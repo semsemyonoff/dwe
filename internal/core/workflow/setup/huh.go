@@ -9,9 +9,9 @@ import (
 	"strconv"
 	"strings"
 
-	"devbox-cli/internal/core/ui"
 	"devbox-cli/internal/core/ui/ask"
 	"devbox-cli/internal/core/ui/styles"
+	"devbox-cli/internal/core/ui/widgets"
 	"devbox-cli/internal/core/validate/env"
 
 	"charm.land/bubbles/v2/key"
@@ -133,7 +133,7 @@ func NewHuhAsker(out io.Writer) (
 		// NOTE: This prompt remains a direct huh.NewForm call (not migrated to ask.Run)
 		// because it uses custom keymaps to hijack the AcceptSuggestion binding for
 		// showing "esc cancel" in the help line. The ask.Field API does not support
-		// per-field keymaps; all keymap customization goes through ui.SetHuhHooks which
+		// per-field keymaps; all keymap customization goes through widgets.SetHuhHooks which
 		// applies globally. Port-override needs per-prompt keymap overrides that can't
 		// be expressed via ask.Field, so it stays as a raw huh form.
 
@@ -179,7 +179,7 @@ func NewHuhAsker(out io.Writer) (
 			WithShowHelp(true).
 			WithOutput(out)
 
-		err := ui.RunWithPromptHooks(func() error {
+		err := widgets.RunWithPromptHooks(func() error {
 			return form.Run()
 		})
 
@@ -272,7 +272,7 @@ func NewHuhAsker(out io.Writer) (
 			WithShowHelp(true).
 			WithOutput(out)
 
-		err := ui.RunWithPromptHooks(func() error { return form.Run() })
+		err := widgets.RunWithPromptHooks(func() error { return form.Run() })
 		if err != nil {
 			if errors.Is(err, huh.ErrUserAborted) {
 				return nil, ErrWizardCanceled

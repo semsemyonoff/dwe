@@ -7,12 +7,11 @@ import (
 	"os"
 
 	"devbox-cli/internal/core/execution/builtin/spec"
-
-	"devbox-cli/internal/core/ui"
+	"devbox-cli/internal/core/ui/widgets"
 )
 
-// runConfirm is the package-level wrapper for ui.RunConfirm; swappable in tests.
-var runConfirm = ui.RunConfirm
+// runConfirm is the package-level wrapper for widgets.RunConfirm; swappable in tests.
+var runConfirm = widgets.RunConfirm
 
 // Confirm prompts the user for interactive confirmation before continuing.
 type Confirm struct{}
@@ -55,10 +54,10 @@ func (Confirm) Run(_ context.Context, with map[string]any, ectx spec.ExecContext
 	}
 
 	// Interactive TTY path: use huh.Confirm.
-	if ui.IsInteractiveFn(stdin) {
+	if widgets.IsInteractiveFn(stdin) {
 		confirmed, err := runConfirm(msg, okMsg, stopMsg)
 		if err != nil {
-			if errors.Is(err, ui.ErrCancelled) {
+			if errors.Is(err, widgets.ErrCancelled) {
 				ectx.Output.Error(stopMsg)
 				return fmt.Errorf("aborted by user")
 			}

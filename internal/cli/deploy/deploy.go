@@ -19,6 +19,7 @@ import (
 	"devbox-cli/internal/core/project/config"
 	userpkg "devbox-cli/internal/core/project/user"
 	"devbox-cli/internal/core/ui"
+	"devbox-cli/internal/core/ui/widgets"
 	"devbox-cli/internal/core/usercommands"
 	"devbox-cli/internal/core/workflow/deploy"
 	"devbox-cli/internal/core/workflow/deploy/journal"
@@ -207,7 +208,7 @@ func (e *deployCancelledError) ExitCode() int { return 0 }
 
 // deployMissingDepsConfirmFn is the swap seam for the after-deps confirmation
 // form. Tests override this to inject Yes/No/cancelled without driving stdin.
-var deployMissingDepsConfirmFn = ui.RunConfirm
+var deployMissingDepsConfirmFn = widgets.RunConfirm
 
 // confirmMissingDeps handles the "declared after: deps not in this run" gate.
 // Interactive: prompts via deployMissingDepsConfirmFn; cancellation (Esc or
@@ -224,7 +225,7 @@ func confirmMissingDeps(cmd *cobra.Command, services, missing []string, isIntera
 		strings.Join(missing, ", "))
 	ok, err := deployMissingDepsConfirmFn(title, "Proceed", "Cancel")
 	if err != nil {
-		if errors.Is(err, ui.ErrCancelled) {
+		if errors.Is(err, widgets.ErrCancelled) {
 			return &deployCancelledError{}
 		}
 		return err
@@ -487,7 +488,7 @@ func RunHelper(ctx context.Context, cmd *cobra.Command, flags *cmdctx.RootFlags,
 	projectHash := journal.ProjectConfigHash(cfg, projectDeploy, svcDeploys, trackedServices)
 
 	// Check if we need to prompt before running
-	isInteractive := ui.IsInteractiveFn(os.Stdin) && !opts.NonInteractive
+	isInteractive := widgets.IsInteractiveFn(os.Stdin) && !opts.NonInteractive
 
 	// Set to true when the config-change dialog fires so the prevIncomplete gate
 	// doesn't show a second prompt for the same run.
@@ -623,9 +624,9 @@ func RunHelper(ctx context.Context, cmd *cobra.Command, flags *cmdctx.RootFlags,
 			if isInteractive {
 				// Prompt for action
 				w.Tip("Tip: 'when:' conditions are always re-evaluated. For a fully clean install (drop service dirs, volumes, etc.) cancel and run 'devbox reset run && devbox deploy run'.")
-				choice, err := ui.RunSelector(
+				choice, err := widgets.RunSelector(
 					"Deployed config changed. Choose action:",
-					[]ui.SelectorItem{
+					[]widgets.SelectorItem{
 						{Label: "Apply changes (re-run only changed steps)"},
 						{Label: "Re-run all steps (ignore state; when: still applies)"},
 						{Label: "Cancel"},
@@ -662,9 +663,9 @@ func RunHelper(ctx context.Context, cmd *cobra.Command, flags *cmdctx.RootFlags,
 		if isInteractive {
 			w.Warning("Last deploy run failed or was incomplete.")
 			w.Tip("Tip: 'when:' conditions are always re-evaluated, so partially-installed services may stay skipped. For a fully clean install (drop service dirs, volumes, etc.) cancel and run 'devbox reset run && devbox deploy run'.")
-			choice, err := ui.RunSelector(
+			choice, err := widgets.RunSelector(
 				"Failed deploy detected:",
-				[]ui.SelectorItem{
+				[]widgets.SelectorItem{
 					{Label: "Resume (skip steps already done)"},
 					{Label: "Re-run all steps (ignore state; when: still applies)"},
 					{Label: "Cancel"},

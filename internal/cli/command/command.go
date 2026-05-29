@@ -8,9 +8,9 @@ import (
 
 	"devbox-cli/internal/cli/cmdctx"
 	"devbox-cli/internal/core/project/config"
-	"devbox-cli/internal/core/ui"
 	"devbox-cli/internal/core/ui/ask"
 	"devbox-cli/internal/core/ui/cmdbrowser"
+	"devbox-cli/internal/core/ui/widgets"
 	"devbox-cli/internal/core/usercommands"
 	"devbox-cli/internal/shared/i18n"
 
@@ -21,7 +21,7 @@ import (
 // MUST NOT call t.Parallel() (global state across goroutines).
 var (
 	runAsk         = ask.Run
-	confirmRun     = ui.ConfirmRun
+	confirmRun     = widgets.ConfirmRun
 	runUserCommand = usercommands.RunCommand
 	notifyContext  = signal.NotifyContext
 )
@@ -121,14 +121,14 @@ Without an id, an interactive selector lists public commands. With a group prefi
 				forceFormFromTUI   bool
 			)
 			selector := makeBrowserSelector(cfg, reg, cmdbrowser.ModeRun, false, &skipConfirmFromTUI, &forceFormFromTUI, i18n.TranslatorOrNop(flags.I18n), flags.Locale)
-			if !ui.IsInteractiveFn(cmd.InOrStdin()) {
+			if !widgets.IsInteractiveFn(cmd.InOrStdin()) {
 				selector = func(_ []*usercommands.CommandDef, _ string) (string, error) {
 					return "", fmt.Errorf("no exact command ID given; pass a full command ID or run in an interactive terminal")
 				}
 			}
 			id, err := resolveCommandID(reg, args, false, cfg.Project.Name, selector)
 			if err != nil {
-				if errors.Is(err, ui.ErrCancelled) {
+				if errors.Is(err, widgets.ErrCancelled) {
 					return nil
 				}
 				return err

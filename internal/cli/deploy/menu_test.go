@@ -11,7 +11,7 @@ import (
 
 	"devbox-cli/internal/cli/cmdctx"
 	"devbox-cli/internal/core/project/config"
-	"devbox-cli/internal/core/ui"
+	"devbox-cli/internal/core/ui/widgets"
 	"devbox-cli/internal/core/validate/env"
 	"devbox-cli/internal/core/workflow/deploy/journal"
 	"devbox-cli/internal/core/workflow/setup"
@@ -26,9 +26,9 @@ func TestRunDeployMenu_NonTTY_PrintsHelpAndExits(t *testing.T) {
 	flags := &cmdctx.RootFlags{ConfigPath: "/tmp/nonexistent"}
 
 	// Stub stdin as non-TTY
-	oldIsInteractive := ui.IsInteractiveFn
-	defer func() { ui.IsInteractiveFn = oldIsInteractive }()
-	ui.IsInteractiveFn = func(stdin io.Reader) bool { return false }
+	oldIsInteractive := widgets.IsInteractiveFn
+	defer func() { widgets.IsInteractiveFn = oldIsInteractive }()
+	widgets.IsInteractiveFn = func(stdin io.Reader) bool { return false }
 
 	err := runDeployMenu(cmd, flags)
 	if err == nil {
@@ -53,16 +53,16 @@ func TestRunDeployMenu_MenuDispatch_Run(t *testing.T) {
 	flags := &cmdctx.RootFlags{ConfigPath: filepath.Join(devboxDir, "devbox.yml")}
 
 	// Override test seams
-	oldIsInteractive := ui.IsInteractiveFn
+	oldIsInteractive := widgets.IsInteractiveFn
 	oldSelectFn := selectMenuItemFn
 	oldRunDeployRunFn := runDeployRunFn
 	defer func() {
-		ui.IsInteractiveFn = oldIsInteractive
+		widgets.IsInteractiveFn = oldIsInteractive
 		selectMenuItemFn = oldSelectFn
 		runDeployRunFn = oldRunDeployRunFn
 	}()
 
-	ui.IsInteractiveFn = func(stdin io.Reader) bool { return true }
+	widgets.IsInteractiveFn = func(stdin io.Reader) bool { return true }
 
 	selectMenuItemFn = func(ctx context.Context, cmd *cobra.Command, pending *journal.PendingApply, showWizard bool) (menuChoice, error) {
 		return menuRun, nil
@@ -95,14 +95,14 @@ func TestRunDeployMenu_MenuDispatch_Exit(t *testing.T) {
 	flags := &cmdctx.RootFlags{ConfigPath: filepath.Join(devboxDir, "devbox.yml")}
 
 	// Override test seams
-	oldIsInteractive := ui.IsInteractiveFn
+	oldIsInteractive := widgets.IsInteractiveFn
 	oldSelectFn := selectMenuItemFn
 	defer func() {
-		ui.IsInteractiveFn = oldIsInteractive
+		widgets.IsInteractiveFn = oldIsInteractive
 		selectMenuItemFn = oldSelectFn
 	}()
 
-	ui.IsInteractiveFn = func(stdin io.Reader) bool { return true }
+	widgets.IsInteractiveFn = func(stdin io.Reader) bool { return true }
 
 	selectMenuItemFn = func(ctx context.Context, cmd *cobra.Command, pending *journal.PendingApply, showWizard bool) (menuChoice, error) {
 		return menuExit, nil
@@ -125,16 +125,16 @@ func TestRunDeployMenu_SetupYMLErrors_BlocksMenu(t *testing.T) {
 
 	flags := &cmdctx.RootFlags{ConfigPath: filepath.Join(devboxDir, "devbox.yml")}
 
-	oldIsInteractive := ui.IsInteractiveFn
+	oldIsInteractive := widgets.IsInteractiveFn
 	oldSelectFn := selectMenuItemFn
 	oldLoadSetupFn := loadSetupYAMLFn
 	defer func() {
-		ui.IsInteractiveFn = oldIsInteractive
+		widgets.IsInteractiveFn = oldIsInteractive
 		selectMenuItemFn = oldSelectFn
 		loadSetupYAMLFn = oldLoadSetupFn
 	}()
 
-	ui.IsInteractiveFn = func(stdin io.Reader) bool { return true }
+	widgets.IsInteractiveFn = func(stdin io.Reader) bool { return true }
 
 	// Stub loader to return a parse error (unknown field) without requiring a real file.
 	loadSetupYAMLFn = func(path string) (*setup.Config, error) {
@@ -177,16 +177,16 @@ func TestRunDeployMenu_MenuDispatch_Plan(t *testing.T) {
 
 	flags := &cmdctx.RootFlags{ConfigPath: filepath.Join(devboxDir, "devbox.yml")}
 
-	oldIsInteractive := ui.IsInteractiveFn
+	oldIsInteractive := widgets.IsInteractiveFn
 	oldSelectFn := selectMenuItemFn
 	oldRunDeployPlanFn := runDeployPlanFn
 	defer func() {
-		ui.IsInteractiveFn = oldIsInteractive
+		widgets.IsInteractiveFn = oldIsInteractive
 		selectMenuItemFn = oldSelectFn
 		runDeployPlanFn = oldRunDeployPlanFn
 	}()
 
-	ui.IsInteractiveFn = func(stdin io.Reader) bool { return true }
+	widgets.IsInteractiveFn = func(stdin io.Reader) bool { return true }
 
 	selectMenuItemFn = func(ctx context.Context, cmd *cobra.Command, pending *journal.PendingApply, showWizard bool) (menuChoice, error) {
 		return menuPlan, nil
@@ -218,16 +218,16 @@ func TestRunDeployMenu_WizardShownWhenConflictsAndEmptyLocal(t *testing.T) {
 
 	flags := &cmdctx.RootFlags{ConfigPath: filepath.Join(devboxDir, "devbox.yml")}
 
-	oldIsInteractive := ui.IsInteractiveFn
+	oldIsInteractive := widgets.IsInteractiveFn
 	oldSelectFn := selectMenuItemFn
 	oldCollectFn := collectPortConflictsFn
 	defer func() {
-		ui.IsInteractiveFn = oldIsInteractive
+		widgets.IsInteractiveFn = oldIsInteractive
 		selectMenuItemFn = oldSelectFn
 		collectPortConflictsFn = oldCollectFn
 	}()
 
-	ui.IsInteractiveFn = func(stdin io.Reader) bool { return true }
+	widgets.IsInteractiveFn = func(stdin io.Reader) bool { return true }
 
 	// Inject a fake port conflict so showWizard becomes true even without setup.yml.
 	collectPortConflictsFn = func(ctx context.Context, cfg *config.DevboxConfig, baseDir string) ([]env.PortConflict, error) {
@@ -256,18 +256,18 @@ func TestRunDeployMenu_WizardPreflightBlocks(t *testing.T) {
 
 	flags := &cmdctx.RootFlags{ConfigPath: filepath.Join(devboxDir, "devbox.yml")}
 
-	oldIsInteractive := ui.IsInteractiveFn
+	oldIsInteractive := widgets.IsInteractiveFn
 	oldSelectFn := selectMenuItemFn
 	oldPreflightFn := runPreWizardPreflightFn
 	oldRunWizardFn := runWizardFn
 	t.Cleanup(func() {
-		ui.IsInteractiveFn = oldIsInteractive
+		widgets.IsInteractiveFn = oldIsInteractive
 		selectMenuItemFn = oldSelectFn
 		runPreWizardPreflightFn = oldPreflightFn
 		runWizardFn = oldRunWizardFn
 	})
 
-	ui.IsInteractiveFn = func(stdin io.Reader) bool { return true }
+	widgets.IsInteractiveFn = func(stdin io.Reader) bool { return true }
 	selectMenuItemFn = func(ctx context.Context, cmd *cobra.Command, pending *journal.PendingApply, showWizard bool) (menuChoice, error) {
 		return menuWizard, nil
 	}

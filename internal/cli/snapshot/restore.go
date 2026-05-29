@@ -16,7 +16,7 @@ import (
 	"devbox-cli/internal/core/notify"
 	"devbox-cli/internal/core/project/config"
 	userpkg "devbox-cli/internal/core/project/user"
-	"devbox-cli/internal/core/ui"
+	"devbox-cli/internal/core/ui/widgets"
 	"devbox-cli/internal/core/usercommands"
 	"devbox-cli/internal/core/usercommands/model"
 	snapshotpkg "devbox-cli/internal/core/workflow/snapshot"
@@ -146,12 +146,12 @@ func runSnapshotRestore(cmd *cobra.Command, flags *cmdctx.RootFlags, name string
 		BaseDir:        baseDir,
 		Name:           name,
 		SkipConfirm:    yes,
-		NonInteractive: !ui.IsInteractiveFn(os.Stdin),
+		NonInteractive: !widgets.IsInteractiveFn(os.Stdin),
 		Stdout:         stdout,
 		Stderr:         stderr,
 		Operation:      operation,
 		ConfirmRestore: func(rc snapshotpkg.RestoreConfirmContext) (bool, error) {
-			if !ui.IsInteractiveFn(os.Stdin) {
+			if !widgets.IsInteractiveFn(os.Stdin) {
 				_, _ = fmt.Fprintln(stderr, "snapshot restore needs confirmation; pass --yes to proceed non-interactively")
 				return false, nil
 			}
@@ -166,7 +166,7 @@ func runSnapshotRestore(cmd *cobra.Command, flags *cmdctx.RootFlags, name string
 			if len(notes) > 0 {
 				prompt += " (" + strings.Join(notes, "; ") + ")"
 			}
-			return ui.RunConfirm(prompt, "Restore", "Cancel")
+			return widgets.RunConfirm(prompt, "Restore", "Cancel")
 		},
 		StepObserverFactory: func(steps []model.WorkflowStep) snapshotpkg.StepObserverCloser {
 			return newSnapshotLiveObserver("snapshot "+operation+": "+name, noLive, steps)

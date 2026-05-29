@@ -13,7 +13,7 @@ import (
 	"devbox-cli/internal/core/execution/condition"
 	pipeline "devbox-cli/internal/core/execution/pipeline"
 	"devbox-cli/internal/core/project/config"
-	"devbox-cli/internal/core/ui"
+	"devbox-cli/internal/core/ui/widgets"
 	"devbox-cli/internal/core/usercommands"
 	"devbox-cli/internal/core/usercommands/registry"
 	"devbox-cli/internal/core/usercommands/runtime"
@@ -39,7 +39,7 @@ var resetRunHookFn = runResetHook
 // Tests override this to assert prompt content and inject Yes/No/cancelled.
 // Required because runConfirmFormFn in internal/core/ui/confirm.go is
 // package-private — tests in the lifecycle package cannot swap it directly.
-var resetConfirmFn = ui.RunConfirm
+var resetConfirmFn = widgets.RunConfirm
 
 // NewResetCmd builds the `devbox reset` cobra command group.
 func NewResetCmd(groupID string, flags *cmdctx.RootFlags) *cobra.Command {
@@ -317,13 +317,13 @@ func resetServiceRunCmd(cmd *cobra.Command, flags *cmdctx.RootFlags, name string
 
 	// Confirmation prompt (after preflight so fast-fail checks run first).
 	if !yes {
-		if !ui.IsInteractiveFn(cmd.InOrStdin()) {
+		if !widgets.IsInteractiveFn(cmd.InOrStdin()) {
 			return fmt.Errorf("non-interactive terminal: use --yes to confirm per-service reset")
 		}
 		title := buildResetServiceConfirmTitle(name, svc.Container, svc.Dir, svc.Required, dirExists, hasResetYAML)
 		ok, confirmErr := resetConfirmFn(title, "Reset", "Cancel")
 		if confirmErr != nil {
-			if errors.Is(confirmErr, ui.ErrCancelled) {
+			if errors.Is(confirmErr, widgets.ErrCancelled) {
 				return nil
 			}
 			return fmt.Errorf("confirm reset: %w", confirmErr)

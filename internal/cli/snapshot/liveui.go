@@ -9,7 +9,7 @@ import (
 
 	"github.com/charmbracelet/x/term"
 
-	"devbox-cli/internal/core/ui"
+	"devbox-cli/internal/core/ui/widgets"
 	"devbox-cli/internal/core/usercommands/model"
 	"devbox-cli/internal/core/usercommands/runtime"
 	snapshotpkg "devbox-cli/internal/core/workflow/snapshot"
@@ -76,7 +76,7 @@ func newSnapshotLiveObserver(label string, disabled bool, steps []model.Workflow
 	// any prompt that fires mid-workflow (whether from a confirm: step or from
 	// a command-level ConfirmCommand) composes with the StepIOSuspender pause
 	// already active around the step.
-	ui.SetHuhHooks(o.pause, o.resume)
+	widgets.SetHuhHooks(o.pause, o.resume)
 	return o
 }
 
@@ -186,6 +186,6 @@ func (o *snapshotLiveObserver) resume() {
 // elsewhere in the process does not call back into a stopped LiveLine), then
 // stop the live ticker.
 func (o *snapshotLiveObserver) Close() {
-	ui.ClearHuhHooks()
+	widgets.ClearHuhHooks()
 	o.live.Stop()
 }

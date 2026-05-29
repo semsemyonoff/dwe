@@ -8,7 +8,7 @@ import (
 	"time"
 
 	"devbox-cli/internal/core/project/config"
-	"devbox-cli/internal/core/ui"
+	"devbox-cli/internal/core/ui/widgets"
 	"devbox-cli/internal/shared/liveui"
 	"devbox-cli/internal/shared/render"
 )
@@ -148,7 +148,7 @@ func NewPlainReporter(screen *render.Writer, logFile io.Writer, termOut io.Write
 	// RunSelector, RunMultiSelect) pause/resume the LiveLine automatically.
 	// Only one PlainReporter is expected per process; nested deploys are not
 	// supported by this design. Close() clears the hooks on shutdown.
-	ui.SetHuhHooks(r.live.Pause, r.live.Resume)
+	widgets.SetHuhHooks(r.live.Pause, r.live.Resume)
 	return r
 }
 
@@ -159,7 +159,7 @@ func NewPlainReporter(screen *render.Writer, logFile io.Writer, termOut io.Write
 // even on panic or early return.
 func (r *PlainReporter) Close() {
 	r.live.Stop()
-	ui.ClearHuhHooks()
+	widgets.ClearHuhHooks()
 }
 
 // SuspendForExec hides the LiveLine footer for the duration of a child

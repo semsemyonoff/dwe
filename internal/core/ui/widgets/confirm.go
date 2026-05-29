@@ -1,4 +1,10 @@
-package ui
+// Package widgets hosts interactive huh-based form primitives (RunConfirm,
+// RunSelector, RunMultiSelect) plus the SetHuhHooks / RunWithPromptHooks
+// indirection used by the live pipeline reporter to pause/resume its frame.
+//
+// Widgets imports devbox-cli/internal/core/ui/styles for the shared HuhTheme
+// and palette; renderers in core/ui/render do not depend on widgets.
+package widgets
 
 import (
 	"errors"

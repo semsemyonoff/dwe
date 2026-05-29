@@ -7,7 +7,7 @@ import (
 
 	tea "charm.land/bubbletea/v2"
 
-	"devbox-cli/internal/core/ui"
+	"devbox-cli/internal/core/ui/widgets"
 )
 
 // Run launches the status TUI, returning an error if not a terminal or if
@@ -30,7 +30,7 @@ func Run(ctx context.Context, d Deps) error {
 	m := newModel(d, runCtx, width, height)
 	prog := tea.NewProgram(m, tea.WithContext(runCtx))
 
-	runErr := ui.RunWithPromptHooks(func() error {
+	runErr := widgets.RunWithPromptHooks(func() error {
 		_, e := prog.Run()
 		return e
 	})

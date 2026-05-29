@@ -9,7 +9,7 @@ import (
 
 	"devbox-cli/internal/cli/cmdctx"
 	"devbox-cli/internal/core/project/config"
-	"devbox-cli/internal/core/ui"
+	"devbox-cli/internal/core/ui/widgets"
 	snapshotpkg "devbox-cli/internal/core/workflow/snapshot"
 	"devbox-cli/internal/shared/lock"
 	"devbox-cli/internal/shared/render"
@@ -73,18 +73,18 @@ func runSnapshotUnpack(cmd *cobra.Command, flags *cmdctx.RootFlags, tarPath, asN
 		AssumeYes: yes,
 		NoVerify:  noVerify,
 		ConfirmOverwrite: func() (bool, error) {
-			if !ui.IsInteractiveFn(os.Stdin) {
+			if !widgets.IsInteractiveFn(os.Stdin) {
 				_, _ = fmt.Fprintln(stderr, "target snapshot dir already exists; pass --yes to overwrite non-interactively")
 				return false, nil
 			}
-			return ui.RunConfirm(fmt.Sprintf("Overwrite existing snapshot %q?", name), "Overwrite", "Cancel")
+			return widgets.RunConfirm(fmt.Sprintf("Overwrite existing snapshot %q?", name), "Overwrite", "Cancel")
 		},
 		ConfirmVerify: func(prompt string) (bool, error) {
-			if !ui.IsInteractiveFn(os.Stdin) {
+			if !widgets.IsInteractiveFn(os.Stdin) {
 				_, _ = fmt.Fprintln(stderr, "verification warnings present; pass --yes to continue non-interactively")
 				return false, nil
 			}
-			return ui.RunConfirm(prompt, "Continue", "Cancel")
+			return widgets.RunConfirm(prompt, "Continue", "Cancel")
 		},
 		Stderr: stderr,
 	})

@@ -17,6 +17,7 @@ import (
 	"devbox-cli/internal/core/project/services"
 	"devbox-cli/internal/core/ui"
 	"devbox-cli/internal/core/ui/styles"
+	"devbox-cli/internal/core/ui/widgets"
 	"devbox-cli/internal/core/usercommands"
 	"devbox-cli/internal/core/validate"
 	valchecks "devbox-cli/internal/core/validate/checks"
@@ -72,7 +73,7 @@ type deployServiceItem struct {
 // runDeployMenu is the entry point for `devbox deploy` without subcommands.
 // It opens an interactive TUI menu if stdin/stdout are TTY, otherwise prints help.
 func runDeployMenu(cmd *cobra.Command, flags *cmdctx.RootFlags) error {
-	if !ui.IsInteractiveFn(os.Stdin) {
+	if !widgets.IsInteractiveFn(os.Stdin) {
 		_ = cmd.Help()
 		return usageError("devbox deploy: requires a subcommand or interactive TTY")
 	}
@@ -169,7 +170,7 @@ func runDeployMenu(cmd *cobra.Command, flags *cmdctx.RootFlags) error {
 
 		choice, err := selectMenuItemFn(ctx, cmd, pending, showWizard)
 		if err != nil {
-			if errors.Is(err, setup.ErrWizardCanceled) || errors.Is(err, ui.ErrCancelled) {
+			if errors.Is(err, setup.ErrWizardCanceled) || errors.Is(err, widgets.ErrCancelled) {
 				return nil
 			}
 			return err
@@ -188,7 +189,7 @@ func runDeployMenu(cmd *cobra.Command, flags *cmdctx.RootFlags) error {
 			}
 			name, err := selectDeployServiceFn(ctx, cmd, "Select service to deploy", gated, true)
 			if err != nil {
-				if errors.Is(err, ui.ErrCancelled) {
+				if errors.Is(err, widgets.ErrCancelled) {
 					continue // back to main menu
 				}
 				return err
@@ -207,7 +208,7 @@ func runDeployMenu(cmd *cobra.Command, flags *cmdctx.RootFlags) error {
 			}
 			name, err := selectDeployServiceFn(ctx, cmd, "Select service to plan", items, false)
 			if err != nil {
-				if errors.Is(err, ui.ErrCancelled) {
+				if errors.Is(err, widgets.ErrCancelled) {
 					continue
 				}
 				return err
@@ -398,7 +399,7 @@ func deployInfoRowsFrom(items []deployServiceItem) []ui.DeployInfoRow {
 // selectMenuItemInteractive prompts the user to select a top-level menu item.
 // Per-option descriptions are concatenated into the option label (so the help
 // line stays available for navigation hints). Esc and Ctrl-C both abort with
-// ui.ErrCancelled.
+// widgets.ErrCancelled.
 func selectMenuItemInteractive(_ context.Context, cmd *cobra.Command, _ *journal.PendingApply, showWizard bool) (menuChoice, error) {
 	type itemDef struct {
 		key         menuChoice
@@ -454,7 +455,7 @@ func selectMenuItemInteractive(_ context.Context, cmd *cobra.Command, _ *journal
 		WithShowHelp(true).
 		WithOutput(cmd.OutOrStdout())
 
-	if err := ui.RunWithPromptHooks(func() error { return form.Run() }); err != nil {
+	if err := widgets.RunWithPromptHooks(func() error { return form.Run() }); err != nil {
 		if errors.Is(err, huh.ErrUserAborted) {
 			return menuExit, nil
 		}
@@ -490,7 +491,7 @@ func deployMenuKeyMap(quitHelp string) *huh.KeyMap {
 // selectDeployServiceInteractive prompts the user to pick a service from a
 // pre-sorted, pre-decorated list. When applyGate is true, locked items are
 // shown but selection is rejected via the form's Validate hook. Esc returns
-// ui.ErrCancelled so the caller can navigate back to the parent menu.
+// widgets.ErrCancelled so the caller can navigate back to the parent menu.
 func selectDeployServiceInteractive(_ context.Context, cmd *cobra.Command, title string, items []deployServiceItem, applyGate bool) (string, error) {
 	if len(items) == 0 {
 		return "", errors.New("no services to choose from")
@@ -546,9 +547,9 @@ func selectDeployServiceInteractive(_ context.Context, cmd *cobra.Command, title
 		WithShowHelp(true).
 		WithOutput(cmd.OutOrStdout())
 
-	if err := ui.RunWithPromptHooks(func() error { return form.Run() }); err != nil {
+	if err := widgets.RunWithPromptHooks(func() error { return form.Run() }); err != nil {
 		if errors.Is(err, huh.ErrUserAborted) {
-			return "", ui.ErrCancelled
+			return "", widgets.ErrCancelled
 		}
 		return "", fmt.Errorf("service selection: %w", err)
 	}

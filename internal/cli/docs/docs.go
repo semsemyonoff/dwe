@@ -13,7 +13,7 @@ import (
 	"devbox-cli/internal/core/docs/tui"
 	"devbox-cli/internal/core/project/config"
 	userpkg "devbox-cli/internal/core/project/user"
-	"devbox-cli/internal/core/ui"
+	"devbox-cli/internal/core/ui/widgets"
 	"devbox-cli/internal/shared/i18n"
 
 	tea "charm.land/bubbletea/v2"
@@ -149,8 +149,8 @@ func runDocsTUI(cmd *cobra.Command, flags *cmdctx.RootFlags, termWidth, termHeig
 			"`docs/reference/docs/index.md` § *Installing `mmdc`*.\n\n"
 	}
 
-	// Run via ui.RunWithPromptHooks for proper signal handling
-	runErr := ui.RunWithPromptHooks(func() error {
+	// Run via widgets.RunWithPromptHooks for proper signal handling
+	runErr := widgets.RunWithPromptHooks(func() error {
 		prog := tea.NewProgram(model, tea.WithContext(ctx))
 		_, e := prog.Run()
 		return e
@@ -161,7 +161,7 @@ func runDocsTUI(cmd *cobra.Command, flags *cmdctx.RootFlags, termWidth, termHeig
 			return runErr
 		}
 		if errors.Is(runErr, tea.ErrInterrupted) || errors.Is(runErr, tea.ErrProgramKilled) {
-			return ui.ErrCancelled
+			return widgets.ErrCancelled
 		}
 		return runErr
 	}

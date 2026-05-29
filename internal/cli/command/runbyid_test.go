@@ -9,8 +9,8 @@ import (
 	"testing"
 
 	"devbox-cli/internal/core/project/config"
-	"devbox-cli/internal/core/ui"
 	"devbox-cli/internal/core/ui/ask"
+	"devbox-cli/internal/core/ui/widgets"
 	"devbox-cli/internal/core/usercommands"
 	"devbox-cli/internal/core/usercommands/model"
 
@@ -18,7 +18,7 @@ import (
 )
 
 // stubOrchestratorSeams replaces the four package-level seams in runbyid.go
-// and ui.IsInteractiveFn, restoring them on cleanup.
+// and widgets.IsInteractiveFn, restoring them on cleanup.
 // Subtests using this MUST NOT call t.Parallel().
 func stubOrchestratorSeams(t *testing.T) *orchestratorStubs {
 	t.Helper()
@@ -27,13 +27,13 @@ func stubOrchestratorSeams(t *testing.T) *orchestratorStubs {
 	origConfirm := confirmRun
 	origRun := runUserCommand
 	origNotify := notifyContext
-	origInteractive := ui.IsInteractiveFn
+	origInteractive := widgets.IsInteractiveFn
 	t.Cleanup(func() {
 		runAsk = origAsk
 		confirmRun = origConfirm
 		runUserCommand = origRun
 		notifyContext = origNotify
-		ui.IsInteractiveFn = origInteractive
+		widgets.IsInteractiveFn = origInteractive
 	})
 	return s
 }
@@ -201,7 +201,7 @@ func TestRunCommandByID_PrivateDirectRun_Error(t *testing.T) {
 
 func TestRunCommandByID_FormInvokedWhenRequiredUnsatisfied(t *testing.T) {
 	s := stubOrchestratorSeams(t)
-	ui.IsInteractiveFn = func(io.Reader) bool { return true }
+	widgets.IsInteractiveFn = func(io.Reader) bool { return true }
 	// Stub the form to return a user-supplied value so BuildRunContext's
 	// required-check passes after the form runs.
 	s.formValues = ask.NewResultForTest(map[string]any{"env": "prod"})
@@ -236,7 +236,7 @@ func TestRunCommandByID_FormInvokedWhenRequiredUnsatisfied(t *testing.T) {
 // and the prefilled values flow straight through to the runner.
 func TestRunCommandByID_FormSkippedWhenAllDefaultsPresent(t *testing.T) {
 	s := stubOrchestratorSeams(t)
-	ui.IsInteractiveFn = func(io.Reader) bool { return true }
+	widgets.IsInteractiveFn = func(io.Reader) bool { return true }
 	s.installForm()
 	s.installRunner()
 	def := &usercommands.CommandDef{
@@ -267,7 +267,7 @@ func TestRunCommandByID_FormSkippedWhenAllDefaultsPresent(t *testing.T) {
 // open even though every required param is already satisfied.
 func TestRunCommandByID_ForceParamFormOpensFormDespiteDefaults(t *testing.T) {
 	s := stubOrchestratorSeams(t)
-	ui.IsInteractiveFn = func(io.Reader) bool { return true }
+	widgets.IsInteractiveFn = func(io.Reader) bool { return true }
 	s.installForm()
 	s.installRunner()
 	def := &usercommands.CommandDef{
@@ -292,7 +292,7 @@ func TestRunCommandByID_ForceParamFormOpensFormDespiteDefaults(t *testing.T) {
 
 func TestRunCommandByID_YesSkipsForm(t *testing.T) {
 	s := stubOrchestratorSeams(t)
-	ui.IsInteractiveFn = func(io.Reader) bool { return true }
+	widgets.IsInteractiveFn = func(io.Reader) bool { return true }
 	s.installForm()
 	s.installRunner()
 	def := &usercommands.CommandDef{
@@ -324,7 +324,7 @@ func TestRunCommandByID_YesSkipsForm(t *testing.T) {
 
 func TestRunCommandByID_MissingRequiredNonInteractive_Error(t *testing.T) {
 	s := stubOrchestratorSeams(t)
-	ui.IsInteractiveFn = func(io.Reader) bool { return false }
+	widgets.IsInteractiveFn = func(io.Reader) bool { return false }
 	s.installRunner()
 	def := &usercommands.CommandDef{
 		ID: "db.up", LocalName: "up", Group: "db", Type: usercommands.CommandTypeShell, Cmd: "echo",
@@ -348,7 +348,7 @@ func TestRunCommandByID_MissingRequiredNonInteractive_Error(t *testing.T) {
 
 func TestRunCommandByID_MissingRequiredWithYes_Error(t *testing.T) {
 	s := stubOrchestratorSeams(t)
-	ui.IsInteractiveFn = func(io.Reader) bool { return true }
+	widgets.IsInteractiveFn = func(io.Reader) bool { return true }
 	s.installRunner()
 	def := &usercommands.CommandDef{
 		ID: "db.up", LocalName: "up", Group: "db", Type: usercommands.CommandTypeShell, Cmd: "echo",
@@ -369,7 +369,7 @@ func TestRunCommandByID_MissingRequiredWithYes_Error(t *testing.T) {
 
 func TestRunCommandByID_FormCancel_ExitZero(t *testing.T) {
 	s := stubOrchestratorSeams(t)
-	ui.IsInteractiveFn = func(io.Reader) bool { return true }
+	widgets.IsInteractiveFn = func(io.Reader) bool { return true }
 	s.formErr = huh.ErrUserAborted
 	s.installForm()
 	s.installRunner()
@@ -391,7 +391,7 @@ func TestRunCommandByID_FormCancel_ExitZero(t *testing.T) {
 
 func TestRunCommandByID_NoParamsTTY_FormSkipped(t *testing.T) {
 	s := stubOrchestratorSeams(t)
-	ui.IsInteractiveFn = func(io.Reader) bool { return true }
+	widgets.IsInteractiveFn = func(io.Reader) bool { return true }
 	s.installForm()
 	s.installRunner()
 	def := &usercommands.CommandDef{
@@ -415,7 +415,7 @@ func TestRunCommandByID_NoParamsTTY_FormSkipped(t *testing.T) {
 
 func TestRunCommandByID_ConfirmationTemplate_RenderedTitle(t *testing.T) {
 	s := stubOrchestratorSeams(t)
-	ui.IsInteractiveFn = func(io.Reader) bool { return true }
+	widgets.IsInteractiveFn = func(io.Reader) bool { return true }
 	s.confirmOK = true
 	s.installForm()
 	s.installConfirm()
@@ -452,7 +452,7 @@ func TestRunCommandByID_ConfirmationTemplate_RenderedTitle(t *testing.T) {
 
 func TestRunCommandByID_ConfirmationSummary_UsesNormalizedParams(t *testing.T) {
 	s := stubOrchestratorSeams(t)
-	ui.IsInteractiveFn = func(io.Reader) bool { return true }
+	widgets.IsInteractiveFn = func(io.Reader) bool { return true }
 	s.confirmOK = true
 	// Form returns empty string for the optional param — orchestrator should
 	// fall back to the declared Default in the summary.
@@ -481,8 +481,8 @@ func TestRunCommandByID_ConfirmationSummary_UsesNormalizedParams(t *testing.T) {
 
 func TestRunCommandByID_ConfirmationCancel_ExitZero(t *testing.T) {
 	s := stubOrchestratorSeams(t)
-	ui.IsInteractiveFn = func(io.Reader) bool { return true }
-	s.confirmErr = ui.ErrCancelled
+	widgets.IsInteractiveFn = func(io.Reader) bool { return true }
+	s.confirmErr = widgets.ErrCancelled
 	s.installConfirm()
 	s.installRunner()
 	def := &usercommands.CommandDef{
@@ -504,7 +504,7 @@ func TestRunCommandByID_ConfirmationCancel_ExitZero(t *testing.T) {
 
 func TestRunCommandByID_ConfirmationNo_ExitZero(t *testing.T) {
 	s := stubOrchestratorSeams(t)
-	ui.IsInteractiveFn = func(io.Reader) bool { return true }
+	widgets.IsInteractiveFn = func(io.Reader) bool { return true }
 	s.confirmOK = false
 	s.confirmErr = nil
 	s.installConfirm()
@@ -528,7 +528,7 @@ func TestRunCommandByID_ConfirmationNo_ExitZero(t *testing.T) {
 
 func TestRunCommandByID_ConfirmationGenericError_Propagates(t *testing.T) {
 	s := stubOrchestratorSeams(t)
-	ui.IsInteractiveFn = func(io.Reader) bool { return true }
+	widgets.IsInteractiveFn = func(io.Reader) bool { return true }
 	s.confirmErr = errors.New("boom")
 	s.installConfirm()
 	s.installRunner()
@@ -555,7 +555,7 @@ func TestRunCommandByID_TUIYesPropagation(t *testing.T) {
 	// opts.Yes from caller (mimicking yesFlag || skipFromTUI at the call site)
 	// must skip the orchestrator confirm and set SkipConfirm/NonInteractive on rctx.
 	s := stubOrchestratorSeams(t)
-	ui.IsInteractiveFn = func(io.Reader) bool { return true }
+	widgets.IsInteractiveFn = func(io.Reader) bool { return true }
 	s.installConfirm()
 	s.installRunner()
 	def := &usercommands.CommandDef{
@@ -582,7 +582,7 @@ func TestRunCommandByID_TUIYesPropagation(t *testing.T) {
 
 func TestRunCommandByID_IOChannelsAttached(t *testing.T) {
 	s := stubOrchestratorSeams(t)
-	ui.IsInteractiveFn = func(io.Reader) bool { return false }
+	widgets.IsInteractiveFn = func(io.Reader) bool { return false }
 	s.installRunner()
 	def := &usercommands.CommandDef{
 		ID: "db.up", LocalName: "up", Group: "db",
@@ -612,7 +612,7 @@ func TestRunCommandByID_IOChannelsAttached(t *testing.T) {
 
 func TestRunCommandByID_NonInteractiveEnv_SkipsForm(t *testing.T) {
 	s := stubOrchestratorSeams(t)
-	ui.IsInteractiveFn = func(io.Reader) bool { return true }
+	widgets.IsInteractiveFn = func(io.Reader) bool { return true }
 	t.Setenv("DEVBOX_NONINTERACTIVE", "1")
 	s.installForm()
 	s.installConfirm()
@@ -646,7 +646,7 @@ func TestRunCommandByID_NonInteractiveEnv_SkipsForm(t *testing.T) {
 
 func TestRunCommandByID_NoDoublePrompt(t *testing.T) {
 	s := stubOrchestratorSeams(t)
-	ui.IsInteractiveFn = func(io.Reader) bool { return true }
+	widgets.IsInteractiveFn = func(io.Reader) bool { return true }
 	s.confirmOK = true
 	s.installConfirm()
 	s.installRunner()
@@ -680,7 +680,7 @@ func TestRunCommandByID_NoDoublePrompt(t *testing.T) {
 // non-TTY Y/n branch.
 func TestRunCommandByID_NonTTYWithoutYes_FallbackPreserved(t *testing.T) {
 	s := stubOrchestratorSeams(t)
-	ui.IsInteractiveFn = func(io.Reader) bool { return false }
+	widgets.IsInteractiveFn = func(io.Reader) bool { return false }
 	s.installConfirm()
 	s.installRunner()
 	def := &usercommands.CommandDef{

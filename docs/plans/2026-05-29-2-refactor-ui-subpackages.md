@@ -262,16 +262,16 @@ Several callers use symbols from multiple groups → import multiple subpkgs. Th
 - Move + modify: `confirm_test.go`, `multiselect_test.go`, `selector_test.go`, `huh_test.go` → `widgets/`
 - Modify: external callers of widgets symbols (per Symbol Mapping)
 
-- [ ] create `widgets/` directory; move 5 files; change `package ui` → `package widgets`
-- [ ] add `import "devbox-cli/internal/core/ui/styles"` in widgets files that need `styles.HuhTheme`, `styles.ApplyFormGlyphs`, `styles.BuildPaletteApplier`
-- [ ] **special: `applyMultiSelectStateStyles` cross-call in `huh_test.go`** — currently calls a sibling-package helper. After move, either inline it or stay package-local; verify the test continues to function
-- [ ] update internal references: lowercase symbols stay (intra-pkg); references that crossed into styles already use `styles.*` from Task 2
-- [ ] move corresponding test files; update package decl + helper calls
-- [ ] **update sibling subpkg `ask/ask.go`** to import `core/ui/widgets` and `core/ui/styles` as needed: `ui.Theme()` → `widgets.Theme()`, `ui.RunWithPromptHooks` → `widgets.RunWithPromptHooks`, `ui.ErrCancelled` → `widgets.ErrCancelled` (atomic — ask/ won't compile if its `ui.X` references break)
-- [ ] **update sibling subpkg `cmdbrowser/`** as needed (uses widgets + styles symbols — refer to Symbol Mapping)
-- [ ] grep external callers of widgets symbols; update imports to add `core/ui/widgets`; per-symbol qualify
-- [ ] run `make test` — must pass before Task 4
-- [ ] run `make lint` — must pass before Task 4
+- [x] create `widgets/` directory; move 5 files; change `package ui` → `package widgets`
+- [x] add `import "devbox-cli/internal/core/ui/styles"` in widgets files that need `styles.HuhTheme`, `styles.ApplyFormGlyphs`, `styles.BuildPaletteApplier` (already present from Task 2 — confirm.go/selector.go/multiselect.go already import `styles` for `styles.Theme()`)
+- [x] **special: `applyMultiSelectStateStyles` cross-call in `huh_test.go`** — n/a: the helper already lives in `styles/styles.go` (moved in Task 1/2), no cross-package call from widgets needed
+- [x] update internal references: lowercase symbols stay (intra-pkg); references that crossed into styles already use `styles.*` from Task 2
+- [x] move corresponding test files; update package decl + helper calls
+- [x] **update sibling subpkg `ask/ask.go`** to import `core/ui/widgets` and `core/ui/styles` as needed: `ui.RunWithPromptHooks` → `widgets.RunWithPromptHooks` (atomic — ask/ no longer compiles against root ui after the move; `ui.Theme()` already moved to `styles.Theme()` in Task 2)
+- [x] **update sibling subpkg `cmdbrowser/`** as needed: `ui.RunSelector`, `ui.RunWithPromptHooks`, `ui.ErrCancelled`, `ui.SelectorItem` → `widgets.*` in run.go, fallback.go, and cmdbrowser_test.go
+- [x] grep external callers of widgets symbols; update imports to add `core/ui/widgets`; per-symbol qualify (perl bulk-rewrite across 42 files; goimports cleaned unused root-ui imports)
+- [x] run `make test` — must pass before Task 4
+- [x] run `make lint` — must pass before Task 4
 
 ### Task 4: Extract `render/` subpackage
 

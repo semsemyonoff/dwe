@@ -13,7 +13,7 @@ import (
 // without forking or manipulating real file descriptors.
 //
 // Only stdin needs to be a TTY — desktop notifications are OS toasts and
-// don't use stdout. Checking stdout (like ui.IsInteractiveFn does for TUI
+// don't use stdout. Checking stdout (like widgets.IsInteractiveFn does for TUI
 // forms) would suppress notifications when output is piped, which is exactly
 // the scenario where a passive toast is most valuable.
 var isStdinTTY = func() bool {

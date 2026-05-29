@@ -7,8 +7,8 @@ import (
 	"io"
 	"os"
 
-	"devbox-cli/internal/core/ui"
 	"devbox-cli/internal/core/ui/styles"
+	"devbox-cli/internal/core/ui/widgets"
 
 	huh "charm.land/huh/v2"
 )
@@ -120,7 +120,7 @@ type RunOptions struct {
 // submits or cancels. Uses huh.Form.RunWithContext so context cancellation
 // (Ctrl-C, parent timeout) aborts the form cleanly. Returns huh.ErrUserAborted
 // if the user cancels; the caller is responsible for mapping that to a
-// user-facing error like ui.ErrCancelled.
+// user-facing error like widgets.ErrCancelled.
 func Run(ctx context.Context, title string, fields []Field, opts RunOptions) (Result, error) {
 	if opts.Input == nil {
 		opts.Input = os.Stdin
@@ -163,7 +163,7 @@ func Run(ctx context.Context, title string, fields []Field, opts RunOptions) (Re
 		WithInput(opts.Input).
 		WithOutput(opts.Output)
 
-	err := ui.RunWithPromptHooks(func() error {
+	err := widgets.RunWithPromptHooks(func() error {
 		return form.RunWithContext(ctx)
 	})
 	if err != nil {

@@ -8,7 +8,7 @@ import (
 	"strings"
 	"testing"
 
-	"devbox-cli/internal/core/ui"
+	"devbox-cli/internal/core/ui/widgets"
 	"devbox-cli/internal/shared/tpl"
 )
 
@@ -138,9 +138,9 @@ func TestWorkflowRunner_NestedParallel_WrappedByParentGroup(t *testing.T) {
 // -----------------------------------------------------------------------------
 
 func TestWorkflowRunner_ConfirmStep_UnderParallelRejected(t *testing.T) {
-	origIsInteractive := ui.IsInteractiveFn
-	t.Cleanup(func() { ui.IsInteractiveFn = origIsInteractive })
-	ui.IsInteractiveFn = func(_ io.Reader) bool { return false }
+	origIsInteractive := widgets.IsInteractiveFn
+	t.Cleanup(func() { widgets.IsInteractiveFn = origIsInteractive })
+	widgets.IsInteractiveFn = func(_ io.Reader) bool { return false }
 
 	wf := &CommandDef{
 		Type:      CommandTypeWorkflow,
@@ -276,9 +276,9 @@ func TestConfirmCommand_NonConfirmingCommandIgnoresGuard(t *testing.T) {
 // -----------------------------------------------------------------------------
 
 func TestWorkflowRunner_Parallel_TransitiveConfirmRejected(t *testing.T) {
-	origIsInteractive := ui.IsInteractiveFn
-	t.Cleanup(func() { ui.IsInteractiveFn = origIsInteractive })
-	ui.IsInteractiveFn = func(_ io.Reader) bool { return false }
+	origIsInteractive := widgets.IsInteractiveFn
+	t.Cleanup(func() { widgets.IsInteractiveFn = origIsInteractive })
+	widgets.IsInteractiveFn = func(_ io.Reader) bool { return false }
 
 	// Inner workflow has a confirm step.
 	inner := &CommandDef{
@@ -319,9 +319,9 @@ func TestWorkflowRunner_Parallel_TransitiveConfirmationCommandRejected(t *testin
 	// Inner workflow's final step references a `confirmation: true` command.
 	// Task 5 preflight cannot see this because the IMMEDIATE sub-step is the
 	// workflow (Confirmation=false). The runtime guard in ConfirmCommand catches it.
-	origIsInteractive := ui.IsInteractiveFn
-	t.Cleanup(func() { ui.IsInteractiveFn = origIsInteractive })
-	ui.IsInteractiveFn = func(_ io.Reader) bool { return false }
+	origIsInteractive := widgets.IsInteractiveFn
+	t.Cleanup(func() { widgets.IsInteractiveFn = origIsInteractive })
+	widgets.IsInteractiveFn = func(_ io.Reader) bool { return false }
 
 	confirming := &CommandDef{
 		Type:         CommandTypeShell,

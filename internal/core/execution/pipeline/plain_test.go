@@ -12,7 +12,7 @@ import (
 	"time"
 
 	"devbox-cli/internal/core/project/config"
-	"devbox-cli/internal/core/ui"
+	"devbox-cli/internal/core/ui/widgets"
 	"devbox-cli/internal/shared/render"
 )
 
@@ -1402,26 +1402,26 @@ func TestPlainReporter_TTY_FullParallelGroup_Integration(t *testing.T) {
 // --- Task 10: huh hook registration ---
 
 func TestNewPlainReporter_RegistersHuhHooks(t *testing.T) {
-	ui.ClearHuhHooks()
-	t.Cleanup(ui.ClearHuhHooks)
+	widgets.ClearHuhHooks()
+	t.Cleanup(widgets.ClearHuhHooks)
 
 	r, _ := newBufReporter()
 	t.Cleanup(r.Close)
 
-	before, after := ui.SnapshotHuhHooks()
+	before, after := widgets.SnapshotHuhHooks()
 	if before == nil || after == nil {
 		t.Fatal("NewPlainReporter must install before+after huh hooks")
 	}
 }
 
 func TestPlainReporter_Close_ClearsHooks(t *testing.T) {
-	ui.ClearHuhHooks()
-	t.Cleanup(ui.ClearHuhHooks)
+	widgets.ClearHuhHooks()
+	t.Cleanup(widgets.ClearHuhHooks)
 
 	r, _ := newBufReporter()
 	r.Close()
 
-	before, after := ui.SnapshotHuhHooks()
+	before, after := widgets.SnapshotHuhHooks()
 	if before != nil || after != nil {
 		t.Errorf("Close must clear huh hooks, got before=%v after=%v", before != nil, after != nil)
 	}
@@ -1434,15 +1434,15 @@ func TestPlainReporter_Close_Idempotent(t *testing.T) {
 }
 
 func TestPlainReporter_HuhHooksDriveLiveLinePauseResume(t *testing.T) {
-	ui.ClearHuhHooks()
-	t.Cleanup(ui.ClearHuhHooks)
+	widgets.ClearHuhHooks()
+	t.Cleanup(widgets.ClearHuhHooks)
 
 	r, grid := newTTYReporter()
 	t.Cleanup(r.Close)
 
 	r.StartPipeline("deploy", 1)
 
-	before, after := ui.SnapshotHuhHooks()
+	before, after := widgets.SnapshotHuhHooks()
 	if before == nil || after == nil {
 		t.Fatal("hooks not installed")
 	}

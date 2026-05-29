@@ -6,9 +6,9 @@ import (
 	"strings"
 	"testing"
 
-	"devbox-cli/internal/core/ui"
-
 	"github.com/spf13/cobra"
+
+	"devbox-cli/internal/core/ui/widgets"
 )
 
 // swapMissingDepsConfirm replaces deployMissingDepsConfirmFn for the duration
@@ -50,7 +50,7 @@ func TestConfirmMissingDeps_InteractiveCancelButton(t *testing.T) {
 }
 
 func TestConfirmMissingDeps_InteractiveEsc(t *testing.T) {
-	swapMissingDepsConfirm(t, false, ui.ErrCancelled)
+	swapMissingDepsConfirm(t, false, widgets.ErrCancelled)
 	cmd, _ := newConfirmTestCmd()
 
 	err := confirmMissingDeps(cmd, []string{"web"}, []string{"db"}, true)

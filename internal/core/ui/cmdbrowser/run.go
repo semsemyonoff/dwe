@@ -10,7 +10,7 @@ import (
 
 	tea "charm.land/bubbletea/v2"
 
-	"devbox-cli/internal/core/ui"
+	"devbox-cli/internal/core/ui/widgets"
 )
 
 // Action enumerates intents returned by the browser. ActionUnknown sits at
@@ -110,12 +110,12 @@ func DefaultOptions() Options {
 	}
 }
 
-// Run launches the interactive command browser. Returns ui.ErrCancelled
+// Run launches the interactive command browser. Returns widgets.ErrCancelled
 // when the user quits via q / Esc / Ctrl-C. On TTYs narrower than 60 cols
 // or shorter than 15 rows (and on terminal-size read failures), delegates
-// to ui.RunSelector. Non-TTY callers are short-circuited at the call site
+// to widgets.RunSelector. Non-TTY callers are short-circuited at the call site
 // with an error before reaching this function; this code returns
-// ui.ErrCancelled defensively if it is reached anyway.
+// widgets.ErrCancelled defensively if it is reached anyway.
 func Run(title string, items []Item, opts Options) (Result, error) {
 	opts.applyDefaults()
 	if len(items) == 0 {
@@ -125,7 +125,7 @@ func Run(title string, items []Item, opts Options) (Result, error) {
 	if !isTerminalFn() {
 		// Defence-in-depth: production callers short-circuit non-TTY at the
 		// call site. RunSelector also requires a TTY so we cannot delegate.
-		return Result{}, ui.ErrCancelled
+		return Result{}, widgets.ErrCancelled
 	}
 
 	width, height, err := terminalSizeFn()
@@ -136,7 +136,7 @@ func Run(title string, items []Item, opts Options) (Result, error) {
 	m := newModel(title, items, opts, width, height)
 	prog := tea.NewProgram(m)
 
-	runErr := ui.RunWithPromptHooks(func() error {
+	runErr := widgets.RunWithPromptHooks(func() error {
 		_, e := prog.Run()
 		return e
 	})
@@ -145,18 +145,18 @@ func Run(title string, items []Item, opts Options) (Result, error) {
 			return Result{}, runErr
 		}
 		if errors.Is(runErr, tea.ErrInterrupted) || errors.Is(runErr, tea.ErrProgramKilled) {
-			return Result{}, ui.ErrCancelled
+			return Result{}, widgets.ErrCancelled
 		}
 		return Result{}, runErr
 	}
 	if m.cancelled {
-		return Result{}, ui.ErrCancelled
+		return Result{}, widgets.ErrCancelled
 	}
 	// ActionUnknown (zero value) means the program exited without the user
 	// making a selection — treat it as a cancellation rather than silently
 	// returning defs[0].
 	if m.result.Action == ActionUnknown {
-		return Result{}, ui.ErrCancelled
+		return Result{}, widgets.ErrCancelled
 	}
 	return m.result, nil
 }

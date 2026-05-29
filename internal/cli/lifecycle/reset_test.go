@@ -12,7 +12,7 @@ import (
 
 	"devbox-cli/internal/cli/cmdctx"
 	"devbox-cli/internal/core/project/config"
-	"devbox-cli/internal/core/ui"
+	"devbox-cli/internal/core/ui/widgets"
 	"devbox-cli/internal/core/usercommands"
 	"devbox-cli/internal/core/usercommands/registry"
 	"devbox-cli/internal/core/usercommands/runtime"
@@ -703,9 +703,9 @@ func TestResetServiceRun_TTYConfirmationDecline(t *testing.T) {
 
 	stubPreflightRun(t)
 
-	prevInteractive := ui.IsInteractiveFn
-	t.Cleanup(func() { ui.IsInteractiveFn = prevInteractive })
-	ui.IsInteractiveFn = func(_ io.Reader) bool { return true }
+	prevInteractive := widgets.IsInteractiveFn
+	t.Cleanup(func() { widgets.IsInteractiveFn = prevInteractive })
+	widgets.IsInteractiveFn = func(_ io.Reader) bool { return true }
 
 	var capturedTitle, capturedAffirm, capturedNegative string
 	prevConfirm := resetConfirmFn
@@ -750,9 +750,9 @@ func TestResetServiceRun_TTYConfirmationAccept(t *testing.T) {
 
 	stubPreflightRun(t)
 
-	prevInteractive := ui.IsInteractiveFn
-	t.Cleanup(func() { ui.IsInteractiveFn = prevInteractive })
-	ui.IsInteractiveFn = func(_ io.Reader) bool { return true }
+	prevInteractive := widgets.IsInteractiveFn
+	t.Cleanup(func() { widgets.IsInteractiveFn = prevInteractive })
+	widgets.IsInteractiveFn = func(_ io.Reader) bool { return true }
 
 	prevConfirm := resetConfirmFn
 	t.Cleanup(func() { resetConfirmFn = prevConfirm })
@@ -780,18 +780,18 @@ func TestResetServiceRun_TTYConfirmationAccept(t *testing.T) {
 }
 
 // TestResetServiceRun_ConfirmCancelledSilently verifies that pressing Esc/Ctrl-C
-// in the confirm form (ui.ErrCancelled) returns nil without side effects.
+// in the confirm form (widgets.ErrCancelled) returns nil without side effects.
 func TestResetServiceRun_ConfirmCancelledSilently(t *testing.T) {
 	cfgPath, dir := makeResetServiceTestDir(t, "postgres", true, false, true, false)
 	stubPreflightRun(t)
 
-	prevInteractive := ui.IsInteractiveFn
-	t.Cleanup(func() { ui.IsInteractiveFn = prevInteractive })
-	ui.IsInteractiveFn = func(_ io.Reader) bool { return true }
+	prevInteractive := widgets.IsInteractiveFn
+	t.Cleanup(func() { widgets.IsInteractiveFn = prevInteractive })
+	widgets.IsInteractiveFn = func(_ io.Reader) bool { return true }
 
 	prevConfirm := resetConfirmFn
 	t.Cleanup(func() { resetConfirmFn = prevConfirm })
-	resetConfirmFn = func(_, _, _ string) (bool, error) { return false, ui.ErrCancelled }
+	resetConfirmFn = func(_, _, _ string) (bool, error) { return false, widgets.ErrCancelled }
 
 	flags := &cmdctx.RootFlags{}
 	root := buildLifecycleTestRoot(flags)
@@ -813,9 +813,9 @@ func TestResetServiceRun_NonInteractiveRequiresYes(t *testing.T) {
 	cfgPath, _ := makeResetServiceTestDir(t, "postgres", true, false, true, false)
 	stubPreflightRun(t)
 
-	prevInteractive := ui.IsInteractiveFn
-	t.Cleanup(func() { ui.IsInteractiveFn = prevInteractive })
-	ui.IsInteractiveFn = func(_ io.Reader) bool { return false }
+	prevInteractive := widgets.IsInteractiveFn
+	t.Cleanup(func() { widgets.IsInteractiveFn = prevInteractive })
+	widgets.IsInteractiveFn = func(_ io.Reader) bool { return false }
 
 	flags := &cmdctx.RootFlags{}
 	root := buildLifecycleTestRoot(flags)
@@ -846,9 +846,9 @@ func TestResetServiceRun_WithDirSyntheticFilesPhase(t *testing.T) {
 		capturedTitle = title
 		return true, nil
 	}
-	prevInteractive := ui.IsInteractiveFn
-	t.Cleanup(func() { ui.IsInteractiveFn = prevInteractive })
-	ui.IsInteractiveFn = func(_ io.Reader) bool { return true }
+	prevInteractive := widgets.IsInteractiveFn
+	t.Cleanup(func() { widgets.IsInteractiveFn = prevInteractive })
+	widgets.IsInteractiveFn = func(_ io.Reader) bool { return true }
 
 	flags := &cmdctx.RootFlags{}
 	root := buildLifecycleTestRoot(flags)
@@ -873,9 +873,9 @@ func TestResetServiceRun_WithDirSyntheticFilesPhase(t *testing.T) {
 func TestResetServiceRun_RequiredServiceWarning(t *testing.T) {
 	cfgPath, _ := makeResetServiceTestDir(t, "postgres", true, true, true, false)
 	stubPreflightRun(t)
-	prevInteractive := ui.IsInteractiveFn
-	t.Cleanup(func() { ui.IsInteractiveFn = prevInteractive })
-	ui.IsInteractiveFn = func(_ io.Reader) bool { return true }
+	prevInteractive := widgets.IsInteractiveFn
+	t.Cleanup(func() { widgets.IsInteractiveFn = prevInteractive })
+	widgets.IsInteractiveFn = func(_ io.Reader) bool { return true }
 
 	var capturedTitle string
 	prevConfirm := resetConfirmFn
@@ -904,9 +904,9 @@ func TestResetServiceRun_RequiredServiceWarning(t *testing.T) {
 func TestResetServiceRun_ResetYMLBulletInTitle(t *testing.T) {
 	cfgPath, _ := makeResetServiceTestDir(t, "postgres", true, false, true, true)
 	stubPreflightRun(t)
-	prevInteractive := ui.IsInteractiveFn
-	t.Cleanup(func() { ui.IsInteractiveFn = prevInteractive })
-	ui.IsInteractiveFn = func(_ io.Reader) bool { return true }
+	prevInteractive := widgets.IsInteractiveFn
+	t.Cleanup(func() { widgets.IsInteractiveFn = prevInteractive })
+	widgets.IsInteractiveFn = func(_ io.Reader) bool { return true }
 
 	var capturedTitle string
 	prevConfirm := resetConfirmFn

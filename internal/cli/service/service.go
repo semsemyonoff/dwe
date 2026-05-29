@@ -10,8 +10,8 @@ import (
 	"devbox-cli/internal/core/project/config"
 	localpkg "devbox-cli/internal/core/project/local"
 	"devbox-cli/internal/core/project/services"
-	"devbox-cli/internal/core/ui"
 	"devbox-cli/internal/core/ui/styles"
+	"devbox-cli/internal/core/ui/widgets"
 	"devbox-cli/internal/core/usercommands"
 	"devbox-cli/internal/core/workflow/deploy/journal"
 	"devbox-cli/internal/shared/render"
@@ -68,7 +68,7 @@ state, and daemons, run 'devbox status'.`,
 // --output json is set or stdin is not a TTY, dispatches to the read-only
 // list renderer. All-mandatory short-circuits.
 func runServicesToggle(cmd *cobra.Command, flags *cmdctx.RootFlags, opts singleToggleFlags) error {
-	if flags.Output == "json" || !ui.IsInteractiveFn(cmd.InOrStdin()) {
+	if flags.Output == "json" || !widgets.IsInteractiveFn(cmd.InOrStdin()) {
 		return runServicesList(cmd, flags)
 	}
 
@@ -88,10 +88,10 @@ func runServicesToggle(cmd *cobra.Command, flags *cmdctx.RootFlags, opts singleT
 		return fmt.Errorf("nothing to toggle, see 'devbox status'")
 	}
 
-	items := make([]ui.MultiSelectItem, len(rows))
+	items := make([]widgets.MultiSelectItem, len(rows))
 	var lockedNames []string
 	for i, row := range rows {
-		items[i] = ui.MultiSelectItem{
+		items[i] = widgets.MultiSelectItem{
 			Key:         row.Name,
 			Label:       formatServiceToggleOptionLabel(row),
 			Description: formatServiceToggleOptionDescription(row),
@@ -110,7 +110,7 @@ func runServicesToggle(cmd *cobra.Command, flags *cmdctx.RootFlags, opts singleT
 
 	result, err := runMultiSelect("Toggle services:", items)
 	if err != nil {
-		if errors.Is(err, ui.ErrCancelled) {
+		if errors.Is(err, widgets.ErrCancelled) {
 			return nil
 		}
 		return err
@@ -212,7 +212,7 @@ func runServicesToggle(cmd *cobra.Command, flags *cmdctx.RootFlags, opts singleT
 	// We're always in TTY here (checked at the top), so prompt the user.
 	ok, err := confirmApplyPrompt()
 	if err != nil {
-		if errors.Is(err, ui.ErrCancelled) {
+		if errors.Is(err, widgets.ErrCancelled) {
 			return nil
 		}
 		return err
@@ -261,10 +261,10 @@ func rowActive(row services.Row) bool {
 
 // selectToggleFn is a function type for interactive service selection used by
 // enable/disable commands when no service argument is provided.
-type selectToggleFn func(title string, items []ui.SelectorItem) (int, error)
+type selectToggleFn func(title string, items []widgets.SelectorItem) (int, error)
 
-// defaultSelectToggle calls ui.RunSelector.
-var defaultSelectToggle selectToggleFn = ui.RunSelector
+// defaultSelectToggle calls widgets.RunSelector.
+var defaultSelectToggle selectToggleFn = widgets.RunSelector
 
 // pickServiceToEnable returns the name of a disabled non-required service to enable.
 func pickServiceToEnable(cfg *config.DevboxConfig, selector selectToggleFn) (string, error) {
@@ -294,7 +294,7 @@ func pickToggleCandidates(cfg *config.DevboxConfig, names []string, statusLabel,
 	if len(names) == 0 {
 		return "", fmt.Errorf("no %s optional services found", statusLabel)
 	}
-	items := make([]ui.SelectorItem, len(names))
+	items := make([]widgets.SelectorItem, len(names))
 	for i, name := range names {
 		svc := cfg.Services[name]
 		row := services.Row{
@@ -305,7 +305,7 @@ func pickToggleCandidates(cfg *config.DevboxConfig, names []string, statusLabel,
 			Mandatory: svc.Required,
 			Enabled:   svc.Enabled,
 		}
-		items[i] = ui.SelectorItem{
+		items[i] = widgets.SelectorItem{
 			Label:       formatServiceToggleLabel(row),
 			Description: formatServiceToggleDescription(row),
 			Status:      statusLabel,
@@ -358,12 +358,12 @@ disabled optional services.`,
 					return nil
 				}
 			} else {
-				if !ui.IsInteractiveFn(cmd.InOrStdin()) {
+				if !widgets.IsInteractiveFn(cmd.InOrStdin()) {
 					return fmt.Errorf("no service name given; pass a service name or run in an interactive terminal")
 				}
 				name, err = pickServiceToEnable(cfg, defaultSelectToggle)
 				if err != nil {
-					if errors.Is(err, ui.ErrCancelled) {
+					if errors.Is(err, widgets.ErrCancelled) {
 						return nil
 					}
 					return err
@@ -419,12 +419,12 @@ enabled optional services.`,
 					return nil
 				}
 			} else {
-				if !ui.IsInteractiveFn(cmd.InOrStdin()) {
+				if !widgets.IsInteractiveFn(cmd.InOrStdin()) {
 					return fmt.Errorf("no service name given; pass a service name or run in an interactive terminal")
 				}
 				name, err = pickServiceToDisable(cfg, defaultSelectToggle)
 				if err != nil {
-					if errors.Is(err, ui.ErrCancelled) {
+					if errors.Is(err, widgets.ErrCancelled) {
 						return nil
 					}
 					return err

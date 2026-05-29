@@ -13,7 +13,7 @@ import (
 	"devbox-cli/internal/core/notify"
 	"devbox-cli/internal/core/project/config"
 	userpkg "devbox-cli/internal/core/project/user"
-	"devbox-cli/internal/core/ui"
+	"devbox-cli/internal/core/ui/widgets"
 	"devbox-cli/internal/shared/tpl"
 )
 
@@ -227,9 +227,9 @@ func TestRunCommand_NilCmd_ReturnsErrorNoNotify(t *testing.T) {
 // TestRunCommand_NotifyTrue_CommandAborted_NoEvent verifies that an explicit
 // user confirmation refusal (commandAbortedError) does not fire a notification.
 func TestRunCommand_NotifyTrue_CommandAborted_NoEvent(t *testing.T) {
-	origIsInteractive := ui.IsInteractiveFn
-	t.Cleanup(func() { ui.IsInteractiveFn = origIsInteractive })
-	ui.IsInteractiveFn = func(io.Reader) bool { return false }
+	origIsInteractive := widgets.IsInteractiveFn
+	t.Cleanup(func() { widgets.IsInteractiveFn = origIsInteractive })
+	widgets.IsInteractiveFn = func(io.Reader) bool { return false }
 
 	rec := installRecordingNotifier(t)
 	cmd := &CommandDef{

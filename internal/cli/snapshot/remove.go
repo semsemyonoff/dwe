@@ -14,7 +14,7 @@ import (
 	"devbox-cli/internal/core/notify"
 	"devbox-cli/internal/core/project/config"
 	userpkg "devbox-cli/internal/core/project/user"
-	"devbox-cli/internal/core/ui"
+	"devbox-cli/internal/core/ui/widgets"
 	"devbox-cli/internal/core/usercommands"
 	"devbox-cli/internal/core/usercommands/model"
 	"devbox-cli/internal/core/usercommands/registry"
@@ -127,11 +127,11 @@ func runSnapshotRemove(cmd *cobra.Command, flags *cmdctx.RootFlags, name string,
 		BaseDir:        baseDir,
 		Name:           name,
 		SkipConfirm:    yes,
-		NonInteractive: !ui.IsInteractiveFn(os.Stdin),
+		NonInteractive: !widgets.IsInteractiveFn(os.Stdin),
 		Stdout:         stdout,
 		Stderr:         stderr,
 		ConfirmRemove: func(m *snapshotpkg.Manifest) (bool, error) {
-			if !ui.IsInteractiveFn(os.Stdin) {
+			if !widgets.IsInteractiveFn(os.Stdin) {
 				_, _ = fmt.Fprintln(stderr, "snapshot remove needs confirmation; pass --yes to proceed non-interactively")
 				return false, nil
 			}
@@ -139,7 +139,7 @@ func runSnapshotRemove(cmd *cobra.Command, flags *cmdctx.RootFlags, name string,
 			if m != nil && m.Description != "" {
 				prompt = fmt.Sprintf("Remove snapshot %q (%s)?", name, m.Description)
 			}
-			return ui.RunConfirm(prompt, "Remove", "Cancel")
+			return widgets.RunConfirm(prompt, "Remove", "Cancel")
 		},
 		StepObserverFactory: func(steps []model.WorkflowStep) snapshotpkg.StepObserverCloser {
 			return newSnapshotLiveObserver("snapshot remove: "+name, noLive, steps)

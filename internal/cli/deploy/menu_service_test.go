@@ -11,7 +11,7 @@ import (
 
 	"devbox-cli/internal/cli/cmdctx"
 	"devbox-cli/internal/core/project/config"
-	"devbox-cli/internal/core/ui"
+	"devbox-cli/internal/core/ui/widgets"
 	"devbox-cli/internal/core/workflow/deploy/journal"
 
 	"github.com/spf13/cobra"
@@ -125,20 +125,20 @@ func TestRunDeployMenu_SubmenuCancelLoopsBack(t *testing.T) {
 	oldPicker := selectDeployServiceFn
 	oldRunFn := runDeployRunFn
 	oldBuild := buildDeployItemsFn
-	oldIsInteractive := ui.IsInteractiveFn
+	oldIsInteractive := widgets.IsInteractiveFn
 	t.Cleanup(func() {
 		selectMenuItemFn = oldSelect
 		selectDeployServiceFn = oldPicker
 		runDeployRunFn = oldRunFn
 		buildDeployItemsFn = oldBuild
-		ui.IsInteractiveFn = oldIsInteractive
+		widgets.IsInteractiveFn = oldIsInteractive
 	})
 
 	buildDeployItemsFn = func(baseDir string, cfg *config.DevboxConfig, state *journal.ProjectState) ([]deployServiceItem, error) {
 		return []deployServiceItem{{Name: "web", Type: "app", Mandatory: true}}, nil
 	}
 
-	ui.IsInteractiveFn = func(stdin io.Reader) bool { return true }
+	widgets.IsInteractiveFn = func(stdin io.Reader) bool { return true }
 
 	calls := 0
 	selectMenuItemFn = func(ctx context.Context, cmd *cobra.Command, pending *journal.PendingApply, showWizard bool) (menuChoice, error) {
@@ -152,7 +152,7 @@ func TestRunDeployMenu_SubmenuCancelLoopsBack(t *testing.T) {
 	pickerCalled := false
 	selectDeployServiceFn = func(ctx context.Context, cmd *cobra.Command, title string, items []deployServiceItem, applyGate bool) (string, error) {
 		pickerCalled = true
-		return "", ui.ErrCancelled
+		return "", widgets.ErrCancelled
 	}
 
 	runDeployRunFn = func(ctx context.Context, cmd *cobra.Command, flags *cmdctx.RootFlags, opts deployRunOpts) error {

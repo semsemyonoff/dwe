@@ -8,7 +8,7 @@ import (
 	"path/filepath"
 
 	"devbox-cli/internal/cli/cmdctx"
-	"devbox-cli/internal/core/ui"
+	"devbox-cli/internal/core/ui/widgets"
 	"devbox-cli/internal/core/workflow/deploy/journal"
 	"devbox-cli/internal/shared/lock"
 	"devbox-cli/internal/shared/render"
@@ -130,8 +130,8 @@ func deployStateClearCmd(flags *cmdctx.RootFlags, force bool) error {
 	}
 
 	// Prompt for confirmation if not forced and interactive
-	if !force && ui.IsInteractiveFn(os.Stdin) {
-		confirmed, err := ui.RunConfirm(
+	if !force && widgets.IsInteractiveFn(os.Stdin) {
+		confirmed, err := widgets.RunConfirm(
 			"Clear deploy state?",
 			"Clear",
 			"Cancel",

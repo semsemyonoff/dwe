@@ -7,7 +7,7 @@ import (
 	"strings"
 	"testing"
 
-	"devbox-cli/internal/core/ui"
+	"devbox-cli/internal/core/ui/widgets"
 	"devbox-cli/internal/core/usercommands/model"
 	"devbox-cli/internal/core/usercommands/runtime"
 	snapshotpkg "devbox-cli/internal/core/workflow/snapshot"
@@ -36,7 +36,7 @@ func withSnapshotLiveLineFactory(t *testing.T, buf io.Writer, isTTY bool) {
 	t.Cleanup(func() {
 		snapshotLiveOutputs = prevOutputs
 		newSnapshotObserverLiveLine = prevFactory
-		ui.ClearHuhHooks()
+		widgets.ClearHuhHooks()
 	})
 }
 
@@ -163,12 +163,12 @@ func TestSnapshotLiveObserver_Close_ClearsHuhHooks(t *testing.T) {
 	if obs == nil {
 		t.Fatalf("expected observer")
 	}
-	before, after := ui.SnapshotHuhHooks()
+	before, after := widgets.SnapshotHuhHooks()
 	if before == nil || after == nil {
 		t.Fatalf("expected huh hooks to be installed; got before==nil:%v after==nil:%v", before == nil, after == nil)
 	}
 	obs.Close()
-	before, after = ui.SnapshotHuhHooks()
+	before, after = widgets.SnapshotHuhHooks()
 	if before != nil || after != nil {
 		t.Errorf("expected hooks cleared after Close; got before==nil:%v after==nil:%v", before == nil, after == nil)
 	}

@@ -8,9 +8,9 @@ import (
 	"testing"
 
 	"devbox-cli/internal/core/execution/builtin/spec"
+	"devbox-cli/internal/core/ui/widgets"
 
 	"devbox-cli/internal/core/project/config"
-	"devbox-cli/internal/core/ui"
 	"devbox-cli/internal/shared/render"
 )
 
@@ -138,14 +138,14 @@ func TestConfirmBuiltin_NoConfirmFunc_SkipsWhenSkipConfirmSet(t *testing.T) {
 // TestConfirmBuiltin_TTY_UsesRunConfirmWrapper verifies the huh path via injected wrapper.
 func TestConfirmBuiltin_TTY_UsesRunConfirmWrapper(t *testing.T) {
 	orig := runConfirm
-	origIsInteractive := ui.IsInteractiveFn
+	origIsInteractive := widgets.IsInteractiveFn
 	t.Cleanup(func() {
 		runConfirm = orig
-		ui.IsInteractiveFn = origIsInteractive
+		widgets.IsInteractiveFn = origIsInteractive
 	})
 
 	// Force TTY detection to return true.
-	ui.IsInteractiveFn = func(_ io.Reader) bool { return true }
+	widgets.IsInteractiveFn = func(_ io.Reader) bool { return true }
 
 	var called bool
 	runConfirm = func(title, affirmative, negative string) (bool, error) {
@@ -172,15 +172,15 @@ func TestConfirmBuiltin_TTY_UsesRunConfirmWrapper(t *testing.T) {
 // TestConfirmBuiltin_TTY_ErrCancelled verifies that ErrCancelled (Esc/Ctrl-C) maps to "aborted by user".
 func TestConfirmBuiltin_TTY_ErrCancelled(t *testing.T) {
 	orig := runConfirm
-	origIsInteractive := ui.IsInteractiveFn
+	origIsInteractive := widgets.IsInteractiveFn
 	t.Cleanup(func() {
 		runConfirm = orig
-		ui.IsInteractiveFn = origIsInteractive
+		widgets.IsInteractiveFn = origIsInteractive
 	})
 
-	ui.IsInteractiveFn = func(_ io.Reader) bool { return true }
+	widgets.IsInteractiveFn = func(_ io.Reader) bool { return true }
 	runConfirm = func(title, affirmative, negative string) (bool, error) {
-		return false, ui.ErrCancelled
+		return false, widgets.ErrCancelled
 	}
 
 	out := &bytes.Buffer{}
@@ -199,13 +199,13 @@ func TestConfirmBuiltin_TTY_ErrCancelled(t *testing.T) {
 // TestConfirmBuiltin_TTY_Denied verifies that runConfirm returning false aborts.
 func TestConfirmBuiltin_TTY_Denied(t *testing.T) {
 	orig := runConfirm
-	origIsInteractive := ui.IsInteractiveFn
+	origIsInteractive := widgets.IsInteractiveFn
 	t.Cleanup(func() {
 		runConfirm = orig
-		ui.IsInteractiveFn = origIsInteractive
+		widgets.IsInteractiveFn = origIsInteractive
 	})
 
-	ui.IsInteractiveFn = func(_ io.Reader) bool { return true }
+	widgets.IsInteractiveFn = func(_ io.Reader) bool { return true }
 	runConfirm = func(title, affirmative, negative string) (bool, error) {
 		return false, nil
 	}
@@ -225,10 +225,10 @@ func TestConfirmBuiltin_TTY_Denied(t *testing.T) {
 
 // TestConfirmBuiltin_NonTTY_StdinY verifies that piped "y" input succeeds via fallback.
 func TestConfirmBuiltin_NonTTY_StdinY(t *testing.T) {
-	origIsInteractive := ui.IsInteractiveFn
-	t.Cleanup(func() { ui.IsInteractiveFn = origIsInteractive })
+	origIsInteractive := widgets.IsInteractiveFn
+	t.Cleanup(func() { widgets.IsInteractiveFn = origIsInteractive })
 
-	ui.IsInteractiveFn = func(_ io.Reader) bool { return false }
+	widgets.IsInteractiveFn = func(_ io.Reader) bool { return false }
 
 	out := &bytes.Buffer{}
 	ctx := spec.ExecContext{
@@ -245,10 +245,10 @@ func TestConfirmBuiltin_NonTTY_StdinY(t *testing.T) {
 
 // TestConfirmBuiltin_NonTTY_StdinN verifies that piped "n" input aborts via fallback.
 func TestConfirmBuiltin_NonTTY_StdinN(t *testing.T) {
-	origIsInteractive := ui.IsInteractiveFn
-	t.Cleanup(func() { ui.IsInteractiveFn = origIsInteractive })
+	origIsInteractive := widgets.IsInteractiveFn
+	t.Cleanup(func() { widgets.IsInteractiveFn = origIsInteractive })
 
-	ui.IsInteractiveFn = func(_ io.Reader) bool { return false }
+	widgets.IsInteractiveFn = func(_ io.Reader) bool { return false }
 
 	out := &bytes.Buffer{}
 	ctx := spec.ExecContext{

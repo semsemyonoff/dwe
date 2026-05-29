@@ -8,7 +8,7 @@ import (
 	"strings"
 	"testing"
 
-	"devbox-cli/internal/core/ui"
+	"devbox-cli/internal/core/ui/widgets"
 	"devbox-cli/internal/shared/tpl"
 )
 
@@ -328,13 +328,13 @@ func TestNewRunner_Returns_WorkflowRunner(t *testing.T) {
 
 func TestWorkflowRunner_ConfirmStep_TTY_Confirmed(t *testing.T) {
 	origRC := runConfirm
-	origIsInteractive := ui.IsInteractiveFn
+	origIsInteractive := widgets.IsInteractiveFn
 	t.Cleanup(func() {
 		runConfirm = origRC
-		ui.IsInteractiveFn = origIsInteractive
+		widgets.IsInteractiveFn = origIsInteractive
 	})
 
-	ui.IsInteractiveFn = func(_ io.Reader) bool { return true }
+	widgets.IsInteractiveFn = func(_ io.Reader) bool { return true }
 	runConfirm = func(title, affirmative, negative string) (bool, error) {
 		return true, nil
 	}
@@ -369,13 +369,13 @@ func TestWorkflowRunner_ConfirmStep_TTY_Confirmed(t *testing.T) {
 
 func TestWorkflowRunner_ConfirmStep_TTY_Denied(t *testing.T) {
 	origRC := runConfirm
-	origIsInteractive := ui.IsInteractiveFn
+	origIsInteractive := widgets.IsInteractiveFn
 	t.Cleanup(func() {
 		runConfirm = origRC
-		ui.IsInteractiveFn = origIsInteractive
+		widgets.IsInteractiveFn = origIsInteractive
 	})
 
-	ui.IsInteractiveFn = func(_ io.Reader) bool { return true }
+	widgets.IsInteractiveFn = func(_ io.Reader) bool { return true }
 	runConfirm = func(title, affirmative, negative string) (bool, error) {
 		return false, nil
 	}
@@ -416,10 +416,10 @@ func TestWorkflowRunner_ConfirmStep_TTY_Denied(t *testing.T) {
 // ---------------------------------------------------------------------------
 
 func TestWorkflowRunner_ConfirmStep_NonTTY_YInput(t *testing.T) {
-	origIsInteractive := ui.IsInteractiveFn
-	t.Cleanup(func() { ui.IsInteractiveFn = origIsInteractive })
+	origIsInteractive := widgets.IsInteractiveFn
+	t.Cleanup(func() { widgets.IsInteractiveFn = origIsInteractive })
 
-	ui.IsInteractiveFn = func(_ io.Reader) bool { return false }
+	widgets.IsInteractiveFn = func(_ io.Reader) bool { return false }
 
 	wf := &CommandDef{
 		Type:      CommandTypeWorkflow,
@@ -452,10 +452,10 @@ func TestWorkflowRunner_ConfirmStep_NonTTY_YInput(t *testing.T) {
 // TestWorkflowRunner_ConfirmStep_NonTTY_CIEnv verifies that CI=1 auto-confirms
 // the prompt — matching the behavior of builtin/print confirm paths.
 func TestWorkflowRunner_ConfirmStep_NonTTY_CIEnv(t *testing.T) {
-	origIsInteractive := ui.IsInteractiveFn
-	t.Cleanup(func() { ui.IsInteractiveFn = origIsInteractive })
+	origIsInteractive := widgets.IsInteractiveFn
+	t.Cleanup(func() { widgets.IsInteractiveFn = origIsInteractive })
 
-	ui.IsInteractiveFn = func(_ io.Reader) bool { return false }
+	widgets.IsInteractiveFn = func(_ io.Reader) bool { return false }
 	t.Setenv("CI", "1")
 
 	wf := &CommandDef{
@@ -486,10 +486,10 @@ func TestWorkflowRunner_ConfirmStep_NonTTY_CIEnv(t *testing.T) {
 }
 
 func TestWorkflowRunner_ConfirmStep_NonTTY_NInput(t *testing.T) {
-	origIsInteractive := ui.IsInteractiveFn
-	t.Cleanup(func() { ui.IsInteractiveFn = origIsInteractive })
+	origIsInteractive := widgets.IsInteractiveFn
+	t.Cleanup(func() { widgets.IsInteractiveFn = origIsInteractive })
 
-	ui.IsInteractiveFn = func(_ io.Reader) bool { return false }
+	widgets.IsInteractiveFn = func(_ io.Reader) bool { return false }
 
 	wf := &CommandDef{
 		Type:      CommandTypeWorkflow,

@@ -15,8 +15,8 @@ import (
 	cmdDeploy "devbox-cli/internal/cli/deploy"
 	"devbox-cli/internal/core/project/config"
 	localpkg "devbox-cli/internal/core/project/local"
-	"devbox-cli/internal/core/ui"
 	"devbox-cli/internal/core/ui/styles"
+	"devbox-cli/internal/core/ui/widgets"
 	"devbox-cli/internal/core/usercommands"
 	"devbox-cli/internal/core/usercommands/registry"
 	"devbox-cli/internal/core/usercommands/runtime"
@@ -56,15 +56,15 @@ var detectStackRunning = func(cfg *config.DevboxConfig, baseDir string) (bool, e
 	return len(ids) > 0, nil
 }
 
-// runMultiSelect is a package-level wrapper for ui.RunMultiSelect.
+// runMultiSelect is a package-level wrapper for widgets.RunMultiSelect.
 // Tests in this package swap it to inject fake multi-select behaviour.
-var runMultiSelect = ui.RunMultiSelect
+var runMultiSelect = widgets.RunMultiSelect
 
-// confirmApplyPrompt is a package-level wrapper for ui.RunConfirm used by the
+// confirmApplyPrompt is a package-level wrapper for widgets.RunConfirm used by the
 // "Run them now?" confirmation in the toggle flow. Tests swap it to inject
 // canned answers without driving a real huh form.
 var confirmApplyPrompt = func() (bool, error) {
-	return ui.RunConfirm("Run them now?", "Yes", "No")
+	return widgets.RunConfirm("Run them now?", "Yes", "No")
 }
 
 // singleToggleAddPendingOps is the seam for journal.AddPendingOps.
@@ -567,10 +567,10 @@ func runSingleServiceToggle(
 		return executeTogglePlan(ctx, deps, plan, execOpts)
 	}
 
-	if ui.IsInteractiveFn(cmd.InOrStdin()) {
+	if widgets.IsInteractiveFn(cmd.InOrStdin()) {
 		ok, err := confirmApplyPrompt()
 		if err != nil {
-			if errors.Is(err, ui.ErrCancelled) {
+			if errors.Is(err, widgets.ErrCancelled) {
 				return nil
 			}
 			return err

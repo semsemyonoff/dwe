@@ -169,7 +169,7 @@ func (w *Writer) Println(s string) {
 }
 
 // Confirm is the non-TTY fallback for user confirmation (plain stdin Y/n).
-// Use ui.RunConfirm for interactive TTY prompts backed by huh.
+// Use widgets.RunConfirm for interactive TTY prompts backed by huh.
 // Returns true if the user answered y/Y, false otherwise.
 // If the CI environment variable is set, skips the prompt and returns true.
 func (w *Writer) Confirm(msg string, r io.Reader) bool {

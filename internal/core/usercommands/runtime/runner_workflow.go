@@ -17,7 +17,7 @@ import (
 
 	"devbox-cli/internal/core/execution/filesgate"
 	"devbox-cli/internal/core/execution/filesgate/spec"
-	"devbox-cli/internal/core/ui"
+	"devbox-cli/internal/core/ui/widgets"
 	"devbox-cli/internal/core/usercommands/model"
 	"devbox-cli/internal/core/usercommands/resolve"
 	"devbox-cli/internal/shared/liveui"
@@ -229,10 +229,10 @@ func (r *WorkflowRunner) runConfirmStep(ctx RunContext, message string) error {
 		stdin = os.Stdin
 	}
 
-	if ui.IsInteractiveFn(stdin) {
+	if widgets.IsInteractiveFn(stdin) {
 		confirmed, err := runConfirm(message, "Yes", "No")
 		if err != nil {
-			if errors.Is(err, ui.ErrCancelled) {
+			if errors.Is(err, widgets.ErrCancelled) {
 				return fmt.Errorf("aborted by user")
 			}
 			return err

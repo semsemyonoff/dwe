@@ -15,7 +15,7 @@ import (
 	"devbox-cli/internal/core/notify"
 	"devbox-cli/internal/core/project/config"
 	userpkg "devbox-cli/internal/core/project/user"
-	"devbox-cli/internal/core/ui"
+	"devbox-cli/internal/core/ui/widgets"
 	"devbox-cli/internal/core/usercommands"
 	"devbox-cli/internal/core/usercommands/model"
 	snapshotpkg "devbox-cli/internal/core/workflow/snapshot"
@@ -135,15 +135,15 @@ func runSnapshotCreate(cmd *cobra.Command, flags *cmdctx.RootFlags, name, descri
 		Variant:        variant,
 		DevboxVersion:  version.Version,
 		SkipConfirm:    yes,
-		NonInteractive: !ui.IsInteractiveFn(os.Stdin),
+		NonInteractive: !widgets.IsInteractiveFn(os.Stdin),
 		Stdout:         stdout,
 		Stderr:         stderr,
 		ConfirmOverwrite: func() (bool, error) {
-			if !ui.IsInteractiveFn(os.Stdin) {
+			if !widgets.IsInteractiveFn(os.Stdin) {
 				_, _ = fmt.Fprintln(stderr, "snapshot already exists; pass --yes to overwrite non-interactively")
 				return false, nil
 			}
-			return ui.RunConfirm(
+			return widgets.RunConfirm(
 				fmt.Sprintf("Snapshot %q already exists. Overwrite?", name),
 				"Overwrite",
 				"Cancel",

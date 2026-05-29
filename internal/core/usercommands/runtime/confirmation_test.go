@@ -7,14 +7,14 @@ import (
 	"strings"
 	"testing"
 
-	"devbox-cli/internal/core/ui"
+	"devbox-cli/internal/core/ui/widgets"
 	"devbox-cli/internal/shared/tpl"
 )
 
 func TestRunCommand_Confirmation_NonTTY_YInputRunsCommand(t *testing.T) {
-	origIsInteractive := ui.IsInteractiveFn
-	t.Cleanup(func() { ui.IsInteractiveFn = origIsInteractive })
-	ui.IsInteractiveFn = func(_ io.Reader) bool { return false }
+	origIsInteractive := widgets.IsInteractiveFn
+	t.Cleanup(func() { widgets.IsInteractiveFn = origIsInteractive })
+	widgets.IsInteractiveFn = func(_ io.Reader) bool { return false }
 
 	dir := t.TempDir()
 	logFile := dir + "/run.log"
@@ -43,9 +43,9 @@ func TestRunCommand_Confirmation_NonTTY_YInputRunsCommand(t *testing.T) {
 }
 
 func TestRunCommand_Confirmation_NonTTY_NInputAbortsCommand(t *testing.T) {
-	origIsInteractive := ui.IsInteractiveFn
-	t.Cleanup(func() { ui.IsInteractiveFn = origIsInteractive })
-	ui.IsInteractiveFn = func(_ io.Reader) bool { return false }
+	origIsInteractive := widgets.IsInteractiveFn
+	t.Cleanup(func() { widgets.IsInteractiveFn = origIsInteractive })
+	widgets.IsInteractiveFn = func(_ io.Reader) bool { return false }
 
 	dir := t.TempDir()
 	logFile := dir + "/run.log"
@@ -75,9 +75,9 @@ func TestRunCommand_Confirmation_NonTTY_NInputAbortsCommand(t *testing.T) {
 }
 
 func TestRunCommand_Confirmation_DefaultText(t *testing.T) {
-	origIsInteractive := ui.IsInteractiveFn
-	t.Cleanup(func() { ui.IsInteractiveFn = origIsInteractive })
-	ui.IsInteractiveFn = func(_ io.Reader) bool { return false }
+	origIsInteractive := widgets.IsInteractiveFn
+	t.Cleanup(func() { widgets.IsInteractiveFn = origIsInteractive })
+	widgets.IsInteractiveFn = func(_ io.Reader) bool { return false }
 
 	cmd := &CommandDef{
 		ID:           "test.default-text",
@@ -100,13 +100,13 @@ func TestRunCommand_Confirmation_DefaultText(t *testing.T) {
 
 func TestRunCommand_Confirmation_TTYUsesCustomText(t *testing.T) {
 	origRC := runConfirm
-	origIsInteractive := ui.IsInteractiveFn
+	origIsInteractive := widgets.IsInteractiveFn
 	t.Cleanup(func() {
 		runConfirm = origRC
-		ui.IsInteractiveFn = origIsInteractive
+		widgets.IsInteractiveFn = origIsInteractive
 	})
 
-	ui.IsInteractiveFn = func(_ io.Reader) bool { return true }
+	widgets.IsInteractiveFn = func(_ io.Reader) bool { return true }
 	var gotTitle, gotAffirmative, gotNegative string
 	runConfirm = func(title, affirmative, negative string) (bool, error) {
 		gotTitle = title
@@ -155,9 +155,9 @@ func (r *trackingReader) Read(p []byte) (int, error) {
 // path — the only place runtime could prompt — must not touch stdin nor invoke
 // the runConfirm seam.
 func TestConfirmCommand_FilledParams_SkipConfirm_DoesNotReadStdin(t *testing.T) {
-	origIsInteractive := ui.IsInteractiveFn
-	t.Cleanup(func() { ui.IsInteractiveFn = origIsInteractive })
-	ui.IsInteractiveFn = func(_ io.Reader) bool { return true }
+	origIsInteractive := widgets.IsInteractiveFn
+	t.Cleanup(func() { widgets.IsInteractiveFn = origIsInteractive })
+	widgets.IsInteractiveFn = func(_ io.Reader) bool { return true }
 
 	origRC := runConfirm
 	t.Cleanup(func() { runConfirm = origRC })

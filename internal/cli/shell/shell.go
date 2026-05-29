@@ -8,7 +8,7 @@ import (
 
 	"devbox-cli/internal/cli/cmdctx"
 	"devbox-cli/internal/core/project/config"
-	"devbox-cli/internal/core/ui"
+	"devbox-cli/internal/core/ui/widgets"
 	"devbox-cli/internal/shared/docker"
 
 	"maps"
@@ -23,17 +23,17 @@ var validModes = map[string]bool{"auto": true, "exec": true, "run": true}
 // It receives the sorted list of enabled service names and returns the chosen name.
 type selectServiceFn func(cfg *config.DevboxConfig, names []string) (string, error)
 
-// defaultSelectService shows an interactive selector via ui.RunSelector.
+// defaultSelectService shows an interactive selector via widgets.RunSelector.
 func defaultSelectService(cfg *config.DevboxConfig, names []string) (string, error) {
-	items := make([]ui.SelectorItem, len(names))
+	items := make([]widgets.SelectorItem, len(names))
 	for i, name := range names {
 		svc := cfg.Services[name]
-		items[i] = ui.SelectorItem{
+		items[i] = widgets.SelectorItem{
 			Label:       name,
 			Description: svc.Container,
 		}
 	}
-	idx, err := ui.RunSelector("Select a service:", items)
+	idx, err := widgets.RunSelector("Select a service:", items)
 	if err != nil {
 		return "", err
 	}
@@ -132,14 +132,14 @@ service exists, or shows an interactive selector when multiple services are enab
 				argName = args[0]
 			}
 			svcSelector := selectServiceFn(defaultSelectService)
-			if !ui.IsInteractiveFn(cmd.InOrStdin()) {
+			if !widgets.IsInteractiveFn(cmd.InOrStdin()) {
 				svcSelector = func(_ *config.DevboxConfig, _ []string) (string, error) {
 					return "", fmt.Errorf("multiple services are enabled; pass a service name or run in an interactive terminal")
 				}
 			}
 			serviceName, err := pickService(cfg, argName, svcSelector)
 			if err != nil {
-				if errors.Is(err, ui.ErrCancelled) {
+				if errors.Is(err, widgets.ErrCancelled) {
 					return nil
 				}
 				return err

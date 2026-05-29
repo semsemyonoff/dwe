@@ -14,7 +14,7 @@ import (
 	"devbox-cli/internal/core/notify"
 	"devbox-cli/internal/core/project/config"
 	userpkg "devbox-cli/internal/core/project/user"
-	"devbox-cli/internal/core/ui"
+	"devbox-cli/internal/core/ui/widgets"
 	"devbox-cli/internal/core/usercommands"
 	"devbox-cli/internal/core/workflow/deploy"
 	"devbox-cli/internal/core/workflow/deploy/journal"
@@ -204,7 +204,7 @@ func RunRun(ctx RunContext) (err error) {
 		if err != nil {
 			return fmt.Errorf("git probe: %w", err)
 		}
-		action, msg := git.Decide(status, git.UpdateMode(effectiveMode), ui.IsInteractiveFn(os.Stdin))
+		action, msg := git.Decide(status, git.UpdateMode(effectiveMode), widgets.IsInteractiveFn(os.Stdin))
 		switch action {
 		case git.ActionWarn:
 			w.Warning(msg)
@@ -216,7 +216,7 @@ func RunRun(ctx RunContext) (err error) {
 				pulled = moved
 			}
 		case git.ActionPullPrompt:
-			confirmed, confirmErr := ui.RunConfirm(
+			confirmed, confirmErr := widgets.RunConfirm(
 				fmt.Sprintf("Update available: %s — pull now?", msg),
 				"Pull", "Skip",
 			)
@@ -227,7 +227,7 @@ func RunRun(ctx RunContext) (err error) {
 				} else {
 					pulled = moved
 				}
-			} else if confirmErr != nil && !errors.Is(confirmErr, ui.ErrCancelled) {
+			} else if confirmErr != nil && !errors.Is(confirmErr, widgets.ErrCancelled) {
 				w.Warning(fmt.Sprintf("confirmation prompt failed: %v — skipping update", confirmErr))
 			}
 		default:

@@ -13,9 +13,9 @@ import (
 
 	"devbox-cli/internal/cli/cmdctx"
 	"devbox-cli/internal/core/project/config"
-	"devbox-cli/internal/core/ui"
 	"devbox-cli/internal/core/ui/ask"
 	"devbox-cli/internal/core/ui/styles"
+	"devbox-cli/internal/core/ui/widgets"
 	"devbox-cli/internal/core/usercommands"
 	"devbox-cli/internal/core/usercommands/model"
 	"devbox-cli/internal/core/usercommands/resolve"
@@ -67,7 +67,7 @@ func runCommandByID(
 
 	nonInteractiveEnv := os.Getenv("DEVBOX_NONINTERACTIVE") == "1" || os.Getenv("DEVBOX_NONINTERACTIVE") == "true"
 	skipPrompts := opts.Yes || nonInteractiveEnv
-	canPromptHuh := ui.IsInteractiveFn(stdin) && !skipPrompts
+	canPromptHuh := widgets.IsInteractiveFn(stdin) && !skipPrompts
 
 	prefilled := resolve.ParamDefaults(def.Params, provided, cfg)
 
@@ -196,7 +196,7 @@ func runCommandByID(
 		summary := stringifyParams(rctx.Params)
 		ok, cerr := confirmRun(title, summary)
 		if cerr != nil {
-			if errors.Is(cerr, ui.ErrCancelled) {
+			if errors.Is(cerr, widgets.ErrCancelled) {
 				return nil
 			}
 			return cerr

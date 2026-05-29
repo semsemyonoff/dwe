@@ -15,8 +15,8 @@ import (
 
 	"devbox-cli/internal/cli/cmdctx"
 	"devbox-cli/internal/core/project/config"
-	"devbox-cli/internal/core/ui"
 	"devbox-cli/internal/core/ui/ask"
+	"devbox-cli/internal/core/ui/widgets"
 	"devbox-cli/internal/core/usercommands"
 	"devbox-cli/internal/core/usercommands/model"
 	"devbox-cli/internal/shared/i18n"
@@ -938,9 +938,9 @@ func TestCommandCmd_SignalAwareContext(t *testing.T) {
 	}
 
 	// Non-TTY so no selector fires; pass exact ID as arg.
-	origInteractive := ui.IsInteractiveFn
-	t.Cleanup(func() { ui.IsInteractiveFn = origInteractive })
-	ui.IsInteractiveFn = func(io.Reader) bool { return false }
+	origInteractive := widgets.IsInteractiveFn
+	t.Cleanup(func() { widgets.IsInteractiveFn = origInteractive })
+	widgets.IsInteractiveFn = func(io.Reader) bool { return false }
 
 	flags := &cmdctx.RootFlags{ConfigPath: cfgPath}
 	cmd := NewCmd("", flags)

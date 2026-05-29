@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"os"
 
-	"devbox-cli/internal/core/ui"
+	"devbox-cli/internal/core/ui/widgets"
 	"devbox-cli/internal/shared/i18n"
 	"devbox-cli/internal/shared/render"
 	"devbox-cli/internal/shared/tpl"
@@ -20,8 +20,8 @@ type commandAbortedError struct{}
 func (e *commandAbortedError) Error() string { return "aborted by user" }
 func (e *commandAbortedError) ExitCode() int { return 0 }
 
-// runConfirm is the package-level wrapper for ui.RunConfirm; swappable in tests.
-var runConfirm = ui.RunConfirm
+// runConfirm is the package-level wrapper for widgets.RunConfirm; swappable in tests.
+var runConfirm = widgets.RunConfirm
 
 // ConfirmCommand prompts before running confirmation-enabled commands.
 func ConfirmCommand(ctx RunContext) error {
@@ -56,10 +56,10 @@ func ConfirmCommand(ctx RunContext) error {
 		stdin = os.Stdin
 	}
 
-	if ui.IsInteractiveFn(stdin) {
+	if widgets.IsInteractiveFn(stdin) {
 		confirmed, err := runConfirm(message, "Yes", "No")
 		if err != nil {
-			if errors.Is(err, ui.ErrCancelled) {
+			if errors.Is(err, widgets.ErrCancelled) {
 				return &commandAbortedError{}
 			}
 			return err

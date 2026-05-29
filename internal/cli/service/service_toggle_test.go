@@ -20,7 +20,7 @@ import (
 	"devbox-cli/internal/core/project/config"
 	localpkg "devbox-cli/internal/core/project/local"
 	servicepkg "devbox-cli/internal/core/project/services"
-	"devbox-cli/internal/core/ui"
+	"devbox-cli/internal/core/ui/widgets"
 	"devbox-cli/internal/core/workflow/deploy/journal"
 	"devbox-cli/internal/core/workflow/lifecycle"
 
@@ -102,15 +102,15 @@ func TestServicesToggle_NonTTY_RendersListTable(t *testing.T) {
 		"second": {required: false, enabled: false},
 	})
 
-	oldInteractive := ui.IsInteractiveFn
-	t.Cleanup(func() { ui.IsInteractiveFn = oldInteractive })
-	ui.IsInteractiveFn = func(_ io.Reader) bool { return false }
+	oldInteractive := widgets.IsInteractiveFn
+	t.Cleanup(func() { widgets.IsInteractiveFn = oldInteractive })
+	widgets.IsInteractiveFn = func(_ io.Reader) bool { return false }
 
 	oldMS := runMultiSelect
 	t.Cleanup(func() { runMultiSelect = oldMS })
-	runMultiSelect = func(_ string, _ []ui.MultiSelectItem) (ui.MultiSelectResult, error) {
+	runMultiSelect = func(_ string, _ []widgets.MultiSelectItem) (widgets.MultiSelectResult, error) {
 		t.Fatal("runMultiSelect should not be called in non-TTY mode")
-		return ui.MultiSelectResult{}, nil
+		return widgets.MultiSelectResult{}, nil
 	}
 
 	flags := &cmdctx.RootFlags{ConfigPath: configPath}
@@ -146,16 +146,16 @@ func TestServicesToggle_JSON_RendersServicesArray(t *testing.T) {
 		"second": {required: false, enabled: false},
 	})
 
-	oldInteractive := ui.IsInteractiveFn
-	t.Cleanup(func() { ui.IsInteractiveFn = oldInteractive })
+	oldInteractive := widgets.IsInteractiveFn
+	t.Cleanup(func() { widgets.IsInteractiveFn = oldInteractive })
 	// JSON mode must bypass the toggle even on a TTY.
-	ui.IsInteractiveFn = func(_ io.Reader) bool { return true }
+	widgets.IsInteractiveFn = func(_ io.Reader) bool { return true }
 
 	oldMS := runMultiSelect
 	t.Cleanup(func() { runMultiSelect = oldMS })
-	runMultiSelect = func(_ string, _ []ui.MultiSelectItem) (ui.MultiSelectResult, error) {
+	runMultiSelect = func(_ string, _ []widgets.MultiSelectItem) (widgets.MultiSelectResult, error) {
 		t.Fatal("runMultiSelect should not be called in JSON mode")
-		return ui.MultiSelectResult{}, nil
+		return widgets.MultiSelectResult{}, nil
 	}
 
 	flags := &cmdctx.RootFlags{ConfigPath: configPath, Output: "json"}
@@ -199,15 +199,15 @@ func TestServicesToggle_AllMandatory_ReturnsError(t *testing.T) {
 		"main": {required: true, enabled: true},
 	})
 
-	oldInteractive := ui.IsInteractiveFn
-	t.Cleanup(func() { ui.IsInteractiveFn = oldInteractive })
-	ui.IsInteractiveFn = func(_ io.Reader) bool { return true }
+	oldInteractive := widgets.IsInteractiveFn
+	t.Cleanup(func() { widgets.IsInteractiveFn = oldInteractive })
+	widgets.IsInteractiveFn = func(_ io.Reader) bool { return true }
 
 	oldMS := runMultiSelect
 	t.Cleanup(func() { runMultiSelect = oldMS })
-	runMultiSelect = func(_ string, _ []ui.MultiSelectItem) (ui.MultiSelectResult, error) {
+	runMultiSelect = func(_ string, _ []widgets.MultiSelectItem) (widgets.MultiSelectResult, error) {
 		t.Fatal("runMultiSelect should not be called when all mandatory")
-		return ui.MultiSelectResult{}, nil
+		return widgets.MultiSelectResult{}, nil
 	}
 
 	flags := &cmdctx.RootFlags{ConfigPath: configPath}
@@ -232,14 +232,14 @@ func TestServicesToggle_TTY_EnablesAndDisables(t *testing.T) {
 		"third":  {required: false, enabled: true},
 	})
 
-	oldInteractive := ui.IsInteractiveFn
-	t.Cleanup(func() { ui.IsInteractiveFn = oldInteractive })
-	ui.IsInteractiveFn = func(_ io.Reader) bool { return true }
+	oldInteractive := widgets.IsInteractiveFn
+	t.Cleanup(func() { widgets.IsInteractiveFn = oldInteractive })
+	widgets.IsInteractiveFn = func(_ io.Reader) bool { return true }
 
 	oldMS := runMultiSelect
 	t.Cleanup(func() { runMultiSelect = oldMS })
-	runMultiSelect = func(_ string, _ []ui.MultiSelectItem) (ui.MultiSelectResult, error) {
-		return ui.MultiSelectResult{Kept: []string{"second"}, Locked: []string{"main"}}, nil
+	runMultiSelect = func(_ string, _ []widgets.MultiSelectItem) (widgets.MultiSelectResult, error) {
+		return widgets.MultiSelectResult{Kept: []string{"second"}, Locked: []string{"main"}}, nil
 	}
 
 	// Decline the apply prompt — this test only asserts local.yml mutation.
@@ -285,14 +285,14 @@ func TestServicesToggle_TTY_CancelNoWrites(t *testing.T) {
 		"second": {required: false, enabled: false},
 	})
 
-	oldInteractive := ui.IsInteractiveFn
-	t.Cleanup(func() { ui.IsInteractiveFn = oldInteractive })
-	ui.IsInteractiveFn = func(_ io.Reader) bool { return true }
+	oldInteractive := widgets.IsInteractiveFn
+	t.Cleanup(func() { widgets.IsInteractiveFn = oldInteractive })
+	widgets.IsInteractiveFn = func(_ io.Reader) bool { return true }
 
 	oldMS := runMultiSelect
 	t.Cleanup(func() { runMultiSelect = oldMS })
-	runMultiSelect = func(_ string, _ []ui.MultiSelectItem) (ui.MultiSelectResult, error) {
-		return ui.MultiSelectResult{}, ui.ErrCancelled
+	runMultiSelect = func(_ string, _ []widgets.MultiSelectItem) (widgets.MultiSelectResult, error) {
+		return widgets.MultiSelectResult{}, widgets.ErrCancelled
 	}
 
 	flags := &cmdctx.RootFlags{ConfigPath: configPath}
@@ -385,20 +385,20 @@ func TestServicesToggle_MixedTypes(t *testing.T) {
 		}
 	}
 
-	oldInteractive := ui.IsInteractiveFn
-	t.Cleanup(func() { ui.IsInteractiveFn = oldInteractive })
-	ui.IsInteractiveFn = func(_ io.Reader) bool { return true }
+	oldInteractive := widgets.IsInteractiveFn
+	t.Cleanup(func() { widgets.IsInteractiveFn = oldInteractive })
+	widgets.IsInteractiveFn = func(_ io.Reader) bool { return true }
 
 	oldMS := runMultiSelect
 	t.Cleanup(func() { runMultiSelect = oldMS })
 	var seenKeys []string
-	var seenItems []ui.MultiSelectItem
-	runMultiSelect = func(_ string, items []ui.MultiSelectItem) (ui.MultiSelectResult, error) {
+	var seenItems []widgets.MultiSelectItem
+	runMultiSelect = func(_ string, items []widgets.MultiSelectItem) (widgets.MultiSelectResult, error) {
 		seenItems = append(seenItems, items...)
 		for _, item := range items {
 			seenKeys = append(seenKeys, item.Key)
 		}
-		return ui.MultiSelectResult{Kept: []string{"adminer"}, Locked: []string{"main"}}, nil
+		return widgets.MultiSelectResult{Kept: []string{"adminer"}, Locked: []string{"main"}}, nil
 	}
 
 	// Stack-running override + decline apply prompt — this test asserts the
@@ -461,7 +461,7 @@ func TestPickServiceToEnable_TypeSortedAndDecorated(t *testing.T) {
 
 	var labels []string
 	var descriptions []string
-	selector := func(title string, items []ui.SelectorItem) (int, error) {
+	selector := func(title string, items []widgets.SelectorItem) (int, error) {
 		for _, item := range items {
 			labels = append(labels, stripANSI(item.Label))
 			descriptions = append(descriptions, stripANSI(item.Description))
@@ -614,9 +614,9 @@ func TestSingleToggle_StackNotRunning_NoApply_RecordsPendingSkipsHooks(t *testin
 		return nil
 	}
 
-	oldInteractive := ui.IsInteractiveFn
-	t.Cleanup(func() { ui.IsInteractiveFn = oldInteractive })
-	ui.IsInteractiveFn = func(_ io.Reader) bool { return false }
+	oldInteractive := widgets.IsInteractiveFn
+	t.Cleanup(func() { widgets.IsInteractiveFn = oldInteractive })
+	widgets.IsInteractiveFn = func(_ io.Reader) bool { return false }
 
 	flags := &cmdctx.RootFlags{ConfigPath: configPath}
 	cmd := newServiceEnableCmd(flags)
@@ -719,9 +719,9 @@ func TestSingleToggle_StackProbeError_PendingStillRecorded(t *testing.T) {
 		return false, fmt.Errorf("docker daemon unreachable")
 	}
 
-	oldInteractive := ui.IsInteractiveFn
-	t.Cleanup(func() { ui.IsInteractiveFn = oldInteractive })
-	ui.IsInteractiveFn = func(_ io.Reader) bool { return false }
+	oldInteractive := widgets.IsInteractiveFn
+	t.Cleanup(func() { widgets.IsInteractiveFn = oldInteractive })
+	widgets.IsInteractiveFn = func(_ io.Reader) bool { return false }
 
 	flags := &cmdctx.RootFlags{ConfigPath: configPath}
 	cmd := newServiceEnableCmd(flags)
@@ -778,9 +778,9 @@ func TestSingleToggle_RequiresNone_NoPending(t *testing.T) {
 	cmd := newServiceEnableCmd(flags)
 	cmd.SetArgs([]string{"svc"})
 
-	oldInteractive := ui.IsInteractiveFn
-	t.Cleanup(func() { ui.IsInteractiveFn = oldInteractive })
-	ui.IsInteractiveFn = func(_ io.Reader) bool { return false }
+	oldInteractive := widgets.IsInteractiveFn
+	t.Cleanup(func() { widgets.IsInteractiveFn = oldInteractive })
+	widgets.IsInteractiveFn = func(_ io.Reader) bool { return false }
 
 	if err := cmd.Execute(); err != nil {
 		t.Fatalf("unexpected error: %v", err)
@@ -817,9 +817,9 @@ func TestSingleToggle_NonTTY_PendingRecorded(t *testing.T) {
 	configPath, baseDir := writeServiceProject(t, "type: app\ncontainer: c\n")
 	localPath := filepath.Join(baseDir, "devbox", "local.yml")
 
-	oldInteractive := ui.IsInteractiveFn
-	t.Cleanup(func() { ui.IsInteractiveFn = oldInteractive })
-	ui.IsInteractiveFn = func(_ io.Reader) bool { return false }
+	oldInteractive := widgets.IsInteractiveFn
+	t.Cleanup(func() { widgets.IsInteractiveFn = oldInteractive })
+	widgets.IsInteractiveFn = func(_ io.Reader) bool { return false }
 
 	flags := &cmdctx.RootFlags{ConfigPath: configPath}
 	cmd := newServiceEnableCmd(flags)
@@ -857,9 +857,9 @@ func TestSingleToggle_TTY_No_PendingRecorded(t *testing.T) {
 	configPath, baseDir := writeServiceProject(t, "type: app\ncontainer: c\n")
 	localPath := filepath.Join(baseDir, "devbox", "local.yml")
 
-	oldInteractive := ui.IsInteractiveFn
-	t.Cleanup(func() { ui.IsInteractiveFn = oldInteractive })
-	ui.IsInteractiveFn = func(_ io.Reader) bool { return true }
+	oldInteractive := widgets.IsInteractiveFn
+	t.Cleanup(func() { widgets.IsInteractiveFn = oldInteractive })
+	widgets.IsInteractiveFn = func(_ io.Reader) bool { return true }
 
 	oldPrompt := confirmApplyPrompt
 	t.Cleanup(func() { confirmApplyPrompt = oldPrompt })
@@ -950,9 +950,9 @@ func TestSingleToggle_TTY_Yes_ClearsPending(t *testing.T) {
 	t.Cleanup(func() { singleToggleRunRestart = oldRunRestart })
 	singleToggleRunRestart = func(_ lifecycle.RunContext) error { return nil }
 
-	oldInteractive := ui.IsInteractiveFn
-	t.Cleanup(func() { ui.IsInteractiveFn = oldInteractive })
-	ui.IsInteractiveFn = func(_ io.Reader) bool { return true }
+	oldInteractive := widgets.IsInteractiveFn
+	t.Cleanup(func() { widgets.IsInteractiveFn = oldInteractive })
+	widgets.IsInteractiveFn = func(_ io.Reader) bool { return true }
 
 	oldPrompt := confirmApplyPrompt
 	t.Cleanup(func() { confirmApplyPrompt = oldPrompt })
@@ -1145,9 +1145,9 @@ func TestSingleToggle_AllRequiresNone_NoPendingRecord(t *testing.T) {
 	cmd := newServiceEnableCmd(flags)
 	cmd.SetArgs([]string{"svc"})
 
-	oldInteractive := ui.IsInteractiveFn
-	t.Cleanup(func() { ui.IsInteractiveFn = oldInteractive })
-	ui.IsInteractiveFn = func(_ io.Reader) bool { return false }
+	oldInteractive := widgets.IsInteractiveFn
+	t.Cleanup(func() { widgets.IsInteractiveFn = oldInteractive })
+	widgets.IsInteractiveFn = func(_ io.Reader) bool { return false }
 
 	if err := cmd.Execute(); err != nil {
 		t.Fatalf("unexpected error: %v", err)
@@ -1187,9 +1187,9 @@ func TestSingleToggle_DisableFlow(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	oldInteractive := ui.IsInteractiveFn
-	t.Cleanup(func() { ui.IsInteractiveFn = oldInteractive })
-	ui.IsInteractiveFn = func(_ io.Reader) bool { return false }
+	oldInteractive := widgets.IsInteractiveFn
+	t.Cleanup(func() { widgets.IsInteractiveFn = oldInteractive })
+	widgets.IsInteractiveFn = func(_ io.Reader) bool { return false }
 
 	oldDetect := detectStackRunning
 	t.Cleanup(func() { detectStackRunning = oldDetect })
@@ -1453,14 +1453,14 @@ func TestMultiToggle_PrintPlan_NoMutation(t *testing.T) {
 	localPath := filepath.Join(baseDir, "devbox", "local.yml")
 	envPath := filepath.Join(baseDir, ".env")
 
-	oldInteractive := ui.IsInteractiveFn
-	t.Cleanup(func() { ui.IsInteractiveFn = oldInteractive })
-	ui.IsInteractiveFn = func(_ io.Reader) bool { return true }
+	oldInteractive := widgets.IsInteractiveFn
+	t.Cleanup(func() { widgets.IsInteractiveFn = oldInteractive })
+	widgets.IsInteractiveFn = func(_ io.Reader) bool { return true }
 
 	oldMS := runMultiSelect
 	t.Cleanup(func() { runMultiSelect = oldMS })
-	runMultiSelect = func(_ string, _ []ui.MultiSelectItem) (ui.MultiSelectResult, error) {
-		return ui.MultiSelectResult{Kept: []string{"alpha"}, Locked: nil}, nil
+	runMultiSelect = func(_ string, _ []widgets.MultiSelectItem) (widgets.MultiSelectResult, error) {
+		return widgets.MultiSelectResult{Kept: []string{"alpha"}, Locked: nil}, nil
 	}
 
 	flags := &cmdctx.RootFlags{ConfigPath: configPath}
@@ -1498,15 +1498,15 @@ func TestMultiToggle_AllNone_NoPending(t *testing.T) {
 			"beta":  "type: app\ncontainer: b\non_enable:\n  requires: none\n",
 		}, nil)
 
-	oldInteractive := ui.IsInteractiveFn
-	t.Cleanup(func() { ui.IsInteractiveFn = oldInteractive })
-	ui.IsInteractiveFn = func(_ io.Reader) bool { return true }
+	oldInteractive := widgets.IsInteractiveFn
+	t.Cleanup(func() { widgets.IsInteractiveFn = oldInteractive })
+	widgets.IsInteractiveFn = func(_ io.Reader) bool { return true }
 
 	oldMS := runMultiSelect
 	t.Cleanup(func() { runMultiSelect = oldMS })
 	// TUI keeps alpha+beta enabled (enabling both from disabled → all-enable).
-	runMultiSelect = func(_ string, _ []ui.MultiSelectItem) (ui.MultiSelectResult, error) {
-		return ui.MultiSelectResult{Kept: []string{"alpha", "beta"}, Locked: nil}, nil
+	runMultiSelect = func(_ string, _ []widgets.MultiSelectItem) (widgets.MultiSelectResult, error) {
+		return widgets.MultiSelectResult{Kept: []string{"alpha", "beta"}, Locked: nil}, nil
 	}
 
 	var addCalled bool
@@ -1545,14 +1545,14 @@ func TestMultiToggle_MixedRestartDeploy_Apply(t *testing.T) {
 			"bob": "type: app\ncontainer: bob\non_enable:\n  requires: restart\n",
 		}, []string{"ada"})
 
-	oldInteractive := ui.IsInteractiveFn
-	t.Cleanup(func() { ui.IsInteractiveFn = oldInteractive })
-	ui.IsInteractiveFn = func(_ io.Reader) bool { return true }
+	oldInteractive := widgets.IsInteractiveFn
+	t.Cleanup(func() { widgets.IsInteractiveFn = oldInteractive })
+	widgets.IsInteractiveFn = func(_ io.Reader) bool { return true }
 
 	oldMS := runMultiSelect
 	t.Cleanup(func() { runMultiSelect = oldMS })
-	runMultiSelect = func(_ string, _ []ui.MultiSelectItem) (ui.MultiSelectResult, error) {
-		return ui.MultiSelectResult{Kept: []string{"ada", "bob"}, Locked: nil}, nil
+	runMultiSelect = func(_ string, _ []widgets.MultiSelectItem) (widgets.MultiSelectResult, error) {
+		return widgets.MultiSelectResult{Kept: []string{"ada", "bob"}, Locked: nil}, nil
 	}
 
 	callLog := injectMultiToggleSeams(t, nil, nil)
@@ -1594,14 +1594,14 @@ func TestMultiToggle_MixedBatchPartialFailure(t *testing.T) {
 			"bob": "type: app\ncontainer: bob\non_enable:\n  requires: restart\n",
 		}, []string{"ada"})
 
-	oldInteractive := ui.IsInteractiveFn
-	t.Cleanup(func() { ui.IsInteractiveFn = oldInteractive })
-	ui.IsInteractiveFn = func(_ io.Reader) bool { return true }
+	oldInteractive := widgets.IsInteractiveFn
+	t.Cleanup(func() { widgets.IsInteractiveFn = oldInteractive })
+	widgets.IsInteractiveFn = func(_ io.Reader) bool { return true }
 
 	oldMS := runMultiSelect
 	t.Cleanup(func() { runMultiSelect = oldMS })
-	runMultiSelect = func(_ string, _ []ui.MultiSelectItem) (ui.MultiSelectResult, error) {
-		return ui.MultiSelectResult{Kept: []string{"ada", "bob"}, Locked: nil}, nil
+	runMultiSelect = func(_ string, _ []widgets.MultiSelectItem) (widgets.MultiSelectResult, error) {
+		return widgets.MultiSelectResult{Kept: []string{"ada", "bob"}, Locked: nil}, nil
 	}
 
 	restartErr := fmt.Errorf("restart failed: injected")
@@ -1638,14 +1638,14 @@ func TestMultiToggle_AllDeploy_Apply(t *testing.T) {
 			"bob": "type: app\ncontainer: bob\non_enable:\n  requires: deploy\n",
 		}, []string{"ada", "bob"})
 
-	oldInteractive := ui.IsInteractiveFn
-	t.Cleanup(func() { ui.IsInteractiveFn = oldInteractive })
-	ui.IsInteractiveFn = func(_ io.Reader) bool { return true }
+	oldInteractive := widgets.IsInteractiveFn
+	t.Cleanup(func() { widgets.IsInteractiveFn = oldInteractive })
+	widgets.IsInteractiveFn = func(_ io.Reader) bool { return true }
 
 	oldMS := runMultiSelect
 	t.Cleanup(func() { runMultiSelect = oldMS })
-	runMultiSelect = func(_ string, _ []ui.MultiSelectItem) (ui.MultiSelectResult, error) {
-		return ui.MultiSelectResult{Kept: []string{"ada", "bob"}, Locked: nil}, nil
+	runMultiSelect = func(_ string, _ []widgets.MultiSelectItem) (widgets.MultiSelectResult, error) {
+		return widgets.MultiSelectResult{Kept: []string{"ada", "bob"}, Locked: nil}, nil
 	}
 
 	callLog := injectMultiToggleSeams(t, nil, nil)
@@ -1704,14 +1704,14 @@ func TestMultiToggle_AtomicPendingWriteRegression(t *testing.T) {
 		return injectedErr
 	}
 
-	oldInteractive := ui.IsInteractiveFn
-	t.Cleanup(func() { ui.IsInteractiveFn = oldInteractive })
-	ui.IsInteractiveFn = func(_ io.Reader) bool { return true }
+	oldInteractive := widgets.IsInteractiveFn
+	t.Cleanup(func() { widgets.IsInteractiveFn = oldInteractive })
+	widgets.IsInteractiveFn = func(_ io.Reader) bool { return true }
 
 	oldMS := runMultiSelect
 	t.Cleanup(func() { runMultiSelect = oldMS })
-	runMultiSelect = func(_ string, _ []ui.MultiSelectItem) (ui.MultiSelectResult, error) {
-		return ui.MultiSelectResult{Kept: []string{"ada", "bob"}, Locked: nil}, nil
+	runMultiSelect = func(_ string, _ []widgets.MultiSelectItem) (widgets.MultiSelectResult, error) {
+		return widgets.MultiSelectResult{Kept: []string{"ada", "bob"}, Locked: nil}, nil
 	}
 
 	flags := &cmdctx.RootFlags{ConfigPath: configPath}
@@ -1753,14 +1753,14 @@ func TestMultiToggle_DeclineApply_PendingRecorded(t *testing.T) {
 		}, []string{"ada"})
 	localPath := filepath.Join(baseDir, "devbox", "local.yml")
 
-	oldInteractive := ui.IsInteractiveFn
-	t.Cleanup(func() { ui.IsInteractiveFn = oldInteractive })
-	ui.IsInteractiveFn = func(_ io.Reader) bool { return true }
+	oldInteractive := widgets.IsInteractiveFn
+	t.Cleanup(func() { widgets.IsInteractiveFn = oldInteractive })
+	widgets.IsInteractiveFn = func(_ io.Reader) bool { return true }
 
 	oldMS := runMultiSelect
 	t.Cleanup(func() { runMultiSelect = oldMS })
-	runMultiSelect = func(_ string, _ []ui.MultiSelectItem) (ui.MultiSelectResult, error) {
-		return ui.MultiSelectResult{Kept: []string{"ada", "bob"}, Locked: nil}, nil
+	runMultiSelect = func(_ string, _ []widgets.MultiSelectItem) (widgets.MultiSelectResult, error) {
+		return widgets.MultiSelectResult{Kept: []string{"ada", "bob"}, Locked: nil}, nil
 	}
 
 	oldPrompt := confirmApplyPrompt
@@ -1801,14 +1801,14 @@ func TestMultiToggle_RequiresNoneAndRestart(t *testing.T) {
 			"beta":  "type: app\ncontainer: b\non_enable:\n  requires: restart\n",
 		}, nil)
 
-	oldInteractive := ui.IsInteractiveFn
-	t.Cleanup(func() { ui.IsInteractiveFn = oldInteractive })
-	ui.IsInteractiveFn = func(_ io.Reader) bool { return true }
+	oldInteractive := widgets.IsInteractiveFn
+	t.Cleanup(func() { widgets.IsInteractiveFn = oldInteractive })
+	widgets.IsInteractiveFn = func(_ io.Reader) bool { return true }
 
 	oldMS := runMultiSelect
 	t.Cleanup(func() { runMultiSelect = oldMS })
-	runMultiSelect = func(_ string, _ []ui.MultiSelectItem) (ui.MultiSelectResult, error) {
-		return ui.MultiSelectResult{Kept: []string{"alpha", "beta"}, Locked: nil}, nil
+	runMultiSelect = func(_ string, _ []widgets.MultiSelectItem) (widgets.MultiSelectResult, error) {
+		return widgets.MultiSelectResult{Kept: []string{"alpha", "beta"}, Locked: nil}, nil
 	}
 
 	callLog := injectMultiToggleSeams(t, nil, nil)

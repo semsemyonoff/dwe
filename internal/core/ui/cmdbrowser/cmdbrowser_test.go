@@ -10,7 +10,7 @@ import (
 	"github.com/charmbracelet/colorprofile"
 	"go.uber.org/goleak"
 
-	"devbox-cli/internal/core/ui"
+	"devbox-cli/internal/core/ui/widgets"
 )
 
 func TestMain(m *testing.M) {
@@ -26,7 +26,7 @@ func TestMain(m *testing.M) {
 // withSeams installs test stubs for the package-level seams and restores
 // them via t.Cleanup. Pass terminalSize as (0, 0, err) to simulate a size
 // read failure.
-func withSeams(t *testing.T, isTTY bool, width, height int, sizeErr error, runSelector func(string, []ui.SelectorItem) (int, error)) {
+func withSeams(t *testing.T, isTTY bool, width, height int, sizeErr error, runSelector func(string, []widgets.SelectorItem) (int, error)) {
 	t.Helper()
 	origTTY := isTerminalFn
 	origSize := terminalSizeFn
@@ -80,12 +80,12 @@ func TestRun_EmptyItems(t *testing.T) {
 
 func TestRun_NonTTY_ReturnsCancelledAndDoesNotCallSelector(t *testing.T) {
 	called := 0
-	withSeams(t, false, 0, 0, nil, func(string, []ui.SelectorItem) (int, error) {
+	withSeams(t, false, 0, 0, nil, func(string, []widgets.SelectorItem) (int, error) {
 		called++
 		return 0, nil
 	})
 	_, err := Run("pick", []Item{{ID: "a"}}, DefaultOptions())
-	if !errors.Is(err, ui.ErrCancelled) {
+	if !errors.Is(err, widgets.ErrCancelled) {
 		t.Errorf("non-TTY: want ErrCancelled, got %v", err)
 	}
 	if called != 0 {
@@ -95,7 +95,7 @@ func TestRun_NonTTY_ReturnsCancelledAndDoesNotCallSelector(t *testing.T) {
 
 func TestRun_NarrowDelegatesToSelector(t *testing.T) {
 	called := 0
-	withSeams(t, true, 50, 30, nil, func(title string, items []ui.SelectorItem) (int, error) {
+	withSeams(t, true, 50, 30, nil, func(title string, items []widgets.SelectorItem) (int, error) {
 		called++
 		if title != "pick" {
 			t.Errorf("title=%q", title)
@@ -119,7 +119,7 @@ func TestRun_NarrowDelegatesToSelector(t *testing.T) {
 
 func TestRun_ShortDelegatesToSelector(t *testing.T) {
 	called := 0
-	withSeams(t, true, 120, 10, nil, func(string, []ui.SelectorItem) (int, error) {
+	withSeams(t, true, 120, 10, nil, func(string, []widgets.SelectorItem) (int, error) {
 		called++
 		return 0, nil
 	})
@@ -135,7 +135,7 @@ func TestRun_ShortDelegatesToSelector(t *testing.T) {
 func TestRun_TerminalSizeErrorDelegates(t *testing.T) {
 	called := 0
 	sentinel := errors.New("ioctl boom")
-	withSeams(t, true, 0, 0, sentinel, func(string, []ui.SelectorItem) (int, error) {
+	withSeams(t, true, 0, 0, sentinel, func(string, []widgets.SelectorItem) (int, error) {
 		called++
 		return 0, nil
 	})
@@ -153,11 +153,11 @@ func TestRun_TerminalSizeErrorDelegates(t *testing.T) {
 }
 
 func TestRun_FallbackPropagatesSelectorError(t *testing.T) {
-	withSeams(t, true, 50, 30, nil, func(string, []ui.SelectorItem) (int, error) {
-		return -1, ui.ErrCancelled
+	withSeams(t, true, 50, 30, nil, func(string, []widgets.SelectorItem) (int, error) {
+		return -1, widgets.ErrCancelled
 	})
 	_, err := Run("pick", []Item{{ID: "a"}}, DefaultOptions())
-	if !errors.Is(err, ui.ErrCancelled) {
+	if !errors.Is(err, widgets.ErrCancelled) {
 		t.Errorf("want ErrCancelled, got %v", err)
 	}
 }
