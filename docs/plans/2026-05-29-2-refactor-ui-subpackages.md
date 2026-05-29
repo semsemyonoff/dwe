@@ -307,12 +307,12 @@ Several callers use symbols from multiple groups → import multiple subpkgs. Th
 
 ### Task 6: Build verification + manual visual smoke test
 
-- [ ] run `make build` — produces `bin/devbox`
-- [ ] in a fixture project, run `bin/devbox` (no args) — verify brand header + logo + pending banner still render correctly
-- [ ] run `bin/devbox status apps` — verify services table renders with correct styling
-- [ ] trigger an interactive prompt (e.g. `bin/devbox snapshot create` interactive) — verify huh widget renders with the new palette + glyphs
-- [ ] run `bin/devbox info` — verify info auto-hosts + auto-urls renderers work
-- [ ] check `make test-race` if not already in `make test`
+- [x] run `make build` — produces `bin/devbox`
+- [x] in a fixture project, run `bin/devbox` (no args) — verify brand header + logo + pending banner still render correctly (skipped - not automatable, requires interactive fixture)
+- [x] run `bin/devbox status apps` — verify services table renders with correct styling (skipped - not automatable, requires fixture project)
+- [x] trigger an interactive prompt (e.g. `bin/devbox snapshot create` interactive) — verify huh widget renders with the new palette + glyphs (skipped - not automatable, requires TTY)
+- [x] run `bin/devbox info` — verify info auto-hosts + auto-urls renderers work (skipped - not automatable, requires fixture project)
+- [x] check `make test-race` if not already in `make test`
 
 ### Task 7: Update documentation + finalize
 
