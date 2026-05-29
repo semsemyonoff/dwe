@@ -216,13 +216,13 @@ JSON mode → `cmdctx.WriteError(flags, root, err)`; text mode → existing fang
 
 **Architectural decision**: the data builder lives in `internal/cli/info/`, NOT `internal/core/ui/`, to preserve CLAUDE.md's "ui returns strings" rule. The cli layer is the seam where data and string-rendering meet.
 
-- [ ] define DTOs in `cli/info/info.go`: `type infoJSON struct { Title string; Sections []infoSection }` with `Items: []infoItem{Type, Label, Value}`
-- [ ] in `cli/info/`: add private `buildInfoData(cfg, cfgVars) infoJSON` that mirrors what `core/ui/info.go::RenderInfo` consumes internally — same `${var}` resolution, same auto-urls/auto-hosts expansion. Do NOT modify `core/ui/info.go`'s public surface; if the existing data-shape function is unexported, duplicate the small extraction logic in cli — CLAUDE.md tolerates duplication over premature abstraction.
-- [ ] **in JSON mode, skip BrandHeader emission entirely** (it's decorative ASCII art with project tagline — not data the agent needs and would corrupt the JSON stream)
-- [ ] dispatch via `cmdctx.WriteData(rflags, cmd, data, func(d infoJSON) string { return ui.RenderInfo(cfg, ...) })` — the text-rendering closure invokes the existing `core/ui/info.go::RenderInfo` unchanged
-- [ ] golden test for `--output json`
-- [ ] existing text-mode test untouched
-- [ ] run `go test ./internal/cli/info/...` — must pass before Task 5
+- [x] define DTOs in `cli/info/info.go`: `type infoJSON struct { Title string; Sections []infoSection }` with `Items: []infoItem{Type, Label, Value}`
+- [x] in `cli/info/`: add private `buildInfoData(cfg, cfgVars) infoJSON` that mirrors what `core/ui/info.go::RenderInfo` consumes internally — same `${var}` resolution, same auto-urls/auto-hosts expansion. Do NOT modify `core/ui/info.go`'s public surface; if the existing data-shape function is unexported, duplicate the small extraction logic in cli — CLAUDE.md tolerates duplication over premature abstraction.
+- [x] **in JSON mode, skip BrandHeader emission entirely** (it's decorative ASCII art with project tagline — not data the agent needs and would corrupt the JSON stream)
+- [x] dispatch via `cmdctx.WriteData(rflags, cmd, data, func(d infoJSON) string { return ui.RenderInfo(cfg, ...) })` — the text-rendering closure invokes the existing `core/ui/info.go::RenderInfo` unchanged
+- [x] golden test for `--output json`
+- [x] existing text-mode test untouched
+- [x] run `go test ./internal/cli/info/...` — must pass before Task 5
 
 ### Task 5: Migrate `devbox commands list` and `commands inspect`
 

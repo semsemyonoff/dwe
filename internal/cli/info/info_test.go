@@ -8,6 +8,10 @@ import (
 	"testing"
 
 	"devbox-cli/internal/cli"
+	"devbox-cli/internal/cli/cmdctx"
+	infocmd "devbox-cli/internal/cli/info"
+
+	"github.com/spf13/cobra"
 )
 
 // writeMinimalInfoYML writes a minimal info.yml to dir and returns its path.
@@ -338,5 +342,137 @@ footer: true
 	// Section title should appear.
 	if !strings.Contains(out, "Status") {
 		t.Errorf("expected section title, got:\n%s", out)
+	}
+}
+
+// runInfoJSONCmd creates a minimal cobra tree, pre-configures flags, and runs
+// info.Run directly so the test does not need to go through PersistentPreRunE.
+func runInfoJSONCmd(t *testing.T, cfgPath string, pretty bool) string {
+	t.Helper()
+	flags := &cmdctx.RootFlags{
+		ConfigPath: cfgPath,
+		Output:     "json",
+		Pretty:     pretty,
+	}
+	root := &cobra.Command{Use: "devbox", SilenceErrors: true, SilenceUsage: true}
+	root.AddCommand(infocmd.NewCmd("", flags))
+	var out bytes.Buffer
+	root.SetOut(&out)
+	root.SetErr(&bytes.Buffer{})
+	root.SetArgs([]string{"info"})
+	if err := root.Execute(); err != nil {
+		t.Fatalf("Execute: %v", err)
+	}
+	return out.String()
+}
+
+// TestInfoCmd_JSONMode_Golden captures the JSON shape for a simple info.yml fixture.
+func TestInfoCmd_JSONMode_Golden(t *testing.T) {
+	dir := t.TempDir()
+	cfgPath := writeMinimalDevboxYML(t, dir)
+	writeMinimalInfoYML(t, dir, `sections:
+  - id: details
+    title: Project Details
+    items:
+      - type: definition
+        name: Project
+        value: "{{ .Project.Name }}"
+      - type: warning
+        text: "Everything is fine"
+      - type: info
+        text: "No services configured"
+`)
+
+	got := strings.TrimRight(runInfoJSONCmd(t, cfgPath, false), "\n")
+
+	goldenPath := filepath.Join("testdata", "info.json.golden")
+	if os.Getenv("UPDATE_GOLDEN") != "" {
+		if err := os.MkdirAll("testdata", 0755); err != nil {
+			t.Fatalf("creating testdata: %v", err)
+		}
+		if err := os.WriteFile(goldenPath, []byte(got+"\n"), 0644); err != nil {
+			t.Fatalf("writing golden: %v", err)
+		}
+		t.Logf("updated golden: %s", goldenPath)
+		return
+	}
+
+	raw, err := os.ReadFile(goldenPath)
+	if err != nil {
+		t.Fatalf("reading golden %s: %v", goldenPath, err)
+	}
+	want := strings.TrimRight(string(raw), "\n")
+	if got != want {
+		t.Errorf("JSON output mismatch:\ngot:  %s\nwant: %s", got, want)
+	}
+}
+
+// TestInfoCmd_JSONMode_NoBrandHeader verifies that JSON output does not contain
+// ANSI-styled brand header lines.
+func TestInfoCmd_JSONMode_NoBrandHeader(t *testing.T) {
+	dir := t.TempDir()
+	cfgPath := writeMinimalDevboxYML(t, dir)
+	writeMinimalInfoYML(t, dir, `sections:
+  - id: s1
+    title: Section
+    items:
+      - type: definition
+        name: Name
+        value: "{{ .Project.Name }}"
+`)
+	got := runInfoJSONCmd(t, cfgPath, false)
+	// JSON output must start with '{' — not with brand header text or ANSI sequences.
+	if !strings.HasPrefix(strings.TrimSpace(got), "{") {
+		t.Errorf("JSON output should start with '{', got: %q", got[:min(50, len(got))])
+	}
+	// No ANSI escape sequences.
+	if strings.Contains(got, "\x1b[") {
+		t.Errorf("JSON output should not contain ANSI sequences, got: %q", got[:min(100, len(got))])
+	}
+}
+
+// TestInfoCmd_JSONMode_PrettyFlag verifies that --pretty produces indented JSON.
+func TestInfoCmd_JSONMode_PrettyFlag(t *testing.T) {
+	dir := t.TempDir()
+	cfgPath := writeMinimalDevboxYML(t, dir)
+	writeMinimalInfoYML(t, dir, `sections:
+  - id: s1
+    items:
+      - type: definition
+        name: Key
+        value: val
+`)
+	got := runInfoJSONCmd(t, cfgPath, true)
+	if !strings.Contains(got, "\n  ") {
+		t.Errorf("pretty JSON should contain indented lines; got: %q", got)
+	}
+}
+
+// TestInfoCmd_JSONMode_HideOnEmpty verifies that sections with hide_on_empty collapse.
+func TestInfoCmd_JSONMode_HideOnEmpty(t *testing.T) {
+	dir := t.TempDir()
+	cfgPath := writeMinimalDevboxYML(t, dir)
+	writeMinimalInfoYML(t, dir, `sections:
+  - id: visible
+    title: Visible
+    items:
+      - type: definition
+        name: X
+        value: y
+  - id: hidden
+    title: Hidden
+    hide_on_empty: true
+    items:
+      - type: definition
+        name: X
+        value: y
+        when: "{{if eq .Project.Name \"nonexistent\"}}true{{end}}"
+`)
+	got := runInfoJSONCmd(t, cfgPath, false)
+	if !strings.Contains(got, `"id":"visible"`) {
+		t.Errorf("visible section should appear in JSON: %s", got)
+	}
+	if strings.Contains(got, `"id":"hidden"`) {
+		t.Errorf("hidden section should be absent from JSON: %s", got)
 	}
 }

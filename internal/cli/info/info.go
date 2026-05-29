@@ -13,6 +13,27 @@ import (
 	"github.com/spf13/cobra"
 )
 
+// infoJSON is the JSON output shape for `devbox info --output json`.
+type infoJSON struct {
+	Title    string        `json:"title"`
+	Sections []infoSection `json:"sections"`
+}
+
+// infoSection is a section in the info JSON output.
+type infoSection struct {
+	ID    string     `json:"id,omitempty"`
+	Title string     `json:"title,omitempty"`
+	Items []infoItem `json:"items"`
+}
+
+// infoItem is a single structured element within a section.
+// Type values: "definition", "info", "warning", "url", "host", "subgroup".
+type infoItem struct {
+	Type  string `json:"type"`
+	Label string `json:"label,omitempty"`
+	Value string `json:"value,omitempty"`
+}
+
 // NewCmd builds the `devbox info` command.
 func NewCmd(groupID string, flags *cmdctx.RootFlags) *cobra.Command {
 	return &cobra.Command{
@@ -22,13 +43,13 @@ func NewCmd(groupID string, flags *cmdctx.RootFlags) *cobra.Command {
 
 Shows project name, URLs, hosts, services, tools, and runtime details.
 The dashboard is driven by Go templates evaluated against the merged devbox config.`,
-		Example: "  devbox info",
-		Args:    cobra.NoArgs,
-		GroupID: groupID,
+		Example:      "  devbox info",
+		Args:         cobra.NoArgs,
+		GroupID:      groupID,
+		SilenceUsage: true,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			return Run(cmd, flags)
 		},
-		SilenceUsage: true,
 	}
 }
 
@@ -45,6 +66,14 @@ func Run(cmd *cobra.Command, flags *cmdctx.RootFlags) error {
 	infoCfg, err := config.LoadInfoConfig(infoPath)
 	if err != nil {
 		return fmt.Errorf("loading devbox/info.yml: %w", err)
+	}
+
+	if flags.Output == "json" {
+		data, err := buildInfoData(cfg, infoCfg)
+		if err != nil {
+			return fmt.Errorf("building info data: %w", err)
+		}
+		return cmdctx.WriteData(flags, cmd, data, func(infoJSON) string { return "" })
 	}
 
 	stylesCfg := flags.StylesCfg
