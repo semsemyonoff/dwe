@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"os"
 	"path/filepath"
+	"regexp"
 	"strings"
 	"testing"
 	"time"
@@ -44,14 +45,61 @@ func writeTestSnapshot(t *testing.T, base, name string, m *snapshotpkg.Manifest)
 	}
 }
 
+// makeTestCmd builds a minimal cobra.Command with captured output/error buffers.
+func makeTestCmd(t *testing.T) (*cobra.Command, *bytes.Buffer, *bytes.Buffer) {
+	t.Helper()
+	var out, errW bytes.Buffer
+	cmd := &cobra.Command{Use: "test"}
+	cmd.SetOut(&out)
+	cmd.SetErr(&errW)
+	return cmd, &out, &errW
+}
+
+// normalizeSnapshotPaths replaces absolute snapshot directory paths with a
+// stable placeholder so golden files are portable across test runs.
+func normalizeSnapshotPaths(s, base string) string {
+	s = strings.ReplaceAll(s, base, "<BASE>")
+	// Also normalize any remaining absolute paths that look like snapshot dirs.
+	re := regexp.MustCompile(`"dir":"[^"]*"`)
+	return re.ReplaceAllString(s, `"dir":"<DIR>"`)
+}
+
+// normalizeSnapshotSource replaces a source path (manifest file path) with a
+// stable placeholder.
+func normalizeSnapshotSource(s, base string) string {
+	return strings.ReplaceAll(s, base, "<BASE>")
+}
+
+// loadOrUpdateGolden reads the golden file at path and compares it to got.
+// When UPDATE_GOLDEN=1 is set, it writes got to the golden file instead.
+func loadOrUpdateGolden(t *testing.T, path, got string) {
+	t.Helper()
+	if os.Getenv("UPDATE_GOLDEN") == "1" {
+		if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+			t.Fatalf("mkdir golden dir: %v", err)
+		}
+		if err := os.WriteFile(path, []byte(got), 0o644); err != nil {
+			t.Fatalf("write golden: %v", err)
+		}
+		return
+	}
+	want, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatalf("read golden %s: %v (run UPDATE_GOLDEN=1 to create)", path, err)
+	}
+	if string(want) != got {
+		t.Errorf("golden mismatch for %s:\nwant: %s\n got: %s", path, want, got)
+	}
+}
+
 func TestSnapshotList_Empty(t *testing.T) {
 	base := snapshotTestProject(t)
 	flags := &cmdctx.RootFlags{
 		ConfigPath: filepath.Join(base, "devbox.yml"),
 		Root:       base,
 	}
-	var out, errW bytes.Buffer
-	if err := runSnapshotList(flags, &out, &errW, false); err != nil {
+	cmd, out, errW := makeTestCmd(t)
+	if err := runSnapshotList(flags, cmd); err != nil {
 		t.Fatalf("err: %v", err)
 	}
 	if out.Len() != 0 {
@@ -87,8 +135,8 @@ func TestSnapshotList_TableAndJSON(t *testing.T) {
 	}
 
 	t.Run("table", func(t *testing.T) {
-		var out, errW bytes.Buffer
-		if err := runSnapshotList(flags, &out, &errW, false); err != nil {
+		cmd, out, _ := makeTestCmd(t)
+		if err := runSnapshotList(flags, cmd); err != nil {
 			t.Fatalf("err: %v", err)
 		}
 		s := out.String()
@@ -107,23 +155,42 @@ func TestSnapshotList_TableAndJSON(t *testing.T) {
 	})
 
 	t.Run("json", func(t *testing.T) {
-		var out, errW bytes.Buffer
-		if err := runSnapshotList(flags, &out, &errW, true); err != nil {
+		flagsJSON := &cmdctx.RootFlags{
+			ConfigPath: flags.ConfigPath,
+			Root:       flags.Root,
+			Output:     "json",
+		}
+		cmd, out, _ := makeTestCmd(t)
+		if err := runSnapshotList(flagsJSON, cmd); err != nil {
 			t.Fatalf("err: %v", err)
 		}
-		var got []snapshotListJSONEntry
+		var got snapshotListJSON
 		if err := json.Unmarshal(out.Bytes(), &got); err != nil {
 			t.Fatalf("decode json: %v\n%s", err, out.String())
 		}
-		if len(got) != 2 {
-			t.Fatalf("entries = %d, want 2", len(got))
+		if len(got.Snapshots) != 2 {
+			t.Fatalf("entries = %d, want 2", len(got.Snapshots))
 		}
-		if got[0].Name != "beta" || !got[0].Current {
-			t.Errorf("expected beta first + current=true, got %+v", got[0])
+		if got.Snapshots[0].Name != "beta" || !got.Snapshots[0].Current {
+			t.Errorf("expected beta first + current=true, got %+v", got.Snapshots[0])
 		}
-		if got[1].Name != "alpha" || got[1].TotalSize != 2048 {
-			t.Errorf("expected alpha second with size 2048, got %+v", got[1])
+		if got.Snapshots[1].Name != "alpha" || got.Snapshots[1].TotalSize != 2048 {
+			t.Errorf("expected alpha second with size 2048, got %+v", got.Snapshots[1])
 		}
+	})
+
+	t.Run("golden", func(t *testing.T) {
+		flagsJSON := &cmdctx.RootFlags{
+			ConfigPath: flags.ConfigPath,
+			Root:       flags.Root,
+			Output:     "json",
+		}
+		cmd, out, _ := makeTestCmd(t)
+		if err := runSnapshotList(flagsJSON, cmd); err != nil {
+			t.Fatalf("err: %v", err)
+		}
+		got := normalizeSnapshotPaths(out.String(), base)
+		loadOrUpdateGolden(t, "testdata/list.json.golden", got)
 	})
 }
 
@@ -135,8 +202,8 @@ func TestSnapshotCurrent(t *testing.T) {
 	}
 
 	t.Run("cleared", func(t *testing.T) {
-		var out, errW bytes.Buffer
-		if err := runSnapshotCurrent(flags, &out, &errW); err != nil {
+		cmd, out, errW := makeTestCmd(t)
+		if err := runSnapshotCurrent(flags, cmd); err != nil {
 			t.Fatalf("err: %v", err)
 		}
 		if out.Len() != 0 {
@@ -156,8 +223,8 @@ func TestSnapshotCurrent(t *testing.T) {
 		if err := snapshotpkg.WriteCurrent(base, "feature-x"); err != nil {
 			t.Fatalf("write current: %v", err)
 		}
-		var out, errW bytes.Buffer
-		if err := runSnapshotCurrent(flags, &out, &errW); err != nil {
+		cmd, out, _ := makeTestCmd(t)
+		if err := runSnapshotCurrent(flags, cmd); err != nil {
 			t.Fatalf("err: %v", err)
 		}
 		if !strings.Contains(out.String(), "feature-x") {
@@ -166,6 +233,51 @@ func TestSnapshotCurrent(t *testing.T) {
 		if !strings.Contains(out.String(), "wip") {
 			t.Errorf("missing description on stdout: %q", out.String())
 		}
+	})
+
+	t.Run("json_none", func(t *testing.T) {
+		// Start fresh — no current pointer set in this subtest.
+		base2 := snapshotTestProject(t)
+		flags2 := &cmdctx.RootFlags{
+			ConfigPath: filepath.Join(base2, "devbox.yml"),
+			Root:       base2,
+			Output:     "json",
+		}
+		cmd, out, _ := makeTestCmd(t)
+		if err := runSnapshotCurrent(flags2, cmd); err != nil {
+			t.Fatalf("err: %v", err)
+		}
+		var got snapshotCurrentWrapper
+		if err := json.Unmarshal(out.Bytes(), &got); err != nil {
+			t.Fatalf("decode json: %v\n%s", err, out.String())
+		}
+		if got.Current != nil {
+			t.Errorf("expected current=null, got %+v", got.Current)
+		}
+	})
+
+	t.Run("golden", func(t *testing.T) {
+		// Create a fresh base with a known current snapshot for the golden.
+		base2 := snapshotTestProject(t)
+		flags2 := &cmdctx.RootFlags{
+			ConfigPath: filepath.Join(base2, "devbox.yml"),
+			Root:       base2,
+			Output:     "json",
+		}
+		writeTestSnapshot(t, base2, "release-1", &snapshotpkg.Manifest{
+			Name:        "release-1",
+			CreatedAt:   time.Date(2026, 5, 24, 11, 0, 0, 0, time.UTC),
+			Description: "stable",
+		})
+		if err := snapshotpkg.WriteCurrent(base2, "release-1"); err != nil {
+			t.Fatalf("write current: %v", err)
+		}
+		cmd, out, _ := makeTestCmd(t)
+		if err := runSnapshotCurrent(flags2, cmd); err != nil {
+			t.Fatalf("err: %v", err)
+		}
+		got := normalizeSnapshotPaths(out.String(), base2)
+		loadOrUpdateGolden(t, "testdata/current.json.golden", got)
 	})
 }
 
@@ -185,8 +297,8 @@ func TestSnapshotInspect_FromDir(t *testing.T) {
 	})
 
 	t.Run("text", func(t *testing.T) {
-		var out bytes.Buffer
-		if err := runSnapshotInspect(flags, &out, "feature-x", false); err != nil {
+		cmd, out, _ := makeTestCmd(t)
+		if err := runSnapshotInspect(flags, cmd, "feature-x"); err != nil {
 			t.Fatalf("err: %v", err)
 		}
 		s := out.String()
@@ -198,16 +310,16 @@ func TestSnapshotInspect_FromDir(t *testing.T) {
 	})
 
 	t.Run("json", func(t *testing.T) {
-		var out bytes.Buffer
-		if err := runSnapshotInspect(flags, &out, "feature-x", true); err != nil {
+		flagsJSON := &cmdctx.RootFlags{
+			ConfigPath: flags.ConfigPath,
+			Root:       flags.Root,
+			Output:     "json",
+		}
+		cmd, out, _ := makeTestCmd(t)
+		if err := runSnapshotInspect(flagsJSON, cmd, "feature-x"); err != nil {
 			t.Fatalf("err: %v", err)
 		}
-		var payload struct {
-			Source             string                `json:"source"`
-			Manifest           *snapshotpkg.Manifest `json:"manifest"`
-			CurrentConfigHash  string                `json:"current_config_hash"`
-			ConfigHashDiverged bool                  `json:"config_hash_diverged"`
-		}
+		var payload snapshotInspectJSON
 		if err := json.Unmarshal(out.Bytes(), &payload); err != nil {
 			t.Fatalf("decode: %v\n%s", err, out.String())
 		}
@@ -220,10 +332,24 @@ func TestSnapshotInspect_FromDir(t *testing.T) {
 	})
 
 	t.Run("invalid name", func(t *testing.T) {
-		var out bytes.Buffer
-		if err := runSnapshotInspect(flags, &out, "Bad Name!", false); err == nil {
+		cmd, _, _ := makeTestCmd(t)
+		if err := runSnapshotInspect(flags, cmd, "Bad Name!"); err == nil {
 			t.Fatalf("expected error for invalid name")
 		}
+	})
+
+	t.Run("golden", func(t *testing.T) {
+		flagsJSON := &cmdctx.RootFlags{
+			ConfigPath: flags.ConfigPath,
+			Root:       flags.Root,
+			Output:     "json",
+		}
+		cmd, out, _ := makeTestCmd(t)
+		if err := runSnapshotInspect(flagsJSON, cmd, "feature-x"); err != nil {
+			t.Fatalf("err: %v", err)
+		}
+		got := normalizeSnapshotSource(out.String(), base)
+		loadOrUpdateGolden(t, "testdata/inspect.json.golden", got)
 	})
 }
 
@@ -256,8 +382,8 @@ func TestSnapshotInspect_FromTar(t *testing.T) {
 		t.Fatalf("write tar: %v", err)
 	}
 
-	var out bytes.Buffer
-	if err := runSnapshotInspect(flags, &out, tarPath, false); err != nil {
+	cmd, out, _ := makeTestCmd(t)
+	if err := runSnapshotInspect(flags, cmd, tarPath); err != nil {
 		t.Fatalf("err: %v", err)
 	}
 	if !strings.Contains(out.String(), "from-tar") {
@@ -290,8 +416,8 @@ func TestSnapshotInspect_ConfigDiverged(t *testing.T) {
 		Project:   snapshotpkg.ProjectInfo{Name: "testproj", ConfigHash: "snap-hash"},
 	})
 
-	var out bytes.Buffer
-	if err := runSnapshotInspect(flags, &out, "snap", false); err != nil {
+	cmd, out, _ := makeTestCmd(t)
+	if err := runSnapshotInspect(flags, cmd, "snap"); err != nil {
 		t.Fatalf("err: %v", err)
 	}
 	if !strings.Contains(out.String(), "DIVERGED") {

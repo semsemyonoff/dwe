@@ -11,6 +11,8 @@ import (
 
 	"devbox-cli/internal/cli/cmdctx"
 	snapshotpkg "devbox-cli/internal/core/workflow/snapshot"
+
+	"github.com/spf13/cobra"
 )
 
 // snapshotInspectProject builds a devbox project with the given service map
@@ -133,7 +135,10 @@ func TestSnapshotInspect_ServicesDiff(t *testing.T) {
 				Root:       base,
 			}
 			var out bytes.Buffer
-			if err := runSnapshotInspect(flags, &out, "snap", false); err != nil {
+			cmd := &cobra.Command{Use: "test"}
+			cmd.SetOut(&out)
+			cmd.SetErr(&bytes.Buffer{})
+			if err := runSnapshotInspect(flags, cmd, "snap"); err != nil {
 				t.Fatalf("err: %v", err)
 			}
 			s := out.String()
@@ -160,9 +165,13 @@ func TestSnapshotInspect_ServicesDiff_JSON(t *testing.T) {
 	flags := &cmdctx.RootFlags{
 		ConfigPath: filepath.Join(base, "devbox.yml"),
 		Root:       base,
+		Output:     "json",
 	}
 	var out bytes.Buffer
-	if err := runSnapshotInspect(flags, &out, "snap", true); err != nil {
+	cmd := &cobra.Command{Use: "test"}
+	cmd.SetOut(&out)
+	cmd.SetErr(&bytes.Buffer{})
+	if err := runSnapshotInspect(flags, cmd, "snap"); err != nil {
 		t.Fatalf("err: %v", err)
 	}
 	var payload struct {

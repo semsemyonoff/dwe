@@ -301,13 +301,13 @@ JSON mode → `cmdctx.WriteError(flags, root, err)`; text mode → existing fang
 - Create: `internal/cli/snapshot/testdata/inspect.json.golden`
 - Create: `internal/cli/snapshot/testdata/current.json.golden`
 
-- [ ] in `snapshot.go` `newSnapshotListCmd`: delete `--json` local flag and `jsonOut bool` variable; replace `runSnapshotList` JSON branch with dispatch on `flags.Output == "json"` via `cmdctx.WriteData`
-- [ ] in `snapshot.go` `newSnapshotInspectCmd`: same treatment — delete `--json` local flag; preserve the existing inline JSON struct shape (`Source`, `Manifest`, `CurrentConfigHash`, `ConfigHashDiverged`, `ServicesDiff`) as the DTO
-- [ ] in `newSnapshotCurrentCmd`: add JSON support — DTO is `{name, dir, created_at, description, variant, total_size}` (or `null` body if no current snapshot); text behavior unchanged
-- [ ] existing `snapshotListJSONEntry` struct stays as-is (rename to lowercase `snapshotListEntry` if you want consistency with new DTOs — optional)
-- [ ] update existing tests that exercised `--json` to use `flags.Output = "json"` instead
-- [ ] golden tests for list/inspect/current JSON shapes
-- [ ] run `go test ./internal/cli/snapshot/...` — must pass before Task 9
+- [x] in `snapshot.go` `newSnapshotListCmd`: delete `--json` local flag and `jsonOut bool` variable; replace `runSnapshotList` JSON branch with dispatch on `flags.Output == "json"` via `cmdctx.WriteData`
+- [x] in `snapshot.go` `newSnapshotInspectCmd`: same treatment — delete `--json` local flag; preserve the existing inline JSON struct shape (`Source`, `Manifest`, `CurrentConfigHash`, `ConfigHashDiverged`, `ServicesDiff`) as the DTO
+- [x] in `newSnapshotCurrentCmd`: add JSON support — DTO is `{name, dir, created_at, description, variant, total_size}` (or `null` body if no current snapshot); text behavior unchanged
+- [x] existing `snapshotListJSONEntry` struct stays as-is (rename to lowercase `snapshotListEntry` if you want consistency with new DTOs — optional)
+- [x] update existing tests that exercised `--json` to use `flags.Output = "json"` instead
+- [x] golden tests for list/inspect/current JSON shapes
+- [x] run `go test ./internal/cli/snapshot/...` — must pass before Task 9
 
 ### Task 9: Wrap user-facing errors with CodedError
 

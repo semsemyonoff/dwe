@@ -1,9 +1,7 @@
 package snapshot
 
 import (
-	"encoding/json"
 	"fmt"
-	"io"
 	"os"
 	"path/filepath"
 	"sort"
@@ -45,71 +43,14 @@ and restore or roll back to it. Workflows live in devbox/snapshot.yml.`,
 	return cmd
 }
 
-// newSnapshotListCmd: `devbox snapshot list [--json]`.
-func newSnapshotListCmd(flags *cmdctx.RootFlags) *cobra.Command {
-	var jsonOut bool
-	cmd := &cobra.Command{
-		Use:          "list",
-		Short:        "List snapshots in ./snapshots/",
-		Args:         cobra.NoArgs,
-		SilenceUsage: true,
-		RunE: func(cmd *cobra.Command, args []string) error {
-			return runSnapshotList(flags, cmd.OutOrStdout(), cmd.ErrOrStderr(), jsonOut)
-		},
-	}
-	cmd.Flags().BoolVar(&jsonOut, "json", false, "emit JSON instead of a human-readable table")
-	return cmd
+// --- DTOs ---
+
+// snapshotListJSON is the top-level JSON wrapper for `snapshot list --output json`.
+type snapshotListJSON struct {
+	Snapshots []snapshotListJSONEntry `json:"snapshots"`
 }
 
-func runSnapshotList(flags *cmdctx.RootFlags, out, errW io.Writer, jsonOut bool) error {
-	baseDir := flags.ProjectRoot()
-	snapCfg, err := loadSnapshotConfigOrNil(baseDir)
-	if err != nil {
-		return err
-	}
-	entries, err := snapshotpkg.ListSnapshots(baseDir, snapCfg)
-	if err != nil {
-		return err
-	}
-	current, readCurErr := snapshotpkg.ReadCurrent(baseDir)
-	if readCurErr != nil {
-		_, _ = fmt.Fprintf(errW, "warning: could not read current snapshot pointer: %v\n", readCurErr)
-	}
-
-	if jsonOut {
-		return writeSnapshotListJSON(out, entries, current)
-	}
-	if len(entries) == 0 {
-		_, _ = fmt.Fprintln(errW, "no snapshots found")
-		return nil
-	}
-	headers := []string{"NAME", "CREATED", "SIZE", "VARIANT", "DESCRIPTION"}
-	rows := make([][]string, 0, len(entries))
-	for _, e := range entries {
-		name := filepath.Base(e.Dir)
-		if e.Manifest == nil {
-			rows = append(rows, []string{name + " (corrupt)", "—", "—", "—", "manifest unreadable"})
-			continue
-		}
-		marker := ""
-		if e.Manifest.Name == current {
-			marker = " *"
-		}
-		rows = append(rows, []string{
-			e.Manifest.Name + marker,
-			formatSnapshotTime(e.Manifest.CreatedAt),
-			formatSnapshotSize(e.TotalSize),
-			defaultDash(e.Manifest.Variant),
-			defaultDash(e.Manifest.Description),
-		})
-	}
-	_, _ = fmt.Fprintln(out, ui.RenderTable(headers, rows))
-	return nil
-}
-
-// snapshotListJSONEntry is the shape used for `snapshot list --json`. Fields
-// are explicit and stable — adding new fields is allowed, renaming or
-// removing is a breaking change.
+// snapshotListJSONEntry is the shape of one snapshot entry in the list output.
 type snapshotListJSONEntry struct {
 	Name        string `json:"name"`
 	CreatedAt   string `json:"created_at,omitempty"`
@@ -121,7 +62,70 @@ type snapshotListJSONEntry struct {
 	Dir         string `json:"dir"`
 }
 
-func writeSnapshotListJSON(out io.Writer, entries []snapshotpkg.Entry, current string) error {
+// snapshotInspectJSON is the shape for `snapshot inspect --output json`.
+type snapshotInspectJSON struct {
+	Source             string                    `json:"source"`
+	Manifest           *snapshotpkg.Manifest     `json:"manifest"`
+	CurrentConfigHash  string                    `json:"current_config_hash"`
+	ConfigHashDiverged bool                      `json:"config_hash_diverged"`
+	ServicesDiff       *snapshotpkg.ServicesDiff `json:"services_diff,omitempty"`
+}
+
+// snapshotCurrentJSON is the shape of the current snapshot in JSON mode.
+type snapshotCurrentJSON struct {
+	Name        string `json:"name"`
+	Dir         string `json:"dir,omitempty"`
+	CreatedAt   string `json:"created_at,omitempty"`
+	Description string `json:"description,omitempty"`
+	Variant     string `json:"variant,omitempty"`
+	TotalSize   int64  `json:"total_size,omitempty"`
+}
+
+// snapshotCurrentWrapper wraps the current snapshot: {"current": {...}} or
+// {"current": null} when no snapshot is currently set.
+type snapshotCurrentWrapper struct {
+	Current *snapshotCurrentJSON `json:"current"`
+}
+
+// --- Commands ---
+
+// newSnapshotListCmd: `devbox snapshot list`.
+func newSnapshotListCmd(flags *cmdctx.RootFlags) *cobra.Command {
+	return &cobra.Command{
+		Use:          "list",
+		Short:        "List snapshots in ./snapshots/",
+		Args:         cobra.NoArgs,
+		SilenceUsage: true,
+		RunE: func(cmd *cobra.Command, args []string) error {
+			return runSnapshotList(flags, cmd)
+		},
+	}
+}
+
+func runSnapshotList(flags *cmdctx.RootFlags, cmd *cobra.Command) error {
+	baseDir := flags.ProjectRoot()
+	snapCfg, err := loadSnapshotConfigOrNil(baseDir)
+	if err != nil {
+		return err
+	}
+	entries, err := snapshotpkg.ListSnapshots(baseDir, snapCfg)
+	if err != nil {
+		return err
+	}
+	current, readCurErr := snapshotpkg.ReadCurrent(baseDir)
+	if readCurErr != nil {
+		_, _ = fmt.Fprintf(cmd.ErrOrStderr(), "warning: could not read current snapshot pointer: %v\n", readCurErr)
+	}
+
+	data := buildSnapshotListData(entries, current)
+	if flags.Output != "json" && len(data.Snapshots) == 0 {
+		_, _ = fmt.Fprintln(cmd.ErrOrStderr(), "no snapshots found")
+		return nil
+	}
+	return cmdctx.WriteData(flags, cmd, data, renderSnapshotListText)
+}
+
+func buildSnapshotListData(entries []snapshotpkg.Entry, current string) snapshotListJSON {
 	payload := make([]snapshotListJSONEntry, 0, len(entries))
 	for _, e := range entries {
 		j := snapshotListJSONEntry{
@@ -140,9 +144,34 @@ func writeSnapshotListJSON(out io.Writer, entries []snapshotpkg.Entry, current s
 		}
 		payload = append(payload, j)
 	}
-	enc := json.NewEncoder(out)
-	enc.SetIndent("", "  ")
-	return enc.Encode(payload)
+	return snapshotListJSON{Snapshots: payload}
+}
+
+func renderSnapshotListText(data snapshotListJSON) string {
+	headers := []string{"NAME", "CREATED", "SIZE", "VARIANT", "DESCRIPTION"}
+	rows := make([][]string, 0, len(data.Snapshots))
+	for _, e := range data.Snapshots {
+		if e.Corrupt {
+			rows = append(rows, []string{e.Name + " (corrupt)", "—", "—", "—", "manifest unreadable"})
+			continue
+		}
+		marker := ""
+		if e.Current {
+			marker = " *"
+		}
+		var t time.Time
+		if e.CreatedAt != "" {
+			t, _ = time.Parse(time.RFC3339, e.CreatedAt)
+		}
+		rows = append(rows, []string{
+			e.Name + marker,
+			formatSnapshotTime(t),
+			formatSnapshotSize(e.TotalSize),
+			defaultDash(e.Variant),
+			defaultDash(e.Description),
+		})
+	}
+	return ui.RenderTable(headers, rows)
 }
 
 // newSnapshotCurrentCmd: `devbox snapshot current`.
@@ -153,19 +182,22 @@ func newSnapshotCurrentCmd(flags *cmdctx.RootFlags) *cobra.Command {
 		Args:         cobra.NoArgs,
 		SilenceUsage: true,
 		RunE: func(cmd *cobra.Command, args []string) error {
-			return runSnapshotCurrent(flags, cmd.OutOrStdout(), cmd.ErrOrStderr())
+			return runSnapshotCurrent(flags, cmd)
 		},
 	}
 }
 
-func runSnapshotCurrent(flags *cmdctx.RootFlags, out, errW io.Writer) error {
+func runSnapshotCurrent(flags *cmdctx.RootFlags, cmd *cobra.Command) error {
 	baseDir := flags.ProjectRoot()
 	name, err := snapshotpkg.ReadCurrent(baseDir)
 	if err != nil {
 		return err
 	}
 	if name == "" {
-		_, _ = fmt.Fprintln(errW, "no current snapshot")
+		if flags.Output == "json" {
+			return cmdctx.WriteData(flags, cmd, snapshotCurrentWrapper{Current: nil}, renderSnapshotCurrentText)
+		}
+		_, _ = fmt.Fprintln(cmd.ErrOrStderr(), "no current snapshot")
 		return nil
 	}
 	snapCfg, err := loadSnapshotConfigOrNil(baseDir)
@@ -175,32 +207,67 @@ func runSnapshotCurrent(flags *cmdctx.RootFlags, out, errW io.Writer) error {
 	manifestPath := snapshotpkg.ManifestPath(baseDir, snapCfg, name)
 	m, mErr := snapshotpkg.LoadManifest(manifestPath)
 	if mErr != nil {
-		_, _ = fmt.Fprintln(out, name)
-		_, _ = fmt.Fprintf(errW, "warning: manifest unreadable at %s: %v\n", manifestPath, mErr)
+		if flags.Output == "json" {
+			cur := &snapshotCurrentJSON{Name: name}
+			return cmdctx.WriteData(flags, cmd, snapshotCurrentWrapper{Current: cur}, renderSnapshotCurrentText)
+		}
+		_, _ = fmt.Fprintln(cmd.OutOrStdout(), name)
+		_, _ = fmt.Fprintf(cmd.ErrOrStderr(), "warning: manifest unreadable at %s: %v\n", manifestPath, mErr)
 		return nil
 	}
-	_, _ = fmt.Fprintln(out, formatSnapshotSummary(m))
-	return nil
+
+	cur := &snapshotCurrentJSON{
+		Name:        m.Name,
+		Description: m.Description,
+		Variant:     m.Variant,
+	}
+	if !m.CreatedAt.IsZero() {
+		cur.CreatedAt = m.CreatedAt.UTC().Format(time.RFC3339)
+	}
+	// Populate dir and total_size by scanning the snapshots directory.
+	if entries, _ := snapshotpkg.ListSnapshots(baseDir, snapCfg); len(entries) > 0 {
+		for _, e := range entries {
+			if e.Manifest != nil && e.Manifest.Name == name {
+				cur.Dir = e.Dir
+				cur.TotalSize = e.TotalSize
+				break
+			}
+		}
+	}
+	return cmdctx.WriteData(flags, cmd, snapshotCurrentWrapper{Current: cur}, renderSnapshotCurrentText)
 }
 
-// newSnapshotInspectCmd: `devbox snapshot inspect <name|tar-path> [--json]`.
+func renderSnapshotCurrentText(data snapshotCurrentWrapper) string {
+	if data.Current == nil {
+		return ""
+	}
+	var b strings.Builder
+	fmt.Fprintf(&b, "%s", data.Current.Name)
+	if data.Current.Description != "" {
+		fmt.Fprintf(&b, " — %s", data.Current.Description)
+	}
+	if data.Current.CreatedAt != "" {
+		t, _ := time.Parse(time.RFC3339, data.Current.CreatedAt)
+		fmt.Fprintf(&b, " (created %s)", formatSnapshotTime(t))
+	}
+	return b.String()
+}
+
+// newSnapshotInspectCmd: `devbox snapshot inspect <name|tar-path>`.
 func newSnapshotInspectCmd(flags *cmdctx.RootFlags) *cobra.Command {
-	var jsonOut bool
-	cmd := &cobra.Command{
+	return &cobra.Command{
 		Use:               "inspect <name|tar-path>",
 		Short:             "Inspect a snapshot directory or a packed .tar.gz archive",
 		Args:              cobra.ExactArgs(1),
 		SilenceUsage:      true,
 		ValidArgsFunction: snapshotNameCompletion(flags),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			return runSnapshotInspect(flags, cmd.OutOrStdout(), args[0], jsonOut)
+			return runSnapshotInspect(flags, cmd, args[0])
 		},
 	}
-	cmd.Flags().BoolVar(&jsonOut, "json", false, "emit JSON instead of human-readable text")
-	return cmd
 }
 
-func runSnapshotInspect(flags *cmdctx.RootFlags, out io.Writer, arg string, jsonOut bool) error {
+func runSnapshotInspect(flags *cmdctx.RootFlags, cmd *cobra.Command, arg string) error {
 	baseDir := flags.ProjectRoot()
 	m, source, err := loadInspectManifest(baseDir, arg)
 	if err != nil {
@@ -223,27 +290,21 @@ func runSnapshotInspect(flags *cmdctx.RootFlags, out io.Writer, arg string, json
 		}
 	}
 
-	if jsonOut {
-		enc := json.NewEncoder(out)
-		enc.SetIndent("", "  ")
-		return enc.Encode(struct {
-			Source             string                    `json:"source"`
-			Manifest           *snapshotpkg.Manifest     `json:"manifest"`
-			CurrentConfigHash  string                    `json:"current_config_hash"`
-			ConfigHashDiverged bool                      `json:"config_hash_diverged"`
-			ServicesDiff       *snapshotpkg.ServicesDiff `json:"services_diff,omitempty"`
-		}{
-			Source:             source,
-			Manifest:           m,
-			CurrentConfigHash:  currentHash,
-			ConfigHashDiverged: diverged,
-			ServicesDiff:       servicesDiff,
-		})
+	data := snapshotInspectJSON{
+		Source:             source,
+		Manifest:           m,
+		CurrentConfigHash:  currentHash,
+		ConfigHashDiverged: diverged,
+		ServicesDiff:       servicesDiff,
 	}
+	return cmdctx.WriteData(flags, cmd, data, renderSnapshotInspectText)
+}
 
+func renderSnapshotInspectText(data snapshotInspectJSON) string {
+	m := data.Manifest
 	var b strings.Builder
 	fmt.Fprintf(&b, "name:           %s\n", m.Name)
-	fmt.Fprintf(&b, "source:         %s\n", source)
+	fmt.Fprintf(&b, "source:         %s\n", data.Source)
 	fmt.Fprintf(&b, "created_at:     %s\n", formatSnapshotTime(m.CreatedAt))
 	if m.Description != "" {
 		fmt.Fprintf(&b, "description:    %s\n", m.Description)
@@ -258,8 +319,8 @@ func runSnapshotInspect(flags *cmdctx.RootFlags, out io.Writer, arg string, json
 	switch {
 	case m.Project.ConfigHash == "":
 		fmt.Fprintf(&b, "config_hash:    (empty — predates any deploy)\n")
-	case diverged:
-		fmt.Fprintf(&b, "config_hash:    %s  DIVERGED (current=%s)\n", m.Project.ConfigHash, currentHash)
+	case data.ConfigHashDiverged:
+		fmt.Fprintf(&b, "config_hash:    %s  DIVERGED (current=%s)\n", m.Project.ConfigHash, data.CurrentConfigHash)
 	default:
 		fmt.Fprintf(&b, "config_hash:    %s\n", m.Project.ConfigHash)
 	}
@@ -269,11 +330,11 @@ func runSnapshotInspect(flags *cmdctx.RootFlags, out io.Writer, arg string, json
 			fmt.Fprintf(&b, "  - %s  (%s, sha256=%s)\n", a.Path, formatSnapshotSize(a.Size), shortHash(a.Sha256))
 		}
 	}
-	if servicesDiff != nil {
-		if servicesDiff.IsEmpty() {
+	if data.ServicesDiff != nil {
+		if data.ServicesDiff.IsEmpty() {
 			fmt.Fprintf(&b, "services:       in sync (%d captured)\n", len(m.Project.Services))
 		} else {
-			fmt.Fprintf(&b, "services:       %s\n", snapshotpkg.FormatServicesDiff(*servicesDiff))
+			fmt.Fprintf(&b, "services:       %s\n", snapshotpkg.FormatServicesDiff(*data.ServicesDiff))
 		}
 	} else if len(m.Project.Services) > 0 {
 		fmt.Fprintf(&b, "services:       %d captured (current project not loaded)\n", len(m.Project.Services))
@@ -295,8 +356,7 @@ func runSnapshotInspect(flags *cmdctx.RootFlags, out io.Writer, arg string, json
 		}
 		fmt.Fprintln(&b)
 	}
-	_, _ = io.WriteString(out, b.String())
-	return nil
+	return strings.TrimRight(b.String(), "\n")
 }
 
 // loadInspectManifest resolves arg into a manifest. The argument is treated as
@@ -378,18 +438,6 @@ func loadSnapshotConfigOrNil(baseDir string) (*config.SnapshotConfig, error) {
 	return cfg, nil
 }
 
-func formatSnapshotSummary(m *snapshotpkg.Manifest) string {
-	var b strings.Builder
-	fmt.Fprintf(&b, "%s", m.Name)
-	if m.Description != "" {
-		fmt.Fprintf(&b, " — %s", m.Description)
-	}
-	if !m.CreatedAt.IsZero() {
-		fmt.Fprintf(&b, " (created %s)", formatSnapshotTime(m.CreatedAt))
-	}
-	return b.String()
-}
-
 func formatSnapshotTime(t time.Time) string {
 	if t.IsZero() {
 		return "—"
@@ -434,3 +482,4 @@ type snapshotInterruptedError struct{ wrapped error }
 func (e *snapshotInterruptedError) Error() string { return e.wrapped.Error() }
 func (e *snapshotInterruptedError) Unwrap() error { return e.wrapped }
 func (e *snapshotInterruptedError) ExitCode() int { return 130 }
+
