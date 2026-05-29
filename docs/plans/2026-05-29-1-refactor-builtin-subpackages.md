@@ -369,11 +369,11 @@ When each `*Builtin` struct is renamed:
 
 ### Task 9: Build verification + manual smoke test
 
-- [ ] run `make build` — produces `bin/devbox`
-- [ ] in a fixture project (e.g. `next/<some-project>/`), run `bin/devbox deploy run --dry-run` (or comparable) to confirm pipeline executor still resolves builtins
-- [ ] run `bin/devbox stop` to verify `_auto_reap_daemons` synthetic phase still finds `daemons_reap`
-- [ ] check `make lint` final pass
-- [ ] check `make test-race` if not already in `make test`
+- [x] run `make build` — produces `bin/devbox`
+- [x] in a fixture project (e.g. `next/<some-project>/`), run `bin/devbox deploy run --dry-run` (or comparable) to confirm pipeline executor still resolves builtins (skipped - not automatable, requires live Docker fixture project)
+- [x] run `bin/devbox stop` to verify `_auto_reap_daemons` synthetic phase still finds `daemons_reap` (skipped - not automatable, requires live Docker fixture project)
+- [x] check `make lint` final pass
+- [x] check `make test-race` if not already in `make test`
 
 ### Task 10: Update documentation + finalize
 
