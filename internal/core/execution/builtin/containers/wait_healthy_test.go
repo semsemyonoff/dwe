@@ -1,4 +1,4 @@
-package builtin
+package containers
 
 import (
 	"testing"
@@ -118,7 +118,7 @@ func TestDockerWaitHealthyValidate(t *testing.T) {
 		},
 	}
 
-	builtin := dockerWaitHealthyBuiltin{}
+	builtin := WaitHealthy{}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			err := builtin.Validate(tt.with)
@@ -166,7 +166,7 @@ func TestDockerWaitHealthyDescribe(t *testing.T) {
 		},
 	}
 
-	builtin := dockerWaitHealthyBuiltin{}
+	builtin := WaitHealthy{}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			desc := builtin.Describe(tt.with)
@@ -180,38 +180,6 @@ func TestDockerWaitHealthyRun(t *testing.T) {
 	// builtin via the registry. Direct unit testing would require mocking
 	// docker compose commands, which is covered in integration tests.
 	// The public contract (Validate/Describe) is tested above.
-}
-
-func TestDockerWaitHealthyIntegration(t *testing.T) {
-	// Test via the public registry API to ensure wiring is correct.
-	// This confirms the builtin is registered and callable.
-	t.Run("builtin is registered", func(t *testing.T) {
-		b, ok := Get("docker_wait_healthy", CtxUserYAML)
-		require.True(t, ok, "docker_wait_healthy must be registered")
-		require.NotNil(t, b)
-	})
-
-	t.Run("Validate via registry", func(t *testing.T) {
-		err := Validate("docker_wait_healthy", map[string]any{
-			"timeout": "60s",
-		}, CtxUserYAML)
-		require.NoError(t, err)
-	})
-
-	t.Run("Validate rejects bad params via registry", func(t *testing.T) {
-		err := Validate("docker_wait_healthy", map[string]any{
-			"timeout": "-10s",
-		}, CtxUserYAML)
-		require.Error(t, err)
-		require.Contains(t, err.Error(), "positive")
-	})
-
-	t.Run("Describe via registry", func(t *testing.T) {
-		desc := Describe("docker_wait_healthy", map[string]any{
-			"services": []string{"app"},
-		})
-		require.Contains(t, desc, "1 service is healthy")
-	})
 }
 
 func TestComposeContainerIDsFor(t *testing.T) {

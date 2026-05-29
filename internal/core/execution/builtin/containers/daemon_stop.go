@@ -1,4 +1,4 @@
-package builtin
+package containers
 
 import (
 	"context"
@@ -46,25 +46,28 @@ func stopTimeoutSeconds(raw string) int {
 	return max(int(timeout.Round(time.Second).Seconds()), 1)
 }
 
-// daemonStopBuiltin implements docker_daemon_stop.
+// DaemonStop implements docker_daemon_stop.
 //
 // Issues `docker stop -t <secs> <full>`. Missing-container exits 0
 // (idempotent). stop_timeout is parsed defensively; sub-second values round
 // up to 1 second since docker stop -t 0 sends SIGKILL immediately.
-type daemonStopBuiltin struct{}
+type DaemonStop struct{}
 
-func (daemonStopBuiltin) Validate(with map[string]any) error {
+// Validate checks that the with parameters are valid before the pipeline runs.
+func (DaemonStop) Validate(with map[string]any) error {
 	if spec.GetStringParam(with, "container_template", "") == "" {
 		return fmt.Errorf("docker_daemon_stop: container_template required")
 	}
 	return nil
 }
 
-func (daemonStopBuiltin) Describe(with map[string]any) string {
+// Describe returns a short human-readable description used in plan output.
+func (DaemonStop) Describe(with map[string]any) string {
 	return "stop daemon: " + spec.GetStringParam(with, "container_template", "?")
 }
 
-func (daemonStopBuiltin) Run(ctx context.Context, with map[string]any, ectx spec.ExecContext) error {
+// Run executes the docker_daemon_stop builtin.
+func (DaemonStop) Run(ctx context.Context, with map[string]any, ectx spec.ExecContext) error {
 	if ectx.Config == nil {
 		return fmt.Errorf("docker_daemon_stop: config not available")
 	}

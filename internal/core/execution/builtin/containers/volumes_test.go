@@ -1,14 +1,14 @@
-package builtin
+package containers
 
 import (
 	"strings"
 	"testing"
 )
 
-// --- dockerRemoveProjectVolumesBuiltin ---
+// --- RemoveProjectVolumes ---
 
 func TestDockerRemoveVolumes_Validate(t *testing.T) {
-	b := dockerRemoveProjectVolumesBuiltin{}
+	b := RemoveProjectVolumes{}
 	if err := b.Validate(nil); err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -18,7 +18,7 @@ func TestDockerRemoveVolumes_Validate(t *testing.T) {
 }
 
 func TestDockerRemoveVolumes_Describe(t *testing.T) {
-	b := dockerRemoveProjectVolumesBuiltin{}
+	b := RemoveProjectVolumes{}
 	desc := b.Describe(nil)
 	if !strings.Contains(desc, "docker_remove_project_volumes") {
 		t.Errorf("expected builtin name in describe, got %q", desc)

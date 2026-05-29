@@ -1,4 +1,4 @@
-package builtin
+package containers
 
 import (
 	"context"
@@ -71,15 +71,16 @@ func buildStartExtraArgs(in startArgsInput) []string {
 	return extraArgs
 }
 
-// daemonStartBuiltin implements docker_daemon_start.
+// DaemonStart implements docker_daemon_start.
 //
 // It reads pre-rendered fields from with: (templating already applied by
 // runtime's renderBuiltinWith) and invokes `docker compose run -d ...` through
 // docker.Compose so docker.yml policy (project_name, file flags, command
 // defaults, configured binary, process_env) applies.
-type daemonStartBuiltin struct{}
+type DaemonStart struct{}
 
-func (daemonStartBuiltin) Validate(with map[string]any) error {
+// Validate checks that the with parameters are valid before the pipeline runs.
+func (DaemonStart) Validate(with map[string]any) error {
 	if spec.GetStringParam(with, "service", "") == "" {
 		return fmt.Errorf("docker_daemon_start: service required")
 	}
@@ -89,11 +90,13 @@ func (daemonStartBuiltin) Validate(with map[string]any) error {
 	return nil
 }
 
-func (daemonStartBuiltin) Describe(with map[string]any) string {
+// Describe returns a short human-readable description used in plan output.
+func (DaemonStart) Describe(with map[string]any) string {
 	return "start daemon: " + spec.GetStringParam(with, "container_template", "?")
 }
 
-func (daemonStartBuiltin) Run(ctx context.Context, with map[string]any, ectx spec.ExecContext) error {
+// Run executes the docker_daemon_start builtin.
+func (DaemonStart) Run(ctx context.Context, with map[string]any, ectx spec.ExecContext) error {
 	if ectx.Config == nil {
 		return fmt.Errorf("docker_daemon_start: config not available")
 	}

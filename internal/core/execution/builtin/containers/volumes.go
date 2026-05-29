@@ -1,4 +1,4 @@
-package builtin
+package containers
 
 import (
 	"context"
@@ -11,17 +11,21 @@ import (
 	"devbox-cli/internal/core/project/config"
 )
 
-type dockerRemoveProjectVolumesBuiltin struct{}
+// RemoveProjectVolumes implements docker_remove_project_volumes.
+type RemoveProjectVolumes struct{}
 
-func (dockerRemoveProjectVolumesBuiltin) Validate(with map[string]any) error {
+// Validate checks that the with parameters are valid before the pipeline runs.
+func (RemoveProjectVolumes) Validate(with map[string]any) error {
 	return nil
 }
 
-func (dockerRemoveProjectVolumesBuiltin) Describe(with map[string]any) string {
+// Describe returns a short human-readable description used in plan output.
+func (RemoveProjectVolumes) Describe(with map[string]any) string {
 	return "builtin: docker_remove_project_volumes()"
 }
 
-func (dockerRemoveProjectVolumesBuiltin) Run(ctx context.Context, with map[string]any, ectx spec.ExecContext) error {
+// Run executes the docker_remove_project_volumes builtin.
+func (RemoveProjectVolumes) Run(ctx context.Context, with map[string]any, ectx spec.ExecContext) error {
 	// Use the pre-loaded docker config from spec.ExecContext; callers normalise
 	// os.ErrNotExist to &config.DockerConfig{} so we never load it here.
 	dockerCfg := ectx.DockerConfig

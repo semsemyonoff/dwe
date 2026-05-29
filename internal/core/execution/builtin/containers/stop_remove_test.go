@@ -1,4 +1,4 @@
-package builtin
+package containers
 
 import (
 	"bytes"
@@ -39,7 +39,7 @@ func swapDockerSeams(t *testing.T, stop func(context.Context, string, string, in
 }
 
 func TestDockerStopRemoveContainer_Validate(t *testing.T) {
-	b := dockerStopRemoveContainerBuiltin{}
+	b := StopRemoveContainer{}
 
 	if err := b.Validate(nil); err == nil {
 		t.Fatal("expected error for nil with")
@@ -56,7 +56,7 @@ func TestDockerStopRemoveContainer_Validate(t *testing.T) {
 }
 
 func TestDockerStopRemoveContainer_Describe(t *testing.T) {
-	b := dockerStopRemoveContainerBuiltin{}
+	b := StopRemoveContainer{}
 	got := b.Describe(map[string]any{"container_template": "app-pg"})
 	if !strings.Contains(got, "stop+rm container: app-pg") {
 		t.Errorf("Describe = %q, want substring 'stop+rm container: app-pg'", got)
@@ -90,7 +90,7 @@ func TestDockerStopRemoveContainer_Run_HappyPath(t *testing.T) {
 	cfg.Project.Prefix = "devbox"
 
 	ectx, buf := newDockerStopRemoveCtx(cfg)
-	err := dockerStopRemoveContainerBuiltin{}.Run(
+	err := StopRemoveContainer{}.Run(
 		context.Background(),
 		map[string]any{"container_template": "app-postgres", "stop_timeout": "5s"},
 		ectx,
@@ -131,7 +131,7 @@ func TestDockerStopRemoveContainer_Run_DefaultTimeout(t *testing.T) {
 	cfg := &config.DevboxConfig{}
 	cfg.Project.Name = "demo"
 	ectx, _ := newDockerStopRemoveCtx(cfg)
-	err := dockerStopRemoveContainerBuiltin{}.Run(
+	err := StopRemoveContainer{}.Run(
 		context.Background(),
 		map[string]any{"container_template": "app"},
 		ectx,
@@ -158,7 +158,7 @@ func TestDockerStopRemoveContainer_Run_StopFailurePropagatesAndSkipsRm(t *testin
 	cfg := &config.DevboxConfig{}
 	cfg.Project.Name = "tbm"
 	ectx, buf := newDockerStopRemoveCtx(cfg)
-	err := dockerStopRemoveContainerBuiltin{}.Run(
+	err := StopRemoveContainer{}.Run(
 		context.Background(),
 		map[string]any{"container_template": "app"},
 		ectx,
@@ -190,7 +190,7 @@ func TestDockerStopRemoveContainer_Run_MissingContainerIdempotent(t *testing.T) 
 	cfg := &config.DevboxConfig{}
 	cfg.Project.Name = "tbm"
 	ectx, buf := newDockerStopRemoveCtx(cfg)
-	err := dockerStopRemoveContainerBuiltin{}.Run(
+	err := StopRemoveContainer{}.Run(
 		context.Background(),
 		map[string]any{"container_template": "ghost"},
 		ectx,
@@ -216,7 +216,7 @@ func TestDockerStopRemoveContainer_Run_RmFailurePropagates(t *testing.T) {
 	cfg := &config.DevboxConfig{}
 	cfg.Project.Name = "tbm"
 	ectx, _ := newDockerStopRemoveCtx(cfg)
-	err := dockerStopRemoveContainerBuiltin{}.Run(
+	err := StopRemoveContainer{}.Run(
 		context.Background(),
 		map[string]any{"container_template": "app"},
 		ectx,
@@ -245,7 +245,7 @@ func TestDockerStopRemoveContainer_Run_NoProjectPrefix(t *testing.T) {
 	cfg := &config.DevboxConfig{}
 	cfg.Project.Name = "demo"
 	ectx, _ := newDockerStopRemoveCtx(cfg)
-	err := dockerStopRemoveContainerBuiltin{}.Run(
+	err := StopRemoveContainer{}.Run(
 		context.Background(),
 		map[string]any{"container_template": "app"},
 		ectx,
@@ -260,7 +260,7 @@ func TestDockerStopRemoveContainer_Run_NoProjectPrefix(t *testing.T) {
 
 func TestDockerStopRemoveContainer_Run_NilConfig(t *testing.T) {
 	ectx := spec.ExecContext{Output: render.NewWriter(&bytes.Buffer{})}
-	err := dockerStopRemoveContainerBuiltin{}.Run(
+	err := StopRemoveContainer{}.Run(
 		context.Background(),
 		map[string]any{"container_template": "app"},
 		ectx,
@@ -277,34 +277,13 @@ func TestDockerStopRemoveContainer_Run_InvalidContainerName(t *testing.T) {
 	cfg := &config.DevboxConfig{}
 	cfg.Project.Name = "demo"
 	ectx, _ := newDockerStopRemoveCtx(cfg)
-	err := dockerStopRemoveContainerBuiltin{}.Run(
+	err := StopRemoveContainer{}.Run(
 		context.Background(),
 		map[string]any{"container_template": "bad/name"},
 		ectx,
 	)
 	if err == nil {
 		t.Fatal("expected error for invalid container name, got nil")
-	}
-}
-
-func TestDockerStopRemoveContainer_Registered(t *testing.T) {
-	b, ok := Get("docker_stop_remove_container", CtxInternal)
-	if !ok {
-		t.Fatal("docker_stop_remove_container not registered for CtxInternal")
-	}
-	if b == nil {
-		t.Fatal("docker_stop_remove_container Get returned nil impl")
-	}
-	// Not callable from user YAML — it is engine-internal.
-	if _, ok := Get("docker_stop_remove_container", CtxUserYAML); ok {
-		t.Error("docker_stop_remove_container should not be available in CtxUserYAML")
-	}
-	// Validate via registry surface.
-	if err := Validate("docker_stop_remove_container", map[string]any{"container_template": "x"}, CtxInternal); err != nil {
-		t.Errorf("registry Validate failed: %v", err)
-	}
-	if got := Describe("docker_stop_remove_container", map[string]any{"container_template": "x"}); !strings.Contains(got, "stop+rm container: x") {
-		t.Errorf("registry Describe = %q", got)
 	}
 }
 

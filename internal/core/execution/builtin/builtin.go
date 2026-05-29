@@ -35,6 +35,7 @@ import (
 	"sort"
 	"strings"
 
+	"devbox-cli/internal/core/execution/builtin/containers"
 	"devbox-cli/internal/core/execution/builtin/spec"
 )
 
@@ -69,27 +70,28 @@ var registry = buildRegistry()
 func buildRegistry() map[string]spec.Entry {
 	r := map[string]spec.Entry{
 		// KindAction: user-callable step actions with side effects
-		"confirm":                       {Impl: confirmBuiltin{}, Kind: spec.KindAction},
-		"message":                       {Impl: messageBuiltin{}, Kind: spec.KindAction},
-		"service_configs_copy":          {Impl: serviceConfigsCopyBuiltin{}, Kind: spec.KindAction},
-		"service_configs_check":         {Impl: serviceConfigsCheckBuiltin{}, Kind: spec.KindAction},
-		"service_dirs_ensure":           {Impl: serviceDirsEnsureBuiltin{}, Kind: spec.KindAction},
-		"docker_remove_project_volumes": {Impl: dockerRemoveProjectVolumesBuiltin{}, Kind: spec.KindAction},
-		"docker_wait_healthy":           {Impl: dockerWaitHealthyBuiltin{}, Kind: spec.KindAction},
-		"remove_paths":                  {Impl: removePathsBuiltin{}, Kind: spec.KindAction},
+		"confirm":               {Impl: confirmBuiltin{}, Kind: spec.KindAction},
+		"message":               {Impl: messageBuiltin{}, Kind: spec.KindAction},
+		"service_configs_copy":  {Impl: serviceConfigsCopyBuiltin{}, Kind: spec.KindAction},
+		"service_configs_check": {Impl: serviceConfigsCheckBuiltin{}, Kind: spec.KindAction},
+		"service_dirs_ensure":   {Impl: serviceDirsEnsureBuiltin{}, Kind: spec.KindAction},
+		"remove_paths":          {Impl: removePathsBuiltin{}, Kind: spec.KindAction},
 		// KindPredicate: read-only checks for check: positions and validate.yml
-		"containers_running": {Impl: containersRunningBuiltin{}, Kind: spec.KindPredicate},
 		"shell":              {Impl: Shell{}, Kind: spec.KindPredicate},
 		"file_exists":        {Impl: fileExistsBuiltin{}, Kind: spec.KindPredicate},
 		"executable_in_path": {Impl: executableInPathBuiltin{}, Kind: spec.KindPredicate},
 		"env_keys_present":   {Impl: envKeysPresentBuiltin{}, Kind: spec.KindPredicate},
 		"tcp_reachable":      {Impl: TCPReachable{}, Kind: spec.KindPredicate},
-		// KindInternal: engine-only; not callable from user-authored YAML
-		"docker_daemon_start":          {Impl: daemonStartBuiltin{}, Kind: spec.KindInternal},
-		"docker_daemon_logs":           {Impl: daemonLogsBuiltin{}, Kind: spec.KindInternal},
-		"docker_daemon_stop":           {Impl: daemonStopBuiltin{}, Kind: spec.KindInternal},
-		"docker_stop_remove_container": {Impl: dockerStopRemoveContainerBuiltin{}, Kind: spec.KindInternal},
-		"daemons_reap":                 {Impl: daemonsReapBuiltin{}, Kind: spec.KindInternal},
+	}
+	for _, src := range []map[string]spec.Entry{
+		containers.Builtins(),
+	} {
+		for k, v := range src {
+			if _, dup := r[k]; dup {
+				panic("duplicate builtin name: " + k)
+			}
+			r[k] = v
+		}
 	}
 	return r
 }

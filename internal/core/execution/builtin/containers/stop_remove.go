@@ -1,4 +1,4 @@
-package builtin
+package containers
 
 import (
 	"context"
@@ -19,7 +19,7 @@ var (
 	removeContainerFn = docker.RemoveContainer
 )
 
-// dockerStopRemoveContainerBuiltin implements docker_stop_remove_container.
+// StopRemoveContainer implements docker_stop_remove_container.
 //
 // Issues `docker stop -t <secs> <full>` followed by `docker rm -f <full>`,
 // both bypassing docker compose. Used by the synthetic baseline phase of
@@ -33,20 +33,23 @@ var (
 // missing-container, which it absorbs), the builtin propagates and does NOT
 // attempt rm. Stop failure means the container is in an unexpected state;
 // force-removing on top would hide the diagnostic.
-type dockerStopRemoveContainerBuiltin struct{}
+type StopRemoveContainer struct{}
 
-func (dockerStopRemoveContainerBuiltin) Validate(with map[string]any) error {
+// Validate checks that the with parameters are valid before the pipeline runs.
+func (StopRemoveContainer) Validate(with map[string]any) error {
 	if spec.GetStringParam(with, "container_template", "") == "" {
 		return fmt.Errorf("docker_stop_remove_container: container_template required")
 	}
 	return nil
 }
 
-func (dockerStopRemoveContainerBuiltin) Describe(with map[string]any) string {
+// Describe returns a short human-readable description used in plan output.
+func (StopRemoveContainer) Describe(with map[string]any) string {
 	return "stop+rm container: " + spec.GetStringParam(with, "container_template", "?")
 }
 
-func (dockerStopRemoveContainerBuiltin) Run(ctx context.Context, with map[string]any, ectx spec.ExecContext) error {
+// Run executes the docker_stop_remove_container builtin.
+func (StopRemoveContainer) Run(ctx context.Context, with map[string]any, ectx spec.ExecContext) error {
 	if ectx.Config == nil {
 		return fmt.Errorf("docker_stop_remove_container: config not available")
 	}

@@ -1,4 +1,4 @@
-package builtin
+package containers
 
 import (
 	"context"
@@ -12,15 +12,20 @@ import (
 	"devbox-cli/internal/shared/docker"
 )
 
-// containersRunningBuiltin is a fast "is running" check for compose services.
+// ContainersRunning is a fast "is running" check for compose services.
 // Unlike docker_wait_healthy it does not poll, does not honour a timeout, and
 // does not require services to have a healthcheck — it asks compose once for
 // the set of currently-running services and returns immediately. Intended as
 // a `check:` partner for `docker up` steps and as a precondition for
 // service-touching pipeline steps.
-type containersRunningBuiltin struct{}
+//
+// Name mirrors the registered builtin name `containers_running`.
+//
+//nolint:revive // intentional: type name mirrors the registered builtin name.
+type ContainersRunning struct{}
 
-func (containersRunningBuiltin) Validate(with map[string]any) error {
+// Validate checks that the with parameters are valid before the pipeline runs.
+func (ContainersRunning) Validate(with map[string]any) error {
 	if raw, ok := with["services"]; ok && raw != nil {
 		if items, ok := raw.([]any); ok {
 			for i, item := range items {
@@ -49,7 +54,8 @@ func (containersRunningBuiltin) Validate(with map[string]any) error {
 	return nil
 }
 
-func (containersRunningBuiltin) Describe(with map[string]any) string {
+// Describe returns a short human-readable description used in plan output.
+func (ContainersRunning) Describe(with map[string]any) string {
 	services, _ := spec.GetStringSlice(with, "services")
 	if len(services) == 1 {
 		return fmt.Sprintf("check that service %q is running", services[0])
@@ -57,7 +63,8 @@ func (containersRunningBuiltin) Describe(with map[string]any) string {
 	return fmt.Sprintf("check that %d services are running", len(services))
 }
 
-func (containersRunningBuiltin) Run(ctx context.Context, with map[string]any, ectx spec.ExecContext) error {
+// Run executes the containers_running predicate.
+func (ContainersRunning) Run(ctx context.Context, with map[string]any, ectx spec.ExecContext) error {
 	services, _ := spec.GetStringSlice(with, "services")
 
 	dockerCfg := ectx.DockerConfig

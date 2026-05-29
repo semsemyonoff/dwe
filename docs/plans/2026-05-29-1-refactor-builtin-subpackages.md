@@ -265,18 +265,18 @@ When each `*Builtin` struct is renamed:
 - Move + modify: `daemon_test.go`, `daemons_reap_test.go`, `containers_stop_remove_test.go`, `wait_healthy_test.go`, `volumes_test.go` → `containers/`
 - Modify: `internal/core/execution/builtin/builtin.go` (compose registry from `containers.Builtins()`)
 
-- [ ] create `containers/containers.go` with `func Builtins() map[string]spec.Entry` returning the 8 docker entries (table above) + a leading doc comment
-- [ ] move 8 implementation files to `containers/` directory; change `package builtin` → `package containers`; add `import "devbox-cli/internal/core/execution/builtin/spec"`
-- [ ] rename types in each moved file: `daemonStartBuiltin` → `DaemonStart`, `dockerRemoveProjectVolumesBuiltin` → `RemoveProjectVolumes`, etc. (full table above)
-- [ ] update receivers (idiomatic short letters matching new type initials: `d DaemonStart`, `v RemoveProjectVolumes`, etc.)
-- [ ] update doc comments on each renamed type and exported method (revive `exported` rule enforces "comment must start with name")
-- [ ] update receiver method signatures: `ectx ExecContext` → `ectx spec.ExecContext`
-- [ ] update helper calls inside moved files: `getStringParam` → `spec.GetStringParam`, etc.
-- [ ] rename file `containers_stop_remove.go` → `stop_remove.go` (the type inside is `StopRemoveContainer`)
-- [ ] move corresponding `*_test.go` files; change package; update type instantiations (`&DaemonStart{}` etc.); update helper imports
-- [ ] in root `builtin.go`: append `for k, v := range containers.Builtins() { r[k] = v }` in `buildRegistry()`; import `containers` package
-- [ ] run `make test ./internal/core/execution/builtin/...` — must pass before Task 4
-- [ ] run `make lint` — must pass before Task 4
+- [x] create `containers/containers.go` with `func Builtins() map[string]spec.Entry` returning the 8 docker entries (table above) + a leading doc comment
+- [x] move 8 implementation files to `containers/` directory; change `package builtin` → `package containers`; add `import "devbox-cli/internal/core/execution/builtin/spec"`
+- [x] rename types in each moved file: `daemonStartBuiltin` → `DaemonStart`, `dockerRemoveProjectVolumesBuiltin` → `RemoveProjectVolumes`, etc. (full table above)
+- [x] update receivers (idiomatic short letters matching new type initials: `d DaemonStart`, `v RemoveProjectVolumes`, etc.)
+- [x] update doc comments on each renamed type and exported method (revive `exported` rule enforces "comment must start with name")
+- [x] update receiver method signatures: `ectx ExecContext` → `ectx spec.ExecContext`
+- [x] update helper calls inside moved files: `getStringParam` → `spec.GetStringParam`, etc.
+- [x] rename file `containers_stop_remove.go` → `stop_remove.go` (the type inside is `StopRemoveContainer`)
+- [x] move corresponding `*_test.go` files; change package; update type instantiations (`&DaemonStart{}` etc.); update helper imports
+- [x] in root `builtin.go`: append `for k, v := range containers.Builtins() { r[k] = v }` in `buildRegistry()`; import `containers` package
+- [x] run `make test ./internal/core/execution/builtin/...` — must pass before Task 4
+- [x] run `make lint` — must pass before Task 4
 
 ### Task 4: Extract `services/` subpackage (3 service_* builtins)
 

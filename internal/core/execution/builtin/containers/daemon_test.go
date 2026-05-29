@@ -1,4 +1,4 @@
-package builtin
+package containers
 
 import (
 	"slices"
@@ -149,22 +149,24 @@ func TestBuildStartExtraArgs_secretValueNeverInArgv(t *testing.T) {
 
 func TestDaemonBuiltins_Validate(t *testing.T) {
 	tests := []struct {
-		name    string
-		builtin string
+		name string
+		impl interface {
+			Validate(map[string]any) error
+		}
 		with    map[string]any
 		wantErr string
 	}{
-		{"start missing service", "docker_daemon_start", map[string]any{"container_template": "x"}, "service required"},
-		{"start missing template", "docker_daemon_start", map[string]any{"service": "app"}, "container_template required"},
-		{"start ok", "docker_daemon_start", map[string]any{"service": "app", "container_template": "x"}, ""},
-		{"logs missing template", "docker_daemon_logs", map[string]any{}, "container_template required"},
-		{"logs ok", "docker_daemon_logs", map[string]any{"container_template": "x"}, ""},
-		{"stop missing template", "docker_daemon_stop", map[string]any{}, "container_template required"},
-		{"stop ok", "docker_daemon_stop", map[string]any{"container_template": "x"}, ""},
+		{"start missing service", DaemonStart{}, map[string]any{"container_template": "x"}, "service required"},
+		{"start missing template", DaemonStart{}, map[string]any{"service": "app"}, "container_template required"},
+		{"start ok", DaemonStart{}, map[string]any{"service": "app", "container_template": "x"}, ""},
+		{"logs missing template", DaemonLogs{}, map[string]any{}, "container_template required"},
+		{"logs ok", DaemonLogs{}, map[string]any{"container_template": "x"}, ""},
+		{"stop missing template", DaemonStop{}, map[string]any{}, "container_template required"},
+		{"stop ok", DaemonStop{}, map[string]any{"container_template": "x"}, ""},
 	}
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
-			err := Validate(tc.builtin, tc.with, CtxInternal)
+			err := tc.impl.Validate(tc.with)
 			if tc.wantErr == "" {
 				if err != nil {
 					t.Fatalf("unexpected error: %v", err)
@@ -175,14 +177,6 @@ func TestDaemonBuiltins_Validate(t *testing.T) {
 				t.Fatalf("got err=%v, want substring %q", err, tc.wantErr)
 			}
 		})
-	}
-}
-
-func TestDaemonBuiltins_Registered(t *testing.T) {
-	for _, name := range []string{"docker_daemon_start", "docker_daemon_logs", "docker_daemon_stop"} {
-		if _, ok := Get(name, CtxInternal); !ok {
-			t.Errorf("builtin %q not registered", name)
-		}
 	}
 }
 

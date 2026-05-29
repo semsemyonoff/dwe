@@ -1,4 +1,4 @@
-package builtin
+package containers
 
 import (
 	"bufio"
@@ -21,7 +21,7 @@ import (
 	"devbox-cli/internal/shared/docker"
 )
 
-// daemonsReapBuiltin implements daemons_reap.
+// DaemonsReap implements daemons_reap.
 //
 // Enumerates running daemon containers for the current project via
 // `docker ps --format=json` filtered on the standard devbox.project and
@@ -30,9 +30,10 @@ import (
 // stop; can also be invoked directly from user pipelines.
 //
 // Accepts no with: parameters in v1.
-type daemonsReapBuiltin struct{}
+type DaemonsReap struct{}
 
-func (daemonsReapBuiltin) Validate(with map[string]any) error {
+// Validate checks that the with parameters are valid before the pipeline runs.
+func (DaemonsReap) Validate(with map[string]any) error {
 	if len(with) == 0 {
 		return nil
 	}
@@ -44,11 +45,13 @@ func (daemonsReapBuiltin) Validate(with map[string]any) error {
 	return fmt.Errorf("daemons_reap: unknown key %q", keys[0])
 }
 
-func (daemonsReapBuiltin) Describe(_ map[string]any) string {
+// Describe returns a short human-readable description used in plan output.
+func (DaemonsReap) Describe(_ map[string]any) string {
 	return "reap running daemons for this project"
 }
 
-func (daemonsReapBuiltin) Run(ctx context.Context, _ map[string]any, ectx spec.ExecContext) error {
+// Run executes the daemons_reap builtin.
+func (DaemonsReap) Run(ctx context.Context, _ map[string]any, ectx spec.ExecContext) error {
 	if ectx.Config == nil {
 		return fmt.Errorf("daemons_reap: config not available")
 	}

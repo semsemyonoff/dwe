@@ -1,4 +1,4 @@
-package builtin
+package containers
 
 import (
 	"context"
@@ -16,25 +16,28 @@ import (
 	"devbox-cli/internal/shared/docker"
 )
 
-// daemonLogsBuiltin implements docker_daemon_logs.
+// DaemonLogs implements docker_daemon_logs.
 //
 // Foreground tail of `docker logs -f --tail=100 <full>`. Ctrl-C / context
 // cancellation sends SIGINT to docker (graceful detach); the container is
 // never signalled by this builtin.
-type daemonLogsBuiltin struct{}
+type DaemonLogs struct{}
 
-func (daemonLogsBuiltin) Validate(with map[string]any) error {
+// Validate checks that the with parameters are valid before the pipeline runs.
+func (DaemonLogs) Validate(with map[string]any) error {
 	if spec.GetStringParam(with, "container_template", "") == "" {
 		return fmt.Errorf("docker_daemon_logs: container_template required")
 	}
 	return nil
 }
 
-func (daemonLogsBuiltin) Describe(with map[string]any) string {
+// Describe returns a short human-readable description used in plan output.
+func (DaemonLogs) Describe(with map[string]any) string {
 	return "tail daemon logs: " + spec.GetStringParam(with, "container_template", "?")
 }
 
-func (daemonLogsBuiltin) Run(ctx context.Context, with map[string]any, ectx spec.ExecContext) error {
+// Run executes the docker_daemon_logs builtin.
+func (DaemonLogs) Run(ctx context.Context, with map[string]any, ectx spec.ExecContext) error {
 	if ectx.Config == nil {
 		return fmt.Errorf("docker_daemon_logs: config not available")
 	}

@@ -1,4 +1,4 @@
-package builtin
+package containers
 
 import (
 	"bytes"
@@ -78,24 +78,19 @@ func TestParseDaemonsPSOutput_NameFallback(t *testing.T) {
 	}
 }
 
-func TestDaemonsReap_Registered(t *testing.T) {
-	if _, ok := Get("daemons_reap", CtxInternal); !ok {
-		t.Fatal("daemons_reap builtin not registered")
-	}
-}
-
 func TestDaemonsReap_Validate_RejectsUnknownKeys(t *testing.T) {
-	err := Validate("daemons_reap", map[string]any{"foo": "bar"}, CtxInternal)
+	err := DaemonsReap{}.Validate(map[string]any{"foo": "bar"})
 	if err == nil || !strings.Contains(err.Error(), "unknown key") {
 		t.Fatalf("expected unknown key error, got: %v", err)
 	}
 }
 
 func TestDaemonsReap_Validate_EmptyOK(t *testing.T) {
-	if err := Validate("daemons_reap", nil, CtxInternal); err != nil {
+	b := DaemonsReap{}
+	if err := b.Validate(nil); err != nil {
 		t.Fatalf("nil with: should validate, got: %v", err)
 	}
-	if err := Validate("daemons_reap", map[string]any{}, CtxInternal); err != nil {
+	if err := b.Validate(map[string]any{}); err != nil {
 		t.Fatalf("empty with: should validate, got: %v", err)
 	}
 }
@@ -112,7 +107,7 @@ func newReapExecContext(buf *bytes.Buffer) spec.ExecContext {
 }
 
 func TestDaemonsReap_Run_NilConfig(t *testing.T) {
-	err := daemonsReapBuiltin{}.Run(context.Background(), nil, spec.ExecContext{})
+	err := DaemonsReap{}.Run(context.Background(), nil, spec.ExecContext{})
 	if err == nil || !strings.Contains(err.Error(), "config not available") {
 		t.Fatalf("expected config-not-available error, got: %v", err)
 	}
@@ -127,7 +122,7 @@ func TestDaemonsReap_Run_ListError(t *testing.T) {
 
 	var buf bytes.Buffer
 	ectx := newReapExecContext(&buf)
-	err := daemonsReapBuiltin{}.Run(context.Background(), nil, ectx)
+	err := DaemonsReap{}.Run(context.Background(), nil, ectx)
 	if err != nil {
 		t.Fatalf("list error should be best-effort (nil return), got: %v", err)
 	}
@@ -145,7 +140,7 @@ func TestDaemonsReap_Run_NoDaemons(t *testing.T) {
 
 	var buf bytes.Buffer
 	ectx := newReapExecContext(&buf)
-	err := daemonsReapBuiltin{}.Run(context.Background(), nil, ectx)
+	err := DaemonsReap{}.Run(context.Background(), nil, ectx)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}

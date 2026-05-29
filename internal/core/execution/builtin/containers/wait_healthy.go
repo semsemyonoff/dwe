@@ -1,4 +1,4 @@
-package builtin
+package containers
 
 import (
 	"context"
@@ -12,9 +12,11 @@ import (
 	"devbox-cli/internal/shared/docker"
 )
 
-type dockerWaitHealthyBuiltin struct{}
+// WaitHealthy implements docker_wait_healthy.
+type WaitHealthy struct{}
 
-func (dockerWaitHealthyBuiltin) Validate(with map[string]any) error {
+// Validate checks that the with parameters are valid before the pipeline runs.
+func (WaitHealthy) Validate(with map[string]any) error {
 	// Validate timeout.
 	timeout, err := spec.GetDurationParam(with, "timeout", 60*time.Second)
 	if err != nil {
@@ -63,7 +65,8 @@ func (dockerWaitHealthyBuiltin) Validate(with map[string]any) error {
 	return nil
 }
 
-func (dockerWaitHealthyBuiltin) Describe(with map[string]any) string {
+// Describe returns a short human-readable description used in plan output.
+func (WaitHealthy) Describe(with map[string]any) string {
 	timeout, _ := spec.GetDurationParam(with, "timeout", 60*time.Second)
 	interval, _ := spec.GetDurationParam(with, "interval", 2*time.Second)
 	services, _ := spec.GetStringSlice(with, "services")
@@ -80,7 +83,8 @@ func (dockerWaitHealthyBuiltin) Describe(with map[string]any) string {
 		timeout, interval)
 }
 
-func (dockerWaitHealthyBuiltin) Run(ctx context.Context, with map[string]any, ectx spec.ExecContext) error {
+// Run executes the docker_wait_healthy builtin.
+func (WaitHealthy) Run(ctx context.Context, with map[string]any, ectx spec.ExecContext) error {
 	// Parse parameters.
 	timeout, _ := spec.GetDurationParam(with, "timeout", 60*time.Second)
 	interval, _ := spec.GetDurationParam(with, "interval", 2*time.Second)
