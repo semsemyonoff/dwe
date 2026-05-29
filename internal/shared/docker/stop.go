@@ -41,3 +41,30 @@ func StopContainer(ctx context.Context, dockerBin, containerName string, timeout
 	}
 	return nil
 }
+
+// RemoveContainer issues `docker rm -f <containerName>` directly, bypassing
+// docker compose. The `-f` flag ensures containers in any intermediate state
+// (Created, Exited, Restarting, even Running) are removed reliably.
+//
+// Idempotent: if the container does not exist, RemoveContainer returns nil.
+// Any other docker error is wrapped and returned.
+func RemoveContainer(ctx context.Context, dockerBin, containerName string) error {
+	if dockerBin == "" {
+		dockerBin = "docker"
+	}
+	cmd := exec.CommandContext(ctx, dockerBin, "rm", "-f", containerName) //nolint:gosec
+	cmd.Stdout = io.Discard
+	var stderr strings.Builder
+	cmd.Stderr = &stderr
+	if err := cmd.Run(); err != nil {
+		errOut := stderr.String()
+		if strings.Contains(errOut, "No such container") {
+			return nil
+		}
+		if errOut != "" {
+			return fmt.Errorf("docker rm: %w: %s", err, strings.TrimSpace(errOut))
+		}
+		return fmt.Errorf("docker rm: %w", err)
+	}
+	return nil
+}

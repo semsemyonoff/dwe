@@ -261,14 +261,14 @@ Drop the `bufio` import if no other uses remain in `deploy.go`.
 - Modify: `internal/shared/docker/stop.go`
 - Modify: `internal/shared/docker/stop_test.go`
 
-- [ ] add `RemoveContainer(ctx, dockerBin, containerName string) error` in `internal/shared/docker/stop.go` mirroring `StopContainer` (idempotent on "No such container", wraps other errors)
-- [ ] use `docker rm -f` so containers in any intermediate state (Created, Exited, Restarting) are removed reliably — add a one-line comment in the body explaining the `-f` choice
-- [ ] doc-comment matches `StopContainer` style — note bypassing compose, idempotency contract
-- [ ] write `TestRemoveContainer_HappyPath` using fake docker-bin (model after `TestStopContainer` in `stop_test.go`)
-- [ ] write `TestRemoveContainer_MissingContainerReturnsNil` (fake bin exits 1 with "No such container" on stderr)
-- [ ] write `TestRemoveContainer_GenericError` (fake bin exits 1 with arbitrary stderr → wrapped error)
-- [ ] write `TestRemoveContainer_DefaultBin` (empty dockerBin defaults to "docker", parallels existing test)
-- [ ] run tests: `go test ./internal/shared/docker/...` — must pass before Task 2
+- [x] add `RemoveContainer(ctx, dockerBin, containerName string) error` in `internal/shared/docker/stop.go` mirroring `StopContainer` (idempotent on "No such container", wraps other errors)
+- [x] use `docker rm -f` so containers in any intermediate state (Created, Exited, Restarting) are removed reliably — add a one-line comment in the body explaining the `-f` choice
+- [x] doc-comment matches `StopContainer` style — note bypassing compose, idempotency contract
+- [x] write `TestRemoveContainer_HappyPath` using fake docker-bin (model after `TestStopContainer` in `stop_test.go`)
+- [x] write `TestRemoveContainer_MissingContainerReturnsNil` (fake bin exits 1 with "No such container" on stderr)
+- [x] write `TestRemoveContainer_GenericError` (fake bin exits 1 with arbitrary stderr → wrapped error)
+- [x] write `TestRemoveContainer_DefaultBin` (empty dockerBin defaults to "docker", parallels existing test)
+- [x] run tests: `go test ./internal/shared/docker/...` — must pass before Task 2
 
 ### Task 2: Add `docker_stop_remove_container` builtin
 
