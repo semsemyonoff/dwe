@@ -11,13 +11,6 @@ import (
 	"devbox-cli/internal/shared/tpl"
 )
 
-// FileProbeResult tracks the outcome of a single file probe.
-type FileProbeResult struct {
-	Resolved bool   // true if the file (or a candidate chain) resolved
-	Path     string // the resolved path, if Resolved is true
-	Err      error  // configuration error, if any (e.g. bad template, bad glob, bad regex)
-}
-
 // ComputeFilePaths resolves file paths for all file specs in a command definition.
 // It is non-mutating — no filesystem changes occur during this phase.
 func ComputeFilePaths(ctx RunContext) (map[string]tpl.ResolvedFile, error) {

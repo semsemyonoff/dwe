@@ -231,15 +231,15 @@ All `spec.ResolveRequireIDs` (currently from filesgate) become `fgspec.ResolveRe
 - Modify: `internal/core/usercommands/runtime/observer.go` (move public contract types out; keep `fireOnStepStart`/`fireOnStepEnd` until Task 4 moves them to `runners/workflow/`)
 - Modify: `internal/core/usercommands/runtime/resolve_files.go` (FileProbeResult → spec.FileProbeResult)
 
-- [ ] create `spec/runner.go`: move `Runner` interface, `RunContext` struct, `FileProbeResult` from `runner.go` and `resolve_files.go`
-- [ ] create `spec/observer.go`: move ONLY the public contract — `StepStatus`, `StepResult`, `WorkflowStepObserver`, `StepIOSuspender` — from root `observer.go` to `spec/observer.go`
-- [ ] in root `runner.go`: keep `NewRunner` factory (still references runners by current names — they're still in root at this point); add type aliases for spec types
-- [ ] keep root `observer.go` (now only `fireOnStepStart`/`fireOnStepEnd` left — they migrate to `runners/workflow/` in Task 4, NOT to `spec/`, because they're WorkflowRunner-private nil-check helpers used only by workflow runner)
-- [ ] update root files that referenced `WorkflowStepObserver` etc.: now use the aliased names (no source change since aliases are transparent)
-- [ ] update `resolve_files.go`: `FileProbeResult` → `spec.FileProbeResult` (or via alias — pick consistent approach)
-- [ ] keep `runner_test.go` / `observer_test.go` parts in root for now (factory tests stay; spec types are tested through their use)
-- [ ] run `make test ./internal/core/usercommands/runtime/...` — must pass before Task 2
-- [ ] run `make lint` — must pass before Task 2
+- [x] create `spec/runner.go`: move `Runner` interface, `RunContext` struct, `FileProbeResult` from `runner.go` and `resolve_files.go`
+- [x] create `spec/observer.go`: move ONLY the public contract — `StepStatus`, `StepResult`, `WorkflowStepObserver`, `StepIOSuspender` — from root `observer.go` to `spec/observer.go`
+- [x] in root `runner.go`: keep `NewRunner` factory (still references runners by current names — they're still in root at this point); add type aliases for spec types
+- [x] keep root `observer.go` (now only `fireOnStepStart`/`fireOnStepEnd` left — they migrate to `runners/workflow/` in Task 4, NOT to `spec/`, because they're WorkflowRunner-private nil-check helpers used only by workflow runner)
+- [x] update root files that referenced `WorkflowStepObserver` etc.: now use the aliased names (no source change since aliases are transparent)
+- [x] update `resolve_files.go`: `FileProbeResult` → `spec.FileProbeResult` (or via alias — pick consistent approach)
+- [x] keep `runner_test.go` / `observer_test.go` parts in root for now (factory tests stay; spec types are tested through their use)
+- [x] run `make test ./internal/core/usercommands/runtime/...` — must pass before Task 2
+- [x] run `make lint` — must pass before Task 2
 
 ### Task 2: Intra-file splits — `runner_workflow.go` and `resolve_files.go` (prep before subpkg move)
 
