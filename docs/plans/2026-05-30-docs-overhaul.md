@@ -349,10 +349,10 @@ For phases that touch many files, order is: index file last (it links to everyth
 - Create: `docs/reference/concepts/index.md`
 - Create: `docs/reference/concepts/getting-started.md`
 
-- [ ] write `concepts/index.md`: one paragraph per concept page below, in reading order
-- [ ] write `concepts/getting-started.md`: install (`make build`, `bin/devbox`), enter a project, first `devbox deploy`, first `devbox run`, first `devbox info`, "where to next" links
-- [ ] real YAML examples, no placeholders
-- [ ] `make build` exits 0; `./bin/devbox docs show concepts/getting-started` renders
+- [x] write `concepts/index.md`: one paragraph per concept page below, in reading order
+- [x] write `concepts/getting-started.md`: install (`make build`, `bin/devbox`), enter a project, first `devbox deploy`, first `devbox run`, first `devbox info`, "where to next" links
+- [x] real YAML examples, no placeholders
+- [x] `make build` exits 0; `./bin/devbox docs show concepts/getting-started` renders
 
 ### Task 4.2: `concepts/architecture.md`
 

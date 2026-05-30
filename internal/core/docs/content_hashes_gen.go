@@ -111,6 +111,8 @@ var ContentHashes = map[string]string{
 	"reference/cli/devbox.md":                                "4664db9e4373",
 	"reference/cli/index.md":                                 "cfd2cd1d2da2",
 	"reference/cli/starship.md":                              "2b9f7b50923a",
+	"reference/concepts/getting-started.md":                  "3e4a21eb6fcd",
+	"reference/concepts/index.md":                            "f794cffeb488",
 	"reference/config/commands/directives.md":                "f7ecd310ec7f",
 	"reference/config/commands/index.md":                     "bbbb5ee585e0",
 	"reference/config/commands/templating.md":                "f7aadc2d1da2",
