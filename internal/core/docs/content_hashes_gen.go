@@ -112,6 +112,7 @@ var ContentHashes = map[string]string{
 	"reference/cli/index.md":                                 "cfd2cd1d2da2",
 	"reference/cli/starship.md":                              "2b9f7b50923a",
 	"reference/concepts/architecture.md":                     "9849e0789409",
+	"reference/concepts/docker.md":                           "93d8a00617e2",
 	"reference/concepts/getting-started.md":                  "3e4a21eb6fcd",
 	"reference/concepts/index.md":                            "f794cffeb488",
 	"reference/concepts/project-layout.md":                   "b1f1358a776a",

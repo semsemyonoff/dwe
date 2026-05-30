@@ -383,10 +383,10 @@ For phases that touch many files, order is: index file last (it links to everyth
 **Files:**
 - Create: `docs/reference/concepts/docker.md`
 
-- [ ] write compose project-name derivation, compose file list assembly (base + service overlays + tools + local), env propagation, volume conventions, lifecycle commands using `docker stop/rm` directly vs through compose
-- [ ] one mermaid `sequenceDiagram` showing `devbox deploy` → compose invocation
-- [ ] validate mermaid
-- [ ] `make build` exits 0
+- [x] write compose project-name derivation, compose file list assembly (base + service overlays + tools + local), env propagation, volume conventions, lifecycle commands using `docker stop/rm` directly vs through compose
+- [x] one mermaid `sequenceDiagram` showing `devbox deploy` → compose invocation
+- [x] validate mermaid (mmdc 11.15.0 renders clean; `<project>` placeholders + underscores in message text parse without warnings)
+- [x] `make build` exits 0
 
 ### Task 4.5: `concepts/git.md`
 
