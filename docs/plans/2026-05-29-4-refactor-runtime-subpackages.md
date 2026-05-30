@@ -253,16 +253,16 @@ All `spec.ResolveRequireIDs` (currently from filesgate) become `fgspec.ResolveRe
 - Create: `internal/core/usercommands/runtime/files_resolve.go`
 - Modify: `internal/core/usercommands/runtime/resolve_files_test.go` (split if convenient)
 
-- [ ] in `runner_workflow.go`: keep `WorkflowRunner` type + main `Run` dispatcher + dispatch helpers (~150 lines)
-- [ ] move `runConfirmStep`, `runCommandStep`, `isNonInteractive`, `evalWorkflowStepWhen` to `runner_workflow_step.go` (~110 lines)
-- [ ] move `subResult`, `runParallelGroup`, `writeParallelSummary` to `runner_workflow_parallel.go` (~310 lines, biggest chunk)
-- [ ] move `dumpSubStepOutput`, `evalSubStepOverrideGate` to `runner_workflow_helpers.go` (~50 lines)
-- [ ] in `resolve_files.go`: split into `files_probe.go` (ComputeFilePathsProbe + probe* helpers, ~190 lines) and `files_resolve.go` (ComputeFilePaths + resolve* + PrepareFileEffects, ~320 lines)
-- [ ] delete `resolve_files.go` once empty
-- [ ] decide on test split — likely keep `runner_workflow_*_test.go` files unchanged (they already cover different aspects)
-- [ ] decide on `resolve_files_test.go` split — split into `files_probe_test.go` + `files_resolve_test.go` if tests naturally divide
-- [ ] run `make test` — must pass before Task 3
-- [ ] run `make lint` — must pass before Task 3
+- [x] in `runner_workflow.go`: keep `WorkflowRunner` type + main `Run` dispatcher + dispatch helpers (~150 lines)
+- [x] move `runConfirmStep`, `runCommandStep`, `isNonInteractive`, `evalWorkflowStepWhen` to `runner_workflow_step.go` (~110 lines)
+- [x] move `subResult`, `runParallelGroup`, `writeParallelSummary` to `runner_workflow_parallel.go` (~310 lines, biggest chunk)
+- [x] move `dumpSubStepOutput`, `evalSubStepOverrideGate` to `runner_workflow_helpers.go` (~50 lines)
+- [x] in `resolve_files.go`: split into `files_probe.go` (ComputeFilePathsProbe + probe* helpers, ~190 lines) and `files_resolve.go` (ComputeFilePaths + resolve* + PrepareFileEffects, ~320 lines)
+- [x] delete `resolve_files.go` once empty
+- [x] decide on test split — kept `runner_workflow_*_test.go` files unchanged (they already cover different aspects)
+- [x] decide on `resolve_files_test.go` split — split into `files_probe_test.go` + `files_resolve_test.go` (tests naturally divide at line 1338)
+- [x] run `make test` — must pass before Task 3
+- [x] run `make lint` — must pass before Task 3
 
 ### Task 2.5: Extract `runtime/internal/runio/` (shared I/O helpers)
 
