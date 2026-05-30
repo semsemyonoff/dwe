@@ -2,6 +2,8 @@ package docs
 
 import (
 	"bytes"
+	"io/fs"
+	"strings"
 	"testing"
 	"testing/fstest"
 )
@@ -370,6 +372,73 @@ func TestAvailableLocalesFor(t *testing.T) {
 		if !localeSet[locale] {
 			t.Errorf("missing expected locale: %q", locale)
 		}
+	}
+}
+
+// TestRussianTranslationsAreFresh walks every Russian translation embedded in
+// BuiltinFS under i18n/ru/ and asserts that the hash in the
+// `> Translated from: <relPath> @ <hash>` header matches the current English
+// content hash recorded in ContentHashes. Drift here means an English source
+// was edited without re-translating; CI catches it instead of relying on a
+// manual spot-check.
+func TestRussianTranslationsAreFresh(t *testing.T) {
+	const localeDir = "i18n/ru"
+
+	if _, err := fs.Stat(BuiltinFS, localeDir); err != nil {
+		t.Skipf("no embedded Russian translations under %s (run `make build`): %v", localeDir, err)
+	}
+
+	var stale []string
+	var missingHeader []string
+	var missingManifest []string
+
+	err := fs.WalkDir(BuiltinFS, localeDir, func(path string, d fs.DirEntry, err error) error {
+		if err != nil {
+			return err
+		}
+		if d.IsDir() || !strings.HasSuffix(path, ".md") {
+			return nil
+		}
+
+		content, readErr := fs.ReadFile(BuiltinFS, path)
+		if readErr != nil {
+			t.Errorf("read %s: %v", path, readErr)
+			return nil
+		}
+
+		headerHash, ok := parseContentHashHeader(content)
+		relPath := strings.TrimPrefix(path, localeDir+"/")
+		if !ok {
+			missingHeader = append(missingHeader, path)
+			return nil
+		}
+
+		enHash := ContentHashFor(relPath)
+		if enHash == "" {
+			missingManifest = append(missingManifest, relPath)
+			return nil
+		}
+
+		if headerHash != enHash {
+			stale = append(stale, relPath+" (header="+headerHash+" current="+enHash+")")
+		}
+		return nil
+	})
+	if err != nil {
+		t.Fatalf("walk %s: %v", localeDir, err)
+	}
+
+	if len(missingHeader) > 0 {
+		t.Errorf("Russian translations missing `> Translated from: ... @ <hash>` header (%d):\n  %s",
+			len(missingHeader), strings.Join(missingHeader, "\n  "))
+	}
+	if len(missingManifest) > 0 {
+		t.Errorf("Russian translations reference English paths not in ContentHashes (%d):\n  %s",
+			len(missingManifest), strings.Join(missingManifest, "\n  "))
+	}
+	if len(stale) > 0 {
+		t.Errorf("Russian translations whose header hash no longer matches English source (%d):\n  %s",
+			len(stale), strings.Join(stale, "\n  "))
 	}
 }
 
