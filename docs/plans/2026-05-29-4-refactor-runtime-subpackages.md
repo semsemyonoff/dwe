@@ -365,14 +365,14 @@ These reference both `runtime.NewRunner` and concrete types like `*HostRunner` �
 **Files:**
 - Read-only verification of: `internal/cli/`, `internal/core/execution/pipeline/`, `internal/core/workflow/snapshot/`, `internal/core/validate/checks/`, `internal/core/usercommands/usercommands.go`
 
-- [ ] grep `runtime\\.HostRunner`, `runtime\\.WorkflowRunner`, `runtime\\.ServiceExecRunner`, etc. — none should remain (type aliases unset for these; subpkg types not directly named externally because runners are created via NewRunner)
-- [ ] grep `runtime\\.Runner`, `runtime\\.RunContext`, `runtime\\.NewRunner` — these should still compile via aliases
-- [ ] grep `runtime\\.StepResult`, `runtime\\.WorkflowStepObserver`, `runtime\\.StepIOSuspender` — should compile via aliases
-- [ ] in `internal/core/workflow/snapshot/observer.go` and `exec.go`: verify usage still works (observer types come through type aliases)
-- [ ] in `internal/cli/snapshot/liveui.go`: verify observer impl still compiles (StepIOSuspender bridge documented in CLAUDE.md)
-- [ ] in `internal/core/execution/pipeline/executor_*_test.go`: verify runtime types still resolve
-- [ ] run full test suite: `make test`
-- [ ] run linter: `make lint`
+- [x] grep `runtime\\.HostRunner`, `runtime\\.WorkflowRunner`, `runtime\\.ServiceExecRunner`, etc. — only consumer is `internal/core/usercommands/usercommands.go:138-144` (the documented re-export chain); concrete-type aliases in root `runner.go` keep it compiling
+- [x] grep `runtime\\.Runner`, `runtime\\.RunContext`, `runtime\\.NewRunner` — all resolve via spec aliases / root factory
+- [x] grep `runtime\\.StepResult`, `runtime\\.WorkflowStepObserver`, `runtime\\.StepIOSuspender` — resolve via spec aliases (used by `internal/cli/snapshot/liveui.go` and `internal/core/workflow/snapshot/observer.go`)
+- [x] in `internal/core/workflow/snapshot/observer.go` and `exec.go`: usage works via aliases (`runtime.RunContext`, `runtime.WorkflowStepObserver`, `runtime.RunCommand` all compile)
+- [x] in `internal/cli/snapshot/liveui.go`: observer impl compiles unchanged — references `runtime.WorkflowStepObserver`, `runtime.StepIOSuspender`, `runtime.StepResult`, `runtime.StepStatusDone/Failed/Skipped` all via aliases
+- [x] in `internal/core/execution/pipeline/executor_*_test.go`: `runtime.RunContext` and `runtime.TestSnapshotRC` resolve correctly
+- [x] run full test suite: `make test` — all packages pass
+- [x] run linter: `make lint` — 0 issues
 
 ### Task 6: Build verification + per-runner smoke test
 
