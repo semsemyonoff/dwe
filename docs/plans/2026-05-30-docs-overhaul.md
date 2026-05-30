@@ -402,11 +402,11 @@ For phases that touch many files, order is: index file last (it links to everyth
 **Files:**
 - Create: `docs/reference/concepts/pipelines.md`
 
-- [ ] write phase → step → condition model, parallel groups, sub-step overrides, step types, pre/post conditions (`when:`, `check:`, `files_gate:`)
-- [ ] one mermaid `flowchart TD` of phase/step execution
-- [ ] cross-link to `config/deploy/index.md`, `config/lifecycle.md`, `config/reset.md`
-- [ ] validate mermaid
-- [ ] `make build` exits 0
+- [x] write phase → step → condition model, parallel groups, sub-step overrides, step types, pre/post conditions (`when:`, `check:`, `files_gate:`)
+- [x] one mermaid `flowchart TD` of phase/step execution
+- [x] cross-link to `config/deploy/index.md`, `config/lifecycle.md`, `config/reset.md`
+- [x] validate mermaid
+- [x] `make build` exits 0
 
 ### Task 4.7: `concepts/state-and-locks.md`
 
