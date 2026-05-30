@@ -45,7 +45,7 @@ the service. Run `devbox deploy run --service <name>` to re-provision it.
 
 **Volumes are not touched automatically.** If you need to drop the service's
 Docker volumes as part of reset, declare a `services/<name>/reset.yml` with a
-step calling [`docker_remove_project_volumes`](deploy.md#docker_remove_project_volumes).
+step calling [`docker_remove_project_volumes`](deploy/builtins.md#docker_remove_project_volumes).
 
 ### Requirements
 

@@ -1,0 +1,220 @@
+# deploy.yml / reset.yml
+
+Deploy and reset pipeline declarations.
+
+## Contents
+
+- [Purpose](#purpose)
+- [File roles](#file-roles)
+- [Structure](#structure)
+- [Top-level fields](#top-level-fields)
+- [Phase fields](#phase-fields)
+- [Step fields](#step-fields)
+- [Post-deploy semantics](#post-deploy-semantics)
+- [`deploy_services` marker](#deploy_services-marker)
+- [Idempotent deploy and state](#idempotent-deploy-and-state)
+- [Pages](#pages)
+- [Related commands](#related-commands)
+
+## Purpose
+
+`devbox/deploy.yml` declares the orchestrator deploy pipeline. `devbox/reset.yml` declares the destructive reset pipeline. Per-service deploy pipelines live in `devbox/services/<service>/deploy.yml`.
+
+All three are loaded separately and are not merged with the 3-layer config.
+
+Both `devbox/deploy.yml` and `devbox/reset.yml` are optional. When absent, Devbox substitutes a built-in default pipeline and prints one info line to stderr: `Using built-in default <deploy|reset> pipeline (override with devbox/<deploy|reset>.yml).` The info line is suppressed in `--output json` mode.
+
+**Default deploy pipeline** (fires when `devbox/deploy.yml` is absent):
+
+Phases: `services` (runs `deploy_services: true` to inline enabled service pipelines) → `start` (`type: devbox`, `cmd: "docker up --wait"`) → `post-deploy` (info display + success message).
+
+**Default reset pipeline** (fires when `devbox/reset.yml` is absent):
+
+Phases: `pre` (confirm prompt) → `stop` (`type: devbox`, `cmd: "docker down"`) → `cleanup` (remove volumes, remove `services/` directory).
+
+## File roles
+
+| File | Loader | Role |
+|------|--------|------|
+| `devbox/deploy.yml` | `LoadProjectDeployConfig` | Top-level orchestrator: lists phases in order, references service pipelines |
+| `devbox/services/<svc>/deploy.yml` | `LoadServiceDeployConfigs` | Per-service phases and steps (inlined by orchestrator at `deploy_services: true`). Any service type (app, tool, infra) may have a deploy pipeline. |
+| `devbox/reset.yml` | `LoadResetConfig` | Separate reset pipeline, executed via `devbox reset run`. `deploy_services` phases are rejected. |
+
+```mermaid
+flowchart TB
+  D[devbox/deploy.yml] -->|phase: deploy_services| INL{Inline enabled services}
+
+  subgraph svc["devbox/services/&lt;service&gt;/deploy.yml — one file per service"]
+    direction TB
+    S1["required service<br/>(always inlined)"]
+    S2["optional service A<br/>(inlined when enabled)"]
+    S3["optional service B<br/>(inlined when enabled)"]
+    SN["…N services"]
+  end
+
+  svc --> INL
+  INL -->|topo-sorted by depends_on| PLAN[Resolved plan]
+  PLAN --> RUN[(PlainReporter — ✓ ✗ ◎ ·<br/>.devbox/logs/deploy.log)]
+
+  R[devbox/reset.yml] --> RPLAN[Resolved plan] --> RUN2[(PlainReporter)]
+```
+
+Any service type (app, tool, or infra) may have a `devbox/services/<name>/deploy.yml`. At plan time the orchestrator filters that set down to **enabled** services (required ones are always enabled) and inlines them in topological `depends_on` order. Services without a deploy file are silently skipped — not every service needs one.
+
+The `after:` field in `devbox/services/<name>/deploy.yml` declares deploy-time ordering between services (separate from runtime `depends_on:`). See [Top-level fields](#top-level-fields) for details.
+
+## Structure
+
+```yaml
+log: true                          # optional: tee output to .devbox/logs/<pipeline>.log
+
+phases:
+  # Normal phase: supports when, untracked, and steps
+  - name: <phase-name>
+    description: Human-readable description
+    when:                          # optional: pre-condition (typed condition)
+      type: builtin|shell|template
+      cmd: <string>                # for builtin/shell
+      expr: <string>               # for template
+    untracked: true                # optional: suppress step output for this phase
+    steps:
+      - name: <step-name>
+        description: Human-readable description
+        type: shell|devbox|command|builtin  # execution type (required)
+        cmd: <value>               # command payload (required)
+        when:                      # optional: pre-condition (typed condition)
+          type: builtin|shell|template
+          cmd: <string>            # for builtin/shell
+          expr: <string>           # for template
+        check:                     # optional: post-condition (typed action)
+          type: shell|devbox|command|builtin
+          cmd: <value>
+          with:                    # optional: parameters
+            key: value
+        continue_on_error: true    # optional: failure does not abort the pipeline
+        skip_confirm: true         # optional: bypass confirmation prompts for this step
+        untracked: true            # optional: exclude this step from [N/M] counter and suppress its output
+        files_gate: readable       # short form: state must be readable|missing
+        # or long form:
+        files_gate:
+          state: readable|missing  # required
+          command: <cmd-id>        # default: step.cmd (only valid for type: command)
+          require: required|all|[id1, id2]  # default: required
+          with:                    # default: step.with
+            key: value
+        with:                      # parameters (for command and builtin types)
+          key: value
+
+  # deploy_services phase (deploy.yml only): no steps or when allowed
+  - name: services
+    description: Human-readable description
+    deploy_services: true          # orchestrator marker; mutually exclusive with steps and when
+```
+
+## Top-level fields
+
+| Field | Type | Default | Description |
+|-------|------|---------|-------------|
+| `log` | bool | `deploy.yml`: `true`; `reset.yml`: `false` | Tee devbox status messages and child stdout/stderr to `.devbox/logs/<pipeline>.log` (ANSI codes stripped). |
+| `phases` | list | — | Ordered list of phases. |
+| `after` | list of strings | `[]` | **Per-service `deploy.yml` only.** Declares deploy-time ordering: this service deploys after the named services. Omitted or empty means no deploy-ordering constraint. Distinct from runtime `depends_on:` (which controls container startup order) — use `after:` when you want one service's deploy steps to complete before another's begin. Not valid in `devbox/deploy.yml`, `devbox/reset.yml`, or `devbox/services/<name>/reset.yml` (load-time error). Full deploy (`devbox deploy run`) topo-sorts services by `after:`; `devbox deploy run --service <name>` does NOT cascade to declared `after:` dependencies (explicit intent overrides ordering). |
+
+## Phase fields
+
+| Field | Type | Default | Description |
+|-------|------|---------|-------------|
+| `name` | string | required | Unique phase key within the pipeline |
+| `description` | string | optional | Shown in `deploy plan` output |
+| `when` | typed condition | — | Pre-condition; phase skipped if falsy (see [Conditions](conditions.md)). Not allowed on `deploy_services` phases. |
+| `untracked` | bool | false | If true, phase steps are excluded from the step counter and produce no system output |
+| `deploy_services` | bool | false | Orchestrator marker: CLI inlines per-service pipelines here in dependency order. A `deploy_services` phase must not contain `steps` or a `when` condition — both are hard errors at load time. |
+
+## Step fields
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `name` | string | Unique step key within the phase |
+| `description` | string | Shown in `deploy plan` output |
+| `type` | enum | Execution type: one of `shell`, `devbox`, `command`, `builtin` (required). See [Step execution types](steps.md). |
+| `cmd` | string | Command payload (required); content depends on `type` |
+| `with` | mapping | Parameters passed to command or builtin (optional; required for most builtins) |
+| `when` | typed condition | Pre-condition evaluated before the step runs; step skipped if falsy. See [Conditions](conditions.md). |
+| `check` | typed action | Post-condition evaluated after the step succeeds; pipeline aborts when the action fails. Skipped when `continue_on_error: true` and the step failed. See [Conditions](conditions.md). |
+| `files_gate` | typed gate | Pre-condition based on file existence/absence from a command's `files:` block. Step skipped if unsatisfied. See [`files_gate:`](conditions.md#files_gate-pre-condition-for-files). |
+| `continue_on_error` | bool | When `true`, a failed step is reported via `FailStep` (red ✗) but the pipeline does not abort. The post-step `check` and the next-step hook are skipped for the failed step. Useful for optional hook phases — see [lifecycle.yml](../lifecycle.md). When the step body succeeds but `check:` fails and `continue_on_error: true`, the step is reported as failed and the pipeline continues to the next step (symmetric with body-failure semantics). |
+| `skip_confirm` | bool | When `true`, bypasses confirmation prompts for this step only — equivalent to a per-step `-y` / `--yes`. Propagates to the step body and its `check:` action. ORed with the pipeline-wide skip-confirm flag, so the step is non-interactive whenever either is set. Useful when most of the pipeline is interactive but one step (e.g. a `confirm` builtin guarding an idempotent action, or a command that re-prompts internally) should always proceed. |
+| `untracked` | bool | When `true`, the step is excluded from the `[N/M]` step counter and its lifecycle output (start/done lines) is suppressed. Failures still surface. ORed with phase-level `untracked` — use the step-level flag to hide a single stack-up or wait-healthy step without moving it into a dedicated untracked phase. Allowed on parallel-group steps; sub-steps inherit untracked status from their group. |
+
+A step may also declare a `parallel:` block instead of leaf body fields (`type` / `cmd`). See [Parallel step groups](examples.md#parallel-step-groups).
+
+## Post-deploy semantics
+
+The `post-deploy` phase (by convention, the last phase in `deploy.yml`) runs only if all prior phases succeed. This is not magic — it follows the existing behavior where deploy aborts on first failure. Name the final summary phase `post-deploy` and it naturally benefits from this.
+
+Use `untracked: true` on the `post-deploy` phase to suppress system step messages (the builtin steps produce their own output via the message level):
+
+```yaml
+- name: post-deploy
+  description: Post-deploy summary
+  untracked: true
+  steps:
+    - name: info
+      type: devbox
+      cmd: "info"
+    - name: success
+      type: builtin
+      cmd: message
+      with:
+        level: success
+        text: Deploy completed successfully
+```
+
+## `deploy_services` marker
+
+In `deploy.yml`, a phase with `deploy_services: true` is a placeholder. The CLI replaces it with the inlined per-service pipelines at runtime, ordered by dependency (`depends_on` in each service's `devbox/services/<name>/service.yml`). Only enabled services are included.
+
+```yaml
+phases:
+  - name: services
+    deploy_services: true
+    description: Deploy all enabled services
+```
+
+## Idempotent deploy and state
+
+By default, `devbox deploy run` tracks the outcome and hash of every executed step in `.devbox/deploy/state.yml`. On the next deploy run, steps that succeeded with unchanged `action_hash` values are **skipped** (unless they have a `check:` action, which always runs to re-validate idempotency).
+
+This makes deploys idempotent: re-running an unchanged project is fast (unchanged steps are skipped), while editing a step body automatically re-triggers it. Edits to service config files (`devbox/services/<name>/service.yml`) or deploy configs (`devbox/deploy.yml`, `devbox/services/<name>/deploy.yml`) invalidate the affected scope and force those steps to re-run.
+
+Key behaviors:
+
+- **Step hash change** → step re-runs
+- **Service config change** → all service steps re-run
+- **Project config change** → all project-level steps re-run
+- **Has `check:` action** → step always runs (even if hash matches), so the check re-validates idempotency
+- **Has `files_gate: state: missing`** → journal skip is bypassed and the gate is re-evaluated on every deploy (the producer pattern: artifact deletion must re-trigger production regardless of journal contents)
+- **Has `files_gate: state: readable`** → journal skip is consulted first like any other step; the gate only fires when the journal would otherwise let the step run (the consumer pattern: destructive consumers stay idempotent). Use an explicit `check:` to force re-evaluation on every run
+- In both cases the journal records the step for audit/status display using `step_hash`, which includes the gate config — so changing the gate invalidates the recorded hash and re-triggers the step
+- **Previous step failed** → step re-runs on next deploy (allows `--resume` to continue from the failure)
+
+Use `devbox deploy state show` to inspect the journal, `devbox deploy state clear` to reset it, and `devbox deploy state repair` to fix corrupted aggregates.
+
+See [state.md](../state.md) for full details on hashing, skip decisions, and recovery from mid-deploy crashes.
+
+## Pages
+
+- [Step execution types](steps.md) — `shell`, `devbox`, `command`, `builtin`; the `cmd: shell` builtin vs `type: shell` step distinction
+- [Available builtins](builtins.md) — every builtin with inputs and examples; internal engine builtins
+- [Conditions](conditions.md) — `when:`, `check:`, and `files_gate:` semantics
+- [Examples](examples.md) — orchestrator, per-service, infra `after:`, parallel groups, workflow sub-step overrides, common pitfalls
+
+## Related commands
+
+- `devbox deploy plan` — show resolved pipeline (with inlined service phases)
+- `devbox deploy run` — execute deploy pipeline with state tracking
+- `devbox deploy state show` — inspect deploy state journal
+- `devbox deploy state clear` — reset deploy state
+- `devbox deploy state repair` — rebuild state aggregates
+- `devbox reset plan` — show reset pipeline
+- `devbox reset run [--yes]` — execute reset pipeline
+- See also [lifecycle.yml](../lifecycle.md) — `run` / `stop` pipelines reuse the same phase/step grammar with optional update probe and hook phases.

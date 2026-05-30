@@ -120,7 +120,7 @@ Actions support four executor types:
 | `command` | Command registry | `type: command, cmd: "services.main.migrate"` |
 | `builtin` | Engine builtin | `type: builtin, cmd: "service_configs_check"` |
 
-See [deploy.md](deploy.md) for the full action reference and the semantics of `check:` failures under `continue_on_error`.
+See [deploy/conditions.md](deploy/conditions.md) for the full action reference and the semantics of `check:` failures under `continue_on_error`.
 
 ## Two `type: builtin` registries
 
@@ -174,7 +174,7 @@ Workflow conditions are evaluated by `internal/shared/tpl/render_command.go` and
 
 ## Related documentation
 
-- [deploy.md](deploy.md) — pipeline `when:` and `check:` syntax with examples
+- [deploy](deploy/index.md) — pipeline `when:` and `check:` syntax with examples
 - [lifecycle.md](lifecycle.md) — lifecycle pipelines (same step/condition grammar as deploy)
 - [commands/](commands/index.md) — command definitions (separate system; workflows keep string-based `when:`)
 - [Templates](../templates.md) — Go template syntax, sprout helpers, render contexts

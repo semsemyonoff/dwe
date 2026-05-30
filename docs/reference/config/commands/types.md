@@ -336,7 +336,7 @@ queue-worker:
 
 A workflow runs an ordered sequence of other commands, with optional confirmations and conditional steps. Workflows are the only way to compose multiple commands behind a single ID.
 
-**Note:** Workflow steps use a string-based `command:` / `confirm:` / `with:` / `when:` syntax. The `when:` conditions inside workflows are string mini-language expressions, distinct from the typed `when:` / `check:` used in pipeline steps (see [deploy.md](../deploy.md)).
+**Note:** Workflow steps use a string-based `command:` / `confirm:` / `with:` / `when:` syntax. The `when:` conditions inside workflows are string mini-language expressions, distinct from the typed `when:` / `check:` used in pipeline steps (see [deploy](../deploy/index.md)).
 
 ```yaml
 bootstrap:
@@ -436,7 +436,7 @@ Confirm steps are silently skipped under `--yes` or `DEVBOX_NONINTERACTIVE=1`. O
 
 ### Parallel sub-steps
 
-A workflow step can declare a `parallel:` block that fans out a group of sub-steps concurrently. This mirrors the pipeline `parallel:` schema in [deploy.yml → Parallel step groups](../deploy.md#parallel-step-groups) — the same `max_concurrent` / `fail_fast` knobs and the same live-block UI — but lives inside a workflow so the group is reusable across pipelines and invocable ad-hoc via `devbox commands`.
+A workflow step can declare a `parallel:` block that fans out a group of sub-steps concurrently. This mirrors the pipeline `parallel:` schema in [deploy → Parallel step groups](../deploy/examples.md#parallel-step-groups) — the same `max_concurrent` / `fail_fast` knobs and the same live-block UI — but lives inside a workflow so the group is reusable across pipelines and invocable ad-hoc via `devbox commands`.
 
 ```yaml
 services.all.composer-install:
@@ -489,7 +489,7 @@ Each sub-step's combined stdout/stderr is captured to `.devbox/logs/parallel/wor
 
 #### Sub-step naming and pipeline overrides
 
-Each workflow sub-step may set an explicit `name:` (optional). When absent the effective name defaults to the referenced `command`. This name is the handle the pipeline uses for `sub_step_overrides:` — see [deploy.md → Targeting workflow sub-steps with overrides](../deploy.md#targeting-workflow-sub-steps-with-overrides). When two sub-steps in the same workflow share the same effective name, a pipeline override targeting that name is rejected at plan time as ambiguous; set explicit `name:` on the sub-steps to disambiguate.
+Each workflow sub-step may set an explicit `name:` (optional). When absent the effective name defaults to the referenced `command`. This name is the handle the pipeline uses for `sub_step_overrides:` — see [deploy → Targeting workflow sub-steps with overrides](../deploy/examples.md#targeting-workflow-sub-steps-with-overrides). When two sub-steps in the same workflow share the same effective name, a pipeline override targeting that name is rejected at plan time as ambiguous; set explicit `name:` on the sub-steps to disambiguate.
 
 ```yaml
 commands:
@@ -548,7 +548,7 @@ Non-string scalars (booleans, integers) pass through untouched.
 
 ### Builtin registry
 
-The list of available builtins, their parameters, and their behaviour are documented once in [deploy.yml → Available builtins](../deploy.md#available-builtins). The same builtins are usable from `type: builtin` commands — there is one shared registry.
+The list of available builtins, their parameters, and their behaviour are documented once in [deploy → Available builtins](../deploy/builtins.md). The same builtins are usable from `type: builtin` commands — there is one shared registry.
 
 The most useful builtins to expose as commands tend to be the long-running, idempotent ones — `docker_wait_healthy` in particular, which is meant to be called whenever the project needs to block until the stack (or a specific service) is healthy.
 

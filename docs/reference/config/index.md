@@ -98,7 +98,7 @@ For more details on `docker.local.yml` semantics and examples, see [docker.yml](
 
 - [devbox / defaults / local](devbox.md) — the 3-layer merged config: merge order, precedence, dot-path resolution, field reference
 - [services/<name>/service.yml](services.md) — per-service declarations, extends, dirs, cli config
-- [deploy.yml / reset.yml](deploy.md) — deploy and reset pipelines, steps, builtins, file logging, idempotent deploy
+- [deploy.yml / reset.yml](deploy/index.md) — deploy and reset pipelines, steps, builtins, file logging, idempotent deploy
 - [state.yml](state.md) — deploy state tracking, skip-decision table, hashing, lock file, recovery from crashes
 - [lifecycle.yml](lifecycle.md) — run/stop pipelines, update probe, hook phases, required service gate
 - [Conditions and Actions](conditions.md) — typed conditions for `when:`, typed actions for `check:` and step bodies, predicate vs engine-builtin distinction

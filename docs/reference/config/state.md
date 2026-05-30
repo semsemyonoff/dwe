@@ -556,5 +556,5 @@ devbox deploy run --resume
 - `devbox deploy state repair` — rebuild status aggregates
 - `devbox reset run` — reset and clear deploy state
 - `devbox services enable/disable` — toggle services (writes `pending` when not using `--apply`)
-- See also [deploy.yml](deploy.md) — how to declare steps and phases
+- See also [deploy.yml](deploy/index.md) — how to declare steps and phases
 - See also [lifecycle.yml](lifecycle.md) — how `devbox run` gates on required service deployment

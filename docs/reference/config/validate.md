@@ -138,7 +138,7 @@ Runs a shell command via hardcoded `sh -c` (matching the deploy `when:` predicat
 
 Error message on non-zero exit: `exit status N: <last line of stderr>`.
 
-See [deploy.md: `cmd: shell` vs `type: shell`](deploy.md#cmd-shell-builtin-vs-type-shell-step) for the distinction between this builtin and the `type: shell` step execution type.
+See [deploy: `cmd: shell` vs `type: shell`](deploy/steps.md#cmd-shell-builtin-vs-type-shell-step) for the distinction between this builtin and the `type: shell` step execution type.
 
 ### `file_exists`
 

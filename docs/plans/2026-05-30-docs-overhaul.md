@@ -225,15 +225,15 @@ For phases that touch many files, order is: index file last (it links to everyth
 - Create: `docs/reference/config/deploy/examples.md`
 - Delete: `docs/reference/config/deploy.md`
 
-- [ ] write `deploy/index.md`: purpose, file roles, structure, top-level + phase + step fields
-- [ ] write `deploy/steps.md`: step execution types; `cmd: shell` builtin vs `type: shell` step
-- [ ] write `deploy/builtins.md`: every available builtin with inputs + examples
-- [ ] write `deploy/conditions.md`: `when:`, `check:`, `files_gate:` (link to `config/conditions.md` for the catalogue)
-- [ ] write `deploy/examples.md`: orchestrator + per-service + infra `after:` + parallel groups + sub-step overrides
-- [ ] delete `deploy.md`
-- [ ] update `config/index.md`
-- [ ] grep + rewrite inbound links
-- [ ] `make build` exits 0; `./bin/devbox docs list` shows new paths
+- [x] write `deploy/index.md`: purpose, file roles, structure, top-level + phase + step fields
+- [x] write `deploy/steps.md`: step execution types; `cmd: shell` builtin vs `type: shell` step
+- [x] write `deploy/builtins.md`: every available builtin with inputs + examples
+- [x] write `deploy/conditions.md`: `when:`, `check:`, `files_gate:` (link to `config/conditions.md` for the catalogue)
+- [x] write `deploy/examples.md`: orchestrator + per-service + infra `after:` + parallel groups + sub-step overrides
+- [x] delete `deploy.md`
+- [x] update `config/index.md`
+- [x] grep + rewrite inbound links
+- [x] `make build` exits 0; `./bin/devbox docs list` shows new paths
 
 ### Task 2.3: Split `config/services.md` into `config/services/`
 
@@ -620,7 +620,7 @@ For phases that touch many files, order is: index file last (it links to everyth
 
 ### Phase 2 — Splits
 - [x] Task 2.1: split `config/commands.md`
-- [ ] Task 2.2: split `config/deploy.md`
+- [x] Task 2.2: split `config/deploy.md`
 - [ ] Task 2.3: split `config/services.md`
 - [ ] Task 2.4: audit-driven splits
 - [ ] Task 2.5: inbound links + validation gate

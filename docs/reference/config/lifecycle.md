@@ -83,7 +83,7 @@ run:
   phases:
     - name: <phase>
       description: <text>
-      when:             # optional: typed condition (see deploy.md)
+      when:             # optional: typed condition (see deploy/conditions.md)
         type: builtin|shell|template
         cmd: <string>
         expr: <string>
@@ -112,7 +112,7 @@ stop:
             key: value
 ```
 
-Phases and steps use the same shape as [deploy.yml](deploy.md): `name`, `description`, `when`, `untracked`, `steps[]`, plus per-step `type` / `cmd` / `with`, `when`, `check`, `files_gate`, `continue_on_error`. See the deploy reference for the complete step grammar, including [`files_gate:` (pre-condition for files)](deploy.md#files_gate-pre-condition-for-files).
+Phases and steps use the same shape as [deploy.yml](deploy/index.md): `name`, `description`, `when`, `untracked`, `steps[]`, plus per-step `type` / `cmd` / `with`, `when`, `check`, `files_gate`, `continue_on_error`. See the deploy reference for the complete step grammar, including [`files_gate:` (pre-condition for files)](deploy/conditions.md#files_gate-pre-condition-for-files).
 
 `deploy_services: true` is **not** allowed in lifecycle pipelines.
 
@@ -246,7 +246,7 @@ stop:
 
 ## Parallel step groups
 
-Lifecycle phases use the same `parallel:` step-group container as `deploy.yml`. A step may declare `parallel: { max_concurrent, fail_fast, steps }` instead of a leaf body, and the inner sub-steps run concurrently with the same cancellation, journal, and reporter semantics. See [deploy.md → Parallel step groups](deploy.md#parallel-step-groups) for the schema, defaults, validation rules, and execution model.
+Lifecycle phases use the same `parallel:` step-group container as `deploy.yml`. A step may declare `parallel: { max_concurrent, fail_fast, steps }` instead of a leaf body, and the inner sub-steps run concurrently with the same cancellation, journal, and reporter semantics. See [deploy → Parallel step groups](deploy/examples.md#parallel-step-groups) for the schema, defaults, validation rules, and execution model.
 
 ## Common pitfalls
 
