@@ -105,7 +105,7 @@ For more details on `docker.local.yml` semantics and examples, see [docker.yml](
 - [docker.yml](docker.md) — Compose execution policy, project name, env triggers
 - [styles.yml](styles.md) — ASCII header, color palette, separator
 - [info.yml](info.md) — info dashboard sections, template expressions
-- [commands/](commands.md) — declarative commands: types, params, context, files, workflows, templates
+- [commands/](commands/index.md) — declarative commands: types, params, context, files, workflows, templates
 - [validate.yml](validate.md) — project readiness checks: env probes, declarative checks, builtins, stages, preflight
 - [snapshot.yml](snapshot.md) — snapshot workflows: create/restore/remove blocks, variants, `${snapshot.*}` namespace, manifest, lock interaction, archive safety
 - [Localization (i18n)](i18n.md) — user command and UI string translations: locale resolution, file format, key reference, validation

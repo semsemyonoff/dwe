@@ -22,7 +22,7 @@ Go templates (with the [go-sprout](https://docs.atom.codes/sprout/) function lib
 | Site | Syntax | Context | Notes |
 |------|--------|---------|-------|
 | `info.yml` — `text`, `value`, `when` | `{{ ... }}` | `DevboxConfig` (typed) | See [info.md](config/info.md) |
-| `devbox/commands/` — `cmd`, `argv`, `workdir`, `compose_args`, `env`, `messages.*`, `confirmation_text`, `files.*.path`/`candidates`, workflow `steps[].with[<key>]` / `steps[].when` | `${...}` and `{{ ... }}` | `RenderContext` (Raw + Params + Context + Files + Host) | See [commands.md](config/commands.md) |
+| `devbox/commands/` — `cmd`, `argv`, `workdir`, `compose_args`, `env`, `messages.*`, `confirmation_text`, `files.*.path`/`candidates`, workflow `steps[].with[<key>]` / `steps[].when` | `${...}` and `{{ ... }}` | `RenderContext` (Raw + Params + Context + Files + Host) | See [commands/](config/commands/index.md) |
 | `deploy.yml` / `lifecycle.yml` / `reset.yml` — `when: type: template, expr:` | `{{ ... }}` | Merged `DevboxConfig` | Evaluated at plan time. See [deploy.md](config/deploy.md) |
 | `message` builtin — `text:` | `{{ ... }}` | Merged `DevboxConfig` | See [deploy.md](config/deploy.md#message) |
 | `docker.yml` — `project_name` | `${...}` only | Merged `DevboxConfig.Raw` | Dot-path lookups (no `{{ }}` logic). See [docker.md](config/docker.md) |

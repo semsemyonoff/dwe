@@ -94,7 +94,7 @@ Each block has:
 | Field | Type | Purpose |
 |---|---|---|
 | `description` | string | Free-form description displayed by `inspect` and `list`. |
-| `steps` | `[]WorkflowStep` | Step list — same shape as the `workflow:` block in a declarative command. See [commands.md](commands.md) for step syntax. |
+| `steps` | `[]WorkflowStep` | Step list — same shape as the `workflow:` block in a declarative command. See [commands/types.md](commands/types.md#type-workflow) for step syntax. |
 | `variants` | `map[string]Workflow` | Named alternative step lists (see [Variants](#variants)). |
 
 The `steps:` shape is the existing `model.WorkflowStep` type. Snapshot workflows are user-command workflows executed at runtime from a different source file — every step shape and feature (`command:`, `with:`, `when:`, `confirm:`, `parallel:`, `continue_on_error:`) is supported.
@@ -391,4 +391,4 @@ When either lock is already held by another live process, the operation exits 75
 - `devbox snapshot unpack <tar-path> [--as=<name>] [--no-verify] [-y]`
 - `devbox validate snapshot [<name>] [--verify]`
 
-See [commands.md](commands.md) for the `WorkflowStep` shape reused by snapshot workflows, and [state.md](state.md) for the deploy state journal that snapshots back up alongside `devbox/local.yml`.
+See [commands/types.md](commands/types.md#type-workflow) for the `WorkflowStep` shape reused by snapshot workflows, and [state.md](state.md) for the deploy state journal that snapshots back up alongside `devbox/local.yml`.

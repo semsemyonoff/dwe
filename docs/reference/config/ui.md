@@ -100,5 +100,5 @@ The browser inspects the terminal at startup and degrades gracefully:
 ## Related
 
 - [`devbox.md`](devbox.md) — top-level configuration overview
-- [`commands.md`](commands.md) — user command definitions
+- [`commands/`](commands/index.md) — user command definitions
 - [`styles.md`](styles.md) — palette keys consumed by the type badges

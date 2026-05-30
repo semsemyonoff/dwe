@@ -78,7 +78,7 @@ func daemonStructuralDiagnostics(cmd model.CommandDef, relFile string) ([]valida
 			Target:   target,
 			File:     relFile,
 			Message:  "daemon: daemon block required",
-			Hint:     "add a daemon: block with container_template:\nsee docs/reference/config/commands.md",
+			Hint:     "add a daemon: block with container_template:\nsee docs/reference/config/commands/types.md#type-daemon",
 		})
 		return out, fields
 	}

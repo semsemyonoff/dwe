@@ -20,7 +20,7 @@ Typed conditions (`when:`) and typed actions (`check:` / step bodies) in pipelin
 
 **Actions** are **payloads** that execute code. When used as `check:` (post-action), their success/failure determines whether the step passed or failed.
 
-The pipeline system uses **typed** forms for both — a `type:` field dispatches to different evaluators. Workflow steps (inside command definitions) use a separate string-based `when:` form documented in [commands.md](commands.md).
+The pipeline system uses **typed** forms for both — a `type:` field dispatches to different evaluators. Workflow steps (inside command definitions) use a separate string-based `when:` form documented in [commands/](commands/index.md).
 
 ```
 Pipeline steps (typed):
@@ -155,7 +155,7 @@ phases:
 
 ## Workflow conditions (string-based, separate)
 
-Workflow steps use a separate string-based condition mini-language. The full grammar is documented in [commands.md](commands.md); this section only sketches the surface for context.
+Workflow steps use a separate string-based condition mini-language. The full grammar is documented in [commands/](commands/index.md); this section only sketches the surface for context.
 
 ```yaml
 # Workflow (string-based, separate system)
@@ -170,11 +170,11 @@ steps:
     when: "cmd: test -d /tmp/workdir"
 ```
 
-Workflow conditions are evaluated by `internal/shared/tpl/render_command.go` and `internal/core/execution/condition` string-classification logic. See [commands.md](commands.md) for the full workflow grammar.
+Workflow conditions are evaluated by `internal/shared/tpl/render_command.go` and `internal/core/execution/condition` string-classification logic. See [commands/](commands/index.md) for the full workflow grammar.
 
 ## Related documentation
 
 - [deploy.md](deploy.md) — pipeline `when:` and `check:` syntax with examples
 - [lifecycle.md](lifecycle.md) — lifecycle pipelines (same step/condition grammar as deploy)
-- [commands.md](commands.md) — command definitions (separate system; workflows keep string-based `when:`)
+- [commands/](commands/index.md) — command definitions (separate system; workflows keep string-based `when:`)
 - [Templates](../templates.md) — Go template syntax, sprout helpers, render contexts

@@ -205,15 +205,15 @@ For phases that touch many files, order is: index file last (it links to everyth
 - Create: `docs/reference/config/commands/validation.md`
 - Delete: `docs/reference/config/commands.md`
 
-- [ ] write `commands/index.md`: purpose, file layout, command IDs, lifecycle, links to siblings
-- [ ] write `commands/directives.md`: identity/visibility, confirm, messages, notifications, params, context, env, files
-- [ ] write `commands/types.md`: `shell`, `devbox`, `script`, `service_exec`, `service_run`, `workflow`, `builtin`, `daemon`
-- [ ] write `commands/templating.md`: render context, scope resolvers, command-specific examples
-- [ ] write `commands/validation.md`: validation rules, common pitfalls
-- [ ] delete `commands.md`
-- [ ] update `config/index.md` to point at `commands/index.md`
-- [ ] `grep -r "config/commands.md" docs/ internal/` and rewrite inbound links
-- [ ] `make build` exits 0; `./bin/devbox docs list` shows the new paths
+- [x] write `commands/index.md`: purpose, file layout, command IDs, lifecycle, links to siblings
+- [x] write `commands/directives.md`: identity/visibility, confirm, messages, notifications, params, context, env, files
+- [x] write `commands/types.md`: `shell`, `devbox`, `script`, `service_exec`, `service_run`, `workflow`, `builtin`, `daemon`
+- [x] write `commands/templating.md`: render context, scope resolvers, command-specific examples
+- [x] write `commands/validation.md`: validation rules, common pitfalls
+- [x] delete `commands.md`
+- [x] update `config/index.md` to point at `commands/index.md`
+- [x] `grep -r "config/commands.md" docs/ internal/` and rewrite inbound links
+- [x] `make build` exits 0; `./bin/devbox docs list` shows the new paths
 
 ### Task 2.2: Split `config/deploy.md` into `config/deploy/`
 
@@ -619,7 +619,7 @@ For phases that touch many files, order is: index file last (it links to everyth
 - [x] Task 1.1: fill in the Phase 1 audit table
 
 ### Phase 2 — Splits
-- [ ] Task 2.1: split `config/commands.md`
+- [x] Task 2.1: split `config/commands.md`
 - [ ] Task 2.2: split `config/deploy.md`
 - [ ] Task 2.3: split `config/services.md`
 - [ ] Task 2.4: audit-driven splits

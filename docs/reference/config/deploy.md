@@ -257,7 +257,7 @@ Dispatches a declarative command by ID from the command registry (`devbox/comman
 
 ### `type: builtin`
 
-Executes an engine-internal Go function. Builtins run in-process and have access to the full config. The same registry is reachable from declarative commands via [`type: builtin` in `commands/`](commands.md#type-builtin) — pipelines and commands share one set of builtins.
+Executes an engine-internal Go function. Builtins run in-process and have access to the full config. The same registry is reachable from declarative commands via [`type: builtin` in `commands/`](commands/types.md#type-builtin) — pipelines and commands share one set of builtins.
 
 ```yaml
 - name: create-dirs

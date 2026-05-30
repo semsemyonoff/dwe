@@ -47,7 +47,7 @@ When `lifecycle.yml` is absent or a section is absent, Devbox substitutes a buil
 | `final_message` | `Project is stopped. Have a nice day!` |
 | Phases | Auto-reap phase (see below) + single `stop` phase: one `type: devbox` step with `cmd: "docker down"` |
 
-Whenever a `stop:` pipeline runs (default or user-defined), the `_auto_reap_daemons` phase is prepended automatically; it has no opt-out and is visible in plan output for transparency. It stops any background daemons started via [`type: daemon`](commands.md#type-daemon) commands.
+Whenever a `stop:` pipeline runs (default or user-defined), the `_auto_reap_daemons` phase is prepended automatically; it has no opt-out and is visible in plan output for transparency. It stops any background daemons started via [`type: daemon`](commands/types.md#type-daemon) commands.
 
 `devbox docker up` and `devbox docker down` are thin Docker Compose passthroughs and never use this pipeline; raw `docker compose stop` / `restart` remain accessible via `devbox docker stop` / `devbox docker restart`.
 
