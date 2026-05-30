@@ -47,6 +47,22 @@ cd "$REPO_ROOT"
         echo "    \"$escaped_relpath\": \"$hash\","
     done | sort -k1
 
+    # Also include the repo-root README.md as a top-level topic.
+    # The find loop above is docs/-prefixed; emit this entry directly so the
+    # relpath stays "README.md" (not "../README.md").
+    if [ -f "README.md" ]; then
+        if command -v sha256sum &> /dev/null; then
+            readme_hash=$(sha256sum "README.md" | cut -c1-12)
+        elif command -v shasum &> /dev/null; then
+            readme_hash=$(shasum -a 256 "README.md" | cut -c1-12)
+        else
+            readme_hash=""
+        fi
+        if [ -n "$readme_hash" ]; then
+            echo "    \"README.md\": \"$readme_hash\","
+        fi
+    fi
+
     echo "}"
 } > "$OUTPUT_FILE.tmp"
 

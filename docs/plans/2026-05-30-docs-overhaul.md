@@ -470,13 +470,13 @@ For phases that touch many files, order is: index file last (it links to everyth
 - Possibly modify: `internal/core/docs/llmstxt/generator.go` (only if README appears miscategorized — see acceptance)
 - Modify: `internal/core/docs/llmstxt/testdata/*.golden` (README will appear as a top-level topic — update goldens accordingly)
 
-- [ ] in `gen-docs-content-hashes.sh`, after the existing `find docs/...` loop closes (i.e. *outside* the loop body), emit a single hash entry for the repo-root README using `relpath="README.md"` directly. Do NOT extend the `find` pattern — the loop's `relpath="${file#docs/}"` substitution is `docs/`-prefix-specific and would silently produce a wrong path for a repo-root file
-- [ ] in `sync-embedded-docs.sh`, after the existing source tree sync block, copy `$REPO_ROOT/README.md` into `$EMBEDDED_DIR/README.md` (use the same rsync-or-cp pattern the script already uses; `mkdir -p` not needed since `$EMBEDDED_DIR` already exists)
-- [ ] verify by running `make build` — `internal/core/docs/content_hashes_gen.go` now contains a `"README.md": "<hash>"` entry; `internal/core/docs/embedded/README.md` exists
-- [ ] `./bin/devbox docs list` shows `README` as a top-level topic (no `internals/` or `reference/` prefix)
-- [ ] `./bin/devbox docs show README` renders the English README
-- [ ] `./bin/devbox docs llms-txt` includes `README` as a top-level entry; verify the emitted URL/link form is consistent with other top-level entries and that the topic is NOT classified as `internals/`
-- [ ] if the llms-txt output misclassifies README, patch `internal/core/docs/llmstxt/generator.go` to explicitly handle the root-level README topic (only as needed; prefer leaving the generator untouched)
+- [x] in `gen-docs-content-hashes.sh`, after the existing `find docs/...` loop closes (i.e. *outside* the loop body), emit a single hash entry for the repo-root README using `relpath="README.md"` directly. Do NOT extend the `find` pattern — the loop's `relpath="${file#docs/}"` substitution is `docs/`-prefix-specific and would silently produce a wrong path for a repo-root file
+- [x] in `sync-embedded-docs.sh`, after the existing source tree sync block, copy `$REPO_ROOT/README.md` into `$EMBEDDED_DIR/README.md` (use the same rsync-or-cp pattern the script already uses; `mkdir -p` not needed since `$EMBEDDED_DIR` already exists)
+- [x] verify by running `make build` — `internal/core/docs/content_hashes_gen.go` now contains a `"README.md": "<hash>"` entry; `internal/core/docs/embedded/README.md` exists
+- [x] `./bin/devbox docs list` shows `README` as a top-level topic (no `internals/` or `reference/` prefix)
+- [x] `./bin/devbox docs show README` renders the English README
+- [x] `./bin/devbox docs llms-txt` includes `README` as a top-level entry; verify the emitted URL/link form is consistent with other top-level entries and that the topic is NOT classified as `internals/` (emitted as `[README.md](devbox-docs://README)` at the top of the Documentation section — not under `internals/`)
+- [x] if the llms-txt output misclassifies README, patch `internal/core/docs/llmstxt/generator.go` to explicitly handle the root-level README topic (only as needed; prefer leaving the generator untouched) — not needed; generator left untouched
 
 ### Task 5.3: Test README localization
 
@@ -643,7 +643,7 @@ For phases that touch many files, order is: index file last (it links to everyth
 
 ### Phase 5 — README
 - [x] Task 5.1: write `README.md`
-- [ ] Task 5.2: extend hash + sync scripts
+- [x] Task 5.2: extend hash + sync scripts
 - [ ] Task 5.3: test README localization
 - [ ] Task 5.4: validation gate
 

@@ -162,4 +162,5 @@ var ContentHashes = map[string]string{
 	"reference/render/ide.md":                                "7b595a6330ed",
 	"reference/render/index.md":                              "85f4c3cb179b",
 	"reference/templates.md":                                 "9fc9123bf6d1",
+	"README.md":                                              "3d302c612b7e",
 }

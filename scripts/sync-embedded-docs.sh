@@ -36,4 +36,10 @@ else
 	done
 fi
 
+# Copy the repo-root README.md into the embedded tree so BuiltinFS exposes
+# it at the relPath "README.md" (top-level topic alongside reference/, internals/).
+if [ -f "$REPO_ROOT/README.md" ]; then
+	cp "$REPO_ROOT/README.md" "$EMBEDDED_DIR/README.md"
+fi
+
 echo "Synced docs to $EMBEDDED_DIR"
