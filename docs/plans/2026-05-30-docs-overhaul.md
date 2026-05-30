@@ -485,7 +485,7 @@ For phases that touch many files, order is: index file last (it links to everyth
 
 - [x] add a test case: given a fake fs with `README.md` (English) and `i18n/ru/README.md` (Russian with hash header), `ResolveContent(root, "README.md", "ru")` returns Russian content, `sourceLang="ru"`, `stale=false`
 - [x] add a sibling test case for staleness: header hash mismatches → `stale=true`
-- [x] run tests for the package — must pass
+- [x] run tests for the package — must pass (`go test ./internal/core/docs/` — `TestResolveContent_ReadmeWithMatchingHash` + `TestResolveContent_ReadmeWithStaleHash` pass)
 
 ### Task 5.4: Validation gate
 
@@ -644,7 +644,7 @@ For phases that touch many files, order is: index file last (it links to everyth
 ### Phase 5 — README
 - [x] Task 5.1: write `README.md`
 - [x] Task 5.2: extend hash + sync scripts
-- [ ] Task 5.3: test README localization
+- [x] Task 5.3: test README localization
 - [ ] Task 5.4: validation gate
 
 ### Phase 6 — Russian translation
