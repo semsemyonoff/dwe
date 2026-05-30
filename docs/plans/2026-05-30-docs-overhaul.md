@@ -245,14 +245,14 @@ For phases that touch many files, order is: index file last (it links to everyth
 - Delete: `docs/reference/config/services.md`
 - Modify: `docs/i18n/ru/reference/config/services.md` (existing stub — relocate to match new layout in Phase 6; leave the file in place for now, mark for Phase 6 retranslation)
 
-- [ ] write `services/index.md`: purpose, service types, load behavior, per-type field allowlist
-- [ ] write `services/fields.md`: full field reference (top-level, ports, hosts, configs, dirs, cli, status, render)
-- [ ] write `services/extends.md`: inheritance, toposort, app-only guard
-- [ ] write `services/examples.md`: full service definition, toggle lifecycle, common pitfalls
-- [ ] delete `services.md`
-- [ ] update `config/index.md`
-- [ ] grep + rewrite inbound links
-- [ ] `make build` exits 0; `./bin/devbox docs list` shows new paths
+- [x] write `services/index.md`: purpose, service types, load behavior, per-type field allowlist
+- [x] write `services/fields.md`: full field reference (top-level, ports, hosts, configs, dirs, cli, status, render)
+- [x] write `services/extends.md`: inheritance, toposort, app-only guard
+- [x] write `services/examples.md`: full service definition, toggle lifecycle, common pitfalls
+- [x] delete `services.md`
+- [x] update `config/index.md`
+- [x] grep + rewrite inbound links
+- [x] `make build` exits 0; `./bin/devbox docs list` shows new paths
 
 ### Task 2.4: Audit-driven splits
 
@@ -621,7 +621,7 @@ For phases that touch many files, order is: index file last (it links to everyth
 ### Phase 2 — Splits
 - [x] Task 2.1: split `config/commands.md`
 - [x] Task 2.2: split `config/deploy.md`
-- [ ] Task 2.3: split `config/services.md`
+- [x] Task 2.3: split `config/services.md`
 - [ ] Task 2.4: audit-driven splits
 - [ ] Task 2.5: inbound links + validation gate
 

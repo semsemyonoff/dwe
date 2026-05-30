@@ -366,6 +366,6 @@ Errors are returned as command failures and name the offending service so the so
 
 ## Related references
 
-- [`services.<name>.render.ai` block](../config/services.md#renderai-block) — `enabled`, `template`, inheritance via `extends`
+- [`services.<name>.render.ai` block](../config/services/fields.md#renderai-block) — `enabled`, `template`, inheritance via `extends`
 - [`render ide`](ide.md) — companion command with the opposite (deepest-wins) collision policy
 - CLI reference: [`devbox render ai`](../cli/devbox_render_ai.md)

@@ -95,7 +95,7 @@ A label + value pair, rendered as `Label — Value`.
 |-------|-------------|
 | `name` | Label text |
 | `value` | Value text (plain string or template expression) |
-| `icon` | Optional emoji or symbol prepended to value. Prefer codepoints with `Emoji_Presentation=Yes` (e.g. `📦`, `🐳`, `💾`); text-default codepoints like `🛢`, `🗄`, `⚙` are flagged by `devbox validate` and dropped at render time to keep columns aligned — see [`icon` field](services.md#icon-field) in the services reference for the full caveat. |
+| `icon` | Optional emoji or symbol prepended to value. Prefer codepoints with `Emoji_Presentation=Yes` (e.g. `📦`, `🐳`, `💾`); text-default codepoints like `🛢`, `🗄`, `⚙` are flagged by `devbox validate` and dropped at render time to keep columns aligned — see [`icon` field](services/fields.md#icon-field) in the services reference for the full caveat. |
 | `indent` | Optional leading whitespace count. Default for definition items is `2`; pass `0` to flush left. Negative values are rejected. |
 | `when` | Condition; item hidden if falsy |
 
@@ -180,7 +180,7 @@ When auto-detection finds zero or multiple infra services with the target port, 
   include: [app, tool]
 ```
 
-Services contribute to `auto-urls` via their `info:` block in `service.yml` (see [services.md](services.md) for the schema). Each service may declare:
+Services contribute to `auto-urls` via their `info:` block in `service.yml` (see [services.md](services/index.md) for the schema). Each service may declare:
 - `title` — override the service header (defaults to title-cased folder name)
 - `primary_host` — which `hosts` entry to surface as the main URL (default: `web`)
 - `primary_port` — which `ports` entry to surface (default: `http`)

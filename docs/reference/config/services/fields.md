@@ -1,219 +1,23 @@
-# Service configuration (`devbox/services/<name>/service.yml`)
+# Service field reference
 
-Service declarations for the devbox project.
+Every field allowed in `devbox/services/<name>/service.yml`, plus the nested blocks (`ports`, `hosts`, `icon`, `info`, `configs`, `dirs`, `cli`, `status`, `render`).
 
 ## Contents
 
-- [Purpose](#purpose)
-- [Service types](#service-types)
-- [Per-type field allowlist](#per-type-field-allowlist)
-- [Load behavior](#load-behavior)
-- [Structure](#structure)
-- [Field reference](#field-reference)
-  - [Top-level service fields](#top-level-service-fields)
-  - [`ports` field](#ports-field)
-  - [`hosts` field](#hosts-field)
-  - [`configs` field](#configs-field)
-  - [`dirs` field](#dirs-field)
-  - [`cli` block](#cli-block)
-  - [`status` block](#status-block)
-  - [`render` block](#render-block)
-- [Inheritance via `extends`](#inheritance-via-extends)
-- [Example: full service definition](#example-full-service-definition)
-- [Common pitfalls](#common-pitfalls)
-- [Related commands](#related-commands)
+- [Top-level service fields](#top-level-service-fields)
+- [`ports` field](#ports-field)
+- [`hosts` field](#hosts-field)
+- [`icon` field](#icon-field)
+- [`info` block](#info-block)
+- [`configs` field](#configs-field)
+- [`dirs` field](#dirs-field)
+- [`cli` block](#cli-block)
+- [`status` block](#status-block)
+- [`render` block](#render-block)
 
-## Purpose
+**Host vs internal terminology:** Fields ending in `*_internal` or using the suffix convention (like `dir` for host, `dir_internal` for container) refer to paths: host side runs on your machine, internal side is the container mount point. Apply the same distinction to ports and hostnames: `ports.http` binds a container port to your host; `hosts.main` is the hostname the container resolves as.
 
-Service definitions live under `devbox/services/`, one folder per service. Each service is declared in `devbox/services/<name>/service.yml`, where `<name>` becomes the service's key in the resolved `DevboxConfig.Services` map. Each entry declares its container name, ports, hosts, compose overlay, and optional structural fields. The `type:` discriminator selects which fields are legal for the entry.
-
-Loaded by `LoadServices(baseDir)` which enumerates `devbox/services/*/` subdirectories, calls `LoadServiceFolder(baseDir, name)` per folder (responsibilities: raw-shape pre-validation, required `type` field, per-type field allowlist, `extends:` app-only guard, `ports`/`hosts` shape validation, strict KnownFields decode), then applies cross-service `extends:` toposort and inheritance merge. A missing `devbox/services/` directory returns an empty map (not an error). Per-developer toggles (`enabled:`, `ports:`, `hosts:`) live in the 3-layer overlay; structural fields belong exclusively in `devbox/services/<name>/service.yml`.
-
-## Service types
-
-Every entry under `services:` requires a `type:` key. Three values are supported:
-
-| `type:` | Semantics | Deploy lifecycle | `depends_on:` target | App-only fields |
-|---------|-----------|------------------|----------------------|-----------------|
-| `app`   | Service with source code under `dir:`; renders IDE/AI/git templates; runs through `devbox deploy`. | yes (a `devbox/services/<name>/deploy.yml` may exist) | yes | yes (`dir`, `dir_internal`, `work_dir_internal`, `configs`, `dirs`, `extends`, `cli`, `render`) |
-| `tool`  | Ephemeral utility container (adminer, mailpit, redis-insight). Cannot be a dependency target of any service. | no | **no** | no |
-| `infra` | Backing service (db, cache, queue, search). Can be a dependency target of `app` / other `infra`. | no | yes | no |
-
-Locked rules:
-
-- `extends:` is **app-only**. A `tool` / `infra` entry with `extends:` is rejected at load.
-- `depends_on:` may not reference a `type: tool` entry. This is enforced at load (`ErrDependsOnTool`), not only at validate time.
-- `devbox/services/<name>/deploy.yml` is supported for **any service type** (app, tool, infra). Full deploy (`devbox deploy run`) enumerates every **enabled** service that has a `deploy.yml`; `devbox deploy run --service <name>` works for any service type with a deploy file regardless of enabled state.
-- `ports:` is always `map[string]int` and `hosts:` is always `map[string]string`. There is no `port:` / `host:` scalar shorthand. A single-port entry writes `ports: { http: 8025 }`.
-- Type semantics partition `docker compose` file emission to `tool → infra → app` order.
-
-`type: infra` services may be optional (`required: false`) — they take a `compose:` overlay and are toggleable via `devbox services enable|disable <name>` like apps and tools. Required infra (`required: true`, typical for backing services like databases, caches, and queues) is always-on and not toggleable. Optional infra fits semantically request-path or data-path components that are not strictly required for every developer (e.g. a Varnish cache in front of nginx, or a MinIO S3-storage backend used only when no external S3 is configured).
-
-## Per-type field allowlist
-
-| Field             | `app` | `tool` | `infra` |
-|-------------------|:-----:|:------:|:-------:|
-| `type`            |   ✓   |   ✓    |    ✓    |
-| `container`       |   ✓   |   ✓    |    ✓    |
-| `required`        |   ✓   |   ✓    |    ✓    |
-| `compose`         |   ✓   |   ✓    |    ✓    |
-| `ports`           |   ✓   |   ✓    |    ✓    |
-| `hosts`           |   ✓   |   ✓    |    ✓    |
-| `icon`            |   ✓   |   ✓    |    ✓    |
-| `info`            |   ✓   |   ✓    |    ✓    |
-| `depends_on`      |   ✓   |   —    |    ✓    |
-| `status`          |   ✓   |   ✓    |    ✓    |
-| `dir`             |   ✓   |   —    |    —    |
-| `dir_internal`    |   ✓   |   —    |    —    |
-| `work_dir_internal` | ✓   |   —    |    —    |
-| `configs`         |   ✓   |   —    |    —    |
-| `dirs`            |   ✓   |   —    |    —    |
-| `extends`         |   ✓   |   —    |    —    |
-| `cli`             |   ✓   |   —    |    —    |
-| `render`          |   ✓   |   —    |    —    |
-| `on_enable`       |   ✓   |   ✓    |    ✓    |
-| `on_disable`      |   ✓   |   ✓    |    ✓    |
-| `notes`           |   ✓   |   ✓    |    ✓    |
-
-A disallowed field is a hard load error (`ErrServiceFieldNotAllowed`). Validation aggregates per-file violations via `errors.Join` so a single parse pass surfaces every issue at once.
-
-### Why the type matrix
-
-The per-type allowlists reflect the distinct roles services play in the dev environment:
-
-- **`app`**: owns source code and a running container. Supports mounts, templates, and deploy orchestration (`dir`, `extends`, `configs`, `depends_on`).
-- **`tool`**: standalone utility container (database UI, observability frontend, etc.). No source ownership; cannot depend on services or be a `depends_on` target for other services.
-- **`infra`**: supporting container (database, cache, broker, reverse proxy). Can be a `depends_on` target but not own source; lighter footprint than app.
-
-This separation ensures that build and deploy logic is explicit (defined only in `type: app`), and that infrastructure services remain independently testable without dragging in application code.
-
-## Load behavior
-
-- Each `devbox/services/<name>/service.yml` is strict-decoded — unknown and per-type-disallowed fields are hard errors. `LoadServices` collects errors from all folders via `errors.Join` so every broken folder surfaces at once, not just the first.
-- Service inheritance via `extends:` is resolved in topological order (parents before children) so multi-level chains (`C → B → A`) merge correctly regardless of map iteration order. Cycles and unknown parents are reported as load errors. `extends:` is **app-only**.
-- For each child, only zero-value fields are inherited from the parent; child fields take precedence on conflicts. Inherited slices / maps are defensively copied (`slices.Clone` / `maps.Clone`) so mutating a child never corrupts the parent.
-- The `dirs` field is deduplicated across parent and child (parent first, child appended). `cli.env` is recursively merged: parent provides defaults, child wins on key conflicts.
-- After loading, `enabled` is resolved from the 3-layer merge (`services.<name>.enabled`); required services force `enabled: true`.
-- Overlays under `services.<name>` may set **only** `enabled:`, `ports:`, and `hosts:`. Any other field there is a layer-aware overlay error — structural fields (`container`, `dir`, `configs`, `compose`, `extends`, …) belong in `devbox/services/<name>/service.yml`. The overlay validator also enforces shape: `ports:` must be a map of name → integer in `1..65535`; `hosts:` must be a map of name → string.
-- `ports:` and `hosts:` are **deep-merged by entry name** on top of the declared map: a per-developer override under `devbox/local.yml` only touches the listed keys; declared entries the overlay does not mention are preserved. New entries may also be introduced via overlay. This is a first-class devbox feature: developers routinely need to remap a port that clashes with something already bound on their host, or switch their `*.local` hostname, without editing the shared `devbox/services/<name>/service.yml`.
-- Each resolved service (including the post-overlay `ports` / `hosts` nested maps) is injected into `DevboxConfig.Raw["services"]` so dot-paths like `services.main.ports.http` and `services.adminer.hosts.web` resolve in export rules, `docker.yml` templates, command `default_from:`, and `info.yml` references.
-- Port values are bounded `1..65535` at load time (both in `service.yml` and in overlay layers).
-
-Example: a developer whose host already binds 8027 remaps adminer locally without touching the shared config —
-
-```yaml
-# devbox/local.yml (not tracked by git)
-services:
-  adminer:
-    ports:
-      http: 9027        # overrides declared 8027
-  main:
-    hosts:
-      api: api.dev.local   # adds a new entry; web stays as declared
-```
-
-## Structure
-
-Each service lives in its own folder under `devbox/services/`. The folder name becomes the service key.
-
-```
-devbox/services/
-  main/
-    service.yml
-    deploy.yml          # optional; enables deploy lifecycle for this service
-  db/
-    service.yml
-  varnish/
-    service.yml
-  adminer/
-    service.yml
-```
-
-```yaml
-# devbox/services/main/service.yml
-# type: app — owns source under dir:, has deploy lifecycle, renders templates
-type: app
-container: app-main
-required: true
-dir: ./services/main
-dir_internal: /workspace
-work_dir_internal: /workspace/src
-extends: <parent-app-key>           # app-only
-depends_on: [db, redis]             # may target app or infra (never tool)
-icon: "📦"
-hosts:
-  web: app.localhost
-ports:
-  http: 80
-info:
-  title: "Main Application"
-  primary_host: web
-  primary_port: http
-  paths:
-    - name: "API Documentation"
-      path: /api/docs
-      icon: "📖"
-compose:
-  - compose/services/main/overlay.yml
-configs:
-  - file: .env
-    mountpoint: src/.env
-dirs: [logs, home, runtime]
-cli:
-  mode: auto|exec|run
-  shell: bash
-  user: www-data
-  workdir: /workspace/src
-  env:
-    - KEY=value
-render:
-  ide:    { enabled: true, template: <pack> }
-  ai:     { enabled: true, template: <pack> }
-  git:    { enabled: true, template: <pack> }
-```
-
-```yaml
-# devbox/services/db/service.yml
-# type: infra — backing service, may be a depends_on target
-type: infra
-container: db
-required: true                      # always-on backing service
-ports:
-  mysql: 13306
-```
-
-```yaml
-# devbox/services/varnish/service.yml
-# type: infra (optional) — toggleable via `devbox services enable varnish`
-# Note: container field is omitted here — it defaults to the folder name "varnish"
-type: infra
-compose:
-  - compose/services/varnish/overlay.yml
-ports:
-  http: 6081
-```
-
-```yaml
-# devbox/services/adminer/service.yml
-# type: tool — ephemeral utility container, never a depends_on target
-type: tool
-container: adminer
-icon: "🔧"
-compose:
-  - compose/tools/adminer.yml
-ports:
-  http: 8027
-hosts:
-  web: db.localhost
-info:
-  title: Adminer
-```
-
-## Field reference
-
-**host vs internal terminology:** Fields ending in `*_internal` or using the suffix convention (like `dir` for host, `dir_internal` for container) refer to paths: host side runs on your machine, internal side is the container mount point. Apply the same distinction to ports and hostnames: `ports.http` binds a container port to your host; `hosts.main` is the hostname the container resolves as.
-
-### Top-level service fields
+## Top-level service fields
 
 | Field | Type | Required | Allowed for | Description |
 |-------|------|----------|-------------|-------------|
@@ -227,21 +31,21 @@ info:
 | `info` | block | no | all | Display metadata for the info dashboard — title override, host/port key selection, and sub-paths. See [`info` block](#info-block). |
 | `depends_on` | list | no | app / infra | Ordered dependency on other services (affects deploy order). A `type: tool` target is rejected at load. |
 | `status` | list | no | all | Custom columns for the per-type `devbox status apps` / `tools` / `infra` table — see [`status` block](#status-block). |
-| `on_enable` | block | no | app / tool / infra | Lifecycle hooks to run when the service is enabled. See toggle lifecycle. |
+| `on_enable` | block | no | app / tool / infra | Lifecycle hooks to run when the service is enabled. See [Examples — toggle lifecycle](examples.md#toggle-lifecycle). |
 | `on_disable` | block | no | app / tool / infra | Lifecycle hooks to run when the service is disabled. |
 | `notes` | block | no | app / tool / infra | Human-readable hints shown in the `services enable/disable` plan output. |
 | `dir` | string | yes (non-extends) | **app** | Path to the service hub directory on the host. |
 | `dir_internal` | string | no | **app** | Container mount point for the hub. |
 | `work_dir_internal` | string | no | **app** | Default working directory for `exec`/`run` inside the container. |
-| `extends` | string | no | **app** | Inherit fields from another `type: app` entry. Cross-type extends is rejected. |
+| `extends` | string | no | **app** | Inherit fields from another `type: app` entry. Cross-type extends is rejected. See [Inheritance](extends.md). |
 | `configs` | list | no | **app** | See [`configs` field](#configs-field). |
 | `dirs` | list | no | **app** | Extra hub-relative directories — see [`dirs` field](#dirs-field). |
 | `cli` | block | no | **app** | `devbox shell` defaults — see [`cli` block](#cli-block). |
 | `render` | block | no | **app** | Nested template-render policy — see [`render` block](#render-block). |
 
-### `ports` field
+## `ports` field
 
-`ports:` is always a map from a port name to a container port. Single-port services need a chosen name (recommendation: `http` for web, `tcp` for raw TCP, role-specific like `mysql` / `amqp` for infra). Port values are defined in `devbox/services/<name>/service.yml`; `devbox/local.yml` overlays may remap individual entries — see the deep-merge behavior in [Load behavior](#load-behavior).
+`ports:` is always a map from a port name to a container port. Single-port services need a chosen name (recommendation: `http` for web, `tcp` for raw TCP, role-specific like `mysql` / `amqp` for infra). Port values are defined in `devbox/services/<name>/service.yml`; `devbox/local.yml` overlays may remap individual entries — see the deep-merge behavior in [Load behavior](index.md#load-behavior).
 
 ```yaml
 # devbox/services/rabbitmq/service.yml
@@ -254,7 +58,7 @@ ports:
 
 Values are bounded `1..65535` at load time. Scalar shapes (`ports: 80`, `ports: "80"`) are rejected with `ErrServicePortsShape`.
 
-### `hosts` field
+## `hosts` field
 
 `hosts:` is always a map from a host name to a hostname. Symmetric with `ports`. A single hostname is conventionally `web`.
 
@@ -265,9 +69,9 @@ hosts:
   web: app.localhost
 ```
 
-Host values are defined in `devbox/services/<name>/service.yml`; `devbox/local.yml` overlays may remap individual entries — see the deep-merge behavior in [Load behavior](#load-behavior).
+Host values are defined in `devbox/services/<name>/service.yml`; `devbox/local.yml` overlays may remap individual entries — see the deep-merge behavior in [Load behavior](index.md#load-behavior).
 
-### `icon` field
+## `icon` field
 
 An optional emoji or Unicode symbol displayed next to the service name in the `devbox info` dashboard when rendering `auto-urls` blocks.
 
@@ -293,7 +97,7 @@ Icons are treated as opaque user content — ZWJ-joined emoji (family glyphs, pr
 >
 > Prefer codepoints that are emoji by default — e.g. `📦`, `🧱`, `🐳`, `📚`, `💾`, `🔧`, `🧰` — or stick to single-width ASCII / box-drawing symbols.
 
-### `info` block
+## `info` block
 
 Optional metadata for rendering this service in the `devbox info` dashboard.
 
@@ -320,7 +124,7 @@ info:
 | `primary_port` | string | `http` | Which key from `ports` to surface in the main URL row (e.g., `console` for a multi-port service). |
 | `paths` | list | — | Ordered list of sub-paths under the main URL. See [`info.paths` entries](#infopaths-entries) below. |
 
-#### `info.paths` entries
+### `info.paths` entries
 
 Each entry in the `paths` list declares a named sub-path relative to the service's main URL.
 
@@ -341,7 +145,7 @@ paths:
 
 Services without an `info` block are still included in `auto-urls` dashboard blocks (if their `include` types match) and render their main URL; they simply do not contribute custom title or sub-paths.
 
-### `configs` field
+## `configs` field
 
 Lists config files that are copied into the service hub during deploy.
 
@@ -359,7 +163,7 @@ configs:
 
 The source directory `configs/services/<service>/` is owned by the project and committed to git; the destination `services/<service>/configs/` is created during deploy and is gitignored.
 
-### `dirs` field
+## `dirs` field
 
 Additional directories to create inside the service hub directory beyond the mandatory `src`.
 
@@ -376,7 +180,7 @@ dirs:
 - When a service `extends` another, the child's `dirs` are appended to the parent's (deduplicated, parent first).
 - Used by the `service_dirs_ensure` builtin during deploy.
 
-### `cli` block
+## `cli` block
 
 Controls how `devbox shell` and CLI execution behave for this service.
 
@@ -400,7 +204,7 @@ cli:
 
 CLI flags override `cli` config. Priority order (highest first): `--root`/`--user`/`--shell`/`--env` flags → `cli` config → built-in defaults.
 
-#### `cli.env` map vs list form
+### `cli.env` map vs list form
 
 `cli.env` accepts either YAML map or list-of-`KEY=VALUE` form; both produce the same internal map and are interchangeable.
 
@@ -420,7 +224,7 @@ cli:
 
 The list form is convenient when copy-pasting from a `.env` file; the map form is friendlier for inheriting and overriding individual keys via `extends:`.
 
-### `status` block
+## `status` block
 
 Optional list of custom columns appended to the type-specific status table — `devbox status apps` for `type: app`, `devbox status tools` for `type: tool`, `devbox status infra` for `type: infra` (and the default `devbox status` composite). Each entry declares a column name and a hermetic Go template that is evaluated per row against the merged config.
 
@@ -455,11 +259,11 @@ The data root has only those three keys — there are no `.Project` / `.Runtime`
 
 **Column ordering**: within a single type-keyed status section (apps / tools / infra), when multiple services declare overlapping columns the column order in the rendered table is "first appearance" during deterministic alphabetical iteration over services of that type. Services declaring fewer columns leave missing cells as `—`.
 
-### `render` block
+## `render` block
 
 Nested block controlling whether and how rendering generates files for this service from template packs. Contains three sub-blocks: `ide`, `ai`, and `git`, each with the same structure.
 
-#### `render.ide` block
+### `render.ide` block
 
 Controls whether and how IDE rendering generates config files for this service from template packs.
 
@@ -589,7 +393,7 @@ services/main/
 
 Note that `main` is skipped due to collision (same `dir` as `main-debug`), so only `main-debug`'s template pack is rendered.
 
-#### `render.ai` block
+### `render.ai` block
 
 Controls whether and how agentic documentation rendering generates hub-level docs for this service from template packs.
 
@@ -702,7 +506,7 @@ services/main/
     CLAUDE.md        ← rendered from .claude/CLAUDE.md.tmpl
 ```
 
-#### `render.git` block
+### `render.git` block
 
 Controls whether and how shell git hooks are rendered into the service's `src/.git/hooks/` directory from template packs.
 
@@ -720,155 +524,4 @@ render:
 
 `extends` inheritance for `render.git.enabled` and `render.git.template` follows the same rules as `render.ide` and `render.ai`: child explicit values override the parent's; omitted values inherit. Collision resolution on shared `dir` uses **deepest-extends-wins** (same as `render.ide`).
 
-Hooks are written to `<svc.Dir>/src/.git/hooks/<basename>` with mode `0755`. Services whose `src/.git` is missing (no git checkout) or is a file (worktree/submodule pointer) are skipped with a warning. See [render git](../render/git.md) for the full reference, manifest schema, and examples.
-
-## Inheritance via `extends`
-
-A child service inherits all fields from the named parent. The child then overrides only the fields it declares. Multi-level chains are supported and resolved in topological order — a grandchild gets the parent's defaults indirectly via its direct parent.
-
-```mermaid
-flowchart LR
-  A[main<br/>defaults: dir, dirs, cli] --> B[main-debug<br/>extends: main]
-  A --> C[main-stage<br/>extends: main]
-  C --> D[main-stage-debug<br/>extends: main-stage]
-```
-
-Resolution rules:
-
-- Scalar fields (`dir`, `dir_internal`, `work_dir_internal`, `cli.mode`, `cli.shell`, `cli.user`, `cli.workdir`) — child wins when set, parent fills in only when child's value is empty. `type` is required in every `service.yml` and is never inherited.
-- `dirs` — parent's list comes first; child entries are appended; duplicates are removed (parent order preserved).
-- `configs` — child wholly replaces parent when set (child has its own list); parent's list is used only when child omits the key.
-- `cli.env` — recursive map merge: parent provides defaults, child overrides per key.
-- `render.ide.enabled`, `render.ide.template`, `render.ai.enabled`, `render.ai.template`, `render.git.enabled`, and `render.git.template` — inherited like scalar fields. Child's explicit `enabled: true|false` or non-empty `template` override the parent's; omitted values inherit from parent. This allows grandchildren to inherit settings indirectly.
-- `compose` — inherited when the child declares no `compose:` list of its own (parent's list is cloned); the child's own list wholly replaces the parent's, not merged.
-- `container`, `required`, `depends_on` — never inherited. A child that omits `container` defaults to its service folder name at load time. Each child specifies its own `depends_on`.
-
-```yaml
-# devbox/services/main/service.yml
-type: app
-container: app-main
-required: true
-dir: ./services/main
-dirs: [logs, home, runtime]
-cli:
-  shell: bash
-  user: www-data
-render:
-  ide:
-    enabled: true
-```
-
-```yaml
-# devbox/services/main-debug/service.yml
-type: app
-extends: main            # inherits dir, dirs, cli, render, etc.
-container: app-main-debug
-required: false
-compose:
-  - compose/services/main/debug.yml
-cli:
-  env:
-    - XDEBUG_CONFIG="cli_color=1"
-render:
-  ide:
-    template: main-debug  # override template, keep enabled: true from parent
-```
-
-`main-debug` gets `dir`, `dirs`, base `cli`, and `render.ide.enabled: true` from `main`. It overrides `render.ide.template` to use a custom template subdirectory (`devbox/templates/ide/main-debug/`), and adds its own `compose` overlay and extra env. When `devbox render ide` runs, both services share `dir: ./services/main`, so the most-derived (`main-debug`) wins and renders its custom template; `main` is skipped with a collision warning.
-
-## Example: full service definition
-
-```yaml
-# devbox/services/main/service.yml
-type: app
-container: app-main
-required: true
-dir: ./services/main
-dir_internal: /workspace
-work_dir_internal: /workspace/src
-icon: "📦"
-info:
-  title: "Main Application"
-  paths:
-    - name: "API Documentation"
-      path: /api/docs
-      icon: "📖"
-ports:
-  http: 80
-hosts:
-  web: app.localhost
-configs:
-  - .env
-dirs:
-  - logs
-  - home
-  - runtime
-cli:
-  mode: auto
-  shell: bash
-  user: www-data
-  workdir: /workspace/src
-render:
-  ide:
-    enabled: true
-  ai:
-    enabled: true
-```
-
-## Toggle lifecycle
-
-The `on_enable`, `on_disable`, and `notes` blocks control what happens when a service is toggled via `devbox services enable/disable`.
-
-### `on_enable` and `on_disable` schema
-
-```yaml
-on_enable:
-  requires: none | restart | deploy   # what to trigger after writing local.yml
-  before: [command-id]                # user commands run before the toggle is written
-  after: [command-id]                 # user commands run after the toggle is written
-on_disable:
-  requires: none | restart            # deploy is not allowed on disable
-  before: [command-id]
-  after: [command-id]
-```
-
-| Field | Default | Description |
-|-------|---------|-------------|
-| `requires` | `restart` | What must happen for the change to take effect. `none` → write local.yml only; `restart` → trigger `devbox restart`; `deploy` → trigger `devbox deploy run --service <name>`. `deploy` is forbidden on `on_disable`. |
-| `before` | — | User command IDs (from `devbox/commands/`) to run before the toggle write. Each must be `type: shell` or `type: script`. |
-| `after` | — | User command IDs to run after the toggle write. Same type constraint applies. |
-
-Hook commands run with `--yes` (non-interactive), stdout discarded, stderr captured for error messages.
-
-### `notes` schema
-
-```yaml
-notes:
-  enable: "Run migrations after enabling this service."
-  disable: "Safe to disable while the stack is running."
-```
-
-Notes are shown in the plan output (`devbox services enable/disable --print-plan`) to guide the operator through manual follow-up steps.
-
-### Toggle plan and `--apply`
-
-`devbox services enable <name>` (without `--apply`) writes `local.yml` and records a pending op in the deploy state journal. The pending op is displayed by `devbox status` until cleared. `--apply` executes the plan immediately (runs hooks, triggers restart or deploy as declared by `requires`).
-
-## Common pitfalls
-
-- **Editing `dir` in `extends` child** — a child that sets `dir` completely replaces the parent's `dir` (not merged). This is intentional for services that live in a different host directory.
-- **Absolute paths in `dirs`** — dirs entries must be relative paths. Absolute paths or paths containing `..` are rejected by `service_dirs_ensure` as a security check.
-- **Missing `container` in child** — `container` is **not** inherited via `extends:`. A child without an explicit `container` defaults to its folder name (the same default that applies to any service). Declare `container` explicitly when the folder name is not the right container name.
-- **Forgetting `depends_on:` on a child** — not inherited. A child that needs a dependency must declare it explicitly. (`compose:` is inherited from the parent when the child omits it — see "Resolution rules" above.)
-- **`render:` block under a `tool` / `infra` service** — the `render:` block is app-only. Tool / infra entries that declare it fail to load. To attach a template pack to a non-app service it must first be retyped to `app` (with the prerequisite `dir:`).
-- **Pre-existing non-symlink at a managed symlink path** — if `CLAUDE.md` (or another `symlinks[].link` path) already exists as a regular file, `devbox render ai` refuses to overwrite it and exits with an error: `refuse to overwrite non-symlink file at <path>; remove it or disable via render.ai.enabled: false`. Delete the file first, or set `render.ai.enabled: false` for that service.
-
-## Related commands
-
-- `devbox shell [service]` — open shell in a service container (`type: app` only).
-- `devbox status` — composite read-only view: apps + tools + infra sections, each with custom `status:` columns.
-- `devbox status apps` / `devbox status tools` / `devbox status infra` — per-type tables.
-- `devbox services` — interactive multi-select toggle for every optional service across all types.
-- `devbox services enable <name>` / `devbox services disable <name>` — toggle by name (type looked up internally).
-- `devbox deploy run` — runs the full deploy pipeline; enumerates all enabled services that have a `devbox/services/<name>/deploy.yml` (any service type).
-- `devbox reset run --service <name>` — resets a single service: stops and removes the container, deletes the service `dir:` if declared and present, runs per-service `reset.yml` if present, marks service as requiring a subsequent deploy. Volumes are not auto-removed (opt in via `docker_remove_project_volumes`).
+Hooks are written to `<svc.Dir>/src/.git/hooks/<basename>` with mode `0755`. Services whose `src/.git` is missing (no git checkout) or is a file (worktree/submodule pointer) are skipped with a warning. See [render git](../../render/git.md) for the full reference, manifest schema, and examples.

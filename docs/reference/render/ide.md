@@ -308,6 +308,6 @@ Errors are returned as command failures and name the offending service so the so
 
 ## Related references
 
-- [`services.<name>.render.ide` block](../config/services.md#renderide-block) — `enabled`, `template`, inheritance via `extends`
+- [`services.<name>.render.ide` block](../config/services/fields.md#renderide-block) — `enabled`, `template`, inheritance via `extends`
 - [`render ai`](ai.md) — companion command with the opposite collision policy
 - CLI reference: [`devbox render ide`](../cli/devbox_render_ide.md)
