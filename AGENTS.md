@@ -33,7 +33,7 @@ The executable entrypoint lives in `cmd/devbox`; most code is under `internal/`.
   - **`core/project/`**: `project/`, `config/`, `user/` (imported as `userpkg`), `local/` (imported as `localpkg`), `services/`, `stack/`
   - **`core/execution/`**: `pipeline/`, `condition/`, `filesgate/`, `builtin/`, `templates/`, `preflight/`
   - **`core/workflow/`**: `deploy/`, `lifecycle/`, `reset/`, `snapshot/`, `setup/`
-  - **`core/usercommands/`**: `model/`, `loader/`, `registry/`, `resolve/`, `runtime/`
+  - **`core/usercommands/`**: `model/`, `loader/`, `registry/`, `resolve/`, `runtime/` (`spec/` contract, `internal/runio/` shared I/O, `runners/{host,service,script,builtin,workflow}/`)
   - **`core/validate/`**: framework + subdomains (`config/`, `templates/`, `commands/`, `env/`, `checks/`, `linters/`, `i18n/`, `snapshot/`, `setup/`, `diag/`)
   - **`core/docs/`**: embedded docs subsystem (embed, render, mermaid, tui, export)
   - **`core/ui/`**: domain-aware renderers (`ui/styles/`, `ui/widgets/`, `ui/render/`, `ui/ask/`, `ui/cmdbrowser/`, `ui/statusview/`, `ui/statustui/`) — sink layer, imported only by `cli/`. The root `internal/core/ui/` directory holds zero `.go` files; one-way dep `render, widgets → styles`
