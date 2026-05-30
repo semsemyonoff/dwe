@@ -483,9 +483,9 @@ For phases that touch many files, order is: index file last (it links to everyth
 **Files:**
 - Modify: `internal/core/docs/lang_test.go` (add a sub-test)
 
-- [ ] add a test case: given a fake fs with `README.md` (English) and `i18n/ru/README.md` (Russian with hash header), `ResolveContent(root, "README.md", "ru")` returns Russian content, `sourceLang="ru"`, `stale=false`
-- [ ] add a sibling test case for staleness: header hash mismatches → `stale=true`
-- [ ] run tests for the package — must pass
+- [x] add a test case: given a fake fs with `README.md` (English) and `i18n/ru/README.md` (Russian with hash header), `ResolveContent(root, "README.md", "ru")` returns Russian content, `sourceLang="ru"`, `stale=false`
+- [x] add a sibling test case for staleness: header hash mismatches → `stale=true`
+- [x] run tests for the package — must pass
 
 ### Task 5.4: Validation gate
 

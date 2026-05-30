@@ -193,6 +193,74 @@ func TestResolveContent_MalformedHeader(t *testing.T) {
 	}
 }
 
+func TestResolveContent_ReadmeWithMatchingHash(t *testing.T) {
+	// Setup: repo-root README and Russian sibling under i18n/ru/
+	fsys := fstest.MapFS{
+		"README.md": &fstest.MapFile{Data: []byte("# devbox\n\nDeveloper environments on Docker.")},
+		"i18n/ru/README.md": &fstest.MapFile{
+			Data: []byte("> Translated from: README.md @ 0123456789ab\n\n# devbox\n\nСреды разработки на Docker."),
+		},
+	}
+	root := DocRoot{
+		Name: "devbox",
+		FS:   fsys,
+	}
+
+	oldHashes := ContentHashes
+	defer func() { ContentHashes = oldHashes }()
+	ContentHashes = map[string]string{
+		"README.md": "0123456789ab",
+	}
+
+	content, lang, stale, err := ResolveContent(root, "README.md", "ru")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if lang != "ru" {
+		t.Errorf("expected lang=ru, got %q", lang)
+	}
+	if stale {
+		t.Errorf("expected stale=false for matching hash, got true")
+	}
+	if !bytes.Contains(content, []byte("Среды разработки")) {
+		t.Errorf("expected Russian README content, got: %q", string(content))
+	}
+}
+
+func TestResolveContent_ReadmeWithStaleHash(t *testing.T) {
+	// Setup: repo-root README with Russian sibling whose header hash is outdated
+	fsys := fstest.MapFS{
+		"README.md": &fstest.MapFile{Data: []byte("# devbox\n\nUpdated tagline.")},
+		"i18n/ru/README.md": &fstest.MapFile{
+			Data: []byte("> Translated from: README.md @ aaaaaaaaaaaa\n\n# devbox\n\nСтарый перевод."),
+		},
+	}
+	root := DocRoot{
+		Name: "devbox",
+		FS:   fsys,
+	}
+
+	oldHashes := ContentHashes
+	defer func() { ContentHashes = oldHashes }()
+	ContentHashes = map[string]string{
+		"README.md": "bbbbbbbbbbbb",
+	}
+
+	content, lang, stale, err := ResolveContent(root, "README.md", "ru")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if lang != "ru" {
+		t.Errorf("expected lang=ru, got %q", lang)
+	}
+	if !stale {
+		t.Errorf("expected stale=true for mismatched README hash, got false")
+	}
+	if !bytes.Contains(content, []byte("Старый перевод")) {
+		t.Errorf("expected Russian README content despite staleness")
+	}
+}
+
 func TestParseContentHashHeader(t *testing.T) {
 	tests := []struct {
 		name     string
