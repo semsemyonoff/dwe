@@ -1,5 +1,7 @@
 # Devbox
 
+*Languages: **English** · [Русский](docs/i18n/ru/README.md)*
+
 A single-binary CLI for running, configuring, and maintaining containerised local development environments declaratively.
 
 ## Why devbox

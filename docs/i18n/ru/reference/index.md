@@ -1,6 +1,8 @@
-> Translated from: reference/index.md @ 03d3a39123bb
+> Translated from: reference/index.md @ f3c92a0f06de
 
 # Справочная документация Devbox
+
+*Языки: [English](../../../reference/index.md) · **Русский***
 
 Справочник для пользователей Devbox CLI: конфигурация проекта, render-паки, подсистема документации, шаблонизатор и автогенерируемое дерево команд CLI.
 

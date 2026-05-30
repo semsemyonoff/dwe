@@ -1,5 +1,7 @@
 # Devbox Reference Documentation
 
+*Languages: **English** · [Русский](../i18n/ru/reference/index.md)*
+
 User-facing reference for the Devbox CLI: project configuration, render packs, the docs subsystem, the template engine, and the auto-generated CLI command tree.
 
 ## Sections

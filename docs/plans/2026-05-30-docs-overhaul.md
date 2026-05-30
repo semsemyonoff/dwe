@@ -622,8 +622,8 @@ These rules apply uniformly to every file translated under 6.2a/b/c/d. They are 
 - Modify: `README.md` (add a one-line language switcher pointing at `docs/i18n/ru/README.md`)
 - Modify: `docs/i18n/ru/README.md` (mirror language switcher in Russian)
 
-- [ ] add "Languages: English · Русский" line at the top of each index page and README
-- [ ] in the Russian README, the switcher points back to `README.md` at the repo root
+- [x] add "Languages: English · Русский" line at the top of each index page and README
+- [x] in the Russian README, the switcher points back to `README.md` at the repo root
 
 ### Task 6.4: Regenerate hashes, add freshness sanity test, validate
 
@@ -727,7 +727,7 @@ These rules apply uniformly to every file translated under 6.2a/b/c/d. They are 
 - [x] Task 6.2b: `config/` non-split files + `templates.md`
 - [x] Task 6.2c: `config/{commands,deploy,services,state}/` split subdirs
 - [x] Task 6.2d: `render/` + `docs/`
-- [ ] Task 6.3: surface translations
+- [x] Task 6.3: surface translations
 - [ ] Task 6.4: validate
 
 ### Final
