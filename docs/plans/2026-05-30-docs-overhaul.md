@@ -425,18 +425,18 @@ For phases that touch many files, order is: index file last (it links to everyth
 - Modify: `docs/reference/index.md`
 - Modify: `docs/reference/config/index.md` (cross-link `concepts/getting-started.md` from the top)
 
-- [ ] add `concepts/` to `reference/index.md` with one-line description — preserve the Phase 3.3 refresh content; this is an additive edit, not a rewrite
-- [ ] add a "Getting started" pointer to `config/index.md`
-- [ ] `make build` exits 0
-- [ ] `./bin/devbox docs list` enumerates all 8 new files
-- [ ] `./bin/devbox docs search architecture` finds the new page
+- [x] add `concepts/` to `reference/index.md` with one-line description — preserve the Phase 3.3 refresh content; this is an additive edit, not a rewrite
+- [x] add a "Getting started" pointer to `config/index.md`
+- [x] `make build` exits 0
+- [x] `./bin/devbox docs list` enumerates all 8 new files
+- [x] `./bin/devbox docs search architecture` finds the new page
 
 **Acceptance criteria for Phase 4:**
 
-- [ ] all 8 concept pages exist and render via `devbox docs show`
-- [ ] every mermaid diagram passes mermaid-syntax validation
-- [ ] no brand/product names beyond unavoidable technical terms
-- [ ] each page ≤ 400 lines
+- [x] all 8 concept pages exist and render via `devbox docs show`
+- [x] every mermaid diagram passes mermaid-syntax validation
+- [x] no brand/product names beyond unavoidable technical terms
+- [x] each page ≤ 400 lines
 
 ---
 
@@ -639,7 +639,7 @@ For phases that touch many files, order is: index file last (it links to everyth
 - [ ] Task 4.5: `git.md`
 - [ ] Task 4.6: `pipelines.md`
 - [ ] Task 4.7: `state-and-locks.md`
-- [ ] Task 4.8: surface in index
+- [x] Task 4.8: surface in index
 
 ### Phase 5 — README
 - [ ] Task 5.1: write `README.md`

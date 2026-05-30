@@ -2,6 +2,8 @@
 
 Overview of all configuration files in the devbox system.
 
+> New to devbox? Start with [Getting started](../concepts/getting-started.md) for an end-to-end walkthrough, then return here for the file-by-file reference.
+
 ## Contents
 
 - [File inventory](#file-inventory)

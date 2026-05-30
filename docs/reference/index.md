@@ -4,6 +4,7 @@ User-facing reference for the Devbox CLI: project configuration, render packs, t
 
 ## Sections
 
+- [Concepts (`concepts/`)](concepts/index.md) — high-level orientation: getting started, architecture, project layout, container orchestration interaction, version control integration, pipelines, state and locks
 - [Configuration (`config/`)](config/index.md) — project layout, services, commands, deploy / reset / lifecycle pipelines, snapshot, info dashboard, validate, setup wizard, styles, UI, state, i18n, notifications, docker integration
 - [Render packs (`render/`)](render/index.md) — `devbox render env`, `render ide`, `render ai`, `render git`; pack manifest schema, collision policies, local overrides
 - [Documentation subsystem (`docs/`)](docs/index.md) — the `devbox docs` TUI browser, non-interactive subcommands (`show`, `list`, `export`, `llms-txt`, `cache clear`), translations and the content-hash staleness check
