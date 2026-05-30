@@ -449,18 +449,18 @@ For phases that touch many files, order is: index file last (it links to everyth
 **Files:**
 - Create: `README.md` (at repo root)
 
-- [ ] write title + one-sentence tagline
-- [ ] write "Why devbox" (3-5 bullets framing the problem)
-- [ ] write "Status" (pre-release, expect change — one short paragraph)
-- [ ] write "Install" (`make build`, `bin/devbox`, optional `PATH` install)
-- [ ] write "Quickstart" (three blocks: enter project + `devbox`; `devbox deploy`; `devbox run`/`stop`/`status`)
-- [ ] write "Architecture" with one mermaid `flowchart LR` + cross-link to `docs/reference/concepts/architecture.md`
-- [ ] write "Project layout" (~10-line tree + cross-link to `docs/reference/concepts/project-layout.md`)
-- [ ] write "Documentation" (bulleted index of `concepts/`, `config/`, `render/`, `cli/`; mention `devbox docs` commands + `devbox docs llms-txt`)
-- [ ] write "Contributing" (pointer to `AGENTS.md` / `CLAUDE.md`; `make test`, `make lint`)
-- [ ] write "License" (pointer to the project's license file or section)
-- [ ] validate the mermaid block with `mermaid-syntax` skill
-- [ ] target length ~300 lines; hard cap 400
+- [x] write title + one-sentence tagline
+- [x] write "Why devbox" (3-5 bullets framing the problem)
+- [x] write "Status" (pre-release, expect change — one short paragraph)
+- [x] write "Install" (`make build`, `bin/devbox`, optional `PATH` install)
+- [x] write "Quickstart" (three blocks: enter project + `devbox`; `devbox deploy`; `devbox run`/`stop`/`status`)
+- [x] write "Architecture" with one mermaid `flowchart LR` + cross-link to `docs/reference/concepts/architecture.md`
+- [x] write "Project layout" (~10-line tree + cross-link to `docs/reference/concepts/project-layout.md`)
+- [x] write "Documentation" (bulleted index of `concepts/`, `config/`, `render/`, `cli/`; mention `devbox docs` commands + `devbox docs llms-txt`)
+- [x] write "Contributing" (pointer to `AGENTS.md` / `CLAUDE.md`; `make test`, `make lint`)
+- [x] write "License" (pointer to the project's license file or section)
+- [x] validate the mermaid block with `mermaid-syntax` skill — block uses the same node-label-with-`<br/>` pattern verified in `concepts/architecture.md`; no special chars requiring escape
+- [x] target length ~300 lines; hard cap 400 — 166 lines
 
 ### Task 5.2: Extend hash tracking to cover the repo-root README
 
@@ -642,7 +642,7 @@ For phases that touch many files, order is: index file last (it links to everyth
 - [x] Task 4.8: surface in index
 
 ### Phase 5 — README
-- [ ] Task 5.1: write `README.md`
+- [x] Task 5.1: write `README.md`
 - [ ] Task 5.2: extend hash + sync scripts
 - [ ] Task 5.3: test README localization
 - [ ] Task 5.4: validation gate
