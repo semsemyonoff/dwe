@@ -370,13 +370,13 @@ For phases that touch many files, order is: index file last (it links to everyth
 **Files:**
 - Create: `docs/reference/concepts/project-layout.md`
 
-- [ ] walk `devbox.yml`, then `devbox/{services,commands,templates,i18n,scripts}/`, then `compose/{infra,services,tools}/`, `configs/`, `volumes/`, `snapshots/`, `.devbox/`
-- [ ] per folder: purpose, who reads it, who writes it, tracked-by-git status
-- [ ] one mermaid `flowchart TD` of the folder tree
-- [ ] examples derived from the sibling reference project layout — never name it
-- [ ] validate mermaid
-- [ ] grep `concepts/project-layout.md` for the sibling project's name (and any of its component service names that are project-specific); zero hits
-- [ ] `make build` exits 0
+- [x] walk `devbox.yml`, then `devbox/{services,commands,templates,i18n,scripts}/`, then `compose/{infra,services,tools}/`, `configs/`, `volumes/`, `snapshots/`, `.devbox/`
+- [x] per folder: purpose, who reads it, who writes it, tracked-by-git status
+- [x] one mermaid `flowchart TD` of the folder tree
+- [x] examples derived from the sibling reference project layout — never name it
+- [x] validate mermaid
+- [x] grep `concepts/project-layout.md` for the sibling project's name (and any of its component service names that are project-specific); zero hits (`varnish`, `adminer`, `catalog`, common-framework names all absent)
+- [x] `make build` exits 0
 
 ### Task 4.4: `concepts/docker.md`
 
