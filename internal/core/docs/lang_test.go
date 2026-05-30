@@ -68,7 +68,7 @@ func TestResolveContent_TranslationWithMatchingHash(t *testing.T) {
 	}
 }
 
-func TestResolveContent_TranslationWithStalHash(t *testing.T) {
+func TestResolveContent_TranslationWithStaleHash(t *testing.T) {
 	// Setup: en file and translated file with mismatched hash
 	fsys := fstest.MapFS{
 		"config/services.md": &fstest.MapFile{Data: []byte("# Services\n\nConfiguration.")},
@@ -318,6 +318,18 @@ func TestParseContentHashHeader(t *testing.T) {
 			wantHash: "",
 			wantOK:   false,
 		},
+		{
+			name:     "valid header without trailing newline",
+			input:    "> Translated from: file.md @ abcd1234ef56",
+			wantHash: "abcd1234ef56",
+			wantOK:   true,
+		},
+		{
+			name:     "valid header with CRLF line ending",
+			input:    "> Translated from: file.md @ abcd1234ef56\r\n",
+			wantHash: "abcd1234ef56",
+			wantOK:   true,
+		},
 	}
 
 	for _, tt := range tests {
@@ -385,12 +397,13 @@ func TestRussianTranslationsAreFresh(t *testing.T) {
 	const localeDir = "i18n/ru"
 
 	if _, err := fs.Stat(BuiltinFS, localeDir); err != nil {
-		t.Skipf("no embedded Russian translations under %s (run `make build`): %v", localeDir, err)
+		t.Fatalf("no embedded Russian translations under %s; run `make embedded-docs` (or use `make test`): %v", localeDir, err)
 	}
 
 	var stale []string
 	var missingHeader []string
 	var missingManifest []string
+	filesWalked := 0
 
 	err := fs.WalkDir(BuiltinFS, localeDir, func(path string, d fs.DirEntry, err error) error {
 		if err != nil {
@@ -399,6 +412,7 @@ func TestRussianTranslationsAreFresh(t *testing.T) {
 		if d.IsDir() || !strings.HasSuffix(path, ".md") {
 			return nil
 		}
+		filesWalked++
 
 		content, readErr := fs.ReadFile(BuiltinFS, path)
 		if readErr != nil {
@@ -426,6 +440,9 @@ func TestRussianTranslationsAreFresh(t *testing.T) {
 	})
 	if err != nil {
 		t.Fatalf("walk %s: %v", localeDir, err)
+	}
+	if filesWalked == 0 {
+		t.Fatalf("no Russian translation files found under %s; embedded tree likely not synced (run `make embedded-docs`)", localeDir)
 	}
 
 	if len(missingHeader) > 0 {

@@ -22,15 +22,20 @@ cd "$REPO_ROOT"
     echo "// See docs/reference/docs/index.md for details on the hash-based staleness check."
     echo "var ContentHashes = map[string]string{"
 
-    # Find all markdown files in docs/reference and docs/internals
-    # For each file, compute sha256 and take first 12 hex chars
-    # Build map entries as "path": "hash"
-    find docs/reference docs/internals -name "*.md" -type f 2>/dev/null | while read -r file; do
-        # Get the relative path (e.g., "reference/config/devbox.md")
+    # Build map entries from all markdown files. We feed two inputs into the
+    # same pipeline so the output stays sorted and there is one hash branch:
+    #   - markdown files under docs/reference and docs/internals
+    #     (relpath = "${file#docs/}", e.g. "reference/config/devbox.md")
+    #   - the repo-root README.md as a flat top-level topic
+    #     (relpath = "README.md")
+    {
+        find docs/reference docs/internals -name "*.md" -type f 2>/dev/null
+        if [ -f "README.md" ]; then
+            echo "README.md"
+        fi
+    } | while read -r file; do
         relpath="${file#docs/}"
 
-        # Compute sha256 hash and take first 12 chars
-        # Handle both sha256sum (Linux) and shasum -a 256 (macOS)
         if command -v sha256sum &> /dev/null; then
             hash=$(sha256sum "$file" | cut -c1-12)
         elif command -v shasum &> /dev/null; then
@@ -40,28 +45,10 @@ cd "$REPO_ROOT"
             continue
         fi
 
-        # Escape any double quotes in the path (unlikely but safe)
         escaped_relpath="${relpath//\"/\\\"}"
 
-        # Output map entry: "path": "hash",
         echo "    \"$escaped_relpath\": \"$hash\","
     done | sort -k1
-
-    # Also include the repo-root README.md as a top-level topic.
-    # The find loop above is docs/-prefixed; emit this entry directly so the
-    # relpath stays "README.md" (not "../README.md").
-    if [ -f "README.md" ]; then
-        if command -v sha256sum &> /dev/null; then
-            readme_hash=$(sha256sum "README.md" | cut -c1-12)
-        elif command -v shasum &> /dev/null; then
-            readme_hash=$(shasum -a 256 "README.md" | cut -c1-12)
-        else
-            readme_hash=""
-        fi
-        if [ -n "$readme_hash" ]; then
-            echo "    \"README.md\": \"$readme_hash\","
-        fi
-    fi
 
     echo "}"
 } > "$OUTPUT_FILE.tmp"
