@@ -66,9 +66,11 @@ func ResolveContent(root DocRoot, relPath, locale string) (content []byte, sourc
 	return enContent, "en", false, err
 }
 
+// contentHashHeaderRe matches the translation header:
+// `> Translated from: <path> @ <hash>` where <hash> is 12-64 hex chars.
+var contentHashHeaderRe = regexp.MustCompile(`^>\s*Translated from:\s*\S+\s*@\s*([0-9a-f]{12,64})\s*$`)
+
 // parseContentHashHeader extracts the content hash from a translation header.
-// The header format is: `> Translated from: ... @ <hash>`
-// where <hash> is 12-64 hex characters.
 // Returns (hash, found).
 func parseContentHashHeader(content []byte) (string, bool) {
 	lines := bytes.SplitN(content, []byte{'\n'}, 2)
@@ -76,12 +78,8 @@ func parseContentHashHeader(content []byte) (string, bool) {
 		return "", false
 	}
 
-	firstLine := string(lines[0])
-
-	// Regex to match the header: `> Translated from: ... @ <hash>`
-	// Pattern: `^>\s*Translated from:\s*\S+\s*@\s*([0-9a-f]{12,64})\s*$`
-	headerRegex := regexp.MustCompile(`^>\s*Translated from:\s*\S+\s*@\s*([0-9a-f]{12,64})\s*$`)
-	matches := headerRegex.FindStringSubmatch(firstLine)
+	firstLine := strings.TrimRight(string(lines[0]), "\r")
+	matches := contentHashHeaderRe.FindStringSubmatch(firstLine)
 	if len(matches) < 2 {
 		return "", false
 	}
