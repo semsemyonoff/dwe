@@ -1,4 +1,4 @@
-package runtime
+package workflow
 
 import (
 	"bytes"
@@ -15,16 +15,6 @@ import (
 // ---------------------------------------------------------------------------
 // helpers
 // ---------------------------------------------------------------------------
-
-// buildWorkflowRegistry creates a Registry with the given commands pre-loaded
-// without going through YAML files.
-func buildWorkflowRegistry(cmds ...*CommandDef) *Registry {
-	reg := newEmptyRegistry()
-	for _, cmd := range cmds {
-		reg.AddCommandForTest(cmd)
-	}
-	return reg
-}
 
 // runWorkflowCtx executes a workflow command and returns stdout, stderr, and error.
 func runWorkflowCtx(t *testing.T, reg *Registry, workflowCmd *CommandDef) (string, string, error) {

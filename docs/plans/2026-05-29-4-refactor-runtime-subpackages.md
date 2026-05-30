@@ -347,18 +347,18 @@ These reference both `runtime.NewRunner` and concrete types like `*HostRunner` �
 
 **`buildWorkflowRegistry` test helper**: duplicate. The helper (defined in `runner_workflow_test.go:21`, ~20 lines) is used by 7 test files. After Task 4, `runner_workflow_test.go` moves to `runners/workflow/`. **Decision committed: place the root copy in existing `runtime/runner_test.go`** (already present, doesn't require a new file). The subpkg copy lives in `runners/workflow/workflow_test.go` for in-subpkg tests. Test helpers can't be imported across packages — duplication is the standard Go answer.
 
-- [ ] create `runners/workflow/` directory
-- [ ] move 6 implementation files; change package to `workflow`; add spec import (use plain `spec` for runtime spec; alias `fgspec` for filesgate spec per Collision 2); rename `WorkflowRunner` → `Runner`
-- [ ] update receiver to short single-letter (`r *workflow.Runner`) on `Run` and `runConfirmStep`/`runCommandStep`/`runParallelGroup` methods
-- [ ] update doc comments to lead with new exported name (`// Runner executes workflow commands ...`)
-- [ ] **atomic step**: in the SAME edit, move `fireOnStepStart` and `fireOnStepEnd` from root `observer.go` to `runners/workflow/observer_fire.go` (they stay package-private — no spec/ export needed; their only callers are workflow Runner internals now co-located)
-- [ ] delete root `observer.go` if empty after this move
-- [ ] move 6 workflow test files; verify each is truly workflow-specific (not exercising the factory — factory tests already extracted to root in Task 3)
-- [ ] **duplicate `buildWorkflowRegistry`**: copy from `runner_workflow_test.go` (now in `runners/workflow/workflow_test.go`) back into root `runtime/runner_test.go` (existing file). Both packages need a same-named test helper since `notify_workflow_test.go` (stays root) and the moved workflow tests both reference it.
-- [ ] **keep `notify_workflow_test.go` at root** — it depends on root-package test helpers (`installRecordingNotifier`, `TestSnapshotRC`) AND uses `WorkflowRunner` (now via the root alias). Update internal type references if needed — they likely still compile via aliasing.
-- [ ] update root factory: import workflow subpkg; switch case for `"workflow"` returns `&workflow.Runner{}`
-- [ ] run `make test` — must pass before Task 5
-- [ ] run `make lint` — must pass before Task 5
+- [x] create `runners/workflow/` directory
+- [x] move 6 implementation files; change package to `workflow`; add spec import (use plain `spec` for runtime spec; alias `fgspec` for filesgate spec per Collision 2); rename `WorkflowRunner` → `Runner`
+- [x] update receiver to short single-letter (`r *workflow.Runner`) on `Run` and `runConfirmStep`/`runCommandStep`/`runParallelGroup` methods
+- [x] update doc comments to lead with new exported name (`// Runner executes workflow commands ...`)
+- [x] **atomic step**: in the SAME edit, move `fireOnStepStart` and `fireOnStepEnd` from root `observer.go` to `runners/workflow/observer_fire.go` (they stay package-private — no spec/ export needed; their only callers are workflow Runner internals now co-located)
+- [x] delete root `observer.go` if empty after this move
+- [x] move 6 workflow test files; verify each is truly workflow-specific (not exercising the factory — factory tests already extracted to root in Task 3). The 4 `TestConfirmCommand_*` tests originally embedded in `runner_workflow_guards_test.go` were extracted to a new root file `confirmation_guards_test.go` since they exercise root `ConfirmCommand`, not workflow runner internals.
+- [x] **duplicate `buildWorkflowRegistry`**: copy from `runner_workflow_test.go` (now in `runners/workflow/workflow_test.go`) back into root `runtime/runner_test.go` (existing file). Both packages need a same-named test helper since `notify_workflow_test.go` (stays root) and the moved workflow tests both reference it.
+- [x] **keep `notify_workflow_test.go` at root** — it depends on root-package test helpers (`installRecordingNotifier`, `TestSnapshotRC`) AND uses `WorkflowRunner` (now via the root alias). Update internal type references if needed — they likely still compile via aliasing.
+- [x] update root factory: import workflow subpkg; switch case for `"workflow"` returns `&workflow.Runner{}` (via `&WorkflowRunner{}` alias). Also added three function-var seams (`RunCommandFn`, `BuildRunContextFn`, `ComputeFilePathsProbeFn`) in `runners/workflow/workflow.go` wired by root `init()` to break the circular dep. Added external test file `runners/workflow/wire_test.go` (`package workflow_test`) with a blank import of root runtime so the workflow test binary picks up the init wiring without forming a build cycle.
+- [x] run `make test` — must pass before Task 5
+- [x] run `make lint` — must pass before Task 5
 
 ### Task 5: Verify external callers and integration
 

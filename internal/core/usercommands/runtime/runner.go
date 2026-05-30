@@ -16,10 +16,23 @@ import (
 	"devbox-cli/internal/core/usercommands/runtime/runners/host"
 	"devbox-cli/internal/core/usercommands/runtime/runners/script"
 	"devbox-cli/internal/core/usercommands/runtime/runners/service"
+	"devbox-cli/internal/core/usercommands/runtime/runners/workflow"
 	"devbox-cli/internal/core/usercommands/runtime/spec"
 	"devbox-cli/internal/shared/render"
 	"devbox-cli/internal/shared/tpl"
 )
+
+// Workflow runner callback wiring. The workflow subpackage holds three
+// function-var seams (RunCommandFn / BuildRunContextFn /
+// ComputeFilePathsProbeFn) so it can dispatch sub-steps and probe files_gate
+// overrides without importing this root package. Wiring lives in init().
+//
+//nolint:gochecknoinits // breaks runtime↔workflow import cycle
+func init() {
+	workflow.RunCommandFn = RunCommand
+	workflow.BuildRunContextFn = BuildRunContext
+	workflow.ComputeFilePathsProbeFn = ComputeFilePathsProbe
+}
 
 // Runner is the interface implemented by each command type executor. It is
 // an alias for spec.Runner so the runtime root package and its callers can
@@ -53,7 +66,43 @@ type (
 	// BuiltinRunner runs type=builtin commands by dispatching to the engine
 	// builtin registry.
 	BuiltinRunner = builtin.Runner
+	// WorkflowRunner runs type=workflow commands by dispatching each step.
+	WorkflowRunner = workflow.Runner
 )
+
+// StepStatus enumerates the terminal states a workflow step can finish in.
+// Alias for spec.StepStatus so external callers keep writing runtime.StepStatus.
+type StepStatus = spec.StepStatus
+
+// StepResult carries the outcome of one workflow step. Alias for spec.StepResult.
+type StepResult = spec.StepResult
+
+// WorkflowStepObserver receives lifecycle events for top-level sequential
+// workflow steps. Alias for spec.WorkflowStepObserver.
+type WorkflowStepObserver = spec.WorkflowStepObserver
+
+// StepIOSuspender is an optional capability an observer can implement so the
+// workflow runner can hide its live UI footer while a child process writes
+// directly to the terminal. Alias for spec.StepIOSuspender.
+type StepIOSuspender = spec.StepIOSuspender
+
+const (
+	// StepStatusDone indicates the step completed without error.
+	StepStatusDone = spec.StepStatusDone
+	// StepStatusFailed indicates the step returned an error.
+	StepStatusFailed = spec.StepStatusFailed
+	// StepStatusSkipped indicates the step never ran (when: false or files_gate override).
+	StepStatusSkipped = spec.StepStatusSkipped
+)
+
+// ErrWorkflowNestedParallel is returned when a workflow containing a
+// `parallel:` block is invoked from another parallel context. Aliased from
+// spec/ so external callers continue to test against runtime.ErrWorkflowNestedParallel.
+var ErrWorkflowNestedParallel = spec.ErrWorkflowNestedParallel
+
+// ErrConfirmInsideParallel is returned when an interactive confirmation is
+// reached inside a parallel group. Aliased from spec/.
+var ErrConfirmInsideParallel = spec.ErrConfirmInsideParallel
 
 // NewRunner returns the appropriate Runner implementation for the given command type.
 // An error is returned for unknown command types.

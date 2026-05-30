@@ -1,4 +1,4 @@
-package runtime
+package workflow
 
 import (
 	"fmt"
@@ -6,8 +6,9 @@ import (
 	"strings"
 
 	"devbox-cli/internal/core/execution/filesgate"
-	"devbox-cli/internal/core/execution/filesgate/spec"
+	fgspec "devbox-cli/internal/core/execution/filesgate/spec"
 	"devbox-cli/internal/core/usercommands/model"
+	"devbox-cli/internal/core/usercommands/runtime/spec"
 )
 
 // dumpSubStepOutput writes a sub-step's captured output between labelled
@@ -35,7 +36,7 @@ func dumpSubStepOutput(w io.Writer, command, output string) {
 // The override is intentionally consumed once per sub-step: the inner
 // RunContext built by runCommandStep does NOT propagate the map, so an inner
 // workflow does not see the outer pipeline-step's overrides.
-func evalSubStepOverrideGate(rc RunContext, step model.WorkflowStep) (skip bool, reason string, err error) {
+func evalSubStepOverrideGate(rc spec.RunContext, step model.WorkflowStep) (skip bool, reason string, err error) {
 	if len(rc.WorkflowSubStepOverrides) == 0 {
 		return false, "", nil
 	}
@@ -74,16 +75,16 @@ func evalSubStepOverrideGate(rc RunContext, step model.WorkflowStep) (skip bool,
 	if rc.Config == nil {
 		return false, "", fmt.Errorf("sub_step_overrides[%q]: config required to evaluate files_gate", name)
 	}
-	probeCtx, err := BuildRunContext(rc.Config, rc.Registry, def, gateWith, rc.ProjectRoot)
+	probeCtx, err := BuildRunContextFn(rc.Config, rc.Registry, def, gateWith, rc.ProjectRoot)
 	if err != nil {
 		return false, "", fmt.Errorf("sub_step_overrides[%q]: build context: %w", name, err)
 	}
 
-	ids, err := spec.ResolveRequireIDs(ov.FilesGate.Require, def.Files)
+	ids, err := fgspec.ResolveRequireIDs(ov.FilesGate.Require, def.Files)
 	if err != nil {
 		return false, "", fmt.Errorf("sub_step_overrides[%q]: %w", name, err)
 	}
-	probeResults, err := ComputeFilePathsProbe(probeCtx, ids)
+	probeResults, err := ComputeFilePathsProbeFn(probeCtx, ids)
 	if err != nil {
 		return false, "", fmt.Errorf("sub_step_overrides[%q]: probe: %w", name, err)
 	}

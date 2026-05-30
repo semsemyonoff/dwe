@@ -147,3 +147,15 @@ func TestNewRunner_Unsupported_Type(t *testing.T) {
 		t.Errorf("expected 'unknown_type' in error, got %q", unsup.Type)
 	}
 }
+
+// buildWorkflowRegistry creates a Registry with the given commands pre-loaded
+// without going through YAML files. Duplicated from runners/workflow/ for the
+// root-package tests that still drive WorkflowRunner via the type alias
+// (notably notify_workflow_test.go).
+func buildWorkflowRegistry(cmds ...*CommandDef) *Registry {
+	reg := newEmptyRegistry()
+	for _, cmd := range cmds {
+		reg.AddCommandForTest(cmd)
+	}
+	return reg
+}

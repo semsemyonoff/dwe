@@ -1,8 +1,10 @@
-package runtime
+// Package workflow implements the runtime Runner for type=workflow commands.
+// It dispatches each step (command reference, confirmation prompt, or parallel
+// group) through the recursive RunCommandFn seam wired by runtime root.
+package workflow
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"io"
 	"os"
@@ -10,11 +12,38 @@ import (
 
 	"github.com/charmbracelet/x/term"
 
+	"devbox-cli/internal/core/project/config"
+	"devbox-cli/internal/core/usercommands/model"
+	"devbox-cli/internal/core/usercommands/registry"
 	"devbox-cli/internal/core/usercommands/runtime/internal/runio"
 	"devbox-cli/internal/core/usercommands/runtime/spec"
 	"devbox-cli/internal/shared/liveui"
 	"devbox-cli/internal/shared/tpl"
 )
+
+// RunCommandFn dispatches a leaf command through the runtime root's full
+// pipeline (file paths, confirmation, runner dispatch, messages). The root
+// runtime package wires it in init() to runtime.RunCommand. Allowing this
+// indirection breaks the otherwise-circular dep between root and workflow.
+//
+// Tests that exercise workflow sub-step dispatch ensure this is wired by
+// importing the root runtime package via an external test file.
+var RunCommandFn func(ctx context.Context, rc spec.RunContext) error
+
+// BuildRunContextFn constructs a RunContext for an inner command (used by
+// the files_gate override probe path). Wired by runtime root init() to
+// runtime.BuildRunContext.
+var BuildRunContextFn func(
+	cfg *config.DevboxConfig,
+	reg *registry.Registry,
+	def *model.CommandDef,
+	with map[string]any,
+	workDir string,
+) (spec.RunContext, error)
+
+// ComputeFilePathsProbeFn probes a subset of a command's declared files for
+// presence. Wired by runtime root init() to runtime.ComputeFilePathsProbe.
+var ComputeFilePathsProbeFn func(ctx spec.RunContext, only []string) (map[string]spec.FileProbeResult, error)
 
 // workflowParallelStdoutIsTTY reports whether os.Stdout is attached to a
 // terminal. Overridable for tests so the LiveLine integration can be exercised
@@ -39,30 +68,27 @@ var newWorkflowParallelLiveLine = func(workflowID string) *liveui.LiveLine {
 	return live
 }
 
-// ErrWorkflowNestedParallel is returned when a workflow containing a
-// `parallel:` block is invoked from another parallel context (pipeline or
-// workflow). Only one LiveBlock owner is allowed per terminal.
-var ErrWorkflowNestedParallel = errors.New("nested workflow parallel block is not supported in v1")
+// ErrWorkflowNestedParallel is aliased from spec/ so workflow runner internals
+// can reference it without prefix.
+var ErrWorkflowNestedParallel = spec.ErrWorkflowNestedParallel
 
-// ErrConfirmInsideParallel is returned when an interactive confirmation is
-// reached inside a parallel group. Aliased from spec/ so external callers
-// continue to test against runtime.ErrConfirmInsideParallel.
+// ErrConfirmInsideParallel is aliased from spec/.
 var ErrConfirmInsideParallel = spec.ErrConfirmInsideParallel
 
-// WorkflowRunner executes type=workflow commands by running each step in sequence.
+// Runner executes type=workflow commands by running each step in sequence.
 //
 // Each step is either a command reference or a confirm prompt:
 //   - Command steps resolve the referenced command from the registry, merge `with`
-//     param overrides, and dispatch to the appropriate runner.
+//     param overrides, and dispatch through RunCommandFn.
 //   - Confirm steps prompt the user for confirmation before continuing.  In
 //     non-interactive mode (DEVBOX_NONINTERACTIVE=1) confirm steps are skipped
 //     (treated as auto-confirmed).
 //
 // Private commands may be referenced from workflow steps.
-type WorkflowRunner struct{}
+type Runner struct{}
 
 // Run executes the workflow described by rc.
-func (r *WorkflowRunner) Run(ctx context.Context, rc RunContext) error {
+func (r *Runner) Run(ctx context.Context, rc spec.RunContext) error {
 	if rc.Registry == nil {
 		return fmt.Errorf("workflow runner: registry is required but not set in RunContext")
 	}
@@ -82,14 +108,14 @@ func (r *WorkflowRunner) Run(ctx context.Context, rc RunContext) error {
 			if err != nil {
 				wrapped := fmt.Errorf("workflow %q step[%d]: %w", rc.Cmd.ID, i, err)
 				fireOnStepStart(rc, i, total, step)
-				fireOnStepEnd(rc, i, step, StepResult{Status: StepStatusFailed, Err: wrapped})
+				fireOnStepEnd(rc, i, step, spec.StepResult{Status: spec.StepStatusFailed, Err: wrapped})
 				return wrapped
 			}
 			if !ok {
 				_, _ = fmt.Fprintf(runio.StderrOf(rc), "  ◎ workflow %q step[%d]: skipped (when: %s)\n",
 					rc.Cmd.ID, i, step.When)
-				fireOnStepEnd(rc, i, step, StepResult{
-					Status:     StepStatusSkipped,
+				fireOnStepEnd(rc, i, step, spec.StepResult{
+					Status:     spec.StepStatusSkipped,
 					SkipReason: "when: " + step.When,
 				})
 				continue
@@ -99,16 +125,9 @@ func (r *WorkflowRunner) Run(ctx context.Context, rc RunContext) error {
 		switch {
 		case step.Parallel != nil:
 			stepStart := time.Now()
-			// Iteration-scoped closure mirrors the default case: suspend the
-			// outer observer's LiveLine for the duration of the inner parallel
-			// group's LiveLine. Without this, two LiveLines write ANSI cursor
-			// sequences to os.Stdout concurrently (outer = snapshot observer
-			// ticker, inner = runParallelGroup ticker), causing visible flicker
-			// and interleaved frames on TTY. The deferred ResumeAfterExec pairs
-			// with this iteration's SuspendForExec regardless of error path.
 			err := func() error {
 				fireOnStepStart(rc, i, total, step)
-				suspender, hasSuspend := rc.StepObserver.(StepIOSuspender)
+				suspender, hasSuspend := rc.StepObserver.(spec.StepIOSuspender)
 				if hasSuspend {
 					suspender.SuspendForExec()
 					defer suspender.ResumeAfterExec()
@@ -116,8 +135,8 @@ func (r *WorkflowRunner) Run(ctx context.Context, rc RunContext) error {
 				return r.runParallelGroup(ctx, rc, step.Parallel, i)
 			}()
 			if err != nil {
-				fireOnStepEnd(rc, i, step, StepResult{
-					Status:   StepStatusFailed,
+				fireOnStepEnd(rc, i, step, spec.StepResult{
+					Status:   spec.StepStatusFailed,
 					Duration: time.Since(stepStart),
 					Err:      err,
 				})
@@ -128,8 +147,8 @@ func (r *WorkflowRunner) Run(ctx context.Context, rc RunContext) error {
 				}
 				return err
 			}
-			fireOnStepEnd(rc, i, step, StepResult{
-				Status:   StepStatusDone,
+			fireOnStepEnd(rc, i, step, spec.StepResult{
+				Status:   spec.StepStatusDone,
 				Duration: time.Since(stepStart),
 			})
 		case step.Confirm != "":
@@ -137,15 +156,15 @@ func (r *WorkflowRunner) Run(ctx context.Context, rc RunContext) error {
 			fireOnStepStart(rc, i, total, step)
 			if err := r.runConfirmStep(rc, step.Confirm); err != nil {
 				wrapped := fmt.Errorf("workflow %q step[%d] confirm: %w", rc.Cmd.ID, i, err)
-				fireOnStepEnd(rc, i, step, StepResult{
-					Status:   StepStatusFailed,
+				fireOnStepEnd(rc, i, step, spec.StepResult{
+					Status:   spec.StepStatusFailed,
 					Duration: time.Since(stepStart),
 					Err:      wrapped,
 				})
 				return wrapped
 			}
-			fireOnStepEnd(rc, i, step, StepResult{
-				Status:   StepStatusDone,
+			fireOnStepEnd(rc, i, step, spec.StepResult{
+				Status:   spec.StepStatusDone,
 				Duration: time.Since(stepStart),
 			})
 		default:
@@ -153,28 +172,23 @@ func (r *WorkflowRunner) Run(ctx context.Context, rc RunContext) error {
 			if gateErr != nil {
 				wrapped := fmt.Errorf("workflow %q step[%d] %q: %w", rc.Cmd.ID, i, step.Command, gateErr)
 				fireOnStepStart(rc, i, total, step)
-				fireOnStepEnd(rc, i, step, StepResult{Status: StepStatusFailed, Err: wrapped})
+				fireOnStepEnd(rc, i, step, spec.StepResult{Status: spec.StepStatusFailed, Err: wrapped})
 				return wrapped
 			}
 			if gateSkip {
 				_, _ = fmt.Fprintf(runio.StderrOf(rc), "  ◎ workflow %q step[%d] %q: skipped (%s)\n",
 					rc.Cmd.ID, i, step.Command, gateReason)
-				fireOnStepEnd(rc, i, step, StepResult{
-					Status:     StepStatusSkipped,
+				fireOnStepEnd(rc, i, step, spec.StepResult{
+					Status:     spec.StepStatusSkipped,
 					SkipReason: gateReason,
 				})
 				continue
 			}
 
 			stepStart := time.Now()
-			// Iteration-scoped closure so the deferred ResumeAfterExec pairs
-			// with this iteration's SuspendForExec regardless of error or
-			// panic; using `defer` directly inside the loop would only fire
-			// at function return and leave the live UI suspended across the
-			// remaining steps.
 			err := func() error {
 				fireOnStepStart(rc, i, total, step)
-				suspender, hasSuspend := rc.StepObserver.(StepIOSuspender)
+				suspender, hasSuspend := rc.StepObserver.(spec.StepIOSuspender)
 				if hasSuspend {
 					suspender.SuspendForExec()
 					defer suspender.ResumeAfterExec()
@@ -182,8 +196,8 @@ func (r *WorkflowRunner) Run(ctx context.Context, rc RunContext) error {
 				return r.runCommandStep(ctx, rc, i, step)
 			}()
 			if err != nil {
-				fireOnStepEnd(rc, i, step, StepResult{
-					Status:   StepStatusFailed,
+				fireOnStepEnd(rc, i, step, spec.StepResult{
+					Status:   spec.StepStatusFailed,
 					Duration: time.Since(stepStart),
 					Err:      err,
 				})
@@ -194,8 +208,8 @@ func (r *WorkflowRunner) Run(ctx context.Context, rc RunContext) error {
 				}
 				return err
 			}
-			fireOnStepEnd(rc, i, step, StepResult{
-				Status:   StepStatusDone,
+			fireOnStepEnd(rc, i, step, spec.StepResult{
+				Status:   spec.StepStatusDone,
 				Duration: time.Since(stepStart),
 			})
 		}

@@ -1,4 +1,4 @@
-package runtime
+package workflow
 
 import (
 	"context"
@@ -10,12 +10,16 @@ import (
 	"devbox-cli/internal/core/usercommands/model"
 	"devbox-cli/internal/core/usercommands/resolve"
 	"devbox-cli/internal/core/usercommands/runtime/internal/runio"
+	"devbox-cli/internal/core/usercommands/runtime/spec"
 	"devbox-cli/internal/shared/render"
 	"devbox-cli/internal/shared/tpl"
 )
 
+// runConfirm is the package-level wrapper for widgets.RunConfirm; swappable in tests.
+var runConfirm = widgets.RunConfirm
+
 // runConfirmStep handles a confirm step.
-func (r *WorkflowRunner) runConfirmStep(ctx RunContext, message string) error {
+func (r *Runner) runConfirmStep(ctx spec.RunContext, message string) error {
 	if ctx.SkipConfirm || ctx.NonInteractive || runio.IsNonInteractive() {
 		return nil
 	}
@@ -50,7 +54,7 @@ func (r *WorkflowRunner) runConfirmStep(ctx RunContext, message string) error {
 }
 
 // runCommandStep resolves and executes a single command-reference step.
-func (r *WorkflowRunner) runCommandStep(ctx context.Context, rc RunContext, stepIdx int, step model.WorkflowStep) error {
+func (r *Runner) runCommandStep(ctx context.Context, rc spec.RunContext, stepIdx int, step model.WorkflowStep) error {
 	cmd, err := rc.Registry.Get(step.Command)
 	if err != nil {
 		return fmt.Errorf("workflow %q step[%d]: %w", rc.Cmd.ID, stepIdx, err)
@@ -90,7 +94,7 @@ func (r *WorkflowRunner) runCommandStep(ctx context.Context, rc RunContext, step
 		renderCtx.SnapshotScope = rc.Render.SnapshotScope
 	}
 
-	subCtx := RunContext{
+	subCtx := spec.RunContext{
 		Cmd:            cmd,
 		Params:         resolvedParams,
 		Context:        resolvedCtx,
@@ -113,7 +117,7 @@ func (r *WorkflowRunner) runCommandStep(ctx context.Context, rc RunContext, step
 		Locale:     rc.Locale,
 	}
 
-	if err := RunCommand(ctx, subCtx); err != nil {
+	if err := RunCommandFn(ctx, subCtx); err != nil {
 		return fmt.Errorf("workflow %q step[%d] %q: %w", rc.Cmd.ID, stepIdx, step.Command, err)
 	}
 
@@ -124,6 +128,6 @@ func (r *WorkflowRunner) runCommandStep(ctx context.Context, rc RunContext, step
 // Used by parallel preflight, which evaluates all `when:` conditions once
 // before the goroutines start so that side-effectful shell predicates run
 // exactly once per group execution regardless of concurrency.
-func evalWorkflowStepWhen(expr string, rc RunContext) (bool, error) {
+func evalWorkflowStepWhen(expr string, rc spec.RunContext) (bool, error) {
 	return tpl.EvalCommandCondition(expr, rc.Render, rc.ProjectRoot)
 }

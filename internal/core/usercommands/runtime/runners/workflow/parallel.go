@@ -1,4 +1,4 @@
-package runtime
+package workflow
 
 import (
 	"bytes"
@@ -15,6 +15,7 @@ import (
 
 	"devbox-cli/internal/core/usercommands/model"
 	"devbox-cli/internal/core/usercommands/runtime/internal/runio"
+	"devbox-cli/internal/core/usercommands/runtime/spec"
 	"devbox-cli/internal/shared/liveui"
 	"devbox-cli/internal/shared/render"
 )
@@ -48,7 +49,7 @@ type subResult struct {
 // Phase 3 — Post-Wait emit (sequential, no race):
 //   - iterate results in order; write ✓/✗/◎ status lines to rc.Stderr; for
 //     failed sub-steps print captured output between separator bars.
-func (r *WorkflowRunner) runParallelGroup(parentCtx context.Context, rc RunContext, group *model.WorkflowParallel, _ int) error {
+func (r *Runner) runParallelGroup(parentCtx context.Context, rc spec.RunContext, group *model.WorkflowParallel, _ int) error {
 	n := len(group.Steps)
 	maxC := group.MaxConcurrent
 	if maxC <= 0 {
@@ -133,11 +134,6 @@ func (r *WorkflowRunner) runParallelGroup(parentCtx context.Context, rc RunConte
 			results[i].sub = sub
 
 			if gctx.Err() != nil {
-				// Group already cancelled (fail_fast sibling failed or SIGINT).
-				// Mark as cancelled so the post-Wait emit shows ◎ Cancelled
-				// rather than ✓ Done (which would be misleading for work that
-				// never ran). The initiating error is still reported by the
-				// goroutine that caused the cancellation.
 				results[i].cancelled = true
 				live.SetBlockRowFinal(i, liveui.BlockRowSkipped,
 					fmt.Sprintf("[%d/%d] Cancelled: %s", i+1, n, sub.Command))
@@ -179,14 +175,7 @@ func (r *WorkflowRunner) runParallelGroup(parentCtx context.Context, rc RunConte
 
 			gRC := rc
 			gRC.UnderParallel = true
-			// Parallel sub-steps are never the top-level invocation; runCommandStep
-			// sets SkipNotify on the inner subCtx it builds, but set it here too
-			// so any future code path that bypasses runCommandStep stays correct.
 			gRC.SkipNotify = true
-			// Never let parallel sub-steps read from shared stdin. Interactive
-			// commands are rejected at plan time, but shell scripts or builtin
-			// confirm (without SkipConfirm) could still block on an unexpected
-			// read without this isolation.
 			gRC.Stdin = strings.NewReader("")
 
 			subFile, _, openErr := openWorkflowSubStepLog(rc.ProjectRoot, workflowID, sub.Command, rc.ProjectRoot != "")
@@ -203,22 +192,9 @@ func (r *WorkflowRunner) runParallelGroup(parentCtx context.Context, rc RunConte
 
 			var buf bytes.Buffer
 			tee := liveui.NewLineTeePreserveANSI(func(frame string, final bool) {
-				// Strip ANSI for the live row label and the per-sub-step
-				// log; the buffered failure-dump copy keeps colours so the
-				// dump on stderr preserves the child's formatting.
 				stripped := liveui.ANSIOnlyRe.ReplaceAllString(frame, "")
-				// Always refresh the live block row with the latest frame so
-				// `\r`-overwritten progress (curl/wget/docker pulls) is shown.
-				// Mirrors PlainReporter.StepOutput's behaviour for parallel
-				// sub-steps; without this only newline-terminated lines would
-				// surface on the row and the first header line would freeze
-				// while the actual progress is hidden.
 				live.SetBlockRowRunning(i,
 					fmt.Sprintf("[%d/%d] %s: %s", i+1, n, sub.Command, stripped))
-				// Commit to buffer + per-sub-step log ONLY on newline frames.
-				// Non-final frames are transient display state — writing them
-				// would balloon logs with overwritten progress bars and the
-				// failure-dump output would be unreadable.
 				if !final {
 					return
 				}
@@ -265,32 +241,13 @@ func (r *WorkflowRunner) runParallelGroup(parentCtx context.Context, rc RunConte
 		}
 	}
 
-	// If no sub-step produced an error but the parent context was cancelled
-	// (e.g. SIGINT before the group started, or a sibling pipeline step
-	// triggering cancellation), surface that cancellation rather than
-	// returning success. Sibling fail-fast errors are already captured in
-	// groupErr by the errgroup, so this branch only fires when groupErr==nil.
 	if groupErr == nil && parentCtx.Err() != nil {
 		groupErr = parentCtx.Err()
 	}
 
-	// End the live block and stop the ticker before the post-Wait emit.
-	// EndBlock() alone does not stop the ticker — only Stop() does. Leaving
-	// the ticker running causes cursor-control ANSI sequences (written to
-	// os.Stdout) to interleave with status lines written to os.Stderr on a
-	// TTY where both fds share the same terminal. Stop() is idempotent; the
-	// deferred Stop() below is kept as a safety net for any early-return path.
 	live.EndBlock()
 	live.Stop()
 
-	// Post-Wait emit. TTY users already saw the per-sub-step rows finalise
-	// inside the live block — re-printing "✓ [i/N] Done: ..." for every
-	// sub-step duplicates that information. Instead:
-	//   - TTY mode: print only failure dumps (the captured output between
-	//     separator bars, which the live row cannot show), then a single
-	//     green-✓ summary footer matching the workflow's live header.
-	//   - Non-TTY: print the per-sub-step status lines (sole output channel),
-	//     followed by the summary footer.
 	emitStatus := !isTTY
 	alwaysShowOutput := group.AlwaysShowOutput
 	failures := 0

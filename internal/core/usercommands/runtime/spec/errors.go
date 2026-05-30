@@ -11,3 +11,12 @@ import "errors"
 // confirmation helper) can return / wrap this sentinel without introducing a
 // cycle through the factory in runtime/runner.go.
 var ErrConfirmInsideParallel = errors.New("interactive confirmation is not allowed inside a parallel group")
+
+// ErrWorkflowNestedParallel is returned when a workflow containing a
+// `parallel:` block is invoked from another parallel context (pipeline or
+// workflow). Only one LiveBlock owner is allowed per terminal.
+//
+// Defined in spec/ so external callers (`internal/core/usercommands`,
+// pipeline tests) can keep importing it via the root runtime alias without
+// pulling in the workflow runner subpackage directly.
+var ErrWorkflowNestedParallel = errors.New("nested workflow parallel block is not supported in v1")

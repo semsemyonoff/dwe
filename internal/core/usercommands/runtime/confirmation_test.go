@@ -4,12 +4,18 @@ import (
 	"bytes"
 	"context"
 	"io"
+	"os"
 	"strings"
 	"testing"
 
 	"devbox-cli/internal/core/ui/widgets"
 	"devbox-cli/internal/shared/tpl"
 )
+
+// readFileBytes reads a file into bytes, returning nil on error.
+func readFileBytes(path string) ([]byte, error) {
+	return os.ReadFile(path)
+}
 
 func TestRunCommand_Confirmation_NonTTY_YInputRunsCommand(t *testing.T) {
 	origIsInteractive := widgets.IsInteractiveFn
