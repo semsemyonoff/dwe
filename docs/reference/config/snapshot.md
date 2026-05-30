@@ -391,4 +391,4 @@ When either lock is already held by another live process, the operation exits 75
 - `devbox snapshot unpack <tar-path> [--as=<name>] [--no-verify] [-y]`
 - `devbox validate snapshot [<name>] [--verify]`
 
-See [commands/types.md](commands/types.md#type-workflow) for the `WorkflowStep` shape reused by snapshot workflows, and [state.md](state.md) for the deploy state journal that snapshots back up alongside `devbox/local.yml`.
+See [commands/types.md](commands/types.md#type-workflow) for the `WorkflowStep` shape reused by snapshot workflows, and [state/index.md](state/index.md) for the deploy state journal that snapshots back up alongside `devbox/local.yml`.

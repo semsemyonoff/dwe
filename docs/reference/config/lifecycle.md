@@ -148,7 +148,7 @@ When the probe finds a dirty tree, no upstream, or a fetch failure it warns and 
 
 If any tracked service is not yet deployed, `devbox run` exits with an error: "run `devbox deploy run` first". This prevents running against a partially-initialized environment — bypassing the gate would just hand `docker compose up` a service whose volumes/configs/database have never been provisioned, and the run would fail almost immediately with an unrelated error. Always deploy first.
 
-For more details, see [state.md](state.md).
+For more details, see [state/index.md](state/index.md).
 
 ## `stop.final_message`
 

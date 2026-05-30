@@ -142,11 +142,11 @@ func runDocsTUI(cmd *cobra.Command, flags *cmdctx.RootFlags, termWidth, termHeig
 	// Banner: warn once at startup when mmdc is missing on $PATH (and the user
 	// hasn't explicitly disabled mermaid). Skipping the install entirely would
 	// leave users guessing why diagrams never render — the banner points them
-	// at the canonical install section in docs/reference/docs/index.md.
+	// at the canonical install section in docs/reference/docs/commands.md.
 	if mermaidMode != "off" && !mmdcAvailable(config.MmdcBin(cfg)) {
 		model.MmdcNotice = "> **⚠ `mmdc` not installed.** Mermaid diagrams cannot render. " +
 			"Install with `npm i -g @mermaid-js/mermaid-cli` — see " +
-			"`docs/reference/docs/index.md` § *Installing `mmdc`*.\n\n"
+			"`docs/reference/docs/commands.md` § *Installing `mmdc`*.\n\n"
 	}
 
 	// Run via widgets.RunWithPromptHooks for proper signal handling

@@ -199,7 +199,7 @@ Key behaviors:
 
 Use `devbox deploy state show` to inspect the journal, `devbox deploy state clear` to reset it, and `devbox deploy state repair` to fix corrupted aggregates.
 
-See [state.md](../state.md) for full details on hashing, skip decisions, and recovery from mid-deploy crashes.
+See [state/index.md](../state/index.md) for full details on hashing, skip decisions, and recovery from mid-deploy crashes.
 
 ## Pages
 

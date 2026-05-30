@@ -260,9 +260,9 @@ For phases that touch many files, order is: index file last (it links to everyth
 - Possibly create: `docs/reference/config/state/`, `config/i18n/`, `config/validate/`, `config/setup/`, `config/info/`, `docs/` subdir.
 - Possibly delete: corresponding single files.
 
-- [ ] for each candidate from the audit table with `Action: split`, perform the same six-step split workflow as Tasks 2.1-2.3
-- [ ] for each candidate marked `keep-as-is`, no action
-- [ ] `make build` exits 0 after all splits; `./bin/devbox docs list` enumerates the final tree
+- [x] for each candidate from the audit table with `Action: split`, perform the same six-step split workflow as Tasks 2.1-2.3
+- [x] for each candidate marked `keep-as-is`, no action
+- [x] `make build` exits 0 after all splits; `./bin/devbox docs list` enumerates the final tree
 
 ### Task 2.5: Verify all inbound links, update goldens, run validation gate
 
@@ -622,7 +622,7 @@ For phases that touch many files, order is: index file last (it links to everyth
 - [x] Task 2.1: split `config/commands.md`
 - [x] Task 2.2: split `config/deploy.md`
 - [x] Task 2.3: split `config/services.md`
-- [ ] Task 2.4: audit-driven splits
+- [x] Task 2.4: audit-driven splits
 - [ ] Task 2.5: inbound links + validation gate
 
 ### Phase 3 — Updates
