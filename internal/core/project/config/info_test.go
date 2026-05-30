@@ -925,4 +925,3 @@ func TestDefaultInfoConfig(t *testing.T) {
 		t.Error("Footer should be true")
 	}
 }
-

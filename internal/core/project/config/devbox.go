@@ -1149,7 +1149,7 @@ func LoadConfig(devboxPath string) (*DevboxConfig, error) {
 
 	// Reject tools: blocks — replaced by services with type:tool
 	if _, ok := merged["tools"]; ok {
-		return nil, fmt.Errorf("tools: no longer supported — define tool entries as services with type: tool in devbox/services/. See docs/reference/config/services.md")
+		return nil, fmt.Errorf("tools: no longer supported — define tool entries as services with type: tool in devbox/services/. See docs/reference/config/services/index.md")
 	}
 
 	// Load user-config for binary overrides. On error, log warning and continue

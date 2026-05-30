@@ -180,7 +180,7 @@ When auto-detection finds zero or multiple infra services with the target port, 
   include: [app, tool]
 ```
 
-Services contribute to `auto-urls` via their `info:` block in `service.yml` (see [services.md](services/index.md) for the schema). Each service may declare:
+Services contribute to `auto-urls` via their `info:` block in `service.yml` (see [services/index.md](services/index.md) for the schema). Each service may declare:
 - `title` — override the service header (defaults to title-cased folder name)
 - `primary_host` — which `hosts` entry to surface as the main URL (default: `web`)
 - `primary_port` — which `ports` entry to surface (default: `http`)

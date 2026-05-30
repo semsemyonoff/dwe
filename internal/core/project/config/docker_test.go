@@ -492,4 +492,3 @@ args:
 		t.Errorf("Down args = %v, want [--remove-orphans] (default applied)", dcfg.Args.Down)
 	}
 }
-

@@ -110,7 +110,7 @@ func RenderTopology(in StatusInput) string {
 }
 
 // buildServiceTemplateData prepares the template data map for a service row's
-// custom status columns. See docs/reference/config/services.md for the contract.
+// custom status columns. See docs/reference/config/services/fields.md for the contract.
 func buildServiceTemplateData(cfg *config.DevboxConfig, svc config.ServiceConfig) map[string]any {
 	return map[string]any{
 		"ServiceCfg": svc,

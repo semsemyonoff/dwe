@@ -958,4 +958,3 @@ func writeInfoYML(t *testing.T, content string) string {
 
 	return root
 }
-
