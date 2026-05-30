@@ -359,11 +359,11 @@ For phases that touch many files, order is: index file last (it links to everyth
 **Files:**
 - Create: `docs/reference/concepts/architecture.md`
 
-- [ ] write composition root (`cmd/devbox` → `cli/root` → cobra tree), layered structure (`cli/` → `core/` → `shared/`), single-binary delivery, embedded docs+i18n, no network during normal operation
-- [ ] add one mermaid `flowchart LR` showing layers + responsibilities
-- [ ] validate mermaid with `mermaid-syntax` skill
-- [ ] ≤ 400 lines
-- [ ] `make build` exits 0
+- [x] write composition root (`cmd/devbox` → `cli/root` → cobra tree), layered structure (`cli/` → `core/` → `shared/`), single-binary delivery, embedded docs+i18n, no network during normal operation
+- [x] add one mermaid `flowchart LR` showing layers + responsibilities
+- [x] validate mermaid with `mermaid-syntax` skill
+- [x] ≤ 400 lines (125 lines)
+- [x] `make build` exits 0
 
 ### Task 4.3: `concepts/project-layout.md`
 
