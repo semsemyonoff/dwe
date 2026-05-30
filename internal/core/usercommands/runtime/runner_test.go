@@ -75,3 +75,75 @@ func TestRunCommand_DefensiveInitRawCopy(t *testing.T) {
 		t.Fatalf("RunCommand returned unexpected error: %v", err)
 	}
 }
+
+// --- NewRunner factory dispatching ---
+
+func TestNewRunner_Returns_HostRunner(t *testing.T) {
+	cmd := &CommandDef{Type: CommandTypeShell}
+	runner, err := NewRunner(cmd)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if _, ok := runner.(*HostRunner); !ok {
+		t.Errorf("expected *HostRunner, got %T", runner)
+	}
+}
+
+func TestNewRunner_Returns_ServiceExecRunner(t *testing.T) {
+	cmd := &CommandDef{Type: CommandTypeServiceExec}
+	runner, err := NewRunner(cmd)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if _, ok := runner.(*ServiceExecRunner); !ok {
+		t.Errorf("expected *ServiceExecRunner, got %T", runner)
+	}
+}
+
+func TestNewRunner_Returns_ServiceRunRunner(t *testing.T) {
+	cmd := &CommandDef{Type: CommandTypeServiceRun}
+	runner, err := NewRunner(cmd)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if _, ok := runner.(*ServiceRunRunner); !ok {
+		t.Errorf("expected *ServiceRunRunner, got %T", runner)
+	}
+}
+
+func TestNewRunner_Returns_ScriptRunner(t *testing.T) {
+	cmd := &CommandDef{Type: CommandTypeScript}
+	runner, err := NewRunner(cmd)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if _, ok := runner.(*ScriptRunner); !ok {
+		t.Errorf("expected *ScriptRunner, got %T", runner)
+	}
+}
+
+func TestNewRunner_Returns_WorkflowRunner(t *testing.T) {
+	cmd := &CommandDef{Type: CommandTypeWorkflow}
+	runner, err := NewRunner(cmd)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if _, ok := runner.(*WorkflowRunner); !ok {
+		t.Errorf("expected *WorkflowRunner, got %T", runner)
+	}
+}
+
+func TestNewRunner_Unsupported_Type(t *testing.T) {
+	cmd := &CommandDef{Type: CommandType("unknown_type")}
+	_, err := NewRunner(cmd)
+	if err == nil {
+		t.Fatal("expected error for unknown type")
+	}
+	unsup, ok := err.(*ErrUnsupportedType)
+	if !ok {
+		t.Fatalf("expected *ErrUnsupportedType, got %T", err)
+	}
+	if unsup.Type != "unknown_type" {
+		t.Errorf("expected 'unknown_type' in error, got %q", unsup.Type)
+	}
+}

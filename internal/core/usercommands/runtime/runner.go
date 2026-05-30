@@ -12,6 +12,10 @@ import (
 	"devbox-cli/internal/core/notify"
 	"devbox-cli/internal/core/usercommands/model"
 	"devbox-cli/internal/core/usercommands/runtime/internal/runio"
+	"devbox-cli/internal/core/usercommands/runtime/runners/builtin"
+	"devbox-cli/internal/core/usercommands/runtime/runners/host"
+	"devbox-cli/internal/core/usercommands/runtime/runners/script"
+	"devbox-cli/internal/core/usercommands/runtime/runners/service"
 	"devbox-cli/internal/core/usercommands/runtime/spec"
 	"devbox-cli/internal/shared/render"
 	"devbox-cli/internal/shared/tpl"
@@ -30,24 +34,45 @@ type RunContext = spec.RunContext
 // Alias for spec.FileProbeResult.
 type FileProbeResult = spec.FileProbeResult
 
+// Concrete-runner type aliases. External callers
+// (`internal/core/usercommands/usercommands.go:138-144` chains them onto
+// `usercommands.HostRunner` etc.) continue to write `runtime.HostRunner`,
+// `runtime.WorkflowRunner`, … . Subpackage tests also resolve their own
+// concrete type from these aliases when needed.
+type (
+	// HostRunner runs type=shell commands on the host machine.
+	HostRunner = host.Runner
+	// DevboxRunner runs type=devbox commands by re-invoking the devbox CLI.
+	DevboxRunner = host.DevboxRunner
+	// ServiceExecRunner runs type=service commands via `docker compose exec`.
+	ServiceExecRunner = service.ExecRunner
+	// ServiceRunRunner runs type=service commands via `docker compose run --rm`.
+	ServiceRunRunner = service.RunRunner
+	// ScriptRunner runs type=script commands.
+	ScriptRunner = script.Runner
+	// BuiltinRunner runs type=builtin commands by dispatching to the engine
+	// builtin registry.
+	BuiltinRunner = builtin.Runner
+)
+
 // NewRunner returns the appropriate Runner implementation for the given command type.
 // An error is returned for unknown command types.
 func NewRunner(cmd *model.CommandDef) (Runner, error) {
 	switch cmd.Type {
 	case model.CommandTypeShell:
-		return &HostRunner{}, nil
+		return &host.Runner{}, nil
 	case model.CommandTypeDevbox:
-		return &DevboxRunner{}, nil
+		return &host.DevboxRunner{}, nil
 	case model.CommandTypeServiceExec:
-		return &ServiceExecRunner{}, nil
+		return &service.ExecRunner{}, nil
 	case model.CommandTypeServiceRun:
-		return &ServiceRunRunner{}, nil
+		return &service.RunRunner{}, nil
 	case model.CommandTypeScript:
-		return &ScriptRunner{}, nil
+		return &script.Runner{}, nil
 	case model.CommandTypeWorkflow:
 		return &WorkflowRunner{}, nil
 	case model.CommandTypeBuiltin:
-		return &BuiltinRunner{}, nil
+		return &builtin.Runner{}, nil
 	default:
 		return nil, &ErrUnsupportedType{Type: cmd.Type}
 	}

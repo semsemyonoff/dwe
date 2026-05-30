@@ -1,4 +1,4 @@
-package runtime
+package script
 
 import (
 	"bytes"
@@ -8,9 +8,28 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
-	"time"
 
+	"devbox-cli/internal/core/usercommands/model"
+	"devbox-cli/internal/core/usercommands/runtime/spec"
 	"devbox-cli/internal/shared/tpl"
+)
+
+// Local aliases keep the moved tests readable without rewriting every type
+// qualifier. The tests live in the same package as Runner so the original
+// `&Runner{}` form is renamed in-place to `&Runner{}`.
+type (
+	CommandDef    = model.CommandDef
+	RunContext    = spec.RunContext
+	ScriptDef     = model.ScriptDef
+	FileSpec      = model.FileSpec
+	FileCandidate = model.FileCandidate
+)
+
+const (
+	CommandTypeScript = model.CommandTypeScript
+	FileAccessRead    = model.FileAccessRead
+	FileAccessWrite   = model.FileAccessWrite
+	FileOnErrorRemove = model.FileOnErrorRemove
 )
 
 // writeScript writes content to a temporary file and returns its path.
@@ -23,13 +42,13 @@ func writeScript(t *testing.T, dir, name, content string) string {
 	return p
 }
 
-// captureOutput runs the ScriptRunner and captures stdout/stderr.
+// captureOutput runs the Runner and captures stdout/stderr.
 func captureOutput(t *testing.T, ctx RunContext) (string, string, error) {
 	t.Helper()
 	var outBuf, errBuf bytes.Buffer
 	ctx.Stdout = &outBuf
 	ctx.Stderr = &errBuf
-	r := &ScriptRunner{}
+	r := &Runner{}
 	err := r.Run(context.Background(), ctx)
 	return outBuf.String(), errBuf.String(), err
 }
@@ -38,7 +57,7 @@ func captureOutput(t *testing.T, ctx RunContext) (string, string, error) {
 // Contract env vars
 // ---------------------------------------------------------------------------
 
-func TestScriptRunner_ContractEnvVars(t *testing.T) {
+func TestRunner_ContractEnvVars(t *testing.T) {
 	dir := t.TempDir()
 	scriptPath := writeScript(t, dir, "check.sh", `
 env | grep -E '^DEVBOX_' | sort
@@ -79,7 +98,7 @@ env | grep -E '^DEVBOX_' | sort
 	}
 }
 
-func TestScriptRunner_ContractEnvVars_ParamsJSON(t *testing.T) {
+func TestRunner_ContractEnvVars_ParamsJSON(t *testing.T) {
 	dir := t.TempDir()
 	scriptPath := writeScript(t, dir, "params.sh", `printf '%s' "$DEVBOX_PARAMS_JSON"`)
 
@@ -109,7 +128,7 @@ func TestScriptRunner_ContractEnvVars_ParamsJSON(t *testing.T) {
 	}
 }
 
-func TestScriptRunner_ContractEnvVars_ContextJSON(t *testing.T) {
+func TestRunner_ContractEnvVars_ContextJSON(t *testing.T) {
 	dir := t.TempDir()
 	scriptPath := writeScript(t, dir, "ctx.sh", `printf '%s' "$DEVBOX_CONTEXT_JSON"`)
 
@@ -117,7 +136,7 @@ func TestScriptRunner_ContractEnvVars_ContextJSON(t *testing.T) {
 		Type:    CommandTypeScript,
 		ID:      "test.ctx",
 		Script:  &ScriptDef{Path: scriptPath},
-		Context: map[string]ContextDef{},
+		Context: map[string]model.ContextDef{},
 	}
 	ctx := RunContext{
 		Cmd:         cmd,
@@ -140,7 +159,7 @@ func TestScriptRunner_ContractEnvVars_ContextJSON(t *testing.T) {
 	}
 }
 
-func TestScriptRunner_ContractEnvVars_DevboxBin(t *testing.T) {
+func TestRunner_ContractEnvVars_DevboxBin(t *testing.T) {
 	dir := t.TempDir()
 	scriptPath := writeScript(t, dir, "bin.sh", `printf '%s' "$DEVBOX_BIN"`)
 
@@ -168,7 +187,7 @@ func TestScriptRunner_ContractEnvVars_DevboxBin(t *testing.T) {
 	}
 }
 
-func TestScriptRunner_ContractEnvVars_FilesJSON_Empty(t *testing.T) {
+func TestRunner_ContractEnvVars_FilesJSON_Empty(t *testing.T) {
 	dir := t.TempDir()
 	scriptPath := writeScript(t, dir, "files.sh", `printf '%s' "$DEVBOX_FILES_JSON"`)
 
@@ -197,7 +216,7 @@ func TestScriptRunner_ContractEnvVars_FilesJSON_Empty(t *testing.T) {
 	}
 }
 
-func TestScriptRunner_ContractEnvVars_FilesJSON_WithFiles(t *testing.T) {
+func TestRunner_ContractEnvVars_FilesJSON_WithFiles(t *testing.T) {
 	dir := t.TempDir()
 	scriptPath := writeScript(t, dir, "files.sh", `printf '%s' "$DEVBOX_FILES_JSON"`)
 
@@ -239,7 +258,7 @@ func TestScriptRunner_ContractEnvVars_FilesJSON_WithFiles(t *testing.T) {
 // Simple mode
 // ---------------------------------------------------------------------------
 
-func TestScriptRunner_SimpleMode(t *testing.T) {
+func TestRunner_SimpleMode(t *testing.T) {
 	dir := t.TempDir()
 	scriptPath := writeScript(t, dir, "simple.sh", `printf 'hello from simple'`)
 
@@ -263,7 +282,7 @@ func TestScriptRunner_SimpleMode(t *testing.T) {
 	}
 }
 
-func TestScriptRunner_SimpleMode_ScriptFails(t *testing.T) {
+func TestRunner_SimpleMode_ScriptFails(t *testing.T) {
 	dir := t.TempDir()
 	scriptPath := writeScript(t, dir, "fail.sh", `exit 42`)
 
@@ -288,7 +307,7 @@ func TestScriptRunner_SimpleMode_ScriptFails(t *testing.T) {
 // Phased mode
 // ---------------------------------------------------------------------------
 
-func TestScriptRunner_PhasedMode_AllPhases(t *testing.T) {
+func TestRunner_PhasedMode_AllPhases(t *testing.T) {
 	dir := t.TempDir()
 	logFile := filepath.Join(dir, "phases.log")
 
@@ -325,7 +344,7 @@ func TestScriptRunner_PhasedMode_AllPhases(t *testing.T) {
 	}
 }
 
-func TestScriptRunner_PhasedMode_CleanupRunsOnFailure(t *testing.T) {
+func TestRunner_PhasedMode_CleanupRunsOnFailure(t *testing.T) {
 	dir := t.TempDir()
 	logFile := filepath.Join(dir, "phases.log")
 
@@ -358,7 +377,7 @@ func TestScriptRunner_PhasedMode_CleanupRunsOnFailure(t *testing.T) {
 	}
 }
 
-func TestScriptRunner_PhasedMode_PlanFails_RunNotExecuted(t *testing.T) {
+func TestRunner_PhasedMode_PlanFails_RunNotExecuted(t *testing.T) {
 	dir := t.TempDir()
 	logFile := filepath.Join(dir, "phases.log")
 
@@ -395,7 +414,7 @@ func TestScriptRunner_PhasedMode_PlanFails_RunNotExecuted(t *testing.T) {
 // Shell override
 // ---------------------------------------------------------------------------
 
-func TestScriptRunner_ShellOverride(t *testing.T) {
+func TestRunner_ShellOverride(t *testing.T) {
 	// Use bash if available; otherwise skip.
 	if _, err := os.Stat("/bin/bash"); os.IsNotExist(err) {
 		t.Skip("bash not available")
@@ -427,7 +446,7 @@ func TestScriptRunner_ShellOverride(t *testing.T) {
 // DEVBOX_TEMP_DIR cleanup
 // ---------------------------------------------------------------------------
 
-func TestScriptRunner_TempDirCreatedAndCleaned(t *testing.T) {
+func TestRunner_TempDirCreatedAndCleaned(t *testing.T) {
 	dir := t.TempDir()
 	tmpCapture := filepath.Join(dir, "tmpdir.txt")
 
@@ -462,197 +481,10 @@ func TestScriptRunner_TempDirCreatedAndCleaned(t *testing.T) {
 }
 
 // ---------------------------------------------------------------------------
-// NewRunner dispatching
-// ---------------------------------------------------------------------------
-
-func TestNewRunner_Returns_ScriptRunner(t *testing.T) {
-	cmd := &CommandDef{Type: CommandTypeScript}
-	runner, err := NewRunner(cmd)
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
-	if _, ok := runner.(*ScriptRunner); !ok {
-		t.Errorf("expected *ScriptRunner, got %T", runner)
-	}
-}
-
-// ---------------------------------------------------------------------------
 // Files directive integration tests
 // ---------------------------------------------------------------------------
 
-func TestScriptRunner_FilesWrite_EnvInjection(t *testing.T) {
-	dir := t.TempDir()
-	// Script writes hello to the env var pointing to a file
-	scriptPath := writeScript(t, dir, "write.sh", `printf 'hello' > "$DUMP_FILE"`)
-
-	dumpDir := filepath.Join(dir, "dumps")
-	dumpFile := filepath.Join(dumpDir, "db.sql.gz")
-
-	cmd := &CommandDef{
-		Type:   CommandTypeScript,
-		ID:     "test.dump-write",
-		Script: &ScriptDef{Path: scriptPath},
-		Files: map[string]FileSpec{
-			"dump": {
-				Access:    FileAccessWrite,
-				Path:      filepath.Join(dumpDir, "db.sql.gz"),
-				Mkdir:     true,
-				Overwrite: true,
-				OnError:   FileOnErrorRemove,
-				Env:       "DUMP_FILE",
-			},
-		},
-	}
-
-	var outBuf, errBuf bytes.Buffer
-	ctx := RunContext{
-		Cmd:         cmd,
-		Render:      &tpl.RenderContext{Raw: map[string]any{}, Params: map[string]any{}, Context: map[string]any{}},
-		ProjectRoot: dir,
-		Stdout:      &outBuf,
-		Stderr:      &errBuf,
-	}
-
-	err := RunCommand(context.Background(), ctx)
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
-
-	// File should exist
-	data, err := os.ReadFile(dumpFile)
-	if err != nil {
-		t.Fatalf("dump file not created: %v", err)
-	}
-	if string(data) != "hello" {
-		t.Errorf("expected 'hello', got %q", string(data))
-	}
-}
-
-func TestScriptRunner_FilesRead_GlobMatchSort(t *testing.T) {
-	dir := t.TempDir()
-	dumpsDir := filepath.Join(dir, "dumps")
-	if err := os.MkdirAll(dumpsDir, 0o755); err != nil {
-		t.Fatalf("mkdir dumps: %v", err)
-	}
-
-	// Create multiple dated dump files with different modification times
-	files := []struct {
-		name string
-		time time.Time
-	}{
-		{"db_2026-04-27.sql.gz", time.Date(2026, 4, 27, 10, 0, 0, 0, time.Local)},
-		{"db_2026-04-28.sql.gz", time.Date(2026, 4, 28, 10, 0, 0, 0, time.Local)},
-		{"db_2026-04-29.sql.gz", time.Date(2026, 4, 29, 10, 0, 0, 0, time.Local)},
-	}
-	for _, f := range files {
-		path := filepath.Join(dumpsDir, f.name)
-		if err := os.WriteFile(path, []byte("dump data"), 0o644); err != nil {
-			t.Fatalf("write file %s: %v", f.name, err)
-		}
-		// Set modification time to match the date in the filename
-		if err := os.Chtimes(path, f.time, f.time); err != nil {
-			t.Fatalf("chtimes for %s: %v", f.name, err)
-		}
-	}
-
-	// Script reads from DUMP_FILE env var
-	scriptPath := writeScript(t, dir, "read.sh", `
-if [ -f "$DUMP_FILE" ]; then
-  basename "$DUMP_FILE"
-else
-  exit 1
-fi
-`)
-
-	cmd := &CommandDef{
-		Type:   CommandTypeScript,
-		ID:     "test.dump-read",
-		Script: &ScriptDef{Path: scriptPath},
-		Files: map[string]FileSpec{
-			"dump": {
-				Access: FileAccessRead,
-				Candidates: []FileCandidate{
-					{
-						Glob:  "dumps/db_*.sql.gz",
-						Match: `db_\d{4}-\d{2}-\d{2}`,
-						Sort:  FileSortModtimeDesc,
-					},
-				},
-				Required: true,
-				Env:      "DUMP_FILE",
-			},
-		},
-	}
-
-	var outBuf, errBuf bytes.Buffer
-	ctx := RunContext{
-		Cmd:         cmd,
-		Render:      &tpl.RenderContext{Raw: map[string]any{}, Params: map[string]any{}, Context: map[string]any{}},
-		ProjectRoot: dir,
-		Stdout:      &outBuf,
-		Stderr:      &errBuf,
-	}
-
-	err := RunCommand(context.Background(), ctx)
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
-
-	out := outBuf.String()
-	// The newest file (by modtime) should be selected; this is db_2026-04-29.sql.gz
-	if !strings.Contains(out, "db_2026-04-29.sql.gz") {
-		t.Errorf("expected newest file to be selected; got output: %q", out)
-	}
-}
-
-func TestScriptRunner_FilesOnError_RemovesFailed(t *testing.T) {
-	dir := t.TempDir()
-	dumpDir := filepath.Join(dir, "dumps")
-	dumpFile := filepath.Join(dumpDir, "db.sql.gz")
-
-	// Script fails after creating the file
-	scriptPath := writeScript(t, dir, "fail.sh", `
-touch "$DUMP_FILE"
-exit 1
-`)
-
-	cmd := &CommandDef{
-		Type:   CommandTypeScript,
-		ID:     "test.dump-fail",
-		Script: &ScriptDef{Path: scriptPath},
-		Files: map[string]FileSpec{
-			"dump": {
-				Access:    FileAccessWrite,
-				Path:      dumpFile,
-				Mkdir:     true,
-				Overwrite: true,
-				OnError:   FileOnErrorRemove,
-				Env:       "DUMP_FILE",
-			},
-		},
-	}
-
-	var outBuf, errBuf bytes.Buffer
-	ctx := RunContext{
-		Cmd:         cmd,
-		Render:      &tpl.RenderContext{Raw: map[string]any{}, Params: map[string]any{}, Context: map[string]any{}},
-		ProjectRoot: dir,
-		Stdout:      &outBuf,
-		Stderr:      &errBuf,
-	}
-
-	err := RunCommand(context.Background(), ctx)
-	if err == nil {
-		t.Fatal("expected error from failing script")
-	}
-
-	// File should have been removed by on_error cleanup
-	if _, err := os.Stat(dumpFile); !os.IsNotExist(err) {
-		t.Errorf("expected dump file to be removed on error; still exists")
-	}
-}
-
-func TestScriptRunner_ExitErrorIncludesScriptPath(t *testing.T) {
+func TestRunner_ExitErrorIncludesScriptPath(t *testing.T) {
 	dir := t.TempDir()
 	scriptPath := writeScript(t, dir, "missing-command.sh", `definitely-not-a-devbox-test-command`)
 
@@ -662,7 +494,7 @@ func TestScriptRunner_ExitErrorIncludesScriptPath(t *testing.T) {
 		Script: &ScriptDef{Path: scriptPath, Shell: "sh"},
 	}
 
-	err := (&ScriptRunner{}).Run(context.Background(), RunContext{
+	err := (&Runner{}).Run(context.Background(), RunContext{
 		Cmd:         cmd,
 		Render:      &tpl.RenderContext{Raw: map[string]any{}, Params: map[string]any{}, Context: map[string]any{}},
 		ProjectRoot: dir,
@@ -680,62 +512,7 @@ func TestScriptRunner_ExitErrorIncludesScriptPath(t *testing.T) {
 	}
 }
 
-func TestScriptRunner_FilesOnError_PreservesExisting(t *testing.T) {
-	dir := t.TempDir()
-	dumpDir := filepath.Join(dir, "dumps")
-	dumpFile := filepath.Join(dumpDir, "db.sql.gz")
-
-	// Pre-create the file
-	if err := os.MkdirAll(dumpDir, 0o755); err != nil {
-		t.Fatalf("mkdir: %v", err)
-	}
-	if err := os.WriteFile(dumpFile, []byte("existing data"), 0o644); err != nil {
-		t.Fatalf("write existing file: %v", err)
-	}
-
-	// Script fails
-	scriptPath := writeScript(t, dir, "fail.sh", `exit 1`)
-
-	cmd := &CommandDef{
-		Type:   CommandTypeScript,
-		ID:     "test.dump-fail-existing",
-		Script: &ScriptDef{Path: scriptPath},
-		Files: map[string]FileSpec{
-			"dump": {
-				Access:    FileAccessWrite,
-				Path:      dumpFile,
-				Overwrite: true,
-				OnError:   FileOnErrorRemove,
-				Env:       "DUMP_FILE",
-			},
-		},
-	}
-
-	var outBuf, errBuf bytes.Buffer
-	ctx := RunContext{
-		Cmd:         cmd,
-		Render:      &tpl.RenderContext{Raw: map[string]any{}, Params: map[string]any{}, Context: map[string]any{}},
-		ProjectRoot: dir,
-		Stdout:      &outBuf,
-		Stderr:      &errBuf,
-	}
-
-	err := RunCommand(context.Background(), ctx)
-	if err == nil {
-		t.Fatal("expected error from failing script")
-	}
-
-	// File should still exist (pre-existing, not removed)
-	data, err := os.ReadFile(dumpFile)
-	if err != nil {
-		t.Fatalf("expected file to be preserved; got error: %v", err)
-	}
-	if string(data) != "existing data" {
-		t.Errorf("expected 'existing data'; got %q", string(data))
-	}
-}
-
-func TestScriptRunner_ContractEnvVars_NonInteractiveContext(t *testing.T) {
+func TestRunner_ContractEnvVars_NonInteractiveContext(t *testing.T) {
 	dir := t.TempDir()
 	scriptPath := writeScript(t, dir, "nonint.sh", `printf '%s' "$DEVBOX_NONINTERACTIVE"`)
 
@@ -765,7 +542,7 @@ func TestScriptRunner_ContractEnvVars_NonInteractiveContext(t *testing.T) {
 // Workdir support
 // ---------------------------------------------------------------------------
 
-func TestScriptRunner_Workdir_AbsolutePath(t *testing.T) {
+func TestRunner_Workdir_AbsolutePath(t *testing.T) {
 	projectRoot := t.TempDir()
 	workdirAbs := t.TempDir()
 
@@ -799,7 +576,7 @@ func TestScriptRunner_Workdir_AbsolutePath(t *testing.T) {
 	}
 }
 
-func TestScriptRunner_Workdir_RelativePath(t *testing.T) {
+func TestRunner_Workdir_RelativePath(t *testing.T) {
 	projectRoot := t.TempDir()
 	subdir := filepath.Join(projectRoot, "subdir")
 	if err := os.Mkdir(subdir, 0o755); err != nil {
@@ -833,7 +610,7 @@ func TestScriptRunner_Workdir_RelativePath(t *testing.T) {
 	}
 }
 
-func TestScriptRunner_Workdir_ScriptPathIsProjectRootRelative(t *testing.T) {
+func TestRunner_Workdir_ScriptPathIsProjectRootRelative(t *testing.T) {
 	projectRoot := t.TempDir()
 	workdirAbs := t.TempDir()
 
@@ -884,7 +661,7 @@ func TestScriptRunner_Workdir_ScriptPathIsProjectRootRelative(t *testing.T) {
 	}
 }
 
-func TestScriptRunner_Workdir_TemplateRendering(t *testing.T) {
+func TestRunner_Workdir_TemplateRendering(t *testing.T) {
 	projectRoot := t.TempDir()
 	subdir := filepath.Join(projectRoot, "mydir")
 	if err := os.Mkdir(subdir, 0o755); err != nil {
@@ -921,7 +698,7 @@ func TestScriptRunner_Workdir_TemplateRendering(t *testing.T) {
 	}
 }
 
-func TestScriptRunner_Workdir_RenderError(t *testing.T) {
+func TestRunner_Workdir_RenderError(t *testing.T) {
 	projectRoot := t.TempDir()
 	scriptPath := writeScript(t, projectRoot, "check_pwd.sh", `pwd`)
 
@@ -951,7 +728,7 @@ func TestScriptRunner_Workdir_RenderError(t *testing.T) {
 	}
 }
 
-func TestScriptRunner_Workdir_Empty_FallsBackToProjectRoot(t *testing.T) {
+func TestRunner_Workdir_Empty_FallsBackToProjectRoot(t *testing.T) {
 	projectRoot := t.TempDir()
 	scriptPath := writeScript(t, projectRoot, "check_pwd.sh", `pwd`)
 

@@ -16,7 +16,7 @@ import (
 
 // runConfirmStep handles a confirm step.
 func (r *WorkflowRunner) runConfirmStep(ctx RunContext, message string) error {
-	if ctx.SkipConfirm || ctx.NonInteractive || isNonInteractive() {
+	if ctx.SkipConfirm || ctx.NonInteractive || runio.IsNonInteractive() {
 		return nil
 	}
 
@@ -118,13 +118,6 @@ func (r *WorkflowRunner) runCommandStep(ctx context.Context, rc RunContext, step
 	}
 
 	return nil
-}
-
-// isNonInteractive returns true when the DEVBOX_NONINTERACTIVE environment
-// variable is set to "1" or "true".
-func isNonInteractive() bool {
-	v := os.Getenv("DEVBOX_NONINTERACTIVE")
-	return v == "1" || v == "true"
 }
 
 // evalWorkflowStepWhen evaluates a workflow sub-step's `when:` expression.

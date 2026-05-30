@@ -308,21 +308,6 @@ func TestWorkflowRunner_MissingCommandRef_Error(t *testing.T) {
 }
 
 // ---------------------------------------------------------------------------
-// NewRunner dispatching
-// ---------------------------------------------------------------------------
-
-func TestNewRunner_Returns_WorkflowRunner(t *testing.T) {
-	cmd := &CommandDef{Type: CommandTypeWorkflow}
-	runner, err := NewRunner(cmd)
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
-	if _, ok := runner.(*WorkflowRunner); !ok {
-		t.Errorf("expected *WorkflowRunner, got %T", runner)
-	}
-}
-
-// ---------------------------------------------------------------------------
 // Confirm step — TTY path (huh wrapper)
 // ---------------------------------------------------------------------------
 

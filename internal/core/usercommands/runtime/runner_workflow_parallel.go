@@ -76,7 +76,7 @@ func (r *WorkflowRunner) runParallelGroup(parentCtx context.Context, rc RunConte
 		whenDecisions[i] = subDecision{skip: !ok, err: err}
 	}
 
-	if !rc.SkipConfirm && !rc.NonInteractive && !isNonInteractive() {
+	if !rc.SkipConfirm && !rc.NonInteractive && !runio.IsNonInteractive() {
 		for i, sub := range group.Steps {
 			d := whenDecisions[i]
 			if d.err != nil || d.skip {

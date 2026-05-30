@@ -1,24 +1,31 @@
-package runtime
+// Package builtin implements the runtime runner for type=builtin commands,
+// which dispatch to an engine-internal builtin action by name.
+//
+// The engine builtin registry lives in `internal/core/execution/builtin`; it
+// is imported here as `engbuiltin` to avoid colliding with this package's own
+// name.
+package builtin
 
 import (
 	"context"
 	"fmt"
 	"os"
 
-	"devbox-cli/internal/core/execution/builtin"
+	engbuiltin "devbox-cli/internal/core/execution/builtin"
 	"devbox-cli/internal/core/usercommands/runtime/internal/runio"
+	"devbox-cli/internal/core/usercommands/runtime/spec"
 	"devbox-cli/internal/shared/render"
 	"devbox-cli/internal/shared/tpl"
 )
 
-// BuiltinRunner executes type=builtin commands by invoking an engine-internal
+// Runner executes type=builtin commands by invoking an engine-internal
 // builtin action by name. The command's cmd: field holds the builtin name and
 // with: holds its parameters. String values inside with: are rendered against
 // the command template context so callers can use ${...} / {{ }} expressions.
-type BuiltinRunner struct{}
+type Runner struct{}
 
 // Run dispatches the builtin and surfaces any validation or execution error.
-func (r *BuiltinRunner) Run(ctx context.Context, rc RunContext) error {
+func (b *Runner) Run(ctx context.Context, rc spec.RunContext) error {
 	name := rc.Cmd.Cmd
 	if name == "" {
 		return fmt.Errorf("builtin: cmd (builtin name) is empty")
@@ -37,21 +44,21 @@ func (r *BuiltinRunner) Run(ctx context.Context, rc RunContext) error {
 	// parallel regardless of -y. The guard runs before Validate so the
 	// surfaced error is the architectural reason, not a downstream
 	// missing-field complaint.
-	if rc.UnderParallel && builtin.IsInteractive(name) {
-		skipOK := name == "confirm" && (rc.SkipConfirm || rc.NonInteractive || isNonInteractive())
+	if rc.UnderParallel && engbuiltin.IsInteractive(name) {
+		skipOK := name == "confirm" && (rc.SkipConfirm || rc.NonInteractive || runio.IsNonInteractive())
 		if !skipOK {
-			return fmt.Errorf("%w: builtin %s in command %q", ErrConfirmInsideParallel, name, rc.Cmd.ID)
+			return fmt.Errorf("%w: builtin %s in command %q", spec.ErrConfirmInsideParallel, name, rc.Cmd.ID)
 		}
 	}
 
 	// Daemon-generated virtual commands (.start, .logs, .stop) invoke KindInternal
 	// builtins and are NOT user-authored YAML — they are expanded from type: daemon.
-	callerCtx := builtin.CtxUserYAML
+	callerCtx := engbuiltin.CtxUserYAML
 	if rc.Cmd.DerivedFromDaemon != "" && rc.Cmd.SourceDaemon != nil {
-		callerCtx = builtin.CtxInternal
+		callerCtx = engbuiltin.CtxInternal
 	}
 
-	if err := builtin.Validate(name, with, callerCtx); err != nil {
+	if err := engbuiltin.Validate(name, with, callerCtx); err != nil {
 		return fmt.Errorf("builtin %q: %w", name, err)
 	}
 
@@ -60,15 +67,15 @@ func (r *BuiltinRunner) Run(ctx context.Context, rc RunContext) error {
 		stdin = f
 	}
 
-	execCtx := builtin.ExecContext{
+	execCtx := engbuiltin.ExecContext{
 		Config:       rc.Config,
 		DockerConfig: rc.DockerConfig,
 		ProjectRoot:  rc.ProjectRoot,
 		Output:       render.NewWriter(runio.StdoutOf(rc)),
 		Stdin:        stdin,
-		SkipConfirm:  rc.SkipConfirm || rc.NonInteractive || isNonInteractive(),
+		SkipConfirm:  rc.SkipConfirm || rc.NonInteractive || runio.IsNonInteractive(),
 	}
-	return builtin.Run(ctx, name, with, execCtx, callerCtx)
+	return engbuiltin.Run(ctx, name, with, execCtx, callerCtx)
 }
 
 // renderBuiltinWith walks the with map and renders any string values via the

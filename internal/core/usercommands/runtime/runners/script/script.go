@@ -1,4 +1,8 @@
-package runtime
+// Package script implements the runtime runner for type=script commands.
+// A Runner executes one (simple mode) or up to three (plan/run/cleanup phased
+// mode) script files with a stable DEVBOX_* contract env injected into each
+// child shell.
+package script
 
 import (
 	"context"
@@ -10,10 +14,11 @@ import (
 	"strings"
 
 	"devbox-cli/internal/core/usercommands/runtime/internal/runio"
+	"devbox-cli/internal/core/usercommands/runtime/spec"
 	"devbox-cli/internal/shared/tpl"
 )
 
-// ScriptRunner executes type=script commands by running one or more script files.
+// Runner executes type=script commands by running one or more script files.
 //
 // Two modes are supported:
 //   - Simple mode: script.path is set — a single script file is executed.
@@ -30,16 +35,16 @@ import (
 //	DEVBOX_CONTEXT_JSON    resolved context values as a JSON object
 //	DEVBOX_BIN             absolute path to the devbox executable
 //	DEVBOX_FILES_JSON      JSON object mapping file IDs to resolved paths
-type ScriptRunner struct{}
+type Runner struct{}
 
 // Run executes the script command described by rc.
-func (r *ScriptRunner) Run(ctx context.Context, rc RunContext) error {
-	s := rc.Cmd.Script
-	if s == nil {
+func (s *Runner) Run(ctx context.Context, rc spec.RunContext) error {
+	sd := rc.Cmd.Script
+	if sd == nil {
 		return fmt.Errorf("script runner: script block is nil")
 	}
 
-	shell := s.Shell
+	shell := sd.Shell
 	if shell == "" {
 		shell = "sh"
 	}
@@ -50,25 +55,25 @@ func (r *ScriptRunner) Run(ctx context.Context, rc RunContext) error {
 	}
 	defer os.RemoveAll(tmpDir) //nolint:errcheck
 
-	contractEnv, err := r.buildContractEnv(rc, tmpDir)
+	contractEnv, err := s.buildContractEnv(rc, tmpDir)
 	if err != nil {
 		return err
 	}
 
-	if s.Path != "" {
-		return r.execScript(ctx, rc, shell, s.Path, contractEnv)
+	if sd.Path != "" {
+		return s.execScript(ctx, rc, shell, sd.Path, contractEnv)
 	}
 
-	if s.Plan != "" {
-		if err := r.execScript(ctx, rc, shell, s.Plan, contractEnv); err != nil {
+	if sd.Plan != "" {
+		if err := s.execScript(ctx, rc, shell, sd.Plan, contractEnv); err != nil {
 			return fmt.Errorf("script plan phase: %w", err)
 		}
 	}
 
-	runErr := r.execScript(ctx, rc, shell, s.Run, contractEnv)
+	runErr := s.execScript(ctx, rc, shell, sd.Run, contractEnv)
 
-	if s.Cleanup != "" {
-		if cleanErr := r.execScript(ctx, rc, shell, s.Cleanup, contractEnv); cleanErr != nil {
+	if sd.Cleanup != "" {
+		if cleanErr := s.execScript(ctx, rc, shell, sd.Cleanup, contractEnv); cleanErr != nil {
 			_, _ = fmt.Fprintf(runio.StderrOf(rc), "script runner: cleanup phase error: %v\n", cleanErr)
 		}
 	}
@@ -77,7 +82,7 @@ func (r *ScriptRunner) Run(ctx context.Context, rc RunContext) error {
 }
 
 // buildContractEnv constructs the slice of NAME=VALUE contract env vars.
-func (r *ScriptRunner) buildContractEnv(ctx RunContext, tmpDir string) ([]string, error) {
+func (s *Runner) buildContractEnv(ctx spec.RunContext, tmpDir string) ([]string, error) {
 	root := ctx.ProjectRoot
 	if root == "" {
 		wd, err := os.Getwd()
@@ -148,7 +153,7 @@ func (r *ScriptRunner) buildContractEnv(ctx RunContext, tmpDir string) ([]string
 
 // execScript runs a single script file using the given shell interpreter.
 // Note: script.path is always resolved against rc.ProjectRoot, not against workdir.
-func (r *ScriptRunner) execScript(ctx context.Context, rc RunContext, shell, scriptPath string, contractEnv []string) error {
+func (s *Runner) execScript(ctx context.Context, rc spec.RunContext, shell, scriptPath string, contractEnv []string) error {
 	if !filepath.IsAbs(scriptPath) && rc.ProjectRoot != "" {
 		scriptPath = filepath.Join(rc.ProjectRoot, scriptPath)
 	}
@@ -164,7 +169,7 @@ func (r *ScriptRunner) execScript(ctx context.Context, rc RunContext, shell, scr
 	}
 
 	c := exec.CommandContext(ctx, shell, scriptPath) //nolint:gosec
-	bindCancel(c)
+	runio.BindCancel(c)
 
 	workdir := rc.ProjectRoot
 	if rc.Cmd != nil && rc.Cmd.Workdir != "" {
@@ -192,7 +197,7 @@ func (r *ScriptRunner) execScript(ctx context.Context, rc RunContext, shell, scr
 		c.Env = append(c.Env, k+"="+v)
 	}
 	c.Env = append(c.Env, contractEnv...)
-	for _, kv := range parallelColorForceEnv(rc) {
+	for _, kv := range runio.ParallelColorForceEnv(rc) {
 		if eq := strings.IndexByte(kv, '='); eq > 0 {
 			if _, exists := envMap[kv[:eq]]; !exists {
 				c.Env = append(c.Env, kv)

@@ -11,6 +11,7 @@ import (
 	"github.com/charmbracelet/x/term"
 
 	"devbox-cli/internal/core/usercommands/runtime/internal/runio"
+	"devbox-cli/internal/core/usercommands/runtime/spec"
 	"devbox-cli/internal/shared/liveui"
 	"devbox-cli/internal/shared/tpl"
 )
@@ -44,10 +45,9 @@ var newWorkflowParallelLiveLine = func(workflowID string) *liveui.LiveLine {
 var ErrWorkflowNestedParallel = errors.New("nested workflow parallel block is not supported in v1")
 
 // ErrConfirmInsideParallel is returned when an interactive confirmation is
-// reached inside a parallel group. Preflight catches direct cases; this
-// sentinel catches transitive cases (workflow containing a confirm step or
-// referencing a confirmation: true command from within a parallel sub-step).
-var ErrConfirmInsideParallel = errors.New("interactive confirmation is not allowed inside a parallel group")
+// reached inside a parallel group. Aliased from spec/ so external callers
+// continue to test against runtime.ErrConfirmInsideParallel.
+var ErrConfirmInsideParallel = spec.ErrConfirmInsideParallel
 
 // WorkflowRunner executes type=workflow commands by running each step in sequence.
 //

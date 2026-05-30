@@ -1,4 +1,4 @@
-package runtime
+package service
 
 import (
 	"context"
@@ -6,8 +6,30 @@ import (
 	"testing"
 
 	"devbox-cli/internal/core/project/config"
+	"devbox-cli/internal/core/usercommands/model"
+	"devbox-cli/internal/core/usercommands/runtime/spec"
 	"devbox-cli/internal/shared/docker"
 	"devbox-cli/internal/shared/tpl"
+)
+
+// Local aliases keep the moved tests readable without rewriting every type
+// qualifier.
+type (
+	CommandDef = model.CommandDef
+	RunContext = spec.RunContext
+	UserMode   = model.UserMode
+	ExecMode   = model.ExecMode
+	RunnerDef  = model.RunnerDef
+)
+
+const (
+	CommandTypeServiceExec = model.CommandTypeServiceExec
+	CommandTypeServiceRun  = model.CommandTypeServiceRun
+	ExecModeExec           = model.ExecModeExec
+	ExecModeRun            = model.ExecModeRun
+	UserModeCurrent        = model.UserModeCurrent
+	UserModeInternal       = model.UserModeInternal
+	UserModeRoot           = model.UserModeRoot
 )
 
 // testCompose returns a minimal *docker.Compose for use in tests.
@@ -54,9 +76,9 @@ func makeServiceExecCtx(svc string, user UserMode, workdir string, mode ExecMode
 	}
 }
 
-func TestServiceExecRunner_BuildCommand_ExecMode(t *testing.T) {
+func TestExecRunner_BuildCommand_ExecMode(t *testing.T) {
 	ctx := makeServiceExecCtx("app-main", "", "", ExecModeExec, "php artisan list", nil)
-	r := &ServiceExecRunner{}
+	r := &ExecRunner{}
 	c, err := r.BuildCommand(context.Background(), ctx, testCompose("devbox-laravel", nil))
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
@@ -73,9 +95,9 @@ func TestServiceExecRunner_BuildCommand_ExecMode(t *testing.T) {
 	}
 }
 
-func TestServiceExecRunner_BuildCommand_RunMode(t *testing.T) {
+func TestExecRunner_BuildCommand_RunMode(t *testing.T) {
 	ctx := makeServiceExecCtx("app-main", "", "", ExecModeRun, "php artisan migrate", nil)
-	r := &ServiceExecRunner{}
+	r := &ExecRunner{}
 	c, err := r.BuildCommand(context.Background(), ctx, testCompose("devbox-laravel", nil))
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
@@ -92,9 +114,9 @@ func TestServiceExecRunner_BuildCommand_RunMode(t *testing.T) {
 	}
 }
 
-func TestServiceExecRunner_BuildCommand_UserRoot(t *testing.T) {
+func TestExecRunner_BuildCommand_UserRoot(t *testing.T) {
 	ctx := makeServiceExecCtx("app-main", UserModeRoot, "", ExecModeExec, "id", nil)
-	r := &ServiceExecRunner{}
+	r := &ExecRunner{}
 	c, err := r.BuildCommand(context.Background(), ctx, testCompose("devbox-laravel", nil))
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
@@ -105,13 +127,13 @@ func TestServiceExecRunner_BuildCommand_UserRoot(t *testing.T) {
 	}
 }
 
-func TestServiceExecRunner_BuildCommand_UserInternalSkipsFlag(t *testing.T) {
+func TestExecRunner_BuildCommand_UserInternalSkipsFlag(t *testing.T) {
 	// user: internal should never emit --user, even if cli.user is set.
 	ctx := makeServiceExecCtx("app-main", UserModeInternal, "", ExecModeExec, "id", nil)
 	ctx.Config.Services = map[string]config.ServiceConfig{
 		"main": {Container: "app-main", CLI: config.ServiceCLIConfig{User: "www-data"}},
 	}
-	r := &ServiceExecRunner{}
+	r := &ExecRunner{}
 	c, err := r.BuildCommand(context.Background(), ctx, testCompose("devbox-laravel", nil))
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
@@ -122,13 +144,13 @@ func TestServiceExecRunner_BuildCommand_UserInternalSkipsFlag(t *testing.T) {
 	}
 }
 
-func TestServiceExecRunner_BuildCommand_EmptyUserFallsBackToCLIUser(t *testing.T) {
+func TestExecRunner_BuildCommand_EmptyUserFallsBackToCLIUser(t *testing.T) {
 	// When user is omitted, services.<svc>.cli.user is used as the default.
 	ctx := makeServiceExecCtx("app-main", "", "", ExecModeExec, "id", nil)
 	ctx.Config.Services = map[string]config.ServiceConfig{
 		"main": {Container: "app-main", CLI: config.ServiceCLIConfig{User: "www-data"}},
 	}
-	r := &ServiceExecRunner{}
+	r := &ExecRunner{}
 	c, err := r.BuildCommand(context.Background(), ctx, testCompose("devbox-laravel", nil))
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
@@ -139,13 +161,13 @@ func TestServiceExecRunner_BuildCommand_EmptyUserFallsBackToCLIUser(t *testing.T
 	}
 }
 
-func TestServiceExecRunner_BuildCommand_EmptyUserNoCLIUserSkipsFlag(t *testing.T) {
+func TestExecRunner_BuildCommand_EmptyUserNoCLIUserSkipsFlag(t *testing.T) {
 	// When user is omitted and cli.user is also empty, no --user flag is added.
 	ctx := makeServiceExecCtx("app-main", "", "", ExecModeExec, "id", nil)
 	ctx.Config.Services = map[string]config.ServiceConfig{
 		"main": {Container: "app-main"},
 	}
-	r := &ServiceExecRunner{}
+	r := &ExecRunner{}
 	c, err := r.BuildCommand(context.Background(), ctx, testCompose("devbox-laravel", nil))
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
@@ -156,13 +178,13 @@ func TestServiceExecRunner_BuildCommand_EmptyUserNoCLIUserSkipsFlag(t *testing.T
 	}
 }
 
-func TestServiceExecRunner_BuildCommand_ExplicitUserOverridesCLIUser(t *testing.T) {
+func TestExecRunner_BuildCommand_ExplicitUserOverridesCLIUser(t *testing.T) {
 	// An explicit user: at the top level wins over cli.user fallback.
 	ctx := makeServiceExecCtx("app-main", UserModeRoot, "", ExecModeExec, "id", nil)
 	ctx.Config.Services = map[string]config.ServiceConfig{
 		"main": {Container: "app-main", CLI: config.ServiceCLIConfig{User: "www-data"}},
 	}
-	r := &ServiceExecRunner{}
+	r := &ExecRunner{}
 	c, err := r.BuildCommand(context.Background(), ctx, testCompose("devbox-laravel", nil))
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
@@ -176,7 +198,7 @@ func TestServiceExecRunner_BuildCommand_ExplicitUserOverridesCLIUser(t *testing.
 	}
 }
 
-func TestServiceExecRunner_BuildCommand_RunnerServiceUsesItsOwnCLIUser(t *testing.T) {
+func TestExecRunner_BuildCommand_RunnerServiceUsesItsOwnCLIUser(t *testing.T) {
 	// runner.service redirects to a different service; cli.user fallback
 	// should resolve against that redirected service, not the original.
 	ctx := RunContext{
@@ -200,7 +222,7 @@ func TestServiceExecRunner_BuildCommand_RunnerServiceUsesItsOwnCLIUser(t *testin
 		Params:  map[string]any{},
 		Context: map[string]any{},
 	}
-	r := &ServiceExecRunner{}
+	r := &ExecRunner{}
 	c, err := r.BuildCommand(context.Background(), ctx, testCompose("devbox-laravel", nil))
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
@@ -214,9 +236,9 @@ func TestServiceExecRunner_BuildCommand_RunnerServiceUsesItsOwnCLIUser(t *testin
 	}
 }
 
-func TestServiceExecRunner_BuildCommand_UserCurrent(t *testing.T) {
+func TestExecRunner_BuildCommand_UserCurrent(t *testing.T) {
 	ctx := makeServiceExecCtx("app-main", UserModeCurrent, "", ExecModeExec, "id", nil)
-	r := &ServiceExecRunner{}
+	r := &ExecRunner{}
 	c, err := r.BuildCommand(context.Background(), ctx, testCompose("devbox-laravel", nil))
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
@@ -227,9 +249,9 @@ func TestServiceExecRunner_BuildCommand_UserCurrent(t *testing.T) {
 	}
 }
 
-func TestServiceExecRunner_BuildCommand_Workdir(t *testing.T) {
+func TestExecRunner_BuildCommand_Workdir(t *testing.T) {
 	ctx := makeServiceExecCtx("app-main", "", "/var/www", ExecModeExec, "ls", nil)
-	r := &ServiceExecRunner{}
+	r := &ExecRunner{}
 	c, err := r.BuildCommand(context.Background(), ctx, testCompose("devbox-laravel", nil))
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
@@ -240,9 +262,9 @@ func TestServiceExecRunner_BuildCommand_Workdir(t *testing.T) {
 	}
 }
 
-func TestServiceExecRunner_BuildCommand_Argv(t *testing.T) {
+func TestExecRunner_BuildCommand_Argv(t *testing.T) {
 	ctx := makeServiceExecCtx("app-main", "", "", ExecModeExec, "", []string{"php", "artisan", "list"})
-	r := &ServiceExecRunner{}
+	r := &ExecRunner{}
 	c, err := r.BuildCommand(context.Background(), ctx, testCompose("devbox-laravel", nil))
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
@@ -253,9 +275,9 @@ func TestServiceExecRunner_BuildCommand_Argv(t *testing.T) {
 	}
 }
 
-func TestServiceExecRunner_BuildCommand_ProjectFlag(t *testing.T) {
+func TestExecRunner_BuildCommand_ProjectFlag(t *testing.T) {
 	ctx := makeServiceExecCtx("app-main", "", "", ExecModeExec, "ls", nil)
-	r := &ServiceExecRunner{}
+	r := &ExecRunner{}
 	c, err := r.BuildCommand(context.Background(), ctx, testCompose("devbox-laravel", nil))
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
@@ -266,7 +288,7 @@ func TestServiceExecRunner_BuildCommand_ProjectFlag(t *testing.T) {
 	}
 }
 
-func TestServiceRunRunner_BuildCommand_AlwaysRun(t *testing.T) {
+func TestRunRunner_BuildCommand_AlwaysRun(t *testing.T) {
 	ctx := RunContext{
 		Cmd: &CommandDef{
 			Type:    CommandTypeServiceRun,
@@ -278,7 +300,7 @@ func TestServiceRunRunner_BuildCommand_AlwaysRun(t *testing.T) {
 		Params:  map[string]any{},
 		Context: map[string]any{},
 	}
-	r := &ServiceRunRunner{}
+	r := &RunRunner{}
 	c, err := r.BuildCommand(context.Background(), ctx, testCompose("devbox-laravel", nil))
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
@@ -288,11 +310,11 @@ func TestServiceRunRunner_BuildCommand_AlwaysRun(t *testing.T) {
 		t.Errorf("expected 'run --rm --no-deps --entrypoint', got: %s", args)
 	}
 	if strings.Contains(args, " exec ") {
-		t.Errorf("ServiceRunRunner must not use exec, got: %s", args)
+		t.Errorf("RunRunner must not use exec, got: %s", args)
 	}
 }
 
-func TestServiceExecRunner_BuildCommand_RunnerOverride(t *testing.T) {
+func TestExecRunner_BuildCommand_RunnerOverride(t *testing.T) {
 	ctx := RunContext{
 		Cmd: &CommandDef{
 			Type:    CommandTypeServiceExec,
@@ -311,7 +333,7 @@ func TestServiceExecRunner_BuildCommand_RunnerOverride(t *testing.T) {
 		Params:  map[string]any{},
 		Context: map[string]any{},
 	}
-	r := &ServiceExecRunner{}
+	r := &ExecRunner{}
 	c, err := r.BuildCommand(context.Background(), ctx, testCompose("devbox-laravel", nil))
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
@@ -326,7 +348,7 @@ func TestServiceExecRunner_BuildCommand_RunnerOverride(t *testing.T) {
 	}
 }
 
-func TestServiceExecRunner_BuildCommand_WorkdirFrom(t *testing.T) {
+func TestExecRunner_BuildCommand_WorkdirFrom(t *testing.T) {
 	ctx := RunContext{
 		Cmd: &CommandDef{
 			Type:        CommandTypeServiceExec,
@@ -349,7 +371,7 @@ func TestServiceExecRunner_BuildCommand_WorkdirFrom(t *testing.T) {
 		Params:  map[string]any{},
 		Context: map[string]any{},
 	}
-	r := &ServiceExecRunner{}
+	r := &ExecRunner{}
 	c, err := r.BuildCommand(context.Background(), ctx, testCompose("devbox-laravel", nil))
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
@@ -360,7 +382,7 @@ func TestServiceExecRunner_BuildCommand_WorkdirFrom(t *testing.T) {
 	}
 }
 
-func TestServiceExecRunner_BuildCommand_WorkdirFromWinsOverLiteral(t *testing.T) {
+func TestExecRunner_BuildCommand_WorkdirFromWinsOverLiteral(t *testing.T) {
 	// When both workdir and workdir_from are set, the config-driven path wins.
 	ctx := RunContext{
 		Cmd: &CommandDef{
@@ -383,7 +405,7 @@ func TestServiceExecRunner_BuildCommand_WorkdirFromWinsOverLiteral(t *testing.T)
 		Params:  map[string]any{},
 		Context: map[string]any{},
 	}
-	r := &ServiceExecRunner{}
+	r := &ExecRunner{}
 	c, err := r.BuildCommand(context.Background(), ctx, testCompose("devbox-laravel", nil))
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
@@ -397,7 +419,7 @@ func TestServiceExecRunner_BuildCommand_WorkdirFromWinsOverLiteral(t *testing.T)
 	}
 }
 
-func TestServiceExecRunner_BuildCommand_WorkdirFromMissingFallsBackToLiteral(t *testing.T) {
+func TestExecRunner_BuildCommand_WorkdirFromMissingFallsBackToLiteral(t *testing.T) {
 	// When workdir_from path is missing in config, fall back to the literal.
 	ctx := RunContext{
 		Cmd: &CommandDef{
@@ -413,7 +435,7 @@ func TestServiceExecRunner_BuildCommand_WorkdirFromMissingFallsBackToLiteral(t *
 		Params:  map[string]any{},
 		Context: map[string]any{},
 	}
-	r := &ServiceExecRunner{}
+	r := &ExecRunner{}
 	c, err := r.BuildCommand(context.Background(), ctx, testCompose("devbox-laravel", nil))
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
@@ -424,7 +446,7 @@ func TestServiceExecRunner_BuildCommand_WorkdirFromMissingFallsBackToLiteral(t *
 	}
 }
 
-func TestServiceExecRunner_BuildCommand_WorkdirFromEmptyFallsBackToLiteral(t *testing.T) {
+func TestExecRunner_BuildCommand_WorkdirFromEmptyFallsBackToLiteral(t *testing.T) {
 	// When workdir_from resolves to an empty string, fall back to the literal.
 	ctx := RunContext{
 		Cmd: &CommandDef{
@@ -445,7 +467,7 @@ func TestServiceExecRunner_BuildCommand_WorkdirFromEmptyFallsBackToLiteral(t *te
 		Params:  map[string]any{},
 		Context: map[string]any{},
 	}
-	r := &ServiceExecRunner{}
+	r := &ExecRunner{}
 	c, err := r.BuildCommand(context.Background(), ctx, testCompose("devbox-laravel", nil))
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
@@ -456,7 +478,7 @@ func TestServiceExecRunner_BuildCommand_WorkdirFromEmptyFallsBackToLiteral(t *te
 	}
 }
 
-func TestServiceExecRunner_BuildCommand_WorkdirFromNonStringErrors(t *testing.T) {
+func TestExecRunner_BuildCommand_WorkdirFromNonStringErrors(t *testing.T) {
 	// A non-string value at workdir_from is a hard error (configuration bug).
 	ctx := RunContext{
 		Cmd: &CommandDef{
@@ -476,13 +498,13 @@ func TestServiceExecRunner_BuildCommand_WorkdirFromNonStringErrors(t *testing.T)
 		Params:  map[string]any{},
 		Context: map[string]any{},
 	}
-	r := &ServiceExecRunner{}
+	r := &ExecRunner{}
 	if _, err := r.BuildCommand(context.Background(), ctx, testCompose("devbox-laravel", nil)); err == nil {
 		t.Fatal("expected error for non-string workdir_from value, got nil")
 	}
 }
 
-func TestServiceExecRunner_BuildCommand_ComposeFiles(t *testing.T) {
+func TestExecRunner_BuildCommand_ComposeFiles(t *testing.T) {
 	files := []string{"compose.yaml", "compose/services/second/app.yml"}
 	ctx := RunContext{
 		Cmd: &CommandDef{
@@ -504,7 +526,7 @@ func TestServiceExecRunner_BuildCommand_ComposeFiles(t *testing.T) {
 		Params:  map[string]any{},
 		Context: map[string]any{},
 	}
-	r := &ServiceExecRunner{}
+	r := &ExecRunner{}
 	c, err := r.BuildCommand(context.Background(), ctx, testCompose("devbox-laravel", files))
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
@@ -518,7 +540,7 @@ func TestServiceExecRunner_BuildCommand_ComposeFiles(t *testing.T) {
 	}
 }
 
-func TestServiceRunRunner_BuildCommand_ComposeFiles(t *testing.T) {
+func TestRunRunner_BuildCommand_ComposeFiles(t *testing.T) {
 	files := []string{"compose.yaml", "compose/services/second/app.yml"}
 	ctx := RunContext{
 		Cmd: &CommandDef{
@@ -539,7 +561,7 @@ func TestServiceRunRunner_BuildCommand_ComposeFiles(t *testing.T) {
 		Params:  map[string]any{},
 		Context: map[string]any{},
 	}
-	r := &ServiceRunRunner{}
+	r := &RunRunner{}
 	c, err := r.BuildCommand(context.Background(), ctx, testCompose("devbox-laravel", files))
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
@@ -553,9 +575,9 @@ func TestServiceRunRunner_BuildCommand_ComposeFiles(t *testing.T) {
 	}
 }
 
-func TestServiceExecRunner_BuildCommand_GlobalArgs(t *testing.T) {
+func TestExecRunner_BuildCommand_GlobalArgs(t *testing.T) {
 	ctx := makeServiceExecCtx("app-main", "", "", ExecModeExec, "ls", nil)
-	r := &ServiceExecRunner{}
+	r := &ExecRunner{}
 	compose := testComposeWithGlobalArgs("devbox-laravel", nil, []string{"--ansi", "always", "--progress", "tty"})
 	c, err := r.BuildCommand(context.Background(), ctx, compose)
 	if err != nil {
@@ -573,7 +595,7 @@ func TestServiceExecRunner_BuildCommand_GlobalArgs(t *testing.T) {
 	}
 }
 
-func TestServiceRunRunner_BuildCommand_GlobalArgs(t *testing.T) {
+func TestRunRunner_BuildCommand_GlobalArgs(t *testing.T) {
 	ctx := RunContext{
 		Cmd: &CommandDef{
 			Type:    CommandTypeServiceRun,
@@ -585,7 +607,7 @@ func TestServiceRunRunner_BuildCommand_GlobalArgs(t *testing.T) {
 		Params:  map[string]any{},
 		Context: map[string]any{},
 	}
-	r := &ServiceRunRunner{}
+	r := &RunRunner{}
 	compose := testComposeWithGlobalArgs("devbox-laravel", nil, []string{"--ansi", "always"})
 	c, err := r.BuildCommand(context.Background(), ctx, compose)
 	if err != nil {
@@ -648,10 +670,10 @@ func TestRunContext_Compose_NilConfig(t *testing.T) {
 	}
 }
 
-func TestServiceExecRunner_BuildCommand_ComposeArgsEmpty(t *testing.T) {
+func TestExecRunner_BuildCommand_ComposeArgsEmpty(t *testing.T) {
 	ctx := makeServiceExecCtx("app-main", "", "", ExecModeExec, "id", nil)
 	ctx.Cmd.ComposeArgs = []string{}
-	r := &ServiceExecRunner{}
+	r := &ExecRunner{}
 	c, err := r.BuildCommand(context.Background(), ctx, testCompose("devbox-laravel", nil))
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
@@ -662,10 +684,10 @@ func TestServiceExecRunner_BuildCommand_ComposeArgsEmpty(t *testing.T) {
 	}
 }
 
-func TestServiceExecRunner_BuildCommand_ComposeArgsLiteral(t *testing.T) {
+func TestExecRunner_BuildCommand_ComposeArgsLiteral(t *testing.T) {
 	ctx := makeServiceExecCtx("app-main", "", "", ExecModeExec, "id", nil)
 	ctx.Cmd.ComposeArgs = []string{"-T", "--name", "test-container"}
-	r := &ServiceExecRunner{}
+	r := &ExecRunner{}
 	c, err := r.BuildCommand(context.Background(), ctx, testCompose("devbox-laravel", nil))
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
@@ -697,7 +719,7 @@ func TestServiceExecRunner_BuildCommand_ComposeArgsLiteral(t *testing.T) {
 	}
 }
 
-func TestServiceRunRunner_BuildCommand_ComposeArgsLiteral(t *testing.T) {
+func TestRunRunner_BuildCommand_ComposeArgsLiteral(t *testing.T) {
 	ctx := RunContext{
 		Cmd: &CommandDef{
 			Type:        CommandTypeServiceRun,
@@ -710,7 +732,7 @@ func TestServiceRunRunner_BuildCommand_ComposeArgsLiteral(t *testing.T) {
 		Params:  map[string]any{},
 		Context: map[string]any{},
 	}
-	r := &ServiceRunRunner{}
+	r := &RunRunner{}
 	c, err := r.BuildCommand(context.Background(), ctx, testCompose("devbox-laravel", nil))
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
@@ -736,11 +758,11 @@ func TestServiceRunRunner_BuildCommand_ComposeArgsLiteral(t *testing.T) {
 	}
 }
 
-func TestServiceExecRunner_BuildCommand_ComposeArgsTemplate(t *testing.T) {
+func TestExecRunner_BuildCommand_ComposeArgsTemplate(t *testing.T) {
 	ctx := makeServiceExecCtx("app-main", "", "", ExecModeExec, "id", nil)
 	ctx.Cmd.ComposeArgs = []string{"--name", "${param.name}"}
 	ctx.Render.Params = map[string]any{"name": "custom-name"}
-	r := &ServiceExecRunner{}
+	r := &ExecRunner{}
 	c, err := r.BuildCommand(context.Background(), ctx, testCompose("devbox-laravel", nil))
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
@@ -754,11 +776,11 @@ func TestServiceExecRunner_BuildCommand_ComposeArgsTemplate(t *testing.T) {
 	}
 }
 
-func TestServiceExecRunner_BuildCommand_ComposeArgsPositioning(t *testing.T) {
+func TestExecRunner_BuildCommand_ComposeArgsPositioning(t *testing.T) {
 	// Verify compose_args are inserted between run defaults and --user flag
 	ctx := makeServiceExecCtx("app-main", UserModeRoot, "", ExecModeRun, "id", nil)
 	ctx.Cmd.ComposeArgs = []string{"-d", "--name", "test"}
-	r := &ServiceExecRunner{}
+	r := &ExecRunner{}
 	c, err := r.BuildCommand(context.Background(), ctx, testCompose("devbox-laravel", nil))
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
@@ -785,7 +807,7 @@ func TestServiceExecRunner_BuildCommand_ComposeArgsPositioning(t *testing.T) {
 	}
 }
 
-func TestServiceExecRunner_BuildCommand_ServiceTemplated(t *testing.T) {
+func TestExecRunner_BuildCommand_ServiceTemplated(t *testing.T) {
 	ctx := RunContext{
 		Cmd: &CommandDef{
 			Type:    CommandTypeServiceExec,
@@ -801,7 +823,7 @@ func TestServiceExecRunner_BuildCommand_ServiceTemplated(t *testing.T) {
 		Params:  map[string]any{"service": "catalog"},
 		Context: map[string]any{},
 	}
-	r := &ServiceExecRunner{}
+	r := &ExecRunner{}
 	c, err := r.BuildCommand(context.Background(), ctx, testCompose("devbox-laravel", nil))
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
@@ -815,7 +837,7 @@ func TestServiceExecRunner_BuildCommand_ServiceTemplated(t *testing.T) {
 	}
 }
 
-func TestServiceRunRunner_BuildCommand_ServiceTemplated(t *testing.T) {
+func TestRunRunner_BuildCommand_ServiceTemplated(t *testing.T) {
 	ctx := RunContext{
 		Cmd: &CommandDef{
 			Type:    CommandTypeServiceRun,
@@ -830,7 +852,7 @@ func TestServiceRunRunner_BuildCommand_ServiceTemplated(t *testing.T) {
 		Params:  map[string]any{"service": "main"},
 		Context: map[string]any{},
 	}
-	r := &ServiceRunRunner{}
+	r := &RunRunner{}
 	c, err := r.BuildCommand(context.Background(), ctx, testCompose("devbox-laravel", nil))
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
@@ -841,7 +863,7 @@ func TestServiceRunRunner_BuildCommand_ServiceTemplated(t *testing.T) {
 	}
 }
 
-func TestServiceExecRunner_BuildCommand_WorkdirFromTemplated(t *testing.T) {
+func TestExecRunner_BuildCommand_WorkdirFromTemplated(t *testing.T) {
 	// workdir_from itself can be a template so the same generic command works
 	// across multiple services keyed by ${param.service}.
 	ctx := RunContext{
@@ -866,7 +888,7 @@ func TestServiceExecRunner_BuildCommand_WorkdirFromTemplated(t *testing.T) {
 		Params:  map[string]any{"service": "catalog"},
 		Context: map[string]any{},
 	}
-	r := &ServiceExecRunner{}
+	r := &ExecRunner{}
 	c, err := r.BuildCommand(context.Background(), ctx, testCompose("devbox-laravel", nil))
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
@@ -877,7 +899,7 @@ func TestServiceExecRunner_BuildCommand_WorkdirFromTemplated(t *testing.T) {
 	}
 }
 
-func TestServiceExecRunner_BuildCommand_WorkdirLiteralTemplated(t *testing.T) {
+func TestExecRunner_BuildCommand_WorkdirLiteralTemplated(t *testing.T) {
 	// The literal workdir field is also rendered as a template, matching the
 	// same contract as argv/cmd/compose_args.
 	ctx := RunContext{
@@ -895,7 +917,7 @@ func TestServiceExecRunner_BuildCommand_WorkdirLiteralTemplated(t *testing.T) {
 		Params:  map[string]any{"subdir": "src"},
 		Context: map[string]any{},
 	}
-	r := &ServiceExecRunner{}
+	r := &ExecRunner{}
 	c, err := r.BuildCommand(context.Background(), ctx, testCompose("devbox-laravel", nil))
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
@@ -906,7 +928,7 @@ func TestServiceExecRunner_BuildCommand_WorkdirLiteralTemplated(t *testing.T) {
 	}
 }
 
-func TestServiceExecRunner_BuildCommand_RunnerServiceTemplated(t *testing.T) {
+func TestExecRunner_BuildCommand_RunnerServiceTemplated(t *testing.T) {
 	// runner.service / runner.workdir_from are also rendered so the override
 	// block behaves identically to the top-level fields.
 	ctx := RunContext{
@@ -935,7 +957,7 @@ func TestServiceExecRunner_BuildCommand_RunnerServiceTemplated(t *testing.T) {
 		Params:  map[string]any{"service": "catalog"},
 		Context: map[string]any{},
 	}
-	r := &ServiceExecRunner{}
+	r := &ExecRunner{}
 	c, err := r.BuildCommand(context.Background(), ctx, testCompose("devbox-laravel", nil))
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)

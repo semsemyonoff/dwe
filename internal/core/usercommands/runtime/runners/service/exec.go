@@ -1,4 +1,9 @@
-package runtime
+// Package service implements the runtime runners for type=service commands:
+// service.ExecRunner (mode=exec / exec-or-fail / exec-or-run) and
+// service.RunRunner (mode=run, ephemeral container). Both drive
+// `docker compose` and share helpers for argv rendering, env construction,
+// and user/workdir resolution.
+package service
 
 import (
 	"context"
@@ -10,24 +15,25 @@ import (
 	"devbox-cli/internal/core/project/config"
 	"devbox-cli/internal/core/usercommands/model"
 	"devbox-cli/internal/core/usercommands/runtime/internal/runio"
+	"devbox-cli/internal/core/usercommands/runtime/spec"
 	"devbox-cli/internal/shared/docker"
 	"devbox-cli/internal/shared/render"
 	"devbox-cli/internal/shared/tpl"
 )
 
-// ServiceExecRunner executes type=service_exec commands via `docker compose exec`.
+// ExecRunner executes type=service_exec commands via `docker compose exec`.
 // The behaviour when the target container is not running depends on Mode:
 //   - exec-or-fail (default): refuses with a clear devbox error.
 //   - exec-or-run: silently falls back to `docker compose run --rm` (with a
 //     warning written to stderr so the ephemeral-container behaviour is visible).
 //   - exec / run: forced; exec lets compose emit its own error if the container
 //     is missing.
-type ServiceExecRunner struct{}
+type ExecRunner struct{}
 
 // BuildCommand constructs the exec.Cmd for the given context.
-// See ServiceExecRunner for mode semantics. The supplied ctx is attached to
+// See ExecRunner for mode semantics. The supplied ctx is attached to
 // the returned *exec.Cmd so callers can cancel the child by cancelling ctx.
-func (r *ServiceExecRunner) BuildCommand(ctx context.Context, rc RunContext, compose *docker.Compose) (*exec.Cmd, error) {
+func (e *ExecRunner) BuildCommand(ctx context.Context, rc spec.RunContext, compose *docker.Compose) (*exec.Cmd, error) {
 	svc, user, workdir, mode, err := resolveServiceFields(rc)
 	if err != nil {
 		return nil, err
@@ -78,55 +84,9 @@ func (r *ServiceExecRunner) BuildCommand(ctx context.Context, rc RunContext, com
 }
 
 // Run executes the command inside the container.
-func (r *ServiceExecRunner) Run(ctx context.Context, rc RunContext) error {
+func (e *ExecRunner) Run(ctx context.Context, rc spec.RunContext) error {
 	compose := rc.Compose()
-	c, err := r.BuildCommand(ctx, rc, compose)
-	if err != nil {
-		return err
-	}
-	used, cleanup := runio.ParallelChildIO(rc, c, runio.StdoutOf(rc))
-	defer cleanup()
-	if !used {
-		c.Stdout = runio.StdoutOf(rc)
-		c.Stderr = runio.StderrOf(rc)
-		c.Stdin = runio.StdinOrOS(rc)
-	}
-	return c.Run()
-}
-
-// ServiceRunRunner executes type=service_run commands via `docker compose run --rm`.
-type ServiceRunRunner struct{}
-
-// BuildCommand constructs the exec.Cmd for the given context.
-// The supplied ctx is attached to the returned *exec.Cmd.
-func (r *ServiceRunRunner) BuildCommand(ctx context.Context, rc RunContext, compose *docker.Compose) (*exec.Cmd, error) {
-	svc, user, workdir, _, err := resolveServiceFields(rc)
-	if err != nil {
-		return nil, err
-	}
-
-	argv, err := buildServiceArgv(rc)
-	if err != nil {
-		return nil, err
-	}
-
-	envVars, err := runio.BuildRenderedEnv(rc.Cmd, rc)
-	if err != nil {
-		return nil, err
-	}
-
-	composeArgs, err := buildRenderedComposeArgs(rc)
-	if err != nil {
-		return nil, err
-	}
-
-	return buildDockerComposeCmd(ctx, rc, compose, svc, user, workdir, argv, envVars, composeArgs, false), nil
-}
-
-// Run executes the command in a one-off container.
-func (r *ServiceRunRunner) Run(ctx context.Context, rc RunContext) error {
-	compose := rc.Compose()
-	c, err := r.BuildCommand(ctx, rc, compose)
+	c, err := e.BuildCommand(ctx, rc, compose)
 	if err != nil {
 		return err
 	}
@@ -148,7 +108,7 @@ func (r *ServiceRunRunner) Run(ctx context.Context, rc RunContext) error {
 // or any other entry in the command template space — same contract as argv,
 // cmd, and compose_args. This unblocks generic per-service commands such as
 // `service: app-${param.service}` invoked from a per-service deploy pipeline.
-func resolveServiceFields(ctx RunContext) (svc string, user model.UserMode, workdir string, mode model.ExecMode, err error) {
+func resolveServiceFields(ctx spec.RunContext) (svc string, user model.UserMode, workdir string, mode model.ExecMode, err error) {
 	cmd := ctx.Cmd
 
 	svc = cmd.Service
@@ -229,7 +189,7 @@ func lookupServiceCLIUser(cfg *config.DevboxConfig, container string) string {
 
 // resolveWorkdirFrom resolves a dot-path into the config Raw map and returns
 // the string value.
-func resolveWorkdirFrom(dotPath string, ctx RunContext) (string, error) {
+func resolveWorkdirFrom(dotPath string, ctx spec.RunContext) (string, error) {
 	v, err := config.LookupDotPath(ctx.Config, dotPath)
 	if err != nil {
 		return "", fmt.Errorf("workdir_from %q: %w", dotPath, err)
@@ -245,7 +205,7 @@ func resolveWorkdirFrom(dotPath string, ctx RunContext) (string, error) {
 }
 
 // buildRenderedComposeArgs renders each compose_args entry via templates and returns the slice.
-func buildRenderedComposeArgs(ctx RunContext) ([]string, error) {
+func buildRenderedComposeArgs(ctx spec.RunContext) ([]string, error) {
 	cmd := ctx.Cmd
 	if len(cmd.ComposeArgs) == 0 {
 		return nil, nil
@@ -264,7 +224,7 @@ func buildRenderedComposeArgs(ctx RunContext) ([]string, error) {
 
 // buildServiceArgv renders the cmd/argv fields of the command and returns the
 // argument slice.
-func buildServiceArgv(ctx RunContext) ([]string, error) {
+func buildServiceArgv(ctx spec.RunContext) ([]string, error) {
 	cmd := ctx.Cmd
 	if cmd.Cmd != "" {
 		rendered, err := tpl.RenderCommand(cmd.Cmd, ctx.Render)
@@ -287,7 +247,7 @@ func buildServiceArgv(ctx RunContext) ([]string, error) {
 // buildDockerComposeCmd assembles the full docker compose exec/run command.
 func buildDockerComposeCmd(
 	ctx context.Context,
-	rc RunContext,
+	rc spec.RunContext,
 	compose *docker.Compose,
 	svc string,
 	user model.UserMode,
@@ -348,7 +308,7 @@ func buildDockerComposeCmd(
 	if envVars == nil {
 		envVars = make(map[string]string)
 	}
-	for _, kv := range parallelColorForceEnv(rc) {
+	for _, kv := range runio.ParallelColorForceEnv(rc) {
 		// kv is "KEY=VALUE"; split once.
 		if eq := strings.IndexByte(kv, '='); eq > 0 {
 			k, v := kv[:eq], kv[eq+1:]
@@ -366,7 +326,7 @@ func buildDockerComposeCmd(
 	args = append(args, serviceArgv...)
 
 	cmd := exec.CommandContext(ctx, compose.BinName(), append([]string{"compose"}, args...)...) //nolint:gosec
-	bindCancel(cmd)
+	runio.BindCancel(cmd)
 	combined := make(map[string]string, len(compose.ProcessEnv)+len(envVars))
 	maps.Copy(combined, compose.ProcessEnv)
 	maps.Copy(combined, envVars)

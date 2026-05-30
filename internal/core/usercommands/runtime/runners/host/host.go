@@ -1,4 +1,8 @@
-package runtime
+// Package host implements the runtime runners for type=shell (host.Runner)
+// and type=devbox (host.DevboxRunner) commands. Both run on the host machine
+// and share helpers for env contract injection and parallel-aware colour
+// forcing.
+package host
 
 import (
 	"context"
@@ -7,115 +11,21 @@ import (
 	"os/exec"
 	"path/filepath"
 	"strings"
-	"syscall"
-	"time"
 
 	"devbox-cli/internal/core/project/config"
 	"devbox-cli/internal/core/usercommands/runtime/internal/runio"
+	"devbox-cli/internal/core/usercommands/runtime/spec"
 	"devbox-cli/internal/shared/tpl"
 )
 
-// childTermDelay is the grace period exec.CommandContext gives a child after
-// SIGTERM before sending SIGKILL when ctx is cancelled.
-const childTermDelay = 5 * time.Second
-
-// parallelColorForceEnv returns env entries that coerce common CLI tools to
-// keep ANSI colours when the child's stdout is a pipe rather than a TTY.
-// Inside a workflow parallel sub-step each child writes through a LineTee
-// (no PTY is allocated — concurrent sub-steps cannot share one), so without
-// these vars tools like lipgloss, npm/yarn, jest, chalk-based tools, BSD
-// ls, brew, and others auto-disable colours and the captured failure /
-// always_show_output dump on stderr ends up plain text.
-//
-// Returns nil outside parallel so non-parallel runs keep the existing
-// auto-detection behaviour.
-func parallelColorForceEnv(rc RunContext) []string {
-	if !rc.UnderParallel {
-		return nil
-	}
-	if os.Getenv("NO_COLOR") != "" {
-		return nil
-	}
-	return []string{
-		"CLICOLOR_FORCE=1",    // BSD ls, brew, lipgloss
-		"FORCE_COLOR=1",       // Node ecosystem (npm/yarn/jest/eslint/chalk)
-		"COLORTERM=truecolor", // anything that key-checks COLORTERM
-	}
-}
-
-// bindCancel configures cmd to send SIGTERM (instead of the default SIGKILL)
-// when its context is cancelled, and to force-kill after childTermDelay.
-// Call this immediately after exec.CommandContext to give children a chance
-// to clean up.
-func bindCancel(cmd *exec.Cmd) {
-	cmd.Cancel = func() error {
-		if cmd.Process == nil {
-			return nil
-		}
-		return cmd.Process.Signal(syscall.SIGTERM)
-	}
-	cmd.WaitDelay = childTermDelay
-}
-
-// DevboxRunner executes type=devbox commands by invoking the current devbox
-// executable with the run: string as its arguments.
-type DevboxRunner struct{}
-
-// Run executes the devbox subcommand described by rc.Cmd.
-func (r *DevboxRunner) Run(ctx context.Context, rc RunContext) error {
-	bin, err := os.Executable()
-	if err != nil {
-		bin = config.DevboxBin(rc.Config)
-	}
-
-	rendered, err := tpl.RenderCommand(rc.Cmd.Cmd, rc.Render)
-	if err != nil {
-		return fmt.Errorf("render cmd: %w", err)
-	}
-
-	cmd := exec.CommandContext(ctx, config.ShellBin(rc.Config), "-c", shellQuote(bin)+" "+rendered) //nolint:gosec
-	bindCancel(cmd)
-	if rc.ProjectRoot != "" {
-		cmd.Dir = rc.ProjectRoot
-	}
-
-	envMap, err := runio.BuildRenderedEnv(rc.Cmd, rc)
-	if err != nil {
-		return err
-	}
-	colorEnv := parallelColorForceEnv(rc)
-	if len(envMap) > 0 || len(colorEnv) > 0 {
-		cmd.Env = os.Environ()
-		for k, v := range envMap {
-			cmd.Env = append(cmd.Env, k+"="+v)
-		}
-		for _, kv := range colorEnv {
-			if eq := strings.IndexByte(kv, '='); eq > 0 {
-				if _, exists := envMap[kv[:eq]]; !exists {
-					cmd.Env = append(cmd.Env, kv)
-				}
-			}
-		}
-	}
-
-	used, cleanup := runio.ParallelChildIO(rc, cmd, runio.StdoutOf(rc))
-	defer cleanup()
-	if !used {
-		cmd.Stdout = runio.StdoutOf(rc)
-		cmd.Stderr = runio.StderrOf(rc)
-		cmd.Stdin = runio.StdinOrOS(rc)
-	}
-	return cmd.Run()
-}
-
-// HostRunner executes type=shell commands on the host machine.
-type HostRunner struct{}
+// Runner executes type=shell commands on the host machine.
+type Runner struct{}
 
 // BuildCommand constructs the exec.Cmd that would be run for the given context.
 // It is exported for testing without actual execution. The supplied ctx is
 // attached to the returned *exec.Cmd via exec.CommandContext so callers can
 // cancel the child by cancelling ctx.
-func (r *HostRunner) BuildCommand(ctx context.Context, rc RunContext) (*exec.Cmd, error) {
+func (r *Runner) BuildCommand(ctx context.Context, rc spec.RunContext) (*exec.Cmd, error) {
 	cmd := rc.Cmd
 
 	var argv []string
@@ -141,7 +51,7 @@ func (r *HostRunner) BuildCommand(ctx context.Context, rc RunContext) (*exec.Cmd
 		return nil, fmt.Errorf("argv is empty")
 	}
 	c := exec.CommandContext(ctx, argv[0], argv[1:]...) //nolint:gosec
-	bindCancel(c)
+	runio.BindCancel(c)
 
 	if cmd.Workdir != "" {
 		rendered, err := tpl.RenderCommand(cmd.Workdir, rc.Render)
@@ -161,7 +71,7 @@ func (r *HostRunner) BuildCommand(ctx context.Context, rc RunContext) (*exec.Cmd
 		return nil, err
 	}
 	contractEnv := hostContractEnv(rc)
-	colorEnv := parallelColorForceEnv(rc)
+	colorEnv := runio.ParallelColorForceEnv(rc)
 	if len(envMap) > 0 || len(contractEnv) > 0 || len(colorEnv) > 0 {
 		c.Env = os.Environ()
 		for k, v := range envMap {
@@ -194,7 +104,7 @@ func (r *HostRunner) BuildCommand(ctx context.Context, rc RunContext) (*exec.Cmd
 // Variables already exported by the parent process or the user's env: block
 // remain visible — Go's os/exec uses the last entry for duplicate keys, so
 // contract values placed after user env take precedence (matching script).
-func hostContractEnv(rc RunContext) []string {
+func hostContractEnv(rc spec.RunContext) []string {
 	var out []string
 
 	devboxBin, err := os.Executable()
@@ -223,7 +133,7 @@ func hostContractEnv(rc RunContext) []string {
 }
 
 // Run executes the command on the host.
-func (r *HostRunner) Run(ctx context.Context, rc RunContext) error {
+func (r *Runner) Run(ctx context.Context, rc spec.RunContext) error {
 	c, err := r.BuildCommand(ctx, rc)
 	if err != nil {
 		return err
@@ -236,10 +146,4 @@ func (r *HostRunner) Run(ctx context.Context, rc RunContext) error {
 		c.Stdin = runio.StdinOrOS(rc)
 	}
 	return c.Run()
-}
-
-// shellQuote wraps a path in single quotes for safe inclusion in a sh -c string.
-// Embedded single quotes are escaped via the '\\” idiom.
-func shellQuote(s string) string {
-	return "'" + strings.ReplaceAll(s, "'", "'\\''") + "'"
 }

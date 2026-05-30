@@ -312,20 +312,20 @@ These reference both `runtime.NewRunner` and concrete types like `*HostRunner` �
 - Move + modify: `runner_builtin_test.go` → `runners/builtin/`
 - Modify: root `runner.go` (factory now references subpkg types)
 
-- [ ] **extract factory tests first**: cut `TestNewRunner_Returns_HostRunner`, `TestNewRunner_Returns_ServiceExecRunner`, `TestNewRunner_Returns_ServiceRunRunner`, `TestNewRunner_Unsupported_Type` from `runner_host_test.go`; cut `TestNewRunner_Returns_ScriptRunner` from `runner_script_test.go`; cut `TestNewRunner_Returns_WorkflowRunner` from `runner_workflow_test.go`. Move all to root `runner_test.go`. They keep working because root has the concrete-type aliases (`type HostRunner = host.Runner` etc.).
-- [ ] create `runners/` directory + 4 subdirs (host, service, script, builtin)
-- [ ] for each runner: move file, change package decl, add `import "devbox-cli/internal/core/usercommands/runtime/spec"`, rename type (HostRunner → Runner, etc.), update `Run` receiver signature to use `spec.RunContext`
-- [ ] split runner_host.go into 2 files inside `runners/host/`: host.go (Runner), devbox.go (DevboxRunner)
-- [ ] split runner_service.go into 2 files inside `runners/service/`: exec.go (ExecRunner), run.go (RunRunner)
-- [ ] **for `runners/builtin/builtin.go`**: add import alias `engbuiltin "devbox-cli/internal/core/execution/builtin"`; rename all call sites of `builtin.Validate`, `builtin.Run`, `builtin.ExecContext`, `builtin.IsInteractive`, `builtin.CtxUserYAML`, `builtin.CtxInternal` to use the `engbuiltin.` prefix (because the file's own package is now `builtin`)
-- [ ] move corresponding test files; update package decl + type instantiations (the factory tests moved earlier to root are NOT in these files anymore)
-- [ ] update receivers to short single-letter conventional (`r *host.Runner`, `e *service.ExecRunner`, `s *script.Runner`, etc. — match new type initial)
-- [ ] update doc comments on each renamed type and its methods to lead with the new exported name — `// HostRunner runs ...` becomes `// Runner runs host commands ...` (revive `exported` rule enforces this)
-- [ ] update root `runner.go` factory: import the 4 new subpkgs; switch cases now return `&host.Runner{}`, `&service.ExecRunner{}`, etc.
-- [ ] add concrete-type aliases to root `runner.go` per Solution Overview (HostRunner = host.Runner, etc.) — required for usercommands.go:138-144 chain
-- [ ] update each runner subpkg's helper calls: `stdout(ctx)` → `runio.StdoutOf(ctx)`, etc. (these were renamed in Task 2.5; here we just verify subpkg files import `runtime/internal/runio`)
-- [ ] run `make test` — must pass before Task 4
-- [ ] run `make lint` — must pass before Task 4
+- [x] **extract factory tests first**: cut `TestNewRunner_Returns_HostRunner`, `TestNewRunner_Returns_ServiceExecRunner`, `TestNewRunner_Returns_ServiceRunRunner`, `TestNewRunner_Unsupported_Type` from `runner_host_test.go`; cut `TestNewRunner_Returns_ScriptRunner` from `runner_script_test.go`; cut `TestNewRunner_Returns_WorkflowRunner` from `runner_workflow_test.go`. Move all to root `runner_test.go`. They keep working because root has the concrete-type aliases (`type HostRunner = host.Runner` etc.).
+- [x] create `runners/` directory + 4 subdirs (host, service, script, builtin)
+- [x] for each runner: move file, change package decl, add `import "devbox-cli/internal/core/usercommands/runtime/spec"`, rename type (HostRunner → Runner, etc.), update `Run` receiver signature to use `spec.RunContext`
+- [x] split runner_host.go into 2 files inside `runners/host/`: host.go (Runner), devbox.go (DevboxRunner)
+- [x] split runner_service.go into 2 files inside `runners/service/`: exec.go (ExecRunner), run.go (RunRunner)
+- [x] **for `runners/builtin/builtin.go`**: add import alias `engbuiltin "devbox-cli/internal/core/execution/builtin"`; rename all call sites of `builtin.Validate`, `builtin.Run`, `builtin.ExecContext`, `builtin.IsInteractive`, `builtin.CtxUserYAML`, `builtin.CtxInternal` to use the `engbuiltin.` prefix (because the file's own package is now `builtin`)
+- [x] move corresponding test files; update package decl + type instantiations (the factory tests moved earlier to root are NOT in these files anymore). RunCommand-based script integration tests stayed at root in `runner_script_integration_test.go` (subpkg can't import root). Also added `spec.ErrConfirmInsideParallel` + `runio.IsNonInteractive`/`runio.BindCancel`/`runio.ParallelColorForceEnv` shared symbols so all four runner subpkgs compile without cycles.
+- [x] update receivers to short single-letter conventional (`r *host.Runner`, `e *service.ExecRunner`, `s *script.Runner`, `b *builtin.Runner` — match new type initial)
+- [x] update doc comments on each renamed type and its methods to lead with the new exported name — `// HostRunner runs ...` becomes `// Runner runs host commands ...` (revive `exported` rule enforces this)
+- [x] update root `runner.go` factory: import the 4 new subpkgs; switch cases now return `&host.Runner{}`, `&service.ExecRunner{}`, etc.
+- [x] add concrete-type aliases to root `runner.go` per Solution Overview (HostRunner = host.Runner, etc.) — required for usercommands.go:138-144 chain
+- [x] update each runner subpkg's helper calls: `stdout(ctx)` → `runio.StdoutOf(ctx)`, etc. (these were renamed in Task 2.5; here we just verify subpkg files import `runtime/internal/runio`)
+- [x] run `make test` — must pass before Task 4
+- [x] run `make lint` — must pass before Task 4
 
 ### Task 4: Extract `runners/workflow/` subpackage (most complex — 6 files)
 

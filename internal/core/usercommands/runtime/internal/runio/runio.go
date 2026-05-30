@@ -10,6 +10,8 @@ import (
 	"os"
 	"os/exec"
 	"sync"
+	"syscall"
+	"time"
 
 	"github.com/creack/pty"
 
@@ -18,6 +20,59 @@ import (
 	"devbox-cli/internal/core/usercommands/runtime/spec"
 	"devbox-cli/internal/shared/tpl"
 )
+
+// ChildTermDelay is the grace period exec.CommandContext gives a child after
+// SIGTERM before sending SIGKILL when ctx is cancelled. Exported so runner
+// subpackages can configure it on their constructed *exec.Cmd via BindCancel.
+const ChildTermDelay = 5 * time.Second
+
+// BindCancel configures cmd to send SIGTERM (instead of the default SIGKILL)
+// when its context is cancelled, and to force-kill after ChildTermDelay.
+// Call this immediately after exec.CommandContext to give children a chance
+// to clean up.
+func BindCancel(cmd *exec.Cmd) {
+	cmd.Cancel = func() error {
+		if cmd.Process == nil {
+			return nil
+		}
+		return cmd.Process.Signal(syscall.SIGTERM)
+	}
+	cmd.WaitDelay = ChildTermDelay
+}
+
+// ParallelColorForceEnv returns env entries that coerce common CLI tools to
+// keep ANSI colours when the child's stdout is a pipe rather than a TTY.
+// Inside a workflow parallel sub-step each child writes through a LineTee
+// (no PTY is allocated — concurrent sub-steps cannot share one), so without
+// these vars tools like lipgloss, npm/yarn, jest, chalk-based tools, BSD
+// ls, brew, and others auto-disable colours and the captured failure /
+// always_show_output dump on stderr ends up plain text.
+//
+// Returns nil outside parallel so non-parallel runs keep the existing
+// auto-detection behaviour.
+func ParallelColorForceEnv(rc spec.RunContext) []string {
+	if !rc.UnderParallel {
+		return nil
+	}
+	if os.Getenv("NO_COLOR") != "" {
+		return nil
+	}
+	return []string{
+		"CLICOLOR_FORCE=1",    // BSD ls, brew, lipgloss
+		"FORCE_COLOR=1",       // Node ecosystem (npm/yarn/jest/eslint/chalk)
+		"COLORTERM=truecolor", // anything that key-checks COLORTERM
+	}
+}
+
+// IsNonInteractive returns true when the DEVBOX_NONINTERACTIVE environment
+// variable is set to "1" or "true". Hoisted to runio so every runner
+// subpackage can consult it without round-tripping through the workflow
+// package, which would create a runner→workflow import cycle for the
+// type=builtin runner that also gates on this signal.
+func IsNonInteractive() bool {
+	v := os.Getenv("DEVBOX_NONINTERACTIVE")
+	return v == "1" || v == "true"
+}
 
 // StdoutOf returns the writer to use for stdout, defaulting to os.Stdout.
 func StdoutOf(ctx spec.RunContext) io.Writer {
