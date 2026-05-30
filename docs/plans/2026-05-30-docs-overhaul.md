@@ -324,18 +324,18 @@ For phases that touch many files, order is: index file last (it links to everyth
 
 ### Task 3.4: Final validation gate
 
-- [ ] `make build` exits 0
-- [ ] `make test` exits 0
-- [ ] `make lint` exits 0
-- [ ] `./bin/devbox docs list` enumerates every refreshed path
-- [ ] spot-check `./bin/devbox docs show <topic>` on 5 random pages — render is correct
+- [x] `make build` exits 0
+- [x] `make test` exits 0
+- [x] `make lint` exits 0
+- [x] `./bin/devbox docs list` enumerates every refreshed path
+- [x] spot-check `./bin/devbox docs show <topic>` on 5 random pages — render is correct (caught a stray `-o <path>` in `render/index.md` table; fixed in this task)
 
 **Acceptance criteria for Phase 3:**
 
-- [ ] every concrete claim in every doc traces to a current code location
-- [ ] no field names appear in docs without matching code
-- [ ] every behavioral doc has ≥1 worked example
-- [ ] no brand or vendor names beyond unavoidable technical terms
+- [x] every concrete claim in every doc traces to a current code location
+- [x] no field names appear in docs without matching code
+- [x] every behavioral doc has ≥1 worked example
+- [x] no brand or vendor names beyond unavoidable technical terms
 
 ---
 
@@ -626,10 +626,10 @@ For phases that touch many files, order is: index file last (it links to everyth
 - [x] Task 2.5: inbound links + validation gate
 
 ### Phase 3 — Updates
-- [ ] Task 3.1: refresh remaining `config/*`
+- [x] Task 3.1: refresh remaining `config/*`
 - [x] Task 3.2: refresh `render/*`
 - [x] Task 3.3: refresh `docs/`, `templates.md`, `reference/index.md`
-- [ ] Task 3.4: validation gate
+- [x] Task 3.4: validation gate
 
 ### Phase 4 — New `concepts/`
 - [ ] Task 4.1: `index.md` + `getting-started.md`

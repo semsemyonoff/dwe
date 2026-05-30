@@ -14,7 +14,7 @@
 
 | Command | Output | Source |
 |---------|--------|--------|
-| `devbox render env` | `.env` content (stdout or `-o <path>`) | `exports.env` rules in `devbox/defaults.yml` + system vars |
+| `devbox render env` | `.env` content (stdout or `--out <path>`) | `exports.env` rules in `devbox/defaults.yml` + system vars |
 | `devbox render ide` | Per-service IDE config files inside each service hub | Template packs under `devbox/templates/ide/<pack>/` driven by `manifest.yml` |
 | `devbox render ai` | Hub-level agent docs (`AGENTS.md`, `CLAUDE.md` symlink, …) | Template packs under `devbox/templates/ai/<pack>/` driven by `manifest.yml` |
 | `devbox render git` | Per-service shell git hooks at `<svc.Dir>/src/.git/hooks/<basename>` (mode `0755`) | Template packs under `devbox/templates/git/<pack>/` driven by `manifest.yml` |
