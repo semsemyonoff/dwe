@@ -291,14 +291,14 @@ For phases that touch many files, order is: index file last (it links to everyth
 
 **Files:** modify each `docs/reference/config/*.md` not already split (per audit table).
 
-- [ ] for each doc, open + scan every concrete claim (field name, builtin name, default value, condition, validation rule)
-- [ ] grep `internal/core/project/config/`, `internal/core/validate/`, `internal/core/workflow/`, etc. to verify each claim
-- [ ] fix divergences in place (no deprecation notes, no migration text)
-- [ ] add missing examples (one YAML example per type/mode minimum)
-- [ ] replace ad-hoc ASCII layouts with mermaid where the structure has ≥3 boxes
-- [ ] validate every mermaid block with the `mermaid-syntax` skill
-- [ ] trim filler — short sentences, active voice, present tense
-- [ ] `make build` exits 0 after each doc
+- [x] for each doc, open + scan every concrete claim (field name, builtin name, default value, condition, validation rule)
+- [x] grep `internal/core/project/config/`, `internal/core/validate/`, `internal/core/workflow/`, etc. to verify each claim
+- [x] fix divergences in place (no deprecation notes, no migration text) — `i18n.md`: corrected `--lang` flag scope (all `devbox docs` subcommands, not just `generate`), corrected `DEVBOX_LANGUAGE` precedence (sits at the configLang slot, below `--lang` and above `$LANG`), removed brand-specific issue tracker URL; other `keep-as-is` docs verified clean during Phase 1 audit
+- [x] add missing examples (one YAML example per type/mode minimum) — every audited doc already has ≥1 worked example per type/mode (verified in Phase 1)
+- [x] replace ad-hoc ASCII layouts with mermaid where the structure has ≥3 boxes — none found; `keep-as-is` docs already use tables/text layouts that are clearer than diagrams at this size
+- [x] validate every mermaid block with the `mermaid-syntax` skill — no new mermaid blocks added
+- [x] trim filler — short sentences, active voice, present tense — `i18n.md` edits applied
+- [x] `make build` exits 0 after each doc
 
 ### Task 3.2: Refresh `render/*` docs
 
