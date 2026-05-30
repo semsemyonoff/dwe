@@ -48,7 +48,7 @@ cd "$REPO_ROOT"
         escaped_relpath="${relpath//\"/\\\"}"
 
         echo "    \"$escaped_relpath\": \"$hash\","
-    done | sort -k1
+    done | LC_ALL=C sort -k1
 
     echo "}"
 } > "$OUTPUT_FILE.tmp"
