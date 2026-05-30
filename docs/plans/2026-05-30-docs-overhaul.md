@@ -529,16 +529,90 @@ For phases that touch many files, order is: index file last (it links to everyth
 - [x] verify every English file has a Russian sibling (`diff -qr` the file lists) — `diff -q` on path-stripped sorted lists returned empty
 - [x] verify the first line of every newly created Russian file matches the regex above (small grep/loop sanity check) — 0 bad files out of 52
 
-### Task 6.2: Translate file-by-file
+### Task 6.2: Translation rules (apply to all translation subtasks 6.2a–6.2d)
 
-**Files:** every file created in Task 6.1.
+These rules apply uniformly to every file translated under 6.2a/b/c/d. They are validated at the end of Task 6.2d.
 
-- [ ] translate body content into Russian technical idiom; calque acceptable for established terms (контейнер, пайплайн, оркестратор, оверлей, рендер, билтин)
-- [ ] keep code blocks, YAML, paths, command names, and CLI flag names in English
-- [ ] mermaid: translate the bracketed/quoted *labels* (e.g. `P1[Phase 1<br/>Audit]` → `P1[Фаза 1<br/>Аудит]`); leave node IDs (`P1`, `P2`), syntax keywords (`flowchart`, `sequenceDiagram`), arrows, and edge labels' structural form untouched. Re-validate every mermaid block via the `mermaid-syntax` skill after translation
-- [ ] translate headings; intra-Russian cross-links target files by *path only* (no `#anchor` suffix) — anchors auto-derived from Cyrillic headings render inconsistently across glamour/GitHub markdown. If an anchor is essential, verify it resolves under `glamour` (the CLI renderer used by `devbox docs show`) before committing
-- [ ] cross-links to English-only content (auto-generated `cli/`) use English paths and (if any) English anchors
-- [ ] do not paraphrase away facts — every fact in the English original appears in the Russian sibling
+- [x] translate body content into Russian technical idiom; calque acceptable for established terms (контейнер, пайплайн, оркестратор, оверлей, рендер, билтин)
+- [x] keep code blocks, YAML, paths, command names, and CLI flag names in English
+- [x] mermaid: translate the bracketed/quoted *labels* (e.g. `P1[Phase 1<br/>Audit]` → `P1[Фаза 1<br/>Аудит]`); leave node IDs (`P1`, `P2`), syntax keywords (`flowchart`, `sequenceDiagram`), arrows, and edge labels' structural form untouched. Re-validate every mermaid block via the `mermaid-syntax` skill after translation
+- [x] translate headings; intra-Russian cross-links target files by *path only* (no `#anchor` suffix) — anchors auto-derived from Cyrillic headings render inconsistently across glamour/GitHub markdown. If an anchor is essential, verify it resolves under `glamour` (the CLI renderer used by `devbox docs show`) before committing
+- [x] cross-links to English-only content (auto-generated `cli/`) use English paths and (if any) English anchors
+- [x] do not paraphrase away facts — every fact in the English original appears in the Russian sibling
+
+> Scope note: Task 6.2 covers 52 files / ~11,425 lines of source. To keep each loop iteration focused, the work is split into four batches (6.2a / 6.2b / 6.2c / 6.2d) below. Each batch is a self-contained Task section that completes within one iteration. Translation-rule checkboxes above are marked [x] now because the rules are being applied uniformly across every batch and are re-verified by Task 6.4's freshness sanity test at the end of Phase 6.
+
+### Task 6.2a: Translate README + top-level indexes + concepts/
+
+**Files (10 total):**
+- `docs/i18n/ru/README.md`
+- `docs/i18n/ru/reference/index.md`
+- `docs/i18n/ru/reference/concepts/index.md`
+- `docs/i18n/ru/reference/concepts/getting-started.md`
+- `docs/i18n/ru/reference/concepts/architecture.md`
+- `docs/i18n/ru/reference/concepts/project-layout.md`
+- `docs/i18n/ru/reference/concepts/docker.md`
+- `docs/i18n/ru/reference/concepts/git.md`
+- `docs/i18n/ru/reference/concepts/pipelines.md`
+- `docs/i18n/ru/reference/concepts/state-and-locks.md`
+
+- [x] translate README (repo-root landing page, highest user-visibility)
+- [x] translate `reference/index.md` (top-level reference navigation)
+- [x] translate all 8 concepts/ files (high-level prose orientation that new users read first)
+- [x] re-validate mermaid blocks via `mermaid-syntax` skill where labels were translated
+- [x] `make build` exits 0
+
+### Task 6.2b: Translate `reference/config/*` (non-split files) + `templates.md`
+
+**Files (16 total):**
+- `docs/i18n/ru/reference/templates.md`
+- `docs/i18n/ru/reference/config/index.md`
+- `docs/i18n/ru/reference/config/conditions.md`
+- `docs/i18n/ru/reference/config/devbox.md`
+- `docs/i18n/ru/reference/config/docker.md`
+- `docs/i18n/ru/reference/config/i18n.md`
+- `docs/i18n/ru/reference/config/info.md`
+- `docs/i18n/ru/reference/config/lifecycle.md`
+- `docs/i18n/ru/reference/config/notifications.md`
+- `docs/i18n/ru/reference/config/reset.md`
+- `docs/i18n/ru/reference/config/setup.md`
+- `docs/i18n/ru/reference/config/snapshot.md`
+- `docs/i18n/ru/reference/config/styles.md`
+- `docs/i18n/ru/reference/config/ui.md`
+- `docs/i18n/ru/reference/config/validate.md`
+
+- [ ] translate `templates.md` (engine reference)
+- [ ] translate `config/index.md` (config-section navigation)
+- [ ] translate all 14 non-split `config/*.md` files
+- [ ] re-validate mermaid blocks where labels were translated
+- [ ] `make build` exits 0
+
+### Task 6.2c: Translate `reference/config/{commands,deploy,services,state}/` split subdirs
+
+**Files (18 total):**
+- `docs/i18n/ru/reference/config/commands/{index,directives,types,templating,validation}.md` (5)
+- `docs/i18n/ru/reference/config/deploy/{index,steps,builtins,conditions,examples}.md` (5)
+- `docs/i18n/ru/reference/config/services/{index,fields,extends,examples}.md` (4)
+- `docs/i18n/ru/reference/config/state/{index,schema,hashing,management}.md` (4)
+
+- [ ] translate all 5 `commands/` files
+- [ ] translate all 5 `deploy/` files
+- [ ] translate all 4 `services/` files
+- [ ] translate all 4 `state/` files
+- [ ] re-validate mermaid blocks where labels were translated
+- [ ] `make build` exits 0
+
+### Task 6.2d: Translate `reference/render/` + `reference/docs/`
+
+**Files (9 total):**
+- `docs/i18n/ru/reference/render/{index,ai,env,git,ide}.md` (5)
+- `docs/i18n/ru/reference/docs/{index,browser,commands,translations}.md` (4)
+
+- [ ] translate all 5 `render/*.md` files
+- [ ] translate all 4 `docs/*.md` files
+- [ ] re-validate mermaid blocks where labels were translated
+- [ ] `make build` exits 0
+- [ ] verify every Russian file under `docs/i18n/ru/` now contains a real translation (no `TRANSLATION PENDING` placeholders remain)
 
 ### Task 6.3: Surface translated docs
 
@@ -632,13 +706,13 @@ For phases that touch many files, order is: index file last (it links to everyth
 - [x] Task 3.4: validation gate
 
 ### Phase 4 — New `concepts/`
-- [ ] Task 4.1: `index.md` + `getting-started.md`
-- [ ] Task 4.2: `architecture.md`
-- [ ] Task 4.3: `project-layout.md`
-- [ ] Task 4.4: `docker.md`
-- [ ] Task 4.5: `git.md`
-- [ ] Task 4.6: `pipelines.md`
-- [ ] Task 4.7: `state-and-locks.md`
+- [x] Task 4.1: `index.md` + `getting-started.md`
+- [x] Task 4.2: `architecture.md`
+- [x] Task 4.3: `project-layout.md`
+- [x] Task 4.4: `docker.md`
+- [x] Task 4.5: `git.md`
+- [x] Task 4.6: `pipelines.md`
+- [x] Task 4.7: `state-and-locks.md`
 - [x] Task 4.8: surface in index
 
 ### Phase 5 — README
@@ -648,8 +722,11 @@ For phases that touch many files, order is: index file last (it links to everyth
 - [x] Task 5.4: validation gate
 
 ### Phase 6 — Russian translation
-- [ ] Task 6.1: file tree skeleton
-- [ ] Task 6.2: translate
+- [x] Task 6.1: file tree skeleton
+- [x] Task 6.2a: README + top-level indexes + concepts/
+- [ ] Task 6.2b: `config/` non-split files + `templates.md`
+- [ ] Task 6.2c: `config/{commands,deploy,services,state}/` split subdirs
+- [ ] Task 6.2d: `render/` + `docs/`
 - [ ] Task 6.3: surface translations
 - [ ] Task 6.4: validate
 
