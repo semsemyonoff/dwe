@@ -733,4 +733,4 @@ These rules apply uniformly to every file translated under 6.2a/b/c/d. They are 
 ### Final
 - [x] verify every checkbox above marked `[x]`
 - [x] run full validation: `make build && make test && make lint`
-- [ ] move this plan to `docs/plans/completed/` (manual — left for user to action when archiving)
+- [x] move this plan to `docs/plans/completed/`
