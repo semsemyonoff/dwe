@@ -10,6 +10,7 @@ import (
 
 	"github.com/charmbracelet/x/term"
 
+	"devbox-cli/internal/core/usercommands/runtime/internal/runio"
 	"devbox-cli/internal/shared/liveui"
 	"devbox-cli/internal/shared/tpl"
 )
@@ -85,7 +86,7 @@ func (r *WorkflowRunner) Run(ctx context.Context, rc RunContext) error {
 				return wrapped
 			}
 			if !ok {
-				_, _ = fmt.Fprintf(stderr(rc), "  ◎ workflow %q step[%d]: skipped (when: %s)\n",
+				_, _ = fmt.Fprintf(runio.StderrOf(rc), "  ◎ workflow %q step[%d]: skipped (when: %s)\n",
 					rc.Cmd.ID, i, step.When)
 				fireOnStepEnd(rc, i, step, StepResult{
 					Status:     StepStatusSkipped,
@@ -121,7 +122,7 @@ func (r *WorkflowRunner) Run(ctx context.Context, rc RunContext) error {
 					Err:      err,
 				})
 				if step.ContinueOnError {
-					_, _ = fmt.Fprintf(stderr(rc), "  ⚠ workflow %q step[%d] parallel: continue_on_error: %v\n",
+					_, _ = fmt.Fprintf(runio.StderrOf(rc), "  ⚠ workflow %q step[%d] parallel: continue_on_error: %v\n",
 						rc.Cmd.ID, i, err)
 					continue
 				}
@@ -156,7 +157,7 @@ func (r *WorkflowRunner) Run(ctx context.Context, rc RunContext) error {
 				return wrapped
 			}
 			if gateSkip {
-				_, _ = fmt.Fprintf(stderr(rc), "  ◎ workflow %q step[%d] %q: skipped (%s)\n",
+				_, _ = fmt.Fprintf(runio.StderrOf(rc), "  ◎ workflow %q step[%d] %q: skipped (%s)\n",
 					rc.Cmd.ID, i, step.Command, gateReason)
 				fireOnStepEnd(rc, i, step, StepResult{
 					Status:     StepStatusSkipped,
@@ -187,7 +188,7 @@ func (r *WorkflowRunner) Run(ctx context.Context, rc RunContext) error {
 					Err:      err,
 				})
 				if step.ContinueOnError {
-					_, _ = fmt.Fprintf(stderr(rc), "  ⚠ workflow %q step[%d] %q: continue_on_error: %v\n",
+					_, _ = fmt.Fprintf(runio.StderrOf(rc), "  ⚠ workflow %q step[%d] %q: continue_on_error: %v\n",
 						rc.Cmd.ID, i, step.Command, err)
 					continue
 				}

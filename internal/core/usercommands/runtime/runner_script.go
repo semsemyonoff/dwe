@@ -9,6 +9,7 @@ import (
 	"path/filepath"
 	"strings"
 
+	"devbox-cli/internal/core/usercommands/runtime/internal/runio"
 	"devbox-cli/internal/shared/tpl"
 )
 
@@ -68,7 +69,7 @@ func (r *ScriptRunner) Run(ctx context.Context, rc RunContext) error {
 
 	if s.Cleanup != "" {
 		if cleanErr := r.execScript(ctx, rc, shell, s.Cleanup, contractEnv); cleanErr != nil {
-			_, _ = fmt.Fprintf(stderr(rc), "script runner: cleanup phase error: %v\n", cleanErr)
+			_, _ = fmt.Fprintf(runio.StderrOf(rc), "script runner: cleanup phase error: %v\n", cleanErr)
 		}
 	}
 
@@ -182,7 +183,7 @@ func (r *ScriptRunner) execScript(ctx context.Context, rc RunContext, shell, scr
 		c.Dir = workdir
 	}
 
-	envMap, err := buildRenderedEnv(rc.Cmd, rc)
+	envMap, err := runio.BuildRenderedEnv(rc.Cmd, rc)
 	if err != nil {
 		return err
 	}
@@ -199,12 +200,12 @@ func (r *ScriptRunner) execScript(ctx context.Context, rc RunContext, shell, scr
 		}
 	}
 
-	used, cleanup := parallelChildIO(rc, c, stdout(rc))
+	used, cleanup := runio.ParallelChildIO(rc, c, runio.StdoutOf(rc))
 	defer cleanup()
 	if !used {
-		c.Stdout = stdout(rc)
-		c.Stderr = stderr(rc)
-		c.Stdin = stdinOrOS(rc)
+		c.Stdout = runio.StdoutOf(rc)
+		c.Stderr = runio.StderrOf(rc)
+		c.Stdin = runio.StdinOrOS(rc)
 	}
 
 	if err := c.Run(); err != nil {

@@ -3,7 +3,6 @@ package runtime
 import (
 	"context"
 	"fmt"
-	"io"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -12,8 +11,7 @@ import (
 	"time"
 
 	"devbox-cli/internal/core/project/config"
-	"devbox-cli/internal/core/usercommands/model"
-	"devbox-cli/internal/core/usercommands/resolve"
+	"devbox-cli/internal/core/usercommands/runtime/internal/runio"
 	"devbox-cli/internal/shared/tpl"
 )
 
@@ -81,7 +79,7 @@ func (r *DevboxRunner) Run(ctx context.Context, rc RunContext) error {
 		cmd.Dir = rc.ProjectRoot
 	}
 
-	envMap, err := buildRenderedEnv(rc.Cmd, rc)
+	envMap, err := runio.BuildRenderedEnv(rc.Cmd, rc)
 	if err != nil {
 		return err
 	}
@@ -100,12 +98,12 @@ func (r *DevboxRunner) Run(ctx context.Context, rc RunContext) error {
 		}
 	}
 
-	used, cleanup := parallelChildIO(rc, cmd, stdout(rc))
+	used, cleanup := runio.ParallelChildIO(rc, cmd, runio.StdoutOf(rc))
 	defer cleanup()
 	if !used {
-		cmd.Stdout = stdout(rc)
-		cmd.Stderr = stderr(rc)
-		cmd.Stdin = stdinOrOS(rc)
+		cmd.Stdout = runio.StdoutOf(rc)
+		cmd.Stderr = runio.StderrOf(rc)
+		cmd.Stdin = runio.StdinOrOS(rc)
 	}
 	return cmd.Run()
 }
@@ -158,7 +156,7 @@ func (r *HostRunner) BuildCommand(ctx context.Context, rc RunContext) (*exec.Cmd
 		c.Dir = rc.ProjectRoot
 	}
 
-	envMap, err := buildRenderedEnv(cmd, rc)
+	envMap, err := runio.BuildRenderedEnv(cmd, rc)
 	if err != nil {
 		return nil, err
 	}
@@ -230,52 +228,14 @@ func (r *HostRunner) Run(ctx context.Context, rc RunContext) error {
 	if err != nil {
 		return err
 	}
-	used, cleanup := parallelChildIO(rc, c, stdout(rc))
+	used, cleanup := runio.ParallelChildIO(rc, c, runio.StdoutOf(rc))
 	defer cleanup()
 	if !used {
-		c.Stdout = stdout(rc)
-		c.Stderr = stderr(rc)
-		c.Stdin = stdinOrOS(rc)
+		c.Stdout = runio.StdoutOf(rc)
+		c.Stderr = runio.StderrOf(rc)
+		c.Stdin = runio.StdinOrOS(rc)
 	}
 	return c.Run()
-}
-
-// buildRenderedEnv renders all env values (which may contain ${...} expressions)
-// and returns the final string→string map.
-func buildRenderedEnv(cmd *model.CommandDef, ctx RunContext) (map[string]string, error) {
-	files := make(map[string]tpl.ResolvedFile)
-	if ctx.Render != nil && ctx.Render.Files != nil {
-		files = ctx.Render.Files
-	}
-	raw, err := resolve.BuildEnv(cmd, ctx.Params, ctx.Context, files)
-	if err != nil {
-		return nil, err
-	}
-	result := make(map[string]string, len(raw))
-	for k, v := range raw {
-		rendered, err := tpl.RenderCommand(v, ctx.Render)
-		if err != nil {
-			return nil, fmt.Errorf("render env %q: %w", k, err)
-		}
-		result[k] = rendered
-	}
-	return result, nil
-}
-
-// stdout returns the writer to use for stdout, defaulting to os.Stdout.
-func stdout(ctx RunContext) io.Writer {
-	if ctx.Stdout != nil {
-		return ctx.Stdout
-	}
-	return os.Stdout
-}
-
-// stderr returns the writer to use for stderr, defaulting to os.Stderr.
-func stderr(ctx RunContext) io.Writer {
-	if ctx.Stderr != nil {
-		return ctx.Stderr
-	}
-	return os.Stderr
 }
 
 // shellQuote wraps a path in single quotes for safe inclusion in a sh -c string.

@@ -1,14 +1,49 @@
-package runtime
+// Package runio holds I/O helpers shared by every runner subpackage:
+// stdout/stderr/stdin defaulting, parallel-sub-step PTY allocation, and the
+// rendered env builder. Living under internal/ keeps these helpers usable
+// only from within runtime/ and its subpackages.
+package runio
 
 import (
+	"fmt"
 	"io"
+	"os"
 	"os/exec"
 	"sync"
 
 	"github.com/creack/pty"
+
+	"devbox-cli/internal/core/usercommands/model"
+	"devbox-cli/internal/core/usercommands/resolve"
+	"devbox-cli/internal/core/usercommands/runtime/spec"
+	"devbox-cli/internal/shared/tpl"
 )
 
-// parallelChildIO conditionally allocates a PTY for a parallel sub-step's
+// StdoutOf returns the writer to use for stdout, defaulting to os.Stdout.
+func StdoutOf(ctx spec.RunContext) io.Writer {
+	if ctx.Stdout != nil {
+		return ctx.Stdout
+	}
+	return os.Stdout
+}
+
+// StderrOf returns the writer to use for stderr, defaulting to os.Stderr.
+func StderrOf(ctx spec.RunContext) io.Writer {
+	if ctx.Stderr != nil {
+		return ctx.Stderr
+	}
+	return os.Stderr
+}
+
+// StdinOrOS returns ctx.Stdin if set, otherwise os.Stdin.
+func StdinOrOS(ctx spec.RunContext) io.Reader {
+	if ctx.Stdin != nil {
+		return ctx.Stdin
+	}
+	return os.Stdin
+}
+
+// ParallelChildIO conditionally allocates a PTY for a parallel sub-step's
 // child process so tools that key colour output off `isatty(STDOUT)` — Pest,
 // PHPUnit/Symfony Console, ripgrep, fzf, lipgloss, … — keep emitting ANSI
 // codes even though the captured output is consumed by a LineTee rather than
@@ -33,7 +68,7 @@ import (
 // Returns (used, cleanup). When used==false the cleanup is a no-op and the
 // caller must wire stdin/stdout/stderr itself; when used==true the runner
 // must NOT overwrite c.Stdin / c.Stdout / c.Stderr afterwards.
-func parallelChildIO(rc RunContext, c *exec.Cmd, stdoutSink io.Writer) (used bool, cleanup func()) {
+func ParallelChildIO(rc spec.RunContext, c *exec.Cmd, stdoutSink io.Writer) (used bool, cleanup func()) {
 	if !rc.UnderParallel || stdoutSink == nil {
 		return false, func() {}
 	}
@@ -66,4 +101,26 @@ func parallelChildIO(rc RunContext, c *exec.Cmd, stdoutSink io.Writer) (used boo
 		})
 	}
 	return true, cleanup
+}
+
+// BuildRenderedEnv renders all env values (which may contain ${...} expressions)
+// and returns the final string→string map.
+func BuildRenderedEnv(cmd *model.CommandDef, ctx spec.RunContext) (map[string]string, error) {
+	files := make(map[string]tpl.ResolvedFile)
+	if ctx.Render != nil && ctx.Render.Files != nil {
+		files = ctx.Render.Files
+	}
+	raw, err := resolve.BuildEnv(cmd, ctx.Params, ctx.Context, files)
+	if err != nil {
+		return nil, err
+	}
+	result := make(map[string]string, len(raw))
+	for k, v := range raw {
+		rendered, err := tpl.RenderCommand(v, ctx.Render)
+		if err != nil {
+			return nil, fmt.Errorf("render env %q: %w", k, err)
+		}
+		result[k] = rendered
+	}
+	return result, nil
 }

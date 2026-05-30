@@ -6,6 +6,7 @@ import (
 	"os"
 
 	"devbox-cli/internal/core/ui/widgets"
+	"devbox-cli/internal/core/usercommands/runtime/internal/runio"
 	"devbox-cli/internal/shared/i18n"
 	"devbox-cli/internal/shared/render"
 	"devbox-cli/internal/shared/tpl"
@@ -70,7 +71,7 @@ func ConfirmCommand(ctx RunContext) error {
 		return nil
 	}
 
-	if render.NewWriter(stdout(ctx)).Confirm(message, stdin) {
+	if render.NewWriter(runio.StdoutOf(ctx)).Confirm(message, stdin) {
 		return nil
 	}
 	return &commandAbortedError{}

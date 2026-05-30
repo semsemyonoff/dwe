@@ -5,14 +5,13 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"io"
 	"log/slog"
-	"os"
 	"slices"
 	"time"
 
 	"devbox-cli/internal/core/notify"
 	"devbox-cli/internal/core/usercommands/model"
+	"devbox-cli/internal/core/usercommands/runtime/internal/runio"
 	"devbox-cli/internal/core/usercommands/runtime/spec"
 	"devbox-cli/internal/shared/render"
 	"devbox-cli/internal/shared/tpl"
@@ -30,14 +29,6 @@ type RunContext = spec.RunContext
 // FileProbeResult tracks the outcome of a single file probe.
 // Alias for spec.FileProbeResult.
 type FileProbeResult = spec.FileProbeResult
-
-// stdinOrOS returns ctx.Stdin if set, otherwise os.Stdin.
-func stdinOrOS(ctx RunContext) io.Reader {
-	if ctx.Stdin != nil {
-		return ctx.Stdin
-	}
-	return os.Stdin
-}
 
 // NewRunner returns the appropriate Runner implementation for the given command type.
 // An error is returned for unknown command types.
@@ -190,10 +181,10 @@ func emitCommandMessage(ctx RunContext, message string, success bool) error {
 		message = rendered
 	}
 	if success {
-		render.NewWriter(stdout(ctx)).Success(message)
+		render.NewWriter(runio.StdoutOf(ctx)).Success(message)
 		return nil
 	}
-	render.NewWriter(stderr(ctx)).Error(message)
+	render.NewWriter(runio.StderrOf(ctx)).Error(message)
 	return nil
 }
 

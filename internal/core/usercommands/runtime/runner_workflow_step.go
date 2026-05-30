@@ -9,6 +9,7 @@ import (
 	"devbox-cli/internal/core/ui/widgets"
 	"devbox-cli/internal/core/usercommands/model"
 	"devbox-cli/internal/core/usercommands/resolve"
+	"devbox-cli/internal/core/usercommands/runtime/internal/runio"
 	"devbox-cli/internal/shared/render"
 	"devbox-cli/internal/shared/tpl"
 )
@@ -42,7 +43,7 @@ func (r *WorkflowRunner) runConfirmStep(ctx RunContext, message string) error {
 		return nil
 	}
 
-	if render.NewWriter(stdout(ctx)).Confirm(message, stdin) {
+	if render.NewWriter(runio.StdoutOf(ctx)).Confirm(message, stdin) {
 		return nil
 	}
 	return fmt.Errorf("aborted by user")

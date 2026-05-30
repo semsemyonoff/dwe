@@ -276,12 +276,12 @@ This is a NEW task between intra-file splits and subpkg extraction. Without it, 
 - Modify: every runner file that calls these helpers: `confirmation.go`, `runner_builtin.go`, `runner_script.go`, `runner_service.go`, `runner_workflow.go` (+ the step/parallel/helpers files from Task 2)
 
 **Atomic sequence within Task 2.5** (do NOT run `make test` between sub-steps — intermediate states are non-compiling):
-- [ ] step 1: create `runtime/internal/runio/runio.go` exporting `StdoutOf(ctx) io.Writer`, `StderrOf(ctx) io.Writer`, `StdinOrOS(ctx) io.Reader`, `ParallelChildIO(...)`, `BuildRenderedEnv(...)` — bodies copied verbatim from `runner_host.go:245,266,274`, `runner.go:125`, `parallel_pty.go`
-- [ ] step 2: in each runner file (`runner_host.go`, `confirmation.go`, `runner_builtin.go`, `runner_script.go`, `runner_service.go`, `runner_workflow.go` + the Task 2 split files), replace `stdout(ctx)` → `runio.StdoutOf(ctx)`, `stderr(ctx)` → `runio.StderrOf(ctx)`, `stdinOrOS(ctx)` → `runio.StdinOrOS(ctx)`, `parallelChildIO(...)` → `runio.ParallelChildIO(...)`, `buildRenderedEnv(...)` → `runio.BuildRenderedEnv(...)`
-- [ ] step 3: delete the original definitions (`stdout`, `stderr`, `stdinOrOS`, `parallelChildIO`, `buildRenderedEnv`) from `runner_host.go` / `runner.go` / `parallel_pty.go`
-- [ ] `internal/runio/` placement under `internal/` ensures only runtime-subpkgs can import it (Go visibility rule — `runners/host/` etc. can import `runtime/internal/runio/` because they share the `runtime/` parent)
-- [ ] run `make test` — must pass before Task 3
-- [ ] run `make lint` — must pass before Task 3
+- [x] step 1: create `runtime/internal/runio/runio.go` exporting `StdoutOf(ctx) io.Writer`, `StderrOf(ctx) io.Writer`, `StdinOrOS(ctx) io.Reader`, `ParallelChildIO(...)`, `BuildRenderedEnv(...)` — bodies copied verbatim from `runner_host.go:245,266,274`, `runner.go:125`, `parallel_pty.go`
+- [x] step 2: in each runner file (`runner_host.go`, `confirmation.go`, `runner_builtin.go`, `runner_script.go`, `runner_service.go`, `runner_workflow.go` + the Task 2 split files), replace `stdout(ctx)` → `runio.StdoutOf(ctx)`, `stderr(ctx)` → `runio.StderrOf(ctx)`, `stdinOrOS(ctx)` → `runio.StdinOrOS(ctx)`, `parallelChildIO(...)` → `runio.ParallelChildIO(...)`, `buildRenderedEnv(...)` → `runio.BuildRenderedEnv(...)`
+- [x] step 3: delete the original definitions (`stdout`, `stderr`, `stdinOrOS`, `parallelChildIO`, `buildRenderedEnv`) from `runner_host.go` / `runner.go` / `parallel_pty.go` (parallel_pty.go deleted entirely)
+- [x] `internal/runio/` placement under `internal/` ensures only runtime-subpkgs can import it (Go visibility rule — `runners/host/` etc. can import `runtime/internal/runio/` because they share the `runtime/` parent)
+- [x] run `make test` — must pass before Task 3
+- [x] run `make lint` — must pass before Task 3
 
 ### Task 3: Extract `runners/host/`, `runners/service/`, `runners/script/`, `runners/builtin/` subpackages
 

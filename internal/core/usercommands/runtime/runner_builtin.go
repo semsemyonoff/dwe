@@ -6,6 +6,7 @@ import (
 	"os"
 
 	"devbox-cli/internal/core/execution/builtin"
+	"devbox-cli/internal/core/usercommands/runtime/internal/runio"
 	"devbox-cli/internal/shared/render"
 	"devbox-cli/internal/shared/tpl"
 )
@@ -54,7 +55,7 @@ func (r *BuiltinRunner) Run(ctx context.Context, rc RunContext) error {
 		return fmt.Errorf("builtin %q: %w", name, err)
 	}
 
-	stdin := stdinOrOS(rc)
+	stdin := runio.StdinOrOS(rc)
 	if f, ok := stdin.(*os.File); ok {
 		stdin = f
 	}
@@ -63,7 +64,7 @@ func (r *BuiltinRunner) Run(ctx context.Context, rc RunContext) error {
 		Config:       rc.Config,
 		DockerConfig: rc.DockerConfig,
 		ProjectRoot:  rc.ProjectRoot,
-		Output:       render.NewWriter(stdout(rc)),
+		Output:       render.NewWriter(runio.StdoutOf(rc)),
 		Stdin:        stdin,
 		SkipConfirm:  rc.SkipConfirm || rc.NonInteractive || isNonInteractive(),
 	}

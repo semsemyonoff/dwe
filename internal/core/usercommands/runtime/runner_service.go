@@ -9,6 +9,7 @@ import (
 
 	"devbox-cli/internal/core/project/config"
 	"devbox-cli/internal/core/usercommands/model"
+	"devbox-cli/internal/core/usercommands/runtime/internal/runio"
 	"devbox-cli/internal/shared/docker"
 	"devbox-cli/internal/shared/render"
 	"devbox-cli/internal/shared/tpl"
@@ -40,7 +41,7 @@ func (r *ServiceExecRunner) BuildCommand(ctx context.Context, rc RunContext, com
 		return nil, err
 	}
 
-	envVars, err := buildRenderedEnv(rc.Cmd, rc)
+	envVars, err := runio.BuildRenderedEnv(rc.Cmd, rc)
 	if err != nil {
 		return nil, err
 	}
@@ -64,7 +65,7 @@ func (r *ServiceExecRunner) BuildCommand(ctx context.Context, rc RunContext, com
 		}
 		useExec = running
 		if !running {
-			render.NewWriter(stderr(rc)).Warning(fmt.Sprintf("service %q is not running — falling back to ephemeral `docker compose run --rm`; state will not persist between invocations", svc))
+			render.NewWriter(runio.StderrOf(rc)).Warning(fmt.Sprintf("service %q is not running — falling back to ephemeral `docker compose run --rm`; state will not persist between invocations", svc))
 		}
 	}
 
@@ -83,12 +84,12 @@ func (r *ServiceExecRunner) Run(ctx context.Context, rc RunContext) error {
 	if err != nil {
 		return err
 	}
-	used, cleanup := parallelChildIO(rc, c, stdout(rc))
+	used, cleanup := runio.ParallelChildIO(rc, c, runio.StdoutOf(rc))
 	defer cleanup()
 	if !used {
-		c.Stdout = stdout(rc)
-		c.Stderr = stderr(rc)
-		c.Stdin = stdinOrOS(rc)
+		c.Stdout = runio.StdoutOf(rc)
+		c.Stderr = runio.StderrOf(rc)
+		c.Stdin = runio.StdinOrOS(rc)
 	}
 	return c.Run()
 }
@@ -109,7 +110,7 @@ func (r *ServiceRunRunner) BuildCommand(ctx context.Context, rc RunContext, comp
 		return nil, err
 	}
 
-	envVars, err := buildRenderedEnv(rc.Cmd, rc)
+	envVars, err := runio.BuildRenderedEnv(rc.Cmd, rc)
 	if err != nil {
 		return nil, err
 	}
@@ -129,12 +130,12 @@ func (r *ServiceRunRunner) Run(ctx context.Context, rc RunContext) error {
 	if err != nil {
 		return err
 	}
-	used, cleanup := parallelChildIO(rc, c, stdout(rc))
+	used, cleanup := runio.ParallelChildIO(rc, c, runio.StdoutOf(rc))
 	defer cleanup()
 	if !used {
-		c.Stdout = stdout(rc)
-		c.Stderr = stderr(rc)
-		c.Stdin = stdinOrOS(rc)
+		c.Stdout = runio.StdoutOf(rc)
+		c.Stderr = runio.StderrOf(rc)
+		c.Stdin = runio.StdinOrOS(rc)
 	}
 	return c.Run()
 }

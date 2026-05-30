@@ -14,6 +14,7 @@ import (
 	"golang.org/x/sync/errgroup"
 
 	"devbox-cli/internal/core/usercommands/model"
+	"devbox-cli/internal/core/usercommands/runtime/internal/runio"
 	"devbox-cli/internal/shared/liveui"
 	"devbox-cli/internal/shared/render"
 )
@@ -297,7 +298,7 @@ func (r *WorkflowRunner) runParallelGroup(parentCtx context.Context, rc RunConte
 		switch {
 		case res.cancelled:
 			if emitStatus {
-				_, _ = fmt.Fprintf(stderr(rc), "  ◎ [%d/%d] Cancelled: %s\n", i+1, n, res.sub.Command)
+				_, _ = fmt.Fprintf(runio.StderrOf(rc), "  ◎ [%d/%d] Cancelled: %s\n", i+1, n, res.sub.Command)
 			}
 		case res.skipped:
 			if emitStatus {
@@ -305,31 +306,31 @@ func (r *WorkflowRunner) runParallelGroup(parentCtx context.Context, rc RunConte
 				if res.output != "" {
 					reason = res.output
 				}
-				_, _ = fmt.Fprintf(stderr(rc), "  ◎ [%d/%d] Skipped: %s (%s)\n", i+1, n, res.sub.Command, reason)
+				_, _ = fmt.Fprintf(runio.StderrOf(rc), "  ◎ [%d/%d] Skipped: %s (%s)\n", i+1, n, res.sub.Command, reason)
 			}
 		case res.err != nil && res.continueOnError:
 			failures++
 			if emitStatus {
-				_, _ = fmt.Fprintf(stderr(rc), "  ◎ [%d/%d] Failed (continue_on_error): %s\n", i+1, n, res.sub.Command)
+				_, _ = fmt.Fprintf(runio.StderrOf(rc), "  ◎ [%d/%d] Failed (continue_on_error): %s\n", i+1, n, res.sub.Command)
 			}
-			dumpSubStepOutput(stderr(rc), res.sub.Command, res.output)
+			dumpSubStepOutput(runio.StderrOf(rc), res.sub.Command, res.output)
 		case res.err != nil:
 			failures++
 			if emitStatus {
-				_, _ = fmt.Fprintf(stderr(rc), "  ✗ [%d/%d] Failed: %s\n", i+1, n, res.sub.Command)
+				_, _ = fmt.Fprintf(runio.StderrOf(rc), "  ✗ [%d/%d] Failed: %s\n", i+1, n, res.sub.Command)
 			}
-			dumpSubStepOutput(stderr(rc), res.sub.Command, res.output)
+			dumpSubStepOutput(runio.StderrOf(rc), res.sub.Command, res.output)
 		default:
 			if emitStatus {
-				_, _ = fmt.Fprintf(stderr(rc), "  ✓ [%d/%d] Done: %s\n", i+1, n, res.sub.Command)
+				_, _ = fmt.Fprintf(runio.StderrOf(rc), "  ✓ [%d/%d] Done: %s\n", i+1, n, res.sub.Command)
 			}
 			if alwaysShowOutput {
-				dumpSubStepOutput(stderr(rc), res.sub.Command, res.output)
+				dumpSubStepOutput(runio.StderrOf(rc), res.sub.Command, res.output)
 			}
 		}
 	}
 
-	writeParallelSummary(stderr(rc), rc.Cmd.ID, time.Since(groupStart), failures > 0, isTTY)
+	writeParallelSummary(runio.StderrOf(rc), rc.Cmd.ID, time.Since(groupStart), failures > 0, isTTY)
 
 	return groupErr
 }
