@@ -76,7 +76,9 @@ func exportRoot(dst string, root docs.DocRoot, opts Opts) error {
 	// produced "dst/reference/reference/..." and stuffed internals under
 	// reference; using the root name keeps roots separated and matches the
 	// source layout.
-	tree, err := docs.BuildTree(root)
+	// Export always walks the canonical English source tree; per-locale files
+	// live under i18n/<locale>/ and are exported alongside as ordinary files.
+	tree, err := docs.BuildTree(root, "en")
 	if err != nil {
 		return fmt.Errorf("cannot build tree for %s docs: %w", root.Name, err)
 	}

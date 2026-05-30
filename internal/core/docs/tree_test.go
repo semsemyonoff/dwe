@@ -22,7 +22,7 @@ func TestBuildTree(t *testing.T) {
 		FS:   testFS,
 	}
 
-	tree, err := BuildTree(root)
+	tree, err := BuildTree(root, "en")
 	if err != nil {
 		t.Fatalf("BuildTree failed: %v", err)
 	}
@@ -110,7 +110,7 @@ func TestBuildTreeFiltersNonMarkdown(t *testing.T) {
 	}
 
 	root := DocRoot{Name: "test", FS: testFS}
-	tree, err := BuildTree(root)
+	tree, err := BuildTree(root, "en")
 	if err != nil {
 		t.Fatalf("BuildTree failed: %v", err)
 	}
@@ -133,7 +133,7 @@ func TestBuildTreeFiltersNonMarkdown(t *testing.T) {
 func TestBuildTreeEmptyRoot(t *testing.T) {
 	testFS := fstest.MapFS{}
 	root := DocRoot{Name: "test", FS: testFS}
-	tree, err := BuildTree(root)
+	tree, err := BuildTree(root, "en")
 	if err != nil {
 		t.Fatalf("BuildTree failed: %v", err)
 	}

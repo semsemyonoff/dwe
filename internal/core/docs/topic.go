@@ -215,7 +215,7 @@ func AllTopics(roots []DocRoot, locale string) []TopicEntry {
 	seen := make(map[string]bool) // Track (source, path) pairs to avoid duplicates
 
 	for _, root := range roots {
-		tree, err := BuildTree(root)
+		tree, err := BuildTree(root, locale)
 		if err != nil {
 			// Skip roots with errors
 			continue

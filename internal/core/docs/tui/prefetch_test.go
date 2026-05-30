@@ -293,3 +293,55 @@ done:
 
 	require.Equal(t, len(batch1)+len(batch2), renderer.calls, "all items should have been rendered")
 }
+
+// TestPrefetchCancelsStaleRendersOnBeginTopic guards the cold-mmdc freeze
+// fix: workers used to run stale work to completion (Chromium cold-start
+// can take many seconds per render), so rapid tree navigation piled up
+// wasted mmdc spawns and the UI felt frozen on first launch. After the
+// fix, BeginTopic rotates a per-topic context that cancels the in-flight
+// renderer.Render call and stale queued items are dropped before mmdc is
+// spawned.
+func TestPrefetchCancelsStaleRendersOnBeginTopic(t *testing.T) {
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	progress := make(chan ProgressMsg, 100)
+	// Long delay so the in-flight render is definitely cancelled by
+	// BeginTopic rather than completing on its own.
+	renderer := &FakeRenderer{delay: 2 * time.Second}
+
+	prefetch := NewPrefetch(ctx, renderer, progress)
+	defer prefetch.Close()
+
+	// Queue 4 items; with 2 workers, 2 enter Render() and the rest sit
+	// in the workQueue.
+	prefetch.Queue([]WorkItem{
+		{Source: "stale_a", Theme: mermaid.ThemeDark, Width: 100, Index: 0},
+		{Source: "stale_b", Theme: mermaid.ThemeDark, Width: 100, Index: 1},
+		{Source: "stale_c", Theme: mermaid.ThemeDark, Width: 100, Index: 2},
+		{Source: "stale_d", Theme: mermaid.ThemeDark, Width: 100, Index: 3},
+	})
+
+	// Let the two workers enter Render() — the FakeRenderer will block on
+	// its delay select waiting on ctx.Done().
+	time.Sleep(50 * time.Millisecond)
+	require.GreaterOrEqual(t, renderer.currentConcurrent.Load(), int32(1),
+		"expected at least one worker mid-render before BeginTopic")
+
+	prefetch.BeginTopic()
+
+	// After BeginTopic, in-flight renders observe ctx.Done() and return
+	// promptly; queued items see the stale generation and skip Render
+	// entirely. currentConcurrent should fall back to 0 quickly.
+	require.Eventually(t, func() bool {
+		return renderer.currentConcurrent.Load() == 0
+	}, 500*time.Millisecond, 10*time.Millisecond,
+		"in-flight renders should be cancelled by BeginTopic")
+
+	// Verify queued stale items did not spawn additional Render calls
+	// during the wait window.
+	staleCalls := renderer.calls
+	time.Sleep(100 * time.Millisecond)
+	require.Equal(t, staleCalls, renderer.calls,
+		"stale queued items must not enter Render after BeginTopic")
+}

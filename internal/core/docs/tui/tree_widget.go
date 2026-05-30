@@ -23,6 +23,7 @@ type TreeNode struct {
 
 type TreeWidget struct {
 	roots   []docs.DocRoot
+	locale  string // Locale used to pick per-file title/headings (with English fallback).
 	root    *TreeNode
 	cursor  *TreeNode
 	visible []*TreeNode
@@ -55,12 +56,82 @@ func projectDevboxForTUI(children []*docs.Node) []*docs.Node {
 	return out
 }
 
-func NewTreeWidget(roots []docs.DocRoot) (*TreeWidget, error) {
-	tw := &TreeWidget{roots: roots}
+func NewTreeWidget(roots []docs.DocRoot, locale string) (*TreeWidget, error) {
+	tw := &TreeWidget{roots: roots, locale: locale}
 	if err := tw.rebuild(); err != nil {
 		return nil, err
 	}
 	return tw, nil
+}
+
+// Rebuild discards the current tree and re-walks the roots with the given
+// locale, re-parsing per-file Title/Headings so the navigation reflects the
+// translated text. It tries to keep the user on the same row by matching
+// the previous cursor's RootName + Path (and, for heading rows, the heading
+// index in the parent file); when the rebuild changes the tree shape enough
+// that the previous cursor can't be located, it falls back to the first
+// visible row.
+func (tw *TreeWidget) Rebuild(locale string) error {
+	prev := tw.cursor
+	var prevPath, prevRoot string
+	var prevHeadingIdx = -1
+	var prevWasDir bool
+	if prev != nil && prev.Node != nil {
+		prevPath = prev.Node.Path
+		prevRoot = prev.RootName
+		prevWasDir = prev.Node.IsDir
+		if prev.Heading != nil && prev.Parent != nil {
+			for i, sib := range prev.Parent.Children {
+				if sib == prev {
+					prevHeadingIdx = i
+					break
+				}
+			}
+		}
+	}
+
+	tw.locale = locale
+	tw.cursor = nil
+	if err := tw.rebuild(); err != nil {
+		return err
+	}
+
+	if prevPath == "" && !prevWasDir {
+		return nil
+	}
+	if match := tw.findByPath(tw.root, prevRoot, prevPath, prevWasDir); match != nil {
+		if prevHeadingIdx >= 0 && prevHeadingIdx < len(match.Children) {
+			tw.cursor = match.Children[prevHeadingIdx]
+			// Make sure the heading row is reachable in `visible`.
+			expandAncestors(tw.cursor)
+		} else {
+			tw.cursor = match
+			expandAncestors(tw.cursor)
+		}
+		tw.recomputeVisible()
+	}
+	return nil
+}
+
+// findByPath walks the tree and returns the file-or-directory node matching
+// the (rootName, path, isDir) tuple. Heading children are skipped — callers
+// re-pick a heading by index off the returned file node.
+func (tw *TreeWidget) findByPath(node *TreeNode, rootName, path string, isDir bool) *TreeNode {
+	if node == nil {
+		return nil
+	}
+	if node.Node != nil && node.Heading == nil &&
+		node.RootName == rootName &&
+		node.Node.Path == path &&
+		node.Node.IsDir == isDir {
+		return node
+	}
+	for _, child := range node.Children {
+		if got := tw.findByPath(child, rootName, path, isDir); got != nil {
+			return got
+		}
+	}
+	return nil
 }
 
 func (tw *TreeWidget) rebuild() error {
@@ -74,7 +145,7 @@ func (tw *TreeWidget) rebuild() error {
 	useGroups := len(tw.roots) > 1
 
 	for _, root := range tw.roots {
-		tree, err := docs.BuildTree(root)
+		tree, err := docs.BuildTree(root, tw.locale)
 		if err != nil {
 			continue
 		}
@@ -151,7 +222,8 @@ func (tw *TreeWidget) addNodeAsChild(node *docs.Node, parent *TreeNode, rootName
 func (tw *TreeWidget) recomputeVisible() {
 	tw.visible = nil
 	if tw.filter != nil && tw.filter.Active && tw.filter.Query != "" {
-		tw.walkFiltered(tw.root, false)
+		matched := tw.markFilterMatches(tw.root)
+		tw.emitFiltered(tw.root, matched)
 		tw.ensureCursorVisible()
 		return
 	}
@@ -170,38 +242,54 @@ func (tw *TreeWidget) walkVisible(node *TreeNode) {
 	}
 }
 
-// walkFiltered emits a node when it matches the filter, plus any ancestor on
-// the path to a match (so the user sees where the match lives in the tree).
-// ancestorAdded tracks whether the parent chain has already been added to
-// `visible`, preventing duplicates when a directory has multiple matching
-// descendants.
-func (tw *TreeWidget) walkFiltered(node *TreeNode, ancestorAdded bool) bool {
-	selfMatch := node != tw.root && tw.filter.Matches(nodeLabel(node))
-	childMatch := false
-	if node.Children != nil {
-		// Walk children first so we know whether to include this node as an
-		// ancestor of a match.
-		appendIdx := len(tw.visible)
-		if node != tw.root && (selfMatch || ancestorAdded) {
-			tw.visible = append(tw.visible, node)
-			ancestorAdded = true
+// markFilterMatches walks the tree and returns a set of nodes that should
+// be visible under the active filter: a node matches itself, OR has any
+// descendant that matches. This is the two-phase counterpart of the old
+// in-place algorithm — the old version only included a node when one of
+// its own ancestors was also added during the same pass, which silently
+// dropped parent files of matching headings (the user saw a lone H2 row
+// floating with no file context, or, worse, nothing at all when ancestor
+// labels did not match the query either).
+func (tw *TreeWidget) markFilterMatches(node *TreeNode) map[*TreeNode]bool {
+	matched := map[*TreeNode]bool{}
+	var walk func(*TreeNode) bool
+	walk = func(n *TreeNode) bool {
+		if n == nil {
+			return false
 		}
-		for _, child := range node.Children {
-			if tw.walkFiltered(child, ancestorAdded) {
-				childMatch = true
+		any := false
+		if n != tw.root && tw.filter.Matches(nodeLabel(n)) {
+			matched[n] = true
+			any = true
+		}
+		for _, c := range n.Children {
+			if walk(c) {
+				matched[n] = true
+				any = true
 			}
 		}
-		if !selfMatch && !childMatch && node != tw.root {
-			// We tentatively added this node but no descendant matched —
-			// roll it back. Only roll back if we were the one to add it.
-			if appendIdx < len(tw.visible) && tw.visible[appendIdx] == node {
-				tw.visible = append(tw.visible[:appendIdx], tw.visible[appendIdx+1:]...)
-			}
+		return any
+	}
+	walk(node)
+	return matched
+}
+
+// emitFiltered appends matched nodes to tw.visible in pre-order so the
+// rendered tree preserves the hierarchy. The root is never appended (the
+// walkVisible / renderTree contract treats root as a header, not a row).
+func (tw *TreeWidget) emitFiltered(node *TreeNode, matched map[*TreeNode]bool) {
+	if node == nil {
+		return
+	}
+	if node != tw.root {
+		if !matched[node] {
+			return
 		}
-	} else if selfMatch && node != tw.root {
 		tw.visible = append(tw.visible, node)
 	}
-	return selfMatch || childMatch
+	for _, c := range node.Children {
+		tw.emitFiltered(c, matched)
+	}
 }
 
 // ensureCursorVisible reparks the cursor on the first visible node when the

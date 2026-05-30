@@ -44,8 +44,11 @@ func TestNewModel(t *testing.T) {
 		t.Error("Model.StatusBar should not be nil")
 	}
 
-	if m.Init() != nil {
-		t.Error("Init should return nil")
+	// Init returns a non-nil Cmd: the initial topic load runs in a goroutine
+	// (see loadTopic / topicLoadedMsg) so the bubbletea event loop stays
+	// responsive while the first file resolves and renders.
+	if m.Init() == nil {
+		t.Error("Init should return a Cmd for the initial async topic load")
 	}
 }
 

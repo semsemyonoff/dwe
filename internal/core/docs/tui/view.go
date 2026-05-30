@@ -172,7 +172,7 @@ func (m *Model) renderHelpFooter(totalWidth int) string {
 func (m *Model) helpHeight() int { return footerRows }
 
 func (m *Model) renderTree() string {
-	if m.Tree == nil || m.Tree.VisibleNodes() == nil {
+	if m.Tree == nil {
 		return ""
 	}
 
@@ -182,9 +182,17 @@ func (m *Model) renderTree() string {
 	inner := leftPanelInnerWidth(m.TermWidth)
 	var sb strings.Builder
 
+	// The filter header MUST render even when the current query has zero
+	// matches — otherwise typing a non-matching second character makes the
+	// entire left panel blank and the user has no feedback on what they
+	// typed. The header itself shows the query and match count.
 	if m.Filter != nil && m.Filter.Active {
 		sb.WriteString(m.renderFilterHeader(inner, accent, muted))
 		sb.WriteString("\n")
+	}
+
+	if m.Tree.VisibleNodes() == nil {
+		return sb.String()
 	}
 
 	for i, node := range m.Tree.VisibleNodes() {

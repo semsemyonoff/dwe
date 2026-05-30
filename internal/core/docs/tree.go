@@ -25,7 +25,14 @@ type Node struct {
 // hiding internals, re-rooting at reference/) are the caller's job; doing
 // it here would silently drop content for non-TUI consumers like
 // `devbox docs export --include-internals`.
-func BuildTree(root DocRoot) (*Node, error) {
+//
+// locale controls which file variant is parsed for the per-node Title and
+// Headings. Empty / "en" reads English content directly; other locales go
+// through ResolveContent so a translated H1/H2/H3 appears in the tree when
+// available, with automatic fallback to English. The tree shape itself is
+// always derived from the English layout — translations may not cover every
+// file, but the navigation still needs to expose them.
+func BuildTree(root DocRoot, locale string) (*Node, error) {
 	rootNode := &Node{
 		Name:     root.Name,
 		Path:     "",
@@ -33,7 +40,7 @@ func BuildTree(root DocRoot) (*Node, error) {
 		Children: []*Node{},
 	}
 
-	if err := walkFS(root.FS, ".", "", rootNode, root); err != nil {
+	if err := walkFS(root.FS, ".", "", rootNode, root, locale); err != nil {
 		return nil, fmt.Errorf("failed to build tree for %s: %w", root.Name, err)
 	}
 
@@ -41,7 +48,7 @@ func BuildTree(root DocRoot) (*Node, error) {
 	return rootNode, nil
 }
 
-func walkFS(fsys fs.FS, dir string, relPath string, parent *Node, root DocRoot) error {
+func walkFS(fsys fs.FS, dir string, relPath string, parent *Node, root DocRoot, locale string) error {
 	entries, err := fs.ReadDir(fsys, dir)
 	if err != nil {
 		return err
@@ -69,7 +76,7 @@ func walkFS(fsys fs.FS, dir string, relPath string, parent *Node, root DocRoot) 
 
 			// Recurse into the directory.
 			subPath := filepath.Join(dir, name)
-			if err := walkFS(fsys, subPath, entryRelPath, dirNode, root); err != nil {
+			if err := walkFS(fsys, subPath, entryRelPath, dirNode, root, locale); err != nil {
 				return err
 			}
 		} else if strings.HasSuffix(name, ".md") {
@@ -77,13 +84,15 @@ func walkFS(fsys fs.FS, dir string, relPath string, parent *Node, root DocRoot) 
 			// first H1 (used as the tree label) and the H2/H3 headings (used
 			// as expandable sub-rows). Read failures are non-fatal: the node
 			// is still added with an empty title and the tree falls back to
-			// the filename.
+			// the filename. Use ResolveContent so a translated H1/H2/H3 appears
+			// in the tree when a localized variant exists for this file —
+			// fallback to English is built into ResolveContent.
 			fileNode := &Node{
 				Name:  name,
 				Path:  entryRelPathForward,
 				IsDir: false,
 			}
-			if content, err := fs.ReadFile(fsys, filepath.Join(dir, name)); err == nil {
+			if content, _, _, err := ResolveContent(root, entryRelPathForward, locale); err == nil {
 				fileNode.Title, fileNode.Headings = ParseDoc(content)
 			}
 			parent.Children = append(parent.Children, fileNode)
