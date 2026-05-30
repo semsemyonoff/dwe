@@ -581,11 +581,11 @@ These rules apply uniformly to every file translated under 6.2a/b/c/d. They are 
 - `docs/i18n/ru/reference/config/ui.md`
 - `docs/i18n/ru/reference/config/validate.md`
 
-- [ ] translate `templates.md` (engine reference)
-- [ ] translate `config/index.md` (config-section navigation)
-- [ ] translate all 14 non-split `config/*.md` files
-- [ ] re-validate mermaid blocks where labels were translated
-- [ ] `make build` exits 0
+- [x] translate `templates.md` (engine reference)
+- [x] translate `config/index.md` (config-section navigation)
+- [x] translate all 14 non-split `config/*.md` files
+- [x] re-validate mermaid blocks where labels were translated
+- [x] `make build` exits 0
 
 ### Task 6.2c: Translate `reference/config/{commands,deploy,services,state}/` split subdirs
 
@@ -724,7 +724,7 @@ These rules apply uniformly to every file translated under 6.2a/b/c/d. They are 
 ### Phase 6 — Russian translation
 - [x] Task 6.1: file tree skeleton
 - [x] Task 6.2a: README + top-level indexes + concepts/
-- [ ] Task 6.2b: `config/` non-split files + `templates.md`
+- [x] Task 6.2b: `config/` non-split files + `templates.md`
 - [ ] Task 6.2c: `config/{commands,deploy,services,state}/` split subdirs
 - [ ] Task 6.2d: `render/` + `docs/`
 - [ ] Task 6.3: surface translations

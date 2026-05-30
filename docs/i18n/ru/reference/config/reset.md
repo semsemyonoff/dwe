@@ -1,5 +1,80 @@
 > Translated from: reference/config/reset.md @ cb3e4418d83e
 
-<!-- TRANSLATION PENDING (Phase 6 Task 6.2) -->
+# Reset
 
-_Перевод в процессе. Актуальная версия — на английском языке._
+Команда `devbox reset run` сносит проект или отдельный сервис и возвращает его в чистое состояние, требующее последующего деплоя.
+
+## Reset всего проекта
+
+```
+devbox reset run [--yes]
+```
+
+Выполняет `devbox/reset.yml`. Файл **опционален** — когда отсутствует, Devbox использует встроенный дефолтный reset-пайплайн и печатает одну info-строку в stderr: `Using built-in default reset pipeline (override with devbox/reset.yml).` Info-строка подавляется в режиме `--output json`.
+
+**Дефолтный reset-пайплайн** (срабатывает, когда `devbox/reset.yml` отсутствует):
+
+Фазы: `pre` (confirm-промпт: "This will stop containers, remove project volumes, and delete generated data.") → `stop` (`type: devbox`, `cmd: "docker down"`) → `cleanup` (удалить все volume'ы проекта, удалить директорию `services/`).
+
+При успехе журнал состояния деплоя удаляется целиком, так что каждый сервис в `devbox status` показывается как не задеплоенный.
+
+| Опция | Описание |
+|-------|----------|
+| `--yes` / `-y` | Пропустить confirm-промпты внутри reset-шагов |
+
+## Per-service reset
+
+```
+devbox reset run --service <name> [--yes] [--skip-preflight]
+```
+
+Сбрасывает отдельный сервис, не затрагивая остальной проект:
+
+1. Запускает preflight-проверки stop-стадии (бинари docker, git; проверка доступности порта для stop-стадии пропускается).
+2. Показывает интерактивную форму подтверждения, перечисляющую ровно то, что произойдёт (пропускается с `--yes`).
+3. Если сервис сейчас **enabled**, запускает любые user-команды `on_disable.before`, объявленные в `devbox/services/<name>/service.yml` (вне project-лока).
+4. Захватывает project-лок, затем выполняет один пайплайн, состоящий из:
+   a. **Baseline (всегда-включено):** остановить **и удалить** контейнер сервиса напрямую через `docker stop` + `docker rm -f` (обход compose — работает, включён ли сервис или выключен).
+   b. **Baseline (условно):** удалить директорию сервиса, если сервис объявляет `dir:` в `service.yml` и директория существует на диске.
+   c. **Пользовательский пайплайн (опционально):** фазы, объявленные в `devbox/services/<name>/reset.yml`, если он есть, добавляются после baseline.
+5. Атомарно убирает задеплоенное состояние сервиса из журнала и пишет запись `PendingDeploy`.
+6. Освобождает лок.
+
+После per-service reset'а `devbox status` показывает баннер pending-deploy для сервиса. Запустите `devbox deploy run --service <name>`, чтобы пере-провизионировать его.
+
+**Volume'ы автоматически не трогаются.** Если нужно сбросить Docker-volume'ы сервиса как часть reset'а, объявите `services/<name>/reset.yml` с шагом, вызывающим [`docker_remove_project_volumes`](deploy/builtins.md#docker_remove_project_volumes).
+
+### Требования
+
+- Сервис должен существовать в `devbox/services/<name>/`.
+- **У сервиса должен быть `devbox/services/<name>/deploy.yml`** — per-service reset пишет в журнал запись `PendingDeploy`, так что сервис должен быть деплоимым. Если `deploy.yml` нет, используйте полный `devbox reset run` вместо этого.
+
+Обязательные сервисы (`required: true`) **разрешены** для per-service reset'а (`required` защищает от `services disable`, не от reset'а).
+
+| Опция | Описание |
+|-------|----------|
+| `--service <name>` | Сбросить только этот сервис |
+| `--yes` / `-y` | Пропустить confirm-промпт |
+| `--skip-preflight` | Обойти environment-пробы перед запуском |
+
+### Per-service `reset.yml`
+
+`devbox/services/<name>/reset.yml` следует тому же формату, что и общий `devbox/reset.yml`. Он **опционален** и добавляется после всегда-включённого baseline'а (stop+rm контейнера, опциональное удаление `dir:`). Когда отсутствует, происходят только baseline и обновление журнала.
+
+```yaml
+# devbox/services/postgres/reset.yml
+phases:
+  - name: wipe
+    steps:
+      - name: drop-volume
+        type: builtin
+        cmd: docker_remove_project_volumes
+```
+
+### Жизненный цикл pending-состояния
+
+| Команда | Эффект на журнал |
+|---------|------------------|
+| `devbox reset run --service <name>` | Удаляет `state.services.<name>`, пишет `PendingDeploy` для `<name>` |
+| `devbox deploy run --service <name>` | Очищает `PendingDeploy` для `<name>` при успехе |
+| `devbox reset run` (полный проект) | Удаляет весь файл состояния (семантика `ClearPending`) |

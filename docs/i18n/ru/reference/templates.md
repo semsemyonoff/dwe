@@ -1,5 +1,256 @@
 > Translated from: reference/templates.md @ 9fc9123bf6d1
 
-<!-- TRANSLATION PENDING (Phase 6 Task 6.2) -->
+# Шаблоны
 
-_Перевод в процессе. Актуальная версия — на английском языке._
+Go-шаблоны (с библиотекой функций [go-sprout](https://docs.atom.codes/sprout/)) вычисляются в нескольких surface'ах devbox: элементах info-дашборда, декларативных командах, условиях `when:` пайплайнов, билтине `message` и render-паках IDE / AI. Эта страница — единый справочник по движку шаблонов, доступным хелперам и соглашениям, общим для всех мест.
+
+## Содержание
+
+- [Где вычисляются шаблоны](#где-вычисляются-шаблоны)
+- [Два синтаксиса: shorthand и полные шаблоны](#два-синтаксиса-shorthand-и-полные-шаблоны)
+  - [Квотинг шаблонов внутри YAML](#квотинг-шаблонов-внутри-yaml)
+- [Render-контекст по surface'у](#render-контекст-по-surfaceу)
+- [Встроенные функции `text/template`](#встроенные-функции-texttemplate)
+- [Доменный хелпер: appURL](#доменный-хелпер-appurl)
+- [Регистры Sprout](#регистры-sprout)
+- [Резолверы scope команд](#резолверы-scope-команд)
+- [Строгий рендер (render-паки)](#строгий-рендер-render-паки)
+- [Распространённые паттерны](#распространённые-паттерны)
+- [Соглашения и подводные камни](#соглашения-и-подводные-камни)
+- [Дополнительное чтение](#дополнительное-чтение)
+
+## Где вычисляются шаблоны
+
+| Место | Синтаксис | Контекст | Заметки |
+|-------|-----------|----------|---------|
+| `info.yml` — `text`, `value`, `when` | `{{ ... }}` | `DevboxConfig` (типизированный) | См. [info.md](config/info.md) |
+| `devbox/commands/` — `cmd`, `argv`, `workdir`, `compose_args`, `env`, `messages.*`, `confirmation_text`, `files.*.path`/`candidates`, workflow-шаги `steps[].with[<key>]` / `steps[].when` | `${...}` и `{{ ... }}` | `RenderContext` (Raw + Params + Context + Files + Host) | См. [commands/](config/commands/index.md) |
+| `deploy.yml` / `lifecycle.yml` / `reset.yml` — `when: type: template, expr:` | `{{ ... }}` | Слитый `DevboxConfig` | Вычисляется на этапе планирования. См. [deploy](config/deploy/index.md) |
+| Билтин `message` — `text:` | `{{ ... }}` | Слитый `DevboxConfig` | См. [билтин message](config/deploy/builtins.md#message) |
+| `docker.yml` — `project_name` | Только `${...}` | Слитый `DevboxConfig.Raw` | Только dot-path lookups (без `{{ }}`-логики). См. [docker.md](config/docker.md) |
+| `devbox/templates/git/<pack>/**/*.tmpl` | `{{ ... }}` | `{.Project, .Service, .Resolved, .ServiceCfg, .Runtime, .Services, .Cfg}` | Строгий режим. См. [render/git.md](render/git.md) |
+| `devbox/templates/ide/<pack>/**/*.tmpl` | `{{ ... }}` | `{.Project, .Service, .Resolved, .ServiceCfg, .Runtime, .Services, .Cfg}` | Строгий режим. См. [render/ide.md](render/ide.md) |
+| `devbox/templates/ai/<pack>/**/*.tmpl` | `{{ ... }}` | `{.Project, .Service, .Resolved, .ServiceCfg, .Runtime, .Services, .Cfg}` | Строгий режим. См. [render/ai.md](render/ai.md) |
+| `params.*.default_from`, `context.*.from` | — | — | Только plain dot-paths (без template-выражений). |
+
+## Два синтаксиса: shorthand и полные шаблоны
+
+Существуют два слоя интерполяции; оба вычисляются одним движком.
+
+**`${...}` — shorthand lookups.** Компактный, без логики. Используется в определениях команд и в `project_name` из `docker.yml`. Компилятор переписывает каждое `${...}` в эквивалентное выражение `{{ ... }}` на этапе разбора.
+
+**`{{ ... }}` — полный Go `text/template`.** Условия, циклы, пайплайны, helper-функции. Доступно везде, где вычисляются шаблоны.
+
+```yaml
+# Микс в одной строке (место команды)
+path: "${param.dump_dir}/${param.database}{{ if .Params.dump_date }}_{{ now | date \"2006-01-02\" }}{{ end }}.sql.gz"
+```
+
+Эмпирическое правило: используйте `${...}` для простых lookup'ов; беритесь за `{{ ... }}` всякий раз, когда нужно условие, сравнение, default, преобразование строки или пайплайн.
+
+### Неймспейсы `${...}`
+
+`${...}` резолвится через неймспейсы; первый сегмент маршрутизирует к конкретному источнику данных:
+
+| Выражение | Резолвится как |
+|-----------|----------------|
+| `${db.user}` | Dot-path в слитом devbox-конфиге (`Raw`) |
+| `${param.<name>}` | Разрешённое значение параметра |
+| `${context.<name>}` | Разрешённое значение контекста |
+| `${files.<id>.path}` | Абсолютный путь разрешённого файла-артефакта |
+| `${host.uid}` / `${host.gid}` | Эффективные UID/GID (1000:1000 на macOS, реальные значения на Linux) |
+
+Всё, что не совпадает с известным неймспейсом (`${foo}`, `${a.b.c}`), трактуется как dot-path lookup в `Raw`. Литерал `$$` пропускается без изменений.
+
+### Квотинг шаблонов внутри YAML
+
+Строка между `{{ }}` одинакова в каждой форме YAML — меняется только обёртка:
+
+```yaml
+# скаляр в двойных кавычках: внутренний " нужно экранировать как \"
+path: ".devbox/logs/{{ now | date \"2006-01-02\" }}.log"
+
+# скаляр в одинарных кавычках: экранирование не требуется (рекомендуется для шаблонов)
+path: '.devbox/logs/{{ now | date "2006-01-02" }}.log'
+
+# литеральный блок-скаляр: экранирование не требуется
+cmd: |
+  echo "{{ now | date "2006-01-02" }}"
+```
+
+Предпочитайте скаляры в одинарных кавычках (`'...'`) для однострочных шаблонов, тело которых содержит `"`. Двойные кавычки (`"..."`) оставляйте для строк, которым нужны YAML escape-последовательности `\n`/`\t`. `\|`, который вы можете видеть в таблицах на этой странице, — это экранирование markdown-ячеек для отрендеренных доков; ваш YAML всегда использует простой `|` внутри `{{ }}`.
+
+## Render-контекст по surface'у
+
+Данные, доступные шаблону, зависят от места. Все места сходятся на struct-shaped контексте — доступ к полям использует Go-синтаксис точки (`.Project.Name`).
+
+**Команды (`RenderContext`):**
+
+| Путь | Содержимое |
+|------|------------|
+| `.Raw` | Слитые `devbox.yml` + `defaults.yml` + `local.yml` как вложенная карта |
+| `.Params` | Разрешённые значения параметров (map по имени параметра) |
+| `.Context` | Разрешённые значения контекста (map по имени контекста) |
+| `.Files` | Разрешённые файлы-артефакты (map по file id; у каждого есть поле `.Path`) |
+| `.Host.UID` / `.Host.GID` | Строки UID/GID хоста |
+
+**Info, пайплайны, билтин `message`:** слитый типизированный `DevboxConfig` (например, `.Project.Name`, `((index .Services "main").Port "http")`, `(index .Services "catalog").Enabled`).
+
+**Render-паки (git / ide / ai, строгие):**
+
+| Переменная | Источник |
+|------------|----------|
+| `.Project` | блок `project:` из `devbox.yml` |
+| `.Service` | имя сервиса (ключ карты в `services:`) |
+| `.ServiceCfg` | эффективная конфигурация сервиса после резолва `extends` |
+| `.Runtime` | слитый блок `runtime` (`.Runtime.UseHTTPS`, `.Runtime.SPX.Path`). Per-service порты / хосты живут на каждой записи сервиса (см. `.Services` ниже). |
+| `.Services` | `map[string]ServiceConfig` по имени сервиса. Используйте `(index .Services "<name>")` для выборки; per-entry хелперы `.Port "<port-name>"` / `.Host "<host-name>"`. Подмножества по типу через `.AppServices` / `.ToolServices` / `.InfraServices`. |
+| `.Cfg` | слитый `DevboxConfig` (продвинутое). `.Cfg.Raw` — это конфиг-карта после слияния и devbox-нормализации (`services.*` инжектится из per-service файлов `service.yml`). Dot-синтаксис (`.Cfg.Raw.git.project_prefix`) работает только для identifier-safe ключей; используйте `{{ index .Cfg.Raw "my-key" }}` для ключей с дефисами, точками, ведущими цифрами и т.д. Предпочитайте выделенные поля выше для типовых случаев. |
+
+IDE- и AI-паки рендерятся в трекаемые файлы проекта. Избегайте потребления developer-local или секретных ключей через `.Cfg.Raw` в этих шаблонах — значения из `local.yml` дадут per-developer диффы. Git-хуки рендерятся в `.git/hooks/` (gitignored) и под это ограничение не попадают.
+
+## Встроенные функции `text/template`
+
+Стандартная библиотека выставляет следующие функции из коробки. Полный справочник: [pkg.go.dev/text/template#hdr-Functions](https://pkg.go.dev/text/template#hdr-Functions).
+
+| Функция | Применение |
+|---------|------------|
+| `eq`, `ne`, `lt`, `le`, `gt`, `ge` | Сравнение |
+| `and`, `or`, `not` | Булева логика |
+| `len` | Длина строки / слайса / map |
+| `index` | Индексация map / слайса |
+| `printf` | Форматированные строки (Go format verbs) |
+| `print`, `println` | Конкатенация |
+| `html`, `js`, `urlquery` | Экранирование |
+
+Управляющие конструкции: `{{ if }}`, `{{ range }}`, `{{ with }}`, `{{ define }}` / `{{ template }}`.
+
+```yaml
+# эмитнуть флаг только если bool-параметр true
+argv:
+  - "{{ if .Params.fresh }}--fresh{{ end }}"
+
+# вложенный if / else if / else
+env:
+  LOG_LEVEL: |-
+    {{ if eq .Params.profile "prod" }}error
+    {{ else if eq .Params.profile "stage" }}warn
+    {{ else }}debug{{ end }}
+
+# range с индексом
+env:
+  TAGS: "{{ range $i, $t := .Params.tags }}{{ if $i }},{{ end }}{{ $t }}{{ end }}"
+
+# with / default
+cmd: "mariadb -u${db.user}{{ with .Params.database }} -D{{ . }}{{ end }}"
+env:
+  REGION: '{{ or .Params.region "us-east-1" }}'
+```
+
+### Обрезка whitespace
+
+`{{- ... -}}` срезает окружающий whitespace. Полезно, когда многострочный `{{ if }}`-блок рендерится в один shell-аргумент:
+
+```yaml
+cmd: |-
+  echo "{{- if .Params.verbose -}}verbose{{- else -}}quiet{{- end -}}"
+```
+
+## Доменный хелпер: appURL
+
+Единственный project-specific хелпер. Строит URL из хоста, порта, HTTPS-флага и опционального path. Порт опускается, когда совпадает с дефолтом схемы (80 для http, 443 для https).
+
+Сигнатура: `appURL host port useHTTPS [path]`
+
+```yaml
+# Хостнейм приложения + порт приложения (проксируется через main-сервис)
+value: '{{ appURL ((index .Services "main").Host "web") ((index .Services "main").Port "http") .Runtime.UseHTTPS }}'
+# → "http://laravel.localhost" или "https://laravel.localhost"
+
+# Хостнейм инструмента + порт реверс-прокси main (инструмент маршрутизируется через main-приложение, а не через свой прямой порт)
+value: '{{ appURL ((index .Services "adminer").Host "web") ((index .Services "main").Port "http") .Runtime.UseHTTPS "/login" }}'
+# → "http://adminer.localhost/login"
+```
+
+## Регистры Sprout
+
+Следующие регистры из [go-sprout](https://docs.atom.codes/sprout/registries/) доступны везде, где вычисляются шаблоны.
+
+| Регистр | Примеры | Описание |
+|---------|---------|----------|
+| `std` | `default`, `ternary`, `empty`, `coalesce` | Дефолты, условия, проверки на пустоту |
+| `strings` | `hasSuffix`, `hasPrefix`, `lower`, `upper`, `trim`, `replace`, `split` | Манипуляции со строками |
+| `numeric` | `add`, `sub`, `mul`, `div`, `max`, `min` | Числовые операции |
+| `slices` | `first`, `last`, `slice`, `join`, `reverse`, `uniq` | Операции над списками/массивами |
+| `maps` | `keys`, `values`, `has`, `pick`, `omit` | Операции над map'ами/объектами |
+| `regexp` | `regexMatch`, `regexReplace`, `regexSplit` | Сопоставление по регулярным выражениям |
+| `conversion` | `toInt`, `toFloat`, `toString`, `toBool` | Преобразование типов |
+| `time` | `now`, `date`, `dateFormat`, `duration` | Операции с датой/временем |
+| `filesystem` | `pathBase`, `pathDir`, `pathExt`, `pathClean`, `osBase`, `osDir` | Манипуляции с путями |
+| `semver` | `semverCompare`, `semverSort` | Операции над семантическими версиями |
+
+**Герметичность по построению.** FuncMap собран без единой функции, которая бы трогала окружение, файловую систему, сеть или random/crypto-источники. Sprout'овские `shuffle` (math/rand, засеянный из crypto) и `hello` (debug-заглушка) намеренно удалены.
+
+Полную документацию по каждой функции см. в [справочнике регистров sprout](https://docs.atom.codes/sprout/registries/).
+
+## Резолверы scope команд
+
+Три дополнительных хелпера доступны **только** внутри шаблонов `devbox/commands/`. Они принимают сырые map'ы и ходят по dot-path'ам, возвращая `""` для отсутствующего ключа (без template-ошибки).
+
+| Хелпер | Сигнатура | Применение |
+|--------|-----------|------------|
+| `resolve` | `resolve .Raw "db.host"` | Dot-path lookup в слитом конфиге. Эквивалентно `${db.host}`. |
+| `resolveMap` | `resolveMap .Params "name"` | Lookup ключа в плоской `map[string]any`. Эквивалентно `${param.name}` / `${context.name}`. |
+| `resolveFile` | `resolveFile .Files "id" "path"` | Lookup подключа в разрешённом файле-артефакте. Эквивалентно `${files.id.path}`. |
+
+Они существуют, чтобы shorthand `${...}` мог разворачиваться в портируемую Go-template форму, и чтобы авторы могли дотянуться до сырого конфига, когда типизированный стиль `.Raw.<x>.<y>` неудобен (ключи с точками, числовые ключи и т.д.).
+
+## Строгий рендер (render-паки)
+
+`render ide`, `render ai` и `render git` парсят шаблоны с семантикой `{{.Option "missingkey=error"}}`: опечатка вроде `{{.Servic.Name}}` прерывает рендер всего пака целиком, а не пишет `<no value>` на диск. Защищайте действительно опциональные поля через `{{if ...}}`:
+
+```gotemplate
+{{if .ServiceCfg.CLI.Workdir}}WORKDIR={{.ServiceCfg.CLI.Workdir}}{{end}}
+```
+
+Другие места (info, commands, условия пайплайнов, `message`) используют lenient-рендер — отсутствующий ключ резолвится в `<no value>` или пустую строку, никогда не в ошибку.
+
+## Распространённые паттерны
+
+| Задача | Сниппет |
+|--------|---------|
+| Текущая дата | `{{ now \| date "2006-01-02" }}` |
+| Текущие дата и время | `{{ now \| date "2006-01-02_15-04-05" }}` |
+| Базовое имя пути | `{{ .Params.script_path \| pathBase }}` |
+| Директория пути | `{{ .Params.script_path \| pathDir }}` |
+| Default / fallback | `{{ .Value \| default "N/A" }}` или `{{ or .Params.region "us-east-1" }}` |
+| Условное значение | `{{ if eq .State "ready" }}Ready{{ else }}Not ready{{ end }}` |
+| Блок с защитой от пустоты | `{{ with .Params.database }} -D{{ . }}{{ end }}` |
+| Объединить список | `{{ join "," .Params.tags }}` |
+| Lookup сырого конфига | `{{ resolve .Raw "db.host" }}` (только команды) |
+| Сборка URL | `{{ appURL ((index .Services "main").Host "web") ((index .Services "main").Port "http") .Runtime.UseHTTPS }}` |
+
+## Соглашения и подводные камни
+
+- **Предпочитайте `path*` вместо `os*` для путей в контейнерах.** `pathBase` / `pathDir` используют семантику прямого слэша; `osBase` / `osDir` следуют разделителю хостовой ОС. Пути в контейнерах должны быть предсказуемыми при рендере на macOS-хостах — придерживайтесь вариантов `path*`, если только вам не нужно поведение, специфичное для ОС.
+
+- **`date` — это фильтр, не конструктор.** Он принимает строку-формат и `time.Time`, а не наоборот:
+  - `{{ now | date "2006-01-02" }}` ✓
+  - `{{ date "2006-01-02" }}` ✗ (нет значения времени)
+
+  Строка-формат использует референсное время Go `Mon Jan 2 15:04:05 MST 2006` — см. [шпаргалку по форматированию даты/времени в Go](https://yourbasic.org/golang/format-parse-string-time-date-example/).
+
+- **Truthiness `when:`.** Отрендеренное значение `when:` truthy, если только оно не равно `""`, `"false"` или `"0"` (после trim). Сравнения, возвращающие Go-`bool`, рендерятся как `"true"`/`"false"`; сравнения, возвращающие integer-like значение (например, длины), рендерятся как десятичные строки.
+
+- **Никаких env, FS, сети или случайности.** Шаблоны вычисляются в герметичном FuncMap по дизайну. Если шаблону нужно состояние проекта, выставьте его через `DevboxConfig` (info / пайплайны) или через декларацию `context.<name>: from: <dot.path>` (команды).
+
+- **Микс `${...}` и `{{ ... }}` нормален.** Они разделяют один контекст и рендерятся за один проход — `${...}` переписывается в template-вызовы до парсинга.
+
+## Дополнительное чтение
+
+- [Доки пакета `text/template`](https://pkg.go.dev/text/template) — полный справочник по языку Go-шаблонов
+- [Action-синтаксис](https://pkg.go.dev/text/template#hdr-Actions) — `{{ if }}`, `{{ range }}`, `{{ with }}`
+- [Встроенные функции](https://pkg.go.dev/text/template#hdr-Functions) — `eq`, `printf`, `index` и т.д.
+- [Пайплайны и курсор `.`](https://pkg.go.dev/text/template#hdr-Pipelines)
+- [Регистры Sprout](https://docs.atom.codes/sprout/registries/) — документация по каждой функции
+- [Шпаргалка по форматированию даты/времени в Go](https://yourbasic.org/golang/format-parse-string-time-date-example/) — референсный layout `2006-01-02 15:04:05` и распространённые строки-форматы
