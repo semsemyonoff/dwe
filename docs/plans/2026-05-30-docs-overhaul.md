@@ -608,11 +608,11 @@ These rules apply uniformly to every file translated under 6.2a/b/c/d. They are 
 - `docs/i18n/ru/reference/render/{index,ai,env,git,ide}.md` (5)
 - `docs/i18n/ru/reference/docs/{index,browser,commands,translations}.md` (4)
 
-- [ ] translate all 5 `render/*.md` files
-- [ ] translate all 4 `docs/*.md` files
-- [ ] re-validate mermaid blocks where labels were translated
-- [ ] `make build` exits 0
-- [ ] verify every Russian file under `docs/i18n/ru/` now contains a real translation (no `TRANSLATION PENDING` placeholders remain)
+- [x] translate all 5 `render/*.md` files
+- [x] translate all 4 `docs/*.md` files
+- [x] re-validate mermaid blocks where labels were translated
+- [x] `make build` exits 0
+- [x] verify every Russian file under `docs/i18n/ru/` now contains a real translation (no `TRANSLATION PENDING` placeholders remain)
 
 ### Task 6.3: Surface translated docs
 
@@ -726,7 +726,7 @@ These rules apply uniformly to every file translated under 6.2a/b/c/d. They are 
 - [x] Task 6.2a: README + top-level indexes + concepts/
 - [x] Task 6.2b: `config/` non-split files + `templates.md`
 - [x] Task 6.2c: `config/{commands,deploy,services,state}/` split subdirs
-- [ ] Task 6.2d: `render/` + `docs/`
+- [x] Task 6.2d: `render/` + `docs/`
 - [ ] Task 6.3: surface translations
 - [ ] Task 6.4: validate
 
