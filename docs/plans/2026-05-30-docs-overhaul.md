@@ -521,13 +521,13 @@ For phases that touch many files, order is: index file last (it links to everyth
 - Create: `docs/i18n/ru/reference/docs/` mirror(s)
 - Modify: `docs/i18n/ru/reference/config/services.md` (existing stub — replace with full translation matching new layout, or relocate under `services/` subdir)
 
-- [ ] freeze English doc edits for the duration of Phase 6 — if an English fix is needed mid-flight, re-run `make build` and update affected Russian headers immediately
-- [ ] enumerate the final English tree (post-Phase 5) under `docs/reference/` + repo-root `README.md`
-- [ ] for each English file, compute its current 12-char content hash (via `make build` regen, then read `internal/core/docs/content_hashes_gen.go`)
-- [ ] create the mirror path under `docs/i18n/ru/`
-- [ ] first line of each new file: `> Translated from: <relative-english-path> @ <hash>` — exact format, single space around `@`, no trailing whitespace, no smart quotes. Must match the loader regex `^>\s*Translated from:\s*\S+\s*@\s*([0-9a-f]{12,64})\s*$` (`internal/core/docs/lang.go:83`). Mismatches silently disable staleness detection
-- [ ] verify every English file has a Russian sibling (`diff -qr` the file lists)
-- [ ] verify the first line of every newly created Russian file matches the regex above (small grep/loop sanity check)
+- [x] freeze English doc edits for the duration of Phase 6 — if an English fix is needed mid-flight, re-run `make build` and update affected Russian headers immediately
+- [x] enumerate the final English tree (post-Phase 5) under `docs/reference/` + repo-root `README.md` — 51 files under `docs/reference/` (excluding auto-generated `cli/`) + repo-root `README.md` = 52 mirror targets
+- [x] for each English file, compute its current 12-char content hash (via `make build` regen, then read `internal/core/docs/content_hashes_gen.go`)
+- [x] create the mirror path under `docs/i18n/ru/` — orphaned old stub `docs/i18n/ru/reference/config/services.md` removed (English source split into `services/` subdir during Phase 2.3)
+- [x] first line of each new file: `> Translated from: <relative-english-path> @ <hash>` — exact format, single space around `@`, no trailing whitespace, no smart quotes. Must match the loader regex `^>\s*Translated from:\s*\S+\s*@\s*([0-9a-f]{12,64})\s*$` (`internal/core/docs/lang.go:83`). Mismatches silently disable staleness detection
+- [x] verify every English file has a Russian sibling (`diff -qr` the file lists) — `diff -q` on path-stripped sorted lists returned empty
+- [x] verify the first line of every newly created Russian file matches the regex above (small grep/loop sanity check) — 0 bad files out of 52
 
 ### Task 6.2: Translate file-by-file
 
