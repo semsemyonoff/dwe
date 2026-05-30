@@ -67,23 +67,6 @@ func (v *devboxValidator) Run(ctx validate.Context) []validate.Diagnostic {
 		})
 	}
 
-	// Check 1b: Check for removed `binaries:` block
-	if rawData, err := os.ReadFile(configPath); err == nil {
-		var rawCfg map[string]any
-		if err := yaml.Unmarshal(rawData, &rawCfg); err == nil {
-			if _, hasBinaries := rawCfg["binaries"]; hasBinaries {
-				diags = append(diags, validate.Diagnostic{
-					Severity: validate.SeverityError,
-					Domain:   "config",
-					Target:   "config.devbox.binaries",
-					File:     relPath(ctx.ProjectRoot, configPath),
-					Message:  "binaries: removed from devbox.yml — binary paths are now configured in ~/.config/devbox/config using binary_<name>=<path> entries.",
-					Hint:     "See docs/reference/config/devbox.md for details.",
-				})
-			}
-		}
-	}
-
 	// Check 2: Config loading and validation
 	cfg, err := config.LoadConfig(configPath)
 	if err != nil {
@@ -1255,59 +1238,3 @@ func (v *serviceDeployValidator) Run(ctx validate.Context) []validate.Diagnostic
 	return diags
 }
 
-type untypedKeysValidator struct{}
-
-func (v *untypedKeysValidator) ID() string {
-	return "untyped-keys"
-}
-
-func (v *untypedKeysValidator) Domain() string {
-	return "config"
-}
-
-var knownTypedKeys = map[string]bool{
-	"schema_version": true,
-	"project":        true,
-	"runtime":        true,
-	"state":          true,
-	"exports":        true,
-	"compose":        true,
-	"ui":             true,
-	"docs":           true,
-	"services":       true,
-}
-
-func (v *untypedKeysValidator) Run(ctx validate.Context) []validate.Diagnostic {
-	var diags []validate.Diagnostic
-
-	if ctx.Cfg == nil {
-		return diags
-	}
-
-	// Scan each raw layer independently for per-layer source attribution.
-	seen := make(map[string]bool)
-	for _, layer := range ctx.Cfg.RawLayers {
-		for key := range layer.Data {
-			if key == "__configPath" {
-				continue
-			}
-			if knownTypedKeys[key] {
-				continue
-			}
-			// Emit once per key (first layer that introduces it wins attribution).
-			if seen[key] {
-				continue
-			}
-			seen[key] = true
-			diags = append(diags, validate.Diagnostic{
-				Severity: validate.SeverityInfo,
-				Domain:   "config",
-				Target:   "config.untyped-keys",
-				File:     relPath(ctx.ProjectRoot, layer.Path),
-				Message:  fmt.Sprintf("key %q is accessible via dot-path only; not a typed CLI field — typo check recommended", key),
-			})
-		}
-	}
-
-	return diags
-}

@@ -101,17 +101,11 @@ type DockerArgs struct {
 // ([]) opt out of the default.
 //
 // .env is auto-regenerated before {up, run, exec, restart, build} unconditionally.
-// Old docker.yml files with an `env:` block will be rejected with a migration error.
 func LoadDockerConfig(baseDir string, cfg *DevboxConfig) (*DockerConfig, error) {
 	dockerPath := filepath.Join(baseDir, "devbox", "docker.yml")
 	base, err := loadRawYAML(dockerPath)
 	if err != nil {
 		return nil, fmt.Errorf("read %s: %w", dockerPath, err)
-	}
-
-	// Check for removed `env:` block in base layer.
-	if _, hasEnv := base["env"]; hasEnv {
-		return nil, fmt.Errorf("env: removed from docker.yml — .env auto-regenerates for {up, run, exec, restart, build} unconditionally; the env: customization is gone. See docs/reference/config/docker.md")
 	}
 
 	// Track which args keys were explicitly set in the YAML.
@@ -120,10 +114,6 @@ func LoadDockerConfig(baseDir string, cfg *DevboxConfig) (*DockerConfig, error) 
 	// Merge local overrides if present.
 	localPath := filepath.Join(baseDir, "devbox", "docker.local.yml")
 	if local, err := loadRawYAML(localPath); err == nil {
-		// Check for removed `env:` block in local layer.
-		if _, hasEnv := local["env"]; hasEnv {
-			return nil, fmt.Errorf("env: removed from docker.local.yml — .env auto-regenerates for {up, run, exec, restart, build} unconditionally; the env: customization is gone. See docs/reference/config/docker.md")
-		}
 		deepMerge(base, local)
 		// Merge presence tracking from local layer
 		localKeys := detectPresentArgsKeys(localPath)

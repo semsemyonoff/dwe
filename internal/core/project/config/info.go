@@ -257,15 +257,6 @@ func LoadInfoConfig(path string) (*InfoConfig, error) {
 		return nil, fmt.Errorf("read %s: %w", path, err)
 	}
 
-	// Check for removed settings: block before parsing.
-	var rawMap map[string]any
-	if err := yaml.Unmarshal(data, &rawMap); err != nil {
-		return nil, fmt.Errorf("parse %s: %w", path, err)
-	}
-	if _, hasSettings := rawMap["settings"]; hasSettings {
-		return nil, fmt.Errorf("parse %s: settings: removed from info.yml — the line_width customization was never wired up. See docs/reference/config/info.md", path)
-	}
-
 	var cfg InfoConfig
 	if err := yaml.Unmarshal(data, &cfg); err != nil {
 		return nil, fmt.Errorf("parse %s: %w", path, err)

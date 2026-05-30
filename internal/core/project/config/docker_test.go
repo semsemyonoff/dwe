@@ -3,7 +3,6 @@ package config
 import (
 	"os"
 	"path/filepath"
-	"strings"
 	"testing"
 )
 
@@ -494,47 +493,3 @@ args:
 	}
 }
 
-// Tests for loader-level rejection of env: block (Task 17)
-
-func TestLoadDockerConfig_RejectionOnEnvBlockInDockerYml(t *testing.T) {
-	// Old docker.yml with env: block should be rejected at load time.
-	yml := `
-project_name: "test"
-args: {}
-env:
-  auto_generate: true
-  commands: [up, run]
-`
-	baseDir := writeDockerFixture(t, yml, "")
-	cfg := &DevboxConfig{Raw: map[string]any{}}
-
-	_, err := LoadDockerConfig(baseDir, cfg)
-	if err == nil {
-		t.Fatal("expected error for env: block in docker.yml")
-	}
-	if !strings.Contains(err.Error(), "env: removed from docker.yml") {
-		t.Errorf("error message = %q, should mention env removal", err.Error())
-	}
-}
-
-func TestLoadDockerConfig_RejectionOnEnvBlockInDockerLocalYml(t *testing.T) {
-	// Old docker.local.yml with env: block should be rejected at load time.
-	baseYML := `
-project_name: "test"
-args: {}
-`
-	localYML := `
-env:
-  auto_generate: false
-`
-	baseDir := writeDockerFixture(t, baseYML, localYML)
-	cfg := &DevboxConfig{Raw: map[string]any{}}
-
-	_, err := LoadDockerConfig(baseDir, cfg)
-	if err == nil {
-		t.Fatal("expected error for env: block in docker.local.yml")
-	}
-	if !strings.Contains(err.Error(), "env: removed from docker.local.yml") {
-		t.Errorf("error message = %q, should mention env removal", err.Error())
-	}
-}

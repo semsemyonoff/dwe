@@ -102,21 +102,10 @@ type DevboxConfig struct {
 	// in export rules. Populated only by LoadConfig; not serialized.
 	Raw map[string]any `yaml:"-"`
 
-	// RawLayers holds the individual config layers before merging, in load order:
-	// devbox.yml, devbox/defaults.yml (if present), devbox/local.yml (if present).
-	// Used by validators that need per-layer source attribution.
-	RawLayers []RawConfigLayer `yaml:"-"`
-
 	// userConfig holds user-level preferences loaded from ~/.config/devbox/config
 	// and .devbox/config. Used by binary accessors to resolve engine binary overrides.
 	// Nil if load failed (graceful degradation).
 	userConfig *userpkg.Config `yaml:"-"`
-}
-
-// RawConfigLayer holds a single raw YAML layer with its source path.
-type RawConfigLayer struct {
-	Path string
-	Data map[string]any
 }
 
 // ProjectDeployConfig holds the project-wide deploy pipeline loaded from devbox/deploy.yml.
@@ -1181,12 +1170,6 @@ func LoadConfig(devboxPath string) (*DevboxConfig, error) {
 	cfg.Raw = merged
 	// Store config path so deploy resolution can find service deploy files.
 	cfg.Raw["__configPath"] = devboxPath
-
-	// Expose individual layers for per-layer validators (e.g. untyped-keys attribution).
-	cfg.RawLayers = make([]RawConfigLayer, 0, len(layers))
-	for _, l := range layers {
-		cfg.RawLayers = append(cfg.RawLayers, RawConfigLayer{Path: l.path, Data: l.data})
-	}
 
 	// Step 4: resolve per-service Enabled and per-developer port/host overrides
 	// from the merged overlay (devbox/defaults.yml + devbox/local.yml). The
