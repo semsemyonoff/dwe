@@ -595,12 +595,12 @@ These rules apply uniformly to every file translated under 6.2a/b/c/d. They are 
 - `docs/i18n/ru/reference/config/services/{index,fields,extends,examples}.md` (4)
 - `docs/i18n/ru/reference/config/state/{index,schema,hashing,management}.md` (4)
 
-- [ ] translate all 5 `commands/` files
-- [ ] translate all 5 `deploy/` files
-- [ ] translate all 4 `services/` files
-- [ ] translate all 4 `state/` files
-- [ ] re-validate mermaid blocks where labels were translated
-- [ ] `make build` exits 0
+- [x] translate all 5 `commands/` files
+- [x] translate all 5 `deploy/` files
+- [x] translate all 4 `services/` files
+- [x] translate all 4 `state/` files
+- [x] re-validate mermaid blocks where labels were translated
+- [x] `make build` exits 0
 
 ### Task 6.2d: Translate `reference/render/` + `reference/docs/`
 
@@ -725,7 +725,7 @@ These rules apply uniformly to every file translated under 6.2a/b/c/d. They are 
 - [x] Task 6.1: file tree skeleton
 - [x] Task 6.2a: README + top-level indexes + concepts/
 - [x] Task 6.2b: `config/` non-split files + `templates.md`
-- [ ] Task 6.2c: `config/{commands,deploy,services,state}/` split subdirs
+- [x] Task 6.2c: `config/{commands,deploy,services,state}/` split subdirs
 - [ ] Task 6.2d: `render/` + `docs/`
 - [ ] Task 6.3: surface translations
 - [ ] Task 6.4: validate
