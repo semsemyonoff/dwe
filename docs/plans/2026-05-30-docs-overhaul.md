@@ -413,11 +413,11 @@ For phases that touch many files, order is: index file last (it links to everyth
 **Files:**
 - Create: `docs/reference/concepts/state-and-locks.md`
 
-- [ ] write `state.yml` hashes + skip decisions, project lock ordering (`deploy.lock` then `snapshot.lock`, release reverse), crash recovery, pending state
-- [ ] one mermaid `stateDiagram-v2` of step status transitions
-- [ ] cross-link to `config/state.md` (or its split version)
-- [ ] validate mermaid
-- [ ] `make build` exits 0
+- [x] write `state.yml` hashes + skip decisions, project lock ordering (`deploy.lock` then `snapshot.lock`, release reverse), crash recovery, pending state
+- [x] one mermaid `stateDiagram-v2` of step status transitions
+- [x] cross-link to `config/state.md` (or its split version)
+- [x] validate mermaid
+- [x] `make build` exits 0
 
 ### Task 4.8: Surface the new subdir
 
