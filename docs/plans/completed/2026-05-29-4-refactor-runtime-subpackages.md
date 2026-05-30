@@ -395,10 +395,10 @@ These reference both `runtime.NewRunner` and concrete types like `*HostRunner` �
 - Modify: `AGENTS.md` / `CLAUDE.md` — check for any references to runner type internals
 - Move: this plan file → `docs/plans/completed/`
 
-- [ ] update `docs/internals/packages.md` to document the spec/runners layout + factory
-- [ ] CLAUDE.md "Live view & state pointers" or similar sections mentioning workflow runner — verify still accurate
-- [ ] verify all checkboxes above are `[x]`
-- [ ] move plan file: `mkdir -p docs/plans/completed && mv docs/plans/2026-05-29-4-refactor-runtime-subpackages.md docs/plans/completed/`
+- [x] update `docs/internals/packages.md` to document the spec/runners layout + factory
+- [x] CLAUDE.md "Live view & state pointers" or similar sections mentioning workflow runner — verify still accurate (no stale runner_*.go path references found in AGENTS.md/CLAUDE.md; the `liveui` invariants reference and the notifier-hookpoints section refer to `usercommands/runtime/RunCommand` which is still the public root entrypoint)
+- [x] verify all checkboxes above are `[x]`
+- [x] move plan file: `mkdir -p docs/plans/completed && git mv docs/plans/2026-05-29-4-refactor-runtime-subpackages.md docs/plans/completed/`
 
 ## Post-Completion
 
