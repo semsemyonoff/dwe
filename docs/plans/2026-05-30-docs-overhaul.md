@@ -393,9 +393,9 @@ For phases that touch many files, order is: index file last (it links to everyth
 **Files:**
 - Create: `docs/reference/concepts/git.md`
 
-- [ ] write Git hook rendering (`<svc.Dir>/src/.git/hooks/`), hook template inheritance, `devbox status git` data flow, `.gitignore` conventions for `.devbox/`
-- [ ] short doc — no mandatory diagram (add one only if it clarifies)
-- [ ] `make build` exits 0
+- [x] write Git hook rendering (`<svc.Dir>/src/.git/hooks/`), hook template inheritance, `devbox status git` data flow, `.gitignore` conventions for `.devbox/`
+- [x] short doc — no mandatory diagram (add one only if it clarifies) — added one `flowchart TD` for the workspace probe data flow; validated via mermaid-syntax skill
+- [x] `make build` exits 0
 
 ### Task 4.6: `concepts/pipelines.md`
 

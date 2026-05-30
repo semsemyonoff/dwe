@@ -114,6 +114,7 @@ var ContentHashes = map[string]string{
 	"reference/concepts/architecture.md":                     "9849e0789409",
 	"reference/concepts/docker.md":                           "93d8a00617e2",
 	"reference/concepts/getting-started.md":                  "3e4a21eb6fcd",
+	"reference/concepts/git.md":                              "1f219ec6cde2",
 	"reference/concepts/index.md":                            "f794cffeb488",
 	"reference/concepts/project-layout.md":                   "b1f1358a776a",
 	"reference/config/commands/directives.md":                "f7ecd310ec7f",
