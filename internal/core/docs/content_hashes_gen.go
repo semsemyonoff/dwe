@@ -149,9 +149,9 @@ var ContentHashes = map[string]string{
 	"reference/docs/translations.md":                         "cf5332a9a613",
 	"reference/index.md":                                     "3676cf9a612e",
 	"reference/render/ai.md":                                 "a320984f18da",
-	"reference/render/env.md":                                "0d22bca0bdeb",
+	"reference/render/env.md":                                "7b50c09c3b02",
 	"reference/render/git.md":                                "8c1411a7e945",
 	"reference/render/ide.md":                                "7b595a6330ed",
-	"reference/render/index.md":                              "51f2ac471f03",
+	"reference/render/index.md":                              "9a67b440849c",
 	"reference/templates.md":                                 "9fc9123bf6d1",
 }

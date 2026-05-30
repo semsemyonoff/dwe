@@ -51,7 +51,7 @@ Each subcommand:
 3. Writes output files. Where they go depends on the subcommand:
    - `render ide` and `render ai` write inside each service's hub directory, anchored to the project root (the directory containing `devbox.yml`), and enforce path-safety boundaries.
    - `render git` writes inside `<svc.Dir>/src/.git/hooks/` for each service whose `src/.git` is a real directory; the destination is never tracked by git.
-   - `render env` writes to stdout by default, or to the `-o <path>` argument as given. The `-o` path is interpreted relative to the current working directory, not the project root — pass an absolute path if you want a deterministic location regardless of where the command is invoked from.
+   - `render env` writes to stdout by default, or to the `--out <path>` argument as given. The `--out` path is interpreted relative to the current working directory, not the project root — pass an absolute path if you want a deterministic location regardless of where the command is invoked from.
 
 ## Inputs and outputs at a glance
 

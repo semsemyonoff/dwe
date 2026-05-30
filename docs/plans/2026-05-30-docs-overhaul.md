@@ -304,11 +304,11 @@ For phases that touch many files, order is: index file last (it links to everyth
 
 **Files:** modify each `docs/reference/render/*.md`.
 
-- [ ] same workflow as Task 3.1, applied to `render/{index, env, git, ide, ai}.md`
-- [ ] verify pack manifest schema descriptions match `internal/core/workflow/render/...` or equivalent
-- [ ] verify the local override and collision policy descriptions are current
-- [ ] mermaid where applicable; validate
-- [ ] `make build` exits 0
+- [x] same workflow as Task 3.1, applied to `render/{index, env, git, ide, ai}.md` — `env.md` + `render/index.md`: corrected `-o <path>` to `--out <path>` (cobra binding is `cmd.Flags().StringVar(&outputPath, "out", ...)` in `internal/cli/render/env.go:33`, no short alias); added a pitfall noting `--out` has no `-o` form. Other claims verified clean during Phase 1 audit.
+- [x] verify pack manifest schema descriptions match `internal/core/workflow/render/...` or equivalent — manifest schema docs (`render/index.md` + per-kind pages) match `internal/core/execution/templates/manifest/manifest.go` (strict YAML decode, shape vs. sources passes, `render` + `symlinks` lists, per-kind `to` constraints, basename-only for git)
+- [x] verify the local override and collision policy descriptions are current — packroot resolver (`internal/core/execution/templates/packroot/packroot.go`) matches the `<pack>.local/<rel>` → canonical `<pack>/<rel>` resolution + hard error on non-regular candidates; collision policies (deepest for ide/git, shallowest for ai) + 32-hop cap match `ide.ExtendsDepth` / `ai.ExtendsDepth`
+- [x] mermaid where applicable; validate — no new mermaid blocks added; existing diagrams already passed Phase 1 audit
+- [x] `make build` exits 0
 
 ### Task 3.3: Refresh `docs/index.md`, `templates.md`, `reference/index.md`
 
@@ -627,7 +627,7 @@ For phases that touch many files, order is: index file last (it links to everyth
 
 ### Phase 3 — Updates
 - [ ] Task 3.1: refresh remaining `config/*`
-- [ ] Task 3.2: refresh `render/*`
+- [x] Task 3.2: refresh `render/*`
 - [ ] Task 3.3: refresh `docs/`, `templates.md`, `reference/index.md`
 - [ ] Task 3.4: validation gate
 
