@@ -144,11 +144,11 @@ For phases that touch many files, order is: index file last (it links to everyth
 **Files:**
 - Modify: `docs/plans/2026-05-30-docs-overhaul.md` (this file — fill in the audit table below)
 
-- [ ] for each manual reference doc, scan every concrete claim (field names, builtin names, command names, default values, validation rules)
-- [ ] grep current source under `internal/` for each claim; flag mismatches
-- [ ] for each doc, write one row into the audit table with: Path | Lines | Audience | Freshness | Action | New paths (if splitting) | Notes (≤ 1 line)
-- [ ] verify the table has one row per manual reference doc (26 expected: 18 config + 5 render + 1 docs + templates + reference/index)
-- [ ] no doc edits in this phase — audit only
+- [x] for each manual reference doc, scan every concrete claim (field names, builtin names, command names, default values, validation rules)
+- [x] grep current source under `internal/` for each claim; flag mismatches
+- [x] for each doc, write one row into the audit table with: Path | Lines | Audience | Freshness | Action | New paths (if splitting) | Notes (≤ 1 line)
+- [x] verify the table has one row per manual reference doc (26 expected: 18 config + 5 render + 1 docs + templates + reference/index)
+- [x] no doc edits in this phase — audit only
 
 ### Phase 1 audit table
 
@@ -156,38 +156,38 @@ For phases that touch many files, order is: index file last (it links to everyth
 
 | Path | Lines | Audience | Freshness | Action | New paths | Notes |
 |------|------:|----------|-----------|--------|-----------|-------|
-| `reference/index.md` | 8 | human+ai | TBD | TBD | TBD | TBD |
-| `reference/templates.md` | 254 | human+ai | TBD | TBD | TBD | TBD |
-| `reference/config/index.md` | 127 | human+ai | TBD | TBD | TBD | TBD |
-| `reference/config/commands.md` | 1452 | human+ai | TBD | split | `config/commands/{index, directives, types, templating, validation}.md` | definite split |
-| `reference/config/conditions.md` | 180 | human+ai | TBD | TBD | TBD | TBD |
-| `reference/config/deploy.md` | 1006 | human+ai | TBD | split | `config/deploy/{index, steps, builtins, conditions, examples}.md` | definite split |
-| `reference/config/devbox.md` | 321 | human+ai | TBD | TBD | TBD | TBD |
-| `reference/config/docker.md` | 253 | human+ai | TBD | TBD | TBD | TBD |
-| `reference/config/i18n.md` | 551 | human+ai | TBD | TBD | TBD | audit-driven split candidate |
-| `reference/config/info.md` | 418 | human+ai | TBD | TBD | TBD | audit-driven split candidate |
-| `reference/config/lifecycle.md` | 265 | human+ai | TBD | TBD | TBD | TBD |
-| `reference/config/notifications.md` | 208 | human+ai | TBD | TBD | TBD | TBD |
-| `reference/config/reset.md` | 90 | human+ai | TBD | TBD | TBD | TBD |
-| `reference/config/services.md` | 874 | human+ai | TBD | split | `config/services/{index, fields, extends, examples}.md` | definite split |
-| `reference/config/setup.md` | 449 | human+ai | TBD | TBD | TBD | audit-driven split candidate |
-| `reference/config/snapshot.md` | 394 | human+ai | TBD | TBD | TBD | TBD |
-| `reference/config/state.md` | 560 | human+ai | TBD | TBD | TBD | audit-driven split candidate |
-| `reference/config/styles.md` | 177 | human+ai | TBD | TBD | TBD | TBD |
-| `reference/config/ui.md` | 104 | human+ai | TBD | TBD | TBD | TBD |
-| `reference/config/validate.md` | 450 | human+ai | TBD | TBD | TBD | audit-driven split candidate |
-| `reference/render/index.md` | 149 | human+ai | TBD | TBD | TBD | TBD |
-| `reference/render/ai.md` | 371 | human+ai | TBD | TBD | TBD | TBD |
-| `reference/render/env.md` | 262 | human+ai | TBD | TBD | TBD | TBD |
-| `reference/render/git.md` | 270 | human+ai | TBD | TBD | TBD | TBD |
-| `reference/render/ide.md` | 313 | human+ai | TBD | TBD | TBD | TBD |
-| `reference/docs/index.md` | 449 | human+ai | TBD | TBD | TBD | audit-driven split candidate |
+| `reference/index.md` | 8 | human+ai | current | keep-as-is (Phase 3.3 refresh + Phase 4.8 additive edit) | — | top-level reference index; will gain `concepts/` entry in Phase 4.8 |
+| `reference/templates.md` | 254 | human+ai | current | refresh-in-place | — | go-sprout v1.0.3 registries + `{{ }}` / `${ }` syntax verified vs `internal/shared/tpl/engine.go` |
+| `reference/config/index.md` | 127 | human+ai | current | refresh-in-place | — | 3-layer merge model + `.devbox/` artifacts accurate; needs link rewrites after Phase 2 splits |
+| `reference/config/commands.md` | 1452 | human+ai | current | split | `config/commands/{index, directives, types, templating, validation}.md` | definite split; all 8 command types + directives match `internal/core/usercommands/model/types.go` |
+| `reference/config/conditions.md` | 180 | human+ai | current | keep-as-is | — | predicates + builtin registries verified vs `internal/core/execution/condition/condition.go` |
+| `reference/config/deploy.md` | 1006 | human+ai | current | split | `config/deploy/{index, steps, builtins, conditions, examples}.md` | definite split; builtins (`service_dirs_ensure`, `service_configs_copy/check`, `docker_remove_project_volumes`, `remove_paths`) verified |
+| `reference/config/devbox.md` | 321 | human+ai | current | keep-as-is | — | 3-layer merge (`devbox.yml` → `defaults.yml` → `local.yml`), dot-path resolution, `exports.env`, `docs.mermaid` verified |
+| `reference/config/docker.md` | 253 | human+ai | current | keep-as-is | — | standalone load path + `docker.local.yml` deep-merge + `topology.hidden` verified vs `internal/shared/docker/compose.go` |
+| `reference/config/i18n.md` | 551 | human+ai | stale | refresh-in-place | — | locale precedence claim (`--lang` scope) + `DEVBOX_LANGUAGE` env-var claim do not match `internal/shared/i18n/locale.go`; size driven by examples, not topic count → no split |
+| `reference/config/info.md` | 418 | human+ai | current | keep-as-is | — | `auto-urls` / `auto-hosts` render-time expansion + `LoadInfoConfig()` verified vs `internal/core/ui/render/info.go` |
+| `reference/config/lifecycle.md` | 265 | human+ai | current | keep-as-is | — | update-probe modes (`on`/`off`), precedence (`--no-update` > `--update` > config), auto-reap daemon phase verified |
+| `reference/config/notifications.md` | 208 | human+ai | current | keep-as-is | — | four per-op gates + macOS terminal-notifier/osascript fallback + `SkipNotify` verified vs `internal/core/notify/` |
+| `reference/config/reset.md` | 90 | human+ai | current | keep-as-is | — | default pipeline (pre → stop → cleanup) + per-service reset semantics + `PendingDeploy` tracking verified |
+| `reference/config/services.md` | 874 | human+ai | current | split | `config/services/{index, fields, extends, examples}.md` | definite split; service types (`app`/`tool`/`infra`), per-type allowlist, `on_enable`/`on_disable` hooks verified |
+| `reference/config/setup.md` | 449 | human+ai | current | keep-as-is | — | question fields + types (`input`/`confirm`/`select`/`multiselect`) + write-scope rules verified vs `internal/core/workflow/setup/model.go`; coherent single-topic doc |
+| `reference/config/snapshot.md` | 394 | human+ai | current | keep-as-is | — | `require_matching_config`, `services_mismatch.policy`, `local_yml.preserve_keys`, manifest format, lock interaction verified |
+| `reference/config/state.md` | 560 | human+ai | current | split | `config/state/{index, schema, hashing, management}.md` | size + topic mix justify split; `action_hash`/`deployed_at`/`config_hash`/`status` schema verified vs `internal/core/workflow/deploy/journal/state.go` |
+| `reference/config/styles.md` | 177 | human+ai | current | keep-as-is | — | 7 semantic tokens + light/dark resolution via `lipgloss.HasDarkBackground()` verified vs `internal/core/ui/styles/styles.go` |
+| `reference/config/ui.md` | 104 | human+ai | current | keep-as-is | — | pointer semantics (`default_expanded_depth`, `auto_collapse_empty`, `show_type_badges`) verified vs `internal/core/project/config/ui.go` |
+| `reference/config/validate.md` | 450 | human+ai | current | keep-as-is | — | check fields + builtins (`shell`, `file_exists`, `executable_in_path`, `env_keys_present`, `tcp_reachable`) + stages verified vs `internal/core/validate/checks/`; size driven by examples, no clean split |
+| `reference/render/index.md` | 149 | human+ai | current | keep-as-is | — | pipeline, collision policies (shallowest/deepest), manifest schema, local overrides verified |
+| `reference/render/ai.md` | 371 | human+ai | current | keep-as-is | — | shallowest-wins, activation defaults, hub-anchor resolution verified vs `ai.go` |
+| `reference/render/env.md` | 262 | human+ai | current | keep-as-is | — | system vars (`PROJECT`, `UID`, `GID`), export rules, format hints verified vs envfile package |
+| `reference/render/git.md` | 270 | human+ai | current | keep-as-is | — | deepest-wins, basename-only `to`, `chmod 0755`, symlink refusal, worktree skip verified |
+| `reference/render/ide.md` | 313 | human+ai | current | keep-as-is | — | deepest-wins, `type: app` default opt-in, manifest requirement, path-safety verified vs `ide.go` |
+| `reference/docs/index.md` | 449 | human+ai | minor-drift | split | `docs/{index, browser, commands, translations}.md` | `devbox docs generate` is a root-level subcommand (not nested) — clarity fix; topic mix (TUI / command reference / translation behavior / mermaid) supports split |
 
 **Acceptance criteria:**
 
-- [ ] every manual reference doc has a row in the table (26 expected: 1 `reference/index.md` + 1 `templates.md` + 1 `config/index.md` + 17 other `config/*` + 5 `render/*` + 1 `docs/index.md`)
-- [ ] every row that proposes a split also lists target paths
-- [ ] no file edits outside this plan file
+- [x] every manual reference doc has a row in the table (26 expected: 1 `reference/index.md` + 1 `templates.md` + 1 `config/index.md` + 17 other `config/*` + 5 `render/*` + 1 `docs/index.md`)
+- [x] every row that proposes a split also lists target paths
+- [x] no file edits outside this plan file
 
 ---
 
@@ -616,7 +616,7 @@ For phases that touch many files, order is: index file last (it links to everyth
 ## Implementation Steps (summary checklist)
 
 ### Phase 1 — Audit
-- [ ] Task 1.1: fill in the Phase 1 audit table
+- [x] Task 1.1: fill in the Phase 1 audit table
 
 ### Phase 2 — Splits
 - [ ] Task 2.1: split `config/commands.md`
