@@ -317,10 +317,10 @@ For phases that touch many files, order is: index file last (it links to everyth
 - Modify: `docs/reference/templates.md`
 - Modify: `docs/reference/index.md`
 
-- [ ] refresh `docs/index.md` against current behaviour of `internal/core/docs/...`
-- [ ] refresh `templates.md` against `internal/shared/tpl/`
-- [ ] refresh `reference/index.md` to reflect current subsection list (config, render, docs, templates, cli) — the `concepts/` entry is added in Phase 4.8, not here, since the subdir does not exist yet
-- [ ] `make build` exits 0
+- [x] refresh `docs/index.md` against current behaviour of `internal/core/docs/...` — split children (`docs/{index, browser, commands, translations}.md`) audited; `browser.md` keymap corrected against `internal/core/docs/tui/keys.go` (removed nonexistent `n`/`N`, `?`, `d`/`Enter`-on-diagram; corrected `]d`/`[d` → `]`/`[`; `/` is tree filter, not heading search; added `f`/`b`/`g`/`G` page-nav); `commands.md` updated against `internal/cli/docs/{show,list}.go` (added `--anchors` + `--toc` to `show`; added `--match` to `list`); `docs/index.md` + `translations.md` claims verified clean
+- [x] refresh `templates.md` against `internal/shared/tpl/` — go-sprout v1 (10 registries: std, strings, numeric, slices, maps, regexp, conversion, time, filesystem, semver) + `appURL` helper + `${...}` shorthand rewriter + lenient/strict modes all verified against `internal/shared/tpl/funcs.go` + `engine.go`; no edits needed
+- [x] refresh `reference/index.md` to reflect current subsection list (config, render, docs, templates, cli) — the `concepts/` entry is added in Phase 4.8, not here, since the subdir does not exist yet
+- [x] `make build` exits 0
 
 ### Task 3.4: Final validation gate
 
@@ -628,7 +628,7 @@ For phases that touch many files, order is: index file last (it links to everyth
 ### Phase 3 — Updates
 - [ ] Task 3.1: refresh remaining `config/*`
 - [x] Task 3.2: refresh `render/*`
-- [ ] Task 3.3: refresh `docs/`, `templates.md`, `reference/index.md`
+- [x] Task 3.3: refresh `docs/`, `templates.md`, `reference/index.md`
 - [ ] Task 3.4: validation gate
 
 ### Phase 4 — New `concepts/`

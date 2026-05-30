@@ -8,7 +8,7 @@ Render a single documentation topic to stdout.
 
 **Usage:**
 ```bash
-devbox docs show <topic> [--lang <code>] [--raw] [--source all|devbox|project]
+devbox docs show <topic> [--lang <code>] [--raw] [--source all|devbox|project] [--anchors] [--toc]
 ```
 
 **Arguments:**
@@ -18,6 +18,8 @@ devbox docs show <topic> [--lang <code>] [--raw] [--source all|devbox|project]
 - `--lang <code>` — Render in a specific language (2-letter code; e.g., `ru`, `de`). Defaults to the system locale or `en`.
 - `--raw` — Output raw markdown (no syntax highlighting, no mermaid rendering). Useful for pipes and programmatic consumption.
 - `--source <all|devbox|project>` — Search scope (default `all`). `devbox` searches only built-in docs; `project` searches only `./docs/`; `all` searches both.
+- `--anchors` — Print every anchor slug for the topic (one per line) and exit. Useful for shell completion of `topic#anchor` forms.
+- `--toc` — Print the topic's table of contents as TSV (`level\tslug\ttext`, one heading per line) and exit. Agent-friendly outline of the page.
 
 **Output:**
 - **TTY:** Glamour-rendered markdown with syntax highlighting. Mermaid diagrams are rendered to PNG and cached; inline display on capable terminals (kitty, ghostty, wezterm), system viewer fallback on others.
@@ -44,12 +46,13 @@ List all available documentation topics (flat format).
 
 **Usage:**
 ```bash
-devbox docs list [--lang <code>] [--source all|devbox|project]
+devbox docs list [--lang <code>] [--source all|devbox|project] [--match <glob>]
 ```
 
 **Flags:**
 - `--lang <code>` — Filter by language (default: active locale or `en`).
 - `--source <all|devbox|project>` — Search scope (default `all`).
+- `--match <glob>` — Filter topic paths by shell-style glob. `*` matches one path segment; `**` crosses `/`. Examples: `reference/config/*`, `reference/commands/**`.
 
 **Output:**
 Tab-separated columns (agent-friendly):

@@ -16,21 +16,22 @@ devbox docs
 
 | Key | Action |
 |-----|--------|
-| `j` / `k` | Move up/down in the left tree pane |
-| `h` / `l` | Collapse/expand folders |
+| `j` / `↓`, `k` / `↑` | Move down/up |
+| `h` / `←`, `l` / `→` | Collapse/expand folders in the tree |
+| `f` / `PgDn`, `b` / `PgUp` | Page down/up in the content pane |
+| `g`, `G` | Jump to start/end |
 | `Tab` | Switch focus between tree (left) and content (right) |
 | `Enter` | Open a topic |
-| `/` | Search headings (within the current document) |
-| `n` / `N` | Jump to next/previous search result |
-| `]d` / `[d` | Navigate to next/previous mermaid diagram |
-| `d` / `Enter` on diagram | View diagram inline (if supported) or open in system viewer |
-| `o` | Always open diagram in system viewer |
-| `y` | Copy diagram source code via clipboard (OSC 52) |
+| `/` | Filter the tree by substring (case-insensitive match on dir names, file titles, and headings) |
+| `]`, `[` | Jump to next/previous mermaid diagram |
+| `o` | Open the focused mermaid diagram in the system viewer |
+| `y` | Copy mermaid source via clipboard (OSC 52) |
 | `L` | Cycle through available languages for the current topic |
 | `e` | Jump to English original (when viewing a translation) |
 | `r` | Reload the current topic (picks up live edits in project docs) |
-| `?` | Show help |
-| `q` | Quit |
+| `q` / `Esc` / `Ctrl+C` | Quit |
+
+A footer panel renders the full keymap so the bindings are always one glance away.
 
 ## Layout
 
