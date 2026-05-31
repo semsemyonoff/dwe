@@ -122,10 +122,14 @@ homebrew_casks:
       fish: completions/devbox.fish
     # Strip the macOS quarantine attribute on install so the unsigned binary
     # runs without a Gatekeeper prompt. Standard pattern for unsigned CLI casks.
+    # Guarded by OS.mac? — Linuxbrew does not ship /usr/bin/xattr and has no
+    # Gatekeeper, so the hook is a no-op (and would crash) on Linux.
     hooks:
       post:
         install: |
-          system_command "/usr/bin/xattr", args: ["-dr", "com.apple.quarantine", "#{staged_path}/devbox"]
+          if OS.mac?
+            system_command "/usr/bin/xattr", args: ["-dr", "com.apple.quarantine", "#{staged_path}/devbox"]
+          end
 
 checksum:
   name_template: 'checksums.txt'
