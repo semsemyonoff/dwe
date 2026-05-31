@@ -10,7 +10,6 @@ The three layers of the merged devbox config.
   - [Where service fields come from](#where-service-fields-come-from)
 - [devbox.yml](#devboxyml)
   - [Field reference](#field-reference)
-  - [Binary overrides](#binary-overrides)
   - [Project convention keys](#project-convention-keys)
 - [devbox/defaults.yml](#devboxdefaultsyml)
   - [`services` overlay](#services-overlay)
@@ -115,10 +114,6 @@ project:
 | `project.prefix` | string | Prefix for Docker project name and container labels |
 
 `project.prefix` and `project.name` combine to form the Docker Compose project name via the template in `docker.yml` (`${project.prefix}-${project.name}`).
-
-## Binary overrides
-
-Binary paths (docker, git, devbox, shell, mmdc) are configured at the user level via `~/.config/devbox/config`, not in `devbox.yml`. See the [user config reference](../../../internal-user-config.md) for details on overriding binaries using `binary_<name>=<path>` entries.
 
 ## Project convention keys
 

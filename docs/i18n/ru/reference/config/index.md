@@ -1,4 +1,4 @@
-> Translated from: reference/config/index.md @ bbcd6968acb4
+> Translated from: reference/config/index.md @ 521a8ac66835
 
 # Справочник конфигурации
 
@@ -113,6 +113,7 @@ flowchart LR
 - [validate.yml](validate.md) — проверки готовности проекта: env-пробы, декларативные проверки, билтины, стадии, preflight
 - [snapshot.yml](snapshot.md) — snapshot-workflow'ы: блоки create/restore/remove, варианты, неймспейс `${snapshot.*}`, manifest, взаимодействие с lock, безопасность архивов
 - [Локализация (i18n)](i18n.md) — переводы пользовательских команд и UI-строк: разрешение локали, формат файла, справочник ключей, валидация
+- [Пользовательский конфиг](userconfig.md) — пользовательские настройки: расположение файла, синтаксис, переопределения бинарей, язык, тема mermaid
 - [Уведомления](notifications.md) — user-level desktop-уведомления: расположение конфиг-файлов, ключи, gate-матрица, env-override'ы
 - [UI](ui.md) — конфигурация интерактивного браузера команд: глубина, collapse, бэйджи, хоткеи, fallback-лестница
 - [Шаблоны](../templates.md) — Go-шаблоны, shorthand `${...}`, sprout-хелперы (общие для info, commands, пайплайнов, render-паков)

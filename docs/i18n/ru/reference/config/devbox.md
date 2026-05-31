@@ -1,4 +1,4 @@
-> Translated from: reference/config/devbox.md @ fb79bc70a96b
+> Translated from: reference/config/devbox.md @ 25c5965f6340
 
 # devbox.yml / defaults.yml / local.yml
 
@@ -12,7 +12,6 @@
   - [Откуда берутся поля сервисов](#откуда-берутся-поля-сервисов)
 - [devbox.yml](#devboxyml)
   - [Справочник полей](#справочник-полей)
-  - [Переопределения бинарей](#переопределения-бинарей)
   - [Ключи проектных соглашений](#ключи-проектных-соглашений)
 - [devbox/defaults.yml](#devboxdefaultsyml)
   - [Оверлей `services`](#оверлей-services)
@@ -117,10 +116,6 @@ project:
 | `project.prefix` | string | Префикс для имени Docker Compose-проекта и меток контейнеров |
 
 `project.prefix` и `project.name` комбинируются, образуя имя Docker Compose-проекта через шаблон в `docker.yml` (`${project.prefix}-${project.name}`).
-
-## Переопределения бинарей
-
-Пути к бинарям (docker, git, devbox, shell, mmdc) настраиваются на пользовательском уровне через `~/.config/devbox/config`, не в `devbox.yml`. Подробности о переопределении бинарей через записи `binary_<name>=<path>` см. в [справочнике пользовательского конфига](../../../internal-user-config.md).
 
 ## Ключи проектных соглашений
 

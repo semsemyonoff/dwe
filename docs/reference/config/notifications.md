@@ -14,7 +14,6 @@ See also: [Localization (i18n)](i18n.md) for translating user command descriptio
 - [Gate matrix](#gate-matrix)
 - [Non-interactive detection](#non-interactive-detection)
 - [Drop-on-busy policy](#drop-on-busy-policy)
-- [Reserved keys (not yet wired)](#reserved-keys-not-yet-wired)
 - [Sample config](#sample-config)
 - [Title and body format](#title-and-body-format)
 - [macOS icon and app name](#macos-icon-and-app-name)
@@ -65,7 +64,7 @@ Flat `key = value` lines:
 - Keys use lowercase letters, digits, and underscores; **dotted keys are rejected** (`notify_telegram_token`, not `notify.telegram.token`).
 - Booleans: `true` / `false`.
 - Lists: comma-separated.
-- Unknown keys are warnings (forward-compat with reserved keys).
+- Unknown keys are warnings, not errors.
 
 ## Keys (MVP)
 
@@ -130,16 +129,6 @@ killall NotificationCenter
 **Linux** uses libnotify via dbus (or `notify-send` as a fallback); the icon comes through as the PNG payload directly.
 
 **Windows** uses native toast notifications with the embedded PNG.
-
-## Reserved keys (not yet wired)
-
-The parser accepts these keys without error so that adding the corresponding backend in a future release does not require a config migration. They are decoded but **not used** in MVP:
-
-- `notify_telegram_token`
-- `notify_telegram_chat`
-- `notify_webhook_urls` (list)
-
-Setting `notify_channels = telegram` or `notify_channels = webhook` in MVP falls back to no-op (unknown channel logged at debug).
 
 ## Sample config
 

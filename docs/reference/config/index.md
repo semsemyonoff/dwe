@@ -111,6 +111,7 @@ For more details on `docker.local.yml` semantics and examples, see [docker.yml](
 - [validate.yml](validate.md) — project readiness checks: env probes, declarative checks, builtins, stages, preflight
 - [snapshot.yml](snapshot.md) — snapshot workflows: create/restore/remove blocks, variants, `${snapshot.*}` namespace, manifest, lock interaction, archive safety
 - [Localization (i18n)](i18n.md) — user command and UI string translations: locale resolution, file format, key reference, validation
+- [User config](userconfig.md) — user-level preferences: file location, syntax, binary overrides, language, mermaid theme
 - [Notifications](notifications.md) — user-level desktop notifications: config file locations, keys, gate matrix, environment overrides
 - [UI](ui.md) — interactive command browser configuration: depth, collapse, badges, hotkeys, fallback ladder
 - [Templates](../templates.md) — Go templates, `${...}` shorthand, sprout helpers (shared across info, commands, pipelines, render packs)

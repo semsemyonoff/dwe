@@ -1,4 +1,4 @@
-> Translated from: README.md @ dd277e31d038
+> Translated from: README.md @ 54377d0210e9
 
 # Devbox
 
@@ -16,27 +16,56 @@ CLI в виде одного бинарника для декларативно�
 
 ## Установка
 
-Devbox собирается из исходников и поставляется как один статический Go-бинарник по адресу `bin/devbox`.
+Devbox поставляется как один статический Go-бинарник. Выбирайте удобный канал.
+
+### Через Homebrew
 
 ```sh
+brew install semsemyonoff/tap/devbox
+```
+
+Устанавливает бинарник и completion для bash, zsh, fish по стандартным путям Homebrew. Работает на macOS (Intel + Apple Silicon) и Linux (linuxbrew).
+
+### Из релизов
+
+Скачайте подходящий архив или пакет с [GitHub releases](https://github.com/semsemyonoff/devbox/releases):
+
+- `devbox_<version>_macos_{x86_64,arm64}.tar.gz` и `devbox_<version>_linux_{x86_64,arm64}.tar.gz` — распакуйте и положите `devbox` в `/usr/local/bin` (или в любую директорию из `$PATH`); внутри архива лежит папка `completions/` со скриптами для `devbox completion install`.
+- `devbox_<version>_{amd64,arm64}.deb` — `sudo dpkg -i devbox_*.deb`; completion ставится автоматически в `/usr/share/{bash-completion,zsh/site-functions,fish/vendor_completions.d}`.
+- `devbox-<version>-1.{x86_64,aarch64}.rpm` — `sudo rpm -i devbox-*.rpm`; пути для completion те же, что у deb.
+
+Целостность файлов проверяется по опубликованному `checksums.txt`.
+
+### Из исходников
+
+```sh
+git clone https://github.com/semsemyonoff/devbox.git
+cd devbox
 make build
 ```
 
-`make build` запускает `go mod tidy`, синхронизирует `docs/` в `internal/core/docs/embedded/`, перегенерирует `internal/core/docs/content_hashes_gen.go`, компилирует `./cmd/devbox` и пишет `bin/devbox`. Бинарник самодостаточен: документация, переводы, дефолтные пайплайны и встроенные шаги вшиты внутрь.
-
-Запускайте его прямо из корня репозитория:
-
-```sh
-./bin/devbox version
-```
-
-Опциональная общесистемная установка:
+`make build` запускает `go mod tidy`, синхронизирует `docs/` в `internal/core/docs/embedded/`, перегенерирует `internal/core/docs/content_hashes_gen.go`, компилирует `./cmd/devbox` и пишет `bin/devbox`. Бинарник самодостаточен: документация, переводы, дефолтные пайплайны и встроенные шаги вшиты внутрь. Положите на `$PATH`:
 
 ```sh
 install -m 0755 bin/devbox /usr/local/bin/devbox
 ```
 
-Runtime-зависимости на хосте: `docker` (с `docker compose`), `git` и POSIX-shell. Переопределите пути к бинарникам в `devbox.yml`, если они лежат в нестандартных местах — см. [`docs/reference/config/devbox.md`](../../reference/config/devbox.md).
+> `go install github.com/semsemyonoff/devbox/cmd/devbox@latest` намеренно не поддерживается: дерево встроенной документации (`internal/core/docs/embedded/`) генерируется build-time скриптом `scripts/sync-embedded-docs.sh` и не коммитится — сборка через `go install` приехала бы с пустыми docs.
+
+### Shell completion (только для tar.gz)
+
+Если бинарник получен из tar.gz, completion ставится отдельной командой:
+
+```sh
+devbox completion install            # автоопределение $SHELL
+devbox completion install zsh        # или явно указать шелл
+```
+
+Поддерживаемые шеллы: bash, zsh, fish, powershell. Подробности и dry-run — `devbox completion install --help`.
+
+### Runtime-зависимости
+
+`docker` (с `docker compose`), `git` и POSIX-shell на хосте. Если они лежат в нестандартных местах, переопределите их пути в пользовательском конфиге `~/.config/devbox/config` через записи `binary_<name> = <path>` — см. [`docs/reference/config/userconfig.md`](../../reference/config/userconfig.md#переопределения-бинарей).
 
 ### Опционально: скил для AI-агентов
 
