@@ -1,0 +1,18 @@
+{
+  "name": "devbox",
+  "owner": {
+    "name": "Devbox"
+  },
+  "description": "Distributes the Devbox agent skill — a Docker-based developer environment manager. The skill teaches AI agents how to detect a Devbox project, inspect services, look up configuration via the built-in `devbox docs` subsystem, and respect the read/mutation permission boundary.",
+  "metadata": {
+    "pluginRoot": "."
+  },
+  "plugins": [
+    {
+      "name": "devbox",
+      "source": "./",
+      "description": "Navigator skill for Devbox projects. Activates when working in a project containing `devbox.yml`. Teaches agents how to use `devbox status`, `devbox validate`, `devbox docs`, and the deploy / runtime command boundary.",
+      "skills": ["./skills/devbox"]
+    }
+  ]
+}
