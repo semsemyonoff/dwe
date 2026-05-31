@@ -1,4 +1,4 @@
-> Translated from: reference/docs/commands.md @ 3dab2006e628
+> Translated from: reference/docs/commands.md @ d73f21b975f4
 
 # Неинтерактивные команды документации
 
@@ -14,7 +14,7 @@ devbox docs show <topic> [--lang <code>] [--raw] [--source all|devbox|project] [
 ```
 
 **Аргументы:**
-- `<topic>` — путь темы, опционально с якорем: `config/services`, `config/services#binaries`, `config/services.md#binaries`. Поддерживается нечёткое сопоставление (нечувствительный к регистру поиск по подстроке).
+- `<topic>` — путь темы, опционально с якорем: `config/lifecycle`, `config/services/fields`, `config/devbox#binary-overrides`, `config/services/fields.md#ports-field`. Поддерживается нечёткое сопоставление (нечувствительный к регистру поиск по подстроке); многостраничные темы вроде `config/services` неоднозначны сами по себе — указывайте конкретную подстраницу.
 
 **Флаги:**
 - `--lang <code>` — рендер на конкретном языке (2-буквенный код; например `ru`, `de`). По умолчанию — системная локаль или `en`.
@@ -30,16 +30,17 @@ devbox docs show <topic> [--lang <code>] [--raw] [--source all|devbox|project] [
 **Примеры:**
 ```bash
 # Рендер в текущей локали или fallback на английский
-devbox docs show config/services
+devbox docs show config/services/index
 
 # Рендер на русском (с плашкой об устаревшем переводе, если применимо)
-devbox docs show config/services --lang ru
+devbox docs show config/services/index --lang ru
 
-# Рендер сырого markdown (удобно для агентов)
-devbox docs show config/services --raw
+# Рендер сырого markdown (удобно для агентов); скоуп на секцию через якорь
+devbox docs show config/services/fields --raw --lang en
+devbox docs show config/devbox#binary-overrides --raw --lang en
 
 # Показать только встроенные доки (пропустить проектные ./docs/)
-devbox docs show config/services --source devbox
+devbox docs show config/services/fields --source devbox --lang en
 ```
 
 ## `devbox docs list`
@@ -61,8 +62,8 @@ devbox docs list [--lang <code>] [--source all|devbox|project] [--match <glob>]
 ```
 <source>	<path>	<language>
 devbox	config/devbox	en
-devbox	config/services	en
-devbox	config/services	ru
+devbox	config/services/fields	en
+devbox	config/services/fields	ru
 project	guides/setup	en
 ```
 
@@ -70,8 +71,8 @@ project	guides/setup	en
 ```bash
 $ devbox docs list
 devbox	reference/config/devbox	en
-devbox	reference/config/services	en
-devbox	reference/config/services	ru
+devbox	reference/config/services/fields	en
+devbox	reference/config/services/fields	ru
 project	guides/getting-started	en
 ```
 

@@ -59,7 +59,7 @@ Generated reference for the `devbox` command tree.
   - [devbox reset step](devbox_reset_step.md) — Run a single reset step by <phase>/<step> address
 - [devbox restart](devbox_restart.md) — Restart the project (stop, then run --no-update)
 - [devbox run](devbox_run.md) — Start the project (full lifecycle: update probe → up → wait → info)
-- [devbox services](devbox_services.md) — Toggle optional services (interactive) or enable/disable individually
+- [devbox services](devbox_services.md) — Toggle optional services (interactive) or list / enable / disable
   - [devbox services disable](devbox_services_disable.md) — Disable an optional service (writes to devbox/local.yml)
   - [devbox services enable](devbox_services_enable.md) — Enable an optional service (writes to devbox/local.yml)
 - [devbox shell](devbox_shell.md) — Open a shell in a service container

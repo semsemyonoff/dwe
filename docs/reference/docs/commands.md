@@ -12,7 +12,7 @@ devbox docs show <topic> [--lang <code>] [--raw] [--source all|devbox|project] [
 ```
 
 **Arguments:**
-- `<topic>` — Topic path, optionally with an anchor: `config/services`, `config/services#binaries`, `config/services.md#binaries`. Fuzzy matching supported (case-insensitive substring).
+- `<topic>` — Topic path, optionally with an anchor: `config/lifecycle`, `config/services/fields`, `config/devbox#binary-overrides`, `config/services/fields.md#ports-field`. Fuzzy matching supported (case-insensitive substring); multi-page topics like `config/services` are ambiguous on their own — pass the specific sub-page.
 
 **Flags:**
 - `--lang <code>` — Render in a specific language (2-letter code; e.g., `ru`, `de`). Defaults to the system locale or `en`.
@@ -28,16 +28,17 @@ devbox docs show <topic> [--lang <code>] [--raw] [--source all|devbox|project] [
 **Examples:**
 ```bash
 # Render in the current locale or English fallback
-devbox docs show config/services
+devbox docs show config/services/index
 
 # Render in Russian (with stale-translation banner if applicable)
-devbox docs show config/services --lang ru
+devbox docs show config/services/index --lang ru
 
-# Render raw markdown (agent-friendly)
-devbox docs show config/services --raw
+# Render raw markdown (agent-friendly); scope to a specific section via anchor
+devbox docs show config/services/fields --raw --lang en
+devbox docs show config/devbox#binary-overrides --raw --lang en
 
 # Show only built-in docs (skip project ./docs/)
-devbox docs show config/services --source devbox
+devbox docs show config/services/fields --source devbox --lang en
 ```
 
 ## `devbox docs list`
@@ -59,8 +60,8 @@ Tab-separated columns (agent-friendly):
 ```
 <source>	<path>	<language>
 devbox	config/devbox	en
-devbox	config/services	en
-devbox	config/services	ru
+devbox	config/services/fields	en
+devbox	config/services/fields	ru
 project	guides/setup	en
 ```
 
@@ -68,8 +69,8 @@ project	guides/setup	en
 ```bash
 $ devbox docs list
 devbox	reference/config/devbox	en
-devbox	reference/config/services	en
-devbox	reference/config/services	ru
+devbox	reference/config/services/fields	en
+devbox	reference/config/services/fields	ru
 project	guides/getting-started	en
 ```
 

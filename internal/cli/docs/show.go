@@ -38,23 +38,34 @@ In a TTY, renders the markdown with syntax highlighting and colors.
 In a pipe or with --raw, outputs plain markdown.
 
 Topics are matched case-insensitively with fuzzy substring matching if exact match fails.
-When the match is ambiguous, the segment closest to the input wins (e.g. "services" prefers
-"reference/config/services" over deeper paths that only contain "services" as an intermediate segment).
+When more than one topic matches and there is no unique closest segment, the command
+lists the candidates and exits with an error — pass a more specific path to
+disambiguate. Common examples:
+  - "devbox" alone is ambiguous (both "reference/cli/devbox" and
+    "reference/config/devbox" match); pass "config/devbox" or "cli/devbox".
+  - Multi-page topics like "config/services" are ambiguous on their own;
+    pass the specific sub-page, e.g. "config/services/index",
+    "config/services/fields", or "config/services/examples".
 
 Append "#anchor" to scope output to a single section. The anchor is the GitHub-style heading
-slug (lower-case, spaces become hyphens, punctuation dropped). Unknown anchors list the
-available slugs in the document.
+slug (lower-case, spaces become hyphens, punctuation dropped). Anchors are language-specific
+(the slug is derived from the heading text); always pass --lang en together with an English
+anchor or your locale will not have it. Unknown anchors list the available slugs in the
+document.
 
 Use --anchors to list the slug of every H2/H3 heading in the topic (one per line),
 or --toc for a level/slug/text TSV. Both bypass the body and are useful for
 scoping a follow-up "docs show topic#anchor" without reading the whole document.
 
+This command always emits markdown — the global --output json flag is ignored
+here, since the document is the payload.
+
 Examples:
-  devbox docs show config/services
-  devbox docs show config/devbox#binaries
-  devbox docs show config/services --lang ru
-  devbox docs show config/services --anchors
-  devbox docs show config/services --toc`,
+  devbox docs show config/services/index
+  devbox docs show config/devbox#binary-overrides --lang en
+  devbox docs show config/services/fields --lang en
+  devbox docs show config/services/fields --anchors --lang en
+  devbox docs show config/services/fields --toc --lang en`,
 		Args: cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			return runDocsShow(cmd, flags, df, args[0])

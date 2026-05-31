@@ -17,8 +17,8 @@ devbox docs
 
 Show a specific topic in the terminal:
 ```bash
-devbox docs show config/services
-devbox docs show config/devbox#binaries
+devbox docs show config/services/fields
+devbox docs show config/devbox#binary-overrides
 ```
 
 List all available topics:

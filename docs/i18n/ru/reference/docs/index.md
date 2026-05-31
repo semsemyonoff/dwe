@@ -1,4 +1,4 @@
-> Translated from: reference/docs/index.md @ 0bbf7128b4f1
+> Translated from: reference/docs/index.md @ 707173ea5611
 
 # Подсистема документации
 
@@ -19,8 +19,8 @@ devbox docs
 
 Показ конкретной темы в терминале:
 ```bash
-devbox docs show config/services
-devbox docs show config/devbox#binaries
+devbox docs show config/services/fields
+devbox docs show config/devbox#binary-overrides
 ```
 
 Список всех доступных тем:
