@@ -16,3 +16,7 @@ bin/
 # Generated: synced from docs/ by scripts/sync-embedded-docs.sh on `make build`
 # and `make test*` (which depend on the embedded-docs target).
 /internal/core/docs/embedded/
+
+# Release artifacts (GoReleaser output and generated completion scripts).
+/dist/
+/completions/

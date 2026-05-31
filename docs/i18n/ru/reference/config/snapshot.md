@@ -1,4 +1,4 @@
-> Translated from: reference/config/snapshot.md @ 1d360aac37e3
+> Translated from: reference/config/snapshot.md @ 4d20939d8342
 
 # snapshot.yml
 

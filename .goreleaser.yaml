@@ -1,0 +1,153 @@
+version: 2
+
+project_name: devbox
+
+# Hooks run once before all builds. Order matters:
+#   1. sync embedded docs (without it cmd/devbox does not compile)
+#   2. regen the docs content-hash table (cheap; keeps the binary's manifest
+#      consistent with the embedded tree)
+#   3. generate shell completions via `go run ./cmd/devbox completion <shell>`,
+#      so the resulting files reflect the exact cobra tree of this commit.
+before:
+  hooks:
+    - ./scripts/sync-embedded-docs.sh
+    - ./scripts/gen-docs-content-hashes.sh
+    - ./scripts/gen-completions.sh
+
+builds:
+  - id: devbox
+    main: ./cmd/devbox
+    binary: devbox
+    env:
+      - CGO_ENABLED=0
+    goos:
+      - linux
+      - darwin
+    goarch:
+      - amd64
+      - arm64
+    flags:
+      - -trimpath
+    ldflags:
+      - -s -w
+      - -X github.com/semsemyonoff/devbox/internal/shared/version.Version={{ .Version }}
+      - -X github.com/semsemyonoff/devbox/internal/shared/version.Commit={{ .Commit }}
+      - -X github.com/semsemyonoff/devbox/internal/shared/version.Date={{ .Date }}
+      - -X github.com/semsemyonoff/devbox/internal/shared/version.BuiltBy=goreleaser
+
+archives:
+  - id: default
+    ids:
+      - devbox
+    # Naming kept Homebrew-friendly: macos_x86_64 / macos_arm64 / linux_x86_64 /
+    # linux_arm64. The Homebrew formula consumes the same tar.gz files as
+    # general users.
+    name_template: >-
+      {{ .ProjectName }}_{{ .Version }}_
+      {{- if eq .Os "darwin" }}macos
+      {{- else }}{{ .Os }}{{ end }}_
+      {{- if eq .Arch "amd64" }}x86_64
+      {{- else }}{{ .Arch }}{{ end }}
+    formats:
+      - tar.gz
+    files:
+      - LICENSE
+      - README.md
+      - AGENTS.md
+      - completions/devbox.bash
+      - completions/devbox.zsh
+      - completions/devbox.fish
+
+nfpms:
+  - id: packages
+    ids:
+      - devbox
+    package_name: devbox
+    file_name_template: '{{ .ConventionalFileName }}'
+    vendor: Semsemyonoff
+    homepage: https://github.com/semsemyonoff/devbox
+    maintainer: Semsemyonoff <semyonoff.sergey.usa@gmail.com>
+    description: |-
+      Docker-based developer environment manager.
+      Devbox orchestrates Docker services, deploy pipelines, and project
+      commands from a single declarative configuration.
+    license: MIT
+    formats:
+      - deb
+      - rpm
+    bindir: /usr/bin
+    section: utils
+    priority: optional
+    # Completion files are placed at the canonical system paths so that
+    # bash-completion, zsh's fpath, and fish's vendor_completions.d pick them
+    # up automatically on package install. No post-install scripts required.
+    contents:
+      - src: completions/devbox.bash
+        dst: /usr/share/bash-completion/completions/devbox
+        file_info:
+          mode: 0644
+      - src: completions/devbox.zsh
+        dst: /usr/share/zsh/site-functions/_devbox
+        file_info:
+          mode: 0644
+      - src: completions/devbox.fish
+        dst: /usr/share/fish/vendor_completions.d/devbox.fish
+        file_info:
+          mode: 0644
+      - src: LICENSE
+        dst: /usr/share/doc/devbox/LICENSE
+        file_info:
+          mode: 0644
+
+homebrew_casks:
+  - name: devbox
+    binaries:
+      - devbox
+    ids:
+      - default
+    repository:
+      owner: semsemyonoff
+      name: homebrew-tap
+      branch: main
+      token: '{{ .Env.HOMEBREW_TAP_GITHUB_TOKEN }}'
+    homepage: https://github.com/semsemyonoff/devbox
+    description: Docker-based developer environment manager
+    license: MIT
+    # The cask manifest auto-installs these into Homebrew's completion dirs;
+    # brew picks them up via its standard fpath wiring for both Intel and
+    # Apple Silicon installs.
+    completions:
+      bash: completions/devbox.bash
+      zsh: completions/devbox.zsh
+      fish: completions/devbox.fish
+    # Strip the macOS quarantine attribute on install so the unsigned binary
+    # runs without a Gatekeeper prompt. Standard pattern for unsigned CLI casks.
+    hooks:
+      post:
+        install: |
+          system_command "/usr/bin/xattr", args: ["-dr", "com.apple.quarantine", "#{staged_path}/devbox"]
+
+checksum:
+  name_template: 'checksums.txt'
+
+snapshot:
+  version_template: '{{ incpatch .Version }}-snapshot-{{ .ShortCommit }}'
+
+changelog:
+  sort: asc
+  use: github
+  filters:
+    exclude:
+      - '^docs:'
+      - '^test:'
+      - '^chore:'
+      - '^ci:'
+      - Merge pull request
+      - Merge branch
+
+release:
+  github:
+    owner: semsemyonoff
+    name: devbox
+  draft: false
+  prerelease: auto
