@@ -20,6 +20,14 @@ type docsListFlags struct {
 	match  string
 }
 
+// docsListEntry is one JSON record in `devbox docs list --output json`.
+// Field names form an agent-facing contract; keep stable.
+type docsListEntry struct {
+	Source string `json:"source"`
+	Path   string `json:"path"`
+	Lang   string `json:"lang"`
+}
+
 func newDocsListCmd(flags *cmdctx.RootFlags) *cobra.Command {
 	df := &docsListFlags{}
 
@@ -28,8 +36,10 @@ func newDocsListCmd(flags *cmdctx.RootFlags) *cobra.Command {
 		Short: "List all available documentation topics",
 		Long: `List all available documentation topics.
 
-Output is tab-separated for easy parsing by scripts and agents:
+Default output is tab-separated for easy parsing by scripts and agents:
   <source>\t<path>\t<lang>
+
+With --output json, emits a JSON array of {source, path, lang} records.
 
 The --match flag filters by topic path using shell-style globs. * matches
 any characters within one path segment; ** spans separators (so reference/**
@@ -63,8 +73,8 @@ func runDocsList(cmd *cobra.Command, rflags *cmdctx.RootFlags, df *docsListFlags
 	// Filter by --source flag
 	roots := filterDocRoots(allRoots, df.source)
 	if len(roots) == 0 {
-		// No docs available for this source; output nothing (not an error)
-		return nil
+		// No docs available for this source; emit an empty result set (not an error).
+		return cmdctx.WriteData(rflags, cmd, []docsListEntry{}, renderDocsListText)
 	}
 
 	// Load user config to get the configured language
@@ -89,15 +99,36 @@ func runDocsList(cmd *cobra.Command, rflags *cmdctx.RootFlags, df *docsListFlags
 		return fmt.Errorf("--match: %w", err)
 	}
 
-	// Output tab-separated format: source\tpath\tlang
+	entries := make([]docsListEntry, 0, len(topics))
 	for _, topic := range topics {
 		if !matcher(topic.Path) {
 			continue
 		}
-		_, _ = fmt.Fprintf(cmd.OutOrStdout(), "%s\t%s\t%s\n", topic.Source, topic.Path, topic.Lang)
+		entries = append(entries, docsListEntry{
+			Source: topic.Source,
+			Path:   topic.Path,
+			Lang:   topic.Lang,
+		})
 	}
 
-	return nil
+	return cmdctx.WriteData(rflags, cmd, entries, renderDocsListText)
+}
+
+// renderDocsListText renders the default TSV (one row per topic):
+//
+//	<source>\t<path>\t<lang>
+//
+// WriteData appends a single trailing newline; rows are joined with '\n' so
+// the on-the-wire format matches the prior per-row Fprintf("…\n").
+func renderDocsListText(entries []docsListEntry) string {
+	var sb strings.Builder
+	for i, e := range entries {
+		if i > 0 {
+			sb.WriteByte('\n')
+		}
+		fmt.Fprintf(&sb, "%s\t%s\t%s", e.Source, e.Path, e.Lang)
+	}
+	return sb.String()
 }
 
 // compilePathGlob builds a matcher for the --match flag. Semantics:

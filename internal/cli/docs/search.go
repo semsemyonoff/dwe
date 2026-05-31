@@ -3,6 +3,7 @@ package docs
 import (
 	"fmt"
 	"os"
+	"strings"
 
 	"devbox-cli/internal/cli/cmdctx"
 	coredocs "devbox-cli/internal/core/docs"
@@ -18,6 +19,15 @@ type docsSearchFlags struct {
 	limit  int
 }
 
+// docsSearchResult is one JSON record in `devbox docs search --output json`.
+// Field names form an agent-facing contract; keep stable.
+type docsSearchResult struct {
+	Source string `json:"source"`
+	Path   string `json:"path"`
+	Anchor string `json:"anchor"`
+	Count  int    `json:"count"`
+}
+
 func newDocsSearchCmd(flags *cmdctx.RootFlags) *cobra.Command {
 	df := &docsSearchFlags{}
 
@@ -27,8 +37,12 @@ func newDocsSearchCmd(flags *cmdctx.RootFlags) *cobra.Command {
 		Long: `Search every documentation topic for a case-insensitive literal substring
 and emit the sections that contain it.
 
-Output is tab-separated (one row per matching section):
+Default output is tab-separated (one row per matching section):
   <source>\t<path>#<anchor>\t<count>
+
+With --output json, emits a JSON array of {source, path, anchor, count}
+records (path and anchor are split; anchor is empty for lead text under
+the H1 before the first H2/H3).
 
 Sections are sorted by match count (desc), then by path. Lead text under the
 H1 (before the first H2) is reported with an empty anchor. Matches inside
@@ -74,12 +88,38 @@ func runDocsSearch(cmd *cobra.Command, rflags *cmdctx.RootFlags, df *docsSearchF
 	if df.limit > 0 && len(hits) > df.limit {
 		hits = hits[:df.limit]
 	}
+
+	results := make([]docsSearchResult, 0, len(hits))
 	for _, h := range hits {
-		topicRef := h.Path
-		if h.Section != "" {
-			topicRef = h.Path + "#" + h.Section
-		}
-		_, _ = fmt.Fprintf(cmd.OutOrStdout(), "%s\t%s\t%d\n", h.Source, topicRef, h.Count)
+		results = append(results, docsSearchResult{
+			Source: h.Source,
+			Path:   h.Path,
+			Anchor: h.Section,
+			Count:  h.Count,
+		})
 	}
-	return nil
+
+	return cmdctx.WriteData(rflags, cmd, results, renderDocsSearchText)
+}
+
+// renderDocsSearchText renders the default TSV (one row per result):
+//
+//	<source>\t<path>#<anchor>\t<count>
+//
+// When anchor is empty, only `<path>` is printed (no trailing '#').
+// WriteData appends a single trailing newline; rows here are joined with '\n'
+// so the on-the-wire format matches the prior per-row Fprintf("…\n").
+func renderDocsSearchText(results []docsSearchResult) string {
+	var sb strings.Builder
+	for i, r := range results {
+		topicRef := r.Path
+		if r.Anchor != "" {
+			topicRef = r.Path + "#" + r.Anchor
+		}
+		if i > 0 {
+			sb.WriteByte('\n')
+		}
+		fmt.Fprintf(&sb, "%s\t%s\t%d", r.Source, topicRef, r.Count)
+	}
+	return sb.String()
 }

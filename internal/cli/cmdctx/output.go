@@ -64,8 +64,16 @@ func ErrWrap(code string, err error) *CodedError {
 }
 
 // WriteData dispatches between JSON and text output modes.
-// In JSON mode it encodes data to cmd.OutOrStdout(); in text mode it
-// calls renderText and writes the resulting string with a trailing newline.
+//
+// In JSON mode it always encodes data to cmd.OutOrStdout() — even when data is
+// an empty slice (yielding `[]\n`), so JSON consumers always receive a valid
+// JSON value.
+//
+// In text mode it calls renderText. If renderText returns an empty string,
+// nothing is written at all (no stray newline). Otherwise the rendered string
+// is written followed by a single trailing newline. This preserves the
+// `len(stdout) == 0` contract for "no results" while still letting renderers
+// join multi-row output with internal '\n' separators.
 func WriteData[T any](flags *RootFlags, cmd *cobra.Command, data T, renderText func(T) string) error {
 	if flags.Output == "json" {
 		enc := json.NewEncoder(cmd.OutOrStdout())
@@ -74,7 +82,11 @@ func WriteData[T any](flags *RootFlags, cmd *cobra.Command, data T, renderText f
 		}
 		return enc.Encode(data)
 	}
-	_, err := fmt.Fprintln(cmd.OutOrStdout(), renderText(data))
+	text := renderText(data)
+	if text == "" {
+		return nil
+	}
+	_, err := fmt.Fprintln(cmd.OutOrStdout(), text)
 	return err
 }
 
