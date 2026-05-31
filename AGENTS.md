@@ -1,21 +1,5 @@
 # Repository Guidelines
 
-## Project Status & Compatibility Policy
-
-**Devbox is in active pre-release development.** There are no external users, no released versions, and no third-party projects depending on `schema_version`, command names, config keys, dot-path templates, file layouts, or any other surface. Backwards compatibility is **not** a constraint when choosing a design.
-
-What this means in practice when proposing or evaluating changes:
-
-- Pick the design that will be the most flexible and practical **after the first release**. The goal is to avoid breaking changes later, not to avoid breaking changes now.
-- Do not introduce `schema_version` bumps, deprecation paths, version gates, dual-loader fallbacks, alias shims, or `migrate-from-X` flags. There is nothing to migrate from.
-- Do not preserve legacy field names "just in case." Rename freely. Restructure freely. Delete freely.
-- Do not write back-compat code paths in loaders, validators, or template resolvers. One canonical form per concept.
-- Internal call-site cascades from a rename or restructure are fine — fix them all in one PR. Mechanical refactors are cheap; carrying two parallel models is expensive.
-- Live user projects sitting alongside this CLI in the monorepo are updated alongside CLI changes. Treat them as fixtures, not as compatibility constraints.
-- The only exception: do not silently change behavior of an existing config in a way that produces *wrong* results without an error. If a config shape becomes invalid, the loader/validator must reject it with a clear message — not interpret it differently.
-
-When in doubt: choose the shape that will be correct in the long run and update the world to match. Don't preserve the past.
-
 ## Project Structure & Module Organization
 
 This is a Go CLI project named `devbox`. Devbox is a developer tool for local development environments running on Docker. Typical flow: a developer installs Devbox locally, enters a project with Devbox configuration, runs `devbox`, and the CLI detects the current directory as a Devbox project. From there it automates deploy/setup steps, orchestrates Docker services, and runs project commands.

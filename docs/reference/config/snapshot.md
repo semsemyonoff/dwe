@@ -274,8 +274,6 @@ last_restore:
   failed_step: ""
 ```
 
-The manifest carries no `schema_version` — devbox is in active pre-release development and there is nothing to migrate from.
-
 ## Filesystem layout
 
 ```

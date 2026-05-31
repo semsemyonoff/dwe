@@ -12,10 +12,6 @@ A single-binary CLI for running, configuring, and maintaining containerised loca
 - Per-developer overrides live in tracked `defaults.yml` plus gitignored `local.yml`; the same project boots cleanly on every workstation.
 - Embedded docs and i18n make `devbox docs` and translated UIs work without network access or out-of-band assets.
 
-## Status
-
-Devbox is in active pre-release development. Field names, commands, config layout, and surfaces all change without backwards-compatibility shims. There are no released versions and no third-party projects depending on the schema. Treat live projects in the monorepo as fixtures, not as compatibility constraints.
-
 ## Install
 
 Devbox builds from source and ships as one static Go binary at `bin/devbox`.
@@ -39,6 +35,21 @@ install -m 0755 bin/devbox /usr/local/bin/devbox
 ```
 
 Runtime dependencies on the host: `docker` (with `docker compose`), `git`, and a POSIX shell. Override binary paths in `devbox.yml` if they live in non-standard locations — see [`docs/reference/config/devbox.md`](docs/reference/config/devbox.md).
+
+### Optional: AI agent skill
+
+The repository ships an agent skill at [`skills/devbox/`](skills/devbox/SKILL.md) — a thin navigator that teaches Claude Code, Codex, Cursor, OpenCode, and other compatible agents how to detect a Devbox project, which `devbox` commands to use for inspection vs mutation, and how to look up everything else through the built-in `devbox docs` subsystem. Install it with the [vercel-labs/skills](https://github.com/vercel-labs/skills) CLI:
+
+```sh
+# install into the current project (./<agent>/skills/)
+npx skills add semsemyonoff/devbox --skill devbox
+
+# or install globally for all your projects
+npx skills add semsemyonoff/devbox --skill devbox -g
+
+# target a specific agent (claude-code, codex, cursor, opencode, ...)
+npx skills add semsemyonoff/devbox --skill devbox -a claude-code
+```
 
 ## Quickstart
 
@@ -165,4 +176,4 @@ Per-package responsibilities, invariants, and cross-package contracts are docume
 
 ## License
 
-License terms are not yet finalised for this pre-release. A `LICENSE` file will be added at the repository root before the first tagged release.
+Released under the [MIT License](LICENSE).

@@ -1,7 +1,7 @@
 {
   "name": "devbox",
   "owner": {
-    "name": "Devbox"
+    "name": "Semsemyonoff"
   },
   "description": "Distributes the Devbox agent skill — a Docker-based developer environment manager. The skill teaches AI agents how to detect a Devbox project, inspect services, look up configuration via the built-in `devbox docs` subsystem, and respect the read/mutation permission boundary.",
   "metadata": {
