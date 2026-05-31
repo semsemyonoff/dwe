@@ -5,7 +5,7 @@ import (
 	"runtime"
 	"sync"
 
-	"devbox-cli/internal/core/validate"
+	"github.com/semsemyonoff/devbox/internal/core/validate"
 )
 
 // MaxLinterConcurrency caps how many child linters in lintersGroup.RunGroup

@@ -2,7 +2,7 @@
 // RunSelector, RunMultiSelect) plus the SetHuhHooks / RunWithPromptHooks
 // indirection used by the live pipeline reporter to pause/resume its frame.
 //
-// Widgets imports devbox-cli/internal/core/ui/styles for the shared HuhTheme
+// Widgets imports github.com/semsemyonoff/devbox/internal/core/ui/styles for the shared HuhTheme
 // and palette; renderers in core/ui/render do not depend on widgets.
 package widgets
 
@@ -14,7 +14,7 @@ import (
 
 	huh "charm.land/huh/v2"
 
-	"devbox-cli/internal/core/ui/styles"
+	"github.com/semsemyonoff/devbox/internal/core/ui/styles"
 )
 
 // runConfirmFormFn is the underlying form runner; swappable in tests.

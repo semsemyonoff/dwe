@@ -1,4 +1,4 @@
-module devbox-cli
+module github.com/semsemyonoff/devbox
 
 go 1.26
 

@@ -8,9 +8,9 @@ import (
 	tea "charm.land/bubbletea/v2"
 	"charm.land/lipgloss/v2"
 
-	"devbox-cli/internal/core/docs"
-	"devbox-cli/internal/core/ui/render"
-	"devbox-cli/internal/core/ui/styles"
+	"github.com/semsemyonoff/devbox/internal/core/docs"
+	"github.com/semsemyonoff/devbox/internal/core/ui/render"
+	"github.com/semsemyonoff/devbox/internal/core/ui/styles"
 )
 
 // applyDocsHelpStyles overwrites the palette-driven fields on a bubbles/v2

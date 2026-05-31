@@ -1,8 +1,8 @@
 package env
 
 import (
-	"devbox-cli/internal/core/project/config"
-	"devbox-cli/internal/core/validate"
+	"github.com/semsemyonoff/devbox/internal/core/project/config"
+	"github.com/semsemyonoff/devbox/internal/core/validate"
 )
 
 // All returns the built-in env probes. cfg is consulted via the nil-safe

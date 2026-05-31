@@ -7,7 +7,7 @@ import (
 	"github.com/charmbracelet/lipgloss"
 	"github.com/muesli/termenv"
 
-	"devbox-cli/internal/core/ui/styles"
+	"github.com/semsemyonoff/devbox/internal/core/ui/styles"
 )
 
 // stripANSI removes ANSI escape sequences from s for plain-text comparison.

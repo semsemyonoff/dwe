@@ -7,14 +7,14 @@ import (
 	"sort"
 	"strings"
 
-	"devbox-cli/internal/core/execution/builtin"
-	"devbox-cli/internal/core/execution/condition"
-	"devbox-cli/internal/core/execution/filesgate"
-	"devbox-cli/internal/core/execution/filesgate/spec"
-	"devbox-cli/internal/core/project/config"
-	"devbox-cli/internal/core/usercommands/model"
-	"devbox-cli/internal/core/usercommands/registry"
-	"devbox-cli/internal/shared/tpl"
+	"github.com/semsemyonoff/devbox/internal/core/execution/builtin"
+	"github.com/semsemyonoff/devbox/internal/core/execution/condition"
+	"github.com/semsemyonoff/devbox/internal/core/execution/filesgate"
+	"github.com/semsemyonoff/devbox/internal/core/execution/filesgate/spec"
+	"github.com/semsemyonoff/devbox/internal/core/project/config"
+	"github.com/semsemyonoff/devbox/internal/core/usercommands/model"
+	"github.com/semsemyonoff/devbox/internal/core/usercommands/registry"
+	"github.com/semsemyonoff/devbox/internal/shared/tpl"
 )
 
 // Exported sentinel errors for parallel-group plan-time validation. Callers

@@ -7,13 +7,13 @@ import (
 	"sort"
 	"strings"
 
-	"devbox-cli/internal/cli/cmdctx"
-	"devbox-cli/internal/core/project/config"
-	"devbox-cli/internal/core/ui/cmdbrowser"
-	"devbox-cli/internal/core/ui/styles"
-	"devbox-cli/internal/core/usercommands"
-	"devbox-cli/internal/shared/i18n"
-	"devbox-cli/internal/shared/render"
+	"github.com/semsemyonoff/devbox/internal/cli/cmdctx"
+	"github.com/semsemyonoff/devbox/internal/core/project/config"
+	"github.com/semsemyonoff/devbox/internal/core/ui/cmdbrowser"
+	"github.com/semsemyonoff/devbox/internal/core/ui/styles"
+	"github.com/semsemyonoff/devbox/internal/core/usercommands"
+	"github.com/semsemyonoff/devbox/internal/shared/i18n"
+	"github.com/semsemyonoff/devbox/internal/shared/render"
 
 	"github.com/spf13/cobra"
 )

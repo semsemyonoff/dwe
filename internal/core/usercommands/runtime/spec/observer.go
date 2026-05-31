@@ -3,7 +3,7 @@ package spec
 import (
 	"time"
 
-	"devbox-cli/internal/core/usercommands/model"
+	"github.com/semsemyonoff/devbox/internal/core/usercommands/model"
 )
 
 // StepStatus enumerates the terminal states a workflow step can finish in.

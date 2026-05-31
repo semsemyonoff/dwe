@@ -9,10 +9,10 @@ import (
 	"testing"
 	"time"
 
-	"devbox-cli/internal/core/project/config"
-	"devbox-cli/internal/core/usercommands/model"
-	"devbox-cli/internal/core/usercommands/runtime/spec"
-	"devbox-cli/internal/shared/tpl"
+	"github.com/semsemyonoff/devbox/internal/core/project/config"
+	"github.com/semsemyonoff/devbox/internal/core/usercommands/model"
+	"github.com/semsemyonoff/devbox/internal/core/usercommands/runtime/spec"
+	"github.com/semsemyonoff/devbox/internal/shared/tpl"
 )
 
 func TestHostRunner_BuildCommand_Run(t *testing.T) {

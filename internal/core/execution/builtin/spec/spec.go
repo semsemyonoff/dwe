@@ -9,8 +9,8 @@ import (
 	"context"
 	"io"
 
-	"devbox-cli/internal/core/project/config"
-	"devbox-cli/internal/shared/render"
+	"github.com/semsemyonoff/devbox/internal/core/project/config"
+	"github.com/semsemyonoff/devbox/internal/shared/render"
 )
 
 // ExecContext holds the runtime context passed to every builtin execution.

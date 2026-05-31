@@ -1,7 +1,7 @@
 package config
 
 import (
-	"devbox-cli/internal/core/validate"
+	"github.com/semsemyonoff/devbox/internal/core/validate"
 )
 
 // All returns all config validators.

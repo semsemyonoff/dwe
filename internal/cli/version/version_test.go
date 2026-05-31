@@ -6,9 +6,9 @@ import (
 	"strings"
 	"testing"
 
-	"devbox-cli/internal/cli/cmdctx"
-	"devbox-cli/internal/cli/version"
-	versioninfo "devbox-cli/internal/shared/version"
+	"github.com/semsemyonoff/devbox/internal/cli/cmdctx"
+	"github.com/semsemyonoff/devbox/internal/cli/version"
+	versioninfo "github.com/semsemyonoff/devbox/internal/shared/version"
 
 	"github.com/spf13/cobra"
 )

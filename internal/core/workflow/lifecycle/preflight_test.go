@@ -8,10 +8,10 @@ import (
 	"path/filepath"
 	"testing"
 
-	"devbox-cli/internal/core/execution/preflight"
-	"devbox-cli/internal/core/project/config"
-	"devbox-cli/internal/core/usercommands"
-	"devbox-cli/internal/shared/git"
+	"github.com/semsemyonoff/devbox/internal/core/execution/preflight"
+	"github.com/semsemyonoff/devbox/internal/core/project/config"
+	"github.com/semsemyonoff/devbox/internal/core/usercommands"
+	"github.com/semsemyonoff/devbox/internal/shared/git"
 )
 
 // TestRunRun_PreflightBlocksBeforeGitProbe asserts a preflight error aborts

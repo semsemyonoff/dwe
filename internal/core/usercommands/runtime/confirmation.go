@@ -5,11 +5,11 @@ import (
 	"fmt"
 	"os"
 
-	"devbox-cli/internal/core/ui/widgets"
-	"devbox-cli/internal/core/usercommands/runtime/internal/runio"
-	"devbox-cli/internal/shared/i18n"
-	"devbox-cli/internal/shared/render"
-	"devbox-cli/internal/shared/tpl"
+	"github.com/semsemyonoff/devbox/internal/core/ui/widgets"
+	"github.com/semsemyonoff/devbox/internal/core/usercommands/runtime/internal/runio"
+	"github.com/semsemyonoff/devbox/internal/shared/i18n"
+	"github.com/semsemyonoff/devbox/internal/shared/render"
+	"github.com/semsemyonoff/devbox/internal/shared/tpl"
 )
 
 // commandAbortedError is returned when the user explicitly declines a

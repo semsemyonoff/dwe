@@ -5,7 +5,7 @@ package llmstxt
 import (
 	"strings"
 
-	coredocs "devbox-cli/internal/core/docs"
+	coredocs "github.com/semsemyonoff/devbox/internal/core/docs"
 )
 
 // CommandSummary is a single user command entry for the Commands section.

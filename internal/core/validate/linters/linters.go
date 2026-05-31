@@ -14,7 +14,7 @@ import (
 	"fmt"
 	"strings"
 
-	"devbox-cli/internal/core/validate"
+	"github.com/semsemyonoff/devbox/internal/core/validate"
 )
 
 // Domain is the diagnostic domain stamped on every linter-produced diagnostic.

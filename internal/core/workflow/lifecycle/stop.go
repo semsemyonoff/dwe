@@ -9,12 +9,12 @@ import (
 	"os"
 	"path/filepath"
 
-	"devbox-cli/internal/core/project/config"
-	"devbox-cli/internal/core/usercommands"
-	"devbox-cli/internal/core/workflow/deploy/journal"
-	"devbox-cli/internal/shared/i18n"
-	"devbox-cli/internal/shared/lock"
-	"devbox-cli/internal/shared/render"
+	"github.com/semsemyonoff/devbox/internal/core/project/config"
+	"github.com/semsemyonoff/devbox/internal/core/usercommands"
+	"github.com/semsemyonoff/devbox/internal/core/workflow/deploy/journal"
+	"github.com/semsemyonoff/devbox/internal/shared/i18n"
+	"github.com/semsemyonoff/devbox/internal/shared/lock"
+	"github.com/semsemyonoff/devbox/internal/shared/render"
 )
 
 // StopContext carries all parameters for the stop lifecycle entry point.

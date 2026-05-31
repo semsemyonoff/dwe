@@ -6,7 +6,7 @@ import (
 
 	"github.com/stretchr/testify/require"
 
-	"devbox-cli/internal/core/project/config"
+	"github.com/semsemyonoff/devbox/internal/core/project/config"
 )
 
 // testTool mirrors the one in internal/core/project/stack/testhelpers_test.go for test config building.

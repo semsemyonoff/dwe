@@ -8,7 +8,7 @@ import (
 	"testing"
 	"time"
 
-	"devbox-cli/internal/shared/tpl"
+	"github.com/semsemyonoff/devbox/internal/shared/tpl"
 )
 
 // TestComputeFilePaths_SinglePathHit tests basic path resolution in read mode.

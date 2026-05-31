@@ -12,14 +12,14 @@ import (
 	lipglossv2 "charm.land/lipgloss/v2"
 	"github.com/spf13/pflag"
 
-	"devbox-cli/internal/cli"
-	"devbox-cli/internal/cli/cmdctx"
-	"devbox-cli/internal/core/execution/pipeline"
-	"devbox-cli/internal/core/project/config"
-	"devbox-cli/internal/core/project/project"
-	"devbox-cli/internal/core/ui/styles"
-	"devbox-cli/internal/shared/prompt"
-	"devbox-cli/internal/shared/version"
+	"github.com/semsemyonoff/devbox/internal/cli"
+	"github.com/semsemyonoff/devbox/internal/cli/cmdctx"
+	"github.com/semsemyonoff/devbox/internal/core/execution/pipeline"
+	"github.com/semsemyonoff/devbox/internal/core/project/config"
+	"github.com/semsemyonoff/devbox/internal/core/project/project"
+	"github.com/semsemyonoff/devbox/internal/core/ui/styles"
+	"github.com/semsemyonoff/devbox/internal/shared/prompt"
+	"github.com/semsemyonoff/devbox/internal/shared/version"
 )
 
 func main() {

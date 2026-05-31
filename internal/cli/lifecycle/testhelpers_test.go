@@ -5,11 +5,11 @@ import (
 	"io"
 	"testing"
 
-	"devbox-cli/internal/cli/cmdctx"
-	"devbox-cli/internal/core/project/config"
-	"devbox-cli/internal/core/usercommands"
-	lifecyclepkg "devbox-cli/internal/core/workflow/lifecycle"
-	"devbox-cli/internal/shared/i18n"
+	"github.com/semsemyonoff/devbox/internal/cli/cmdctx"
+	"github.com/semsemyonoff/devbox/internal/core/project/config"
+	"github.com/semsemyonoff/devbox/internal/core/usercommands"
+	lifecyclepkg "github.com/semsemyonoff/devbox/internal/core/workflow/lifecycle"
+	"github.com/semsemyonoff/devbox/internal/shared/i18n"
 
 	"github.com/spf13/cobra"
 )

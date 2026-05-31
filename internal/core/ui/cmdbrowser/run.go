@@ -10,7 +10,7 @@ import (
 
 	tea "charm.land/bubbletea/v2"
 
-	"devbox-cli/internal/core/ui/widgets"
+	"github.com/semsemyonoff/devbox/internal/core/ui/widgets"
 )
 
 // Action enumerates intents returned by the browser. ActionUnknown sits at

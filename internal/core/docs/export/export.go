@@ -6,7 +6,7 @@ import (
 	"os"
 	"path/filepath"
 
-	"devbox-cli/internal/core/docs"
+	"github.com/semsemyonoff/devbox/internal/core/docs"
 )
 
 // Opts configures the export behavior.

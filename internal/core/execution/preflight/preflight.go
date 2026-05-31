@@ -12,14 +12,14 @@ import (
 	"fmt"
 	"io"
 
-	"devbox-cli/internal/core/project/config"
-	"devbox-cli/internal/core/ui/render"
-	"devbox-cli/internal/core/ui/styles"
-	"devbox-cli/internal/core/usercommands"
-	"devbox-cli/internal/core/validate"
-	valchecks "devbox-cli/internal/core/validate/checks"
-	valconfig "devbox-cli/internal/core/validate/config"
-	valenv "devbox-cli/internal/core/validate/env"
+	"github.com/semsemyonoff/devbox/internal/core/project/config"
+	"github.com/semsemyonoff/devbox/internal/core/ui/render"
+	"github.com/semsemyonoff/devbox/internal/core/ui/styles"
+	"github.com/semsemyonoff/devbox/internal/core/usercommands"
+	"github.com/semsemyonoff/devbox/internal/core/validate"
+	valchecks "github.com/semsemyonoff/devbox/internal/core/validate/checks"
+	valconfig "github.com/semsemyonoff/devbox/internal/core/validate/config"
+	valenv "github.com/semsemyonoff/devbox/internal/core/validate/env"
 )
 
 // Error is returned when preflight surfaces any error-severity diagnostic.

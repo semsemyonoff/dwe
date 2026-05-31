@@ -5,7 +5,7 @@ import (
 	"testing"
 	"time"
 
-	"devbox-cli/internal/core/validate"
+	"github.com/semsemyonoff/devbox/internal/core/validate"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"

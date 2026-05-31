@@ -4,7 +4,7 @@ import (
 	"errors"
 	"testing"
 
-	"devbox-cli/internal/shared/tpl"
+	"github.com/semsemyonoff/devbox/internal/shared/tpl"
 )
 
 // -----------------------------------------------------------------------------

@@ -4,7 +4,7 @@ import (
 	"errors"
 	"os"
 
-	"devbox-cli/internal/core/validate"
+	"github.com/semsemyonoff/devbox/internal/core/validate"
 )
 
 // validateYmlValidator surfaces the outcome of the single LoadValidateConfig

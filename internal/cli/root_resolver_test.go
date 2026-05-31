@@ -8,7 +8,7 @@ import (
 	"strings"
 	"testing"
 
-	"devbox-cli/internal/core/project/project"
+	"github.com/semsemyonoff/devbox/internal/core/project/project"
 )
 
 // makeV2Project creates a minimal v2 devbox.yml in dir and returns the config path.

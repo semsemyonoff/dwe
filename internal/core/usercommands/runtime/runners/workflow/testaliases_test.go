@@ -1,9 +1,9 @@
 package workflow
 
 import (
-	"devbox-cli/internal/core/usercommands/model"
-	"devbox-cli/internal/core/usercommands/registry"
-	"devbox-cli/internal/core/usercommands/runtime/spec"
+	"github.com/semsemyonoff/devbox/internal/core/usercommands/model"
+	"github.com/semsemyonoff/devbox/internal/core/usercommands/registry"
+	"github.com/semsemyonoff/devbox/internal/core/usercommands/runtime/spec"
 )
 
 // Type and constant aliases for test files. Keeps the moved workflow tests

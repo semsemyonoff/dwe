@@ -7,8 +7,8 @@ import (
 	"path/filepath"
 	"testing"
 
-	"devbox-cli/internal/cli/cmdctx"
-	"devbox-cli/internal/shared/lock"
+	"github.com/semsemyonoff/devbox/internal/cli/cmdctx"
+	"github.com/semsemyonoff/devbox/internal/shared/lock"
 
 	"github.com/spf13/cobra"
 )

@@ -7,11 +7,11 @@ import (
 	"strings"
 	"time"
 
-	"devbox-cli/internal/core/project/config"
-	"devbox-cli/internal/core/ui/render"
-	"devbox-cli/internal/core/ui/statusview"
-	"devbox-cli/internal/core/workflow/deploy/journal"
-	sharedrender "devbox-cli/internal/shared/render"
+	"github.com/semsemyonoff/devbox/internal/core/project/config"
+	"github.com/semsemyonoff/devbox/internal/core/ui/render"
+	"github.com/semsemyonoff/devbox/internal/core/ui/statusview"
+	"github.com/semsemyonoff/devbox/internal/core/workflow/deploy/journal"
+	sharedrender "github.com/semsemyonoff/devbox/internal/shared/render"
 )
 
 // DeployStatus returns the Deploy Status section title + table as a

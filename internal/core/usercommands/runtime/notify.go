@@ -3,8 +3,8 @@ package runtime
 import (
 	"context"
 
-	"devbox-cli/internal/core/notify"
-	userpkg "devbox-cli/internal/core/project/user"
+	"github.com/semsemyonoff/devbox/internal/core/notify"
+	userpkg "github.com/semsemyonoff/devbox/internal/core/project/user"
 )
 
 // notifier is the consumer-local interface declared per the plan's

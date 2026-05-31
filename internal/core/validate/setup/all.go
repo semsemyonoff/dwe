@@ -1,8 +1,8 @@
 package setup
 
 import (
-	"devbox-cli/internal/core/validate"
-	"devbox-cli/internal/core/workflow/setup"
+	"github.com/semsemyonoff/devbox/internal/core/validate"
+	"github.com/semsemyonoff/devbox/internal/core/workflow/setup"
 )
 
 // All returns the setup domain validators. The setupCfg and setupErr come from

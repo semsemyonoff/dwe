@@ -3,9 +3,9 @@ package render
 import (
 	"fmt"
 
-	"devbox-cli/internal/cli/cmdctx"
-	"devbox-cli/internal/core/project/config"
-	"devbox-cli/internal/shared/envfile"
+	"github.com/semsemyonoff/devbox/internal/cli/cmdctx"
+	"github.com/semsemyonoff/devbox/internal/core/project/config"
+	"github.com/semsemyonoff/devbox/internal/shared/envfile"
 
 	"github.com/spf13/cobra"
 )

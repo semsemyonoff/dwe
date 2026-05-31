@@ -6,9 +6,9 @@ import (
 	"path/filepath"
 	"testing"
 
-	"devbox-cli/internal/core/project/config"
-	"devbox-cli/internal/core/usercommands"
-	"devbox-cli/internal/core/workflow/deploy"
+	"github.com/semsemyonoff/devbox/internal/core/project/config"
+	"github.com/semsemyonoff/devbox/internal/core/usercommands"
+	"github.com/semsemyonoff/devbox/internal/core/workflow/deploy"
 )
 
 // writeMixedTypeFixture builds a project with one app and one infra service.

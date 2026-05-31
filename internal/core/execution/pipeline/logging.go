@@ -9,7 +9,7 @@ import (
 	"regexp"
 	"strings"
 
-	"devbox-cli/internal/shared/render"
+	"github.com/semsemyonoff/devbox/internal/shared/render"
 )
 
 // unsafeFSRe matches characters not allowed in sanitised filesystem names.

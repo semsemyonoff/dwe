@@ -9,8 +9,8 @@ import (
 	"github.com/stretchr/testify/require"
 	"gopkg.in/yaml.v3"
 
-	devconfig "devbox-cli/internal/core/project/config"
-	"devbox-cli/internal/core/validate"
+	devconfig "github.com/semsemyonoff/devbox/internal/core/project/config"
+	"github.com/semsemyonoff/devbox/internal/core/validate"
 )
 
 func TestDevboxValidator(t *testing.T) {

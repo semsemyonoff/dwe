@@ -5,7 +5,7 @@ import (
 	"path/filepath"
 	"testing"
 
-	"devbox-cli/internal/core/execution/condition"
+	"github.com/semsemyonoff/devbox/internal/core/execution/condition"
 )
 
 // --- Classify ---

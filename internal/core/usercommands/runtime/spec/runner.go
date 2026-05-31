@@ -12,12 +12,12 @@ import (
 	"context"
 	"io"
 
-	"devbox-cli/internal/core/project/config"
-	"devbox-cli/internal/core/usercommands/model"
-	"devbox-cli/internal/core/usercommands/registry"
-	"devbox-cli/internal/shared/docker"
-	"devbox-cli/internal/shared/i18n"
-	"devbox-cli/internal/shared/tpl"
+	"github.com/semsemyonoff/devbox/internal/core/project/config"
+	"github.com/semsemyonoff/devbox/internal/core/usercommands/model"
+	"github.com/semsemyonoff/devbox/internal/core/usercommands/registry"
+	"github.com/semsemyonoff/devbox/internal/shared/docker"
+	"github.com/semsemyonoff/devbox/internal/shared/i18n"
+	"github.com/semsemyonoff/devbox/internal/shared/tpl"
 )
 
 // Runner is the interface implemented by each command type executor.

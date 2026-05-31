@@ -6,13 +6,13 @@ import (
 	"sort"
 	"strings"
 
-	"devbox-cli/internal/cli/cmdctx"
-	aipkg "devbox-cli/internal/core/execution/templates/ai"
+	"github.com/semsemyonoff/devbox/internal/cli/cmdctx"
+	aipkg "github.com/semsemyonoff/devbox/internal/core/execution/templates/ai"
 
-	"devbox-cli/internal/core/execution/templates/manifest"
-	"devbox-cli/internal/core/project/config"
-	"devbox-cli/internal/shared/pathsafe"
-	"devbox-cli/internal/shared/render"
+	"github.com/semsemyonoff/devbox/internal/core/execution/templates/manifest"
+	"github.com/semsemyonoff/devbox/internal/core/project/config"
+	"github.com/semsemyonoff/devbox/internal/shared/pathsafe"
+	"github.com/semsemyonoff/devbox/internal/shared/render"
 
 	"github.com/spf13/cobra"
 )

@@ -10,7 +10,7 @@ import (
 
 	"gopkg.in/yaml.v3"
 
-	"devbox-cli/internal/core/usercommands/model"
+	"github.com/semsemyonoff/devbox/internal/core/usercommands/model"
 )
 
 // SnapshotConfigFileName is the filename of the project-level snapshot.yml,

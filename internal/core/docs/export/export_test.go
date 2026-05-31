@@ -8,7 +8,7 @@ import (
 	"testing"
 	"testing/fstest"
 
-	"devbox-cli/internal/core/docs"
+	"github.com/semsemyonoff/devbox/internal/core/docs"
 )
 
 func TestExportTree_EmptyDirectory(t *testing.T) {

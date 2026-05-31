@@ -1,6 +1,6 @@
 package pipeline
 
-import "devbox-cli/internal/core/workflow/deploy/journal"
+import "github.com/semsemyonoff/devbox/internal/core/workflow/deploy/journal"
 
 // Recorder receives lifecycle events from the deploy/reset pipeline executor
 // and records them for state tracking and idempotency decisions.

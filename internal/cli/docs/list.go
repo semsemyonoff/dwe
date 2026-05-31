@@ -6,10 +6,10 @@ import (
 	"regexp"
 	"strings"
 
-	"devbox-cli/internal/cli/cmdctx"
-	coredocs "devbox-cli/internal/core/docs"
-	userpkg "devbox-cli/internal/core/project/user"
-	"devbox-cli/internal/shared/i18n"
+	"github.com/semsemyonoff/devbox/internal/cli/cmdctx"
+	coredocs "github.com/semsemyonoff/devbox/internal/core/docs"
+	userpkg "github.com/semsemyonoff/devbox/internal/core/project/user"
+	"github.com/semsemyonoff/devbox/internal/shared/i18n"
 
 	"github.com/spf13/cobra"
 )

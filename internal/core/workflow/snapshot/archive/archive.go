@@ -9,7 +9,7 @@ import (
 	"fmt"
 	"io"
 
-	"devbox-cli/internal/core/workflow/snapshot/meta"
+	"github.com/semsemyonoff/devbox/internal/core/workflow/snapshot/meta"
 )
 
 // Archive safety constants. Constants for now — promote to SnapshotConfig

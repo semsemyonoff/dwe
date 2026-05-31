@@ -7,11 +7,11 @@ import (
 	"sort"
 	"time"
 
-	"devbox-cli/internal/cli/cmdctx"
-	"devbox-cli/internal/core/project/config"
-	"devbox-cli/internal/core/project/stack"
-	"devbox-cli/internal/core/ui/render"
-	"devbox-cli/internal/core/workflow/deploy/journal"
+	"github.com/semsemyonoff/devbox/internal/cli/cmdctx"
+	"github.com/semsemyonoff/devbox/internal/core/project/config"
+	"github.com/semsemyonoff/devbox/internal/core/project/stack"
+	"github.com/semsemyonoff/devbox/internal/core/ui/render"
+	"github.com/semsemyonoff/devbox/internal/core/workflow/deploy/journal"
 
 	"github.com/spf13/cobra"
 )

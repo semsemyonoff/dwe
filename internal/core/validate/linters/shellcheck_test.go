@@ -5,7 +5,7 @@ import (
 	"path/filepath"
 	"testing"
 
-	"devbox-cli/internal/core/validate"
+	"github.com/semsemyonoff/devbox/internal/core/validate"
 )
 
 func TestShellcheckBuildArgs(t *testing.T) {

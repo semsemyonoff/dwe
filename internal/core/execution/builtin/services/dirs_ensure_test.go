@@ -7,10 +7,10 @@ import (
 	"path/filepath"
 	"testing"
 
-	"devbox-cli/internal/core/execution/builtin/spec"
+	"github.com/semsemyonoff/devbox/internal/core/execution/builtin/spec"
 
-	"devbox-cli/internal/core/project/config"
-	"devbox-cli/internal/shared/render"
+	"github.com/semsemyonoff/devbox/internal/core/project/config"
+	"github.com/semsemyonoff/devbox/internal/shared/render"
 )
 
 // makeExecCtx returns an spec.ExecContext with an in-memory output writer and the

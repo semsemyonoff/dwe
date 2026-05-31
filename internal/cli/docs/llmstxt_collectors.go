@@ -3,10 +3,10 @@ package docs
 import (
 	"sort"
 
-	"devbox-cli/internal/core/docs/llmstxt"
-	"devbox-cli/internal/core/project/config"
-	"devbox-cli/internal/core/usercommands"
-	"devbox-cli/internal/shared/i18n"
+	"github.com/semsemyonoff/devbox/internal/core/docs/llmstxt"
+	"github.com/semsemyonoff/devbox/internal/core/project/config"
+	"github.com/semsemyonoff/devbox/internal/core/usercommands"
+	"github.com/semsemyonoff/devbox/internal/shared/i18n"
 )
 
 // collectServiceSummaries returns service summaries in deploy order.

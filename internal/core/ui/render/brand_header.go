@@ -4,8 +4,8 @@ import (
 	"bytes"
 	"strings"
 
-	"devbox-cli/internal/core/ui/styles"
-	sharedrender "devbox-cli/internal/shared/render"
+	"github.com/semsemyonoff/devbox/internal/core/ui/styles"
+	sharedrender "github.com/semsemyonoff/devbox/internal/shared/render"
 )
 
 // Brand is the input to BrandHeader. Project and Version drive the

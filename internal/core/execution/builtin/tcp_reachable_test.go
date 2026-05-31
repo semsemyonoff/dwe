@@ -8,7 +8,7 @@ import (
 	"testing"
 	"time"
 
-	"devbox-cli/internal/core/execution/builtin/spec"
+	"github.com/semsemyonoff/devbox/internal/core/execution/builtin/spec"
 )
 
 func TestTCPReachableValidate(t *testing.T) {

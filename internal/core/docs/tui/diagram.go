@@ -1,7 +1,7 @@
 package tui
 
 import (
-	"devbox-cli/internal/core/docs/render"
+	"github.com/semsemyonoff/devbox/internal/core/docs/render"
 )
 
 // DiagramState tracks diagrams for the current document.

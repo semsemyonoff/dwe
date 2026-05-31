@@ -10,7 +10,7 @@
 package env
 
 import (
-	"devbox-cli/internal/core/validate"
+	"github.com/semsemyonoff/devbox/internal/core/validate"
 )
 
 // fail builds an error-severity env diagnostic.

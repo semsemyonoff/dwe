@@ -4,11 +4,11 @@ import (
 	"fmt"
 	"path/filepath"
 
-	"devbox-cli/internal/core/execution/filesgate"
-	"devbox-cli/internal/core/execution/filesgate/spec"
-	"devbox-cli/internal/core/project/config"
-	"devbox-cli/internal/core/usercommands/registry"
-	"devbox-cli/internal/core/validate"
+	"github.com/semsemyonoff/devbox/internal/core/execution/filesgate"
+	"github.com/semsemyonoff/devbox/internal/core/execution/filesgate/spec"
+	"github.com/semsemyonoff/devbox/internal/core/project/config"
+	"github.com/semsemyonoff/devbox/internal/core/usercommands/registry"
+	"github.com/semsemyonoff/devbox/internal/core/validate"
 )
 
 // deployHasFilesGateSteps reports whether any step in the deploy config (project or service) uses files_gate.

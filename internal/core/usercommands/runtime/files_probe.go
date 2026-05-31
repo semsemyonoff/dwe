@@ -6,7 +6,7 @@ import (
 	"path/filepath"
 	"regexp"
 
-	"devbox-cli/internal/core/usercommands/model"
+	"github.com/semsemyonoff/devbox/internal/core/usercommands/model"
 )
 
 // ComputeFilePathsProbe probes a subset of files (given by `only`) to check for existence.

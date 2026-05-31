@@ -8,8 +8,8 @@ import (
 	"strings"
 	"testing"
 
-	"devbox-cli/internal/cli/cmdctx"
-	"devbox-cli/internal/core/validate"
+	"github.com/semsemyonoff/devbox/internal/cli/cmdctx"
+	"github.com/semsemyonoff/devbox/internal/core/validate"
 
 	"github.com/stretchr/testify/require"
 )

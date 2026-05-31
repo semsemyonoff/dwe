@@ -53,12 +53,12 @@ import (
 	"sort"
 	"strings"
 
-	"devbox-cli/internal/core/execution/builtin/containers"
-	"devbox-cli/internal/core/execution/builtin/env"
-	"devbox-cli/internal/core/execution/builtin/fs"
-	"devbox-cli/internal/core/execution/builtin/interaction"
-	"devbox-cli/internal/core/execution/builtin/services"
-	"devbox-cli/internal/core/execution/builtin/spec"
+	"github.com/semsemyonoff/devbox/internal/core/execution/builtin/containers"
+	"github.com/semsemyonoff/devbox/internal/core/execution/builtin/env"
+	"github.com/semsemyonoff/devbox/internal/core/execution/builtin/fs"
+	"github.com/semsemyonoff/devbox/internal/core/execution/builtin/interaction"
+	"github.com/semsemyonoff/devbox/internal/core/execution/builtin/services"
+	"github.com/semsemyonoff/devbox/internal/core/execution/builtin/spec"
 )
 
 // Builtin is an engine-internal pipeline action.

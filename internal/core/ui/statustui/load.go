@@ -8,10 +8,10 @@ import (
 
 	tea "charm.land/bubbletea/v2"
 
-	"devbox-cli/internal/core/project/config"
-	"devbox-cli/internal/core/project/stack"
-	"devbox-cli/internal/core/ui/render"
-	"devbox-cli/internal/core/ui/styles"
+	"github.com/semsemyonoff/devbox/internal/core/project/config"
+	"github.com/semsemyonoff/devbox/internal/core/project/stack"
+	"github.com/semsemyonoff/devbox/internal/core/ui/render"
+	"github.com/semsemyonoff/devbox/internal/core/ui/styles"
 )
 
 // tabsLoadedMsg is emitted when buildTabsCmd completes and carries the

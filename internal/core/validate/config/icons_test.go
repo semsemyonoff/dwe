@@ -9,8 +9,8 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	devconfig "devbox-cli/internal/core/project/config"
-	"devbox-cli/internal/core/validate"
+	devconfig "github.com/semsemyonoff/devbox/internal/core/project/config"
+	"github.com/semsemyonoff/devbox/internal/core/validate"
 )
 
 func TestIconsValidator_Services(t *testing.T) {

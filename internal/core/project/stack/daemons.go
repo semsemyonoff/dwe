@@ -26,11 +26,11 @@ import (
 	"time"
 	"unicode"
 
-	"devbox-cli/internal/core/project/config"
-	"devbox-cli/internal/core/ui/render"
-	"devbox-cli/internal/core/ui/statusview"
-	"devbox-cli/internal/shared/daemon"
-	"devbox-cli/internal/shared/docker"
+	"github.com/semsemyonoff/devbox/internal/core/project/config"
+	"github.com/semsemyonoff/devbox/internal/core/ui/render"
+	"github.com/semsemyonoff/devbox/internal/core/ui/statusview"
+	"github.com/semsemyonoff/devbox/internal/shared/daemon"
+	"github.com/semsemyonoff/devbox/internal/shared/docker"
 )
 
 // daemonsShellOutFn is the seam used by CollectDaemons to invoke docker ps.

@@ -5,8 +5,8 @@ import (
 	"path/filepath"
 	"testing"
 
-	"devbox-cli/internal/core/project/config"
-	"devbox-cli/internal/core/workflow/deploy/journal"
+	"github.com/semsemyonoff/devbox/internal/core/project/config"
+	"github.com/semsemyonoff/devbox/internal/core/workflow/deploy/journal"
 )
 
 func TestRunStop_MissingLifecycleYML(t *testing.T) {

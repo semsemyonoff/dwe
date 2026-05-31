@@ -12,13 +12,13 @@ import (
 
 	"github.com/charmbracelet/x/term"
 
-	"devbox-cli/internal/core/project/config"
-	"devbox-cli/internal/core/usercommands/model"
-	"devbox-cli/internal/core/usercommands/registry"
-	"devbox-cli/internal/core/usercommands/runtime/internal/runio"
-	"devbox-cli/internal/core/usercommands/runtime/spec"
-	"devbox-cli/internal/shared/liveui"
-	"devbox-cli/internal/shared/tpl"
+	"github.com/semsemyonoff/devbox/internal/core/project/config"
+	"github.com/semsemyonoff/devbox/internal/core/usercommands/model"
+	"github.com/semsemyonoff/devbox/internal/core/usercommands/registry"
+	"github.com/semsemyonoff/devbox/internal/core/usercommands/runtime/internal/runio"
+	"github.com/semsemyonoff/devbox/internal/core/usercommands/runtime/spec"
+	"github.com/semsemyonoff/devbox/internal/shared/liveui"
+	"github.com/semsemyonoff/devbox/internal/shared/tpl"
 )
 
 // RunCommandFn dispatches a leaf command through the runtime root's full

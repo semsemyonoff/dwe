@@ -7,7 +7,7 @@ import (
 
 	"gopkg.in/yaml.v3"
 
-	"devbox-cli/internal/core/execution/condition"
+	"github.com/semsemyonoff/devbox/internal/core/execution/condition"
 )
 
 // --- Typed Condition Decode ---

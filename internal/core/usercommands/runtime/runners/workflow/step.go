@@ -6,13 +6,13 @@ import (
 	"fmt"
 	"os"
 
-	"devbox-cli/internal/core/ui/widgets"
-	"devbox-cli/internal/core/usercommands/model"
-	"devbox-cli/internal/core/usercommands/resolve"
-	"devbox-cli/internal/core/usercommands/runtime/internal/runio"
-	"devbox-cli/internal/core/usercommands/runtime/spec"
-	"devbox-cli/internal/shared/render"
-	"devbox-cli/internal/shared/tpl"
+	"github.com/semsemyonoff/devbox/internal/core/ui/widgets"
+	"github.com/semsemyonoff/devbox/internal/core/usercommands/model"
+	"github.com/semsemyonoff/devbox/internal/core/usercommands/resolve"
+	"github.com/semsemyonoff/devbox/internal/core/usercommands/runtime/internal/runio"
+	"github.com/semsemyonoff/devbox/internal/core/usercommands/runtime/spec"
+	"github.com/semsemyonoff/devbox/internal/shared/render"
+	"github.com/semsemyonoff/devbox/internal/shared/tpl"
 )
 
 // runConfirm is the package-level wrapper for widgets.RunConfirm; swappable in tests.

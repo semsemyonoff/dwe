@@ -8,8 +8,8 @@ import (
 	"testing"
 	"time"
 
-	"devbox-cli/internal/core/project/config"
-	"devbox-cli/internal/shared/git"
+	"github.com/semsemyonoff/devbox/internal/core/project/config"
+	"github.com/semsemyonoff/devbox/internal/shared/git"
 )
 
 // --- resolveUpdateMode tests (unexported, same package) ---

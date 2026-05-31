@@ -7,10 +7,10 @@ import (
 	"sync"
 	"time"
 
-	"devbox-cli/internal/core/project/config"
-	"devbox-cli/internal/core/ui/widgets"
-	"devbox-cli/internal/shared/liveui"
-	"devbox-cli/internal/shared/render"
+	"github.com/semsemyonoff/devbox/internal/core/project/config"
+	"github.com/semsemyonoff/devbox/internal/core/ui/widgets"
+	"github.com/semsemyonoff/devbox/internal/shared/liveui"
+	"github.com/semsemyonoff/devbox/internal/shared/render"
 )
 
 // Icons used in step output lines. Aliased from liveui for backwards-

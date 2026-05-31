@@ -4,7 +4,7 @@ Print version information
 
 ### Synopsis
 
-Print the devbox-cli version, git commit, and build date.
+Print the devbox version, git commit, and build date.
 
 ```
 devbox version [flags]

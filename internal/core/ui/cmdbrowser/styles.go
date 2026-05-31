@@ -1,6 +1,6 @@
 package cmdbrowser
 
-import "devbox-cli/internal/core/ui/styles"
+import "github.com/semsemyonoff/devbox/internal/core/ui/styles"
 
 // badgeRender returns a function that renders the type badge for a command
 // type using existing styles.yml keys (via the internal/core/ui style accessors).

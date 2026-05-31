@@ -12,7 +12,7 @@ import (
 	"os"
 	"path/filepath"
 
-	"devbox-cli/internal/shared/pathsafe"
+	"github.com/semsemyonoff/devbox/internal/shared/pathsafe"
 )
 
 // Resolve looks up a single relative path inside the named pack with the

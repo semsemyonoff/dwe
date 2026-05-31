@@ -7,9 +7,9 @@ import (
 	"strings"
 	"testing"
 
-	"devbox-cli/internal/cli"
-	"devbox-cli/internal/cli/cmdctx"
-	infocmd "devbox-cli/internal/cli/info"
+	"github.com/semsemyonoff/devbox/internal/cli"
+	"github.com/semsemyonoff/devbox/internal/cli/cmdctx"
+	infocmd "github.com/semsemyonoff/devbox/internal/cli/info"
 
 	"github.com/spf13/cobra"
 )

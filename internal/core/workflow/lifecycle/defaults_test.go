@@ -3,7 +3,7 @@ package lifecycle
 import (
 	"testing"
 
-	"devbox-cli/internal/core/project/config"
+	"github.com/semsemyonoff/devbox/internal/core/project/config"
 )
 
 // --- DefaultRunConfig shape tests ---

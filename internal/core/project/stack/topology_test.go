@@ -5,8 +5,8 @@ import (
 	"path/filepath"
 	"testing"
 
-	"devbox-cli/internal/core/project/config"
-	"devbox-cli/internal/core/ui/render"
+	"github.com/semsemyonoff/devbox/internal/core/project/config"
+	"github.com/semsemyonoff/devbox/internal/core/ui/render"
 )
 
 // --- FetchComposeTopology bin parameter ---

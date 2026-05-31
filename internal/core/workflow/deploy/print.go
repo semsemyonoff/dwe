@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"io"
 
-	"devbox-cli/internal/core/execution/pipeline"
+	"github.com/semsemyonoff/devbox/internal/core/execution/pipeline"
 )
 
 // PrintPlanShell emits executable shell commands for each step.

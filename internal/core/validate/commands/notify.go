@@ -17,9 +17,9 @@ package commands
 import (
 	"fmt"
 
-	"devbox-cli/internal/core/usercommands/model"
-	"devbox-cli/internal/core/usercommands/registry"
-	"devbox-cli/internal/core/validate"
+	"github.com/semsemyonoff/devbox/internal/core/usercommands/model"
+	"github.com/semsemyonoff/devbox/internal/core/usercommands/registry"
+	"github.com/semsemyonoff/devbox/internal/core/validate"
 )
 
 // notifyDaemonDiagnostics emits an error when notify: true is set on a

@@ -6,7 +6,7 @@ import (
 	"slices"
 	"testing"
 
-	"devbox-cli/internal/cli/cmdctx"
+	"github.com/semsemyonoff/devbox/internal/cli/cmdctx"
 
 	"github.com/spf13/cobra"
 )

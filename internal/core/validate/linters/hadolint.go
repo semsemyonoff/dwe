@@ -5,7 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 
-	"devbox-cli/internal/core/validate"
+	"github.com/semsemyonoff/devbox/internal/core/validate"
 )
 
 // HadolintID is the stable adapter identifier.

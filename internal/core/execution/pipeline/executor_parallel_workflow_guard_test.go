@@ -5,10 +5,10 @@ import (
 	"strings"
 	"testing"
 
-	"devbox-cli/internal/core/project/config"
-	"devbox-cli/internal/core/usercommands"
-	"devbox-cli/internal/core/usercommands/runtime"
-	"devbox-cli/internal/core/workflow/deploy/journal"
+	"github.com/semsemyonoff/devbox/internal/core/project/config"
+	"github.com/semsemyonoff/devbox/internal/core/usercommands"
+	"github.com/semsemyonoff/devbox/internal/core/usercommands/runtime"
+	"github.com/semsemyonoff/devbox/internal/core/workflow/deploy/journal"
 )
 
 // A pipeline parallel sub-step that resolves to a workflow with `parallel:`

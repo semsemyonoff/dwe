@@ -6,7 +6,7 @@ import (
 	"os"
 	"path/filepath"
 
-	"devbox-cli/internal/core/validate"
+	"github.com/semsemyonoff/devbox/internal/core/validate"
 )
 
 // knownServiceFiles lists the only filenames allowed in a devbox/services/<name>/ folder.

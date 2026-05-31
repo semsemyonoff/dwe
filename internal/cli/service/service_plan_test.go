@@ -9,14 +9,14 @@ import (
 	"strings"
 	"testing"
 
-	"devbox-cli/internal/cli/cmdctx"
-	"devbox-cli/internal/cli/deploy"
-	"devbox-cli/internal/core/project/config"
-	"devbox-cli/internal/core/usercommands/model"
-	"devbox-cli/internal/core/usercommands/registry"
-	"devbox-cli/internal/core/usercommands/runtime"
-	"devbox-cli/internal/core/workflow/deploy/journal"
-	"devbox-cli/internal/core/workflow/lifecycle"
+	"github.com/semsemyonoff/devbox/internal/cli/cmdctx"
+	"github.com/semsemyonoff/devbox/internal/cli/deploy"
+	"github.com/semsemyonoff/devbox/internal/core/project/config"
+	"github.com/semsemyonoff/devbox/internal/core/usercommands/model"
+	"github.com/semsemyonoff/devbox/internal/core/usercommands/registry"
+	"github.com/semsemyonoff/devbox/internal/core/usercommands/runtime"
+	"github.com/semsemyonoff/devbox/internal/core/workflow/deploy/journal"
+	"github.com/semsemyonoff/devbox/internal/core/workflow/lifecycle"
 
 	"github.com/spf13/cobra"
 )

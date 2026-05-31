@@ -5,13 +5,13 @@ import (
 	"os"
 	"path/filepath"
 
-	"devbox-cli/internal/cli/cmdctx"
-	coredocs "devbox-cli/internal/core/docs"
-	"devbox-cli/internal/core/docs/llmstxt"
-	"devbox-cli/internal/core/project/config"
-	userpkg "devbox-cli/internal/core/project/user"
-	"devbox-cli/internal/core/usercommands"
-	"devbox-cli/internal/shared/i18n"
+	"github.com/semsemyonoff/devbox/internal/cli/cmdctx"
+	coredocs "github.com/semsemyonoff/devbox/internal/core/docs"
+	"github.com/semsemyonoff/devbox/internal/core/docs/llmstxt"
+	"github.com/semsemyonoff/devbox/internal/core/project/config"
+	userpkg "github.com/semsemyonoff/devbox/internal/core/project/user"
+	"github.com/semsemyonoff/devbox/internal/core/usercommands"
+	"github.com/semsemyonoff/devbox/internal/shared/i18n"
 
 	"github.com/spf13/cobra"
 )

@@ -6,12 +6,12 @@ import (
 	"os"
 	"path/filepath"
 
-	"devbox-cli/internal/core/project/config"
-	"devbox-cli/internal/core/usercommands/model"
-	"devbox-cli/internal/core/validate"
-	coresnap "devbox-cli/internal/core/workflow/snapshot"
-	"devbox-cli/internal/core/workflow/snapshot/meta"
-	"devbox-cli/internal/shared/tpl"
+	"github.com/semsemyonoff/devbox/internal/core/project/config"
+	"github.com/semsemyonoff/devbox/internal/core/usercommands/model"
+	"github.com/semsemyonoff/devbox/internal/core/validate"
+	coresnap "github.com/semsemyonoff/devbox/internal/core/workflow/snapshot"
+	"github.com/semsemyonoff/devbox/internal/core/workflow/snapshot/meta"
+	"github.com/semsemyonoff/devbox/internal/shared/tpl"
 )
 
 const diagFile = "devbox/snapshot.yml"

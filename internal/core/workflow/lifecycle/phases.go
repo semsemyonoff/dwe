@@ -5,10 +5,10 @@ import (
 	"fmt"
 	"os"
 
-	"devbox-cli/internal/core/execution/pipeline"
-	"devbox-cli/internal/core/project/config"
-	"devbox-cli/internal/core/usercommands"
-	"devbox-cli/internal/shared/i18n"
+	"github.com/semsemyonoff/devbox/internal/core/execution/pipeline"
+	"github.com/semsemyonoff/devbox/internal/core/project/config"
+	"github.com/semsemyonoff/devbox/internal/core/usercommands"
+	"github.com/semsemyonoff/devbox/internal/shared/i18n"
 )
 
 // RunPhasesFunc is a package-level variable so tests can stub phase execution

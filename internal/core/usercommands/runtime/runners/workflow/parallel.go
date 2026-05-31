@@ -13,11 +13,11 @@ import (
 
 	"golang.org/x/sync/errgroup"
 
-	"devbox-cli/internal/core/usercommands/model"
-	"devbox-cli/internal/core/usercommands/runtime/internal/runio"
-	"devbox-cli/internal/core/usercommands/runtime/spec"
-	"devbox-cli/internal/shared/liveui"
-	"devbox-cli/internal/shared/render"
+	"github.com/semsemyonoff/devbox/internal/core/usercommands/model"
+	"github.com/semsemyonoff/devbox/internal/core/usercommands/runtime/internal/runio"
+	"github.com/semsemyonoff/devbox/internal/core/usercommands/runtime/spec"
+	"github.com/semsemyonoff/devbox/internal/shared/liveui"
+	"github.com/semsemyonoff/devbox/internal/shared/render"
 )
 
 // subResult collects the outcome of one parallel sub-step. Each goroutine

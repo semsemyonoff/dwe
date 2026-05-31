@@ -12,8 +12,8 @@ import (
 	"testing"
 	"time"
 
-	"devbox-cli/internal/cli/cmdctx"
-	"devbox-cli/internal/core/workflow/snapshot/meta"
+	"github.com/semsemyonoff/devbox/internal/cli/cmdctx"
+	"github.com/semsemyonoff/devbox/internal/core/workflow/snapshot/meta"
 
 	"github.com/spf13/cobra"
 )

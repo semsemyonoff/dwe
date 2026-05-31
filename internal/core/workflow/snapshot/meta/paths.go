@@ -3,7 +3,7 @@ package meta
 import (
 	"path/filepath"
 
-	"devbox-cli/internal/core/project/config"
+	"github.com/semsemyonoff/devbox/internal/core/project/config"
 )
 
 // Default subdirectory under the project root where unpacked snapshots live.

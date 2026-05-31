@@ -8,12 +8,12 @@ import (
 	"strings"
 	"time"
 
-	"devbox-cli/internal/cli/cmdctx"
-	"devbox-cli/internal/core/project/config"
-	"devbox-cli/internal/core/ui/render"
-	snapshotpkg "devbox-cli/internal/core/workflow/snapshot"
-	"devbox-cli/internal/core/workflow/snapshot/archive"
-	"devbox-cli/internal/core/workflow/snapshot/meta"
+	"github.com/semsemyonoff/devbox/internal/cli/cmdctx"
+	"github.com/semsemyonoff/devbox/internal/core/project/config"
+	"github.com/semsemyonoff/devbox/internal/core/ui/render"
+	snapshotpkg "github.com/semsemyonoff/devbox/internal/core/workflow/snapshot"
+	"github.com/semsemyonoff/devbox/internal/core/workflow/snapshot/archive"
+	"github.com/semsemyonoff/devbox/internal/core/workflow/snapshot/meta"
 
 	"github.com/spf13/cobra"
 )

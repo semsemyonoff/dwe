@@ -4,7 +4,7 @@ import (
 	"strings"
 	"testing"
 
-	"devbox-cli/internal/core/usercommands/model"
+	"github.com/semsemyonoff/devbox/internal/core/usercommands/model"
 )
 
 const daemonYAML = `

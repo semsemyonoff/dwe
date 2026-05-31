@@ -4,8 +4,8 @@ import (
 	"strings"
 	"testing"
 
-	"devbox-cli/internal/core/project/config"
-	"devbox-cli/internal/core/ui/render"
+	"github.com/semsemyonoff/devbox/internal/core/project/config"
+	"github.com/semsemyonoff/devbox/internal/core/ui/render"
 )
 
 func TestHealthIndicator_Stopped(t *testing.T) {

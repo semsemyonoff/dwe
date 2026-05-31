@@ -5,7 +5,7 @@ import (
 	"path/filepath"
 	"testing"
 
-	"devbox-cli/internal/core/usercommands"
+	"github.com/semsemyonoff/devbox/internal/core/usercommands"
 )
 
 // TestLoadRegistryFromConfigPath_NoCommandsDirReturnsEmpty guards the

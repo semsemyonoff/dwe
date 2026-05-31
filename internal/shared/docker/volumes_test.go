@@ -3,8 +3,8 @@ package docker
 import (
 	"testing"
 
-	"devbox-cli/internal/core/project/config"
-	"devbox-cli/internal/shared/render"
+	"github.com/semsemyonoff/devbox/internal/core/project/config"
+	"github.com/semsemyonoff/devbox/internal/shared/render"
 )
 
 // TestEnsureVolumes_BinarySubstitution verifies that EnsureVolumes uses the

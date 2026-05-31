@@ -1,6 +1,6 @@
 package deploy
 
-import "devbox-cli/internal/core/project/config"
+import "github.com/semsemyonoff/devbox/internal/core/project/config"
 
 // DefaultDeployConfig returns a freshly-allocated default deploy pipeline. Callers may mutate the result safely.
 // Log defaults to true to match LoadProjectDeployConfig's behavior — a project with no deploy.yml gets the

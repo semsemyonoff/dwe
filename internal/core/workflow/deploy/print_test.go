@@ -5,11 +5,11 @@ import (
 	"strings"
 	"testing"
 
-	"devbox-cli/internal/core/execution/pipeline"
-	"devbox-cli/internal/core/project/config"
-	"devbox-cli/internal/core/usercommands"
-	"devbox-cli/internal/core/workflow/deploy"
-	"devbox-cli/internal/shared/render"
+	"github.com/semsemyonoff/devbox/internal/core/execution/pipeline"
+	"github.com/semsemyonoff/devbox/internal/core/project/config"
+	"github.com/semsemyonoff/devbox/internal/core/usercommands"
+	"github.com/semsemyonoff/devbox/internal/core/workflow/deploy"
+	"github.com/semsemyonoff/devbox/internal/shared/render"
 )
 
 // --- PrintPlanShell tests ---

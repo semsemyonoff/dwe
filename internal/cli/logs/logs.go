@@ -18,11 +18,11 @@ import (
 
 	"golang.org/x/sync/errgroup"
 
-	"devbox-cli/internal/cli/cmdctx"
-	"devbox-cli/internal/core/project/config"
-	"devbox-cli/internal/core/project/services"
-	"devbox-cli/internal/shared/daemon"
-	"devbox-cli/internal/shared/docker"
+	"github.com/semsemyonoff/devbox/internal/cli/cmdctx"
+	"github.com/semsemyonoff/devbox/internal/core/project/config"
+	"github.com/semsemyonoff/devbox/internal/core/project/services"
+	"github.com/semsemyonoff/devbox/internal/shared/daemon"
+	"github.com/semsemyonoff/devbox/internal/shared/docker"
 
 	"github.com/spf13/cobra"
 )

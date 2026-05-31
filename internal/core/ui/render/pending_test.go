@@ -4,8 +4,8 @@ import (
 	"strings"
 	"testing"
 
-	"devbox-cli/internal/core/ui/render"
-	"devbox-cli/internal/core/workflow/deploy/journal"
+	"github.com/semsemyonoff/devbox/internal/core/ui/render"
+	"github.com/semsemyonoff/devbox/internal/core/workflow/deploy/journal"
 )
 
 func TestRenderPendingBanner(t *testing.T) {

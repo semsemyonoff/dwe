@@ -6,8 +6,8 @@ import (
 	"strings"
 	"time"
 
-	"devbox-cli/internal/core/ui/styles"
-	"devbox-cli/internal/core/workflow/deploy/journal"
+	"github.com/semsemyonoff/devbox/internal/core/ui/styles"
+	"github.com/semsemyonoff/devbox/internal/core/workflow/deploy/journal"
 )
 
 // DeployInfoRow describes one service's deploy timestamp for the interactive

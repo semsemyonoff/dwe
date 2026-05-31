@@ -6,9 +6,9 @@ import (
 	"strings"
 	"testing"
 
-	"devbox-cli/internal/cli/cmdctx"
-	"devbox-cli/internal/core/project/config"
-	"devbox-cli/internal/shared/render"
+	"github.com/semsemyonoff/devbox/internal/cli/cmdctx"
+	"github.com/semsemyonoff/devbox/internal/core/project/config"
+	"github.com/semsemyonoff/devbox/internal/shared/render"
 )
 
 // setupGitPack writes a git template pack at devbox/templates/git/<packName>/.

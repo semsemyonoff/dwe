@@ -1,14 +1,14 @@
 BINARY_NAME := devbox
 BIN_DIR     := ./bin
-MODULE      := devbox-cli
+MODULE      := github.com/semsemyonoff/devbox
 
 VERSION  ?= $(shell git describe --tags --always --dirty 2>/dev/null || echo dev)
 COMMIT   ?= $(shell git rev-parse --short HEAD 2>/dev/null || echo unknown)
 DATE     ?= $(shell date -u +%Y-%m-%dT%H:%M:%SZ)
-LDFLAGS  := -X devbox-cli/internal/shared/version.Version=$(VERSION) \
-            -X devbox-cli/internal/shared/version.Commit=$(COMMIT) \
-            -X devbox-cli/internal/shared/version.Date=$(DATE) \
-            -X devbox-cli/internal/shared/version.BuiltBy=make
+LDFLAGS  := -X github.com/semsemyonoff/devbox/internal/shared/version.Version=$(VERSION) \
+            -X github.com/semsemyonoff/devbox/internal/shared/version.Commit=$(COMMIT) \
+            -X github.com/semsemyonoff/devbox/internal/shared/version.Date=$(DATE) \
+            -X github.com/semsemyonoff/devbox/internal/shared/version.BuiltBy=make
 
 .PHONY: build test test-v test-race clean tidy lint embedded-docs gen-docs-manifest
 

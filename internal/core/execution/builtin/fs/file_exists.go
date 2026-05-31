@@ -7,7 +7,7 @@ import (
 	"os"
 	"path/filepath"
 
-	"devbox-cli/internal/core/execution/builtin/spec"
+	"github.com/semsemyonoff/devbox/internal/core/execution/builtin/spec"
 )
 
 // FileExists is a predicate builtin that succeeds when the given path exists

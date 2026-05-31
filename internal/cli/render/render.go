@@ -3,7 +3,7 @@ package render
 import (
 	"github.com/spf13/cobra"
 
-	"devbox-cli/internal/cli/cmdctx"
+	"github.com/semsemyonoff/devbox/internal/cli/cmdctx"
 )
 
 // NewCmd builds the `devbox render` command tree: env / ide / ai / git

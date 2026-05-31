@@ -5,8 +5,8 @@ import (
 	"path/filepath"
 	"testing"
 
-	"devbox-cli/internal/core/workflow/deploy/journal"
-	"devbox-cli/internal/shared/git"
+	"github.com/semsemyonoff/devbox/internal/core/workflow/deploy/journal"
+	"github.com/semsemyonoff/devbox/internal/shared/git"
 )
 
 func TestRunRestart_MissingLifecycleYML_BothLegsUseDefault(t *testing.T) {

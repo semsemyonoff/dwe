@@ -5,7 +5,7 @@ import (
 	"path/filepath"
 	"testing"
 
-	"devbox-cli/internal/core/project/config"
+	"github.com/semsemyonoff/devbox/internal/core/project/config"
 )
 
 // testTool is the legacy tool shape used by stack tests pre-unification. It

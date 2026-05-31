@@ -7,9 +7,9 @@ import (
 	"sort"
 	"testing"
 
-	"devbox-cli/internal/core/project/config"
-	userpkg "devbox-cli/internal/core/project/user"
-	"devbox-cli/internal/core/validate"
+	"github.com/semsemyonoff/devbox/internal/core/project/config"
+	userpkg "github.com/semsemyonoff/devbox/internal/core/project/user"
+	"github.com/semsemyonoff/devbox/internal/core/validate"
 )
 
 // children unwraps the single lintersGroup returned by All() into its child

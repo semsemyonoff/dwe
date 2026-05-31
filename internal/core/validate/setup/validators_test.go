@@ -5,8 +5,8 @@ import (
 	"os"
 	"testing"
 
-	"devbox-cli/internal/core/validate"
-	"devbox-cli/internal/core/workflow/setup"
+	"github.com/semsemyonoff/devbox/internal/core/validate"
+	"github.com/semsemyonoff/devbox/internal/core/workflow/setup"
 )
 
 func TestParseValidator(t *testing.T) {

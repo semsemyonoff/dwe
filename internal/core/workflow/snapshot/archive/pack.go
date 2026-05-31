@@ -13,7 +13,7 @@ import (
 	"regexp"
 	"strings"
 
-	"devbox-cli/internal/core/workflow/snapshot/meta"
+	"github.com/semsemyonoff/devbox/internal/core/workflow/snapshot/meta"
 )
 
 // glob matching ---------------------------------------------------------------

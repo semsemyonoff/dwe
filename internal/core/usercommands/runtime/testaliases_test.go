@@ -1,10 +1,10 @@
 package runtime
 
 import (
-	"devbox-cli/internal/core/usercommands/model"
-	"devbox-cli/internal/core/usercommands/registry"
-	"devbox-cli/internal/core/usercommands/resolve"
-	"devbox-cli/internal/shared/tpl"
+	"github.com/semsemyonoff/devbox/internal/core/usercommands/model"
+	"github.com/semsemyonoff/devbox/internal/core/usercommands/registry"
+	"github.com/semsemyonoff/devbox/internal/core/usercommands/resolve"
+	"github.com/semsemyonoff/devbox/internal/shared/tpl"
 )
 
 // type aliases for test files that reference model/registry types without package prefix

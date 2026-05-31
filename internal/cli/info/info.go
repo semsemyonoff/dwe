@@ -5,10 +5,10 @@ import (
 	"fmt"
 	"path/filepath"
 
-	"devbox-cli/internal/cli/cmdctx"
-	"devbox-cli/internal/core/project/config"
-	"devbox-cli/internal/core/ui/render"
-	"devbox-cli/internal/shared/version"
+	"github.com/semsemyonoff/devbox/internal/cli/cmdctx"
+	"github.com/semsemyonoff/devbox/internal/core/project/config"
+	"github.com/semsemyonoff/devbox/internal/core/ui/render"
+	"github.com/semsemyonoff/devbox/internal/shared/version"
 
 	"github.com/spf13/cobra"
 )

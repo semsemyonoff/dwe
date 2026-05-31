@@ -7,8 +7,8 @@ import (
 	"strings"
 	"time"
 
-	"devbox-cli/internal/core/project/config"
-	"devbox-cli/internal/core/validate"
+	"github.com/semsemyonoff/devbox/internal/core/project/config"
+	"github.com/semsemyonoff/devbox/internal/core/validate"
 )
 
 // Legacy `docker-compose` (v1) was a standalone Python binary invoked as

@@ -7,9 +7,9 @@ import (
 	"regexp"
 	"strings"
 
-	"devbox-cli/internal/core/project/config"
-	"devbox-cli/internal/core/validate"
-	"devbox-cli/internal/core/workflow/setup"
+	"github.com/semsemyonoff/devbox/internal/core/project/config"
+	"github.com/semsemyonoff/devbox/internal/core/validate"
+	"github.com/semsemyonoff/devbox/internal/core/workflow/setup"
 )
 
 // Helper functions for creating diagnostics.

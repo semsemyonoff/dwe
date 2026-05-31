@@ -8,8 +8,8 @@ import (
 	"github.com/charmbracelet/lipgloss"
 	"github.com/charmbracelet/lipgloss/table"
 
-	"devbox-cli/internal/core/ui/styles"
-	"devbox-cli/internal/core/validate"
+	"github.com/semsemyonoff/devbox/internal/core/ui/styles"
+	"github.com/semsemyonoff/devbox/internal/core/validate"
 )
 
 // Keep MESSAGE/HINT narrow enough that the six-column diagnostics table stays

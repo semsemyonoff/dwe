@@ -5,7 +5,7 @@ import (
 	"path/filepath"
 	"testing"
 
-	"devbox-cli/internal/shared/tpl"
+	"github.com/semsemyonoff/devbox/internal/shared/tpl"
 )
 
 // TestComputeFilePathsProbe_GlobMatchPresent tests probe with a matching glob candidate.

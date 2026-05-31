@@ -4,7 +4,7 @@ import (
 	"slices"
 	"strings"
 
-	"devbox-cli/internal/core/docs"
+	"github.com/semsemyonoff/devbox/internal/core/docs"
 )
 
 type TreeNode struct {

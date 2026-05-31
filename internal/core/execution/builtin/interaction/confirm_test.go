@@ -7,11 +7,11 @@ import (
 	"io"
 	"testing"
 
-	"devbox-cli/internal/core/execution/builtin/spec"
-	"devbox-cli/internal/core/ui/widgets"
+	"github.com/semsemyonoff/devbox/internal/core/execution/builtin/spec"
+	"github.com/semsemyonoff/devbox/internal/core/ui/widgets"
 
-	"devbox-cli/internal/core/project/config"
-	"devbox-cli/internal/shared/render"
+	"github.com/semsemyonoff/devbox/internal/core/project/config"
+	"github.com/semsemyonoff/devbox/internal/shared/render"
 )
 
 // newTestConfirmCtx returns an spec.ExecContext for use in confirm builtin tests.

@@ -5,7 +5,7 @@ import (
 	"testing"
 	"unicode/utf8"
 
-	"devbox-cli/internal/core/project/config"
+	"github.com/semsemyonoff/devbox/internal/core/project/config"
 )
 
 func makeInfoConfig(sections []config.InfoSection) *config.InfoConfig {

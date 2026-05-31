@@ -10,10 +10,10 @@ import (
 	"sync"
 	"testing"
 
-	"devbox-cli/internal/cli/cmdctx"
-	"devbox-cli/internal/core/notify"
-	userpkg "devbox-cli/internal/core/project/user"
-	"devbox-cli/internal/shared/lock"
+	"github.com/semsemyonoff/devbox/internal/cli/cmdctx"
+	"github.com/semsemyonoff/devbox/internal/core/notify"
+	userpkg "github.com/semsemyonoff/devbox/internal/core/project/user"
+	"github.com/semsemyonoff/devbox/internal/shared/lock"
 
 	"github.com/spf13/cobra"
 )

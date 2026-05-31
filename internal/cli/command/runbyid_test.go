@@ -8,11 +8,11 @@ import (
 	"strings"
 	"testing"
 
-	"devbox-cli/internal/core/project/config"
-	"devbox-cli/internal/core/ui/ask"
-	"devbox-cli/internal/core/ui/widgets"
-	"devbox-cli/internal/core/usercommands"
-	"devbox-cli/internal/core/usercommands/model"
+	"github.com/semsemyonoff/devbox/internal/core/project/config"
+	"github.com/semsemyonoff/devbox/internal/core/ui/ask"
+	"github.com/semsemyonoff/devbox/internal/core/ui/widgets"
+	"github.com/semsemyonoff/devbox/internal/core/usercommands"
+	"github.com/semsemyonoff/devbox/internal/core/usercommands/model"
 
 	huh "charm.land/huh/v2"
 )

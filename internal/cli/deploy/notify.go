@@ -1,6 +1,6 @@
 package deploy
 
-import "devbox-cli/internal/cli/cmdctx"
+import "github.com/semsemyonoff/devbox/internal/cli/cmdctx"
 
 // newNotifier is the same-package test seam. Production calls go through
 // cmdctx.NewNotifier; tests in package deploy override newNotifier to swap

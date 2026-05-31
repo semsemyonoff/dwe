@@ -3,9 +3,9 @@ package i18n
 import (
 	"fmt"
 
-	"devbox-cli/internal/core/usercommands/registry"
-	"devbox-cli/internal/core/validate"
-	"devbox-cli/internal/shared/i18n"
+	"github.com/semsemyonoff/devbox/internal/core/usercommands/registry"
+	"github.com/semsemyonoff/devbox/internal/core/validate"
+	"github.com/semsemyonoff/devbox/internal/shared/i18n"
 )
 
 // orphanValidator emits a diagnostic for each orphaned command or group entry

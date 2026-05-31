@@ -13,9 +13,9 @@ import (
 	"sort"
 	"strings"
 
-	"devbox-cli/internal/core/execution/condition"
-	"devbox-cli/internal/core/execution/filesgate"
-	userpkg "devbox-cli/internal/core/project/user"
+	"github.com/semsemyonoff/devbox/internal/core/execution/condition"
+	"github.com/semsemyonoff/devbox/internal/core/execution/filesgate"
+	userpkg "github.com/semsemyonoff/devbox/internal/core/project/user"
 
 	"gopkg.in/yaml.v3"
 )

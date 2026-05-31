@@ -7,7 +7,7 @@ import (
 	"charm.land/bubbles/v2/key"
 	huh "charm.land/huh/v2"
 
-	"devbox-cli/internal/core/ui/styles"
+	"github.com/semsemyonoff/devbox/internal/core/ui/styles"
 )
 
 // ErrCancelled is returned by RunSelector when the user presses q, Esc, or Ctrl-C.

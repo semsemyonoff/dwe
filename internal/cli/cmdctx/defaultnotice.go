@@ -3,7 +3,7 @@ package cmdctx
 import (
 	"fmt"
 
-	"devbox-cli/internal/shared/render"
+	"github.com/semsemyonoff/devbox/internal/shared/render"
 
 	"github.com/spf13/cobra"
 )

@@ -5,9 +5,9 @@ import (
 	"path/filepath"
 	"testing"
 
-	"devbox-cli/internal/core/execution/pipeline"
-	"devbox-cli/internal/core/project/config"
-	"devbox-cli/internal/core/usercommands"
+	"github.com/semsemyonoff/devbox/internal/core/execution/pipeline"
+	"github.com/semsemyonoff/devbox/internal/core/project/config"
+	"github.com/semsemyonoff/devbox/internal/core/usercommands"
 
 	"github.com/stretchr/testify/assert"
 )

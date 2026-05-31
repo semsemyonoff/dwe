@@ -8,10 +8,10 @@ import (
 	"sync"
 	"testing"
 
-	"devbox-cli/internal/core/execution/filesgate"
-	"devbox-cli/internal/core/project/config"
-	"devbox-cli/internal/core/usercommands/model"
-	"devbox-cli/internal/shared/tpl"
+	"github.com/semsemyonoff/devbox/internal/core/execution/filesgate"
+	"github.com/semsemyonoff/devbox/internal/core/project/config"
+	"github.com/semsemyonoff/devbox/internal/core/usercommands/model"
+	"github.com/semsemyonoff/devbox/internal/shared/tpl"
 )
 
 // recordedEvent captures one observer callback for sequence assertions.

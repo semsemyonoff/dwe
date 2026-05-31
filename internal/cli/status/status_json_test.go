@@ -12,9 +12,9 @@ import (
 	"strings"
 	"testing"
 
-	"devbox-cli/internal/cli/cmdctx"
-	"devbox-cli/internal/core/ui/statustui"
-	"devbox-cli/internal/core/workflow/deploy/journal"
+	"github.com/semsemyonoff/devbox/internal/cli/cmdctx"
+	"github.com/semsemyonoff/devbox/internal/core/ui/statustui"
+	"github.com/semsemyonoff/devbox/internal/core/workflow/deploy/journal"
 
 	"github.com/spf13/cobra"
 )

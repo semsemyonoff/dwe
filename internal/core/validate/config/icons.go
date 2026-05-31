@@ -9,9 +9,9 @@ import (
 	"slices"
 	"strings"
 
-	"devbox-cli/internal/core/project/config"
-	"devbox-cli/internal/core/ui/styles"
-	"devbox-cli/internal/core/validate"
+	"github.com/semsemyonoff/devbox/internal/core/project/config"
+	"github.com/semsemyonoff/devbox/internal/core/ui/styles"
+	"github.com/semsemyonoff/devbox/internal/core/validate"
 )
 
 // iconsValidator flags icons whose base codepoint has Emoji_Presentation = No

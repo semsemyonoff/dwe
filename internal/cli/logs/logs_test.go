@@ -14,8 +14,8 @@ import (
 
 	"go.uber.org/goleak"
 
-	"devbox-cli/internal/cli/cmdctx"
-	cmdlogs "devbox-cli/internal/cli/logs"
+	"github.com/semsemyonoff/devbox/internal/cli/cmdctx"
+	cmdlogs "github.com/semsemyonoff/devbox/internal/cli/logs"
 
 	"github.com/spf13/cobra"
 )

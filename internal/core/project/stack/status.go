@@ -6,10 +6,10 @@ import (
 	"slices"
 	"strings"
 
-	"devbox-cli/internal/core/project/config"
-	"devbox-cli/internal/core/ui/render"
-	"devbox-cli/internal/core/ui/styles"
-	"devbox-cli/internal/core/workflow/deploy/journal"
+	"github.com/semsemyonoff/devbox/internal/core/project/config"
+	"github.com/semsemyonoff/devbox/internal/core/ui/render"
+	"github.com/semsemyonoff/devbox/internal/core/ui/styles"
+	"github.com/semsemyonoff/devbox/internal/core/workflow/deploy/journal"
 )
 
 // ContainerCheckFn reports whether a container with the given name is running

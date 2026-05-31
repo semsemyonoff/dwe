@@ -11,10 +11,10 @@ import (
 	"charm.land/bubbles/v2/key"
 	tea "charm.land/bubbletea/v2"
 
-	"devbox-cli/internal/core/docs"
-	"devbox-cli/internal/core/docs/mermaid"
-	"devbox-cli/internal/core/docs/render"
-	"devbox-cli/internal/shared/i18n"
+	"github.com/semsemyonoff/devbox/internal/core/docs"
+	"github.com/semsemyonoff/devbox/internal/core/docs/mermaid"
+	"github.com/semsemyonoff/devbox/internal/core/docs/render"
+	"github.com/semsemyonoff/devbox/internal/shared/i18n"
 )
 
 type Model struct {

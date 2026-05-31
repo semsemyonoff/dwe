@@ -7,14 +7,14 @@ import (
 	"strings"
 	"testing"
 
-	"devbox-cli/internal/core/execution/builtin/containers"
-	"devbox-cli/internal/core/execution/builtin/env"
-	"devbox-cli/internal/core/execution/builtin/fs"
-	"devbox-cli/internal/core/execution/builtin/interaction"
-	"devbox-cli/internal/core/execution/builtin/services"
-	"devbox-cli/internal/core/execution/builtin/spec"
-	"devbox-cli/internal/core/project/config"
-	"devbox-cli/internal/shared/render"
+	"github.com/semsemyonoff/devbox/internal/core/execution/builtin/containers"
+	"github.com/semsemyonoff/devbox/internal/core/execution/builtin/env"
+	"github.com/semsemyonoff/devbox/internal/core/execution/builtin/fs"
+	"github.com/semsemyonoff/devbox/internal/core/execution/builtin/interaction"
+	"github.com/semsemyonoff/devbox/internal/core/execution/builtin/services"
+	"github.com/semsemyonoff/devbox/internal/core/execution/builtin/spec"
+	"github.com/semsemyonoff/devbox/internal/core/project/config"
+	"github.com/semsemyonoff/devbox/internal/shared/render"
 )
 
 // --- IsInteractive ---

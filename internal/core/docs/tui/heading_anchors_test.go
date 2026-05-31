@@ -4,7 +4,7 @@ import (
 	"strings"
 	"testing"
 
-	"devbox-cli/internal/core/docs/render"
+	"github.com/semsemyonoff/devbox/internal/core/docs/render"
 )
 
 // TestHeadingMarkersMapToCorrectLine guards the section-navigation fix:

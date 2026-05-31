@@ -4,9 +4,9 @@ import (
 	"fmt"
 	"strings"
 
-	"devbox-cli/internal/core/project/config"
-	"devbox-cli/internal/core/ui/statusview"
-	"devbox-cli/internal/core/ui/styles"
+	"github.com/semsemyonoff/devbox/internal/core/project/config"
+	"github.com/semsemyonoff/devbox/internal/core/ui/statusview"
+	"github.com/semsemyonoff/devbox/internal/core/ui/styles"
 )
 
 // Summary returns a compact project summary string.

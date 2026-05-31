@@ -7,8 +7,8 @@ import (
 	"strings"
 	"time"
 
-	"devbox-cli/internal/core/usercommands/model"
-	"devbox-cli/internal/core/validate"
+	"github.com/semsemyonoff/devbox/internal/core/usercommands/model"
+	"github.com/semsemyonoff/devbox/internal/core/validate"
 )
 
 // daemonSentinels maps each model.ErrDaemon* sentinel to the field-marker

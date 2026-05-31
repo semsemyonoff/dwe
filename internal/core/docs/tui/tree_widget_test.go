@@ -5,7 +5,7 @@ import (
 	"strings"
 	"testing"
 
-	"devbox-cli/internal/core/docs"
+	"github.com/semsemyonoff/devbox/internal/core/docs"
 )
 
 func TestTreeWidget(t *testing.T) {

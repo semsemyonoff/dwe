@@ -8,9 +8,9 @@ import (
 	"strings"
 	"testing"
 
-	"devbox-cli/internal/core/execution/filesgate"
-	"devbox-cli/internal/core/project/config"
-	"devbox-cli/internal/shared/tpl"
+	"github.com/semsemyonoff/devbox/internal/core/execution/filesgate"
+	"github.com/semsemyonoff/devbox/internal/core/project/config"
+	"github.com/semsemyonoff/devbox/internal/shared/tpl"
 )
 
 // buildLeafWithRequiredFile builds a shell command whose Files block declares a

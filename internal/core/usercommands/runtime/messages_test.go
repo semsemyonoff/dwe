@@ -6,7 +6,7 @@ import (
 	"strings"
 	"testing"
 
-	"devbox-cli/internal/shared/tpl"
+	"github.com/semsemyonoff/devbox/internal/shared/tpl"
 )
 
 func TestRunCommand_Messages_NoMessagesNoExtraOutput(t *testing.T) {

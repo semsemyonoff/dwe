@@ -11,9 +11,9 @@ import (
 	"charm.land/fang/v2"
 	"github.com/spf13/cobra"
 
-	"devbox-cli/internal/cli"
-	pipeline "devbox-cli/internal/core/execution/pipeline"
-	"devbox-cli/internal/shared/version"
+	"github.com/semsemyonoff/devbox/internal/cli"
+	pipeline "github.com/semsemyonoff/devbox/internal/core/execution/pipeline"
+	"github.com/semsemyonoff/devbox/internal/shared/version"
 )
 
 // executeWithFang runs fang.Execute against root, capturing stdout/stderr,

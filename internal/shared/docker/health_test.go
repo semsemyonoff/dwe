@@ -8,7 +8,7 @@ import (
 	"testing"
 	"time"
 
-	"devbox-cli/internal/shared/render"
+	"github.com/semsemyonoff/devbox/internal/shared/render"
 )
 
 func discardWriter() *render.Writer {

@@ -3,7 +3,7 @@ package checks
 import (
 	"slices"
 
-	"devbox-cli/internal/core/project/config"
+	"github.com/semsemyonoff/devbox/internal/core/project/config"
 )
 
 // MatchStage reports whether entry participates in the given stage. An empty

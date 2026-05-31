@@ -3,8 +3,8 @@ package cmdctx
 import (
 	"context"
 
-	"devbox-cli/internal/core/notify"
-	userpkg "devbox-cli/internal/core/project/user"
+	"github.com/semsemyonoff/devbox/internal/core/notify"
+	userpkg "github.com/semsemyonoff/devbox/internal/core/project/user"
 )
 
 // Notifier is the minimal interface consumers depend on. Tests override

@@ -4,8 +4,8 @@ import (
 	"fmt"
 	"os"
 
-	"devbox-cli/internal/cli/cmdctx"
-	"devbox-cli/internal/core/docs/mermaid"
+	"github.com/semsemyonoff/devbox/internal/cli/cmdctx"
+	"github.com/semsemyonoff/devbox/internal/core/docs/mermaid"
 
 	"github.com/spf13/cobra"
 )

@@ -5,8 +5,8 @@ import (
 	"errors"
 	"fmt"
 
-	localpkg "devbox-cli/internal/core/project/local"
-	"devbox-cli/internal/core/validate/env"
+	localpkg "github.com/semsemyonoff/devbox/internal/core/project/local"
+	"github.com/semsemyonoff/devbox/internal/core/validate/env"
 )
 
 // ServiceToggle describes a service candidate for the wizard's enable/disable

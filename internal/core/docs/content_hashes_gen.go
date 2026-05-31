@@ -7,7 +7,7 @@ package docs
 // See docs/reference/docs/index.md for details on the hash-based staleness check.
 var ContentHashes = map[string]string{
 	"README.md":                                              "dd277e31d038",
-	"internals/packages.md":                                  "0c0600e57437",
+	"internals/packages.md":                                  "812703552079",
 	"reference/cli/devbox.md":                                "b346e402b25a",
 	"reference/cli/devbox_commands.md":                       "fa01de6a3ddf",
 	"reference/cli/devbox_commands_list.md":                  "ea0a2ceeb8e6",
@@ -109,7 +109,7 @@ var ContentHashes = map[string]string{
 	"reference/cli/devbox_validate_templates_git.md":         "22248616a0cb",
 	"reference/cli/devbox_validate_templates_ide.md":         "6db9d6d32d1a",
 	"reference/cli/devbox_validate_translations.md":          "b7cabb1651cf",
-	"reference/cli/devbox_version.md":                        "28ebba11427e",
+	"reference/cli/devbox_version.md":                        "b88a90d5b6b8",
 	"reference/cli/index.md":                                 "61ce23bbd5f9",
 	"reference/cli/starship.md":                              "2b9f7b50923a",
 	"reference/concepts/architecture.md":                     "9849e0789409",
@@ -158,7 +158,7 @@ var ContentHashes = map[string]string{
 	"reference/docs/translations.md":                         "cf5332a9a613",
 	"reference/index.md":                                     "f3c92a0f06de",
 	"reference/render/ai.md":                                 "a320984f18da",
-	"reference/render/env.md":                                "7b50c09c3b02",
+	"reference/render/env.md":                                "e31d8a346016",
 	"reference/render/git.md":                                "8c1411a7e945",
 	"reference/render/ide.md":                                "7b595a6330ed",
 	"reference/render/index.md":                              "85f4c3cb179b",

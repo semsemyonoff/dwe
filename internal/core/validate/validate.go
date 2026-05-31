@@ -4,8 +4,8 @@ import (
 	"context"
 	"sort"
 
-	"devbox-cli/internal/core/project/config"
-	"devbox-cli/internal/core/validate/diag"
+	"github.com/semsemyonoff/devbox/internal/core/project/config"
+	"github.com/semsemyonoff/devbox/internal/core/validate/diag"
 )
 
 // Severity is the validation diagnostic severity. Re-exported from the leaf

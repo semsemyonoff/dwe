@@ -1,9 +1,9 @@
 package i18n
 
 import (
-	"devbox-cli/internal/core/usercommands/registry"
-	"devbox-cli/internal/core/validate"
-	"devbox-cli/internal/shared/i18n"
+	"github.com/semsemyonoff/devbox/internal/core/usercommands/registry"
+	"github.com/semsemyonoff/devbox/internal/core/validate"
+	"github.com/semsemyonoff/devbox/internal/shared/i18n"
 )
 
 // All produces validators for i18n translation files.

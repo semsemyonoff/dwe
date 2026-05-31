@@ -3,7 +3,7 @@ package tui
 import (
 	"testing"
 
-	"devbox-cli/internal/core/docs/render"
+	"github.com/semsemyonoff/devbox/internal/core/docs/render"
 )
 
 func TestNewDiagramState(t *testing.T) {

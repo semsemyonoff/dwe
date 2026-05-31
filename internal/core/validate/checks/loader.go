@@ -16,13 +16,13 @@ import (
 	"os"
 	"strings"
 
-	"devbox-cli/internal/core/execution/builtin"
-	"devbox-cli/internal/core/project/config"
-	"devbox-cli/internal/core/usercommands/model"
-	"devbox-cli/internal/core/usercommands/registry"
-	"devbox-cli/internal/core/usercommands/runtime"
-	"devbox-cli/internal/core/validate"
-	"devbox-cli/internal/shared/render"
+	"github.com/semsemyonoff/devbox/internal/core/execution/builtin"
+	"github.com/semsemyonoff/devbox/internal/core/project/config"
+	"github.com/semsemyonoff/devbox/internal/core/usercommands/model"
+	"github.com/semsemyonoff/devbox/internal/core/usercommands/registry"
+	"github.com/semsemyonoff/devbox/internal/core/usercommands/runtime"
+	"github.com/semsemyonoff/devbox/internal/core/validate"
+	"github.com/semsemyonoff/devbox/internal/shared/render"
 )
 
 // diagFile is the canonical path reported in diagnostics. Matches what the

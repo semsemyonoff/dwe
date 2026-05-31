@@ -6,10 +6,10 @@ import (
 	"slices"
 	"strings"
 
-	"devbox-cli/internal/core/execution/builtin/spec"
+	"github.com/semsemyonoff/devbox/internal/core/execution/builtin/spec"
 
-	"devbox-cli/internal/core/project/config"
-	"devbox-cli/internal/shared/docker"
+	"github.com/semsemyonoff/devbox/internal/core/project/config"
+	"github.com/semsemyonoff/devbox/internal/shared/docker"
 )
 
 // ContainersRunning is a fast "is running" check for compose services.

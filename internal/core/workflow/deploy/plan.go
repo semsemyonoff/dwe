@@ -8,9 +8,9 @@ import (
 	"path/filepath"
 	"strings"
 
-	"devbox-cli/internal/core/execution/pipeline"
-	"devbox-cli/internal/core/project/config"
-	"devbox-cli/internal/core/usercommands/registry"
+	"github.com/semsemyonoff/devbox/internal/core/execution/pipeline"
+	"github.com/semsemyonoff/devbox/internal/core/project/config"
+	"github.com/semsemyonoff/devbox/internal/core/usercommands/registry"
 )
 
 // ImplicitEnvStep is always the first step of any deploy plan.

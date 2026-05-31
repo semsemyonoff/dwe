@@ -10,9 +10,9 @@ import (
 	"sort"
 	"strings"
 
-	"devbox-cli/internal/core/project/config"
-	"devbox-cli/internal/core/ui/render"
-	"devbox-cli/internal/shared/docker"
+	"github.com/semsemyonoff/devbox/internal/core/project/config"
+	"github.com/semsemyonoff/devbox/internal/core/ui/render"
+	"github.com/semsemyonoff/devbox/internal/shared/docker"
 )
 
 // FetchComposeTopology runs `docker compose config` with the given compose files

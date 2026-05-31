@@ -16,9 +16,9 @@ import (
 	"syscall"
 	"time"
 
-	"devbox-cli/internal/core/project/config"
-	"devbox-cli/internal/core/validate"
-	"devbox-cli/internal/shared/daemon"
+	"github.com/semsemyonoff/devbox/internal/core/project/config"
+	"github.com/semsemyonoff/devbox/internal/core/validate"
+	"github.com/semsemyonoff/devbox/internal/shared/daemon"
 )
 
 // portsProbeTimeout caps the `docker ps` invocation so a hung daemon does not

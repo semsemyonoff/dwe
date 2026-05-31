@@ -5,10 +5,10 @@ import (
 	"testing"
 	"time"
 
-	"devbox-cli/internal/core/project/config"
-	"devbox-cli/internal/core/ui/render"
-	"devbox-cli/internal/core/ui/statusview"
-	"devbox-cli/internal/core/workflow/deploy/journal"
+	"github.com/semsemyonoff/devbox/internal/core/project/config"
+	"github.com/semsemyonoff/devbox/internal/core/ui/render"
+	"github.com/semsemyonoff/devbox/internal/core/ui/statusview"
+	"github.com/semsemyonoff/devbox/internal/core/workflow/deploy/journal"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"

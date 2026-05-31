@@ -17,16 +17,16 @@ import (
 	"github.com/creack/pty"
 	"golang.org/x/sync/errgroup"
 
-	"devbox-cli/internal/core/execution/builtin"
-	"devbox-cli/internal/core/execution/condition"
-	"devbox-cli/internal/core/execution/filesgate"
-	"devbox-cli/internal/core/execution/filesgate/spec"
-	"devbox-cli/internal/core/project/config"
-	"devbox-cli/internal/core/usercommands"
-	"devbox-cli/internal/core/workflow/deploy/journal"
-	"devbox-cli/internal/shared/i18n"
-	"devbox-cli/internal/shared/liveui"
-	"devbox-cli/internal/shared/render"
+	"github.com/semsemyonoff/devbox/internal/core/execution/builtin"
+	"github.com/semsemyonoff/devbox/internal/core/execution/condition"
+	"github.com/semsemyonoff/devbox/internal/core/execution/filesgate"
+	"github.com/semsemyonoff/devbox/internal/core/execution/filesgate/spec"
+	"github.com/semsemyonoff/devbox/internal/core/project/config"
+	"github.com/semsemyonoff/devbox/internal/core/usercommands"
+	"github.com/semsemyonoff/devbox/internal/core/workflow/deploy/journal"
+	"github.com/semsemyonoff/devbox/internal/shared/i18n"
+	"github.com/semsemyonoff/devbox/internal/shared/liveui"
+	"github.com/semsemyonoff/devbox/internal/shared/render"
 )
 
 // stdoutIsTTY reports whether os.Stdout is attached to a terminal.

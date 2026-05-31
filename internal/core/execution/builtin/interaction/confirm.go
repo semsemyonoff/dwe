@@ -6,8 +6,8 @@ import (
 	"fmt"
 	"os"
 
-	"devbox-cli/internal/core/execution/builtin/spec"
-	"devbox-cli/internal/core/ui/widgets"
+	"github.com/semsemyonoff/devbox/internal/core/execution/builtin/spec"
+	"github.com/semsemyonoff/devbox/internal/core/ui/widgets"
 )
 
 // runConfirm is the package-level wrapper for widgets.RunConfirm; swappable in tests.

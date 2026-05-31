@@ -6,7 +6,7 @@ import (
 	"os"
 	"testing"
 
-	userpkg "devbox-cli/internal/core/project/user"
+	userpkg "github.com/semsemyonoff/devbox/internal/core/project/user"
 )
 
 // recordingBackend captures every notify call for assertions.

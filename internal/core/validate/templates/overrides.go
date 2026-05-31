@@ -6,7 +6,7 @@ import (
 	"sort"
 	"strings"
 
-	"devbox-cli/internal/core/validate"
+	"github.com/semsemyonoff/devbox/internal/core/validate"
 )
 
 // overrideSink returns a sink and a getter that collects rels with fromOverride=true.

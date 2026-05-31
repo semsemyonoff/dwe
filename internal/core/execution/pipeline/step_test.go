@@ -3,8 +3,8 @@ package pipeline
 import (
 	"testing"
 
-	"devbox-cli/internal/core/execution/filesgate"
-	"devbox-cli/internal/core/project/config"
+	"github.com/semsemyonoff/devbox/internal/core/execution/filesgate"
+	"github.com/semsemyonoff/devbox/internal/core/project/config"
 )
 
 func TestStepBadge_shellStep(t *testing.T) {

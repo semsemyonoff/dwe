@@ -6,7 +6,7 @@ import (
 	"strings"
 	"testing"
 
-	"devbox-cli/internal/core/project/config"
+	"github.com/semsemyonoff/devbox/internal/core/project/config"
 )
 
 func TestWrite_createsFile(t *testing.T) {

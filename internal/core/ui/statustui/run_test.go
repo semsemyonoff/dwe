@@ -10,8 +10,8 @@ import (
 	tea "charm.land/bubbletea/v2"
 	"github.com/stretchr/testify/require"
 
-	"devbox-cli/internal/core/project/config"
-	"devbox-cli/internal/core/ui/statusview"
+	"github.com/semsemyonoff/devbox/internal/core/project/config"
+	"github.com/semsemyonoff/devbox/internal/core/ui/statusview"
 )
 
 func TestMapRunError(t *testing.T) {

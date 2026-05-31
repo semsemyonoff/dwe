@@ -2,10 +2,10 @@
 package prompt
 
 import (
-	pipeline "devbox-cli/internal/core/execution/pipeline"
-	promptpkg "devbox-cli/internal/shared/prompt"
+	pipeline "github.com/semsemyonoff/devbox/internal/core/execution/pipeline"
+	promptpkg "github.com/semsemyonoff/devbox/internal/shared/prompt"
 
-	"devbox-cli/internal/cli/cmdctx"
+	"github.com/semsemyonoff/devbox/internal/cli/cmdctx"
 
 	"github.com/spf13/cobra"
 )

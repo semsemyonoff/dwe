@@ -7,7 +7,7 @@ import (
 	"sort"
 	"sync"
 
-	"devbox-cli/internal/core/docs/mermaid"
+	"github.com/semsemyonoff/devbox/internal/core/docs/mermaid"
 )
 
 // WorkItem represents a diagram to be rendered.

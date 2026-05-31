@@ -11,11 +11,11 @@ import (
 	"sort"
 	"time"
 
-	"devbox-cli/internal/core/project/config"
-	"devbox-cli/internal/core/usercommands/registry"
-	"devbox-cli/internal/core/workflow/deploy/journal"
-	"devbox-cli/internal/core/workflow/snapshot/meta"
-	"devbox-cli/internal/shared/tpl"
+	"github.com/semsemyonoff/devbox/internal/core/project/config"
+	"github.com/semsemyonoff/devbox/internal/core/usercommands/registry"
+	"github.com/semsemyonoff/devbox/internal/core/workflow/deploy/journal"
+	"github.com/semsemyonoff/devbox/internal/core/workflow/snapshot/meta"
+	"github.com/semsemyonoff/devbox/internal/shared/tpl"
 )
 
 // CreateParams describes one `devbox snapshot create` invocation. The caller

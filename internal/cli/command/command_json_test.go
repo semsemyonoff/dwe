@@ -6,9 +6,9 @@ import (
 	"strings"
 	"testing"
 
-	"devbox-cli/internal/core/usercommands"
-	"devbox-cli/internal/core/usercommands/model"
-	"devbox-cli/internal/shared/i18n"
+	"github.com/semsemyonoff/devbox/internal/core/usercommands"
+	"github.com/semsemyonoff/devbox/internal/core/usercommands/model"
+	"github.com/semsemyonoff/devbox/internal/shared/i18n"
 )
 
 // buildTestRegistry builds a small registry with deterministic content for JSON tests.

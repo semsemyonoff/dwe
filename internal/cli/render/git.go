@@ -6,11 +6,11 @@ import (
 	"sort"
 	"strings"
 
-	"devbox-cli/internal/cli/cmdctx"
-	gitpkg "devbox-cli/internal/core/execution/templates/git"
-	"devbox-cli/internal/core/execution/templates/manifest"
-	"devbox-cli/internal/core/project/config"
-	"devbox-cli/internal/shared/render"
+	"github.com/semsemyonoff/devbox/internal/cli/cmdctx"
+	gitpkg "github.com/semsemyonoff/devbox/internal/core/execution/templates/git"
+	"github.com/semsemyonoff/devbox/internal/core/execution/templates/manifest"
+	"github.com/semsemyonoff/devbox/internal/core/project/config"
+	"github.com/semsemyonoff/devbox/internal/shared/render"
 
 	"github.com/spf13/cobra"
 )

@@ -4,8 +4,8 @@ import (
 	"fmt"
 	"os/exec"
 
-	"devbox-cli/internal/core/project/config"
-	"devbox-cli/internal/core/validate"
+	"github.com/semsemyonoff/devbox/internal/core/project/config"
+	"github.com/semsemyonoff/devbox/internal/core/validate"
 )
 
 type gitBinValidator struct {

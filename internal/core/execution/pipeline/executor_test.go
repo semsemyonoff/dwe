@@ -12,12 +12,12 @@ import (
 	"sync"
 	"testing"
 
-	"devbox-cli/internal/core/execution/builtin"
-	"devbox-cli/internal/core/execution/condition"
-	"devbox-cli/internal/core/execution/filesgate"
-	"devbox-cli/internal/core/project/config"
-	"devbox-cli/internal/core/usercommands"
-	"devbox-cli/internal/core/workflow/deploy/journal"
+	"github.com/semsemyonoff/devbox/internal/core/execution/builtin"
+	"github.com/semsemyonoff/devbox/internal/core/execution/condition"
+	"github.com/semsemyonoff/devbox/internal/core/execution/filesgate"
+	"github.com/semsemyonoff/devbox/internal/core/project/config"
+	"github.com/semsemyonoff/devbox/internal/core/usercommands"
+	"github.com/semsemyonoff/devbox/internal/core/workflow/deploy/journal"
 )
 
 // --- mockReporter records all reporter events for assertion ---

@@ -15,10 +15,10 @@ import (
 	"strings"
 	"text/template"
 
-	"devbox-cli/internal/core/execution/templates/manifest"
-	"devbox-cli/internal/core/execution/templates/packroot"
-	"devbox-cli/internal/core/project/config"
-	"devbox-cli/internal/shared/pathsafe"
+	"github.com/semsemyonoff/devbox/internal/core/execution/templates/manifest"
+	"github.com/semsemyonoff/devbox/internal/core/execution/templates/packroot"
+	"github.com/semsemyonoff/devbox/internal/core/project/config"
+	"github.com/semsemyonoff/devbox/internal/shared/pathsafe"
 )
 
 // SkippedService carries information about a service that was skipped during IDE rendering.

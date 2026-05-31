@@ -6,12 +6,12 @@ import (
 	"sort"
 	"strings"
 
-	"devbox-cli/internal/core/project/config"
-	"devbox-cli/internal/core/ui/render"
-	"devbox-cli/internal/core/usercommands"
-	"devbox-cli/internal/shared/daemon"
-	"devbox-cli/internal/shared/i18n"
-	"devbox-cli/internal/shared/tpl"
+	"github.com/semsemyonoff/devbox/internal/core/project/config"
+	"github.com/semsemyonoff/devbox/internal/core/ui/render"
+	"github.com/semsemyonoff/devbox/internal/core/usercommands"
+	"github.com/semsemyonoff/devbox/internal/shared/daemon"
+	"github.com/semsemyonoff/devbox/internal/shared/i18n"
+	"github.com/semsemyonoff/devbox/internal/shared/tpl"
 )
 
 // commandInspectJSON is the DTO for `commands [id] --inspect --output json`.

@@ -5,8 +5,8 @@ import (
 	"context"
 	"testing"
 
-	"devbox-cli/internal/core/project/config"
-	"devbox-cli/internal/shared/tpl"
+	"github.com/semsemyonoff/devbox/internal/core/project/config"
+	"github.com/semsemyonoff/devbox/internal/shared/tpl"
 )
 
 // --- RunContext.Compose bin propagation ---

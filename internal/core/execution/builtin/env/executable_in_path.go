@@ -6,7 +6,7 @@ import (
 	"fmt"
 	"os/exec"
 
-	"devbox-cli/internal/core/execution/builtin/spec"
+	"github.com/semsemyonoff/devbox/internal/core/execution/builtin/spec"
 )
 
 // ExecutableInPath verifies that a named binary is discoverable on PATH.

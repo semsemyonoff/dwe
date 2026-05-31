@@ -3,7 +3,7 @@ package linters
 import (
 	"testing"
 
-	"devbox-cli/internal/core/validate"
+	"github.com/semsemyonoff/devbox/internal/core/validate"
 )
 
 func TestHadolintBuildArgs(t *testing.T) {

@@ -1,7 +1,7 @@
 package render
 
 import (
-	"devbox-cli/internal/core/ui/styles"
+	"github.com/semsemyonoff/devbox/internal/core/ui/styles"
 
 	"github.com/charmbracelet/lipgloss"
 )

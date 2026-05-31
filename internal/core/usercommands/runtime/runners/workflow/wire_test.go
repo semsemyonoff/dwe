@@ -9,5 +9,5 @@
 package workflow_test
 
 import (
-	_ "devbox-cli/internal/core/usercommands/runtime"
+	_ "github.com/semsemyonoff/devbox/internal/core/usercommands/runtime"
 )

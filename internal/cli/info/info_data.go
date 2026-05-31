@@ -5,8 +5,8 @@ import (
 	"slices"
 	"strings"
 
-	"devbox-cli/internal/core/project/config"
-	"devbox-cli/internal/shared/tpl"
+	"github.com/semsemyonoff/devbox/internal/core/project/config"
+	"github.com/semsemyonoff/devbox/internal/shared/tpl"
 )
 
 // buildInfoData builds the structured JSON representation of the info dashboard.

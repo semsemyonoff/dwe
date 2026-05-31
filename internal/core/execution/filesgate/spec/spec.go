@@ -4,9 +4,9 @@ package spec
 import (
 	"fmt"
 
-	"devbox-cli/internal/core/execution/filesgate"
-	"devbox-cli/internal/core/project/config"
-	"devbox-cli/internal/core/usercommands/registry"
+	"github.com/semsemyonoff/devbox/internal/core/execution/filesgate"
+	"github.com/semsemyonoff/devbox/internal/core/project/config"
+	"github.com/semsemyonoff/devbox/internal/core/usercommands/registry"
 )
 
 // Issue represents a validation issue with a files_gate directive.

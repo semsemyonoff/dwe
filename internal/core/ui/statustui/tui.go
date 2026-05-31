@@ -14,11 +14,11 @@ import (
 	"github.com/charmbracelet/lipgloss"
 	"github.com/charmbracelet/x/term"
 
-	"devbox-cli/internal/core/project/config"
-	"devbox-cli/internal/core/project/stack"
-	"devbox-cli/internal/core/ui/render"
-	"devbox-cli/internal/core/ui/styles"
-	"devbox-cli/internal/core/workflow/deploy/journal"
+	"github.com/semsemyonoff/devbox/internal/core/project/config"
+	"github.com/semsemyonoff/devbox/internal/core/project/stack"
+	"github.com/semsemyonoff/devbox/internal/core/ui/render"
+	"github.com/semsemyonoff/devbox/internal/core/ui/styles"
+	"github.com/semsemyonoff/devbox/internal/core/workflow/deploy/journal"
 )
 
 // Test seams for TTY detection and terminal size queries.

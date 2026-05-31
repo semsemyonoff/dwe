@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"testing"
 
-	"devbox-cli/internal/core/project/config"
+	"github.com/semsemyonoff/devbox/internal/core/project/config"
 )
 
 // --- pickService ---

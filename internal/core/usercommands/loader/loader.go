@@ -8,7 +8,7 @@ import (
 	"slices"
 	"strings"
 
-	"devbox-cli/internal/core/usercommands/model"
+	"github.com/semsemyonoff/devbox/internal/core/usercommands/model"
 )
 
 // DiscoverCommandFiles walks baseDir recursively and returns the absolute paths of

@@ -8,10 +8,10 @@ import (
 	"strings"
 	"testing"
 
-	"devbox-cli/internal/cli"
-	"devbox-cli/internal/cli/cmdctx"
-	"devbox-cli/internal/cli/prompt"
-	"devbox-cli/internal/core/execution/pipeline"
+	"github.com/semsemyonoff/devbox/internal/cli"
+	"github.com/semsemyonoff/devbox/internal/cli/cmdctx"
+	"github.com/semsemyonoff/devbox/internal/cli/prompt"
+	"github.com/semsemyonoff/devbox/internal/core/execution/pipeline"
 )
 
 func TestNewPromptCmd_UseAndFlags(t *testing.T) {

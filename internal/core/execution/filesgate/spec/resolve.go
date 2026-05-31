@@ -5,8 +5,8 @@ import (
 	"fmt"
 	"sort"
 
-	"devbox-cli/internal/core/execution/filesgate"
-	"devbox-cli/internal/core/usercommands/model"
+	"github.com/semsemyonoff/devbox/internal/core/execution/filesgate"
+	"github.com/semsemyonoff/devbox/internal/core/usercommands/model"
 )
 
 // ResolveRequireIDs expands a require spec into a sorted list of file IDs.

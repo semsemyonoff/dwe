@@ -8,7 +8,7 @@ import (
 	"slices"
 	"strings"
 
-	"devbox-cli/internal/core/execution/builtin/spec"
+	"github.com/semsemyonoff/devbox/internal/core/execution/builtin/spec"
 )
 
 // mandatoryDirs are always created for every service hub regardless of config.

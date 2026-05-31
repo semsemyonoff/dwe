@@ -9,11 +9,11 @@ import (
 	"strings"
 	"time"
 
-	"devbox-cli/internal/core/execution/builtin/spec"
+	"github.com/semsemyonoff/devbox/internal/core/execution/builtin/spec"
 
-	"devbox-cli/internal/core/project/config"
-	"devbox-cli/internal/shared/daemon"
-	"devbox-cli/internal/shared/docker"
+	"github.com/semsemyonoff/devbox/internal/core/project/config"
+	"github.com/semsemyonoff/devbox/internal/shared/daemon"
+	"github.com/semsemyonoff/devbox/internal/shared/docker"
 )
 
 // defaultStopTimeout mirrors docker.DefaultStopTimeoutSec as a duration.

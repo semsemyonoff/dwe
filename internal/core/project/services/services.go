@@ -7,7 +7,7 @@ import (
 	"maps"
 	"slices"
 
-	"devbox-cli/internal/core/project/config"
+	"github.com/semsemyonoff/devbox/internal/core/project/config"
 )
 
 // Row is a single row of the services topology view used by status, info,

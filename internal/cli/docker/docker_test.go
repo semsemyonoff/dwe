@@ -5,9 +5,9 @@ import (
 	"slices"
 	"testing"
 
-	"devbox-cli/internal/cli/cmdctx"
-	"devbox-cli/internal/core/project/config"
-	dockerpkg "devbox-cli/internal/shared/docker"
+	"github.com/semsemyonoff/devbox/internal/cli/cmdctx"
+	"github.com/semsemyonoff/devbox/internal/core/project/config"
+	dockerpkg "github.com/semsemyonoff/devbox/internal/shared/docker"
 )
 
 // TestDockerPipelineBuildsCompose verifies that the docker pipeline correctly

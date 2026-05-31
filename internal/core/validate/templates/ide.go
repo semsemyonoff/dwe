@@ -5,9 +5,9 @@ import (
 	"fmt"
 	"path/filepath"
 
-	"devbox-cli/internal/core/execution/templates/ide"
-	"devbox-cli/internal/core/project/config"
-	"devbox-cli/internal/core/validate"
+	"github.com/semsemyonoff/devbox/internal/core/execution/templates/ide"
+	"github.com/semsemyonoff/devbox/internal/core/project/config"
+	"github.com/semsemyonoff/devbox/internal/core/validate"
 )
 
 // IDEValidator validates IDE template packs for app services.

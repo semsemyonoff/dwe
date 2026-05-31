@@ -4,9 +4,9 @@ import (
 	"fmt"
 	"path/filepath"
 
-	"devbox-cli/internal/core/execution/templates/git"
-	"devbox-cli/internal/core/project/config"
-	"devbox-cli/internal/core/validate"
+	"github.com/semsemyonoff/devbox/internal/core/execution/templates/git"
+	"github.com/semsemyonoff/devbox/internal/core/project/config"
+	"github.com/semsemyonoff/devbox/internal/core/validate"
 )
 
 // GitValidator validates git-hooks template packs for app services.

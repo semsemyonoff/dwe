@@ -7,7 +7,7 @@ import (
 	"path/filepath"
 	"strings"
 
-	"devbox-cli/internal/core/execution/builtin/spec"
+	"github.com/semsemyonoff/devbox/internal/core/execution/builtin/spec"
 )
 
 // RemovePaths deletes declared relative paths inside the project root.

@@ -11,8 +11,8 @@ import (
 	"charm.land/bubbles/v2/viewport"
 	"charm.land/lipgloss/v2"
 
-	"devbox-cli/internal/core/project/config"
-	"devbox-cli/internal/core/ui/styles"
+	"github.com/semsemyonoff/devbox/internal/core/project/config"
+	"github.com/semsemyonoff/devbox/internal/core/ui/styles"
 )
 
 // applyPaletteOverride installs a palette where accent and muted are distinct

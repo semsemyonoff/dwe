@@ -11,9 +11,9 @@ import (
 	"testing"
 	"time"
 
-	"devbox-cli/internal/core/project/config"
-	"devbox-cli/internal/core/validate"
-	"devbox-cli/internal/core/validate/diag"
+	"github.com/semsemyonoff/devbox/internal/core/project/config"
+	"github.com/semsemyonoff/devbox/internal/core/validate"
+	"github.com/semsemyonoff/devbox/internal/core/validate/diag"
 )
 
 // fakeLinterBin is the absolute path to the compiled cmd/fake-linter binary,

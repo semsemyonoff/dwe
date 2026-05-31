@@ -4,8 +4,8 @@ import (
 	"github.com/charmbracelet/lipgloss"
 	"github.com/charmbracelet/lipgloss/table"
 
-	"devbox-cli/internal/core/ui/statusview"
-	"devbox-cli/internal/core/ui/styles"
+	"github.com/semsemyonoff/devbox/internal/core/ui/statusview"
+	"github.com/semsemyonoff/devbox/internal/core/ui/styles"
 )
 
 // GitWorkspace renders a styled Lipgloss table of per-service git

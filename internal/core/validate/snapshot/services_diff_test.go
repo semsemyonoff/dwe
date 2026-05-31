@@ -7,10 +7,10 @@ import (
 	"testing"
 	"time"
 
-	"devbox-cli/internal/core/project/config"
-	"devbox-cli/internal/core/validate"
-	coresnap "devbox-cli/internal/core/workflow/snapshot"
-	"devbox-cli/internal/core/workflow/snapshot/meta"
+	"github.com/semsemyonoff/devbox/internal/core/project/config"
+	"github.com/semsemyonoff/devbox/internal/core/validate"
+	coresnap "github.com/semsemyonoff/devbox/internal/core/workflow/snapshot"
+	"github.com/semsemyonoff/devbox/internal/core/workflow/snapshot/meta"
 )
 
 // snapshotEntry builds a coresnap.Entry on disk under root/snapshots/<name>

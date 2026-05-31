@@ -10,11 +10,11 @@ import (
 	"sync/atomic"
 	"testing"
 
-	"devbox-cli/internal/core/notify"
-	"devbox-cli/internal/core/project/config"
-	userpkg "devbox-cli/internal/core/project/user"
-	"devbox-cli/internal/core/ui/widgets"
-	"devbox-cli/internal/shared/tpl"
+	"github.com/semsemyonoff/devbox/internal/core/notify"
+	"github.com/semsemyonoff/devbox/internal/core/project/config"
+	userpkg "github.com/semsemyonoff/devbox/internal/core/project/user"
+	"github.com/semsemyonoff/devbox/internal/core/ui/widgets"
+	"github.com/semsemyonoff/devbox/internal/shared/tpl"
 )
 
 type recordingNotifier struct {

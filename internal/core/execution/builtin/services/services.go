@@ -2,7 +2,7 @@
 // service_configs_copy, service_configs_check, and service_dirs_ensure.
 package services
 
-import "devbox-cli/internal/core/execution/builtin/spec"
+import "github.com/semsemyonoff/devbox/internal/core/execution/builtin/spec"
 
 // Builtins returns the services builtin entries keyed by their registered name.
 func Builtins() map[string]spec.Entry {

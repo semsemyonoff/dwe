@@ -7,10 +7,10 @@ import (
 	"testing"
 	"time"
 
-	"devbox-cli/internal/cli/cmdctx"
-	pipeline "devbox-cli/internal/core/execution/pipeline"
-	"devbox-cli/internal/core/project/config"
-	"devbox-cli/internal/core/workflow/deploy/journal"
+	"github.com/semsemyonoff/devbox/internal/cli/cmdctx"
+	pipeline "github.com/semsemyonoff/devbox/internal/core/execution/pipeline"
+	"github.com/semsemyonoff/devbox/internal/core/project/config"
+	"github.com/semsemyonoff/devbox/internal/core/workflow/deploy/journal"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"

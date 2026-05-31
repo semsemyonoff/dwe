@@ -4,8 +4,8 @@ import (
 	"fmt"
 	"strings"
 
-	"devbox-cli/internal/core/ui/styles"
-	"devbox-cli/internal/core/workflow/deploy/journal"
+	"github.com/semsemyonoff/devbox/internal/core/ui/styles"
+	"github.com/semsemyonoff/devbox/internal/core/workflow/deploy/journal"
 )
 
 // PendingBanner returns a formatted warning string for outstanding pending

@@ -3,8 +3,8 @@ package deploy_test
 import (
 	"testing"
 
-	"devbox-cli/internal/core/project/config"
-	"devbox-cli/internal/core/workflow/deploy"
+	"github.com/semsemyonoff/devbox/internal/core/project/config"
+	"github.com/semsemyonoff/devbox/internal/core/workflow/deploy"
 )
 
 func TestDefaultDeployConfig_Shape(t *testing.T) {

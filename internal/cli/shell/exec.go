@@ -11,9 +11,9 @@ import (
 	"slices"
 	"strings"
 
-	"devbox-cli/internal/core/project/config"
-	"devbox-cli/internal/shared/docker"
-	"devbox-cli/internal/shared/render"
+	"github.com/semsemyonoff/devbox/internal/core/project/config"
+	"github.com/semsemyonoff/devbox/internal/shared/docker"
+	"github.com/semsemyonoff/devbox/internal/shared/render"
 )
 
 // shellOptions holds fully resolved shell session parameters after applying

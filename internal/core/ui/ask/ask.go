@@ -7,8 +7,8 @@ import (
 	"io"
 	"os"
 
-	"devbox-cli/internal/core/ui/styles"
-	"devbox-cli/internal/core/ui/widgets"
+	"github.com/semsemyonoff/devbox/internal/core/ui/styles"
+	"github.com/semsemyonoff/devbox/internal/core/ui/widgets"
 
 	huh "charm.land/huh/v2"
 )

@@ -3,7 +3,7 @@ package resolve
 import (
 	"testing"
 
-	"devbox-cli/internal/core/usercommands/model"
+	"github.com/semsemyonoff/devbox/internal/core/usercommands/model"
 
 	"github.com/stretchr/testify/require"
 )
