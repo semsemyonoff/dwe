@@ -98,6 +98,15 @@ type Model struct {
 	// Lazily created on first export; left on disk at exit (os cleans /tmp).
 	diagramExportDir string
 
+	// treeTopIdx is the index into Tree.VisibleNodes() of the first row
+	// rendered in the left panel. Without it, an oversized tree (more
+	// visible nodes than rows that fit) would stretch the joined body
+	// past the bordered frame and push the help footer off the alt
+	// screen. Same approach as cmdbrowser's treeTopIdx. Adjusted at
+	// render time by ensureTreeFocusVisible so the focused row stays on
+	// screen as the user navigates.
+	treeTopIdx int
+
 	ctx      context.Context
 	initCmd  tea.Cmd // cmd to run on first Init() call
 	quitting bool
@@ -344,6 +353,19 @@ func (m *Model) applyTopicLoaded(msg topicLoadedMsg) tea.Cmd {
 	}
 
 	if len(msg.Diagrams) == 0 {
+		return nil
+	}
+	// Skip prefetch when the renderer can't cache results — i.e. the
+	// chain reduces to mermaid.Disabled (mode=off, or auto/mmdc with
+	// mmdc absent on $PATH). Without this gate the worker pool would
+	// fail every queued item in a rapid burst, and each ProgressMsg
+	// rewrites the full viewport via inlineDiagrams + SetContent —
+	// the compounded re-renders are what users perceive as a UI
+	// "freeze on first open" of a diagram-heavy doc. Lookuper is the
+	// cache-capable contract; the diagramPlaceholder fallback (no
+	// Lookuper → "rendering disabled") already surfaces the right
+	// hint, so a silent skip here is the correct user-facing behavior.
+	if _, ok := m.MermaidRenderer.(mermaid.Lookuper); !ok {
 		return nil
 	}
 	m.ensurePrefetch()

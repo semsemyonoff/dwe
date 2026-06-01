@@ -180,26 +180,52 @@ func (m *Model) renderTree() string {
 	muted := lipgloss.NewStyle().Foreground(lipgloss.Color(styles.ColorMuted()))
 
 	inner := leftPanelInnerWidth(m.TermWidth)
-	var sb strings.Builder
 
 	// The filter header MUST render even when the current query has zero
 	// matches — otherwise typing a non-matching second character makes the
 	// entire left panel blank and the user has no feedback on what they
 	// typed. The header itself shows the query and match count.
+	var header string
 	if m.Filter != nil && m.Filter.Active {
-		sb.WriteString(m.renderFilterHeader(inner, accent, muted))
-		sb.WriteString("\n")
+		header = m.renderFilterHeader(inner, accent, muted)
 	}
 
-	if m.Tree.VisibleNodes() == nil {
-		return sb.String()
+	rows := m.renderTreeRows(inner, accent, muted)
+
+	// Reserve one row for the filter header when present so the
+	// scrolling window matches the available row area inside the
+	// bordered left panel.
+	rowsAvail := m.treeViewportHeight()
+	if header != "" {
+		rowsAvail = max(rowsAvail-1, 0)
 	}
 
-	for i, node := range m.Tree.VisibleNodes() {
-		if i > 0 {
-			sb.WriteString("\n")
-		}
+	m.ensureTreeFocusVisible(len(rows), rowsAvail)
+	clipped := clipTreeRows(rows, m.treeTopIdx, rowsAvail)
 
+	switch {
+	case header == "" && len(clipped) == 0:
+		return ""
+	case header == "":
+		return strings.Join(clipped, "\n")
+	case len(clipped) == 0:
+		return header
+	default:
+		return header + "\n" + strings.Join(clipped, "\n")
+	}
+}
+
+// renderTreeRows emits one styled string per visible tree node. Each
+// row is independent (no shared trailing newline) so clipTreeRows can
+// slice them by index when the rendered tree would otherwise overflow
+// the left panel and push the body off-screen.
+func (m *Model) renderTreeRows(inner int, accent, muted lipgloss.Style) []string {
+	visible := m.Tree.VisibleNodes()
+	if len(visible) == 0 {
+		return nil
+	}
+	rows := make([]string, 0, len(visible))
+	for _, node := range visible {
 		depth := m.getNodeDepth(node)
 		indent := strings.Repeat("  ", depth)
 
@@ -255,10 +281,69 @@ func (m *Model) renderTree() string {
 		if node == m.Tree.Cursor() {
 			line = accent.Render(line)
 		}
-		sb.WriteString(line)
+		rows = append(rows, line)
 	}
+	return rows
+}
 
-	return sb.String()
+// treeViewportHeight is the number of rows that fit inside the left
+// panel's bordered frame — bodyHeight minus the two border rows.
+// Mirrors cmdbrowser.treeViewportHeight so both TUIs handle oversized
+// trees the same way.
+func (m *Model) treeViewportHeight() int {
+	return max(bodyHeight(m.TermHeight, m.helpHeight())-2, 1)
+}
+
+// ensureTreeFocusVisible adjusts treeTopIdx so the cursor row stays
+// inside the visible window after navigation, expansion, or a tree
+// rebuild (locale switch). Mirrors cmdbrowser.ensureTreeFocusVisible.
+// Called at render time so we don't need to instrument every mutator.
+func (m *Model) ensureTreeFocusVisible(total, rowsAvail int) {
+	if total == 0 || rowsAvail <= 0 {
+		m.treeTopIdx = 0
+		return
+	}
+	idx := -1
+	if m.Tree != nil {
+		cursor := m.Tree.Cursor()
+		for i, n := range m.Tree.VisibleNodes() {
+			if n == cursor {
+				idx = i
+				break
+			}
+		}
+	}
+	if idx < 0 {
+		m.treeTopIdx = 0
+		return
+	}
+	if idx < m.treeTopIdx {
+		m.treeTopIdx = idx
+	} else if idx >= m.treeTopIdx+rowsAvail {
+		m.treeTopIdx = idx - rowsAvail + 1
+	}
+	maxTop := max(total-rowsAvail, 0)
+	if m.treeTopIdx > maxTop {
+		m.treeTopIdx = maxTop
+	}
+	if m.treeTopIdx < 0 {
+		m.treeTopIdx = 0
+	}
+}
+
+// clipTreeRows returns the slice [top:top+h] of rows, clamped to the
+// available range. The tree renderer emits exactly one line per
+// visible node (labels are truncated, never wrapped), so row indices
+// align with Tree.VisibleNodes() and a plain slice is safe.
+func clipTreeRows(rows []string, top, h int) []string {
+	if h <= 0 || len(rows) == 0 {
+		return nil
+	}
+	if len(rows) <= h {
+		return rows
+	}
+	top = min(max(top, 0), len(rows)-h)
+	return rows[top : top+h]
 }
 
 // renderFilterHeader renders the filter prompt + match count at the top of

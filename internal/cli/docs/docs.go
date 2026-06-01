@@ -110,11 +110,25 @@ func runDocsTUI(cmd *cobra.Command, flags *cmdctx.RootFlags, termWidth, termHeig
 
 	cacheCapBytes := int64(config.MermaidCacheSizeMB(cfg) * 1024 * 1024)
 	mermaidMode := config.MermaidMode(cfg)
+	mmdcOnPath := mmdcAvailable(config.MmdcBin(cfg))
 
-	switch mermaidMode {
-	case "off":
+	switch {
+	case mermaidMode == "off":
 		renderer = mermaid.Disabled{}
-	case "mmdc":
+	case !mmdcOnPath:
+		// mmdc is absent on $PATH. Wiring a FileCache → mmdc chain here
+		// would have prefetch workers fail every queued diagram in a
+		// rapid burst (each Render returns ErrMmdcNotAvailable after a
+		// useless tempdir+write), and each fast tick re-runs
+		// inlineDiagrams + viewport.SetContent on a doc with N
+		// diagrams — compounding into a perceptible UI freeze on the
+		// first heavy-diagram document. Substituting Disabled here
+		// short-circuits the queue entirely (see applyTopicLoaded) and
+		// keeps the "rendering disabled" placeholder consistent with
+		// what users see today; the MmdcNotice banner below tells them
+		// how to install mmdc.
+		renderer = mermaid.Disabled{}
+	case mermaidMode == "mmdc":
 		// Strict mode: mmdc is required
 		renderer = mermaid.New(config.MmdcBin(cfg), cacheDir, cacheCapBytes, true)
 	default: // "auto"
@@ -143,7 +157,7 @@ func runDocsTUI(cmd *cobra.Command, flags *cmdctx.RootFlags, termWidth, termHeig
 	// hasn't explicitly disabled mermaid). Skipping the install entirely would
 	// leave users guessing why diagrams never render — the banner points them
 	// at the canonical install section in docs/reference/docs/commands.md.
-	if mermaidMode != "off" && !mmdcAvailable(config.MmdcBin(cfg)) {
+	if mermaidMode != "off" && !mmdcOnPath {
 		model.MmdcNotice = "> **⚠ `mmdc` not installed.** Mermaid diagrams cannot render. " +
 			"Install with `npm i -g @mermaid-js/mermaid-cli` — see " +
 			"`docs/reference/docs/commands.md` § *Installing `mmdc`*.\n\n"
