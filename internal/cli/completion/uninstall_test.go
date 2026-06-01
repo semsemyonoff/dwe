@@ -31,7 +31,7 @@ func TestUninstallCompletion_DeletesInstalledFile(t *testing.T) {
 	t.Cleanup(func() { completionHomeDir = origHomeDir })
 	completionHomeDir = func() (string, error) { return tmpDir, nil }
 
-	target := filepath.Join(tmpDir, ".local", "share", "bash-completion", "completions", "devbox")
+	target := filepath.Join(tmpDir, ".local", "share", "bash-completion", "completions", "dwe")
 	if err := os.MkdirAll(filepath.Dir(target), 0o755); err != nil {
 		t.Fatalf("creating dir: %v", err)
 	}
@@ -74,7 +74,7 @@ func TestUninstallCompletion_PathFlag(t *testing.T) {
 	t.Cleanup(func() { completionHomeDir = origHomeDir })
 	completionHomeDir = func() (string, error) { return "/should-not-be-used", nil }
 
-	target := filepath.Join(tmpDir, "_devbox")
+	target := filepath.Join(tmpDir, "_dwe")
 	if err := os.WriteFile(target, []byte("# zsh completion\n"), 0o644); err != nil {
 		t.Fatalf("writing file: %v", err)
 	}
@@ -157,10 +157,10 @@ func TestUninstallCompletion_AllShells_PathFlag(t *testing.T) {
 		shell    string
 		filename string
 	}{
-		{"bash", "devbox"},
-		{"zsh", "_devbox"},
-		{"fish", "devbox.fish"},
-		{"powershell", "devbox-completion.ps1"},
+		{"bash", "dwe"},
+		{"zsh", "_dwe"},
+		{"fish", "dwe.fish"},
+		{"powershell", "dwe-completion.ps1"},
 	}
 	for _, tc := range cases {
 		t.Run(tc.shell, func(t *testing.T) {

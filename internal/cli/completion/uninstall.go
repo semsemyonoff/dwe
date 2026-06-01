@@ -16,8 +16,8 @@ func newUninstallCompletionCmd() *cobra.Command {
 
 	cmd := &cobra.Command{
 		Use:   "uninstall [shell]",
-		Short: "Uninstall shell completion for devbox",
-		Long: `Remove the devbox shell completion script from the standard location for your
+		Short: "Uninstall shell completion for dwe",
+		Long: `Remove the dwe shell completion script from the standard location for your
 shell. The target file is determined automatically from the shell name (or
 detected from $SHELL).
 
@@ -25,12 +25,12 @@ Supported shells: bash, zsh, fish, powershell
 
 To uninstall for a specific shell:
 
-    devbox completion uninstall zsh
-    devbox completion uninstall bash
+    dwe completion uninstall zsh
+    dwe completion uninstall bash
 
 Override the target directory:
 
-    devbox completion uninstall zsh --path ~/.config/completions
+    dwe completion uninstall zsh --path ~/.config/completions
 
 NOTES
   - Dotfiles (e.g. ~/.zshrc, PowerShell $PROFILE) are never modified.

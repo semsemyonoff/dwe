@@ -33,8 +33,8 @@ func newInstallCompletionCmd() *cobra.Command {
 
 	cmd := &cobra.Command{
 		Use:   "install [shell]",
-		Short: "Install shell completion for devbox",
-		Long: `Install the devbox shell completion script to the standard location for your
+		Short: "Install shell completion for dwe",
+		Long: `Install the dwe shell completion script to the standard location for your
 shell. The target file is determined automatically from the shell name (or
 detected from $SHELL), and the parent directory is created if missing.
 
@@ -42,16 +42,16 @@ Supported shells: bash, zsh, fish, powershell
 
 To install for a specific shell:
 
-    devbox completion install zsh
-    devbox completion install bash
+    dwe completion install zsh
+    dwe completion install bash
 
 Override the target directory:
 
-    devbox completion install zsh --path ~/.config/completions
+    dwe completion install zsh --path ~/.config/completions
 
 Preview without writing:
 
-    devbox completion install --dry-run
+    dwe completion install --dry-run
 
 NOTES
   - Dotfiles (e.g. ~/.zshrc, PowerShell $PROFILE) are never modified.
@@ -125,11 +125,11 @@ func resolveInstallPath(shell, customDir string) (string, error) {
 
 	switch shell {
 	case "bash":
-		return filepath.Join(home, ".local", "share", "bash-completion", "completions", "devbox"), nil
+		return filepath.Join(home, ".local", "share", "bash-completion", "completions", "dwe"), nil
 	case "zsh":
-		return filepath.Join(home, ".zsh", "completions", "_devbox"), nil
+		return filepath.Join(home, ".zsh", "completions", "_dwe"), nil
 	case "fish":
-		return filepath.Join(home, ".config", "fish", "completions", "devbox.fish"), nil
+		return filepath.Join(home, ".config", "fish", "completions", "dwe.fish"), nil
 	case "powershell":
 		return resolvePowerShellInstallPath(home)
 	default:
@@ -141,27 +141,27 @@ func resolveInstallPath(shell, customDir string) (string, error) {
 func completionFileInDir(shell, dir string) string {
 	switch shell {
 	case "zsh":
-		return filepath.Join(dir, "_devbox")
+		return filepath.Join(dir, "_dwe")
 	case "fish":
-		return filepath.Join(dir, "devbox.fish")
+		return filepath.Join(dir, "dwe.fish")
 	case "powershell":
-		return filepath.Join(dir, "devbox-completion.ps1")
+		return filepath.Join(dir, "dwe-completion.ps1")
 	default: // bash and anything else
-		return filepath.Join(dir, "devbox")
+		return filepath.Join(dir, "dwe")
 	}
 }
 
-// resolvePowerShellInstallPath resolves the directory to write devbox-completion.ps1
+// resolvePowerShellInstallPath resolves the directory to write dwe-completion.ps1
 // into, using resolvePowerShellProfile (seam) with fallback to ~/.config/powershell/.
 func resolvePowerShellInstallPath(home string) (string, error) {
 	profilePath, err := resolvePowerShellProfile()
 	if err == nil && profilePath != "" {
 		dir := filepath.Dir(profilePath)
-		return filepath.Join(dir, "devbox-completion.ps1"), nil
+		return filepath.Join(dir, "dwe-completion.ps1"), nil
 	}
 	// Fallback: pwsh not installed or failed — use the documented default.
 	dir := filepath.Join(home, ".config", "powershell")
-	return filepath.Join(dir, "devbox-completion.ps1"), nil
+	return filepath.Join(dir, "dwe-completion.ps1"), nil
 }
 
 // defaultResolvePowerShellProfile invokes `pwsh -NoProfile -Command "$PROFILE.CurrentUserAllHosts"`
@@ -208,7 +208,7 @@ func atomicWriteCompletion(targetPath string, content []byte) error {
 	if err := os.MkdirAll(dir, 0o755); err != nil {
 		return fmt.Errorf("creating directory %s: %w", dir, err)
 	}
-	tmp, err := os.CreateTemp(dir, ".devbox-completion-*")
+	tmp, err := os.CreateTemp(dir, ".dwe-completion-*")
 	if err != nil {
 		return fmt.Errorf("creating temp file: %w", err)
 	}

@@ -63,7 +63,7 @@ func TestInstallCompletion_ShellAutoDetect_Zsh(t *testing.T) {
 	if !strings.Contains(stdout, "zsh") {
 		t.Errorf("expected stdout to mention zsh, got: %q", stdout)
 	}
-	expected := filepath.Join(tmpDir, ".zsh", "completions", "_devbox")
+	expected := filepath.Join(tmpDir, ".zsh", "completions", "_dwe")
 	if !strings.Contains(stdout, expected) {
 		t.Errorf("expected stdout to contain %q, got: %q", expected, stdout)
 	}
@@ -146,7 +146,7 @@ func TestInstallCompletion_DryRun_NoFile(t *testing.T) {
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
-	target := filepath.Join(tmpDir, ".local", "share", "bash-completion", "completions", "devbox")
+	target := filepath.Join(tmpDir, ".local", "share", "bash-completion", "completions", "dwe")
 	if _, statErr := os.Stat(target); !errors.Is(statErr, os.ErrNotExist) {
 		t.Errorf("dry-run must not create target file; stat returned: %v", statErr)
 	}
@@ -172,7 +172,7 @@ func TestInstallCompletion_PathFlag_Zsh(t *testing.T) {
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
-	target := filepath.Join(tmpDir, "_devbox")
+	target := filepath.Join(tmpDir, "_dwe")
 	if _, statErr := os.Stat(target); statErr != nil {
 		t.Errorf("expected %s to exist after install, got: %v", target, statErr)
 	}
@@ -185,7 +185,7 @@ func TestInstallCompletion_PathFlag_Fish(t *testing.T) {
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
-	target := filepath.Join(tmpDir, "devbox.fish")
+	target := filepath.Join(tmpDir, "dwe.fish")
 	if _, statErr := os.Stat(target); statErr != nil {
 		t.Errorf("expected %s to exist after install, got: %v", target, statErr)
 	}
@@ -198,7 +198,7 @@ func TestInstallCompletion_PathFlag_Bash(t *testing.T) {
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
-	target := filepath.Join(tmpDir, "devbox")
+	target := filepath.Join(tmpDir, "dwe")
 	if _, statErr := os.Stat(target); statErr != nil {
 		t.Errorf("expected %s to exist after install, got: %v", target, statErr)
 	}
@@ -216,7 +216,7 @@ func TestInstallCompletion_Idempotent(t *testing.T) {
 	t.Cleanup(func() { completionReadFile = origReadFile })
 	completionReadFile = func(name string) ([]byte, error) { return nil, os.ErrNotExist }
 
-	target := filepath.Join(tmpDir, ".local", "share", "bash-completion", "completions", "devbox")
+	target := filepath.Join(tmpDir, ".local", "share", "bash-completion", "completions", "dwe")
 
 	// First install.
 	run := buildFreshInstallCmd(t)
@@ -252,7 +252,7 @@ func TestInstallCompletion_Idempotent(t *testing.T) {
 		t.Fatalf("reading dir: %v", err)
 	}
 	for _, e := range entries {
-		if strings.HasPrefix(e.Name(), ".devbox-completion-") {
+		if strings.HasPrefix(e.Name(), ".dwe-completion-") {
 			t.Errorf("temp file left over: %s", e.Name())
 		}
 	}
@@ -327,8 +327,8 @@ func TestInstallCompletion_PowerShell_HintPrinted(t *testing.T) {
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
-	if !strings.Contains(stderr, "devbox-completion.ps1") {
-		t.Errorf("expected PowerShell hint to mention devbox-completion.ps1, got: %q", stderr)
+	if !strings.Contains(stderr, "dwe-completion.ps1") {
+		t.Errorf("expected PowerShell hint to mention dwe-completion.ps1, got: %q", stderr)
 	}
 	if !strings.Contains(stderr, "$PROFILE") || !strings.Contains(stderr, "source") && !strings.Contains(stderr, ".") {
 		t.Errorf("expected PowerShell sourcing hint in stderr, got: %q", stderr)
@@ -350,7 +350,7 @@ func TestResolvePowerShellInstallPath_PathFlagOverrides(t *testing.T) {
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
-	expected := filepath.Join(tmpDir, "devbox-completion.ps1")
+	expected := filepath.Join(tmpDir, "dwe-completion.ps1")
 	if path != expected {
 		t.Errorf("expected %q, got %q", expected, path)
 	}
@@ -373,7 +373,7 @@ func TestResolvePowerShellInstallPath_PwshReturnsPath(t *testing.T) {
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
-	expected := filepath.Join(psDir, "devbox-completion.ps1")
+	expected := filepath.Join(psDir, "dwe-completion.ps1")
 	if path != expected {
 		t.Errorf("expected %q, got %q", expected, path)
 	}
@@ -395,7 +395,7 @@ func TestResolvePowerShellInstallPath_PwshMissing_Fallback(t *testing.T) {
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
-	expected := filepath.Join(tmpDir, ".config", "powershell", "devbox-completion.ps1")
+	expected := filepath.Join(tmpDir, ".config", "powershell", "dwe-completion.ps1")
 	if path != expected {
 		t.Errorf("expected fallback path %q, got %q", expected, path)
 	}

@@ -367,13 +367,13 @@ bin/dwe docs generate --scope cli
 - Rename+regenerate: `completions/devbox.{bash,zsh,fish}` → `completions/dwe.{bash,zsh,fish}`
 - Modify: `scripts/gen-completions.sh`, `internal/cli/completion/{install,uninstall,install_test,uninstall_test}.go`
 
-- [ ] delete `completions/devbox.{bash,zsh,fish}`
-- [ ] regenerate: `bin/dwe completion bash > completions/dwe.bash` (zsh, fish)
-- [ ] update `scripts/gen-completions.sh`
-- [ ] update `install.go`: `_devbox` → `_dwe`, `devbox.fish` → `dwe.fish`, `devbox-completion.ps1` → `dwe-completion.ps1`, temp prefix `.devbox-completion-*` → `.dwe-completion-*`
-- [ ] update `uninstall.go` mirrors
-- [ ] update completion tests
-- [ ] `make build && make test`
+- [x] delete `completions/devbox.{bash,zsh,fish}`
+- [x] regenerate: `bin/dwe completion bash > completions/dwe.bash` (zsh, fish)
+- [x] update `scripts/gen-completions.sh`
+- [x] update `install.go`: `_devbox` → `_dwe`, `devbox.fish` → `dwe.fish`, `devbox-completion.ps1` → `dwe-completion.ps1`, temp prefix `.devbox-completion-*` → `.dwe-completion-*`
+- [x] update `uninstall.go` mirrors
+- [x] update completion tests
+- [x] `make build && make test`
 
 ### Task 4: Phase 3a — Project schema + Go identifiers + drop schema_version + atomic fixture migration
 
