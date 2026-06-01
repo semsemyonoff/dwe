@@ -33,7 +33,7 @@ type (
 
 const (
 	CommandTypeShell        = model.CommandTypeShell
-	CommandTypeDevbox       = model.CommandTypeDevbox
+	CommandTypeDwe       = model.CommandTypeDwe
 	CommandTypeScript       = model.CommandTypeScript
 	CommandTypeServiceExec  = model.CommandTypeServiceExec
 	CommandTypeServiceRun   = model.CommandTypeServiceRun

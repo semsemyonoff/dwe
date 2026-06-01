@@ -31,9 +31,9 @@ const (
 	CommandTypeServiceRun CommandType = "service_run"
 	// CommandTypeWorkflow executes a sequence of command references.
 	CommandTypeWorkflow CommandType = "workflow"
-	// CommandTypeDevbox runs a devbox subcommand using the current executable.
+	// CommandTypeDwe runs a dwe subcommand using the current executable.
 	// The cmd: field contains the subcommand and its arguments (without the binary path).
-	CommandTypeDevbox CommandType = "devbox"
+	CommandTypeDwe CommandType = "dwe"
 	// CommandTypeBuiltin invokes an engine-internal builtin action by name.
 	// The cmd: field holds the builtin name; with: holds its parameters.
 	CommandTypeBuiltin CommandType = "builtin"
@@ -75,7 +75,7 @@ func allowedFieldsFor(t CommandType) map[string]bool {
 		common["cmd"] = true
 		common["argv"] = true
 		common["workdir"] = true
-	case CommandTypeDevbox:
+	case CommandTypeDwe:
 		common["cmd"] = true
 		// workdir is explicitly rejected for devbox, NOT in allowed set
 	case CommandTypeScript:
@@ -735,7 +735,7 @@ func (c *CommandDef) Validate() error {
 	}
 
 	switch c.Type {
-	case CommandTypeShell, CommandTypeDevbox:
+	case CommandTypeShell, CommandTypeDwe:
 		if err := c.validateCommandType(); err != nil {
 			return fmt.Errorf("command %q: %w", c.ID, err)
 		}
@@ -807,12 +807,12 @@ func (c *CommandDef) validateCommandType() error {
 			return fmt.Errorf("one of cmd or argv must be set")
 		}
 	}
-	if c.Type == CommandTypeDevbox {
+	if c.Type == CommandTypeDwe {
 		if c.Cmd == "" {
-			return fmt.Errorf("cmd is required for type=devbox")
+			return fmt.Errorf("cmd is required for type=dwe")
 		}
 		if len(c.Argv) > 0 {
-			return fmt.Errorf("argv is not valid for type=devbox; use cmd")
+			return fmt.Errorf("argv is not valid for type=dwe; use cmd")
 		}
 	}
 
@@ -831,8 +831,8 @@ func (c *CommandDef) validateCommandType() error {
 	if c.WorkdirFrom != "" {
 		return fmt.Errorf("workdir_from is not valid for type=%s", c.Type)
 	}
-	if c.Type == CommandTypeDevbox && c.Workdir != "" {
-		return fmt.Errorf("workdir is not valid for type=devbox")
+	if c.Type == CommandTypeDwe && c.Workdir != "" {
+		return fmt.Errorf("workdir is not valid for type=dwe")
 	}
 	if c.User != "" {
 		return fmt.Errorf("user is not valid for type=%s", c.Type)

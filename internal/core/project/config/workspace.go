@@ -2048,7 +2048,7 @@ func validateStepShape(step *DeployStep, phaseName string) error {
 		return fmt.Errorf("step %q (phase %q): cmd is required", step.Name, phaseName)
 	}
 	switch step.Type {
-	case "shell", "devbox":
+	case "shell", "dwe":
 		if len(step.With) > 0 {
 			return fmt.Errorf("step %q (phase %q): type %q does not accept with", step.Name, phaseName, step.Type)
 		}

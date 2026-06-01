@@ -97,7 +97,7 @@ func buildCommandInspectJSON(def *usercommands.CommandDef, translator i18n.Trans
 	}
 
 	switch def.Type {
-	case usercommands.CommandTypeShell, usercommands.CommandTypeDevbox:
+	case usercommands.CommandTypeShell, usercommands.CommandTypeDwe:
 		data.Cmd = def.Cmd
 		data.Argv = def.Argv
 		data.Workdir = def.Workdir
@@ -271,7 +271,7 @@ func printInspectAt(w io.Writer, def *usercommands.CommandDef, cfg *config.DweCo
 	}
 
 	switch def.Type {
-	case usercommands.CommandTypeDevbox:
+	case usercommands.CommandTypeDwe:
 		if def.Cmd != "" {
 			def2("cmd", def.Cmd, 2)
 		}

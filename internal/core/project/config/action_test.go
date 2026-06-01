@@ -26,14 +26,14 @@ cmd: echo hello`
 }
 
 func TestAction_DecodeDevbox(t *testing.T) {
-	data := `type: devbox
+	data := `type: dwe
 cmd: docker down`
 	var a config.Action
 	if err := yaml.Unmarshal([]byte(data), &a); err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
-	if a.Type != "devbox" {
-		t.Errorf("Type = %q, want %q", a.Type, "devbox")
+	if a.Type != "dwe" {
+		t.Errorf("Type = %q, want %q", a.Type, "dwe")
 	}
 	if a.Cmd != "docker down" {
 		t.Errorf("Cmd = %q, want %q", a.Cmd, "docker down")
@@ -119,7 +119,7 @@ func TestAction_ValidateShell_OK(t *testing.T) {
 }
 
 func TestAction_ValidateDevbox_OK(t *testing.T) {
-	a := config.Action{Type: "devbox", Cmd: "docker down"}
+	a := config.Action{Type: "dwe", Cmd: "docker down"}
 	if err := a.Validate(); err != nil {
 		t.Errorf("unexpected error: %v", err)
 	}
@@ -156,7 +156,7 @@ func TestAction_ValidateEmptyCmd(t *testing.T) {
 }
 
 func TestAction_ValidateAllTypes_Empty(t *testing.T) {
-	types := []string{"shell", "devbox", "command", "builtin"}
+	types := []string{"shell", "dwe", "command", "builtin"}
 	for _, typ := range types {
 		a := config.Action{Type: typ, Cmd: ""}
 		if err := a.Validate(); err == nil {

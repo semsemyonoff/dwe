@@ -20,7 +20,7 @@ func badgeRender(typ string) func(string) string {
 		return styles.RenderPartial
 	case "builtin":
 		return styles.StyleMuted
-	case "devbox":
+	case "dwe":
 		return styles.StyleSectionTitle
 	default:
 		return styles.StyleMuted

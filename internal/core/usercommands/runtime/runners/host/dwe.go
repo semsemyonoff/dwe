@@ -13,12 +13,12 @@ import (
 	"github.com/semsemyonoff/dwe/internal/shared/tpl"
 )
 
-// DevboxRunner executes type=devbox commands by invoking the current devbox
+// DweRunner executes type=dwe commands by invoking the current dwe
 // executable with the run: string as its arguments.
-type DevboxRunner struct{}
+type DweRunner struct{}
 
-// Run executes the devbox subcommand described by rc.Cmd.
-func (r *DevboxRunner) Run(ctx context.Context, rc spec.RunContext) error {
+// Run executes the dwe subcommand described by rc.Cmd.
+func (r *DweRunner) Run(ctx context.Context, rc spec.RunContext) error {
 	bin, err := os.Executable()
 	if err != nil {
 		bin = config.DweBin(rc.Config)

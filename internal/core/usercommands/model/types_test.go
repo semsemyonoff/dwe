@@ -1846,7 +1846,7 @@ func TestValidate_ComposeArgsRejectedOnWorkflow(t *testing.T) {
 
 func TestValidate_ComposeArgsRejectedOnDevbox(t *testing.T) {
 	cmd := CommandDef{
-		Type:        CommandTypeDevbox,
+		Type:        CommandTypeDwe,
 		ID:          "g.dwe",
 		Cmd:         "info",
 		ComposeArgs: []string{"-T"},
@@ -1900,7 +1900,7 @@ func TestValidate_WorkdirFromRejectedOnWorkflow(t *testing.T) {
 
 func TestValidate_WorkdirFromRejectedOnDevbox(t *testing.T) {
 	cmd := CommandDef{
-		Type:        CommandTypeDevbox,
+		Type:        CommandTypeDwe,
 		ID:          "g.dwe",
 		Cmd:         "info",
 		WorkdirFrom: "some.path",
@@ -1928,7 +1928,7 @@ func TestValidate_WorkdirRejectedOnWorkflow(t *testing.T) {
 
 func TestValidate_WorkdirRejectedOnDevbox(t *testing.T) {
 	cmd := CommandDef{
-		Type:    CommandTypeDevbox,
+		Type:    CommandTypeDwe,
 		ID:      "g.dwe",
 		Cmd:     "info",
 		Workdir: "/some/path",
@@ -2113,7 +2113,7 @@ func TestParseCommandFile_PerTypeAllowlist_Devbox(t *testing.T) {
 	yaml := `
 commands:
   test:
-    type: devbox
+    type: dwe
     cmd: deploy
 `
 	cf, err := ParseCommandFile([]byte(yaml))
@@ -2130,7 +2130,7 @@ func TestParseCommandFile_PerTypeAllowlist_DevboxRejectWorkdir(t *testing.T) {
 	yaml := `
 commands:
   test:
-    type: devbox
+    type: dwe
     cmd: deploy
     workdir: /tmp
 `

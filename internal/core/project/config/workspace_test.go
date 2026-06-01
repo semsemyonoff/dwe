@@ -1442,7 +1442,7 @@ func TestLoadServiceDeployConfig_phaseUntrackedDefaultFalseSimple(t *testing.T) 
     description: Start phase
     steps:
       - name: up
-        type: devbox
+        type: dwe
         cmd: "docker up"
         description: Start containers
 `
@@ -1473,7 +1473,7 @@ func TestLoadServiceDeployConfig_phaseUntrackedField(t *testing.T) {
     untracked: true
     steps:
       - name: info
-        type: devbox
+        type: dwe
         cmd: "info"
 `
 	dir := t.TempDir()
@@ -1502,7 +1502,7 @@ func TestLoadServiceDeployConfig_phaseUntrackedDefaultFalse(t *testing.T) {
     description: Start phase
     steps:
       - name: up
-        type: devbox
+        type: dwe
         cmd: "docker up"
 `
 	dir := t.TempDir()
@@ -2483,10 +2483,10 @@ run:
     - name: start
       steps:
         - name: up
-          type: devbox
+          type: dwe
           cmd: "docker up"
         - name: wait
-          type: devbox
+          type: dwe
           cmd: "docker wait"
 stop:
   final_message: "Project is stopped. Have a nice day!"
@@ -2494,7 +2494,7 @@ stop:
     - name: stop
       steps:
         - name: down
-          type: devbox
+          type: dwe
           cmd: "docker down"
 `
 
@@ -2557,7 +2557,7 @@ run:
     - name: start
       steps:
         - name: bad
-          type: devbox
+          type: dwe
           cmd: "docker up"
           run: echo hello
 `
@@ -2591,7 +2591,7 @@ run:
     - name: start
       steps:
         - name: up
-          type: devbox
+          type: dwe
           cmd: "docker up"
 `
 	path := writeLifecycleFixture(t, yml)
@@ -2613,7 +2613,7 @@ run:
     - name: start
       steps:
         - name: up
-          type: devbox
+          type: dwe
           cmd: "docker up"
 `
 	path := writeLifecycleFixture(t, yml)
@@ -2631,14 +2631,14 @@ run:
     - name: start
       steps:
         - name: up
-          type: devbox
+          type: dwe
           cmd: "docker up"
 stop:
   phases:
     - name: stop
       steps:
         - name: down
-          type: devbox
+          type: dwe
           cmd: "docker down"
 `
 	path := writeLifecycleFixture(t, yml)
@@ -2688,7 +2688,7 @@ run:
     - name: start
       steps:
         - name: up
-          type: devbox
+          type: dwe
           cmd: "docker up"
 stop:
   final_message: "Custom stop message"
@@ -2696,7 +2696,7 @@ stop:
     - name: stop
       steps:
         - name: down
-          type: devbox
+          type: dwe
           cmd: "docker down"
 `
 	path := writeLifecycleFixture(t, yml)
@@ -2763,7 +2763,7 @@ run:
     - name: start
       steps:
         - name: up
-          type: devbox
+          type: dwe
           cmd: "docker up"
 `
 	path := writeLifecycleFixture(t, yml)
@@ -2785,7 +2785,7 @@ run:
     - name: start
       steps:
         - name: up
-          type: devbox
+          type: dwe
           cmd: "docker up"
 `
 	path := writeLifecycleFixture(t, yml)
@@ -2807,7 +2807,7 @@ run:
     - name: start
       steps:
         - name: up
-          type: devbox
+          type: dwe
           cmd: "docker up"
 `
 	path := writeLifecycleFixture(t, yml)
@@ -2830,7 +2830,7 @@ run:
     - name: start
       steps:
         - name: up
-          type: devbox
+          type: dwe
           cmd: "docker up"
 `
 	path := writeLifecycleFixture(t, yml)
@@ -2973,14 +2973,14 @@ run:
     - name: start
       steps:
         - name: up
-          type: devbox
+          type: dwe
           cmd: "docker up"
 stop:
   phases:
     - name: stop
       steps:
         - name: down
-          type: devbox
+          type: dwe
           cmd: "docker down"
 `
 	path := writeLifecycleFixture(t, yml)
@@ -3340,7 +3340,7 @@ run:
     - name: start
       steps:
         - name: up
-          type: devbox
+          type: dwe
           cmd: "docker up"
 stop:
   log: true
@@ -3348,7 +3348,7 @@ stop:
     - name: stop
       steps:
         - name: down
-          type: devbox
+          type: dwe
           cmd: "docker down"
 `
 	path := writeLifecycleFixture(t, yml)

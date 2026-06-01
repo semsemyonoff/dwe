@@ -76,7 +76,7 @@ const (
 	CommandTypeServiceExec = model.CommandTypeServiceExec
 	CommandTypeServiceRun  = model.CommandTypeServiceRun
 	CommandTypeWorkflow    = model.CommandTypeWorkflow
-	CommandTypeDevbox      = model.CommandTypeDevbox
+	CommandTypeDwe         = model.CommandTypeDwe
 	CommandTypeBuiltin     = model.CommandTypeBuiltin
 )
 
@@ -135,7 +135,7 @@ const DefaultConfirmationText = model.DefaultConfirmationText
 
 // ---- Runner type aliases ----
 
-type DevboxRunner = runtime.DevboxRunner
+type DweRunner = runtime.DweRunner
 type HostRunner = runtime.HostRunner
 type ScriptRunner = runtime.ScriptRunner
 type ServiceExecRunner = runtime.ServiceExecRunner

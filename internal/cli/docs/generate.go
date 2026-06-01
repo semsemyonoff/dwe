@@ -449,7 +449,7 @@ func writeCommandMarkdown(def *usercommands.CommandDef, dir string, reg *usercom
 
 	// Type-specific details.
 	switch def.Type {
-	case usercommands.CommandTypeShell, usercommands.CommandTypeDevbox:
+	case usercommands.CommandTypeShell, usercommands.CommandTypeDwe:
 		if def.Cmd != "" {
 			fmt.Fprintf(&sb, "## %s\n\n```sh\n%s\n```\n\n", commandHeader, def.Cmd)
 		}

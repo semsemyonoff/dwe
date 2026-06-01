@@ -55,8 +55,8 @@ type FileProbeResult = spec.FileProbeResult
 type (
 	// HostRunner runs type=shell commands on the host machine.
 	HostRunner = host.Runner
-	// DevboxRunner runs type=devbox commands by re-invoking the devbox CLI.
-	DevboxRunner = host.DevboxRunner
+	// DweRunner runs type=dwe commands by re-invoking the dwe CLI.
+	DweRunner = host.DweRunner
 	// ServiceExecRunner runs type=service commands via `docker compose exec`.
 	ServiceExecRunner = service.ExecRunner
 	// ServiceRunRunner runs type=service commands via `docker compose run --rm`.
@@ -110,8 +110,8 @@ func NewRunner(cmd *model.CommandDef) (Runner, error) {
 	switch cmd.Type {
 	case model.CommandTypeShell:
 		return &host.Runner{}, nil
-	case model.CommandTypeDevbox:
-		return &host.DevboxRunner{}, nil
+	case model.CommandTypeDwe:
+		return &host.DweRunner{}, nil
 	case model.CommandTypeServiceExec:
 		return &service.ExecRunner{}, nil
 	case model.CommandTypeServiceRun:

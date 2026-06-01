@@ -495,14 +495,14 @@ bin/dwe docs generate --scope cli
 - Modify: `internal/core/usercommands/model/types_test.go`, `action_test.go`
 - Modify: all fixture YAML with `type: devbox`
 
-- [ ] `rg -n 'case "shell", "devbox"' --type go` → replace with `"dwe"`
-- [ ] rename `CommandTypeDevbox` → `CommandTypeDwe` (gopls rename for cross-package safety)
-- [ ] update all ~10 alias re-export sites
-- [ ] rename `DevboxRunner` → `DweRunner`
-- [ ] update UI style discriminator key
-- [ ] `rg -l 'type: devbox' --type yaml` → bulk replace with `type: dwe`
-- [ ] update tests asserting on the discriminator
-- [ ] `make build && make test` — must end **green**
+- [x] `rg -n 'case "shell", "devbox"' --type go` → replace with `"dwe"`
+- [x] rename `CommandTypeDevbox` → `CommandTypeDwe` (gopls rename for cross-package safety)
+- [x] update all ~10 alias re-export sites
+- [x] rename `DevboxRunner` → `DweRunner`
+- [x] update UI style discriminator key
+- [x] `rg -l 'type: devbox' --type yaml` → bulk replace with `type: dwe`
+- [x] update tests asserting on the discriminator
+- [x] `make build && make test` — must end **green**
 
 ### Task 9: Phase 3f — Snapshot archive schema (owns `meta/paths.go:28` + `devbox_files.go`)
 
