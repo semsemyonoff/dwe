@@ -70,7 +70,7 @@ func VerifyExtractedArtifacts(stagingDir string, m *meta.Manifest) (ArtifactVeri
 	}
 
 	// Extras: anything on disk under stagingDir that is not the manifest and
-	// not under DevboxSubdir, and not declared.
+	// not under WorkspaceSubdir, and not declared.
 	scanned, err := meta.ScanArtifacts(stagingDir)
 	if err != nil {
 		return ArtifactVerifyReport{}, fmt.Errorf("verify: scan staging: %w", err)

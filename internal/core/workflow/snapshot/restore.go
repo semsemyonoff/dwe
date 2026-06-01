@@ -16,7 +16,7 @@ import (
 	"github.com/semsemyonoff/dwe/internal/shared/tpl"
 )
 
-// RestoreParams describes one `devbox snapshot restore` (or rollback)
+// RestoreParams describes one `dwe snapshot restore` (or rollback)
 // invocation. The caller is responsible for acquiring project locks before
 // calling Restore.
 type RestoreParams struct {
@@ -99,11 +99,11 @@ type RestoreResult struct {
 	Status       string
 	DurationMs   int64
 	// BackupDir is the path the pre-restore backup was written to (empty when
-	// no devbox files were captured).
+	// no workspace files were captured).
 	BackupDir string
 }
 
-// Restore runs the restore workflow for p.Name and swaps the project's devbox
+// Restore runs the restore workflow for p.Name and swaps the project's workspace
 // files in place.
 //
 // Flow:
@@ -115,8 +115,8 @@ type RestoreResult struct {
 //     - mismatch + require_matching_config → RestoreBlockedError.
 //     - mismatch otherwise → warning on Stderr; restore proceeds.
 //  4. Optionally confirm (skipped when SkipConfirm or callback returns true).
-//  5. Back up the working-copy devbox files into .dwe/snapshots/.pre-restore-backup/.
-//  6. Restore devbox files from <snap>/devbox/ over the working copies.
+//  5. Back up the working-copy workspace files into .dwe/snapshots/.pre-restore-backup/.
+//  6. Restore workspace files from <snap>/workspace/ over the working copies.
 //  7. Run the restore workflow under SnapshotScopeRestoreOrRemove.
 //  8. On success: update current pointer; record last_restore.status="ok".
 //  9. On failure / SIGINT: leave current pointer untouched; record
@@ -126,10 +126,10 @@ func Restore(ctx context.Context, p RestoreParams) (*RestoreResult, error) {
 		return nil, err
 	}
 	if p.Cfg == nil {
-		return nil, errors.New("snapshot: devbox config is required")
+		return nil, errors.New("snapshot: project config is required")
 	}
 	if p.SnapCfg == nil {
-		return nil, errors.New("snapshot: snapshot config not loaded (missing devbox/snapshot.yml)")
+		return nil, errors.New("snapshot: snapshot config not loaded (missing workspace/snapshot.yml)")
 	}
 	if p.Registry == nil {
 		return nil, errors.New("snapshot: user-command registry is required")
@@ -180,18 +180,18 @@ func Restore(ctx context.Context, p RestoreParams) (*RestoreResult, error) {
 
 	// Validate the workflow selection before touching the filesystem so that a
 	// missing restore: block or empty steps list fails fast without overwriting
-	// devbox files.
+	// workspace files.
 	wf, err := SelectWorkflow(p.SnapCfg, "restore", m.Variant)
 	if err != nil {
 		return nil, fmt.Errorf("snapshot %q: %w", p.Name, err)
 	}
 	if len(wf.Steps) == 0 {
-		return nil, fmt.Errorf("snapshot %q: restore workflow has no steps; add steps to restore: in devbox/snapshot.yml", p.Name)
+		return nil, fmt.Errorf("snapshot %q: restore workflow has no steps; add steps to restore: in workspace/snapshot.yml", p.Name)
 	}
 
 	// Compare captured services against the current effective set and dispatch
 	// per the snapshot.yml services_mismatch policy. This runs before any side
-	// effect on devbox/local.yml so a `block` policy aborts cleanly.
+	// effect on workspace/local.yml so a `block` policy aborts cleanly.
 	policy := p.SnapCfg.ServicesMismatch.Effective()
 	var svcDiff ServicesDiff
 	if policy != config.ServicesMismatchIgnore {
@@ -227,12 +227,12 @@ func Restore(ctx context.Context, p RestoreParams) (*RestoreResult, error) {
 		return nil, fmt.Errorf("snapshot %q: write pre-restore backup: %w", p.Name, err)
 	}
 
-	if err := restoreDevboxFiles(snapDir, p.BaseDir, p.SnapCfg.LocalYML.PreserveKeys); err != nil {
+	if err := restoreWorkspaceFiles(snapDir, p.BaseDir, p.SnapCfg.LocalYML.PreserveKeys); err != nil {
 		if p.Stderr != nil && backupDir != "" {
 			_, _ = fmt.Fprintf(p.Stderr,
-				"hint: pre-restore devbox files backed up under %s\n", backupDir)
+				"hint: pre-restore workspace files backed up under %s\n", backupDir)
 		}
-		return nil, fmt.Errorf("snapshot %q: restore devbox files: %w", p.Name, err)
+		return nil, fmt.Errorf("snapshot %q: restore workspace files: %w", p.Name, err)
 	}
 
 	absSnapDir, absErr := filepath.Abs(snapDir)
@@ -300,7 +300,7 @@ func Restore(ctx context.Context, p RestoreParams) (*RestoreResult, error) {
 	if status != meta.StatusOk {
 		if p.Stderr != nil && backupDir != "" {
 			_, _ = fmt.Fprintf(p.Stderr,
-				"hint: pre-restore devbox files preserved under %s for manual recovery\n",
+				"hint: pre-restore workspace files preserved under %s for manual recovery\n",
 				backupDir)
 		}
 		return res, runErr
@@ -317,11 +317,11 @@ func Restore(ctx context.Context, p RestoreParams) (*RestoreResult, error) {
 // distinguish it from a direct restore.
 func Rollback(ctx context.Context, p RestoreParams) (*RestoreResult, error) {
 	if p.SnapCfg == nil {
-		return nil, errors.New("snapshot: snapshot config not loaded (missing devbox/snapshot.yml)")
+		return nil, errors.New("snapshot: snapshot config not loaded (missing workspace/snapshot.yml)")
 	}
 	target := p.SnapCfg.RollbackTarget
 	if target == "" {
-		return nil, errors.New("snapshot: rollback_target is not set in devbox/snapshot.yml")
+		return nil, errors.New("snapshot: rollback_target is not set in workspace/snapshot.yml")
 	}
 	p.Name = target
 	p.Operation = "rollback"
@@ -335,7 +335,7 @@ func confirmRestore(fn func(RestoreConfirmContext) (bool, error), ctx RestoreCon
 	return fn(ctx)
 }
 
-// writePreRestoreBackup snapshots the working-copy devbox/local.yml and
+// writePreRestoreBackup snapshots the working-copy workspace/local.yml and
 // .dwe/deploy/state.yml into <stateDir>/.pre-restore-backup/, replacing any
 // previous backup atomically (write each file via meta.WriteFileAtomic).
 // Missing source files are skipped silently.

@@ -31,8 +31,8 @@ func TestScanArtifacts_basic(t *testing.T) {
 	writeFile(t, filepath.Join(snap, "db/main.sql.gz"), []byte("dump-data"))
 	writeFile(t, filepath.Join(snap, "search/idx.bin"), []byte("xx"))
 	writeFile(t, filepath.Join(snap, "manifest.yml"), []byte("name: ignored"))
-	writeFile(t, filepath.Join(snap, "devbox/local.yml"), []byte("ignored"))
-	writeFile(t, filepath.Join(snap, "devbox/deploy-state.yml"), []byte("ignored"))
+	writeFile(t, filepath.Join(snap, "workspace/local.yml"), []byte("ignored"))
+	writeFile(t, filepath.Join(snap, "workspace/deploy-state.yml"), []byte("ignored"))
 
 	out, err := ScanArtifacts(snap)
 	if err != nil {

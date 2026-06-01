@@ -23,9 +23,9 @@ const (
 // ManifestFileName is the canonical filename for the per-snapshot manifest.
 const ManifestFileName = "manifest.yml"
 
-// DevboxSubdir is the per-snapshot subdirectory that holds the captured
-// devbox/local.yml and deploy state files. Excluded from artifact scans.
-const DevboxSubdir = "devbox"
+// WorkspaceSubdir is the per-snapshot subdirectory that holds the captured
+// workspace/local.yml and deploy state files. Excluded from artifact scans.
+const WorkspaceSubdir = "workspace"
 
 // SnapshotsDir returns the directory that holds unpacked snapshots, honoring
 // cfg.Dir (relative paths are joined to baseDir; absolute paths are returned
@@ -70,7 +70,7 @@ func LockPath(baseDir string) string {
 }
 
 // PreRestoreBackup returns the path of the pre-restore backup directory.
-// `restore` copies devbox/local.yml and the deploy state file here before
+// `restore` copies workspace/local.yml and the deploy state file here before
 // overwriting them so users have a manual-recovery path on failure.
 func PreRestoreBackup(baseDir string) string {
 	return filepath.Join(StateDir(baseDir), preRestoreBackupName)

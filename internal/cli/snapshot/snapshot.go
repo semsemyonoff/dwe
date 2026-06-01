@@ -314,8 +314,8 @@ func renderSnapshotInspectText(data snapshotInspectJSON) string {
 	if m.Variant != "" {
 		fmt.Fprintf(&b, "variant:        %s\n", m.Variant)
 	}
-	if m.DevboxVersion != "" {
-		fmt.Fprintf(&b, "devbox_version: %s\n", m.DevboxVersion)
+	if m.DweVersion != "" {
+		fmt.Fprintf(&b, "dwe_version: %s\n", m.DweVersion)
 	}
 	fmt.Fprintf(&b, "project:        %s\n", m.Project.Name)
 	switch {

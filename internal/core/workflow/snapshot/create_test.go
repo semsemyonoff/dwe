@@ -60,7 +60,7 @@ func TestCreate_EndToEndWritesMarkerAndManifest(t *testing.T) {
 		BaseDir:       tmp,
 		Name:          "snap1",
 		Description:   "hello world",
-		DevboxVersion: "0.42.0",
+		DweVersion: "0.42.0",
 		Now:           func() time.Time { return fixed },
 		Stdout:        &out,
 		Stderr:        &errBuf,
@@ -96,8 +96,8 @@ func TestCreate_EndToEndWritesMarkerAndManifest(t *testing.T) {
 	if !m.CreatedAt.Equal(fixed) {
 		t.Errorf("createdAt = %v want %v", m.CreatedAt, fixed)
 	}
-	if m.DevboxVersion != "0.42.0" {
-		t.Errorf("version = %q", m.DevboxVersion)
+	if m.DweVersion != "0.42.0" {
+		t.Errorf("version = %q", m.DweVersion)
 	}
 	if len(m.Artifacts) != 1 {
 		t.Fatalf("artifacts: got %d want 1: %+v", len(m.Artifacts), m.Artifacts)
@@ -321,14 +321,14 @@ func TestCreate_CapturesDevboxFiles(t *testing.T) {
 		t.Fatalf("Create: %v", err)
 	}
 
-	localBody, err := os.ReadFile(filepath.Join(res.SnapshotDir, "devbox", "local.yml"))
+	localBody, err := os.ReadFile(filepath.Join(res.SnapshotDir, "workspace", "local.yml"))
 	if err != nil {
 		t.Fatalf("local.yml: %v", err)
 	}
 	if string(localBody) != "key: value\n" {
 		t.Errorf("captured local.yml = %q", string(localBody))
 	}
-	deployBody, err := os.ReadFile(filepath.Join(res.SnapshotDir, "devbox", "deploy-state.yml"))
+	deployBody, err := os.ReadFile(filepath.Join(res.SnapshotDir, "workspace", "deploy-state.yml"))
 	if err != nil {
 		t.Fatalf("deploy-state.yml: %v", err)
 	}
@@ -337,11 +337,11 @@ func TestCreate_CapturesDevboxFiles(t *testing.T) {
 	}
 
 	m, _ := meta.LoadManifest(res.ManifestPath)
-	if m.DevboxFiles.LocalYML != "devbox/local.yml" {
-		t.Errorf("DevboxFiles.LocalYML = %q", m.DevboxFiles.LocalYML)
+	if m.WorkspaceFiles.LocalYML != "workspace/local.yml" {
+		t.Errorf("WorkspaceFiles.LocalYML = %q", m.WorkspaceFiles.LocalYML)
 	}
-	if m.DevboxFiles.DeployState != "devbox/deploy-state.yml" {
-		t.Errorf("DevboxFiles.DeployState = %q", m.DevboxFiles.DeployState)
+	if m.WorkspaceFiles.DeployState != "workspace/deploy-state.yml" {
+		t.Errorf("WorkspaceFiles.DeployState = %q", m.WorkspaceFiles.DeployState)
 	}
 	// Project config hash is sourced from the deploy state file.
 	if m.Project.ConfigHash != "abc" {
@@ -402,7 +402,7 @@ func TestCreate_StripsPreserveKeysFromLocalYML(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Create: %v", err)
 	}
-	body, err := os.ReadFile(filepath.Join(res.SnapshotDir, "devbox", "local.yml"))
+	body, err := os.ReadFile(filepath.Join(res.SnapshotDir, "workspace", "local.yml"))
 	if err != nil {
 		t.Fatalf("read snapshot local.yml: %v", err)
 	}

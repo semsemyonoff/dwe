@@ -15,7 +15,7 @@ import (
 	"github.com/semsemyonoff/dwe/internal/shared/tpl"
 )
 
-// RemoveParams describes one `devbox snapshot remove` invocation. The caller
+// RemoveParams describes one `dwe snapshot remove` invocation. The caller
 // is responsible for project-lock acquisition before calling Remove.
 type RemoveParams struct {
 	Cfg            *config.DweConfig
@@ -61,10 +61,10 @@ func Remove(ctx context.Context, p RemoveParams) (*RemoveResult, error) {
 		return nil, err
 	}
 	if p.SnapCfg == nil {
-		return nil, errors.New("snapshot: snapshot config not loaded (missing devbox/snapshot.yml)")
+		return nil, errors.New("snapshot: snapshot config not loaded (missing workspace/snapshot.yml)")
 	}
 	if p.Cfg == nil {
-		return nil, errors.New("snapshot: devbox config is required")
+		return nil, errors.New("snapshot: project config is required")
 	}
 
 	snapDir := meta.SnapshotDir(p.BaseDir, p.SnapCfg, p.Name)

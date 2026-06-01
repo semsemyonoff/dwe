@@ -13,22 +13,22 @@ import (
 	"github.com/semsemyonoff/dwe/internal/core/workflow/snapshot/meta"
 )
 
-// localYMLMaxBytes caps the size of any devbox/local.yml input the
+// localYMLMaxBytes caps the size of any workspace/local.yml input the
 // preserve_keys helpers will parse. The snapshot-embedded copy is untrusted
 // input from an archive, so we reject pathological documents before handing
 // them to yaml.v3. 1 MiB is orders of magnitude above any realistic local.yml.
 const localYMLMaxBytes = 1 << 20
 
-// captureDevboxFiles copies devbox/local.yml and the deploy state file from
-// baseDir into <snapDir>/devbox/. Missing source files are skipped silently —
+// captureWorkspaceFiles copies workspace/local.yml and the deploy state file from
+// baseDir into <snapDir>/workspace/. Missing source files are skipped silently —
 // neither file is mandatory at create time. The preserveKeys parameter lists
 // dot-paths to strip from the captured local.yml so they can be re-spliced
 // from the working copy on restore.
-func captureDevboxFiles(baseDir, snapDir string, preserveKeys []string) (meta.DevboxFiles, error) {
-	var df meta.DevboxFiles
+func captureWorkspaceFiles(baseDir, snapDir string, preserveKeys []string) (meta.WorkspaceFiles, error) {
+	var df meta.WorkspaceFiles
 
 	srcLocal := filepath.Join(baseDir, "workspace", "local.yml")
-	dstLocalRel := filepath.Join(meta.DevboxSubdir, "local.yml")
+	dstLocalRel := filepath.Join(meta.WorkspaceSubdir, "local.yml")
 	dstLocal := filepath.Join(snapDir, dstLocalRel)
 	wrote, err := captureLocalYML(srcLocal, dstLocal, preserveKeys)
 	if err != nil {
@@ -39,7 +39,7 @@ func captureDevboxFiles(baseDir, snapDir string, preserveKeys []string) (meta.De
 	}
 
 	srcState := filepath.Join(baseDir, journal.DefaultRelPath)
-	dstStateRel := filepath.Join(meta.DevboxSubdir, "deploy-state.yml")
+	dstStateRel := filepath.Join(meta.WorkspaceSubdir, "deploy-state.yml")
 	dstState := filepath.Join(snapDir, dstStateRel)
 	ok, err := copyFileIfExists(srcState, dstState)
 	if err != nil {
@@ -96,7 +96,7 @@ func copyFileIfExists(src, dst string) (bool, error) {
 	return true, nil
 }
 
-// restoreDevboxFiles writes the snapshot's local.yml and deploy-state.yml over
+// restoreWorkspaceFiles writes the snapshot's local.yml and deploy-state.yml over
 // the working-copy paths in baseDir. Writes are atomic.
 //
 // local.yml restore follows a four-row edge case table driven by
@@ -112,16 +112,16 @@ func copyFileIfExists(src, dst string) (bool, error) {
 //
 // deploy-state.yml is a plain overwrite: when the snapshot has no copy the
 // working-copy file is removed so restored state matches captured state.
-func restoreDevboxFiles(snapDir, baseDir string, preserveKeys []string) error {
+func restoreWorkspaceFiles(snapDir, baseDir string, preserveKeys []string) error {
 	if err := restoreLocalYML(
-		filepath.Join(snapDir, meta.DevboxSubdir, "local.yml"),
+		filepath.Join(snapDir, meta.WorkspaceSubdir, "local.yml"),
 		filepath.Join(baseDir, "workspace", "local.yml"),
 		preserveKeys,
 	); err != nil {
 		return err
 	}
 
-	stateSrc := filepath.Join(snapDir, meta.DevboxSubdir, "deploy-state.yml")
+	stateSrc := filepath.Join(snapDir, meta.WorkspaceSubdir, "deploy-state.yml")
 	stateDst := filepath.Join(baseDir, journal.DefaultRelPath)
 	data, err := os.ReadFile(stateSrc)
 	if err != nil {
@@ -143,7 +143,7 @@ func restoreDevboxFiles(snapDir, baseDir string, preserveKeys []string) error {
 }
 
 // restoreLocalYML implements the four-row edge case table documented on
-// restoreDevboxFiles.
+// restoreWorkspaceFiles.
 func restoreLocalYML(src, dst string, preserveKeys []string) error {
 	snapData, snapErr := os.ReadFile(src)
 	snapMissing := errors.Is(snapErr, os.ErrNotExist)

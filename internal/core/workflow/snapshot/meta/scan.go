@@ -13,7 +13,7 @@ import (
 )
 
 // ScanArtifacts walks snapDir and returns ArtifactInfo entries for every
-// regular file outside the manifest and the captured devbox/ subdir.
+// regular file outside the manifest and the captured workspace/ subdir.
 //
 // Symlinks are rejected with a clear error — workflows may not produce
 // symlinks in the snapshot dir (they would break pack/unpack safety).
@@ -21,7 +21,7 @@ import (
 // Returned entries are sorted by Path for deterministic manifests.
 func ScanArtifacts(snapDir string) ([]ArtifactInfo, error) {
 	var out []ArtifactInfo
-	devboxPrefix := DevboxSubdir + string(filepath.Separator)
+	workspacePrefix := WorkspaceSubdir + string(filepath.Separator)
 	err := filepath.WalkDir(snapDir, func(path string, d fs.DirEntry, walkErr error) error {
 		if walkErr != nil {
 			return walkErr
@@ -33,8 +33,8 @@ func ScanArtifacts(snapDir string) ([]ArtifactInfo, error) {
 		if err != nil {
 			return fmt.Errorf("relative path: %w", err)
 		}
-		// Skip the captured devbox/ subtree entirely (entries are not user artifacts).
-		if rel == DevboxSubdir || strings.HasPrefix(rel, devboxPrefix) {
+		// Skip the captured workspace/ subtree entirely (entries are not user artifacts).
+		if rel == WorkspaceSubdir || strings.HasPrefix(rel, workspacePrefix) {
 			if d.IsDir() {
 				return filepath.SkipDir
 			}

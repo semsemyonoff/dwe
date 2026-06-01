@@ -134,7 +134,7 @@ func runSnapshotCreate(cmd *cobra.Command, flags *cmdctx.RootFlags, name, descri
 		Name:           name,
 		Description:    description,
 		Variant:        variant,
-		DevboxVersion:  version.Version,
+		DweVersion:     version.Version,
 		SkipConfirm:    yes,
 		NonInteractive: !widgets.IsInteractiveFn(os.Stdin),
 		Stdout:         stdout,

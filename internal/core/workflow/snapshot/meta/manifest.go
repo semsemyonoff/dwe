@@ -47,7 +47,7 @@ type ServiceSnapshot struct {
 // ConfigHash may be empty when no deploy has run yet — restore treats an
 // empty hash as a match against any current hash.
 type ProjectInfo struct {
-	// Name is the devbox project name (cfg.Project.Name).
+	// Name is the project name (cfg.Project.Name).
 	Name string `yaml:"name" json:"name"`
 	// ConfigHash mirrors deploy/journal ProjectLevelState.ConfigHash; empty
 	// when no deploy has populated state.yml yet.
@@ -58,10 +58,10 @@ type ProjectInfo struct {
 	Services []ServiceSnapshot `yaml:"services,omitempty" json:"services,omitempty"`
 }
 
-// DevboxFiles records which devbox files were captured into <snap>/devbox/.
-type DevboxFiles struct {
+// WorkspaceFiles records which workspace files were captured into <snap>/workspace/.
+type WorkspaceFiles struct {
 	// LocalYML is the relative path of the captured local.yml (relative to
-	// the snapshot dir), e.g. "devbox/local.yml".
+	// the snapshot dir), e.g. "workspace/local.yml".
 	LocalYML string `yaml:"local_yml,omitempty" json:"local_yml,omitempty"`
 	// DeployState is the relative path of the captured deploy state file.
 	DeployState string `yaml:"deploy_state,omitempty" json:"deploy_state,omitempty"`
@@ -94,7 +94,7 @@ type LastRestore struct {
 //
 // Per CLAUDE.md "no schema_version" project policy, the manifest carries no
 // version field; the loader is lenient on unknown fields so that future
-// devbox versions can add metadata without breaking older readers.
+// dwe versions can add metadata without breaking older readers.
 type Manifest struct {
 	// Name mirrors the snapshot directory name.
 	Name string `yaml:"name" json:"name"`
@@ -104,15 +104,15 @@ type Manifest struct {
 	Description string `yaml:"description,omitempty" json:"description,omitempty"`
 	// Project identifies the source project + config hash at capture time.
 	Project ProjectInfo `yaml:"project" json:"project"`
-	// DevboxVersion is the version string of the devbox CLI that created it.
-	DevboxVersion string `yaml:"devbox_version,omitempty" json:"devbox_version,omitempty"`
+	// DweVersion is the version string of the dwe CLI that created it.
+	DweVersion string `yaml:"dwe_version,omitempty" json:"dwe_version,omitempty"`
 	// Variant is the snapshot variant name (empty for the default block).
 	Variant string `yaml:"variant,omitempty" json:"variant,omitempty"`
 	// Artifacts lists every user-produced file in the snapshot with its
-	// size and sha256. Devbox files under DevboxSubdir are not included.
+	// size and sha256. Workspace files under WorkspaceSubdir are not included.
 	Artifacts []ArtifactInfo `yaml:"artifacts,omitempty" json:"artifacts,omitempty"`
-	// DevboxFiles records which devbox files were captured alongside.
-	DevboxFiles DevboxFiles `yaml:"devbox_files,omitempty" json:"devbox_files,omitzero"`
+	// WorkspaceFiles records which workspace files were captured alongside.
+	WorkspaceFiles WorkspaceFiles `yaml:"workspace_files,omitempty" json:"workspace_files,omitzero"`
 	// LastCreate / LastRestore record the outcome of the most recent
 	// create / restore attempt for this snapshot.
 	LastCreate  *LastCreate  `yaml:"last_create,omitempty" json:"last_create,omitempty"`
@@ -132,7 +132,7 @@ func NewManifest(name string, now func() time.Time) *Manifest {
 }
 
 // LoadManifest reads and decodes a manifest.yml from path. Unknown fields are
-// tolerated (lenient decode) — older devbox versions must be able to read
+// tolerated (lenient decode) — older dwe versions must be able to read
 // manifests written by newer versions without breaking.
 func LoadManifest(path string) (*Manifest, error) {
 	data, err := os.ReadFile(path)

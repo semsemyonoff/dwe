@@ -82,7 +82,7 @@ func writeDeployState(t *testing.T, baseDir, hash string) {
 func TestRestore_RoundTripWritesBackupAndUpdatesCurrent(t *testing.T) {
 	tmp := t.TempDir()
 
-	// Seed the working-copy devbox files so the pre-restore backup has something
+	// Seed the working-copy workspace files so the pre-restore backup has something
 	// to capture.
 	writeStringFile(t, filepath.Join(tmp, "workspace", "local.yml"), "live: local")
 	writeStringFile(t, filepath.Join(tmp, journal.DefaultRelPath),
@@ -90,12 +90,12 @@ func TestRestore_RoundTripWritesBackupAndUpdatesCurrent(t *testing.T) {
 
 	createBaselineSnap(t, tmp, "snap1", "live")
 
-	// Verify the snapshot captured the devbox files.
-	if _, err := os.Stat(filepath.Join(tmp, "snapshots", "snap1", meta.DevboxSubdir, "local.yml")); err != nil {
-		t.Fatalf("snapshot did not capture devbox/local.yml: %v", err)
+	// Verify the snapshot captured the workspace files.
+	if _, err := os.Stat(filepath.Join(tmp, "snapshots", "snap1", meta.WorkspaceSubdir, "local.yml")); err != nil {
+		t.Fatalf("snapshot did not capture workspace/local.yml: %v", err)
 	}
 
-	// Mutate working-copy devbox/local.yml after the snapshot.
+	// Mutate working-copy workspace/local.yml after the snapshot.
 	writeStringFile(t, filepath.Join(tmp, "workspace", "local.yml"), "mutated")
 
 	// Restore: workflow simply re-writes the marker file.

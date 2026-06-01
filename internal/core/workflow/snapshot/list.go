@@ -20,7 +20,7 @@ type Entry struct {
 	// Dir is the absolute filesystem path of the snapshot directory.
 	Dir string
 	// TotalSize is the sum of Manifest.Artifacts[*].Size; it ignores the
-	// captured devbox/ subtree (which is small and identical in shape).
+	// captured workspace/ subtree (which is small and identical in shape).
 	TotalSize int64
 }
 

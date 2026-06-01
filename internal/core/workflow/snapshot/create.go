@@ -18,18 +18,18 @@ import (
 	"github.com/semsemyonoff/dwe/internal/shared/tpl"
 )
 
-// CreateParams describes one `devbox snapshot create` invocation. The caller
+// CreateParams describes one `dwe snapshot create` invocation. The caller
 // is responsible for project-lock acquisition before calling Create.
 type CreateParams struct {
-	// Cfg is the loaded devbox config.
+	// Cfg is the loaded project config.
 	Cfg *config.DweConfig
-	// SnapCfg is the parsed devbox/snapshot.yml. Must be non-nil and define a
+	// SnapCfg is the parsed workspace/snapshot.yml. Must be non-nil and define a
 	// Create block, else Create returns an error before any filesystem
 	// mutation.
 	SnapCfg *config.SnapshotConfig
 	// Registry is the user-command registry; workflows resolve commands here.
 	Registry *registry.Registry
-	// BaseDir is the project root (the directory that holds devbox/).
+	// BaseDir is the project root (the directory that holds workspace/).
 	BaseDir string
 	// Name is the snapshot name (must pass ValidateName).
 	Name string
@@ -38,8 +38,8 @@ type CreateParams struct {
 	// Variant selects a Variants[Variant] body from the Create block; empty
 	// selects the default block.
 	Variant string
-	// DevboxVersion is recorded in the manifest for diagnostic purposes.
-	DevboxVersion string
+	// DweVersion is recorded in the manifest for diagnostic purposes.
+	DweVersion string
 	// SkipConfirm short-circuits the overwrite prompt (the `-y` flag).
 	SkipConfirm bool
 	// NonInteractive forces non-interactive code paths even on a TTY (used by
@@ -95,8 +95,8 @@ type CreateResult struct {
 //
 //  1. Validate name, snapshot config block, and variant.
 //  2. If the snapshot dir already exists, confirm overwrite (or fail).
-//  3. Create <snap>/ + <snap>/devbox/; copy devbox/local.yml and
-//     .dwe/deploy/state.yml into <snap>/devbox/ (each is optional —
+//  3. Create <snap>/ + <snap>/workspace/; copy workspace/local.yml and
+//     .dwe/deploy/state.yml into <snap>/workspace/ (each is optional —
 //     missing source files are skipped silently).
 //  4. Run the selected create workflow under SnapshotScopeCreate.
 //  5. Scan artifacts, write the manifest atomically, update the current
@@ -113,10 +113,10 @@ func Create(ctx context.Context, p CreateParams) (*CreateResult, error) {
 		return nil, err
 	}
 	if p.SnapCfg == nil {
-		return nil, errors.New("snapshot: snapshot config not loaded (missing devbox/snapshot.yml)")
+		return nil, errors.New("snapshot: snapshot config not loaded (missing workspace/snapshot.yml)")
 	}
 	if p.Cfg == nil {
-		return nil, errors.New("snapshot: devbox config is required")
+		return nil, errors.New("snapshot: project config is required")
 	}
 	if p.Registry == nil {
 		return nil, errors.New("snapshot: user-command registry is required")
@@ -160,7 +160,7 @@ func Create(ctx context.Context, p CreateParams) (*CreateResult, error) {
 		return nil, fmt.Errorf("snapshot: stat existing dir: %w", statErr)
 	}
 
-	if err := os.MkdirAll(filepath.Join(snapDir, meta.DevboxSubdir), 0o755); err != nil {
+	if err := os.MkdirAll(filepath.Join(snapDir, meta.WorkspaceSubdir), 0o755); err != nil {
 		if backupDir != "" {
 			_ = os.RemoveAll(snapDir)
 			if rErr := os.Rename(backupDir, snapDir); rErr != nil && p.Stderr != nil {
@@ -170,7 +170,7 @@ func Create(ctx context.Context, p CreateParams) (*CreateResult, error) {
 		return nil, fmt.Errorf("snapshot: create snapshot dir: %w", err)
 	}
 
-	devboxFiles, err := captureDevboxFiles(p.BaseDir, snapDir, p.SnapCfg.LocalYML.PreserveKeys)
+	devboxFiles, err := captureWorkspaceFiles(p.BaseDir, snapDir, p.SnapCfg.LocalYML.PreserveKeys)
 	if err != nil {
 		if backupDir != "" {
 			_ = os.RemoveAll(snapDir)
@@ -236,10 +236,10 @@ func Create(ctx context.Context, p CreateParams) (*CreateResult, error) {
 		ConfigHash: ProjectConfigHash(p.BaseDir),
 		Services:   captureServiceSnapshots(p.Cfg.Services),
 	}
-	m.DevboxVersion = p.DevboxVersion
+	m.DweVersion = p.DweVersion
 	m.Variant = p.Variant
 	m.Artifacts = artifacts
-	m.DevboxFiles = devboxFiles
+	m.WorkspaceFiles = devboxFiles
 	m.LastCreate = &meta.LastCreate{
 		At:         createdAt,
 		Status:     status,

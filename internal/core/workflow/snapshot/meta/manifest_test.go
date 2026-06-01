@@ -27,14 +27,14 @@ func TestManifestRoundTrip(t *testing.T) {
 	m := NewManifest("feature-x", func() time.Time { return fixed })
 	m.Description = "WIP"
 	m.Project = ProjectInfo{Name: "tbm-next", ConfigHash: "abc123"}
-	m.DevboxVersion = "0.42.0"
+	m.DweVersion = "0.42.0"
 	m.Variant = "db-only"
 	m.Artifacts = []ArtifactInfo{
 		{Path: "db/main.sql.gz", Size: 1234, Sha256: "deadbeef"},
 	}
-	m.DevboxFiles = DevboxFiles{
-		LocalYML:    "devbox/local.yml",
-		DeployState: "devbox/deploy-state.yml",
+	m.WorkspaceFiles = WorkspaceFiles{
+		LocalYML:    "workspace/local.yml",
+		DeployState: "workspace/deploy-state.yml",
 	}
 	m.LastCreate = &LastCreate{At: fixed, Status: StatusOk}
 
@@ -51,7 +51,7 @@ func TestManifestRoundTrip(t *testing.T) {
 	if !reflect.DeepEqual(got.Project, m.Project) {
 		t.Errorf("project mismatch: got %+v want %+v", got.Project, m.Project)
 	}
-	if got.Variant != "db-only" || got.DevboxVersion != "0.42.0" {
+	if got.Variant != "db-only" || got.DweVersion != "0.42.0" {
 		t.Errorf("variant/version mismatch: %+v", got)
 	}
 	if len(got.Artifacts) != 1 || got.Artifacts[0].Sha256 != "deadbeef" || got.Artifacts[0].Size != 1234 {

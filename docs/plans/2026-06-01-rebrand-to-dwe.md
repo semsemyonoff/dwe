@@ -514,14 +514,14 @@ bin/dwe docs generate --scope cli
 - Modify: `internal/cli/snapshot/` inspect output golden files
 - Modify: docs `docs/reference/snapshot.md` and RU equivalent (archive layout)
 
-- [ ] rename constant: `DevboxSubdir` → `WorkspaceSubdir`, value `"devbox"` → `"workspace"`
-- [ ] rename type + fields: `DevboxFiles` struct → `WorkspaceFiles`; manifest field + tag `devbox_files` → `workspace_files`; `DevboxVersion` field + tag `devbox_version` → `dwe_version`
-- [ ] `git mv internal/core/workflow/snapshot/devbox_files.go internal/core/workflow/snapshot/workspace_files.go`
-- [ ] rename internal funcs (`restoreDevboxFiles` → `restoreWorkspaceFiles`)
-- [ ] update path joins (`meta.WorkspaceSubdir`) in capture + restore code
-- [ ] regenerate snapshot golden files OR hand-update fixture archives' `manifest.yml` entries
-- [ ] update godoc throughout `internal/core/workflow/snapshot/`
-- [ ] `make build && make test` — must end **green**
+- [x] rename constant: `DevboxSubdir` → `WorkspaceSubdir`, value `"devbox"` → `"workspace"`
+- [x] rename type + fields: `DevboxFiles` struct → `WorkspaceFiles`; manifest field + tag `devbox_files` → `workspace_files`; `DevboxVersion` field + tag `devbox_version` → `dwe_version`
+- [x] `git mv internal/core/workflow/snapshot/devbox_files.go internal/core/workflow/snapshot/workspace_files.go`
+- [x] rename internal funcs (`restoreDevboxFiles` → `restoreWorkspaceFiles`)
+- [x] update path joins (`meta.WorkspaceSubdir`) in capture + restore code
+- [x] regenerate snapshot golden files OR hand-update fixture archives' `manifest.yml` entries
+- [x] update godoc throughout `internal/core/workflow/snapshot/`
+- [x] `make build && make test` — must end **green**
 
 ### Task 10: Phase 3g — User-visible brand strings + docs source discriminators + Cobra help text
 

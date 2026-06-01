@@ -17,13 +17,13 @@ import (
 // config and executed by the existing user-command workflow runner via a
 // synthetic *model.CommandDef built at runtime.
 type ExecParams struct {
-	// Cfg is the loaded devbox config used for ${...} resolution and to look
+	// Cfg is the loaded project config used for ${...} resolution and to look
 	// up registered user commands referenced from workflow steps.
 	Cfg *config.DweConfig
 	// Registry is the loaded user-command registry. Workflow steps reference
 	// user commands by ID through it.
 	Registry *registry.Registry
-	// BaseDir is the project root (the directory that holds devbox/).
+	// BaseDir is the project root (the directory that holds workspace/).
 	BaseDir string
 	// Workflow is the chosen create/restore/remove block (or its variant).
 	Workflow *config.SnapshotWorkflow
@@ -64,7 +64,7 @@ func RunWorkflow(ctx context.Context, p ExecParams) error {
 		return fmt.Errorf("snapshot: registry is required to run workflows")
 	}
 	if p.Cfg == nil {
-		return fmt.Errorf("snapshot: devbox config is required to run workflows")
+		return fmt.Errorf("snapshot: project config is required to run workflows")
 	}
 
 	cmd := &model.CommandDef{
