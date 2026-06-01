@@ -1,5 +1,5 @@
 {
-  "name": "devbox",
-  "description": "Navigator skill for Devbox projects — a Docker-based developer environment manager. Activates when working in a project containing `devbox.yml`.",
-  "skills": ["./skills/devbox"]
+  "name": "dwe",
+  "description": "Navigator skill for DWE projects — a Docker-based developer environment manager. Activates when working in a project containing `workspace.yml`.",
+  "skills": ["./skills/dwe"]
 }

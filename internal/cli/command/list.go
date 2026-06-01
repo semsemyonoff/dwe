@@ -196,7 +196,7 @@ func makeBrowserSelector(cfg *config.DweConfig, reg *usercommands.Registry, mode
 //
 // projectName, when non-empty, is prepended to the selector title as
 // "<project> · Select command [...]" so the TUI header makes clear which
-// devbox project is active.
+// dwe project is active.
 func resolveCommandID(reg *usercommands.Registry, args []string, includePrivate bool, projectName string, selector selectCommandFn) (string, error) {
 	if len(args) == 1 {
 		arg := args[0]

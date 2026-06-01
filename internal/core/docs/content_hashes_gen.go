@@ -6,7 +6,7 @@ package docs
 // Generated from docs/reference and docs/internals at build time.
 // See docs/reference/docs/index.md for details on the hash-based staleness check.
 var ContentHashes = map[string]string{
-	"README.md":                                           "54377d0210e9",
+	"README.md":                                           "a568f0456775",
 	"internals/architecture.md":                           "4fe04c86171c",
 	"internals/packages.md":                               "35290bb4c9ef",
 	"reference/cli/dwe.md":                                "fc5e008431fa",

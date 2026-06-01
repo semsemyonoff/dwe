@@ -1,4 +1,4 @@
-// Package validate hosts the devbox validate command tree.
+// Package validate hosts the dwe validate command tree.
 package validate
 
 import (
@@ -504,7 +504,7 @@ func styleValidateHeader(text string, summary validate.Summary) string {
 	}
 }
 
-// validateHeader returns a friendly description of what Devbox is checking,
+// validateHeader returns a friendly description of what DWE is checking,
 // shown above the diagnostics table so the user has context for the rows.
 // The wording intentionally avoids jargon like "validator" / "scope" so the
 // header reads naturally to someone who has not internalised our domain

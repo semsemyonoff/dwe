@@ -617,16 +617,16 @@ Review the full list. Allow only intentional test-data identifiers (e.g. `devbox
 - Rename: `skills/devbox/` → `skills/dwe/`
 - Modify: `skills/dwe/SKILL.md`, `skills/dwe/references/recipes.md`
 
-- [ ] update AGENTS.md fully: opening sentences, product mentions, file refs, command examples, Critical Patterns section (`cmd/devbox/main.go` → `cmd/dwe/main.go`, `DevboxBin` → `DweBin`, `.devbox/` → `.dwe/`, `devbox.yml` → `workspace.yml`, `devbox/` → `workspace/`, daemon labels, snapshot schema, llms URI scheme, brand strings)
-- [ ] verify `ls -la CLAUDE.md` symlink intact
-- [ ] update README.md: title, badges, install (`brew install dwe`), examples
-- [ ] update package godoc lines `// Package … devbox …` across `internal/cli/*` (bulk-replaceable)
-- [ ] `git mv skills/devbox skills/dwe`
-- [ ] update `skills/dwe/SKILL.md` (34 mentions), detection prose
-- [ ] update `skills/dwe/references/recipes.md`
-- [ ] update `.claude-plugin/plugin.json`: name, description, activation hint, skill path
-- [ ] update `.claude-plugin/marketplace.json`: name, description, command examples
-- [ ] `make build && make test`
+- [x] update AGENTS.md fully: opening sentences, product mentions, file refs, command examples, Critical Patterns section (`cmd/devbox/main.go` → `cmd/dwe/main.go`, `DevboxBin` → `DweBin`, `.devbox/` → `.dwe/`, `devbox.yml` → `workspace.yml`, `devbox/` → `workspace/`, daemon labels, snapshot schema, llms URI scheme, brand strings)
+- [x] verify `ls -la CLAUDE.md` symlink intact
+- [x] update README.md: title, badges, install (`brew install dwe`), examples
+- [x] update package godoc lines `// Package … devbox …` across `internal/cli/*` (bulk-replaceable)
+- [x] `git mv skills/devbox skills/dwe`
+- [x] update `skills/dwe/SKILL.md` (34 mentions), detection prose
+- [x] update `skills/dwe/references/recipes.md`
+- [x] update `.claude-plugin/plugin.json`: name, description, activation hint, skill path
+- [x] update `.claude-plugin/marketplace.json`: name, description, command examples
+- [x] `make build && make test`
 
 ### Task 15: Phase 6 — Release config
 
