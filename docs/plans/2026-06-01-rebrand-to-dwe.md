@@ -297,37 +297,37 @@ bin/dwe docs generate --scope cli
 **Files:**
 - Modify: `docs/plans/2026-06-01-rebrand-to-dwe.md` (this file)
 
-- [ ] confirm `git status` clean; commit/stash pre-existing edits
-- [ ] run `make test` on baseline — record green/red
-- [ ] capture audit counts:
-  - [ ] `rg -l --hidden devbox` (total)
-  - [ ] `rg -l --hidden Devbox` (PascalCase)
-  - [ ] `rg -l --hidden DEVBOX` (UPPER)
-  - [ ] `rg -l --hidden 'github.com/semsemyonoff/devbox'`
-- [ ] grep schema/runtime surfaces:
-  - [ ] `rg -l --hidden 'schema_version'`
-  - [ ] `rg -l --hidden '\.devbox/'`
-  - [ ] `rg -l --hidden 'devbox\.project|devbox\.daemon'` (Docker labels)
-  - [ ] `rg -l --hidden 'DevboxSubdir|DevboxFiles|DevboxVersion|devbox_version|devbox_files'` (snapshot schema)
-- [ ] grep user-visible brand-string sites (Phase 3g):
-  - [ ] `rg -n '"Devbox"' --type go`
-  - [ ] `rg -n 'devbox-docs://' --type go`
-  - [ ] `rg -n 'CommandTypeDevbox' --type go`
-  - [ ] `rg -n 'Use:\s*"devbox"' --type go`
-  - [ ] `rg -n 'Name:\s*"devbox"' --type go`
-  - [ ] `rg -n 'beeep.AppName|terminalNotifierGroup' --type go`
-- [ ] grep tooling/release:
-  - [ ] `rg -n 'devbox' .golangci.yml .goreleaser.yaml .github/`
-  - [ ] `rg -n 'BINARY_NAME|MODULE' Makefile`
-- [ ] grep user-config + binary lookup:
-  - [ ] `rg -n 'binary_devbox|BinaryOverride\("devbox"\)'`
-- [ ] grep template-pack paths (multi-arg join):
-  - [ ] `rg -n '"devbox"' internal/core/execution/templates/`
-- [ ] grep `cmd/devbox` and `bin/devbox` in non-Go (Makefile, scripts, workflows)
-- [ ] grep `Project.Prefix` default — if `"devbox"`, add ➕ note
-- [ ] confirm `internal/shared/i18n/translations/en.yml` has no `devbox|Devbox` (currently empty for it)
-- [ ] confirm `LICENSE` has no `devbox` references (currently confirmed clean)
-- [ ] add ➕ task for any unexpected area
+- [x] confirm `git status` clean; commit/stash pre-existing edits
+- [x] run `make test` on baseline — record green/red (one pre-existing Docker-dependent failure: TestDeployRunCmd_LockHeldBlocksDeploy requires Docker daemon; all other tests pass)
+- [x] capture audit counts:
+  - [x] `rg -l --hidden devbox` (total) — 848 files
+  - [x] `rg -l --hidden Devbox` (PascalCase) — 351 files
+  - [x] `rg -l --hidden DEVBOX` (UPPER) — 45 files
+  - [x] `rg -l --hidden 'github.com/semsemyonoff/devbox'` — 499 files
+- [x] grep schema/runtime surfaces:
+  - [x] `rg -l --hidden 'schema_version'` — 69 files
+  - [x] `rg -l --hidden '\.devbox/'` — 100 files
+  - [x] `rg -l --hidden 'devbox\.project|devbox\.daemon'` (Docker labels) — 16 files enumerated
+  - [x] `rg -l --hidden 'DevboxSubdir|DevboxFiles|DevboxVersion|devbox_version|devbox_files'` (snapshot schema) — 23 files enumerated
+- [x] grep user-visible brand-string sites (Phase 3g):
+  - [x] `rg -n '"Devbox"' --type go` — notify, brand_header, docs browser, command list, tests
+  - [x] `rg -n 'devbox-docs://' --type go` — generator.go:189 + generator_test.go:115
+  - [x] `rg -n 'CommandTypeDevbox' --type go` — ~15 sites enumerated
+  - [x] `rg -n 'Use:\s*"devbox"' --type go` — root.go:124 + 13 test files
+  - [x] `rg -n 'Name:\s*"devbox"' --type go` — source.go:25 + many test files
+  - [x] `rg -n 'beeep.AppName|terminalNotifierGroup' --type go` — native_darwin.go:28, native_other.go:8
+- [x] grep tooling/release:
+  - [x] `rg -n 'devbox' .golangci.yml .goreleaser.yaml .github/` — goreleaser: 23+ occurrences; github: 1 occurrence
+  - [x] `rg -n 'BINARY_NAME|MODULE' Makefile` — line 1 BINARY_NAME, line 3 MODULE
+- [x] grep user-config + binary lookup:
+  - [x] `rg -n 'binary_devbox|BinaryOverride\("devbox"\)'` — config/devbox.go:28
+- [x] grep template-pack paths (multi-arg join):
+  - [x] `rg -n '"devbox"' internal/core/execution/templates/` — 8 source files + test files enumerated
+- [x] grep `cmd/devbox` and `bin/devbox` in non-Go (Makefile, scripts, workflows) — Makefile, scripts/gen-completions.sh, README.md
+- [x] grep `Project.Prefix` default — `"devbox"` NOT present; Prefix has no hardcoded default (empty string)
+- [x] confirm `internal/shared/i18n/translations/en.yml` has no `devbox|Devbox` — confirmed clean
+- [x] confirm `LICENSE` has no `devbox` references (currently confirmed clean)
+- [x] add ➕ task for any unexpected area — no unexpected areas found; all surfaces already covered by existing tasks
 
 ### Task 2: Phase 1 — Rename Go module + cmd folder + binary + tooling config + cobra root + command-path gates
 
