@@ -604,10 +604,10 @@ Review the full list. Allow only intentional test-data identifiers (e.g. `devbox
 
 **Note:** `bin/dwe docs generate` defaults to `--scope all` which requires a project (commands scope check at `generate.go:59`). Must use `--scope cli` to regenerate outside a project. The glob `devbox_*.md` misses `devbox.md` (root command page) — must remove it explicitly.
 
-- [ ] `rm docs/reference/cli/devbox.md docs/reference/cli/devbox_*.md`
-- [ ] `bin/dwe docs generate --scope cli`
-- [ ] inspect diff — verify `docs/reference/cli/dwe.md` produced; no stale `devbox*.md` remains; `index.md` regenerated with `dwe` references
-- [ ] `make build && make test`
+- [x] `rm docs/reference/cli/devbox.md docs/reference/cli/devbox_*.md`
+- [x] `bin/dwe docs generate --scope cli`
+- [x] inspect diff — verify `docs/reference/cli/dwe.md` produced; no stale `devbox*.md` remains; `index.md` regenerated with `dwe` references
+- [x] `make build && make test`
 
 ### Task 14: Phase 5 — Narrative docs + Claude plugin + skills
 
