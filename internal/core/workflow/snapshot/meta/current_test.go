@@ -57,7 +57,7 @@ func TestWriteCurrent_createsStateDir(t *testing.T) {
 	if err := WriteCurrent(base, "x"); err != nil {
 		t.Fatalf("write: %v", err)
 	}
-	if _, err := os.Stat(filepath.Join(base, ".devbox/snapshots")); err != nil {
+	if _, err := os.Stat(filepath.Join(base, ".dwe/snapshots")); err != nil {
 		t.Fatalf("state dir not created: %v", err)
 	}
 }

@@ -9,9 +9,9 @@ import (
 // Default subdirectory under the project root where unpacked snapshots live.
 const defaultSnapshotsDir = "snapshots"
 
-// Internal state directory under <baseDir>/.devbox/ for the snapshot subsystem
+// Internal state directory under <baseDir>/.dwe/ for the snapshot subsystem
 // (lock file, current pointer, pre-restore backup, transient unpack staging).
-const stateSubdir = ".devbox/snapshots"
+const stateSubdir = ".dwe/snapshots"
 
 // File names inside the snapshot state directory.
 const (
@@ -54,7 +54,7 @@ func ManifestPath(baseDir string, cfg *config.SnapshotConfig, name string) strin
 	return filepath.Join(SnapshotDir(baseDir, cfg, name), ManifestFileName)
 }
 
-// StateDir returns the per-project snapshot state directory under .devbox/.
+// StateDir returns the per-project snapshot state directory under .dwe/.
 func StateDir(baseDir string) string {
 	return filepath.Join(baseDir, stateSubdir)
 }

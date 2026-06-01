@@ -55,7 +55,7 @@ func writeLogsTestConfig(t *testing.T, dir string, svcs map[string]string) strin
 }
 
 // writeLogsTestConfigWithDockerBin is like writeLogsTestConfig but also writes
-// a .devbox/config file that sets the docker binary override, so tests can use
+// a .dwe/config file that sets the docker binary override, so tests can use
 // a fake docker binary without touching PATH.
 func writeLogsTestConfigWithDockerBin(t *testing.T, dir string, svcs map[string]string, dockerBin string) string {
 	t.Helper()
@@ -74,13 +74,13 @@ func writeLogsTestConfigWithDockerBin(t *testing.T, dir string, svcs map[string]
 		}
 	}
 	if dockerBin != "" {
-		devboxDir := filepath.Join(dir, ".devbox")
+		devboxDir := filepath.Join(dir, ".dwe")
 		if err := os.MkdirAll(devboxDir, 0o755); err != nil {
-			t.Fatalf("mkdir .devbox: %v", err)
+			t.Fatalf("mkdir .dwe: %v", err)
 		}
 		cfg := fmt.Sprintf("binary_docker = %s\n", dockerBin)
 		if err := os.WriteFile(filepath.Join(devboxDir, "config"), []byte(cfg), 0o644); err != nil {
-			t.Fatalf("write .devbox/config: %v", err)
+			t.Fatalf("write .dwe/config: %v", err)
 		}
 	}
 	return filepath.Join(dir, "workspace.yml")

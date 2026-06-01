@@ -10,7 +10,7 @@ import (
 )
 
 // DefaultRelPath is the relative path to the deploy state file.
-const DefaultRelPath = ".devbox/deploy/state.yml"
+const DefaultRelPath = ".dwe/deploy/state.yml"
 
 // Status represents the deployment status of a step or service.
 type Status string

@@ -1,7 +1,7 @@
 // Package userconfig loads user-level Devbox preferences from a flat
 // key=value file. It merges defaults, a global config at
-// ~/.config/devbox/config (same path on every OS), an optional
-// per-project override at .devbox/config, and environment variables.
+// ~/.config/dwe/config (same path on every OS), an optional
+// per-project override at .dwe/config, and environment variables.
 package user
 
 import (

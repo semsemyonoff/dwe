@@ -171,18 +171,18 @@ func TestProjectPerms_OK(t *testing.T) {
 	if findSeverity(diags, "project_perms") != validate.SeverityOK {
 		t.Fatalf("want OK, got %+v", diags)
 	}
-	// .devbox/ and .devbox/deploy/ should have been created.
-	if _, err := os.Stat(filepath.Join(root, ".devbox")); err != nil {
-		t.Fatalf(".devbox not created: %v", err)
+	// .dwe/ and .dwe/deploy/ should have been created.
+	if _, err := os.Stat(filepath.Join(root, ".dwe")); err != nil {
+		t.Fatalf(".dwe not created: %v", err)
 	}
-	if _, err := os.Stat(filepath.Join(root, ".devbox", "deploy")); err != nil {
-		t.Fatalf(".devbox/deploy not created: %v", err)
+	if _, err := os.Stat(filepath.Join(root, ".dwe", "deploy")); err != nil {
+		t.Fatalf(".dwe/deploy not created: %v", err)
 	}
 }
 
 func TestProjectPerms_DeployDirBlockedByFile(t *testing.T) {
 	root := t.TempDir()
-	devboxDir := filepath.Join(root, ".devbox")
+	devboxDir := filepath.Join(root, ".dwe")
 	if err := os.Mkdir(devboxDir, 0o755); err != nil {
 		t.Fatal(err)
 	}
@@ -193,7 +193,7 @@ func TestProjectPerms_DeployDirBlockedByFile(t *testing.T) {
 	v := &projectPermsValidator{}
 	diags := v.Run(validate.Context{ProjectRoot: root})
 	if findSeverity(diags, "project_perms") != validate.SeverityError {
-		t.Fatalf("want error when .devbox/deploy is a file, got %+v", diags)
+		t.Fatalf("want error when .dwe/deploy is a file, got %+v", diags)
 	}
 }
 
@@ -207,7 +207,7 @@ func TestProjectPerms_NoRoot(t *testing.T) {
 
 func TestProjectPerms_LockFileIsDirectory(t *testing.T) {
 	root := t.TempDir()
-	deployDir := filepath.Join(root, ".devbox", "deploy")
+	deployDir := filepath.Join(root, ".dwe", "deploy")
 	if err := os.MkdirAll(deployDir, 0o755); err != nil {
 		t.Fatalf("mkdir deploy: %v", err)
 	}
@@ -231,7 +231,7 @@ func TestProjectPerms_ExistingLockFileNotWritable(t *testing.T) {
 		t.Skip("root bypasses permission bits")
 	}
 	root := t.TempDir()
-	devboxDir := filepath.Join(root, ".devbox")
+	devboxDir := filepath.Join(root, ".dwe")
 	deployDir := filepath.Join(devboxDir, "deploy")
 	if err := os.MkdirAll(deployDir, 0o755); err != nil {
 		t.Fatalf("mkdir -p deploy: %v", err)
@@ -258,10 +258,10 @@ func TestProjectPerms_UnwritableDeployDir(t *testing.T) {
 		t.Skip("root bypasses permission bits")
 	}
 	root := t.TempDir()
-	devboxDir := filepath.Join(root, ".devbox")
+	devboxDir := filepath.Join(root, ".dwe")
 	deployDir := filepath.Join(devboxDir, "deploy")
 	if err := os.Mkdir(devboxDir, 0o755); err != nil {
-		t.Fatalf("mkdir .devbox: %v", err)
+		t.Fatalf("mkdir .dwe: %v", err)
 	}
 	if err := os.Mkdir(deployDir, 0o555); err != nil {
 		t.Fatalf("mkdir deploy: %v", err)
@@ -270,7 +270,7 @@ func TestProjectPerms_UnwritableDeployDir(t *testing.T) {
 	v := &projectPermsValidator{}
 	diags := v.Run(validate.Context{ProjectRoot: root})
 	if findSeverity(diags, "project_perms") != validate.SeverityError {
-		t.Fatalf("want error on unwritable .devbox/deploy, got %+v", diags)
+		t.Fatalf("want error on unwritable .dwe/deploy, got %+v", diags)
 	}
 }
 
@@ -279,8 +279,8 @@ func TestProjectPerms_Unwritable(t *testing.T) {
 		t.Skip("root bypasses permission bits")
 	}
 	root := t.TempDir()
-	// Pre-create .devbox/ with no write permission.
-	devboxDir := filepath.Join(root, ".devbox")
+	// Pre-create .dwe/ with no write permission.
+	devboxDir := filepath.Join(root, ".dwe")
 	if err := os.Mkdir(devboxDir, 0o555); err != nil {
 		t.Fatalf("mkdir: %v", err)
 	}
@@ -288,7 +288,7 @@ func TestProjectPerms_Unwritable(t *testing.T) {
 	v := &projectPermsValidator{}
 	diags := v.Run(validate.Context{ProjectRoot: root})
 	if findSeverity(diags, "project_perms") != validate.SeverityError {
-		t.Fatalf("want error on unwritable .devbox, got %+v", diags)
+		t.Fatalf("want error on unwritable .dwe, got %+v", diags)
 	}
 }
 

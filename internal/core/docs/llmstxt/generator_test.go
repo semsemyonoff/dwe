@@ -96,7 +96,7 @@ func TestGenerate_WithCommands(t *testing.T) {
 func TestGenerate_WithDocTopics(t *testing.T) {
 	topics := []coredocs.TopicEntry{
 		{Path: "reference/config/services", DisplayName: "Services", Source: "devbox"},
-		{Path: "reference/config/devbox", DisplayName: "Devbox Config", Source: "devbox"},
+		{Path: "reference/config/dwe", DisplayName: "Devbox Config", Source: "devbox"},
 		{Path: "internals/packages", DisplayName: "Package Layout", Source: "devbox"},
 	}
 

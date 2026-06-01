@@ -434,10 +434,10 @@ func TestLocaleResolutionWithUserconfig(t *testing.T) {
 		t.Fatalf("writing config: %v", err)
 	}
 
-	// Create .devbox/config with language setting
-	devboxDir := filepath.Join(dir, ".devbox")
+	// Create .dwe/config with language setting
+	devboxDir := filepath.Join(dir, ".dwe")
 	if err := os.MkdirAll(devboxDir, 0755); err != nil {
-		t.Fatalf("creating .devbox dir: %v", err)
+		t.Fatalf("creating .dwe dir: %v", err)
 	}
 	configPath := filepath.Join(devboxDir, "config")
 	if err := os.WriteFile(configPath, []byte("language=de\n"), 0644); err != nil {
@@ -477,10 +477,10 @@ func TestLocaleResolutionEnvVarPrecedence(t *testing.T) {
 		t.Fatalf("writing config: %v", err)
 	}
 
-	// Create .devbox/config with language setting
-	devboxDir := filepath.Join(dir, ".devbox")
+	// Create .dwe/config with language setting
+	devboxDir := filepath.Join(dir, ".dwe")
 	if err := os.MkdirAll(devboxDir, 0755); err != nil {
-		t.Fatalf("creating .devbox dir: %v", err)
+		t.Fatalf("creating .dwe dir: %v", err)
 	}
 	configPath := filepath.Join(devboxDir, "config")
 	if err := os.WriteFile(configPath, []byte("language=de\n"), 0644); err != nil {

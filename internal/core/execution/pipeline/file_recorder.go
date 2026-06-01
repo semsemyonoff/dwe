@@ -43,7 +43,7 @@ func (r *FileRecorder) Err() error {
 // NewFileRecorder constructs a FileRecorder that will record state to the given path.
 // It accepts pre-computed config hashes that will be stamped on OnPipelineFinish.
 //
-// statePath is the path to .devbox/deploy/state.yml.
+// statePath is the path to .dwe/deploy/state.yml.
 // state is the loaded ProjectState (or a new one if file was absent).
 // serviceConfigHashes maps service names to their current journal.ServiceConfigHash.
 // projectConfigHash is the current journal.ProjectConfigHash.

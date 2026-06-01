@@ -31,7 +31,7 @@ func TestOpenPipelineLog_CreatesDevboxLogsDirectory(t *testing.T) {
 		t.Errorf("expected logWriter to be non-nil")
 	}
 
-	expectedPath := filepath.Join(tmpDir, ".devbox", "logs", "deploy.log")
+	expectedPath := filepath.Join(tmpDir, ".dwe", "logs", "deploy.log")
 	if logPath != expectedPath {
 		t.Errorf("expected logPath=%q, got %q", expectedPath, logPath)
 	}
@@ -69,7 +69,7 @@ func TestOpenSubStepLog_CreatesPathAndSanitises(t *testing.T) {
 	}
 	defer func() { _ = w.Close() }()
 
-	wantDir := filepath.Join(tmp, ".devbox", "logs", "parallel", "dep_loy", "my_group_1")
+	wantDir := filepath.Join(tmp, ".dwe", "logs", "parallel", "dep_loy", "my_group_1")
 	wantPath := filepath.Join(wantDir, "_sub_a.log")
 	if path != wantPath {
 		t.Errorf("path = %q, want %q", path, wantPath)
@@ -78,7 +78,7 @@ func TestOpenSubStepLog_CreatesPathAndSanitises(t *testing.T) {
 		t.Errorf("expected file to exist: %v", err)
 	}
 	// Ensure the sanitised name did not escape the parallel root.
-	rel, err := filepath.Rel(filepath.Join(tmp, ".devbox", "logs", "parallel"), path)
+	rel, err := filepath.Rel(filepath.Join(tmp, ".dwe", "logs", "parallel"), path)
 	if err != nil {
 		t.Fatalf("filepath.Rel: %v", err)
 	}
@@ -198,8 +198,8 @@ func TestParallelGroup_PerSubStepLogRoutesOutput(t *testing.T) {
 		t.Fatalf("unexpected error: %v", err)
 	}
 
-	alphaPath := filepath.Join(tmp, ".devbox", "logs", "parallel", "deploy", "g", "alpha.log")
-	betaPath := filepath.Join(tmp, ".devbox", "logs", "parallel", "deploy", "g", "beta.log")
+	alphaPath := filepath.Join(tmp, ".dwe", "logs", "parallel", "deploy", "g", "alpha.log")
+	betaPath := filepath.Join(tmp, ".dwe", "logs", "parallel", "deploy", "g", "beta.log")
 
 	alpha, err := os.ReadFile(alphaPath)
 	if err != nil {
@@ -273,7 +273,7 @@ func TestParallelGroup_DisabledLog_NoFiles_StillStreamsToReporter(t *testing.T) 
 	}
 
 	// No parallel log directory should have been created.
-	if _, err := os.Stat(filepath.Join(tmp, ".devbox", "logs", "parallel")); !os.IsNotExist(err) {
+	if _, err := os.Stat(filepath.Join(tmp, ".dwe", "logs", "parallel")); !os.IsNotExist(err) {
 		t.Errorf("expected no parallel/ log dir when logging disabled, got err=%v", err)
 	}
 
@@ -500,8 +500,8 @@ func TestOpenPipelineLog_DisabledReturnsNil(t *testing.T) {
 		t.Errorf("expected termOut to be non-nil even when disabled (io.Discard or os.Stdout)")
 	}
 
-	devboxLogsDir := filepath.Join(tmpDir, ".devbox", "logs")
+	devboxLogsDir := filepath.Join(tmpDir, ".dwe", "logs")
 	if _, err := os.Stat(devboxLogsDir); !os.IsNotExist(err) {
-		t.Errorf("expected .devbox/logs directory to not exist when logging disabled")
+		t.Errorf("expected .dwe/logs directory to not exist when logging disabled")
 	}
 }

@@ -47,7 +47,7 @@ func swapNewNotifier(t *testing.T) *recordingNotifier {
 }
 
 // pointHomeAtTempDir isolates HOME so userconfig reads don't pick up the
-// developer's real ~/.config/devbox/config.
+// developer's real ~/.config/dwe/config.
 func pointHomeAtTempDir(t *testing.T) string {
 	t.Helper()
 	dir := t.TempDir()

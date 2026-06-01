@@ -124,7 +124,7 @@ func TestRunFromDir(t *testing.T) {
 			setup: func(t *testing.T) string {
 				root := t.TempDir()
 				writeFile(t, filepath.Join(root, "workspace.yml"), "project:\n  name: p\n")
-				writeFile(t, filepath.Join(root, ".devbox/deploy/state.yml"), "pending: {}\n")
+				writeFile(t, filepath.Join(root, ".dwe/deploy/state.yml"), "pending: {}\n")
 				return root
 			},
 			args:       nil,
@@ -136,7 +136,7 @@ func TestRunFromDir(t *testing.T) {
 			setup: func(t *testing.T) string {
 				root := t.TempDir()
 				writeFile(t, filepath.Join(root, "workspace.yml"), "project:\n  name: p\n")
-				writeFile(t, filepath.Join(root, ".devbox/deploy/state.yml"), "project:\n  status: deployed\n")
+				writeFile(t, filepath.Join(root, ".dwe/deploy/state.yml"), "project:\n  status: deployed\n")
 				return root
 			},
 			args:       nil,
@@ -148,7 +148,7 @@ func TestRunFromDir(t *testing.T) {
 			setup: func(t *testing.T) string {
 				root := t.TempDir()
 				writeFile(t, filepath.Join(root, "workspace.yml"), "project:\n  name: p\n")
-				writeFile(t, filepath.Join(root, ".devbox/deploy/state.yml"), "project:\n  status: partial\n")
+				writeFile(t, filepath.Join(root, ".dwe/deploy/state.yml"), "project:\n  status: partial\n")
 				return root
 			},
 			args:       nil,
@@ -160,7 +160,7 @@ func TestRunFromDir(t *testing.T) {
 			setup: func(t *testing.T) string {
 				root := t.TempDir()
 				writeFile(t, filepath.Join(root, "workspace.yml"), "project:\n  name: p\n")
-				writeFile(t, filepath.Join(root, ".devbox/deploy/state.yml"), "project:\n  status: failed\n")
+				writeFile(t, filepath.Join(root, ".dwe/deploy/state.yml"), "project:\n  status: failed\n")
 				return root
 			},
 			args:       nil,
@@ -172,7 +172,7 @@ func TestRunFromDir(t *testing.T) {
 			setup: func(t *testing.T) string {
 				root := t.TempDir()
 				writeFile(t, filepath.Join(root, "workspace.yml"), "project:\n  name: p\n")
-				writeFile(t, filepath.Join(root, ".devbox/deploy/state.yml"), "project:\n  status: deployed\npending: {}\n")
+				writeFile(t, filepath.Join(root, ".dwe/deploy/state.yml"), "project:\n  status: deployed\npending: {}\n")
 				return root
 			},
 			args:       nil,
@@ -184,7 +184,7 @@ func TestRunFromDir(t *testing.T) {
 			setup: func(t *testing.T) string {
 				root := t.TempDir()
 				writeFile(t, filepath.Join(root, "workspace.yml"), "project:\n  name: p\n")
-				writeFile(t, filepath.Join(root, ".devbox/deploy/state.yml"), "project:\n  status: partial\npending: {}\n")
+				writeFile(t, filepath.Join(root, ".dwe/deploy/state.yml"), "project:\n  status: partial\npending: {}\n")
 				return root
 			},
 			args:       nil,
@@ -196,7 +196,7 @@ func TestRunFromDir(t *testing.T) {
 			setup: func(t *testing.T) string {
 				root := t.TempDir()
 				writeFile(t, filepath.Join(root, "workspace.yml"), "project:\n  name: p\n")
-				writeFile(t, filepath.Join(root, ".devbox/deploy/state.yml"), "project:\n  status: failed\npending: {}\n")
+				writeFile(t, filepath.Join(root, ".dwe/deploy/state.yml"), "project:\n  status: failed\npending: {}\n")
 				return root
 			},
 			args:       nil,
@@ -208,7 +208,7 @@ func TestRunFromDir(t *testing.T) {
 			setup: func(t *testing.T) string {
 				root := t.TempDir()
 				writeFile(t, filepath.Join(root, "workspace.yml"), "project:\n  name: p\n")
-				writeFile(t, filepath.Join(root, ".devbox/deploy/state.yml"), "project:\n  status: not_deployed\n")
+				writeFile(t, filepath.Join(root, ".dwe/deploy/state.yml"), "project:\n  status: not_deployed\n")
 				return root
 			},
 			args:       nil,
@@ -220,7 +220,7 @@ func TestRunFromDir(t *testing.T) {
 			setup: func(t *testing.T) string {
 				root := t.TempDir()
 				writeFile(t, filepath.Join(root, "workspace.yml"), "project:\n  name: p\n")
-				writeFile(t, filepath.Join(root, ".devbox/deploy/state.yml"), "project: [this is: not valid\n  - bad\n")
+				writeFile(t, filepath.Join(root, ".dwe/deploy/state.yml"), "project: [this is: not valid\n  - bad\n")
 				return root
 			},
 			args:       nil,
@@ -232,7 +232,7 @@ func TestRunFromDir(t *testing.T) {
 			setup: func(t *testing.T) string {
 				root := t.TempDir()
 				writeFile(t, filepath.Join(root, "workspace.yml"), "project:\n  name: p\n")
-				writeFile(t, filepath.Join(root, ".devbox/deploy/state.yml"), "project:\n  status: deployed\n  extra: stuff\nservices:\n  db:\n    status: deployed\nunknown_top_level: 42\n")
+				writeFile(t, filepath.Join(root, ".dwe/deploy/state.yml"), "project:\n  status: deployed\n  extra: stuff\nservices:\n  db:\n    status: deployed\nunknown_top_level: 42\n")
 				return root
 			},
 			args:       nil,
@@ -291,7 +291,7 @@ func TestRunFromDirColor(t *testing.T) {
 	tests := []struct {
 		name       string
 		styles     string // contents of devbox/styles.yml; empty string means file absent
-		state      string // contents of .devbox/deploy/state.yml; empty means absent
+		state      string // contents of .dwe/deploy/state.yml; empty means absent
 		wantStdout string
 	}{
 		{
@@ -362,7 +362,7 @@ func TestRunFromDirColor(t *testing.T) {
 				writeFile(t, filepath.Join(root, "workspace/styles.yml"), tt.styles)
 			}
 			if tt.state != "" {
-				writeFile(t, filepath.Join(root, ".devbox/deploy/state.yml"), tt.state)
+				writeFile(t, filepath.Join(root, ".dwe/deploy/state.yml"), tt.state)
 			}
 			var buf bytes.Buffer
 			code := runFromDir(&buf, nil, root, true)
@@ -386,7 +386,7 @@ func TestRunFromDirNoColorSuppression(t *testing.T) {
 	writeFile(t, filepath.Join(root, "workspace.yml"), "project:\n  name: p\n")
 	writeFile(t, filepath.Join(root, "workspace/styles.yml"),
 		"colors:\n  accent: \"#010203\"\n  success: \"#040506\"\n")
-	writeFile(t, filepath.Join(root, ".devbox/deploy/state.yml"), "project:\n  status: deployed\n")
+	writeFile(t, filepath.Join(root, ".dwe/deploy/state.yml"), "project:\n  status: deployed\n")
 
 	var buf bytes.Buffer
 	code := runFromDir(&buf, nil, root, false)
@@ -462,7 +462,7 @@ func TestRenderUsesDefaultForegroundReset(t *testing.T) {
 	t.Parallel()
 	root := t.TempDir()
 	writeFile(t, filepath.Join(root, "workspace.yml"), "project:\n  name: p\n")
-	writeFile(t, filepath.Join(root, ".devbox/deploy/state.yml"), "project:\n  status: deployed\n")
+	writeFile(t, filepath.Join(root, ".dwe/deploy/state.yml"), "project:\n  status: deployed\n")
 	var buf bytes.Buffer
 	if code := runFromDir(&buf, nil, root, true); code != 0 {
 		t.Fatalf("exit: %d", code)
@@ -504,10 +504,10 @@ func BenchmarkPromptRun(b *testing.B) {
 		[]byte("colors:\n  accent: \"#2EC3EB\"\n  success: \"#22C55E\"\n"), 0o644); err != nil {
 		b.Fatal(err)
 	}
-	if err := os.MkdirAll(filepath.Join(root, ".devbox", "deploy"), 0o755); err != nil {
+	if err := os.MkdirAll(filepath.Join(root, ".dwe", "deploy"), 0o755); err != nil {
 		b.Fatal(err)
 	}
-	if err := os.WriteFile(filepath.Join(root, ".devbox", "deploy", "state.yml"),
+	if err := os.WriteFile(filepath.Join(root, ".dwe", "deploy", "state.yml"),
 		[]byte("project:\n  status: deployed\n"), 0o644); err != nil {
 		b.Fatal(err)
 	}

@@ -45,7 +45,7 @@ func diagramRenderWidth() int { return 1200 }
 // no whitespace, no markdown syntax) so post-render substitution can find
 // each block unambiguously by index.
 func diagramMarker(index int) string {
-	return fmt.Sprintf("⟦devbox-mermaid-%d⟧", index)
+	return fmt.Sprintf("⟦dwe-mermaid-%d⟧", index)
 }
 
 // inlineDiagrams replaces each diagramMarker in the glamour output with a
@@ -166,9 +166,9 @@ func (m *Model) openCurrentDiagram() error {
 	}
 	// Write to a per-session temp dir so re-opens reuse the same file
 	// instead of leaking a new temp on every `o` press, and so concurrent
-	// `devbox docs` sessions don't fight over the same filename.
+	// `dwe docs` sessions don't fight over the same filename.
 	if m.diagramExportDir == "" {
-		dir, err := os.MkdirTemp("", "devbox-diagrams-*")
+		dir, err := os.MkdirTemp("", "dwe-diagrams-*")
 		if err != nil {
 			return err
 		}

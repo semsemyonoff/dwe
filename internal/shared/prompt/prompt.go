@@ -16,7 +16,7 @@ import (
 
 const (
 	configFilename = "workspace.yml"
-	stateRelPath   = ".devbox/deploy/state.yml"
+	stateRelPath   = ".dwe/deploy/state.yml"
 	stylesRelPath  = "workspace/styles.yml"
 
 	defaultAccent  = "#2EC3EB"

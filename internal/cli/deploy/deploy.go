@@ -152,7 +152,7 @@ the plan to steps relevant to a specific service. Use --format shell for script-
 //
 // File logging is controlled by the top-level `log:` field in devbox/deploy.yml
 // (default: enabled). When enabled, devbox status messages are teed to
-// .devbox/logs/deploy.log; child process output (docker, make) goes directly to
+// .dwe/logs/deploy.log; child process output (docker, make) goes directly to
 // os.Stdout/os.Stderr so TTY detection works.
 func newDeployRunCmd(flags *cmdctx.RootFlags) *cobra.Command {
 	var serviceName string
@@ -176,7 +176,7 @@ re-run all steps (when: conditions are still evaluated — for a fully clean
 install run 'devbox reset run && devbox deploy run'). Use --resume to continue
 from the last failed step in a partially deployed project.
 
-File logging is enabled by default for deploy and writes to .devbox/logs/deploy.log.
+File logging is enabled by default for deploy and writes to .dwe/logs/deploy.log.
 Disable it with 'log: false' at the top of devbox/deploy.yml.`,
 		Example: `  devbox deploy run
   devbox deploy run --service main
@@ -299,7 +299,7 @@ func deployRunCmd(cmd *cobra.Command, flags *cmdctx.RootFlags, serviceName strin
 // `devbox deploy run` cobra command.
 func RunHelper(ctx context.Context, cmd *cobra.Command, flags *cmdctx.RootFlags, opts Opts) (err error) {
 	workDir := flags.ProjectRoot()
-	stateDir := filepath.Join(workDir, ".devbox", "deploy")
+	stateDir := filepath.Join(workDir, ".dwe", "deploy")
 	statePath := filepath.Join(stateDir, "state.yml")
 
 	// Install notifier defer before any error-returning step so even an
@@ -335,7 +335,7 @@ func RunHelper(ctx context.Context, cmd *cobra.Command, flags *cmdctx.RootFlags,
 	}
 
 	// Load cfg + registry BEFORE acquiring the deploy lock so preflight can
-	// reject without leaving a stale lock file in .devbox/deploy/.
+	// reject without leaving a stale lock file in .dwe/deploy/.
 	cfg, err := config.LoadConfig(flags.ConfigPath)
 	if err != nil {
 		return fmt.Errorf("loading config: %w", err)

@@ -362,5 +362,5 @@ func TestRecompute_NilState(t *testing.T) {
 
 // TestDefaultRelPath checks the constant is correct.
 func TestDefaultRelPath(t *testing.T) {
-	assert.Equal(t, ".devbox/deploy/state.yml", DefaultRelPath)
+	assert.Equal(t, ".dwe/deploy/state.yml", DefaultRelPath)
 }

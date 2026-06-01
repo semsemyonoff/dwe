@@ -229,7 +229,7 @@ func TestWorkflowRunner_Parallel_OutputIsolation(t *testing.T) {
 		t.Fatalf("unexpected error: %v", err)
 	}
 
-	logDir := filepath.Join(dir, ".devbox", "logs", "parallel", "workflow", "wf.iso")
+	logDir := filepath.Join(dir, ".dwe", "logs", "parallel", "workflow", "wf.iso")
 	for sub, want := range map[string]string{"wf.one": "one-", "wf.two": "two-"} {
 		path := filepath.Join(logDir, sub+".log")
 		data, readErr := readFileBytes(path)

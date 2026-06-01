@@ -21,7 +21,7 @@ func newDeployStateCmd(flags *cmdctx.RootFlags) *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "state",
 		Short: "Manage deploy state",
-		Long: `View, clear, or repair the deploy state file at .devbox/deploy/state.yml.
+		Long: `View, clear, or repair the deploy state file at .dwe/deploy/state.yml.
 
 The deploy state file tracks the outcome and hashes of every deployed step,
 enabling idempotent deploys. Use 'show' to inspect the current state, 'clear'
@@ -41,7 +41,7 @@ func newDeployStateShowCmd(flags *cmdctx.RootFlags) *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "show",
 		Short: "Show the current deploy state",
-		Long: `Print the contents of .devbox/deploy/state.yml in human-readable YAML format.
+		Long: `Print the contents of .dwe/deploy/state.yml in human-readable YAML format.
 
 Shows per-step status, timestamps, action hashes, and duration metrics.
 If the state file does not exist, shows a message indicating no state.`,
@@ -57,7 +57,7 @@ If the state file does not exist, shows a message indicating no state.`,
 
 func deployStateShowCmd(flags *cmdctx.RootFlags, out io.Writer) error {
 	workDir := flags.ProjectRoot()
-	stateDir := filepath.Join(workDir, ".devbox", "deploy")
+	stateDir := filepath.Join(workDir, ".dwe", "deploy")
 	statePath := filepath.Join(stateDir, "state.yml")
 
 	// Check existence before loading to avoid printing zero-value state.
@@ -87,7 +87,7 @@ func newDeployStateClearCmd(flags *cmdctx.RootFlags) *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "clear",
 		Short: "Clear the deploy state",
-		Long: `Delete the deploy state file at .devbox/deploy/state.yml.
+		Long: `Delete the deploy state file at .dwe/deploy/state.yml.
 
 This removes all step status records, hashes, and run metrics. The next 'devbox deploy run'
 will treat all steps as needing to be executed.
@@ -108,7 +108,7 @@ In interactive mode (TTY), a confirmation prompt is shown. Use -y/--non-interact
 
 func deployStateClearCmd(flags *cmdctx.RootFlags, force bool) error {
 	workDir := flags.ProjectRoot()
-	stateDir := filepath.Join(workDir, ".devbox", "deploy")
+	stateDir := filepath.Join(workDir, ".dwe", "deploy")
 	statePath := filepath.Join(stateDir, "state.yml")
 	lockPath := filepath.Join(stateDir, "deploy.lock")
 
@@ -175,7 +175,7 @@ process terminations.`,
 
 func deployStateRepairCmd(flags *cmdctx.RootFlags) error {
 	workDir := flags.ProjectRoot()
-	stateDir := filepath.Join(workDir, ".devbox", "deploy")
+	stateDir := filepath.Join(workDir, ".dwe", "deploy")
 	statePath := filepath.Join(stateDir, "state.yml")
 	lockPath := filepath.Join(stateDir, "deploy.lock")
 

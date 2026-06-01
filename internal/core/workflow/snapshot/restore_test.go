@@ -39,7 +39,7 @@ func createBaselineSnap(t *testing.T, baseDir, name, hash string) string {
 
 	// Seed deploy state so manifest.Project.ConfigHash is populated from baseDir.
 	if hash != "" {
-		stateDir := filepath.Join(baseDir, ".devbox", "deploy")
+		stateDir := filepath.Join(baseDir, ".dwe", "deploy")
 		if err := os.MkdirAll(stateDir, 0o755); err != nil {
 			t.Fatalf("mkdir state: %v", err)
 		}
@@ -69,7 +69,7 @@ func createBaselineSnap(t *testing.T, baseDir, name, hash string) string {
 // writeDeployState writes a deploy state.yml with the given config_hash.
 func writeDeployState(t *testing.T, baseDir, hash string) {
 	t.Helper()
-	stateDir := filepath.Join(baseDir, ".devbox", "deploy")
+	stateDir := filepath.Join(baseDir, ".dwe", "deploy")
 	if err := os.MkdirAll(stateDir, 0o755); err != nil {
 		t.Fatalf("mkdir state: %v", err)
 	}

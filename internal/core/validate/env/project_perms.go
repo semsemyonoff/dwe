@@ -21,21 +21,21 @@ func (v *projectPermsValidator) Run(ctx validate.Context) []validate.Diagnostic 
 			"run from inside a devbox project (a directory containing devbox.yml)",
 		)}
 	}
-	devboxDir := filepath.Join(ctx.ProjectRoot, ".devbox")
+	devboxDir := filepath.Join(ctx.ProjectRoot, ".dwe")
 	if err := os.MkdirAll(devboxDir, 0o755); err != nil {
 		return []validate.Diagnostic{fail(
 			v.ID(),
-			fmt.Sprintf("cannot create .devbox/: %v", err),
+			fmt.Sprintf("cannot create .dwe/: %v", err),
 			"check filesystem permissions on the project directory",
 		)}
 	}
-	// Try-create a temp file in .devbox/ to confirm write access.
+	// Try-create a temp file in .dwe/ to confirm write access.
 	f, err := os.CreateTemp(devboxDir, ".perm-probe-*")
 	if err != nil {
 		return []validate.Diagnostic{fail(
 			v.ID(),
-			fmt.Sprintf(".devbox/ not writable: %v", err),
-			"check filesystem permissions on .devbox/",
+			fmt.Sprintf(".dwe/ not writable: %v", err),
+			"check filesystem permissions on .dwe/",
 		)}
 	}
 	name := f.Name()
@@ -48,8 +48,8 @@ func (v *projectPermsValidator) Run(ctx validate.Context) []validate.Diagnostic 
 	if err := os.MkdirAll(deployDir, 0o755); err != nil {
 		return []validate.Diagnostic{fail(
 			v.ID(),
-			fmt.Sprintf(".devbox/deploy/ not creatable: %v", err),
-			"remove the file at .devbox/deploy or fix directory permissions",
+			fmt.Sprintf(".dwe/deploy/ not creatable: %v", err),
+			"remove the file at .dwe/deploy or fix directory permissions",
 		)}
 	}
 
@@ -64,16 +64,16 @@ func (v *projectPermsValidator) Run(ctx validate.Context) []validate.Diagnostic 
 		if !fi.Mode().IsRegular() {
 			return []validate.Diagnostic{fail(
 				v.ID(),
-				fmt.Sprintf(".devbox/deploy/deploy.lock is not a regular file (mode: %s)", fi.Mode()),
-				"remove the path at .devbox/deploy/deploy.lock or fix filesystem state",
+				fmt.Sprintf(".dwe/deploy/deploy.lock is not a regular file (mode: %s)", fi.Mode()),
+				"remove the path at .dwe/deploy/deploy.lock or fix filesystem state",
 			)}
 		}
 		lf, err := os.OpenFile(lockFile, os.O_RDWR, 0)
 		if err != nil {
 			return []validate.Diagnostic{fail(
 				v.ID(),
-				fmt.Sprintf(".devbox/deploy/deploy.lock not writable: %v", err),
-				"check permissions on .devbox/deploy/deploy.lock or remove it",
+				fmt.Sprintf(".dwe/deploy/deploy.lock not writable: %v", err),
+				"check permissions on .dwe/deploy/deploy.lock or remove it",
 			)}
 		}
 		_ = lf.Close()
@@ -84,8 +84,8 @@ func (v *projectPermsValidator) Run(ctx validate.Context) []validate.Diagnostic 
 		if err != nil {
 			return []validate.Diagnostic{fail(
 				v.ID(),
-				fmt.Sprintf(".devbox/deploy/ not writable: %v", err),
-				"check filesystem permissions on .devbox/deploy/",
+				fmt.Sprintf(".dwe/deploy/ not writable: %v", err),
+				"check filesystem permissions on .dwe/deploy/",
 			)}
 		}
 		gname := g.Name()

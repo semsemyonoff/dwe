@@ -110,13 +110,13 @@ func (v *linterValidator) Run(vctx validate.Context) []validate.Diagnostic {
 			return append(operationalDiags, fail(
 				v.ID(),
 				fmt.Sprintf("%s: user-config override path %q: %v", v.ID(), bin, err),
-				"verify the path exists and is accessible, or remove the binary_"+v.entry.ID+" setting from ~/.config/devbox/config",
+				"verify the path exists and is accessible, or remove the binary_"+v.entry.ID+" setting from ~/.config/dwe/config",
 			))
 		} else if info.Mode()&0o111 == 0 {
 			return append(operationalDiags, fail(
 				v.ID(),
 				fmt.Sprintf("%s: user-config override path %q: file is not executable", v.ID(), bin),
-				"check file permissions on the override binary, or remove the binary_"+v.entry.ID+" setting from ~/.config/devbox/config",
+				"check file permissions on the override binary, or remove the binary_"+v.entry.ID+" setting from ~/.config/dwe/config",
 			))
 		}
 	} else if _, err := exec.LookPath(bin); err != nil {
@@ -128,7 +128,7 @@ func (v *linterValidator) Run(vctx validate.Context) []validate.Diagnostic {
 		return append(operationalDiags, warn(
 			v.ID(),
 			fmt.Sprintf("%s: bin %q not found on PATH", v.ID(), bin),
-			"install the linter or set a different bin: in devbox/validate.yml",
+			"install the linter or set a different bin: in workspace/validate.yml",
 		))
 	}
 
@@ -203,7 +203,7 @@ func (v *linterValidator) Run(vctx validate.Context) []validate.Diagnostic {
 			return append(operationalDiags, fail(
 				v.ID(),
 				fmt.Sprintf("%s timed out after %s", v.ID(), DefaultLinterTimeout),
-				"narrow paths: in devbox/validate.yml to reduce the number of files scanned",
+				"narrow paths: in workspace/validate.yml to reduce the number of files scanned",
 			))
 		}
 		// Parent context cancelled (e.g. Ctrl-C) — not a linter failure.

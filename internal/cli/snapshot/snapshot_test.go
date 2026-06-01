@@ -401,7 +401,7 @@ func TestSnapshotInspect_ConfigDiverged(t *testing.T) {
 		Root:       base,
 	}
 	// Write a deploy state with a different config_hash.
-	stateDir := filepath.Join(base, ".devbox", "deploy")
+	stateDir := filepath.Join(base, ".dwe", "deploy")
 	if err := os.MkdirAll(stateDir, 0o755); err != nil {
 		t.Fatalf("mkdir: %v", err)
 	}

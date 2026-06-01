@@ -3136,7 +3136,7 @@ binaries:
 		t.Fatal("LoadConfig: expected error for binaries: block, got nil")
 	}
 	if !strings.Contains(err.Error(), "binaries: moved to") {
-		t.Errorf("LoadConfig error message = %q, want migration message about ~/.config/devbox/config", err.Error())
+		t.Errorf("LoadConfig error message = %q, want migration message about ~/.config/dwe/config", err.Error())
 	}
 }
 

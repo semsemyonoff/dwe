@@ -14,7 +14,7 @@ func TestRenderDiagnosticsTable(t *testing.T) {
 		{
 			Severity: validate.SeverityOK,
 			Domain:   "config",
-			Target:   "config.devbox",
+			Target:   "config.dwe",
 			File:     "workspace.yml",
 			Message:  "",
 			Hint:     "",
@@ -97,7 +97,7 @@ func TestRenderDiagnosticsTable_WrapsLongMessageAndHint(t *testing.T) {
 
 func TestFormatDiagnostics_Quiet(t *testing.T) {
 	diags := []validate.Diagnostic{
-		{Severity: validate.SeverityOK, Domain: "config", Target: "config.devbox"},
+		{Severity: validate.SeverityOK, Domain: "config", Target: "config.dwe"},
 		{Severity: validate.SeverityInfo, Domain: "config", Target: "config.services"},
 		{Severity: validate.SeverityWarning, Domain: "config", Target: "config.docker"},
 		{Severity: validate.SeverityError, Domain: "config", Target: "config.deploy"},

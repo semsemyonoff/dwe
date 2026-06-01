@@ -442,16 +442,16 @@ bin/dwe docs generate --scope cli
 - Modify: `.gitignore` (`.devbox/` → `.dwe/`)
 - Modify: any `~/.config/devbox/` → `~/.config/dwe/` references
 
-- [ ] `rg -n '\.devbox' --type go` — enumerate; replace `.devbox/` → `.dwe/`, `.devbox` (literal) → `.dwe`
-- [ ] specifically verify `paths.go` edit ONLY changes line 14; line 28 stays unchanged
-- [ ] confirm `devbox_files.go` is NOT modified in this task
-- [ ] `rg -n 'config/devbox' --type go` for XDG path; replace with `config/dwe`
-- [ ] update mermaid `CacheDir()`: 3 `filepath.Join` literals + godoc; `rg -n 'devbox' internal/core/docs/mermaid/`
-- [ ] update `internal/core/docs/tui/diagram_inline.go:48,171` cache references
-- [ ] update `internal/shared/prompt/prompt.go:19` stateRelPath
-- [ ] update `.gitignore`
-- [ ] verify no testdata fixtures hardcode `.devbox/` as input data
-- [ ] `make build && make test` — must end **green**
+- [x] `rg -n '\.devbox' --type go` — enumerate; replace `.devbox/` → `.dwe/`, `.devbox` (literal) → `.dwe`
+- [x] specifically verify `paths.go` edit ONLY changes line 14; line 28 stays unchanged
+- [x] confirm `devbox_files.go` is NOT modified in this task
+- [x] `rg -n 'config/devbox' --type go` for XDG path; replace with `config/dwe`
+- [x] update mermaid `CacheDir()`: 3 `filepath.Join` literals + godoc; `rg -n 'devbox' internal/core/docs/mermaid/`
+- [x] update `internal/core/docs/tui/diagram_inline.go:48,171` cache references
+- [x] update `internal/shared/prompt/prompt.go:19` stateRelPath
+- [x] update `.gitignore`
+- [x] verify no testdata fixtures hardcode `.devbox/` as input data
+- [x] `make build && make test` — must end **green**
 
 ### Task 6: Phase 3c — Docker daemon labels
 

@@ -29,7 +29,7 @@ func TestRunPhases_HappyPath(t *testing.T) {
 		t.Fatalf("unexpected error: %v", err)
 	}
 
-	logPath := filepath.Join(workDir, ".devbox", "logs", "run.log")
+	logPath := filepath.Join(workDir, ".dwe", "logs", "run.log")
 	data, readErr := os.ReadFile(logPath)
 	if readErr != nil {
 		t.Fatalf("log file not created at %s: %v", logPath, readErr)
@@ -60,7 +60,7 @@ func TestRunPhases_AbortingStepFails(t *testing.T) {
 		t.Fatalf("want pipeline.ErrSilent, got %v", err)
 	}
 
-	logPath := filepath.Join(workDir, ".devbox", "logs", "run.log")
+	logPath := filepath.Join(workDir, ".dwe", "logs", "run.log")
 	if _, statErr := os.Stat(logPath); statErr != nil {
 		t.Errorf("log file not created on failure: %v", statErr)
 	}
@@ -99,11 +99,11 @@ func TestRunPhases_LogFileNameUsed(t *testing.T) {
 		t.Fatalf("unexpected error: %v", err)
 	}
 
-	logPath := filepath.Join(workDir, ".devbox", "logs", "stop.log")
+	logPath := filepath.Join(workDir, ".dwe", "logs", "stop.log")
 	if _, statErr := os.Stat(logPath); statErr != nil {
 		t.Errorf("expected log at %s, got: %v", logPath, statErr)
 	}
-	runLog := filepath.Join(workDir, ".devbox", "logs", "run.log")
+	runLog := filepath.Join(workDir, ".dwe", "logs", "run.log")
 	if _, statErr := os.Stat(runLog); !os.IsNotExist(statErr) {
 		t.Errorf("run.log should not exist for a stop pipeline")
 	}
@@ -118,7 +118,7 @@ func TestRunPhases_EmptyPhases(t *testing.T) {
 		t.Fatalf("unexpected error with empty phases: %v", err)
 	}
 
-	logPath := filepath.Join(workDir, ".devbox", "logs", "run.log")
+	logPath := filepath.Join(workDir, ".dwe", "logs", "run.log")
 	if _, statErr := os.Stat(logPath); statErr != nil {
 		t.Errorf("log file not created for empty phases: %v", statErr)
 	}
@@ -137,13 +137,13 @@ func TestRunPhases_LogDisabled(t *testing.T) {
 		t.Fatalf("unexpected error: %v", err)
 	}
 
-	logPath := filepath.Join(workDir, ".devbox", "logs", "run.log")
+	logPath := filepath.Join(workDir, ".dwe", "logs", "run.log")
 	if _, statErr := os.Stat(logPath); !os.IsNotExist(statErr) {
 		t.Errorf("log file should not exist when logging is disabled, got stat err: %v", statErr)
 	}
-	logsDir := filepath.Join(workDir, ".devbox", "logs")
+	logsDir := filepath.Join(workDir, ".dwe", "logs")
 	if _, statErr := os.Stat(logsDir); !os.IsNotExist(statErr) {
-		t.Errorf(".devbox/logs/ dir should not be created when logging is disabled, got stat err: %v", statErr)
+		t.Errorf(".dwe/logs/ dir should not be created when logging is disabled, got stat err: %v", statErr)
 	}
 }
 
@@ -159,7 +159,7 @@ func TestRunPhases_LogDisabledFailingStep(t *testing.T) {
 	if !errors.Is(err, pipeline.ErrSilent) {
 		t.Fatalf("want pipeline.ErrSilent, got %v", err)
 	}
-	logPath := filepath.Join(workDir, ".devbox", "logs", "run.log")
+	logPath := filepath.Join(workDir, ".dwe", "logs", "run.log")
 	if _, statErr := os.Stat(logPath); !os.IsNotExist(statErr) {
 		t.Errorf("log file should not exist when logging is disabled, got stat err: %v", statErr)
 	}

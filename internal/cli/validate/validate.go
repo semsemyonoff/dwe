@@ -220,7 +220,7 @@ Scope targets:
 	cmd.AddCommand(&cobra.Command{
 		Use:          "env",
 		Short:        "Validate environment readiness",
-		Long:         `Run built-in environment probes (docker binary, docker daemon, compose plugin, git/shell binaries, .devbox writable).`,
+		Long:         `Run built-in environment probes (docker binary, docker daemon, compose plugin, git/shell binaries, .dwe writable).`,
 		Args:         cobra.NoArgs,
 		SilenceUsage: true,
 		RunE: func(cmd *cobra.Command, args []string) error {

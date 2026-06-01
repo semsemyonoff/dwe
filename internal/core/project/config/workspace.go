@@ -101,8 +101,8 @@ type DweConfig struct {
 	// in export rules. Populated only by LoadConfig; not serialized.
 	Raw map[string]any `yaml:"-"`
 
-	// userConfig holds user-level preferences loaded from ~/.config/devbox/config
-	// and .devbox/config. Used by binary accessors to resolve engine binary overrides.
+	// userConfig holds user-level preferences loaded from ~/.config/dwe/config
+	// and .dwe/config. Used by binary accessors to resolve engine binary overrides.
 	// Nil if load failed (graceful degradation).
 	userConfig *userpkg.Config `yaml:"-"`
 }
@@ -110,7 +110,7 @@ type DweConfig struct {
 // ProjectDeployConfig holds the project-wide deploy pipeline loaded from devbox/deploy.yml.
 // It is loaded separately and not part of the 3-layer config merge.
 //
-// Log enables/disables file logging at .devbox/logs/<pipeline>.log for the pipeline run.
+// Log enables/disables file logging at .dwe/logs/<pipeline>.log for the pipeline run.
 // nil means "use loader default": LoadProjectDeployConfig defaults to true.
 // Set explicitly via top-level `log: true|false`.
 type ProjectDeployConfig struct {
@@ -127,7 +127,7 @@ func (c *ProjectDeployConfig) LogEnabled() bool {
 // ServiceDeployConfig holds a per-service deploy pipeline loaded from devbox/services/<name>/deploy.yml.
 // It is loaded separately and not part of the 3-layer config merge.
 //
-// Log enables/disables file logging at .devbox/logs/<pipeline>.log for the pipeline run.
+// Log enables/disables file logging at .dwe/logs/<pipeline>.log for the pipeline run.
 // nil means "use loader default": LoadServiceDeployConfig defaults to true.
 // Set explicitly via top-level `log: true|false`.
 //
@@ -1143,7 +1143,7 @@ func LoadConfig(devboxPath string) (*DweConfig, error) {
 
 	// Reject binaries: blocks — they've moved to user-config
 	if _, ok := merged["binaries"]; ok {
-		return nil, fmt.Errorf("binaries: moved to ~/.config/devbox/config — use binary_docker=/path, binary_git=/path, etc. See docs/reference/config/devbox.md")
+		return nil, fmt.Errorf("binaries: moved to ~/.config/dwe/config — use binary_docker=/path, binary_git=/path, etc. See docs/reference/config/devbox.md")
 	}
 
 	// Reject tools: blocks — replaced by services with type:tool

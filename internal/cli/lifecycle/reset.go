@@ -114,7 +114,7 @@ func newResetPlanCmd(flags *cmdctx.RootFlags) *cobra.Command {
 // Use --yes to skip confirmation prompts.
 //
 // File logging is controlled by the top-level `log:` field in devbox/reset.yml
-// (default: disabled). Enable with `log: true` to write .devbox/logs/reset.log.
+// (default: disabled). Enable with `log: true` to write .dwe/logs/reset.log.
 func newResetRunCmd(flags *cmdctx.RootFlags) *cobra.Command {
 	var yes bool
 	var serviceName string
@@ -133,7 +133,7 @@ requiring a subsequent deploy. Volumes are NOT auto-removed; use
 'docker_remove_project_volumes' in services/<name>/reset.yml to opt in.
 
 File logging is disabled by default for reset. Enable it with 'log: true' at
-the top of devbox/reset.yml; output will be written to .devbox/logs/reset.log.`,
+the top of devbox/reset.yml; output will be written to .dwe/logs/reset.log.`,
 		Args:         cobra.NoArgs,
 		SilenceUsage: true,
 		RunE: func(cmd *cobra.Command, args []string) error {

@@ -49,13 +49,13 @@ func TestSnapshotsDir(t *testing.T) {
 
 func TestSnapshotPaths(t *testing.T) {
 	base := t.TempDir()
-	if got, want := CurrentPointer(base), filepath.Join(base, ".devbox/snapshots/current"); got != want {
+	if got, want := CurrentPointer(base), filepath.Join(base, ".dwe/snapshots/current"); got != want {
 		t.Errorf("CurrentPointer: got %q want %q", got, want)
 	}
-	if got, want := LockPath(base), filepath.Join(base, ".devbox/snapshots/snapshot.lock"); got != want {
+	if got, want := LockPath(base), filepath.Join(base, ".dwe/snapshots/snapshot.lock"); got != want {
 		t.Errorf("LockPath: got %q want %q", got, want)
 	}
-	if got, want := PreRestoreBackup(base), filepath.Join(base, ".devbox/snapshots/.pre-restore-backup"); got != want {
+	if got, want := PreRestoreBackup(base), filepath.Join(base, ".dwe/snapshots/.pre-restore-backup"); got != want {
 		t.Errorf("PreRestoreBackup: got %q want %q", got, want)
 	}
 	if got, want := SnapshotDir(base, nil, "foo"), filepath.Join(base, "snapshots/foo"); got != want {

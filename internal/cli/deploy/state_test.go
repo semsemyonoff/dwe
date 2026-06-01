@@ -19,7 +19,7 @@ import (
 func TestDeployStateShow(t *testing.T) {
 	t.Run("state file exists", func(t *testing.T) {
 		workDir := t.TempDir()
-		stateDir := filepath.Join(workDir, ".devbox", "deploy")
+		stateDir := filepath.Join(workDir, ".dwe", "deploy")
 		statePath := filepath.Join(stateDir, "state.yml")
 
 		// Create a state file
@@ -62,7 +62,7 @@ func TestDeployStateShow(t *testing.T) {
 func TestDeployStateClear(t *testing.T) {
 	t.Run("clears existing state", func(t *testing.T) {
 		workDir := t.TempDir()
-		stateDir := filepath.Join(workDir, ".devbox", "deploy")
+		stateDir := filepath.Join(workDir, ".dwe", "deploy")
 		statePath := filepath.Join(stateDir, "state.yml")
 
 		// Create a state file
@@ -105,7 +105,7 @@ func TestDeployStateClear(t *testing.T) {
 func TestDeployStateRepair(t *testing.T) {
 	t.Run("recomputes status aggregates", func(t *testing.T) {
 		workDir := t.TempDir()
-		stateDir := filepath.Join(workDir, ".devbox", "deploy")
+		stateDir := filepath.Join(workDir, ".dwe", "deploy")
 		statePath := filepath.Join(stateDir, "state.yml")
 
 		// Create a state with service status that needs recompute
@@ -152,7 +152,7 @@ func TestDeployStateRepair(t *testing.T) {
 
 	t.Run("preserves step data", func(t *testing.T) {
 		workDir := t.TempDir()
-		stateDir := filepath.Join(workDir, ".devbox", "deploy")
+		stateDir := filepath.Join(workDir, ".dwe", "deploy")
 		statePath := filepath.Join(stateDir, "state.yml")
 
 		// Create state with step data

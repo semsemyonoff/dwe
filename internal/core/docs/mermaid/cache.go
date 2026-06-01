@@ -27,7 +27,7 @@ type FileCache struct {
 }
 
 // NewFileCache constructs a FileCache wrapping the given renderer.
-// Dir is the cache directory (e.g. $XDG_CACHE_HOME/devbox/mermaid).
+// Dir is the cache directory (e.g. $XDG_CACHE_HOME/dwe/mermaid).
 // CapBytes is the max cache size; eviction removes oldest by mtime until under cap.
 // Version is called once (via sync.OnceValue in callers) to include in the cache key.
 func NewFileCache(dir string, capBytes int64, underlying Renderer, version func() string) *FileCache {
@@ -194,17 +194,17 @@ func randHex() string {
 }
 
 // CacheDir returns the cache directory path for mermaid diagrams.
-// Returns $XDG_CACHE_HOME/devbox/mermaid/ if XDG_CACHE_HOME is set,
-// else os.UserCacheDir() + /devbox/mermaid/,
-// else os.TempDir() + /devbox-mermaid/.
+// Returns $XDG_CACHE_HOME/dwe/mermaid/ if XDG_CACHE_HOME is set,
+// else os.UserCacheDir() + /dwe/mermaid/,
+// else os.TempDir() + /dwe-mermaid/.
 func CacheDir() (string, error) {
 	if xdg := os.Getenv("XDG_CACHE_HOME"); xdg != "" {
-		return filepath.Join(xdg, "workspace", "mermaid"), nil
+		return filepath.Join(xdg, "dwe", "mermaid"), nil
 	}
 
 	if userCache, err := os.UserCacheDir(); err == nil {
-		return filepath.Join(userCache, "workspace", "mermaid"), nil
+		return filepath.Join(userCache, "dwe", "mermaid"), nil
 	}
 
-	return filepath.Join(os.TempDir(), "devbox-mermaid"), nil
+	return filepath.Join(os.TempDir(), "dwe-mermaid"), nil
 }

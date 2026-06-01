@@ -15,7 +15,7 @@ import (
 // unsafeFSRe matches characters not allowed in sanitised filesystem names.
 var unsafeFSRe = regexp.MustCompile(`[^A-Za-z0-9._-]+`)
 
-// OpenPipelineLog opens (or skips) a pipeline log file at .devbox/logs/<name>.log.
+// OpenPipelineLog opens (or skips) a pipeline log file at .dwe/logs/<name>.log.
 //
 // Returns three separate writers so PlainReporter can drive its live-line UI
 // without fan-out at the writer level:
@@ -45,7 +45,7 @@ func OpenPipelineLog(workDir, name string, enabled bool) (
 	if !enabled {
 		return render.Stdout(), nil, termOut, "", func() {}, nil
 	}
-	logsDir := filepath.Join(workDir, ".devbox", "logs")
+	logsDir := filepath.Join(workDir, ".dwe", "logs")
 	if mkErr := os.MkdirAll(logsDir, 0o755); mkErr != nil {
 		return nil, nil, nil, "", func() {}, fmt.Errorf("creating logs directory %s: %w", logsDir, mkErr)
 	}
@@ -58,7 +58,7 @@ func OpenPipelineLog(workDir, name string, enabled bool) (
 }
 
 // OpenSubStepLog opens (or skips) a per-sub-step log file at
-// .devbox/logs/parallel/<pipeline>/<group>/<sub>.log.
+// .dwe/logs/parallel/<pipeline>/<group>/<sub>.log.
 //
 // When enabled is true it creates the directory tree and returns the open file
 // plus its absolute path. When enabled is false it returns (nil, "", nil) — the
@@ -71,7 +71,7 @@ func OpenSubStepLog(workDir, pipelineName, groupName, subStepName string, enable
 		return nil, "", nil
 	}
 	dir := filepath.Join(
-		workDir, ".devbox", "logs", "parallel",
+		workDir, ".dwe", "logs", "parallel",
 		sanitizeForFS(pipelineName),
 		sanitizeForFS(groupName),
 	)

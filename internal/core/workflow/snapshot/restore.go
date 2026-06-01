@@ -115,7 +115,7 @@ type RestoreResult struct {
 //     - mismatch + require_matching_config → RestoreBlockedError.
 //     - mismatch otherwise → warning on Stderr; restore proceeds.
 //  4. Optionally confirm (skipped when SkipConfirm or callback returns true).
-//  5. Back up the working-copy devbox files into .devbox/snapshots/.pre-restore-backup/.
+//  5. Back up the working-copy devbox files into .dwe/snapshots/.pre-restore-backup/.
 //  6. Restore devbox files from <snap>/devbox/ over the working copies.
 //  7. Run the restore workflow under SnapshotScopeRestoreOrRemove.
 //  8. On success: update current pointer; record last_restore.status="ok".
@@ -336,7 +336,7 @@ func confirmRestore(fn func(RestoreConfirmContext) (bool, error), ctx RestoreCon
 }
 
 // writePreRestoreBackup snapshots the working-copy devbox/local.yml and
-// .devbox/deploy/state.yml into <stateDir>/.pre-restore-backup/, replacing any
+// .dwe/deploy/state.yml into <stateDir>/.pre-restore-backup/, replacing any
 // previous backup atomically (write each file via meta.WriteFileAtomic).
 // Missing source files are skipped silently.
 func writePreRestoreBackup(baseDir string) (string, error) {

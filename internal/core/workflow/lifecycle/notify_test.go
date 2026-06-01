@@ -32,7 +32,7 @@ func (r *recordingNotifier) snapshot() []notify.Event {
 
 // pointHomeAtTempDir isolates the HOME-relative userconfig path for the
 // test process so global userconfig reads can't accidentally pick up
-// the developer's real ~/.config/devbox/config.
+// the developer's real ~/.config/dwe/config.
 func pointHomeAtTempDir(t *testing.T) {
 	t.Helper()
 	t.Setenv("HOME", t.TempDir())

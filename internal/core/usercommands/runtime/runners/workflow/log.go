@@ -12,7 +12,7 @@ import (
 
 // unsafeWorkflowFSRe matches characters not allowed in sanitised filesystem names.
 // Matches the pattern used by pipeline.sanitizeForFS so workflow logs sit
-// alongside pipeline parallel logs under a shared `.devbox/logs/parallel/` tree.
+// alongside pipeline parallel logs under a shared `.dwe/logs/parallel/` tree.
 var unsafeWorkflowFSRe = regexp.MustCompile(`[^A-Za-z0-9._-]+`)
 
 // sanitizeWorkflowFS returns a filesystem-safe version of s. Empty / all-unsafe
@@ -27,7 +27,7 @@ func sanitizeWorkflowFS(s string) string {
 }
 
 // openWorkflowSubStepLog opens a per-sub-step log file at
-// .devbox/logs/parallel/workflow/<workflow-id>/<sub-name>.log.
+// .dwe/logs/parallel/workflow/<workflow-id>/<sub-name>.log.
 //
 // Mirrors pipeline.OpenSubStepLog but lives here to avoid an import cycle
 // (pipeline imports usercommands → runtime). When enabled is false or workDir
@@ -37,7 +37,7 @@ func openWorkflowSubStepLog(workDir, workflowID, subName string, enabled bool) (
 		return nil, "", nil
 	}
 	dir := filepath.Join(
-		workDir, ".devbox", "logs", "parallel", "workflow",
+		workDir, ".dwe", "logs", "parallel", "workflow",
 		sanitizeWorkflowFS(workflowID),
 	)
 	if err := os.MkdirAll(dir, 0o755); err != nil {

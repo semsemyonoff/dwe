@@ -4,7 +4,7 @@ import "github.com/semsemyonoff/dwe/internal/core/project/config"
 
 // DefaultDeployConfig returns a freshly-allocated default deploy pipeline. Callers may mutate the result safely.
 // Log defaults to true to match LoadProjectDeployConfig's behavior — a project with no deploy.yml gets the
-// same .devbox/logs/deploy.log artifact as a project that authors deploy.yml without an explicit log: field.
+// same .dwe/logs/deploy.log artifact as a project that authors deploy.yml without an explicit log: field.
 func DefaultDeployConfig() *config.ProjectDeployConfig {
 	logOn := true
 	return &config.ProjectDeployConfig{

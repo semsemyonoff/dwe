@@ -23,8 +23,8 @@ const (
 
 // Load resolves the effective Config by applying:
 //  1. embedded defaults
-//  2. global file at ~/.config/devbox/config (missing → skip)
-//  3. project file at <projectRoot>/.devbox/config (missing → skip)
+//  2. global file at ~/.config/dwe/config (missing → skip)
+//  3. project file at <projectRoot>/.dwe/config (missing → skip)
 //  4. environment variables (highest precedence)
 //
 // Missing files are silently skipped. Parse errors and home-dir
@@ -37,13 +37,13 @@ func Load(projectRoot string) (*Config, error) {
 	if err != nil {
 		return nil, fmt.Errorf("userconfig: resolve home dir: %w", err)
 	}
-	globalPath := filepath.Join(home, ".config", "devbox", "config")
+	globalPath := filepath.Join(home, ".config", "dwe", "config")
 	if err := loadFile(globalPath, cfg); err != nil {
 		return nil, err
 	}
 
 	if projectRoot != "" {
-		projectPath := filepath.Join(projectRoot, ".devbox", "config")
+		projectPath := filepath.Join(projectRoot, ".dwe", "config")
 		if err := loadFile(projectPath, cfg); err != nil {
 			return nil, err
 		}

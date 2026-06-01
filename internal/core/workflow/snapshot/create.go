@@ -96,7 +96,7 @@ type CreateResult struct {
 //  1. Validate name, snapshot config block, and variant.
 //  2. If the snapshot dir already exists, confirm overwrite (or fail).
 //  3. Create <snap>/ + <snap>/devbox/; copy devbox/local.yml and
-//     .devbox/deploy/state.yml into <snap>/devbox/ (each is optional —
+//     .dwe/deploy/state.yml into <snap>/devbox/ (each is optional —
 //     missing source files are skipped silently).
 //  4. Run the selected create workflow under SnapshotScopeCreate.
 //  5. Scan artifacts, write the manifest atomically, update the current

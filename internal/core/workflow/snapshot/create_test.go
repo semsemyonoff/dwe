@@ -309,7 +309,7 @@ func TestCreate_CapturesDevboxFiles(t *testing.T) {
 	tmp := t.TempDir()
 	// Seed a local.yml and a deploy state file.
 	writeStringFile(t, filepath.Join(tmp, "workspace", "local.yml"), "key: value\n")
-	writeStringFile(t, filepath.Join(tmp, ".devbox", "deploy", "state.yml"), "project:\n  config_hash: abc\n")
+	writeStringFile(t, filepath.Join(tmp, ".dwe", "deploy", "state.yml"), "project:\n  config_hash: abc\n")
 
 	reg := newRegistryWith(t, "x", "true")
 	snapCfg := newSnapCfgWithCreate(model.WorkflowStep{Command: "x"})

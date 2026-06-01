@@ -25,13 +25,13 @@ func (e *ProjectLockHeldError) ExitCode() int { return 2 }
 // DeployLockPath returns the canonical path to deploy.lock for the given
 // project root.
 func DeployLockPath(baseDir string) string {
-	return filepath.Join(baseDir, ".devbox", "deploy", "deploy.lock")
+	return filepath.Join(baseDir, ".dwe", "deploy", "deploy.lock")
 }
 
 // SnapshotLockPath returns the canonical path to snapshot.lock for the given
 // project root.
 func SnapshotLockPath(baseDir string) string {
-	return filepath.Join(baseDir, ".devbox", "snapshots", "snapshot.lock")
+	return filepath.Join(baseDir, ".dwe", "snapshots", "snapshot.lock")
 }
 
 // AcquireProjectLocks acquires the deploy and snapshot locks for the project,

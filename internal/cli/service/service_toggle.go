@@ -186,7 +186,7 @@ func restoreFileState(path string, captured []byte) error {
 	if err := os.MkdirAll(dir, 0o755); err != nil {
 		return fmt.Errorf("mkdir for restore: %w", err)
 	}
-	tmp, err := os.CreateTemp(dir, ".devbox-restore-*")
+	tmp, err := os.CreateTemp(dir, ".dwe-restore-*")
 	if err != nil {
 		return fmt.Errorf("create temp for restore: %w", err)
 	}

@@ -3,7 +3,7 @@
 // shadow pack at devbox/templates/<kind>/<name>.local/<rel> overrides the
 // canonical devbox/templates/<kind>/<name>/<rel> file. The override pack is
 // gitignored by the project's `*.local/` pattern; the canonical pack is
-// tracked. The .devbox/ runtime directory is never consulted here.
+// tracked. The .dwe/ runtime directory is never consulted here.
 package packroot
 
 import (

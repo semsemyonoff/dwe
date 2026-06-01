@@ -42,7 +42,7 @@ When more than one topic matches and there is no unique closest segment, the com
 lists the candidates and exits with an error — pass a more specific path to
 disambiguate. Common examples:
   - "devbox" alone is ambiguous (both "reference/cli/devbox" and
-    "reference/config/devbox" match); pass "config/devbox" or "cli/devbox".
+    "reference/config/dwe" match); pass "config/dwe" or "cli/devbox".
   - Multi-page topics like "config/services" are ambiguous on their own;
     pass the specific sub-page, e.g. "config/services/index",
     "config/services/fields", or "config/services/examples".

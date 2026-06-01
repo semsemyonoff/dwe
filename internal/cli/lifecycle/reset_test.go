@@ -28,7 +28,7 @@ import (
 func TestResetRunCmd_projectWideCleanup(t *testing.T) {
 	tmpDir := t.TempDir()
 	configPath := filepath.Join(tmpDir, "workspace.yml")
-	stateDir := filepath.Join(tmpDir, ".devbox", "deploy")
+	stateDir := filepath.Join(tmpDir, ".dwe", "deploy")
 	statePath := filepath.Join(stateDir, "state.yml")
 
 	// Create minimal devbox.yml + devbox/services/main/service.yml
@@ -128,7 +128,7 @@ phases:
 func TestResetRunCmd_handlesMissingStateFile(t *testing.T) {
 	tmpDir := t.TempDir()
 	configPath := filepath.Join(tmpDir, "workspace.yml")
-	stateDir := filepath.Join(tmpDir, ".devbox", "deploy")
+	stateDir := filepath.Join(tmpDir, ".dwe", "deploy")
 	statePath := filepath.Join(stateDir, "state.yml")
 
 	// Create minimal devbox.yml
@@ -186,7 +186,7 @@ phases:
 // service is removed via RemoveService, the state file is deleted entirely.
 func TestResetRunCmd_stateRemovalWhenNoServicesRemain(t *testing.T) {
 	tmpDir := t.TempDir()
-	stateDir := filepath.Join(tmpDir, ".devbox", "deploy")
+	stateDir := filepath.Join(tmpDir, ".dwe", "deploy")
 	statePath := filepath.Join(stateDir, "state.yml")
 
 	// Create initial state file with single service
@@ -227,7 +227,7 @@ func TestResetRunCmd_stateRemovalWhenNoServicesRemain(t *testing.T) {
 // TestResetRunCmd_multipleLockAttempts verifies that lock cleanup allows retry.
 func TestResetRunCmd_multipleLockAttempts(t *testing.T) {
 	tmpDir := t.TempDir()
-	lockPath := filepath.Join(tmpDir, ".devbox", "deploy", "deploy.lock")
+	lockPath := filepath.Join(tmpDir, ".dwe", "deploy", "deploy.lock")
 
 	// We don't test actual concurrency here, but we verify that
 	// the lock file is created and cleaned up properly in sequential scenarios.
@@ -270,7 +270,7 @@ func makeResetServiceTestDir(t *testing.T, serviceName string, enabled, mandator
 }
 
 // makeResetServiceFixture is the options-form sibling that supports withDir.
-// It also installs a fake docker binary via .devbox/config so the synthetic
+// It also installs a fake docker binary via .dwe/config so the synthetic
 // container baseline can run without a real Docker daemon. The fake's
 // invocation log path is recorded in fakeDockerLogPath so callers can read it
 // via dockerInvocations(t, dir).
@@ -334,24 +334,24 @@ func makeResetServiceFixture(t *testing.T, serviceName string, opts resetService
 }
 
 // installFakeDocker writes a shell-script fake docker binary into
-// <baseDir>/.devbox/bin/docker and a .devbox/config that points
+// <baseDir>/.dwe/bin/docker and a .dwe/config that points
 // binary_docker at it. The fake logs every invocation (as "<args>\n") to
-// <baseDir>/.devbox/docker-args.log and always exits 0. Use
+// <baseDir>/.dwe/docker-args.log and always exits 0. Use
 // dockerInvocations(t, baseDir) to read the log.
 func installFakeDocker(t *testing.T, baseDir string) {
 	t.Helper()
-	binDir := filepath.Join(baseDir, ".devbox", "bin")
+	binDir := filepath.Join(baseDir, ".dwe", "bin")
 	if err := os.MkdirAll(binDir, 0o755); err != nil {
 		t.Fatalf("mkdir bin: %v", err)
 	}
-	logPath := filepath.Join(baseDir, ".devbox", "docker-args.log")
+	logPath := filepath.Join(baseDir, ".dwe", "docker-args.log")
 	fakePath := filepath.Join(binDir, "docker")
 	script := "#!/bin/sh\nprintf '%s\\n' \"$*\" >> " + logPath + "\nexit 0\n"
 	if err := os.WriteFile(fakePath, []byte(script), 0o755); err != nil {
 		t.Fatalf("write fake docker: %v", err)
 	}
 	userCfg := "binary_docker=" + fakePath + "\n"
-	if err := os.WriteFile(filepath.Join(baseDir, ".devbox", "config"), []byte(userCfg), 0o644); err != nil {
+	if err := os.WriteFile(filepath.Join(baseDir, ".dwe", "config"), []byte(userCfg), 0o644); err != nil {
 		t.Fatalf("write user config: %v", err)
 	}
 }
@@ -360,7 +360,7 @@ func installFakeDocker(t *testing.T, baseDir string) {
 // one entry per invocation in call order. Returns nil when no calls.
 func dockerInvocations(t *testing.T, baseDir string) []string {
 	t.Helper()
-	logPath := filepath.Join(baseDir, ".devbox", "docker-args.log")
+	logPath := filepath.Join(baseDir, ".dwe", "docker-args.log")
 	data, err := os.ReadFile(logPath)
 	if err != nil {
 		if errors.Is(err, os.ErrNotExist) {
@@ -1134,9 +1134,9 @@ func TestResetServiceRun_PipelineFailureSkipsJournal(t *testing.T) {
 	}
 
 	// Replace fake docker with a failing one.
-	logPath := filepath.Join(dir, ".devbox", "docker-args.log")
+	logPath := filepath.Join(dir, ".dwe", "docker-args.log")
 	failingScript := "#!/bin/sh\nprintf '%s\\n' \"$*\" >> " + logPath + "\necho 'boom' >&2\nexit 1\n"
-	fakePath := filepath.Join(dir, ".devbox", "bin", "docker")
+	fakePath := filepath.Join(dir, ".dwe", "bin", "docker")
 	if err := os.WriteFile(fakePath, []byte(failingScript), 0o755); err != nil {
 		t.Fatalf("write failing docker: %v", err)
 	}
