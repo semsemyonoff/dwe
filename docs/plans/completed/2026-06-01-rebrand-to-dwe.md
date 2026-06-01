@@ -754,9 +754,9 @@ commands:
 
 ### Task 17: Update memory and move plan
 
-- [ ] update memory `~/.claude/projects/.../memory/project_rename_devbox_to_dwe.md` — code phase done
-- [ ] mark every task in this plan `[x]`
-- [ ] `mkdir -p docs/plans/completed && git mv docs/plans/2026-06-01-rebrand-to-dwe.md docs/plans/completed/`
+- [x] update memory `~/.claude/projects/.../memory/project_rename_devbox_to_dwe.md` — code phase done
+- [x] mark every task in this plan `[x]`
+- [x] `mkdir -p docs/plans/completed && git mv docs/plans/2026-06-01-rebrand-to-dwe.md docs/plans/completed/`
 
 ## Post-Completion
 
