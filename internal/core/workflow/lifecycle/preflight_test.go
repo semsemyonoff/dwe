@@ -20,7 +20,7 @@ import (
 // and assert GitProbeFunc is never invoked.
 func TestRunRun_PreflightBlocksBeforeGitProbe(t *testing.T) {
 	dir := t.TempDir()
-	cfgPath := makeMinimalDevboxYML(t, dir)
+	cfgPath := makeMinimalWorkspaceYML(t, dir)
 	workspaceDir := filepath.Join(dir, "workspace")
 	if err := os.MkdirAll(workspaceDir, 0o755); err != nil {
 		t.Fatal(err)
@@ -57,7 +57,7 @@ func TestRunRun_PreflightBlocksBeforeGitProbe(t *testing.T) {
 // stop run phase is in helpers, we just assert the preflight error surfaces.
 func TestRunStop_PreflightBlocksBeforePhases(t *testing.T) {
 	dir := t.TempDir()
-	cfgPath := makeMinimalDevboxYML(t, dir)
+	cfgPath := makeMinimalWorkspaceYML(t, dir)
 
 	prev := PreflightFunc
 	t.Cleanup(func() { PreflightFunc = prev })
@@ -77,7 +77,7 @@ func TestRunStop_PreflightBlocksBeforePhases(t *testing.T) {
 // TestRunRun_SkipPreflightThreaded confirms ctx.SkipPreflight propagates.
 func TestRunRun_SkipPreflightThreaded(t *testing.T) {
 	dir := t.TempDir()
-	cfgPath := makeMinimalDevboxYML(t, dir)
+	cfgPath := makeMinimalWorkspaceYML(t, dir)
 	workspaceDir := filepath.Join(dir, "workspace")
 	if err := os.MkdirAll(workspaceDir, 0o755); err != nil {
 		t.Fatal(err)
@@ -103,7 +103,7 @@ func TestRunRun_SkipPreflightThreaded(t *testing.T) {
 // SkipPreflight to both legs (stop then run).
 func TestRunRestart_PropagatesSkipPreflight(t *testing.T) {
 	dir := t.TempDir()
-	cfgPath := makeMinimalDevboxYML(t, dir)
+	cfgPath := makeMinimalWorkspaceYML(t, dir)
 	workspaceDir := filepath.Join(dir, "workspace")
 	if err := os.MkdirAll(workspaceDir, 0o755); err != nil {
 		t.Fatal(err)

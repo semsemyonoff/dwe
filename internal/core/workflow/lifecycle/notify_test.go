@@ -53,7 +53,7 @@ func TestRunRun_FiresNotifyOnSuccess(t *testing.T) {
 	pointHomeAtTempDir(t)
 	rec := installRecordingNotifier(t)
 	dir := t.TempDir()
-	cfgPath := makeMinimalDevboxYML(t, dir)
+	cfgPath := makeMinimalWorkspaceYML(t, dir)
 	workspaceDir := filepath.Join(dir, "workspace")
 	if err := os.MkdirAll(workspaceDir, 0755); err != nil {
 		t.Fatalf("mkdir: %v", err)
@@ -87,7 +87,7 @@ func TestRunRun_FiresNotifyOnFailure(t *testing.T) {
 	pointHomeAtTempDir(t)
 	rec := installRecordingNotifier(t)
 	dir := t.TempDir()
-	cfgPath := makeMinimalDevboxYML(t, dir)
+	cfgPath := makeMinimalWorkspaceYML(t, dir)
 	// Write a lifecycle.yml with a YAML parse error to trigger a load failure.
 	workspaceDir := filepath.Join(dir, "workspace")
 	if err := os.MkdirAll(workspaceDir, 0755); err != nil {
@@ -145,7 +145,7 @@ func TestRunRun_SkipNotify_NoEvent(t *testing.T) {
 	pointHomeAtTempDir(t)
 	rec := installRecordingNotifier(t)
 	dir := t.TempDir()
-	cfgPath := makeMinimalDevboxYML(t, dir)
+	cfgPath := makeMinimalWorkspaceYML(t, dir)
 	workspaceDir := filepath.Join(dir, "workspace")
 	if err := os.MkdirAll(workspaceDir, 0755); err != nil {
 		t.Fatalf("mkdir: %v", err)
@@ -165,7 +165,7 @@ func TestRunRestart_PropagatesSkipNotify(t *testing.T) {
 	pointHomeAtTempDir(t)
 	rec := installRecordingNotifier(t)
 	dir := t.TempDir()
-	cfgPath := makeMinimalDevboxYML(t, dir)
+	cfgPath := makeMinimalWorkspaceYML(t, dir)
 	workspaceDir := filepath.Join(dir, "workspace")
 	if err := os.MkdirAll(workspaceDir, 0755); err != nil {
 		t.Fatalf("mkdir: %v", err)

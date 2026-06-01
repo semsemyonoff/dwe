@@ -33,8 +33,8 @@ func stubRunPhases(t *testing.T) {
 	}
 }
 
-// makeMinimalDevboxYML writes the minimum workspace.yml needed for config.LoadConfig to succeed.
-func makeMinimalDevboxYML(t *testing.T, dir string) string {
+// makeMinimalWorkspaceYML writes the minimum workspace.yml needed for config.LoadConfig to succeed.
+func makeMinimalWorkspaceYML(t *testing.T, dir string) string {
 	t.Helper()
 	cfgPath := filepath.Join(dir, "workspace.yml")
 	content := "project:\n  name: test\n  prefix: dwe\n"

@@ -57,7 +57,7 @@ func withTempCwd(t *testing.T, dir string) {
 	t.Cleanup(func() { _ = os.Chdir(prev) })
 }
 
-func writeDevbox(t *testing.T, root, name string) {
+func writeWorkspace(t *testing.T, root, name string) {
 	t.Helper()
 	body := "project:\n  name: " + name + "\n"
 	if err := os.WriteFile(filepath.Join(root, "workspace.yml"), []byte(body), 0o644); err != nil {
@@ -68,7 +68,7 @@ func writeDevbox(t *testing.T, root, name string) {
 func TestPromptCmd_RunInProject(t *testing.T) {
 	// Test that cobra RunE produces the same output as prompt.Run directly.
 	tmp := t.TempDir()
-	writeDevbox(t, tmp, "demoproj")
+	writeWorkspace(t, tmp, "demoproj")
 	t.Setenv("NO_COLOR", "1")
 	withTempCwd(t, tmp)
 
@@ -123,7 +123,7 @@ func TestPromptCmd_RunOutsideProject(t *testing.T) {
 
 func TestPromptCmd_CheckFlag(t *testing.T) {
 	tmp := t.TempDir()
-	writeDevbox(t, tmp, "x")
+	writeWorkspace(t, tmp, "x")
 	t.Setenv("NO_COLOR", "1")
 	withTempCwd(t, tmp)
 

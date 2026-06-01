@@ -53,8 +53,8 @@ func Generate(opts Opts) (string, error) {
 
 	if opts.ProjectRoot == "" {
 		// Project-agnostic output.
-		writeTitle(&b, "dwe")
-		writeBlockquote(&b, "dwe is a developer tool for local development environments running on Docker. "+
+		writeTitle(&b, "DWE")
+		writeBlockquote(&b, "DWE (Dev Workspace Engine) is a CLI for managing Docker-based local development environments. "+
 			"Use `dwe --help` for a full command list.")
 		writeCommandsSection(&b, opts.Commands)
 		writeDocumentationSection(&b, opts.DocTopics, opts.IncludeIntern)
@@ -65,10 +65,10 @@ func Generate(opts Opts) (string, error) {
 	// Project-aware output.
 	name := opts.ProjectName
 	if name == "" {
-		name = "dwe project"
+		name = "DWE project"
 	}
 	writeTitle(&b, name)
-	writeBlockquote(&b, "dwe project environment. "+
+	writeBlockquote(&b, "DWE (Dev Workspace Engine) project environment. "+
 		"Use `dwe status` to see running services, `dwe validate` to check project health, "+
 		"and `dwe docs llms-txt` to regenerate this index.")
 

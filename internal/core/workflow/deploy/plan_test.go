@@ -427,7 +427,7 @@ func TestStepCommand_cmdReturnsRaw(t *testing.T) {
 	}
 }
 
-func TestStepCommand_commandReturnsDevboxRunCmd(t *testing.T) {
+func TestStepCommand_commandReturnsDweRunCmd(t *testing.T) {
 	s := config.DeployStep{Type: "command", Cmd: "services.main.migrate"}
 	if got := pipeline.StepCommand(s, "dwe"); got != "dwe commands run services.main.migrate" {
 		t.Errorf("got %q, want 'dwe commands run services.main.migrate'", got)

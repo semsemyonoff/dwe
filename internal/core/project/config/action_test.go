@@ -25,7 +25,7 @@ cmd: echo hello`
 	}
 }
 
-func TestAction_DecodeDevbox(t *testing.T) {
+func TestAction_DecodeDwe(t *testing.T) {
 	data := `type: dwe
 cmd: docker down`
 	var a config.Action
@@ -118,7 +118,7 @@ func TestAction_ValidateShell_OK(t *testing.T) {
 	}
 }
 
-func TestAction_ValidateDevbox_OK(t *testing.T) {
+func TestAction_ValidateDwe_OK(t *testing.T) {
 	a := config.Action{Type: "dwe", Cmd: "docker down"}
 	if err := a.Validate(); err != nil {
 		t.Errorf("unexpected error: %v", err)

@@ -52,7 +52,7 @@ dwe services [flags]
 
 ### SEE ALSO
 
-* [dwe](dwe.md)	 - dwe — local development environment toolkit
+* [dwe](dwe.md)	 - Manage Docker-based local development environments
 * [dwe services disable](dwe_services_disable.md)	 - Disable an optional service (writes to workspace/local.yml)
 * [dwe services enable](dwe_services_enable.md)	 - Enable an optional service (writes to workspace/local.yml)
 

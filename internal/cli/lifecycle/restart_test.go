@@ -50,7 +50,7 @@ func TestRestartCmd_RegisteredAtRoot(t *testing.T) {
 func TestRunRestart_MissingLifecycleYML_UsesDefault(t *testing.T) {
 	stubRunPhases(t)
 	dir := t.TempDir()
-	cfgPath := makeMinimalDevboxYML(t, dir)
+	cfgPath := makeMinimalWorkspaceYML(t, dir)
 
 	var errBuf strings.Builder
 	flags := &cmdctx.RootFlags{}
@@ -73,7 +73,7 @@ func TestRunRestart_MissingStopSection(t *testing.T) {
 	// Missing stop: uses the default stop config (type:dwe step); stub to prevent recursion.
 	stubRunPhases(t)
 	dir := t.TempDir()
-	cfgPath := makeMinimalDevboxYML(t, dir)
+	cfgPath := makeMinimalWorkspaceYML(t, dir)
 
 	workspaceDir := filepath.Join(dir, "workspace")
 	if err := os.MkdirAll(workspaceDir, 0755); err != nil {
@@ -99,7 +99,7 @@ func TestRunRestart_MissingStopSection(t *testing.T) {
 func TestRunRestart_MissingRunSection_UsesDefault(t *testing.T) {
 	stubRunPhases(t)
 	dir := t.TempDir()
-	cfgPath := makeMinimalDevboxYML(t, dir)
+	cfgPath := makeMinimalWorkspaceYML(t, dir)
 
 	workspaceDir := filepath.Join(dir, "workspace")
 	if err := os.MkdirAll(workspaceDir, 0755); err != nil {

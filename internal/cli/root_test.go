@@ -274,7 +274,7 @@ func TestRootCmd_StylesWithHeaderRendered(t *testing.T) {
 	if err := os.MkdirAll(workspaceDir, 0755); err != nil {
 		t.Fatalf("creating workspace dir: %v", err)
 	}
-	stylesYAML := "header:\n  lines:\n    - \"Devbox\"\n  font: standard\n  color: none\n"
+	stylesYAML := "header:\n  lines:\n    - \"DWE\"\n  font: standard\n  color: none\n"
 	if err := os.WriteFile(filepath.Join(workspaceDir, "styles.yml"), []byte(stylesYAML), 0644); err != nil {
 		t.Fatalf("writing styles.yml: %v", err)
 	}
@@ -487,11 +487,11 @@ func TestLocaleResolutionEnvVarPrecedence(t *testing.T) {
 		t.Fatalf("writing userconfig: %v", err)
 	}
 
-	oldDevboxLang := os.Getenv("DWE_LANGUAGE")
+	oldDweLang := os.Getenv("DWE_LANGUAGE")
 	_ = os.Setenv("DWE_LANGUAGE", "fr")
 	defer func() {
-		if oldDevboxLang != "" {
-			_ = os.Setenv("DWE_LANGUAGE", oldDevboxLang)
+		if oldDweLang != "" {
+			_ = os.Setenv("DWE_LANGUAGE", oldDweLang)
 		} else {
 			_ = os.Unsetenv("DWE_LANGUAGE")
 		}

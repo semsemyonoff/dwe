@@ -22,13 +22,13 @@ func TestWorkspaceValidator(t *testing.T) {
 	}{
 		{
 			name:          "bad keys",
-			fixture:       "devbox-v2-bad-keys",
+			fixture:       "dwe-v2-bad-keys",
 			wantDiags:     1,
 			wantWorkspace: validate.SeverityError,
 		},
 		{
 			name:          "good config",
-			fixture:       "devbox-v2-good",
+			fixture:       "dwe-v2-good",
 			wantDiags:     1,
 			wantWorkspace: validate.SeverityOK,
 		},

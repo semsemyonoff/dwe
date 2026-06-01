@@ -24,7 +24,7 @@ See each sub-command's help for details on how to use the generated script.
 
 ### SEE ALSO
 
-* [dwe](dwe.md)	 - dwe — local development environment toolkit
+* [dwe](dwe.md)	 - Manage Docker-based local development environments
 * [dwe completion bash](dwe_completion_bash.md)	 - Generate the autocompletion script for bash
 * [dwe completion fish](dwe_completion_fish.md)	 - Generate the autocompletion script for fish
 * [dwe completion install](dwe_completion_install.md)	 - Install shell completion for dwe

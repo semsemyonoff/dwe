@@ -76,8 +76,8 @@ func TestRunCmd_InEnvironmentGroup(t *testing.T) {
 
 // --- config loading error tests (cobra integration) ---
 
-// makeMinimalDevboxYML writes the minimum workspace.yml needed for config.LoadConfig to succeed.
-func makeMinimalDevboxYML(t *testing.T, dir string) string {
+// makeMinimalWorkspaceYML writes the minimum workspace.yml needed for config.LoadConfig to succeed.
+func makeMinimalWorkspaceYML(t *testing.T, dir string) string {
 	t.Helper()
 	cfgPath := filepath.Join(dir, "workspace.yml")
 	content := "schema_version: \"2\"\nproject:\n  name: test\n  prefix: dwe\n"
@@ -90,7 +90,7 @@ func makeMinimalDevboxYML(t *testing.T, dir string) string {
 func TestRunRun_MissingLifecycleYML_UsesDefault(t *testing.T) {
 	stubRunPhases(t)
 	dir := t.TempDir()
-	cfgPath := makeMinimalDevboxYML(t, dir)
+	cfgPath := makeMinimalWorkspaceYML(t, dir)
 
 	var errBuf strings.Builder
 	flags := &cmdctx.RootFlags{}
@@ -112,7 +112,7 @@ func TestRunRun_MissingLifecycleYML_UsesDefault(t *testing.T) {
 func TestRunRun_MissingRunSection_UsesDefault(t *testing.T) {
 	stubRunPhases(t)
 	dir := t.TempDir()
-	cfgPath := makeMinimalDevboxYML(t, dir)
+	cfgPath := makeMinimalWorkspaceYML(t, dir)
 
 	workspaceDir := filepath.Join(dir, "workspace")
 	if err := os.MkdirAll(workspaceDir, 0755); err != nil {
@@ -143,7 +143,7 @@ func TestRunRun_MissingRunSection_UsesDefault(t *testing.T) {
 func TestRunRun_JSONMode_NoInfoLine(t *testing.T) {
 	stubRunPhases(t)
 	dir := t.TempDir()
-	cfgPath := makeMinimalDevboxYML(t, dir)
+	cfgPath := makeMinimalWorkspaceYML(t, dir)
 
 	var errBuf strings.Builder
 	flags := &cmdctx.RootFlags{Output: "json"}
@@ -164,7 +164,7 @@ func TestRunRun_JSONMode_NoInfoLine(t *testing.T) {
 func TestRunRun_WithLifecycleYML_NoInfoLine(t *testing.T) {
 	stubRunPhases(t)
 	dir := t.TempDir()
-	cfgPath := makeMinimalDevboxYML(t, dir)
+	cfgPath := makeMinimalWorkspaceYML(t, dir)
 
 	workspaceDir := filepath.Join(dir, "workspace")
 	if err := os.MkdirAll(workspaceDir, 0755); err != nil {

@@ -14,7 +14,7 @@ func TestRunStop_MissingLifecycleYML(t *testing.T) {
 	// (docker down) whose os.Executable() call would recursively re-run the test binary.
 	stubRunPhases(t)
 	dir := t.TempDir()
-	cfgPath := makeMinimalDevboxYML(t, dir)
+	cfgPath := makeMinimalWorkspaceYML(t, dir)
 
 	ctx := StopContext{ConfigPath: cfgPath}
 	if err := RunStop(ctx); err != nil {
@@ -26,7 +26,7 @@ func TestRunStop_MissingStopSection(t *testing.T) {
 	// Stub RunPhasesFunc for the same reason as TestRunStop_MissingLifecycleYML.
 	stubRunPhases(t)
 	dir := t.TempDir()
-	cfgPath := makeMinimalDevboxYML(t, dir)
+	cfgPath := makeMinimalWorkspaceYML(t, dir)
 
 	workspaceDir := filepath.Join(dir, "workspace")
 	if err := os.MkdirAll(workspaceDir, 0755); err != nil {
@@ -45,7 +45,7 @@ func TestRunStop_MissingStopSection(t *testing.T) {
 
 func TestRunStop_HappyPath(t *testing.T) {
 	dir := t.TempDir()
-	cfgPath := makeMinimalDevboxYML(t, dir)
+	cfgPath := makeMinimalWorkspaceYML(t, dir)
 
 	workspaceDir := filepath.Join(dir, "workspace")
 	if err := os.MkdirAll(workspaceDir, 0755); err != nil {
@@ -66,7 +66,7 @@ func TestRunStop_ClearsPendingRestart_KeepsPendingDeploy(t *testing.T) {
 	// No lifecycle.yml → default stop config (type:dwe step) → stub required.
 	stubRunPhases(t)
 	dir := t.TempDir()
-	cfgPath := makeMinimalDevboxYML(t, dir)
+	cfgPath := makeMinimalWorkspaceYML(t, dir)
 
 	statePath := filepath.Join(dir, journal.DefaultRelPath)
 	if err := os.MkdirAll(filepath.Dir(statePath), 0o755); err != nil {
@@ -204,7 +204,7 @@ func TestEnsureStopConfig_NilConfig_PhasesMatchDefault(t *testing.T) {
 func TestRunStop_MissingLifecycleYML_FiresOnDefaultUsed(t *testing.T) {
 	stubRunPhases(t)
 	dir := t.TempDir()
-	cfgPath := makeMinimalDevboxYML(t, dir)
+	cfgPath := makeMinimalWorkspaceYML(t, dir)
 
 	var called []DefaultedPipeline
 	ctx := StopContext{
@@ -223,7 +223,7 @@ func TestRunStop_MissingLifecycleYML_FiresOnDefaultUsed(t *testing.T) {
 
 func TestRunStop_WithStopSection_DoesNotFireOnDefaultUsed(t *testing.T) {
 	dir := t.TempDir()
-	cfgPath := makeMinimalDevboxYML(t, dir)
+	cfgPath := makeMinimalWorkspaceYML(t, dir)
 
 	workspaceDir := filepath.Join(dir, "workspace")
 	if err := os.MkdirAll(workspaceDir, 0755); err != nil {

@@ -18,7 +18,7 @@ Docker Compose lifecycle commands
 
 ### SEE ALSO
 
-* [dwe](dwe.md)	 - dwe — local development environment toolkit
+* [dwe](dwe.md)	 - Manage Docker-based local development environments
 * [dwe docker build](dwe_docker_build.md)	 - Build compose service images
 * [dwe docker down](dwe_docker_down.md)	 - Stop and remove compose services
 * [dwe docker exec](dwe_docker_exec.md)	 - Execute a command in a running compose service

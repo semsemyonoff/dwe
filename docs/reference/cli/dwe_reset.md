@@ -22,7 +22,7 @@ Commands for running the declarative reset pipeline (workspace/reset.yml).
 
 ### SEE ALSO
 
-* [dwe](dwe.md)	 - dwe — local development environment toolkit
+* [dwe](dwe.md)	 - Manage Docker-based local development environments
 * [dwe reset plan](dwe_reset_plan.md)	 - Show resolved reset plan
 * [dwe reset run](dwe_reset_run.md)	 - Execute the reset pipeline
 * [dwe reset step](dwe_reset_step.md)	 - Run a single reset step by <phase>/<step> address

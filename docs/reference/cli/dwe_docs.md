@@ -29,7 +29,7 @@ dwe docs [flags]
 
 ### SEE ALSO
 
-* [dwe](dwe.md)	 - dwe — local development environment toolkit
+* [dwe](dwe.md)	 - Manage Docker-based local development environments
 * [dwe docs cache](dwe_docs_cache.md)	 - Manage mermaid diagram cache
 * [dwe docs export](dwe_docs_export.md)	 - Export documentation to a directory
 * [dwe docs generate](dwe_docs_generate.md)	 - Generate reference documentation

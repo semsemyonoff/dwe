@@ -14,6 +14,7 @@ import (
 	"github.com/semsemyonoff/dwe/internal/core/usercommands"
 	"github.com/semsemyonoff/dwe/internal/shared/i18n"
 
+	"github.com/charmbracelet/x/ansi"
 	"github.com/spf13/cobra"
 	cobradoc "github.com/spf13/cobra/doc"
 )
@@ -85,6 +86,11 @@ func runDocsGenerate(cmd *cobra.Command, rflags *cmdctx.RootFlags, df *docsFlags
 			return fmt.Errorf("creating cli output dir: %w", err)
 		}
 		root := cmd.Root()
+		// Strip ANSI from help fields so generated docs stay clean. The root
+		// command's Long is decorated with accent escapes for terminal help
+		// (see cli.ApplyHelpBranding); markdown/yaml/man output must not carry
+		// raw escape sequences.
+		stripANSIFromTree(root)
 		// cobra/doc already skips Hidden commands; no pre-processing needed.
 		for _, fmt_ := range formats {
 			if err := genCLIDocs(root, cliDir, fmt_); err != nil {
@@ -284,6 +290,17 @@ func genHiddenCLIMan(root *cobra.Command, dir string) error {
 			return err
 		}
 		return f.Close()
+	})
+}
+
+// stripANSIFromTree removes ANSI escape sequences from Short/Long fields
+// across every command in the tree, including hidden ones. Mutates in place
+// (docs gen is a terminal subcommand — the process exits right after).
+func stripANSIFromTree(root *cobra.Command) {
+	_ = walkAllCommands(root, func(c *cobra.Command) error {
+		c.Short = ansi.Strip(c.Short)
+		c.Long = ansi.Strip(c.Long)
+		return nil
 	})
 }
 

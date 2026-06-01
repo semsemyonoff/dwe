@@ -1,4 +1,4 @@
-// Package userconfig loads user-level Devbox preferences from a flat
+// Package userconfig loads user-level DWE preferences from a flat
 // key=value file. It merges defaults, a global config at
 // ~/.config/dwe/config (same path on every OS), an optional
 // per-project override at .dwe/config, and environment variables.
@@ -8,7 +8,7 @@ import (
 	"strings"
 )
 
-// Config holds user-level Devbox preferences. The MVP only covers the
+// Config holds user-level DWE preferences. The MVP only covers the
 // notification subsystem; reserved fields are decoded but not exposed yet
 // so adding future channels does not require a schema migration.
 type Config struct {

@@ -43,10 +43,10 @@ func TestGenerate_NoProject_Structure(t *testing.T) {
 		t.Fatalf("Generate returned error: %v", err)
 	}
 
-	if !strings.HasPrefix(got, "# dwe\n") {
-		t.Errorf("expected output to start with '# dwe\\n', got: %q", got[:min(len(got), 30)])
+	if !strings.HasPrefix(got, "# DWE\n") {
+		t.Errorf("expected output to start with '# DWE\\n', got: %q", got[:min(len(got), 30)])
 	}
-	if !strings.Contains(got, "> dwe is") {
+	if !strings.Contains(got, "> DWE (Dev Workspace Engine) is") {
 		t.Errorf("expected blockquote summary in output")
 	}
 	if !strings.Contains(got, "## Quick start") {
@@ -96,7 +96,7 @@ func TestGenerate_WithCommands(t *testing.T) {
 func TestGenerate_WithDocTopics(t *testing.T) {
 	topics := []coredocs.TopicEntry{
 		{Path: "reference/config/services", DisplayName: "Services", Source: "dwe"},
-		{Path: "reference/config/dwe", DisplayName: "Devbox Config", Source: "dwe"},
+		{Path: "reference/config/dwe", DisplayName: "DWE Config", Source: "dwe"},
 		{Path: "internals/packages", DisplayName: "Package Layout", Source: "dwe"},
 	}
 
@@ -222,7 +222,7 @@ func TestGenerate_ProjectAware_DefaultName(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Generate error: %v", err)
 	}
-	if !strings.HasPrefix(got, "# dwe project\n") {
+	if !strings.HasPrefix(got, "# DWE project\n") {
 		t.Errorf("expected default project name in H1, got: %q", got[:min(len(got), 40)])
 	}
 }

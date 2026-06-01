@@ -65,7 +65,7 @@ func TestRunStop_MissingLifecycleYML(t *testing.T) {
 	// Default stop config includes a type:dwe step; stub to prevent recursion.
 	stubRunPhases(t)
 	dir := t.TempDir()
-	cfgPath := makeMinimalDevboxYML(t, dir)
+	cfgPath := makeMinimalWorkspaceYML(t, dir)
 
 	var errBuf strings.Builder
 	flags := &cmdctx.RootFlags{}
@@ -88,7 +88,7 @@ func TestRunStop_MissingStopSection(t *testing.T) {
 	// Default stop config includes a type:dwe step; stub to prevent recursion.
 	stubRunPhases(t)
 	dir := t.TempDir()
-	cfgPath := makeMinimalDevboxYML(t, dir)
+	cfgPath := makeMinimalWorkspaceYML(t, dir)
 
 	workspaceDir := filepath.Join(dir, "workspace")
 	if err := os.MkdirAll(workspaceDir, 0755); err != nil {

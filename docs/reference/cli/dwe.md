@@ -1,10 +1,10 @@
 ## dwe
 
-dwe — local development environment toolkit
+Manage Docker-based local development environments
 
 ### Synopsis
 
-dwe is the core engine for the Dev Workspace Engine local development environment.
+DWE (Dev Workspace Engine) — CLI for managing Docker-based local development environments.
 
 It provides config validation, rendering, topology inspection, and project info display.
 

@@ -17,7 +17,7 @@ import (
 	"github.com/semsemyonoff/dwe/internal/shared/render"
 )
 
-func TestOpenPipelineLog_CreatesDevboxLogsDirectory(t *testing.T) {
+func TestOpenPipelineLog_CreatesDweLogsDirectory(t *testing.T) {
 	tmpDir := t.TempDir()
 
 	_, logWriter, _, logPath, cleanup, err := OpenPipelineLog(tmpDir, "deploy", true)

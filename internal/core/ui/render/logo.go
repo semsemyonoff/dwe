@@ -6,7 +6,7 @@ import (
 	"github.com/charmbracelet/lipgloss"
 )
 
-// LogoMark returns the Devbox logomark "{▪}" with the inner square colored
+// LogoMark returns the DWE logomark "{▪}" with the inner square colored
 // using the accent token. The braces stay default text color. Use this in v1
 // lipgloss contexts (internal/core/ui consumers, root + info headers, status section
 // titles, docs generator progress lines, version output).
@@ -28,7 +28,7 @@ func LogoMark() string {
 	return "{" + square + "}"
 }
 
-// LogoMarkPlain returns the Devbox logomark "{▪}" with no styling. Use this in
+// LogoMarkPlain returns the DWE logomark "{▪}" with no styling. Use this in
 // non-TTY paths or inside v2 lipgloss containers that color the whole string
 // uniformly — embedding v1 escapes would cancel the outer v2 style.
 func LogoMarkPlain() string {

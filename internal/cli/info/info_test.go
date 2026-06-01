@@ -26,8 +26,8 @@ func writeMinimalInfoYML(t *testing.T, dir, content string) {
 	}
 }
 
-// writeMinimalDevboxYML writes a minimal workspace.yml to dir.
-func writeMinimalDevboxYML(t *testing.T, dir string) string {
+// writeMinimalWorkspaceYML writes a minimal workspace.yml to dir.
+func writeMinimalWorkspaceYML(t *testing.T, dir string) string {
 	t.Helper()
 	cfgPath := filepath.Join(dir, "workspace.yml")
 	cfgYAML := `schema_version: "2"
@@ -44,7 +44,7 @@ project:
 // TestInfoCmd_RendersSection verifies that info command renders section content.
 func TestInfoCmd_RendersSection(t *testing.T) {
 	dir := t.TempDir()
-	cfgPath := writeMinimalDevboxYML(t, dir)
+	cfgPath := writeMinimalWorkspaceYML(t, dir)
 	writeMinimalInfoYML(t, dir, `sections:
   - id: details
     title: Project Details
@@ -79,7 +79,7 @@ func TestInfoCmd_RendersSection(t *testing.T) {
 // TestInfoCmd_RendersWarningAndInfoItems verifies warning/info item types.
 func TestInfoCmd_RendersWarningAndInfoItems(t *testing.T) {
 	dir := t.TempDir()
-	cfgPath := writeMinimalDevboxYML(t, dir)
+	cfgPath := writeMinimalWorkspaceYML(t, dir)
 	writeMinimalInfoYML(t, dir, `sections:
   - id: hosts
     title: Hosts
@@ -115,7 +115,7 @@ func TestInfoCmd_RendersWarningAndInfoItems(t *testing.T) {
 // TestInfoCmd_ConditionalItems verifies that when: conditions are evaluated.
 func TestInfoCmd_ConditionalItems(t *testing.T) {
 	dir := t.TempDir()
-	cfgPath := writeMinimalDevboxYML(t, dir)
+	cfgPath := writeMinimalWorkspaceYML(t, dir)
 	writeMinimalInfoYML(t, dir, `sections:
   - id: cond
     items:
@@ -155,7 +155,7 @@ func TestInfoCmd_ConditionalItems(t *testing.T) {
 // when workspace/styles.yml is absent.
 func TestInfoCmd_StylesMissingIsGraceful(t *testing.T) {
 	dir := t.TempDir()
-	cfgPath := writeMinimalDevboxYML(t, dir)
+	cfgPath := writeMinimalWorkspaceYML(t, dir)
 	writeMinimalInfoYML(t, dir, `sections:
   - id: s1
     title: Test
@@ -185,7 +185,7 @@ func TestInfoCmd_StylesMissingIsGraceful(t *testing.T) {
 // art header when workspace/styles.yml defines one, without error.
 func TestInfoCmd_StylesWithHeaderRendered(t *testing.T) {
 	dir := t.TempDir()
-	cfgPath := writeMinimalDevboxYML(t, dir)
+	cfgPath := writeMinimalWorkspaceYML(t, dir)
 	writeMinimalInfoYML(t, dir, `sections:
   - id: s1
     items:
@@ -194,7 +194,7 @@ func TestInfoCmd_StylesWithHeaderRendered(t *testing.T) {
         value: "{{ .Project.Name }}"
 `)
 	workspaceDir := filepath.Join(dir, "workspace")
-	stylesYAML := "header:\n  lines:\n    - \"Devbox\"\n  font: standard\n  color: none\n"
+	stylesYAML := "header:\n  lines:\n    - \"DWE\"\n  font: standard\n  color: none\n"
 	if err := os.WriteFile(filepath.Join(workspaceDir, "styles.yml"), []byte(stylesYAML), 0644); err != nil {
 		t.Fatalf("writing styles.yml: %v", err)
 	}
@@ -220,7 +220,7 @@ func TestInfoCmd_StylesWithHeaderRendered(t *testing.T) {
 // hide_on_empty sections collapse — output is the brand header only.
 func TestInfoCmd_MissingInfoYMLIsGraceful(t *testing.T) {
 	dir := t.TempDir()
-	cfgPath := writeMinimalDevboxYML(t, dir)
+	cfgPath := writeMinimalWorkspaceYML(t, dir)
 	// Intentionally no info.yml written.
 
 	root := cli.NewRootCmd()
@@ -253,7 +253,7 @@ func TestInfoCmd_MissingInfoYMLIsGraceful(t *testing.T) {
 // emitted on `dwe info` even when no styles.yml / header.lines is set.
 func TestInfoCmd_BrandHeaderAlwaysPresent(t *testing.T) {
 	dir := t.TempDir()
-	cfgPath := writeMinimalDevboxYML(t, dir)
+	cfgPath := writeMinimalWorkspaceYML(t, dir)
 	writeMinimalInfoYML(t, dir, `sections:
   - id: s1
     items:
@@ -304,7 +304,7 @@ func TestInfoCmd_MissingConfig(t *testing.T) {
 // content is still present (structural smoke test).
 func TestInfoCmd_UsesUIRenderInfo(t *testing.T) {
 	dir := t.TempDir()
-	cfgPath := writeMinimalDevboxYML(t, dir)
+	cfgPath := writeMinimalWorkspaceYML(t, dir)
 	writeMinimalInfoYML(t, dir, `sections:
   - id: s1
     title: Status
@@ -369,7 +369,7 @@ func runInfoJSONCmd(t *testing.T, cfgPath string, pretty bool) string {
 // TestInfoCmd_JSONMode_Golden captures the JSON shape for a simple info.yml fixture.
 func TestInfoCmd_JSONMode_Golden(t *testing.T) {
 	dir := t.TempDir()
-	cfgPath := writeMinimalDevboxYML(t, dir)
+	cfgPath := writeMinimalWorkspaceYML(t, dir)
 	writeMinimalInfoYML(t, dir, `sections:
   - id: details
     title: Project Details
@@ -411,7 +411,7 @@ func TestInfoCmd_JSONMode_Golden(t *testing.T) {
 // ANSI-styled brand header lines.
 func TestInfoCmd_JSONMode_NoBrandHeader(t *testing.T) {
 	dir := t.TempDir()
-	cfgPath := writeMinimalDevboxYML(t, dir)
+	cfgPath := writeMinimalWorkspaceYML(t, dir)
 	writeMinimalInfoYML(t, dir, `sections:
   - id: s1
     title: Section
@@ -434,7 +434,7 @@ func TestInfoCmd_JSONMode_NoBrandHeader(t *testing.T) {
 // TestInfoCmd_JSONMode_PrettyFlag verifies that --pretty produces indented JSON.
 func TestInfoCmd_JSONMode_PrettyFlag(t *testing.T) {
 	dir := t.TempDir()
-	cfgPath := writeMinimalDevboxYML(t, dir)
+	cfgPath := writeMinimalWorkspaceYML(t, dir)
 	writeMinimalInfoYML(t, dir, `sections:
   - id: s1
     items:
@@ -451,7 +451,7 @@ func TestInfoCmd_JSONMode_PrettyFlag(t *testing.T) {
 // TestInfoCmd_JSONMode_HideOnEmpty verifies that sections with hide_on_empty collapse.
 func TestInfoCmd_JSONMode_HideOnEmpty(t *testing.T) {
 	dir := t.TempDir()
-	cfgPath := writeMinimalDevboxYML(t, dir)
+	cfgPath := writeMinimalWorkspaceYML(t, dir)
 	writeMinimalInfoYML(t, dir, `sections:
   - id: visible
     title: Visible

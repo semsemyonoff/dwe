@@ -1,6 +1,6 @@
 # my-project
 
-> dwe project environment. Use `dwe status` to see running services, `dwe validate` to check project health, and `dwe docs llms-txt` to regenerate this index.
+> DWE (Dev Workspace Engine) project environment. Use `dwe status` to see running services, `dwe validate` to check project health, and `dwe docs llms-txt` to regenerate this index.
 
 ## Project
 

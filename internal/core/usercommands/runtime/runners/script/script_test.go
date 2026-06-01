@@ -486,7 +486,7 @@ func TestRunner_TempDirCreatedAndCleaned(t *testing.T) {
 
 func TestRunner_ExitErrorIncludesScriptPath(t *testing.T) {
 	dir := t.TempDir()
-	scriptPath := writeScript(t, dir, "missing-command.sh", `definitely-not-a-devbox-test-command`)
+	scriptPath := writeScript(t, dir, "missing-command.sh", `definitely-not-a-dwe-test-command`)
 
 	cmd := &CommandDef{
 		Type:   CommandTypeScript,

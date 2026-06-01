@@ -22,8 +22,8 @@ func TestHealthIndicator_Stopped(t *testing.T) {
 	if !strings.Contains(out, "○ stopped") {
 		t.Errorf("expected '○ stopped' indicator, got: %q", out)
 	}
-	if strings.Contains(out, "Devbox:") {
-		t.Errorf("HealthIndicator should not include 'Devbox:' prefix, got: %q", out)
+	if strings.Contains(out, "DWE:") {
+		t.Errorf("HealthIndicator should not include 'DWE:' prefix, got: %q", out)
 	}
 }
 
@@ -41,8 +41,8 @@ func TestHealthIndicator_Running(t *testing.T) {
 	if !strings.Contains(out, "● running") {
 		t.Errorf("expected '● running' indicator, got: %q", out)
 	}
-	if strings.Contains(out, "Devbox:") {
-		t.Errorf("HealthIndicator should not include 'Devbox:' prefix, got: %q", out)
+	if strings.Contains(out, "DWE:") {
+		t.Errorf("HealthIndicator should not include 'DWE:' prefix, got: %q", out)
 	}
 }
 
@@ -63,8 +63,8 @@ func TestHealthIndicator_Partial(t *testing.T) {
 	if !strings.Contains(out, "◐ partial") {
 		t.Errorf("expected '◐ partial' indicator, got: %q", out)
 	}
-	if strings.Contains(out, "Devbox:") {
-		t.Errorf("HealthIndicator should not include 'Devbox:' prefix, got: %q", out)
+	if strings.Contains(out, "DWE:") {
+		t.Errorf("HealthIndicator should not include 'DWE:' prefix, got: %q", out)
 	}
 }
 

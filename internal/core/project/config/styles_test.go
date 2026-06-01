@@ -10,7 +10,7 @@ const sampleStylesYML = `
 header:
   lines:
     - "Welcome to"
-    - "Devbox Next"
+    - "DWE Next"
   font: doom
   tagline: "Local dev, batteries included"
 
@@ -44,7 +44,7 @@ func TestLoadStylesConfig(t *testing.T) {
 	if cfg.Header.Lines[0] != "Welcome to" {
 		t.Errorf("header.lines[0] = %q", cfg.Header.Lines[0])
 	}
-	if cfg.Header.Lines[1] != "Devbox Next" {
+	if cfg.Header.Lines[1] != "DWE Next" {
 		t.Errorf("header.lines[1] = %q", cfg.Header.Lines[1])
 	}
 	if cfg.Header.Font != "doom" {

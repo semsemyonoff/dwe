@@ -57,7 +57,7 @@ dwe validate [flags]
 
 ### SEE ALSO
 
-* [dwe](dwe.md)	 - dwe — local development environment toolkit
+* [dwe](dwe.md)	 - Manage Docker-based local development environments
 * [dwe validate checks](dwe_validate_checks.md)	 - Validate project checks from workspace/validate.yml
 * [dwe validate commands](dwe_validate_commands.md)	 - Validate command definitions
 * [dwe validate config](dwe_validate_config.md)	 - Validate configuration files

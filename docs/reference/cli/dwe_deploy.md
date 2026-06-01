@@ -36,7 +36,7 @@ dwe deploy [flags]
 
 ### SEE ALSO
 
-* [dwe](dwe.md)	 - dwe — local development environment toolkit
+* [dwe](dwe.md)	 - Manage Docker-based local development environments
 * [dwe deploy plan](dwe_deploy_plan.md)	 - Show resolved deploy plan
 * [dwe deploy run](dwe_deploy_run.md)	 - Execute the deploy plan
 * [dwe deploy state](dwe_deploy_state.md)	 - Manage deploy state

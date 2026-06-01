@@ -37,7 +37,7 @@ Subcommands:
 
 ### SEE ALSO
 
-* [dwe](dwe.md)	 - dwe — local development environment toolkit
+* [dwe](dwe.md)	 - Manage Docker-based local development environments
 * [dwe render ai](dwe_render_ai.md)	 - Generate hub-level agents docs from template packs
 * [dwe render env](dwe_render_env.md)	 - Generate .env from exports.env spec (stdout or --out <file>)
 * [dwe render git](dwe_render_git.md)	 - Generate git hooks from template packs

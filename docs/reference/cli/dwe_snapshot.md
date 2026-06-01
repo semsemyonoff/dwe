@@ -24,7 +24,7 @@ and restore or roll back to it. Workflows live in workspace/snapshot.yml.
 
 ### SEE ALSO
 
-* [dwe](dwe.md)	 - dwe — local development environment toolkit
+* [dwe](dwe.md)	 - Manage Docker-based local development environments
 * [dwe snapshot create](dwe_snapshot_create.md)	 - Capture the current environment into a named snapshot
 * [dwe snapshot current](dwe_snapshot_current.md)	 - Show the snapshot currently restored into the project
 * [dwe snapshot inspect](dwe_snapshot_inspect.md)	 - Inspect a snapshot directory or a packed .tar.gz archive

@@ -39,7 +39,7 @@ func TestPrintPlanShell_cmdStepAsIs(t *testing.T) {
 	}
 }
 
-func TestPrintPlanShell_commandStepAsDevboxRun(t *testing.T) {
+func TestPrintPlanShell_commandStepAsDweRun(t *testing.T) {
 	var buf bytes.Buffer
 	steps := []pipeline.ResolvedStep{
 		{Phase: phaseWith("start"), Step: commandStep("migrate", "services.main.migrate")},

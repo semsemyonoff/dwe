@@ -162,7 +162,14 @@ func (tw *TreeWidget) rebuild() error {
 			children = projectDweForTUI(tree.Children)
 		}
 		if useGroups {
-			groupName := strings.ToUpper(root.Name[:1]) + root.Name[1:]
+			// The "dwe" built-in root displays as the uppercase product
+			// brand "DWE"; other roots use Title case (first letter only).
+			var groupName string
+			if root.Name == "dwe" {
+				groupName = "DWE"
+			} else {
+				groupName = strings.ToUpper(root.Name[:1]) + root.Name[1:]
+			}
 			groupNode := &docs.Node{Name: groupName, IsDir: true, Path: root.Name}
 			groupTreeNode := &TreeNode{
 				Node:     groupNode,

@@ -1844,7 +1844,7 @@ func TestValidate_ComposeArgsRejectedOnWorkflow(t *testing.T) {
 	}
 }
 
-func TestValidate_ComposeArgsRejectedOnDevbox(t *testing.T) {
+func TestValidate_ComposeArgsRejectedOnDwe(t *testing.T) {
 	cmd := CommandDef{
 		Type:        CommandTypeDwe,
 		ID:          "g.dwe",
@@ -1898,7 +1898,7 @@ func TestValidate_WorkdirFromRejectedOnWorkflow(t *testing.T) {
 	}
 }
 
-func TestValidate_WorkdirFromRejectedOnDevbox(t *testing.T) {
+func TestValidate_WorkdirFromRejectedOnDwe(t *testing.T) {
 	cmd := CommandDef{
 		Type:        CommandTypeDwe,
 		ID:          "g.dwe",
@@ -1926,7 +1926,7 @@ func TestValidate_WorkdirRejectedOnWorkflow(t *testing.T) {
 	}
 }
 
-func TestValidate_WorkdirRejectedOnDevbox(t *testing.T) {
+func TestValidate_WorkdirRejectedOnDwe(t *testing.T) {
 	cmd := CommandDef{
 		Type:    CommandTypeDwe,
 		ID:      "g.dwe",
@@ -2108,7 +2108,7 @@ commands:
 	}
 }
 
-func TestParseCommandFile_PerTypeAllowlist_Devbox(t *testing.T) {
+func TestParseCommandFile_PerTypeAllowlist_Dwe(t *testing.T) {
 	// Valid: dwe with cmd
 	yaml := `
 commands:
@@ -2125,7 +2125,7 @@ commands:
 	}
 }
 
-func TestParseCommandFile_PerTypeAllowlist_DevboxRejectWorkdir(t *testing.T) {
+func TestParseCommandFile_PerTypeAllowlist_DweRejectWorkdir(t *testing.T) {
 	// Invalid: dwe with workdir
 	yaml := `
 commands:

@@ -18,7 +18,7 @@ Low-level Docker Compose diagnostics
 
 ### SEE ALSO
 
-* [dwe](dwe.md)	 - dwe — local development environment toolkit
+* [dwe](dwe.md)	 - Manage Docker-based local development environments
 * [dwe compose argv](dwe_compose_argv.md)	 - Show the full docker compose command that would be executed
 * [dwe compose files](dwe_compose_files.md)	 - Print resolved compose file list (base + enabled overlays), one per line
 * [dwe compose raw](dwe_compose_raw.md)	 - Run docker compose directly with resolved file list and project name (escape hatch)

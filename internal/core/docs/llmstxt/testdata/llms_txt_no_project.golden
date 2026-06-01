@@ -1,6 +1,6 @@
-# dwe
+# DWE
 
-> dwe is a developer tool for local development environments running on Docker. Use `dwe --help` for a full command list.
+> DWE (Dev Workspace Engine) is a CLI for managing Docker-based local development environments. Use `dwe --help` for a full command list.
 
 ## Quick start
 

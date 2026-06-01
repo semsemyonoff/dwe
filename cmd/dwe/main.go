@@ -62,6 +62,11 @@ func main() {
 		opts = append(opts, fang.WithColorSchemeFunc(cs))
 	}
 
+	// Apply branded emphasis to the root help body now that the styles palette
+	// has been resolved (either from workspace/styles.yml above or from the
+	// init-time defaults baked into the styles package).
+	cli.ApplyHelpBranding(root)
+
 	err := fang.Execute(
 		context.Background(),
 		root,

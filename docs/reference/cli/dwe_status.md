@@ -48,7 +48,7 @@ dwe status [flags]
 
 ### SEE ALSO
 
-* [dwe](dwe.md)	 - dwe — local development environment toolkit
+* [dwe](dwe.md)	 - Manage Docker-based local development environments
 * [dwe status apps](dwe_status_apps.md)	 - Show only the apps section
 * [dwe status daemons](dwe_status_daemons.md)	 - Show only the daemons section
 * [dwe status deploy](dwe_status_deploy.md)	 - Show deploy status (table) or per-service deploy detail

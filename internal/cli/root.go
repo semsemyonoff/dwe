@@ -119,13 +119,38 @@ func NewRootCmd() *cobra.Command {
 	return root
 }
 
+// ApplyHelpBranding rebuilds the root command's Long help text with accent-
+// coloured emphasis on the product name "DWE" and the leading letters of its
+// expansion. Call after styles.ApplyStyles so the resolved accent palette is
+// in effect; safe to call anytime afterwards. Commands that consume Long as
+// plain text (docs generators) should strip ANSI before writing.
+func ApplyHelpBranding(root *cobra.Command) {
+	if root == nil {
+		return
+	}
+	a := styles.AccentStyle()
+	root.Long = fmt.Sprintf(
+		"%s (%sev %sorkspace %sngine) — CLI for managing Docker-based local development environments.\n\nIt provides config validation, rendering, topology inspection, and project info display.",
+		a.Render("DWE"),
+		a.Render("D"),
+		a.Render("W"),
+		a.Render("E"),
+	)
+}
+
+// rootLongDescription is the plain-text Long help body for the root command.
+// applyHelpBranding rebuilds this with accent-coloured emphasis after the
+// styles palette is resolved; this constant is the fallback rendered when
+// styles have not been loaded (e.g. during docs generation).
+const rootLongDescription = `DWE (Dev Workspace Engine) — CLI for managing Docker-based local development environments.
+
+It provides config validation, rendering, topology inspection, and project info display.`
+
 func initRootCmd(flags *cmdctx.RootFlags) *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "dwe",
-		Short: "dwe — local development environment toolkit",
-		Long: `dwe is the core engine for the Dev Workspace Engine local development environment.
-
-It provides config validation, rendering, topology inspection, and project info display.`,
+		Short: "Manage Docker-based local development environments",
+		Long:  rootLongDescription,
 		// PersistentPreRunE resolves the project root before any subcommand runs.
 		// It walks upward from cwd (discovery mode) or uses the explicit -c path,
 		// validates the config, and populates flags.ConfigPath / flags.Root.

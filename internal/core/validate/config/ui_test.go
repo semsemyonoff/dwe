@@ -9,7 +9,7 @@ import (
 	"github.com/semsemyonoff/dwe/internal/core/validate"
 )
 
-func writeTempDevbox(t *testing.T, body string) (root, configPath string) {
+func writeTempWorkspace(t *testing.T, body string) (root, configPath string) {
 	t.Helper()
 	root = t.TempDir()
 	configPath = filepath.Join(root, "workspace.yml")
@@ -90,7 +90,7 @@ func TestUIValidator(t *testing.T) {
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
-			root, cfgPath := writeTempDevbox(t, tc.body)
+			root, cfgPath := writeTempWorkspace(t, tc.body)
 			v := &uiValidator{}
 			diags := v.Run(validate.Context{ProjectRoot: root, ConfigPath: cfgPath})
 			if tc.wantSev == 0 {
@@ -117,7 +117,7 @@ func TestUIValidator(t *testing.T) {
 	t.Run("unknown key warning has line number", func(t *testing.T) {
 		t.Parallel()
 		body := "schema_version: \"2\"\nui:\n  commands:\n    bogus: true\n"
-		root, cfgPath := writeTempDevbox(t, body)
+		root, cfgPath := writeTempWorkspace(t, body)
 		v := &uiValidator{}
 		diags := v.Run(validate.Context{ProjectRoot: root, ConfigPath: cfgPath})
 		for _, d := range diags {

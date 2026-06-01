@@ -15,7 +15,7 @@ func TestRunRestart_MissingLifecycleYML_BothLegsUseDefault(t *testing.T) {
 	stubRunPhases(t)
 
 	dir := t.TempDir()
-	cfgPath := makeMinimalDevboxYML(t, dir)
+	cfgPath := makeMinimalWorkspaceYML(t, dir)
 
 	var called []DefaultedPipeline
 	ctx := RunContext{
@@ -39,7 +39,7 @@ func TestRunRestart_MissingStopSection(t *testing.T) {
 	// step); stub RunPhasesFunc to avoid recursive test binary execution.
 	stubRunPhases(t)
 	dir := t.TempDir()
-	cfgPath := makeMinimalDevboxYML(t, dir)
+	cfgPath := makeMinimalWorkspaceYML(t, dir)
 
 	workspaceDir := filepath.Join(dir, "workspace")
 	if err := os.MkdirAll(workspaceDir, 0755); err != nil {
@@ -62,7 +62,7 @@ func TestRunRestart_MissingRunSection_UsesDefault(t *testing.T) {
 	stubRunPhases(t)
 
 	dir := t.TempDir()
-	cfgPath := makeMinimalDevboxYML(t, dir)
+	cfgPath := makeMinimalWorkspaceYML(t, dir)
 
 	workspaceDir := filepath.Join(dir, "workspace")
 	if err := os.MkdirAll(workspaceDir, 0755); err != nil {
@@ -93,7 +93,7 @@ func TestRunRestart_MissingRunSection_UsesDefault(t *testing.T) {
 // clears the PendingRestart journal entry but leaves any PendingDeploy entry intact.
 func TestRunRestart_ClearsPendingRestartOnSuccess(t *testing.T) {
 	dir := t.TempDir()
-	cfgPath := makeMinimalDevboxYML(t, dir)
+	cfgPath := makeMinimalWorkspaceYML(t, dir)
 
 	workspaceDir := filepath.Join(dir, "workspace")
 	if err := os.MkdirAll(workspaceDir, 0o755); err != nil {
@@ -159,7 +159,7 @@ func TestRunRestart_OnlyRunSectionPresent_StopUsesDefault(t *testing.T) {
 	stubRunPhases(t)
 
 	dir := t.TempDir()
-	cfgPath := makeMinimalDevboxYML(t, dir)
+	cfgPath := makeMinimalWorkspaceYML(t, dir)
 
 	workspaceDir := filepath.Join(dir, "workspace")
 	if err := os.MkdirAll(workspaceDir, 0755); err != nil {
@@ -188,7 +188,7 @@ func TestRunRestart_OnlyRunSectionPresent_StopUsesDefault(t *testing.T) {
 
 func TestRunRestart_NoUpdatePropagated(t *testing.T) {
 	dir := t.TempDir()
-	cfgPath := makeMinimalDevboxYML(t, dir)
+	cfgPath := makeMinimalWorkspaceYML(t, dir)
 
 	workspaceDir := filepath.Join(dir, "workspace")
 	if err := os.MkdirAll(workspaceDir, 0755); err != nil {
