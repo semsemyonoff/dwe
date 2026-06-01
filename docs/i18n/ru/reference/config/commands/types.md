@@ -1,4 +1,4 @@
-> Translated from: reference/config/commands/types.md @ 3d9dcc34e3d0
+> Translated from: reference/config/commands/types.md @ fb011fa0bc50
 
 # Типы команд
 
@@ -625,15 +625,15 @@ commands:
 
 Каждый контейнер daemon несёт три метки, чтобы `docker ps` был единственным источником истины:
 
-- `devbox.project=<project.full>`
-- `devbox.daemon.id=<base>` (например, `services.main.queue`)
-- `devbox.daemon.params=<json>` (например, `{"name":"emails"}`) — производится через `encoding/json.Marshal` для безопасного round-trip через кавычки, обратные слэши и управляющие символы
+- `dwe.project=<project.full>`
+- `dwe.daemon.id=<base>` (например, `services.main.queue`)
+- `dwe.daemon.params=<json>` (например, `{"name":"emails"}`) — производится через `encoding/json.Marshal` для безопасного round-trip через кавычки, обратные слэши и управляющие символы
 
 `devbox status daemons`, completion `--set` и `_auto_reap_daemons` все фильтруют по этим меткам.
 
 ### Поведение виртуальных команд
 
-- **`.start`** — выпускает `docker compose run -d --name <full> --no-deps --entrypoint "" [--rm] [--user …] [--workdir …] -e K1 -e K2 --label devbox.project=… --label devbox.daemon.id=… --label devbox.daemon.params=… <service> <argv…>`. **Значения** env передаются через окружение дочернего процесса (`cmd.Env`), никогда через хостовый argv, так что секреты не появляются в `ps` или `/proc/<pid>/cmdline`. `--no-deps` оставляет работающий стек нетронутым; `--entrypoint ""` гарантирует, что фактически запускается пользовательский `argv:`. При `on_already_running: error` плюс ошибке конфликта имён docker builtin выдаёт `ErrDaemonAlreadyRunning`; при `noop` та же ошибка проглатывается, и `.start` завершается успешно.
+- **`.start`** — выпускает `docker compose run -d --name <full> --no-deps --entrypoint "" [--rm] [--user …] [--workdir …] -e K1 -e K2 --label dwe.project=… --label dwe.daemon.id=… --label dwe.daemon.params=… <service> <argv…>`. **Значения** env передаются через окружение дочернего процесса (`cmd.Env`), никогда через хостовый argv, так что секреты не появляются в `ps` или `/proc/<pid>/cmdline`. `--no-deps` оставляет работающий стек нетронутым; `--entrypoint ""` гарантирует, что фактически запускается пользовательский `argv:`. При `on_already_running: error` плюс ошибке конфликта имён docker builtin выдаёт `ErrDaemonAlreadyRunning`; при `noop` та же ошибка проглатывается, и `.start` завершается успешно.
 - **`.logs`** — запускает `docker logs -f --tail=100 <full>` на переднем плане. Ctrl-C посылает `SIGINT` только процессу `docker logs` (мягкое отсоединение через `cmd.Cancel`); контейнер никогда не получает сигнал. Если контейнер не запущен, `.logs` ошибается с подсказкой, указывающей на `.start`.
 - **`.stop`** — запускает `docker stop -t <stop_timeout-в-секундах> <full>`. Отсутствующий контейнер **не** ошибка (идемпотентная остановка).
 - **`.restart`** — виртуальный `type: workflow` из `<base>.stop`, за которым следует `<base>.start`. Шаги workflow явно прокидывают каждый объявленный `param.<name>` через `with:`, так что `devbox cmd queue.restart --set name=emails` перезапускает демон `emails` (а не default).
@@ -642,7 +642,7 @@ commands:
 
 `devbox validate` и загрузочный `cmd.Validate()` обеспечивают:
 
-- `service:` обязателен и **должен быть литеральным** — никаких `${...}` или `{{...}}`. (Параметризованный `service:` намеренно вне области v1, чтобы метка `devbox.daemon.id` оставалась стабильной.)
+- `service:` обязателен и **должен быть литеральным** — никаких `${...}` или `{{...}}`. (Параметризованный `service:` намеренно вне области v1, чтобы метка `dwe.daemon.id` оставалась стабильной.)
 - `daemon.container_template` обязателен и непуст.
 - `daemon.on_already_running` — одно из `error` / `noop` (пусто = default `error`).
 - `daemon.stop_timeout` парсится через `time.ParseDuration` и строго положителен.
@@ -655,15 +655,15 @@ commands:
 
 ### Интеграция с lifecycle
 
-Всякий раз, когда запускается `devbox stop` (независимо от наличия `lifecycle.yml`), синтетическая фаза `_auto_reap_daemons` дописывается в начало stop-пайплайна. Она перечисляет каждый контейнер, помеченный `devbox.project=<full>` с непустым `devbox.daemon.id`, и останавливает их параллельно. Опций отказа нет; фаза видна в выводе плана. Форму stop-пайплайна см. в [lifecycle.md](../lifecycle.md).
+Всякий раз, когда запускается `devbox stop` (независимо от наличия `lifecycle.yml`), синтетическая фаза `_auto_reap_daemons` дописывается в начало stop-пайплайна. Она перечисляет каждый контейнер, помеченный `dwe.project=<full>` с непустым `dwe.daemon.id`, и останавливает их параллельно. Опций отказа нет; фаза видна в выводе плана. Форму stop-пайплайна см. в [lifecycle.md](../lifecycle.md).
 
 Если `lifecycle.yml` отсутствует, `devbox stop` всё равно работает (только с фазой `_auto_reap_daemons` плюс дефолтным сообщением `Project is stopped. Have a nice day!`) — `lifecycle.yml` больше не требуется для `stop`.
 
 ### Безопасность и приватность
 
-- **Значения параметров попадают в `devbox.daemon.params` как JSON-метки**, которые `docker inspect` экспонирует любому с доступом к docker-сокету на хосте. **Не помещайте секреты в `params:`.** Используйте вместо этого `env:` — env-значения передаются через окружение контейнера (`docker compose run -e KEY` со значением в `cmd.Env`), никогда через хостовый процессный argv, так что не появляются в `ps` или `/proc/<pid>/cmdline`.
+- **Значения параметров попадают в `dwe.daemon.params` как JSON-метки**, которые `docker inspect` экспонирует любому с доступом к docker-сокету на хосте. **Не помещайте секреты в `params:`.** Используйте вместо этого `env:` — env-значения передаются через окружение контейнера (`docker compose run -e KEY` со значением в `cmd.Env`), никогда через хостовый процессный argv, так что не появляются в `ps` или `/proc/<pid>/cmdline`.
 - **Регекс имени контейнера применяется после рендера** — недопустимые символы в отрендеренных значениях параметров — жёсткая runtime-ошибка, даже если YAML-`pattern:` случайно их разрешил. Проверка `pattern:` параметров валидатором рекомендательна; регекс отрендеренного имени — авторитетная защита.
-- **Параметризация `service:` отвергается** в v1 — метка `devbox.daemon.id` должна быть стабильной между перезапусками, чтобы completion, status и reap могли надёжно соотносить состояние между вызовами.
+- **Параметризация `service:` отвергается** в v1 — метка `dwe.daemon.id` должна быть стабильной между перезапусками, чтобы completion, status и reap могли надёжно соотносить состояние между вызовами.
 
 ### Недопустимые поля
 

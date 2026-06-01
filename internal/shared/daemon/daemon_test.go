@@ -177,8 +177,8 @@ func TestStandardLabels_DeterministicKeyOrder(t *testing.T) {
 func TestFilterArgsByLabels(t *testing.T) {
 	got := FilterArgsByLabels("my-proj", "services.main.queue")
 	want := []string{
-		"--filter", "label=devbox.project=my-proj",
-		"--filter", "label=devbox.daemon.id=services.main.queue",
+		"--filter", "label=dwe.project=my-proj",
+		"--filter", "label=dwe.daemon.id=services.main.queue",
 	}
 	if len(got) != len(want) {
 		t.Fatalf("len = %d, want %d (got=%v)", len(got), len(want), got)
@@ -195,8 +195,8 @@ func TestFilterArgsByLabels_EmptyDaemonID(t *testing.T) {
 	// existence only.
 	got := FilterArgsByLabels("my-proj", "")
 	want := []string{
-		"--filter", "label=devbox.project=my-proj",
-		"--filter", "label=devbox.daemon.id",
+		"--filter", "label=dwe.project=my-proj",
+		"--filter", "label=dwe.daemon.id",
 	}
 	if len(got) != len(want) {
 		t.Fatalf("len = %d, want %d (got=%v)", len(got), len(want), got)
@@ -211,13 +211,13 @@ func TestFilterArgsByLabels_EmptyDaemonID(t *testing.T) {
 func TestLabelKeyConstants(t *testing.T) {
 	// These constants are part of the public contract — any rename is a
 	// schema break visible via `docker inspect`. Pin them here.
-	if LabelProject != "devbox.project" {
+	if LabelProject != "dwe.project" {
 		t.Errorf("LabelProject = %q", LabelProject)
 	}
-	if LabelDaemonID != "devbox.daemon.id" {
+	if LabelDaemonID != "dwe.daemon.id" {
 		t.Errorf("LabelDaemonID = %q", LabelDaemonID)
 	}
-	if LabelDaemonParams != "devbox.daemon.params" {
+	if LabelDaemonParams != "dwe.daemon.params" {
 		t.Errorf("LabelDaemonParams = %q", LabelDaemonParams)
 	}
 }

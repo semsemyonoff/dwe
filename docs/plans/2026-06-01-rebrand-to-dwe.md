@@ -463,11 +463,11 @@ bin/dwe docs generate --scope cli
 - Modify: auto-reap logic if it filters by label string (`internal/core/workflow/deploy/`)
 - Modify: docs `docs/reference/config/commands/types.md`, `directives.md` daemon sections; same in RU
 
-- [ ] rename label constants: `LabelProject = "dwe.project"`, etc.
-- [ ] update godoc refs in `daemon.go`
-- [ ] `rg -n 'devbox\.project|devbox\.daemon\.id|devbox\.daemon\.params'` — find every consumer (tests, golden files, completion suggestions, docs)
-- [ ] update docs that show `docker inspect` output with `devbox.*` labels
-- [ ] `make build && make test` — must end **green**
+- [x] rename label constants: `LabelProject = "dwe.project"`, etc.
+- [x] update godoc refs in `daemon.go`
+- [x] `rg -n 'devbox\.project|devbox\.daemon\.id|devbox\.daemon\.params'` — find every consumer (tests, golden files, completion suggestions, docs)
+- [x] update docs that show `docker inspect` output with `devbox.*` labels
+- [x] `make build && make test` — must end **green**
 
 ### Task 7: Phase 3d — Env-var contract `DEVBOX_*` → `DWE_*`
 

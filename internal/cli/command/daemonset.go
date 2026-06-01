@@ -28,7 +28,7 @@ import (
 var daemonSetShellOutFn = runDaemonSetPS
 
 // buildDaemonSetPSArgs returns the exact argv passed to docker for `--set`
-// value completion: filter on BOTH devbox.project AND devbox.daemon.id so
+// value completion: filter on BOTH dwe.project AND dwe.daemon.id so
 // containers from another project with a colliding daemon ID never leak into
 // completions. --format=json (not the Go-template form, which historically
 // returned `.Labels` as a comma-separated string on real docker).
@@ -61,7 +61,7 @@ func runDaemonSetPS(ctx context.Context, compose *docker.Compose, projectFull, d
 //   - if the command isn't derived from a daemon, return empty
 //   - parse toComplete as "<key>=<partial>"; without a key, return empty
 //   - shell out to docker ps filtered on BOTH project + daemon.id labels,
-//     parse NDJSON, pull devbox.daemon.params label, return sorted unique
+//     parse NDJSON, pull dwe.daemon.params label, return sorted unique
 //     "<key>=<value>" completions
 //
 // Failures return empty + NoFileComp silently (CLAUDE.md "Completion helpers"
@@ -120,7 +120,7 @@ func daemonSetCompletion(flags *cmdctx.RootFlags) func(*cobra.Command, []string,
 }
 
 // parseDaemonParamValuesForKey parses NDJSON docker-ps output, decodes the
-// devbox.daemon.params label per line (tolerating both the modern object
+// dwe.daemon.params label per line (tolerating both the modern object
 // shape and the legacy comma-separated string shape), and returns the sorted
 // unique set of values seen for the requested param key.
 func parseDaemonParamValuesForKey(r io.Reader, key string) []string {

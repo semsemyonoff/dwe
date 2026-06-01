@@ -623,15 +623,15 @@ commands:
 
 Every daemon container carries three labels so `docker ps` is the single source of truth:
 
-- `devbox.project=<project.full>`
-- `devbox.daemon.id=<base>` (e.g. `services.main.queue`)
-- `devbox.daemon.params=<json>` (e.g. `{"name":"emails"}`) — produced via `encoding/json.Marshal` to round-trip safely through quotes, backslashes, and control characters
+- `dwe.project=<project.full>`
+- `dwe.daemon.id=<base>` (e.g. `services.main.queue`)
+- `dwe.daemon.params=<json>` (e.g. `{"name":"emails"}`) — produced via `encoding/json.Marshal` to round-trip safely through quotes, backslashes, and control characters
 
 `devbox status daemons`, `--set` completion, and `_auto_reap_daemons` all filter on these labels.
 
 ### Virtual command behaviour
 
-- **`.start`** — issues `docker compose run -d --name <full> --no-deps --entrypoint "" [--rm] [--user …] [--workdir …] -e K1 -e K2 --label devbox.project=… --label devbox.daemon.id=… --label devbox.daemon.params=… <service> <argv…>`. Environment **values** are passed via the child process environment (`cmd.Env`), never the host argv, so secrets do not appear in `ps` or `/proc/<pid>/cmdline`. `--no-deps` keeps the running stack untouched; `--entrypoint ""` ensures the user's `argv:` is what actually runs. On `on_already_running: error` plus a docker name-conflict error, the builtin surfaces `ErrDaemonAlreadyRunning`; on `noop`, the same error is swallowed and `.start` succeeds.
+- **`.start`** — issues `docker compose run -d --name <full> --no-deps --entrypoint "" [--rm] [--user …] [--workdir …] -e K1 -e K2 --label dwe.project=… --label dwe.daemon.id=… --label dwe.daemon.params=… <service> <argv…>`. Environment **values** are passed via the child process environment (`cmd.Env`), never the host argv, so secrets do not appear in `ps` or `/proc/<pid>/cmdline`. `--no-deps` keeps the running stack untouched; `--entrypoint ""` ensures the user's `argv:` is what actually runs. On `on_already_running: error` plus a docker name-conflict error, the builtin surfaces `ErrDaemonAlreadyRunning`; on `noop`, the same error is swallowed and `.start` succeeds.
 - **`.logs`** — runs `docker logs -f --tail=100 <full>` foreground. Ctrl-C sends `SIGINT` to the `docker logs` process only (graceful detach via `cmd.Cancel`); the container is never signalled. If the container is not running, `.logs` errors with a hint pointing at `.start`.
 - **`.stop`** — runs `docker stop -t <stop_timeout-as-seconds> <full>`. Missing container is **not** an error (idempotent stop).
 - **`.restart`** — a virtual `type: workflow` of `<base>.stop` followed by `<base>.start`. Workflow steps explicitly forward each declared `param.<name>` via `with:`, so `devbox cmd queue.restart --set name=emails` restarts the `emails` daemon (not the default).
@@ -640,7 +640,7 @@ Every daemon container carries three labels so `docker ps` is the single source 
 
 `devbox validate` and load-time `cmd.Validate()` enforce:
 
-- `service:` is required and **must be literal** — no `${...}` or `{{...}}`. (Parameterised `service:` is intentionally out of scope for v1 to keep the `devbox.daemon.id` label stable.)
+- `service:` is required and **must be literal** — no `${...}` or `{{...}}`. (Parameterised `service:` is intentionally out of scope for v1 to keep the `dwe.daemon.id` label stable.)
 - `daemon.container_template` is required and non-empty.
 - `daemon.on_already_running` is one of `error` / `noop` (empty = default `error`).
 - `daemon.stop_timeout` parses via `time.ParseDuration` and is strictly positive.
@@ -653,15 +653,15 @@ Every daemon container carries three labels so `docker ps` is the single source 
 
 ### Lifecycle integration
 
-Whenever `devbox stop` runs (whether `lifecycle.yml` exists or not), a synthetic `_auto_reap_daemons` phase is prepended to the stop pipeline. It enumerates every container labelled `devbox.project=<full>` with a non-empty `devbox.daemon.id` and stops them in parallel. There is no opt-out; the phase is visible in plan output. See [lifecycle.md](../lifecycle.md) for the stop pipeline shape.
+Whenever `devbox stop` runs (whether `lifecycle.yml` exists or not), a synthetic `_auto_reap_daemons` phase is prepended to the stop pipeline. It enumerates every container labelled `dwe.project=<full>` with a non-empty `dwe.daemon.id` and stops them in parallel. There is no opt-out; the phase is visible in plan output. See [lifecycle.md](../lifecycle.md) for the stop pipeline shape.
 
 If `lifecycle.yml` is absent, `devbox stop` still runs (with only the `_auto_reap_daemons` phase plus the default `Project is stopped. Have a nice day!` message) — `lifecycle.yml` is no longer required for `stop`.
 
 ### Security & privacy
 
-- **Param values land in `devbox.daemon.params` as JSON labels**, which `docker inspect` exposes to anyone with docker socket access on the host. **Do not put secrets in `params:`.** Use `env:` instead — env values are passed through the container environment (`docker compose run -e KEY` with the value in `cmd.Env`), never through the host process argv, so they do not appear in `ps` or `/proc/<pid>/cmdline`.
+- **Param values land in `dwe.daemon.params` as JSON labels**, which `docker inspect` exposes to anyone with docker socket access on the host. **Do not put secrets in `params:`.** Use `env:` instead — env values are passed through the container environment (`docker compose run -e KEY` with the value in `cmd.Env`), never through the host process argv, so they do not appear in `ps` or `/proc/<pid>/cmdline`.
 - **The container-name regex is enforced after rendering** — invalid characters in rendered param values are a hard runtime error even if the YAML `pattern:` happened to allow them. The validator's param-pattern check is advisory; the rendered-name regex is the authoritative defense.
-- **`service:` parameterisation is rejected** in v1 — the `devbox.daemon.id` label needs to be stable across restarts so completion, status, and reap can reliably correlate state across invocations.
+- **`service:` parameterisation is rejected** in v1 — the `dwe.daemon.id` label needs to be stable across restarts so completion, status, and reap can reliably correlate state across invocations.
 
 ### Invalid fields
 

@@ -49,13 +49,13 @@ func TestBuildStartExtraArgs_orderAndFlags(t *testing.T) {
 	}
 
 	// Label triple present.
-	if !hasPair(args, "--label", "devbox.project=proj") {
+	if !hasPair(args, "--label", "dwe.project=proj") {
 		t.Fatalf("missing project label; args=%v", args)
 	}
-	if !hasPair(args, "--label", "devbox.daemon.id=services.main.queue") {
+	if !hasPair(args, "--label", "dwe.daemon.id=services.main.queue") {
 		t.Fatalf("missing daemon.id label; args=%v", args)
 	}
-	if !hasPair(args, "--label", `devbox.daemon.params={"name":"default"}`) {
+	if !hasPair(args, "--label", `dwe.daemon.params={"name":"default"}`) {
 		t.Fatalf("missing daemon.params label; args=%v", args)
 	}
 

@@ -24,8 +24,8 @@ import (
 // DaemonsReap implements daemons_reap.
 //
 // Enumerates running daemon containers for the current project via
-// `docker ps --format=json` filtered on the standard devbox.project and
-// devbox.daemon.id labels, then issues `docker stop -t <default>` against
+// `docker ps --format=json` filtered on the standard dwe.project and
+// dwe.daemon.id labels, then issues `docker stop -t <default>` against
 // each. Used by the auto-injected `_auto_reap_daemons` phase in lifecycle
 // stop; can also be invoked directly from user pipelines.
 //
@@ -123,7 +123,7 @@ func (DaemonsReap) Run(ctx context.Context, _ map[string]any, ectx spec.ExecCont
 var listDaemonsFn = listDaemons
 
 // listDaemons runs `docker ps --format=json` filtered on the project's
-// devbox.project and devbox.daemon.id labels, then parses the NDJSON
+// dwe.project and dwe.daemon.id labels, then parses the NDJSON
 // stdout into a sorted, deduplicated slice of container names.
 func listDaemons(ctx context.Context, compose *docker.Compose, projectFull string) ([]string, error) {
 	args := []string{"ps", "--format=json"}

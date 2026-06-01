@@ -1,8 +1,8 @@
 // Package stack — daemons collector.
 //
 // Enumerates running daemon containers for the current project via
-// `docker ps --format=json` filtered on the standard devbox.project and
-// devbox.daemon.id labels. The output is NDJSON — one JSON object per line —
+// `docker ps --format=json` filtered on the standard dwe.project and
+// dwe.daemon.id labels. The output is NDJSON — one JSON object per line —
 // parsed with bufio.Scanner + per-line json.Unmarshal (never as a JSON
 // array). The collector is consumed by the `status daemons` section and the
 // default `status` orchestrator.
@@ -163,7 +163,7 @@ func decodeLabels(raw json.RawMessage) map[string]string {
 	return daemon.DecodeLabels(raw)
 }
 
-// prettyParams renders a devbox.daemon.params JSON object as a stable
+// prettyParams renders a dwe.daemon.params JSON object as a stable
 // "k=v, k=v" string for display. Falls back to the raw value on parse error.
 func prettyParams(s string) string {
 	if s == "" {

@@ -12,8 +12,8 @@ func TestBuildDaemonSetPSArgs_endToEnd(t *testing.T) {
 	got := buildDaemonSetPSArgs("my-proj", "services.main.queue")
 	want := []string{
 		"ps",
-		"--filter", "label=devbox.project=my-proj",
-		"--filter", "label=devbox.daemon.id=services.main.queue",
+		"--filter", "label=dwe.project=my-proj",
+		"--filter", "label=dwe.daemon.id=services.main.queue",
 		"--format=json",
 	}
 	if !reflect.DeepEqual(got, want) {
@@ -23,9 +23,9 @@ func TestBuildDaemonSetPSArgs_endToEnd(t *testing.T) {
 
 func TestParseDaemonParamValuesForKey_modernLabels(t *testing.T) {
 	// docker ps --format=json output: Labels is an object map.
-	nd := `{"Names":"my-proj-queue_emails","Labels":{"devbox.project":"my-proj","devbox.daemon.id":"queue","devbox.daemon.params":"{\"name\":\"emails\"}"}}
-{"Names":"my-proj-queue_default","Labels":{"devbox.project":"my-proj","devbox.daemon.id":"queue","devbox.daemon.params":"{\"name\":\"default\"}"}}
-{"Names":"my-proj-queue_emails2","Labels":{"devbox.project":"my-proj","devbox.daemon.id":"queue","devbox.daemon.params":"{\"name\":\"emails\"}"}}
+	nd := `{"Names":"my-proj-queue_emails","Labels":{"dwe.project":"my-proj","dwe.daemon.id":"queue","dwe.daemon.params":"{\"name\":\"emails\"}"}}
+{"Names":"my-proj-queue_default","Labels":{"dwe.project":"my-proj","dwe.daemon.id":"queue","dwe.daemon.params":"{\"name\":\"default\"}"}}
+{"Names":"my-proj-queue_emails2","Labels":{"dwe.project":"my-proj","dwe.daemon.id":"queue","dwe.daemon.params":"{\"name\":\"emails\"}"}}
 `
 	got := parseDaemonParamValuesForKey(strings.NewReader(nd), "name")
 	want := []string{"default", "emails"}
@@ -36,8 +36,8 @@ func TestParseDaemonParamValuesForKey_modernLabels(t *testing.T) {
 
 func TestParseDaemonParamValuesForKey_legacyStringLabels(t *testing.T) {
 	// Legacy: Labels is a comma-separated string.
-	nd := `{"Names":"my-proj-queue_a","Labels":"devbox.project=my-proj,devbox.daemon.id=queue,devbox.daemon.params={\"name\":\"a\"}"}
-{"Names":"my-proj-queue_b","Labels":"devbox.project=my-proj,devbox.daemon.id=queue,devbox.daemon.params={\"name\":\"b\"}"}
+	nd := `{"Names":"my-proj-queue_a","Labels":"dwe.project=my-proj,dwe.daemon.id=queue,dwe.daemon.params={\"name\":\"a\"}"}
+{"Names":"my-proj-queue_b","Labels":"dwe.project=my-proj,dwe.daemon.id=queue,dwe.daemon.params={\"name\":\"b\"}"}
 `
 	got := parseDaemonParamValuesForKey(strings.NewReader(nd), "name")
 	want := []string{"a", "b"}
@@ -47,9 +47,9 @@ func TestParseDaemonParamValuesForKey_legacyStringLabels(t *testing.T) {
 }
 
 func TestParseDaemonParamValuesForKey_legacyMultiParamJSON(t *testing.T) {
-	// Legacy string where devbox.daemon.params contains a multi-key JSON
+	// Legacy string where dwe.daemon.params contains a multi-key JSON
 	// object. Commas inside the JSON must not split the entry.
-	nd := `{"Names":"my-proj-queue_a","Labels":"devbox.project=my-proj,devbox.daemon.id=queue,devbox.daemon.params={\"name\":\"a\",\"queue\":\"emails\"}"}
+	nd := `{"Names":"my-proj-queue_a","Labels":"dwe.project=my-proj,dwe.daemon.id=queue,dwe.daemon.params={\"name\":\"a\",\"queue\":\"emails\"}"}
 `
 	got := parseDaemonParamValuesForKey(strings.NewReader(nd), "name")
 	want := []string{"a"}
@@ -65,7 +65,7 @@ func TestParseDaemonParamValuesForKey_legacyMultiParamJSON(t *testing.T) {
 
 func TestParseDaemonParamValuesForKey_legacySpecialCharsInValue(t *testing.T) {
 	// A JSON string value containing '}' and ',' must not corrupt parsing.
-	nd := `{"Names":"my-proj-queue_a","Labels":"devbox.project=my-proj,devbox.daemon.id=queue,devbox.daemon.params={\"name\":\"foo},bar\",\"queue\":\"emails\"}"}
+	nd := `{"Names":"my-proj-queue_a","Labels":"dwe.project=my-proj,dwe.daemon.id=queue,dwe.daemon.params={\"name\":\"foo},bar\",\"queue\":\"emails\"}"}
 `
 	got := parseDaemonParamValuesForKey(strings.NewReader(nd), "name")
 	want := []string{"foo},bar"}
@@ -80,7 +80,7 @@ func TestParseDaemonParamValuesForKey_legacySpecialCharsInValue(t *testing.T) {
 }
 
 func TestParseDaemonParamValuesForKey_missingKey(t *testing.T) {
-	nd := `{"Names":"x","Labels":{"devbox.daemon.params":"{\"queue\":\"emails\"}"}}
+	nd := `{"Names":"x","Labels":{"dwe.daemon.params":"{\"queue\":\"emails\"}"}}
 `
 	got := parseDaemonParamValuesForKey(strings.NewReader(nd), "name")
 	if len(got) != 0 {
@@ -90,9 +90,9 @@ func TestParseDaemonParamValuesForKey_missingKey(t *testing.T) {
 
 func TestParseDaemonParamValuesForKey_invalidLines(t *testing.T) {
 	nd := `not-json
-{"Names":"x","Labels":{"devbox.daemon.params":"{\"name\":\"good\"}"}}
+{"Names":"x","Labels":{"dwe.daemon.params":"{\"name\":\"good\"}"}}
 
-{"Names":"y","Labels":{"devbox.daemon.params":"not-json"}}
+{"Names":"y","Labels":{"dwe.daemon.params":"not-json"}}
 `
 	got := parseDaemonParamValuesForKey(strings.NewReader(nd), "name")
 	want := []string{"good"}
@@ -110,8 +110,8 @@ func TestParseDaemonParamValuesForKey_emptyInput(t *testing.T) {
 
 func TestParseDaemonParamValuesForKey_nonStringValueCoerced(t *testing.T) {
 	// Param values can be non-strings in the JSON (e.g. numbers); coerce.
-	nd := `{"Labels":{"devbox.daemon.params":"{\"workers\":3}"}}
-{"Labels":{"devbox.daemon.params":"{\"workers\":5}"}}
+	nd := `{"Labels":{"dwe.daemon.params":"{\"workers\":3}"}}
+{"Labels":{"dwe.daemon.params":"{\"workers\":5}"}}
 `
 	got := parseDaemonParamValuesForKey(strings.NewReader(nd), "workers")
 	want := []string{"3", "5"}

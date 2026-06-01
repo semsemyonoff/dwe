@@ -13,8 +13,8 @@ import (
 )
 
 func TestParseDaemonRows_ModernLabelsShape(t *testing.T) {
-	in := strings.NewReader(`{"Names":"proj-php_queue_default","Labels":{"devbox.project":"proj","devbox.daemon.id":"services.main.queue","devbox.daemon.params":"{\"name\":\"default\"}"},"CreatedAt":"2026-05-21 12:00:00 +0000 UTC"}
-{"Names":"proj-php_queue_emails","Labels":{"devbox.project":"proj","devbox.daemon.id":"services.main.queue","devbox.daemon.params":"{\"name\":\"emails\"}"},"CreatedAt":"2026-05-21 12:00:00 +0000 UTC"}`)
+	in := strings.NewReader(`{"Names":"proj-php_queue_default","Labels":{"dwe.project":"proj","dwe.daemon.id":"services.main.queue","dwe.daemon.params":"{\"name\":\"default\"}"},"CreatedAt":"2026-05-21 12:00:00 +0000 UTC"}
+{"Names":"proj-php_queue_emails","Labels":{"dwe.project":"proj","dwe.daemon.id":"services.main.queue","dwe.daemon.params":"{\"name\":\"emails\"}"},"CreatedAt":"2026-05-21 12:00:00 +0000 UTC"}`)
 	rows, errs := parseDaemonRows(in)
 	if len(errs) != 0 {
 		t.Fatalf("unexpected errs: %v", errs)
@@ -37,7 +37,7 @@ func TestParseDaemonRows_LegacyLabelsString(t *testing.T) {
 	// Older docker emits Labels as a comma-separated string. The parser
 	// tolerates both shapes so future docker version changes don't silently
 	// break completion / status.
-	in := strings.NewReader(`{"Names":"proj-foo","Labels":"devbox.project=proj,devbox.daemon.id=svc.foo,devbox.daemon.params={\"k\":\"v\"}"}`)
+	in := strings.NewReader(`{"Names":"proj-foo","Labels":"dwe.project=proj,dwe.daemon.id=svc.foo,dwe.daemon.params={\"k\":\"v\"}"}`)
 	rows, errs := parseDaemonRows(in)
 	if len(errs) != 0 {
 		t.Fatalf("unexpected errs: %v", errs)
@@ -53,7 +53,7 @@ func TestParseDaemonRows_LegacyLabelsString(t *testing.T) {
 func TestParseDaemonRows_LegacyLabelsStringMultiParam(t *testing.T) {
 	// Legacy string with a multi-param JSON value that contains commas.
 	// The depth-aware parser must not split inside the JSON object.
-	in := strings.NewReader(`{"Names":"proj-foo","Labels":"devbox.project=proj,devbox.daemon.id=svc.foo,devbox.daemon.params={\"name\":\"default\",\"queue\":\"emails\"}"}`)
+	in := strings.NewReader(`{"Names":"proj-foo","Labels":"dwe.project=proj,dwe.daemon.id=svc.foo,dwe.daemon.params={\"name\":\"default\",\"queue\":\"emails\"}"}`)
 	rows, errs := parseDaemonRows(in)
 	if len(errs) != 0 {
 		t.Fatalf("unexpected errs: %v", errs)
@@ -73,7 +73,7 @@ func TestParseDaemonRows_LegacyLabelsStringMultiParam(t *testing.T) {
 func TestParseDaemonRows_LegacyLabelsStringSpecialCharsInValue(t *testing.T) {
 	// A param value that contains '}' and ',' inside a JSON string must not
 	// confuse the depth/split logic.
-	in := strings.NewReader(`{"Names":"proj-foo","Labels":"devbox.project=proj,devbox.daemon.id=svc.foo,devbox.daemon.params={\"name\":\"foo},bar\",\"queue\":\"emails\"}"}`)
+	in := strings.NewReader(`{"Names":"proj-foo","Labels":"dwe.project=proj,dwe.daemon.id=svc.foo,dwe.daemon.params={\"name\":\"foo},bar\",\"queue\":\"emails\"}"}`)
 	rows, errs := parseDaemonRows(in)
 	if len(errs) != 0 {
 		t.Fatalf("unexpected errs: %v", errs)
@@ -98,7 +98,7 @@ func TestParseDaemonRows_SkipsContainerWithoutDaemonID(t *testing.T) {
 }
 
 func TestParseDaemonRows_InvalidJSONLineYieldsError(t *testing.T) {
-	in := strings.NewReader("{not json}\n{\"Names\":\"ok\",\"Labels\":{\"devbox.daemon.id\":\"a\"}}\n")
+	in := strings.NewReader("{not json}\n{\"Names\":\"ok\",\"Labels\":{\"dwe.daemon.id\":\"a\"}}\n")
 	rows, errs := parseDaemonRows(in)
 	if len(errs) != 1 {
 		t.Fatalf("got %d errs, want 1", len(errs))
@@ -111,7 +111,7 @@ func TestParseDaemonRows_InvalidJSONLineYieldsError(t *testing.T) {
 func TestParseDaemonRows_SanitisesControlChars(t *testing.T) {
 	// Container created by an external actor with newline + ANSI in the
 	// labels MUST not reach the renderer untouched.
-	in := strings.NewReader("{\"Names\":\"bad\\u001b[31mname\",\"Labels\":{\"devbox.daemon.id\":\"i\\u0007d\"}}")
+	in := strings.NewReader("{\"Names\":\"bad\\u001b[31mname\",\"Labels\":{\"dwe.daemon.id\":\"i\\u0007d\"}}")
 	rows, errs := parseDaemonRows(in)
 	if len(rows) != 1 {
 		t.Fatalf("want 1 row, got %d (errs=%v)", len(rows), errs)
@@ -217,7 +217,7 @@ func TestCollectDaemons_ShellSeam(t *testing.T) {
 	orig := daemonsShellOutFn
 	defer func() { daemonsShellOutFn = orig }()
 	daemonsShellOutFn = func(_ context.Context, _ *docker.Compose, _ string) ([]byte, error) {
-		return []byte(`{"Names":"proj-php_queue_default","Labels":{"devbox.daemon.id":"services.main.queue","devbox.daemon.params":"{\"name\":\"default\"}"}}`), nil
+		return []byte(`{"Names":"proj-php_queue_default","Labels":{"dwe.daemon.id":"services.main.queue","dwe.daemon.params":"{\"name\":\"default\"}"}}`), nil
 	}
 	rows, errs := CollectDaemons(context.Background(), cfg, &config.DockerConfig{})
 	if len(errs) != 0 {

@@ -20,9 +20,9 @@ import (
 
 // Standard label keys applied to every daemon container.
 const (
-	LabelProject      = "devbox.project"
-	LabelDaemonID     = "devbox.daemon.id"
-	LabelDaemonParams = "devbox.daemon.params"
+	LabelProject      = "dwe.project"
+	LabelDaemonID     = "dwe.daemon.id"
+	LabelDaemonParams = "dwe.daemon.params"
 )
 
 // Sentinel errors.
@@ -74,7 +74,7 @@ func ResolveContainerName(projectFullName, renderedTemplate string) (string, err
 }
 
 // StandardLabels returns the `--label key=value` argv pairs for a daemon
-// container. The devbox.daemon.params value is encoded via encoding/json so
+// container. The dwe.daemon.params value is encoded via encoding/json so
 // values containing quotes, backslashes, or control characters round-trip
 // cleanly through `docker inspect` and downstream parsing.
 //
@@ -148,7 +148,7 @@ func DecodeLabels(raw json.RawMessage) map[string]string {
 
 // ParseLegacyLabelString parses a "k=v,k=v" label string from old Docker
 // versions. It tracks JSON object depth and quoted strings so that brace/comma
-// characters inside a JSON string value (e.g. devbox.daemon.params={"n":"a},b"})
+// characters inside a JSON string value (e.g. dwe.daemon.params={"n":"a},b"})
 // are not treated as depth changes or entry separators.
 func ParseLegacyLabelString(s string) map[string]string {
 	out := make(map[string]string)
