@@ -29,29 +29,29 @@ func buildStatusTestRoot() *cobra.Command {
 	return root
 }
 
-// statusFixture creates a minimal devbox project on disk for end-to-end
+// statusFixture creates a minimal dwe project on disk for end-to-end
 // status command tests and returns the workspace.yml path.
 // The main service has dir: services/main so CollectGitWorkspace produces rows.
 func statusFixture(t *testing.T) string {
 	t.Helper()
 	dir := t.TempDir()
-	devboxYML := `schema_version: "2"
+	cfgYAML := `schema_version: "2"
 project:
   name: test
-  prefix: devbox
+  prefix: dwe
 `
-	if err := os.WriteFile(filepath.Join(dir, "workspace.yml"), []byte(devboxYML), 0o644); err != nil {
+	if err := os.WriteFile(filepath.Join(dir, "workspace.yml"), []byte(cfgYAML), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	devboxDir := filepath.Join(dir, "workspace")
-	if err := os.MkdirAll(devboxDir, 0o755); err != nil {
+	workspaceDir := filepath.Join(dir, "workspace")
+	if err := os.MkdirAll(workspaceDir, 0o755); err != nil {
 		t.Fatal(err)
 	}
 	defaultsYML := `services:
   adminer:
     enabled: true
 `
-	if err := os.WriteFile(filepath.Join(devboxDir, "defaults.yml"), []byte(defaultsYML), 0o644); err != nil {
+	if err := os.WriteFile(filepath.Join(workspaceDir, "defaults.yml"), []byte(defaultsYML), 0o644); err != nil {
 		t.Fatal(err)
 	}
 	// Services are loaded from per-folder workspace/services/<name>/ — not from inline workspace.yml.
@@ -61,7 +61,7 @@ project:
 		"worker":  "type: app\ncontainer: app-worker\n",
 		"adminer": "type: tool\ncontainer: adminer\nports:\n  main: 8080\nhosts:\n  main: adminer.localhost\n",
 	} {
-		svcDir := filepath.Join(devboxDir, "services", name)
+		svcDir := filepath.Join(workspaceDir, "services", name)
 		if err := os.MkdirAll(svcDir, 0o755); err != nil {
 			t.Fatal(err)
 		}
@@ -81,23 +81,23 @@ project:
 func statusFixtureWithInfra(t *testing.T) string {
 	t.Helper()
 	dir := t.TempDir()
-	devboxYML := `schema_version: "2"
+	cfgYAML := `schema_version: "2"
 project:
   name: test
-  prefix: devbox
+  prefix: dwe
 `
-	if err := os.WriteFile(filepath.Join(dir, "workspace.yml"), []byte(devboxYML), 0o644); err != nil {
+	if err := os.WriteFile(filepath.Join(dir, "workspace.yml"), []byte(cfgYAML), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	devboxDir := filepath.Join(dir, "workspace")
-	if err := os.MkdirAll(devboxDir, 0o755); err != nil {
+	workspaceDir := filepath.Join(dir, "workspace")
+	if err := os.MkdirAll(workspaceDir, 0o755); err != nil {
 		t.Fatal(err)
 	}
 	for name, content := range map[string]string{
 		"main": "type: app\ncontainer: app-main\nrequired: true\ndir: services/main\n",
 		"db":   "type: infra\ncontainer: db\nrequired: true\n",
 	} {
-		svcDir := filepath.Join(devboxDir, "services", name)
+		svcDir := filepath.Join(workspaceDir, "services", name)
 		if err := os.MkdirAll(svcDir, 0o755); err != nil {
 			t.Fatal(err)
 		}
@@ -117,19 +117,19 @@ func statusFixtureWithDeploy(t *testing.T) string {
 	t.Helper()
 	configPath := statusFixture(t)
 	dir := filepath.Dir(configPath)
-	devboxDir := filepath.Join(dir, "workspace")
+	workspaceDir := filepath.Join(dir, "workspace")
 
 	// Project-level deploy.yml: a deploy_services phase so main is tracked.
 	deployYML := `phases:
   - name: services
     deploy_services: true
 `
-	if err := os.WriteFile(filepath.Join(devboxDir, "deploy.yml"), []byte(deployYML), 0o644); err != nil {
+	if err := os.WriteFile(filepath.Join(workspaceDir, "deploy.yml"), []byte(deployYML), 0o644); err != nil {
 		t.Fatal(err)
 	}
 
 	// Per-service deploy pipeline for main.
-	deployDir := filepath.Join(devboxDir, "deploy")
+	deployDir := filepath.Join(workspaceDir, "deploy")
 	if err := os.MkdirAll(deployDir, 0o755); err != nil {
 		t.Fatal(err)
 	}

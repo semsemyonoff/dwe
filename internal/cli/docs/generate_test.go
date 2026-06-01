@@ -350,7 +350,7 @@ func TestDocsGenerateCommand_Integration(t *testing.T) {
 	tmpDir := t.TempDir()
 
 	// Minimal workspace.yml.
-	devboxYML := `project:
+	cfgYAML := `project:
   name: test
   prefix: dwe
 services:
@@ -358,7 +358,7 @@ services:
     type: app
     dir: ./services/main
 `
-	if err := os.WriteFile(filepath.Join(tmpDir, "workspace.yml"), []byte(devboxYML), 0o644); err != nil {
+	if err := os.WriteFile(filepath.Join(tmpDir, "workspace.yml"), []byte(cfgYAML), 0o644); err != nil {
 		t.Fatal(err)
 	}
 

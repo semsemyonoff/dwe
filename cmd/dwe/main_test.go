@@ -7,7 +7,7 @@ import (
 )
 
 // makeProject creates a minimal temp project tree at the given root with:
-//   - devbox.yml with schema_version (v2 by default, v1 if legacy=true)
+//   - workspace.yml with optional legacy fields (schema_version silently ignored)
 //   - workspace/styles.yml so loadHelpColorScheme finds a styles file and returns
 //     a non-nil ColorSchemeFunc (file presence triggers the non-nil path).
 func makeProject(t *testing.T, root string, legacy bool) {
@@ -69,27 +69,27 @@ func TestConfigPathFromArgs(t *testing.T) {
 
 	t.Run("explicit --config flag", func(t *testing.T) {
 		origArgs := os.Args
-		os.Args = []string{"dwe", "--config", "/some/devbox.yml", "info"}
+		os.Args = []string{"dwe", "--config", "/some/workspace.yml", "info"}
 		defer func() { os.Args = origArgs }()
 
 		path, explicit := configPathFromArgs()
-		if path != "/some/devbox.yml" || !explicit {
-			t.Errorf("want (\"/some/devbox.yml\", true), got (%q, %v)", path, explicit)
+		if path != "/some/workspace.yml" || !explicit {
+			t.Errorf("want (\"/some/workspace.yml\", true), got (%q, %v)", path, explicit)
 		}
 	})
 
 	t.Run("short -c flag", func(t *testing.T) {
 		origArgs := os.Args
-		os.Args = []string{"dwe", "-c", "/other/devbox.yml"}
+		os.Args = []string{"dwe", "-c", "/other/workspace.yml"}
 		defer func() { os.Args = origArgs }()
 
 		path, explicit := configPathFromArgs()
-		if path != "/other/devbox.yml" || !explicit {
-			t.Errorf("want (\"/other/devbox.yml\", true), got (%q, %v)", path, explicit)
+		if path != "/other/workspace.yml" || !explicit {
+			t.Errorf("want (\"/other/workspace.yml\", true), got (%q, %v)", path, explicit)
 		}
 	})
 
-	// Passing --config devbox.yml (value matching the old default) must be treated as explicit.
+	// Passing --config workspace.yml (value matching the default) must be treated as explicit.
 	t.Run("explicit flag with default-like value is treated as explicit", func(t *testing.T) {
 		origArgs := os.Args
 		os.Args = []string{"dwe", "--config", "workspace.yml"}
@@ -97,7 +97,7 @@ func TestConfigPathFromArgs(t *testing.T) {
 
 		path, explicit := configPathFromArgs()
 		if path != "workspace.yml" || !explicit {
-			t.Errorf("want (\"devbox.yml\", true), got (%q, %v)", path, explicit)
+			t.Errorf("want (\"workspace.yml\", true), got (%q, %v)", path, explicit)
 		}
 	})
 }
@@ -132,11 +132,11 @@ func TestLoadHelpColorScheme(t *testing.T) {
 		}
 		defer func() { _ = os.Chdir(orig) }()
 
-		// Ensure we are not inside any devbox project.
+		// Ensure we are not inside any dwe project.
 		cs := loadHelpColorScheme("", false)
-		// We can't guarantee /tmp has no devbox.yml above it in all CI environments,
+		// We can't guarantee /tmp has no workspace.yml above it in all CI environments,
 		// but we can guarantee no panic occurs. If nil, that is fine.
-		// If non-nil, the test environment has a devbox project above /tmp (unusual).
+		// If non-nil, the test environment has a dwe project above /tmp (unusual).
 		_ = cs
 	})
 
@@ -170,7 +170,7 @@ func TestLoadHelpColorScheme(t *testing.T) {
 	})
 
 	t.Run("explicit bad path returns nil silently", func(t *testing.T) {
-		cs := loadHelpColorScheme("/nonexistent/path/devbox.yml", true)
+		cs := loadHelpColorScheme("/nonexistent/path/workspace.yml", true)
 		if cs != nil {
 			t.Error("expected nil ColorSchemeFunc for nonexistent explicit path")
 		}
@@ -178,7 +178,7 @@ func TestLoadHelpColorScheme(t *testing.T) {
 
 	t.Run("project without styles.yml returns nil", func(t *testing.T) {
 		root := t.TempDir()
-		// Create devbox.yml but no styles.yml
+		// Create workspace.yml but no styles.yml
 		if err := os.WriteFile(filepath.Join(root, "workspace.yml"), []byte("schema_version: \"2\"\n"), 0o644); err != nil {
 			t.Fatal(err)
 		}

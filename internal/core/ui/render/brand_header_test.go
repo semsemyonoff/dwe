@@ -6,11 +6,11 @@ import (
 )
 
 func TestRenderBrandHeader_Minimal(t *testing.T) {
-	out := BrandHeader(Brand{Project: "devbox-myapp", Version: "v1.2.3"})
+	out := BrandHeader(Brand{Project: "dwe-myapp", Version: "v1.2.3"})
 	if !strings.Contains(out, "DWE") {
 		t.Errorf("expected 'DWE' in brand header, got:\n%s", out)
 	}
-	if !strings.Contains(out, "devbox-myapp") {
+	if !strings.Contains(out, "dwe-myapp") {
 		t.Errorf("expected project in brand header, got:\n%s", out)
 	}
 	if !strings.Contains(out, "v1.2.3") {

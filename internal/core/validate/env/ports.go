@@ -228,7 +228,7 @@ func classifyPortForConflict(dp declaredPort, bindings map[int][]portOwner, ourP
 	return ""
 }
 
-// resolveComposeProject returns the compose project name for the current devbox
+// resolveComposeProject returns the compose project name for the current dwe
 // project. It reads docker.yml first; if that is absent or has no project_name,
 // it falls back to the lowercased directory basename — the same default that
 // Docker Compose v2 applies when no project_name is configured. Without this

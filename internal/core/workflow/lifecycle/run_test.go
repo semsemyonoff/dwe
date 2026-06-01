@@ -77,7 +77,7 @@ func TestResolveUpdateMode_NoUpdateTakesPrecedenceOverUpdateFlag(t *testing.T) {
 
 func TestRunRun_MissingLifecycleYML_UsesDefault(t *testing.T) {
 	// Stub RunPhasesFunc to avoid recursive test-binary execution from
-	// type:devbox steps calling os.Executable() in the default run config.
+	// type:dwe steps calling os.Executable() in the default run config.
 	stubRunPhases(t)
 
 	dir := t.TempDir()
@@ -100,18 +100,18 @@ func TestRunRun_MissingLifecycleYML_UsesDefault(t *testing.T) {
 
 func TestRunRun_MissingRunSection_UsesDefault(t *testing.T) {
 	// Stub RunPhasesFunc to avoid recursive test-binary execution from
-	// type:devbox steps calling os.Executable() in the default run config.
+	// type:dwe steps calling os.Executable() in the default run config.
 	stubRunPhases(t)
 
 	dir := t.TempDir()
 	cfgPath := makeMinimalDevboxYML(t, dir)
 
-	devboxDir := filepath.Join(dir, "workspace")
-	if err := os.MkdirAll(devboxDir, 0755); err != nil {
-		t.Fatalf("creating devbox dir: %v", err)
+	workspaceDir := filepath.Join(dir, "workspace")
+	if err := os.MkdirAll(workspaceDir, 0755); err != nil {
+		t.Fatalf("creating workspace dir: %v", err)
 	}
 	lifecycleYAML := "stop:\n  final_message: bye\n  phases: []\n"
-	if err := os.WriteFile(filepath.Join(devboxDir, "lifecycle.yml"), []byte(lifecycleYAML), 0644); err != nil {
+	if err := os.WriteFile(filepath.Join(workspaceDir, "lifecycle.yml"), []byte(lifecycleYAML), 0644); err != nil {
 		t.Fatalf("writing lifecycle.yml: %v", err)
 	}
 
@@ -183,12 +183,12 @@ func TestRunRun_MissingLifecycleYML_DefaultedCallbackFiresOnceAcrossPullReload(t
 func TestRunRun_ReloadsConfigAfterPull(t *testing.T) {
 	dir := t.TempDir()
 	cfgPath := makeMinimalDevboxYML(t, dir)
-	devboxDir := filepath.Join(dir, "workspace")
-	if err := os.MkdirAll(devboxDir, 0755); err != nil {
-		t.Fatalf("creating devbox dir: %v", err)
+	workspaceDir := filepath.Join(dir, "workspace")
+	if err := os.MkdirAll(workspaceDir, 0755); err != nil {
+		t.Fatalf("creating workspace dir: %v", err)
 	}
 
-	writeLifecycleYML(t, devboxDir, "before-reload")
+	writeLifecycleYML(t, workspaceDir, "before-reload")
 
 	origProbe := GitProbeFunc
 	origPull := GitPullFFOnlyFunc
@@ -209,7 +209,7 @@ func TestRunRun_ReloadsConfigAfterPull(t *testing.T) {
 	}
 
 	GitPullFFOnlyFunc = func(_, workDir string) (bool, error) {
-		writeLifecycleYML(t, devboxDir, "after-reload")
+		writeLifecycleYML(t, workspaceDir, "after-reload")
 		return true, nil
 	}
 
@@ -223,11 +223,11 @@ func TestRunRun_ReloadsConfigAfterPull(t *testing.T) {
 func TestRunRun_NoUpdateFlag_SkipsFetch(t *testing.T) {
 	dir := t.TempDir()
 	cfgPath := makeMinimalDevboxYML(t, dir)
-	devboxDir := filepath.Join(dir, "workspace")
-	if err := os.MkdirAll(devboxDir, 0755); err != nil {
-		t.Fatalf("creating devbox dir: %v", err)
+	workspaceDir := filepath.Join(dir, "workspace")
+	if err := os.MkdirAll(workspaceDir, 0755); err != nil {
+		t.Fatalf("creating workspace dir: %v", err)
 	}
-	writeLifecycleYML(t, devboxDir, "done")
+	writeLifecycleYML(t, workspaceDir, "done")
 
 	origProbe := GitProbeFunc
 	t.Cleanup(func() { GitProbeFunc = origProbe })
@@ -253,12 +253,12 @@ func TestRunRun_NoUpdateFlag_SkipsFetch(t *testing.T) {
 func TestRunRun_UpdateFlagOff_SkipsFetch(t *testing.T) {
 	dir := t.TempDir()
 	cfgPath := makeMinimalDevboxYML(t, dir)
-	devboxDir := filepath.Join(dir, "workspace")
-	if err := os.MkdirAll(devboxDir, 0755); err != nil {
-		t.Fatalf("creating devbox dir: %v", err)
+	workspaceDir := filepath.Join(dir, "workspace")
+	if err := os.MkdirAll(workspaceDir, 0755); err != nil {
+		t.Fatalf("creating workspace dir: %v", err)
 	}
 	yaml := "run:\n  update:\n    mode: on\n  phases:\n    - name: s\n      steps:\n        - name: n\n          type: shell\n          cmd: \"true\"\n"
-	if err := os.WriteFile(filepath.Join(devboxDir, "lifecycle.yml"), []byte(yaml), 0644); err != nil {
+	if err := os.WriteFile(filepath.Join(workspaceDir, "lifecycle.yml"), []byte(yaml), 0644); err != nil {
 		t.Fatalf("writing lifecycle.yml: %v", err)
 	}
 
@@ -286,12 +286,12 @@ func TestRunRun_UpdateFlagOff_SkipsFetch(t *testing.T) {
 func TestRunRun_UpdateBlockOmitted_DefaultsToOffNoFetch(t *testing.T) {
 	dir := t.TempDir()
 	cfgPath := makeMinimalDevboxYML(t, dir)
-	devboxDir := filepath.Join(dir, "workspace")
-	if err := os.MkdirAll(devboxDir, 0755); err != nil {
-		t.Fatalf("creating devbox dir: %v", err)
+	workspaceDir := filepath.Join(dir, "workspace")
+	if err := os.MkdirAll(workspaceDir, 0755); err != nil {
+		t.Fatalf("creating workspace dir: %v", err)
 	}
 	yaml := "run:\n  phases:\n    - name: s\n      steps:\n        - name: n\n          type: shell\n          cmd: \"true\"\n"
-	if err := os.WriteFile(filepath.Join(devboxDir, "lifecycle.yml"), []byte(yaml), 0644); err != nil {
+	if err := os.WriteFile(filepath.Join(workspaceDir, "lifecycle.yml"), []byte(yaml), 0644); err != nil {
 		t.Fatalf("writing lifecycle.yml: %v", err)
 	}
 
@@ -318,11 +318,11 @@ func TestRunRun_UpdateBlockOmitted_DefaultsToOffNoFetch(t *testing.T) {
 func TestRunRun_ProbeError(t *testing.T) {
 	dir := t.TempDir()
 	cfgPath := makeMinimalDevboxYML(t, dir)
-	devboxDir := filepath.Join(dir, "workspace")
-	if err := os.MkdirAll(devboxDir, 0755); err != nil {
-		t.Fatalf("creating devbox dir: %v", err)
+	workspaceDir := filepath.Join(dir, "workspace")
+	if err := os.MkdirAll(workspaceDir, 0755); err != nil {
+		t.Fatalf("creating workspace dir: %v", err)
 	}
-	writeLifecycleYML(t, devboxDir, "done")
+	writeLifecycleYML(t, workspaceDir, "done")
 
 	origProbe := GitProbeFunc
 	t.Cleanup(func() { GitProbeFunc = origProbe })
@@ -344,11 +344,11 @@ func TestRunRun_ProbeError(t *testing.T) {
 func TestRunRun_InvalidUpdateFlag(t *testing.T) {
 	dir := t.TempDir()
 	cfgPath := makeMinimalDevboxYML(t, dir)
-	devboxDir := filepath.Join(dir, "workspace")
-	if err := os.MkdirAll(devboxDir, 0755); err != nil {
-		t.Fatalf("creating devbox dir: %v", err)
+	workspaceDir := filepath.Join(dir, "workspace")
+	if err := os.MkdirAll(workspaceDir, 0755); err != nil {
+		t.Fatalf("creating workspace dir: %v", err)
 	}
-	writeLifecycleYML(t, devboxDir, "done")
+	writeLifecycleYML(t, workspaceDir, "done")
 
 	ctx := RunContext{ConfigPath: cfgPath, UpdateMode: "bogus"}
 	err := RunRun(ctx)
@@ -363,11 +363,11 @@ func TestRunRun_InvalidUpdateFlag(t *testing.T) {
 func TestRunRun_WarnOnFetchFailed(t *testing.T) {
 	dir := t.TempDir()
 	cfgPath := makeMinimalDevboxYML(t, dir)
-	devboxDir := filepath.Join(dir, "workspace")
-	if err := os.MkdirAll(devboxDir, 0755); err != nil {
-		t.Fatalf("creating devbox dir: %v", err)
+	workspaceDir := filepath.Join(dir, "workspace")
+	if err := os.MkdirAll(workspaceDir, 0755); err != nil {
+		t.Fatalf("creating workspace dir: %v", err)
 	}
-	writeLifecycleYML(t, devboxDir, "done")
+	writeLifecycleYML(t, workspaceDir, "done")
 
 	origProbe := GitProbeFunc
 	t.Cleanup(func() { GitProbeFunc = origProbe })
@@ -393,11 +393,11 @@ func TestRunRun_WarnOnFetchFailed(t *testing.T) {
 func TestRunRun_PullError_ContinuesWithWarning(t *testing.T) {
 	dir := t.TempDir()
 	cfgPath := makeMinimalDevboxYML(t, dir)
-	devboxDir := filepath.Join(dir, "workspace")
-	if err := os.MkdirAll(devboxDir, 0755); err != nil {
-		t.Fatalf("creating devbox dir: %v", err)
+	workspaceDir := filepath.Join(dir, "workspace")
+	if err := os.MkdirAll(workspaceDir, 0755); err != nil {
+		t.Fatalf("creating workspace dir: %v", err)
 	}
-	writeLifecycleYML(t, devboxDir, "done")
+	writeLifecycleYML(t, workspaceDir, "done")
 
 	origProbe := GitProbeFunc
 	origPull := GitPullFFOnlyFunc
@@ -426,7 +426,7 @@ func TestRunRun_PullError_ContinuesWithWarning(t *testing.T) {
 // --- .env render-and-source tests ---
 
 // TestRunRun_RendersDotEnvBeforePhases is a regression guard: `dwe run`
-// must regenerate devbox/.env from the current config BEFORE preflight, lock
+// must regenerate workspace/.env from the current config BEFORE preflight, lock
 // acquisition, git probe, and lifecycle phases, mirroring the implicit
 // render-env step at the head of the deploy pipeline. Lifecycle phases (and
 // preflight type: command checks) read this file via deploy.SourceDotEnv —
@@ -434,11 +434,11 @@ func TestRunRun_PullError_ContinuesWithWarning(t *testing.T) {
 func TestRunRun_RendersDotEnvBeforePhases(t *testing.T) {
 	dir := t.TempDir()
 	cfgPath := makeMinimalDevboxYML(t, dir)
-	devboxDir := filepath.Join(dir, "workspace")
-	if err := os.MkdirAll(devboxDir, 0755); err != nil {
-		t.Fatalf("creating devbox dir: %v", err)
+	workspaceDir := filepath.Join(dir, "workspace")
+	if err := os.MkdirAll(workspaceDir, 0755); err != nil {
+		t.Fatalf("creating workspace dir: %v", err)
 	}
-	writeLifecycleYML(t, devboxDir, "done")
+	writeLifecycleYML(t, workspaceDir, "done")
 
 	envPath := filepath.Join(dir, ".env")
 	if _, err := os.Stat(envPath); err == nil {
@@ -466,11 +466,11 @@ func TestRunRun_RendersDotEnvBeforePhases(t *testing.T) {
 func TestRunRun_ReRendersDotEnvAfterPull(t *testing.T) {
 	dir := t.TempDir()
 	cfgPath := makeMinimalDevboxYML(t, dir)
-	devboxDir := filepath.Join(dir, "workspace")
-	if err := os.MkdirAll(devboxDir, 0755); err != nil {
-		t.Fatalf("creating devbox dir: %v", err)
+	workspaceDir := filepath.Join(dir, "workspace")
+	if err := os.MkdirAll(workspaceDir, 0755); err != nil {
+		t.Fatalf("creating workspace dir: %v", err)
 	}
-	writeLifecycleYML(t, devboxDir, "before-reload")
+	writeLifecycleYML(t, workspaceDir, "before-reload")
 
 	origProbe := GitProbeFunc
 	origPull := GitPullFFOnlyFunc
@@ -494,7 +494,7 @@ func TestRunRun_ReRendersDotEnvAfterPull(t *testing.T) {
 	GitPullFFOnlyFunc = func(_, _ string) (bool, error) {
 		pullCalledAt = time.Now()
 		// Simulate the pull bringing in an updated lifecycle.yml.
-		writeLifecycleYML(t, devboxDir, "after-reload")
+		writeLifecycleYML(t, workspaceDir, "after-reload")
 		// Sleep a touch so the post-pull write of .env is observably newer
 		// than the pre-pull one even on coarse-grained mtime filesystems.
 		time.Sleep(20 * time.Millisecond)
@@ -525,11 +525,11 @@ func TestRunRun_DeploymentGate_NoTrackedServices_Passes(t *testing.T) {
 	// the gate should pass through without checking state.
 	dir := t.TempDir()
 	cfgPath := makeMinimalDevboxYML(t, dir)
-	devboxDir := filepath.Join(dir, "workspace")
-	if err := os.MkdirAll(devboxDir, 0755); err != nil {
-		t.Fatalf("creating devbox dir: %v", err)
+	workspaceDir := filepath.Join(dir, "workspace")
+	if err := os.MkdirAll(workspaceDir, 0755); err != nil {
+		t.Fatalf("creating workspace dir: %v", err)
 	}
-	writeLifecycleYML(t, devboxDir, "done")
+	writeLifecycleYML(t, workspaceDir, "done")
 
 	ctx := RunContext{ConfigPath: cfgPath}
 	err := RunRun(ctx)

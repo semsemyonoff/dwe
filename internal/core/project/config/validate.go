@@ -14,11 +14,11 @@ import (
 )
 
 // ValidateConfigFileName is the filename of the project-level validate.yml,
-// relative to the devbox/ directory.
+// relative to the workspace/ directory.
 const ValidateConfigFileName = "validate.yml"
 
 // ValidateConfigPath returns the canonical path to validate.yml given a
-// project base directory (the directory that contains the devbox/ folder).
+// project base directory (the directory that contains the workspace/ folder).
 func ValidateConfigPath(baseDir string) string {
 	return filepath.Join(baseDir, "workspace", ValidateConfigFileName)
 }

@@ -15,21 +15,21 @@ import (
 
 func TestWorkspaceValidator(t *testing.T) {
 	tests := []struct {
-		name         string
-		fixture      string
-		wantDiags    int
+		name          string
+		fixture       string
+		wantDiags     int
 		wantWorkspace validate.Severity
 	}{
 		{
-			name:         "bad keys",
-			fixture:      "devbox-v2-bad-keys",
-			wantDiags:    1,
+			name:          "bad keys",
+			fixture:       "devbox-v2-bad-keys",
+			wantDiags:     1,
 			wantWorkspace: validate.SeverityError,
 		},
 		{
-			name:         "good config",
-			fixture:      "devbox-v2-good",
-			wantDiags:    1,
+			name:          "good config",
+			fixture:       "devbox-v2-good",
+			wantDiags:     1,
 			wantWorkspace: validate.SeverityOK,
 		},
 	}
@@ -445,7 +445,7 @@ services:
 }
 
 func TestServicesValidator_InterfaceCompileCheck(t *testing.T) {
-	// Compile-time enforcement lives in devbox.go (`var _ validate.Validator = ...`).
+	// Compile-time enforcement lives in workspace.go (`var _ validate.Validator = ...`).
 	// This runtime smoke test exercises the ID()/Domain() pair as a second layer.
 	v := &servicesValidator{}
 	require.Equal(t, "services", v.ID())
@@ -904,8 +904,8 @@ sections:
 func writeInfoYML(t *testing.T, content string) string {
 	t.Helper()
 	root := t.TempDir()
-	devboxDir := filepath.Join(root, "workspace")
-	if err := os.MkdirAll(devboxDir, 0o755); err != nil {
+	workspaceDir := filepath.Join(root, "workspace")
+	if err := os.MkdirAll(workspaceDir, 0o755); err != nil {
 		t.Fatalf("MkdirAll: %v", err)
 	}
 
@@ -916,7 +916,7 @@ func writeInfoYML(t *testing.T, content string) string {
 	}
 
 	// Write info.yml
-	infoYML := filepath.Join(devboxDir, "info.yml")
+	infoYML := filepath.Join(workspaceDir, "info.yml")
 	if err := os.WriteFile(infoYML, []byte(content), 0o644); err != nil {
 		t.Fatalf("WriteFile info.yml: %v", err)
 	}

@@ -8,7 +8,7 @@
 //     with:
 //     key: value
 //
-// Unlike type: shell, type: command (registry), and type: devbox (CLI), a builtin is
+// Unlike type: shell, type: command (registry), and type: dwe (CLI), a builtin is
 // executed directly in Go — no subprocess is spawned. This makes destructive
 // and file-system operations safe, auditable, and visible in plan output.
 //

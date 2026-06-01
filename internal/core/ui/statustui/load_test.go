@@ -42,7 +42,7 @@ func makeServicesCfg(services map[string]config.ServiceConfig, tools map[string]
 	}
 	cfg := &config.DweConfig{Services: merged}
 	cfg.Project.Name = "test-project"
-	cfg.Project.Prefix = "devbox"
+	cfg.Project.Prefix = "dwe"
 	return cfg
 }
 

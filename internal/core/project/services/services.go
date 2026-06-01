@@ -1,4 +1,4 @@
-// Package services contains view-helpers derived from the merged devbox
+// Package services contains view-helpers derived from the merged dwe
 // config Services map. It exists so command-layer packages can share
 // ordering, filtering, and completion logic without importing each other.
 package services

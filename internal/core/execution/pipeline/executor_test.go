@@ -1612,23 +1612,23 @@ func TestChildIO_NilLogWriter_PassesThrough(t *testing.T) {
 	}
 }
 
-// TestBuildDevboxCmd_SetsCLICOLOR_FORCE verifies that devbox: step commands
+// TestBuildDweCmd_SetsCLICOLOR_FORCE verifies that dwe: step commands
 // are built with CLICOLOR_FORCE=1 so lipgloss enables colors even when stdout
 // is piped through an io.MultiWriter.
-func TestBuildDevboxCmd_SetsCLICOLOR_FORCE(t *testing.T) {
-	cmd := buildDevboxCmd(context.Background(), "info", t.TempDir(), "sh", "devbox", false)
+func TestBuildDweCmd_SetsCLICOLOR_FORCE(t *testing.T) {
+	cmd := buildDweCmd(context.Background(), "info", t.TempDir(), "sh", "dwe", false)
 	if !slices.Contains(cmd.Env, "CLICOLOR_FORCE=1") {
-		t.Errorf("buildDevboxCmd env should contain CLICOLOR_FORCE=1, got: %v", cmd.Env)
+		t.Errorf("buildDweCmd env should contain CLICOLOR_FORCE=1, got: %v", cmd.Env)
 	}
 }
 
-// TestBuildDevboxCmd_InheritsParentEnv verifies that the child env includes
+// TestBuildDweCmd_InheritsParentEnv verifies that the child env includes
 // parent environment variables (not just CLICOLOR_FORCE).
-func TestBuildDevboxCmd_InheritsParentEnv(t *testing.T) {
-	cmd := buildDevboxCmd(context.Background(), "info", t.TempDir(), "sh", "devbox", false)
+func TestBuildDweCmd_InheritsParentEnv(t *testing.T) {
+	cmd := buildDweCmd(context.Background(), "info", t.TempDir(), "sh", "dwe", false)
 	// cmd.Env should be non-empty (it includes os.Environ() + CLICOLOR_FORCE).
 	if len(cmd.Env) == 0 {
-		t.Error("buildDevboxCmd env should include parent environment (os.Environ())")
+		t.Error("buildDweCmd env should include parent environment (os.Environ())")
 	}
 	// The env count should be at least os.Environ() + 1 for CLICOLOR_FORCE.
 	if len(cmd.Env) < len(os.Environ())+1 {
@@ -1636,25 +1636,25 @@ func TestBuildDevboxCmd_InheritsParentEnv(t *testing.T) {
 	}
 }
 
-// TestBuildDevboxCmd_WorkDir verifies that the cmd working directory is set correctly.
-func TestBuildDevboxCmd_WorkDir(t *testing.T) {
+// TestBuildDweCmd_WorkDir verifies that the cmd working directory is set correctly.
+func TestBuildDweCmd_WorkDir(t *testing.T) {
 	workDir := t.TempDir()
-	cmd := buildDevboxCmd(context.Background(), "info", workDir, "sh", "devbox", false)
+	cmd := buildDweCmd(context.Background(), "info", workDir, "sh", "dwe", false)
 	if cmd.Dir != workDir {
-		t.Errorf("buildDevboxCmd Dir = %q, want %q", cmd.Dir, workDir)
+		t.Errorf("buildDweCmd Dir = %q, want %q", cmd.Dir, workDir)
 	}
 }
 
-// TestBuildDevboxCmd_SkipConfirmSetsNonInteractive verifies that skipConfirm=true
+// TestBuildDweCmd_SkipConfirmSetsNonInteractive verifies that skipConfirm=true
 // adds DWE_NONINTERACTIVE=1 to the child environment.
-func TestBuildDevboxCmd_SkipConfirmSetsNonInteractive(t *testing.T) {
-	cmd := buildDevboxCmd(context.Background(), "info", t.TempDir(), "sh", "devbox", true)
+func TestBuildDweCmd_SkipConfirmSetsNonInteractive(t *testing.T) {
+	cmd := buildDweCmd(context.Background(), "info", t.TempDir(), "sh", "dwe", true)
 	if !slices.Contains(cmd.Env, "DWE_NONINTERACTIVE=1") {
-		t.Errorf("buildDevboxCmd with skipConfirm should contain DWE_NONINTERACTIVE=1, got: %v", cmd.Env)
+		t.Errorf("buildDweCmd with skipConfirm should contain DWE_NONINTERACTIVE=1, got: %v", cmd.Env)
 	}
-	cmd2 := buildDevboxCmd(context.Background(), "info", t.TempDir(), "sh", "devbox", false)
+	cmd2 := buildDweCmd(context.Background(), "info", t.TempDir(), "sh", "dwe", false)
 	if slices.Contains(cmd2.Env, "DWE_NONINTERACTIVE=1") {
-		t.Errorf("buildDevboxCmd without skipConfirm should not contain DWE_NONINTERACTIVE=1")
+		t.Errorf("buildDweCmd without skipConfirm should not contain DWE_NONINTERACTIVE=1")
 	}
 }
 
@@ -1976,9 +1976,9 @@ func TestRunPipeline_ServiceConfigsCheckBuiltin(t *testing.T) {
 	})
 }
 
-// TestBuildDevboxCmd_UsesShellParam verifies that buildDevboxCmd uses the supplied
+// TestBuildDweCmd_UsesShellParam verifies that buildDweCmd uses the supplied
 // shell binary, not a hardcoded "sh".
-func TestBuildDevboxCmd_UsesShellParam(t *testing.T) {
+func TestBuildDweCmd_UsesShellParam(t *testing.T) {
 	tests := []struct {
 		shell string
 	}{
@@ -1987,7 +1987,7 @@ func TestBuildDevboxCmd_UsesShellParam(t *testing.T) {
 		{"zsh"},
 	}
 	for _, tc := range tests {
-		cmd := buildDevboxCmd(context.Background(), "info", t.TempDir(), tc.shell, "devbox", false)
+		cmd := buildDweCmd(context.Background(), "info", t.TempDir(), tc.shell, "dwe", false)
 		// exec.Command resolves the binary; Args[0] holds the original name.
 		if len(cmd.Args) == 0 || cmd.Args[0] != tc.shell {
 			t.Errorf("shell=%q: Args[0] = %q, want %q", tc.shell, cmd.Args[0], tc.shell)
@@ -2027,21 +2027,21 @@ func TestExecStep_ShellFromConfig(t *testing.T) {
 	}
 }
 
-// TestBuildDevboxCmd_DweBinParam verifies that buildDevboxCmd accepts a devboxBin
-// fallback parameter and produces a non-empty shell command for any non-empty devboxBin.
-// At runtime, os.Executable() is preferred; devboxBin is only used when it fails.
-func TestBuildDevboxCmd_DweBinParam(t *testing.T) {
-	cases := []string{"devbox", "my-devbox", "/usr/local/bin/devbox"}
+// TestBuildDweCmd_DweBinParam verifies that buildDweCmd accepts a dweBin
+// fallback parameter and produces a non-empty shell command for any non-empty dweBin.
+// At runtime, os.Executable() is preferred; dweBin is only used when it fails.
+func TestBuildDweCmd_DweBinParam(t *testing.T) {
+	cases := []string{"dwe", "my-dwe", "/usr/local/bin/dwe"}
 	for _, bin := range cases {
-		cmd := buildDevboxCmd(context.Background(), "info", t.TempDir(), "sh", bin, false)
+		cmd := buildDweCmd(context.Background(), "info", t.TempDir(), "sh", bin, false)
 		// The shell command is: sh -c "<resolved_binary> info"
 		if len(cmd.Args) < 3 {
 			t.Fatalf("bin=%q: expected at least 3 args, got %v", bin, cmd.Args)
 		}
-		// The third arg is the shell -c string. It must contain "info" (the devboxArg).
+		// The third arg is the shell -c string. It must contain "info" (the dweArg).
 		shellCmd := cmd.Args[2]
 		if !strings.Contains(shellCmd, "info") {
-			t.Errorf("bin=%q: shell cmd %q should contain devboxArg 'info'", bin, shellCmd)
+			t.Errorf("bin=%q: shell cmd %q should contain dweArg 'info'", bin, shellCmd)
 		}
 		// The shell -c string must not be empty (ensures no exec.Command("") regression).
 		if shellCmd == "" {

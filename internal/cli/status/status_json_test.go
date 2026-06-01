@@ -102,16 +102,16 @@ func updateOrCheckGolden(t *testing.T, goldenPath, got string) {
 func statusFixtureWithTrackedDeploy(t *testing.T) string {
 	t.Helper()
 	dir := t.TempDir()
-	devboxYML := `schema_version: "2"
+	cfgYAML := `schema_version: "2"
 project:
   name: test
-  prefix: devbox
+  prefix: dwe
 `
-	if err := os.WriteFile(filepath.Join(dir, "workspace.yml"), []byte(devboxYML), 0o644); err != nil {
+	if err := os.WriteFile(filepath.Join(dir, "workspace.yml"), []byte(cfgYAML), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	devboxDir := filepath.Join(dir, "workspace")
-	if err := os.MkdirAll(devboxDir, 0o755); err != nil {
+	workspaceDir := filepath.Join(dir, "workspace")
+	if err := os.MkdirAll(workspaceDir, 0o755); err != nil {
 		t.Fatal(err)
 	}
 
@@ -120,12 +120,12 @@ project:
   main:
     enabled: true
 `
-	if err := os.WriteFile(filepath.Join(devboxDir, "defaults.yml"), []byte(defaultsYML), 0o644); err != nil {
+	if err := os.WriteFile(filepath.Join(workspaceDir, "defaults.yml"), []byte(defaultsYML), 0o644); err != nil {
 		t.Fatal(err)
 	}
 
 	// Service directory.
-	mainSvcDir := filepath.Join(devboxDir, "services", "main")
+	mainSvcDir := filepath.Join(workspaceDir, "services", "main")
 	if err := os.MkdirAll(mainSvcDir, 0o755); err != nil {
 		t.Fatal(err)
 	}
@@ -151,7 +151,7 @@ project:
   - name: services
     deploy_services: true
 `
-	if err := os.WriteFile(filepath.Join(devboxDir, "deploy.yml"), []byte(projDeployYML), 0o644); err != nil {
+	if err := os.WriteFile(filepath.Join(workspaceDir, "deploy.yml"), []byte(projDeployYML), 0o644); err != nil {
 		t.Fatal(err)
 	}
 

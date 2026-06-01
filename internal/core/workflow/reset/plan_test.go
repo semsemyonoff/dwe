@@ -85,9 +85,9 @@ phases:
 
 func TestResolvePlan_noFileUsesDefault(t *testing.T) {
 	dir := t.TempDir()
-	// Write devbox dir without a reset.yml so the default fires.
-	devboxDir := filepath.Join(dir, "workspace")
-	if err := os.MkdirAll(devboxDir, 0o755); err != nil {
+	// Write workspace dir without a reset.yml so the default fires.
+	workspaceDir := filepath.Join(dir, "workspace")
+	if err := os.MkdirAll(workspaceDir, 0o755); err != nil {
 		t.Fatal(err)
 	}
 	cfg := makeResetCfgWithPath(dir + "/workspace.yml")
@@ -113,8 +113,8 @@ func TestResolvePlan_noFileUsesDefault(t *testing.T) {
 
 func TestLoadAndResolvePlan_noFileReturnsDefaulted(t *testing.T) {
 	dir := t.TempDir()
-	devboxDir := filepath.Join(dir, "workspace")
-	if err := os.MkdirAll(devboxDir, 0o755); err != nil {
+	workspaceDir := filepath.Join(dir, "workspace")
+	if err := os.MkdirAll(workspaceDir, 0o755); err != nil {
 		t.Fatal(err)
 	}
 	cfg := makeResetCfgWithPath(dir + "/workspace.yml")
@@ -155,8 +155,8 @@ phases:
 
 func TestFindStep_noFileSearchesDefault(t *testing.T) {
 	dir := t.TempDir()
-	devboxDir := filepath.Join(dir, "workspace")
-	if err := os.MkdirAll(devboxDir, 0o755); err != nil {
+	workspaceDir := filepath.Join(dir, "workspace")
+	if err := os.MkdirAll(workspaceDir, 0o755); err != nil {
 		t.Fatal(err)
 	}
 	cfg := makeResetCfgWithPath(dir + "/workspace.yml")

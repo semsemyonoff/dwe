@@ -109,7 +109,7 @@ func TestPromptCmd_RunOutsideProject(t *testing.T) {
 		// (e.g. the repo root). Only assert exit-code behavior when actually outside.
 		if out.Len() > 0 {
 			// Some output produced — we're inside a project. Skip assertion.
-			t.Skip("running inside a parent devbox project; cannot test outside-project case")
+			t.Skip("running inside a parent dwe project; cannot test outside-project case")
 		}
 		return
 	}
@@ -154,7 +154,7 @@ func TestPromptCmd_OutsideProjectReturnsSilent(t *testing.T) {
 	// Verify that the cobra path returns ErrSilent when outside a project,
 	// so main.go's error handler suppresses output and os.Exit(1) fires.
 	tmp := t.TempDir()
-	deep := filepath.Join(tmp, "no", "devbox", "project")
+	deep := filepath.Join(tmp, "no", "dwe", "project")
 	if err := os.MkdirAll(deep, 0o755); err != nil {
 		t.Fatalf("mkdir: %v", err)
 	}
@@ -165,7 +165,7 @@ func TestPromptCmd_OutsideProjectReturnsSilent(t *testing.T) {
 	cmd.SetArgs([]string{})
 	err := cmd.Execute()
 	if err == nil {
-		t.Skip("may be running inside a parent devbox project")
+		t.Skip("may be running inside a parent dwe project")
 	}
 	if !errors.Is(err, pipeline.ErrSilent) {
 		t.Errorf("expected ErrSilent, got %T: %v", err, err)

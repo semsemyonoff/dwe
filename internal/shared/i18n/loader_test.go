@@ -444,8 +444,8 @@ func TestLoadProjectBundlesDirectoryErrors(t *testing.T) {
 	t.Run("project dir is file returns sentinel", func(t *testing.T) {
 		dir := t.TempDir()
 		i18nFile := filepath.Join(dir, "workspace", "i18n")
-		devboxDir := filepath.Join(dir, "workspace")
-		if err := os.MkdirAll(devboxDir, 0755); err != nil {
+		workspaceDir := filepath.Join(dir, "workspace")
+		if err := os.MkdirAll(workspaceDir, 0755); err != nil {
 			t.Fatalf("mkdir: %v", err)
 		}
 		if err := os.WriteFile(i18nFile, []byte("not a dir"), 0644); err != nil {

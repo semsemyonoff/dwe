@@ -10,7 +10,7 @@ import (
 )
 
 func TestRunStop_MissingLifecycleYML(t *testing.T) {
-	// Stub RunPhasesFunc: default stop config contains a type:devbox step
+	// Stub RunPhasesFunc: default stop config contains a type:dwe step
 	// (docker down) whose os.Executable() call would recursively re-run the test binary.
 	stubRunPhases(t)
 	dir := t.TempDir()
@@ -28,12 +28,12 @@ func TestRunStop_MissingStopSection(t *testing.T) {
 	dir := t.TempDir()
 	cfgPath := makeMinimalDevboxYML(t, dir)
 
-	devboxDir := filepath.Join(dir, "workspace")
-	if err := os.MkdirAll(devboxDir, 0755); err != nil {
-		t.Fatalf("creating devbox dir: %v", err)
+	workspaceDir := filepath.Join(dir, "workspace")
+	if err := os.MkdirAll(workspaceDir, 0755); err != nil {
+		t.Fatalf("creating workspace dir: %v", err)
 	}
 	lifecycleYAML := "run:\n  final_message: ready\n  phases: []\n"
-	if err := os.WriteFile(filepath.Join(devboxDir, "lifecycle.yml"), []byte(lifecycleYAML), 0644); err != nil {
+	if err := os.WriteFile(filepath.Join(workspaceDir, "lifecycle.yml"), []byte(lifecycleYAML), 0644); err != nil {
 		t.Fatalf("writing lifecycle.yml: %v", err)
 	}
 
@@ -47,12 +47,12 @@ func TestRunStop_HappyPath(t *testing.T) {
 	dir := t.TempDir()
 	cfgPath := makeMinimalDevboxYML(t, dir)
 
-	devboxDir := filepath.Join(dir, "workspace")
-	if err := os.MkdirAll(devboxDir, 0755); err != nil {
-		t.Fatalf("creating devbox dir: %v", err)
+	workspaceDir := filepath.Join(dir, "workspace")
+	if err := os.MkdirAll(workspaceDir, 0755); err != nil {
+		t.Fatalf("creating workspace dir: %v", err)
 	}
 	lifecycleYAML := "stop:\n  final_message: \"Goodbye!\"\n  phases:\n    - name: down\n      steps:\n        - name: noop\n          type: shell\n          cmd: \"true\"\n"
-	if err := os.WriteFile(filepath.Join(devboxDir, "lifecycle.yml"), []byte(lifecycleYAML), 0644); err != nil {
+	if err := os.WriteFile(filepath.Join(workspaceDir, "lifecycle.yml"), []byte(lifecycleYAML), 0644); err != nil {
 		t.Fatalf("writing lifecycle.yml: %v", err)
 	}
 
@@ -63,7 +63,7 @@ func TestRunStop_HappyPath(t *testing.T) {
 }
 
 func TestRunStop_ClearsPendingRestart_KeepsPendingDeploy(t *testing.T) {
-	// No lifecycle.yml → default stop config (type:devbox step) → stub required.
+	// No lifecycle.yml → default stop config (type:dwe step) → stub required.
 	stubRunPhases(t)
 	dir := t.TempDir()
 	cfgPath := makeMinimalDevboxYML(t, dir)
@@ -182,7 +182,7 @@ func TestDefaultStopConfig_Shape(t *testing.T) {
 	}
 	step := ph.Steps[0]
 	if step.Type != "dwe" || step.Cmd != "docker down" {
-		t.Errorf("step = {type:%q cmd:%q}, want {type:devbox cmd:docker down}", step.Type, step.Cmd)
+		t.Errorf("step = {type:%q cmd:%q}, want {type:dwe cmd:docker down}", step.Type, step.Cmd)
 	}
 }
 
@@ -225,12 +225,12 @@ func TestRunStop_WithStopSection_DoesNotFireOnDefaultUsed(t *testing.T) {
 	dir := t.TempDir()
 	cfgPath := makeMinimalDevboxYML(t, dir)
 
-	devboxDir := filepath.Join(dir, "workspace")
-	if err := os.MkdirAll(devboxDir, 0755); err != nil {
-		t.Fatalf("creating devbox dir: %v", err)
+	workspaceDir := filepath.Join(dir, "workspace")
+	if err := os.MkdirAll(workspaceDir, 0755); err != nil {
+		t.Fatalf("creating workspace dir: %v", err)
 	}
 	lifecycleYAML := "stop:\n  final_message: bye\n  phases: []\n"
-	if err := os.WriteFile(filepath.Join(devboxDir, "lifecycle.yml"), []byte(lifecycleYAML), 0644); err != nil {
+	if err := os.WriteFile(filepath.Join(workspaceDir, "lifecycle.yml"), []byte(lifecycleYAML), 0644); err != nil {
 		t.Fatalf("writing lifecycle.yml: %v", err)
 	}
 

@@ -95,7 +95,7 @@ func (r *Runner) BuildCommand(ctx context.Context, rc spec.RunContext) (*exec.Cm
 // dwe CLI and the active docker compose project without rediscovery:
 //
 //	DWE_BIN            absolute path to the running dwe binary
-//	COMPOSE_PROJECT_NAME  active compose project name (e.g. devbox-laravel)
+//	COMPOSE_PROJECT_NAME  active compose project name (e.g. dwe-laravel)
 //	COMPOSE_FILE          colon-joined list of active overlay paths
 //	                      (absolute when ProjectRoot is known)
 //
@@ -107,11 +107,11 @@ func (r *Runner) BuildCommand(ctx context.Context, rc spec.RunContext) (*exec.Cm
 func hostContractEnv(rc spec.RunContext) []string {
 	var out []string
 
-	devboxBin, err := os.Executable()
-	if err != nil || devboxBin == "" {
-		devboxBin = config.DweBin(rc.Config)
+	dweBin, err := os.Executable()
+	if err != nil || dweBin == "" {
+		dweBin = config.DweBin(rc.Config)
 	}
-	out = append(out, "DWE_BIN="+devboxBin)
+	out = append(out, "DWE_BIN="+dweBin)
 
 	compose := rc.Compose()
 	if compose.ProjectName != "" {

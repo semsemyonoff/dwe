@@ -25,7 +25,7 @@ func (*ShellcheckAdapter) ID() string { return ShellcheckID }
 // DefaultBin returns "shellcheck".
 func (*ShellcheckAdapter) DefaultBin() string { return "shellcheck" }
 
-// DefaultPaths returns the conventional script directories devbox projects use.
+// DefaultPaths returns the conventional script directories dwe projects use.
 func (*ShellcheckAdapter) DefaultPaths() []string { return []string{"workspace/scripts", "scripts"} }
 
 // DefaultExtensions returns shell-script extensions matched by the walker.

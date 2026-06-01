@@ -108,7 +108,7 @@ func TestOutputFlag_Text_DoesNotSetNoColor(t *testing.T) {
 	}
 }
 
-// TestRootJSON_NoProject verifies that `devbox --output json` with no project
+// TestRootJSON_NoProject verifies that `dwe --output json` with no project
 // emits `{"project":null,"deploy_summary":null,"pending":null}`.
 func TestRootJSON_NoProject(t *testing.T) {
 	t.Chdir(t.TempDir())
@@ -135,7 +135,7 @@ func TestRootJSON_NoProject(t *testing.T) {
 	}
 }
 
-// TestRootJSON_WithProject verifies that `devbox --output json` with a v2 project
+// TestRootJSON_WithProject verifies that `dwe --output json` with a v2 project
 // emits a JSON object with project name, version, and root set.
 func TestRootJSON_WithProject(t *testing.T) {
 	dir := t.TempDir()
@@ -163,8 +163,8 @@ func TestRootJSON_WithProject(t *testing.T) {
 	if !ok || proj == nil {
 		t.Fatalf("expected project object, got %v", got["project"])
 	}
-	if proj["name"] != "devbox-testproject" {
-		t.Errorf("project.name: got %v, want devbox-testproject", proj["name"])
+	if proj["name"] != "dwe-testproject" {
+		t.Errorf("project.name: got %v, want dwe-testproject", proj["name"])
 	}
 	wantRoot, _ := filepath.EvalSymlinks(filepath.Dir(cfgPath))
 	if proj["root"] != wantRoot {

@@ -133,7 +133,7 @@ func listDaemons(ctx context.Context, compose *docker.Compose, projectFull strin
 	out, err := cmd.Output()
 	if err != nil {
 		// If the docker binary is not on PATH there are by definition no
-		// devbox-managed daemons running on this host. Reap exits cleanly
+		// dwe-managed daemons running on this host. Reap exits cleanly
 		// rather than failing the entire lifecycle stop pipeline.
 		if errors.Is(err, exec.ErrNotFound) {
 			return nil, nil

@@ -79,12 +79,12 @@ func runResetPlan(cmd *cobra.Command, flags *cmdctx.RootFlags, opts resetPlanOpt
 	if defaulted {
 		cmdctx.EmitDefaultNotice(cmd, flags, "reset", "reset")
 	}
-	devboxBin := config.DweBin(cfg)
+	dweBin := config.DweBin(cfg)
 	switch opts.Format {
 	case "shell":
-		reset.PrintPlanShell(steps, cmd.OutOrStdout(), devboxBin)
+		reset.PrintPlanShell(steps, cmd.OutOrStdout(), dweBin)
 	default:
-		pipeline.PrintPlanTable(steps, render.NewWriter(cmd.OutOrStdout()), devboxBin)
+		pipeline.PrintPlanTable(steps, render.NewWriter(cmd.OutOrStdout()), dweBin)
 	}
 	return nil
 }

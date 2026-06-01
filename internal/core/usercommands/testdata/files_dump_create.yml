@@ -27,7 +27,7 @@ files:
     on_error: remove
     env: DUMP_FILE
 script:
-  path: devbox/scripts/db/dump-create.sh
+  path: workspace/scripts/db/dump-create.sh
 messages:
   success: "Database dump created at ${files.dump.path}"
   error: "Failed to create database dump"

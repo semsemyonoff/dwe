@@ -297,7 +297,7 @@ func TestHostRunner_BuildCommand_ContractEnvComposeFile(t *testing.T) {
 		},
 		Render: &tpl.RenderContext{},
 		Config: &config.DweConfig{
-			Project: config.ProjectConfig{Prefix: "devbox", Name: "laravel"},
+			Project: config.ProjectConfig{Prefix: "dwe", Name: "laravel"},
 			Compose: config.ComposeConfig{Base: "compose.yaml"},
 			Services: map[string]config.ServiceConfig{
 				"catalog": {Enabled: true, Compose: []string{"compose/services/catalog/app.yml"}},
@@ -318,8 +318,8 @@ func TestHostRunner_BuildCommand_ContractEnvComposeFile(t *testing.T) {
 			composeProject = v
 		}
 	}
-	if composeProject != "devbox-laravel" {
-		t.Errorf("COMPOSE_PROJECT_NAME = %q, want %q", composeProject, "devbox-laravel")
+	if composeProject != "dwe-laravel" {
+		t.Errorf("COMPOSE_PROJECT_NAME = %q, want %q", composeProject, "dwe-laravel")
 	}
 	want := "/project/compose.yaml:/project/compose/services/catalog/app.yml"
 	if composeFile != want {
@@ -338,7 +338,7 @@ func TestHostRunner_BuildCommand_ContractEnvNoComposeFiles(t *testing.T) {
 			Cmd:  "env",
 		},
 		Render:      &tpl.RenderContext{},
-		Config:      &config.DweConfig{Project: config.ProjectConfig{Prefix: "devbox", Name: "laravel"}},
+		Config:      &config.DweConfig{Project: config.ProjectConfig{Prefix: "dwe", Name: "laravel"}},
 		ProjectRoot: "/project",
 	}
 	c, err := r.BuildCommand(context.Background(), ctx)

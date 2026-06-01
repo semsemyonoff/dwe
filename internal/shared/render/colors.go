@@ -1,6 +1,6 @@
 package render
 
-// ANSI color escape codes, matching legacy devbox make color scheme.
+// ANSI color escape codes, matching legacy dwe color scheme.
 const (
 	Blue     = "\033[38;5;45m" // cyan-blue (inf color in legacy)
 	Green    = "\033[0;32m"    // ok/success

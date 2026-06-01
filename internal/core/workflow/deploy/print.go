@@ -11,8 +11,8 @@ import (
 // Prepends "set -e" so the pipeline aborts on any step failure.
 // After the implicit .env generation step, ". .env" is emitted so variables
 // are available to all subsequent steps in the generated script.
-// devboxBin is the configured binary name used in emitted commands (e.g. "devbox").
-func PrintPlanShell(steps []pipeline.ResolvedStep, w io.Writer, devboxBin string) {
+// dweBin is the configured binary name (e.g. "dwe")).
+func PrintPlanShell(steps []pipeline.ResolvedStep, w io.Writer, dweBin string) {
 	_, _ = fmt.Fprintln(w, "set -e")
 	lastService := ""
 	lastPhaseKey := ""
@@ -33,13 +33,13 @@ func PrintPlanShell(steps []pipeline.ResolvedStep, w io.Writer, devboxBin string
 		}
 		switch {
 		case rs.Step.Type == "builtin" && rs.Step.ContinueOnError:
-			_, _ = fmt.Fprintf(w, "%s deploy step %s || true\n", devboxBin, rs.StepAddress())
+			_, _ = fmt.Fprintf(w, "%s deploy step %s || true\n", dweBin, rs.StepAddress())
 		case rs.Step.Type == "builtin":
-			_, _ = fmt.Fprintf(w, "%s deploy step %s\n", devboxBin, rs.StepAddress())
+			_, _ = fmt.Fprintf(w, "%s deploy step %s\n", dweBin, rs.StepAddress())
 		case rs.Step.ContinueOnError:
-			_, _ = fmt.Fprintln(w, pipeline.StepCommand(rs.Step, devboxBin)+" || true")
+			_, _ = fmt.Fprintln(w, pipeline.StepCommand(rs.Step, dweBin)+" || true")
 		default:
-			_, _ = fmt.Fprintln(w, pipeline.StepCommand(rs.Step, devboxBin))
+			_, _ = fmt.Fprintln(w, pipeline.StepCommand(rs.Step, dweBin))
 		}
 		if rs.Step.Name == ImplicitEnvStep.Name {
 			_, _ = fmt.Fprintln(w, ". .env")

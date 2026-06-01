@@ -198,9 +198,9 @@ func TestResolveContent_MalformedHeader(t *testing.T) {
 func TestResolveContent_ReadmeWithMatchingHash(t *testing.T) {
 	// Setup: repo-root README and Russian sibling under i18n/ru/
 	fsys := fstest.MapFS{
-		"README.md": &fstest.MapFile{Data: []byte("# devbox\n\nDeveloper environments on Docker.")},
+		"README.md": &fstest.MapFile{Data: []byte("# dwe\n\nDeveloper environments on Docker.")},
 		"i18n/ru/README.md": &fstest.MapFile{
-			Data: []byte("> Translated from: README.md @ 0123456789ab\n\n# devbox\n\nСреды разработки на Docker."),
+			Data: []byte("> Translated from: README.md @ 0123456789ab\n\n# dwe\n\nСреды разработки на Docker."),
 		},
 	}
 	root := DocRoot{
@@ -232,9 +232,9 @@ func TestResolveContent_ReadmeWithMatchingHash(t *testing.T) {
 func TestResolveContent_ReadmeWithStaleHash(t *testing.T) {
 	// Setup: repo-root README with Russian sibling whose header hash is outdated
 	fsys := fstest.MapFS{
-		"README.md": &fstest.MapFile{Data: []byte("# devbox\n\nUpdated tagline.")},
+		"README.md": &fstest.MapFile{Data: []byte("# dwe\n\nUpdated tagline.")},
 		"i18n/ru/README.md": &fstest.MapFile{
-			Data: []byte("> Translated from: README.md @ aaaaaaaaaaaa\n\n# devbox\n\nСтарый перевод."),
+			Data: []byte("> Translated from: README.md @ aaaaaaaaaaaa\n\n# dwe\n\nСтарый перевод."),
 		},
 	}
 	root := DocRoot{

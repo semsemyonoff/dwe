@@ -312,7 +312,7 @@ func TestContext_RequiredMissing(t *testing.T) {
 func TestContext_RequiredPresentIsOK(t *testing.T) {
 	cfg := makeConfig(map[string]any{
 		"services": map[string]any{
-			"main": map[string]any{"container": "devbox-laravel-main"},
+			"main": map[string]any{"container": "dwe-laravel-main"},
 		},
 	})
 	defs := map[string]ContextDef{
@@ -322,8 +322,8 @@ func TestContext_RequiredPresentIsOK(t *testing.T) {
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
-	if got["container"] != "devbox-laravel-main" {
-		t.Errorf("expected %q, got %v", "devbox-laravel-main", got["container"])
+	if got["container"] != "dwe-laravel-main" {
+		t.Errorf("expected %q, got %v", "dwe-laravel-main", got["container"])
 	}
 }
 
@@ -378,13 +378,13 @@ func TestBuildEnv_ContextEnv(t *testing.T) {
 			"container": {From: "services.main.container", Env: "APP_CONTAINER"},
 		},
 	}
-	ctx := map[string]any{"container": "devbox-laravel-main"}
+	ctx := map[string]any{"container": "dwe-laravel-main"}
 	env, err := BuildEnv(cmd, nil, ctx, map[string]tpl.ResolvedFile{})
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
-	if env["APP_CONTAINER"] != "devbox-laravel-main" {
-		t.Errorf("expected APP_CONTAINER=devbox-laravel-main, got %v", env["APP_CONTAINER"])
+	if env["APP_CONTAINER"] != "dwe-laravel-main" {
+		t.Errorf("expected APP_CONTAINER=dwe-laravel-main, got %v", env["APP_CONTAINER"])
 	}
 }
 

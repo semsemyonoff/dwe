@@ -140,20 +140,20 @@ type ActionContext struct {
 	CallerCtx builtin.CallerContext
 }
 
-// buildDevboxCmd constructs an exec.Cmd for a devbox: pipeline step.
+// buildDweCmd constructs an exec.Cmd for a dwe: pipeline step.
 //
 // It sets CLICOLOR_FORCE=1 in the child environment so that lipgloss enables
 // colors even when stdout is wrapped in an io.MultiWriter (which the child sees
 // as a pipe rather than a TTY). The log tee via logSanitizer is unaffected.
 // When skipConfirm is true, DWE_NONINTERACTIVE=1 is added so that nested
-// devbox subcommands also skip confirmation prompts. The supplied ctx
+// dwe subcommands also skip confirmation prompts. The supplied ctx
 // propagates cancellation into the child via exec.CommandContext.
-func buildDevboxCmd(ctx context.Context, devboxArg, workDir, shell, devboxBin string, skipConfirm bool) *exec.Cmd {
+func buildDweCmd(ctx context.Context, dweArg, workDir, shell, dweBin string, skipConfirm bool) *exec.Cmd {
 	bin, err := os.Executable()
 	if err != nil {
-		bin = devboxBin
+		bin = dweBin
 	}
-	cmd := exec.CommandContext(ctx, shell, "-c", shellQuote(bin)+" "+strings.TrimSpace(devboxArg)) //nolint:gosec
+	cmd := exec.CommandContext(ctx, shell, "-c", shellQuote(bin)+" "+strings.TrimSpace(dweArg)) //nolint:gosec
 	bindCancelTerm(cmd)
 	cmd.Dir = workDir
 	cmd.Env = append(os.Environ(), "CLICOLOR_FORCE=1")
@@ -164,7 +164,7 @@ func buildDevboxCmd(ctx context.Context, devboxArg, workDir, shell, devboxBin st
 }
 
 // ExecAction executes a typed action (used in step bodies and checks).
-// It dispatches based on action type: shell, devbox, command, or builtin.
+// It dispatches based on action type: shell, dwe, command, or builtin.
 // Does NOT handle reporter calls, when evaluation, hooks, or check orchestration —
 // those stay in Run. The supplied ctx propagates cancellation into child processes
 // via exec.CommandContext.
@@ -175,7 +175,7 @@ func ExecAction(ctx context.Context, a config.Action, actx ActionContext) error 
 	case "command":
 		return execCommandAction(ctx, a, actx)
 	case "dwe":
-		return execDevboxAction(ctx, a, actx)
+		return execDweAction(ctx, a, actx)
 	case "shell":
 		return execShellAction(ctx, a, actx)
 	default:
@@ -205,10 +205,10 @@ func execShellAction(ctx context.Context, a config.Action, actx ActionContext) e
 	return nil
 }
 
-// execDevboxAction runs a devbox subcommand.
-func execDevboxAction(ctx context.Context, a config.Action, actx ActionContext) error {
+// execDweAction runs a dwe subcommand.
+func execDweAction(ctx context.Context, a config.Action, actx ActionContext) error {
 	shell := config.ShellBin(actx.Cfg)
-	cmd := buildDevboxCmd(ctx, a.Cmd, actx.WorkDir, shell, config.DweBin(actx.Cfg), actx.SkipConfirm)
+	cmd := buildDweCmd(ctx, a.Cmd, actx.WorkDir, shell, config.DweBin(actx.Cfg), actx.SkipConfirm)
 	if !actx.Parallel {
 		cmd.Stdin = os.Stdin
 	}

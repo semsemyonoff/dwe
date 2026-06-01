@@ -15,21 +15,21 @@ import (
 func writeServiceDeployFixture(t *testing.T, orchestratorYML, serviceDeployYML string) string {
 	t.Helper()
 	dir := t.TempDir()
-	devboxPath := filepath.Join(dir, "workspace.yml")
-	if err := os.WriteFile(devboxPath, []byte(`schema_version: "1"
+	workspacePath := filepath.Join(dir, "workspace.yml")
+	if err := os.WriteFile(workspacePath, []byte(`schema_version: "1"
 project:
   name: laravel
-  prefix: devbox
+  prefix: dwe
 `), 0o644); err != nil {
 		t.Fatal(err)
 	}
 
-	devboxDir := filepath.Join(dir, "workspace")
-	if err := os.MkdirAll(devboxDir, 0o755); err != nil {
+	workspaceDir := filepath.Join(dir, "workspace")
+	if err := os.MkdirAll(workspaceDir, 0o755); err != nil {
 		t.Fatal(err)
 	}
 
-	svcDir := filepath.Join(devboxDir, "services", "main")
+	svcDir := filepath.Join(workspaceDir, "services", "main")
 	if err := os.MkdirAll(svcDir, 0o755); err != nil {
 		t.Fatal(err)
 	}
@@ -38,7 +38,7 @@ project:
 	}
 
 	if orchestratorYML != "" {
-		if err := os.WriteFile(filepath.Join(devboxDir, "deploy.yml"), []byte(orchestratorYML), 0o644); err != nil {
+		if err := os.WriteFile(filepath.Join(workspaceDir, "deploy.yml"), []byte(orchestratorYML), 0o644); err != nil {
 			t.Fatal(err)
 		}
 	}
@@ -49,7 +49,7 @@ project:
 		}
 	}
 
-	return devboxPath
+	return workspacePath
 }
 
 func TestResolvePlan_deployServicesInlines(t *testing.T) {
@@ -78,8 +78,8 @@ func TestResolvePlan_deployServicesInlines(t *testing.T) {
         type: command
         cmd: services.main.migrate
 `
-	devboxPath := writeServiceDeployFixture(t, orchestrator, serviceDeploy)
-	cfg, err := config.LoadConfig(devboxPath)
+	workspacePath := writeServiceDeployFixture(t, orchestrator, serviceDeploy)
+	cfg, err := config.LoadConfig(workspacePath)
 	if err != nil {
 		t.Fatalf("LoadConfig: %v", err)
 	}
@@ -127,8 +127,8 @@ func TestResolveServicePlan_singleService(t *testing.T) {
         type: command
         cmd: services.main.migrate
 `
-	devboxPath := writeServiceDeployFixture(t, "", serviceDeploy)
-	cfg, err := config.LoadConfig(devboxPath)
+	workspacePath := writeServiceDeployFixture(t, "", serviceDeploy)
+	cfg, err := config.LoadConfig(workspacePath)
 	if err != nil {
 		t.Fatalf("LoadConfig: %v", err)
 	}
@@ -155,8 +155,8 @@ func TestFindStep_threePartAddress(t *testing.T) {
         cmd: services.main.migrate
         description: Run migrations
 `
-	devboxPath := writeServiceDeployFixture(t, "", serviceDeploy)
-	cfg, err := config.LoadConfig(devboxPath)
+	workspacePath := writeServiceDeployFixture(t, "", serviceDeploy)
+	cfg, err := config.LoadConfig(workspacePath)
 	if err != nil {
 		t.Fatalf("LoadConfig: %v", err)
 	}

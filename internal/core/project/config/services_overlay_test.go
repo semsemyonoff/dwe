@@ -47,7 +47,7 @@ func TestValidateServicesOverlay_rejectsDefinitionField(t *testing.T) {
 }
 
 // TestValidateServicesOverlay_acceptsPortsHosts confirms that per-developer
-// port/host overrides are permitted in overlay layers — a core devbox
+// port/host overrides are permitted in overlay layers — a core dwe
 // feature so a developer can resolve port clashes locally without touching
 // shared workspace/services.yml.
 func TestValidateServicesOverlay_acceptsPortsHosts(t *testing.T) {
@@ -155,29 +155,29 @@ func TestValidateServicesOverlay_noServicesBlock(t *testing.T) {
 // merge-after-validate ordering of LoadConfig.
 func TestLoadConfig_overlaySequencing_unknownServiceRejected(t *testing.T) {
 	dir := t.TempDir()
-	devboxYML := `schema_version: "2"
+	cfgYAML := `schema_version: "2"
 project:
   name: test
-  prefix: devbox
+  prefix: dwe
 `
-	if err := os.WriteFile(filepath.Join(dir, "workspace.yml"), []byte(devboxYML), 0o644); err != nil {
+	if err := os.WriteFile(filepath.Join(dir, "workspace.yml"), []byte(cfgYAML), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	devboxDir := filepath.Join(dir, "workspace")
-	if err := os.MkdirAll(devboxDir, 0o755); err != nil {
+	workspaceDir := filepath.Join(dir, "workspace")
+	if err := os.MkdirAll(workspaceDir, 0o755); err != nil {
 		t.Fatal(err)
 	}
-	if err := os.MkdirAll(filepath.Join(devboxDir, "services", "adminer"), 0o755); err != nil {
+	if err := os.MkdirAll(filepath.Join(workspaceDir, "services", "adminer"), 0o755); err != nil {
 		t.Fatal(err)
 	}
-	if err := os.WriteFile(filepath.Join(devboxDir, "services", "adminer", "service.yml"), []byte("type: tool\ncontainer: adminer\n"), 0o644); err != nil {
+	if err := os.WriteFile(filepath.Join(workspaceDir, "services", "adminer", "service.yml"), []byte("type: tool\ncontainer: adminer\n"), 0o644); err != nil {
 		t.Fatal(err)
 	}
 	defaultsYML := `services:
   brand_new:
     enabled: true
 `
-	if err := os.WriteFile(filepath.Join(devboxDir, "defaults.yml"), []byte(defaultsYML), 0o644); err != nil {
+	if err := os.WriteFile(filepath.Join(workspaceDir, "defaults.yml"), []byte(defaultsYML), 0o644); err != nil {
 		t.Fatal(err)
 	}
 	_, err := LoadConfig(filepath.Join(dir, "workspace.yml"))
@@ -196,23 +196,23 @@ project:
 // cfg.Raw so dot-path templates resolve against the overridden values.
 func TestLoadConfig_overlayPortsHostsMerged(t *testing.T) {
 	dir := t.TempDir()
-	devboxYML := `schema_version: "2"
+	cfgYAML := `schema_version: "2"
 project:
   name: test
-  prefix: devbox
+  prefix: dwe
 `
-	if err := os.WriteFile(filepath.Join(dir, "workspace.yml"), []byte(devboxYML), 0o644); err != nil {
+	if err := os.WriteFile(filepath.Join(dir, "workspace.yml"), []byte(cfgYAML), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	devboxDir := filepath.Join(dir, "workspace")
-	if err := os.MkdirAll(devboxDir, 0o755); err != nil {
+	workspaceDir := filepath.Join(dir, "workspace")
+	if err := os.MkdirAll(workspaceDir, 0o755); err != nil {
 		t.Fatal(err)
 	}
 	for name, content := range map[string]string{
 		"adminer": "type: tool\ncontainer: adminer\nports:\n  http: 8027\nhosts:\n  web: admin.local\n",
 		"main":    "type: app\ncontainer: app-main\nrequired: true\ndir: ./services/main\nports:\n  http: 80\nhosts:\n  web: app.local\n",
 	} {
-		svcDir := filepath.Join(devboxDir, "services", name)
+		svcDir := filepath.Join(workspaceDir, "services", name)
 		if err := os.MkdirAll(svcDir, 0o755); err != nil {
 			t.Fatal(err)
 		}
@@ -228,7 +228,7 @@ project:
     hosts:
       api: api.dev.local
 `
-	if err := os.WriteFile(filepath.Join(devboxDir, "local.yml"), []byte(localYML), 0o644); err != nil {
+	if err := os.WriteFile(filepath.Join(workspaceDir, "local.yml"), []byte(localYML), 0o644); err != nil {
 		t.Fatal(err)
 	}
 	cfg, err := LoadConfig(filepath.Join(dir, "workspace.yml"))
@@ -325,19 +325,19 @@ func TestInjectServicesIntoRaw_portsHostsRoundTrip(t *testing.T) {
 func TestLoadConfig_extendsInheritsOverlaidParentHosts(t *testing.T) {
 	dir := t.TempDir()
 
-	devboxYML := `
+	cfgYAML := `
 schema_version: "1"
 project:
   name: tbm
-  prefix: devbox
+  prefix: dwe
 `
-	if err := os.WriteFile(filepath.Join(dir, "workspace.yml"), []byte(devboxYML), 0o644); err != nil {
+	if err := os.WriteFile(filepath.Join(dir, "workspace.yml"), []byte(cfgYAML), 0o644); err != nil {
 		t.Fatalf("write workspace.yml: %v", err)
 	}
 
-	devboxDir := filepath.Join(dir, "workspace")
-	if err := os.MkdirAll(devboxDir, 0o755); err != nil {
-		t.Fatalf("mkdir devbox/: %v", err)
+	workspaceDir := filepath.Join(dir, "workspace")
+	if err := os.MkdirAll(workspaceDir, 0o755); err != nil {
+		t.Fatalf("mkdir workspace/: %v", err)
 	}
 
 	// local.yml overrides the parent's hosts.web only. main-debug has no
@@ -350,7 +350,7 @@ services:
   main-debug:
     enabled: true
 `
-	if err := os.WriteFile(filepath.Join(devboxDir, "local.yml"), []byte(localYML), 0o644); err != nil {
+	if err := os.WriteFile(filepath.Join(workspaceDir, "local.yml"), []byte(localYML), 0o644); err != nil {
 		t.Fatalf("write local.yml: %v", err)
 	}
 
@@ -390,19 +390,19 @@ extends: main
 func TestLoadConfig_extendsInheritsOverlaidParentPorts(t *testing.T) {
 	dir := t.TempDir()
 
-	devboxYML := `
+	cfgYAML := `
 schema_version: "1"
 project:
   name: tbm
-  prefix: devbox
+  prefix: dwe
 `
-	if err := os.WriteFile(filepath.Join(dir, "workspace.yml"), []byte(devboxYML), 0o644); err != nil {
+	if err := os.WriteFile(filepath.Join(dir, "workspace.yml"), []byte(cfgYAML), 0o644); err != nil {
 		t.Fatalf("write workspace.yml: %v", err)
 	}
 
-	devboxDir := filepath.Join(dir, "workspace")
-	if err := os.MkdirAll(devboxDir, 0o755); err != nil {
-		t.Fatalf("mkdir devbox/: %v", err)
+	workspaceDir := filepath.Join(dir, "workspace")
+	if err := os.MkdirAll(workspaceDir, 0o755); err != nil {
+		t.Fatalf("mkdir workspace/: %v", err)
 	}
 
 	localYML := `
@@ -413,7 +413,7 @@ services:
   child:
     enabled: true
 `
-	if err := os.WriteFile(filepath.Join(devboxDir, "local.yml"), []byte(localYML), 0o644); err != nil {
+	if err := os.WriteFile(filepath.Join(workspaceDir, "local.yml"), []byte(localYML), 0o644); err != nil {
 		t.Fatalf("write local.yml: %v", err)
 	}
 
@@ -454,19 +454,19 @@ extends: parent
 func TestLoadConfig_extendsChildOwnHostBeatsParentOverlay(t *testing.T) {
 	dir := t.TempDir()
 
-	devboxYML := `
+	cfgYAML := `
 schema_version: "1"
 project:
   name: tbm
-  prefix: devbox
+  prefix: dwe
 `
-	if err := os.WriteFile(filepath.Join(dir, "workspace.yml"), []byte(devboxYML), 0o644); err != nil {
+	if err := os.WriteFile(filepath.Join(dir, "workspace.yml"), []byte(cfgYAML), 0o644); err != nil {
 		t.Fatalf("write workspace.yml: %v", err)
 	}
 
-	devboxDir := filepath.Join(dir, "workspace")
-	if err := os.MkdirAll(devboxDir, 0o755); err != nil {
-		t.Fatalf("mkdir devbox/: %v", err)
+	workspaceDir := filepath.Join(dir, "workspace")
+	if err := os.MkdirAll(workspaceDir, 0o755); err != nil {
+		t.Fatalf("mkdir workspace/: %v", err)
 	}
 
 	localYML := `
@@ -477,7 +477,7 @@ services:
   child:
     enabled: true
 `
-	if err := os.WriteFile(filepath.Join(devboxDir, "local.yml"), []byte(localYML), 0o644); err != nil {
+	if err := os.WriteFile(filepath.Join(workspaceDir, "local.yml"), []byte(localYML), 0o644); err != nil {
 		t.Fatalf("write local.yml: %v", err)
 	}
 

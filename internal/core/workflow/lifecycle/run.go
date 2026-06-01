@@ -337,7 +337,7 @@ func RunRestart(ctx RunContext) error {
 	return nil
 }
 
-// renderAndSourceDotEnv regenerates devbox/.env from the current config and
+// renderAndSourceDotEnv regenerates workspace/.env from the current config and
 // loads its key=value pairs into the process environment, so commands run by
 // preflight checks and lifecycle phases observe the freshly-rendered values.
 // Mirrors the implicit render-env step at the head of the deploy pipeline.

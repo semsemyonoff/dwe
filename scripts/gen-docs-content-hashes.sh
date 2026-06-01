@@ -25,7 +25,7 @@ cd "$REPO_ROOT"
     # Build map entries from all markdown files. We feed two inputs into the
     # same pipeline so the output stays sorted and there is one hash branch:
     #   - markdown files under docs/reference and docs/internals
-    #     (relpath = "${file#docs/}", e.g. "reference/config/devbox.md")
+    #     (relpath = "${file#docs/}", e.g. "reference/config/workspace.md")
     #   - the repo-root README.md as a flat top-level topic
     #     (relpath = "README.md")
     {

@@ -117,13 +117,13 @@ func (s *Runner) buildContractEnv(ctx spec.RunContext, tmpDir string) ([]string,
 		return nil, fmt.Errorf("script runner: marshal context: %w", err)
 	}
 
-	devboxBin, err := os.Executable()
+	dweBin, err := os.Executable()
 	if err != nil {
-		devboxBin = os.Args[0]
-		if !filepath.IsAbs(devboxBin) {
-			absPath, err := filepath.Abs(devboxBin)
+		dweBin = os.Args[0]
+		if !filepath.IsAbs(dweBin) {
+			absPath, err := filepath.Abs(dweBin)
 			if err == nil {
-				devboxBin = absPath
+				dweBin = absPath
 			}
 		}
 	}
@@ -146,7 +146,7 @@ func (s *Runner) buildContractEnv(ctx spec.RunContext, tmpDir string) ([]string,
 		"DWE_NONINTERACTIVE=" + nonInteractive,
 		"DWE_PARAMS_JSON=" + string(paramsJSON),
 		"DWE_CONTEXT_JSON=" + string(contextJSON),
-		"DWE_BIN=" + devboxBin,
+		"DWE_BIN=" + dweBin,
 		"DWE_FILES_JSON=" + string(filesJSON),
 	}, nil
 }

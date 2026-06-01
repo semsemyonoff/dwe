@@ -14,7 +14,7 @@ func TestNewCompose(t *testing.T) {
 		},
 	}
 	dockerCfg := &config.DockerConfig{
-		ProjectName: "devbox-laravel",
+		ProjectName: "dwe-laravel",
 		Args: config.DockerArgs{
 			Global: []string{"--ansi", "always"},
 			Up:     []string{"-d", "--remove-orphans"},
@@ -24,8 +24,8 @@ func TestNewCompose(t *testing.T) {
 
 	c := NewCompose(cfg, dockerCfg)
 
-	if c.ProjectName != "devbox-laravel" {
-		t.Errorf("ProjectName = %q, want %q", c.ProjectName, "devbox-laravel")
+	if c.ProjectName != "dwe-laravel" {
+		t.Errorf("ProjectName = %q, want %q", c.ProjectName, "dwe-laravel")
 	}
 	if len(c.Files) != 1 || c.Files[0] != "compose.yaml" {
 		t.Errorf("Files = %v, want [compose.yaml]", c.Files)
@@ -422,7 +422,7 @@ func TestNewComposeAll(t *testing.T) {
 		},
 	}
 	dockerCfg := &config.DockerConfig{
-		ProjectName: "devbox-test",
+		ProjectName: "dwe-test",
 		Args: config.DockerArgs{
 			Global: []string{"--ansi", "always"},
 			Pull:   []string{"--policy", "always"},

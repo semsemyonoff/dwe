@@ -16,14 +16,14 @@ import (
 	"github.com/spf13/cobra"
 )
 
-// snapshotInspectProject builds a devbox project with the given service map
-// declared via devbox/{services,defaults}.yml so config.LoadConfig produces a
+// snapshotInspectProject builds a dwe project with the given service map
+// declared via workspace/{services,defaults}.yml so config.LoadConfig produces a
 // non-empty cfg.Services and runSnapshotInspect can diff against it.
 func snapshotInspectProject(t *testing.T, services map[string]bool) string {
 	t.Helper()
 	dir := t.TempDir()
-	devboxDir := filepath.Join(dir, "workspace")
-	if err := os.MkdirAll(devboxDir, 0o755); err != nil {
+	workspaceDir := filepath.Join(dir, "workspace")
+	if err := os.MkdirAll(workspaceDir, 0o755); err != nil {
 		t.Fatal(err)
 	}
 	if err := os.WriteFile(filepath.Join(dir, "workspace.yml"), []byte("schema_version: \"2\"\n"), 0o644); err != nil {
@@ -43,7 +43,7 @@ func snapshotInspectProject(t *testing.T, services map[string]bool) string {
 				defaults.WriteString("false\n")
 			}
 			// Write per-folder service file.
-			svcDir := filepath.Join(devboxDir, "services", name)
+			svcDir := filepath.Join(workspaceDir, "services", name)
 			if err := os.MkdirAll(svcDir, 0o755); err != nil {
 				t.Fatal(err)
 			}
@@ -53,7 +53,7 @@ func snapshotInspectProject(t *testing.T, services map[string]bool) string {
 			}
 		}
 	}
-	if err := os.WriteFile(filepath.Join(devboxDir, "defaults.yml"), []byte(defaults.String()), 0o644); err != nil {
+	if err := os.WriteFile(filepath.Join(workspaceDir, "defaults.yml"), []byte(defaults.String()), 0o644); err != nil {
 		t.Fatal(err)
 	}
 	if err := os.MkdirAll(filepath.Join(dir, "snapshots"), 0o755); err != nil {

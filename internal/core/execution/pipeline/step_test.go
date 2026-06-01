@@ -37,8 +37,7 @@ func TestStepBadge_allTypes(t *testing.T) {
 }
 
 func TestResolvePhaseSteps_filesGateThreadedThrough(t *testing.T) {
-	cfg := &config.DweConfig{
-	}
+	cfg := &config.DweConfig{}
 
 	fg := &filesgate.FilesGate{
 		State: filesgate.StateReadable,

@@ -9,12 +9,12 @@ import (
 )
 
 // PrintPlanTable prints the plan in human-readable table format.
-// devboxBin is forwarded to StepCommand for display (e.g. "devbox" or a custom configured name).
+// dweBin is forwarded to StepCommand for display (e.g. "dwe" or a custom configured name).
 //
 // Parallel groups are rendered with a header line and indented sub-steps. Indices in the
 // form [N/total] are shown for the group (as a range, e.g. [12-14/25]) and each sub-step.
 // Sequential leaf steps are rendered without an index prefix (legacy format).
-func PrintPlanTable(steps []ResolvedStep, w *sharedrender.Writer, devboxBin string) {
+func PrintPlanTable(steps []ResolvedStep, w *sharedrender.Writer, dweBin string) {
 	out := w.Writer()
 
 	trackedTotal := computeTrackedTotal(steps)
@@ -91,7 +91,7 @@ func PrintPlanTable(steps []ResolvedStep, w *sharedrender.Writer, devboxBin stri
 				if !rs.IsUntracked() && trackedTotal > 0 {
 					idxPrefix = fmt.Sprintf("[%d/%d] ", trackedIndex, trackedTotal)
 				}
-				printLeafStep(out, sub, subIndent, subDetailIndent, idxPrefix, devboxBin)
+				printLeafStep(out, sub, subIndent, subDetailIndent, idxPrefix, dweBin)
 			}
 			continue
 		}
@@ -99,18 +99,18 @@ func PrintPlanTable(steps []ResolvedStep, w *sharedrender.Writer, devboxBin stri
 		if !rs.IsUntracked() {
 			trackedIndex++
 		}
-		printLeafStep(out, rs, indent, detailIndent, "", devboxBin)
+		printLeafStep(out, rs, indent, detailIndent, "", dweBin)
 	}
 }
 
 // printLeafStep renders a single (non-parallel) ResolvedStep. The optional indexPrefix
 // (e.g. "[12/25] ") is inserted between the indent and the badge for parallel sub-steps;
 // sequential leaf callers pass "".
-func printLeafStep(out io.Writer, rs ResolvedStep, indent, detailIndent, indexPrefix, devboxBin string) {
+func printLeafStep(out io.Writer, rs ResolvedStep, indent, detailIndent, indexPrefix, dweBin string) {
 	badge := stepBadge(rs.Step)
 	name := rs.Step.Name
 	desc := rs.Step.Description
-	cmd := StepCommand(rs.Step, devboxBin)
+	cmd := StepCommand(rs.Step, dweBin)
 
 	if desc != "" {
 		_, _ = fmt.Fprintln(out, render.Definition(indexPrefix+badge+" "+name, desc, len(indent), ""))

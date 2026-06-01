@@ -91,7 +91,7 @@ func Load(path string) (*ProjectState, error) {
 	}
 
 	// Lenient decode: state.yml is machine-generated; ignore unknown fields so
-	// a newer devbox version's state file can be read by an older version.
+	// a newer dwe version's state file can be read by an older version.
 	var state ProjectState
 	if err := yaml.Unmarshal(data, &state); err != nil {
 		return nil, fmt.Errorf("failed to parse state file: %w", err)

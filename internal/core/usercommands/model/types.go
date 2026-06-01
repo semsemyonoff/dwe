@@ -1,4 +1,4 @@
-// Package model contains the core types and constants for the devbox command system.
+// Package model contains the core types and constants for the dwe command system.
 package model
 
 import (
@@ -77,7 +77,7 @@ func allowedFieldsFor(t CommandType) map[string]bool {
 		common["workdir"] = true
 	case CommandTypeDwe:
 		common["cmd"] = true
-		// workdir is explicitly rejected for devbox, NOT in allowed set
+		// workdir is explicitly rejected for dwe, NOT in allowed set
 	case CommandTypeScript:
 		common["script"] = true
 		common["workdir"] = true
@@ -194,7 +194,7 @@ const (
 	// network with other compose services, etc.).
 	ExecModeExecOrRun ExecMode = "exec-or-run"
 	// ExecModeExecOrFail (default) pre-checks the target service and refuses
-	// with a clear devbox-level error when the container is not running.
+	// with a clear dwe-level error when the container is not running.
 	// Prevents the silent compose-fallback that ExecModeExecOrRun does for
 	// tools that legitimately work as ephemeral runs (mc, composer, etc.).
 	ExecModeExecOrFail ExecMode = "exec-or-fail"
@@ -202,7 +202,7 @@ const (
 
 // DefaultExecMode is the ExecMode used when a service_exec command does not
 // specify mode. It is exec-or-fail rather than exec so that a "service not
-// running" condition surfaces as an actionable devbox error rather than a raw
+// running" condition surfaces as an actionable dwe error rather than a raw
 // compose stderr trace.
 const DefaultExecMode = ExecModeExecOrFail
 
@@ -407,7 +407,7 @@ func (p *ParamOptions) IsZero() bool {
 type ParamDef struct {
 	// Type is the expected value type. Defaults to "string" when empty.
 	Type ParamType `yaml:"type"`
-	// Description is human-readable help text shown by devbox command inspect.
+	// Description is human-readable help text shown by dwe command inspect.
 	Description string `yaml:"description"`
 	// Required indicates the caller must supply this parameter explicitly.
 	Required bool `yaml:"required"`

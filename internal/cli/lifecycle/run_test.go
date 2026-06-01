@@ -80,7 +80,7 @@ func TestRunCmd_InEnvironmentGroup(t *testing.T) {
 func makeMinimalDevboxYML(t *testing.T, dir string) string {
 	t.Helper()
 	cfgPath := filepath.Join(dir, "workspace.yml")
-	content := "schema_version: \"2\"\nproject:\n  name: test\n  prefix: devbox\n"
+	content := "schema_version: \"2\"\nproject:\n  name: test\n  prefix: dwe\n"
 	if err := os.WriteFile(cfgPath, []byte(content), 0644); err != nil {
 		t.Fatalf("writing workspace.yml: %v", err)
 	}
@@ -114,12 +114,12 @@ func TestRunRun_MissingRunSection_UsesDefault(t *testing.T) {
 	dir := t.TempDir()
 	cfgPath := makeMinimalDevboxYML(t, dir)
 
-	devboxDir := filepath.Join(dir, "workspace")
-	if err := os.MkdirAll(devboxDir, 0755); err != nil {
-		t.Fatalf("creating devbox dir: %v", err)
+	workspaceDir := filepath.Join(dir, "workspace")
+	if err := os.MkdirAll(workspaceDir, 0755); err != nil {
+		t.Fatalf("creating workspace dir: %v", err)
 	}
 	lifecycleYAML := "stop:\n  final_message: bye\n  phases: []\n"
-	if err := os.WriteFile(filepath.Join(devboxDir, "lifecycle.yml"), []byte(lifecycleYAML), 0644); err != nil {
+	if err := os.WriteFile(filepath.Join(workspaceDir, "lifecycle.yml"), []byte(lifecycleYAML), 0644); err != nil {
 		t.Fatalf("writing lifecycle.yml: %v", err)
 	}
 
@@ -166,12 +166,12 @@ func TestRunRun_WithLifecycleYML_NoInfoLine(t *testing.T) {
 	dir := t.TempDir()
 	cfgPath := makeMinimalDevboxYML(t, dir)
 
-	devboxDir := filepath.Join(dir, "workspace")
-	if err := os.MkdirAll(devboxDir, 0755); err != nil {
-		t.Fatalf("creating devbox dir: %v", err)
+	workspaceDir := filepath.Join(dir, "workspace")
+	if err := os.MkdirAll(workspaceDir, 0755); err != nil {
+		t.Fatalf("creating workspace dir: %v", err)
 	}
 	lifecycleYAML := "run:\n  final_message: ready\n  phases:\n    - name: start\n      steps:\n        - name: noop\n          type: shell\n          cmd: \"true\"\n"
-	if err := os.WriteFile(filepath.Join(devboxDir, "lifecycle.yml"), []byte(lifecycleYAML), 0644); err != nil {
+	if err := os.WriteFile(filepath.Join(workspaceDir, "lifecycle.yml"), []byte(lifecycleYAML), 0644); err != nil {
 		t.Fatalf("writing lifecycle.yml: %v", err)
 	}
 

@@ -35,7 +35,7 @@ type Reporter interface {
 
 	// SkipStep is called when a step is skipped due to a when condition.
 	// reason is a human-readable explanation (e.g. "when: dir-empty services/main"
-	// or "phase when: cmd: ./bin/devbox status").
+	// or "phase when: cmd: ./bin/dwe status").
 	SkipStep(stepAddr string, step config.DeployStep, index int, total int, reason string)
 
 	// FinishStep is called after a step completes successfully.

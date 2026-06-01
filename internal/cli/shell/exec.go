@@ -128,7 +128,7 @@ func runServicesCLI(
 	}
 
 	// Container name matches the container_name field in compose.yaml:
-	// <project-full-name>-<container>, e.g. devbox-laravel-app-main.
+	// <project-full-name>-<container>, e.g. dwe-laravel-app-main.
 	fullContainerName := compose.ProjectName + "-" + svc.Container
 
 	switch opts.Mode {

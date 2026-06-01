@@ -92,7 +92,7 @@ func TestDeployRunCmd_NotifierFiresOnEarlyConfigLoadFailure(t *testing.T) {
 // short-circuit deploy.
 func TestDeployRunCmd_MalformedUserConfigDoesNotBlockDeploy(t *testing.T) {
 	home := pointHomeAtTempDir(t)
-	globalDir := filepath.Join(home, ".config", "devbox")
+	globalDir := filepath.Join(home, ".config", "dwe")
 	if err := os.MkdirAll(globalDir, 0o755); err != nil {
 		t.Fatal(err)
 	}
@@ -105,7 +105,7 @@ func TestDeployRunCmd_MalformedUserConfigDoesNotBlockDeploy(t *testing.T) {
 
 	err := deployRunCmd(&cobra.Command{}, flags, "", false, false, true, false, false)
 	if err == nil {
-		t.Fatal("expected deploy to fail when devbox config missing")
+		t.Fatal("expected deploy to fail when dwe config missing")
 	}
 	if msg := err.Error(); !strings.Contains(msg, "loading config") {
 		t.Errorf("err = %q, want one mentioning 'loading config'", msg)

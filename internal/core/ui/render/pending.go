@@ -15,8 +15,8 @@ import (
 // Output uses the warning palette so the banner stands out on plain status
 // output. One line per op:
 //
-//   - PendingDeploy  → "⚠ Pending: deploy required for: a, b\n  Run: devbox deploy run"
-//   - PendingRestart → "⚠ Pending: restart required\n  Run: devbox restart"
+//   - PendingDeploy  → "⚠ Pending: deploy required for: a, b\n  Run: dwe deploy run"
+//   - PendingRestart → "⚠ Pending: restart required\n  Run: dwe restart"
 func PendingBanner(p *journal.PendingApply) string {
 	if p == nil || len(p.Operations) == 0 {
 		return ""

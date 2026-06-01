@@ -277,7 +277,7 @@ func TestComposeArgvOutput(t *testing.T) {
 		},
 	}
 	dockerCfg := &config.DockerConfig{
-		ProjectName: "devbox-laravel",
+		ProjectName: "dwe-laravel",
 		Args: config.DockerArgs{
 			Global:  []string{"--ansi", "always"},
 			Up:      []string{"-d", "--remove-orphans"},
@@ -303,19 +303,19 @@ func TestComposeArgvOutput(t *testing.T) {
 			name:     "up with service",
 			command:  "up",
 			extra:    []string{"redis"},
-			contains: []string{"docker", "compose", "-p", "devbox-laravel", "-f", "compose.yaml", "--ansi", "always", "up", "-d", "--remove-orphans", "redis"},
+			contains: []string{"docker", "compose", "-p", "dwe-laravel", "-f", "compose.yaml", "--ansi", "always", "up", "-d", "--remove-orphans", "redis"},
 		},
 		{
 			name:     "down no extras",
 			command:  "down",
 			extra:    nil,
-			contains: []string{"docker", "compose", "-p", "devbox-laravel", "-f", "compose.yaml", "--ansi", "always", "down"},
+			contains: []string{"docker", "compose", "-p", "dwe-laravel", "-f", "compose.yaml", "--ansi", "always", "down"},
 		},
 		{
 			name:     "logs with service",
 			command:  "logs",
 			extra:    []string{"nginx"},
-			contains: []string{"docker", "compose", "-p", "devbox-laravel", "logs", "-f", "nginx"},
+			contains: []string{"docker", "compose", "-p", "dwe-laravel", "logs", "-f", "nginx"},
 		},
 		{
 			name:     "run with command",
@@ -443,26 +443,26 @@ func commandNames(cmds []*cobra.Command) []string {
 func makeMinimalProject(t *testing.T) string {
 	t.Helper()
 	dir := t.TempDir()
-	devboxYML := `project:
+	cfgYAML := `project:
   name: test
-  prefix: devbox
+  prefix: dwe
 `
-	if err := os.WriteFile(filepath.Join(dir, "workspace.yml"), []byte(devboxYML), 0o644); err != nil {
+	if err := os.WriteFile(filepath.Join(dir, "workspace.yml"), []byte(cfgYAML), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	devboxDir := filepath.Join(dir, "workspace")
-	if err := os.MkdirAll(devboxDir, 0o755); err != nil {
+	workspaceDir := filepath.Join(dir, "workspace")
+	if err := os.MkdirAll(workspaceDir, 0o755); err != nil {
 		t.Fatal(err)
 	}
-	svcDir := filepath.Join(devboxDir, "services", "main")
+	svcDir := filepath.Join(workspaceDir, "services", "main")
 	if err := os.MkdirAll(svcDir, 0o755); err != nil {
 		t.Fatal(err)
 	}
 	if err := os.WriteFile(filepath.Join(svcDir, "service.yml"), []byte("type: app\ndir: ./services/main\n"), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	dockerYML := "project_name: devbox-test\n"
-	if err := os.WriteFile(filepath.Join(devboxDir, "docker.yml"), []byte(dockerYML), 0o644); err != nil {
+	dockerYML := "project_name: dwe-test\n"
+	if err := os.WriteFile(filepath.Join(workspaceDir, "docker.yml"), []byte(dockerYML), 0o644); err != nil {
 		t.Fatal(err)
 	}
 	return dir

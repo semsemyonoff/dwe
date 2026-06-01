@@ -81,7 +81,7 @@ func TestLoadStylesConfig(t *testing.T) {
 }
 
 func TestLoadStylesConfig_missingFile(t *testing.T) {
-	cfg, err := LoadStylesConfig("/tmp/devbox-nonexistent-styles.yml")
+	cfg, err := LoadStylesConfig("/tmp/dwe-nonexistent-styles.yml")
 	if err != nil {
 		t.Fatalf("expected no error for missing file, got: %v", err)
 	}

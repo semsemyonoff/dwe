@@ -96,7 +96,7 @@ func runDeployPlan(ctx context.Context, cmd *cobra.Command, flags *cmdctx.RootFl
 		return fmt.Errorf("resolving deploy plan: %w", err)
 	}
 
-	devboxBin := config.DweBin(cfg)
+	dweBin := config.DweBin(cfg)
 	switch opts.Format {
 	case "shell":
 		if opts.ServiceName != "" {
@@ -104,14 +104,14 @@ func runDeployPlan(ctx context.Context, cmd *cobra.Command, flags *cmdctx.RootFl
 		} else {
 			_, _ = fmt.Fprintln(cmd.OutOrStdout(), "# Deploy plan")
 		}
-		deploy.PrintPlanShell(steps, cmd.OutOrStdout(), devboxBin)
+		deploy.PrintPlanShell(steps, cmd.OutOrStdout(), dweBin)
 	default:
 		title := "Deploy plan"
 		if opts.ServiceName != "" {
 			title = fmt.Sprintf("Deploy plan for service %s", opts.ServiceName)
 		}
 		_, _ = fmt.Fprintln(cmd.OutOrStdout(), render.SectionTitle(title))
-		pipeline.PrintPlanTable(steps, sharedrender.NewWriter(cmd.OutOrStdout()), devboxBin)
+		pipeline.PrintPlanTable(steps, sharedrender.NewWriter(cmd.OutOrStdout()), dweBin)
 	}
 	return nil
 }
@@ -151,7 +151,7 @@ the plan to steps relevant to a specific service. Use --format shell for script-
 // idempotency, and optional resumption from prior failed runs.
 //
 // File logging is controlled by the top-level `log:` field in workspace/deploy.yml
-// (default: enabled). When enabled, devbox status messages are teed to
+// (default: enabled). When enabled, dwe status messages are teed to
 // .dwe/logs/deploy.log; child process output (docker, make) goes directly to
 // os.Stdout/os.Stderr so TTY detection works.
 func newDeployRunCmd(flags *cmdctx.RootFlags) *cobra.Command {

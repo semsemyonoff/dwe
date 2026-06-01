@@ -87,7 +87,7 @@ func TestDockerStopRemoveContainer_Run_HappyPath(t *testing.T) {
 
 	cfg := &config.DweConfig{}
 	cfg.Project.Name = "tbm"
-	cfg.Project.Prefix = "devbox"
+	cfg.Project.Prefix = "dwe"
 
 	ectx, buf := newDockerStopRemoveCtx(cfg)
 	err := StopRemoveContainer{}.Run(
@@ -99,7 +99,7 @@ func TestDockerStopRemoveContainer_Run_HappyPath(t *testing.T) {
 		t.Fatalf("Run returned unexpected error: %v", err)
 	}
 
-	want := []string{"devbox-tbm-app-postgres"}
+	want := []string{"dwe-tbm-app-postgres"}
 	if !equalStrings(stopCalls, want) {
 		t.Errorf("stop calls = %v, want %v", stopCalls, want)
 	}
@@ -110,10 +110,10 @@ func TestDockerStopRemoveContainer_Run_HappyPath(t *testing.T) {
 		t.Errorf("stop timeouts = %v, want [5]", stopTimeouts)
 	}
 	out := buf.String()
-	if !strings.Contains(out, "✓ container stopped: devbox-tbm-app-postgres") {
+	if !strings.Contains(out, "✓ container stopped: dwe-tbm-app-postgres") {
 		t.Errorf("missing stop success line; got %q", out)
 	}
-	if !strings.Contains(out, "✓ container removed: devbox-tbm-app-postgres") {
+	if !strings.Contains(out, "✓ container removed: dwe-tbm-app-postgres") {
 		t.Errorf("missing remove success line; got %q", out)
 	}
 }

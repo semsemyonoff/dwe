@@ -10,7 +10,7 @@ import (
 
 const sampleInfoYML = `
 sections:
-  - id: devbox_info
+  - id: dwe_info
     items:
       - type: subgroup
         title: DWE
@@ -62,18 +62,18 @@ func TestLoadInfoConfig(t *testing.T) {
 		t.Fatalf("sections count = %d, want 2", len(cfg.Sections))
 	}
 
-	devboxInfo := cfg.Sections[0]
-	if devboxInfo.ID != "devbox_info" {
-		t.Errorf("sections[0].id = %q", devboxInfo.ID)
+	wsInfo := cfg.Sections[0]
+	if wsInfo.ID != "dwe_info" {
+		t.Errorf("sections[0].id = %q", wsInfo.ID)
 	}
-	if devboxInfo.Title != "" {
-		t.Errorf("sections[0].title should be empty, got %q", devboxInfo.Title)
+	if wsInfo.Title != "" {
+		t.Errorf("sections[0].title should be empty, got %q", wsInfo.Title)
 	}
-	if len(devboxInfo.Items) != 1 {
-		t.Fatalf("sections[0] items = %d, want 1 (subgroup)", len(devboxInfo.Items))
+	if len(wsInfo.Items) != 1 {
+		t.Fatalf("sections[0] items = %d, want 1 (subgroup)", len(wsInfo.Items))
 	}
 
-	subgroup := devboxInfo.Items[0]
+	subgroup := wsInfo.Items[0]
 	if subgroup.Type != "subgroup" {
 		t.Errorf("sections[0].items[0].type = %q, want subgroup", subgroup.Type)
 	}
@@ -106,7 +106,7 @@ func TestLoadInfoConfig(t *testing.T) {
 
 func TestLoadInfoConfig_notFound(t *testing.T) {
 	t.Parallel()
-	cfg, err := LoadInfoConfig("/tmp/devbox-nonexistent-info-12345.yml")
+	cfg, err := LoadInfoConfig("/tmp/dwe-nonexistent-info-12345.yml")
 	if err != nil {
 		t.Errorf("LoadInfoConfig should return default on missing file, got error: %v", err)
 	}

@@ -59,7 +59,7 @@ func writeLogsTestConfig(t *testing.T, dir string, svcs map[string]string) strin
 // a fake docker binary without touching PATH.
 func writeLogsTestConfigWithDockerBin(t *testing.T, dir string, svcs map[string]string, dockerBin string) string {
 	t.Helper()
-	content := "schema_version: \"2\"\nproject:\n  name: test\n  prefix: devbox\n"
+	content := "schema_version: \"2\"\nproject:\n  name: test\n  prefix: dwe\n"
 	if err := os.WriteFile(filepath.Join(dir, "workspace.yml"), []byte(content), 0o644); err != nil {
 		t.Fatalf("write workspace.yml: %v", err)
 	}
@@ -74,12 +74,12 @@ func writeLogsTestConfigWithDockerBin(t *testing.T, dir string, svcs map[string]
 		}
 	}
 	if dockerBin != "" {
-		devboxDir := filepath.Join(dir, ".dwe")
-		if err := os.MkdirAll(devboxDir, 0o755); err != nil {
+		workspaceDir := filepath.Join(dir, ".dwe")
+		if err := os.MkdirAll(workspaceDir, 0o755); err != nil {
 			t.Fatalf("mkdir .dwe: %v", err)
 		}
 		cfg := fmt.Sprintf("binary_docker = %s\n", dockerBin)
-		if err := os.WriteFile(filepath.Join(devboxDir, "config"), []byte(cfg), 0o644); err != nil {
+		if err := os.WriteFile(filepath.Join(workspaceDir, "config"), []byte(cfg), 0o644); err != nil {
 			t.Fatalf("write .dwe/config: %v", err)
 		}
 	}
@@ -202,7 +202,7 @@ func TestResolveLogsTarget_KnownService(t *testing.T) {
 		t.Fatalf("unexpected error: %v", err)
 	}
 	// Container name = project.FullName() + "-" + container template.
-	// From the fixture: prefix=devbox, name=test → fullName=devbox-test.
+	// From the fixture: prefix=dwe, name=test → fullName=dwe-test.
 	want := cfg.Project.FullName() + "-myapp-container"
 	if containerName != want {
 		t.Errorf("container name = %q, want %q", containerName, want)
@@ -291,7 +291,7 @@ func TestLogsCmd_TextMode_DockerError(t *testing.T) {
 func TestLogsCmd_TextMode_NoSuchContainer(t *testing.T) {
 	dir := t.TempDir()
 	fakeBin := makeFakeDocker(t, dir, "docker",
-		"#!/bin/sh\necho 'Error response from daemon: No such container: devbox-test-myapp' >&2\nexit 1\n")
+		"#!/bin/sh\necho 'Error response from daemon: No such container: dwe-test-myapp' >&2\nexit 1\n")
 	cfgPath := writeLogsTestConfigWithDockerBin(t, dir, map[string]string{"myapp": "myapp"}, fakeBin)
 	flags := &cmdctx.RootFlags{Output: "text", ConfigPath: cfgPath}
 	root := newTestRoot(flags)
@@ -674,7 +674,7 @@ func TestLogsCmd_JSONMode_DaemonUnavailable(t *testing.T) {
 func TestLogsCmd_JSONMode_NoSuchContainer(t *testing.T) {
 	dir := t.TempDir()
 	fakeBin := makeFakeDocker(t, dir, "docker",
-		"#!/bin/sh\necho 'Error response from daemon: No such container: devbox-test-myapp' >&2\nexit 1\n")
+		"#!/bin/sh\necho 'Error response from daemon: No such container: dwe-test-myapp' >&2\nexit 1\n")
 	cfgPath := writeLogsTestConfigWithDockerBin(t, dir, map[string]string{"myapp": "myapp"}, fakeBin)
 	flags := &cmdctx.RootFlags{Output: "json", ConfigPath: cfgPath}
 	root := newTestRoot(flags)

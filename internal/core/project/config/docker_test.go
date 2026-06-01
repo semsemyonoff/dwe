@@ -21,20 +21,20 @@ args:
   run: ["--rm"]
 `
 
-// writeDockerFixture creates workspace/docker.yml and optionally devbox/docker.local.yml
+// writeDockerFixture creates workspace/docker.yml and optionally workspace/docker.local.yml
 // under a temp directory. Returns the base dir path.
 func writeDockerFixture(t *testing.T, docker, local string) string {
 	t.Helper()
 	dir := t.TempDir()
-	devboxDir := filepath.Join(dir, "workspace")
-	if err := os.MkdirAll(devboxDir, 0755); err != nil {
-		t.Fatalf("mkdir devbox/: %v", err)
+	workspaceDir := filepath.Join(dir, "workspace")
+	if err := os.MkdirAll(workspaceDir, 0755); err != nil {
+		t.Fatalf("mkdir workspace/: %v", err)
 	}
-	if err := os.WriteFile(filepath.Join(devboxDir, "docker.yml"), []byte(docker), 0644); err != nil {
+	if err := os.WriteFile(filepath.Join(workspaceDir, "docker.yml"), []byte(docker), 0644); err != nil {
 		t.Fatalf("write docker.yml: %v", err)
 	}
 	if local != "" {
-		if err := os.WriteFile(filepath.Join(devboxDir, "docker.local.yml"), []byte(local), 0644); err != nil {
+		if err := os.WriteFile(filepath.Join(workspaceDir, "docker.local.yml"), []byte(local), 0644); err != nil {
 			t.Fatalf("write docker.local.yml: %v", err)
 		}
 	}
@@ -47,7 +47,7 @@ func TestLoadDockerConfig_Basic(t *testing.T) {
 		Raw: map[string]any{
 			"project": map[string]any{
 				"name":   "laravel",
-				"prefix": "devbox",
+				"prefix": "dwe",
 			},
 		},
 	}
@@ -57,8 +57,8 @@ func TestLoadDockerConfig_Basic(t *testing.T) {
 		t.Fatalf("LoadDockerConfig: %v", err)
 	}
 
-	if dcfg.ProjectName != "devbox-laravel" {
-		t.Errorf("ProjectName = %q, want %q", dcfg.ProjectName, "devbox-laravel")
+	if dcfg.ProjectName != "dwe-laravel" {
+		t.Errorf("ProjectName = %q, want %q", dcfg.ProjectName, "dwe-laravel")
 	}
 
 	// Global args
@@ -105,7 +105,7 @@ args:
 		Raw: map[string]any{
 			"project": map[string]any{
 				"name":   "laravel",
-				"prefix": "devbox",
+				"prefix": "dwe",
 			},
 		},
 	}
@@ -192,7 +192,7 @@ func TestResolveVarTemplate(t *testing.T) {
 	raw := map[string]any{
 		"project": map[string]any{
 			"name":   "laravel",
-			"prefix": "devbox",
+			"prefix": "dwe",
 		},
 	}
 
@@ -200,10 +200,10 @@ func TestResolveVarTemplate(t *testing.T) {
 		input string
 		want  string
 	}{
-		{"${project.prefix}-${project.name}", "devbox-laravel"},
+		{"${project.prefix}-${project.name}", "dwe-laravel"},
 		{"plain-string", "plain-string"},
 		{"${project.name}", "laravel"},
-		{"prefix-${project.prefix}", "prefix-devbox"},
+		{"prefix-${project.prefix}", "prefix-dwe"},
 	}
 
 	for _, tt := range tests {

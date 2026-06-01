@@ -13,10 +13,10 @@ func TestRenderSummary_OmitsProjectIdentity(t *testing.T) {
 	// Project identity has moved to RenderBrandHeader. The summary itself must
 	// no longer contain the project name nor a "project —" label.
 	cfg := &config.DweConfig{
-		Project: config.ProjectConfig{Name: "laravel", Prefix: "devbox"},
+		Project: config.ProjectConfig{Name: "laravel", Prefix: "dwe"},
 	}
 	out := Summary(cfg, nil)
-	if strings.Contains(out, "devbox-laravel") {
+	if strings.Contains(out, "dwe-laravel") {
 		t.Errorf("did not expect project full name in summary, got:\n%s", out)
 	}
 	if strings.Contains(out, "project ") {

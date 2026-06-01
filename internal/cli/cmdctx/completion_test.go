@@ -12,12 +12,11 @@ import (
 
 func writeV2Project(t *testing.T, dir string) {
 	t.Helper()
-	yml := "schema_version: \"2\"\nproject:\n  name: testproject\n  prefix: devbox\n"
+	yml := "schema_version: \"2\"\nproject:\n  name: testproject\n  prefix: dwe\n"
 	if err := os.WriteFile(filepath.Join(dir, "workspace.yml"), []byte(yml), 0o644); err != nil {
 		t.Fatalf("write workspace.yml: %v", err)
 	}
 }
-
 
 // rootCmdForCompletion returns a minimal cobra root carrying the --config
 // persistent flag, optionally pre-set as if --config were passed on the CLI.
@@ -71,4 +70,3 @@ func TestCompletionConfigPath_explicitBadPath(t *testing.T) {
 		t.Fatal("expected error for explicit bad path, got nil")
 	}
 }
-

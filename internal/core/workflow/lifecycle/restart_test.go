@@ -11,7 +11,7 @@ import (
 
 func TestRunRestart_MissingLifecycleYML_BothLegsUseDefault(t *testing.T) {
 	// Stub RunPhasesFunc to avoid recursive test-binary execution from
-	// type:devbox steps calling os.Executable() in the default run config.
+	// type:dwe steps calling os.Executable() in the default run config.
 	stubRunPhases(t)
 
 	dir := t.TempDir()
@@ -35,18 +35,18 @@ func TestRunRestart_MissingLifecycleYML_BothLegsUseDefault(t *testing.T) {
 }
 
 func TestRunRestart_MissingStopSection(t *testing.T) {
-	// Missing stop: uses the built-in default stop (which includes a type:devbox
+	// Missing stop: uses the built-in default stop (which includes a type:dwe
 	// step); stub RunPhasesFunc to avoid recursive test binary execution.
 	stubRunPhases(t)
 	dir := t.TempDir()
 	cfgPath := makeMinimalDevboxYML(t, dir)
 
-	devboxDir := filepath.Join(dir, "workspace")
-	if err := os.MkdirAll(devboxDir, 0755); err != nil {
-		t.Fatalf("creating devbox dir: %v", err)
+	workspaceDir := filepath.Join(dir, "workspace")
+	if err := os.MkdirAll(workspaceDir, 0755); err != nil {
+		t.Fatalf("creating workspace dir: %v", err)
 	}
 	lifecycleYAML := "run:\n  final_message: ready\n  phases: []\n"
-	if err := os.WriteFile(filepath.Join(devboxDir, "lifecycle.yml"), []byte(lifecycleYAML), 0644); err != nil {
+	if err := os.WriteFile(filepath.Join(workspaceDir, "lifecycle.yml"), []byte(lifecycleYAML), 0644); err != nil {
 		t.Fatalf("writing lifecycle.yml: %v", err)
 	}
 
@@ -58,18 +58,18 @@ func TestRunRestart_MissingStopSection(t *testing.T) {
 
 func TestRunRestart_MissingRunSection_UsesDefault(t *testing.T) {
 	// Stub RunPhasesFunc to avoid recursive test-binary execution from
-	// type:devbox steps calling os.Executable() in the default run config.
+	// type:dwe steps calling os.Executable() in the default run config.
 	stubRunPhases(t)
 
 	dir := t.TempDir()
 	cfgPath := makeMinimalDevboxYML(t, dir)
 
-	devboxDir := filepath.Join(dir, "workspace")
-	if err := os.MkdirAll(devboxDir, 0755); err != nil {
-		t.Fatalf("creating devbox dir: %v", err)
+	workspaceDir := filepath.Join(dir, "workspace")
+	if err := os.MkdirAll(workspaceDir, 0755); err != nil {
+		t.Fatalf("creating workspace dir: %v", err)
 	}
 	lifecycleYAML := "stop:\n  final_message: bye\n  phases: []\n"
-	if err := os.WriteFile(filepath.Join(devboxDir, "lifecycle.yml"), []byte(lifecycleYAML), 0644); err != nil {
+	if err := os.WriteFile(filepath.Join(workspaceDir, "lifecycle.yml"), []byte(lifecycleYAML), 0644); err != nil {
 		t.Fatalf("writing lifecycle.yml: %v", err)
 	}
 
@@ -95,9 +95,9 @@ func TestRunRestart_ClearsPendingRestartOnSuccess(t *testing.T) {
 	dir := t.TempDir()
 	cfgPath := makeMinimalDevboxYML(t, dir)
 
-	devboxDir := filepath.Join(dir, "workspace")
-	if err := os.MkdirAll(devboxDir, 0o755); err != nil {
-		t.Fatalf("creating devbox dir: %v", err)
+	workspaceDir := filepath.Join(dir, "workspace")
+	if err := os.MkdirAll(workspaceDir, 0o755); err != nil {
+		t.Fatalf("creating workspace dir: %v", err)
 	}
 	lifecycleYAML := `stop:
   final_message: "Stopped."
@@ -106,7 +106,7 @@ run:
   final_message: "Ready."
   phases: []
 `
-	if err := os.WriteFile(filepath.Join(devboxDir, "lifecycle.yml"), []byte(lifecycleYAML), 0o644); err != nil {
+	if err := os.WriteFile(filepath.Join(workspaceDir, "lifecycle.yml"), []byte(lifecycleYAML), 0o644); err != nil {
 		t.Fatalf("writing lifecycle.yml: %v", err)
 	}
 
@@ -161,12 +161,12 @@ func TestRunRestart_OnlyRunSectionPresent_StopUsesDefault(t *testing.T) {
 	dir := t.TempDir()
 	cfgPath := makeMinimalDevboxYML(t, dir)
 
-	devboxDir := filepath.Join(dir, "workspace")
-	if err := os.MkdirAll(devboxDir, 0755); err != nil {
-		t.Fatalf("creating devbox dir: %v", err)
+	workspaceDir := filepath.Join(dir, "workspace")
+	if err := os.MkdirAll(workspaceDir, 0755); err != nil {
+		t.Fatalf("creating workspace dir: %v", err)
 	}
 	lifecycleYAML := "run:\n  final_message: ready\n  phases: []\n"
-	if err := os.WriteFile(filepath.Join(devboxDir, "lifecycle.yml"), []byte(lifecycleYAML), 0644); err != nil {
+	if err := os.WriteFile(filepath.Join(workspaceDir, "lifecycle.yml"), []byte(lifecycleYAML), 0644); err != nil {
 		t.Fatalf("writing lifecycle.yml: %v", err)
 	}
 
@@ -190,9 +190,9 @@ func TestRunRestart_NoUpdatePropagated(t *testing.T) {
 	dir := t.TempDir()
 	cfgPath := makeMinimalDevboxYML(t, dir)
 
-	devboxDir := filepath.Join(dir, "workspace")
-	if err := os.MkdirAll(devboxDir, 0755); err != nil {
-		t.Fatalf("creating devbox dir: %v", err)
+	workspaceDir := filepath.Join(dir, "workspace")
+	if err := os.MkdirAll(workspaceDir, 0755); err != nil {
+		t.Fatalf("creating workspace dir: %v", err)
 	}
 	lifecycleYAML := `stop:
   final_message: "Stopped."
@@ -213,7 +213,7 @@ run:
           type: shell
           cmd: "true"
 `
-	if err := os.WriteFile(filepath.Join(devboxDir, "lifecycle.yml"), []byte(lifecycleYAML), 0644); err != nil {
+	if err := os.WriteFile(filepath.Join(workspaceDir, "lifecycle.yml"), []byte(lifecycleYAML), 0644); err != nil {
 		t.Fatalf("writing lifecycle.yml: %v", err)
 	}
 

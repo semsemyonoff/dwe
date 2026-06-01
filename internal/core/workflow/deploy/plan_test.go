@@ -25,7 +25,7 @@ func TestResolvePlan_implicitEnvStepAlwaysFirst(t *testing.T) {
 		t.Errorf("first step name = %q, want render-env", steps[0].Step.Name)
 	}
 	if steps[0].Step.Type != "dwe" || steps[0].Step.Cmd != "render env --out .env" {
-		t.Errorf("first step devbox = type %q cmd %q, want type dwe cmd 'render env --out .env'", steps[0].Step.Type, steps[0].Step.Cmd)
+		t.Errorf("first step dwe = type %q cmd %q, want type dwe cmd 'render env --out .env'", steps[0].Step.Type, steps[0].Step.Cmd)
 	}
 }
 
@@ -516,8 +516,8 @@ func TestStepCommand_customBin(t *testing.T) {
 		bin  string
 		want string
 	}{
-		{config.DeployStep{Type: "dwe", Cmd: "docker down"}, "/usr/local/bin/devbox", "/usr/local/bin/devbox docker down"},
-		{config.DeployStep{Type: "command", Cmd: "services.main.migrate"}, "my-devbox", "my-devbox commands run services.main.migrate"},
+		{config.DeployStep{Type: "dwe", Cmd: "docker down"}, "/usr/local/bin/dwe", "/usr/local/bin/dwe docker down"},
+		{config.DeployStep{Type: "command", Cmd: "services.main.migrate"}, "my-dwe", "my-dwe commands run services.main.migrate"},
 		{config.DeployStep{Type: "shell", Cmd: "echo hi"}, "anything", "echo hi"},
 	}
 	for _, tc := range cases {

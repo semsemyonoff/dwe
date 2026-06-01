@@ -35,7 +35,7 @@ files:
     required: true
     env: DUMP_FILE
 script:
-  path: devbox/scripts/db/dump-deploy.sh
+  path: workspace/scripts/db/dump-deploy.sh
 messages:
   success: "Database restored from ${files.dump.path}"
   error: "Failed to restore database"

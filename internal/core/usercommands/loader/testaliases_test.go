@@ -19,7 +19,7 @@ const (
 	CommandTypeServiceExec = model.CommandTypeServiceExec
 	CommandTypeServiceRun  = model.CommandTypeServiceRun
 	CommandTypeWorkflow    = model.CommandTypeWorkflow
-	CommandTypeDwe      = model.CommandTypeDwe
+	CommandTypeDwe         = model.CommandTypeDwe
 	FileAccessWrite        = model.FileAccessWrite
 	FileAccessRead         = model.FileAccessRead
 	FileAccessReadWrite    = model.FileAccessReadWrite

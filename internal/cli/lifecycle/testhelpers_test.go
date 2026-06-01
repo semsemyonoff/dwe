@@ -24,7 +24,7 @@ func init() {
 
 // stubRunPhases replaces RunPhasesFunc with a no-op for the duration of t.
 // Required for tests that exercise the built-in default run pipeline, which
-// contains a type:devbox step whose os.Executable() invocation would otherwise
+// contains a type:dwe step whose os.Executable() invocation would otherwise
 // recursively re-execute the test binary.
 func stubRunPhases(t *testing.T) {
 	t.Helper()

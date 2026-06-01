@@ -32,7 +32,7 @@ func TestDeployRunCmd_LockHeldBlocksDeploy(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			dir := t.TempDir()
 			cfgPath := filepath.Join(dir, "workspace.yml")
-			if err := os.WriteFile(cfgPath, []byte("project:\n  name: test\n  prefix: devbox\n"), 0o644); err != nil {
+			if err := os.WriteFile(cfgPath, []byte("project:\n  name: test\n  prefix: dwe\n"), 0o644); err != nil {
 				t.Fatal(err)
 			}
 

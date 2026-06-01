@@ -318,9 +318,9 @@ func TestParallelGroupsValidator_RegistryNilTolerance(t *testing.T) {
 // Lifecycle validator: hits the run-phases path.
 func TestLifecycleParallelGroupsValidator_Run(t *testing.T) {
 	tmp := t.TempDir()
-	devboxDir := filepath.Join(tmp, "workspace")
-	require.NoError(t, os.MkdirAll(devboxDir, 0o755))
-	require.NoError(t, os.WriteFile(filepath.Join(devboxDir, "lifecycle.yml"), []byte(`run:
+	workspaceDir := filepath.Join(tmp, "workspace")
+	require.NoError(t, os.MkdirAll(workspaceDir, 0o755))
+	require.NoError(t, os.WriteFile(filepath.Join(workspaceDir, "lifecycle.yml"), []byte(`run:
   phases:
     - name: boot
       steps:
@@ -351,9 +351,9 @@ func TestLifecycleParallelGroupsValidator_Run(t *testing.T) {
 
 func TestResetParallelGroupsValidator(t *testing.T) {
 	tmp := t.TempDir()
-	devboxDir := filepath.Join(tmp, "workspace")
-	require.NoError(t, os.MkdirAll(devboxDir, 0o755))
-	require.NoError(t, os.WriteFile(filepath.Join(devboxDir, "reset.yml"), []byte(`phases:
+	workspaceDir := filepath.Join(tmp, "workspace")
+	require.NoError(t, os.MkdirAll(workspaceDir, 0o755))
+	require.NoError(t, os.WriteFile(filepath.Join(workspaceDir, "reset.yml"), []byte(`phases:
   - name: tear-down
     steps:
       - name: g1

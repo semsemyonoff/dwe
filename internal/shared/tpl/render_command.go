@@ -20,7 +20,7 @@ type ResolvedFile struct {
 
 // RenderContext holds all data available during command template evaluation.
 type RenderContext struct {
-	// Raw is the merged devbox config map (workspace.yml + defaults.yml + local.yml).
+	// Raw is the merged dwe config map (workspace.yml + defaults.yml + local.yml).
 	Raw map[string]any
 	// Params holds resolved command parameter values (keyed by param name).
 	Params map[string]any

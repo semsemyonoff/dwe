@@ -47,7 +47,7 @@ func TestRegenerate_writesEnvNextToConfig(t *testing.T) {
 	configContent := `
 project:
   name: testproject
-  prefix: devbox
+  prefix: dwe
 `
 	configPath := filepath.Join(dir, "workspace.yml")
 	if err := os.WriteFile(configPath, []byte(configContent), 0o644); err != nil {
@@ -76,7 +76,7 @@ project:
 func TestWrite_withExportRules(t *testing.T) {
 	dir := t.TempDir()
 	cfg := &config.DweConfig{
-		Project: config.ProjectConfig{Name: "myapp", Prefix: "devbox"},
+		Project: config.ProjectConfig{Name: "myapp", Prefix: "dwe"},
 		Exports: config.ExportsConfig{Env: []config.ExportRule{
 			{Name: "APP_ENV", From: "state"},
 		}},

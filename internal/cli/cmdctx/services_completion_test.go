@@ -25,7 +25,7 @@ func rootCmdForServiceCompletion(flags *cmdctx.RootFlags, configPath string) *co
 // ShellCompDirectiveNoFileComp — never surface the error to the terminal.
 func TestServiceNameCompletion_brokenSchema(t *testing.T) {
 	projectDir := t.TempDir()
-	yml := "schema_version: \"1\"\nproject:\n  name: legacy\n  prefix: devbox\n"
+	yml := "schema_version: \"1\"\nproject:\n  name: legacy\n  prefix: dwe\n"
 	if err := os.WriteFile(filepath.Join(projectDir, "workspace.yml"), []byte(yml), 0o644); err != nil {
 		t.Fatal(err)
 	}
@@ -48,20 +48,20 @@ func TestServiceNameCompletion_brokenSchema(t *testing.T) {
 // a malformed template manifest must not affect service-name completion.
 func TestServiceNameCompletion_malformedManifestDoesNotBlock(t *testing.T) {
 	projectDir := t.TempDir()
-	devboxDir := filepath.Join(projectDir, "workspace")
-	if err := os.MkdirAll(devboxDir, 0o755); err != nil {
+	workspaceDir := filepath.Join(projectDir, "workspace")
+	if err := os.MkdirAll(workspaceDir, 0o755); err != nil {
 		t.Fatal(err)
 	}
 	yml := `schema_version: "2"
 project:
   name: testproject
-  prefix: devbox
+  prefix: dwe
 `
 	if err := os.WriteFile(filepath.Join(projectDir, "workspace.yml"), []byte(yml), 0o644); err != nil {
 		t.Fatal(err)
 	}
 	for _, name := range []string{"main", "worker"} {
-		dir := filepath.Join(devboxDir, "services", name)
+		dir := filepath.Join(workspaceDir, "services", name)
 		if err := os.MkdirAll(dir, 0o755); err != nil {
 			t.Fatal(err)
 		}
@@ -70,7 +70,7 @@ project:
 		}
 	}
 	// Broken manifest under a template pack — must NOT affect completion.
-	packDir := filepath.Join(devboxDir, "templates", "ide", "default")
+	packDir := filepath.Join(workspaceDir, "templates", "ide", "default")
 	if err := os.MkdirAll(packDir, 0o755); err != nil {
 		t.Fatal(err)
 	}

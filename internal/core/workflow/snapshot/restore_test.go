@@ -358,7 +358,7 @@ func TestRestore_InterruptedKeepsBackupAndCurrent(t *testing.T) {
 	// Seed a local.yml so writePreRestoreBackup has something to capture.
 	localDir := filepath.Join(tmp, "workspace")
 	if err := os.MkdirAll(localDir, 0o755); err != nil {
-		t.Fatalf("mkdir devbox: %v", err)
+		t.Fatalf("mkdir workspace: %v", err)
 	}
 	if err := os.WriteFile(filepath.Join(localDir, "local.yml"), []byte("before: restore"), 0o644); err != nil {
 		t.Fatalf("seed local.yml: %v", err)

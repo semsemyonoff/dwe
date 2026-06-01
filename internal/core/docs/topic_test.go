@@ -95,9 +95,9 @@ func TestParseTopic(t *testing.T) {
 func TestResolveExact(t *testing.T) {
 	// Create a test tree
 	testFS := fstest.MapFS{
-		"config/services.md": &fstest.MapFile{Data: []byte("# Services")},
-		"config/devbox.md":   &fstest.MapFile{Data: []byte("# Devbox")},
-		"cli/reference.md":   &fstest.MapFile{Data: []byte("# CLI Reference")},
+		"config/services.md":  &fstest.MapFile{Data: []byte("# Services")},
+		"config/workspace.md": &fstest.MapFile{Data: []byte("# DWE")},
+		"cli/reference.md":    &fstest.MapFile{Data: []byte("# CLI Reference")},
 	}
 
 	roots := []DocRoot{
@@ -253,9 +253,9 @@ func TestResolveNotFound(t *testing.T) {
 
 func TestAllTopics(t *testing.T) {
 	testFS := fstest.MapFS{
-		"config/services.md": &fstest.MapFile{Data: []byte("# Services")},
-		"config/devbox.md":   &fstest.MapFile{Data: []byte("# Devbox")},
-		"cli/reference.md":   &fstest.MapFile{Data: []byte("# CLI Reference")},
+		"config/services.md":  &fstest.MapFile{Data: []byte("# Services")},
+		"config/workspace.md": &fstest.MapFile{Data: []byte("# DWE")},
+		"cli/reference.md":    &fstest.MapFile{Data: []byte("# CLI Reference")},
 	}
 
 	roots := []DocRoot{
@@ -272,7 +272,7 @@ func TestAllTopics(t *testing.T) {
 	}
 
 	// Check that topics are sorted deterministically
-	expected := []string{"cli/reference", "config/devbox", "config/services"}
+	expected := []string{"cli/reference", "config/services", "config/workspace"}
 	for i, topic := range topics {
 		if i >= len(expected) {
 			break

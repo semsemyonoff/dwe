@@ -36,7 +36,7 @@ func TestResetRunCmd_projectWideCleanup(t *testing.T) {
 schema_version: "2"
 project:
   name: test
-  prefix: devbox
+  prefix: dwe
 `), 0o644); err != nil {
 		t.Fatal(err)
 	}
@@ -136,7 +136,7 @@ func TestResetRunCmd_handlesMissingStateFile(t *testing.T) {
 schema_version: "2"
 project:
   name: test
-  prefix: devbox
+  prefix: dwe
 `), 0o644); err != nil {
 		t.Fatal(err)
 	}
@@ -277,7 +277,7 @@ func makeResetServiceTestDir(t *testing.T, serviceName string, enabled, mandator
 func makeResetServiceFixture(t *testing.T, serviceName string, opts resetServiceFixtureOpts) (string, string) {
 	t.Helper()
 	dir := t.TempDir()
-	cfgContent := "schema_version: \"2\"\nproject:\n  name: test\n  prefix: devbox\n"
+	cfgContent := "schema_version: \"2\"\nproject:\n  name: test\n  prefix: dwe\n"
 	cfgPath := filepath.Join(dir, "workspace.yml")
 	if err := os.WriteFile(cfgPath, []byte(cfgContent), 0o644); err != nil {
 		t.Fatalf("write workspace.yml: %v", err)
@@ -489,10 +489,10 @@ func TestResetServiceRun_NoResetYML(t *testing.T) {
 	if len(calls) < 2 {
 		t.Fatalf("expected at least 2 docker invocations (stop, rm); got %v", calls)
 	}
-	if !strings.HasPrefix(calls[0], "stop ") || !strings.Contains(calls[0], "devbox-test-app-postgres") {
+	if !strings.HasPrefix(calls[0], "stop ") || !strings.Contains(calls[0], "dwe-test-app-postgres") {
 		t.Errorf("docker stop call wrong; got %q", calls[0])
 	}
-	if !strings.HasPrefix(calls[1], "rm ") || !strings.Contains(calls[1], "devbox-test-app-postgres") {
+	if !strings.HasPrefix(calls[1], "rm ") || !strings.Contains(calls[1], "dwe-test-app-postgres") {
 		t.Errorf("docker rm call wrong; got %q", calls[1])
 	}
 
@@ -581,7 +581,7 @@ func TestResetServiceRun_DisabledServiceStop(t *testing.T) {
 func TestResetServiceRun_EnabledServiceRunsHooks(t *testing.T) {
 	dir := t.TempDir()
 	cfgPath := filepath.Join(dir, "workspace.yml")
-	if err := os.WriteFile(cfgPath, []byte("schema_version: \"2\"\nproject:\n  name: test\n  prefix: devbox\n"), 0o644); err != nil {
+	if err := os.WriteFile(cfgPath, []byte("schema_version: \"2\"\nproject:\n  name: test\n  prefix: dwe\n"), 0o644); err != nil {
 		t.Fatal(err)
 	}
 	svcDir := filepath.Join(dir, "workspace", "services", "postgres")
@@ -644,7 +644,7 @@ on_disable:
 func TestResetServiceRun_DisabledServiceSkipsHooks(t *testing.T) {
 	dir := t.TempDir()
 	cfgPath := filepath.Join(dir, "workspace.yml")
-	if err := os.WriteFile(cfgPath, []byte("schema_version: \"2\"\nproject:\n  name: test\n  prefix: devbox\n"), 0o644); err != nil {
+	if err := os.WriteFile(cfgPath, []byte("schema_version: \"2\"\nproject:\n  name: test\n  prefix: dwe\n"), 0o644); err != nil {
 		t.Fatal(err)
 	}
 	svcDir := filepath.Join(dir, "workspace", "services", "postgres")
@@ -1005,7 +1005,7 @@ func makeMinimalResetProject(t *testing.T) string {
 	t.Helper()
 	dir := t.TempDir()
 	if err := os.WriteFile(filepath.Join(dir, "workspace.yml"), []byte(
-		"schema_version: \"2\"\nproject:\n  name: testproject\n  prefix: devbox\n",
+		"schema_version: \"2\"\nproject:\n  name: testproject\n  prefix: dwe\n",
 	), 0o644); err != nil {
 		t.Fatal(err)
 	}
@@ -1060,12 +1060,12 @@ func TestRunResetPlan_JSONModeNoInfoLine(t *testing.T) {
 func TestRunResetPlan_UserResetYMLNoInfoLine(t *testing.T) {
 	dir := makeMinimalResetProject(t)
 
-	devboxDir := filepath.Join(dir, "workspace")
-	if err := os.MkdirAll(devboxDir, 0o755); err != nil {
+	workspaceDir := filepath.Join(dir, "workspace")
+	if err := os.MkdirAll(workspaceDir, 0o755); err != nil {
 		t.Fatal(err)
 	}
 	userReset := "phases:\n  - name: mycleanup\n    steps:\n      - name: step1\n        type: shell\n        cmd: echo bye\n"
-	if err := os.WriteFile(filepath.Join(devboxDir, "reset.yml"), []byte(userReset), 0o644); err != nil {
+	if err := os.WriteFile(filepath.Join(workspaceDir, "reset.yml"), []byte(userReset), 0o644); err != nil {
 		t.Fatal(err)
 	}
 

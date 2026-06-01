@@ -12,7 +12,7 @@ import (
 )
 
 // RunPhasesFunc is a package-level variable so tests can stub phase execution
-// without executing actual devbox/shell commands. Same pattern as PreflightFunc
+// without executing actual dwe/shell commands. Same pattern as PreflightFunc
 // and GitProbeFunc.
 var RunPhasesFunc = runPhases
 

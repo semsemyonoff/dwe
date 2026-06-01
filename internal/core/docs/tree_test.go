@@ -10,7 +10,7 @@ func TestBuildTree(t *testing.T) {
 	testFS := fstest.MapFS{
 		"index.md":            &fstest.MapFile{Data: []byte("# Index")},
 		"config/services.md":  &fstest.MapFile{Data: []byte("# Services")},
-		"config/devbox.md":    &fstest.MapFile{Data: []byte("# Devbox")},
+		"config/workspace.md": &fstest.MapFile{Data: []byte("# DWE")},
 		"lifecycle/deploy.md": &fstest.MapFile{Data: []byte("# Deploy")},
 		"lifecycle/run.md":    &fstest.MapFile{Data: []byte("# Run")},
 		"ignored.txt":         &fstest.MapFile{Data: []byte("ignored")}, // Should be filtered out
@@ -61,12 +61,12 @@ func TestBuildTree(t *testing.T) {
 	if len(configNode.Children) != 2 {
 		t.Errorf("config has %d children, want 2; got: %v", len(configNode.Children), childNames(configNode.Children))
 	}
-	// Alphabetical order: devbox.md, services.md
-	if configNode.Children[0].Name != "devbox.md" {
-		t.Errorf("config[0]: got %q, want %q", configNode.Children[0].Name, "devbox.md")
+	// Alphabetical order: services.md, workspace.md
+	if configNode.Children[0].Name != "services.md" {
+		t.Errorf("config[0]: got %q, want %q", configNode.Children[0].Name, "services.md")
 	}
-	if configNode.Children[1].Name != "services.md" {
-		t.Errorf("config[1]: got %q, want %q", configNode.Children[1].Name, "services.md")
+	if configNode.Children[1].Name != "workspace.md" {
+		t.Errorf("config[1]: got %q, want %q", configNode.Children[1].Name, "workspace.md")
 	}
 
 	// Verify lifecycle directory contents.

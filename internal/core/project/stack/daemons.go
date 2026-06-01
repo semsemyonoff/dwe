@@ -8,7 +8,7 @@
 // default `status` orchestrator.
 //
 // docker ps is authoritative — there is no on-disk daemon state file. A
-// `docker stop <container>` issued outside devbox is reflected immediately on
+// `docker stop <container>` issued outside dwe is reflected immediately on
 // the next status read.
 package stack
 
@@ -209,7 +209,7 @@ func parseDockerTime(s string) time.Time {
 }
 
 // sanitiseDisplay strips control characters so an external actor (or an older
-// devbox version) can't disrupt the terminal via crafted labels or container
+// dwe version) can't disrupt the terminal via crafted labels or container
 // names. Standard whitespace (space, tab) is preserved.
 func sanitiseDisplay(s string) string {
 	if s == "" {

@@ -123,7 +123,7 @@ func TestWriteError_JSONMode_CodedError(t *testing.T) {
 	flags := &cmdctx.RootFlags{Output: "json"}
 
 	ce := cmdctx.Err("project_not_found", "no workspace.yml found").
-		WithHint("run from a Devbox project directory").
+		WithHint("run from a dwe project directory").
 		WithDetail("searched_path", "/home/user/proj")
 
 	cmdctx.WriteError(flags, cmd, ce)

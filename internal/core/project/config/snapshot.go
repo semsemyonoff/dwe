@@ -14,11 +14,11 @@ import (
 )
 
 // SnapshotConfigFileName is the filename of the project-level snapshot.yml,
-// relative to the devbox/ directory.
+// relative to the workspace/ directory.
 const SnapshotConfigFileName = "snapshot.yml"
 
 // SnapshotConfigPath returns the canonical path to snapshot.yml given a project
-// base directory (the directory that contains the devbox/ folder).
+// base directory (the directory that contains the workspace/ folder).
 func SnapshotConfigPath(baseDir string) string {
 	return filepath.Join(baseDir, "workspace", SnapshotConfigFileName)
 }

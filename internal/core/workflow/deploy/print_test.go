@@ -114,7 +114,7 @@ func TestPrintPlanShell_showsCheckComment(t *testing.T) {
 	steps := []pipeline.ResolvedStep{
 		{Phase: config.DeployPhase{Name: "env"}, Step: deploy.ImplicitEnvStep},
 		{
-			Phase: config.DeployPhase{Name: "setup"}, Step: checkStep("copy-configs", "./bin/devbox deploy config main --mode replace", "file-exists services/main/configs/.env"),
+			Phase: config.DeployPhase{Name: "setup"}, Step: checkStep("copy-configs", "./bin/dwe deploy config main --mode replace", "file-exists services/main/configs/.env"),
 		},
 	}
 	deploy.PrintPlanShell(steps, &buf, "dwe")
@@ -299,7 +299,7 @@ func TestPrintPlanTable_showsCheck(t *testing.T) {
 	steps := []pipeline.ResolvedStep{
 		{
 			Phase: config.DeployPhase{Name: "setup"},
-			Step:  checkStep("copy-configs", "./bin/devbox deploy config main --mode replace", "file-exists services/main/configs/.env"),
+			Step:  checkStep("copy-configs", "./bin/dwe deploy config main --mode replace", "file-exists services/main/configs/.env"),
 		},
 	}
 	pipeline.PrintPlanTable(steps, w, "dwe")
@@ -392,11 +392,11 @@ func TestPrintPlanTable_binarySubstitution(t *testing.T) {
 	steps := []pipeline.ResolvedStep{
 		{Phase: config.DeployPhase{Name: "start"}, Step: commandStep("migrate", "services.main.migrate")},
 	}
-	pipeline.PrintPlanTable(steps, w, "my-devbox")
+	pipeline.PrintPlanTable(steps, w, "my-dwe")
 	out := buf.String()
 
-	if !strings.Contains(out, "my-devbox") {
-		t.Errorf("expected 'my-devbox' binary name in table output, got:\n%s", out)
+	if !strings.Contains(out, "my-dwe") {
+		t.Errorf("expected 'my-dwe' binary name in table output, got:\n%s", out)
 	}
 }
 
@@ -501,13 +501,13 @@ func TestPrintPlanShell_binarySubstitution(t *testing.T) {
 		{Phase: config.DeployPhase{Name: "start"}, Step: commandStep("migrate", "services.main.migrate")},
 		{Phase: config.DeployPhase{Name: "setup"}, Step: config.DeployStep{Name: "ensure", Type: "builtin", Cmd: "service_dirs_ensure"}},
 	}
-	deploy.PrintPlanShell(steps, &buf, "podman-devbox")
+	deploy.PrintPlanShell(steps, &buf, "podman-dwe")
 	out := buf.String()
 
-	if !strings.Contains(out, "podman-devbox commands run services.main.migrate") {
-		t.Errorf("expected 'podman-devbox commands run' in shell output, got:\n%s", out)
+	if !strings.Contains(out, "podman-dwe commands run services.main.migrate") {
+		t.Errorf("expected 'podman-dwe commands run' in shell output, got:\n%s", out)
 	}
-	if !strings.Contains(out, "podman-devbox deploy step") {
-		t.Errorf("expected 'podman-devbox deploy step' for builtin in shell output, got:\n%s", out)
+	if !strings.Contains(out, "podman-dwe deploy step") {
+		t.Errorf("expected 'podman-dwe deploy step' for builtin in shell output, got:\n%s", out)
 	}
 }

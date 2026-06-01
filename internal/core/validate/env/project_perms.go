@@ -18,11 +18,11 @@ func (v *projectPermsValidator) Run(ctx validate.Context) []validate.Diagnostic 
 		return []validate.Diagnostic{fail(
 			v.ID(),
 			"project root not resolved",
-			"run from inside a devbox project (a directory containing workspace.yml)",
+			"run from inside a dwe project (a directory containing workspace.yml)",
 		)}
 	}
-	devboxDir := filepath.Join(ctx.ProjectRoot, ".dwe")
-	if err := os.MkdirAll(devboxDir, 0o755); err != nil {
+	workspaceDir := filepath.Join(ctx.ProjectRoot, ".dwe")
+	if err := os.MkdirAll(workspaceDir, 0o755); err != nil {
 		return []validate.Diagnostic{fail(
 			v.ID(),
 			fmt.Sprintf("cannot create .dwe/: %v", err),
@@ -30,7 +30,7 @@ func (v *projectPermsValidator) Run(ctx validate.Context) []validate.Diagnostic 
 		)}
 	}
 	// Try-create a temp file in .dwe/ to confirm write access.
-	f, err := os.CreateTemp(devboxDir, ".perm-probe-*")
+	f, err := os.CreateTemp(workspaceDir, ".perm-probe-*")
 	if err != nil {
 		return []validate.Diagnostic{fail(
 			v.ID(),
@@ -44,7 +44,7 @@ func (v *projectPermsValidator) Run(ctx validate.Context) []validate.Diagnostic 
 
 	// Ensure the deploy subdirectory (where the lock file lives) exists.
 	// MkdirAll catches the "path is a file" case.
-	deployDir := filepath.Join(devboxDir, "deploy")
+	deployDir := filepath.Join(workspaceDir, "deploy")
 	if err := os.MkdirAll(deployDir, 0o755); err != nil {
 		return []validate.Diagnostic{fail(
 			v.ID(),

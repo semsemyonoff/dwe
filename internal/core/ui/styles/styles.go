@@ -1,4 +1,4 @@
-// Package styles provides Lipgloss-based theme primitives for the devbox CLI:
+// Package styles provides Lipgloss-based theme primitives for the dwe CLI:
 // the 7-token semantic palette (accent/success/warning/danger/muted/border/text),
 // rendering helpers, icon classification, and huh.Theme construction.
 //
@@ -416,7 +416,7 @@ func TermWidth() int {
 }
 
 // HuhTheme is the package-level huh.Theme built from workspace/styles.yml.
-// It defaults to ThemeBase + devbox glyph overrides (no project palette
+// It defaults to ThemeBase + dwe glyph overrides (no project palette
 // applied) until ApplyStyles is called.
 var HuhTheme huh.Theme = huh.ThemeFunc(func(isDark bool) *huh.Styles {
 	s := huh.ThemeBase(isDark)
@@ -425,7 +425,7 @@ var HuhTheme huh.Theme = huh.ThemeFunc(func(isDark bool) *huh.Styles {
 	return s
 })
 
-// ApplyFormGlyphs replaces the default huh prefix glyphs with the devbox look:
+// ApplyFormGlyphs replaces the default huh prefix glyphs with the dwe look:
 // "✓ " for selected items, "• " for unselected. Coloring is handled separately
 // by BuildPaletteApplier so the glyphs always render even without a palette.
 func ApplyFormGlyphs(s *huh.Styles) {

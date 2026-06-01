@@ -17,11 +17,11 @@ import (
 // writeMinimalInfoYML writes a minimal info.yml to dir and returns its path.
 func writeMinimalInfoYML(t *testing.T, dir, content string) {
 	t.Helper()
-	devboxDir := filepath.Join(dir, "workspace")
-	if err := os.MkdirAll(devboxDir, 0755); err != nil {
-		t.Fatalf("creating devbox dir: %v", err)
+	workspaceDir := filepath.Join(dir, "workspace")
+	if err := os.MkdirAll(workspaceDir, 0755); err != nil {
+		t.Fatalf("creating workspace dir: %v", err)
 	}
-	if err := os.WriteFile(filepath.Join(devboxDir, "info.yml"), []byte(content), 0644); err != nil {
+	if err := os.WriteFile(filepath.Join(workspaceDir, "info.yml"), []byte(content), 0644); err != nil {
 		t.Fatalf("writing info.yml: %v", err)
 	}
 }
@@ -33,7 +33,7 @@ func writeMinimalDevboxYML(t *testing.T, dir string) string {
 	cfgYAML := `schema_version: "2"
 project:
   name: infotest
-  prefix: devbox
+  prefix: dwe
 `
 	if err := os.WriteFile(cfgPath, []byte(cfgYAML), 0644); err != nil {
 		t.Fatalf("writing workspace.yml: %v", err)
@@ -193,9 +193,9 @@ func TestInfoCmd_StylesWithHeaderRendered(t *testing.T) {
         name: Name
         value: "{{ .Project.Name }}"
 `)
-	devboxDir := filepath.Join(dir, "workspace")
+	workspaceDir := filepath.Join(dir, "workspace")
 	stylesYAML := "header:\n  lines:\n    - \"Devbox\"\n  font: standard\n  color: none\n"
-	if err := os.WriteFile(filepath.Join(devboxDir, "styles.yml"), []byte(stylesYAML), 0644); err != nil {
+	if err := os.WriteFile(filepath.Join(workspaceDir, "styles.yml"), []byte(stylesYAML), 0644); err != nil {
 		t.Fatalf("writing styles.yml: %v", err)
 	}
 
@@ -277,7 +277,7 @@ func TestInfoCmd_BrandHeaderAlwaysPresent(t *testing.T) {
 	if !strings.Contains(out, "DWE") {
 		t.Errorf("expected 'DWE' brand line in output, got:\n%s", out)
 	}
-	if !strings.Contains(out, "devbox-infotest") {
+	if !strings.Contains(out, "dwe-infotest") {
 		t.Errorf("expected project full name in brand line, got:\n%s", out)
 	}
 }
@@ -289,7 +289,7 @@ func TestInfoCmd_MissingConfig(t *testing.T) {
 	root.SetOut(&buf)
 	root.SetErr(&buf)
 	root.SetArgs([]string{"info"})
-	if err := root.PersistentFlags().Set("config", "/tmp/nonexistent-devbox-xyz.yml"); err != nil {
+	if err := root.PersistentFlags().Set("config", "/tmp/nonexistent-dwe-xyz.yml"); err != nil {
 		t.Fatalf("setting config flag: %v", err)
 	}
 
@@ -336,7 +336,7 @@ footer: true
 	if !strings.Contains(out, "infotest") {
 		t.Errorf("expected project name, got:\n%s", out)
 	}
-	if !strings.Contains(out, "devbox") {
+	if !strings.Contains(out, "dwe") {
 		t.Errorf("expected project prefix, got:\n%s", out)
 	}
 	// Section title should appear.

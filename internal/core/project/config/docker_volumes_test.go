@@ -11,15 +11,15 @@ func TestDockerVolumeConfigResolveName(t *testing.T) {
 	}{
 		{
 			name:        "shared volume keeps name verbatim",
-			vol:         DockerVolumeConfig{Name: "devbox_composer_cache", Shared: true},
-			projectName: "devbox-laravel",
-			want:        "devbox_composer_cache",
+			vol:         DockerVolumeConfig{Name: "dwe_composer_cache", Shared: true},
+			projectName: "dwe-laravel",
+			want:        "dwe_composer_cache",
 		},
 		{
 			name:        "non-shared volume is prefixed with project name",
 			vol:         DockerVolumeConfig{Name: "build_cache"},
-			projectName: "devbox-laravel",
-			want:        "devbox-laravel_build_cache",
+			projectName: "dwe-laravel",
+			want:        "dwe-laravel_build_cache",
 		},
 		{
 			name:        "shared flag wins even with empty project name",

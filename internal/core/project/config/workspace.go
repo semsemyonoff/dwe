@@ -1,4 +1,4 @@
-// Package config provides loading and validation of devbox configuration files.
+// Package config provides loading and validation of dwe configuration files.
 package config
 
 import (
@@ -83,14 +83,14 @@ func MmdcBin(cfg *DweConfig) string {
 // DweConfig is the merged top-level dwe configuration.
 // It is produced by layering workspace.yml → workspace/defaults.yml → workspace/local.yml.
 type DweConfig struct {
-	Project       ProjectConfig        `yaml:"project"`
-	Runtime       RuntimeConfig        `yaml:"runtime"`
-	State         string               `yaml:"state"`
-	Exports       ExportsConfig        `yaml:"exports"`
-	Compose       ComposeConfig        `yaml:"compose"`
-	Deploy        *ProjectDeployConfig `yaml:"-"`
-	UI            UIConfig             `yaml:"ui"`
-	Docs          DocsConfig           `yaml:"docs"`
+	Project ProjectConfig        `yaml:"project"`
+	Runtime RuntimeConfig        `yaml:"runtime"`
+	State   string               `yaml:"state"`
+	Exports ExportsConfig        `yaml:"exports"`
+	Compose ComposeConfig        `yaml:"compose"`
+	Deploy  *ProjectDeployConfig `yaml:"-"`
+	UI      UIConfig             `yaml:"ui"`
+	Docs    DocsConfig           `yaml:"docs"`
 
 	// Services holds the fully resolved service definitions loaded from
 	// workspace/services/<name>/service.yml with Enabled populated from the 3-layer config merge.
@@ -208,7 +208,7 @@ type DeployPhase struct {
 // DeployStep is a single atomic pipeline action.
 // DeployStep is a step in a phase, using the typed action model.
 //
-//   - Type            — executor: shell, devbox, command, or builtin
+//   - Type            — executor: shell, dwe, command, or builtin
 //   - Cmd             — the action payload (command string or builtin name)
 //   - With            — optional parameters for command or builtin actions
 //   - When            — optional skip condition (type: template|builtin|shell)
@@ -511,7 +511,7 @@ type ServiceIDEConfig struct {
 
 // ServiceAIConfig holds AI-related settings for a service. The current keys
 // (Enabled, Template) control hub-level agent documentation rendering, which
-// is the primary AI feature in devbox. Future AI subsystems should be nested
+// is the primary AI feature in dwe. Future AI subsystems should be nested
 // here as sub-blocks (e.g. ai.shell, ai.commands) rather than added as new
 // top-level keys.
 type ServiceAIConfig struct {
@@ -1060,7 +1060,7 @@ func detectLegacyComposeOverlays(raw map[string]any) error {
 
 // LoadConfig loads the merged DweConfig by layering:
 //
-//  1. devboxPath (required)
+//  1. workspacePath (required)
 //  2. <dir>/workspace/defaults.yml (optional, versioned project defaults)
 //  3. <dir>/workspace/local.yml   (optional, local overrides, gitignored)
 //
@@ -1074,8 +1074,8 @@ func detectLegacyComposeOverlays(raw map[string]any) error {
 //  3. Merge the raw YAML layers.
 //  4. Resolve per-service Enabled from the merged overlay.
 //  5. Inject services into Raw for dot-path resolution.
-func LoadConfig(devboxPath string) (*DweConfig, error) {
-	baseDir := filepath.Dir(devboxPath)
+func LoadConfig(workspacePath string) (*DweConfig, error) {
+	baseDir := filepath.Dir(workspacePath)
 
 	// Read each layer separately so the cross-layer overlay validator can
 	// attribute errors to a specific source file.
@@ -1086,11 +1086,11 @@ func LoadConfig(devboxPath string) (*DweConfig, error) {
 	var layers []rawLayer
 
 	// Layer 1: workspace.yml (required)
-	base, err := loadRawYAML(devboxPath)
+	base, err := loadRawYAML(workspacePath)
 	if err != nil {
-		return nil, fmt.Errorf("read %s: %w", devboxPath, err)
+		return nil, fmt.Errorf("read %s: %w", workspacePath, err)
 	}
-	layers = append(layers, rawLayer{path: devboxPath, data: base})
+	layers = append(layers, rawLayer{path: workspacePath, data: base})
 
 	// Layer 2: workspace/defaults.yml (optional)
 	defaultsPath := filepath.Join(baseDir, "workspace", "defaults.yml")
@@ -1168,7 +1168,7 @@ func LoadConfig(devboxPath string) (*DweConfig, error) {
 
 	cfg.Raw = merged
 	// Store config path so deploy resolution can find service deploy files.
-	cfg.Raw["__configPath"] = devboxPath
+	cfg.Raw["__configPath"] = workspacePath
 
 	// Step 4: resolve per-service Enabled and per-developer port/host overrides
 	// from the merged overlay (workspace/defaults.yml + workspace/local.yml). The
@@ -1811,7 +1811,7 @@ func (cfg *LifecycleStopConfig) LogEnabled() bool {
 	return cfg != nil && cfg.Log != nil && *cfg.Log
 }
 
-// LifecycleUpdate configures the optional git update probe run at the start of devbox run.
+// LifecycleUpdate configures the optional git update probe run at the start of dwe run.
 // Mode must be one of: on, off.
 type LifecycleUpdate struct {
 	Mode string `yaml:"mode"`

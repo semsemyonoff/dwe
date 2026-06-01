@@ -154,9 +154,9 @@ func TestLifecycleFilesGateValidator_NilRegistry_WithGateSteps(t *testing.T) {
             command: db-download
             state: readable
 `
-	devboxDir := filepath.Join(tmpDir, "workspace")
-	require.NoError(t, os.MkdirAll(devboxDir, 0o755))
-	require.NoError(t, os.WriteFile(filepath.Join(devboxDir, "lifecycle.yml"), []byte(lifecycleYml), 0o644))
+	workspaceDir := filepath.Join(tmpDir, "workspace")
+	require.NoError(t, os.MkdirAll(workspaceDir, 0o755))
+	require.NoError(t, os.WriteFile(filepath.Join(workspaceDir, "lifecycle.yml"), []byte(lifecycleYml), 0o644))
 
 	cfg := &config.DweConfig{}
 	ctx := validate.Context{
@@ -232,9 +232,9 @@ func TestResetFilesGateValidator_UnknownCommand(t *testing.T) {
           command: db-download
           state: readable
 `
-	devboxDir := filepath.Join(tmpDir, "workspace")
-	require.NoError(t, os.MkdirAll(devboxDir, 0o755))
-	require.NoError(t, os.WriteFile(filepath.Join(devboxDir, "reset.yml"), []byte(resetYml), 0o644))
+	workspaceDir := filepath.Join(tmpDir, "workspace")
+	require.NoError(t, os.MkdirAll(workspaceDir, 0o755))
+	require.NoError(t, os.WriteFile(filepath.Join(workspaceDir, "reset.yml"), []byte(resetYml), 0o644))
 
 	reg := usercommands.NewEmptyRegistry()
 

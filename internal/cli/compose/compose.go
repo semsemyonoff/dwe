@@ -49,7 +49,7 @@ func newComposeRawCmd(flags *cmdctx.RootFlags) *cobra.Command {
 				return fmt.Errorf("loading config: %w", err)
 			}
 
-			// Use docker policy project name for consistency with devbox docker commands.
+			// Use docker policy project name for consistency with dwe docker commands.
 			baseDir := flags.ProjectRoot()
 			dockerCfg, err := config.LoadDockerConfig(baseDir, cfg)
 			if err != nil {
@@ -81,7 +81,7 @@ func newComposeRawCmd(flags *cmdctx.RootFlags) *cobra.Command {
 // extractBareFlag checks for --bare in the arg list and returns the remaining
 // args with the leading "--" separator stripped. Only a "--" that appears before
 // any positional argument (i.e. before args that are not --bare) is treated as
-// the devbox separator and removed. Once positional args have started, all "--"
+// the dwe separator and removed. Once positional args have started, all "--"
 // tokens are preserved so they pass through to docker compose unchanged.
 func extractBareFlag(args []string) (bare bool, rest []string) {
 	separatorSkipped := false

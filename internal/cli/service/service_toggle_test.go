@@ -28,7 +28,7 @@ import (
 	"gopkg.in/yaml.v3"
 )
 
-// writeTempServiceConfig creates a minimal devbox config in a temp dir and
+// writeTempServiceConfig creates a minimal dwe config in a temp dir and
 // returns the path to workspace.yml. Services map: name → {required, enabled, container}.
 func writeTempServiceConfig(t *testing.T, services map[string]struct {
 	required  bool
@@ -45,28 +45,28 @@ func writeTempServiceConfig(t *testing.T, services map[string]struct {
 
 	dir := t.TempDir()
 
-	var devboxLines []string
-	devboxLines = append(devboxLines, "project:")
-	devboxLines = append(devboxLines, "  name: test")
-	devboxLines = append(devboxLines, "  prefix: devbox")
+	var wsLines []string
+	wsLines = append(wsLines, "project:")
+	wsLines = append(wsLines, "  name: test")
+	wsLines = append(wsLines, "  prefix: dwe")
 	hasEnabled := false
 	for name, spec := range services {
 		if spec.enabled && !spec.required {
 			if !hasEnabled {
-				devboxLines = append(devboxLines, "services:")
+				wsLines = append(wsLines, "services:")
 				hasEnabled = true
 			}
-			devboxLines = append(devboxLines, "  "+name+":")
-			devboxLines = append(devboxLines, "    enabled: true")
+			wsLines = append(wsLines, "  "+name+":")
+			wsLines = append(wsLines, "    enabled: true")
 		}
 	}
-	devboxYML := strings.Join(devboxLines, "\n") + "\n"
-	if err := os.WriteFile(filepath.Join(dir, "workspace.yml"), []byte(devboxYML), 0o644); err != nil {
+	cfgYAML := strings.Join(wsLines, "\n") + "\n"
+	if err := os.WriteFile(filepath.Join(dir, "workspace.yml"), []byte(cfgYAML), 0o644); err != nil {
 		t.Fatalf("write workspace.yml: %v", err)
 	}
 
 	if err := os.MkdirAll(filepath.Join(dir, "workspace"), 0o755); err != nil {
-		t.Fatalf("mkdir devbox/: %v", err)
+		t.Fatalf("mkdir workspace/: %v", err)
 	}
 	for name, spec := range services {
 		svcDir := filepath.Join(dir, "workspace", "services", name)
@@ -557,7 +557,7 @@ func TestServiceEnableCmd_OptionalInfraEnables(t *testing.T) {
 
 // --- helper for single-service toggle tests ---
 
-// writeServiceProject writes a devbox project in a temp dir with a single
+// writeServiceProject writes a dwe project in a temp dir with a single
 // service named "svc". svcYAML is the content of service.yml.
 // Returns (configPath, baseDir).
 func writeServiceProject(t *testing.T, svcYAML string) (string, string) {
@@ -599,7 +599,7 @@ func readPending(t *testing.T, baseDir string) *journal.PendingApply {
 
 // TestSingleToggle_StackNotRunning_NoApply_RecordsPendingSkipsHooks verifies
 // that when the stack is not currently running AND the user did not pass
-// --apply, the toggle records pending (so devbox status reminds the user) and
+// --apply, the toggle records pending (so dwe status reminds the user) and
 // does NOT auto-run hooks/restart. local.yml is updated.
 func TestSingleToggle_StackNotRunning_NoApply_RecordsPendingSkipsHooks(t *testing.T) {
 	configPath, baseDir := writeServiceProject(t, "type: app\ncontainer: c\n")
@@ -633,7 +633,7 @@ func TestSingleToggle_StackNotRunning_NoApply_RecordsPendingSkipsHooks(t *testin
 		t.Fatalf("local.yml must be written: %v", err)
 	}
 	if p := readPending(t, baseDir); p == nil || p.Find(journal.PendingRestart) == nil {
-		t.Errorf("pending must be recorded so devbox status shows the deferred work, got %+v", p)
+		t.Errorf("pending must be recorded so dwe status shows the deferred work, got %+v", p)
 	}
 	if restartCalled {
 		t.Error("RunRestart must NOT auto-run when stack is stopped and --apply was not passed")
@@ -1376,7 +1376,7 @@ func TestBuildPendingOpsFromContributors(t *testing.T) {
 	}
 }
 
-// --- multi-toggle (devbox services) tests ---
+// --- multi-toggle (dwe services) tests ---
 
 // writeMultiServiceProject creates a project with named services in the
 // per-folder layout. svcContents maps service name to service.yml content.

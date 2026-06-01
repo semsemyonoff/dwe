@@ -403,7 +403,7 @@ func makeDumpDeployRegistry(t *testing.T) *registry.Registry {
 		Type: model.CommandTypeShell,
 		Cmd:  "echo restore",
 		Files: map[string]model.FileSpec{
-			"dump": {Access: model.FileAccessRead, Path: "/tmp/devbox-test-not-there", Required: true},
+			"dump": {Access: model.FileAccessRead, Path: "/tmp/dwe-test-not-there", Required: true},
 		},
 	})
 	reg.AddCommandForTest(&model.CommandDef{

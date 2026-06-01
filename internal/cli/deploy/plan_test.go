@@ -18,7 +18,7 @@ import (
 func makeMinimalProject(t *testing.T) string {
 	t.Helper()
 	dir := t.TempDir()
-	yml := "schema_version: \"2\"\nproject:\n  name: testproject\n  prefix: devbox\n"
+	yml := "schema_version: \"2\"\nproject:\n  name: testproject\n  prefix: dwe\n"
 	if err := os.WriteFile(filepath.Join(dir, "workspace.yml"), []byte(yml), 0o644); err != nil {
 		t.Fatal(err)
 	}
@@ -153,12 +153,12 @@ func TestRunDeployPlan_UserDeployYMLNoInfoLine(t *testing.T) {
 	dir := makeMinimalProject(t)
 
 	// Write a minimal user deploy.yml.
-	devboxDir := filepath.Join(dir, "workspace")
-	if err := os.MkdirAll(devboxDir, 0o755); err != nil {
+	workspaceDir := filepath.Join(dir, "workspace")
+	if err := os.MkdirAll(workspaceDir, 0o755); err != nil {
 		t.Fatal(err)
 	}
 	userDeploy := "phases:\n  - name: custom\n    steps:\n      - name: step1\n        type: shell\n        cmd: echo hello\n"
-	if err := os.WriteFile(filepath.Join(devboxDir, "deploy.yml"), []byte(userDeploy), 0o644); err != nil {
+	if err := os.WriteFile(filepath.Join(workspaceDir, "deploy.yml"), []byte(userDeploy), 0o644); err != nil {
 		t.Fatal(err)
 	}
 

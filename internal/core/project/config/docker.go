@@ -11,14 +11,14 @@ import (
 )
 
 // DockerConfig holds Docker Compose execution policy.
-// Loaded separately from workspace/docker.yml + devbox/docker.local.yml.
+// Loaded separately from workspace/docker.yml + workspace/docker.local.yml.
 type DockerConfig struct {
 	// ProjectName is the resolved compose project name.
 	ProjectName string `yaml:"project_name"`
 	// Args holds per-command default arguments for docker compose.
 	Args DockerArgs `yaml:"args"`
 	// ProcessEnv holds additional environment variables passed to every
-	// `docker compose` process launched by devbox. Use this to suppress
+	// `docker compose` process launched by dwe. Use this to suppress
 	// unwanted Docker CLI output, e.g.:
 	//   process_env:
 	//     DOCKER_CLI_HINTS: "false"
@@ -38,13 +38,13 @@ type DockerTopologyConfig struct {
 	Hidden []string `yaml:"hidden"`
 }
 
-// DockerResourcesConfig holds declarations for Docker resources managed by devbox.
+// DockerResourcesConfig holds declarations for Docker resources managed by dwe.
 type DockerResourcesConfig struct {
 	// Volumes is a map of logical name → volume config.
 	Volumes map[string]DockerVolumeConfig `yaml:"volumes"`
 }
 
-// DockerVolumeConfig describes a Docker volume that devbox should ensure exists.
+// DockerVolumeConfig describes a Docker volume that dwe should ensure exists.
 type DockerVolumeConfig struct {
 	// Name is the base volume name as declared in the YAML.
 	// For shared volumes this is the literal Docker volume name.
@@ -59,7 +59,7 @@ type DockerVolumeConfig struct {
 	// "<project_name>_<Name>" — same scheme that Docker Compose uses for
 	// named volumes declared inside compose.yaml.
 	Shared bool `yaml:"shared"`
-	// EnsureBefore lists the devbox docker/deploy commands that trigger idempotent creation.
+	// EnsureBefore lists the dwe docker/deploy commands that trigger idempotent creation.
 	// Supported values: up, deploy.
 	EnsureBefore []string `yaml:"ensure_before"`
 }
@@ -77,7 +77,7 @@ func (v DockerVolumeConfig) ResolveName(projectName string) string {
 }
 
 // DockerArgs holds global and per-command default arguments.
-// Extend here when adding new docker subcommands wrapped by devbox.
+// Extend here when adding new docker subcommands wrapped by dwe.
 type DockerArgs struct {
 	Global  []string `yaml:"global"`
 	Up      []string `yaml:"up"`
@@ -93,7 +93,7 @@ type DockerArgs struct {
 }
 
 // LoadDockerConfig loads Docker Compose execution policy from
-// workspace/docker.yml (base) and devbox/docker.local.yml (optional overrides).
+// workspace/docker.yml (base) and workspace/docker.local.yml (optional overrides).
 // The project_name field is resolved as a ${...} template against cfg.Raw.
 //
 // Per-key defaults are applied for args: up, logs, run, down. These defaults

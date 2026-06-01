@@ -10,7 +10,7 @@ import (
 )
 
 // ServiceNameCompletion returns a cobra ValidArgsFunction that completes
-// service names from the resolved devbox config. Errors yield empty
+// service names from the resolved dwe config. Errors yield empty
 // completions silently (completion never surfaces errors to the terminal).
 func ServiceNameCompletion(flags *RootFlags) func(*cobra.Command, []string, string) ([]string, cobra.ShellCompDirective) {
 	return func(cmd *cobra.Command, args []string, _ string) ([]string, cobra.ShellCompDirective) {

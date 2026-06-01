@@ -293,14 +293,14 @@ func TestRemoveHiddenNodes_EmptyHidden(t *testing.T) {
 func TestResolveProjectAndDocker_WithDockerYML(t *testing.T) {
 	dir := makeMinimalProject(t)
 	cfg := &config.DweConfig{
-		Project: config.ProjectConfig{Name: "test", Prefix: "devbox"},
+		Project: config.ProjectConfig{Name: "test", Prefix: "dwe"},
 	}
 	projectName, dockerCfg, err := ResolveProjectAndDocker(filepath.Join(dir, "workspace.yml"), cfg)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
-	if projectName != "devbox-test" {
-		t.Errorf("expected project name %q from docker.yml, got %q", "devbox-test", projectName)
+	if projectName != "dwe-test" {
+		t.Errorf("expected project name %q from docker.yml, got %q", "dwe-test", projectName)
 	}
 	if dockerCfg == nil {
 		t.Error("expected non-nil dockerCfg")
@@ -309,19 +309,19 @@ func TestResolveProjectAndDocker_WithDockerYML(t *testing.T) {
 
 func TestResolveProjectAndDocker_NoDockerYML(t *testing.T) {
 	dir := t.TempDir()
-	devboxYML := `project:
+	cfgYAML := `project:
   name: test
-  prefix: devbox
+  prefix: dwe
 services:
   main:
     type: app
     dir: ./services/main
 `
-	if err := os.WriteFile(filepath.Join(dir, "workspace.yml"), []byte(devboxYML), 0o644); err != nil {
+	if err := os.WriteFile(filepath.Join(dir, "workspace.yml"), []byte(cfgYAML), 0o644); err != nil {
 		t.Fatal(err)
 	}
 	cfg := &config.DweConfig{
-		Project: config.ProjectConfig{Name: "test", Prefix: "devbox"},
+		Project: config.ProjectConfig{Name: "test", Prefix: "dwe"},
 	}
 	projectName, dockerCfg, err := ResolveProjectAndDocker(filepath.Join(dir, "workspace.yml"), cfg)
 	if err != nil {

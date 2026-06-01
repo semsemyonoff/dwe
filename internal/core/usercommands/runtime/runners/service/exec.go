@@ -23,7 +23,7 @@ import (
 
 // ExecRunner executes type=service_exec commands via `docker compose exec`.
 // The behaviour when the target container is not running depends on Mode:
-//   - exec-or-fail (default): refuses with a clear devbox error.
+//   - exec-or-fail (default): refuses with a clear dwe error.
 //   - exec-or-run: silently falls back to `docker compose run --rm` (with a
 //     warning written to stderr so the ephemeral-container behaviour is visible).
 //   - exec / run: forced; exec lets compose emit its own error if the container
@@ -57,7 +57,7 @@ func (e *ExecRunner) BuildCommand(ctx context.Context, rc spec.RunContext, compo
 	case model.ExecModeRun:
 		useExec = false
 	case model.ExecModeExecOrFail:
-		// Pre-check so that "service not running" surfaces as a clean devbox
+		// Pre-check so that "service not running" surfaces as a clean dwe
 		// error rather than a raw compose stderr trace.
 		running, checkErr := isContainerRunning(compose, svc)
 		if checkErr == nil && !running {

@@ -43,7 +43,7 @@ type RunContext struct {
 	// May be nil on entry; RunCommand defensive-inits it if needed.
 	Render *tpl.RenderContext
 
-	// Config is the merged devbox configuration.
+	// Config is the merged dwe configuration.
 	Config *config.DweConfig
 
 	// DockerConfig is the Docker Compose execution policy. When set, service
@@ -55,7 +55,7 @@ type RunContext struct {
 	// up referenced commands. May be nil when workflows are not expected.
 	Registry *registry.Registry
 
-	// ProjectRoot is the absolute path to the devbox project root directory.
+	// ProjectRoot is the absolute path to the dwe project root directory.
 	// Runners use it to resolve relative cwd paths and script paths.
 	ProjectRoot string
 
@@ -121,7 +121,7 @@ type RunContext struct {
 
 // Compose builds a *docker.Compose from the context's config and docker policy.
 // When DockerConfig is nil a minimal Compose is returned with just the project
-// name and file list derived from the devbox config.
+// name and file list derived from the dwe config.
 func (ctx RunContext) Compose() *docker.Compose {
 	if ctx.DockerConfig != nil && ctx.Config != nil {
 		return docker.NewCompose(ctx.Config, ctx.DockerConfig)

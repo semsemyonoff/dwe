@@ -45,12 +45,12 @@ func TestRunDeployMenu_NonTTY_PrintsHelpAndExits(t *testing.T) {
 func TestRunDeployMenu_MenuDispatch_Run(t *testing.T) {
 	tmpdir := t.TempDir()
 
-	devboxDir := filepath.Join(tmpdir, "workspace")
-	require.NoError(t, os.MkdirAll(devboxDir, 0o755))
+	workspaceDir := filepath.Join(tmpdir, "workspace")
+	require.NoError(t, os.MkdirAll(workspaceDir, 0o755))
 
-	require.NoError(t, os.WriteFile(filepath.Join(devboxDir, "workspace.yml"), []byte("project:\n  name: test"), 0o644))
+	require.NoError(t, os.WriteFile(filepath.Join(workspaceDir, "workspace.yml"), []byte("project:\n  name: test"), 0o644))
 
-	flags := &cmdctx.RootFlags{ConfigPath: filepath.Join(devboxDir, "workspace.yml")}
+	flags := &cmdctx.RootFlags{ConfigPath: filepath.Join(workspaceDir, "workspace.yml")}
 
 	// Override test seams
 	oldIsInteractive := widgets.IsInteractiveFn
@@ -87,12 +87,12 @@ func TestRunDeployMenu_MenuDispatch_Run(t *testing.T) {
 func TestRunDeployMenu_MenuDispatch_Exit(t *testing.T) {
 	tmpdir := t.TempDir()
 
-	devboxDir := filepath.Join(tmpdir, "workspace")
-	require.NoError(t, os.MkdirAll(devboxDir, 0o755))
+	workspaceDir := filepath.Join(tmpdir, "workspace")
+	require.NoError(t, os.MkdirAll(workspaceDir, 0o755))
 
-	require.NoError(t, os.WriteFile(filepath.Join(devboxDir, "workspace.yml"), []byte("project:\n  name: test"), 0o644))
+	require.NoError(t, os.WriteFile(filepath.Join(workspaceDir, "workspace.yml"), []byte("project:\n  name: test"), 0o644))
 
-	flags := &cmdctx.RootFlags{ConfigPath: filepath.Join(devboxDir, "workspace.yml")}
+	flags := &cmdctx.RootFlags{ConfigPath: filepath.Join(workspaceDir, "workspace.yml")}
 
 	// Override test seams
 	oldIsInteractive := widgets.IsInteractiveFn
@@ -119,11 +119,11 @@ func TestRunDeployMenu_MenuDispatch_Exit(t *testing.T) {
 func TestRunDeployMenu_SetupYMLErrors_BlocksMenu(t *testing.T) {
 	tmpdir := t.TempDir()
 
-	devboxDir := filepath.Join(tmpdir, "workspace")
-	require.NoError(t, os.MkdirAll(devboxDir, 0o755))
-	require.NoError(t, os.WriteFile(filepath.Join(devboxDir, "workspace.yml"), []byte("project:\n  name: test"), 0o644))
+	workspaceDir := filepath.Join(tmpdir, "workspace")
+	require.NoError(t, os.MkdirAll(workspaceDir, 0o755))
+	require.NoError(t, os.WriteFile(filepath.Join(workspaceDir, "workspace.yml"), []byte("project:\n  name: test"), 0o644))
 
-	flags := &cmdctx.RootFlags{ConfigPath: filepath.Join(devboxDir, "workspace.yml")}
+	flags := &cmdctx.RootFlags{ConfigPath: filepath.Join(workspaceDir, "workspace.yml")}
 
 	oldIsInteractive := widgets.IsInteractiveFn
 	oldSelectFn := selectMenuItemFn
@@ -171,11 +171,11 @@ func TestRunDeployMenu_SetupYMLErrors_BlocksMenu(t *testing.T) {
 func TestRunDeployMenu_MenuDispatch_Plan(t *testing.T) {
 	tmpdir := t.TempDir()
 
-	devboxDir := filepath.Join(tmpdir, "workspace")
-	require.NoError(t, os.MkdirAll(devboxDir, 0o755))
-	require.NoError(t, os.WriteFile(filepath.Join(devboxDir, "workspace.yml"), []byte("project:\n  name: test"), 0o644))
+	workspaceDir := filepath.Join(tmpdir, "workspace")
+	require.NoError(t, os.MkdirAll(workspaceDir, 0o755))
+	require.NoError(t, os.WriteFile(filepath.Join(workspaceDir, "workspace.yml"), []byte("project:\n  name: test"), 0o644))
 
-	flags := &cmdctx.RootFlags{ConfigPath: filepath.Join(devboxDir, "workspace.yml")}
+	flags := &cmdctx.RootFlags{ConfigPath: filepath.Join(workspaceDir, "workspace.yml")}
 
 	oldIsInteractive := widgets.IsInteractiveFn
 	oldSelectFn := selectMenuItemFn
@@ -211,12 +211,12 @@ func TestRunDeployMenu_MenuDispatch_Plan(t *testing.T) {
 func TestRunDeployMenu_WizardShownWhenConflictsAndEmptyLocal(t *testing.T) {
 	tmpdir := t.TempDir()
 
-	devboxDir := filepath.Join(tmpdir, "workspace")
-	require.NoError(t, os.MkdirAll(devboxDir, 0o755))
-	require.NoError(t, os.WriteFile(filepath.Join(devboxDir, "workspace.yml"), []byte("project:\n  name: test"), 0o644))
+	workspaceDir := filepath.Join(tmpdir, "workspace")
+	require.NoError(t, os.MkdirAll(workspaceDir, 0o755))
+	require.NoError(t, os.WriteFile(filepath.Join(workspaceDir, "workspace.yml"), []byte("project:\n  name: test"), 0o644))
 	// No setup.yml — port-conflicts-only path.
 
-	flags := &cmdctx.RootFlags{ConfigPath: filepath.Join(devboxDir, "workspace.yml")}
+	flags := &cmdctx.RootFlags{ConfigPath: filepath.Join(workspaceDir, "workspace.yml")}
 
 	oldIsInteractive := widgets.IsInteractiveFn
 	oldSelectFn := selectMenuItemFn
@@ -250,11 +250,11 @@ func TestRunDeployMenu_WizardShownWhenConflictsAndEmptyLocal(t *testing.T) {
 
 func TestRunDeployMenu_WizardPreflightBlocks(t *testing.T) {
 	tmpdir := t.TempDir()
-	devboxDir := filepath.Join(tmpdir, "workspace")
-	require.NoError(t, os.MkdirAll(devboxDir, 0o755))
-	require.NoError(t, os.WriteFile(filepath.Join(devboxDir, "workspace.yml"), []byte("project:\n  name: test"), 0o644))
+	workspaceDir := filepath.Join(tmpdir, "workspace")
+	require.NoError(t, os.MkdirAll(workspaceDir, 0o755))
+	require.NoError(t, os.WriteFile(filepath.Join(workspaceDir, "workspace.yml"), []byte("project:\n  name: test"), 0o644))
 
-	flags := &cmdctx.RootFlags{ConfigPath: filepath.Join(devboxDir, "workspace.yml")}
+	flags := &cmdctx.RootFlags{ConfigPath: filepath.Join(workspaceDir, "workspace.yml")}
 
 	oldIsInteractive := widgets.IsInteractiveFn
 	oldSelectFn := selectMenuItemFn

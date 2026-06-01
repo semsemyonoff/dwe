@@ -182,12 +182,12 @@ func TestProjectPerms_OK(t *testing.T) {
 
 func TestProjectPerms_DeployDirBlockedByFile(t *testing.T) {
 	root := t.TempDir()
-	devboxDir := filepath.Join(root, ".dwe")
-	if err := os.Mkdir(devboxDir, 0o755); err != nil {
+	workspaceDir := filepath.Join(root, ".dwe")
+	if err := os.Mkdir(workspaceDir, 0o755); err != nil {
 		t.Fatal(err)
 	}
 	// Place a regular file where the deploy directory should be.
-	if err := os.WriteFile(filepath.Join(devboxDir, "deploy"), []byte("block"), 0o644); err != nil {
+	if err := os.WriteFile(filepath.Join(workspaceDir, "deploy"), []byte("block"), 0o644); err != nil {
 		t.Fatal(err)
 	}
 	v := &projectPermsValidator{}
@@ -231,8 +231,8 @@ func TestProjectPerms_ExistingLockFileNotWritable(t *testing.T) {
 		t.Skip("root bypasses permission bits")
 	}
 	root := t.TempDir()
-	devboxDir := filepath.Join(root, ".dwe")
-	deployDir := filepath.Join(devboxDir, "deploy")
+	workspaceDir := filepath.Join(root, ".dwe")
+	deployDir := filepath.Join(workspaceDir, "deploy")
 	if err := os.MkdirAll(deployDir, 0o755); err != nil {
 		t.Fatalf("mkdir -p deploy: %v", err)
 	}
@@ -258,9 +258,9 @@ func TestProjectPerms_UnwritableDeployDir(t *testing.T) {
 		t.Skip("root bypasses permission bits")
 	}
 	root := t.TempDir()
-	devboxDir := filepath.Join(root, ".dwe")
-	deployDir := filepath.Join(devboxDir, "deploy")
-	if err := os.Mkdir(devboxDir, 0o755); err != nil {
+	workspaceDir := filepath.Join(root, ".dwe")
+	deployDir := filepath.Join(workspaceDir, "deploy")
+	if err := os.Mkdir(workspaceDir, 0o755); err != nil {
 		t.Fatalf("mkdir .dwe: %v", err)
 	}
 	if err := os.Mkdir(deployDir, 0o555); err != nil {
@@ -280,11 +280,11 @@ func TestProjectPerms_Unwritable(t *testing.T) {
 	}
 	root := t.TempDir()
 	// Pre-create .dwe/ with no write permission.
-	devboxDir := filepath.Join(root, ".dwe")
-	if err := os.Mkdir(devboxDir, 0o555); err != nil {
+	workspaceDir := filepath.Join(root, ".dwe")
+	if err := os.Mkdir(workspaceDir, 0o555); err != nil {
 		t.Fatalf("mkdir: %v", err)
 	}
-	t.Cleanup(func() { _ = os.Chmod(devboxDir, 0o755) })
+	t.Cleanup(func() { _ = os.Chmod(workspaceDir, 0o755) })
 	v := &projectPermsValidator{}
 	diags := v.Run(validate.Context{ProjectRoot: root})
 	if findSeverity(diags, "project_perms") != validate.SeverityError {

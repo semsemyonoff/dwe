@@ -15,24 +15,24 @@ func TestAllValidators(t *testing.T) {
 	tmpDir := t.TempDir()
 
 	// Create workspace.yml
-	devboxYml := `project:
+	cfgYAML := `project:
   name: test-project
 `
-	require.NoError(t, os.WriteFile(filepath.Join(tmpDir, "workspace.yml"), []byte(devboxYml), 0644))
+	require.NoError(t, os.WriteFile(filepath.Join(tmpDir, "workspace.yml"), []byte(cfgYAML), 0644))
 
-	// Create devbox directory
-	devboxDir := filepath.Join(tmpDir, "workspace")
-	require.NoError(t, os.Mkdir(devboxDir, 0755))
+	// Create workspace directory
+	workspaceDir := filepath.Join(tmpDir, "workspace")
+	require.NoError(t, os.Mkdir(workspaceDir, 0755))
 
 	// Create per-folder service
-	svcDir := filepath.Join(devboxDir, "services", "app")
+	svcDir := filepath.Join(workspaceDir, "services", "app")
 	require.NoError(t, os.MkdirAll(svcDir, 0o755))
 	require.NoError(t, os.WriteFile(filepath.Join(svcDir, "service.yml"), []byte("type: app\ndir: /app\ncontainer: app\n"), 0644))
 
 	// Create docker.yml
 	dockerYml := `project_name: test-project
 `
-	require.NoError(t, os.WriteFile(filepath.Join(devboxDir, "docker.yml"), []byte(dockerYml), 0644))
+	require.NoError(t, os.WriteFile(filepath.Join(workspaceDir, "docker.yml"), []byte(dockerYml), 0644))
 
 	// Create info.yml
 	infoYml := `sections:
@@ -45,12 +45,12 @@ func TestAllValidators(t *testing.T) {
             label: Key
             title: Value
 `
-	require.NoError(t, os.WriteFile(filepath.Join(devboxDir, "info.yml"), []byte(infoYml), 0644))
+	require.NoError(t, os.WriteFile(filepath.Join(workspaceDir, "info.yml"), []byte(infoYml), 0644))
 
 	// Create styles.yml  (minimal)
 	stylesYml := `palette: {}
 `
-	require.NoError(t, os.WriteFile(filepath.Join(devboxDir, "styles.yml"), []byte(stylesYml), 0644))
+	require.NoError(t, os.WriteFile(filepath.Join(workspaceDir, "styles.yml"), []byte(stylesYml), 0644))
 
 	// Create lifecycle.yml
 	lifecycleYml := `run:
@@ -64,7 +64,7 @@ func TestAllValidators(t *testing.T) {
             level: info
             text: Starting...
 `
-	require.NoError(t, os.WriteFile(filepath.Join(devboxDir, "lifecycle.yml"), []byte(lifecycleYml), 0644))
+	require.NoError(t, os.WriteFile(filepath.Join(workspaceDir, "lifecycle.yml"), []byte(lifecycleYml), 0644))
 
 	// Create deploy.yml
 	deployYml := `phases:
@@ -77,7 +77,7 @@ func TestAllValidators(t *testing.T) {
           level: info
           text: Deploying...
 `
-	require.NoError(t, os.WriteFile(filepath.Join(devboxDir, "deploy.yml"), []byte(deployYml), 0644))
+	require.NoError(t, os.WriteFile(filepath.Join(workspaceDir, "deploy.yml"), []byte(deployYml), 0644))
 
 	// Create reset.yml
 	resetYml := `phases:
@@ -90,7 +90,7 @@ func TestAllValidators(t *testing.T) {
           level: info
           text: Cleaning up...
 `
-	require.NoError(t, os.WriteFile(filepath.Join(devboxDir, "reset.yml"), []byte(resetYml), 0644))
+	require.NoError(t, os.WriteFile(filepath.Join(workspaceDir, "reset.yml"), []byte(resetYml), 0644))
 
 	// Run all validators
 	ctx := validate.Context{

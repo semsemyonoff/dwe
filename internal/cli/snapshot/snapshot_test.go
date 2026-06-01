@@ -18,7 +18,7 @@ import (
 	"github.com/spf13/cobra"
 )
 
-// snapshotTestProject sets up an empty devbox project (workspace.yml + snapshots/
+// snapshotTestProject sets up an empty dwe project (workspace.yml + snapshots/
 // dir) and returns the project root. The on-disk workspace.yml is minimal but
 // loadable by config.LoadConfig.
 func snapshotTestProject(t *testing.T) string {

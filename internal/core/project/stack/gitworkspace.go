@@ -84,7 +84,7 @@ func extendsDepth(services map[string]config.ServiceConfig, name string) int {
 // alphabetically sorted by service name. Cancellation propagates via ctx.
 //
 // projectRoot is the resolved project root directory. Relative service dirs
-// are joined against it so the collector works correctly when devbox is
+// are joined against it so the collector works correctly when dwe is
 // invoked from a subdirectory of the project.
 //
 // Services without a `dir`, or whose `<dir>/src` is missing on disk, are

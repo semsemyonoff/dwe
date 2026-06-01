@@ -27,7 +27,7 @@ type (
 
 const (
 	CommandTypeShell    = model.CommandTypeShell
-	CommandTypeDwe   = model.CommandTypeDwe
+	CommandTypeDwe      = model.CommandTypeDwe
 	CommandTypeScript   = model.CommandTypeScript
 	CommandTypeWorkflow = model.CommandTypeWorkflow
 	FileAccessRead      = model.FileAccessRead

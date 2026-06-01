@@ -54,16 +54,16 @@ func TestCreate_EndToEndWritesMarkerAndManifest(t *testing.T) {
 
 	var out, errBuf bytes.Buffer
 	res, err := Create(context.Background(), CreateParams{
-		Cfg:           testCfg(),
-		SnapCfg:       snapCfg,
-		Registry:      reg,
-		BaseDir:       tmp,
-		Name:          "snap1",
-		Description:   "hello world",
-		DweVersion: "0.42.0",
-		Now:           func() time.Time { return fixed },
-		Stdout:        &out,
-		Stderr:        &errBuf,
+		Cfg:         testCfg(),
+		SnapCfg:     snapCfg,
+		Registry:    reg,
+		BaseDir:     tmp,
+		Name:        "snap1",
+		Description: "hello world",
+		DweVersion:  "0.42.0",
+		Now:         func() time.Time { return fixed },
+		Stdout:      &out,
+		Stderr:      &errBuf,
 	})
 	if err != nil {
 		t.Fatalf("Create: %v (stderr=%s)", err, errBuf.String())
@@ -305,7 +305,7 @@ func TestCreate_WorkflowFailureRecordsFailedStatusAndKeepsDir(t *testing.T) {
 	}
 }
 
-func TestCreate_CapturesDevboxFiles(t *testing.T) {
+func TestCreate_CapturesWorkspaceFiles(t *testing.T) {
 	tmp := t.TempDir()
 	// Seed a local.yml and a deploy state file.
 	writeStringFile(t, filepath.Join(tmp, "workspace", "local.yml"), "key: value\n")

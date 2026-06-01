@@ -181,7 +181,7 @@ func RemoveHiddenNodes(topo map[string][]string, status map[string]render.NodeSt
 }
 
 // BuildNodeCategories maps compose service names to topology categories
-// based on the actual service Type in the devbox config:
+// based on the actual service Type in the dwe config:
 //
 //   - app   → CatService
 //   - tool  → CatTool

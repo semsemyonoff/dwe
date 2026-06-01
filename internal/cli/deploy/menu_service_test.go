@@ -115,11 +115,11 @@ func TestDeployInfoRowsFrom(t *testing.T) {
 
 func TestRunDeployMenu_SubmenuCancelLoopsBack(t *testing.T) {
 	tmpdir := t.TempDir()
-	devboxDir := filepath.Join(tmpdir, "workspace")
-	require.NoError(t, os.MkdirAll(devboxDir, 0o755))
-	require.NoError(t, os.WriteFile(filepath.Join(devboxDir, "workspace.yml"), []byte("project:\n  name: test\n"), 0o644))
+	workspaceDir := filepath.Join(tmpdir, "workspace")
+	require.NoError(t, os.MkdirAll(workspaceDir, 0o755))
+	require.NoError(t, os.WriteFile(filepath.Join(workspaceDir, "workspace.yml"), []byte("project:\n  name: test\n"), 0o644))
 
-	flags := &cmdctx.RootFlags{ConfigPath: filepath.Join(devboxDir, "workspace.yml")}
+	flags := &cmdctx.RootFlags{ConfigPath: filepath.Join(workspaceDir, "workspace.yml")}
 
 	oldSelect := selectMenuItemFn
 	oldPicker := selectDeployServiceFn

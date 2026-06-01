@@ -38,7 +38,7 @@ func (c *Compose) BinName() string {
 	return c.Bin
 }
 
-// NewCompose creates a Compose from the resolved devbox config and docker policy.
+// NewCompose creates a Compose from the resolved dwe config and docker policy.
 func NewCompose(cfg *config.DweConfig, dockerCfg *config.DockerConfig) *Compose {
 	return buildCompose(cfg, dockerCfg, cfg.ComposeFiles())
 }

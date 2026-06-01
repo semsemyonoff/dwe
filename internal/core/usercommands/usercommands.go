@@ -1,4 +1,4 @@
-// Package usercommands is the public API for the devbox command system.
+// Package usercommands is the public API for the dwe command system.
 // It re-exports types, constants, and functions from the model, loader,
 // registry, resolve, and runtime subpackages so that callers can use a single
 // import path ("github.com/semsemyonoff/dwe/internal/core/usercommands") without knowing which

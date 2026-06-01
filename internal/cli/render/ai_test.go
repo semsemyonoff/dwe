@@ -1092,14 +1092,14 @@ func TestNewAICmd_happyPath(t *testing.T) {
 	projectRoot := t.TempDir()
 
 	// Setup workspace.yml
-	devboxYAML := `schema_version: "2"
+	cfgYAML := `schema_version: "2"
 project:
   name: test-project
 services:
   api:
     enabled: true
 `
-	if err := os.WriteFile(filepath.Join(projectRoot, "workspace.yml"), []byte(devboxYAML), 0o644); err != nil {
+	if err := os.WriteFile(filepath.Join(projectRoot, "workspace.yml"), []byte(cfgYAML), 0o644); err != nil {
 		t.Fatalf("write workspace.yml: %v", err)
 	}
 
@@ -1156,14 +1156,14 @@ services:
 func TestNewAICmd_explicitServiceAIDisabled(t *testing.T) {
 	projectRoot := t.TempDir()
 
-	devboxYAML := `schema_version: "2"
+	cfgYAML := `schema_version: "2"
 project:
   name: test-project
 services:
   api:
     enabled: true
 `
-	if err := os.WriteFile(filepath.Join(projectRoot, "workspace.yml"), []byte(devboxYAML), 0o644); err != nil {
+	if err := os.WriteFile(filepath.Join(projectRoot, "workspace.yml"), []byte(cfgYAML), 0o644); err != nil {
 		t.Fatalf("write workspace.yml: %v", err)
 	}
 
@@ -1194,7 +1194,7 @@ services:
 func TestNewAICmd_noArgAutoSelection(t *testing.T) {
 	projectRoot := t.TempDir()
 
-	devboxYAML := `schema_version: "2"
+	cfgYAML := `schema_version: "2"
 project:
   name: test-project
 services:
@@ -1207,7 +1207,7 @@ services:
   no-dir-svc:
     enabled: true
 `
-	if err := os.WriteFile(filepath.Join(projectRoot, "workspace.yml"), []byte(devboxYAML), 0o644); err != nil {
+	if err := os.WriteFile(filepath.Join(projectRoot, "workspace.yml"), []byte(cfgYAML), 0o644); err != nil {
 		t.Fatalf("write workspace.yml: %v", err)
 	}
 
@@ -1283,14 +1283,14 @@ services:
 func TestNewAICmd_explicitServiceNotFound(t *testing.T) {
 	projectRoot := t.TempDir()
 
-	devboxYAML := `schema_version: "2"
+	cfgYAML := `schema_version: "2"
 project:
   name: test-project
 services:
   api:
     enabled: true
 `
-	if err := os.WriteFile(filepath.Join(projectRoot, "workspace.yml"), []byte(devboxYAML), 0o644); err != nil {
+	if err := os.WriteFile(filepath.Join(projectRoot, "workspace.yml"), []byte(cfgYAML), 0o644); err != nil {
 		t.Fatalf("write workspace.yml: %v", err)
 	}
 
@@ -1318,14 +1318,14 @@ services:
 func TestNewAICmd_explicitServiceDisabled(t *testing.T) {
 	projectRoot := t.TempDir()
 
-	devboxYAML := `schema_version: "2"
+	cfgYAML := `schema_version: "2"
 project:
   name: test-project
 services:
   api:
     enabled: false
 `
-	if err := os.WriteFile(filepath.Join(projectRoot, "workspace.yml"), []byte(devboxYAML), 0o644); err != nil {
+	if err := os.WriteFile(filepath.Join(projectRoot, "workspace.yml"), []byte(cfgYAML), 0o644); err != nil {
 		t.Fatalf("write workspace.yml: %v", err)
 	}
 
@@ -1353,14 +1353,14 @@ services:
 func TestNewAICmd_missingPack(t *testing.T) {
 	projectRoot := t.TempDir()
 
-	devboxYAML := `schema_version: "2"
+	cfgYAML := `schema_version: "2"
 project:
   name: test-project
 services:
   api:
     enabled: true
 `
-	if err := os.WriteFile(filepath.Join(projectRoot, "workspace.yml"), []byte(devboxYAML), 0o644); err != nil {
+	if err := os.WriteFile(filepath.Join(projectRoot, "workspace.yml"), []byte(cfgYAML), 0o644); err != nil {
 		t.Fatalf("write workspace.yml: %v", err)
 	}
 
@@ -1390,14 +1390,14 @@ services:
 func TestNewAICmd_explicitPackMissing(t *testing.T) {
 	projectRoot := t.TempDir()
 
-	devboxYAML := `schema_version: "2"
+	cfgYAML := `schema_version: "2"
 project:
   name: test-project
 services:
   api:
     enabled: true
 `
-	if err := os.WriteFile(filepath.Join(projectRoot, "workspace.yml"), []byte(devboxYAML), 0o644); err != nil {
+	if err := os.WriteFile(filepath.Join(projectRoot, "workspace.yml"), []byte(cfgYAML), 0o644); err != nil {
 		t.Fatalf("write workspace.yml: %v", err)
 	}
 
@@ -1433,14 +1433,14 @@ services:
 func TestNewAICmd_explicitServiceNoDir(t *testing.T) {
 	projectRoot := t.TempDir()
 
-	devboxYAML := `schema_version: "2"
+	cfgYAML := `schema_version: "2"
 project:
   name: test-project
 services:
   api:
     enabled: true
 `
-	if err := os.WriteFile(filepath.Join(projectRoot, "workspace.yml"), []byte(devboxYAML), 0o644); err != nil {
+	if err := os.WriteFile(filepath.Join(projectRoot, "workspace.yml"), []byte(cfgYAML), 0o644); err != nil {
 		t.Fatalf("write workspace.yml: %v", err)
 	}
 
@@ -1595,14 +1595,14 @@ func TestSelectAgentsServices(t *testing.T) {
 func TestNewAICmd_existingRegularFile(t *testing.T) {
 	projectRoot := t.TempDir()
 
-	devboxYAML := `schema_version: "2"
+	cfgYAML := `schema_version: "2"
 project:
   name: test-project
 services:
   api:
     enabled: true
 `
-	if err := os.WriteFile(filepath.Join(projectRoot, "workspace.yml"), []byte(devboxYAML), 0o644); err != nil {
+	if err := os.WriteFile(filepath.Join(projectRoot, "workspace.yml"), []byte(cfgYAML), 0o644); err != nil {
 		t.Fatalf("write workspace.yml: %v", err)
 	}
 

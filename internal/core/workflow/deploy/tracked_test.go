@@ -100,22 +100,22 @@ func TestLoadTrackedServices_Integration(t *testing.T) {
 	testDir := t.TempDir()
 
 	// Create minimal workspace.yml
-	devboxYML := `project:
+	cfgYAML := `project:
   name: test
-  prefix: devbox
+  prefix: dwe
 `
 	if err := os.WriteFile(
 		filepath.Join(testDir, "workspace.yml"),
-		[]byte(devboxYML),
+		[]byte(cfgYAML),
 		0644,
 	); err != nil {
 		t.Fatalf("writing workspace.yml: %v", err)
 	}
 
-	// Create devbox dir
-	devboxDir := filepath.Join(testDir, "workspace")
-	if err := os.MkdirAll(devboxDir, 0755); err != nil {
-		t.Fatalf("creating devbox dir: %v", err)
+	// Create workspace dir
+	workspaceDir := filepath.Join(testDir, "workspace")
+	if err := os.MkdirAll(workspaceDir, 0755); err != nil {
+		t.Fatalf("creating workspace dir: %v", err)
 	}
 
 	// Create a minimal deploy.yml with no deploy_services
@@ -127,7 +127,7 @@ func TestLoadTrackedServices_Integration(t *testing.T) {
         cmd: echo setup
 `
 	if err := os.WriteFile(
-		filepath.Join(devboxDir, "deploy.yml"),
+		filepath.Join(workspaceDir, "deploy.yml"),
 		[]byte(deployYML),
 		0644,
 	); err != nil {

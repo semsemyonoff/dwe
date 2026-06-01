@@ -15,7 +15,7 @@ import (
 const defaultIndent = 2
 
 // Info builds and returns the full styled info dashboard string for the
-// given devbox config and info configuration. It replaces the legacy
+// given dwe config and info configuration. It replaces the legacy
 // table-header / definition rendering in internal/cli/info/info.go.
 //
 // Returns an error if any Go template expression in text/value/when fields

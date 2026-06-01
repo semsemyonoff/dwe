@@ -1,6 +1,6 @@
 // Package prompt renders a compact, shell-prompt-ready segment for the current
-// devbox project. Optimised for per-prompt invocation: avoids cobra, lipgloss,
-// and config validation. Bypassed from cmd/devbox/main.go before cobra is
+// dwe project. Optimised for per-prompt invocation: avoids cobra, lipgloss,
+// and config validation. Bypassed from cmd/dwe/main.go before cobra is
 // constructed.
 package prompt
 
@@ -135,7 +135,7 @@ func runFromDir(stdout io.Writer, args []string, cwd string, useColor bool) int 
 // Unicode Bidi overrides into the shell prompt. Strips ASCII controls (< 0x20,
 // 0x7F), C1 controls (0x80–0x9F), LTR/RTL marks (U+200E–U+200F), Bidi
 // embeddings and overrides (U+202A–U+202E), and Bidi isolates (U+2066–U+2069).
-// Starship runs devbox prompt automatically, so this must be safe for untrusted
+// Starship runs dwe prompt automatically, so this must be safe for untrusted
 // workspace.yml files in cloned repos.
 func sanitizeName(s string) string {
 	return strings.Map(func(r rune) rune {

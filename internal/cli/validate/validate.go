@@ -474,7 +474,7 @@ func loadForValidate(flags *cmdctx.RootFlags) (*config.DweConfig, string, string
 	}
 	if !found {
 		return nil, "", "", cmdctx.ErrWrap("project_not_found", project.ErrNotFound).
-			WithHint("run from a Devbox project directory or pass --config")
+			WithHint("run from a dwe project directory or pass --config")
 	}
 
 	configPath := loc.ConfigPath

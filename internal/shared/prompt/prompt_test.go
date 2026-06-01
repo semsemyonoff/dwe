@@ -240,7 +240,7 @@ func TestRunFromDir(t *testing.T) {
 			wantStdout: "{▪} p ✓\n",
 		},
 		{
-			name: "corrupted_devbox_yml",
+			name: "corrupted_workspace_yml",
 			setup: func(t *testing.T) string {
 				root := t.TempDir()
 				writeFile(t, filepath.Join(root, "workspace.yml"), "project: [this is: not valid yaml\n  - bad\n")
@@ -482,7 +482,7 @@ func TestRenderUsesDefaultForegroundReset(t *testing.T) {
 // BenchmarkPromptRun measures runFromDir for the deployed-status case (the
 // most common steady-state). It exercises the full hot path: walk-up, three
 // file reads, three yaml unmarshals, and TrueColor render. The end-to-end
-// 50 ms cold-start budget is verified manually with `time devbox prompt`.
+// 50 ms cold-start budget is verified manually with `time dwe prompt`.
 //
 // Baseline (Apple M1 Max, go test -bench=. -benchtime=2s):
 //

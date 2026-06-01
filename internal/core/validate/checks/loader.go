@@ -31,7 +31,7 @@ import (
 const diagFile = "workspace/validate.yml"
 
 // allowedCommandTypes is the whitelist of user-command types invokable from
-// a check. Heavyweight types (workflow, service_*, devbox, builtin-as-command)
+// a check. Heavyweight types (workflow, service_*, dwe, builtin-as-command)
 // are rejected at load time.
 var allowedCommandTypes = map[model.CommandType]struct{}{
 	model.CommandTypeShell:  {},

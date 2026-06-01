@@ -500,8 +500,8 @@ func TestOpenPipelineLog_DisabledReturnsNil(t *testing.T) {
 		t.Errorf("expected termOut to be non-nil even when disabled (io.Discard or os.Stdout)")
 	}
 
-	devboxLogsDir := filepath.Join(tmpDir, ".dwe", "logs")
-	if _, err := os.Stat(devboxLogsDir); !os.IsNotExist(err) {
+	logsDir := filepath.Join(tmpDir, ".dwe", "logs")
+	if _, err := os.Stat(logsDir); !os.IsNotExist(err) {
 		t.Errorf("expected .dwe/logs directory to not exist when logging disabled")
 	}
 }

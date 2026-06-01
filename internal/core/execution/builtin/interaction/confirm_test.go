@@ -264,7 +264,7 @@ func TestConfirmBuiltin_NonTTY_StdinN(t *testing.T) {
 }
 
 // TestConfirmBuiltin_PipedStdin_RoutesToFallback verifies that a non-os.File stdin
-// (e.g. bytes.Buffer from "echo y | devbox ...") always uses the non-TTY fallback.
+// (e.g. bytes.Buffer from "echo y | dwe ...") always uses the non-TTY fallback.
 func TestConfirmBuiltin_PipedStdin_RoutesToFallback(t *testing.T) {
 	// IsInteractiveFn returns false for bytes.Buffer (not *os.File), so this
 	// test exercises the real IsInteractiveFn behavior with a bytes.Buffer.

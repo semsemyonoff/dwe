@@ -15,13 +15,12 @@ import (
 func makeV2Project(t *testing.T, dir string) string {
 	t.Helper()
 	cfgPath := filepath.Join(dir, "workspace.yml")
-	yml := "schema_version: \"2\"\nproject:\n  name: testproject\n  prefix: devbox\n"
+	yml := "schema_version: \"2\"\nproject:\n  name: testproject\n  prefix: dwe\n"
 	if err := os.WriteFile(cfgPath, []byte(yml), 0644); err != nil {
 		t.Fatalf("writing workspace.yml: %v", err)
 	}
 	return cfgPath
 }
-
 
 // runRootWithConfig builds and executes a root command with an explicit --config flag.
 // Returns the cobra error (if any) and the combined stdout+stderr output.
@@ -74,7 +73,6 @@ func TestRootResolver_ExplicitBadPath_AlwaysFatal(t *testing.T) {
 	}
 }
 
-
 // TestRootResolver_DiscoveryFromSubdir verifies that running from a subdirectory
 // of a v2 project finds workspace.yml via upward walk.
 func TestRootResolver_DiscoveryFromSubdir(t *testing.T) {
@@ -100,7 +98,7 @@ func TestRootResolver_DiscoveryFromSubdir(t *testing.T) {
 		t.Errorf("root from subdir should not error: %v", err)
 	}
 	// Output should contain help text.
-	if !strings.Contains(buf.String(), "devbox") {
+	if !strings.Contains(buf.String(), "dwe") {
 		t.Errorf("expected help output, got: %s", buf.String())
 	}
 }

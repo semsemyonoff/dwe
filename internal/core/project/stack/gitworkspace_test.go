@@ -404,7 +404,7 @@ func TestCollectGitWorkspace_DisplayDirIsProjectRelative(t *testing.T) {
 
 // TestCollectGitWorkspace_RelativeDirResolvedAgainstProjectRoot verifies that
 // a service dir configured as a relative path (e.g. "services/app") is
-// resolved against projectRoot so the collector works when devbox is invoked
+// resolved against projectRoot so the collector works when dwe is invoked
 // from a subdirectory of the project.
 func TestCollectGitWorkspace_RelativeDirResolvedAgainstProjectRoot(t *testing.T) {
 	requireGit(t)

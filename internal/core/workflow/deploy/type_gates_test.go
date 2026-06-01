@@ -16,23 +16,23 @@ import (
 func writeMixedTypeFixture(t *testing.T, deployFor string) string {
 	t.Helper()
 	dir := t.TempDir()
-	devboxPath := filepath.Join(dir, "workspace.yml")
-	if err := os.WriteFile(devboxPath, []byte(`schema_version: "1"
+	workspacePath := filepath.Join(dir, "workspace.yml")
+	if err := os.WriteFile(workspacePath, []byte(`schema_version: "1"
 project:
   name: laravel
-  prefix: devbox
+  prefix: dwe
 `), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	devboxDir := filepath.Join(dir, "workspace")
-	if err := os.MkdirAll(devboxDir, 0o755); err != nil {
+	workspaceDir := filepath.Join(dir, "workspace")
+	if err := os.MkdirAll(workspaceDir, 0o755); err != nil {
 		t.Fatal(err)
 	}
 	for name, content := range map[string]string{
 		"main": "type: app\ncontainer: app-main\nrequired: true\ndir: ./services/main\n",
 		"db":   "type: infra\ncontainer: db\nrequired: true\n",
 	} {
-		svcDir := filepath.Join(devboxDir, "services", name)
+		svcDir := filepath.Join(workspaceDir, "services", name)
 		if err := os.MkdirAll(svcDir, 0o755); err != nil {
 			t.Fatal(err)
 		}
@@ -48,12 +48,12 @@ project:
         type: shell
         cmd: 'true'
 `
-		svcDeployPath := filepath.Join(devboxDir, "services", deployFor, "deploy.yml")
+		svcDeployPath := filepath.Join(workspaceDir, "services", deployFor, "deploy.yml")
 		if err := os.WriteFile(svcDeployPath, []byte(body), 0o644); err != nil {
 			t.Fatal(err)
 		}
 	}
-	return devboxPath
+	return workspacePath
 }
 
 // writeThreeServiceFixture builds a project with app + tool + infra services.
@@ -63,16 +63,16 @@ project:
 func writeThreeServiceFixture(t *testing.T, deployFor []string, mandatory []string) string {
 	t.Helper()
 	dir := t.TempDir()
-	devboxPath := filepath.Join(dir, "workspace.yml")
-	if err := os.WriteFile(devboxPath, []byte(`schema_version: "1"
+	workspacePath := filepath.Join(dir, "workspace.yml")
+	if err := os.WriteFile(workspacePath, []byte(`schema_version: "1"
 project:
   name: mixed
-  prefix: devbox
+  prefix: dwe
 `), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	devboxDir := filepath.Join(dir, "workspace")
-	if err := os.MkdirAll(devboxDir, 0o755); err != nil {
+	workspaceDir := filepath.Join(dir, "workspace")
+	if err := os.MkdirAll(workspaceDir, 0o755); err != nil {
 		t.Fatal(err)
 	}
 
@@ -88,7 +88,7 @@ project:
 		"infra": "type: infra\ncontainer: infra\n",
 	}
 	for name, content := range services {
-		svcDir := filepath.Join(devboxDir, "services", name)
+		svcDir := filepath.Join(workspaceDir, "services", name)
 		if err := os.MkdirAll(svcDir, 0o755); err != nil {
 			t.Fatal(err)
 		}
@@ -109,19 +109,19 @@ project:
         cmd: 'true'
 `
 	for _, name := range deployFor {
-		svcDeployPath := filepath.Join(devboxDir, "services", name, "deploy.yml")
+		svcDeployPath := filepath.Join(workspaceDir, "services", name, "deploy.yml")
 		if err := os.WriteFile(svcDeployPath, []byte(deployBody), 0o644); err != nil {
 			t.Fatal(err)
 		}
 	}
-	return devboxPath
+	return workspacePath
 }
 
 // TestResolveServicePlan_infraWithDeploy confirms that ResolveServicePlan accepts
 // a non-app (infra) service when it has a deploy.yml.
 func TestResolveServicePlan_infraWithDeploy(t *testing.T) {
-	devboxPath := writeMixedTypeFixture(t, "db")
-	cfg, err := config.LoadConfig(devboxPath)
+	workspacePath := writeMixedTypeFixture(t, "db")
+	cfg, err := config.LoadConfig(workspacePath)
 	if err != nil {
 		t.Fatalf("LoadConfig: %v", err)
 	}
@@ -137,8 +137,8 @@ func TestResolveServicePlan_infraWithDeploy(t *testing.T) {
 // TestResolveServicePlan_noDeployFile returns ErrServiceNoDeployFile when the
 // named service exists but has no deploy.yml.
 func TestResolveServicePlan_noDeployFile(t *testing.T) {
-	devboxPath := writeMixedTypeFixture(t, "")
-	cfg, err := config.LoadConfig(devboxPath)
+	workspacePath := writeMixedTypeFixture(t, "")
+	cfg, err := config.LoadConfig(workspacePath)
 	if err != nil {
 		t.Fatalf("LoadConfig: %v", err)
 	}
@@ -155,8 +155,8 @@ func TestResolveServicePlan_noDeployFile(t *testing.T) {
 // deploy enumerates every enabled service that has a deploy.yml, not just apps.
 func TestResolveServicesPlan_enumeratesAllEnabledWithDeployFile(t *testing.T) {
 	// app + infra both mandatory (enabled) + have deploy.yml; tool has neither.
-	devboxPath := writeThreeServiceFixture(t, []string{"app", "infra"}, []string{"app", "infra"})
-	cfg, err := config.LoadConfig(devboxPath)
+	workspacePath := writeThreeServiceFixture(t, []string{"app", "infra"}, []string{"app", "infra"})
+	cfg, err := config.LoadConfig(workspacePath)
 	if err != nil {
 		t.Fatalf("LoadConfig: %v", err)
 	}
@@ -183,8 +183,8 @@ func TestResolveServicesPlan_enumeratesAllEnabledWithDeployFile(t *testing.T) {
 // (disabled by default) with a deploy.yml are excluded from full deploy.
 func TestResolveServicesPlan_skipsDisabled(t *testing.T) {
 	// app is mandatory (enabled), infra is not mandatory (disabled); both have deploy.yml.
-	devboxPath := writeThreeServiceFixture(t, []string{"app", "infra"}, []string{"app"})
-	cfg, err := config.LoadConfig(devboxPath)
+	workspacePath := writeThreeServiceFixture(t, []string{"app", "infra"}, []string{"app"})
+	cfg, err := config.LoadConfig(workspacePath)
 	if err != nil {
 		t.Fatalf("LoadConfig: %v", err)
 	}
@@ -203,8 +203,8 @@ func TestResolveServicesPlan_skipsDisabled(t *testing.T) {
 // --service <tool> with deploy.yml works whether or not the service is enabled.
 func TestResolveServicePlan_toolWithDeployExplicitOverridesEnabled(t *testing.T) {
 	// tool is not mandatory (disabled), but has deploy.yml; --service should work.
-	devboxPath := writeThreeServiceFixture(t, []string{"tool"}, nil)
-	cfg, err := config.LoadConfig(devboxPath)
+	workspacePath := writeThreeServiceFixture(t, []string{"tool"}, nil)
+	cfg, err := config.LoadConfig(workspacePath)
 	if err != nil {
 		t.Fatalf("LoadConfig: %v", err)
 	}
@@ -221,23 +221,23 @@ func TestResolveServicePlan_toolWithDeployExplicitOverridesEnabled(t *testing.T)
 // names a tool fails LoadConfig.
 func TestLoadConfig_rejectsDependsOnTool(t *testing.T) {
 	dir := t.TempDir()
-	devboxPath := filepath.Join(dir, "workspace.yml")
-	if err := os.WriteFile(devboxPath, []byte(`schema_version: "1"
+	workspacePath := filepath.Join(dir, "workspace.yml")
+	if err := os.WriteFile(workspacePath, []byte(`schema_version: "1"
 project:
   name: laravel
-  prefix: devbox
+  prefix: dwe
 `), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	devboxDir := filepath.Join(dir, "workspace")
-	if err := os.MkdirAll(devboxDir, 0o755); err != nil {
+	workspaceDir := filepath.Join(dir, "workspace")
+	if err := os.MkdirAll(workspaceDir, 0o755); err != nil {
 		t.Fatal(err)
 	}
 	for name, content := range map[string]string{
 		"main":    "type: app\ncontainer: app-main\nrequired: true\ndir: ./services/main\ndepends_on:\n  - adminer\n",
 		"adminer": "type: tool\ncontainer: adminer\n",
 	} {
-		svcDir := filepath.Join(devboxDir, "services", name)
+		svcDir := filepath.Join(workspaceDir, "services", name)
 		if err := os.MkdirAll(svcDir, 0o755); err != nil {
 			t.Fatal(err)
 		}
@@ -245,7 +245,7 @@ project:
 			t.Fatal(err)
 		}
 	}
-	_, err := config.LoadConfig(devboxPath)
+	_, err := config.LoadConfig(workspacePath)
 	if err == nil {
 		t.Fatal("expected ErrDependsOnTool")
 	}

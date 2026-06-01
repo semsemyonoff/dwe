@@ -1853,7 +1853,7 @@ func TestValidate_ComposeArgsRejectedOnDevbox(t *testing.T) {
 	}
 	err := cmd.Validate()
 	if err == nil || !strings.Contains(err.Error(), "compose_args") {
-		t.Errorf("expected compose_args rejection for type=devbox, got %v", err)
+		t.Errorf("expected compose_args rejection for type=dwe, got %v", err)
 	}
 }
 
@@ -1907,7 +1907,7 @@ func TestValidate_WorkdirFromRejectedOnDevbox(t *testing.T) {
 	}
 	err := cmd.Validate()
 	if err == nil || !strings.Contains(err.Error(), "workdir_from") {
-		t.Errorf("expected workdir_from rejection for type=devbox, got %v", err)
+		t.Errorf("expected workdir_from rejection for type=dwe, got %v", err)
 	}
 }
 
@@ -1935,7 +1935,7 @@ func TestValidate_WorkdirRejectedOnDevbox(t *testing.T) {
 	}
 	err := cmd.Validate()
 	if err == nil || !strings.Contains(err.Error(), "workdir") {
-		t.Errorf("expected workdir rejection for type=devbox, got %v", err)
+		t.Errorf("expected workdir rejection for type=dwe, got %v", err)
 	}
 }
 
@@ -2109,7 +2109,7 @@ commands:
 }
 
 func TestParseCommandFile_PerTypeAllowlist_Devbox(t *testing.T) {
-	// Valid: devbox with cmd
+	// Valid: dwe with cmd
 	yaml := `
 commands:
   test:
@@ -2118,7 +2118,7 @@ commands:
 `
 	cf, err := ParseCommandFile([]byte(yaml))
 	if err != nil {
-		t.Errorf("expected valid devbox command to parse, got %v", err)
+		t.Errorf("expected valid dwe command to parse, got %v", err)
 	}
 	if cf == nil {
 		t.Fatal("expected non-nil CommandFile")
@@ -2126,7 +2126,7 @@ commands:
 }
 
 func TestParseCommandFile_PerTypeAllowlist_DevboxRejectWorkdir(t *testing.T) {
-	// Invalid: devbox with workdir
+	// Invalid: dwe with workdir
 	yaml := `
 commands:
   test:
@@ -2136,7 +2136,7 @@ commands:
 `
 	_, err := ParseCommandFile([]byte(yaml))
 	if err == nil {
-		t.Error("expected parse error for devbox command with workdir field")
+		t.Error("expected parse error for dwe command with workdir field")
 	}
 	if !strings.Contains(err.Error(), "workdir") {
 		t.Errorf("expected 'workdir not allowed' in error, got %v", err)

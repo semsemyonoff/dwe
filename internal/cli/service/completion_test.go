@@ -17,15 +17,15 @@ import (
 func makeServiceProject(t *testing.T) string {
 	t.Helper()
 	dir := t.TempDir()
-	devboxDir := filepath.Join(dir, "workspace")
-	if err := os.MkdirAll(devboxDir, 0o755); err != nil {
+	workspaceDir := filepath.Join(dir, "workspace")
+	if err := os.MkdirAll(workspaceDir, 0o755); err != nil {
 		t.Fatal(err)
 	}
 	if err := os.WriteFile(filepath.Join(dir, "workspace.yml"), []byte("schema_version: \"2\"\n"), 0o644); err != nil {
 		t.Fatal(err)
 	}
 	defaults := "project:\n  name: test\n  prefix: test\nservices:\n  api:\n    enabled: true\n  worker:\n    enabled: false\n"
-	if err := os.WriteFile(filepath.Join(devboxDir, "defaults.yml"), []byte(defaults), 0o644); err != nil {
+	if err := os.WriteFile(filepath.Join(workspaceDir, "defaults.yml"), []byte(defaults), 0o644); err != nil {
 		t.Fatal(err)
 	}
 	for name, content := range map[string]string{
@@ -33,7 +33,7 @@ func makeServiceProject(t *testing.T) string {
 		"api":    "type: app\ncontainer: app-api\n",
 		"worker": "type: app\ncontainer: app-worker\n",
 	} {
-		svcDir := filepath.Join(devboxDir, "services", name)
+		svcDir := filepath.Join(workspaceDir, "services", name)
 		if err := os.MkdirAll(svcDir, 0o755); err != nil {
 			t.Fatal(err)
 		}

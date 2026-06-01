@@ -40,7 +40,7 @@ func mkGitDir(t *testing.T, hubDir string) {
 // makeGitCfg returns a DweConfig configured for git rendering tests.
 func makeGitCfg(name string) *config.DweConfig {
 	return &config.DweConfig{
-		Project: config.ProjectConfig{Name: "test", Prefix: "devbox"},
+		Project: config.ProjectConfig{Name: "test", Prefix: "dwe"},
 		Services: map[string]config.ServiceConfig{
 			name: {
 				Type:      "app",
@@ -78,14 +78,14 @@ func TestRenderGitHooksForService_implicitPackMissing(t *testing.T) {
 func TestNewGitCmd_happyPath(t *testing.T) {
 	projectRoot := t.TempDir()
 
-	devboxYAML := `schema_version: "2"
+	cfgYAML := `schema_version: "2"
 project:
   name: test-project
 services:
   api:
     enabled: true
 `
-	if err := os.WriteFile(filepath.Join(projectRoot, "workspace.yml"), []byte(devboxYAML), 0o644); err != nil {
+	if err := os.WriteFile(filepath.Join(projectRoot, "workspace.yml"), []byte(cfgYAML), 0o644); err != nil {
 		t.Fatalf("write workspace.yml: %v", err)
 	}
 	setupServicesConfig(t, projectRoot, `

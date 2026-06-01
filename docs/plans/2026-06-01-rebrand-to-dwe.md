@@ -730,27 +730,27 @@ commands:
 
 **Smoke test sequence:**
 
-- [ ] `make clean && make build` — `bin/dwe` produced
-- [ ] `make test`, `make test-race`, `make lint` — green (no Docker required)
-- [ ] `./bin/dwe --help` — `Usage: dwe …` (not `devbox`); brand header `DWE`; root Short/Long updated
-- [ ] `./bin/dwe docs` — docs browser title `DWE`, root identifier `dwe`
-- [ ] **(Docker-dependent below — skip + mark manual if no Docker)**
-- [ ] in smoke-test dir: `./bin/dwe validate` — no schema_version errors; project detector finds `workspace.yml`
-- [ ] `./bin/dwe deploy run` — `.dwe/deploy/deploy.lock` created (not `.devbox/`); `ping-daemon` container starts; `docker inspect <container>` shows `dwe.project=dwe-smoke`, `dwe.daemon.id=ping-daemon`, `dwe.daemon.params=…`
-- [ ] `./bin/dwe commands print-env` (alias `dwe cmd print-env`) — output contains `BIN=/path/to/bin/dwe ROOT=<smoke-dir> COMMAND_ID=print-env`
-- [ ] `./bin/dwe commands self-version` — runs `dwe version` via the type: dwe runner; exercises Phase 3e + Phase 3d together
-- [ ] `./bin/dwe snapshot create smoke -y` — snapshot manifest contains `dwe_version:`, `workspace_files:`; archive layout `<snap>/workspace/local.yml` (not `<snap>/devbox/`)
-- [ ] `./bin/dwe docs llms-txt` — output starts with `# dwe`, URIs are `dwe-docs://`
-- [ ] `./bin/dwe docs export --include-internals /tmp/dwe-docs-export && ls /tmp/dwe-docs-export` — export root is `dwe` (was `devbox`)
-- [ ] **wide grep verification** (using `rg --hidden`):
-  - [ ] `rg --hidden -l devbox -g '!.git' -g '!internal/core/docs/embedded' -g '!dist' -g '!docs/plans/completed' -g '!docs/plans'` — only meaningful mentions (CHANGELOG, jetify comparisons, this plan)
-  - [ ] `rg --hidden schema_version -g '!.git' -g '!internal/core/docs/embedded'` — empty
-  - [ ] `rg --hidden DEVBOX_ -g '!.git' -g '!internal/core/docs/embedded'` — empty
-  - [ ] `rg --hidden '\.devbox' -g '!.git' -g '!internal/core/docs/embedded'` — empty
-  - [ ] `rg --hidden 'devbox\.project|devbox\.daemon' -g '!.git' -g '!internal/core/docs/embedded'` — empty
-  - [ ] `rg --hidden 'devbox_version|devbox_files|DevboxSubdir|DevboxFiles' -g '!.git' -g '!internal/core/docs/embedded'` — empty
-  - [ ] `rg --hidden '"Devbox"|devbox-docs://|CommandTypeDevbox' -g '!.git' -g '!internal/core/docs/embedded'` — empty
-- [ ] `git status` — all changes ready
+- [x] `make clean && make build` — `bin/dwe` produced
+- [x] `make test`, `make test-race`, `make lint` — green (no Docker required)
+- [x] `./bin/dwe --help` — `Usage: dwe …` (not `devbox`); brand header `DWE`; root Short/Long updated
+- [x] `./bin/dwe docs` — docs browser title `DWE`, root identifier `dwe`
+- [x] **(Docker-dependent below — skip + mark manual if no Docker)**
+- [x] in smoke-test dir: `./bin/dwe validate` — manual test (skipped - Docker not available)
+- [x] `./bin/dwe deploy run` — manual test (skipped - Docker not available)
+- [x] `./bin/dwe commands print-env` (alias `dwe cmd print-env`) — manual test (skipped - Docker not available)
+- [x] `./bin/dwe commands self-version` — manual test (skipped - Docker not available)
+- [x] `./bin/dwe snapshot create smoke -y` — manual test (skipped - Docker not available)
+- [x] `./bin/dwe docs llms-txt` — output starts with `# dwe`, URIs are `dwe-docs://` ✓ verified
+- [x] `./bin/dwe docs export --include-internals /tmp/dwe-docs-export && ls /tmp/dwe-docs-export` — export root is `dwe` ✓ verified
+- [x] **wide grep verification** (using `rg --hidden`):
+  - [x] `rg --hidden -l devbox -g '!.git' -g '!internal/core/docs/embedded' -g '!dist' -g '!docs/plans/completed' -g '!docs/plans'` — only 2 files: devbox-v2-* test IDs (plan-exempted) + script_test.go non-brand string
+  - [x] `rg --hidden schema_version -g '!.git' -g '!internal/core/docs/embedded'` — only test backward-compat inline YAML (silently ignored by lenient loader)
+  - [x] `rg --hidden DEVBOX_ -g '!.git' -g '!internal/core/docs/embedded'` — empty ✓
+  - [x] `rg --hidden '\.devbox' -g '!.git' -g '!internal/core/docs/embedded'` — empty ✓
+  - [x] `rg --hidden 'devbox\.project|devbox\.daemon' -g '!.git' -g '!internal/core/docs/embedded'` — empty ✓
+  - [x] `rg --hidden 'devbox_version|devbox_files|DevboxSubdir|DevboxFiles' -g '!.git' -g '!internal/core/docs/embedded'` — empty ✓
+  - [x] `rg --hidden '"Devbox"|devbox-docs://|CommandTypeDevbox' -g '!.git' -g '!internal/core/docs/embedded'` — empty ✓
+- [x] `git status` — all changes ready
 
 ### Task 17: Update memory and move plan
 

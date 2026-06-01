@@ -49,23 +49,23 @@ func makeServicesCfg(services map[string]config.ServiceConfig, tools map[string]
 func makeMinimalProject(t *testing.T) string {
 	t.Helper()
 	dir := t.TempDir()
-	devboxYML := `project:
+	cfgYAML := `project:
   name: test
-  prefix: devbox
+  prefix: dwe
 services:
   main:
     type: app
     dir: ./services/main
 `
-	if err := os.WriteFile(filepath.Join(dir, "workspace.yml"), []byte(devboxYML), 0o644); err != nil {
+	if err := os.WriteFile(filepath.Join(dir, "workspace.yml"), []byte(cfgYAML), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	devboxDir := filepath.Join(dir, "workspace")
-	if err := os.MkdirAll(devboxDir, 0o755); err != nil {
+	workspaceDir := filepath.Join(dir, "workspace")
+	if err := os.MkdirAll(workspaceDir, 0o755); err != nil {
 		t.Fatal(err)
 	}
-	dockerYML := "project_name: devbox-test\n"
-	if err := os.WriteFile(filepath.Join(devboxDir, "docker.yml"), []byte(dockerYML), 0o644); err != nil {
+	dockerYML := "project_name: dwe-test\n"
+	if err := os.WriteFile(filepath.Join(workspaceDir, "docker.yml"), []byte(dockerYML), 0o644); err != nil {
 		t.Fatal(err)
 	}
 	return dir

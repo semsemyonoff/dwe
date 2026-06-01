@@ -9,8 +9,8 @@ import (
 // Action represents a typed action (used in step bodies and check: clauses).
 // Exactly one of the four types must be set:
 //   - shell:   direct shell command via os/exec
-//   - devbox:  public devbox CLI subcommand
-//   - command: devbox command ID reference (workflow context)
+//   - dwe:     public dwe CLI subcommand
+//   - command: dwe command ID reference (workflow context)
 //   - builtin: engine-internal action
 //
 // Cmd is the payload for all four types (command string or builtin name).

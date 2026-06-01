@@ -96,7 +96,7 @@ func TestLoad_RoundTrip(t *testing.T) {
 }
 
 // TestLoad_UnknownFields tests that state.yml uses lenient YAML decoding —
-// unknown fields are silently ignored so a newer devbox version's state file
+// unknown fields are silently ignored so a newer dwe version's state file
 // can be read by an older version without error.
 func TestLoad_UnknownFields(t *testing.T) {
 	tmpDir := t.TempDir()
@@ -138,8 +138,8 @@ func TestSave_CreatesParentDirectory(t *testing.T) {
 	statePath := filepath.Join(tmpDir, "subdir", "state.yml")
 
 	state := &ProjectState{
-		Project:       &ProjectLevelState{},
-		Services:      make(map[string]*ServiceState),
+		Project:  &ProjectLevelState{},
+		Services: make(map[string]*ServiceState),
 	}
 
 	err := Save(statePath, state)
@@ -160,8 +160,8 @@ func TestSave_FilePermissions(t *testing.T) {
 	statePath := filepath.Join(tmpDir, "state.yml")
 
 	state := &ProjectState{
-		Project:       &ProjectLevelState{},
-		Services:      make(map[string]*ServiceState),
+		Project:  &ProjectLevelState{},
+		Services: make(map[string]*ServiceState),
 	}
 
 	err := Save(statePath, state)
@@ -199,8 +199,8 @@ func TestRemove_DeletesFile(t *testing.T) {
 
 	// Create file
 	state := &ProjectState{
-		Project:       &ProjectLevelState{},
-		Services:      make(map[string]*ServiceState),
+		Project:  &ProjectLevelState{},
+		Services: make(map[string]*ServiceState),
 	}
 	err := Save(statePath, state)
 	require.NoError(t, err)
@@ -218,7 +218,7 @@ func TestRemoveService_LastServiceRemoved(t *testing.T) {
 	statePath := filepath.Join(tmpDir, "state.yml")
 
 	state := &ProjectState{
-		Project:       &ProjectLevelState{},
+		Project: &ProjectLevelState{},
 		Services: map[string]*ServiceState{
 			"main": {
 				Status:     StatusDeployed,
@@ -246,7 +246,7 @@ func TestRemoveService_PreservesOtherServices(t *testing.T) {
 	statePath := filepath.Join(tmpDir, "state.yml")
 
 	state := &ProjectState{
-		Project:       &ProjectLevelState{},
+		Project: &ProjectLevelState{},
 		Services: map[string]*ServiceState{
 			"main": {
 				Status:     StatusDeployed,
@@ -344,8 +344,8 @@ func TestRecompute_ProjectStatusFromServices(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			state := &ProjectState{
-				Project:       &ProjectLevelState{},
-				Services:      tt.services,
+				Project:  &ProjectLevelState{},
+				Services: tt.services,
 			}
 
 			Recompute(state)

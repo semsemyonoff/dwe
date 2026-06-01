@@ -21,11 +21,11 @@ import (
 func TestRunRun_PreflightBlocksBeforeGitProbe(t *testing.T) {
 	dir := t.TempDir()
 	cfgPath := makeMinimalDevboxYML(t, dir)
-	devboxDir := filepath.Join(dir, "workspace")
-	if err := os.MkdirAll(devboxDir, 0o755); err != nil {
+	workspaceDir := filepath.Join(dir, "workspace")
+	if err := os.MkdirAll(workspaceDir, 0o755); err != nil {
 		t.Fatal(err)
 	}
-	writeLifecycleYML(t, devboxDir, "ready")
+	writeLifecycleYML(t, workspaceDir, "ready")
 
 	prevPF := PreflightFunc
 	prevGP := GitProbeFunc
@@ -78,11 +78,11 @@ func TestRunStop_PreflightBlocksBeforePhases(t *testing.T) {
 func TestRunRun_SkipPreflightThreaded(t *testing.T) {
 	dir := t.TempDir()
 	cfgPath := makeMinimalDevboxYML(t, dir)
-	devboxDir := filepath.Join(dir, "workspace")
-	if err := os.MkdirAll(devboxDir, 0o755); err != nil {
+	workspaceDir := filepath.Join(dir, "workspace")
+	if err := os.MkdirAll(workspaceDir, 0o755); err != nil {
 		t.Fatal(err)
 	}
-	writeLifecycleYML(t, devboxDir, "ready")
+	writeLifecycleYML(t, workspaceDir, "ready")
 
 	prev := PreflightFunc
 	t.Cleanup(func() { PreflightFunc = prev })
@@ -104,11 +104,11 @@ func TestRunRun_SkipPreflightThreaded(t *testing.T) {
 func TestRunRestart_PropagatesSkipPreflight(t *testing.T) {
 	dir := t.TempDir()
 	cfgPath := makeMinimalDevboxYML(t, dir)
-	devboxDir := filepath.Join(dir, "workspace")
-	if err := os.MkdirAll(devboxDir, 0o755); err != nil {
+	workspaceDir := filepath.Join(dir, "workspace")
+	if err := os.MkdirAll(workspaceDir, 0o755); err != nil {
 		t.Fatal(err)
 	}
-	writeLifecycleYML(t, devboxDir, "ready")
+	writeLifecycleYML(t, workspaceDir, "ready")
 
 	prev := PreflightFunc
 	t.Cleanup(func() { PreflightFunc = prev })

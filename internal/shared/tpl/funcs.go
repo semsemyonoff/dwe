@@ -65,7 +65,7 @@ func buildFuncMap() template.FuncMap {
 	// violates the hermetic/no-random contract. Remove it explicitly.
 	delete(fm, "shuffle")
 	// hello is exposed by the std registry as a debug/test artifact ("Hello!").
-	// It is not a useful helper for devbox templates and pollutes the API surface.
+	// It is not a useful helper for dwe templates and pollutes the API surface.
 	delete(fm, "hello")
 	return fm
 }

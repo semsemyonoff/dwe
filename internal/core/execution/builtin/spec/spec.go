@@ -15,7 +15,7 @@ import (
 
 // ExecContext holds the runtime context passed to every builtin execution.
 type ExecContext struct {
-	// Config is the merged devbox configuration.
+	// Config is the merged dwe configuration.
 	Config *config.DweConfig
 	// DockerConfig is the resolved docker policy. Callers must pre-normalise
 	// missing-file (os.ErrNotExist) to &config.DockerConfig{} so builtins can

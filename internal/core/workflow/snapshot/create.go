@@ -170,7 +170,7 @@ func Create(ctx context.Context, p CreateParams) (*CreateResult, error) {
 		return nil, fmt.Errorf("snapshot: create snapshot dir: %w", err)
 	}
 
-	devboxFiles, err := captureWorkspaceFiles(p.BaseDir, snapDir, p.SnapCfg.LocalYML.PreserveKeys)
+	workspaceFiles, err := captureWorkspaceFiles(p.BaseDir, snapDir, p.SnapCfg.LocalYML.PreserveKeys)
 	if err != nil {
 		if backupDir != "" {
 			_ = os.RemoveAll(snapDir)
@@ -239,7 +239,7 @@ func Create(ctx context.Context, p CreateParams) (*CreateResult, error) {
 	m.DweVersion = p.DweVersion
 	m.Variant = p.Variant
 	m.Artifacts = artifacts
-	m.WorkspaceFiles = devboxFiles
+	m.WorkspaceFiles = workspaceFiles
 	m.LastCreate = &meta.LastCreate{
 		At:         createdAt,
 		Status:     status,

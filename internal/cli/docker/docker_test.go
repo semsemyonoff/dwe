@@ -19,7 +19,7 @@ func TestDockerPipelineBuildsCompose(t *testing.T) {
 		},
 	}
 	dockerCfg := &config.DockerConfig{
-		ProjectName: "devbox-laravel",
+		ProjectName: "dwe-laravel",
 		Args: config.DockerArgs{
 			Global:  []string{"--ansi", "always", "--progress", "tty"},
 			Up:      []string{"-d", "--remove-orphans"},
@@ -39,7 +39,7 @@ func TestDockerPipelineBuildsCompose(t *testing.T) {
 	args := compose.BuildArgs("up", "redis")
 	expected := []string{
 		"compose",
-		"-p", "devbox-laravel",
+		"-p", "dwe-laravel",
 		"-f", "compose.yaml",
 		"--ansi", "always", "--progress", "tty",
 		"up",
@@ -52,7 +52,7 @@ func TestDockerPipelineBuildsCompose(t *testing.T) {
 	args = compose.BuildArgs("down")
 	expected = []string{
 		"compose",
-		"-p", "devbox-laravel",
+		"-p", "dwe-laravel",
 		"-f", "compose.yaml",
 		"--ansi", "always", "--progress", "tty",
 		"down",
@@ -63,7 +63,7 @@ func TestDockerPipelineBuildsCompose(t *testing.T) {
 	args = compose.BuildArgs("logs", "nginx")
 	expected = []string{
 		"compose",
-		"-p", "devbox-laravel",
+		"-p", "dwe-laravel",
 		"-f", "compose.yaml",
 		"--ansi", "always", "--progress", "tty",
 		"logs",
@@ -76,7 +76,7 @@ func TestDockerPipelineBuildsCompose(t *testing.T) {
 	args = compose.BuildArgs("exec", "app-main", "--", "php", "artisan", "--version")
 	expected = []string{
 		"compose",
-		"-p", "devbox-laravel",
+		"-p", "dwe-laravel",
 		"-f", "compose.yaml",
 		"--ansi", "always", "--progress", "tty",
 		"exec",
@@ -88,7 +88,7 @@ func TestDockerPipelineBuildsCompose(t *testing.T) {
 	args = compose.BuildArgs("run", "app-main", "--", "composer", "install")
 	expected = []string{
 		"compose",
-		"-p", "devbox-laravel",
+		"-p", "dwe-laravel",
 		"-f", "compose.yaml",
 		"--ansi", "always", "--progress", "tty",
 		"run",
@@ -509,7 +509,7 @@ func TestLegacyImageCommandMapping(t *testing.T) {
 		expectedArgs    []string
 	}{
 		{
-			name:         "image_pull -> devbox docker pull",
+			name:         "image_pull -> dwe docker pull",
 			legacyTarget: "image_pull",
 			allFlag:      false,
 			forceFlag:    false,
@@ -520,7 +520,7 @@ func TestLegacyImageCommandMapping(t *testing.T) {
 			expectedArgs: []string{},
 		},
 		{
-			name:         "image_pull_all -> devbox docker pull --all",
+			name:         "image_pull_all -> dwe docker pull --all",
 			legacyTarget: "image_pull_all",
 			allFlag:      true,
 			forceFlag:    false,
@@ -531,7 +531,7 @@ func TestLegacyImageCommandMapping(t *testing.T) {
 			expectedArgs: []string{},
 		},
 		{
-			name:         "image_rebuild -> devbox docker build",
+			name:         "image_rebuild -> dwe docker build",
 			legacyTarget: "image_rebuild",
 			allFlag:      false,
 			forceFlag:    false,
@@ -542,7 +542,7 @@ func TestLegacyImageCommandMapping(t *testing.T) {
 			expectedArgs: []string{},
 		},
 		{
-			name:         "image_rebuild_% -> devbox docker build <service>",
+			name:         "image_rebuild_% -> dwe docker build <service>",
 			legacyTarget: "image_rebuild_%",
 			allFlag:      false,
 			forceFlag:    false,
@@ -553,7 +553,7 @@ func TestLegacyImageCommandMapping(t *testing.T) {
 			expectedArgs: []string{"svc-x"},
 		},
 		{
-			name:         "image_rebuild_force -> devbox docker build --force",
+			name:         "image_rebuild_force -> dwe docker build --force",
 			legacyTarget: "image_rebuild_force",
 			allFlag:      false,
 			forceFlag:    true,
@@ -564,7 +564,7 @@ func TestLegacyImageCommandMapping(t *testing.T) {
 			expectedArgs: []string{"--no-cache", "--pull"},
 		},
 		{
-			name:         "image_rebuild_all -> devbox docker build --all",
+			name:         "image_rebuild_all -> dwe docker build --all",
 			legacyTarget: "image_rebuild_all",
 			allFlag:      true,
 			forceFlag:    false,
@@ -575,7 +575,7 @@ func TestLegacyImageCommandMapping(t *testing.T) {
 			expectedArgs: []string{},
 		},
 		{
-			name:         "image_rebuild_all_force -> devbox docker build --all --force",
+			name:         "image_rebuild_all_force -> dwe docker build --all --force",
 			legacyTarget: "image_rebuild_all_force",
 			allFlag:      true,
 			forceFlag:    true,

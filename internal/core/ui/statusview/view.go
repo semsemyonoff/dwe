@@ -54,7 +54,7 @@ type DaemonRow struct {
 }
 
 // GitWorkspaceRow holds data for one row in the git workspace status table.
-// Service is the devbox service name; Dir is the configured directory.
+// Service is the dwe service name; Dir is the configured directory.
 // When the service directory has no own `.git` (boundary check fails),
 // Branch / SHA / AheadBehind are empty, Dirty is false, and Err is nil
 // (the normal "service has no own repo" case — rendered as blank cells).

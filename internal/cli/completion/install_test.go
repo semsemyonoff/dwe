@@ -16,7 +16,7 @@ import (
 
 // buildCompletionTestRoot builds a minimal cobra tree containing the
 // install/uninstall subcommands under a synthetic "completion" parent. It
-// stands in for the real devbox root in unit tests without dragging in the
+// stands in for the real dwe root in unit tests without dragging in the
 // project-resolution PersistentPreRunE chain.
 func buildCompletionTestRoot() *cobra.Command {
 	root := &cobra.Command{Use: "dwe"}

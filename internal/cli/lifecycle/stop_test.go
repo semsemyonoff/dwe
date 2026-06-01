@@ -62,7 +62,7 @@ func TestStopCmd_RegisteredAtRoot(t *testing.T) {
 }
 
 func TestRunStop_MissingLifecycleYML(t *testing.T) {
-	// Default stop config includes a type:devbox step; stub to prevent recursion.
+	// Default stop config includes a type:dwe step; stub to prevent recursion.
 	stubRunPhases(t)
 	dir := t.TempDir()
 	cfgPath := makeMinimalDevboxYML(t, dir)
@@ -85,17 +85,17 @@ func TestRunStop_MissingLifecycleYML(t *testing.T) {
 }
 
 func TestRunStop_MissingStopSection(t *testing.T) {
-	// Default stop config includes a type:devbox step; stub to prevent recursion.
+	// Default stop config includes a type:dwe step; stub to prevent recursion.
 	stubRunPhases(t)
 	dir := t.TempDir()
 	cfgPath := makeMinimalDevboxYML(t, dir)
 
-	devboxDir := filepath.Join(dir, "workspace")
-	if err := os.MkdirAll(devboxDir, 0755); err != nil {
-		t.Fatalf("creating devbox dir: %v", err)
+	workspaceDir := filepath.Join(dir, "workspace")
+	if err := os.MkdirAll(workspaceDir, 0755); err != nil {
+		t.Fatalf("creating workspace dir: %v", err)
 	}
 	lifecycleYAML := "run:\n  final_message: ready\n  phases: []\n"
-	if err := os.WriteFile(filepath.Join(devboxDir, "lifecycle.yml"), []byte(lifecycleYAML), 0644); err != nil {
+	if err := os.WriteFile(filepath.Join(workspaceDir, "lifecycle.yml"), []byte(lifecycleYAML), 0644); err != nil {
 		t.Fatalf("writing lifecycle.yml: %v", err)
 	}
 
@@ -123,7 +123,7 @@ func writeStopTestConfig(t *testing.T, services map[string]struct {
 }) string {
 	t.Helper()
 	dir := t.TempDir()
-	content := "schema_version: \"2\"\nproject:\n  name: test\n  prefix: devbox\n"
+	content := "schema_version: \"2\"\nproject:\n  name: test\n  prefix: dwe\n"
 	if err := os.WriteFile(filepath.Join(dir, "workspace.yml"), []byte(content), 0o644); err != nil {
 		t.Fatalf("write workspace.yml: %v", err)
 	}

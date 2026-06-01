@@ -54,11 +54,11 @@ func TestRunRun_FiresNotifyOnSuccess(t *testing.T) {
 	rec := installRecordingNotifier(t)
 	dir := t.TempDir()
 	cfgPath := makeMinimalDevboxYML(t, dir)
-	devboxDir := filepath.Join(dir, "workspace")
-	if err := os.MkdirAll(devboxDir, 0755); err != nil {
+	workspaceDir := filepath.Join(dir, "workspace")
+	if err := os.MkdirAll(workspaceDir, 0755); err != nil {
 		t.Fatalf("mkdir: %v", err)
 	}
-	writeLifecycleYML(t, devboxDir, "ready")
+	writeLifecycleYML(t, workspaceDir, "ready")
 
 	if err := RunRun(RunContext{ConfigPath: cfgPath}); err != nil {
 		t.Fatalf("RunRun: %v", err)
@@ -89,11 +89,11 @@ func TestRunRun_FiresNotifyOnFailure(t *testing.T) {
 	dir := t.TempDir()
 	cfgPath := makeMinimalDevboxYML(t, dir)
 	// Write a lifecycle.yml with a YAML parse error to trigger a load failure.
-	devboxDir := filepath.Join(dir, "workspace")
-	if err := os.MkdirAll(devboxDir, 0755); err != nil {
+	workspaceDir := filepath.Join(dir, "workspace")
+	if err := os.MkdirAll(workspaceDir, 0755); err != nil {
 		t.Fatalf("mkdir: %v", err)
 	}
-	if err := os.WriteFile(filepath.Join(devboxDir, "lifecycle.yml"), []byte("run: [\ninvalid yaml\n"), 0644); err != nil {
+	if err := os.WriteFile(filepath.Join(workspaceDir, "lifecycle.yml"), []byte("run: [\ninvalid yaml\n"), 0644); err != nil {
 		t.Fatalf("writing lifecycle.yml: %v", err)
 	}
 
@@ -146,11 +146,11 @@ func TestRunRun_SkipNotify_NoEvent(t *testing.T) {
 	rec := installRecordingNotifier(t)
 	dir := t.TempDir()
 	cfgPath := makeMinimalDevboxYML(t, dir)
-	devboxDir := filepath.Join(dir, "workspace")
-	if err := os.MkdirAll(devboxDir, 0755); err != nil {
+	workspaceDir := filepath.Join(dir, "workspace")
+	if err := os.MkdirAll(workspaceDir, 0755); err != nil {
 		t.Fatalf("mkdir: %v", err)
 	}
-	writeLifecycleYML(t, devboxDir, "ready")
+	writeLifecycleYML(t, workspaceDir, "ready")
 
 	if err := RunRun(RunContext{ConfigPath: cfgPath, SkipNotify: true}); err != nil {
 		t.Fatalf("RunRun: %v", err)
@@ -166,8 +166,8 @@ func TestRunRestart_PropagatesSkipNotify(t *testing.T) {
 	rec := installRecordingNotifier(t)
 	dir := t.TempDir()
 	cfgPath := makeMinimalDevboxYML(t, dir)
-	devboxDir := filepath.Join(dir, "workspace")
-	if err := os.MkdirAll(devboxDir, 0755); err != nil {
+	workspaceDir := filepath.Join(dir, "workspace")
+	if err := os.MkdirAll(workspaceDir, 0755); err != nil {
 		t.Fatalf("mkdir: %v", err)
 	}
 	yaml := `stop:
@@ -187,7 +187,7 @@ run:
           type: shell
           cmd: "true"
 `
-	if err := os.WriteFile(filepath.Join(devboxDir, "lifecycle.yml"), []byte(yaml), 0644); err != nil {
+	if err := os.WriteFile(filepath.Join(workspaceDir, "lifecycle.yml"), []byte(yaml), 0644); err != nil {
 		t.Fatalf("write lifecycle.yml: %v", err)
 	}
 

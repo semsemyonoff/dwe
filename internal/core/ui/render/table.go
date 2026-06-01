@@ -124,7 +124,7 @@ func formatPortsCell(ports map[string]int) string {
 // pass false for tool/infra rows that have no source directory.
 //
 // HOSTS / PORTS columns are populated from ServiceTableRow.Hosts / .Ports —
-// devbox treats per-developer port and host overrides as a core feature, so
+// dwe treats per-developer port and host overrides as a core feature, so
 // these are always-visible built-in columns rather than opt-in extras.
 func ServicesTable(rows []ServiceTableRow, extraCols []string, withDirCol bool) string {
 	stringRows := make([][]string, len(rows))

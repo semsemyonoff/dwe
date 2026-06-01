@@ -253,26 +253,26 @@ func TestPrintCommandInspect_ScriptNilShellDefaultsSh(t *testing.T) {
 func makeMinimalProject(t *testing.T) string {
 	t.Helper()
 	dir := t.TempDir()
-	devboxYML := `project:
+	cfgYAML := `project:
   name: test
-  prefix: devbox
+  prefix: dwe
 `
-	if err := os.WriteFile(filepath.Join(dir, "workspace.yml"), []byte(devboxYML), 0o644); err != nil {
+	if err := os.WriteFile(filepath.Join(dir, "workspace.yml"), []byte(cfgYAML), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	devboxDir := filepath.Join(dir, "workspace")
-	if err := os.MkdirAll(devboxDir, 0o755); err != nil {
+	workspaceDir := filepath.Join(dir, "workspace")
+	if err := os.MkdirAll(workspaceDir, 0o755); err != nil {
 		t.Fatal(err)
 	}
-	svcDir := filepath.Join(devboxDir, "services", "main")
+	svcDir := filepath.Join(workspaceDir, "services", "main")
 	if err := os.MkdirAll(svcDir, 0o755); err != nil {
 		t.Fatal(err)
 	}
 	if err := os.WriteFile(filepath.Join(svcDir, "service.yml"), []byte("type: app\ndir: ./services/main\n"), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	dockerYML := "project_name: devbox-test\n"
-	if err := os.WriteFile(filepath.Join(devboxDir, "docker.yml"), []byte(dockerYML), 0o644); err != nil {
+	dockerYML := "project_name: dwe-test\n"
+	if err := os.WriteFile(filepath.Join(workspaceDir, "docker.yml"), []byte(dockerYML), 0o644); err != nil {
 		t.Fatal(err)
 	}
 	return dir

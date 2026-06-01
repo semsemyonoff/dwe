@@ -70,7 +70,7 @@ func makeServiceExecCtx(svc string, user UserMode, workdir string, mode ExecMode
 			Argv:    argv,
 		},
 		Render:  &tpl.RenderContext{Host: tpl.CurrentHostInfo()},
-		Config:  &config.DweConfig{Project: config.ProjectConfig{Prefix: "devbox", Name: "laravel"}},
+		Config:  &config.DweConfig{Project: config.ProjectConfig{Prefix: "dwe", Name: "laravel"}},
 		Params:  map[string]any{},
 		Context: map[string]any{},
 	}
@@ -79,7 +79,7 @@ func makeServiceExecCtx(svc string, user UserMode, workdir string, mode ExecMode
 func TestExecRunner_BuildCommand_ExecMode(t *testing.T) {
 	ctx := makeServiceExecCtx("app-main", "", "", ExecModeExec, "php artisan list", nil)
 	r := &ExecRunner{}
-	c, err := r.BuildCommand(context.Background(), ctx, testCompose("devbox-laravel", nil))
+	c, err := r.BuildCommand(context.Background(), ctx, testCompose("dwe-laravel", nil))
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -98,7 +98,7 @@ func TestExecRunner_BuildCommand_ExecMode(t *testing.T) {
 func TestExecRunner_BuildCommand_RunMode(t *testing.T) {
 	ctx := makeServiceExecCtx("app-main", "", "", ExecModeRun, "php artisan migrate", nil)
 	r := &ExecRunner{}
-	c, err := r.BuildCommand(context.Background(), ctx, testCompose("devbox-laravel", nil))
+	c, err := r.BuildCommand(context.Background(), ctx, testCompose("dwe-laravel", nil))
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -117,7 +117,7 @@ func TestExecRunner_BuildCommand_RunMode(t *testing.T) {
 func TestExecRunner_BuildCommand_UserRoot(t *testing.T) {
 	ctx := makeServiceExecCtx("app-main", UserModeRoot, "", ExecModeExec, "id", nil)
 	r := &ExecRunner{}
-	c, err := r.BuildCommand(context.Background(), ctx, testCompose("devbox-laravel", nil))
+	c, err := r.BuildCommand(context.Background(), ctx, testCompose("dwe-laravel", nil))
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -134,7 +134,7 @@ func TestExecRunner_BuildCommand_UserInternalSkipsFlag(t *testing.T) {
 		"main": {Container: "app-main", CLI: config.ServiceCLIConfig{User: "www-data"}},
 	}
 	r := &ExecRunner{}
-	c, err := r.BuildCommand(context.Background(), ctx, testCompose("devbox-laravel", nil))
+	c, err := r.BuildCommand(context.Background(), ctx, testCompose("dwe-laravel", nil))
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -151,7 +151,7 @@ func TestExecRunner_BuildCommand_EmptyUserFallsBackToCLIUser(t *testing.T) {
 		"main": {Container: "app-main", CLI: config.ServiceCLIConfig{User: "www-data"}},
 	}
 	r := &ExecRunner{}
-	c, err := r.BuildCommand(context.Background(), ctx, testCompose("devbox-laravel", nil))
+	c, err := r.BuildCommand(context.Background(), ctx, testCompose("dwe-laravel", nil))
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -168,7 +168,7 @@ func TestExecRunner_BuildCommand_EmptyUserNoCLIUserSkipsFlag(t *testing.T) {
 		"main": {Container: "app-main"},
 	}
 	r := &ExecRunner{}
-	c, err := r.BuildCommand(context.Background(), ctx, testCompose("devbox-laravel", nil))
+	c, err := r.BuildCommand(context.Background(), ctx, testCompose("dwe-laravel", nil))
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -185,7 +185,7 @@ func TestExecRunner_BuildCommand_ExplicitUserOverridesCLIUser(t *testing.T) {
 		"main": {Container: "app-main", CLI: config.ServiceCLIConfig{User: "www-data"}},
 	}
 	r := &ExecRunner{}
-	c, err := r.BuildCommand(context.Background(), ctx, testCompose("devbox-laravel", nil))
+	c, err := r.BuildCommand(context.Background(), ctx, testCompose("dwe-laravel", nil))
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -213,7 +213,7 @@ func TestExecRunner_BuildCommand_RunnerServiceUsesItsOwnCLIUser(t *testing.T) {
 		},
 		Render: &tpl.RenderContext{Host: tpl.CurrentHostInfo()},
 		Config: &config.DweConfig{
-			Project: config.ProjectConfig{Prefix: "devbox", Name: "laravel"},
+			Project: config.ProjectConfig{Prefix: "dwe", Name: "laravel"},
 			Services: map[string]config.ServiceConfig{
 				"main":      {Container: "app-main", CLI: config.ServiceCLIConfig{User: "www-data"}},
 				"installer": {Container: "app-installer", CLI: config.ServiceCLIConfig{User: "root"}},
@@ -223,7 +223,7 @@ func TestExecRunner_BuildCommand_RunnerServiceUsesItsOwnCLIUser(t *testing.T) {
 		Context: map[string]any{},
 	}
 	r := &ExecRunner{}
-	c, err := r.BuildCommand(context.Background(), ctx, testCompose("devbox-laravel", nil))
+	c, err := r.BuildCommand(context.Background(), ctx, testCompose("dwe-laravel", nil))
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -239,7 +239,7 @@ func TestExecRunner_BuildCommand_RunnerServiceUsesItsOwnCLIUser(t *testing.T) {
 func TestExecRunner_BuildCommand_UserCurrent(t *testing.T) {
 	ctx := makeServiceExecCtx("app-main", UserModeCurrent, "", ExecModeExec, "id", nil)
 	r := &ExecRunner{}
-	c, err := r.BuildCommand(context.Background(), ctx, testCompose("devbox-laravel", nil))
+	c, err := r.BuildCommand(context.Background(), ctx, testCompose("dwe-laravel", nil))
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -252,7 +252,7 @@ func TestExecRunner_BuildCommand_UserCurrent(t *testing.T) {
 func TestExecRunner_BuildCommand_Workdir(t *testing.T) {
 	ctx := makeServiceExecCtx("app-main", "", "/var/www", ExecModeExec, "ls", nil)
 	r := &ExecRunner{}
-	c, err := r.BuildCommand(context.Background(), ctx, testCompose("devbox-laravel", nil))
+	c, err := r.BuildCommand(context.Background(), ctx, testCompose("dwe-laravel", nil))
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -265,7 +265,7 @@ func TestExecRunner_BuildCommand_Workdir(t *testing.T) {
 func TestExecRunner_BuildCommand_Argv(t *testing.T) {
 	ctx := makeServiceExecCtx("app-main", "", "", ExecModeExec, "", []string{"php", "artisan", "list"})
 	r := &ExecRunner{}
-	c, err := r.BuildCommand(context.Background(), ctx, testCompose("devbox-laravel", nil))
+	c, err := r.BuildCommand(context.Background(), ctx, testCompose("dwe-laravel", nil))
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -278,13 +278,13 @@ func TestExecRunner_BuildCommand_Argv(t *testing.T) {
 func TestExecRunner_BuildCommand_ProjectFlag(t *testing.T) {
 	ctx := makeServiceExecCtx("app-main", "", "", ExecModeExec, "ls", nil)
 	r := &ExecRunner{}
-	c, err := r.BuildCommand(context.Background(), ctx, testCompose("devbox-laravel", nil))
+	c, err := r.BuildCommand(context.Background(), ctx, testCompose("dwe-laravel", nil))
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
 	args := strings.Join(c.Args, " ")
-	if !strings.Contains(args, "-p devbox-laravel") {
-		t.Errorf("expected '-p devbox-laravel', got: %s", args)
+	if !strings.Contains(args, "-p dwe-laravel") {
+		t.Errorf("expected '-p dwe-laravel', got: %s", args)
 	}
 }
 
@@ -296,12 +296,12 @@ func TestRunRunner_BuildCommand_AlwaysRun(t *testing.T) {
 			Cmd:     "composer install",
 		},
 		Render:  &tpl.RenderContext{},
-		Config:  &config.DweConfig{Project: config.ProjectConfig{Prefix: "devbox", Name: "laravel"}},
+		Config:  &config.DweConfig{Project: config.ProjectConfig{Prefix: "dwe", Name: "laravel"}},
 		Params:  map[string]any{},
 		Context: map[string]any{},
 	}
 	r := &RunRunner{}
-	c, err := r.BuildCommand(context.Background(), ctx, testCompose("devbox-laravel", nil))
+	c, err := r.BuildCommand(context.Background(), ctx, testCompose("dwe-laravel", nil))
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -329,12 +329,12 @@ func TestExecRunner_BuildCommand_RunnerOverride(t *testing.T) {
 			},
 		},
 		Render:  &tpl.RenderContext{Host: tpl.CurrentHostInfo()},
-		Config:  &config.DweConfig{Project: config.ProjectConfig{Prefix: "devbox", Name: "laravel"}},
+		Config:  &config.DweConfig{Project: config.ProjectConfig{Prefix: "dwe", Name: "laravel"}},
 		Params:  map[string]any{},
 		Context: map[string]any{},
 	}
 	r := &ExecRunner{}
-	c, err := r.BuildCommand(context.Background(), ctx, testCompose("devbox-laravel", nil))
+	c, err := r.BuildCommand(context.Background(), ctx, testCompose("dwe-laravel", nil))
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -359,7 +359,7 @@ func TestExecRunner_BuildCommand_WorkdirFrom(t *testing.T) {
 		},
 		Render: &tpl.RenderContext{},
 		Config: &config.DweConfig{
-			Project: config.ProjectConfig{Prefix: "devbox", Name: "laravel"},
+			Project: config.ProjectConfig{Prefix: "dwe", Name: "laravel"},
 			Raw: map[string]any{
 				"services": map[string]any{
 					"main": map[string]any{
@@ -372,7 +372,7 @@ func TestExecRunner_BuildCommand_WorkdirFrom(t *testing.T) {
 		Context: map[string]any{},
 	}
 	r := &ExecRunner{}
-	c, err := r.BuildCommand(context.Background(), ctx, testCompose("devbox-laravel", nil))
+	c, err := r.BuildCommand(context.Background(), ctx, testCompose("dwe-laravel", nil))
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -395,7 +395,7 @@ func TestExecRunner_BuildCommand_WorkdirFromWinsOverLiteral(t *testing.T) {
 		},
 		Render: &tpl.RenderContext{},
 		Config: &config.DweConfig{
-			Project: config.ProjectConfig{Prefix: "devbox", Name: "laravel"},
+			Project: config.ProjectConfig{Prefix: "dwe", Name: "laravel"},
 			Raw: map[string]any{
 				"services": map[string]any{
 					"main": map[string]any{"dir_internal": "/var/www/html"},
@@ -406,7 +406,7 @@ func TestExecRunner_BuildCommand_WorkdirFromWinsOverLiteral(t *testing.T) {
 		Context: map[string]any{},
 	}
 	r := &ExecRunner{}
-	c, err := r.BuildCommand(context.Background(), ctx, testCompose("devbox-laravel", nil))
+	c, err := r.BuildCommand(context.Background(), ctx, testCompose("dwe-laravel", nil))
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -431,12 +431,12 @@ func TestExecRunner_BuildCommand_WorkdirFromMissingFallsBackToLiteral(t *testing
 			Cmd:         "ls",
 		},
 		Render:  &tpl.RenderContext{},
-		Config:  &config.DweConfig{Project: config.ProjectConfig{Prefix: "devbox", Name: "laravel"}, Raw: map[string]any{}},
+		Config:  &config.DweConfig{Project: config.ProjectConfig{Prefix: "dwe", Name: "laravel"}, Raw: map[string]any{}},
 		Params:  map[string]any{},
 		Context: map[string]any{},
 	}
 	r := &ExecRunner{}
-	c, err := r.BuildCommand(context.Background(), ctx, testCompose("devbox-laravel", nil))
+	c, err := r.BuildCommand(context.Background(), ctx, testCompose("dwe-laravel", nil))
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -459,7 +459,7 @@ func TestExecRunner_BuildCommand_WorkdirFromEmptyFallsBackToLiteral(t *testing.T
 		},
 		Render: &tpl.RenderContext{},
 		Config: &config.DweConfig{
-			Project: config.ProjectConfig{Prefix: "devbox", Name: "laravel"},
+			Project: config.ProjectConfig{Prefix: "dwe", Name: "laravel"},
 			Raw: map[string]any{
 				"services": map[string]any{"main": map[string]any{"dir_internal": ""}},
 			},
@@ -468,7 +468,7 @@ func TestExecRunner_BuildCommand_WorkdirFromEmptyFallsBackToLiteral(t *testing.T
 		Context: map[string]any{},
 	}
 	r := &ExecRunner{}
-	c, err := r.BuildCommand(context.Background(), ctx, testCompose("devbox-laravel", nil))
+	c, err := r.BuildCommand(context.Background(), ctx, testCompose("dwe-laravel", nil))
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -490,7 +490,7 @@ func TestExecRunner_BuildCommand_WorkdirFromNonStringErrors(t *testing.T) {
 		},
 		Render: &tpl.RenderContext{},
 		Config: &config.DweConfig{
-			Project: config.ProjectConfig{Prefix: "devbox", Name: "laravel"},
+			Project: config.ProjectConfig{Prefix: "dwe", Name: "laravel"},
 			Raw: map[string]any{
 				"services": map[string]any{"main": map[string]any{"dir_internal": 42}},
 			},
@@ -499,7 +499,7 @@ func TestExecRunner_BuildCommand_WorkdirFromNonStringErrors(t *testing.T) {
 		Context: map[string]any{},
 	}
 	r := &ExecRunner{}
-	if _, err := r.BuildCommand(context.Background(), ctx, testCompose("devbox-laravel", nil)); err == nil {
+	if _, err := r.BuildCommand(context.Background(), ctx, testCompose("dwe-laravel", nil)); err == nil {
 		t.Fatal("expected error for non-string workdir_from value, got nil")
 	}
 }
@@ -515,7 +515,7 @@ func TestExecRunner_BuildCommand_ComposeFiles(t *testing.T) {
 		},
 		Render: &tpl.RenderContext{Host: tpl.CurrentHostInfo()},
 		Config: &config.DweConfig{
-			Project: config.ProjectConfig{Prefix: "devbox", Name: "laravel"},
+			Project: config.ProjectConfig{Prefix: "dwe", Name: "laravel"},
 			Compose: config.ComposeConfig{
 				Base: "compose.yaml",
 			},
@@ -527,7 +527,7 @@ func TestExecRunner_BuildCommand_ComposeFiles(t *testing.T) {
 		Context: map[string]any{},
 	}
 	r := &ExecRunner{}
-	c, err := r.BuildCommand(context.Background(), ctx, testCompose("devbox-laravel", files))
+	c, err := r.BuildCommand(context.Background(), ctx, testCompose("dwe-laravel", files))
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -550,7 +550,7 @@ func TestRunRunner_BuildCommand_ComposeFiles(t *testing.T) {
 		},
 		Render: &tpl.RenderContext{},
 		Config: &config.DweConfig{
-			Project: config.ProjectConfig{Prefix: "devbox", Name: "laravel"},
+			Project: config.ProjectConfig{Prefix: "dwe", Name: "laravel"},
 			Compose: config.ComposeConfig{
 				Base: "compose.yaml",
 			},
@@ -562,7 +562,7 @@ func TestRunRunner_BuildCommand_ComposeFiles(t *testing.T) {
 		Context: map[string]any{},
 	}
 	r := &RunRunner{}
-	c, err := r.BuildCommand(context.Background(), ctx, testCompose("devbox-laravel", files))
+	c, err := r.BuildCommand(context.Background(), ctx, testCompose("dwe-laravel", files))
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -578,7 +578,7 @@ func TestRunRunner_BuildCommand_ComposeFiles(t *testing.T) {
 func TestExecRunner_BuildCommand_GlobalArgs(t *testing.T) {
 	ctx := makeServiceExecCtx("app-main", "", "", ExecModeExec, "ls", nil)
 	r := &ExecRunner{}
-	compose := testComposeWithGlobalArgs("devbox-laravel", nil, []string{"--ansi", "always", "--progress", "tty"})
+	compose := testComposeWithGlobalArgs("dwe-laravel", nil, []string{"--ansi", "always", "--progress", "tty"})
 	c, err := r.BuildCommand(context.Background(), ctx, compose)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
@@ -603,12 +603,12 @@ func TestRunRunner_BuildCommand_GlobalArgs(t *testing.T) {
 			Cmd:     "composer install",
 		},
 		Render:  &tpl.RenderContext{},
-		Config:  &config.DweConfig{Project: config.ProjectConfig{Prefix: "devbox", Name: "laravel"}},
+		Config:  &config.DweConfig{Project: config.ProjectConfig{Prefix: "dwe", Name: "laravel"}},
 		Params:  map[string]any{},
 		Context: map[string]any{},
 	}
 	r := &RunRunner{}
-	compose := testComposeWithGlobalArgs("devbox-laravel", nil, []string{"--ansi", "always"})
+	compose := testComposeWithGlobalArgs("dwe-laravel", nil, []string{"--ansi", "always"})
 	c, err := r.BuildCommand(context.Background(), ctx, compose)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
@@ -622,11 +622,11 @@ func TestRunRunner_BuildCommand_GlobalArgs(t *testing.T) {
 func TestRunContext_Compose_WithDockerConfig(t *testing.T) {
 	ctx := RunContext{
 		Config: &config.DweConfig{
-			Project: config.ProjectConfig{Prefix: "devbox", Name: "laravel"},
+			Project: config.ProjectConfig{Prefix: "dwe", Name: "laravel"},
 			Compose: config.ComposeConfig{Base: "compose.yaml"},
 		},
 		DockerConfig: &config.DockerConfig{
-			ProjectName: "devbox-laravel",
+			ProjectName: "dwe-laravel",
 			Args: config.DockerArgs{
 				Global: []string{"--ansi", "always"},
 				Exec:   []string{},
@@ -635,8 +635,8 @@ func TestRunContext_Compose_WithDockerConfig(t *testing.T) {
 		},
 	}
 	compose := ctx.Compose()
-	if compose.ProjectName != "devbox-laravel" {
-		t.Errorf("expected project name 'devbox-laravel', got: %s", compose.ProjectName)
+	if compose.ProjectName != "dwe-laravel" {
+		t.Errorf("expected project name 'dwe-laravel', got: %s", compose.ProjectName)
 	}
 	if len(compose.GlobalArgs) != 2 || compose.GlobalArgs[0] != "--ansi" {
 		t.Errorf("expected global args from docker config, got: %v", compose.GlobalArgs)
@@ -646,13 +646,13 @@ func TestRunContext_Compose_WithDockerConfig(t *testing.T) {
 func TestRunContext_Compose_WithoutDockerConfig(t *testing.T) {
 	ctx := RunContext{
 		Config: &config.DweConfig{
-			Project: config.ProjectConfig{Prefix: "devbox", Name: "laravel"},
+			Project: config.ProjectConfig{Prefix: "dwe", Name: "laravel"},
 			Compose: config.ComposeConfig{Base: "compose.yaml"},
 		},
 	}
 	compose := ctx.Compose()
-	if compose.ProjectName != "devbox-laravel" {
-		t.Errorf("expected project name 'devbox-laravel', got: %s", compose.ProjectName)
+	if compose.ProjectName != "dwe-laravel" {
+		t.Errorf("expected project name 'dwe-laravel', got: %s", compose.ProjectName)
 	}
 	if len(compose.GlobalArgs) != 0 {
 		t.Errorf("expected no global args without docker config, got: %v", compose.GlobalArgs)
@@ -674,7 +674,7 @@ func TestExecRunner_BuildCommand_ComposeArgsEmpty(t *testing.T) {
 	ctx := makeServiceExecCtx("app-main", "", "", ExecModeExec, "id", nil)
 	ctx.Cmd.ComposeArgs = []string{}
 	r := &ExecRunner{}
-	c, err := r.BuildCommand(context.Background(), ctx, testCompose("devbox-laravel", nil))
+	c, err := r.BuildCommand(context.Background(), ctx, testCompose("dwe-laravel", nil))
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -688,7 +688,7 @@ func TestExecRunner_BuildCommand_ComposeArgsLiteral(t *testing.T) {
 	ctx := makeServiceExecCtx("app-main", "", "", ExecModeExec, "id", nil)
 	ctx.Cmd.ComposeArgs = []string{"-T", "--name", "test-container"}
 	r := &ExecRunner{}
-	c, err := r.BuildCommand(context.Background(), ctx, testCompose("devbox-laravel", nil))
+	c, err := r.BuildCommand(context.Background(), ctx, testCompose("dwe-laravel", nil))
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -728,12 +728,12 @@ func TestRunRunner_BuildCommand_ComposeArgsLiteral(t *testing.T) {
 			ComposeArgs: []string{"-d", "--rm"},
 		},
 		Render:  &tpl.RenderContext{Host: tpl.CurrentHostInfo()},
-		Config:  &config.DweConfig{Project: config.ProjectConfig{Prefix: "devbox", Name: "laravel"}},
+		Config:  &config.DweConfig{Project: config.ProjectConfig{Prefix: "dwe", Name: "laravel"}},
 		Params:  map[string]any{},
 		Context: map[string]any{},
 	}
 	r := &RunRunner{}
-	c, err := r.BuildCommand(context.Background(), ctx, testCompose("devbox-laravel", nil))
+	c, err := r.BuildCommand(context.Background(), ctx, testCompose("dwe-laravel", nil))
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -763,7 +763,7 @@ func TestExecRunner_BuildCommand_ComposeArgsTemplate(t *testing.T) {
 	ctx.Cmd.ComposeArgs = []string{"--name", "${param.name}"}
 	ctx.Render.Params = map[string]any{"name": "custom-name"}
 	r := &ExecRunner{}
-	c, err := r.BuildCommand(context.Background(), ctx, testCompose("devbox-laravel", nil))
+	c, err := r.BuildCommand(context.Background(), ctx, testCompose("dwe-laravel", nil))
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -781,7 +781,7 @@ func TestExecRunner_BuildCommand_ComposeArgsPositioning(t *testing.T) {
 	ctx := makeServiceExecCtx("app-main", UserModeRoot, "", ExecModeRun, "id", nil)
 	ctx.Cmd.ComposeArgs = []string{"-d", "--name", "test"}
 	r := &ExecRunner{}
-	c, err := r.BuildCommand(context.Background(), ctx, testCompose("devbox-laravel", nil))
+	c, err := r.BuildCommand(context.Background(), ctx, testCompose("dwe-laravel", nil))
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -819,12 +819,12 @@ func TestExecRunner_BuildCommand_ServiceTemplated(t *testing.T) {
 			Host:   tpl.CurrentHostInfo(),
 			Params: map[string]any{"service": "catalog"},
 		},
-		Config:  &config.DweConfig{Project: config.ProjectConfig{Prefix: "devbox", Name: "laravel"}},
+		Config:  &config.DweConfig{Project: config.ProjectConfig{Prefix: "dwe", Name: "laravel"}},
 		Params:  map[string]any{"service": "catalog"},
 		Context: map[string]any{},
 	}
 	r := &ExecRunner{}
-	c, err := r.BuildCommand(context.Background(), ctx, testCompose("devbox-laravel", nil))
+	c, err := r.BuildCommand(context.Background(), ctx, testCompose("dwe-laravel", nil))
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -848,12 +848,12 @@ func TestRunRunner_BuildCommand_ServiceTemplated(t *testing.T) {
 			Host:   tpl.CurrentHostInfo(),
 			Params: map[string]any{"service": "main"},
 		},
-		Config:  &config.DweConfig{Project: config.ProjectConfig{Prefix: "devbox", Name: "laravel"}},
+		Config:  &config.DweConfig{Project: config.ProjectConfig{Prefix: "dwe", Name: "laravel"}},
 		Params:  map[string]any{"service": "main"},
 		Context: map[string]any{},
 	}
 	r := &RunRunner{}
-	c, err := r.BuildCommand(context.Background(), ctx, testCompose("devbox-laravel", nil))
+	c, err := r.BuildCommand(context.Background(), ctx, testCompose("dwe-laravel", nil))
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -878,7 +878,7 @@ func TestExecRunner_BuildCommand_WorkdirFromTemplated(t *testing.T) {
 			Params: map[string]any{"service": "catalog"},
 		},
 		Config: &config.DweConfig{
-			Project: config.ProjectConfig{Prefix: "devbox", Name: "laravel"},
+			Project: config.ProjectConfig{Prefix: "dwe", Name: "laravel"},
 			Raw: map[string]any{
 				"services": map[string]any{
 					"catalog": map[string]any{"work_dir_internal": "/workspace/src"},
@@ -889,7 +889,7 @@ func TestExecRunner_BuildCommand_WorkdirFromTemplated(t *testing.T) {
 		Context: map[string]any{},
 	}
 	r := &ExecRunner{}
-	c, err := r.BuildCommand(context.Background(), ctx, testCompose("devbox-laravel", nil))
+	c, err := r.BuildCommand(context.Background(), ctx, testCompose("dwe-laravel", nil))
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -913,12 +913,12 @@ func TestExecRunner_BuildCommand_WorkdirLiteralTemplated(t *testing.T) {
 		Render: &tpl.RenderContext{
 			Params: map[string]any{"subdir": "src"},
 		},
-		Config:  &config.DweConfig{Project: config.ProjectConfig{Prefix: "devbox", Name: "laravel"}},
+		Config:  &config.DweConfig{Project: config.ProjectConfig{Prefix: "dwe", Name: "laravel"}},
 		Params:  map[string]any{"subdir": "src"},
 		Context: map[string]any{},
 	}
 	r := &ExecRunner{}
-	c, err := r.BuildCommand(context.Background(), ctx, testCompose("devbox-laravel", nil))
+	c, err := r.BuildCommand(context.Background(), ctx, testCompose("dwe-laravel", nil))
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -947,7 +947,7 @@ func TestExecRunner_BuildCommand_RunnerServiceTemplated(t *testing.T) {
 			Params: map[string]any{"service": "catalog"},
 		},
 		Config: &config.DweConfig{
-			Project: config.ProjectConfig{Prefix: "devbox", Name: "laravel"},
+			Project: config.ProjectConfig{Prefix: "dwe", Name: "laravel"},
 			Raw: map[string]any{
 				"services": map[string]any{
 					"catalog": map[string]any{"work_dir_internal": "/workspace/catalog"},
@@ -958,7 +958,7 @@ func TestExecRunner_BuildCommand_RunnerServiceTemplated(t *testing.T) {
 		Context: map[string]any{},
 	}
 	r := &ExecRunner{}
-	c, err := r.BuildCommand(context.Background(), ctx, testCompose("devbox-laravel", nil))
+	c, err := r.BuildCommand(context.Background(), ctx, testCompose("dwe-laravel", nil))
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}

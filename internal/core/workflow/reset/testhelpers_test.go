@@ -11,11 +11,11 @@ import (
 
 func writeResetYML(t *testing.T, dir, content string) {
 	t.Helper()
-	devboxDir := filepath.Join(dir, "workspace")
-	if err := os.MkdirAll(devboxDir, 0o755); err != nil {
-		t.Fatalf("mkdir devbox: %v", err)
+	workspaceDir := filepath.Join(dir, "workspace")
+	if err := os.MkdirAll(workspaceDir, 0o755); err != nil {
+		t.Fatalf("mkdir workspace: %v", err)
 	}
-	if err := os.WriteFile(filepath.Join(devboxDir, "reset.yml"), []byte(content), 0o644); err != nil {
+	if err := os.WriteFile(filepath.Join(workspaceDir, "reset.yml"), []byte(content), 0o644); err != nil {
 		t.Fatalf("write reset.yml: %v", err)
 	}
 }

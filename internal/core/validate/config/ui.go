@@ -35,7 +35,7 @@ func (v *uiValidator) Run(ctx validate.Context) []validate.Diagnostic {
 
 	data, err := os.ReadFile(configPath)
 	if err != nil {
-		// devboxValidator already surfaces missing/invalid workspace.yml — stay silent.
+		// workspaceValidator already surfaces missing/invalid workspace.yml — stay silent.
 		return nil
 	}
 	var top struct {

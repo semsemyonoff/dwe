@@ -14,7 +14,7 @@ import (
 // makeEnvCfg builds a DweConfig with the given export rules and raw map.
 func makeEnvCfg(rules []config.ExportRule, raw map[string]any) *config.DweConfig {
 	return &config.DweConfig{
-		Project: config.ProjectConfig{Name: "laravel", Prefix: "devbox"},
+		Project: config.ProjectConfig{Name: "laravel", Prefix: "dwe"},
 		Exports: config.ExportsConfig{Env: rules},
 		Raw:     raw,
 	}
@@ -243,7 +243,7 @@ func TestFormatValue_boolFormatNonBoolValue(t *testing.T) {
 func TestRunRenderEnv_ToFile(t *testing.T) {
 	dir := t.TempDir()
 	cfgPath := filepath.Join(dir, "workspace.yml")
-	yml := "schema_version: \"2\"\nproject:\n  name: testproject\n  prefix: devbox\n"
+	yml := "schema_version: \"2\"\nproject:\n  name: testproject\n  prefix: dwe\n"
 	if err := os.WriteFile(cfgPath, []byte(yml), 0o644); err != nil {
 		t.Fatal(err)
 	}

@@ -19,7 +19,7 @@ const sampleDevboxYML = `
 schema_version: "1"
 project:
   name: laravel
-  prefix: devbox
+  prefix: dwe
 `
 
 // sampleToolsYML declares the standard tools as type=tool services with
@@ -163,7 +163,7 @@ func writeServiceYAML(t *testing.T, baseDir, name, content string) {
 
 func writeTempYML(t *testing.T, content string) string {
 	t.Helper()
-	f, err := os.CreateTemp(t.TempDir(), "devbox-*.yml")
+	f, err := os.CreateTemp(t.TempDir(), "dwe-*.yml")
 	if err != nil {
 		t.Fatalf("create temp file: %v", err)
 	}
@@ -181,18 +181,18 @@ func writeTempYML(t *testing.T, content string) string {
 //	<tmp>/workspace.yml
 //	<tmp>/workspace/defaults.yml   (optional)
 //	<tmp>/workspace/local.yml       (optional)
-//	<tmp>/devbox/tools.yml       (sampleToolsYML)
+//	<tmp>/workspace/tools.yml       (sampleToolsYML)
 //
 // Tests that need a non-standard tools.yml should call writeFullFixture with an
 // explicit tools argument; tests that want no tools.yml at all should pass
 // "<NONE>" sentinel for tools.
-func writeLayeredFixture(t *testing.T, devbox, defaults, user string) string {
+func writeLayeredFixture(t *testing.T, wsContent, defaults, user string) string {
 	t.Helper()
-	return writeFullFixture(t, devbox, defaults, user, "", sampleToolsYML)
+	return writeFullFixture(t, wsContent, defaults, user, "", sampleToolsYML)
 }
 
 // noToolsYML is a sentinel passed as the tools argument to writeFullFixture to
-// suppress creation of devbox/tools.yml entirely.
+// suppress creation of workspace/tools.yml entirely.
 const noToolsYML = "<NONE>"
 
 // writeFullFixture creates the complete file layout used by LoadConfig,
@@ -200,16 +200,16 @@ const noToolsYML = "<NONE>"
 //
 // Pass tools=noToolsYML to suppress creating tool service folders. Empty
 // string falls back to sampleToolsYML so existing layered tests stay terse.
-func writeFullFixture(t *testing.T, devbox, defaults, user, services, tools string) string {
+func writeFullFixture(t *testing.T, wsContent, defaults, user, services, tools string) string {
 	t.Helper()
 	dir := t.TempDir()
 
-	devboxPath := filepath.Join(dir, "workspace.yml")
-	if err := os.WriteFile(devboxPath, []byte(devbox), 0644); err != nil {
+	workspacePath := filepath.Join(dir, "workspace.yml")
+	if err := os.WriteFile(workspacePath, []byte(wsContent), 0644); err != nil {
 		t.Fatalf("write workspace.yml: %v", err)
 	}
 
-	devboxDir := filepath.Join(dir, "workspace")
+	workspaceDir := filepath.Join(dir, "workspace")
 
 	writeTools := tools != noToolsYML
 	toolsContent := ""
@@ -221,19 +221,19 @@ func writeFullFixture(t *testing.T, devbox, defaults, user, services, tools stri
 	}
 
 	if defaults != "" || user != "" {
-		if err := os.MkdirAll(devboxDir, 0755); err != nil {
-			t.Fatalf("mkdir devbox/: %v", err)
+		if err := os.MkdirAll(workspaceDir, 0755); err != nil {
+			t.Fatalf("mkdir workspace/: %v", err)
 		}
 	}
 
 	if defaults != "" {
-		if err := os.WriteFile(filepath.Join(devboxDir, "defaults.yml"), []byte(defaults), 0644); err != nil {
+		if err := os.WriteFile(filepath.Join(workspaceDir, "defaults.yml"), []byte(defaults), 0644); err != nil {
 			t.Fatalf("write defaults.yml: %v", err)
 		}
 	}
 
 	if user != "" {
-		if err := os.WriteFile(filepath.Join(devboxDir, "local.yml"), []byte(user), 0644); err != nil {
+		if err := os.WriteFile(filepath.Join(workspaceDir, "local.yml"), []byte(user), 0644); err != nil {
 			t.Fatalf("write local.yml: %v", err)
 		}
 	}
@@ -242,7 +242,7 @@ func writeFullFixture(t *testing.T, devbox, defaults, user, services, tools stri
 	writeServicesDir(t, dir, services)
 	writeServicesDir(t, dir, toolsContent)
 
-	return devboxPath
+	return workspacePath
 }
 
 // --- LoadDweConfig (single-file loader) ---
@@ -253,7 +253,7 @@ const fullSingleYML = `
 schema_version: "1"
 project:
   name: laravel
-  prefix: devbox
+  prefix: dwe
 tools:
   adminer:
     enabled: false
@@ -290,8 +290,8 @@ func TestLoadDweConfig(t *testing.T) {
 	if cfg.Project.Name != "laravel" {
 		t.Errorf("Project.Name = %q", cfg.Project.Name)
 	}
-	if cfg.Project.FullName() != "devbox-laravel" {
-		t.Errorf("FullName = %q, want devbox-laravel", cfg.Project.FullName())
+	if cfg.Project.FullName() != "dwe-laravel" {
+		t.Errorf("FullName = %q, want dwe-laravel", cfg.Project.FullName())
 	}
 }
 
@@ -947,7 +947,7 @@ phases:
         description: Create service hub directories
       - name: copy-configs
         type: shell
-        cmd: devbox deploy config main
+        cmd: dwe deploy config main
         description: Copy template configs
         when:
           type: template
@@ -964,20 +964,20 @@ phases:
 func writeDeployFixture(t *testing.T, deployYML string) string {
 	t.Helper()
 	dir := t.TempDir()
-	devboxPath := filepath.Join(dir, "workspace.yml")
-	if err := os.WriteFile(devboxPath, []byte(sampleDevboxYML), 0644); err != nil {
+	workspacePath := filepath.Join(dir, "workspace.yml")
+	if err := os.WriteFile(workspacePath, []byte(sampleDevboxYML), 0644); err != nil {
 		t.Fatalf("write workspace.yml: %v", err)
 	}
-	devboxDir := filepath.Join(dir, "workspace")
-	if err := os.MkdirAll(devboxDir, 0755); err != nil {
-		t.Fatalf("mkdir devbox/: %v", err)
+	workspaceDir := filepath.Join(dir, "workspace")
+	if err := os.MkdirAll(workspaceDir, 0755); err != nil {
+		t.Fatalf("mkdir workspace/: %v", err)
 	}
 	if deployYML != "" {
-		if err := os.WriteFile(filepath.Join(devboxDir, "deploy.yml"), []byte(deployYML), 0644); err != nil {
+		if err := os.WriteFile(filepath.Join(workspaceDir, "deploy.yml"), []byte(deployYML), 0644); err != nil {
 			t.Fatalf("write deploy.yml: %v", err)
 		}
 	}
-	return devboxPath
+	return workspacePath
 }
 
 func TestLoadServiceDeployConfig_phasesPresent(t *testing.T) {
@@ -1158,8 +1158,8 @@ func TestLoadServiceDeployConfig_invalidYAML(t *testing.T) {
 }
 
 func TestLoadConfig_deployLoaded(t *testing.T) {
-	devboxPath := writeDeployFixture(t, sampleDeployYML)
-	cfg, err := LoadConfig(devboxPath)
+	workspacePath := writeDeployFixture(t, sampleDeployYML)
+	cfg, err := LoadConfig(workspacePath)
 	if err != nil {
 		t.Fatalf("LoadConfig: %v", err)
 	}
@@ -1173,8 +1173,8 @@ func TestLoadConfig_deployLoaded(t *testing.T) {
 
 func TestLoadConfig_deployAbsent(t *testing.T) {
 	// No deploy.yml — Deploy field should be nil (no error).
-	devboxPath := writeDeployFixture(t, "")
-	cfg, err := LoadConfig(devboxPath)
+	workspacePath := writeDeployFixture(t, "")
+	cfg, err := LoadConfig(workspacePath)
 	if err != nil {
 		t.Fatalf("LoadConfig: %v", err)
 	}
@@ -3123,14 +3123,14 @@ phases:
 
 func TestLoadConfig_rejectsBinariesBlock(t *testing.T) {
 	// LoadConfig rejects workspace.yml with binaries: block and returns migration error
-	devboxYML := `
+	cfgYAML := `
 schema_version: "1"
 project:
   name: test
 binaries:
   docker: podman
 `
-	path := writeLayeredFixture(t, devboxYML, sampleDefaultsYML, "")
+	path := writeLayeredFixture(t, cfgYAML, sampleDefaultsYML, "")
 	_, err := LoadConfig(path)
 	if err == nil {
 		t.Fatal("LoadConfig: expected error for binaries: block, got nil")
@@ -3142,14 +3142,14 @@ binaries:
 
 func TestLoadConfig_rejectsToolsBlock(t *testing.T) {
 	// LoadConfig rejects workspace.yml with tools: block and returns migration error
-	devboxYML := `
+	cfgYAML := `
 schema_version: "1"
 project:
   name: test
 tools:
   - name: mytool
 `
-	path := writeLayeredFixture(t, devboxYML, sampleDefaultsYML, "")
+	path := writeLayeredFixture(t, cfgYAML, sampleDefaultsYML, "")
 	_, err := LoadConfig(path)
 	if err == nil {
 		t.Fatal("LoadConfig: expected error for tools: block, got nil")
@@ -3266,13 +3266,13 @@ func TestLoadConfig_docsDefaults(t *testing.T) {
 }
 
 func TestLoadConfig_docsConfigured(t *testing.T) {
-	devboxYML := sampleDevboxYML
+	cfgYAML := sampleDevboxYML
 	defaultsYML := sampleDefaultsYML + `
 docs:
   mermaid: mmdc
   cache_size_mb: 50
 `
-	path := writeLayeredFixture(t, devboxYML, defaultsYML, "")
+	path := writeLayeredFixture(t, cfgYAML, defaultsYML, "")
 	cfg, err := LoadConfig(path)
 	if err != nil {
 		t.Fatalf("LoadConfig: %v", err)
@@ -3296,12 +3296,12 @@ docs:
 
 func TestLoadConfig_docsCacheSizeClamp(t *testing.T) {
 	// Test that negative cache size is clamped to 100 by the accessor
-	devboxYML := sampleDevboxYML
+	cfgYAML := sampleDevboxYML
 	defaultsYML := sampleDefaultsYML + `
 docs:
   cache_size_mb: -1
 `
-	path := writeLayeredFixture(t, devboxYML, defaultsYML, "")
+	path := writeLayeredFixture(t, cfgYAML, defaultsYML, "")
 	cfg, err := LoadConfig(path)
 	if err != nil {
 		t.Fatalf("LoadConfig: %v", err)

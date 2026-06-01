@@ -155,7 +155,7 @@ func TestRootCmdWithConfigShowsSummaryAndHelp(t *testing.T) {
 	cfgYAML := `schema_version: "2"
 project:
   name: testproject
-  prefix: devbox
+  prefix: dwe
 `
 	if err := os.WriteFile(cfgPath, []byte(cfgYAML), 0644); err != nil {
 		t.Fatalf("writing temp config: %v", err)
@@ -193,7 +193,7 @@ func TestRootCmdBrandHeaderAlwaysPresent(t *testing.T) {
 	cfgYAML := `schema_version: "2"
 project:
   name: brandtest
-  prefix: devbox
+  prefix: dwe
 `
 	if err := os.WriteFile(cfgPath, []byte(cfgYAML), 0644); err != nil {
 		t.Fatalf("writing config: %v", err)
@@ -214,7 +214,7 @@ project:
 	if !strings.Contains(out, "DWE") {
 		t.Errorf("expected 'DWE' brand line in output, got:\n%s", out)
 	}
-	if !strings.Contains(out, "devbox-brandtest") {
+	if !strings.Contains(out, "dwe-brandtest") {
 		t.Errorf("expected project full name in brand line, got:\n%s", out)
 	}
 }
@@ -240,7 +240,7 @@ func TestRootCmdInfoIsNotDuplicated(t *testing.T) {
 func TestRootCmd_StylesMissingIsGraceful(t *testing.T) {
 	dir := t.TempDir()
 	cfgPath := filepath.Join(dir, "workspace.yml")
-	if err := os.WriteFile(cfgPath, []byte("schema_version: \"2\"\nproject:\n  name: styletest\n  prefix: devbox\n"), 0644); err != nil {
+	if err := os.WriteFile(cfgPath, []byte("schema_version: \"2\"\nproject:\n  name: styletest\n  prefix: dwe\n"), 0644); err != nil {
 		t.Fatalf("writing config: %v", err)
 	}
 	// No workspace/styles.yml — must not cause an error.
@@ -267,15 +267,15 @@ func TestRootCmd_StylesMissingIsGraceful(t *testing.T) {
 func TestRootCmd_StylesWithHeaderRendered(t *testing.T) {
 	dir := t.TempDir()
 	cfgPath := filepath.Join(dir, "workspace.yml")
-	if err := os.WriteFile(cfgPath, []byte("schema_version: \"2\"\nproject:\n  name: headertest\n  prefix: devbox\n"), 0644); err != nil {
+	if err := os.WriteFile(cfgPath, []byte("schema_version: \"2\"\nproject:\n  name: headertest\n  prefix: dwe\n"), 0644); err != nil {
 		t.Fatalf("writing config: %v", err)
 	}
-	devboxDir := filepath.Join(dir, "workspace")
-	if err := os.MkdirAll(devboxDir, 0755); err != nil {
-		t.Fatalf("creating devbox dir: %v", err)
+	workspaceDir := filepath.Join(dir, "workspace")
+	if err := os.MkdirAll(workspaceDir, 0755); err != nil {
+		t.Fatalf("creating workspace dir: %v", err)
 	}
 	stylesYAML := "header:\n  lines:\n    - \"Devbox\"\n  font: standard\n  color: none\n"
-	if err := os.WriteFile(filepath.Join(devboxDir, "styles.yml"), []byte(stylesYAML), 0644); err != nil {
+	if err := os.WriteFile(filepath.Join(workspaceDir, "styles.yml"), []byte(stylesYAML), 0644); err != nil {
 		t.Fatalf("writing styles.yml: %v", err)
 	}
 
@@ -303,7 +303,7 @@ func TestRootCmd_StylesWithHeaderRendered(t *testing.T) {
 func TestLocaleResolutionWithNoUserConfig(t *testing.T) {
 	dir := t.TempDir()
 	cfgPath := filepath.Join(dir, "workspace.yml")
-	if err := os.WriteFile(cfgPath, []byte("schema_version: \"2\"\nproject:\n  name: testproj\n  prefix: devbox\n"), 0644); err != nil {
+	if err := os.WriteFile(cfgPath, []byte("schema_version: \"2\"\nproject:\n  name: testproj\n  prefix: dwe\n"), 0644); err != nil {
 		t.Fatalf("writing config: %v", err)
 	}
 
@@ -339,7 +339,7 @@ func TestLocaleResolutionWithNoUserConfig(t *testing.T) {
 func TestLocaleResolutionWithLangEnv(t *testing.T) {
 	dir := t.TempDir()
 	cfgPath := filepath.Join(dir, "workspace.yml")
-	if err := os.WriteFile(cfgPath, []byte("schema_version: \"2\"\nproject:\n  name: testproj\n  prefix: devbox\n"), 0644); err != nil {
+	if err := os.WriteFile(cfgPath, []byte("schema_version: \"2\"\nproject:\n  name: testproj\n  prefix: dwe\n"), 0644); err != nil {
 		t.Fatalf("writing config: %v", err)
 	}
 
@@ -372,7 +372,7 @@ func TestLocaleResolutionWithLangEnv(t *testing.T) {
 func TestI18nStoreIsNonNilAfterInit(t *testing.T) {
 	dir := t.TempDir()
 	cfgPath := filepath.Join(dir, "workspace.yml")
-	if err := os.WriteFile(cfgPath, []byte("schema_version: \"2\"\nproject:\n  name: testproj\n  prefix: devbox\n"), 0644); err != nil {
+	if err := os.WriteFile(cfgPath, []byte("schema_version: \"2\"\nproject:\n  name: testproj\n  prefix: dwe\n"), 0644); err != nil {
 		t.Fatalf("writing config: %v", err)
 	}
 
@@ -398,7 +398,7 @@ func TestI18nStoreIsNonNilAfterInit(t *testing.T) {
 func TestLocaleIsAlwaysSet(t *testing.T) {
 	dir := t.TempDir()
 	cfgPath := filepath.Join(dir, "workspace.yml")
-	if err := os.WriteFile(cfgPath, []byte("schema_version: \"2\"\nproject:\n  name: testproj\n  prefix: devbox\n"), 0644); err != nil {
+	if err := os.WriteFile(cfgPath, []byte("schema_version: \"2\"\nproject:\n  name: testproj\n  prefix: dwe\n"), 0644); err != nil {
 		t.Fatalf("writing config: %v", err)
 	}
 
@@ -430,16 +430,16 @@ func TestLocaleIsAlwaysSet(t *testing.T) {
 func TestLocaleResolutionWithUserconfig(t *testing.T) {
 	dir := t.TempDir()
 	cfgPath := filepath.Join(dir, "workspace.yml")
-	if err := os.WriteFile(cfgPath, []byte("schema_version: \"2\"\nproject:\n  name: testproj\n  prefix: devbox\n"), 0644); err != nil {
+	if err := os.WriteFile(cfgPath, []byte("schema_version: \"2\"\nproject:\n  name: testproj\n  prefix: dwe\n"), 0644); err != nil {
 		t.Fatalf("writing config: %v", err)
 	}
 
 	// Create .dwe/config with language setting
-	devboxDir := filepath.Join(dir, ".dwe")
-	if err := os.MkdirAll(devboxDir, 0755); err != nil {
+	workspaceDir := filepath.Join(dir, ".dwe")
+	if err := os.MkdirAll(workspaceDir, 0755); err != nil {
 		t.Fatalf("creating .dwe dir: %v", err)
 	}
-	configPath := filepath.Join(devboxDir, "config")
+	configPath := filepath.Join(workspaceDir, "config")
 	if err := os.WriteFile(configPath, []byte("language=de\n"), 0644); err != nil {
 		t.Fatalf("writing userconfig: %v", err)
 	}
@@ -473,16 +473,16 @@ func TestLocaleResolutionWithUserconfig(t *testing.T) {
 func TestLocaleResolutionEnvVarPrecedence(t *testing.T) {
 	dir := t.TempDir()
 	cfgPath := filepath.Join(dir, "workspace.yml")
-	if err := os.WriteFile(cfgPath, []byte("schema_version: \"2\"\nproject:\n  name: testproj\n  prefix: devbox\n"), 0644); err != nil {
+	if err := os.WriteFile(cfgPath, []byte("schema_version: \"2\"\nproject:\n  name: testproj\n  prefix: dwe\n"), 0644); err != nil {
 		t.Fatalf("writing config: %v", err)
 	}
 
 	// Create .dwe/config with language setting
-	devboxDir := filepath.Join(dir, ".dwe")
-	if err := os.MkdirAll(devboxDir, 0755); err != nil {
+	workspaceDir := filepath.Join(dir, ".dwe")
+	if err := os.MkdirAll(workspaceDir, 0755); err != nil {
 		t.Fatalf("creating .dwe dir: %v", err)
 	}
-	configPath := filepath.Join(devboxDir, "config")
+	configPath := filepath.Join(workspaceDir, "config")
 	if err := os.WriteFile(configPath, []byte("language=de\n"), 0644); err != nil {
 		t.Fatalf("writing userconfig: %v", err)
 	}

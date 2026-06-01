@@ -20,23 +20,23 @@ func sha256Hex(b []byte) string {
 	return hex.EncodeToString(h[:])
 }
 
-// snapshotUnpackProject builds a minimal devbox project root so
+// snapshotUnpackProject builds a minimal dwe project root so
 // loadSnapshotConfigOrNil and lock.AcquireProjectLocks succeed in tests.
 func snapshotUnpackProject(t *testing.T) string {
 	t.Helper()
 	dir := t.TempDir()
-	devboxDir := filepath.Join(dir, "workspace")
-	if err := os.MkdirAll(devboxDir, 0o755); err != nil {
+	workspaceDir := filepath.Join(dir, "workspace")
+	if err := os.MkdirAll(workspaceDir, 0o755); err != nil {
 		t.Fatal(err)
 	}
 	if err := os.WriteFile(filepath.Join(dir, "workspace.yml"), []byte("schema_version: \"2\"\n"), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	if err := os.WriteFile(filepath.Join(devboxDir, "defaults.yml"), []byte("project:\n  name: testproj\n  prefix: testproj\n"), 0o644); err != nil {
+	if err := os.WriteFile(filepath.Join(workspaceDir, "defaults.yml"), []byte("project:\n  name: testproj\n  prefix: testproj\n"), 0o644); err != nil {
 		t.Fatal(err)
 	}
 	// workspace/services/ empty directory (no services defined).
-	if err := os.MkdirAll(filepath.Join(devboxDir, "services"), 0o755); err != nil {
+	if err := os.MkdirAll(filepath.Join(workspaceDir, "services"), 0o755); err != nil {
 		t.Fatal(err)
 	}
 	if err := os.MkdirAll(filepath.Join(dir, "snapshots"), 0o755); err != nil {

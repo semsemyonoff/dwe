@@ -11,7 +11,7 @@
 //   - huge-output  — emit MANY bytes to stdout to exercise the boundedWriter cap.
 //
 // This binary is only built by tests (via `go build` into t.TempDir()); it is
-// never shipped in the user-facing devbox binary.
+// never shipped in the user-facing dwe binary.
 package main
 
 import (

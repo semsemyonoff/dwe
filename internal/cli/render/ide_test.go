@@ -68,7 +68,7 @@ func setupIDEPackTemplates(t *testing.T, dir, packName string, files map[string]
 // makeIDECfg returns a DweConfig configured for IDE rendering tests.
 func makeIDECfg(name string) *config.DweConfig {
 	return &config.DweConfig{
-		Project: config.ProjectConfig{Name: "laravel", Prefix: "devbox"},
+		Project: config.ProjectConfig{Name: "laravel", Prefix: "dwe"},
 		Services: map[string]config.ServiceConfig{
 			name: {
 				Type:            "app",
