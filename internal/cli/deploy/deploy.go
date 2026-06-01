@@ -623,6 +623,7 @@ func RunHelper(ctx context.Context, cmd *cobra.Command, flags *cmdctx.RootFlags,
 		if !scopeAllHashMatch {
 			if isInteractive {
 				// Prompt for action
+				render.PrintSelectorHeader(w.Writer(), projectName, "Deploy")
 				w.Tip("Tip: 'when:' conditions are always re-evaluated. For a fully clean install (drop service dirs, volumes, etc.) cancel and run 'dwe reset run && dwe deploy run'.")
 				choice, err := widgets.RunSelector(
 					"Deployed config changed. Choose action:",
@@ -661,6 +662,7 @@ func RunHelper(ctx context.Context, cmd *cobra.Command, flags *cmdctx.RootFlags,
 		scopeLastRunStatus == journal.StatusFailed
 	if !opts.Force && prevIncomplete && !configChangeHandled {
 		if isInteractive {
+			render.PrintSelectorHeader(w.Writer(), projectName, "Deploy")
 			w.Warning("Last deploy run failed or was incomplete.")
 			w.Tip("Tip: 'when:' conditions are always re-evaluated, so partially-installed services may stay skipped. For a fully clean install (drop service dirs, volumes, etc.) cancel and run 'dwe reset run && dwe deploy run'.")
 			choice, err := widgets.RunSelector(

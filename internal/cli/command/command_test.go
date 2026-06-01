@@ -588,8 +588,8 @@ func TestResolveCommandID_titlePrefixesProjectName(t *testing.T) {
 		if _, err := resolveCommandID(reg, []string{}, false, "laravel", cs.selector); err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}
-		if cs.title != "DWE · laravel · Commands" {
-			t.Errorf("title = %q, want %q", cs.title, "DWE · laravel · Commands")
+		if want := "{▪} DWE · laravel · Commands"; cs.title != want {
+			t.Errorf("title = %q, want %q", cs.title, want)
 		}
 	})
 
@@ -598,8 +598,8 @@ func TestResolveCommandID_titlePrefixesProjectName(t *testing.T) {
 		if _, err := resolveCommandID(reg, []string{"db"}, false, "laravel", cs.selector); err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}
-		if cs.title != "DWE · laravel · Commands (db)" {
-			t.Errorf("title = %q, want %q", cs.title, "DWE · laravel · Commands (db)")
+		if want := "{▪} DWE · laravel · Commands (db)"; cs.title != want {
+			t.Errorf("title = %q, want %q", cs.title, want)
 		}
 	})
 
@@ -608,8 +608,8 @@ func TestResolveCommandID_titlePrefixesProjectName(t *testing.T) {
 		if _, err := resolveCommandID(reg, []string{}, false, "", cs.selector); err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}
-		if cs.title != "DWE · Commands" {
-			t.Errorf("title = %q, want %q", cs.title, "DWE · Commands")
+		if want := "{▪} DWE · Commands"; cs.title != want {
+			t.Errorf("title = %q, want %q", cs.title, want)
 		}
 	})
 }

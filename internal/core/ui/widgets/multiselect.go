@@ -4,6 +4,7 @@ import (
 	"errors"
 
 	"charm.land/bubbles/v2/key"
+	tea "charm.land/bubbletea/v2"
 	huh "charm.land/huh/v2"
 
 	"github.com/semsemyonoff/dwe/internal/core/ui/styles"
@@ -40,19 +41,21 @@ func defaultRunMultiSelectForm(title string, opts []huh.Option[string]) ([]strin
 	field := huh.NewMultiSelect[string]().
 		Options(opts...).
 		Title(title).
-		Description("enter: confirm · esc: quit without saving").
+		Description("enter: confirm · q/esc: quit without saving").
 		Value(&keys).
 		Filterable(true).
 		Height(height)
 
 	keymap := huh.NewDefaultKeyMap()
-	// Bind q and esc to abort so users can leave the form without saving.
-	keymap.Quit = key.NewBinding(key.WithKeys("ctrl+c", "esc"), key.WithHelp("esc", "quit"))
+	quitFull := key.NewBinding(key.WithKeys("ctrl+c", "esc", "q"), key.WithHelp("q/esc", "quit"))
+	quitNarrow := key.NewBinding(key.WithKeys("ctrl+c"), key.WithHelp("ctrl+c", "quit"))
+	filterAwareQuit := newFilterAwareQuit(func(b key.Binding) { keymap.Quit = b }, quitFull, quitNarrow)
 
 	err := huh.NewForm(huh.NewGroup(field)).
 		WithTheme(styles.Theme()).
 		WithKeyMap(keymap).
 		WithShowHelp(true).
+		WithProgramOptions(tea.WithFilter(filterAwareQuit)).
 		Run()
 	return keys, err
 }
@@ -105,7 +108,8 @@ func lockedKeys(items []MultiSelectItem) []string {
 //
 // Locked items are never shown in the form. If all items are locked or there are
 // no toggleable items, the form is skipped entirely. ErrCancelled is returned when
-// the user presses q, Esc, or Ctrl-C.
+// the user presses q, Esc, or Ctrl-C. While the in-form filter (`/`) is active,
+// q falls through to the filter text input — see defaultRunMultiSelectForm.
 func RunMultiSelect(title string, items []MultiSelectItem) (MultiSelectResult, error) {
 	locked, toggleable := partitionMultiSelect(items)
 	lk := lockedKeys(locked)

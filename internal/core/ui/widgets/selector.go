@@ -5,6 +5,7 @@ import (
 	"fmt"
 
 	"charm.land/bubbles/v2/key"
+	tea "charm.land/bubbletea/v2"
 	huh "charm.land/huh/v2"
 
 	"github.com/semsemyonoff/dwe/internal/core/ui/styles"
@@ -33,17 +34,20 @@ func defaultRunSelectForm(title string, opts []huh.Option[int]) (int, error) {
 	field := huh.NewSelect[int]().
 		Options(opts...).
 		Title(title).
-		Description("enter: select · esc: quit without choosing").
+		Description("enter: select · q/esc: quit without choosing · /: filter").
 		Value(&idx).
 		Height(height)
 
 	keymap := huh.NewDefaultKeyMap()
-	keymap.Quit = key.NewBinding(key.WithKeys("ctrl+c", "esc"), key.WithHelp("esc", "quit"))
+	quitFull := key.NewBinding(key.WithKeys("ctrl+c", "esc", "q"), key.WithHelp("q/esc", "quit"))
+	quitNarrow := key.NewBinding(key.WithKeys("ctrl+c"), key.WithHelp("ctrl+c", "quit"))
+	filterAwareQuit := newFilterAwareQuit(func(b key.Binding) { keymap.Quit = b }, quitFull, quitNarrow)
 
 	err := huh.NewForm(huh.NewGroup(field)).
 		WithTheme(styles.Theme()).
 		WithKeyMap(keymap).
 		WithShowHelp(true).
+		WithProgramOptions(tea.WithFilter(filterAwareQuit)).
 		Run()
 	return idx, err
 }

@@ -10,6 +10,7 @@ import (
 	"github.com/semsemyonoff/dwe/internal/cli/cmdctx"
 	"github.com/semsemyonoff/dwe/internal/core/project/config"
 	"github.com/semsemyonoff/dwe/internal/core/ui/cmdbrowser"
+	uirender "github.com/semsemyonoff/dwe/internal/core/ui/render"
 	"github.com/semsemyonoff/dwe/internal/core/ui/styles"
 	"github.com/semsemyonoff/dwe/internal/core/usercommands"
 	"github.com/semsemyonoff/dwe/internal/shared/i18n"
@@ -214,7 +215,7 @@ func resolveCommandID(reg *usercommands.Registry, args []string, includePrivate 
 		if len(defs) == 0 {
 			return "", fmt.Errorf("command %q not found", arg)
 		}
-		return selector(defs, selectorTitle(projectName, "Commands ("+arg+")"))
+		return selector(defs, uirender.BrandedSelectorTitle(projectName, "Commands ("+arg+")"))
 	}
 	// No arg — show full list.
 	var defs []*usercommands.CommandDef
@@ -226,20 +227,7 @@ func resolveCommandID(reg *usercommands.Registry, args []string, includePrivate 
 	if len(defs) == 0 {
 		return "", fmt.Errorf("no commands available")
 	}
-	return selector(defs, selectorTitle(projectName, "Commands"))
-}
-
-// selectorTitle composes the selector header from a fixed "DWE" prefix,
-// the project name (when set), and the base title, joined with middots. The
-// "DWE" prefix is always present so the TUI advertises which tool owns the
-// window regardless of project context.
-func selectorTitle(projectName, base string) string {
-	parts := []string{"DWE"}
-	if projectName != "" {
-		parts = append(parts, projectName)
-	}
-	parts = append(parts, base)
-	return strings.Join(parts, " · ")
+	return selector(defs, uirender.BrandedSelectorTitle(projectName, "Commands"))
 }
 
 // parseSetFlags parses --set key=value flags into a map.

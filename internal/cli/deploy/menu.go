@@ -160,7 +160,10 @@ func runDeployMenu(cmd *cobra.Command, flags *cmdctx.RootFlags) error {
 
 		// Print last-deploy info + pending banner above the menu form. The
 		// banner is re-rendered each loop iteration so it reappears after a
-		// submenu cancel-and-back.
+		// submenu cancel-and-back. The subheader matches the shape used by the
+		// services and docs selectors so users always know which dwe project
+		// owns the prompt.
+		render.PrintSelectorHeader(cmd.OutOrStdout(), cfg.Project.Name, "Deploy")
 		if banner := render.DeployInfo(state, time.Now(), deployInfoRowsFrom(items)); banner != "" {
 			_, _ = fmt.Fprintln(cmd.OutOrStdout(), banner)
 		}
@@ -480,8 +483,8 @@ func selectMenuItemInteractive(_ context.Context, cmd *cobra.Command, _ *journal
 // quitHelp is the verb shown after "esc" in the help line ("exit" / "back").
 func deployMenuKeyMap(quitHelp string) *huh.KeyMap {
 	km := huh.NewDefaultKeyMap()
-	km.Quit = key.NewBinding(key.WithKeys("ctrl+c", "esc"), key.WithHelp("esc", quitHelp))
-	km.Select.Filter = key.NewBinding(key.WithKeys("esc"), key.WithHelp("esc", quitHelp))
+	km.Quit = key.NewBinding(key.WithKeys("ctrl+c", "esc", "q"), key.WithHelp("q/esc", quitHelp))
+	km.Select.Filter = key.NewBinding(key.WithKeys("esc"), key.WithHelp("q/esc", quitHelp))
 	// Make submit help read "enter select" instead of "enter submit" — purely
 	// cosmetic.
 	km.Select.Submit = key.NewBinding(key.WithKeys("enter"), key.WithHelp("enter", "select"))

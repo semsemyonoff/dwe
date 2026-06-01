@@ -9,7 +9,6 @@ import (
 	"charm.land/lipgloss/v2"
 
 	"github.com/semsemyonoff/dwe/internal/core/docs"
-	"github.com/semsemyonoff/dwe/internal/core/ui/render"
 	"github.com/semsemyonoff/dwe/internal/core/ui/styles"
 )
 
@@ -86,15 +85,15 @@ func (m *Model) renderTwoPanel() tea.View {
 // renderTitleBar renders the brand title — `{▪} DWE · <project> ·
 // Documentation` in accent + bold — padded to totalWidth so it lines up
 // with the panels below. Same shape as cmdbrowser.renderTitleBar so the
-// two TUIs read consistently.
+// two TUIs read consistently. The logomark is expected to already be part
+// of m.Title (the caller builds it via render.BrandedSelectorTitle).
 func (m *Model) renderTitleBar(totalWidth int) string {
-	text := render.LogoMarkPlain() + " " + m.Title
 	return lipgloss.NewStyle().
 		Width(totalWidth).
 		Padding(0, 1).
 		Foreground(lipgloss.Color(styles.ColorAccent())).
 		Bold(true).
-		Render(text)
+		Render(m.Title)
 }
 
 // renderStatusLine renders the path / language / progress strip pulled from

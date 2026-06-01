@@ -5,7 +5,6 @@ import (
 	"errors"
 	"fmt"
 	"os"
-	"strings"
 
 	"github.com/semsemyonoff/dwe/internal/cli/cmdctx"
 	coredocs "github.com/semsemyonoff/dwe/internal/core/docs"
@@ -13,6 +12,7 @@ import (
 	"github.com/semsemyonoff/dwe/internal/core/docs/tui"
 	"github.com/semsemyonoff/dwe/internal/core/project/config"
 	userpkg "github.com/semsemyonoff/dwe/internal/core/project/user"
+	"github.com/semsemyonoff/dwe/internal/core/ui/render"
 	"github.com/semsemyonoff/dwe/internal/core/ui/widgets"
 	"github.com/semsemyonoff/dwe/internal/shared/i18n"
 
@@ -29,18 +29,6 @@ type docsFlags struct {
 	lang           string
 	includeHidden  bool
 	includePrivate bool
-}
-
-// docsSelectorTitle mirrors cli/command.SelectorTitle to avoid a cross-sibling
-// cli import. The helper keeps the docs TUI title shape symmetrical with
-// cmdbrowser without dragging cli/command into the docs package's import graph.
-func docsSelectorTitle(projectName, base string) string {
-	parts := []string{"DWE"}
-	if projectName != "" {
-		parts = append(parts, projectName)
-	}
-	parts = append(parts, base)
-	return strings.Join(parts, " · ")
 }
 
 // NewCmd builds the `dwe docs` command tree.
@@ -147,7 +135,7 @@ func runDocsTUI(cmd *cobra.Command, flags *cmdctx.RootFlags, termWidth, termHeig
 	if cfg != nil {
 		projectName = cfg.Project.Name
 	}
-	title := docsSelectorTitle(projectName, "Documentation")
+	title := render.BrandedSelectorTitle(projectName, "Documentation")
 	model, err := tui.NewModel(ctx, sources, locale, translator, renderer, termWidth, termHeight, projectRoot, title, mermaidTheme)
 	if err != nil {
 		return fmt.Errorf("failed to create TUI model: %w", err)

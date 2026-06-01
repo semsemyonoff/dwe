@@ -10,11 +10,11 @@ import (
 	"github.com/semsemyonoff/dwe/internal/core/project/config"
 	localpkg "github.com/semsemyonoff/dwe/internal/core/project/local"
 	"github.com/semsemyonoff/dwe/internal/core/project/services"
+	uirender "github.com/semsemyonoff/dwe/internal/core/ui/render"
 	"github.com/semsemyonoff/dwe/internal/core/ui/styles"
 	"github.com/semsemyonoff/dwe/internal/core/ui/widgets"
 	"github.com/semsemyonoff/dwe/internal/core/usercommands"
 	"github.com/semsemyonoff/dwe/internal/core/workflow/deploy/journal"
-	"github.com/semsemyonoff/dwe/internal/shared/render"
 
 	"github.com/spf13/cobra"
 )
@@ -26,6 +26,7 @@ func NewCmd(groupID string, flags *cmdctx.RootFlags) *cobra.Command {
 	cmd := &cobra.Command{
 		GroupID: groupID,
 		Use:     "services",
+		Aliases: []string{"srv"},
 		Short:   "Toggle optional services (interactive) or list / enable / disable",
 		Long: `Open an interactive multi-select form to enable or disable optional services.
 Required services (including required infra) are always active and shown
@@ -103,12 +104,13 @@ func runServicesToggle(cmd *cobra.Command, flags *cmdctx.RootFlags, opts singleT
 		}
 	}
 
-	if len(lockedNames) > 0 {
-		w := render.NewWriter(cmd.OutOrStdout())
-		_, _ = fmt.Fprintln(w.Writer(), styles.StyleSubheader("Always on: ")+styles.StyleMuted(strings.Join(lockedNames, ", ")))
-	}
+	uirender.PrintSelectorHeader(cmd.OutOrStdout(), cfg.Project.Name, "Services")
 
-	result, err := runMultiSelect("Toggle services:", items)
+	formTitle := "Toggle services:"
+	if len(lockedNames) > 0 {
+		formTitle = "Always on: " + strings.Join(lockedNames, ", ")
+	}
+	result, err := runMultiSelect(formTitle, items)
 	if err != nil {
 		if errors.Is(err, widgets.ErrCancelled) {
 			return nil
@@ -324,8 +326,9 @@ func pickToggleCandidates(cfg *config.DweConfig, names []string, statusLabel, ti
 func newServiceEnableCmd(flags *cmdctx.RootFlags) *cobra.Command {
 	var apply, printPlan, skipHooks bool
 	cmd := &cobra.Command{
-		Use:   "enable [service]",
-		Short: "Enable an optional service (writes to workspace/local.yml)",
+		Use:     "enable [service]",
+		Aliases: []string{"e"},
+		Short:   "Enable an optional service (writes to workspace/local.yml)",
 		Long: `Enable an optional service by writing services.<name>.enabled = true to workspace/local.yml.
 
 The .env file is regenerated automatically after the change.
@@ -361,6 +364,7 @@ disabled optional services.`,
 				if !widgets.IsInteractiveFn(cmd.InOrStdin()) {
 					return fmt.Errorf("no service name given; pass a service name or run in an interactive terminal")
 				}
+				uirender.PrintSelectorHeader(cmd.OutOrStdout(), cfg.Project.Name, "Services")
 				name, err = pickServiceToEnable(cfg, defaultSelectToggle)
 				if err != nil {
 					if errors.Is(err, widgets.ErrCancelled) {
@@ -386,8 +390,9 @@ disabled optional services.`,
 func newServiceDisableCmd(flags *cmdctx.RootFlags) *cobra.Command {
 	var apply, printPlan, skipHooks bool
 	cmd := &cobra.Command{
-		Use:   "disable [service]",
-		Short: "Disable an optional service (writes to workspace/local.yml)",
+		Use:     "disable [service]",
+		Aliases: []string{"d"},
+		Short:   "Disable an optional service (writes to workspace/local.yml)",
 		Long: `Disable an optional service by writing services.<name>.enabled = false to workspace/local.yml.
 
 The .env file is regenerated automatically after the change.
@@ -422,6 +427,7 @@ enabled optional services.`,
 				if !widgets.IsInteractiveFn(cmd.InOrStdin()) {
 					return fmt.Errorf("no service name given; pass a service name or run in an interactive terminal")
 				}
+				uirender.PrintSelectorHeader(cmd.OutOrStdout(), cfg.Project.Name, "Services")
 				name, err = pickServiceToDisable(cfg, defaultSelectToggle)
 				if err != nil {
 					if errors.Is(err, widgets.ErrCancelled) {

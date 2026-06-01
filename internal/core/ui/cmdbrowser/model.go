@@ -11,7 +11,6 @@ import (
 	tea "charm.land/bubbletea/v2"
 	"charm.land/lipgloss/v2"
 
-	"github.com/semsemyonoff/dwe/internal/core/ui/render"
 	"github.com/semsemyonoff/dwe/internal/core/ui/styles"
 )
 
@@ -581,12 +580,10 @@ func (m *Model) renderRight() string {
 // renderTitleBar renders the branded title bar — `{▪} <title>` in accent+bold,
 // optionally suffixed by a success-coloured `[--yes ON]` toggle — wrapped in a
 // v2 lipgloss envelope that pads the line out to totalWidth so it lines up
-// with the joined panel(s) below. The plain logomark is used because the
-// outer accent foreground colours the entire string uniformly; v1's
-// LogoMark() carries a reset escape that would clip the accent partway
-// through the title.
+// with the joined panel(s) below. The logomark is expected to already be part
+// of m.title (the caller builds it via render.BrandedSelectorTitle).
 func (m *Model) renderTitleBar(totalWidth int) string {
-	text := render.LogoMarkPlain() + " " + m.title
+	text := m.title
 	if m.skipConfirm && m.opts.Mode == ModeRun {
 		// Pre-render the toggle with its own success-coloured envelope; the
 		// outer accent style below threads around the existing SGR escapes so
