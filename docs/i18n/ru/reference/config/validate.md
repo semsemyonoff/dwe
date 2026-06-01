@@ -1,4 +1,4 @@
-> Translated from: reference/config/validate.md @ 91de69852402
+> Translated from: reference/config/validate.md @ a54f2f89d7a2
 
 # validate.yml
 
@@ -399,7 +399,7 @@ Generic-адаптер запускает `bin <flags> <files...>` и конве
 
 ### Пользовательские оверрайды бинаря
 
-Можно переопределить путь бинаря для любого линтера через свой user-level конфигурационный файл (`~/.config/workspace/config`). Полезно, когда у вас кастомные установки, замены (например, `podman` вместо `docker`) или бинари вне дефолтного PATH.
+Можно переопределить путь бинаря для любого линтера через свой user-level конфигурационный файл (`~/.config/dwe/config`). Полезно, когда у вас кастомные установки, замены (например, `podman` вместо `docker`) или бинари вне дефолтного PATH.
 
 Добавьте строку в свой user config:
 

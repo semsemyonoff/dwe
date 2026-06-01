@@ -1,4 +1,4 @@
-> Translated from: reference/config/notifications.md @ 6c2bbb306dc4
+> Translated from: reference/config/notifications.md @ f1f95d07d94c
 
 # Уведомления
 
@@ -49,7 +49,7 @@
 
 Два файла читаются в следующем порядке приоритета (ниже → выше):
 
-1. **Глобальный user-конфиг** в `~/.config/workspace/config` на каждой ОС (Linux, macOS, Windows). Никакого нативного для платформы расположения, никакого XDG-отката — один путь везде. Отсутствие файла молча трактуется как пустота. Если DWE когда-нибудь его пишет, режим — `0600`.
+1. **Глобальный user-конфиг** в `~/.config/dwe/config` на каждой ОС (Linux, macOS, Windows). Никакого нативного для платформы расположения, никакого XDG-отката — один путь везде. Отсутствие файла молча трактуется как пустота. Если DWE когда-нибудь его пишет, режим — `0600`.
 
 2. **Override на уровне проекта** в `<project>/.dwe/config`. Директория `.dwe/` уже игнорируется DWE через gitignore. Отсутствие файла молча трактуется как пустота.
 
@@ -137,7 +137,7 @@ killall NotificationCenter
 Типичная настройка: уведомлять о деплое и ad-hoc командах, но молчать про inner-loop цикл `dwe run`.
 
 ```
-# ~/.config/workspace/config  (одинаково на каждой ОС)
+# ~/.config/dwe/config  (одинаково на каждой ОС)
 
 notify_enabled          = true
 notify_deploy_enabled   = true

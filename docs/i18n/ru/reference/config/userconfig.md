@@ -1,4 +1,4 @@
-> Translated from: reference/config/userconfig.md @ d8255c431079
+> Translated from: reference/config/userconfig.md @ 8ca47488a9bd
 
 # Пользовательский конфиг
 
@@ -23,7 +23,7 @@
 
 Два файла читаются в таком порядке приоритета (от низкого к высокому), потом env-переменные поверх:
 
-1. **Глобальный пользовательский конфиг** в `~/.config/workspace/config` на каждой ОС (Linux, macOS, Windows). Один путь везде — никаких platform-native локаций, никакого XDG-фолбэка. Отсутствие файла трактуется как пустой. Если DWE когда-либо пишет этот файл, права — `0600`.
+1. **Глобальный пользовательский конфиг** в `~/.config/dwe/config` на каждой ОС (Linux, macOS, Windows). Один путь везде — никаких platform-native локаций, никакого XDG-фолбэка. Отсутствие файла трактуется как пустой. Если DWE когда-либо пишет этот файл, права — `0600`.
 
 2. **Per-project оверрайд** в `<project>/.dwe/config`. Директория `.dwe/` уже gitignored DWE'ом; этот файл нужен, чтобы разработчик мог зафиксировать оверрайды для одного проекта, не трогая глобальный файл. Отсутствие файла трактуется как пустой.
 
@@ -108,7 +108,7 @@ binary_mmdc   = /Users/me/.npm-global/bin/mmdc
 
 ```
 embedded defaults
-  → глобальный ~/.config/workspace/config
+  → глобальный ~/.config/dwe/config
     → per-project <project>/.dwe/config
       → переменные окружения
 ```
@@ -118,7 +118,7 @@ embedded defaults
 ## Пример конфига
 
 ```
-# ~/.config/workspace/config — один путь на всех ОС
+# ~/.config/dwe/config — один путь на всех ОС
 
 # Локаль и TUI
 language       = ru

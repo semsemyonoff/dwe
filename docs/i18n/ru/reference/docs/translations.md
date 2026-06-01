@@ -1,4 +1,4 @@
-> Translated from: reference/docs/translations.md @ bdd3b80ecdd1
+> Translated from: reference/docs/translations.md @ 3c546084c580
 
 # Переводы и поведение языка
 
@@ -10,7 +10,7 @@ DWE выбирает активную локаль по цепочке прио�
 
 1. **Флаг `--lang`** (на `docs show` / `docs export` / `docs list`; в рамках одного запуска)
 2. **Переменная окружения `DWE_LANGUAGE`**
-3. **Параметр `language` в пользовательской конфигурации** (`~/.config/workspace/config` или `.dwe/config`)
+3. **Параметр `language` в пользовательской конфигурации** (`~/.config/dwe/config` или `.dwe/config`)
 4. **Системная переменная `$LANG`** (разбирается до 2-буквенного кода)
 5. **По умолчанию:** `en` (английский)
 
