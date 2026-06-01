@@ -1,125 +1,136 @@
 # Architecture
 
-How the Devbox CLI is put together: a single Go binary with a three-layer internal structure, embedded docs and translations, and no network calls on the normal path.
+A high-level view of how Devbox and Docker fit together: Devbox is a CLI that turns a project's YAML tree into Docker Compose invocations, journals the result locally, and hands the developer a way to talk to the containers. This page is the boundary view — what Devbox owns, what Docker owns, and where one ends and the other begins.
 
 ## Contents
 
-- [Single binary, single composition root](#single-binary-single-composition-root)
-- [Three internal layers](#three-internal-layers)
-- [Cobra command tree](#cobra-command-tree)
-- [Embedded docs and translations](#embedded-docs-and-translations)
-- [No network on the normal path](#no-network-on-the-normal-path)
+- [The big picture](#the-big-picture)
+- [Division of responsibility](#division-of-responsibility)
+- [From a command to a container](#from-a-command-to-a-container)
+- [Where things live](#where-things-live)
+- [Boundaries Devbox does not cross](#boundaries-devbox-does-not-cross)
 - [Where to go next](#where-to-go-next)
 
-## Single binary, single composition root
+## The big picture
 
-Devbox ships as one statically linked Go binary at `bin/devbox`. There is no plugin loader, no companion daemon, and no external runtime besides the host Docker engine.
-
-Process startup goes through a single composition root:
-
-1. `cmd/devbox/main.go` is the executable entrypoint.
-2. It detects the fast `devbox prompt` path before cobra runs and dispatches into `internal/shared/prompt` for shell prompts.
-3. For every other invocation it calls `cli.NewRootCmdWithFlags()`, which builds the entire cobra command tree.
-4. It hands the tree to `fang.Execute` with a custom error handler that suppresses output for `pipeline.ErrSilent`, honours `ExitCode()`-bearing errors, and emits a JSON envelope to stderr when `--output json` is set.
-5. On exit the handler translates the returned error to a process exit code via `cmdctx.ExitCodeFor`.
-
-The composition root in `internal/cli/root.go` registers commands into five groups (`core`, `environment`, `configuration`, `pipelines`, `advanced`) and wires the shared `*cmdctx.RootFlags` bundle into every subcommand. There is no global state, no `init()` registration of commands from sibling packages; every command is added explicitly in `NewRootCmdWithFlags`.
-
-## Three internal layers
-
-`internal/` is organized in three layers. The intended dependency rules are enforced by convention today; `depguard` activation is pending. The full inventory lives in [`docs/internals/packages.md`](../../internals/packages.md).
+Devbox sits between the developer and a Dockerized stack. It reads a project on disk, writes a small amount of generated state next to it, and drives Docker Compose to actually run the containers. The developer never types `docker compose` directly.
 
 ```mermaid
 flowchart LR
-  Bin["cmd/devbox<br/>main"] --> CLI
+  Dev["Developer<br/>(terminal + browser)"]
 
-  subgraph internal["internal/"]
-    direction LR
-    CLI["cli/<br/>cobra tree"] --> Core
-    Core["core/<br/>domain logic"] --> Shared
-    Shared["shared/<br/>leaf infra"]
+  subgraph Project["Project on disk"]
+    Cfg["devbox.yml<br/>+ devbox/"]
+    Comp["compose/<br/>overlays"]
+    Gen[".devbox/<br/>+ .env<br/>(generated)"]
   end
 
-  Core -.imports.-> UI["core/ui/<br/>sink"]
-  CLI -.imports.-> UI
+  subgraph DevboxBox["Devbox CLI"]
+    CLI["devbox"]
+  end
+
+  subgraph Engine["Docker engine"]
+    Compose["docker compose"]
+    Containers["containers<br/>networks<br/>volumes"]
+  end
+
+  Dev -->|"devbox run / deploy / stop"| CLI
+  CLI -->|reads| Cfg
+  CLI -->|reads| Comp
+  CLI -->|writes| Gen
+  CLI -->|shells out| Compose
+  Compose --> Containers
+  Dev -->|"http://*.localhost<br/>tcp ports"| Containers
 ```
 
-| Layer | Path | Role | Dependency rule |
-|-------|------|------|------|
-| CLI | `internal/cli/` | Cobra commands, flag parsing, I/O routing. No domain logic. | May import `core/` and `shared/`. |
-| Core | `internal/core/` | Domain logic: project model, pipelines, workflows, validation, docs. | May import `shared/`. Must not import `cli/`. |
-| Shared | `internal/shared/` | Leaf infrastructure: Docker, Git, locks, templates, i18n. | Must not import `cli/` or `core/`. |
+The CLI itself is a single static binary with docs and pipelines embedded. There is no Devbox daemon, no companion service, no plugin loader — every invocation is short-lived and stateless except for what it writes under `.devbox/`.
 
-`core/ui/` is a special sink: any `core/` package that wants to render to the terminal exposes a string-returning function, and only `cli/` imports `core/ui/`. The same rule keeps the `stack/` collectors and `render/` renderers from holding writers — the cli layer is the single writer to stdout and stderr.
+## Division of responsibility
 
-Inside `core/` there is a soft ordering: `project ← execution ← workflow`. A package defining "what is a project" lives in `project/`; a package that runs a pipeline lives in `execution/`; a package that names a user operation lives in `workflow/`.
+Devbox and Docker each own a clean slice of the system. The split is what makes Devbox swappable around an existing Compose stack and what makes the stack survive without Devbox installed.
 
-## Cobra command tree
+| Concern | Owned by Devbox | Owned by Docker / Compose |
+|---------|-----------------|---------------------------|
+| Project model | `devbox.yml` + `devbox/` tree, services enabled/disabled | — |
+| Compose file list | Ordered `-f` list (base + overlays), deterministic merge order | Merge semantics |
+| Project name | Resolved from `${project.prefix}-${project.name}` and passed as `-p` | Resource naming (`<project>_<svc>_<n>`) |
+| Lifecycle commands | `devbox run` / `deploy` / `stop` / `restart` / `reset` orchestration | `up` / `down` / `stop` / `rm` / `wait` actually run |
+| Container env | Renders `.env` before `up`, `run`, `exec`, `restart`, `build` | Reads `.env` and `environment:` into containers |
+| Networks | Declared in compose files | Created on `up`, torn down on `down` |
+| Volumes | Naming convention (`<project>_<vol>`), shared/non-shared policy, reset sweep | Actual data persistence |
+| Health / readiness | Polls via `docker compose ps` and `docker inspect` | Reports health state |
+| Hooks / scripts | Renders Git hooks, runs deploy/reset/lifecycle pipelines | — |
+| State journal | `.devbox/deploy/state.yml`, skip decisions, locks | — |
+| Logs | Tees pipeline output to `.devbox/logs/` | Container logs (via `docker compose logs`) |
+| Image build / pull | Drives `docker compose build` / `pull` with policy args | Image layers, registry I/O |
 
-The cobra tree has one shape per command subpackage. Every subpackage under `internal/cli/<name>/` exports `NewCmd(groupID string, flags *cmdctx.RootFlags) *cobra.Command`, and the root calls it once. Three variants exist:
+There is no shared mutable state between the two: Devbox writes YAML and `.env`, Docker writes container state. The only handshake is the argv Devbox passes to `docker compose` and the exit code Docker returns.
 
-- Standard: a single `NewCmd` entry point (`info`, `status`, `logs`, `validate`, `render`, `service`, `snapshot`, `deploy`, `docker`, `compose`, `docs`, `command`, `shell`).
-- Multi-export Go-domain grouping: `lifecycle/` exposes `NewRunCmd` / `NewStopCmd` / `NewRestartCmd` / `NewResetCmd` because the four commands share a `preflightRun` test seam and the lock pattern, even though they are independent top-level commands.
-- Special: `completion/` exposes `AttachInstallUninstall(parent, flags)` because its subcommands attach to cobra's auto-generated `completion` command.
+## From a command to a container
 
-The root's `PersistentPreRunE` does five things before any `RunE` runs:
+A `devbox run` invocation is the canonical loop: read config, render env, assemble argv, exec compose, wait for health, print info. Everything else (`devbox deploy run`, `devbox stop`, `devbox reset run`) follows the same shape with different pipelines and different compose subcommands.
 
-1. Validates `--output` (`text` or `json`) and rejects `--pretty` without JSON.
-2. Sets `NO_COLOR=1`, `SilenceErrors`, and `SilenceUsage` in JSON mode.
-3. Locates the project. `validate` and its descendants use `project.Locate` (no schema check) so schema errors surface as diagnostics; every other command uses `project.Resolve` (schema check). A small allowlist (`version`, `prompt`, `completion …`, `docs …`) is allowed to run without a project.
-4. Loads `devbox/styles.yml` and applies the palette to `core/ui/styles`.
-5. Resolves the locale via `i18n.ResolveLocale` and loads the i18n store.
+```mermaid
+sequenceDiagram
+  autonumber
+  participant Dev as Developer
+  participant CLI as devbox
+  participant FS as Project FS
+  participant Engine as Docker engine
 
-Two cross-cutting patterns flow through `cmdctx.RootFlags`:
-
-- JSON output mode: read-only commands dispatch via `cmdctx.WriteData[T]` for text vs JSON. Errors flow through `cmdctx.Err` / `cmdctx.ErrWrap` and serialize to `{"error":{code,message,hint,details}}` on stderr. `validate` is the exception: it emits diagnostics-as-data even at severity=error, with the exit code conveying severity.
-- Display-string localization: any call site that renders a user-command description, parameter description, group name, or doc-generator header uses the typed `store.*` helpers (`store.CommandDescription`, `store.ParamDescription`, …) and threads the locale through `rflags.I18n`. Storage and hashing sites stay English.
-
-Cobra's hidden `__complete` path bypasses `PersistentPreRunE`. Every `ValidArgsFunction` callback calls `cmdctx.CompletionConfigPath(flags, cmd)` first and returns empty completions + `cobra.ShellCompDirectiveNoFileComp` on error, so a stale or broken config never crashes the shell completion path.
-
-## Embedded docs and translations
-
-Documentation is embedded in the binary. The build step `scripts/sync-embedded-docs.sh` mirrors `docs/{reference,internals,i18n}` into `internal/core/docs/embedded/`, and the package uses `//go:embed embedded` to make it part of the binary at compile time.
-
-The runtime layout is straightforward:
-
-```text
-embedded/
-├── reference/   # user-facing schema and command reference
-├── internals/   # contributor-facing internal docs
-└── i18n/<lang>/ # mirrored translated trees
+  Dev->>CLI: devbox run
+  CLI->>FS: read devbox.yml + devbox/
+  CLI->>FS: write .env (envfile.Regenerate)
+  CLI->>FS: acquire .devbox/deploy.lock
+  CLI->>Engine: docker compose -p <proj> -f base -f svc1 -f svc2 up -d --wait
+  Engine-->>CLI: containers ready
+  CLI->>Engine: docker compose ps --services --status running
+  Engine-->>CLI: running service names
+  CLI->>FS: release lock, append .devbox/logs/run.log
+  CLI-->>Dev: info dashboard (URLs, hosts, ports, commands)
+  Dev->>Engine: http://my-project.localhost:8080
 ```
 
-Three properties matter:
+Three properties of this loop are load-bearing:
 
-- `BuiltinFS` is `fs.Sub(embedFS, "embedded")`, so callers see `reference/`, `internals/`, and `i18n/` at the root.
-- Content hashes for every file are baked into `internal/core/docs/content_hashes_gen.go` by `scripts/gen-docs-content-hashes.sh` at build time. The hash is the per-file freshness anchor.
-- Each translated file starts with `> Translated from: <relPath> @ <hash>`. `internal/core/docs/lang.go` parses the header, compares the hash against `ContentHashFor(relPath)`, and surfaces a staleness warning when they diverge.
+- **Deterministic argv.** The compose file list is sorted (tools → infra → apps, alphabetical within each group). The project name is templated once and reused. Two `devbox run` invocations on the same config produce byte-identical `docker compose` commands.
+- **Env is fresh before every relevant call.** Devbox regenerates `.env` immediately before `up` / `run` / `exec` / `restart` / `build`. Container-visible variables are always in sync with the resolved config.
+- **No long-lived process.** The CLI exits as soon as Docker accepts the command (or after `--wait` resolves). The Docker engine keeps the containers alive; Devbox does not babysit them.
 
-`devbox docs` reads from `BuiltinFS` only — no filesystem walk under the project root, no remote fetch. The subsystem is read-only: no lock acquisition, no preflight, and locale resolution uses `i18n.ResolveLocale(flagLang, cfgLang, sysLang)` directly (the cobra-clamped `rflags.Locale` is the wrong namespace for markdown).
+The full deploy pipeline expands this loop into phases — preflight, per-service deploy steps, volume creation, `up --wait`, info — but the shape of each leaf call to Docker is the same.
 
-`devbox docs llms-txt` emits a compact AI-agent index that combines the embedded docs with project-aware data (services, commands, info) collected in the cli layer. The generator itself stays config-import-free.
+## Where things live
 
-## No network on the normal path
+A useful mental model: there are three concentric stores, owned by three different things.
 
-Devbox does not phone home, fetch updates, or pull templates over the network on a normal invocation. Every behavior the CLI drives is local:
+| Store | Lives in | Owner | Survives `devbox reset`? |
+|-------|----------|-------|--------------------------|
+| Project source | `devbox.yml`, `devbox/`, `compose/`, your app code | You / git | Yes |
+| Generated artifacts | `.env`, `.devbox/`, logs, state journal | Devbox | `.devbox/` rebuilt; `.env` re-rendered next run |
+| Runtime state | Containers, named volumes, networks, images | Docker engine | Non-shared volumes are swept; shared volumes survive |
 
-- Project discovery walks upward from the working directory.
-- Config is YAML on disk under `devbox.yml` and `devbox/`.
-- Templates, validators, and pipelines are evaluated in-process.
-- Docs and translations are embedded.
-- Container orchestration shells out to local `docker` and `docker compose`.
-- Git interaction shells out to local `git`.
+Two consequences worth knowing:
 
-The only network traffic the CLI initiates is whatever the user explicitly asks for inside a pipeline step or a user command — for example, a `type: shell` step that calls `curl`, a `type: builtin` step that probes `tcp_reachable`, or a Git hook that pushes. The CLI itself does not open sockets on the normal path.
+- **Uninstalling Devbox does not break your stack.** The compose files under `compose/` remain valid `docker compose` input. You can `docker compose -f compose/base.yml -f ... up` by hand. Devbox's value is automation, not lock-in.
+- **Cloning a project does not require Docker state.** `.devbox/` and `.env` are generated. A fresh clone goes from zero to running via `devbox deploy run` — no snapshot of engine state to copy around.
 
-This makes Devbox safe to run on disconnected machines, easy to reason about in CI, and predictable under restricted egress policies.
+## Boundaries Devbox does not cross
+
+A few hard lines that keep the architecture predictable:
+
+- **Devbox does not replace `docker` or `docker compose`.** Every container operation shells out. There is no embedded compose engine.
+- **Devbox does not install Docker.** The host is expected to have `docker` and `docker compose` on the path. Devbox shells out via configurable binary overrides (`docker_bin`), but it does not bootstrap the engine.
+- **Devbox does not run as a daemon.** No background process, no socket, no tray app. Every command starts fresh, reads config, does its work, exits.
+- **Devbox does not make network calls on the normal path.** No phone-home, no update check, no template fetch. The only network traffic is whatever the user puts inside a pipeline step or user command (a `curl` in a `type: shell` step, a `docker pull` from a registry, a `git push` in a hook).
+- **Devbox does not manage `/etc/hosts` or a proxy.** Hostnames like `my-project.localhost` resolve via the OS resolver (`*.localhost` is loopback by RFC), or via whatever local DNS / reverse proxy the developer runs. Devbox renders the hostnames into config and into the info dashboard; routing them is outside its scope.
+
+This narrow surface is what lets Devbox be useful in CI, on air-gapped machines, and alongside existing Compose-based workflows.
 
 ## Where to go next
 
+- [Docker integration](docker.md) — the deep dive on compose file assembly, project naming, env propagation, volume conventions, and the few cases where Devbox bypasses compose and calls `docker stop` / `docker rm` directly.
 - [Project layout](project-layout.md) — what each folder under `devbox/` is for, and what gets generated under `.devbox/`.
 - [Pipelines](pipelines.md) — the phase / step / condition execution model that deploy, reset, and lifecycle share.
-- [Docker integration](docker.md) — how compose file lists are assembled and when lifecycle commands bypass compose.
-- [Git integration](git.md) — where hooks are rendered and how the workspace view is collected.
 - [State and locks](state-and-locks.md) — what `state.yml` records and how `deploy.lock` / `snapshot.lock` serialise mutations.
-- [`docs/internals/packages.md`](../../internals/packages.md) — per-package responsibilities, invariants, and cross-package contracts for contributors.
+- [Git integration](git.md) — what Devbox renders into a project's `.git/hooks/` and how the workspace view is collected.
+- For contributors: [`docs/internals/architecture.md`](../../internals/architecture.md) — the internal `cli/` ↔ `core/` ↔ `shared/` layering inside the binary, and [`docs/internals/packages.md`](../../internals/packages.md) for per-package responsibilities.

@@ -1,39 +1,14 @@
 # Getting started
 
-A first walk-through of Devbox: build the binary, enter a project, run the deploy pipeline, start the stack, and read the info dashboard.
+A first walk-through of Devbox: enter a project, run the deploy pipeline, start the stack, and read the info dashboard.
 
 ## Contents
 
-- [Install](#install)
 - [Enter a project](#enter-a-project)
 - [First `devbox deploy`](#first-devbox-deploy)
 - [First `devbox run`](#first-devbox-run)
 - [First `devbox info`](#first-devbox-info)
 - [Where to next](#where-to-next)
-
-## Install
-
-Devbox ships as a single Go binary. Build from this repository:
-
-```sh
-make build
-```
-
-`make build` runs `go mod tidy`, syncs `docs/` into the embedded tree, regenerates `internal/core/docs/content_hashes_gen.go`, builds `./cmd/devbox`, and writes `bin/devbox`. The binary is self-contained: docs, translations, and the default pipelines are embedded.
-
-Run it from the repository root:
-
-```sh
-./bin/devbox version
-```
-
-For project-wide use, copy the binary onto your `$PATH`:
-
-```sh
-install -m 0755 bin/devbox /usr/local/bin/devbox
-```
-
-Devbox needs `docker` (and `docker compose`) on the path; `git` and `bash` are used for hook rendering and shell steps. See [`devbox.yml`](../config/devbox.md#binary-overrides) for binary overrides if those tools live in non-standard locations.
 
 ## Enter a project
 

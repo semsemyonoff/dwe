@@ -7,7 +7,7 @@ The pages are ordered for first-time reading: start at "Getting started", then w
 ## Pages
 
 - [Getting started](getting-started.md) — install the binary, enter a project, run your first `devbox deploy` and `devbox run`, see the info dashboard, and find the next thing to read.
-- [Architecture](architecture.md) — how the single binary is composed: `cmd/devbox` boots the cobra tree in `internal/cli/`, which drives domain logic in `internal/core/` over leaf infrastructure in `internal/shared/`. Docs and translations are embedded; nothing else is fetched at runtime.
+- [Architecture](architecture.md) — the boundary view: what Devbox owns vs what Docker owns, how a `devbox` command turns into a `docker compose` invocation, and what state lives on disk vs in the Docker engine.
 - [Project layout](project-layout.md) — what a real Devbox project looks like on disk: `devbox.yml` at the root, the `devbox/` config tree with `services/`, `commands/`, `templates/`, `i18n/`, and `scripts/`; the parallel `compose/` overlays; and the runtime-managed `.devbox/` artifacts.
 - [Docker integration](docker.md) — how Devbox drives Docker Compose: project-name derivation, the compose file list assembled from base + service overlays + tools + local, environment propagation, volume conventions, and why some lifecycle commands bypass compose and call `docker stop` / `docker rm` directly.
 - [Git integration](git.md) — what Devbox renders into Git: shell hook templates copied into `<svc.Dir>/src/.git/hooks/`, hook inheritance through the pack root, the `devbox status git` view, and the `.gitignore` conventions that keep `.devbox/` out of version control.

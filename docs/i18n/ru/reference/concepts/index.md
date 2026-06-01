@@ -1,4 +1,4 @@
-> Translated from: reference/concepts/index.md @ f794cffeb488
+> Translated from: reference/concepts/index.md @ b043ae6442ec
 
 # Концепции
 
@@ -9,7 +9,7 @@
 ## Страницы
 
 - [Начало работы](getting-started.md) — установите бинарник, войдите в проект, запустите свой первый `devbox deploy` и `devbox run`, посмотрите информационную панель и найдите, что читать дальше.
-- [Архитектура](architecture.md) — как устроен единый бинарник: `cmd/devbox` поднимает дерево cobra в `internal/cli/`, которое управляет доменной логикой в `internal/core/` поверх листовой инфраструктуры в `internal/shared/`. Документация и переводы встроены; ничего больше не запрашивается в runtime.
+- [Архитектура](architecture.md) — взгляд на границу: что владеет Devbox, а что Docker; как команда `devbox` превращается в вызов `docker compose`; и какое состояние живёт на диске, а какое — в Docker engine.
 - [Раскладка проекта](project-layout.md) — как реальный проект Devbox выглядит на диске: `devbox.yml` в корне, дерево конфигурации `devbox/` с `services/`, `commands/`, `templates/`, `i18n/` и `scripts/`; параллельные оверлеи `compose/`; и runtime-артефакты под `.devbox/`.
 - [Интеграция с Docker](docker.md) — как Devbox управляет Docker Compose: вывод имени compose-проекта, список compose-файлов, собранный из базы + оверлеев сервисов + tools + local, проброс окружения, конвенции по томам, и почему некоторые lifecycle-команды обходят compose и вызывают `docker stop` / `docker rm` напрямую.
 - [Интеграция с Git](git.md) — что Devbox рендерит в Git: шаблоны shell-хуков, копируемые в `<svc.Dir>/src/.git/hooks/`, наследование хуков через корень пака, отображение `devbox status git` и конвенции `.gitignore`, удерживающие `.devbox/` вне контроля версий.

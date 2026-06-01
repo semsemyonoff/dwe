@@ -7,6 +7,7 @@ package docs
 // See docs/reference/docs/index.md for details on the hash-based staleness check.
 var ContentHashes = map[string]string{
 	"README.md":                                              "54377d0210e9",
+	"internals/architecture.md":                              "ad30af04d355",
 	"internals/packages.md":                                  "812703552079",
 	"reference/cli/devbox.md":                                "b346e402b25a",
 	"reference/cli/devbox_commands.md":                       "fa01de6a3ddf",
@@ -112,11 +113,11 @@ var ContentHashes = map[string]string{
 	"reference/cli/devbox_version.md":                        "b88a90d5b6b8",
 	"reference/cli/index.md":                                 "61ce23bbd5f9",
 	"reference/cli/starship.md":                              "2b9f7b50923a",
-	"reference/concepts/architecture.md":                     "9849e0789409",
+	"reference/concepts/architecture.md":                     "759b88ac3161",
 	"reference/concepts/docker.md":                           "93d8a00617e2",
-	"reference/concepts/getting-started.md":                  "3e4a21eb6fcd",
+	"reference/concepts/getting-started.md":                  "7c7c9334834b",
 	"reference/concepts/git.md":                              "1f219ec6cde2",
-	"reference/concepts/index.md":                            "f794cffeb488",
+	"reference/concepts/index.md":                            "b043ae6442ec",
 	"reference/concepts/pipelines.md":                        "cddeb0a50edc",
 	"reference/concepts/project-layout.md":                   "b1f1358a776a",
 	"reference/concepts/state-and-locks.md":                  "814275d4ac51",
