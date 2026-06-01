@@ -49,7 +49,7 @@ var detectStackRunning = func(cfg *config.DweConfig, baseDir string) (bool, erro
 	if err != nil {
 		return false, fmt.Errorf("loading docker config: %w", err)
 	}
-	ids, err := docker.NewCompose(cfg, dockerCfg).ContainerIDs()
+	ids, err := docker.NewCompose(cfg, dockerCfg, baseDir).ContainerIDs()
 	if err != nil {
 		return false, fmt.Errorf("probing stack containers: %w", err)
 	}

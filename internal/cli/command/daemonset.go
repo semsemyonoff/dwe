@@ -43,6 +43,7 @@ func buildDaemonSetPSArgs(projectFull, daemonID string) []string {
 // filters. Used by daemonSetCompletion's production path.
 func runDaemonSetPS(ctx context.Context, compose *docker.Compose, projectFull, daemonID string) ([]byte, error) {
 	cmd := exec.CommandContext(ctx, compose.BinName(), buildDaemonSetPSArgs(projectFull, daemonID)...) //nolint:gosec
+	cmd.Dir = compose.BaseDir
 	cmd.Env = compose.BuildEnv()
 	out, err := cmd.Output()
 	if err != nil {
@@ -112,7 +113,7 @@ func daemonSetCompletion(flags *cmdctx.RootFlags) func(*cobra.Command, []string,
 			dockerCfg = &config.DockerConfig{}
 		}
 
-		compose := docker.NewCompose(cfg, dockerCfg)
+		compose := docker.NewCompose(cfg, dockerCfg, projectRoot)
 		out, err := daemonSetShellOutFn(cmd.Context(), compose, cfg.Project.FullName(), def.DerivedFromDaemon)
 		if err != nil {
 			return nil, cobra.ShellCompDirectiveNoFileComp

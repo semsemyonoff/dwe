@@ -43,6 +43,7 @@ type dockerPipeline struct {
 	cfg       *config.DweConfig
 	dockerCfg *config.DockerConfig
 	compose   *dockerpkg.Compose
+	baseDir   string
 }
 
 // envRegenCommands lists docker commands that trigger automatic .env regeneration.
@@ -75,12 +76,13 @@ func newDockerPipeline(flags *cmdctx.RootFlags, command string) (*dockerPipeline
 		return nil, fmt.Errorf("ensuring volumes: %w", err)
 	}
 
-	compose := dockerpkg.NewCompose(cfg, dockerCfg)
+	compose := dockerpkg.NewCompose(cfg, dockerCfg, baseDir)
 
 	return &dockerPipeline{
 		cfg:       cfg,
 		dockerCfg: dockerCfg,
 		compose:   compose,
+		baseDir:   baseDir,
 	}, nil
 }
 
@@ -248,11 +250,11 @@ func stripDockerCommandSeparator(args []string) []string {
 // resolvePullInvocation returns the Compose instance and extra args for a pull command.
 // When all is true, uses ComposeFilesAll(); otherwise uses ComposeFiles().
 // The returned extra args are just the service names (pull doesn't have flags like --force).
-func resolvePullInvocation(cfg *config.DweConfig, dockerCfg *config.DockerConfig, all bool, services []string) (*dockerpkg.Compose, []string) {
+func resolvePullInvocation(cfg *config.DweConfig, dockerCfg *config.DockerConfig, baseDir string, all bool, services []string) (*dockerpkg.Compose, []string) {
 	if all {
-		return dockerpkg.NewComposeAll(cfg, dockerCfg), services
+		return dockerpkg.NewComposeAll(cfg, dockerCfg, baseDir), services
 	}
-	return dockerpkg.NewCompose(cfg, dockerCfg), services
+	return dockerpkg.NewCompose(cfg, dockerCfg, baseDir), services
 }
 
 func newDockerPullCmd(flags *cmdctx.RootFlags) *cobra.Command {
@@ -267,7 +269,7 @@ func newDockerPullCmd(flags *cmdctx.RootFlags) *cobra.Command {
 				return err
 			}
 
-			compose, extraArgs := resolvePullInvocation(p.cfg, p.dockerCfg, all, args)
+			compose, extraArgs := resolvePullInvocation(p.cfg, p.dockerCfg, p.baseDir, all, args)
 			return compose.Exec("pull", extraArgs...)
 		},
 		SilenceUsage: true,
@@ -281,12 +283,12 @@ func newDockerPullCmd(flags *cmdctx.RootFlags) *cobra.Command {
 // When all is true, uses ComposeFilesAll(); otherwise uses ComposeFiles().
 // When force is true, prepends --no-cache --pull to the extra args.
 // The returned extra args include the force flags (if applicable) and service names.
-func resolveBuildInvocation(cfg *config.DweConfig, dockerCfg *config.DockerConfig, all, force bool, services []string) (*dockerpkg.Compose, []string) {
+func resolveBuildInvocation(cfg *config.DweConfig, dockerCfg *config.DockerConfig, baseDir string, all, force bool, services []string) (*dockerpkg.Compose, []string) {
 	var compose *dockerpkg.Compose
 	if all {
-		compose = dockerpkg.NewComposeAll(cfg, dockerCfg)
+		compose = dockerpkg.NewComposeAll(cfg, dockerCfg, baseDir)
 	} else {
-		compose = dockerpkg.NewCompose(cfg, dockerCfg)
+		compose = dockerpkg.NewCompose(cfg, dockerCfg, baseDir)
 	}
 
 	extraArgs := make([]string, 0, len(services)+2)
@@ -310,7 +312,7 @@ func newDockerBuildCmd(flags *cmdctx.RootFlags) *cobra.Command {
 				return err
 			}
 
-			compose, extraArgs := resolveBuildInvocation(p.cfg, p.dockerCfg, all, force, args)
+			compose, extraArgs := resolveBuildInvocation(p.cfg, p.dockerCfg, p.baseDir, all, force, args)
 			return compose.Exec("build", extraArgs...)
 		},
 		SilenceUsage: true,

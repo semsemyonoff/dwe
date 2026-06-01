@@ -61,7 +61,7 @@ func (DaemonsReap) Run(ctx context.Context, _ map[string]any, ectx spec.ExecCont
 	}
 
 	projectFull := ectx.Config.Project.FullName()
-	compose := docker.NewCompose(ectx.Config, dockerCfg)
+	compose := docker.NewCompose(ectx.Config, dockerCfg, ectx.ProjectRoot)
 
 	names, err := listDaemonsFn(ctx, compose, projectFull)
 	if err != nil {

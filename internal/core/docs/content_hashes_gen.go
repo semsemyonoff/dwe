@@ -8,7 +8,7 @@ package docs
 var ContentHashes = map[string]string{
 	"README.md":                                           "a568f0456775",
 	"internals/architecture.md":                           "4fe04c86171c",
-	"internals/packages.md":                               "b566bd746839",
+	"internals/packages.md":                               "7d0455eba2a6",
 	"reference/cli/dwe.md":                                "3a98df74db87",
 	"reference/cli/dwe_commands.md":                       "2b6486cb54ac",
 	"reference/cli/dwe_commands_list.md":                  "24fa793bdf18",

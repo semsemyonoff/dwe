@@ -111,7 +111,7 @@ func TestRun_ReloadThenQuit_CancelsInflightContext(t *testing.T) {
 	exited := make(chan struct{})
 
 	// Override collectDaemonsFn to block on context cancellation
-	collectDaemonsFn = func(ctx context.Context, _ *config.DweConfig, _ *config.DockerConfig) ([]statusview.DaemonRow, []error) {
+	collectDaemonsFn = func(ctx context.Context, _ *config.DweConfig, _ *config.DockerConfig, _ string) ([]statusview.DaemonRow, []error) {
 		close(started) // Signal that collectDaemons has started
 		<-ctx.Done()   // Wait for context cancellation
 		close(exited)  // Signal that collectDaemons has exited

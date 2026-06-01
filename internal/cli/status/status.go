@@ -96,7 +96,7 @@ func loadStatusContext(flags *cmdctx.RootFlags, errW io.Writer) (*statusContext,
 	if err != nil {
 		return nil, cmdctx.ErrWrap("project_invalid_config", err)
 	}
-	topo, topoStatus := stack.ResolveTopology(cfg, dockerCfg, projectName)
+	topo, topoStatus := stack.ResolveTopology(cfg, dockerCfg, projectName, flags.ProjectRoot())
 	dockerBin := config.DockerBin(cfg)
 	isRunning := func(_, container string) bool {
 		return stack.ContainerRunning(projectName, container, dockerBin)
@@ -289,7 +289,7 @@ func renderSection(ctx context.Context, out, errW io.Writer, in stack.StatusInpu
 			_, _ = fmt.Fprintf(errW, "warning: %d custom status expression(s) failed to render\n", len(errs))
 		}
 	case sectionDaemons:
-		rows, collectErrs := stack.CollectDaemons(ctx, sc.Cfg, sc.normalisedDockerCfg())
+		rows, collectErrs := stack.CollectDaemons(ctx, sc.Cfg, sc.normalisedDockerCfg(), sc.ProjectRoot)
 		body, renderErrs := stack.RenderDaemons(rows)
 		writeNonEmpty(out, body)
 		if n := len(collectErrs) + len(renderErrs); n > 0 {

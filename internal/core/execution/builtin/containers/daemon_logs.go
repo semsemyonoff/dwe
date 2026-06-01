@@ -52,7 +52,7 @@ func (DaemonLogs) Run(ctx context.Context, with map[string]any, ectx spec.ExecCo
 		return err
 	}
 
-	compose := docker.NewCompose(ectx.Config, dockerCfg)
+	compose := docker.NewCompose(ectx.Config, dockerCfg, ectx.ProjectRoot)
 
 	running, probeErr := isDaemonRunning(ctx, compose, fullName)
 	if probeErr != nil {

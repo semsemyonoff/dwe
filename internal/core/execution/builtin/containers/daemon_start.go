@@ -154,7 +154,7 @@ func (DaemonStart) Run(ctx context.Context, with map[string]any, ectx spec.ExecC
 		return fmt.Errorf("docker_daemon_start: %w", err)
 	}
 
-	compose := docker.NewCompose(ectx.Config, dockerCfg)
+	compose := docker.NewCompose(ectx.Config, dockerCfg, ectx.ProjectRoot)
 
 	// Best-effort pre-check via docker ps for the resolved container name.
 	if running, _ := isDaemonRunning(ctx, compose, fullName); running {
@@ -181,6 +181,7 @@ func (DaemonStart) Run(ctx context.Context, with map[string]any, ectx spec.ExecC
 
 	args := compose.BuildArgs("run", extraArgs...)
 	cmd := exec.CommandContext(ctx, compose.BinName(), args...) //nolint:gosec
+	cmd.Dir = compose.BaseDir
 	combined := make(map[string]string, len(compose.ProcessEnv)+len(envVars))
 	maps.Copy(combined, compose.ProcessEnv)
 	maps.Copy(combined, envVars)

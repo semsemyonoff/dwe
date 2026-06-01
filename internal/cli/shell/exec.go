@@ -243,7 +243,8 @@ func dockerExecCLI(containerName, shell, u, workDir string, env map[string]strin
 	args = append(args, containerName, shell)
 
 	render.Stdout().Info(fmt.Sprintf("exec → %s", containerName))
-	return runInteractive(processEnv, dockerBin, args...)
+	// docker exec does not read compose files, so cwd is irrelevant — inherit parent's.
+	return runInteractive(processEnv, "", dockerBin, args...)
 }
 
 // composeRunCLI starts a new temporary container via docker compose run --rm.
@@ -270,14 +271,17 @@ func composeRunCLI(compose *docker.Compose, serviceName, shell, u, workDir strin
 	args = append(args, serviceName, shell)
 
 	render.Stdout().Info(fmt.Sprintf("run → %s (new container)", serviceName))
-	return runInteractive(compose.BuildEnv(), compose.BinName(), args...)
+	return runInteractive(compose.BuildEnv(), compose.BaseDir, compose.BinName(), args...)
 }
 
 // runInteractive executes a command with the current process's stdin/stdout/stderr,
 // allowing full interactive terminal use. processEnv overrides the OS environment
-// for the child process (nil means inherit unchanged).
-func runInteractive(processEnv []string, name string, args ...string) error {
+// for the child process (nil means inherit unchanged). workDir is the cwd for the
+// child (empty inherits the parent CWD); compose-aware callers must pass
+// compose.BaseDir so relative `-f` paths resolve against the project root.
+func runInteractive(processEnv []string, workDir, name string, args ...string) error {
 	cmd := exec.Command(name, args...)
+	cmd.Dir = workDir
 	cmd.Stdin = os.Stdin
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr

@@ -33,7 +33,7 @@ func TestDockerPipelineBuildsCompose(t *testing.T) {
 		},
 	}
 
-	compose := dockerpkg.NewCompose(cfg, dockerCfg)
+	compose := dockerpkg.NewCompose(cfg, dockerCfg, "")
 
 	// Verify up args include policy defaults + service args.
 	args := compose.BuildArgs("up", "redis")
@@ -231,7 +231,7 @@ func TestResolvePullInvocation(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			compose, extraArgs := resolvePullInvocation(cfg, dockerCfg, tt.all, []string{"svc"})
+			compose, extraArgs := resolvePullInvocation(cfg, dockerCfg, "", tt.all, []string{"svc"})
 			if !tt.want(compose) {
 				t.Errorf("resolvePullInvocation(%v) file count mismatch", tt.all)
 			}
@@ -271,7 +271,7 @@ func TestDockerPullArgs(t *testing.T) {
 		},
 	}
 
-	compose := dockerpkg.NewCompose(cfg, dockerCfg)
+	compose := dockerpkg.NewCompose(cfg, dockerCfg, "")
 	args := compose.BuildArgs("pull", "svc")
 	expected := []string{
 		"compose",
@@ -381,7 +381,7 @@ func TestResolveBuildInvocation(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			compose, extraArgs := resolveBuildInvocation(cfg, dockerCfg, tt.all, tt.force, tt.services)
+			compose, extraArgs := resolveBuildInvocation(cfg, dockerCfg, "", tt.all, tt.force, tt.services)
 			if !tt.check(compose) {
 				t.Errorf("resolveBuildInvocation file set mismatch")
 			}
@@ -468,7 +468,7 @@ func TestDockerBuildArgs(t *testing.T) {
 		},
 	}
 
-	compose := dockerpkg.NewCompose(cfg, dockerCfg)
+	compose := dockerpkg.NewCompose(cfg, dockerCfg, "")
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			args := compose.BuildArgs("build", tt.extraArgs...)
@@ -593,9 +593,9 @@ func TestLegacyImageCommandMapping(t *testing.T) {
 			var extraArgs []string
 
 			if tt.legacyTarget == "image_pull" || tt.legacyTarget == "image_pull_all" {
-				compose, extraArgs = resolvePullInvocation(cfg, dockerCfg, tt.allFlag, tt.services)
+				compose, extraArgs = resolvePullInvocation(cfg, dockerCfg, "", tt.allFlag, tt.services)
 			} else {
-				compose, extraArgs = resolveBuildInvocation(cfg, dockerCfg, tt.allFlag, tt.forceFlag, tt.services)
+				compose, extraArgs = resolveBuildInvocation(cfg, dockerCfg, "", tt.allFlag, tt.forceFlag, tt.services)
 			}
 
 			if !tt.expectedCompose(compose) {
@@ -631,8 +631,8 @@ func TestAllFlagDoesNotMutateLocalConfig(t *testing.T) {
 	}
 
 	// --all should return ComposeFilesAll() (includes disabled "api" service).
-	withAll, _ := resolvePullInvocation(cfg, dockerCfg, true, nil)
-	withoutAll, _ := resolvePullInvocation(cfg, dockerCfg, false, nil)
+	withAll, _ := resolvePullInvocation(cfg, dockerCfg, "", true, nil)
+	withoutAll, _ := resolvePullInvocation(cfg, dockerCfg, "", false, nil)
 
 	if !reflect.DeepEqual(withAll.Files, cfg.ComposeFilesAll()) {
 		t.Errorf("resolvePullInvocation(--all) files = %v, want %v", withAll.Files, cfg.ComposeFilesAll())
@@ -645,8 +645,8 @@ func TestAllFlagDoesNotMutateLocalConfig(t *testing.T) {
 	}
 
 	// Same assertions for build.
-	buildWithAll, _ := resolveBuildInvocation(cfg, dockerCfg, true, false, nil)
-	buildWithoutAll, _ := resolveBuildInvocation(cfg, dockerCfg, false, false, nil)
+	buildWithAll, _ := resolveBuildInvocation(cfg, dockerCfg, "", true, false, nil)
+	buildWithoutAll, _ := resolveBuildInvocation(cfg, dockerCfg, "", false, false, nil)
 
 	if !reflect.DeepEqual(buildWithAll.Files, cfg.ComposeFilesAll()) {
 		t.Errorf("resolveBuildInvocation(--all) files = %v, want %v", buildWithAll.Files, cfg.ComposeFilesAll())

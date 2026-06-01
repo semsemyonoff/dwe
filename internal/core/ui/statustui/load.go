@@ -134,7 +134,7 @@ func buildTabs(ctx context.Context, d Deps) ([]tab, string) {
 	git := renderGitTab(ctx, d)
 
 	// Daemons
-	daemonRows, daemonErrs := collectDaemonsFn(ctx, d.Cfg, normaliseDocker(d.DockerCfg))
+	daemonRows, daemonErrs := collectDaemonsFn(ctx, d.Cfg, normaliseDocker(d.DockerCfg), d.ProjectRoot)
 	daemonsBody, renderErrs := stack.RenderDaemons(daemonRows)
 	allDaemonErrs := make([]error, 0, len(daemonErrs)+len(renderErrs))
 	allDaemonErrs = append(allDaemonErrs, daemonErrs...)

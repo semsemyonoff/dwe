@@ -326,6 +326,7 @@ func buildDockerComposeCmd(
 	args = append(args, serviceArgv...)
 
 	cmd := exec.CommandContext(ctx, compose.BinName(), append([]string{"compose"}, args...)...) //nolint:gosec
+	cmd.Dir = compose.BaseDir
 	runio.BindCancel(cmd)
 	combined := make(map[string]string, len(compose.ProcessEnv)+len(envVars))
 	maps.Copy(combined, compose.ProcessEnv)
@@ -339,6 +340,7 @@ func isContainerRunning(compose *docker.Compose, service string) (bool, error) {
 	args := compose.BuildInternalArgs("ps", "--status", "running", "--format", "json", service)
 
 	cmd := exec.Command(compose.BinName(), args...) //nolint:gosec
+	cmd.Dir = compose.BaseDir
 	cmd.Env = compose.BuildEnv()
 	out, err := cmd.Output()
 	if err != nil {

@@ -291,7 +291,7 @@ func TestComposeArgvOutput(t *testing.T) {
 		},
 	}
 
-	compose := docker.NewCompose(cfg, dockerCfg)
+	compose := docker.NewCompose(cfg, dockerCfg, "")
 
 	tests := []struct {
 		name     string

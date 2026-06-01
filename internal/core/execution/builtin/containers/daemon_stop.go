@@ -84,7 +84,7 @@ func (DaemonStop) Run(ctx context.Context, with map[string]any, ectx spec.ExecCo
 
 	secs := stopTimeoutSeconds(spec.GetStringParam(with, "stop_timeout", ""))
 
-	compose := docker.NewCompose(ectx.Config, dockerCfg)
+	compose := docker.NewCompose(ectx.Config, dockerCfg, ectx.ProjectRoot)
 
 	args := []string{"stop", "-t", strconv.Itoa(secs), fullName}
 	cmd := exec.CommandContext(ctx, compose.BinName(), args...) //nolint:gosec

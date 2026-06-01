@@ -71,7 +71,7 @@ func (ContainersRunning) Run(ctx context.Context, with map[string]any, ectx spec
 	if dockerCfg == nil {
 		dockerCfg = &config.DockerConfig{}
 	}
-	compose := docker.NewCompose(ectx.Config, dockerCfg)
+	compose := docker.NewCompose(ectx.Config, dockerCfg, ectx.ProjectRoot)
 
 	running, err := compose.RunningServices(ctx, services)
 	if err != nil {

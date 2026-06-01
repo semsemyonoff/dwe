@@ -13,13 +13,13 @@ import (
 
 func TestFetchComposeTopology_EmptyFiles_NilRegardlessOfBin(t *testing.T) {
 	// No files → nil regardless of which binary is requested.
-	if got := FetchComposeTopology(nil, "proj", nil, "podman"); got != nil {
+	if got := FetchComposeTopology(nil, "proj", nil, "podman", ""); got != nil {
 		t.Errorf("expected nil for empty file list, got %v", got)
 	}
 }
 
 func TestComposeNodeStatuses_EmptyFiles_NilRegardlessOfBin(t *testing.T) {
-	if got := ComposeNodeStatuses(nil, "proj", nil, "podman"); got != nil {
+	if got := ComposeNodeStatuses(nil, "proj", nil, "podman", ""); got != nil {
 		t.Errorf("expected nil for empty file list, got %v", got)
 	}
 }
@@ -55,14 +55,14 @@ func TestBuildComposeArgs_NoProjectName(t *testing.T) {
 // --- ParseTopologyFromFiles ---
 
 func TestParseTopologyFromFiles_Empty(t *testing.T) {
-	result := ParseTopologyFromFiles(nil)
+	result := ParseTopologyFromFiles(nil, "")
 	if result != nil {
 		t.Errorf("expected nil for no files, got %v", result)
 	}
 }
 
 func TestParseTopologyFromFiles_MissingFile(t *testing.T) {
-	result := ParseTopologyFromFiles([]string{"/nonexistent/path/compose.yaml"})
+	result := ParseTopologyFromFiles([]string{"/nonexistent/path/compose.yaml"}, "")
 	if result != nil {
 		t.Errorf("expected nil when all files missing, got %v", result)
 	}
@@ -84,7 +84,7 @@ services:
 		t.Fatal(err)
 	}
 
-	result := ParseTopologyFromFiles([]string{f})
+	result := ParseTopologyFromFiles([]string{f}, "")
 	if result == nil {
 		t.Fatal("expected non-nil result")
 	}

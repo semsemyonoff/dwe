@@ -99,7 +99,7 @@ func (WaitHealthy) Run(ctx context.Context, with map[string]any, ectx spec.ExecC
 
 	var err error
 	// Build compose.
-	compose := docker.NewCompose(ectx.Config, dockerCfg)
+	compose := docker.NewCompose(ectx.Config, dockerCfg, ectx.ProjectRoot)
 
 	// Obtain container IDs.
 	var ids []string

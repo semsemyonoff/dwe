@@ -125,7 +125,7 @@ service exists, or shows an interactive selector when multiple services are enab
 				}
 				dockerCfg = &config.DockerConfig{}
 			}
-			compose := docker.NewCompose(cfg, dockerCfg)
+			compose := docker.NewCompose(cfg, dockerCfg, baseDir)
 
 			argName := ""
 			if len(args) > 0 {

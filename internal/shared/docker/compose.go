@@ -27,6 +27,13 @@ type Compose struct {
 	// docker compose process (e.g. DOCKER_CLI_HINTS=false).
 	// Keys are sorted for deterministic ordering when building os.Environ slices.
 	ProcessEnv map[string]string
+	// BaseDir is the absolute project root (directory of workspace.yml). It is
+	// applied as the working directory of every docker compose subprocess so
+	// that relative `-f compose.yaml` paths resolve correctly when dwe is
+	// invoked from a subdirectory of the project. Empty string disables the
+	// override (subprocess inherits the parent CWD — only safe inside tests
+	// that do not exec).
+	BaseDir string
 }
 
 // BinName returns the Docker-compatible binary name. Safe on nil receivers and
@@ -39,18 +46,22 @@ func (c *Compose) BinName() string {
 }
 
 // NewCompose creates a Compose from the resolved dwe config and docker policy.
-func NewCompose(cfg *config.DweConfig, dockerCfg *config.DockerConfig) *Compose {
-	return buildCompose(cfg, dockerCfg, cfg.ComposeFiles())
+// baseDir is the absolute project root; it is applied as cmd.Dir on every
+// docker compose subprocess so relative `-f` paths resolve correctly when dwe
+// runs from a project subdirectory. Pass an empty string only from tests that
+// never exec.
+func NewCompose(cfg *config.DweConfig, dockerCfg *config.DockerConfig, baseDir string) *Compose {
+	return buildCompose(cfg, dockerCfg, cfg.ComposeFiles(), baseDir)
 }
 
 // NewComposeAll creates a Compose like NewCompose but sources files from ComposeFilesAll(),
 // which includes all overlays regardless of enabled state.
-func NewComposeAll(cfg *config.DweConfig, dockerCfg *config.DockerConfig) *Compose {
-	return buildCompose(cfg, dockerCfg, cfg.ComposeFilesAll())
+func NewComposeAll(cfg *config.DweConfig, dockerCfg *config.DockerConfig, baseDir string) *Compose {
+	return buildCompose(cfg, dockerCfg, cfg.ComposeFilesAll(), baseDir)
 }
 
 // buildCompose is a private helper that constructs a Compose with the provided file list.
-func buildCompose(cfg *config.DweConfig, dockerCfg *config.DockerConfig, files []string) *Compose {
+func buildCompose(cfg *config.DweConfig, dockerCfg *config.DockerConfig, files []string, baseDir string) *Compose {
 	cmdArgs := map[string][]string{
 		"up":      dockerCfg.Args.Up,
 		"down":    dockerCfg.Args.Down,
@@ -71,6 +82,7 @@ func buildCompose(cfg *config.DweConfig, dockerCfg *config.DockerConfig, files [
 		GlobalArgs:  dockerCfg.Args.Global,
 		CommandArgs: cmdArgs,
 		ProcessEnv:  dockerCfg.ProcessEnv,
+		BaseDir:     baseDir,
 	}
 }
 
@@ -117,6 +129,7 @@ func (c *Compose) Exec(command string, extraArgs ...string) error {
 	args := c.BuildArgs(command, extraArgs...)
 	bin := c.BinName()
 	cmd := exec.Command(bin, args...)
+	cmd.Dir = c.BaseDir
 	cmd.Stdin = os.Stdin
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
@@ -208,6 +221,7 @@ func (c *Compose) BuildInternalArgs(command string, extraArgs ...string) []strin
 // are consistent with Exec-based lifecycle commands.
 func (c *Compose) output(args []string) ([]byte, error) {
 	cmd := exec.Command(c.BinName(), args...)
+	cmd.Dir = c.BaseDir
 	cmd.Env = c.BuildEnv()
 	return cmd.Output()
 }
@@ -248,6 +262,7 @@ func (c *Compose) RunningServices(ctx context.Context, services []string) ([]str
 	args = append(args, services...)
 
 	cmd := exec.CommandContext(ctx, c.BinName(), args...) //nolint:gosec
+	cmd.Dir = c.BaseDir
 	cmd.Env = c.BuildEnv()
 	out, err := cmd.Output()
 	if err != nil {

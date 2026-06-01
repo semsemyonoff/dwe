@@ -22,12 +22,13 @@ import (
 // overrides from docker.yml process_env are honoured.
 // bin is the Docker-compatible binary (e.g. "docker", "podman"); pass
 // config.DockerBin(cfg) at the call site.
-func FetchComposeTopology(composeFiles []string, projectName string, processEnv []string, bin string) map[string][]string {
+func FetchComposeTopology(composeFiles []string, projectName string, processEnv []string, bin, baseDir string) map[string][]string {
 	if len(composeFiles) == 0 {
 		return nil
 	}
 	args := BuildComposeArgs(projectName, composeFiles, "config")
 	cmd := exec.Command(bin, args...) //nolint:gosec
+	cmd.Dir = baseDir
 	cmd.Env = processEnv
 	out, err := cmd.Output()
 	if err != nil {
@@ -43,12 +44,18 @@ func FetchComposeTopology(composeFiles []string, projectName string, processEnv 
 // ParseTopologyFromFiles builds a dependency map by reading and parsing compose
 // YAML files directly, without invoking docker. Used as a fallback when docker
 // is not available. Each file is parsed independently; services are merged across files.
-func ParseTopologyFromFiles(composeFiles []string) map[string][]string {
+// baseDir is the project root used to resolve relative entries in composeFiles
+// (so this works when dwe is invoked from a subdirectory). Empty baseDir keeps
+// the legacy CWD-relative behavior — only safe inside tests.
+func ParseTopologyFromFiles(composeFiles []string, baseDir string) map[string][]string {
 	if len(composeFiles) == 0 {
 		return nil
 	}
 	result := make(map[string][]string)
 	for _, f := range composeFiles {
+		if baseDir != "" && !filepath.IsAbs(f) {
+			f = filepath.Join(baseDir, f)
+		}
 		data, err := os.ReadFile(f)
 		if err != nil {
 			continue
@@ -74,12 +81,13 @@ func ParseTopologyFromFiles(composeFiles []string) map[string][]string {
 // overrides from docker.yml process_env are honoured.
 // bin is the Docker-compatible binary (e.g. "docker", "podman"); pass
 // config.DockerBin(cfg) at the call site.
-func ComposeNodeStatuses(composeFiles []string, projectName string, processEnv []string, bin string) map[string]render.NodeStatus {
+func ComposeNodeStatuses(composeFiles []string, projectName string, processEnv []string, bin, baseDir string) map[string]render.NodeStatus {
 	if len(composeFiles) == 0 {
 		return nil
 	}
 	runningArgs := BuildComposeArgs(projectName, composeFiles, "ps", "--format", "{{.Service}}", "--filter", "status=running")
 	runningCmd := exec.Command(bin, runningArgs...) //nolint:gosec
+	runningCmd.Dir = baseDir
 	runningCmd.Env = processEnv
 	runningOut, err := runningCmd.Output()
 	if err != nil {
@@ -95,6 +103,7 @@ func ComposeNodeStatuses(composeFiles []string, projectName string, processEnv [
 
 	allArgs := BuildComposeArgs(projectName, composeFiles, "ps", "--format", "{{.Service}}", "--all")
 	allCmd := exec.Command(bin, allArgs...) //nolint:gosec
+	allCmd.Dir = baseDir
 	allCmd.Env = processEnv
 	allOut, err := allCmd.Output()
 	if err != nil {
@@ -245,7 +254,7 @@ func ResolveProjectAndDocker(configPath string, cfg *config.DweConfig) (string, 
 // It queries docker compose where available, falling back to YAML-only parsing
 // when docker is unavailable. Disabled nodes are then added as isolated
 // entries, and any nodes hidden via docker.yml are removed.
-func ResolveTopology(cfg *config.DweConfig, dockerCfg *config.DockerConfig, projectName string) (map[string][]string, map[string]render.NodeStatus) {
+func ResolveTopology(cfg *config.DweConfig, dockerCfg *config.DockerConfig, projectName, baseDir string) (map[string][]string, map[string]render.NodeStatus) {
 	composeFiles := cfg.ComposeFiles()
 	var processEnv []string
 	if dockerCfg != nil {
@@ -253,12 +262,12 @@ func ResolveTopology(cfg *config.DweConfig, dockerCfg *config.DockerConfig, proj
 	}
 	dockerBin := config.DockerBin(cfg)
 
-	topo := FetchComposeTopology(composeFiles, projectName, processEnv, dockerBin)
+	topo := FetchComposeTopology(composeFiles, projectName, processEnv, dockerBin, baseDir)
 	var topoStatus map[string]render.NodeStatus
 	if topo == nil {
-		topo = ParseTopologyFromFiles(composeFiles)
+		topo = ParseTopologyFromFiles(composeFiles, baseDir)
 	} else {
-		topoStatus = ComposeNodeStatuses(composeFiles, projectName, processEnv, dockerBin)
+		topoStatus = ComposeNodeStatuses(composeFiles, projectName, processEnv, dockerBin, baseDir)
 		if topoStatus != nil {
 			for name := range topo {
 				if _, ok := topoStatus[name]; !ok {

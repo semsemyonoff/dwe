@@ -1,11 +1,78 @@
 package docker
 
 import (
+	"os"
+	"path/filepath"
+	"runtime"
 	"slices"
+	"strings"
 	"testing"
 
 	"github.com/semsemyonoff/dwe/internal/core/project/config"
 )
+
+// TestExec_RunsInBaseDir guarantees that docker compose subprocesses inherit
+// BaseDir as their working directory, so relative `-f compose.yaml` paths
+// resolve against the project root even when dwe is invoked from a project
+// subdirectory. Regression for the cwd-bug where commands launched from a
+// subdir crashed with "open <cwd>/compose.yaml: no such file or directory".
+func TestExec_RunsInBaseDir(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("shell stub is sh-based")
+	}
+	tmp := t.TempDir()
+	// Build a stub docker binary that writes its own CWD to a file and exits 0.
+	stubDir := filepath.Join(tmp, "stub")
+	if err := os.Mkdir(stubDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	cwdFile := filepath.Join(tmp, "cwd.txt")
+	stubPath := filepath.Join(stubDir, "docker-cwd-stub")
+	stub := "#!/bin/sh\npwd > " + cwdFile + "\n"
+	if err := os.WriteFile(stubPath, []byte(stub), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	// Pretend baseDir is the project root.
+	baseDir := filepath.Join(tmp, "project")
+	if err := os.Mkdir(baseDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	// Switch our own cwd to a *different* directory — this is what reproduces
+	// "ran from a subdir" semantics for the parent process. t.Chdir restores
+	// the cwd at test end and panics if the test (or another in the package)
+	// is parallel — both desirable here.
+	otherDir := filepath.Join(tmp, "elsewhere")
+	if err := os.Mkdir(otherDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	t.Chdir(otherDir)
+
+	c := &Compose{Bin: stubPath, BaseDir: baseDir}
+	if err := c.Exec("ps"); err != nil {
+		t.Fatalf("Exec: %v", err)
+	}
+	got, err := os.ReadFile(cwdFile)
+	if err != nil {
+		t.Fatalf("read cwd file: %v", err)
+	}
+	gotPath := strings.TrimSpace(string(got))
+	if gotPath == "" {
+		t.Fatal("stub wrote empty cwd — child likely did not run")
+	}
+	// macOS resolves /var → /private/var; compare via EvalSymlinks. Surface
+	// EvalSymlinks errors so an unreadable path can't masquerade as "" == "".
+	wantResolved, err := filepath.EvalSymlinks(baseDir)
+	if err != nil {
+		t.Fatalf("EvalSymlinks baseDir: %v", err)
+	}
+	gotResolved, err := filepath.EvalSymlinks(gotPath)
+	if err != nil {
+		t.Fatalf("EvalSymlinks child cwd %q: %v", gotPath, err)
+	}
+	if gotResolved != wantResolved {
+		t.Fatalf("child CWD = %q, want %q (BaseDir not applied)", gotResolved, wantResolved)
+	}
+}
 
 func TestNewCompose(t *testing.T) {
 	cfg := &config.DweConfig{
@@ -22,7 +89,7 @@ func TestNewCompose(t *testing.T) {
 		},
 	}
 
-	c := NewCompose(cfg, dockerCfg)
+	c := NewCompose(cfg, dockerCfg, "")
 
 	if c.ProjectName != "dwe-laravel" {
 		t.Errorf("ProjectName = %q, want %q", c.ProjectName, "dwe-laravel")
@@ -365,7 +432,7 @@ func TestNewCompose_PopulatesBinFromConfig(t *testing.T) {
 		Compose: config.ComposeConfig{Base: "compose.yaml"},
 	}
 	dockerCfg := &config.DockerConfig{ProjectName: "test"}
-	c := NewCompose(cfg, dockerCfg)
+	c := NewCompose(cfg, dockerCfg, "")
 	// DockerBin returns "docker" when userconfig is nil
 	if c.Bin != "docker" {
 		t.Errorf("NewCompose Bin = %q, want %q", c.Bin, "docker")
@@ -380,7 +447,7 @@ func TestNewCompose_DefaultBinWhenNotSet(t *testing.T) {
 		Compose: config.ComposeConfig{Base: "compose.yaml"},
 	}
 	dockerCfg := &config.DockerConfig{ProjectName: "test"}
-	c := NewCompose(cfg, dockerCfg)
+	c := NewCompose(cfg, dockerCfg, "")
 	if c.BinName() != "docker" {
 		t.Errorf("NewCompose BinName() = %q, want %q", c.BinName(), "docker")
 	}
@@ -430,7 +497,7 @@ func TestNewComposeAll(t *testing.T) {
 		},
 	}
 
-	c := NewComposeAll(cfg, dockerCfg)
+	c := NewComposeAll(cfg, dockerCfg, "")
 
 	// Verify Files come from ComposeFilesAll() instead of ComposeFiles()
 	wantFiles := cfg.ComposeFilesAll()

@@ -185,7 +185,7 @@ func TestCollectDaemons_ShellError(t *testing.T) {
 	daemonsShellOutFn = func(_ context.Context, _ *docker.Compose, _ string) ([]byte, error) {
 		return nil, errors.New("permission denied")
 	}
-	rows, errs := CollectDaemons(context.Background(), cfg, &config.DockerConfig{})
+	rows, errs := CollectDaemons(context.Background(), cfg, &config.DockerConfig{}, "")
 	if rows != nil {
 		t.Errorf("expected nil rows on error, got %v", rows)
 	}
@@ -198,7 +198,7 @@ func TestCollectDaemons_ShellError(t *testing.T) {
 }
 
 func TestCollectDaemons_NilCfg(t *testing.T) {
-	rows, errs := CollectDaemons(context.Background(), nil, nil)
+	rows, errs := CollectDaemons(context.Background(), nil, nil, "")
 	if rows != nil || errs != nil {
 		t.Errorf("nil cfg → expected (nil, nil), got (%v, %v)", rows, errs)
 	}
@@ -219,7 +219,7 @@ func TestCollectDaemons_ShellSeam(t *testing.T) {
 	daemonsShellOutFn = func(_ context.Context, _ *docker.Compose, _ string) ([]byte, error) {
 		return []byte(`{"Names":"proj-php_queue_default","Labels":{"dwe.daemon.id":"services.main.queue","dwe.daemon.params":"{\"name\":\"default\"}"}}`), nil
 	}
-	rows, errs := CollectDaemons(context.Background(), cfg, &config.DockerConfig{})
+	rows, errs := CollectDaemons(context.Background(), cfg, &config.DockerConfig{}, "")
 	if len(errs) != 0 {
 		t.Fatalf("unexpected errs: %v", errs)
 	}

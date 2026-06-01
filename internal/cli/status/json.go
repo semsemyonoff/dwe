@@ -205,7 +205,7 @@ func buildServicesJSON(sc *statusContext, svcType config.ServiceType) []serviceJ
 }
 
 func buildDaemonsJSON(ctx context.Context, sc *statusContext) []daemonJSON {
-	rows, _ := stack.CollectDaemons(ctx, sc.Cfg, sc.normalisedDockerCfg())
+	rows, _ := stack.CollectDaemons(ctx, sc.Cfg, sc.normalisedDockerCfg(), sc.ProjectRoot)
 	if len(rows) == 0 {
 		return nil
 	}

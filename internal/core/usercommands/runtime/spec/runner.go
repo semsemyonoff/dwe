@@ -124,11 +124,12 @@ type RunContext struct {
 // name and file list derived from the dwe config.
 func (ctx RunContext) Compose() *docker.Compose {
 	if ctx.DockerConfig != nil && ctx.Config != nil {
-		return docker.NewCompose(ctx.Config, ctx.DockerConfig)
+		return docker.NewCompose(ctx.Config, ctx.DockerConfig, ctx.ProjectRoot)
 	}
 	c := &docker.Compose{
 		Bin:         config.DockerBin(ctx.Config),
 		CommandArgs: map[string][]string{},
+		BaseDir:     ctx.ProjectRoot,
 	}
 	if ctx.Config != nil {
 		c.ProjectName = ctx.Config.Project.FullName()

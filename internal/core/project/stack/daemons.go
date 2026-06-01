@@ -45,6 +45,7 @@ func runDaemonsPS(ctx context.Context, compose *docker.Compose, projectFullName 
 	args := []string{"ps", "--format=json"}
 	args = append(args, daemon.FilterArgsByLabels(projectFullName, "")...)
 	cmd := exec.CommandContext(ctx, compose.BinName(), args...) //nolint:gosec
+	cmd.Dir = compose.BaseDir
 	cmd.Env = compose.BuildEnv()
 	out, err := cmd.Output()
 	if err != nil {
@@ -65,14 +66,14 @@ func runDaemonsPS(ctx context.Context, compose *docker.Compose, projectFullName 
 // for per-row parse failures. A docker shellout failure surfaces as a single
 // error entry and an empty row slice (best-effort: status renders the rest of
 // the project without aborting).
-func CollectDaemons(ctx context.Context, cfg *config.DweConfig, dockerCfg *config.DockerConfig) ([]statusview.DaemonRow, []error) {
+func CollectDaemons(ctx context.Context, cfg *config.DweConfig, dockerCfg *config.DockerConfig, baseDir string) ([]statusview.DaemonRow, []error) {
 	if cfg == nil {
 		return nil, nil
 	}
 	if dockerCfg == nil {
 		dockerCfg = &config.DockerConfig{}
 	}
-	compose := docker.NewCompose(cfg, dockerCfg)
+	compose := docker.NewCompose(cfg, dockerCfg, baseDir)
 	projectFull := cfg.Project.FullName()
 	out, err := daemonsShellOutFn(ctx, compose, projectFull)
 	if err != nil {
