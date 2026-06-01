@@ -168,6 +168,25 @@ func (r *Runner) Run(ctx context.Context, rc spec.RunContext) error {
 				Duration: time.Since(stepStart),
 			})
 		default:
+			// Hidden-target preflight: when the referenced command resolves
+			// to a Hidden def (own hide: truthy or cascaded from a hidden
+			// group), the step is skipped before any other gate. Lookup
+			// failures fall through — runCommandStep will produce a
+			// canonical "command not found" error there.
+			//
+			// Skip path emits OnStepEnd only — matching the when:false and
+			// override-gate skip paths above. Per CLAUDE.md, every early-
+			// continue branch emits OnStepEnd; OnStepStart is reserved for
+			// steps that actually begin work.
+			if targetDef, lookupErr := rc.Registry.Get(step.Command); lookupErr == nil && targetDef.Hidden {
+				_, _ = fmt.Fprintf(runio.StderrOf(rc), "  ◎ workflow %q step[%d] %q: skipped (target hidden)\n",
+					rc.Cmd.ID, i, step.Command)
+				fireOnStepEnd(rc, i, step, spec.StepResult{
+					Status:     spec.StepStatusSkipped,
+					SkipReason: "hidden: " + step.Command,
+				})
+				continue
+			}
 			gateSkip, gateReason, gateErr := evalSubStepOverrideGate(rc, step)
 			if gateErr != nil {
 				wrapped := fmt.Errorf("workflow %q step[%d] %q: %w", rc.Cmd.ID, i, step.Command, gateErr)

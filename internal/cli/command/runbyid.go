@@ -50,9 +50,23 @@ func runCommandByID(
 	}
 
 	// Inspect route — write the formatted definition and stop.
+	// Inspect is allowed on hidden commands (informational) so users can
+	// debug why a command disappeared from listings.
 	if opts.Inspect {
 		printInspect(stdout, def, cfg, reg, opts.Translator, opts.Locale)
 		return nil
+	}
+
+	// Hidden guard: hide is a runtime condition, so the user-facing error
+	// distinguishes it from Private (developer intent) and points at the
+	// remediation — usually "the condition turned true; check `hide:` or
+	// enable the underlying service".
+	if def.Hidden {
+		err := cmdctx.Err("command_unknown",
+			fmt.Sprintf("command %q is hidden by its hide: condition", id)).
+			WithDetail("id", id).
+			WithHint("Run `dwe commands -i " + id + "` to see the hide expression.")
+		return err
 	}
 
 	// Private guard: only block direct run; inspect already returned above.

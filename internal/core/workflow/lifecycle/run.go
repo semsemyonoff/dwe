@@ -142,6 +142,12 @@ func RunRun(ctx RunContext) (err error) {
 	if regErr != nil {
 		reg = nil
 	}
+	// Apply hide: visibility so the workflow runner's Hidden-target skip
+	// fires consistently for user commands invoked from lifecycle phases.
+	// Fail-open — eval failures are logged and the command stays visible.
+	if reg != nil {
+		_ = reg.ApplyVisibility(cfg, workDir)
+	}
 
 	lifecyclePath := filepath.Join(workDir, "workspace", "lifecycle.yml")
 
@@ -262,6 +268,7 @@ func RunRun(ctx RunContext) (err error) {
 		if err != nil {
 			return fmt.Errorf("reloading command registry after pull: %w", err)
 		}
+		_ = reg.ApplyVisibility(cfg, workDir)
 	}
 
 	// Gate: ensure all tracked services are deployed.

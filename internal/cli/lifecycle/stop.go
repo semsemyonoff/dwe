@@ -130,6 +130,9 @@ Use 'dwe docker stop' for the low-level compose stop (no container removal).`,
 				reg = nil
 			}
 			baseDir := filepath.Dir(flags.ConfigPath)
+			if reg != nil {
+				_ = reg.ApplyVisibility(cfg, baseDir)
+			}
 			deps := StopServiceDeps{
 				Cfg:            cfg,
 				CmdRegistry:    reg,

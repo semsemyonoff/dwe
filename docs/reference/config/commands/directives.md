@@ -22,7 +22,41 @@ Directives common to **all** command types unless noted otherwise. Type-specific
 | `type` | enum | required | One of `shell`, `dwe`, `script`, `service_exec`, `service_run`, `workflow`, `builtin`, `daemon` |
 | `description` | string | — | Human-readable description shown in the DWE CLI (selectors, `commands list`, `commands inspect`) |
 | `private` | bool | `false` | Hides from `dwe commands list` and blocks direct `commands run`; still callable from workflows and pipelines |
+| `hide` | string | `""` | Condition expression. When truthy at runtime, the command is treated as if it does not exist: invisible in `dwe commands`, completion, and TUI; rejected on direct invocation; and workflow steps targeting it are auto-skipped with `SkipReason="hidden"`. Same syntax as workflow step `when:` — see [Hide condition](#hide-condition) below. |
 | `notify` | bool | `false` | Fire a desktop notification when the command finishes. See [Notifications](#notifications) below. |
+
+## Hide condition
+
+`hide:` is a runtime-evaluated visibility gate, distinct from `private:`:
+
+- `private:` is a static developer intent — the command is always invisible to end users.
+- `hide:` is a per-invocation condition — the command appears when the condition is falsy and disappears when truthy. Typical use: tie commands to enabled services.
+
+The expression syntax matches workflow step `when:` — supports Go templates (`{{ ... }}`), `${...}` variable substitution, and builtin predicates (`cmd:`, `file:`). See [conditions](../conditions.md) for the full grammar.
+
+Cascade rules:
+
+- A `hide:` field on a group's `group:` block hides the entire group **and all descendants** (commands and sub-groups). The cascade is one-way: a child cannot opt back in via `hide: false`. To make exceptions, restructure the groups.
+- When a workflow step references a hidden command, the step is skipped at runtime with `SkipReason="hidden: <id>"` printed to stderr. The workflow itself continues normally.
+
+Inspect output (`dwe commands -i <id>`) is allowed on hidden commands and shows both the `hide:` expression and the resolved `Hidden: true` line — useful for debugging why a command disappeared.
+
+```yaml
+# workspace/services/db/commands.yml — disappears when db is disabled
+group:
+  title: Database
+  hide: '{{ not (index .services "db" "enabled") }}'
+
+commands:
+  migrate:
+    type: shell
+    cmd: db migrate
+  # individual command can also be hidden:
+  reset_engine:
+    type: shell
+    hide: '{{ eq (index .services "db" "engine") "sqlite" }}'
+    cmd: db reset --engine
+```
 
 ## Confirmation
 

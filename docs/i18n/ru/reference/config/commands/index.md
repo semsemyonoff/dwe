@@ -1,4 +1,4 @@
-> Translated from: reference/config/commands/index.md @ 41738938f081
+> Translated from: reference/config/commands/index.md @ 00c09ea2b287
 
 # commands/
 
@@ -88,6 +88,7 @@ commands:
 |-------|------|-------------|
 | `group.title` | string | Отображаемый заголовок, показываемый в `dwe commands list` |
 | `group.description` | string | Короткое описание, отображаемое рядом с группой |
+| `group.hide` | string | Опциональное выражение-условие; когда truthy, скрывает группу и каскадно — все её потомки (команды и подгруппы). См. [Условие hide](directives.md#условие-hide). |
 | `commands` | map | Именованные определения команд (ключ = локальное имя) |
 
 ## Жизненный цикл выполнения

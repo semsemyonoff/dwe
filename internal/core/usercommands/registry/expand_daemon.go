@@ -53,6 +53,7 @@ func expandDaemon(src model.CommandDef) []model.CommandDef {
 		return model.CommandDef{
 			Description:       src.Description,
 			Private:           src.Private,
+			Hide:              src.Hide,
 			Params:            src.Params,
 			Context:           src.Context,
 			Env:               src.Env,
@@ -136,6 +137,14 @@ func (r *Registry) expandAndInsertDaemon(src model.CommandDef) error {
 			Title:       src.LocalName,
 			Description: src.Description,
 		}
+	}
+	// Propagate src.Hide onto the synthetic group's Meta.Hide so that
+	// ApplyVisibility cascades to all 4 synthetics from one evaluation
+	// instead of running the same expression 4×. Also ensures the synthetic
+	// group node itself is Hidden (no phantom group header under
+	// `dwe commands list --all`).
+	if src.Hide != "" && baseGN.Meta.Hide == "" {
+		baseGN.Meta.Hide = src.Hide
 	}
 
 	synthetics := expandDaemon(src)

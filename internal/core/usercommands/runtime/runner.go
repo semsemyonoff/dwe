@@ -138,9 +138,24 @@ var ErrNilCmd = errors.New("runtime: RunCommand called with nil Cmd")
 // behavior such as file preparation and confirmation prompts before dispatching
 // to the concrete runner for the command type. The supplied ctx is threaded
 // through to the runner so child processes can be cancelled.
+//
+// Hidden gate: when rc.Cmd.Hidden is true (resolved by reg.ApplyVisibility),
+// the command is treated as if it does not exist — the runner is not
+// invoked, no notifier fires, and a single stderr line records the skip.
+// This is the central enforcement point for the `hide:` contract; every
+// dispatcher (workflow runner, pipeline executor, reset hooks, validate
+// checks, direct invocation) inherits it without per-site duplication.
+// Returns nil so callers see a clean "no-op" — the same shape as a
+// when:false skip at the workflow level.
 func RunCommand(ctx context.Context, rc RunContext) (err error) {
 	if rc.Cmd == nil {
 		return ErrNilCmd
+	}
+	if rc.Cmd.Hidden {
+		if w := rc.Stderr; w != nil {
+			_, _ = fmt.Fprintf(w, "  ◎ command %q: skipped (hidden)\n", rc.Cmd.ID)
+		}
+		return nil
 	}
 	if TestSnapshotRC != nil {
 		TestSnapshotRC(rc)

@@ -60,6 +60,7 @@ func allowedFieldsFor(t CommandType) map[string]bool {
 		"type":              true,
 		"description":       true,
 		"private":           true,
+		"hide":              true,
 		"confirmation":      true,
 		"confirmation_text": true,
 		"notify":            true,
@@ -294,6 +295,13 @@ type FileSpec struct {
 type GroupMeta struct {
 	Title       string `yaml:"title"`
 	Description string `yaml:"description"`
+	// Hide is an optional template condition that, when truthy at runtime,
+	// hides the entire group (and every descendant command/sub-group via
+	// cascade) from listings, completion, TUI, llms-txt, and direct
+	// invocation. Workflow steps targeting commands inside a hidden group
+	// are auto-skipped. Same syntax as workflow step `when:` — supports
+	// Go-template `{{...}}` and builtin predicates via cmd:/builtin keys.
+	Hide string `yaml:"hide,omitempty"`
 }
 
 // ParamWidget identifies the form widget type for prompting a parameter.
@@ -638,6 +646,13 @@ type CommandDef struct {
 	// Private hides the command from `dwe command list` but allows
 	// it to be referenced from workflows.
 	Private bool `yaml:"private"`
+	// Hide is an optional template condition that, when truthy at runtime,
+	// makes the command unavailable: invisible in listings/completion/TUI
+	// and rejected on direct invocation. Workflow steps targeting it are
+	// auto-skipped with SkipReason="hidden". Same syntax as workflow step
+	// `when:`. Distinct from Private: Private is a static developer intent
+	// (never user-facing); Hide is a runtime condition.
+	Hide string `yaml:"hide,omitempty"`
 	// Confirmation asks the user to confirm before the command is executed.
 	Confirmation bool `yaml:"confirmation"`
 	// ConfirmationText is the prompt shown when Confirmation is true.
@@ -721,6 +736,11 @@ type CommandDef struct {
 	Group string `yaml:"-"`
 	// LocalName is the command name within its group, e.g. "migrate".
 	LocalName string `yaml:"-"`
+	// Hidden is the resolved visibility for the current invocation, set by
+	// registry.ApplyVisibility from the Hide expression on this command plus
+	// any cascaded hide from owning groups. Zero value (false) is the safe
+	// default when ApplyVisibility has not been called.
+	Hidden bool `yaml:"-"`
 }
 
 // Validate checks that the CommandDef is internally consistent.

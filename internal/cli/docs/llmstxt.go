@@ -94,6 +94,11 @@ func runDocsLlmsTxt(cmd *cobra.Command, rflags *cmdctx.RootFlags, df *docsLlmsTx
 
 			if rflags.ConfigPath != "" {
 				if reg, regErr := usercommands.LoadRegistryFromConfigPath(rflags.ConfigPath); regErr == nil {
+					// Apply visibility so hidden commands do not appear in the
+					// agent-facing snapshot. Best-effort: a hide-eval error
+					// keeps the reg available but with whatever Hidden flags
+					// were set before the failure.
+					_ = reg.ApplyVisibility(cfg, projectRoot)
 					opts.Commands = collectCommandSummaries(reg, tr, locale)
 				}
 			}

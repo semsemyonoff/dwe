@@ -593,6 +593,21 @@ func executeStepBody(ctx context.Context, opts RunOptions, rs ResolvedStep, addr
 		}
 	}
 
+	// Step 2b: Hidden-target skip for `type: command` steps. When a user
+	// command referenced by a pipeline step has been resolved to Hidden
+	// (via reg.ApplyVisibility upstream — fail-open if not), skip the step
+	// before any side effect. Mirrors the workflow runner's per-sub-step
+	// hidden-skip so pipeline and workflow invocations behave the same.
+	if rs.Step.Type == "command" && opts.Registry != nil {
+		if targetDef, lookupErr := opts.Registry.Get(rs.Step.Cmd); lookupErr == nil && targetDef.Hidden {
+			opts.Reporter.StartStep(addr, rs.Step, stepIndex, stepTotal)
+			reason := "hidden: " + rs.Step.Cmd
+			opts.Reporter.SkipStep(addr, rs.Step, stepIndex, stepTotal, reason)
+			opts.Recorder.OnStepSkip(addr, rs, stepHash, reason)
+			return nil
+		}
+	}
+
 	// Step 3: files_gate / journal-skip interaction.
 	//
 	// Asymmetric by gate state:

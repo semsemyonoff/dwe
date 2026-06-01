@@ -20,6 +20,8 @@ type commandInspectJSON struct {
 	Type             string            `json:"type"`
 	Description      string            `json:"description,omitempty"`
 	Private          bool              `json:"private,omitempty"`
+	Hidden           bool              `json:"hidden,omitempty"`
+	Hide             string            `json:"hide,omitempty"`
 	Confirmation     bool              `json:"confirmation,omitempty"`
 	ConfirmationText string            `json:"confirmation_text,omitempty"`
 	DerivedFrom      string            `json:"derived_from,omitempty"`
@@ -83,6 +85,8 @@ func buildCommandInspectJSON(def *usercommands.CommandDef, translator i18n.Trans
 		Type:        string(def.Type),
 		Description: translator.CommandDescription(locale, def.ID, def.Description),
 		Private:     def.Private,
+		Hidden:      def.Hidden,
+		Hide:        def.Hide,
 		DerivedFrom: def.DerivedFromDaemon,
 	}
 	if def.Confirmation {
@@ -254,6 +258,12 @@ func printInspectAt(w io.Writer, def *usercommands.CommandDef, cfg *config.DweCo
 	}
 	if def.Private {
 		def2("private", "true", 2)
+	}
+	if def.Hide != "" {
+		def2("hide", def.Hide, 2)
+	}
+	if def.Hidden {
+		def2("hidden", "true (resolved by hide: condition or cascaded from a hidden parent group)", 2)
 	}
 	if def.Confirmation {
 		def2("confirmation", "true", 2)

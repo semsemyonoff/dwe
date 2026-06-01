@@ -10,6 +10,7 @@ import (
 	"strings"
 
 	"github.com/semsemyonoff/dwe/internal/cli/cmdctx"
+	"github.com/semsemyonoff/dwe/internal/core/project/config"
 	"github.com/semsemyonoff/dwe/internal/core/ui/render"
 	"github.com/semsemyonoff/dwe/internal/core/usercommands"
 	"github.com/semsemyonoff/dwe/internal/shared/i18n"
@@ -131,6 +132,12 @@ func runDocsGenerate(cmd *cobra.Command, rflags *cmdctx.RootFlags, df *docsFlags
 		if err != nil {
 			return err
 		}
+		// Apply hide: visibility so generated docs match the runtime CLI
+		// surface — parity with `dwe docs llms-txt`. Best-effort: cfg load
+		// errors are tolerated; ApplyVisibility is fail-open on per-expression
+		// failures.
+		cfg, _ := config.LoadConfig(rflags.ConfigPath)
+		_ = reg.ApplyVisibility(cfg, rflags.ProjectRoot())
 
 		// Resolve locale: explicit --lang flag takes precedence, then fall back to rflags.Locale
 		// (which is already clamped to available locales in root PersistentPreRunE).

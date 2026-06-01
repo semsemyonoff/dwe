@@ -82,6 +82,11 @@ func runDeployPlan(ctx context.Context, cmd *cobra.Command, flags *cmdctx.RootFl
 	if err != nil {
 		return fmt.Errorf("loading command registry: %w", err)
 	}
+	// Apply hide: visibility so the pipeline executor and workflow runner
+	// see Hidden=true on user commands gated by the active config.
+	// Fail-open — per-expression eval failures are logged and treated as
+	// visible.
+	_ = reg.ApplyVisibility(cfg, flags.Root)
 
 	var steps []pipeline.ResolvedStep
 	if opts.ServiceName != "" {
@@ -346,6 +351,9 @@ func RunHelper(ctx context.Context, cmd *cobra.Command, flags *cmdctx.RootFlags,
 	if regErr != nil {
 		// nil-tolerant during preflight; surface the real error after.
 		reg = nil
+	}
+	if reg != nil {
+		_ = reg.ApplyVisibility(cfg, flags.Root)
 	}
 
 	runPreflight := opts.PreflightFn

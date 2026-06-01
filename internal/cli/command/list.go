@@ -45,7 +45,10 @@ type paramEntryJSON struct {
 }
 
 // buildCommandsListJSON builds a flat list of commands from the registry.
-// When showAll is false, private commands are excluded.
+// When showAll is false, private commands are excluded. Hidden commands
+// (resolved via reg.ApplyVisibility) are always excluded — they represent
+// a runtime "command does not exist" state. --all does not surface them
+// because --all is for developer-intent Private, not runtime hide.
 func buildCommandsListJSON(reg *usercommands.Registry, groupFilter string, showAll bool, translator i18n.Translator, locale string) commandsListJSON {
 	var defs []*usercommands.CommandDef
 	if showAll {
@@ -55,6 +58,9 @@ func buildCommandsListJSON(reg *usercommands.Registry, groupFilter string, showA
 	}
 	entries := make([]commandEntryJSON, 0, len(defs))
 	for _, def := range defs {
+		if def.Hidden {
+			continue
+		}
 		entries = append(entries, commandDefToEntryJSON(def, translator, locale))
 	}
 	return commandsListJSON{Commands: entries}
@@ -113,6 +119,11 @@ Use --all to include private commands.`,
 			if err != nil {
 				return cmdctx.ErrWrap("command_registry_invalid", err)
 			}
+			// Visibility is best-effort here: cfg load errors are tolerated so
+			// a broken project can still list its commands. ApplyVisibility
+			// is fail-open — per-expression failures log + treat as visible.
+			cfg, _ := config.LoadConfig(flags.ConfigPath)
+			_ = reg.ApplyVisibility(cfg, flags.ProjectRoot())
 			if flags.Output == "json" {
 				translator := i18n.TranslatorOrNop(flags.I18n)
 				data := buildCommandsListJSON(reg, groupFilter, showAll, translator, flags.Locale)
@@ -275,16 +286,23 @@ func findGroupNode(node *usercommands.GroupNode, id string) *usercommands.GroupN
 
 // groupNodeToChildren converts a GroupNode's contents into render.TreeNode slices,
 // adding sub-groups and commands as children. Sub-groups without visible content
-// are omitted when includePrivate is false.
+// are omitted when includePrivate is false. Hidden groups and hidden commands
+// are always omitted (hide is a runtime condition, --all does not bypass it).
 func groupNodeToChildren(gn *usercommands.GroupNode, includePrivate bool, translator i18n.Translator, locale string) []*render.TreeNode {
 	var nodes []*render.TreeNode
 	for _, child := range gn.Children {
+		if child.Hidden {
+			continue
+		}
 		childNode := groupNodeToSingleNode(child, includePrivate, translator, locale)
 		if childNode != nil {
 			nodes = append(nodes, childNode)
 		}
 	}
 	for _, cmd := range gn.Commands {
+		if cmd.Hidden {
+			continue
+		}
 		if !includePrivate && cmd.Private {
 			continue
 		}
@@ -294,8 +312,11 @@ func groupNodeToChildren(gn *usercommands.GroupNode, includePrivate bool, transl
 }
 
 // groupNodeToSingleNode converts a GroupNode into a single render.TreeNode.
-// Returns nil when the group has no visible content (after private filtering).
+// Returns nil when the group is hidden or has no visible content.
 func groupNodeToSingleNode(gn *usercommands.GroupNode, includePrivate bool, translator i18n.Translator, locale string) *render.TreeNode {
+	if gn.Hidden {
+		return nil
+	}
 	children := groupNodeToChildren(gn, includePrivate, translator, locale)
 	if !includePrivate && len(children) == 0 {
 		return nil

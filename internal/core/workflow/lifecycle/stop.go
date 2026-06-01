@@ -56,6 +56,11 @@ func RunStop(ctx StopContext) error {
 	if regErr != nil {
 		reg = nil
 	}
+	// Apply hide: visibility so user commands referenced by stop phases see
+	// Hidden=true on commands gated by the active config. Fail-open.
+	if reg != nil {
+		_ = reg.ApplyVisibility(cfg, workDir)
+	}
 
 	errOut := ctx.ErrOut
 	if errOut == nil {

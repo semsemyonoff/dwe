@@ -85,6 +85,13 @@ Without an id, an interactive selector lists public commands. With a group prefi
 				if len(args) == 0 {
 					return cmdctx.Err("usage_error", "id required with --inspect")
 				}
+				// Best-effort cfg load — inspect tolerates malformed configs so users
+				// can still introspect command definitions when the project is broken.
+				// ApplyVisibility is fail-open: per-expression eval failures log a
+				// warning and treat the command as visible, so a broken project never
+				// blocks inspect.
+				inspectCfg, _ := config.LoadConfig(flags.ConfigPath)
+				_ = reg.ApplyVisibility(inspectCfg, flags.ProjectRoot())
 				if flags.Output == "json" {
 					def, err := reg.Get(args[0])
 					if err != nil {
@@ -94,11 +101,10 @@ Without an id, an interactive selector lists public commands. With a group prefi
 					data := buildCommandInspectJSON(def, translator, flags.Locale)
 					return cmdctx.WriteData(flags, cmd, data, func(commandInspectJSON) string { return "" })
 				}
-				cfg, _ := config.LoadConfig(flags.ConfigPath)
 				return runCommandByID(
 					cmd.Context(),
 					cmd.InOrStdin(), cmd.OutOrStdout(), cmd.ErrOrStderr(),
-					cfg, reg, flags.ProjectRoot(), args[0],
+					inspectCfg, reg, flags.ProjectRoot(), args[0],
 					runOpts{
 						Inspect:    true,
 						Translator: i18n.TranslatorOrNop(flags.I18n),
@@ -112,6 +118,9 @@ Without an id, an interactive selector lists public commands. With a group prefi
 			if err != nil {
 				return cmdctx.ErrWrap("project_invalid_config", err)
 			}
+			// ApplyVisibility is fail-open: a single bad hide expression
+			// must never brick the entire `dwe commands` UX.
+			_ = reg.ApplyVisibility(cfg, flags.ProjectRoot())
 
 			ctx, stop := notifyContext(cmd.Context(), syscall.SIGINT, syscall.SIGTERM)
 			defer stop()

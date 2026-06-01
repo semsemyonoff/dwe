@@ -2,6 +2,7 @@ package command
 
 import (
 	"github.com/semsemyonoff/dwe/internal/cli/cmdctx"
+	"github.com/semsemyonoff/dwe/internal/core/project/config"
 	"github.com/semsemyonoff/dwe/internal/core/usercommands"
 	"github.com/semsemyonoff/dwe/internal/shared/i18n"
 
@@ -9,16 +10,18 @@ import (
 )
 
 // registryIDCompletion returns a ValidArgsFunction that completes command IDs
-// from the registry. When includePrivate is true, private command IDs are also
-// returned (useful for `inspect`). When false, only public IDs are returned
-// (useful for `run`).
+// from the registry. When includePrivate is true, private AND hidden command
+// IDs are returned — this path is used for the `inspect` flag, which is the
+// documented escape hatch for users debugging why a command disappeared from
+// listings. When includePrivate is false (public listing/run), both Private
+// and Hidden command IDs are filtered out.
 func registryIDCompletion(flags *cmdctx.RootFlags, includePrivate bool) func(*cobra.Command, []string, string) ([]string, cobra.ShellCompDirective) {
 	return func(cmd *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
 		// Only complete the first positional argument.
 		if len(args) != 0 {
 			return nil, cobra.ShellCompDirectiveNoFileComp
 		}
-		configPath, _, err := cmdctx.CompletionConfigPath(flags, cmd)
+		configPath, projectRoot, err := cmdctx.CompletionConfigPath(flags, cmd)
 		if err != nil {
 			return nil, cobra.ShellCompDirectiveNoFileComp
 		}
@@ -26,9 +29,20 @@ func registryIDCompletion(flags *cmdctx.RootFlags, includePrivate bool) func(*co
 		if err != nil {
 			return nil, cobra.ShellCompDirectiveNoFileComp
 		}
+		// Best-effort visibility application: ApplyVisibility is fail-open
+		// (per-expression failures log via slog and treat the entry as
+		// visible) so this never short-circuits completions on a bad hide
+		// expression. cfg load errors fall through with no filter — the
+		// pre-PR behavior of always-show is preserved.
+		if cfg, cfgErr := config.LoadConfig(configPath); cfgErr == nil {
+			_ = reg.ApplyVisibility(cfg, projectRoot)
+		}
 		var defs []*usercommands.CommandDef
 		if includePrivate {
-			defs = reg.ListAll("")
+			// Inspect path: surface Hidden commands so users can tab-discover
+			// the ID they need to debug. runbyid.go explicitly allows inspect
+			// on hidden commands; this completion variant matches that contract.
+			defs = reg.ListAllIncludingHidden("")
 		} else {
 			defs = reg.List("")
 		}

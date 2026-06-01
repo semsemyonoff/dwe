@@ -95,6 +95,14 @@ func daemonSetCompletion(flags *cmdctx.RootFlags) func(*cobra.Command, []string,
 		if err != nil {
 			return nil, cobra.ShellCompDirectiveNoFileComp
 		}
+		// Apply visibility; hidden commands should not surface --set completions.
+		// ApplyVisibility is fail-open so any per-expression error is logged
+		// (slog.Warn) and the command is treated as visible — the completion
+		// path stays usable on a typo.
+		_ = reg.ApplyVisibility(cfg, projectRoot)
+		if def.Hidden {
+			return nil, cobra.ShellCompDirectiveNoFileComp
+		}
 
 		dockerCfg, err := config.LoadDockerConfig(projectRoot, cfg)
 		if err != nil {

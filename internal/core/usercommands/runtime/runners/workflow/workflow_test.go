@@ -897,3 +897,48 @@ func TestWorkflowRunner_ContinueOnError_OnConfirmStep_Rejected(t *testing.T) {
 		t.Fatal("expected validation error for continue_on_error on confirm step")
 	}
 }
+
+// ---------------------------------------------------------------------------
+// Hidden target — workflow auto-skip
+// ---------------------------------------------------------------------------
+
+// When a workflow step references a Hidden command (resolved via
+// reg.ApplyVisibility), the step is skipped before any other gate fires.
+// The skip reason logged to stderr distinguishes hidden from when=false.
+func TestWorkflowRunner_HiddenTarget_SkipsStep(t *testing.T) {
+	dir := t.TempDir()
+	logFile := dir + "/hidden.log"
+
+	hidden := &CommandDef{
+		Type:      CommandTypeShell,
+		ID:        "wf.target",
+		Group:     "wf",
+		LocalName: "target",
+		Hidden:    true, // pre-set; production sets this via reg.ApplyVisibility
+		Cmd:       `printf 'should-not-run\n' >> ` + logFile,
+	}
+	wf := &CommandDef{
+		Type:      CommandTypeWorkflow,
+		ID:        "wf.caller",
+		Group:     "wf",
+		LocalName: "caller",
+		Steps: []WorkflowStep{
+			{Command: "wf.target"},
+		},
+	}
+
+	reg := buildWorkflowRegistry(wf, hidden)
+	_, stderr, err := runWorkflowCtx(t, reg, wf)
+	if err != nil {
+		t.Fatalf("workflow should not fail when target is hidden: %v", err)
+	}
+
+	if !strings.Contains(stderr, "target hidden") {
+		t.Errorf("stderr should mention 'target hidden'; got %q", stderr)
+	}
+
+	data, _ := readFileBytes(logFile)
+	if len(data) != 0 {
+		t.Errorf("hidden command body must not run; log: %q", string(data))
+	}
+}

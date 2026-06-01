@@ -25,6 +25,12 @@ type GroupNode struct {
 	// Commands are the commands that belong directly to this group (not sub-groups).
 	// Private commands are included; callers must filter if needed.
 	Commands []*model.CommandDef
+	// Hidden is the resolved visibility for this group in the current
+	// invocation, populated by Registry.ApplyVisibility. Cascades:
+	// when a parent is Hidden, every descendant group + command is forced
+	// Hidden regardless of its own Meta.Hide expression. Zero value is
+	// the safe default when ApplyVisibility has not been called.
+	Hidden bool
 }
 
 // Registry holds all commands discovered from a commands directory, indexed
@@ -97,8 +103,20 @@ func LoadRegistry(baseDir string) (*Registry, error) {
 // are deterministic.
 func (r *Registry) addCommandFile(cf *model.CommandFile) error {
 	gn := r.ensureGroup(cf.GroupID)
-	if cf.Group.Title != "" || cf.Group.Description != "" {
-		gn.Meta = cf.Group
+	// Merge per-field: each non-empty value overrides the prior (last-wins
+	// per field), while empty fields preserve whatever an earlier file set.
+	// Preserves the pre-PR last-wins semantics for Title/Description while
+	// extending the same rule to the new Hide field. This avoids the silent
+	// regression where a sibling file declaring only `group: {hide: ...}`
+	// would wipe a title/description set by an earlier file.
+	if cf.Group.Title != "" {
+		gn.Meta.Title = cf.Group.Title
+	}
+	if cf.Group.Description != "" {
+		gn.Meta.Description = cf.Group.Description
+	}
+	if cf.Group.Hide != "" {
+		gn.Meta.Hide = cf.Group.Hide
 	}
 
 	names := make([]string, 0, len(cf.Commands))
@@ -165,21 +183,41 @@ func (r *Registry) Get(id string) (*model.CommandDef, error) {
 	return cmd, nil
 }
 
-// List returns all non-private commands whose group ID starts with groupPrefix,
-// sorted lexically by full ID.  Pass an empty string to list all non-private commands.
+// List returns all non-private, non-hidden commands whose group ID starts
+// with groupPrefix, sorted lexically by full ID. Pass an empty string to
+// list everything matching the visibility filter.
 func (r *Registry) List(groupPrefix string) []*model.CommandDef {
-	return r.list(groupPrefix, false)
+	return r.list(groupPrefix, false, false)
 }
 
-// ListAll returns all commands (including private) whose group ID starts with
-// groupPrefix, sorted lexically by full ID.  Pass an empty string to list everything.
+// ListAll returns all non-hidden commands (including private) whose group ID
+// starts with groupPrefix, sorted lexically by full ID. Pass an empty string
+// to list everything non-hidden. Hidden commands are never returned from
+// ListAll — hide is a runtime "this command does not exist right now" gate,
+// distinct from the developer-intent Private flag which --all/ListAll opts in.
+//
+// To include Hidden commands (e.g. for the inspect-on-hidden debug path that
+// lets users discover why a command disappeared), use ListAllIncludingHidden.
 func (r *Registry) ListAll(groupPrefix string) []*model.CommandDef {
-	return r.list(groupPrefix, true)
+	return r.list(groupPrefix, true, false)
 }
 
-func (r *Registry) list(groupPrefix string, includePrivate bool) []*model.CommandDef {
+// ListAllIncludingHidden returns every command in the registry whose group ID
+// starts with groupPrefix, sorted lexically. Includes both Private and Hidden
+// entries — escape hatch for tab-completion in the `dwe commands -i` inspect
+// path, where users need to discover hidden IDs to debug their hide: expressions.
+// Never use this from public listing, completion, or TUI paths — they must
+// honor the runtime visibility filter.
+func (r *Registry) ListAllIncludingHidden(groupPrefix string) []*model.CommandDef {
+	return r.list(groupPrefix, true, true)
+}
+
+func (r *Registry) list(groupPrefix string, includePrivate, includeHidden bool) []*model.CommandDef {
 	var result []*model.CommandDef
 	for id, cmd := range r.byID {
+		if !includeHidden && cmd.Hidden {
+			continue
+		}
 		if !includePrivate && cmd.Private {
 			continue
 		}

@@ -86,6 +86,7 @@ commands:
 |-------|------|-------------|
 | `group.title` | string | Display title shown by `dwe commands list` |
 | `group.description` | string | Short description shown next to the group |
+| `group.hide` | string | Optional condition expression; when truthy, hides the group and cascades to every descendant (commands and sub-groups). See [Hide condition](directives.md#hide-condition). |
 | `commands` | map | Named command definitions (key = local name) |
 
 ## Execution lifecycle

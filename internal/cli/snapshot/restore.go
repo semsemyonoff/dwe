@@ -96,6 +96,7 @@ func runSnapshotRestore(cmd *cobra.Command, flags *cmdctx.RootFlags, name string
 	if err != nil {
 		return fmt.Errorf("loading command registry: %w", err)
 	}
+	_ = reg.ApplyVisibility(cfg, baseDir)
 
 	releaseLocks, err := lock.AcquireProjectLocks(baseDir)
 	if err != nil {

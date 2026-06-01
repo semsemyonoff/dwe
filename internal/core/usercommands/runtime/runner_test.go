@@ -3,6 +3,7 @@ package runtime
 import (
 	"bytes"
 	"context"
+	"strings"
 	"testing"
 
 	"github.com/semsemyonoff/dwe/internal/core/project/config"
@@ -73,6 +74,42 @@ func TestRunCommand_DefensiveInitRawCopy(t *testing.T) {
 
 	if err := RunCommand(context.Background(), ctx); err != nil {
 		t.Fatalf("RunCommand returned unexpected error: %v", err)
+	}
+}
+
+// TestRunCommand_HiddenCommand_SkipsAndLogs verifies the central Hidden gate:
+// when rc.Cmd.Hidden is true, RunCommand must skip dispatch entirely (no
+// runner invoked, no side effects), return nil, and emit a single skip line
+// on stderr. This is the catch-all that protects every dispatcher (workflow
+// runner, pipeline executor, reset hooks, validate/checks, direct invoke)
+// from running a command whose hide: condition resolves truthy.
+func TestRunCommand_HiddenCommand_SkipsAndLogs(t *testing.T) {
+	// `Cmd: "false"` would fail if the runner ever fired — proving the gate
+	// short-circuited before dispatch.
+	cmd := &CommandDef{
+		ID:     "hidden.cmd",
+		Type:   CommandTypeShell,
+		Files:  map[string]FileSpec{},
+		Cmd:    "false",
+		Hidden: true,
+	}
+
+	var stdout, stderr bytes.Buffer
+	ctx := RunContext{
+		Cmd:    cmd,
+		Render: &tpl.RenderContext{},
+		Stdout: &stdout,
+		Stderr: &stderr,
+	}
+
+	if err := RunCommand(context.Background(), ctx); err != nil {
+		t.Fatalf("hidden command must skip silently; got err: %v", err)
+	}
+	if stdout.Len() != 0 {
+		t.Errorf("hidden command must not write to stdout; got %q", stdout.String())
+	}
+	if got := stderr.String(); !strings.Contains(got, "hidden.cmd") || !strings.Contains(got, "skipped") {
+		t.Errorf("stderr must record the skip; got %q", got)
 	}
 }
 

@@ -1,4 +1,4 @@
-> Translated from: reference/config/commands/directives.md @ aa990b8db931
+> Translated from: reference/config/commands/directives.md @ f5234d164b00
 
 # Директивы команд
 
@@ -24,7 +24,41 @@
 | `type` | enum | обязательно | Одно из `shell`, `dwe`, `script`, `service_exec`, `service_run`, `workflow`, `builtin`, `daemon` |
 | `description` | string | — | Человекочитаемое описание, отображаемое в DWE CLI (селекторы, `commands list`, `commands inspect`) |
 | `private` | bool | `false` | Скрывает из `dwe commands list` и блокирует прямой `commands run`; всё ещё вызываема из сценариев и пайплайнов |
+| `hide` | string | `""` | Выражение-условие. Когда вычисляется в truthy на runtime — команда трактуется как несуществующая: не отображается в `dwe commands`, completion и TUI; отклоняется при прямом вызове; шаги workflow, ссылающиеся на неё, авто-скипаются с `SkipReason="hidden"`. Синтаксис тот же, что у workflow `when:` — см. [Условие hide](#условие-hide) ниже. |
 | `notify` | bool | `false` | Отправить десктопное уведомление по завершении команды. См. [Уведомления](#уведомления) ниже. |
+
+## Условие hide
+
+`hide:` — это runtime-условие видимости, отличающееся от `private:`:
+
+- `private:` — статичный developer-intent: команда всегда невидима конечным пользователям.
+- `hide:` — per-invocation условие: команда видна, когда выражение falsy, и исчезает, когда truthy. Типовое применение — привязка команд к включённым сервисам.
+
+Синтаксис выражения совпадает с workflow `when:` — поддерживает Go-шаблоны (`{{ ... }}`), подстановку переменных `${...}` и встроенные предикаты (`cmd:`, `file:`). Полную грамматику см. в [conditions](../conditions.md).
+
+Правила каскада:
+
+- `hide:` в блоке `group:` группы скрывает её целиком **и все потомки** (команды и подгруппы). Каскад односторонний: ребёнок не может явно вернуть видимость через `hide: false`. Если нужны исключения, реструктурируй группы.
+- Когда шаг workflow ссылается на скрытую команду, шаг скипается на runtime с `SkipReason="hidden: <id>"` в stderr. Сам workflow продолжается нормально.
+
+`dwe commands -i <id>` (inspect) работает и на скрытых командах — показывает выражение `hide:` и резолвленный `Hidden: true`, что удобно для отладки исчезновения команд.
+
+```yaml
+# workspace/services/db/commands.yml — исчезает, когда db выключен
+group:
+  title: База данных
+  hide: '{{ not (index .services "db" "enabled") }}'
+
+commands:
+  migrate:
+    type: shell
+    cmd: db migrate
+  # команда тоже может быть скрыта индивидуально:
+  reset_engine:
+    type: shell
+    hide: '{{ eq (index .services "db" "engine") "sqlite" }}'
+    cmd: db reset --engine
+```
 
 ## Подтверждение
 

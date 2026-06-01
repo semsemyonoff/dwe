@@ -192,6 +192,34 @@ func validateSnapshotScope(expr string, scope SnapshotScope) error {
 	return nil
 }
 
+// CompileCommand syntactically validates a command-template expression
+// without executing it. Returns an error when ${snapshot.*} appears in a
+// non-snapshot scope, ${...} expansion, or `{{ }}` template parsing fails.
+// Useful for static validators that want to surface typos without
+// exercising runtime data or shell predicates.
+//
+// scope is the snapshot scope the expression will run under at runtime.
+// For surfaces that are never snapshot-scoped (e.g. user-command `hide:`),
+// pass SnapshotScopeNone so any ${snapshot.*} reference is rejected at
+// validate time instead of exploding at runtime.
+func CompileCommand(expr string, scope SnapshotScope) error {
+	if expr == "" {
+		return nil
+	}
+	if err := validateSnapshotScope(expr, scope); err != nil {
+		return err
+	}
+	compiled := CompileVarSyntax(expr)
+	if !strings.Contains(compiled, "{{") {
+		return nil
+	}
+	fm := commandFuncMap()
+	if _, err := template.New("").Funcs(fm).Parse(compiled); err != nil {
+		return fmt.Errorf("parse command template %q: %w", expr, err)
+	}
+	return nil
+}
+
 // RenderCommand compiles ${...} syntax in expr, then evaluates the resulting
 // Go template against data.
 func RenderCommand(expr string, data *RenderContext) (string, error) {

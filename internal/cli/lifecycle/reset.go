@@ -72,6 +72,7 @@ func runResetPlan(cmd *cobra.Command, flags *cmdctx.RootFlags, opts resetPlanOpt
 	if err != nil {
 		return fmt.Errorf("loading command registry: %w", err)
 	}
+	_ = reg.ApplyVisibility(cfg, flags.Root)
 	_, steps, defaulted, err := reset.LoadAndResolvePlan(cfg, reg)
 	if err != nil {
 		return fmt.Errorf("resolving reset plan: %w", err)
@@ -168,6 +169,9 @@ func resetRunCmd(cmd *cobra.Command, flags *cmdctx.RootFlags, yes bool, skipPref
 	reg, regErr := usercommands.LoadRegistryFromConfigPath(flags.ConfigPath)
 	if regErr != nil {
 		reg = nil
+	}
+	if reg != nil {
+		_ = reg.ApplyVisibility(cfg, workDir)
 	}
 
 	// Preflight: run before any side effect on Docker, git, or the filesystem.
@@ -286,6 +290,9 @@ func resetServiceRunCmd(cmd *cobra.Command, flags *cmdctx.RootFlags, name string
 	reg, regErr := usercommands.LoadRegistryFromConfigPath(flags.ConfigPath)
 	if regErr != nil {
 		reg = nil
+	}
+	if reg != nil {
+		_ = reg.ApplyVisibility(cfg, baseDir)
 	}
 
 	// Preflight: stop-stage, before any hooks or locks.
@@ -577,6 +584,7 @@ func newResetStepCmd(flags *cmdctx.RootFlags) *cobra.Command {
 			if err != nil {
 				return fmt.Errorf("loading command registry: %w", err)
 			}
+			_ = reg.ApplyVisibility(cfg, workDir)
 			// Single-step execution: no --yes flag, so confirm prompts are shown.
 			actx := pipeline.ActionContext{
 				WorkDir:     workDir,

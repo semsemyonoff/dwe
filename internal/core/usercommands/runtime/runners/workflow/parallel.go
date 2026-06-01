@@ -77,10 +77,25 @@ func (r *Runner) runParallelGroup(parentCtx context.Context, rc spec.RunContext,
 		whenDecisions[i] = subDecision{skip: !ok, err: err}
 	}
 
+	// Hidden-target preflight: a sub-step pointing at a hidden command is
+	// skipped just like a when:false sub-step. Cached here so the per-
+	// goroutine code never has to look it up again. Lookup failures are
+	// not pre-baked — the per-goroutine runCommandStep produces the
+	// canonical error.
+	hiddenDecisions := make([]bool, n)
+	for i, sub := range group.Steps {
+		if whenDecisions[i].skip || whenDecisions[i].err != nil {
+			continue
+		}
+		if def, err := rc.Registry.Get(sub.Command); err == nil && def.Hidden {
+			hiddenDecisions[i] = true
+		}
+	}
+
 	if !rc.SkipConfirm && !rc.NonInteractive && !runio.IsNonInteractive() {
 		for i, sub := range group.Steps {
 			d := whenDecisions[i]
-			if d.err != nil || d.skip {
+			if d.err != nil || d.skip || hiddenDecisions[i] {
 				continue
 			}
 			def, err := rc.Registry.Get(sub.Command)
@@ -152,6 +167,13 @@ func (r *Runner) runParallelGroup(parentCtx context.Context, rc spec.RunContext,
 				results[i].skipped = true
 				live.SetBlockRowFinal(i, liveui.BlockRowSkipped,
 					fmt.Sprintf("[%d/%d] Skipped: %s (when=false)", i+1, n, sub.Command))
+				return nil
+			}
+
+			if hiddenDecisions[i] {
+				results[i].skipped = true
+				live.SetBlockRowFinal(i, liveui.BlockRowSkipped,
+					fmt.Sprintf("[%d/%d] Skipped: %s (target hidden)", i+1, n, sub.Command))
 				return nil
 			}
 

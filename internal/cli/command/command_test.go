@@ -111,6 +111,55 @@ func TestBuildTreeNodes_publicCommandsOnly(t *testing.T) {
 	}
 }
 
+func TestBuildTreeNodes_hiddenCommandFiltered(t *testing.T) {
+	// Hidden commands are filtered even when includePrivate is true — hide
+	// is a runtime "does not exist" gate distinct from Private.
+	root := &usercommands.GroupNode{
+		Commands: []*usercommands.CommandDef{
+			{ID: "visible", LocalName: "visible", Type: usercommands.CommandTypeShell},
+			{ID: "gone", LocalName: "gone", Type: usercommands.CommandTypeShell, Hidden: true},
+		},
+	}
+	for _, includePriv := range []bool{false, true} {
+		nodes := buildTreeNodes(root, "", includePriv, i18n.NopTranslator{}, "")
+		if len(nodes) != 1 {
+			t.Fatalf("includePrivate=%v: expected 1 visible node, got %d", includePriv, len(nodes))
+		}
+		if nodes[0].Label != "visible" {
+			t.Errorf("includePrivate=%v: expected 'visible', got %q", includePriv, nodes[0].Label)
+		}
+	}
+}
+
+func TestBuildTreeNodes_hiddenGroupCollapsed(t *testing.T) {
+	// A hidden group node is omitted entirely, regardless of whether its
+	// commands have their own Hidden flag set.
+	hiddenGroup := &usercommands.GroupNode{
+		ID:     "db",
+		Name:   "db",
+		Hidden: true,
+		Commands: []*usercommands.CommandDef{
+			{ID: "db.migrate", LocalName: "migrate", Type: usercommands.CommandTypeShell, Hidden: true},
+		},
+	}
+	visibleGroup := &usercommands.GroupNode{
+		ID:   "app",
+		Name: "app",
+		Commands: []*usercommands.CommandDef{
+			{ID: "app.run", LocalName: "run", Type: usercommands.CommandTypeShell},
+		},
+	}
+	root := &usercommands.GroupNode{Children: []*usercommands.GroupNode{hiddenGroup, visibleGroup}}
+
+	nodes := buildTreeNodes(root, "", false, i18n.NopTranslator{}, "")
+	if len(nodes) != 1 {
+		t.Fatalf("expected 1 node (only app), got %d", len(nodes))
+	}
+	if nodes[0].Label != "app" {
+		t.Errorf("expected only 'app' group, got %q", nodes[0].Label)
+	}
+}
+
 func TestBuildTreeNodes_includePrivate(t *testing.T) {
 	root := &usercommands.GroupNode{
 		Commands: []*usercommands.CommandDef{
