@@ -8,7 +8,7 @@ DWE picks an active locale via the precedence chain:
 
 1. **`--lang` flag** (on `docs show` / `docs export` / `docs list`; per-invocation)
 2. **`DWE_LANGUAGE` environment variable**
-3. **`language` setting in userconfig** (`~/.config/workspace/config` or `.dwe/config`)
+3. **`language` setting in userconfig** (`~/.config/dwe/config` or `.dwe/config`)
 4. **System `$LANG`** (parsed to 2-letter code)
 5. **Default:** `en` (English)
 

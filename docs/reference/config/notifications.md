@@ -47,7 +47,7 @@ The flag is available on: `dwe deploy run`, `dwe run`, `dwe snapshot create`, `d
 
 Two files are read in this precedence order (lower → higher):
 
-1. **Global user config** at `~/.config/workspace/config` on every OS (Linux, macOS, Windows). No platform-native location, no XDG fallback — one path everywhere. Missing file is silently treated as empty. If DWE ever writes it, mode is `0600`.
+1. **Global user config** at `~/.config/dwe/config` on every OS (Linux, macOS, Windows). No platform-native location, no XDG fallback — one path everywhere. Missing file is silently treated as empty. If DWE ever writes it, mode is `0600`.
 
 2. **Per-project override** at `<project>/.dwe/config`. The `.dwe/` directory is already gitignored by DWE. Missing file is silently treated as empty.
 
@@ -135,7 +135,7 @@ killall NotificationCenter
 A common setup: notify on deploy and ad-hoc commands, but stay quiet for the inner-loop `dwe run` cycle.
 
 ```
-# ~/.config/workspace/config  (same on every OS)
+# ~/.config/dwe/config  (same on every OS)
 
 notify_enabled          = true
 notify_deploy_enabled   = true

@@ -21,7 +21,7 @@ Settings cover preferences that are inherently personal — preferred language, 
 
 Two files are read in this precedence order (lower → higher), then env vars on top:
 
-1. **Global user config** at `~/.config/workspace/config` on every OS (Linux, macOS, Windows). One path everywhere — no platform-native location, no XDG fallback. Missing file is silently treated as empty. If DWE ever writes it, mode is `0600`.
+1. **Global user config** at `~/.config/dwe/config` on every OS (Linux, macOS, Windows). One path everywhere — no platform-native location, no XDG fallback. Missing file is silently treated as empty. If DWE ever writes it, mode is `0600`.
 
 2. **Per-project override** at `<project>/.dwe/config`. The `.dwe/` directory is already gitignored by DWE; this file is meant for a developer to pin overrides for a single project without touching the global file. Missing file is silently treated as empty.
 
@@ -106,7 +106,7 @@ Binary overrides have no env-var equivalent — set them in the config file.
 
 ```
 embedded defaults
-  → global ~/.config/workspace/config
+  → global ~/.config/dwe/config
     → per-project <project>/.dwe/config
       → environment variables
 ```
@@ -116,7 +116,7 @@ Later layers win. Maps merge per-key; list-valued keys (`notify_channels`) repla
 ## Sample config
 
 ```
-# ~/.config/workspace/config — same path on every OS
+# ~/.config/dwe/config — same path on every OS
 
 # Locale and TUI
 language       = ru

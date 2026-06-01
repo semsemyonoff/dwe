@@ -397,7 +397,7 @@ The generic adapter runs `bin <flags> <files...>` and converts a non-zero exit i
 
 ### User-config binary overrides
 
-You can override the binary path for any linter using your user-level config file (`~/.config/workspace/config`). This is useful when you have custom installations, replacements (e.g., `podman` instead of `docker`), or binaries outside the default PATH.
+You can override the binary path for any linter using your user-level config file (`~/.config/dwe/config`). This is useful when you have custom installations, replacements (e.g., `podman` instead of `docker`), or binaries outside the default PATH.
 
 Add a line to your user config:
 

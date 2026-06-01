@@ -212,7 +212,7 @@ func genCLIDocs(root *cobra.Command, dir, format string) error {
 		return cobradoc.GenYamlTree(root, dir)
 	case "man":
 		header := &cobradoc.GenManHeader{
-			Title:   "DEVBOX",
+			Title:   "DWE",
 			Section: "1",
 		}
 		return cobradoc.GenManTree(root, header, dir)
@@ -266,7 +266,7 @@ func genHiddenCLIYaml(root *cobra.Command, dir string) error {
 // stock GenManTree skips. Called only when --include-hidden is set.
 func genHiddenCLIMan(root *cobra.Command, dir string) error {
 	header := &cobradoc.GenManHeader{
-		Title:   "DEVBOX",
+		Title:   "DWE",
 		Section: "1",
 	}
 	return walkAllCommands(root, func(cmd *cobra.Command) error {

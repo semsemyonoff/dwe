@@ -172,7 +172,7 @@ func TestStatusCmd_DefaultPrintsHealthAndSections(t *testing.T) {
 		t.Fatalf("execute: %v", err)
 	}
 	out := buf.String()
-	for _, want := range []string{"Devbox:", "Apps", "Tools"} {
+	for _, want := range []string{"DWE:", "Apps", "Tools"} {
 		if !strings.Contains(out, want) {
 			t.Errorf("expected %q in default status output:\n%s", want, out)
 		}
@@ -190,7 +190,7 @@ func TestStatusCmd_NoAppsFlagSuppressesSection(t *testing.T) {
 		t.Fatalf("execute: %v", err)
 	}
 	out := buf.String()
-	if !strings.Contains(out, "Devbox:") {
+	if !strings.Contains(out, "DWE:") {
 		t.Errorf("health line must still appear when sections suppressed: %s", out)
 	}
 	if strings.Contains(out, "Apps") {
@@ -227,7 +227,7 @@ func TestStatusCmd_EachNoFlag_SuppressesItsSection(t *testing.T) {
 			if strings.Contains(out, tt.section) {
 				t.Errorf("%s should suppress %q section:\n%s", tt.flag, tt.section, out)
 			}
-			if !strings.Contains(out, "Devbox:") {
+			if !strings.Contains(out, "DWE:") {
 				t.Errorf("health line must still appear with %s:\n%s", tt.flag, out)
 			}
 		})
@@ -248,7 +248,7 @@ func TestStatusCmd_AppsSubcommandRendersOnlyApps(t *testing.T) {
 	if !strings.Contains(out, "Apps") {
 		t.Errorf("expected Apps section title:\n%s", out)
 	}
-	if strings.Contains(out, "Devbox:") {
+	if strings.Contains(out, "DWE:") {
 		t.Errorf("subcommand should NOT print health indicator:\n%s", out)
 	}
 }
@@ -267,7 +267,7 @@ func TestStatusCmd_ToolsSubcommandRendersOnlyTools(t *testing.T) {
 	if !strings.Contains(out, "Tools") {
 		t.Errorf("expected Tools section title:\n%s", out)
 	}
-	if strings.Contains(out, "Devbox:") {
+	if strings.Contains(out, "DWE:") {
 		t.Errorf("subcommand should NOT print health indicator:\n%s", out)
 	}
 	if strings.Contains(out, "Apps") {
@@ -319,7 +319,7 @@ func TestStatusCmd_DaemonsSubcommandRuns(t *testing.T) {
 		t.Fatalf("execute: %v", err)
 	}
 	out := buf.String()
-	if strings.Contains(out, "Devbox:") {
+	if strings.Contains(out, "DWE:") {
 		t.Errorf("subcommand should NOT print health indicator:\n%s", out)
 	}
 }
@@ -403,7 +403,7 @@ func TestStatusCmd_TopologySubcommandRuns(t *testing.T) {
 	if err := root.Execute(); err != nil {
 		t.Fatalf("status topology should succeed: %v", err)
 	}
-	if strings.Contains(buf.String(), "Devbox:") {
+	if strings.Contains(buf.String(), "DWE:") {
 		t.Errorf("topology subcommand should NOT print health indicator: %s", buf.String())
 	}
 }
@@ -418,7 +418,7 @@ func TestStatusCmd_GitSubcommandRuns(t *testing.T) {
 	if err := root.Execute(); err != nil {
 		t.Fatalf("status git should succeed: %v", err)
 	}
-	if strings.Contains(buf.String(), "Devbox:") {
+	if strings.Contains(buf.String(), "DWE:") {
 		t.Errorf("git subcommand should NOT print health indicator: %s", buf.String())
 	}
 }
@@ -612,7 +612,7 @@ func TestStatusSubcommands_NeverInvokeTUI(t *testing.T) {
 			// Verify subcommands executed as plain output (not TUI).
 			// The key assertion is that we didn't panic (which would happen if
 			// runStatusTUIFn was called). Health indicator should NOT appear in subcommands.
-			if strings.Contains(out, "Devbox:") {
+			if strings.Contains(out, "DWE:") {
 				// Health indicator should only appear in default view, not subcommands
 				t.Errorf("subcommand %q should not print health indicator", subcmd)
 			}

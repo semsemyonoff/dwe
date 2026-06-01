@@ -36,7 +36,7 @@ func NewCmd(groupID string, flags *cmdctx.RootFlags) *cobra.Command {
 				BuiltBy: versioninfo.BuiltBy,
 			}
 			return cmdctx.WriteData(flags, cmd, dto, func(d versionJSON) string {
-				return fmt.Sprintf("%s Devbox v%s (commit %s, built %s)",
+				return fmt.Sprintf("%s DWE v%s (commit %s, built %s)",
 					render.LogoMark(), d.Version, d.Commit, d.BuiltAt)
 			})
 		},

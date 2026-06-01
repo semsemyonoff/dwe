@@ -43,9 +43,9 @@ func (e *Error) ExitCode() int { return 1 }
 func preflightHeader(stage string, blocking bool) string {
 	action := preflightActionLabel(stage)
 	if blocking {
-		return fmt.Sprintf("Devbox can't %s — please fix the issues below and try again:", action)
+		return fmt.Sprintf("DWE can't %s — please fix the issues below and try again:", action)
 	}
-	return fmt.Sprintf("Devbox is about to %s. A few things to know:", action)
+	return fmt.Sprintf("DWE is about to %s. A few things to know:", action)
 }
 
 // preflightActionLabel translates the internal stage name into a short

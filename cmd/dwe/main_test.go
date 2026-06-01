@@ -165,7 +165,7 @@ func TestLoadHelpColorScheme(t *testing.T) {
 		// So styles should be loaded even for a legacy project.
 		cs := loadHelpColorScheme("", false)
 		if cs == nil {
-			t.Error("expected non-nil ColorSchemeFunc: Locate should succeed for legacy v1 (schema check is Task 3)")
+			t.Error("expected non-nil ColorSchemeFunc: Locate succeeds regardless of schema_version (field silently ignored)")
 		}
 	})
 

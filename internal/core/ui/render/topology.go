@@ -117,7 +117,7 @@ func Topology(deps map[string][]string, status map[string]NodeStatus, categories
 		sort.Strings(roots)
 	}
 
-	root := tree.Root(styles.AccentStyle().Bold(true).Render("⁜ Devbox"))
+	root := tree.Root(styles.AccentStyle().Bold(true).Render("⁜ DWE"))
 	for _, name := range roots {
 		root.Child(buildTopoNode(name, deps, status, categories, nil))
 	}

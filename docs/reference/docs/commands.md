@@ -198,7 +198,7 @@ If that produces a PNG, `dwe docs` will too.
 
 ### Diagram theme (`mermaid_theme`)
 
-Override which mermaid theme is rendered, independent of the terminal background. Set in the user-config file (`~/.config/workspace/config` global, `.dwe/config` per-project, env var wins).
+Override which mermaid theme is rendered, independent of the terminal background. Set in the user-config file (`~/.config/dwe/config` global, `.dwe/config` per-project, env var wins).
 
 | Key | Type | Default | Values |
 |---|---|---|---|

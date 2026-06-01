@@ -32,7 +32,7 @@ type StatusInput struct {
 }
 
 // HealthIndicator returns just the health indicator glyph and state (e.g., "● running")
-// without the "Devbox: " prefix.
+// without the "DWE: " prefix.
 func HealthIndicator(in StatusInput) string {
 	if in.Cfg == nil {
 		return ""
@@ -41,9 +41,9 @@ func HealthIndicator(in StatusInput) string {
 	return selectHealthIndicator(rows, in.TopoStatus)
 }
 
-// RenderHealth returns the "Devbox: ●/◐/○ ..." indicator line (no trailing newline).
+// RenderHealth returns the "DWE: ●/◐/○ ..." indicator line (no trailing newline).
 func RenderHealth(in StatusInput) string {
-	return "Devbox: " + HealthIndicator(in)
+	return "DWE: " + HealthIndicator(in)
 }
 
 // RenderApps returns the Apps section (services with type=app) title + table.

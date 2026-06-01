@@ -14,8 +14,8 @@ import (
 	userpkg "github.com/semsemyonoff/dwe/internal/core/project/user"
 )
 
-// sampleDevboxYML reflects the lean workspace.yml (project identity only).
-const sampleDevboxYML = `
+// sampleWorkspaceYML reflects the lean workspace.yml (project identity only, schema_version silently ignored).
+const sampleWorkspaceYML = `
 schema_version: "1"
 project:
   name: laravel
@@ -319,7 +319,7 @@ services:
     enabled: true
 state: staging
 `
-	path := writeLayeredFixture(t, sampleDevboxYML, sampleDefaultsYML, userYML)
+	path := writeLayeredFixture(t, sampleWorkspaceYML, sampleDefaultsYML, userYML)
 	cfg, err := LoadConfig(path)
 	if err != nil {
 		t.Fatalf("LoadConfig: %v", err)
@@ -349,7 +349,7 @@ state: staging
 
 func TestLoadConfig_noOptionalFiles(t *testing.T) {
 	// Works fine when defaults.yml, local.yml, and tools.yml are absent.
-	path := writeFullFixture(t, sampleDevboxYML, "", "", "", noToolsYML)
+	path := writeFullFixture(t, sampleWorkspaceYML, "", "", "", noToolsYML)
 	cfg, err := LoadConfig(path)
 	if err != nil {
 		t.Fatalf("LoadConfig: %v", err)
@@ -363,7 +363,7 @@ func TestLoadConfig_noDefaultsFile(t *testing.T) {
 	// local.yml present, defaults.yml absent. Skip tools.yml to avoid requiring
 	// a runtime block solely to satisfy tool host/port validation.
 	userYML := `state: demo`
-	path := writeFullFixture(t, sampleDevboxYML, "", userYML, "", noToolsYML)
+	path := writeFullFixture(t, sampleWorkspaceYML, "", userYML, "", noToolsYML)
 	cfg, err := LoadConfig(path)
 	if err != nil {
 		t.Fatalf("LoadConfig: %v", err)
@@ -517,7 +517,7 @@ func TestLookupDotPath_nilConfig(t *testing.T) {
 // --- LoadConfig populates Raw ---
 
 func TestLoadConfig_rawPopulated(t *testing.T) {
-	path := writeLayeredFixture(t, sampleDevboxYML, sampleDefaultsYML, "")
+	path := writeLayeredFixture(t, sampleWorkspaceYML, sampleDefaultsYML, "")
 	cfg, err := LoadConfig(path)
 	if err != nil {
 		t.Fatalf("LoadConfig: %v", err)
@@ -541,7 +541,7 @@ func TestLoadConfig_composeBasePresent(t *testing.T) {
 compose:
   base: compose.yaml
 `
-	path := writeLayeredFixture(t, sampleDevboxYML, defaultsWithCompose, "")
+	path := writeLayeredFixture(t, sampleWorkspaceYML, defaultsWithCompose, "")
 	cfg, err := LoadConfig(path)
 	if err != nil {
 		t.Fatalf("LoadConfig: %v", err)
@@ -552,7 +552,7 @@ compose:
 }
 
 func TestLoadConfig_toolComposesLoaded(t *testing.T) {
-	path := writeLayeredFixture(t, sampleDevboxYML, sampleDefaultsYML, "")
+	path := writeLayeredFixture(t, sampleWorkspaceYML, sampleDefaultsYML, "")
 	cfg, err := LoadConfig(path)
 	if err != nil {
 		t.Fatalf("LoadConfig: %v", err)
@@ -584,7 +584,7 @@ func slicesEqual(a, b []string) bool {
 
 func TestLoadConfig_composeAbsent(t *testing.T) {
 	// When compose section is absent, fields are zero values.
-	path := writeLayeredFixture(t, sampleDevboxYML, sampleDefaultsYML, "")
+	path := writeLayeredFixture(t, sampleWorkspaceYML, sampleDefaultsYML, "")
 	cfg, err := LoadConfig(path)
 	if err != nil {
 		t.Fatalf("LoadConfig: %v", err)
@@ -711,7 +711,7 @@ services:
   elasticvue:
     enabled: false
 `
-	path := writeFullFixture(t, sampleDevboxYML, defaultsWithNewTool, "", "", toolsWithNewTool)
+	path := writeFullFixture(t, sampleWorkspaceYML, defaultsWithNewTool, "", "", toolsWithNewTool)
 	cfg, err := LoadConfig(path)
 	if err != nil {
 		t.Fatalf("LoadConfig: %v", err)
@@ -860,7 +860,7 @@ services:
   main-debug:
     enabled: false
 `
-	path := writeFullFixture(t, sampleDevboxYML, defaults, "", sampleServicesYML, sampleToolsYML)
+	path := writeFullFixture(t, sampleWorkspaceYML, defaults, "", sampleServicesYML, sampleToolsYML)
 	cfg, err := LoadConfig(path)
 	if err != nil {
 		t.Fatalf("LoadConfig: %v", err)
@@ -893,7 +893,7 @@ services:
   main-debug:
     enabled: true
 `
-	path := writeFullFixture(t, sampleDevboxYML, defaults, local, sampleServicesYML, sampleToolsYML)
+	path := writeFullFixture(t, sampleWorkspaceYML, defaults, local, sampleServicesYML, sampleToolsYML)
 	cfg, err := LoadConfig(path)
 	if err != nil {
 		t.Fatalf("LoadConfig: %v", err)
@@ -905,7 +905,7 @@ services:
 }
 
 func TestLoadConfig_servicesInjectedIntoRaw(t *testing.T) {
-	path := writeFullFixture(t, sampleDevboxYML, sampleDefaultsYML, "", sampleServicesYML, sampleToolsYML)
+	path := writeFullFixture(t, sampleWorkspaceYML, sampleDefaultsYML, "", sampleServicesYML, sampleToolsYML)
 	cfg, err := LoadConfig(path)
 	if err != nil {
 		t.Fatalf("LoadConfig: %v", err)
@@ -922,7 +922,7 @@ func TestLoadConfig_servicesInjectedIntoRaw(t *testing.T) {
 
 func TestLoadConfig_noServicesFile(t *testing.T) {
 	// Without services.yml, cfg.Services should be empty/nil-safe (no error).
-	path := writeFullFixture(t, sampleDevboxYML, "", "", "", noToolsYML)
+	path := writeFullFixture(t, sampleWorkspaceYML, "", "", "", noToolsYML)
 	cfg, err := LoadConfig(path)
 	if err != nil {
 		t.Fatalf("LoadConfig: %v", err)
@@ -965,7 +965,7 @@ func writeDeployFixture(t *testing.T, deployYML string) string {
 	t.Helper()
 	dir := t.TempDir()
 	workspacePath := filepath.Join(dir, "workspace.yml")
-	if err := os.WriteFile(workspacePath, []byte(sampleDevboxYML), 0644); err != nil {
+	if err := os.WriteFile(workspacePath, []byte(sampleWorkspaceYML), 0644); err != nil {
 		t.Fatalf("write workspace.yml: %v", err)
 	}
 	workspaceDir := filepath.Join(dir, "workspace")
@@ -1965,7 +1965,7 @@ exports:
     - name: STATE
       from: state
 `
-	path := writeLayeredFixture(t, sampleDevboxYML, defaultsWithExports, "")
+	path := writeLayeredFixture(t, sampleWorkspaceYML, defaultsWithExports, "")
 	cfg, err := LoadConfig(path)
 	if err != nil {
 		t.Fatalf("LoadConfig: %v", err)
@@ -1993,7 +1993,7 @@ exports:
     - name: ` + name + `
       from: services.app.ports.http
 `
-			path := writeLayeredFixture(t, sampleDevboxYML, defaultsWithReservedRule, "")
+			path := writeLayeredFixture(t, sampleWorkspaceYML, defaultsWithReservedRule, "")
 			_, err := LoadConfig(path)
 			if err == nil {
 				t.Fatalf("LoadConfig: expected error for reserved name %q, got nil", name)
@@ -3248,7 +3248,7 @@ func TestBinaryAccessorPartialUserConfigOverrides(t *testing.T) {
 
 func TestLoadConfig_docsDefaults(t *testing.T) {
 	// Test that docs config defaults to empty string and 0, which resolve to "auto" and 100 MB
-	path := writeLayeredFixture(t, sampleDevboxYML, sampleDefaultsYML, "")
+	path := writeLayeredFixture(t, sampleWorkspaceYML, sampleDefaultsYML, "")
 	cfg, err := LoadConfig(path)
 	if err != nil {
 		t.Fatalf("LoadConfig: %v", err)
@@ -3266,7 +3266,7 @@ func TestLoadConfig_docsDefaults(t *testing.T) {
 }
 
 func TestLoadConfig_docsConfigured(t *testing.T) {
-	cfgYAML := sampleDevboxYML
+	cfgYAML := sampleWorkspaceYML
 	defaultsYML := sampleDefaultsYML + `
 docs:
   mermaid: mmdc
@@ -3296,7 +3296,7 @@ docs:
 
 func TestLoadConfig_docsCacheSizeClamp(t *testing.T) {
 	// Test that negative cache size is clamped to 100 by the accessor
-	cfgYAML := sampleDevboxYML
+	cfgYAML := sampleWorkspaceYML
 	defaultsYML := sampleDefaultsYML + `
 docs:
   cache_size_mb: -1
@@ -3372,7 +3372,7 @@ func TestComposeFilesAll_baseOnly(t *testing.T) {
 compose:
   base: compose.yaml
 `
-	path := writeFullFixture(t, sampleDevboxYML, defaultsWithCompose, "", "", minimalToolsYML)
+	path := writeFullFixture(t, sampleWorkspaceYML, defaultsWithCompose, "", "", minimalToolsYML)
 	cfg, err := LoadConfig(path)
 	if err != nil {
 		t.Fatalf("LoadConfig: %v", err)
@@ -3424,7 +3424,7 @@ runtime:
 compose:
   base: compose.yaml
 `
-	path := writeFullFixture(t, sampleDevboxYML, defaultsWithCompose, "", "", customTools)
+	path := writeFullFixture(t, sampleWorkspaceYML, defaultsWithCompose, "", "", customTools)
 	cfg, err := LoadConfig(path)
 	if err != nil {
 		t.Fatalf("LoadConfig: %v", err)
@@ -3509,7 +3509,7 @@ services:
     compose:
       - compose/services/worker/base.yml
 `
-	path := writeFullFixture(t, sampleDevboxYML, defaultsWithCompose, "", servicesYML, minimalToolsYML)
+	path := writeFullFixture(t, sampleWorkspaceYML, defaultsWithCompose, "", servicesYML, minimalToolsYML)
 	cfg, err := LoadConfig(path)
 	if err != nil {
 		t.Fatalf("LoadConfig: %v", err)
@@ -3555,7 +3555,7 @@ func TestComposeFilesAll_fullMixedScenario(t *testing.T) {
 compose:
   base: compose.yaml
 `
-	path := writeFullFixture(t, sampleDevboxYML, defaultsWithBase, "", sampleServicesYML, sampleToolsYML)
+	path := writeFullFixture(t, sampleWorkspaceYML, defaultsWithBase, "", sampleServicesYML, sampleToolsYML)
 	cfg, err := LoadConfig(path)
 	if err != nil {
 		t.Fatalf("LoadConfig: %v", err)
@@ -3586,7 +3586,7 @@ compose:
 func TestComposeFilesAll_noBase(t *testing.T) {
 	// Tool overlays without a base file. ComposeFilesAll must still work.
 	// Use sampleDefaultsYML which has mailpit and redis_insight enabled with compose files.
-	path := writeLayeredFixture(t, sampleDevboxYML, sampleDefaultsYML, "")
+	path := writeLayeredFixture(t, sampleWorkspaceYML, sampleDefaultsYML, "")
 	cfg, err := LoadConfig(path)
 	if err != nil {
 		t.Fatalf("LoadConfig: %v", err)
@@ -3610,7 +3610,7 @@ func TestComposeFilesAll_noBase(t *testing.T) {
 func TestComposeFilesAll_empty(t *testing.T) {
 	// No compose section at all, and no tools with compose files.
 	// Use minimalDefaultsYML/minimalToolsYML which have no compose section and no tool compose files.
-	path := writeFullFixture(t, sampleDevboxYML, minimalDefaultsYML, "", "", minimalToolsYML)
+	path := writeFullFixture(t, sampleWorkspaceYML, minimalDefaultsYML, "", "", minimalToolsYML)
 	cfg, err := LoadConfig(path)
 	if err != nil {
 		t.Fatalf("LoadConfig: %v", err)
@@ -3642,7 +3642,7 @@ services:
 compose:
   base: compose.yaml
 `
-	path := writeFullFixture(t, sampleDevboxYML, defaultsWithCompose, "", serviceYML, minimalToolsYML)
+	path := writeFullFixture(t, sampleWorkspaceYML, defaultsWithCompose, "", serviceYML, minimalToolsYML)
 	cfg, err := LoadConfig(path)
 	if err != nil {
 		t.Fatalf("LoadConfig: %v", err)
@@ -3692,7 +3692,7 @@ runtime:
 compose:
   base: compose.yaml
 `
-	path := writeFullFixture(t, sampleDevboxYML, defaultsWithElasticvue, "", "", customTools)
+	path := writeFullFixture(t, sampleWorkspaceYML, defaultsWithElasticvue, "", "", customTools)
 	cfg, err := LoadConfig(path)
 	if err != nil {
 		t.Fatalf("LoadConfig: %v", err)
@@ -3770,7 +3770,7 @@ runtime:
 compose:
   base: compose.yaml
 `
-	path := writeFullFixture(t, sampleDevboxYML, defaultsUnsorted, "", "", customTools)
+	path := writeFullFixture(t, sampleWorkspaceYML, defaultsUnsorted, "", "", customTools)
 	cfg, err := LoadConfig(path)
 	if err != nil {
 		t.Fatalf("LoadConfig: %v", err)
@@ -4394,7 +4394,7 @@ func TestLoadConfig_GitNotInjectedIntoRaw(t *testing.T) {
         enabled: true
         template: custom
 `
-	path := writeFullFixture(t, sampleDevboxYML, sampleDefaultsYML, "", svcYml, sampleToolsYML)
+	path := writeFullFixture(t, sampleWorkspaceYML, sampleDefaultsYML, "", svcYml, sampleToolsYML)
 	cfg, err := LoadConfig(path)
 	if err != nil {
 		t.Fatalf("LoadConfig: %v", err)

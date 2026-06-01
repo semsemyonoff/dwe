@@ -34,13 +34,13 @@ type TreeWidget struct {
 	filter *TreeFilter
 }
 
-// projectDevboxForTUI returns the user-facing projection of the canonical
+// projectDweForTUI returns the user-facing projection of the canonical
 // dwe docs tree: drops the `internals/` subtree (not user-facing) and
 // promotes `reference/` children to top-level so the TUI doesn't show a
 // redundant `reference/` folder. The `Node.Path` on each surviving node is
 // unchanged (still `reference/foo.md`) so ResolveContent and
 // content_hashes lookups keep working.
-func projectDevboxForTUI(children []*docs.Node) []*docs.Node {
+func projectDweForTUI(children []*docs.Node) []*docs.Node {
 	out := make([]*docs.Node, 0, len(children))
 	for _, child := range children {
 		switch child.Name {
@@ -159,7 +159,7 @@ func (tw *TreeWidget) rebuild() error {
 		// full canonical tree.
 		children := tree.Children
 		if root.Name == "dwe" {
-			children = projectDevboxForTUI(tree.Children)
+			children = projectDweForTUI(tree.Children)
 		}
 		if useGroups {
 			groupName := strings.ToUpper(root.Name[:1]) + root.Name[1:]

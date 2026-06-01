@@ -515,7 +515,7 @@ func validateHeader(scope []string, stage string) string {
 		stageSuffix = fmt.Sprintf(" (stage: %s)", stage)
 	}
 	what := validateScopeLabel(scope)
-	return fmt.Sprintf("Devbox checked %s%s. Results:", what, stageSuffix)
+	return fmt.Sprintf("DWE checked %s%s. Results:", what, stageSuffix)
 }
 
 // validateScopeLabel produces a human label for the scope being validated.

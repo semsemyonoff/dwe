@@ -50,7 +50,7 @@ func TestVersionCmd_TextMode(t *testing.T) {
 	setTestVersion(t)
 	flags := &cmdctx.RootFlags{Output: "text"}
 	got := runVersionCmd(t, flags, "version")
-	if !strings.Contains(got, "Devbox v1.2.3") {
+	if !strings.Contains(got, "DWE v1.2.3") {
 		t.Errorf("text output should contain version; got: %q", got)
 	}
 	if !strings.Contains(got, "abc1234") {

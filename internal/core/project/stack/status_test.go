@@ -79,8 +79,8 @@ func TestRenderHealth_ContainsIndicator(t *testing.T) {
 	)
 	neverRunning := func(_, _ string) bool { return false }
 	out := RenderHealth(StatusInput{Cfg: cfg, IsRunning: neverRunning})
-	if !strings.Contains(out, "Devbox:") {
-		t.Errorf("output missing 'Devbox:' indicator: %q", out)
+	if !strings.Contains(out, "DWE:") {
+		t.Errorf("output missing 'DWE:' indicator: %q", out)
 	}
 }
 
