@@ -1,4 +1,4 @@
-> Translated from: reference/config/commands/types.md @ fb011fa0bc50
+> Translated from: reference/config/commands/types.md @ 7906cbefcff4
 
 # Типы команд
 
@@ -74,7 +74,7 @@ commit-config:
 
 | Переменная | Значение |
 |----------|-------|
-| `DEVBOX_BIN` | Абсолютный путь к запущенному бинарнику devbox — используйте его вместо хардкода `./bin/devbox` |
+| `DWE_BIN` | Абсолютный путь к запущенному бинарнику devbox — используйте его вместо хардкода `./bin/devbox` |
 | `COMPOSE_PROJECT_NAME` | Имя активного compose-проекта (например, `devbox-laravel`) — `docker compose ...` подхватывает его без `-p` |
 | `COMPOSE_FILE` | Объединённый через двоеточие список путей активных оверлеев, приведённых к абсолютным относительно корня проекта — `docker compose ...` подхватывает их без флагов `-f` |
 
@@ -85,7 +85,7 @@ hub.chown-src-host:
   type: shell
   description: Chown the host-side mount via the running container
   cmd: |
-    "$DEVBOX_BIN" docker exec -u root app-main -- \
+    "$DWE_BIN" docker exec -u root app-main -- \
       chown -R www-data:www-data /workspace/src
 ```
 
@@ -163,16 +163,16 @@ db.dump-create:
 
 | Переменная | Описание |
 |----------|-------------|
-| `DEVBOX_ROOT` | Абсолютный корень проекта |
-| `DEVBOX_BIN` | Абсолютный путь к запущенному бинарнику devbox |
-| `DEVBOX_COMMAND_ID` | Полный идентификатор данного вызова |
-| `DEVBOX_TEMP_DIR` | Writable temp-директория, ограниченная этим вызовом (автоудаление) |
-| `DEVBOX_NONINTERACTIVE` | `1`, когда родительский `RunContext` имеет `NonInteractive: true` (установлено `commands --yes` / `-y`), **или** раннер наследует `DEVBOX_NONINTERACTIVE=1` из собственного окружения (например, вложенные вызовы). Иначе `0`. Само по себе обнаружение TTY этого не переключает — скрипты, которым нужно по-разному вести себя на не-TTY, должны проверять собственный stdin. |
-| `DEVBOX_PARAMS_JSON` | Разрешённые params как JSON-объект |
-| `DEVBOX_CONTEXT_JSON` | Разрешённый context как JSON-объект |
-| `DEVBOX_FILES_JSON` | JSON-объект, отображающий идентификаторы файлов в `{path}` |
+| `DWE_ROOT` | Абсолютный корень проекта |
+| `DWE_BIN` | Абсолютный путь к запущенному бинарнику devbox |
+| `DWE_COMMAND_ID` | Полный идентификатор данного вызова |
+| `DWE_TEMP_DIR` | Writable temp-директория, ограниченная этим вызовом (автоудаление) |
+| `DWE_NONINTERACTIVE` | `1`, когда родительский `RunContext` имеет `NonInteractive: true` (установлено `commands --yes` / `-y`), **или** раннер наследует `DWE_NONINTERACTIVE=1` из собственного окружения (например, вложенные вызовы). Иначе `0`. Само по себе обнаружение TTY этого не переключает — скрипты, которым нужно по-разному вести себя на не-TTY, должны проверять собственный stdin. |
+| `DWE_PARAMS_JSON` | Разрешённые params как JSON-объект |
+| `DWE_CONTEXT_JSON` | Разрешённый context как JSON-объект |
+| `DWE_FILES_JSON` | JSON-объект, отображающий идентификаторы файлов в `{path}` |
 
-Используйте `DEVBOX_BIN` вместо хардкода `./bin/devbox`:
+Используйте `DWE_BIN` вместо хардкода `./bin/devbox`:
 
 ```bash
 #!/bin/bash
@@ -181,14 +181,14 @@ set -euo pipefail
 TMPFILE=$(mktemp "${DUMP_FILE}.XXXXXX")
 trap 'rm -f "$TMPFILE"' EXIT
 
-"$DEVBOX_BIN" docker exec -T -e MYSQL_PWD db -- \
+"$DWE_BIN" docker exec -T -e MYSQL_PWD db -- \
   mariadb-dump -u"$DB_USER" "$DB_NAME" | gzip > "$TMPFILE"
 mv "$TMPFILE" "$DUMP_FILE"
 ```
 
 ### Линтинг скриптов
 
-Сам devbox не линтит shell-скрипты. Мы **рекомендуем** установить [ShellCheck](https://github.com/koalaman/shellcheck) и прогонять его по `devbox/scripts/` как часть вашего локального процесса или CI. Это внешний инструмент, полностью опциональный, но он ловит классы багов, которые в этом контексте наиболее болезненны: неэкранированные подстановки, отсутствующий `set -euo pipefail`, сломанные обработчики `trap`, тонкие проблемы с кавычками вокруг `$DUMP_FILE` / `$DEVBOX_BIN` и несоответствующий синтаксис тестов.
+Сам devbox не линтит shell-скрипты. Мы **рекомендуем** установить [ShellCheck](https://github.com/koalaman/shellcheck) и прогонять его по `devbox/scripts/` как часть вашего локального процесса или CI. Это внешний инструмент, полностью опциональный, но он ловит классы багов, которые в этом контексте наиболее болезненны: неэкранированные подстановки, отсутствующий `set -euo pipefail`, сломанные обработчики `trap`, тонкие проблемы с кавычками вокруг `$DUMP_FILE` / `$DWE_BIN` и несоответствующий синтаксис тестов.
 
 ```bash
 # one-off check
@@ -209,8 +209,8 @@ set -euo pipefail
 Рекомендуемые соглашения для скриптов под `devbox/scripts/` (независимо от ShellCheck — это хорошие практики в любом случае):
 
 - Начинайте с `set -euo pipefail` — fail fast, никаких тихих багов с unset-переменными.
-- Экранируйте каждую подстановку: `"$DUMP_FILE"`, `"$DEVBOX_BIN"`, `"$DB_NAME"`.
-- Используйте `trap 'rm -f "$TMPFILE"' EXIT` для временных файлов; раннер очищает `$DEVBOX_TEMP_DIR` за вас, но временные файлы отдельных шагов всё равно требуют собственных trap.
+- Экранируйте каждую подстановку: `"$DUMP_FILE"`, `"$DWE_BIN"`, `"$DB_NAME"`.
+- Используйте `trap 'rm -f "$TMPFILE"' EXIT` для временных файлов; раннер очищает `$DWE_TEMP_DIR` за вас, но временные файлы отдельных шагов всё равно требуют собственных trap.
 - Считайте unset env-переменные ошибками через `${VAR:?error message}`, когда скрипт не должен запускаться без них.
 
 ## Тип: service_exec
@@ -434,7 +434,7 @@ steps:
       database: "${db.database}"
 ```
 
-Confirm-шаги тихо пропускаются под `--yes` или `DEVBOX_NONINTERACTIVE=1`. Иначе huh выводит запрос на TTY, а fallback `[y/N]` через stdin обрабатывает piped-ввод.
+Confirm-шаги тихо пропускаются под `--yes` или `DWE_NONINTERACTIVE=1`. Иначе huh выводит запрос на TTY, а fallback `[y/N]` через stdin обрабатывает piped-ввод.
 
 ### Параллельные подшаги
 
@@ -468,7 +468,7 @@ services.all.composer-install:
 
 1. **Минимум два подшага** — список `parallel.steps:` длиной 0 или 1 отвергается на этапе валидации.
 2. **Без вложенных parallel** — подшаг не может сам объявить `parallel:`. Распрямите структуру или разделите на отдельные шаги workflow.
-3. **Без confirm в подшагах** — `confirm:`-шаги интерактивно запрашивают подтверждение; параллельный live-block UI владеет терминалом и не может разместить запрос. Подшаг, ссылающийся на команду с `confirmation: true`, требует `--yes` (или `DEVBOX_NONINTERACTIVE=1`); preflight иначе отвергает группу, а runtime-гард ловит транзитивные вызовы подтверждения.
+3. **Без confirm в подшагах** — `confirm:`-шаги интерактивно запрашивают подтверждение; параллельный live-block UI владеет терминалом и не может разместить запрос. Подшаг, ссылающийся на команду с `confirmation: true`, требует `--yes` (или `DWE_NONINTERACTIVE=1`); preflight иначе отвергает группу, а runtime-гард ловит транзитивные вызовы подтверждения.
 4. **Без `with:` на контейнере** — параллельный контейнер не имеет собственных параметров; каждый подшаг несёт собственный `with:`.
 
 #### Композиция

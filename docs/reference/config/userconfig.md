@@ -92,13 +92,13 @@ Each typed key has a matching `DEVBOX_<UPPER_SNAKE>` env var that overrides what
 
 | Env var | Overrides |
 |---|---|
-| `DEVBOX_LANGUAGE` | `language` |
-| `DEVBOX_MERMAID_THEME` | `mermaid_theme` |
-| `DEVBOX_NOTIFY_ENABLED` | `notify_enabled` |
-| `DEVBOX_NOTIFY_RUN_ENABLED` | `notify_run_enabled` |
-| `DEVBOX_NOTIFY_DEPLOY_ENABLED` | `notify_deploy_enabled` |
-| `DEVBOX_NOTIFY_COMMANDS_ENABLED` | `notify_commands_enabled` |
-| `DEVBOX_NOTIFY_CHANNELS` | `notify_channels` |
+| `DWE_LANGUAGE` | `language` |
+| `DWE_MERMAID_THEME` | `mermaid_theme` |
+| `DWE_NOTIFY_ENABLED` | `notify_enabled` |
+| `DWE_NOTIFY_RUN_ENABLED` | `notify_run_enabled` |
+| `DWE_NOTIFY_DEPLOY_ENABLED` | `notify_deploy_enabled` |
+| `DWE_NOTIFY_COMMANDS_ENABLED` | `notify_commands_enabled` |
+| `DWE_NOTIFY_CHANNELS` | `notify_channels` |
 
 Binary overrides have no env-var equivalent — set them in the config file.
 

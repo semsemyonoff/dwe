@@ -81,7 +81,7 @@ var ErrConfirmInsideParallel = spec.ErrConfirmInsideParallel
 //   - Command steps resolve the referenced command from the registry, merge `with`
 //     param overrides, and dispatch through RunCommandFn.
 //   - Confirm steps prompt the user for confirmation before continuing.  In
-//     non-interactive mode (DEVBOX_NONINTERACTIVE=1) confirm steps are skipped
+//     non-interactive mode (DWE_NONINTERACTIVE=1) confirm steps are skipped
 //     (treated as auto-confirmed).
 //
 // Private commands may be referenced from workflow steps.

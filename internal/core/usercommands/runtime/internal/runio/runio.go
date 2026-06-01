@@ -64,13 +64,13 @@ func ParallelColorForceEnv(rc spec.RunContext) []string {
 	}
 }
 
-// IsNonInteractive returns true when the DEVBOX_NONINTERACTIVE environment
+// IsNonInteractive returns true when the DWE_NONINTERACTIVE environment
 // variable is set to "1" or "true". Hoisted to runio so every runner
 // subpackage can consult it without round-tripping through the workflow
 // package, which would create a runner→workflow import cycle for the
 // type=builtin runner that also gates on this signal.
 func IsNonInteractive() bool {
-	v := os.Getenv("DEVBOX_NONINTERACTIVE")
+	v := os.Getenv("DWE_NONINTERACTIVE")
 	return v == "1" || v == "true"
 }
 

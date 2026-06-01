@@ -1,4 +1,4 @@
-> Translated from: reference/config/notifications.md @ 8299d3197d7e
+> Translated from: reference/config/notifications.md @ 6bb95b57ec2d
 
 # Уведомления
 
@@ -84,11 +84,11 @@
 
 | Env-переменная | Переопределяет |
 |---|---|
-| `DEVBOX_NOTIFY_ENABLED` | `notify_enabled` |
-| `DEVBOX_NOTIFY_RUN_ENABLED` | `notify_run_enabled` |
-| `DEVBOX_NOTIFY_DEPLOY_ENABLED` | `notify_deploy_enabled` |
-| `DEVBOX_NOTIFY_COMMANDS_ENABLED` | `notify_commands_enabled` |
-| `DEVBOX_NOTIFY_CHANNELS` | `notify_channels` |
+| `DWE_NOTIFY_ENABLED` | `notify_enabled` |
+| `DWE_NOTIFY_RUN_ENABLED` | `notify_run_enabled` |
+| `DWE_NOTIFY_DEPLOY_ENABLED` | `notify_deploy_enabled` |
+| `DWE_NOTIFY_COMMANDS_ENABLED` | `notify_commands_enabled` |
+| `DWE_NOTIFY_CHANNELS` | `notify_channels` |
 
 Булевы env-значения: `1` / `true` / `yes` — истинные; `0` / `false` / `no` — ложные.
 
@@ -109,7 +109,7 @@
 Уведомления короткозамыкаются, когда верно любое из:
 
 - Переменная окружения `CI` выставлена в любое непустое значение.
-- `DEVBOX_NONINTERACTIVE` выставлен в truthy-значение (`1` или `true`; нечувствительно к регистру).
+- `DWE_NONINTERACTIVE` выставлен в truthy-значение (`1` или `true`; нечувствительно к регистру).
 - `stdin` не подключён к терминалу (stdout намеренно не проверяется — пайп вывода с сохранённым интерактивным stdin — это ровно тот сценарий, где пассивное toast-уведомление наиболее ценно).
 
 Это означает, что CI-запуски, piped-вывод и скриптовые вызовы никогда не порождают desktop-уведомление, независимо от конфига.

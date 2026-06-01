@@ -65,7 +65,7 @@ flowchart TD
 Operational notes:
 
 - `commands --yes` sets `SkipConfirm` and `NonInteractive` on the in-process `RunContext` so every confirm call (top-level command, builtin `confirm`, workflow confirm steps) skips the prompt for the duration of the invocation.
-- Subprocess env propagation is **scoped to the script runner**: `type: script` injects `DEVBOX_NONINTERACTIVE=1` (along with `DEVBOX_PARAMS_JSON`, `DEVBOX_CONTEXT_JSON`, etc.) into the script's environment. `type: shell` exports a smaller contract — `DEVBOX_BIN`, `COMPOSE_PROJECT_NAME`, `COMPOSE_FILE` (see [Shell env contract](types.md#shell-env-contract)) — but **not** `DEVBOX_NONINTERACTIVE`. `type: devbox`, `service_exec`, and `service_run` export none of these — confirmation skipping inside them is enforced by the `RunContext` they run under, not by the env.
+- Subprocess env propagation is **scoped to the script runner**: `type: script` injects `DWE_NONINTERACTIVE=1` (along with `DWE_PARAMS_JSON`, `DWE_CONTEXT_JSON`, etc.) into the script's environment. `type: shell` exports a smaller contract — `DWE_BIN`, `COMPOSE_PROJECT_NAME`, `COMPOSE_FILE` (see [Shell env contract](types.md#shell-env-contract)) — but **not** `DWE_NONINTERACTIVE`. `type: devbox`, `service_exec`, and `service_run` export none of these — confirmation skipping inside them is enforced by the `RunContext` they run under, not by the env.
 - Inside a workflow, child commands inherit `NonInteractive` and `SkipConfirm` from the parent `RunContext`.
 - The non-TTY fallback is `render.Writer.Confirm`; under `CI=1` it auto-confirms.
 
@@ -89,7 +89,7 @@ messages:
 - the `CommandDef` declares `notify: true` (default is `false`);
 - the command is the **top-level** invocation — `devbox commands <id>` typed by the user. Commands invoked transitively as a workflow sub-step (sequential or parallel), from a deploy pipeline action, or from a reset pipeline action are **always suppressed at runtime** regardless of their own `notify:` value;
 - the user's `notify_enabled` master switch and `notify_commands_enabled` per-op gate are both true;
-- the environment is interactive (not CI / `DEVBOX_NONINTERACTIVE` / non-TTY).
+- the environment is interactive (not CI / `DWE_NONINTERACTIVE` / non-TTY).
 
 The rule: "the notification fires for the command you typed, not for any command it runs internally."
 

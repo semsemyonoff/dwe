@@ -372,7 +372,7 @@ func TestWorkflowObserver_ConfirmStep_AutoAcceptedNonInteractive(t *testing.T) {
 func TestWorkflowObserver_ConfirmStep_Aborted(t *testing.T) {
 	// CI=1 makes render.Writer.Confirm auto-yes; clear it for this test.
 	t.Setenv("CI", "")
-	t.Setenv("DEVBOX_NONINTERACTIVE", "")
+	t.Setenv("DWE_NONINTERACTIVE", "")
 
 	wf := &CommandDef{
 		Type: CommandTypeWorkflow, ID: "obs.wf",

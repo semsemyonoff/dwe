@@ -207,7 +207,7 @@ Override which mermaid theme is rendered, independent of the terminal background
 - `auto` — probe the terminal background and pick a matching theme.
 - `dark` / `light` — hard-pin the theme. Useful for transparent terminals where background detection is unreliable, or to standardise the cached PNGs across machines.
 
-Env override: `DEVBOX_MERMAID_THEME=dark`. The chosen theme is part of the cache key, so flipping the value re-renders rather than serving a wrong-themed PNG.
+Env override: `DWE_MERMAID_THEME=dark`. The chosen theme is part of the cache key, so flipping the value re-renders rather than serving a wrong-themed PNG.
 
 ### Cache management
 

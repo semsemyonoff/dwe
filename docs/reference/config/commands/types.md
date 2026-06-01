@@ -72,7 +72,7 @@ commit-config:
 
 | Variable | Value |
 |----------|-------|
-| `DEVBOX_BIN` | Absolute path to the running devbox binary — use it instead of hardcoding `./bin/devbox` |
+| `DWE_BIN` | Absolute path to the running devbox binary — use it instead of hardcoding `./bin/devbox` |
 | `COMPOSE_PROJECT_NAME` | Active compose project name (e.g. `devbox-laravel`) — `docker compose ...` picks this up without `-p` |
 | `COMPOSE_FILE` | Colon-joined list of active overlay paths, made absolute against the project root — `docker compose ...` picks this up without any `-f` flags |
 
@@ -83,7 +83,7 @@ hub.chown-src-host:
   type: shell
   description: Chown the host-side mount via the running container
   cmd: |
-    "$DEVBOX_BIN" docker exec -u root app-main -- \
+    "$DWE_BIN" docker exec -u root app-main -- \
       chown -R www-data:www-data /workspace/src
 ```
 
@@ -161,16 +161,16 @@ The runner always injects the following env vars into the script process:
 
 | Variable | Description |
 |----------|-------------|
-| `DEVBOX_ROOT` | Absolute project root |
-| `DEVBOX_BIN` | Absolute path to the running devbox binary |
-| `DEVBOX_COMMAND_ID` | Full ID of this invocation |
-| `DEVBOX_TEMP_DIR` | Writable temp dir scoped to this invocation (auto-removed) |
-| `DEVBOX_NONINTERACTIVE` | `1` when the parent `RunContext` has `NonInteractive: true` (set by `commands --yes` / `-y`) **or** the runner inherits `DEVBOX_NONINTERACTIVE=1` from its own environment (e.g. nested invocations). Otherwise `0`. TTY detection alone does not flip this — scripts that need to behave differently on a non-TTY should test their own stdin. |
-| `DEVBOX_PARAMS_JSON` | Resolved params as a JSON object |
-| `DEVBOX_CONTEXT_JSON` | Resolved context as a JSON object |
-| `DEVBOX_FILES_JSON` | JSON object mapping file IDs to `{path}` |
+| `DWE_ROOT` | Absolute project root |
+| `DWE_BIN` | Absolute path to the running devbox binary |
+| `DWE_COMMAND_ID` | Full ID of this invocation |
+| `DWE_TEMP_DIR` | Writable temp dir scoped to this invocation (auto-removed) |
+| `DWE_NONINTERACTIVE` | `1` when the parent `RunContext` has `NonInteractive: true` (set by `commands --yes` / `-y`) **or** the runner inherits `DWE_NONINTERACTIVE=1` from its own environment (e.g. nested invocations). Otherwise `0`. TTY detection alone does not flip this — scripts that need to behave differently on a non-TTY should test their own stdin. |
+| `DWE_PARAMS_JSON` | Resolved params as a JSON object |
+| `DWE_CONTEXT_JSON` | Resolved context as a JSON object |
+| `DWE_FILES_JSON` | JSON object mapping file IDs to `{path}` |
 
-Use `DEVBOX_BIN` instead of hard-coding `./bin/devbox`:
+Use `DWE_BIN` instead of hard-coding `./bin/devbox`:
 
 ```bash
 #!/bin/bash
@@ -179,14 +179,14 @@ set -euo pipefail
 TMPFILE=$(mktemp "${DUMP_FILE}.XXXXXX")
 trap 'rm -f "$TMPFILE"' EXIT
 
-"$DEVBOX_BIN" docker exec -T -e MYSQL_PWD db -- \
+"$DWE_BIN" docker exec -T -e MYSQL_PWD db -- \
   mariadb-dump -u"$DB_USER" "$DB_NAME" | gzip > "$TMPFILE"
 mv "$TMPFILE" "$DUMP_FILE"
 ```
 
 ### Linting scripts
 
-Devbox itself does not lint shell scripts. We **recommend** installing [ShellCheck](https://github.com/koalaman/shellcheck) and running it over `devbox/scripts/` as part of your local workflow or CI. It is an external tool, completely optional, but catches the classes of bugs that hurt most in this context: unquoted expansions, missing `set -euo pipefail`, broken `trap` handlers, subtle quoting issues around `$DUMP_FILE` / `$DEVBOX_BIN`, and mismatched test syntax.
+Devbox itself does not lint shell scripts. We **recommend** installing [ShellCheck](https://github.com/koalaman/shellcheck) and running it over `devbox/scripts/` as part of your local workflow or CI. It is an external tool, completely optional, but catches the classes of bugs that hurt most in this context: unquoted expansions, missing `set -euo pipefail`, broken `trap` handlers, subtle quoting issues around `$DUMP_FILE` / `$DWE_BIN`, and mismatched test syntax.
 
 ```bash
 # one-off check
@@ -207,8 +207,8 @@ set -euo pipefail
 Suggested conventions for scripts under `devbox/scripts/` (independent of ShellCheck — these are good ideas regardless):
 
 - Start with `set -euo pipefail` — fail fast, no silent unset-var bugs.
-- Quote every expansion: `"$DUMP_FILE"`, `"$DEVBOX_BIN"`, `"$DB_NAME"`.
-- Use `trap 'rm -f "$TMPFILE"' EXIT` for ephemeral files; the runner cleans `$DEVBOX_TEMP_DIR` for you, but per-step temps still need their own traps.
+- Quote every expansion: `"$DUMP_FILE"`, `"$DWE_BIN"`, `"$DB_NAME"`.
+- Use `trap 'rm -f "$TMPFILE"' EXIT` for ephemeral files; the runner cleans `$DWE_TEMP_DIR` for you, but per-step temps still need their own traps.
 - Treat unset env vars as errors via `${VAR:?error message}` when a script must not run without them.
 
 ## Type: service_exec
@@ -432,7 +432,7 @@ steps:
       database: "${db.database}"
 ```
 
-Confirm steps are silently skipped under `--yes` or `DEVBOX_NONINTERACTIVE=1`. Otherwise huh prompts on TTY, and a `[y/N]` stdin fallback handles piped inputs.
+Confirm steps are silently skipped under `--yes` or `DWE_NONINTERACTIVE=1`. Otherwise huh prompts on TTY, and a `[y/N]` stdin fallback handles piped inputs.
 
 ### Parallel sub-steps
 
@@ -466,7 +466,7 @@ Group-level `when:` and `continue_on_error:` are valid on the step that carries 
 
 1. **At least two sub-steps** — a `parallel.steps:` list of length 0 or 1 is rejected at validate-time.
 2. **No nested parallel** — a sub-step may not itself declare `parallel:`. Flatten the structure or split into separate workflow steps.
-3. **No confirm in sub-steps** — `confirm:` steps interactively prompt; the parallel live-block UI owns the terminal and cannot host a prompt. A sub-step that references a command with `confirmation: true` requires `--yes` (or `DEVBOX_NONINTERACTIVE=1`); preflight rejects the group otherwise, and a runtime guard catches transitive confirmation calls.
+3. **No confirm in sub-steps** — `confirm:` steps interactively prompt; the parallel live-block UI owns the terminal and cannot host a prompt. A sub-step that references a command with `confirmation: true` requires `--yes` (or `DWE_NONINTERACTIVE=1`); preflight rejects the group otherwise, and a runtime guard catches transitive confirmation calls.
 4. **No `with:` on the container** — the parallel container holds no params of its own; each sub-step carries its own `with:`.
 
 #### Composition

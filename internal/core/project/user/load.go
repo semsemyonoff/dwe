@@ -10,15 +10,15 @@ import (
 )
 
 // Env var names recognised by Load. Each maps to the same-named flat key
-// without the DEVBOX_ prefix.
+// without the DWE_ prefix.
 const (
-	envNotifyEnabled         = "DEVBOX_NOTIFY_ENABLED"
-	envNotifyRunEnabled      = "DEVBOX_NOTIFY_RUN_ENABLED"
-	envNotifyDeployEnabled   = "DEVBOX_NOTIFY_DEPLOY_ENABLED"
-	envNotifyCommandsEnabled = "DEVBOX_NOTIFY_COMMANDS_ENABLED"
-	envNotifyChannels        = "DEVBOX_NOTIFY_CHANNELS"
-	envLanguage              = "DEVBOX_LANGUAGE"
-	envMermaidTheme          = "DEVBOX_MERMAID_THEME"
+	envNotifyEnabled         = "DWE_NOTIFY_ENABLED"
+	envNotifyRunEnabled      = "DWE_NOTIFY_RUN_ENABLED"
+	envNotifyDeployEnabled   = "DWE_NOTIFY_DEPLOY_ENABLED"
+	envNotifyCommandsEnabled = "DWE_NOTIFY_COMMANDS_ENABLED"
+	envNotifyChannels        = "DWE_NOTIFY_CHANNELS"
+	envLanguage              = "DWE_LANGUAGE"
+	envMermaidTheme          = "DWE_MERMAID_THEME"
 )
 
 // Load resolves the effective Config by applying:

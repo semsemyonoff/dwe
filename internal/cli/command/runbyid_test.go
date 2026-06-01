@@ -608,12 +608,12 @@ func TestRunCommandByID_IOChannelsAttached(t *testing.T) {
 	}
 }
 
-// --- DEVBOX_NONINTERACTIVE env -----------------------------------------
+// --- DWE_NONINTERACTIVE env -----------------------------------------
 
 func TestRunCommandByID_NonInteractiveEnv_SkipsForm(t *testing.T) {
 	s := stubOrchestratorSeams(t)
 	widgets.IsInteractiveFn = func(io.Reader) bool { return true }
-	t.Setenv("DEVBOX_NONINTERACTIVE", "1")
+	t.Setenv("DWE_NONINTERACTIVE", "1")
 	s.installForm()
 	s.installConfirm()
 	s.installRunner()
@@ -632,10 +632,10 @@ func TestRunCommandByID_NonInteractiveEnv_SkipsForm(t *testing.T) {
 		t.Fatalf("unexpected error: %v", err)
 	}
 	if s.formCalls != 0 {
-		t.Errorf("form must be skipped under DEVBOX_NONINTERACTIVE; got %d", s.formCalls)
+		t.Errorf("form must be skipped under DWE_NONINTERACTIVE; got %d", s.formCalls)
 	}
 	if s.confirmCalls != 0 {
-		t.Errorf("confirm must be skipped under DEVBOX_NONINTERACTIVE; got %d", s.confirmCalls)
+		t.Errorf("confirm must be skipped under DWE_NONINTERACTIVE; got %d", s.confirmCalls)
 	}
 	if !s.runRC.SkipConfirm || !s.runRC.NonInteractive {
 		t.Errorf("expected SkipConfirm/NonInteractive=true; got %+v", s.runRC)
@@ -674,7 +674,7 @@ func TestRunCommandByID_NoDoublePrompt(t *testing.T) {
 // --- non-TTY Y/n fallback ------------------------------------------------
 
 // TestRunCommandByID_NonTTYWithoutYes_FallbackPreserved guards the pipe-stdin
-// Y/n path: when stdin is non-TTY and neither --yes nor DEVBOX_NONINTERACTIVE
+// Y/n path: when stdin is non-TTY and neither --yes nor DWE_NONINTERACTIVE
 // is set, the orchestrator must not call confirmRun and must leave
 // rctx.SkipConfirm=false so RunCommand's internal ConfirmCommand uses its
 // non-TTY Y/n branch.

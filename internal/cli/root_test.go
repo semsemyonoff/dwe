@@ -468,7 +468,7 @@ func TestLocaleResolutionWithUserconfig(t *testing.T) {
 	}
 }
 
-// TestLocaleResolutionEnvVarPrecedence verifies that DEVBOX_LANGUAGE env var
+// TestLocaleResolutionEnvVarPrecedence verifies that DWE_LANGUAGE env var
 // takes precedence over the config file.
 func TestLocaleResolutionEnvVarPrecedence(t *testing.T) {
 	dir := t.TempDir()
@@ -487,13 +487,13 @@ func TestLocaleResolutionEnvVarPrecedence(t *testing.T) {
 		t.Fatalf("writing userconfig: %v", err)
 	}
 
-	oldDevboxLang := os.Getenv("DEVBOX_LANGUAGE")
-	_ = os.Setenv("DEVBOX_LANGUAGE", "fr")
+	oldDevboxLang := os.Getenv("DWE_LANGUAGE")
+	_ = os.Setenv("DWE_LANGUAGE", "fr")
 	defer func() {
 		if oldDevboxLang != "" {
-			_ = os.Setenv("DEVBOX_LANGUAGE", oldDevboxLang)
+			_ = os.Setenv("DWE_LANGUAGE", oldDevboxLang)
 		} else {
-			_ = os.Unsetenv("DEVBOX_LANGUAGE")
+			_ = os.Unsetenv("DWE_LANGUAGE")
 		}
 	}()
 

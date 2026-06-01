@@ -1,4 +1,4 @@
-> Translated from: reference/docs/translations.md @ cf5332a9a613
+> Translated from: reference/docs/translations.md @ 9c716f08a69d
 
 # Переводы и поведение языка
 
@@ -9,7 +9,7 @@
 Devbox выбирает активную локаль по цепочке приоритетов:
 
 1. **Флаг `--lang`** (на `docs show` / `docs export` / `docs list`; в рамках одного запуска)
-2. **Переменная окружения `DEVBOX_LANGUAGE`**
+2. **Переменная окружения `DWE_LANGUAGE`**
 3. **Параметр `language` в пользовательской конфигурации** (`~/.config/devbox/config` или `.devbox/config`)
 4. **Системная переменная `$LANG`** (разбирается до 2-буквенного кода)
 5. **По умолчанию:** `en` (английский)

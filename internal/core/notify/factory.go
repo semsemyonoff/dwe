@@ -27,7 +27,7 @@ var isInteractiveForNotify = func() bool {
 	if os.Getenv("CI") != "" {
 		return false
 	}
-	if v := os.Getenv("DEVBOX_NONINTERACTIVE"); v == "1" || v == "true" {
+	if v := os.Getenv("DWE_NONINTERACTIVE"); v == "1" || v == "true" {
 		return false
 	}
 	return isStdinTTY()
@@ -37,7 +37,7 @@ var isInteractiveForNotify = func() bool {
 // (noop) Notifier when:
 //   - cfg is nil or master switch off
 //   - no channels configured
-//   - environment is non-interactive (CI / DEVBOX_NONINTERACTIVE / non-TTY)
+//   - environment is non-interactive (CI / DWE_NONINTERACTIVE / non-TTY)
 //   - configured channels contain no recognised backend
 //
 // A disabled Notifier still satisfies the Notify(ctx, ev) contract

@@ -477,11 +477,11 @@ bin/dwe docs generate --scope cli
 - Modify: tests asserting env-var names
 - Modify: any fixture YAML with `${DEVBOX_*}` references
 
-- [ ] `rg -n 'DEVBOX_' --type go` — full enumeration
-- [ ] bulk replace `DEVBOX_BIN`/`ROOT`/`COMMAND_ID`/`TEMP_DIR`/`NONINTERACTIVE`/`PARAMS_JSON`/`CONTEXT_JSON`/`FILES_JSON` → `DWE_*`
-- [ ] update tests pinning env-var names
-- [ ] `rg -n 'DEVBOX_' --type yaml` — update fixture references
-- [ ] `make build && make test` — must end **green**
+- [x] `rg -n 'DEVBOX_' --type go` — full enumeration
+- [x] bulk replace `DEVBOX_BIN`/`ROOT`/`COMMAND_ID`/`TEMP_DIR`/`NONINTERACTIVE`/`PARAMS_JSON`/`CONTEXT_JSON`/`FILES_JSON` → `DWE_*`
+- [x] update tests pinning env-var names
+- [x] `rg -n 'DEVBOX_' --type yaml` — update fixture references
+- [x] `make build && make test` — must end **green**
 
 ### Task 8: Phase 3e — YAML enum `type: devbox` + `CommandTypeDevbox` const + alias re-exports
 

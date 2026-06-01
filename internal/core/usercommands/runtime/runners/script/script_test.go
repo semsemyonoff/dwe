@@ -60,7 +60,7 @@ func captureOutput(t *testing.T, ctx RunContext) (string, string, error) {
 func TestRunner_ContractEnvVars(t *testing.T) {
 	dir := t.TempDir()
 	scriptPath := writeScript(t, dir, "check.sh", `
-env | grep -E '^DEVBOX_' | sort
+env | grep -E '^DWE_' | sort
 `)
 
 	cmd := &CommandDef{
@@ -83,14 +83,14 @@ env | grep -E '^DEVBOX_' | sort
 
 	// Verify all contract vars are present in the output.
 	for _, want := range []string{
-		"DEVBOX_ROOT=",
-		"DEVBOX_COMMAND_ID=test.check",
-		"DEVBOX_TEMP_DIR=",
-		"DEVBOX_NONINTERACTIVE=",
-		"DEVBOX_PARAMS_JSON=",
-		"DEVBOX_CONTEXT_JSON=",
-		"DEVBOX_BIN=",
-		"DEVBOX_FILES_JSON=",
+		"DWE_ROOT=",
+		"DWE_COMMAND_ID=test.check",
+		"DWE_TEMP_DIR=",
+		"DWE_NONINTERACTIVE=",
+		"DWE_PARAMS_JSON=",
+		"DWE_CONTEXT_JSON=",
+		"DWE_BIN=",
+		"DWE_FILES_JSON=",
 	} {
 		if !strings.Contains(out, want) {
 			t.Errorf("expected %q in output; got:\n%s", want, out)
@@ -100,7 +100,7 @@ env | grep -E '^DEVBOX_' | sort
 
 func TestRunner_ContractEnvVars_ParamsJSON(t *testing.T) {
 	dir := t.TempDir()
-	scriptPath := writeScript(t, dir, "params.sh", `printf '%s' "$DEVBOX_PARAMS_JSON"`)
+	scriptPath := writeScript(t, dir, "params.sh", `printf '%s' "$DWE_PARAMS_JSON"`)
 
 	cmd := &CommandDef{
 		Type:   CommandTypeScript,
@@ -121,7 +121,7 @@ func TestRunner_ContractEnvVars_ParamsJSON(t *testing.T) {
 
 	var decoded map[string]any
 	if err := json.Unmarshal([]byte(out), &decoded); err != nil {
-		t.Fatalf("DEVBOX_PARAMS_JSON is not valid JSON: %v\ngot: %s", err, out)
+		t.Fatalf("DWE_PARAMS_JSON is not valid JSON: %v\ngot: %s", err, out)
 	}
 	if decoded["foo"] != "bar" {
 		t.Errorf("expected foo=bar in params JSON; got %v", decoded)
@@ -130,7 +130,7 @@ func TestRunner_ContractEnvVars_ParamsJSON(t *testing.T) {
 
 func TestRunner_ContractEnvVars_ContextJSON(t *testing.T) {
 	dir := t.TempDir()
-	scriptPath := writeScript(t, dir, "ctx.sh", `printf '%s' "$DEVBOX_CONTEXT_JSON"`)
+	scriptPath := writeScript(t, dir, "ctx.sh", `printf '%s' "$DWE_CONTEXT_JSON"`)
 
 	cmd := &CommandDef{
 		Type:    CommandTypeScript,
@@ -152,7 +152,7 @@ func TestRunner_ContractEnvVars_ContextJSON(t *testing.T) {
 
 	var decoded map[string]any
 	if err := json.Unmarshal([]byte(out), &decoded); err != nil {
-		t.Fatalf("DEVBOX_CONTEXT_JSON is not valid JSON: %v\ngot: %s", err, out)
+		t.Fatalf("DWE_CONTEXT_JSON is not valid JSON: %v\ngot: %s", err, out)
 	}
 	if decoded["db"] != "mydb" {
 		t.Errorf("expected db=mydb in context JSON; got %v", decoded)
@@ -161,7 +161,7 @@ func TestRunner_ContractEnvVars_ContextJSON(t *testing.T) {
 
 func TestRunner_ContractEnvVars_DweBin(t *testing.T) {
 	dir := t.TempDir()
-	scriptPath := writeScript(t, dir, "bin.sh", `printf '%s' "$DEVBOX_BIN"`)
+	scriptPath := writeScript(t, dir, "bin.sh", `printf '%s' "$DWE_BIN"`)
 
 	cmd := &CommandDef{
 		Type:   CommandTypeScript,
@@ -180,16 +180,16 @@ func TestRunner_ContractEnvVars_DweBin(t *testing.T) {
 	}
 
 	if out == "" {
-		t.Error("DEVBOX_BIN is empty")
+		t.Error("DWE_BIN is empty")
 	}
 	if !filepath.IsAbs(out) {
-		t.Errorf("DEVBOX_BIN is not absolute; got %q", out)
+		t.Errorf("DWE_BIN is not absolute; got %q", out)
 	}
 }
 
 func TestRunner_ContractEnvVars_FilesJSON_Empty(t *testing.T) {
 	dir := t.TempDir()
-	scriptPath := writeScript(t, dir, "files.sh", `printf '%s' "$DEVBOX_FILES_JSON"`)
+	scriptPath := writeScript(t, dir, "files.sh", `printf '%s' "$DWE_FILES_JSON"`)
 
 	cmd := &CommandDef{
 		Type:   CommandTypeScript,
@@ -209,7 +209,7 @@ func TestRunner_ContractEnvVars_FilesJSON_Empty(t *testing.T) {
 
 	var decoded map[string]any
 	if err := json.Unmarshal([]byte(out), &decoded); err != nil {
-		t.Fatalf("DEVBOX_FILES_JSON is not valid JSON: %v\ngot: %s", err, out)
+		t.Fatalf("DWE_FILES_JSON is not valid JSON: %v\ngot: %s", err, out)
 	}
 	if len(decoded) != 0 {
 		t.Errorf("expected empty files JSON; got %v", decoded)
@@ -218,7 +218,7 @@ func TestRunner_ContractEnvVars_FilesJSON_Empty(t *testing.T) {
 
 func TestRunner_ContractEnvVars_FilesJSON_WithFiles(t *testing.T) {
 	dir := t.TempDir()
-	scriptPath := writeScript(t, dir, "files.sh", `printf '%s' "$DEVBOX_FILES_JSON"`)
+	scriptPath := writeScript(t, dir, "files.sh", `printf '%s' "$DWE_FILES_JSON"`)
 
 	cmd := &CommandDef{
 		Type:   CommandTypeScript,
@@ -243,7 +243,7 @@ func TestRunner_ContractEnvVars_FilesJSON_WithFiles(t *testing.T) {
 
 	var decoded map[string]map[string]string
 	if err := json.Unmarshal([]byte(out), &decoded); err != nil {
-		t.Fatalf("DEVBOX_FILES_JSON is not valid JSON: %v\ngot: %s", err, out)
+		t.Fatalf("DWE_FILES_JSON is not valid JSON: %v\ngot: %s", err, out)
 	}
 
 	if decoded["dump"]["path"] != "/tmp/db_2026-04-29.sql.gz" {
@@ -443,14 +443,14 @@ func TestRunner_ShellOverride(t *testing.T) {
 }
 
 // ---------------------------------------------------------------------------
-// DEVBOX_TEMP_DIR cleanup
+// DWE_TEMP_DIR cleanup
 // ---------------------------------------------------------------------------
 
 func TestRunner_TempDirCreatedAndCleaned(t *testing.T) {
 	dir := t.TempDir()
 	tmpCapture := filepath.Join(dir, "tmpdir.txt")
 
-	scriptPath := writeScript(t, dir, "tmpdir.sh", `printf '%s' "$DEVBOX_TEMP_DIR" > `+tmpCapture)
+	scriptPath := writeScript(t, dir, "tmpdir.sh", `printf '%s' "$DWE_TEMP_DIR" > `+tmpCapture)
 
 	cmd := &CommandDef{
 		Type:   CommandTypeScript,
@@ -471,7 +471,7 @@ func TestRunner_TempDirCreatedAndCleaned(t *testing.T) {
 	captured, _ := os.ReadFile(tmpCapture)
 	tmpPath := strings.TrimSpace(string(captured))
 	if tmpPath == "" {
-		t.Fatal("DEVBOX_TEMP_DIR was empty")
+		t.Fatal("DWE_TEMP_DIR was empty")
 	}
 
 	// After Run returns the temp dir should be cleaned up.
@@ -514,7 +514,7 @@ func TestRunner_ExitErrorIncludesScriptPath(t *testing.T) {
 
 func TestRunner_ContractEnvVars_NonInteractiveContext(t *testing.T) {
 	dir := t.TempDir()
-	scriptPath := writeScript(t, dir, "nonint.sh", `printf '%s' "$DEVBOX_NONINTERACTIVE"`)
+	scriptPath := writeScript(t, dir, "nonint.sh", `printf '%s' "$DWE_NONINTERACTIVE"`)
 
 	cmd := &CommandDef{
 		Type:   CommandTypeScript,
@@ -534,7 +534,7 @@ func TestRunner_ContractEnvVars_NonInteractiveContext(t *testing.T) {
 	}
 
 	if out != "1" {
-		t.Errorf("expected DEVBOX_NONINTERACTIVE=1 when NonInteractive=true; got %q", out)
+		t.Errorf("expected DWE_NONINTERACTIVE=1 when NonInteractive=true; got %q", out)
 	}
 }
 

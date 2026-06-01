@@ -1,5 +1,5 @@
 // Package host implements the runtime runners for type=shell (host.Runner)
-// and type=devbox (host.DevboxRunner) commands. Both run on the host machine
+// and type=dwe (host.DweRunner) commands. Both run on the host machine
 // and share helpers for env contract injection and parallel-aware colour
 // forcing.
 package host
@@ -92,9 +92,9 @@ func (r *Runner) BuildCommand(ctx context.Context, rc spec.RunContext) (*exec.Cm
 
 // hostContractEnv returns the contract environment variables exported into
 // every type:shell subprocess so shell snippets can talk back to the host
-// devbox CLI and the active docker compose project without rediscovery:
+// dwe CLI and the active docker compose project without rediscovery:
 //
-//	DEVBOX_BIN            absolute path to the running devbox binary
+//	DWE_BIN            absolute path to the running dwe binary
 //	COMPOSE_PROJECT_NAME  active compose project name (e.g. devbox-laravel)
 //	COMPOSE_FILE          colon-joined list of active overlay paths
 //	                      (absolute when ProjectRoot is known)
@@ -111,7 +111,7 @@ func hostContractEnv(rc spec.RunContext) []string {
 	if err != nil || devboxBin == "" {
 		devboxBin = config.DweBin(rc.Config)
 	}
-	out = append(out, "DEVBOX_BIN="+devboxBin)
+	out = append(out, "DWE_BIN="+devboxBin)
 
 	compose := rc.Compose()
 	if compose.ProjectName != "" {

@@ -7,7 +7,7 @@ How Devbox resolves the active locale, where translated long-form docs live on d
 Devbox picks an active locale via the precedence chain:
 
 1. **`--lang` flag** (on `docs show` / `docs export` / `docs list`; per-invocation)
-2. **`DEVBOX_LANGUAGE` environment variable**
+2. **`DWE_LANGUAGE` environment variable**
 3. **`language` setting in userconfig** (`~/.config/devbox/config` or `.devbox/config`)
 4. **System `$LANG`** (parsed to 2-letter code)
 5. **Default:** `en` (English)

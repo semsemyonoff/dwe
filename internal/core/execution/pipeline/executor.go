@@ -145,7 +145,7 @@ type ActionContext struct {
 // It sets CLICOLOR_FORCE=1 in the child environment so that lipgloss enables
 // colors even when stdout is wrapped in an io.MultiWriter (which the child sees
 // as a pipe rather than a TTY). The log tee via logSanitizer is unaffected.
-// When skipConfirm is true, DEVBOX_NONINTERACTIVE=1 is added so that nested
+// When skipConfirm is true, DWE_NONINTERACTIVE=1 is added so that nested
 // devbox subcommands also skip confirmation prompts. The supplied ctx
 // propagates cancellation into the child via exec.CommandContext.
 func buildDevboxCmd(ctx context.Context, devboxArg, workDir, shell, devboxBin string, skipConfirm bool) *exec.Cmd {
@@ -158,7 +158,7 @@ func buildDevboxCmd(ctx context.Context, devboxArg, workDir, shell, devboxBin st
 	cmd.Dir = workDir
 	cmd.Env = append(os.Environ(), "CLICOLOR_FORCE=1")
 	if skipConfirm {
-		cmd.Env = append(cmd.Env, "DEVBOX_NONINTERACTIVE=1")
+		cmd.Env = append(cmd.Env, "DWE_NONINTERACTIVE=1")
 	}
 	return cmd
 }

@@ -257,8 +257,8 @@ func TestHostRunner_BuildCommand_ShellFromConfig(t *testing.T) {
 }
 
 // TestHostRunner_BuildCommand_ContractEnvDweBin verifies that every type:shell
-// subprocess gets DEVBOX_BIN exported so shell snippets can shell back into the
-// running devbox binary without hardcoding the path.
+// subprocess gets DWE_BIN exported so shell snippets can shell back into the
+// running dwe binary without hardcoding the path.
 func TestHostRunner_BuildCommand_ContractEnvDweBin(t *testing.T) {
 	r := &Runner{}
 	ctx := spec.RunContext{
@@ -275,13 +275,13 @@ func TestHostRunner_BuildCommand_ContractEnvDweBin(t *testing.T) {
 	}
 	found := false
 	for _, kv := range c.Env {
-		if strings.HasPrefix(kv, "DEVBOX_BIN=") && len(kv) > len("DEVBOX_BIN=") {
+		if strings.HasPrefix(kv, "DWE_BIN=") && len(kv) > len("DWE_BIN=") {
 			found = true
 			break
 		}
 	}
 	if !found {
-		t.Errorf("expected DEVBOX_BIN=<non-empty> in env, got: %v", c.Env)
+		t.Errorf("expected DWE_BIN=<non-empty> in env, got: %v", c.Env)
 	}
 }
 
@@ -360,7 +360,7 @@ func TestHostRunner_BuildCommand_ContractEnvOverridesUserEnv(t *testing.T) {
 		Cmd: &model.CommandDef{
 			Type: model.CommandTypeShell,
 			Cmd:  "env",
-			Env:  map[string]string{"DEVBOX_BIN": "user-supplied-value"},
+			Env:  map[string]string{"DWE_BIN": "user-supplied-value"},
 		},
 		Params:      map[string]any{},
 		Context:     map[string]any{},
@@ -373,17 +373,17 @@ func TestHostRunner_BuildCommand_ContractEnvOverridesUserEnv(t *testing.T) {
 	}
 	userIdx, contractIdx := -1, -1
 	for i, kv := range c.Env {
-		if kv == "DEVBOX_BIN=user-supplied-value" {
+		if kv == "DWE_BIN=user-supplied-value" {
 			userIdx = i
-		} else if strings.HasPrefix(kv, "DEVBOX_BIN=") {
+		} else if strings.HasPrefix(kv, "DWE_BIN=") {
 			contractIdx = i
 		}
 	}
 	if userIdx < 0 || contractIdx < 0 {
-		t.Fatalf("expected both user and contract DEVBOX_BIN entries, got: %v", c.Env)
+		t.Fatalf("expected both user and contract DWE_BIN entries, got: %v", c.Env)
 	}
 	if contractIdx <= userIdx {
-		t.Errorf("contract DEVBOX_BIN must follow user DEVBOX_BIN (so it wins per os/exec rules); user=%d contract=%d", userIdx, contractIdx)
+		t.Errorf("contract DWE_BIN must follow user DWE_BIN (so it wins per os/exec rules); user=%d contract=%d", userIdx, contractIdx)
 	}
 }
 

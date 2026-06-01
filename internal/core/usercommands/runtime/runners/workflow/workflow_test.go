@@ -237,7 +237,7 @@ func TestWorkflowRunner_PrivateCommand_Callable(t *testing.T) {
 // ---------------------------------------------------------------------------
 
 func TestWorkflowRunner_ConfirmStep_NonInteractive_AutoSkip(t *testing.T) {
-	t.Setenv("DEVBOX_NONINTERACTIVE", "1")
+	t.Setenv("DWE_NONINTERACTIVE", "1")
 
 	dir := t.TempDir()
 	logFile := dir + "/confirm.log"

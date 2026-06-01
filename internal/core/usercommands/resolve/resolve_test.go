@@ -392,14 +392,14 @@ func TestBuildEnv_CommandLevelEnv(t *testing.T) {
 	cmd := &CommandDef{
 		Type: CommandTypeShell,
 		Cmd:  "echo",
-		Env:  map[string]string{"DEVBOX_ROOT": "${project.name}"},
+		Env:  map[string]string{"DWE_ROOT": "${project.name}"},
 	}
 	env, err := BuildEnv(cmd, nil, nil, map[string]tpl.ResolvedFile{})
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
-	if env["DEVBOX_ROOT"] != "${project.name}" {
-		t.Errorf("expected raw template string, got %v", env["DEVBOX_ROOT"])
+	if env["DWE_ROOT"] != "${project.name}" {
+		t.Errorf("expected raw template string, got %v", env["DWE_ROOT"])
 	}
 }
 

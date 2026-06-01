@@ -1,6 +1,6 @@
 // Package script implements the runtime runner for type=script commands.
 // A Runner executes one (simple mode) or up to three (plan/run/cleanup phased
-// mode) script files with a stable DEVBOX_* contract env injected into each
+// mode) script files with a stable DWE_* contract env injected into each
 // child shell.
 package script
 
@@ -27,14 +27,14 @@ import (
 //
 // The following contract environment variables are injected into every script:
 //
-//	DEVBOX_ROOT            absolute project root path
-//	DEVBOX_COMMAND_ID      full command ID (e.g. "services.main.bootstrap")
-//	DEVBOX_TEMP_DIR        writable temp directory scoped to this invocation
-//	DEVBOX_NONINTERACTIVE  "1" when running without a TTY / in CI, "0" otherwise
-//	DEVBOX_PARAMS_JSON     resolved params as a JSON object
-//	DEVBOX_CONTEXT_JSON    resolved context values as a JSON object
-//	DEVBOX_BIN             absolute path to the devbox executable
-//	DEVBOX_FILES_JSON      JSON object mapping file IDs to resolved paths
+//	DWE_ROOT            absolute project root path
+//	DWE_COMMAND_ID      full command ID (e.g. "services.main.bootstrap")
+//	DWE_TEMP_DIR        writable temp directory scoped to this invocation
+//	DWE_NONINTERACTIVE  "1" when running without a TTY / in CI, "0" otherwise
+//	DWE_PARAMS_JSON     resolved params as a JSON object
+//	DWE_CONTEXT_JSON    resolved context values as a JSON object
+//	DWE_BIN             absolute path to the dwe executable
+//	DWE_FILES_JSON      JSON object mapping file IDs to resolved paths
 type Runner struct{}
 
 // Run executes the script command described by rc.
@@ -95,7 +95,7 @@ func (s *Runner) buildContractEnv(ctx spec.RunContext, tmpDir string) ([]string,
 	nonInteractive := "0"
 	if ctx.NonInteractive {
 		nonInteractive = "1"
-	} else if v := os.Getenv("DEVBOX_NONINTERACTIVE"); v == "1" || v == "true" {
+	} else if v := os.Getenv("DWE_NONINTERACTIVE"); v == "1" || v == "true" {
 		nonInteractive = "1"
 	}
 
@@ -140,14 +140,14 @@ func (s *Runner) buildContractEnv(ctx spec.RunContext, tmpDir string) ([]string,
 	}
 
 	return []string{
-		"DEVBOX_ROOT=" + root,
-		"DEVBOX_COMMAND_ID=" + ctx.Cmd.ID,
-		"DEVBOX_TEMP_DIR=" + tmpDir,
-		"DEVBOX_NONINTERACTIVE=" + nonInteractive,
-		"DEVBOX_PARAMS_JSON=" + string(paramsJSON),
-		"DEVBOX_CONTEXT_JSON=" + string(contextJSON),
-		"DEVBOX_BIN=" + devboxBin,
-		"DEVBOX_FILES_JSON=" + string(filesJSON),
+		"DWE_ROOT=" + root,
+		"DWE_COMMAND_ID=" + ctx.Cmd.ID,
+		"DWE_TEMP_DIR=" + tmpDir,
+		"DWE_NONINTERACTIVE=" + nonInteractive,
+		"DWE_PARAMS_JSON=" + string(paramsJSON),
+		"DWE_CONTEXT_JSON=" + string(contextJSON),
+		"DWE_BIN=" + devboxBin,
+		"DWE_FILES_JSON=" + string(filesJSON),
 	}, nil
 }
 

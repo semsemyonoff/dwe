@@ -1646,15 +1646,15 @@ func TestBuildDevboxCmd_WorkDir(t *testing.T) {
 }
 
 // TestBuildDevboxCmd_SkipConfirmSetsNonInteractive verifies that skipConfirm=true
-// adds DEVBOX_NONINTERACTIVE=1 to the child environment.
+// adds DWE_NONINTERACTIVE=1 to the child environment.
 func TestBuildDevboxCmd_SkipConfirmSetsNonInteractive(t *testing.T) {
 	cmd := buildDevboxCmd(context.Background(), "info", t.TempDir(), "sh", "devbox", true)
-	if !slices.Contains(cmd.Env, "DEVBOX_NONINTERACTIVE=1") {
-		t.Errorf("buildDevboxCmd with skipConfirm should contain DEVBOX_NONINTERACTIVE=1, got: %v", cmd.Env)
+	if !slices.Contains(cmd.Env, "DWE_NONINTERACTIVE=1") {
+		t.Errorf("buildDevboxCmd with skipConfirm should contain DWE_NONINTERACTIVE=1, got: %v", cmd.Env)
 	}
 	cmd2 := buildDevboxCmd(context.Background(), "info", t.TempDir(), "sh", "devbox", false)
-	if slices.Contains(cmd2.Env, "DEVBOX_NONINTERACTIVE=1") {
-		t.Errorf("buildDevboxCmd without skipConfirm should not contain DEVBOX_NONINTERACTIVE=1")
+	if slices.Contains(cmd2.Env, "DWE_NONINTERACTIVE=1") {
+		t.Errorf("buildDevboxCmd without skipConfirm should not contain DWE_NONINTERACTIVE=1")
 	}
 }
 

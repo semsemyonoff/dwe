@@ -88,7 +88,7 @@ func (r *Runner) runParallelGroup(parentCtx context.Context, rc spec.RunContext,
 				return fmt.Errorf("parallel preflight: %w", err)
 			}
 			if def.Confirmation {
-				return fmt.Errorf("parallel sub-step %q requires confirmation; rerun with --yes or set DEVBOX_NONINTERACTIVE=1", sub.Command)
+				return fmt.Errorf("parallel sub-step %q requires confirmation; rerun with --yes or set DWE_NONINTERACTIVE=1", sub.Command)
 			}
 		}
 	}

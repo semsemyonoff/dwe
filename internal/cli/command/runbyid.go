@@ -65,7 +65,7 @@ func runCommandByID(
 		return err
 	}
 
-	nonInteractiveEnv := os.Getenv("DEVBOX_NONINTERACTIVE") == "1" || os.Getenv("DEVBOX_NONINTERACTIVE") == "true"
+	nonInteractiveEnv := os.Getenv("DWE_NONINTERACTIVE") == "1" || os.Getenv("DWE_NONINTERACTIVE") == "true"
 	skipPrompts := opts.Yes || nonInteractiveEnv
 	canPromptHuh := widgets.IsInteractiveFn(stdin) && !skipPrompts
 

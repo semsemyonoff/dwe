@@ -37,7 +37,7 @@ func withUserConfigDir(t *testing.T) (string, func()) {
 	return cfgDir, cleanup
 }
 
-// clearNotifyEnv unsets every DEVBOX_NOTIFY_* and DEVBOX_LANGUAGE env var
+// clearNotifyEnv unsets every DWE_NOTIFY_* and DWE_LANGUAGE env var
 // so tests are hermetic. Returns a restore func.
 func clearNotifyEnv(t *testing.T) func() {
 	t.Helper()
