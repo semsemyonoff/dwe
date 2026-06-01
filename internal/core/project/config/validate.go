@@ -20,7 +20,7 @@ const ValidateConfigFileName = "validate.yml"
 // ValidateConfigPath returns the canonical path to validate.yml given a
 // project base directory (the directory that contains the devbox/ folder).
 func ValidateConfigPath(baseDir string) string {
-	return filepath.Join(baseDir, "devbox", ValidateConfigFileName)
+	return filepath.Join(baseDir, "workspace", ValidateConfigFileName)
 }
 
 // reservedValidateStages is the set of stages bound to built-in preflight hooks.

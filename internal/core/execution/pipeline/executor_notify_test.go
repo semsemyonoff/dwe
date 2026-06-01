@@ -26,7 +26,7 @@ func TestExecCommandAction_SetsSkipNotify(t *testing.T) {
 	runtime.TestSnapshotRC = func(rc runtime.RunContext) { captured = rc }
 	t.Cleanup(func() { runtime.TestSnapshotRC = prev })
 
-	cfg := &config.DevboxConfig{Raw: map[string]any{}}
+	cfg := &config.DweConfig{Raw: map[string]any{}}
 	for _, parallel := range []bool{false, true} {
 		captured = runtime.RunContext{}
 		actx := ActionContext{

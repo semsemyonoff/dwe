@@ -7,7 +7,7 @@ import (
 // All returns all config validators.
 func All() []validate.Validator {
 	return []validate.Validator{
-		&devboxValidator{},
+		&workspaceValidator{},
 		&validateYmlValidator{},
 		&uiValidator{},
 		&servicesValidator{},

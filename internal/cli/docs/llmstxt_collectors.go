@@ -11,7 +11,7 @@ import (
 
 // collectServiceSummaries returns service summaries in deploy order.
 // Iterates via config.DeployOrder per the service-iteration rule (never range cfg.Services).
-func collectServiceSummaries(cfg *config.DevboxConfig) []llmstxt.ServiceSummary {
+func collectServiceSummaries(cfg *config.DweConfig) []llmstxt.ServiceSummary {
 	if cfg == nil {
 		return nil
 	}
@@ -47,7 +47,7 @@ func collectCommandSummaries(reg *usercommands.Registry, tr i18n.Translator, loc
 
 // collectInfoSummary gathers project URLs and hosts from service configs.
 // Returns nil when cfg is nil or no service contributes a URL or host.
-func collectInfoSummary(cfg *config.DevboxConfig) *llmstxt.InfoSummary {
+func collectInfoSummary(cfg *config.DweConfig) *llmstxt.InfoSummary {
 	if cfg == nil {
 		return nil
 	}

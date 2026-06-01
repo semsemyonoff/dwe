@@ -26,7 +26,7 @@ func groupStep(name string, subs ...config.DeployStep) config.DeployStep {
 
 func runDeployParallel(t *testing.T, reg *usercommands.Registry, phases []config.DeployPhase) []validate.Diagnostic {
 	t.Helper()
-	cfg := &config.DevboxConfig{Deploy: &config.ProjectDeployConfig{Phases: phases}}
+	cfg := &config.DweConfig{Deploy: &config.ProjectDeployConfig{Phases: phases}}
 	ctx := validate.Context{
 		ProjectRoot:     t.TempDir(),
 		Cfg:             cfg,
@@ -287,7 +287,7 @@ func TestParallelGroupsValidator_ServiceRunTTY(t *testing.T) {
 
 // Registry-nil tolerance: command-target lookups skipped, builtin still flagged.
 func TestParallelGroupsValidator_RegistryNilTolerance(t *testing.T) {
-	cfg := &config.DevboxConfig{Deploy: &config.ProjectDeployConfig{Phases: parallelPhases(
+	cfg := &config.DweConfig{Deploy: &config.ProjectDeployConfig{Phases: parallelPhases(
 		groupStep("g1",
 			config.DeployStep{Name: "ask", Type: "builtin", Cmd: "confirm"},
 			config.DeployStep{Name: "wf", Type: "command", Cmd: "wf-direct"},
@@ -318,7 +318,7 @@ func TestParallelGroupsValidator_RegistryNilTolerance(t *testing.T) {
 // Lifecycle validator: hits the run-phases path.
 func TestLifecycleParallelGroupsValidator_Run(t *testing.T) {
 	tmp := t.TempDir()
-	devboxDir := filepath.Join(tmp, "devbox")
+	devboxDir := filepath.Join(tmp, "workspace")
 	require.NoError(t, os.MkdirAll(devboxDir, 0o755))
 	require.NoError(t, os.WriteFile(filepath.Join(devboxDir, "lifecycle.yml"), []byte(`run:
   phases:
@@ -333,7 +333,7 @@ func TestLifecycleParallelGroupsValidator_Run(t *testing.T) {
                 type: shell
                 cmd: "true"
 `), 0o644))
-	cfg := &config.DevboxConfig{}
+	cfg := &config.DweConfig{}
 	diags := (&lifecycleParallelGroupsValidator{}).Run(validate.Context{
 		ProjectRoot:     tmp,
 		Cfg:             cfg,
@@ -351,7 +351,7 @@ func TestLifecycleParallelGroupsValidator_Run(t *testing.T) {
 
 func TestResetParallelGroupsValidator(t *testing.T) {
 	tmp := t.TempDir()
-	devboxDir := filepath.Join(tmp, "devbox")
+	devboxDir := filepath.Join(tmp, "workspace")
 	require.NoError(t, os.MkdirAll(devboxDir, 0o755))
 	require.NoError(t, os.WriteFile(filepath.Join(devboxDir, "reset.yml"), []byte(`phases:
   - name: tear-down
@@ -363,7 +363,7 @@ func TestResetParallelGroupsValidator(t *testing.T) {
               type: shell
               cmd: "true"
 `), 0o644))
-	cfg := &config.DevboxConfig{}
+	cfg := &config.DweConfig{}
 	diags := (&resetParallelGroupsValidator{}).Run(validate.Context{
 		ProjectRoot:     tmp,
 		Cfg:             cfg,

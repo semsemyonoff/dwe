@@ -17,7 +17,7 @@ var ErrServiceNoDeployFile = errors.New("deploy: service has no deploy pipeline"
 // ResolveServicePlan builds the step list for a single named service.
 // Used by --service flag to deploy only one service.
 // reg (registry) is used to validate files_gate directives.
-func ResolveServicePlan(cfg *config.DevboxConfig, reg *registry.Registry, serviceName string) ([]pipeline.ResolvedStep, error) {
+func ResolveServicePlan(cfg *config.DweConfig, reg *registry.Registry, serviceName string) ([]pipeline.ResolvedStep, error) {
 	implicit := pipeline.ResolvedStep{
 		Phase: config.DeployPhase{Name: "env", Description: "Environment"},
 		Step:  ImplicitEnvStep,
@@ -57,7 +57,7 @@ func ResolveServicePlan(cfg *config.DevboxConfig, reg *registry.Registry, servic
 // ResolveServicesPlan loads all per-service deploy pipelines, sorts them
 // by deploy-ordering (after: field), and returns their steps inlined.
 // reg (registry) is used to validate files_gate directives.
-func ResolveServicesPlan(cfg *config.DevboxConfig, reg *registry.Registry) ([]pipeline.ResolvedStep, error) {
+func ResolveServicesPlan(cfg *config.DweConfig, reg *registry.Registry) ([]pipeline.ResolvedStep, error) {
 	cfgPath, ok := cfg.Raw["__configPath"].(string)
 	if !ok {
 		return nil, fmt.Errorf("internal: __configPath missing from config")
@@ -106,7 +106,7 @@ func ResolveServicesPlan(cfg *config.DevboxConfig, reg *registry.Registry) ([]pi
 // References to services outside the subset are dropped from the sort graph
 // (no transitive closure — subset deploys are explicit-intent only).
 func ResolveServicesPlanSubset(
-	cfg *config.DevboxConfig,
+	cfg *config.DweConfig,
 	reg *registry.Registry,
 	deploys map[string]*config.ServiceDeployConfig,
 	names []string,

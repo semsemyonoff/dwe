@@ -19,7 +19,7 @@ var RunPhasesFunc = runPhases
 // RunPhases resolves and executes a set of lifecycle pipeline phases.
 // It delegates to RunPhasesFunc, which tests may replace with a no-op stub.
 func RunPhases(
-	cfg *config.DevboxConfig,
+	cfg *config.DweConfig,
 	reg *usercommands.Registry,
 	workDir string,
 	phases []config.DeployPhase,
@@ -35,7 +35,7 @@ func RunPhases(
 
 // runPhases is the real implementation of phase resolution and execution.
 func runPhases(
-	cfg *config.DevboxConfig,
+	cfg *config.DweConfig,
 	reg *usercommands.Registry,
 	workDir string,
 	phases []config.DeployPhase,

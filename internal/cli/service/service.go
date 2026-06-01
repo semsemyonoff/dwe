@@ -158,7 +158,7 @@ func runServicesToggle(cmd *cobra.Command, flags *cmdctx.RootFlags, opts singleT
 		return nil
 	}
 
-	localPath := filepath.Join(baseDir, "devbox", "local.yml")
+	localPath := filepath.Join(baseDir, "workspace", "local.yml")
 	envPath := filepath.Join(baseDir, ".env")
 
 	stackRunning := probeStackOrWarn(cmd.ErrOrStderr(), cfg, baseDir)
@@ -267,7 +267,7 @@ type selectToggleFn func(title string, items []widgets.SelectorItem) (int, error
 var defaultSelectToggle selectToggleFn = widgets.RunSelector
 
 // pickServiceToEnable returns the name of a disabled non-required service to enable.
-func pickServiceToEnable(cfg *config.DevboxConfig, selector selectToggleFn) (string, error) {
+func pickServiceToEnable(cfg *config.DweConfig, selector selectToggleFn) (string, error) {
 	var candidates []string
 	for _, name := range services.SortedNames(cfg.Services) {
 		svc := cfg.Services[name]
@@ -279,7 +279,7 @@ func pickServiceToEnable(cfg *config.DevboxConfig, selector selectToggleFn) (str
 }
 
 // pickServiceToDisable returns the name of an enabled non-required service to disable.
-func pickServiceToDisable(cfg *config.DevboxConfig, selector selectToggleFn) (string, error) {
+func pickServiceToDisable(cfg *config.DweConfig, selector selectToggleFn) (string, error) {
 	var candidates []string
 	for _, name := range services.SortedNames(cfg.Services) {
 		svc := cfg.Services[name]
@@ -290,7 +290,7 @@ func pickServiceToDisable(cfg *config.DevboxConfig, selector selectToggleFn) (st
 	return pickToggleCandidates(cfg, candidates, "enabled", "Select a service to disable:", selector)
 }
 
-func pickToggleCandidates(cfg *config.DevboxConfig, names []string, statusLabel, title string, selector selectToggleFn) (string, error) {
+func pickToggleCandidates(cfg *config.DweConfig, names []string, statusLabel, title string, selector selectToggleFn) (string, error) {
 	if len(names) == 0 {
 		return "", fmt.Errorf("no %s optional services found", statusLabel)
 	}

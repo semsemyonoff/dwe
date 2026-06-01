@@ -26,7 +26,7 @@ args:
 func writeDockerFixture(t *testing.T, docker, local string) string {
 	t.Helper()
 	dir := t.TempDir()
-	devboxDir := filepath.Join(dir, "devbox")
+	devboxDir := filepath.Join(dir, "workspace")
 	if err := os.MkdirAll(devboxDir, 0755); err != nil {
 		t.Fatalf("mkdir devbox/: %v", err)
 	}
@@ -43,7 +43,7 @@ func writeDockerFixture(t *testing.T, docker, local string) string {
 
 func TestLoadDockerConfig_Basic(t *testing.T) {
 	baseDir := writeDockerFixture(t, sampleDockerYML, "")
-	cfg := &DevboxConfig{
+	cfg := &DweConfig{
 		Raw: map[string]any{
 			"project": map[string]any{
 				"name":   "laravel",
@@ -101,7 +101,7 @@ args:
   logs: ["-f", "--tail", "100"]
 `
 	baseDir := writeDockerFixture(t, sampleDockerYML, localYML)
-	cfg := &DevboxConfig{
+	cfg := &DweConfig{
 		Raw: map[string]any{
 			"project": map[string]any{
 				"name":   "laravel",
@@ -144,7 +144,7 @@ func TestLoadDockerConfig_ProjectNameResolution(t *testing.T) {
 args: {}
 `
 	baseDir := writeDockerFixture(t, yml, "")
-	cfg := &DevboxConfig{
+	cfg := &DweConfig{
 		Raw: map[string]any{
 			"project": map[string]any{
 				"name":   "myapp",
@@ -164,7 +164,7 @@ args: {}
 
 func TestLoadDockerConfig_MissingFile(t *testing.T) {
 	dir := t.TempDir()
-	cfg := &DevboxConfig{Raw: map[string]any{}}
+	cfg := &DweConfig{Raw: map[string]any{}}
 	_, err := LoadDockerConfig(dir, cfg)
 	if err == nil {
 		t.Fatal("expected error for missing docker.yml")
@@ -177,7 +177,7 @@ func TestLoadDockerConfig_NoLocalFile(t *testing.T) {
 args: {}
 `
 	baseDir := writeDockerFixture(t, yml, "")
-	cfg := &DevboxConfig{Raw: map[string]any{}}
+	cfg := &DweConfig{Raw: map[string]any{}}
 
 	dcfg, err := LoadDockerConfig(baseDir, cfg)
 	if err != nil {
@@ -244,7 +244,7 @@ args:
   build: ["--progress", "plain"]
 `
 	baseDir := writeDockerFixture(t, yml, "")
-	cfg := &DevboxConfig{Raw: map[string]any{}}
+	cfg := &DweConfig{Raw: map[string]any{}}
 
 	dcfg, err := LoadDockerConfig(baseDir, cfg)
 	if err != nil {
@@ -289,7 +289,7 @@ args:
   build: []
 `
 	baseDir := writeDockerFixture(t, baseYML, localYML)
-	cfg := &DevboxConfig{Raw: map[string]any{}}
+	cfg := &DweConfig{Raw: map[string]any{}}
 
 	dcfg, err := LoadDockerConfig(baseDir, cfg)
 	if err != nil {
@@ -331,7 +331,7 @@ project_name: "test"
 args: {}
 `
 	baseDir := writeDockerFixture(t, yml, "")
-	cfg := &DevboxConfig{Raw: map[string]any{}}
+	cfg := &DweConfig{Raw: map[string]any{}}
 
 	dcfg, err := LoadDockerConfig(baseDir, cfg)
 	if err != nil {
@@ -372,7 +372,7 @@ args:
   down: []
 `
 	baseDir := writeDockerFixture(t, yml, "")
-	cfg := &DevboxConfig{Raw: map[string]any{}}
+	cfg := &DweConfig{Raw: map[string]any{}}
 
 	dcfg, err := LoadDockerConfig(baseDir, cfg)
 	if err != nil {
@@ -405,7 +405,7 @@ args:
   down: []
 `
 	baseDir := writeDockerFixture(t, yml, "")
-	cfg := &DevboxConfig{Raw: map[string]any{}}
+	cfg := &DweConfig{Raw: map[string]any{}}
 
 	dcfg, err := LoadDockerConfig(baseDir, cfg)
 	if err != nil {
@@ -436,7 +436,7 @@ args:
   logs: []
 `
 	baseDir := writeDockerFixture(t, yml, "")
-	cfg := &DevboxConfig{Raw: map[string]any{}}
+	cfg := &DweConfig{Raw: map[string]any{}}
 
 	dcfg, err := LoadDockerConfig(baseDir, cfg)
 	if err != nil {
@@ -470,7 +470,7 @@ args:
   logs: ["-f", "--tail", "100"]
 `
 	baseDir := writeDockerFixture(t, baseYML, localYML)
-	cfg := &DevboxConfig{Raw: map[string]any{}}
+	cfg := &DweConfig{Raw: map[string]any{}}
 
 	dcfg, err := LoadDockerConfig(baseDir, cfg)
 	if err != nil {

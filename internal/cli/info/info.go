@@ -62,7 +62,7 @@ func Run(cmd *cobra.Command, flags *cmdctx.RootFlags) error {
 		return cmdctx.ErrWrap("project_invalid_config", err)
 	}
 
-	infoPath := filepath.Join(flags.ProjectRoot(), "devbox", "info.yml")
+	infoPath := filepath.Join(flags.ProjectRoot(), "workspace", "info.yml")
 	infoCfg, err := config.LoadInfoConfig(infoPath)
 	if err != nil {
 		return cmdctx.ErrWrap("project_invalid_config", err)

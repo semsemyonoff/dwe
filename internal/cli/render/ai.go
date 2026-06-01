@@ -113,7 +113,7 @@ parent 'main' identity for the shared hub.`,
 // renderAgentsForService renders a single service's agents documentation.
 // It resolves the template pack, loads and validates the manifest, and renders
 // each entry in the manifest (files + symlinks).
-func renderAgentsForService(projectRoot, name string, svc config.ServiceConfig, cfg *config.DevboxConfig, w *render.Writer) error {
+func renderAgentsForService(projectRoot, name string, svc config.ServiceConfig, cfg *config.DweConfig, w *render.Writer) error {
 	if cfg == nil {
 		return fmt.Errorf("ai: nil cfg")
 	}

@@ -21,7 +21,7 @@ func TestRunContext_Compose_NilConfigNilDockerConfig_DefaultBin(t *testing.T) {
 
 func TestRunContext_Compose_CustomDockerBin_NoDockerConfig(t *testing.T) {
 	ctx := RunContext{
-		Config: &config.DevboxConfig{},
+		Config: &config.DweConfig{},
 	}
 	c := ctx.Compose()
 	// DockerBin returns "docker" when userconfig is nil
@@ -63,7 +63,7 @@ func TestRunCommand_DefensiveInitRawCopy(t *testing.T) {
 	raw := map[string]any{"db": map[string]any{"host": "localhost"}}
 	ctx := RunContext{
 		Cmd: cmd,
-		Config: &config.DevboxConfig{
+		Config: &config.DweConfig{
 			Raw: raw,
 		},
 		Render: &tpl.RenderContext{}, // Empty RenderContext — RunCommand must copy Raw from Config

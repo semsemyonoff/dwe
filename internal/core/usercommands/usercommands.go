@@ -160,7 +160,7 @@ func LoadRegistry(baseDir string) (*Registry, error) {
 // relative to configPath. Returns an empty registry when the directory does not
 // exist. Validates the registry before returning.
 func LoadRegistryFromConfigPath(configPath string) (*Registry, error) {
-	commandsDir := filepath.Join(filepath.Dir(configPath), "devbox", "commands")
+	commandsDir := filepath.Join(filepath.Dir(configPath), "workspace", "commands")
 	if _, statErr := os.Stat(commandsDir); errors.Is(statErr, os.ErrNotExist) {
 		return registry.NewEmptyRegistry(), nil
 	}
@@ -199,12 +199,12 @@ func LoadCommandFile(absPath, baseDir string) (*CommandFile, error) {
 // ---- Functions (resolve) ----
 
 // ResolveParams resolves parameter values for a command invocation.
-func ResolveParams(defs map[string]ParamDef, provided map[string]string, cfg *config.DevboxConfig) (map[string]any, error) {
+func ResolveParams(defs map[string]ParamDef, provided map[string]string, cfg *config.DweConfig) (map[string]any, error) {
 	return resolve.Params(defs, provided, cfg)
 }
 
 // ResolveContext resolves context values for a command invocation.
-func ResolveContext(defs map[string]ContextDef, cfg *config.DevboxConfig) (map[string]any, error) {
+func ResolveContext(defs map[string]ContextDef, cfg *config.DweConfig) (map[string]any, error) {
 	return resolve.Context(defs, cfg)
 }
 
@@ -239,7 +239,7 @@ func ConfirmCommand(ctx RunContext) error {
 // BuildRunContext constructs a RunContext for command execution by resolving
 // params, context, and docker config.
 func BuildRunContext(
-	cfg *config.DevboxConfig,
+	cfg *config.DweConfig,
 	reg *Registry,
 	def *CommandDef,
 	with map[string]any,

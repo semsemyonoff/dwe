@@ -103,7 +103,7 @@ func TestDescribe_KnownBuiltin(t *testing.T) {
 
 func TestRun_UnknownBuiltin(t *testing.T) {
 	ctx := ExecContext{
-		Config:      &config.DevboxConfig{},
+		Config:      &config.DweConfig{},
 		ProjectRoot: t.TempDir(),
 		Output:      render.NewWriter(&bytes.Buffer{}),
 	}

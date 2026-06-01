@@ -133,7 +133,7 @@ func (v *AIValidator) validateService(name string, svc config.ServiceConfig, pro
 			Severity: validate.SeverityError,
 			Domain:   "templates",
 			Target:   fmt.Sprintf("templates.ai:%s", name),
-			File:     filepath.Join("devbox", "templates", "ai", packName, "manifest.yml"),
+			File:     filepath.Join("workspace", "templates", "ai", packName, "manifest.yml"),
 			Message:  fmt.Sprintf("failed to load manifest: %v", err),
 			Hint:     "check manifest.yml syntax and structure",
 		}}
@@ -146,7 +146,7 @@ func (v *AIValidator) validateService(name string, svc config.ServiceConfig, pro
 			Severity: validate.SeverityError,
 			Domain:   "templates",
 			Target:   fmt.Sprintf("templates.ai:%s", name),
-			File:     filepath.Join("devbox", "templates", "ai", packName, "manifest.yml"),
+			File:     filepath.Join("workspace", "templates", "ai", packName, "manifest.yml"),
 			Message:  fmt.Sprintf("invalid manifest: %v", err),
 			Hint:     "check render and symlink entries in manifest.yml",
 		}}

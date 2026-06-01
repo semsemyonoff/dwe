@@ -13,44 +13,24 @@ import (
 	"github.com/semsemyonoff/dwe/internal/core/validate"
 )
 
-func TestDevboxValidator(t *testing.T) {
+func TestWorkspaceValidator(t *testing.T) {
 	tests := []struct {
-		name          string
-		fixture       string
-		wantDiags     int
-		wantSchema    validate.Severity
-		wantDevbox    validate.Severity
-		wantSchemaMsg string
+		name         string
+		fixture      string
+		wantDiags    int
+		wantWorkspace validate.Severity
 	}{
 		{
-			name:          "missing schema",
-			fixture:       "devbox-missing-schema",
-			wantDiags:     2,
-			wantSchema:    validate.SeverityError,
-			wantDevbox:    validate.SeverityOK, // LoadConfig succeeds without schema validation
-			wantSchemaMsg: "schema_version",
+			name:         "bad keys",
+			fixture:      "devbox-v2-bad-keys",
+			wantDiags:    1,
+			wantWorkspace: validate.SeverityError,
 		},
 		{
-			name:          "legacy schema",
-			fixture:       "devbox-legacy-schema",
-			wantDiags:     2,
-			wantSchema:    validate.SeverityError,
-			wantDevbox:    validate.SeverityOK, // LoadConfig succeeds without schema validation
-			wantSchemaMsg: "schema_version",
-		},
-		{
-			name:       "bad keys",
-			fixture:    "devbox-v2-bad-keys",
-			wantDiags:  2,
-			wantSchema: validate.SeverityOK,
-			wantDevbox: validate.SeverityError,
-		},
-		{
-			name:       "good config",
-			fixture:    "devbox-v2-good",
-			wantDiags:  2,
-			wantSchema: validate.SeverityOK,
-			wantDevbox: validate.SeverityOK,
+			name:         "good config",
+			fixture:      "devbox-v2-good",
+			wantDiags:    1,
+			wantWorkspace: validate.SeverityOK,
 		},
 	}
 
@@ -59,10 +39,10 @@ func TestDevboxValidator(t *testing.T) {
 			fixturePath := filepath.Join("testdata", tt.fixture)
 			ctx := validate.Context{
 				ProjectRoot: fixturePath,
-				ConfigPath:  filepath.Join(fixturePath, "devbox.yml"),
+				ConfigPath:  filepath.Join(fixturePath, "workspace.yml"),
 			}
 
-			v := &devboxValidator{}
+			v := &workspaceValidator{}
 			diags := v.Run(ctx)
 
 			t.Logf("fixture=%s: got %d diags", tt.fixture, len(diags))
@@ -73,91 +53,77 @@ func TestDevboxValidator(t *testing.T) {
 			require.Equal(t, tt.wantDiags, len(diags), "diagnostic count mismatch")
 
 			if len(diags) > 0 {
-				// First diagnostic should be schema check
-				require.Equal(t, tt.wantSchema, diags[0].Severity)
-				require.Equal(t, "config.devbox.schema", diags[0].Target)
-			}
-
-			if len(diags) > 1 {
-				// Second diagnostic should be devbox load
-				require.Equal(t, tt.wantDevbox, diags[1].Severity)
-				require.Equal(t, "config.devbox", diags[1].Target)
-			}
-
-			if tt.wantSchemaMsg != "" && len(diags) > 0 {
-				require.Contains(t, diags[0].Message, tt.wantSchemaMsg)
+				require.Equal(t, tt.wantWorkspace, diags[0].Severity)
+				require.Equal(t, "config.workspace", diags[0].Target)
 			}
 		})
 	}
 }
 
-func TestDevboxValidatorID(t *testing.T) {
-	v := &devboxValidator{}
-	require.Equal(t, "devbox", v.ID())
+func TestWorkspaceValidatorID(t *testing.T) {
+	v := &workspaceValidator{}
+	require.Equal(t, "workspace", v.ID())
 	require.Equal(t, "config", v.Domain())
 }
 
-func TestDevboxValidator_DocsValidation_InvalidMermaidMode(t *testing.T) {
-	// Write a devbox project with invalid mermaid mode
+func TestWorkspaceValidator_DocsValidation_InvalidMermaidMode(t *testing.T) {
+	// Write a dwe project with invalid mermaid mode
 	root := t.TempDir()
-	require.NoError(t, os.MkdirAll(filepath.Join(root, "devbox", "services"), 0o755))
+	require.NoError(t, os.MkdirAll(filepath.Join(root, "workspace", "services"), 0o755))
 
-	devboxYML := `
-schema_version: "2"
+	workspaceYML := `
 project:
   name: test
   prefix: test
 docs:
   mermaid: invalid_mode
 `
-	require.NoError(t, os.WriteFile(filepath.Join(root, "devbox.yml"), []byte(devboxYML), 0o644))
+	require.NoError(t, os.WriteFile(filepath.Join(root, "workspace.yml"), []byte(workspaceYML), 0o644))
 
 	ctx := validate.Context{
 		ProjectRoot: root,
-		ConfigPath:  filepath.Join(root, "devbox.yml"),
+		ConfigPath:  filepath.Join(root, "workspace.yml"),
 	}
 
-	v := &devboxValidator{}
+	v := &workspaceValidator{}
 	diags := v.Run(ctx)
 
 	// Should have validation error for invalid mermaid mode
 	hasDiag(t, diags, validate.SeverityError, "invalid")
 }
 
-func TestDevboxValidator_DocsValidation_NegativeCacheSize(t *testing.T) {
-	// Write a devbox project with negative cache size
+func TestWorkspaceValidator_DocsValidation_NegativeCacheSize(t *testing.T) {
+	// Write a dwe project with negative cache size
 	root := t.TempDir()
-	require.NoError(t, os.MkdirAll(filepath.Join(root, "devbox", "services"), 0o755))
+	require.NoError(t, os.MkdirAll(filepath.Join(root, "workspace", "services"), 0o755))
 
-	devboxYML := `
-schema_version: "2"
+	workspaceYML := `
 project:
   name: test
   prefix: test
 docs:
   cache_size_mb: -10
 `
-	require.NoError(t, os.WriteFile(filepath.Join(root, "devbox.yml"), []byte(devboxYML), 0o644))
+	require.NoError(t, os.WriteFile(filepath.Join(root, "workspace.yml"), []byte(workspaceYML), 0o644))
 
 	ctx := validate.Context{
 		ProjectRoot: root,
-		ConfigPath:  filepath.Join(root, "devbox.yml"),
+		ConfigPath:  filepath.Join(root, "workspace.yml"),
 	}
 
-	v := &devboxValidator{}
+	v := &workspaceValidator{}
 	diags := v.Run(ctx)
 
 	// Should have validation error for negative cache size
 	hasDiag(t, diags, validate.SeverityError, "non-negative")
 }
 
-func TestDevboxValidator_DocsValidation_ValidConfig(t *testing.T) {
-	// Write a devbox project with valid docs config
+func TestWorkspaceValidator_DocsValidation_ValidConfig(t *testing.T) {
+	// Write a dwe project with valid docs config
 	root := t.TempDir()
-	require.NoError(t, os.MkdirAll(filepath.Join(root, "devbox", "services"), 0o755))
+	require.NoError(t, os.MkdirAll(filepath.Join(root, "workspace", "services"), 0o755))
 
-	devboxYML := `
-schema_version: "2"
+	workspaceYML := `
 project:
   name: test
   prefix: test
@@ -165,20 +131,19 @@ docs:
   mermaid: auto
   cache_size_mb: 100
 `
-	require.NoError(t, os.WriteFile(filepath.Join(root, "devbox.yml"), []byte(devboxYML), 0o644))
+	require.NoError(t, os.WriteFile(filepath.Join(root, "workspace.yml"), []byte(workspaceYML), 0o644))
 
 	ctx := validate.Context{
 		ProjectRoot: root,
-		ConfigPath:  filepath.Join(root, "devbox.yml"),
+		ConfigPath:  filepath.Join(root, "workspace.yml"),
 	}
 
-	v := &devboxValidator{}
+	v := &workspaceValidator{}
 	diags := v.Run(ctx)
 
-	// Should have no validation errors (OK for both schema and devbox checks)
-	require.True(t, len(diags) > 1, "expected at least 2 diagnostics (schema and devbox)")
-	require.Equal(t, validate.SeverityOK, diags[0].Severity) // schema
-	require.Equal(t, validate.SeverityOK, diags[1].Severity) // devbox
+	// Should have no validation errors (OK for workspace check)
+	require.True(t, len(diags) > 0, "expected at least 1 diagnostic (workspace)")
+	require.Equal(t, validate.SeverityOK, diags[0].Severity) // workspace
 }
 
 // writeServicesDir sets up a project root with per-folder services under devbox/services/
@@ -187,14 +152,14 @@ docs:
 func writeServicesDir(t *testing.T, body string) string {
 	t.Helper()
 	root := t.TempDir()
-	require.NoError(t, os.MkdirAll(filepath.Join(root, "devbox"), 0o755))
+	require.NoError(t, os.MkdirAll(filepath.Join(root, "workspace"), 0o755))
 	type wrap struct {
 		Services map[string]any `yaml:"services"`
 	}
 	var w wrap
 	require.NoError(t, yaml.Unmarshal([]byte(body), &w))
 	for name, svc := range w.Services {
-		dir := filepath.Join(root, "devbox", "services", name)
+		dir := filepath.Join(root, "workspace", "services", name)
 		require.NoError(t, os.MkdirAll(dir, 0o755))
 		data, err := yaml.Marshal(svc)
 		require.NoError(t, err)
@@ -353,7 +318,7 @@ services:
 	root := writeServicesDir(t, body)
 	ctx := validate.Context{
 		ProjectRoot: root,
-		Cfg: &devconfig.DevboxConfig{
+		Cfg: &devconfig.DweConfig{
 			Services: map[string]devconfig.ServiceConfig{
 				"main": {
 					Type:        devconfig.ServiceTypeApp,
@@ -490,8 +455,8 @@ func TestServicesValidator_InterfaceCompileCheck(t *testing.T) {
 func writeStylesFile(t *testing.T, body string) string {
 	t.Helper()
 	root := t.TempDir()
-	require.NoError(t, os.MkdirAll(filepath.Join(root, "devbox"), 0o755))
-	require.NoError(t, os.WriteFile(filepath.Join(root, "devbox", "styles.yml"), []byte(body), 0o644))
+	require.NoError(t, os.MkdirAll(filepath.Join(root, "workspace"), 0o755))
+	require.NoError(t, os.WriteFile(filepath.Join(root, "workspace", "styles.yml"), []byte(body), 0o644))
 	return root
 }
 
@@ -640,7 +605,7 @@ header:
 
 func TestStylesValidator_NoFile(t *testing.T) {
 	root := t.TempDir()
-	require.NoError(t, os.MkdirAll(filepath.Join(root, "devbox"), 0o755))
+	require.NoError(t, os.MkdirAll(filepath.Join(root, "workspace"), 0o755))
 	diags := (&stylesValidator{}).Run(validate.Context{ProjectRoot: root})
 	// no styles.yml -> info diagnostic only, no warnings
 	for _, d := range diags {
@@ -832,7 +797,7 @@ sections:
         port_via: nonexistent_service
 `
 	root := writeInfoYML(t, body)
-	cfg, _ := devconfig.LoadConfig(filepath.Join(root, "devbox.yml"))
+	cfg, _ := devconfig.LoadConfig(filepath.Join(root, "workspace.yml"))
 	diags := (&infoValidator{}).Run(validate.Context{
 		ProjectRoot: root,
 		Cfg:         cfg,
@@ -851,7 +816,7 @@ sections:
         hide: [unknown_service]
 `
 	root := writeInfoYML(t, body)
-	cfg, _ := devconfig.LoadConfig(filepath.Join(root, "devbox.yml"))
+	cfg, _ := devconfig.LoadConfig(filepath.Join(root, "workspace.yml"))
 	diags := (&infoValidator{}).Run(validate.Context{
 		ProjectRoot: root,
 		Cfg:         cfg,
@@ -870,7 +835,7 @@ sections:
         ip: "not-an-ip"
 `
 	root := writeInfoYML(t, body)
-	cfg, _ := devconfig.LoadConfig(filepath.Join(root, "devbox.yml"))
+	cfg, _ := devconfig.LoadConfig(filepath.Join(root, "workspace.yml"))
 	diags := (&infoValidator{}).Run(validate.Context{
 		ProjectRoot: root,
 		Cfg:         cfg,
@@ -901,7 +866,7 @@ sections:
         ip: %q
 `, tt.ip)
 			root := writeInfoYML(t, body)
-			cfg, _ := devconfig.LoadConfig(filepath.Join(root, "devbox.yml"))
+			cfg, _ := devconfig.LoadConfig(filepath.Join(root, "workspace.yml"))
 			diags := (&infoValidator{}).Run(validate.Context{
 				ProjectRoot: root,
 				Cfg:         cfg,
@@ -927,7 +892,7 @@ sections:
         hide: []
 `
 	root := writeInfoYML(t, body)
-	cfg, _ := devconfig.LoadConfig(filepath.Join(root, "devbox.yml"))
+	cfg, _ := devconfig.LoadConfig(filepath.Join(root, "workspace.yml"))
 	diags := (&infoValidator{}).Run(validate.Context{
 		ProjectRoot: root,
 		Cfg:         cfg,
@@ -939,15 +904,15 @@ sections:
 func writeInfoYML(t *testing.T, content string) string {
 	t.Helper()
 	root := t.TempDir()
-	devboxDir := filepath.Join(root, "devbox")
+	devboxDir := filepath.Join(root, "workspace")
 	if err := os.MkdirAll(devboxDir, 0o755); err != nil {
 		t.Fatalf("MkdirAll: %v", err)
 	}
 
-	// Write minimal devbox.yml
-	devboxYML := filepath.Join(root, "devbox.yml")
-	if err := os.WriteFile(devboxYML, []byte("schema_version: \"2\"\n"), 0o644); err != nil {
-		t.Fatalf("WriteFile devbox.yml: %v", err)
+	// Write minimal workspace.yml
+	workspaceYML := filepath.Join(root, "workspace.yml")
+	if err := os.WriteFile(workspaceYML, []byte("project:\n  name: test\n"), 0o644); err != nil {
+		t.Fatalf("WriteFile workspace.yml: %v", err)
 	}
 
 	// Write info.yml

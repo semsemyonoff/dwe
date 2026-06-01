@@ -457,7 +457,7 @@ func (pd *ParamDef) EffectiveWidget() ParamWidget {
 
 // ContextDef defines a single named context value derived from the merged config.
 type ContextDef struct {
-	// From is a dot-path into the merged DevboxConfig.Raw map.
+	// From is a dot-path into the merged DweConfig.Raw map.
 	From string `yaml:"from"`
 	// Required causes an error at resolution time when the path resolves to nil/empty.
 	Required bool `yaml:"required"`

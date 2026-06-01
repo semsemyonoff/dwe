@@ -22,7 +22,7 @@ type ContainerCheckFn func(projectFullName, containerName string) bool
 // State may be nil — deploy status section is then skipped (useful for tests
 // that exercise the stack rendering without a project state file).
 type StatusInput struct {
-	Cfg        *config.DevboxConfig
+	Cfg        *config.DweConfig
 	IsRunning  ContainerCheckFn
 	Topo       map[string][]string
 	TopoStatus map[string]render.NodeStatus
@@ -111,7 +111,7 @@ func RenderTopology(in StatusInput) string {
 
 // buildServiceTemplateData prepares the template data map for a service row's
 // custom status columns. See docs/reference/config/services/fields.md for the contract.
-func buildServiceTemplateData(cfg *config.DevboxConfig, svc config.ServiceConfig) map[string]any {
+func buildServiceTemplateData(cfg *config.DweConfig, svc config.ServiceConfig) map[string]any {
 	return map[string]any{
 		"ServiceCfg": svc,
 		"Globals":    rawSubtree(cfg, "globals"),
@@ -119,7 +119,7 @@ func buildServiceTemplateData(cfg *config.DevboxConfig, svc config.ServiceConfig
 	}
 }
 
-func rawSubtree(cfg *config.DevboxConfig, key string) any {
+func rawSubtree(cfg *config.DweConfig, key string) any {
 	if cfg == nil || cfg.Raw == nil {
 		return nil
 	}
@@ -128,7 +128,7 @@ func rawSubtree(cfg *config.DevboxConfig, key string) any {
 
 // collectRowsByType returns rows for services matching the given type. When
 // filter is nil, all services are returned (used by health aggregation).
-func collectRowsByType(cfg *config.DevboxConfig, isRunning ContainerCheckFn, projectFull string, filter *config.ServiceType) []render.ServiceTableRow {
+func collectRowsByType(cfg *config.DweConfig, isRunning ContainerCheckFn, projectFull string, filter *config.ServiceType) []render.ServiceTableRow {
 	if cfg == nil {
 		return nil
 	}

@@ -95,7 +95,7 @@ func TestValidateCommandTree(t *testing.T) {
 	require.Equal(t, "commands", commandsCmd.Name())
 
 	// Check config subcommands.
-	configSubcmds := []string{"devbox", "services", "docker", "info", "styles", "lifecycle", "deploy", "reset", "service-deploy"}
+	configSubcmds := []string{"workspace", "services", "docker", "info", "styles", "lifecycle", "deploy", "reset", "service-deploy"}
 	for _, subcmd := range configSubcmds {
 		found, _, _ := cmd.Find([]string{"config", subcmd})
 		require.NotNil(t, found, "missing config.%s", subcmd)
@@ -144,7 +144,7 @@ func TestValidateUsesLoadForValidate(t *testing.T) {
 	tmpDir := t.TempDir()
 
 	// Create minimal devbox.yml to pass locate.
-	devboxPath := filepath.Join(tmpDir, "devbox.yml")
+	devboxPath := filepath.Join(tmpDir, "workspace.yml")
 	err := os.WriteFile(devboxPath, []byte(`schema_version: "2"`), 0644)
 	require.NoError(t, err)
 
@@ -189,12 +189,12 @@ func TestValidateMalformedValidateYmlDoesNotShortCircuit(t *testing.T) {
 	tmpDir := t.TempDir()
 
 	// Minimal devbox.yml so locate succeeds.
-	devboxPath := filepath.Join(tmpDir, "devbox.yml")
+	devboxPath := filepath.Join(tmpDir, "workspace.yml")
 	require.NoError(t, os.WriteFile(devboxPath, []byte("schema_version: \"2\"\n"), 0o644))
 
 	// Malformed validate.yml: unknown top-level field.
-	require.NoError(t, os.MkdirAll(filepath.Join(tmpDir, "devbox"), 0o755))
-	badYml := filepath.Join(tmpDir, "devbox", "validate.yml")
+	require.NoError(t, os.MkdirAll(filepath.Join(tmpDir, "workspace"), 0o755))
+	badYml := filepath.Join(tmpDir, "workspace", "validate.yml")
 	require.NoError(t, os.WriteFile(badYml, []byte("bogus_field: 1\n"), 0o644))
 
 	flags := &cmdctx.RootFlags{ConfigPath: devboxPath}
@@ -219,11 +219,11 @@ func TestValidateMalformedValidateYmlDoesNotShortCircuit(t *testing.T) {
 func TestValidateChecksScopedMalformedValidateYmlSurfacesDiagnostic(t *testing.T) {
 	tmpDir := t.TempDir()
 
-	devboxPath := filepath.Join(tmpDir, "devbox.yml")
+	devboxPath := filepath.Join(tmpDir, "workspace.yml")
 	require.NoError(t, os.WriteFile(devboxPath, []byte("schema_version: \"2\"\n"), 0o644))
 
-	require.NoError(t, os.MkdirAll(filepath.Join(tmpDir, "devbox"), 0o755))
-	badYml := filepath.Join(tmpDir, "devbox", "validate.yml")
+	require.NoError(t, os.MkdirAll(filepath.Join(tmpDir, "workspace"), 0o755))
+	badYml := filepath.Join(tmpDir, "workspace", "validate.yml")
 	require.NoError(t, os.WriteFile(badYml, []byte("bogus_field: 1\n"), 0o644))
 
 	flags := &cmdctx.RootFlags{ConfigPath: devboxPath}
@@ -247,11 +247,11 @@ func TestValidateChecksScopedMalformedValidateYmlSurfacesDiagnostic(t *testing.T
 func TestValidateChecksScopedByIDMalformedValidateYmlSurfacesDiagnostic(t *testing.T) {
 	tmpDir := t.TempDir()
 
-	devboxPath := filepath.Join(tmpDir, "devbox.yml")
+	devboxPath := filepath.Join(tmpDir, "workspace.yml")
 	require.NoError(t, os.WriteFile(devboxPath, []byte("schema_version: \"2\"\n"), 0o644))
 
-	require.NoError(t, os.MkdirAll(filepath.Join(tmpDir, "devbox"), 0o755))
-	badYml := filepath.Join(tmpDir, "devbox", "validate.yml")
+	require.NoError(t, os.MkdirAll(filepath.Join(tmpDir, "workspace"), 0o755))
+	badYml := filepath.Join(tmpDir, "workspace", "validate.yml")
 	require.NoError(t, os.WriteFile(badYml, []byte("bogus_field: 1\n"), 0o644))
 
 	flags := &cmdctx.RootFlags{ConfigPath: devboxPath}
@@ -273,7 +273,7 @@ func TestValidateChecksScopedByIDMalformedValidateYmlSurfacesDiagnostic(t *testi
 // tolerated — no diagnostic, no error.
 func TestValidateMissingValidateYmlIsSilent(t *testing.T) {
 	tmpDir := t.TempDir()
-	devboxPath := filepath.Join(tmpDir, "devbox.yml")
+	devboxPath := filepath.Join(tmpDir, "workspace.yml")
 	require.NoError(t, os.WriteFile(devboxPath, []byte("schema_version: \"2\"\n"), 0o644))
 
 	flags := &cmdctx.RootFlags{ConfigPath: devboxPath}
@@ -297,11 +297,11 @@ func TestValidateMissingValidateYmlIsSilent(t *testing.T) {
 func TestValidateEnvScopedMalformedValidateYmlSurfacesDiagnostic(t *testing.T) {
 	tmpDir := t.TempDir()
 
-	devboxPath := filepath.Join(tmpDir, "devbox.yml")
+	devboxPath := filepath.Join(tmpDir, "workspace.yml")
 	require.NoError(t, os.WriteFile(devboxPath, []byte("schema_version: \"2\"\n"), 0o644))
 
-	require.NoError(t, os.MkdirAll(filepath.Join(tmpDir, "devbox"), 0o755))
-	badYml := filepath.Join(tmpDir, "devbox", "validate.yml")
+	require.NoError(t, os.MkdirAll(filepath.Join(tmpDir, "workspace"), 0o755))
+	badYml := filepath.Join(tmpDir, "workspace", "validate.yml")
 	require.NoError(t, os.WriteFile(badYml, []byte("bogus_field: 1\n"), 0o644))
 
 	flags := &cmdctx.RootFlags{ConfigPath: devboxPath}
@@ -364,7 +364,7 @@ func TestValidateLintersSubcommand(t *testing.T) {
 // domains (config, env, checks, snapshot, templates, commands).
 func TestValidateLintersRunsLintersDomainOnly(t *testing.T) {
 	tmpDir := t.TempDir()
-	devboxPath := filepath.Join(tmpDir, "devbox.yml")
+	devboxPath := filepath.Join(tmpDir, "workspace.yml")
 	require.NoError(t, os.WriteFile(devboxPath, []byte("schema_version: \"2\"\n"), 0o644))
 
 	flags := &cmdctx.RootFlags{ConfigPath: devboxPath}
@@ -391,7 +391,7 @@ func TestValidateLintersRunsLintersDomainOnly(t *testing.T) {
 // built-in) must not appear.
 func TestValidateLintersScopedByIDFiltersToOne(t *testing.T) {
 	tmpDir := t.TempDir()
-	devboxPath := filepath.Join(tmpDir, "devbox.yml")
+	devboxPath := filepath.Join(tmpDir, "workspace.yml")
 	require.NoError(t, os.WriteFile(devboxPath, []byte("schema_version: \"2\"\n"), 0o644))
 
 	flags := &cmdctx.RootFlags{ConfigPath: devboxPath}
@@ -412,7 +412,7 @@ func TestValidateLintersScopedByIDFiltersToOne(t *testing.T) {
 // `checks` domain behavior.
 func TestValidateLintersUnknownIDIsNotHardError(t *testing.T) {
 	tmpDir := t.TempDir()
-	devboxPath := filepath.Join(tmpDir, "devbox.yml")
+	devboxPath := filepath.Join(tmpDir, "workspace.yml")
 	require.NoError(t, os.WriteFile(devboxPath, []byte("schema_version: \"2\"\n"), 0o644))
 
 	flags := &cmdctx.RootFlags{ConfigPath: devboxPath}
@@ -432,13 +432,13 @@ func TestValidateLintersUnknownIDIsNotHardError(t *testing.T) {
 // --strict, that Warning must drive a non-zero exit code.
 func TestValidateLintersStrictUpgradesWarningToError(t *testing.T) {
 	tmpDir := t.TempDir()
-	devboxPath := filepath.Join(tmpDir, "devbox.yml")
+	devboxPath := filepath.Join(tmpDir, "workspace.yml")
 	require.NoError(t, os.WriteFile(devboxPath, []byte("schema_version: \"2\"\n"), 0o644))
 
 	// Configure a generic linter pointing at a binary that won't be on PATH.
-	require.NoError(t, os.MkdirAll(filepath.Join(tmpDir, "devbox"), 0o755))
+	require.NoError(t, os.MkdirAll(filepath.Join(tmpDir, "workspace"), 0o755))
 	yml := "linters:\n  totally-fake-bin-xyz:\n    type: generic\n    bin: totally-fake-bin-xyz\n    paths: [\".\"]\n"
-	require.NoError(t, os.WriteFile(filepath.Join(tmpDir, "devbox", "validate.yml"), []byte(yml), 0o644))
+	require.NoError(t, os.WriteFile(filepath.Join(tmpDir, "workspace", "validate.yml"), []byte(yml), 0o644))
 
 	flags := &cmdctx.RootFlags{ConfigPath: devboxPath}
 	cmd := NewCmd("", flags)
@@ -464,11 +464,11 @@ func TestValidateLintersStrictUpgradesWarningToError(t *testing.T) {
 func TestValidateLintersScopedMalformedValidateYmlSurfacesDiagnostic(t *testing.T) {
 	tmpDir := t.TempDir()
 
-	devboxPath := filepath.Join(tmpDir, "devbox.yml")
+	devboxPath := filepath.Join(tmpDir, "workspace.yml")
 	require.NoError(t, os.WriteFile(devboxPath, []byte("schema_version: \"2\"\n"), 0o644))
 
-	require.NoError(t, os.MkdirAll(filepath.Join(tmpDir, "devbox"), 0o755))
-	badYml := filepath.Join(tmpDir, "devbox", "validate.yml")
+	require.NoError(t, os.MkdirAll(filepath.Join(tmpDir, "workspace"), 0o755))
+	badYml := filepath.Join(tmpDir, "workspace", "validate.yml")
 	require.NoError(t, os.WriteFile(badYml, []byte("bogus_field: 1\n"), 0o644))
 
 	flags := &cmdctx.RootFlags{ConfigPath: devboxPath}
@@ -501,7 +501,7 @@ func TestValidateSnapshotSubcommand(t *testing.T) {
 func TestValidateSnapshotRunsAndSurfacesPerSnapshotDiagnostics(t *testing.T) {
 	tmpDir := t.TempDir()
 
-	devboxPath := filepath.Join(tmpDir, "devbox.yml")
+	devboxPath := filepath.Join(tmpDir, "workspace.yml")
 	require.NoError(t, os.WriteFile(devboxPath, []byte("schema_version: \"2\"\n"), 0o644))
 	// Create a snapshot dir with no manifest.
 	brokenDir := filepath.Join(tmpDir, "snapshots", "broken")
@@ -524,7 +524,7 @@ func TestValidateSnapshotRunsAndSurfacesPerSnapshotDiagnostics(t *testing.T) {
 // TestValidateSnapshotScopedByName filters to a single snapshot's checks.
 func TestValidateSnapshotScopedByName(t *testing.T) {
 	tmpDir := t.TempDir()
-	devboxPath := filepath.Join(tmpDir, "devbox.yml")
+	devboxPath := filepath.Join(tmpDir, "workspace.yml")
 	require.NoError(t, os.WriteFile(devboxPath, []byte("schema_version: \"2\"\n"), 0o644))
 	// Two snapshot dirs: only one should appear in output when scoped.
 	require.NoError(t, os.MkdirAll(filepath.Join(tmpDir, "snapshots", "alpha"), 0o755))
@@ -547,7 +547,7 @@ func TestValidateSnapshotScopedByName(t *testing.T) {
 // computation: without it no checksums target appears; with it an OK one does.
 func TestValidateSnapshotVerifyFlag(t *testing.T) {
 	tmpDir := t.TempDir()
-	devboxPath := filepath.Join(tmpDir, "devbox.yml")
+	devboxPath := filepath.Join(tmpDir, "workspace.yml")
 	require.NoError(t, os.WriteFile(devboxPath, []byte("schema_version: \"2\"\n"), 0o644))
 
 	snapDir := filepath.Join(tmpDir, "snapshots", "snap1")
@@ -594,7 +594,7 @@ func runValidateJSONCmd(t *testing.T, cfgPath string, args ...string) (stdout, s
 // emits a JSON object with the expected top-level keys.
 func TestValidateCmd_JSONMode_Structure(t *testing.T) {
 	tmpDir := t.TempDir()
-	devboxPath := filepath.Join(tmpDir, "devbox.yml")
+	devboxPath := filepath.Join(tmpDir, "workspace.yml")
 	require.NoError(t, os.WriteFile(devboxPath, []byte("schema_version: \"2\"\n"), 0o644))
 
 	stdout, _ := runValidateJSONCmd(t, devboxPath)
@@ -618,7 +618,7 @@ func TestValidateCmd_JSONMode_Structure(t *testing.T) {
 // TestValidateCmd_JSONMode_SummaryFields verifies the summary contains numeric fields.
 func TestValidateCmd_JSONMode_SummaryFields(t *testing.T) {
 	tmpDir := t.TempDir()
-	devboxPath := filepath.Join(tmpDir, "devbox.yml")
+	devboxPath := filepath.Join(tmpDir, "workspace.yml")
 	require.NoError(t, os.WriteFile(devboxPath, []byte("schema_version: \"2\"\n"), 0o644))
 
 	stdout, _ := runValidateJSONCmd(t, devboxPath)
@@ -641,7 +641,7 @@ func TestValidateCmd_JSONMode_SummaryFields(t *testing.T) {
 // JSON output has the required fields with valid values.
 func TestValidateCmd_JSONMode_DiagnosticFields(t *testing.T) {
 	tmpDir := t.TempDir()
-	devboxPath := filepath.Join(tmpDir, "devbox.yml")
+	devboxPath := filepath.Join(tmpDir, "workspace.yml")
 	require.NoError(t, os.WriteFile(devboxPath, []byte("schema_version: \"2\"\n"), 0o644))
 
 	stdout, _ := runValidateJSONCmd(t, devboxPath)
@@ -670,7 +670,7 @@ func TestValidateCmd_JSONMode_DiagnosticFields(t *testing.T) {
 // JSON mode still produce a non-zero exit code (via validationFailedError).
 func TestValidateCmd_JSONMode_ExitCodePreserved(t *testing.T) {
 	tmpDir := t.TempDir()
-	devboxPath := filepath.Join(tmpDir, "devbox.yml")
+	devboxPath := filepath.Join(tmpDir, "workspace.yml")
 	require.NoError(t, os.WriteFile(devboxPath, []byte("schema_version: \"2\"\n"), 0o644))
 
 	// Snapshot directory with no manifest → error diagnostic.
@@ -724,13 +724,13 @@ func TestValidateCmd_JSONMode_ExitCodePreserved(t *testing.T) {
 // warnings to errors in JSON mode (exit code 1).
 func TestValidateCmd_JSONMode_StrictExitCodePreserved(t *testing.T) {
 	tmpDir := t.TempDir()
-	devboxPath := filepath.Join(tmpDir, "devbox.yml")
+	devboxPath := filepath.Join(tmpDir, "workspace.yml")
 	require.NoError(t, os.WriteFile(devboxPath, []byte("schema_version: \"2\"\n"), 0o644))
 
 	// Configure a generic linter with a missing binary → Warning.
-	require.NoError(t, os.MkdirAll(filepath.Join(tmpDir, "devbox"), 0o755))
+	require.NoError(t, os.MkdirAll(filepath.Join(tmpDir, "workspace"), 0o755))
 	yml := "linters:\n  totally-fake-linter-xyz:\n    type: generic\n    bin: totally-fake-linter-xyz\n    paths: [\".\"]\n"
-	require.NoError(t, os.WriteFile(filepath.Join(tmpDir, "devbox", "validate.yml"), []byte(yml), 0o644))
+	require.NoError(t, os.WriteFile(filepath.Join(tmpDir, "workspace", "validate.yml"), []byte(yml), 0o644))
 
 	flags := &cmdctx.RootFlags{ConfigPath: devboxPath, Output: "json"}
 	cmd := NewCmd("", flags)
@@ -758,7 +758,7 @@ func TestValidateCmd_JSONMode_StrictExitCodePreserved(t *testing.T) {
 // against a minimal devbox.yml. The golden file is generated with UPDATE_GOLDEN=1.
 func TestValidateCmd_JSONMode_ConfigGolden(t *testing.T) {
 	tmpDir := t.TempDir()
-	devboxPath := filepath.Join(tmpDir, "devbox.yml")
+	devboxPath := filepath.Join(tmpDir, "workspace.yml")
 	require.NoError(t, os.WriteFile(devboxPath, []byte("schema_version: \"2\"\n"), 0o644))
 
 	stdout, _ := runValidateJSONCmd(t, devboxPath, "config")
@@ -786,7 +786,7 @@ func TestValidateCmd_JSONMode_ConfigGolden(t *testing.T) {
 // escape sequences even when validators emit styled text.
 func TestValidateCmd_JSONMode_NoANSI(t *testing.T) {
 	tmpDir := t.TempDir()
-	devboxPath := filepath.Join(tmpDir, "devbox.yml")
+	devboxPath := filepath.Join(tmpDir, "workspace.yml")
 	require.NoError(t, os.WriteFile(devboxPath, []byte("schema_version: \"2\"\n"), 0o644))
 
 	stdout, _ := runValidateJSONCmd(t, devboxPath, "config")
@@ -796,7 +796,7 @@ func TestValidateCmd_JSONMode_NoANSI(t *testing.T) {
 // TestValidateCmd_JSONMode_PrettyFlag verifies that --pretty produces indented JSON.
 func TestValidateCmd_JSONMode_PrettyFlag(t *testing.T) {
 	tmpDir := t.TempDir()
-	devboxPath := filepath.Join(tmpDir, "devbox.yml")
+	devboxPath := filepath.Join(tmpDir, "workspace.yml")
 	require.NoError(t, os.WriteFile(devboxPath, []byte("schema_version: \"2\"\n"), 0o644))
 
 	flags := &cmdctx.RootFlags{ConfigPath: devboxPath, Output: "json", Pretty: true}
@@ -817,7 +817,7 @@ func TestValidateCmd_JSONMode_PrettyFlag(t *testing.T) {
 // produces the human-readable table+summary format (regression guard).
 func TestValidateCmd_JSONMode_TextBehaviorUnchanged(t *testing.T) {
 	tmpDir := t.TempDir()
-	devboxPath := filepath.Join(tmpDir, "devbox.yml")
+	devboxPath := filepath.Join(tmpDir, "workspace.yml")
 	require.NoError(t, os.WriteFile(devboxPath, []byte("schema_version: \"2\"\n"), 0o644))
 
 	flags := &cmdctx.RootFlags{ConfigPath: devboxPath, Output: "text"}

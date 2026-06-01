@@ -219,7 +219,7 @@ func TestHostRunner_BuildCommand_WorkdirAbsoluteTemplate(t *testing.T) {
 func TestHostRunner_BuildCommand_ShellFromConfig(t *testing.T) {
 	tests := []struct {
 		name      string
-		cfg       *config.DevboxConfig
+		cfg       *config.DweConfig
 		wantShell string
 	}{
 		{
@@ -229,7 +229,7 @@ func TestHostRunner_BuildCommand_ShellFromConfig(t *testing.T) {
 		},
 		{
 			name:      "empty config defaults to sh",
-			cfg:       &config.DevboxConfig{},
+			cfg:       &config.DweConfig{},
 			wantShell: "sh",
 		},
 	}
@@ -256,10 +256,10 @@ func TestHostRunner_BuildCommand_ShellFromConfig(t *testing.T) {
 	}
 }
 
-// TestHostRunner_BuildCommand_ContractEnvDevboxBin verifies that every type:shell
+// TestHostRunner_BuildCommand_ContractEnvDweBin verifies that every type:shell
 // subprocess gets DEVBOX_BIN exported so shell snippets can shell back into the
 // running devbox binary without hardcoding the path.
-func TestHostRunner_BuildCommand_ContractEnvDevboxBin(t *testing.T) {
+func TestHostRunner_BuildCommand_ContractEnvDweBin(t *testing.T) {
 	r := &Runner{}
 	ctx := spec.RunContext{
 		Cmd: &model.CommandDef{
@@ -296,7 +296,7 @@ func TestHostRunner_BuildCommand_ContractEnvComposeFile(t *testing.T) {
 			Cmd:  "env",
 		},
 		Render: &tpl.RenderContext{},
-		Config: &config.DevboxConfig{
+		Config: &config.DweConfig{
 			Project: config.ProjectConfig{Prefix: "devbox", Name: "laravel"},
 			Compose: config.ComposeConfig{Base: "compose.yaml"},
 			Services: map[string]config.ServiceConfig{
@@ -338,7 +338,7 @@ func TestHostRunner_BuildCommand_ContractEnvNoComposeFiles(t *testing.T) {
 			Cmd:  "env",
 		},
 		Render:      &tpl.RenderContext{},
-		Config:      &config.DevboxConfig{Project: config.ProjectConfig{Prefix: "devbox", Name: "laravel"}},
+		Config:      &config.DweConfig{Project: config.ProjectConfig{Prefix: "devbox", Name: "laravel"}},
 		ProjectRoot: "/project",
 	}
 	c, err := r.BuildCommand(context.Background(), ctx)

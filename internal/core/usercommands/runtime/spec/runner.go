@@ -44,7 +44,7 @@ type RunContext struct {
 	Render *tpl.RenderContext
 
 	// Config is the merged devbox configuration.
-	Config *config.DevboxConfig
+	Config *config.DweConfig
 
 	// DockerConfig is the Docker Compose execution policy. When set, service
 	// runners use it to apply global args and project naming from the policy.

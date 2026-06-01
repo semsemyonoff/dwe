@@ -8,7 +8,7 @@ import (
 )
 
 func TestNewCompose(t *testing.T) {
-	cfg := &config.DevboxConfig{
+	cfg := &config.DweConfig{
 		Compose: config.ComposeConfig{
 			Base: "compose.yaml",
 		},
@@ -361,7 +361,7 @@ func TestBinName_CustomBin(t *testing.T) {
 }
 
 func TestNewCompose_PopulatesBinFromConfig(t *testing.T) {
-	cfg := &config.DevboxConfig{
+	cfg := &config.DweConfig{
 		Compose: config.ComposeConfig{Base: "compose.yaml"},
 	}
 	dockerCfg := &config.DockerConfig{ProjectName: "test"}
@@ -376,7 +376,7 @@ func TestNewCompose_PopulatesBinFromConfig(t *testing.T) {
 }
 
 func TestNewCompose_DefaultBinWhenNotSet(t *testing.T) {
-	cfg := &config.DevboxConfig{
+	cfg := &config.DweConfig{
 		Compose: config.ComposeConfig{Base: "compose.yaml"},
 	}
 	dockerCfg := &config.DockerConfig{ProjectName: "test"}
@@ -406,7 +406,7 @@ func TestFormatCommandQuotesUnsafeArgs(t *testing.T) {
 }
 
 func TestNewComposeAll(t *testing.T) {
-	cfg := &config.DevboxConfig{
+	cfg := &config.DweConfig{
 		Compose: config.ComposeConfig{
 			Base: "compose.yaml",
 		},

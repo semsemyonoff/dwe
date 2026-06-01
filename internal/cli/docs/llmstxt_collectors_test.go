@@ -16,7 +16,7 @@ func TestCollectServiceSummaries_NilCfg(t *testing.T) {
 }
 
 func TestCollectServiceSummaries_Empty(t *testing.T) {
-	cfg := &config.DevboxConfig{
+	cfg := &config.DweConfig{
 		Services: map[string]config.ServiceConfig{},
 	}
 	result := collectServiceSummaries(cfg)
@@ -26,7 +26,7 @@ func TestCollectServiceSummaries_Empty(t *testing.T) {
 }
 
 func TestCollectServiceSummaries_DeployOrder(t *testing.T) {
-	cfg := &config.DevboxConfig{
+	cfg := &config.DweConfig{
 		Services: map[string]config.ServiceConfig{
 			"api": {
 				Type:    config.ServiceTypeApp,
@@ -62,7 +62,7 @@ func TestCollectServiceSummaries_DeployOrder(t *testing.T) {
 }
 
 func TestCollectServiceSummaries_DisabledExcluded(t *testing.T) {
-	cfg := &config.DevboxConfig{
+	cfg := &config.DweConfig{
 		Services: map[string]config.ServiceConfig{
 			"enabled":  {Type: config.ServiceTypeApp, Enabled: true},
 			"disabled": {Type: config.ServiceTypeApp, Enabled: false},
@@ -172,7 +172,7 @@ func TestCollectInfoSummary_NilCfg(t *testing.T) {
 }
 
 func TestCollectInfoSummary_EmptyProject(t *testing.T) {
-	cfg := &config.DevboxConfig{
+	cfg := &config.DweConfig{
 		Services: map[string]config.ServiceConfig{},
 	}
 	result := collectInfoSummary(cfg)
@@ -183,7 +183,7 @@ func TestCollectInfoSummary_EmptyProject(t *testing.T) {
 }
 
 func TestCollectInfoSummary_ServicesProvideURLsAndHosts(t *testing.T) {
-	cfg := &config.DevboxConfig{
+	cfg := &config.DweConfig{
 		Project: config.ProjectConfig{Name: "my-project"},
 		Services: map[string]config.ServiceConfig{
 			"api": {
@@ -207,7 +207,7 @@ func TestCollectInfoSummary_ServicesProvideURLsAndHosts(t *testing.T) {
 }
 
 func TestCollectInfoSummary_PrimaryHostMissingFromHostsSkipsURL(t *testing.T) {
-	cfg := &config.DevboxConfig{
+	cfg := &config.DweConfig{
 		Services: map[string]config.ServiceConfig{
 			"svc": {
 				Type:    config.ServiceTypeApp,
@@ -230,7 +230,7 @@ func TestCollectInfoSummary_PrimaryHostMissingFromHostsSkipsURL(t *testing.T) {
 }
 
 func TestCollectInfoSummary_HostsSortedDeterministically(t *testing.T) {
-	cfg := &config.DevboxConfig{
+	cfg := &config.DweConfig{
 		Project: config.ProjectConfig{Name: "p"},
 		Services: map[string]config.ServiceConfig{
 			"svc": {

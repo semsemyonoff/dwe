@@ -394,33 +394,33 @@ bin/dwe docs generate --scope cli
 
 **Step-by-step with dry-run gates:**
 
-- [ ] `git mv internal/core/project/config/devbox.go internal/core/project/config/workspace.go`
-- [ ] rename Go struct `DevboxConfig` → `DweConfig`, accessor `DevboxBin` → `DweBin` (gopls or sed)
-- [ ] update default fallback inside `DweBin` (`"devbox"` → `"dwe"`)
-- [ ] update `BinaryOverride("devbox")` → `BinaryOverride("dwe")` callers
-- [ ] update user-config key `binary_devbox` → `binary_dwe`
-- [ ] replace literal strings: `"devbox.yml"` → `"workspace.yml"`, `"devbox/"` (folder constants) → `"workspace/"`
-- [ ] update template-pack multi-arg joins: `rg -n '"devbox"' internal/core/execution/templates/` then replace `filepath.Join(…, "devbox", "templates", …)` → `filepath.Join(…, "workspace", "templates", …)` in each of the 8 files
-- [ ] update `internal/cli/root.go:297` `filepath.Join(projectRoot, "devbox", "styles.yml")` → `filepath.Join(projectRoot, "workspace", "styles.yml")` (multi-arg join, not caught by literal `"devbox/"` grep)
-- [ ] update `internal/shared/prompt/prompt.go:18` const `configFilename = "devbox.yml"` → `"workspace.yml"` and `:20` const `stylesRelPath = "devbox/styles.yml"` → `"workspace/styles.yml"` (prompt hot path, AGENTS.md critical pattern — note line :19 `stateRelPath` belongs to Task 5)
-- [ ] update prompt tests `internal/shared/prompt/*_test.go` matching the consts above
-- [ ] update i18n loader path: `devbox/i18n/<lang>.yml` → `workspace/i18n/<lang>.yml`
-- [ ] **drop schema_version completely:** remove `SchemaVersion` struct field + yaml tag; delete validator + Hint; delete gate symbols at `internal/core/project/project/project.go:14-23` (`ValidateSchema`, `SchemaField`, `SupportedSchema`); remove godoc; delete legacy fixture dirs (`git rm -r internal/core/validate/config/testdata/devbox-legacy-schema/ devbox-missing-schema/`); delete subtests in `internal/core/validate/config/{devbox_test,all_test}.go` and `internal/core/project/project/project_test.go`
-- [ ] **rename root config validator** (`devboxValidator` → `workspaceValidator`):
-  - [ ] `internal/core/validate/config/devbox.go:33` `type devboxValidator struct{}` → `workspaceValidator`; `ID() string` returns `"workspace"` (was `"devbox"`); `Domain()` stays `"config"`
-  - [ ] consider `git mv internal/core/validate/config/devbox.go internal/core/validate/config/workspace.go` (filename alignment)
-  - [ ] update diagnostic targets `config.devbox*` → `config.workspace*` throughout this file
-  - [ ] `internal/core/validate/config/all.go:10` registration `&devboxValidator{}` → `&workspaceValidator{}`
-  - [ ] `internal/cli/validate/validate.go:142-144` Cobra help text: `devbox validate config <devbox|services|...>` → `dwe validate config <workspace|services|...>` (the `devbox` validator ID is now `workspace`)
-  - [ ] update `internal/core/validate/config/devbox_test.go` (or renamed test file) — every fixture/golden expecting `Target: "config.devbox"` etc.
-- [ ] audit `Project.Prefix` default; replace `"devbox"` → `"dwe"` if found
-- [ ] **DRY-RUN GATE — fixture file list:** `find . -path '*/testdata/*' -type f -name 'devbox.yml' -print` — visually confirm output (review every path before mv)
-- [ ] **DRY-RUN GATE — fixture dir list:** `find . -path '*/testdata/*' -type d -name 'devbox' -print` — visually confirm NO `devbox-v2-*`/`devbox-legacy-*`/`devbox-missing-*` appears (those are test IDs or deleted)
-- [ ] execute mass `git mv`: for each path in the two find outputs, `git mv <path> <path with workspace>`
-- [ ] strip schema_version: `rg -l 'schema_version' --type yaml` → delete those lines
-- [ ] update test literals: `rg -l '"devbox\.yml"' -t go` → replace with `"workspace.yml"`
-- [ ] **PRECHECK before make test:** `rg -n '"devbox\.yml"' --type go` returns zero
-- [ ] `make build && make test` — must end **green**
+- [x] `git mv internal/core/project/config/devbox.go internal/core/project/config/workspace.go`
+- [x] rename Go struct `DevboxConfig` → `DweConfig`, accessor `DevboxBin` → `DweBin` (gopls or sed)
+- [x] update default fallback inside `DweBin` (`"devbox"` → `"dwe"`)
+- [x] update `BinaryOverride("devbox")` → `BinaryOverride("dwe")` callers
+- [x] update user-config key `binary_devbox` → `binary_dwe`
+- [x] replace literal strings: `"devbox.yml"` → `"workspace.yml"`, `"devbox/"` (folder constants) → `"workspace/"`
+- [x] update template-pack multi-arg joins: `rg -n '"devbox"' internal/core/execution/templates/` then replace `filepath.Join(…, "devbox", "templates", …)` → `filepath.Join(…, "workspace", "templates", …)` in each of the 8 files
+- [x] update `internal/cli/root.go:297` `filepath.Join(projectRoot, "devbox", "styles.yml")` → `filepath.Join(projectRoot, "workspace", "styles.yml")` (multi-arg join, not caught by literal `"devbox/"` grep)
+- [x] update `internal/shared/prompt/prompt.go:18` const `configFilename = "devbox.yml"` → `"workspace.yml"` and `:20` const `stylesRelPath = "devbox/styles.yml"` → `"workspace/styles.yml"` (prompt hot path, AGENTS.md critical pattern — note line :19 `stateRelPath` belongs to Task 5)
+- [x] update prompt tests `internal/shared/prompt/*_test.go` matching the consts above
+- [x] update i18n loader path: `devbox/i18n/<lang>.yml` → `workspace/i18n/<lang>.yml`
+- [x] **drop schema_version completely:** remove `SchemaVersion` struct field + yaml tag; delete validator + Hint; delete gate symbols at `internal/core/project/project/project.go:14-23` (`ValidateSchema`, `SchemaField`, `SupportedSchema`); remove godoc; delete legacy fixture dirs (`git rm -r internal/core/validate/config/testdata/devbox-legacy-schema/ devbox-missing-schema/`); delete subtests in `internal/core/validate/config/{devbox_test,all_test}.go` and `internal/core/project/project/project_test.go`
+- [x] **rename root config validator** (`devboxValidator` → `workspaceValidator`):
+  - [x] `internal/core/validate/config/devbox.go:33` `type devboxValidator struct{}` → `workspaceValidator`; `ID() string` returns `"workspace"` (was `"devbox"`); `Domain()` stays `"config"`
+  - [x] consider `git mv internal/core/validate/config/devbox.go internal/core/validate/config/workspace.go` (filename alignment)
+  - [x] update diagnostic targets `config.devbox*` → `config.workspace*` throughout this file
+  - [x] `internal/core/validate/config/all.go:10` registration `&devboxValidator{}` → `&workspaceValidator{}`
+  - [x] `internal/cli/validate/validate.go:142-144` Cobra help text: `devbox validate config <devbox|services|...>` → `dwe validate config <workspace|services|...>` (the `devbox` validator ID is now `workspace`)
+  - [x] update `internal/core/validate/config/devbox_test.go` (or renamed test file) — every fixture/golden expecting `Target: "config.devbox"` etc.
+- [x] audit `Project.Prefix` default; replace `"devbox"` → `"dwe"` if found
+- [x] **DRY-RUN GATE — fixture file list:** `find . -path '*/testdata/*' -type f -name 'devbox.yml' -print` — visually confirm output (review every path before mv)
+- [x] **DRY-RUN GATE — fixture dir list:** `find . -path '*/testdata/*' -type d -name 'devbox' -print` — visually confirm NO `devbox-v2-*`/`devbox-legacy-*`/`devbox-missing-*` appears (those are test IDs or deleted)
+- [x] execute mass `git mv`: for each path in the two find outputs, `git mv <path> <path with workspace>`
+- [x] strip schema_version: `rg -l 'schema_version' --type yaml` → delete those lines
+- [x] update test literals: `rg -l '"devbox\.yml"' -t go` → replace with `"workspace.yml"`
+- [x] **PRECHECK before make test:** `rg -n '"devbox\.yml"' --type go` returns zero
+- [x] `make build && make test` — must end **green**
 
 ### Task 5: Phase 3b — Runtime dir `.devbox/` → `.dwe/`
 

@@ -3,7 +3,6 @@ package cmdctx_test
 import (
 	"os"
 	"path/filepath"
-	"strings"
 	"testing"
 
 	"github.com/semsemyonoff/dwe/internal/cli/cmdctx"
@@ -14,18 +13,11 @@ import (
 func writeV2Project(t *testing.T, dir string) {
 	t.Helper()
 	yml := "schema_version: \"2\"\nproject:\n  name: testproject\n  prefix: devbox\n"
-	if err := os.WriteFile(filepath.Join(dir, "devbox.yml"), []byte(yml), 0o644); err != nil {
+	if err := os.WriteFile(filepath.Join(dir, "workspace.yml"), []byte(yml), 0o644); err != nil {
 		t.Fatalf("write devbox.yml: %v", err)
 	}
 }
 
-func writeV1Project(t *testing.T, dir string) {
-	t.Helper()
-	yml := "schema_version: \"1\"\nproject:\n  name: legacy\n  prefix: devbox\n"
-	if err := os.WriteFile(filepath.Join(dir, "devbox.yml"), []byte(yml), 0o644); err != nil {
-		t.Fatalf("write devbox.yml: %v", err)
-	}
-}
 
 // rootCmdForCompletion returns a minimal cobra root carrying the --config
 // persistent flag, optionally pre-set as if --config were passed on the CLI.
@@ -80,19 +72,3 @@ func TestCompletionConfigPath_explicitBadPath(t *testing.T) {
 	}
 }
 
-// TestCompletionConfigPath_legacyV1: a v1 project must surface a
-// schema_version error so completion declines silently.
-func TestCompletionConfigPath_legacyV1(t *testing.T) {
-	projectDir := t.TempDir()
-	writeV1Project(t, projectDir)
-	t.Chdir(projectDir)
-
-	flags := &cmdctx.RootFlags{}
-	_, _, err := cmdctx.CompletionConfigPath(flags, rootCmdForCompletion(flags, ""))
-	if err == nil {
-		t.Fatal("expected schema error for v1 project, got nil")
-	}
-	if !strings.Contains(err.Error(), "schema_version") {
-		t.Errorf("err = %v, want one mentioning schema_version", err)
-	}
-}

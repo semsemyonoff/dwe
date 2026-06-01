@@ -60,11 +60,11 @@ func writeLogsTestConfig(t *testing.T, dir string, svcs map[string]string) strin
 func writeLogsTestConfigWithDockerBin(t *testing.T, dir string, svcs map[string]string, dockerBin string) string {
 	t.Helper()
 	content := "schema_version: \"2\"\nproject:\n  name: test\n  prefix: devbox\n"
-	if err := os.WriteFile(filepath.Join(dir, "devbox.yml"), []byte(content), 0o644); err != nil {
+	if err := os.WriteFile(filepath.Join(dir, "workspace.yml"), []byte(content), 0o644); err != nil {
 		t.Fatalf("write devbox.yml: %v", err)
 	}
 	for name, container := range svcs {
-		svcDir := filepath.Join(dir, "devbox", "services", name)
+		svcDir := filepath.Join(dir, "workspace", "services", name)
 		if err := os.MkdirAll(svcDir, 0o755); err != nil {
 			t.Fatalf("mkdir %s: %v", svcDir, err)
 		}
@@ -83,7 +83,7 @@ func writeLogsTestConfigWithDockerBin(t *testing.T, dir string, svcs map[string]
 			t.Fatalf("write .devbox/config: %v", err)
 		}
 	}
-	return filepath.Join(dir, "devbox.yml")
+	return filepath.Join(dir, "workspace.yml")
 }
 
 // makeFakeDocker creates an executable shell script in dir and returns its path.

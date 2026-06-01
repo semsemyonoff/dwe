@@ -81,7 +81,7 @@ func RunStop(ctx StopContext) error {
 	}
 	defer releaseLocks()
 
-	lifecyclePath := filepath.Join(workDir, "devbox", "lifecycle.yml")
+	lifecyclePath := filepath.Join(workDir, "workspace", "lifecycle.yml")
 	lifecycleCfg, err := config.LoadLifecycleConfig(lifecyclePath)
 	if err != nil && !errors.Is(err, os.ErrNotExist) {
 		return fmt.Errorf("loading lifecycle config: %w", err)

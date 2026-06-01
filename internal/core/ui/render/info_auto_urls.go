@@ -16,7 +16,7 @@ import (
 //
 // Service iteration MUST use deploy-order logic — never range cfg.Services directly
 // because Go map iteration is randomized and produces flaky tests.
-func renderAutoURLs(cfg *config.DevboxConfig, spec *config.AutoURLsSpec) string {
+func renderAutoURLs(cfg *config.DweConfig, spec *config.AutoURLsSpec) string {
 	if cfg == nil || spec == nil {
 		return ""
 	}
@@ -136,7 +136,7 @@ func renderAutoURLs(cfg *config.DevboxConfig, spec *config.AutoURLsSpec) string 
 
 // autoDetectPortVia finds the single infra service with ports.http == 80 or ports.https == 443.
 // Returns nil, 0 if 0 or >1 candidates found, or if cfg is nil.
-func autoDetectPortVia(cfg *config.DevboxConfig) (*config.ServiceConfig, int) {
+func autoDetectPortVia(cfg *config.DweConfig) (*config.ServiceConfig, int) {
 	if cfg == nil {
 		return nil, 0
 	}
@@ -182,7 +182,7 @@ func getScheme(useHTTPS bool) string {
 //   - only hosts (app behind proxy) → "<proxied>" (requires port_via)
 //   - only ports → "http(s)://localhost:<port>"
 //   - neither → ""
-func buildMainURL(cfg *config.DevboxConfig, host string, port int,
+func buildMainURL(cfg *config.DweConfig, host string, port int,
 	portVia *config.ServiceConfig, portViaPort int) string {
 
 	scheme := getScheme(cfg.Runtime.UseHTTPS)
@@ -213,7 +213,7 @@ func buildProxiedURL(scheme, host string, port int) string {
 
 // buildPathURL returns the full URL for a sub-path row, or "" if it cannot be
 // assembled (e.g. host-only without portVia and no direct port).
-func buildPathURL(cfg *config.DevboxConfig, path config.ServiceInfoPath,
+func buildPathURL(cfg *config.DweConfig, path config.ServiceInfoPath,
 	host string, port int, portVia *config.ServiceConfig, portViaPort int) string {
 
 	if path.Path == "" {

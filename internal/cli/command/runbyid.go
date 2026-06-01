@@ -33,7 +33,7 @@ func runCommandByID(
 	stdin io.Reader,
 	stdout io.Writer,
 	stderr io.Writer,
-	cfg *config.DevboxConfig,
+	cfg *config.DweConfig,
 	reg *usercommands.Registry,
 	projectRoot string,
 	id string,

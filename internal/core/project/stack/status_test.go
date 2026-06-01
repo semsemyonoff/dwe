@@ -157,7 +157,7 @@ func TestRenderApps_ContainsServiceName(t *testing.T) {
 }
 
 func TestRenderInfra_FiltersByType(t *testing.T) {
-	cfg := &config.DevboxConfig{
+	cfg := &config.DweConfig{
 		Services: map[string]config.ServiceConfig{
 			"db":   {Type: config.ServiceTypeInfra, Container: "db", Required: true},
 			"main": {Type: config.ServiceTypeApp, Container: "app-main", Required: true},

@@ -21,10 +21,10 @@ var validModes = map[string]bool{"auto": true, "exec": true, "run": true}
 
 // selectServiceFn is the function signature for interactive service selection.
 // It receives the sorted list of enabled service names and returns the chosen name.
-type selectServiceFn func(cfg *config.DevboxConfig, names []string) (string, error)
+type selectServiceFn func(cfg *config.DweConfig, names []string) (string, error)
 
 // defaultSelectService shows an interactive selector via widgets.RunSelector.
-func defaultSelectService(cfg *config.DevboxConfig, names []string) (string, error) {
+func defaultSelectService(cfg *config.DweConfig, names []string) (string, error) {
 	items := make([]widgets.SelectorItem, len(names))
 	for i, name := range names {
 		svc := cfg.Services[name]
@@ -47,7 +47,7 @@ func defaultSelectService(cfg *config.DevboxConfig, names []string) (string, err
 //   - If no enabled services exist, an error is returned.
 //
 // "Enabled" means mandatory or explicitly enabled in the current config.
-func pickService(cfg *config.DevboxConfig, serviceName string, selector selectServiceFn) (string, error) {
+func pickService(cfg *config.DweConfig, serviceName string, selector selectServiceFn) (string, error) {
 	if serviceName != "" {
 		return serviceName, nil
 	}
@@ -133,7 +133,7 @@ service exists, or shows an interactive selector when multiple services are enab
 			}
 			svcSelector := selectServiceFn(defaultSelectService)
 			if !widgets.IsInteractiveFn(cmd.InOrStdin()) {
-				svcSelector = func(_ *config.DevboxConfig, _ []string) (string, error) {
+				svcSelector = func(_ *config.DweConfig, _ []string) (string, error) {
 					return "", fmt.Errorf("multiple services are enabled; pass a service name or run in an interactive terminal")
 				}
 			}

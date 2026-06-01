@@ -96,7 +96,7 @@ func runDeployPlan(ctx context.Context, cmd *cobra.Command, flags *cmdctx.RootFl
 		return fmt.Errorf("resolving deploy plan: %w", err)
 	}
 
-	devboxBin := config.DevboxBin(cfg)
+	devboxBin := config.DweBin(cfg)
 	switch opts.Format {
 	case "shell":
 		if opts.ServiceName != "" {
@@ -385,7 +385,7 @@ func RunHelper(ctx context.Context, cmd *cobra.Command, flags *cmdctx.RootFlags,
 	baseDir := filepath.Dir(flags.ConfigPath)
 
 	// Load project-level deploy config (absent is valid — some projects only have per-service deploy files)
-	projectDeploy, err := config.LoadProjectDeployConfig(filepath.Join(baseDir, "devbox", "deploy.yml"))
+	projectDeploy, err := config.LoadProjectDeployConfig(filepath.Join(baseDir, "workspace", "deploy.yml"))
 	switch {
 	case errors.Is(err, os.ErrNotExist):
 		projectDeploy = nil

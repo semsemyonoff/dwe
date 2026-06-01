@@ -22,7 +22,7 @@ import (
 // is responsible for project-lock acquisition before calling Create.
 type CreateParams struct {
 	// Cfg is the loaded devbox config.
-	Cfg *config.DevboxConfig
+	Cfg *config.DweConfig
 	// SnapCfg is the parsed devbox/snapshot.yml. Must be non-nil and define a
 	// Create block, else Create returns an error before any filesystem
 	// mutation.

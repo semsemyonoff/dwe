@@ -151,7 +151,7 @@ func TestRootCmdNoConfigShowsHelp(t *testing.T) {
 // project summary (from config) followed by Cobra help output.
 func TestRootCmdWithConfigShowsSummaryAndHelp(t *testing.T) {
 	dir := t.TempDir()
-	cfgPath := filepath.Join(dir, "devbox.yml")
+	cfgPath := filepath.Join(dir, "workspace.yml")
 	cfgYAML := `schema_version: "2"
 project:
   name: testproject
@@ -189,7 +189,7 @@ project:
 // emitted on `devbox` even when no header.lines is configured.
 func TestRootCmdBrandHeaderAlwaysPresent(t *testing.T) {
 	dir := t.TempDir()
-	cfgPath := filepath.Join(dir, "devbox.yml")
+	cfgPath := filepath.Join(dir, "workspace.yml")
 	cfgYAML := `schema_version: "2"
 project:
   name: brandtest
@@ -239,7 +239,7 @@ func TestRootCmdInfoIsNotDuplicated(t *testing.T) {
 // when devbox/styles.yml is absent (defaults apply).
 func TestRootCmd_StylesMissingIsGraceful(t *testing.T) {
 	dir := t.TempDir()
-	cfgPath := filepath.Join(dir, "devbox.yml")
+	cfgPath := filepath.Join(dir, "workspace.yml")
 	if err := os.WriteFile(cfgPath, []byte("schema_version: \"2\"\nproject:\n  name: styletest\n  prefix: devbox\n"), 0644); err != nil {
 		t.Fatalf("writing config: %v", err)
 	}
@@ -266,11 +266,11 @@ func TestRootCmd_StylesMissingIsGraceful(t *testing.T) {
 // contains a header block, root command renders ASCII art without error.
 func TestRootCmd_StylesWithHeaderRendered(t *testing.T) {
 	dir := t.TempDir()
-	cfgPath := filepath.Join(dir, "devbox.yml")
+	cfgPath := filepath.Join(dir, "workspace.yml")
 	if err := os.WriteFile(cfgPath, []byte("schema_version: \"2\"\nproject:\n  name: headertest\n  prefix: devbox\n"), 0644); err != nil {
 		t.Fatalf("writing config: %v", err)
 	}
-	devboxDir := filepath.Join(dir, "devbox")
+	devboxDir := filepath.Join(dir, "workspace")
 	if err := os.MkdirAll(devboxDir, 0755); err != nil {
 		t.Fatalf("creating devbox dir: %v", err)
 	}
@@ -302,7 +302,7 @@ func TestRootCmd_StylesWithHeaderRendered(t *testing.T) {
 // and no $LANG is set, locale defaults to "en".
 func TestLocaleResolutionWithNoUserConfig(t *testing.T) {
 	dir := t.TempDir()
-	cfgPath := filepath.Join(dir, "devbox.yml")
+	cfgPath := filepath.Join(dir, "workspace.yml")
 	if err := os.WriteFile(cfgPath, []byte("schema_version: \"2\"\nproject:\n  name: testproj\n  prefix: devbox\n"), 0644); err != nil {
 		t.Fatalf("writing config: %v", err)
 	}
@@ -338,7 +338,7 @@ func TestLocaleResolutionWithNoUserConfig(t *testing.T) {
 // when no userconfig language is set.
 func TestLocaleResolutionWithLangEnv(t *testing.T) {
 	dir := t.TempDir()
-	cfgPath := filepath.Join(dir, "devbox.yml")
+	cfgPath := filepath.Join(dir, "workspace.yml")
 	if err := os.WriteFile(cfgPath, []byte("schema_version: \"2\"\nproject:\n  name: testproj\n  prefix: devbox\n"), 0644); err != nil {
 		t.Fatalf("writing config: %v", err)
 	}
@@ -371,7 +371,7 @@ func TestLocaleResolutionWithLangEnv(t *testing.T) {
 // after PersistentPreRunE completes.
 func TestI18nStoreIsNonNilAfterInit(t *testing.T) {
 	dir := t.TempDir()
-	cfgPath := filepath.Join(dir, "devbox.yml")
+	cfgPath := filepath.Join(dir, "workspace.yml")
 	if err := os.WriteFile(cfgPath, []byte("schema_version: \"2\"\nproject:\n  name: testproj\n  prefix: devbox\n"), 0644); err != nil {
 		t.Fatalf("writing config: %v", err)
 	}
@@ -397,7 +397,7 @@ func TestI18nStoreIsNonNilAfterInit(t *testing.T) {
 // after PersistentPreRunE completes.
 func TestLocaleIsAlwaysSet(t *testing.T) {
 	dir := t.TempDir()
-	cfgPath := filepath.Join(dir, "devbox.yml")
+	cfgPath := filepath.Join(dir, "workspace.yml")
 	if err := os.WriteFile(cfgPath, []byte("schema_version: \"2\"\nproject:\n  name: testproj\n  prefix: devbox\n"), 0644); err != nil {
 		t.Fatalf("writing config: %v", err)
 	}
@@ -429,7 +429,7 @@ func TestLocaleIsAlwaysSet(t *testing.T) {
 // takes precedence over $LANG.
 func TestLocaleResolutionWithUserconfig(t *testing.T) {
 	dir := t.TempDir()
-	cfgPath := filepath.Join(dir, "devbox.yml")
+	cfgPath := filepath.Join(dir, "workspace.yml")
 	if err := os.WriteFile(cfgPath, []byte("schema_version: \"2\"\nproject:\n  name: testproj\n  prefix: devbox\n"), 0644); err != nil {
 		t.Fatalf("writing config: %v", err)
 	}
@@ -472,7 +472,7 @@ func TestLocaleResolutionWithUserconfig(t *testing.T) {
 // takes precedence over the config file.
 func TestLocaleResolutionEnvVarPrecedence(t *testing.T) {
 	dir := t.TempDir()
-	cfgPath := filepath.Join(dir, "devbox.yml")
+	cfgPath := filepath.Join(dir, "workspace.yml")
 	if err := os.WriteFile(cfgPath, []byte("schema_version: \"2\"\nproject:\n  name: testproj\n  prefix: devbox\n"), 0644); err != nil {
 		t.Fatalf("writing config: %v", err)
 	}

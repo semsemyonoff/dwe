@@ -347,7 +347,7 @@ func TestRestoreLocalYML_EdgeCases(t *testing.T) {
 				}
 			}
 			if tc.current != "" {
-				p := filepath.Join(baseDir, "devbox", "local.yml")
+				p := filepath.Join(baseDir, "workspace", "local.yml")
 				if err := os.MkdirAll(filepath.Dir(p), 0o755); err != nil {
 					t.Fatalf("mkdir base: %v", err)
 				}
@@ -358,14 +358,14 @@ func TestRestoreLocalYML_EdgeCases(t *testing.T) {
 
 			err := restoreLocalYML(
 				filepath.Join(snapDir, meta.DevboxSubdir, "local.yml"),
-				filepath.Join(baseDir, "devbox", "local.yml"),
+				filepath.Join(baseDir, "workspace", "local.yml"),
 				tc.preserveKeys,
 			)
 			if err != nil {
 				t.Fatalf("restoreLocalYML: %v", err)
 			}
 
-			dst := filepath.Join(baseDir, "devbox", "local.yml")
+			dst := filepath.Join(baseDir, "workspace", "local.yml")
 			body, statErr := os.ReadFile(dst)
 			if !tc.wantExists {
 				if statErr == nil {

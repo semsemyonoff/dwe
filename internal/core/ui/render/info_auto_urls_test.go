@@ -12,13 +12,13 @@ func TestRenderAutoURLs(t *testing.T) {
 
 	tests := []struct {
 		name    string
-		cfg     *config.DevboxConfig
+		cfg     *config.DweConfig
 		spec    *config.AutoURLsSpec
 		wantOut string
 	}{
 		{
 			name: "app behind proxy with multiple paths",
-			cfg: &config.DevboxConfig{
+			cfg: &config.DweConfig{
 				Runtime: config.RuntimeConfig{UseHTTPS: false},
 				Services: map[string]config.ServiceConfig{
 					"nginx": {
@@ -60,7 +60,7 @@ func TestRenderAutoURLs(t *testing.T) {
 		},
 		{
 			name: "app with no paths",
-			cfg: &config.DevboxConfig{
+			cfg: &config.DweConfig{
 				Runtime: config.RuntimeConfig{UseHTTPS: false},
 				Services: map[string]config.ServiceConfig{
 					"nginx": {
@@ -90,7 +90,7 @@ func TestRenderAutoURLs(t *testing.T) {
 		},
 		{
 			name: "tool with both hosts and ports - proxied and direct",
-			cfg: &config.DevboxConfig{
+			cfg: &config.DweConfig{
 				Runtime: config.RuntimeConfig{UseHTTPS: false},
 				Services: map[string]config.ServiceConfig{
 					"nginx": {
@@ -121,7 +121,7 @@ func TestRenderAutoURLs(t *testing.T) {
 		},
 		{
 			name: "tool with only ports - localhost URL",
-			cfg: &config.DevboxConfig{
+			cfg: &config.DweConfig{
 				Runtime: config.RuntimeConfig{UseHTTPS: false},
 				Services: map[string]config.ServiceConfig{
 					"redis": {
@@ -147,7 +147,7 @@ func TestRenderAutoURLs(t *testing.T) {
 		},
 		{
 			name: "service with neither host nor port and no paths - silently omitted",
-			cfg: &config.DevboxConfig{
+			cfg: &config.DweConfig{
 				Runtime: config.RuntimeConfig{UseHTTPS: false},
 				Services: map[string]config.ServiceConfig{
 					"main": {
@@ -165,7 +165,7 @@ func TestRenderAutoURLs(t *testing.T) {
 		},
 		{
 			name: "hide excludes services",
-			cfg: &config.DevboxConfig{
+			cfg: &config.DweConfig{
 				Runtime: config.RuntimeConfig{UseHTTPS: false},
 				Services: map[string]config.ServiceConfig{
 					"nginx": {
@@ -205,7 +205,7 @@ func TestRenderAutoURLs(t *testing.T) {
 		},
 		{
 			name: "hide_paths excludes individual paths",
-			cfg: &config.DevboxConfig{
+			cfg: &config.DweConfig{
 				Runtime: config.RuntimeConfig{UseHTTPS: false},
 				Services: map[string]config.ServiceConfig{
 					"nginx": {
@@ -243,7 +243,7 @@ func TestRenderAutoURLs(t *testing.T) {
 		},
 		{
 			name: "explicit port_via",
-			cfg: &config.DevboxConfig{
+			cfg: &config.DweConfig{
 				Runtime: config.RuntimeConfig{UseHTTPS: false},
 				Services: map[string]config.ServiceConfig{
 					"nginx": {
@@ -274,7 +274,7 @@ func TestRenderAutoURLs(t *testing.T) {
 		},
 		{
 			name: "auto-detect port_via picks single infra with ports.http == 80",
-			cfg: &config.DevboxConfig{
+			cfg: &config.DweConfig{
 				Runtime: config.RuntimeConfig{UseHTTPS: false},
 				Services: map[string]config.ServiceConfig{
 					"nginx": {
@@ -305,7 +305,7 @@ func TestRenderAutoURLs(t *testing.T) {
 		},
 		{
 			name: "auto-detect port_via declines when extra infra with non-80 http",
-			cfg: &config.DevboxConfig{
+			cfg: &config.DweConfig{
 				Runtime: config.RuntimeConfig{UseHTTPS: false},
 				Services: map[string]config.ServiceConfig{
 					"nginx": {
@@ -341,7 +341,7 @@ func TestRenderAutoURLs(t *testing.T) {
 		},
 		{
 			name: "auto-detect port_via declines when 0 candidates",
-			cfg: &config.DevboxConfig{
+			cfg: &config.DweConfig{
 				Runtime: config.RuntimeConfig{UseHTTPS: false},
 				Services: map[string]config.ServiceConfig{
 					"opensearch": {
@@ -368,7 +368,7 @@ func TestRenderAutoURLs(t *testing.T) {
 		},
 		{
 			name: "service with custom primary_host and primary_port",
-			cfg: &config.DevboxConfig{
+			cfg: &config.DweConfig{
 				Runtime: config.RuntimeConfig{UseHTTPS: false},
 				Services: map[string]config.ServiceConfig{
 					"nginx": {
@@ -402,7 +402,7 @@ func TestRenderAutoURLs(t *testing.T) {
 		},
 		{
 			name: "disabled service is skipped",
-			cfg: &config.DevboxConfig{
+			cfg: &config.DweConfig{
 				Runtime: config.RuntimeConfig{UseHTTPS: false},
 				Services: map[string]config.ServiceConfig{
 					"nginx": {
@@ -428,7 +428,7 @@ func TestRenderAutoURLs(t *testing.T) {
 		},
 		{
 			name: "host-only with paths and no portVia - paths suppressed, service omitted",
-			cfg: &config.DevboxConfig{
+			cfg: &config.DweConfig{
 				Runtime: config.RuntimeConfig{UseHTTPS: false},
 				Services: map[string]config.ServiceConfig{
 					"main": {
@@ -450,7 +450,7 @@ func TestRenderAutoURLs(t *testing.T) {
 		},
 		{
 			name: "auto-detect portVia with use_https true and proxy has only ports.http - host-only https URL",
-			cfg: &config.DevboxConfig{
+			cfg: &config.DweConfig{
 				Runtime: config.RuntimeConfig{UseHTTPS: true},
 				Services: map[string]config.ServiceConfig{
 					"nginx": {
@@ -479,7 +479,7 @@ func TestRenderAutoURLs(t *testing.T) {
 		},
 		{
 			name: "auto-detect portVia with use_https false and proxy has only ports.https - host-only http URL",
-			cfg: &config.DevboxConfig{
+			cfg: &config.DweConfig{
 				Runtime: config.RuntimeConfig{UseHTTPS: false},
 				Services: map[string]config.ServiceConfig{
 					"nginx": {
@@ -508,7 +508,7 @@ func TestRenderAutoURLs(t *testing.T) {
 		},
 		{
 			name: "service without info block renders main URL using defaults",
-			cfg: &config.DevboxConfig{
+			cfg: &config.DweConfig{
 				Runtime: config.RuntimeConfig{UseHTTPS: false},
 				Services: map[string]config.ServiceConfig{
 					"nginx": {
@@ -542,7 +542,7 @@ func TestRenderAutoURLs(t *testing.T) {
 		},
 		{
 			name: "nil spec returns empty string",
-			cfg: &config.DevboxConfig{
+			cfg: &config.DweConfig{
 				Runtime: config.RuntimeConfig{UseHTTPS: false},
 				Services: map[string]config.ServiceConfig{
 					"main": {
@@ -558,7 +558,7 @@ func TestRenderAutoURLs(t *testing.T) {
 		},
 		{
 			name: "empty cfg.Services returns empty string",
-			cfg: &config.DevboxConfig{
+			cfg: &config.DweConfig{
 				Runtime:  config.RuntimeConfig{UseHTTPS: false},
 				Services: map[string]config.ServiceConfig{},
 			},
@@ -569,7 +569,7 @@ func TestRenderAutoURLs(t *testing.T) {
 		},
 		{
 			name: "default include when empty",
-			cfg: &config.DevboxConfig{
+			cfg: &config.DweConfig{
 				Runtime: config.RuntimeConfig{UseHTTPS: false},
 				Services: map[string]config.ServiceConfig{
 					"nginx": {
@@ -620,7 +620,7 @@ func TestRenderAutoURLs(t *testing.T) {
 		},
 		{
 			name: "https scheme applied correctly",
-			cfg: &config.DevboxConfig{
+			cfg: &config.DweConfig{
 				Runtime: config.RuntimeConfig{UseHTTPS: true},
 				Services: map[string]config.ServiceConfig{
 					"nginx": {

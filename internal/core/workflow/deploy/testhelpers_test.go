@@ -5,8 +5,8 @@ import (
 	"github.com/semsemyonoff/dwe/internal/core/project/config"
 )
 
-func makeDeployCfg(phases []config.DeployPhase) *config.DevboxConfig {
-	return &config.DevboxConfig{
+func makeDeployCfg(phases []config.DeployPhase) *config.DweConfig {
+	return &config.DweConfig{
 		Deploy: &config.ProjectDeployConfig{Phases: phases},
 		Raw:    map[string]any{"__configPath": "/tmp/devbox.yml"},
 	}

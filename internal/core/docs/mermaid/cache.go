@@ -199,11 +199,11 @@ func randHex() string {
 // else os.TempDir() + /devbox-mermaid/.
 func CacheDir() (string, error) {
 	if xdg := os.Getenv("XDG_CACHE_HOME"); xdg != "" {
-		return filepath.Join(xdg, "devbox", "mermaid"), nil
+		return filepath.Join(xdg, "workspace", "mermaid"), nil
 	}
 
 	if userCache, err := os.UserCacheDir(); err == nil {
-		return filepath.Join(userCache, "devbox", "mermaid"), nil
+		return filepath.Join(userCache, "workspace", "mermaid"), nil
 	}
 
 	return filepath.Join(os.TempDir(), "devbox-mermaid"), nil

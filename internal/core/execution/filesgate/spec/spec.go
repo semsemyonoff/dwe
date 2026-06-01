@@ -18,7 +18,7 @@ type Issue struct {
 // cfg is the loaded project config used to resolve default_from paths; reg is the command registry;
 // ref is the step reference (type, cmd, with); fg is the files_gate directive.
 // Returns a list of validation issues; empty list means valid.
-func Validate(cfg *config.DevboxConfig, reg *registry.Registry, ref filesgate.StepRef, fg *filesgate.FilesGate) []Issue {
+func Validate(cfg *config.DweConfig, reg *registry.Registry, ref filesgate.StepRef, fg *filesgate.FilesGate) []Issue {
 	var issues []Issue
 
 	if fg == nil {

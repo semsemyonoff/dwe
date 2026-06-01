@@ -15,7 +15,7 @@ import (
 func writeServiceDeployFixture(t *testing.T, orchestratorYML, serviceDeployYML string) string {
 	t.Helper()
 	dir := t.TempDir()
-	devboxPath := filepath.Join(dir, "devbox.yml")
+	devboxPath := filepath.Join(dir, "workspace.yml")
 	if err := os.WriteFile(devboxPath, []byte(`schema_version: "1"
 project:
   name: laravel
@@ -24,7 +24,7 @@ project:
 		t.Fatal(err)
 	}
 
-	devboxDir := filepath.Join(dir, "devbox")
+	devboxDir := filepath.Join(dir, "workspace")
 	if err := os.MkdirAll(devboxDir, 0o755); err != nil {
 		t.Fatal(err)
 	}
@@ -175,8 +175,8 @@ func TestFindStep_threePartAddress(t *testing.T) {
 
 // helpers for ResolveServicesPlanSubset tests
 
-func makeSubsetCfg(services map[string]config.ServiceConfig) *config.DevboxConfig {
-	return &config.DevboxConfig{
+func makeSubsetCfg(services map[string]config.ServiceConfig) *config.DweConfig {
+	return &config.DweConfig{
 		Services: services,
 		Raw:      map[string]any{"__configPath": "/tmp/devbox.yml"},
 	}

@@ -188,7 +188,7 @@ func TestParallelGroup_PerSubStepLogRoutesOutput(t *testing.T) {
 		Steps:       []ResolvedStep{group},
 		Reporter:    rep,
 		Name:        "deploy",
-		Config:      &config.DevboxConfig{Raw: map[string]any{}},
+		Config:      &config.DweConfig{Raw: map[string]any{}},
 		WorkDir:     tmp,
 		LogWriter:   globalLog,
 		Recorder:    &mockRecorder{},
@@ -262,7 +262,7 @@ func TestParallelGroup_DisabledLog_NoFiles_StillStreamsToReporter(t *testing.T) 
 		Steps:       []ResolvedStep{group},
 		Reporter:    rep,
 		Name:        "deploy",
-		Config:      &config.DevboxConfig{Raw: map[string]any{}},
+		Config:      &config.DweConfig{Raw: map[string]any{}},
 		WorkDir:     tmp,
 		LogWriter:   nil,
 		Recorder:    &mockRecorder{},
@@ -307,7 +307,7 @@ func TestExecBuiltinAction_Parallel_NoStdoutWrite(t *testing.T) {
 	os.Stdout = wPipe
 	defer func() { os.Stdout = origStdout; _ = rPipe.Close(); _ = wPipe.Close() }()
 
-	cfg := &config.DevboxConfig{Raw: map[string]any{}}
+	cfg := &config.DweConfig{Raw: map[string]any{}}
 	actx := ActionContext{
 		WorkDir:    t.TempDir(),
 		Cfg:        cfg,
@@ -344,7 +344,7 @@ func TestSequentialStep_BypassesStepOutput(t *testing.T) {
 			Name: "echo", Type: "shell", Cmd: "printf 'alpha\\nbeta\\n'",
 		}},
 	}
-	if err := Run(steps, rep, "deploy", &config.DevboxConfig{Raw: map[string]any{}}, nil, t.TempDir(), nil, true, nil); err != nil {
+	if err := Run(steps, rep, "deploy", &config.DweConfig{Raw: map[string]any{}}, nil, t.TempDir(), nil, true, nil); err != nil {
 		t.Fatalf("Run: %v", err)
 	}
 	for _, e := range rep.events {
@@ -371,7 +371,7 @@ func TestSequentialStep_LogTeeCapturesOutput(t *testing.T) {
 		Steps:     steps,
 		Reporter:  rep,
 		Name:      "deploy",
-		Config:    &config.DevboxConfig{Raw: map[string]any{}},
+		Config:    &config.DweConfig{Raw: map[string]any{}},
 		WorkDir:   t.TempDir(),
 		LogWriter: &logBuf,
 	}
@@ -394,7 +394,7 @@ func TestSequentialStep_SuspendsAndResumesLive(t *testing.T) {
 	steps := buildResolvedSteps(phase, []config.DeployStep{
 		noopStep("a"), noopStep("b"), noopStep("c"),
 	})
-	if err := Run(steps, rep, "deploy", &config.DevboxConfig{Raw: map[string]any{}}, nil, t.TempDir(), nil, true, nil); err != nil {
+	if err := Run(steps, rep, "deploy", &config.DweConfig{Raw: map[string]any{}}, nil, t.TempDir(), nil, true, nil); err != nil {
 		t.Fatalf("Run: %v", err)
 	}
 	if rep.suspendCalls != 3 || rep.resumeCalls != 3 {

@@ -39,7 +39,7 @@ func TestRunPipeline_ParallelSubStep_NestedWorkflowParallel_Rejected(t *testing.
 	reg.AddCommandForTest(leaf)
 	reg.AddCommandForTest(innerWF)
 
-	cfg := &config.DevboxConfig{Raw: map[string]any{}}
+	cfg := &config.DweConfig{Raw: map[string]any{}}
 	phase := config.DeployPhase{Name: "p"}
 	group := buildParallelGroupStep(phase, "g", false, 0, []config.DeployStep{
 		{Name: "call-wf", Type: "command", Cmd: "inner.wf"},
@@ -105,7 +105,7 @@ func TestRunPipeline_SequentialStep_WorkflowWithParallel_Runs(t *testing.T) {
 	reg.AddCommandForTest(leaf)
 	reg.AddCommandForTest(wf)
 
-	cfg := &config.DevboxConfig{Raw: map[string]any{}}
+	cfg := &config.DweConfig{Raw: map[string]any{}}
 	phase := config.DeployPhase{Name: "p"}
 	steps := []ResolvedStep{
 		{

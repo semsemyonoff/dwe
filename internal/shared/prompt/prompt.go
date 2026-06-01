@@ -15,9 +15,9 @@ import (
 )
 
 const (
-	configFilename = "devbox.yml"
+	configFilename = "workspace.yml"
 	stateRelPath   = ".devbox/deploy/state.yml"
-	stylesRelPath  = "devbox/styles.yml"
+	stylesRelPath  = "workspace/styles.yml"
 
 	defaultAccent  = "#2EC3EB"
 	defaultSuccess = "#22C55E"
@@ -27,7 +27,7 @@ const (
 	sgrReset = "\x1b[39m"
 )
 
-type devboxStub struct {
+type workspaceStub struct {
 	Project struct {
 		Name string `yaml:"name"`
 	} `yaml:"project"`
@@ -305,7 +305,7 @@ func readProjectName(root string) (string, bool) {
 	if err != nil {
 		return "", false
 	}
-	var stub devboxStub
+	var stub workspaceStub
 	if err := yaml.Unmarshal(data, &stub); err != nil {
 		return "", false
 	}

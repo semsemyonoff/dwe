@@ -27,7 +27,7 @@ import (
 // removes the entire deploy state file.
 func TestResetRunCmd_projectWideCleanup(t *testing.T) {
 	tmpDir := t.TempDir()
-	configPath := filepath.Join(tmpDir, "devbox.yml")
+	configPath := filepath.Join(tmpDir, "workspace.yml")
 	stateDir := filepath.Join(tmpDir, ".devbox", "deploy")
 	statePath := filepath.Join(stateDir, "state.yml")
 
@@ -41,7 +41,7 @@ project:
 		t.Fatal(err)
 	}
 
-	resetDir := filepath.Join(tmpDir, "devbox")
+	resetDir := filepath.Join(tmpDir, "workspace")
 	if err := os.MkdirAll(resetDir, 0o755); err != nil {
 		t.Fatal(err)
 	}
@@ -127,7 +127,7 @@ phases:
 // a missing state file gracefully (RemoveService on missing file is a no-op).
 func TestResetRunCmd_handlesMissingStateFile(t *testing.T) {
 	tmpDir := t.TempDir()
-	configPath := filepath.Join(tmpDir, "devbox.yml")
+	configPath := filepath.Join(tmpDir, "workspace.yml")
 	stateDir := filepath.Join(tmpDir, ".devbox", "deploy")
 	statePath := filepath.Join(stateDir, "state.yml")
 
@@ -142,7 +142,7 @@ project:
 	}
 
 	// Create devbox/reset.yml + services/main/service.yml
-	resetDir := filepath.Join(tmpDir, "devbox")
+	resetDir := filepath.Join(tmpDir, "workspace")
 	if err := os.MkdirAll(resetDir, 0o755); err != nil {
 		t.Fatal(err)
 	}
@@ -278,11 +278,11 @@ func makeResetServiceFixture(t *testing.T, serviceName string, opts resetService
 	t.Helper()
 	dir := t.TempDir()
 	cfgContent := "schema_version: \"2\"\nproject:\n  name: test\n  prefix: devbox\n"
-	cfgPath := filepath.Join(dir, "devbox.yml")
+	cfgPath := filepath.Join(dir, "workspace.yml")
 	if err := os.WriteFile(cfgPath, []byte(cfgContent), 0o644); err != nil {
 		t.Fatalf("write devbox.yml: %v", err)
 	}
-	svcDir := filepath.Join(dir, "devbox", "services", serviceName)
+	svcDir := filepath.Join(dir, "workspace", "services", serviceName)
 	if err := os.MkdirAll(svcDir, 0o755); err != nil {
 		t.Fatalf("mkdir: %v", err)
 	}
@@ -314,7 +314,7 @@ func makeResetServiceFixture(t *testing.T, serviceName string, opts resetService
 	} else {
 		localContent += "false\n"
 	}
-	if err := os.WriteFile(filepath.Join(dir, "devbox", "local.yml"), []byte(localContent), 0o644); err != nil {
+	if err := os.WriteFile(filepath.Join(dir, "workspace", "local.yml"), []byte(localContent), 0o644); err != nil {
 		t.Fatalf("write local.yml: %v", err)
 	}
 	if opts.deployYML {
@@ -379,7 +379,7 @@ func dockerInvocations(t *testing.T, baseDir string) []string {
 func stubPreflightRun(t *testing.T) {
 	t.Helper()
 	prev := preflightRun
-	preflightRun = func(_ context.Context, _ *config.DevboxConfig, _ *usercommands.Registry, _, _ string, _ bool, _ io.Writer) error {
+	preflightRun = func(_ context.Context, _ *config.DweConfig, _ *usercommands.Registry, _, _ string, _ bool, _ io.Writer) error {
 		return nil
 	}
 	t.Cleanup(func() { preflightRun = prev })
@@ -387,7 +387,7 @@ func stubPreflightRun(t *testing.T) {
 
 // TestResetServiceRun_FlagsExist verifies --service, --yes, --skip-preflight flags exist on reset run.
 func TestResetServiceRun_FlagsExist(t *testing.T) {
-	flags := &cmdctx.RootFlags{ConfigPath: "devbox.yml"}
+	flags := &cmdctx.RootFlags{ConfigPath: "workspace.yml"}
 	resetCmd := NewResetCmd(groupPipelines, flags)
 	var cmd *cobra.Command
 	for _, sub := range resetCmd.Commands() {
@@ -580,17 +580,17 @@ func TestResetServiceRun_DisabledServiceStop(t *testing.T) {
 // TestResetServiceRun_EnabledServiceRunsHooks verifies on_disable.before hooks run for enabled services.
 func TestResetServiceRun_EnabledServiceRunsHooks(t *testing.T) {
 	dir := t.TempDir()
-	cfgPath := filepath.Join(dir, "devbox.yml")
+	cfgPath := filepath.Join(dir, "workspace.yml")
 	if err := os.WriteFile(cfgPath, []byte("schema_version: \"2\"\nproject:\n  name: test\n  prefix: devbox\n"), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	svcDir := filepath.Join(dir, "devbox", "services", "postgres")
+	svcDir := filepath.Join(dir, "workspace", "services", "postgres")
 	if err := os.MkdirAll(svcDir, 0o755); err != nil {
 		t.Fatal(err)
 	}
 	// Enable the service via local.yml (services are disabled by default without an explicit override).
 	localContent := "services:\n  postgres:\n    enabled: true\n"
-	if err := os.WriteFile(filepath.Join(dir, "devbox", "local.yml"), []byte(localContent), 0o644); err != nil {
+	if err := os.WriteFile(filepath.Join(dir, "workspace", "local.yml"), []byte(localContent), 0o644); err != nil {
 		t.Fatal(err)
 	}
 	svcContent := `type: app
@@ -614,7 +614,7 @@ on_disable:
 	// Seam at the runResetHook level so we intercept before any registry lookup.
 	prevRunHook := resetRunHookFn
 	t.Cleanup(func() { resetRunHookFn = prevRunHook })
-	resetRunHookFn = func(_ context.Context, _ *cobra.Command, _ *config.DevboxConfig, _ *registry.Registry, _ string, cmdID string) error {
+	resetRunHookFn = func(_ context.Context, _ *cobra.Command, _ *config.DweConfig, _ *registry.Registry, _ string, cmdID string) error {
 		hookCalled = true
 		hookIDs = append(hookIDs, cmdID)
 		return nil
@@ -643,17 +643,17 @@ on_disable:
 // TestResetServiceRun_DisabledServiceSkipsHooks verifies hooks do not run for disabled services.
 func TestResetServiceRun_DisabledServiceSkipsHooks(t *testing.T) {
 	dir := t.TempDir()
-	cfgPath := filepath.Join(dir, "devbox.yml")
+	cfgPath := filepath.Join(dir, "workspace.yml")
 	if err := os.WriteFile(cfgPath, []byte("schema_version: \"2\"\nproject:\n  name: test\n  prefix: devbox\n"), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	svcDir := filepath.Join(dir, "devbox", "services", "postgres")
+	svcDir := filepath.Join(dir, "workspace", "services", "postgres")
 	if err := os.MkdirAll(svcDir, 0o755); err != nil {
 		t.Fatal(err)
 	}
 	// Disable via local.yml
 	localContent := "services:\n  postgres:\n    enabled: false\n"
-	if err := os.WriteFile(filepath.Join(dir, "devbox", "local.yml"), []byte(localContent), 0o644); err != nil {
+	if err := os.WriteFile(filepath.Join(dir, "workspace", "local.yml"), []byte(localContent), 0o644); err != nil {
 		t.Fatal(err)
 	}
 	svcContent := `type: app
@@ -1004,7 +1004,7 @@ func TestResetServiceRun_MandatoryService(t *testing.T) {
 func makeMinimalResetProject(t *testing.T) string {
 	t.Helper()
 	dir := t.TempDir()
-	if err := os.WriteFile(filepath.Join(dir, "devbox.yml"), []byte(
+	if err := os.WriteFile(filepath.Join(dir, "workspace.yml"), []byte(
 		"schema_version: \"2\"\nproject:\n  name: testproject\n  prefix: devbox\n",
 	), 0o644); err != nil {
 		t.Fatal(err)
@@ -1017,7 +1017,7 @@ func makeMinimalResetProject(t *testing.T) string {
 // built-in default, and prints the info line on stderr.
 func TestRunResetPlan_DefaultPipelineWhenNoResetYML(t *testing.T) {
 	dir := makeMinimalResetProject(t)
-	flags := &cmdctx.RootFlags{ConfigPath: filepath.Join(dir, "devbox.yml")}
+	flags := &cmdctx.RootFlags{ConfigPath: filepath.Join(dir, "workspace.yml")}
 
 	cmd := &cobra.Command{}
 	var outBuf, errBuf bytes.Buffer
@@ -1042,7 +1042,7 @@ func TestRunResetPlan_DefaultPipelineWhenNoResetYML(t *testing.T) {
 // the default-pipeline info line on stderr.
 func TestRunResetPlan_JSONModeNoInfoLine(t *testing.T) {
 	dir := makeMinimalResetProject(t)
-	flags := &cmdctx.RootFlags{ConfigPath: filepath.Join(dir, "devbox.yml"), Output: "json"}
+	flags := &cmdctx.RootFlags{ConfigPath: filepath.Join(dir, "workspace.yml"), Output: "json"}
 
 	cmd := &cobra.Command{}
 	var errBuf bytes.Buffer
@@ -1060,7 +1060,7 @@ func TestRunResetPlan_JSONModeNoInfoLine(t *testing.T) {
 func TestRunResetPlan_UserResetYMLNoInfoLine(t *testing.T) {
 	dir := makeMinimalResetProject(t)
 
-	devboxDir := filepath.Join(dir, "devbox")
+	devboxDir := filepath.Join(dir, "workspace")
 	if err := os.MkdirAll(devboxDir, 0o755); err != nil {
 		t.Fatal(err)
 	}
@@ -1069,7 +1069,7 @@ func TestRunResetPlan_UserResetYMLNoInfoLine(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	flags := &cmdctx.RootFlags{ConfigPath: filepath.Join(dir, "devbox.yml")}
+	flags := &cmdctx.RootFlags{ConfigPath: filepath.Join(dir, "workspace.yml")}
 
 	cmd := &cobra.Command{}
 	var outBuf, errBuf bytes.Buffer
@@ -1095,7 +1095,7 @@ func TestRunResetPlan_UserResetYMLNoInfoLine(t *testing.T) {
 // works with the default pipeline and does not emit extra stderr.
 func TestRunResetPlan_DefaultPipelineShellFormat(t *testing.T) {
 	dir := makeMinimalResetProject(t)
-	flags := &cmdctx.RootFlags{ConfigPath: filepath.Join(dir, "devbox.yml")}
+	flags := &cmdctx.RootFlags{ConfigPath: filepath.Join(dir, "workspace.yml")}
 
 	cmd := &cobra.Command{}
 	var outBuf, errBuf bytes.Buffer

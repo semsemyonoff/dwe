@@ -101,7 +101,7 @@ func Load(projectRoot string) (*Store, error) {
 // Returns a sentinel ProjectFile with empty Locale for directory-level failures.
 // Returns per-file parse errors in each ProjectFile.ParseErr.
 func LoadProjectBundles(projectRoot string) ([]ProjectFile, error) {
-	dir := filepath.Join(projectRoot, "devbox", "i18n")
+	dir := filepath.Join(projectRoot, "workspace", "i18n")
 
 	// Check if dir exists
 	stat, err := os.Stat(dir)

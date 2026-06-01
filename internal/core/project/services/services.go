@@ -24,7 +24,7 @@ type Row struct {
 
 // BuildRows returns the ordered, manageable service rows from cfg.
 // Required infra services are filtered out — they are not user-managed.
-func BuildRows(cfg *config.DevboxConfig) []Row {
+func BuildRows(cfg *config.DweConfig) []Row {
 	rows := make([]Row, 0, len(cfg.Services))
 	for _, name := range SortedNames(cfg.Services) {
 		svc := cfg.Services[name]

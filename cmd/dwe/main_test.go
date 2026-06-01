@@ -19,7 +19,7 @@ func makeProject(t *testing.T, root string, legacy bool) {
 	if legacy {
 		schema = `schema_version: "1"`
 	}
-	if err := os.WriteFile(filepath.Join(root, "devbox.yml"), []byte(schema+"\n"), 0o644); err != nil {
+	if err := os.WriteFile(filepath.Join(root, "workspace.yml"), []byte(schema+"\n"), 0o644); err != nil {
 		t.Fatal(err)
 	}
 	styles := "colors:\n  accent: \"#ff0000\"\n"
@@ -92,11 +92,11 @@ func TestConfigPathFromArgs(t *testing.T) {
 	// Passing --config devbox.yml (value matching the old default) must be treated as explicit.
 	t.Run("explicit flag with default-like value is treated as explicit", func(t *testing.T) {
 		origArgs := os.Args
-		os.Args = []string{"dwe", "--config", "devbox.yml"}
+		os.Args = []string{"dwe", "--config", "workspace.yml"}
 		defer func() { os.Args = origArgs }()
 
 		path, explicit := configPathFromArgs()
-		if path != "devbox.yml" || !explicit {
+		if path != "workspace.yml" || !explicit {
 			t.Errorf("want (\"devbox.yml\", true), got (%q, %v)", path, explicit)
 		}
 	})
@@ -144,7 +144,7 @@ func TestLoadHelpColorScheme(t *testing.T) {
 		root := t.TempDir()
 		makeProject(t, root, false)
 
-		configPath := filepath.Join(root, "devbox.yml")
+		configPath := filepath.Join(root, "workspace.yml")
 		cs := loadHelpColorScheme(configPath, true)
 		if cs == nil {
 			t.Error("expected non-nil ColorSchemeFunc with explicit config path")
@@ -179,11 +179,11 @@ func TestLoadHelpColorScheme(t *testing.T) {
 	t.Run("project without styles.yml returns nil", func(t *testing.T) {
 		root := t.TempDir()
 		// Create devbox.yml but no styles.yml
-		if err := os.WriteFile(filepath.Join(root, "devbox.yml"), []byte("schema_version: \"2\"\n"), 0o644); err != nil {
+		if err := os.WriteFile(filepath.Join(root, "workspace.yml"), []byte("schema_version: \"2\"\n"), 0o644); err != nil {
 			t.Fatal(err)
 		}
 
-		cs := loadHelpColorScheme(filepath.Join(root, "devbox.yml"), true)
+		cs := loadHelpColorScheme(filepath.Join(root, "workspace.yml"), true)
 		if cs != nil {
 			t.Error("expected nil ColorSchemeFunc when no styles.yml present")
 		}

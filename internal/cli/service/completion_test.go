@@ -17,11 +17,11 @@ import (
 func makeServiceProject(t *testing.T) string {
 	t.Helper()
 	dir := t.TempDir()
-	devboxDir := filepath.Join(dir, "devbox")
+	devboxDir := filepath.Join(dir, "workspace")
 	if err := os.MkdirAll(devboxDir, 0o755); err != nil {
 		t.Fatal(err)
 	}
-	if err := os.WriteFile(filepath.Join(dir, "devbox.yml"), []byte("schema_version: \"2\"\n"), 0o644); err != nil {
+	if err := os.WriteFile(filepath.Join(dir, "workspace.yml"), []byte("schema_version: \"2\"\n"), 0o644); err != nil {
 		t.Fatal(err)
 	}
 	defaults := "project:\n  name: test\n  prefix: test\nservices:\n  api:\n    enabled: true\n  worker:\n    enabled: false\n"
@@ -50,7 +50,7 @@ func makeServiceProject(t *testing.T) string {
 // completion contract.
 func TestServiceCompletion_Filters(t *testing.T) {
 	dir := makeServiceProject(t)
-	flags := &cmdctx.RootFlags{ConfigPath: filepath.Join(dir, "devbox.yml"), Root: dir}
+	flags := &cmdctx.RootFlags{ConfigPath: filepath.Join(dir, "workspace.yml"), Root: dir}
 	cmd := &cobra.Command{}
 
 	t.Run("disabled optional", func(t *testing.T) {
@@ -76,7 +76,7 @@ func TestServiceCompletion_Filters(t *testing.T) {
 // TestServiceCompletion_NoSecondArg: with a positional arg already given,
 // no completions are returned (suppresses double-suggesting).
 func TestServiceCompletion_NoSecondArg(t *testing.T) {
-	flags := &cmdctx.RootFlags{ConfigPath: "devbox.yml"}
+	flags := &cmdctx.RootFlags{ConfigPath: "workspace.yml"}
 	names, directive := serviceCompletion(flags, completeDisabledOptional)(nil, []string{"already"}, "")
 	if len(names) != 0 {
 		t.Errorf("got %d completions, want 0", len(names))

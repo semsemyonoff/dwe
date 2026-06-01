@@ -29,7 +29,7 @@ func TestValidateServicesOverlay_acceptsEnabledOnly(t *testing.T) {
 // (ports/hosts) have their own positive-path tests below.
 func TestValidateServicesOverlay_rejectsDefinitionField(t *testing.T) {
 	declared := map[string]ServiceConfig{"adminer": {Type: ServiceTypeTool, Container: "adminer"}}
-	for _, layer := range []string{"devbox.yml", "devbox/defaults.yml", "devbox/local.yml"} {
+	for _, layer := range []string{"workspace.yml", "devbox/defaults.yml", "devbox/local.yml"} {
 		raw := map[string]any{
 			"services": map[string]any{
 				"adminer": map[string]any{"container": "stale"},
@@ -143,7 +143,7 @@ func TestValidateServicesOverlay_rejectsUnknownService(t *testing.T) {
 
 func TestValidateServicesOverlay_noServicesBlock(t *testing.T) {
 	declared := map[string]ServiceConfig{"adminer": {Type: ServiceTypeTool}}
-	if err := validateServicesOverlay("devbox.yml", map[string]any{"project": "x"}, declared); err != nil {
+	if err := validateServicesOverlay("workspace.yml", map[string]any{"project": "x"}, declared); err != nil {
 		t.Errorf("missing services block should not error: %v", err)
 	}
 }
@@ -160,10 +160,10 @@ project:
   name: test
   prefix: devbox
 `
-	if err := os.WriteFile(filepath.Join(dir, "devbox.yml"), []byte(devboxYML), 0o644); err != nil {
+	if err := os.WriteFile(filepath.Join(dir, "workspace.yml"), []byte(devboxYML), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	devboxDir := filepath.Join(dir, "devbox")
+	devboxDir := filepath.Join(dir, "workspace")
 	if err := os.MkdirAll(devboxDir, 0o755); err != nil {
 		t.Fatal(err)
 	}
@@ -180,7 +180,7 @@ project:
 	if err := os.WriteFile(filepath.Join(devboxDir, "defaults.yml"), []byte(defaultsYML), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	_, err := LoadConfig(filepath.Join(dir, "devbox.yml"))
+	_, err := LoadConfig(filepath.Join(dir, "workspace.yml"))
 	if err == nil {
 		t.Fatal("expected overlay validation to reject brand_new service")
 	}
@@ -201,10 +201,10 @@ project:
   name: test
   prefix: devbox
 `
-	if err := os.WriteFile(filepath.Join(dir, "devbox.yml"), []byte(devboxYML), 0o644); err != nil {
+	if err := os.WriteFile(filepath.Join(dir, "workspace.yml"), []byte(devboxYML), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	devboxDir := filepath.Join(dir, "devbox")
+	devboxDir := filepath.Join(dir, "workspace")
 	if err := os.MkdirAll(devboxDir, 0o755); err != nil {
 		t.Fatal(err)
 	}
@@ -231,7 +231,7 @@ project:
 	if err := os.WriteFile(filepath.Join(devboxDir, "local.yml"), []byte(localYML), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	cfg, err := LoadConfig(filepath.Join(dir, "devbox.yml"))
+	cfg, err := LoadConfig(filepath.Join(dir, "workspace.yml"))
 	if err != nil {
 		t.Fatalf("LoadConfig: %v", err)
 	}
@@ -331,11 +331,11 @@ project:
   name: tbm
   prefix: devbox
 `
-	if err := os.WriteFile(filepath.Join(dir, "devbox.yml"), []byte(devboxYML), 0o644); err != nil {
+	if err := os.WriteFile(filepath.Join(dir, "workspace.yml"), []byte(devboxYML), 0o644); err != nil {
 		t.Fatalf("write devbox.yml: %v", err)
 	}
 
-	devboxDir := filepath.Join(dir, "devbox")
+	devboxDir := filepath.Join(dir, "workspace")
 	if err := os.MkdirAll(devboxDir, 0o755); err != nil {
 		t.Fatalf("mkdir devbox/: %v", err)
 	}
@@ -371,7 +371,7 @@ extends: main
 	writeServiceFolder(t, dir, "main", mainYML)
 	writeServiceFolder(t, dir, "main-debug", debugYML)
 
-	cfg, err := LoadConfig(filepath.Join(dir, "devbox.yml"))
+	cfg, err := LoadConfig(filepath.Join(dir, "workspace.yml"))
 	if err != nil {
 		t.Fatalf("LoadConfig: %v", err)
 	}
@@ -396,11 +396,11 @@ project:
   name: tbm
   prefix: devbox
 `
-	if err := os.WriteFile(filepath.Join(dir, "devbox.yml"), []byte(devboxYML), 0o644); err != nil {
+	if err := os.WriteFile(filepath.Join(dir, "workspace.yml"), []byte(devboxYML), 0o644); err != nil {
 		t.Fatalf("write devbox.yml: %v", err)
 	}
 
-	devboxDir := filepath.Join(dir, "devbox")
+	devboxDir := filepath.Join(dir, "workspace")
 	if err := os.MkdirAll(devboxDir, 0o755); err != nil {
 		t.Fatalf("mkdir devbox/: %v", err)
 	}
@@ -434,7 +434,7 @@ extends: parent
 	writeServiceFolder(t, dir, "parent", parentYML)
 	writeServiceFolder(t, dir, "child", childYML)
 
-	cfg, err := LoadConfig(filepath.Join(dir, "devbox.yml"))
+	cfg, err := LoadConfig(filepath.Join(dir, "workspace.yml"))
 	if err != nil {
 		t.Fatalf("LoadConfig: %v", err)
 	}
@@ -460,11 +460,11 @@ project:
   name: tbm
   prefix: devbox
 `
-	if err := os.WriteFile(filepath.Join(dir, "devbox.yml"), []byte(devboxYML), 0o644); err != nil {
+	if err := os.WriteFile(filepath.Join(dir, "workspace.yml"), []byte(devboxYML), 0o644); err != nil {
 		t.Fatalf("write devbox.yml: %v", err)
 	}
 
-	devboxDir := filepath.Join(dir, "devbox")
+	devboxDir := filepath.Join(dir, "workspace")
 	if err := os.MkdirAll(devboxDir, 0o755); err != nil {
 		t.Fatalf("mkdir devbox/: %v", err)
 	}
@@ -500,7 +500,7 @@ hosts:
 	writeServiceFolder(t, dir, "parent", parentYML)
 	writeServiceFolder(t, dir, "child", childYML)
 
-	cfg, err := LoadConfig(filepath.Join(dir, "devbox.yml"))
+	cfg, err := LoadConfig(filepath.Join(dir, "workspace.yml"))
 	if err != nil {
 		t.Fatalf("LoadConfig: %v", err)
 	}

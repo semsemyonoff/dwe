@@ -20,22 +20,22 @@ import (
 	"gopkg.in/yaml.v3"
 )
 
-// DevboxBin returns the configured devbox binary name (default: "devbox").
+// DweBin returns the configured dwe binary name (default: "dwe").
 // Checks user-config overrides first, then falls back to the built-in default.
 // Safe when cfg is nil.
-func DevboxBin(cfg *DevboxConfig) string {
+func DweBin(cfg *DweConfig) string {
 	if cfg != nil && cfg.userConfig != nil {
-		if path, ok := cfg.userConfig.BinaryOverride("devbox"); ok {
+		if path, ok := cfg.userConfig.BinaryOverride("dwe"); ok {
 			return path
 		}
 	}
-	return "devbox"
+	return "dwe"
 }
 
 // DockerBin returns the configured docker binary name (default: "docker").
 // Checks user-config overrides first, then falls back to the built-in default.
 // Safe when cfg is nil.
-func DockerBin(cfg *DevboxConfig) string {
+func DockerBin(cfg *DweConfig) string {
 	if cfg != nil && cfg.userConfig != nil {
 		if path, ok := cfg.userConfig.BinaryOverride("docker"); ok {
 			return path
@@ -47,7 +47,7 @@ func DockerBin(cfg *DevboxConfig) string {
 // ShellBin returns the configured shell binary name (default: "sh").
 // Checks user-config overrides first, then falls back to the built-in default.
 // Safe when cfg is nil.
-func ShellBin(cfg *DevboxConfig) string {
+func ShellBin(cfg *DweConfig) string {
 	if cfg != nil && cfg.userConfig != nil {
 		if path, ok := cfg.userConfig.BinaryOverride("shell"); ok {
 			return path
@@ -59,7 +59,7 @@ func ShellBin(cfg *DevboxConfig) string {
 // GitBin returns the configured git binary name (default: "git").
 // Checks user-config overrides first, then falls back to the built-in default.
 // Safe when cfg is nil.
-func GitBin(cfg *DevboxConfig) string {
+func GitBin(cfg *DweConfig) string {
 	if cfg != nil && cfg.userConfig != nil {
 		if path, ok := cfg.userConfig.BinaryOverride("git"); ok {
 			return path
@@ -71,7 +71,7 @@ func GitBin(cfg *DevboxConfig) string {
 // MmdcBin returns the configured mmdc binary name (default: "mmdc").
 // Checks user-config overrides first, then falls back to the built-in default.
 // Safe when cfg is nil.
-func MmdcBin(cfg *DevboxConfig) string {
+func MmdcBin(cfg *DweConfig) string {
 	if cfg != nil && cfg.userConfig != nil {
 		if path, ok := cfg.userConfig.BinaryOverride("mmdc"); ok {
 			return path
@@ -80,10 +80,9 @@ func MmdcBin(cfg *DevboxConfig) string {
 	return "mmdc"
 }
 
-// DevboxConfig is the merged top-level devbox configuration.
-// It is produced by layering devbox.yml → devbox/defaults.yml → devbox/local.yml.
-type DevboxConfig struct {
-	SchemaVersion string               `yaml:"schema_version"`
+// DweConfig is the merged top-level dwe configuration.
+// It is produced by layering workspace.yml → workspace/defaults.yml → workspace/local.yml.
+type DweConfig struct {
 	Project       ProjectConfig        `yaml:"project"`
 	Runtime       RuntimeConfig        `yaml:"runtime"`
 	State         string               `yaml:"state"`
@@ -393,19 +392,19 @@ func (p ProjectConfig) FullName() string {
 
 // AppServices returns the subset of c.Services whose Type is "app".
 // The returned map is a fresh allocation so callers may mutate it freely.
-func (c *DevboxConfig) AppServices() map[string]ServiceConfig {
+func (c *DweConfig) AppServices() map[string]ServiceConfig {
 	return filterServicesByType(c.Services, ServiceTypeApp)
 }
 
 // ToolServices returns the subset of c.Services whose Type is "tool".
 // The name deliberately does not shadow the deleted .Tools field so the
 // acceptance grep can still flag stale `.Tools` references.
-func (c *DevboxConfig) ToolServices() map[string]ServiceConfig {
+func (c *DweConfig) ToolServices() map[string]ServiceConfig {
 	return filterServicesByType(c.Services, ServiceTypeTool)
 }
 
 // InfraServices returns the subset of c.Services whose Type is "infra".
-func (c *DevboxConfig) InfraServices() map[string]ServiceConfig {
+func (c *DweConfig) InfraServices() map[string]ServiceConfig {
 	return filterServicesByType(c.Services, ServiceTypeInfra)
 }
 
@@ -423,7 +422,7 @@ func filterServicesByType(svcs map[string]ServiceConfig, t ServiceType) map[stri
 // base file first, then enabled tool overlays (sorted by key), then enabled
 // service overlays (sorted by service name). This is the canonical file list
 // used by all compose-aware CLI operations.
-func (c *DevboxConfig) ComposeFiles() []string {
+func (c *DweConfig) ComposeFiles() []string {
 	return c.composeFiles(false)
 }
 
@@ -431,11 +430,11 @@ func (c *DevboxConfig) ComposeFiles() []string {
 // regardless of whether overlays are enabled: base file first, then all tool
 // overlays (sorted by key), then all service overlays (sorted by service name).
 // This is used by --all flags to override the active set.
-func (c *DevboxConfig) ComposeFilesAll() []string {
+func (c *DweConfig) ComposeFilesAll() []string {
 	return c.composeFiles(true)
 }
 
-func (c *DevboxConfig) composeFiles(all bool) []string {
+func (c *DweConfig) composeFiles(all bool) []string {
 	files := make([]string, 0, 1+len(c.Services))
 	if c.Compose.Base != "" {
 		files = append(files, c.Compose.Base)
@@ -1019,7 +1018,7 @@ func ValidIdentifierKey(s string) bool {
 // validateConfigKeys checks per-service identifier-safety of Ports/Hosts keys
 // so they can be used with Go template dot syntax (^[A-Za-z_][A-Za-z0-9_]*$).
 // Top-level service names are checked as well.
-func validateConfigKeys(cfg *DevboxConfig) error {
+func validateConfigKeys(cfg *DweConfig) error {
 	for _, svcName := range slices.Sorted(maps.Keys(cfg.Services)) {
 		svc := cfg.Services[svcName]
 		for _, k := range slices.Sorted(maps.Keys(svc.Ports)) {
@@ -1059,14 +1058,14 @@ func detectLegacyComposeOverlays(raw map[string]any) error {
 	return fmt.Errorf("compose.overlays is no longer supported; move overlay files to individual services (type: tool): services.<name>.compose instead. See docs/reference/config/devbox.md for migration details. Found overlays: %v", keys)
 }
 
-// LoadConfig loads the merged DevboxConfig by layering:
+// LoadConfig loads the merged DweConfig by layering:
 //
 //  1. devboxPath (required)
 //  2. <dir>/devbox/defaults.yml (optional, versioned project defaults)
 //  3. <dir>/devbox/local.yml   (optional, local overrides, gitignored)
 //
 // Later layers win on conflict; maps are merged recursively.
-// The merged raw map is stored in DevboxConfig.Raw for dot-path resolution.
+// The merged raw map is stored in DweConfig.Raw for dot-path resolution.
 //
 // Sequencing:
 //  1. Load devbox/services/<name>/service.yml (canonical service declarations).
@@ -1075,7 +1074,7 @@ func detectLegacyComposeOverlays(raw map[string]any) error {
 //  3. Merge the raw YAML layers.
 //  4. Resolve per-service Enabled from the merged overlay.
 //  5. Inject services into Raw for dot-path resolution.
-func LoadConfig(devboxPath string) (*DevboxConfig, error) {
+func LoadConfig(devboxPath string) (*DweConfig, error) {
 	baseDir := filepath.Dir(devboxPath)
 
 	// Read each layer separately so the cross-layer overlay validator can
@@ -1094,7 +1093,7 @@ func LoadConfig(devboxPath string) (*DevboxConfig, error) {
 	layers = append(layers, rawLayer{path: devboxPath, data: base})
 
 	// Layer 2: devbox/defaults.yml (optional)
-	defaultsPath := filepath.Join(baseDir, "devbox", "defaults.yml")
+	defaultsPath := filepath.Join(baseDir, "workspace", "defaults.yml")
 	if defaults, err := loadRawYAML(defaultsPath); err == nil {
 		layers = append(layers, rawLayer{path: defaultsPath, data: defaults})
 	} else if !errors.Is(err, os.ErrNotExist) {
@@ -1102,7 +1101,7 @@ func LoadConfig(devboxPath string) (*DevboxConfig, error) {
 	}
 
 	// Layer 3: devbox/local.yml (optional)
-	localPath := filepath.Join(baseDir, "devbox", "local.yml")
+	localPath := filepath.Join(baseDir, "workspace", "local.yml")
 	if local, err := loadRawYAML(localPath); err == nil {
 		layers = append(layers, rawLayer{path: localPath, data: local})
 	} else if !errors.Is(err, os.ErrNotExist) {
@@ -1137,7 +1136,7 @@ func LoadConfig(devboxPath string) (*DevboxConfig, error) {
 	if err != nil {
 		return nil, fmt.Errorf("marshal merged config: %w", err)
 	}
-	var cfg DevboxConfig
+	var cfg DweConfig
 	if err := yaml.Unmarshal(data, &cfg); err != nil {
 		return nil, fmt.Errorf("unmarshal merged config: %w", err)
 	}
@@ -1210,7 +1209,7 @@ func LoadConfig(devboxPath string) (*DevboxConfig, error) {
 		return nil, err
 	}
 	// Load devbox/deploy.yml separately (not merged with config layers).
-	deployPath := filepath.Join(baseDir, "devbox", "deploy.yml")
+	deployPath := filepath.Join(baseDir, "workspace", "deploy.yml")
 	if deployCfg, err := LoadProjectDeployConfig(deployPath); err == nil {
 		cfg.Deploy = deployCfg
 	} else if !errors.Is(err, os.ErrNotExist) {
@@ -1344,7 +1343,7 @@ func validateOverlayHosts(layerPath, svcName string, raw any) error {
 // wrapper key). Returns an error wrapping the name if the file is missing or
 // invalid.
 func LoadServiceFolder(baseDir, name string) (*ServiceConfig, error) {
-	svcFile := filepath.Join(baseDir, "devbox", "services", name, "service.yml")
+	svcFile := filepath.Join(baseDir, "workspace", "services", name, "service.yml")
 	data, err := os.ReadFile(svcFile)
 	if err != nil {
 		return nil, fmt.Errorf("loading service %q definition: %w", name, err)
@@ -1455,7 +1454,7 @@ func LoadServices(baseDir string) (map[string]ServiceConfig, error) {
 // It does NOT resolve `extends:` — callers must follow up with
 // [ResolveServiceExtends] when extends-aware data is needed.
 func loadServiceFolders(baseDir string) (map[string]ServiceConfig, error) {
-	servicesDir := filepath.Join(baseDir, "devbox", "services")
+	servicesDir := filepath.Join(baseDir, "workspace", "services")
 	entries, err := os.ReadDir(servicesDir)
 	if err != nil {
 		if errors.Is(err, os.ErrNotExist) {
@@ -2100,7 +2099,7 @@ func LoadServiceDeployConfigs(baseDir string, services map[string]ServiceConfig)
 	result := make(map[string]*ServiceDeployConfig)
 
 	for name := range services {
-		path := filepath.Join(baseDir, "devbox", "services", name, "deploy.yml")
+		path := filepath.Join(baseDir, "workspace", "services", name, "deploy.yml")
 		cfg, err := LoadServiceDeployConfig(path)
 		if err != nil {
 			if errors.Is(err, os.ErrNotExist) {
@@ -2118,7 +2117,7 @@ func LoadServiceDeployConfigs(baseDir string, services map[string]ServiceConfig)
 // absent (the service simply has no reset pipeline). Reset pipelines structurally
 // do not support the after: field (reset is per-service or full, not ordered).
 func LoadServiceResetConfig(baseDir, name string) (*ProjectDeployConfig, error) {
-	path := filepath.Join(baseDir, "devbox", "services", name, "reset.yml")
+	path := filepath.Join(baseDir, "workspace", "services", name, "reset.yml")
 	cfg, err := loadProjectDeployConfigDecode(path, false)
 	if err != nil {
 		if errors.Is(err, os.ErrNotExist) {
@@ -2135,7 +2134,7 @@ func LoadServiceResetConfig(baseDir, name string) (*ProjectDeployConfig, error) 
 // A missing devbox/services/ directory returns an empty map and nil error.
 // Per-folder decode failures are collected and returned via errors.Join.
 func LoadServiceResetConfigs(baseDir string) (map[string]*ProjectDeployConfig, error) {
-	servicesDir := filepath.Join(baseDir, "devbox", "services")
+	servicesDir := filepath.Join(baseDir, "workspace", "services")
 	entries, err := os.ReadDir(servicesDir)
 	if err != nil {
 		if errors.Is(err, os.ErrNotExist) {
@@ -2220,14 +2219,14 @@ func TopoSortServices(names []string, services map[string]ServiceConfig) ([]stri
 	return order, nil
 }
 
-// LoadDevboxConfig reads and parses a single devbox.yml file at the given path.
+// LoadDweConfig reads and parses a single devbox.yml file at the given path.
 // Prefer LoadConfig for full layered loading.
-func LoadDevboxConfig(path string) (*DevboxConfig, error) {
+func LoadDweConfig(path string) (*DweConfig, error) {
 	data, err := os.ReadFile(path)
 	if err != nil {
 		return nil, fmt.Errorf("read %s: %w", path, err)
 	}
-	var cfg DevboxConfig
+	var cfg DweConfig
 	if err := yaml.Unmarshal(data, &cfg); err != nil {
 		return nil, fmt.Errorf("parse %s: %w", path, err)
 	}
@@ -2238,7 +2237,7 @@ func LoadDevboxConfig(path string) (*DevboxConfig, error) {
 // against cfg.Raw and returns the value. Returns (nil, nil) when cfg is nil or the
 // path is missing. Returns an error when the resolved value is not a string — the
 // only currently-supported leaf type for dot-path lookups in user-facing config.
-func LookupDotPath(cfg *DevboxConfig, path string) (any, error) {
+func LookupDotPath(cfg *DweConfig, path string) (any, error) {
 	if cfg == nil || path == "" {
 		return nil, nil
 	}

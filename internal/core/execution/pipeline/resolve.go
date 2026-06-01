@@ -61,7 +61,7 @@ var (
 // parallel groups. When reg is nil, both checks are skipped; this is tolerated
 // for internal-tool and test callers. Runtime callers (deploy run, reset run,
 // etc.) MUST pass a non-nil registry.
-func ResolvePhaseSteps(cfg *config.DevboxConfig, reg *registry.Registry, phase config.DeployPhase, service string) ([]ResolvedStep, error) {
+func ResolvePhaseSteps(cfg *config.DweConfig, reg *registry.Registry, phase config.DeployPhase, service string) ([]ResolvedStep, error) {
 	var phaseRuntimeWhen *condition.Condition
 	if phase.When != nil {
 		if phase.When.IsRuntime() {
@@ -115,7 +115,7 @@ func ResolvePhaseSteps(cfg *config.DevboxConfig, reg *registry.Registry, phase c
 
 // resolveLeafStep resolves a single leaf-style DeployStep. Returns ok=false when
 // the step's template `when:` evaluates to false (step is filtered out).
-func resolveLeafStep(cfg *config.DevboxConfig, reg *registry.Registry, phase config.DeployPhase, service string, step config.DeployStep, phaseRuntimeWhen *condition.Condition) (ResolvedStep, bool, error) {
+func resolveLeafStep(cfg *config.DweConfig, reg *registry.Registry, phase config.DeployPhase, service string, step config.DeployStep, phaseRuntimeWhen *condition.Condition) (ResolvedStep, bool, error) {
 	var stepRuntimeWhen *condition.Condition
 	if step.When != nil {
 		if step.When.IsRuntime() {
@@ -174,7 +174,7 @@ func resolveLeafStep(cfg *config.DevboxConfig, reg *registry.Registry, phase con
 
 // resolveParallelStep recursively resolves a parallel-group DeployStep. Returns
 // (nil, nil) when the group's template `when:` evaluates to false.
-func resolveParallelStep(cfg *config.DevboxConfig, reg *registry.Registry, phase config.DeployPhase, service string, step config.DeployStep, phaseRuntimeWhen *condition.Condition) (*ResolvedStep, error) {
+func resolveParallelStep(cfg *config.DweConfig, reg *registry.Registry, phase config.DeployPhase, service string, step config.DeployStep, phaseRuntimeWhen *condition.Condition) (*ResolvedStep, error) {
 	prefix := stepPrefix(phase, service, step.Name)
 	if len(step.Parallel.Steps) < 2 {
 		return nil, fmt.Errorf("step %s: %w", prefix, ErrEmptyParallelSteps)
@@ -369,7 +369,7 @@ func checkUniqueStepNames(steps []ResolvedStep, phase config.DeployPhase, servic
 //
 // A nil registry is tolerated (test / internal-tool callers): only the
 // dependent registry checks are skipped.
-func validateSubStepOverrides(cfg *config.DevboxConfig, reg *registry.Registry, phase config.DeployPhase, service string, step config.DeployStep) error {
+func validateSubStepOverrides(cfg *config.DweConfig, reg *registry.Registry, phase config.DeployPhase, service string, step config.DeployStep) error {
 	prefix := stepPrefix(phase, service, step.Name)
 	if step.Type != "command" {
 		return fmt.Errorf("step %s: %w: only steps with type=command can declare sub_step_overrides", prefix, ErrSubStepOverridesInvalid)

@@ -17,7 +17,7 @@ import (
 // writeMinimalInfoYML writes a minimal info.yml to dir and returns its path.
 func writeMinimalInfoYML(t *testing.T, dir, content string) {
 	t.Helper()
-	devboxDir := filepath.Join(dir, "devbox")
+	devboxDir := filepath.Join(dir, "workspace")
 	if err := os.MkdirAll(devboxDir, 0755); err != nil {
 		t.Fatalf("creating devbox dir: %v", err)
 	}
@@ -29,7 +29,7 @@ func writeMinimalInfoYML(t *testing.T, dir, content string) {
 // writeMinimalDevboxYML writes a minimal devbox.yml to dir.
 func writeMinimalDevboxYML(t *testing.T, dir string) string {
 	t.Helper()
-	cfgPath := filepath.Join(dir, "devbox.yml")
+	cfgPath := filepath.Join(dir, "workspace.yml")
 	cfgYAML := `schema_version: "2"
 project:
   name: infotest
@@ -193,7 +193,7 @@ func TestInfoCmd_StylesWithHeaderRendered(t *testing.T) {
         name: Name
         value: "{{ .Project.Name }}"
 `)
-	devboxDir := filepath.Join(dir, "devbox")
+	devboxDir := filepath.Join(dir, "workspace")
 	stylesYAML := "header:\n  lines:\n    - \"Devbox\"\n  font: standard\n  color: none\n"
 	if err := os.WriteFile(filepath.Join(devboxDir, "styles.yml"), []byte(stylesYAML), 0644); err != nil {
 		t.Fatalf("writing styles.yml: %v", err)

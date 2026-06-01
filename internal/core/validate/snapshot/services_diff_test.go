@@ -45,14 +45,14 @@ func TestServicesDiffValidator(t *testing.T) {
 
 	tests := []struct {
 		name     string
-		cfg      *config.DevboxConfig
+		cfg      *config.DweConfig
 		manifest []meta.ServiceSnapshot
 		wantDiag bool
 		wantHint []string
 	}{
 		{
 			name: "identical: no diag",
-			cfg: &config.DevboxConfig{Services: map[string]config.ServiceConfig{
+			cfg: &config.DweConfig{Services: map[string]config.ServiceConfig{
 				"db":   {Enabled: true},
 				"main": {Enabled: true},
 			}},
@@ -67,7 +67,7 @@ func TestServicesDiffValidator(t *testing.T) {
 		},
 		{
 			name: "no services captured: silent",
-			cfg: &config.DevboxConfig{Services: map[string]config.ServiceConfig{
+			cfg: &config.DweConfig{Services: map[string]config.ServiceConfig{
 				"db": {Enabled: true},
 			}},
 			manifest: nil,
@@ -75,7 +75,7 @@ func TestServicesDiffValidator(t *testing.T) {
 		},
 		{
 			name: "only in snapshot",
-			cfg: &config.DevboxConfig{Services: map[string]config.ServiceConfig{
+			cfg: &config.DweConfig{Services: map[string]config.ServiceConfig{
 				"main": {Enabled: true},
 			}},
 			manifest: captured,
@@ -84,7 +84,7 @@ func TestServicesDiffValidator(t *testing.T) {
 		},
 		{
 			name: "only local",
-			cfg: &config.DevboxConfig{Services: map[string]config.ServiceConfig{
+			cfg: &config.DweConfig{Services: map[string]config.ServiceConfig{
 				"db":     {Enabled: true},
 				"main":   {Enabled: true},
 				"search": {Enabled: true},
@@ -95,7 +95,7 @@ func TestServicesDiffValidator(t *testing.T) {
 		},
 		{
 			name: "enabled flipped",
-			cfg: &config.DevboxConfig{Services: map[string]config.ServiceConfig{
+			cfg: &config.DweConfig{Services: map[string]config.ServiceConfig{
 				"db":   {Enabled: false},
 				"main": {Enabled: true},
 			}},
@@ -149,7 +149,7 @@ func TestServicesDiffValidator_RegisteredInAll(t *testing.T) {
 	}
 	snapshotEntry(t, root, "s1", captured)
 
-	cfg := &config.DevboxConfig{Services: map[string]config.ServiceConfig{
+	cfg := &config.DweConfig{Services: map[string]config.ServiceConfig{
 		"main": {Enabled: true},
 	}}
 	all := All(cfg, nil, nil, root, nil, false)

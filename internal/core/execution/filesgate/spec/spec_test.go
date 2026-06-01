@@ -204,7 +204,7 @@ func TestValidate_Parameters(t *testing.T) {
 		name      string
 		fg        *filesgate.FilesGate
 		ref       filesgate.StepRef
-		cfg       *config.DevboxConfig
+		cfg       *config.DweConfig
 		wantIssue bool
 		wantMsg   string
 	}{
@@ -271,7 +271,7 @@ func TestValidate_Parameters(t *testing.T) {
 				Command: "cmd_req_with_default_from",
 			},
 			ref: filesgate.StepRef{Type: "command", Cmd: "cmd_req_with_default_from"},
-			cfg: &config.DevboxConfig{
+			cfg: &config.DweConfig{
 				Raw: map[string]any{
 					"databases": map[string]any{
 						"main": map[string]any{
@@ -290,7 +290,7 @@ func TestValidate_Parameters(t *testing.T) {
 				Command: "cmd_req_with_default_from",
 			},
 			ref: filesgate.StepRef{Type: "command", Cmd: "cmd_req_with_default_from"},
-			cfg: &config.DevboxConfig{
+			cfg: &config.DweConfig{
 				Raw: map[string]any{
 					"databases": map[string]any{},
 				},
@@ -306,7 +306,7 @@ func TestValidate_Parameters(t *testing.T) {
 				Command: "cmd_req_with_default_from",
 			},
 			ref: filesgate.StepRef{Type: "command", Cmd: "cmd_req_with_default_from"},
-			cfg: &config.DevboxConfig{
+			cfg: &config.DweConfig{
 				Raw: map[string]any{
 					"databases": map[string]any{
 						"main": map[string]any{

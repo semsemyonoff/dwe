@@ -70,7 +70,7 @@ func preflightActionLabel(stage string) string {
 // RunFn is the signature of Run. Commands that want a swappable preflight
 // (e.g. for tests, or to override the implementation) accept a RunFn and
 // default to Run when nil.
-type RunFn = func(ctx context.Context, cfg *config.DevboxConfig, cmdRegistry *usercommands.Registry, baseDir, stage string, skip bool, errOut io.Writer) error
+type RunFn = func(ctx context.Context, cfg *config.DweConfig, cmdRegistry *usercommands.Registry, baseDir, stage string, skip bool, errOut io.Writer) error
 
 // Run executes env + checks (filtered by stage) and renders diagnostics to
 // errOut. Returns *Error on any error-severity diagnostic.
@@ -82,7 +82,7 @@ type RunFn = func(ctx context.Context, cfg *config.DevboxConfig, cmdRegistry *us
 //
 // cmdRegistry is nil-tolerant: checks.AllForStage produces unknown-command
 // diagnostics for any type: command entry when nil.
-func Run(ctx context.Context, cfg *config.DevboxConfig, cmdRegistry *usercommands.Registry, baseDir, stage string, skip bool, errOut io.Writer) error {
+func Run(ctx context.Context, cfg *config.DweConfig, cmdRegistry *usercommands.Registry, baseDir, stage string, skip bool, errOut io.Writer) error {
 	if errOut == nil {
 		errOut = io.Discard
 	}

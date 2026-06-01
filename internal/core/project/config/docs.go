@@ -13,7 +13,7 @@ type DocsConfig struct {
 // MermaidMode returns the resolved mermaid rendering mode (default: "auto").
 // Valid values: "auto" (try mmdc if available), "mmdc" (require mmdc),
 // "off" (disable). Safe when cfg is nil.
-func MermaidMode(cfg *DevboxConfig) string {
+func MermaidMode(cfg *DweConfig) string {
 	if cfg == nil || cfg.Docs.Mermaid == "" {
 		return "auto"
 	}
@@ -22,7 +22,7 @@ func MermaidMode(cfg *DevboxConfig) string {
 
 // MermaidCacheSizeMB returns the resolved cache size limit in MB (default: 100).
 // Zero or negative values are clamped to 100. Safe when cfg is nil.
-func MermaidCacheSizeMB(cfg *DevboxConfig) int {
+func MermaidCacheSizeMB(cfg *DweConfig) int {
 	if cfg == nil {
 		return 100
 	}

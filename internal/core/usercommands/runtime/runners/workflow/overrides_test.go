@@ -40,7 +40,7 @@ func runWorkflowWithOverrides(t *testing.T, projectRoot string, reg *Registry, w
 		Params:                   map[string]any{},
 		Context:                  map[string]any{},
 		Render:                   &tpl.RenderContext{Params: map[string]any{}, Raw: map[string]any{}},
-		Config:                   &config.DevboxConfig{SchemaVersion: "2"},
+		Config:                   &config.DweConfig{},
 		Registry:                 reg,
 		ProjectRoot:              projectRoot,
 		Stdout:                   &outBuf,

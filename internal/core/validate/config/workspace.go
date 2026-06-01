@@ -13,7 +13,6 @@ import (
 	"gopkg.in/yaml.v3"
 
 	"github.com/semsemyonoff/dwe/internal/core/project/config"
-	"github.com/semsemyonoff/dwe/internal/core/project/project"
 	"github.com/semsemyonoff/dwe/internal/core/validate"
 	"github.com/semsemyonoff/dwe/internal/core/workflow/deploy"
 	"github.com/semsemyonoff/dwe/internal/core/workflow/reset"
@@ -30,50 +29,30 @@ func relPath(projectRoot, path string) string {
 	return rel
 }
 
-type devboxValidator struct{}
+type workspaceValidator struct{}
 
-func (v *devboxValidator) ID() string {
-	return "devbox"
+func (v *workspaceValidator) ID() string {
+	return "workspace"
 }
 
-func (v *devboxValidator) Domain() string {
+func (v *workspaceValidator) Domain() string {
 	return "config"
 }
 
-func (v *devboxValidator) Run(ctx validate.Context) []validate.Diagnostic {
+func (v *workspaceValidator) Run(ctx validate.Context) []validate.Diagnostic {
 	var diags []validate.Diagnostic
 	configPath := ctx.ConfigPath
 	if configPath == "" {
-		configPath = filepath.Join(ctx.ProjectRoot, "devbox.yml")
+		configPath = filepath.Join(ctx.ProjectRoot, "workspace.yml")
 	}
 
-	// Check 1: Schema validation
-	if err := project.ValidateSchema(configPath); err != nil {
-		diags = append(diags, validate.Diagnostic{
-			Severity: validate.SeverityError,
-			Domain:   "config",
-			Target:   "config.devbox.schema",
-			File:     relPath(ctx.ProjectRoot, configPath),
-			Message:  err.Error(),
-			Hint:     "Ensure devbox.yml has schema_version: \"2\"",
-		})
-		// Continue to load check even if schema fails
-	} else {
-		diags = append(diags, validate.Diagnostic{
-			Severity: validate.SeverityOK,
-			Domain:   "config",
-			Target:   "config.devbox.schema",
-			File:     relPath(ctx.ProjectRoot, configPath),
-		})
-	}
-
-	// Check 2: Config loading and validation
+	// Config loading and validation
 	cfg, err := config.LoadConfig(configPath)
 	if err != nil {
 		diags = append(diags, validate.Diagnostic{
 			Severity: validate.SeverityError,
 			Domain:   "config",
-			Target:   "config.devbox",
+			Target:   "config.workspace",
 			File:     relPath(ctx.ProjectRoot, configPath),
 			Message:  err.Error(),
 		})
@@ -81,7 +60,7 @@ func (v *devboxValidator) Run(ctx validate.Context) []validate.Diagnostic {
 		diags = append(diags, validate.Diagnostic{
 			Severity: validate.SeverityOK,
 			Domain:   "config",
-			Target:   "config.devbox",
+			Target:   "config.workspace",
 			File:     relPath(ctx.ProjectRoot, configPath),
 		})
 
@@ -90,7 +69,7 @@ func (v *devboxValidator) Run(ctx validate.Context) []validate.Diagnostic {
 			diags = append(diags, validate.Diagnostic{
 				Severity: validate.SeverityError,
 				Domain:   "config",
-				Target:   "config.devbox.docs.mermaid",
+				Target:   "config.workspace.docs.mermaid",
 				File:     relPath(ctx.ProjectRoot, configPath),
 				Message:  fmt.Sprintf("docs.mermaid: %q is invalid; must be one of auto, mmdc, off", cfg.Docs.Mermaid),
 			})
@@ -99,15 +78,12 @@ func (v *devboxValidator) Run(ctx validate.Context) []validate.Diagnostic {
 			diags = append(diags, validate.Diagnostic{
 				Severity: validate.SeverityError,
 				Domain:   "config",
-				Target:   "config.devbox.docs.cache_size_mb",
+				Target:   "config.workspace.docs.cache_size_mb",
 				File:     relPath(ctx.ProjectRoot, configPath),
 				Message:  fmt.Sprintf("docs.cache_size_mb: %d is invalid; must be non-negative", cfg.Docs.CacheSizeMB),
 			})
 		}
 	}
-
-	// If LoadConfig failed, we still checked what we could. Don't emit "cross-ref" info
-	// since there's no failure to explain — the devbox load check above captures it.
 
 	return diags
 }
@@ -154,7 +130,7 @@ var servicesAllowedFields = map[config.ServiceType]map[string]bool{
 
 func (v *servicesValidator) Run(ctx validate.Context) []validate.Diagnostic {
 	var diags []validate.Diagnostic
-	servicesDir := filepath.Join(ctx.ProjectRoot, "devbox", "services")
+	servicesDir := filepath.Join(ctx.ProjectRoot, "workspace", "services")
 
 	entries, err := os.ReadDir(servicesDir)
 	if err != nil {
@@ -164,7 +140,7 @@ func (v *servicesValidator) Run(ctx validate.Context) []validate.Diagnostic {
 				Domain:   "config",
 				Target:   "config.services",
 				File:     relPath(ctx.ProjectRoot, servicesDir),
-				Message:  "no devbox/services/ directory; no services defined",
+				Message:  "no workspace/services/ directory; no services defined",
 			})
 			return diags
 		}
@@ -566,7 +542,7 @@ func (v *dockerValidator) Domain() string {
 
 func (v *dockerValidator) Run(ctx validate.Context) []validate.Diagnostic {
 	var diags []validate.Diagnostic
-	dockerPath := filepath.Join(ctx.ProjectRoot, "devbox", "docker.yml")
+	dockerPath := filepath.Join(ctx.ProjectRoot, "workspace", "docker.yml")
 
 	// Docker validation requires successful main config load for template resolution
 	if ctx.Cfg == nil {
@@ -627,7 +603,7 @@ func (v *infoValidator) Domain() string {
 
 func (v *infoValidator) Run(ctx validate.Context) []validate.Diagnostic {
 	var diags []validate.Diagnostic
-	infoPath := filepath.Join(ctx.ProjectRoot, "devbox", "info.yml")
+	infoPath := filepath.Join(ctx.ProjectRoot, "workspace", "info.yml")
 
 	// Check if file exists
 	fileExists := true
@@ -817,7 +793,7 @@ func (v *stylesValidator) Domain() string {
 
 func (v *stylesValidator) Run(ctx validate.Context) []validate.Diagnostic {
 	var diags []validate.Diagnostic
-	stylesPath := filepath.Join(ctx.ProjectRoot, "devbox", "styles.yml")
+	stylesPath := filepath.Join(ctx.ProjectRoot, "workspace", "styles.yml")
 
 	if _, statErr := os.Stat(stylesPath); statErr != nil {
 		if errors.Is(statErr, os.ErrNotExist) {
@@ -983,7 +959,7 @@ func (v *lifecycleValidator) Domain() string {
 
 func (v *lifecycleValidator) Run(ctx validate.Context) []validate.Diagnostic {
 	var diags []validate.Diagnostic
-	lifecyclePath := filepath.Join(ctx.ProjectRoot, "devbox", "lifecycle.yml")
+	lifecyclePath := filepath.Join(ctx.ProjectRoot, "workspace", "lifecycle.yml")
 
 	lifecycleCfg, err := config.LoadLifecycleConfig(lifecyclePath)
 	if err != nil {
@@ -1031,7 +1007,7 @@ func (v *deployValidator) Domain() string {
 
 func (v *deployValidator) Run(ctx validate.Context) []validate.Diagnostic {
 	var diags []validate.Diagnostic
-	deployPath := filepath.Join(ctx.ProjectRoot, "devbox", "deploy.yml")
+	deployPath := filepath.Join(ctx.ProjectRoot, "workspace", "deploy.yml")
 
 	deployCfg, err := config.ParseDeployConfigForValidation(deployPath)
 	if err != nil {
@@ -1103,7 +1079,7 @@ func (v *resetValidator) Domain() string {
 
 func (v *resetValidator) Run(ctx validate.Context) []validate.Diagnostic {
 	var diags []validate.Diagnostic
-	resetPath := filepath.Join(ctx.ProjectRoot, "devbox", "reset.yml")
+	resetPath := filepath.Join(ctx.ProjectRoot, "workspace", "reset.yml")
 
 	resetCfg, err := config.LoadResetConfig(resetPath)
 	if err != nil {
@@ -1199,7 +1175,7 @@ func (v *serviceDeployValidator) Run(ctx validate.Context) []validate.Diagnostic
 				Severity: validate.SeverityInfo,
 				Domain:   "config",
 				Target:   "config.service-deploy",
-				File:     relPath(ctx.ProjectRoot, filepath.Join(ctx.ProjectRoot, "devbox", "services")),
+				File:     relPath(ctx.ProjectRoot, filepath.Join(ctx.ProjectRoot, "workspace", "services")),
 				Message:  "no services defined; no service deploy configs to validate",
 			})
 			return diags

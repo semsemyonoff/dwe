@@ -24,7 +24,7 @@ func setupServicesConfig(t *testing.T, dir, servicesYML string) {
 		t.Fatalf("setupServicesConfig parse: %v", err)
 	}
 	for name, svc := range w.Services {
-		svcDir := filepath.Join(dir, "devbox", "services", name)
+		svcDir := filepath.Join(dir, "workspace", "services", name)
 		if err := os.MkdirAll(svcDir, 0o755); err != nil {
 			t.Fatalf("setupServicesConfig mkdir %s: %v", name, err)
 		}
@@ -45,7 +45,7 @@ func setupServicesConfig(t *testing.T, dir, servicesYML string) {
 func setupAIPack(t *testing.T) (projectRoot, packDir string) {
 	t.Helper()
 	projectRoot = t.TempDir()
-	packDir = filepath.Join(projectRoot, "devbox", "templates", "ai", "test")
+	packDir = filepath.Join(projectRoot, "workspace", "templates", "ai", "test")
 	if err := os.MkdirAll(packDir, 0o755); err != nil {
 		t.Fatalf("setup ai pack: %v", err)
 	}
@@ -56,7 +56,7 @@ func setupAIPack(t *testing.T) (projectRoot, packDir string) {
 // and populates it with a directory structure of files.
 func setupAgentsPackTemplates(t *testing.T, dir, packName string, files map[string]string) {
 	t.Helper()
-	packDir := filepath.Join(dir, "devbox", "templates", "ai", packName)
+	packDir := filepath.Join(dir, "workspace", "templates", "ai", packName)
 	if err := os.MkdirAll(packDir, 0o755); err != nil {
 		t.Fatalf("create pack dir: %v", err)
 	}
@@ -92,7 +92,7 @@ func TestResolveAgentsTemplatePack_explicitPackFound(t *testing.T) {
 		t.Fatal("expected found=true")
 	}
 
-	expected := filepath.Join(projectRoot, "devbox", "templates", "ai", "custom")
+	expected := filepath.Join(projectRoot, "workspace", "templates", "ai", "custom")
 	if pack != expected {
 		t.Errorf("expected %q, got %q", expected, pack)
 	}
@@ -141,7 +141,7 @@ func TestResolveAgentsTemplatePack_implicitServiceName(t *testing.T) {
 		t.Fatal("expected found=true")
 	}
 
-	expected := filepath.Join(projectRoot, "devbox", "templates", "ai", "api")
+	expected := filepath.Join(projectRoot, "workspace", "templates", "ai", "api")
 	if pack != expected {
 		t.Errorf("expected %q, got %q", expected, pack)
 	}
@@ -168,7 +168,7 @@ func TestResolveAgentsTemplatePack_implicitFallbackToDefault(t *testing.T) {
 		t.Fatal("expected found=true")
 	}
 
-	expected := filepath.Join(projectRoot, "devbox", "templates", "ai", "default")
+	expected := filepath.Join(projectRoot, "workspace", "templates", "ai", "default")
 	if pack != expected {
 		t.Errorf("expected %q, got %q", expected, pack)
 	}
@@ -201,7 +201,7 @@ func TestResolveAgentsTemplatePack_symlinkedPackRejected(t *testing.T) {
 		t.Fatalf("create real pack: %v", err)
 	}
 
-	templatesDir := filepath.Join(projectRoot, "devbox", "templates", "ai")
+	templatesDir := filepath.Join(projectRoot, "workspace", "templates", "ai")
 	if err := os.MkdirAll(templatesDir, 0o755); err != nil {
 		t.Fatalf("create templates dir: %v", err)
 	}
@@ -232,7 +232,7 @@ func TestResolveAgentsTemplatePack_symlinkedPackRejected(t *testing.T) {
 // TestResolveAgentsTemplatePack_nonDirPackRejected verifies non-directories are rejected.
 func TestResolveAgentsTemplatePack_nonDirPackRejected(t *testing.T) {
 	projectRoot := t.TempDir()
-	templatesDir := filepath.Join(projectRoot, "devbox", "templates", "ai")
+	templatesDir := filepath.Join(projectRoot, "workspace", "templates", "ai")
 	if err := os.MkdirAll(templatesDir, 0o755); err != nil {
 		t.Fatalf("create templates dir: %v", err)
 	}
@@ -350,7 +350,7 @@ func TestResolveAgentsTemplatePack_implicitChainPreference(t *testing.T) {
 	}
 
 	// Should pick the service-name pack, not the default
-	expected := filepath.Join(projectRoot, "devbox", "templates", "ai", "myapi")
+	expected := filepath.Join(projectRoot, "workspace", "templates", "ai", "myapi")
 	if pack != expected {
 		t.Errorf("expected %q (service-name), got %q", expected, pack)
 	}
@@ -739,7 +739,7 @@ func TestValidateAgentsManifest_validFull(t *testing.T) {
 func TestValidateAgentsManifest_overrideSatisfiesMissingFrom(t *testing.T) {
 	projectRoot, _ := setupAIPack(t)
 	// Canonical pack intentionally has NO foo.tmpl; place it only in the override pack.
-	overrideDir := filepath.Join(projectRoot, "devbox", "templates", "ai", "test.local")
+	overrideDir := filepath.Join(projectRoot, "workspace", "templates", "ai", "test.local")
 	if err := os.MkdirAll(overrideDir, 0o755); err != nil {
 		t.Fatalf("mkdir override: %v", err)
 	}
@@ -760,7 +760,7 @@ func TestValidateAgentsManifest_overrideSatisfiesMissingFrom(t *testing.T) {
 // writeAIPackTmpl writes a single .tmpl into <projectRoot>/devbox/templates/ai/test/<rel>.
 func writeAIPackTmpl(t *testing.T, projectRoot, rel, content string) {
 	t.Helper()
-	packDir := filepath.Join(projectRoot, "devbox", "templates", "ai", "test")
+	packDir := filepath.Join(projectRoot, "workspace", "templates", "ai", "test")
 	if err := os.MkdirAll(packDir, 0o755); err != nil {
 		t.Fatalf("mkdir pack: %v", err)
 	}
@@ -782,7 +782,7 @@ func TestRenderAgentsTemplateFile_fresh(t *testing.T) {
 	data := aipkg.TemplateData{
 		Project: config.ProjectConfig{Name: "myproject"},
 		Service: "api",
-		Cfg:     &config.DevboxConfig{Raw: map[string]any{}},
+		Cfg:     &config.DweConfig{Raw: map[string]any{}},
 	}
 
 	dest := "AGENTS.md"
@@ -809,7 +809,7 @@ func TestRenderAgentsTemplateFile_idempotent(t *testing.T) {
 	}
 
 	writeAIPackTmpl(t, projectRoot, "template.tmpl", "Content: {{ .Service }}")
-	data := aipkg.TemplateData{Service: "api", Cfg: &config.DevboxConfig{Raw: map[string]any{}}}
+	data := aipkg.TemplateData{Service: "api", Cfg: &config.DweConfig{Raw: map[string]any{}}}
 	dest := "AGENTS.md"
 
 	if _, err := aipkg.RenderTemplateFile(projectRoot, "test", "template.tmpl", data, dest, hubDir, projectRoot); err != nil {
@@ -850,7 +850,7 @@ func TestRenderAgentsTemplateFile_nestedPath(t *testing.T) {
 	}
 
 	writeAIPackTmpl(t, projectRoot, "template.tmpl", "Nested")
-	data := aipkg.TemplateData{Cfg: &config.DevboxConfig{Raw: map[string]any{}}}
+	data := aipkg.TemplateData{Cfg: &config.DweConfig{Raw: map[string]any{}}}
 	dest := ".claude/AGENTS.md"
 
 	if _, err := aipkg.RenderTemplateFile(projectRoot, "test", "template.tmpl", data, dest, hubDir, projectRoot); err != nil {
@@ -871,7 +871,7 @@ func TestRenderAgentsTemplateFile_escapingDest(t *testing.T) {
 	}
 
 	writeAIPackTmpl(t, projectRoot, "template.tmpl", "test")
-	data := aipkg.TemplateData{Cfg: &config.DevboxConfig{Raw: map[string]any{}}}
+	data := aipkg.TemplateData{Cfg: &config.DweConfig{Raw: map[string]any{}}}
 	dest := "../escape.md"
 
 	_, err := aipkg.RenderTemplateFile(projectRoot, "test", "template.tmpl", data, dest, hubDir, projectRoot)
@@ -899,7 +899,7 @@ func TestRenderAgentsTemplateFile_symlinkInDestDir(t *testing.T) {
 	}
 
 	writeAIPackTmpl(t, projectRoot, "template.tmpl", "test")
-	data := aipkg.TemplateData{Cfg: &config.DevboxConfig{Raw: map[string]any{}}}
+	data := aipkg.TemplateData{Cfg: &config.DweConfig{Raw: map[string]any{}}}
 	dest := ".claude/AGENTS.md"
 
 	_, err := aipkg.RenderTemplateFile(projectRoot, "test", "template.tmpl", data, dest, hubDir, projectRoot)
@@ -920,7 +920,7 @@ func TestRenderAgentsTemplateFile_overrideHit(t *testing.T) {
 		t.Fatalf("create hub dir: %v", err)
 	}
 	writeAIPackTmpl(t, projectRoot, "foo.tmpl", "canonical")
-	overrideDir := filepath.Join(projectRoot, "devbox", "templates", "ai", "test.local")
+	overrideDir := filepath.Join(projectRoot, "workspace", "templates", "ai", "test.local")
 	if err := os.MkdirAll(overrideDir, 0o755); err != nil {
 		t.Fatalf("mkdir override: %v", err)
 	}
@@ -928,7 +928,7 @@ func TestRenderAgentsTemplateFile_overrideHit(t *testing.T) {
 		t.Fatalf("write override: %v", err)
 	}
 
-	fromOverride, err := aipkg.RenderTemplateFile(projectRoot, "test", "foo.tmpl", aipkg.TemplateData{Cfg: &config.DevboxConfig{Raw: map[string]any{}}}, "AGENTS.md", hubDir, projectRoot)
+	fromOverride, err := aipkg.RenderTemplateFile(projectRoot, "test", "foo.tmpl", aipkg.TemplateData{Cfg: &config.DweConfig{Raw: map[string]any{}}}, "AGENTS.md", hubDir, projectRoot)
 	if err != nil {
 		t.Fatalf("render: %v", err)
 	}
@@ -1099,7 +1099,7 @@ services:
   api:
     enabled: true
 `
-	if err := os.WriteFile(filepath.Join(projectRoot, "devbox.yml"), []byte(devboxYAML), 0o644); err != nil {
+	if err := os.WriteFile(filepath.Join(projectRoot, "workspace.yml"), []byte(devboxYAML), 0o644); err != nil {
 		t.Fatalf("write devbox.yml: %v", err)
 	}
 
@@ -1124,7 +1124,7 @@ services:
 		t.Fatalf("create service dir: %v", err)
 	}
 
-	flags := &cmdctx.RootFlags{ConfigPath: filepath.Join(projectRoot, "devbox.yml")}
+	flags := &cmdctx.RootFlags{ConfigPath: filepath.Join(projectRoot, "workspace.yml")}
 	cmd := newAICmd(flags)
 
 	if err := cmd.RunE(cmd, []string{"api"}); err != nil {
@@ -1163,7 +1163,7 @@ services:
   api:
     enabled: true
 `
-	if err := os.WriteFile(filepath.Join(projectRoot, "devbox.yml"), []byte(devboxYAML), 0o644); err != nil {
+	if err := os.WriteFile(filepath.Join(projectRoot, "workspace.yml"), []byte(devboxYAML), 0o644); err != nil {
 		t.Fatalf("write devbox.yml: %v", err)
 	}
 
@@ -1178,7 +1178,7 @@ services:
         enabled: false
 `)
 
-	flags := &cmdctx.RootFlags{ConfigPath: filepath.Join(projectRoot, "devbox.yml")}
+	flags := &cmdctx.RootFlags{ConfigPath: filepath.Join(projectRoot, "workspace.yml")}
 	cmd := newAICmd(flags)
 
 	err := cmd.RunE(cmd, []string{"api"})
@@ -1207,7 +1207,7 @@ services:
   no-dir-svc:
     enabled: true
 `
-	if err := os.WriteFile(filepath.Join(projectRoot, "devbox.yml"), []byte(devboxYAML), 0o644); err != nil {
+	if err := os.WriteFile(filepath.Join(projectRoot, "workspace.yml"), []byte(devboxYAML), 0o644); err != nil {
 		t.Fatalf("write devbox.yml: %v", err)
 	}
 
@@ -1246,7 +1246,7 @@ services:
 		}
 	}
 
-	flags := &cmdctx.RootFlags{ConfigPath: filepath.Join(projectRoot, "devbox.yml")}
+	flags := &cmdctx.RootFlags{ConfigPath: filepath.Join(projectRoot, "workspace.yml")}
 	cmd := newAICmd(flags)
 
 	// Command should succeed even though no-dir-svc is skipped with a warning
@@ -1290,7 +1290,7 @@ services:
   api:
     enabled: true
 `
-	if err := os.WriteFile(filepath.Join(projectRoot, "devbox.yml"), []byte(devboxYAML), 0o644); err != nil {
+	if err := os.WriteFile(filepath.Join(projectRoot, "workspace.yml"), []byte(devboxYAML), 0o644); err != nil {
 		t.Fatalf("write devbox.yml: %v", err)
 	}
 
@@ -1302,7 +1302,7 @@ services:
     container: test-api
 `)
 
-	flags := &cmdctx.RootFlags{ConfigPath: filepath.Join(projectRoot, "devbox.yml")}
+	flags := &cmdctx.RootFlags{ConfigPath: filepath.Join(projectRoot, "workspace.yml")}
 	cmd := newAICmd(flags)
 
 	err := cmd.RunE(cmd, []string{"nonexistent"})
@@ -1325,7 +1325,7 @@ services:
   api:
     enabled: false
 `
-	if err := os.WriteFile(filepath.Join(projectRoot, "devbox.yml"), []byte(devboxYAML), 0o644); err != nil {
+	if err := os.WriteFile(filepath.Join(projectRoot, "workspace.yml"), []byte(devboxYAML), 0o644); err != nil {
 		t.Fatalf("write devbox.yml: %v", err)
 	}
 
@@ -1337,7 +1337,7 @@ services:
     container: test-api
 `)
 
-	flags := &cmdctx.RootFlags{ConfigPath: filepath.Join(projectRoot, "devbox.yml")}
+	flags := &cmdctx.RootFlags{ConfigPath: filepath.Join(projectRoot, "workspace.yml")}
 	cmd := newAICmd(flags)
 
 	err := cmd.RunE(cmd, []string{"api"})
@@ -1360,7 +1360,7 @@ services:
   api:
     enabled: true
 `
-	if err := os.WriteFile(filepath.Join(projectRoot, "devbox.yml"), []byte(devboxYAML), 0o644); err != nil {
+	if err := os.WriteFile(filepath.Join(projectRoot, "workspace.yml"), []byte(devboxYAML), 0o644); err != nil {
 		t.Fatalf("write devbox.yml: %v", err)
 	}
 
@@ -1377,7 +1377,7 @@ services:
 		t.Fatalf("create service dir: %v", err)
 	}
 
-	flags := &cmdctx.RootFlags{ConfigPath: filepath.Join(projectRoot, "devbox.yml")}
+	flags := &cmdctx.RootFlags{ConfigPath: filepath.Join(projectRoot, "workspace.yml")}
 	cmd := newAICmd(flags)
 
 	err := cmd.RunE(cmd, []string{"api"})
@@ -1397,7 +1397,7 @@ services:
   api:
     enabled: true
 `
-	if err := os.WriteFile(filepath.Join(projectRoot, "devbox.yml"), []byte(devboxYAML), 0o644); err != nil {
+	if err := os.WriteFile(filepath.Join(projectRoot, "workspace.yml"), []byte(devboxYAML), 0o644); err != nil {
 		t.Fatalf("write devbox.yml: %v", err)
 	}
 
@@ -1417,7 +1417,7 @@ services:
 		t.Fatalf("create service dir: %v", err)
 	}
 
-	flags := &cmdctx.RootFlags{ConfigPath: filepath.Join(projectRoot, "devbox.yml")}
+	flags := &cmdctx.RootFlags{ConfigPath: filepath.Join(projectRoot, "workspace.yml")}
 	cmd := newAICmd(flags)
 
 	err := cmd.RunE(cmd, []string{"api"})
@@ -1440,7 +1440,7 @@ services:
   api:
     enabled: true
 `
-	if err := os.WriteFile(filepath.Join(projectRoot, "devbox.yml"), []byte(devboxYAML), 0o644); err != nil {
+	if err := os.WriteFile(filepath.Join(projectRoot, "workspace.yml"), []byte(devboxYAML), 0o644); err != nil {
 		t.Fatalf("write devbox.yml: %v", err)
 	}
 
@@ -1451,7 +1451,7 @@ services:
     container: test-api
 `)
 
-	flags := &cmdctx.RootFlags{ConfigPath: filepath.Join(projectRoot, "devbox.yml")}
+	flags := &cmdctx.RootFlags{ConfigPath: filepath.Join(projectRoot, "workspace.yml")}
 	cmd := newAICmd(flags)
 
 	err := cmd.RunE(cmd, []string{"api"})
@@ -1602,7 +1602,7 @@ services:
   api:
     enabled: true
 `
-	if err := os.WriteFile(filepath.Join(projectRoot, "devbox.yml"), []byte(devboxYAML), 0o644); err != nil {
+	if err := os.WriteFile(filepath.Join(projectRoot, "workspace.yml"), []byte(devboxYAML), 0o644); err != nil {
 		t.Fatalf("write devbox.yml: %v", err)
 	}
 
@@ -1629,7 +1629,7 @@ services:
 		t.Fatalf("write CLAUDE.md: %v", err)
 	}
 
-	flags := &cmdctx.RootFlags{ConfigPath: filepath.Join(projectRoot, "devbox.yml")}
+	flags := &cmdctx.RootFlags{ConfigPath: filepath.Join(projectRoot, "workspace.yml")}
 	cmd := newAICmd(flags)
 
 	err := cmd.RunE(cmd, []string{"api"})
@@ -1729,7 +1729,7 @@ func TestRenderAgentsTemplateFile_cfgRawDotAccess(t *testing.T) {
 	writeAIPackTmpl(t, projectRoot, "template.tmpl",
 		`prefix={{ .Cfg.Raw.git.project_prefix }};hook={{ index (index .Cfg.Raw.git.hooks .Service) "pre_commit" }}`)
 
-	cfg := &config.DevboxConfig{Raw: map[string]any{
+	cfg := &config.DweConfig{Raw: map[string]any{
 		"git": map[string]any{
 			"project_prefix": "PRJ",
 			"hooks": map[string]any{
@@ -1760,7 +1760,7 @@ func TestRenderAgentsTemplateFile_cfgRawNonIdentifierKey(t *testing.T) {
 	writeAIPackTmpl(t, projectRoot, "template.tmpl",
 		`token={{ index .Cfg.Raw "my-tool" "api-key" }}`)
 
-	cfg := &config.DevboxConfig{Raw: map[string]any{
+	cfg := &config.DweConfig{Raw: map[string]any{
 		"my-tool": map[string]any{"api-key": "VALUE"},
 	}}
 	data := aipkg.TemplateData{Service: "main", Cfg: cfg}
@@ -1786,7 +1786,7 @@ func TestRenderAgentsTemplateFile_cfgRawMissingKey(t *testing.T) {
 	writeAIPackTmpl(t, projectRoot, "template.tmpl",
 		`prefix={{ .Cfg.Raw.git.project_prefix }}`)
 
-	cfg := &config.DevboxConfig{Raw: map[string]any{}}
+	cfg := &config.DweConfig{Raw: map[string]any{}}
 	data := aipkg.TemplateData{Service: "main", Cfg: cfg}
 	_, err := aipkg.RenderTemplateFile(projectRoot, "test", "template.tmpl", data, "AGENTS.md", hubDir, projectRoot)
 	if err == nil {
@@ -1800,7 +1800,7 @@ func TestRenderAgentsTemplateFile_cfgRawMissingKey(t *testing.T) {
 // TestRenderAgentsTemplateFile_backwardCompat verifies output byte-identical when
 // templates do not reference .Cfg.
 func TestRenderAgentsTemplateFile_backwardCompat(t *testing.T) {
-	render := func(cfg *config.DevboxConfig) []byte {
+	render := func(cfg *config.DweConfig) []byte {
 		projectRoot := t.TempDir()
 		hubDir := filepath.Join(projectRoot, "services", "main")
 		if err := os.MkdirAll(hubDir, 0o755); err != nil {
@@ -1822,8 +1822,8 @@ func TestRenderAgentsTemplateFile_backwardCompat(t *testing.T) {
 		}
 		return got
 	}
-	empty := render(&config.DevboxConfig{})
-	populated := render(&config.DevboxConfig{Raw: map[string]any{"git": map[string]any{"project_prefix": "PRJ"}}})
+	empty := render(&config.DweConfig{})
+	populated := render(&config.DweConfig{Raw: map[string]any{"git": map[string]any{"project_prefix": "PRJ"}}})
 	if string(empty) != string(populated) {
 		t.Errorf("output diverged when template does not reference .Cfg:\nempty=%q\npopulated=%q", empty, populated)
 	}

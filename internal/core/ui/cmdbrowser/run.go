@@ -64,7 +64,7 @@ type Item struct {
 // Options carries already-resolved configuration. Defaulting happens in the
 // config accessors (config.UICommands*); auto-defaulting int/bool fields
 // here would silently overwrite legitimate opt-outs. Callers without a
-// *config.DevboxConfig should use DefaultOptions().
+// *config.DweConfig should use DefaultOptions().
 type Options struct {
 	DefaultExpandedDepth int
 	AutoCollapseEmpty    bool
@@ -97,7 +97,7 @@ type Result struct {
 }
 
 // DefaultOptions returns the spec defaults for callers that don't have a
-// *config.DevboxConfig (tests and future programmatic callers). Options{}
+// *config.DweConfig (tests and future programmatic callers). Options{}
 // is intentionally NOT a useful zero value — use this factory or the
 // config.UICommands* accessors.
 func DefaultOptions() Options {

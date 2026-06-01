@@ -17,8 +17,8 @@ type testTool struct {
 	Port      int
 }
 
-// makeServicesCfg builds a minimal DevboxConfig for tests.
-func makeServicesCfg(services map[string]config.ServiceConfig, tools map[string]testTool) *config.DevboxConfig {
+// makeServicesCfg builds a minimal DweConfig for tests.
+func makeServicesCfg(services map[string]config.ServiceConfig, tools map[string]testTool) *config.DweConfig {
 	merged := make(map[string]config.ServiceConfig, len(services)+len(tools))
 	for k, v := range services {
 		if v.Type == "" {
@@ -40,7 +40,7 @@ func makeServicesCfg(services map[string]config.ServiceConfig, tools map[string]
 		}
 		merged[k] = svc
 	}
-	cfg := &config.DevboxConfig{Services: merged}
+	cfg := &config.DweConfig{Services: merged}
 	cfg.Project.Name = "test-project"
 	cfg.Project.Prefix = "devbox"
 	return cfg

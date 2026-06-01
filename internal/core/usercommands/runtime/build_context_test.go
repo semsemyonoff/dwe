@@ -12,7 +12,7 @@ import (
 func TestBuildRunContext_BasicExecution(t *testing.T) {
 	tmpdir := t.TempDir()
 
-	cfg := &config.DevboxConfig{
+	cfg := &config.DweConfig{
 		Raw: map[string]any{
 			"db": map[string]any{
 				"host": "localhost",
@@ -82,7 +82,7 @@ func TestBuildRunContext_BasicExecution(t *testing.T) {
 func TestBuildRunContext_DockerConfigMissing(t *testing.T) {
 	tmpdir := t.TempDir()
 
-	cfg := &config.DevboxConfig{
+	cfg := &config.DweConfig{
 		Raw: map[string]any{},
 	}
 
@@ -109,7 +109,7 @@ func TestBuildRunContext_DockerConfigMissing(t *testing.T) {
 func TestBuildRunContext_ParamResolveError(t *testing.T) {
 	tmpdir := t.TempDir()
 
-	cfg := &config.DevboxConfig{
+	cfg := &config.DweConfig{
 		Raw: map[string]any{},
 	}
 
@@ -143,7 +143,7 @@ func TestBuildRunContext_ParamResolveError(t *testing.T) {
 func TestBuildRunContext_ContextResolveError(t *testing.T) {
 	tmpdir := t.TempDir()
 
-	cfg := &config.DevboxConfig{
+	cfg := &config.DweConfig{
 		Raw: map[string]any{},
 	}
 
@@ -170,7 +170,7 @@ func TestBuildRunContext_ContextResolveError(t *testing.T) {
 func TestBuildRunContext_WithDefaultParam(t *testing.T) {
 	tmpdir := t.TempDir()
 
-	cfg := &config.DevboxConfig{
+	cfg := &config.DweConfig{
 		Raw: map[string]any{},
 	}
 
@@ -202,7 +202,7 @@ func TestBuildRunContext_WithDefaultParam(t *testing.T) {
 func TestBuildRunContext_ConvertWithMapType(t *testing.T) {
 	tmpdir := t.TempDir()
 
-	cfg := &config.DevboxConfig{
+	cfg := &config.DweConfig{
 		Raw: map[string]any{},
 	}
 
@@ -238,7 +238,7 @@ func TestBuildRunContext_ConvertWithMapType(t *testing.T) {
 func TestBuildRunContext_WithTemplateRender(t *testing.T) {
 	tmpdir := t.TempDir()
 
-	cfg := &config.DevboxConfig{
+	cfg := &config.DweConfig{
 		Raw: map[string]any{
 			"db": map[string]any{
 				"stock_database": "app_stock",
@@ -276,7 +276,7 @@ func TestBuildRunContext_WithTemplateRender(t *testing.T) {
 func TestBuildRunContext_WithTemplateMissingKey(t *testing.T) {
 	tmpdir := t.TempDir()
 
-	cfg := &config.DevboxConfig{
+	cfg := &config.DweConfig{
 		Raw: map[string]any{},
 	}
 
@@ -307,7 +307,7 @@ func TestBuildRunContext_WithTemplateMissingKey(t *testing.T) {
 func TestBuildRunContext_WithLiteralPassthrough(t *testing.T) {
 	tmpdir := t.TempDir()
 
-	cfg := &config.DevboxConfig{
+	cfg := &config.DweConfig{
 		Raw: map[string]any{},
 	}
 
@@ -337,7 +337,7 @@ func TestBuildRunContext_WithLiteralPassthrough(t *testing.T) {
 func TestBuildRunContext_NoFilesystemSideEffects(t *testing.T) {
 	tmpdir := t.TempDir()
 
-	cfg := &config.DevboxConfig{
+	cfg := &config.DweConfig{
 		Raw: map[string]any{},
 	}
 
@@ -373,7 +373,7 @@ func TestBuildRunContext_NoFilesystemSideEffects(t *testing.T) {
 func TestBuildRunContext_RenderContextPopulated(t *testing.T) {
 	tmpdir := t.TempDir()
 
-	cfg := &config.DevboxConfig{
+	cfg := &config.DweConfig{
 		Raw: map[string]any{
 			"db": map[string]any{
 				"host": "localhost",

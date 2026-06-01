@@ -60,7 +60,7 @@ func withTempCwd(t *testing.T, dir string) {
 func writeDevbox(t *testing.T, root, name string) {
 	t.Helper()
 	body := "project:\n  name: " + name + "\n"
-	if err := os.WriteFile(filepath.Join(root, "devbox.yml"), []byte(body), 0o644); err != nil {
+	if err := os.WriteFile(filepath.Join(root, "workspace.yml"), []byte(body), 0o644); err != nil {
 		t.Fatalf("write devbox.yml: %v", err)
 	}
 }

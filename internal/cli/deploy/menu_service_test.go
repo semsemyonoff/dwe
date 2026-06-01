@@ -115,11 +115,11 @@ func TestDeployInfoRowsFrom(t *testing.T) {
 
 func TestRunDeployMenu_SubmenuCancelLoopsBack(t *testing.T) {
 	tmpdir := t.TempDir()
-	devboxDir := filepath.Join(tmpdir, "devbox")
+	devboxDir := filepath.Join(tmpdir, "workspace")
 	require.NoError(t, os.MkdirAll(devboxDir, 0o755))
-	require.NoError(t, os.WriteFile(filepath.Join(devboxDir, "devbox.yml"), []byte("project:\n  name: test\n"), 0o644))
+	require.NoError(t, os.WriteFile(filepath.Join(devboxDir, "workspace.yml"), []byte("project:\n  name: test\n"), 0o644))
 
-	flags := &cmdctx.RootFlags{ConfigPath: filepath.Join(devboxDir, "devbox.yml")}
+	flags := &cmdctx.RootFlags{ConfigPath: filepath.Join(devboxDir, "workspace.yml")}
 
 	oldSelect := selectMenuItemFn
 	oldPicker := selectDeployServiceFn
@@ -134,7 +134,7 @@ func TestRunDeployMenu_SubmenuCancelLoopsBack(t *testing.T) {
 		widgets.IsInteractiveFn = oldIsInteractive
 	})
 
-	buildDeployItemsFn = func(baseDir string, cfg *config.DevboxConfig, state *journal.ProjectState) ([]deployServiceItem, error) {
+	buildDeployItemsFn = func(baseDir string, cfg *config.DweConfig, state *journal.ProjectState) ([]deployServiceItem, error) {
 		return []deployServiceItem{{Name: "web", Type: "app", Mandatory: true}}, nil
 	}
 

@@ -23,7 +23,7 @@ func TestValidator(t *testing.T) {
 			name: "empty_commands_directory",
 			buildDir: func(t *testing.T) string {
 				dir := t.TempDir()
-				cmdDir := filepath.Join(dir, "devbox", "commands")
+				cmdDir := filepath.Join(dir, "workspace", "commands")
 				require.NoError(t, os.MkdirAll(cmdDir, 0o755))
 				return dir
 			},
@@ -37,7 +37,7 @@ func TestValidator(t *testing.T) {
 			name: "good_command_file",
 			buildDir: func(t *testing.T) string {
 				dir := t.TempDir()
-				cmdDir := filepath.Join(dir, "devbox", "commands")
+				cmdDir := filepath.Join(dir, "workspace", "commands")
 				require.NoError(t, os.MkdirAll(cmdDir, 0o755))
 
 				// Create a valid command file
@@ -61,7 +61,7 @@ func TestValidator(t *testing.T) {
 			name: "workflow_missing_command",
 			buildDir: func(t *testing.T) string {
 				dir := t.TempDir()
-				cmdDir := filepath.Join(dir, "devbox", "commands")
+				cmdDir := filepath.Join(dir, "workspace", "commands")
 				require.NoError(t, os.MkdirAll(cmdDir, 0o755))
 
 				// Create a workflow that references a non-existent command
@@ -88,7 +88,7 @@ func TestValidator(t *testing.T) {
 			name: "reserved_top_level_id_list_warns",
 			buildDir: func(t *testing.T) string {
 				dir := t.TempDir()
-				cmdDir := filepath.Join(dir, "devbox", "commands")
+				cmdDir := filepath.Join(dir, "workspace", "commands")
 				require.NoError(t, os.MkdirAll(cmdDir, 0o755))
 				// A file named ".yml" produces an empty group, so the command id
 				// equals its local name — the only way to author a root-level id.
@@ -119,7 +119,7 @@ func TestValidator(t *testing.T) {
 			name: "grouped_list_id_does_not_warn",
 			buildDir: func(t *testing.T) string {
 				dir := t.TempDir()
-				cmdDir := filepath.Join(dir, "devbox", "commands")
+				cmdDir := filepath.Join(dir, "workspace", "commands")
 				require.NoError(t, os.MkdirAll(cmdDir, 0o755))
 				cmdFile := filepath.Join(cmdDir, "services.yml")
 				content := `commands:
@@ -143,7 +143,7 @@ func TestValidator(t *testing.T) {
 			name: "no_reserved_id_no_warning",
 			buildDir: func(t *testing.T) string {
 				dir := t.TempDir()
-				cmdDir := filepath.Join(dir, "devbox", "commands")
+				cmdDir := filepath.Join(dir, "workspace", "commands")
 				require.NoError(t, os.MkdirAll(cmdDir, 0o755))
 				cmdFile := filepath.Join(cmdDir, "ok.yml")
 				content := `commands:
@@ -402,7 +402,7 @@ func TestWorkflowParallelDiagnostics(t *testing.T) {
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
 			dir := t.TempDir()
-			cmdDir := filepath.Join(dir, "devbox", "commands")
+			cmdDir := filepath.Join(dir, "workspace", "commands")
 			require.NoError(t, os.MkdirAll(cmdDir, 0o755))
 			require.NoError(t, os.WriteFile(filepath.Join(cmdDir, "workflow.yml"), []byte(tc.yaml), 0o644))
 
@@ -711,7 +711,7 @@ func TestParamValidationDiagnostics(t *testing.T) {
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
 			dir := t.TempDir()
-			cmdDir := filepath.Join(dir, "devbox", "commands")
+			cmdDir := filepath.Join(dir, "workspace", "commands")
 			require.NoError(t, os.MkdirAll(cmdDir, 0o755))
 			require.NoError(t, os.WriteFile(filepath.Join(cmdDir, "test.yml"), []byte(tc.yaml), 0o644))
 

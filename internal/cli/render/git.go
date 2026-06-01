@@ -120,7 +120,7 @@ func validateExplicitGitArg(name string, services map[string]config.ServiceConfi
 }
 
 // renderGitHooksForService renders all hooks for a single service.
-func renderGitHooksForService(projectRoot, name string, svc config.ServiceConfig, cfg *config.DevboxConfig, w *render.Writer) error {
+func renderGitHooksForService(projectRoot, name string, svc config.ServiceConfig, cfg *config.DweConfig, w *render.Writer) error {
 	absRoot, err := filepath.Abs(projectRoot)
 	if err != nil {
 		return fmt.Errorf("resolve project root: %w", err)

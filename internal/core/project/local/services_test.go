@@ -91,7 +91,7 @@ func TestDiffServiceSelection_MultipleChanges(t *testing.T) {
 }
 
 func TestValidateServiceToggle_UnknownService(t *testing.T) {
-	cfg := &config.DevboxConfig{
+	cfg := &config.DweConfig{
 		Services: map[string]config.ServiceConfig{
 			"main": {Required: false},
 		},
@@ -102,7 +102,7 @@ func TestValidateServiceToggle_UnknownService(t *testing.T) {
 }
 
 func TestValidateServiceToggle_MandatoryService(t *testing.T) {
-	cfg := &config.DevboxConfig{
+	cfg := &config.DweConfig{
 		Services: map[string]config.ServiceConfig{
 			"main": {Required: true},
 		},
@@ -113,7 +113,7 @@ func TestValidateServiceToggle_MandatoryService(t *testing.T) {
 }
 
 func TestValidateServiceToggle_MandatoryInfraService(t *testing.T) {
-	cfg := &config.DevboxConfig{
+	cfg := &config.DweConfig{
 		Services: map[string]config.ServiceConfig{
 			"db": {Type: config.ServiceTypeInfra, Required: true},
 		},
@@ -124,7 +124,7 @@ func TestValidateServiceToggle_MandatoryInfraService(t *testing.T) {
 }
 
 func TestValidateServiceToggle_OptionalInfraService(t *testing.T) {
-	cfg := &config.DevboxConfig{
+	cfg := &config.DweConfig{
 		Services: map[string]config.ServiceConfig{
 			"varnish": {Type: config.ServiceTypeInfra, Required: false},
 		},
@@ -135,7 +135,7 @@ func TestValidateServiceToggle_OptionalInfraService(t *testing.T) {
 }
 
 func TestValidateServiceToggle_OptionalService(t *testing.T) {
-	cfg := &config.DevboxConfig{
+	cfg := &config.DweConfig{
 		Services: map[string]config.ServiceConfig{
 			"second": {Required: false},
 		},
@@ -146,7 +146,7 @@ func TestValidateServiceToggle_OptionalService(t *testing.T) {
 }
 
 func TestApplyServiceTogglesToYAML_AllOrNothing(t *testing.T) {
-	cfg := &config.DevboxConfig{
+	cfg := &config.DweConfig{
 		Services: map[string]config.ServiceConfig{
 			"main":   {Required: true},
 			"second": {Required: false},
@@ -167,7 +167,7 @@ func TestApplyServiceTogglesToYAML_AllOrNothing(t *testing.T) {
 }
 
 func TestApplyServiceTogglesToYAML_AppliesChanges(t *testing.T) {
-	cfg := &config.DevboxConfig{
+	cfg := &config.DweConfig{
 		Services: map[string]config.ServiceConfig{
 			"second": {Required: false},
 			"third":  {Required: false},

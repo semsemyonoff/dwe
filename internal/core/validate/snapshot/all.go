@@ -21,7 +21,7 @@ import (
 // verifyChecksums toggles the per-snapshot sha256 verification (off by default
 // because it can be slow for multi-GB dumps; the `--verify` flag on
 // `devbox validate snapshot` flips it on).
-func All(cfg *config.DevboxConfig, snapCfg *config.SnapshotConfig, snapCfgErr error, baseDir string, _ *registry.Registry, verifyChecksums bool) []validate.Validator {
+func All(cfg *config.DweConfig, snapCfg *config.SnapshotConfig, snapCfgErr error, baseDir string, _ *registry.Registry, verifyChecksums bool) []validate.Validator {
 	out := []validate.Validator{
 		&configLoadableValidator{err: snapCfgErr},
 		&createDefinedValidator{cfg: snapCfg},

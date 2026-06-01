@@ -326,7 +326,7 @@ func TestLoadSnapshotConfig_servicesMismatchPolicy(t *testing.T) {
 
 func TestSnapshotConfigPath(t *testing.T) {
 	got := SnapshotConfigPath("/proj")
-	want := filepath.Join("/proj", "devbox", "snapshot.yml")
+	want := filepath.Join("/proj", "workspace", "snapshot.yml")
 	if got != want {
 		t.Errorf("SnapshotConfigPath: got %q want %q", got, want)
 	}

@@ -51,7 +51,7 @@ func TestValidateDependsOnTypes_unknownTargetTolerated(t *testing.T) {
 // order: base → tools (sorted) → infra (sorted) → apps (sorted). This order is
 // part of the public surface — overlay precedence depends on it.
 func TestComposeFiles_grouped_tool_infra_app(t *testing.T) {
-	cfg := &DevboxConfig{
+	cfg := &DweConfig{
 		Compose: ComposeConfig{Base: "compose.yaml"},
 		Services: map[string]ServiceConfig{
 			"zzz_tool": {Type: ServiceTypeTool, Enabled: true, Compose: []string{"tool-z.yml"}},

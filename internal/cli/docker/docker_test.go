@@ -13,7 +13,7 @@ import (
 // TestDockerPipelineBuildsCompose verifies that the docker pipeline correctly
 // assembles a Compose struct from config and docker policy.
 func TestDockerPipelineBuildsCompose(t *testing.T) {
-	cfg := &config.DevboxConfig{
+	cfg := &config.DweConfig{
 		Compose: config.ComposeConfig{
 			Base: "compose.yaml",
 		},
@@ -128,7 +128,7 @@ func TestDockerEnvRegenCommands(t *testing.T) {
 
 // TestDockerCommandSubcommands verifies the docker command group has all expected subcommands.
 func TestDockerCommandSubcommands(t *testing.T) {
-	flags := &cmdctx.RootFlags{ConfigPath: "devbox.yml"}
+	flags := &cmdctx.RootFlags{ConfigPath: "workspace.yml"}
 	dockerCmd := NewCmd("", flags)
 
 	expectedSubs := []string{"up", "down", "stop", "restart", "logs", "ps", "exec", "run", "pull", "build", "project-name"}
@@ -183,7 +183,7 @@ func TestStripDockerCommandSeparator(t *testing.T) {
 
 // TestResolvePullInvocation verifies the pull resolver logic.
 func TestResolvePullInvocation(t *testing.T) {
-	cfg := &config.DevboxConfig{
+	cfg := &config.DweConfig{
 		Compose: config.ComposeConfig{
 			Base: "compose.yaml",
 		},
@@ -242,7 +242,7 @@ func TestResolvePullInvocation(t *testing.T) {
 
 // TestDockerPullCmd verifies pull command registration and flag parsing.
 func TestDockerPullCmd(t *testing.T) {
-	flags := &cmdctx.RootFlags{ConfigPath: "devbox.yml"}
+	flags := &cmdctx.RootFlags{ConfigPath: "workspace.yml"}
 	pullCmd := newDockerPullCmd(flags)
 
 	if pullCmd.Name() != "pull" {
@@ -258,7 +258,7 @@ func TestDockerPullCmd(t *testing.T) {
 
 // TestDockerPullArgs verifies that pull builds correct docker compose arguments.
 func TestDockerPullArgs(t *testing.T) {
-	cfg := &config.DevboxConfig{
+	cfg := &config.DweConfig{
 		Compose: config.ComposeConfig{
 			Base: "compose.yaml",
 		},
@@ -287,7 +287,7 @@ func TestDockerPullArgs(t *testing.T) {
 
 // TestResolveBuildInvocation verifies the build resolver logic.
 func TestResolveBuildInvocation(t *testing.T) {
-	cfg := &config.DevboxConfig{
+	cfg := &config.DweConfig{
 		Compose: config.ComposeConfig{
 			Base: "compose.yaml",
 		},
@@ -392,7 +392,7 @@ func TestResolveBuildInvocation(t *testing.T) {
 
 // TestDockerBuildCmd verifies build command registration and flag parsing.
 func TestDockerBuildCmd(t *testing.T) {
-	flags := &cmdctx.RootFlags{ConfigPath: "devbox.yml"}
+	flags := &cmdctx.RootFlags{ConfigPath: "workspace.yml"}
 	buildCmd := newDockerBuildCmd(flags)
 
 	if buildCmd.Name() != "build" {
@@ -408,7 +408,7 @@ func TestDockerBuildCmd(t *testing.T) {
 
 // TestDockerBuildArgs verifies that build builds correct docker compose arguments.
 func TestDockerBuildArgs(t *testing.T) {
-	cfg := &config.DevboxConfig{
+	cfg := &config.DweConfig{
 		Compose: config.ComposeConfig{
 			Base: "compose.yaml",
 		},
@@ -479,7 +479,7 @@ func TestDockerBuildArgs(t *testing.T) {
 
 // TestLegacyImageCommandMapping verifies legacy make targets map to new commands.
 func TestLegacyImageCommandMapping(t *testing.T) {
-	cfg := &config.DevboxConfig{
+	cfg := &config.DweConfig{
 		Compose: config.ComposeConfig{
 			Base: "compose.yaml",
 		},
@@ -610,7 +610,7 @@ func TestLegacyImageCommandMapping(t *testing.T) {
 // (including disabled services) without modifying any external state. The resolver functions
 // are pure value functions; this test confirms --all expands the file set beyond the active set.
 func TestAllFlagDoesNotMutateLocalConfig(t *testing.T) {
-	cfg := &config.DevboxConfig{
+	cfg := &config.DweConfig{
 		Compose: config.ComposeConfig{
 			Base: "compose.yaml",
 		},

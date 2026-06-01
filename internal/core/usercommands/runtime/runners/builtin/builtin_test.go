@@ -20,7 +20,7 @@ func builtinRC(name string, underParallel, skipConfirm, nonInteractive bool) spe
 			Type: model.CommandTypeBuiltin,
 			Cmd:  name,
 		},
-		Config:         &config.DevboxConfig{},
+		Config:         &config.DweConfig{},
 		Stdout:         &bytes.Buffer{},
 		Stderr:         &bytes.Buffer{},
 		UnderParallel:  underParallel,

@@ -29,7 +29,7 @@ func (v *uiValidator) Domain() string { return "config" }
 func (v *uiValidator) Run(ctx validate.Context) []validate.Diagnostic {
 	configPath := ctx.ConfigPath
 	if configPath == "" {
-		configPath = filepath.Join(ctx.ProjectRoot, "devbox.yml")
+		configPath = filepath.Join(ctx.ProjectRoot, "workspace.yml")
 	}
 	file := relPath(ctx.ProjectRoot, configPath)
 

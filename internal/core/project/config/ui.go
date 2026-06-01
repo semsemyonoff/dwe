@@ -32,7 +32,7 @@ type UICommandsConfig struct {
 
 // UICommandsDefaultDepth returns the resolved default-expanded-depth value
 // (nil → 1; negative values clamp to 0; explicit 0 = all-collapsed). Safe when cfg is nil.
-func UICommandsDefaultDepth(cfg *DevboxConfig) int {
+func UICommandsDefaultDepth(cfg *DweConfig) int {
 	if cfg == nil || cfg.UI.Commands.DefaultExpandedDepth == nil {
 		return 1
 	}
@@ -46,7 +46,7 @@ func UICommandsDefaultDepth(cfg *DevboxConfig) int {
 // UICommandsAutoCollapseEmpty returns the resolved auto-collapse-empty flag.
 // Defaults to true when cfg is nil or the field is unset; honours an
 // explicit &false. Safe when cfg is nil.
-func UICommandsAutoCollapseEmpty(cfg *DevboxConfig) bool {
+func UICommandsAutoCollapseEmpty(cfg *DweConfig) bool {
 	if cfg == nil || cfg.UI.Commands.AutoCollapseEmpty == nil {
 		return true
 	}
@@ -56,7 +56,7 @@ func UICommandsAutoCollapseEmpty(cfg *DevboxConfig) bool {
 // UICommandsShowTypeBadges returns the resolved show-type-badges flag.
 // Defaults to true when cfg is nil or the field is unset; honours an
 // explicit &false. Safe when cfg is nil.
-func UICommandsShowTypeBadges(cfg *DevboxConfig) bool {
+func UICommandsShowTypeBadges(cfg *DweConfig) bool {
 	if cfg == nil || cfg.UI.Commands.ShowTypeBadges == nil {
 		return true
 	}

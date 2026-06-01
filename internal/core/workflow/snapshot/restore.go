@@ -20,7 +20,7 @@ import (
 // invocation. The caller is responsible for acquiring project locks before
 // calling Restore.
 type RestoreParams struct {
-	Cfg            *config.DevboxConfig
+	Cfg            *config.DweConfig
 	SnapCfg        *config.SnapshotConfig
 	Registry       *registry.Registry
 	BaseDir        string
@@ -352,7 +352,7 @@ func writePreRestoreBackup(baseDir string) (string, error) {
 		src    string
 		dstRel string
 	}{
-		{filepath.Join(baseDir, "devbox", "local.yml"), "local.yml"},
+		{filepath.Join(baseDir, "workspace", "local.yml"), "local.yml"},
 		{filepath.Join(baseDir, journal.DefaultRelPath), "deploy-state.yml"},
 	}
 	written := 0

@@ -10,7 +10,7 @@ import (
 
 // Write renders the .env content from cfg and writes it to outputPath,
 // creating parent directories as needed.
-func Write(cfg *config.DevboxConfig, outputPath string) error {
+func Write(cfg *config.DweConfig, outputPath string) error {
 	content, err := BuildContent(cfg)
 	if err != nil {
 		return err

@@ -2,7 +2,7 @@
 //
 // Three expression kinds are supported:
 //
-//   - Go template  — contains "{{"; evaluated against DevboxConfig at plan-resolution time
+//   - Go template  — contains "{{"; evaluated against DweConfig at plan-resolution time
 //   - Builtin predicate — e.g. "dir-empty services/main/src"; evaluated at step-execution time
 //   - Shell command — prefixed "cmd: "; evaluated at step-execution time via sh -c
 //
@@ -25,7 +25,7 @@ type Kind int
 
 const (
 	// KindTemplate is a Go template expression (contains "{{").
-	// Evaluated against DevboxConfig at plan-resolution time by the tpl package.
+	// Evaluated against DweConfig at plan-resolution time by the tpl package.
 	KindTemplate Kind = iota
 
 	// KindBuiltin is a filesystem predicate ("dir-exists", "dir-missing", etc.).

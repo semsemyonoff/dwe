@@ -12,7 +12,7 @@ import (
 func writeTempDevbox(t *testing.T, body string) (root, configPath string) {
 	t.Helper()
 	root = t.TempDir()
-	configPath = filepath.Join(root, "devbox.yml")
+	configPath = filepath.Join(root, "workspace.yml")
 	if err := os.WriteFile(configPath, []byte(body), 0o644); err != nil {
 		t.Fatalf("write fixture: %v", err)
 	}

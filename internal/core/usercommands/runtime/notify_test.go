@@ -262,7 +262,7 @@ func TestRunCommand_NotifyTrue_CommandAborted_NoEvent(t *testing.T) {
 
 func TestRunCommand_NotifyTrue_PopulatesProjectName(t *testing.T) {
 	rec := installRecordingNotifier(t)
-	cfg := &config.DevboxConfig{}
+	cfg := &config.DweConfig{}
 	cfg.Project.Name = "demo"
 	rc := RunContext{
 		Cmd:    basicShellCmd(true),

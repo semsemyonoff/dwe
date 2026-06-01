@@ -18,9 +18,9 @@ type testTool struct {
 	Status    []config.StatusColumn
 }
 
-// makeServicesCfg builds a minimal DevboxConfig for stack tests. Optional
+// makeServicesCfg builds a minimal DweConfig for stack tests. Optional
 // tools are merged into services with Type=ServiceTypeTool.
-func makeServicesCfg(services map[string]config.ServiceConfig, tools map[string]testTool, _ any, _ any) *config.DevboxConfig {
+func makeServicesCfg(services map[string]config.ServiceConfig, tools map[string]testTool, _ any, _ any) *config.DweConfig {
 	merged := make(map[string]config.ServiceConfig, len(services)+len(tools))
 	for k, v := range services {
 		if v.Type == "" {
@@ -43,7 +43,7 @@ func makeServicesCfg(services map[string]config.ServiceConfig, tools map[string]
 		}
 		merged[k] = svc
 	}
-	return &config.DevboxConfig{Services: merged}
+	return &config.DweConfig{Services: merged}
 }
 
 func makeMinimalProject(t *testing.T) string {
@@ -57,10 +57,10 @@ services:
     type: app
     dir: ./services/main
 `
-	if err := os.WriteFile(filepath.Join(dir, "devbox.yml"), []byte(devboxYML), 0o644); err != nil {
+	if err := os.WriteFile(filepath.Join(dir, "workspace.yml"), []byte(devboxYML), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	devboxDir := filepath.Join(dir, "devbox")
+	devboxDir := filepath.Join(dir, "workspace")
 	if err := os.MkdirAll(devboxDir, 0o755); err != nil {
 		t.Fatal(err)
 	}

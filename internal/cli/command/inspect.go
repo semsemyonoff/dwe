@@ -229,13 +229,13 @@ func inspectStepDescription(reg *usercommands.Registry, translator i18n.Translat
 // (e.g. an inspect viewport narrower than the terminal), use
 // [printInspectAt] with the explicit width — otherwise values wrap to the
 // terminal and get silently clipped when the viewport renders.
-func printInspect(w io.Writer, def *usercommands.CommandDef, cfg *config.DevboxConfig, reg *usercommands.Registry, translator i18n.Translator, locale string) {
+func printInspect(w io.Writer, def *usercommands.CommandDef, cfg *config.DweConfig, reg *usercommands.Registry, translator i18n.Translator, locale string) {
 	printInspectAt(w, def, cfg, reg, 0, translator, locale)
 }
 
 // printInspectAt is [printInspect] with an explicit wrap width. maxWidth == 0
 // falls back to the terminal width.
-func printInspectAt(w io.Writer, def *usercommands.CommandDef, cfg *config.DevboxConfig, reg *usercommands.Registry, maxWidth int, translator i18n.Translator, locale string) {
+func printInspectAt(w io.Writer, def *usercommands.CommandDef, cfg *config.DweConfig, reg *usercommands.Registry, maxWidth int, translator i18n.Translator, locale string) {
 	def2 := func(name, value string, indent int) {
 		_, _ = fmt.Fprintln(w, render.DefinitionAt(name, value, indent, "", maxWidth))
 	}

@@ -16,7 +16,7 @@ import (
 // Loads devbox/reset.yml and resolves all phases/steps. When the file is
 // absent, the built-in default pipeline is used.
 // reg (registry) is used to validate files_gate directives and must be non-nil.
-func ResolvePlan(cfg *config.DevboxConfig, reg *registry.Registry) ([]pipeline.ResolvedStep, error) {
+func ResolvePlan(cfg *config.DweConfig, reg *registry.Registry) ([]pipeline.ResolvedStep, error) {
 	_, steps, _, err := LoadAndResolvePlan(cfg, reg)
 	return steps, err
 }
@@ -26,13 +26,13 @@ func ResolvePlan(cfg *config.DevboxConfig, reg *registry.Registry) ([]pipeline.R
 // resolved step list, and whether the built-in default pipeline was used.
 // When the file is absent, the built-in default pipeline is used.
 // reg (registry) is used to validate files_gate directives and must be non-nil.
-func LoadAndResolvePlan(cfg *config.DevboxConfig, reg *registry.Registry) (*config.ProjectDeployConfig, []pipeline.ResolvedStep, bool, error) {
+func LoadAndResolvePlan(cfg *config.DweConfig, reg *registry.Registry) (*config.ProjectDeployConfig, []pipeline.ResolvedStep, bool, error) {
 	cfgPath, ok := cfg.Raw["__configPath"].(string)
 	if !ok {
 		return nil, nil, false, fmt.Errorf("internal: __configPath missing from config")
 	}
 	baseDir := filepath.Dir(cfgPath)
-	resetPath := filepath.Join(baseDir, "devbox", "reset.yml")
+	resetPath := filepath.Join(baseDir, "workspace", "reset.yml")
 
 	loaded, err := config.LoadResetConfig(resetPath)
 	switch {
@@ -57,7 +57,7 @@ func LoadAndResolvePlan(cfg *config.DevboxConfig, reg *registry.Registry) (*conf
 
 // FindStep looks up a step by <phase>/<step> address in the reset config.
 // When the reset.yml file is absent, the built-in default pipeline is searched.
-func FindStep(cfg *config.DevboxConfig, address string) (config.DeployPhase, config.DeployStep, error) {
+func FindStep(cfg *config.DweConfig, address string) (config.DeployPhase, config.DeployStep, error) {
 	parts := strings.Split(address, "/")
 	if len(parts) != 2 {
 		return config.DeployPhase{}, config.DeployStep{}, fmt.Errorf("invalid step address %q: expected <phase>/<step>", address)
@@ -70,7 +70,7 @@ func FindStep(cfg *config.DevboxConfig, address string) (config.DeployPhase, con
 	}
 	baseDir := filepath.Dir(cfgPath)
 
-	loaded, err := config.LoadResetConfig(filepath.Join(baseDir, "devbox", "reset.yml"))
+	loaded, err := config.LoadResetConfig(filepath.Join(baseDir, "workspace", "reset.yml"))
 	switch {
 	case errors.Is(err, os.ErrNotExist):
 		loaded = nil

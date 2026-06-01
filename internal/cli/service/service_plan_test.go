@@ -23,8 +23,8 @@ import (
 
 // helpers
 
-func makeToggleCfg(services map[string]config.ServiceConfig) *config.DevboxConfig {
-	return &config.DevboxConfig{Services: services}
+func makeToggleCfg(services map[string]config.ServiceConfig) *config.DweConfig {
+	return &config.DweConfig{Services: services}
 }
 
 func svcApp(hooks *config.ServiceToggleHooks, onDisable *config.ServiceToggleHooks, notes *config.ServiceNotes) config.ServiceConfig {
@@ -683,7 +683,7 @@ func TestExecuteTogglePlan_FullPlanOrder(t *testing.T) {
 	reg.AddCommandForTest(makeShellCmd("foo:pre"))
 	reg.AddCommandForTest(makeShellCmd("foo:post"))
 	deps.CmdReg = reg
-	deps.Cfg = &config.DevboxConfig{}
+	deps.Cfg = &config.DweConfig{}
 
 	plan := TogglePlan{
 		BeforeSteps: []PlanStep{{CommandID: "foo:pre"}},
@@ -1052,7 +1052,7 @@ func TestExecuteTogglePlan_BeforeHookFailureShortCircuits(t *testing.T) {
 	reg := registry.NewEmptyRegistry()
 	reg.AddCommandForTest(makeShellCmd("foo:pre"))
 	deps.CmdReg = reg
-	deps.Cfg = &config.DevboxConfig{}
+	deps.Cfg = &config.DweConfig{}
 
 	plan := TogglePlan{
 		BeforeSteps: []PlanStep{{CommandID: "foo:pre"}},

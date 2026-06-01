@@ -64,7 +64,7 @@ var portListenFn = listenTCP
 // This exported function is the canonical port-conflict probe. Both the
 // validator (portsFreeValidator) and the setup wizard use it — there is no
 // second port enumeration path.
-func CollectPortConflicts(ctx context.Context, cfg *config.DevboxConfig, baseDir string) ([]PortConflict, error) {
+func CollectPortConflicts(ctx context.Context, cfg *config.DweConfig, baseDir string) ([]PortConflict, error) {
 	if cfg == nil {
 		return nil, nil
 	}
@@ -104,7 +104,7 @@ func CollectPortConflicts(ctx context.Context, cfg *config.DevboxConfig, baseDir
 }
 
 type portsFreeValidator struct {
-	cfg *config.DevboxConfig
+	cfg *config.DweConfig
 }
 
 var _ validate.Validator = (*portsFreeValidator)(nil)
@@ -165,7 +165,7 @@ type declaredPort struct {
 // host port on an enabled service. Disabled services are skipped — they do not
 // bind ports, so a conflict on their declared port does not block startup.
 // Output is sorted (service, portName) for deterministic diagnostics.
-func collectDeclaredPorts(cfg *config.DevboxConfig) []declaredPort {
+func collectDeclaredPorts(cfg *config.DweConfig) []declaredPort {
 	if cfg == nil {
 		return nil
 	}
@@ -234,7 +234,7 @@ func classifyPortForConflict(dp declaredPort, bindings map[int][]portOwner, ourP
 // Docker Compose v2 applies when no project_name is configured. Without this
 // fallback, our own containers from a previous deploy would be misidentified as
 // foreign conflicts and block the next `devbox run` / `devbox deploy run`.
-func resolveComposeProject(baseDir string, cfg *config.DevboxConfig) string {
+func resolveComposeProject(baseDir string, cfg *config.DweConfig) string {
 	if baseDir == "" || cfg == nil {
 		return ""
 	}

@@ -25,7 +25,7 @@ func snapshotTestProject(t *testing.T) string {
 	t.Helper()
 	dir := t.TempDir()
 	cfg := []byte("schema_version: 1\nproject:\n  name: testproj\n")
-	if err := os.WriteFile(filepath.Join(dir, "devbox.yml"), cfg, 0o644); err != nil {
+	if err := os.WriteFile(filepath.Join(dir, "workspace.yml"), cfg, 0o644); err != nil {
 		t.Fatalf("write devbox.yml: %v", err)
 	}
 	if err := os.MkdirAll(filepath.Join(dir, "snapshots"), 0o755); err != nil {
@@ -95,7 +95,7 @@ func loadOrUpdateGolden(t *testing.T, path, got string) {
 func TestSnapshotList_Empty(t *testing.T) {
 	base := snapshotTestProject(t)
 	flags := &cmdctx.RootFlags{
-		ConfigPath: filepath.Join(base, "devbox.yml"),
+		ConfigPath: filepath.Join(base, "workspace.yml"),
 		Root:       base,
 	}
 	cmd, out, errW := makeTestCmd(t)
@@ -113,7 +113,7 @@ func TestSnapshotList_Empty(t *testing.T) {
 func TestSnapshotList_TableAndJSON(t *testing.T) {
 	base := snapshotTestProject(t)
 	flags := &cmdctx.RootFlags{
-		ConfigPath: filepath.Join(base, "devbox.yml"),
+		ConfigPath: filepath.Join(base, "workspace.yml"),
 		Root:       base,
 	}
 	older := time.Date(2026, 5, 20, 10, 0, 0, 0, time.UTC)
@@ -197,7 +197,7 @@ func TestSnapshotList_TableAndJSON(t *testing.T) {
 func TestSnapshotCurrent(t *testing.T) {
 	base := snapshotTestProject(t)
 	flags := &cmdctx.RootFlags{
-		ConfigPath: filepath.Join(base, "devbox.yml"),
+		ConfigPath: filepath.Join(base, "workspace.yml"),
 		Root:       base,
 	}
 
@@ -239,7 +239,7 @@ func TestSnapshotCurrent(t *testing.T) {
 		// Start fresh — no current pointer set in this subtest.
 		base2 := snapshotTestProject(t)
 		flags2 := &cmdctx.RootFlags{
-			ConfigPath: filepath.Join(base2, "devbox.yml"),
+			ConfigPath: filepath.Join(base2, "workspace.yml"),
 			Root:       base2,
 			Output:     "json",
 		}
@@ -260,7 +260,7 @@ func TestSnapshotCurrent(t *testing.T) {
 		// Create a fresh base with a known current snapshot for the golden.
 		base2 := snapshotTestProject(t)
 		flags2 := &cmdctx.RootFlags{
-			ConfigPath: filepath.Join(base2, "devbox.yml"),
+			ConfigPath: filepath.Join(base2, "workspace.yml"),
 			Root:       base2,
 			Output:     "json",
 		}
@@ -284,7 +284,7 @@ func TestSnapshotCurrent(t *testing.T) {
 func TestSnapshotInspect_FromDir(t *testing.T) {
 	base := snapshotTestProject(t)
 	flags := &cmdctx.RootFlags{
-		ConfigPath: filepath.Join(base, "devbox.yml"),
+		ConfigPath: filepath.Join(base, "workspace.yml"),
 		Root:       base,
 	}
 	writeTestSnapshot(t, base, "feature-x", &meta.Manifest{
@@ -356,7 +356,7 @@ func TestSnapshotInspect_FromDir(t *testing.T) {
 func TestSnapshotInspect_FromTar(t *testing.T) {
 	base := snapshotTestProject(t)
 	flags := &cmdctx.RootFlags{
-		ConfigPath: filepath.Join(base, "devbox.yml"),
+		ConfigPath: filepath.Join(base, "workspace.yml"),
 		Root:       base,
 	}
 
@@ -397,7 +397,7 @@ func TestSnapshotInspect_FromTar(t *testing.T) {
 func TestSnapshotInspect_ConfigDiverged(t *testing.T) {
 	base := snapshotTestProject(t)
 	flags := &cmdctx.RootFlags{
-		ConfigPath: filepath.Join(base, "devbox.yml"),
+		ConfigPath: filepath.Join(base, "workspace.yml"),
 		Root:       base,
 	}
 	// Write a deploy state with a different config_hash.
@@ -461,7 +461,7 @@ func TestSnapshotCmd_ArgsValidation(t *testing.T) {
 func TestSnapshotNameCompletion(t *testing.T) {
 	base := snapshotTestProject(t)
 	flags := &cmdctx.RootFlags{
-		ConfigPath: filepath.Join(base, "devbox.yml"),
+		ConfigPath: filepath.Join(base, "workspace.yml"),
 		Root:       base,
 	}
 	writeTestSnapshot(t, base, "alpha", &meta.Manifest{Name: "alpha", CreatedAt: time.Now().UTC()})

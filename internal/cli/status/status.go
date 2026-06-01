@@ -59,7 +59,7 @@ var defaultSectionOrder = []section{
 // per command execution via loadStatusContext — never via PersistentPreRunE
 // (which would shadow the root hook; see CLAUDE.md).
 type statusContext struct {
-	Cfg         *config.DevboxConfig
+	Cfg         *config.DweConfig
 	State       *journal.ProjectState
 	Tracked     []string
 	SvcDeploys  map[string]*config.ServiceDeployConfig

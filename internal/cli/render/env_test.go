@@ -11,9 +11,9 @@ import (
 	"github.com/semsemyonoff/dwe/internal/shared/envfile"
 )
 
-// makeEnvCfg builds a DevboxConfig with the given export rules and raw map.
-func makeEnvCfg(rules []config.ExportRule, raw map[string]any) *config.DevboxConfig {
-	return &config.DevboxConfig{
+// makeEnvCfg builds a DweConfig with the given export rules and raw map.
+func makeEnvCfg(rules []config.ExportRule, raw map[string]any) *config.DweConfig {
+	return &config.DweConfig{
 		Project: config.ProjectConfig{Name: "laravel", Prefix: "devbox"},
 		Exports: config.ExportsConfig{Env: rules},
 		Raw:     raw,
@@ -242,7 +242,7 @@ func TestFormatValue_boolFormatNonBoolValue(t *testing.T) {
 // outputPath causes the rendered .env to land at that path on disk.
 func TestRunRenderEnv_ToFile(t *testing.T) {
 	dir := t.TempDir()
-	cfgPath := filepath.Join(dir, "devbox.yml")
+	cfgPath := filepath.Join(dir, "workspace.yml")
 	yml := "schema_version: \"2\"\nproject:\n  name: testproject\n  prefix: devbox\n"
 	if err := os.WriteFile(cfgPath, []byte(yml), 0o644); err != nil {
 		t.Fatal(err)

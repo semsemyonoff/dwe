@@ -13,7 +13,7 @@ import (
 //
 // Service iteration MUST use deploy-order logic — never range cfg.Services directly
 // because Go map iteration is randomized and produces flaky tests.
-func renderAutoHosts(cfg *config.DevboxConfig, spec *config.AutoHostsSpec) string {
+func renderAutoHosts(cfg *config.DweConfig, spec *config.AutoHostsSpec) string {
 	if cfg == nil || spec == nil {
 		return ""
 	}

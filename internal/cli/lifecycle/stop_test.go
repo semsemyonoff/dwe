@@ -14,7 +14,7 @@ import (
 )
 
 func TestStopCmd_Use(t *testing.T) {
-	flags := &cmdctx.RootFlags{ConfigPath: "devbox.yml"}
+	flags := &cmdctx.RootFlags{ConfigPath: "workspace.yml"}
 	cmd := NewStopCmd(groupEnvironment, flags)
 	if cmd.Use != "stop [service]" {
 		t.Errorf("Use = %q, want %q", cmd.Use, "stop [service]")
@@ -22,7 +22,7 @@ func TestStopCmd_Use(t *testing.T) {
 }
 
 func TestStopCmd_MaximumOneArg(t *testing.T) {
-	flags := &cmdctx.RootFlags{ConfigPath: "devbox.yml"}
+	flags := &cmdctx.RootFlags{ConfigPath: "workspace.yml"}
 	cmd := NewStopCmd(groupEnvironment, flags)
 
 	// Zero args allowed.
@@ -40,7 +40,7 @@ func TestStopCmd_MaximumOneArg(t *testing.T) {
 }
 
 func TestStopCmd_FlagsExist(t *testing.T) {
-	flags := &cmdctx.RootFlags{ConfigPath: "devbox.yml"}
+	flags := &cmdctx.RootFlags{ConfigPath: "workspace.yml"}
 	cmd := NewStopCmd(groupEnvironment, flags)
 	if cmd.Flags().Lookup("yes") == nil {
 		t.Error("missing --yes flag")
@@ -90,7 +90,7 @@ func TestRunStop_MissingStopSection(t *testing.T) {
 	dir := t.TempDir()
 	cfgPath := makeMinimalDevboxYML(t, dir)
 
-	devboxDir := filepath.Join(dir, "devbox")
+	devboxDir := filepath.Join(dir, "workspace")
 	if err := os.MkdirAll(devboxDir, 0755); err != nil {
 		t.Fatalf("creating devbox dir: %v", err)
 	}
@@ -124,11 +124,11 @@ func writeStopTestConfig(t *testing.T, services map[string]struct {
 	t.Helper()
 	dir := t.TempDir()
 	content := "schema_version: \"2\"\nproject:\n  name: test\n  prefix: devbox\n"
-	if err := os.WriteFile(filepath.Join(dir, "devbox.yml"), []byte(content), 0o644); err != nil {
+	if err := os.WriteFile(filepath.Join(dir, "workspace.yml"), []byte(content), 0o644); err != nil {
 		t.Fatalf("write devbox.yml: %v", err)
 	}
 	for name, spec := range services {
-		svcDir := filepath.Join(dir, "devbox", "services", name)
+		svcDir := filepath.Join(dir, "workspace", "services", name)
 		if err := os.MkdirAll(svcDir, 0o755); err != nil {
 			t.Fatalf("mkdir: %v", err)
 		}
@@ -141,7 +141,7 @@ func writeStopTestConfig(t *testing.T, services map[string]struct {
 			t.Fatalf("write service.yml: %v", err)
 		}
 	}
-	return filepath.Join(dir, "devbox.yml")
+	return filepath.Join(dir, "workspace.yml")
 }
 
 func TestStopService_UnknownService(t *testing.T) {

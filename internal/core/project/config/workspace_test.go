@@ -135,7 +135,7 @@ func writeServicesDir(t *testing.T, baseDir, servicesYML string) {
 		t.Fatalf("writeServicesDir: parse: %v", err)
 	}
 	for name, svc := range w.Services {
-		dir := filepath.Join(baseDir, "devbox", "services", name)
+		dir := filepath.Join(baseDir, "workspace", "services", name)
 		if err := os.MkdirAll(dir, 0755); err != nil {
 			t.Fatalf("writeServicesDir: mkdir %s: %v", dir, err)
 		}
@@ -152,7 +152,7 @@ func writeServicesDir(t *testing.T, baseDir, servicesYML string) {
 // writeServiceYAML writes a service.yml file at <baseDir>/devbox/services/<name>/
 func writeServiceYAML(t *testing.T, baseDir, name, content string) {
 	t.Helper()
-	dir := filepath.Join(baseDir, "devbox", "services", name)
+	dir := filepath.Join(baseDir, "workspace", "services", name)
 	if err := os.MkdirAll(dir, 0755); err != nil {
 		t.Fatalf("writeServiceYAML: mkdir %s: %v", dir, err)
 	}
@@ -204,12 +204,12 @@ func writeFullFixture(t *testing.T, devbox, defaults, user, services, tools stri
 	t.Helper()
 	dir := t.TempDir()
 
-	devboxPath := filepath.Join(dir, "devbox.yml")
+	devboxPath := filepath.Join(dir, "workspace.yml")
 	if err := os.WriteFile(devboxPath, []byte(devbox), 0644); err != nil {
 		t.Fatalf("write devbox.yml: %v", err)
 	}
 
-	devboxDir := filepath.Join(dir, "devbox")
+	devboxDir := filepath.Join(dir, "workspace")
 
 	writeTools := tools != noToolsYML
 	toolsContent := ""
@@ -245,10 +245,10 @@ func writeFullFixture(t *testing.T, devbox, defaults, user, services, tools stri
 	return devboxPath
 }
 
-// --- LoadDevboxConfig (single-file loader) ---
+// --- LoadDweConfig (single-file loader) ---
 
 // fullSingleYML is a self-contained devbox.yml with all fields, used to test
-// LoadDevboxConfig in isolation.
+// LoadDweConfig in isolation.
 const fullSingleYML = `
 schema_version: "1"
 project:
@@ -280,16 +280,13 @@ runtime:
 state: ""
 `
 
-func TestLoadDevboxConfig(t *testing.T) {
+func TestLoadDweConfig(t *testing.T) {
 	path := writeTempYML(t, fullSingleYML)
-	cfg, err := LoadDevboxConfig(path)
+	cfg, err := LoadDweConfig(path)
 	if err != nil {
-		t.Fatalf("LoadDevboxConfig: %v", err)
+		t.Fatalf("LoadDweConfig: %v", err)
 	}
 
-	if cfg.SchemaVersion != "1" {
-		t.Errorf("SchemaVersion = %q, want 1", cfg.SchemaVersion)
-	}
 	if cfg.Project.Name != "laravel" {
 		t.Errorf("Project.Name = %q", cfg.Project.Name)
 	}
@@ -298,16 +295,16 @@ func TestLoadDevboxConfig(t *testing.T) {
 	}
 }
 
-func TestLoadDevboxConfig_notFound(t *testing.T) {
-	_, err := LoadDevboxConfig(filepath.Join(t.TempDir(), "nonexistent.yml"))
+func TestLoadDweConfig_notFound(t *testing.T) {
+	_, err := LoadDweConfig(filepath.Join(t.TempDir(), "nonexistent.yml"))
 	if err == nil {
 		t.Error("expected error for missing file")
 	}
 }
 
-func TestLoadDevboxConfig_invalidYAML(t *testing.T) {
+func TestLoadDweConfig_invalidYAML(t *testing.T) {
 	path := writeTempYML(t, "{ invalid yaml ][")
-	_, err := LoadDevboxConfig(path)
+	_, err := LoadDweConfig(path)
 	if err == nil {
 		t.Error("expected error for invalid YAML")
 	}
@@ -477,7 +474,7 @@ func TestResolvePath_nilMap(t *testing.T) {
 // --- LookupDotPath ---
 
 func TestLookupDotPath_stringLeaf(t *testing.T) {
-	cfg := &DevboxConfig{Raw: map[string]any{
+	cfg := &DweConfig{Raw: map[string]any{
 		"services": map[string]any{
 			"main": map[string]any{"work_dir_internal": "/var/www"},
 		},
@@ -492,7 +489,7 @@ func TestLookupDotPath_stringLeaf(t *testing.T) {
 }
 
 func TestLookupDotPath_missingReturnsNil(t *testing.T) {
-	cfg := &DevboxConfig{Raw: map[string]any{}}
+	cfg := &DweConfig{Raw: map[string]any{}}
 	v, err := LookupDotPath(cfg, "a.b.c")
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
@@ -503,7 +500,7 @@ func TestLookupDotPath_missingReturnsNil(t *testing.T) {
 }
 
 func TestLookupDotPath_nonStringErrors(t *testing.T) {
-	cfg := &DevboxConfig{Raw: map[string]any{"port": 8080}}
+	cfg := &DweConfig{Raw: map[string]any{"port": 8080}}
 	_, err := LookupDotPath(cfg, "port")
 	if err == nil {
 		t.Fatal("expected error for non-string leaf")
@@ -600,7 +597,7 @@ func TestLoadConfig_composeAbsent(t *testing.T) {
 // --- Config Validation ---
 
 func TestValidateConfigKeys_nilMapsAreSafe(t *testing.T) {
-	cfg := &DevboxConfig{Services: nil}
+	cfg := &DweConfig{Services: nil}
 	err := validateConfigKeys(cfg)
 	if err != nil {
 		t.Errorf("validateConfigKeys on nil maps = %v, want nil", err)
@@ -624,7 +621,7 @@ func TestValidateConfigKeys_servicePortsHostsIdentifierSafety(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			cfg := &DevboxConfig{
+			cfg := &DweConfig{
 				Services: map[string]ServiceConfig{
 					"svc": {Type: ServiceTypeTool, Container: "test", Ports: tt.ports, Hosts: tt.hosts},
 				},
@@ -967,11 +964,11 @@ phases:
 func writeDeployFixture(t *testing.T, deployYML string) string {
 	t.Helper()
 	dir := t.TempDir()
-	devboxPath := filepath.Join(dir, "devbox.yml")
+	devboxPath := filepath.Join(dir, "workspace.yml")
 	if err := os.WriteFile(devboxPath, []byte(sampleDevboxYML), 0644); err != nil {
 		t.Fatalf("write devbox.yml: %v", err)
 	}
-	devboxDir := filepath.Join(dir, "devbox")
+	devboxDir := filepath.Join(dir, "workspace")
 	if err := os.MkdirAll(devboxDir, 0755); err != nil {
 		t.Fatalf("mkdir devbox/: %v", err)
 	}
@@ -1603,7 +1600,7 @@ func TestTopoSortServices_depNotInSetSkipped(t *testing.T) {
 
 func TestLoadServiceDeployConfigs_loadsExisting(t *testing.T) {
 	dir := t.TempDir()
-	mainDeployDir := filepath.Join(dir, "devbox", "services", "main")
+	mainDeployDir := filepath.Join(dir, "workspace", "services", "main")
 	if err := os.MkdirAll(mainDeployDir, 0755); err != nil {
 		t.Fatal(err)
 	}
@@ -1730,7 +1727,7 @@ phases:
 
 func TestLoadServiceResetConfig_presentFile(t *testing.T) {
 	dir := t.TempDir()
-	svcDir := filepath.Join(dir, "devbox", "services", "mydb")
+	svcDir := filepath.Join(dir, "workspace", "services", "mydb")
 	if err := os.MkdirAll(svcDir, 0755); err != nil {
 		t.Fatal(err)
 	}
@@ -1769,7 +1766,7 @@ func TestLoadServiceResetConfig_missingFile(t *testing.T) {
 
 func TestLoadServiceResetConfig_unknownFieldRejected(t *testing.T) {
 	dir := t.TempDir()
-	svcDir := filepath.Join(dir, "devbox", "services", "svc")
+	svcDir := filepath.Join(dir, "workspace", "services", "svc")
 	if err := os.MkdirAll(svcDir, 0755); err != nil {
 		t.Fatal(err)
 	}
@@ -1787,7 +1784,7 @@ bogus_field: true
 
 func TestLoadServiceResetConfig_rejectsAfterField(t *testing.T) {
 	dir := t.TempDir()
-	svcDir := filepath.Join(dir, "devbox", "services", "svc")
+	svcDir := filepath.Join(dir, "workspace", "services", "svc")
 	if err := os.MkdirAll(svcDir, 0755); err != nil {
 		t.Fatal(err)
 	}
@@ -1812,7 +1809,7 @@ phases: []
 func TestLoadServiceResetConfigs_loadsPresent(t *testing.T) {
 	dir := t.TempDir()
 	for _, svc := range []string{"db", "cache"} {
-		d := filepath.Join(dir, "devbox", "services", svc)
+		d := filepath.Join(dir, "workspace", "services", svc)
 		if err := os.MkdirAll(d, 0755); err != nil {
 			t.Fatal(err)
 		}
@@ -1822,7 +1819,7 @@ func TestLoadServiceResetConfigs_loadsPresent(t *testing.T) {
 		}
 	}
 	// third service without reset.yml — should be omitted silently
-	noReset := filepath.Join(dir, "devbox", "services", "noreset")
+	noReset := filepath.Join(dir, "workspace", "services", "noreset")
 	if err := os.MkdirAll(noReset, 0755); err != nil {
 		t.Fatal(err)
 	}
@@ -1858,7 +1855,7 @@ func TestLoadServiceResetConfigs_missingServicesDir(t *testing.T) {
 func TestLoadServiceResetConfigs_collectsErrors(t *testing.T) {
 	dir := t.TempDir()
 	// service with invalid reset.yml (unknown field)
-	svcDir := filepath.Join(dir, "devbox", "services", "bad")
+	svcDir := filepath.Join(dir, "workspace", "services", "bad")
 	if err := os.MkdirAll(svcDir, 0755); err != nil {
 		t.Fatal(err)
 	}
@@ -1910,7 +1907,7 @@ func TestDeployConfigAfter_decodeAbsent(t *testing.T) {
 
 func TestLoadServiceDeployConfigs_strictDecoderRejectsUnknownFields(t *testing.T) {
 	dir := t.TempDir()
-	svcDir := filepath.Join(dir, "devbox", "services", "main")
+	svcDir := filepath.Join(dir, "workspace", "services", "main")
 	if err := os.MkdirAll(svcDir, 0755); err != nil {
 		t.Fatal(err)
 	}
@@ -1933,7 +1930,7 @@ func TestLoadServiceDeployConfigs_strictDecoderRejectsUnknownFields(t *testing.T
 
 func TestLoadServiceDeployConfigs_onlyServicesWithDeployFile(t *testing.T) {
 	dir := t.TempDir()
-	mainDir := filepath.Join(dir, "devbox", "services", "main")
+	mainDir := filepath.Join(dir, "workspace", "services", "main")
 	if err := os.MkdirAll(mainDir, 0755); err != nil {
 		t.Fatal(err)
 	}
@@ -1941,7 +1938,7 @@ func TestLoadServiceDeployConfigs_onlyServicesWithDeployFile(t *testing.T) {
 		t.Fatal(err)
 	}
 	// "other" has no deploy.yml
-	otherDir := filepath.Join(dir, "devbox", "services", "other")
+	otherDir := filepath.Join(dir, "workspace", "services", "other")
 	if err := os.MkdirAll(otherDir, 0755); err != nil {
 		t.Fatal(err)
 	}
@@ -3164,8 +3161,8 @@ tools:
 
 func TestBinaryAccessorDefaults(t *testing.T) {
 	// All accessors return defaults when cfg is nil
-	if got := DevboxBin(nil); got != "devbox" {
-		t.Errorf("DevboxBin(nil) = %q, want devbox", got)
+	if got := DweBin(nil); got != "dwe" {
+		t.Errorf("DweBin(nil) = %q, want dwe", got)
 	}
 	if got := DockerBin(nil); got != "docker" {
 		t.Errorf("DockerBin(nil) = %q, want docker", got)
@@ -3181,9 +3178,9 @@ func TestBinaryAccessorDefaults(t *testing.T) {
 	}
 
 	// All accessors return defaults when cfg exists but userConfig is nil
-	cfg := &DevboxConfig{}
-	if got := DevboxBin(cfg); got != "devbox" {
-		t.Errorf("DevboxBin(cfg) = %q, want devbox", got)
+	cfg := &DweConfig{}
+	if got := DweBin(cfg); got != "dwe" {
+		t.Errorf("DweBin(cfg) = %q, want dwe", got)
 	}
 	if got := DockerBin(cfg); got != "docker" {
 		t.Errorf("DockerBin(cfg) = %q, want docker", got)
@@ -3201,10 +3198,10 @@ func TestBinaryAccessorDefaults(t *testing.T) {
 
 func TestBinaryAccessorUserConfigOverrides(t *testing.T) {
 	// Accessors use userConfig overrides when available
-	cfg := &DevboxConfig{
+	cfg := &DweConfig{
 		userConfig: &userpkg.Config{
 			Binaries: map[string]string{
-				"devbox": "/custom/devbox",
+				"dwe":    "/custom/dwe",
 				"docker": "podman",
 				"shell":  "bash",
 				"git":    "/opt/git",
@@ -3212,8 +3209,8 @@ func TestBinaryAccessorUserConfigOverrides(t *testing.T) {
 			},
 		},
 	}
-	if got := DevboxBin(cfg); got != "/custom/devbox" {
-		t.Errorf("DevboxBin(cfg) = %q, want /custom/devbox", got)
+	if got := DweBin(cfg); got != "/custom/dwe" {
+		t.Errorf("DweBin(cfg) = %q, want /custom/dwe", got)
 	}
 	if got := DockerBin(cfg); got != "podman" {
 		t.Errorf("DockerBin(cfg) = %q, want podman", got)
@@ -3231,15 +3228,15 @@ func TestBinaryAccessorUserConfigOverrides(t *testing.T) {
 
 func TestBinaryAccessorPartialUserConfigOverrides(t *testing.T) {
 	// Accessors fall back to defaults for missing overrides
-	cfg := &DevboxConfig{
+	cfg := &DweConfig{
 		userConfig: &userpkg.Config{
 			Binaries: map[string]string{
 				"docker": "podman",
 			},
 		},
 	}
-	if got := DevboxBin(cfg); got != "devbox" {
-		t.Errorf("DevboxBin(cfg) = %q, want devbox (default)", got)
+	if got := DweBin(cfg); got != "dwe" {
+		t.Errorf("DweBin(cfg) = %q, want dwe (default)", got)
 	}
 	if got := DockerBin(cfg); got != "podman" {
 		t.Errorf("DockerBin(cfg) = %q, want podman (override)", got)
@@ -3322,14 +3319,14 @@ docs:
 }
 
 // TestLoadConfig_noTopLevelIDEField verifies that the top-level IDE config
-// has been removed from DevboxConfig. The IDE field is no longer part of the
+// has been removed from DweConfig. The IDE field is no longer part of the
 // typed configuration and cfg.IDE does not exist.
 func TestLoadConfig_noTopLevelIDEField(t *testing.T) {
-	// Verify that the DevboxConfig struct does not carry top-level IDE state.
+	// Verify that the DweConfig struct does not carry top-level IDE state.
 	// Reflection check: IDE field should not exist in the struct.
-	cfgStructType := reflect.TypeFor[DevboxConfig]()
+	cfgStructType := reflect.TypeFor[DweConfig]()
 	if _, ok := cfgStructType.FieldByName("IDE"); ok {
-		t.Error("DevboxConfig should not have an IDE field")
+		t.Error("DweConfig should not have an IDE field")
 	}
 }
 

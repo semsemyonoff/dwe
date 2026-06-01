@@ -10,7 +10,7 @@ import (
 )
 
 func TestRestartCmd_Use(t *testing.T) {
-	flags := &cmdctx.RootFlags{ConfigPath: "devbox.yml"}
+	flags := &cmdctx.RootFlags{ConfigPath: "workspace.yml"}
 	cmd := NewRestartCmd(groupEnvironment, flags)
 	if cmd.Use != "restart" {
 		t.Errorf("Use = %q, want %q", cmd.Use, "restart")
@@ -18,7 +18,7 @@ func TestRestartCmd_Use(t *testing.T) {
 }
 
 func TestRestartCmd_NoArgs(t *testing.T) {
-	flags := &cmdctx.RootFlags{ConfigPath: "devbox.yml"}
+	flags := &cmdctx.RootFlags{ConfigPath: "workspace.yml"}
 	cmd := NewRestartCmd(groupEnvironment, flags)
 	if cmd.Args == nil {
 		t.Error("Args validator should be set (cobra.NoArgs)")
@@ -29,7 +29,7 @@ func TestRestartCmd_NoArgs(t *testing.T) {
 }
 
 func TestRestartCmd_FlagsExist(t *testing.T) {
-	flags := &cmdctx.RootFlags{ConfigPath: "devbox.yml"}
+	flags := &cmdctx.RootFlags{ConfigPath: "workspace.yml"}
 	cmd := NewRestartCmd(groupEnvironment, flags)
 	if cmd.Flags().Lookup("yes") == nil {
 		t.Error("missing --yes flag")
@@ -75,7 +75,7 @@ func TestRunRestart_MissingStopSection(t *testing.T) {
 	dir := t.TempDir()
 	cfgPath := makeMinimalDevboxYML(t, dir)
 
-	devboxDir := filepath.Join(dir, "devbox")
+	devboxDir := filepath.Join(dir, "workspace")
 	if err := os.MkdirAll(devboxDir, 0755); err != nil {
 		t.Fatalf("creating devbox dir: %v", err)
 	}
@@ -101,7 +101,7 @@ func TestRunRestart_MissingRunSection_UsesDefault(t *testing.T) {
 	dir := t.TempDir()
 	cfgPath := makeMinimalDevboxYML(t, dir)
 
-	devboxDir := filepath.Join(dir, "devbox")
+	devboxDir := filepath.Join(dir, "workspace")
 	if err := os.MkdirAll(devboxDir, 0755); err != nil {
 		t.Fatalf("creating devbox dir: %v", err)
 	}

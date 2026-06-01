@@ -9,10 +9,9 @@ import (
 	"github.com/semsemyonoff/dwe/internal/core/project/project"
 )
 
-// makeProject creates a temp dir with a devbox.yml containing the given schema_version.
-// Pass an empty string to omit the schema_version field entirely.
+// makeProject creates a temp dir with a workspace.yml.
 // Returns the canonical (symlink-resolved) path so comparisons work on macOS.
-func makeProject(t *testing.T, schemaVersion string) string {
+func makeProject(t *testing.T, _ string) string {
 	t.Helper()
 	dir := t.TempDir()
 	// Resolve symlinks for canonical comparison (macOS /var/folders → /private/var/folders).
@@ -20,13 +19,8 @@ func makeProject(t *testing.T, schemaVersion string) string {
 	if err != nil {
 		real = dir
 	}
-	var content string
-	if schemaVersion == "" {
-		content = "project:\n  name: test\n"
-	} else {
-		content = "schema_version: \"" + schemaVersion + "\"\nproject:\n  name: test\n"
-	}
-	if err := os.WriteFile(filepath.Join(real, "devbox.yml"), []byte(content), 0o644); err != nil {
+	content := "project:\n  name: test\n"
+	if err := os.WriteFile(filepath.Join(real, "workspace.yml"), []byte(content), 0o644); err != nil {
 		t.Fatalf("makeProject: %v", err)
 	}
 	return real
@@ -48,8 +42,8 @@ func chdir(t *testing.T, dir string) {
 // --- Locate tests ---
 
 func TestLocate_ExplicitExisting(t *testing.T) {
-	root := makeProject(t, "2")
-	path := filepath.Join(root, "devbox.yml")
+	root := makeProject(t, "")
+	path := filepath.Join(root, "workspace.yml")
 
 	resolved, found, err := project.Locate(path)
 	if err != nil {
@@ -67,7 +61,7 @@ func TestLocate_ExplicitExisting(t *testing.T) {
 }
 
 func TestLocate_ExplicitNonexistent(t *testing.T) {
-	_, found, err := project.Locate("/nonexistent/path/devbox.yml")
+	_, found, err := project.Locate("/nonexistent/path/workspace.yml")
 	if err == nil {
 		t.Fatal("expected error for nonexistent explicit path")
 	}
@@ -78,13 +72,13 @@ func TestLocate_ExplicitNonexistent(t *testing.T) {
 		t.Errorf("expected errors.Is(err, os.ErrNotExist); got %v", err)
 	}
 	// message should name the bad path
-	if !containsStr(err.Error(), "/nonexistent/path/devbox.yml") {
+	if !containsStr(err.Error(), "/nonexistent/path/workspace.yml") {
 		t.Errorf("error message should name the path; got: %v", err)
 	}
 }
 
 func TestLocate_DiscoveryAtCwd(t *testing.T) {
-	root := makeProject(t, "1") // Locate does NOT validate schema
+	root := makeProject(t, "")
 	chdir(t, root)
 
 	resolved, found, err := project.Locate("")
@@ -100,7 +94,7 @@ func TestLocate_DiscoveryAtCwd(t *testing.T) {
 }
 
 func TestLocate_DiscoveryTwoLevelsUp(t *testing.T) {
-	root := makeProject(t, "2")
+	root := makeProject(t, "")
 	sub := filepath.Join(root, "a", "b")
 	if err := os.MkdirAll(sub, 0o755); err != nil {
 		t.Fatalf("mkdir: %v", err)
@@ -120,10 +114,7 @@ func TestLocate_DiscoveryTwoLevelsUp(t *testing.T) {
 }
 
 func TestLocate_DiscoveryNoProject(t *testing.T) {
-	empty := t.TempDir()
-	chdir(t, empty)
-
-	// Walk upward — we might find a devbox.yml in a parent of the temp dir on the
+	// Walk upward — we might find a workspace.yml in a parent of the temp dir on the
 	// developer's machine. Use a deep subpath under /tmp that won't have one.
 	isolated := filepath.Join(t.TempDir(), "deep", "nested", "path")
 	if err := os.MkdirAll(isolated, 0o755); err != nil {
@@ -136,73 +127,15 @@ func TestLocate_DiscoveryNoProject(t *testing.T) {
 		t.Fatalf("unexpected error: %v", err)
 	}
 	if found {
-		t.Fatal("expected found=false when no devbox.yml exists in any parent")
-	}
-}
-
-func TestLocate_DiscoverySucceedsForLegacyV1(t *testing.T) {
-	// Locate must succeed even for schema_version: "1" — validation is separate.
-	root := makeProject(t, "1")
-	chdir(t, root)
-
-	resolved, found, err := project.Locate("")
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
-	if !found {
-		t.Fatal("expected found=true for v1 project")
-	}
-	if resolved.Root != root {
-		t.Errorf("Root = %q; want %q", resolved.Root, root)
-	}
-}
-
-// --- ValidateSchema tests ---
-
-func TestValidateSchema_V2(t *testing.T) {
-	root := makeProject(t, "2")
-	if err := project.ValidateSchema(filepath.Join(root, "devbox.yml")); err != nil {
-		t.Errorf("unexpected error for v2: %v", err)
-	}
-}
-
-func TestValidateSchema_V1(t *testing.T) {
-	root := makeProject(t, "1")
-	err := project.ValidateSchema(filepath.Join(root, "devbox.yml"))
-	if err == nil {
-		t.Fatal("expected error for v1 schema")
-	}
-	if !containsStr(err.Error(), "legacy devbox project") {
-		t.Errorf("expected 'legacy devbox project' in error; got: %v", err)
-	}
-}
-
-func TestValidateSchema_Missing(t *testing.T) {
-	root := makeProject(t, "")
-	err := project.ValidateSchema(filepath.Join(root, "devbox.yml"))
-	if err == nil {
-		t.Fatal("expected error for missing schema_version")
-	}
-	if !containsStr(err.Error(), "missing") {
-		t.Errorf("expected 'missing' in error; got: %v", err)
-	}
-}
-
-func TestValidateSchema_Unreadable(t *testing.T) {
-	err := project.ValidateSchema("/nonexistent/devbox.yml")
-	if err == nil {
-		t.Fatal("expected error for unreadable file")
-	}
-	if !errors.Is(err, os.ErrNotExist) {
-		t.Errorf("expected wrapped os.ErrNotExist; got: %v", err)
+		t.Fatal("expected found=false when no workspace.yml exists in any parent")
 	}
 }
 
 // --- Resolve tests ---
 
-func TestResolve_ExplicitGoodV2(t *testing.T) {
-	root := makeProject(t, "2")
-	resolved, err := project.Resolve(filepath.Join(root, "devbox.yml"))
+func TestResolve_ExplicitGood(t *testing.T) {
+	root := makeProject(t, "")
+	resolved, err := project.Resolve(filepath.Join(root, "workspace.yml"))
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -211,22 +144,8 @@ func TestResolve_ExplicitGoodV2(t *testing.T) {
 	}
 }
 
-func TestResolve_ExplicitGoodV1(t *testing.T) {
-	root := makeProject(t, "1")
-	_, err := project.Resolve(filepath.Join(root, "devbox.yml"))
-	if err == nil {
-		t.Fatal("expected schema error for v1")
-	}
-	if errors.Is(err, project.ErrNotFound) {
-		t.Error("schema error must not be ErrNotFound")
-	}
-	if !containsStr(err.Error(), "legacy devbox project") {
-		t.Errorf("expected 'legacy devbox project'; got: %v", err)
-	}
-}
-
 func TestResolve_ExplicitBadPath(t *testing.T) {
-	_, err := project.Resolve("/nonexistent/devbox.yml")
+	_, err := project.Resolve("/nonexistent/workspace.yml")
 	if err == nil {
 		t.Fatal("expected error for bad path")
 	}
@@ -255,19 +174,16 @@ func TestResolve_DiscoveryNoProject(t *testing.T) {
 	}
 }
 
-func TestResolve_DiscoveryFoundLegacyV1(t *testing.T) {
-	root := makeProject(t, "1")
+func TestResolve_DiscoveryFound(t *testing.T) {
+	root := makeProject(t, "")
 	chdir(t, root)
 
-	_, err := project.Resolve("")
-	if err == nil {
-		t.Fatal("expected schema error for v1")
+	resolved, err := project.Resolve("")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
 	}
-	if errors.Is(err, project.ErrNotFound) {
-		t.Error("legacy v1 schema error must not be ErrNotFound")
-	}
-	if !containsStr(err.Error(), "legacy devbox project") {
-		t.Errorf("expected 'legacy devbox project'; got: %v", err)
+	if resolved.Root != root {
+		t.Errorf("Root = %q; want %q", resolved.Root, root)
 	}
 }
 

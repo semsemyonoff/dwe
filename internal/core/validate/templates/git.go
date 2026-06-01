@@ -147,7 +147,7 @@ func (v *GitValidator) validateService(name string, svc config.ServiceConfig, pr
 			Severity: validate.SeverityError,
 			Domain:   "templates",
 			Target:   fmt.Sprintf("templates.git:%s", name),
-			File:     filepath.Join("devbox", "templates", "git", packName, "manifest.yml"),
+			File:     filepath.Join("workspace", "templates", "git", packName, "manifest.yml"),
 			Message:  fmt.Sprintf("failed to load manifest: %v", err),
 			Hint:     "check manifest.yml syntax and structure",
 		}}
@@ -159,7 +159,7 @@ func (v *GitValidator) validateService(name string, svc config.ServiceConfig, pr
 			Severity: validate.SeverityError,
 			Domain:   "templates",
 			Target:   fmt.Sprintf("templates.git:%s", name),
-			File:     filepath.Join("devbox", "templates", "git", packName, "manifest.yml"),
+			File:     filepath.Join("workspace", "templates", "git", packName, "manifest.yml"),
 			Message:  fmt.Sprintf("invalid manifest: %v", err),
 			Hint:     "check render entries (to must be a basename; symlinks not supported)",
 		})

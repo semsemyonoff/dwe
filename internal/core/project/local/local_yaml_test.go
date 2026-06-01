@@ -81,7 +81,7 @@ func TestWriteLocalYAML_RoundTrip(t *testing.T) {
 
 func TestWriteLocalYAML_CreatesParentDir(t *testing.T) {
 	dir := t.TempDir()
-	path := filepath.Join(dir, "devbox", "local.yml")
+	path := filepath.Join(dir, "workspace", "local.yml")
 	local := map[string]any{"services": map[string]any{}}
 	if err := WriteLocalYAML(path, local); err != nil {
 		t.Fatalf("expected parent dir to be created, got error: %v", err)

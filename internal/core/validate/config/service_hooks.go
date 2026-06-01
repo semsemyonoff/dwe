@@ -39,7 +39,7 @@ func (v *serviceHooksValidator) Run(ctx validate.Context) []validate.Diagnostic 
 
 	reg, _ := ctx.CommandRegistry.(*registry.Registry)
 
-	servicesDir := filepath.Join(ctx.ProjectRoot, "devbox", "services")
+	servicesDir := filepath.Join(ctx.ProjectRoot, "workspace", "services")
 
 	for name, svc := range services {
 		svcFile := relPath(ctx.ProjectRoot, filepath.Join(servicesDir, name, "service.yml"))

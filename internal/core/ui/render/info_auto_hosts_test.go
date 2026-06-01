@@ -12,13 +12,13 @@ func TestRenderAutoHosts(t *testing.T) {
 
 	tests := []struct {
 		name    string
-		cfg     *config.DevboxConfig
+		cfg     *config.DweConfig
 		spec    *config.AutoHostsSpec
 		wantOut string
 	}{
 		{
 			name: "dedup across services",
-			cfg: &config.DevboxConfig{
+			cfg: &config.DweConfig{
 				Services: map[string]config.ServiceConfig{
 					"main": {
 						Type:    config.ServiceTypeApp,
@@ -48,7 +48,7 @@ func TestRenderAutoHosts(t *testing.T) {
 		},
 		{
 			name: ".localhost suffix filtered",
-			cfg: &config.DevboxConfig{
+			cfg: &config.DweConfig{
 				Services: map[string]config.ServiceConfig{
 					"main": {
 						Type:    config.ServiceTypeApp,
@@ -69,7 +69,7 @@ func TestRenderAutoHosts(t *testing.T) {
 		},
 		{
 			name: "localhost filtered",
-			cfg: &config.DevboxConfig{
+			cfg: &config.DweConfig{
 				Services: map[string]config.ServiceConfig{
 					"main": {
 						Type:    config.ServiceTypeApp,
@@ -89,7 +89,7 @@ func TestRenderAutoHosts(t *testing.T) {
 		},
 		{
 			name: "hide works",
-			cfg: &config.DevboxConfig{
+			cfg: &config.DweConfig{
 				Services: map[string]config.ServiceConfig{
 					"main": {
 						Type:    config.ServiceTypeApp,
@@ -116,7 +116,7 @@ func TestRenderAutoHosts(t *testing.T) {
 		},
 		{
 			name: "deploy order preserved",
-			cfg: &config.DevboxConfig{
+			cfg: &config.DweConfig{
 				Services: map[string]config.ServiceConfig{
 					"catalog": {
 						Type:    config.ServiceTypeApp,
@@ -147,7 +147,7 @@ func TestRenderAutoHosts(t *testing.T) {
 		},
 		{
 			name: "custom IP applied",
-			cfg: &config.DevboxConfig{
+			cfg: &config.DweConfig{
 				Services: map[string]config.ServiceConfig{
 					"main": {
 						Type:    config.ServiceTypeApp,
@@ -166,7 +166,7 @@ func TestRenderAutoHosts(t *testing.T) {
 		},
 		{
 			name: "empty result returns empty string",
-			cfg: &config.DevboxConfig{
+			cfg: &config.DweConfig{
 				Services: map[string]config.ServiceConfig{
 					"main": {
 						Type:    config.ServiceTypeApp,
@@ -183,7 +183,7 @@ func TestRenderAutoHosts(t *testing.T) {
 		},
 		{
 			name: "disabled service skipped",
-			cfg: &config.DevboxConfig{
+			cfg: &config.DweConfig{
 				Services: map[string]config.ServiceConfig{
 					"main": {
 						Type:    config.ServiceTypeApp,
@@ -202,7 +202,7 @@ func TestRenderAutoHosts(t *testing.T) {
 		},
 		{
 			name: "default include when empty",
-			cfg: &config.DevboxConfig{
+			cfg: &config.DweConfig{
 				Services: map[string]config.ServiceConfig{
 					"app1": {
 						Type:    config.ServiceTypeApp,
@@ -239,7 +239,7 @@ func TestRenderAutoHosts(t *testing.T) {
 		},
 		{
 			name: "default IP when empty",
-			cfg: &config.DevboxConfig{
+			cfg: &config.DweConfig{
 				Services: map[string]config.ServiceConfig{
 					"main": {
 						Type:    config.ServiceTypeApp,
@@ -267,7 +267,7 @@ func TestRenderAutoHosts(t *testing.T) {
 		},
 		{
 			name: "nil spec returns empty string",
-			cfg: &config.DevboxConfig{
+			cfg: &config.DweConfig{
 				Services: map[string]config.ServiceConfig{
 					"main": {
 						Type:    config.ServiceTypeApp,
@@ -283,7 +283,7 @@ func TestRenderAutoHosts(t *testing.T) {
 		},
 		{
 			name: "empty cfg.Services returns empty string",
-			cfg: &config.DevboxConfig{
+			cfg: &config.DweConfig{
 				Services: map[string]config.ServiceConfig{},
 			},
 			spec: &config.AutoHostsSpec{
@@ -294,7 +294,7 @@ func TestRenderAutoHosts(t *testing.T) {
 		},
 		{
 			name: "first-seen order preserved on dedup",
-			cfg: &config.DevboxConfig{
+			cfg: &config.DweConfig{
 				Services: map[string]config.ServiceConfig{
 					"main": {
 						Type:    config.ServiceTypeApp,
@@ -329,7 +329,7 @@ func TestRenderAutoHosts(t *testing.T) {
 		},
 		{
 			name: "empty strings dropped",
-			cfg: &config.DevboxConfig{
+			cfg: &config.DweConfig{
 				Services: map[string]config.ServiceConfig{
 					"main": {
 						Type:    config.ServiceTypeApp,

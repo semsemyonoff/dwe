@@ -36,7 +36,7 @@ import (
 // user-visible template surface would freeze the layout.
 //
 // Strings without any `{{` markers are returned unchanged.
-func renderNote(note string, cfg *config.DevboxConfig, name string) string {
+func renderNote(note string, cfg *config.DweConfig, name string) string {
 	if note == "" || cfg == nil {
 		return note
 	}
@@ -117,7 +117,7 @@ type TogglePlan struct {
 //   - all RequiresDeploy  → [{Deploy, sorted contributors}]
 //   - mixed restart+deploy → [{Deploy, sorted contributors}, {Restart}]
 func buildTogglePlan(
-	cfg *config.DevboxConfig,
+	cfg *config.DweConfig,
 	reg *registry.Registry,
 	svcDeploys map[string]*config.ServiceDeployConfig,
 	toggles []ToggleAction,
@@ -391,7 +391,7 @@ type ExecuteDeps struct {
 	Flags     *cmdctx.RootFlags
 	BaseDir   string
 	StatePath string
-	Cfg       *config.DevboxConfig
+	Cfg       *config.DweConfig
 	CmdReg    *registry.Registry
 
 	// Seams — signatures match real callees so no adapter is needed at the call site.
@@ -434,7 +434,7 @@ func executeTogglePlan(ctx context.Context, deps ExecuteDeps, plan TogglePlan, o
 				SuppressPendingClear: true,
 			})
 		case journal.PendingRestart:
-			configPath := filepath.Join(deps.BaseDir, "devbox.yml")
+			configPath := filepath.Join(deps.BaseDir, "workspace.yml")
 			if deps.Flags != nil {
 				configPath = deps.Flags.ConfigPath
 			}

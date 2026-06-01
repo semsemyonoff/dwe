@@ -54,7 +54,7 @@ func (v *iconsValidator) runServices(ctx validate.Context) []validate.Diagnostic
 	// stable across runs (map iteration is randomized).
 	for _, name := range slices.Sorted(maps.Keys(ctx.Cfg.Services)) {
 		svc := ctx.Cfg.Services[name]
-		svcFile := filepath.Join(ctx.ProjectRoot, "devbox", "services", name, "service.yml")
+		svcFile := filepath.Join(ctx.ProjectRoot, "workspace", "services", name, "service.yml")
 		file := relPath(ctx.ProjectRoot, svcFile)
 
 		if d, ok := iconDiag(svc.Icon, file, "config.icons:services:"+name); ok {
@@ -74,7 +74,7 @@ func (v *iconsValidator) runServices(ctx validate.Context) []validate.Diagnostic
 }
 
 func (v *iconsValidator) runInfo(ctx validate.Context) []validate.Diagnostic {
-	infoPath := filepath.Join(ctx.ProjectRoot, "devbox", "info.yml")
+	infoPath := filepath.Join(ctx.ProjectRoot, "workspace", "info.yml")
 	file := relPath(ctx.ProjectRoot, infoPath)
 
 	// Silent skip when info.yml is absent — infoValidator already emits an

@@ -174,14 +174,14 @@ Scope targets:
 		},
 	}
 	configCmd.AddCommand(
-		newValidateConfigSubCmd(flags, &strict, &quiet, &stage, "devbox", "Validate main devbox.yml"),
-		newValidateConfigSubCmd(flags, &strict, &quiet, &stage, "services", "Validate devbox/services/<name>/service.yml"),
-		newValidateConfigSubCmd(flags, &strict, &quiet, &stage, "docker", "Validate devbox/docker.yml"),
-		newValidateConfigSubCmd(flags, &strict, &quiet, &stage, "info", "Validate devbox/info.yml"),
-		newValidateConfigSubCmd(flags, &strict, &quiet, &stage, "styles", "Validate devbox/styles.yml"),
-		newValidateConfigSubCmd(flags, &strict, &quiet, &stage, "lifecycle", "Validate devbox/lifecycle.yml"),
-		newValidateConfigSubCmd(flags, &strict, &quiet, &stage, "deploy", "Validate devbox/deploy.yml"),
-		newValidateConfigSubCmd(flags, &strict, &quiet, &stage, "reset", "Validate devbox/reset.yml (replaces 'devbox reset config check')"),
+		newValidateConfigSubCmd(flags, &strict, &quiet, &stage, "workspace", "Validate main workspace.yml"),
+		newValidateConfigSubCmd(flags, &strict, &quiet, &stage, "services", "Validate workspace/services/<name>/service.yml"),
+		newValidateConfigSubCmd(flags, &strict, &quiet, &stage, "docker", "Validate workspace/docker.yml"),
+		newValidateConfigSubCmd(flags, &strict, &quiet, &stage, "info", "Validate workspace/info.yml"),
+		newValidateConfigSubCmd(flags, &strict, &quiet, &stage, "styles", "Validate workspace/styles.yml"),
+		newValidateConfigSubCmd(flags, &strict, &quiet, &stage, "lifecycle", "Validate workspace/lifecycle.yml"),
+		newValidateConfigSubCmd(flags, &strict, &quiet, &stage, "deploy", "Validate workspace/deploy.yml"),
+		newValidateConfigSubCmd(flags, &strict, &quiet, &stage, "reset", "Validate workspace/reset.yml (replaces 'dwe reset config check')"),
 		newValidateConfigSubCmd(flags, &strict, &quiet, &stage, "service-deploy", "Validate service deploy configs"),
 	)
 	cmd.AddCommand(configCmd)
@@ -350,7 +350,7 @@ func runValidate(cmd *cobra.Command, flags *cmdctx.RootFlags, strict, quiet bool
 	if projectRoot != "" {
 		configPathForReg := configPath
 		if configPathForReg == "" {
-			configPathForReg = filepath.Join(projectRoot, "devbox.yml")
+			configPathForReg = filepath.Join(projectRoot, "workspace.yml")
 		}
 		if reg, err := usercommands.LoadRegistryFromConfigPath(configPathForReg); err == nil {
 			cmdReg = reg
@@ -413,7 +413,7 @@ func runValidate(cmd *cobra.Command, flags *cmdctx.RootFlags, strict, quiet bool
 		setupPath   string
 	)
 	if projectRoot != "" {
-		setupPath = filepath.Join(projectRoot, "devbox", "setup.yml")
+		setupPath = filepath.Join(projectRoot, "workspace", "setup.yml")
 		setupCfg, setupCfgErr = setup.LoadSetupYAML(setupPath)
 	}
 
@@ -466,7 +466,7 @@ var errPartialLoad = errors.New("partial load")
 // at the caller level. It returns the merged config (or nil if load failed), the paths,
 // and errPartialLoad if the config load failed but we should continue (to allow the
 // validators to surface file-level diagnostics).
-func loadForValidate(flags *cmdctx.RootFlags) (*config.DevboxConfig, string, string, error) {
+func loadForValidate(flags *cmdctx.RootFlags) (*config.DweConfig, string, string, error) {
 	// First, locate the project (without schema validation).
 	loc, found, err := project.Locate(flags.ConfigPath)
 	if err != nil {
@@ -570,7 +570,7 @@ func validateScopeLabel(scope []string) string {
 // scope. When config.validate IS in scope it already surfaces the same parse
 // error, so passing the error to AllForStage as well would emit a duplicate
 // diagnostic and inflate the error count.
-func buildRegistry(cfg *config.DevboxConfig, validateCfg *config.ValidateConfig, validateLoadErr error, snapCfg *config.SnapshotConfig, snapCfgErr error, setupCfg *setup.Config, setupCfgErr error, setupPath string, baseDir string, cmdReg *usercommands.Registry, stage string, verifyChecksums bool, scope []string, userCfg *userpkg.Config) *validate.Registry {
+func buildRegistry(cfg *config.DweConfig, validateCfg *config.ValidateConfig, validateLoadErr error, snapCfg *config.SnapshotConfig, snapCfgErr error, setupCfg *setup.Config, setupCfgErr error, setupPath string, baseDir string, cmdReg *usercommands.Registry, stage string, verifyChecksums bool, scope []string, userCfg *userpkg.Config) *validate.Registry {
 	reg := validate.NewRegistry()
 	for _, v := range valconfig.All() {
 		reg.Register(v)

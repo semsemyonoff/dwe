@@ -135,7 +135,7 @@ func (v *IDEValidator) validateService(name string, svc config.ServiceConfig, pr
 			Severity: validate.SeverityError,
 			Domain:   "templates",
 			Target:   fmt.Sprintf("templates.ide:%s", name),
-			File:     filepath.Join("devbox", "templates", "ide", packName, "manifest.yml"),
+			File:     filepath.Join("workspace", "templates", "ide", packName, "manifest.yml"),
 			Message:  fmt.Sprintf("failed to load manifest: %v", err),
 			Hint:     "IDE packs now require a manifest.yml; see docs/reference/render/ide.md for the migration",
 		}}
@@ -148,7 +148,7 @@ func (v *IDEValidator) validateService(name string, svc config.ServiceConfig, pr
 			Severity: validate.SeverityError,
 			Domain:   "templates",
 			Target:   fmt.Sprintf("templates.ide:%s", name),
-			File:     filepath.Join("devbox", "templates", "ide", packName, "manifest.yml"),
+			File:     filepath.Join("workspace", "templates", "ide", packName, "manifest.yml"),
 			Message:  fmt.Sprintf("invalid manifest: %v", err),
 			Hint:     "check render and symlink entries in manifest.yml",
 		}}

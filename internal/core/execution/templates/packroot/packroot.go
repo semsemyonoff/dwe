@@ -46,7 +46,7 @@ func Resolve(projectRoot, kind, packName, rel string) (string, bool, error) {
 		return "", false, errors.New("packroot: rel is required")
 	}
 
-	templatesRoot := filepath.Join(projectRoot, "devbox", "templates", kind)
+	templatesRoot := filepath.Join(projectRoot, "workspace", "templates", kind)
 	overrideRoot := filepath.Join(templatesRoot, packName+".local")
 	canonicalRoot := filepath.Join(templatesRoot, packName)
 

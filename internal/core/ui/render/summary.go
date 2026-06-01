@@ -13,7 +13,7 @@ import (
 // It shows the project name, state, and enabled service/tool counts.
 // When deploySummary is provided, also shows deploy status (N/M deployed).
 // The returned string contains no trailing newline on the last line.
-func Summary(cfg *config.DevboxConfig, deploySummary *statusview.DeploySummary) string {
+func Summary(cfg *config.DweConfig, deploySummary *statusview.DeploySummary) string {
 	var lines []string
 
 	// Project identity now lives in the branded header (render.BrandHeader);
@@ -44,7 +44,7 @@ func Summary(cfg *config.DevboxConfig, deploySummary *statusview.DeploySummary) 
 // Tools have their own counter; infra is excluded because it's mostly mandatory
 // stack plumbing (db, redis, …) that would skew the user-visible "enabled"
 // ratio without adding signal.
-func countServices(cfg *config.DevboxConfig) (int, int) {
+func countServices(cfg *config.DweConfig) (int, int) {
 	total := 0
 	enabled := 0
 	for _, svc := range cfg.Services {
@@ -60,7 +60,7 @@ func countServices(cfg *config.DevboxConfig) (int, int) {
 }
 
 // countTools returns the number of enabled services of type "tool".
-func countTools(cfg *config.DevboxConfig) int {
+func countTools(cfg *config.DweConfig) int {
 	n := 0
 	for _, svc := range cfg.Services {
 		if svc.IsTool() && svc.Enabled {

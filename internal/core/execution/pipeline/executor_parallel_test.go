@@ -38,7 +38,7 @@ func buildParallelGroupStep(phase config.DeployPhase, groupName string, failFast
 
 func newRunOpts(t *testing.T, rep Reporter, rec Recorder, steps []ResolvedStep) RunOptions {
 	t.Helper()
-	cfg := &config.DevboxConfig{Raw: map[string]any{}}
+	cfg := &config.DweConfig{Raw: map[string]any{}}
 	if rec == nil {
 		rec = &mockRecorder{}
 	}

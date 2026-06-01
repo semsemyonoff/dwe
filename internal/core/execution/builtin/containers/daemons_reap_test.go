@@ -96,7 +96,7 @@ func TestDaemonsReap_Validate_EmptyOK(t *testing.T) {
 }
 
 func newReapExecContext(buf *bytes.Buffer) spec.ExecContext {
-	cfg := &config.DevboxConfig{}
+	cfg := &config.DweConfig{}
 	cfg.Project.Name = "testproj"
 	return spec.ExecContext{
 		Config:       cfg,

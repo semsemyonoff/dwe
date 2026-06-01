@@ -19,7 +19,7 @@ func makeMinimalProject(t *testing.T) string {
 	t.Helper()
 	dir := t.TempDir()
 	yml := "schema_version: \"2\"\nproject:\n  name: testproject\n  prefix: devbox\n"
-	if err := os.WriteFile(filepath.Join(dir, "devbox.yml"), []byte(yml), 0o644); err != nil {
+	if err := os.WriteFile(filepath.Join(dir, "workspace.yml"), []byte(yml), 0o644); err != nil {
 		t.Fatal(err)
 	}
 	return dir
@@ -29,7 +29,7 @@ func makeMinimalProject(t *testing.T) string {
 // branch writes the "Deploy plan" section title.
 func TestRunDeployPlan_DefaultFormatRendersTitle(t *testing.T) {
 	dir := makeMinimalProject(t)
-	flags := &cmdctx.RootFlags{ConfigPath: filepath.Join(dir, "devbox.yml")}
+	flags := &cmdctx.RootFlags{ConfigPath: filepath.Join(dir, "workspace.yml")}
 
 	cmd := &cobra.Command{}
 	var buf bytes.Buffer
@@ -49,7 +49,7 @@ func TestRunDeployPlan_DefaultFormatRendersTitle(t *testing.T) {
 // header (which is distinct from the table-format title path).
 func TestRunDeployPlan_ShellFormat(t *testing.T) {
 	dir := makeMinimalProject(t)
-	flags := &cmdctx.RootFlags{ConfigPath: filepath.Join(dir, "devbox.yml")}
+	flags := &cmdctx.RootFlags{ConfigPath: filepath.Join(dir, "workspace.yml")}
 
 	cmd := &cobra.Command{}
 	var buf bytes.Buffer
@@ -68,7 +68,7 @@ func TestRunDeployPlan_ShellFormat(t *testing.T) {
 // no error.)
 func TestRunDeployPlan_UnknownServiceErrors(t *testing.T) {
 	dir := makeMinimalProject(t)
-	flags := &cmdctx.RootFlags{ConfigPath: filepath.Join(dir, "devbox.yml")}
+	flags := &cmdctx.RootFlags{ConfigPath: filepath.Join(dir, "workspace.yml")}
 
 	err := runDeployPlan(context.Background(), &cobra.Command{}, flags, deployPlanOpts{ServiceName: "nonexistent"})
 	if err == nil {
@@ -84,7 +84,7 @@ func TestRunDeployPlan_UnknownServiceErrors(t *testing.T) {
 // default, and prints the info line on stderr.
 func TestRunDeployPlan_DefaultPipelineWhenNoDeployYML(t *testing.T) {
 	dir := makeMinimalProject(t)
-	flags := &cmdctx.RootFlags{ConfigPath: filepath.Join(dir, "devbox.yml")}
+	flags := &cmdctx.RootFlags{ConfigPath: filepath.Join(dir, "workspace.yml")}
 
 	cmd := &cobra.Command{}
 	var outBuf, errBuf bytes.Buffer
@@ -109,7 +109,7 @@ func TestRunDeployPlan_DefaultPipelineWhenNoDeployYML(t *testing.T) {
 // the default-pipeline info line on stderr.
 func TestRunDeployPlan_JSONModeNoInfoLine(t *testing.T) {
 	dir := makeMinimalProject(t)
-	flags := &cmdctx.RootFlags{ConfigPath: filepath.Join(dir, "devbox.yml"), Output: "json"}
+	flags := &cmdctx.RootFlags{ConfigPath: filepath.Join(dir, "workspace.yml"), Output: "json"}
 
 	cmd := &cobra.Command{}
 	var errBuf bytes.Buffer
@@ -132,7 +132,7 @@ func TestRunDeployPlan_JSONModeNoInfoLine(t *testing.T) {
 // absent at the project level.
 func TestRunDeployPlan_ServiceScopeNoInfoLine(t *testing.T) {
 	dir := makeMinimalProject(t)
-	flags := &cmdctx.RootFlags{ConfigPath: filepath.Join(dir, "devbox.yml")}
+	flags := &cmdctx.RootFlags{ConfigPath: filepath.Join(dir, "workspace.yml")}
 
 	cmd := &cobra.Command{}
 	var errBuf bytes.Buffer
@@ -153,7 +153,7 @@ func TestRunDeployPlan_UserDeployYMLNoInfoLine(t *testing.T) {
 	dir := makeMinimalProject(t)
 
 	// Write a minimal user deploy.yml.
-	devboxDir := filepath.Join(dir, "devbox")
+	devboxDir := filepath.Join(dir, "workspace")
 	if err := os.MkdirAll(devboxDir, 0o755); err != nil {
 		t.Fatal(err)
 	}
@@ -162,7 +162,7 @@ func TestRunDeployPlan_UserDeployYMLNoInfoLine(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	flags := &cmdctx.RootFlags{ConfigPath: filepath.Join(dir, "devbox.yml")}
+	flags := &cmdctx.RootFlags{ConfigPath: filepath.Join(dir, "workspace.yml")}
 
 	cmd := &cobra.Command{}
 	var outBuf, errBuf bytes.Buffer

@@ -34,7 +34,7 @@ var RunCommandFn func(ctx context.Context, rc spec.RunContext) error
 // the files_gate override probe path). Wired by runtime root init() to
 // runtime.BuildRunContext.
 var BuildRunContextFn func(
-	cfg *config.DevboxConfig,
+	cfg *config.DweConfig,
 	reg *registry.Registry,
 	def *model.CommandDef,
 	with map[string]any,

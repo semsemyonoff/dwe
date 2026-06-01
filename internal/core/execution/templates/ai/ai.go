@@ -118,7 +118,7 @@ func ResolveTemplatePack(svc config.ServiceConfig, projectRoot, serviceName stri
 		if err := manifest.ValidatePackName(svc.Render.AI.Template); err != nil {
 			return "", "", false, fmt.Errorf("invalid render.ai.template %q: %w", svc.Render.AI.Template, err)
 		}
-		candidate := filepath.Join(absRoot, "devbox", "templates", "ai", svc.Render.AI.Template)
+		candidate := filepath.Join(absRoot, "workspace", "templates", "ai", svc.Render.AI.Template)
 		fi, err := os.Lstat(candidate)
 		if err == nil {
 			if fi.Mode()&os.ModeSymlink != 0 {
@@ -147,7 +147,7 @@ func ResolveTemplatePack(svc config.ServiceConfig, projectRoot, serviceName stri
 	}
 	candidates = append(candidates, "default")
 	for _, name := range candidates {
-		candidate := filepath.Join(absRoot, "devbox", "templates", "ai", name)
+		candidate := filepath.Join(absRoot, "workspace", "templates", "ai", name)
 		fi, err := os.Lstat(candidate)
 		if err == nil {
 			if fi.Mode()&os.ModeSymlink != 0 {
@@ -216,7 +216,7 @@ type TemplateData struct {
 	ServiceCfg config.ServiceConfig
 	Runtime    config.RuntimeConfig
 	Services   map[string]config.ServiceConfig
-	Cfg        *config.DevboxConfig
+	Cfg        *config.DweConfig
 }
 
 // AppServices returns services whose Type is "app".

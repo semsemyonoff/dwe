@@ -138,7 +138,6 @@ func TestSave_CreatesParentDirectory(t *testing.T) {
 	statePath := filepath.Join(tmpDir, "subdir", "state.yml")
 
 	state := &ProjectState{
-		SchemaVersion: "1",
 		Project:       &ProjectLevelState{},
 		Services:      make(map[string]*ServiceState),
 	}
@@ -161,7 +160,6 @@ func TestSave_FilePermissions(t *testing.T) {
 	statePath := filepath.Join(tmpDir, "state.yml")
 
 	state := &ProjectState{
-		SchemaVersion: "1",
 		Project:       &ProjectLevelState{},
 		Services:      make(map[string]*ServiceState),
 	}
@@ -201,7 +199,6 @@ func TestRemove_DeletesFile(t *testing.T) {
 
 	// Create file
 	state := &ProjectState{
-		SchemaVersion: "1",
 		Project:       &ProjectLevelState{},
 		Services:      make(map[string]*ServiceState),
 	}
@@ -221,7 +218,6 @@ func TestRemoveService_LastServiceRemoved(t *testing.T) {
 	statePath := filepath.Join(tmpDir, "state.yml")
 
 	state := &ProjectState{
-		SchemaVersion: "1",
 		Project:       &ProjectLevelState{},
 		Services: map[string]*ServiceState{
 			"main": {
@@ -250,7 +246,6 @@ func TestRemoveService_PreservesOtherServices(t *testing.T) {
 	statePath := filepath.Join(tmpDir, "state.yml")
 
 	state := &ProjectState{
-		SchemaVersion: "1",
 		Project:       &ProjectLevelState{},
 		Services: map[string]*ServiceState{
 			"main": {
@@ -349,7 +344,6 @@ func TestRecompute_ProjectStatusFromServices(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			state := &ProjectState{
-				SchemaVersion: "1",
 				Project:       &ProjectLevelState{},
 				Services:      tt.services,
 			}

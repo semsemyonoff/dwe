@@ -39,18 +39,18 @@ func (c *Compose) BinName() string {
 }
 
 // NewCompose creates a Compose from the resolved devbox config and docker policy.
-func NewCompose(cfg *config.DevboxConfig, dockerCfg *config.DockerConfig) *Compose {
+func NewCompose(cfg *config.DweConfig, dockerCfg *config.DockerConfig) *Compose {
 	return buildCompose(cfg, dockerCfg, cfg.ComposeFiles())
 }
 
 // NewComposeAll creates a Compose like NewCompose but sources files from ComposeFilesAll(),
 // which includes all overlays regardless of enabled state.
-func NewComposeAll(cfg *config.DevboxConfig, dockerCfg *config.DockerConfig) *Compose {
+func NewComposeAll(cfg *config.DweConfig, dockerCfg *config.DockerConfig) *Compose {
 	return buildCompose(cfg, dockerCfg, cfg.ComposeFilesAll())
 }
 
 // buildCompose is a private helper that constructs a Compose with the provided file list.
-func buildCompose(cfg *config.DevboxConfig, dockerCfg *config.DockerConfig, files []string) *Compose {
+func buildCompose(cfg *config.DweConfig, dockerCfg *config.DockerConfig, files []string) *Compose {
 	cmdArgs := map[string][]string{
 		"up":      dockerCfg.Args.Up,
 		"down":    dockerCfg.Args.Down,

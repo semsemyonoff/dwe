@@ -67,7 +67,7 @@ func TestBuildRegistryCompletions(t *testing.T) {
 // TestRegistryIDCompletion_noSecondArg guards the early-return contract:
 // when a positional arg is already provided, no completions are produced.
 func TestRegistryIDCompletion_noSecondArg(t *testing.T) {
-	fn := registryIDCompletion(&cmdctx.RootFlags{ConfigPath: "devbox.yml"}, false)
+	fn := registryIDCompletion(&cmdctx.RootFlags{ConfigPath: "workspace.yml"}, false)
 	completions, directive := fn(nil, []string{"already-provided"}, "")
 	if len(completions) != 0 {
 		t.Errorf("expected 0 completions, got %d", len(completions))

@@ -15,7 +15,7 @@ import (
 // Disabled services are skipped entirely. Service order within each type group is
 // deterministic: services without dependencies appear alphabetically, those with
 // dependencies appear in topological order relative to their dependents.
-func DeployOrder(cfg *DevboxConfig, types []string) []string {
+func DeployOrder(cfg *DweConfig, types []string) []string {
 	if cfg == nil || cfg.Services == nil {
 		return nil
 	}

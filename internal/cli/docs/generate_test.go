@@ -358,7 +358,7 @@ services:
     type: app
     dir: ./services/main
 `
-	if err := os.WriteFile(filepath.Join(tmpDir, "devbox.yml"), []byte(devboxYML), 0o644); err != nil {
+	if err := os.WriteFile(filepath.Join(tmpDir, "workspace.yml"), []byte(devboxYML), 0o644); err != nil {
 		t.Fatal(err)
 	}
 
@@ -369,7 +369,7 @@ services:
 		t.Fatalf("i18n.Load: %v", err)
 	}
 	flags := &cmdctx.RootFlags{
-		ConfigPath: filepath.Join(tmpDir, "devbox.yml"),
+		ConfigPath: filepath.Join(tmpDir, "workspace.yml"),
 		I18n:       store,
 		Locale:     "en",
 	}

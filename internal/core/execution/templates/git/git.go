@@ -91,7 +91,7 @@ func ResolveTemplatePack(svc config.ServiceConfig, projectRoot, serviceName stri
 		if err := manifest.ValidatePackName(svc.Render.Git.Template); err != nil {
 			return "", "", false, fmt.Errorf("invalid render.git.template %q: %w", svc.Render.Git.Template, err)
 		}
-		candidate := filepath.Join(absRoot, "devbox", "templates", "git", svc.Render.Git.Template)
+		candidate := filepath.Join(absRoot, "workspace", "templates", "git", svc.Render.Git.Template)
 		fi, err := os.Lstat(candidate)
 		if err == nil {
 			if fi.Mode()&os.ModeSymlink != 0 {
@@ -119,7 +119,7 @@ func ResolveTemplatePack(svc config.ServiceConfig, projectRoot, serviceName stri
 	}
 	candidates = append(candidates, "default")
 	for _, name := range candidates {
-		candidate := filepath.Join(absRoot, "devbox", "templates", "git", name)
+		candidate := filepath.Join(absRoot, "workspace", "templates", "git", name)
 		fi, err := os.Lstat(candidate)
 		if err == nil {
 			if fi.Mode()&os.ModeSymlink != 0 {
@@ -330,7 +330,7 @@ type TemplateData struct {
 	ServiceCfg config.ServiceConfig
 	Runtime    config.RuntimeConfig
 	Services   map[string]config.ServiceConfig
-	Cfg        *config.DevboxConfig
+	Cfg        *config.DweConfig
 }
 
 // AppServices returns services whose Type is "app".
@@ -364,7 +364,7 @@ func filterServices(svcs map[string]config.ServiceConfig, t config.ServiceType) 
 // match when the rendering service has no extends chain.
 type Context struct {
 	ProjectRoot string
-	Cfg         *config.DevboxConfig
+	Cfg         *config.DweConfig
 	Service     string
 	Resolved    string
 	ServiceCfg  config.ServiceConfig

@@ -22,11 +22,11 @@ import (
 func snapshotInspectProject(t *testing.T, services map[string]bool) string {
 	t.Helper()
 	dir := t.TempDir()
-	devboxDir := filepath.Join(dir, "devbox")
+	devboxDir := filepath.Join(dir, "workspace")
 	if err := os.MkdirAll(devboxDir, 0o755); err != nil {
 		t.Fatal(err)
 	}
-	if err := os.WriteFile(filepath.Join(dir, "devbox.yml"), []byte("schema_version: \"2\"\n"), 0o644); err != nil {
+	if err := os.WriteFile(filepath.Join(dir, "workspace.yml"), []byte("schema_version: \"2\"\n"), 0o644); err != nil {
 		t.Fatal(err)
 	}
 	var defaults strings.Builder
@@ -132,7 +132,7 @@ func TestSnapshotInspect_ServicesDiff(t *testing.T) {
 			base := snapshotInspectProject(t, tc.services)
 			writeSnapshotWithServices(t, base, "snap", tc.captured)
 			flags := &cmdctx.RootFlags{
-				ConfigPath: filepath.Join(base, "devbox.yml"),
+				ConfigPath: filepath.Join(base, "workspace.yml"),
 				Root:       base,
 			}
 			var out bytes.Buffer
@@ -164,7 +164,7 @@ func TestSnapshotInspect_ServicesDiff_JSON(t *testing.T) {
 		{Name: "main", Enabled: true},
 	})
 	flags := &cmdctx.RootFlags{
-		ConfigPath: filepath.Join(base, "devbox.yml"),
+		ConfigPath: filepath.Join(base, "workspace.yml"),
 		Root:       base,
 		Output:     "json",
 	}

@@ -25,15 +25,15 @@ func makeDeployAfterProject(t *testing.T,
 	enabledServices map[string]bool,
 	projectDeployYAML, projectResetYAML string,
 	serviceResetContents map[string]string,
-) (root string, cfg *devconfig.DevboxConfig) {
+) (root string, cfg *devconfig.DweConfig) {
 	t.Helper()
 	root = t.TempDir()
-	require.NoError(t, os.MkdirAll(filepath.Join(root, "devbox"), 0o755))
+	require.NoError(t, os.MkdirAll(filepath.Join(root, "workspace"), 0o755))
 
 	// Build ctx.Cfg manually so tests don't depend on LoadConfig succeeding.
 	svcMap := make(map[string]devconfig.ServiceConfig, len(services))
 	for name, svcType := range services {
-		svcDir := filepath.Join(root, "devbox", "services", name)
+		svcDir := filepath.Join(root, "workspace", "services", name)
 		require.NoError(t, os.MkdirAll(svcDir, 0o755))
 		require.NoError(t, os.WriteFile(filepath.Join(svcDir, "service.yml"),
 			[]byte("type: "+svcType+"\n"), 0o644))
@@ -45,27 +45,27 @@ func makeDeployAfterProject(t *testing.T,
 		}
 	}
 	for name, content := range deployContents {
-		depPath := filepath.Join(root, "devbox", "services", name, "deploy.yml")
+		depPath := filepath.Join(root, "workspace", "services", name, "deploy.yml")
 		require.NoError(t, os.WriteFile(depPath, []byte(content), 0o644))
 	}
 	for name, content := range serviceResetContents {
-		resetPath := filepath.Join(root, "devbox", "services", name, "reset.yml")
+		resetPath := filepath.Join(root, "workspace", "services", name, "reset.yml")
 		require.NoError(t, os.WriteFile(resetPath, []byte(content), 0o644))
 	}
 	if projectDeployYAML != "" {
-		require.NoError(t, os.WriteFile(filepath.Join(root, "devbox", "deploy.yml"),
+		require.NoError(t, os.WriteFile(filepath.Join(root, "workspace", "deploy.yml"),
 			[]byte(projectDeployYAML), 0o644))
 	}
 	if projectResetYAML != "" {
-		require.NoError(t, os.WriteFile(filepath.Join(root, "devbox", "reset.yml"),
+		require.NoError(t, os.WriteFile(filepath.Join(root, "workspace", "reset.yml"),
 			[]byte(projectResetYAML), 0o644))
 	}
 
-	cfg = &devconfig.DevboxConfig{Services: svcMap}
+	cfg = &devconfig.DweConfig{Services: svcMap}
 	return root, cfg
 }
 
-func runDeployAfter(t *testing.T, root string, cfg *devconfig.DevboxConfig) []validate.Diagnostic {
+func runDeployAfter(t *testing.T, root string, cfg *devconfig.DweConfig) []validate.Diagnostic {
 	t.Helper()
 	ctx := validate.Context{
 		ProjectRoot: root,

@@ -12,7 +12,7 @@ import (
 // --- cobra wiring tests ---
 
 func TestRunCmd_Use(t *testing.T) {
-	flags := &cmdctx.RootFlags{ConfigPath: "devbox.yml"}
+	flags := &cmdctx.RootFlags{ConfigPath: "workspace.yml"}
 	cmd := NewRunCmd(groupEnvironment, flags)
 	if cmd.Use != "run" {
 		t.Errorf("Use = %q, want %q", cmd.Use, "run")
@@ -20,7 +20,7 @@ func TestRunCmd_Use(t *testing.T) {
 }
 
 func TestRunCmd_NoArgs(t *testing.T) {
-	flags := &cmdctx.RootFlags{ConfigPath: "devbox.yml"}
+	flags := &cmdctx.RootFlags{ConfigPath: "workspace.yml"}
 	cmd := NewRunCmd(groupEnvironment, flags)
 	if cmd.Args == nil {
 		t.Error("Args validator should be set (cobra.NoArgs)")
@@ -31,7 +31,7 @@ func TestRunCmd_NoArgs(t *testing.T) {
 }
 
 func TestRunCmd_FlagsExist(t *testing.T) {
-	flags := &cmdctx.RootFlags{ConfigPath: "devbox.yml"}
+	flags := &cmdctx.RootFlags{ConfigPath: "workspace.yml"}
 	cmd := NewRunCmd(groupEnvironment, flags)
 
 	if cmd.Flags().Lookup("no-update") == nil {
@@ -79,7 +79,7 @@ func TestRunCmd_InEnvironmentGroup(t *testing.T) {
 // makeMinimalDevboxYML writes the minimum devbox.yml needed for config.LoadConfig to succeed.
 func makeMinimalDevboxYML(t *testing.T, dir string) string {
 	t.Helper()
-	cfgPath := filepath.Join(dir, "devbox.yml")
+	cfgPath := filepath.Join(dir, "workspace.yml")
 	content := "schema_version: \"2\"\nproject:\n  name: test\n  prefix: devbox\n"
 	if err := os.WriteFile(cfgPath, []byte(content), 0644); err != nil {
 		t.Fatalf("writing devbox.yml: %v", err)
@@ -114,7 +114,7 @@ func TestRunRun_MissingRunSection_UsesDefault(t *testing.T) {
 	dir := t.TempDir()
 	cfgPath := makeMinimalDevboxYML(t, dir)
 
-	devboxDir := filepath.Join(dir, "devbox")
+	devboxDir := filepath.Join(dir, "workspace")
 	if err := os.MkdirAll(devboxDir, 0755); err != nil {
 		t.Fatalf("creating devbox dir: %v", err)
 	}
@@ -166,7 +166,7 @@ func TestRunRun_WithLifecycleYML_NoInfoLine(t *testing.T) {
 	dir := t.TempDir()
 	cfgPath := makeMinimalDevboxYML(t, dir)
 
-	devboxDir := filepath.Join(dir, "devbox")
+	devboxDir := filepath.Join(dir, "workspace")
 	if err := os.MkdirAll(devboxDir, 0755); err != nil {
 		t.Fatalf("creating devbox dir: %v", err)
 	}

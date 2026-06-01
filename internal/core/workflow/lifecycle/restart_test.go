@@ -41,7 +41,7 @@ func TestRunRestart_MissingStopSection(t *testing.T) {
 	dir := t.TempDir()
 	cfgPath := makeMinimalDevboxYML(t, dir)
 
-	devboxDir := filepath.Join(dir, "devbox")
+	devboxDir := filepath.Join(dir, "workspace")
 	if err := os.MkdirAll(devboxDir, 0755); err != nil {
 		t.Fatalf("creating devbox dir: %v", err)
 	}
@@ -64,7 +64,7 @@ func TestRunRestart_MissingRunSection_UsesDefault(t *testing.T) {
 	dir := t.TempDir()
 	cfgPath := makeMinimalDevboxYML(t, dir)
 
-	devboxDir := filepath.Join(dir, "devbox")
+	devboxDir := filepath.Join(dir, "workspace")
 	if err := os.MkdirAll(devboxDir, 0755); err != nil {
 		t.Fatalf("creating devbox dir: %v", err)
 	}
@@ -95,7 +95,7 @@ func TestRunRestart_ClearsPendingRestartOnSuccess(t *testing.T) {
 	dir := t.TempDir()
 	cfgPath := makeMinimalDevboxYML(t, dir)
 
-	devboxDir := filepath.Join(dir, "devbox")
+	devboxDir := filepath.Join(dir, "workspace")
 	if err := os.MkdirAll(devboxDir, 0o755); err != nil {
 		t.Fatalf("creating devbox dir: %v", err)
 	}
@@ -161,7 +161,7 @@ func TestRunRestart_OnlyRunSectionPresent_StopUsesDefault(t *testing.T) {
 	dir := t.TempDir()
 	cfgPath := makeMinimalDevboxYML(t, dir)
 
-	devboxDir := filepath.Join(dir, "devbox")
+	devboxDir := filepath.Join(dir, "workspace")
 	if err := os.MkdirAll(devboxDir, 0755); err != nil {
 		t.Fatalf("creating devbox dir: %v", err)
 	}
@@ -190,7 +190,7 @@ func TestRunRestart_NoUpdatePropagated(t *testing.T) {
 	dir := t.TempDir()
 	cfgPath := makeMinimalDevboxYML(t, dir)
 
-	devboxDir := filepath.Join(dir, "devbox")
+	devboxDir := filepath.Join(dir, "workspace")
 	if err := os.MkdirAll(devboxDir, 0755); err != nil {
 		t.Fatalf("creating devbox dir: %v", err)
 	}

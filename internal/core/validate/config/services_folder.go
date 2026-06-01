@@ -28,7 +28,7 @@ func (v *servicesFolderValidator) Domain() string {
 
 func (v *servicesFolderValidator) Run(ctx validate.Context) []validate.Diagnostic {
 	var diags []validate.Diagnostic
-	servicesDir := filepath.Join(ctx.ProjectRoot, "devbox", "services")
+	servicesDir := filepath.Join(ctx.ProjectRoot, "workspace", "services")
 
 	entries, err := os.ReadDir(servicesDir)
 	if err != nil {

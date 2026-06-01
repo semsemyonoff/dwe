@@ -257,10 +257,10 @@ func makeMinimalProject(t *testing.T) string {
   name: test
   prefix: devbox
 `
-	if err := os.WriteFile(filepath.Join(dir, "devbox.yml"), []byte(devboxYML), 0o644); err != nil {
+	if err := os.WriteFile(filepath.Join(dir, "workspace.yml"), []byte(devboxYML), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	devboxDir := filepath.Join(dir, "devbox")
+	devboxDir := filepath.Join(dir, "workspace")
 	if err := os.MkdirAll(devboxDir, 0o755); err != nil {
 		t.Fatal(err)
 	}
@@ -280,7 +280,7 @@ func makeMinimalProject(t *testing.T) string {
 
 func TestCommandListCmd_RunE_NoCommands(t *testing.T) {
 	dir := makeMinimalProject(t)
-	flags := &cmdctx.RootFlags{ConfigPath: filepath.Join(dir, "devbox.yml")}
+	flags := &cmdctx.RootFlags{ConfigPath: filepath.Join(dir, "workspace.yml")}
 	cmd := newCommandListCmd(flags)
 	var buf bytes.Buffer
 	cmd.SetOut(&buf)
@@ -294,7 +294,7 @@ func TestCommandListCmd_RunE_NoCommands(t *testing.T) {
 
 func TestCommandListCmd_RunE_WithCommands(t *testing.T) {
 	dir := makeMinimalProject(t)
-	cmdDir := filepath.Join(dir, "devbox", "commands")
+	cmdDir := filepath.Join(dir, "workspace", "commands")
 	if err := os.MkdirAll(cmdDir, 0o755); err != nil {
 		t.Fatal(err)
 	}
@@ -307,7 +307,7 @@ func TestCommandListCmd_RunE_WithCommands(t *testing.T) {
 	if err := os.WriteFile(filepath.Join(cmdDir, "db.yml"), []byte(yml), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	flags := &cmdctx.RootFlags{ConfigPath: filepath.Join(dir, "devbox.yml")}
+	flags := &cmdctx.RootFlags{ConfigPath: filepath.Join(dir, "workspace.yml")}
 	cmd := newCommandListCmd(flags)
 	var buf bytes.Buffer
 	cmd.SetOut(&buf)
@@ -318,7 +318,7 @@ func TestCommandListCmd_RunE_WithCommands(t *testing.T) {
 
 func TestCommandListCmd_RunE_WithGroupFilter(t *testing.T) {
 	dir := makeMinimalProject(t)
-	cmdDir := filepath.Join(dir, "devbox", "commands")
+	cmdDir := filepath.Join(dir, "workspace", "commands")
 	if err := os.MkdirAll(cmdDir, 0o755); err != nil {
 		t.Fatal(err)
 	}
@@ -330,7 +330,7 @@ func TestCommandListCmd_RunE_WithGroupFilter(t *testing.T) {
 	if err := os.WriteFile(filepath.Join(cmdDir, "db.yml"), []byte(yml), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	flags := &cmdctx.RootFlags{ConfigPath: filepath.Join(dir, "devbox.yml")}
+	flags := &cmdctx.RootFlags{ConfigPath: filepath.Join(dir, "workspace.yml")}
 	cmd := newCommandListCmd(flags)
 	var buf bytes.Buffer
 	cmd.SetOut(&buf)
@@ -345,7 +345,7 @@ func TestCommandListCmd_RunE_WithGroupFilter(t *testing.T) {
 
 func TestCommandInspectCmd_RunE_DirectID(t *testing.T) {
 	dir := makeMinimalProject(t)
-	cmdDir := filepath.Join(dir, "devbox", "commands")
+	cmdDir := filepath.Join(dir, "workspace", "commands")
 	if err := os.MkdirAll(cmdDir, 0o755); err != nil {
 		t.Fatal(err)
 	}
@@ -358,7 +358,7 @@ func TestCommandInspectCmd_RunE_DirectID(t *testing.T) {
 	if err := os.WriteFile(filepath.Join(cmdDir, "db.yml"), []byte(yml), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	flags := &cmdctx.RootFlags{ConfigPath: filepath.Join(dir, "devbox.yml")}
+	flags := &cmdctx.RootFlags{ConfigPath: filepath.Join(dir, "workspace.yml")}
 	cmd := NewCmd("", flags)
 	if err := cmd.Flags().Set("inspect", "true"); err != nil {
 		t.Fatal(err)

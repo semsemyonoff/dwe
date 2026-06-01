@@ -16,7 +16,7 @@ import (
 // writeServiceYML creates devbox/services/<name>/service.yml with the given content.
 func writeServiceYML(t *testing.T, root, name, content string) {
 	t.Helper()
-	dir := filepath.Join(root, "devbox", "services", name)
+	dir := filepath.Join(root, "workspace", "services", name)
 	require.NoError(t, os.MkdirAll(dir, 0o755))
 	require.NoError(t, os.WriteFile(filepath.Join(dir, "service.yml"), []byte(content), 0o644))
 }
@@ -24,12 +24,12 @@ func writeServiceYML(t *testing.T, root, name, content string) {
 // writeDeployYML creates devbox/services/<name>/deploy.yml.
 func writeDeployYML(t *testing.T, root, name string) {
 	t.Helper()
-	dir := filepath.Join(root, "devbox", "services", name)
+	dir := filepath.Join(root, "workspace", "services", name)
 	require.NoError(t, os.MkdirAll(dir, 0o755))
 	require.NoError(t, os.WriteFile(filepath.Join(dir, "deploy.yml"), []byte("phases: []\n"), 0o644))
 }
 
-func runHooksValidator(t *testing.T, root string, cfg *config.DevboxConfig, reg *usercommands.Registry) []validate.Diagnostic {
+func runHooksValidator(t *testing.T, root string, cfg *config.DweConfig, reg *usercommands.Registry) []validate.Diagnostic {
 	t.Helper()
 	ctx := validate.Context{
 		ProjectRoot:     root,
@@ -43,7 +43,7 @@ func TestServiceHooksValidator(t *testing.T) {
 	tests := []struct {
 		name       string
 		setup      func(root string)
-		cfg        func(root string) *config.DevboxConfig
+		cfg        func(root string) *config.DweConfig
 		reg        func() *usercommands.Registry
 		wantErrors int
 		wantWarns  int
@@ -53,7 +53,7 @@ func TestServiceHooksValidator(t *testing.T) {
 		{
 			name:  "no services — no diagnostics",
 			setup: func(root string) {},
-			cfg:   func(root string) *config.DevboxConfig { return nil },
+			cfg:   func(root string) *config.DweConfig { return nil },
 			reg:   usercommands.NewEmptyRegistry,
 		},
 		{
@@ -61,13 +61,13 @@ func TestServiceHooksValidator(t *testing.T) {
 			setup: func(root string) {
 				writeServiceYML(t, root, "redis", "type: tool\ncontainer: redis\n")
 			},
-			cfg: func(root string) *config.DevboxConfig { return nil },
+			cfg: func(root string) *config.DweConfig { return nil },
 			reg: usercommands.NewEmptyRegistry,
 		},
 		{
 			name: "on_disable.requires deploy — error",
-			cfg: func(root string) *config.DevboxConfig {
-				return &config.DevboxConfig{
+			cfg: func(root string) *config.DweConfig {
+				return &config.DweConfig{
 					Services: map[string]config.ServiceConfig{
 						"myapp": {
 							Type:      config.ServiceTypeApp,
@@ -86,8 +86,8 @@ func TestServiceHooksValidator(t *testing.T) {
 		},
 		{
 			name: "on_enable.requires unknown value — error",
-			cfg: func(root string) *config.DevboxConfig {
-				return &config.DevboxConfig{
+			cfg: func(root string) *config.DweConfig {
+				return &config.DweConfig{
 					Services: map[string]config.ServiceConfig{
 						"myapp": {
 							Type:      config.ServiceTypeApp,
@@ -106,8 +106,8 @@ func TestServiceHooksValidator(t *testing.T) {
 		},
 		{
 			name: "on_disable.requires unknown value — deploy omitted from valid list",
-			cfg: func(root string) *config.DevboxConfig {
-				return &config.DevboxConfig{
+			cfg: func(root string) *config.DweConfig {
+				return &config.DweConfig{
 					Services: map[string]config.ServiceConfig{
 						"myapp": {
 							Type:      config.ServiceTypeApp,
@@ -127,8 +127,8 @@ func TestServiceHooksValidator(t *testing.T) {
 		},
 		{
 			name: "on_enable.requires deploy — no deploy.yml — error",
-			cfg: func(root string) *config.DevboxConfig {
-				return &config.DevboxConfig{
+			cfg: func(root string) *config.DweConfig {
+				return &config.DweConfig{
 					Services: map[string]config.ServiceConfig{
 						"myapp": {
 							Type:      config.ServiceTypeApp,
@@ -148,8 +148,8 @@ func TestServiceHooksValidator(t *testing.T) {
 		},
 		{
 			name: "on_enable.requires deploy — deploy.yml present — no error",
-			cfg: func(root string) *config.DevboxConfig {
-				return &config.DevboxConfig{
+			cfg: func(root string) *config.DweConfig {
+				return &config.DweConfig{
 					Services: map[string]config.ServiceConfig{
 						"myapp": {
 							Type:      config.ServiceTypeApp,
@@ -168,8 +168,8 @@ func TestServiceHooksValidator(t *testing.T) {
 		},
 		{
 			name: "before references unknown command — error",
-			cfg: func(root string) *config.DevboxConfig {
-				return &config.DevboxConfig{
+			cfg: func(root string) *config.DweConfig {
+				return &config.DweConfig{
 					Services: map[string]config.ServiceConfig{
 						"myapp": {
 							Type:      config.ServiceTypeApp,
@@ -188,8 +188,8 @@ func TestServiceHooksValidator(t *testing.T) {
 		},
 		{
 			name: "after references command with unsupported type — error",
-			cfg: func(root string) *config.DevboxConfig {
-				return &config.DevboxConfig{
+			cfg: func(root string) *config.DweConfig {
+				return &config.DweConfig{
 					Services: map[string]config.ServiceConfig{
 						"myapp": {
 							Type:      config.ServiceTypeApp,
@@ -215,8 +215,8 @@ func TestServiceHooksValidator(t *testing.T) {
 		},
 		{
 			name: "before references shell command — no error",
-			cfg: func(root string) *config.DevboxConfig {
-				return &config.DevboxConfig{
+			cfg: func(root string) *config.DweConfig {
+				return &config.DweConfig{
 					Services: map[string]config.ServiceConfig{
 						"myapp": {
 							Type:      config.ServiceTypeApp,
@@ -241,8 +241,8 @@ func TestServiceHooksValidator(t *testing.T) {
 		},
 		{
 			name: "after references script command — no error",
-			cfg: func(root string) *config.DevboxConfig {
-				return &config.DevboxConfig{
+			cfg: func(root string) *config.DweConfig {
+				return &config.DweConfig{
 					Services: map[string]config.ServiceConfig{
 						"myapp": {
 							Type:      config.ServiceTypeApp,
@@ -267,8 +267,8 @@ func TestServiceHooksValidator(t *testing.T) {
 		},
 		{
 			name: "mandatory service with on_enable hook — warning",
-			cfg: func(root string) *config.DevboxConfig {
-				return &config.DevboxConfig{
+			cfg: func(root string) *config.DweConfig {
+				return &config.DweConfig{
 					Services: map[string]config.ServiceConfig{
 						"mandatory-svc": {
 							Type:      config.ServiceTypeApp,
@@ -288,8 +288,8 @@ func TestServiceHooksValidator(t *testing.T) {
 		},
 		{
 			name: "mandatory service with on_disable hook — warning",
-			cfg: func(root string) *config.DevboxConfig {
-				return &config.DevboxConfig{
+			cfg: func(root string) *config.DweConfig {
+				return &config.DweConfig{
 					Services: map[string]config.ServiceConfig{
 						"mandatory-svc": {
 							Type:      config.ServiceTypeApp,
@@ -309,8 +309,8 @@ func TestServiceHooksValidator(t *testing.T) {
 		},
 		{
 			name: "no registry — ref validation skipped — no error",
-			cfg: func(root string) *config.DevboxConfig {
-				return &config.DevboxConfig{
+			cfg: func(root string) *config.DweConfig {
+				return &config.DweConfig{
 					Services: map[string]config.ServiceConfig{
 						"myapp": {
 							Type:      config.ServiceTypeApp,
@@ -331,10 +331,10 @@ func TestServiceHooksValidator(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			root := t.TempDir()
-			require.NoError(t, os.MkdirAll(filepath.Join(root, "devbox"), 0o755))
+			require.NoError(t, os.MkdirAll(filepath.Join(root, "workspace"), 0o755))
 			tt.setup(root)
 
-			var cfg *config.DevboxConfig
+			var cfg *config.DweConfig
 			if tt.cfg != nil {
 				cfg = tt.cfg(root)
 			}

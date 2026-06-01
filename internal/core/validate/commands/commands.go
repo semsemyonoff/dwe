@@ -34,7 +34,7 @@ func (v *Validator) Run(ctx validate.Context) []validate.Diagnostic {
 	var diags []validate.Diagnostic
 
 	// Discover command files
-	baseDir := filepath.Join(ctx.ProjectRoot, "devbox", "commands")
+	baseDir := filepath.Join(ctx.ProjectRoot, "workspace", "commands")
 	paths, err := loader.DiscoverCommandFiles(baseDir)
 	if err != nil {
 		// If the commands directory doesn't exist, that's OK; just no commands
@@ -298,7 +298,7 @@ func sortedCommandNames(cf *model.CommandFile) []string {
 // paramStructuralDiagnostics emits categorized diagnostics for param validation violations.
 // It checks widget/options rules and validates default/default_from values against
 // resolved options (if cfg is available). Returns diagnostics or nil if no violations.
-func paramStructuralDiagnostics(cmd model.CommandDef, relFile string, cfg *config.DevboxConfig) []validate.Diagnostic {
+func paramStructuralDiagnostics(cmd model.CommandDef, relFile string, cfg *config.DweConfig) []validate.Diagnostic {
 	var out []validate.Diagnostic
 	target := fmt.Sprintf("commands:%s", cmd.ID)
 

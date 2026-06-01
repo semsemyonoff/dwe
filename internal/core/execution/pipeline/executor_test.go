@@ -185,7 +185,7 @@ func buildResolvedSteps(phase config.DeployPhase, steps []config.DeployStep) []R
 
 func TestRunPipeline_EmptySteps(t *testing.T) {
 	rep := &mockReporter{}
-	cfg := &config.DevboxConfig{Raw: map[string]any{}}
+	cfg := &config.DweConfig{Raw: map[string]any{}}
 	err := Run(nil, rep, "test", cfg, nil, t.TempDir(), nil, false, nil)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
@@ -202,7 +202,7 @@ func TestRunPipeline_EmptySteps(t *testing.T) {
 
 func TestRunPipeline_SingleStep_Success(t *testing.T) {
 	rep := &mockReporter{}
-	cfg := &config.DevboxConfig{Raw: map[string]any{}}
+	cfg := &config.DweConfig{Raw: map[string]any{}}
 	phase := config.DeployPhase{Name: "init"}
 	step := noopStep("setup")
 	steps := buildResolvedSteps(phase, []config.DeployStep{step})
@@ -238,7 +238,7 @@ func TestRunPipeline_SingleStep_Success(t *testing.T) {
 
 func TestRunPipeline_MultipleSteps_CorrectIndexing(t *testing.T) {
 	rep := &mockReporter{}
-	cfg := &config.DevboxConfig{Raw: map[string]any{}}
+	cfg := &config.DweConfig{Raw: map[string]any{}}
 	phase := config.DeployPhase{Name: "setup"}
 	steps := buildResolvedSteps(phase, []config.DeployStep{
 		noopStep("a"),
@@ -271,7 +271,7 @@ func TestRunPipeline_MultipleSteps_CorrectIndexing(t *testing.T) {
 
 func TestRunPipeline_StepFailure_ReporterCalled(t *testing.T) {
 	rep := &mockReporter{}
-	cfg := &config.DevboxConfig{Raw: map[string]any{}}
+	cfg := &config.DweConfig{Raw: map[string]any{}}
 	phase := config.DeployPhase{Name: "init"}
 	steps := buildResolvedSteps(phase, []config.DeployStep{
 		{Name: "fail", Type: "shell", Cmd: "exit 1"},
@@ -321,7 +321,7 @@ func TestRunPipeline_StepSkippedByRuntimeWhen(t *testing.T) {
 	}
 
 	rep := &mockReporter{}
-	cfg := &config.DevboxConfig{Raw: map[string]any{}}
+	cfg := &config.DweConfig{Raw: map[string]any{}}
 	phase := config.DeployPhase{Name: "setup"}
 
 	// "dir-empty <workDir>" → false because workDir is not empty → step is skipped.
@@ -360,7 +360,7 @@ func TestRunPipeline_PhaseSkipped_AllStepsSkipped(t *testing.T) {
 	}
 
 	rep := &mockReporter{}
-	cfg := &config.DevboxConfig{Raw: map[string]any{}}
+	cfg := &config.DweConfig{Raw: map[string]any{}}
 	phase := config.DeployPhase{Name: "cond-phase"}
 
 	phaseWhenExpr := "dir-empty " + workDir
@@ -406,7 +406,7 @@ func TestRunPipeline_PhaseSkipped_AllStepsSkipped(t *testing.T) {
 
 func TestRunPipeline_PostStepHook_CalledAfterSuccess(t *testing.T) {
 	rep := &mockReporter{}
-	cfg := &config.DevboxConfig{Raw: map[string]any{}}
+	cfg := &config.DweConfig{Raw: map[string]any{}}
 	phase := config.DeployPhase{Name: "env"}
 	steps := buildResolvedSteps(phase, []config.DeployStep{noopStep("render-env")})
 
@@ -429,7 +429,7 @@ func TestRunPipeline_PostStepHook_CalledAfterSuccess(t *testing.T) {
 
 func TestRunPipeline_PostStepHook_NotCalledOnFailure(t *testing.T) {
 	rep := &mockReporter{}
-	cfg := &config.DevboxConfig{Raw: map[string]any{}}
+	cfg := &config.DweConfig{Raw: map[string]any{}}
 	phase := config.DeployPhase{Name: "env"}
 	steps := buildResolvedSteps(phase, []config.DeployStep{{Name: "render-env", Type: "shell", Cmd: "exit 1"}})
 
@@ -452,7 +452,7 @@ func TestRunPipeline_PostStepHook_NotCalledOnFailure(t *testing.T) {
 
 func TestRunPipeline_ServiceStep_PhaseKeyIncludesService(t *testing.T) {
 	rep := &mockReporter{}
-	cfg := &config.DevboxConfig{Raw: map[string]any{}}
+	cfg := &config.DweConfig{Raw: map[string]any{}}
 	phase := config.DeployPhase{Name: "setup"}
 	steps := []ResolvedStep{
 		{Phase: phase, Step: noopStep("migrate"), Service: "main"},
@@ -501,7 +501,7 @@ func TestRunPipeline_SuspendResumeAroundSequentialExec(t *testing.T) {
 	// colors and broke docker compose's interactive UI; this test pins the
 	// restored pause/resume hand-off.
 	rep := &mockReporter{}
-	cfg := &config.DevboxConfig{Raw: map[string]any{}}
+	cfg := &config.DweConfig{Raw: map[string]any{}}
 	phase := config.DeployPhase{Name: "p"}
 	steps := buildResolvedSteps(phase, []config.DeployStep{noopStep("s")})
 
@@ -517,7 +517,7 @@ func TestRunPipeline_SuspendResumeAroundSequentialExec(t *testing.T) {
 
 func TestRunPipeline_PostDeploySkippedOnFailure(t *testing.T) {
 	rep := &mockReporter{}
-	cfg := &config.DevboxConfig{Raw: map[string]any{}}
+	cfg := &config.DweConfig{Raw: map[string]any{}}
 
 	phase1 := config.DeployPhase{Name: "setup"}
 	phase2 := config.DeployPhase{Name: "post-deploy"}
@@ -556,7 +556,7 @@ func TestRunPipeline_PostDeploySkippedOnFailure(t *testing.T) {
 
 func TestRunPipeline_UntrackedPhase_ExcludedFromTotal(t *testing.T) {
 	rep := &mockReporter{}
-	cfg := &config.DevboxConfig{Raw: map[string]any{}}
+	cfg := &config.DweConfig{Raw: map[string]any{}}
 
 	tracked := config.DeployPhase{Name: "setup", Untracked: false}
 	untracked := config.DeployPhase{Name: "post-deploy", Untracked: true}
@@ -584,7 +584,7 @@ func TestRunPipeline_UntrackedPhase_ExcludedFromTotal(t *testing.T) {
 
 func TestRunPipeline_UntrackedPhase_StepsReceiveZeroIndex(t *testing.T) {
 	rep := &mockReporter{}
-	cfg := &config.DevboxConfig{Raw: map[string]any{}}
+	cfg := &config.DweConfig{Raw: map[string]any{}}
 
 	tracked := config.DeployPhase{Name: "setup", Untracked: false}
 	untracked := config.DeployPhase{Name: "post-deploy", Untracked: true}
@@ -630,7 +630,7 @@ func TestRunPipeline_UntrackedPhase_StepsReceiveZeroIndex(t *testing.T) {
 func TestRunPipeline_TrackedIndexContinuous(t *testing.T) {
 	// Three tracked steps across two phases: indices should be 1, 2, 3.
 	rep := &mockReporter{}
-	cfg := &config.DevboxConfig{Raw: map[string]any{}}
+	cfg := &config.DweConfig{Raw: map[string]any{}}
 
 	phase1 := config.DeployPhase{Name: "phase1", Untracked: false}
 	phase2 := config.DeployPhase{Name: "phase2", Untracked: false}
@@ -669,7 +669,7 @@ func TestRunPipeline_ConfirmStep_PausesAndResumes(t *testing.T) {
 	// huh prompt also installs its own package-level pause/resume hooks
 	// (those are an inner guard, not a replacement).
 	rep := &mockReporter{}
-	cfg := &config.DevboxConfig{Raw: map[string]any{}}
+	cfg := &config.DweConfig{Raw: map[string]any{}}
 
 	phase := config.DeployPhase{Name: "pre"}
 	steps := []ResolvedStep{
@@ -715,7 +715,7 @@ func TestRunPipeline_FilesGate_ReadableFilePresent(t *testing.T) {
 	reg.AddCommandForTest(cmd)
 
 	rep := &mockReporter{}
-	cfg := &config.DevboxConfig{Raw: map[string]any{}}
+	cfg := &config.DweConfig{Raw: map[string]any{}}
 	phase := config.DeployPhase{Name: "setup"}
 	steps := []ResolvedStep{
 		{
@@ -787,7 +787,7 @@ func TestRunPipeline_FilesGate_ReadableFileMissing_SkipsStep(t *testing.T) {
 	reg.AddCommandForTest(cmd)
 
 	rep := &mockReporter{}
-	cfg := &config.DevboxConfig{Raw: map[string]any{}}
+	cfg := &config.DweConfig{Raw: map[string]any{}}
 	phase := config.DeployPhase{Name: "setup"}
 	steps := []ResolvedStep{
 		{
@@ -867,7 +867,7 @@ func TestRunPipeline_FilesGate_Readable_RespectsJournalSkip(t *testing.T) {
 	reg.AddCommandForTest(cmd)
 
 	rep := &mockReporter{}
-	cfg := &config.DevboxConfig{Raw: map[string]any{}}
+	cfg := &config.DweConfig{Raw: map[string]any{}}
 	phase := config.DeployPhase{Name: "setup"}
 	steps := []ResolvedStep{
 		{
@@ -948,7 +948,7 @@ func TestRunPipeline_FilesGate_Missing_BypassesJournalSkip(t *testing.T) {
 	reg.AddCommandForTest(cmd)
 
 	rep := &mockReporter{}
-	cfg := &config.DevboxConfig{Raw: map[string]any{}}
+	cfg := &config.DweConfig{Raw: map[string]any{}}
 	phase := config.DeployPhase{Name: "setup"}
 	steps := []ResolvedStep{
 		{
@@ -1021,7 +1021,7 @@ func TestRunPipeline_FilesGate_MissingStateFileAbsent(t *testing.T) {
 	reg.AddCommandForTest(cmd)
 
 	rep := &mockReporter{}
-	cfg := &config.DevboxConfig{Raw: map[string]any{}}
+	cfg := &config.DweConfig{Raw: map[string]any{}}
 	phase := config.DeployPhase{Name: "setup"}
 	steps := []ResolvedStep{
 		{
@@ -1097,7 +1097,7 @@ func TestRunPipeline_FilesGate_MissingStateFilePresent_SkipsStep(t *testing.T) {
 	reg.AddCommandForTest(cmd)
 
 	rep := &mockReporter{}
-	cfg := &config.DevboxConfig{Raw: map[string]any{}}
+	cfg := &config.DweConfig{Raw: map[string]any{}}
 	phase := config.DeployPhase{Name: "setup"}
 	steps := []ResolvedStep{
 		{
@@ -1178,7 +1178,7 @@ func TestRunPipeline_FilesGate_WhenFalseBypassesGate(t *testing.T) {
 	reg.AddCommandForTest(cmd)
 
 	rep := &mockReporter{}
-	cfg := &config.DevboxConfig{Raw: map[string]any{}}
+	cfg := &config.DweConfig{Raw: map[string]any{}}
 	phase := config.DeployPhase{Name: "setup"}
 	steps := []ResolvedStep{
 		{
@@ -1237,7 +1237,7 @@ func TestRunPipeline_FilesGate_NilRegistry_FailsStep(t *testing.T) {
 	workDir := t.TempDir()
 
 	rep := &mockReporter{}
-	cfg := &config.DevboxConfig{Raw: map[string]any{}}
+	cfg := &config.DweConfig{Raw: map[string]any{}}
 	phase := config.DeployPhase{Name: "setup"}
 	steps := []ResolvedStep{
 		{
@@ -1323,7 +1323,7 @@ func TestRunPipeline_FilesGate_WithRendersTemplate(t *testing.T) {
 	reg.AddCommandForTest(cmd)
 
 	rep := &mockReporter{}
-	cfg := &config.DevboxConfig{Raw: map[string]any{
+	cfg := &config.DweConfig{Raw: map[string]any{
 		"db": map[string]any{
 			"stock_database": "app_stock",
 		},
@@ -1388,7 +1388,7 @@ func TestRunPipeline_FilesGate_UnknownCommand_FailsStep(t *testing.T) {
 	// "db-download" intentionally absent from registry.
 
 	rep := &mockReporter{}
-	cfg := &config.DevboxConfig{Raw: map[string]any{}}
+	cfg := &config.DweConfig{Raw: map[string]any{}}
 	phase := config.DeployPhase{Name: "setup"}
 	steps := []ResolvedStep{
 		{
@@ -1463,7 +1463,7 @@ func TestRunPipeline_FilesGate_JournalBypass_MissingStateArtifactAbsent(t *testi
 
 	rep := &mockReporter{}
 	rec := &mockRecorder{}
-	cfg := &config.DevboxConfig{Raw: map[string]any{}}
+	cfg := &config.DweConfig{Raw: map[string]any{}}
 	phase := config.DeployPhase{Name: "setup"}
 	steps := []ResolvedStep{
 		{
@@ -1526,7 +1526,7 @@ func TestRunPipeline_FilesGate_JournalBypass_MissingStateArtifactAbsent(t *testi
 // stdin and block in tests, so a clean exit demonstrates the per-step bypass.
 func TestRunPipeline_PerStepSkipConfirm(t *testing.T) {
 	rep := &mockReporter{}
-	cfg := &config.DevboxConfig{Raw: map[string]any{}}
+	cfg := &config.DweConfig{Raw: map[string]any{}}
 
 	phase := config.DeployPhase{Name: "pre"}
 	steps := []ResolvedStep{
@@ -1663,7 +1663,7 @@ func TestBuildDevboxCmd_SkipConfirmSetsNonInteractive(t *testing.T) {
 // The next step must still execute and FinishPipeline must be called with success=true.
 func TestRunPipeline_ContinueOnError_Continues(t *testing.T) {
 	rep := &mockReporter{}
-	cfg := &config.DevboxConfig{Raw: map[string]any{}}
+	cfg := &config.DweConfig{Raw: map[string]any{}}
 	phase := config.DeployPhase{Name: "hooks"}
 
 	failStep := config.DeployStep{Name: "optional-hook", Type: "shell", Cmd: "exit 1", ContinueOnError: true}
@@ -1709,7 +1709,7 @@ func TestRunPipeline_ContinueOnError_Continues(t *testing.T) {
 // with ContinueOnError=true, neither the post-step hook nor the Check condition runs.
 func TestRunPipeline_ContinueOnError_SkipsHookAndCheck(t *testing.T) {
 	rep := &mockReporter{}
-	cfg := &config.DevboxConfig{Raw: map[string]any{}}
+	cfg := &config.DweConfig{Raw: map[string]any{}}
 	phase := config.DeployPhase{Name: "hooks"}
 
 	failStep := config.DeployStep{
@@ -1748,7 +1748,7 @@ func TestRunPipeline_ContinueOnError_SkipsHookAndCheck(t *testing.T) {
 // check fails on a step with ContinueOnError=true, the pipeline continues rather than aborting.
 func TestRunPipeline_ContinueOnError_CheckFails(t *testing.T) {
 	rep := &mockReporter{}
-	cfg := &config.DevboxConfig{Raw: map[string]any{}}
+	cfg := &config.DweConfig{Raw: map[string]any{}}
 	phase := config.DeployPhase{Name: "verify"}
 
 	checkFailStep := config.DeployStep{
@@ -1788,7 +1788,7 @@ func TestRunPipeline_ContinueOnError_CheckFails(t *testing.T) {
 // without ContinueOnError still returns ErrSilent (existing behaviour is unchanged).
 func TestRunPipeline_NoContinueOnError_AbortsAsUsual(t *testing.T) {
 	rep := &mockReporter{}
-	cfg := &config.DevboxConfig{Raw: map[string]any{}}
+	cfg := &config.DweConfig{Raw: map[string]any{}}
 	phase := config.DeployPhase{Name: "init"}
 	steps := buildResolvedSteps(phase, []config.DeployStep{
 		{Name: "fail", Type: "shell", Cmd: "exit 1", ContinueOnError: false},
@@ -1804,7 +1804,7 @@ func TestRunPipeline_NoContinueOnError_AbortsAsUsual(t *testing.T) {
 // an error, Run calls FailStep on the reporter and returns ErrSilent.
 func TestRunPipeline_PostStepHook_ReturnsError(t *testing.T) {
 	rep := &mockReporter{}
-	cfg := &config.DevboxConfig{Raw: map[string]any{}}
+	cfg := &config.DweConfig{Raw: map[string]any{}}
 	phase := config.DeployPhase{Name: "env"}
 	steps := buildResolvedSteps(phase, []config.DeployStep{noopStep("render-env")})
 
@@ -1833,7 +1833,7 @@ func TestRunPipeline_PostStepHook_ReturnsError(t *testing.T) {
 // condition evaluates to false, FailStep is called and ErrSilent is returned.
 func TestRunPipeline_Check_Fails(t *testing.T) {
 	rep := &mockReporter{}
-	cfg := &config.DevboxConfig{Raw: map[string]any{}}
+	cfg := &config.DweConfig{Raw: map[string]any{}}
 	phase := config.DeployPhase{Name: "setup"}
 
 	// Shell check that exits non-zero → check returns false.
@@ -1860,7 +1860,7 @@ func TestRunPipeline_Check_Fails(t *testing.T) {
 // FailStep is called and ErrSilent is returned.
 func TestRunPipeline_Check_EvalError(t *testing.T) {
 	rep := &mockReporter{}
-	cfg := &config.DevboxConfig{Raw: map[string]any{}}
+	cfg := &config.DweConfig{Raw: map[string]any{}}
 	phase := config.DeployPhase{Name: "setup"}
 
 	// An invalid/unknown condition function name causes EvalRuntime to error.
@@ -1895,7 +1895,7 @@ func TestRunPipeline_ServiceConfigsCheckBuiltin(t *testing.T) {
 	}
 
 	rep := &mockReporter{}
-	cfg := &config.DevboxConfig{
+	cfg := &config.DweConfig{
 		Raw: map[string]any{},
 		Services: map[string]config.ServiceConfig{
 			"main": {
@@ -2000,7 +2000,7 @@ func TestExecAction_UnknownType(t *testing.T) {
 	a := config.Action{Type: "bogus", Cmd: "echo hi"}
 	actx := ActionContext{
 		WorkDir: t.TempDir(),
-		Cfg:     &config.DevboxConfig{Raw: map[string]any{}},
+		Cfg:     &config.DweConfig{Raw: map[string]any{}},
 	}
 	err := ExecAction(context.Background(), a, actx)
 	if err == nil {
@@ -2017,7 +2017,7 @@ func TestExecStep_ShellFromConfig(t *testing.T) {
 	// Use a step that would fail if run under "sh" but trivially succeeds under
 	// the configured shell. We assert the step succeeds with a shell that exists.
 	// The shell binary defaults to "sh" when userconfig is nil.
-	cfg := &config.DevboxConfig{
+	cfg := &config.DweConfig{
 		Raw: map[string]any{},
 	}
 	step := config.DeployStep{Name: "noop", Type: "shell", Cmd: "true"}
@@ -2027,10 +2027,10 @@ func TestExecStep_ShellFromConfig(t *testing.T) {
 	}
 }
 
-// TestBuildDevboxCmd_DevboxBinParam verifies that buildDevboxCmd accepts a devboxBin
+// TestBuildDevboxCmd_DweBinParam verifies that buildDevboxCmd accepts a devboxBin
 // fallback parameter and produces a non-empty shell command for any non-empty devboxBin.
 // At runtime, os.Executable() is preferred; devboxBin is only used when it fails.
-func TestBuildDevboxCmd_DevboxBinParam(t *testing.T) {
+func TestBuildDevboxCmd_DweBinParam(t *testing.T) {
 	cases := []string{"devbox", "my-devbox", "/usr/local/bin/devbox"}
 	for _, bin := range cases {
 		cmd := buildDevboxCmd(context.Background(), "info", t.TempDir(), "sh", bin, false)
@@ -2055,7 +2055,7 @@ func TestBuildDevboxCmd_DevboxBinParam(t *testing.T) {
 func TestRunWithOptions_State_StepSkipped_NoCheck(t *testing.T) {
 	rep := &mockReporter{}
 	rec := &mockRecorder{}
-	cfg := &config.DevboxConfig{Raw: map[string]any{}}
+	cfg := &config.DweConfig{Raw: map[string]any{}}
 	phase := config.DeployPhase{Name: "init"}
 	step := noopStep("setup")
 	steps := buildResolvedSteps(phase, []config.DeployStep{step})
@@ -2127,7 +2127,7 @@ func TestRunWithOptions_State_StepSkipped_NoCheck(t *testing.T) {
 func TestRunWithOptions_State_StepRuns_WithCheck(t *testing.T) {
 	rep := &mockReporter{}
 	rec := &mockRecorder{}
-	cfg := &config.DevboxConfig{Raw: map[string]any{}}
+	cfg := &config.DweConfig{Raw: map[string]any{}}
 	phase := config.DeployPhase{Name: "init"}
 	step := config.DeployStep{
 		Name:  "setup",
@@ -2193,7 +2193,7 @@ func TestRunWithOptions_State_StepRuns_WithCheck(t *testing.T) {
 func TestRunWithOptions_State_StepRuns_ActionHashDiverged(t *testing.T) {
 	rep := &mockReporter{}
 	rec := &mockRecorder{}
-	cfg := &config.DevboxConfig{Raw: map[string]any{}}
+	cfg := &config.DweConfig{Raw: map[string]any{}}
 	phase := config.DeployPhase{Name: "init"}
 	step := noopStep("setup")
 	steps := buildResolvedSteps(phase, []config.DeployStep{step})
@@ -2244,7 +2244,7 @@ func TestRunWithOptions_State_StepRuns_ActionHashDiverged(t *testing.T) {
 func TestRunWithOptions_State_WhenConditionTakesPrecedence(t *testing.T) {
 	rep := &mockReporter{}
 	rec := &mockRecorder{}
-	cfg := &config.DevboxConfig{Raw: map[string]any{}}
+	cfg := &config.DweConfig{Raw: map[string]any{}}
 
 	// Create a directory with a file so dir-empty evaluates to false.
 	workDir := t.TempDir()
@@ -2315,7 +2315,7 @@ func TestRunWithOptions_State_WhenConditionTakesPrecedence(t *testing.T) {
 func TestRunWithOptions_RecorderGetsDurationMs(t *testing.T) {
 	rep := &mockReporter{}
 	rec := &mockRecorder{}
-	cfg := &config.DevboxConfig{Raw: map[string]any{}}
+	cfg := &config.DweConfig{Raw: map[string]any{}}
 	phase := config.DeployPhase{Name: "init"}
 	step := noopStep("setup")
 	steps := buildResolvedSteps(phase, []config.DeployStep{step})
@@ -2405,7 +2405,7 @@ func TestExecAction_PredicateBuiltin_RejectedInBody(t *testing.T) {
 	a := config.Action{Type: "builtin", Cmd: "containers_running", With: map[string]any{"services": []any{"app"}}}
 	actx := ActionContext{
 		WorkDir:   t.TempDir(),
-		Cfg:       &config.DevboxConfig{Raw: map[string]any{}},
+		Cfg:       &config.DweConfig{Raw: map[string]any{}},
 		CallerCtx: builtin.CtxUserYAML, // body position
 	}
 	err := ExecAction(context.Background(), a, actx)
@@ -2424,7 +2424,7 @@ func TestExecAction_PredicateBuiltin_AllowedInCheckPosition(t *testing.T) {
 	a := config.Action{Type: "builtin", Cmd: "containers_running", With: map[string]any{"services": []any{"app"}}}
 	actx := ActionContext{
 		WorkDir:   t.TempDir(),
-		Cfg:       &config.DevboxConfig{Raw: map[string]any{}},
+		Cfg:       &config.DweConfig{Raw: map[string]any{}},
 		CallerCtx: builtin.CtxPredicate, // check: position
 	}
 	err := ExecAction(context.Background(), a, actx)
@@ -2440,7 +2440,7 @@ func TestExecAction_InternalBuiltin_RejectedInUserYAML(t *testing.T) {
 	a := config.Action{Type: "builtin", Cmd: "daemons_reap"}
 	actx := ActionContext{
 		WorkDir:   t.TempDir(),
-		Cfg:       &config.DevboxConfig{Raw: map[string]any{}},
+		Cfg:       &config.DweConfig{Raw: map[string]any{}},
 		CallerCtx: builtin.CtxUserYAML, // user-authored step
 	}
 	err := ExecAction(context.Background(), a, actx)
@@ -2461,7 +2461,7 @@ func TestResolvePhaseSteps_UnderscorePhaseAllowsInternalBuiltin(t *testing.T) {
 			{Name: "reap", Type: "builtin", Cmd: "daemons_reap"},
 		},
 	}
-	steps, err := ResolvePhaseSteps(&config.DevboxConfig{Raw: map[string]any{}}, nil, phase, "")
+	steps, err := ResolvePhaseSteps(&config.DweConfig{Raw: map[string]any{}}, nil, phase, "")
 	if err != nil {
 		t.Fatalf("ResolvePhaseSteps: unexpected error for engine-synthetic phase: %v", err)
 	}
@@ -2479,7 +2479,7 @@ func TestResolvePhaseSteps_UserPhaseRejectsInternalBuiltin(t *testing.T) {
 			{Name: "reap", Type: "builtin", Cmd: "daemons_reap"},
 		},
 	}
-	_, err := ResolvePhaseSteps(&config.DevboxConfig{Raw: map[string]any{}}, nil, phase, "")
+	_, err := ResolvePhaseSteps(&config.DweConfig{Raw: map[string]any{}}, nil, phase, "")
 	if err == nil {
 		t.Fatal("expected error for internal builtin in user-authored phase")
 	}
@@ -2506,7 +2506,7 @@ func TestResolvePhaseSteps_CheckWithPredicateBuiltin(t *testing.T) {
 			},
 		},
 	}
-	steps, err := ResolvePhaseSteps(&config.DevboxConfig{Raw: map[string]any{}}, nil, phase, "")
+	steps, err := ResolvePhaseSteps(&config.DweConfig{Raw: map[string]any{}}, nil, phase, "")
 	if err != nil {
 		t.Fatalf("ResolvePhaseSteps: unexpected error for predicate in check: position: %v", err)
 	}
@@ -2529,7 +2529,7 @@ func TestResolvePhaseSteps_BodyWithPredicateBuiltin(t *testing.T) {
 			},
 		},
 	}
-	_, err := ResolvePhaseSteps(&config.DevboxConfig{Raw: map[string]any{}}, nil, phase, "")
+	_, err := ResolvePhaseSteps(&config.DweConfig{Raw: map[string]any{}}, nil, phase, "")
 	if err == nil {
 		t.Fatal("expected error for predicate builtin in step body")
 	}

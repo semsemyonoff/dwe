@@ -18,7 +18,7 @@ func TestBuildDeployStatusView(t *testing.T) {
 	tests := []struct {
 		name       string
 		state      *journal.ProjectState
-		cfg        *config.DevboxConfig
+		cfg        *config.DweConfig
 		svcDeploys map[string]*config.ServiceDeployConfig
 		tracked    []string
 		expectRows int
@@ -31,7 +31,7 @@ func TestBuildDeployStatusView(t *testing.T) {
 				Project:       &journal.ProjectLevelState{},
 				Services:      make(map[string]*journal.ServiceState),
 			},
-			cfg: &config.DevboxConfig{
+			cfg: &config.DweConfig{
 				Services: make(map[string]config.ServiceConfig),
 			},
 			tracked:    []string{},
@@ -44,7 +44,7 @@ func TestBuildDeployStatusView(t *testing.T) {
 				Project:       &journal.ProjectLevelState{},
 				Services:      make(map[string]*journal.ServiceState),
 			},
-			cfg: &config.DevboxConfig{
+			cfg: &config.DweConfig{
 				Services: map[string]config.ServiceConfig{
 					"main": {
 						Enabled:  true,
@@ -88,7 +88,7 @@ func TestBuildDeployStatusView(t *testing.T) {
 					},
 				},
 			},
-			cfg: &config.DevboxConfig{
+			cfg: &config.DweConfig{
 				Services: map[string]config.ServiceConfig{
 					"main": {
 						Enabled:  true,
@@ -214,7 +214,7 @@ func TestRenderDeployStatusEmpty(t *testing.T) {
 		Services:      make(map[string]*journal.ServiceState),
 	}
 
-	cfg := &config.DevboxConfig{
+	cfg := &config.DweConfig{
 		Services: make(map[string]config.ServiceConfig),
 	}
 

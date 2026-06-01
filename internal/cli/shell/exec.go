@@ -101,7 +101,7 @@ type shellRunFunc func(compose *docker.Compose, serviceName, shell, u, workDir s
 // container or starts a new one via docker compose run.
 // getState, execCLI, and runCLI are injected for testability.
 func runServicesCLI(
-	cfg *config.DevboxConfig,
+	cfg *config.DweConfig,
 	compose *docker.Compose,
 	serviceName string,
 	flags shellCLIFlags,

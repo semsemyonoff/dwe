@@ -79,7 +79,7 @@ func runResetPlan(cmd *cobra.Command, flags *cmdctx.RootFlags, opts resetPlanOpt
 	if defaulted {
 		cmdctx.EmitDefaultNotice(cmd, flags, "reset", "reset")
 	}
-	devboxBin := config.DevboxBin(cfg)
+	devboxBin := config.DweBin(cfg)
 	switch opts.Format {
 	case "shell":
 		reset.PrintPlanShell(steps, cmd.OutOrStdout(), devboxBin)
@@ -490,7 +490,7 @@ func buildResetServiceConfirmTitle(name, container, dir string, required, dirExi
 
 // runResetHook looks up a command by ID in the registry and runs it
 // non-interactively. Used for on_disable.before hooks in per-service reset.
-func runResetHook(ctx context.Context, cmd *cobra.Command, cfg *config.DevboxConfig, reg *registry.Registry, baseDir, cmdID string) error {
+func runResetHook(ctx context.Context, cmd *cobra.Command, cfg *config.DweConfig, reg *registry.Registry, baseDir, cmdID string) error {
 	if reg == nil {
 		return fmt.Errorf("command registry required for hook %q", cmdID)
 	}
@@ -566,7 +566,7 @@ func newResetStepCmd(flags *cmdctx.RootFlags) *cobra.Command {
 				render.Stdout().Warning(fmt.Sprintf("note: files_gate on step %s/%s is not evaluated by this command", phase.Name, step.Name))
 			}
 
-			resolved := pipeline.StepCommand(step, config.DevboxBin(cfg))
+			resolved := pipeline.StepCommand(step, config.DweBin(cfg))
 			if dryRun {
 				_, _ = fmt.Fprintln(cmd.OutOrStdout(), resolved)
 				return nil

@@ -16,7 +16,7 @@ func makeServiceFolder(t *testing.T) string {
 	t.Helper()
 	dir := t.TempDir()
 	// Create devbox.yml (not needed by the validator but keeps project structure valid).
-	require.NoError(t, os.MkdirAll(filepath.Join(dir, "devbox"), 0o755))
+	require.NoError(t, os.MkdirAll(filepath.Join(dir, "workspace"), 0o755))
 	return dir
 }
 
@@ -41,7 +41,7 @@ func TestServicesFolderValidator(t *testing.T) {
 		{
 			name: "well-formed folder produces no errors",
 			setup: func(root string) {
-				svcDir := filepath.Join(root, "devbox", "services", "redis")
+				svcDir := filepath.Join(root, "workspace", "services", "redis")
 				require.NoError(t, os.MkdirAll(svcDir, 0o755))
 				require.NoError(t, os.WriteFile(filepath.Join(svcDir, "service.yml"), []byte("type: tool\ncontainer: redis\n"), 0o644))
 			},
@@ -52,7 +52,7 @@ func TestServicesFolderValidator(t *testing.T) {
 		{
 			name: "missing service.yml → error",
 			setup: func(root string) {
-				svcDir := filepath.Join(root, "devbox", "services", "myapp")
+				svcDir := filepath.Join(root, "workspace", "services", "myapp")
 				require.NoError(t, os.MkdirAll(svcDir, 0o755))
 				// no service.yml
 			},
@@ -64,7 +64,7 @@ func TestServicesFolderValidator(t *testing.T) {
 		{
 			name: "unknown file in folder → warning",
 			setup: func(root string) {
-				svcDir := filepath.Join(root, "devbox", "services", "myapp")
+				svcDir := filepath.Join(root, "workspace", "services", "myapp")
 				require.NoError(t, os.MkdirAll(svcDir, 0o755))
 				require.NoError(t, os.WriteFile(filepath.Join(svcDir, "service.yml"), []byte("type: app\n"), 0o644))
 				require.NoError(t, os.WriteFile(filepath.Join(svcDir, "custom.txt"), []byte("extra"), 0o644))
@@ -77,7 +77,7 @@ func TestServicesFolderValidator(t *testing.T) {
 		{
 			name: "known files only (service + deploy + reset) → OK",
 			setup: func(root string) {
-				svcDir := filepath.Join(root, "devbox", "services", "postgres")
+				svcDir := filepath.Join(root, "workspace", "services", "postgres")
 				require.NoError(t, os.MkdirAll(svcDir, 0o755))
 				require.NoError(t, os.WriteFile(filepath.Join(svcDir, "service.yml"), []byte("type: infra\n"), 0o644))
 				require.NoError(t, os.WriteFile(filepath.Join(svcDir, "deploy.yml"), []byte("phases: []\n"), 0o644))
@@ -90,7 +90,7 @@ func TestServicesFolderValidator(t *testing.T) {
 		{
 			name: "non-dir entry in services dir is ignored",
 			setup: func(root string) {
-				servicesDir := filepath.Join(root, "devbox", "services")
+				servicesDir := filepath.Join(root, "workspace", "services")
 				require.NoError(t, os.MkdirAll(servicesDir, 0o755))
 				// Write a plain file directly inside services/ (not a dir).
 				require.NoError(t, os.WriteFile(filepath.Join(servicesDir, "notes.md"), []byte("ignore me"), 0o644))

@@ -11,7 +11,7 @@ func TestDeployOrder_Empty(t *testing.T) {
 	t.Parallel()
 	tests := []struct {
 		name  string
-		cfg   *config.DevboxConfig
+		cfg   *config.DweConfig
 		types []string
 		want  []string
 	}{
@@ -23,19 +23,19 @@ func TestDeployOrder_Empty(t *testing.T) {
 		},
 		{
 			name:  "nil services map",
-			cfg:   &config.DevboxConfig{},
+			cfg:   &config.DweConfig{},
 			types: []string{"app", "tool"},
 			want:  nil,
 		},
 		{
 			name:  "empty types",
-			cfg:   &config.DevboxConfig{Services: map[string]config.ServiceConfig{}},
+			cfg:   &config.DweConfig{Services: map[string]config.ServiceConfig{}},
 			types: []string{},
 			want:  nil,
 		},
 		{
 			name:  "empty services",
-			cfg:   &config.DevboxConfig{Services: map[string]config.ServiceConfig{}},
+			cfg:   &config.DweConfig{Services: map[string]config.ServiceConfig{}},
 			types: []string{"app", "tool", "infra"},
 			want:  nil,
 		},
@@ -54,7 +54,7 @@ func TestDeployOrder_Empty(t *testing.T) {
 func TestDeployOrder_DisabledSkipped(t *testing.T) {
 	t.Parallel()
 	// Create a config with both enabled and disabled services.
-	cfg := &config.DevboxConfig{
+	cfg := &config.DweConfig{
 		Services: map[string]config.ServiceConfig{
 			"app1": {
 				Type:    "app",
@@ -90,7 +90,7 @@ func TestDeployOrder_DisabledSkipped(t *testing.T) {
 func TestDeployOrder_TypeGrouping(t *testing.T) {
 	t.Parallel()
 	// Create a config with mixed types.
-	cfg := &config.DevboxConfig{
+	cfg := &config.DweConfig{
 		Services: map[string]config.ServiceConfig{
 			"app1": {
 				Type:    "app",
@@ -144,7 +144,7 @@ func TestDeployOrder_TypeGrouping(t *testing.T) {
 func TestDeployOrder_DependsOnOrdering(t *testing.T) {
 	t.Parallel()
 	// Create a config where services have dependencies.
-	cfg := &config.DevboxConfig{
+	cfg := &config.DweConfig{
 		Services: map[string]config.ServiceConfig{
 			"app1": {
 				Type:      "app",
@@ -174,7 +174,7 @@ func TestDeployOrder_AlphabeticFallback(t *testing.T) {
 	t.Parallel()
 	// Create a config with a circular dependency (app1 -> app2 -> app1).
 	// DeployOrder should fall back to alphabetic order silently.
-	cfg := &config.DevboxConfig{
+	cfg := &config.DweConfig{
 		Services: map[string]config.ServiceConfig{
 			"app1": {
 				Type:      "app",
@@ -203,7 +203,7 @@ func TestDeployOrder_NoDependenciesAlphabetic(t *testing.T) {
 	t.Parallel()
 	// Create a config with services that have no dependencies.
 	// They should be ordered alphabetically (pre-sort before topo-sort).
-	cfg := &config.DevboxConfig{
+	cfg := &config.DweConfig{
 		Services: map[string]config.ServiceConfig{
 			"zebra": {
 				Type:    "app",
@@ -231,7 +231,7 @@ func TestDeployOrder_MapIterationDeterminism(t *testing.T) {
 	// Create a config with many services in random map insertion order.
 	// Run multiple times and verify consistent output (proves map iteration
 	// doesn't affect the result).
-	cfg := &config.DevboxConfig{
+	cfg := &config.DweConfig{
 		Services: map[string]config.ServiceConfig{
 			"z_app": {
 				Type:    "app",
@@ -262,7 +262,7 @@ func TestDeployOrder_MapIterationDeterminism(t *testing.T) {
 func TestDeployOrder_MultipleTypeGroups(t *testing.T) {
 	t.Parallel()
 	// Create a config with mixed types and dependencies within each type.
-	cfg := &config.DevboxConfig{
+	cfg := &config.DweConfig{
 		Services: map[string]config.ServiceConfig{
 			"app_b": {
 				Type:      "app",
@@ -322,7 +322,7 @@ func TestDeployOrder_MultipleTypeGroups(t *testing.T) {
 func TestDeployOrder_OnlySelectedTypes(t *testing.T) {
 	t.Parallel()
 	// Create a config with multiple types, but only request some.
-	cfg := &config.DevboxConfig{
+	cfg := &config.DweConfig{
 		Services: map[string]config.ServiceConfig{
 			"app1": {
 				Type:    "app",
@@ -357,7 +357,7 @@ func TestDeployOrder_OnlySelectedTypes(t *testing.T) {
 func TestDeployOrder_EmptyTypesSlice(t *testing.T) {
 	t.Parallel()
 	// Request with empty types slice.
-	cfg := &config.DevboxConfig{
+	cfg := &config.DweConfig{
 		Services: map[string]config.ServiceConfig{
 			"app1": {
 				Type:    "app",

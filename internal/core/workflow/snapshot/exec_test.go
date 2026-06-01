@@ -15,9 +15,9 @@ import (
 	"github.com/semsemyonoff/dwe/internal/shared/tpl"
 )
 
-// testCfg returns a minimal DevboxConfig usable for snapshot exec tests.
-func testCfg() *config.DevboxConfig {
-	return &config.DevboxConfig{
+// testCfg returns a minimal DweConfig usable for snapshot exec tests.
+func testCfg() *config.DweConfig {
+	return &config.DweConfig{
 		Raw: map[string]any{
 			"project": map[string]any{"name": "fixture"},
 		},

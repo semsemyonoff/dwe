@@ -20,12 +20,12 @@ func mustWrite(t *testing.T, path, content string) {
 
 func canonicalPath(t *testing.T, root, kind, pack, rel string) string {
 	t.Helper()
-	return filepath.Join(root, "devbox", "templates", kind, pack, rel)
+	return filepath.Join(root, "workspace", "templates", kind, pack, rel)
 }
 
 func overridePath(t *testing.T, root, kind, pack, rel string) string {
 	t.Helper()
-	return filepath.Join(root, "devbox", "templates", kind, pack+".local", rel)
+	return filepath.Join(root, "workspace", "templates", kind, pack+".local", rel)
 }
 
 func TestResolve_CanonicalHit(t *testing.T) {
@@ -182,7 +182,7 @@ func TestResolve_SymlinkPackRootIsHardError(t *testing.T) {
 	// Build a real directory elsewhere and symlink the override pack dir to it.
 	realPack := filepath.Join(root, "stash", "default.local")
 	mustWrite(t, filepath.Join(realPack, "foo.tmpl"), "x")
-	overrideDir := filepath.Join(root, "devbox", "templates", "ai", "default.local")
+	overrideDir := filepath.Join(root, "workspace", "templates", "ai", "default.local")
 	if err := os.MkdirAll(filepath.Dir(overrideDir), 0o755); err != nil {
 		t.Fatal(err)
 	}
@@ -207,7 +207,7 @@ func TestResolve_SymlinkComponentInsidePack(t *testing.T) {
 		t.Skip("symlink semantics differ on windows")
 	}
 	root := t.TempDir()
-	canonicalDir := filepath.Join(root, "devbox", "templates", "ai", "default")
+	canonicalDir := filepath.Join(root, "workspace", "templates", "ai", "default")
 	if err := os.MkdirAll(canonicalDir, 0o755); err != nil {
 		t.Fatal(err)
 	}

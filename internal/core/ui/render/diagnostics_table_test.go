@@ -15,7 +15,7 @@ func TestRenderDiagnosticsTable(t *testing.T) {
 			Severity: validate.SeverityOK,
 			Domain:   "config",
 			Target:   "config.devbox",
-			File:     "devbox.yml",
+			File:     "workspace.yml",
 			Message:  "",
 			Hint:     "",
 		},

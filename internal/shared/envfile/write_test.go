@@ -49,7 +49,7 @@ project:
   name: testproject
   prefix: devbox
 `
-	configPath := filepath.Join(dir, "devbox.yml")
+	configPath := filepath.Join(dir, "workspace.yml")
 	if err := os.WriteFile(configPath, []byte(configContent), 0o644); err != nil {
 		t.Fatalf("WriteFile devbox.yml: %v", err)
 	}
@@ -75,7 +75,7 @@ project:
 
 func TestWrite_withExportRules(t *testing.T) {
 	dir := t.TempDir()
-	cfg := &config.DevboxConfig{
+	cfg := &config.DweConfig{
 		Project: config.ProjectConfig{Name: "myapp", Prefix: "devbox"},
 		Exports: config.ExportsConfig{Env: []config.ExportRule{
 			{Name: "APP_ENV", From: "state"},

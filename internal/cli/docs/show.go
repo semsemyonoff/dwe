@@ -105,7 +105,7 @@ func runDocsShow(cmd *cobra.Command, rflags *cmdctx.RootFlags, df *docsShowFlags
 	// Load project config for mermaid settings; tolerate missing config.
 	cfg, err := config.LoadConfig(rflags.ConfigPath)
 	if err != nil {
-		cfg = &config.DevboxConfig{}
+		cfg = &config.DweConfig{}
 	}
 
 	// Load user config to get the configured language
@@ -312,6 +312,6 @@ func getTermWidth() int {
 // scripting; rendering diagrams to PNG and showing a "cached" placeholder
 // added noise without ever displaying the diagram. The interactive
 // `devbox docs` TUI is the place to view rendered diagrams.
-func buildShowMermaidPlaceholder(_ context.Context, _ *config.DevboxConfig, _ []byte, _ string, _ int) render.PlaceholderFunc {
+func buildShowMermaidPlaceholder(_ context.Context, _ *config.DweConfig, _ []byte, _ string, _ int) render.PlaceholderFunc {
 	return nil
 }

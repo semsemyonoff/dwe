@@ -54,7 +54,7 @@ func TestRunRun_FiresNotifyOnSuccess(t *testing.T) {
 	rec := installRecordingNotifier(t)
 	dir := t.TempDir()
 	cfgPath := makeMinimalDevboxYML(t, dir)
-	devboxDir := filepath.Join(dir, "devbox")
+	devboxDir := filepath.Join(dir, "workspace")
 	if err := os.MkdirAll(devboxDir, 0755); err != nil {
 		t.Fatalf("mkdir: %v", err)
 	}
@@ -89,7 +89,7 @@ func TestRunRun_FiresNotifyOnFailure(t *testing.T) {
 	dir := t.TempDir()
 	cfgPath := makeMinimalDevboxYML(t, dir)
 	// Write a lifecycle.yml with a YAML parse error to trigger a load failure.
-	devboxDir := filepath.Join(dir, "devbox")
+	devboxDir := filepath.Join(dir, "workspace")
 	if err := os.MkdirAll(devboxDir, 0755); err != nil {
 		t.Fatalf("mkdir: %v", err)
 	}
@@ -123,7 +123,7 @@ func TestRunRun_EarlyConfigFailure_PopulatesEmptyProject(t *testing.T) {
 	rec := installRecordingNotifier(t)
 	dir := t.TempDir()
 	// No devbox.yml — RunRun fails at the first config.LoadConfig step.
-	cfgPath := filepath.Join(dir, "devbox.yml")
+	cfgPath := filepath.Join(dir, "workspace.yml")
 
 	if err := RunRun(RunContext{ConfigPath: cfgPath}); err == nil {
 		t.Fatal("expected error, got nil")
@@ -146,7 +146,7 @@ func TestRunRun_SkipNotify_NoEvent(t *testing.T) {
 	rec := installRecordingNotifier(t)
 	dir := t.TempDir()
 	cfgPath := makeMinimalDevboxYML(t, dir)
-	devboxDir := filepath.Join(dir, "devbox")
+	devboxDir := filepath.Join(dir, "workspace")
 	if err := os.MkdirAll(devboxDir, 0755); err != nil {
 		t.Fatalf("mkdir: %v", err)
 	}
@@ -166,7 +166,7 @@ func TestRunRestart_PropagatesSkipNotify(t *testing.T) {
 	rec := installRecordingNotifier(t)
 	dir := t.TempDir()
 	cfgPath := makeMinimalDevboxYML(t, dir)
-	devboxDir := filepath.Join(dir, "devbox")
+	devboxDir := filepath.Join(dir, "workspace")
 	if err := os.MkdirAll(devboxDir, 0755); err != nil {
 		t.Fatalf("mkdir: %v", err)
 	}

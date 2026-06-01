@@ -12,7 +12,7 @@ import (
 // buildInfoData builds the structured JSON representation of the info dashboard.
 // It mirrors the traversal logic of core/ui/render.Info but produces data instead
 // of styled strings. The cli layer is the seam between data and rendering (CLAUDE.md).
-func buildInfoData(cfg *config.DevboxConfig, infoCfg *config.InfoConfig) (infoJSON, error) {
+func buildInfoData(cfg *config.DweConfig, infoCfg *config.InfoConfig) (infoJSON, error) {
 	result := infoJSON{
 		Title:    cfg.Project.FullName(),
 		Sections: []infoSection{},
@@ -30,7 +30,7 @@ func buildInfoData(cfg *config.DevboxConfig, infoCfg *config.InfoConfig) (infoJS
 	return result, nil
 }
 
-func buildSectionData(cfg *config.DevboxConfig, section config.InfoSection) (infoSection, int, error) {
+func buildSectionData(cfg *config.DweConfig, section config.InfoSection) (infoSection, int, error) {
 	items, contentCount, err := buildItemsData(cfg, section.Items, section.ID)
 	if err != nil {
 		return infoSection{}, 0, err
@@ -46,7 +46,7 @@ func buildSectionData(cfg *config.DevboxConfig, section config.InfoSection) (inf
 	return sec, contentCount, nil
 }
 
-func buildItemsData(cfg *config.DevboxConfig, items []config.InfoItem, sectionID string) ([]infoItem, int, error) {
+func buildItemsData(cfg *config.DweConfig, items []config.InfoItem, sectionID string) ([]infoItem, int, error) {
 	var result []infoItem
 	contentCount := 0
 	for idx, item := range items {
@@ -69,7 +69,7 @@ func buildItemsData(cfg *config.DevboxConfig, items []config.InfoItem, sectionID
 	return result, contentCount, nil
 }
 
-func buildItemData(cfg *config.DevboxConfig, item config.InfoItem, sectionID string) ([]infoItem, bool, error) {
+func buildItemData(cfg *config.DweConfig, item config.InfoItem, sectionID string) ([]infoItem, bool, error) {
 	switch item.Type {
 	case "definition":
 		value, err := tpl.Render(item.Value, cfg)
@@ -137,7 +137,7 @@ func buildItemData(cfg *config.DevboxConfig, item config.InfoItem, sectionID str
 // Mirrors the traversal in core/ui.renderAutoURLs but returns data instead of styled strings.
 // The URL assembly helpers below are duplicated from core/ui/info_auto_urls.go because
 // core/ui is a string-only sink layer and cannot be imported by cli for data extraction.
-func buildAutoURLsData(cfg *config.DevboxConfig, spec *config.AutoURLsSpec) []infoItem {
+func buildAutoURLsData(cfg *config.DweConfig, spec *config.AutoURLsSpec) []infoItem {
 	if cfg == nil || spec == nil {
 		return nil
 	}
@@ -206,7 +206,7 @@ func buildAutoURLsData(cfg *config.DevboxConfig, spec *config.AutoURLsSpec) []in
 
 // buildAutoHostsData extracts hostname data from config.
 // Mirrors the traversal in core/ui.renderAutoHosts but returns data instead of styled strings.
-func buildAutoHostsData(cfg *config.DevboxConfig, spec *config.AutoHostsSpec) []infoItem {
+func buildAutoHostsData(cfg *config.DweConfig, spec *config.AutoHostsSpec) []infoItem {
 	if cfg == nil || spec == nil {
 		return nil
 	}
@@ -252,7 +252,7 @@ func buildAutoHostsData(cfg *config.DevboxConfig, spec *config.AutoHostsSpec) []
 // URL building helpers — logic duplicated from core/ui/info_auto_urls.go.
 // core/ui is a string-only sink (returns styled strings); the cli layer owns data extraction.
 
-func autoDetectPortViaData(cfg *config.DevboxConfig) (*config.ServiceConfig, int) {
+func autoDetectPortViaData(cfg *config.DweConfig) (*config.ServiceConfig, int) {
 	if cfg == nil {
 		return nil, 0
 	}
@@ -285,7 +285,7 @@ func getSchemeData(useHTTPS bool) string {
 	return "http"
 }
 
-func buildMainURLData(cfg *config.DevboxConfig, host string, port int,
+func buildMainURLData(cfg *config.DweConfig, host string, port int,
 	portVia *config.ServiceConfig, portViaPort int) string {
 	scheme := getSchemeData(cfg.Runtime.UseHTTPS)
 	var urls []string
@@ -308,7 +308,7 @@ func buildProxiedURLData(scheme, host string, port int) string {
 	return fmt.Sprintf("%s://%s:%d", scheme, host, port)
 }
 
-func buildPathURLData(cfg *config.DevboxConfig, path config.ServiceInfoPath,
+func buildPathURLData(cfg *config.DweConfig, path config.ServiceInfoPath,
 	host string, port int, portVia *config.ServiceConfig, portViaPort int) string {
 	if path.Path == "" {
 		return ""

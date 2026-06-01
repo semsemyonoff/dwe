@@ -14,7 +14,7 @@ import (
 // makeV2Project creates a minimal v2 devbox.yml in dir and returns the config path.
 func makeV2Project(t *testing.T, dir string) string {
 	t.Helper()
-	cfgPath := filepath.Join(dir, "devbox.yml")
+	cfgPath := filepath.Join(dir, "workspace.yml")
 	yml := "schema_version: \"2\"\nproject:\n  name: testproject\n  prefix: devbox\n"
 	if err := os.WriteFile(cfgPath, []byte(yml), 0644); err != nil {
 		t.Fatalf("writing devbox.yml: %v", err)
@@ -22,16 +22,6 @@ func makeV2Project(t *testing.T, dir string) string {
 	return cfgPath
 }
 
-// makeV1Project creates a legacy v1 devbox.yml in dir and returns the config path.
-func makeV1Project(t *testing.T, dir string) string {
-	t.Helper()
-	cfgPath := filepath.Join(dir, "devbox.yml")
-	yml := "schema_version: \"1\"\nproject:\n  name: legacy\n  prefix: devbox\n"
-	if err := os.WriteFile(cfgPath, []byte(yml), 0644); err != nil {
-		t.Fatalf("writing v1 devbox.yml: %v", err)
-	}
-	return cfgPath
-}
 
 // runRootWithConfig builds and executes a root command with an explicit --config flag.
 // Returns the cobra error (if any) and the combined stdout+stderr output.
@@ -84,23 +74,6 @@ func TestRootResolver_ExplicitBadPath_AlwaysFatal(t *testing.T) {
 	}
 }
 
-// TestRootResolver_ExplicitV1Path verifies that an explicit --config pointing to a
-// v1 project always produces a schema error.
-func TestRootResolver_ExplicitV1Path_SchemaError(t *testing.T) {
-	dir := t.TempDir()
-	cfgPath := makeV1Project(t, dir)
-
-	_, err := runRootWithConfig([]string{"version"}, cfgPath)
-	if err == nil {
-		t.Fatal("expected schema error for v1 project on allowlisted command, got nil")
-	}
-	if !strings.Contains(err.Error(), "schema_version") {
-		t.Errorf("expected schema_version error, got: %v", err)
-	}
-	if errors.Is(err, project.ErrNotFound) {
-		t.Errorf("v1 schema error should NOT be ErrNotFound, got: %v", err)
-	}
-}
 
 // TestRootResolver_DiscoveryFromSubdir verifies that running from a subdirectory
 // of a v2 project finds devbox.yml via upward walk.
@@ -175,7 +148,7 @@ func TestRootResolver_ExplicitDefaultMatchingValue(t *testing.T) {
 	// Run from a temp dir that has no devbox.yml.
 	// If the resolver treated "--config devbox.yml" as discovery mode, it would return
 	// ErrNotFound (allowlisted root shows help). But since it's explicit, it should fail
-	// because "devbox.yml" doesn't exist in the temp dir.
+	// because "workspace.yml" doesn't exist in the temp dir.
 	t.Chdir(t.TempDir())
 
 	root := NewRootCmd()
@@ -183,8 +156,8 @@ func TestRootResolver_ExplicitDefaultMatchingValue(t *testing.T) {
 	root.SetOut(&buf)
 	root.SetErr(&buf)
 	root.SetArgs([]string{})
-	// Explicitly set --config to "devbox.yml" (the old default value).
-	if err := root.PersistentFlags().Set("config", "devbox.yml"); err != nil {
+	// Explicitly set --config to "workspace.yml" (the old default value).
+	if err := root.PersistentFlags().Set("config", "workspace.yml"); err != nil {
 		t.Fatalf("setting config flag: %v", err)
 	}
 
@@ -268,7 +241,7 @@ func TestRootResolver_FlagsPopulated_RelativePath(t *testing.T) {
 	dir := t.TempDir()
 	makeV2Project(t, dir)
 
-	// Chdir to dir so relative "devbox.yml" resolves correctly.
+	// Chdir to dir so relative "workspace.yml" resolves correctly.
 	t.Chdir(dir)
 
 	root := NewRootCmd()
@@ -277,7 +250,7 @@ func TestRootResolver_FlagsPopulated_RelativePath(t *testing.T) {
 	root.SetErr(&buf)
 	root.SetArgs([]string{})
 	// Use a relative path — should be resolved to absolute.
-	if err := root.PersistentFlags().Set("config", "devbox.yml"); err != nil {
+	if err := root.PersistentFlags().Set("config", "workspace.yml"); err != nil {
 		t.Fatalf("setting config flag: %v", err)
 	}
 

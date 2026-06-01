@@ -113,8 +113,8 @@ func newTestRegistry(defs ...*usercommands.CommandDef) *usercommands.Registry {
 	return reg
 }
 
-func newCfg() *config.DevboxConfig {
-	return &config.DevboxConfig{Raw: map[string]any{}}
+func newCfg() *config.DweConfig {
+	return &config.DweConfig{Raw: map[string]any{}}
 }
 
 // --- inspect routing -----------------------------------------------------

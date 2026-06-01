@@ -40,10 +40,10 @@ project:
   name: test
   prefix: devbox
 `
-	if err := os.WriteFile(filepath.Join(dir, "devbox.yml"), []byte(devboxYML), 0o644); err != nil {
+	if err := os.WriteFile(filepath.Join(dir, "workspace.yml"), []byte(devboxYML), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	devboxDir := filepath.Join(dir, "devbox")
+	devboxDir := filepath.Join(dir, "workspace")
 	if err := os.MkdirAll(devboxDir, 0o755); err != nil {
 		t.Fatal(err)
 	}
@@ -73,7 +73,7 @@ project:
 	if err := os.MkdirAll(filepath.Join(dir, "services", "main"), 0o755); err != nil {
 		t.Fatal(err)
 	}
-	return filepath.Join(dir, "devbox.yml")
+	return filepath.Join(dir, "workspace.yml")
 }
 
 // statusFixtureWithInfra builds a fixture that includes a type=infra service
@@ -86,10 +86,10 @@ project:
   name: test
   prefix: devbox
 `
-	if err := os.WriteFile(filepath.Join(dir, "devbox.yml"), []byte(devboxYML), 0o644); err != nil {
+	if err := os.WriteFile(filepath.Join(dir, "workspace.yml"), []byte(devboxYML), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	devboxDir := filepath.Join(dir, "devbox")
+	devboxDir := filepath.Join(dir, "workspace")
 	if err := os.MkdirAll(devboxDir, 0o755); err != nil {
 		t.Fatal(err)
 	}
@@ -108,7 +108,7 @@ project:
 	if err := os.MkdirAll(filepath.Join(dir, "services", "main"), 0o755); err != nil {
 		t.Fatal(err)
 	}
-	return filepath.Join(dir, "devbox.yml")
+	return filepath.Join(dir, "workspace.yml")
 }
 
 // statusFixtureWithDeploy extends statusFixture with a minimal deploy pipeline
@@ -117,7 +117,7 @@ func statusFixtureWithDeploy(t *testing.T) string {
 	t.Helper()
 	configPath := statusFixture(t)
 	dir := filepath.Dir(configPath)
-	devboxDir := filepath.Join(dir, "devbox")
+	devboxDir := filepath.Join(dir, "workspace")
 
 	// Project-level deploy.yml: a deploy_services phase so main is tracked.
 	deployYML := `phases:

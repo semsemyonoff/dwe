@@ -293,7 +293,7 @@ func TestProjectPerms_Unwritable(t *testing.T) {
 }
 
 func TestAll_Composition(t *testing.T) {
-	cfg := &config.DevboxConfig{}
+	cfg := &config.DweConfig{}
 	got := All(cfg)
 	if len(got) != 7 {
 		t.Fatalf("want 7 validators, got %d", len(got))

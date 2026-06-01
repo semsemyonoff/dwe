@@ -176,7 +176,7 @@ func validateExplicitIDEArg(name string, services map[string]config.ServiceConfi
 
 // renderIDEConfigs generates IDE config files for a single service using the
 // manifest-driven pack flow (parity with `render ai`).
-func renderIDEConfigs(projectRoot, name string, svc config.ServiceConfig, cfg *config.DevboxConfig, w *render.Writer) error {
+func renderIDEConfigs(projectRoot, name string, svc config.ServiceConfig, cfg *config.DweConfig, w *render.Writer) error {
 	if cfg == nil {
 		return fmt.Errorf("ide: nil cfg")
 	}

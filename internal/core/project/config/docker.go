@@ -101,8 +101,8 @@ type DockerArgs struct {
 // ([]) opt out of the default.
 //
 // .env is auto-regenerated before {up, run, exec, restart, build} unconditionally.
-func LoadDockerConfig(baseDir string, cfg *DevboxConfig) (*DockerConfig, error) {
-	dockerPath := filepath.Join(baseDir, "devbox", "docker.yml")
+func LoadDockerConfig(baseDir string, cfg *DweConfig) (*DockerConfig, error) {
+	dockerPath := filepath.Join(baseDir, "workspace", "docker.yml")
 	base, err := loadRawYAML(dockerPath)
 	if err != nil {
 		return nil, fmt.Errorf("read %s: %w", dockerPath, err)
@@ -112,7 +112,7 @@ func LoadDockerConfig(baseDir string, cfg *DevboxConfig) (*DockerConfig, error) 
 	presentKeys := detectPresentArgsKeys(dockerPath)
 
 	// Merge local overrides if present.
-	localPath := filepath.Join(baseDir, "devbox", "docker.local.yml")
+	localPath := filepath.Join(baseDir, "workspace", "docker.local.yml")
 	if local, err := loadRawYAML(localPath); err == nil {
 		deepMerge(base, local)
 		// Merge presence tracking from local layer

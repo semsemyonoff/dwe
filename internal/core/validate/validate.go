@@ -32,7 +32,7 @@ type Context struct {
 	Ctx             context.Context
 	ProjectRoot     string
 	ConfigPath      string
-	Cfg             *config.DevboxConfig
+	Cfg             *config.DweConfig
 	CommandRegistry any // *usercommands.Registry; nil-tolerant
 
 	// ValidateCfg is the parsed devbox/validate.yml (nil when the load failed

@@ -175,7 +175,7 @@ func resolveServiceFields(ctx spec.RunContext) (svc string, user model.UserMode,
 // lookupServiceCLIUser returns services.<svc>.cli.user for the service whose
 // Container field matches the given compose service name, or "" when no match
 // is found (or the matched entry has no cli.user set).
-func lookupServiceCLIUser(cfg *config.DevboxConfig, container string) string {
+func lookupServiceCLIUser(cfg *config.DweConfig, container string) string {
 	if cfg == nil || container == "" {
 		return ""
 	}

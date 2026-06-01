@@ -35,7 +35,7 @@ func DiffServiceSelection(selections []ServiceSelection, kept []string) (toEnabl
 }
 
 // ValidateServiceToggle returns an error if the service is unknown or mandatory.
-func ValidateServiceToggle(cfg *config.DevboxConfig, name string) error {
+func ValidateServiceToggle(cfg *config.DweConfig, name string) error {
 	svc, ok := cfg.Services[name]
 	if !ok {
 		return fmt.Errorf("service %q not found", name)
@@ -48,7 +48,7 @@ func ValidateServiceToggle(cfg *config.DevboxConfig, name string) error {
 
 // ApplyServiceTogglesToYAML validates and applies all service toggles to the
 // local config map in-memory. Either every change is applied or none are.
-func ApplyServiceTogglesToYAML(cfg *config.DevboxConfig, local map[string]any, toEnable, toDisable []string) error {
+func ApplyServiceTogglesToYAML(cfg *config.DweConfig, local map[string]any, toEnable, toDisable []string) error {
 	for _, name := range toEnable {
 		if err := ValidateServiceToggle(cfg, name); err != nil {
 			return err

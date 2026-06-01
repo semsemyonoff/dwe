@@ -7,9 +7,9 @@ import (
 	"github.com/semsemyonoff/dwe/internal/core/project/config"
 )
 
-// makeEnvCfg builds a DevboxConfig with the given export rules and raw map.
-func makeEnvCfg(rules []config.ExportRule, raw map[string]any) *config.DevboxConfig {
-	return &config.DevboxConfig{
+// makeEnvCfg builds a DweConfig with the given export rules and raw map.
+func makeEnvCfg(rules []config.ExportRule, raw map[string]any) *config.DweConfig {
+	return &config.DweConfig{
 		Project: config.ProjectConfig{Name: "laravel", Prefix: "devbox"},
 		Exports: config.ExportsConfig{Env: rules},
 		Raw:     raw,

@@ -19,7 +19,7 @@ import (
 type ExecParams struct {
 	// Cfg is the loaded devbox config used for ${...} resolution and to look
 	// up registered user commands referenced from workflow steps.
-	Cfg *config.DevboxConfig
+	Cfg *config.DweConfig
 	// Registry is the loaded user-command registry. Workflow steps reference
 	// user commands by ID through it.
 	Registry *registry.Registry

@@ -21,7 +21,7 @@ import (
 func TestRunRun_PreflightBlocksBeforeGitProbe(t *testing.T) {
 	dir := t.TempDir()
 	cfgPath := makeMinimalDevboxYML(t, dir)
-	devboxDir := filepath.Join(dir, "devbox")
+	devboxDir := filepath.Join(dir, "workspace")
 	if err := os.MkdirAll(devboxDir, 0o755); err != nil {
 		t.Fatal(err)
 	}
@@ -36,7 +36,7 @@ func TestRunRun_PreflightBlocksBeforeGitProbe(t *testing.T) {
 		gitProbeCalls++
 		return git.Status{}, nil
 	}
-	PreflightFunc = func(_ context.Context, _ *config.DevboxConfig, _ *usercommands.Registry, _, _ string, _ bool, _ io.Writer) error {
+	PreflightFunc = func(_ context.Context, _ *config.DweConfig, _ *usercommands.Registry, _, _ string, _ bool, _ io.Writer) error {
 		return &preflight.Error{}
 	}
 
@@ -61,7 +61,7 @@ func TestRunStop_PreflightBlocksBeforePhases(t *testing.T) {
 
 	prev := PreflightFunc
 	t.Cleanup(func() { PreflightFunc = prev })
-	PreflightFunc = func(_ context.Context, _ *config.DevboxConfig, _ *usercommands.Registry, _, _ string, _ bool, _ io.Writer) error {
+	PreflightFunc = func(_ context.Context, _ *config.DweConfig, _ *usercommands.Registry, _, _ string, _ bool, _ io.Writer) error {
 		return &preflight.Error{}
 	}
 
@@ -78,7 +78,7 @@ func TestRunStop_PreflightBlocksBeforePhases(t *testing.T) {
 func TestRunRun_SkipPreflightThreaded(t *testing.T) {
 	dir := t.TempDir()
 	cfgPath := makeMinimalDevboxYML(t, dir)
-	devboxDir := filepath.Join(dir, "devbox")
+	devboxDir := filepath.Join(dir, "workspace")
 	if err := os.MkdirAll(devboxDir, 0o755); err != nil {
 		t.Fatal(err)
 	}
@@ -88,7 +88,7 @@ func TestRunRun_SkipPreflightThreaded(t *testing.T) {
 	t.Cleanup(func() { PreflightFunc = prev })
 
 	var sawSkip bool
-	PreflightFunc = func(_ context.Context, _ *config.DevboxConfig, _ *usercommands.Registry, _, _ string, skip bool, _ io.Writer) error {
+	PreflightFunc = func(_ context.Context, _ *config.DweConfig, _ *usercommands.Registry, _, _ string, skip bool, _ io.Writer) error {
 		sawSkip = skip
 		return errors.New("short-circuit after preflight observation")
 	}
@@ -104,7 +104,7 @@ func TestRunRun_SkipPreflightThreaded(t *testing.T) {
 func TestRunRestart_PropagatesSkipPreflight(t *testing.T) {
 	dir := t.TempDir()
 	cfgPath := makeMinimalDevboxYML(t, dir)
-	devboxDir := filepath.Join(dir, "devbox")
+	devboxDir := filepath.Join(dir, "workspace")
 	if err := os.MkdirAll(devboxDir, 0o755); err != nil {
 		t.Fatal(err)
 	}
@@ -114,7 +114,7 @@ func TestRunRestart_PropagatesSkipPreflight(t *testing.T) {
 	t.Cleanup(func() { PreflightFunc = prev })
 
 	var calls []bool
-	PreflightFunc = func(_ context.Context, _ *config.DevboxConfig, _ *usercommands.Registry, _, _ string, skip bool, _ io.Writer) error {
+	PreflightFunc = func(_ context.Context, _ *config.DweConfig, _ *usercommands.Registry, _, _ string, skip bool, _ io.Writer) error {
 		calls = append(calls, skip)
 		return errors.New("short-circuit")
 	}

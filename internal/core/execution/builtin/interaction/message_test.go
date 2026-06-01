@@ -17,7 +17,7 @@ func makeMessageCtx(t *testing.T) (spec.ExecContext, *bytes.Buffer) {
 	t.Helper()
 	buf := &bytes.Buffer{}
 	ctx := spec.ExecContext{
-		Config:      &config.DevboxConfig{},
+		Config:      &config.DweConfig{},
 		ProjectRoot: t.TempDir(),
 		Output:      render.NewWriter(buf),
 	}
@@ -91,7 +91,7 @@ func TestMessageRun_AllLevels(t *testing.T) {
 func TestMessageRun_TemplateEvaluation(t *testing.T) {
 	b := Message{}
 	ctx, buf := makeMessageCtx(t)
-	ctx.Config = &config.DevboxConfig{
+	ctx.Config = &config.DweConfig{
 		Project: config.ProjectConfig{Name: "myproject"},
 	}
 

@@ -16,7 +16,7 @@ import (
 func writeMixedTypeFixture(t *testing.T, deployFor string) string {
 	t.Helper()
 	dir := t.TempDir()
-	devboxPath := filepath.Join(dir, "devbox.yml")
+	devboxPath := filepath.Join(dir, "workspace.yml")
 	if err := os.WriteFile(devboxPath, []byte(`schema_version: "1"
 project:
   name: laravel
@@ -24,7 +24,7 @@ project:
 `), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	devboxDir := filepath.Join(dir, "devbox")
+	devboxDir := filepath.Join(dir, "workspace")
 	if err := os.MkdirAll(devboxDir, 0o755); err != nil {
 		t.Fatal(err)
 	}
@@ -63,7 +63,7 @@ project:
 func writeThreeServiceFixture(t *testing.T, deployFor []string, mandatory []string) string {
 	t.Helper()
 	dir := t.TempDir()
-	devboxPath := filepath.Join(dir, "devbox.yml")
+	devboxPath := filepath.Join(dir, "workspace.yml")
 	if err := os.WriteFile(devboxPath, []byte(`schema_version: "1"
 project:
   name: mixed
@@ -71,7 +71,7 @@ project:
 `), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	devboxDir := filepath.Join(dir, "devbox")
+	devboxDir := filepath.Join(dir, "workspace")
 	if err := os.MkdirAll(devboxDir, 0o755); err != nil {
 		t.Fatal(err)
 	}
@@ -221,7 +221,7 @@ func TestResolveServicePlan_toolWithDeployExplicitOverridesEnabled(t *testing.T)
 // names a tool fails LoadConfig.
 func TestLoadConfig_rejectsDependsOnTool(t *testing.T) {
 	dir := t.TempDir()
-	devboxPath := filepath.Join(dir, "devbox.yml")
+	devboxPath := filepath.Join(dir, "workspace.yml")
 	if err := os.WriteFile(devboxPath, []byte(`schema_version: "1"
 project:
   name: laravel
@@ -229,7 +229,7 @@ project:
 `), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	devboxDir := filepath.Join(dir, "devbox")
+	devboxDir := filepath.Join(dir, "workspace")
 	if err := os.MkdirAll(devboxDir, 0o755); err != nil {
 		t.Fatal(err)
 	}

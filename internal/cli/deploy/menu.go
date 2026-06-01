@@ -80,8 +80,8 @@ func runDeployMenu(cmd *cobra.Command, flags *cmdctx.RootFlags) error {
 
 	ctx := cmd.Context()
 	baseDir := flags.ProjectRoot()
-	localPath := filepath.Join(baseDir, "devbox", "local.yml")
-	setupPath := filepath.Join(baseDir, "devbox", "setup.yml")
+	localPath := filepath.Join(baseDir, "workspace", "local.yml")
+	setupPath := filepath.Join(baseDir, "workspace", "setup.yml")
 
 	cfg, err := config.LoadConfig(flags.ConfigPath)
 	if err != nil {
@@ -309,7 +309,7 @@ func isEmptyLocal(m map[string]any) bool {
 // deploy.yml) in deploy-order, decorated with type/mandatory/deploy-status.
 // Services without deploy.yml are intentionally excluded — the run/plan
 // per-service flow has nothing to do with them.
-func buildDeployServiceItems(baseDir string, cfg *config.DevboxConfig, state *journal.ProjectState) ([]deployServiceItem, error) {
+func buildDeployServiceItems(baseDir string, cfg *config.DweConfig, state *journal.ProjectState) ([]deployServiceItem, error) {
 	if cfg == nil || len(cfg.Services) == 0 {
 		return nil, nil
 	}
@@ -627,7 +627,7 @@ func relativeTimeForMenu(t time.Time) string {
 // the typed list the wizard's multi-select consumes. Mirrors the filter used
 // by `devbox services` (mandatory infra is hidden — it's always-on and not
 // meaningful as a toggle row).
-func buildWizardServiceToggles(cfg *config.DevboxConfig) []setup.ServiceToggle {
+func buildWizardServiceToggles(cfg *config.DweConfig) []setup.ServiceToggle {
 	if cfg == nil {
 		return nil
 	}
@@ -655,8 +655,8 @@ func buildWizardServiceToggles(cfg *config.DevboxConfig) []setup.ServiceToggle {
 // If any blocking diagnostic is produced, prints the diagnostic table to
 // errOut and returns a deployValidationError so fang's err handler suppresses
 // the double-print.
-func runPreWizardPreflight(ctx context.Context, cfg *config.DevboxConfig, baseDir string, errOut io.Writer) error {
-	cmdRegistry, _ := usercommands.LoadRegistryFromConfigPath(filepath.Join(baseDir, "devbox.yml"))
+func runPreWizardPreflight(ctx context.Context, cfg *config.DweConfig, baseDir string, errOut io.Writer) error {
+	cmdRegistry, _ := usercommands.LoadRegistryFromConfigPath(filepath.Join(baseDir, "workspace.yml"))
 	validateCfg, warnings, loadErr := config.LoadValidateConfig(config.ValidateConfigPath(baseDir))
 
 	vctx := validate.Context{

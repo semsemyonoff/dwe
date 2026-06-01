@@ -26,7 +26,7 @@ func rootCmdForServiceCompletion(flags *cmdctx.RootFlags, configPath string) *co
 func TestServiceNameCompletion_brokenSchema(t *testing.T) {
 	projectDir := t.TempDir()
 	yml := "schema_version: \"1\"\nproject:\n  name: legacy\n  prefix: devbox\n"
-	if err := os.WriteFile(filepath.Join(projectDir, "devbox.yml"), []byte(yml), 0o644); err != nil {
+	if err := os.WriteFile(filepath.Join(projectDir, "workspace.yml"), []byte(yml), 0o644); err != nil {
 		t.Fatal(err)
 	}
 	t.Chdir(projectDir)
@@ -48,7 +48,7 @@ func TestServiceNameCompletion_brokenSchema(t *testing.T) {
 // a malformed template manifest must not affect service-name completion.
 func TestServiceNameCompletion_malformedManifestDoesNotBlock(t *testing.T) {
 	projectDir := t.TempDir()
-	devboxDir := filepath.Join(projectDir, "devbox")
+	devboxDir := filepath.Join(projectDir, "workspace")
 	if err := os.MkdirAll(devboxDir, 0o755); err != nil {
 		t.Fatal(err)
 	}
@@ -57,7 +57,7 @@ project:
   name: testproject
   prefix: devbox
 `
-	if err := os.WriteFile(filepath.Join(projectDir, "devbox.yml"), []byte(yml), 0o644); err != nil {
+	if err := os.WriteFile(filepath.Join(projectDir, "workspace.yml"), []byte(yml), 0o644); err != nil {
 		t.Fatal(err)
 	}
 	for _, name := range []string{"main", "worker"} {
@@ -91,7 +91,7 @@ project:
 // TestServiceNameCompletion_noSecondArg: when a positional arg is already
 // given, no completions are produced — guards against over-eager suggestions.
 func TestServiceNameCompletion_noSecondArg(t *testing.T) {
-	flags := &cmdctx.RootFlags{ConfigPath: "devbox.yml"}
+	flags := &cmdctx.RootFlags{ConfigPath: "workspace.yml"}
 	completions, directive := cmdctx.ServiceNameCompletion(flags)(nil, []string{"already"}, "")
 	if len(completions) != 0 {
 		t.Errorf("got %d completions, want 0", len(completions))

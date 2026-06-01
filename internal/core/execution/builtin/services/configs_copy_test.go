@@ -226,7 +226,7 @@ func TestCopyConfigFile_Update_NoAdditions(t *testing.T) {
 func TestServiceConfigsCopy_Run_ServiceNotFound(t *testing.T) {
 	b := ConfigsCopy{}
 	ctx := spec.ExecContext{
-		Config:      &config.DevboxConfig{Services: map[string]config.ServiceConfig{}},
+		Config:      &config.DweConfig{Services: map[string]config.ServiceConfig{}},
 		ProjectRoot: t.TempDir(),
 		Output:      render.NewWriter(&bytes.Buffer{}),
 	}
@@ -242,7 +242,7 @@ func TestServiceConfigsCopy_Run_ServiceNotFound(t *testing.T) {
 func TestServiceConfigsCopy_Run_EmptyServiceDir(t *testing.T) {
 	b := ConfigsCopy{}
 	ctx := spec.ExecContext{
-		Config: &config.DevboxConfig{
+		Config: &config.DweConfig{
 			Services: map[string]config.ServiceConfig{
 				"main": {Dir: ""},
 			},
@@ -259,7 +259,7 @@ func TestServiceConfigsCopy_Run_EmptyServiceDir(t *testing.T) {
 func TestServiceConfigsCopy_Run_NoConfigs_Succeeds(t *testing.T) {
 	b := ConfigsCopy{}
 	ctx := spec.ExecContext{
-		Config: &config.DevboxConfig{
+		Config: &config.DweConfig{
 			Services: map[string]config.ServiceConfig{
 				"main": {Dir: "services/main", Configs: nil},
 			},

@@ -223,7 +223,7 @@ func (v *templateScopeValidator) Run(_ validate.Context) []validate.Diagnostic {
 type servicesDiffValidator struct {
 	name  string
 	entry coresnap.Entry
-	cfg   *config.DevboxConfig
+	cfg   *config.DweConfig
 }
 
 func (v *servicesDiffValidator) ID() string     { return v.name }

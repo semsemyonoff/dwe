@@ -30,7 +30,7 @@ var stopContainerFn = docker.StopContainer
 
 // StopServiceDeps carries all state needed by StopService and stopServiceLocked.
 type StopServiceDeps struct {
-	Cfg            *config.DevboxConfig
+	Cfg            *config.DweConfig
 	CmdRegistry    *registry.Registry // nil-tolerant; preflight surfaces unknown-command diagnostics
 	CmdRegistryErr error              // deferred registry-load error; checked after preflight succeeds
 	BaseDir        string

@@ -119,7 +119,7 @@ func TestLoad(t *testing.T) {
 			name: "built-in + project overlay",
 			setupFunc: func(t *testing.T) string {
 				dir := t.TempDir()
-				i18nDir := filepath.Join(dir, "devbox", "i18n")
+				i18nDir := filepath.Join(dir, "workspace", "i18n")
 				if err := os.MkdirAll(i18nDir, 0755); err != nil {
 					t.Fatalf("mkdir: %v", err)
 				}
@@ -142,7 +142,7 @@ commands:
 			name: "project overlay wins over built-in",
 			setupFunc: func(t *testing.T) string {
 				dir := t.TempDir()
-				i18nDir := filepath.Join(dir, "devbox", "i18n")
+				i18nDir := filepath.Join(dir, "workspace", "i18n")
 				if err := os.MkdirAll(i18nDir, 0755); err != nil {
 					t.Fatalf("mkdir: %v", err)
 				}
@@ -168,7 +168,7 @@ ui:
 			name: "malformed project file is non-fatal",
 			setupFunc: func(t *testing.T) string {
 				dir := t.TempDir()
-				i18nDir := filepath.Join(dir, "devbox", "i18n")
+				i18nDir := filepath.Join(dir, "workspace", "i18n")
 				if err := os.MkdirAll(i18nDir, 0755); err != nil {
 					t.Fatalf("mkdir: %v", err)
 				}
@@ -259,7 +259,7 @@ func TestLoadProjectBundles(t *testing.T) {
 			name: "single valid file",
 			setupFunc: func(t *testing.T) string {
 				dir := t.TempDir()
-				i18nDir := filepath.Join(dir, "devbox", "i18n")
+				i18nDir := filepath.Join(dir, "workspace", "i18n")
 				if err := os.MkdirAll(i18nDir, 0755); err != nil {
 					t.Fatalf("mkdir: %v", err)
 				}
@@ -283,7 +283,7 @@ groups: {}
 			name: "multiple valid files",
 			setupFunc: func(t *testing.T) string {
 				dir := t.TempDir()
-				i18nDir := filepath.Join(dir, "devbox", "i18n")
+				i18nDir := filepath.Join(dir, "workspace", "i18n")
 				if err := os.MkdirAll(i18nDir, 0755); err != nil {
 					t.Fatalf("mkdir: %v", err)
 				}
@@ -308,7 +308,7 @@ groups: {}
 			name: "parse error in one file, others load",
 			setupFunc: func(t *testing.T) string {
 				dir := t.TempDir()
-				i18nDir := filepath.Join(dir, "devbox", "i18n")
+				i18nDir := filepath.Join(dir, "workspace", "i18n")
 				if err := os.MkdirAll(i18nDir, 0755); err != nil {
 					t.Fatalf("mkdir: %v", err)
 				}
@@ -340,7 +340,7 @@ groups: {}
 			name: "only yml files loaded, others ignored",
 			setupFunc: func(t *testing.T) string {
 				dir := t.TempDir()
-				i18nDir := filepath.Join(dir, "devbox", "i18n")
+				i18nDir := filepath.Join(dir, "workspace", "i18n")
 				if err := os.MkdirAll(i18nDir, 0755); err != nil {
 					t.Fatalf("mkdir: %v", err)
 				}
@@ -410,7 +410,7 @@ func TestLoadProjectBundlesDirectoryErrors(t *testing.T) {
 		}
 
 		dir := t.TempDir()
-		i18nDir := filepath.Join(dir, "devbox", "i18n")
+		i18nDir := filepath.Join(dir, "workspace", "i18n")
 		if err := os.MkdirAll(i18nDir, 0755); err != nil {
 			t.Fatalf("mkdir: %v", err)
 		}
@@ -443,8 +443,8 @@ func TestLoadProjectBundlesDirectoryErrors(t *testing.T) {
 
 	t.Run("project dir is file returns sentinel", func(t *testing.T) {
 		dir := t.TempDir()
-		i18nFile := filepath.Join(dir, "devbox", "i18n")
-		devboxDir := filepath.Join(dir, "devbox")
+		i18nFile := filepath.Join(dir, "workspace", "i18n")
+		devboxDir := filepath.Join(dir, "workspace")
 		if err := os.MkdirAll(devboxDir, 0755); err != nil {
 			t.Fatalf("mkdir: %v", err)
 		}

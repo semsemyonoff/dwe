@@ -44,7 +44,7 @@ import (
 // pending journal entry is still recorded and `--apply` is still honored.
 //
 // Seamed so tests can force a value without spawning docker.
-var detectStackRunning = func(cfg *config.DevboxConfig, baseDir string) (bool, error) {
+var detectStackRunning = func(cfg *config.DweConfig, baseDir string) (bool, error) {
 	dockerCfg, err := config.LoadDockerConfig(baseDir, cfg)
 	if err != nil {
 		return false, fmt.Errorf("loading docker config: %w", err)
@@ -129,7 +129,7 @@ func loadDeployedServices(statePath string) (map[string]bool, error) {
 // probeStackOrWarn calls detectStackRunning and prints a warning to errOut if
 // the probe failed. A probe failure is treated as "unknown" → return true so
 // callers default to running-semantics (write pending, attempt apply).
-func probeStackOrWarn(errOut io.Writer, cfg *config.DevboxConfig, baseDir string) bool {
+func probeStackOrWarn(errOut io.Writer, cfg *config.DweConfig, baseDir string) bool {
 	running, err := detectStackRunning(cfg, baseDir)
 	if err != nil {
 		_, _ = fmt.Fprintln(errOut, styles.StyleWarning(fmt.Sprintf(
@@ -213,7 +213,7 @@ func restoreFileState(path string, captured []byte) error {
 // deployedServices is the journal-derived "currently deployed" set; passed
 // here so the deploy-or-restart resolution (via ToggleRequires.Resolve) lands
 // on the same value buildTogglePlan used to shape ApplySteps.
-func buildContributors(cfg *config.DevboxConfig, toggles []ToggleAction, deployedServices map[string]bool) []Contributor {
+func buildContributors(cfg *config.DweConfig, toggles []ToggleAction, deployedServices map[string]bool) []Contributor {
 	var contributors []Contributor
 	for _, t := range toggles {
 		svc, ok := cfg.Services[t.Service]
@@ -276,13 +276,13 @@ func buildPendingOpsFromContributors(contributors []Contributor) []journal.Pendi
 func mutateAndPlan(
 	out io.Writer,
 	baseDir, configPath, localPath, envPath, statePath string,
-	cfg *config.DevboxConfig,
+	cfg *config.DweConfig,
 	reg *registry.Registry,
 	svcDeploys map[string]*config.ServiceDeployConfig,
 	deployedServices map[string]bool,
 	name string,
 	direction ToggleDirection,
-) (TogglePlan, []Contributor, *config.DevboxConfig, error) {
+) (TogglePlan, []Contributor, *config.DweConfig, error) {
 	releaseLock, err := lock.AcquireProjectLocks(baseDir)
 	if err != nil {
 		return TogglePlan{}, nil, nil, fmt.Errorf("acquiring project locks: %w", err)
@@ -364,7 +364,7 @@ func mutateAndPlan(
 // batchServiceConfigHash computes a combined config hash covering all toggled services.
 // It concatenates the per-service hashes in sorted-name order, which is deterministic
 // and unique per configuration state.
-func batchServiceConfigHash(cfg *config.DevboxConfig, svcDeploys map[string]*config.ServiceDeployConfig, names ...string) string {
+func batchServiceConfigHash(cfg *config.DweConfig, svcDeploys map[string]*config.ServiceDeployConfig, names ...string) string {
 	sorted := make([]string, len(names))
 	copy(sorted, names)
 	sort.Strings(sorted)
@@ -384,12 +384,12 @@ func batchServiceConfigHash(cfg *config.DevboxConfig, svcDeploys map[string]*con
 func mutateAndPlanBatch(
 	out io.Writer,
 	baseDir, configPath, localPath, envPath, statePath string,
-	cfg *config.DevboxConfig,
+	cfg *config.DweConfig,
 	reg *registry.Registry,
 	svcDeploys map[string]*config.ServiceDeployConfig,
 	deployedServices map[string]bool,
 	toEnable, toDisable []string,
-) (TogglePlan, []Contributor, *config.DevboxConfig, error) {
+) (TogglePlan, []Contributor, *config.DweConfig, error) {
 	releaseLock, err := lock.AcquireProjectLocks(baseDir)
 	if err != nil {
 		return TogglePlan{}, nil, nil, fmt.Errorf("acquiring project locks: %w", err)
@@ -511,7 +511,7 @@ func runSingleServiceToggle(
 		return nil
 	}
 
-	localPath := filepath.Join(baseDir, "devbox", "local.yml")
+	localPath := filepath.Join(baseDir, "workspace", "local.yml")
 	envPath := filepath.Join(baseDir, ".env")
 
 	stackRunning := probeStackOrWarn(cmd.ErrOrStderr(), cfg, baseDir)

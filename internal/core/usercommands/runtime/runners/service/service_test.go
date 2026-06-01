@@ -70,7 +70,7 @@ func makeServiceExecCtx(svc string, user UserMode, workdir string, mode ExecMode
 			Argv:    argv,
 		},
 		Render:  &tpl.RenderContext{Host: tpl.CurrentHostInfo()},
-		Config:  &config.DevboxConfig{Project: config.ProjectConfig{Prefix: "devbox", Name: "laravel"}},
+		Config:  &config.DweConfig{Project: config.ProjectConfig{Prefix: "devbox", Name: "laravel"}},
 		Params:  map[string]any{},
 		Context: map[string]any{},
 	}
@@ -212,7 +212,7 @@ func TestExecRunner_BuildCommand_RunnerServiceUsesItsOwnCLIUser(t *testing.T) {
 			},
 		},
 		Render: &tpl.RenderContext{Host: tpl.CurrentHostInfo()},
-		Config: &config.DevboxConfig{
+		Config: &config.DweConfig{
 			Project: config.ProjectConfig{Prefix: "devbox", Name: "laravel"},
 			Services: map[string]config.ServiceConfig{
 				"main":      {Container: "app-main", CLI: config.ServiceCLIConfig{User: "www-data"}},
@@ -296,7 +296,7 @@ func TestRunRunner_BuildCommand_AlwaysRun(t *testing.T) {
 			Cmd:     "composer install",
 		},
 		Render:  &tpl.RenderContext{},
-		Config:  &config.DevboxConfig{Project: config.ProjectConfig{Prefix: "devbox", Name: "laravel"}},
+		Config:  &config.DweConfig{Project: config.ProjectConfig{Prefix: "devbox", Name: "laravel"}},
 		Params:  map[string]any{},
 		Context: map[string]any{},
 	}
@@ -329,7 +329,7 @@ func TestExecRunner_BuildCommand_RunnerOverride(t *testing.T) {
 			},
 		},
 		Render:  &tpl.RenderContext{Host: tpl.CurrentHostInfo()},
-		Config:  &config.DevboxConfig{Project: config.ProjectConfig{Prefix: "devbox", Name: "laravel"}},
+		Config:  &config.DweConfig{Project: config.ProjectConfig{Prefix: "devbox", Name: "laravel"}},
 		Params:  map[string]any{},
 		Context: map[string]any{},
 	}
@@ -358,7 +358,7 @@ func TestExecRunner_BuildCommand_WorkdirFrom(t *testing.T) {
 			Cmd:         "ls",
 		},
 		Render: &tpl.RenderContext{},
-		Config: &config.DevboxConfig{
+		Config: &config.DweConfig{
 			Project: config.ProjectConfig{Prefix: "devbox", Name: "laravel"},
 			Raw: map[string]any{
 				"services": map[string]any{
@@ -394,7 +394,7 @@ func TestExecRunner_BuildCommand_WorkdirFromWinsOverLiteral(t *testing.T) {
 			Cmd:         "ls",
 		},
 		Render: &tpl.RenderContext{},
-		Config: &config.DevboxConfig{
+		Config: &config.DweConfig{
 			Project: config.ProjectConfig{Prefix: "devbox", Name: "laravel"},
 			Raw: map[string]any{
 				"services": map[string]any{
@@ -431,7 +431,7 @@ func TestExecRunner_BuildCommand_WorkdirFromMissingFallsBackToLiteral(t *testing
 			Cmd:         "ls",
 		},
 		Render:  &tpl.RenderContext{},
-		Config:  &config.DevboxConfig{Project: config.ProjectConfig{Prefix: "devbox", Name: "laravel"}, Raw: map[string]any{}},
+		Config:  &config.DweConfig{Project: config.ProjectConfig{Prefix: "devbox", Name: "laravel"}, Raw: map[string]any{}},
 		Params:  map[string]any{},
 		Context: map[string]any{},
 	}
@@ -458,7 +458,7 @@ func TestExecRunner_BuildCommand_WorkdirFromEmptyFallsBackToLiteral(t *testing.T
 			Cmd:         "ls",
 		},
 		Render: &tpl.RenderContext{},
-		Config: &config.DevboxConfig{
+		Config: &config.DweConfig{
 			Project: config.ProjectConfig{Prefix: "devbox", Name: "laravel"},
 			Raw: map[string]any{
 				"services": map[string]any{"main": map[string]any{"dir_internal": ""}},
@@ -489,7 +489,7 @@ func TestExecRunner_BuildCommand_WorkdirFromNonStringErrors(t *testing.T) {
 			Cmd:         "ls",
 		},
 		Render: &tpl.RenderContext{},
-		Config: &config.DevboxConfig{
+		Config: &config.DweConfig{
 			Project: config.ProjectConfig{Prefix: "devbox", Name: "laravel"},
 			Raw: map[string]any{
 				"services": map[string]any{"main": map[string]any{"dir_internal": 42}},
@@ -514,7 +514,7 @@ func TestExecRunner_BuildCommand_ComposeFiles(t *testing.T) {
 			Cmd:     "composer install",
 		},
 		Render: &tpl.RenderContext{Host: tpl.CurrentHostInfo()},
-		Config: &config.DevboxConfig{
+		Config: &config.DweConfig{
 			Project: config.ProjectConfig{Prefix: "devbox", Name: "laravel"},
 			Compose: config.ComposeConfig{
 				Base: "compose.yaml",
@@ -549,7 +549,7 @@ func TestRunRunner_BuildCommand_ComposeFiles(t *testing.T) {
 			Cmd:     "composer install",
 		},
 		Render: &tpl.RenderContext{},
-		Config: &config.DevboxConfig{
+		Config: &config.DweConfig{
 			Project: config.ProjectConfig{Prefix: "devbox", Name: "laravel"},
 			Compose: config.ComposeConfig{
 				Base: "compose.yaml",
@@ -603,7 +603,7 @@ func TestRunRunner_BuildCommand_GlobalArgs(t *testing.T) {
 			Cmd:     "composer install",
 		},
 		Render:  &tpl.RenderContext{},
-		Config:  &config.DevboxConfig{Project: config.ProjectConfig{Prefix: "devbox", Name: "laravel"}},
+		Config:  &config.DweConfig{Project: config.ProjectConfig{Prefix: "devbox", Name: "laravel"}},
 		Params:  map[string]any{},
 		Context: map[string]any{},
 	}
@@ -621,7 +621,7 @@ func TestRunRunner_BuildCommand_GlobalArgs(t *testing.T) {
 
 func TestRunContext_Compose_WithDockerConfig(t *testing.T) {
 	ctx := RunContext{
-		Config: &config.DevboxConfig{
+		Config: &config.DweConfig{
 			Project: config.ProjectConfig{Prefix: "devbox", Name: "laravel"},
 			Compose: config.ComposeConfig{Base: "compose.yaml"},
 		},
@@ -645,7 +645,7 @@ func TestRunContext_Compose_WithDockerConfig(t *testing.T) {
 
 func TestRunContext_Compose_WithoutDockerConfig(t *testing.T) {
 	ctx := RunContext{
-		Config: &config.DevboxConfig{
+		Config: &config.DweConfig{
 			Project: config.ProjectConfig{Prefix: "devbox", Name: "laravel"},
 			Compose: config.ComposeConfig{Base: "compose.yaml"},
 		},
@@ -728,7 +728,7 @@ func TestRunRunner_BuildCommand_ComposeArgsLiteral(t *testing.T) {
 			ComposeArgs: []string{"-d", "--rm"},
 		},
 		Render:  &tpl.RenderContext{Host: tpl.CurrentHostInfo()},
-		Config:  &config.DevboxConfig{Project: config.ProjectConfig{Prefix: "devbox", Name: "laravel"}},
+		Config:  &config.DweConfig{Project: config.ProjectConfig{Prefix: "devbox", Name: "laravel"}},
 		Params:  map[string]any{},
 		Context: map[string]any{},
 	}
@@ -819,7 +819,7 @@ func TestExecRunner_BuildCommand_ServiceTemplated(t *testing.T) {
 			Host:   tpl.CurrentHostInfo(),
 			Params: map[string]any{"service": "catalog"},
 		},
-		Config:  &config.DevboxConfig{Project: config.ProjectConfig{Prefix: "devbox", Name: "laravel"}},
+		Config:  &config.DweConfig{Project: config.ProjectConfig{Prefix: "devbox", Name: "laravel"}},
 		Params:  map[string]any{"service": "catalog"},
 		Context: map[string]any{},
 	}
@@ -848,7 +848,7 @@ func TestRunRunner_BuildCommand_ServiceTemplated(t *testing.T) {
 			Host:   tpl.CurrentHostInfo(),
 			Params: map[string]any{"service": "main"},
 		},
-		Config:  &config.DevboxConfig{Project: config.ProjectConfig{Prefix: "devbox", Name: "laravel"}},
+		Config:  &config.DweConfig{Project: config.ProjectConfig{Prefix: "devbox", Name: "laravel"}},
 		Params:  map[string]any{"service": "main"},
 		Context: map[string]any{},
 	}
@@ -877,7 +877,7 @@ func TestExecRunner_BuildCommand_WorkdirFromTemplated(t *testing.T) {
 		Render: &tpl.RenderContext{
 			Params: map[string]any{"service": "catalog"},
 		},
-		Config: &config.DevboxConfig{
+		Config: &config.DweConfig{
 			Project: config.ProjectConfig{Prefix: "devbox", Name: "laravel"},
 			Raw: map[string]any{
 				"services": map[string]any{
@@ -913,7 +913,7 @@ func TestExecRunner_BuildCommand_WorkdirLiteralTemplated(t *testing.T) {
 		Render: &tpl.RenderContext{
 			Params: map[string]any{"subdir": "src"},
 		},
-		Config:  &config.DevboxConfig{Project: config.ProjectConfig{Prefix: "devbox", Name: "laravel"}},
+		Config:  &config.DweConfig{Project: config.ProjectConfig{Prefix: "devbox", Name: "laravel"}},
 		Params:  map[string]any{"subdir": "src"},
 		Context: map[string]any{},
 	}
@@ -946,7 +946,7 @@ func TestExecRunner_BuildCommand_RunnerServiceTemplated(t *testing.T) {
 			Host:   tpl.CurrentHostInfo(),
 			Params: map[string]any{"service": "catalog"},
 		},
-		Config: &config.DevboxConfig{
+		Config: &config.DweConfig{
 			Project: config.ProjectConfig{Prefix: "devbox", Name: "laravel"},
 			Raw: map[string]any{
 				"services": map[string]any{
@@ -976,7 +976,7 @@ func TestExecRunner_BuildCommand_RunnerServiceTemplated(t *testing.T) {
 func TestBuildServiceArgv_ShellFromConfig(t *testing.T) {
 	tests := []struct {
 		name      string
-		cfg       *config.DevboxConfig
+		cfg       *config.DweConfig
 		wantShell string
 	}{
 		{
@@ -986,7 +986,7 @@ func TestBuildServiceArgv_ShellFromConfig(t *testing.T) {
 		},
 		{
 			name:      "empty config defaults to sh",
-			cfg:       &config.DevboxConfig{},
+			cfg:       &config.DweConfig{},
 			wantShell: "sh",
 		},
 	}

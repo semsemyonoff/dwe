@@ -68,15 +68,15 @@ func TestServiceConfigsCheckBuiltin_Run(t *testing.T) {
 	tests := []struct {
 		name       string
 		service    string
-		setup      func(t *testing.T, tmpDir string) *config.DevboxConfig
+		setup      func(t *testing.T, tmpDir string) *config.DweConfig
 		wantErr    bool
 		errContain string
 	}{
 		{
 			name:    "service not found",
 			service: "unknown",
-			setup: func(t *testing.T, tmpDir string) *config.DevboxConfig {
-				return &config.DevboxConfig{Services: map[string]config.ServiceConfig{}}
+			setup: func(t *testing.T, tmpDir string) *config.DweConfig {
+				return &config.DweConfig{Services: map[string]config.ServiceConfig{}}
 			},
 			wantErr:    true,
 			errContain: "not found in config",
@@ -84,8 +84,8 @@ func TestServiceConfigsCheckBuiltin_Run(t *testing.T) {
 		{
 			name:    "no configs declared",
 			service: "main",
-			setup: func(t *testing.T, tmpDir string) *config.DevboxConfig {
-				return &config.DevboxConfig{
+			setup: func(t *testing.T, tmpDir string) *config.DweConfig {
+				return &config.DweConfig{
 					Services: map[string]config.ServiceConfig{
 						"main": {
 							Dir:     "services/main",
@@ -99,7 +99,7 @@ func TestServiceConfigsCheckBuiltin_Run(t *testing.T) {
 		{
 			name:    "all configs exist",
 			service: "main",
-			setup: func(t *testing.T, tmpDir string) *config.DevboxConfig {
+			setup: func(t *testing.T, tmpDir string) *config.DweConfig {
 				svcDir := filepath.Join(tmpDir, "services", "main", "configs")
 				if err := os.MkdirAll(svcDir, 0o755); err != nil {
 					t.Fatalf("failed to create dir: %v", err)
@@ -111,7 +111,7 @@ func TestServiceConfigsCheckBuiltin_Run(t *testing.T) {
 					t.Fatalf("failed to write file: %v", err)
 				}
 
-				return &config.DevboxConfig{
+				return &config.DweConfig{
 					Services: map[string]config.ServiceConfig{
 						"main": {
 							Dir: "services/main",
@@ -128,7 +128,7 @@ func TestServiceConfigsCheckBuiltin_Run(t *testing.T) {
 		{
 			name:    "some configs missing",
 			service: "main",
-			setup: func(t *testing.T, tmpDir string) *config.DevboxConfig {
+			setup: func(t *testing.T, tmpDir string) *config.DweConfig {
 				svcDir := filepath.Join(tmpDir, "services", "main", "configs")
 				if err := os.MkdirAll(svcDir, 0o755); err != nil {
 					t.Fatalf("failed to create dir: %v", err)
@@ -137,7 +137,7 @@ func TestServiceConfigsCheckBuiltin_Run(t *testing.T) {
 					t.Fatalf("failed to write file: %v", err)
 				}
 
-				return &config.DevboxConfig{
+				return &config.DweConfig{
 					Services: map[string]config.ServiceConfig{
 						"main": {
 							Dir: "services/main",
@@ -155,8 +155,8 @@ func TestServiceConfigsCheckBuiltin_Run(t *testing.T) {
 		{
 			name:    "missing directory",
 			service: "main",
-			setup: func(t *testing.T, tmpDir string) *config.DevboxConfig {
-				return &config.DevboxConfig{
+			setup: func(t *testing.T, tmpDir string) *config.DweConfig {
+				return &config.DweConfig{
 					Services: map[string]config.ServiceConfig{
 						"main": {
 							Dir: "services/main",
@@ -199,7 +199,7 @@ func TestServiceConfigsCheckBuiltin_Run(t *testing.T) {
 
 func TestServiceConfigsCheckBuiltin_Run_OutputWriterLogsErrors(t *testing.T) {
 	tmpDir := t.TempDir()
-	cfg := &config.DevboxConfig{
+	cfg := &config.DweConfig{
 		Services: map[string]config.ServiceConfig{
 			"main": {
 				Dir: "services/main",

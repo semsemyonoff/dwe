@@ -23,7 +23,7 @@ import (
 //  4. If Required and still no value, return an error.
 //
 // Values are type-coerced according to ParamDef.Type before being returned.
-func Params(defs map[string]model.ParamDef, provided map[string]string, cfg *config.DevboxConfig) (map[string]any, error) {
+func Params(defs map[string]model.ParamDef, provided map[string]string, cfg *config.DweConfig) (map[string]any, error) {
 	result := make(map[string]any, len(defs))
 	for name, def := range defs {
 		raw, ok := provided[name]
@@ -79,7 +79,7 @@ func Params(defs map[string]model.ParamDef, provided map[string]string, cfg *con
 // skipped — those are enforced by the form (per-field Validate) and by Params
 // at run time. Missing or pattern-mismatched values are returned as-is (or as
 // the empty string), never as an error.
-func ParamDefaults(defs map[string]model.ParamDef, provided map[string]string, cfg *config.DevboxConfig) map[string]string {
+func ParamDefaults(defs map[string]model.ParamDef, provided map[string]string, cfg *config.DweConfig) map[string]string {
 	result := make(map[string]string, len(defs))
 	for name, def := range defs {
 		raw, ok := provided[name]
@@ -136,7 +136,7 @@ func coerceParam(name, raw string, pt model.ParamType) (any, error) {
 // For each declared context entry the value is looked up via ContextDef.From
 // (a dot-path into cfg.Raw).  When Required is true and the path resolves to
 // nil or an empty string, an error is returned.
-func Context(defs map[string]model.ContextDef, cfg *config.DevboxConfig) (map[string]any, error) {
+func Context(defs map[string]model.ContextDef, cfg *config.DweConfig) (map[string]any, error) {
 	result := make(map[string]any, len(defs))
 	for name, def := range defs {
 		var val any

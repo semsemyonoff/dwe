@@ -11,10 +11,10 @@ import (
 	"github.com/semsemyonoff/dwe/internal/core/workflow/reset"
 )
 
-// makeResetCfg returns a DevboxConfig with __configPath pointing to a
+// makeResetCfg returns a DweConfig with __configPath pointing to a
 // temp reset.yml so FindStep can load it.
-func makeResetCfgWithPath(cfgPath string) *config.DevboxConfig {
-	return &config.DevboxConfig{
+func makeResetCfgWithPath(cfgPath string) *config.DweConfig {
+	return &config.DweConfig{
 		Raw: map[string]any{"__configPath": cfgPath},
 	}
 }
@@ -22,7 +22,7 @@ func makeResetCfgWithPath(cfgPath string) *config.DevboxConfig {
 // --- FindStep invalid address tests (no filesystem needed) ---
 
 func TestFindStep_InvalidAddress(t *testing.T) {
-	cfg := &config.DevboxConfig{}
+	cfg := &config.DweConfig{}
 	_, _, err := reset.FindStep(cfg, "no-slash")
 	if err == nil {
 		t.Fatal("expected error for address without slash")
@@ -33,7 +33,7 @@ func TestFindStep_InvalidAddress(t *testing.T) {
 }
 
 func TestFindStep_MissingConfigPath(t *testing.T) {
-	cfg := &config.DevboxConfig{Raw: map[string]any{}}
+	cfg := &config.DweConfig{Raw: map[string]any{}}
 	_, _, err := reset.FindStep(cfg, "phase/step")
 	if err == nil {
 		t.Fatal("expected error when __configPath missing")
@@ -86,7 +86,7 @@ phases:
 func TestResolvePlan_noFileUsesDefault(t *testing.T) {
 	dir := t.TempDir()
 	// Write devbox dir without a reset.yml so the default fires.
-	devboxDir := filepath.Join(dir, "devbox")
+	devboxDir := filepath.Join(dir, "workspace")
 	if err := os.MkdirAll(devboxDir, 0o755); err != nil {
 		t.Fatal(err)
 	}
@@ -113,7 +113,7 @@ func TestResolvePlan_noFileUsesDefault(t *testing.T) {
 
 func TestLoadAndResolvePlan_noFileReturnsDefaulted(t *testing.T) {
 	dir := t.TempDir()
-	devboxDir := filepath.Join(dir, "devbox")
+	devboxDir := filepath.Join(dir, "workspace")
 	if err := os.MkdirAll(devboxDir, 0o755); err != nil {
 		t.Fatal(err)
 	}
@@ -155,7 +155,7 @@ phases:
 
 func TestFindStep_noFileSearchesDefault(t *testing.T) {
 	dir := t.TempDir()
-	devboxDir := filepath.Join(dir, "devbox")
+	devboxDir := filepath.Join(dir, "workspace")
 	if err := os.MkdirAll(devboxDir, 0o755); err != nil {
 		t.Fatal(err)
 	}

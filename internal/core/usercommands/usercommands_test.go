@@ -13,7 +13,7 @@ import (
 // configPath, return an empty (non-nil) registry, not an error.
 func TestLoadRegistryFromConfigPath_NoCommandsDirReturnsEmpty(t *testing.T) {
 	dir := t.TempDir()
-	cfgPath := filepath.Join(dir, "devbox.yml")
+	cfgPath := filepath.Join(dir, "workspace.yml")
 	if err := os.WriteFile(cfgPath, []byte("schema_version: \"2\"\n"), 0o644); err != nil {
 		t.Fatal(err)
 	}
@@ -34,11 +34,11 @@ func TestLoadRegistryFromConfigPath_NoCommandsDirReturnsEmpty(t *testing.T) {
 // devbox/commands/ present, definitions are loaded relative to configPath.
 func TestLoadRegistryFromConfigPath_LoadsCommands(t *testing.T) {
 	dir := t.TempDir()
-	cfgPath := filepath.Join(dir, "devbox.yml")
+	cfgPath := filepath.Join(dir, "workspace.yml")
 	if err := os.WriteFile(cfgPath, []byte("schema_version: \"2\"\n"), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	cmdDir := filepath.Join(dir, "devbox", "commands")
+	cmdDir := filepath.Join(dir, "workspace", "commands")
 	if err := os.MkdirAll(cmdDir, 0o755); err != nil {
 		t.Fatal(err)
 	}

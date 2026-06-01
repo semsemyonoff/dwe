@@ -14,7 +14,7 @@ import (
 // setupGitPack writes a git template pack at devbox/templates/git/<packName>/.
 func setupGitPack(t *testing.T, projectRoot, packName string, files map[string]string) {
 	t.Helper()
-	packDir := filepath.Join(projectRoot, "devbox", "templates", "git", packName)
+	packDir := filepath.Join(projectRoot, "workspace", "templates", "git", packName)
 	if err := os.MkdirAll(packDir, 0o755); err != nil {
 		t.Fatalf("create pack dir: %v", err)
 	}
@@ -37,9 +37,9 @@ func mkGitDir(t *testing.T, hubDir string) {
 	}
 }
 
-// makeGitCfg returns a DevboxConfig configured for git rendering tests.
-func makeGitCfg(name string) *config.DevboxConfig {
-	return &config.DevboxConfig{
+// makeGitCfg returns a DweConfig configured for git rendering tests.
+func makeGitCfg(name string) *config.DweConfig {
+	return &config.DweConfig{
 		Project: config.ProjectConfig{Name: "test", Prefix: "devbox"},
 		Services: map[string]config.ServiceConfig{
 			name: {
@@ -85,7 +85,7 @@ services:
   api:
     enabled: true
 `
-	if err := os.WriteFile(filepath.Join(projectRoot, "devbox.yml"), []byte(devboxYAML), 0o644); err != nil {
+	if err := os.WriteFile(filepath.Join(projectRoot, "workspace.yml"), []byte(devboxYAML), 0o644); err != nil {
 		t.Fatalf("write devbox.yml: %v", err)
 	}
 	setupServicesConfig(t, projectRoot, `
@@ -104,7 +104,7 @@ services:
 	hubDir := filepath.Join(projectRoot, "services", "api")
 	mkGitDir(t, hubDir)
 
-	flags := &cmdctx.RootFlags{ConfigPath: filepath.Join(projectRoot, "devbox.yml")}
+	flags := &cmdctx.RootFlags{ConfigPath: filepath.Join(projectRoot, "workspace.yml")}
 	cmd := newGitCmd(flags)
 	if err := cmd.RunE(cmd, []string{"api"}); err != nil {
 		t.Fatalf("RunE: %v", err)
@@ -129,7 +129,7 @@ services:
 
 func TestNewGitCmd_unknownService(t *testing.T) {
 	projectRoot := t.TempDir()
-	if err := os.WriteFile(filepath.Join(projectRoot, "devbox.yml"), []byte(`schema_version: "2"
+	if err := os.WriteFile(filepath.Join(projectRoot, "workspace.yml"), []byte(`schema_version: "2"
 project:
   name: p
 services:
@@ -146,7 +146,7 @@ services:
     container: c
 `)
 
-	flags := &cmdctx.RootFlags{ConfigPath: filepath.Join(projectRoot, "devbox.yml")}
+	flags := &cmdctx.RootFlags{ConfigPath: filepath.Join(projectRoot, "workspace.yml")}
 	cmd := newGitCmd(flags)
 	err := cmd.RunE(cmd, []string{"missing"})
 	if err == nil || !strings.Contains(err.Error(), "not found") {
@@ -156,7 +156,7 @@ services:
 
 func TestNewGitCmd_noGitDirSkippedNonError(t *testing.T) {
 	projectRoot := t.TempDir()
-	if err := os.WriteFile(filepath.Join(projectRoot, "devbox.yml"), []byte(`schema_version: "2"
+	if err := os.WriteFile(filepath.Join(projectRoot, "workspace.yml"), []byte(`schema_version: "2"
 project:
   name: p
 services:
@@ -181,7 +181,7 @@ services:
 		t.Fatal(err)
 	}
 
-	flags := &cmdctx.RootFlags{ConfigPath: filepath.Join(projectRoot, "devbox.yml")}
+	flags := &cmdctx.RootFlags{ConfigPath: filepath.Join(projectRoot, "workspace.yml")}
 	cmd := newGitCmd(flags)
 	if err := cmd.RunE(cmd, []string{"api"}); err != nil {
 		t.Fatalf("RunE: %v", err)
@@ -194,7 +194,7 @@ services:
 
 func TestNewGitCmd_dirEscapesProjectRoot(t *testing.T) {
 	projectRoot := t.TempDir()
-	if err := os.WriteFile(filepath.Join(projectRoot, "devbox.yml"), []byte(`schema_version: "2"
+	if err := os.WriteFile(filepath.Join(projectRoot, "workspace.yml"), []byte(`schema_version: "2"
 project:
   name: p
 services:
@@ -215,7 +215,7 @@ services:
 		"pre-commit.tmpl": "#!/bin/sh\n",
 	})
 
-	flags := &cmdctx.RootFlags{ConfigPath: filepath.Join(projectRoot, "devbox.yml")}
+	flags := &cmdctx.RootFlags{ConfigPath: filepath.Join(projectRoot, "workspace.yml")}
 	cmd := newGitCmd(flags)
 	err := cmd.RunE(cmd, []string{"api"})
 	if err == nil {
@@ -232,7 +232,7 @@ services:
 
 func TestNewGitCmd_manifestMissingFromFile(t *testing.T) {
 	projectRoot := t.TempDir()
-	if err := os.WriteFile(filepath.Join(projectRoot, "devbox.yml"), []byte(`schema_version: "2"
+	if err := os.WriteFile(filepath.Join(projectRoot, "workspace.yml"), []byte(`schema_version: "2"
 project:
   name: p
 services:
@@ -255,7 +255,7 @@ services:
 	hubDir := filepath.Join(projectRoot, "services", "api")
 	mkGitDir(t, hubDir)
 
-	flags := &cmdctx.RootFlags{ConfigPath: filepath.Join(projectRoot, "devbox.yml")}
+	flags := &cmdctx.RootFlags{ConfigPath: filepath.Join(projectRoot, "workspace.yml")}
 	cmd := newGitCmd(flags)
 	err := cmd.RunE(cmd, []string{"api"})
 	if err == nil {
@@ -270,7 +270,7 @@ services:
 
 func TestNewGitCmd_implicitPackMissing(t *testing.T) {
 	projectRoot := t.TempDir()
-	if err := os.WriteFile(filepath.Join(projectRoot, "devbox.yml"), []byte(`schema_version: "2"
+	if err := os.WriteFile(filepath.Join(projectRoot, "workspace.yml"), []byte(`schema_version: "2"
 project:
   name: p
 services:
@@ -289,7 +289,7 @@ services:
 	hubDir := filepath.Join(projectRoot, "services", "api")
 	mkGitDir(t, hubDir)
 
-	flags := &cmdctx.RootFlags{ConfigPath: filepath.Join(projectRoot, "devbox.yml")}
+	flags := &cmdctx.RootFlags{ConfigPath: filepath.Join(projectRoot, "workspace.yml")}
 	cmd := newGitCmd(flags)
 	err := cmd.RunE(cmd, []string{"api"})
 	if err != nil {
@@ -299,7 +299,7 @@ services:
 
 func TestNewGitCmd_explicitPackMissing(t *testing.T) {
 	projectRoot := t.TempDir()
-	if err := os.WriteFile(filepath.Join(projectRoot, "devbox.yml"), []byte(`schema_version: "2"
+	if err := os.WriteFile(filepath.Join(projectRoot, "workspace.yml"), []byte(`schema_version: "2"
 project:
   name: p
 services:
@@ -321,7 +321,7 @@ services:
 	hubDir := filepath.Join(projectRoot, "services", "api")
 	mkGitDir(t, hubDir)
 
-	flags := &cmdctx.RootFlags{ConfigPath: filepath.Join(projectRoot, "devbox.yml")}
+	flags := &cmdctx.RootFlags{ConfigPath: filepath.Join(projectRoot, "workspace.yml")}
 	cmd := newGitCmd(flags)
 	err := cmd.RunE(cmd, []string{"api"})
 	if err == nil {
@@ -334,7 +334,7 @@ services:
 
 func TestNewGitCmd_explicitPackMissingWithoutGitDir(t *testing.T) {
 	projectRoot := t.TempDir()
-	if err := os.WriteFile(filepath.Join(projectRoot, "devbox.yml"), []byte(`schema_version: "2"
+	if err := os.WriteFile(filepath.Join(projectRoot, "workspace.yml"), []byte(`schema_version: "2"
 project:
   name: p
 services:
@@ -359,7 +359,7 @@ services:
 		t.Fatal(err)
 	}
 
-	flags := &cmdctx.RootFlags{ConfigPath: filepath.Join(projectRoot, "devbox.yml")}
+	flags := &cmdctx.RootFlags{ConfigPath: filepath.Join(projectRoot, "workspace.yml")}
 	cmd := newGitCmd(flags)
 	err := cmd.RunE(cmd, []string{"api"})
 	if err == nil {
@@ -372,7 +372,7 @@ services:
 
 func TestNewGitCmd_noArgIteratesEnabledAppServices(t *testing.T) {
 	projectRoot := t.TempDir()
-	if err := os.WriteFile(filepath.Join(projectRoot, "devbox.yml"), []byte(`schema_version: "2"
+	if err := os.WriteFile(filepath.Join(projectRoot, "workspace.yml"), []byte(`schema_version: "2"
 project:
   name: p
 services:
@@ -413,7 +413,7 @@ services:
 		mkGitDir(t, filepath.Join(projectRoot, d))
 	}
 
-	flags := &cmdctx.RootFlags{ConfigPath: filepath.Join(projectRoot, "devbox.yml")}
+	flags := &cmdctx.RootFlags{ConfigPath: filepath.Join(projectRoot, "workspace.yml")}
 	cmd := newGitCmd(flags)
 	if err := cmd.RunE(cmd, []string{}); err != nil {
 		t.Fatalf("RunE: %v", err)
@@ -435,7 +435,7 @@ services:
 
 func TestNewGitCmd_completionReturnsAllServices(t *testing.T) {
 	projectRoot := t.TempDir()
-	if err := os.WriteFile(filepath.Join(projectRoot, "devbox.yml"), []byte(`schema_version: "2"
+	if err := os.WriteFile(filepath.Join(projectRoot, "workspace.yml"), []byte(`schema_version: "2"
 project:
   name: p
 services:
@@ -459,7 +459,7 @@ services:
 `)
 
 	flags := &cmdctx.RootFlags{
-		ConfigPath: filepath.Join(projectRoot, "devbox.yml"),
+		ConfigPath: filepath.Join(projectRoot, "workspace.yml"),
 		Root:       projectRoot,
 	}
 	cmd := newGitCmd(flags)

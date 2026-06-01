@@ -11,7 +11,7 @@ import (
 
 func writeResetYML(t *testing.T, dir, content string) {
 	t.Helper()
-	devboxDir := filepath.Join(dir, "devbox")
+	devboxDir := filepath.Join(dir, "workspace")
 	if err := os.MkdirAll(devboxDir, 0o755); err != nil {
 		t.Fatalf("mkdir devbox: %v", err)
 	}

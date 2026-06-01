@@ -104,14 +104,14 @@ type InfoItem struct {
 	Type string `yaml:"type"`
 
 	// Text is the content for: warning, info.
-	// Supports Go template expressions evaluated against DevboxConfig.
+	// Supports Go template expressions evaluated against DweConfig.
 	Text string `yaml:"text"`
 
 	// Name is the left-hand label for definition items.
 	Name string `yaml:"name"`
 
 	// Value is the right-hand content for definition items.
-	// Supports Go template expressions evaluated against DevboxConfig.
+	// Supports Go template expressions evaluated against DweConfig.
 	Value string `yaml:"value"`
 
 	// Indent controls leading whitespace for definition and info items (number of spaces).
@@ -122,7 +122,7 @@ type InfoItem struct {
 	// in definition items. Empty means no icon.
 	Icon string `yaml:"icon"`
 
-	// When is an optional Go template expression evaluated against DevboxConfig.
+	// When is an optional Go template expression evaluated against DweConfig.
 	// The item is shown only when the rendered result is truthy
 	// (non-empty, not "false", not "0").
 	// Empty When always shows the item.

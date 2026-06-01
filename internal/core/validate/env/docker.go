@@ -23,7 +23,7 @@ import (
 const dockerProbeTimeout = 5 * time.Second
 
 type dockerBinValidator struct {
-	cfg *config.DevboxConfig
+	cfg *config.DweConfig
 }
 
 func (v *dockerBinValidator) ID() string     { return "docker_bin" }
@@ -42,7 +42,7 @@ func (v *dockerBinValidator) Run(_ validate.Context) []validate.Diagnostic {
 }
 
 type dockerDaemonValidator struct {
-	cfg *config.DevboxConfig
+	cfg *config.DweConfig
 }
 
 func (v *dockerDaemonValidator) ID() string     { return "docker_daemon" }
@@ -72,7 +72,7 @@ func (v *dockerDaemonValidator) Run(vctx validate.Context) []validate.Diagnostic
 }
 
 type dockerComposeValidator struct {
-	cfg *config.DevboxConfig
+	cfg *config.DweConfig
 }
 
 func (v *dockerComposeValidator) ID() string     { return "docker_compose" }

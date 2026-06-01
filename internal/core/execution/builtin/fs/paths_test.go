@@ -16,7 +16,7 @@ import (
 
 func newTestExecCtx(root string) spec.ExecContext {
 	return spec.ExecContext{
-		Config:      &config.DevboxConfig{},
+		Config:      &config.DweConfig{},
 		ProjectRoot: root,
 		Output:      render.NewWriter(&bytes.Buffer{}),
 	}

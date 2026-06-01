@@ -122,7 +122,7 @@ func ComposeNodeStatuses(composeFiles []string, projectName string, processEnv [
 
 // DisabledNodes returns the compose service names for services that
 // are neither required nor enabled in the current config.
-func DisabledNodes(cfg *config.DevboxConfig) []string {
+func DisabledNodes(cfg *config.DweConfig) []string {
 	var names []string
 	for _, svc := range cfg.Services {
 		if !svc.Required && !svc.Enabled && svc.Container != "" {
@@ -136,7 +136,7 @@ func DisabledNodes(cfg *config.DevboxConfig) []string {
 // AugmentWithDisabled adds disabled services and tools as isolated nodes to topo
 // and marks them NodeDisabled in the status map. If topo is nil, it is initialised
 // to an empty map so disabled nodes are still shown.
-func AugmentWithDisabled(cfg *config.DevboxConfig, topo map[string][]string, topoStatus map[string]render.NodeStatus) (map[string][]string, map[string]render.NodeStatus) {
+func AugmentWithDisabled(cfg *config.DweConfig, topo map[string][]string, topoStatus map[string]render.NodeStatus) (map[string][]string, map[string]render.NodeStatus) {
 	disabled := DisabledNodes(cfg)
 	if len(disabled) == 0 {
 		return topo, topoStatus
@@ -188,7 +188,7 @@ func RemoveHiddenNodes(topo map[string][]string, status map[string]render.NodeSt
 //   - infra → CatInfra
 //
 // Services without a Container are skipped. Unknown types fall through to CatInfra.
-func BuildNodeCategories(cfg *config.DevboxConfig) map[string]render.NodeCategory {
+func BuildNodeCategories(cfg *config.DweConfig) map[string]render.NodeCategory {
 	cats := make(map[string]render.NodeCategory)
 	for _, svc := range cfg.Services {
 		if svc.Container == "" {
@@ -225,7 +225,7 @@ func BuildComposeArgs(projectName string, composeFiles []string, command string,
 // ResolveProjectAndDocker returns both the compose project name and the full
 // docker config. If docker.yml does not exist, project name falls back to the
 // config default and dockerCfg is nil (no error).
-func ResolveProjectAndDocker(configPath string, cfg *config.DevboxConfig) (string, *config.DockerConfig, error) {
+func ResolveProjectAndDocker(configPath string, cfg *config.DweConfig) (string, *config.DockerConfig, error) {
 	baseDir := filepath.Dir(configPath)
 	dockerCfg, err := config.LoadDockerConfig(baseDir, cfg)
 	if err != nil {
@@ -245,7 +245,7 @@ func ResolveProjectAndDocker(configPath string, cfg *config.DevboxConfig) (strin
 // It queries docker compose where available, falling back to YAML-only parsing
 // when docker is unavailable. Disabled nodes are then added as isolated
 // entries, and any nodes hidden via docker.yml are removed.
-func ResolveTopology(cfg *config.DevboxConfig, dockerCfg *config.DockerConfig, projectName string) (map[string][]string, map[string]render.NodeStatus) {
+func ResolveTopology(cfg *config.DweConfig, dockerCfg *config.DockerConfig, projectName string) (map[string][]string, map[string]render.NodeStatus) {
 	composeFiles := cfg.ComposeFiles()
 	var processEnv []string
 	if dockerCfg != nil {

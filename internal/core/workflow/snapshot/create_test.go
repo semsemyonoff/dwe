@@ -308,7 +308,7 @@ func TestCreate_WorkflowFailureRecordsFailedStatusAndKeepsDir(t *testing.T) {
 func TestCreate_CapturesDevboxFiles(t *testing.T) {
 	tmp := t.TempDir()
 	// Seed a local.yml and a deploy state file.
-	writeStringFile(t, filepath.Join(tmp, "devbox", "local.yml"), "key: value\n")
+	writeStringFile(t, filepath.Join(tmp, "workspace", "local.yml"), "key: value\n")
 	writeStringFile(t, filepath.Join(tmp, ".devbox", "deploy", "state.yml"), "project:\n  config_hash: abc\n")
 
 	reg := newRegistryWith(t, "x", "true")
@@ -389,7 +389,7 @@ func TestCreate_CapturesServicesSorted(t *testing.T) {
 
 func TestCreate_StripsPreserveKeysFromLocalYML(t *testing.T) {
 	tmp := t.TempDir()
-	writeStringFile(t, filepath.Join(tmp, "devbox", "local.yml"),
+	writeStringFile(t, filepath.Join(tmp, "workspace", "local.yml"),
 		"services:\n  main:\n    ports:\n      - 9090\n    enabled: true\n")
 
 	reg := newRegistryWith(t, "x", "true")

@@ -17,8 +17,8 @@ import (
 	"github.com/spf13/cobra"
 )
 
-func makeComposeCfg(base string, services map[string]config.ServiceConfig) *config.DevboxConfig {
-	return &config.DevboxConfig{
+func makeComposeCfg(base string, services map[string]config.ServiceConfig) *config.DweConfig {
+	return &config.DweConfig{
 		Compose: config.ComposeConfig{
 			Base: base,
 		},
@@ -246,7 +246,7 @@ func TestWaitContainersHealthy_mixedNoHealthcheckAndHealthy(t *testing.T) {
 // TestComposeSubcommands verifies the compose command group has the expected subcommands
 // after the refactor: files, raw, argv (wait removed, run renamed to raw).
 func TestComposeSubcommands(t *testing.T) {
-	flags := &cmdctx.RootFlags{ConfigPath: "devbox.yml"}
+	flags := &cmdctx.RootFlags{ConfigPath: "workspace.yml"}
 	composeCmd := NewCmd("", flags)
 
 	expectedSubs := []string{"files", "raw", "argv"}
@@ -271,7 +271,7 @@ func TestComposeSubcommands(t *testing.T) {
 // TestComposeArgvOutput verifies that `compose argv` produces the correct output
 // using the docker package's BuildArgs.
 func TestComposeArgvOutput(t *testing.T) {
-	cfg := &config.DevboxConfig{
+	cfg := &config.DweConfig{
 		Compose: config.ComposeConfig{
 			Base: "compose.yaml",
 		},
@@ -342,7 +342,7 @@ func TestComposeArgvOutput(t *testing.T) {
 
 // TestComposeArgvCmd verifies the cobra command for `compose argv` requires at least one arg.
 func TestComposeArgvCmd(t *testing.T) {
-	flags := &cmdctx.RootFlags{ConfigPath: "devbox.yml"}
+	flags := &cmdctx.RootFlags{ConfigPath: "workspace.yml"}
 	cmd := newComposeArgvCmd(flags)
 
 	// No args should fail validation.
@@ -447,10 +447,10 @@ func makeMinimalProject(t *testing.T) string {
   name: test
   prefix: devbox
 `
-	if err := os.WriteFile(filepath.Join(dir, "devbox.yml"), []byte(devboxYML), 0o644); err != nil {
+	if err := os.WriteFile(filepath.Join(dir, "workspace.yml"), []byte(devboxYML), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	devboxDir := filepath.Join(dir, "devbox")
+	devboxDir := filepath.Join(dir, "workspace")
 	if err := os.MkdirAll(devboxDir, 0o755); err != nil {
 		t.Fatal(err)
 	}
@@ -474,7 +474,7 @@ func TestComposeFilesCmd_RunE(t *testing.T) {
 	if err := os.WriteFile(filepath.Join(dir, "compose.yaml"), []byte(composeYAML), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	flags := &cmdctx.RootFlags{ConfigPath: filepath.Join(dir, "devbox.yml")}
+	flags := &cmdctx.RootFlags{ConfigPath: filepath.Join(dir, "workspace.yml")}
 	cmd := newComposeFilesCmd(flags)
 	var buf bytes.Buffer
 	cmd.SetOut(&buf)
@@ -493,7 +493,7 @@ func TestComposeFilesCmd_RunE_InvalidConfig(t *testing.T) {
 
 func TestComposeArgvCmd_RunE(t *testing.T) {
 	dir := makeMinimalProject(t)
-	flags := &cmdctx.RootFlags{ConfigPath: filepath.Join(dir, "devbox.yml")}
+	flags := &cmdctx.RootFlags{ConfigPath: filepath.Join(dir, "workspace.yml")}
 	cmd := newComposeArgvCmd(flags)
 	var buf bytes.Buffer
 	cmd.SetOut(&buf)

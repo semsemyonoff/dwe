@@ -36,7 +36,7 @@ func TrackedServices(plan []pipeline.ResolvedStep) []string {
 //
 // Returns: tracked service names, service deploy configs (keyed by service name), error.
 // reg (registry) is used to validate files_gate directives and must be non-nil.
-func LoadTrackedServices(cfg *config.DevboxConfig, reg *registry.Registry, baseDir string) ([]string, map[string]*config.ServiceDeployConfig, error) {
+func LoadTrackedServices(cfg *config.DweConfig, reg *registry.Registry, baseDir string) ([]string, map[string]*config.ServiceDeployConfig, error) {
 	// Resolve the full deploy plan to find which services are tracked
 	plan, err := ResolvePlan(cfg, reg)
 	if err != nil {
@@ -48,7 +48,7 @@ func LoadTrackedServices(cfg *config.DevboxConfig, reg *registry.Registry, baseD
 	// Load service deploy configs for tracked services only
 	svcDeploys := make(map[string]*config.ServiceDeployConfig)
 	for _, name := range tracked {
-		svcPath := filepath.Join(baseDir, "devbox", "services", name, "deploy.yml")
+		svcPath := filepath.Join(baseDir, "workspace", "services", name, "deploy.yml")
 		svcDeploy, err := config.LoadServiceDeployConfig(svcPath)
 		if err != nil {
 			// Tracked services always have deploy files (discovered by ResolvePlan),

@@ -18,7 +18,7 @@ import (
 // RemoveParams describes one `devbox snapshot remove` invocation. The caller
 // is responsible for project-lock acquisition before calling Remove.
 type RemoveParams struct {
-	Cfg            *config.DevboxConfig
+	Cfg            *config.DweConfig
 	SnapCfg        *config.SnapshotConfig
 	Registry       *registry.Registry
 	BaseDir        string

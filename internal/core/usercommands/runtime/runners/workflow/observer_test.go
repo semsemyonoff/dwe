@@ -232,7 +232,7 @@ func TestWorkflowObserver_FilesGateSkip(t *testing.T) {
 	}
 
 	_, err := runWithObserver(t, reg, wf, obs, func(rc *RunContext) {
-		rc.Config = &config.DevboxConfig{}
+		rc.Config = &config.DweConfig{}
 		rc.WorkflowSubStepOverrides = overrides
 	})
 	if err != nil {

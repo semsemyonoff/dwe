@@ -139,7 +139,7 @@ func TestCollectGitWorkspace_BlankWhenNoOwnGit(t *testing.T) {
 	}
 	t.Cleanup(func() { gitShellOutFn = prev })
 
-	cfg := &config.DevboxConfig{
+	cfg := &config.DweConfig{
 		Services: map[string]config.ServiceConfig{
 			"app": {Dir: svcDir},
 		},
@@ -176,7 +176,7 @@ func TestCollectGitWorkspace_OmitsServicesWithoutSrcSubdir(t *testing.T) {
 	}
 	// Note: no svcDir/src/ created.
 
-	cfg := &config.DevboxConfig{
+	cfg := &config.DweConfig{
 		Services: map[string]config.ServiceConfig{
 			"app": {Dir: svcDir},
 		},
@@ -191,7 +191,7 @@ func TestCollectGitWorkspace_OmitsServicesWithoutSrcSubdir(t *testing.T) {
 func TestCollectGitWorkspace_OmitsWhenDirMissing(t *testing.T) {
 	defer goleak.VerifyNone(t)
 
-	cfg := &config.DevboxConfig{
+	cfg := &config.DweConfig{
 		Services: map[string]config.ServiceConfig{
 			"ghost": {Dir: "/definitely/does/not/exist/anywhere"},
 		},
@@ -209,7 +209,7 @@ func TestCollectGitWorkspace_SkipsServicesWithoutDir(t *testing.T) {
 	withDir := filepath.Join(root, "with")
 	makeSrcDir(t, root, "with")
 
-	cfg := &config.DevboxConfig{
+	cfg := &config.DweConfig{
 		Services: map[string]config.ServiceConfig{
 			"with":    {Dir: withDir},
 			"without": {Dir: ""},
@@ -238,7 +238,7 @@ func TestCollectGitWorkspace_RealRepoClean(t *testing.T) {
 	mustRun(t, srcDir, "git", "add", ".")
 	mustRun(t, srcDir, "git", "commit", "-m", "init")
 
-	cfg := &config.DevboxConfig{
+	cfg := &config.DweConfig{
 		Services: map[string]config.ServiceConfig{
 			"app": {Dir: svcDir},
 		},
@@ -284,7 +284,7 @@ func TestCollectGitWorkspace_RealRepoDirty(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	cfg := &config.DevboxConfig{
+	cfg := &config.DweConfig{
 		Services: map[string]config.ServiceConfig{
 			"app": {Dir: svcDir},
 		},
@@ -311,7 +311,7 @@ func TestCollectGitWorkspace_ShelloutFailure(t *testing.T) {
 	}
 	t.Cleanup(func() { gitShellOutFn = prev })
 
-	cfg := &config.DevboxConfig{
+	cfg := &config.DweConfig{
 		Services: map[string]config.ServiceConfig{
 			"app": {Dir: svcDir},
 		},
@@ -337,7 +337,7 @@ func TestCollectGitWorkspace_OrderingAlphabetical(t *testing.T) {
 		makeSrcDir(t, root, name)
 	}
 
-	cfg := &config.DevboxConfig{
+	cfg := &config.DweConfig{
 		Services: map[string]config.ServiceConfig{
 			"c": {Dir: filepath.Join(root, "c")},
 			"a": {Dir: filepath.Join(root, "a")},
@@ -387,7 +387,7 @@ func TestCollectGitWorkspace_DisplayDirIsProjectRelative(t *testing.T) {
 	svcDir := filepath.Join(projectRoot, "services", "app")
 	makeSrcDir(t, projectRoot, filepath.Join("services", "app"))
 
-	cfg := &config.DevboxConfig{
+	cfg := &config.DweConfig{
 		Services: map[string]config.ServiceConfig{
 			"app": {Dir: svcDir},
 		},
@@ -422,7 +422,7 @@ func TestCollectGitWorkspace_RelativeDirResolvedAgainstProjectRoot(t *testing.T)
 	mustRun(t, srcDir, "git", "add", ".")
 	mustRun(t, srcDir, "git", "commit", "-m", "init")
 
-	cfg := &config.DevboxConfig{
+	cfg := &config.DweConfig{
 		Services: map[string]config.ServiceConfig{
 			"app": {Dir: "services/app"},
 		},
@@ -450,7 +450,7 @@ func TestCollectGitWorkspace_ExtendsDedup(t *testing.T) {
 	svcDir := filepath.Join(root, "main")
 	makeSrcDir(t, root, "main")
 
-	cfg := &config.DevboxConfig{
+	cfg := &config.DweConfig{
 		Services: map[string]config.ServiceConfig{
 			"main":       {Dir: svcDir},
 			"main-debug": {Dir: svcDir, Extends: "main"},
@@ -486,7 +486,7 @@ func TestCollectGitWorkspace_UsesConfiguredGitBin(t *testing.T) {
 	}
 	t.Cleanup(func() { gitShellOutFn = prev })
 
-	cfg := &config.DevboxConfig{
+	cfg := &config.DweConfig{
 		Services: map[string]config.ServiceConfig{
 			"app": {Dir: svcDir},
 		},

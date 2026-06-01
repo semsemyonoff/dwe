@@ -107,10 +107,10 @@ project:
   name: test
   prefix: devbox
 `
-	if err := os.WriteFile(filepath.Join(dir, "devbox.yml"), []byte(devboxYML), 0o644); err != nil {
+	if err := os.WriteFile(filepath.Join(dir, "workspace.yml"), []byte(devboxYML), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	devboxDir := filepath.Join(dir, "devbox")
+	devboxDir := filepath.Join(dir, "workspace")
 	if err := os.MkdirAll(devboxDir, 0o755); err != nil {
 		t.Fatal(err)
 	}
@@ -169,7 +169,7 @@ project:
 		t.Fatal(err)
 	}
 
-	return filepath.Join(dir, "devbox.yml")
+	return filepath.Join(dir, "workspace.yml")
 }
 
 func TestStatusCmd_JSONMode_CompositeGolden(t *testing.T) {

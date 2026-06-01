@@ -17,7 +17,7 @@ import (
 func runValidator(t *testing.T, content string) []validate.Diagnostic {
 	t.Helper()
 	dir := t.TempDir()
-	cmdDir := filepath.Join(dir, "devbox", "commands")
+	cmdDir := filepath.Join(dir, "workspace", "commands")
 	require.NoError(t, os.MkdirAll(cmdDir, 0o755))
 	require.NoError(t, os.WriteFile(filepath.Join(cmdDir, "daemons.yml"), []byte(content), 0o644))
 	v := &Validator{}
@@ -269,5 +269,5 @@ func TestDaemonValidator_FileFieldPopulated(t *testing.T) {
 	diags := runValidator(t, content)
 	d := findDiag(diags, "daemon: service required")
 	require.NotNil(t, d)
-	require.Equal(t, filepath.Join("devbox", "commands", "daemons.yml"), d.File)
+	require.Equal(t, filepath.Join("workspace", "commands", "daemons.yml"), d.File)
 }

@@ -79,7 +79,7 @@ func TestRun_NotATerminal_ReturnsError(t *testing.T) {
 
 	ctx := context.Background()
 	deps := Deps{
-		Cfg:         &config.DevboxConfig{},
+		Cfg:         &config.DweConfig{},
 		ProjectName: "test",
 	}
 
@@ -111,7 +111,7 @@ func TestRun_ReloadThenQuit_CancelsInflightContext(t *testing.T) {
 	exited := make(chan struct{})
 
 	// Override collectDaemonsFn to block on context cancellation
-	collectDaemonsFn = func(ctx context.Context, _ *config.DevboxConfig, _ *config.DockerConfig) ([]statusview.DaemonRow, []error) {
+	collectDaemonsFn = func(ctx context.Context, _ *config.DweConfig, _ *config.DockerConfig) ([]statusview.DaemonRow, []error) {
 		close(started) // Signal that collectDaemons has started
 		<-ctx.Done()   // Wait for context cancellation
 		close(exited)  // Signal that collectDaemons has exited
@@ -120,7 +120,7 @@ func TestRun_ReloadThenQuit_CancelsInflightContext(t *testing.T) {
 
 	// Override collectGitWorkspaceFn to return immediately
 	// (if git was slow, we wouldn't reach the daemons stage)
-	collectGitWorkspaceFn = func(ctx context.Context, _ *config.DevboxConfig, _ string) []statusview.GitWorkspaceRow {
+	collectGitWorkspaceFn = func(ctx context.Context, _ *config.DweConfig, _ string) []statusview.GitWorkspaceRow {
 		return nil
 	}
 
@@ -129,7 +129,7 @@ func TestRun_ReloadThenQuit_CancelsInflightContext(t *testing.T) {
 	defer cancel()
 
 	deps := Deps{
-		Cfg:         &config.DevboxConfig{},
+		Cfg:         &config.DweConfig{},
 		ProjectName: "test",
 	}
 

@@ -20,7 +20,7 @@ const SnapshotConfigFileName = "snapshot.yml"
 // SnapshotConfigPath returns the canonical path to snapshot.yml given a project
 // base directory (the directory that contains the devbox/ folder).
 func SnapshotConfigPath(baseDir string) string {
-	return filepath.Join(baseDir, "devbox", SnapshotConfigFileName)
+	return filepath.Join(baseDir, "workspace", SnapshotConfigFileName)
 }
 
 // snapshotVariantNamePattern restricts variant identifiers to a safe subset

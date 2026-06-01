@@ -292,10 +292,10 @@ func TestRemoveHiddenNodes_EmptyHidden(t *testing.T) {
 
 func TestResolveProjectAndDocker_WithDockerYML(t *testing.T) {
 	dir := makeMinimalProject(t)
-	cfg := &config.DevboxConfig{
+	cfg := &config.DweConfig{
 		Project: config.ProjectConfig{Name: "test", Prefix: "devbox"},
 	}
-	projectName, dockerCfg, err := ResolveProjectAndDocker(filepath.Join(dir, "devbox.yml"), cfg)
+	projectName, dockerCfg, err := ResolveProjectAndDocker(filepath.Join(dir, "workspace.yml"), cfg)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -317,13 +317,13 @@ services:
     type: app
     dir: ./services/main
 `
-	if err := os.WriteFile(filepath.Join(dir, "devbox.yml"), []byte(devboxYML), 0o644); err != nil {
+	if err := os.WriteFile(filepath.Join(dir, "workspace.yml"), []byte(devboxYML), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	cfg := &config.DevboxConfig{
+	cfg := &config.DweConfig{
 		Project: config.ProjectConfig{Name: "test", Prefix: "devbox"},
 	}
-	projectName, dockerCfg, err := ResolveProjectAndDocker(filepath.Join(dir, "devbox.yml"), cfg)
+	projectName, dockerCfg, err := ResolveProjectAndDocker(filepath.Join(dir, "workspace.yml"), cfg)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}

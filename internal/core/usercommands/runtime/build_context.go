@@ -18,7 +18,7 @@ import (
 // SkipConfirm, NonInteractive) are left at their zero values and must be
 // set by the caller before invoking RunCommand.
 func BuildRunContext(
-	cfg *config.DevboxConfig,
+	cfg *config.DweConfig,
 	reg *registry.Registry,
 	def *model.CommandDef,
 	with map[string]any,
@@ -33,7 +33,7 @@ func BuildRunContext(
 // ${snapshot.*} resolves and is scope-validated for both `with:` rendering at
 // the top of this call and downstream `when:`/script env expansion.
 func BuildSnapshotRunContext(
-	cfg *config.DevboxConfig,
+	cfg *config.DweConfig,
 	reg *registry.Registry,
 	def *model.CommandDef,
 	with map[string]any,
@@ -45,7 +45,7 @@ func BuildSnapshotRunContext(
 }
 
 func buildRunContext(
-	cfg *config.DevboxConfig,
+	cfg *config.DweConfig,
 	reg *registry.Registry,
 	def *model.CommandDef,
 	with map[string]any,

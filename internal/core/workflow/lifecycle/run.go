@@ -143,7 +143,7 @@ func RunRun(ctx RunContext) (err error) {
 		reg = nil
 	}
 
-	lifecyclePath := filepath.Join(workDir, "devbox", "lifecycle.yml")
+	lifecyclePath := filepath.Join(workDir, "workspace", "lifecycle.yml")
 
 	if ctx.UpdateMode != "" && !config.ValidUpdateMode(ctx.UpdateMode) {
 		return fmt.Errorf("invalid --update mode %q: must be one of: on, off", ctx.UpdateMode)
@@ -341,7 +341,7 @@ func RunRestart(ctx RunContext) error {
 // loads its key=value pairs into the process environment, so commands run by
 // preflight checks and lifecycle phases observe the freshly-rendered values.
 // Mirrors the implicit render-env step at the head of the deploy pipeline.
-func renderAndSourceDotEnv(cfg *config.DevboxConfig, workDir string) error {
+func renderAndSourceDotEnv(cfg *config.DweConfig, workDir string) error {
 	envPath := filepath.Join(workDir, ".env")
 	if err := envfile.Write(cfg, envPath); err != nil {
 		return fmt.Errorf("rendering .env: %w", err)

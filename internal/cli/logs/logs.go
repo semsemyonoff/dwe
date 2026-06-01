@@ -63,7 +63,7 @@ With --output json, emits NDJSON: one {"ts","stream","msg"} object per line.`,
 
 // ResolveLogsTarget loads the project config, validates the service name, and
 // returns the resolved Docker container name and loaded config.
-func ResolveLogsTarget(flags *cmdctx.RootFlags, serviceName string) (containerName string, cfg *config.DevboxConfig, err error) {
+func ResolveLogsTarget(flags *cmdctx.RootFlags, serviceName string) (containerName string, cfg *config.DweConfig, err error) {
 	cfg, err = config.LoadConfig(flags.ConfigPath)
 	if err != nil {
 		return "", nil, cmdctx.ErrWrap("project_invalid_config", err)
@@ -139,7 +139,7 @@ func runLogs(cmd *cobra.Command, flags *cmdctx.RootFlags, args []string, opts lo
 	return runLogsText(cmd, ctx, args[0], opts, containerName, cfg)
 }
 
-func runLogsText(cmd *cobra.Command, ctx context.Context, serviceName string, opts logsOptions, containerName string, cfg *config.DevboxConfig) error {
+func runLogsText(cmd *cobra.Command, ctx context.Context, serviceName string, opts logsOptions, containerName string, cfg *config.DweConfig) error {
 	dockerArgs := buildDockerLogsArgs(containerName, opts)
 	dockerCmd := exec.CommandContext(ctx, config.DockerBin(cfg), dockerArgs...) //nolint:gosec
 	dockerCmd.Stdout = cmd.OutOrStdout()
@@ -198,7 +198,7 @@ func isCleanFollowExit(err error, ctx context.Context) bool {
 	return false
 }
 
-func runLogsJSON(cmd *cobra.Command, ctx context.Context, serviceName string, opts logsOptions, containerName string, cfg *config.DevboxConfig) error {
+func runLogsJSON(cmd *cobra.Command, ctx context.Context, serviceName string, opts logsOptions, containerName string, cfg *config.DweConfig) error {
 	// Build base args and insert --timestamps right after "logs".
 	base := buildDockerLogsArgs(containerName, opts)
 	dockerArgs := make([]string, 0, len(base)+1)

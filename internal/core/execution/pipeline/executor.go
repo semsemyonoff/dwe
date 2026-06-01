@@ -94,7 +94,7 @@ func childIO(stepWriter io.Writer, parallel bool) (stdout, stderr io.Writer, cle
 // It is constructed once per step by Run and reused for both body and check.
 type ActionContext struct {
 	WorkDir   string
-	Cfg       *config.DevboxConfig
+	Cfg       *config.DweConfig
 	DockerCfg *config.DockerConfig
 	Reg       *usercommands.Registry
 	// StepWriter is the per-step destination for child output, populated by
@@ -208,7 +208,7 @@ func execShellAction(ctx context.Context, a config.Action, actx ActionContext) e
 // execDevboxAction runs a devbox subcommand.
 func execDevboxAction(ctx context.Context, a config.Action, actx ActionContext) error {
 	shell := config.ShellBin(actx.Cfg)
-	cmd := buildDevboxCmd(ctx, a.Cmd, actx.WorkDir, shell, config.DevboxBin(actx.Cfg), actx.SkipConfirm)
+	cmd := buildDevboxCmd(ctx, a.Cmd, actx.WorkDir, shell, config.DweBin(actx.Cfg), actx.SkipConfirm)
 	if !actx.Parallel {
 		cmd.Stdin = os.Stdin
 	}
@@ -304,7 +304,7 @@ func execCommandAction(ctx context.Context, a config.Action, actx ActionContext)
 // any external caller that supplies a writer still receives child output via
 // the same single durable path. Passing nil yields os.Stdout/os.Stderr
 // passthrough (legacy `devbox deploy run` semantics).
-func ExecStep(ctx context.Context, step config.DeployStep, workDir string, cfg *config.DevboxConfig, reg *usercommands.Registry, logWriter io.Writer, skipConfirm bool) error {
+func ExecStep(ctx context.Context, step config.DeployStep, workDir string, cfg *config.DweConfig, reg *usercommands.Registry, logWriter io.Writer, skipConfirm bool) error {
 	actx := ActionContext{
 		WorkDir:     workDir,
 		Cfg:         cfg,
@@ -334,7 +334,7 @@ type RunOptions struct {
 	Steps        []ResolvedStep
 	Reporter     Reporter
 	Name         string
-	Config       *config.DevboxConfig
+	Config       *config.DweConfig
 	DockerConfig *config.DockerConfig
 	Registry     *usercommands.Registry
 	WorkDir      string
@@ -373,7 +373,7 @@ func Run(
 	steps []ResolvedStep,
 	rep Reporter,
 	name string,
-	cfg *config.DevboxConfig,
+	cfg *config.DweConfig,
 	reg *usercommands.Registry,
 	workDir string,
 	logWriter io.Writer,

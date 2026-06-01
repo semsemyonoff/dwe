@@ -19,15 +19,15 @@ func makeExecCtx(t *testing.T, projectRoot string) spec.ExecContext {
 	t.Helper()
 	buf := &bytes.Buffer{}
 	return spec.ExecContext{
-		Config:      &config.DevboxConfig{},
+		Config:      &config.DweConfig{},
 		ProjectRoot: projectRoot,
 		Output:      render.NewWriter(buf),
 	}
 }
 
-// makeCfgWithService builds a minimal DevboxConfig containing one service.
-func makeCfgWithService(name, dir string, dirs []string) *config.DevboxConfig {
-	return &config.DevboxConfig{
+// makeCfgWithService builds a minimal DweConfig containing one service.
+func makeCfgWithService(name, dir string, dirs []string) *config.DweConfig {
+	return &config.DweConfig{
 		Services: map[string]config.ServiceConfig{
 			name: {
 				Dir:  dir,
@@ -440,7 +440,7 @@ func TestEnsureDir_UnknownMode(t *testing.T) {
 
 func TestServiceDirsEnsure_EmptyServiceDir(t *testing.T) {
 	root := t.TempDir()
-	cfg := &config.DevboxConfig{
+	cfg := &config.DweConfig{
 		Services: map[string]config.ServiceConfig{
 			"main": {Dir: ""},
 		},

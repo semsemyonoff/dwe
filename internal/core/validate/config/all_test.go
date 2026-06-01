@@ -19,10 +19,10 @@ func TestAllValidators(t *testing.T) {
 project:
   name: test-project
 `
-	require.NoError(t, os.WriteFile(filepath.Join(tmpDir, "devbox.yml"), []byte(devboxYml), 0644))
+	require.NoError(t, os.WriteFile(filepath.Join(tmpDir, "workspace.yml"), []byte(devboxYml), 0644))
 
 	// Create devbox directory
-	devboxDir := filepath.Join(tmpDir, "devbox")
+	devboxDir := filepath.Join(tmpDir, "workspace")
 	require.NoError(t, os.Mkdir(devboxDir, 0755))
 
 	// Create per-folder service
@@ -96,7 +96,7 @@ project:
 	// Run all validators
 	ctx := validate.Context{
 		ProjectRoot: tmpDir,
-		ConfigPath:  filepath.Join(tmpDir, "devbox.yml"),
+		ConfigPath:  filepath.Join(tmpDir, "workspace.yml"),
 	}
 
 	// Create a mini registry and run all validators

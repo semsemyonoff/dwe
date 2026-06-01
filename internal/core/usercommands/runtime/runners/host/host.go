@@ -109,7 +109,7 @@ func hostContractEnv(rc spec.RunContext) []string {
 
 	devboxBin, err := os.Executable()
 	if err != nil || devboxBin == "" {
-		devboxBin = config.DevboxBin(rc.Config)
+		devboxBin = config.DweBin(rc.Config)
 	}
 	out = append(out, "DEVBOX_BIN="+devboxBin)
 

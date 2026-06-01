@@ -12,7 +12,7 @@ import (
 func TestRenderSummary_OmitsProjectIdentity(t *testing.T) {
 	// Project identity has moved to RenderBrandHeader. The summary itself must
 	// no longer contain the project name nor a "project —" label.
-	cfg := &config.DevboxConfig{
+	cfg := &config.DweConfig{
 		Project: config.ProjectConfig{Name: "laravel", Prefix: "devbox"},
 	}
 	out := Summary(cfg, nil)
@@ -25,7 +25,7 @@ func TestRenderSummary_OmitsProjectIdentity(t *testing.T) {
 }
 
 func TestRenderSummary_State(t *testing.T) {
-	cfg := &config.DevboxConfig{
+	cfg := &config.DweConfig{
 		Project: config.ProjectConfig{Name: "myapp"},
 		State:   "running",
 	}
@@ -36,7 +36,7 @@ func TestRenderSummary_State(t *testing.T) {
 }
 
 func TestRenderSummary_NoState(t *testing.T) {
-	cfg := &config.DevboxConfig{
+	cfg := &config.DweConfig{
 		Project: config.ProjectConfig{Name: "myapp"},
 	}
 	out := Summary(cfg, nil)
@@ -47,7 +47,7 @@ func TestRenderSummary_NoState(t *testing.T) {
 }
 
 func TestRenderSummary_NoURL(t *testing.T) {
-	cfg := &config.DevboxConfig{
+	cfg := &config.DweConfig{
 		Project: config.ProjectConfig{Name: "myapp"},
 		Runtime: config.RuntimeConfig{
 			UseHTTPS: false,
@@ -64,7 +64,7 @@ func TestRenderSummary_NoURL(t *testing.T) {
 }
 
 func TestRenderSummary_ServiceCounts(t *testing.T) {
-	cfg := &config.DevboxConfig{
+	cfg := &config.DweConfig{
 		Project: config.ProjectConfig{Name: "myapp"},
 		Services: map[string]config.ServiceConfig{
 			"main":   {Type: config.ServiceTypeApp, Enabled: true},
@@ -78,7 +78,7 @@ func TestRenderSummary_ServiceCounts(t *testing.T) {
 }
 
 func TestRenderSummary_MandatoryCountsAsEnabled(t *testing.T) {
-	cfg := &config.DevboxConfig{
+	cfg := &config.DweConfig{
 		Project: config.ProjectConfig{Name: "myapp"},
 		Services: map[string]config.ServiceConfig{
 			"main":   {Type: config.ServiceTypeApp, Required: true},
@@ -95,7 +95,7 @@ func TestRenderSummary_MandatoryCountsAsEnabled(t *testing.T) {
 // TestRenderSummary_ServiceCountIsAppOnly verifies that tools and infra are
 // excluded from the "services N/M enabled" count — only apps are reported.
 func TestRenderSummary_ServiceCountIsAppOnly(t *testing.T) {
-	cfg := &config.DevboxConfig{
+	cfg := &config.DweConfig{
 		Project: config.ProjectConfig{Name: "myapp"},
 		Services: map[string]config.ServiceConfig{
 			"web":     {Type: config.ServiceTypeApp, Enabled: true},
@@ -116,7 +116,7 @@ func TestRenderSummary_ServiceCountIsAppOnly(t *testing.T) {
 }
 
 func TestRenderSummary_ToolCounts(t *testing.T) {
-	cfg := &config.DevboxConfig{
+	cfg := &config.DweConfig{
 		Project: config.ProjectConfig{Name: "myapp"},
 		Services: map[string]config.ServiceConfig{
 			"adminer":       {Type: config.ServiceTypeTool, Enabled: true},
@@ -131,7 +131,7 @@ func TestRenderSummary_ToolCounts(t *testing.T) {
 }
 
 func TestRenderSummary_OneLineWhenNoState(t *testing.T) {
-	cfg := &config.DevboxConfig{
+	cfg := &config.DweConfig{
 		Project: config.ProjectConfig{Name: "myapp"},
 	}
 	out := Summary(cfg, nil)
@@ -142,7 +142,7 @@ func TestRenderSummary_OneLineWhenNoState(t *testing.T) {
 }
 
 func TestRenderSummary_TwoLinesWithState(t *testing.T) {
-	cfg := &config.DevboxConfig{
+	cfg := &config.DweConfig{
 		Project: config.ProjectConfig{Name: "myapp"},
 		State:   "running",
 	}
@@ -154,7 +154,7 @@ func TestRenderSummary_TwoLinesWithState(t *testing.T) {
 }
 
 func TestRenderSummary_NilTools(t *testing.T) {
-	cfg := &config.DevboxConfig{
+	cfg := &config.DweConfig{
 		Project:  config.ProjectConfig{Name: "myapp"},
 		Services: nil,
 	}
@@ -165,7 +165,7 @@ func TestRenderSummary_NilTools(t *testing.T) {
 }
 
 func TestRenderSummary_WithDeploySummaryNil(t *testing.T) {
-	cfg := &config.DevboxConfig{
+	cfg := &config.DweConfig{
 		Project: config.ProjectConfig{Name: "myapp"},
 	}
 	out := Summary(cfg, nil)
@@ -176,7 +176,7 @@ func TestRenderSummary_WithDeploySummaryNil(t *testing.T) {
 }
 
 func TestRenderSummary_WithDeploySummary_AllDeployed(t *testing.T) {
-	cfg := &config.DevboxConfig{
+	cfg := &config.DweConfig{
 		Project: config.ProjectConfig{Name: "myapp"},
 	}
 	summary := &statusview.DeploySummary{
@@ -191,7 +191,7 @@ func TestRenderSummary_WithDeploySummary_AllDeployed(t *testing.T) {
 }
 
 func TestRenderSummary_WithDeploySummary_PartiallyDeployed(t *testing.T) {
-	cfg := &config.DevboxConfig{
+	cfg := &config.DweConfig{
 		Project: config.ProjectConfig{Name: "myapp"},
 	}
 	summary := &statusview.DeploySummary{
@@ -206,7 +206,7 @@ func TestRenderSummary_WithDeploySummary_PartiallyDeployed(t *testing.T) {
 }
 
 func TestRenderSummary_WithDeploySummary_ZeroTotal(t *testing.T) {
-	cfg := &config.DevboxConfig{
+	cfg := &config.DweConfig{
 		Project: config.ProjectConfig{Name: "myapp"},
 	}
 	summary := &statusview.DeploySummary{

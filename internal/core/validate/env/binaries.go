@@ -9,7 +9,7 @@ import (
 )
 
 type gitBinValidator struct {
-	cfg *config.DevboxConfig
+	cfg *config.DweConfig
 }
 
 func (v *gitBinValidator) ID() string     { return "git_bin" }
@@ -28,7 +28,7 @@ func (v *gitBinValidator) Run(_ validate.Context) []validate.Diagnostic {
 }
 
 type shellBinValidator struct {
-	cfg *config.DevboxConfig
+	cfg *config.DweConfig
 }
 
 func (v *shellBinValidator) ID() string     { return "shell_bin" }

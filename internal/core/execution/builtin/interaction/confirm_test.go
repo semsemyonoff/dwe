@@ -17,7 +17,7 @@ import (
 // newTestConfirmCtx returns an spec.ExecContext for use in confirm builtin tests.
 func newTestConfirmCtx(confirmFunc func(string, string, string) (bool, error)) spec.ExecContext {
 	return spec.ExecContext{
-		Config:      &config.DevboxConfig{},
+		Config:      &config.DweConfig{},
 		ProjectRoot: "/tmp",
 		Output:      render.NewWriter(&bytes.Buffer{}),
 		ConfirmFunc: confirmFunc,
@@ -123,7 +123,7 @@ func TestConfirmBuiltin_ConfirmFunc_DefaultParams(t *testing.T) {
 // TestConfirmBuiltin_NoConfirmFunc_SkipsWhenSkipConfirmSet verifies plain mode skips on SkipConfirm.
 func TestConfirmBuiltin_NoConfirmFunc_SkipsWhenSkipConfirmSet(t *testing.T) {
 	ctx := spec.ExecContext{
-		Config:      &config.DevboxConfig{},
+		Config:      &config.DweConfig{},
 		ProjectRoot: "/tmp",
 		Output:      render.NewWriter(&bytes.Buffer{}),
 		SkipConfirm: true,
@@ -155,7 +155,7 @@ func TestConfirmBuiltin_TTY_UsesRunConfirmWrapper(t *testing.T) {
 
 	out := &bytes.Buffer{}
 	ctx := spec.ExecContext{
-		Config:      &config.DevboxConfig{},
+		Config:      &config.DweConfig{},
 		ProjectRoot: "/tmp",
 		Output:      render.NewWriter(out),
 		Stdin:       bytes.NewBufferString(""), // non-nil, but IsInteractiveFn is faked
@@ -185,7 +185,7 @@ func TestConfirmBuiltin_TTY_ErrCancelled(t *testing.T) {
 
 	out := &bytes.Buffer{}
 	ctx := spec.ExecContext{
-		Config:      &config.DevboxConfig{},
+		Config:      &config.DweConfig{},
 		ProjectRoot: "/tmp",
 		Output:      render.NewWriter(out),
 		Stdin:       bytes.NewBufferString(""),
@@ -212,7 +212,7 @@ func TestConfirmBuiltin_TTY_Denied(t *testing.T) {
 
 	out := &bytes.Buffer{}
 	ctx := spec.ExecContext{
-		Config:      &config.DevboxConfig{},
+		Config:      &config.DweConfig{},
 		ProjectRoot: "/tmp",
 		Output:      render.NewWriter(out),
 		Stdin:       bytes.NewBufferString(""),
@@ -232,7 +232,7 @@ func TestConfirmBuiltin_NonTTY_StdinY(t *testing.T) {
 
 	out := &bytes.Buffer{}
 	ctx := spec.ExecContext{
-		Config:      &config.DevboxConfig{},
+		Config:      &config.DweConfig{},
 		ProjectRoot: "/tmp",
 		Output:      render.NewWriter(out),
 		Stdin:       bytes.NewBufferString("y\n"),
@@ -252,7 +252,7 @@ func TestConfirmBuiltin_NonTTY_StdinN(t *testing.T) {
 
 	out := &bytes.Buffer{}
 	ctx := spec.ExecContext{
-		Config:      &config.DevboxConfig{},
+		Config:      &config.DweConfig{},
 		ProjectRoot: "/tmp",
 		Output:      render.NewWriter(out),
 		Stdin:       bytes.NewBufferString("n\n"),
@@ -270,7 +270,7 @@ func TestConfirmBuiltin_PipedStdin_RoutesToFallback(t *testing.T) {
 	// test exercises the real IsInteractiveFn behavior with a bytes.Buffer.
 	out := &bytes.Buffer{}
 	ctx := spec.ExecContext{
-		Config:      &config.DevboxConfig{},
+		Config:      &config.DweConfig{},
 		ProjectRoot: "/tmp",
 		Output:      render.NewWriter(out),
 		Stdin:       bytes.NewBufferString("y\n"),

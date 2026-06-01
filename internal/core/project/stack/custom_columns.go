@@ -12,7 +12,7 @@ import (
 // declared across all services of the given type. Ordering is deterministic:
 // services are iterated alphabetically by name and column names are appended
 // in first-encounter order during that walk.
-func BuildCustomColumns(cfg *config.DevboxConfig, t config.ServiceType) []string {
+func BuildCustomColumns(cfg *config.DweConfig, t config.ServiceType) []string {
 	if cfg == nil {
 		return nil
 	}

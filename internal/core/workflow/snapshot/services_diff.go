@@ -42,7 +42,7 @@ func (d ServicesDiff) IsEmpty() bool {
 // project's effective service map. The comparison is config-blind beyond the
 // service Name and Enabled flag — it does not inspect ports, hosts, or any
 // other ServiceConfig field. The current map shape mirrors
-// config.DevboxConfig.Services so callers can pass cfg.Services directly.
+// config.DweConfig.Services so callers can pass cfg.Services directly.
 func DiffServices(manifest []meta.ServiceSnapshot, current map[string]config.ServiceConfig) ServicesDiff {
 	manifestByName := make(map[string]meta.ServiceSnapshot, len(manifest))
 	for _, s := range manifest {

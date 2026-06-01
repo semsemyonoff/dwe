@@ -85,7 +85,7 @@ func runDocsTUI(cmd *cobra.Command, flags *cmdctx.RootFlags, termWidth, termHeig
 	cfg, err := config.LoadConfig(flags.ConfigPath)
 	if err != nil {
 		// If config fails to load, use defaults (docs still work without full config)
-		cfg = &config.DevboxConfig{}
+		cfg = &config.DweConfig{}
 	}
 
 	// Get project root, user config language, and mermaid theme override.

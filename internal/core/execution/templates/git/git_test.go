@@ -28,7 +28,7 @@ func ptrBool(b bool) *bool { v := b; return &v } //nolint:newexpr
 func mkPack(t *testing.T, root, packName string, files map[string]string) {
 	t.Helper()
 	for rel, content := range files {
-		writeFile(t, filepath.Join(root, "devbox", "templates", "git", packName, rel), content)
+		writeFile(t, filepath.Join(root, "workspace", "templates", "git", packName, rel), content)
 	}
 }
 
@@ -371,7 +371,7 @@ func TestValidateManifest(t *testing.T) {
 	hooksDir := filepath.Join(root, "services", "main", "src", ".git", "hooks")
 
 	t.Run("valid", func(t *testing.T) {
-		m, err := LoadManifest(filepath.Join(root, "devbox", "templates", "git", "default"))
+		m, err := LoadManifest(filepath.Join(root, "workspace", "templates", "git", "default"))
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -440,9 +440,9 @@ func TestValidateManifest(t *testing.T) {
 		mkPack(t, root2, "default", map[string]string{
 			"manifest.yml": "render:\n  - {from: pre-commit.tmpl, to: pre-commit}\n",
 		})
-		writeFile(t, filepath.Join(root2, "devbox", "templates", "git", "default.local", "pre-commit.tmpl"), "#!/bin/sh\n")
+		writeFile(t, filepath.Join(root2, "workspace", "templates", "git", "default.local", "pre-commit.tmpl"), "#!/bin/sh\n")
 		hooksDir2 := filepath.Join(root2, "services", "main", "src", ".git", "hooks")
-		m, err := LoadManifest(filepath.Join(root2, "devbox", "templates", "git", "default"))
+		m, err := LoadManifest(filepath.Join(root2, "workspace", "templates", "git", "default"))
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -453,7 +453,7 @@ func TestValidateManifest(t *testing.T) {
 }
 
 func TestRenderHooks(t *testing.T) {
-	setup := func(t *testing.T) (root, hub, hooks string, cfg *config.DevboxConfig, m *manifest.File) {
+	setup := func(t *testing.T) (root, hub, hooks string, cfg *config.DweConfig, m *manifest.File) {
 		t.Helper()
 		root = t.TempDir()
 		mkPack(t, root, "default", map[string]string{
@@ -465,9 +465,9 @@ func TestRenderHooks(t *testing.T) {
 			t.Fatal(err)
 		}
 		hooks = filepath.Join(hub, "src", ".git", "hooks")
-		cfg = &config.DevboxConfig{}
+		cfg = &config.DweConfig{}
 		var err error
-		m, err = LoadManifest(filepath.Join(root, "devbox", "templates", "git", "default"))
+		m, err = LoadManifest(filepath.Join(root, "workspace", "templates", "git", "default"))
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -503,7 +503,7 @@ func TestRenderHooks(t *testing.T) {
 
 	t.Run("override file used", func(t *testing.T) {
 		root, hub, hooks, cfg, m := setup(t)
-		writeFile(t, filepath.Join(root, "devbox", "templates", "git", "default.local", "pre-commit.tmpl"),
+		writeFile(t, filepath.Join(root, "workspace", "templates", "git", "default.local", "pre-commit.tmpl"),
 			"#!/bin/sh\necho OVERRIDE-{{.Service}}\n")
 		ctx := Context{
 			ProjectRoot: root, Cfg: cfg, Service: "main",
@@ -526,9 +526,9 @@ func TestRenderHooks(t *testing.T) {
 	t.Run("missingkey error", func(t *testing.T) {
 		root, hub, hooks, cfg, _ := setup(t)
 		// Replace template with one that references a missing key.
-		writeFile(t, filepath.Join(root, "devbox", "templates", "git", "default", "pre-commit.tmpl"),
+		writeFile(t, filepath.Join(root, "workspace", "templates", "git", "default", "pre-commit.tmpl"),
 			"#!/bin/sh\necho {{.Nope}}\n")
-		m, err := LoadManifest(filepath.Join(root, "devbox", "templates", "git", "default"))
+		m, err := LoadManifest(filepath.Join(root, "workspace", "templates", "git", "default"))
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -596,13 +596,13 @@ func TestRenderHooks(t *testing.T) {
 
 	t.Run("cfg raw dot access", func(t *testing.T) {
 		root, hub, hooks, _, _ := setup(t)
-		writeFile(t, filepath.Join(root, "devbox", "templates", "git", "default", "pre-commit.tmpl"),
+		writeFile(t, filepath.Join(root, "workspace", "templates", "git", "default", "pre-commit.tmpl"),
 			"#!/bin/sh\necho {{ .Cfg.Raw.git.project_prefix }} {{ index (index .Cfg.Raw.git.hooks .Service) \"pre_commit\" }}\n")
-		m, err := LoadManifest(filepath.Join(root, "devbox", "templates", "git", "default"))
+		m, err := LoadManifest(filepath.Join(root, "workspace", "templates", "git", "default"))
 		if err != nil {
 			t.Fatal(err)
 		}
-		cfg := &config.DevboxConfig{Raw: map[string]any{
+		cfg := &config.DweConfig{Raw: map[string]any{
 			"git": map[string]any{
 				"project_prefix": "PRJ",
 				"hooks": map[string]any{
@@ -630,13 +630,13 @@ func TestRenderHooks(t *testing.T) {
 
 	t.Run("cfg raw non-identifier key via index", func(t *testing.T) {
 		root, hub, hooks, _, _ := setup(t)
-		writeFile(t, filepath.Join(root, "devbox", "templates", "git", "default", "pre-commit.tmpl"),
+		writeFile(t, filepath.Join(root, "workspace", "templates", "git", "default", "pre-commit.tmpl"),
 			"#!/bin/sh\necho {{ index .Cfg.Raw \"my-tool\" \"api-key\" }}\n")
-		m, err := LoadManifest(filepath.Join(root, "devbox", "templates", "git", "default"))
+		m, err := LoadManifest(filepath.Join(root, "workspace", "templates", "git", "default"))
 		if err != nil {
 			t.Fatal(err)
 		}
-		cfg := &config.DevboxConfig{Raw: map[string]any{
+		cfg := &config.DweConfig{Raw: map[string]any{
 			"my-tool": map[string]any{"api-key": "VALUE"},
 		}}
 		ctx := Context{
@@ -659,13 +659,13 @@ func TestRenderHooks(t *testing.T) {
 
 	t.Run("cfg raw missingkey error", func(t *testing.T) {
 		root, hub, hooks, _, _ := setup(t)
-		writeFile(t, filepath.Join(root, "devbox", "templates", "git", "default", "pre-commit.tmpl"),
+		writeFile(t, filepath.Join(root, "workspace", "templates", "git", "default", "pre-commit.tmpl"),
 			"#!/bin/sh\necho {{ .Cfg.Raw.git.project_prefix }}\n")
-		m, err := LoadManifest(filepath.Join(root, "devbox", "templates", "git", "default"))
+		m, err := LoadManifest(filepath.Join(root, "workspace", "templates", "git", "default"))
 		if err != nil {
 			t.Fatal(err)
 		}
-		cfg := &config.DevboxConfig{Raw: map[string]any{}}
+		cfg := &config.DweConfig{Raw: map[string]any{}}
 		ctx := Context{
 			ProjectRoot: root, Cfg: cfg, Service: "main",
 			ServiceCfg: config.ServiceConfig{Dir: "services/main"},
@@ -684,7 +684,7 @@ func TestRenderHooks(t *testing.T) {
 	t.Run("backward compat without cfg reference", func(t *testing.T) {
 		// Render with a template that does not reference .Cfg, then again with
 		// Cfg populated by arbitrary Raw data — output must be byte-identical.
-		render := func(cfg *config.DevboxConfig) []byte {
+		render := func(cfg *config.DweConfig) []byte {
 			root, hub, hooks, _, m := setup(t)
 			ctx := Context{
 				ProjectRoot: root, Cfg: cfg, Service: "main",
@@ -701,8 +701,8 @@ func TestRenderHooks(t *testing.T) {
 			}
 			return got
 		}
-		empty := render(&config.DevboxConfig{})
-		populated := render(&config.DevboxConfig{Raw: map[string]any{"git": map[string]any{"project_prefix": "PRJ"}}})
+		empty := render(&config.DweConfig{})
+		populated := render(&config.DweConfig{Raw: map[string]any{"git": map[string]any{"project_prefix": "PRJ"}}})
 		if string(empty) != string(populated) {
 			t.Errorf("output diverged when template does not reference .Cfg:\nempty=%q\npopulated=%q", empty, populated)
 		}
@@ -730,12 +730,12 @@ func TestRenderHooks(t *testing.T) {
 		if err := os.MkdirAll(hooks, 0o755); err != nil {
 			t.Fatal(err)
 		}
-		m, err := LoadManifest(filepath.Join(root, "devbox", "templates", "git", "default"))
+		m, err := LoadManifest(filepath.Join(root, "workspace", "templates", "git", "default"))
 		if err != nil {
 			t.Fatal(err)
 		}
 		ctx := Context{
-			ProjectRoot: root, Cfg: &config.DevboxConfig{}, Service: "main",
+			ProjectRoot: root, Cfg: &config.DweConfig{}, Service: "main",
 			ServiceCfg: config.ServiceConfig{Dir: "services/main"},
 			PackName:   "default", Manifest: m,
 			HooksDir: hooks, HubDir: hub,
@@ -765,11 +765,11 @@ func TestRenderHooks(t *testing.T) {
 			t.Fatal(err)
 		}
 		hooks := filepath.Join(hub, "src", ".git", "hooks")
-		m, err := LoadManifest(filepath.Join(root, "devbox", "templates", "git", "default"))
+		m, err := LoadManifest(filepath.Join(root, "workspace", "templates", "git", "default"))
 		if err != nil {
 			t.Fatal(err)
 		}
-		cfg := &config.DevboxConfig{Raw: map[string]any{
+		cfg := &config.DweConfig{Raw: map[string]any{
 			"git": map[string]any{
 				"hooks": map[string]any{
 					"main": map[string]any{"pre_commit": "make lint"},
@@ -798,14 +798,14 @@ func TestRenderHooks(t *testing.T) {
 
 	t.Run("resolved falls back to service when empty", func(t *testing.T) {
 		root, hub, hooks, _, _ := setup(t)
-		writeFile(t, filepath.Join(root, "devbox", "templates", "git", "default", "pre-commit.tmpl"),
+		writeFile(t, filepath.Join(root, "workspace", "templates", "git", "default", "pre-commit.tmpl"),
 			"#!/bin/sh\necho svc={{.Service}} resolved={{.Resolved}}\n")
-		m, err := LoadManifest(filepath.Join(root, "devbox", "templates", "git", "default"))
+		m, err := LoadManifest(filepath.Join(root, "workspace", "templates", "git", "default"))
 		if err != nil {
 			t.Fatal(err)
 		}
 		ctx := Context{
-			ProjectRoot: root, Cfg: &config.DevboxConfig{},
+			ProjectRoot: root, Cfg: &config.DweConfig{},
 			Service:    "main", // Resolved deliberately left empty
 			ServiceCfg: config.ServiceConfig{Dir: "services/main"},
 			PackName:   "default", Manifest: m,

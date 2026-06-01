@@ -41,7 +41,7 @@ func writeTempServiceConfig(t *testing.T, services map[string]struct {
 	// regressions.
 	oldDetect := detectStackRunning
 	t.Cleanup(func() { detectStackRunning = oldDetect })
-	detectStackRunning = func(_ *config.DevboxConfig, _ string) (bool, error) { return true, nil }
+	detectStackRunning = func(_ *config.DweConfig, _ string) (bool, error) { return true, nil }
 
 	dir := t.TempDir()
 
@@ -61,15 +61,15 @@ func writeTempServiceConfig(t *testing.T, services map[string]struct {
 		}
 	}
 	devboxYML := strings.Join(devboxLines, "\n") + "\n"
-	if err := os.WriteFile(filepath.Join(dir, "devbox.yml"), []byte(devboxYML), 0o644); err != nil {
+	if err := os.WriteFile(filepath.Join(dir, "workspace.yml"), []byte(devboxYML), 0o644); err != nil {
 		t.Fatalf("write devbox.yml: %v", err)
 	}
 
-	if err := os.MkdirAll(filepath.Join(dir, "devbox"), 0o755); err != nil {
+	if err := os.MkdirAll(filepath.Join(dir, "workspace"), 0o755); err != nil {
 		t.Fatalf("mkdir devbox/: %v", err)
 	}
 	for name, spec := range services {
-		svcDir := filepath.Join(dir, "devbox", "services", name)
+		svcDir := filepath.Join(dir, "workspace", "services", name)
 		if err := os.MkdirAll(svcDir, 0o755); err != nil {
 			t.Fatalf("mkdir services/%s: %v", name, err)
 		}
@@ -89,7 +89,7 @@ func writeTempServiceConfig(t *testing.T, services map[string]struct {
 		}
 	}
 
-	return filepath.Join(dir, "devbox.yml")
+	return filepath.Join(dir, "workspace.yml")
 }
 
 func TestServicesToggle_NonTTY_RendersListTable(t *testing.T) {
@@ -253,7 +253,7 @@ func TestServicesToggle_TTY_EnablesAndDisables(t *testing.T) {
 		t.Fatalf("unexpected error: %v", err)
 	}
 
-	localPath := filepath.Join(filepath.Dir(configPath), "devbox", "local.yml")
+	localPath := filepath.Join(filepath.Dir(configPath), "workspace", "local.yml")
 	data, err := os.ReadFile(localPath)
 	if err != nil {
 		t.Fatalf("local.yml not written: %v", err)
@@ -300,7 +300,7 @@ func TestServicesToggle_TTY_CancelNoWrites(t *testing.T) {
 	if err := cmd.RunE(cmd, nil); err != nil {
 		t.Fatalf("cancel should return nil, got: %v", err)
 	}
-	localPath := filepath.Join(filepath.Dir(configPath), "devbox", "local.yml")
+	localPath := filepath.Join(filepath.Dir(configPath), "workspace", "local.yml")
 	if _, err := os.Stat(localPath); !os.IsNotExist(err) {
 		t.Error("local.yml should not be created after cancel")
 	}
@@ -319,7 +319,7 @@ type testTool struct {
 	Port      int
 }
 
-func makeServicesCfg(services map[string]config.ServiceConfig, tools map[string]testTool, _ any, _ any) *config.DevboxConfig {
+func makeServicesCfg(services map[string]config.ServiceConfig, tools map[string]testTool, _ any, _ any) *config.DweConfig {
 	merged := make(map[string]config.ServiceConfig, len(services)+len(tools))
 	maps.Copy(merged, services)
 	for k, v := range tools {
@@ -336,7 +336,7 @@ func makeServicesCfg(services map[string]config.ServiceConfig, tools map[string]
 		}
 		merged[k] = svc
 	}
-	return &config.DevboxConfig{Services: merged}
+	return &config.DweConfig{Services: merged}
 }
 
 func TestFormatServiceToggleLabel_DisabledPreservesVisibleText(t *testing.T) {
@@ -365,10 +365,10 @@ func TestFormatServiceToggleLabel_MandatoryLooksActive(t *testing.T) {
 // mandatory services are always on.
 func TestServicesToggle_MixedTypes(t *testing.T) {
 	dir := t.TempDir()
-	if err := os.WriteFile(filepath.Join(dir, "devbox.yml"), []byte("project:\n  name: t\n  prefix: t\n"), 0o644); err != nil {
+	if err := os.WriteFile(filepath.Join(dir, "workspace.yml"), []byte("project:\n  name: t\n  prefix: t\n"), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	if err := os.MkdirAll(filepath.Join(dir, "devbox"), 0o755); err != nil {
+	if err := os.MkdirAll(filepath.Join(dir, "workspace"), 0o755); err != nil {
 		t.Fatal(err)
 	}
 	for name, content := range map[string]string{
@@ -376,7 +376,7 @@ func TestServicesToggle_MixedTypes(t *testing.T) {
 		"adminer": "type: tool\ncontainer: adminer\nports:\n  web: 8080\n",
 		"db":      "type: infra\ncontainer: db\nrequired: true\n",
 	} {
-		svcDir := filepath.Join(dir, "devbox", "services", name)
+		svcDir := filepath.Join(dir, "workspace", "services", name)
 		if err := os.MkdirAll(svcDir, 0o755); err != nil {
 			t.Fatal(err)
 		}
@@ -405,12 +405,12 @@ func TestServicesToggle_MixedTypes(t *testing.T) {
 	// multi-select item ordering, not the apply behavior.
 	oldDetect := detectStackRunning
 	t.Cleanup(func() { detectStackRunning = oldDetect })
-	detectStackRunning = func(_ *config.DevboxConfig, _ string) (bool, error) { return true, nil }
+	detectStackRunning = func(_ *config.DweConfig, _ string) (bool, error) { return true, nil }
 	oldPrompt := confirmApplyPrompt
 	t.Cleanup(func() { confirmApplyPrompt = oldPrompt })
 	confirmApplyPrompt = func() (bool, error) { return false, nil }
 
-	flags := &cmdctx.RootFlags{ConfigPath: filepath.Join(dir, "devbox.yml")}
+	flags := &cmdctx.RootFlags{ConfigPath: filepath.Join(dir, "workspace.yml")}
 	cmd := NewCmd("", flags)
 	if err := cmd.RunE(cmd, nil); err != nil {
 		t.Fatalf("unexpected error: %v", err)
@@ -488,13 +488,13 @@ func TestPickServiceToEnable_TypeSortedAndDecorated(t *testing.T) {
 
 func TestServiceEnableCmd_MandatoryInfraWarn(t *testing.T) {
 	dir := t.TempDir()
-	if err := os.WriteFile(filepath.Join(dir, "devbox.yml"), []byte("project:\n  name: t\n  prefix: t\n"), 0o644); err != nil {
+	if err := os.WriteFile(filepath.Join(dir, "workspace.yml"), []byte("project:\n  name: t\n  prefix: t\n"), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	if err := os.MkdirAll(filepath.Join(dir, "devbox"), 0o755); err != nil {
+	if err := os.MkdirAll(filepath.Join(dir, "workspace"), 0o755); err != nil {
 		t.Fatal(err)
 	}
-	svcDir1 := filepath.Join(dir, "devbox", "services", "db")
+	svcDir1 := filepath.Join(dir, "workspace", "services", "db")
 	if err := os.MkdirAll(svcDir1, 0o755); err != nil {
 		t.Fatal(err)
 	}
@@ -502,7 +502,7 @@ func TestServiceEnableCmd_MandatoryInfraWarn(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	flags := &cmdctx.RootFlags{ConfigPath: filepath.Join(dir, "devbox.yml")}
+	flags := &cmdctx.RootFlags{ConfigPath: filepath.Join(dir, "workspace.yml")}
 	cmd := newServiceEnableCmd(flags)
 	var stderr strings.Builder
 	cmd.SetErr(&stderr)
@@ -516,13 +516,13 @@ func TestServiceEnableCmd_MandatoryInfraWarn(t *testing.T) {
 
 func TestServiceEnableCmd_OptionalInfraEnables(t *testing.T) {
 	dir := t.TempDir()
-	if err := os.WriteFile(filepath.Join(dir, "devbox.yml"), []byte("project:\n  name: t\n  prefix: t\n"), 0o644); err != nil {
+	if err := os.WriteFile(filepath.Join(dir, "workspace.yml"), []byte("project:\n  name: t\n  prefix: t\n"), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	if err := os.MkdirAll(filepath.Join(dir, "devbox"), 0o755); err != nil {
+	if err := os.MkdirAll(filepath.Join(dir, "workspace"), 0o755); err != nil {
 		t.Fatal(err)
 	}
-	svcDir2 := filepath.Join(dir, "devbox", "services", "varnish")
+	svcDir2 := filepath.Join(dir, "workspace", "services", "varnish")
 	if err := os.MkdirAll(svcDir2, 0o755); err != nil {
 		t.Fatal(err)
 	}
@@ -530,13 +530,13 @@ func TestServiceEnableCmd_OptionalInfraEnables(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	flags := &cmdctx.RootFlags{ConfigPath: filepath.Join(dir, "devbox.yml")}
+	flags := &cmdctx.RootFlags{ConfigPath: filepath.Join(dir, "workspace.yml")}
 	cmd := newServiceEnableCmd(flags)
 	if err := cmd.RunE(cmd, []string{"varnish"}); err != nil {
 		t.Fatalf("enabling optional infra service should succeed, got: %v", err)
 	}
 
-	localPath := filepath.Join(dir, "devbox", "local.yml")
+	localPath := filepath.Join(dir, "workspace", "local.yml")
 	data, err := os.ReadFile(localPath)
 	if err != nil {
 		t.Fatalf("local.yml not written: %v", err)
@@ -567,21 +567,21 @@ func writeServiceProject(t *testing.T, svcYAML string) (string, string) {
 	// stack-not-running path must override this seam themselves.
 	oldDetect := detectStackRunning
 	t.Cleanup(func() { detectStackRunning = oldDetect })
-	detectStackRunning = func(_ *config.DevboxConfig, _ string) (bool, error) { return true, nil }
+	detectStackRunning = func(_ *config.DweConfig, _ string) (bool, error) { return true, nil }
 
 	dir := t.TempDir()
-	if err := os.WriteFile(filepath.Join(dir, "devbox.yml"),
+	if err := os.WriteFile(filepath.Join(dir, "workspace.yml"),
 		[]byte("project:\n  name: test\n  prefix: t\n"), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	svcDir := filepath.Join(dir, "devbox", "services", "svc")
+	svcDir := filepath.Join(dir, "workspace", "services", "svc")
 	if err := os.MkdirAll(svcDir, 0o755); err != nil {
 		t.Fatal(err)
 	}
 	if err := os.WriteFile(filepath.Join(svcDir, "service.yml"), []byte(svcYAML), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	return filepath.Join(dir, "devbox.yml"), dir
+	return filepath.Join(dir, "workspace.yml"), dir
 }
 
 func statePath(baseDir string) string {
@@ -604,7 +604,7 @@ func readPending(t *testing.T, baseDir string) *journal.PendingApply {
 func TestSingleToggle_StackNotRunning_NoApply_RecordsPendingSkipsHooks(t *testing.T) {
 	configPath, baseDir := writeServiceProject(t, "type: app\ncontainer: c\n")
 
-	detectStackRunning = func(_ *config.DevboxConfig, _ string) (bool, error) { return false, nil }
+	detectStackRunning = func(_ *config.DweConfig, _ string) (bool, error) { return false, nil }
 
 	restartCalled := false
 	oldRunRestart := singleToggleRunRestart
@@ -628,7 +628,7 @@ func TestSingleToggle_StackNotRunning_NoApply_RecordsPendingSkipsHooks(t *testin
 		t.Fatalf("unexpected error: %v", err)
 	}
 
-	localPath := filepath.Join(baseDir, "devbox", "local.yml")
+	localPath := filepath.Join(baseDir, "workspace", "local.yml")
 	if _, err := os.Stat(localPath); err != nil {
 		t.Fatalf("local.yml must be written: %v", err)
 	}
@@ -649,7 +649,7 @@ func TestSingleToggle_StackNotRunning_NoApply_RecordsPendingSkipsHooks(t *testin
 func TestSingleToggle_StackNotRunning_Apply_StillExecutes(t *testing.T) {
 	configPath, _ := writeServiceProject(t, "type: app\ncontainer: c\n")
 
-	detectStackRunning = func(_ *config.DevboxConfig, _ string) (bool, error) { return false, nil }
+	detectStackRunning = func(_ *config.DweConfig, _ string) (bool, error) { return false, nil }
 
 	restartCalled := false
 	oldRunRestart := singleToggleRunRestart
@@ -678,7 +678,7 @@ func TestSingleToggle_StackProbeError_ProceedsAsRunning(t *testing.T) {
 	configPath, _ := writeServiceProject(t, "type: app\ncontainer: c\n")
 
 	// Override the helper's default (true) with a probe-error sentinel.
-	detectStackRunning = func(_ *config.DevboxConfig, _ string) (bool, error) {
+	detectStackRunning = func(_ *config.DweConfig, _ string) (bool, error) {
 		return false, fmt.Errorf("docker daemon unreachable")
 	}
 
@@ -715,7 +715,7 @@ func TestSingleToggle_StackProbeError_ProceedsAsRunning(t *testing.T) {
 func TestSingleToggle_StackProbeError_PendingStillRecorded(t *testing.T) {
 	configPath, baseDir := writeServiceProject(t, "type: app\ncontainer: c\n")
 
-	detectStackRunning = func(_ *config.DevboxConfig, _ string) (bool, error) {
+	detectStackRunning = func(_ *config.DweConfig, _ string) (bool, error) {
 		return false, fmt.Errorf("docker daemon unreachable")
 	}
 
@@ -740,7 +740,7 @@ func TestSingleToggle_StackProbeError_PendingStillRecorded(t *testing.T) {
 // TestSingleToggle_PrintPlan_NoMutation verifies --print-plan makes no filesystem changes.
 func TestSingleToggle_PrintPlan_NoMutation(t *testing.T) {
 	configPath, baseDir := writeServiceProject(t, "type: app\ncontainer: c\n")
-	localPath := filepath.Join(baseDir, "devbox", "local.yml")
+	localPath := filepath.Join(baseDir, "workspace", "local.yml")
 	envPath := filepath.Join(baseDir, ".env")
 
 	flags := &cmdctx.RootFlags{ConfigPath: configPath}
@@ -772,7 +772,7 @@ func TestSingleToggle_PrintPlan_NoMutation(t *testing.T) {
 func TestSingleToggle_RequiresNone_NoPending(t *testing.T) {
 	configPath, baseDir := writeServiceProject(t,
 		"type: app\ncontainer: c\non_enable:\n  requires: none\n")
-	localPath := filepath.Join(baseDir, "devbox", "local.yml")
+	localPath := filepath.Join(baseDir, "workspace", "local.yml")
 
 	flags := &cmdctx.RootFlags{ConfigPath: configPath}
 	cmd := newServiceEnableCmd(flags)
@@ -815,7 +815,7 @@ func TestSingleToggle_RequiresNone_NoPending(t *testing.T) {
 // --apply, mutation is persisted and pending state is recorded.
 func TestSingleToggle_NonTTY_PendingRecorded(t *testing.T) {
 	configPath, baseDir := writeServiceProject(t, "type: app\ncontainer: c\n")
-	localPath := filepath.Join(baseDir, "devbox", "local.yml")
+	localPath := filepath.Join(baseDir, "workspace", "local.yml")
 
 	oldInteractive := widgets.IsInteractiveFn
 	t.Cleanup(func() { widgets.IsInteractiveFn = oldInteractive })
@@ -855,7 +855,7 @@ func TestSingleToggle_NonTTY_PendingRecorded(t *testing.T) {
 // leaves mutation persisted and pending recorded.
 func TestSingleToggle_TTY_No_PendingRecorded(t *testing.T) {
 	configPath, baseDir := writeServiceProject(t, "type: app\ncontainer: c\n")
-	localPath := filepath.Join(baseDir, "devbox", "local.yml")
+	localPath := filepath.Join(baseDir, "workspace", "local.yml")
 
 	oldInteractive := widgets.IsInteractiveFn
 	t.Cleanup(func() { widgets.IsInteractiveFn = oldInteractive })
@@ -929,7 +929,7 @@ func TestSingleToggle_Apply_Failure(t *testing.T) {
 	}
 
 	// Mutation must persist.
-	localPath := filepath.Join(baseDir, "devbox", "local.yml")
+	localPath := filepath.Join(baseDir, "workspace", "local.yml")
 	if _, err := os.Stat(localPath); err != nil {
 		t.Fatal("local.yml must remain after --apply failure")
 	}
@@ -980,7 +980,7 @@ func TestSingleToggle_RollbackOnBuildTogglePlanError(t *testing.T) {
 	configPath, baseDir := writeServiceProject(t,
 		"type: app\ncontainer: c\non_enable:\n  requires: bad_value\n")
 
-	localPath := filepath.Join(baseDir, "devbox", "local.yml")
+	localPath := filepath.Join(baseDir, "workspace", "local.yml")
 	envPath := filepath.Join(baseDir, ".env")
 
 	// Pre-create local.yml referencing the actual "svc" service so that the
@@ -1052,7 +1052,7 @@ func TestSingleToggle_RollbackEnvAbsent(t *testing.T) {
 func TestSingleToggle_RollbackLocalYmlAbsent(t *testing.T) {
 	configPath, baseDir := writeServiceProject(t,
 		"type: app\ncontainer: c\non_enable:\n  requires: bad_value\n")
-	localPath := filepath.Join(baseDir, "devbox", "local.yml")
+	localPath := filepath.Join(baseDir, "workspace", "local.yml")
 
 	flags := &cmdctx.RootFlags{ConfigPath: configPath}
 	cmd := newServiceEnableCmd(flags)
@@ -1072,7 +1072,7 @@ func TestSingleToggle_RollbackLocalYmlAbsent(t *testing.T) {
 // restored.
 func TestSingleToggle_RollbackOnAddPendingOpsFailure(t *testing.T) {
 	configPath, baseDir := writeServiceProject(t, "type: app\ncontainer: c\n")
-	localPath := filepath.Join(baseDir, "devbox", "local.yml")
+	localPath := filepath.Join(baseDir, "workspace", "local.yml")
 	envPath := filepath.Join(baseDir, ".env")
 
 	// Pre-create local.yml referencing the actual "svc" service so the config
@@ -1168,11 +1168,11 @@ func TestSingleToggle_AllRequiresNone_NoPendingRecord(t *testing.T) {
 func TestSingleToggle_DisableFlow(t *testing.T) {
 	// Write a project with svc enabled.
 	dir := t.TempDir()
-	if err := os.WriteFile(filepath.Join(dir, "devbox.yml"),
+	if err := os.WriteFile(filepath.Join(dir, "workspace.yml"),
 		[]byte("project:\n  name: t\n  prefix: t\n"), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	svcDir := filepath.Join(dir, "devbox", "services", "svc")
+	svcDir := filepath.Join(dir, "workspace", "services", "svc")
 	if err := os.MkdirAll(svcDir, 0o755); err != nil {
 		t.Fatal(err)
 	}
@@ -1181,7 +1181,7 @@ func TestSingleToggle_DisableFlow(t *testing.T) {
 		t.Fatal(err)
 	}
 	// Pre-enable svc in local.yml.
-	localPath := filepath.Join(dir, "devbox", "local.yml")
+	localPath := filepath.Join(dir, "workspace", "local.yml")
 	if err := os.WriteFile(localPath,
 		[]byte("services:\n  svc:\n    enabled: true\n"), 0o600); err != nil {
 		t.Fatal(err)
@@ -1193,9 +1193,9 @@ func TestSingleToggle_DisableFlow(t *testing.T) {
 
 	oldDetect := detectStackRunning
 	t.Cleanup(func() { detectStackRunning = oldDetect })
-	detectStackRunning = func(_ *config.DevboxConfig, _ string) (bool, error) { return true, nil }
+	detectStackRunning = func(_ *config.DweConfig, _ string) (bool, error) { return true, nil }
 
-	flags := &cmdctx.RootFlags{ConfigPath: filepath.Join(dir, "devbox.yml")}
+	flags := &cmdctx.RootFlags{ConfigPath: filepath.Join(dir, "workspace.yml")}
 	cmd := newServiceDisableCmd(flags)
 	cmd.SetArgs([]string{"svc"})
 
@@ -1387,15 +1387,15 @@ func writeMultiServiceProject(t *testing.T, svcContents map[string]string, deplo
 	// pending/hook assertions still fire. Override in individual tests when needed.
 	oldDetect := detectStackRunning
 	t.Cleanup(func() { detectStackRunning = oldDetect })
-	detectStackRunning = func(_ *config.DevboxConfig, _ string) (bool, error) { return true, nil }
+	detectStackRunning = func(_ *config.DweConfig, _ string) (bool, error) { return true, nil }
 
 	dir := t.TempDir()
-	if err := os.WriteFile(filepath.Join(dir, "devbox.yml"),
+	if err := os.WriteFile(filepath.Join(dir, "workspace.yml"),
 		[]byte("project:\n  name: test\n  prefix: t\n"), 0o644); err != nil {
 		t.Fatal(err)
 	}
 	for name, content := range svcContents {
-		svcDir := filepath.Join(dir, "devbox", "services", name)
+		svcDir := filepath.Join(dir, "workspace", "services", name)
 		if err := os.MkdirAll(svcDir, 0o755); err != nil {
 			t.Fatal(err)
 		}
@@ -1404,7 +1404,7 @@ func writeMultiServiceProject(t *testing.T, svcContents map[string]string, deplo
 		}
 	}
 	for _, name := range deployNames {
-		svcDir := filepath.Join(dir, "devbox", "services", name)
+		svcDir := filepath.Join(dir, "workspace", "services", name)
 		if err := os.MkdirAll(svcDir, 0o755); err != nil {
 			t.Fatal(err)
 		}
@@ -1412,7 +1412,7 @@ func writeMultiServiceProject(t *testing.T, svcContents map[string]string, deplo
 			t.Fatal(err)
 		}
 	}
-	return filepath.Join(dir, "devbox.yml"), dir
+	return filepath.Join(dir, "workspace.yml"), dir
 }
 
 // injectMultiToggleSeams replaces the multi-toggle apply seams for the duration
@@ -1450,7 +1450,7 @@ func TestMultiToggle_PrintPlan_NoMutation(t *testing.T) {
 			"alpha": "type: app\ncontainer: a\n",
 			"beta":  "type: app\ncontainer: b\n",
 		}, nil)
-	localPath := filepath.Join(baseDir, "devbox", "local.yml")
+	localPath := filepath.Join(baseDir, "workspace", "local.yml")
 	envPath := filepath.Join(baseDir, ".env")
 
 	oldInteractive := widgets.IsInteractiveFn
@@ -1685,7 +1685,7 @@ func TestMultiToggle_AtomicPendingWriteRegression(t *testing.T) {
 			"ada": "type: app\ncontainer: ada\non_enable:\n  requires: deploy\n",
 			"bob": "type: app\ncontainer: bob\non_enable:\n  requires: restart\n",
 		}, []string{"ada"})
-	localPath := filepath.Join(baseDir, "devbox", "local.yml")
+	localPath := filepath.Join(baseDir, "workspace", "local.yml")
 	envPath := filepath.Join(baseDir, ".env")
 
 	// Pre-create local.yml so rollback restores bytes rather than removes.
@@ -1751,7 +1751,7 @@ func TestMultiToggle_DeclineApply_PendingRecorded(t *testing.T) {
 			"ada": "type: app\ncontainer: ada\non_enable:\n  requires: deploy\n",
 			"bob": "type: app\ncontainer: bob\non_enable:\n  requires: restart\n",
 		}, []string{"ada"})
-	localPath := filepath.Join(baseDir, "devbox", "local.yml")
+	localPath := filepath.Join(baseDir, "workspace", "local.yml")
 
 	oldInteractive := widgets.IsInteractiveFn
 	t.Cleanup(func() { widgets.IsInteractiveFn = oldInteractive })
@@ -1837,7 +1837,7 @@ func TestMultiToggle_RequiresNoneAndRestart(t *testing.T) {
 
 // TestBatchServiceConfigHash verifies determinism regardless of name order.
 func TestBatchServiceConfigHash(t *testing.T) {
-	cfg := &config.DevboxConfig{
+	cfg := &config.DweConfig{
 		Services: map[string]config.ServiceConfig{
 			"a": {Type: config.ServiceTypeApp, Container: "ca"},
 			"b": {Type: config.ServiceTypeApp, Container: "cb"},
@@ -1882,7 +1882,7 @@ func TestApplyServiceToggles_MandatoryRejected(t *testing.T) {
 	}
 
 	baseDir := filepath.Dir(configPath)
-	localPath := filepath.Join(baseDir, "devbox", "local.yml")
+	localPath := filepath.Join(baseDir, "workspace", "local.yml")
 	local, err := localpkg.LoadLocalYAML(localPath)
 	if err != nil {
 		t.Fatalf("load local.yml: %v", err)

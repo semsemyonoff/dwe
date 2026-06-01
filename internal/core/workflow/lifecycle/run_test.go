@@ -106,7 +106,7 @@ func TestRunRun_MissingRunSection_UsesDefault(t *testing.T) {
 	dir := t.TempDir()
 	cfgPath := makeMinimalDevboxYML(t, dir)
 
-	devboxDir := filepath.Join(dir, "devbox")
+	devboxDir := filepath.Join(dir, "workspace")
 	if err := os.MkdirAll(devboxDir, 0755); err != nil {
 		t.Fatalf("creating devbox dir: %v", err)
 	}
@@ -183,7 +183,7 @@ func TestRunRun_MissingLifecycleYML_DefaultedCallbackFiresOnceAcrossPullReload(t
 func TestRunRun_ReloadsConfigAfterPull(t *testing.T) {
 	dir := t.TempDir()
 	cfgPath := makeMinimalDevboxYML(t, dir)
-	devboxDir := filepath.Join(dir, "devbox")
+	devboxDir := filepath.Join(dir, "workspace")
 	if err := os.MkdirAll(devboxDir, 0755); err != nil {
 		t.Fatalf("creating devbox dir: %v", err)
 	}
@@ -223,7 +223,7 @@ func TestRunRun_ReloadsConfigAfterPull(t *testing.T) {
 func TestRunRun_NoUpdateFlag_SkipsFetch(t *testing.T) {
 	dir := t.TempDir()
 	cfgPath := makeMinimalDevboxYML(t, dir)
-	devboxDir := filepath.Join(dir, "devbox")
+	devboxDir := filepath.Join(dir, "workspace")
 	if err := os.MkdirAll(devboxDir, 0755); err != nil {
 		t.Fatalf("creating devbox dir: %v", err)
 	}
@@ -253,7 +253,7 @@ func TestRunRun_NoUpdateFlag_SkipsFetch(t *testing.T) {
 func TestRunRun_UpdateFlagOff_SkipsFetch(t *testing.T) {
 	dir := t.TempDir()
 	cfgPath := makeMinimalDevboxYML(t, dir)
-	devboxDir := filepath.Join(dir, "devbox")
+	devboxDir := filepath.Join(dir, "workspace")
 	if err := os.MkdirAll(devboxDir, 0755); err != nil {
 		t.Fatalf("creating devbox dir: %v", err)
 	}
@@ -286,7 +286,7 @@ func TestRunRun_UpdateFlagOff_SkipsFetch(t *testing.T) {
 func TestRunRun_UpdateBlockOmitted_DefaultsToOffNoFetch(t *testing.T) {
 	dir := t.TempDir()
 	cfgPath := makeMinimalDevboxYML(t, dir)
-	devboxDir := filepath.Join(dir, "devbox")
+	devboxDir := filepath.Join(dir, "workspace")
 	if err := os.MkdirAll(devboxDir, 0755); err != nil {
 		t.Fatalf("creating devbox dir: %v", err)
 	}
@@ -318,7 +318,7 @@ func TestRunRun_UpdateBlockOmitted_DefaultsToOffNoFetch(t *testing.T) {
 func TestRunRun_ProbeError(t *testing.T) {
 	dir := t.TempDir()
 	cfgPath := makeMinimalDevboxYML(t, dir)
-	devboxDir := filepath.Join(dir, "devbox")
+	devboxDir := filepath.Join(dir, "workspace")
 	if err := os.MkdirAll(devboxDir, 0755); err != nil {
 		t.Fatalf("creating devbox dir: %v", err)
 	}
@@ -344,7 +344,7 @@ func TestRunRun_ProbeError(t *testing.T) {
 func TestRunRun_InvalidUpdateFlag(t *testing.T) {
 	dir := t.TempDir()
 	cfgPath := makeMinimalDevboxYML(t, dir)
-	devboxDir := filepath.Join(dir, "devbox")
+	devboxDir := filepath.Join(dir, "workspace")
 	if err := os.MkdirAll(devboxDir, 0755); err != nil {
 		t.Fatalf("creating devbox dir: %v", err)
 	}
@@ -363,7 +363,7 @@ func TestRunRun_InvalidUpdateFlag(t *testing.T) {
 func TestRunRun_WarnOnFetchFailed(t *testing.T) {
 	dir := t.TempDir()
 	cfgPath := makeMinimalDevboxYML(t, dir)
-	devboxDir := filepath.Join(dir, "devbox")
+	devboxDir := filepath.Join(dir, "workspace")
 	if err := os.MkdirAll(devboxDir, 0755); err != nil {
 		t.Fatalf("creating devbox dir: %v", err)
 	}
@@ -393,7 +393,7 @@ func TestRunRun_WarnOnFetchFailed(t *testing.T) {
 func TestRunRun_PullError_ContinuesWithWarning(t *testing.T) {
 	dir := t.TempDir()
 	cfgPath := makeMinimalDevboxYML(t, dir)
-	devboxDir := filepath.Join(dir, "devbox")
+	devboxDir := filepath.Join(dir, "workspace")
 	if err := os.MkdirAll(devboxDir, 0755); err != nil {
 		t.Fatalf("creating devbox dir: %v", err)
 	}
@@ -434,7 +434,7 @@ func TestRunRun_PullError_ContinuesWithWarning(t *testing.T) {
 func TestRunRun_RendersDotEnvBeforePhases(t *testing.T) {
 	dir := t.TempDir()
 	cfgPath := makeMinimalDevboxYML(t, dir)
-	devboxDir := filepath.Join(dir, "devbox")
+	devboxDir := filepath.Join(dir, "workspace")
 	if err := os.MkdirAll(devboxDir, 0755); err != nil {
 		t.Fatalf("creating devbox dir: %v", err)
 	}
@@ -466,7 +466,7 @@ func TestRunRun_RendersDotEnvBeforePhases(t *testing.T) {
 func TestRunRun_ReRendersDotEnvAfterPull(t *testing.T) {
 	dir := t.TempDir()
 	cfgPath := makeMinimalDevboxYML(t, dir)
-	devboxDir := filepath.Join(dir, "devbox")
+	devboxDir := filepath.Join(dir, "workspace")
 	if err := os.MkdirAll(devboxDir, 0755); err != nil {
 		t.Fatalf("creating devbox dir: %v", err)
 	}
@@ -525,7 +525,7 @@ func TestRunRun_DeploymentGate_NoTrackedServices_Passes(t *testing.T) {
 	// the gate should pass through without checking state.
 	dir := t.TempDir()
 	cfgPath := makeMinimalDevboxYML(t, dir)
-	devboxDir := filepath.Join(dir, "devbox")
+	devboxDir := filepath.Join(dir, "workspace")
 	if err := os.MkdirAll(devboxDir, 0755); err != nil {
 		t.Fatalf("creating devbox dir: %v", err)
 	}

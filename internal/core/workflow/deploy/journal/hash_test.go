@@ -162,7 +162,7 @@ func TestServiceConfigHash(t *testing.T) {
 
 // TestProjectConfigHash verifies the project config hash with tracked services.
 func TestProjectConfigHash(t *testing.T) {
-	cfg := &config.DevboxConfig{
+	cfg := &config.DweConfig{
 		Services: map[string]config.ServiceConfig{
 			"main": {
 				Type:      "app",
@@ -199,7 +199,7 @@ func TestProjectConfigHash(t *testing.T) {
 // TestProjectConfigHashIgnoresUntracked verifies that changes to untracked
 // services do not affect the project config hash.
 func TestProjectConfigHashIgnoresUntracked(t *testing.T) {
-	cfg1 := &config.DevboxConfig{
+	cfg1 := &config.DweConfig{
 		Services: map[string]config.ServiceConfig{
 			"main": {
 				Type:      "app",
@@ -213,7 +213,7 @@ func TestProjectConfigHashIgnoresUntracked(t *testing.T) {
 		},
 	}
 
-	cfg2 := &config.DevboxConfig{
+	cfg2 := &config.DweConfig{
 		Services: map[string]config.ServiceConfig{
 			"main": {
 				Type:      "app",
@@ -288,7 +288,7 @@ func TestHashesNotEmptyOnEmptyInput(t *testing.T) {
 	assert.Len(t, svcHash, 64)
 	assert.NotEmpty(t, svcHash)
 
-	cfg := &config.DevboxConfig{Services: map[string]config.ServiceConfig{}}
+	cfg := &config.DweConfig{Services: map[string]config.ServiceConfig{}}
 	projHash := ProjectConfigHash(cfg, nil, map[string]*config.ServiceDeployConfig{}, []string{})
 	assert.Len(t, projHash, 64)
 	assert.NotEmpty(t, projHash)

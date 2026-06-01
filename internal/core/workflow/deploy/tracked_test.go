@@ -105,7 +105,7 @@ func TestLoadTrackedServices_Integration(t *testing.T) {
   prefix: devbox
 `
 	if err := os.WriteFile(
-		filepath.Join(testDir, "devbox.yml"),
+		filepath.Join(testDir, "workspace.yml"),
 		[]byte(devboxYML),
 		0644,
 	); err != nil {
@@ -113,7 +113,7 @@ func TestLoadTrackedServices_Integration(t *testing.T) {
 	}
 
 	// Create devbox dir
-	devboxDir := filepath.Join(testDir, "devbox")
+	devboxDir := filepath.Join(testDir, "workspace")
 	if err := os.MkdirAll(devboxDir, 0755); err != nil {
 		t.Fatalf("creating devbox dir: %v", err)
 	}
@@ -135,7 +135,7 @@ func TestLoadTrackedServices_Integration(t *testing.T) {
 	}
 
 	// Load config
-	cfg, err := config.LoadConfig(filepath.Join(testDir, "devbox.yml"))
+	cfg, err := config.LoadConfig(filepath.Join(testDir, "workspace.yml"))
 	if err != nil {
 		t.Fatalf("LoadConfig failed: %v", err)
 	}

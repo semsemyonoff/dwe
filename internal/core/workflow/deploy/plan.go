@@ -29,7 +29,7 @@ var ImplicitEnvStep = config.DeployStep{
 // deploy pipelines in topological dependency order.
 // reg (registry) is used to validate files_gate directives and must be non-nil
 // for runtime callers (deploy run, etc.).
-func ResolvePlan(cfg *config.DevboxConfig, reg *registry.Registry) ([]pipeline.ResolvedStep, error) {
+func ResolvePlan(cfg *config.DweConfig, reg *registry.Registry) ([]pipeline.ResolvedStep, error) {
 	implicit := pipeline.ResolvedStep{
 		Phase: config.DeployPhase{Name: "env", Description: "Environment"},
 		Step:  ImplicitEnvStep,
@@ -59,7 +59,7 @@ func ResolvePlan(cfg *config.DevboxConfig, reg *registry.Registry) ([]pipeline.R
 // Supports two forms:
 //   - "<phase>/<step>"           — orchestrator step
 //   - "<service>/<phase>/<step>" — per-service step (loaded from devbox/services/<service>/deploy.yml)
-func FindStep(cfg *config.DevboxConfig, address string) (config.DeployPhase, config.DeployStep, error) {
+func FindStep(cfg *config.DweConfig, address string) (config.DeployPhase, config.DeployStep, error) {
 	parts := strings.Split(address, "/")
 	switch len(parts) {
 	case 2:
@@ -87,7 +87,7 @@ func FindStep(cfg *config.DevboxConfig, address string) (config.DeployPhase, con
 			return config.DeployPhase{}, config.DeployStep{}, fmt.Errorf("internal: __configPath missing from config")
 		}
 		baseDir := filepath.Dir(cfgPath)
-		svcDeploy, err := config.LoadServiceDeployConfig(filepath.Join(baseDir, "devbox", "services", serviceName, "deploy.yml"))
+		svcDeploy, err := config.LoadServiceDeployConfig(filepath.Join(baseDir, "workspace", "services", serviceName, "deploy.yml"))
 		if err != nil {
 			return config.DeployPhase{}, config.DeployStep{}, fmt.Errorf("loading deploy config for service %q: %w", serviceName, err)
 		}

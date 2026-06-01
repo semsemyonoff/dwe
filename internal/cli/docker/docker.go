@@ -40,7 +40,7 @@ func NewCmd(groupID string, flags *cmdctx.RootFlags) *cobra.Command {
 // dockerPipeline loads config and docker policy, builds a Compose struct,
 // and optionally generates .env. It is the shared setup for all docker commands.
 type dockerPipeline struct {
-	cfg       *config.DevboxConfig
+	cfg       *config.DweConfig
 	dockerCfg *config.DockerConfig
 	compose   *dockerpkg.Compose
 }
@@ -248,7 +248,7 @@ func stripDockerCommandSeparator(args []string) []string {
 // resolvePullInvocation returns the Compose instance and extra args for a pull command.
 // When all is true, uses ComposeFilesAll(); otherwise uses ComposeFiles().
 // The returned extra args are just the service names (pull doesn't have flags like --force).
-func resolvePullInvocation(cfg *config.DevboxConfig, dockerCfg *config.DockerConfig, all bool, services []string) (*dockerpkg.Compose, []string) {
+func resolvePullInvocation(cfg *config.DweConfig, dockerCfg *config.DockerConfig, all bool, services []string) (*dockerpkg.Compose, []string) {
 	if all {
 		return dockerpkg.NewComposeAll(cfg, dockerCfg), services
 	}
@@ -281,7 +281,7 @@ func newDockerPullCmd(flags *cmdctx.RootFlags) *cobra.Command {
 // When all is true, uses ComposeFilesAll(); otherwise uses ComposeFiles().
 // When force is true, prepends --no-cache --pull to the extra args.
 // The returned extra args include the force flags (if applicable) and service names.
-func resolveBuildInvocation(cfg *config.DevboxConfig, dockerCfg *config.DockerConfig, all, force bool, services []string) (*dockerpkg.Compose, []string) {
+func resolveBuildInvocation(cfg *config.DweConfig, dockerCfg *config.DockerConfig, all, force bool, services []string) (*dockerpkg.Compose, []string) {
 	var compose *dockerpkg.Compose
 	if all {
 		compose = dockerpkg.NewComposeAll(cfg, dockerCfg)

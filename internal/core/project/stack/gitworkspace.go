@@ -95,7 +95,7 @@ func extendsDepth(services map[string]config.ServiceConfig, name string) int {
 // Per-row Err discriminates "service has no own repo" (Err == nil, blank
 // cells) from "configuration smells" (Err != nil — shellout or parse
 // failure).
-func CollectGitWorkspace(ctx context.Context, cfg *config.DevboxConfig, projectRoot string) []statusview.GitWorkspaceRow {
+func CollectGitWorkspace(ctx context.Context, cfg *config.DweConfig, projectRoot string) []statusview.GitWorkspaceRow {
 	if cfg == nil {
 		return nil
 	}

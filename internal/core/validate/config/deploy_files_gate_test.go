@@ -61,7 +61,7 @@ func TestDeployFilesGateValidator_NilCfg(t *testing.T) {
 // TestDeployFilesGateValidator_NilRegistry_NoGateSteps verifies no diagnostic when
 // registry is absent but no steps use files_gate.
 func TestDeployFilesGateValidator_NilRegistry_NoGateSteps(t *testing.T) {
-	cfg := &config.DevboxConfig{
+	cfg := &config.DweConfig{
 		Deploy: &config.ProjectDeployConfig{
 			Phases: []config.DeployPhase{
 				{Name: "setup", Steps: []config.DeployStep{{Name: "plain", Type: "shell", Cmd: "true"}}},
@@ -80,7 +80,7 @@ func TestDeployFilesGateValidator_NilRegistry_NoGateSteps(t *testing.T) {
 // TestDeployFilesGateValidator_NilRegistry_WithGateSteps verifies an info skip diagnostic
 // when registry is absent but a step uses files_gate.
 func TestDeployFilesGateValidator_NilRegistry_WithGateSteps(t *testing.T) {
-	cfg := &config.DevboxConfig{
+	cfg := &config.DweConfig{
 		Deploy: &config.ProjectDeployConfig{Phases: makeGatePhases("db-download")},
 	}
 	ctx := validate.Context{
@@ -100,7 +100,7 @@ func TestDeployFilesGateValidator_UnknownCommand(t *testing.T) {
 	reg := usercommands.NewEmptyRegistry()
 	// "db-download" intentionally absent from registry.
 
-	cfg := &config.DevboxConfig{
+	cfg := &config.DweConfig{
 		Raw:    map[string]any{},
 		Deploy: &config.ProjectDeployConfig{Phases: makeGatePhases("db-download")},
 	}
@@ -121,7 +121,7 @@ func TestDeployFilesGateValidator_ValidGate(t *testing.T) {
 	reg := usercommands.NewEmptyRegistry()
 	reg.AddCommandForTest(makeGateCommand())
 
-	cfg := &config.DevboxConfig{
+	cfg := &config.DweConfig{
 		Raw:    map[string]any{},
 		Deploy: &config.ProjectDeployConfig{Phases: makeGatePhases("db-download")},
 	}
@@ -154,11 +154,11 @@ func TestLifecycleFilesGateValidator_NilRegistry_WithGateSteps(t *testing.T) {
             command: db-download
             state: readable
 `
-	devboxDir := filepath.Join(tmpDir, "devbox")
+	devboxDir := filepath.Join(tmpDir, "workspace")
 	require.NoError(t, os.MkdirAll(devboxDir, 0o755))
 	require.NoError(t, os.WriteFile(filepath.Join(devboxDir, "lifecycle.yml"), []byte(lifecycleYml), 0o644))
 
-	cfg := &config.DevboxConfig{}
+	cfg := &config.DweConfig{}
 	ctx := validate.Context{
 		ProjectRoot:     tmpDir,
 		CommandRegistry: nil,
@@ -176,7 +176,7 @@ func TestDeployFilesGateValidator_ParallelSubStep(t *testing.T) {
 	reg := usercommands.NewEmptyRegistry()
 	// "db-download" intentionally absent from registry — sub-step gate must be caught.
 
-	cfg := &config.DevboxConfig{
+	cfg := &config.DweConfig{
 		Raw: map[string]any{},
 		Deploy: &config.ProjectDeployConfig{
 			Phases: []config.DeployPhase{
@@ -232,13 +232,13 @@ func TestResetFilesGateValidator_UnknownCommand(t *testing.T) {
           command: db-download
           state: readable
 `
-	devboxDir := filepath.Join(tmpDir, "devbox")
+	devboxDir := filepath.Join(tmpDir, "workspace")
 	require.NoError(t, os.MkdirAll(devboxDir, 0o755))
 	require.NoError(t, os.WriteFile(filepath.Join(devboxDir, "reset.yml"), []byte(resetYml), 0o644))
 
 	reg := usercommands.NewEmptyRegistry()
 
-	cfg := &config.DevboxConfig{Raw: map[string]any{}}
+	cfg := &config.DweConfig{Raw: map[string]any{}}
 	ctx := validate.Context{
 		ProjectRoot:     tmpDir,
 		CommandRegistry: reg,

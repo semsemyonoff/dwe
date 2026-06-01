@@ -27,7 +27,7 @@ const minimalVscodeSettingsTpl = `{"php.validate.executablePath":"/usr/local/bin
 // continue to exercise the manifest-driven renderer.
 func setupIDEPackTemplates(t *testing.T, dir, packName string, files map[string]string) {
 	t.Helper()
-	packDir := filepath.Join(dir, "devbox", "templates", "ide", packName)
+	packDir := filepath.Join(dir, "workspace", "templates", "ide", packName)
 	if err := os.MkdirAll(packDir, 0o755); err != nil {
 		t.Fatalf("create pack dir: %v", err)
 	}
@@ -65,9 +65,9 @@ func setupIDEPackTemplates(t *testing.T, dir, packName string, files map[string]
 	}
 }
 
-// makeIDECfg returns a DevboxConfig configured for IDE rendering tests.
-func makeIDECfg(name string) *config.DevboxConfig {
-	return &config.DevboxConfig{
+// makeIDECfg returns a DweConfig configured for IDE rendering tests.
+func makeIDECfg(name string) *config.DweConfig {
+	return &config.DweConfig{
 		Project: config.ProjectConfig{Name: "laravel", Prefix: "devbox"},
 		Services: map[string]config.ServiceConfig{
 			name: {
@@ -87,7 +87,7 @@ func makeIDECfg(name string) *config.DevboxConfig {
 // writeIDEPackFile writes a single file into <projectRoot>/devbox/templates/ide/test/<rel>.
 func writeIDEPackFile(t *testing.T, projectRoot, rel, content string) {
 	t.Helper()
-	packDir := filepath.Join(projectRoot, "devbox", "templates", "ide", "test")
+	packDir := filepath.Join(projectRoot, "workspace", "templates", "ide", "test")
 	if err := os.MkdirAll(packDir, 0o755); err != nil {
 		t.Fatalf("mkdir pack: %v", err)
 	}
@@ -118,7 +118,7 @@ func TestRenderIDETemplateFile_devcontainer(t *testing.T) {
 			WorkDirInternal: "/workspace/src",
 			Ports:           map[string]int{"http": 8080},
 		},
-		Cfg: &config.DevboxConfig{Raw: map[string]any{}},
+		Cfg: &config.DweConfig{Raw: map[string]any{}},
 	}
 
 	if _, err := ide.RenderTemplateFile(projectRoot, "test", "devcontainer.json.tmpl", data, "devcontainer.json", hubDir, projectRoot); err != nil {
@@ -158,7 +158,7 @@ func TestRenderIDETemplateFile_createsParentDirs(t *testing.T) {
 			DirInternal:     "/workspace",
 			WorkDirInternal: "/workspace/src",
 		},
-		Cfg: &config.DevboxConfig{Raw: map[string]any{}},
+		Cfg: &config.DweConfig{Raw: map[string]any{}},
 	}
 	dest := filepath.Join("nested", "deep", "file.json")
 	if _, err := ide.RenderTemplateFile(projectRoot, "test", "launch.json.tmpl", data, dest, hubDir, projectRoot); err != nil {
@@ -179,7 +179,7 @@ func TestRenderIDETemplateFile_serviceDirContainment(t *testing.T) {
 	writeIDEPackFile(t, projectRoot, "x.tmpl", "{}")
 
 	dest := "../sibling/file.json"
-	_, err := ide.RenderTemplateFile(projectRoot, "test", "x.tmpl", ide.TemplateData{Cfg: &config.DevboxConfig{Raw: map[string]any{}}}, dest, hubDir, projectRoot)
+	_, err := ide.RenderTemplateFile(projectRoot, "test", "x.tmpl", ide.TemplateData{Cfg: &config.DweConfig{Raw: map[string]any{}}}, dest, hubDir, projectRoot)
 	if err == nil {
 		t.Fatal("expected error when dest escapes service dir")
 	}
@@ -201,7 +201,7 @@ func TestRenderIDETemplateFile_symlinkDir(t *testing.T) {
 	}
 	writeIDEPackFile(t, projectRoot, "x.tmpl", "{}")
 
-	_, err := ide.RenderTemplateFile(projectRoot, "test", "x.tmpl", ide.TemplateData{Cfg: &config.DevboxConfig{Raw: map[string]any{}}}, ".devcontainer/devcontainer.json", hubDir, projectRoot)
+	_, err := ide.RenderTemplateFile(projectRoot, "test", "x.tmpl", ide.TemplateData{Cfg: &config.DweConfig{Raw: map[string]any{}}}, ".devcontainer/devcontainer.json", hubDir, projectRoot)
 	if err == nil {
 		t.Fatal("expected error when destination dir is a symlink outside project root")
 	}
@@ -229,7 +229,7 @@ func TestRenderIDETemplateFile_symlinkFile(t *testing.T) {
 	}
 	writeIDEPackFile(t, projectRoot, "x.tmpl", "{}")
 
-	_, err := ide.RenderTemplateFile(projectRoot, "test", "x.tmpl", ide.TemplateData{Cfg: &config.DevboxConfig{Raw: map[string]any{}}}, ".devcontainer/devcontainer.json", absHubDir, projectRoot)
+	_, err := ide.RenderTemplateFile(projectRoot, "test", "x.tmpl", ide.TemplateData{Cfg: &config.DweConfig{Raw: map[string]any{}}}, ".devcontainer/devcontainer.json", absHubDir, projectRoot)
 	if err == nil {
 		t.Fatal("expected error when destination file is a symlink")
 	}
@@ -246,7 +246,7 @@ func TestRenderIDETemplateFile_overrideHit(t *testing.T) {
 		t.Fatal(err)
 	}
 	writeIDEPackFile(t, projectRoot, "settings.json.tmpl", `{"src":"canonical"}`)
-	overrideDir := filepath.Join(projectRoot, "devbox", "templates", "ide", "test.local")
+	overrideDir := filepath.Join(projectRoot, "workspace", "templates", "ide", "test.local")
 	if err := os.MkdirAll(overrideDir, 0o755); err != nil {
 		t.Fatal(err)
 	}
@@ -254,7 +254,7 @@ func TestRenderIDETemplateFile_overrideHit(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	fromOverride, err := ide.RenderTemplateFile(projectRoot, "test", "settings.json.tmpl", ide.TemplateData{Cfg: &config.DevboxConfig{Raw: map[string]any{}}}, "settings.json", hubDir, projectRoot)
+	fromOverride, err := ide.RenderTemplateFile(projectRoot, "test", "settings.json.tmpl", ide.TemplateData{Cfg: &config.DweConfig{Raw: map[string]any{}}}, "settings.json", hubDir, projectRoot)
 	if err != nil {
 		t.Fatalf("render: %v", err)
 	}
@@ -403,7 +403,7 @@ func TestResolveIDETemplatePack_packIsSymlink(t *testing.T) {
 	if err := os.MkdirAll(realPack, 0o755); err != nil {
 		t.Fatal(err)
 	}
-	packDir := filepath.Join(projectRoot, "devbox", "templates", "ide")
+	packDir := filepath.Join(projectRoot, "workspace", "templates", "ide")
 	if err := os.MkdirAll(packDir, 0o755); err != nil {
 		t.Fatal(err)
 	}
@@ -495,7 +495,7 @@ func TestResolveIDETemplatePack_leadingDotServiceName(t *testing.T) {
 // TestLoadIDEManifest_missing verifies missing manifest produces ErrManifestMissing.
 func TestLoadIDEManifest_missing(t *testing.T) {
 	projectRoot := t.TempDir()
-	packDir := filepath.Join(projectRoot, "devbox", "templates", "ide", "default")
+	packDir := filepath.Join(projectRoot, "workspace", "templates", "ide", "default")
 	if err := os.MkdirAll(packDir, 0o755); err != nil {
 		t.Fatal(err)
 	}
@@ -518,7 +518,7 @@ func TestLoadIDEManifest_missing(t *testing.T) {
 // TestRenderIDEConfigs_missingManifest verifies friendly migration error.
 func TestRenderIDEConfigs_missingManifest(t *testing.T) {
 	projectRoot := t.TempDir()
-	packDir := filepath.Join(projectRoot, "devbox", "templates", "ide", "default")
+	packDir := filepath.Join(projectRoot, "workspace", "templates", "ide", "default")
 	if err := os.MkdirAll(packDir, 0o755); err != nil {
 		t.Fatal(err)
 	}
@@ -737,7 +737,7 @@ func TestRenderIDEConfigs_overrideEmitsInfo(t *testing.T) {
 	setupIDEPackTemplates(t, projectRoot, "default", map[string]string{
 		".vscode/settings.json.tmpl": `{"src":"canonical"}`,
 	})
-	overrideDir := filepath.Join(projectRoot, "devbox", "templates", "ide", "default.local", ".vscode")
+	overrideDir := filepath.Join(projectRoot, "workspace", "templates", "ide", "default.local", ".vscode")
 	if err := os.MkdirAll(overrideDir, 0o755); err != nil {
 		t.Fatal(err)
 	}
@@ -1149,7 +1149,7 @@ func TestRenderIDETemplateFile_cfgRawDotAccess(t *testing.T) {
 	writeIDEPackFile(t, projectRoot, "settings.json.tmpl",
 		`{"prefix":"{{ .Cfg.Raw.git.project_prefix }}","hook":"{{ index (index .Cfg.Raw.git.hooks .Service) "pre_commit" }}"}`)
 
-	cfg := &config.DevboxConfig{Raw: map[string]any{
+	cfg := &config.DweConfig{Raw: map[string]any{
 		"git": map[string]any{
 			"project_prefix": "PRJ",
 			"hooks": map[string]any{
@@ -1180,7 +1180,7 @@ func TestRenderIDETemplateFile_cfgRawNonIdentifierKey(t *testing.T) {
 	writeIDEPackFile(t, projectRoot, "settings.json.tmpl",
 		`{"token":"{{ index .Cfg.Raw "my-tool" "api-key" }}"}`)
 
-	cfg := &config.DevboxConfig{Raw: map[string]any{
+	cfg := &config.DweConfig{Raw: map[string]any{
 		"my-tool": map[string]any{"api-key": "VALUE"},
 	}}
 	data := ide.TemplateData{Service: "main", Cfg: cfg}
@@ -1206,7 +1206,7 @@ func TestRenderIDETemplateFile_cfgRawMissingKey(t *testing.T) {
 	writeIDEPackFile(t, projectRoot, "settings.json.tmpl",
 		`{"prefix":"{{ .Cfg.Raw.git.project_prefix }}"}`)
 
-	cfg := &config.DevboxConfig{Raw: map[string]any{}}
+	cfg := &config.DweConfig{Raw: map[string]any{}}
 	data := ide.TemplateData{Service: "main", Cfg: cfg}
 	_, err := ide.RenderTemplateFile(projectRoot, "test", "settings.json.tmpl", data, "settings.json", hubDir, projectRoot)
 	if err == nil {
@@ -1220,7 +1220,7 @@ func TestRenderIDETemplateFile_cfgRawMissingKey(t *testing.T) {
 // TestRenderIDETemplateFile_backwardCompat verifies output byte-identical when
 // templates do not reference .Cfg.
 func TestRenderIDETemplateFile_backwardCompat(t *testing.T) {
-	render := func(cfg *config.DevboxConfig) []byte {
+	render := func(cfg *config.DweConfig) []byte {
 		projectRoot := t.TempDir()
 		hubDir := filepath.Join(projectRoot, "services", "main")
 		if err := os.MkdirAll(hubDir, 0o755); err != nil {
@@ -1243,8 +1243,8 @@ func TestRenderIDETemplateFile_backwardCompat(t *testing.T) {
 		}
 		return got
 	}
-	empty := render(&config.DevboxConfig{})
-	populated := render(&config.DevboxConfig{Raw: map[string]any{"git": map[string]any{"project_prefix": "PRJ"}}})
+	empty := render(&config.DweConfig{})
+	populated := render(&config.DweConfig{Raw: map[string]any{"git": map[string]any{"project_prefix": "PRJ"}}})
 	if string(empty) != string(populated) {
 		t.Errorf("output diverged when template does not reference .Cfg:\nempty=%q\npopulated=%q", empty, populated)
 	}

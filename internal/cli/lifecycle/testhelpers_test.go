@@ -17,7 +17,7 @@ import (
 // init stubs PreflightFunc so CLI integration tests don't require a real
 // Docker / git environment on the host.
 func init() {
-	lifecyclepkg.PreflightFunc = func(_ context.Context, _ *config.DevboxConfig, _ *usercommands.Registry, _, _ string, _ bool, _ io.Writer) error {
+	lifecyclepkg.PreflightFunc = func(_ context.Context, _ *config.DweConfig, _ *usercommands.Registry, _, _ string, _ bool, _ io.Writer) error {
 		return nil
 	}
 }
@@ -30,7 +30,7 @@ func stubRunPhases(t *testing.T) {
 	t.Helper()
 	prev := lifecyclepkg.RunPhasesFunc
 	t.Cleanup(func() { lifecyclepkg.RunPhasesFunc = prev })
-	lifecyclepkg.RunPhasesFunc = func(_ *config.DevboxConfig, _ *usercommands.Registry, _ string, _ []config.DeployPhase, _, _ string, _ bool, _ bool, _ i18n.Translator, _ string) error {
+	lifecyclepkg.RunPhasesFunc = func(_ *config.DweConfig, _ *usercommands.Registry, _ string, _ []config.DeployPhase, _, _ string, _ bool, _ bool, _ i18n.Translator, _ string) error {
 		return nil
 	}
 }

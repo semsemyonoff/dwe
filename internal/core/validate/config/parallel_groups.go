@@ -26,14 +26,14 @@ func (v *parallelGroupsValidator) Run(ctx validate.Context) []validate.Diagnosti
 	reg, _ := ctx.CommandRegistry.(*registry.Registry)
 
 	var diags []validate.Diagnostic
-	deployPath := filepath.Join(ctx.ProjectRoot, "devbox", "deploy.yml")
+	deployPath := filepath.Join(ctx.ProjectRoot, "workspace", "deploy.yml")
 	diags = append(diags, validateParallelPhases(reg, ctx.Cfg.Deploy.Phases, "config.deploy", relPath(ctx.ProjectRoot, deployPath))...)
 
 	if len(ctx.Cfg.Services) > 0 {
 		svcDeploys, err := config.LoadServiceDeployConfigs(ctx.ProjectRoot, ctx.Cfg.Services)
 		if err == nil {
 			for svcName, svcDeploy := range svcDeploys {
-				svcPath := filepath.Join(ctx.ProjectRoot, "devbox", "deploy", svcName+".yml")
+				svcPath := filepath.Join(ctx.ProjectRoot, "workspace", "deploy", svcName+".yml")
 				target := fmt.Sprintf("config.service-deploy[%s]", svcName)
 				diags = append(diags, validateParallelPhases(reg, svcDeploy.Phases, target, relPath(ctx.ProjectRoot, svcPath))...)
 			}
@@ -53,7 +53,7 @@ func (v *lifecycleParallelGroupsValidator) Run(ctx validate.Context) []validate.
 		return nil
 	}
 	reg, _ := ctx.CommandRegistry.(*registry.Registry)
-	lifecyclePath := filepath.Join(ctx.ProjectRoot, "devbox", "lifecycle.yml")
+	lifecyclePath := filepath.Join(ctx.ProjectRoot, "workspace", "lifecycle.yml")
 	lifecycleCfg, err := config.LoadLifecycleConfig(lifecyclePath)
 	if err != nil {
 		return nil
@@ -80,7 +80,7 @@ func (v *resetParallelGroupsValidator) Run(ctx validate.Context) []validate.Diag
 		return nil
 	}
 	reg, _ := ctx.CommandRegistry.(*registry.Registry)
-	resetPath := filepath.Join(ctx.ProjectRoot, "devbox", "reset.yml")
+	resetPath := filepath.Join(ctx.ProjectRoot, "workspace", "reset.yml")
 	resetCfg, err := config.LoadResetConfig(resetPath)
 	if err != nil {
 		return nil

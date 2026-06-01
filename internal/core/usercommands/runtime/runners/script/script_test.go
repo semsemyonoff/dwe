@@ -159,7 +159,7 @@ func TestRunner_ContractEnvVars_ContextJSON(t *testing.T) {
 	}
 }
 
-func TestRunner_ContractEnvVars_DevboxBin(t *testing.T) {
+func TestRunner_ContractEnvVars_DweBin(t *testing.T) {
 	dir := t.TempDir()
 	scriptPath := writeScript(t, dir, "bin.sh", `printf '%s' "$DEVBOX_BIN"`)
 

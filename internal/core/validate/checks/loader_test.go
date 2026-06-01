@@ -14,8 +14,8 @@ import (
 	"github.com/semsemyonoff/dwe/internal/core/validate/diag"
 )
 
-func newCfg() *config.DevboxConfig {
-	return &config.DevboxConfig{Raw: map[string]any{}}
+func newCfg() *config.DweConfig {
+	return &config.DweConfig{Raw: map[string]any{}}
 }
 
 func runOne(t *testing.T, v validate.Validator) []validate.Diagnostic {

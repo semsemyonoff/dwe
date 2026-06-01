@@ -248,7 +248,7 @@ func TestLoadValidateConfig_errors(t *testing.T) {
 
 func TestValidateConfigPath(t *testing.T) {
 	got := ValidateConfigPath("/tmp/proj")
-	want := filepath.Join("/tmp/proj", "devbox", "validate.yml")
+	want := filepath.Join("/tmp/proj", "workspace", "validate.yml")
 	if got != want {
 		t.Fatalf("got %q, want %q", got, want)
 	}

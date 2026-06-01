@@ -16,7 +16,7 @@ import (
 func TestIconsValidator_Services(t *testing.T) {
 	t.Parallel()
 
-	cfg := &devconfig.DevboxConfig{
+	cfg := &devconfig.DweConfig{
 		Services: map[string]devconfig.ServiceConfig{
 			"good": {Icon: "📁"},
 			"bad-bare": {
@@ -74,7 +74,7 @@ func TestIconsValidator_Services(t *testing.T) {
 func TestIconsValidator_HintHasSuggestions(t *testing.T) {
 	t.Parallel()
 
-	cfg := &devconfig.DevboxConfig{
+	cfg := &devconfig.DweConfig{
 		Services: map[string]devconfig.ServiceConfig{
 			"drum": {Icon: "🛢"},
 		},
@@ -96,7 +96,7 @@ func TestIconsValidator_HintFallbackForUnmappedAmbiguous(t *testing.T) {
 	// U+26F0 ⛰ (mountain) is a text-default codepoint with no entry in the
 	// curated replacement map. The validator should still flag it (warning)
 	// and fall back to the generic hint phrasing.
-	cfg := &devconfig.DevboxConfig{
+	cfg := &devconfig.DweConfig{
 		Services: map[string]devconfig.ServiceConfig{
 			"peak": {Icon: "⛰"},
 		},
@@ -112,7 +112,7 @@ func TestIconsValidator_NilCfgStillRunsInfo(t *testing.T) {
 	t.Parallel()
 
 	dir := t.TempDir()
-	infoDir := filepath.Join(dir, "devbox")
+	infoDir := filepath.Join(dir, "workspace")
 	require.NoError(t, os.MkdirAll(infoDir, 0o755))
 	require.NoError(t, os.WriteFile(
 		filepath.Join(infoDir, "info.yml"),

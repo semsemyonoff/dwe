@@ -16,7 +16,7 @@ func TestRenderInfo_SectionTitle(t *testing.T) {
 	infoCfg := makeInfoConfig([]config.InfoSection{
 		{ID: "s1", Title: "Project Info", Items: nil},
 	})
-	cfg := &config.DevboxConfig{}
+	cfg := &config.DweConfig{}
 	out, err := Info(cfg, infoCfg)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
@@ -36,7 +36,7 @@ func TestRenderInfo_DefinitionItem(t *testing.T) {
 			},
 		},
 	})
-	cfg := &config.DevboxConfig{}
+	cfg := &config.DweConfig{}
 	out, err := Info(cfg, infoCfg)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
@@ -58,7 +58,7 @@ func TestRenderInfo_DefinitionWithIcon(t *testing.T) {
 			},
 		},
 	})
-	cfg := &config.DevboxConfig{}
+	cfg := &config.DweConfig{}
 	out, err := Info(cfg, infoCfg)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
@@ -80,7 +80,7 @@ func TestRenderInfo_WarningItem(t *testing.T) {
 			},
 		},
 	})
-	cfg := &config.DevboxConfig{}
+	cfg := &config.DweConfig{}
 	out, err := Info(cfg, infoCfg)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
@@ -99,7 +99,7 @@ func TestRenderInfo_InfoItem(t *testing.T) {
 			},
 		},
 	})
-	cfg := &config.DevboxConfig{}
+	cfg := &config.DweConfig{}
 	out, err := Info(cfg, infoCfg)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
@@ -118,7 +118,7 @@ func TestRenderInfo_ConditionalItem_Show(t *testing.T) {
 			},
 		},
 	})
-	cfg := &config.DevboxConfig{
+	cfg := &config.DweConfig{
 		Project: config.ProjectConfig{Name: "myapp"},
 	}
 	out, err := Info(cfg, infoCfg)
@@ -139,7 +139,7 @@ func TestRenderInfo_ConditionalItem_Hide(t *testing.T) {
 			},
 		},
 	})
-	cfg := &config.DevboxConfig{
+	cfg := &config.DweConfig{
 		Project: config.ProjectConfig{Name: ""},
 	}
 	out, err := Info(cfg, infoCfg)
@@ -160,7 +160,7 @@ func TestRenderInfo_TemplateInValue(t *testing.T) {
 			},
 		},
 	})
-	cfg := &config.DevboxConfig{
+	cfg := &config.DweConfig{
 		Project: config.ProjectConfig{Name: "testproject"},
 	}
 	out, err := Info(cfg, infoCfg)
@@ -179,7 +179,7 @@ func TestRenderInfo_Footer(t *testing.T) {
 		},
 		Footer: true,
 	}
-	cfg := &config.DevboxConfig{}
+	cfg := &config.DweConfig{}
 	out, err := Info(cfg, infoCfg)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
@@ -196,7 +196,7 @@ func TestRenderInfo_MultipleSection(t *testing.T) {
 		{ID: "s1", Title: "First"},
 		{ID: "s2", Title: "Second"},
 	})
-	cfg := &config.DevboxConfig{}
+	cfg := &config.DweConfig{}
 	out, err := Info(cfg, infoCfg)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
@@ -215,7 +215,7 @@ func TestRenderInfo_TemplateError(t *testing.T) {
 			},
 		},
 	})
-	cfg := &config.DevboxConfig{}
+	cfg := &config.DweConfig{}
 	_, err := Info(cfg, infoCfg)
 	if err == nil {
 		t.Error("expected error from invalid template, got nil")
@@ -321,7 +321,7 @@ func TestRenderInfo_HideOnEmpty_AllFiltered_True(t *testing.T) {
 			},
 		},
 	}
-	cfg := &config.DevboxConfig{}
+	cfg := &config.DweConfig{}
 	out, err := Info(cfg, infoCfg)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
@@ -349,7 +349,7 @@ func TestRenderInfo_HideOnEmpty_AllFiltered_False(t *testing.T) {
 			},
 		},
 	}
-	cfg := &config.DevboxConfig{}
+	cfg := &config.DweConfig{}
 	out, err := Info(cfg, infoCfg)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
@@ -385,7 +385,7 @@ func TestRenderInfo_HideOnEmpty_Mixed(t *testing.T) {
 			},
 		},
 	}
-	cfg := &config.DevboxConfig{}
+	cfg := &config.DweConfig{}
 	out, err := Info(cfg, infoCfg)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
@@ -420,7 +420,7 @@ func TestRenderInfo_Footer_NoSectionsRendered(t *testing.T) {
 		},
 		Footer: true,
 	}
-	cfg := &config.DevboxConfig{}
+	cfg := &config.DweConfig{}
 	out, err := Info(cfg, infoCfg)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
@@ -446,7 +446,7 @@ func TestRenderInfo_Footer_SectionRendered(t *testing.T) {
 		},
 		Footer: true,
 	}
-	cfg := &config.DevboxConfig{}
+	cfg := &config.DweConfig{}
 	out, err := Info(cfg, infoCfg)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
@@ -475,7 +475,7 @@ func TestRenderInfo_BareWarningCountsAsContent(t *testing.T) {
 			},
 		},
 	}
-	cfg := &config.DevboxConfig{}
+	cfg := &config.DweConfig{}
 	out, err := Info(cfg, infoCfg)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
@@ -508,7 +508,7 @@ func TestRenderInfo_DecorativeTrueWarningHidesSection(t *testing.T) {
 			},
 		},
 	}
-	cfg := &config.DevboxConfig{}
+	cfg := &config.DweConfig{}
 	out, err := Info(cfg, infoCfg)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
@@ -538,7 +538,7 @@ func TestRenderInfo_DecorativeFalseSeparatorCountsAsContent(t *testing.T) {
 			},
 		},
 	}
-	cfg := &config.DevboxConfig{}
+	cfg := &config.DweConfig{}
 	out, err := Info(cfg, infoCfg)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
@@ -567,7 +567,7 @@ func TestRenderInfo_DecorativeFalseSeparatorTitleless(t *testing.T) {
 			},
 		},
 	}
-	cfg := &config.DevboxConfig{}
+	cfg := &config.DweConfig{}
 	_, err := Info(cfg, infoCfg)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
@@ -603,7 +603,7 @@ func TestRenderInfo_DecorativeTrueSeparatorHidesSection(t *testing.T) {
 			},
 		},
 	}
-	cfg := &config.DevboxConfig{}
+	cfg := &config.DweConfig{}
 	out, err := Info(cfg, infoCfg)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
@@ -622,7 +622,7 @@ func TestRenderInfo_HideOnEmpty_NilItems(t *testing.T) {
 			{ID: "empty", Title: "Empty Section", HideOnEmpty: true, Items: nil},
 		},
 	}
-	cfg := &config.DevboxConfig{}
+	cfg := &config.DweConfig{}
 	out, err := Info(cfg, infoCfg)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
@@ -653,7 +653,7 @@ func TestRenderInfo_SubgroupWhenFalse(t *testing.T) {
 			},
 		},
 	}
-	cfg := &config.DevboxConfig{}
+	cfg := &config.DweConfig{}
 	out, err := Info(cfg, infoCfg)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
@@ -684,7 +684,7 @@ func TestRenderInfo_SubgroupWhenTrue(t *testing.T) {
 			},
 		},
 	}
-	cfg := &config.DevboxConfig{}
+	cfg := &config.DweConfig{}
 	out, err := Info(cfg, infoCfg)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
@@ -714,7 +714,7 @@ func TestRenderInfo_SubgroupWhenInvalidExpr(t *testing.T) {
 			},
 		},
 	}
-	cfg := &config.DevboxConfig{}
+	cfg := &config.DweConfig{}
 	_, err := Info(cfg, infoCfg)
 	if err == nil {
 		t.Error("expected error from invalid when: on subgroup, got nil")
@@ -743,7 +743,7 @@ func TestRenderInfo_SubgroupAllItemsFiltered(t *testing.T) {
 			},
 		},
 	}
-	cfg := &config.DevboxConfig{}
+	cfg := &config.DweConfig{}
 	out, err := Info(cfg, infoCfg)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
@@ -783,7 +783,7 @@ func TestRenderInfo_SubgroupHideOnEmptyFalseWithTitle(t *testing.T) {
 			},
 		},
 	}
-	cfg := &config.DevboxConfig{}
+	cfg := &config.DweConfig{}
 	out, err := Info(cfg, infoCfg)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
@@ -824,7 +824,7 @@ func TestRenderInfo_SubgroupHideOnEmptyFalseDecorativeTrue(t *testing.T) {
 			},
 		},
 	}
-	cfg := &config.DevboxConfig{}
+	cfg := &config.DweConfig{}
 	out, err := Info(cfg, infoCfg)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
@@ -863,7 +863,7 @@ func TestRenderInfo_SubgroupTitlelessWithAllChildrenFiltered(t *testing.T) {
 			},
 		},
 	}
-	cfg := &config.DevboxConfig{}
+	cfg := &config.DweConfig{}
 	out, err := Info(cfg, infoCfg)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
@@ -896,7 +896,7 @@ func TestRenderInfo_SubgroupTitlelessWithSurvivingContent(t *testing.T) {
 			},
 		},
 	}
-	cfg := &config.DevboxConfig{}
+	cfg := &config.DweConfig{}
 	out, err := Info(cfg, infoCfg)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
@@ -933,7 +933,7 @@ func TestRenderInfo_SubgroupWithContentItem(t *testing.T) {
 			},
 		},
 	}
-	cfg := &config.DevboxConfig{}
+	cfg := &config.DweConfig{}
 	out, err := Info(cfg, infoCfg)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
@@ -979,7 +979,7 @@ func TestRenderInfo_NestedSubgroup(t *testing.T) {
 			},
 		},
 	}
-	cfg := &config.DevboxConfig{}
+	cfg := &config.DweConfig{}
 	out, err := Info(cfg, infoCfg)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
@@ -1018,7 +1018,7 @@ func TestRenderInfo_SubgroupTitleTemplate(t *testing.T) {
 			},
 		},
 	}
-	cfg := &config.DevboxConfig{
+	cfg := &config.DweConfig{
 		Project: config.ProjectConfig{Name: "myapp"},
 	}
 	out, err := Info(cfg, infoCfg)
@@ -1049,7 +1049,7 @@ func TestRenderInfo_ErrorPropagation_SubgroupTitleTemplate(t *testing.T) {
 			},
 		},
 	}
-	cfg := &config.DevboxConfig{}
+	cfg := &config.DweConfig{}
 	_, err := Info(cfg, infoCfg)
 	if err == nil {
 		t.Error("expected error from bad subgroup title template, got nil")
@@ -1078,7 +1078,7 @@ func TestRenderInfo_ErrorPropagation_NestedItemWhen(t *testing.T) {
 			},
 		},
 	}
-	cfg := &config.DevboxConfig{}
+	cfg := &config.DweConfig{}
 	_, err := Info(cfg, infoCfg)
 	if err == nil {
 		t.Error("expected error from bad nested when: expression, got nil")
@@ -1109,7 +1109,7 @@ func TestRenderInfo_ErrorPropagation_NestedItemValue(t *testing.T) {
 			},
 		},
 	}
-	cfg := &config.DevboxConfig{}
+	cfg := &config.DweConfig{}
 	_, err := Info(cfg, infoCfg)
 	if err == nil {
 		t.Error("expected error from bad nested item value template, got nil")
@@ -1138,7 +1138,7 @@ func TestRenderInfo_ErrorPropagation_NestedItemText(t *testing.T) {
 			},
 		},
 	}
-	cfg := &config.DevboxConfig{}
+	cfg := &config.DweConfig{}
 	_, err := Info(cfg, infoCfg)
 	if err == nil {
 		t.Error("expected error from bad nested item text template, got nil")
@@ -1164,7 +1164,7 @@ func TestRenderInfo_HideOnEmpty_SeparatorOnly(t *testing.T) {
 			},
 		},
 	}
-	cfg := &config.DevboxConfig{}
+	cfg := &config.DweConfig{}
 	out, err := Info(cfg, infoCfg)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
@@ -1188,7 +1188,7 @@ func TestRenderInfo_WhenEvaluationError_Propagates(t *testing.T) {
 			},
 		},
 	}
-	cfg := &config.DevboxConfig{}
+	cfg := &config.DweConfig{}
 	_, err := Info(cfg, infoCfg)
 	if err == nil {
 		t.Error("expected error from invalid when: expression, got nil")
@@ -1215,7 +1215,7 @@ func TestRenderInfo_AutoURLs_Integration(t *testing.T) {
 		},
 	}
 	// Create a simple app service with hosts and ports
-	cfg := &config.DevboxConfig{
+	cfg := &config.DweConfig{
 		Services: map[string]config.ServiceConfig{
 			"myapp": {
 				Type:    "app",
@@ -1269,7 +1269,7 @@ func TestRenderInfo_AutoHosts_Integration(t *testing.T) {
 			},
 		},
 	}
-	cfg := &config.DevboxConfig{
+	cfg := &config.DweConfig{
 		Services: map[string]config.ServiceConfig{
 			"myapp": {
 				Type:    "app",
@@ -1311,7 +1311,7 @@ func TestRenderInfo_AutoURLs_When_Hidden(t *testing.T) {
 			},
 		},
 	}
-	cfg := &config.DevboxConfig{
+	cfg := &config.DweConfig{
 		Services: map[string]config.ServiceConfig{
 			"myapp": {
 				Type:  "app",
@@ -1352,7 +1352,7 @@ func TestRenderBlock_HideOnEmpty_AutoBlock(t *testing.T) {
 			},
 		},
 	}
-	cfg := &config.DevboxConfig{
+	cfg := &config.DweConfig{
 		Services: map[string]config.ServiceConfig{
 			"app1": {Type: "app", Hosts: map[string]string{"web": "app1.local"}},
 		},
@@ -1385,7 +1385,7 @@ func TestRenderBlock_AutoBlock_EmptyServices(t *testing.T) {
 			},
 		},
 	}
-	cfg := &config.DevboxConfig{
+	cfg := &config.DweConfig{
 		Services: map[string]config.ServiceConfig{}, // empty
 	}
 
@@ -1404,7 +1404,7 @@ func TestRenderInfo_DefaultConfig(t *testing.T) {
 	// Default config has hide_on_empty: true on both sections.
 	// With no services, auto-blocks render "" → sections collapse.
 	infoCfg := config.DefaultInfoConfig()
-	cfg := &config.DevboxConfig{
+	cfg := &config.DweConfig{
 		Services: map[string]config.ServiceConfig{},
 	}
 
@@ -1429,7 +1429,7 @@ func TestRenderInfo_DefaultConfig_WithServices(t *testing.T) {
 	t.Parallel()
 	// With a service that has info.title and hosts, sections should render.
 	infoCfg := config.DefaultInfoConfig()
-	cfg := &config.DevboxConfig{
+	cfg := &config.DweConfig{
 		Services: map[string]config.ServiceConfig{
 			"web": {
 				Type:    config.ServiceTypeApp,

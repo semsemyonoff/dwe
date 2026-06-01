@@ -23,7 +23,7 @@ func newParallelStep(name string, max int, failFast *bool, subs ...config.Deploy
 }
 
 func TestResolvePhaseSteps_parallelHappyPath(t *testing.T) {
-	cfg := &config.DevboxConfig{SchemaVersion: "2"}
+	cfg := &config.DweConfig{}
 	phase := config.DeployPhase{
 		Name: "init",
 		Steps: []config.DeployStep{
@@ -55,7 +55,7 @@ func TestResolvePhaseSteps_parallelHappyPath(t *testing.T) {
 }
 
 func TestResolvePhaseSteps_parallelExplicitDefaults(t *testing.T) {
-	cfg := &config.DevboxConfig{SchemaVersion: "2"}
+	cfg := &config.DweConfig{}
 	phase := config.DeployPhase{
 		Name: "init",
 		Steps: []config.DeployStep{
@@ -79,7 +79,7 @@ func TestResolvePhaseSteps_parallelExplicitDefaults(t *testing.T) {
 }
 
 func TestResolvePhaseSteps_rejectsNestedParallel(t *testing.T) {
-	cfg := &config.DevboxConfig{SchemaVersion: "2"}
+	cfg := &config.DweConfig{}
 	phase := config.DeployPhase{
 		Name: "init",
 		Steps: []config.DeployStep{
@@ -99,7 +99,7 @@ func TestResolvePhaseSteps_rejectsNestedParallel(t *testing.T) {
 }
 
 func TestResolvePhaseSteps_rejectsUnnamedSubStep(t *testing.T) {
-	cfg := &config.DevboxConfig{SchemaVersion: "2"}
+	cfg := &config.DweConfig{}
 	phase := config.DeployPhase{
 		Name: "init",
 		Steps: []config.DeployStep{
@@ -116,7 +116,7 @@ func TestResolvePhaseSteps_rejectsUnnamedSubStep(t *testing.T) {
 }
 
 func TestResolvePhaseSteps_rejectsEmptyParallelSteps(t *testing.T) {
-	cfg := &config.DevboxConfig{SchemaVersion: "2"}
+	cfg := &config.DweConfig{}
 	cases := []struct {
 		name  string
 		steps []config.DeployStep
@@ -141,7 +141,7 @@ func TestResolvePhaseSteps_rejectsEmptyParallelSteps(t *testing.T) {
 }
 
 func TestResolvePhaseSteps_rejectsDuplicateNamesCrossGroup(t *testing.T) {
-	cfg := &config.DevboxConfig{SchemaVersion: "2"}
+	cfg := &config.DweConfig{}
 	phase := config.DeployPhase{
 		Name: "init",
 		Steps: []config.DeployStep{
@@ -162,7 +162,7 @@ func TestResolvePhaseSteps_rejectsDuplicateNamesCrossGroup(t *testing.T) {
 }
 
 func TestResolvePhaseSteps_rejectsDuplicateNamesLeafAndGroup(t *testing.T) {
-	cfg := &config.DevboxConfig{SchemaVersion: "2"}
+	cfg := &config.DweConfig{}
 	phase := config.DeployPhase{
 		Name: "init",
 		Steps: []config.DeployStep{
@@ -180,7 +180,7 @@ func TestResolvePhaseSteps_rejectsDuplicateNamesLeafAndGroup(t *testing.T) {
 }
 
 func TestResolvePhaseSteps_rejectsBuiltinConfirmInParallel(t *testing.T) {
-	cfg := &config.DevboxConfig{SchemaVersion: "2"}
+	cfg := &config.DweConfig{}
 	phase := config.DeployPhase{
 		Name: "init",
 		Steps: []config.DeployStep{
@@ -197,7 +197,7 @@ func TestResolvePhaseSteps_rejectsBuiltinConfirmInParallel(t *testing.T) {
 }
 
 func TestResolvePhaseSteps_rejectsBuiltinDaemonLogsInParallel(t *testing.T) {
-	cfg := &config.DevboxConfig{SchemaVersion: "2"}
+	cfg := &config.DweConfig{}
 	phase := config.DeployPhase{
 		Name: "init",
 		Steps: []config.DeployStep{
@@ -214,7 +214,7 @@ func TestResolvePhaseSteps_rejectsBuiltinDaemonLogsInParallel(t *testing.T) {
 }
 
 func TestResolvePhaseSteps_rejectsCommandResolvingToDaemonLogsBuiltin(t *testing.T) {
-	cfg := &config.DevboxConfig{SchemaVersion: "2"}
+	cfg := &config.DweConfig{}
 	reg := registry.NewEmptyRegistry()
 	reg.AddCommandForTest(&model.CommandDef{
 		ID: "queue.logs", Type: model.CommandTypeBuiltin, Cmd: "docker_daemon_logs",
@@ -235,7 +235,7 @@ func TestResolvePhaseSteps_rejectsCommandResolvingToDaemonLogsBuiltin(t *testing
 }
 
 func TestResolvePhaseSteps_acceptsBuiltinConfirmWithSkipConfirm(t *testing.T) {
-	cfg := &config.DevboxConfig{SchemaVersion: "2"}
+	cfg := &config.DweConfig{}
 	phase := config.DeployPhase{
 		Name: "init",
 		Steps: []config.DeployStep{
@@ -251,7 +251,7 @@ func TestResolvePhaseSteps_acceptsBuiltinConfirmWithSkipConfirm(t *testing.T) {
 }
 
 func TestResolvePhaseSteps_groupSkipConfirmInheritedByEverySubStep(t *testing.T) {
-	cfg := &config.DevboxConfig{SchemaVersion: "2"}
+	cfg := &config.DweConfig{}
 	group := newParallelStep("g", 0, nil,
 		config.DeployStep{Name: "a", Type: "builtin", Cmd: "confirm"},
 		config.DeployStep{Name: "b", Type: "shell", Cmd: "echo b"},
@@ -273,7 +273,7 @@ func TestResolvePhaseSteps_groupSkipConfirmInheritedByEverySubStep(t *testing.T)
 }
 
 func TestResolvePhaseSteps_rejectsCommandWithConfirmation(t *testing.T) {
-	cfg := &config.DevboxConfig{SchemaVersion: "2"}
+	cfg := &config.DweConfig{}
 	reg := registry.NewEmptyRegistry()
 	reg.AddCommandForTest(&model.CommandDef{
 		ID: "g.confirm-me", Type: model.CommandTypeShell, Cmd: "echo x", Confirmation: true,
@@ -294,7 +294,7 @@ func TestResolvePhaseSteps_rejectsCommandWithConfirmation(t *testing.T) {
 }
 
 func TestResolvePhaseSteps_rejectsWorkflowConfirmStep(t *testing.T) {
-	cfg := &config.DevboxConfig{SchemaVersion: "2"}
+	cfg := &config.DweConfig{}
 	reg := registry.NewEmptyRegistry()
 	reg.AddCommandForTest(&model.CommandDef{
 		ID:   "g.wf",
@@ -319,7 +319,7 @@ func TestResolvePhaseSteps_rejectsWorkflowConfirmStep(t *testing.T) {
 }
 
 func TestResolvePhaseSteps_rejectsWorkflowRecursiveConfirm(t *testing.T) {
-	cfg := &config.DevboxConfig{SchemaVersion: "2"}
+	cfg := &config.DweConfig{}
 	reg := registry.NewEmptyRegistry()
 	reg.AddCommandForTest(&model.CommandDef{
 		ID: "g.leaf", Type: model.CommandTypeShell, Cmd: "echo", Confirmation: true,
@@ -345,7 +345,7 @@ func TestResolvePhaseSteps_rejectsWorkflowRecursiveConfirm(t *testing.T) {
 }
 
 func TestResolvePhaseSteps_workflowCycleGuard(t *testing.T) {
-	cfg := &config.DevboxConfig{SchemaVersion: "2"}
+	cfg := &config.DweConfig{}
 	reg := registry.NewEmptyRegistry()
 	reg.AddCommandForTest(&model.CommandDef{
 		ID:    "g.a",
@@ -373,7 +373,7 @@ func TestResolvePhaseSteps_workflowCycleGuard(t *testing.T) {
 }
 
 func TestResolvePhaseSteps_registryNilSkipsCommandInteractiveCheck(t *testing.T) {
-	cfg := &config.DevboxConfig{SchemaVersion: "2"}
+	cfg := &config.DweConfig{}
 	phase := config.DeployPhase{
 		Name: "init",
 		Steps: []config.DeployStep{
@@ -421,7 +421,7 @@ func makeDumpDeployRegistry(t *testing.T) *registry.Registry {
 }
 
 func TestResolvePhaseSteps_subStepOverridesValid(t *testing.T) {
-	cfg := &config.DevboxConfig{SchemaVersion: "2"}
+	cfg := &config.DweConfig{}
 	reg := makeDumpDeployRegistry(t)
 	gate := newReadableGate()
 	phase := config.DeployPhase{
@@ -443,7 +443,7 @@ func TestResolvePhaseSteps_subStepOverridesValid(t *testing.T) {
 }
 
 func TestResolvePhaseSteps_subStepOverridesUnknownKey(t *testing.T) {
-	cfg := &config.DevboxConfig{SchemaVersion: "2"}
+	cfg := &config.DweConfig{}
 	reg := makeDumpDeployRegistry(t)
 	gate := newReadableGate()
 	phase := config.DeployPhase{
@@ -466,7 +466,7 @@ func TestResolvePhaseSteps_subStepOverridesUnknownKey(t *testing.T) {
 }
 
 func TestResolvePhaseSteps_subStepOverridesAmbiguousName(t *testing.T) {
-	cfg := &config.DevboxConfig{SchemaVersion: "2"}
+	cfg := &config.DweConfig{}
 	reg := registry.NewEmptyRegistry()
 	reg.AddCommandForTest(&model.CommandDef{
 		ID:   "db.dump-deploy",
@@ -508,7 +508,7 @@ func TestResolvePhaseSteps_subStepOverridesAmbiguousName(t *testing.T) {
 }
 
 func TestResolvePhaseSteps_subStepOverridesRejectsNestedWorkflow(t *testing.T) {
-	cfg := &config.DevboxConfig{SchemaVersion: "2"}
+	cfg := &config.DweConfig{}
 	reg := registry.NewEmptyRegistry()
 	reg.AddCommandForTest(&model.CommandDef{
 		ID:   "inner.wf",
@@ -550,7 +550,7 @@ func TestResolvePhaseSteps_subStepOverridesRejectsNestedWorkflow(t *testing.T) {
 }
 
 func TestResolvePhaseSteps_subStepOverridesRejectsNonCommandStep(t *testing.T) {
-	cfg := &config.DevboxConfig{SchemaVersion: "2"}
+	cfg := &config.DweConfig{}
 	reg := makeDumpDeployRegistry(t)
 	gate := newReadableGate()
 	phase := config.DeployPhase{
@@ -573,7 +573,7 @@ func TestResolvePhaseSteps_subStepOverridesRejectsNonCommandStep(t *testing.T) {
 }
 
 func TestResolvePhaseSteps_subStepOverridesRejectsNonWorkflowTarget(t *testing.T) {
-	cfg := &config.DevboxConfig{SchemaVersion: "2"}
+	cfg := &config.DweConfig{}
 	reg := registry.NewEmptyRegistry()
 	reg.AddCommandForTest(&model.CommandDef{
 		ID: "g.shell", Type: model.CommandTypeShell, Cmd: "echo",

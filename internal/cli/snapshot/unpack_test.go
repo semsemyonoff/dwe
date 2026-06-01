@@ -25,11 +25,11 @@ func sha256Hex(b []byte) string {
 func snapshotUnpackProject(t *testing.T) string {
 	t.Helper()
 	dir := t.TempDir()
-	devboxDir := filepath.Join(dir, "devbox")
+	devboxDir := filepath.Join(dir, "workspace")
 	if err := os.MkdirAll(devboxDir, 0o755); err != nil {
 		t.Fatal(err)
 	}
-	if err := os.WriteFile(filepath.Join(dir, "devbox.yml"), []byte("schema_version: \"2\"\n"), 0o644); err != nil {
+	if err := os.WriteFile(filepath.Join(dir, "workspace.yml"), []byte("schema_version: \"2\"\n"), 0o644); err != nil {
 		t.Fatal(err)
 	}
 	if err := os.WriteFile(filepath.Join(devboxDir, "defaults.yml"), []byte("project:\n  name: testproj\n  prefix: testproj\n"), 0o644); err != nil {
@@ -78,7 +78,7 @@ func TestSnapshotUnpack_VerifiedSummary(t *testing.T) {
 	buildFixtureTarGz(t, srcBase, "fix", tarPath)
 
 	dstBase := snapshotUnpackProject(t)
-	flags := &cmdctx.RootFlags{ConfigPath: filepath.Join(dstBase, "devbox.yml"), Root: dstBase}
+	flags := &cmdctx.RootFlags{ConfigPath: filepath.Join(dstBase, "workspace.yml"), Root: dstBase}
 
 	cmd := newSnapshotUnpackCmd(flags)
 	var stderr bytes.Buffer
@@ -106,7 +106,7 @@ func TestSnapshotUnpack_NoVerifyFlag(t *testing.T) {
 	buildFixtureTarGz(t, srcBase, "fix", tarPath)
 
 	dstBase := snapshotUnpackProject(t)
-	flags := &cmdctx.RootFlags{ConfigPath: filepath.Join(dstBase, "devbox.yml"), Root: dstBase}
+	flags := &cmdctx.RootFlags{ConfigPath: filepath.Join(dstBase, "workspace.yml"), Root: dstBase}
 
 	cmd := newSnapshotUnpackCmd(flags)
 	var stderr bytes.Buffer
@@ -157,7 +157,7 @@ func TestSnapshotUnpack_VerifiedWithWarnings(t *testing.T) {
 	}
 
 	dstBase := snapshotUnpackProject(t)
-	flags := &cmdctx.RootFlags{ConfigPath: filepath.Join(dstBase, "devbox.yml"), Root: dstBase}
+	flags := &cmdctx.RootFlags{ConfigPath: filepath.Join(dstBase, "workspace.yml"), Root: dstBase}
 
 	cmd := newSnapshotUnpackCmd(flags)
 	var stderr bytes.Buffer

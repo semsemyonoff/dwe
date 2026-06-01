@@ -13,7 +13,7 @@ import (
 
 func TestRunPhases_HappyPath(t *testing.T) {
 	workDir := t.TempDir()
-	cfg := &config.DevboxConfig{Raw: map[string]any{}}
+	cfg := &config.DweConfig{Raw: map[string]any{}}
 
 	phases := []config.DeployPhase{
 		{
@@ -44,7 +44,7 @@ func TestRunPhases_HappyPath(t *testing.T) {
 
 func TestRunPhases_AbortingStepFails(t *testing.T) {
 	workDir := t.TempDir()
-	cfg := &config.DevboxConfig{Raw: map[string]any{}}
+	cfg := &config.DweConfig{Raw: map[string]any{}}
 
 	phases := []config.DeployPhase{
 		{
@@ -68,7 +68,7 @@ func TestRunPhases_AbortingStepFails(t *testing.T) {
 
 func TestRunPhases_ContinueOnError(t *testing.T) {
 	workDir := t.TempDir()
-	cfg := &config.DevboxConfig{Raw: map[string]any{}}
+	cfg := &config.DweConfig{Raw: map[string]any{}}
 
 	phases := []config.DeployPhase{
 		{
@@ -88,7 +88,7 @@ func TestRunPhases_ContinueOnError(t *testing.T) {
 
 func TestRunPhases_LogFileNameUsed(t *testing.T) {
 	workDir := t.TempDir()
-	cfg := &config.DevboxConfig{Raw: map[string]any{}}
+	cfg := &config.DweConfig{Raw: map[string]any{}}
 
 	phases := []config.DeployPhase{
 		{Name: "stop", Steps: []config.DeployStep{{Name: "noop", Type: "shell", Cmd: "true"}}},
@@ -111,7 +111,7 @@ func TestRunPhases_LogFileNameUsed(t *testing.T) {
 
 func TestRunPhases_EmptyPhases(t *testing.T) {
 	workDir := t.TempDir()
-	cfg := &config.DevboxConfig{Raw: map[string]any{}}
+	cfg := &config.DweConfig{Raw: map[string]any{}}
 
 	err := RunPhases(cfg, nil, workDir, nil, "run", "run", false, true, nil, "")
 	if err != nil {
@@ -126,7 +126,7 @@ func TestRunPhases_EmptyPhases(t *testing.T) {
 
 func TestRunPhases_LogDisabled(t *testing.T) {
 	workDir := t.TempDir()
-	cfg := &config.DevboxConfig{Raw: map[string]any{}}
+	cfg := &config.DweConfig{Raw: map[string]any{}}
 
 	phases := []config.DeployPhase{
 		{Name: "start", Steps: []config.DeployStep{{Name: "noop", Type: "shell", Cmd: "true"}}},
@@ -149,7 +149,7 @@ func TestRunPhases_LogDisabled(t *testing.T) {
 
 func TestRunPhases_LogDisabledFailingStep(t *testing.T) {
 	workDir := t.TempDir()
-	cfg := &config.DevboxConfig{Raw: map[string]any{}}
+	cfg := &config.DweConfig{Raw: map[string]any{}}
 
 	phases := []config.DeployPhase{
 		{Name: "start", Steps: []config.DeployStep{{Name: "fail", Type: "shell", Cmd: "exit 1"}}},

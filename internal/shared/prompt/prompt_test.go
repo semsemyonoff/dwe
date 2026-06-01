@@ -32,7 +32,7 @@ func TestRunFromDir(t *testing.T) {
 			name: "in_project_name_from_config",
 			setup: func(t *testing.T) string {
 				root := t.TempDir()
-				writeFile(t, filepath.Join(root, "devbox.yml"), "project:\n  name: my-proj\n")
+				writeFile(t, filepath.Join(root, "workspace.yml"), "project:\n  name: my-proj\n")
 				return root
 			},
 			args:       nil,
@@ -43,7 +43,7 @@ func TestRunFromDir(t *testing.T) {
 			name: "in_subdirectory_walk_up",
 			setup: func(t *testing.T) string {
 				root := t.TempDir()
-				writeFile(t, filepath.Join(root, "devbox.yml"), "project:\n  name: walked\n")
+				writeFile(t, filepath.Join(root, "workspace.yml"), "project:\n  name: walked\n")
 				sub := filepath.Join(root, "a", "b", "c")
 				if err := os.MkdirAll(sub, 0o755); err != nil {
 					t.Fatal(err)
@@ -61,7 +61,7 @@ func TestRunFromDir(t *testing.T) {
 				if err := os.Mkdir(root, 0o755); err != nil {
 					t.Fatal(err)
 				}
-				writeFile(t, filepath.Join(root, "devbox.yml"), "project: {}\n")
+				writeFile(t, filepath.Join(root, "workspace.yml"), "project: {}\n")
 				return root
 			},
 			args:       nil,
@@ -81,7 +81,7 @@ func TestRunFromDir(t *testing.T) {
 			name: "check_inside_project",
 			setup: func(t *testing.T) string {
 				root := t.TempDir()
-				writeFile(t, filepath.Join(root, "devbox.yml"), "project:\n  name: chk\n")
+				writeFile(t, filepath.Join(root, "workspace.yml"), "project:\n  name: chk\n")
 				return root
 			},
 			args:       []string{"--check"},
@@ -101,7 +101,7 @@ func TestRunFromDir(t *testing.T) {
 			name: "unknown_arg",
 			setup: func(t *testing.T) string {
 				root := t.TempDir()
-				writeFile(t, filepath.Join(root, "devbox.yml"), "project:\n  name: x\n")
+				writeFile(t, filepath.Join(root, "workspace.yml"), "project:\n  name: x\n")
 				return root
 			},
 			args:       []string{"foo"},
@@ -112,7 +112,7 @@ func TestRunFromDir(t *testing.T) {
 			name: "status_state_file_absent",
 			setup: func(t *testing.T) string {
 				root := t.TempDir()
-				writeFile(t, filepath.Join(root, "devbox.yml"), "project:\n  name: p\n")
+				writeFile(t, filepath.Join(root, "workspace.yml"), "project:\n  name: p\n")
 				return root
 			},
 			args:       nil,
@@ -123,7 +123,7 @@ func TestRunFromDir(t *testing.T) {
 			name: "status_pending_only",
 			setup: func(t *testing.T) string {
 				root := t.TempDir()
-				writeFile(t, filepath.Join(root, "devbox.yml"), "project:\n  name: p\n")
+				writeFile(t, filepath.Join(root, "workspace.yml"), "project:\n  name: p\n")
 				writeFile(t, filepath.Join(root, ".devbox/deploy/state.yml"), "pending: {}\n")
 				return root
 			},
@@ -135,7 +135,7 @@ func TestRunFromDir(t *testing.T) {
 			name: "status_deployed",
 			setup: func(t *testing.T) string {
 				root := t.TempDir()
-				writeFile(t, filepath.Join(root, "devbox.yml"), "project:\n  name: p\n")
+				writeFile(t, filepath.Join(root, "workspace.yml"), "project:\n  name: p\n")
 				writeFile(t, filepath.Join(root, ".devbox/deploy/state.yml"), "project:\n  status: deployed\n")
 				return root
 			},
@@ -147,7 +147,7 @@ func TestRunFromDir(t *testing.T) {
 			name: "status_partial",
 			setup: func(t *testing.T) string {
 				root := t.TempDir()
-				writeFile(t, filepath.Join(root, "devbox.yml"), "project:\n  name: p\n")
+				writeFile(t, filepath.Join(root, "workspace.yml"), "project:\n  name: p\n")
 				writeFile(t, filepath.Join(root, ".devbox/deploy/state.yml"), "project:\n  status: partial\n")
 				return root
 			},
@@ -159,7 +159,7 @@ func TestRunFromDir(t *testing.T) {
 			name: "status_failed",
 			setup: func(t *testing.T) string {
 				root := t.TempDir()
-				writeFile(t, filepath.Join(root, "devbox.yml"), "project:\n  name: p\n")
+				writeFile(t, filepath.Join(root, "workspace.yml"), "project:\n  name: p\n")
 				writeFile(t, filepath.Join(root, ".devbox/deploy/state.yml"), "project:\n  status: failed\n")
 				return root
 			},
@@ -171,7 +171,7 @@ func TestRunFromDir(t *testing.T) {
 			name: "status_deployed_plus_pending_pending_wins",
 			setup: func(t *testing.T) string {
 				root := t.TempDir()
-				writeFile(t, filepath.Join(root, "devbox.yml"), "project:\n  name: p\n")
+				writeFile(t, filepath.Join(root, "workspace.yml"), "project:\n  name: p\n")
 				writeFile(t, filepath.Join(root, ".devbox/deploy/state.yml"), "project:\n  status: deployed\npending: {}\n")
 				return root
 			},
@@ -183,7 +183,7 @@ func TestRunFromDir(t *testing.T) {
 			name: "status_partial_plus_pending_partial_wins",
 			setup: func(t *testing.T) string {
 				root := t.TempDir()
-				writeFile(t, filepath.Join(root, "devbox.yml"), "project:\n  name: p\n")
+				writeFile(t, filepath.Join(root, "workspace.yml"), "project:\n  name: p\n")
 				writeFile(t, filepath.Join(root, ".devbox/deploy/state.yml"), "project:\n  status: partial\npending: {}\n")
 				return root
 			},
@@ -195,7 +195,7 @@ func TestRunFromDir(t *testing.T) {
 			name: "status_failed_plus_pending_failed_wins",
 			setup: func(t *testing.T) string {
 				root := t.TempDir()
-				writeFile(t, filepath.Join(root, "devbox.yml"), "project:\n  name: p\n")
+				writeFile(t, filepath.Join(root, "workspace.yml"), "project:\n  name: p\n")
 				writeFile(t, filepath.Join(root, ".devbox/deploy/state.yml"), "project:\n  status: failed\npending: {}\n")
 				return root
 			},
@@ -207,7 +207,7 @@ func TestRunFromDir(t *testing.T) {
 			name: "status_not_deployed_no_icon",
 			setup: func(t *testing.T) string {
 				root := t.TempDir()
-				writeFile(t, filepath.Join(root, "devbox.yml"), "project:\n  name: p\n")
+				writeFile(t, filepath.Join(root, "workspace.yml"), "project:\n  name: p\n")
 				writeFile(t, filepath.Join(root, ".devbox/deploy/state.yml"), "project:\n  status: not_deployed\n")
 				return root
 			},
@@ -219,7 +219,7 @@ func TestRunFromDir(t *testing.T) {
 			name: "status_corrupted_state_yml_no_icon",
 			setup: func(t *testing.T) string {
 				root := t.TempDir()
-				writeFile(t, filepath.Join(root, "devbox.yml"), "project:\n  name: p\n")
+				writeFile(t, filepath.Join(root, "workspace.yml"), "project:\n  name: p\n")
 				writeFile(t, filepath.Join(root, ".devbox/deploy/state.yml"), "project: [this is: not valid\n  - bad\n")
 				return root
 			},
@@ -231,7 +231,7 @@ func TestRunFromDir(t *testing.T) {
 			name: "status_state_yml_with_unknown_fields_ignored",
 			setup: func(t *testing.T) string {
 				root := t.TempDir()
-				writeFile(t, filepath.Join(root, "devbox.yml"), "project:\n  name: p\n")
+				writeFile(t, filepath.Join(root, "workspace.yml"), "project:\n  name: p\n")
 				writeFile(t, filepath.Join(root, ".devbox/deploy/state.yml"), "project:\n  status: deployed\n  extra: stuff\nservices:\n  db:\n    status: deployed\nunknown_top_level: 42\n")
 				return root
 			},
@@ -243,7 +243,7 @@ func TestRunFromDir(t *testing.T) {
 			name: "corrupted_devbox_yml",
 			setup: func(t *testing.T) string {
 				root := t.TempDir()
-				writeFile(t, filepath.Join(root, "devbox.yml"), "project: [this is: not valid yaml\n  - bad\n")
+				writeFile(t, filepath.Join(root, "workspace.yml"), "project: [this is: not valid yaml\n  - bad\n")
 				return root
 			},
 			args:       nil,
@@ -357,9 +357,9 @@ func TestRunFromDirColor(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 			root := t.TempDir()
-			writeFile(t, filepath.Join(root, "devbox.yml"), "project:\n  name: p\n")
+			writeFile(t, filepath.Join(root, "workspace.yml"), "project:\n  name: p\n")
 			if tt.styles != "" {
-				writeFile(t, filepath.Join(root, "devbox/styles.yml"), tt.styles)
+				writeFile(t, filepath.Join(root, "workspace/styles.yml"), tt.styles)
 			}
 			if tt.state != "" {
 				writeFile(t, filepath.Join(root, ".devbox/deploy/state.yml"), tt.state)
@@ -383,8 +383,8 @@ func TestRunFromDirNoColorSuppression(t *testing.T) {
 	// (set, non-empty) take this same branch in Run; LookupEnv treats both as
 	// "found = true". Verified by TestRunNoColorEnv below which runs Run().
 	root := t.TempDir()
-	writeFile(t, filepath.Join(root, "devbox.yml"), "project:\n  name: p\n")
-	writeFile(t, filepath.Join(root, "devbox/styles.yml"),
+	writeFile(t, filepath.Join(root, "workspace.yml"), "project:\n  name: p\n")
+	writeFile(t, filepath.Join(root, "workspace/styles.yml"),
 		"colors:\n  accent: \"#010203\"\n  success: \"#040506\"\n")
 	writeFile(t, filepath.Join(root, ".devbox/deploy/state.yml"), "project:\n  status: deployed\n")
 
@@ -438,7 +438,7 @@ func TestRunNoColorEnv(t *testing.T) {
 				})
 			}
 			root := t.TempDir()
-			writeFile(t, filepath.Join(root, "devbox.yml"), "project:\n  name: p\n")
+			writeFile(t, filepath.Join(root, "workspace.yml"), "project:\n  name: p\n")
 			// chdir into root so Run's os.Getwd lands inside the project.
 			t.Chdir(root)
 
@@ -461,7 +461,7 @@ func TestRunNoColorEnv(t *testing.T) {
 func TestRenderUsesDefaultForegroundReset(t *testing.T) {
 	t.Parallel()
 	root := t.TempDir()
-	writeFile(t, filepath.Join(root, "devbox.yml"), "project:\n  name: p\n")
+	writeFile(t, filepath.Join(root, "workspace.yml"), "project:\n  name: p\n")
 	writeFile(t, filepath.Join(root, ".devbox/deploy/state.yml"), "project:\n  status: deployed\n")
 	var buf bytes.Buffer
 	if code := runFromDir(&buf, nil, root, true); code != 0 {
@@ -493,14 +493,14 @@ func TestRenderUsesDefaultForegroundReset(t *testing.T) {
 // regression worth investigating before merge.
 func BenchmarkPromptRun(b *testing.B) {
 	root := b.TempDir()
-	if err := os.WriteFile(filepath.Join(root, "devbox.yml"),
+	if err := os.WriteFile(filepath.Join(root, "workspace.yml"),
 		[]byte("project:\n  name: bench\n"), 0o644); err != nil {
 		b.Fatal(err)
 	}
-	if err := os.MkdirAll(filepath.Join(root, "devbox"), 0o755); err != nil {
+	if err := os.MkdirAll(filepath.Join(root, "workspace"), 0o755); err != nil {
 		b.Fatal(err)
 	}
-	if err := os.WriteFile(filepath.Join(root, "devbox", "styles.yml"),
+	if err := os.WriteFile(filepath.Join(root, "workspace", "styles.yml"),
 		[]byte("colors:\n  accent: \"#2EC3EB\"\n  success: \"#22C55E\"\n"), 0o644); err != nil {
 		b.Fatal(err)
 	}

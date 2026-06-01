@@ -42,7 +42,7 @@ func TestDeployStateShow(t *testing.T) {
 		require.NoError(t, err)
 
 		// Create a root context pointing to the temp directory
-		flags := &cmdctx.RootFlags{ConfigPath: filepath.Join(workDir, "devbox.yml")}
+		flags := &cmdctx.RootFlags{ConfigPath: filepath.Join(workDir, "workspace.yml")}
 
 		// Run the show command
 		err = deployStateShowCmd(flags, io.Discard)
@@ -51,7 +51,7 @@ func TestDeployStateShow(t *testing.T) {
 
 	t.Run("state file absent", func(t *testing.T) {
 		workDir := t.TempDir()
-		flags := &cmdctx.RootFlags{ConfigPath: filepath.Join(workDir, "devbox.yml")}
+		flags := &cmdctx.RootFlags{ConfigPath: filepath.Join(workDir, "workspace.yml")}
 
 		// Run the show command (file doesn't exist)
 		err := deployStateShowCmd(flags, io.Discard)
@@ -81,7 +81,7 @@ func TestDeployStateClear(t *testing.T) {
 		_, err = os.Stat(statePath)
 		require.NoError(t, err)
 
-		flags := &cmdctx.RootFlags{ConfigPath: filepath.Join(workDir, "devbox.yml")}
+		flags := &cmdctx.RootFlags{ConfigPath: filepath.Join(workDir, "workspace.yml")}
 
 		// Clear with force=true (skip confirmation)
 		err = deployStateClearCmd(flags, true)
@@ -94,7 +94,7 @@ func TestDeployStateClear(t *testing.T) {
 
 	t.Run("no-op when state absent", func(t *testing.T) {
 		workDir := t.TempDir()
-		flags := &cmdctx.RootFlags{ConfigPath: filepath.Join(workDir, "devbox.yml")}
+		flags := &cmdctx.RootFlags{ConfigPath: filepath.Join(workDir, "workspace.yml")}
 
 		// Clear when file doesn't exist
 		err := deployStateClearCmd(flags, true)
@@ -129,7 +129,7 @@ func TestDeployStateRepair(t *testing.T) {
 		err := journal.Save(statePath, state)
 		require.NoError(t, err)
 
-		flags := &cmdctx.RootFlags{ConfigPath: filepath.Join(workDir, "devbox.yml")}
+		flags := &cmdctx.RootFlags{ConfigPath: filepath.Join(workDir, "workspace.yml")}
 
 		// Run repair
 		err = deployStateRepairCmd(flags)
@@ -143,7 +143,7 @@ func TestDeployStateRepair(t *testing.T) {
 
 	t.Run("no-op when state absent", func(t *testing.T) {
 		workDir := t.TempDir()
-		flags := &cmdctx.RootFlags{ConfigPath: filepath.Join(workDir, "devbox.yml")}
+		flags := &cmdctx.RootFlags{ConfigPath: filepath.Join(workDir, "workspace.yml")}
 
 		// Repair when file doesn't exist
 		err := deployStateRepairCmd(flags)
@@ -185,7 +185,7 @@ func TestDeployStateRepair(t *testing.T) {
 		err := journal.Save(statePath, state)
 		require.NoError(t, err)
 
-		flags := &cmdctx.RootFlags{ConfigPath: filepath.Join(workDir, "devbox.yml")}
+		flags := &cmdctx.RootFlags{ConfigPath: filepath.Join(workDir, "workspace.yml")}
 
 		// Run repair
 		err = deployStateRepairCmd(flags)

@@ -134,12 +134,12 @@ func ServiceConfigHash(svcCfg config.ServiceConfig, deployCfg *config.ServiceDep
 // the project hash.
 //
 // Parameters:
-//   - cfg: the merged DevboxConfig
+//   - cfg: the merged DweConfig
 //   - deployCfg: the top-level deploy config (may be nil)
 //   - svcDeploys: map of service names to their per-service deploy configs
 //   - trackedServices: the canonical sorted list of tracked service names
 func ProjectConfigHash(
-	cfg *config.DevboxConfig,
+	cfg *config.DweConfig,
 	deployCfg *config.ProjectDeployConfig,
 	svcDeploys map[string]*config.ServiceDeployConfig,
 	trackedServices []string,

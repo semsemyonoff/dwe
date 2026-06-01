@@ -34,7 +34,7 @@ var (
 // Deps carries the dependencies needed by the statustui model. It mirrors
 // statusContext fields without creating a package cycle.
 type Deps struct {
-	Cfg         *config.DevboxConfig
+	Cfg         *config.DweConfig
 	State       *journal.ProjectState
 	Tracked     []string
 	SvcDeploys  map[string]*config.ServiceDeployConfig

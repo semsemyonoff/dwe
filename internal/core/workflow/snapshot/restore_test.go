@@ -84,7 +84,7 @@ func TestRestore_RoundTripWritesBackupAndUpdatesCurrent(t *testing.T) {
 
 	// Seed the working-copy devbox files so the pre-restore backup has something
 	// to capture.
-	writeStringFile(t, filepath.Join(tmp, "devbox", "local.yml"), "live: local")
+	writeStringFile(t, filepath.Join(tmp, "workspace", "local.yml"), "live: local")
 	writeStringFile(t, filepath.Join(tmp, journal.DefaultRelPath),
 		"schema_version: \"1\"\nproject:\n  status: deployed\n  config_hash: live\n")
 
@@ -96,7 +96,7 @@ func TestRestore_RoundTripWritesBackupAndUpdatesCurrent(t *testing.T) {
 	}
 
 	// Mutate working-copy devbox/local.yml after the snapshot.
-	writeStringFile(t, filepath.Join(tmp, "devbox", "local.yml"), "mutated")
+	writeStringFile(t, filepath.Join(tmp, "workspace", "local.yml"), "mutated")
 
 	// Restore: workflow simply re-writes the marker file.
 	reg := newRegistryWith(t, "fake.marker",
@@ -125,7 +125,7 @@ func TestRestore_RoundTripWritesBackupAndUpdatesCurrent(t *testing.T) {
 	}
 
 	// devbox/local.yml restored from snapshot.
-	body, err := os.ReadFile(filepath.Join(tmp, "devbox", "local.yml"))
+	body, err := os.ReadFile(filepath.Join(tmp, "workspace", "local.yml"))
 	if err != nil {
 		t.Fatalf("read local.yml: %v", err)
 	}
@@ -171,7 +171,7 @@ func TestRestore_PreservesLocalYMLPorts(t *testing.T) {
 
 	// Seed working-copy local.yml with both a port (preserved) and an
 	// enabled flag (snapshotted).
-	writeStringFile(t, filepath.Join(tmp, "devbox", "local.yml"),
+	writeStringFile(t, filepath.Join(tmp, "workspace", "local.yml"),
 		"services:\n  main:\n    ports:\n      - 9090\n    enabled: true\n")
 
 	snapCfg := &config.SnapshotConfig{
@@ -191,7 +191,7 @@ func TestRestore_PreservesLocalYMLPorts(t *testing.T) {
 
 	// Mutate the working-copy local.yml: change the port (preserved) and
 	// the enabled flag (snapshotted).
-	writeStringFile(t, filepath.Join(tmp, "devbox", "local.yml"),
+	writeStringFile(t, filepath.Join(tmp, "workspace", "local.yml"),
 		"services:\n  main:\n    ports:\n      - 7777\n    enabled: false\n")
 
 	var errBuf bytes.Buffer
@@ -206,7 +206,7 @@ func TestRestore_PreservesLocalYMLPorts(t *testing.T) {
 		t.Fatalf("status = %q", res.Status)
 	}
 
-	body, err := os.ReadFile(filepath.Join(tmp, "devbox", "local.yml"))
+	body, err := os.ReadFile(filepath.Join(tmp, "workspace", "local.yml"))
 	if err != nil {
 		t.Fatalf("read local.yml: %v", err)
 	}
@@ -356,7 +356,7 @@ func TestRestore_InterruptedKeepsBackupAndCurrent(t *testing.T) {
 	}
 
 	// Seed a local.yml so writePreRestoreBackup has something to capture.
-	localDir := filepath.Join(tmp, "devbox")
+	localDir := filepath.Join(tmp, "workspace")
 	if err := os.MkdirAll(localDir, 0o755); err != nil {
 		t.Fatalf("mkdir devbox: %v", err)
 	}
@@ -517,7 +517,7 @@ func TestRestore_ServicesMismatchPolicies(t *testing.T) {
 
 			// Seed a working-copy devbox/local.yml so we can detect any
 			// unintended side effect on the blocked path.
-			writeStringFile(t, filepath.Join(tmp, "devbox", "local.yml"), "untouched")
+			writeStringFile(t, filepath.Join(tmp, "workspace", "local.yml"), "untouched")
 
 			reg := newRegistryWith(t, "fake.marker", `true`)
 			snapCfg := newSnapCfgWithRestore(
@@ -554,7 +554,7 @@ func TestRestore_ServicesMismatchPolicies(t *testing.T) {
 					t.Fatalf("err = %v, want ServicesMismatchError", err)
 				}
 				// No side effect on devbox/local.yml.
-				body, _ := os.ReadFile(filepath.Join(tmp, "devbox", "local.yml"))
+				body, _ := os.ReadFile(filepath.Join(tmp, "workspace", "local.yml"))
 				if string(body) != "untouched" {
 					t.Errorf("local.yml mutated despite block: %q", string(body))
 				}
@@ -599,7 +599,7 @@ func TestRestore_RejectedConfirmDoesNotTouchLocalYml(t *testing.T) {
 	createBaselineSnap(t, tmp, "s", "")
 	patchManifestServices(t, tmp, "s", []meta.ServiceSnapshot{{Name: "db", Enabled: true}})
 
-	writeStringFile(t, filepath.Join(tmp, "devbox", "local.yml"), "untouched")
+	writeStringFile(t, filepath.Join(tmp, "workspace", "local.yml"), "untouched")
 
 	snapCfg := newSnapCfgWithRestore(
 		[]model.WorkflowStep{{Command: "fake.marker"}},
@@ -626,7 +626,7 @@ func TestRestore_RejectedConfirmDoesNotTouchLocalYml(t *testing.T) {
 	if !errors.As(err, &cancelled) {
 		t.Fatalf("err = %v, want RestoreCancelledError", err)
 	}
-	body, _ := os.ReadFile(filepath.Join(tmp, "devbox", "local.yml"))
+	body, _ := os.ReadFile(filepath.Join(tmp, "workspace", "local.yml"))
 	if string(body) != "untouched" {
 		t.Errorf("local.yml mutated on cancelled restore: %q", string(body))
 	}

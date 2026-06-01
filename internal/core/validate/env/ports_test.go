@@ -86,7 +86,7 @@ func TestParsePortBindings_LegacyLabelFormat(t *testing.T) {
 }
 
 func TestCollectDeclaredPorts(t *testing.T) {
-	cfg := &config.DevboxConfig{
+	cfg := &config.DweConfig{
 		Services: map[string]config.ServiceConfig{
 			"web": {
 				Enabled: true,
@@ -127,7 +127,7 @@ func TestCollectDeclaredPorts_NilCfg(t *testing.T) {
 
 func TestResolveComposeProject_NoDockerYml_FallsBackToBasename(t *testing.T) {
 	dir := t.TempDir()
-	got := resolveComposeProject(dir, &config.DevboxConfig{})
+	got := resolveComposeProject(dir, &config.DweConfig{})
 	want := strings.ToLower(filepath.Base(dir))
 	if got != want {
 		t.Errorf("resolveComposeProject = %q, want %q (dir basename fallback)", got, want)
@@ -189,7 +189,7 @@ func TestClassifyPort_BusyNonDocker(t *testing.T) {
 
 func TestPortsFreeValidator_StopStageSkips(t *testing.T) {
 	// Use a free port — even so, stop stage should produce zero diagnostics.
-	cfg := &config.DevboxConfig{
+	cfg := &config.DweConfig{
 		Services: map[string]config.ServiceConfig{
 			"web": {Enabled: true, Ports: map[string]int{"http": freeLocalPort(t)}},
 		},
@@ -202,7 +202,7 @@ func TestPortsFreeValidator_StopStageSkips(t *testing.T) {
 }
 
 func TestPortsFreeValidator_NoServicesSkips(t *testing.T) {
-	v := &portsFreeValidator{cfg: &config.DevboxConfig{}}
+	v := &portsFreeValidator{cfg: &config.DweConfig{}}
 	diags := v.Run(validate.Context{Stage: "deploy"})
 	if len(diags) != 0 {
 		t.Errorf("no declared ports should produce zero diagnostics; got %d", len(diags))
@@ -212,7 +212,7 @@ func TestPortsFreeValidator_NoServicesSkips(t *testing.T) {
 func TestPortsFreeValidator_DockerMissingSkips(t *testing.T) {
 	dir := t.TempDir()
 	withIsolatedPath(t, dir) // empty PATH — docker is not found
-	cfg := &config.DevboxConfig{
+	cfg := &config.DweConfig{
 		Services: map[string]config.ServiceConfig{
 			"web": {Enabled: true, Ports: map[string]int{"http": 8080}},
 		},
@@ -241,7 +241,7 @@ func TestPortsFreeValidator_ConflictReported(t *testing.T) {
 	}
 	portListenFn = func(int) error { return nil }
 
-	cfg := &config.DevboxConfig{
+	cfg := &config.DweConfig{
 		Services: map[string]config.ServiceConfig{
 			"db": {Enabled: true, Ports: map[string]int{"sql": 5432}},
 		},
@@ -269,7 +269,7 @@ func TestPortsFreeValidator_AllFreeReportsOK(t *testing.T) {
 	dockerPSOutFn = func(_ context.Context, _ string) ([]byte, error) { return nil, nil }
 	portListenFn = func(int) error { return nil }
 
-	cfg := &config.DevboxConfig{
+	cfg := &config.DweConfig{
 		Services: map[string]config.ServiceConfig{
 			"web": {Enabled: true, Ports: map[string]int{"http": 8080}},
 		},
@@ -307,7 +307,7 @@ func TestCollectPortConflicts_DeclaredPortFree(t *testing.T) {
 	dockerPSOutFn = func(_ context.Context, _ string) ([]byte, error) { return nil, nil }
 	portListenFn = func(int) error { return nil }
 
-	cfg := &config.DevboxConfig{
+	cfg := &config.DweConfig{
 		Services: map[string]config.ServiceConfig{
 			"web": {Enabled: true, Ports: map[string]int{"http": 8080}},
 		},
@@ -336,7 +336,7 @@ func TestCollectPortConflicts_ForeignContainerConflict(t *testing.T) {
 	}
 	portListenFn = func(int) error { return nil }
 
-	cfg := &config.DevboxConfig{
+	cfg := &config.DweConfig{
 		Services: map[string]config.ServiceConfig{
 			"db": {Enabled: true, Ports: map[string]int{"sql": 5432}},
 		},
@@ -360,7 +360,7 @@ func TestCollectPortConflicts_ForeignContainerConflict(t *testing.T) {
 func TestCollectPortConflicts_OwnComposeContainerNotConflict(t *testing.T) {
 	// Create a docker.yml with project_name to ensure resolveComposeProject returns "ours".
 	dir := t.TempDir()
-	dockerCfgPath := filepath.Join(dir, "devbox", "docker.yml")
+	dockerCfgPath := filepath.Join(dir, "workspace", "docker.yml")
 	if err := os.MkdirAll(filepath.Dir(dockerCfgPath), 0o755); err != nil {
 		t.Fatalf("mkdir: %v", err)
 	}
@@ -381,7 +381,7 @@ func TestCollectPortConflicts_OwnComposeContainerNotConflict(t *testing.T) {
 	}
 	portListenFn = func(int) error { return nil }
 
-	cfg := &config.DevboxConfig{
+	cfg := &config.DweConfig{
 		Services: map[string]config.ServiceConfig{
 			"db": {Enabled: true, Ports: map[string]int{"sql": 5432}},
 		},
@@ -398,7 +398,7 @@ func TestCollectPortConflicts_OwnComposeContainerNotConflict(t *testing.T) {
 func TestCollectPortConflicts_DockerMissingReturnsNil(t *testing.T) {
 	dir := t.TempDir()
 	withIsolatedPath(t, dir) // empty PATH — docker is not found
-	cfg := &config.DevboxConfig{
+	cfg := &config.DweConfig{
 		Services: map[string]config.ServiceConfig{
 			"web": {Enabled: true, Ports: map[string]int{"http": 8080}},
 		},
@@ -433,7 +433,7 @@ func TestCollectPortConflicts_DockerPSFailedFallback(t *testing.T) {
 		return nil
 	}
 
-	cfg := &config.DevboxConfig{
+	cfg := &config.DweConfig{
 		Services: map[string]config.ServiceConfig{
 			"web": {Enabled: true, Ports: map[string]int{"http": 8080}},
 		},
@@ -462,7 +462,7 @@ func TestCollectPortConflicts_NilCfgReturnsNil(t *testing.T) {
 }
 
 func TestCollectPortConflicts_NoDeclaratedPortsReturnsNil(t *testing.T) {
-	cfg := &config.DevboxConfig{
+	cfg := &config.DweConfig{
 		Services: map[string]config.ServiceConfig{
 			"web": {Enabled: false, Ports: map[string]int{"http": 8080}},
 		},

@@ -9,8 +9,8 @@ import (
 
 // --- helpers -----------------------------------------------------------------
 
-func makeConfig(raw map[string]any) *config.DevboxConfig {
-	return &config.DevboxConfig{Raw: raw}
+func makeConfig(raw map[string]any) *config.DweConfig {
+	return &config.DweConfig{Raw: raw}
 }
 
 // --- Params -----------------------------------------------------------
@@ -839,7 +839,7 @@ func TestParamDefaults(t *testing.T) {
 		name     string
 		defs     map[string]ParamDef
 		provided map[string]string
-		cfg      *config.DevboxConfig
+		cfg      *config.DweConfig
 		want     map[string]string
 	}{
 		{

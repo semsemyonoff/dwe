@@ -11,7 +11,7 @@ import (
 // <baseDir>/devbox/services/<name>/service.yml with the given content.
 func writeServiceFolder(t *testing.T, baseDir, name, content string) {
 	t.Helper()
-	dir := filepath.Join(baseDir, "devbox", "services", name)
+	dir := filepath.Join(baseDir, "workspace", "services", name)
 	if err := os.MkdirAll(dir, 0755); err != nil {
 		t.Fatalf("writeServiceFolder mkdir: %v", err)
 	}
@@ -89,7 +89,7 @@ func TestLoadServices_missingDir(t *testing.T) {
 // TestLoadServices_emptyDir verifies devbox/services/ with no subdirs returns empty map.
 func TestLoadServices_emptyDir(t *testing.T) {
 	dir := t.TempDir()
-	if err := os.MkdirAll(filepath.Join(dir, "devbox", "services"), 0755); err != nil {
+	if err := os.MkdirAll(filepath.Join(dir, "workspace", "services"), 0755); err != nil {
 		t.Fatal(err)
 	}
 	services, err := LoadServices(dir)
@@ -104,7 +104,7 @@ func TestLoadServices_emptyDir(t *testing.T) {
 // TestLoadServices_nonDirEntriesIgnored verifies non-directory entries are skipped.
 func TestLoadServices_nonDirEntriesIgnored(t *testing.T) {
 	dir := t.TempDir()
-	svcDir := filepath.Join(dir, "devbox", "services")
+	svcDir := filepath.Join(dir, "workspace", "services")
 	if err := os.MkdirAll(svcDir, 0755); err != nil {
 		t.Fatal(err)
 	}

@@ -18,14 +18,14 @@ func TestMatchScope(t *testing.T) {
 		{
 			name:   "empty scope matches all",
 			domain: "config",
-			id:     "devbox",
+			id:     "workspace",
 			scope:  []string{},
 			want:   true,
 		},
 		{
 			name:   "single-element scope matches domain",
 			domain: "config",
-			id:     "devbox",
+			id:     "workspace",
 			scope:  []string{"config"},
 			want:   true,
 		},
@@ -451,8 +451,8 @@ func TestRegistryRun(t *testing.T) {
 	registry := NewRegistry()
 	registry.Register(&mockValidator{
 		domain: "config",
-		id:     "devbox",
-		diags:  []Diagnostic{{Severity: SeverityOK, Domain: "config", Target: "config.devbox"}},
+		id:     "workspace",
+		diags:  []Diagnostic{{Severity: SeverityOK, Domain: "config", Target: "config.workspace"}},
 	})
 	registry.Register(&mockValidator{
 		domain: "config",

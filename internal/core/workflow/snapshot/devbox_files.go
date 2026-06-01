@@ -27,7 +27,7 @@ const localYMLMaxBytes = 1 << 20
 func captureDevboxFiles(baseDir, snapDir string, preserveKeys []string) (meta.DevboxFiles, error) {
 	var df meta.DevboxFiles
 
-	srcLocal := filepath.Join(baseDir, "devbox", "local.yml")
+	srcLocal := filepath.Join(baseDir, "workspace", "local.yml")
 	dstLocalRel := filepath.Join(meta.DevboxSubdir, "local.yml")
 	dstLocal := filepath.Join(snapDir, dstLocalRel)
 	wrote, err := captureLocalYML(srcLocal, dstLocal, preserveKeys)
@@ -115,7 +115,7 @@ func copyFileIfExists(src, dst string) (bool, error) {
 func restoreDevboxFiles(snapDir, baseDir string, preserveKeys []string) error {
 	if err := restoreLocalYML(
 		filepath.Join(snapDir, meta.DevboxSubdir, "local.yml"),
-		filepath.Join(baseDir, "devbox", "local.yml"),
+		filepath.Join(baseDir, "workspace", "local.yml"),
 		preserveKeys,
 	); err != nil {
 		return err

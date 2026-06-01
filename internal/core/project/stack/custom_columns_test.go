@@ -8,7 +8,7 @@ import (
 )
 
 func TestBuildCustomColumns_Empty(t *testing.T) {
-	cfg := &config.DevboxConfig{}
+	cfg := &config.DweConfig{}
 	if got := BuildCustomColumns(cfg, config.ServiceTypeApp); got != nil {
 		t.Errorf("services: want nil, got %v", got)
 	}
@@ -24,7 +24,7 @@ func TestBuildCustomColumns_NilCfg(t *testing.T) {
 }
 
 func TestBuildCustomColumns_SingleService(t *testing.T) {
-	cfg := &config.DevboxConfig{
+	cfg := &config.DweConfig{
 		Services: map[string]config.ServiceConfig{
 			"main": {Type: config.ServiceTypeApp, Status: []config.StatusColumn{
 				{Name: "CONTAINER", Value: "{{ .ServiceCfg.Container }}"},
@@ -40,7 +40,7 @@ func TestBuildCustomColumns_SingleService(t *testing.T) {
 }
 
 func TestBuildCustomColumns_OverlappingAndDisjoint(t *testing.T) {
-	cfg := &config.DevboxConfig{
+	cfg := &config.DweConfig{
 		Services: map[string]config.ServiceConfig{
 			"beta": {Type: config.ServiceTypeApp, Status: []config.StatusColumn{
 				{Name: "BETA_ONLY", Value: "b"},
@@ -69,7 +69,7 @@ func TestBuildCustomColumns_OverlappingAndDisjoint(t *testing.T) {
 }
 
 func TestBuildCustomColumns_Tools(t *testing.T) {
-	cfg := &config.DevboxConfig{
+	cfg := &config.DweConfig{
 		Services: map[string]config.ServiceConfig{
 			"mailpit": {Type: config.ServiceTypeTool, Status: []config.StatusColumn{{Name: "ENDPOINT", Value: "x"}}},
 			"adminer": {Type: config.ServiceTypeTool, Status: []config.StatusColumn{{Name: "VERSION", Value: "x"}}},

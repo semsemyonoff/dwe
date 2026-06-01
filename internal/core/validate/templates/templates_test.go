@@ -16,7 +16,7 @@ import (
 func writeGitPack(t *testing.T, root, packName string, files map[string]string) {
 	t.Helper()
 	for rel, content := range files {
-		p := filepath.Join(root, "devbox", "templates", "git", packName, rel)
+		p := filepath.Join(root, "workspace", "templates", "git", packName, rel)
 		require.NoError(t, os.MkdirAll(filepath.Dir(p), 0o755))
 		require.NoError(t, os.WriteFile(p, []byte(content), 0o644))
 	}
@@ -72,7 +72,7 @@ func TestIDEValidator(t *testing.T) {
 			buildCtx: func() validate.Context {
 				return validate.Context{
 					ProjectRoot: t.TempDir(),
-					Cfg: &config.DevboxConfig{
+					Cfg: &config.DweConfig{
 						Services: make(map[string]config.ServiceConfig),
 					},
 				}
@@ -88,7 +88,7 @@ func TestIDEValidator(t *testing.T) {
 			buildCtx: func() validate.Context {
 				return validate.Context{
 					ProjectRoot: t.TempDir(),
-					Cfg: &config.DevboxConfig{
+					Cfg: &config.DweConfig{
 						Services: map[string]config.ServiceConfig{
 							"main": {
 								Enabled: false,
@@ -140,7 +140,7 @@ func TestAIValidator(t *testing.T) {
 			buildCtx: func() validate.Context {
 				return validate.Context{
 					ProjectRoot: t.TempDir(),
-					Cfg: &config.DevboxConfig{
+					Cfg: &config.DweConfig{
 						Services: make(map[string]config.ServiceConfig),
 					},
 				}
@@ -156,7 +156,7 @@ func TestAIValidator(t *testing.T) {
 			buildCtx: func() validate.Context {
 				return validate.Context{
 					ProjectRoot: t.TempDir(),
-					Cfg: &config.DevboxConfig{
+					Cfg: &config.DweConfig{
 						Services: map[string]config.ServiceConfig{
 							"main": {
 								Enabled: false,
@@ -197,7 +197,7 @@ func TestTemplateValidatorsIgnoreNonAppServices(t *testing.T) {
 	tr := true
 	ctx := validate.Context{
 		ProjectRoot: t.TempDir(),
-		Cfg: &config.DevboxConfig{
+		Cfg: &config.DweConfig{
 			Services: map[string]config.ServiceConfig{
 				"adminer": {
 					Enabled: true,
@@ -287,7 +287,7 @@ func TestIDEValidator_ImplicitMissingPackEmitsWarning(t *testing.T) {
 	v := &IDEValidator{}
 	diags := v.Run(validate.Context{
 		ProjectRoot: root,
-		Cfg: &config.DevboxConfig{
+		Cfg: &config.DweConfig{
 			Services: map[string]config.ServiceConfig{"main": ideSvc("services/main")},
 		},
 	})
@@ -314,7 +314,7 @@ func TestIDEValidator_ExplicitMissingPackEmitsError(t *testing.T) {
 	v := &IDEValidator{}
 	diags := v.Run(validate.Context{
 		ProjectRoot: root,
-		Cfg: &config.DevboxConfig{
+		Cfg: &config.DweConfig{
 			Services: map[string]config.ServiceConfig{"main": svc},
 		},
 	})
@@ -332,7 +332,7 @@ func TestAIValidator_ImplicitMissingPackEmitsWarning(t *testing.T) {
 	v := &AIValidator{}
 	diags := v.Run(validate.Context{
 		ProjectRoot: root,
-		Cfg: &config.DevboxConfig{
+		Cfg: &config.DweConfig{
 			Services: map[string]config.ServiceConfig{"main": aiSvc("services/main")},
 		},
 	})
@@ -359,7 +359,7 @@ func TestAIValidator_ExplicitMissingPackEmitsError(t *testing.T) {
 	v := &AIValidator{}
 	diags := v.Run(validate.Context{
 		ProjectRoot: root,
-		Cfg: &config.DevboxConfig{
+		Cfg: &config.DweConfig{
 			Services: map[string]config.ServiceConfig{"main": svc},
 		},
 	})
@@ -388,7 +388,7 @@ func TestGitValidator_NoServices(t *testing.T) {
 	v := &GitValidator{}
 	diags := v.Run(validate.Context{
 		ProjectRoot: t.TempDir(),
-		Cfg:         &config.DevboxConfig{Services: map[string]config.ServiceConfig{}},
+		Cfg:         &config.DweConfig{Services: map[string]config.ServiceConfig{}},
 	})
 	require.Len(t, diags, 1)
 	require.Equal(t, validate.SeverityOK, diags[0].Severity)
@@ -416,7 +416,7 @@ func TestGitValidator_InvalidToEmitsErrorEvenWhenSrcGitMissing(t *testing.T) {
 	v := &GitValidator{}
 	diags := v.Run(validate.Context{
 		ProjectRoot: root,
-		Cfg: &config.DevboxConfig{
+		Cfg: &config.DweConfig{
 			Services: map[string]config.ServiceConfig{"main": gitSvc("services/main")},
 		},
 	})
@@ -440,7 +440,7 @@ func TestGitValidator_ValidPackEmitsInfoForMissingSrcGit(t *testing.T) {
 	v := &GitValidator{}
 	diags := v.Run(validate.Context{
 		ProjectRoot: root,
-		Cfg: &config.DevboxConfig{
+		Cfg: &config.DweConfig{
 			Services: map[string]config.ServiceConfig{"main": gitSvc("services/main")},
 		},
 	})
@@ -459,7 +459,7 @@ func TestGitValidator_ImplicitMissingPackEmitsWarning(t *testing.T) {
 	v := &GitValidator{}
 	diags := v.Run(validate.Context{
 		ProjectRoot: root,
-		Cfg: &config.DevboxConfig{
+		Cfg: &config.DweConfig{
 			Services: map[string]config.ServiceConfig{"main": gitSvc("services/main")},
 		},
 	})
@@ -487,7 +487,7 @@ func TestGitValidator_ExplicitMissingPackEmitsError(t *testing.T) {
 	v := &GitValidator{}
 	diags := v.Run(validate.Context{
 		ProjectRoot: root,
-		Cfg: &config.DevboxConfig{
+		Cfg: &config.DweConfig{
 			Services: map[string]config.ServiceConfig{"main": svc},
 		},
 	})
@@ -502,13 +502,13 @@ func TestGitValidator_MissingManifestEmitsError(t *testing.T) {
 	root := t.TempDir()
 	require.NoError(t, os.MkdirAll(filepath.Join(root, "services", "main"), 0o755))
 	// Pack dir exists but no manifest.yml inside.
-	require.NoError(t, os.MkdirAll(filepath.Join(root, "devbox", "templates", "git", "default"), 0o755))
-	writeFileAt(t, filepath.Join(root, "devbox", "templates", "git", "default", "pre-commit.tmpl"), "#!/bin/sh\n")
+	require.NoError(t, os.MkdirAll(filepath.Join(root, "workspace", "templates", "git", "default"), 0o755))
+	writeFileAt(t, filepath.Join(root, "workspace", "templates", "git", "default", "pre-commit.tmpl"), "#!/bin/sh\n")
 
 	v := &GitValidator{}
 	diags := v.Run(validate.Context{
 		ProjectRoot: root,
-		Cfg: &config.DevboxConfig{
+		Cfg: &config.DweConfig{
 			Services: map[string]config.ServiceConfig{"main": gitSvc("services/main")},
 		},
 	})
@@ -529,7 +529,7 @@ func TestGitValidator_MissingFromFileEmitsError(t *testing.T) {
 	v := &GitValidator{}
 	diags := v.Run(validate.Context{
 		ProjectRoot: root,
-		Cfg: &config.DevboxConfig{
+		Cfg: &config.DweConfig{
 			Services: map[string]config.ServiceConfig{"main": gitSvc("services/main")},
 		},
 	})
@@ -548,13 +548,13 @@ func TestGitValidator_ShadowOverrideResolvesMissingFrom(t *testing.T) {
 	})
 	// Override supplies the missing file.
 	writeFileAt(t,
-		filepath.Join(root, "devbox", "templates", "git", "default.local", "pre-commit.tmpl"),
+		filepath.Join(root, "workspace", "templates", "git", "default.local", "pre-commit.tmpl"),
 		"#!/bin/sh\necho override\n")
 
 	v := &GitValidator{}
 	diags := v.Run(validate.Context{
 		ProjectRoot: root,
-		Cfg: &config.DevboxConfig{
+		Cfg: &config.DweConfig{
 			Services: map[string]config.ServiceConfig{"main": gitSvc("services/main")},
 		},
 	})
@@ -574,7 +574,7 @@ func TestGitValidator_NoOverrides_NoOverrideInfoDiag(t *testing.T) {
 	v := &GitValidator{}
 	diags := v.Run(validate.Context{
 		ProjectRoot: root,
-		Cfg: &config.DevboxConfig{
+		Cfg: &config.DweConfig{
 			Services: map[string]config.ServiceConfig{"main": gitSvc("services/main")},
 		},
 	})
@@ -592,13 +592,13 @@ func TestGitValidator_OneOverride_EmitsInfoDiag(t *testing.T) {
 		"pre-commit.tmpl": "#!/bin/sh\n",
 	})
 	writeFileAt(t,
-		filepath.Join(root, "devbox", "templates", "git", "default.local", "pre-commit.tmpl"),
+		filepath.Join(root, "workspace", "templates", "git", "default.local", "pre-commit.tmpl"),
 		"#!/bin/sh\necho override\n")
 
 	v := &GitValidator{}
 	diags := v.Run(validate.Context{
 		ProjectRoot: root,
-		Cfg: &config.DevboxConfig{
+		Cfg: &config.DweConfig{
 			Services: map[string]config.ServiceConfig{"main": gitSvc("services/main")},
 		},
 	})
@@ -621,7 +621,7 @@ func TestGitValidator_ManyOverrides_TruncatedListing(t *testing.T) {
 		fmt.Fprintf(&b, "  - {from: %s, to: hook%d}\n", name, i)
 		files[name] = "#!/bin/sh\n"
 		writeFileAt(t,
-			filepath.Join(root, "devbox", "templates", "git", "default.local", name),
+			filepath.Join(root, "workspace", "templates", "git", "default.local", name),
 			"#!/bin/sh\necho override\n")
 	}
 	files["manifest.yml"] = b.String()
@@ -630,7 +630,7 @@ func TestGitValidator_ManyOverrides_TruncatedListing(t *testing.T) {
 	v := &GitValidator{}
 	diags := v.Run(validate.Context{
 		ProjectRoot: root,
-		Cfg: &config.DevboxConfig{
+		Cfg: &config.DweConfig{
 			Services: map[string]config.ServiceConfig{"main": gitSvc("services/main")},
 		},
 	})

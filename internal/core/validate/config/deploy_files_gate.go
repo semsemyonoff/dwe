@@ -76,14 +76,14 @@ func (v *deployFilesGateValidator) Run(ctx validate.Context) []validate.Diagnost
 				Severity: validate.SeverityInfo,
 				Domain:   "config",
 				Target:   "config.deploy.files-gate",
-				File:     relPath(ctx.ProjectRoot, filepath.Join(ctx.ProjectRoot, "devbox", "deploy.yml")),
+				File:     relPath(ctx.ProjectRoot, filepath.Join(ctx.ProjectRoot, "workspace", "deploy.yml")),
 				Message:  "deploy.yml files_gate validation skipped: command registry not available",
 			})
 		}
 		return diags
 	}
 
-	deployPath := filepath.Join(ctx.ProjectRoot, "devbox", "deploy.yml")
+	deployPath := filepath.Join(ctx.ProjectRoot, "workspace", "deploy.yml")
 
 	// Iterate through all phases and steps in the deploy config
 	for phaseIdx, phase := range ctx.Cfg.Deploy.Phases {
@@ -135,7 +135,7 @@ func (v *deployFilesGateValidator) Run(ctx validate.Context) []validate.Diagnost
 		svcDeploys, err := config.LoadServiceDeployConfigs(ctx.ProjectRoot, ctx.Cfg.Services)
 		if err == nil {
 			for svcName, svcDeploy := range svcDeploys {
-				svcDeployPath := filepath.Join(ctx.ProjectRoot, "devbox", "deploy", svcName+".yml")
+				svcDeployPath := filepath.Join(ctx.ProjectRoot, "workspace", "deploy", svcName+".yml")
 				for phaseIdx, phase := range svcDeploy.Phases {
 					for stepIdx, step := range phase.Steps {
 						if step.FilesGate != nil {
@@ -236,7 +236,7 @@ func (v *lifecycleFilesGateValidator) Run(ctx validate.Context) []validate.Diagn
 		return diags
 	}
 
-	lifecyclePath := filepath.Join(ctx.ProjectRoot, "devbox", "lifecycle.yml")
+	lifecyclePath := filepath.Join(ctx.ProjectRoot, "workspace", "lifecycle.yml")
 
 	lifecycleCfg, err := config.LoadLifecycleConfig(lifecyclePath)
 	if err != nil {
@@ -331,7 +331,7 @@ func (v *resetFilesGateValidator) Run(ctx validate.Context) []validate.Diagnosti
 		return diags
 	}
 
-	resetPath := filepath.Join(ctx.ProjectRoot, "devbox", "reset.yml")
+	resetPath := filepath.Join(ctx.ProjectRoot, "workspace", "reset.yml")
 
 	resetCfg, err := config.LoadResetConfig(resetPath)
 	if err != nil {

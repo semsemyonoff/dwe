@@ -20,7 +20,7 @@ const defaultIndent = 2
 //
 // Returns an error if any Go template expression in text/value/when fields
 // fails to evaluate.
-func Info(cfg *config.DevboxConfig, infoCfg *config.InfoConfig) (string, error) {
+func Info(cfg *config.DweConfig, infoCfg *config.InfoConfig) (string, error) {
 	var sb strings.Builder
 
 	for _, section := range infoCfg.Sections {
@@ -48,7 +48,7 @@ func Info(cfg *config.DevboxConfig, infoCfg *config.InfoConfig) (string, error) 
 // items, and applies hide_on_empty.
 //
 // Parameters:
-//   - cfg: the DevboxConfig for template evaluation
+//   - cfg: the DweConfig for template evaluation
 //   - items: the items to render (section items or subgroup items)
 //   - hideOnEmpty: section.HideOnEmpty for sections, item.SubgroupHideOnEmpty() for subgroups
 //   - title: section.Title for sections, item.Title for subgroups (NOT item.Text)
@@ -63,7 +63,7 @@ func Info(cfg *config.DevboxConfig, infoCfg *config.InfoConfig) (string, error) 
 //     Parent uses this to decide whether to append `out`. Does NOT imply "counts as content".
 //   - err: any template/when/recursion error, fully propagated
 func renderBlock(
-	cfg *config.DevboxConfig,
+	cfg *config.DweConfig,
 	items []config.InfoItem,
 	hideOnEmpty bool,
 	title string,
@@ -231,7 +231,7 @@ func renderSectionTitle(text string) string {
 
 // renderInfoItem renders a single info item to a string (without trailing newline).
 // Subgroups are handled in renderBlock before reaching here.
-func renderInfoItem(cfg *config.DevboxConfig, item config.InfoItem) (string, error) {
+func renderInfoItem(cfg *config.DweConfig, item config.InfoItem) (string, error) {
 	switch item.Type {
 	case "definition":
 		value, err := tpl.Render(item.Value, cfg)

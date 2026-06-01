@@ -13,7 +13,7 @@ import (
 	"github.com/semsemyonoff/dwe/internal/shared/render"
 )
 
-func newDockerStopRemoveCtx(cfg *config.DevboxConfig) (spec.ExecContext, *bytes.Buffer) {
+func newDockerStopRemoveCtx(cfg *config.DweConfig) (spec.ExecContext, *bytes.Buffer) {
 	buf := &bytes.Buffer{}
 	return spec.ExecContext{
 		Config: cfg,
@@ -85,7 +85,7 @@ func TestDockerStopRemoveContainer_Run_HappyPath(t *testing.T) {
 		return nil
 	}
 
-	cfg := &config.DevboxConfig{}
+	cfg := &config.DweConfig{}
 	cfg.Project.Name = "tbm"
 	cfg.Project.Prefix = "devbox"
 
@@ -128,7 +128,7 @@ func TestDockerStopRemoveContainer_Run_DefaultTimeout(t *testing.T) {
 		func(_ context.Context, _, _ string) error { return nil },
 	)
 
-	cfg := &config.DevboxConfig{}
+	cfg := &config.DweConfig{}
 	cfg.Project.Name = "demo"
 	ectx, _ := newDockerStopRemoveCtx(cfg)
 	err := StopRemoveContainer{}.Run(
@@ -155,7 +155,7 @@ func TestDockerStopRemoveContainer_Run_StopFailurePropagatesAndSkipsRm(t *testin
 		},
 	)
 
-	cfg := &config.DevboxConfig{}
+	cfg := &config.DweConfig{}
 	cfg.Project.Name = "tbm"
 	ectx, buf := newDockerStopRemoveCtx(cfg)
 	err := StopRemoveContainer{}.Run(
@@ -187,7 +187,7 @@ func TestDockerStopRemoveContainer_Run_MissingContainerIdempotent(t *testing.T) 
 		func(_ context.Context, _, _ string, _ int) error { return nil },
 		func(_ context.Context, _, _ string) error { return nil },
 	)
-	cfg := &config.DevboxConfig{}
+	cfg := &config.DweConfig{}
 	cfg.Project.Name = "tbm"
 	ectx, buf := newDockerStopRemoveCtx(cfg)
 	err := StopRemoveContainer{}.Run(
@@ -213,7 +213,7 @@ func TestDockerStopRemoveContainer_Run_RmFailurePropagates(t *testing.T) {
 		func(_ context.Context, _, _ string, _ int) error { return nil },
 		func(_ context.Context, _, _ string) error { return rmErr },
 	)
-	cfg := &config.DevboxConfig{}
+	cfg := &config.DweConfig{}
 	cfg.Project.Name = "tbm"
 	ectx, _ := newDockerStopRemoveCtx(cfg)
 	err := StopRemoveContainer{}.Run(
@@ -242,7 +242,7 @@ func TestDockerStopRemoveContainer_Run_NoProjectPrefix(t *testing.T) {
 		},
 		func(_ context.Context, _, _ string) error { return nil },
 	)
-	cfg := &config.DevboxConfig{}
+	cfg := &config.DweConfig{}
 	cfg.Project.Name = "demo"
 	ectx, _ := newDockerStopRemoveCtx(cfg)
 	err := StopRemoveContainer{}.Run(
@@ -274,7 +274,7 @@ func TestDockerStopRemoveContainer_Run_NilConfig(t *testing.T) {
 }
 
 func TestDockerStopRemoveContainer_Run_InvalidContainerName(t *testing.T) {
-	cfg := &config.DevboxConfig{}
+	cfg := &config.DweConfig{}
 	cfg.Project.Name = "demo"
 	ectx, _ := newDockerStopRemoveCtx(cfg)
 	err := StopRemoveContainer{}.Run(

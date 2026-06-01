@@ -9,8 +9,8 @@ import (
 
 // --- pickService ---
 
-func makeTestConfig(services map[string]config.ServiceConfig) *config.DevboxConfig {
-	return &config.DevboxConfig{Services: services}
+func makeTestConfig(services map[string]config.ServiceConfig) *config.DweConfig {
+	return &config.DweConfig{Services: services}
 }
 
 func TestPickService_explicitName_returnsDirect(t *testing.T) {
@@ -19,7 +19,7 @@ func TestPickService_explicitName_returnsDirect(t *testing.T) {
 		"second": {Enabled: true},
 	})
 	selectorCalled := false
-	sel := func(_ *config.DevboxConfig, _ []string) (string, error) {
+	sel := func(_ *config.DweConfig, _ []string) (string, error) {
 		selectorCalled = true
 		return "", fmt.Errorf("should not call selector")
 	}
@@ -40,7 +40,7 @@ func TestPickService_singleEnabled_autoSelect(t *testing.T) {
 		"main": {Required: true},
 	})
 	selectorCalled := false
-	sel := func(_ *config.DevboxConfig, _ []string) (string, error) {
+	sel := func(_ *config.DweConfig, _ []string) (string, error) {
 		selectorCalled = true
 		return "", fmt.Errorf("should not call selector")
 	}
@@ -60,7 +60,7 @@ func TestPickService_noEnabled_error(t *testing.T) {
 	cfg := makeTestConfig(map[string]config.ServiceConfig{
 		"main": {Required: false, Enabled: false},
 	})
-	sel := func(_ *config.DevboxConfig, _ []string) (string, error) {
+	sel := func(_ *config.DweConfig, _ []string) (string, error) {
 		return "main", nil
 	}
 	_, err := pickService(cfg, "", sel)
@@ -75,7 +75,7 @@ func TestPickService_multipleEnabled_callsSelector(t *testing.T) {
 		"second": {Enabled: true},
 	})
 	selectorCalled := false
-	sel := func(_ *config.DevboxConfig, names []string) (string, error) {
+	sel := func(_ *config.DweConfig, names []string) (string, error) {
 		selectorCalled = true
 		return names[0], nil
 	}
@@ -95,7 +95,7 @@ func TestPickService_nonInteractiveSelector_multipleEnabled_returnsError(t *test
 		"main":   {Required: true},
 		"second": {Enabled: true},
 	})
-	nonTTYSelector := func(_ *config.DevboxConfig, _ []string) (string, error) {
+	nonTTYSelector := func(_ *config.DweConfig, _ []string) (string, error) {
 		return "", fmt.Errorf("multiple services are enabled; pass a service name or run in an interactive terminal")
 	}
 	_, err := pickService(cfg, "", nonTTYSelector)
@@ -110,7 +110,7 @@ func TestPickService_nonInteractiveSelector_singleEnabled_autoSelectsWithoutSele
 		"main": {Required: true},
 	})
 	selectorCalled := false
-	nonTTYSelector := func(_ *config.DevboxConfig, _ []string) (string, error) {
+	nonTTYSelector := func(_ *config.DweConfig, _ []string) (string, error) {
 		selectorCalled = true
 		return "", fmt.Errorf("not interactive")
 	}
