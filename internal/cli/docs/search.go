@@ -19,7 +19,7 @@ type docsSearchFlags struct {
 	limit  int
 }
 
-// docsSearchResult is one JSON record in `devbox docs search --output json`.
+// docsSearchResult is one JSON record in `dwe docs search --output json`.
 // Field names form an agent-facing contract; keep stable.
 type docsSearchResult struct {
 	Source string `json:"source"`
@@ -49,9 +49,9 @@ H1 (before the first H2) is reported with an empty anchor. Matches inside
 fenced code blocks are counted — that's where schema names usually appear.
 
 Examples:
-  devbox docs search depends_on
-  devbox docs search 'RunContext.Render' --source devbox
-  devbox docs search topo-sort --lang en --limit 5`,
+  dwe docs search depends_on
+  dwe docs search 'RunContext.Render' --source dwe
+  dwe docs search topo-sort --lang en --limit 5`,
 		Args: cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			return runDocsSearch(cmd, flags, df, args[0])
@@ -60,7 +60,7 @@ Examples:
 	}
 
 	cmd.Flags().StringVar(&df.lang, "lang", "", "Language code (default: from --lang flag / userconfig / $LANG / en)")
-	cmd.Flags().StringVar(&df.source, "source", "all", "Doc source: devbox, project, or all (default: all)")
+	cmd.Flags().StringVar(&df.source, "source", "all", "Doc source: dwe, project, or all (default: all)")
 	cmd.Flags().IntVar(&df.limit, "limit", 50, "Maximum result rows (0 = unlimited)")
 
 	return cmd

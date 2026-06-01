@@ -20,7 +20,7 @@ func TestSources(t *testing.T) {
 				return ""
 			},
 			want:      1,
-			wantNames: []string{"devbox"},
+			wantNames: []string{"dwe"},
 		},
 		{
 			name: "project root without docs",
@@ -29,7 +29,7 @@ func TestSources(t *testing.T) {
 				return tmpdir
 			},
 			want:      1,
-			wantNames: []string{"devbox"},
+			wantNames: []string{"dwe"},
 		},
 		{
 			name: "project root with docs",
@@ -42,7 +42,7 @@ func TestSources(t *testing.T) {
 				return tmpdir
 			},
 			want:      2,
-			wantNames: []string{"devbox", "project"},
+			wantNames: []string{"dwe", "project"},
 		},
 	}
 

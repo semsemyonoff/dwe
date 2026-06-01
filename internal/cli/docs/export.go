@@ -28,13 +28,13 @@ func newDocsExportCmd(flags *cmdctx.RootFlags) *cobra.Command {
 		Short: "Export documentation to a directory",
 		Long: `Export all documentation files to a target directory.
 
-Files are organized by source (devbox, project, internals).
+Files are organized by source (dwe, project, internals).
 Missing translations are exported with a banner indicating the original language.
 
 Examples:
-  devbox docs export /tmp/docs
-  devbox docs export /tmp/docs --lang ru
-  devbox docs export /tmp/docs --include-project --force`,
+  dwe docs export /tmp/docs
+  dwe docs export /tmp/docs --lang ru
+  dwe docs export /tmp/docs --include-project --force`,
 		Args: cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			return runDocsExport(cmd, flags, df, args[0])
@@ -70,8 +70,8 @@ func runDocsExport(cmd *cobra.Command, rflags *cmdctx.RootFlags, df *docsExportF
 	// Build the roots list based on options
 	roots := []coredocs.DocRoot{}
 	for _, r := range allRoots {
-		// Always include devbox
-		if r.Name == "devbox" {
+		// Always include dwe
+		if r.Name == "dwe" {
 			roots = append(roots, r)
 		}
 		// Optionally include project

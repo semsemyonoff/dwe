@@ -18,7 +18,7 @@ func TestNewModel(t *testing.T) {
 
 	roots := []docs.DocRoot{
 		{
-			Name: "devbox",
+			Name: "dwe",
 			FS:   fsys,
 		},
 	}
@@ -27,7 +27,7 @@ func TestNewModel(t *testing.T) {
 	// Use a no-op renderer for now
 	renderer := &testRenderer{}
 
-	m, err := NewModel(context.Background(), roots, "en", translator, renderer, 120, 30, "", "Devbox · Documentation", "auto")
+	m, err := NewModel(context.Background(), roots, "en", translator, renderer, 120, 30, "", "DWE · Documentation", "auto")
 	if err != nil {
 		t.Fatalf("NewModel failed: %v", err)
 	}
@@ -61,7 +61,7 @@ func TestModelView(t *testing.T) {
 
 	roots := []docs.DocRoot{
 		{
-			Name: "devbox",
+			Name: "dwe",
 			FS:   fsys,
 		},
 	}
@@ -69,7 +69,7 @@ func TestModelView(t *testing.T) {
 	translator := i18n.NopTranslator{}
 	renderer := &testRenderer{}
 
-	m, err := NewModel(context.Background(), roots, "en", translator, renderer, 80, 24, "", "Devbox · Documentation", "auto")
+	m, err := NewModel(context.Background(), roots, "en", translator, renderer, 80, 24, "", "DWE · Documentation", "auto")
 	if err != nil {
 		t.Fatalf("NewModel failed: %v", err)
 	}
@@ -98,7 +98,7 @@ func TestFocusSwitching(t *testing.T) {
 
 	roots := []docs.DocRoot{
 		{
-			Name: "devbox",
+			Name: "dwe",
 			FS:   fsys,
 		},
 	}
@@ -106,7 +106,7 @@ func TestFocusSwitching(t *testing.T) {
 	translator := i18n.NopTranslator{}
 	renderer := &testRenderer{}
 
-	m, err := NewModel(context.Background(), roots, "en", translator, renderer, 80, 24, "", "Devbox · Documentation", "auto")
+	m, err := NewModel(context.Background(), roots, "en", translator, renderer, 80, 24, "", "DWE · Documentation", "auto")
 	if err != nil {
 		t.Fatalf("NewModel failed: %v", err)
 	}

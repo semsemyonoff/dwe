@@ -11,7 +11,7 @@ import (
 type ResolvedTopic struct {
 	Path        string // Relative path (e.g., "config/services")
 	Anchor      string // Optional anchor (e.g., "anchor" from "config/services#anchor")
-	Source      string // Source root name ("devbox" or "project")
+	Source      string // Source root name ("dwe" or "project")
 	DisplayName string // Display name for the topic
 }
 
@@ -20,7 +20,7 @@ type TopicEntry struct {
 	Path        string // Relative path without .md
 	DisplayName string // Display name
 	Lang        string // Language ("en" or other locale code)
-	Source      string // Root name ("devbox" or "project")
+	Source      string // Root name ("dwe" or "project")
 }
 
 // ParseTopic splits a user input like "config/services#anchor" into path and anchor components.
@@ -228,11 +228,11 @@ func AllTopics(roots []DocRoot, locale string) []TopicEntry {
 	// Sort for deterministic output: by source, then by path
 	sort.Slice(topics, func(i, j int) bool {
 		if topics[i].Source != topics[j].Source {
-			// Put "devbox" before "project"
-			if topics[i].Source == "devbox" {
+			// Put "dwe" before "project"
+			if topics[i].Source == "dwe" {
 				return true
 			}
-			if topics[j].Source == "devbox" {
+			if topics[j].Source == "dwe" {
 				return false
 			}
 		}

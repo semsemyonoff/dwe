@@ -14,7 +14,7 @@ func TestResolveContent_English(t *testing.T) {
 		"config/services.md": &fstest.MapFile{Data: []byte("# Services\n\nConfiguration.")},
 	}
 	root := DocRoot{
-		Name: "devbox",
+		Name: "dwe",
 		FS:   fsys,
 	}
 
@@ -42,7 +42,7 @@ func TestResolveContent_TranslationWithMatchingHash(t *testing.T) {
 		},
 	}
 	root := DocRoot{
-		Name: "devbox",
+		Name: "dwe",
 		FS:   fsys,
 	}
 
@@ -77,7 +77,7 @@ func TestResolveContent_TranslationWithStaleHash(t *testing.T) {
 		},
 	}
 	root := DocRoot{
-		Name: "devbox",
+		Name: "dwe",
 		FS:   fsys,
 	}
 
@@ -109,7 +109,7 @@ func TestResolveContent_TranslationMissing_FallbackToEnglish(t *testing.T) {
 		"config/services.md": &fstest.MapFile{Data: []byte("# Services\n\nConfiguration.")},
 	}
 	root := DocRoot{
-		Name: "devbox",
+		Name: "dwe",
 		FS:   fsys,
 	}
 
@@ -137,7 +137,7 @@ func TestResolveContent_TranslationWithEmptyManifest(t *testing.T) {
 		},
 	}
 	root := DocRoot{
-		Name: "devbox",
+		Name: "dwe",
 		FS:   fsys,
 	}
 
@@ -170,7 +170,7 @@ func TestResolveContent_MalformedHeader(t *testing.T) {
 		},
 	}
 	root := DocRoot{
-		Name: "devbox",
+		Name: "dwe",
 		FS:   fsys,
 	}
 
@@ -204,7 +204,7 @@ func TestResolveContent_ReadmeWithMatchingHash(t *testing.T) {
 		},
 	}
 	root := DocRoot{
-		Name: "devbox",
+		Name: "dwe",
 		FS:   fsys,
 	}
 
@@ -238,7 +238,7 @@ func TestResolveContent_ReadmeWithStaleHash(t *testing.T) {
 		},
 	}
 	root := DocRoot{
-		Name: "devbox",
+		Name: "dwe",
 		FS:   fsys,
 	}
 
@@ -353,7 +353,7 @@ func TestAvailableLocalesFor(t *testing.T) {
 		"i18n/fr/other.md":           &fstest.MapFile{Data: []byte("# Autre")}, // Different file
 	}
 	root := DocRoot{
-		Name: "devbox",
+		Name: "dwe",
 		FS:   fsys,
 	}
 
@@ -464,7 +464,7 @@ func TestAvailableLocalesFor_NoI18n(t *testing.T) {
 		"config/services.md": &fstest.MapFile{Data: []byte("# Services")},
 	}
 	root := DocRoot{
-		Name: "devbox",
+		Name: "dwe",
 		FS:   fsys,
 	}
 

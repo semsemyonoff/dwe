@@ -97,9 +97,9 @@ func formatEvent(ev Event) (title, body string) {
 		op = "operation"
 	}
 	dur := humaniseDuration(ev.Duration)
-	prefix := "Devbox"
+	prefix := "DWE"
 	if ev.Project != "" {
-		prefix = "Devbox · " + ev.Project
+		prefix = "DWE · " + ev.Project
 	}
 	switch ev.Outcome {
 	case OutcomeFailure:

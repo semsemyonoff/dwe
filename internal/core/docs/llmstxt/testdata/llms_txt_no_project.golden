@@ -1,12 +1,12 @@
-# devbox
+# dwe
 
-> devbox is a developer tool for local development environments running on Docker. Use `devbox --help` for a full command list.
+> dwe is a developer tool for local development environments running on Docker. Use `dwe --help` for a full command list.
 
 ## Quick start
 
-- `devbox status` — see what's running
-- `devbox validate` — check project health
-- `devbox info` — project overview
-- `devbox docs llms-txt` — regenerate this index
-- `devbox --help` — full command list
+- `dwe status` — see what's running
+- `dwe validate` — check project health
+- `dwe info` — project overview
+- `dwe docs llms-txt` — regenerate this index
+- `dwe --help` — full command list
 

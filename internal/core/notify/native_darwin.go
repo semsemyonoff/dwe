@@ -15,7 +15,7 @@ import (
 // macOS (Sonoma / Sequoia) silently ignores `-appIcon` for
 // terminal-notifier and shows its bundle icon instead, so `-appIcon`
 // is best-effort for older releases while `-contentImage` reliably
-// renders the Devbox logo as a thumbnail in the notification body.
+// renders the DWE logo as a thumbnail in the notification body.
 //
 // If terminal-notifier is missing or fails we fall back to osascript,
 // which can post a notification but cannot carry a custom icon — the
@@ -25,7 +25,7 @@ var osNotify = darwinNotify
 // terminalNotifierGroup is the value passed to `-group`. It controls
 // notification stacking in Notification Center; matches beeep's
 // historical `AppName` value so existing groupings stay stable.
-const terminalNotifierGroup = "Devbox"
+const terminalNotifierGroup = "DWE"
 
 func darwinNotify(title, body string, icon any) error {
 	iconBytes, ok := icon.([]byte)
@@ -73,7 +73,7 @@ func darwinNotify(title, body string, icon any) error {
 }
 
 func writeTempIcon(b []byte) (string, func(), error) {
-	f, err := os.CreateTemp("", "devbox-notify-*.png")
+	f, err := os.CreateTemp("", "dwe-notify-*.png")
 	if err != nil {
 		return "", nil, err
 	}

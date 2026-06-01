@@ -95,13 +95,13 @@ func newCommandListCmd(flags *cmdctx.RootFlags) *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "list [group]",
 		Short: "List available commands",
-		Long: `List all available declarative commands from devbox/commands/.
+		Long: `List all available declarative commands from workspace/commands/.
 
 An optional group filter narrows the output to a specific command group (e.g. 'db', 'services.main').
 Use --all to include private commands.`,
-		Example: `  devbox commands list
-  devbox commands list db
-  devbox commands list --all`,
+		Example: `  dwe commands list
+  dwe commands list db
+  dwe commands list --all`,
 		Args: cobra.MaximumNArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			groupFilter := ""
@@ -229,12 +229,12 @@ func resolveCommandID(reg *usercommands.Registry, args []string, includePrivate 
 	return selector(defs, selectorTitle(projectName, "Commands"))
 }
 
-// selectorTitle composes the selector header from a fixed "Devbox" prefix,
+// selectorTitle composes the selector header from a fixed "DWE" prefix,
 // the project name (when set), and the base title, joined with middots. The
-// "Devbox" prefix is always present so the TUI advertises which tool owns the
+// "DWE" prefix is always present so the TUI advertises which tool owns the
 // window regardless of project context.
 func selectorTitle(projectName, base string) string {
-	parts := []string{"Devbox"}
+	parts := []string{"DWE"}
 	if projectName != "" {
 		parts = append(parts, projectName)
 	}

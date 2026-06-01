@@ -25,8 +25,8 @@ func Tree(dst string, roots []docs.DocRoot, opts Opts) error {
 	filteredRoots := []docs.DocRoot{}
 	for _, root := range roots {
 		switch root.Name {
-		case "devbox":
-			// Always include devbox root
+		case "dwe":
+			// Always include dwe root
 			filteredRoots = append(filteredRoots, root)
 		case "project":
 			if opts.IncludeProject {
@@ -70,8 +70,8 @@ func Tree(dst string, roots []docs.DocRoot, opts Opts) error {
 
 func exportRoot(dst string, root docs.DocRoot, opts Opts) error {
 	// Use root.Name as the subdir so the canonical tree shape is preserved
-	// (e.g. dst/devbox/reference/config/services.md, dst/devbox/internals/...,
-	// dst/project/...). The earlier override (devbox → "reference") combined
+	// (e.g. dst/dwe/reference/config/services.md, dst/dwe/internals/...,
+	// dst/project/...). The earlier override (dwe → "reference") combined
 	// with canonical node.Path values like "reference/config/services.md"
 	// produced "dst/reference/reference/..." and stuffed internals under
 	// reference; using the root name keeps roots separated and matches the
@@ -92,7 +92,7 @@ func walkAndExport(dst, subdir string, node *docs.Node, root docs.DocRoot, opts 
 
 	// Skip the internals subtree when IncludeInternals is false.
 	// Node.Path for a top-level directory equals its name ("internals").
-	if !opts.IncludeInternals && node.Path == "internals" && root.Name == "devbox" {
+	if !opts.IncludeInternals && node.Path == "internals" && root.Name == "dwe" {
 		return nil
 	}
 

@@ -24,14 +24,14 @@ func newDocsGenerateCmd(flags *cmdctx.RootFlags) *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "generate",
 		Short: "Generate reference documentation",
-		Long: `Generate reference documentation for the devbox CLI command tree and/or the
-declarative command registry (devbox/commands/).
+		Long: `Generate reference documentation for the dwe CLI command tree and/or the
+declarative command registry (workspace/commands/).
 
 Supported formats: markdown, yaml, man, all
 Supported scopes:  all, cli, commands`,
-		Example: `  devbox docs generate
-  devbox docs generate --format markdown --scope cli --out docs/reference
-  devbox docs generate --format all --scope all --include-private`,
+		Example: `  dwe docs generate
+  dwe docs generate --format markdown --scope cli --out docs/reference
+  dwe docs generate --format all --scope all --include-private`,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			return runDocsGenerate(cmd, flags, df)
 		},
@@ -63,7 +63,7 @@ func runDocsGenerate(cmd *cobra.Command, rflags *cmdctx.RootFlags, df *docsFlags
 			if df.scope == "all" {
 				scopeLabel = "all scope (which includes commands)"
 			}
-			return fmt.Errorf("%s requires a devbox project; use --scope cli to generate CLI reference docs without a project", scopeLabel)
+			return fmt.Errorf("%s requires a dwe project; use --scope cli to generate CLI reference docs without a project", scopeLabel)
 		}
 		var cwdErr error
 		projectRoot, cwdErr = os.Getwd()
@@ -304,7 +304,7 @@ func walkAllCommands(cmd *cobra.Command, fn func(*cobra.Command) error) error {
 func genCLIIndex(root *cobra.Command, dir string, includeHidden bool) error {
 	var sb strings.Builder
 	sb.WriteString("# CLI Reference\n\n")
-	sb.WriteString("Generated reference for the `devbox` command tree.\n\n")
+	sb.WriteString("Generated reference for the `dwe` command tree.\n\n")
 	sb.WriteString("## Commands\n\n")
 
 	writeCLIIndexEntries(&sb, root, includeHidden, 0)
@@ -703,7 +703,7 @@ func genCommandsIndex(reg *usercommands.Registry, dir string, includePrivate boo
 
 	var sb strings.Builder
 	sb.WriteString("# Commands Reference\n\n")
-	sb.WriteString("Reference for declarative commands defined in `devbox/commands/`.\n\n")
+	sb.WriteString("Reference for declarative commands defined in `workspace/commands/`.\n\n")
 
 	if len(defs) == 0 {
 		sb.WriteString("No commands defined.\n")
@@ -757,11 +757,11 @@ func genCommandsIndex(reg *usercommands.Registry, dir string, includePrivate boo
 // genTopLevelIndex writes a top-level docs/reference/index.md.
 func genTopLevelIndex(outDir string, scopes map[string]bool) error {
 	var sb strings.Builder
-	sb.WriteString("# devbox Reference Documentation\n\n")
-	sb.WriteString("Generated reference documentation for devbox.\n\n")
+	sb.WriteString("# dwe Reference Documentation\n\n")
+	sb.WriteString("Generated reference documentation for dwe.\n\n")
 	sb.WriteString("## Sections\n\n")
 	if scopes["cli"] {
-		sb.WriteString("- [CLI Reference](cli/index.md) — `devbox` command tree\n")
+		sb.WriteString("- [CLI Reference](cli/index.md) — `dwe` command tree\n")
 	}
 	if scopes["commands"] {
 		// List language subdirectories under commands/

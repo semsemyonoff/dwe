@@ -139,17 +139,17 @@ Exit code:
   1 - one or more errors, or warnings with --strict
 
 Scope targets:
-  devbox validate                              - all (config + templates + commands + env + checks + linters + translations + snapshot)
-  devbox validate config                       - all config validators
-  devbox validate config <devbox|services|...> - specific config validator
-  devbox validate templates                    - all template validators (ide, ai, git)
-  devbox validate templates <ide|ai|git>       - specific template validator
-  devbox validate commands                     - commands validator
-  devbox validate env                          - environment readiness probes
-  devbox validate checks [id]                  - project checks from devbox/validate.yml
-  devbox validate linters [id]                 - external linters from devbox/validate.yml + autodetected built-ins
-  devbox validate translations                 - translation files in devbox/i18n/
-  devbox validate snapshot [<name>]            - snapshot config + on-disk integrity
+  dwe validate                                   - all (config + templates + commands + env + checks + linters + translations + snapshot)
+  dwe validate config                            - all config validators
+  dwe validate config <workspace|services|...>   - specific config validator
+  dwe validate templates                         - all template validators (ide, ai, git)
+  dwe validate templates <ide|ai|git>            - specific template validator
+  dwe validate commands                          - commands validator
+  dwe validate env                               - environment readiness probes
+  dwe validate checks [id]                       - project checks from workspace/validate.yml
+  dwe validate linters [id]                      - external linters from workspace/validate.yml + autodetected built-ins
+  dwe validate translations                      - translation files in workspace/i18n/
+  dwe validate snapshot [<name>]                 - snapshot config + on-disk integrity
 `,
 		Args:         cobra.NoArgs,
 		SilenceUsage: true,

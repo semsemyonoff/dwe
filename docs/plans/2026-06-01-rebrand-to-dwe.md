@@ -545,26 +545,26 @@ rg -n 'devbox|Devbox|DEVBOX' internal/cli internal/core/docs internal/core/ui in
 ```
 Review the full list. Allow only intentional test-data identifiers (e.g. `devbox-v2-good` test IDs); everything else gets rebranded.
 
-- [ ] notify package: `"Devbox"` → `"DWE"` in `native.go:100`, `native_darwin.go:28` (`terminalNotifierGroup`), `native_other.go:8` (`beeep.AppName`); `"devbox-notify-*.png"` → `"dwe-notify-*.png"` in `native_darwin.go:76`
-- [ ] `internal/core/ui/render/brand_header.go:32` `"Devbox"` → `"DWE"`
-- [ ] `internal/cli/docs/docs.go:38` `parts := []string{"Devbox"}` → `"DWE"`
-- [ ] `internal/cli/command/list.go:232,234,237` selector title `"Devbox"` → `"DWE"`
-- [ ] `internal/cli/docs/generate.go`: prose `# devbox Reference Documentation` and similar headings → `# dwe …`
-- [ ] **Cobra Short/Long updates** in `command/command.go:53`, `command/list.go:98`, `docs/show.go:44`, `docs/generate.go:27`, `docs/llmstxt.go:35` — replace product-name prose `devbox` → `dwe`
-- [ ] llmstxt generator:
-  - [ ] `internal/core/docs/llmstxt/generator.go:56-73` `# devbox` heading + prose → `# dwe`
-  - [ ] `internal/core/docs/llmstxt/generator.go:189,200` URI scheme `devbox-docs://` → `dwe-docs://`
-  - [ ] update all asserts in `generator_test.go`
-- [ ] docs source root + downstream branches:
-  - [ ] `internal/core/docs/source.go:14,25` `Name: "devbox"` → `"dwe"`
-  - [ ] `internal/core/docs/topic.go:14,23,231-235` `"devbox"` tie-break literal → `"dwe"`
-  - [ ] **`internal/cli/docs/export.go:74`** `if r.Name == "devbox"` → `"dwe"` (filter for built-in docs root)
-  - [ ] **`internal/core/docs/export/export.go:28,95`** `root.Name == "devbox"` branches → `"dwe"`
-  - [ ] **`internal/cli/docs/show.go:280`** any `"devbox"` discriminator → `"dwe"`
-  - [ ] **`internal/core/docs/tui/tree_widget.go:161`** TUI root identifier → `"dwe"`
-  - [ ] update `--source` help text and export destination assertions in `internal/cli/docs/` tests
-- [ ] `rg -n '"Devbox"|devbox-docs://|Name:\s*"devbox"' --type go` returns zero (precheck)
-- [ ] `make build && make test` — must end **green**
+- [x] notify package: `"Devbox"` → `"DWE"` in `native.go:100`, `native_darwin.go:28` (`terminalNotifierGroup`), `native_other.go:8` (`beeep.AppName`); `"devbox-notify-*.png"` → `"dwe-notify-*.png"` in `native_darwin.go:76`
+- [x] `internal/core/ui/render/brand_header.go:32` `"Devbox"` → `"DWE"`
+- [x] `internal/cli/docs/docs.go:38` `parts := []string{"Devbox"}` → `"DWE"`
+- [x] `internal/cli/command/list.go:232,234,237` selector title `"Devbox"` → `"DWE"`
+- [x] `internal/cli/docs/generate.go`: prose `# devbox Reference Documentation` and similar headings → `# dwe …`
+- [x] **Cobra Short/Long updates** in `command/command.go:53`, `command/list.go:98`, `docs/show.go:44`, `docs/generate.go:27`, `docs/llmstxt.go:35` — replace product-name prose `devbox` → `dwe`
+- [x] llmstxt generator:
+  - [x] `internal/core/docs/llmstxt/generator.go:56-73` `# devbox` heading + prose → `# dwe`
+  - [x] `internal/core/docs/llmstxt/generator.go:189,200` URI scheme `devbox-docs://` → `dwe-docs://`
+  - [x] update all asserts in `generator_test.go`
+- [x] docs source root + downstream branches:
+  - [x] `internal/core/docs/source.go:14,25` `Name: "devbox"` → `"dwe"`
+  - [x] `internal/core/docs/topic.go:14,23,231-235` `"devbox"` tie-break literal → `"dwe"`
+  - [x] **`internal/cli/docs/export.go:74`** `if r.Name == "devbox"` → `"dwe"` (filter for built-in docs root)
+  - [x] **`internal/core/docs/export/export.go:28,95`** `root.Name == "devbox"` branches → `"dwe"`
+  - [x] **`internal/cli/docs/show.go:280`** any `"devbox"` discriminator → `"dwe"`
+  - [x] **`internal/core/docs/tui/tree_widget.go:161`** TUI root identifier → `"dwe"`
+  - [x] update `--source` help text and export destination assertions in `internal/cli/docs/` tests
+- [x] `rg -n '"Devbox"|devbox-docs://|Name:\s*"devbox"' --type go` returns zero (precheck)
+- [x] `make build && make test` — must end **green**
 
 ### Task 11: Phase 4a — English docs
 

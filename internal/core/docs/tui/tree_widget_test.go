@@ -19,7 +19,7 @@ func TestTreeWidget(t *testing.T) {
 
 	roots := []docs.DocRoot{
 		{
-			Name: "devbox",
+			Name: "dwe",
 			FS:   fsys,
 		},
 	}
@@ -49,7 +49,7 @@ func TestTreeWidgetNavigation(t *testing.T) {
 
 	roots := []docs.DocRoot{
 		{
-			Name: "devbox",
+			Name: "dwe",
 			FS:   fsys,
 		},
 	}
@@ -108,7 +108,7 @@ func (e *testDirEntry) Info() (fs.FileInfo, error) { return nil, nil }
 // added a node when one of its own ancestors had already been added in
 // the same pass, but no ancestor matched the query.
 func TestFilterShowsParentOfMatchingHeading(t *testing.T) {
-	roots := []docs.DocRoot{{Name: "devbox", FS: filterFixtureFS{}}}
+	roots := []docs.DocRoot{{Name: "dwe", FS: filterFixtureFS{}}}
 	tw, err := NewTreeWidget(roots, "en")
 	if err != nil {
 		t.Fatalf("NewTreeWidget: %v", err)

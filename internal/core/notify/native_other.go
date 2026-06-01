@@ -5,7 +5,7 @@ package notify
 import "github.com/gen2brain/beeep"
 
 func init() {
-	beeep.AppName = "Devbox"
+	beeep.AppName = "DWE"
 }
 
 // osNotify on non-darwin platforms delegates straight to beeep, which

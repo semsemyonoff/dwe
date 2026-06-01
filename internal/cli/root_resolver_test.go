@@ -205,8 +205,8 @@ func TestRootResolver_DocsScope_NoProject_CommandsFails(t *testing.T) {
 	if err == nil {
 		t.Fatal("docs generate --scope commands without project should fail, got nil")
 	}
-	if !strings.Contains(err.Error(), "devbox project") {
-		t.Errorf("error should mention 'devbox project', got: %v", err)
+	if !strings.Contains(err.Error(), "dwe project") {
+		t.Errorf("error should mention 'dwe project', got: %v", err)
 	}
 }
 
@@ -226,8 +226,8 @@ func TestRootResolver_DocsScope_NoProject_AllFails(t *testing.T) {
 	if err == nil {
 		t.Fatal("docs generate --scope all without project should fail, got nil")
 	}
-	if !strings.Contains(err.Error(), "devbox project") {
-		t.Errorf("error should mention 'devbox project', got: %v", err)
+	if !strings.Contains(err.Error(), "dwe project") {
+		t.Errorf("error should mention 'dwe project', got: %v", err)
 	}
 	if !strings.Contains(err.Error(), "all scope") {
 		t.Errorf("error should mention 'all scope', got: %v", err)

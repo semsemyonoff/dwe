@@ -35,7 +35,7 @@ type TreeWidget struct {
 }
 
 // projectDevboxForTUI returns the user-facing projection of the canonical
-// devbox docs tree: drops the `internals/` subtree (not user-facing) and
+// dwe docs tree: drops the `internals/` subtree (not user-facing) and
 // promotes `reference/` children to top-level so the TUI doesn't show a
 // redundant `reference/` folder. The `Node.Path` on each surviving node is
 // unchanged (still `reference/foo.md`) so ResolveContent and
@@ -152,13 +152,13 @@ func (tw *TreeWidget) rebuild() error {
 		if tree == nil || tree.Children == nil {
 			continue
 		}
-		// TUI-only projection of the devbox built-in docs: hide the
+		// TUI-only projection of the dwe built-in docs: hide the
 		// `internals/` subtree and promote `reference/` children to top
 		// level. Done HERE — not in BuildTree — so non-TUI consumers
-		// (notably `devbox docs export --include-internals`) still see the
+		// (notably `dwe docs export --include-internals`) still see the
 		// full canonical tree.
 		children := tree.Children
-		if root.Name == "devbox" {
+		if root.Name == "dwe" {
 			children = projectDevboxForTUI(tree.Children)
 		}
 		if useGroups {

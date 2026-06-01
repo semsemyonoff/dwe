@@ -102,7 +102,7 @@ func TestResolveExact(t *testing.T) {
 
 	roots := []DocRoot{
 		{
-			Name: "devbox",
+			Name: "dwe",
 			FS:   testFS,
 		},
 	}
@@ -116,8 +116,8 @@ func TestResolveExact(t *testing.T) {
 		t.Errorf("expected path %q, got %q", "config/services", result.Path)
 	}
 
-	if result.Source != "devbox" {
-		t.Errorf("expected source %q, got %q", "devbox", result.Source)
+	if result.Source != "dwe" {
+		t.Errorf("expected source %q, got %q", "dwe", result.Source)
 	}
 }
 
@@ -129,7 +129,7 @@ func TestResolveFuzzyMatch(t *testing.T) {
 
 	roots := []DocRoot{
 		{
-			Name: "devbox",
+			Name: "dwe",
 			FS:   testFS,
 		},
 	}
@@ -157,7 +157,7 @@ func TestResolveMultipleMatches(t *testing.T) {
 
 	roots := []DocRoot{
 		{
-			Name: "devbox",
+			Name: "dwe",
 			FS:   testFS,
 		},
 	}
@@ -192,7 +192,7 @@ func TestResolveLastSegmentPreferred(t *testing.T) {
 		"commands/services/foo.md": &fstest.MapFile{Data: []byte("# Foo")},
 		"commands/services/bar.md": &fstest.MapFile{Data: []byte("# Bar")},
 	}
-	roots := []DocRoot{{Name: "devbox", FS: testFS}}
+	roots := []DocRoot{{Name: "dwe", FS: testFS}}
 
 	got, err := Resolve(roots, "services", "en")
 	if err != nil {
@@ -211,7 +211,7 @@ func TestResolveAmbiguousCap(t *testing.T) {
 		key := fmt.Sprintf("group%02d/services.md", i)
 		testFS[key] = &fstest.MapFile{Data: []byte("# x")}
 	}
-	roots := []DocRoot{{Name: "devbox", FS: testFS}}
+	roots := []DocRoot{{Name: "dwe", FS: testFS}}
 
 	_, err := Resolve(roots, "services", "en")
 
@@ -234,7 +234,7 @@ func TestResolveNotFound(t *testing.T) {
 
 	roots := []DocRoot{
 		{
-			Name: "devbox",
+			Name: "dwe",
 			FS:   testFS,
 		},
 	}
@@ -260,7 +260,7 @@ func TestAllTopics(t *testing.T) {
 
 	roots := []DocRoot{
 		{
-			Name: "devbox",
+			Name: "dwe",
 			FS:   testFS,
 		},
 	}
@@ -293,7 +293,7 @@ func TestAllTopicsDeterministic(t *testing.T) {
 
 	roots := []DocRoot{
 		{
-			Name: "devbox",
+			Name: "dwe",
 			FS:   testFS,
 		},
 	}

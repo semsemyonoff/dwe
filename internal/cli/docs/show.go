@@ -41,8 +41,8 @@ Topics are matched case-insensitively with fuzzy substring matching if exact mat
 When more than one topic matches and there is no unique closest segment, the command
 lists the candidates and exits with an error — pass a more specific path to
 disambiguate. Common examples:
-  - "devbox" alone is ambiguous (both "reference/cli/devbox" and
-    "reference/config/dwe" match); pass "config/dwe" or "cli/devbox".
+  - "dwe" alone is ambiguous (both "reference/cli/dwe" and
+    "reference/config/dwe" match); pass "config/dwe" or "cli/dwe".
   - Multi-page topics like "config/services" are ambiguous on their own;
     pass the specific sub-page, e.g. "config/services/index",
     "config/services/fields", or "config/services/examples".
@@ -61,11 +61,11 @@ This command always emits markdown — the global --output json flag is ignored
 here, since the document is the payload.
 
 Examples:
-  devbox docs show config/services/index
-  devbox docs show config/devbox#binary-overrides --lang en
-  devbox docs show config/services/fields --lang en
-  devbox docs show config/services/fields --anchors --lang en
-  devbox docs show config/services/fields --toc --lang en`,
+  dwe docs show config/services/index
+  dwe docs show config/workspace#binary-overrides --lang en
+  dwe docs show config/services/fields --lang en
+  dwe docs show config/services/fields --anchors --lang en
+  dwe docs show config/services/fields --toc --lang en`,
 		Args: cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			return runDocsShow(cmd, flags, df, args[0])
@@ -94,7 +94,7 @@ Examples:
 
 	cmd.Flags().StringVar(&df.lang, "lang", "", "Language code (default: from --lang flag / userconfig / $LANG / en)")
 	cmd.Flags().BoolVar(&df.raw, "raw", false, "Output raw markdown (no syntax highlighting, even in TTY)")
-	cmd.Flags().StringVar(&df.source, "source", "all", "Doc source: devbox, project, or all (default: all)")
+	cmd.Flags().StringVar(&df.source, "source", "all", "Doc source: dwe, project, or all (default: all)")
 	cmd.Flags().BoolVar(&df.anchors, "anchors", false, "Print available anchor slugs (one per line) and exit")
 	cmd.Flags().BoolVar(&df.toc, "toc", false, "Print table of contents (level\\tslug\\ttext, TSV) and exit")
 
@@ -277,9 +277,9 @@ func runDocsShow(cmd *cobra.Command, rflags *cmdctx.RootFlags, df *docsShowFlags
 // filterDocRoots filters documentation sources by the --source flag.
 func filterDocRoots(roots []coredocs.DocRoot, sourceFlag string) []coredocs.DocRoot {
 	switch sourceFlag {
-	case "devbox":
+	case "dwe":
 		for i, r := range roots {
-			if r.Name == "devbox" {
+			if r.Name == "dwe" {
 				return roots[i : i+1]
 			}
 		}
@@ -308,10 +308,10 @@ func getTermWidth() int {
 }
 
 // buildShowMermaidPlaceholder always returns nil so PreprocessMermaid leaves
-// mermaid fenced blocks verbatim. `devbox docs show` is meant for piping /
+// mermaid fenced blocks verbatim. `dwe docs show` is meant for piping /
 // scripting; rendering diagrams to PNG and showing a "cached" placeholder
 // added noise without ever displaying the diagram. The interactive
-// `devbox docs` TUI is the place to view rendered diagrams.
+// `dwe docs` TUI is the place to view rendered diagrams.
 func buildShowMermaidPlaceholder(_ context.Context, _ *config.DweConfig, _ []byte, _ string, _ int) render.PlaceholderFunc {
 	return nil
 }

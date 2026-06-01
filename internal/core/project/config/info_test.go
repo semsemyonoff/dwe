@@ -13,7 +13,7 @@ sections:
   - id: devbox_info
     items:
       - type: subgroup
-        title: Devbox
+        title: DWE
         items:
           - type: definition
             indent: 2
@@ -77,8 +77,8 @@ func TestLoadInfoConfig(t *testing.T) {
 	if subgroup.Type != "subgroup" {
 		t.Errorf("sections[0].items[0].type = %q, want subgroup", subgroup.Type)
 	}
-	if subgroup.Title != "Devbox" {
-		t.Errorf("sections[0].items[0].title = %q, want Devbox", subgroup.Title)
+	if subgroup.Title != "DWE" {
+		t.Errorf("sections[0].items[0].title = %q, want DWE", subgroup.Title)
 	}
 	if len(subgroup.Items) != 2 {
 		t.Fatalf("subgroup items = %d, want 2", len(subgroup.Items))

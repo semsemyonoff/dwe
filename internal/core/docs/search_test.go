@@ -20,7 +20,7 @@ func TestSearch_AttributesToNearestSection(t *testing.T) {
 		"Beta does not mention the keyword.\n",
 	)
 	roots := []DocRoot{{
-		Name: "devbox",
+		Name: "dwe",
 		FS:   fstest.MapFS{"config/services.md": &fstest.MapFile{Data: doc}},
 	}}
 
@@ -42,7 +42,7 @@ func TestSearch_AttributesToNearestSection(t *testing.T) {
 func TestSearch_CaseInsensitive(t *testing.T) {
 	doc := []byte("# T\n\n## Section\n\nFooBar foobar FOOBAR\n")
 	roots := []DocRoot{{
-		Name: "devbox",
+		Name: "dwe",
 		FS:   fstest.MapFS{"x.md": &fstest.MapFile{Data: doc}},
 	}}
 	hits := Search(roots, "foobar", "en")
@@ -53,7 +53,7 @@ func TestSearch_CaseInsensitive(t *testing.T) {
 
 func TestSearch_EmptyQuery(t *testing.T) {
 	roots := []DocRoot{{
-		Name: "devbox",
+		Name: "dwe",
 		FS:   fstest.MapFS{"x.md": &fstest.MapFile{Data: []byte("# T\n\nbody\n")}},
 	}}
 	if hits := Search(roots, "", "en"); hits != nil {
@@ -63,7 +63,7 @@ func TestSearch_EmptyQuery(t *testing.T) {
 
 func TestSearch_SortByCountThenPath(t *testing.T) {
 	roots := []DocRoot{{
-		Name: "devbox",
+		Name: "dwe",
 		FS: fstest.MapFS{
 			"b.md": &fstest.MapFile{Data: []byte("# T\n\n## A\n\nneedle needle needle\n")},
 			"a.md": &fstest.MapFile{Data: []byte("# T\n\n## A\n\nneedle needle needle\n")},

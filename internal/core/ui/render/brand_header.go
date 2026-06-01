@@ -20,7 +20,7 @@ type Brand struct {
 
 // BrandHeader returns the branded header block:
 //
-//   - "Devbox · <project> · <version>" identity line (always emitted)
+//   - "DWE · <project> · <version>" identity line (always emitted)
 //   - optional tagline in muted color
 //   - optional ASCII art block in accent color, preceded by a blank line
 //
@@ -29,7 +29,7 @@ type Brand struct {
 func BrandHeader(h Brand) string {
 	var sb strings.Builder
 
-	parts := []string{LogoMark() + " " + styles.AccentStyle().Bold(true).Render("Devbox")}
+	parts := []string{LogoMark() + " " + styles.AccentStyle().Bold(true).Render("DWE")}
 	if h.Project != "" {
 		parts = append(parts, styles.TextStyle().Render(h.Project))
 	}

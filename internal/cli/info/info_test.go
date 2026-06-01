@@ -274,8 +274,8 @@ func TestInfoCmd_BrandHeaderAlwaysPresent(t *testing.T) {
 		t.Errorf("info command returned error: %v", err)
 	}
 	out := buf.String()
-	if !strings.Contains(out, "Devbox") {
-		t.Errorf("expected 'Devbox' brand line in output, got:\n%s", out)
+	if !strings.Contains(out, "DWE") {
+		t.Errorf("expected 'DWE' brand line in output, got:\n%s", out)
 	}
 	if !strings.Contains(out, "devbox-infotest") {
 		t.Errorf("expected project full name in brand line, got:\n%s", out)

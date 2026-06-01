@@ -28,7 +28,7 @@ type Model struct {
 	Translator i18n.Translator
 	Locale     string
 	Theme      string
-	Title      string // Brand-bar title; "Devbox · <project> · Documentation".
+	Title      string // Brand-bar title; "DWE · <project> · Documentation".
 
 	// Data
 	Roots []docs.DocRoot
@@ -94,7 +94,7 @@ type Model struct {
 	currentHeadingLines []int
 
 	// Per-session temp dir for "open diagram" exports. One dir per Model so
-	// concurrent `devbox docs` sessions don't race on the same temp filename.
+	// concurrent `dwe docs` sessions don't race on the same temp filename.
 	// Lazily created on first export; left on disk at exit (os cleans /tmp).
 	diagramExportDir string
 

@@ -11,18 +11,18 @@ import (
 
 // DocRoot represents a documentation source (either built-in or project-local).
 type DocRoot struct {
-	Name        string // "devbox" or "project"
+	Name        string // "dwe" or "project"
 	FS          fs.FS  // The file system to read from
 	ProjectPath string // Absolute path to the project root (for project docs only)
 }
 
 // Sources returns the available documentation sources:
-// - Always includes the built-in "devbox" docs from BuiltinFS.
+// - Always includes the built-in "dwe" docs from BuiltinFS.
 // - Includes "project" docs if <projectRoot>/docs/ exists and is readable.
 func Sources(projectRoot string) []DocRoot {
 	roots := []DocRoot{
 		{
-			Name: "devbox",
+			Name: "dwe",
 			FS:   BuiltinFS,
 		},
 	}

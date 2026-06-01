@@ -33,7 +33,7 @@ func TestFormatEvent_Success(t *testing.T) {
 		Duration:  2500 * time.Millisecond,
 		Project:   "myproj",
 	})
-	if title != "✓ Devbox · myproj: deploy succeeded" {
+	if title != "✓ DWE · myproj: deploy succeeded" {
 		t.Fatalf("title=%q", title)
 	}
 	if body != "2.5s" {
@@ -48,7 +48,7 @@ func TestFormatEvent_SuccessNoProject(t *testing.T) {
 		Outcome:   OutcomeSuccess,
 		Duration:  2500 * time.Millisecond,
 	})
-	if title != "✓ Devbox: deploy succeeded" {
+	if title != "✓ DWE: deploy succeeded" {
 		t.Fatalf("title=%q", title)
 	}
 	if body != "2.5s" {
@@ -64,7 +64,7 @@ func TestFormatEvent_FailureWithErr(t *testing.T) {
 		Project:   "p",
 		Err:       errors.New("connection refused"),
 	})
-	if title != "✗ Devbox · p: run failed" {
+	if title != "✗ DWE · p: run failed" {
 		t.Fatalf("title=%q", title)
 	}
 	if body != "500ms\nconnection refused" {

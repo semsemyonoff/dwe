@@ -349,10 +349,10 @@ func TestWriteCommandMarkdown_Params(t *testing.T) {
 func TestDocsGenerateCommand_Integration(t *testing.T) {
 	tmpDir := t.TempDir()
 
-	// Minimal devbox.yml.
+	// Minimal workspace.yml.
 	devboxYML := `project:
   name: test
-  prefix: devbox
+  prefix: dwe
 services:
   main:
     type: app

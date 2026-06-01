@@ -24,7 +24,7 @@ type Node struct {
 // view — every section under the root is included. UI projections (e.g.
 // hiding internals, re-rooting at reference/) are the caller's job; doing
 // it here would silently drop content for non-TUI consumers like
-// `devbox docs export --include-internals`.
+// `dwe docs export --include-internals`.
 //
 // locale controls which file variant is parsed for the per-node Title and
 // Headings. Empty / "en" reads English content directly; other locales go

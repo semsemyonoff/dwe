@@ -7,8 +7,8 @@ import (
 
 func TestRenderBrandHeader_Minimal(t *testing.T) {
 	out := BrandHeader(Brand{Project: "devbox-myapp", Version: "v1.2.3"})
-	if !strings.Contains(out, "Devbox") {
-		t.Errorf("expected 'Devbox' in brand header, got:\n%s", out)
+	if !strings.Contains(out, "DWE") {
+		t.Errorf("expected 'DWE' in brand header, got:\n%s", out)
 	}
 	if !strings.Contains(out, "devbox-myapp") {
 		t.Errorf("expected project in brand header, got:\n%s", out)
@@ -24,7 +24,7 @@ func TestRenderBrandHeader_Minimal(t *testing.T) {
 func TestRenderBrandHeader_AlwaysEmitsIdentityLine(t *testing.T) {
 	// Empty Lines / empty Tagline must NOT suppress the identity line.
 	out := BrandHeader(Brand{Project: "p", Version: "v"})
-	if !strings.Contains(out, "Devbox") || !strings.Contains(out, "p") || !strings.Contains(out, "v") {
+	if !strings.Contains(out, "DWE") || !strings.Contains(out, "p") || !strings.Contains(out, "v") {
 		t.Errorf("identity line missing when only project+version provided:\n%s", out)
 	}
 }
@@ -81,10 +81,10 @@ func TestRenderBrandHeader_HasLogoMark(t *testing.T) {
 }
 
 func TestRenderBrandHeader_EmptyProjectAndVersion(t *testing.T) {
-	// Edge case: helper must still emit the 'Devbox' word even with no
+	// Edge case: helper must still emit the 'DWE' word even with no
 	// project/version provided (caller hasn't loaded a config yet).
 	out := BrandHeader(Brand{})
-	if !strings.Contains(out, "Devbox") {
-		t.Errorf("expected 'Devbox' even when project/version empty, got:\n%s", out)
+	if !strings.Contains(out, "DWE") {
+		t.Errorf("expected 'DWE' even when project/version empty, got:\n%s", out)
 	}
 }

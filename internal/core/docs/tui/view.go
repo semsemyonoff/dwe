@@ -83,7 +83,7 @@ func (m *Model) renderTwoPanel() tea.View {
 	return v
 }
 
-// renderTitleBar renders the brand title — `{▪} Devbox · <project> ·
+// renderTitleBar renders the brand title — `{▪} DWE · <project> ·
 // Documentation` in accent + bold — padded to totalWidth so it lines up
 // with the panels below. Same shape as cmdbrowser.renderTitleBar so the
 // two TUIs read consistently.

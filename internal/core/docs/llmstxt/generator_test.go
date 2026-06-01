@@ -43,10 +43,10 @@ func TestGenerate_NoProject_Structure(t *testing.T) {
 		t.Fatalf("Generate returned error: %v", err)
 	}
 
-	if !strings.HasPrefix(got, "# devbox\n") {
-		t.Errorf("expected output to start with '# devbox\\n', got: %q", got[:min(len(got), 30)])
+	if !strings.HasPrefix(got, "# dwe\n") {
+		t.Errorf("expected output to start with '# dwe\\n', got: %q", got[:min(len(got), 30)])
 	}
-	if !strings.Contains(got, "> devbox is") {
+	if !strings.Contains(got, "> dwe is") {
 		t.Errorf("expected blockquote summary in output")
 	}
 	if !strings.Contains(got, "## Quick start") {
@@ -95,9 +95,9 @@ func TestGenerate_WithCommands(t *testing.T) {
 
 func TestGenerate_WithDocTopics(t *testing.T) {
 	topics := []coredocs.TopicEntry{
-		{Path: "reference/config/services", DisplayName: "Services", Source: "devbox"},
-		{Path: "reference/config/dwe", DisplayName: "Devbox Config", Source: "devbox"},
-		{Path: "internals/packages", DisplayName: "Package Layout", Source: "devbox"},
+		{Path: "reference/config/services", DisplayName: "Services", Source: "dwe"},
+		{Path: "reference/config/dwe", DisplayName: "Devbox Config", Source: "dwe"},
+		{Path: "internals/packages", DisplayName: "Package Layout", Source: "dwe"},
 	}
 
 	t.Run("without internals", func(t *testing.T) {
@@ -112,7 +112,7 @@ func TestGenerate_WithDocTopics(t *testing.T) {
 		if strings.Contains(got, "internals/packages") {
 			t.Errorf("internals topic should be excluded when IncludeIntern=false")
 		}
-		if !strings.Contains(got, "devbox-docs://reference/config/services") {
+		if !strings.Contains(got, "dwe-docs://reference/config/services") {
 			t.Errorf("expected reference topic link in output")
 		}
 	})
@@ -222,7 +222,7 @@ func TestGenerate_ProjectAware_DefaultName(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Generate error: %v", err)
 	}
-	if !strings.HasPrefix(got, "# devbox project\n") {
+	if !strings.HasPrefix(got, "# dwe project\n") {
 		t.Errorf("expected default project name in H1, got: %q", got[:min(len(got), 40)])
 	}
 }

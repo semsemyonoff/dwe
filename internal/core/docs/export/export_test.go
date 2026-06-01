@@ -25,7 +25,7 @@ func TestExportTree_EmptyDirectory(t *testing.T) {
 
 	roots := []docs.DocRoot{
 		{
-			Name: "devbox",
+			Name: "dwe",
 			FS:   fsys,
 		},
 	}
@@ -43,7 +43,7 @@ func TestExportTree_EmptyDirectory(t *testing.T) {
 	}
 
 	// Verify the exported file exists
-	exportedPath := filepath.Join(target, "devbox", "reference", "config", "services.md")
+	exportedPath := filepath.Join(target, "dwe", "reference", "config", "services.md")
 	if _, err := os.Stat(exportedPath); err != nil {
 		t.Errorf("exported file not found at %s: %v", exportedPath, err)
 	}
@@ -79,7 +79,7 @@ func TestExportTree_NonEmptyDirectoryWithoutForce(t *testing.T) {
 
 	roots := []docs.DocRoot{
 		{
-			Name: "devbox",
+			Name: "dwe",
 			FS:   fsys,
 		},
 	}
@@ -118,7 +118,7 @@ func TestExportTree_NonEmptyDirectoryWithForce(t *testing.T) {
 
 	roots := []docs.DocRoot{
 		{
-			Name: "devbox",
+			Name: "dwe",
 			FS:   fsys,
 		},
 	}
@@ -136,7 +136,7 @@ func TestExportTree_NonEmptyDirectoryWithForce(t *testing.T) {
 	}
 
 	// Verify the exported file exists
-	exportedPath := filepath.Join(target, "devbox", "reference", "config", "services.md")
+	exportedPath := filepath.Join(target, "dwe", "reference", "config", "services.md")
 	if _, err := os.Stat(exportedPath); err != nil {
 		t.Errorf("exported file not found at %s: %v", exportedPath, err)
 	}
@@ -156,7 +156,7 @@ func TestExportTree_MissingTranslationBanner(t *testing.T) {
 
 	roots := []docs.DocRoot{
 		{
-			Name: "devbox",
+			Name: "dwe",
 			FS:   fsys,
 		},
 	}
@@ -175,7 +175,7 @@ func TestExportTree_MissingTranslationBanner(t *testing.T) {
 	}
 
 	// Verify the exported file includes the banner
-	exportedPath := filepath.Join(target, "devbox", "reference", "config", "services.md")
+	exportedPath := filepath.Join(target, "dwe", "reference", "config", "services.md")
 	content, err := os.ReadFile(exportedPath)
 	if err != nil {
 		t.Fatalf("cannot read exported file: %v", err)
@@ -203,7 +203,7 @@ func TestAvailableLocales(t *testing.T) {
 
 	roots := []docs.DocRoot{
 		{
-			Name: "devbox",
+			Name: "dwe",
 			FS:   fsys,
 		},
 	}

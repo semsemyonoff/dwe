@@ -53,9 +53,9 @@ func Generate(opts Opts) (string, error) {
 
 	if opts.ProjectRoot == "" {
 		// Project-agnostic output.
-		writeTitle(&b, "devbox")
-		writeBlockquote(&b, "devbox is a developer tool for local development environments running on Docker. "+
-			"Use `devbox --help` for a full command list.")
+		writeTitle(&b, "dwe")
+		writeBlockquote(&b, "dwe is a developer tool for local development environments running on Docker. "+
+			"Use `dwe --help` for a full command list.")
 		writeCommandsSection(&b, opts.Commands)
 		writeDocumentationSection(&b, opts.DocTopics, opts.IncludeIntern)
 		writeQuickStart(&b)
@@ -65,12 +65,12 @@ func Generate(opts Opts) (string, error) {
 	// Project-aware output.
 	name := opts.ProjectName
 	if name == "" {
-		name = "devbox project"
+		name = "dwe project"
 	}
 	writeTitle(&b, name)
-	writeBlockquote(&b, "devbox project environment. "+
-		"Use `devbox status` to see running services, `devbox validate` to check project health, "+
-		"and `devbox docs llms-txt` to regenerate this index.")
+	writeBlockquote(&b, "dwe project environment. "+
+		"Use `dwe status` to see running services, `dwe validate` to check project health, "+
+		"and `dwe docs llms-txt` to regenerate this index.")
 
 	writeProjectSection(&b, opts)
 	writeCommandsSection(&b, opts.Commands)
@@ -186,7 +186,7 @@ func writeDocumentationSection(b *strings.Builder, topics []coredocs.TopicEntry,
 		}
 		items = append(items, sectionItem{
 			Label: t.DisplayName,
-			URL:   "devbox-docs://" + t.Path,
+			URL:   "dwe-docs://" + t.Path,
 		})
 	}
 	if len(items) == 0 {
@@ -197,11 +197,11 @@ func writeDocumentationSection(b *strings.Builder, topics []coredocs.TopicEntry,
 
 func writeQuickStart(b *strings.Builder) {
 	lines := []string{
-		"`devbox status` — see what's running",
-		"`devbox validate` — check project health",
-		"`devbox info` — project overview",
-		"`devbox docs llms-txt` — regenerate this index",
-		"`devbox --help` — full command list",
+		"`dwe status` — see what's running",
+		"`dwe validate` — check project health",
+		"`dwe info` — project overview",
+		"`dwe docs llms-txt` — regenerate this index",
+		"`dwe --help` — full command list",
 	}
 	writeSectionLines(b, "Quick start", lines)
 }

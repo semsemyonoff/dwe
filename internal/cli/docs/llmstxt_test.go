@@ -149,7 +149,7 @@ func TestDocsLlmsTxtCommand_IncludeInternals_Flag(t *testing.T) {
 }
 
 func TestDocsLlmsTxtCommand_NoProjectFlag_InsideProject(t *testing.T) {
-	// Create a minimal fake devbox project.
+	// Create a minimal fake dwe project.
 	tmpDir := t.TempDir()
 	cfgPath := filepath.Join(tmpDir, "workspace.yml")
 	err := os.WriteFile(cfgPath, []byte("project:\n  name: test-project\n"), 0o644)
@@ -175,12 +175,12 @@ func TestDocsLlmsTxtCommand_NoProjectFlag_InsideProject(t *testing.T) {
 
 	output := out.String()
 	require.NotEmpty(t, output)
-	// Generic output starts with "# devbox", not "# test-project".
-	require.True(t, strings.HasPrefix(output, "# devbox"), "no-project output should use generic title, got: %q", output[:min(len(output), 40)])
+	// Generic output starts with "# dwe", not "# test-project".
+	require.True(t, strings.HasPrefix(output, "# dwe"), "no-project output should use generic title, got: %q", output[:min(len(output), 40)])
 }
 
 func TestDocsLlmsTxtCommand_ProjectAware(t *testing.T) {
-	// Create a minimal fake devbox project.
+	// Create a minimal fake dwe project.
 	tmpDir := t.TempDir()
 	cfgPath := filepath.Join(tmpDir, "workspace.yml")
 	err := os.WriteFile(cfgPath, []byte("project:\n  name: myapp\n"), 0o644)

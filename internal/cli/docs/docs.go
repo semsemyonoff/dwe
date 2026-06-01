@@ -1,4 +1,4 @@
-// Package docs hosts the `devbox docs` command tree.
+// Package docs hosts the `dwe docs` command tree.
 package docs
 
 import (
@@ -35,7 +35,7 @@ type docsFlags struct {
 // cli import. The helper keeps the docs TUI title shape symmetrical with
 // cmdbrowser without dragging cli/command into the docs package's import graph.
 func docsSelectorTitle(projectName, base string) string {
-	parts := []string{"Devbox"}
+	parts := []string{"DWE"}
 	if projectName != "" {
 		parts = append(parts, projectName)
 	}
@@ -43,12 +43,12 @@ func docsSelectorTitle(projectName, base string) string {
 	return strings.Join(parts, " · ")
 }
 
-// NewCmd builds the `devbox docs` command tree.
+// NewCmd builds the `dwe docs` command tree.
 func NewCmd(groupID string, flags *cmdctx.RootFlags) *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "docs",
 		Short: "Browse and manage documentation",
-		Long: `Browse and manage devbox documentation.
+		Long: `Browse and manage dwe documentation.
 
 View documentation interactively with a TUI browser or display specific topics.
 Generate reference documentation for the CLI and command registry.`,
@@ -58,7 +58,7 @@ Generate reference documentation for the CLI and command registry.`,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			// Check if we're in a TTY
 			if !term.IsTerminal(int(os.Stdout.Fd())) {
-				return errors.New("devbox docs without arguments requires a TTY; use 'devbox docs show <topic>' or 'devbox docs list' for non-interactive use")
+				return errors.New("dwe docs without arguments requires a TTY; use 'dwe docs show <topic>' or 'dwe docs list' for non-interactive use")
 			}
 
 			// Get terminal dimensions
@@ -135,13 +135,13 @@ func runDocsTUI(cmd *cobra.Command, flags *cmdctx.RootFlags, termWidth, termHeig
 		renderer = mermaid.New(config.MmdcBin(cfg), cacheDir, cacheCapBytes, false)
 	}
 
-	// Get sources (devbox + project docs)
+	// Get sources (dwe + project docs)
 	sources := coredocs.Sources(projectRoot)
 
 	// Create translator for TUI strings
 	translator := i18n.TranslatorOrNop(flags.I18n)
 
-	// Create the model. Title shape matches cmdbrowser: "Devbox · <project> · Documentation".
+	// Create the model. Title shape matches cmdbrowser: "DWE · <project> · Documentation".
 	ctx := cmd.Context()
 	projectName := ""
 	if cfg != nil {

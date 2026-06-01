@@ -32,17 +32,17 @@ func newDocsLlmsTxtCmd(flags *cmdctx.RootFlags) *cobra.Command {
 		Long: `Emit a single llms.txt document to stdout (or --output PATH).
 
 The document follows the llms.txt spec: a dense ~2-5KB index that gives an AI
-agent a complete picture of "what this devbox project is and where to find more
+agent a complete picture of "what this dwe project is and where to find more
 detail," without having to ingest the full embedded docs tree.
 
 Works both inside a project (project-aware: includes services, commands, URLs)
-and outside one (project-agnostic: generic devbox reference).
+and outside one (project-agnostic: generic dwe reference).
 
 Examples:
-  devbox docs llms-txt
-  devbox docs llms-txt --output llms.txt
-  devbox docs llms-txt --include-internals
-  devbox docs llms-txt --no-project`,
+  dwe docs llms-txt
+  dwe docs llms-txt --output llms.txt
+  dwe docs llms-txt --include-internals
+  dwe docs llms-txt --no-project`,
 		Args:         cobra.NoArgs,
 		SilenceUsage: true,
 		RunE: func(cmd *cobra.Command, args []string) error {
@@ -53,7 +53,7 @@ Examples:
 	cmd.Flags().StringVar(&df.output, "output", "", "Write output to PATH instead of stdout")
 	cmd.Flags().StringVar(&df.lang, "lang", "", "Language code (default: from userconfig / $LANG / en)")
 	cmd.Flags().BoolVar(&df.includeInternals, "include-internals", false, "Include internals architecture docs section")
-	cmd.Flags().BoolVar(&df.noProject, "no-project", false, "Force project-agnostic output even if devbox.yml exists")
+	cmd.Flags().BoolVar(&df.noProject, "no-project", false, "Force project-agnostic output even if workspace.yml exists")
 
 	return cmd
 }

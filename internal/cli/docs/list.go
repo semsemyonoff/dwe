@@ -46,11 +46,11 @@ any characters within one path segment; ** spans separators (so reference/**
 matches every nested topic under reference/).
 
 Examples:
-  devbox docs list
-  devbox docs list --lang ru
-  devbox docs list --source devbox
-  devbox docs list --match 'reference/config/*'
-  devbox docs list --match 'reference/commands/**'`,
+  dwe docs list
+  dwe docs list --lang ru
+  dwe docs list --source dwe
+  dwe docs list --match 'reference/config/*'
+  dwe docs list --match 'reference/commands/**'`,
 		Args: cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			return runDocsList(cmd, flags, df)
@@ -59,7 +59,7 @@ Examples:
 	}
 
 	cmd.Flags().StringVar(&df.lang, "lang", "", "Language code (default: from --lang flag / userconfig / $LANG / en)")
-	cmd.Flags().StringVar(&df.source, "source", "all", "Doc source: devbox, project, or all (default: all)")
+	cmd.Flags().StringVar(&df.source, "source", "all", "Doc source: dwe, project, or all (default: all)")
 	cmd.Flags().StringVar(&df.match, "match", "", "Filter topics by shell-style glob on path (use ** to cross /)")
 
 	return cmd

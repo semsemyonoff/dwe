@@ -50,8 +50,8 @@ func NewCmd(groupID string, flags *cmdctx.RootFlags) *cobra.Command {
 		Use:     "commands [id]",
 		Aliases: []string{"cmd"},
 		GroupID: groupID,
-		Short:   "Run, inspect, and list devbox commands",
-		Long: `Manage declarative commands defined in devbox/commands/.
+		Short:   "Run, inspect, and list dwe commands",
+		Long: `Manage declarative commands defined in workspace/commands/.
 
 Commands are YAML-defined operations organized into groups (e.g. db, app, services.main).
 They can be shell commands, scripts, service exec/run operations, or multi-step workflows.
@@ -59,12 +59,12 @@ They can be shell commands, scripts, service exec/run operations, or multi-step 
 Without an id, an interactive selector lists public commands. With a group prefix
 (e.g. services.main), the selector is filtered. With a full command id, it runs
 (or inspects with -i) directly without a selector.`,
-		Example: `  devbox commands
-  devbox commands list
-  devbox commands db.up
-  devbox commands db.up --set env=local
-  devbox commands -i db.up
-  devbox cmd db.up --yes`,
+		Example: `  dwe commands
+  dwe commands list
+  dwe commands db.up
+  dwe commands db.up --set env=local
+  dwe commands -i db.up
+  dwe cmd db.up --yes`,
 		Args:         cobra.MaximumNArgs(1),
 		SilenceUsage: true,
 		ValidArgsFunction: func(cmd *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
