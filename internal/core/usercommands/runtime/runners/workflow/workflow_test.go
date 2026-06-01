@@ -8,8 +8,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/semsemyonoff/devbox/internal/core/ui/widgets"
-	"github.com/semsemyonoff/devbox/internal/shared/tpl"
+	"github.com/semsemyonoff/dwe/internal/core/ui/widgets"
+	"github.com/semsemyonoff/dwe/internal/shared/tpl"
 )
 
 // ---------------------------------------------------------------------------

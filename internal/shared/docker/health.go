@@ -7,7 +7,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/semsemyonoff/devbox/internal/shared/render"
+	"github.com/semsemyonoff/dwe/internal/shared/render"
 )
 
 // HealthGetFn returns the Docker health status string for a container by ID.

@@ -6,7 +6,7 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/semsemyonoff/devbox/internal/core/validate"
+	"github.com/semsemyonoff/dwe/internal/core/validate"
 )
 
 // overrideSink returns a sink and a getter that collects rels with fromOverride=true.

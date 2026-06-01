@@ -5,7 +5,7 @@
 // (docker_remove_project_volumes).
 package containers
 
-import "github.com/semsemyonoff/devbox/internal/core/execution/builtin/spec"
+import "github.com/semsemyonoff/dwe/internal/core/execution/builtin/spec"
 
 // Builtins returns the containers builtin entries keyed by their registered name.
 func Builtins() map[string]spec.Entry {

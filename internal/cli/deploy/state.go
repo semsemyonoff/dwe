@@ -7,11 +7,11 @@ import (
 	"os"
 	"path/filepath"
 
-	"github.com/semsemyonoff/devbox/internal/cli/cmdctx"
-	"github.com/semsemyonoff/devbox/internal/core/ui/widgets"
-	"github.com/semsemyonoff/devbox/internal/core/workflow/deploy/journal"
-	"github.com/semsemyonoff/devbox/internal/shared/lock"
-	"github.com/semsemyonoff/devbox/internal/shared/render"
+	"github.com/semsemyonoff/dwe/internal/cli/cmdctx"
+	"github.com/semsemyonoff/dwe/internal/core/ui/widgets"
+	"github.com/semsemyonoff/dwe/internal/core/workflow/deploy/journal"
+	"github.com/semsemyonoff/dwe/internal/shared/lock"
+	"github.com/semsemyonoff/dwe/internal/shared/render"
 
 	"github.com/spf13/cobra"
 	"gopkg.in/yaml.v3"

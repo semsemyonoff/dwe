@@ -5,11 +5,11 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/semsemyonoff/devbox/internal/core/execution/pipeline"
-	"github.com/semsemyonoff/devbox/internal/core/project/config"
-	"github.com/semsemyonoff/devbox/internal/core/usercommands"
-	"github.com/semsemyonoff/devbox/internal/core/workflow/deploy"
-	"github.com/semsemyonoff/devbox/internal/shared/render"
+	"github.com/semsemyonoff/dwe/internal/core/execution/pipeline"
+	"github.com/semsemyonoff/dwe/internal/core/project/config"
+	"github.com/semsemyonoff/dwe/internal/core/usercommands"
+	"github.com/semsemyonoff/dwe/internal/core/workflow/deploy"
+	"github.com/semsemyonoff/dwe/internal/shared/render"
 )
 
 // --- PrintPlanShell tests ---

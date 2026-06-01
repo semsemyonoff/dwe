@@ -9,12 +9,12 @@ import (
 
 	"github.com/charmbracelet/x/term"
 
-	"github.com/semsemyonoff/devbox/internal/core/ui/widgets"
-	"github.com/semsemyonoff/devbox/internal/core/usercommands/model"
-	"github.com/semsemyonoff/devbox/internal/core/usercommands/runtime"
-	snapshotpkg "github.com/semsemyonoff/devbox/internal/core/workflow/snapshot"
-	"github.com/semsemyonoff/devbox/internal/shared/liveui"
-	"github.com/semsemyonoff/devbox/internal/shared/render"
+	"github.com/semsemyonoff/dwe/internal/core/ui/widgets"
+	"github.com/semsemyonoff/dwe/internal/core/usercommands/model"
+	"github.com/semsemyonoff/dwe/internal/core/usercommands/runtime"
+	snapshotpkg "github.com/semsemyonoff/dwe/internal/core/workflow/snapshot"
+	"github.com/semsemyonoff/dwe/internal/shared/liveui"
+	"github.com/semsemyonoff/dwe/internal/shared/render"
 )
 
 // snapshotLiveOutputs picks the terminal-control writer (cursor ANSI / spinner

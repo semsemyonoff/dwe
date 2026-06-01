@@ -342,24 +342,24 @@ bin/dwe docs generate --scope cli
 
 **CRITICAL:** `allowedWithoutProject` (root.go:268-275) and `isValidateCommand` (root.go:280-283) compare `cmd.CommandPath()` against literal `"devbox"`, `"devbox version"`, `"devbox prompt"`, `"devbox completion"`, `"devbox docs"`, `"devbox validate"`. After `Use:` rename, `dwe` command paths won't match — basic dispatch breaks. These must be updated in the same task.
 
-- [ ] `git mv cmd/devbox cmd/dwe` **first** (preserve rename detection)
-- [ ] `go mod edit -module github.com/semsemyonoff/dwe`
-- [ ] `find . -type f -name '*.go' -not -path './internal/core/docs/embedded/*' -print0 | xargs -0 sed -i '' 's|github.com/semsemyonoff/devbox|github.com/semsemyonoff/dwe|g'`
-- [ ] `go mod tidy && goimports -w .`
-- [ ] update `.golangci.yml:51` `goimports.local-prefixes`
-- [ ] update `Makefile:1` `BINARY_NAME := devbox` → `dwe`
-- [ ] update `Makefile:3` `MODULE := github.com/semsemyonoff/devbox` → `github.com/semsemyonoff/dwe`
-- [ ] update Makefile path references `cmd/devbox` → `cmd/dwe`, `bin/devbox` → `bin/dwe`
-- [ ] update `scripts/sync-embedded-docs.sh`, `scripts/gen-docs-content-hashes.sh`, `.gitignore`
-- [ ] update `internal/cli/root.go:124` `Use: "devbox"` → `Use: "dwe"`
-- [ ] update `internal/cli/root.go:268-275` `allowedWithoutProject` — replace every `"devbox"` / `"devbox version"` / `"devbox prompt"` / `"devbox completion"` / `"devbox docs"` literal with `"dwe"` equivalents
-- [ ] update `internal/cli/root.go:280-283` `isValidateCommand` — replace `"devbox validate"` / `"devbox validate "` with `"dwe validate"` / `"dwe validate "`
-- [ ] update `root.go` godoc references (line 265 `devbox.yml` mention, line 285 `applyStyles` godoc)
-- [ ] update root command `Short`/`Long` text in `root.go` (search for `"devbox"` strings in `cobra.Command{...}` literals)
-- [ ] **grep tests:** `rg -n 'Use:\s*"devbox"' --type go` → update each (typically `cobra.Command{Use: "devbox"}` test fixtures)
-- [ ] update `cmd/dwe/main.go`: prompt hot-path text hints, godoc
-- [ ] update `cmd/dwe/main_test.go`: argv[0] `"devbox"` → `"dwe"`
-- [ ] `make build && make test && make lint` — all green (lint verifies goimports re-grouping)
+- [x] `git mv cmd/devbox cmd/dwe` **first** (preserve rename detection)
+- [x] `go mod edit -module github.com/semsemyonoff/dwe`
+- [x] `find . -type f -name '*.go' -not -path './internal/core/docs/embedded/*' -print0 | xargs -0 sed -i '' 's|github.com/semsemyonoff/devbox|github.com/semsemyonoff/dwe|g'`
+- [x] `go mod tidy && goimports -w .`
+- [x] update `.golangci.yml:51` `goimports.local-prefixes`
+- [x] update `Makefile:1` `BINARY_NAME := devbox` → `dwe`
+- [x] update `Makefile:3` `MODULE := github.com/semsemyonoff/devbox` → `github.com/semsemyonoff/dwe`
+- [x] update Makefile path references `cmd/devbox` → `cmd/dwe`, `bin/devbox` → `bin/dwe`
+- [x] update `scripts/sync-embedded-docs.sh`, `scripts/gen-docs-content-hashes.sh`, `.gitignore`
+- [x] update `internal/cli/root.go:124` `Use: "devbox"` → `Use: "dwe"`
+- [x] update `internal/cli/root.go:268-275` `allowedWithoutProject` — replace every `"devbox"` / `"devbox version"` / `"devbox prompt"` / `"devbox completion"` / `"devbox docs"` literal with `"dwe"` equivalents
+- [x] update `internal/cli/root.go:280-283` `isValidateCommand` — replace `"devbox validate"` / `"devbox validate "` with `"dwe validate"` / `"dwe validate "`
+- [x] update `root.go` godoc references (line 265 `devbox.yml` mention, line 285 `applyStyles` godoc)
+- [x] update root command `Short`/`Long` text in `root.go` (search for `"devbox"` strings in `cobra.Command{...}` literals)
+- [x] **grep tests:** `rg -n 'Use:\s*"devbox"' --type go` → update each (typically `cobra.Command{Use: "devbox"}` test fixtures)
+- [x] update `cmd/dwe/main.go`: prompt hot-path text hints, godoc
+- [x] update `cmd/dwe/main_test.go`: argv[0] `"devbox"` → `"dwe"`
+- [x] `make build && make test && make lint` — all green (lint verifies goimports re-grouping)
 
 ### Task 3: Phase 2 — Shell completions
 

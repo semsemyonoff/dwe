@@ -8,7 +8,7 @@ import (
 	tea "charm.land/bubbletea/v2"
 	huh "charm.land/huh/v2"
 
-	"github.com/semsemyonoff/devbox/internal/core/ui/styles"
+	"github.com/semsemyonoff/dwe/internal/core/ui/styles"
 )
 
 // TestWizardHelpKeepsEscAfterSuggestionsRefresh locks the AcceptSuggestion

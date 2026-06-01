@@ -5,10 +5,10 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/semsemyonoff/devbox/internal/core/execution/builtin"
-	"github.com/semsemyonoff/devbox/internal/core/execution/condition"
-	"github.com/semsemyonoff/devbox/internal/core/execution/filesgate"
-	"github.com/semsemyonoff/devbox/internal/core/project/config"
+	"github.com/semsemyonoff/dwe/internal/core/execution/builtin"
+	"github.com/semsemyonoff/dwe/internal/core/execution/condition"
+	"github.com/semsemyonoff/dwe/internal/core/execution/filesgate"
+	"github.com/semsemyonoff/dwe/internal/core/project/config"
 )
 
 // ResolvedStep holds a pipeline step together with the phase it belongs to,

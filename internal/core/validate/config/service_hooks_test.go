@@ -8,9 +8,9 @@ import (
 
 	"github.com/stretchr/testify/require"
 
-	"github.com/semsemyonoff/devbox/internal/core/project/config"
-	"github.com/semsemyonoff/devbox/internal/core/usercommands"
-	"github.com/semsemyonoff/devbox/internal/core/validate"
+	"github.com/semsemyonoff/dwe/internal/core/project/config"
+	"github.com/semsemyonoff/dwe/internal/core/usercommands"
+	"github.com/semsemyonoff/dwe/internal/core/validate"
 )
 
 // writeServiceYML creates devbox/services/<name>/service.yml with the given content.

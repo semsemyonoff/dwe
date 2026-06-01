@@ -4,8 +4,8 @@ import (
 	"os/exec"
 	"slices"
 
-	"github.com/semsemyonoff/devbox/internal/core/project/config"
-	"github.com/semsemyonoff/devbox/internal/shared/render"
+	"github.com/semsemyonoff/dwe/internal/core/project/config"
+	"github.com/semsemyonoff/dwe/internal/shared/render"
 )
 
 // EnsureVolumes creates any declared volumes that do not yet exist.

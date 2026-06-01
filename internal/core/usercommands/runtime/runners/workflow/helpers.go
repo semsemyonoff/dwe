@@ -5,10 +5,10 @@ import (
 	"io"
 	"strings"
 
-	"github.com/semsemyonoff/devbox/internal/core/execution/filesgate"
-	fgspec "github.com/semsemyonoff/devbox/internal/core/execution/filesgate/spec"
-	"github.com/semsemyonoff/devbox/internal/core/usercommands/model"
-	"github.com/semsemyonoff/devbox/internal/core/usercommands/runtime/spec"
+	"github.com/semsemyonoff/dwe/internal/core/execution/filesgate"
+	fgspec "github.com/semsemyonoff/dwe/internal/core/execution/filesgate/spec"
+	"github.com/semsemyonoff/dwe/internal/core/usercommands/model"
+	"github.com/semsemyonoff/dwe/internal/core/usercommands/runtime/spec"
 )
 
 // dumpSubStepOutput writes a sub-step's captured output between labelled

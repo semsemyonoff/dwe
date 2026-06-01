@@ -9,7 +9,7 @@ import (
 	"fmt"
 	"io"
 
-	"github.com/semsemyonoff/devbox/internal/core/workflow/snapshot/meta"
+	"github.com/semsemyonoff/dwe/internal/core/workflow/snapshot/meta"
 )
 
 // Archive safety constants. Constants for now — promote to SnapshotConfig

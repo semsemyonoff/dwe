@@ -1,4 +1,4 @@
-// Package cli wires up the devbox cobra command tree.
+// Package cli wires up the dwe cobra command tree.
 package cli
 
 import (
@@ -10,36 +10,36 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/semsemyonoff/devbox/internal/cli/cmdctx"
-	cmdCommand "github.com/semsemyonoff/devbox/internal/cli/command"
-	"github.com/semsemyonoff/devbox/internal/cli/completion"
-	cmdCompose "github.com/semsemyonoff/devbox/internal/cli/compose"
-	cmdDeploy "github.com/semsemyonoff/devbox/internal/cli/deploy"
-	cmdDocker "github.com/semsemyonoff/devbox/internal/cli/docker"
-	cmdDocs "github.com/semsemyonoff/devbox/internal/cli/docs"
-	cmdInfo "github.com/semsemyonoff/devbox/internal/cli/info"
-	cmdLifecycle "github.com/semsemyonoff/devbox/internal/cli/lifecycle"
-	cmdLogs "github.com/semsemyonoff/devbox/internal/cli/logs"
-	cmdPrompt "github.com/semsemyonoff/devbox/internal/cli/prompt"
-	cmdRender "github.com/semsemyonoff/devbox/internal/cli/render"
-	cmdService "github.com/semsemyonoff/devbox/internal/cli/service"
-	cmdShell "github.com/semsemyonoff/devbox/internal/cli/shell"
-	cmdSnapshot "github.com/semsemyonoff/devbox/internal/cli/snapshot"
-	cmdStatus "github.com/semsemyonoff/devbox/internal/cli/status"
-	cmdValidate "github.com/semsemyonoff/devbox/internal/cli/validate"
-	cmdVersion "github.com/semsemyonoff/devbox/internal/cli/version"
-	"github.com/semsemyonoff/devbox/internal/core/project/config"
-	"github.com/semsemyonoff/devbox/internal/core/project/project"
-	userpkg "github.com/semsemyonoff/devbox/internal/core/project/user"
-	"github.com/semsemyonoff/devbox/internal/core/ui/render"
-	"github.com/semsemyonoff/devbox/internal/core/ui/statusview"
-	"github.com/semsemyonoff/devbox/internal/core/ui/styles"
-	"github.com/semsemyonoff/devbox/internal/core/usercommands"
-	"github.com/semsemyonoff/devbox/internal/core/workflow/deploy"
-	"github.com/semsemyonoff/devbox/internal/core/workflow/deploy/journal"
-	"github.com/semsemyonoff/devbox/internal/shared/i18n"
-	sharedrender "github.com/semsemyonoff/devbox/internal/shared/render"
-	"github.com/semsemyonoff/devbox/internal/shared/version"
+	"github.com/semsemyonoff/dwe/internal/cli/cmdctx"
+	cmdCommand "github.com/semsemyonoff/dwe/internal/cli/command"
+	"github.com/semsemyonoff/dwe/internal/cli/completion"
+	cmdCompose "github.com/semsemyonoff/dwe/internal/cli/compose"
+	cmdDeploy "github.com/semsemyonoff/dwe/internal/cli/deploy"
+	cmdDocker "github.com/semsemyonoff/dwe/internal/cli/docker"
+	cmdDocs "github.com/semsemyonoff/dwe/internal/cli/docs"
+	cmdInfo "github.com/semsemyonoff/dwe/internal/cli/info"
+	cmdLifecycle "github.com/semsemyonoff/dwe/internal/cli/lifecycle"
+	cmdLogs "github.com/semsemyonoff/dwe/internal/cli/logs"
+	cmdPrompt "github.com/semsemyonoff/dwe/internal/cli/prompt"
+	cmdRender "github.com/semsemyonoff/dwe/internal/cli/render"
+	cmdService "github.com/semsemyonoff/dwe/internal/cli/service"
+	cmdShell "github.com/semsemyonoff/dwe/internal/cli/shell"
+	cmdSnapshot "github.com/semsemyonoff/dwe/internal/cli/snapshot"
+	cmdStatus "github.com/semsemyonoff/dwe/internal/cli/status"
+	cmdValidate "github.com/semsemyonoff/dwe/internal/cli/validate"
+	cmdVersion "github.com/semsemyonoff/dwe/internal/cli/version"
+	"github.com/semsemyonoff/dwe/internal/core/project/config"
+	"github.com/semsemyonoff/dwe/internal/core/project/project"
+	userpkg "github.com/semsemyonoff/dwe/internal/core/project/user"
+	"github.com/semsemyonoff/dwe/internal/core/ui/render"
+	"github.com/semsemyonoff/dwe/internal/core/ui/statusview"
+	"github.com/semsemyonoff/dwe/internal/core/ui/styles"
+	"github.com/semsemyonoff/dwe/internal/core/usercommands"
+	"github.com/semsemyonoff/dwe/internal/core/workflow/deploy"
+	"github.com/semsemyonoff/dwe/internal/core/workflow/deploy/journal"
+	"github.com/semsemyonoff/dwe/internal/shared/i18n"
+	sharedrender "github.com/semsemyonoff/dwe/internal/shared/render"
+	"github.com/semsemyonoff/dwe/internal/shared/version"
 
 	"github.com/spf13/cobra"
 )
@@ -121,14 +121,14 @@ func NewRootCmd() *cobra.Command {
 
 func initRootCmd(flags *cmdctx.RootFlags) *cobra.Command {
 	cmd := &cobra.Command{
-		Use:   "devbox",
-		Short: "devbox — local development environment toolkit",
-		Long: `devbox is the core engine for the devbox local development environment.
+		Use:   "dwe",
+		Short: "dwe — local development environment toolkit",
+		Long: `dwe is the core engine for the Dev Workspace Engine local development environment.
 
 It provides config validation, rendering, topology inspection, and project info display.`,
 		// PersistentPreRunE resolves the project root before any subcommand runs.
 		// It walks upward from cwd (discovery mode) or uses the explicit -c path,
-		// validates schema_version, and populates flags.ConfigPath / flags.Root.
+		// validates the config, and populates flags.ConfigPath / flags.Root.
 		// Commands that work without a project (version, completion, print, docs) are
 		// allowed through when no project is found via discovery.
 		// The validate command bypasses schema validation so it can report schema errors
@@ -182,7 +182,7 @@ It provides config validation, rendering, topology inspection, and project info 
 				}
 				// Locate miss — validate always requires a project.
 				return cmdctx.ErrWrap("project_not_found", project.ErrNotFound).
-					WithHint("run from a Devbox project directory or pass --config")
+					WithHint("run from a DWE project directory or pass --config")
 			}
 
 			// Normal commands: use Resolve (with schema validation).
@@ -200,7 +200,7 @@ It provides config validation, rendering, topology inspection, and project info 
 						return nil
 					}
 					return cmdctx.ErrWrap("project_not_found", err).
-						WithHint("run from a Devbox project directory or pass --config")
+						WithHint("run from a DWE project directory or pass --config")
 				}
 				// Explicit bad path or schema error — always fatal.
 				return cmdctx.ErrWrap("project_invalid_config", err)
@@ -213,7 +213,7 @@ It provides config validation, rendering, topology inspection, and project info 
 			resolveLocalization(flags)
 			return nil
 		},
-		// Running 'devbox' with no subcommand shows project summary + help.
+		// Running 'dwe' with no subcommand shows project summary + help.
 		RunE: func(cmd *cobra.Command, args []string) error {
 			return runRoot(cmd, flags)
 		},
@@ -222,7 +222,7 @@ It provides config validation, rendering, topology inspection, and project info 
 		&flags.ConfigPath,
 		"config", "c",
 		"",
-		"path to devbox.yml (default: auto-discover from cwd upward)",
+		"path to workspace.yml (default: auto-discover from cwd upward)",
 	)
 	cmd.PersistentFlags().StringVarP(
 		&flags.Output,
@@ -262,16 +262,16 @@ func resolveLocalization(flags *cmdctx.RootFlags) {
 }
 
 // allowedWithoutProject returns true for commands that can run without a project.
-// These commands are allowed through when no devbox.yml is found via upward discovery.
+// These commands are allowed through when no workspace.yml is found via upward discovery.
 // Note: explicit -c /bad/path is still fatal even for these commands — the allowlist
 // only catches project.ErrNotFound (discovery miss), not os.ErrNotExist or schema errors.
 func allowedWithoutProject(cmd *cobra.Command) bool {
 	path := cmd.CommandPath()
-	return path == "devbox" ||
-		path == "devbox version" ||
-		path == "devbox prompt" ||
-		strings.HasPrefix(path, "devbox completion") ||
-		strings.HasPrefix(path, "devbox docs")
+	return path == "dwe" ||
+		path == "dwe version" ||
+		path == "dwe prompt" ||
+		strings.HasPrefix(path, "dwe completion") ||
+		strings.HasPrefix(path, "dwe docs")
 }
 
 // isValidateCommand returns true if cmd is the validate command or a descendant.
@@ -279,11 +279,11 @@ func allowedWithoutProject(cmd *cobra.Command) bool {
 // report schema errors as diagnostics instead of aborting before the validator runs.
 func isValidateCommand(cmd *cobra.Command) bool {
 	path := cmd.CommandPath()
-	return path == "devbox validate" || strings.HasPrefix(path, "devbox validate ")
+	return path == "dwe validate" || strings.HasPrefix(path, "dwe validate ")
 }
 
-// applyStyles loads devbox/styles.yml from projectRoot, applies the palette to ui,
-// and warns on error. projectRoot is the directory containing devbox.yml; an empty
+// applyStyles loads workspace/styles.yml from projectRoot, applies the palette to ui,
+// and warns on error. projectRoot is the directory containing workspace.yml; an empty
 // string means no project was found and styles fall back to defaults silently.
 // errW is used for warning output so that Cobra stderr redirection is respected.
 // Returns the loaded config (never nil).
@@ -294,7 +294,7 @@ func applyStyles(projectRoot string, errW io.Writer) *config.StylesConfig {
 		styles.ApplyStyles(stylesCfg)
 		return stylesCfg
 	}
-	stylesPath := filepath.Join(projectRoot, "devbox", "styles.yml")
+	stylesPath := filepath.Join(projectRoot, "workspace", "styles.yml")
 	stylesCfg, err := config.LoadStylesConfig(stylesPath)
 	styles.ApplyStyles(stylesCfg)
 	if err != nil {
@@ -330,14 +330,14 @@ type rootPendingJSON struct {
 	CreatedAt  string              `json:"created_at,omitempty"`
 }
 
-// rootJSON is the top-level JSON payload for `devbox` (no subcommand) in JSON mode.
+// rootJSON is the top-level JSON payload for `dwe` (no subcommand) in JSON mode.
 type rootJSON struct {
 	Project       *rootProjectJSON       `json:"project"`
 	DeploySummary *rootDeploySummaryJSON `json:"deploy_summary"`
 	Pending       *rootPendingJSON       `json:"pending"`
 }
 
-// runRootJSON handles `devbox` with no subcommand in JSON output mode.
+// runRootJSON handles `dwe` with no subcommand in JSON output mode.
 // It emits a machine-readable project summary and returns without printing help text.
 func runRootJSON(cmd *cobra.Command, flags *cmdctx.RootFlags) error {
 	if flags.Root == "" {
@@ -404,7 +404,7 @@ func runRootJSON(cmd *cobra.Command, flags *cmdctx.RootFlags) error {
 	return cmdctx.WriteData(flags, cmd, data, func(r rootJSON) string { return "" })
 }
 
-// runRoot is the handler for `devbox` with no subcommand.
+// runRoot is the handler for `dwe` with no subcommand.
 // It prints an ASCII header and compact project summary (when a config is
 // found), followed by the Cobra/Fang help output.
 func runRoot(cmd *cobra.Command, flags *cmdctx.RootFlags) error {

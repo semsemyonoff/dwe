@@ -4,8 +4,8 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/semsemyonoff/devbox/internal/core/ui/styles"
-	"github.com/semsemyonoff/devbox/internal/core/workflow/deploy/journal"
+	"github.com/semsemyonoff/dwe/internal/core/ui/styles"
+	"github.com/semsemyonoff/dwe/internal/core/workflow/deploy/journal"
 )
 
 // PendingBanner returns a formatted warning string for outstanding pending

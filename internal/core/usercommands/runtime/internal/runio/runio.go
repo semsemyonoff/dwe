@@ -15,10 +15,10 @@ import (
 
 	"github.com/creack/pty"
 
-	"github.com/semsemyonoff/devbox/internal/core/usercommands/model"
-	"github.com/semsemyonoff/devbox/internal/core/usercommands/resolve"
-	"github.com/semsemyonoff/devbox/internal/core/usercommands/runtime/spec"
-	"github.com/semsemyonoff/devbox/internal/shared/tpl"
+	"github.com/semsemyonoff/dwe/internal/core/usercommands/model"
+	"github.com/semsemyonoff/dwe/internal/core/usercommands/resolve"
+	"github.com/semsemyonoff/dwe/internal/core/usercommands/runtime/spec"
+	"github.com/semsemyonoff/dwe/internal/shared/tpl"
 )
 
 // ChildTermDelay is the grace period exec.CommandContext gives a child after

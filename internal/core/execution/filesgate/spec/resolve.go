@@ -5,8 +5,8 @@ import (
 	"fmt"
 	"sort"
 
-	"github.com/semsemyonoff/devbox/internal/core/execution/filesgate"
-	"github.com/semsemyonoff/devbox/internal/core/usercommands/model"
+	"github.com/semsemyonoff/dwe/internal/core/execution/filesgate"
+	"github.com/semsemyonoff/dwe/internal/core/usercommands/model"
 )
 
 // ResolveRequireIDs expands a require spec into a sorted list of file IDs.

@@ -11,11 +11,11 @@ import (
 	"sort"
 	"time"
 
-	"github.com/semsemyonoff/devbox/internal/core/project/config"
-	"github.com/semsemyonoff/devbox/internal/core/usercommands/registry"
-	"github.com/semsemyonoff/devbox/internal/core/workflow/deploy/journal"
-	"github.com/semsemyonoff/devbox/internal/core/workflow/snapshot/meta"
-	"github.com/semsemyonoff/devbox/internal/shared/tpl"
+	"github.com/semsemyonoff/dwe/internal/core/project/config"
+	"github.com/semsemyonoff/dwe/internal/core/usercommands/registry"
+	"github.com/semsemyonoff/dwe/internal/core/workflow/deploy/journal"
+	"github.com/semsemyonoff/dwe/internal/core/workflow/snapshot/meta"
+	"github.com/semsemyonoff/dwe/internal/shared/tpl"
 )
 
 // CreateParams describes one `devbox snapshot create` invocation. The caller

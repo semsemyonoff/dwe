@@ -9,7 +9,7 @@ import (
 
 	"github.com/stretchr/testify/require"
 
-	"github.com/semsemyonoff/devbox/internal/core/docs/mermaid"
+	"github.com/semsemyonoff/dwe/internal/core/docs/mermaid"
 )
 
 // FakeRenderer tracks calls and allows injection of delays.

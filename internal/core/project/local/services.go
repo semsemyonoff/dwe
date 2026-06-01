@@ -3,7 +3,7 @@ package local
 import (
 	"fmt"
 
-	"github.com/semsemyonoff/devbox/internal/core/project/config"
+	"github.com/semsemyonoff/dwe/internal/core/project/config"
 )
 
 // ServiceSelection is the minimal service state needed for diff and validation logic.

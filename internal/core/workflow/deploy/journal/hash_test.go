@@ -3,8 +3,8 @@ package journal
 import (
 	"testing"
 
-	"github.com/semsemyonoff/devbox/internal/core/execution/filesgate"
-	"github.com/semsemyonoff/devbox/internal/core/project/config"
+	"github.com/semsemyonoff/dwe/internal/core/execution/filesgate"
+	"github.com/semsemyonoff/dwe/internal/core/project/config"
 
 	"github.com/stretchr/testify/assert"
 )

@@ -5,7 +5,7 @@ import (
 	"os"
 	"testing"
 
-	"github.com/semsemyonoff/devbox/internal/core/validate"
+	"github.com/semsemyonoff/dwe/internal/core/validate"
 )
 
 func TestValidateYmlValidator(t *testing.T) {

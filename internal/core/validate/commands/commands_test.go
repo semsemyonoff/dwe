@@ -8,9 +8,9 @@ import (
 
 	"github.com/stretchr/testify/require"
 
-	"github.com/semsemyonoff/devbox/internal/core/usercommands/model"
-	"github.com/semsemyonoff/devbox/internal/core/usercommands/registry"
-	"github.com/semsemyonoff/devbox/internal/core/validate"
+	"github.com/semsemyonoff/dwe/internal/core/usercommands/model"
+	"github.com/semsemyonoff/dwe/internal/core/usercommands/registry"
+	"github.com/semsemyonoff/dwe/internal/core/validate"
 )
 
 func TestValidator(t *testing.T) {

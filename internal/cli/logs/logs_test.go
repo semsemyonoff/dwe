@@ -14,8 +14,8 @@ import (
 
 	"go.uber.org/goleak"
 
-	"github.com/semsemyonoff/devbox/internal/cli/cmdctx"
-	cmdlogs "github.com/semsemyonoff/devbox/internal/cli/logs"
+	"github.com/semsemyonoff/dwe/internal/cli/cmdctx"
+	cmdlogs "github.com/semsemyonoff/dwe/internal/cli/logs"
 
 	"github.com/spf13/cobra"
 )
@@ -29,7 +29,7 @@ func TestMain(m *testing.M) {
 // resolution should use cli.NewRootCmd() instead.
 func newTestRoot(flags *cmdctx.RootFlags) *cobra.Command {
 	root := &cobra.Command{
-		Use:           "devbox",
+		Use:           "dwe",
 		SilenceErrors: true,
 		SilenceUsage:  true,
 	}

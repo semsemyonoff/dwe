@@ -4,7 +4,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/semsemyonoff/devbox/internal/core/project/config"
+	"github.com/semsemyonoff/dwe/internal/core/project/config"
 )
 
 func TestRenderAutoURLs(t *testing.T) {

@@ -10,11 +10,11 @@ import (
 	"sync/atomic"
 	"testing"
 
-	"github.com/semsemyonoff/devbox/internal/core/notify"
-	"github.com/semsemyonoff/devbox/internal/core/project/config"
-	userpkg "github.com/semsemyonoff/devbox/internal/core/project/user"
-	"github.com/semsemyonoff/devbox/internal/core/ui/widgets"
-	"github.com/semsemyonoff/devbox/internal/shared/tpl"
+	"github.com/semsemyonoff/dwe/internal/core/notify"
+	"github.com/semsemyonoff/dwe/internal/core/project/config"
+	userpkg "github.com/semsemyonoff/dwe/internal/core/project/user"
+	"github.com/semsemyonoff/dwe/internal/core/ui/widgets"
+	"github.com/semsemyonoff/dwe/internal/shared/tpl"
 )
 
 type recordingNotifier struct {

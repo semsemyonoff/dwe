@@ -10,11 +10,11 @@ import (
 	"testing"
 	"time"
 
-	"github.com/semsemyonoff/devbox/internal/core/execution/condition"
-	"github.com/semsemyonoff/devbox/internal/core/project/config"
-	"github.com/semsemyonoff/devbox/internal/core/workflow/deploy/journal"
-	"github.com/semsemyonoff/devbox/internal/shared/liveui"
-	"github.com/semsemyonoff/devbox/internal/shared/render"
+	"github.com/semsemyonoff/dwe/internal/core/execution/condition"
+	"github.com/semsemyonoff/dwe/internal/core/project/config"
+	"github.com/semsemyonoff/dwe/internal/core/workflow/deploy/journal"
+	"github.com/semsemyonoff/dwe/internal/shared/liveui"
+	"github.com/semsemyonoff/dwe/internal/shared/render"
 )
 
 func TestOpenPipelineLog_CreatesDevboxLogsDirectory(t *testing.T) {

@@ -7,7 +7,7 @@ import (
 	"github.com/charmbracelet/lipgloss/tree"
 	"gopkg.in/yaml.v3"
 
-	"github.com/semsemyonoff/devbox/internal/core/ui/styles"
+	"github.com/semsemyonoff/dwe/internal/core/ui/styles"
 )
 
 // NodeStatus represents the display status of a topology node.

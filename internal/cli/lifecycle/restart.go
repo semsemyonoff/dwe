@@ -1,9 +1,9 @@
 package lifecycle
 
 import (
-	"github.com/semsemyonoff/devbox/internal/cli/cmdctx"
-	"github.com/semsemyonoff/devbox/internal/cli/info"
-	lifecyclepkg "github.com/semsemyonoff/devbox/internal/core/workflow/lifecycle"
+	"github.com/semsemyonoff/dwe/internal/cli/cmdctx"
+	"github.com/semsemyonoff/dwe/internal/cli/info"
+	lifecyclepkg "github.com/semsemyonoff/dwe/internal/core/workflow/lifecycle"
 
 	"github.com/spf13/cobra"
 )

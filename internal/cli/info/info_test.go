@@ -7,9 +7,9 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/semsemyonoff/devbox/internal/cli"
-	"github.com/semsemyonoff/devbox/internal/cli/cmdctx"
-	infocmd "github.com/semsemyonoff/devbox/internal/cli/info"
+	"github.com/semsemyonoff/dwe/internal/cli"
+	"github.com/semsemyonoff/dwe/internal/cli/cmdctx"
+	infocmd "github.com/semsemyonoff/dwe/internal/cli/info"
 
 	"github.com/spf13/cobra"
 )
@@ -354,7 +354,7 @@ func runInfoJSONCmd(t *testing.T, cfgPath string, pretty bool) string {
 		Output:     "json",
 		Pretty:     pretty,
 	}
-	root := &cobra.Command{Use: "devbox", SilenceErrors: true, SilenceUsage: true}
+	root := &cobra.Command{Use: "dwe", SilenceErrors: true, SilenceUsage: true}
 	root.AddCommand(infocmd.NewCmd("", flags))
 	var out bytes.Buffer
 	root.SetOut(&out)

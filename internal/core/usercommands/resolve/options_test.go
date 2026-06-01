@@ -3,7 +3,7 @@ package resolve
 import (
 	"testing"
 
-	"github.com/semsemyonoff/devbox/internal/core/usercommands/model"
+	"github.com/semsemyonoff/dwe/internal/core/usercommands/model"
 
 	"github.com/stretchr/testify/require"
 )

@@ -1,6 +1,6 @@
 # Binaries
 bin/
-/devbox
+/dwe
 *.test
 
 # IDE & OS

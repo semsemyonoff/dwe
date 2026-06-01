@@ -7,10 +7,10 @@ import (
 	"os/exec"
 	"strings"
 
-	"github.com/semsemyonoff/devbox/internal/core/project/config"
-	"github.com/semsemyonoff/devbox/internal/core/usercommands/runtime/internal/runio"
-	"github.com/semsemyonoff/devbox/internal/core/usercommands/runtime/spec"
-	"github.com/semsemyonoff/devbox/internal/shared/tpl"
+	"github.com/semsemyonoff/dwe/internal/core/project/config"
+	"github.com/semsemyonoff/dwe/internal/core/usercommands/runtime/internal/runio"
+	"github.com/semsemyonoff/dwe/internal/core/usercommands/runtime/spec"
+	"github.com/semsemyonoff/dwe/internal/shared/tpl"
 )
 
 // DevboxRunner executes type=devbox commands by invoking the current devbox

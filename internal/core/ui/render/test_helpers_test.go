@@ -1,7 +1,7 @@
 package render
 
 import (
-	"github.com/semsemyonoff/devbox/internal/core/ui/styles"
+	"github.com/semsemyonoff/dwe/internal/core/ui/styles"
 )
 
 // resetStyles re-initialises the styles package palette to the built-in

@@ -7,7 +7,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/semsemyonoff/devbox/internal/core/execution/templates/manifest"
+	"github.com/semsemyonoff/dwe/internal/core/execution/templates/manifest"
 )
 
 func writeFile(t *testing.T, path, content string) {

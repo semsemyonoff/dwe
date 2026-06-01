@@ -9,7 +9,7 @@ import (
 	"regexp"
 	"strings"
 
-	"github.com/semsemyonoff/devbox/internal/shared/render"
+	"github.com/semsemyonoff/dwe/internal/shared/render"
 )
 
 // unsafeFSRe matches characters not allowed in sanitised filesystem names.

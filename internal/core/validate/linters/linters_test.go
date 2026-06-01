@@ -3,7 +3,7 @@ package linters
 import (
 	"testing"
 
-	"github.com/semsemyonoff/devbox/internal/core/validate"
+	"github.com/semsemyonoff/dwe/internal/core/validate"
 )
 
 func TestGenericAdapterParseOutput(t *testing.T) {

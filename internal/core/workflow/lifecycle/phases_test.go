@@ -7,8 +7,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/semsemyonoff/devbox/internal/core/execution/pipeline"
-	"github.com/semsemyonoff/devbox/internal/core/project/config"
+	"github.com/semsemyonoff/dwe/internal/core/execution/pipeline"
+	"github.com/semsemyonoff/dwe/internal/core/project/config"
 )
 
 func TestRunPhases_HappyPath(t *testing.T) {

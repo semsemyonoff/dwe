@@ -3,7 +3,7 @@ package cmdctx
 import (
 	"fmt"
 
-	"github.com/semsemyonoff/devbox/internal/shared/render"
+	"github.com/semsemyonoff/dwe/internal/shared/render"
 
 	"github.com/spf13/cobra"
 )

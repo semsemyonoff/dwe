@@ -1,8 +1,8 @@
 package workflow
 
 import (
-	"github.com/semsemyonoff/devbox/internal/core/usercommands/model"
-	"github.com/semsemyonoff/devbox/internal/core/usercommands/runtime/spec"
+	"github.com/semsemyonoff/dwe/internal/core/usercommands/model"
+	"github.com/semsemyonoff/dwe/internal/core/usercommands/runtime/spec"
 )
 
 // fireOnStepStart calls the observer's OnStepStart hook when present.

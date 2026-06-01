@@ -8,7 +8,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/semsemyonoff/devbox/internal/shared/render"
+	"github.com/semsemyonoff/dwe/internal/shared/render"
 )
 
 func discardWriter() *render.Writer {

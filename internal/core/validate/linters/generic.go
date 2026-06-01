@@ -4,7 +4,7 @@ import (
 	"bytes"
 	"strings"
 
-	"github.com/semsemyonoff/devbox/internal/core/validate"
+	"github.com/semsemyonoff/dwe/internal/core/validate"
 )
 
 // genericMessageCap bounds the combined stdout+stderr embedded in a generic

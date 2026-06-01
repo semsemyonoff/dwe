@@ -4,7 +4,7 @@ import (
 	"os"
 	"slices"
 
-	userpkg "github.com/semsemyonoff/devbox/internal/core/project/user"
+	userpkg "github.com/semsemyonoff/dwe/internal/core/project/user"
 
 	"github.com/charmbracelet/x/term"
 )

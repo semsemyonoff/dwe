@@ -6,10 +6,10 @@ import (
 	"slices"
 	"strings"
 
-	"github.com/semsemyonoff/devbox/internal/core/project/config"
-	"github.com/semsemyonoff/devbox/internal/core/ui/render"
-	"github.com/semsemyonoff/devbox/internal/core/ui/styles"
-	"github.com/semsemyonoff/devbox/internal/core/workflow/deploy/journal"
+	"github.com/semsemyonoff/dwe/internal/core/project/config"
+	"github.com/semsemyonoff/dwe/internal/core/ui/render"
+	"github.com/semsemyonoff/dwe/internal/core/ui/styles"
+	"github.com/semsemyonoff/dwe/internal/core/workflow/deploy/journal"
 )
 
 // ContainerCheckFn reports whether a container with the given name is running

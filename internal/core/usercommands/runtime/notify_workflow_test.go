@@ -5,7 +5,7 @@ import (
 	"context"
 	"testing"
 
-	"github.com/semsemyonoff/devbox/internal/shared/tpl"
+	"github.com/semsemyonoff/dwe/internal/shared/tpl"
 )
 
 // TestWorkflowRunner_SubStep_SkipNotifyIsSet verifies that workflow sub-steps

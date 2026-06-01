@@ -4,12 +4,12 @@ import (
 	"path/filepath"
 	"sort"
 
-	"github.com/semsemyonoff/devbox/internal/cli/cmdctx"
-	"github.com/semsemyonoff/devbox/internal/core/project/config"
-	"github.com/semsemyonoff/devbox/internal/core/project/stack"
-	"github.com/semsemyonoff/devbox/internal/core/ui/render"
-	"github.com/semsemyonoff/devbox/internal/core/usercommands"
-	"github.com/semsemyonoff/devbox/internal/core/workflow/deploy"
+	"github.com/semsemyonoff/dwe/internal/cli/cmdctx"
+	"github.com/semsemyonoff/dwe/internal/core/project/config"
+	"github.com/semsemyonoff/dwe/internal/core/project/stack"
+	"github.com/semsemyonoff/dwe/internal/core/ui/render"
+	"github.com/semsemyonoff/dwe/internal/core/usercommands"
+	"github.com/semsemyonoff/dwe/internal/core/workflow/deploy"
 
 	"github.com/spf13/cobra"
 )

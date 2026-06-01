@@ -5,9 +5,9 @@ import (
 	"fmt"
 	"path/filepath"
 
-	"github.com/semsemyonoff/devbox/internal/core/execution/pipeline"
-	"github.com/semsemyonoff/devbox/internal/core/project/config"
-	"github.com/semsemyonoff/devbox/internal/core/usercommands/registry"
+	"github.com/semsemyonoff/dwe/internal/core/execution/pipeline"
+	"github.com/semsemyonoff/dwe/internal/core/project/config"
+	"github.com/semsemyonoff/dwe/internal/core/usercommands/registry"
 )
 
 // ErrServiceNoDeployFile is returned by ResolveServicePlan when the named

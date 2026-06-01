@@ -1,7 +1,7 @@
 package tui
 
 import (
-	"github.com/semsemyonoff/devbox/internal/core/docs/render"
+	"github.com/semsemyonoff/dwe/internal/core/docs/render"
 )
 
 // DiagramState tracks diagrams for the current document.

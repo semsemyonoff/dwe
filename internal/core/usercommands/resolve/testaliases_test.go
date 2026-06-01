@@ -1,6 +1,6 @@
 package resolve
 
-import "github.com/semsemyonoff/devbox/internal/core/usercommands/model"
+import "github.com/semsemyonoff/dwe/internal/core/usercommands/model"
 
 // type aliases for test files that reference model types without the model. prefix
 type (

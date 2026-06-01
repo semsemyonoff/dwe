@@ -6,8 +6,8 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/semsemyonoff/devbox/internal/core/usercommands/loader"
-	"github.com/semsemyonoff/devbox/internal/core/usercommands/model"
+	"github.com/semsemyonoff/dwe/internal/core/usercommands/loader"
+	"github.com/semsemyonoff/dwe/internal/core/usercommands/model"
 )
 
 // GroupNode is a node in the command group tree.

@@ -5,12 +5,12 @@ import (
 	"fmt"
 	"os"
 
-	"github.com/semsemyonoff/devbox/internal/core/project/config"
-	"github.com/semsemyonoff/devbox/internal/core/usercommands/model"
-	"github.com/semsemyonoff/devbox/internal/core/usercommands/registry"
-	"github.com/semsemyonoff/devbox/internal/core/usercommands/resolve"
-	"github.com/semsemyonoff/devbox/internal/shared/i18n"
-	"github.com/semsemyonoff/devbox/internal/shared/tpl"
+	"github.com/semsemyonoff/dwe/internal/core/project/config"
+	"github.com/semsemyonoff/dwe/internal/core/usercommands/model"
+	"github.com/semsemyonoff/dwe/internal/core/usercommands/registry"
+	"github.com/semsemyonoff/dwe/internal/core/usercommands/resolve"
+	"github.com/semsemyonoff/dwe/internal/shared/i18n"
+	"github.com/semsemyonoff/dwe/internal/shared/tpl"
 )
 
 // BuildRunContext constructs a RunContext for command execution by resolving

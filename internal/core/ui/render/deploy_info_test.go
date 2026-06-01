@@ -5,7 +5,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/semsemyonoff/devbox/internal/core/workflow/deploy/journal"
+	"github.com/semsemyonoff/dwe/internal/core/workflow/deploy/journal"
 )
 
 func TestRenderDeployInfo_Empty(t *testing.T) {

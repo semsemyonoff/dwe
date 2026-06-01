@@ -7,8 +7,8 @@ import (
 	"strings"
 	"testing"
 
-	localpkg "github.com/semsemyonoff/devbox/internal/core/project/local"
-	"github.com/semsemyonoff/devbox/internal/core/validate/env"
+	localpkg "github.com/semsemyonoff/dwe/internal/core/project/local"
+	"github.com/semsemyonoff/dwe/internal/core/validate/env"
 )
 
 func TestWizardRunHappyPath(t *testing.T) {

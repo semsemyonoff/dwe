@@ -6,7 +6,7 @@ import (
 	"runtime"
 	"strings"
 
-	"github.com/semsemyonoff/devbox/internal/core/project/config"
+	"github.com/semsemyonoff/dwe/internal/core/project/config"
 )
 
 // HostUID returns the UID to use for container builds.

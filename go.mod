@@ -1,4 +1,4 @@
-module github.com/semsemyonoff/devbox
+module github.com/semsemyonoff/dwe
 
 go 1.26
 

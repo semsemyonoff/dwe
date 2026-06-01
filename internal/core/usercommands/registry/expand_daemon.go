@@ -3,7 +3,7 @@ package registry
 import (
 	"fmt"
 
-	"github.com/semsemyonoff/devbox/internal/core/usercommands/model"
+	"github.com/semsemyonoff/dwe/internal/core/usercommands/model"
 )
 
 // expandDaemon turns a type=daemon CommandDef into up to four synthetic

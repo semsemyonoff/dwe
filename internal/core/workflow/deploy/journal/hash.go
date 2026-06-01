@@ -7,9 +7,9 @@ import (
 	"log/slog"
 	"sort"
 
-	"github.com/semsemyonoff/devbox/internal/core/execution/condition"
-	"github.com/semsemyonoff/devbox/internal/core/execution/filesgate"
-	"github.com/semsemyonoff/devbox/internal/core/project/config"
+	"github.com/semsemyonoff/dwe/internal/core/execution/condition"
+	"github.com/semsemyonoff/dwe/internal/core/execution/filesgate"
+	"github.com/semsemyonoff/dwe/internal/core/project/config"
 )
 
 // Hashes are computed from raw, untranslated fields; do not introduce locale-dependent

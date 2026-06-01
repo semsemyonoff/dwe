@@ -4,9 +4,9 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/semsemyonoff/devbox/internal/core/execution/builtin/spec"
+	"github.com/semsemyonoff/dwe/internal/core/execution/builtin/spec"
 
-	"github.com/semsemyonoff/devbox/internal/shared/tpl"
+	"github.com/semsemyonoff/dwe/internal/shared/tpl"
 )
 
 // validMessageLevels lists the accepted level values for the message builtin.

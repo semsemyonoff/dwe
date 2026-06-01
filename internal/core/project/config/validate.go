@@ -10,7 +10,7 @@ import (
 
 	"gopkg.in/yaml.v3"
 
-	"github.com/semsemyonoff/devbox/internal/core/validate/diag"
+	"github.com/semsemyonoff/dwe/internal/core/validate/diag"
 )
 
 // ValidateConfigFileName is the filename of the project-level validate.yml,

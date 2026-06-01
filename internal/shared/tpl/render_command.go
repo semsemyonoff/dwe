@@ -9,7 +9,7 @@ import (
 	"strings"
 	"text/template"
 
-	"github.com/semsemyonoff/devbox/internal/core/execution/condition"
+	"github.com/semsemyonoff/dwe/internal/core/execution/condition"
 )
 
 // ResolvedFile represents a single resolved file path artifact.

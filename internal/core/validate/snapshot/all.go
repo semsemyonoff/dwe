@@ -6,10 +6,10 @@ package snapshot
 import (
 	"path/filepath"
 
-	"github.com/semsemyonoff/devbox/internal/core/project/config"
-	"github.com/semsemyonoff/devbox/internal/core/usercommands/registry"
-	"github.com/semsemyonoff/devbox/internal/core/validate"
-	coresnap "github.com/semsemyonoff/devbox/internal/core/workflow/snapshot"
+	"github.com/semsemyonoff/dwe/internal/core/project/config"
+	"github.com/semsemyonoff/dwe/internal/core/usercommands/registry"
+	"github.com/semsemyonoff/dwe/internal/core/validate"
+	coresnap "github.com/semsemyonoff/dwe/internal/core/workflow/snapshot"
 )
 
 // All returns the snapshot domain validators.

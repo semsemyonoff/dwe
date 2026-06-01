@@ -4,8 +4,8 @@ import (
 	"context"
 	"sort"
 
-	"github.com/semsemyonoff/devbox/internal/core/project/config"
-	"github.com/semsemyonoff/devbox/internal/core/validate/diag"
+	"github.com/semsemyonoff/dwe/internal/core/project/config"
+	"github.com/semsemyonoff/dwe/internal/core/validate/diag"
 )
 
 // Severity is the validation diagnostic severity. Re-exported from the leaf

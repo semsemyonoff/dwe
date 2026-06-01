@@ -12,9 +12,9 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/semsemyonoff/devbox/internal/cli/cmdctx"
-	"github.com/semsemyonoff/devbox/internal/core/ui/statustui"
-	"github.com/semsemyonoff/devbox/internal/core/workflow/deploy/journal"
+	"github.com/semsemyonoff/dwe/internal/cli/cmdctx"
+	"github.com/semsemyonoff/dwe/internal/core/ui/statustui"
+	"github.com/semsemyonoff/dwe/internal/core/workflow/deploy/journal"
 
 	"github.com/spf13/cobra"
 )
@@ -22,7 +22,7 @@ import (
 // buildStatusJSONRoot constructs a minimal cobra root for JSON mode tests.
 // flags.Output should be set to "json" (and optionally Pretty=true) before use.
 func buildStatusJSONRoot(flags *cmdctx.RootFlags) *cobra.Command {
-	root := &cobra.Command{Use: "devbox", SilenceUsage: true, SilenceErrors: true}
+	root := &cobra.Command{Use: "dwe", SilenceUsage: true, SilenceErrors: true}
 	root.PersistentFlags().StringVarP(&flags.ConfigPath, "config", "c", "", "")
 	root.AddGroup(&cobra.Group{ID: "environment", Title: "Environment Commands:"})
 	root.AddCommand(NewCmd("environment", flags))

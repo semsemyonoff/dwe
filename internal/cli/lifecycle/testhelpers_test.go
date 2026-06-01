@@ -5,11 +5,11 @@ import (
 	"io"
 	"testing"
 
-	"github.com/semsemyonoff/devbox/internal/cli/cmdctx"
-	"github.com/semsemyonoff/devbox/internal/core/project/config"
-	"github.com/semsemyonoff/devbox/internal/core/usercommands"
-	lifecyclepkg "github.com/semsemyonoff/devbox/internal/core/workflow/lifecycle"
-	"github.com/semsemyonoff/devbox/internal/shared/i18n"
+	"github.com/semsemyonoff/dwe/internal/cli/cmdctx"
+	"github.com/semsemyonoff/dwe/internal/core/project/config"
+	"github.com/semsemyonoff/dwe/internal/core/usercommands"
+	lifecyclepkg "github.com/semsemyonoff/dwe/internal/core/workflow/lifecycle"
+	"github.com/semsemyonoff/dwe/internal/shared/i18n"
 
 	"github.com/spf13/cobra"
 )
@@ -48,7 +48,7 @@ const (
 // Tests that previously called cli.NewRootCmd() use this helper to avoid the
 // (now-cyclic) import of the cli root package.
 func buildLifecycleTestRoot(flags *cmdctx.RootFlags) *cobra.Command {
-	root := &cobra.Command{Use: "devbox"}
+	root := &cobra.Command{Use: "dwe"}
 	root.PersistentFlags().StringVarP(&flags.ConfigPath, "config", "c", "", "path to devbox.yml")
 	root.AddGroup(
 		&cobra.Group{ID: groupEnvironment, Title: "Environment Commands:"},

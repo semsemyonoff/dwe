@@ -4,7 +4,7 @@ import (
 	"errors"
 	"os"
 
-	"github.com/semsemyonoff/devbox/internal/core/validate"
+	"github.com/semsemyonoff/dwe/internal/core/validate"
 )
 
 // validateYmlValidator surfaces the outcome of the single LoadValidateConfig

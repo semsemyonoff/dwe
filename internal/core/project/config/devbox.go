@@ -13,9 +13,9 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/semsemyonoff/devbox/internal/core/execution/condition"
-	"github.com/semsemyonoff/devbox/internal/core/execution/filesgate"
-	userpkg "github.com/semsemyonoff/devbox/internal/core/project/user"
+	"github.com/semsemyonoff/dwe/internal/core/execution/condition"
+	"github.com/semsemyonoff/dwe/internal/core/execution/filesgate"
+	userpkg "github.com/semsemyonoff/dwe/internal/core/project/user"
 
 	"gopkg.in/yaml.v3"
 )

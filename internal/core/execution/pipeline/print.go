@@ -4,8 +4,8 @@ import (
 	"fmt"
 	"io"
 
-	"github.com/semsemyonoff/devbox/internal/core/ui/render"
-	sharedrender "github.com/semsemyonoff/devbox/internal/shared/render"
+	"github.com/semsemyonoff/dwe/internal/core/ui/render"
+	sharedrender "github.com/semsemyonoff/dwe/internal/shared/render"
 )
 
 // PrintPlanTable prints the plan in human-readable table format.

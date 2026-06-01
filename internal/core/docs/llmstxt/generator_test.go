@@ -6,8 +6,8 @@ import (
 	"strings"
 	"testing"
 
-	coredocs "github.com/semsemyonoff/devbox/internal/core/docs"
-	"github.com/semsemyonoff/devbox/internal/core/docs/llmstxt"
+	coredocs "github.com/semsemyonoff/dwe/internal/core/docs"
+	"github.com/semsemyonoff/dwe/internal/core/docs/llmstxt"
 )
 
 var update = flag.Bool("update", false, "update golden files")

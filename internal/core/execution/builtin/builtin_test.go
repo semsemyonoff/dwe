@@ -7,14 +7,14 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/semsemyonoff/devbox/internal/core/execution/builtin/containers"
-	"github.com/semsemyonoff/devbox/internal/core/execution/builtin/env"
-	"github.com/semsemyonoff/devbox/internal/core/execution/builtin/fs"
-	"github.com/semsemyonoff/devbox/internal/core/execution/builtin/interaction"
-	"github.com/semsemyonoff/devbox/internal/core/execution/builtin/services"
-	"github.com/semsemyonoff/devbox/internal/core/execution/builtin/spec"
-	"github.com/semsemyonoff/devbox/internal/core/project/config"
-	"github.com/semsemyonoff/devbox/internal/shared/render"
+	"github.com/semsemyonoff/dwe/internal/core/execution/builtin/containers"
+	"github.com/semsemyonoff/dwe/internal/core/execution/builtin/env"
+	"github.com/semsemyonoff/dwe/internal/core/execution/builtin/fs"
+	"github.com/semsemyonoff/dwe/internal/core/execution/builtin/interaction"
+	"github.com/semsemyonoff/dwe/internal/core/execution/builtin/services"
+	"github.com/semsemyonoff/dwe/internal/core/execution/builtin/spec"
+	"github.com/semsemyonoff/dwe/internal/core/project/config"
+	"github.com/semsemyonoff/dwe/internal/shared/render"
 )
 
 // --- IsInteractive ---

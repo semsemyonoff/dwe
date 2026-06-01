@@ -9,7 +9,7 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/semsemyonoff/devbox/internal/shared/pathsafe"
+	"github.com/semsemyonoff/dwe/internal/shared/pathsafe"
 )
 
 // skipDirs are directory basenames the walker always skips regardless of

@@ -5,7 +5,7 @@ import (
 	"runtime"
 	"testing"
 
-	"github.com/semsemyonoff/devbox/internal/core/project/config"
+	"github.com/semsemyonoff/dwe/internal/core/project/config"
 )
 
 func TestSnapshotsDir(t *testing.T) {

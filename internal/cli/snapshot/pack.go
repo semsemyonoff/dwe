@@ -4,12 +4,12 @@ import (
 	"errors"
 	"fmt"
 
-	"github.com/semsemyonoff/devbox/internal/cli/cmdctx"
-	"github.com/semsemyonoff/devbox/internal/core/project/config"
-	"github.com/semsemyonoff/devbox/internal/core/workflow/snapshot/archive"
-	"github.com/semsemyonoff/devbox/internal/core/workflow/snapshot/meta"
-	"github.com/semsemyonoff/devbox/internal/shared/lock"
-	"github.com/semsemyonoff/devbox/internal/shared/render"
+	"github.com/semsemyonoff/dwe/internal/cli/cmdctx"
+	"github.com/semsemyonoff/dwe/internal/core/project/config"
+	"github.com/semsemyonoff/dwe/internal/core/workflow/snapshot/archive"
+	"github.com/semsemyonoff/dwe/internal/core/workflow/snapshot/meta"
+	"github.com/semsemyonoff/dwe/internal/shared/lock"
+	"github.com/semsemyonoff/dwe/internal/shared/render"
 
 	"github.com/spf13/cobra"
 )

@@ -8,7 +8,7 @@ import (
 	"strconv"
 	"time"
 
-	"github.com/semsemyonoff/devbox/internal/core/execution/builtin/spec"
+	"github.com/semsemyonoff/dwe/internal/core/execution/builtin/spec"
 )
 
 const tcpDefaultTimeout = 3 * time.Second

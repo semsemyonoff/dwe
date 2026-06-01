@@ -6,12 +6,12 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/semsemyonoff/devbox/internal/core/project/config"
-	"github.com/semsemyonoff/devbox/internal/core/ui/render"
-	"github.com/semsemyonoff/devbox/internal/core/usercommands"
-	"github.com/semsemyonoff/devbox/internal/shared/daemon"
-	"github.com/semsemyonoff/devbox/internal/shared/i18n"
-	"github.com/semsemyonoff/devbox/internal/shared/tpl"
+	"github.com/semsemyonoff/dwe/internal/core/project/config"
+	"github.com/semsemyonoff/dwe/internal/core/ui/render"
+	"github.com/semsemyonoff/dwe/internal/core/usercommands"
+	"github.com/semsemyonoff/dwe/internal/shared/daemon"
+	"github.com/semsemyonoff/dwe/internal/shared/i18n"
+	"github.com/semsemyonoff/dwe/internal/shared/tpl"
 )
 
 // commandInspectJSON is the DTO for `commands [id] --inspect --output json`.

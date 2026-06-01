@@ -6,11 +6,11 @@ import (
 	"os"
 	"slices"
 
-	"github.com/semsemyonoff/devbox/internal/cli/cmdctx"
-	"github.com/semsemyonoff/devbox/internal/core/project/config"
-	dockerpkg "github.com/semsemyonoff/devbox/internal/shared/docker"
-	"github.com/semsemyonoff/devbox/internal/shared/envfile"
-	"github.com/semsemyonoff/devbox/internal/shared/render"
+	"github.com/semsemyonoff/dwe/internal/cli/cmdctx"
+	"github.com/semsemyonoff/dwe/internal/core/project/config"
+	dockerpkg "github.com/semsemyonoff/dwe/internal/shared/docker"
+	"github.com/semsemyonoff/dwe/internal/shared/envfile"
+	"github.com/semsemyonoff/dwe/internal/shared/render"
 
 	"github.com/spf13/cobra"
 )

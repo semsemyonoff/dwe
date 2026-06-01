@@ -3,7 +3,7 @@ package stack
 import (
 	"testing"
 
-	"github.com/semsemyonoff/devbox/internal/core/ui/render"
+	"github.com/semsemyonoff/dwe/internal/core/ui/render"
 )
 
 // --- AggregateHealth ---

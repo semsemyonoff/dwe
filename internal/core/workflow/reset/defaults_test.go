@@ -3,8 +3,8 @@ package reset_test
 import (
 	"testing"
 
-	"github.com/semsemyonoff/devbox/internal/core/project/config"
-	"github.com/semsemyonoff/devbox/internal/core/workflow/reset"
+	"github.com/semsemyonoff/dwe/internal/core/project/config"
+	"github.com/semsemyonoff/dwe/internal/core/workflow/reset"
 )
 
 func TestDefaultResetConfig_Shape(t *testing.T) {

@@ -4,9 +4,9 @@ package version
 import (
 	"fmt"
 
-	"github.com/semsemyonoff/devbox/internal/cli/cmdctx"
-	"github.com/semsemyonoff/devbox/internal/core/ui/render"
-	versioninfo "github.com/semsemyonoff/devbox/internal/shared/version"
+	"github.com/semsemyonoff/dwe/internal/cli/cmdctx"
+	"github.com/semsemyonoff/dwe/internal/core/ui/render"
+	versioninfo "github.com/semsemyonoff/dwe/internal/shared/version"
 
 	"github.com/spf13/cobra"
 )

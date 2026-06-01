@@ -5,7 +5,7 @@ import (
 
 	"github.com/charmbracelet/x/term"
 
-	"github.com/semsemyonoff/devbox/internal/core/ui/widgets"
+	"github.com/semsemyonoff/dwe/internal/core/ui/widgets"
 )
 
 // Test seams. The real term.IsTerminal / term.GetSize and the package-private

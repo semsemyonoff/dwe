@@ -6,9 +6,9 @@ import (
 
 	"github.com/stretchr/testify/require"
 
-	"github.com/semsemyonoff/devbox/internal/core/execution/builtin/spec"
+	"github.com/semsemyonoff/dwe/internal/core/execution/builtin/spec"
 
-	"github.com/semsemyonoff/devbox/internal/shared/docker"
+	"github.com/semsemyonoff/dwe/internal/shared/docker"
 )
 
 func TestDockerWaitHealthyValidate(t *testing.T) {

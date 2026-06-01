@@ -7,7 +7,7 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/semsemyonoff/devbox/internal/core/execution/builtin/spec"
+	"github.com/semsemyonoff/dwe/internal/core/execution/builtin/spec"
 )
 
 // ConfigsCheck implements the service_configs_check builtin: verify declared

@@ -9,17 +9,17 @@ import (
 	"slices"
 	"time"
 
-	"github.com/semsemyonoff/devbox/internal/core/notify"
-	"github.com/semsemyonoff/devbox/internal/core/usercommands/model"
-	"github.com/semsemyonoff/devbox/internal/core/usercommands/runtime/internal/runio"
-	"github.com/semsemyonoff/devbox/internal/core/usercommands/runtime/runners/builtin"
-	"github.com/semsemyonoff/devbox/internal/core/usercommands/runtime/runners/host"
-	"github.com/semsemyonoff/devbox/internal/core/usercommands/runtime/runners/script"
-	"github.com/semsemyonoff/devbox/internal/core/usercommands/runtime/runners/service"
-	"github.com/semsemyonoff/devbox/internal/core/usercommands/runtime/runners/workflow"
-	"github.com/semsemyonoff/devbox/internal/core/usercommands/runtime/spec"
-	"github.com/semsemyonoff/devbox/internal/shared/render"
-	"github.com/semsemyonoff/devbox/internal/shared/tpl"
+	"github.com/semsemyonoff/dwe/internal/core/notify"
+	"github.com/semsemyonoff/dwe/internal/core/usercommands/model"
+	"github.com/semsemyonoff/dwe/internal/core/usercommands/runtime/internal/runio"
+	"github.com/semsemyonoff/dwe/internal/core/usercommands/runtime/runners/builtin"
+	"github.com/semsemyonoff/dwe/internal/core/usercommands/runtime/runners/host"
+	"github.com/semsemyonoff/dwe/internal/core/usercommands/runtime/runners/script"
+	"github.com/semsemyonoff/dwe/internal/core/usercommands/runtime/runners/service"
+	"github.com/semsemyonoff/dwe/internal/core/usercommands/runtime/runners/workflow"
+	"github.com/semsemyonoff/dwe/internal/core/usercommands/runtime/spec"
+	"github.com/semsemyonoff/dwe/internal/shared/render"
+	"github.com/semsemyonoff/dwe/internal/shared/tpl"
 )
 
 // Workflow runner callback wiring. The workflow subpackage holds three

@@ -4,8 +4,8 @@ import (
 	"errors"
 	"testing"
 
-	"github.com/semsemyonoff/devbox/internal/core/project/config"
-	"github.com/semsemyonoff/devbox/internal/core/workflow/deploy"
+	"github.com/semsemyonoff/dwe/internal/core/project/config"
+	"github.com/semsemyonoff/dwe/internal/core/workflow/deploy"
 )
 
 func makeDeployMap(t *testing.T, entries map[string][]string) map[string]*config.DeployConfig {

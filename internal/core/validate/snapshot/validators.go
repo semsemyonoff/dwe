@@ -6,12 +6,12 @@ import (
 	"os"
 	"path/filepath"
 
-	"github.com/semsemyonoff/devbox/internal/core/project/config"
-	"github.com/semsemyonoff/devbox/internal/core/usercommands/model"
-	"github.com/semsemyonoff/devbox/internal/core/validate"
-	coresnap "github.com/semsemyonoff/devbox/internal/core/workflow/snapshot"
-	"github.com/semsemyonoff/devbox/internal/core/workflow/snapshot/meta"
-	"github.com/semsemyonoff/devbox/internal/shared/tpl"
+	"github.com/semsemyonoff/dwe/internal/core/project/config"
+	"github.com/semsemyonoff/dwe/internal/core/usercommands/model"
+	"github.com/semsemyonoff/dwe/internal/core/validate"
+	coresnap "github.com/semsemyonoff/dwe/internal/core/workflow/snapshot"
+	"github.com/semsemyonoff/dwe/internal/core/workflow/snapshot/meta"
+	"github.com/semsemyonoff/dwe/internal/shared/tpl"
 )
 
 const diagFile = "devbox/snapshot.yml"

@@ -4,7 +4,7 @@ import (
 	"slices"
 	"strings"
 
-	"github.com/semsemyonoff/devbox/internal/core/docs"
+	"github.com/semsemyonoff/dwe/internal/core/docs"
 )
 
 type TreeNode struct {

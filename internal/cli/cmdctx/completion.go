@@ -1,7 +1,7 @@
 package cmdctx
 
 import (
-	"github.com/semsemyonoff/devbox/internal/core/project/project"
+	"github.com/semsemyonoff/dwe/internal/core/project/project"
 
 	"github.com/spf13/cobra"
 )

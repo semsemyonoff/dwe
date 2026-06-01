@@ -4,9 +4,9 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/semsemyonoff/devbox/internal/core/project/config"
-	"github.com/semsemyonoff/devbox/internal/core/ui/statusview"
-	"github.com/semsemyonoff/devbox/internal/core/workflow/deploy/journal"
+	"github.com/semsemyonoff/dwe/internal/core/project/config"
+	"github.com/semsemyonoff/dwe/internal/core/ui/statusview"
+	"github.com/semsemyonoff/dwe/internal/core/workflow/deploy/journal"
 )
 
 func TestRenderSummary_OmitsProjectIdentity(t *testing.T) {

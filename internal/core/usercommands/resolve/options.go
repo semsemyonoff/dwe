@@ -5,8 +5,8 @@ import (
 	"sort"
 	"strconv"
 
-	"github.com/semsemyonoff/devbox/internal/core/project/config"
-	"github.com/semsemyonoff/devbox/internal/core/usercommands/model"
+	"github.com/semsemyonoff/dwe/internal/core/project/config"
+	"github.com/semsemyonoff/dwe/internal/core/usercommands/model"
 )
 
 // Options resolves a ParamOptions to a list of OptionItem.

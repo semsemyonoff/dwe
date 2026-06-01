@@ -3,7 +3,7 @@ package setup
 import (
 	"testing"
 
-	"github.com/semsemyonoff/devbox/internal/core/validate/env"
+	"github.com/semsemyonoff/dwe/internal/core/validate/env"
 )
 
 // Test coerceInputAnswers with various input question types.

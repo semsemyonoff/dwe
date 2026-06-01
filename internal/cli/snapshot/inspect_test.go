@@ -9,9 +9,9 @@ import (
 	"testing"
 	"time"
 
-	"github.com/semsemyonoff/devbox/internal/cli/cmdctx"
-	snapshotpkg "github.com/semsemyonoff/devbox/internal/core/workflow/snapshot"
-	"github.com/semsemyonoff/devbox/internal/core/workflow/snapshot/meta"
+	"github.com/semsemyonoff/dwe/internal/cli/cmdctx"
+	snapshotpkg "github.com/semsemyonoff/dwe/internal/core/workflow/snapshot"
+	"github.com/semsemyonoff/dwe/internal/core/workflow/snapshot/meta"
 
 	"github.com/spf13/cobra"
 )

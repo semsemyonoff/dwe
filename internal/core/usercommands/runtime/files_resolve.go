@@ -7,8 +7,8 @@ import (
 	"regexp"
 	"sort"
 
-	"github.com/semsemyonoff/devbox/internal/core/usercommands/model"
-	"github.com/semsemyonoff/devbox/internal/shared/tpl"
+	"github.com/semsemyonoff/dwe/internal/core/usercommands/model"
+	"github.com/semsemyonoff/dwe/internal/shared/tpl"
 )
 
 // ComputeFilePaths resolves file paths for all file specs in a command definition.

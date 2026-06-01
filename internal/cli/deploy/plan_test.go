@@ -8,7 +8,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/semsemyonoff/devbox/internal/cli/cmdctx"
+	"github.com/semsemyonoff/dwe/internal/cli/cmdctx"
 
 	"github.com/spf13/cobra"
 )

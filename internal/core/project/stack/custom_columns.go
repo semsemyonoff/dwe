@@ -4,8 +4,8 @@ import (
 	"maps"
 	"slices"
 
-	"github.com/semsemyonoff/devbox/internal/core/project/config"
-	"github.com/semsemyonoff/devbox/internal/shared/tpl"
+	"github.com/semsemyonoff/dwe/internal/core/project/config"
+	"github.com/semsemyonoff/dwe/internal/shared/tpl"
 )
 
 // BuildCustomColumns returns the ordered list of custom status-column names

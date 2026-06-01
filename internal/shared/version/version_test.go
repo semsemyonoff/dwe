@@ -4,7 +4,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/semsemyonoff/devbox/internal/shared/version"
+	"github.com/semsemyonoff/dwe/internal/shared/version"
 )
 
 func TestInfoDefaults(t *testing.T) {

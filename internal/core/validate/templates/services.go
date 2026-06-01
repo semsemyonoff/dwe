@@ -1,6 +1,6 @@
 package templates
 
-import "github.com/semsemyonoff/devbox/internal/core/project/config"
+import "github.com/semsemyonoff/dwe/internal/core/project/config"
 
 func appServices(services map[string]config.ServiceConfig) map[string]config.ServiceConfig {
 	apps := make(map[string]config.ServiceConfig)

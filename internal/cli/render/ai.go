@@ -6,13 +6,13 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/semsemyonoff/devbox/internal/cli/cmdctx"
-	aipkg "github.com/semsemyonoff/devbox/internal/core/execution/templates/ai"
+	"github.com/semsemyonoff/dwe/internal/cli/cmdctx"
+	aipkg "github.com/semsemyonoff/dwe/internal/core/execution/templates/ai"
 
-	"github.com/semsemyonoff/devbox/internal/core/execution/templates/manifest"
-	"github.com/semsemyonoff/devbox/internal/core/project/config"
-	"github.com/semsemyonoff/devbox/internal/shared/pathsafe"
-	"github.com/semsemyonoff/devbox/internal/shared/render"
+	"github.com/semsemyonoff/dwe/internal/core/execution/templates/manifest"
+	"github.com/semsemyonoff/dwe/internal/core/project/config"
+	"github.com/semsemyonoff/dwe/internal/shared/pathsafe"
+	"github.com/semsemyonoff/dwe/internal/shared/render"
 
 	"github.com/spf13/cobra"
 )

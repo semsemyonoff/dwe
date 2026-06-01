@@ -6,7 +6,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/semsemyonoff/devbox/internal/core/workflow/snapshot/meta"
+	"github.com/semsemyonoff/dwe/internal/core/workflow/snapshot/meta"
 )
 
 func writeManifest(t *testing.T, dir, name string, m *meta.Manifest) {

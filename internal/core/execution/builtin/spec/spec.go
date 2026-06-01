@@ -9,8 +9,8 @@ import (
 	"context"
 	"io"
 
-	"github.com/semsemyonoff/devbox/internal/core/project/config"
-	"github.com/semsemyonoff/devbox/internal/shared/render"
+	"github.com/semsemyonoff/dwe/internal/core/project/config"
+	"github.com/semsemyonoff/dwe/internal/shared/render"
 )
 
 // ExecContext holds the runtime context passed to every builtin execution.

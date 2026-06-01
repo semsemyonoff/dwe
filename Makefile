@@ -1,6 +1,6 @@
-BINARY_NAME := devbox
+BINARY_NAME := dwe
 BIN_DIR     := ./bin
-MODULE      := github.com/semsemyonoff/devbox
+MODULE      := github.com/semsemyonoff/dwe
 
 VERSION  ?= $(shell git describe --tags --always --dirty 2>/dev/null || echo dev)
 COMMIT   ?= $(shell git rev-parse --short HEAD 2>/dev/null || echo unknown)
@@ -24,7 +24,7 @@ completions: embedded-docs gen-docs-manifest
 
 build: tidy embedded-docs gen-docs-manifest
 	@mkdir -p $(BIN_DIR)
-	go build -ldflags "$(LDFLAGS)" -o $(BIN_DIR)/$(BINARY_NAME) ./cmd/devbox
+	go build -ldflags "$(LDFLAGS)" -o $(BIN_DIR)/$(BINARY_NAME) ./cmd/dwe
 	@echo "Built: $(BIN_DIR)/$(BINARY_NAME)"
 
 # Release pipeline (GoReleaser). The before-hooks in .goreleaser.yaml regenerate

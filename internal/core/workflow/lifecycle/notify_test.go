@@ -7,8 +7,8 @@ import (
 	"sync"
 	"testing"
 
-	"github.com/semsemyonoff/devbox/internal/core/notify"
-	userpkg "github.com/semsemyonoff/devbox/internal/core/project/user"
+	"github.com/semsemyonoff/dwe/internal/core/notify"
+	userpkg "github.com/semsemyonoff/dwe/internal/core/project/user"
 )
 
 type recordingNotifier struct {

@@ -3,8 +3,8 @@ package lifecycle
 import (
 	"context"
 
-	"github.com/semsemyonoff/devbox/internal/core/notify"
-	userpkg "github.com/semsemyonoff/devbox/internal/core/project/user"
+	"github.com/semsemyonoff/dwe/internal/core/notify"
+	userpkg "github.com/semsemyonoff/dwe/internal/core/project/user"
 )
 
 // notifier is the consumer-local interface declared per the plan's

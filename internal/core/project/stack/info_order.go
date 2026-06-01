@@ -1,7 +1,7 @@
 package stack
 
 import (
-	"github.com/semsemyonoff/devbox/internal/core/project/config"
+	"github.com/semsemyonoff/dwe/internal/core/project/config"
 )
 
 // DeployOrder returns services ordered by deployment dependencies, grouped by type.

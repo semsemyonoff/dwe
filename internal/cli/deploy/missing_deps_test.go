@@ -8,7 +8,7 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"github.com/semsemyonoff/devbox/internal/core/ui/widgets"
+	"github.com/semsemyonoff/dwe/internal/core/ui/widgets"
 )
 
 // swapMissingDepsConfirm replaces deployMissingDepsConfirmFn for the duration

@@ -11,11 +11,11 @@ import (
 	"fmt"
 	"os"
 
-	engbuiltin "github.com/semsemyonoff/devbox/internal/core/execution/builtin"
-	"github.com/semsemyonoff/devbox/internal/core/usercommands/runtime/internal/runio"
-	"github.com/semsemyonoff/devbox/internal/core/usercommands/runtime/spec"
-	"github.com/semsemyonoff/devbox/internal/shared/render"
-	"github.com/semsemyonoff/devbox/internal/shared/tpl"
+	engbuiltin "github.com/semsemyonoff/dwe/internal/core/execution/builtin"
+	"github.com/semsemyonoff/dwe/internal/core/usercommands/runtime/internal/runio"
+	"github.com/semsemyonoff/dwe/internal/core/usercommands/runtime/spec"
+	"github.com/semsemyonoff/dwe/internal/shared/render"
+	"github.com/semsemyonoff/dwe/internal/shared/tpl"
 )
 
 // Runner executes type=builtin commands by invoking an engine-internal

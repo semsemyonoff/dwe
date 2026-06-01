@@ -6,9 +6,9 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/semsemyonoff/devbox/internal/cli/cmdctx"
-	"github.com/semsemyonoff/devbox/internal/cli/version"
-	versioninfo "github.com/semsemyonoff/devbox/internal/shared/version"
+	"github.com/semsemyonoff/dwe/internal/cli/cmdctx"
+	"github.com/semsemyonoff/dwe/internal/cli/version"
+	versioninfo "github.com/semsemyonoff/dwe/internal/shared/version"
 
 	"github.com/spf13/cobra"
 )
@@ -34,7 +34,7 @@ func setTestVersion(t *testing.T) {
 // returns stdout output.
 func runVersionCmd(t *testing.T, flags *cmdctx.RootFlags, args ...string) string {
 	t.Helper()
-	root := &cobra.Command{Use: "devbox", SilenceErrors: true, SilenceUsage: true}
+	root := &cobra.Command{Use: "dwe", SilenceErrors: true, SilenceUsage: true}
 	root.AddCommand(version.NewCmd("", flags))
 	var out bytes.Buffer
 	root.SetOut(&out)

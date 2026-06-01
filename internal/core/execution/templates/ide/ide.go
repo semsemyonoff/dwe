@@ -15,10 +15,10 @@ import (
 	"strings"
 	"text/template"
 
-	"github.com/semsemyonoff/devbox/internal/core/execution/templates/manifest"
-	"github.com/semsemyonoff/devbox/internal/core/execution/templates/packroot"
-	"github.com/semsemyonoff/devbox/internal/core/project/config"
-	"github.com/semsemyonoff/devbox/internal/shared/pathsafe"
+	"github.com/semsemyonoff/dwe/internal/core/execution/templates/manifest"
+	"github.com/semsemyonoff/dwe/internal/core/execution/templates/packroot"
+	"github.com/semsemyonoff/dwe/internal/core/project/config"
+	"github.com/semsemyonoff/dwe/internal/shared/pathsafe"
 )
 
 // SkippedService carries information about a service that was skipped during IDE rendering.

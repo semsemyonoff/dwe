@@ -12,14 +12,14 @@ import (
 	lipglossv2 "charm.land/lipgloss/v2"
 	"github.com/spf13/pflag"
 
-	"github.com/semsemyonoff/devbox/internal/cli"
-	"github.com/semsemyonoff/devbox/internal/cli/cmdctx"
-	"github.com/semsemyonoff/devbox/internal/core/execution/pipeline"
-	"github.com/semsemyonoff/devbox/internal/core/project/config"
-	"github.com/semsemyonoff/devbox/internal/core/project/project"
-	"github.com/semsemyonoff/devbox/internal/core/ui/styles"
-	"github.com/semsemyonoff/devbox/internal/shared/prompt"
-	"github.com/semsemyonoff/devbox/internal/shared/version"
+	"github.com/semsemyonoff/dwe/internal/cli"
+	"github.com/semsemyonoff/dwe/internal/cli/cmdctx"
+	"github.com/semsemyonoff/dwe/internal/core/execution/pipeline"
+	"github.com/semsemyonoff/dwe/internal/core/project/config"
+	"github.com/semsemyonoff/dwe/internal/core/project/project"
+	"github.com/semsemyonoff/dwe/internal/core/ui/styles"
+	"github.com/semsemyonoff/dwe/internal/shared/prompt"
+	"github.com/semsemyonoff/dwe/internal/shared/version"
 )
 
 func main() {
@@ -76,7 +76,7 @@ func main() {
 	}
 }
 
-// isPromptInvocation returns true only for `devbox prompt` and `devbox prompt --check`.
+// isPromptInvocation returns true only for `dwe prompt` and `dwe prompt --check`.
 // Any other shape (e.g. `prompt --help`, `prompt foo`) returns false so cobra handles
 // help and unknown-arg errors normally.
 func isPromptInvocation(argv []string) bool {
@@ -107,7 +107,7 @@ func configPathFromArgs() (path string, explicit bool) {
 	return "", false
 }
 
-// loadHelpColorScheme loads devbox/styles.yml relative to the located project root
+// loadHelpColorScheme loads workspace/styles.yml relative to the located project root
 // and returns a fang ColorSchemeFunc if any help colors are configured. Returns nil
 // when no overrides are set, the file cannot be read, or no project is found.
 // This function is intentionally silent under all failure modes — it runs before
@@ -121,7 +121,7 @@ func loadHelpColorScheme(configPath string, explicit bool) fang.ColorSchemeFunc 
 	if err != nil || !found {
 		return nil
 	}
-	stylesPath := filepath.Join(resolved.Root, "devbox", "styles.yml")
+	stylesPath := filepath.Join(resolved.Root, "workspace", "styles.yml")
 	if _, statErr := os.Stat(stylesPath); statErr != nil {
 		return nil
 	}

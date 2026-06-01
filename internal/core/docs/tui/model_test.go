@@ -4,9 +4,9 @@ import (
 	"context"
 	"testing"
 
-	"github.com/semsemyonoff/devbox/internal/core/docs"
-	"github.com/semsemyonoff/devbox/internal/core/docs/mermaid"
-	"github.com/semsemyonoff/devbox/internal/shared/i18n"
+	"github.com/semsemyonoff/dwe/internal/core/docs"
+	"github.com/semsemyonoff/dwe/internal/core/docs/mermaid"
+	"github.com/semsemyonoff/dwe/internal/shared/i18n"
 )
 
 func TestNewModel(t *testing.T) {

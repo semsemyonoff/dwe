@@ -1,6 +1,6 @@
 package reset
 
-import "github.com/semsemyonoff/devbox/internal/core/project/config"
+import "github.com/semsemyonoff/dwe/internal/core/project/config"
 
 // DefaultResetConfig returns a freshly-allocated default reset pipeline. Callers may mutate the result safely.
 func DefaultResetConfig() *config.ProjectDeployConfig {

@@ -8,7 +8,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/semsemyonoff/devbox/internal/shared/tpl"
+	"github.com/semsemyonoff/dwe/internal/shared/tpl"
 )
 
 // TestComputeFilePaths_SinglePathHit tests basic path resolution in read mode.

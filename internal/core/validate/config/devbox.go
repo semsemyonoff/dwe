@@ -12,11 +12,11 @@ import (
 
 	"gopkg.in/yaml.v3"
 
-	"github.com/semsemyonoff/devbox/internal/core/project/config"
-	"github.com/semsemyonoff/devbox/internal/core/project/project"
-	"github.com/semsemyonoff/devbox/internal/core/validate"
-	"github.com/semsemyonoff/devbox/internal/core/workflow/deploy"
-	"github.com/semsemyonoff/devbox/internal/core/workflow/reset"
+	"github.com/semsemyonoff/dwe/internal/core/project/config"
+	"github.com/semsemyonoff/dwe/internal/core/project/project"
+	"github.com/semsemyonoff/dwe/internal/core/validate"
+	"github.com/semsemyonoff/dwe/internal/core/workflow/deploy"
+	"github.com/semsemyonoff/dwe/internal/core/workflow/reset"
 )
 
 var errNotExist = os.ErrNotExist

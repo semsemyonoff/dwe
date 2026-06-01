@@ -6,7 +6,7 @@
 package cmdbrowser
 
 import (
-	"github.com/semsemyonoff/devbox/internal/core/ui/styles"
+	"github.com/semsemyonoff/dwe/internal/core/ui/styles"
 
 	"charm.land/bubbles/v2/help"
 	"charm.land/bubbles/v2/list"

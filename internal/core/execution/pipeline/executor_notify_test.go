@@ -4,9 +4,9 @@ import (
 	"context"
 	"testing"
 
-	"github.com/semsemyonoff/devbox/internal/core/project/config"
-	"github.com/semsemyonoff/devbox/internal/core/usercommands"
-	"github.com/semsemyonoff/devbox/internal/core/usercommands/runtime"
+	"github.com/semsemyonoff/dwe/internal/core/project/config"
+	"github.com/semsemyonoff/dwe/internal/core/usercommands"
+	"github.com/semsemyonoff/dwe/internal/core/usercommands/runtime"
 )
 
 // TestExecCommandAction_SetsSkipNotify verifies the pipeline executor

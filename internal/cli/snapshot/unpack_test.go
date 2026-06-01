@@ -10,9 +10,9 @@ import (
 	"testing"
 	"time"
 
-	"github.com/semsemyonoff/devbox/internal/cli/cmdctx"
-	"github.com/semsemyonoff/devbox/internal/core/workflow/snapshot/archive"
-	"github.com/semsemyonoff/devbox/internal/core/workflow/snapshot/meta"
+	"github.com/semsemyonoff/dwe/internal/cli/cmdctx"
+	"github.com/semsemyonoff/dwe/internal/core/workflow/snapshot/archive"
+	"github.com/semsemyonoff/dwe/internal/core/workflow/snapshot/meta"
 )
 
 func sha256Hex(b []byte) string {

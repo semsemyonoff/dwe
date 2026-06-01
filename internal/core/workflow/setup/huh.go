@@ -9,10 +9,10 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/semsemyonoff/devbox/internal/core/ui/ask"
-	"github.com/semsemyonoff/devbox/internal/core/ui/styles"
-	"github.com/semsemyonoff/devbox/internal/core/ui/widgets"
-	"github.com/semsemyonoff/devbox/internal/core/validate/env"
+	"github.com/semsemyonoff/dwe/internal/core/ui/ask"
+	"github.com/semsemyonoff/dwe/internal/core/ui/styles"
+	"github.com/semsemyonoff/dwe/internal/core/ui/widgets"
+	"github.com/semsemyonoff/dwe/internal/core/validate/env"
 
 	"charm.land/bubbles/v2/key"
 	huh "charm.land/huh/v2"

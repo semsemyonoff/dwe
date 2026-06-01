@@ -8,8 +8,8 @@ import (
 
 	"charm.land/lipgloss/v2"
 
-	"github.com/semsemyonoff/devbox/internal/core/docs/mermaid"
-	"github.com/semsemyonoff/devbox/internal/core/docs/render"
+	"github.com/semsemyonoff/dwe/internal/core/docs/mermaid"
+	"github.com/semsemyonoff/dwe/internal/core/docs/render"
 )
 
 // resolveMermaidTheme maps the user-config value ("auto" | "dark" | "light")

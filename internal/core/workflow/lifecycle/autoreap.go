@@ -1,6 +1,6 @@
 package lifecycle
 
-import "github.com/semsemyonoff/devbox/internal/core/project/config"
+import "github.com/semsemyonoff/dwe/internal/core/project/config"
 
 // AutoReapPhaseName is the synthetic phase name prepended to every lifecycle
 // stop pipeline. It is intentionally visible in plan output (leading

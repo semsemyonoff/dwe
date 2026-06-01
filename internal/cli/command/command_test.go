@@ -13,13 +13,13 @@ import (
 	"testing"
 	"time"
 
-	"github.com/semsemyonoff/devbox/internal/cli/cmdctx"
-	"github.com/semsemyonoff/devbox/internal/core/project/config"
-	"github.com/semsemyonoff/devbox/internal/core/ui/ask"
-	"github.com/semsemyonoff/devbox/internal/core/ui/widgets"
-	"github.com/semsemyonoff/devbox/internal/core/usercommands"
-	"github.com/semsemyonoff/devbox/internal/core/usercommands/model"
-	"github.com/semsemyonoff/devbox/internal/shared/i18n"
+	"github.com/semsemyonoff/dwe/internal/cli/cmdctx"
+	"github.com/semsemyonoff/dwe/internal/core/project/config"
+	"github.com/semsemyonoff/dwe/internal/core/ui/ask"
+	"github.com/semsemyonoff/dwe/internal/core/ui/widgets"
+	"github.com/semsemyonoff/dwe/internal/core/usercommands"
+	"github.com/semsemyonoff/dwe/internal/core/usercommands/model"
+	"github.com/semsemyonoff/dwe/internal/shared/i18n"
 
 	"github.com/spf13/cobra"
 )
@@ -856,7 +856,7 @@ func TestCommandCmd_InspectAndYes_MutuallyExclusive(t *testing.T) {
 func TestCommandCmd_AliasDispatch(t *testing.T) {
 	// Verify the 'cmd' alias resolves through cobra parent dispatch.
 	flags := &cmdctx.RootFlags{ConfigPath: "devbox.yml"}
-	parent := &cobra.Command{Use: "devbox"}
+	parent := &cobra.Command{Use: "dwe"}
 	parent.AddCommand(NewCmd("", flags))
 
 	parent.SetArgs([]string{"cmd", "--help"})

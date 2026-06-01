@@ -12,8 +12,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/semsemyonoff/devbox/internal/cli/cmdctx"
-	"github.com/semsemyonoff/devbox/internal/core/workflow/snapshot/meta"
+	"github.com/semsemyonoff/dwe/internal/cli/cmdctx"
+	"github.com/semsemyonoff/dwe/internal/core/workflow/snapshot/meta"
 
 	"github.com/spf13/cobra"
 )
@@ -469,7 +469,7 @@ func TestSnapshotNameCompletion(t *testing.T) {
 
 	fn := snapshotNameCompletion(flags)
 	// Pass a real cobra.Command — completion contract reads Lookup("config") off root.
-	root := &cobra.Command{Use: "devbox"}
+	root := &cobra.Command{Use: "dwe"}
 	root.PersistentFlags().StringVarP(&flags.ConfigPath, "config", "c", flags.ConfigPath, "")
 	names, dir := fn(root, nil, "")
 	if dir != cobra.ShellCompDirectiveNoFileComp {

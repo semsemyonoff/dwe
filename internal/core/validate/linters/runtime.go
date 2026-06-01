@@ -9,9 +9,9 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/semsemyonoff/devbox/internal/core/project/config"
-	userpkg "github.com/semsemyonoff/devbox/internal/core/project/user"
-	"github.com/semsemyonoff/devbox/internal/core/validate"
+	"github.com/semsemyonoff/dwe/internal/core/project/config"
+	userpkg "github.com/semsemyonoff/dwe/internal/core/project/user"
+	"github.com/semsemyonoff/dwe/internal/core/validate"
 )
 
 // DefaultLinterTimeout caps the wall-clock duration of a single linter

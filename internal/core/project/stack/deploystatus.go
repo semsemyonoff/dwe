@@ -7,11 +7,11 @@ import (
 	"strings"
 	"time"
 
-	"github.com/semsemyonoff/devbox/internal/core/project/config"
-	"github.com/semsemyonoff/devbox/internal/core/ui/render"
-	"github.com/semsemyonoff/devbox/internal/core/ui/statusview"
-	"github.com/semsemyonoff/devbox/internal/core/workflow/deploy/journal"
-	sharedrender "github.com/semsemyonoff/devbox/internal/shared/render"
+	"github.com/semsemyonoff/dwe/internal/core/project/config"
+	"github.com/semsemyonoff/dwe/internal/core/ui/render"
+	"github.com/semsemyonoff/dwe/internal/core/ui/statusview"
+	"github.com/semsemyonoff/dwe/internal/core/workflow/deploy/journal"
+	sharedrender "github.com/semsemyonoff/dwe/internal/shared/render"
 )
 
 // DeployStatus returns the Deploy Status section title + table as a

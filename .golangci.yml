@@ -48,7 +48,7 @@ formatters:
   settings:
     goimports:
       local-prefixes:
-        - github.com/semsemyonoff/devbox
+        - github.com/semsemyonoff/dwe
 
 issues:
   max-issues-per-linter: 0

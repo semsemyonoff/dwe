@@ -3,7 +3,7 @@ package ide
 import (
 	"testing"
 
-	"github.com/semsemyonoff/devbox/internal/core/project/config"
+	"github.com/semsemyonoff/dwe/internal/core/project/config"
 )
 
 func TestSelectServices_typeDefaults(t *testing.T) {

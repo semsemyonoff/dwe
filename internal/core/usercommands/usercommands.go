@@ -1,7 +1,7 @@
 // Package usercommands is the public API for the devbox command system.
 // It re-exports types, constants, and functions from the model, loader,
 // registry, resolve, and runtime subpackages so that callers can use a single
-// import path ("github.com/semsemyonoff/devbox/internal/core/usercommands") without knowing which
+// import path ("github.com/semsemyonoff/dwe/internal/core/usercommands") without knowing which
 // subpackage owns each symbol.
 package usercommands
 
@@ -12,13 +12,13 @@ import (
 	"os"
 	"path/filepath"
 
-	"github.com/semsemyonoff/devbox/internal/core/project/config"
-	"github.com/semsemyonoff/devbox/internal/core/usercommands/loader"
-	"github.com/semsemyonoff/devbox/internal/core/usercommands/model"
-	"github.com/semsemyonoff/devbox/internal/core/usercommands/registry"
-	"github.com/semsemyonoff/devbox/internal/core/usercommands/resolve"
-	"github.com/semsemyonoff/devbox/internal/core/usercommands/runtime"
-	"github.com/semsemyonoff/devbox/internal/shared/tpl"
+	"github.com/semsemyonoff/dwe/internal/core/project/config"
+	"github.com/semsemyonoff/dwe/internal/core/usercommands/loader"
+	"github.com/semsemyonoff/dwe/internal/core/usercommands/model"
+	"github.com/semsemyonoff/dwe/internal/core/usercommands/registry"
+	"github.com/semsemyonoff/dwe/internal/core/usercommands/resolve"
+	"github.com/semsemyonoff/dwe/internal/core/usercommands/runtime"
+	"github.com/semsemyonoff/dwe/internal/shared/tpl"
 )
 
 // ---- Type aliases (model) ----

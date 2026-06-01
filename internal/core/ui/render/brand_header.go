@@ -4,8 +4,8 @@ import (
 	"bytes"
 	"strings"
 
-	"github.com/semsemyonoff/devbox/internal/core/ui/styles"
-	sharedrender "github.com/semsemyonoff/devbox/internal/shared/render"
+	"github.com/semsemyonoff/dwe/internal/core/ui/styles"
+	sharedrender "github.com/semsemyonoff/dwe/internal/shared/render"
 )
 
 // Brand is the input to BrandHeader. Project and Version drive the

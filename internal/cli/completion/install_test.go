@@ -9,7 +9,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/semsemyonoff/devbox/internal/cli/cmdctx"
+	"github.com/semsemyonoff/dwe/internal/cli/cmdctx"
 
 	"github.com/spf13/cobra"
 )
@@ -19,7 +19,7 @@ import (
 // stands in for the real devbox root in unit tests without dragging in the
 // project-resolution PersistentPreRunE chain.
 func buildCompletionTestRoot() *cobra.Command {
-	root := &cobra.Command{Use: "devbox"}
+	root := &cobra.Command{Use: "dwe"}
 	completionCmd := &cobra.Command{Use: "completion"}
 	root.AddCommand(completionCmd)
 	AttachInstallUninstall(completionCmd, &cmdctx.RootFlags{})

@@ -7,11 +7,11 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/semsemyonoff/devbox/internal/core/ui/widgets"
-	"github.com/semsemyonoff/devbox/internal/core/usercommands/model"
-	"github.com/semsemyonoff/devbox/internal/core/usercommands/runtime"
-	snapshotpkg "github.com/semsemyonoff/devbox/internal/core/workflow/snapshot"
-	"github.com/semsemyonoff/devbox/internal/shared/liveui"
+	"github.com/semsemyonoff/dwe/internal/core/ui/widgets"
+	"github.com/semsemyonoff/dwe/internal/core/usercommands/model"
+	"github.com/semsemyonoff/dwe/internal/core/usercommands/runtime"
+	snapshotpkg "github.com/semsemyonoff/dwe/internal/core/workflow/snapshot"
+	"github.com/semsemyonoff/dwe/internal/shared/liveui"
 )
 
 // withSnapshotLiveLineFactory swaps both the live-line factory and the

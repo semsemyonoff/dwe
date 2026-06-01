@@ -6,7 +6,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/semsemyonoff/devbox/internal/cli/cmdctx"
+	"github.com/semsemyonoff/dwe/internal/cli/cmdctx"
 )
 
 func TestRestartCmd_Use(t *testing.T) {

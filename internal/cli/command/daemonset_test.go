@@ -5,7 +5,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/semsemyonoff/devbox/internal/shared/daemon"
+	"github.com/semsemyonoff/dwe/internal/shared/daemon"
 )
 
 func TestBuildDaemonSetPSArgs_endToEnd(t *testing.T) {

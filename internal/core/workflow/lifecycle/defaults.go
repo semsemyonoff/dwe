@@ -1,6 +1,6 @@
 package lifecycle
 
-import "github.com/semsemyonoff/devbox/internal/core/project/config"
+import "github.com/semsemyonoff/dwe/internal/core/project/config"
 
 // DefaultedPipeline identifies which built-in default pipeline was used
 // in place of a missing or empty YAML section. Used as the argument to

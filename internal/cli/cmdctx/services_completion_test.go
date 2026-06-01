@@ -6,13 +6,13 @@ import (
 	"slices"
 	"testing"
 
-	"github.com/semsemyonoff/devbox/internal/cli/cmdctx"
+	"github.com/semsemyonoff/dwe/internal/cli/cmdctx"
 
 	"github.com/spf13/cobra"
 )
 
 func rootCmdForServiceCompletion(flags *cmdctx.RootFlags, configPath string) *cobra.Command {
-	root := &cobra.Command{Use: "devbox"}
+	root := &cobra.Command{Use: "dwe"}
 	root.PersistentFlags().StringVarP(&flags.ConfigPath, "config", "c", "", "")
 	if configPath != "" {
 		_ = root.PersistentFlags().Set("config", configPath)

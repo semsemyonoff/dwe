@@ -7,7 +7,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/semsemyonoff/devbox/internal/core/validate/diag"
+	"github.com/semsemyonoff/dwe/internal/core/validate/diag"
 )
 
 func TestLoadValidateConfig_happy(t *testing.T) {

@@ -6,7 +6,7 @@ import (
 	"charm.land/bubbles/v2/key"
 	huh "charm.land/huh/v2"
 
-	"github.com/semsemyonoff/devbox/internal/core/ui/styles"
+	"github.com/semsemyonoff/dwe/internal/core/ui/styles"
 )
 
 // multiSelectMinHeight is the floor for the multi-select viewport height. The

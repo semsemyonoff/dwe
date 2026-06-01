@@ -6,9 +6,9 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/semsemyonoff/devbox/internal/cli/cmdctx"
-	aipkg "github.com/semsemyonoff/devbox/internal/core/execution/templates/ai"
-	"github.com/semsemyonoff/devbox/internal/core/project/config"
+	"github.com/semsemyonoff/dwe/internal/cli/cmdctx"
+	aipkg "github.com/semsemyonoff/dwe/internal/core/execution/templates/ai"
+	"github.com/semsemyonoff/dwe/internal/core/project/config"
 
 	yamlPkg "gopkg.in/yaml.v3"
 )

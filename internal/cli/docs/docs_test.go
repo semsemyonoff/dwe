@@ -4,7 +4,7 @@ import (
 	"bytes"
 	"testing"
 
-	"github.com/semsemyonoff/devbox/internal/cli/cmdctx"
+	"github.com/semsemyonoff/dwe/internal/cli/cmdctx"
 
 	"github.com/stretchr/testify/require"
 )

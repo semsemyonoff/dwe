@@ -3,8 +3,8 @@ package i18n
 import (
 	"fmt"
 
-	"github.com/semsemyonoff/devbox/internal/core/validate"
-	"github.com/semsemyonoff/devbox/internal/shared/i18n"
+	"github.com/semsemyonoff/dwe/internal/core/validate"
+	"github.com/semsemyonoff/dwe/internal/shared/i18n"
 )
 
 // parseErrorValidator emits a diagnostic for a ProjectFile with a parse error.

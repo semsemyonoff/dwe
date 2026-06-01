@@ -1,6 +1,6 @@
 package stack
 
-import "github.com/semsemyonoff/devbox/internal/core/ui/render"
+import "github.com/semsemyonoff/dwe/internal/core/ui/render"
 
 // Health represents the overall running health of the stack.
 type Health int

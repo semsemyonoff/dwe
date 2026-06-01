@@ -13,7 +13,7 @@ import (
 
 	"gopkg.in/yaml.v3"
 
-	"github.com/semsemyonoff/devbox/internal/shared/pathsafe"
+	"github.com/semsemyonoff/dwe/internal/shared/pathsafe"
 )
 
 // ErrManifestMissing is the sentinel returned when manifest.yml does not exist.

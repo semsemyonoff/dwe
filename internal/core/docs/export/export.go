@@ -6,7 +6,7 @@ import (
 	"os"
 	"path/filepath"
 
-	"github.com/semsemyonoff/devbox/internal/core/docs"
+	"github.com/semsemyonoff/dwe/internal/core/docs"
 )
 
 // Opts configures the export behavior.

@@ -4,8 +4,8 @@ import (
 	"sort"
 	"testing"
 
-	"github.com/semsemyonoff/devbox/internal/core/execution/filesgate"
-	"github.com/semsemyonoff/devbox/internal/core/usercommands/model"
+	"github.com/semsemyonoff/dwe/internal/core/execution/filesgate"
+	"github.com/semsemyonoff/dwe/internal/core/usercommands/model"
 )
 
 func TestResolveRequireIDs(t *testing.T) {

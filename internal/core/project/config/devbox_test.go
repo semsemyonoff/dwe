@@ -11,7 +11,7 @@ import (
 
 	"gopkg.in/yaml.v3"
 
-	userpkg "github.com/semsemyonoff/devbox/internal/core/project/user"
+	userpkg "github.com/semsemyonoff/dwe/internal/core/project/user"
 )
 
 // sampleDevboxYML reflects the lean devbox.yml (project identity only).

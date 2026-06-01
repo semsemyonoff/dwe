@@ -8,9 +8,9 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/semsemyonoff/devbox/internal/cli/cmdctx"
-	"github.com/semsemyonoff/devbox/internal/core/ui/statustui"
-	"github.com/semsemyonoff/devbox/internal/core/workflow/deploy/journal"
+	"github.com/semsemyonoff/dwe/internal/cli/cmdctx"
+	"github.com/semsemyonoff/dwe/internal/core/ui/statustui"
+	"github.com/semsemyonoff/dwe/internal/core/workflow/deploy/journal"
 
 	"github.com/spf13/cobra"
 )
@@ -22,7 +22,7 @@ import (
 // to filepath.Dir(ConfigPath) — same observable behaviour as the cli root.
 func buildStatusTestRoot() *cobra.Command {
 	flags := &cmdctx.RootFlags{}
-	root := &cobra.Command{Use: "devbox", SilenceUsage: true}
+	root := &cobra.Command{Use: "dwe", SilenceUsage: true}
 	root.PersistentFlags().StringVarP(&flags.ConfigPath, "config", "c", "", "")
 	root.AddGroup(&cobra.Group{ID: "environment", Title: "Environment Commands:"})
 	root.AddCommand(NewCmd("environment", flags))

@@ -7,7 +7,7 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/semsemyonoff/devbox/internal/core/validate"
+	"github.com/semsemyonoff/dwe/internal/core/validate"
 
 	"gopkg.in/yaml.v3"
 )

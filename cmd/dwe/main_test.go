@@ -8,11 +8,11 @@ import (
 
 // makeProject creates a minimal temp project tree at the given root with:
 //   - devbox.yml with schema_version (v2 by default, v1 if legacy=true)
-//   - devbox/styles.yml so loadHelpColorScheme finds a styles file and returns
+//   - workspace/styles.yml so loadHelpColorScheme finds a styles file and returns
 //     a non-nil ColorSchemeFunc (file presence triggers the non-nil path).
 func makeProject(t *testing.T, root string, legacy bool) {
 	t.Helper()
-	if err := os.MkdirAll(filepath.Join(root, "devbox"), 0o755); err != nil {
+	if err := os.MkdirAll(filepath.Join(root, "workspace"), 0o755); err != nil {
 		t.Fatal(err)
 	}
 	schema := `schema_version: "2"`
@@ -23,7 +23,7 @@ func makeProject(t *testing.T, root string, legacy bool) {
 		t.Fatal(err)
 	}
 	styles := "colors:\n  accent: \"#ff0000\"\n"
-	if err := os.WriteFile(filepath.Join(root, "devbox", "styles.yml"), []byte(styles), 0o644); err != nil {
+	if err := os.WriteFile(filepath.Join(root, "workspace", "styles.yml"), []byte(styles), 0o644); err != nil {
 		t.Fatal(err)
 	}
 }
@@ -35,15 +35,15 @@ func TestIsPromptInvocation(t *testing.T) {
 		argv []string
 		want bool
 	}{
-		{"bare prompt", []string{"devbox", "prompt"}, true},
-		{"prompt --check", []string{"devbox", "prompt", "--check"}, true},
-		{"prompt --help", []string{"devbox", "prompt", "--help"}, false},
-		{"prompt -h", []string{"devbox", "prompt", "-h"}, false},
-		{"prompt foo", []string{"devbox", "prompt", "foo"}, false},
-		{"prompt --check extra", []string{"devbox", "prompt", "--check", "x"}, false},
-		{"only program", []string{"devbox"}, false},
+		{"bare prompt", []string{"dwe", "prompt"}, true},
+		{"prompt --check", []string{"dwe", "prompt", "--check"}, true},
+		{"prompt --help", []string{"dwe", "prompt", "--help"}, false},
+		{"prompt -h", []string{"dwe", "prompt", "-h"}, false},
+		{"prompt foo", []string{"dwe", "prompt", "foo"}, false},
+		{"prompt --check extra", []string{"dwe", "prompt", "--check", "x"}, false},
+		{"only program", []string{"dwe"}, false},
 		{"empty", nil, false},
-		{"other subcommand", []string{"devbox", "status"}, false},
+		{"other subcommand", []string{"dwe", "status"}, false},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
@@ -58,7 +58,7 @@ func TestIsPromptInvocation(t *testing.T) {
 func TestConfigPathFromArgs(t *testing.T) {
 	t.Run("no flag returns empty and not explicit", func(t *testing.T) {
 		origArgs := os.Args
-		os.Args = []string{"devbox", "info"}
+		os.Args = []string{"dwe", "info"}
 		defer func() { os.Args = origArgs }()
 
 		path, explicit := configPathFromArgs()
@@ -69,7 +69,7 @@ func TestConfigPathFromArgs(t *testing.T) {
 
 	t.Run("explicit --config flag", func(t *testing.T) {
 		origArgs := os.Args
-		os.Args = []string{"devbox", "--config", "/some/devbox.yml", "info"}
+		os.Args = []string{"dwe", "--config", "/some/devbox.yml", "info"}
 		defer func() { os.Args = origArgs }()
 
 		path, explicit := configPathFromArgs()
@@ -80,7 +80,7 @@ func TestConfigPathFromArgs(t *testing.T) {
 
 	t.Run("short -c flag", func(t *testing.T) {
 		origArgs := os.Args
-		os.Args = []string{"devbox", "-c", "/other/devbox.yml"}
+		os.Args = []string{"dwe", "-c", "/other/devbox.yml"}
 		defer func() { os.Args = origArgs }()
 
 		path, explicit := configPathFromArgs()
@@ -92,7 +92,7 @@ func TestConfigPathFromArgs(t *testing.T) {
 	// Passing --config devbox.yml (value matching the old default) must be treated as explicit.
 	t.Run("explicit flag with default-like value is treated as explicit", func(t *testing.T) {
 		origArgs := os.Args
-		os.Args = []string{"devbox", "--config", "devbox.yml"}
+		os.Args = []string{"dwe", "--config", "devbox.yml"}
 		defer func() { os.Args = origArgs }()
 
 		path, explicit := configPathFromArgs()

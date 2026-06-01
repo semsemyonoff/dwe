@@ -3,7 +3,7 @@ package notify
 import (
 	"context"
 
-	userpkg "github.com/semsemyonoff/devbox/internal/core/project/user"
+	userpkg "github.com/semsemyonoff/dwe/internal/core/project/user"
 )
 
 // Notifier is the concrete handle returned by New. A nil receiver is

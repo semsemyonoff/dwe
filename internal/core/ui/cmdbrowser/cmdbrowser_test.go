@@ -10,7 +10,7 @@ import (
 	"github.com/charmbracelet/colorprofile"
 	"go.uber.org/goleak"
 
-	"github.com/semsemyonoff/devbox/internal/core/ui/widgets"
+	"github.com/semsemyonoff/dwe/internal/core/ui/widgets"
 )
 
 func TestMain(m *testing.M) {

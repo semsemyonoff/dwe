@@ -9,7 +9,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/semsemyonoff/devbox/internal/shared/tpl"
+	"github.com/semsemyonoff/dwe/internal/shared/tpl"
 )
 
 // writeScriptFile is the integration-test sibling of the subpkg's writeScript

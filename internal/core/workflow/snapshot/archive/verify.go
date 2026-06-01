@@ -8,8 +8,8 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/semsemyonoff/devbox/internal/core/workflow/snapshot/meta"
-	"github.com/semsemyonoff/devbox/internal/shared/pathsafe"
+	"github.com/semsemyonoff/dwe/internal/core/workflow/snapshot/meta"
+	"github.com/semsemyonoff/dwe/internal/shared/pathsafe"
 )
 
 // Empty reports whether all three verification groups are empty.

@@ -1,7 +1,7 @@
 package config
 
 import (
-	"github.com/semsemyonoff/devbox/internal/core/validate"
+	"github.com/semsemyonoff/dwe/internal/core/validate"
 )
 
 // All returns all config validators.

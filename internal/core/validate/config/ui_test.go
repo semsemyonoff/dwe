@@ -6,7 +6,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/semsemyonoff/devbox/internal/core/validate"
+	"github.com/semsemyonoff/dwe/internal/core/validate"
 )
 
 func writeTempDevbox(t *testing.T, body string) (root, configPath string) {

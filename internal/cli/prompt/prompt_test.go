@@ -8,10 +8,10 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/semsemyonoff/devbox/internal/cli"
-	"github.com/semsemyonoff/devbox/internal/cli/cmdctx"
-	"github.com/semsemyonoff/devbox/internal/cli/prompt"
-	"github.com/semsemyonoff/devbox/internal/core/execution/pipeline"
+	"github.com/semsemyonoff/dwe/internal/cli"
+	"github.com/semsemyonoff/dwe/internal/cli/cmdctx"
+	"github.com/semsemyonoff/dwe/internal/cli/prompt"
+	"github.com/semsemyonoff/dwe/internal/core/execution/pipeline"
 )
 
 func TestNewPromptCmd_UseAndFlags(t *testing.T) {
