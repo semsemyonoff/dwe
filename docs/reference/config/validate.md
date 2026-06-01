@@ -39,14 +39,14 @@ The validate command runs three domains in addition to the existing YAML-shape v
 
 | Domain | Source | Configurable? |
 |--------|--------|---------------|
-| `env.*` | Hardcoded in Go (`internal/core/validate/env/`) | No — seven fixed probes |
+| `env.*` | Hardcoded in the CLI | No — seven fixed probes |
 | `checks.*` | `workspace/validate.yml` entries | Yes — declarative |
 | `linters.*` | Built-in adapters (shellcheck, hadolint) + `workspace/validate.yml` `linters:` block | Yes — declarative |
 | `snapshot.*` | On-disk snapshot directories + `workspace/snapshot.yml` | No — fixed validators per snapshot name |
 
 The `env.*` probes are: `env.docker_bin`, `env.docker_daemon`, `env.docker_compose`, `env.git_bin`, `env.shell_bin`, `env.project_perms`, `env.ports_free`. They run on every `dwe validate` invocation and on every preflight (regardless of stage — env has no stage concept), with one exception: `env.ports_free` self-skips on the `stop` stage since port conflicts are irrelevant when winding the project down.
 
-`env.ports_free` reads every host port declared under `services.<name>.ports` (enabled services only) and checks whether each is bindable. It queries `docker ps --format=json` once to learn which containers currently hold which ports: containers labelled `com.docker.compose.project=<our project>` are treated as "ours" (compose will reuse them on `up`); containers from any other compose project trigger a conflict diagnostic that names the foreign container and project; for ports not held by any container the probe falls back to `net.Listen` to detect non-Docker processes. Docker unreachability falls through silently — `env.docker_daemon` covers that case.
+`env.ports_free` reads every host port declared under `services.<name>.ports` (enabled services only) and checks whether each is bindable. It queries `docker ps --format=json` once to learn which containers currently hold which ports: containers labelled `com.docker.compose.project=<our project>` are treated as "ours" (compose will reuse them on `up`); containers from any other compose project trigger a conflict diagnostic that names the foreign container and project; for ports not held by any container the probe falls back to a direct bind attempt to detect non-Docker processes. Docker unreachability falls through silently — `env.docker_daemon` covers that case.
 
 The `checks.*` validators are synthesized one per `validate.yml` entry. Each dispatches to either a built-in inspection routine or a locked-down user command at run time.
 
@@ -125,7 +125,7 @@ Unknown stages can still be invoked explicitly with `dwe validate --stage <name>
 
 ## Available builtins
 
-All five builtins live in `internal/core/execution/builtin/` and are usable both as `type: builtin` check entries and as deploy step bodies / `check:` action blocks.
+All five builtins are usable both as `type: builtin` check entries and as deploy step bodies / `check:` action blocks.
 
 ### `shell`
 

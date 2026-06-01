@@ -1,6 +1,6 @@
 # DWE — Dev Workspace Engine
 
-*Languages: **English** · [Русский](docs/i18n/ru/README.md)*
+*Languages: 🇬🇧 **English** · 🇷🇺 [Русский](docs/i18n/ru/README.md)*
 
 A single-binary CLI for running, configuring, and maintaining containerised local development environments declaratively.
 
@@ -118,21 +118,20 @@ The deploy journal lives at `.dwe/deploy/state.yml`. Repeat runs skip steps whos
 
 ## Architecture
 
-DWE is a single Go binary built from a three-layer internal structure.
+DWE sits between the developer and a Dockerized stack: it reads a project's YAML tree, renders a small amount of generated state next to it, and drives `docker compose` to actually run the containers. The developer never types `docker compose` directly.
 
 ```mermaid
 flowchart LR
-  Bin["cmd/dwe<br/>main"] --> CLI
-  CLI["internal/cli<br/>cobra tree"] --> Core
-  Core["internal/core<br/>domain logic"] --> Shared
-  Shared["internal/shared<br/>leaf infra"]
+  Dev["Developer"] -->|dwe| CLI["dwe CLI"]
+  Project["DWE project config<br/>+ compose config"] --> CLI
+  CLI -->|docker compose| Engine["Docker engine"]
+  Engine --> Containers["containers"]
+  Dev -.->|http / tcp| Containers
 ```
 
-- `internal/cli/` — cobra commands, flag parsing, I/O routing. No domain logic.
-- `internal/core/` — project model, pipeline engine, workflows (deploy, lifecycle, reset, snapshot, setup), validation, docs, notifications, UI sink.
-- `internal/shared/` — Docker, Git, locks, templates, i18n, render, live UI, version.
-
-The composition root in `internal/cli/root.go` registers every command into five groups (`core`, `environment`, `configuration`, `pipelines`, `advanced`) and threads the shared `*cmdctx.RootFlags` bundle through every subcommand. There is no plugin loader, no companion daemon, and no network on the normal path.
+- DWE owns the project model, the ordered compose file list, env rendering, lifecycle orchestration, locks, and the state journal under `.dwe/`.
+- Docker owns containers, networks, volumes, image layers, and health reporting. The only handshake is the argv DWE passes to `docker compose` and the exit code it returns.
+- Every invocation is short-lived and stateless: no DWE daemon, no plugin loader, no network on the normal path. Uninstalling DWE leaves the compose files under `compose/` as valid standalone `docker compose` input.
 
 Full write-up: [`docs/reference/concepts/architecture.md`](docs/reference/concepts/architecture.md).
 
@@ -184,24 +183,6 @@ dwe docs show <topic>    # render one page
 dwe docs search <term>   # cross-tree search
 dwe docs llms-txt        # compact AI-agent project index
 ```
-
-## Contributing
-
-Contributor-facing guidance lives in [`AGENTS.md`](AGENTS.md) (and the symlink `CLAUDE.md`). It covers the per-layer package boundaries, load-bearing patterns (JSON output mode, display-string localization, preflight + lock ordering, completion-path safety, pipeline defaults), and the docs/i18n hash-tracking workflow.
-
-Common workflows:
-
-```sh
-make build       # tidy + sync embedded docs + regen hashes + build
-make test        # full test suite (depends on embedded-docs sync)
-make test-race   # focused race detector on lock + pipeline + journal
-make lint        # golangci-lint (installs if missing)
-make tidy        # go.mod / go.sum maintenance
-```
-
-Run `make build` after editing anything under `docs/reference/`, `docs/internals/`, or `docs/i18n/`. The sync step keeps the embedded copy and `internal/core/docs/content_hashes_gen.go` in step with the source tree.
-
-Per-package responsibilities, invariants, and cross-package contracts are documented in [`docs/internals/packages.md`](docs/internals/packages.md) — read the relevant section before modifying internal packages.
 
 ## License
 

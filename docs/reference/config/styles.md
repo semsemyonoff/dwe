@@ -24,8 +24,7 @@ branded header shown at startup, the seven semantic color tokens used across
 every UI surface (tables, status sections, command browser, Fang help output),
 and the separator character used in definition lists.
 
-It is loaded by `LoadStylesConfig()` and applied at startup via
-`styles.ApplyStyles()` (in `internal/core/ui/styles/`). Omitting the file
+The CLI loads it and applies your palette at startup. Omitting the file
 entirely produces identical built-in defaults.
 
 ## Structure
@@ -61,7 +60,7 @@ the optional tagline and ASCII art are layered on top when configured.
 | Field | Type | Default | Description |
 |-------|------|---------|-------------|
 | `header.lines` | list of strings | _(none)_ | Text lines rendered as ASCII art under the brand line |
-| `header.font` | string | `doom` | go-figure font name (doom, banner, big, block, slant, …) |
+| `header.font` | string | `doom` | FIGlet font name (doom, banner, big, block, slant, …) |
 | `header.tagline` | string | _(none)_ | Single tagline line rendered in muted color below the brand line |
 
 The ASCII block is colored using the `accent` token. There is no separate
@@ -98,18 +97,16 @@ Character used between label and value in definition items (e.g.
 
 ## Omitting the file
 
-If `workspace/styles.yml` does not exist, `LoadStylesConfig()` returns a
-zero-value struct and `styles.ApplyStyles()` falls back to built-in defaults.
-The CLI works identically — no error is produced.
+If `workspace/styles.yml` does not exist, the CLI falls back to built-in
+defaults. It works identically — no error is produced.
 
 ## Light / dark resolution
 
-Each token has a built-in light and dark hex default. At startup,
-`ApplyStyles` calls `lipgloss.HasDarkBackground()` once and resolves every
-token to a single hex string for the rest of the process. The resolved value
-is exposed via `styles.Color*()` accessors and bridges three styling layers: v1
-lipgloss (`internal/core/ui/render/`, `internal/core/ui/widgets/`), v2 lipgloss
-(`internal/core/ui/cmdbrowser/`), and Fang's `ColorScheme`.
+Each token has a built-in light and dark hex default. At startup the CLI
+detects whether the terminal has a dark background once and resolves every
+token to a single hex string for the rest of the process. The same resolved
+palette is shared across every surface the CLI renders — tables, status
+sections, command browser, and Fang's `--help` output.
 
 | Token | Light default | Dark default |
 |-------|---------------|--------------|
@@ -122,8 +119,8 @@ lipgloss (`internal/core/ui/render/`, `internal/core/ui/widgets/`), v2 lipgloss
 | `text`    | _(empty — terminal default)_ | _(empty — terminal default)_ |
 
 A user-provided non-empty value overrides both modes — overrides are not
-per-mode. Re-running `ApplyStyles` after a profile change is the supported way
-to retheme during a session.
+per-mode. Editing `workspace/styles.yml` and re-running a `dwe` command is
+the supported way to retheme during a session.
 
 ## Customizing colors
 

@@ -1,4 +1,4 @@
-> Translated from: reference/config/styles.md @ 48bca19f4027
+> Translated from: reference/config/styles.md @ 7ff608a7d636
 
 # styles.yml
 
@@ -26,9 +26,8 @@ header'ом, показываемым на старте, семью семант
 используемыми во всех UI-surface'ах (таблицы, status-секции, браузер команд,
 help-вывод Fang), и символом-разделителем, используемым в definition-списках.
 
-Грузится через `LoadStylesConfig()` и применяется на старте через
-`styles.ApplyStyles()` (в `internal/core/ui/styles/`). Полное отсутствие файла
-даёт идентичные встроенные дефолты.
+CLI загружает его и применяет вашу палитру при старте. Полное отсутствие
+файла даёт идентичные встроенные дефолты.
 
 ## Структура
 
@@ -64,7 +63,7 @@ separator: "·"
 | Поле | Тип | Дефолт | Описание |
 |------|-----|--------|----------|
 | `header.lines` | list of strings | _(нет)_ | Текстовые строки, рендерящиеся как ASCII-арт под brand-строкой |
-| `header.font` | string | `doom` | Имя шрифта go-figure (doom, banner, big, block, slant, …) |
+| `header.font` | string | `doom` | Имя FIGlet-шрифта (doom, banner, big, block, slant, …) |
 | `header.tagline` | string | _(нет)_ | Одна строка-tagline, рендерящаяся в muted-цвете ниже brand-строки |
 
 ASCII-блок раскрашен токеном `accent`. Отдельного `header.color` нет — цвет
@@ -101,18 +100,16 @@ separator: "·"
 
 ## Опуская файл
 
-Если `workspace/styles.yml` не существует, `LoadStylesConfig()` возвращает
-zero-value структуру, а `styles.ApplyStyles()` откатывается на встроенные
-дефолты. CLI работает идентично — ошибка не выдаётся.
+Если `workspace/styles.yml` не существует, CLI откатывается на встроенные
+дефолты. Он работает идентично — ошибка не выдаётся.
 
 ## Разрешение light / dark
 
-У каждого токена есть встроенный light- и dark-hex-дефолт. На старте
-`ApplyStyles` один раз зовёт `lipgloss.HasDarkBackground()` и резолвит каждый
-токен в единственную hex-строку на весь остаток процесса. Разрешённое значение
-выставлено через аксессоры `styles.Color*()` и мостит три styling-слоя: v1
-lipgloss (`internal/core/ui/render/`, `internal/core/ui/widgets/`), v2 lipgloss
-(`internal/core/ui/cmdbrowser/`) и `ColorScheme` Fang.
+У каждого токена есть встроенный light- и dark-hex-дефолт. На старте CLI
+один раз определяет, тёмный ли фон у терминала, и резолвит каждый токен в
+единственную hex-строку на весь остаток процесса. Одна и та же разрешённая
+палитра используется на всех поверхностях, которые рендерит CLI, — таблицы,
+status-секции, браузер команд и `--help`-вывод Fang.
 
 | Токен | Light-дефолт | Dark-дефолт |
 |-------|--------------|-------------|
@@ -125,8 +122,8 @@ lipgloss (`internal/core/ui/render/`, `internal/core/ui/widgets/`), v2 lipgloss
 | `text`    | _(пусто — дефолт терминала)_ | _(пусто — дефолт терминала)_ |
 
 Непустое значение, заданное пользователем, переопределяет оба режима — override'ы
-не per-mode. Повторный запуск `ApplyStyles` после смены профиля — поддерживаемый
-способ ретеминга во время сессии.
+не per-mode. Отредактировать `workspace/styles.yml` и перезапустить команду
+`dwe` — поддерживаемый способ ретеминга во время сессии.
 
 ## Кастомизация цветов
 

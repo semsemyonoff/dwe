@@ -71,7 +71,7 @@ When `dwe services enable` or `dwe services disable` is run without `--apply`, t
 | Event | Effect on `pending` |
 |-------|---------------------|
 | `dwe services enable/disable` (without `--apply`) | Writes `pending.operations`; adds/merges ops for restart or deploy contributors |
-| `dwe services enable/disable --apply` success | Clears contributor-owned pending ops via `ClearPendingOps` |
+| `dwe services enable/disable --apply` success | Clears only the pending ops that this apply step performed (unrelated pending ops from other sessions survive) |
 | `dwe restart` success | Clears the `restart` op; deploy op (if any) survives |
 | `dwe deploy run` (full project) success | Clears the `deploy` op; restart op (if any) survives |
 | `dwe deploy run --service <name>` success | Removes `<name>` from the `deploy` op's service list; if empty, removes the op |
@@ -89,7 +89,7 @@ When `dwe services enable` or `dwe services disable` is run without `--apply`, t
   Run: dwe restart
 ```
 
-The banner is rendered by `render.PendingBanner(p *journal.PendingApply)` in `internal/core/ui/render/`. It iterates `pending.operations` and renders one line per op. Empty string is returned (no banner) when `pending` is nil.
+The banner is rendered from `pending.operations` — one line per op. When `pending` is empty, no banner is shown.
 
 ## See also
 

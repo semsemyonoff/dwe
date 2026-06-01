@@ -21,14 +21,14 @@ Go templates (with the [go-sprout](https://docs.atom.codes/sprout/) function lib
 
 | Site | Syntax | Context | Notes |
 |------|--------|---------|-------|
-| `info.yml` — `text`, `value`, `when` | `{{ ... }}` | `DweConfig` (typed) | See [info.md](config/info.md) |
-| `workspace/commands/` — `cmd`, `argv`, `workdir`, `compose_args`, `env`, `messages.*`, `confirmation_text`, `files.*.path`/`candidates`, workflow `steps[].with[<key>]` / `steps[].when` | `${...}` and `{{ ... }}` | `RenderContext` (Raw + Params + Context + Files + Host) | See [commands/](config/commands/index.md) |
-| `deploy.yml` / `lifecycle.yml` / `reset.yml` — `when: type: template, expr:` | `{{ ... }}` | Merged `DweConfig` | Evaluated at plan time. See [deploy](config/deploy/index.md) |
-| `message` builtin — `text:` | `{{ ... }}` | Merged `DweConfig` | See [message builtin](config/deploy/builtins.md#message) |
-| `docker.yml` — `project_name` | `${...}` only | Merged `DweConfig.Raw` | Dot-path lookups (no `{{ }}` logic). See [docker.md](config/docker.md) |
-| `workspace/templates/git/<pack>/**/*.tmpl` | `{{ ... }}` | `{.Project, .Service, .Resolved, .ServiceCfg, .Runtime, .Services, .Cfg}` | Strict mode. See [render/git.md](render/git.md) |
-| `workspace/templates/ide/<pack>/**/*.tmpl` | `{{ ... }}` | `{.Project, .Service, .Resolved, .ServiceCfg, .Runtime, .Services, .Cfg}` | Strict mode. See [render/ide.md](render/ide.md) |
-| `workspace/templates/ai/<pack>/**/*.tmpl` | `{{ ... }}` | `{.Project, .Service, .Resolved, .ServiceCfg, .Runtime, .Services, .Cfg}` | Strict mode. See [render/ai.md](render/ai.md) |
+| `info.yml` — `text`, `value`, `when` | `{{ ... }}` | Resolved project config | See [info.md](config/info.md) |
+| `workspace/commands/` — `cmd`, `argv`, `workdir`, `compose_args`, `env`, `messages.*`, `confirmation_text`, `files.*.path`/`candidates`, workflow `steps[].with[<key>]` / `steps[].when` | `${...}` and `{{ ... }}` | Command context (`.Raw` + `.Params` + `.Context` + `.Files` + `.Host`) | See [commands/](config/commands/index.md) |
+| `deploy.yml` / `lifecycle.yml` / `reset.yml` — `when: type: template, expr:` | `{{ ... }}` | Resolved project config | Evaluated at plan time. See [deploy](config/deploy/index.md) |
+| `message` builtin — `text:` | `{{ ... }}` | Resolved project config | See [message builtin](config/deploy/builtins.md#message) |
+| `docker.yml` — `project_name` | `${...}` only | Resolved project config (`.Raw` lookups) | Dot-path lookups (no `{{ }}` logic). See [docker.md](config/docker.md) |
+| `workspace/templates/git/<pack>/**/*.tmpl` | `{{ ... }}` | Render-pack context (`.Project`, `.Service`, `.ServiceCfg`, `.Runtime`, `.Services`, `.Cfg`) | Strict mode. See [render/git.md](render/git.md) |
+| `workspace/templates/ide/<pack>/**/*.tmpl` | `{{ ... }}` | Render-pack context (`.Project`, `.Service`, `.ServiceCfg`, `.Runtime`, `.Services`, `.Cfg`) | Strict mode. See [render/ide.md](render/ide.md) |
+| `workspace/templates/ai/<pack>/**/*.tmpl` | `{{ ... }}` | Render-pack context (`.Project`, `.Service`, `.ServiceCfg`, `.Runtime`, `.Services`, `.Cfg`) | Strict mode. See [render/ai.md](render/ai.md) |
 | `params.*.default_from`, `context.*.from` | — | — | Plain dot-paths only (no template expressions). |
 
 ## Two syntaxes: shorthand and full templates
@@ -80,9 +80,9 @@ Prefer single-quoted (`'...'`) scalars for one-line templates whose body contain
 
 ## Render context per site
 
-The data exposed to a template depends on the site. All sites converge on a struct-shaped context — field access uses Go's dot syntax (`.Project.Name`).
+The data exposed to a template depends on the site. Field access uses dot syntax (`.Project.Name`).
 
-**Commands (`RenderContext`):**
+**Commands:**
 
 | Path | Contents |
 |------|----------|
@@ -92,7 +92,7 @@ The data exposed to a template depends on the site. All sites converge on a stru
 | `.Files` | Resolved file artefacts (map keyed by file id; each has a `.Path` field) |
 | `.Host.UID` / `.Host.GID` | Host UID/GID strings |
 
-**Info, pipelines, `message` builtin:** The merged typed `DweConfig` (e.g. `.Project.Name`, `((index .Services "main").Port "http")`, `(index .Services "catalog").Enabled`).
+**Info, pipelines, `message` builtin:** the resolved project config — addressed via the same dot syntax as the render-pack `.Cfg` below (e.g. `.Project.Name`, `((index .Services "main").Port "http")`, `(index .Services "catalog").Enabled`).
 
 **Render packs (git / ide / ai, strict):**
 
@@ -102,8 +102,8 @@ The data exposed to a template depends on the site. All sites converge on a stru
 | `.Service` | service name (the map key in `services:`) |
 | `.ServiceCfg` | effective service config after `extends` resolution |
 | `.Runtime` | merged `runtime` block (`.Runtime.UseHTTPS`, `.Runtime.SPX.Path`). Per-service ports / hosts live on each service entry (see `.Services` below). |
-| `.Services` | `map[string]ServiceConfig` keyed by service name. Use `(index .Services "<name>")` to fetch; per-entry helpers `.Port "<port-name>"` / `.Host "<host-name>"`. Type-filtered subsets via `.AppServices` / `.ToolServices` / `.InfraServices`. |
-| `.Cfg` | merged `DweConfig` (advanced). `.Cfg.Raw` is the post-merge config map after DWE normalization (`services.*` injected from per-service `service.yml` files). Dot syntax (`.Cfg.Raw.git.project_prefix`) works only for identifier-safe keys; use `{{ index .Cfg.Raw "my-key" }}` for keys with hyphens, dots, leading digits, etc. Prefer the dedicated fields above for common cases. |
+| `.Services` | services keyed by name. Use `(index .Services "<name>")` to fetch; per-entry helpers `.Port "<port-name>"` / `.Host "<host-name>"`. Type-filtered subsets via `.AppServices` / `.ToolServices` / `.InfraServices`. |
+| `.Cfg` | the merged project config (advanced). `.Cfg.Raw` is the post-merge config tree (`services.*` is injected from per-service `service.yml` files). Dot syntax (`.Cfg.Raw.git.project_prefix`) works only for identifier-safe keys; use `{{ index .Cfg.Raw "my-key" }}` for keys with hyphens, dots, leading digits, etc. Prefer the dedicated fields above for common cases. |
 
 IDE and AI packs render into tracked project files. Avoid consuming developer-local or secret keys via `.Cfg.Raw` in those templates — values from `local.yml` will produce per-developer diffs. Git hooks render under `.git/hooks/` (gitignored) and are not subject to this constraint.
 
@@ -187,7 +187,7 @@ The following registries from [go-sprout](https://docs.atom.codes/sprout/registr
 | `filesystem` | `pathBase`, `pathDir`, `pathExt`, `pathClean`, `osBase`, `osDir` | Path manipulation |
 | `semver` | `semverCompare`, `semverSort` | Semantic version operations |
 
-**Hermetic by construction.** The FuncMap is built without any function that touches the environment, filesystem, network, or random/crypto sources. Sprout's `shuffle` (math/rand seeded from crypto) and `hello` (debug stub) are deliberately removed.
+**Hermetic by construction.** The helper set is built without any function that touches the environment, filesystem, network, or random/crypto sources. Sprout's `shuffle` (math/rand seeded from crypto) and `hello` (debug stub) are deliberately removed.
 
 For full per-function documentation see the [sprout registries reference](https://docs.atom.codes/sprout/registries/).
 
@@ -201,7 +201,7 @@ Three additional helpers are available **only** inside `workspace/commands/` tem
 | `resolveMap` | `resolveMap .Params "name"` | Key lookup in a flat `map[string]any`. Equivalent to `${param.name}` / `${context.name}`. |
 | `resolveFile` | `resolveFile .Files "id" "path"` | Subkey lookup in a resolved file artefact. Equivalent to `${files.id.path}`. |
 
-These exist so the `${...}` shorthand can be expanded to portable Go-template form, and so authors can reach raw config when the typed `.Raw.<x>.<y>` style is awkward (keys with dots, numeric keys, etc.).
+These exist so the `${...}` shorthand can be expanded to portable Go-template form, and so authors can reach raw config when the dotted `.Raw.<x>.<y>` style is awkward (keys with dots, numeric keys, etc.).
 
 ## Strict rendering (render packs)
 
@@ -240,7 +240,7 @@ Other sites (info, commands, pipeline conditions, `message`) use lenient renderi
 
 - **`when:` truthiness.** A rendered `when:` value is truthy unless it equals `""`, `"false"`, or `"0"` (after trimming). Comparisons that return a Go `bool` render as `"true"`/`"false"`; comparisons that return an integer-like value (e.g. lengths) render as decimal strings.
 
-- **No env, FS, network, or randomness.** Templates are evaluated in a hermetic FuncMap by design. If a template needs project state, surface it through `DweConfig` (info / pipelines) or through a `context.<name>: from: <dot.path>` declaration (commands).
+- **No env, FS, network, or randomness.** Templates are evaluated in a hermetic FuncMap by design. If a template needs project state, surface it through the resolved project config (info / pipelines) or through a `context.<name>: from: <dot.path>` declaration (commands).
 
 - **Mixing `${...}` and `{{ ... }}` is fine.** They share the same context and render in one pass — `${...}` is rewritten to template calls before parsing.
 

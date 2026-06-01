@@ -38,7 +38,7 @@ Workflow steps (string-based — separate, not covered here):
 
 ### `type: builtin` — predicates
 
-Builtin conditions test filesystem state using the **predicate registry** in `internal/core/execution/condition`. Predicates are distinct from engine builtins (like `service_configs_copy`) — they live in a separate namespace and cannot be used in `check:` actions.
+Builtin conditions test filesystem state using the **predicate registry**. Predicates are distinct from engine builtins (like `service_configs_copy`) — they live in a separate namespace and cannot be used in `check:` actions.
 
 ```yaml
 when:
@@ -57,7 +57,7 @@ when:
 | `file-exists <path>` | path is an existing regular file |
 | `file-missing <path>` | path is missing or not a regular file |
 
-**Portability:** The predicate evaluator uses hardcoded `sh -c` (not the project's configured `ShellBin`) to ensure POSIX portability and consistency regardless of the project's shell choice.
+**Portability:** Predicates are evaluated through hardcoded `sh -c` (not the project's configured shell binary) to ensure POSIX portability and consistency regardless of the project's shell choice.
 
 ### `type: shell` — shell commands
 
@@ -91,7 +91,7 @@ Template conditions are purely for idempotency checks known at plan time:
   steps: []
 ```
 
-The render context includes the full merged `DweConfig`, so you can reach any configuration value. See [Templates](../templates.md) for the template expression syntax and helper reference.
+The render context includes the full resolved project config, so you can reach any configuration value. See [Templates](../templates.md) for the template expression syntax and helper reference.
 
 ## Typed actions (`check:` and step bodies)
 
@@ -126,8 +126,8 @@ See [deploy/conditions.md](deploy/conditions.md) for the full action reference a
 
 The pipeline system has **two separate `type: builtin` namespaces**, disambiguated by YAML position:
 
-1. **Predicates** — used in `when: type: builtin`. Live in `internal/core/execution/condition`, e.g. `dir-empty`, `file-exists`.
-2. **Engine builtins** — used in step bodies and `check: type: builtin`. Live in `internal/core/execution/builtin`, e.g. `service_configs_copy`, `service_configs_check`, `message`.
+1. **Predicates** — used in `when: type: builtin`. Filesystem-state tests like `dir-empty`, `file-exists`.
+2. **Engine builtins** — used in step bodies and `check: type: builtin`. Executable actions like `service_configs_copy`, `service_configs_check`, `message`.
 
 Example of the distinction:
 
@@ -170,7 +170,7 @@ steps:
     when: "cmd: test -d /tmp/workdir"
 ```
 
-Workflow conditions are evaluated by `internal/shared/tpl/render_command.go` and `internal/core/execution/condition` string-classification logic. See [commands/](commands/index.md) for the full workflow grammar.
+Workflow conditions are classified by leading prefix (`{{ ... }}` → template, `cmd: ...` → shell command, otherwise → predicate). See [commands/](commands/index.md) for the full workflow grammar.
 
 ## Related documentation
 

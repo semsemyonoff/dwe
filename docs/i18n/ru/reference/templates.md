@@ -1,4 +1,4 @@
-> Translated from: reference/templates.md @ cbca9972d437
+> Translated from: reference/templates.md @ 66d27d1926dd
 
 # Шаблоны
 
@@ -23,14 +23,14 @@ Go-шаблоны (с библиотекой функций [go-sprout](https://
 
 | Место | Синтаксис | Контекст | Заметки |
 |-------|-----------|----------|---------|
-| `info.yml` — `text`, `value`, `when` | `{{ ... }}` | `DweConfig` (типизированный) | См. [info.md](config/info.md) |
-| `workspace/commands/` — `cmd`, `argv`, `workdir`, `compose_args`, `env`, `messages.*`, `confirmation_text`, `files.*.path`/`candidates`, workflow-шаги `steps[].with[<key>]` / `steps[].when` | `${...}` и `{{ ... }}` | `RenderContext` (Raw + Params + Context + Files + Host) | См. [commands/](config/commands/index.md) |
-| `deploy.yml` / `lifecycle.yml` / `reset.yml` — `when: type: template, expr:` | `{{ ... }}` | Слитый `DweConfig` | Вычисляется на этапе планирования. См. [deploy](config/deploy/index.md) |
-| Билтин `message` — `text:` | `{{ ... }}` | Слитый `DweConfig` | См. [билтин message](config/deploy/builtins.md#message) |
-| `docker.yml` — `project_name` | Только `${...}` | Слитый `DweConfig.Raw` | Только dot-path lookups (без `{{ }}`-логики). См. [docker.md](config/docker.md) |
-| `workspace/templates/git/<pack>/**/*.tmpl` | `{{ ... }}` | `{.Project, .Service, .Resolved, .ServiceCfg, .Runtime, .Services, .Cfg}` | Строгий режим. См. [render/git.md](render/git.md) |
-| `workspace/templates/ide/<pack>/**/*.tmpl` | `{{ ... }}` | `{.Project, .Service, .Resolved, .ServiceCfg, .Runtime, .Services, .Cfg}` | Строгий режим. См. [render/ide.md](render/ide.md) |
-| `workspace/templates/ai/<pack>/**/*.tmpl` | `{{ ... }}` | `{.Project, .Service, .Resolved, .ServiceCfg, .Runtime, .Services, .Cfg}` | Строгий режим. См. [render/ai.md](render/ai.md) |
+| `info.yml` — `text`, `value`, `when` | `{{ ... }}` | Разрешённая конфигурация проекта | См. [info.md](config/info.md) |
+| `workspace/commands/` — `cmd`, `argv`, `workdir`, `compose_args`, `env`, `messages.*`, `confirmation_text`, `files.*.path`/`candidates`, workflow-шаги `steps[].with[<key>]` / `steps[].when` | `${...}` и `{{ ... }}` | Контекст команды (`.Raw` + `.Params` + `.Context` + `.Files` + `.Host`) | См. [commands/](config/commands/index.md) |
+| `deploy.yml` / `lifecycle.yml` / `reset.yml` — `when: type: template, expr:` | `{{ ... }}` | Разрешённая конфигурация проекта | Вычисляется на этапе планирования. См. [deploy](config/deploy/index.md) |
+| Билтин `message` — `text:` | `{{ ... }}` | Разрешённая конфигурация проекта | См. [билтин message](config/deploy/builtins.md#message) |
+| `docker.yml` — `project_name` | Только `${...}` | Разрешённая конфигурация проекта (lookup'ы по `.Raw`) | Только dot-path lookups (без `{{ }}`-логики). См. [docker.md](config/docker.md) |
+| `workspace/templates/git/<pack>/**/*.tmpl` | `{{ ... }}` | Контекст render-пака (`.Project`, `.Service`, `.ServiceCfg`, `.Runtime`, `.Services`, `.Cfg`) | Строгий режим. См. [render/git.md](render/git.md) |
+| `workspace/templates/ide/<pack>/**/*.tmpl` | `{{ ... }}` | Контекст render-пака (`.Project`, `.Service`, `.ServiceCfg`, `.Runtime`, `.Services`, `.Cfg`) | Строгий режим. См. [render/ide.md](render/ide.md) |
+| `workspace/templates/ai/<pack>/**/*.tmpl` | `{{ ... }}` | Контекст render-пака (`.Project`, `.Service`, `.ServiceCfg`, `.Runtime`, `.Services`, `.Cfg`) | Строгий режим. См. [render/ai.md](render/ai.md) |
 | `params.*.default_from`, `context.*.from` | — | — | Только plain dot-paths (без template-выражений). |
 
 ## Два синтаксиса: shorthand и полные шаблоны
@@ -82,9 +82,9 @@ cmd: |
 
 ## Render-контекст по surface'у
 
-Данные, доступные шаблону, зависят от места. Все места сходятся на struct-shaped контексте — доступ к полям использует Go-синтаксис точки (`.Project.Name`).
+Данные, доступные шаблону, зависят от места. Доступ к полям использует синтаксис точки (`.Project.Name`).
 
-**Команды (`RenderContext`):**
+**Команды:**
 
 | Путь | Содержимое |
 |------|------------|
@@ -94,7 +94,7 @@ cmd: |
 | `.Files` | Разрешённые файлы-артефакты (map по file id; у каждого есть поле `.Path`) |
 | `.Host.UID` / `.Host.GID` | Строки UID/GID хоста |
 
-**Info, пайплайны, билтин `message`:** слитый типизированный `DweConfig` (например, `.Project.Name`, `((index .Services "main").Port "http")`, `(index .Services "catalog").Enabled`).
+**Info, пайплайны, билтин `message`:** разрешённая конфигурация проекта — адресуется тем же синтаксисом точки, что и `.Cfg` render-пака ниже (например, `.Project.Name`, `((index .Services "main").Port "http")`, `(index .Services "catalog").Enabled`).
 
 **Render-паки (git / ide / ai, строгие):**
 
@@ -104,8 +104,8 @@ cmd: |
 | `.Service` | имя сервиса (ключ карты в `services:`) |
 | `.ServiceCfg` | эффективная конфигурация сервиса после резолва `extends` |
 | `.Runtime` | слитый блок `runtime` (`.Runtime.UseHTTPS`, `.Runtime.SPX.Path`). Per-service порты / хосты живут на каждой записи сервиса (см. `.Services` ниже). |
-| `.Services` | `map[string]ServiceConfig` по имени сервиса. Используйте `(index .Services "<name>")` для выборки; per-entry хелперы `.Port "<port-name>"` / `.Host "<host-name>"`. Подмножества по типу через `.AppServices` / `.ToolServices` / `.InfraServices`. |
-| `.Cfg` | слитый `DweConfig` (продвинутое). `.Cfg.Raw` — это конфиг-карта после слияния и dwe-нормализации (`services.*` инжектится из per-service файлов `service.yml`). Dot-синтаксис (`.Cfg.Raw.git.project_prefix`) работает только для identifier-safe ключей; используйте `{{ index .Cfg.Raw "my-key" }}` для ключей с дефисами, точками, ведущими цифрами и т.д. Предпочитайте выделенные поля выше для типовых случаев. |
+| `.Services` | сервисы по имени. Используйте `(index .Services "<name>")` для выборки; per-entry хелперы `.Port "<port-name>"` / `.Host "<host-name>"`. Подмножества по типу через `.AppServices` / `.ToolServices` / `.InfraServices`. |
+| `.Cfg` | объединённая конфигурация проекта (продвинутое). `.Cfg.Raw` — это конфиг-дерево после слияния (`services.*` инжектится из per-service файлов `service.yml`). Dot-синтаксис (`.Cfg.Raw.git.project_prefix`) работает только для identifier-safe ключей; используйте `{{ index .Cfg.Raw "my-key" }}` для ключей с дефисами, точками, ведущими цифрами и т.д. Предпочитайте выделенные поля выше для типовых случаев. |
 
 IDE- и AI-паки рендерятся в трекаемые файлы проекта. Избегайте потребления developer-local или секретных ключей через `.Cfg.Raw` в этих шаблонах — значения из `local.yml` дадут per-developer диффы. Git-хуки рендерятся в `.git/hooks/` (gitignored) и под это ограничение не попадают.
 
@@ -189,7 +189,7 @@ value: '{{ appURL ((index .Services "adminer").Host "web") ((index .Services "ma
 | `filesystem` | `pathBase`, `pathDir`, `pathExt`, `pathClean`, `osBase`, `osDir` | Манипуляции с путями |
 | `semver` | `semverCompare`, `semverSort` | Операции над семантическими версиями |
 
-**Герметичность по построению.** FuncMap собран без единой функции, которая бы трогала окружение, файловую систему, сеть или random/crypto-источники. Sprout'овские `shuffle` (math/rand, засеянный из crypto) и `hello` (debug-заглушка) намеренно удалены.
+**Герметичность по построению.** Набор хелперов собран без единой функции, которая бы трогала окружение, файловую систему, сеть или random/crypto-источники. Sprout'овские `shuffle` (math/rand, засеянный из crypto) и `hello` (debug-заглушка) намеренно удалены.
 
 Полную документацию по каждой функции см. в [справочнике регистров sprout](https://docs.atom.codes/sprout/registries/).
 
@@ -203,7 +203,7 @@ value: '{{ appURL ((index .Services "adminer").Host "web") ((index .Services "ma
 | `resolveMap` | `resolveMap .Params "name"` | Lookup ключа в плоской `map[string]any`. Эквивалентно `${param.name}` / `${context.name}`. |
 | `resolveFile` | `resolveFile .Files "id" "path"` | Lookup подключа в разрешённом файле-артефакте. Эквивалентно `${files.id.path}`. |
 
-Они существуют, чтобы shorthand `${...}` мог разворачиваться в портируемую Go-template форму, и чтобы авторы могли дотянуться до сырого конфига, когда типизированный стиль `.Raw.<x>.<y>` неудобен (ключи с точками, числовые ключи и т.д.).
+Они существуют, чтобы shorthand `${...}` мог разворачиваться в портируемую Go-template форму, и чтобы авторы могли дотянуться до сырого конфига, когда точечный стиль `.Raw.<x>.<y>` неудобен (ключи с точками, числовые ключи и т.д.).
 
 ## Строгий рендер (render-паки)
 
@@ -242,7 +242,7 @@ value: '{{ appURL ((index .Services "adminer").Host "web") ((index .Services "ma
 
 - **Truthiness `when:`.** Отрендеренное значение `when:` truthy, если только оно не равно `""`, `"false"` или `"0"` (после trim). Сравнения, возвращающие Go-`bool`, рендерятся как `"true"`/`"false"`; сравнения, возвращающие integer-like значение (например, длины), рендерятся как десятичные строки.
 
-- **Никаких env, FS, сети или случайности.** Шаблоны вычисляются в герметичном FuncMap по дизайну. Если шаблону нужно состояние проекта, выставьте его через `DweConfig` (info / пайплайны) или через декларацию `context.<name>: from: <dot.path>` (команды).
+- **Никаких env, FS, сети или случайности.** Шаблоны вычисляются в герметичном FuncMap по дизайну. Если шаблону нужно состояние проекта, выставьте его через разрешённую конфигурацию проекта (info / пайплайны) или через декларацию `context.<name>: from: <dot.path>` (команды).
 
 - **Микс `${...}` и `{{ ... }}` нормален.** Они разделяют один контекст и рендерятся за один проход — `${...}` переписывается в template-вызовы до парсинга.
 

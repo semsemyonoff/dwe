@@ -1,4 +1,4 @@
-> Translated from: reference/config/state/schema.md @ 4add20da2753
+> Translated from: reference/config/state/schema.md @ ce7a067ed322
 
 # Схема состояния
 
@@ -73,7 +73,7 @@
 | Событие | Эффект для `pending` |
 |-------|---------------------|
 | `dwe services enable/disable` (без `--apply`) | Записывает `pending.operations`; добавляет/сливает операции для contributor-ов restart или deploy |
-| Успешный `dwe services enable/disable --apply` | Очищает принадлежащие contributor-у pending-операции через `ClearPendingOps` |
+| Успешный `dwe services enable/disable --apply` | Очищает только те pending-операции, которые выполнил данный шаг apply (несвязанные pending-операции из других сессий сохраняются) |
 | Успешный `dwe restart` | Очищает операцию `restart`; операция deploy (если есть) сохраняется |
 | Успешный `dwe deploy run` (по всему проекту) | Очищает операцию `deploy`; операция restart (если есть) сохраняется |
 | Успешный `dwe deploy run --service <name>` | Удаляет `<name>` из списка сервисов операции `deploy`; если список пуст, удаляет операцию |
@@ -91,7 +91,7 @@
   Run: dwe restart
 ```
 
-Баннер рендерится функцией `render.PendingBanner(p *journal.PendingApply)` из `internal/core/ui/render/`. Она проходит по `pending.operations` и выводит по одной строке на операцию. Возвращается пустая строка (баннер не выводится), когда `pending` равно nil.
+Баннер рендерится из `pending.operations` — по одной строке на операцию. Когда `pending` пуст, баннер не выводится.
 
 ## См. также
 

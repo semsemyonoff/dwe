@@ -25,7 +25,7 @@ Five user-facing commands run a pipeline:
 | `dwe restart` | `lifecycle.yml` (both sections) | Runs `stop` then `run --no-update`. |
 | `dwe reset run` | `workspace/reset.yml` (+ per-service `reset.yml`) | Built-in `pre → stop → cleanup` pipeline. |
 
-Every file declares the same shape — an ordered list of phases, each holding an ordered list of steps. The runner in `internal/core/execution/pipeline/` does not know which command called it. That is why per-service deploy files, the orchestrator deploy file, the lifecycle `run:` / `stop:` blocks, and the reset file all accept the same step grammar.
+Every file declares the same shape — an ordered list of phases, each holding an ordered list of steps. A single runner drives all of them and does not know which command called it. That is why per-service deploy files, the orchestrator deploy file, the lifecycle `run:` / `stop:` blocks, and the reset file all accept the same step grammar.
 
 Two grammar extensions are command-scoped:
 

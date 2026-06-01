@@ -29,9 +29,9 @@ Info dashboard configuration.
 
 ## Purpose
 
-`workspace/info.yml` declares the content of the `dwe info` dashboard: sections, items, conditional visibility, and template expressions. It is rendered by `render.Info()` (in `internal/core/ui/render/`) using Lipgloss.
+`workspace/info.yml` declares the content of the `dwe info` dashboard: sections, items, conditional visibility, and template expressions. The CLI renders it on every `dwe info` invocation.
 
-Loaded separately by `LoadInfoConfig()`. Not merged with the 3-layer config.
+Loaded separately. Not merged with the 3-layer config.
 
 ## Structure
 
@@ -76,7 +76,7 @@ footer: true
 
 All items accept an optional `when:` (Go template expression). Items with a falsy `when` are dropped from the rendered output. All items support an optional `decorative` boolean flag (see [Decorative items](#decorative-items)).
 
-> **Note on `auto-urls` and `auto-hosts` rendering:** `auto-urls` and `auto-hosts` items expand at render time (when `dwe info` is executed), not at YAML load time. The expansion happens inside the info renderer by consulting the current configuration and iterating services in deploy order. This design ensures the dashboard always reflects the latest service definitions and state. See [`docs/internals/packages.md`](../../internals/packages.md) for architectural details on the render-time expansion via the `Source*Spec` pattern.
+> **Note on `auto-urls` and `auto-hosts` rendering:** `auto-urls` and `auto-hosts` items expand at render time (when `dwe info` is executed), not at YAML load time. The expansion consults the current configuration and iterates enabled services in deploy order, so the dashboard always reflects the latest service definitions and state.
 
 ### `definition`
 
@@ -287,7 +287,7 @@ When `hide_on_empty: true` on a section or subgroup, the block is skipped entire
 
 ## Template expressions
 
-All `text`, `value`, and `when` fields support Go template syntax evaluated against `DweConfig`.
+All `text`, `value`, and `when` fields support Go template syntax evaluated against the resolved project config.
 
 ### Available template data
 
@@ -407,7 +407,7 @@ footer: true
 - **Bare `when:` values without template syntax** — `when: .State` is not valid; must be `when: "{{ .State }}"`.
 - **Missing quotes around template expressions** — YAML parses `{{ ... }}` as a flow mapping if unquoted. Always quote template strings.
 - **Service lookup syntax** — Go's text/template requires `index` for map access by string key: `(index .Services "main")` returns a `ServiceConfig`. From there, struct fields are PascalCase (`.Container`, `.Enabled`) and ports / hosts use the `Port` / `Host` accessor methods with the port/host name as argument: `(index .Services "main").Port "http"`. Parentheses around the index expression are required so the method dispatches on the returned `ServiceConfig`.
-- **Using config keys not in DweConfig struct** — only fields exposed on the typed `DweConfig` struct are available in templates. Custom keys added to `defaults.yml` are in `Raw` but not in template data unless explicitly exposed.
+- **Using config keys not exposed at the top level** — only fields surfaced by the resolved project config (see the table above) are available as direct template paths like `.Project.Name`. Custom keys added to `defaults.yml` live under `.Cfg.Raw` and need to be accessed via `index` or dot-paths against `Raw`.
 - **`appURL` argument order** — the order is `host`, `port`, `useHTTPS`, then optional `path`. Swapping port and useHTTPS produces incorrect URLs silently. When linking a tool routed via the main reverse proxy, combine the tool's hostname with the main service's port: `appURL ((index .Services "adminer").Host "web") ((index .Services "main").Port "http") .Runtime.UseHTTPS`.
 - **`hide_on_empty` with decorative items** — By default, content items like `definition`, `info`, and `warning` count toward section visibility, but `separator` does not. Use the `decorative` flag to override: set `decorative: true` on a content item to exclude it from the visibility calculation, or set `decorative: false` on a separator to make it count as content. A section with `hide_on_empty: true` is fully hidden if no content item (after `when` filtering) survives.
 - **Footer rendering with `hide_on_empty`** — When `footer: true`, the footer is only rendered if at least one section produced output. If all sections are hidden via `hide_on_empty`, the footer is also suppressed.
@@ -415,4 +415,4 @@ footer: true
 ## Related commands
 
 - `dwe info` — render the full dashboard
-- `dwe` (no args) — shows compact summary (not from `info.yml`, uses `render.Summary`)
+- `dwe` (no args) — shows a built-in compact summary (not from `info.yml`)

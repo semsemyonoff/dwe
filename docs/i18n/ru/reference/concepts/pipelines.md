@@ -1,4 +1,4 @@
-> Translated from: reference/concepts/pipelines.md @ c6dd4fdc7045
+> Translated from: reference/concepts/pipelines.md @ 2f98eeebd73f
 
 # Пайплайны
 
@@ -27,7 +27,7 @@
 | `dwe restart` | `lifecycle.yml` (обе секции) | Запускает `stop`, потом `run --no-update`. |
 | `dwe reset run` | `workspace/reset.yml` (+ per-service `reset.yml`) | Встроенный пайплайн `pre → stop → cleanup`. |
 
-Каждый файл объявляет одну и ту же форму — упорядоченный список фаз, каждая держит упорядоченный список шагов. Runner в `internal/core/execution/pipeline/` не знает, какая команда его вызвала. Поэтому per-service deploy-файлы, deploy-файл оркестратора, блоки `run:` / `stop:` в lifecycle и reset-файл принимают одну и ту же грамматику шагов.
+Каждый файл объявляет одну и ту же форму — упорядоченный список фаз, каждая держит упорядоченный список шагов. Один runner драйвит их все и не знает, какая команда его вызвала. Поэтому per-service deploy-файлы, deploy-файл оркестратора, блоки `run:` / `stop:` в lifecycle и reset-файл принимают одну и ту же грамматику шагов.
 
 Два расширения грамматики ограничены командой:
 
