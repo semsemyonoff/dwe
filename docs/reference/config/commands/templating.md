@@ -1,6 +1,6 @@
 # Templating in command files
 
-Devbox uses two layers of interpolation in command definitions: the lightweight `${...}` syntax and full Go `text/template` blocks. Both are evaluated by the same engine and may be mixed freely.
+DWE uses two layers of interpolation in command definitions: the lightweight `${...}` syntax and full Go `text/template` blocks. Both are evaluated by the same engine and may be mixed freely.
 
 The full template engine — `${...}` namespaces, the render context, Go template control flow, built-in functions, sprout registries, and conventions — is documented in [Templates](../../templates.md). This page only covers the parts specific to command files; everything else is cross-cutting.
 
@@ -14,11 +14,11 @@ The full template engine — `${...}` namespaces, the render context, Go templat
 
 ## Command render context
 
-Templates inside `devbox/commands/` render against `RenderContext`:
+Templates inside `workspace/commands/` render against `RenderContext`:
 
 | Path | Contents |
 |------|----------|
-| `.Raw` | Merged `devbox.yml` + `defaults.yml` + `local.yml` as a nested map |
+| `.Raw` | Merged `workspace.yml` + `defaults.yml` + `local.yml` as a nested map |
 | `.Params` | Resolved param values (map keyed by param name) |
 | `.Context` | Resolved context values (map keyed by context name) |
 | `.Files` | Resolved file artefacts (map keyed by file id; each has a `.Path` field) |
@@ -45,7 +45,7 @@ They walk maps and return `""` on miss — useful when the key has a dot or a nu
 files:
   log:
     access: write
-    path: ".devbox/logs/{{ .Params.task }}_{{ now | date \"2006-01-02_15-04-05\" }}.log"
+    path: ".dwe/logs/{{ .Params.task }}_{{ now | date \"2006-01-02_15-04-05\" }}.log"
     mkdir: true
 
 # pipeline form: pass a value through a function
@@ -75,7 +75,7 @@ When the docs say *"command template space"* this is the set of expressions avai
 
 | Expression | Meaning |
 |------------|---------|
-| `${<dot.path>}` | Lookup in merged `DevboxConfig.Raw` |
+| `${<dot.path>}` | Lookup in merged `DweConfig.Raw` |
 | `${param.<name>}` | Resolved param |
 | `${context.<name>}` | Resolved context value |
 | `${files.<id>.path}` | Absolute path of a file artefact |

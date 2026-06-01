@@ -19,9 +19,9 @@ Directives common to **all** command types unless noted otherwise. Type-specific
 
 | Field | Type | Default | Description |
 |-------|------|---------|-------------|
-| `type` | enum | required | One of `shell`, `devbox`, `script`, `service_exec`, `service_run`, `workflow`, `builtin`, `daemon` |
-| `description` | string | — | Human-readable description shown in the devbox CLI (selectors, `commands list`, `commands inspect`) |
-| `private` | bool | `false` | Hides from `devbox commands list` and blocks direct `commands run`; still callable from workflows and pipelines |
+| `type` | enum | required | One of `shell`, `dwe`, `script`, `service_exec`, `service_run`, `workflow`, `builtin`, `daemon` |
+| `description` | string | — | Human-readable description shown in the DWE CLI (selectors, `commands list`, `commands inspect`) |
+| `private` | bool | `false` | Hides from `dwe commands list` and blocks direct `commands run`; still callable from workflows and pipelines |
 | `notify` | bool | `false` | Fire a desktop notification when the command finishes. See [Notifications](#notifications) below. |
 
 ## Confirmation
@@ -65,7 +65,7 @@ flowchart TD
 Operational notes:
 
 - `commands --yes` sets `SkipConfirm` and `NonInteractive` on the in-process `RunContext` so every confirm call (top-level command, builtin `confirm`, workflow confirm steps) skips the prompt for the duration of the invocation.
-- Subprocess env propagation is **scoped to the script runner**: `type: script` injects `DWE_NONINTERACTIVE=1` (along with `DWE_PARAMS_JSON`, `DWE_CONTEXT_JSON`, etc.) into the script's environment. `type: shell` exports a smaller contract — `DWE_BIN`, `COMPOSE_PROJECT_NAME`, `COMPOSE_FILE` (see [Shell env contract](types.md#shell-env-contract)) — but **not** `DWE_NONINTERACTIVE`. `type: devbox`, `service_exec`, and `service_run` export none of these — confirmation skipping inside them is enforced by the `RunContext` they run under, not by the env.
+- Subprocess env propagation is **scoped to the script runner**: `type: script` injects `DWE_NONINTERACTIVE=1` (along with `DWE_PARAMS_JSON`, `DWE_CONTEXT_JSON`, etc.) into the script's environment. `type: shell` exports a smaller contract — `DWE_BIN`, `COMPOSE_PROJECT_NAME`, `COMPOSE_FILE` (see [Shell env contract](types.md#shell-env-contract)) — but **not** `DWE_NONINTERACTIVE`. `type: dwe`, `service_exec`, and `service_run` export none of these — confirmation skipping inside them is enforced by the `RunContext` they run under, not by the env.
 - Inside a workflow, child commands inherit `NonInteractive` and `SkipConfirm` from the parent `RunContext`.
 - The non-TTY fallback is `render.Writer.Confirm`; under `CI=1` it auto-confirms.
 
@@ -87,7 +87,7 @@ messages:
 `notify: true` opts the command into a desktop notification when it finishes (success or failure). The notification only fires when **all** of the following hold:
 
 - the `CommandDef` declares `notify: true` (default is `false`);
-- the command is the **top-level** invocation — `devbox commands <id>` typed by the user. Commands invoked transitively as a workflow sub-step (sequential or parallel), from a deploy pipeline action, or from a reset pipeline action are **always suppressed at runtime** regardless of their own `notify:` value;
+- the command is the **top-level** invocation — `dwe commands <id>` typed by the user. Commands invoked transitively as a workflow sub-step (sequential or parallel), from a deploy pipeline action, or from a reset pipeline action are **always suppressed at runtime** regardless of their own `notify:` value;
 - the user's `notify_enabled` master switch and `notify_commands_enabled` per-op gate are both true;
 - the environment is interactive (not CI / `DWE_NONINTERACTIVE` / non-TTY).
 
@@ -96,7 +96,7 @@ The rule: "the notification fires for the command you typed, not for any command
 ```yaml
 db.import:
   type: script
-  notify: true            # fires once when `devbox commands db.import` finishes
+  notify: true            # fires once when `dwe commands db.import` finishes
   script:
     inline: ...
 ```
@@ -127,9 +127,9 @@ params:
 | Field | Type | Description |
 |-------|------|-------------|
 | `type` | enum | `string` (default), `bool`, `int`, `path` |
-| `description` | string | Human-readable description shown in the devbox CLI (param help in selectors and `commands inspect`) |
+| `description` | string | Human-readable description shown in the DWE CLI (param help in selectors and `commands inspect`) |
 | `required` | bool | Error if not supplied and no default resolves |
-| `default_from` | string | Dot-path into the merged devbox config; preferred source for the default |
+| `default_from` | string | Dot-path into the merged DWE config; preferred source for the default |
 | `default` | string | Literal fallback used when nothing else resolves |
 | `env` | string | If set, the resolved value is exported under this env name |
 | `pattern` | string | Anchored regex that the resolved value must fully match (string/path only) |
@@ -149,7 +149,7 @@ The config-driven `default_from` is the preferred source — this matches the st
 
 ## Param widgets
 
-Params can declare a **widget type** to control how they are presented in the interactive form, and a list of **options** that guide the user to valid choices. This is especially useful when the valid options are stored in your devbox config and you want the form to stay in sync without duplicating the list in the command file.
+Params can declare a **widget type** to control how they are presented in the interactive form, and a list of **options** that guide the user to valid choices. This is especially useful when the valid options are stored in your DWE config and you want the form to stay in sync without duplicating the list in the command file.
 
 ```yaml
 params:
@@ -203,7 +203,7 @@ Options resolution:
 
 - **Static list** (`options: [a, b, c]`) — the list is literal.
 - **Labeled options** (`options: [{value: x, label: X}, ...]`) — value is used internally, label is shown to the user.
-- **Config reference** (`options: ${databases}`) — the form resolves the dot-path from your merged config (devbox.yml + defaults.yml + local.yml) at runtime. The resolved value can be a scalar list (`[a, b, c]`) or a map (`{x: X, y: Y}` → options with value=key, label=value). Empty or missing references are caught with a clear error when you try to open the form.
+- **Config reference** (`options: ${databases}`) — the form resolves the dot-path from your merged config (workspace.yml + defaults.yml + local.yml) at runtime. The resolved value can be a scalar list (`[a, b, c]`) or a map (`{x: X, y: Y}` → options with value=key, label=value). Empty or missing references are caught with a clear error when you try to open the form.
 
 Validation:
 
@@ -214,7 +214,7 @@ Validation:
 
 ## Context
 
-`context:` declares values pulled from the merged devbox config and exposed to the command for templating and (optionally) as env vars. Unlike params, context values are not user-overridable — they always come from config.
+`context:` declares values pulled from the merged DWE config and exposed to the command for templating and (optionally) as env vars. Unlike params, context values are not user-overridable — they always come from config.
 
 ```yaml
 context:
@@ -226,7 +226,7 @@ context:
 
 | Field | Type | Description |
 |-------|------|-------------|
-| `from` | string | Dot-path into merged `DevboxConfig.Raw` |
+| `from` | string | Dot-path into merged `DweConfig.Raw` |
 | `required` | bool | Error if the path resolves to nil or empty string |
 | `env` | string | Optional env var name to inject |
 

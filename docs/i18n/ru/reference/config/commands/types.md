@@ -1,4 +1,4 @@
-> Translated from: reference/config/commands/types.md @ 7906cbefcff4
+> Translated from: reference/config/commands/types.md @ f35db8259798
 
 # Типы команд
 
@@ -8,7 +8,7 @@
 
 - [Обзор](#обзор)
 - [Тип: shell](#тип-shell)
-- [Тип: devbox](#тип-devbox)
+- [Тип: dwe](#тип-dwe)
 - [Тип: script](#тип-script)
 - [Тип: service_exec](#тип-service_exec)
 - [Тип: service_run](#тип-service_run)
@@ -22,7 +22,7 @@
 | Тип | Исполнитель | Полезная нагрузка | Применение |
 |------|----------|---------|----------|
 | `shell` | Host shell | `cmd` или `argv` | Задачи на хосте (скрипты, git, сборка) |
-| `devbox` | Devbox CLI | `cmd` | Вызов подкоманды |
+| `dwe` | DWE CLI | `cmd` | Вызов подкоманды |
 | `script` | Script runner | блок `script:` | Структурированное многофазное выполнение |
 | `service_exec` | Docker Compose exec/run | `cmd` или `argv` | Операции в контейнере на существующих/новых контейнерах |
 | `service_run` | Docker Compose run | `cmd` или `argv` | Выполнение в одноразовом контейнере |
@@ -34,7 +34,7 @@
 
 ## Тип: shell
 
-Запускает shell-команду на **хостовой** машине. Используйте для задач, которым не нужен контейнер или бинарник devbox.
+Запускает shell-команду на **хостовой** машине. Используйте для задач, которым не нужен контейнер или DWE binary.
 
 | Поле | Обязательно | Описание |
 |-------|----------|-------------|
@@ -46,7 +46,7 @@
 chmod-scripts:
   type: shell
   description: Make all scripts executable
-  cmd: chmod +x devbox/scripts/**/*.sh
+  cmd: chmod +x workspace/scripts/**/*.sh
 ```
 
 ```yaml
@@ -70,15 +70,15 @@ commit-config:
 
 ### Контракт env для shell
 
-Подпроцессы `type: shell` наследуют окружение родительского процесса плюс значения из блока `env:` команды. Поверх этого раннер экспортирует небольшой контракт, чтобы shell-сниппеты могли обращаться к хостовому devbox CLI и активному compose-проекту без переоткрытия:
+Подпроцессы `type: shell` наследуют окружение родительского процесса плюс значения из блока `env:` команды. Поверх этого раннер экспортирует небольшой контракт, чтобы shell-сниппеты могли обращаться к хостовому DWE CLI и активному compose-проекту без переоткрытия:
 
 | Переменная | Значение |
 |----------|-------|
-| `DWE_BIN` | Абсолютный путь к запущенному бинарнику devbox — используйте его вместо хардкода `./bin/devbox` |
-| `COMPOSE_PROJECT_NAME` | Имя активного compose-проекта (например, `devbox-laravel`) — `docker compose ...` подхватывает его без `-p` |
+| `DWE_BIN` | Абсолютный путь к запущенному DWE бинарнику — используйте его вместо хардкода `./bin/dwe` |
+| `COMPOSE_PROJECT_NAME` | Имя активного compose-проекта (например, `dwe-laravel`) — `docker compose ...` подхватывает его без `-p` |
 | `COMPOSE_FILE` | Объединённый через двоеточие список путей активных оверлеев, приведённых к абсолютным относительно корня проекта — `docker compose ...` подхватывает их без флагов `-f` |
 
-Именно это позволяет команде `type: shell` достучаться до docker compose с тем же набором оверлеев, что и остальной devbox:
+Именно это позволяет команде `type: shell` достучаться до docker compose с тем же набором оверлеев, что и остальной DWE:
 
 ```yaml
 hub.chown-src-host:
@@ -91,9 +91,9 @@ hub.chown-src-host:
 
 `COMPOSE_FILE` опускается, если файлы оверлеев не настроены; `COMPOSE_PROJECT_NAME` опускается, если имя проекта не задано. Записи, уже объявленные в блоке `env:` команды, сохраняются, но запись из контракта побеждает при коллизии ключей — `os/exec` Go использует последнюю запись для дубликатов ключей, а контракт дописывается после `env:`.
 
-## Тип: devbox
+## Тип: dwe
 
-Вызывает другую подкоманду devbox, используя текущий запущенный бинарник. Это позволяет избежать хардкода `./bin/devbox` в определениях команд и делает вызовы перемещаемыми.
+Вызывает другую подкоманду dwe, используя текущий запущенный бинарник. Это позволяет избежать хардкода `./bin/dwe` в определениях команд и делает вызовы перемещаемыми.
 
 | Поле | Обязательно | Описание |
 |-------|----------|-------------|
@@ -101,18 +101,18 @@ hub.chown-src-host:
 
 ```yaml
 db.up:
-  type: devbox
+  type: dwe
   private: true
   description: Start the database container in the background
   cmd: "docker up db"
 
 app.install:
-  type: devbox
+  type: dwe
   description: Install the Laravel application via installer container
   cmd: "compose raw --bare -- --progress tty -f compose/installer.yml run --rm -u ${host.uid}:${host.gid} app-install"
 ```
 
-`workdir` не допускается для `type: devbox` (подкоманда наследует корень проекта).
+`workdir` не допускается для `type: dwe` (подкоманда наследует корень проекта).
 
 ## Тип: script
 
@@ -137,7 +137,7 @@ db.dump-create:
     DB_NAME: "${param.database}"
     MYSQL_PWD: "${db.password}"
   script:
-    path: devbox/scripts/db/dump-create.sh
+    path: workspace/scripts/db/dump-create.sh
     shell: bash
 ```
 
@@ -155,7 +155,7 @@ db.dump-create:
 
 ### Пути скриптов
 
-Пути скриптов в `script.path`, `script.run` и т. д. разрешаются **относительно корня проекта** — никогда относительно `workdir`. Это делает безопасным размещение скриптов под `devbox/scripts/` независимо от того, откуда команда запущена.
+Пути скриптов в `script.path`, `script.run` и т. д. разрешаются **относительно корня проекта** — никогда относительно `workdir`. Это делает безопасным размещение скриптов под `workspace/scripts/` независимо от того, откуда команда запущена.
 
 ### Контракт окружения скрипта
 
@@ -164,7 +164,7 @@ db.dump-create:
 | Переменная | Описание |
 |----------|-------------|
 | `DWE_ROOT` | Абсолютный корень проекта |
-| `DWE_BIN` | Абсолютный путь к запущенному бинарнику devbox |
+| `DWE_BIN` | Абсолютный путь к запущенному DWE бинарнику |
 | `DWE_COMMAND_ID` | Полный идентификатор данного вызова |
 | `DWE_TEMP_DIR` | Writable temp-директория, ограниченная этим вызовом (автоудаление) |
 | `DWE_NONINTERACTIVE` | `1`, когда родительский `RunContext` имеет `NonInteractive: true` (установлено `commands --yes` / `-y`), **или** раннер наследует `DWE_NONINTERACTIVE=1` из собственного окружения (например, вложенные вызовы). Иначе `0`. Само по себе обнаружение TTY этого не переключает — скрипты, которым нужно по-разному вести себя на не-TTY, должны проверять собственный stdin. |
@@ -172,7 +172,7 @@ db.dump-create:
 | `DWE_CONTEXT_JSON` | Разрешённый context как JSON-объект |
 | `DWE_FILES_JSON` | JSON-объект, отображающий идентификаторы файлов в `{path}` |
 
-Используйте `DWE_BIN` вместо хардкода `./bin/devbox`:
+Используйте `DWE_BIN` вместо хардкода `./bin/dwe`:
 
 ```bash
 #!/bin/bash
@@ -188,14 +188,14 @@ mv "$TMPFILE" "$DUMP_FILE"
 
 ### Линтинг скриптов
 
-Сам devbox не линтит shell-скрипты. Мы **рекомендуем** установить [ShellCheck](https://github.com/koalaman/shellcheck) и прогонять его по `devbox/scripts/` как часть вашего локального процесса или CI. Это внешний инструмент, полностью опциональный, но он ловит классы багов, которые в этом контексте наиболее болезненны: неэкранированные подстановки, отсутствующий `set -euo pipefail`, сломанные обработчики `trap`, тонкие проблемы с кавычками вокруг `$DUMP_FILE` / `$DWE_BIN` и несоответствующий синтаксис тестов.
+DWE не линтит shell-скрипты. Мы **рекомендуем** установить [ShellCheck](https://github.com/koalaman/shellcheck) и прогонять его по `workspace/scripts/` как часть вашего локального процесса или CI. Это внешний инструмент, полностью опциональный, но он ловит классы багов, которые в этом контексте наиболее болезненны: неэкранированные подстановки, отсутствующий `set -euo pipefail`, сломанные обработчики `trap`, тонкие проблемы с кавычками вокруг `$DUMP_FILE` / `$DWE_BIN` и несоответствующий синтаксис тестов.
 
 ```bash
 # one-off check
-shellcheck devbox/scripts/db/dump-create.sh
+shellcheck workspace/scripts/db/dump-create.sh
 
 # whole tree
-shellcheck devbox/scripts/**/*.sh
+shellcheck workspace/scripts/**/*.sh
 ```
 
 Если вы его внедрите, зафиксируйте диалект shebang-ом или директивой, чтобы ShellCheck выбрал правильные правила (особенно когда задано `script.shell: bash`):
@@ -206,7 +206,7 @@ shellcheck devbox/scripts/**/*.sh
 set -euo pipefail
 ```
 
-Рекомендуемые соглашения для скриптов под `devbox/scripts/` (независимо от ShellCheck — это хорошие практики в любом случае):
+Рекомендуемые соглашения для скриптов под `workspace/scripts/` (независимо от ShellCheck — это хорошие практики в любом случае):
 
 - Начинайте с `set -euo pipefail` — fail fast, никаких тихих багов с unset-переменными.
 - Экранируйте каждую подстановку: `"$DUMP_FILE"`, `"$DWE_BIN"`, `"$DB_NAME"`.
@@ -231,7 +231,7 @@ set -euo pipefail
 
 | Режим | Когда контейнер запущен | Когда контейнер не запущен |
 |------|---------------------------|-------------------------------|
-| `exec-or-fail` (по умолчанию) | запускается через `docker compose exec` | отказывает с ясной ошибкой devbox, предлагающей `devbox docker up <svc>` |
+| `exec-or-fail` (по умолчанию) | запускается через `docker compose exec` | отказывает с ясной ошибкой DWE, предлагающей `dwe docker up <svc>` |
 | `exec` | запускается через `docker compose exec` | всё равно вызывает `compose exec`; docker выдаёт собственную (загадочную) ошибку |
 | `run` | всегда запускает свежий эфемерный контейнер через `docker compose run --rm` | то же |
 | `exec-or-run` | запускается через `docker compose exec` | тихо переключается на `docker compose run --rm`; выводит жёлтое предупреждение, чтобы поведение с эфемерным контейнером было видно |
@@ -438,7 +438,7 @@ Confirm-шаги тихо пропускаются под `--yes` или `DWE_NO
 
 ### Параллельные подшаги
 
-Шаг workflow может объявить блок `parallel:`, который разворачивает группу подшагов конкурентно. Это зеркалит схему `parallel:` пайплайна в [deploy → Группы параллельных шагов](../deploy/examples.md) — те же регуляторы `max_concurrent` / `fail_fast` и тот же live-block UI — но живёт внутри workflow, чтобы группу можно было переиспользовать между пайплайнами и вызывать ad-hoc через `devbox commands`.
+Шаг workflow может объявить блок `parallel:`, который разворачивает группу подшагов конкурентно. Это зеркалит схему `parallel:` пайплайна в [deploy → Группы параллельных шагов](../deploy/examples.md) — те же регуляторы `max_concurrent` / `fail_fast` и тот же live-block UI — но живёт внутри workflow, чтобы группу можно было переиспользовать между пайплайнами и вызывать ad-hoc через `dwe commands`.
 
 ```yaml
 services.all.composer-install:
@@ -473,7 +473,7 @@ services.all.composer-install:
 
 #### Композиция
 
-- **Ad-hoc**: `devbox commands run <workflow-id>` запускает live-block самого workflow на терминале. Ctrl-C распространяется как SIGINT через `signal.NotifyContext`, что отменяет группу и даёт детям до 5 с на выход до эскалации до SIGTERM.
+- **Ad-hoc**: `dwe commands run <workflow-id>` запускает live-block самого workflow на терминале. Ctrl-C распространяется как SIGINT через `signal.NotifyContext`, что отменяет группу и даёт детям до 5 с на выход до эскалации до SIGTERM.
 - **Внутри последовательного шага пайплайна**: когда `cmd:` последовательного шага пайплайна разрешается в workflow с блоком `parallel:`, футер пайплайна приостанавливается на время тела шага (существующий контракт `SuspendForExec` / `ResumeAfterExec`), и workflow рендерит собственные строки блока в этом промежутке. Счётчик шагов пайплайна продвигается ровно на один — подшаги НЕ считаются шагами пайплайна.
 - **Внутри параллельной группы пайплайна ИЛИ другого параллельного workflow**: отвергается во время выполнения. Только один live-block может владеть терминалом одновременно. Ошибка — сентинел `ErrWorkflowNestedParallel`.
 
@@ -487,7 +487,7 @@ services.all.composer-install:
 
 #### Per-подшаговые логи
 
-Объединённые stdout/stderr каждого подшага захватываются в `.devbox/logs/parallel/workflow/<workflow-id>/<sub-command>.log`. Только кадры, завершённые переводом строки, пишутся в файл лога (прогресс-кадры с carriage-return остаются в live-строке и отбрасываются из логов), так что файл остаётся читаемым без спама `\r`.
+Объединённые stdout/stderr каждого подшага захватываются в `.dwe/logs/parallel/workflow/<workflow-id>/<sub-command>.log`. Только кадры, завершённые переводом строки, пишутся в файл лога (прогресс-кадры с carriage-return остаются в live-строке и отбрасываются из логов), так что файл остаётся читаемым без спама `\r`.
 
 #### Именование подшагов и переопределения из пайплайна
 
@@ -560,7 +560,7 @@ db.wait-target:
 
 ## Тип: daemon
 
-`type: daemon` — декларативная форма для долгоживущих, параметризованных фоновых процессов внутри сервисов devbox (канонический пример: Laravel queue worker). Один YAML-блок разворачивается во время загрузки реестра в **четыре полноценные виртуальные команды**:
+`type: daemon` — декларативная форма для долгоживущих, параметризованных фоновых процессов внутри сервисов DWE (канонический пример: Laravel queue worker). Один YAML-блок разворачивается во время загрузки реестра в **четыре полноценные виртуальные команды**:
 
 | Виртуальный ID | Поведение | Блокирующая |
 |---|---|---|
@@ -569,9 +569,9 @@ db.wait-target:
 | `<base>.stop` | `docker stop -t <timeout> <full>` | нет |
 | `<base>.restart` | `<base>.stop` затем `<base>.start` | нет |
 
-Каждая виртуальная команда появляется в реестре, браузере `devbox cmd`, completion, `inspect` и может ссылаться из workflow. Исходная команда `<base>` **не** запускается сама по себе — запускаются только четыре виртуальные команды.
+Каждая виртуальная команда появляется в реестре, браузере `dwe cmd`, completion, `inspect` и может ссылаться из workflow. Исходная команда `<base>` **не** запускается сама по себе — запускаются только четыре виртуальные команды.
 
-Имена контейнеров автоматически префиксуются `ProjectConfig.FullName()` (так что один проект может работать на нескольких checkout-ах одновременно), и каждый контейнер несёт стандартизированные метки, чтобы `devbox status daemons`, completion и `_auto_reap_daemons` могли найти их через `docker ps` — **без отдельного файла состояния**.
+Имена контейнеров автоматически префиксуются `ProjectConfig.FullName()` (так что один проект может работать на нескольких checkout-ах одновременно), и каждый контейнер несёт стандартизированные метки, чтобы `dwe status daemons`, completion и `_auto_reap_daemons` могли найти их через `docker ps` — **без отдельного файла состояния**.
 
 ### YAML-форма
 
@@ -629,18 +629,18 @@ commands:
 - `dwe.daemon.id=<base>` (например, `services.main.queue`)
 - `dwe.daemon.params=<json>` (например, `{"name":"emails"}`) — производится через `encoding/json.Marshal` для безопасного round-trip через кавычки, обратные слэши и управляющие символы
 
-`devbox status daemons`, completion `--set` и `_auto_reap_daemons` все фильтруют по этим меткам.
+`dwe status daemons`, completion `--set` и `_auto_reap_daemons` все фильтруют по этим меткам.
 
 ### Поведение виртуальных команд
 
 - **`.start`** — выпускает `docker compose run -d --name <full> --no-deps --entrypoint "" [--rm] [--user …] [--workdir …] -e K1 -e K2 --label dwe.project=… --label dwe.daemon.id=… --label dwe.daemon.params=… <service> <argv…>`. **Значения** env передаются через окружение дочернего процесса (`cmd.Env`), никогда через хостовый argv, так что секреты не появляются в `ps` или `/proc/<pid>/cmdline`. `--no-deps` оставляет работающий стек нетронутым; `--entrypoint ""` гарантирует, что фактически запускается пользовательский `argv:`. При `on_already_running: error` плюс ошибке конфликта имён docker builtin выдаёт `ErrDaemonAlreadyRunning`; при `noop` та же ошибка проглатывается, и `.start` завершается успешно.
 - **`.logs`** — запускает `docker logs -f --tail=100 <full>` на переднем плане. Ctrl-C посылает `SIGINT` только процессу `docker logs` (мягкое отсоединение через `cmd.Cancel`); контейнер никогда не получает сигнал. Если контейнер не запущен, `.logs` ошибается с подсказкой, указывающей на `.start`.
 - **`.stop`** — запускает `docker stop -t <stop_timeout-в-секундах> <full>`. Отсутствующий контейнер **не** ошибка (идемпотентная остановка).
-- **`.restart`** — виртуальный `type: workflow` из `<base>.stop`, за которым следует `<base>.start`. Шаги workflow явно прокидывают каждый объявленный `param.<name>` через `with:`, так что `devbox cmd queue.restart --set name=emails` перезапускает демон `emails` (а не default).
+- **`.restart`** — виртуальный `type: workflow` из `<base>.stop`, за которым следует `<base>.start`. Шаги workflow явно прокидывают каждый объявленный `param.<name>` через `with:`, так что `dwe cmd queue.restart --set name=emails` перезапускает демон `emails` (а не default).
 
 ### Валидация
 
-`devbox validate` и загрузочный `cmd.Validate()` обеспечивают:
+`dwe validate` и загрузочный `cmd.Validate()` обеспечивают:
 
 - `service:` обязателен и **должен быть литеральным** — никаких `${...}` или `{{...}}`. (Параметризованный `service:` намеренно вне области v1, чтобы метка `dwe.daemon.id` оставалась стабильной.)
 - `daemon.container_template` обязателен и непуст.
@@ -655,9 +655,9 @@ commands:
 
 ### Интеграция с lifecycle
 
-Всякий раз, когда запускается `devbox stop` (независимо от наличия `lifecycle.yml`), синтетическая фаза `_auto_reap_daemons` дописывается в начало stop-пайплайна. Она перечисляет каждый контейнер, помеченный `dwe.project=<full>` с непустым `dwe.daemon.id`, и останавливает их параллельно. Опций отказа нет; фаза видна в выводе плана. Форму stop-пайплайна см. в [lifecycle.md](../lifecycle.md).
+Всякий раз, когда запускается `dwe stop` (независимо от наличия `lifecycle.yml`), синтетическая фаза `_auto_reap_daemons` дописывается в начало stop-пайплайна. Она перечисляет каждый контейнер, помеченный `dwe.project=<full>` с непустым `dwe.daemon.id`, и останавливает их параллельно. Опций отказа нет; фаза видна в выводе плана. Форму stop-пайплайна см. в [lifecycle.md](../lifecycle.md).
 
-Если `lifecycle.yml` отсутствует, `devbox stop` всё равно работает (только с фазой `_auto_reap_daemons` плюс дефолтным сообщением `Project is stopped. Have a nice day!`) — `lifecycle.yml` больше не требуется для `stop`.
+Если `lifecycle.yml` отсутствует, `dwe stop` всё равно работает (только с фазой `_auto_reap_daemons` плюс дефолтным сообщением `Project is stopped. Have a nice day!`) — `lifecycle.yml` больше не требуется для `stop`.
 
 ### Безопасность и приватность
 
@@ -673,22 +673,22 @@ commands:
 
 ```bash
 # Start a worker for the "emails" queue
-devbox cmd queue.start --set name=emails
+dwe cmd queue.start --set name=emails
 
 # Tail it (Ctrl-C detaches, container stays)
-devbox cmd queue.logs --set name=emails
+dwe cmd queue.logs --set name=emails
 
 # Check what's running
-devbox status daemons
+dwe status daemons
 
 # Restart it
-devbox cmd queue.restart --set name=emails
+dwe cmd queue.restart --set name=emails
 
 # Stop one daemon
-devbox cmd queue.stop --set name=emails
+dwe cmd queue.stop --set name=emails
 
 # Stop everything (reaps all daemons in this project automatically)
-devbox stop
+dwe stop
 ```
 
 ## Разрешение workdir

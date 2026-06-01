@@ -1,6 +1,6 @@
 # lifecycle.yml
 
-Run / stop pipeline declarations driving `devbox run`, `devbox stop`, and `devbox restart`.
+Run / stop pipeline declarations driving `dwe run`, `dwe stop`, and `dwe restart`.
 
 ## Contents
 
@@ -20,16 +20,16 @@ Run / stop pipeline declarations driving `devbox run`, `devbox stop`, and `devbo
 
 ## Purpose
 
-`devbox/lifecycle.yml` declares two pipelines:
+`workspace/lifecycle.yml` declares two pipelines:
 
-- **`run:`** — executed by `devbox run` (and `devbox restart`, after stop). Wraps the standard `docker up` + `docker wait` sequence with optional update probe and pre/post hook phases.
-- **`stop:`** — executed by `devbox stop` (and the first half of `devbox restart`). Wraps `docker down` with optional pre/post hook phases.
+- **`run:`** — executed by `dwe run` (and `dwe restart`, after stop). Wraps the standard `docker up` + `docker wait` sequence with optional update probe and pre/post hook phases.
+- **`stop:`** — executed by `dwe stop` (and the first half of `dwe restart`). Wraps `docker down` with optional pre/post hook phases.
 
 It is loaded separately by `LoadLifecycleConfig()` and is **not** merged with the 3-layer config.
 
 The file is optional for all commands that use it.
 
-When `lifecycle.yml` is absent or a section is absent, Devbox substitutes a built-in default pipeline and prints one info line to stderr: `Using built-in default <run|stop> pipeline (override with devbox/lifecycle.yml).` The info line is suppressed in `--output json` mode.
+When `lifecycle.yml` is absent or a section is absent, DWE substitutes a built-in default pipeline and prints one info line to stderr: `Using built-in default <run|stop> pipeline (override with workspace/lifecycle.yml).` The info line is suppressed in `--output json` mode.
 
 **Default `run:` pipeline** (fires when `lifecycle.yml` is absent or has no `run:` section):
 
@@ -38,38 +38,38 @@ When `lifecycle.yml` is absent or a section is absent, Devbox substitutes a buil
 | `update.mode` | `off` (no git probe) |
 | `show_info` | `true` |
 | `final_message` | `Project is ready for work!` |
-| Phases | Single `start` phase: one `type: devbox` step with `cmd: "docker up --wait"` |
+| Phases | Single `start` phase: one `type: dwe` step with `cmd: "docker up --wait"` |
 
 **Default `stop:` pipeline** (fires when `lifecycle.yml` is absent or has no `stop:` section):
 
 | Field | Value |
 |-------|-------|
 | `final_message` | `Project is stopped. Have a nice day!` |
-| Phases | Auto-reap phase (see below) + single `stop` phase: one `type: devbox` step with `cmd: "docker down"` |
+| Phases | Auto-reap phase (see below) + single `stop` phase: one `type: dwe` step with `cmd: "docker down"` |
 
 Whenever a `stop:` pipeline runs (default or user-defined), the `_auto_reap_daemons` phase is prepended automatically; it has no opt-out and is visible in plan output for transparency. It stops any background daemons started via [`type: daemon`](commands/types.md#type-daemon) commands.
 
-`devbox docker up` and `devbox docker down` are thin Docker Compose passthroughs and never use this pipeline; raw `docker compose stop` / `restart` remain accessible via `devbox docker stop` / `devbox docker restart`.
+`dwe docker up` and `dwe docker down` are thin Docker Compose passthroughs and never use this pipeline; raw `docker compose stop` / `restart` remain accessible via `dwe docker stop` / `dwe docker restart`.
 
 ## Pipeline shape
 
 ```mermaid
 flowchart LR
-  subgraph run["devbox run"]
+  subgraph run["dwe run"]
     direction LR
     U[update probe] --> PRE[pre hooks] --> UP[docker up] --> WAIT[docker wait] --> POST[post hooks] --> INFO[info] --> MSG1[final_message]
   end
-  subgraph stop["devbox stop"]
+  subgraph stop["dwe stop"]
     direction LR
     SPRE[pre hooks] --> DOWN[docker down] --> SPOST[post hooks] --> MSG2[final_message]
   end
-  subgraph restart["devbox restart"]
+  subgraph restart["dwe restart"]
     direction LR
     R1[stop pipeline] --> R2[run pipeline<br/>--no-update]
   end
 ```
 
-`docker up` is issued as a `type: devbox` step with `cmd: "docker up"` inside the `start` phase. Container health waiting uses a `type: builtin` step with `cmd: docker_wait_healthy`. They are not magical — the pipeline executor invokes them like any other step, so they pick up policy from `docker.yml`.
+`docker up` is issued as a `type: dwe` step with `cmd: "docker up"` inside the `start` phase. Container health waiting uses a `type: builtin` step with `cmd: docker_wait_healthy`. They are not magical — the pipeline executor invokes them like any other step, so they pick up policy from `docker.yml`.
 
 ## Structure
 
@@ -79,7 +79,7 @@ run:
     mode: on            # on | off
   show_info: true
   final_message: "Project is ready for work!"
-  log: false            # tee status + child stdout/stderr to .devbox/logs/run.log
+  log: false            # tee status + child stdout/stderr to .dwe/logs/run.log
   phases:
     - name: <phase>
       description: <text>
@@ -89,14 +89,14 @@ run:
         expr: <string>
       steps:
         - name: <step>
-          type: shell|devbox|command|builtin
+          type: shell|dwe|command|builtin
           cmd: <value>
           with:         # optional: parameters
             key: value
 
 stop:
   final_message: "Project is stopped. Have a nice day!"
-  log: false            # tee status + child stdout/stderr to .devbox/logs/stop.log
+  log: false            # tee status + child stdout/stderr to .dwe/logs/stop.log
   phases:
     - name: <phase>
       description: <text>
@@ -106,7 +106,7 @@ stop:
         expr: <string>
       steps:
         - name: <step>
-          type: shell|devbox|command|builtin
+          type: shell|dwe|command|builtin
           cmd: <value>
           with:         # optional: parameters
             key: value
@@ -118,7 +118,7 @@ Phases and steps use the same shape as [deploy.yml](deploy/index.md): `name`, `d
 
 ## `run.update`
 
-The optional update probe runs before any phase. It can fetch from the upstream remote, detect drift, and (depending on `mode`) pull `--ff-only`. A successful pull triggers in-process reload of `DevboxConfig`, `LifecycleConfig`, and the command registry before phases execute.
+The optional update probe runs before any phase. It can fetch from the upstream remote, detect drift, and (depending on `mode`) pull `--ff-only`. A successful pull triggers in-process reload of `DweConfig`, `LifecycleConfig`, and the command registry before phases execute.
 
 | Field | Type | Default | Description |
 |-------|------|---------|-------------|
@@ -139,14 +139,14 @@ When the probe finds a dirty tree, no upstream, or a fetch failure it warns and 
 
 | Field | Type | Default | Description |
 |-------|------|---------|-------------|
-| `show_info` | bool | `false` | Append a `devbox info` render after the last phase. |
+| `show_info` | bool | `false` | Append a `dwe info` render after the last phase. |
 | `final_message` | string | `Project is ready for work!` | Success message printed at the very end. |
 
 ## Required service deployment gate
 
-`devbox run` automatically gates on required services being deployed. Before the run pipeline starts, the command checks that all **tracked** services (those appearing in the resolved deploy plan) have `status: deployed` in the state file.
+`dwe run` automatically gates on required services being deployed. Before the run pipeline starts, the command checks that all **tracked** services (those appearing in the resolved deploy plan) have `status: deployed` in the state file.
 
-If any tracked service is not yet deployed, `devbox run` exits with an error: "run `devbox deploy run` first". This prevents running against a partially-initialized environment — bypassing the gate would just hand `docker compose up` a service whose volumes/configs/database have never been provisioned, and the run would fail almost immediately with an unrelated error. Always deploy first.
+If any tracked service is not yet deployed, `dwe run` exits with an error: "run `dwe deploy run` first". This prevents running against a partially-initialized environment — bypassing the gate would just hand `docker compose up` a service whose volumes/configs/database have never been provisioned, and the run would fail almost immediately with an unrelated error. Always deploy first.
 
 For more details, see [state/index.md](state/index.md).
 
@@ -160,11 +160,11 @@ For more details, see [state/index.md](state/index.md).
 
 Top-level field on both `run:` and `stop:`. Defaults to `false` for lifecycle pipelines (in contrast to `deploy.yml`, where the default is `true`).
 
-When enabled, devbox status messages and child-process stdout/stderr are teed to `.devbox/logs/<name>.log` (with ANSI codes stripped) — `.devbox/logs/run.log` for run, `.devbox/logs/stop.log` for stop.
+When enabled, dwe status messages and child-process stdout/stderr are teed to `.dwe/logs/<name>.log` (with ANSI codes stripped) — `.dwe/logs/run.log` for run, `.dwe/logs/stop.log` for stop.
 
 ```yaml
 run:
-  log: true     # tee to .devbox/logs/run.log
+  log: true     # tee to .dwe/logs/run.log
 ```
 
 ## Hook phases
@@ -186,7 +186,7 @@ run:
       description: Start containers and wait for health
       steps:
         - name: up
-          type: devbox
+          type: dwe
           cmd: "docker up"
         - name: wait
           type: builtin
@@ -206,7 +206,7 @@ run:
 ## Minimal example
 
 ```yaml
-# devbox/lifecycle.yml
+# workspace/lifecycle.yml
 run:
   update:
     mode: on
@@ -217,7 +217,7 @@ run:
       description: Start containers and wait for health
       steps:
         - name: up
-          type: devbox
+          type: dwe
           cmd: "docker up"
         - name: wait
           type: builtin
@@ -230,7 +230,7 @@ stop:
       description: Stop and remove containers
       steps:
         - name: down
-          type: devbox
+          type: dwe
           cmd: "docker down"
 ```
 
@@ -238,7 +238,7 @@ stop:
 
 `LoadLifecycleConfig()` enforces:
 
-- Each step in `run.phases` and `stop.phases` has a `type:` field with one of `shell`, `devbox`, `command`, `builtin`.
+- Each step in `run.phases` and `stop.phases` has a `type:` field with one of `shell`, `dwe`, `command`, `builtin`.
 - `update.mode`, when set, is one of `on`, `off`. Old values (`prompt`, `auto`, `check`) are rejected with a clear error.
 - `update.enabled` is not allowed (removed in favor of `mode: off` to disable the probe).
 - `deploy_services: true` is rejected (only valid in `deploy.yml`).
@@ -253,13 +253,13 @@ Lifecycle phases use the same `parallel:` step-group container as `deploy.yml`. 
 - **Forgetting `continue_on_error: true` on hook steps** — without it, a failing pre-stop hook aborts the entire stop sequence and containers are never stopped.
 - **Using `update: {}` with `enabled: true`** — the `enabled` field is no longer supported. Writing the `update:` key is itself the opt-in; use `mode: off` to disable the probe, or omit the `update:` key entirely.
 - **Adding `deploy_services` phases** — they are deploy-only. Lifecycle pipelines call services via `type: command` references instead.
-- **Editing `lifecycle.yml` to use direct `docker compose` calls** — the public API is `type: devbox` with `cmd: "docker up"`. Direct `docker compose` calls bypass policy from `docker.yml`.
+- **Editing `lifecycle.yml` to use direct `docker compose` calls** — the public API is `type: dwe` with `cmd: "docker up"`. Direct `docker compose` calls bypass policy from `docker.yml`.
 
 ## Related commands
 
-- `devbox run` — execute the run pipeline (with optional update probe)
-- `devbox run --no-update` — skip the update probe
-- `devbox run --update <mode>` — override the configured mode
-- `devbox stop` — execute the stop pipeline
-- `devbox restart` — `stop`, then `run --no-update`
-- `devbox docker up` / `devbox docker down` — raw Docker Compose passthrough (does not use this pipeline)
+- `dwe run` — execute the run pipeline (with optional update probe)
+- `dwe run --no-update` — skip the update probe
+- `dwe run --update <mode>` — override the configured mode
+- `dwe stop` — execute the stop pipeline
+- `dwe restart` — `stop`, then `run --no-update`
+- `dwe docker up` / `dwe docker down` — raw Docker Compose passthrough (does not use this pipeline)

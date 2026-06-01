@@ -1,6 +1,6 @@
 # Service field reference
 
-Every field allowed in `devbox/services/<name>/service.yml`, plus the nested blocks (`ports`, `hosts`, `icon`, `info`, `configs`, `dirs`, `cli`, `status`, `render`).
+Every field allowed in `workspace/services/<name>/service.yml`, plus the nested blocks (`ports`, `hosts`, `icon`, `info`, `configs`, `dirs`, `cli`, `status`, `render`).
 
 ## Contents
 
@@ -27,10 +27,10 @@ Every field allowed in `devbox/services/<name>/service.yml`, plus the nested blo
 | `compose` | list | no | all | Additional compose overlay files activated when the service is enabled. |
 | `ports` | `map[string]int` | no | all | Named container ports. See [`ports` field](#ports-field). |
 | `hosts` | `map[string]string` | no | all | Named hostnames. See [`hosts` field](#hosts-field). |
-| `icon` | string | no | all | Visual indicator emoji or symbol used in the `devbox info` dashboard. If omitted, a type default is used: `type: app` → 📦, `type: tool` → 🔧, `type: infra` → 🧱. See [`icon` field](#icon-field). |
+| `icon` | string | no | all | Visual indicator emoji or symbol used in the `dwe info` dashboard. If omitted, a type default is used: `type: app` → 📦, `type: tool` → 🔧, `type: infra` → 🧱. See [`icon` field](#icon-field). |
 | `info` | block | no | all | Display metadata for the info dashboard — title override, host/port key selection, and sub-paths. See [`info` block](#info-block). |
 | `depends_on` | list | no | app / infra | Ordered dependency on other services (affects deploy order). A `type: tool` target is rejected at load. |
-| `status` | list | no | all | Custom columns for the per-type `devbox status apps` / `tools` / `infra` table — see [`status` block](#status-block). |
+| `status` | list | no | all | Custom columns for the per-type `dwe status apps` / `tools` / `infra` table — see [`status` block](#status-block). |
 | `on_enable` | block | no | app / tool / infra | Lifecycle hooks to run when the service is enabled. See [Examples — toggle lifecycle](examples.md#toggle-lifecycle). |
 | `on_disable` | block | no | app / tool / infra | Lifecycle hooks to run when the service is disabled. |
 | `notes` | block | no | app / tool / infra | Human-readable hints shown in the `services enable/disable` plan output. |
@@ -40,15 +40,15 @@ Every field allowed in `devbox/services/<name>/service.yml`, plus the nested blo
 | `extends` | string | no | **app** | Inherit fields from another `type: app` entry. Cross-type extends is rejected. See [Inheritance](extends.md). |
 | `configs` | list | no | **app** | See [`configs` field](#configs-field). |
 | `dirs` | list | no | **app** | Extra hub-relative directories — see [`dirs` field](#dirs-field). |
-| `cli` | block | no | **app** | `devbox shell` defaults — see [`cli` block](#cli-block). |
+| `cli` | block | no | **app** | `dwe shell` defaults — see [`cli` block](#cli-block). |
 | `render` | block | no | **app** | Nested template-render policy — see [`render` block](#render-block). |
 
 ## `ports` field
 
-`ports:` is always a map from a port name to a container port. Single-port services need a chosen name (recommendation: `http` for web, `tcp` for raw TCP, role-specific like `mysql` / `amqp` for infra). Port values are defined in `devbox/services/<name>/service.yml`; `devbox/local.yml` overlays may remap individual entries — see the deep-merge behavior in [Load behavior](index.md#load-behavior).
+`ports:` is always a map from a port name to a container port. Single-port services need a chosen name (recommendation: `http` for web, `tcp` for raw TCP, role-specific like `mysql` / `amqp` for infra). Port values are defined in `workspace/services/<name>/service.yml`; `workspace/local.yml` overlays may remap individual entries — see the deep-merge behavior in [Load behavior](index.md#load-behavior).
 
 ```yaml
-# devbox/services/rabbitmq/service.yml
+# workspace/services/rabbitmq/service.yml
 type: infra
 container: rabbitmq
 ports:
@@ -63,20 +63,20 @@ Values are bounded `1..65535` at load time. Scalar shapes (`ports: 80`, `ports: 
 `hosts:` is always a map from a host name to a hostname. Symmetric with `ports`. A single hostname is conventionally `web`.
 
 ```yaml
-# devbox/services/main/service.yml
+# workspace/services/main/service.yml
 type: app
 hosts:
   web: app.localhost
 ```
 
-Host values are defined in `devbox/services/<name>/service.yml`; `devbox/local.yml` overlays may remap individual entries — see the deep-merge behavior in [Load behavior](index.md#load-behavior).
+Host values are defined in `workspace/services/<name>/service.yml`; `workspace/local.yml` overlays may remap individual entries — see the deep-merge behavior in [Load behavior](index.md#load-behavior).
 
 ## `icon` field
 
-An optional emoji or Unicode symbol displayed next to the service name in the `devbox info` dashboard when rendering `auto-urls` blocks.
+An optional emoji or Unicode symbol displayed next to the service name in the `dwe info` dashboard when rendering `auto-urls` blocks.
 
 ```yaml
-# devbox/services/main/service.yml
+# workspace/services/main/service.yml
 type: app
 icon: "📦"
 ```
@@ -89,20 +89,20 @@ If omitted, a type-based default is used:
 | `tool` | 🔧 |
 | `infra` | 🧱 |
 
-Icons are treated as opaque user content — ZWJ-joined emoji (family glyphs, profession modifiers, skin-tone variations) are supported but not validated for length. The icon appears only in the `devbox info` output; it is not used elsewhere.
+Icons are treated as opaque user content — ZWJ-joined emoji (family glyphs, profession modifiers, skin-tone variations) are supported but not validated for length. The icon appears only in the `dwe info` output; it is not used elsewhere.
 
 > **⚠️ Avoid emoji with `Emoji_Presentation=No`.** Codepoints like `🛢` (U+1F6E2), `🗄` (U+1F5C4), and `⚙` (U+2699) are "text-default" — they only render as colour emoji when followed by VS-16 (U+FE0F), and many terminal + font combinations on macOS and Linux ignore that hint and draw them at 1 cell instead of 2. Lipgloss measures them at 2 cells, so the status / info tables under-fill and every column to the right of the icon shifts.
 >
-> `devbox validate` flags these icons (warning, scope `config.icons`) and suggests safe replacements from a curated map. **At render time the runtime drops ambiguous icons entirely** rather than letting them break column alignment — they will simply not appear in the dashboard, status table, or toggle menu. The same caveat applies to icons set under `info.paths[].icon` and to user-defined `auto-hosts` / `auto-urls` icons in `devbox/info.yml`.
+> `dwe validate` flags these icons (warning, scope `config.icons`) and suggests safe replacements from a curated map. **At render time the runtime drops ambiguous icons entirely** rather than letting them break column alignment — they will simply not appear in the dashboard, status table, or toggle menu. The same caveat applies to icons set under `info.paths[].icon` and to user-defined `auto-hosts` / `auto-urls` icons in `workspace/info.yml`.
 >
 > Prefer codepoints that are emoji by default — e.g. `📦`, `🧱`, `🐳`, `📚`, `💾`, `🔧`, `🧰` — or stick to single-width ASCII / box-drawing symbols.
 
 ## `info` block
 
-Optional metadata for rendering this service in the `devbox info` dashboard.
+Optional metadata for rendering this service in the `dwe info` dashboard.
 
 ```yaml
-# devbox/services/main/service.yml
+# workspace/services/main/service.yml
 type: app
 info:
   title: "Main Application"
@@ -182,7 +182,7 @@ dirs:
 
 ## `cli` block
 
-Controls how `devbox shell` and CLI execution behave for this service.
+Controls how `dwe shell` and CLI execution behave for this service.
 
 ```yaml
 cli:
@@ -213,23 +213,23 @@ CLI flags override `cli` config. Priority order (highest first): `--root`/`--use
 cli:
   env:
     XDEBUG_CONFIG: "cli_color=1"
-    PHP_IDE_CONFIG: serverName=devbox
+    PHP_IDE_CONFIG: serverName=dwe
 
 # List form
 cli:
   env:
     - XDEBUG_CONFIG="cli_color=1"
-    - PHP_IDE_CONFIG=serverName=devbox
+    - PHP_IDE_CONFIG=serverName=dwe
 ```
 
 The list form is convenient when copy-pasting from a `.env` file; the map form is friendlier for inheriting and overriding individual keys via `extends:`.
 
 ## `status` block
 
-Optional list of custom columns appended to the type-specific status table — `devbox status apps` for `type: app`, `devbox status tools` for `type: tool`, `devbox status infra` for `type: infra` (and the default `devbox status` composite). Each entry declares a column name and a hermetic Go template that is evaluated per row against the merged config.
+Optional list of custom columns appended to the type-specific status table — `dwe status apps` for `type: app`, `dwe status tools` for `type: tool`, `dwe status infra` for `type: infra` (and the default `dwe status` composite). Each entry declares a column name and a hermetic Go template that is evaluated per row against the merged config.
 
 ```yaml
-# devbox/services/main/service.yml
+# workspace/services/main/service.yml
 type: app
 container: app-main
 dir: ./services/main
@@ -276,8 +276,8 @@ render:
 
 | Field | Default | Description |
 |-------|---------|-------------|
-| `enabled` | `true` for `type: app`; `false` otherwise | Include this service in IDE rendering. `devbox render ide` respects this setting; see **Activation** below. |
-| `template` | — | Optional custom template pack directory name. Must be a single directory key under `devbox/templates/ide/` (no path separators, no `..`, no absolute paths, no leading `.`). If omitted, rendering falls back to service-name-specific then global packs. Explicit packs are strict: a typo will fail rather than silently using a fallback. |
+| `enabled` | `true` for `type: app`; `false` otherwise | Include this service in IDE rendering. `dwe render ide` respects this setting; see **Activation** below. |
+| `template` | — | Optional custom template pack directory name. Must be a single directory key under `workspace/templates/ide/` (no path separators, no `..`, no absolute paths, no leading `.`). If omitted, rendering falls back to service-name-specific then global packs. Explicit packs are strict: a typo will fail rather than silently using a fallback. |
 
 #### IDE activation rules
 
@@ -292,11 +292,11 @@ A service is rendered only if both are satisfied. Disabling either suppresses re
 
 #### Template pack resolution
 
-`devbox render ide` searches for template packs in this order; the first match is used:
+`dwe render ide` searches for template packs in this order; the first match is used:
 
-1. `devbox/templates/ide/<template>/` (if `template` is set) — **strict**: pack must exist or rendering fails
-2. `devbox/templates/ide/<service-name>/` (if `template` is not set)
-3. `devbox/templates/ide/default/` (final fallback)
+1. `workspace/templates/ide/<template>/` (if `template` is set) — **strict**: pack must exist or rendering fails
+2. `workspace/templates/ide/<service-name>/` (if `template` is not set)
+3. `workspace/templates/ide/default/` (final fallback)
 
 When an explicit `template:` is specified and the pack is not found, rendering fails with an error (catches typos). When no explicit template is set and the implicit chain exhausts without finding a pack, rendering is skipped with a warning.
 
@@ -313,17 +313,17 @@ This manifest-based model lets you add support for any IDE or tool (`.cursor/`, 
 
 When multiple services share the same `dir` (e.g., `main` and `main-debug` both pointing to `./services/main`), only the most-derived service (deepest in the `extends` chain) renders IDE files. The others are reported as skipped with a collision warning.
 
-The explicit positional form `devbox render ide <service>` treats the argument as a **hub anchor**: it is validated as a real service, but then resolved through the same collision policy. So `devbox render ide main` actually renders `main-debug` whenever `main-debug` is enabled — useful from per-service deploy pipelines, which pass the canonical service name and expect the variant-aware result.
+The explicit positional form `dwe render ide <service>` treats the argument as a **hub anchor**: it is validated as a real service, but then resolved through the same collision policy. So `dwe render ide main` actually renders `main-debug` whenever `main-debug` is enabled — useful from per-service deploy pipelines, which pass the canonical service name and expect the variant-aware result.
 
 ```yaml
-# devbox/services/main/service.yml
+# workspace/services/main/service.yml
 type: app
 dir: ./services/main
 # render.ide.enabled defaults to true
 ```
 
 ```yaml
-# devbox/services/main-debug/service.yml
+# workspace/services/main-debug/service.yml
 type: app
 extends: main      # same dir as parent
 dir: ./services/main
@@ -334,7 +334,7 @@ render:
 # (main-debug wins because it extends main)
 ```
 
-In this example, `devbox render ide` produces files in `./services/main/` using the `main-debug` template pack, and emits a warning that `main` was skipped due to collision.
+In this example, `dwe render ide` produces files in `./services/main/` using the `main-debug` template pack, and emits a warning that `main` was skipped due to collision.
 
 #### Worked example: template pack layout
 
@@ -343,12 +343,12 @@ This example shows how template packs are organized and the resulting files gene
 **Project structure:**
 
 ```
-devbox/services/
+workspace/services/
   main/
     service.yml
   main-debug/
     service.yml
-devbox/templates/ide/
+workspace/templates/ide/
   default/
     manifest.yml
     .devcontainer/devcontainer.json.tmpl
@@ -363,14 +363,14 @@ devbox/templates/ide/
 **Service definitions:**
 
 ```yaml
-# devbox/services/main/service.yml
+# workspace/services/main/service.yml
 type: app
 dir: ./services/main
 # render.ide.enabled defaults to true; renders using default pack
 ```
 
 ```yaml
-# devbox/services/main-debug/service.yml
+# workspace/services/main-debug/service.yml
 type: app
 extends: main
 container: app-main-debug
@@ -380,7 +380,7 @@ render:
     template: main-debug  # override to use main-debug pack
 ```
 
-**After `devbox render ide`:**
+**After `dwe render ide`:**
 
 ```
 services/main/
@@ -406,8 +406,8 @@ render:
 
 | Field | Default | Description |
 |-------|---------|-------------|
-| `enabled` | `true` (for all service types) | Include this service in `devbox render ai` output. When `true`, agent-oriented documentation is generated in the service hub. |
-| `template` | — | Optional custom template pack directory name. Must be a single directory key under `devbox/templates/ai/` (no path separators, no `..`, no absolute paths, no leading `.`). If omitted, rendering falls back to service-name-specific then default packs. Explicit packs are strict: a typo will fail rather than silently using a fallback. |
+| `enabled` | `true` (for all service types) | Include this service in `dwe render ai` output. When `true`, agent-oriented documentation is generated in the service hub. |
+| `template` | — | Optional custom template pack directory name. Must be a single directory key under `workspace/templates/ai/` (no path separators, no `..`, no absolute paths, no leading `.`). If omitted, rendering falls back to service-name-specific then default packs. Explicit packs are strict: a typo will fail rather than silently using a fallback. |
 
 #### Agent docs activation rules
 
@@ -422,11 +422,11 @@ A service is rendered only if both are satisfied. Disabling either suppresses re
 
 #### Template pack resolution
 
-`devbox render ai` searches for template packs in this order; the first match is used:
+`dwe render ai` searches for template packs in this order; the first match is used:
 
-1. `devbox/templates/ai/<template>/` (if `template` is set) — **strict**: pack must exist or rendering fails
-2. `devbox/templates/ai/<service-name>/` (if `template` is not set)
-3. `devbox/templates/ai/default/` (final fallback)
+1. `workspace/templates/ai/<template>/` (if `template` is set) — **strict**: pack must exist or rendering fails
+2. `workspace/templates/ai/<service-name>/` (if `template` is not set)
+3. `workspace/templates/ai/default/` (final fallback)
 
 When an explicit `template:` is specified and the pack is not found, rendering fails with an error (catches typos). When no explicit template is set and the implicit chain exhausts without finding a pack, rendering is skipped with a warning.
 
@@ -441,9 +441,9 @@ All destinations are relative to the service hub directory (e.g. `services/main/
 
 When multiple services share the same `dir` (e.g., `main` and `main-debug` both pointing to `./services/main`), only the canonical hub owner — the **least-derived** service (shallowest in the `extends` chain) — renders agent docs. The rationale: agent docs describe the hub's identity, and when a child `extends` a parent and shares its `dir`, the parent owns the hub; the child is a runtime variant of the same workspace. The losing variants are reported as skipped with a collision warning.
 
-The explicit positional form `devbox render ai <service>` treats the argument as a **hub anchor** (same as `render ide`): the argument is validated as a real service, then resolved through the collision policy. So `devbox render ai main-debug` still renders `main` whenever both are enabled — the variant resolves to the canonical hub owner.
+The explicit positional form `dwe render ai <service>` treats the argument as a **hub anchor** (same as `render ide`): the argument is validated as a real service, then resolved through the collision policy. So `dwe render ai main-debug` still renders `main` whenever both are enabled — the variant resolves to the canonical hub owner.
 
-(Note: this differs from `devbox render ide`, where the *deepest* extends chain wins because IDE configs are about per-variant overrides.)
+(Note: this differs from `dwe render ide`, where the *deepest* extends chain wins because IDE configs are about per-variant overrides.)
 
 #### Worked example: template pack layout
 
@@ -452,17 +452,17 @@ This example shows how agent template packs are organized and the resulting file
 **Project structure:**
 
 ```
-devbox/services/
+workspace/services/
   main/
     service.yml
-devbox/templates/ai/
+workspace/templates/ai/
   default/
     manifest.yml
     AGENTS.md.tmpl
     .claude/CLAUDE.md.tmpl
 ```
 
-**Manifest (`devbox/templates/ai/default/manifest.yml`):**
+**Manifest (`workspace/templates/ai/default/manifest.yml`):**
 
 ```yaml
 render:
@@ -481,14 +481,14 @@ symlinks:
 ```markdown
 # {{.Service}} Service Hub
 
-This is the {{.Service}} service running inside a devbox-managed hub.
+This is the {{.Service}} service running inside a DWE-managed hub.
 The application source code is at `src/`.
 
 Service container: {{.ServiceCfg.Container}}
 Workspace root: {{.ServiceCfg.DirInternal}}
 ```
 
-**Service definition (`devbox/services/main/service.yml`):**
+**Service definition (`workspace/services/main/service.yml`):**
 
 ```yaml
 type: app
@@ -496,7 +496,7 @@ dir: ./services/main
 # render.ai.enabled defaults to true; renders using default pack
 ```
 
-**After `devbox render ai`:**
+**After `dwe render ai`:**
 
 ```
 services/main/
@@ -519,8 +519,8 @@ render:
 
 | Field | Default | Description |
 |-------|---------|-------------|
-| `enabled` | `true` for `type: app`; `false` otherwise | Include this service in `devbox render git` output. Mirrors the `render.ide` default policy. |
-| `template` | — | Optional custom template pack directory name. Must be a single directory key under `devbox/templates/git/` (no path separators, no `..`, no absolute paths, no leading `.`). If omitted, rendering falls back to service-name-specific then `default` packs. Explicit packs are strict: a typo will fail rather than silently using a fallback. |
+| `enabled` | `true` for `type: app`; `false` otherwise | Include this service in `dwe render git` output. Mirrors the `render.ide` default policy. |
+| `template` | — | Optional custom template pack directory name. Must be a single directory key under `workspace/templates/git/` (no path separators, no `..`, no absolute paths, no leading `.`). If omitted, rendering falls back to service-name-specific then `default` packs. Explicit packs are strict: a typo will fail rather than silently using a fallback. |
 
 `extends` inheritance for `render.git.enabled` and `render.git.template` follows the same rules as `render.ide` and `render.ai`: child explicit values override the parent's; omitted values inherit. Collision resolution on shared `dir` uses **deepest-extends-wins** (same as `render.ide`).
 

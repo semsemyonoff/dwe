@@ -1,8 +1,8 @@
-> Translated from: reference/templates.md @ 9fc9123bf6d1
+> Translated from: reference/templates.md @ cbca9972d437
 
 # Шаблоны
 
-Go-шаблоны (с библиотекой функций [go-sprout](https://docs.atom.codes/sprout/)) вычисляются в нескольких surface'ах devbox: элементах info-дашборда, декларативных командах, условиях `when:` пайплайнов, билтине `message` и render-паках IDE / AI. Эта страница — единый справочник по движку шаблонов, доступным хелперам и соглашениям, общим для всех мест.
+Go-шаблоны (с библиотекой функций [go-sprout](https://docs.atom.codes/sprout/)) вычисляются в нескольких surfaceах DWE: элементах info-дашборда, декларативных командах, условиях `when:` пайплайнов, билтине `message` и render-паках IDE / AI. Эта страница — единый справочник по движку шаблонов, доступным хелперам и соглашениям, общим для всех мест.
 
 ## Содержание
 
@@ -23,14 +23,14 @@ Go-шаблоны (с библиотекой функций [go-sprout](https://
 
 | Место | Синтаксис | Контекст | Заметки |
 |-------|-----------|----------|---------|
-| `info.yml` — `text`, `value`, `when` | `{{ ... }}` | `DevboxConfig` (типизированный) | См. [info.md](config/info.md) |
-| `devbox/commands/` — `cmd`, `argv`, `workdir`, `compose_args`, `env`, `messages.*`, `confirmation_text`, `files.*.path`/`candidates`, workflow-шаги `steps[].with[<key>]` / `steps[].when` | `${...}` и `{{ ... }}` | `RenderContext` (Raw + Params + Context + Files + Host) | См. [commands/](config/commands/index.md) |
-| `deploy.yml` / `lifecycle.yml` / `reset.yml` — `when: type: template, expr:` | `{{ ... }}` | Слитый `DevboxConfig` | Вычисляется на этапе планирования. См. [deploy](config/deploy/index.md) |
-| Билтин `message` — `text:` | `{{ ... }}` | Слитый `DevboxConfig` | См. [билтин message](config/deploy/builtins.md#message) |
-| `docker.yml` — `project_name` | Только `${...}` | Слитый `DevboxConfig.Raw` | Только dot-path lookups (без `{{ }}`-логики). См. [docker.md](config/docker.md) |
-| `devbox/templates/git/<pack>/**/*.tmpl` | `{{ ... }}` | `{.Project, .Service, .Resolved, .ServiceCfg, .Runtime, .Services, .Cfg}` | Строгий режим. См. [render/git.md](render/git.md) |
-| `devbox/templates/ide/<pack>/**/*.tmpl` | `{{ ... }}` | `{.Project, .Service, .Resolved, .ServiceCfg, .Runtime, .Services, .Cfg}` | Строгий режим. См. [render/ide.md](render/ide.md) |
-| `devbox/templates/ai/<pack>/**/*.tmpl` | `{{ ... }}` | `{.Project, .Service, .Resolved, .ServiceCfg, .Runtime, .Services, .Cfg}` | Строгий режим. См. [render/ai.md](render/ai.md) |
+| `info.yml` — `text`, `value`, `when` | `{{ ... }}` | `DweConfig` (типизированный) | См. [info.md](config/info.md) |
+| `workspace/commands/` — `cmd`, `argv`, `workdir`, `compose_args`, `env`, `messages.*`, `confirmation_text`, `files.*.path`/`candidates`, workflow-шаги `steps[].with[<key>]` / `steps[].when` | `${...}` и `{{ ... }}` | `RenderContext` (Raw + Params + Context + Files + Host) | См. [commands/](config/commands/index.md) |
+| `deploy.yml` / `lifecycle.yml` / `reset.yml` — `when: type: template, expr:` | `{{ ... }}` | Слитый `DweConfig` | Вычисляется на этапе планирования. См. [deploy](config/deploy/index.md) |
+| Билтин `message` — `text:` | `{{ ... }}` | Слитый `DweConfig` | См. [билтин message](config/deploy/builtins.md#message) |
+| `docker.yml` — `project_name` | Только `${...}` | Слитый `DweConfig.Raw` | Только dot-path lookups (без `{{ }}`-логики). См. [docker.md](config/docker.md) |
+| `workspace/templates/git/<pack>/**/*.tmpl` | `{{ ... }}` | `{.Project, .Service, .Resolved, .ServiceCfg, .Runtime, .Services, .Cfg}` | Строгий режим. См. [render/git.md](render/git.md) |
+| `workspace/templates/ide/<pack>/**/*.tmpl` | `{{ ... }}` | `{.Project, .Service, .Resolved, .ServiceCfg, .Runtime, .Services, .Cfg}` | Строгий режим. См. [render/ide.md](render/ide.md) |
+| `workspace/templates/ai/<pack>/**/*.tmpl` | `{{ ... }}` | `{.Project, .Service, .Resolved, .ServiceCfg, .Runtime, .Services, .Cfg}` | Строгий режим. См. [render/ai.md](render/ai.md) |
 | `params.*.default_from`, `context.*.from` | — | — | Только plain dot-paths (без template-выражений). |
 
 ## Два синтаксиса: shorthand и полные шаблоны
@@ -54,7 +54,7 @@ path: "${param.dump_dir}/${param.database}{{ if .Params.dump_date }}_{{ now | da
 
 | Выражение | Резолвится как |
 |-----------|----------------|
-| `${db.user}` | Dot-path в слитом devbox-конфиге (`Raw`) |
+| `${db.user}` | Dot-path в слитом dwe-конфиге (`Raw`) |
 | `${param.<name>}` | Разрешённое значение параметра |
 | `${context.<name>}` | Разрешённое значение контекста |
 | `${files.<id>.path}` | Абсолютный путь разрешённого файла-артефакта |
@@ -68,10 +68,10 @@ path: "${param.dump_dir}/${param.database}{{ if .Params.dump_date }}_{{ now | da
 
 ```yaml
 # скаляр в двойных кавычках: внутренний " нужно экранировать как \"
-path: ".devbox/logs/{{ now | date \"2006-01-02\" }}.log"
+path: ".dwe/logs/{{ now | date \"2006-01-02\" }}.log"
 
 # скаляр в одинарных кавычках: экранирование не требуется (рекомендуется для шаблонов)
-path: '.devbox/logs/{{ now | date "2006-01-02" }}.log'
+path: '.dwe/logs/{{ now | date "2006-01-02" }}.log'
 
 # литеральный блок-скаляр: экранирование не требуется
 cmd: |
@@ -88,24 +88,24 @@ cmd: |
 
 | Путь | Содержимое |
 |------|------------|
-| `.Raw` | Слитые `devbox.yml` + `defaults.yml` + `local.yml` как вложенная карта |
+| `.Raw` | Слитые `workspace.yml` + `defaults.yml` + `local.yml` как вложенная карта |
 | `.Params` | Разрешённые значения параметров (map по имени параметра) |
 | `.Context` | Разрешённые значения контекста (map по имени контекста) |
 | `.Files` | Разрешённые файлы-артефакты (map по file id; у каждого есть поле `.Path`) |
 | `.Host.UID` / `.Host.GID` | Строки UID/GID хоста |
 
-**Info, пайплайны, билтин `message`:** слитый типизированный `DevboxConfig` (например, `.Project.Name`, `((index .Services "main").Port "http")`, `(index .Services "catalog").Enabled`).
+**Info, пайплайны, билтин `message`:** слитый типизированный `DweConfig` (например, `.Project.Name`, `((index .Services "main").Port "http")`, `(index .Services "catalog").Enabled`).
 
 **Render-паки (git / ide / ai, строгие):**
 
 | Переменная | Источник |
 |------------|----------|
-| `.Project` | блок `project:` из `devbox.yml` |
+| `.Project` | блок `project:` из `workspace.yml` |
 | `.Service` | имя сервиса (ключ карты в `services:`) |
 | `.ServiceCfg` | эффективная конфигурация сервиса после резолва `extends` |
 | `.Runtime` | слитый блок `runtime` (`.Runtime.UseHTTPS`, `.Runtime.SPX.Path`). Per-service порты / хосты живут на каждой записи сервиса (см. `.Services` ниже). |
 | `.Services` | `map[string]ServiceConfig` по имени сервиса. Используйте `(index .Services "<name>")` для выборки; per-entry хелперы `.Port "<port-name>"` / `.Host "<host-name>"`. Подмножества по типу через `.AppServices` / `.ToolServices` / `.InfraServices`. |
-| `.Cfg` | слитый `DevboxConfig` (продвинутое). `.Cfg.Raw` — это конфиг-карта после слияния и devbox-нормализации (`services.*` инжектится из per-service файлов `service.yml`). Dot-синтаксис (`.Cfg.Raw.git.project_prefix`) работает только для identifier-safe ключей; используйте `{{ index .Cfg.Raw "my-key" }}` для ключей с дефисами, точками, ведущими цифрами и т.д. Предпочитайте выделенные поля выше для типовых случаев. |
+| `.Cfg` | слитый `DweConfig` (продвинутое). `.Cfg.Raw` — это конфиг-карта после слияния и dwe-нормализации (`services.*` инжектится из per-service файлов `service.yml`). Dot-синтаксис (`.Cfg.Raw.git.project_prefix`) работает только для identifier-safe ключей; используйте `{{ index .Cfg.Raw "my-key" }}` для ключей с дефисами, точками, ведущими цифрами и т.д. Предпочитайте выделенные поля выше для типовых случаев. |
 
 IDE- и AI-паки рендерятся в трекаемые файлы проекта. Избегайте потребления developer-local или секретных ключей через `.Cfg.Raw` в этих шаблонах — значения из `local.yml` дадут per-developer диффы. Git-хуки рендерятся в `.git/hooks/` (gitignored) и под это ограничение не попадают.
 
@@ -195,7 +195,7 @@ value: '{{ appURL ((index .Services "adminer").Host "web") ((index .Services "ma
 
 ## Резолверы scope команд
 
-Три дополнительных хелпера доступны **только** внутри шаблонов `devbox/commands/`. Они принимают сырые map'ы и ходят по dot-path'ам, возвращая `""` для отсутствующего ключа (без template-ошибки).
+Три дополнительных хелпера доступны **только** внутри шаблонов `workspace/commands/`. Они принимают сырые map'ы и ходят по dot-path'ам, возвращая `""` для отсутствующего ключа (без template-ошибки).
 
 | Хелпер | Сигнатура | Применение |
 |--------|-----------|------------|
@@ -242,7 +242,7 @@ value: '{{ appURL ((index .Services "adminer").Host "web") ((index .Services "ma
 
 - **Truthiness `when:`.** Отрендеренное значение `when:` truthy, если только оно не равно `""`, `"false"` или `"0"` (после trim). Сравнения, возвращающие Go-`bool`, рендерятся как `"true"`/`"false"`; сравнения, возвращающие integer-like значение (например, длины), рендерятся как десятичные строки.
 
-- **Никаких env, FS, сети или случайности.** Шаблоны вычисляются в герметичном FuncMap по дизайну. Если шаблону нужно состояние проекта, выставьте его через `DevboxConfig` (info / пайплайны) или через декларацию `context.<name>: from: <dot.path>` (команды).
+- **Никаких env, FS, сети или случайности.** Шаблоны вычисляются в герметичном FuncMap по дизайну. Если шаблону нужно состояние проекта, выставьте его через `DweConfig` (info / пайплайны) или через декларацию `context.<name>: from: <dot.path>` (команды).
 
 - **Микс `${...}` и `{{ ... }}` нормален.** Они разделяют один контекст и рендерятся за один проход — `${...}` переписывается в template-вызовы до парсинга.
 

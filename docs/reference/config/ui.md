@@ -1,8 +1,8 @@
 # `ui` configuration
 
-The optional `ui:` block in `devbox.yml` configures the interactive command browser used by `devbox commands` when invoked without an exact command ID.
+The optional `ui:` block in `workspace.yml` configures the interactive command browser used by `dwe commands` when invoked without an exact command ID.
 
-The block is loaded with the same lenient loader as the rest of `devbox.yml`: an absent block and unknown keys are silently ignored at load time. The dedicated `ui` validator (run via `devbox validate`) surfaces unknown keys as warnings and invalid values (e.g. a negative depth) as errors.
+The block is loaded with the same lenient loader as the rest of `workspace.yml`: an absent block and unknown keys are silently ignored at load time. The dedicated `ui` validator (run via `dwe validate`) surfaces unknown keys as warnings and invalid values (e.g. a negative depth) as errors.
 
 ## Schema
 
@@ -26,7 +26,7 @@ When `true` (default), fuzzy-filter sessions automatically collapse and dim subt
 
 ### `ui.commands.show_type_badges`
 
-When `true` (default), the right-hand command list shows a colour-coded type badge (`shell`, `script`, `workflow`, `service_exec`, `service_run`, `builtin`, `devbox`) next to each command ID. Set `false` to suppress badges on narrow or monochrome terminals.
+When `true` (default), the right-hand command list shows a colour-coded type badge (`shell`, `script`, `workflow`, `service_exec`, `service_run`, `builtin`, `dwe`) next to each command ID. Set `false` to suppress badges on narrow or monochrome terminals.
 
 ## Pointer semantics — omit vs explicit zero
 
@@ -39,9 +39,7 @@ Practical implications:
 ## Example
 
 ```yaml
-# devbox.yml
-schema_version: "2"
-
+# workspace.yml
 ui:
   commands:
     default_expanded_depth: 2
@@ -49,7 +47,7 @@ ui:
     show_type_badges: false
 ```
 
-Omit the block entirely to accept all defaults; existing `devbox.yml` files without a `ui:` block keep behaving identically.
+Omit the block entirely to accept all defaults; existing `workspace.yml` files without a `ui:` block keep behaving identically.
 
 ## Hotkeys
 
@@ -99,6 +97,6 @@ The browser inspects the terminal at startup and degrades gracefully:
 
 ## Related
 
-- [`devbox.md`](devbox.md) — top-level configuration overview
+- [`workspace.md`](workspace.md) — top-level configuration overview
 - [`commands/`](commands/index.md) — user command definitions
 - [`styles.md`](styles.md) — palette keys consumed by the type badges

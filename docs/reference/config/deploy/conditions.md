@@ -32,7 +32,7 @@ when:
 
 Shell commands also use hardcoded `sh -c` (not `ShellBin`) for portability.
 
-**Template expressions** — Go template syntax evaluated at plan time against the merged `DevboxConfig`:
+**Template expressions** — Go template syntax evaluated at plan time against the merged `DweConfig`:
 
 ```yaml
 when:
@@ -157,7 +157,7 @@ Use `check:` to assert that a step had its intended effect — e.g. that a migra
 The command definition once:
 
 ```yaml
-# devbox/commands/services/main/db.yml
+# workspace/commands/services/main/db.yml
 commands:
   dump-download:
     type: shell

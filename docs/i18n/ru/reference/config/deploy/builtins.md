@@ -1,4 +1,4 @@
-> Translated from: reference/config/deploy/builtins.md @ fc1021621845
+> Translated from: reference/config/deploy/builtins.md @ 2bdb5a2bec93
 
 # Доступные билтины
 
@@ -39,7 +39,7 @@
 
 | Параметр | Тип | По умолчанию | Описание |
 |----------|-----|--------------|----------|
-| `service` | string | обязательно | Имя папки сервиса из `devbox/services/<name>/` |
+| `service` | string | обязательно | Имя папки сервиса из `workspace/services/<name>/` |
 | `mode` | string | `skip` | `skip`, `error` или `recreate` |
 
 Разрешённый список директорий: `[src]` + `ServiceConfig.Dirs` (из `service.yml` сервиса). Каждый элемент должен быть непустым относительным путём, не выходящим за пределы `dir` сервиса.
@@ -106,7 +106,7 @@
 | Параметр | Тип | Описание |
 |----------|-----|----------|
 | `level` | string | `info`, `success`, `warning` или `error` (обязательно) |
-| `text` | string | Текст сообщения (обязательно); поддерживает [Go template-выражения](../../templates.md) на `DevboxConfig` |
+| `text` | string | Текст сообщения (обязательно); поддерживает [Go template-выражения](../../templates.md) на `DweConfig` |
 
 ```yaml
 - name: done
@@ -185,7 +185,7 @@
 
 ```yaml
 - name: stack-up
-  type: devbox
+  type: dwe
   cmd: "docker up"
   check:
     type: builtin
@@ -219,7 +219,7 @@
 | `docker_daemon_start` | Запускает именованный daemon-контейнер через `docker compose run -d`. Вызывается виртуальной командой `.start`, генерируемой из команд `type: daemon`. |
 | `docker_daemon_logs` | Тейлит логи daemon-контейнера на переднем плане. Вызывается виртуальной командой `.logs`, генерируемой из команд `type: daemon`. |
 | `docker_daemon_stop` | Останавливает именованный daemon-контейнер (идемпотентно). Вызывается виртуальной командой `.stop`, генерируемой из команд `type: daemon`. |
-| `docker_stop_remove_container` | Останавливает и удаляет именованный контейнер (`docker stop` + `docker rm -f`, оба идемпотентны при отсутствии контейнера). Вызывается синтетической фазой `container`, которую `devbox reset run --service <name>` препендит в каждый per-service пайплайн сброса. Параметры: `container_template` (string, обязателен; шаблон имени, разрешается через префикс проекта), `stop_timeout` (duration string, опционально, по умолчанию `10s`). При сбое остановки пробрасывает ошибку и НЕ пытается удалить. |
+| `docker_stop_remove_container` | Останавливает и удаляет именованный контейнер (`docker stop` + `docker rm -f`, оба идемпотентны при отсутствии контейнера). Вызывается синтетической фазой `container`, которую `dwe reset run --service <name>` препендит в каждый per-service пайплайн сброса. Параметры: `container_template` (string, обязателен; шаблон имени, разрешается через префикс проекта), `stop_timeout` (duration string, опционально, по умолчанию `10s`). При сбое остановки пробрасывает ошибку и НЕ пытается удалить. |
 | `daemons_reap` | Останавливает все daemon-контейнеры проекта. Автоматически инжектится движком как фаза `_auto_reap_daemons` в начало каждого пайплайна `stop` lifecycle. |
 
 ## Соглашение об именовании

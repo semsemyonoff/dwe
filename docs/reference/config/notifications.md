@@ -1,6 +1,6 @@
 # Notifications
 
-Native desktop notifications fired when long-running Devbox operations complete (success or failure). Notifications are a **user-level** concern — preferences live in a user config file outside the project (with an optional per-project override), not in `devbox.yml`.
+Native desktop notifications fired when long-running DWE operations complete (success or failure). Notifications are a **user-level** concern — preferences live in a user config file outside the project (with an optional per-project override), not in `workspace.yml`.
 
 See also: [Localization (i18n)](i18n.md) for translating user command descriptions and UI strings.
 
@@ -22,13 +22,13 @@ See also: [Localization (i18n)](i18n.md) for translating user command descriptio
 
 | Operation | Fires? | Per-op gate |
 |---|---|---|
-| `devbox deploy` | yes | `notify_deploy_enabled` |
-| `devbox run` | yes | `notify_run_enabled` |
-| `devbox restart` | **no** (the inner `run` phase is suppressed via `SkipNotify`) | — |
-| `devbox stop` | no | — |
-| `devbox reset` | no | — |
-| `devbox commands <id>` (top-level, with `notify: true` on the `CommandDef`) | yes | `notify_commands_enabled` |
-| `devbox commands <id>` (without `notify: true`) | no | — |
+| `dwe deploy` | yes | `notify_deploy_enabled` |
+| `dwe run` | yes | `notify_run_enabled` |
+| `dwe restart` | **no** (the inner `run` phase is suppressed via `SkipNotify`) | — |
+| `dwe stop` | no | — |
+| `dwe reset` | no | — |
+| `dwe commands <id>` (top-level, with `notify: true` on the `CommandDef`) | yes | `notify_commands_enabled` |
+| `dwe commands <id>` (without `notify: true`) | no | — |
 | Workflow sub-step (sequential or parallel) | **no** — always suppressed at runtime regardless of its own `notify:` field | — |
 | Deploy pipeline action invoking a command | **no** — same rule | — |
 | Daemon commands (`.start` / `.logs` / `.stop` / `.restart`) | `notify: true` is rejected at validation time | — |
@@ -41,15 +41,15 @@ The validator emits an info-level diagnostic when it can statically detect a `no
 
 Every command that can fire a notification accepts a `--silent` flag that suppresses the desktop notification for that single invocation. Useful for scripted / CI runs where the user is not at the desk to see the popup.
 
-The flag is available on: `devbox deploy run`, `devbox run`, `devbox snapshot create`, `devbox snapshot restore`, `devbox snapshot rollback`, `devbox snapshot remove`, and `devbox commands <id>`. It is a one-shot override — the user config and per-op gates are unchanged.
+The flag is available on: `dwe deploy run`, `dwe run`, `dwe snapshot create`, `dwe snapshot restore`, `dwe snapshot rollback`, `dwe snapshot remove`, and `dwe commands <id>`. It is a one-shot override — the user config and per-op gates are unchanged.
 
 ## File locations
 
 Two files are read in this precedence order (lower → higher):
 
-1. **Global user config** at `~/.config/devbox/config` on every OS (Linux, macOS, Windows). No platform-native location, no XDG fallback — one path everywhere. Missing file is silently treated as empty. If Devbox ever writes it, mode is `0600`.
+1. **Global user config** at `~/.config/workspace/config` on every OS (Linux, macOS, Windows). No platform-native location, no XDG fallback — one path everywhere. Missing file is silently treated as empty. If DWE ever writes it, mode is `0600`.
 
-2. **Per-project override** at `<project>/.devbox/config`. The `.devbox/` directory is already gitignored by Devbox. Missing file is silently treated as empty.
+2. **Per-project override** at `<project>/.dwe/config`. The `.dwe/` directory is already gitignored by DWE. Missing file is silently treated as empty.
 
 3. **Environment variables** override both files (highest precedence).
 
@@ -71,14 +71,14 @@ Flat `key = value` lines:
 | Key | Type | Default | Purpose |
 |---|---|---|---|
 | `notify_enabled` | bool | `true` | Master switch — when `false`, no notification fires |
-| `notify_run_enabled` | bool | `true` | Gate for `devbox run` |
-| `notify_deploy_enabled` | bool | `true` | Gate for `devbox deploy` |
+| `notify_run_enabled` | bool | `true` | Gate for `dwe run` |
+| `notify_deploy_enabled` | bool | `true` | Gate for `dwe deploy` |
 | `notify_commands_enabled` | bool | `true` | Gate for user commands with `notify: true` |
 | `notify_channels` | list | `native` | Comma-separated backend names; only `native` is wired in MVP |
 
 ## Environment variables
 
-Each key has a matching `DEVBOX_<UPPER_SNAKE>` env var that overrides whatever the files set:
+Each key has a matching `DWE_<UPPER_SNAKE>` env var that overrides whatever the files set:
 
 | Env var | Overrides |
 |---|---|
@@ -98,7 +98,7 @@ A notification fires only if **all** of the following are true:
 2. The matching per-op key is `true` (`notify_deploy_enabled`, `notify_run_enabled`, or `notify_commands_enabled`).
 3. `notify_channels` is non-empty and contains at least one known backend (`native` in MVP).
 4. The environment is interactive (see next section).
-5. For `devbox commands`: the `CommandDef` has `notify: true` **and** the command is the top-level invocation (`SkipNotify == false`).
+5. For `dwe commands`: the `CommandDef` has `notify: true` **and** the command is the top-level invocation (`SkipNotify == false`).
 
 Any miss → silent no-op.
 
@@ -118,9 +118,9 @@ The native backend is bounded to **one in-flight notification at a time** per CL
 
 ## Platform notes
 
-**macOS** uses [`terminal-notifier`](https://github.com/julienXX/terminal-notifier) when it's on `PATH` (install via `brew install terminal-notifier`) and falls back to `osascript` otherwise. The Devbox logo is passed as `-contentImage` so it renders as a thumbnail inside the notification card — modern macOS pins the small app-icon slot to terminal-notifier's own bundle icon and silently ignores `-appIcon` overrides. The `osascript` fallback cannot carry a custom icon at all and shows Script Editor's icon instead.
+**macOS** uses [`terminal-notifier`](https://github.com/julienXX/terminal-notifier) when it's on `PATH` (install via `brew install terminal-notifier`) and falls back to `osascript` otherwise. The DWE logo is passed as `-contentImage` so it renders as a thumbnail inside the notification card — modern macOS pins the small app-icon slot to terminal-notifier's own bundle icon and silently ignores `-appIcon` overrides. The `osascript` fallback cannot carry a custom icon at all and shows Script Editor's icon instead.
 
-If notifications stop appearing as banners on macOS despite `terminal-notifier -list Devbox` showing them as delivered, the macOS Notification Center daemon is stuck. Fix with:
+If notifications stop appearing as banners on macOS despite `terminal-notifier -list DWE` showing them as delivered, the macOS Notification Center daemon is stuck. Fix with:
 
 ```sh
 killall NotificationCenter
@@ -132,10 +132,10 @@ killall NotificationCenter
 
 ## Sample config
 
-A common setup: notify on deploy and ad-hoc commands, but stay quiet for the inner-loop `devbox run` cycle.
+A common setup: notify on deploy and ad-hoc commands, but stay quiet for the inner-loop `dwe run` cycle.
 
 ```
-# ~/.config/devbox/config  (same on every OS)
+# ~/.config/workspace/config  (same on every OS)
 
 notify_enabled          = true
 notify_deploy_enabled   = true
@@ -150,7 +150,7 @@ To mute everything globally without touching per-op flags:
 notify_enabled = false
 ```
 
-To mute just for one project (per-project override at `<project>/.devbox/config`):
+To mute just for one project (per-project override at `<project>/.dwe/config`):
 
 ```
 notify_run_enabled = false
@@ -162,20 +162,20 @@ The native backend renders a fixed, branded format. The project name (when known
 
 | Outcome | Title | Body |
 |---|---|---|
-| Success | `✓ Devbox · <project>: <op> succeeded` | `<duration>` |
-| Failure | `✗ Devbox · <project>: <op> failed` | `<duration>` + (on a new line) truncated error message |
+| Success | `✓ DWE · <project>: <op> succeeded` | `<duration>` |
+| Failure | `✗ DWE · <project>: <op> failed` | `<duration>` + (on a new line) truncated error message |
 
-When the event has no associated project (rare — typically only synthetic test events), the `· <project>` segment is omitted and the title collapses to `✓ Devbox: <op> succeeded` / `✗ Devbox: <op> failed`.
+When the event has no associated project (rare — typically only synthetic test events), the `· <project>` segment is omitted and the title collapses to `✓ DWE: <op> succeeded` / `✗ DWE: <op> failed`.
 
 Examples:
 
 ```
-✓ Devbox · acme-api: deploy succeeded
+✓ DWE · acme-api: deploy succeeded
 1m 42s
 ```
 
 ```
-✗ Devbox · acme-api: run failed
+✗ DWE · acme-api: run failed
 3.2s
 exit status 1: migration aborted: relation "users" does not exist
 ```
@@ -184,14 +184,14 @@ Error messages are clipped to the first line and truncated to 200 runes (a trail
 
 ## macOS icon and app name
 
-On macOS, the Devbox icon and the `Devbox` app name in the notification banner require [`terminal-notifier`](https://github.com/julienXX/terminal-notifier) to be installed:
+On macOS, the DWE icon and the `DWE` app name in the notification banner require [`terminal-notifier`](https://github.com/julienXX/terminal-notifier) to be installed:
 
 ```
 brew install terminal-notifier
 ```
 
-When `terminal-notifier` is present, beeep delegates to it and the embedded Devbox icon and `AppName = "Devbox"` are honored.
+When `terminal-notifier` is present, beeep delegates to it and the embedded DWE icon and `AppName = "DWE"` are honored.
 
-Without it, beeep falls back to AppleScript (`osascript`), which on recent macOS releases shows the sender as **Script Editor** and ignores the icon. Functionality is unaffected — only the visual presentation degrades. The title text (which already carries the `Devbox · <project>` prefix) remains correct in either path.
+Without it, beeep falls back to AppleScript (`osascript`), which on recent macOS releases shows the sender as **Script Editor** and ignores the icon. Functionality is unaffected — only the visual presentation degrades. The title text (which already carries the `DWE · <project>` prefix) remains correct in either path.
 
 Linux (libnotify) and Windows (toast) honor the embedded icon and app name without any extra setup.

@@ -1,8 +1,8 @@
 # User config
 
-User-level Devbox preferences live outside any project, in a flat `key = value` file. They are read by every `devbox` invocation regardless of the current working directory and never tracked by git.
+User-level DWE preferences live outside any project, in a flat `key = value` file. They are read by every `dwe` invocation regardless of the current working directory and never tracked by git.
 
-Settings cover preferences that are inherently personal — preferred language, mermaid theme for the docs TUI, desktop-notification gates, and overrides for the absolute paths of external binaries (`docker`, `git`, `devbox`, `shell`, `mmdc`). Nothing here belongs in a project's `devbox.yml`, `defaults.yml`, or `local.yml` — those carry project shape, not per-developer machine state.
+Settings cover preferences that are inherently personal — preferred language, mermaid theme for the docs TUI, desktop-notification gates, and overrides for the absolute paths of external binaries (`docker`, `git`, `dwe`, `shell`, `mmdc`). Nothing here belongs in a project's `workspace.yml`, `defaults.yml`, or `local.yml` — those carry project shape, not per-developer machine state.
 
 ## Contents
 
@@ -21,9 +21,9 @@ Settings cover preferences that are inherently personal — preferred language, 
 
 Two files are read in this precedence order (lower → higher), then env vars on top:
 
-1. **Global user config** at `~/.config/devbox/config` on every OS (Linux, macOS, Windows). One path everywhere — no platform-native location, no XDG fallback. Missing file is silently treated as empty. If Devbox ever writes it, mode is `0600`.
+1. **Global user config** at `~/.config/workspace/config` on every OS (Linux, macOS, Windows). One path everywhere — no platform-native location, no XDG fallback. Missing file is silently treated as empty. If DWE ever writes it, mode is `0600`.
 
-2. **Per-project override** at `<project>/.devbox/config`. The `.devbox/` directory is already gitignored by Devbox; this file is meant for a developer to pin overrides for a single project without touching the global file. Missing file is silently treated as empty.
+2. **Per-project override** at `<project>/.dwe/config`. The `.dwe/` directory is already gitignored by DWE; this file is meant for a developer to pin overrides for a single project without touching the global file. Missing file is silently treated as empty.
 
 3. **Environment variables** override both files.
 
@@ -44,21 +44,21 @@ Flat `key = value` lines:
 
 ### Binary overrides
 
-Override the absolute path Devbox uses when invoking an external binary. Useful when the tool lives in a non-standard location or you want to pin a specific version per project.
+Override the absolute path DWE uses when invoking an external binary. Useful when the tool lives in a non-standard location or you want to pin a specific version per project.
 
 | Key | Default | Used for |
 |---|---|---|
 | `binary_docker` | `docker` | every Docker / Compose call |
 | `binary_git` | `git` | git-aware operations (render git hooks, status probes) |
-| `binary_devbox` | `devbox` | self-references emitted by Devbox (e.g. tip lines, generated wrapper scripts) |
+| `binary_dwe` | `dwe` | self-references emitted by DWE (e.g. tip lines, generated wrapper scripts) |
 | `binary_shell` | `sh` | the shell used to evaluate `when:` predicates and embedded scripts |
-| `binary_mmdc` | `mmdc` | mermaid diagram rendering in the `devbox docs` TUI |
+| `binary_mmdc` | `mmdc` | mermaid diagram rendering in the `dwe docs` TUI |
 
 The pattern `binary_<name> = <absolute path>` also feeds the runtime linter validators — any binary an `env/runtime` check looks up (`shellcheck`, `yamllint`, etc.) can be overridden the same way.
 
 > Note: deploy and condition step `when:` predicates intentionally use hardcoded `sh` for portability and ignore `binary_shell`. The override applies to every other shell invocation.
 
-Empty paths are rejected at parse time. Missing files / non-executable paths surface as diagnostics from `devbox validate` (severity `error`) with a hint pointing back at the override entry.
+Empty paths are rejected at parse time. Missing files / non-executable paths surface as diagnostics from `dwe validate` (severity `error`) with a hint pointing back at the override entry.
 
 ```
 binary_docker = /opt/homebrew/bin/docker
@@ -72,13 +72,13 @@ binary_mmdc   = /Users/me/.npm-global/bin/mmdc
 |---|---|---|---|
 | `language` | string | unset → `$LANG` → `en` | Preferred locale for translated strings |
 
-Two-letter language code (`en`, `ru`, `de`, …). Controls the locale resolution used by user commands, UI strings, and `devbox docs`. See [Localization (i18n)](i18n.md) for the full resolution ladder and per-namespace fallback rules.
+Two-letter language code (`en`, `ru`, `de`, …). Controls the locale resolution used by user commands, UI strings, and `dwe docs`. See [Localization (i18n)](i18n.md) for the full resolution ladder and per-namespace fallback rules.
 
 ### Mermaid theme
 
 | Key | Type | Default | Purpose |
 |---|---|---|---|
-| `mermaid_theme` | enum | `auto` | Theme used when rendering mermaid diagrams in the `devbox docs` TUI |
+| `mermaid_theme` | enum | `auto` | Theme used when rendering mermaid diagrams in the `dwe docs` TUI |
 
 Valid values: `auto` (follow the terminal background), `dark`, `light`. Empty string also resolves to `auto`. Any other value is a parse error.
 
@@ -88,7 +88,7 @@ The notification-related keys (`notify_enabled`, `notify_run_enabled`, `notify_d
 
 ## Environment variables
 
-Each typed key has a matching `DEVBOX_<UPPER_SNAKE>` env var that overrides whatever the files set:
+Each typed key has a matching `DWE_<UPPER_SNAKE>` env var that overrides whatever the files set:
 
 | Env var | Overrides |
 |---|---|
@@ -106,8 +106,8 @@ Binary overrides have no env-var equivalent — set them in the config file.
 
 ```
 embedded defaults
-  → global ~/.config/devbox/config
-    → per-project <project>/.devbox/config
+  → global ~/.config/workspace/config
+    → per-project <project>/.dwe/config
       → environment variables
 ```
 
@@ -116,7 +116,7 @@ Later layers win. Maps merge per-key; list-valued keys (`notify_channels`) repla
 ## Sample config
 
 ```
-# ~/.config/devbox/config — same path on every OS
+# ~/.config/workspace/config — same path on every OS
 
 # Locale and TUI
 language       = ru
@@ -137,7 +137,7 @@ notify_channels         = native
 A per-project file that pins only one knob differently:
 
 ```
-# <project>/.devbox/config
+# <project>/.dwe/config
 
 notify_run_enabled = false
 ```

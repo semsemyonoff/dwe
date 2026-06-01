@@ -1,6 +1,6 @@
 # Render Reference
 
-`devbox render` produces files derived from the merged devbox config. It is the single entry point for code-generated artifacts — none of these files should be hand-edited; re-run the corresponding subcommand instead.
+`dwe render` produces files derived from the merged DWE config. It is the single entry point for code-generated artifacts — none of these files should be hand-edited; re-run the corresponding subcommand instead.
 
 ## Contents
 
@@ -14,21 +14,21 @@
 
 | Command | Output | Source |
 |---------|--------|--------|
-| `devbox render env` | `.env` content (stdout or `--out <path>`) | `exports.env` rules in `devbox/defaults.yml` + system vars |
-| `devbox render ide` | Per-service IDE config files inside each service hub | Template packs under `devbox/templates/ide/<pack>/` driven by `manifest.yml` |
-| `devbox render ai` | Hub-level agent docs (`AGENTS.md`, `CLAUDE.md` symlink, …) | Template packs under `devbox/templates/ai/<pack>/` driven by `manifest.yml` |
-| `devbox render git` | Per-service shell git hooks at `<svc.Dir>/src/.git/hooks/<basename>` (mode `0755`) | Template packs under `devbox/templates/git/<pack>/` driven by `manifest.yml` |
+| `dwe render env` | `.env` content (stdout or `--out <path>`) | `exports.env` rules in `workspace/defaults.yml` + system vars |
+| `dwe render ide` | Per-service IDE config files inside each service hub | Template packs under `workspace/templates/ide/<pack>/` driven by `manifest.yml` |
+| `dwe render ai` | Hub-level agent docs (`AGENTS.md`, `CLAUDE.md` symlink, …) | Template packs under `workspace/templates/ai/<pack>/` driven by `manifest.yml` |
+| `dwe render git` | Per-service shell git hooks at `<svc.Dir>/src/.git/hooks/<basename>` (mode `0755`) | Template packs under `workspace/templates/git/<pack>/` driven by `manifest.yml` |
 
-All four subcommands read the same merged config (`devbox.yml` → `devbox/defaults.yml` → `devbox/local.yml`, with per-service declarations from `devbox/services/<name>/service.yml` joined in). They differ in what they iterate and where they write.
+All four subcommands read the same merged config (`workspace.yml` → `workspace/defaults.yml` → `workspace/local.yml`, with per-service declarations from `workspace/services/<name>/service.yml` joined in). They differ in what they iterate and where they write.
 
 ## Common pipeline
 
 ```mermaid
 flowchart LR
-  L1[devbox.yml] --> M
-  L2[devbox/defaults.yml] --> M
-  L3[devbox/local.yml] --> M
-  S["devbox/services/*/service.yml"] --> M
+  L1[workspace.yml] --> M
+  L2[workspace/defaults.yml] --> M
+  L3[workspace/local.yml] --> M
+  S["workspace/services/*/service.yml"] --> M
   M[("Merged config")]
 
   M --> E[render env]
@@ -49,7 +49,7 @@ Each subcommand:
    - `env` — single artifact, no selection.
    - `ide` / `ai` / `git` — iterates services, applies a selection policy, and optionally narrows to one service via the `[service]` argument.
 3. Writes output files. Where they go depends on the subcommand:
-   - `render ide` and `render ai` write inside each service's hub directory, anchored to the project root (the directory containing `devbox.yml`), and enforce path-safety boundaries.
+   - `render ide` and `render ai` write inside each service's hub directory, anchored to the project root (the directory containing `workspace.yml`), and enforce path-safety boundaries.
    - `render git` writes inside `<svc.Dir>/src/.git/hooks/` for each service whose `src/.git` is a real directory; the destination is never tracked by git.
    - `render env` writes to stdout by default, or to the `--out <path>` argument as given. The `--out` path is interpreted relative to the current working directory, not the project root — pass an absolute path if you want a deterministic location regardless of where the command is invoked from.
 
@@ -93,18 +93,18 @@ The manifest is loaded with strict YAML decode (`yaml.Decoder.KnownFields(true)`
 
 ## Local overrides
 
-Any template pack `devbox/templates/<kind>/<pack>/<rel>` can be overridden on a per-file basis by a sibling shadow pack at `devbox/templates/<kind>/<pack>.local/<rel>`. The resolver applied by all three rendering subcommands is:
+Any template pack `workspace/templates/<kind>/<pack>/<rel>` can be overridden on a per-file basis by a sibling shadow pack at `workspace/templates/<kind>/<pack>.local/<rel>`. The resolver applied by all three rendering subcommands is:
 
-1. Check `devbox/templates/<kind>/<pack>.local/<rel>`:
-   - regular file → use it; the renderer emits one info line `using local override: devbox/templates/<kind>/<pack>.local/<rel>`.
+1. Check `workspace/templates/<kind>/<pack>.local/<rel>`:
+   - regular file → use it; the renderer emits one info line `using local override: workspace/templates/<kind>/<pack>.local/<rel>`.
    - exists but is a directory or symlink → hard error; the override does not silently fall back to the canonical pack (so a bad override surfaces itself).
    - missing → fall through.
-2. Check `devbox/templates/<kind>/<pack>/<rel>`:
+2. Check `workspace/templates/<kind>/<pack>/<rel>`:
    - regular file → use it.
    - exists but is a directory or symlink → hard error with the offending path named.
    - missing → wrapped `os.ErrNotExist`.
 
-The `<pack>.local/` directory is a **sibling** of the canonical pack, not a child. It lives inside the tracked `devbox/templates/<kind>/` directory and is gitignored by pattern (`devbox/templates/*/*.local/` or a broader `*.local/` rule — recommend adding to the project `.gitignore`).
+The `<pack>.local/` directory is a **sibling** of the canonical pack, not a child. It lives inside the tracked `workspace/templates/<kind>/` directory and is gitignored by pattern (`workspace/templates/*/*.local/` or a broader `*.local/` rule — recommend adding to the project `.gitignore`).
 
 The override pack only needs to contain the files being overridden — it is not a full pack. `manifest.yml` is read **only** from the canonical pack; an override cannot rewrite the manifest, just substitute individual `from:` sources.
 
@@ -112,17 +112,17 @@ This mirrors the existing user-local override convention in the project:
 
 | Canonical (tracked) | Local sibling (gitignored) |
 |---------------------|----------------------------|
-| `devbox/devbox.yml` | `devbox/local.yml` (documented in [services reference](../config/services/index.md)) |
-| `devbox/docker.yml` | `devbox/docker.local.yml` |
-| `devbox/templates/<kind>/<pack>/` | `devbox/templates/<kind>/<pack>.local/` |
+| `workspace/workspace.yml` | `workspace/local.yml` (documented in [services reference](../config/services/index.md)) |
+| `workspace/docker.yml` | `workspace/docker.local.yml` |
+| `workspace/templates/<kind>/<pack>/` | `workspace/templates/<kind>/<pack>.local/` |
 
-`.devbox/` (the runtime directory) is never used for user-authored overrides — it is reserved for devbox-managed state (`state.yml`, `deploy.lock`, `logs/`).
+`.dwe/` (the runtime directory) is never used for user-authored overrides — it is reserved for DWE-managed state (`state.yml`, `deploy.lock`, `logs/`).
 
 ### Input vs output
 
 The override is an **input substitution**, not an output redirection:
 
-- The override file at `devbox/templates/<kind>/<pack>.local/<rel>` is gitignored by the `.local/` pattern and never committed.
+- The override file at `workspace/templates/<kind>/<pack>.local/<rel>` is gitignored by the `.local/` pattern and never committed.
 - The rendered **output** still lands at the manifest-declared `to`.
 
 What that means in practice:
@@ -143,7 +143,7 @@ For IDE/AI, a local override that produces a different rendered output is a work
 
 ## Related references
 
-- [`devbox.yml` / `defaults.yml` / `local.yml`](../config/devbox.md) — merged config layers and dot-path resolution (used by `render env`)
-- [service definitions (`devbox/services/*/service.yml`)](../config/services/index.md) — service definitions, `ide` / `ai` / `git` blocks, `extends` chains
+- [`workspace.yml` / `defaults.yml` / `local.yml`](../config/workspace.md) — merged config layers and dot-path resolution (used by `render env`)
+- [service definitions (`workspace/services/*/service.yml`)](../config/services/index.md) — service definitions, `ide` / `ai` / `git` blocks, `extends` chains
 - [Templates](../templates.md) — Go template syntax, sprout helpers, render context (shared with info / commands / pipelines)
-- CLI reference: [`devbox render`](../cli/devbox_render.md), [`devbox render env`](../cli/devbox_render_env.md), [`devbox render ide`](../cli/devbox_render_ide.md), [`devbox render ai`](../cli/devbox_render_ai.md), [`devbox render git`](../cli/devbox_render_git.md)
+- CLI reference: [`dwe render`](../cli/dwe_render.md), [`dwe render env`](../cli/dwe_render_env.md), [`dwe render ide`](../cli/dwe_render_ide.md), [`dwe render ai`](../cli/dwe_render_ai.md), [`dwe render git`](../cli/dwe_render_git.md)

@@ -1,4 +1,4 @@
-> Translated from: reference/config/validate.md @ 0c4bfb9059f0
+> Translated from: reference/config/validate.md @ 91de69852402
 
 # validate.yml
 
@@ -28,10 +28,10 @@
 
 ## Назначение
 
-`devbox/validate.yml` объявляет проверки готовности уровня проекта. CLI потребляет их из двух точек входа:
+`workspace/validate.yml` объявляет проверки готовности уровня проекта. CLI потребляет их из двух точек входа:
 
-- `devbox validate` — запускает каждую проверку (плюс YAML-shape валидаторы в доменах `config`, `templates` и `commands`, плюс окружающие probe'ы в домене `env`) и репортит диагностику.
-- Хук preflight на `devbox deploy run`, `devbox run`, `devbox stop` и `devbox restart` — запускает подмножество проверок, связанных с соответствующей стадией, до любого side-эффекта на Docker, git или файловую систему.
+- `dwe validate` — запускает каждую проверку (плюс YAML-shape валидаторы в доменах `config`, `templates` и `commands`, плюс окружающие probe'ы в домене `env`) и репортит диагностику.
+- Хук preflight на `dwe deploy run`, `dwe run`, `dwe stop` и `dwe restart` — запускает подмножество проверок, связанных с соответствующей стадией, до любого side-эффекта на Docker, git или файловую систему.
 
 Цель — поднять наверх проблемы, которые пользователь может починить («вы не залогинены в ghcr.io», «DATABASE_URL пуст в `.env`», «VPN лёг») ДО того, как шаги деплоя упадут на середине с криптическими ошибками.
 
@@ -42,11 +42,11 @@
 | Домен | Источник | Настраивается? |
 |--------|--------|---------------|
 | `env.*` | Хардкод на Go (`internal/core/validate/env/`) | Нет — семь фиксированных probe'ов |
-| `checks.*` | Записи `devbox/validate.yml` | Да — декларативно |
-| `linters.*` | Встроенные адаптеры (shellcheck, hadolint) + блок `linters:` в `devbox/validate.yml` | Да — декларативно |
-| `snapshot.*` | Директории снапшотов на диске + `devbox/snapshot.yml` | Нет — фиксированные валидаторы на каждое имя снапшота |
+| `checks.*` | Записи `workspace/validate.yml` | Да — декларативно |
+| `linters.*` | Встроенные адаптеры (shellcheck, hadolint) + блок `linters:` в `workspace/validate.yml` | Да — декларативно |
+| `snapshot.*` | Директории снапшотов на диске + `workspace/snapshot.yml` | Нет — фиксированные валидаторы на каждое имя снапшота |
 
-Probe'ы `env.*` это: `env.docker_bin`, `env.docker_daemon`, `env.docker_compose`, `env.git_bin`, `env.shell_bin`, `env.project_perms`, `env.ports_free`. Они запускаются на каждом вызове `devbox validate` и на каждом preflight (независимо от стадии — у env нет понятия стадии), с одним исключением: `env.ports_free` сам пропускает себя на стадии `stop`, поскольку конфликты портов нерелевантны при сворачивании проекта.
+Probe'ы `env.*` это: `env.docker_bin`, `env.docker_daemon`, `env.docker_compose`, `env.git_bin`, `env.shell_bin`, `env.project_perms`, `env.ports_free`. Они запускаются на каждом вызове `dwe validate` и на каждом preflight (независимо от стадии — у env нет понятия стадии), с одним исключением: `env.ports_free` сам пропускает себя на стадии `stop`, поскольку конфликты портов нерелевантны при сворачивании проекта.
 
 `env.ports_free` читает каждый хост-порт, объявленный под `services.<name>.ports` (только enabled-сервисы), и проверяет, можно ли каждый забиндить. Он один раз опрашивает `docker ps --format=json`, чтобы узнать, какие контейнеры держат какие порты сейчас: контейнеры с лейблом `com.docker.compose.project=<наш проект>` трактуются как «наши» (compose переиспользует их на `up`); контейнеры из любого другого compose-проекта триггерят диагностику конфликта, называющую чужой контейнер и проект; для портов, не удерживаемых ни одним контейнером, probe откатывается к `net.Listen`, чтобы детектировать не-Docker процессы. Недоступность Docker проходит молча — `env.docker_daemon` покрывает этот случай.
 
@@ -111,19 +111,19 @@ checks:
 
 | Стадия | Триггеры |
 |-------|--------------|
-| `deploy` | `devbox deploy run`, `devbox validate --stage deploy` |
-| `run` | `devbox run`, `devbox restart` (нога run), `devbox validate --stage run` |
-| `stop` | `devbox stop`, `devbox restart` (нога stop), `devbox validate --stage stop` |
-| `command` | `devbox validate --stage command` (зарезервировано на будущее; автоматического хука нет) |
+| `deploy` | `dwe deploy run`, `dwe validate --stage deploy` |
+| `run` | `dwe run`, `dwe restart` (нога run), `dwe validate --stage run` |
+| `stop` | `dwe stop`, `dwe restart` (нога stop), `dwe validate --stage stop` |
+| `command` | `dwe validate --stage command` (зарезервировано на будущее; автоматического хука нет) |
 
-`devbox validate` без `--stage` запускает каждую проверку независимо от стадии.
+`dwe validate` без `--stage` запускает каждую проверку независимо от стадии.
 
 Неизвестные стадии принимаются (открытое перечисление), но производят **предупреждение** на загрузке, чтобы пользователи ловили опечатки рано:
 
 - `stage "deplooy" is not a known preflight stage` (с предложением, если близко по расстоянию Левенштейна)
 - Особые заметки: `restart` композитный (использует обе стадии stop и run, отдельного preflight нет); `reset` использует только стадию stop
 
-Неизвестные стадии всё ещё можно вызвать явно через `devbox validate --stage <name>`, если нужно (например, для кастомных workflow'ов валидации).
+Неизвестные стадии всё ещё можно вызвать явно через `dwe validate --stage <name>`, если нужно (например, для кастомных workflow'ов валидации).
 
 ## Доступные билтины
 
@@ -181,11 +181,11 @@ checks:
 
 ## Проверки `type: command`
 
-Запись проверки с `type: command` диспатчится в декларативную пользовательскую команду из `devbox/commands/`. Блок `with:` пробрасывается как payload `params:` пользовательской команды — ровно как `devbox commands <id> --set k=v`.
+Запись проверки с `type: command` диспатчится в декларативную пользовательскую команду из `workspace/commands/`. Блок `with:` пробрасывается как payload `params:` пользовательской команды — ровно как `dwe commands <id> --set k=v`.
 
 Ограничения, проверяемые на загрузке:
 
-- `type:` целевой команды ДОЛЖЕН быть `shell` или `script`. Цели workflow, service_exec, service_run, devbox и builtin-as-command отвергаются с: `checks may only invoke user commands of type shell or script (got: <type>)`.
+- `type:` целевой команды ДОЛЖЕН быть `shell` или `script`. Цели workflow, service_exec, service_run, dwe и builtin-as-command отвергаются с: `checks may only invoke user commands of type shell or script (got: <type>)`.
 - Неизвестный ID команды отвергается с: `unknown command: <id>`.
 
 Выполнение залочено:
@@ -235,11 +235,11 @@ checks:
     description: Seed dump exists for first-run import
     stages: [deploy]
     severity: warning
-    hint: Download from s3://team-dumps/latest.sql and place at .devbox/seed.sql
+    hint: Download from s3://team-dumps/latest.sql and place at .dwe/seed.sql
     type: builtin
     cmd: file_exists
     with:
-      path: .devbox/seed.sql
+      path: .dwe/seed.sql
 ```
 
 **3. Необходимые секреты сконфигурированы (env_keys_present):**
@@ -285,7 +285,7 @@ checks:
     cmd: deps.check
 ```
 
-Где `devbox/commands/deps.yml` объявляет:
+Где `workspace/commands/deps.yml` объявляет:
 
 ```yaml
 group: deps
@@ -315,20 +315,20 @@ commands:
 
 ## CLI-флаги
 
-- `devbox validate` — запускает `config.*`, `templates.*`, `commands.*`, `env.*` и все `checks.*`. Опциональный позиционный scope сужает запуск (например, `devbox validate env`, `devbox validate checks ghcr-login`).
-- `devbox validate --stage <name>` — локальный флаг команды `validate`. Фильтрует `checks.*` по стадии. `env.*` и другие домены не затрагиваются (у них нет стадий).
-- `devbox validate --strict` — трактовать предупреждения как ошибки (exit 1).
-- `devbox validate --quiet` — скрыть строки ok / info.
+- `dwe validate` — запускает `config.*`, `templates.*`, `commands.*`, `env.*` и все `checks.*`. Опциональный позиционный scope сужает запуск (например, `dwe validate env`, `dwe validate checks ghcr-login`).
+- `dwe validate --stage <name>` — локальный флаг команды `validate`. Фильтрует `checks.*` по стадии. `env.*` и другие домены не затрагиваются (у них нет стадий).
+- `dwe validate --strict` — трактовать предупреждения как ошибки (exit 1).
+- `dwe validate --quiet` — скрыть строки ok / info.
 - `--skip-preflight` — локальный флаг на `deploy run`, `run`, `stop` и `restart`. Когда задан, preflight печатает `preflight skipped (--skip-preflight)` в stderr и НЕ запускает валидаторов. Флаг — это настоящий байпас: проверки `type: command` вызывают произвольные пользовательские скрипты, поэтому CLI не запускает их под флагом, который пользователь назвал «skip».
 
 ## Диагностический вывод
 
-Диагностики разделяют модель рендеринга и severity, используемую остальным `devbox validate`:
+Диагностики разделяют модель рендеринга и severity, используемую остальным `dwe validate`:
 
 - `Severity`: из `entry.severity` (по умолчанию `error`).
 - `Domain`: `checks` (или `env` для хардкод-probe'ов).
 - `Target`: `id` записи.
-- `File`: `devbox/validate.yml` (записи) или пусто (env-probe'ы).
+- `File`: `workspace/validate.yml` (записи) или пусто (env-probe'ы).
 - `Line`: номер строки (1-based) первого ключа записи (записи).
 - `Message`: строка ошибки билтина / команды.
 - `Hint`: из `entry.hint`.
@@ -337,7 +337,7 @@ Preflight пишет ту же таблицу диагностики в stderr �
 
 ## Внешние линтеры
 
-Домен `linters.*` запускает хорошо известные внешние линтеры (shellcheck, hadolint) и произвольные адаптеры `type: generic` как часть `devbox validate`. Линтеры **не** запускаются в preflight — preflight отвечает на «можем ли мы запуститься?», а не «чист ли код?».
+Домен `linters.*` запускает хорошо известные внешние линтеры (shellcheck, hadolint) и произвольные адаптеры `type: generic` как часть `dwe validate`. Линтеры **не** запускаются в preflight — preflight отвечает на «можем ли мы запуститься?», а не «чист ли код?».
 
 ### Раскладка проводки
 
@@ -346,7 +346,7 @@ linters:
   shellcheck:
     enabled: true
     bin: shellcheck
-    paths: [devbox/scripts, scripts]
+    paths: [workspace/scripts, scripts]
     extensions: [.sh, .bash]
     flags: [--severity=warning]
     severity: warning
@@ -381,7 +381,7 @@ linters:
 
 | ID | Bin по умолчанию | Paths по умолчанию | Extensions по умолчанию | Filenames по умолчанию | Зарезервированные флаги |
 |----|-------------|---------------|--------------------|--------------------|----------------|
-| `shellcheck` | `shellcheck` | `devbox/scripts`, `scripts` | `.sh`, `.bash` | — | `--format`, `-f` |
+| `shellcheck` | `shellcheck` | `workspace/scripts`, `scripts` | `.sh`, `.bash` | — | `--format`, `-f` |
 | `hadolint` | `hadolint` | `.` | `.dockerfile` | `Dockerfile` | `--format`, `-f` |
 
 ### `type: generic`
@@ -399,7 +399,7 @@ Generic-адаптер запускает `bin <flags> <files...>` и конве
 
 ### Пользовательские оверрайды бинаря
 
-Можно переопределить путь бинаря для любого линтера через свой user-level конфигурационный файл (`~/.config/devbox/config`). Полезно, когда у вас кастомные установки, замены (например, `podman` вместо `docker`) или бинари вне дефолтного PATH.
+Можно переопределить путь бинаря для любого линтера через свой user-level конфигурационный файл (`~/.config/workspace/config`). Полезно, когда у вас кастомные установки, замены (например, `podman` вместо `docker`) или бинари вне дефолтного PATH.
 
 Добавьте строку в свой user config:
 
@@ -408,18 +408,18 @@ binary_shellcheck=/custom/path/to/shellcheck
 binary_hadolint=/opt/hadolint
 ```
 
-Формат — `binary_<linter-id>=<path>`. Пути абсолютные или относительные к текущей директории. Если путь не существует или не исполняем, `devbox validate` эмитит error-диагностику в домене `linters`.
+Формат — `binary_<linter-id>=<path>`. Пути абсолютные или относительные к текущей директории. Если путь не существует или не исполняем, `dwe validate` эмитит error-диагностику в домене `linters`.
 
-**Заметка:** Эти оверрайды консультируются **только** во время `devbox validate`. Lifecycle-команды (deploy, run, stop и т. д.) не используют бинари линтеров, так что сломанные оверрайды не затрагивают обычную работу.
+**Заметка:** Эти оверрайды консультируются **только** во время `dwe validate`. Lifecycle-команды (deploy, run, stop и т. д.) не используют бинари линтеров, так что сломанные оверрайды не затрагивают обычную работу.
 
 ### Scope
 
 Запустить все линтеры или сузить до одного через подкоманду `linters`:
 
 ```
-devbox validate                       # all domains (including linters)
-devbox validate linters               # all linters
-devbox validate linters shellcheck    # only shellcheck
+dwe validate                       # all domains (including linters)
+dwe validate linters               # all linters
+dwe validate linters shellcheck    # only shellcheck
 ```
 
 Неизвестные ID линтеров производят пустой результат (не хард-ошибку — зеркалит поведение `checks`).
@@ -437,16 +437,16 @@ devbox validate linters shellcheck    # only shellcheck
 - Файл матчится, если его расширение в `extensions:` ИЛИ его basename в `filenames:`.
 - Симлинки пропускаются (защита от выходов за пределы корня проекта).
 - `.git/` всегда пропускается. Сужение специфичного для адаптера шума (например, `node_modules`, `vendor`) оставлено пользователю через `paths:`.
-- Отсутствующие **дефолтные** пути (например, `devbox/scripts` shellcheck'а в проекте, где их нет) молча отбрасываются. Отсутствующие **пользовательские** пути (записи, явно написанные пользователем) производят Warning.
+- Отсутствующие **дефолтные** пути (например, `workspace/scripts` shellcheck'а в проекте, где их нет) молча отбрасываются. Отсутствующие **пользовательские** пути (записи, явно написанные пользователем) производят Warning.
 
 ### Модель доверия
 
-`bin:` ограничен голым именем команды, резолвимым через `PATH` в рантайме; абсолютные и относительные пути запрещены на загрузке. Обоснование: `validate.yml` едет с репозиторием; злонамеренный конфиг с `bin: ./scripts/evil.sh` не должен молча выполнять произвольный код на `devbox validate`. Пользователи, кому действительно нужен кастомный путь бинаря, устанавливают его в `PATH` (или оборачивают).
+`bin:` ограничен голым именем команды, резолвимым через `PATH` в рантайме; абсолютные и относительные пути запрещены на загрузке. Обоснование: `validate.yml` едет с репозиторием; злонамеренный конфиг с `bin: ./scripts/evil.sh` не должен молча выполнять произвольный код на `dwe validate`. Пользователи, кому действительно нужен кастомный путь бинаря, устанавливают его в `PATH` (или оборачивают).
 
 ## Связанные команды
 
-- `devbox validate` — полный прогон валидации (все домены).
-- `devbox validate env` — только env-probe'ы.
-- `devbox validate checks [id]` — декларативные проверки (опциональный id сужает до одной).
-- `devbox validate linters [id]` — внешние линтеры (опциональный id сужает до одного).
-- `devbox deploy run` / `run` / `stop` / `restart` — автоматически вызывают preflight (см. `--skip-preflight`). Линтеры в preflight **не** запускаются.
+- `dwe validate` — полный прогон валидации (все домены).
+- `dwe validate env` — только env-probe'ы.
+- `dwe validate checks [id]` — декларативные проверки (опциональный id сужает до одной).
+- `dwe validate linters [id]` — внешние линтеры (опциональный id сужает до одного).
+- `dwe deploy run` / `run` / `stop` / `restart` — автоматически вызывают preflight (см. `--skip-preflight`). Линтеры в preflight **не** запускаются.

@@ -18,33 +18,33 @@ Deploy and reset pipeline declarations.
 
 ## Purpose
 
-`devbox/deploy.yml` declares the orchestrator deploy pipeline. `devbox/reset.yml` declares the destructive reset pipeline. Per-service deploy pipelines live in `devbox/services/<service>/deploy.yml`.
+`workspace/deploy.yml` declares the orchestrator deploy pipeline. `workspace/reset.yml` declares the destructive reset pipeline. Per-service deploy pipelines live in `workspace/services/<service>/deploy.yml`.
 
 All three are loaded separately and are not merged with the 3-layer config.
 
-Both `devbox/deploy.yml` and `devbox/reset.yml` are optional. When absent, Devbox substitutes a built-in default pipeline and prints one info line to stderr: `Using built-in default <deploy|reset> pipeline (override with devbox/<deploy|reset>.yml).` The info line is suppressed in `--output json` mode.
+Both `workspace/deploy.yml` and `workspace/reset.yml` are optional. When absent, DWE substitutes a built-in default pipeline and prints one info line to stderr: `Using built-in default <deploy|reset> pipeline (override with DWE/<deploy|reset>.yml).` The info line is suppressed in `--output json` mode.
 
-**Default deploy pipeline** (fires when `devbox/deploy.yml` is absent):
+**Default deploy pipeline** (fires when `workspace/deploy.yml` is absent):
 
-Phases: `services` (runs `deploy_services: true` to inline enabled service pipelines) → `start` (`type: devbox`, `cmd: "docker up --wait"`) → `post-deploy` (info display + success message).
+Phases: `services` (runs `deploy_services: true` to inline enabled service pipelines) → `start` (`type: dwe`, `cmd: "docker up --wait"`) → `post-deploy` (info display + success message).
 
-**Default reset pipeline** (fires when `devbox/reset.yml` is absent):
+**Default reset pipeline** (fires when `workspace/reset.yml` is absent):
 
-Phases: `pre` (confirm prompt) → `stop` (`type: devbox`, `cmd: "docker down"`) → `cleanup` (remove volumes, remove `services/` directory).
+Phases: `pre` (confirm prompt) → `stop` (`type: dwe`, `cmd: "docker down"`) → `cleanup` (remove volumes, remove `services/` directory).
 
 ## File roles
 
 | File | Loader | Role |
 |------|--------|------|
-| `devbox/deploy.yml` | `LoadProjectDeployConfig` | Top-level orchestrator: lists phases in order, references service pipelines |
-| `devbox/services/<svc>/deploy.yml` | `LoadServiceDeployConfigs` | Per-service phases and steps (inlined by orchestrator at `deploy_services: true`). Any service type (app, tool, infra) may have a deploy pipeline. |
-| `devbox/reset.yml` | `LoadResetConfig` | Separate reset pipeline, executed via `devbox reset run`. `deploy_services` phases are rejected. |
+| `workspace/deploy.yml` | `LoadProjectDeployConfig` | Top-level orchestrator: lists phases in order, references service pipelines |
+| `workspace/services/<svc>/deploy.yml` | `LoadServiceDeployConfigs` | Per-service phases and steps (inlined by orchestrator at `deploy_services: true`). Any service type (app, tool, infra) may have a deploy pipeline. |
+| `workspace/reset.yml` | `LoadResetConfig` | Separate reset pipeline, executed via `dwe reset run`. `deploy_services` phases are rejected. |
 
 ```mermaid
 flowchart TB
-  D[devbox/deploy.yml] -->|phase: deploy_services| INL{Inline enabled services}
+  D[workspace/deploy.yml] -->|phase: deploy_services| INL{Inline enabled services}
 
-  subgraph svc["devbox/services/&lt;service&gt;/deploy.yml — one file per service"]
+  subgraph svc["workspace/services/&lt;service&gt;/deploy.yml — one file per service"]
     direction TB
     S1["required service<br/>(always inlined)"]
     S2["optional service A<br/>(inlined when enabled)"]
@@ -54,19 +54,19 @@ flowchart TB
 
   svc --> INL
   INL -->|topo-sorted by depends_on| PLAN[Resolved plan]
-  PLAN --> RUN[(PlainReporter — ✓ ✗ ◎ ·<br/>.devbox/logs/deploy.log)]
+  PLAN --> RUN[(PlainReporter — ✓ ✗ ◎ ·<br/>.dwe/logs/deploy.log)]
 
-  R[devbox/reset.yml] --> RPLAN[Resolved plan] --> RUN2[(PlainReporter)]
+  R[workspace/reset.yml] --> RPLAN[Resolved plan] --> RUN2[(PlainReporter)]
 ```
 
-Any service type (app, tool, or infra) may have a `devbox/services/<name>/deploy.yml`. At plan time the orchestrator filters that set down to **enabled** services (required ones are always enabled) and inlines them in topological `depends_on` order. Services without a deploy file are silently skipped — not every service needs one.
+Any service type (app, tool, or infra) may have a `workspace/services/<name>/deploy.yml`. At plan time the orchestrator filters that set down to **enabled** services (required ones are always enabled) and inlines them in topological `depends_on` order. Services without a deploy file are silently skipped — not every service needs one.
 
-The `after:` field in `devbox/services/<name>/deploy.yml` declares deploy-time ordering between services (separate from runtime `depends_on:`). See [Top-level fields](#top-level-fields) for details.
+The `after:` field in `workspace/services/<name>/deploy.yml` declares deploy-time ordering between services (separate from runtime `depends_on:`). See [Top-level fields](#top-level-fields) for details.
 
 ## Structure
 
 ```yaml
-log: true                          # optional: tee output to .devbox/logs/<pipeline>.log
+log: true                          # optional: tee output to .dwe/logs/<pipeline>.log
 
 phases:
   # Normal phase: supports when, untracked, and steps
@@ -80,14 +80,14 @@ phases:
     steps:
       - name: <step-name>
         description: Human-readable description
-        type: shell|devbox|command|builtin  # execution type (required)
+        type: shell|dwe|command|builtin  # execution type (required)
         cmd: <value>               # command payload (required)
         when:                      # optional: pre-condition (typed condition)
           type: builtin|shell|template
           cmd: <string>            # for builtin/shell
           expr: <string>           # for template
         check:                     # optional: post-condition (typed action)
-          type: shell|devbox|command|builtin
+          type: shell|dwe|command|builtin
           cmd: <value>
           with:                    # optional: parameters
             key: value
@@ -115,9 +115,9 @@ phases:
 
 | Field | Type | Default | Description |
 |-------|------|---------|-------------|
-| `log` | bool | `deploy.yml`: `true`; `reset.yml`: `false` | Tee devbox status messages and child stdout/stderr to `.devbox/logs/<pipeline>.log` (ANSI codes stripped). |
+| `log` | bool | `deploy.yml`: `true`; `reset.yml`: `false` | Tee dwe status messages and child stdout/stderr to `.dwe/logs/<pipeline>.log` (ANSI codes stripped). |
 | `phases` | list | — | Ordered list of phases. |
-| `after` | list of strings | `[]` | **Per-service `deploy.yml` only.** Declares deploy-time ordering: this service deploys after the named services. Omitted or empty means no deploy-ordering constraint. Distinct from runtime `depends_on:` (which controls container startup order) — use `after:` when you want one service's deploy steps to complete before another's begin. Not valid in `devbox/deploy.yml`, `devbox/reset.yml`, or `devbox/services/<name>/reset.yml` (load-time error). Full deploy (`devbox deploy run`) topo-sorts services by `after:`; `devbox deploy run --service <name>` does NOT cascade to declared `after:` dependencies (explicit intent overrides ordering). |
+| `after` | list of strings | `[]` | **Per-service `deploy.yml` only.** Declares deploy-time ordering: this service deploys after the named services. Omitted or empty means no deploy-ordering constraint. Distinct from runtime `depends_on:` (which controls container startup order) — use `after:` when you want one service's deploy steps to complete before another's begin. Not valid in `workspace/deploy.yml`, `workspace/reset.yml`, or `workspace/services/<name>/reset.yml` (load-time error). Full deploy (`dwe deploy run`) topo-sorts services by `after:`; `dwe deploy run --service <name>` does NOT cascade to declared `after:` dependencies (explicit intent overrides ordering). |
 
 ## Phase fields
 
@@ -135,7 +135,7 @@ phases:
 |-------|------|-------------|
 | `name` | string | Unique step key within the phase |
 | `description` | string | Shown in `deploy plan` output |
-| `type` | enum | Execution type: one of `shell`, `devbox`, `command`, `builtin` (required). See [Step execution types](steps.md). |
+| `type` | enum | Execution type: one of `shell`, `dwe`, `command`, `builtin` (required). See [Step execution types](steps.md). |
 | `cmd` | string | Command payload (required); content depends on `type` |
 | `with` | mapping | Parameters passed to command or builtin (optional; required for most builtins) |
 | `when` | typed condition | Pre-condition evaluated before the step runs; step skipped if falsy. See [Conditions](conditions.md). |
@@ -159,7 +159,7 @@ Use `untracked: true` on the `post-deploy` phase to suppress system step message
   untracked: true
   steps:
     - name: info
-      type: devbox
+      type: dwe
       cmd: "info"
     - name: success
       type: builtin
@@ -171,7 +171,7 @@ Use `untracked: true` on the `post-deploy` phase to suppress system step message
 
 ## `deploy_services` marker
 
-In `deploy.yml`, a phase with `deploy_services: true` is a placeholder. The CLI replaces it with the inlined per-service pipelines at runtime, ordered by dependency (`depends_on` in each service's `devbox/services/<name>/service.yml`). Only enabled services are included.
+In `deploy.yml`, a phase with `deploy_services: true` is a placeholder. The CLI replaces it with the inlined per-service pipelines at runtime, ordered by dependency (`depends_on` in each service's `workspace/services/<name>/service.yml`). Only enabled services are included.
 
 ```yaml
 phases:
@@ -182,9 +182,9 @@ phases:
 
 ## Idempotent deploy and state
 
-By default, `devbox deploy run` tracks the outcome and hash of every executed step in `.devbox/deploy/state.yml`. On the next deploy run, steps that succeeded with unchanged `action_hash` values are **skipped** (unless they have a `check:` action, which always runs to re-validate idempotency).
+By default, `dwe deploy run` tracks the outcome and hash of every executed step in `.dwe/deploy/state.yml`. On the next deploy run, steps that succeeded with unchanged `action_hash` values are **skipped** (unless they have a `check:` action, which always runs to re-validate idempotency).
 
-This makes deploys idempotent: re-running an unchanged project is fast (unchanged steps are skipped), while editing a step body automatically re-triggers it. Edits to service config files (`devbox/services/<name>/service.yml`) or deploy configs (`devbox/deploy.yml`, `devbox/services/<name>/deploy.yml`) invalidate the affected scope and force those steps to re-run.
+This makes deploys idempotent: re-running an unchanged project is fast (unchanged steps are skipped), while editing a step body automatically re-triggers it. Edits to service config files (`workspace/services/<name>/service.yml`) or deploy configs (`workspace/deploy.yml`, `workspace/services/<name>/deploy.yml`) invalidate the affected scope and force those steps to re-run.
 
 Key behaviors:
 
@@ -197,24 +197,24 @@ Key behaviors:
 - In both cases the journal records the step for audit/status display using `step_hash`, which includes the gate config — so changing the gate invalidates the recorded hash and re-triggers the step
 - **Previous step failed** → step re-runs on next deploy (allows `--resume` to continue from the failure)
 
-Use `devbox deploy state show` to inspect the journal, `devbox deploy state clear` to reset it, and `devbox deploy state repair` to fix corrupted aggregates.
+Use `dwe deploy state show` to inspect the journal, `dwe deploy state clear` to reset it, and `dwe deploy state repair` to fix corrupted aggregates.
 
 See [state/index.md](../state/index.md) for full details on hashing, skip decisions, and recovery from mid-deploy crashes.
 
 ## Pages
 
-- [Step execution types](steps.md) — `shell`, `devbox`, `command`, `builtin`; the `cmd: shell` builtin vs `type: shell` step distinction
+- [Step execution types](steps.md) — `shell`, `dwe`, `command`, `builtin`; the `cmd: shell` builtin vs `type: shell` step distinction
 - [Available builtins](builtins.md) — every builtin with inputs and examples; internal engine builtins
 - [Conditions](conditions.md) — `when:`, `check:`, and `files_gate:` semantics
 - [Examples](examples.md) — orchestrator, per-service, infra `after:`, parallel groups, workflow sub-step overrides, common pitfalls
 
 ## Related commands
 
-- `devbox deploy plan` — show resolved pipeline (with inlined service phases)
-- `devbox deploy run` — execute deploy pipeline with state tracking
-- `devbox deploy state show` — inspect deploy state journal
-- `devbox deploy state clear` — reset deploy state
-- `devbox deploy state repair` — rebuild state aggregates
-- `devbox reset plan` — show reset pipeline
-- `devbox reset run [--yes]` — execute reset pipeline
+- `dwe deploy plan` — show resolved pipeline (with inlined service phases)
+- `dwe deploy run` — execute deploy pipeline with state tracking
+- `dwe deploy state show` — inspect deploy state journal
+- `dwe deploy state clear` — reset deploy state
+- `dwe deploy state repair` — rebuild state aggregates
+- `dwe reset plan` — show reset pipeline
+- `dwe reset run [--yes]` — execute reset pipeline
 - See also [lifecycle.yml](../lifecycle.md) — `run` / `stop` pipelines reuse the same phase/step grammar with optional update probe and hook phases.

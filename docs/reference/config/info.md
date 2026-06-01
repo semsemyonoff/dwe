@@ -29,7 +29,7 @@ Info dashboard configuration.
 
 ## Purpose
 
-`devbox/info.yml` declares the content of the `devbox info` dashboard: sections, items, conditional visibility, and template expressions. It is rendered by `render.Info()` (in `internal/core/ui/render/`) using Lipgloss.
+`workspace/info.yml` declares the content of the `dwe info` dashboard: sections, items, conditional visibility, and template expressions. It is rendered by `render.Info()` (in `internal/core/ui/render/`) using Lipgloss.
 
 Loaded separately by `LoadInfoConfig()`. Not merged with the 3-layer config.
 
@@ -76,7 +76,7 @@ footer: true
 
 All items accept an optional `when:` (Go template expression). Items with a falsy `when` are dropped from the rendered output. All items support an optional `decorative` boolean flag (see [Decorative items](#decorative-items)).
 
-> **Note on `auto-urls` and `auto-hosts` rendering:** `auto-urls` and `auto-hosts` items expand at render time (when `devbox info` is executed), not at YAML load time. The expansion happens inside the info renderer by consulting the current configuration and iterating services in deploy order. This design ensures the dashboard always reflects the latest service definitions and state. See [`docs/internals/packages.md`](../../internals/packages.md) for architectural details on the render-time expansion via the `Source*Spec` pattern.
+> **Note on `auto-urls` and `auto-hosts` rendering:** `auto-urls` and `auto-hosts` items expand at render time (when `dwe info` is executed), not at YAML load time. The expansion happens inside the info renderer by consulting the current configuration and iterating services in deploy order. This design ensures the dashboard always reflects the latest service definitions and state. See [`docs/internals/packages.md`](../../internals/packages.md) for architectural details on the render-time expansion via the `Source*Spec` pattern.
 
 ### `definition`
 
@@ -95,7 +95,7 @@ A label + value pair, rendered as `Label — Value`.
 |-------|-------------|
 | `name` | Label text |
 | `value` | Value text (plain string or template expression) |
-| `icon` | Optional emoji or symbol prepended to value. Prefer codepoints with `Emoji_Presentation=Yes` (e.g. `📦`, `🐳`, `💾`); text-default codepoints like `🛢`, `🗄`, `⚙` are flagged by `devbox validate` and dropped at render time to keep columns aligned — see [`icon` field](services/fields.md#icon-field) in the services reference for the full caveat. |
+| `icon` | Optional emoji or symbol prepended to value. Prefer codepoints with `Emoji_Presentation=Yes` (e.g. `📦`, `🐳`, `💾`); text-default codepoints like `🛢`, `🗄`, `⚙` are flagged by `dwe validate` and dropped at render time to keep columns aligned — see [`icon` field](services/fields.md#icon-field) in the services reference for the full caveat. |
 | `indent` | Optional leading whitespace count. Default for definition items is `2`; pass `0` to flush left. Negative values are rejected. |
 | `when` | Condition; item hidden if falsy |
 
@@ -132,7 +132,7 @@ A warning text line (rendered in warning color).
 
 ### `auto-urls`
 
-Dynamically generates a list of service URLs from the project's configured services. Services declare their hosts and ports in `devbox/services/<name>/service.yml`; `auto-urls` renders them with optional filtering and customization.
+Dynamically generates a list of service URLs from the project's configured services. Services declare their hosts and ports in `workspace/services/<name>/service.yml`; `auto-urls` renders them with optional filtering and customization.
 
 ```yaml
 - type: auto-urls
@@ -211,7 +211,7 @@ Dynamically generates a list of all hostnames from services for `/etc/hosts` con
 | Field | Type | Default | Description |
 |-------|------|---------|-------------|
 | `include` | list | `[app, tool, infra]` | Service types to include: any combination of `app`, `tool`, `infra`. |
-| `ip` | string | `127.0.0.1` | IP address to associate with all hostnames. Values are not validated for IP format here; `devbox validate` emits a warning if parsing fails. |
+| `ip` | string | `127.0.0.1` | IP address to associate with all hostnames. Values are not validated for IP format here; `dwe validate` emits a warning if parsing fails. |
 | `hide` | list | — | Service folder keys to exclude entirely. Unknown keys are silently ignored. |
 | `when` | string | — | Condition; item hidden if falsy. |
 
@@ -287,7 +287,7 @@ When `hide_on_empty: true` on a section or subgroup, the block is skipped entire
 
 ## Template expressions
 
-All `text`, `value`, and `when` fields support Go template syntax evaluated against `DevboxConfig`.
+All `text`, `value`, and `when` fields support Go template syntax evaluated against `DweConfig`.
 
 ### Available template data
 
@@ -306,7 +306,7 @@ All `text`, `value`, and `when` fields support Go template syntax evaluated agai
 
 ### Template functions
 
-Info templates have access to the standard devbox template surface: the `appURL` domain helper plus the sprout registries (`std`, `strings`, `numeric`, `slices`, `maps`, `regexp`, `conversion`, `time`, `filesystem`, `semver`). See [Templates](../templates.md) for the full helper reference.
+Info templates have access to the standard DWE DWE template surface: the `appURL` domain helper plus the sprout registries (`std`, `strings`, `numeric`, `slices`, `maps`, `regexp`, `conversion`, `time`, `filesystem`, `semver`). See [Templates](../templates.md) for the full helper reference.
 
 Example using `appURL`:
 
@@ -335,23 +335,23 @@ When true, a footer line is rendered below all sections (typically shows help hi
 
 ## Fallback when info.yml is absent
 
-When `devbox/info.yml` does not exist, a built-in default configuration is used. It renders two sections:
+When `workspace/info.yml` does not exist, a built-in default configuration is used. It renders two sections:
 
 1. **URLs** section with an `auto-urls` item (default `include: [app, tool]`; no filtering)
 2. **Hosts** section with a warning and an `auto-hosts` item (default `include: [app, tool, infra]`)
 
-This allows projects without an `info.yml` to immediately see a sensible dashboard showing all services' connectivity, constructed entirely from the service definitions in `devbox/services/*/service.yml`. Services contribute details via their `info:` blocks (title, paths, host/port keys). No `info.yml` editing is required to get started.
+This allows projects without an `info.yml` to immediately see a sensible dashboard showing all services' connectivity, constructed entirely from the service definitions in `workspace/services/*/service.yml`. Services contribute details via their `info:` blocks (title, paths, host/port keys). No `info.yml` editing is required to get started.
 
-To customize the dashboard, create a `devbox/info.yml` with your own `sections` and `items`. The built-in default is not used if the file exists, even if it contains no `auto-urls` or `auto-hosts` items.
+To customize the dashboard, create a `workspace/info.yml` with your own `sections` and `items`. The built-in default is not used if the file exists, even if it contains no `auto-urls` or `auto-hosts` items.
 
 ## Example: full info.yml
 
 ```yaml
 sections:
-  - id: devbox_info
+  - id: dwe_info
     items:
       - type: subgroup
-        title: Devbox
+        title: DWE
         hide_on_empty: false
         items:
           - type: definition
@@ -407,12 +407,12 @@ footer: true
 - **Bare `when:` values without template syntax** — `when: .State` is not valid; must be `when: "{{ .State }}"`.
 - **Missing quotes around template expressions** — YAML parses `{{ ... }}` as a flow mapping if unquoted. Always quote template strings.
 - **Service lookup syntax** — Go's text/template requires `index` for map access by string key: `(index .Services "main")` returns a `ServiceConfig`. From there, struct fields are PascalCase (`.Container`, `.Enabled`) and ports / hosts use the `Port` / `Host` accessor methods with the port/host name as argument: `(index .Services "main").Port "http"`. Parentheses around the index expression are required so the method dispatches on the returned `ServiceConfig`.
-- **Using config keys not in DevboxConfig struct** — only fields exposed on the typed `DevboxConfig` struct are available in templates. Custom keys added to `defaults.yml` are in `Raw` but not in template data unless explicitly exposed.
+- **Using config keys not in DweConfig struct** — only fields exposed on the typed `DweConfig` struct are available in templates. Custom keys added to `defaults.yml` are in `Raw` but not in template data unless explicitly exposed.
 - **`appURL` argument order** — the order is `host`, `port`, `useHTTPS`, then optional `path`. Swapping port and useHTTPS produces incorrect URLs silently. When linking a tool routed via the main reverse proxy, combine the tool's hostname with the main service's port: `appURL ((index .Services "adminer").Host "web") ((index .Services "main").Port "http") .Runtime.UseHTTPS`.
 - **`hide_on_empty` with decorative items** — By default, content items like `definition`, `info`, and `warning` count toward section visibility, but `separator` does not. Use the `decorative` flag to override: set `decorative: true` on a content item to exclude it from the visibility calculation, or set `decorative: false` on a separator to make it count as content. A section with `hide_on_empty: true` is fully hidden if no content item (after `when` filtering) survives.
 - **Footer rendering with `hide_on_empty`** — When `footer: true`, the footer is only rendered if at least one section produced output. If all sections are hidden via `hide_on_empty`, the footer is also suppressed.
 
 ## Related commands
 
-- `devbox info` — render the full dashboard
-- `devbox` (no args) — shows compact summary (not from `info.yml`, uses `render.Summary`)
+- `dwe info` — render the full dashboard
+- `dwe` (no args) — shows compact summary (not from `info.yml`, uses `render.Summary`)

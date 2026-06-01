@@ -1,8 +1,8 @@
-> Translated from: reference/config/state/schema.md @ 19dc547a3555
+> Translated from: reference/config/state/schema.md @ 4add20da2753
 
 # Схема состояния
 
-Справочник полей для `.devbox/deploy/state.yml`.
+Справочник полей для `.dwe/deploy/state.yml`.
 
 ## Поля верхнего уровня
 
@@ -10,8 +10,8 @@
 |-------|------|-------------|
 | `schema_version` | string | Всегда `"1"`; зарезервировано для будущих изменений формата |
 | `project` | object | Состояние уровня проекта (deployed_at, config_hash, status и т. д.) |
-| `services` | map | Состояние по каждому сервису, индексируется именем папки сервиса (`devbox/services/<name>/`) |
-| `pending` | object | Ожидающие операции, которые необходимо применить; присутствует только если `devbox services enable/disable` был запущен без `--apply`. Записывается атомарно командой переключения; очищается командами `devbox restart`, `devbox deploy run` или `devbox reset run` |
+| `services` | map | Состояние по каждому сервису, индексируется именем папки сервиса (`workspace/services/<name>/`) |
+| `pending` | object | Ожидающие операции, которые необходимо применить; присутствует только если `dwe services enable/disable` был запущен без `--apply`. Записывается атомарно командой переключения; очищается командами `dwe restart`, `dwe deploy run` или `dwe reset run` |
 
 ## Поля уровня проекта
 
@@ -29,7 +29,7 @@
 |-------|------|-------------|
 | `status` | enum | `deployed`, `partial`, `failed`, `not_deployed` (сервис никогда не запускался или все шаги были пропущены) |
 | `deployed_at` | ISO 8601 timestamp | Когда этот сервис был последний раз полностью развёрнут |
-| `config_hash` | sha256 hex | Отпечаток `devbox/services/<name>/service.yml` + `devbox/services/<name>/deploy.yml` |
+| `config_hash` | sha256 hex | Отпечаток `workspace/services/<name>/service.yml` + `workspace/services/<name>/deploy.yml` |
 | `last_run` | object | Время и результат последней попытки деплоя для этого сервиса |
 | `phases` | map | Состояние по каждой фазе этого сервиса |
 
@@ -51,7 +51,7 @@
 
 ## Состояние pending
 
-Когда `devbox services enable` или `devbox services disable` запускается без `--apply`, команда переключения сразу записывает изменение в local.yml, но откладывает шаг применения. Поле `pending` в файле состояния отслеживает, что ещё нужно выполнить.
+Когда `dwe services enable` или `dwe services disable` запускается без `--apply`, команда переключения сразу записывает изменение в local.yml, но откладывает шаг применения. Поле `pending` в файле состояния отслеживает, что ещё нужно выполнить.
 
 ### Схема поля pending
 
@@ -72,23 +72,23 @@
 
 | Событие | Эффект для `pending` |
 |-------|---------------------|
-| `devbox services enable/disable` (без `--apply`) | Записывает `pending.operations`; добавляет/сливает операции для contributor-ов restart или deploy |
-| Успешный `devbox services enable/disable --apply` | Очищает принадлежащие contributor-у pending-операции через `ClearPendingOps` |
-| Успешный `devbox restart` | Очищает операцию `restart`; операция deploy (если есть) сохраняется |
-| Успешный `devbox deploy run` (по всему проекту) | Очищает операцию `deploy`; операция restart (если есть) сохраняется |
-| Успешный `devbox deploy run --service <name>` | Удаляет `<name>` из списка сервисов операции `deploy`; если список пуст, удаляет операцию |
-| Успешный `devbox reset run` (по всему проекту) | Очищает все pending-операции (полная очистка журнала) |
-| Успешный `devbox reset run --service <name>` | Атомарно записывает `{kind: deploy, services: [<name>]}` одновременно с удалением состояния развёртывания сервиса |
+| `dwe services enable/disable` (без `--apply`) | Записывает `pending.operations`; добавляет/сливает операции для contributor-ов restart или deploy |
+| Успешный `dwe services enable/disable --apply` | Очищает принадлежащие contributor-у pending-операции через `ClearPendingOps` |
+| Успешный `dwe restart` | Очищает операцию `restart`; операция deploy (если есть) сохраняется |
+| Успешный `dwe deploy run` (по всему проекту) | Очищает операцию `deploy`; операция restart (если есть) сохраняется |
+| Успешный `dwe deploy run --service <name>` | Удаляет `<name>` из списка сервисов операции `deploy`; если список пуст, удаляет операцию |
+| Успешный `dwe reset run` (по всему проекту) | Очищает все pending-операции (полная очистка журнала) |
+| Успешный `dwe reset run --service <name>` | Атомарно записывает `{kind: deploy, services: [<name>]}` одновременно с удалением состояния развёртывания сервиса |
 
 ### Баннер
 
-`devbox status` (и его подкоманды `apps`, `tools`, `infra`, `deploy`) отображают предупреждающий баннер, когда `pending` не равно nil:
+`dwe status` (и его подкоманды `apps`, `tools`, `infra`, `deploy`) отображают предупреждающий баннер, когда `pending` не равно nil:
 
 ```
 ⚠ Pending: deploy required for: svc-a, svc-b
-  Run: devbox deploy run
+  Run: dwe deploy run
 ⚠ Pending: restart required
-  Run: devbox restart
+  Run: dwe restart
 ```
 
 Баннер рендерится функцией `render.PendingBanner(p *journal.PendingApply)` из `internal/core/ui/render/`. Она проходит по `pending.operations` и выводит по одной строке на операцию. Возвращается пустая строка (баннер не выводится), когда `pending` равно nil.

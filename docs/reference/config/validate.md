@@ -26,10 +26,10 @@ Project readiness checks.
 
 ## Purpose
 
-`devbox/validate.yml` declares project-level readiness checks. The CLI consumes these from two entry points:
+`workspace/validate.yml` declares project-level readiness checks. The CLI consumes these from two entry points:
 
-- `devbox validate` — runs every check (plus YAML-shape validators in the `config`, `templates`, and `commands` domains, plus environment probes in the `env` domain) and reports diagnostics.
-- Preflight hook on `devbox deploy run`, `devbox run`, `devbox stop`, and `devbox restart` — runs the subset of checks bound to the relevant stage before any side effect on Docker, git, or the filesystem.
+- `dwe validate` — runs every check (plus YAML-shape validators in the `config`, `templates`, and `commands` domains, plus environment probes in the `env` domain) and reports diagnostics.
+- Preflight hook on `dwe deploy run`, `dwe run`, `dwe stop`, and `dwe restart` — runs the subset of checks bound to the relevant stage before any side effect on Docker, git, or the filesystem.
 
 The goal is to surface user-actionable problems ("you're not logged into ghcr.io", "DATABASE_URL is empty in `.env`", "VPN is down") BEFORE deploy steps fail mid-way with cryptic errors.
 
@@ -40,11 +40,11 @@ The validate command runs three domains in addition to the existing YAML-shape v
 | Domain | Source | Configurable? |
 |--------|--------|---------------|
 | `env.*` | Hardcoded in Go (`internal/core/validate/env/`) | No — seven fixed probes |
-| `checks.*` | `devbox/validate.yml` entries | Yes — declarative |
-| `linters.*` | Built-in adapters (shellcheck, hadolint) + `devbox/validate.yml` `linters:` block | Yes — declarative |
-| `snapshot.*` | On-disk snapshot directories + `devbox/snapshot.yml` | No — fixed validators per snapshot name |
+| `checks.*` | `workspace/validate.yml` entries | Yes — declarative |
+| `linters.*` | Built-in adapters (shellcheck, hadolint) + `workspace/validate.yml` `linters:` block | Yes — declarative |
+| `snapshot.*` | On-disk snapshot directories + `workspace/snapshot.yml` | No — fixed validators per snapshot name |
 
-The `env.*` probes are: `env.docker_bin`, `env.docker_daemon`, `env.docker_compose`, `env.git_bin`, `env.shell_bin`, `env.project_perms`, `env.ports_free`. They run on every `devbox validate` invocation and on every preflight (regardless of stage — env has no stage concept), with one exception: `env.ports_free` self-skips on the `stop` stage since port conflicts are irrelevant when winding the project down.
+The `env.*` probes are: `env.docker_bin`, `env.docker_daemon`, `env.docker_compose`, `env.git_bin`, `env.shell_bin`, `env.project_perms`, `env.ports_free`. They run on every `dwe validate` invocation and on every preflight (regardless of stage — env has no stage concept), with one exception: `env.ports_free` self-skips on the `stop` stage since port conflicts are irrelevant when winding the project down.
 
 `env.ports_free` reads every host port declared under `services.<name>.ports` (enabled services only) and checks whether each is bindable. It queries `docker ps --format=json` once to learn which containers currently hold which ports: containers labelled `com.docker.compose.project=<our project>` are treated as "ours" (compose will reuse them on `up`); containers from any other compose project trigger a conflict diagnostic that names the foreign container and project; for ports not held by any container the probe falls back to `net.Listen` to detect non-Docker processes. Docker unreachability falls through silently — `env.docker_daemon` covers that case.
 
@@ -109,19 +109,19 @@ A check runs whenever its `stages` list contains a stage the caller asked for. T
 
 | Stage | Triggered by |
 |-------|--------------|
-| `deploy` | `devbox deploy run`, `devbox validate --stage deploy` |
-| `run` | `devbox run`, `devbox restart` (run leg), `devbox validate --stage run` |
-| `stop` | `devbox stop`, `devbox restart` (stop leg), `devbox validate --stage stop` |
-| `command` | `devbox validate --stage command` (reserved for future use; no automatic hook) |
+| `deploy` | `dwe deploy run`, `dwe validate --stage deploy` |
+| `run` | `dwe run`, `dwe restart` (run leg), `dwe validate --stage run` |
+| `stop` | `dwe stop`, `dwe restart` (stop leg), `dwe validate --stage stop` |
+| `command` | `dwe validate --stage command` (reserved for future use; no automatic hook) |
 
-`devbox validate` without `--stage` runs every check regardless of stage.
+`dwe validate` without `--stage` runs every check regardless of stage.
 
 Unknown stages are accepted (open enum) but produce a **warning** at load time so users catch typos early:
 
 - `stage "deplooy" is not a known preflight stage` (with a suggestion if close via Levenshtein distance)
 - Special notes: `restart` is composite (uses both stop and run stages, no separate preflight); `reset` uses the stop stage only
 
-Unknown stages can still be invoked explicitly with `devbox validate --stage <name>` if needed (e.g. for custom validation workflows).
+Unknown stages can still be invoked explicitly with `dwe validate --stage <name>` if needed (e.g. for custom validation workflows).
 
 ## Available builtins
 
@@ -179,11 +179,11 @@ Attempts a TCP dial to `host:port`.
 
 ## `type: command` checks
 
-A check entry with `type: command` dispatches to a declarative user command from `devbox/commands/`. The `with:` block is passed through as the user command's `params:` payload — exactly like `devbox commands <id> --set k=v`.
+A check entry with `type: command` dispatches to a declarative user command from `workspace/commands/`. The `with:` block is passed through as the user command's `params:` payload — exactly like `dwe commands <id> --set k=v`.
 
 Restrictions enforced at load time:
 
-- The target command's `type:` MUST be `shell` or `script`. Workflow, service_exec, service_run, devbox, and builtin-as-command targets are rejected with: `checks may only invoke user commands of type shell or script (got: <type>)`.
+- The target command's `type:` MUST be `shell` or `script`. Workflow, service_exec, service_run, dwe, and builtin-as-command targets are rejected with: `checks may only invoke user commands of type shell or script (got: <type>)`.
 - An unknown command ID is rejected with: `unknown command: <id>`.
 
 Execution is locked down:
@@ -233,11 +233,11 @@ checks:
     description: Seed dump exists for first-run import
     stages: [deploy]
     severity: warning
-    hint: Download from s3://team-dumps/latest.sql and place at .devbox/seed.sql
+    hint: Download from s3://team-dumps/latest.sql and place at .dwe/seed.sql
     type: builtin
     cmd: file_exists
     with:
-      path: .devbox/seed.sql
+      path: .dwe/seed.sql
 ```
 
 **3. Required secrets configured (env_keys_present):**
@@ -283,7 +283,7 @@ checks:
     cmd: deps.check
 ```
 
-Where `devbox/commands/deps.yml` declares:
+Where `workspace/commands/deps.yml` declares:
 
 ```yaml
 group: deps
@@ -313,20 +313,20 @@ commands:
 
 ## CLI flags
 
-- `devbox validate` — runs `config.*`, `templates.*`, `commands.*`, `env.*`, and all `checks.*`. Optional positional scope narrows the run (e.g. `devbox validate env`, `devbox validate checks ghcr-login`).
-- `devbox validate --stage <name>` — local flag on the `validate` command. Filters `checks.*` by stage. `env.*` and other domains are unaffected (they have no stages).
-- `devbox validate --strict` — treat warnings as errors (exit 1).
-- `devbox validate --quiet` — hide ok / info rows.
+- `dwe validate` — runs `config.*`, `templates.*`, `commands.*`, `env.*`, and all `checks.*`. Optional positional scope narrows the run (e.g. `dwe validate env`, `dwe validate checks ghcr-login`).
+- `dwe validate --stage <name>` — local flag on the `validate` command. Filters `checks.*` by stage. `env.*` and other domains are unaffected (they have no stages).
+- `dwe validate --strict` — treat warnings as errors (exit 1).
+- `dwe validate --quiet` — hide ok / info rows.
 - `--skip-preflight` — local flag on `deploy run`, `run`, `stop`, and `restart`. When set, preflight prints `preflight skipped (--skip-preflight)` to stderr and runs NO validators. The flag is a true bypass: `type: command` checks invoke arbitrary user scripts, so the CLI does not run them under a flag the user named "skip".
 
 ## Diagnostic output
 
-Diagnostics share the rendering and severity model used by the rest of `devbox validate`:
+Diagnostics share the rendering and severity model used by the rest of `dwe validate`:
 
 - `Severity`: from `entry.severity` (default `error`).
 - `Domain`: `checks` (or `env` for hardcoded probes).
 - `Target`: the entry's `id`.
-- `File`: `devbox/validate.yml` (entries) or empty (env probes).
+- `File`: `workspace/validate.yml` (entries) or empty (env probes).
 - `Line`: 1-based line number of the entry's first key (entries).
 - `Message`: builtin / command error string.
 - `Hint`: from `entry.hint`.
@@ -335,7 +335,7 @@ Preflight writes the same diagnostic table to stderr before failing with exit co
 
 ## External linters
 
-The `linters.*` domain runs well-known external linters (shellcheck, hadolint) and arbitrary `type: generic` adapters as part of `devbox validate`. Linters do **not** run in preflight — preflight answers "can we run?", not "is the code clean?".
+The `linters.*` domain runs well-known external linters (shellcheck, hadolint) and arbitrary `type: generic` adapters as part of `dwe validate`. Linters do **not** run in preflight — preflight answers "can we run?", not "is the code clean?".
 
 ### Wire layout
 
@@ -344,7 +344,7 @@ linters:
   shellcheck:
     enabled: true
     bin: shellcheck
-    paths: [devbox/scripts, scripts]
+    paths: [workspace/scripts, scripts]
     extensions: [.sh, .bash]
     flags: [--severity=warning]
     severity: warning
@@ -379,7 +379,7 @@ The map key is the adapter ID. Unknown fields are rejected at load time (strict 
 
 | ID | Default bin | Default paths | Default extensions | Default filenames | Reserved flags |
 |----|-------------|---------------|--------------------|--------------------|----------------|
-| `shellcheck` | `shellcheck` | `devbox/scripts`, `scripts` | `.sh`, `.bash` | — | `--format`, `-f` |
+| `shellcheck` | `shellcheck` | `workspace/scripts`, `scripts` | `.sh`, `.bash` | — | `--format`, `-f` |
 | `hadolint` | `hadolint` | `.` | `.dockerfile` | `Dockerfile` | `--format`, `-f` |
 
 ### `type: generic`
@@ -397,7 +397,7 @@ The generic adapter runs `bin <flags> <files...>` and converts a non-zero exit i
 
 ### User-config binary overrides
 
-You can override the binary path for any linter using your user-level config file (`~/.config/devbox/config`). This is useful when you have custom installations, replacements (e.g., `podman` instead of `docker`), or binaries outside the default PATH.
+You can override the binary path for any linter using your user-level config file (`~/.config/workspace/config`). This is useful when you have custom installations, replacements (e.g., `podman` instead of `docker`), or binaries outside the default PATH.
 
 Add a line to your user config:
 
@@ -406,18 +406,18 @@ binary_shellcheck=/custom/path/to/shellcheck
 binary_hadolint=/opt/hadolint
 ```
 
-The format is `binary_<linter-id>=<path>`. Paths are absolute or relative to your current directory. If the path does not exist or is not executable, `devbox validate` will emit an error diagnostic in the `linters` domain.
+The format is `binary_<linter-id>=<path>`. Paths are absolute or relative to your current directory. If the path does not exist or is not executable, `dwe validate` will emit an error diagnostic in the `linters` domain.
 
-**Note:** These overrides are **only** consulted during `devbox validate`. Lifecycle commands (deploy, run, stop, etc.) do not use linter binaries, so broken overrides do not affect normal operation.
+**Note:** These overrides are **only** consulted during `dwe validate`. Lifecycle commands (deploy, run, stop, etc.) do not use linter binaries, so broken overrides do not affect normal operation.
 
 ### Scope
 
 Run all linters or narrow to one with the `linters` subcommand:
 
 ```
-devbox validate                       # all domains (including linters)
-devbox validate linters               # all linters
-devbox validate linters shellcheck    # only shellcheck
+dwe validate                       # all domains (including linters)
+dwe validate linters               # all linters
+dwe validate linters shellcheck    # only shellcheck
 ```
 
 Unknown linter IDs produce an empty result (not a hard error — mirrors `checks` behaviour).
@@ -435,16 +435,16 @@ Unknown linter IDs produce an empty result (not a hard error — mirrors `checks
 - A file matches if its extension is in `extensions:` OR its basename is in `filenames:`.
 - Symlinks are skipped (defense against escapes outside the project root).
 - `.git/` is always skipped. Adapter-specific noise (e.g. `node_modules`, `vendor`) is left to the user to narrow via `paths:`.
-- Missing **default** paths (e.g. shellcheck's `devbox/scripts` in a project that has none) are silently dropped. Missing **user-configured** paths (entries the user wrote explicitly) produce a Warning.
+- Missing **default** paths (e.g. shellcheck's `workspace/scripts` in a project that has none) are silently dropped. Missing **user-configured** paths (entries the user wrote explicitly) produce a Warning.
 
 ### Trust model
 
-`bin:` is restricted to a bare command name resolved via `PATH` at runtime; absolute and relative paths are forbidden at load time. Rationale: `validate.yml` ships with the repo; a malicious config with `bin: ./scripts/evil.sh` should not silently execute arbitrary code on `devbox validate`. Users who genuinely need a custom binary path install it on `PATH` (or wrap it).
+`bin:` is restricted to a bare command name resolved via `PATH` at runtime; absolute and relative paths are forbidden at load time. Rationale: `validate.yml` ships with the repo; a malicious config with `bin: ./scripts/evil.sh` should not silently execute arbitrary code on `dwe validate`. Users who genuinely need a custom binary path install it on `PATH` (or wrap it).
 
 ## Related commands
 
-- `devbox validate` — full validation run (all domains).
-- `devbox validate env` — env probes only.
-- `devbox validate checks [id]` — declarative checks (optional id narrows to one).
-- `devbox validate linters [id]` — external linters (optional id narrows to one).
-- `devbox deploy run` / `run` / `stop` / `restart` — invoke preflight automatically (see `--skip-preflight`). Linters do **not** run in preflight.
+- `dwe validate` — full validation run (all domains).
+- `dwe validate env` — env probes only.
+- `dwe validate checks [id]` — declarative checks (optional id narrows to one).
+- `dwe validate linters [id]` — external linters (optional id narrows to one).
+- `dwe deploy run` / `run` / `stop` / `restart` — invoke preflight automatically (see `--skip-preflight`). Linters do **not** run in preflight.

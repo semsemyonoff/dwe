@@ -9,7 +9,7 @@ Command flags, management subcommands, non-interactive defaults, and worked exam
 Ignore the deploy state file and re-run all steps from scratch.
 
 ```bash
-devbox deploy run --force
+dwe deploy run --force
 ```
 
 Useful when:
@@ -24,7 +24,7 @@ When `--force` is used, the state file is cleared before the pipeline runs (all 
 Continue from the last failed or partially deployed step.
 
 ```bash
-devbox deploy run --resume
+dwe deploy run --resume
 ```
 
 Use this after a failed deploy to pick up where it left off, rather than re-running already-completed steps.
@@ -41,8 +41,8 @@ In interactive mode (TTY without `--yes`):
 Suppress all interactive prompts.
 
 ```bash
-devbox deploy run -y
-devbox deploy run --non-interactive
+dwe deploy run -y
+dwe deploy run --non-interactive
 ```
 
 Use in CI/CD pipelines to ensure the deploy does not hang waiting for user input.
@@ -55,12 +55,12 @@ Use in CI/CD pipelines to ensure the deploy does not hang waiting for user input
 
 ## Management commands
 
-### `devbox deploy state show`
+### `dwe deploy state show`
 
-Display the contents of `.devbox/deploy/state.yml` in YAML format.
+Display the contents of `.dwe/deploy/state.yml` in YAML format.
 
 ```bash
-devbox deploy state show
+dwe deploy state show
 ```
 
 Shows:
@@ -70,28 +70,28 @@ Shows:
 
 Useful for debugging why a step was skipped, or to inspect the journal after a deploy.
 
-### `devbox deploy state clear`
+### `dwe deploy state clear`
 
 Delete the deploy state file.
 
 ```bash
-devbox deploy state clear
+dwe deploy state clear
 ```
 
-Equivalent to `rm .devbox/deploy/state.yml`. In interactive mode (TTY), prompts for confirmation. Use `-y` to skip confirmation in CI.
+Equivalent to `rm .dwe/deploy/state.yml`. In interactive mode (TTY), prompts for confirmation. Use `-y` to skip confirmation in CI.
 
 ```bash
-devbox deploy state clear -y  # Non-interactive
+dwe deploy state clear -y  # Non-interactive
 ```
 
-After clearing, the next `devbox deploy run` treats all steps as absent and re-runs them.
+After clearing, the next `dwe deploy run` treats all steps as absent and re-runs them.
 
-### `devbox deploy state repair`
+### `dwe deploy state repair`
 
 Rebuild status aggregates from per-step records.
 
 ```bash
-devbox deploy state repair
+dwe deploy state repair
 ```
 
 Recomputes:
@@ -118,7 +118,7 @@ In non-interactive mode (no TTY, `STDIN` is piped or closed):
 ### Example: full deploy, then skip on re-run
 
 ```bash
-$ devbox deploy run
+$ dwe deploy run
 ✓ Phase setup
   ✓ create-dirs
   ✓ install
@@ -130,11 +130,11 @@ $ devbox deploy run
 
 # State file recorded: all steps ok, hashes match
 
-$ devbox deploy run
+$ dwe deploy run
 ✓ all steps already deployed, skipped
 
 # (Or if there were check steps:)
-$ devbox deploy run
+$ dwe deploy run
 ✓ Phase setup
   · create-dirs  (skipped by state)
   · install      (skipped by state)
@@ -148,7 +148,7 @@ $ devbox deploy run
 ### Example: edit a step, re-run on next deploy
 
 ```yaml
-# devbox/deploy/main.yml
+# workspace/deploy/main.yml
 - name: install
   type: command
   cmd: app.install  # was "app.install"
@@ -165,7 +165,7 @@ Edit the command:
 ```
 
 ```bash
-$ devbox deploy run
+$ dwe deploy run
 ✓ Phase setup
   · create-dirs  (skipped by state)
   ✓ install      (re-run: hash changed abc123 → def456)
@@ -179,7 +179,7 @@ The install step re-runs because its hash changed. Steps with unchanged hashes a
 ### Example: edit a service config, invalidate service scope
 
 ```yaml
-# devbox/services/main/service.yml
+# workspace/services/main/service.yml
 enabled: true
 type: app
 dir: services/main
@@ -190,7 +190,7 @@ depends_on:
 Edit the main service:
 
 ```yaml
-# devbox/services/main/service.yml
+# workspace/services/main/service.yml
 enabled: true
 type: app
 dir: services/main
@@ -202,7 +202,7 @@ depends_on:
 The service's `config_hash` changes, so all of `main`'s steps re-run:
 
 ```bash
-$ devbox deploy run
+$ dwe deploy run
 ✓ Phase setup (main)
   ✓ create-dirs    (re-run: service config_hash changed)
   ✓ install        (re-run: service config_hash changed)
@@ -214,7 +214,7 @@ $ devbox deploy run
 ### Example: force re-run all steps
 
 ```bash
-devbox deploy run --force
+dwe deploy run --force
 ```
 
 Clears the state file and re-runs all steps from scratch, even if they all succeeded previously.
@@ -222,12 +222,12 @@ Clears the state file and re-runs all steps from scratch, even if they all succe
 > **Note:** `--force` only ignores the deploy state. Phase- and step-level `when:` conditions are still
 > evaluated on every run. For example, `when: dir-empty services/main/src` will still skip an install step
 > once the directory has been populated by a previous successful run. To wipe service directories,
-> Docker volumes, and other artifacts so the next deploy is truly clean, use `devbox reset run && devbox deploy run`.
+> Docker volumes, and other artifacts so the next deploy is truly clean, use `dwe reset run && dwe deploy run`.
 
 ### Example: recover from a mid-deploy crash
 
 ```bash
-$ devbox deploy run
+$ dwe deploy run
 ✓ Phase setup
 ✓ Phase init
 ✗ Phase finalize
@@ -235,7 +235,7 @@ $ devbox deploy run
 
 # Process crashed or was killed. State file recorded the failure.
 
-$ devbox deploy run  # (in interactive mode)
+$ dwe deploy run  # (in interactive mode)
 # Prompted: "Failed deploy detected: Resume / Re-run all steps / Cancel"
 # Choose: Resume
 
@@ -252,7 +252,7 @@ $ devbox deploy run  # (in interactive mode)
 Or in non-interactive mode:
 
 ```bash
-devbox deploy run --resume
+dwe deploy run --resume
 ```
 
 ## See also

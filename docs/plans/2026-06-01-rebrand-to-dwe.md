@@ -573,16 +573,16 @@ Review the full list. Allow only intentional test-data identifiers (e.g. `devbox
 - Rename: `docs/reference/config/devbox.md` → `workspace.md` (if present)
 - Modify: `docs/internals/packages.md`
 
-- [ ] `rg -l 'devbox' docs/reference/ docs/internals/` (exclude `cli/devbox_*.md`)
-- [ ] replace: command `devbox` → `dwe`, file `devbox.yml` → `workspace.yml`, folder `devbox/` → `workspace/`, runtime `.devbox/` → `.dwe/`, env `DEVBOX_*` → `DWE_*`, YAML enum, Docker labels `devbox.*` → `dwe.*`, snapshot schema, product "Devbox" → "DWE" / "Dev Workspace Engine" (first mention per file), package godoc lines (`// Package … devbox …`) → `dwe`, llms URI scheme `devbox-docs://` → `dwe-docs://`
-- [ ] **manually** review — leave jetify devbox comparative refs intact
-- [ ] delete schema_version section from `docs/reference/config/workspace.md`
-- [ ] update `docs/internals/packages.md` — Binary accessors pattern `DevboxBin` → `DweBin`
-- [ ] update env-var contract sections
-- [ ] update daemon docs (`types.md:~626`) to show `dwe.*` labels
-- [ ] update snapshot doc (`docs/reference/snapshot.md`) for new archive layout
-- [ ] update render template-pack docs (`docs/reference/render/{ide,ai,git,index}.md`) — ~20 occurrences of `devbox/templates/...` paths
-- [ ] `make build && make test`
+- [x] `rg -l 'devbox' docs/reference/ docs/internals/` (exclude `cli/devbox_*.md`)
+- [x] replace: command `devbox` → `dwe`, file `devbox.yml` → `workspace.yml`, folder `devbox/` → `workspace/`, runtime `.devbox/` → `.dwe/`, env `DEVBOX_*` → `DWE_*`, YAML enum, Docker labels `devbox.*` → `dwe.*`, snapshot schema, product "Devbox" → "DWE" / "Dev Workspace Engine" (first mention per file), package godoc lines (`// Package … devbox …`) → `dwe`, llms URI scheme `devbox-docs://` → `dwe-docs://`
+- [x] **manually** review — leave jetify devbox comparative refs intact
+- [x] delete schema_version section from `docs/reference/config/workspace.md`
+- [x] update `docs/internals/packages.md` — Binary accessors pattern `DevboxBin` → `DweBin`
+- [x] update env-var contract sections
+- [x] update daemon docs (`types.md:~626`) to show `dwe.*` labels
+- [x] update snapshot doc (`docs/reference/snapshot.md`) for new archive layout
+- [x] update render template-pack docs (`docs/reference/render/{ide,ai,git,index}.md`) — ~20 occurrences of `devbox/templates/...` paths
+- [x] `make build && make test`
 
 ### Task 12: Phase 4b — Russian docs
 
@@ -590,11 +590,11 @@ Review the full list. Allow only intentional test-data identifiers (e.g. `devbox
 - Modify: every file under `docs/i18n/ru/reference/**/*.md` and `docs/i18n/ru/internals/**/*.md`
 - Rename: `docs/i18n/ru/reference/config/devbox.md` → `workspace.md`
 
-- [ ] `rg -l 'devbox' docs/i18n/ru/`
-- [ ] apply Task 11 replacements for RU narrative; "Devbox" → "DWE" / "Dev Workspace Engine" / "движок dev-окружения"
-- [ ] **manually** adapt RU inflections (`devbox'а`, `devbox-проект`, `в devbox`)
-- [ ] delete RU schema_version sections
-- [ ] `make build && make test`
+- [x] `rg -l 'devbox' docs/i18n/ru/`
+- [x] apply Task 11 replacements for RU narrative; "Devbox" → "DWE" / "Dev Workspace Engine" / "движок dev-окружения"
+- [x] **manually** adapt RU inflections (`devbox'а`, `devbox-проект`, `в devbox`)
+- [x] delete RU schema_version sections
+- [x] `make build && make test`
 
 ### Task 13: Phase 4c — Regenerate auto-generated CLI reference
 

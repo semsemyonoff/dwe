@@ -1,6 +1,6 @@
-> Translated from: reference/render/ide.md @ 7b595a6330ed
+> Translated from: reference/render/ide.md @ b01d832e930f
 
-# devbox render ide
+# dwe render ide
 
 Сгенерировать IDE-специфичные файлы конфигурации для каждого включённого сервиса из пакета шаблонов. Вывод идёт в hub-каталог сервиса (например, `services/main/.vscode/settings.json`).
 
@@ -63,7 +63,7 @@ flowchart TD
 
 ### Нормализация каталога
 
-После гейта активации сервисы без hub-каталога отбрасываются — либо `dir` пуст, либо он разрешается в корень проекта. У сервиса без hub нет куда писать, а hub, равный корню проекта, дал бы рендереру царапать `devbox.yml` поверх самого себя.
+После гейта активации сервисы без hub-каталога отбрасываются — либо `dir` пуст, либо он разрешается в корень проекта. У сервиса без hub нет куда писать, а hub, равный корню проекта, дал бы рендереру царапать `workspace.yml` поверх самого себя.
 
 ### Разрешение коллизий: выигрывает глубочайший
 
@@ -88,7 +88,7 @@ flowchart LR
 
 ### Явный аргумент `[service]`
 
-`devbox render ide <name>` трактует `<name>` как **hub-якорь**: это должен быть реальный, eligible-сервис, но дальше применяется политика «глубочайший выигрывает», чтобы понять, какой сиблинг действительно рендерится.
+`dwe render ide <name>` трактует `<name>` как **hub-якорь**: это должен быть реальный, eligible-сервис, но дальше применяется политика «глубочайший выигрывает», чтобы понять, какой сиблинг действительно рендерится.
 
 Порядок валидации (первая ошибка побеждает):
 
@@ -99,21 +99,21 @@ flowchart LR
 
 После валидации применяется то же «глубочайший выигрывает», ограниченное сиблингами, делящими тот же `dir`. Если победитель отличается от аргумента, info-строка объявляет подмену.
 
-Так `devbox render ide main` из пер-сервисного deploy-пайплайна всё равно делает правильное, когда активный вариант — `main-debug`.
+Так `dwe render ide main` из пер-сервисного deploy-пайплайна всё равно делает правильное, когда активный вариант — `main-debug`.
 
 ## Разрешение пакета шаблонов
 
-Для каждого выбранного сервиса рендерер выбирает один каталог-пакет под `devbox/templates/ide/`.
+Для каждого выбранного сервиса рендерер выбирает один каталог-пакет под `workspace/templates/ide/`.
 
 ```mermaid
 flowchart TD
   S{"render.ide.template задан?"}
-  S -- да --> EX["devbox/templates/ide/{template}/"]
+  S -- да --> EX["workspace/templates/ide/{template}/"]
   EX -- существует --> USE["использовать этот пакет"]
   EX -- отсутствует --> ERR["ошибка<br/>явный — это строго"]
-  S -- нет --> SN["devbox/templates/ide/{service-name}/"]
+  S -- нет --> SN["workspace/templates/ide/{service-name}/"]
   SN -- существует --> USE
-  SN -- отсутствует --> DEF["devbox/templates/ide/default/"]
+  SN -- отсутствует --> DEF["workspace/templates/ide/default/"]
   DEF -- существует --> USE
   DEF -- отсутствует --> WARN["warning + skip<br/>implicit не найден"]
 ```
@@ -154,7 +154,7 @@ render:
 | Проход | Что проверяет |
 |--------|----------------|
 | Shape (чистый) | хотя бы одна запись `render` или `symlinks`; `to`-пути содержатся под hub; нет дублей `to`; каждый `to` симлинка ссылается на известный render-назначение |
-| Sources (resolver-aware) | каждый `from` существует либо в каноническом `devbox/templates/ide/<pack>/<from>`, либо в overrid-е `devbox/templates/ide/<pack>.local/<from>` |
+| Sources (resolver-aware) | каждый `from` существует либо в каноническом `workspace/templates/ide/<pack>/<from>`, либо в overrid-е `workspace/templates/ide/<pack>.local/<from>` |
 
 Строгий YAML-декод (`yaml.Decoder.KnownFields(true)`) отвергает опечатанные ключи вроде `renders:` на загрузке.
 
@@ -178,15 +178,15 @@ render:
 
 | Переменная | Источник | Замечания |
 |------------|----------|-----------|
-| `.Project` | блок `project:` из `devbox.yml` | например, `.Project.Name`, `.Project.Prefix` |
+| `.Project` | блок `project:` из `workspace.yml` | например, `.Project.Name`, `.Project.Prefix` |
 | `.Service` | **каноническая конфигурационная идентичность** — корень цепочки `extends:` рендерящегося сервиса | используйте для raw-config поисков по имени сервиса (`(index .Cfg.Raw.cs .Service).standard`). Равно `.Resolved` без цепочки extends. |
 | `.Resolved` | **render-идентичность** — сервис, чей hub реально рендерится (победитель коллизии по глубочайшему extends). | Равно `.Service` без коллизии. |
 | `.ServiceCfg` | эффективная конфигурация сервиса `.Resolved`, после разрешения `extends` | например, `.ServiceCfg.Container`, `.ServiceCfg.Dir`, `.ServiceCfg.DirInternal`, `.ServiceCfg.WorkDirInternal`, `.ServiceCfg.CLI.*` отражают overlay рендерящегося сервиса |
 | `.Runtime` | объединённый блок `runtime` | `.Runtime.UseHTTPS`, `.Runtime.SPX.Path`. Пер-сервисные порты/хосты живут в записи каждого сервиса — используйте `((index .Services "<name>").Port "<port-name>")` / `((index .Services "<name>").Host "<host-name>")`. |
 | `.Services` | `map[string]ServiceConfig`, ключёванная по имени сервиса | только индексный доступ (требование Go-шаблона): `(index .Services "main")`. Фильтруйте по типу через `.AppServices` / `.ToolServices` / `.InfraServices` (0-аргументные методы, возвращающие типизированные подмножества). |
-| `.Cfg` | объединённый `DevboxConfig` (продвинутое) | `.Cfg.Raw` — постмержовая мапа после нормализации devbox-ом (`services.*` инжектится из пер-сервисных `service.yml`) — см. [Шаблоны](../templates.md). Для обычных случаев предпочитайте выделенные поля выше. |
+| `.Cfg` | объединённый `DweConfig` (продвинутое) | `.Cfg.Raw` — постмержовая мапа после нормализации DWE (`services.*` инжектится из пер-сервисных `service.yml`) — см. [Шаблоны](../templates.md). Для обычных случаев предпочитайте выделенные поля выше. |
 
-> **Совет.** IDE-выход ложится в `<svc.Dir>/<entry.To>` — обычно в отслеживаемые проектные файлы (`.vscode/settings.json`, `.devcontainer/devcontainer.json`, …). Избегайте потребления developer-local или secret-ключей через `.Cfg.Raw` в IDE-шаблонах: любое значение, налитое из `devbox/local.yml`, всплывёт в отрендеренном файле и даст пер-разработческие diff-ы в отслеживаемых артефактах. Используйте `.Cfg.Raw` только для проектно-широких соглашений.
+> **Совет.** IDE-выход ложится в `<svc.Dir>/<entry.To>` — обычно в отслеживаемые проектные файлы (`.vscode/settings.json`, `.devcontainer/devcontainer.json`, …). Избегайте потребления developer-local или secret-ключей через `.Cfg.Raw` в IDE-шаблонах: любое значение, налитое из `workspace/local.yml`, всплывёт в отрендеренном файле и даст пер-разработческие diff-ы в отслеживаемых артефактах. Используйте `.Cfg.Raw` только для проектно-широких соглашений.
 
 Строгий режим означает, что опечатка `{{.Servic.Name}}` прерывает рендер вместо записи `<no value>`. Используйте `{{if ...}}`-гарды для полей, которые могут быть законно пустыми.
 
@@ -220,12 +220,12 @@ Go-овский `text/template` разрешает dot-сегменты, тол�
 Раскладка:
 
 ```
-devbox/services/
+workspace/services/
   main/
     service.yml
   main-debug/
     service.yml
-devbox/templates/ide/
+workspace/templates/ide/
   default/
     .devcontainer/devcontainer.json.tmpl
     .vscode/settings.json.tmpl
@@ -235,7 +235,7 @@ devbox/templates/ide/
     .vscode/launch.json.tmpl
 ```
 
-`devbox/services/main/service.yml`:
+`workspace/services/main/service.yml`:
 
 ```yaml
 type: app
@@ -244,7 +244,7 @@ dir: ./services/main
 # render.ide.enabled defaults to true (type: app)
 ```
 
-`devbox/services/main-debug/service.yml`:
+`workspace/services/main-debug/service.yml`:
 
 ```yaml
 type: app
@@ -256,7 +256,7 @@ render:
     template: main-debug       # использовать пакет main-debug
 ```
 
-Шаблон `devbox/templates/ide/main-debug/.vscode/settings.json.tmpl`:
+Шаблон `workspace/templates/ide/main-debug/.vscode/settings.json.tmpl`:
 
 ```json
 {
@@ -266,10 +266,10 @@ render:
 }
 ```
 
-`devbox render ide` (без аргумента):
+`dwe render ide` (без аргумента):
 
 1. Выборка: и `main`, и `main-debug` проходят гейт активации. Они делят `dir: ./services/main`. У `main-debug` цепочка `extends` глубже (1 против 0), поэтому `main-debug` выигрывает. `main` сообщается как пропуск из-за коллизии, выводится предупреждение.
-2. Разрешение пакета для `main-debug`: `render.ide.template: main-debug` явный; `devbox/templates/ide/main-debug/` существует — он и используется.
+2. Разрешение пакета для `main-debug`: `render.ide.template: main-debug` явный; `workspace/templates/ide/main-debug/` существует — он и используется.
 3. Обход пакета даёт три записи (отсортированы): `.devcontainer/devcontainer.json`, `.vscode/launch.json`, `.vscode/settings.json`.
 4. Каждая рендерится с `.Service = "main"` (корень цепочки — по нему ключёваны user-config мапы), `.Resolved = "main-debug"` (рендерящийся сервис), `.ServiceCfg.Container = "app-main-debug"` и т. д.
 
@@ -284,7 +284,7 @@ services/main/
     settings.json
 ```
 
-`devbox render ide main` даёт тот же результат — `main` валидируется, но hub-anchor разрешение выбирает `main-debug` и печатает `ide [main] — resolved to main-debug (hub services/main)`.
+`dwe render ide main` даёт тот же результат — `main` валидируется, но hub-anchor разрешение выбирает `main-debug` и печатает `ide [main] — resolved to main-debug (hub services/main)`.
 
 ## Сообщения вывода
 
@@ -301,15 +301,15 @@ services/main/
 
 ## Частые ловушки
 
-- **Сервисы не-`app` не рендерятся по умолчанию.** Задайте `render.ide.enabled: true` в `devbox/services/<name>/service.yml`, чтобы opt-in.
-- **Опечатки в `render.ide.template` — жёсткие ошибки.** Явные пакеты строгие; отсутствующий `devbox/templates/ide/<name>/` не проваливается тихо в `default/`. Либо исправьте имя, либо уберите `render.ide.template`.
+- **Сервисы не-`app` не рендерятся по умолчанию.** Задайте `render.ide.enabled: true` в `workspace/services/<name>/service.yml`, чтобы opt-in.
+- **Опечатки в `render.ide.template` — жёсткие ошибки.** Явные пакеты строгие; отсутствующий `workspace/templates/ide/<name>/` не проваливается тихо в `default/`. Либо исправьте имя, либо уберите `render.ide.template`.
 - **Шаблоны, ссылающиеся на отсутствующие поля, падают.** Строгий режим рендера означает, что `{{.ServiceCfg.NoSuchField}}` прерывает рендер. Заворачивайте опциональные поля в `{{if ...}}`.
 - **Симлинки на назначении отвергаются.** Если `.devcontainer/` или `settings.json` — симлинк, рендерер не перезапишет его. Уберите симлинк и перезапустите.
 - **Файлы, не перечисленные в `manifest.yml`, молча игнорируются.** Рендерер больше не обходит пакет — добавьте запись под `render:`, чтобы включить шаблон.
-- **`dir: "."` отвергается.** Сервис, чей hub — корень проекта, дал бы шаблонам царапать `devbox.yml` и другие корневые файлы. Дайте каждому IDE-рендерящемуся сервису реальный подкаталог.
+- **`dir: "."` отвергается.** Сервис, чей hub — корень проекта, дал бы шаблонам царапать `workspace.yml` и другие корневые файлы. Дайте каждому IDE-рендерящемуся сервису реальный подкаталог.
 
 ## Связанные справочники
 
 - [блок `services.<name>.render.ide`](../config/services/fields.md) — `enabled`, `template`, наследование через `extends`
 - [`render ai`](ai.md) — родственная команда с противоположной политикой коллизий
-- CLI-справочник: [`devbox render ide`](../cli/devbox_render_ide.md)
+- CLI-справочник: [`dwe render ide`](../cli/dwe_render_ide.md)

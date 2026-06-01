@@ -1,8 +1,8 @@
-> Translated from: reference/concepts/pipelines.md @ cddeb0a50edc
+> Translated from: reference/concepts/pipelines.md @ c6dd4fdc7045
 
 # Пайплайны
 
-Модель выполнения phase → step → condition, которую разделяют `devbox deploy`, `devbox run`, `devbox stop` и `devbox reset`. Одна грамматика, один runner, один журнал.
+Модель выполнения phase → step → condition, которую разделяют `dwe deploy`, `dwe run`, `dwe stop` и `dwe reset`. Одна грамматика, один runner, один журнал.
 
 ## Содержание
 
@@ -21,17 +21,17 @@
 
 | Команда | Файл | Дефолт при отсутствии |
 |---------|------|---------------------|
-| `devbox deploy run` | `devbox/deploy.yml` + per-service `devbox/services/<svc>/deploy.yml` | Встроенный пайплайн `services → start → post-deploy`. |
-| `devbox run` | `lifecycle.yml` → `run:` | Встроенная фаза `start`, вызывающая `docker up --wait`. |
-| `devbox stop` | `lifecycle.yml` → `stop:` | Встроенная фаза `stop`, вызывающая `docker down`. |
-| `devbox restart` | `lifecycle.yml` (обе секции) | Запускает `stop`, потом `run --no-update`. |
-| `devbox reset run` | `devbox/reset.yml` (+ per-service `reset.yml`) | Встроенный пайплайн `pre → stop → cleanup`. |
+| `dwe deploy run` | `workspace/deploy.yml` + per-service `workspace/services/<svc>/deploy.yml` | Встроенный пайплайн `services → start → post-deploy`. |
+| `dwe run` | `lifecycle.yml` → `run:` | Встроенная фаза `start`, вызывающая `docker up --wait`. |
+| `dwe stop` | `lifecycle.yml` → `stop:` | Встроенная фаза `stop`, вызывающая `docker down`. |
+| `dwe restart` | `lifecycle.yml` (обе секции) | Запускает `stop`, потом `run --no-update`. |
+| `dwe reset run` | `workspace/reset.yml` (+ per-service `reset.yml`) | Встроенный пайплайн `pre → stop → cleanup`. |
 
 Каждый файл объявляет одну и ту же форму — упорядоченный список фаз, каждая держит упорядоченный список шагов. Runner в `internal/core/execution/pipeline/` не знает, какая команда его вызвала. Поэтому per-service deploy-файлы, deploy-файл оркестратора, блоки `run:` / `stop:` в lifecycle и reset-файл принимают одну и ту же грамматику шагов.
 
 Два расширения грамматики ограничены командой:
 
-- **`deploy_services: true`** на фазе — это маркер оркестратора, инлайнящий per-service deploy-пайплайны. Допустимо только в `devbox/deploy.yml` — отвергается на загрузке в `lifecycle.yml` и `reset.yml`.
+- **`deploy_services: true`** на фазе — это маркер оркестратора, инлайнящий per-service deploy-пайплайны. Допустимо только в `workspace/deploy.yml` — отвергается на загрузке в `lifecycle.yml` и `reset.yml`.
 - **`after:`** на верхнем уровне per-service `deploy.yml` объявляет deploy-time порядок между сервисами. Отвергается в файле оркестратора, в `reset.yml` и в per-service `reset.yml`.
 
 Всё остальное — `when:`, `check:`, `files_gate:`, `continue_on_error:`, `skip_confirm:`, `untracked:`, `parallel:` — общее.
@@ -55,8 +55,8 @@
 | `type:` | Runner | Применение |
 |---------|--------|----------|
 | `shell` | `sh -c` через `config.ShellBin` | Inline shell с полной shell-семантикой (globs, pipes, redirection). |
-| `devbox` | Рекурсивный вызов в бинарник devbox | Compose passthrough'и (`docker up`, `docker down`), render-команды, `info`, всё, доступное как devbox-подкоманда. |
-| `command` | Декларативная команда из `devbox/commands/` | Workflow / service-exec / service-run / builtin / daemon / script / shell / devbox команды, объявленные в реестре. |
+| `dwe` | Рекурсивный вызов в DWE бинарник | Compose passthrough'и (`docker up`, `docker down`), render-команды, `info`, всё, доступное как dwe-подкоманда. |
+| `command` | Декларативная команда из `workspace/commands/` | Workflow / service-exec / service-run / builtin / daemon / script / shell / dwe команды, объявленные в реестре. |
 | `builtin` | Внутренняя Go-функция движка | In-process действие с доступом к смерженному конфигу. Тот же реестр, что используют user-команды. |
 
 Два коротких имени выглядят похоже — они не одно и то же:
@@ -72,8 +72,8 @@
 
 Три директивы стробируют шаг:
 
-- **`when:`** — предусловие. Вычисляется до запуска тела. Falsy → шаг пропущен (не упал). Типизировано как `builtin` (предикаты файловой системы вроде `dir-empty`), `shell` (жёстко закодированный `sh -c`) или `template` (Go-шаблон против смерженного `DevboxConfig`).
-- **`check:`** — постусловие. Вычисляется после успешного завершения тела. Падение → шаг репортится как упавший. Та же `type:` форма, что у тела шага (`shell` / `devbox` / `command` / `builtin`), но его возвращаемое значение стробирует статус успеха шага, а не производит видимый пользователю вывод.
+- **`when:`** — предусловие. Вычисляется до запуска тела. Falsy → шаг пропущен (не упал). Типизировано как `builtin` (предикаты файловой системы вроде `dir-empty`), `shell` (жёстко закодированный `sh -c`) или `template` (Go-шаблон против смерженного `DweConfig`).
+- **`check:`** — постусловие. Вычисляется после успешного завершения тела. Падение → шаг репортится как упавший. Та же `type:` форма, что у тела шага (`shell` / `dwe` / `command` / `builtin`), но его возвращаемое значение стробирует статус успеха шага, а не производит видимый пользователю вывод.
 - **`files_gate:`** — гейт по file-spec. Ссылается на объявленный блок `files:` команды. `state: readable` запускает шаг, если только все пробуемые файлы существуют; `state: missing` запускает шаг, если только никаких не существует.
 
 Две взаимодействия важны:
@@ -113,7 +113,7 @@ flowchart TD
 
 Три вещи, которые стоит заметить на диаграмме:
 
-- Решение о journal-skip принадлежит только `devbox deploy run`. `devbox run` / `stop` / `restart` и `devbox reset run` выполняют каждый достижимый шаг на каждом вызове — нет оптимизации «это уже запускалось» вне deploy.
+- Решение о journal-skip принадлежит только `dwe deploy run`. `dwe run` / `stop` / `restart` и `dwe reset run` выполняют каждый достижимый шаг на каждом вызове — нет оптимизации «это уже запускалось» вне deploy.
 - `check:` пропускается, когда `continue_on_error: true` и тело упало. Он также переоценивается, когда журнал иначе пропустил бы шаг — это то, что держит `check:` честным как утверждение идемпотентности.
 - Шаг, пропущенный по журналу, всё равно занимает один слот в `[N/M]` и одну строку в живом репортёре; он просто немедленно оседает как `◎ Skipped (cached)`.
 
@@ -148,7 +148,7 @@ steps:
 - **Per-sub-step журналирование.** Журнал deploy записывает каждый sub-step под `(phase, sub-step.name)`. Перестановка или добавление sub-step'ов не инвалидирует соседей, потому что `journal.StepHash` вычисляется только из sub-step.
 - **Никакого PTY в sub-step'ах.** Дача потомку PTY, когда stdin — пустой reader, ломает `docker compose exec/run`. Используйте последовательный шаг, когда нужна интерактивная консоль.
 
-Репортёр заменяет подвал LiveLine на LiveBlock на время параллельной группы, с одной строкой на sub-step, пайплайн-индексом `[N/M]` на строку и frame-aware парсером, нормализующим `\r` progress-строки в один фрейм на видимую строку. Полный вывод идёт в `.devbox/logs/parallel/<pipeline>/<group>/<sub>.log`.
+Репортёр заменяет подвал LiveLine на LiveBlock на время параллельной группы, с одной строкой на sub-step, пайплайн-индексом `[N/M]` на строку и frame-aware парсером, нормализующим `\r` progress-строки в один фрейм на видимую строку. Полный вывод идёт в `.dwe/logs/parallel/<pipeline>/<group>/<sub>.log`.
 
 Полная схема, дефолты, правила валидации и семантика выполнения: [`config/deploy/examples.md → Parallel step groups`](../config/deploy/examples.md#parallel-step-groups).
 
@@ -173,14 +173,14 @@ steps:
         with: { database: "${db.stock_database}" }
 ```
 
-Workflow остаётся непрозрачным и переиспользуемым; решение о стробировании принадлежит шагу пайплайна, который его вызвал. Переопределения применяются только когда workflow вызван через породивший шаг; тот же workflow, вызванный ad-hoc (`devbox commands run …`) или как sub-step другого workflow, запускается как написано. В v1 переопределим только `files_gate`, и переопределения не могут нацеливаться на sub-step, чья команда сама является workflow.
+Workflow остаётся непрозрачным и переиспользуемым; решение о стробировании принадлежит шагу пайплайна, который его вызвал. Переопределения применяются только когда workflow вызван через породивший шаг; тот же workflow, вызванный ad-hoc (`dwe commands run …`) или как sub-step другого workflow, запускается как написано. В v1 переопределим только `files_gate`, и переопределения не могут нацеливаться на sub-step, чья команда сама является workflow.
 
 Это канонический ответ на «я хочу per-element стробирование в workflow без форка workflow в N вариантов».
 
 ## Что читать дальше
 
 - [Справочник `deploy.yml` / `reset.yml`](../config/deploy/index.md) — поля верхнего уровня, поля фаз, поля шагов, идемпотентность и взаимодействие с журналом состояния.
-- [Типы выполнения шагов](../config/deploy/steps.md) — `shell`, `devbox`, `command`, `builtin`; `cmd: shell` builtin против `type: shell` step.
+- [Типы выполнения шагов](../config/deploy/steps.md) — `shell`, `dwe`, `command`, `builtin`; `cmd: shell` builtin против `type: shell` step.
 - [Каталог условий](../config/conditions.md) — каждый предикат и типизированное действие, доступные для `when:` / `check:` / `files_gate:`.
 - [`lifecycle.yml`](../config/lifecycle.md) — пайплайны `run:` / `stop:`, проба `run.update`, конвенции hook-фаз.
 - [Reset](../config/reset.md) — общий и сервисный reset, всегда-включённая базовая линия, lifecycle pending-состояния.

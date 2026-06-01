@@ -1,4 +1,4 @@
-> Translated from: reference/config/deploy/conditions.md @ f49d1ee3614f
+> Translated from: reference/config/deploy/conditions.md @ e8efcd088e62
 
 # Условия и проверки
 
@@ -34,7 +34,7 @@ when:
 
 Shell-команды также используют жёстко заданный `sh -c` (а не `ShellBin`) для переносимости.
 
-**Template-выражения** — синтаксис Go template, вычисляемый на этапе плана на объединённом `DevboxConfig`:
+**Template-выражения** — синтаксис Go template, вычисляемый на этапе плана на объединённом `DweConfig`:
 
 ```yaml
 when:
@@ -159,7 +159,7 @@ Template-условия не поддерживают `check:` в том же ш
 Определение команды один раз:
 
 ```yaml
-# devbox/commands/services/main/db.yml
+# workspace/commands/services/main/db.yml
 commands:
   dump-download:
     type: shell

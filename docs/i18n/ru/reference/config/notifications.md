@@ -1,8 +1,8 @@
-> Translated from: reference/config/notifications.md @ 6bb95b57ec2d
+> Translated from: reference/config/notifications.md @ 6c2bbb306dc4
 
 # Уведомления
 
-Нативные desktop-уведомления, срабатывающие, когда долгие операции Devbox завершаются (успех или провал). Уведомления — это **пользовательская** забота: настройки живут в файле user-конфига вне проекта (с опциональным override'ом на уровне проекта), а не в `devbox.yml`.
+Нативные desktop-уведомления, срабатывающие, когда долгие операции DWE завершаются (успех или провал). Уведомления — это **пользовательская** забота: настройки живут в файле user-конфига вне проекта (с опциональным override'ом на уровне проекта), а не в `workspace.yml`.
 
 См. также: [Локализация (i18n)](i18n.md) — про перевод описаний пользовательских команд и UI-строк.
 
@@ -24,13 +24,13 @@
 
 | Операция | Срабатывает? | Per-op гейт |
 |---|---|---|
-| `devbox deploy` | да | `notify_deploy_enabled` |
-| `devbox run` | да | `notify_run_enabled` |
-| `devbox restart` | **нет** (внутренняя фаза `run` подавлена через `SkipNotify`) | — |
-| `devbox stop` | нет | — |
-| `devbox reset` | нет | — |
-| `devbox commands <id>` (top-level, с `notify: true` на `CommandDef`) | да | `notify_commands_enabled` |
-| `devbox commands <id>` (без `notify: true`) | нет | — |
+| `dwe deploy` | да | `notify_deploy_enabled` |
+| `dwe run` | да | `notify_run_enabled` |
+| `dwe restart` | **нет** (внутренняя фаза `run` подавлена через `SkipNotify`) | — |
+| `dwe stop` | нет | — |
+| `dwe reset` | нет | — |
+| `dwe commands <id>` (top-level, с `notify: true` на `CommandDef`) | да | `notify_commands_enabled` |
+| `dwe commands <id>` (без `notify: true`) | нет | — |
 | Под-шаг workflow (последовательный или параллельный) | **нет** — всегда подавляется в рантайме независимо от собственного поля `notify:` | — |
 | Действие пайплайна деплоя, вызывающее команду | **нет** — то же правило | — |
 | Daemon-команды (`.start` / `.logs` / `.stop` / `.restart`) | `notify: true` отвергается на этапе валидации | — |
@@ -43,15 +43,15 @@
 
 Каждая команда, способная вызвать уведомление, принимает флаг `--silent`, который подавляет desktop-уведомление для этого одного вызова. Полезно для скриптовых / CI-запусков, где пользователя нет за рабочим местом и он не увидит попап.
 
-Флаг доступен на: `devbox deploy run`, `devbox run`, `devbox snapshot create`, `devbox snapshot restore`, `devbox snapshot rollback`, `devbox snapshot remove` и `devbox commands <id>`. Это разовый override — user-конфиг и per-op гейты не меняются.
+Флаг доступен на: `dwe deploy run`, `dwe run`, `dwe snapshot create`, `dwe snapshot restore`, `dwe snapshot rollback`, `dwe snapshot remove` и `dwe commands <id>`. Это разовый override — user-конфиг и per-op гейты не меняются.
 
 ## Расположение файлов
 
 Два файла читаются в следующем порядке приоритета (ниже → выше):
 
-1. **Глобальный user-конфиг** в `~/.config/devbox/config` на каждой ОС (Linux, macOS, Windows). Никакого нативного для платформы расположения, никакого XDG-отката — один путь везде. Отсутствие файла молча трактуется как пустота. Если Devbox когда-нибудь его пишет, режим — `0600`.
+1. **Глобальный user-конфиг** в `~/.config/workspace/config` на каждой ОС (Linux, macOS, Windows). Никакого нативного для платформы расположения, никакого XDG-отката — один путь везде. Отсутствие файла молча трактуется как пустота. Если DWE когда-нибудь его пишет, режим — `0600`.
 
-2. **Override на уровне проекта** в `<project>/.devbox/config`. Директория `.devbox/` уже игнорируется Devbox через gitignore. Отсутствие файла молча трактуется как пустота.
+2. **Override на уровне проекта** в `<project>/.dwe/config`. Директория `.dwe/` уже игнорируется DWE через gitignore. Отсутствие файла молча трактуется как пустота.
 
 3. **Переменные окружения** переопределяют оба файла (высший приоритет).
 
@@ -73,8 +73,8 @@
 | Ключ | Тип | По умолчанию | Назначение |
 |---|---|---|---|
 | `notify_enabled` | bool | `true` | Главный выключатель — когда `false`, ни одно уведомление не срабатывает |
-| `notify_run_enabled` | bool | `true` | Гейт для `devbox run` |
-| `notify_deploy_enabled` | bool | `true` | Гейт для `devbox deploy` |
+| `notify_run_enabled` | bool | `true` | Гейт для `dwe run` |
+| `notify_deploy_enabled` | bool | `true` | Гейт для `dwe deploy` |
 | `notify_commands_enabled` | bool | `true` | Гейт для пользовательских команд с `notify: true` |
 | `notify_channels` | list | `native` | Список backend-имён через запятую; в MVP подключён только `native` |
 
@@ -100,7 +100,7 @@
 2. Соответствующий per-op ключ равен `true` (`notify_deploy_enabled`, `notify_run_enabled` или `notify_commands_enabled`).
 3. `notify_channels` непуст и содержит хотя бы один известный backend (`native` в MVP).
 4. Окружение интерактивное (см. следующую секцию).
-5. Для `devbox commands`: `CommandDef` имеет `notify: true` **и** команда — top-level вызов (`SkipNotify == false`).
+5. Для `dwe commands`: `CommandDef` имеет `notify: true` **и** команда — top-level вызов (`SkipNotify == false`).
 
 Любой промах → молчаливый no-op.
 
@@ -120,9 +120,9 @@
 
 ## Особенности платформ
 
-**macOS** использует [`terminal-notifier`](https://github.com/julienXX/terminal-notifier), когда он есть в `PATH` (установка через `brew install terminal-notifier`), и откатывается на `osascript` в противном случае. Логотип Devbox передаётся как `-contentImage`, чтобы он рендерился как thumbnail внутри карточки уведомления — современный macOS пин'ит маленький слот app-иконки на bundle-иконку самого terminal-notifier и молча игнорирует override'ы `-appIcon`. Откат на `osascript` вообще не может нести кастомную иконку и показывает иконку Script Editor.
+**macOS** использует [`terminal-notifier`](https://github.com/julienXX/terminal-notifier), когда он есть в `PATH` (установка через `brew install terminal-notifier`), и откатывается на `osascript` в противном случае. Логотип DWE передаётся как `-contentImage`, чтобы он рендерился как thumbnail внутри карточки уведомления — современный macOS пин'ит маленький слот app-иконки на bundle-иконку самого terminal-notifier и молча игнорирует override'ы `-appIcon`. Откат на `osascript` вообще не может нести кастомную иконку и показывает иконку Script Editor.
 
-Если на macOS уведомления перестают появляться как баннеры, несмотря на то что `terminal-notifier -list Devbox` показывает их как доставленные, демон Notification Center на macOS застрял. Чинится так:
+Если на macOS уведомления перестают появляться как баннеры, несмотря на то что `terminal-notifier -list DWE` показывает их как доставленные, демон Notification Center на macOS застрял. Чинится так:
 
 ```sh
 killall NotificationCenter
@@ -134,10 +134,10 @@ killall NotificationCenter
 
 ## Пример конфигурации
 
-Типичная настройка: уведомлять о деплое и ad-hoc командах, но молчать про inner-loop цикл `devbox run`.
+Типичная настройка: уведомлять о деплое и ad-hoc командах, но молчать про inner-loop цикл `dwe run`.
 
 ```
-# ~/.config/devbox/config  (одинаково на каждой ОС)
+# ~/.config/workspace/config  (одинаково на каждой ОС)
 
 notify_enabled          = true
 notify_deploy_enabled   = true
@@ -152,7 +152,7 @@ notify_channels         = native
 notify_enabled = false
 ```
 
-Заглушить только для одного проекта (per-project override в `<project>/.devbox/config`):
+Заглушить только для одного проекта (per-project override в `<project>/.dwe/config`):
 
 ```
 notify_run_enabled = false
@@ -164,20 +164,20 @@ notify_run_enabled = false
 
 | Исход | Заголовок | Тело |
 |---|---|---|
-| Успех | `✓ Devbox · <project>: <op> succeeded` | `<duration>` |
-| Провал | `✗ Devbox · <project>: <op> failed` | `<duration>` + (с новой строки) усечённое сообщение об ошибке |
+| Успех | `✓ DWE · <project>: <op> succeeded` | `<duration>` |
+| Провал | `✗ DWE · <project>: <op> failed` | `<duration>` + (с новой строки) усечённое сообщение об ошибке |
 
-Когда у события нет связанного проекта (редко — обычно только синтетические тестовые события), сегмент `· <project>` опускается и заголовок схлопывается в `✓ Devbox: <op> succeeded` / `✗ Devbox: <op> failed`.
+Когда у события нет связанного проекта (редко — обычно только синтетические тестовые события), сегмент `· <project>` опускается и заголовок схлопывается в `✓ DWE: <op> succeeded` / `✗ DWE: <op> failed`.
 
 Примеры:
 
 ```
-✓ Devbox · acme-api: deploy succeeded
+✓ DWE · acme-api: deploy succeeded
 1m 42s
 ```
 
 ```
-✗ Devbox · acme-api: run failed
+✗ DWE · acme-api: run failed
 3.2s
 exit status 1: migration aborted: relation "users" does not exist
 ```
@@ -186,14 +186,14 @@ exit status 1: migration aborted: relation "users" does not exist
 
 ## Иконка и имя приложения на macOS
 
-На macOS иконка Devbox и имя приложения `Devbox` в баннере уведомления требуют установленного [`terminal-notifier`](https://github.com/julienXX/terminal-notifier):
+На macOS иконка DWE и имя приложения `DWE` в баннере уведомления требуют установленного [`terminal-notifier`](https://github.com/julienXX/terminal-notifier):
 
 ```
 brew install terminal-notifier
 ```
 
-Когда `terminal-notifier` присутствует, beeep делегирует ему, и встроенная иконка Devbox и `AppName = "Devbox"` соблюдаются.
+Когда `terminal-notifier` присутствует, beeep делегирует ему, и встроенная иконка DWE и `AppName = "DWE"` соблюдаются.
 
-Без него beeep откатывается на AppleScript (`osascript`), который в свежих релизах macOS показывает отправителя как **Script Editor** и игнорирует иконку. Функциональность не страдает — деградирует только визуальное представление. Текст заголовка (который и так несёт префикс `Devbox · <project>`) остаётся правильным в любом пути.
+Без него beeep откатывается на AppleScript (`osascript`), который в свежих релизах macOS показывает отправителя как **Script Editor** и игнорирует иконку. Функциональность не страдает — деградирует только визуальное представление. Текст заголовка (который и так несёт префикс `DWE · <project>`) остаётся правильным в любом пути.
 
 Linux (libnotify) и Windows (toast) соблюдают встроенную иконку и имя приложения без дополнительной настройки.

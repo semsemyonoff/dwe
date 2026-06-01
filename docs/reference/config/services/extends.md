@@ -37,7 +37,7 @@ flowchart LR
 ## Worked example
 
 ```yaml
-# devbox/services/main/service.yml
+# workspace/services/main/service.yml
 type: app
 container: app-main
 required: true
@@ -52,7 +52,7 @@ render:
 ```
 
 ```yaml
-# devbox/services/main-debug/service.yml
+# workspace/services/main-debug/service.yml
 type: app
 extends: main            # inherits dir, dirs, cli, render, etc.
 container: app-main-debug
@@ -67,4 +67,4 @@ render:
     template: main-debug  # override template, keep enabled: true from parent
 ```
 
-`main-debug` gets `dir`, `dirs`, base `cli`, and `render.ide.enabled: true` from `main`. It overrides `render.ide.template` to use a custom template subdirectory (`devbox/templates/ide/main-debug/`), and adds its own `compose` overlay and extra env. When `devbox render ide` runs, both services share `dir: ./services/main`, so the most-derived (`main-debug`) wins and renders its custom template; `main` is skipped with a collision warning.
+`main-debug` gets `dir`, `dirs`, base `cli`, and `render.ide.enabled: true` from `main`. It overrides `render.ide.template` to use a custom template subdirectory (`workspace/templates/ide/main-debug/`), and adds its own `compose` overlay and extra env. When `dwe render ide` runs, both services share `dir: ./services/main`, so the most-derived (`main-debug`) wins and renders its custom template; `main` is skipped with a collision warning.

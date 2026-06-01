@@ -1,12 +1,12 @@
-> Translated from: reference/render/ai.md @ a320984f18da
+> Translated from: reference/render/ai.md @ 0d4fc2b18eeb
 
-# devbox render ai
+# dwe render ai
 
 Сгенерировать hub-уровневую документацию для агентов для каждого включённого сервиса из пакета шаблонов. Пакет объявляет `manifest.yml`, перечисляющий файлы для рендера и симлинки для создания внутри hub-каталога сервиса (например, `services/main/AGENTS.md` плюс `services/main/CLAUDE.md → AGENTS.md`).
 
 `render ai` и [`render ide`](ide.md) делят большую часть пер-сервисной инфраструктуры — выборку, разрешение шаблонов, гарды безопасности путей, схему manifest. Отличаются в одном важном месте: **политика коллизий** инвертирована (выигрывает поверхностнейший, а не глубочайший).
 
-Пофайловые [локальные оверрайды](index.md) через соседний `<pack>.local/` shadow-tree применяются к AI-пакетам так же, как к IDE и git — положите файл в `devbox/templates/ai/<pack>.local/<rel>`, чтобы подменить им канонический без правки отслеживаемого пакета.
+Пофайловые [локальные оверрайды](index.md) через соседний `<pack>.local/` shadow-tree применяются к AI-пакетам так же, как к IDE и git — положите файл в `workspace/templates/ai/<pack>.local/<rel>`, чтобы подменить им канонический без правки отслеживаемого пакета.
 
 ## Содержание
 
@@ -104,7 +104,7 @@ flowchart LR
 
 ### Явный аргумент `[service]`
 
-`devbox render ai <name>` трактует `<name>` как **hub-якорь** (та же модель, что у `render ide`).
+`dwe render ai <name>` трактует `<name>` как **hub-якорь** (та же модель, что у `render ide`).
 
 Порядок валидации (первая ошибка побеждает):
 
@@ -115,21 +115,21 @@ flowchart LR
 
 После валидации применяется то же «поверхностнейший выигрывает», ограниченное сиблингами, делящими hub. Если победитель отличается, info-строка объявляет подмену.
 
-Так `devbox render ai main-debug` всё равно рендерит родителя `main`, когда оба включены — вариант разрешается в канонического владельца hub.
+Так `dwe render ai main-debug` всё равно рендерит родителя `main`, когда оба включены — вариант разрешается в канонического владельца hub.
 
 ## Разрешение пакета шаблонов
 
-Для каждого выбранного сервиса рендерер выбирает один каталог-пакет под `devbox/templates/ai/`. Цепочка разрешения зеркалит IDE точно, различается только базовый каталог.
+Для каждого выбранного сервиса рендерер выбирает один каталог-пакет под `workspace/templates/ai/`. Цепочка разрешения зеркалит IDE точно, различается только базовый каталог.
 
 ```mermaid
 flowchart TD
   S{"render.ai.template задан?"}
-  S -- да --> EX["devbox/templates/ai/{template}/"]
+  S -- да --> EX["workspace/templates/ai/{template}/"]
   EX -- существует --> USE["использовать этот пакет"]
   EX -- отсутствует --> ERR["ошибка<br/>явный — это строго"]
-  S -- нет --> SN["devbox/templates/ai/{service-name}/"]
+  S -- нет --> SN["workspace/templates/ai/{service-name}/"]
   SN -- существует --> USE
-  SN -- отсутствует --> DEF["devbox/templates/ai/default/"]
+  SN -- отсутствует --> DEF["workspace/templates/ai/default/"]
   DEF -- существует --> USE
   DEF -- отсутствует --> WARN["warning + skip<br/>implicit не найден"]
 ```
@@ -212,14 +212,14 @@ Manifest валидируется до записи любого файла:
 
 | Переменная | Источник |
 |------------|----------|
-| `.Project` | блок `project:` из `devbox.yml` |
+| `.Project` | блок `project:` из `workspace.yml` |
 | `.Service` | **каноническая конфигурационная идентичность** — корень цепочки `extends:` рендерящегося сервиса. Используйте для raw-config поисков по имени сервиса. Равно `.Resolved` без цепочки extends. |
 | `.Resolved` | **render-идентичность** — сервис, чей hub реально рендерится (победитель по политике коллизий). Для AI победитель — самый поверхностный расширитель, поэтому `.Resolved` обычно равно `.Service`. |
 | `.ServiceCfg` | эффективная конфигурация сервиса `.Resolved` после разрешения `extends` |
 | `.Runtime` | объединённый блок `runtime` |
-| `.Cfg` | объединённый `DevboxConfig` (продвинутое). `.Cfg.Raw` — постмержовая мапа после нормализации devbox-ом (`services.*` инжектится из пер-сервисных `service.yml`) — см. [Шаблоны](../templates.md). Для обычных случаев предпочитайте выделенные поля выше. |
+| `.Cfg` | объединённый `DweConfig` (продвинутое). `.Cfg.Raw` — постмержовая мапа после нормализации DWE (`services.*` инжектится из пер-сервисных `service.yml`) — см. [Шаблоны](../templates.md). Для обычных случаев предпочитайте выделенные поля выше. |
 
-> **Совет.** AI-выход ложится в `<svc.Dir>/<entry.To>` — обычно в отслеживаемые проектные файлы (`AGENTS.md`, `.claude/CLAUDE.md`, …). Избегайте потребления developer-local или secret-ключей через `.Cfg.Raw` в AI-шаблонах: любое значение, налитое из `devbox/local.yml`, всплывёт в отрендеренном файле и даст пер-разработческие diff-ы в отслеживаемых артефактах. Используйте `.Cfg.Raw` только для проектно-широких соглашений.
+> **Совет.** AI-выход ложится в `<svc.Dir>/<entry.To>` — обычно в отслеживаемые проектные файлы (`AGENTS.md`, `.claude/CLAUDE.md`, …). Избегайте потребления developer-local или secret-ключей через `.Cfg.Raw` в AI-шаблонах: любое значение, налитое из `workspace/local.yml`, всплывёт в отрендеренном файле и даст пер-разработческие diff-ы в отслеживаемых артефактах. Используйте `.Cfg.Raw` только для проектно-широких соглашений.
 
 Строгий режим рендера означает, что опечатка `{{.Servic.Name}}` прерывает рендер вместо вывода `<no value>`. Используйте `{{if ...}}` для полей, которые могут быть законно пустыми.
 
@@ -261,26 +261,26 @@ Go-овский `text/template` разрешает dot-сегменты, тол�
    - обычный файл или каталог — отказать с ошибкой, советующей либо удалить файл, либо задать `render.ai.enabled: false` для сервиса.
    - пути нет — создать симлинк.
 
-Результат **идемпотентен по содержимому**: перезапуск `devbox render ai` приводит hub-каталог в то же финальное состояние. Учтите: отрендеренные файлы всегда перезаписываются на каждом прогоне (поэтому mtime обновляется), но байты полностью определены шаблонами и объединённой конфигурацией. Симлинки же пересоздаются только когда существующий отсутствует или указывает не туда.
+Результат **идемпотентен по содержимому**: перезапуск `dwe render ai` приводит hub-каталог в то же финальное состояние. Учтите: отрендеренные файлы всегда перезаписываются на каждом прогоне (поэтому mtime обновляется), но байты полностью определены шаблонами и объединённой конфигурацией. Симлинки же пересоздаются только когда существующий отсутствует или указывает не туда.
 
 ## Проработанный пример
 
 Раскладка:
 
 ```
-devbox/services/
+workspace/services/
   main/
     service.yml
   main-debug/
     service.yml
-devbox/templates/ai/
+workspace/templates/ai/
   default/
     manifest.yml
     AGENTS.md.tmpl
     .claude/CLAUDE.md.tmpl
 ```
 
-Manifest `devbox/templates/ai/default/manifest.yml`:
+Manifest `workspace/templates/ai/default/manifest.yml`:
 
 ```yaml
 render:
@@ -294,19 +294,19 @@ symlinks:
     to: AGENTS.md
 ```
 
-Шаблон `devbox/templates/ai/default/AGENTS.md.tmpl`:
+Шаблон `workspace/templates/ai/default/AGENTS.md.tmpl`:
 
 ```markdown
 # {{.Service}} Service Hub
 
-This is the {{.Service}} service running inside a devbox-managed hub.
+This is the {{.Service}} service running inside a DWE-managed hub.
 The application source code is at `src/`.
 
 Service container: {{.ServiceCfg.Container}}
 Workspace root: {{.ServiceCfg.DirInternal}}
 ```
 
-`devbox/services/main/service.yml`:
+`workspace/services/main/service.yml`:
 
 ```yaml
 type: app
@@ -314,7 +314,7 @@ container: app-main
 dir: ./services/main
 ```
 
-`devbox/services/main-debug/service.yml`:
+`workspace/services/main-debug/service.yml`:
 
 ```yaml
 type: app
@@ -323,10 +323,10 @@ container: app-main-debug
 dir: ./services/main          # тот же hub, что у родителя — коллизия
 ```
 
-`devbox render ai`:
+`dwe render ai`:
 
 1. Выборка: оба сервиса проходят гейт активации (дефолтный `render.ai.enabled: true`). Они делят `dir: ./services/main`. У `main` цепочка extends поверхностнее (глубина 0 против 1 у `main-debug`), поэтому **выигрывает `main`**. `main-debug` сообщается как пропуск из-за коллизии.
-2. Разрешение пакета для `main`: `render.ai.template` не задан; implicit-цепочка пробует `devbox/templates/ai/main/` (не найдено), затем `devbox/templates/ai/default/` (используется).
+2. Разрешение пакета для `main`: `render.ai.template` не задан; implicit-цепочка пробует `workspace/templates/ai/main/` (не найдено), затем `workspace/templates/ai/default/` (используется).
 3. Manifest загружен и валиден: две записи рендера, один симлинк. Симлинк указывает на `AGENTS.md`, который и есть одно из render-назначений.
 4. Каждая запись рендера обрабатывается: `AGENTS.md` и `.claude/CLAUDE.md` записываются в `services/main/`.
 5. Создаётся симлинк `services/main/CLAUDE.md → AGENTS.md`.
@@ -341,7 +341,7 @@ services/main/
     CLAUDE.md         ← отрендерен из .claude/CLAUDE.md.tmpl
 ```
 
-`devbox render ai main-debug` производит те же файлы — явный аргумент валидируется, но hub-anchor разрешение выбирает `main` (поверхностнейший) и печатает `ai [main-debug] — resolved to main (hub services/main)`.
+`dwe render ai main-debug` производит те же файлы — явный аргумент валидируется, но hub-anchor разрешение выбирает `main` (поверхностнейший) и печатает `ai [main-debug] — resolved to main (hub services/main)`.
 
 ## Сообщения вывода
 
@@ -370,4 +370,4 @@ services/main/
 
 - [блок `services.<name>.render.ai`](../config/services/fields.md) — `enabled`, `template`, наследование через `extends`
 - [`render ide`](ide.md) — родственная команда с противоположной (глубочайший-выигрывает) политикой коллизий
-- CLI-справочник: [`devbox render ai`](../cli/devbox_render_ai.md)
+- CLI-справочник: [`dwe render ai`](../cli/dwe_render_ai.md)

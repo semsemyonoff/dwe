@@ -1,6 +1,6 @@
 # Internal Architecture
 
-How the Devbox CLI is put together inside the binary: a single Go process with a three-layer internal structure, embedded docs and translations, and no network calls on the normal path. This is the contributor-facing companion to the user-facing [Architecture](../reference/concepts/architecture.md) page (which is the Devbox ↔ Docker boundary view). For per-package responsibilities, invariants, and cross-package contracts, see [`packages.md`](packages.md).
+How the DWE CLI is put together inside the binary: a single Go process with a three-layer internal structure, embedded docs and translations, and no network calls on the normal path. This is the contributor-facing companion to the user-facing [Architecture](../reference/concepts/architecture.md) page (which is the DWE ↔ Docker boundary view). For per-package responsibilities, invariants, and cross-package contracts, see [`packages.md`](packages.md).
 
 ## Contents
 
@@ -13,12 +13,12 @@ How the Devbox CLI is put together inside the binary: a single Go process with a
 
 ## Single binary, single composition root
 
-Devbox ships as one statically linked Go binary at `bin/devbox`. There is no plugin loader, no companion daemon, and no external runtime besides the host Docker engine.
+DWE ships as one statically linked Go binary at `bin/dwe`. There is no plugin loader, no companion daemon, and no external runtime besides the host Docker engine.
 
 Process startup goes through a single composition root:
 
-1. `cmd/devbox/main.go` is the executable entrypoint.
-2. It detects the fast `devbox prompt` path before cobra runs and dispatches into `internal/shared/prompt` for shell prompts.
+1. `cmd/dwe/main.go` is the executable entrypoint.
+2. It detects the fast `dwe prompt` path before cobra runs and dispatches into `internal/shared/prompt` for shell prompts.
 3. For every other invocation it calls `cli.NewRootCmdWithFlags()`, which builds the entire cobra command tree.
 4. It hands the tree to `fang.Execute` with a custom error handler that suppresses output for `pipeline.ErrSilent`, honours `ExitCode()`-bearing errors, and emits a JSON envelope to stderr when `--output json` is set.
 5. On exit the handler translates the returned error to a process exit code via `cmdctx.ExitCodeFor`.
@@ -31,7 +31,7 @@ The composition root in `internal/cli/root.go` registers commands into five grou
 
 ```mermaid
 flowchart LR
-  Bin["cmd/devbox<br/>main"] --> CLI
+  Bin["cmd/dwe<br/>main"] --> CLI
 
   subgraph internal["internal/"]
     direction LR
@@ -67,7 +67,7 @@ The root's `PersistentPreRunE` does five things before any `RunE` runs:
 1. Validates `--output` (`text` or `json`) and rejects `--pretty` without JSON.
 2. Sets `NO_COLOR=1`, `SilenceErrors`, and `SilenceUsage` in JSON mode.
 3. Locates the project. `validate` and its descendants use `project.Locate` (no schema check) so schema errors surface as diagnostics; every other command uses `project.Resolve` (schema check). A small allowlist (`version`, `prompt`, `completion …`, `docs …`) is allowed to run without a project.
-4. Loads `devbox/styles.yml` and applies the palette to `core/ui/styles`.
+4. Loads `workspace/styles.yml` and applies the palette to `core/ui/styles`.
 5. Resolves the locale via `i18n.ResolveLocale` and loads the i18n store.
 
 Two cross-cutting patterns flow through `cmdctx.RootFlags`:
@@ -96,16 +96,16 @@ Three properties matter:
 - Content hashes for every file are baked into `internal/core/docs/content_hashes_gen.go` by `scripts/gen-docs-content-hashes.sh` at build time. The hash is the per-file freshness anchor.
 - Each translated file starts with `> Translated from: <relPath> @ <hash>`. `internal/core/docs/lang.go` parses the header, compares the hash against `ContentHashFor(relPath)`, and surfaces a staleness warning when they diverge.
 
-`devbox docs` reads from `BuiltinFS` only — no filesystem walk under the project root, no remote fetch. The subsystem is read-only: no lock acquisition, no preflight, and locale resolution uses `i18n.ResolveLocale(flagLang, cfgLang, sysLang)` directly (the cobra-clamped `rflags.Locale` is the wrong namespace for markdown).
+`dwe docs` reads from `BuiltinFS` only — no filesystem walk under the project root, no remote fetch. The subsystem is read-only: no lock acquisition, no preflight, and locale resolution uses `i18n.ResolveLocale(flagLang, cfgLang, sysLang)` directly (the cobra-clamped `rflags.Locale` is the wrong namespace for markdown).
 
-`devbox docs llms-txt` emits a compact AI-agent index that combines the embedded docs with project-aware data (services, commands, info) collected in the cli layer. The generator itself stays config-import-free.
+`dwe docs llms-txt` emits a compact AI-agent index that combines the embedded docs with project-aware data (services, commands, info) collected in the cli layer. The generator itself stays config-import-free.
 
 ## No network on the normal path
 
-Devbox does not phone home, fetch updates, or pull templates over the network on a normal invocation. Every behavior the CLI drives is local:
+DWE does not phone home, fetch updates, or pull templates over the network on a normal invocation. Every behavior the CLI drives is local:
 
 - Project discovery walks upward from the working directory.
-- Config is YAML on disk under `devbox.yml` and `devbox/`.
+- Config is YAML on disk under `workspace.yml` and `workspace/`.
 - Templates, validators, and pipelines are evaluated in-process.
 - Docs and translations are embedded.
 - Container orchestration shells out to local `docker` and `docker compose`.
@@ -113,11 +113,11 @@ Devbox does not phone home, fetch updates, or pull templates over the network on
 
 The only network traffic the CLI initiates is whatever the user explicitly asks for inside a pipeline step or a user command — for example, a `type: shell` step that calls `curl`, a `type: builtin` step that probes `tcp_reachable`, or a Git hook that pushes. The CLI itself does not open sockets on the normal path.
 
-This makes Devbox safe to run on disconnected machines, easy to reason about in CI, and predictable under restricted egress policies.
+This makes DWE safe to run on disconnected machines, easy to reason about in CI, and predictable under restricted egress policies.
 
 ## Where to go next
 
 - [`packages.md`](packages.md) — per-package responsibilities, invariants, and cross-package contracts. The exhaustive companion to this overview.
-- [Architecture (user-facing)](../reference/concepts/architecture.md) — the Devbox ↔ Docker boundary view: what Devbox owns vs what Docker owns.
-- [Project layout](../reference/concepts/project-layout.md) — what each folder under `devbox/` is for, and what gets generated under `.devbox/`.
+- [Architecture (user-facing)](../reference/concepts/architecture.md) — the DWE ↔ Docker boundary view: what DWE owns vs what Docker owns.
+- [Project layout](../reference/concepts/project-layout.md) — what each folder under `workspace/` is for, and what gets generated under `.dwe/`.
 - [Pipelines](../reference/concepts/pipelines.md) — the phase / step / condition execution model that deploy, reset, and lifecycle share.

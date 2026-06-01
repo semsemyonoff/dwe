@@ -1,25 +1,25 @@
-> Translated from: reference/docs/commands.md @ b56204ee349f
+> Translated from: reference/docs/commands.md @ 4652c112651f
 
 # Неинтерактивные команды документации
 
-Подкоманды `devbox docs` для использования в пайпах, скриптах, агентах и CI. Также описывают настройку mermaid-диаграмм и пути установки `mmdc`.
+Подкоманды `dwe docs` для использования в пайпах, скриптах, агентах и CI. Также описывают настройку mermaid-диаграмм и пути установки `mmdc`.
 
-## `devbox docs show <topic>`
+## `dwe docs show <topic>`
 
 Рендер одной темы документации в stdout.
 
 **Использование:**
 ```bash
-devbox docs show <topic> [--lang <code>] [--raw] [--source all|devbox|project] [--anchors] [--toc]
+dwe docs show <topic> [--lang <code>] [--raw] [--source all|dwe|project] [--anchors] [--toc]
 ```
 
 **Аргументы:**
-- `<topic>` — путь темы, опционально с якорем: `config/lifecycle`, `config/services/fields`, `config/devbox#binary-overrides`, `config/services/fields.md#ports-field`. Поддерживается нечёткое сопоставление (нечувствительный к регистру поиск по подстроке); многостраничные темы вроде `config/services` неоднозначны сами по себе — указывайте конкретную подстраницу.
+- `<topic>` — путь темы, опционально с якорем: `config/lifecycle`, `config/services/fields`, `config/workspace#binary-overrides`, `config/services/fields.md#ports-field`. Поддерживается нечёткое сопоставление (нечувствительный к регистру поиск по подстроке); многостраничные темы вроде `config/services` неоднозначны сами по себе — указывайте конкретную подстраницу.
 
 **Флаги:**
 - `--lang <code>` — рендер на конкретном языке (2-буквенный код; например `ru`, `de`). По умолчанию — системная локаль или `en`.
 - `--raw` — вывод сырого markdown (без подсветки синтаксиса, без рендера mermaid). Полезно для пайпов и программного потребления.
-- `--source <all|devbox|project>` — область поиска (по умолчанию `all`). `devbox` ищет только во встроенных доках; `project` — только в `./docs/`; `all` — в обоих.
+- `--source <all|dwe|project>` — область поиска (по умолчанию `all`). `dwe` ищет только во встроенных доках; `project` — только в `./docs/`; `all` — в обоих.
 - `--anchors` — вывести все якоря темы (по одному в строке) и выйти. Полезно для shell-автодополнения форм `topic#anchor`.
 - `--toc` — вывести оглавление темы как TSV (`level\tslug\ttext`, по одному заголовку в строке) и выйти. Удобная для агентов схема страницы.
 
@@ -30,59 +30,59 @@ devbox docs show <topic> [--lang <code>] [--raw] [--source all|devbox|project] [
 **Примеры:**
 ```bash
 # Рендер в текущей локали или fallback на английский
-devbox docs show config/services/index
+dwe docs show config/services/index
 
 # Рендер на русском (с плашкой об устаревшем переводе, если применимо)
-devbox docs show config/services/index --lang ru
+dwe docs show config/services/index --lang ru
 
 # Рендер сырого markdown (удобно для агентов); скоуп на секцию через якорь
-devbox docs show config/services/fields --raw --lang en
-devbox docs show config/devbox#binary-overrides --raw --lang en
+dwe docs show config/services/fields --raw --lang en
+dwe docs show config/workspace#binary-overrides --raw --lang en
 
 # Показать только встроенные доки (пропустить проектные ./docs/)
-devbox docs show config/services/fields --source devbox --lang en
+dwe docs show config/services/fields --source dwe --lang en
 ```
 
-## `devbox docs list`
+## `dwe docs list`
 
 Вывести список всех доступных тем документации (плоский формат).
 
 **Использование:**
 ```bash
-devbox docs list [--lang <code>] [--source all|devbox|project] [--match <glob>]
+dwe docs list [--lang <code>] [--source all|dwe|project] [--match <glob>]
 ```
 
 **Флаги:**
 - `--lang <code>` — фильтр по языку (по умолчанию: активная локаль или `en`).
-- `--source <all|devbox|project>` — область поиска (по умолчанию `all`).
+- `--source <all|dwe|project>` — область поиска (по умолчанию `all`).
 - `--match <glob>` — фильтр путей тем по shell-glob. `*` совпадает с одним сегментом; `**` пересекает `/`. Примеры: `reference/config/*`, `reference/commands/**`.
 
 **Вывод:**
 Колонки через табуляцию (удобно для агентов):
 ```
 <source>	<path>	<language>
-devbox	config/devbox	en
-devbox	config/services/fields	en
-devbox	config/services/fields	ru
+dwe	config/workspace	en
+dwe	config/services/fields	en
+dwe	config/services/fields	ru
 project	guides/setup	en
 ```
 
 **Пример:**
 ```bash
-$ devbox docs list
-devbox	reference/config/devbox	en
-devbox	reference/config/services/fields	en
-devbox	reference/config/services/fields	ru
+$ dwe docs list
+dwe	reference/config/workspace	en
+dwe	reference/config/services/fields	en
+dwe	reference/config/services/fields	ru
 project	guides/getting-started	en
 ```
 
-## `devbox docs export <dir>`
+## `dwe docs export <dir>`
 
 Экспортировать все темы документации в каталог на диске (полезно для офлайн-чтения, публикации или CI-пайплайнов).
 
 **Использование:**
 ```bash
-devbox docs export <dir> [--lang <code>] [--include-project] [--include-internals] [--force]
+dwe docs export <dir> [--lang <code>] [--include-project] [--include-internals] [--force]
 ```
 
 **Аргументы:**
@@ -103,60 +103,60 @@ Markdown-файлы (с сохранёнными mermaid-блоками как �
 **Примеры:**
 ```bash
 # Экспорт встроенных справочных доков (английский)
-devbox docs export ./docs-en/
+dwe docs export ./docs-en/
 
 # Экспорт на русском с проектными доками
-devbox docs export ./docs-ru/ --lang ru --include-project
+dwe docs export ./docs-ru/ --lang ru --include-project
 
 # Перезаписать существующий каталог
-devbox docs export ./docs-latest/ --force
+dwe docs export ./docs-latest/ --force
 ```
 
-## `devbox docs llms-txt`
+## `dwe docs llms-txt`
 
-Сгенерировать один документ [llms.txt](https://llmstxt.org/) — плотный индекс ~2–5 КБ, дающий AI-агенту полную картину того, что представляет собой данный devbox-проект и где искать подробности.
+Сгенерировать один документ [llms.txt](https://llmstxt.org/) — плотный индекс ~2–5 КБ, дающий AI-агенту полную картину того, что представляет собой данный DWE-проект и где искать подробности.
 
 **Использование:**
 ```bash
-devbox docs llms-txt                          # печать в stdout
-devbox docs llms-txt --output llms.txt        # запись в файл
-devbox docs llms-txt --include-internals      # включить темы internals/*
-devbox docs llms-txt --no-project             # принудительно сгенерировать project-agnostic вывод
-devbox docs llms-txt --lang ru                # локализовать описания команд
+dwe docs llms-txt                          # печать в stdout
+dwe docs llms-txt --output llms.txt        # запись в файл
+dwe docs llms-txt --include-internals      # включить темы internals/*
+dwe docs llms-txt --no-project             # принудительно сгенерировать project-agnostic вывод
+dwe docs llms-txt --lang ru                # локализовать описания команд
 ```
 
 **Флаги:**
 - `--output PATH` — записать в PATH вместо stdout. Родительские каталоги создаются по необходимости.
 - `--lang CODE` — язык описаний команд. По умолчанию — пользовательская конфигурация / `$LANG` / `en`.
 - `--include-internals` — включить архитектурные доки `internals/` в раздел Documentation.
-- `--no-project` — принудительно вывести project-agnostic форму даже внутри devbox-проекта.
+- `--no-project` — принудительно вывести project-agnostic форму даже внутри dwe-проекта.
 
 **Формы вывода:**
-- *Внутри проекта*: H1 с именем проекта, summary-блок, далее `## Project` (сервисы, URL, хосты), `## Commands` (пользовательские команды), `## Documentation` (ссылки на темы как `devbox-docs://path`) и `## Quick start`.
-- *Вне проекта* (или с `--no-project`): обобщённый devbox-справочник — H1 «devbox», summary-блок, `## Documentation`, `## Quick start`. Без секций, специфичных для проекта.
+- *Внутри проекта*: H1 с именем проекта, summary-блок, далее `## Project` (сервисы, URL, хосты), `## Commands` (пользовательские команды), `## Documentation` (ссылки на темы как `dwe-docs://path`) и `## Quick start`.
+- *Вне проекта* (или с `--no-project`): обобщённый DWE-справочник — H1 «dwe», summary-блок, `## Documentation`, `## Quick start`. Без секций, специфичных для проекта.
 
 **Подробности:**
-- Только чтение. Не берёт проектную блокировку и не запускает preflight; работает без `devbox.yml`.
+- Только чтение. Не берёт проектную блокировку и не запускает preflight; работает без `workspace.yml`.
 - Отключённые сервисы и приватные команды исключаются.
-- Схема ссылок `devbox-docs://<path>` соответствует путям тем, потребляемым `devbox docs show <path>`.
+- Схема ссылок `dwe-docs://<path>` соответствует путям тем, потребляемым `dwe docs show <path>`.
 
-## `devbox docs cache clear`
+## `dwe docs cache clear`
 
 Удалить все закешированные mermaid-диаграммы.
 
 **Использование:**
 ```bash
-devbox docs cache clear
+dwe docs cache clear
 ```
 
 **Подробности:**
-- Очищает XDG-кеш (`$XDG_CACHE_HOME/devbox/mermaid/` или fallback).
+- Очищает XDG-кеш (`$XDG_CACHE_HOME/dwe/mermaid/` или fallback).
 - Безвреден, если кеша нет.
 - Закешированные диаграммы автоматически регенерируются при следующем просмотре.
 
 **Пример:**
 ```bash
-devbox docs cache clear
+dwe docs cache clear
 # → "Removed 42 cached diagrams"
 ```
 
@@ -180,7 +180,7 @@ devbox docs cache clear
 - Никогда не рендерит диаграммы; всегда показывает сырые mermaid-блоки
 - Полезно для окружений с ограниченной полосой или ресурсами
 
-Настройка — через `docs.mermaid` в `devbox.yml`. См. [Справочник конфигурации](index.md) для схемы.
+Настройка — через `docs.mermaid` в `workspace.yml`. См. [Справочник конфигурации](index.md) для схемы.
 
 ### Установка `mmdc`
 
@@ -189,18 +189,18 @@ devbox docs cache clear
 - **npm (рекомендуется)** — `npm i -g @mermaid-js/mermaid-cli`. Puppeteer сам управляет загрузкой Chromium в `~/.cache/puppeteer/` и держит её в синхронизации с установленной версией mermaid-cli. Обновление — `npm update -g @mermaid-js/mermaid-cli`.
 - **Homebrew** — `brew install mermaid-cli`. Работает, но формула пиннит конкретную версию puppeteer, ожидающую точную сборку Chromium; если в `~/.cache/puppeteer/` нужной сборки ещё нет, первый рендер падает с `Could not find Chrome (ver. …)`. Лечение: либо один раз выполнить `npx puppeteer browsers install chrome@<version-from-error>`, либо переключиться на npm-установку выше, у которой такой проблемы пиннинга нет.
 
-Проверьте установку одноразовым рендером вне Devbox:
+Проверьте установку одноразовым рендером вне DWE:
 
 ```sh
 echo 'flowchart LR; A-->B' > /tmp/x.mmd
 mmdc -i /tmp/x.mmd -o /tmp/x.png
 ```
 
-Если PNG получился, `devbox docs` тоже справится.
+Если PNG получился, `dwe docs` тоже справится.
 
 ### Тема диаграмм (`mermaid_theme`)
 
-Переопределить, какая mermaid-тема рендерится, независимо от фона терминала. Задаётся в пользовательском конфиге (`~/.config/devbox/config` — глобально, `.devbox/config` — для проекта, переменная окружения побеждает).
+Переопределить, какая mermaid-тема рендерится, независимо от фона терминала. Задаётся в пользовательском конфиге (`~/.config/workspace/config` — глобально, `.dwe/config` — для проекта, переменная окружения побеждает).
 
 | Ключ | Тип | По умолчанию | Значения |
 |---|---|---|---|
@@ -213,7 +213,7 @@ Override через окружение: `DWE_MERMAID_THEME=dark`. Выбранн
 
 ### Управление кешем
 
-PNG-файлы диаграмм кешируются в `$XDG_CACHE_HOME/devbox/mermaid/` (или системный temp как fallback).
+PNG-файлы диаграмм кешируются в `$XDG_CACHE_HOME/dwe/mermaid/` (или системный temp как fallback).
 
 В ключ кеша входят исходник mermaid, ширина рендера, тема (dark/light) и версия `mmdc` — поэтому апгрейд mermaid-cli автоматически инвалидирует старые рендеры.
 
@@ -221,10 +221,10 @@ PNG-файлы диаграмм кешируются в `$XDG_CACHE_HOME/devbox/
 
 Очистка кеша вручную:
 ```bash
-devbox docs cache clear
+dwe docs cache clear
 ```
 
 ## См. также
 
-- [Интерактивный TUI-браузер](browser.md) — клавиши `devbox docs`, раскладка, поиск
+- [Интерактивный TUI-браузер](browser.md) — клавиши `dwe docs`, раскладка, поиск
 - [Переводы и поведение языка](translations.md) — разрешение локали, проверки устаревания

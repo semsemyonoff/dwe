@@ -1,6 +1,6 @@
-> Translated from: reference/render/git.md @ 8c1411a7e945
+> Translated from: reference/render/git.md @ 71927fb2f636
 
-# devbox render git
+# dwe render git
 
 Сгенерировать shell git-хуки для каждого включённого сервиса из пакета шаблонов. Вывод идёт в git-каталог хуков сервиса (например, `services/main/src/.git/hooks/pre-commit`), с исполняемым режимом `0755`.
 
@@ -84,15 +84,15 @@ flowchart TD
 
 ### Явный аргумент `[service]`
 
-`devbox render git <name>` трактует `<name>` как hub-якорь. Аргумент валидируется по карте сервисов и гейту активации, затем применяется то же «глубочайший выигрывает» разрешение — поэтому `devbox render git main` может в итоге рендерить из конфигурации `main-debug`, когда оба делят `dir`.
+`dwe render git <name>` трактует `<name>` как hub-якорь. Аргумент валидируется по карте сервисов и гейту активации, затем применяется то же «глубочайший выигрывает» разрешение — поэтому `dwe render git main` может в итоге рендерить из конфигурации `main-debug`, когда оба делят `dir`.
 
 ## Разрешение пакета шаблонов
 
-Для каждого выбранного сервиса рендерер выбирает один каталог-пакет под `devbox/templates/git/`. Цепочка точно совпадает с [`render ai`](ai.md) и [`render ide`](ide.md), различается только базовый каталог:
+Для каждого выбранного сервиса рендерер выбирает один каталог-пакет под `workspace/templates/git/`. Цепочка точно совпадает с [`render ai`](ai.md) и [`render ide`](ide.md), различается только базовый каталог:
 
-1. Если задано `render.git.template`, пробуется только `devbox/templates/git/<render.git.template>/`. Отсутствие пакета — жёсткая ошибка.
-2. Иначе пробуется `devbox/templates/git/<service-name>/`. Если отсутствует — провалиться дальше.
-3. Иначе используется `devbox/templates/git/default/`. Если отсутствует — пропуск с предупреждением (implicit missing pack).
+1. Если задано `render.git.template`, пробуется только `workspace/templates/git/<render.git.template>/`. Отсутствие пакета — жёсткая ошибка.
+2. Иначе пробуется `workspace/templates/git/<service-name>/`. Если отсутствует — провалиться дальше.
+3. Иначе используется `workspace/templates/git/default/`. Если отсутствует — пропуск с предупреждением (implicit missing pack).
 
 Символы имени пакета ограничены (`^[A-Za-z0-9][A-Za-z0-9_-]*$`); небезопасное имя сервиса (точка в начале, дефис в начале, разделители путей) молча пропускает кандидата по имени сервиса и проваливается на `default/`.
 
@@ -137,12 +137,12 @@ Git-специфичные правила валидации (поверх об�
 
 | Переменная | Источник |
 |------------|----------|
-| `.Project` | блок `project:` из `devbox.yml` |
+| `.Project` | блок `project:` из `workspace.yml` |
 | `.Service` | **каноническая конфигурационная идентичность** — корень цепочки `extends:` рендерящегося сервиса. Используйте для raw-config поисков по имени сервиса (например, `(index .Cfg.Raw.git.hooks .Service)`). Равно `.Resolved`, когда у рендерящегося сервиса нет `extends:`. |
 | `.Resolved` | **render-идентичность** — имя сервиса, чей hub реально рендерится (победитель коллизии по глубочайшему extends). Равно `.Service` без коллизии. |
 | `.ServiceCfg` | эффективная конфигурация сервиса `.Resolved` (рендерящегося), после разрешения `extends`. Поля вроде `.ServiceCfg.Container` отражают overlay расширителя. |
 | `.Runtime` | объединённый блок `runtime` |
-| `.Cfg` | объединённый `DevboxConfig` (продвинутое). `.Cfg.Raw` — постмержовая мапа конфигурации после нормализации devbox-ом (`services.*` инжектится из пер-сервисных `service.yml`) — см. [Шаблоны](../templates.md). Для обычных случаев предпочитайте выделенные поля выше. |
+| `.Cfg` | объединённый `DweConfig` (продвинутое). `.Cfg.Raw` — постмержовая мапа конфигурации после нормализации DWE (`services.*` инжектится из пер-сервисных `service.yml`) — см. [Шаблоны](../templates.md). Для обычных случаев предпочитайте выделенные поля выше. |
 
 > **Почему `.Service` и `.Resolved` различаются.** Когда два сервиса делят один `dir:` (обычно база + `extends:`-ребёнок типа `main` и `main-debug`), политика коллизий выбирает самого глубокого расширителя владельцем hub — это и есть `.Resolved`. Но user-facing секции конфигурации, ключёванные по имени сервиса (`git.hooks.<svc>`, `cs.<svc>`, …), по соглашению заполняются только на базе, поэтому raw-config поиски должны использовать `.Service` (корень цепочки), чтобы найтись. Эти два поля разделяют *поведенческую идентичность* (к какому контейнеру цепляться, какой overlay действует) и *конфигурационную идентичность* (где искать пользовательские значения).
 
@@ -181,17 +181,17 @@ Git-хуки рендерятся под `<svc.Dir>/src/.git/hooks/` (gitignored
 Раскладка:
 
 ```
-devbox/services/
+workspace/services/
   main/
     service.yml
-devbox/templates/git/
+workspace/templates/git/
   default/
     manifest.yml
     pre-commit.tmpl
     pre-push.tmpl
 ```
 
-Manifest `devbox/templates/git/default/manifest.yml`:
+Manifest `workspace/templates/git/default/manifest.yml`:
 
 ```yaml
 render:
@@ -199,15 +199,15 @@ render:
   - { from: pre-push.tmpl,   to: pre-push }
 ```
 
-Шаблон `devbox/templates/git/default/pre-commit.tmpl`:
+Шаблон `workspace/templates/git/default/pre-commit.tmpl`:
 
 ```sh
 #!/usr/bin/env sh
 # pre-commit hook for {{.Resolved}} ({{.ServiceCfg.Container}})
-exec devbox run --service {{.Resolved}} lint
+exec dwe run --service {{.Resolved}} lint
 ```
 
-`devbox/services/main/service.yml`:
+`workspace/services/main/service.yml`:
 
 ```yaml
 type: app
@@ -216,10 +216,10 @@ dir: ./services/main
 # render.git.enabled defaults to true (type: app)
 ```
 
-`devbox render git`:
+`dwe render git`:
 
 1. Выборка: `main` проходит гейт активации. Hub preflight успешен.
-2. Разрешение пакета: implicit-цепочка — `devbox/templates/git/main/` отсутствует, поэтому используется `devbox/templates/git/default/`.
+2. Разрешение пакета: implicit-цепочка — `workspace/templates/git/main/` отсутствует, поэтому используется `workspace/templates/git/default/`.
 3. `services/main/src/.git/` — каталог → зонд успешен.
 4. Manifest валиден: две записи рендера, без симлинков, basename-значения `to`, источники есть.
 5. Каждая запись рендерится в `services/main/src/.git/hooks/` с режимом `0755`.
@@ -269,4 +269,4 @@ services/main/src/.git/hooks/
 - [`render ide`](ide.md) — родственная команда с той же политикой «глубочайший выигрывает»
 - [`render ai`](ai.md) — родственная команда (поверхностнейший выигрывает), разделяющая схему manifest
 - [Обзор render](index.md) — общая схема manifest и механизм локальных оверрайдов
-- CLI-справочник: [`devbox render git`](../cli/devbox_render_git.md)
+- CLI-справочник: [`dwe render git`](../cli/dwe_render_git.md)

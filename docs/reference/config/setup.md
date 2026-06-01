@@ -17,7 +17,7 @@ Interactive setup questions for fresh projects.
 
 ## Purpose
 
-`devbox/setup.yml` defines interactive prompts that run when a developer first enters a fresh project (one without a `devbox/local.yml` or with an empty one). The wizard collects answers, writes them into `devbox/local.yml` as merged settings, and then proceeds to deployment.
+`workspace/setup.yml` defines interactive prompts that run when a developer first enters a fresh project (one without a `workspace/local.yml` or with an empty one). The wizard collects answers, writes them into `workspace/local.yml` as merged settings, and then proceeds to deployment.
 
 Use setup questions for one-time per-developer configuration:
 - API keys or secrets (stored in `local.yml`, which is gitignored)
@@ -25,18 +25,18 @@ Use setup questions for one-time per-developer configuration:
 - Port overrides (when local port conflicts exist)
 - Custom paths or hostnames
 
-The setup wizard is part of the broader `devbox deploy` flow — running `devbox deploy` with no subcommand opens an interactive menu that includes a Wizard option when setup questions are present.
+The setup wizard is part of the broader `dwe deploy` flow — running `dwe deploy` with no subcommand opens an interactive menu that includes a Wizard option when setup questions are present.
 
 ## How it works
 
-1. Developer runs `devbox deploy` in an interactive terminal on a fresh project.
-2. The CLI probes for port conflicts and loads `devbox/setup.yml` (if present).
+1. Developer runs `dwe deploy` in an interactive terminal on a fresh project.
+2. The CLI probes for port conflicts and loads `workspace/setup.yml` (if present).
 3. If both are empty (no questions, no conflicts), no wizard runs — proceed directly to deploy.
 4. If either has content, the menu opens with a **Wizard** option.
 5. Wizard runs:
    - First, port-conflict prompts (if any) — developer chooses override ports.
    - Then, setup questions (if any) — developer answers each prompt.
-   - Finally, both answers are deep-merged into `devbox/local.yml` and written atomically.
+   - Finally, both answers are deep-merged into `workspace/local.yml` and written atomically.
 6. Config is reloaded from the updated `local.yml`, preflight runs, and deploy proceeds normally.
 
 If the developer cancels at any wizard step (Ctrl-C), `local.yml` is left untouched — no partial writes.
@@ -115,7 +115,7 @@ Schema rules enforced at load time:
 - `writes` must be unique across entries and follow dot-path syntax rules (see below).
 - Unknown top-level fields inside a question are rejected.
 
-Schema rules enforced by validation (run via `devbox validate`):
+Schema rules enforced by validation (run via `dwe validate`):
 
 - `type` must be one of the four known values.
 - `writes` must follow the scope and syntax rules below.
@@ -285,11 +285,11 @@ Validate the input against a regular expression pattern. The input must match th
     regex: "^[a-z0-9+._-]+@[a-z0-9.-]+$"
 ```
 
-Pattern must compile as a valid Go regex. Invalid patterns are caught by `devbox validate` before the wizard ever runs.
+Pattern must compile as a valid Go regex. Invalid patterns are caught by `dwe validate` before the wizard ever runs.
 
 ## Write scope rules
 
-The `writes:` field is a dot-path that determines where in `devbox/local.yml` the answer is stored. Not all paths are allowed — the wizard enforces rules to ensure answers merge safely with the config schema.
+The `writes:` field is a dot-path that determines where in `workspace/local.yml` the answer is stored. Not all paths are allowed — the wizard enforces rules to ensure answers merge safely with the config schema.
 
 ### Forbidden top-level namespaces
 
@@ -444,6 +444,6 @@ questions:
 
 ## Related commands
 
-- `devbox deploy` — opens the wizard menu on fresh projects
-- `devbox validate` — checks `devbox/setup.yml` schema and writes paths
-- `devbox validate setup` — validates only the setup domain
+- `dwe deploy` — opens the wizard menu on fresh projects
+- `dwe validate` — checks `workspace/setup.yml` schema and writes paths
+- `dwe validate setup` — validates only the setup domain

@@ -14,7 +14,7 @@ Worked examples for orchestrator and per-service pipelines, the `after:` orderin
 ## Example: orchestrator pipeline
 
 ```yaml
-# devbox/deploy.yml
+# workspace/deploy.yml
 phases:
   - name: services
     deploy_services: true
@@ -24,7 +24,7 @@ phases:
     description: Start containers
     steps:
       - name: up
-        type: devbox
+        type: dwe
         cmd: "docker up"
       - name: wait-healthy
         type: builtin
@@ -35,7 +35,7 @@ phases:
     untracked: true
     steps:
       - name: info
-        type: devbox
+        type: dwe
         cmd: "info"
       - name: success
         type: builtin
@@ -48,7 +48,7 @@ phases:
 ## Example: per-service pipeline
 
 ```yaml
-# devbox/services/main/deploy.yml
+# workspace/services/main/deploy.yml
 phases:
   - name: setup
     description: Create dirs and install
@@ -93,7 +93,7 @@ phases:
     description: Generate IDE config
     steps:
       - name: render-ide
-        type: devbox
+        type: dwe
         cmd: "render ide main"
 ```
 
@@ -102,7 +102,7 @@ phases:
 Any service type can have a deploy pipeline. An infra service like MinIO can declare initial bucket setup, and use `after:` to ensure it deploys after the app whose secrets it provisions:
 
 ```yaml
-# devbox/services/minio/deploy.yml
+# workspace/services/minio/deploy.yml
 after:
   - main  # deploy after the main app service
 
@@ -172,11 +172,11 @@ Leaf-only directives are **rejected** on a group step: `type`, `cmd`, `with`, `c
 | Interactive prompt in sub-step without `skip_confirm: true` (sub-step or inherited from group) | error — covers `confirmation: true` in the target command, `builtin: confirm`, and workflows recursively containing a confirm-step |
 | `service_run` sub-step with TTY-allocating compose args | warning — TTY is never allocated in parallel mode |
 
-Validation runs at `devbox validate` and at plan resolution; either path catches misconfigurations before execution.
+Validation runs at `dwe validate` and at plan resolution; either path catches misconfigurations before execution.
 
 ### Execution semantics
 
-- **Cancellation**: `errgroup.WithContext` carries the parent `context.Context` through every runner (`HostRunner`, `DevboxRunner`, `ServiceExecRunner`, `ServiceRunRunner`, `ScriptRunner`, `WorkflowRunner`) and every builtin. Shell-out children are spawned with `exec.CommandContext` and bound to `cmd.Cancel = SIGTERM` + `cmd.WaitDelay = 5s` — on cancel, the child receives SIGTERM first (graceful shutdown), then SIGKILL after the delay. The Go-side builtin `docker_wait_healthy` aborts its poll loop on `ctx.Done()` within one tick.
+- **Cancellation**: `errgroup.WithContext` carries the parent `context.Context` through every runner (`HostRunner`, `DWERunner`, `ServiceExecRunner`, `ServiceRunRunner`, `ScriptRunner`, `WorkflowRunner`) and every builtin. Shell-out children are spawned with `exec.CommandContext` and bound to `cmd.Cancel = SIGTERM` + `cmd.WaitDelay = 5s` — on cancel, the child receives SIGTERM first (graceful shutdown), then SIGKILL after the delay. The Go-side builtin `docker_wait_healthy` aborts its poll loop on `ctx.Done()` within one tick.
 - **SIGINT**: `RunWithOptions` installs a `signal.NotifyContext(SIGINT, SIGTERM)` on the parent context once per pipeline run. A user Ctrl-C cancels the context, which propagates to every active sub-step's child process. No orphaned `docker compose` / `sleep` processes after a clean shutdown.
 - **`fail_fast: true`**: first failing sub-step (not counting `continue_on_error: true` ones) cancels the group; remaining sub-steps observe `ctx.Done()` and their children are killed. The group's error is the first failure wrapped with its sub-step address.
 - **`fail_fast: false`**: all sub-steps run to completion. Errors are wrapped per-sub-step (`parallel sub-step "phase/group/sub": <err>`) and combined via `errors.Join`.
@@ -191,14 +191,14 @@ Validation runs at `devbox validate` and at plan resolution; either path catches
   - Parallel sub-steps do NOT allocate a PTY — granting a child a PTY while stdin is the empty reader makes `docker compose exec/run` fail with "cannot attach stdin to a TTY-enabled container". Sub-step output flows through `ansiOnlyStripper` → `lineTee` → `Reporter.StepOutput` so the block row shows the latest `\n`-frame; the host terminal is owned by the LiveBlock.
 - **Frame-aware parser**: the `\r`-aware `lineTee` parses each parallel sub-step's stream into `(frame, final)` callbacks; only the latest frame is shown on the live row, and `\r` frames are normalised to one-frame-per-line in log files via `logSanitizer` (ANSI stripped, `\r\n` collapsed to one `\n`, lone `\r` to `\n`).
 - **Buffer dump policy**: on sub-step finish, the buffered full output of the sub-step is replayed between `───── output ─────` separators when the sub-step failed, or when no log file is enabled. On TTY success with logging enabled, the dump is suppressed and a `Full log: <path>` line is emitted instead. Non-TTY mode always dumps (and dumps are clean lines thanks to the frame parser).
-- **Per-sub-step log files**: `.devbox/logs/parallel/<pipeline>/<group>/<sub>.log` captures the sub-step's full output (ANSI stripped, `\r`→`\n`). The global pipeline log (`.devbox/logs/<pipeline>.log`) receives every status line and every committed child line exactly once.
+- **Per-sub-step log files**: `.dwe/logs/parallel/<pipeline>/<group>/<sub>.log` captures the sub-step's full output (ANSI stripped, `\r`→`\n`). The global pipeline log (`.dwe/logs/<pipeline>.log`) receives every status line and every committed child line exactly once.
 - **EndBlock semantics**: when a parallel group finishes, `LiveLine.EndBlock` ERASES the live footer that sat below the block (which would otherwise be frozen in scrollback showing a spinner mid-frame next to the last-started sub-step text) and paints a fresh single-line footer in its place. The finalised block rows (✓/✗/◎ + frozen elapsed) persist as scrollback.
 - **Prompt handoff**: every `widgets.Run*` huh prompt fires package-level hooks registered by `NewPlainReporter` (`widgets.SetHuhHooks(live.Pause, live.Resume)`), so the footer is erased before the prompt renders and repainted after it returns. Sequential step bodies use the same `live.Pause`/`live.Resume` via `Reporter.SuspendForExec`/`ResumeAfterExec`.
 - **Non-TTY parity**: when `term.IsTerminal(os.Stdout.Fd())` is false (CI, piped stdout) the live view is fully disabled (no ticker, no cursor sequences, no footer) but the frame-aware parser is still on, so CI dumps have no `\r`-spam.
 
 ### Plan output
 
-`devbox deploy plan` renders parallel groups with a contiguous index range and indented sub-step lines:
+`dwe deploy plan` renders parallel groups with a contiguous index range and indented sub-step lines:
 
 ```
 [12-14/25] [parallel group: db-dumps (3 steps, max_concurrent=3, fail_fast=true)]
@@ -249,7 +249,7 @@ phases:
 The referenced workflow stays opaque and reusable:
 
 ```yaml
-# devbox/commands/services/main/db.yml
+# workspace/commands/services/main/db.yml
 commands:
   dumps-deploy:
     type: workflow
@@ -270,7 +270,7 @@ commands:
 - Sub-step lookup uses `WorkflowStep.name` when set, otherwise the referenced `command`. Names must be unambiguous within the target workflow when an override key references them; collisions are rejected at plan time with `sub_step_overrides[<key>] is ambiguous`.
 - Each override key must match a leaf sub-step (top-level Command step or a Command leaf inside the workflow's `parallel:` block). Sub-steps whose command is itself a workflow are not addressable in v1 — the override must reach a non-workflow sub-step.
 - `files_gate:` inside an override is validated against the **sub-step's** target command using the same rules as a step-level `files_gate:` (state, require spec, with/default-from coverage of required params).
-- Overrides only apply when the workflow is invoked via the originating pipeline step. The same workflow invoked ad-hoc (`devbox commands run …`) or as a sub-step of another workflow runs as-written. Overrides do NOT propagate through nested workflow invocations.
+- Overrides only apply when the workflow is invoked via the originating pipeline step. The same workflow invoked ad-hoc (`dwe commands run …`) or as a sub-step of another workflow runs as-written. Overrides do NOT propagate through nested workflow invocations.
 
 ### Runtime semantics
 
@@ -294,7 +294,7 @@ The workflow's own `when:` on a sub-step is evaluated first; an override gate is
 
 - Only `files_gate` is supported inside an override. Future versions may extend this to `when:` and `continue_on_error:` at the override level.
 - Overrides cannot target a sub-step whose command is itself a workflow. Refactor the inner workflow to expose the leaf, or move the override one level deeper by re-declaring the pipeline-step against that inner workflow.
-- Override keys must refer to sub-step names that exist in the immediate workflow. Validation runs at `devbox validate` and at plan resolution.
+- Override keys must refer to sub-step names that exist in the immediate workflow. Validation runs at `dwe validate` and at plan resolution.
 
 ## Common pitfalls
 
@@ -302,5 +302,5 @@ The workflow's own `when:` on a sub-step is evaluated first; an override gate is
 - **`deploy_services` in `reset.yml`** — rejected at load time. The reset pipeline does not iterate services; if you need per-service cleanup, declare it explicitly in the reset phases.
 - **Forgetting `log: false` for noisy reset runs** — reset defaults to `log: false`, deploy defaults to `log: true`. Set the field explicitly when you want behaviour different from the default.
 - **Using `continue_on_error` to mask real failures in core phases** — it is meant for hook phases (pre/post). A failed `docker up` should always abort.
-- **Confusing `when:` and `check:`** — `when:` is evaluated before the step runs (pre-condition); `check:` is evaluated after success (post-action). `when:` uses the typed `type: builtin|shell|template` / `cmd:` shape; `check:` uses the typed `type: shell|devbox|command|builtin` shape.
+- **Confusing `when:` and `check:`** — `when:` is evaluated before the step runs (pre-condition); `check:` is evaluated after success (post-action). `when:` uses the typed `type: builtin|shell|template` / `cmd:` shape; `check:` uses the typed `type: shell|dwe|command|builtin` shape.
 - **Duplicating file-probe logic in `when:` instead of using `files_gate:`** — If a step should run conditionally based on whether a file exists, use `files_gate:` instead of hard-coding globs in a shell `when:` condition. That way, edits to the command's `files:` definition automatically apply to the step's probe logic — they stay in sync. The `files_gate:` references the command's canonical file spec.

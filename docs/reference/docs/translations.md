@@ -1,18 +1,18 @@
 # Translations and Language Behavior
 
-How Devbox resolves the active locale, where translated long-form docs live on disk, and how the content-hash staleness check keeps translations honest.
+How DWE resolves the active locale, where translated long-form docs live on disk, and how the content-hash staleness check keeps translations honest.
 
 ## Locale resolution
 
-Devbox picks an active locale via the precedence chain:
+DWE picks an active locale via the precedence chain:
 
 1. **`--lang` flag** (on `docs show` / `docs export` / `docs list`; per-invocation)
 2. **`DWE_LANGUAGE` environment variable**
-3. **`language` setting in userconfig** (`~/.config/devbox/config` or `.devbox/config`)
+3. **`language` setting in userconfig** (`~/.config/workspace/config` or `.dwe/config`)
 4. **System `$LANG`** (parsed to 2-letter code)
 5. **Default:** `en` (English)
 
-Per-file fallback: if a markdown file is not translated to the resolved locale, Devbox automatically uses the English version and displays an info banner.
+Per-file fallback: if a markdown file is not translated to the resolved locale, DWE automatically uses the English version and displays an info banner.
 
 ## Long-form documentation translations
 
@@ -26,7 +26,7 @@ Long-form documentation translations live in a separate namespace from command/U
 docs/
   reference/               # English built-ins
     config/
-      devbox.md
+      workspace.md
     ...
   internals/
     architecture.md
@@ -35,7 +35,7 @@ docs/
     ru/                    # Russian translations
       reference/
         config/
-          devbox.md        # Translated version
+          workspace.md        # Translated version
       internals/
         ...
     de/                    # German translations
@@ -49,19 +49,19 @@ Translations are **optional**; missing translations fall back to English with an
 Each translated markdown file includes a header line that records the SHA256 hash of the English version at translation time:
 
 ```markdown
-> Translated from: config/devbox @ a1b2c3d4e5f6
+> Translated from: config/workspace @ a1b2c3d4e5f6
 
-# Devbox Configuration
+# DWE Configuration
 ...
 ```
 
-When you view a translation, Devbox compares this hash against the embedded manifest (generated at build time). If they differ, the translation is marked **stale** and a warning banner appears:
+When you view a translation, DWE compares this hash against the embedded manifest (generated at build time). If they differ, the translation is marked **stale** and a warning banner appears:
 
 ```
 ⚠ This translation is outdated (last synced at <hash>, current is <hash>). Press `e` to view the English version.
 ```
 
-Translators can update the hash as part of their pull request; Devbox re-generates the manifest at the next `make build`.
+Translators can update the hash as part of their pull request; DWE re-generates the manifest at the next `make build`.
 
 ## See also
 

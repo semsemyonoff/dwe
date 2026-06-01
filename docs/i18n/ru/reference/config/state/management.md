@@ -1,4 +1,4 @@
-> Translated from: reference/config/state/management.md @ 9031a54a3c24
+> Translated from: reference/config/state/management.md @ c8ec98eacca2
 
 # Управление состоянием
 
@@ -11,7 +11,7 @@
 Игнорировать файл состояния деплоя и выполнить все шаги заново с нуля.
 
 ```bash
-devbox deploy run --force
+dwe deploy run --force
 ```
 
 Полезно, когда:
@@ -26,7 +26,7 @@ devbox deploy run --force
 Продолжить с последнего шага, завершившегося с ошибкой или частично развёрнутого.
 
 ```bash
-devbox deploy run --resume
+dwe deploy run --resume
 ```
 
 Используйте это после неудачного деплоя, чтобы продолжить с того места, где он остановился, вместо повторного выполнения уже завершённых шагов.
@@ -43,8 +43,8 @@ devbox deploy run --resume
 Подавить все интерактивные приглашения.
 
 ```bash
-devbox deploy run -y
-devbox deploy run --non-interactive
+dwe deploy run -y
+dwe deploy run --non-interactive
 ```
 
 Используйте в CI/CD пайплайнах, чтобы деплой не зависал в ожидании пользовательского ввода.
@@ -57,12 +57,12 @@ devbox deploy run --non-interactive
 
 ## Команды управления
 
-### `devbox deploy state show`
+### `dwe deploy state show`
 
-Отобразить содержимое `.devbox/deploy/state.yml` в формате YAML.
+Отобразить содержимое `.dwe/deploy/state.yml` в формате YAML.
 
 ```bash
-devbox deploy state show
+dwe deploy state show
 ```
 
 Показывает:
@@ -72,28 +72,28 @@ devbox deploy state show
 
 Полезно для отладки того, почему шаг был пропущен, или для просмотра журнала после деплоя.
 
-### `devbox deploy state clear`
+### `dwe deploy state clear`
 
 Удалить файл состояния деплоя.
 
 ```bash
-devbox deploy state clear
+dwe deploy state clear
 ```
 
-Эквивалентно `rm .devbox/deploy/state.yml`. В интерактивном режиме (TTY) запрашивает подтверждение. Используйте `-y`, чтобы пропустить подтверждение в CI.
+Эквивалентно `rm .dwe/deploy/state.yml`. В интерактивном режиме (TTY) запрашивает подтверждение. Используйте `-y`, чтобы пропустить подтверждение в CI.
 
 ```bash
-devbox deploy state clear -y  # Non-interactive
+dwe deploy state clear -y  # Non-interactive
 ```
 
-После очистки следующий `devbox deploy run` считает все шаги отсутствующими и выполняет их заново.
+После очистки следующий `dwe deploy run` считает все шаги отсутствующими и выполняет их заново.
 
-### `devbox deploy state repair`
+### `dwe deploy state repair`
 
 Пересобрать агрегаты статусов из записей по отдельным шагам.
 
 ```bash
-devbox deploy state repair
+dwe deploy state repair
 ```
 
 Перевычисляет:
@@ -120,7 +120,7 @@ devbox deploy state repair
 ### Пример: полный деплой, затем пропуск при повторном запуске
 
 ```bash
-$ devbox deploy run
+$ dwe deploy run
 ✓ Phase setup
   ✓ create-dirs
   ✓ install
@@ -132,11 +132,11 @@ $ devbox deploy run
 
 # State file recorded: all steps ok, hashes match
 
-$ devbox deploy run
+$ dwe deploy run
 ✓ all steps already deployed, skipped
 
 # (Or if there were check steps:)
-$ devbox deploy run
+$ dwe deploy run
 ✓ Phase setup
   · create-dirs  (skipped by state)
   · install      (skipped by state)
@@ -150,7 +150,7 @@ $ devbox deploy run
 ### Пример: редактирование шага, перезапуск при следующем деплое
 
 ```yaml
-# devbox/deploy/main.yml
+# workspace/deploy/main.yml
 - name: install
   type: command
   cmd: app.install  # was "app.install"
@@ -167,7 +167,7 @@ $ devbox deploy run
 ```
 
 ```bash
-$ devbox deploy run
+$ dwe deploy run
 ✓ Phase setup
   · create-dirs  (skipped by state)
   ✓ install      (re-run: hash changed abc123 → def456)
@@ -181,7 +181,7 @@ $ devbox deploy run
 ### Пример: редактирование конфигурации сервиса, инвалидация области сервиса
 
 ```yaml
-# devbox/services/main/service.yml
+# workspace/services/main/service.yml
 enabled: true
 type: app
 dir: services/main
@@ -192,7 +192,7 @@ depends_on:
 Редактируем сервис main:
 
 ```yaml
-# devbox/services/main/service.yml
+# workspace/services/main/service.yml
 enabled: true
 type: app
 dir: services/main
@@ -204,7 +204,7 @@ depends_on:
 `config_hash` сервиса меняется, поэтому все шаги `main` перезапускаются:
 
 ```bash
-$ devbox deploy run
+$ dwe deploy run
 ✓ Phase setup (main)
   ✓ create-dirs    (re-run: service config_hash changed)
   ✓ install        (re-run: service config_hash changed)
@@ -216,7 +216,7 @@ $ devbox deploy run
 ### Пример: принудительный перезапуск всех шагов
 
 ```bash
-devbox deploy run --force
+dwe deploy run --force
 ```
 
 Очищает файл состояния и выполняет все шаги заново с нуля, даже если они все успешно завершились ранее.
@@ -224,12 +224,12 @@ devbox deploy run --force
 > **Примечание:** `--force` лишь игнорирует состояние деплоя. Условия `when:` уровня фазы и шага по-прежнему
 > вычисляются при каждом запуске. Например, `when: dir-empty services/main/src` всё равно пропустит шаг install
 > после того, как директория была заполнена предыдущим успешным запуском. Чтобы стереть директории сервисов,
-> Docker-тома и другие артефакты так, чтобы следующий деплой был действительно чистым, используйте `devbox reset run && devbox deploy run`.
+> Docker-тома и другие артефакты так, чтобы следующий деплой был действительно чистым, используйте `dwe reset run && dwe deploy run`.
 
 ### Пример: восстановление после сбоя в середине деплоя
 
 ```bash
-$ devbox deploy run
+$ dwe deploy run
 ✓ Phase setup
 ✓ Phase init
 ✗ Phase finalize
@@ -237,7 +237,7 @@ $ devbox deploy run
 
 # Process crashed or was killed. State file recorded the failure.
 
-$ devbox deploy run  # (in interactive mode)
+$ dwe deploy run  # (in interactive mode)
 # Prompted: "Failed deploy detected: Resume / Re-run all steps / Cancel"
 # Choose: Resume
 
@@ -254,7 +254,7 @@ $ devbox deploy run  # (in interactive mode)
 Или в неинтерактивном режиме:
 
 ```bash
-devbox deploy run --resume
+dwe deploy run --resume
 ```
 
 ## См. также

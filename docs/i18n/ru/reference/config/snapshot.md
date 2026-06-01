@@ -1,8 +1,8 @@
-> Translated from: reference/config/snapshot.md @ 4d20939d8342
+> Translated from: reference/config/snapshot.md @ e4faf8aeaa9b
 
 # snapshot.yml
 
-Декларативные workflow'ы снапшотов: захват состояния devbox-проекта (базы данных, индексы, локальный конфиг devbox, состояние деплоя) в именованную директорию под `./snapshots/<name>/` и восстановление или откат к нему.
+Декларативные workflow'ы снапшотов: захват состояния dwe-проекта (базы данных, индексы, локальный конфиг DWE, состояние деплоя) в именованную директорию под `./snapshots/<name>/` и восстановление или откат к нему.
 
 ## Содержание
 
@@ -27,7 +27,7 @@
 
 ## Назначение
 
-Снапшот захватывает известно-хорошее состояние изменяемых проектных данных — обычно баз данных, поисковых индексов, метаданных service-веток и devbox-файлов, фиксирующих локальную конфигурацию разработчика — в самодостаточную директорию. Restore — мягкая операция: запускается workflow `restore`, и devbox-файлы возвращаются на место. Он **не** вызывает `reset`, не пересоздаёт контейнеры и не переприменяет шаги деплоя.
+Снапшот захватывает известно-хорошее состояние изменяемых проектных данных — обычно баз данных, поисковых индексов, метаданных service-веток и workspace-файлов, фиксирующих локальную конфигурацию разработчика — в самодостаточную директорию. Restore — мягкая операция: запускается workflow `restore`, и workspace-файлы возвращаются на место. Он **не** вызывает `reset`, не пересоздаёт контейнеры и не переприменяет шаги деплоя.
 
 Спроектирован вокруг сценария: *«я на фиче, прилетает хотфикс — сохраняю, переключаюсь на чистую БД, чиню, возвращаюсь к фиче»*.
 
@@ -36,7 +36,7 @@
 ## Разобранный пример: переключение между задачами (UC-3)
 
 ```yaml
-# devbox/snapshot.yml
+# workspace/snapshot.yml
 rollback_target: baseline
 
 create:
@@ -61,31 +61,31 @@ restore:
 Один день из жизни:
 
 ```sh
-devbox snapshot create feature-x-wip -d "WIP on feature X"
+dwe snapshot create feature-x-wip -d "WIP on feature X"
 # прилетает хотфикс; восстанавливаем чистый baseline
-devbox snapshot restore baseline
+dwe snapshot restore baseline
 # ... делаем хотфикс, пушим, мерджим ...
-devbox snapshot restore feature-x-wip          # обратно к WIP
-devbox snapshot rollback                       # быстро: восстановить rollback_target
+dwe snapshot restore feature-x-wip          # обратно к WIP
+dwe snapshot rollback                       # быстро: восстановить rollback_target
 ```
 
 ## Расположение файла
 
-`devbox/snapshot.yml` в корне проекта. Файл опционален — read-only подкоманды (`list`, `current`, `inspect`, `unpack`) работают без него. Мутирующие подкоманды (`create`, `restore`, `rollback`, `remove`, `pack`) падают с ошибкой, если он отсутствует или нужный workflow-блок не задан.
+`workspace/snapshot.yml` в корне проекта. Файл опционален — read-only подкоманды (`list`, `current`, `inspect`, `unpack`) работают без него. Мутирующие подкоманды (`create`, `restore`, `rollback`, `remove`, `pack`) падают с ошибкой, если он отсутствует или нужный workflow-блок не задан.
 
 ## Поля верхнего уровня
 
 | Поле | Тип | По умолчанию | Назначение |
 |---|---|---|---|
 | `dir` | string | `./snapshots` | Где живут директории снапшотов и тарболы. Разрешается относительно корня проекта. |
-| `rollback_target` | string | — | Имя снапшота, используемого `devbox snapshot rollback`. Должно указывать на существующий снапшот. |
+| `rollback_target` | string | — | Имя снапшота, используемого `dwe snapshot rollback`. Должно указывать на существующий снапшот. |
 | `require_matching_config` | bool | `false` | Когда `true`, `restore` прерывается (exit 1), если `project.config_hash` снапшота отличается от текущего состояния деплоя. Если `config_hash` снапшота пуст (деплой ещё не запускался), это трактуется как совпадение — никогда не блокируется. |
 | `services_mismatch` | block | — | Политика расхождения набора сервисов между манифестом и текущим конфигом (см. [`services_mismatch`](#services_mismatch)). |
-| `local_yml` | block | — | Политика переопределения ключей `devbox/local.yml` (см. [`local_yml.preserve_keys`](#local_ymlpreserve_keys)). |
+| `local_yml` | block | — | Политика переопределения ключей `workspace/local.yml` (см. [`local_yml.preserve_keys`](#local_ymlpreserve_keys)). |
 | `pack` | block | — | Политика упаковки (см. [`pack`](#pack)). |
 | `create` | workflow | — | Workflow захвата (см. [Workflow-блоки](#workflow-блоки-create--restore--remove)). |
 | `restore` | workflow | — | Workflow восстановления. |
-| `remove` | workflow | — | Workflow очистки, запускаемый `devbox snapshot remove` до удаления директории. |
+| `remove` | workflow | — | Workflow очистки, запускаемый `dwe snapshot remove` до удаления директории. |
 
 Загрузчик использует строгое декодирование (`KnownFields(true)`): неизвестные ключи верхнего уровня — хард-ошибки.
 
@@ -127,9 +127,9 @@ create:
 
 Выбор:
 
-- `devbox snapshot create x` → блок по умолчанию.
-- `devbox snapshot create x --using=db-only` → `create.variants.db-only`.
-- `devbox snapshot restore x` → использует `restore.variants[<manifest.variant>]`, если задан; откатывается к дефолтному блоку `restore`, если вариант отсутствует на стороне restore.
+- `dwe snapshot create x` → блок по умолчанию.
+- `dwe snapshot create x --using=db-only` → `create.variants.db-only`.
+- `dwe snapshot restore x` → использует `restore.variants[<manifest.variant>]`, если задан; откатывается к дефолтному блоку `restore`, если вариант отсутствует на стороне restore.
 - Отсутствующий вариант на **create** падает с ошибкой до любых мутаций файловой системы.
 
 Имена вариантов должны соответствовать `[a-z0-9][a-z0-9._-]{0,30}`. Вариант, выбранный на create, записывается в манифест, чтобы restore автоматически подобрал соответствующий блок.
@@ -146,7 +146,7 @@ services_mismatch:
 | Политика | Поведение |
 |---|---|
 | `warn` (по умолчанию, в том числе когда блок опущен) | Restore продолжается. Любая непустая разница рендерится в промпте подтверждения; с `-y` предупреждение пишется в stderr, и restore продолжается. |
-| `block` | Любая непустая разница прерывает работу до любых side-эффектов на `devbox/local.yml` (exit 1, типизированный `ServicesMismatchError`). |
+| `block` | Любая непустая разница прерывает работу до любых side-эффектов на `workspace/local.yml` (exit 1, типизированный `ServicesMismatchError`). |
 | `ignore` | Разница полностью подавляется; restore продолжается молча. |
 
 Разница группируется в три корзины, каждая рендерится одной формулировкой в промпте restore, `snapshot inspect` и валидаторе `snapshot.<name>.services_diff`:
@@ -161,7 +161,7 @@ services_mismatch:
 
 ## `local_yml.preserve_keys`
 
-`devbox/local.yml` обычно содержит машинно-специфичные оверрайды (порты, имена хостов, пути), которые не должны путешествовать со снапшотом. `preserve_keys` перечисляет dot-пути, чьи **текущие** значения переживают restore, даже когда снапшот привозит свой `local.yml`.
+`workspace/local.yml` обычно содержит машинно-специфичные оверрайды (порты, имена хостов, пути), которые не должны путешествовать со снапшотом. `preserve_keys` перечисляет dot-пути, чьи **текущие** значения переживают restore, даже когда снапшот привозит свой `local.yml`.
 
 ```yaml
 local_yml:
@@ -176,7 +176,7 @@ local_yml:
 - Хелперы работают с `*yaml.Node`, чтобы сохранить порядок ключей и комментарии, привязанные к узлам, там, где `yaml.v3` их удерживает. `yaml.v3` нормализует отступы и flow/block-стиль при маршалинге, так что байт-точное форматирование не сохраняется — только семантическое содержимое + порядок ключей + комментарии на нетронутых узлах.
 - Применяется кэп 1 MiB на payload `local.yml` и на create, и на restore, чтобы обезвредить YAML alias-explosion в недоверенном содержимом архива.
 
-**Create**: `captureDevboxFiles` читает `devbox/local.yml`, вызывает `stripPreservedKeys`, чтобы удалить перечисленные dot-пути, и пишет результат в `<snap>/devbox/local.yml`. Если каждый ключ верхнего уровня был сохранён (получился пустой маппинг), файл всё равно записывается, чтобы семантика restore оставалась однозначной.
+**Create**: `captureDWEFiles` читает `workspace/local.yml`, вызывает `stripPreservedKeys`, чтобы удалить перечисленные dot-пути, и пишет результат в `<snap>/workspace/local.yml`. Если каждый ключ верхнего уровня был сохранён (получился пустой маппинг), файл всё равно записывается, чтобы семантика restore оставалась однозначной.
 
 **Restore**: пограничные случаи:
 
@@ -200,11 +200,11 @@ pack:
 
 `pack.exclude` — список doublestar-глобов, вычисляемых относительно директории снапшота. CLI-флаги `--exclude` **дополняют** этот список (не заменяют).
 
-`devbox snapshot pack <name>` производит один `./snapshots/<name>.tar.gz`. `.sha256`-сайдкар не пишется — один файл на снапшот. In-memory sha256 архива показывается в сообщении об успехе для ad-hoc сверки, но `unpack` его не требует. Транспортные битфлипы ловятся CRC32 gzip'а и структурной валидностью tar; in-archive подделка отдельных артефактов ловится manifest-driven верификацией `unpack` (см. ниже).
+`dwe snapshot pack <name>` производит один `./snapshots/<name>.tar.gz`. `.sha256`-сайдкар не пишется — один файл на снапшот. In-memory sha256 архива показывается в сообщении об успехе для ad-hoc сверки, но `unpack` его не требует. Транспортные битфлипы ловятся CRC32 gzip'а и структурной валидностью tar; in-archive подделка отдельных артефактов ловится manifest-driven верификацией `unpack` (см. ниже).
 
 ## `unpack`
 
-`devbox snapshot unpack <tar-path> [--as=<name>] [--no-verify] [-y]` извлекает архив в `./snapshots/<final-name>/`, используя существующий distrust-safe-контракт извлечения (`filepath.IsLocal`, без симлинков, кэп 50 GiB, кэп 100 000 записей) в соседнюю staging-директорию `./snapshots/.unpack-<random>/`, затем атомарным rename'ом ставит её на место.
+`dwe snapshot unpack <tar-path> [--as=<name>] [--no-verify] [-y]` извлекает архив в `./snapshots/<final-name>/`, используя существующий distrust-safe-контракт извлечения (`filepath.IsLocal`, без симлинков, кэп 50 GiB, кэп 100 000 записей) в соседнюю staging-директорию `./snapshots/.unpack-<random>/`, затем атомарным rename'ом ставит её на место.
 
 После извлечения (и до rename'а в финальную позицию) staging-дерево верифицируется против `manifest.yml`:
 
@@ -256,15 +256,15 @@ project:
     - { name: cdn,  enabled: false }
     - { name: db,   enabled: true }
     - { name: main, enabled: true }
-devbox_version: 0.42.0
+dwe_version: 0.42.0
 variant: ""
 artifacts:
   - path: db/main.sql.gz
     size: 1287654321             # int64
     sha256: abc...
-devbox_files:
-  local_yml: devbox/local.yml
-  deploy_state: devbox/deploy-state.yml
+workspace_files:
+  local_yml: workspace/local.yml
+  deploy_state: workspace/deploy-state.yml
 last_create:
   at: 2026-05-24T11:02:00Z
   status: ok                     # ok | failed | interrupted
@@ -280,14 +280,14 @@ last_restore:
 
 ```
 <project>/
-  devbox/snapshot.yml
+  workspace/snapshot.yml
   snapshots/
     <name>/
       manifest.yml
-      devbox/{local.yml, deploy-state.yml}
+      workspace/{local.yml, deploy-state.yml}
       <user artifacts>
     <name>.tar.gz
-  .devbox/snapshots/
+  .dwe/snapshots/
     current
     snapshot.lock
     .pre-restore-backup/{local.yml, deploy-state.yml}
@@ -295,7 +295,7 @@ last_restore:
 ```
 
 - `./snapshots/` обычно **не** в gitignore, чтобы небольшие dev-фикстуры могли путешествовать через git; крупные артефакты следует добавлять в `.gitignore` пер-проектно.
-- `.devbox/snapshots/` — в gitignore.
+- `.dwe/snapshots/` — в gitignore.
 - `current` — небольшой текстовый файл с именем последнего созданного или восстановленного снапшота. Очищается, когда активный снапшот удаляют.
 
 ## Семантика lifecycle и безопасности
@@ -304,9 +304,9 @@ last_restore:
 
 - Захватывает проектные блокировки (см. [Взаимодействие с блокировками](#взаимодействие-с-блокировками)).
 - Отказывается перезаписывать существующую директорию снапшота без `-y` в non-TTY контекстах (иначе — интерактивное подтверждение).
-- Копирует `devbox/local.yml` и `.devbox/deploy/state.yml` в `<snap>/devbox/` до запуска workflow.
+- Копирует `workspace/local.yml` и `.dwe/deploy/state.yml` в `<snap>/workspace/` до запуска workflow.
 - Запускает выбранный workflow создания с `${snapshot.*}`, доступным в скоупе `create`.
-- Сканирует получившуюся директорию (исключая `manifest.yml` и `devbox/`), стримя sha256 по файлам. Симлинки внутри директории снапшота отвергаются.
+- Сканирует получившуюся директорию (исключая `manifest.yml` и `workspace/`), стримя sha256 по файлам. Симлинки внутри директории снапшота отвергаются.
 - Пишет `manifest.yml` атомарно (temp-файл в той же директории, `rename`).
 - Атомарно обновляет указатель current.
 - При падении workflow: оставляет директорию, пишет `last_create.status = "failed"` с `failed_step`, не трогает указатель current, выходит с кодом 1.
@@ -316,8 +316,8 @@ last_restore:
 
 - Захватывает проектные блокировки.
 - Загружает и верифицирует манифест. Предупреждает, когда `project.config_hash` отличается от текущего состояния деплоя; блокирует (exit 1), когда `require_matching_config: true`. Пустой `config_hash` в манифесте трактуется как совпадение.
-- Атомарно бэкапит текущие `devbox/local.yml` и `.devbox/deploy/state.yml` в `.devbox/snapshots/.pre-restore-backup/`. Предыдущий бэкап перезаписывается.
-- Восстанавливает devbox-файлы из `<snap>/devbox/` поверх рабочих копий.
+- Атомарно бэкапит текущие `workspace/local.yml` и `.dwe/deploy/state.yml` в `.dwe/snapshots/.pre-restore-backup/`. Предыдущий бэкап перезаписывается.
+- Восстанавливает workspace-файлы из `<snap>/workspace/` поверх рабочих копий.
 - Запускает выбранный workflow restore с `${snapshot.*}`, доступным в скоупе `restore` (все ключи, включая `created_at`).
 - При успехе: атомарно обновляет указатель current и пишет `last_restore.status = "ok"` в манифест.
 - При падении или SIGINT: не трогает указатель current; пишет `last_restore.status ∈ {failed, interrupted}` с `failed_step`; эмитит подсказку про `.pre-restore-backup/` для ручного восстановления; выходит с кодом 1 (или 130 для SIGINT).
@@ -341,8 +341,8 @@ last_restore:
 
 Все команды, мутирующие проект, захватывают две блокировки в фиксированном порядке:
 
-1. `<baseDir>/.devbox/deploy/deploy.lock`
-2. `<baseDir>/.devbox/snapshots/snapshot.lock`
+1. `<baseDir>/.dwe/deploy/deploy.lock`
+2. `<baseDir>/.dwe/snapshots/snapshot.lock`
 
 Освобождение — в обратном порядке. Общий хелпер `lock.AcquireProjectLocks(baseDir)` обеспечивает это и для мутирующих команд снапшота (`create`, `restore`, `rollback`, `remove`, `pack`, `unpack`), и для lifecycle-команд деплоя (`deploy`, `run`, `stop`, `restart`, `reset`).
 
@@ -362,12 +362,12 @@ Lifecycle-команды захватывают проектные блокир�
 
 ## Домен validate
 
-`devbox validate snapshot [<name>] [--verify]` выставляет статические проверки:
+`dwe validate snapshot [<name>] [--verify]` выставляет статические проверки:
 
 | Валидатор | Severity | Триггер |
 |---|---|---|
-| `snapshot.config_loadable` | error | `devbox/snapshot.yml` существует, но не парсится. Отсутствие файла — тишина. |
-| `snapshot.create_defined` | info | Отсутствует блок `create:` — `devbox snapshot create` откажется запускаться. |
+| `snapshot.config_loadable` | error | `workspace/snapshot.yml` существует, но не парсится. Отсутствие файла — тишина. |
+| `snapshot.create_defined` | info | Отсутствует блок `create:` — `dwe snapshot create` откажется запускаться. |
 | `snapshot.restore_defined` | info | Отсутствует блок `restore:` — `restore` / `rollback` откажутся. |
 | `snapshot.variant_pairing` | warn | `create.variants[X]` есть, но `restore.variants[X]` отсутствует, и дефолтного блока `restore` для отката нет. |
 | `snapshot.rollback_target_exists` | warn | `rollback_target` задан, но снапшота с таким именем на диске не существует. |
@@ -380,15 +380,15 @@ Lifecycle-команды захватывают проектные блокир�
 
 ## Связанные команды
 
-- `devbox snapshot create <name> [-d <desc>] [--using=<variant>] [-y] [--no-live]`
-- `devbox snapshot list [--output json] [--pretty]`
-- `devbox snapshot current [--output json] [--pretty]`
-- `devbox snapshot inspect <name|tar-path> [--output json] [--pretty]`
-- `devbox snapshot restore <name> [-y] [--no-live]`
-- `devbox snapshot rollback [-y] [--no-live]`
-- `devbox snapshot remove <name> [-y] [--no-live]`
-- `devbox snapshot pack <name> [--out=<path>] [--exclude=<glob>...]`
-- `devbox snapshot unpack <tar-path> [--as=<name>] [--no-verify] [-y]`
-- `devbox validate snapshot [<name>] [--verify]`
+- `dwe snapshot create <name> [-d <desc>] [--using=<variant>] [-y] [--no-live]`
+- `dwe snapshot list [--output json] [--pretty]`
+- `dwe snapshot current [--output json] [--pretty]`
+- `dwe snapshot inspect <name|tar-path> [--output json] [--pretty]`
+- `dwe snapshot restore <name> [-y] [--no-live]`
+- `dwe snapshot rollback [-y] [--no-live]`
+- `dwe snapshot remove <name> [-y] [--no-live]`
+- `dwe snapshot pack <name> [--out=<path>] [--exclude=<glob>...]`
+- `dwe snapshot unpack <tar-path> [--as=<name>] [--no-verify] [-y]`
+- `dwe validate snapshot [<name>] [--verify]`
 
-См. [commands/types.md](commands/types.md#type-workflow) для формы `WorkflowStep`, переиспользуемой workflow'ами снапшотов, и [state/index.md](state/index.md) для журнала состояния деплоя, который снапшоты бэкапят рядом с `devbox/local.yml`.
+См. [commands/types.md](commands/types.md#type-workflow) для формы `WorkflowStep`, переиспользуемой workflow'ами снапшотов, и [state/index.md](state/index.md) для журнала состояния деплоя, который снапшоты бэкапят рядом с `workspace/local.yml`.

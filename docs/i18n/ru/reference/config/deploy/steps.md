@@ -1,4 +1,4 @@
-> Translated from: reference/config/deploy/steps.md @ 053bc5cd282e
+> Translated from: reference/config/deploy/steps.md @ 43cdb6be1975
 
 # Типы исполнения шагов
 
@@ -8,7 +8,7 @@
 
 - [`type: shell`](#type-shell)
 - [`cmd: shell` (билтин) vs `type: shell` (шаг)](#cmd-shell-билтин-vs-type-shell-шаг)
-- [`type: devbox`](#type-devbox)
+- [`type: dwe`](#type-dwe)
 - [`type: command`](#type-command)
 - [`type: builtin`](#type-builtin)
 
@@ -67,27 +67,27 @@
 
 Оба применения гарантируют, что условия вычисляются переносимо в разных CI-системах, рантаймах контейнеров и пользовательских shell-ах, независимо от настройки `config.ShellBin` в проекте. Полную документацию по билтину `cmd: shell` см. в [validate.yml](../validate.md).
 
-## `type: devbox`
+## `type: dwe`
 
-Вызывает подкоманду CLI devbox. Путь к бинарю разрешается автоматически.
+Вызывает подкоманду CLI DWE. Путь к бинарю разрешается автоматически.
 
 ```yaml
 - name: up
-  type: devbox
+  type: dwe
   cmd: "docker up"
 
 - name: info
-  type: devbox
+  type: dwe
   cmd: "info"
 
 - name: render-ide
-  type: devbox
+  type: dwe
   cmd: "render ide main"
 ```
 
 ## `type: command`
 
-Диспатчит декларативную команду по ID из реестра команд (`devbox/commands/`).
+Диспатчит декларативную команду по ID из реестра команд (`workspace/commands/`).
 
 ```yaml
 - name: composer-install

@@ -14,7 +14,7 @@ sha256(type + "\x00" + cmd + "\x00" + canonical_json(with))
 
 **Components:**
 
-- `type` — the step type (`shell`, `devbox`, `command`, `builtin`)
+- `type` — the step type (`shell`, `dwe`, `command`, `builtin`)
 - `cmd` — the command payload
 - `with` — step parameters, serialized as canonical JSON with keys sorted alphabetically
 
@@ -61,25 +61,25 @@ sha256(type + "\x00" + cmd + "\x00" + canonical_json(with))
 A service's `config_hash` covers two things:
 
 ```
-sha256(canonical_json(services.<name>) + canonical_json(devbox/services/<name>/deploy.yml))
+sha256(canonical_json(services.<name>) + canonical_json(workspace/services/<name>/deploy.yml))
 ```
 
-- The service definition from `devbox/services/<name>/service.yml` (Enabled, Depends, Type, Dir, etc.)
-- The per-service deploy pipeline from `devbox/services/<name>/deploy.yml` (or empty if absent)
+- The service definition from `workspace/services/<name>/service.yml` (Enabled, Depends, Type, Dir, etc.)
+- The per-service deploy pipeline from `workspace/services/<name>/deploy.yml` (or empty if absent)
 
-When the service's `config_hash` changes (e.g., you edit `devbox/services/main/service.yml` or `devbox/services/main/deploy.yml`), **all steps in that service's phases are treated as absent**. They re-run on the next deploy regardless of their `action_hash`.
+When the service's `config_hash` changes (e.g., you edit `workspace/services/main/service.yml` or `workspace/services/main/deploy.yml`), **all steps in that service's phases are treated as absent**. They re-run on the next deploy regardless of their `action_hash`.
 
 ## config_hash for the project
 
 The project-level `config_hash` covers three things:
 
 ```
-sha256(canonical_json(services[tracked_only]) + canonical_json(devbox/deploy.yml) + canonical_json(devbox/services/<tracked>/deploy.yml for all tracked services))
+sha256(canonical_json(services[tracked_only]) + canonical_json(workspace/deploy.yml) + canonical_json(workspace/services/<tracked>/deploy.yml for all tracked services))
 ```
 
-**"Tracked" means:** A service is tracked iff it appears in the resolved deploy plan (i.e., enabled in `devbox/services/<name>/service.yml` AND inlined by a `deploy_services: true` phase in `devbox/deploy.yml`). Tools are never tracked. Services without a `devbox/services/<name>/deploy.yml` are still tracked if they appear in the plan.
+**"Tracked" means:** A service is tracked iff it appears in the resolved deploy plan (i.e., enabled in `workspace/services/<name>/service.yml` AND inlined by a `deploy_services: true` phase in `workspace/deploy.yml`). Tools are never tracked. Services without a `workspace/services/<name>/deploy.yml` are still tracked if they appear in the plan.
 
-When the project's `config_hash` changes (e.g., you edit `devbox/deploy.yml` or add a service), **all project-scope steps are treated as absent** and re-run on the next deploy.
+When the project's `config_hash` changes (e.g., you edit `workspace/deploy.yml` or add a service), **all project-scope steps are treated as absent** and re-run on the next deploy.
 
 Note: edits to enabled-but-untracked service variants (e.g., a `main-debug` service extending `main` without its own deploy config) do NOT change the project hash, so they do not invalidate the journal.
 

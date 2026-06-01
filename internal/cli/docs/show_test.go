@@ -72,7 +72,7 @@ func TestDocsShowBuiltinTopic(t *testing.T) {
 	cmd.SetOut(&outBuf)
 	cmd.SetErr(&outBuf)
 	// Pass --raw to skip TTY detection and get plain text output.
-	cmd.SetArgs([]string{"--raw", "reference/config/devbox"})
+	cmd.SetArgs([]string{"--raw", "reference/config/workspace"})
 
 	err := cmd.Execute()
 	require.NoError(t, err, "expected built-in topic to render without error")

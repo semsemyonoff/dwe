@@ -1,13 +1,13 @@
-> Translated from: reference/config/docker.md @ be17105554b4
+> Translated from: reference/config/docker.md @ ddae5300e86e
 
 # docker.yml / docker.local.yml
 
-Политика выполнения Compose для devbox-проекта.
+Политика выполнения Compose для dwe-проекта.
 
 ## Содержание
 
 - [Назначение](#назначение)
-- [devbox docker vs devbox compose](#devbox-docker-vs-devbox-compose)
+- [dwe docker vs dwe compose](#dwe-docker-vs-dwe-compose)
 - [Структура](#структура)
 - [Справочник полей](#справочник-полей)
   - [`project_name`](#project_name)
@@ -21,30 +21,30 @@
 
 ## Назначение
 
-`devbox/docker.yml` контролирует, как `devbox docker` собирает и выполняет команды `docker compose`: имя проекта, args на каждую подкоманду и process environment. Файл `.env` автоматически регенерируется CLI до `{up, run, exec, restart, build}` — это поведение **неконфигурируемо**.
+`workspace/docker.yml` контролирует, как `dwe docker` собирает и выполняет команды `docker compose`: имя проекта, args на каждую подкоманду и process environment. Файл `.env` автоматически регенерируется CLI до `{up, run, exec, restart, build}` — это поведение **неконфигурируемо**.
 
 Он загружается отдельно через `LoadDockerConfig()` и не мерджится с трёхслойным конфигом.
 
-Локальные переопределения идут в `devbox/docker.local.yml` (gitignored). Шаблон в `devbox/docker.local.example.yml`. Локальные переопределения deep-merge'атся в `docker.yml` до анмаршалинга — local выигрывает при конфликте ключей, списки заменяются.
+Локальные переопределения идут в `workspace/docker.local.yml` (gitignored). Шаблон в `workspace/docker.local.example.yml`. Локальные переопределения deep-merge'атся в `docker.yml` до анмаршалинга — local выигрывает при конфликте ключей, списки заменяются.
 
 ```mermaid
 flowchart LR
-  A["devbox/docker.yml"] --> M(["deepMerge"])
-  B["devbox/docker.local.yml<br/>optional, gitignored"] --> M
-  M --> P(["resolveVarTemplate<br/>$#123;...#125; against DevboxConfig.Raw"])
+  A["workspace/docker.yml"] --> M(["deepMerge"])
+  B["workspace/docker.local.yml<br/>optional, gitignored"] --> M
+  M --> P(["resolveVarTemplate<br/>$#123;...#125; against DweConfig.Raw"])
   P --> R[("DockerConfig")]
 ```
 
-## devbox docker vs devbox compose
+## dwe docker vs dwe compose
 
 | Команда | Назначение |
 |---------|---------|
-| `devbox docker <subcommand>` | Публичный lifecycle API. Применяются policy-args. Используйте в Makefile'ах, шагах деплоя и YAML-командах. |
-| `devbox compose raw <args...>` | Низкоуровневый диагностический pass-through. Без policy-args. Используйте только для отладки. |
-| `devbox compose files` | Показать список активных compose-файлов (диагностика). |
-| `devbox compose argv` | Показать полный эффективный argv, включая policy-args (диагностика). |
+| `dwe docker <subcommand>` | Публичный lifecycle API. Применяются policy-args. Используйте в Makefile'ах, шагах деплоя и YAML-командах. |
+| `dwe compose raw <args...>` | Низкоуровневый диагностический pass-through. Без policy-args. Используйте только для отладки. |
+| `dwe compose files` | Показать список активных compose-файлов (диагностика). |
+| `dwe compose argv` | Показать полный эффективный argv, включая policy-args (диагностика). |
 
-В Makefile'ах, декларациях YAML-команд и шагах деплоя разрешены только подкоманды `devbox docker`. Прямые вызовы `docker compose` обходят политику и не должны появляться ни в какой автоматизации.
+В Makefile'ах, декларациях YAML-команд и шагах деплоя разрешены только подкоманды `dwe docker`. Прямые вызовы `docker compose` обходят политику и не должны появляться ни в какой автоматизации.
 
 ## Структура
 
@@ -68,7 +68,7 @@ topology:
 resources:
   volumes:
     composer_cache:
-      name: devbox_composer_cache
+      name: dwe_composer_cache
       shared: true
       ensure_before: [up, deploy]
 ```
@@ -81,7 +81,7 @@ resources:
 project_name: "${project.prefix}-${project.name}"
 ```
 
-Имя Docker Compose-проекта, передаваемое как `-p <name>` в каждый compose-вызов. Поддерживает `${dot.path}` lookup'ы в смерженный devbox-конфиг (см. [Шаблоны](../templates.md) — пространства имён `${...}`). По умолчанию разрешается в `devbox-laravel`.
+Имя Docker Compose-проекта, передаваемое как `-p <name>` в каждый compose-вызов. Поддерживает `${dot.path}` lookup'ы в смерженный DWE-конфиг (см. [Шаблоны](../templates.md) — пространства имён `${...}`). По умолчанию разрешается в `dwe-laravel`.
 
 Локальное переопределение:
 ```yaml
@@ -145,9 +145,9 @@ args:
 
 Подкоманды `pull` и `build` включают опциональные флаги для контроля набора файлов и поведения кеша:
 
-- `devbox docker pull [--all] [services...]` — притянуть образы для сервисов. По умолчанию использует активный набор compose-файлов (base + включённые оверлеи). Флаг `--all` тянет против всех сконфигурированных оверлеев, независимо от локального состояния enable, без модификации `devbox/local.yml`.
+- `dwe docker pull [--all] [services...]` — притянуть образы для сервисов. По умолчанию использует активный набор compose-файлов (base + включённые оверлеи). Флаг `--all` тянет против всех сконфигурированных оверлеев, независимо от локального состояния enable, без модификации `workspace/local.yml`.
 
-- `devbox docker build [--all] [--force] [services...]` — собрать образы для сервисов. По умолчанию ведёт себя так же, как pull. Флаг `--force` дописывает `--no-cache --pull` для обхода layer-кеша Docker и повторного pull базовых слоёв. `--all` и `--force` можно комбинировать.
+- `dwe docker build [--all] [--force] [services...]` — собрать образы для сервисов. По умолчанию ведёт себя так же, как pull. Флаг `--force` дописывает `--no-cache --pull` для обхода layer-кеша Docker и повторного pull базовых слоёв. `--all` и `--force` можно комбинировать.
 
 При конфигурации `args.pull` или `args.build` они применяются перед позиционными сервисами или force-флагами. Пример:
 
@@ -157,7 +157,7 @@ args:
   build: ["--progress", "plain"]
 ```
 
-Флаг `--all` — это переопределение только на один вызов: он НЕ модифицирует `devbox/local.yml` и не сохраняется между командами.
+Флаг `--all` — это переопределение только на один вызов: он НЕ модифицирует `workspace/local.yml` и не сохраняется между командами.
 
 ### `process_env`
 
@@ -191,7 +191,7 @@ topology:
 resources:
   volumes:
     composer_cache:
-      name: devbox_composer_cache
+      name: dwe_composer_cache
       shared: true
       ensure_before: [up, deploy]
 ```
@@ -206,7 +206,7 @@ resources:
 resources:
   volumes:
     composer_cache:                 # логический ключ
-      name: devbox_composer_cache   # реальное имя в Docker (shared)
+      name: dwe_composer_cache   # реальное имя в Docker (shared)
       shared: true
       ensure_before: [up, deploy]
 
@@ -219,7 +219,7 @@ resources:
 
 ## docker.local.yml
 
-Локальные переопределения для docker-политики. Gitignored. Используйте `devbox/docker.local.example.yml` как стартовый шаблон.
+Локальные переопределения для docker-политики. Gitignored. Используйте `workspace/docker.local.example.yml` как стартовый шаблон.
 
 Распространённые переопределения:
 
@@ -242,14 +242,14 @@ process_env:
 
 ## Частые ловушки
 
-- **Прямые `docker compose` в Makefile'ах или YAML** — всегда используйте `devbox docker`. Прямые вызовы обходят policy-args, имя проекта и авто-генерацию `.env`.
-- **Добавление compose-флагов в Make-рецептах** — флаги принадлежат секции args в `docker.yml`, не Make. Make lifecycle-таргеты зовут `devbox docker` без флагов.
+- **Прямые `docker compose` в Makefile'ах или YAML** — всегда используйте `dwe docker`. Прямые вызовы обходят policy-args, имя проекта и авто-генерацию `.env`.
+- **Добавление compose-флагов в Make-рецептах** — флаги принадлежат секции args в `docker.yml`, не Make. Make lifecycle-таргеты зовут `dwe docker` без флагов.
 - **Частичное переопределение args** — `args.up` в `docker.local.yml` заменяет отслеживаемый список, не дописывает к нему. Включайте все нужные флаги.
 - **Глобальное отключение `auto_generate`** — если вы его отключили, вам надо вручную регенерировать `.env` перед compose-командами, которые от него зависят.
 
 ## Связанные команды
 
-- `devbox docker up|down|stop|restart|logs|ps|exec|run|wait|pull|build` — команды lifecycle и управления образами
-- `devbox compose files` — показать список активных compose-файлов
-- `devbox compose argv` — показать полный эффективный argv
-- `devbox render env` — вручную регенерировать `.env`
+- `dwe docker up|down|stop|restart|logs|ps|exec|run|wait|pull|build` — команды lifecycle и управления образами
+- `dwe compose files` — показать список активных compose-файлов
+- `dwe compose argv` — показать полный эффективный argv
+- `dwe render env` — вручную регенерировать `.env`

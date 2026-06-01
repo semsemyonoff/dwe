@@ -1,8 +1,8 @@
 # Config Reference
 
-Overview of all configuration files in the devbox system.
+Overview of all configuration files in the DWE system.
 
-> New to devbox? Start with [Getting started](../concepts/getting-started.md) for an end-to-end walkthrough, then return here for the file-by-file reference.
+> New to DWE? Start with [Getting started](../concepts/getting-started.md) for an end-to-end walkthrough, then return here for the file-by-file reference.
 
 ## Contents
 
@@ -16,59 +16,59 @@ Overview of all configuration files in the devbox system.
 
 | File | Tracked | Loader | Purpose |
 |------|---------|--------|---------|
-| `devbox.yml` | yes | layer 1 | Project identity and service structure |
-| `devbox/defaults.yml` | yes | layer 2 | Versioned defaults: runtime, exports, service enabled toggles |
-| `devbox/local.yml` | no (gitignored) | layer 3 | Per-user overrides: state, service enabled toggles |
-| `devbox/services/<name>/service.yml` | yes | standalone | Per-service declaration (dirs, cli, configs, ports) |
-| `devbox/deploy.yml` | yes | standalone | Orchestrator deploy pipeline (phases + steps) |
-| `devbox/services/<name>/deploy.yml` | yes | standalone | Per-service deploy pipelines |
-| `devbox/reset.yml` | yes | standalone | Reset pipeline |
-| `devbox/lifecycle.yml` | yes | standalone | Run / stop pipelines (driving `devbox run`/`stop`/`restart`) |
-| `devbox/docker.yml` | yes | standalone | Compose execution policy |
-| `devbox/docker.local.yml` | no (gitignored) | merged into `docker.yml` | Local compose policy overrides |
-| `devbox/styles.yml` | yes | standalone | ASCII header, color palette, separator |
-| `devbox/info.yml` | yes | standalone | Info dashboard sections |
-| `devbox/commands/` | yes | standalone | Declarative command definitions (per-file groups) |
-| `devbox/validate.yml` | yes | standalone | Project readiness checks (preflight + `devbox validate`) |
-| `devbox/snapshot.yml` | yes | standalone | Snapshot workflows: create / restore / remove (`devbox snapshot`) |
-| `devbox/i18n/*.yml` | no (ignored) | standalone | User command and UI string translations (optional; one file per language) |
+| `workspace.yml` | yes | layer 1 | Project identity and service structure |
+| `workspace/defaults.yml` | yes | layer 2 | Versioned defaults: runtime, exports, service enabled toggles |
+| `workspace/local.yml` | no (gitignored) | layer 3 | Per-user overrides: state, service enabled toggles |
+| `workspace/services/<name>/service.yml` | yes | standalone | Per-service declaration (dirs, cli, configs, ports) |
+| `workspace/deploy.yml` | yes | standalone | Orchestrator deploy pipeline (phases + steps) |
+| `workspace/services/<name>/deploy.yml` | yes | standalone | Per-service deploy pipelines |
+| `workspace/reset.yml` | yes | standalone | Reset pipeline |
+| `workspace/lifecycle.yml` | yes | standalone | Run / stop pipelines (driving `dwe run`/`stop`/`restart`) |
+| `workspace/docker.yml` | yes | standalone | Compose execution policy |
+| `workspace/docker.local.yml` | no (gitignored) | merged into `docker.yml` | Local compose policy overrides |
+| `workspace/styles.yml` | yes | standalone | ASCII header, color palette, separator |
+| `workspace/info.yml` | yes | standalone | Info dashboard sections |
+| `workspace/commands/` | yes | standalone | Declarative command definitions (per-file groups) |
+| `workspace/validate.yml` | yes | standalone | Project readiness checks (preflight + `dwe validate`) |
+| `workspace/snapshot.yml` | yes | standalone | Snapshot workflows: create / restore / remove (`dwe snapshot`) |
+| `workspace/i18n/*.yml` | no (ignored) | standalone | User command and UI string translations (optional; one file per language) |
 
 ## Runtime artifacts
 
-The `.devbox/` directory contains Devbox-managed artifacts and is **gitignored**:
+The `.dwe/` directory contains DWE-managed artifacts and is **gitignored**:
 
-- `.devbox/logs/` — pipeline logs (deploy, reset, lifecycle run/stop)
-- `.devbox/deploy/deploy.lock` — deployment lock file (Unix-only; prevents parallel deploys)
-- `.devbox/deploy/state.yml` — deployment state journal (tracks service deploy status and hashes)
-- `.devbox/snapshots/snapshot.lock` — snapshot lock file (Unix-only; serialises snapshot mutating commands and is co-acquired by deploy lifecycle commands)
-- `.devbox/snapshots/current` — current snapshot pointer (last created or restored snapshot)
-- `.devbox/snapshots/.pre-restore-backup/` — backup of `devbox/local.yml` + `.devbox/deploy/state.yml` taken before each restore; manual recovery target on restore failure
+- `.dwe/logs/` — pipeline logs (deploy, reset, lifecycle run/stop)
+- `.dwe/deploy/deploy.lock` — deployment lock file (Unix-only; prevents parallel deploys)
+- `.dwe/deploy/state.yml` — deployment state journal (tracks service deploy status and hashes)
+- `.dwe/snapshots/snapshot.lock` — snapshot lock file (Unix-only; serialises snapshot mutating commands and is co-acquired by deploy lifecycle commands)
+- `.dwe/snapshots/current` — current snapshot pointer (last created or restored snapshot)
+- `.dwe/snapshots/.pre-restore-backup/` — backup of `workspace/local.yml` + `.dwe/deploy/state.yml` taken before each restore; manual recovery target on restore failure
 
-Add `.devbox/` to your project's `.gitignore` if not already present.
+Add `.dwe/` to your project's `.gitignore` if not already present.
 
 ## Loader topology
 
 ```mermaid
 flowchart LR
-  subgraph merged["3-layer merge — DevboxConfig"]
+  subgraph merged["3-layer merge — DweConfig"]
     direction TB
-    A[devbox.yml] --> B[devbox/defaults.yml] --> C[devbox/local.yml]
+    A[workspace.yml] --> B[workspace/defaults.yml] --> C[workspace/local.yml]
   end
 
-  S["devbox/services/&lt;name&gt;/service.yml"] -. injected into Raw .-> merged
+  S["workspace/services/&lt;name&gt;/service.yml"] -. injected into Raw .-> merged
 
-  merged --> R[(DevboxConfig.Raw<br/>+ typed structs)]
+  merged --> R[(DweConfig.Raw<br/>+ typed structs)]
 
   subgraph standalone["Standalone loaders"]
     direction TB
-    D[devbox/deploy.yml]
-    DS["devbox/services/&lt;name&gt;/deploy.yml"]
-    RS[devbox/reset.yml]
-    L[devbox/lifecycle.yml]
-    DK[devbox/docker.yml<br/>+ docker.local.yml]
-    ST[devbox/styles.yml]
-    IN[devbox/info.yml]
-    CM[devbox/commands/]
+    D[workspace/deploy.yml]
+    DS["workspace/services/&lt;name&gt;/deploy.yml"]
+    RS[workspace/reset.yml]
+    L[workspace/lifecycle.yml]
+    DK[workspace/docker.yml<br/>+ docker.local.yml]
+    ST[workspace/styles.yml]
+    IN[workspace/info.yml]
+    CM[workspace/commands/]
   end
 
   R -. "dot-paths / templates" .-> D
@@ -82,15 +82,15 @@ flowchart LR
 
 ## Merged vs standalone
 
-**Merged (3-layer config)**: `devbox.yml` → `devbox/defaults.yml` → `devbox/local.yml` are deep-merged at startup. Later layers win; maps merge recursively. The result is the effective config used for `.env` generation, topology resolution, and export rules. Each `devbox/services/<name>/service.yml` is loaded separately and then injected into the merged raw map so dot-paths like `services.main.container` resolve.
+**Merged (3-layer config)**: `workspace.yml` → `workspace/defaults.yml` → `workspace/local.yml` are deep-merged at startup. Later layers win; maps merge recursively. The result is the effective config used for `.env` generation, topology resolution, and export rules. Each `workspace/services/<name>/service.yml` is loaded separately and then injected into the merged raw map so dot-paths like `services.main.container` resolve.
 
-**Standalone**: `devbox/services/<name>/service.yml`, `deploy.yml`, `devbox/services/<name>/deploy.yml`, `reset.yml`, `lifecycle.yml`, `docker.yml` (+ `docker.local.yml`), `styles.yml`, `info.yml`, and `commands/*.yml` are loaded by dedicated functions in `internal/core/project/config/` and `internal/core/usercommands/`. They are not part of the 3-layer merge but most of them resolve template expressions against the merged config.
+**Standalone**: `workspace/services/<name>/service.yml`, `deploy.yml`, `workspace/services/<name>/deploy.yml`, `reset.yml`, `lifecycle.yml`, `docker.yml` (+ `docker.local.yml`), `styles.yml`, `info.yml`, and `commands/*.yml` are loaded by dedicated functions in `internal/core/project/config/` and `internal/core/usercommands/`. They are not part of the 3-layer merge but most of them resolve template expressions against the merged config.
 
 ## Files that support local overrides
 
 Currently, only `docker.local.yml` supports a `.local.yml` variant for per-developer customization. The pattern is:
 
-**Docker**: `devbox/docker.yml` (tracked, shared project-wide) + `devbox/docker.local.yml` (gitignored, per-developer). The local file is merged on top of the base file, allowing developers to customize their compose execution policy — e.g., add extra volumes, mount local source directories, or override platform/args without affecting teammates.
+**Docker**: `workspace/docker.yml` (tracked, shared project-wide) + `workspace/docker.local.yml` (gitignored, per-developer). The local file is merged on top of the base file, allowing developers to customize their compose execution policy — e.g., add extra volumes, mount local source directories, or override platform/args without affecting teammates.
 
 **Why only docker?** Docker setups are inherently personal — they depend on the developer's local environment (available binaries, volume mounts, platform differences). Other configs like `lifecycle.yml`, `info.yml`, and `styles.yml` are shared project-wide and don't benefit from per-developer overrides.
 
@@ -98,7 +98,7 @@ For more details on `docker.local.yml` semantics and examples, see [docker.yml](
 
 ## Pages
 
-- [devbox / defaults / local](devbox.md) — the 3-layer merged config: merge order, precedence, dot-path resolution, field reference
+- [workspace / defaults / local](workspace.md) — the 3-layer merged config: merge order, precedence, dot-path resolution, field reference
 - [services/<name>/service.yml](services/index.md) — per-service declarations, extends, dirs, cli config
 - [deploy.yml / reset.yml](deploy/index.md) — deploy and reset pipelines, steps, builtins, file logging, idempotent deploy
 - [state.yml](state/index.md) — deploy state tracking, skip-decision table, hashing, lock file, recovery from crashes
@@ -118,13 +118,13 @@ For more details on `docker.local.yml` semantics and examples, see [docker.yml](
 
 ## Related commands
 
-- `devbox render env` — generate `.env` from the merged config export rules
-- `devbox render ide` — generate IDE configs
-- `devbox render ai` — generate hub-level AGENTS.md and CLAUDE.md symlinks
-- `devbox render git` — generate shell git hooks into `<svc.Dir>/src/.git/hooks/`
-- `devbox info` — render the info dashboard from `info.yml`
-- `devbox deploy plan` — show the resolved deploy pipeline
-- `devbox compose files` — show active compose file list (diagnostic)
-- `devbox status apps` — show app services with health and deploy status
-- `devbox status tools` — show tool services table (read-only)
-- `devbox status infra` — show infra services table (read-only)
+- `dwe render env` — generate `.env` from the merged config export rules
+- `dwe render ide` — generate IDE configs
+- `dwe render ai` — generate hub-level AGENTS.md and CLAUDE.md symlinks
+- `dwe render git` — generate shell git hooks into `<svc.Dir>/src/.git/hooks/`
+- `dwe info` — render the info dashboard from `info.yml`
+- `dwe deploy plan` — show the resolved deploy pipeline
+- `dwe compose files` — show active compose file list (diagnostic)
+- `dwe status apps` — show app services with health and deploy status
+- `dwe status tools` — show tool services table (read-only)
+- `dwe status infra` — show infra services table (read-only)

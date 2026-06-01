@@ -1,10 +1,10 @@
 # Documentation Subsystem
 
-Devbox includes an integrated documentation browser and reference system. Access embedded built-in docs, project-specific docs (when present), render markdown with syntax highlighting, and view mermaid diagrams inline.
+DWE includes an integrated documentation browser and reference system. Access embedded built-in docs, project-specific docs (when present), render markdown with syntax highlighting, and view mermaid diagrams inline.
 
 ## Pages
 
-- [Interactive TUI browser](browser.md) — `devbox docs` keys, layout, search
+- [Interactive TUI browser](browser.md) — `dwe docs` keys, layout, search
 - [Non-interactive commands](commands.md) — `show`, `list`, `export`, `llms-txt`, `cache clear`, plus mermaid configuration and `mmdc` install
 - [Translations and language behavior](translations.md) — locale resolution, file layout, content-hash staleness check
 
@@ -12,32 +12,32 @@ Devbox includes an integrated documentation browser and reference system. Access
 
 View docs interactively:
 ```bash
-devbox docs
+dwe docs
 ```
 
 Show a specific topic in the terminal:
 ```bash
-devbox docs show config/services/fields
-devbox docs show config/devbox#binary-overrides
+dwe docs show config/services/fields
+dwe docs show config/workspace#binary-overrides
 ```
 
 List all available topics:
 ```bash
-devbox docs list
+dwe docs list
 ```
 
 Export all docs to a directory:
 ```bash
-devbox docs export ./my-docs
+dwe docs export ./my-docs
 ```
 
 ## Project docs
 
-Devbox automatically detects and includes documentation from your project's `./docs/` directory.
+DWE automatically detects and includes documentation from your project's `./docs/` directory.
 
 When `./docs/` exists, the TUI browser shows a second top-level branch:
 ```
-Devbox
+DWE
   reference/
   internals/
 Project
@@ -102,6 +102,6 @@ Once the cache exceeds this limit, oldest diagrams are automatically deleted (LR
 
 ## Related commands
 
-- `devbox docs generate` — Generate markdown documentation from user commands
-- `devbox validate` — Check for documentation errors and orphan translation entries
-- `devbox command list` — List user commands with translated descriptions
+- `dwe docs generate` — Generate markdown documentation from user commands
+- `dwe validate` — Check for documentation errors and orphan translation entries
+- `dwe command list` — List user commands with translated descriptions

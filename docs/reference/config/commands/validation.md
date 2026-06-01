@@ -25,7 +25,7 @@ The loader enforces the rules below and reports the offending file + field on fa
 
 ## Common pitfalls
 
-- **Don't shell out to `./bin/devbox`** — use `type: devbox` or `$DWE_BIN` (in scripts). Either form picks up the running binary, even when the build path changes.
+- **Don't shell out to `./bin/dwe`** — use `type: dwe` or `$DWE_BIN` (in scripts). Either form picks up the running binary, even when the build path changes.
 - **Don't put secrets in `argv`** — use `env:` so values are injected through the container env, not the command line.
 - **Don't reuse env names across sources** — declaring `MYSQL_PWD` in both `params.x.env` and `env:` is a load-time error.
 - **Don't write to a path without `mkdir: true`** — write mode does not create parents on its own.

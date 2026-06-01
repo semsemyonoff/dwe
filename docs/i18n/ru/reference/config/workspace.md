@@ -1,8 +1,8 @@
-> Translated from: reference/config/devbox.md @ 25c5965f6340
+> Translated from: reference/config/workspace.md @ a5e61466665f
 
-# devbox.yml / defaults.yml / local.yml
+# workspace.yml / defaults.yml / local.yml
 
-Три слоя смерженного конфига devbox.
+Три слоя смерженного конфига DWE.
 
 ## Содержание
 
@@ -10,17 +10,17 @@
 - [Что принадлежит каждому слою](#что-принадлежит-каждому-слою)
 - [Разрешение dot-path](#разрешение-dot-path)
   - [Откуда берутся поля сервисов](#откуда-берутся-поля-сервисов)
-- [devbox.yml](#devboxyml)
+- [workspace.yml](#workspaceyml)
   - [Справочник полей](#справочник-полей)
   - [Ключи проектных соглашений](#ключи-проектных-соглашений)
-- [devbox/defaults.yml](#devboxdefaultsyml)
+- [workspace/defaults.yml](#workspacedefaultsyml)
   - [Оверлей `services`](#оверлей-services)
   - [`runtime`](#runtime)
   - [`state`](#state)
   - [`exports.env`](#exportsenv)
   - [`compose`](#compose)
   - [`ide`](#ide)
-- [devbox/local.yml](#devboxlocalyml)
+- [workspace/local.yml](#workspacelocalyml)
 - [Частые ловушки](#частые-ловушки)
 - [Связанные команды](#связанные-команды)
 
@@ -28,51 +28,50 @@
 
 ```mermaid
 flowchart TB
-  L1["1 · devbox.yml<br/>tracked · структурный скелет"]
-  L2["2 · devbox/defaults.yml<br/>tracked · версионированные дефолты"]
-  L3["3 · devbox/local.yml<br/>gitignored · переопределения на пользователя"]
-  R[(Эффективный DevboxConfig<br/>+ DevboxConfig.Raw)]
+  L1["1 · workspace.yml<br/>tracked · структурный скелет"]
+  L2["2 · workspace/defaults.yml<br/>tracked · версионированные дефолты"]
+  L3["3 · workspace/local.yml<br/>gitignored · переопределения на пользователя"]
+  R[(Эффективный DweConfig<br/>+ DweConfig.Raw)]
 
   L1 -- "merged into" --> L2
   L2 -- "overridden by<br/>(local wins)" --> L3
   L3 -- "deepMerge result" --> R
 
-  R --> ENV[devbox render env → .env]
-  R --> DASH[devbox info]
+  R --> ENV[dwe render env → .env]
+  R --> DASH[dwe info]
   R --> RES[ResolvePath dot-paths<br/>exports, docker.yml,<br/>commands, info templates]
 ```
 
-Читайте сверху вниз: каждая стрелка — это «следующий слой накладывается сверху». `local.yml` сидит в конце, поэтому любой ключ, который он выставляет, затеняет тот же ключ из `defaults.yml` или `devbox.yml`. Ключи, отсутствующие в `local.yml`, пропадают вниз к `defaults.yml`, затем к `devbox.yml`, затем к типовому Go zero value.
+Читайте сверху вниз: каждая стрелка — это «следующий слой накладывается сверху». `local.yml` сидит в конце, поэтому любой ключ, который он выставляет, затеняет тот же ключ из `defaults.yml` или `workspace.yml`. Ключи, отсутствующие в `local.yml`, пропадают вниз к `defaults.yml`, затем к `workspace.yml`, затем к типовому Go zero value.
 
 Три файла делят одно пространство имён — один и тот же ключ в разных слоях — это одна и та же настройка. Слой 1 устанавливает структуру, слой 2 заполняет дефолты, слой 3 переопределяет для локальной машины. Никто из трёх не обязан декларировать каждый ключ; отсутствующие ключи просто проваливаются к тому слою, который их выставил, с type-zero значениями как окончательным fallback'ом.
 
-`devbox/local.yml` опционален: когда отсутствует, мердж молча пропускает слой 3.
+`workspace/local.yml` опционален: когда отсутствует, мердж молча пропускает слой 3.
 
 ## Что принадлежит каждому слою
 
 | Назначение | Слой |
 |---------|-------|
-| Имя и префикс проекта | `devbox.yml` |
-| Версия схемы | `devbox.yml` |
-| Порты / хосты сервисов (apps, tools, infra) | [`devbox/services/<name>/service.yml`](services/index.md) (per-entry карты `ports:` / `hosts:`) |
-| Структурные определения сервисов (container / compose / status / render) | [`devbox/services/<name>/service.yml`](services/index.md) |
+| Имя и префикс проекта | `workspace.yml` |
+| Порты / хосты сервисов (apps, tools, infra) | [`workspace/services/<name>/service.yml`](services/index.md) (per-entry карты `ports:` / `hosts:`) |
+| Структурные определения сервисов (container / compose / status / render) | [`workspace/services/<name>/service.yml`](services/index.md) |
 | Опциональное состояние enabled для сервисов (для всех типов) | `defaults.yml` (переопределяемо в `local.yml`) |
 | Правила экспорта (`exports.env`) | `defaults.yml` |
 | Дефолты IDE-конфига | `defaults.yml` |
 | Дефолты блока `db` | `defaults.yml` |
 | Активное состояние | `local.yml` |
-| Значения портов / хостов сервисов | [`devbox/services/<name>/service.yml`](services/index.md) (проектные определения) и `local.yml` (переопределения на разработчика, deep-merge по имени записи) |
+| Значения портов / хостов сервисов | [`workspace/services/<name>/service.yml`](services/index.md) (проектные определения) и `local.yml` (переопределения на разработчика, deep-merge по имени записи) |
 | Личные креды (`db.user`, `db.password`) | `local.yml` |
 | Включение debug / опциональных сервисов | `local.yml` |
-| Конфигурация, сгенерированная мастером | `local.yml` (пишется `devbox deploy` при ответе на вопросы setup или конфликты портов) |
+| Конфигурация, сгенерированная мастером | `local.yml` (пишется `dwe deploy` при ответе на вопросы setup или конфликты портов) |
 
-Сами определения сервисов (apps, tools, infra — включая их порты / хосты) живут в per-folder файлах [`devbox/services/<name>/service.yml`](services/index.md), которые загружаются отдельно и не являются частью этого мерджа. Трёхслойный оверлей несёт `services.<name>.enabled`, `services.<name>.ports` и `services.<name>.hosts`. Карты портов и хостов deep-merge'атся по имени записи, поэтому частичное переопределение затрагивает только перечисленные ключи.
+Сами определения сервисов (apps, tools, infra — включая их порты / хосты) живут в per-folder файлах [`workspace/services/<name>/service.yml`](services/index.md), которые загружаются отдельно и не являются частью этого мерджа. Трёхслойный оверлей несёт `services.<name>.enabled`, `services.<name>.ports` и `services.<name>.hosts`. Карты портов и хостов deep-merge'атся по имени записи, поэтому частичное переопределение затрагивает только перечисленные ключи.
 
-Команда `devbox deploy` включает интерактивный мастер, запускающийся на свежих проектах (когда `devbox/local.yml` отсутствует или пуст). Мастер собирает ответы на вопросы, объявленные в [`devbox/setup.yml`](setup.md), и спрашивает переопределения портов при наличии конфликтов. Все ответы deep-merge'атся в `local.yml` и атомарно записываются до того, как продолжится деплой. Подробности схемы см. в [`devbox/setup.yml`](setup.md).
+Команда `dwe deploy` включает интерактивный мастер, запускающийся на свежих проектах (когда `workspace/local.yml` отсутствует или пуст). Мастер собирает ответы на вопросы, объявленные в [`workspace/setup.yml`](setup.md), и спрашивает переопределения портов при наличии конфликтов. Все ответы deep-merge'атся в `local.yml` и атомарно записываются до того, как продолжится деплой. Подробности схемы см. в [`workspace/setup.yml`](setup.md).
 
 ## Разрешение dot-path
 
-CLI хранит смерженный результат в двух местах: типизированной структуре `DevboxConfig` (с полями вроде `DevboxConfig.Services` и `DevboxConfig.Runtime.UseHTTPS`) и обычной мапе `DevboxConfig.Raw`. Мапа Raw движёт разрешение dot-path.
+CLI хранит смерженный результат в двух местах: типизированной структуре `DweConfig` (с полями вроде `DweConfig.Services` и `DweConfig.Runtime.UseHTTPS`) и обычной мапе `DweConfig.Raw`. Мапа Raw движёт разрешение dot-path.
 
 Dot-path — это цепочка ключей через `.`, навигирующая смерженную YAML-мапу. Примеры:
 
@@ -85,14 +84,14 @@ Dot-path'ы потребляются:
 
 - правилами экспорта в `defaults.yml` (`from:`, `when:`)
 - шаблонными выражениями `${...}` в `docker.yml` (`project_name`)
-- шаблонными выражениями `${...}` в декларативных командах (`devbox/commands/`)
+- шаблонными выражениями `${...}` в декларативных командах (`workspace/commands/`)
 - Go-шаблонами `{{ ... }}` в `info.yml` (через типизированную структуру, не Raw)
 
 ### Откуда берутся поля сервисов
 
-Пути `services.<name>.*` в смерженной мапе наполняются `LoadConfig`. После загрузки каждого `devbox/services/<name>/service.yml` (каноническая декларация с `type:`) загрузчик валидирует каждый оверлейный слой против декларированного набора (`validateServicesOverlay`), мерджит 3 слоя, затем разрешает `enabled` для каждого сервиса (required выигрывает; иначе значение из смерженного оверлея, по умолчанию `false`). Каждый разрешённый сервис — включая вложенные карты `ports` / `hosts` и разрешённые поля вроде `container`, `dir`, `compose` — инжектится в `raw["services"]`. Правила экспорта и шаблоны могут поэтому использовать `services.main.container`, `services.main.ports.http`, `services.adminer.hosts.web`, `services.catalog.enabled` и т.д. без отдельной осведомлённости о структуре per-service папок.
+Пути `services.<name>.*` в смерженной мапе наполняются `LoadConfig`. После загрузки каждого `workspace/services/<name>/service.yml` (каноническая декларация с `type:`) загрузчик валидирует каждый оверлейный слой против декларированного набора (`validateServicesOverlay`), мерджит 3 слоя, затем разрешает `enabled` для каждого сервиса (required выигрывает; иначе значение из смерженного оверлея, по умолчанию `false`). Каждый разрешённый сервис — включая вложенные карты `ports` / `hosts` и разрешённые поля вроде `container`, `dir`, `compose` — инжектится в `raw["services"]`. Правила экспорта и шаблоны могут поэтому использовать `services.main.container`, `services.main.ports.http`, `services.adminer.hosts.web`, `services.catalog.enabled` и т.д. без отдельной осведомлённости о структуре per-service папок.
 
-## devbox.yml
+## workspace.yml
 
 **Назначение**: идентичность проекта и структурный скелет. Отслеживается git. Редко меняется после первоначальной настройки.
 
@@ -100,18 +99,15 @@ Dot-path'ы потребляются:
 
 **Пример**:
 ```yaml
-schema_version: "2"
-
 project:
   name: laravel
-  prefix: devbox
+  prefix: myprefix
 ```
 
 ### Справочник полей
 
 | Поле | Тип | Описание |
 |-------|------|-------------|
-| `schema_version` | string | Версия схемы конфига. Должна быть `"2"` — CLI отвергает v1-проекты с понятной ошибкой. |
 | `project.name` | string | Короткий идентификатор проекта (используется в именах контейнеров, `.env`) |
 | `project.prefix` | string | Префикс для имени Docker Compose-проекта и меток контейнеров |
 
@@ -119,7 +115,7 @@ project:
 
 ## Ключи проектных соглашений
 
-Помимо типизированных полей, документированных выше, `devbox.yml`, `defaults.yml` и `local.yml` поддерживают открытое пространство имён ключей-соглашений. Эти ключи не интерпретируются CLI напрямую — они экспонируются через dot-path'ы в смерженном конфиге и потребляются правилами экспорта, шаблонами и пользовательскими командами.
+Помимо типизированных полей, документированных выше, `workspace.yml`, `defaults.yml` и `local.yml` поддерживают открытое пространство имён ключей-соглашений. Эти ключи не интерпретируются CLI напрямую — они экспонируются через dot-path'ы в смерженном конфиге и потребляются правилами экспорта, шаблонами и пользовательскими командами.
 
 Распространённые ключи-соглашения:
 
@@ -143,7 +139,7 @@ my_custom:
 
 ### `docs`
 
-Конфигурирует поведение рендеринга документации и кеширования для команд `devbox docs`.
+Конфигурирует поведение рендеринга документации и кеширования для команд `dwe docs`.
 
 ```yaml
 docs:
@@ -157,21 +153,21 @@ docs:
 - `mmdc`: требовать наличие `mmdc`; при отсутствии эмитить error-плейсхолдер, но продолжать.
 - `off`: никогда не рендерить диаграммы; всегда показывать блоки кода.
 
-**`docs.cache_size_mb`**: максимальный размер в MB для кеша mermaid-диаграмм (PNG-файлы, хранящиеся в `$XDG_CACHE_HOME/devbox/mermaid/`). Кеш использует LRU-вытеснение при превышении лимита. По умолчанию 100 MB. Должно быть неотрицательным; ноль приводит к дефолту 100.
+**`docs.cache_size_mb`**: максимальный размер в MB для кеша mermaid-диаграмм (PNG-файлы, хранящиеся в `$XDG_CACHE_HOME/dwe/mermaid/`). Кеш использует LRU-вытеснение при превышении лимита. По умолчанию 100 MB. Должно быть неотрицательным; ноль приводит к дефолту 100.
 
 ---
 
-## devbox/defaults.yml
+## workspace/defaults.yml
 
 **Назначение**: версионированные дефолты для всего проекта. Отслеживается git. Предоставляет всю runtime-конфигурацию, не являющуюся структурной идентичностью.
 
-**Порядок загрузки**: слой 2 (мерджится поверх `devbox.yml`).
+**Порядок загрузки**: слой 2 (мерджится поверх `workspace.yml`).
 
 **Секции**:
 
 ### Оверлей `services`
 
-Переключает опциональные сервисы любого типа (сервисы, объявленные в [`devbox/services/<name>/service.yml`](services/index.md) без `required: true`). Apps, tools и infra делят одно оверлейное пространство имён — дискриминатор `type:` живёт в `service.yml` каждого сервиса, не здесь.
+Переключает опциональные сервисы любого типа (сервисы, объявленные в [`workspace/services/<name>/service.yml`](services/index.md) без `required: true`). Apps, tools и infra делят одно оверлейное пространство имён — дискриминатор `type:` живёт в `service.yml` каждого сервиса, не здесь.
 
 ```yaml
 services:
@@ -185,11 +181,11 @@ services:
     enabled: true
 ```
 
-Разрешённые поля под `services.<name>` в любом оверлейном слое — это `enabled`, `ports` и `hosts`. Добавление структурных полей вроде `container:`, `compose:`, `extends:` и т.д. — это layer-aware overlay error — те поля живут в `devbox/services/<name>/service.yml`. Карты портов и хостов deep-merge'атся по имени записи. Required-сервисы всегда активны и не имеют переключателя.
+Разрешённые поля под `services.<name>` в любом оверлейном слое — это `enabled`, `ports` и `hosts`. Добавление структурных полей вроде `container:`, `compose:`, `extends:` и т.д. — это layer-aware overlay error — те поля живут в `workspace/services/<name>/service.yml`. Карты портов и хостов deep-merge'атся по имени записи. Required-сервисы всегда активны и не имеют переключателя.
 
 ### `runtime`
 
-Runtime-настройки, влияющие на генерацию `.env` и info-дашборд, но не относящиеся к конкретному сервису. Per-service порты / хосты живут в [`devbox/services/<name>/service.yml`](services/index.md) под картами `ports:` / `hosts:` каждой записи (и доступны как dot-path'ы `services.<name>.ports.<port-name>` / `services.<name>.hosts.<host-name>`).
+Runtime-настройки, влияющие на генерацию `.env` и info-дашборд, но не относящиеся к конкретному сервису. Per-service порты / хосты живут в [`workspace/services/<name>/service.yml`](services/index.md) под картами `ports:` / `hosts:` каждой записи (и доступны как dot-path'ы `services.<name>.ports.<port-name>` / `services.<name>.hosts.<host-name>`).
 
 ```yaml
 runtime:
@@ -245,7 +241,7 @@ exports:
 
 #### Неявные системные переменные
 
-`devbox render env` всегда эмитит три переменные до выполнения любого правила, независимо от `exports.env`:
+`dwe render env` всегда эмитит три переменные до выполнения любого правила, независимо от `exports.env`:
 
 | Переменная | Источник | Заметки |
 |----------|--------|-------|
@@ -268,13 +264,13 @@ compose:
 |-------|-------------|
 | `compose.base` | Базовый compose-файл (всегда подключается) |
 
-Service-specific оверлеи живут под `services.<name>.compose` (список путей к файлам для каждой записи сервиса) в [`devbox/services/<name>/service.yml`](services/index.md). Порядок эмиссии compose-файлов — `base → tools (sorted) → infra (sorted) → apps (sorted)`.
+Service-specific оверлеи живут под `services.<name>.compose` (список путей к файлам для каждой записи сервиса) в [`workspace/services/<name>/service.yml`](services/index.md). Порядок эмиссии compose-файлов — `base → tools (sorted) → infra (sorted) → apps (sorted)`.
 
 ---
 
-## devbox/local.yml
+## workspace/local.yml
 
-**Назначение**: переопределения на пользователя. Gitignored, никогда не коммитится. Шаблон в `devbox/local.example.yml`.
+**Назначение**: переопределения на пользователя. Gitignored, никогда не коммитится. Шаблон в `workspace/local.example.yml`.
 
 **Порядок загрузки**: слой 3 (мерджится последним — наивысший приоритет).
 
@@ -292,7 +288,7 @@ runtime:
   use_https: true
 ```
 
-> Переопределения портов / хостов на разработчика поддерживаются через `local.yml`. Используйте `services.<name>.ports` или `services.<name>.hosts` для переопределения конкретных записей; значения deep-merge'атся по ключу поверх проектных деклараций в `devbox/services/<name>/service.yml`.
+> Переопределения портов / хостов на разработчика поддерживаются через `local.yml`. Используйте `services.<name>.ports` или `services.<name>.hosts` для переопределения конкретных записей; значения deep-merge'атся по ключу поверх проектных деклараций в `workspace/services/<name>/service.yml`.
 
 Если `local.yml` не существует, слой 3 молча пропускается.
 
@@ -306,13 +302,13 @@ runtime:
 
 ## Опциональный блок `ui:`
 
-`devbox.yml` может нести опциональный верхнеуровневый блок `ui:`, конфигурирующий интерактивный браузер команд. См. [`ui.md`](ui.md) для схемы, дефолтов и семантики omit-vs-`false` для `*bool`. Поведение не меняется для проектов, опускающих блок.
+`workspace.yml` может нести опциональный верхнеуровневый блок `ui:`, конфигурирующий интерактивный браузер команд. См. [`ui.md`](ui.md) для схемы, дефолтов и семантики omit-vs-`false` для `*bool`. Поведение не меняется для проектов, опускающих блок.
 
 ## Связанные команды
 
-- `devbox render env --out .env` — перегенерировать `.env` из смерженного конфига
-- `devbox render ide` / `devbox render ai` / `devbox render git` — pack-based рендереры; см. [справочник render](../render/index.md)
-- `devbox info` — показать дашборд (использует смерженный конфиг + `info.yml`)
-- `devbox status` — композитный read-only view (apps + tools + infra + deploy + topology + git + daemons)
-- `devbox status apps` / `devbox status tools` / `devbox status infra` — таблицы по типу
-- `devbox compose argv` — показать эффективную compose-команду со всеми флагами (полезно для отладки разрешения dot-path в `docker.yml`)
+- `dwe render env --out .env` — перегенерировать `.env` из смерженного конфига
+- `dwe render ide` / `dwe render ai` / `dwe render git` — pack-based рендереры; см. [справочник render](../render/index.md)
+- `dwe info` — показать дашборд (использует смерженный конфиг + `info.yml`)
+- `dwe status` — композитный read-only view (apps + tools + infra + deploy + topology + git + daemons)
+- `dwe status apps` / `dwe status tools` / `dwe status infra` — таблицы по типу
+- `dwe compose argv` — показать эффективную compose-команду со всеми флагами (полезно для отладки разрешения dot-path в `docker.yml`)

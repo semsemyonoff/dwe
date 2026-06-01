@@ -1,10 +1,10 @@
-# devbox render ai
+# dwe render ai
 
 Generate hub-level agent documentation for each enabled service from a template pack. The pack declares a `manifest.yml` listing files to render and symlinks to create inside the service's hub directory (e.g. `services/main/AGENTS.md` plus `services/main/CLAUDE.md → AGENTS.md`).
 
 `render ai` and [`render ide`](ide.md) share most of the per-service plumbing — selection, template resolution, path-safety guards, manifest schema. They differ in one important place: the **collision policy** is inverted (shallowest wins, not deepest).
 
-Per-file [local overrides](index.md#local-overrides) via the sibling `<pack>.local/` shadow tree apply to AI packs identically to IDE and git — drop a file at `devbox/templates/ai/<pack>.local/<rel>` to substitute it for the canonical one without touching the tracked pack.
+Per-file [local overrides](index.md#local-overrides) via the sibling `<pack>.local/` shadow tree apply to AI packs identically to IDE and git — drop a file at `workspace/templates/ai/<pack>.local/<rel>` to substitute it for the canonical one without touching the tracked pack.
 
 ## Contents
 
@@ -102,7 +102,7 @@ This is the **opposite** of `render ide`'s deepest-wins policy. The reason is th
 
 ### Explicit `[service]` argument
 
-`devbox render ai <name>` treats `<name>` as a **hub anchor** (same model as `render ide`).
+`dwe render ai <name>` treats `<name>` as a **hub anchor** (same model as `render ide`).
 
 Validation order (first failure wins):
 
@@ -113,21 +113,21 @@ Validation order (first failure wins):
 
 After validation, the same shallowest-wins resolution is applied scoped to siblings sharing the hub. If the winner differs, an info line announces the substitution.
 
-So `devbox render ai main-debug` still renders the parent `main` whenever both are enabled — the variant resolves to the canonical hub owner.
+So `dwe render ai main-debug` still renders the parent `main` whenever both are enabled — the variant resolves to the canonical hub owner.
 
 ## Template pack resolution
 
-For each selected service, the renderer picks one pack directory under `devbox/templates/ai/`. The resolution chain mirrors IDE pack resolution exactly, only the base directory differs.
+For each selected service, the renderer picks one pack directory under `workspace/templates/ai/`. The resolution chain mirrors IDE pack resolution exactly, only the base directory differs.
 
 ```mermaid
 flowchart TD
   S{"render.ai.template set?"}
-  S -- yes --> EX["devbox/templates/ai/{template}/"]
+  S -- yes --> EX["workspace/templates/ai/{template}/"]
   EX -- exists --> USE["use this pack"]
   EX -- missing --> ERR["error<br/>explicit is strict"]
-  S -- no --> SN["devbox/templates/ai/{service-name}/"]
+  S -- no --> SN["workspace/templates/ai/{service-name}/"]
   SN -- exists --> USE
-  SN -- missing --> DEF["devbox/templates/ai/default/"]
+  SN -- missing --> DEF["workspace/templates/ai/default/"]
   DEF -- exists --> USE
   DEF -- missing --> WARN["warning + skip<br/>implicit not found"]
 ```
@@ -210,14 +210,14 @@ Templates receive the same object shape as IDE templates:
 
 | Variable | Source |
 |----------|--------|
-| `.Project` | `project:` block from `devbox.yml` |
+| `.Project` | `project:` block from `workspace.yml` |
 | `.Service` | **canonical config identity** — root of the rendering service's `extends:` chain. Use this for raw-config lookups keyed by service name. Equals `.Resolved` when no extends chain. |
 | `.Resolved` | **rendering identity** — service whose hub is actually being rendered (collision-policy winner). For AI the winner is the shallowest extender, so `.Resolved` typically equals `.Service`. |
 | `.ServiceCfg` | effective service config of `.Resolved`, after `extends` resolution. |
 | `.Runtime` | merged `runtime` block |
-| `.Cfg` | merged `DevboxConfig` (advanced). `.Cfg.Raw` is the post-merge config map after devbox normalization (`services.*` injected from per-service `service.yml` files) — see [Templates](../templates.md#render-context-per-site). Prefer the dedicated fields above for common cases. |
+| `.Cfg` | merged `DweConfig` (advanced). `.Cfg.Raw` is the post-merge config map after DWE normalization (`services.*` injected from per-service `service.yml` files) — see [Templates](../templates.md#render-context-per-site). Prefer the dedicated fields above for common cases. |
 
-> **Advisory.** AI outputs land at `<svc.Dir>/<entry.To>` — typically tracked project files (`AGENTS.md`, `.claude/CLAUDE.md`, …). Avoid consuming developer-local or secret keys via `.Cfg.Raw` in AI templates: any value layered in from `devbox/local.yml` will surface in the rendered file and produce per-developer diffs in tracked artefacts. Use `.Cfg.Raw` for repo-wide conventions only.
+> **Advisory.** AI outputs land at `<svc.Dir>/<entry.To>` — typically tracked project files (`AGENTS.md`, `.claude/CLAUDE.md`, …). Avoid consuming developer-local or secret keys via `.Cfg.Raw` in AI templates: any value layered in from `workspace/local.yml` will surface in the rendered file and produce per-developer diffs in tracked artefacts. Use `.Cfg.Raw` for repo-wide conventions only.
 
 Strict-mode rendering means a typo like `{{.Servic.Name}}` aborts rendering instead of producing `<no value>`. Use `{{if ...}}` for fields that may legitimately be empty.
 
@@ -259,26 +259,26 @@ Steps:
    - Regular file or directory — refuse with an error suggesting either deleting the file or setting `render.ai.enabled: false` for the service.
    - Path absent — create the symlink.
 
-The result is **content-idempotent**: re-running `devbox render ai` produces a hub directory in the same final state. Note that rendered files are always rewritten on each run (so file modification times advance), but the bytes are determined entirely by the templates and the merged config. Symlinks, by contrast, are only re-created when the existing one is missing or points at the wrong target.
+The result is **content-idempotent**: re-running `dwe render ai` produces a hub directory in the same final state. Note that rendered files are always rewritten on each run (so file modification times advance), but the bytes are determined entirely by the templates and the merged config. Symlinks, by contrast, are only re-created when the existing one is missing or points at the wrong target.
 
 ## Worked example
 
 Layout:
 
 ```
-devbox/services/
+workspace/services/
   main/
     service.yml
   main-debug/
     service.yml
-devbox/templates/ai/
+workspace/templates/ai/
   default/
     manifest.yml
     AGENTS.md.tmpl
     .claude/CLAUDE.md.tmpl
 ```
 
-Manifest `devbox/templates/ai/default/manifest.yml`:
+Manifest `workspace/templates/ai/default/manifest.yml`:
 
 ```yaml
 render:
@@ -292,19 +292,19 @@ symlinks:
     to: AGENTS.md
 ```
 
-Template `devbox/templates/ai/default/AGENTS.md.tmpl`:
+Template `workspace/templates/ai/default/AGENTS.md.tmpl`:
 
 ```markdown
 # {{.Service}} Service Hub
 
-This is the {{.Service}} service running inside a devbox-managed hub.
+This is the {{.Service}} service running inside a DWE-managed hub.
 The application source code is at `src/`.
 
 Service container: {{.ServiceCfg.Container}}
 Workspace root: {{.ServiceCfg.DirInternal}}
 ```
 
-`devbox/services/main/service.yml`:
+`workspace/services/main/service.yml`:
 
 ```yaml
 type: app
@@ -312,7 +312,7 @@ container: app-main
 dir: ./services/main
 ```
 
-`devbox/services/main-debug/service.yml`:
+`workspace/services/main-debug/service.yml`:
 
 ```yaml
 type: app
@@ -321,10 +321,10 @@ container: app-main-debug
 dir: ./services/main          # same hub as parent — collision
 ```
 
-`devbox render ai`:
+`dwe render ai`:
 
 1. Selection: both services pass the activation gate (default `render.ai.enabled: true`). They share `dir: ./services/main`. `main` has the shallower extends chain (depth 0 vs `main-debug`'s 1), so **`main` wins**. `main-debug` is reported as a collision skip.
-2. Pack resolution for `main`: `render.ai.template` is unset; the implicit chain tries `devbox/templates/ai/main/` (not found), then `devbox/templates/ai/default/` (used).
+2. Pack resolution for `main`: `render.ai.template` is unset; the implicit chain tries `workspace/templates/ai/main/` (not found), then `workspace/templates/ai/default/` (used).
 3. Manifest is loaded and validated: two render entries, one symlink. The symlink targets `AGENTS.md`, which is one of the render destinations.
 4. Each render entry is processed: `AGENTS.md` and `.claude/CLAUDE.md` are written into `services/main/`.
 5. The symlink `services/main/CLAUDE.md → AGENTS.md` is created.
@@ -339,7 +339,7 @@ services/main/
     CLAUDE.md         ← rendered from .claude/CLAUDE.md.tmpl
 ```
 
-`devbox render ai main-debug` produces the same files — the explicit argument is validated, but the hub-anchor resolution picks `main` (shallowest) and prints `ai [main-debug] — resolved to main (hub services/main)`.
+`dwe render ai main-debug` produces the same files — the explicit argument is validated, but the hub-anchor resolution picks `main` (shallowest) and prints `ai [main-debug] — resolved to main (hub services/main)`.
 
 ## Output messages
 
@@ -368,4 +368,4 @@ Errors are returned as command failures and name the offending service so the so
 
 - [`services.<name>.render.ai` block](../config/services/fields.md#renderai-block) — `enabled`, `template`, inheritance via `extends`
 - [`render ide`](ide.md) — companion command with the opposite (deepest-wins) collision policy
-- CLI reference: [`devbox render ai`](../cli/devbox_render_ai.md)
+- CLI reference: [`dwe render ai`](../cli/dwe_render_ai.md)

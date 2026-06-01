@@ -1,67 +1,67 @@
-> Translated from: reference/concepts/docker.md @ 93d8a00617e2
+> Translated from: reference/concepts/docker.md @ 0c621f4351a3
 
 # Интеграция с Docker
 
-Как Devbox управляет Docker Compose: имя compose-проекта, список собираемых файлов, окружение, пробрасываемое в каждый дочерний процесс, тома, которыми он владеет, и немногие места, где он обходит compose и вызывает `docker stop` / `docker rm` напрямую.
+Как DWE управляет Docker Compose: имя compose-проекта, список собираемых файлов, окружение, пробрасываемое в каждый дочерний процесс, тома, которыми он владеет, и немногие места, где он обходит compose и вызывает `docker stop` / `docker rm` напрямую.
 
 ## Содержание
 
-- [Две точки входа: `devbox docker` против `devbox compose`](#две-точки-входа-devbox-docker-против-devbox-compose)
+- [Две точки входа: `dwe docker` против `dwe compose`](#две-точки-входа-dwe-docker-против-dwe-compose)
 - [Имя проекта](#имя-проекта)
 - [Список compose-файлов](#список-compose-файлов)
 - [Окружение процесса](#окружение-процесса)
 - [Тома](#тома)
 - [Обход compose на пути сервисов](#обход-compose-на-пути-сервисов)
-- [`devbox deploy` от начала до конца](#devbox-deploy-от-начала-до-конца)
+- [`dwe deploy` от начала до конца](#dwe-deploy-от-начала-до-конца)
 - [Что читать дальше](#что-читать-дальше)
 
-## Две точки входа: `devbox docker` против `devbox compose`
+## Две точки входа: `dwe docker` против `dwe compose`
 
-Devbox никогда не просит пользователя вводить `docker compose` напрямую. Каждый lifecycle-вызов проходит через одну из двух поверхностей CLI:
+DWE никогда не просит пользователя вводить `docker compose` напрямую. Каждый lifecycle-вызов проходит через одну из двух поверхностей CLI:
 
 | Поверхность | Назначение | Применяются policy-аргументы? |
 |---------|---------|----------------------|
-| `devbox docker <sub>` | Публичный lifecycle-API, используемый Makefile, deploy-шагами и user-командами. | Да (`global` + дефолты per-subcommand). |
-| `devbox compose raw <args...>` | Низкоуровневая диагностическая прокидка. | Нет. |
-| `devbox compose files` / `compose argv` | Просмотр активного списка файлов или полного эффективного argv. | n/a (только чтение). |
+| `dwe docker <sub>` | Публичный lifecycle-API, используемый Makefile, deploy-шагами и user-командами. | Да (`global` + дефолты per-subcommand). |
+| `dwe compose raw <args...>` | Низкоуровневая диагностическая прокидка. | Нет. |
+| `dwe compose files` / `compose argv` | Просмотр активного списка файлов или полного эффективного argv. | n/a (только чтение). |
 
 Обе поверхности разрешаются через одну и ту же структуру `docker.Compose` в `internal/shared/docker/`. Структура выставляет два строителя argv:
 
-- `BuildArgs(command, extraArgs…)` собирает `compose -p <project> -f <file>… <globalArgs> <command> <commandDefaultArgs> <extraArgs>`. Это то, что использует `devbox docker`.
+- `BuildArgs(command, extraArgs…)` собирает `compose -p <project> -f <file>… <globalArgs> <command> <commandDefaultArgs> <extraArgs>`. Это то, что использует `dwe docker`.
 - `BuildInternalArgs(command, extraArgs…)` строит тот же скелет, но пропускает и `globalArgs`, и per-command дефолты, так что внутренние пробы (health-проверки, запросы «работает ли контейнер») не могут быть сломаны пользовательским переопределением вроде `args.ps: ["--services"]`.
 
 ## Имя проекта
 
 Имя compose-проекта — это значение `-p <name>`, передаваемое в каждый вызов `docker compose`. Это также префикс, который Docker Compose использует для собственных конвенций именования ресурсов: контейнеры (`<project>_<service>_<n>`), сети (`<project>_default`) и именованные тома (`<project>_<vol>`).
 
-Devbox разрешает имя из `devbox/docker.yml`:
+DWE разрешает имя из `workspace/docker.yml`:
 
 ```yaml
-# devbox/docker.yml
+# workspace/docker.yml
 project_name: "${project.prefix}-${project.name}"
 ```
 
-Плейсхолдеры `${dot.path}` разрешаются против смерженного `DevboxConfig` (каскад `devbox.yml` → `defaults.yml` → `local.yml`) через `resolveVarTemplate`. То же имя возвращается в:
+Плейсхолдеры `${dot.path}` разрешаются против смерженного `DweConfig` (каскад `workspace.yml` → `defaults.yml` → `local.yml`) через `resolveVarTemplate`. То же имя возвращается в:
 
 - Каждый вызов compose (`compose -p <name>`).
 - Резолвер имени не-shared тома (`<project>_<volume>` — см. [Тома](#тома)).
 - Резолвер имени контейнера сервиса в `internal/shared/daemon/`, используемый per-service stop и reset (см. [Обход compose](#обход-compose-на-пути-сервисов)).
 - Билтин удаления томов в обход compose, который использует имя проекта как фильтр-префикс при подметании томов.
 
-Типичное разрешённое имя выглядит как `myorg-shop` или `devbox-laravel`. Точная форма — часть публичной поверхности — переименование проекта требует обновления `local.yml`, чтобы префикс совпадал, иначе следующий вызов `docker compose` обратится к другому проекту, а старые контейнеры и тома осиротеют.
+Типичное разрешённое имя выглядит как `myorg-shop` или `dwe-laravel`. Точная форма — часть публичной поверхности — переименование проекта требует обновления `local.yml`, чтобы префикс совпадал, иначе следующий вызов `docker compose` обратится к другому проекту, а старые контейнеры и тома осиротеют.
 
 ## Список compose-файлов
 
-Devbox не пишет один `compose.yaml`, который импортирует всё. Он передаёт *список* флагов `-f`, по порядку, и позволяет Docker Compose их смержить. Список строится через `DevboxConfig.ComposeFiles()`:
+DWE не пишет один `compose.yaml`, который импортирует всё. Он передаёт *список* флагов `-f`, по порядку, и позволяет Docker Compose их смержить. Список строится через `DweConfig.ComposeFiles()`:
 
-1. Базовый файл из `compose.base` в `devbox.yml` (всегда включается).
+1. Базовый файл из `compose.base` в `workspace.yml` (всегда включается).
 2. Включённые оверлеи **tool**, отсортированные по ключу сервиса.
 3. Включённые оверлеи **infra**, отсортированные по ключу сервиса.
 4. Включённые оверлеи **app**, отсортированные по ключу сервиса.
 
-Порядок типов сервисов важен: сначала tools, потом infra, потом apps. Внутри группы сортировка алфавитная по ключу сервиса (имя директории под `devbox/services/<name>/`). Итерация по map в Go рандомизирована; явная сортировка делает список файлов детерминированным, чтобы золотые тесты оставались зелёными, и чтобы `docker compose` всегда видел оверлеи в одном и том же порядке merge.
+Порядок типов сервисов важен: сначала tools, потом infra, потом apps. Внутри группы сортировка алфавитная по ключу сервиса (имя директории под `workspace/services/<name>/`). Итерация по map в Go рандомизирована; явная сортировка делает список файлов детерминированным, чтобы золотые тесты оставались зелёными, и чтобы `docker compose` всегда видел оверлеи в одном и том же порядке merge.
 
-Второй вариант, `ComposeFilesAll()`, возвращает тот же упорядоченный список, но игнорирует флаг `enabled`. Это то, что использует `devbox docker pull --all` и `devbox docker build --all`, чтобы оперировать оверлеями, которые разработчик отключил локально — без модификации `devbox/local.yml`.
+Второй вариант, `ComposeFilesAll()`, возвращает тот же упорядоченный список, но игнорирует флаг `enabled`. Это то, что использует `dwe docker pull --all` и `dwe docker build --all`, чтобы оперировать оверлеями, которые разработчик отключил локально — без модификации `workspace/local.yml`.
 
 Каждая запись в списке указывает на файл внутри дерева проекта, обычно под `compose/`:
 
@@ -73,14 +73,14 @@ compose/services/api.yml          # app оверлей
 
 Нет переопределения списка compose-файлов на уровне `docker.local.yml`. Локальные оверрайды живут в:
 
-- `devbox/local.yml` — per-service `enabled: true|false`, порты, хосты, кастомные env. Влияет на содержимое списка через набор enabled.
-- `devbox/docker.local.yml` — переопределения политики (имя проекта, args, process env, топология). **Не** добавляет и не удаляет `-f` файлы.
+- `workspace/local.yml` — per-service `enabled: true|false`, порты, хосты, кастомные env. Влияет на содержимое списка через набор enabled.
+- `workspace/docker.local.yml` — переопределения политики (имя проекта, args, process env, топология). **Не** добавляет и не удаляет `-f` файлы.
 
-Чтобы посмотреть эффективный список, запустите `devbox compose files`.
+Чтобы посмотреть эффективный список, запустите `dwe compose files`.
 
 ## Окружение процесса
 
-Каждый дочерний процесс `docker compose` наследует окружение родительского процесса плюс оверлей, определённый в `devbox/docker.yml`:
+Каждый дочерний процесс `docker compose` наследует окружение родительского процесса плюс оверлей, определённый в `workspace/docker.yml`:
 
 ```yaml
 process_env:
@@ -89,43 +89,43 @@ process_env:
 
 `Compose.BuildEnv()` возвращает `os.Environ()` с наложенными ключами — существующие значения заменяются, новые ключи добавляются, и результат стабильно отсортирован для детерминированного вывода тестов. Когда `process_env` пуст, `BuildEnv()` возвращает `nil`, и потомок наследует родительское окружение без изменений (распространённый путь).
 
-`process_env` влияет на **процесс compose CLI**, а не на запущенные контейнеры. Видимый контейнеру env приходит из `.env` (и блоков `environment:` в compose-файле). Devbox автоматически перегенерирует `.env` перед пятью подкомандами — `up`, `run`, `exec`, `restart`, `build` — вызывая `envfile.Regenerate` на активной конфигурации. Этот шаг специально не конфигурируется. Другие подкоманды (`down`, `stop`, `ps`, `logs`, `pull`) пропускают его, потому что им не нужен актуальный `.env`.
+`process_env` влияет на **процесс compose CLI**, а не на запущенные контейнеры. Видимый контейнеру env приходит из `.env` (и блоков `environment:` в compose-файле). DWE автоматически перегенерирует `.env` перед пятью подкомандами — `up`, `run`, `exec`, `restart`, `build` — вызывая `envfile.Regenerate` на активной конфигурации. Этот шаг специально не конфигурируется. Другие подкоманды (`down`, `stop`, `ps`, `logs`, `pull`) пропускают его, потому что им не нужен актуальный `.env`.
 
 ## Тома
 
-Docker Compose создаёт именованные тома лениво: первый `docker compose up`, ссылающийся на том, создаёт его. Devbox добавляет два слоя сверху:
+Docker Compose создаёт именованные тома лениво: первый `docker compose up`, ссылающийся на том, создаёт его. DWE добавляет два слоя сверху:
 
-- **Скоупинг по проекту.** Тома, объявленные под `resources.volumes` в `devbox/docker.yml`, получают префикс `<project_name>_`, соответствующий собственной конвенции имён Compose для `volumes:`, объявленных внутри `compose.yaml`. Том с ключом `build_artifacts` и `shared: false` становится фактическим Docker-томом `myorg-shop_build_artifacts`.
-- **Shared-режим.** `shared: true` отказывается от префикса. Том создаётся с буквальным именем и переживает запуски `devbox reset` на этом проекте — и переиспользуется любым другим проектом Devbox, объявляющим то же shared-имя. Каноничный кейс — кэш тулчейна языка (composer, npm, go-build), разделяемый между проектами.
+- **Скоупинг по проекту.** Тома, объявленные под `resources.volumes` в `workspace/docker.yml`, получают префикс `<project_name>_`, соответствующий собственной конвенции имён Compose для `volumes:`, объявленных внутри `compose.yaml`. Том с ключом `build_artifacts` и `shared: false` становится фактическим Docker-томом `myorg-shop_build_artifacts`.
+- **Shared-режим.** `shared: true` отказывается от префикса. Том создаётся с буквальным именем и переживает запуски `dwe reset` на этом проекте — и переиспользуется любым другим проектом DWE, объявляющим то же shared-имя. Каноничный кейс — кэш тулчейна языка (composer, npm, go-build), разделяемый между проектами.
 
 `ensure_before: [up, deploy]` запускает идемпотентное создание на этих точках входа. Не-shared, скоупенные по проекту тома — это также то, что подметает `docker_remove_project_volumes` во время reset: билтин перечисляет каждый Docker-том, чьё имя начинается с `<project_name>_`, и удаляет его. Shared-тома не подходят под префикс и выживают.
 
 ## Обход compose на пути сервисов
 
-Для full-stack lifecycle (`devbox run`, `devbox stop`, `devbox restart` без аргумента-сервиса) Devbox вызывает `docker compose up` / `down` / `stop`. Список compose-файлов и policy-аргументы применяются, как описано выше.
+Для full-stack lifecycle (`dwe run`, `dwe stop`, `dwe restart` без аргумента-сервиса) DWE вызывает `docker compose up` / `down` / `stop`. Список compose-файлов и policy-аргументы применяются, как описано выше.
 
 Два потока намеренно обходят compose:
 
-- **`devbox stop <service>`.** Когда пользователь именует один сервис, Devbox разрешает имя контейнера через `daemon.ResolveContainerName(projectFull, svc.Container)` и зовёт `docker stop <name>` напрямую. Это работает даже после того, как сервис отключён в `local.yml` — в этой точке оверлей сервиса больше не в списке `-f`, и `docker compose stop <name>` вообще не увидит контейнер. Видимое пользователю поведение: «я всегда могу остановить этот сервис по имени».
-- **`devbox reset run --service <name>`.** Per-service reset предваряет пайплайн сервиса синтетическим builtin-шагом `docker_stop_remove_container`. Билтин останавливает и удаляет именованный контейнер двумя вызовами `docker`, опять же вне compose. Тело пайплайна reset затем выполняется как объявлено; очистка томов происходит только при явном согласии пользователя через `docker_remove_project_volumes`.
+- **`dwe stop <service>`.** Когда пользователь именует один сервис, DWE разрешает имя контейнера через `daemon.ResolveContainerName(projectFull, svc.Container)` и зовёт `docker stop <name>` напрямую. Это работает даже после того, как сервис отключён в `local.yml` — в этой точке оверлей сервиса больше не в списке `-f`, и `docker compose stop <name>` вообще не увидит контейнер. Видимое пользователю поведение: «я всегда могу остановить этот сервис по имени».
+- **`dwe reset run --service <name>`.** Per-service reset предваряет пайплайн сервиса синтетическим builtin-шагом `docker_stop_remove_container`. Билтин останавливает и удаляет именованный контейнер двумя вызовами `docker`, опять же вне compose. Тело пайплайна reset затем выполняется как объявлено; очистка томов происходит только при явном согласии пользователя через `docker_remove_project_volumes`.
 
-Для всего остального — `devbox docker up`, `down`, `logs`, `ps`, `exec`, `run`, `pull`, `build`, плюс `devbox stop` без аргумента-сервиса — Devbox говорит с `docker compose`.
+Для всего остального — `dwe docker up`, `down`, `logs`, `ps`, `exec`, `run`, `pull`, `build`, плюс `dwe stop` без аргумента-сервиса — DWE говорит с `docker compose`.
 
-## `devbox deploy` от начала до конца
+## `dwe deploy` от начала до конца
 
-Вызов `devbox deploy run` проходит пайплайн деплоя (preflight → фазы оркестратора → оверлеи сервисов → infra `after:` → финальные хуки). В нескольких точках пайплайн зовёт Docker-слой, описанный выше:
+Вызов `dwe deploy run` проходит пайплайн деплоя (preflight → фазы оркестратора → оверлеи сервисов → infra `after:` → финальные хуки). В нескольких точках пайплайн зовёт Docker-слой, описанный выше:
 
 ```mermaid
 sequenceDiagram
   autonumber
   participant U as Пользователь
-  participant CLI as devbox CLI
+  participant CLI as DWE CLI
   participant Pipe as пайплайн deploy
   participant Env as envfile.Regenerate
   participant Compose as docker.Compose
   participant Docker as docker compose
 
-  U->>CLI: devbox deploy run
+  U->>CLI: dwe deploy run
   CLI->>CLI: preflight + AcquireProjectLocks
   CLI->>Pipe: запустить фазы
   Pipe->>Compose: NewCompose(cfg, dockerCfg)
@@ -152,7 +152,7 @@ sequenceDiagram
 
 ## Что читать дальше
 
-- [Справочник по полям `docker.yml`](../config/docker.md) — каждое поле `devbox/docker.yml` и `devbox/docker.local.yml`.
+- [Справочник по полям `docker.yml`](../config/docker.md) — каждое поле `workspace/docker.yml` и `workspace/docker.local.yml`.
 - [Render env](../render/env.md) — что попадает в `.env` и как разрешается `${...}`.
 - [Deploy](../config/deploy/index.md) — пайплайн, оборачивающий эти compose-вызовы.
 - [Состояние и блокировки](state-and-locks.md) — почему `deploy.lock` и `snapshot.lock` сериализуют пайплайн выше.

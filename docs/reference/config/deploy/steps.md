@@ -6,7 +6,7 @@ Every leaf pipeline step declares a `type:` that selects how its `cmd:` is execu
 
 - [`type: shell`](#type-shell)
 - [`cmd: shell` (builtin) vs `type: shell` (step)](#cmd-shell-builtin-vs-type-shell-step)
-- [`type: devbox`](#type-devbox)
+- [`type: dwe`](#type-dwe)
 - [`type: command`](#type-command)
 - [`type: builtin`](#type-builtin)
 
@@ -65,27 +65,27 @@ The `shell` builtin (`cmd: shell`) is **distinct** from the step execution type 
 
 Both usages ensure that conditions evaluate portably across CI systems, container runtimes, and developer shells, regardless of the project's `config.ShellBin` setting. See [validate.yml](../validate.md#shell) for the full `cmd: shell` builtin documentation.
 
-## `type: devbox`
+## `type: dwe`
 
-Invokes a devbox CLI subcommand. The binary path is resolved automatically.
+Invokes a DWE CLI subcommand. The binary path is resolved automatically.
 
 ```yaml
 - name: up
-  type: devbox
+  type: dwe
   cmd: "docker up"
 
 - name: info
-  type: devbox
+  type: dwe
   cmd: "info"
 
 - name: render-ide
-  type: devbox
+  type: dwe
   cmd: "render ide main"
 ```
 
 ## `type: command`
 
-Dispatches a declarative command by ID from the command registry (`devbox/commands/`).
+Dispatches a declarative command by ID from the command registry (`workspace/commands/`).
 
 ```yaml
 - name: composer-install

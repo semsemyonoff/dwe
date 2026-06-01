@@ -1,4 +1,4 @@
-> Translated from: reference/config/conditions.md @ 1817099028eb
+> Translated from: reference/config/conditions.md @ 7e40fcf9ace6
 
 # Условия и действия
 
@@ -27,7 +27,7 @@
 ```
 Шаги пайплайна (типизированные):
   when: { type: builtin|shell|template, cmd: ..., expr: ... }
-  check: { type: shell|devbox|command|builtin, cmd: ..., with: ... }
+  check: { type: shell|dwe|command|builtin, cmd: ..., with: ... }
 
 Шаги workflow'а (строковые — отдельные, здесь не покрываются):
   when: "dir-empty path" | "{{ ... }}" | "cmd: ..."
@@ -93,11 +93,11 @@ Template-условия предназначены исключительно д
   steps: []
 ```
 
-Render-контекст включает полный слитый `DevboxConfig`, поэтому можно дотянуться до любого значения конфигурации. Синтаксис template-выражений и справочник по хелперам см. в [Шаблонах](../templates.md).
+Render-контекст включает полный слитый `DweConfig`, поэтому можно дотянуться до любого значения конфигурации. Синтаксис template-выражений и справочник по хелперам см. в [Шаблонах](../templates.md).
 
 ## Типизированные действия (`check:` и тела шагов)
 
-Действия — это **исполняемые payload'ы** — та же форма `type: shell|devbox|command|builtin`, что и в телах шагов. Когда используются как post-action `check:`, успех/падение действия определяет успех/падение шага.
+Действия — это **исполняемые payload'ы** — та же форма `type: shell|dwe|command|builtin`, что и в телах шагов. Когда используются как post-action `check:`, успех/падение действия определяет успех/падение шага.
 
 ```yaml
 - name: copy-configs
@@ -118,7 +118,7 @@ Render-контекст включает полный слитый `DevboxConfig
 | Тип | Исполнитель | Пример |
 |-----|-------------|--------|
 | `shell` | `sh -c` | `type: shell, cmd: "test -f file.txt"` |
-| `devbox` | Devbox CLI | `type: devbox, cmd: "docker up"` |
+| `dwe` | DWE CLI | `type: dwe, cmd: "docker up"` |
 | `command` | Регистр команд | `type: command, cmd: "services.main.migrate"` |
 | `builtin` | Engine-билтин | `type: builtin, cmd: "service_configs_check"` |
 

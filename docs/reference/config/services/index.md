@@ -1,6 +1,6 @@
-# Service configuration (`devbox/services/<name>/service.yml`)
+# Service configuration (`workspace/services/<name>/service.yml`)
 
-Service declarations for the devbox project.
+Service declarations for the DWE project.
 
 ## Contents
 
@@ -14,9 +14,9 @@ Service declarations for the devbox project.
 
 ## Purpose
 
-Service definitions live under `devbox/services/`, one folder per service. Each service is declared in `devbox/services/<name>/service.yml`, where `<name>` becomes the service's key in the resolved `DevboxConfig.Services` map. Each entry declares its container name, ports, hosts, compose overlay, and optional structural fields. The `type:` discriminator selects which fields are legal for the entry.
+Service definitions live under `workspace/services/`, one folder per service. Each service is declared in `workspace/services/<name>/service.yml`, where `<name>` becomes the service's key in the resolved `DweConfig.Services` map. Each entry declares its container name, ports, hosts, compose overlay, and optional structural fields. The `type:` discriminator selects which fields are legal for the entry.
 
-Loaded by `LoadServices(baseDir)` which enumerates `devbox/services/*/` subdirectories, calls `LoadServiceFolder(baseDir, name)` per folder (responsibilities: raw-shape pre-validation, required `type` field, per-type field allowlist, `extends:` app-only guard, `ports`/`hosts` shape validation, strict KnownFields decode), then applies cross-service `extends:` toposort and inheritance merge. A missing `devbox/services/` directory returns an empty map (not an error). Per-developer toggles (`enabled:`, `ports:`, `hosts:`) live in the 3-layer overlay; structural fields belong exclusively in `devbox/services/<name>/service.yml`.
+Loaded by `LoadServices(baseDir)` which enumerates `workspace/services/*/` subdirectories, calls `LoadServiceFolder(baseDir, name)` per folder (responsibilities: raw-shape pre-validation, required `type` field, per-type field allowlist, `extends:` app-only guard, `ports`/`hosts` shape validation, strict KnownFields decode), then applies cross-service `extends:` toposort and inheritance merge. A missing `workspace/services/` directory returns an empty map (not an error). Per-developer toggles (`enabled:`, `ports:`, `hosts:`) live in the 3-layer overlay; structural fields belong exclusively in `workspace/services/<name>/service.yml`.
 
 ## Service types
 
@@ -24,7 +24,7 @@ Every entry under `services:` requires a `type:` key. Three values are supported
 
 | `type:` | Semantics | Deploy lifecycle | `depends_on:` target | App-only fields |
 |---------|-----------|------------------|----------------------|-----------------|
-| `app`   | Service with source code under `dir:`; renders IDE/AI/git templates; runs through `devbox deploy`. | yes (a `devbox/services/<name>/deploy.yml` may exist) | yes | yes (`dir`, `dir_internal`, `work_dir_internal`, `configs`, `dirs`, `extends`, `cli`, `render`) |
+| `app`   | Service with source code under `dir:`; renders IDE/AI/git templates; runs through `dwe deploy`. | yes (a `workspace/services/<name>/deploy.yml` may exist) | yes | yes (`dir`, `dir_internal`, `work_dir_internal`, `configs`, `dirs`, `extends`, `cli`, `render`) |
 | `tool`  | Ephemeral utility container (adminer, mailpit, redis-insight). Cannot be a dependency target of any service. | no | **no** | no |
 | `infra` | Backing service (db, cache, queue, search). Can be a dependency target of `app` / other `infra`. | no | yes | no |
 
@@ -32,11 +32,11 @@ Locked rules:
 
 - `extends:` is **app-only**. A `tool` / `infra` entry with `extends:` is rejected at load.
 - `depends_on:` may not reference a `type: tool` entry. This is enforced at load (`ErrDependsOnTool`), not only at validate time.
-- `devbox/services/<name>/deploy.yml` is supported for **any service type** (app, tool, infra). Full deploy (`devbox deploy run`) enumerates every **enabled** service that has a `deploy.yml`; `devbox deploy run --service <name>` works for any service type with a deploy file regardless of enabled state.
+- `workspace/services/<name>/deploy.yml` is supported for **any service type** (app, tool, infra). Full deploy (`dwe deploy run`) enumerates every **enabled** service that has a `deploy.yml`; `dwe deploy run --service <name>` works for any service type with a deploy file regardless of enabled state.
 - `ports:` is always `map[string]int` and `hosts:` is always `map[string]string`. There is no `port:` / `host:` scalar shorthand. A single-port entry writes `ports: { http: 8025 }`.
 - Type semantics partition `docker compose` file emission to `tool → infra → app` order.
 
-`type: infra` services may be optional (`required: false`) — they take a `compose:` overlay and are toggleable via `devbox services enable|disable <name>` like apps and tools. Required infra (`required: true`, typical for backing services like databases, caches, and queues) is always-on and not toggleable. Optional infra fits semantically request-path or data-path components that are not strictly required for every developer (e.g. a Varnish cache in front of nginx, or a MinIO S3-storage backend used only when no external S3 is configured).
+`type: infra` services may be optional (`required: false`) — they take a `compose:` overlay and are toggleable via `dwe services enable|disable <name>` like apps and tools. Required infra (`required: true`, typical for backing services like databases, caches, and queues) is always-on and not toggleable. Optional infra fits semantically request-path or data-path components that are not strictly required for every developer (e.g. a Varnish cache in front of nginx, or a MinIO S3-storage backend used only when no external S3 is configured).
 
 ### Why the type matrix
 
@@ -78,20 +78,20 @@ A disallowed field is a hard load error (`ErrServiceFieldNotAllowed`). Validatio
 
 ## Load behavior
 
-- Each `devbox/services/<name>/service.yml` is strict-decoded — unknown and per-type-disallowed fields are hard errors. `LoadServices` collects errors from all folders via `errors.Join` so every broken folder surfaces at once, not just the first.
+- Each `workspace/services/<name>/service.yml` is strict-decoded — unknown and per-type-disallowed fields are hard errors. `LoadServices` collects errors from all folders via `errors.Join` so every broken folder surfaces at once, not just the first.
 - Service inheritance via `extends:` is resolved in topological order (parents before children) so multi-level chains (`C → B → A`) merge correctly regardless of map iteration order. Cycles and unknown parents are reported as load errors. `extends:` is **app-only**.
 - For each child, only zero-value fields are inherited from the parent; child fields take precedence on conflicts. Inherited slices / maps are defensively copied (`slices.Clone` / `maps.Clone`) so mutating a child never corrupts the parent.
 - The `dirs` field is deduplicated across parent and child (parent first, child appended). `cli.env` is recursively merged: parent provides defaults, child wins on key conflicts.
 - After loading, `enabled` is resolved from the 3-layer merge (`services.<name>.enabled`); required services force `enabled: true`.
-- Overlays under `services.<name>` may set **only** `enabled:`, `ports:`, and `hosts:`. Any other field there is a layer-aware overlay error — structural fields (`container`, `dir`, `configs`, `compose`, `extends`, …) belong in `devbox/services/<name>/service.yml`. The overlay validator also enforces shape: `ports:` must be a map of name → integer in `1..65535`; `hosts:` must be a map of name → string.
-- `ports:` and `hosts:` are **deep-merged by entry name** on top of the declared map: a per-developer override under `devbox/local.yml` only touches the listed keys; declared entries the overlay does not mention are preserved. New entries may also be introduced via overlay. This is a first-class devbox feature: developers routinely need to remap a port that clashes with something already bound on their host, or switch their `*.local` hostname, without editing the shared `devbox/services/<name>/service.yml`.
-- Each resolved service (including the post-overlay `ports` / `hosts` nested maps) is injected into `DevboxConfig.Raw["services"]` so dot-paths like `services.main.ports.http` and `services.adminer.hosts.web` resolve in export rules, `docker.yml` templates, command `default_from:`, and `info.yml` references.
+- Overlays under `services.<name>` may set **only** `enabled:`, `ports:`, and `hosts:`. Any other field there is a layer-aware overlay error — structural fields (`container`, `dir`, `configs`, `compose`, `extends`, …) belong in `workspace/services/<name>/service.yml`. The overlay validator also enforces shape: `ports:` must be a map of name → integer in `1..65535`; `hosts:` must be a map of name → string.
+- `ports:` and `hosts:` are **deep-merged by entry name** on top of the declared map: a per-developer override under `workspace/local.yml` only touches the listed keys; declared entries the overlay does not mention are preserved. New entries may also be introduced via overlay. This is a first-class DWE feature: developers routinely need to remap a port that clashes with something already bound on their host, or switch their `*.local` hostname, without editing the shared `workspace/services/<name>/service.yml`.
+- Each resolved service (including the post-overlay `ports` / `hosts` nested maps) is injected into `DweConfig.Raw["services"]` so dot-paths like `services.main.ports.http` and `services.adminer.hosts.web` resolve in export rules, `docker.yml` templates, command `default_from:`, and `info.yml` references.
 - Port values are bounded `1..65535` at load time (both in `service.yml` and in overlay layers).
 
 Example: a developer whose host already binds 8027 remaps adminer locally without touching the shared config —
 
 ```yaml
-# devbox/local.yml (not tracked by git)
+# workspace/local.yml (not tracked by git)
 services:
   adminer:
     ports:
@@ -103,10 +103,10 @@ services:
 
 ## Structure
 
-Each service lives in its own folder under `devbox/services/`. The folder name becomes the service key.
+Each service lives in its own folder under `workspace/services/`. The folder name becomes the service key.
 
 ```
-devbox/services/
+workspace/services/
   main/
     service.yml
     deploy.yml          # optional; enables deploy lifecycle for this service
@@ -119,7 +119,7 @@ devbox/services/
 ```
 
 ```yaml
-# devbox/services/main/service.yml
+# workspace/services/main/service.yml
 # type: app — owns source under dir:, has deploy lifecycle, renders templates
 type: app
 container: app-main
@@ -162,7 +162,7 @@ render:
 ```
 
 ```yaml
-# devbox/services/db/service.yml
+# workspace/services/db/service.yml
 # type: infra — backing service, may be a depends_on target
 type: infra
 container: db
@@ -172,8 +172,8 @@ ports:
 ```
 
 ```yaml
-# devbox/services/varnish/service.yml
-# type: infra (optional) — toggleable via `devbox services enable varnish`
+# workspace/services/varnish/service.yml
+# type: infra (optional) — toggleable via `dwe services enable varnish`
 # Note: container field is omitted here — it defaults to the folder name "varnish"
 type: infra
 compose:
@@ -183,7 +183,7 @@ ports:
 ```
 
 ```yaml
-# devbox/services/adminer/service.yml
+# workspace/services/adminer/service.yml
 # type: tool — ephemeral utility container, never a depends_on target
 type: tool
 container: adminer
@@ -206,10 +206,10 @@ info:
 
 ## Related commands
 
-- `devbox shell [service]` — open shell in a service container (`type: app` only).
-- `devbox status` — composite read-only view: apps + tools + infra sections, each with custom `status:` columns.
-- `devbox status apps` / `devbox status tools` / `devbox status infra` — per-type tables.
-- `devbox services` — interactive multi-select toggle for every optional service across all types.
-- `devbox services enable <name>` / `devbox services disable <name>` — toggle by name (type looked up internally).
-- `devbox deploy run` — runs the full deploy pipeline; enumerates all enabled services that have a `devbox/services/<name>/deploy.yml` (any service type).
-- `devbox reset run --service <name>` — resets a single service: stops and removes the container, deletes the service `dir:` if declared and present, runs per-service `reset.yml` if present, marks service as requiring a subsequent deploy. Volumes are not auto-removed (opt in via `docker_remove_project_volumes`).
+- `dwe shell [service]` — open shell in a service container (`type: app` only).
+- `dwe status` — composite read-only view: apps + tools + infra sections, each with custom `status:` columns.
+- `dwe status apps` / `dwe status tools` / `dwe status infra` — per-type tables.
+- `dwe services` — interactive multi-select toggle for every optional service across all types.
+- `dwe services enable <name>` / `dwe services disable <name>` — toggle by name (type looked up internally).
+- `dwe deploy run` — runs the full deploy pipeline; enumerates all enabled services that have a `workspace/services/<name>/deploy.yml` (any service type).
+- `dwe reset run --service <name>` — resets a single service: stops and removes the container, deletes the service `dir:` if declared and present, runs per-service `reset.yml` if present, marks service as requiring a subsequent deploy. Volumes are not auto-removed (opt in via `docker_remove_project_volumes`).

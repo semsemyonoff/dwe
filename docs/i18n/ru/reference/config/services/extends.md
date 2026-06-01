@@ -1,4 +1,4 @@
-> Translated from: reference/config/services/extends.md @ 8a1b7079386f
+> Translated from: reference/config/services/extends.md @ 820d54a1850b
 
 # Наследование через `extends`
 
@@ -39,7 +39,7 @@ flowchart LR
 ## Разбор примера
 
 ```yaml
-# devbox/services/main/service.yml
+# workspace/services/main/service.yml
 type: app
 container: app-main
 required: true
@@ -54,7 +54,7 @@ render:
 ```
 
 ```yaml
-# devbox/services/main-debug/service.yml
+# workspace/services/main-debug/service.yml
 type: app
 extends: main            # наследует dir, dirs, cli, render и т.д.
 container: app-main-debug
@@ -69,4 +69,4 @@ render:
     template: main-debug  # переопределить template, оставить enabled: true от родителя
 ```
 
-`main-debug` получает `dir`, `dirs`, базовый `cli` и `render.ide.enabled: true` от `main`. Он переопределяет `render.ide.template`, чтобы использовать пользовательский подкаталог шаблона (`devbox/templates/ide/main-debug/`), и добавляет собственный оверлей `compose` и дополнительные env. Когда запускается `devbox render ide`, оба сервиса разделяют `dir: ./services/main`, поэтому самый дочерний (`main-debug`) побеждает и рендерит свой пользовательский шаблон; `main` пропускается с предупреждением о коллизии.
+`main-debug` получает `dir`, `dirs`, базовый `cli` и `render.ide.enabled: true` от `main`. Он переопределяет `render.ide.template`, чтобы использовать пользовательский подкаталог шаблона (`workspace/templates/ide/main-debug/`), и добавляет собственный оверлей `compose` и дополнительные env. Когда запускается `dwe render ide`, оба сервиса разделяют `dir: ./services/main`, поэтому самый дочерний (`main-debug`) побеждает и рендерит свой пользовательский шаблон; `main` пропускается с предупреждением о коллизии.

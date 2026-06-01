@@ -1,10 +1,10 @@
-> Translated from: reference/config/index.md @ 521a8ac66835
+> Translated from: reference/config/index.md @ ea9533e26547
 
 # Справочник конфигурации
 
-Обзор всех конфигурационных файлов в системе devbox.
+Обзор всех конфигурационных файлов в системе DWE.
 
-> Впервые сталкиваетесь с devbox? Начните с [Getting started](../concepts/getting-started.md), чтобы пройти сценарий от начала до конца, и возвращайтесь сюда за пофайловым справочником.
+> Впервые сталкиваетесь с DWE? Начните с [Getting started](../concepts/getting-started.md), чтобы пройти сценарий от начала до конца, и возвращайтесь сюда за пофайловым справочником.
 
 ## Содержание
 
@@ -18,59 +18,59 @@
 
 | Файл | Трекается | Загрузчик | Назначение |
 |------|-----------|-----------|------------|
-| `devbox.yml` | да | layer 1 | Идентичность проекта и структура сервисов |
-| `devbox/defaults.yml` | да | layer 2 | Версионированные дефолты: runtime, экспорты, тумблеры enabled сервисов |
-| `devbox/local.yml` | нет (gitignored) | layer 3 | Per-user override'ы: состояние, тумблеры enabled сервисов |
-| `devbox/services/<name>/service.yml` | да | standalone | Per-service декларация (dirs, cli, configs, порты) |
-| `devbox/deploy.yml` | да | standalone | Deploy-пайплайн оркестратора (фазы + шаги) |
-| `devbox/services/<name>/deploy.yml` | да | standalone | Per-service deploy-пайплайны |
-| `devbox/reset.yml` | да | standalone | Reset-пайплайн |
-| `devbox/lifecycle.yml` | да | standalone | Пайплайны run / stop (драйверы для `devbox run`/`stop`/`restart`) |
-| `devbox/docker.yml` | да | standalone | Политика выполнения compose |
-| `devbox/docker.local.yml` | нет (gitignored) | сливается в `docker.yml` | Локальные override'ы compose-политики |
-| `devbox/styles.yml` | да | standalone | ASCII header, цветовая палитра, разделитель |
-| `devbox/info.yml` | да | standalone | Секции info-дашборда |
-| `devbox/commands/` | да | standalone | Декларативные определения команд (per-file группы) |
-| `devbox/validate.yml` | да | standalone | Проверки готовности проекта (preflight + `devbox validate`) |
-| `devbox/snapshot.yml` | да | standalone | Snapshot-workflow'ы: create / restore / remove (`devbox snapshot`) |
-| `devbox/i18n/*.yml` | нет (ignored) | standalone | Переводы пользовательских команд и UI-строк (опционально; один файл на язык) |
+| `workspace.yml` | да | layer 1 | Идентичность проекта и структура сервисов |
+| `workspace/defaults.yml` | да | layer 2 | Версионированные дефолты: runtime, экспорты, тумблеры enabled сервисов |
+| `workspace/local.yml` | нет (gitignored) | layer 3 | Per-user override'ы: состояние, тумблеры enabled сервисов |
+| `workspace/services/<name>/service.yml` | да | standalone | Per-service декларация (dirs, cli, configs, порты) |
+| `workspace/deploy.yml` | да | standalone | Deploy-пайплайн оркестратора (фазы + шаги) |
+| `workspace/services/<name>/deploy.yml` | да | standalone | Per-service deploy-пайплайны |
+| `workspace/reset.yml` | да | standalone | Reset-пайплайн |
+| `workspace/lifecycle.yml` | да | standalone | Пайплайны run / stop (драйверы для `dwe run`/`stop`/`restart`) |
+| `workspace/docker.yml` | да | standalone | Политика выполнения compose |
+| `workspace/docker.local.yml` | нет (gitignored) | сливается в `docker.yml` | Локальные override'ы compose-политики |
+| `workspace/styles.yml` | да | standalone | ASCII header, цветовая палитра, разделитель |
+| `workspace/info.yml` | да | standalone | Секции info-дашборда |
+| `workspace/commands/` | да | standalone | Декларативные определения команд (per-file группы) |
+| `workspace/validate.yml` | да | standalone | Проверки готовности проекта (preflight + `dwe validate`) |
+| `workspace/snapshot.yml` | да | standalone | Snapshot-workflow'ы: create / restore / remove (`dwe snapshot`) |
+| `workspace/i18n/*.yml` | нет (ignored) | standalone | Переводы пользовательских команд и UI-строк (опционально; один файл на язык) |
 
 ## Runtime-артефакты
 
-Директория `.devbox/` содержит управляемые Devbox артефакты и **gitignored**:
+Директория `.dwe/` содержит управляемые DWE артефакты и **gitignored**:
 
-- `.devbox/logs/` — логи пайплайнов (deploy, reset, lifecycle run/stop)
-- `.devbox/deploy/deploy.lock` — lock-файл деплоя (только Unix; предотвращает параллельные деплои)
-- `.devbox/deploy/state.yml` — журнал состояния деплоя (трекает deploy-статус и хэши сервисов)
-- `.devbox/snapshots/snapshot.lock` — snapshot lock-файл (только Unix; сериализует snapshot-мутации и совместно захватывается lifecycle-командами деплоя)
-- `.devbox/snapshots/current` — указатель текущего снапшота (последний созданный или восстановленный)
-- `.devbox/snapshots/.pre-restore-backup/` — бэкап `devbox/local.yml` + `.devbox/deploy/state.yml`, снимаемый перед каждым restore; цель ручного восстановления при сбое restore
+- `.dwe/logs/` — логи пайплайнов (deploy, reset, lifecycle run/stop)
+- `.dwe/deploy/deploy.lock` — lock-файл деплоя (только Unix; предотвращает параллельные деплои)
+- `.dwe/deploy/state.yml` — журнал состояния деплоя (трекает deploy-статус и хэши сервисов)
+- `.dwe/snapshots/snapshot.lock` — snapshot lock-файл (только Unix; сериализует snapshot-мутации и совместно захватывается lifecycle-командами деплоя)
+- `.dwe/snapshots/current` — указатель текущего снапшота (последний созданный или восстановленный)
+- `.dwe/snapshots/.pre-restore-backup/` — бэкап `workspace/local.yml` + `.dwe/deploy/state.yml`, снимаемый перед каждым restore; цель ручного восстановления при сбое restore
 
-Добавьте `.devbox/` в `.gitignore` проекта, если ещё не добавлено.
+Добавьте `.dwe/` в `.gitignore` проекта, если ещё не добавлено.
 
 ## Топология загрузчиков
 
 ```mermaid
 flowchart LR
-  subgraph merged["Слияние 3 слоёв — DevboxConfig"]
+  subgraph merged["Слияние 3 слоёв — DweConfig"]
     direction TB
-    A[devbox.yml] --> B[devbox/defaults.yml] --> C[devbox/local.yml]
+    A[workspace.yml] --> B[workspace/defaults.yml] --> C[workspace/local.yml]
   end
 
-  S["devbox/services/&lt;name&gt;/service.yml"] -. инжектится в Raw .-> merged
+  S["workspace/services/&lt;name&gt;/service.yml"] -. инжектится в Raw .-> merged
 
-  merged --> R[(DevboxConfig.Raw<br/>+ типизированные структуры)]
+  merged --> R[(DweConfig.Raw<br/>+ типизированные структуры)]
 
   subgraph standalone["Standalone-загрузчики"]
     direction TB
-    D[devbox/deploy.yml]
-    DS["devbox/services/&lt;name&gt;/deploy.yml"]
-    RS[devbox/reset.yml]
-    L[devbox/lifecycle.yml]
-    DK[devbox/docker.yml<br/>+ docker.local.yml]
-    ST[devbox/styles.yml]
-    IN[devbox/info.yml]
-    CM[devbox/commands/]
+    D[workspace/deploy.yml]
+    DS["workspace/services/&lt;name&gt;/deploy.yml"]
+    RS[workspace/reset.yml]
+    L[workspace/lifecycle.yml]
+    DK[workspace/docker.yml<br/>+ docker.local.yml]
+    ST[workspace/styles.yml]
+    IN[workspace/info.yml]
+    CM[workspace/commands/]
   end
 
   R -. "dot-paths / шаблоны" .-> D
@@ -84,15 +84,15 @@ flowchart LR
 
 ## Слитые vs standalone
 
-**Слитые (3-слойный конфиг)**: `devbox.yml` → `devbox/defaults.yml` → `devbox/local.yml` глубоко сливаются на старте. Поздние слои выигрывают; map'ы сливаются рекурсивно. Результат — эффективный конфиг, используемый для генерации `.env`, резолва топологии и правил экспорта. Каждый `devbox/services/<name>/service.yml` грузится отдельно и затем инжектится в слитый raw-map, чтобы dot-пути вроде `services.main.container` резолвились.
+**Слитые (3-слойный конфиг)**: `workspace.yml` → `workspace/defaults.yml` → `workspace/local.yml` глубоко сливаются на старте. Поздние слои выигрывают; map'ы сливаются рекурсивно. Результат — эффективный конфиг, используемый для генерации `.env`, резолва топологии и правил экспорта. Каждый `workspace/services/<name>/service.yml` грузится отдельно и затем инжектится в слитый raw-map, чтобы dot-пути вроде `services.main.container` резолвились.
 
-**Standalone**: `devbox/services/<name>/service.yml`, `deploy.yml`, `devbox/services/<name>/deploy.yml`, `reset.yml`, `lifecycle.yml`, `docker.yml` (+ `docker.local.yml`), `styles.yml`, `info.yml` и `commands/*.yml` грузятся выделенными функциями в `internal/core/project/config/` и `internal/core/usercommands/`. Они не часть 3-слойного слияния, но большинство из них резолвят template-выражения против слитого конфига.
+**Standalone**: `workspace/services/<name>/service.yml`, `deploy.yml`, `workspace/services/<name>/deploy.yml`, `reset.yml`, `lifecycle.yml`, `docker.yml` (+ `docker.local.yml`), `styles.yml`, `info.yml` и `commands/*.yml` грузятся выделенными функциями в `internal/core/project/config/` и `internal/core/usercommands/`. Они не часть 3-слойного слияния, но большинство из них резолвят template-выражения против слитого конфига.
 
 ## Файлы, поддерживающие локальные override'ы
 
 На данный момент только `docker.local.yml` поддерживает вариант `.local.yml` для per-developer кастомизации. Паттерн такой:
 
-**Docker**: `devbox/docker.yml` (трекаемый, общий на весь проект) + `devbox/docker.local.yml` (gitignored, per-developer). Локальный файл сливается поверх базового, позволяя разработчикам кастомизировать политику выполнения compose — например, добавить дополнительные volume'ы, смонтировать локальные директории с исходниками или переопределить platform/args, не задевая коллег.
+**Docker**: `workspace/docker.yml` (трекаемый, общий на весь проект) + `workspace/docker.local.yml` (gitignored, per-developer). Локальный файл сливается поверх базового, позволяя разработчикам кастомизировать политику выполнения compose — например, добавить дополнительные volume'ы, смонтировать локальные директории с исходниками или переопределить platform/args, не задевая коллег.
 
 **Почему только docker?** Docker-настройки по своей природе персональные — они зависят от локального окружения разработчика (доступные бинарники, монтирование volume'ов, различия платформ). Другие конфиги вроде `lifecycle.yml`, `info.yml` и `styles.yml` общие на весь проект и не выигрывают от per-developer override'ов.
 
@@ -100,7 +100,7 @@ flowchart LR
 
 ## Страницы
 
-- [devbox / defaults / local](devbox.md) — 3-слойный слитый конфиг: порядок слияния, приоритет, резолв dot-path'ов, справочник полей
+- [workspace / defaults / local](workspace.md) — 3-слойный слитый конфиг: порядок слияния, приоритет, резолв dot-path'ов, справочник полей
 - [services/<name>/service.yml](services/index.md) — per-service декларации, extends, dirs, cli-конфиг
 - [deploy.yml / reset.yml](deploy/index.md) — deploy- и reset-пайплайны, шаги, билтины, file-логирование, идемпотентный деплой
 - [state.yml](state/index.md) — трекинг состояния деплоя, таблица skip-решений, хэширование, lock-файл, восстановление после крашей
@@ -120,13 +120,13 @@ flowchart LR
 
 ## Связанные команды
 
-- `devbox render env` — генерирует `.env` из правил экспорта слитого конфига
-- `devbox render ide` — генерирует IDE-конфиги
-- `devbox render ai` — генерирует hub-level AGENTS.md и симлинки CLAUDE.md
-- `devbox render git` — генерирует shell-хуки git в `<svc.Dir>/src/.git/hooks/`
-- `devbox info` — рендерит info-дашборд из `info.yml`
-- `devbox deploy plan` — показывает разрешённый deploy-пайплайн
-- `devbox compose files` — показывает список активных compose-файлов (диагностика)
-- `devbox status apps` — показывает app-сервисы с health и deploy-статусом
-- `devbox status tools` — показывает таблицу tool-сервисов (read-only)
-- `devbox status infra` — показывает таблицу infra-сервисов (read-only)
+- `dwe render env` — генерирует `.env` из правил экспорта слитого конфига
+- `dwe render ide` — генерирует IDE-конфиги
+- `dwe render ai` — генерирует hub-level AGENTS.md и симлинки CLAUDE.md
+- `dwe render git` — генерирует shell-хуки git в `<svc.Dir>/src/.git/hooks/`
+- `dwe info` — рендерит info-дашборд из `info.yml`
+- `dwe deploy plan` — показывает разрешённый deploy-пайплайн
+- `dwe compose files` — показывает список активных compose-файлов (диагностика)
+- `dwe status apps` — показывает app-сервисы с health и deploy-статусом
+- `dwe status tools` — показывает таблицу tool-сервисов (read-only)
+- `dwe status infra` — показывает таблицу infra-сервисов (read-only)

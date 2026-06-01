@@ -1,4 +1,4 @@
-> Translated from: reference/config/services/examples.md @ 603e8b59735b
+> Translated from: reference/config/services/examples.md @ c3023746774b
 
 # Примеры сервисов и жизненный цикл переключения
 
@@ -13,7 +13,7 @@
 ## Полное определение сервиса
 
 ```yaml
-# devbox/services/main/service.yml
+# workspace/services/main/service.yml
 type: app
 container: app-main
 required: true
@@ -51,7 +51,7 @@ render:
 
 ## Жизненный цикл переключения
 
-Блоки `on_enable`, `on_disable` и `notes` управляют тем, что происходит при переключении сервиса через `devbox services enable/disable`.
+Блоки `on_enable`, `on_disable` и `notes` управляют тем, что происходит при переключении сервиса через `dwe services enable/disable`.
 
 ### Схема `on_enable` и `on_disable`
 
@@ -68,8 +68,8 @@ on_disable:
 
 | Поле | По умолчанию | Описание |
 |-------|---------|-------------|
-| `requires` | `restart` | Что должно произойти, чтобы изменение вступило в силу. `none` → только запись local.yml; `restart` → запустить `devbox restart`; `deploy` → запустить `devbox deploy run --service <name>`. `deploy` запрещён в `on_disable`. |
-| `before` | — | ID пользовательских команд (из `devbox/commands/`) для запуска до записи переключения. Каждая должна быть `type: shell` или `type: script`. |
+| `requires` | `restart` | Что должно произойти, чтобы изменение вступило в силу. `none` → только запись local.yml; `restart` → запустить `dwe restart`; `deploy` → запустить `dwe deploy run --service <name>`. `deploy` запрещён в `on_disable`. |
+| `before` | — | ID пользовательских команд (из `workspace/commands/`) для запуска до записи переключения. Каждая должна быть `type: shell` или `type: script`. |
 | `after` | — | ID пользовательских команд для запуска после записи переключения. Применяется то же ограничение типа. |
 
 Хук-команды запускаются с `--yes` (неинтерактивно), stdout отбрасывается, stderr захватывается для сообщений об ошибках.
@@ -82,11 +82,11 @@ notes:
   disable: "Safe to disable while the stack is running."
 ```
 
-Заметки показываются в выводе плана (`devbox services enable/disable --print-plan`), чтобы провести оператора через ручные последующие шаги.
+Заметки показываются в выводе плана (`dwe services enable/disable --print-plan`), чтобы провести оператора через ручные последующие шаги.
 
 ### План переключения и `--apply`
 
-`devbox services enable <name>` (без `--apply`) записывает `local.yml` и фиксирует ожидающую операцию в журнале состояния deploy. Ожидающая операция отображается в `devbox status`, пока не очищена. `--apply` выполняет план немедленно (запускает хуки, инициирует restart или deploy, как объявлено в `requires`).
+`dwe services enable <name>` (без `--apply`) записывает `local.yml` и фиксирует ожидающую операцию в журнале состояния deploy. Ожидающая операция отображается в `dwe status`, пока не очищена. `--apply` выполняет план немедленно (запускает хуки, инициирует restart или deploy, как объявлено в `requires`).
 
 ## Типичные ловушки
 
@@ -95,4 +95,4 @@ notes:
 - **Отсутствие `container` в потомке** — `container` **не** наследуется через `extends:`. Потомок без явного `container` получает по умолчанию имя своей папки (тот же дефолт, что применяется к любому сервису). Объявляйте `container` явно, когда имя папки не подходит как имя контейнера.
 - **Забытый `depends_on:` у потомка** — не наследуется. Потомок, нуждающийся в зависимости, должен объявить её явно. (`compose:` наследуется от родителя, когда потомок его опускает — см. [Правила разрешения наследования](extends.md).)
 - **Блок `render:` под сервисом `tool` / `infra`** — блок `render:` только для app. Записи tool / infra, объявляющие его, не загружаются. Чтобы прикрепить шаблонный пак к не-app сервису, его нужно сначала переопределить как `app` (с обязательным `dir:`).
-- **Существующий не-симлинк по пути управляемого симлинка** — если `CLAUDE.md` (или другой путь `symlinks[].link`) уже существует как обычный файл, `devbox render ai` отказывается его перезаписывать и завершается с ошибкой: `refuse to overwrite non-symlink file at <path>; remove it or disable via render.ai.enabled: false`. Удалите файл первым или установите `render.ai.enabled: false` для этого сервиса.
+- **Существующий не-симлинк по пути управляемого симлинка** — если `CLAUDE.md` (или другой путь `symlinks[].link`) уже существует как обычный файл, `dwe render ai` отказывается его перезаписывать и завершается с ошибкой: `refuse to overwrite non-symlink file at <path>; remove it or disable via render.ai.enabled: false`. Удалите файл первым или установите `render.ai.enabled: false` для этого сервиса.

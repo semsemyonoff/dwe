@@ -1,107 +1,107 @@
 # CLI Reference
 
-Generated reference for the `devbox` command tree.
+Generated reference for the `dwe` command tree.
 
 ## Commands
 
-- [devbox commands](devbox_commands.md) — Run, inspect, and list devbox commands
-  - [devbox commands list](devbox_commands_list.md) — List available commands
-- [devbox completion](devbox_completion.md) — Generate the autocompletion script for the specified shell
-  - [devbox completion bash](devbox_completion_bash.md) — Generate the autocompletion script for bash
-  - [devbox completion fish](devbox_completion_fish.md) — Generate the autocompletion script for fish
-  - [devbox completion install](devbox_completion_install.md) — Install shell completion for devbox
-  - [devbox completion powershell](devbox_completion_powershell.md) — Generate the autocompletion script for powershell
-  - [devbox completion uninstall](devbox_completion_uninstall.md) — Uninstall shell completion for devbox
-  - [devbox completion zsh](devbox_completion_zsh.md) — Generate the autocompletion script for zsh
-- [devbox compose](devbox_compose.md) — Low-level Docker Compose diagnostics
-  - [devbox compose argv](devbox_compose_argv.md) — Show the full docker compose command that would be executed
-  - [devbox compose files](devbox_compose_files.md) — Print resolved compose file list (base + enabled overlays), one per line
-  - [devbox compose raw](devbox_compose_raw.md) — Run docker compose directly with resolved file list and project name (escape hatch)
-- [devbox deploy](devbox_deploy.md) — Deploy pipeline commands
-  - [devbox deploy plan](devbox_deploy_plan.md) — Show resolved deploy plan
-  - [devbox deploy run](devbox_deploy_run.md) — Execute the deploy plan
-  - [devbox deploy state](devbox_deploy_state.md) — Manage deploy state
-    - [devbox deploy state clear](devbox_deploy_state_clear.md) — Clear the deploy state
-    - [devbox deploy state repair](devbox_deploy_state_repair.md) — Repair the deploy state
-    - [devbox deploy state show](devbox_deploy_state_show.md) — Show the current deploy state
-- [devbox docker](devbox_docker.md) — Docker Compose lifecycle commands
-  - [devbox docker build](devbox_docker_build.md) — Build compose service images
-  - [devbox docker down](devbox_docker_down.md) — Stop and remove compose services
-  - [devbox docker exec](devbox_docker_exec.md) — Execute a command in a running compose service
-  - [devbox docker logs](devbox_docker_logs.md) — View compose service logs
-  - [devbox docker project-name](devbox_docker_project-name.md) — Print the resolved compose project name
-  - [devbox docker ps](devbox_docker_ps.md) — List compose containers
-  - [devbox docker pull](devbox_docker_pull.md) — Pull compose service images
-  - [devbox docker restart](devbox_docker_restart.md) — Restart compose services
-  - [devbox docker run](devbox_docker_run.md) — Run a one-off command in a compose service
-  - [devbox docker stop](devbox_docker_stop.md) — Stop compose services
-  - [devbox docker up](devbox_docker_up.md) — Start compose services
-- [devbox docs](devbox_docs.md) — Browse and manage documentation
-  - [devbox docs cache](devbox_docs_cache.md) — Manage mermaid diagram cache
-    - [devbox docs cache clear](devbox_docs_cache_clear.md) — Clear the mermaid diagram cache
-  - [devbox docs export](devbox_docs_export.md) — Export documentation to a directory
-  - [devbox docs generate](devbox_docs_generate.md) — Generate reference documentation
-  - [devbox docs list](devbox_docs_list.md) — List all available documentation topics
-  - [devbox docs llms-txt](devbox_docs_llms-txt.md) — Emit an llms.txt project index for AI agents
-  - [devbox docs search](devbox_docs_search.md) — Search documentation for a literal substring
-  - [devbox docs show](devbox_docs_show.md) — Show documentation for a topic
-- [devbox info](devbox_info.md) — Display project info dashboard (URLs, hosts, services, tools)
-- [devbox logs](devbox_logs.md) — Stream container logs for a service
-- [devbox prompt](devbox_prompt.md) — Print a compact shell-prompt segment for the current project
-- [devbox render](devbox_render.md) — Render derived artifacts from the merged devbox config
-  - [devbox render ai](devbox_render_ai.md) — Generate hub-level agents docs from template packs
-  - [devbox render env](devbox_render_env.md) — Generate .env from exports.env spec (stdout or --out <file>)
-  - [devbox render git](devbox_render_git.md) — Generate git hooks from template packs
-  - [devbox render ide](devbox_render_ide.md) — Generate IDE configs from template packs
-- [devbox reset](devbox_reset.md) — Reset pipeline commands
-  - [devbox reset plan](devbox_reset_plan.md) — Show resolved reset plan
-  - [devbox reset run](devbox_reset_run.md) — Execute the reset pipeline
-  - [devbox reset step](devbox_reset_step.md) — Run a single reset step by <phase>/<step> address
-- [devbox restart](devbox_restart.md) — Restart the project (stop, then run --no-update)
-- [devbox run](devbox_run.md) — Start the project (full lifecycle: update probe → up → wait → info)
-- [devbox services](devbox_services.md) — Toggle optional services (interactive) or list / enable / disable
-  - [devbox services disable](devbox_services_disable.md) — Disable an optional service (writes to devbox/local.yml)
-  - [devbox services enable](devbox_services_enable.md) — Enable an optional service (writes to devbox/local.yml)
-- [devbox shell](devbox_shell.md) — Open a shell in a service container
-- [devbox snapshot](devbox_snapshot.md) — Capture, restore, and manage project snapshots
-  - [devbox snapshot create](devbox_snapshot_create.md) — Capture the current environment into a named snapshot
-  - [devbox snapshot current](devbox_snapshot_current.md) — Show the snapshot currently restored into the project
-  - [devbox snapshot inspect](devbox_snapshot_inspect.md) — Inspect a snapshot directory or a packed .tar.gz archive
-  - [devbox snapshot list](devbox_snapshot_list.md) — List snapshots in ./snapshots/
-  - [devbox snapshot pack](devbox_snapshot_pack.md) — Pack a snapshot into a .tar.gz archive
-  - [devbox snapshot remove](devbox_snapshot_remove.md) — Delete a snapshot (runs remove: workflow if defined)
-  - [devbox snapshot restore](devbox_snapshot_restore.md) — Restore a snapshot into the current project
-  - [devbox snapshot rollback](devbox_snapshot_rollback.md) — Restore the snapshot named by rollback_target in devbox/snapshot.yml
-  - [devbox snapshot unpack](devbox_snapshot_unpack.md) — Extract a packed snapshot archive into ./snapshots/
-- [devbox status](devbox_status.md) — Show stack health and per-section status (read-only)
-  - [devbox status apps](devbox_status_apps.md) — Show only the apps section
-  - [devbox status daemons](devbox_status_daemons.md) — Show only the daemons section
-  - [devbox status deploy](devbox_status_deploy.md) — Show deploy status (table) or per-service deploy detail
-  - [devbox status git](devbox_status_git.md) — Show only the git workspace section
-  - [devbox status infra](devbox_status_infra.md) — Show only the infra section
-  - [devbox status tools](devbox_status_tools.md) — Show only the tools section
-  - [devbox status topology](devbox_status_topology.md) — Show only the topology section
-- [devbox stop](devbox_stop.md) — Stop the project (full lifecycle: before-stop hooks → docker down → after-stop hooks)
-- [devbox validate](devbox_validate.md) — Validate project configuration and files
-  - [devbox validate checks](devbox_validate_checks.md) — Validate project checks from devbox/validate.yml
-  - [devbox validate commands](devbox_validate_commands.md) — Validate command definitions
-  - [devbox validate config](devbox_validate_config.md) — Validate configuration files
-    - [devbox validate config deploy](devbox_validate_config_deploy.md) — Validate devbox/deploy.yml
-    - [devbox validate config devbox](devbox_validate_config_devbox.md) — Validate main devbox.yml
-    - [devbox validate config docker](devbox_validate_config_docker.md) — Validate devbox/docker.yml
-    - [devbox validate config info](devbox_validate_config_info.md) — Validate devbox/info.yml
-    - [devbox validate config lifecycle](devbox_validate_config_lifecycle.md) — Validate devbox/lifecycle.yml
-    - [devbox validate config reset](devbox_validate_config_reset.md) — Validate devbox/reset.yml (replaces 'devbox reset config check')
-    - [devbox validate config service-deploy](devbox_validate_config_service-deploy.md) — Validate service deploy configs
-    - [devbox validate config services](devbox_validate_config_services.md) — Validate devbox/services/<name>/service.yml
-    - [devbox validate config styles](devbox_validate_config_styles.md) — Validate devbox/styles.yml
-  - [devbox validate env](devbox_validate_env.md) — Validate environment readiness
-  - [devbox validate linters](devbox_validate_linters.md) — Run external linters (shellcheck, hadolint, generic)
-  - [devbox validate setup](devbox_validate_setup.md) — Validate devbox/setup.yml schema and writes: paths
-  - [devbox validate snapshot](devbox_validate_snapshot.md) — Validate snapshot config and on-disk snapshot integrity
-  - [devbox validate templates](devbox_validate_templates.md) — Validate template packs
-    - [devbox validate templates ai](devbox_validate_templates_ai.md) — Validate AI template pack
-    - [devbox validate templates git](devbox_validate_templates_git.md) — Validate git hooks template pack
-    - [devbox validate templates ide](devbox_validate_templates_ide.md) — Validate IDE template pack
-  - [devbox validate translations](devbox_validate_translations.md) — Validate translation files in devbox/i18n/
-- [devbox version](devbox_version.md) — Print version information
+- [dwe commands](devbox_commands.md) — Run, inspect, and list dwe commands
+  - [dwe commands list](devbox_commands_list.md) — List available commands
+- [dwe completion](devbox_completion.md) — Generate the autocompletion script for the specified shell
+  - [dwe completion bash](devbox_completion_bash.md) — Generate the autocompletion script for bash
+  - [dwe completion fish](devbox_completion_fish.md) — Generate the autocompletion script for fish
+  - [dwe completion install](devbox_completion_install.md) — Install shell completion for dwe
+  - [dwe completion powershell](devbox_completion_powershell.md) — Generate the autocompletion script for powershell
+  - [dwe completion uninstall](devbox_completion_uninstall.md) — Uninstall shell completion for dwe
+  - [dwe completion zsh](devbox_completion_zsh.md) — Generate the autocompletion script for zsh
+- [dwe compose](devbox_compose.md) — Low-level Docker Compose diagnostics
+  - [dwe compose argv](devbox_compose_argv.md) — Show the full docker compose command that would be executed
+  - [dwe compose files](devbox_compose_files.md) — Print resolved compose file list (base + enabled overlays), one per line
+  - [dwe compose raw](devbox_compose_raw.md) — Run docker compose directly with resolved file list and project name (escape hatch)
+- [dwe deploy](devbox_deploy.md) — Deploy pipeline commands
+  - [dwe deploy plan](devbox_deploy_plan.md) — Show resolved deploy plan
+  - [dwe deploy run](devbox_deploy_run.md) — Execute the deploy plan
+  - [dwe deploy state](devbox_deploy_state.md) — Manage deploy state
+    - [dwe deploy state clear](devbox_deploy_state_clear.md) — Clear the deploy state
+    - [dwe deploy state repair](devbox_deploy_state_repair.md) — Repair the deploy state
+    - [dwe deploy state show](devbox_deploy_state_show.md) — Show the current deploy state
+- [dwe docker](devbox_docker.md) — Docker Compose lifecycle commands
+  - [dwe docker build](devbox_docker_build.md) — Build compose service images
+  - [dwe docker down](devbox_docker_down.md) — Stop and remove compose services
+  - [dwe docker exec](devbox_docker_exec.md) — Execute a command in a running compose service
+  - [dwe docker logs](devbox_docker_logs.md) — View compose service logs
+  - [dwe docker project-name](devbox_docker_project-name.md) — Print the resolved compose project name
+  - [dwe docker ps](devbox_docker_ps.md) — List compose containers
+  - [dwe docker pull](devbox_docker_pull.md) — Pull compose service images
+  - [dwe docker restart](devbox_docker_restart.md) — Restart compose services
+  - [dwe docker run](devbox_docker_run.md) — Run a one-off command in a compose service
+  - [dwe docker stop](devbox_docker_stop.md) — Stop compose services
+  - [dwe docker up](devbox_docker_up.md) — Start compose services
+- [dwe docs](devbox_docs.md) — Browse and manage documentation
+  - [dwe docs cache](devbox_docs_cache.md) — Manage mermaid diagram cache
+    - [dwe docs cache clear](devbox_docs_cache_clear.md) — Clear the mermaid diagram cache
+  - [dwe docs export](devbox_docs_export.md) — Export documentation to a directory
+  - [dwe docs generate](devbox_docs_generate.md) — Generate reference documentation
+  - [dwe docs list](devbox_docs_list.md) — List all available documentation topics
+  - [dwe docs llms-txt](devbox_docs_llms-txt.md) — Emit an llms.txt project index for AI agents
+  - [dwe docs search](devbox_docs_search.md) — Search documentation for a literal substring
+  - [dwe docs show](devbox_docs_show.md) — Show documentation for a topic
+- [dwe info](devbox_info.md) — Display project info dashboard (URLs, hosts, services, tools)
+- [dwe logs](devbox_logs.md) — Stream container logs for a service
+- [dwe prompt](devbox_prompt.md) — Print a compact shell-prompt segment for the current project
+- [dwe render](devbox_render.md) — Render derived artifacts from the merged DWE config
+  - [dwe render ai](devbox_render_ai.md) — Generate hub-level agents docs from template packs
+  - [dwe render env](devbox_render_env.md) — Generate .env from exports.env spec (stdout or --out <file>)
+  - [dwe render git](devbox_render_git.md) — Generate git hooks from template packs
+  - [dwe render ide](devbox_render_ide.md) — Generate IDE configs from template packs
+- [dwe reset](devbox_reset.md) — Reset pipeline commands
+  - [dwe reset plan](devbox_reset_plan.md) — Show resolved reset plan
+  - [dwe reset run](devbox_reset_run.md) — Execute the reset pipeline
+  - [dwe reset step](devbox_reset_step.md) — Run a single reset step by <phase>/<step> address
+- [dwe restart](devbox_restart.md) — Restart the project (stop, then run --no-update)
+- [dwe run](devbox_run.md) — Start the project (full lifecycle: update probe → up → wait → info)
+- [dwe services](devbox_services.md) — Toggle optional services (interactive) or list / enable / disable
+  - [dwe services disable](devbox_services_disable.md) — Disable an optional service (writes to workspace/local.yml)
+  - [dwe services enable](devbox_services_enable.md) — Enable an optional service (writes to workspace/local.yml)
+- [dwe shell](devbox_shell.md) — Open a shell in a service container
+- [dwe snapshot](devbox_snapshot.md) — Capture, restore, and manage project snapshots
+  - [dwe snapshot create](devbox_snapshot_create.md) — Capture the current environment into a named snapshot
+  - [dwe snapshot current](devbox_snapshot_current.md) — Show the snapshot currently restored into the project
+  - [dwe snapshot inspect](devbox_snapshot_inspect.md) — Inspect a snapshot directory or a packed .tar.gz archive
+  - [dwe snapshot list](devbox_snapshot_list.md) — List snapshots in ./snapshots/
+  - [dwe snapshot pack](devbox_snapshot_pack.md) — Pack a snapshot into a .tar.gz archive
+  - [dwe snapshot remove](devbox_snapshot_remove.md) — Delete a snapshot (runs remove: workflow if defined)
+  - [dwe snapshot restore](devbox_snapshot_restore.md) — Restore a snapshot into the current project
+  - [dwe snapshot rollback](devbox_snapshot_rollback.md) — Restore the snapshot named by rollback_target in workspace/snapshot.yml
+  - [dwe snapshot unpack](devbox_snapshot_unpack.md) — Extract a packed snapshot archive into ./snapshots/
+- [dwe status](devbox_status.md) — Show stack health and per-section status (read-only)
+  - [dwe status apps](devbox_status_apps.md) — Show only the apps section
+  - [dwe status daemons](devbox_status_daemons.md) — Show only the daemons section
+  - [dwe status deploy](devbox_status_deploy.md) — Show deploy status (table) or per-service deploy detail
+  - [dwe status git](devbox_status_git.md) — Show only the git workspace section
+  - [dwe status infra](devbox_status_infra.md) — Show only the infra section
+  - [dwe status tools](devbox_status_tools.md) — Show only the tools section
+  - [dwe status topology](devbox_status_topology.md) — Show only the topology section
+- [dwe stop](devbox_stop.md) — Stop the project (full lifecycle: before-stop hooks → docker down → after-stop hooks)
+- [dwe validate](devbox_validate.md) — Validate project configuration and files
+  - [dwe validate checks](devbox_validate_checks.md) — Validate project checks from workspace/validate.yml
+  - [dwe validate commands](devbox_validate_commands.md) — Validate command definitions
+  - [dwe validate config](devbox_validate_config.md) — Validate configuration files
+    - [dwe validate config deploy](devbox_validate_config_deploy.md) — Validate workspace/deploy.yml
+    - [dwe validate config workspace](devbox_validate_config_workspace.md) — Validate main workspace.yml
+    - [dwe validate config docker](devbox_validate_config_docker.md) — Validate workspace/docker.yml
+    - [dwe validate config info](devbox_validate_config_info.md) — Validate workspace/info.yml
+    - [dwe validate config lifecycle](devbox_validate_config_lifecycle.md) — Validate workspace/lifecycle.yml
+    - [dwe validate config reset](devbox_validate_config_reset.md) — Validate workspace/reset.yml (replaces 'dwe reset config check')
+    - [dwe validate config service-deploy](devbox_validate_config_service-deploy.md) — Validate service deploy configs
+    - [dwe validate config services](devbox_validate_config_services.md) — Validate workspace/services/<name>/service.yml
+    - [dwe validate config styles](devbox_validate_config_styles.md) — Validate workspace/styles.yml
+  - [dwe validate env](devbox_validate_env.md) — Validate environment readiness
+  - [dwe validate linters](devbox_validate_linters.md) — Run external linters (shellcheck, hadolint, generic)
+  - [dwe validate setup](devbox_validate_setup.md) — Validate workspace/setup.yml schema and writes: paths
+  - [dwe validate snapshot](devbox_validate_snapshot.md) — Validate snapshot config and on-disk snapshot integrity
+  - [dwe validate templates](devbox_validate_templates.md) — Validate template packs
+    - [dwe validate templates ai](devbox_validate_templates_ai.md) — Validate AI template pack
+    - [dwe validate templates git](devbox_validate_templates_git.md) — Validate git hooks template pack
+    - [dwe validate templates ide](devbox_validate_templates_ide.md) — Validate IDE template pack
+  - [dwe validate translations](devbox_validate_translations.md) — Validate translation files in workspace/i18n/
+- [dwe version](dwe_version.md) — Print version information

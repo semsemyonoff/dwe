@@ -25,7 +25,7 @@ The pipeline system uses **typed** forms for both — a `type:` field dispatches
 ```
 Pipeline steps (typed):
   when: { type: builtin|shell|template, cmd: ..., expr: ... }
-  check: { type: shell|devbox|command|builtin, cmd: ..., with: ... }
+  check: { type: shell|dwe|command|builtin, cmd: ..., with: ... }
 
 Workflow steps (string-based — separate, not covered here):
   when: "dir-empty path" | "{{ ... }}" | "cmd: ..."
@@ -91,11 +91,11 @@ Template conditions are purely for idempotency checks known at plan time:
   steps: []
 ```
 
-The render context includes the full merged `DevboxConfig`, so you can reach any configuration value. See [Templates](../templates.md) for the template expression syntax and helper reference.
+The render context includes the full merged `DweConfig`, so you can reach any configuration value. See [Templates](../templates.md) for the template expression syntax and helper reference.
 
 ## Typed actions (`check:` and step bodies)
 
-Actions are **executable payloads** — the same `type: shell|devbox|command|builtin` shape used in step bodies. When used as a `check:` post-action, the action's success/failure determines the step's success/failure.
+Actions are **executable payloads** — the same `type: shell|dwe|command|builtin` shape used in step bodies. When used as a `check:` post-action, the action's success/failure determines the step's success/failure.
 
 ```yaml
 - name: copy-configs
@@ -116,7 +116,7 @@ Actions support four executor types:
 | Type | Executor | Example |
 |------|----------|---------|
 | `shell` | `sh -c` | `type: shell, cmd: "test -f file.txt"` |
-| `devbox` | Devbox CLI | `type: devbox, cmd: "docker up"` |
+| `dwe` | DWE CLI | `type: dwe, cmd: "docker up"` |
 | `command` | Command registry | `type: command, cmd: "services.main.migrate"` |
 | `builtin` | Engine builtin | `type: builtin, cmd: "service_configs_check"` |
 

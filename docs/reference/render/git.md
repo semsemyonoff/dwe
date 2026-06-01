@@ -1,4 +1,4 @@
-# devbox render git
+# dwe render git
 
 Generate shell git hooks for each enabled service from a template pack. Output goes into the service's git hooks directory (e.g. `services/main/src/.git/hooks/pre-commit`), with executable mode `0755`.
 
@@ -82,15 +82,15 @@ Rationale matches IDE: git hooks reflect the variant being worked on right now (
 
 ### Explicit `[service]` argument
 
-`devbox render git <name>` treats `<name>` as a hub anchor. The argument is validated against the service map and the activation gate, then the same deepest-wins resolution is applied — so `devbox render git main` may end up rendering from the `main-debug` config when both share `dir`.
+`dwe render git <name>` treats `<name>` as a hub anchor. The argument is validated against the service map and the activation gate, then the same deepest-wins resolution is applied — so `dwe render git main` may end up rendering from the `main-debug` config when both share `dir`.
 
 ## Template pack resolution
 
-For each selected service the renderer picks one pack directory under `devbox/templates/git/`. The chain matches [`render ai`](ai.md#template-pack-resolution) and [`render ide`](ide.md#template-pack-resolution) exactly, only the base directory differs:
+For each selected service the renderer picks one pack directory under `workspace/templates/git/`. The chain matches [`render ai`](ai.md#template-pack-resolution) and [`render ide`](ide.md#template-pack-resolution) exactly, only the base directory differs:
 
-1. If `render.git.template` is set, only `devbox/templates/git/<render.git.template>/` is tried. Missing pack is a hard error.
-2. Otherwise, try `devbox/templates/git/<service-name>/`. If missing, fall through.
-3. Otherwise, use `devbox/templates/git/default/`. If missing, skip with a warning (implicit missing pack).
+1. If `render.git.template` is set, only `workspace/templates/git/<render.git.template>/` is tried. Missing pack is a hard error.
+2. Otherwise, try `workspace/templates/git/<service-name>/`. If missing, fall through.
+3. Otherwise, use `workspace/templates/git/default/`. If missing, skip with a warning (implicit missing pack).
 
 Pack-name characters are restricted (`^[A-Za-z0-9][A-Za-z0-9_-]*$`); an unsafe service name (leading dot, leading hyphen, path separators) silently skips the service-name candidate and falls through to `default/`.
 
@@ -135,12 +135,12 @@ Same shape as `render ide` and `render ai`:
 
 | Variable | Source |
 |----------|--------|
-| `.Project` | `project:` block from `devbox.yml` |
+| `.Project` | `project:` block from `workspace.yml` |
 | `.Service` | **canonical config identity** — the root of the rendering service's `extends:` chain. Use this for raw-config lookups keyed by service name (e.g. `(index .Cfg.Raw.git.hooks .Service)`). Equals `.Resolved` when the rendering service has no `extends:`. |
 | `.Resolved` | **rendering identity** — the name of the service whose hub is actually being rendered (the deepest-extends collision winner). Equals `.Service` in the no-collision case. |
 | `.ServiceCfg` | effective service config of `.Resolved` (the rendering service), after `extends` resolution. Fields like `.ServiceCfg.Container` reflect the extender's overlay. |
 | `.Runtime` | merged `runtime` block |
-| `.Cfg` | merged `DevboxConfig` (advanced). `.Cfg.Raw` is the post-merge config map after devbox normalization (`services.*` injected from per-service `service.yml` files) — see [Templates](../templates.md#render-context-per-site). Prefer the dedicated fields above for common cases. |
+| `.Cfg` | merged `DweConfig` (advanced). `.Cfg.Raw` is the post-merge config map after DWE normalization (`services.*` injected from per-service `service.yml` files) — see [Templates](../templates.md#render-context-per-site). Prefer the dedicated fields above for common cases. |
 
 > **Why `.Service` and `.Resolved` differ.** When two services share the same `dir:` (typically a base + an `extends:` child like `main` and `main-debug`), the collision policy picks the deepest extender as the hub owner — that's `.Resolved`. But user-facing config sections keyed by service name (`git.hooks.<svc>`, `cs.<svc>`, …) are populated only on the base by convention, so raw-config lookups must use `.Service` (the chain root) to resolve. The two fields keep the *behavioral identity* (which container to attach to, which overlay applies) and the *config identity* (where to look up user values) distinguishable.
 
@@ -179,17 +179,17 @@ The renderer applies the same boundary chain as IDE/AI, adapted for the `.git/ho
 Layout:
 
 ```
-devbox/services/
+workspace/services/
   main/
     service.yml
-devbox/templates/git/
+workspace/templates/git/
   default/
     manifest.yml
     pre-commit.tmpl
     pre-push.tmpl
 ```
 
-Manifest `devbox/templates/git/default/manifest.yml`:
+Manifest `workspace/templates/git/default/manifest.yml`:
 
 ```yaml
 render:
@@ -197,15 +197,15 @@ render:
   - { from: pre-push.tmpl,   to: pre-push }
 ```
 
-Template `devbox/templates/git/default/pre-commit.tmpl`:
+Template `workspace/templates/git/default/pre-commit.tmpl`:
 
 ```sh
 #!/usr/bin/env sh
 # pre-commit hook for {{.Resolved}} ({{.ServiceCfg.Container}})
-exec devbox run --service {{.Resolved}} lint
+exec dwe run --service {{.Resolved}} lint
 ```
 
-`devbox/services/main/service.yml`:
+`workspace/services/main/service.yml`:
 
 ```yaml
 type: app
@@ -214,10 +214,10 @@ dir: ./services/main
 # render.git.enabled defaults to true (type: app)
 ```
 
-`devbox render git`:
+`dwe render git`:
 
 1. Selection: `main` passes the activation gate. Hub preflight succeeds.
-2. Pack resolution: implicit chain — `devbox/templates/git/main/` is missing, so `devbox/templates/git/default/` is used.
+2. Pack resolution: implicit chain — `workspace/templates/git/main/` is missing, so `workspace/templates/git/default/` is used.
 3. `services/main/src/.git/` is a directory → probe succeeds.
 4. Manifest validated: two render entries, no symlinks, basename `to` values, sources exist.
 5. Each entry rendered into `services/main/src/.git/hooks/` with mode `0755`.
@@ -267,4 +267,4 @@ A follow-up plan will add worktree support. Until then, services with worktree c
 - [`render ide`](ide.md) — companion command with the same deepest-wins collision policy
 - [`render ai`](ai.md) — companion command (shallowest-wins) sharing the manifest schema
 - [Render overview](index.md) — shared manifest schema and local-override mechanism
-- CLI reference: [`devbox render git`](../cli/devbox_render_git.md)
+- CLI reference: [`dwe render git`](../cli/dwe_render_git.md)

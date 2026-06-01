@@ -1,6 +1,6 @@
 # State Schema
 
-Field reference for `.devbox/deploy/state.yml`.
+Field reference for `.dwe/deploy/state.yml`.
 
 ## Top-level fields
 
@@ -8,8 +8,8 @@ Field reference for `.devbox/deploy/state.yml`.
 |-------|------|-------------|
 | `schema_version` | string | Always `"1"`; reserved for future format changes |
 | `project` | object | Project-level state (deployed_at, config_hash, status, etc.) |
-| `services` | map | Per-service state, keyed by service folder name (`devbox/services/<name>/`) |
-| `pending` | object | Pending operations that need to be applied; present only when `devbox services enable/disable` was run without `--apply`. Written atomically by the toggle command; cleared by `devbox restart`, `devbox deploy run`, or `devbox reset run` |
+| `services` | map | Per-service state, keyed by service folder name (`workspace/services/<name>/`) |
+| `pending` | object | Pending operations that need to be applied; present only when `dwe services enable/disable` was run without `--apply`. Written atomically by the toggle command; cleared by `dwe restart`, `dwe deploy run`, or `dwe reset run` |
 
 ## Project-level fields
 
@@ -27,7 +27,7 @@ Field reference for `.devbox/deploy/state.yml`.
 |-------|------|-------------|
 | `status` | enum | `deployed`, `partial`, `failed`, `not_deployed` (service never ran, or all steps skipped) |
 | `deployed_at` | ISO 8601 timestamp | When this service was last fully deployed |
-| `config_hash` | sha256 hex | Fingerprint of `devbox/services/<name>/service.yml` + `devbox/services/<name>/deploy.yml` |
+| `config_hash` | sha256 hex | Fingerprint of `workspace/services/<name>/service.yml` + `workspace/services/<name>/deploy.yml` |
 | `last_run` | object | Timing and outcome of the last deploy attempt for this service |
 | `phases` | map | Per-phase state for this service's phases |
 
@@ -49,7 +49,7 @@ Field reference for `.devbox/deploy/state.yml`.
 
 ## Pending state
 
-When `devbox services enable` or `devbox services disable` is run without `--apply`, the toggle command writes the local.yml change immediately but defers the apply step. The `pending` field in the state file tracks what still needs to run.
+When `dwe services enable` or `dwe services disable` is run without `--apply`, the toggle command writes the local.yml change immediately but defers the apply step. The `pending` field in the state file tracks what still needs to run.
 
 ### pending field schema
 
@@ -70,23 +70,23 @@ When `devbox services enable` or `devbox services disable` is run without `--app
 
 | Event | Effect on `pending` |
 |-------|---------------------|
-| `devbox services enable/disable` (without `--apply`) | Writes `pending.operations`; adds/merges ops for restart or deploy contributors |
-| `devbox services enable/disable --apply` success | Clears contributor-owned pending ops via `ClearPendingOps` |
-| `devbox restart` success | Clears the `restart` op; deploy op (if any) survives |
-| `devbox deploy run` (full project) success | Clears the `deploy` op; restart op (if any) survives |
-| `devbox deploy run --service <name>` success | Removes `<name>` from the `deploy` op's service list; if empty, removes the op |
-| `devbox reset run` (project-wide) success | Clears all pending (full journal wipe) |
-| `devbox reset run --service <name>` success | Writes `{kind: deploy, services: [<name>]}` atomically alongside removing service deployed state |
+| `dwe services enable/disable` (without `--apply`) | Writes `pending.operations`; adds/merges ops for restart or deploy contributors |
+| `dwe services enable/disable --apply` success | Clears contributor-owned pending ops via `ClearPendingOps` |
+| `dwe restart` success | Clears the `restart` op; deploy op (if any) survives |
+| `dwe deploy run` (full project) success | Clears the `deploy` op; restart op (if any) survives |
+| `dwe deploy run --service <name>` success | Removes `<name>` from the `deploy` op's service list; if empty, removes the op |
+| `dwe reset run` (project-wide) success | Clears all pending (full journal wipe) |
+| `dwe reset run --service <name>` success | Writes `{kind: deploy, services: [<name>]}` atomically alongside removing service deployed state |
 
 ### Banner
 
-`devbox status` (and its subcommands `apps`, `tools`, `infra`, `deploy`) display a warning banner when `pending` is non-nil:
+`dwe status` (and its subcommands `apps`, `tools`, `infra`, `deploy`) display a warning banner when `pending` is non-nil:
 
 ```
 ⚠ Pending: deploy required for: svc-a, svc-b
-  Run: devbox deploy run
+  Run: dwe deploy run
 ⚠ Pending: restart required
-  Run: devbox restart
+  Run: dwe restart
 ```
 
 The banner is rendered by `render.PendingBanner(p *journal.PendingApply)` in `internal/core/ui/render/`. It iterates `pending.operations` and renders one line per op. Empty string is returned (no banner) when `pending` is nil.

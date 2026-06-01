@@ -1,4 +1,4 @@
-> Translated from: reference/config/state/hashing.md @ 299b02f7c8e9
+> Translated from: reference/config/state/hashing.md @ e5639ee9d79e
 
 # Хеширование и решения о пропуске
 
@@ -16,7 +16,7 @@ sha256(type + "\x00" + cmd + "\x00" + canonical_json(with))
 
 **Компоненты:**
 
-- `type` — тип шага (`shell`, `devbox`, `command`, `builtin`)
+- `type` — тип шага (`shell`, `dwe`, `command`, `builtin`)
 - `cmd` — полезная нагрузка команды
 - `with` — параметры шага, сериализованные как канонический JSON с ключами, отсортированными по алфавиту
 
@@ -63,25 +63,25 @@ sha256(type + "\x00" + cmd + "\x00" + canonical_json(with))
 `config_hash` сервиса покрывает две вещи:
 
 ```
-sha256(canonical_json(services.<name>) + canonical_json(devbox/services/<name>/deploy.yml))
+sha256(canonical_json(services.<name>) + canonical_json(workspace/services/<name>/deploy.yml))
 ```
 
-- Определение сервиса из `devbox/services/<name>/service.yml` (Enabled, Depends, Type, Dir и т. д.)
-- Пайплайн деплоя для конкретного сервиса из `devbox/services/<name>/deploy.yml` (или пусто, если отсутствует)
+- Определение сервиса из `workspace/services/<name>/service.yml` (Enabled, Depends, Type, Dir и т. д.)
+- Пайплайн деплоя для конкретного сервиса из `workspace/services/<name>/deploy.yml` (или пусто, если отсутствует)
 
-Когда `config_hash` сервиса меняется (например, вы редактируете `devbox/services/main/service.yml` или `devbox/services/main/deploy.yml`), **все шаги во всех фазах этого сервиса считаются отсутствующими**. Они выполняются заново при следующем деплое независимо от их `action_hash`.
+Когда `config_hash` сервиса меняется (например, вы редактируете `workspace/services/main/service.yml` или `workspace/services/main/deploy.yml`), **все шаги во всех фазах этого сервиса считаются отсутствующими**. Они выполняются заново при следующем деплое независимо от их `action_hash`.
 
 ## config_hash для проекта
 
 `config_hash` уровня проекта покрывает три вещи:
 
 ```
-sha256(canonical_json(services[tracked_only]) + canonical_json(devbox/deploy.yml) + canonical_json(devbox/services/<tracked>/deploy.yml for all tracked services))
+sha256(canonical_json(services[tracked_only]) + canonical_json(workspace/deploy.yml) + canonical_json(workspace/services/<tracked>/deploy.yml for all tracked services))
 ```
 
-**«Отслеживаемый» означает:** сервис считается отслеживаемым тогда и только тогда, когда он появляется в разрешённом плане деплоя (то есть включён в `devbox/services/<name>/service.yml` И встроен в фазу с `deploy_services: true` в `devbox/deploy.yml`). Инструменты никогда не отслеживаются. Сервисы без `devbox/services/<name>/deploy.yml` всё равно отслеживаются, если они появляются в плане.
+**«Отслеживаемый» означает:** сервис считается отслеживаемым тогда и только тогда, когда он появляется в разрешённом плане деплоя (то есть включён в `workspace/services/<name>/service.yml` И встроен в фазу с `deploy_services: true` в `workspace/deploy.yml`). Инструменты никогда не отслеживаются. Сервисы без `workspace/services/<name>/deploy.yml` всё равно отслеживаются, если они появляются в плане.
 
-Когда `config_hash` проекта меняется (например, вы редактируете `devbox/deploy.yml` или добавляете сервис), **все шаги уровня проекта считаются отсутствующими** и выполняются заново при следующем деплое.
+Когда `config_hash` проекта меняется (например, вы редактируете `workspace/deploy.yml` или добавляете сервис), **все шаги уровня проекта считаются отсутствующими** и выполняются заново при следующем деплое.
 
 Примечание: правки включённых, но не отслеживаемых вариантов сервисов (например, сервис `main-debug`, расширяющий `main` без собственной конфигурации деплоя) НЕ меняют хеш проекта, поэтому они не инвалидируют журнал.
 

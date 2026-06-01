@@ -1,4 +1,4 @@
-> Translated from: reference/config/deploy/index.md @ 180dac2dd8ec
+> Translated from: reference/config/deploy/index.md @ 48167aec9162
 
 # deploy.yml / reset.yml
 
@@ -20,33 +20,33 @@
 
 ## Назначение
 
-`devbox/deploy.yml` декларирует пайплайн деплоя оркестратора. `devbox/reset.yml` декларирует деструктивный пайплайн сброса. Пайплайны деплоя отдельных сервисов лежат в `devbox/services/<service>/deploy.yml`.
+`workspace/deploy.yml` декларирует пайплайн деплоя оркестратора. `workspace/reset.yml` декларирует деструктивный пайплайн сброса. Пайплайны деплоя отдельных сервисов лежат в `workspace/services/<service>/deploy.yml`.
 
 Все три файла загружаются раздельно и не сливаются с 3-слойным конфигом.
 
-И `devbox/deploy.yml`, и `devbox/reset.yml` опциональны. При их отсутствии Devbox подставляет встроенный пайплайн по умолчанию и выводит одну info-строку в stderr: `Using built-in default <deploy|reset> pipeline (override with devbox/<deploy|reset>.yml).` Эта строка подавляется в режиме `--output json`.
+И `workspace/deploy.yml`, и `workspace/reset.yml` опциональны. При их отсутствии DWE подставляет встроенный пайплайн по умолчанию и выводит одну info-строку в stderr: `Using built-in default <deploy|reset> pipeline (override with DWE/<deploy|reset>.yml).` Эта строка подавляется в режиме `--output json`.
 
-**Дефолтный пайплайн деплоя** (срабатывает, когда `devbox/deploy.yml` отсутствует):
+**Дефолтный пайплайн деплоя** (срабатывает, когда `workspace/deploy.yml` отсутствует):
 
-Фазы: `services` (запускает `deploy_services: true` для встраивания пайплайнов включённых сервисов) → `start` (`type: devbox`, `cmd: "docker up --wait"`) → `post-deploy` (отображение info + сообщение об успехе).
+Фазы: `services` (запускает `deploy_services: true` для встраивания пайплайнов включённых сервисов) → `start` (`type: dwe`, `cmd: "docker up --wait"`) → `post-deploy` (отображение info + сообщение об успехе).
 
-**Дефолтный пайплайн сброса** (срабатывает, когда `devbox/reset.yml` отсутствует):
+**Дефолтный пайплайн сброса** (срабатывает, когда `workspace/reset.yml` отсутствует):
 
-Фазы: `pre` (промпт подтверждения) → `stop` (`type: devbox`, `cmd: "docker down"`) → `cleanup` (удаление томов, удаление директории `services/`).
+Фазы: `pre` (промпт подтверждения) → `stop` (`type: dwe`, `cmd: "docker down"`) → `cleanup` (удаление томов, удаление директории `services/`).
 
 ## Роли файлов
 
 | Файл | Загрузчик | Роль |
 |------|-----------|------|
-| `devbox/deploy.yml` | `LoadProjectDeployConfig` | Оркестратор верхнего уровня: перечисляет фазы по порядку, ссылается на пайплайны сервисов |
-| `devbox/services/<svc>/deploy.yml` | `LoadServiceDeployConfigs` | Фазы и шаги отдельного сервиса (встраиваются оркестратором при `deploy_services: true`). Пайплайн деплоя может быть у сервиса любого типа (app, tool, infra). |
-| `devbox/reset.yml` | `LoadResetConfig` | Отдельный пайплайн сброса, исполняемый через `devbox reset run`. Фазы `deploy_services` отвергаются. |
+| `workspace/deploy.yml` | `LoadProjectDeployConfig` | Оркестратор верхнего уровня: перечисляет фазы по порядку, ссылается на пайплайны сервисов |
+| `workspace/services/<svc>/deploy.yml` | `LoadServiceDeployConfigs` | Фазы и шаги отдельного сервиса (встраиваются оркестратором при `deploy_services: true`). Пайплайн деплоя может быть у сервиса любого типа (app, tool, infra). |
+| `workspace/reset.yml` | `LoadResetConfig` | Отдельный пайплайн сброса, исполняемый через `dwe reset run`. Фазы `deploy_services` отвергаются. |
 
 ```mermaid
 flowchart TB
-  D[devbox/deploy.yml] -->|phase: deploy_services| INL{Встраивание включённых сервисов}
+  D[workspace/deploy.yml] -->|phase: deploy_services| INL{Встраивание включённых сервисов}
 
-  subgraph svc["devbox/services/&lt;service&gt;/deploy.yml — по одному файлу на сервис"]
+  subgraph svc["workspace/services/&lt;service&gt;/deploy.yml — по одному файлу на сервис"]
     direction TB
     S1["обязательный сервис<br/>(всегда встраивается)"]
     S2["опциональный сервис A<br/>(встраивается, если включён)"]
@@ -56,19 +56,19 @@ flowchart TB
 
   svc --> INL
   INL -->|топосортировка по depends_on| PLAN[Разрешённый план]
-  PLAN --> RUN[(PlainReporter — ✓ ✗ ◎ ·<br/>.devbox/logs/deploy.log)]
+  PLAN --> RUN[(PlainReporter — ✓ ✗ ◎ ·<br/>.dwe/logs/deploy.log)]
 
-  R[devbox/reset.yml] --> RPLAN[Разрешённый план] --> RUN2[(PlainReporter)]
+  R[workspace/reset.yml] --> RPLAN[Разрешённый план] --> RUN2[(PlainReporter)]
 ```
 
-Сервис любого типа (app, tool или infra) может иметь `devbox/services/<name>/deploy.yml`. На этапе планирования оркестратор отфильтровывает этот набор до **включённых** сервисов (обязательные всегда включены) и встраивает их в топологическом порядке `depends_on`. Сервисы без файла деплоя молча пропускаются — не каждому сервису он нужен.
+Сервис любого типа (app, tool или infra) может иметь `workspace/services/<name>/deploy.yml`. На этапе планирования оркестратор отфильтровывает этот набор до **включённых** сервисов (обязательные всегда включены) и встраивает их в топологическом порядке `depends_on`. Сервисы без файла деплоя молча пропускаются — не каждому сервису он нужен.
 
-Поле `after:` в `devbox/services/<name>/deploy.yml` декларирует порядок деплоя между сервисами (отдельно от рантайм-зависимости `depends_on:`). Подробности см. в [Поля верхнего уровня](#поля-верхнего-уровня).
+Поле `after:` в `workspace/services/<name>/deploy.yml` декларирует порядок деплоя между сервисами (отдельно от рантайм-зависимости `depends_on:`). Подробности см. в [Поля верхнего уровня](#поля-верхнего-уровня).
 
 ## Структура
 
 ```yaml
-log: true                          # optional: tee output to .devbox/logs/<pipeline>.log
+log: true                          # optional: tee output to .dwe/logs/<pipeline>.log
 
 phases:
   # Normal phase: supports when, untracked, and steps
@@ -82,14 +82,14 @@ phases:
     steps:
       - name: <step-name>
         description: Human-readable description
-        type: shell|devbox|command|builtin  # execution type (required)
+        type: shell|dwe|command|builtin  # execution type (required)
         cmd: <value>               # command payload (required)
         when:                      # optional: pre-condition (typed condition)
           type: builtin|shell|template
           cmd: <string>            # for builtin/shell
           expr: <string>           # for template
         check:                     # optional: post-condition (typed action)
-          type: shell|devbox|command|builtin
+          type: shell|dwe|command|builtin
           cmd: <value>
           with:                    # optional: parameters
             key: value
@@ -117,9 +117,9 @@ phases:
 
 | Поле | Тип | По умолчанию | Описание |
 |------|-----|--------------|----------|
-| `log` | bool | `deploy.yml`: `true`; `reset.yml`: `false` | Дублировать статусные сообщения devbox и stdout/stderr дочерних процессов в `.devbox/logs/<pipeline>.log` (ANSI-коды вырезаются). |
+| `log` | bool | `deploy.yml`: `true`; `reset.yml`: `false` | Дублировать статусные сообщения DWE и stdout/stderr дочерних процессов в `.dwe/logs/<pipeline>.log` (ANSI-коды вырезаются). |
 | `phases` | list | — | Упорядоченный список фаз. |
-| `after` | list of strings | `[]` | **Только в `deploy.yml` отдельного сервиса.** Декларирует порядок деплоя: данный сервис деплоится после перечисленных. Опущенное или пустое значение означает отсутствие ограничения порядка. Отличается от рантайм-зависимости `depends_on:` (которая управляет порядком запуска контейнеров) — используйте `after:`, когда хотите, чтобы шаги деплоя одного сервиса завершились до начала шагов другого. Недопустимо в `devbox/deploy.yml`, `devbox/reset.yml` и `devbox/services/<name>/reset.yml` (ошибка на этапе загрузки). Полный деплой (`devbox deploy run`) топосортирует сервисы по `after:`; `devbox deploy run --service <name>` НЕ каскадирует на объявленные `after:` зависимости (явный выбор перекрывает порядок). |
+| `after` | list of strings | `[]` | **Только в `deploy.yml` отдельного сервиса.** Декларирует порядок деплоя: данный сервис деплоится после перечисленных. Опущенное или пустое значение означает отсутствие ограничения порядка. Отличается от рантайм-зависимости `depends_on:` (которая управляет порядком запуска контейнеров) — используйте `after:`, когда хотите, чтобы шаги деплоя одного сервиса завершились до начала шагов другого. Недопустимо в `workspace/deploy.yml`, `workspace/reset.yml` и `workspace/services/<name>/reset.yml` (ошибка на этапе загрузки). Полный деплой (`dwe deploy run`) топосортирует сервисы по `after:`; `dwe deploy run --service <name>` НЕ каскадирует на объявленные `after:` зависимости (явный выбор перекрывает порядок). |
 
 ## Поля фазы
 
@@ -137,7 +137,7 @@ phases:
 |------|-----|----------|
 | `name` | string | Уникальный ключ шага внутри фазы |
 | `description` | string | Показывается в выводе `deploy plan` |
-| `type` | enum | Тип исполнения: один из `shell`, `devbox`, `command`, `builtin` (обязательно). См. [Типы исполнения шагов](steps.md). |
+| `type` | enum | Тип исполнения: один из `shell`, `dwe`, `command`, `builtin` (обязательно). См. [Типы исполнения шагов](steps.md). |
 | `cmd` | string | Полезная нагрузка команды (обязательно); содержимое зависит от `type` |
 | `with` | mapping | Параметры, передаваемые в команду или билтин (опционально; обязательно для большинства билтинов) |
 | `when` | typed condition | Предусловие, вычисляемое до запуска шага; шаг пропускается при ложном значении. См. [Условия](conditions.md). |
@@ -161,7 +161,7 @@ phases:
   untracked: true
   steps:
     - name: info
-      type: devbox
+      type: dwe
       cmd: "info"
     - name: success
       type: builtin
@@ -173,7 +173,7 @@ phases:
 
 ## Маркер `deploy_services`
 
-В `deploy.yml` фаза с `deploy_services: true` является плейсхолдером. CLI заменяет её встраиваемыми пайплайнами сервисов на этапе выполнения, упорядочивая по зависимостям (`depends_on` в `devbox/services/<name>/service.yml` каждого сервиса). Включены только активные сервисы.
+В `deploy.yml` фаза с `deploy_services: true` является плейсхолдером. CLI заменяет её встраиваемыми пайплайнами сервисов на этапе выполнения, упорядочивая по зависимостям (`depends_on` в `workspace/services/<name>/service.yml` каждого сервиса). Включены только активные сервисы.
 
 ```yaml
 phases:
@@ -184,9 +184,9 @@ phases:
 
 ## Идемпотентный деплой и состояние
 
-По умолчанию `devbox deploy run` отслеживает исход и хеш каждого выполненного шага в `.devbox/deploy/state.yml`. На следующем запуске деплоя шаги, успешно завершившиеся с неизменным `action_hash`, **пропускаются** (если у них нет действия `check:`, которое всегда выполняется для повторной проверки идемпотентности).
+По умолчанию `dwe deploy run` отслеживает исход и хеш каждого выполненного шага в `.dwe/deploy/state.yml`. На следующем запуске деплоя шаги, успешно завершившиеся с неизменным `action_hash`, **пропускаются** (если у них нет действия `check:`, которое всегда выполняется для повторной проверки идемпотентности).
 
-Это делает деплои идемпотентными: повторный запуск неизменённого проекта быстр (неизменённые шаги пропускаются), а правка тела шага автоматически перезапускает его. Правки в конфигурационных файлах сервисов (`devbox/services/<name>/service.yml`) или в конфигах деплоя (`devbox/deploy.yml`, `devbox/services/<name>/deploy.yml`) инвалидируют затронутую область и заставляют эти шаги выполниться заново.
+Это делает деплои идемпотентными: повторный запуск неизменённого проекта быстр (неизменённые шаги пропускаются), а правка тела шага автоматически перезапускает его. Правки в конфигурационных файлах сервисов (`workspace/services/<name>/service.yml`) или в конфигах деплоя (`workspace/deploy.yml`, `workspace/services/<name>/deploy.yml`) инвалидируют затронутую область и заставляют эти шаги выполниться заново.
 
 Ключевые модели поведения:
 
@@ -199,24 +199,24 @@ phases:
 - В обоих случаях журнал фиксирует шаг для аудита и отображения статуса через `step_hash`, который включает конфигурацию гейта — поэтому изменение гейта инвалидирует записанный хеш и перезапускает шаг
 - **Предыдущий шаг провалился** → шаг перезапускается на следующем деплое (позволяет `--resume` продолжить с места падения)
 
-Используйте `devbox deploy state show` для инспекции журнала, `devbox deploy state clear` для его сброса и `devbox deploy state repair` для починки повреждённых агрегатов.
+Используйте `dwe deploy state show` для инспекции журнала, `dwe deploy state clear` для его сброса и `dwe deploy state repair` для починки повреждённых агрегатов.
 
 Полные сведения о хешировании, решениях о пропуске и восстановлении после крахов посреди деплоя см. в [state/index.md](../state/index.md).
 
 ## Страницы
 
-- [Типы исполнения шагов](steps.md) — `shell`, `devbox`, `command`, `builtin`; различие билтина `cmd: shell` и шага `type: shell`
+- [Типы исполнения шагов](steps.md) — `shell`, `dwe`, `command`, `builtin`; различие билтина `cmd: shell` и шага `type: shell`
 - [Доступные билтины](builtins.md) — каждый билтин с входами и примерами; внутренние билтины движка
 - [Условия](conditions.md) — семантика `when:`, `check:` и `files_gate:`
 - [Примеры](examples.md) — оркестратор, отдельный сервис, infra-`after:`, параллельные группы, переопределения под-шагов в воркфлоу, типичные ловушки
 
 ## Связанные команды
 
-- `devbox deploy plan` — показать разрешённый пайплайн (с встраиваемыми фазами сервисов)
-- `devbox deploy run` — выполнить пайплайн деплоя с отслеживанием состояния
-- `devbox deploy state show` — инспекция журнала состояния деплоя
-- `devbox deploy state clear` — сброс состояния деплоя
-- `devbox deploy state repair` — пересборка агрегатов состояния
-- `devbox reset plan` — показать пайплайн сброса
-- `devbox reset run [--yes]` — выполнить пайплайн сброса
+- `dwe deploy plan` — показать разрешённый пайплайн (с встраиваемыми фазами сервисов)
+- `dwe deploy run` — выполнить пайплайн деплоя с отслеживанием состояния
+- `dwe deploy state show` — инспекция журнала состояния деплоя
+- `dwe deploy state clear` — сброс состояния деплоя
+- `dwe deploy state repair` — пересборка агрегатов состояния
+- `dwe reset plan` — показать пайплайн сброса
+- `dwe reset run [--yes]` — выполнить пайплайн сброса
 - См. также [lifecycle.yml](../lifecycle.md) — пайплайны `run` / `stop` переиспользуют ту же грамматику фаз/шагов с опциональной пробой обновлений и хук-фазами.

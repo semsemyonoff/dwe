@@ -19,7 +19,7 @@ UI styles configuration: ASCII header, semantic color palette, and separator.
 
 ## Purpose
 
-`devbox/styles.yml` controls the visual appearance of the `devbox` CLI: the
+`workspace/styles.yml` controls the visual appearance of the `dwe` CLI: the
 branded header shown at startup, the seven semantic color tokens used across
 every UI surface (tables, status sections, command browser, Fang help output),
 and the separator character used in definition lists.
@@ -34,7 +34,7 @@ entirely produces identical built-in defaults.
 header:
   lines:
     - "Welcome to"
-    - "Devbox Laravel"
+    - "DWE Laravel"
   font: doom
   tagline: "Local dev, container-orchestrated."
 
@@ -54,8 +54,8 @@ separator: "·"
 
 ### `header`
 
-Controls the branded header displayed by `devbox` (no args) and `devbox info`.
-The brand identity line (`{▪} Devbox · <project> · <version>`) always renders;
+Controls the branded header displayed by `dwe` (no args) and `dwe info`.
+The brand identity line (`{▪} DWE · <project> · <version>`) always renders;
 the optional tagline and ASCII art are layered on top when configured.
 
 | Field | Type | Default | Description |
@@ -98,7 +98,7 @@ Character used between label and value in definition items (e.g.
 
 ## Omitting the file
 
-If `devbox/styles.yml` does not exist, `LoadStylesConfig()` returns a
+If `workspace/styles.yml` does not exist, `LoadStylesConfig()` returns a
 zero-value struct and `styles.ApplyStyles()` falls back to built-in defaults.
 The CLI works identically — no error is produced.
 
@@ -155,8 +155,8 @@ They collapse into the seven semantic tokens as follows:
 | `colors.help.*` (entire block) | _(removed — derived from `accent` + `muted`)_ |
 | `header.color` | _(removed — always `accent`)_ |
 
-Running `devbox validate` surfaces a rename hint per unknown key found in
-`styles.yml`. Normal `devbox` commands load styles silently and do not warn.
+Running `dwe validate` surfaces a rename hint per unknown key found in
+`styles.yml`. Normal `dwe` commands load styles silently and do not warn.
 
 ## Common pitfalls
 
@@ -168,10 +168,10 @@ Running `devbox validate` surfaces a rename hint per unknown key found in
   override applies in both modes; pick a hex that reads well on both
   backgrounds, or rely on the built-in defaults.
 - **Old keys silently ignored at runtime** — the loader is lenient. Use
-  `devbox validate` to catch stale keys before they become invisible no-ops.
+  `dwe validate` to catch stale keys before they become invisible no-ops.
 
 ## Related commands
 
-- `devbox` (no args) — shows brand header + compact summary
-- `devbox info` — shows full info dashboard with styled output
-- `devbox validate` — surfaces rename warnings for legacy palette keys
+- `dwe` (no args) — shows brand header + compact summary
+- `dwe info` — shows full info dashboard with styled output
+- `dwe validate` — surfaces rename warnings for legacy palette keys

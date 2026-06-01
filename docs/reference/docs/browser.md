@@ -1,16 +1,16 @@
 # Interactive TUI Browser
 
-`devbox docs` opens an interactive terminal UI to browse all documentation.
+`dwe docs` opens an interactive terminal UI to browse all documentation.
 
 ## Usage
 
 ```bash
-devbox docs
+dwe docs
 ```
 
 ## Requirements
 
-- TTY (terminal) — non-interactive use (pipes, agents) must use [`devbox docs show <topic>`](commands.md#devbox-docs-show-topic) or [`devbox docs list`](commands.md#devbox-docs-list) instead.
+- TTY (terminal) — non-interactive use (pipes, agents) must use [`dwe docs show <topic>`](commands.md#dwe-docs-show-topic) or [`dwe docs list`](commands.md#dwe-docs-list) instead.
 
 ## Navigation
 
@@ -35,7 +35,7 @@ A footer panel renders the full keymap so the bindings are always one glance awa
 
 ## Layout
 
-- **Left pane:** Collapsible file tree of all topics (Devbox built-ins and Project docs if present)
+- **Left pane:** Collapsible file tree of all topics (DWE built-ins and Project docs if present)
 - **Right pane:** Rendered markdown content with syntax highlighting
 - **Status bar:** Current topic path, mermaid progress, active language, and keyboard hints
 

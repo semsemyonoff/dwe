@@ -1,8 +1,8 @@
-> Translated from: reference/render/index.md @ 85f4c3cb179b
+> Translated from: reference/render/index.md @ 772a9968010c
 
 # Справочник Render
 
-`devbox render` производит файлы, выведенные из объединённой конфигурации devbox. Это единая точка входа для сгенерированных артефактов — ни один из этих файлов не должен править вручную; вместо этого перезапустите соответствующую подкоманду.
+`dwe render` производит файлы, выведенные из объединённой конфигурации DWE. Это единая точка входа для сгенерированных артефактов — ни один из этих файлов не должен править вручную; вместо этого перезапустите соответствующую подкоманду.
 
 ## Содержание
 
@@ -16,21 +16,21 @@
 
 | Команда | Вывод | Источник |
 |---------|-------|----------|
-| `devbox render env` | содержимое `.env` (stdout или `--out <path>`) | правила `exports.env` в `devbox/defaults.yml` + системные переменные |
-| `devbox render ide` | пер-сервисные IDE-файлы внутри hub-каталога каждого сервиса | пакеты шаблонов под `devbox/templates/ide/<pack>/`, управляемые `manifest.yml` |
-| `devbox render ai` | hub-уровневые agent-доки (`AGENTS.md`, симлинк `CLAUDE.md`, …) | пакеты шаблонов под `devbox/templates/ai/<pack>/`, управляемые `manifest.yml` |
-| `devbox render git` | shell git-хуки на каждый сервис, в `<svc.Dir>/src/.git/hooks/<basename>` (режим `0755`) | пакеты шаблонов под `devbox/templates/git/<pack>/`, управляемые `manifest.yml` |
+| `dwe render env` | содержимое `.env` (stdout или `--out <path>`) | правила `exports.env` в `workspace/defaults.yml` + системные переменные |
+| `dwe render ide` | пер-сервисные IDE-файлы внутри hub-каталога каждого сервиса | пакеты шаблонов под `workspace/templates/ide/<pack>/`, управляемые `manifest.yml` |
+| `dwe render ai` | hub-уровневые agent-доки (`AGENTS.md`, симлинк `CLAUDE.md`, …) | пакеты шаблонов под `workspace/templates/ai/<pack>/`, управляемые `manifest.yml` |
+| `dwe render git` | shell git-хуки на каждый сервис, в `<svc.Dir>/src/.git/hooks/<basename>` (режим `0755`) | пакеты шаблонов под `workspace/templates/git/<pack>/`, управляемые `manifest.yml` |
 
-Все четыре подкоманды читают одну и ту же объединённую конфигурацию (`devbox.yml` → `devbox/defaults.yml` → `devbox/local.yml`, с пер-сервисными объявлениями из `devbox/services/<name>/service.yml`). Различаются они тем, что итерируют и куда пишут.
+Все четыре подкоманды читают одну и ту же объединённую конфигурацию (`workspace.yml` → `workspace/defaults.yml` → `workspace/local.yml`, с пер-сервисными объявлениями из `workspace/services/<name>/service.yml`). Различаются они тем, что итерируют и куда пишут.
 
 ## Общий конвейер
 
 ```mermaid
 flowchart LR
-  L1[devbox.yml] --> M
-  L2[devbox/defaults.yml] --> M
-  L3[devbox/local.yml] --> M
-  S["devbox/services/*/service.yml"] --> M
+  L1[workspace.yml] --> M
+  L2[workspace/defaults.yml] --> M
+  L3[workspace/local.yml] --> M
+  S["workspace/services/*/service.yml"] --> M
   M[("Объединённая конфигурация")]
 
   M --> E[render env]
@@ -51,7 +51,7 @@ flowchart LR
    - `env` — один артефакт, без выборки.
    - `ide` / `ai` / `git` — итерирует сервисы, применяет политику выборки, опционально сужает до одного сервиса через аргумент `[service]`.
 3. Пишет выходные файлы. Куда они идут — зависит от подкоманды:
-   - `render ide` и `render ai` пишут внутрь hub-каталога каждого сервиса, привязанного к корню проекта (каталог, содержащий `devbox.yml`), и применяют границы безопасности путей.
+   - `render ide` и `render ai` пишут внутрь hub-каталога каждого сервиса, привязанного к корню проекта (каталог, содержащий `workspace.yml`), и применяют границы безопасности путей.
    - `render git` пишет в `<svc.Dir>/src/.git/hooks/` для каждого сервиса, у которого `src/.git` — реальный каталог; назначение никогда не отслеживается git.
    - `render env` пишет в stdout по умолчанию или в аргумент `--out <path>` как задано. Путь `--out` трактуется относительно текущего рабочего каталога, не корня проекта — указывайте абсолютный путь, если нужно детерминированное расположение независимо от того, откуда запущена команда.
 
@@ -95,18 +95,18 @@ Manifest загружается со строгим YAML-декодом (`yaml.D
 
 ## Локальные оверрайды
 
-Любой пакет шаблонов `devbox/templates/<kind>/<pack>/<rel>` может быть пофайлово переопределён соседним shadow-пакетом `devbox/templates/<kind>/<pack>.local/<rel>`. Resolver, применяемый всеми тремя подкомандами рендера:
+Любой пакет шаблонов `workspace/templates/<kind>/<pack>/<rel>` может быть пофайлово переопределён соседним shadow-пакетом `workspace/templates/<kind>/<pack>.local/<rel>`. Resolver, применяемый всеми тремя подкомандами рендера:
 
-1. Проверить `devbox/templates/<kind>/<pack>.local/<rel>`:
-   - обычный файл → использовать; рендерер выводит одну info-строку `using local override: devbox/templates/<kind>/<pack>.local/<rel>`.
+1. Проверить `workspace/templates/<kind>/<pack>.local/<rel>`:
+   - обычный файл → использовать; рендерер выводит одну info-строку `using local override: workspace/templates/<kind>/<pack>.local/<rel>`.
    - существует, но это каталог или симлинк → жёсткая ошибка; override не падает молча на канонический пакет (так плохой override обозначит себя сам).
    - отсутствует → провалиться дальше.
-2. Проверить `devbox/templates/<kind>/<pack>/<rel>`:
+2. Проверить `workspace/templates/<kind>/<pack>/<rel>`:
    - обычный файл → использовать.
    - существует, но это каталог или симлинк → жёсткая ошибка с именем нарушающего пути.
    - отсутствует → обёрнутый `os.ErrNotExist`.
 
-Каталог `<pack>.local/` — это **сосед** канонического пакета, не его потомок. Он лежит в отслеживаемом `devbox/templates/<kind>/` и игнорируется git по паттерну (`devbox/templates/*/*.local/` или более широкое правило `*.local/` — рекомендуется добавить в проектный `.gitignore`).
+Каталог `<pack>.local/` — это **сосед** канонического пакета, не его потомок. Он лежит в отслеживаемом `workspace/templates/<kind>/` и игнорируется git по паттерну (`workspace/templates/*/*.local/` или более широкое правило `*.local/` — рекомендуется добавить в проектный `.gitignore`).
 
 В override-пакете должны быть только переопределяемые файлы — это не полный пакет. `manifest.yml` читается **только** из канонического пакета; override не может переписать manifest, а только подменить отдельные `from:`-источники.
 
@@ -114,17 +114,17 @@ Manifest загружается со строгим YAML-декодом (`yaml.D
 
 | Каноническое (отслеживаемое) | Локальный сосед (gitignored) |
 |------------------------------|-------------------------------|
-| `devbox/devbox.yml` | `devbox/local.yml` (описан в [справочнике services](../config/services/index.md)) |
-| `devbox/docker.yml` | `devbox/docker.local.yml` |
-| `devbox/templates/<kind>/<pack>/` | `devbox/templates/<kind>/<pack>.local/` |
+| `workspace/workspace.yml` | `workspace/local.yml` (описан в [справочнике services](../config/services/index.md)) |
+| `workspace/docker.yml` | `workspace/docker.local.yml` |
+| `workspace/templates/<kind>/<pack>/` | `workspace/templates/<kind>/<pack>.local/` |
 
-`.devbox/` (runtime-каталог) никогда не используется для пользовательских оверрайдов — он зарезервирован под управляемое devbox-ом состояние (`state.yml`, `deploy.lock`, `logs/`).
+`.dwe/` (runtime-каталог) никогда не используется для пользовательских оверрайдов — он зарезервирован под управляемое DWE состояние (`state.yml`, `deploy.lock`, `logs/`).
 
 ### Вход vs выход
 
 Override — это **подмена входа**, а не перенаправление выхода:
 
-- Файл-override `devbox/templates/<kind>/<pack>.local/<rel>` игнорируется git по паттерну `.local/` и никогда не коммитится.
+- Файл-override `workspace/templates/<kind>/<pack>.local/<rel>` игнорируется git по паттерну `.local/` и никогда не коммитится.
 - Отрендеренный **выход** всё равно падает на `to`, объявленный в manifest.
 
 Что это означает на практике:
@@ -145,7 +145,7 @@ Override — это **подмена входа**, а не перенаправ�
 
 ## Связанные справочники
 
-- [`devbox.yml` / `defaults.yml` / `local.yml`](../config/devbox.md) — слои объединённой конфигурации и разрешение dot-path (используется `render env`)
-- [определения сервисов (`devbox/services/*/service.yml`)](../config/services/index.md) — определения сервисов, блоки `ide` / `ai` / `git`, цепочки `extends`
+- [`workspace.yml` / `defaults.yml` / `local.yml`](../config/workspace.md) — слои объединённой конфигурации и разрешение dot-path (используется `render env`)
+- [определения сервисов (`workspace/services/*/service.yml`)](../config/services/index.md) — определения сервисов, блоки `ide` / `ai` / `git`, цепочки `extends`
 - [Шаблоны](../templates.md) — синтаксис Go-шаблонов, помощники sprout, render-контекст (общий с info / commands / pipelines)
-- CLI-справочник: [`devbox render`](../cli/devbox_render.md), [`devbox render env`](../cli/devbox_render_env.md), [`devbox render ide`](../cli/devbox_render_ide.md), [`devbox render ai`](../cli/devbox_render_ai.md), [`devbox render git`](../cli/devbox_render_git.md)
+- CLI-справочник: [`dwe render`](../cli/dwe_render.md), [`dwe render env`](../cli/dwe_render_env.md), [`dwe render ide`](../cli/dwe_render_ide.md), [`dwe render ai`](../cli/dwe_render_ai.md), [`dwe render git`](../cli/dwe_render_git.md)

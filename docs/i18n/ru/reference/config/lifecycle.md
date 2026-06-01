@@ -1,8 +1,8 @@
-> Translated from: reference/config/lifecycle.md @ 70b4fb4374f4
+> Translated from: reference/config/lifecycle.md @ b8ffdf900870
 
 # lifecycle.yml
 
-Декларации пайплайнов run / stop, движущие `devbox run`, `devbox stop` и `devbox restart`.
+Декларации пайплайнов run / stop, движущие `dwe run`, `dwe stop` и `dwe restart`.
 
 ## Содержание
 
@@ -22,16 +22,16 @@
 
 ## Назначение
 
-`devbox/lifecycle.yml` декларирует два пайплайна:
+`workspace/lifecycle.yml` декларирует два пайплайна:
 
-- **`run:`** — выполняется `devbox run` (и `devbox restart` после stop). Оборачивает стандартную последовательность `docker up` + `docker wait` опциональным update-пробом и pre/post hook-фазами.
-- **`stop:`** — выполняется `devbox stop` (и первой половиной `devbox restart`). Оборачивает `docker down` опциональными pre/post hook-фазами.
+- **`run:`** — выполняется `dwe run` (и `dwe restart` после stop). Оборачивает стандартную последовательность `docker up` + `docker wait` опциональным update-пробом и pre/post hook-фазами.
+- **`stop:`** — выполняется `dwe stop` (и первой половиной `dwe restart`). Оборачивает `docker down` опциональными pre/post hook-фазами.
 
 Он загружается отдельно через `LoadLifecycleConfig()` и **не** мерджится с трёхслойным конфигом.
 
 Файл опционален для всех команд, которые его используют.
 
-Когда `lifecycle.yml` отсутствует или отсутствует секция, Devbox подставляет встроенный дефолтный пайплайн и печатает одну info-строку в stderr: `Using built-in default <run|stop> pipeline (override with devbox/lifecycle.yml).` Info-строка подавляется в режиме `--output json`.
+Когда `lifecycle.yml` отсутствует или отсутствует секция, DWE подставляет встроенный дефолтный пайплайн и печатает одну info-строку в stderr: `Using built-in default <run|stop> pipeline (override with workspace/lifecycle.yml).` Info-строка подавляется в режиме `--output json`.
 
 **Дефолтный пайплайн `run:`** (срабатывает, когда `lifecycle.yml` отсутствует или не имеет секции `run:`):
 
@@ -40,38 +40,38 @@
 | `update.mode` | `off` (без git-проба) |
 | `show_info` | `true` |
 | `final_message` | `Project is ready for work!` |
-| Фазы | Одна фаза `start`: один шаг `type: devbox` с `cmd: "docker up --wait"` |
+| Фазы | Одна фаза `start`: один шаг `type: dwe` с `cmd: "docker up --wait"` |
 
 **Дефолтный пайплайн `stop:`** (срабатывает, когда `lifecycle.yml` отсутствует или не имеет секции `stop:`):
 
 | Поле | Значение |
 |-------|-------|
 | `final_message` | `Project is stopped. Have a nice day!` |
-| Фазы | Auto-reap фаза (см. ниже) + одна фаза `stop`: один шаг `type: devbox` с `cmd: "docker down"` |
+| Фазы | Auto-reap фаза (см. ниже) + одна фаза `stop`: один шаг `type: dwe` с `cmd: "docker down"` |
 
 Всякий раз, когда запускается пайплайн `stop:` (дефолтный или пользовательский), автоматически препендится фаза `_auto_reap_daemons`; opt-out нет, и она видна в plan output для прозрачности. Она останавливает все фоновые демоны, запущенные через команды [`type: daemon`](commands/types.md#type-daemon).
 
-`devbox docker up` и `devbox docker down` — тонкие passthrough'и Docker Compose и никогда не используют этот пайплайн; сырые `docker compose stop` / `restart` остаются доступными через `devbox docker stop` / `devbox docker restart`.
+`dwe docker up` и `dwe docker down` — тонкие passthrough'и Docker Compose и никогда не используют этот пайплайн; сырые `docker compose stop` / `restart` остаются доступными через `dwe docker stop` / `dwe docker restart`.
 
 ## Форма пайплайна
 
 ```mermaid
 flowchart LR
-  subgraph run["devbox run"]
+  subgraph run["dwe run"]
     direction LR
     U[update probe] --> PRE[pre hooks] --> UP[docker up] --> WAIT[docker wait] --> POST[post hooks] --> INFO[info] --> MSG1[final_message]
   end
-  subgraph stop["devbox stop"]
+  subgraph stop["dwe stop"]
     direction LR
     SPRE[pre hooks] --> DOWN[docker down] --> SPOST[post hooks] --> MSG2[final_message]
   end
-  subgraph restart["devbox restart"]
+  subgraph restart["dwe restart"]
     direction LR
     R1[stop pipeline] --> R2[run pipeline<br/>--no-update]
   end
 ```
 
-`docker up` выдаётся как шаг `type: devbox` с `cmd: "docker up"` внутри фазы `start`. Ожидание health контейнеров использует шаг `type: builtin` с `cmd: docker_wait_healthy`. Они не магические — исполнитель пайплайна зовёт их как любой другой шаг, поэтому они подхватывают политику из `docker.yml`.
+`docker up` выдаётся как шаг `type: dwe` с `cmd: "docker up"` внутри фазы `start`. Ожидание health контейнеров использует шаг `type: builtin` с `cmd: docker_wait_healthy`. Они не магические — исполнитель пайплайна зовёт их как любой другой шаг, поэтому они подхватывают политику из `docker.yml`.
 
 ## Структура
 
@@ -81,7 +81,7 @@ run:
     mode: on            # on | off
   show_info: true
   final_message: "Project is ready for work!"
-  log: false            # tee status + child stdout/stderr to .devbox/logs/run.log
+  log: false            # tee status + child stdout/stderr to .dwe/logs/run.log
   phases:
     - name: <phase>
       description: <text>
@@ -91,14 +91,14 @@ run:
         expr: <string>
       steps:
         - name: <step>
-          type: shell|devbox|command|builtin
+          type: shell|dwe|command|builtin
           cmd: <value>
           with:         # optional: parameters
             key: value
 
 stop:
   final_message: "Project is stopped. Have a nice day!"
-  log: false            # tee status + child stdout/stderr to .devbox/logs/stop.log
+  log: false            # tee status + child stdout/stderr to .dwe/logs/stop.log
   phases:
     - name: <phase>
       description: <text>
@@ -108,7 +108,7 @@ stop:
         expr: <string>
       steps:
         - name: <step>
-          type: shell|devbox|command|builtin
+          type: shell|dwe|command|builtin
           cmd: <value>
           with:         # optional: parameters
             key: value
@@ -120,7 +120,7 @@ stop:
 
 ## `run.update`
 
-Опциональный update-проб запускается до любой фазы. Он может фетчить из upstream-ремоута, детектить drift и (в зависимости от `mode`) пуллить `--ff-only`. Успешный pull триггерит in-process перезагрузку `DevboxConfig`, `LifecycleConfig` и реестра команд до выполнения фаз.
+Опциональный update-проб запускается до любой фазы. Он может фетчить из upstream-ремоута, детектить drift и (в зависимости от `mode`) пуллить `--ff-only`. Успешный pull триггерит in-process перезагрузку `DweConfig`, `LifecycleConfig` и реестра команд до выполнения фаз.
 
 | Поле | Тип | По умолчанию | Описание |
 |-------|------|---------|-------------|
@@ -141,14 +141,14 @@ stop:
 
 | Поле | Тип | По умолчанию | Описание |
 |-------|------|---------|-------------|
-| `show_info` | bool | `false` | Дописать рендер `devbox info` после последней фазы. |
+| `show_info` | bool | `false` | Дописать рендер `dwe info` после последней фазы. |
 | `final_message` | string | `Project is ready for work!` | Сообщение об успехе, печатаемое в самом конце. |
 
 ## Гейт деплоя required-сервисов
 
-`devbox run` автоматически гейтит на том, чтобы required-сервисы были задеплоены. До старта пайплайна run команда проверяет, что все **tracked**-сервисы (те, что появляются в разрешённом плане деплоя) имеют `status: deployed` в state-файле.
+`dwe run` автоматически гейтит на том, чтобы required-сервисы были задеплоены. До старта пайплайна run команда проверяет, что все **tracked**-сервисы (те, что появляются в разрешённом плане деплоя) имеют `status: deployed` в state-файле.
 
-Если какой-то tracked-сервис ещё не задеплоен, `devbox run` выходит с ошибкой: "run `devbox deploy run` first". Это предотвращает запуск против частично инициализированного окружения — обход гейта просто отдал бы `docker compose up` сервис, чьи тома/конфиги/база данных никогда не провижились, и run упал бы почти сразу с несвязанной ошибкой. Всегда сначала деплойте.
+Если какой-то tracked-сервис ещё не задеплоен, `dwe run` выходит с ошибкой: "run `dwe deploy run` first". Это предотвращает запуск против частично инициализированного окружения — обход гейта просто отдал бы `docker compose up` сервис, чьи тома/конфиги/база данных никогда не провижились, и run упал бы почти сразу с несвязанной ошибкой. Всегда сначала деплойте.
 
 Подробности см. в [state/index.md](state/index.md).
 
@@ -162,11 +162,11 @@ stop:
 
 Верхнеуровневое поле и на `run:`, и на `stop:`. По умолчанию `false` для lifecycle-пайплайнов (в отличие от `deploy.yml`, где дефолт — `true`).
 
-Когда включено, статус-сообщения devbox и stdout/stderr дочерних процессов теются в `.devbox/logs/<name>.log` (с убранными ANSI-кодами) — `.devbox/logs/run.log` для run, `.devbox/logs/stop.log` для stop.
+Когда включено, статус-сообщения DWE и stdout/stderr дочерних процессов теются в `.dwe/logs/<name>.log` (с убранными ANSI-кодами) — `.dwe/logs/run.log` для run, `.dwe/logs/stop.log` для stop.
 
 ```yaml
 run:
-  log: true     # tee to .devbox/logs/run.log
+  log: true     # tee to .dwe/logs/run.log
 ```
 
 ## Hook-фазы
@@ -188,7 +188,7 @@ run:
       description: Start containers and wait for health
       steps:
         - name: up
-          type: devbox
+          type: dwe
           cmd: "docker up"
         - name: wait
           type: builtin
@@ -208,7 +208,7 @@ run:
 ## Минимальный пример
 
 ```yaml
-# devbox/lifecycle.yml
+# workspace/lifecycle.yml
 run:
   update:
     mode: on
@@ -219,7 +219,7 @@ run:
       description: Start containers and wait for health
       steps:
         - name: up
-          type: devbox
+          type: dwe
           cmd: "docker up"
         - name: wait
           type: builtin
@@ -232,7 +232,7 @@ stop:
       description: Stop and remove containers
       steps:
         - name: down
-          type: devbox
+          type: dwe
           cmd: "docker down"
 ```
 
@@ -240,7 +240,7 @@ stop:
 
 `LoadLifecycleConfig()` обеспечивает:
 
-- Каждый шаг в `run.phases` и `stop.phases` имеет поле `type:` с одним из `shell`, `devbox`, `command`, `builtin`.
+- Каждый шаг в `run.phases` и `stop.phases` имеет поле `type:` с одним из `shell`, `dwe`, `command`, `builtin`.
 - `update.mode`, когда выставлен, — одно из `on`, `off`. Старые значения (`prompt`, `auto`, `check`) отвергаются с понятной ошибкой.
 - `update.enabled` не разрешён (удалён в пользу `mode: off` для отключения проба).
 - `deploy_services: true` отвергается (валидно только в `deploy.yml`).
@@ -255,13 +255,13 @@ Lifecycle-фазы используют тот же контейнер step-grou
 - **Забыть `continue_on_error: true` на hook-шагах** — без него упавший pre-stop хук прерывает всю последовательность stop, и контейнеры никогда не останавливаются.
 - **Использование `update: {}` с `enabled: true`** — поле `enabled` больше не поддерживается. Само написание ключа `update:` — это opt-in; используйте `mode: off` для отключения проба или полностью опустите ключ `update:`.
 - **Добавление `deploy_services`-фаз** — они только для деплоя. Lifecycle-пайплайны вызывают сервисы через ссылки `type: command`.
-- **Редактирование `lifecycle.yml` для использования прямых вызовов `docker compose`** — публичный API — это `type: devbox` с `cmd: "docker up"`. Прямые вызовы `docker compose` обходят политику из `docker.yml`.
+- **Редактирование `lifecycle.yml` для использования прямых вызовов `docker compose`** — публичный API — это `type: dwe` с `cmd: "docker up"`. Прямые вызовы `docker compose` обходят политику из `docker.yml`.
 
 ## Связанные команды
 
-- `devbox run` — выполнить пайплайн run (с опциональным update-пробом)
-- `devbox run --no-update` — пропустить update-проб
-- `devbox run --update <mode>` — переопределить сконфигурированный mode
-- `devbox stop` — выполнить пайплайн stop
-- `devbox restart` — `stop`, затем `run --no-update`
-- `devbox docker up` / `devbox docker down` — сырой passthrough Docker Compose (не использует этот пайплайн)
+- `dwe run` — выполнить пайплайн run (с опциональным update-пробом)
+- `dwe run --no-update` — пропустить update-проб
+- `dwe run --update <mode>` — переопределить сконфигурированный mode
+- `dwe stop` — выполнить пайплайн stop
+- `dwe restart` — `stop`, затем `run --no-update`
+- `dwe docker up` / `dwe docker down` — сырой passthrough Docker Compose (не использует этот пайплайн)

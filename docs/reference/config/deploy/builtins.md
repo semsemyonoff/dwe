@@ -37,7 +37,7 @@ Creates service hub directories.
 
 | Parameter | Type | Default | Description |
 |-----------|------|---------|-------------|
-| `service` | string | required | Service folder name from `devbox/services/<name>/` |
+| `service` | string | required | Service folder name from `workspace/services/<name>/` |
 | `mode` | string | `skip` | `skip`, `error`, or `recreate` |
 
 Resolved dir list: `[src]` + `ServiceConfig.Dirs` (from the service's `service.yml`). Each entry must be a non-empty relative path that does not escape the service `dir`.
@@ -104,7 +104,7 @@ Prints a message to deploy output.
 | Parameter | Type | Description |
 |-----------|------|-------------|
 | `level` | string | `info`, `success`, `warning`, or `error` (required) |
-| `text` | string | Message text (required); supports [Go template expressions](../../templates.md) against `DevboxConfig` |
+| `text` | string | Message text (required); supports [Go template expressions](../../templates.md) against `DweConfig` |
 
 ```yaml
 - name: done
@@ -183,7 +183,7 @@ Fast "is running" check for compose services. Unlike `docker_wait_healthy` it do
 
 ```yaml
 - name: stack-up
-  type: devbox
+  type: dwe
   cmd: "docker up"
   check:
     type: builtin
@@ -217,7 +217,7 @@ The following builtins are reserved for the engine. They cannot appear in user-a
 | `docker_daemon_start` | Start a named daemon container via `docker compose run -d`. Invoked by the `.start` virtual command generated from `type: daemon` commands. |
 | `docker_daemon_logs` | Tail daemon container logs in the foreground. Invoked by the `.logs` virtual command generated from `type: daemon` commands. |
 | `docker_daemon_stop` | Stop a named daemon container (idempotent). Invoked by the `.stop` virtual command generated from `type: daemon` commands. |
-| `docker_stop_remove_container` | Stop and remove a named container (`docker stop` + `docker rm -f`, both idempotent on missing container). Invoked by the synthetic `container` phase that `devbox reset run --service <name>` prepends to every per-service reset pipeline. Params: `container_template` (string, required; name template, resolved via the project prefix), `stop_timeout` (duration string, optional, default `10s`). On stop failure, propagates the error and does NOT attempt removal. |
+| `docker_stop_remove_container` | Stop and remove a named container (`docker stop` + `docker rm -f`, both idempotent on missing container). Invoked by the synthetic `container` phase that `dwe reset run --service <name>` prepends to every per-service reset pipeline. Params: `container_template` (string, required; name template, resolved via the project prefix), `stop_timeout` (duration string, optional, default `10s`). On stop failure, propagates the error and does NOT attempt removal. |
 | `daemons_reap` | Stop all project daemon containers. Auto-injected by the engine as the `_auto_reap_daemons` phase at the start of every `stop` lifecycle pipeline. |
 
 ## Naming convention

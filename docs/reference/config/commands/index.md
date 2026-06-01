@@ -1,6 +1,6 @@
 # commands/
 
-Declarative command definitions for the devbox project.
+Declarative command definitions for the DWE project.
 
 ## Contents
 
@@ -15,9 +15,9 @@ Declarative command definitions for the devbox project.
 
 ## Purpose
 
-`devbox/commands/` is the home of every reusable, scriptable action the project exposes through the CLI: container shells, build steps, database operations, multi-step workflows, deploy hooks, custom scripts, etc.
+`workspace/commands/` is the home of every reusable, scriptable action the project exposes through the CLI: container shells, build steps, database operations, multi-step workflows, deploy hooks, custom scripts, etc.
 
-Each YAML file declares one or more named commands. Commands are discovered automatically by walking the directory tree, are addressable by a dot-separated ID, and can be executed directly (`devbox commands <id>`) or referenced from workflows and pipelines (`deploy.yml`, `lifecycle.yml`).
+Each YAML file declares one or more named commands. Commands are discovered automatically by walking the directory tree, are addressable by a dot-separated ID, and can be executed directly (`dwe commands <id>`) or referenced from workflows and pipelines (`deploy.yml`, `lifecycle.yml`).
 
 This page is the entry point to the configuration reference. Directives, types, templating, and validation each have their own sibling page — see [Further reading](#further-reading) at the bottom.
 
@@ -26,7 +26,7 @@ This page is the entry point to the configuration reference. Directives, types, 
 The directory layout determines the **group** prefix and the file's basename determines the leaf segment. Files and subdirectories are entirely up to the project — names below are illustrative, and any number of files at any depth may exist.
 
 ```
-devbox/commands/
+workspace/commands/
 ├── <top-group>.yml              → group: <top-group>
 ├── …                            → any number of top-level groups
 └── <parent-group>/              → optional subdirectory expands a group
@@ -39,7 +39,7 @@ devbox/commands/
 Concretely, a project might lay things out like this — every name here is the project's choice, not a convention enforced by the CLI:
 
 ```
-devbox/commands/
+workspace/commands/
 ├── db.yml                       → group: db
 ├── app.yml                      → group: app
 └── services/
@@ -54,7 +54,7 @@ Each command's full ID is `<group>.<name>` where `<name>` is its key inside the 
 Pattern: put the **core** commands of a group in a single file named after the group (`services/<service>.yml`), and split larger groups into a sibling subdirectory only when there are enough commands to warrant logical sub-groups (`services/<service>/db.yml`, `services/<service>/cache.yml`). The subdirectory is optional — small groups stay in one file. There are no required files: a project may have zero, one, or dozens of groups at any depth.
 
 ```yaml
-# devbox/commands/db.yml  →  group "db"
+# workspace/commands/db.yml  →  group "db"
 commands:
   cli:                          # full ID: db.cli
     type: service_exec
@@ -84,7 +84,7 @@ commands:
 
 | Field | Type | Description |
 |-------|------|-------------|
-| `group.title` | string | Display title shown by `devbox commands list` |
+| `group.title` | string | Display title shown by `dwe commands list` |
 | `group.description` | string | Short description shown next to the group |
 | `commands` | map | Named command definitions (key = local name) |
 
@@ -114,18 +114,18 @@ Phases:
 3. **Compute file paths** — render `path` / `candidates` templates, normalise to absolute, discover files. Non-mutating.
 4. **Confirmation** — when `confirmation: true`, prompt the user; the prompt is bypassed only by `SkipConfirm` (set by `--yes` / `-y` and inherited by workflow children). Otherwise dispatch is by stdin: TTY → `huh.Confirm`, non-TTY → plain Y/n fallback that auto-answers "yes" when `CI=1`. Refusal aborts the command. See [Confirmation flow](directives.md#confirmation-flow) for the full decision tree.
 5. **Prepare file effects** — `mkdir`, `overwrite` checks, register cleanup callbacks.
-6. **Run** — dispatch to the type-specific runner (host shell, devbox CLI, container exec/run, script, or workflow).
+6. **Run** — dispatch to the type-specific runner (host shell, DWE CLI, container exec/run, script, or workflow).
 7. **Success / error** — emit `messages.success` or `messages.error`. On error, registered cleanups fire in LIFO order before the error message.
 
 ## Visibility, registration, and discovery
 
-- Files under `devbox/commands/` are discovered recursively at startup.
+- Files under `workspace/commands/` are discovered recursively at startup.
 - Each file is parsed and validated; a load failure halts startup with a structured error pointing to the file and field.
-- `private: true` hides commands from `devbox commands list` and rejects direct invocation via `devbox commands`. Private commands can still be referenced from workflows and pipelines — useful for steps that should only run as part of a larger sequence.
+- `private: true` hides commands from `dwe commands list` and rejects direct invocation via `dwe commands`. Private commands can still be referenced from workflows and pipelines — useful for steps that should only run as part of a larger sequence.
 
 ```yaml
 db.up:
-  type: devbox
+  type: dwe
   private: true              # used only inside db.start workflow
   cmd: "docker up db"
 ```
@@ -185,7 +185,7 @@ db.dump-create:
       on_error: remove
       env: DUMP_FILE
   script:
-    path: devbox/scripts/db/dump-create.sh
+    path: workspace/scripts/db/dump-create.sh
     shell: bash
   messages:
     success: "Database dump created at ${files.dump.path}"
@@ -217,7 +217,7 @@ db.dump-deploy:
       required: true
       env: DUMP_FILE
   script:
-    path: devbox/scripts/db/dump-deploy.sh
+    path: workspace/scripts/db/dump-deploy.sh
     shell: bash
 ```
 
@@ -248,9 +248,9 @@ reset-and-bootstrap:
 ### A private composition
 
 ```yaml
-# devbox/commands/db.yml
+# workspace/commands/db.yml
 db.up:
-  type: devbox
+  type: dwe
   private: true
   description: Start the database container in the background
   cmd: "docker up db"
@@ -274,16 +274,16 @@ db.start:
     - command: db.wait
 ```
 
-`db.start` cannot be invoked directly via `devbox commands db.start`, but `bootstrap` can reference it from its `steps:`. The composition above is the canonical pattern: a thin `type: devbox` for the start, a `type: builtin` for the wait, and a `type: workflow` that strings them together.
+`db.start` cannot be invoked directly via `dwe commands db.start`, but `bootstrap` can reference it from its `steps:`. The composition above is the canonical pattern: a thin `type: dwe` for the start, a `type: builtin` for the wait, and a `type: workflow` that strings them together.
 
 ## Related commands
 
-- `devbox commands list` — list all public commands grouped by file
-- `devbox commands <id> [--set k=v] [--yes]` — execute a command (alias: `devbox cmd <id>`)
-- `devbox commands --inspect <id>` (or `-i`) — show the resolved definition (params, context, env, runner)
-- `devbox docs generate` — regenerate the per-command reference under `docs/reference/commands/`
+- `dwe commands list` — list all public commands grouped by file
+- `dwe commands <id> [--set k=v] [--yes]` — execute a command (alias: `dwe cmd <id>`)
+- `dwe commands --inspect <id>` (or `-i`) — show the resolved definition (params, context, env, runner)
+- `dwe docs generate` — regenerate the per-command reference under `docs/reference/commands/`
 
-When `devbox commands` is invoked without an exact command ID on an interactive terminal, an interactive two-panel command browser opens. Its behaviour (default expansion depth, auto-collapse during fuzzy filter, type badges) is configured via the [`ui:` block in `devbox.yml`](../ui.md).
+When `dwe commands` is invoked without an exact command ID on an interactive terminal, an interactive two-panel command browser opens. Its behaviour (default expansion depth, auto-collapse during fuzzy filter, type badges) is configured via the [`ui:` block in `workspace.yml`](../ui.md).
 
 `--inspect` / `-i` is mutually exclusive with `--set` and `--yes`; it requires an exact command id and prints the definition without running it.
 
