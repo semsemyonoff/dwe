@@ -635,23 +635,23 @@ Review the full list. Allow only intentional test-data identifiers (e.g. `devbox
 - Modify: `.github/workflows/release.yml`
 
 `.goreleaser.yaml` enumeration:
-- [ ] `project_name`
-- [ ] build `id`/`main`/`binary`
-- [ ] three `-X github.com/semsemyonoff/devbox/internal/shared/version.*` ldflags
-- [ ] archive `name_template`, `files`
-- [ ] nfpm `bindir`/`package_name`/`homepage`
-- [ ] **nfpm description (line 72)** — prose `"Devbox orchestrates Docker services, deploy pipelines, and project commands…"` → rewrite for DWE; ships in `.deb`/`.rpm` package metadata visible to users
-- [ ] three `completions/devbox.{bash,zsh,fish}` sources
-- [ ] three completion install destinations (`/usr/share/.../devbox`, `_devbox`, `devbox.fish`)
-- [ ] LICENSE dst `/usr/share/doc/devbox/LICENSE` → `/usr/share/doc/dwe/LICENSE`
-- [ ] cask `name`, `homepage`
-- [ ] cask post-install xattr hook `#{staged_path}/devbox` → `#{staged_path}/dwe`
-- [ ] three Homebrew completion sources
-- [ ] `release.github.name: devbox` (line ~155) → `dwe`
-- [ ] `.github/workflows/release.yml`: workflow name, hardcoded `devbox` strings, artifact upload paths, comment text `Formula/devbox.rb`
-- [ ] verify secret name in workflow: `HOMEBREW_TAP_GITHUB_TOKEN` (correct)
-- [ ] **dry-run:** `goreleaser release --snapshot --clean --skip=publish` — verify artifact names
-- [ ] commit; `actionlint` if installed
+- [x] `project_name`
+- [x] build `id`/`main`/`binary`
+- [x] three `-X github.com/semsemyonoff/devbox/internal/shared/version.*` ldflags
+- [x] archive `name_template`, `files`
+- [x] nfpm `bindir`/`package_name`/`homepage`
+- [x] **nfpm description (line 72)** — prose `"Devbox orchestrates Docker services, deploy pipelines, and project commands…"` → rewrite for DWE; ships in `.deb`/`.rpm` package metadata visible to users
+- [x] three `completions/devbox.{bash,zsh,fish}` sources
+- [x] three completion install destinations (`/usr/share/.../devbox`, `_devbox`, `devbox.fish`)
+- [x] LICENSE dst `/usr/share/doc/devbox/LICENSE` → `/usr/share/doc/dwe/LICENSE`
+- [x] cask `name`, `homepage`
+- [x] cask post-install xattr hook `#{staged_path}/devbox` → `#{staged_path}/dwe`
+- [x] three Homebrew completion sources
+- [x] `release.github.name: devbox` (line ~155) → `dwe`
+- [x] `.github/workflows/release.yml`: workflow name, hardcoded `devbox` strings, artifact upload paths, comment text `Formula/devbox.rb`
+- [x] verify secret name in workflow: `HOMEBREW_TAP_GITHUB_TOKEN` (correct)
+- [x] **dry-run:** `goreleaser release --snapshot --clean --skip=publish` — verify artifact names
+- [x] commit; `actionlint` if installed
 
 ### Task 16: Phase 7 — Final validation and concrete smoke test
 

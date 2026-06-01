@@ -1,12 +1,12 @@
 version: 2
 
-project_name: devbox
+project_name: dwe
 
 # Hooks run once before all builds. Order matters:
-#   1. sync embedded docs (without it cmd/devbox does not compile)
+#   1. sync embedded docs (without it cmd/dwe does not compile)
 #   2. regen the docs content-hash table (cheap; keeps the binary's manifest
 #      consistent with the embedded tree)
-#   3. generate shell completions via `go run ./cmd/devbox completion <shell>`,
+#   3. generate shell completions via `go run ./cmd/dwe completion <shell>`,
 #      so the resulting files reflect the exact cobra tree of this commit.
 before:
   hooks:
@@ -15,9 +15,9 @@ before:
     - ./scripts/gen-completions.sh
 
 builds:
-  - id: devbox
-    main: ./cmd/devbox
-    binary: devbox
+  - id: dwe
+    main: ./cmd/dwe
+    binary: dwe
     env:
       - CGO_ENABLED=0
     goos:
@@ -30,15 +30,15 @@ builds:
       - -trimpath
     ldflags:
       - -s -w
-      - -X github.com/semsemyonoff/devbox/internal/shared/version.Version={{ .Version }}
-      - -X github.com/semsemyonoff/devbox/internal/shared/version.Commit={{ .Commit }}
-      - -X github.com/semsemyonoff/devbox/internal/shared/version.Date={{ .Date }}
-      - -X github.com/semsemyonoff/devbox/internal/shared/version.BuiltBy=goreleaser
+      - -X github.com/semsemyonoff/dwe/internal/shared/version.Version={{ .Version }}
+      - -X github.com/semsemyonoff/dwe/internal/shared/version.Commit={{ .Commit }}
+      - -X github.com/semsemyonoff/dwe/internal/shared/version.Date={{ .Date }}
+      - -X github.com/semsemyonoff/dwe/internal/shared/version.BuiltBy=goreleaser
 
 archives:
   - id: default
     ids:
-      - devbox
+      - dwe
     # Naming kept Homebrew-friendly: macos_x86_64 / macos_arm64 / linux_x86_64 /
     # linux_arm64. The Homebrew formula consumes the same tar.gz files as
     # general users.
@@ -54,22 +54,22 @@ archives:
       - LICENSE
       - README.md
       - AGENTS.md
-      - completions/devbox.bash
-      - completions/devbox.zsh
-      - completions/devbox.fish
+      - completions/dwe.bash
+      - completions/dwe.zsh
+      - completions/dwe.fish
 
 nfpms:
   - id: packages
     ids:
-      - devbox
-    package_name: devbox
+      - dwe
+    package_name: dwe
     file_name_template: '{{ .ConventionalFileName }}'
     vendor: Semsemyonoff
-    homepage: https://github.com/semsemyonoff/devbox
+    homepage: https://github.com/semsemyonoff/dwe
     maintainer: Semsemyonoff <semyonoff.sergey.usa@gmail.com>
     description: |-
       Docker-based developer environment manager.
-      Devbox orchestrates Docker services, deploy pipelines, and project
+      DWE (Dev Workspace Engine) orchestrates Docker services, deploy pipelines, and project
       commands from a single declarative configuration.
     license: MIT
     formats:
@@ -82,27 +82,27 @@ nfpms:
     # bash-completion, zsh's fpath, and fish's vendor_completions.d pick them
     # up automatically on package install. No post-install scripts required.
     contents:
-      - src: completions/devbox.bash
-        dst: /usr/share/bash-completion/completions/devbox
+      - src: completions/dwe.bash
+        dst: /usr/share/bash-completion/completions/dwe
         file_info:
           mode: 0644
-      - src: completions/devbox.zsh
-        dst: /usr/share/zsh/site-functions/_devbox
+      - src: completions/dwe.zsh
+        dst: /usr/share/zsh/site-functions/_dwe
         file_info:
           mode: 0644
-      - src: completions/devbox.fish
-        dst: /usr/share/fish/vendor_completions.d/devbox.fish
+      - src: completions/dwe.fish
+        dst: /usr/share/fish/vendor_completions.d/dwe.fish
         file_info:
           mode: 0644
       - src: LICENSE
-        dst: /usr/share/doc/devbox/LICENSE
+        dst: /usr/share/doc/dwe/LICENSE
         file_info:
           mode: 0644
 
 homebrew_casks:
-  - name: devbox
+  - name: dwe
     binaries:
-      - devbox
+      - dwe
     ids:
       - default
     repository:
@@ -110,16 +110,16 @@ homebrew_casks:
       name: homebrew-tap
       branch: main
       token: '{{ .Env.HOMEBREW_TAP_GITHUB_TOKEN }}'
-    homepage: https://github.com/semsemyonoff/devbox
+    homepage: https://github.com/semsemyonoff/dwe
     description: Docker-based developer environment manager
     license: MIT
     # The cask manifest auto-installs these into Homebrew's completion dirs;
     # brew picks them up via its standard fpath wiring for both Intel and
     # Apple Silicon installs.
     completions:
-      bash: completions/devbox.bash
-      zsh: completions/devbox.zsh
-      fish: completions/devbox.fish
+      bash: completions/dwe.bash
+      zsh: completions/dwe.zsh
+      fish: completions/dwe.fish
     # Strip the macOS quarantine attribute on install so the unsigned binary
     # runs without a Gatekeeper prompt. Standard pattern for unsigned CLI casks.
     # Guarded by OS.mac? — Linuxbrew does not ship /usr/bin/xattr and has no
@@ -128,7 +128,7 @@ homebrew_casks:
       post:
         install: |
           if OS.mac?
-            system_command "/usr/bin/xattr", args: ["-dr", "com.apple.quarantine", "#{staged_path}/devbox"]
+            system_command "/usr/bin/xattr", args: ["-dr", "com.apple.quarantine", "#{staged_path}/dwe"]
           end
 
 checksum:
@@ -152,6 +152,6 @@ changelog:
 release:
   github:
     owner: semsemyonoff
-    name: devbox
+    name: dwe
   draft: false
   prerelease: auto

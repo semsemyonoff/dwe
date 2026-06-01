@@ -35,6 +35,6 @@ jobs:
           # Default token — uploads release assets to this repo.
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           # PAT with `repo` scope for semsemyonoff/homebrew-tap so GoReleaser
-          # can push the generated Formula/devbox.rb on each release. Configure
+          # can push the generated Casks/dwe.rb on each release. Configure
           # in repo Settings → Secrets → Actions.
           HOMEBREW_TAP_GITHUB_TOKEN: ${{ secrets.HOMEBREW_TAP_GITHUB_TOKEN }}
