@@ -182,11 +182,11 @@ render:
 | `.Service` | **каноническая конфигурационная идентичность** — корень цепочки `extends:` рендерящегося сервиса | используйте для raw-config поисков по имени сервиса (`(index .Cfg.Raw.cs .Service).standard`). Равно `.Resolved` без цепочки extends. |
 | `.Resolved` | **render-идентичность** — сервис, чей hub реально рендерится (победитель коллизии по глубочайшему extends). | Равно `.Service` без коллизии. |
 | `.ServiceCfg` | эффективная конфигурация сервиса `.Resolved`, после разрешения `extends` | например, `.ServiceCfg.Container`, `.ServiceCfg.Dir`, `.ServiceCfg.DirInternal`, `.ServiceCfg.WorkDirInternal`, `.ServiceCfg.CLI.*` отражают overlay рендерящегося сервиса |
-| `.Runtime` | объединённый блок `runtime` | `.Runtime.UseHTTPS`, `.Runtime.SPX.Path`. Пер-сервисные порты/хосты живут в записи каждого сервиса — используйте `((index .Services "<name>").Port "<port-name>")` / `((index .Services "<name>").Host "<host-name>")`. |
+| `.Runtime` | объединённый блок `runtime` | `.Runtime.UseHTTPS`, `.Runtime.SPX.Path`. Порты/хосты на сервис находятся в записи каждого сервиса — используйте `((index .Services "<name>").Port "<port-name>")` / `((index .Services "<name>").Host "<host-name>")`. |
 | `.Services` | `map[string]ServiceConfig`, ключёванная по имени сервиса | только индексный доступ (требование Go-шаблона): `(index .Services "main")`. Фильтруйте по типу через `.AppServices` / `.ToolServices` / `.InfraServices` (0-аргументные методы, возвращающие типизированные подмножества). |
-| `.Cfg` | объединённый `DweConfig` (продвинутое) | `.Cfg.Raw` — постмержовая мапа после нормализации DWE (`services.*` инжектится из пер-сервисных `service.yml`) — см. [Шаблоны](../templates.md). Для обычных случаев предпочитайте выделенные поля выше. |
+| `.Cfg` | объединённый `DweConfig` (продвинутое) | `.Cfg.Raw` — мапа после слияния и нормализации DWE (`services.*` подставляется из per-service `service.yml`) — см. [Шаблоны](../templates.md). Для обычных случаев предпочитайте выделенные поля выше. |
 
-> **Совет.** IDE-выход ложится в `<svc.Dir>/<entry.To>` — обычно в отслеживаемые проектные файлы (`.vscode/settings.json`, `.devcontainer/devcontainer.json`, …). Избегайте потребления developer-local или secret-ключей через `.Cfg.Raw` в IDE-шаблонах: любое значение, налитое из `workspace/local.yml`, всплывёт в отрендеренном файле и даст пер-разработческие diff-ы в отслеживаемых артефактах. Используйте `.Cfg.Raw` только для проектно-широких соглашений.
+> **Совет.** IDE-выход ложится в `<svc.Dir>/<entry.To>` — обычно в отслеживаемые проектные файлы (`.vscode/settings.json`, `.devcontainer/devcontainer.json`, …). Избегайте использования developer-local или секретных ключей через `.Cfg.Raw` в IDE-шаблонах: любое значение, попавшее из `workspace/local.yml`, всплывёт в отрендеренном файле и даст разные диффы у разных разработчиков в отслеживаемых артефактах. Используйте `.Cfg.Raw` только для общих для всего проекта соглашений.
 
 Строгий режим означает, что опечатка `{{.Servic.Name}}` прерывает рендер вместо записи `<no value>`. Используйте `{{if ...}}`-гарды для полей, которые могут быть законно пустыми.
 
@@ -199,7 +199,7 @@ Go-овский `text/template` разрешает dot-сегменты, тол�
 {{ index .Cfg.Raw "my-tool" "api-key" }}       {{- /* index — ключи с дефисами */ -}}
 ```
 
-Замечание: пер-сервисные порты/хосты живут в значении `ServiceConfig` этого сервиса — `((index .Services "main").Port "http")`, `((index .Services "adminer").Host "web")`. Отдельных namespace-ов `.Runtime.Ports` / `.Runtime.Hosts` / `.Tools` нет.
+Замечание: порты/хосты на сервис находятся в значении `ServiceConfig` этого сервиса — `((index .Services "main").Port "http")`, `((index .Services "adminer").Host "web")`. Отдельных namespace-ов `.Runtime.Ports` / `.Runtime.Hosts` / `.Tools` нет.
 
 Полный набор хелперов, доступных внутри `*.tmpl` (`appURL`, sprout-реестры, встроенные `text/template`), описан в [Шаблоны](../templates.md).
 

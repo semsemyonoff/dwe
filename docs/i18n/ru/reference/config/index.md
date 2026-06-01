@@ -4,13 +4,13 @@
 
 Обзор всех конфигурационных файлов в системе DWE.
 
-> Впервые сталкиваетесь с DWE? Начните с [Getting started](../concepts/getting-started.md), чтобы пройти сценарий от начала до конца, и возвращайтесь сюда за пофайловым справочником.
+> Впервые сталкиваетесь с DWE? Начните с [Getting started](../concepts/getting-started.md), чтобы пройти сценарий от начала до конца, а затем возвращайтесь сюда за пофайловым справочником.
 
 ## Содержание
 
 - [Инвентарь файлов](#инвентарь-файлов)
 - [Топология загрузчиков](#топология-загрузчиков)
-- [Слитые vs standalone](#слитые-vs-standalone)
+- [Смерженные vs standalone](#смерженные-vs-standalone)
 - [Страницы](#страницы)
 - [Связанные команды](#связанные-команды)
 
@@ -18,22 +18,22 @@
 
 | Файл | Трекается | Загрузчик | Назначение |
 |------|-----------|-----------|------------|
-| `workspace.yml` | да | layer 1 | Идентичность проекта и структура сервисов |
-| `workspace/defaults.yml` | да | layer 2 | Версионированные дефолты: runtime, экспорты, тумблеры enabled сервисов |
-| `workspace/local.yml` | нет (gitignored) | layer 3 | Per-user override'ы: состояние, тумблеры enabled сервисов |
-| `workspace/services/<name>/service.yml` | да | standalone | Per-service декларация (dirs, cli, configs, порты) |
-| `workspace/deploy.yml` | да | standalone | Deploy-пайплайн оркестратора (фазы + шаги) |
-| `workspace/services/<name>/deploy.yml` | да | standalone | Per-service deploy-пайплайны |
-| `workspace/reset.yml` | да | standalone | Reset-пайплайн |
-| `workspace/lifecycle.yml` | да | standalone | Пайплайны run / stop (драйверы для `dwe run`/`stop`/`restart`) |
-| `workspace/docker.yml` | да | standalone | Политика выполнения compose |
-| `workspace/docker.local.yml` | нет (gitignored) | сливается в `docker.yml` | Локальные override'ы compose-политики |
-| `workspace/styles.yml` | да | standalone | ASCII header, цветовая палитра, разделитель |
-| `workspace/info.yml` | да | standalone | Секции info-дашборда |
-| `workspace/commands/` | да | standalone | Декларативные определения команд (per-file группы) |
-| `workspace/validate.yml` | да | standalone | Проверки готовности проекта (preflight + `dwe validate`) |
-| `workspace/snapshot.yml` | да | standalone | Snapshot-workflow'ы: create / restore / remove (`dwe snapshot`) |
-| `workspace/i18n/*.yml` | нет (ignored) | standalone | Переводы пользовательских команд и UI-строк (опционально; один файл на язык) |
+| `workspace.yml` | да | слой 1 | Идентификация проекта и структура сервисов |
+| `workspace/defaults.yml` | да | слой 2 | Версионированные значения по умолчанию: runtime, экспорты, переключатели enabled сервисов |
+| `workspace/local.yml` | нет (gitignored) | слой 3 | Переопределения на пользователя: состояние, переключатели enabled сервисов |
+| `workspace/services/<name>/service.yml` | да | отдельный | Декларация сервиса (dirs, cli, configs, порты) |
+| `workspace/deploy.yml` | да | отдельный | Deploy-пайплайн оркестратора (фазы + шаги) |
+| `workspace/services/<name>/deploy.yml` | да | отдельный | Deploy-пайплайны на каждый сервис |
+| `workspace/reset.yml` | да | отдельный | Reset-пайплайн |
+| `workspace/lifecycle.yml` | да | отдельный | Пайплайны run / stop (драйверы для `dwe run`/`stop`/`restart`) |
+| `workspace/docker.yml` | да | отдельный | Политика выполнения compose |
+| `workspace/docker.local.yml` | нет (gitignored) | сливается с `docker.yml` | Локальные переопределения политики compose |
+| `workspace/styles.yml` | да | отдельный | ASCII header, цветовая палитра, разделитель |
+| `workspace/info.yml` | да | отдельный | Секции info-дашборда |
+| `workspace/commands/` | да | отдельный | Декларативные определения команд (по группе на файл) |
+| `workspace/validate.yml` | да | отдельный | Проверки готовности проекта (preflight + `dwe validate`) |
+| `workspace/snapshot.yml` | да | отдельный | Snapshot-workflow'ы: create / restore / remove (`dwe snapshot`) |
+| `workspace/i18n/*.yml` | нет (ignored) | отдельный | Переводы пользовательских команд и UI-строк (опционально; один файл на язык) |
 
 ## Runtime-артефакты
 
@@ -41,10 +41,10 @@
 
 - `.dwe/logs/` — логи пайплайнов (deploy, reset, lifecycle run/stop)
 - `.dwe/deploy/deploy.lock` — lock-файл деплоя (только Unix; предотвращает параллельные деплои)
-- `.dwe/deploy/state.yml` — журнал состояния деплоя (трекает deploy-статус и хэши сервисов)
-- `.dwe/snapshots/snapshot.lock` — snapshot lock-файл (только Unix; сериализует snapshot-мутации и совместно захватывается lifecycle-командами деплоя)
+- `.dwe/deploy/state.yml` — журнал состояния деплоя (отслеживает deploy-статус и хэши сервисов)
+- `.dwe/snapshots/snapshot.lock` — snapshot lock-файл (только Unix; сериализует изменения снапшотов и совместно захватывается lifecycle-командами деплоя)
 - `.dwe/snapshots/current` — указатель текущего снапшота (последний созданный или восстановленный)
-- `.dwe/snapshots/.pre-restore-backup/` — бэкап `workspace/local.yml` + `.dwe/deploy/state.yml`, снимаемый перед каждым restore; цель ручного восстановления при сбое restore
+- `.dwe/snapshots/.pre-restore-backup/` — резервная копия `workspace/local.yml` + `.dwe/deploy/state.yml`, снимаемая перед каждым restore; используется для ручного восстановления при сбое restore
 
 Добавьте `.dwe/` в `.gitignore` проекта, если ещё не добавлено.
 
@@ -52,16 +52,16 @@
 
 ```mermaid
 flowchart LR
-  subgraph merged["Слияние 3 слоёв — DweConfig"]
+  subgraph merged["Слияние трёх слоёв — DweConfig"]
     direction TB
     A[workspace.yml] --> B[workspace/defaults.yml] --> C[workspace/local.yml]
   end
 
-  S["workspace/services/&lt;name&gt;/service.yml"] -. инжектится в Raw .-> merged
+  S["workspace/services/&lt;name&gt;/service.yml"] -. подставляется в Raw .-> merged
 
   merged --> R[(DweConfig.Raw<br/>+ типизированные структуры)]
 
-  subgraph standalone["Standalone-загрузчики"]
+  subgraph standalone["Отдельные загрузчики"]
     direction TB
     D[workspace/deploy.yml]
     DS["workspace/services/&lt;name&gt;/deploy.yml"]
@@ -82,28 +82,28 @@ flowchart LR
   R -. "$#123;...#125; параметры команд" .-> CM
 ```
 
-## Слитые vs standalone
+## Смерженные vs standalone
 
-**Слитые (3-слойный конфиг)**: `workspace.yml` → `workspace/defaults.yml` → `workspace/local.yml` глубоко сливаются на старте. Поздние слои выигрывают; map'ы сливаются рекурсивно. Результат — эффективный конфиг, используемый для генерации `.env`, резолва топологии и правил экспорта. Каждый `workspace/services/<name>/service.yml` грузится отдельно и затем инжектится в слитый raw-map, чтобы dot-пути вроде `services.main.container` резолвились.
+**Смерженные (трёхслойный конфиг)**: `workspace.yml` → `workspace/defaults.yml` → `workspace/local.yml` глубоко сливаются на старте. Поздние слои перекрывают предыдущие; map'ы сливаются рекурсивно. Результат — эффективный конфиг, используемый для генерации `.env`, разрешения топологии и правил экспорта. Каждый `workspace/services/<name>/service.yml` грузится отдельно и затем подставляется в смерженный raw-map, чтобы dot-пути вроде `services.main.container` корректно резолвились.
 
-**Standalone**: `workspace/services/<name>/service.yml`, `deploy.yml`, `workspace/services/<name>/deploy.yml`, `reset.yml`, `lifecycle.yml`, `docker.yml` (+ `docker.local.yml`), `styles.yml`, `info.yml` и `commands/*.yml` грузятся выделенными функциями в `internal/core/project/config/` и `internal/core/usercommands/`. Они не часть 3-слойного слияния, но большинство из них резолвят template-выражения против слитого конфига.
+**Отдельные**: `workspace/services/<name>/service.yml`, `deploy.yml`, `workspace/services/<name>/deploy.yml`, `reset.yml`, `lifecycle.yml`, `docker.yml` (+ `docker.local.yml`), `styles.yml`, `info.yml` и `commands/*.yml` грузятся выделенными функциями в `internal/core/project/config/` и `internal/core/usercommands/`. Они не участвуют в трёхслойном слиянии, но большинство из них разрешают template-выражения по смерженному конфигу.
 
-## Файлы, поддерживающие локальные override'ы
+## Файлы, поддерживающие локальные переопределения
 
-На данный момент только `docker.local.yml` поддерживает вариант `.local.yml` для per-developer кастомизации. Паттерн такой:
+На данный момент только `docker.local.yml` поддерживает вариант `.local.yml` для кастомизации на разработчика. Паттерн такой:
 
-**Docker**: `workspace/docker.yml` (трекаемый, общий на весь проект) + `workspace/docker.local.yml` (gitignored, per-developer). Локальный файл сливается поверх базового, позволяя разработчикам кастомизировать политику выполнения compose — например, добавить дополнительные volume'ы, смонтировать локальные директории с исходниками или переопределить platform/args, не задевая коллег.
+**Docker**: `workspace/docker.yml` (отслеживаемый, общий на весь проект) + `workspace/docker.local.yml` (gitignored, на разработчика). Локальный файл сливается поверх базового, позволяя разработчикам кастомизировать политику выполнения compose — например, добавить дополнительные volume'ы, смонтировать локальные директории с исходниками или переопределить platform/args, не задевая коллег.
 
-**Почему только docker?** Docker-настройки по своей природе персональные — они зависят от локального окружения разработчика (доступные бинарники, монтирование volume'ов, различия платформ). Другие конфиги вроде `lifecycle.yml`, `info.yml` и `styles.yml` общие на весь проект и не выигрывают от per-developer override'ов.
+**Почему только docker?** Docker-настройки по своей природе персональные — они зависят от локального окружения разработчика (доступные бинарники, монтирование volume'ов, различия платформ). Другие конфиги вроде `lifecycle.yml`, `info.yml` и `styles.yml` общие на весь проект и не выигрывают от переопределений на разработчика.
 
 Подробнее о семантике и примерах `docker.local.yml` см. [docker.yml](docker.md#dockerlocalyml).
 
 ## Страницы
 
-- [workspace / defaults / local](workspace.md) — 3-слойный слитый конфиг: порядок слияния, приоритет, резолв dot-path'ов, справочник полей
-- [services/<name>/service.yml](services/index.md) — per-service декларации, extends, dirs, cli-конфиг
+- [workspace / defaults / local](workspace.md) — трёхслойный смерженный конфиг: порядок слияния, приоритет, разрешение dot-путей, справочник полей
+- [services/<name>/service.yml](services/index.md) — декларации сервисов, extends, dirs, cli-конфиг
 - [deploy.yml / reset.yml](deploy/index.md) — deploy- и reset-пайплайны, шаги, билтины, file-логирование, идемпотентный деплой
-- [state.yml](state/index.md) — трекинг состояния деплоя, таблица skip-решений, хэширование, lock-файл, восстановление после крашей
+- [state.yml](state/index.md) — отслеживание состояния деплоя, таблица skip-решений, хэширование, lock-файл, восстановление после падений
 - [lifecycle.yml](lifecycle.md) — пайплайны run/stop, проба обновлений, hook-фазы, гейт обязательных сервисов
 - [Условия и действия](conditions.md) — типизированные условия для `when:`, типизированные действия для `check:` и тел шагов, различие predicate vs engine-builtin
 - [docker.yml](docker.md) — политика выполнения Compose, имя проекта, env-триггеры
@@ -114,18 +114,18 @@ flowchart LR
 - [snapshot.yml](snapshot.md) — snapshot-workflow'ы: блоки create/restore/remove, варианты, неймспейс `${snapshot.*}`, manifest, взаимодействие с lock, безопасность архивов
 - [Локализация (i18n)](i18n.md) — переводы пользовательских команд и UI-строк: разрешение локали, формат файла, справочник ключей, валидация
 - [Пользовательский конфиг](userconfig.md) — пользовательские настройки: расположение файла, синтаксис, переопределения бинарей, язык, тема mermaid
-- [Уведомления](notifications.md) — user-level desktop-уведомления: расположение конфиг-файлов, ключи, gate-матрица, env-override'ы
-- [UI](ui.md) — конфигурация интерактивного браузера команд: глубина, collapse, бэйджи, хоткеи, fallback-лестница
+- [Уведомления](notifications.md) — desktop-уведомления на уровне пользователя: расположение конфиг-файлов, ключи, матрица условий, env-переопределения
+- [UI](ui.md) — конфигурация интерактивного браузера команд: глубина, collapse, бэйджи, хоткеи, лестница фолбэков
 - [Шаблоны](../templates.md) — Go-шаблоны, shorthand `${...}`, sprout-хелперы (общие для info, commands, пайплайнов, render-паков)
 
 ## Связанные команды
 
-- `dwe render env` — генерирует `.env` из правил экспорта слитого конфига
+- `dwe render env` — генерирует `.env` из правил экспорта смерженного конфига
 - `dwe render ide` — генерирует IDE-конфиги
 - `dwe render ai` — генерирует hub-level AGENTS.md и симлинки CLAUDE.md
 - `dwe render git` — генерирует shell-хуки git в `<svc.Dir>/src/.git/hooks/`
 - `dwe info` — рендерит info-дашборд из `info.yml`
-- `dwe deploy plan` — показывает разрешённый deploy-пайплайн
+- `dwe deploy plan` — показывает итоговый deploy-пайплайн
 - `dwe compose files` — показывает список активных compose-файлов (диагностика)
 - `dwe status apps` — показывает app-сервисы с health и deploy-статусом
 - `dwe status tools` — показывает таблицу tool-сервисов (read-only)

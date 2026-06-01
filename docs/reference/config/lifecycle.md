@@ -25,7 +25,7 @@ Run / stop pipeline declarations driving `dwe run`, `dwe stop`, and `dwe restart
 - **`run:`** — executed by `dwe run` (and `dwe restart`, after stop). Wraps the standard `docker up` + `docker wait` sequence with optional update probe and pre/post hook phases.
 - **`stop:`** — executed by `dwe stop` (and the first half of `dwe restart`). Wraps `docker down` with optional pre/post hook phases.
 
-It is loaded separately by `LoadLifecycleConfig()` and is **not** merged with the 3-layer config.
+This file is loaded on its own and is **not** part of the 3-layer config merge.
 
 The file is optional for all commands that use it.
 
@@ -236,7 +236,7 @@ stop:
 
 ## Validation
 
-`LoadLifecycleConfig()` enforces:
+On load, the file is checked for:
 
 - Each step in `run.phases` and `stop.phases` has a `type:` field with one of `shell`, `dwe`, `command`, `builtin`.
 - `update.mode`, when set, is one of `on`, `off`. Old values (`prompt`, `auto`, `check`) are rejected with a clear error.

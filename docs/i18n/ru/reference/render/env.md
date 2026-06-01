@@ -51,7 +51,7 @@ flowchart TD
 
 ## Правила экспорта
 
-Каждое правило мапит dot-path в объединённой конфигурации на имя env-переменной. Все пер-сервисные значения — `enabled`, `container`, `ports.<port-name>`, `hosts.<host-name>` — достижимы под `services.<name>.*` независимо от типа (`app` / `tool` / `infra`).
+Каждое правило сопоставляет dot-path в объединённой конфигурации имени env-переменной. Все значения по сервисам — `enabled`, `container`, `ports.<port-name>`, `hosts.<host-name>` — доступны под `services.<name>.*` независимо от типа (`app` / `tool` / `infra`).
 
 ```yaml
 exports:
@@ -150,7 +150,7 @@ flowchart TD
 
 Пример: `when: services.adminer.enabled` пропускает правило всякий раз, когда сервис не задан, явно `false` или строка `"false"` / `"0"`.
 
-**Замечание про синтаксис dot-path.** Поля `from:` / `when:` правил экспорта используют **голые dot-path** в объединённую конфигурацию, не синтаксис шаблонов `{{ ... }}`. Пер-сервисные значения живут под `services.<name>.*` для каждого типа — например, `from: services.adminer.ports.http`, `from: services.mailpit.hosts.web`, `from: services.main.container`, `when: services.adminer.enabled`.
+**Замечание про синтаксис dot-path.** Поля `from:` / `when:` правил экспорта используют **голые dot-path** в объединённую конфигурацию, а не синтаксис шаблонов `{{ ... }}`. Значения по сервисам лежат под `services.<name>.*` для каждого типа — например, `from: services.adminer.ports.http`, `from: services.mailpit.hosts.web`, `from: services.main.container`, `when: services.adminer.enabled`.
 
 ## Формат вывода
 

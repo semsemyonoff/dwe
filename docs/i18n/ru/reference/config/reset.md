@@ -2,7 +2,7 @@
 
 # Reset
 
-Команда `dwe reset run` сносит проект или отдельный сервис и возвращает его в чистое состояние, требующее последующего деплоя.
+Команда `dwe reset run` сносит проект или отдельный сервис и возвращает его в чистое состояние, после которого требуется повторный деплой.
 
 ## Reset всего проекта
 
@@ -10,9 +10,9 @@
 dwe reset run [--yes]
 ```
 
-Выполняет `workspace/reset.yml`. Файл **опционален** — когда отсутствует, DWE использует встроенный дефолтный reset-пайплайн и печатает одну info-строку в stderr: `Using built-in default reset pipeline (override with workspace/reset.yml).` Info-строка подавляется в режиме `--output json`.
+Выполняет `workspace/reset.yml`. Файл **опционален** — если он отсутствует, DWE использует встроенный reset-пайплайн по умолчанию и печатает одну info-строку в stderr: `Using built-in default reset pipeline (override with workspace/reset.yml).` Info-строка подавляется в режиме `--output json`.
 
-**Дефолтный reset-пайплайн** (срабатывает, когда `workspace/reset.yml` отсутствует):
+**Reset-пайплайн по умолчанию** (срабатывает, если `workspace/reset.yml` отсутствует):
 
 Фазы: `pre` (confirm-промпт: "This will stop containers, remove project volumes, and delete generated data.") → `stop` (`type: dwe`, `cmd: "docker down"`) → `cleanup` (удалить все volume'ы проекта, удалить директорию `services/`).
 
@@ -32,9 +32,9 @@ dwe reset run --service <name> [--yes] [--skip-preflight]
 
 1. Запускает preflight-проверки stop-стадии (бинари docker, git; проверка доступности порта для stop-стадии пропускается).
 2. Показывает интерактивную форму подтверждения, перечисляющую ровно то, что произойдёт (пропускается с `--yes`).
-3. Если сервис сейчас **enabled**, запускает любые user-команды `on_disable.before`, объявленные в `workspace/services/<name>/service.yml` (вне project-лока).
+3. Если сервис сейчас **enabled**, запускает все пользовательские команды `on_disable.before`, объявленные в `workspace/services/<name>/service.yml` (вне project-лока).
 4. Захватывает project-лок, затем выполняет один пайплайн, состоящий из:
-   a. **Baseline (всегда-включено):** остановить **и удалить** контейнер сервиса напрямую через `docker stop` + `docker rm -f` (обход compose — работает, включён ли сервис или выключен).
+   a. **Baseline (всегда):** остановить **и удалить** контейнер сервиса напрямую через `docker stop` + `docker rm -f` (в обход compose — работает независимо от того, включён сервис или выключен).
    b. **Baseline (условно):** удалить директорию сервиса, если сервис объявляет `dir:` в `service.yml` и директория существует на диске.
    c. **Пользовательский пайплайн (опционально):** фазы, объявленные в `workspace/services/<name>/reset.yml`, если он есть, добавляются после baseline.
 5. Атомарно убирает задеплоенное состояние сервиса из журнала и пишет запись `PendingDeploy`.
@@ -47,9 +47,9 @@ dwe reset run --service <name> [--yes] [--skip-preflight]
 ### Требования
 
 - Сервис должен существовать в `workspace/services/<name>/`.
-- **У сервиса должен быть `workspace/services/<name>/deploy.yml`** — per-service reset пишет в журнал запись `PendingDeploy`, так что сервис должен быть деплоимым. Если `deploy.yml` нет, используйте полный `dwe reset run` вместо этого.
+- **У сервиса должен быть `workspace/services/<name>/deploy.yml`** — per-service reset пишет в журнал запись `PendingDeploy`, поэтому сервис должен быть деплоимым. Если `deploy.yml` нет, используйте полный `dwe reset run`.
 
-Обязательные сервисы (`required: true`) **разрешены** для per-service reset'а (`required` защищает от `services disable`, не от reset'а).
+Обязательные сервисы (`required: true`) **разрешены** для per-service reset'а (`required` защищает от `services disable`, а не от reset'а).
 
 | Опция | Описание |
 |-------|----------|
@@ -59,7 +59,7 @@ dwe reset run --service <name> [--yes] [--skip-preflight]
 
 ### Per-service `reset.yml`
 
-`workspace/services/<name>/reset.yml` следует тому же формату, что и общий `workspace/reset.yml`. Он **опционален** и добавляется после всегда-включённого baseline'а (stop+rm контейнера, опциональное удаление `dir:`). Когда отсутствует, происходят только baseline и обновление журнала.
+`workspace/services/<name>/reset.yml` следует тому же формату, что и общий `workspace/reset.yml`. Он **опционален** и добавляется после всегда включённого baseline'а (stop+rm контейнера, опциональное удаление `dir:`). Если отсутствует, выполняются только baseline и обновление журнала.
 
 ```yaml
 # workspace/services/postgres/reset.yml

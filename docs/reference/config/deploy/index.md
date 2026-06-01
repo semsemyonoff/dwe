@@ -34,11 +34,11 @@ Phases: `pre` (confirm prompt) â†’ `stop` (`type: dwe`, `cmd: "docker down"`) â†
 
 ## File roles
 
-| File | Loader | Role |
-|------|--------|------|
-| `workspace/deploy.yml` | `LoadProjectDeployConfig` | Top-level orchestrator: lists phases in order, references service pipelines |
-| `workspace/services/<svc>/deploy.yml` | `LoadServiceDeployConfigs` | Per-service phases and steps (inlined by orchestrator at `deploy_services: true`). Any service type (app, tool, infra) may have a deploy pipeline. |
-| `workspace/reset.yml` | `LoadResetConfig` | Separate reset pipeline, executed via `dwe reset run`. `deploy_services` phases are rejected. |
+| File | Role |
+|------|------|
+| `workspace/deploy.yml` | Top-level orchestrator: lists phases in order, references service pipelines |
+| `workspace/services/<svc>/deploy.yml` | Per-service phases and steps (inlined by the orchestrator at `deploy_services: true`). Any service type (app, tool, infra) may have a deploy pipeline. |
+| `workspace/reset.yml` | Separate reset pipeline, executed via `dwe reset run`. `deploy_services` phases are rejected. |
 
 ```mermaid
 flowchart TB

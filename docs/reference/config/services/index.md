@@ -16,7 +16,7 @@ Service declarations for the DWE project.
 
 Service definitions live under `workspace/services/`, one folder per service. Each service is declared in `workspace/services/<name>/service.yml`, where `<name>` becomes the service's key in the resolved `DweConfig.Services` map. Each entry declares its container name, ports, hosts, compose overlay, and optional structural fields. The `type:` discriminator selects which fields are legal for the entry.
 
-Loaded by `LoadServices(baseDir)` which enumerates `workspace/services/*/` subdirectories, calls `LoadServiceFolder(baseDir, name)` per folder (responsibilities: raw-shape pre-validation, required `type` field, per-type field allowlist, `extends:` app-only guard, `ports`/`hosts` shape validation, strict KnownFields decode), then applies cross-service `extends:` toposort and inheritance merge. A missing `workspace/services/` directory returns an empty map (not an error). Per-developer toggles (`enabled:`, `ports:`, `hosts:`) live in the 3-layer overlay; structural fields belong exclusively in `workspace/services/<name>/service.yml`.
+On load, each `workspace/services/*/` subdirectory is enumerated and its `service.yml` is parsed in strict mode: the file must declare a `type`, every field is checked against the type's allowlist, `extends:` is rejected on non-app entries, and the shapes of `ports` / `hosts` are validated. Cross-service `extends:` chains are then resolved in topological order and parent fields are merged into each child. A missing `workspace/services/` directory yields an empty service set (not an error). Per-developer toggles (`enabled:`, `ports:`, `hosts:`) live in the 3-layer overlay; structural fields belong exclusively in `workspace/services/<name>/service.yml`.
 
 ## Service types
 
@@ -78,9 +78,9 @@ A disallowed field is a hard load error (`ErrServiceFieldNotAllowed`). Validatio
 
 ## Load behavior
 
-- Each `workspace/services/<name>/service.yml` is strict-decoded — unknown and per-type-disallowed fields are hard errors. `LoadServices` collects errors from all folders via `errors.Join` so every broken folder surfaces at once, not just the first.
+- Each `workspace/services/<name>/service.yml` is strict-decoded — unknown and per-type-disallowed fields are hard errors. Errors from all folders are reported together, so every broken folder surfaces at once, not just the first.
 - Service inheritance via `extends:` is resolved in topological order (parents before children) so multi-level chains (`C → B → A`) merge correctly regardless of map iteration order. Cycles and unknown parents are reported as load errors. `extends:` is **app-only**.
-- For each child, only zero-value fields are inherited from the parent; child fields take precedence on conflicts. Inherited slices / maps are defensively copied (`slices.Clone` / `maps.Clone`) so mutating a child never corrupts the parent.
+- For each child, only zero-value fields are inherited from the parent; child fields take precedence on conflicts. Inherited slices and maps are copied defensively, so mutating a child never corrupts the parent.
 - The `dirs` field is deduplicated across parent and child (parent first, child appended). `cli.env` is recursively merged: parent provides defaults, child wins on key conflicts.
 - After loading, `enabled` is resolved from the 3-layer merge (`services.<name>.enabled`); required services force `enabled: true`.
 - Overlays under `services.<name>` may set **only** `enabled:`, `ports:`, and `hosts:`. Any other field there is a layer-aware overlay error — structural fields (`container`, `dir`, `configs`, `compose`, `extends`, …) belong in `workspace/services/<name>/service.yml`. The overlay validator also enforces shape: `ports:` must be a map of name → integer in `1..65535`; `hosts:` must be a map of name → string.

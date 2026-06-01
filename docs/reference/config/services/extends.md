@@ -32,7 +32,7 @@ flowchart LR
 
 ## Topological sort
 
-`LoadServices` resolves the `extends:` graph in topological order so multi-level chains (`C → B → A`) merge correctly regardless of map iteration order. Cycles and unknown parents are reported as load errors. For each child, only zero-value fields are inherited from the parent; child fields take precedence on conflicts. Inherited slices / maps are defensively copied (`slices.Clone` / `maps.Clone`) so mutating a child never corrupts the parent.
+The `extends:` graph is resolved in topological order, so multi-level chains (`C → B → A`) merge correctly regardless of map iteration order. Cycles and unknown parents are reported as load errors. For each child, only zero-value fields are inherited from the parent; child fields take precedence on conflicts. Inherited slices and maps are copied defensively, so mutating a child never corrupts the parent.
 
 ## Worked example
 

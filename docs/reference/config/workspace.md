@@ -87,7 +87,7 @@ Dot-paths are consumed by:
 
 ### Where service fields come from
 
-`services.<name>.*` paths in the merged map are populated by `LoadConfig`. After loading each `workspace/services/<name>/service.yml` (canonical declaration with `type:`), the loader validates every overlay layer against the declared set (`validateServicesOverlay`), merges the 3 layers, then resolves `enabled` per service (required wins; otherwise the merged overlay value, defaulting to `false`). Each resolved service — including its nested `ports` / `hosts` maps and resolved fields like `container`, `dir`, `compose` — is injected into `raw["services"]`. Export rules and templates can therefore use `services.main.container`, `services.main.ports.http`, `services.adminer.hosts.web`, `services.catalog.enabled`, etc. without separate awareness of the per-service folder structure.
+`services.<name>.*` paths in the merged map are populated from each `workspace/services/<name>/service.yml` (the canonical service declaration, which carries `type:`). Every overlay layer is validated against the declared field set, the 3 layers are merged, then `enabled` is resolved per service (required wins; otherwise the merged overlay value, defaulting to `false`). Each resolved service — including its nested `ports` / `hosts` maps and resolved fields like `container`, `dir`, `compose` — becomes available under `services.<name>` in the merged config. Export rules and templates can therefore use `services.main.container`, `services.main.ports.http`, `services.adminer.hosts.web`, `services.catalog.enabled`, etc. without separate awareness of the per-service folder structure.
 
 ## workspace.yml
 

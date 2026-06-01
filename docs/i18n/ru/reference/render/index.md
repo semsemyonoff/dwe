@@ -17,11 +17,11 @@
 | Команда | Вывод | Источник |
 |---------|-------|----------|
 | `dwe render env` | содержимое `.env` (stdout или `--out <path>`) | правила `exports.env` в `workspace/defaults.yml` + системные переменные |
-| `dwe render ide` | пер-сервисные IDE-файлы внутри hub-каталога каждого сервиса | пакеты шаблонов под `workspace/templates/ide/<pack>/`, управляемые `manifest.yml` |
-| `dwe render ai` | hub-уровневые agent-доки (`AGENTS.md`, симлинк `CLAUDE.md`, …) | пакеты шаблонов под `workspace/templates/ai/<pack>/`, управляемые `manifest.yml` |
-| `dwe render git` | shell git-хуки на каждый сервис, в `<svc.Dir>/src/.git/hooks/<basename>` (режим `0755`) | пакеты шаблонов под `workspace/templates/git/<pack>/`, управляемые `manifest.yml` |
+| `dwe render ide` | IDE-файлы по каждому сервису внутри hub-каталога сервиса | пакеты шаблонов в `workspace/templates/ide/<pack>/`, управляемые `manifest.yml` |
+| `dwe render ai` | agent-доки на уровне hub (`AGENTS.md`, симлинк `CLAUDE.md`, …) | пакеты шаблонов в `workspace/templates/ai/<pack>/`, управляемые `manifest.yml` |
+| `dwe render git` | shell git-хуки на каждый сервис, в `<svc.Dir>/src/.git/hooks/<basename>` (режим `0755`) | пакеты шаблонов в `workspace/templates/git/<pack>/`, управляемые `manifest.yml` |
 
-Все четыре подкоманды читают одну и ту же объединённую конфигурацию (`workspace.yml` → `workspace/defaults.yml` → `workspace/local.yml`, с пер-сервисными объявлениями из `workspace/services/<name>/service.yml`). Различаются они тем, что итерируют и куда пишут.
+Все четыре подкоманды читают одну и ту же объединённую конфигурацию (`workspace.yml` → `workspace/defaults.yml` → `workspace/local.yml`, с объявлениями сервисов из `workspace/services/<name>/service.yml`). Различаются они тем, что итерируют и куда пишут.
 
 ## Общий конвейер
 
