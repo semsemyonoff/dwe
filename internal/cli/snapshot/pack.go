@@ -14,7 +14,7 @@ import (
 	"github.com/spf13/cobra"
 )
 
-// newSnapshotPackCmd: `devbox snapshot pack <name> [--out=<path>] [--exclude=<glob>...]`.
+// newSnapshotPackCmd: `dwe snapshot pack <name> [--out=<path>] [--exclude=<glob>...]`.
 func newSnapshotPackCmd(flags *cmdctx.RootFlags) *cobra.Command {
 	var (
 		outPath  string

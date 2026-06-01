@@ -33,7 +33,7 @@ func TestRenderPendingBanner(t *testing.T) {
 					{Kind: journal.PendingDeploy, Services: []string{"a", "b"}},
 				},
 			},
-			wantContain: []string{"Pending", "deploy required for", "a, b", "devbox deploy run"},
+			wantContain: []string{"Pending", "deploy required for", "a, b", "dwe deploy run"},
 			wantAbsent:  []string{"restart"},
 		},
 		{
@@ -43,7 +43,7 @@ func TestRenderPendingBanner(t *testing.T) {
 					{Kind: journal.PendingRestart},
 				},
 			},
-			wantContain: []string{"Pending", "restart required", "devbox restart"},
+			wantContain: []string{"Pending", "restart required", "dwe restart"},
 			wantAbsent:  []string{"deploy required"},
 		},
 		{
@@ -54,7 +54,7 @@ func TestRenderPendingBanner(t *testing.T) {
 					{Kind: journal.PendingRestart},
 				},
 			},
-			wantContain: []string{"deploy required for: main", "restart required", "devbox deploy run", "devbox restart"},
+			wantContain: []string{"deploy required for: main", "restart required", "dwe deploy run", "dwe restart"},
 		},
 		{
 			name: "deploy with single service",

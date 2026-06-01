@@ -155,7 +155,7 @@ func TestChildIO_Parallel_TTY_NoPTY(t *testing.T) {
 
 func TestChildIO_NilStepWriter_FallsBackToOsStdio(t *testing.T) {
 	// Task 6: childIO with stepWriter == nil falls back to os.Stdout / os.Stderr
-	// passthrough so ad-hoc external callers (`devbox deploy run STEP`) still
+	// passthrough so ad-hoc external callers (`dwe deploy run STEP`) still
 	// inherit the real terminal fd. Replaces the old parallel-nil panic which
 	// is no longer reachable: parallel-mode callers always supply a tee.
 	stdout, stderr, cleanup := childIO(nil, false)

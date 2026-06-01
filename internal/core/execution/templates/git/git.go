@@ -436,7 +436,7 @@ func RenderHooks(ctx Context) error {
 			return err
 		}
 		if fromOverride && ctx.Writer != nil {
-			ctx.Writer.Info(fmt.Sprintf("using local override: devbox/templates/git/%s.local/%s", ctx.PackName, entry.From))
+			ctx.Writer.Info(fmt.Sprintf("using local override: workspace/templates/git/%s.local/%s", ctx.PackName, entry.From))
 		}
 		if ctx.Writer != nil {
 			ctx.Writer.Success(fmt.Sprintf("git → %s", filepath.Join(ctx.ServiceCfg.Dir, "src/.git/hooks", entry.To)))

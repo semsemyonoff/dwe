@@ -61,7 +61,7 @@ func writeDevbox(t *testing.T, root, name string) {
 	t.Helper()
 	body := "project:\n  name: " + name + "\n"
 	if err := os.WriteFile(filepath.Join(root, "workspace.yml"), []byte(body), 0o644); err != nil {
-		t.Fatalf("write devbox.yml: %v", err)
+		t.Fatalf("write workspace.yml: %v", err)
 	}
 }
 
@@ -105,7 +105,7 @@ func TestPromptCmd_RunOutsideProject(t *testing.T) {
 	cmd.SetArgs([]string{})
 	err := cmd.Execute()
 	if err == nil {
-		// Outside a project means devbox.yml may exist somewhere up the tree
+		// Outside a project means workspace.yml may exist somewhere up the tree
 		// (e.g. the repo root). Only assert exit-code behavior when actually outside.
 		if out.Len() > 0 {
 			// Some output produced — we're inside a project. Skip assertion.

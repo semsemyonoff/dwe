@@ -9,7 +9,7 @@ import (
 )
 
 // TestLoadRegistryFromConfigPath_NoCommandsDirReturnsEmpty guards the
-// silent-on-missing-dir contract: if devbox/commands/ is absent next to
+// silent-on-missing-dir contract: if workspace/commands/ is absent next to
 // configPath, return an empty (non-nil) registry, not an error.
 func TestLoadRegistryFromConfigPath_NoCommandsDirReturnsEmpty(t *testing.T) {
 	dir := t.TempDir()
@@ -31,7 +31,7 @@ func TestLoadRegistryFromConfigPath_NoCommandsDirReturnsEmpty(t *testing.T) {
 }
 
 // TestLoadRegistryFromConfigPath_LoadsCommands verifies that with
-// devbox/commands/ present, definitions are loaded relative to configPath.
+// workspace/commands/ present, definitions are loaded relative to configPath.
 func TestLoadRegistryFromConfigPath_LoadsCommands(t *testing.T) {
 	dir := t.TempDir()
 	cfgPath := filepath.Join(dir, "workspace.yml")

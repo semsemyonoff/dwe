@@ -29,7 +29,7 @@ import (
 )
 
 // writeTempServiceConfig creates a minimal devbox config in a temp dir and
-// returns the path to devbox.yml. Services map: name → {required, enabled, container}.
+// returns the path to workspace.yml. Services map: name → {required, enabled, container}.
 func writeTempServiceConfig(t *testing.T, services map[string]struct {
 	required  bool
 	enabled   bool
@@ -62,7 +62,7 @@ func writeTempServiceConfig(t *testing.T, services map[string]struct {
 	}
 	devboxYML := strings.Join(devboxLines, "\n") + "\n"
 	if err := os.WriteFile(filepath.Join(dir, "workspace.yml"), []byte(devboxYML), 0o644); err != nil {
-		t.Fatalf("write devbox.yml: %v", err)
+		t.Fatalf("write workspace.yml: %v", err)
 	}
 
 	if err := os.MkdirAll(filepath.Join(dir, "workspace"), 0o755); err != nil {

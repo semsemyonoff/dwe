@@ -26,7 +26,7 @@ func writeMinimalInfoYML(t *testing.T, dir, content string) {
 	}
 }
 
-// writeMinimalDevboxYML writes a minimal devbox.yml to dir.
+// writeMinimalDevboxYML writes a minimal workspace.yml to dir.
 func writeMinimalDevboxYML(t *testing.T, dir string) string {
 	t.Helper()
 	cfgPath := filepath.Join(dir, "workspace.yml")
@@ -36,7 +36,7 @@ project:
   prefix: devbox
 `
 	if err := os.WriteFile(cfgPath, []byte(cfgYAML), 0644); err != nil {
-		t.Fatalf("writing devbox.yml: %v", err)
+		t.Fatalf("writing workspace.yml: %v", err)
 	}
 	return cfgPath
 }
@@ -152,7 +152,7 @@ func TestInfoCmd_ConditionalItems(t *testing.T) {
 }
 
 // TestInfoCmd_StylesMissingIsGraceful verifies that info command does not error
-// when devbox/styles.yml is absent.
+// when workspace/styles.yml is absent.
 func TestInfoCmd_StylesMissingIsGraceful(t *testing.T) {
 	dir := t.TempDir()
 	cfgPath := writeMinimalDevboxYML(t, dir)
@@ -164,7 +164,7 @@ func TestInfoCmd_StylesMissingIsGraceful(t *testing.T) {
         name: Name
         value: "{{ .Project.Name }}"
 `)
-	// No devbox/styles.yml — must not cause an error.
+	// No workspace/styles.yml — must not cause an error.
 	root := cli.NewRootCmd()
 	var buf bytes.Buffer
 	root.SetOut(&buf)
@@ -182,7 +182,7 @@ func TestInfoCmd_StylesMissingIsGraceful(t *testing.T) {
 }
 
 // TestInfoCmd_StylesWithHeaderRendered verifies that info command renders ASCII
-// art header when devbox/styles.yml defines one, without error.
+// art header when workspace/styles.yml defines one, without error.
 func TestInfoCmd_StylesWithHeaderRendered(t *testing.T) {
 	dir := t.TempDir()
 	cfgPath := writeMinimalDevboxYML(t, dir)
@@ -215,8 +215,8 @@ func TestInfoCmd_StylesWithHeaderRendered(t *testing.T) {
 	}
 }
 
-// TestInfoCmd_MissingInfoYMLIsGraceful verifies that `devbox info` does not
-// error when devbox/info.yml is absent. With no services, the default config's
+// TestInfoCmd_MissingInfoYMLIsGraceful verifies that `dwe info` does not
+// error when workspace/info.yml is absent. With no services, the default config's
 // hide_on_empty sections collapse — output is the brand header only.
 func TestInfoCmd_MissingInfoYMLIsGraceful(t *testing.T) {
 	dir := t.TempDir()
@@ -250,7 +250,7 @@ func TestInfoCmd_MissingInfoYMLIsGraceful(t *testing.T) {
 }
 
 // TestInfoCmd_BrandHeaderAlwaysPresent verifies the branded identity line is
-// emitted on `devbox info` even when no styles.yml / header.lines is set.
+// emitted on `dwe info` even when no styles.yml / header.lines is set.
 func TestInfoCmd_BrandHeaderAlwaysPresent(t *testing.T) {
 	dir := t.TempDir()
 	cfgPath := writeMinimalDevboxYML(t, dir)
@@ -282,7 +282,7 @@ func TestInfoCmd_BrandHeaderAlwaysPresent(t *testing.T) {
 	}
 }
 
-// TestInfoCmd_MissingConfig returns an error when devbox.yml is not found.
+// TestInfoCmd_MissingConfig returns an error when workspace.yml is not found.
 func TestInfoCmd_MissingConfig(t *testing.T) {
 	root := cli.NewRootCmd()
 	var buf bytes.Buffer

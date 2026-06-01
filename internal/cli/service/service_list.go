@@ -11,7 +11,7 @@ import (
 	"github.com/spf13/cobra"
 )
 
-// serviceListJSON is the JSON DTO emitted by `devbox services --output json`.
+// serviceListJSON is the JSON DTO emitted by `dwe services --output json`.
 // One entry per service (apps, tools, and infra), including required infra.
 type serviceListJSON struct {
 	Services []serviceListEntryJSON `json:"services"`
@@ -31,7 +31,7 @@ type serviceListEntryJSON struct {
 
 // runServicesList renders the read-only services view used when stdin is not a
 // TTY and when `--output json` is requested. Text mode emits the Apps, Tools,
-// and Infra sections (same style as `devbox status`); JSON mode emits a single
+// and Infra sections (same style as `dwe status`); JSON mode emits a single
 // `{"services":[...]}` array covering all configured services.
 func runServicesList(cmd *cobra.Command, flags *cmdctx.RootFlags) error {
 	cfg, err := config.LoadConfig(flags.ConfigPath)

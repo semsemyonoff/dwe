@@ -17,7 +17,7 @@ import (
 // It regenerates .env from the current config before any phase runs.
 var ImplicitEnvStep = config.DeployStep{
 	Name:        "render-env",
-	Type:        "devbox",
+	Type:        "dwe",
 	Cmd:         "render env --out .env",
 	Description: "Generate .env from config (implicit first step)",
 }
@@ -58,7 +58,7 @@ func ResolvePlan(cfg *config.DweConfig, reg *registry.Registry) ([]pipeline.Reso
 // FindStep looks up a step by address in the deploy config.
 // Supports two forms:
 //   - "<phase>/<step>"           — orchestrator step
-//   - "<service>/<phase>/<step>" — per-service step (loaded from devbox/services/<service>/deploy.yml)
+//   - "<service>/<phase>/<step>" — per-service step (loaded from workspace/services/<service>/deploy.yml)
 func FindStep(cfg *config.DweConfig, address string) (config.DeployPhase, config.DeployStep, error) {
 	parts := strings.Split(address, "/")
 	switch len(parts) {

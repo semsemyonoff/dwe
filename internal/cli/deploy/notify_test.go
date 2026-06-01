@@ -56,7 +56,7 @@ func pointHomeAtTempDir(t *testing.T) string {
 }
 
 // TestDeployRunCmd_NotifierFiresOnEarlyConfigLoadFailure guards the
-// notifier-defer-before-config-load contract: an unreadable devbox.yml
+// notifier-defer-before-config-load contract: an unreadable workspace.yml
 // must still produce a failure notification (with Project=="").
 func TestDeployRunCmd_NotifierFiresOnEarlyConfigLoadFailure(t *testing.T) {
 	pointHomeAtTempDir(t)

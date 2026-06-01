@@ -124,7 +124,7 @@ func TestRestore_RoundTripWritesBackupAndUpdatesCurrent(t *testing.T) {
 		t.Fatalf("status = %q (stderr=%s)", res.Status, errBuf.String())
 	}
 
-	// devbox/local.yml restored from snapshot.
+	// workspace/local.yml restored from snapshot.
 	body, err := os.ReadFile(filepath.Join(tmp, "workspace", "local.yml"))
 	if err != nil {
 		t.Fatalf("read local.yml: %v", err)
@@ -515,7 +515,7 @@ func TestRestore_ServicesMismatchPolicies(t *testing.T) {
 			createBaselineSnap(t, tmp, "s", "")
 			patchManifestServices(t, tmp, "s", tc.manifestSvcs)
 
-			// Seed a working-copy devbox/local.yml so we can detect any
+			// Seed a working-copy workspace/local.yml so we can detect any
 			// unintended side effect on the blocked path.
 			writeStringFile(t, filepath.Join(tmp, "workspace", "local.yml"), "untouched")
 
@@ -553,7 +553,7 @@ func TestRestore_ServicesMismatchPolicies(t *testing.T) {
 				if !errors.As(err, &sme) {
 					t.Fatalf("err = %v, want ServicesMismatchError", err)
 				}
-				// No side effect on devbox/local.yml.
+				// No side effect on workspace/local.yml.
 				body, _ := os.ReadFile(filepath.Join(tmp, "workspace", "local.yml"))
 				if string(body) != "untouched" {
 					t.Errorf("local.yml mutated despite block: %q", string(body))

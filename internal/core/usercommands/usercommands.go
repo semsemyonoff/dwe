@@ -156,7 +156,7 @@ func LoadRegistry(baseDir string) (*Registry, error) {
 	return registry.LoadRegistry(baseDir)
 }
 
-// LoadRegistryFromConfigPath loads the command registry from devbox/commands/
+// LoadRegistryFromConfigPath loads the command registry from workspace/commands/
 // relative to configPath. Returns an empty registry when the directory does not
 // exist. Validates the registry before returning.
 func LoadRegistryFromConfigPath(configPath string) (*Registry, error) {

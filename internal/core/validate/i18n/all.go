@@ -10,7 +10,7 @@ import (
 // projectFiles is the result of i18n.LoadProjectBundles.
 // reg is the user-command registry used to validate that translation entries reference real commands/groups.
 //
-// Missing devbox/i18n/ directory returns zero validators (no error).
+// Missing workspace/i18n/ directory returns zero validators (no error).
 func All(projectFiles []i18n.ProjectFile, reg *registry.Registry) []validate.Validator {
 	var validators []validate.Validator
 

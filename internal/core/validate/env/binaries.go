@@ -21,7 +21,7 @@ func (v *gitBinValidator) Run(_ validate.Context) []validate.Diagnostic {
 		return []validate.Diagnostic{fail(
 			v.ID(),
 			fmt.Sprintf("git binary not found in PATH: %s", bin),
-			"install git or set binaries.git in devbox.yml",
+			"install git or set binaries.git in workspace.yml",
 		)}
 	}
 	return []validate.Diagnostic{ok(v.ID())}
@@ -40,7 +40,7 @@ func (v *shellBinValidator) Run(_ validate.Context) []validate.Diagnostic {
 		return []validate.Diagnostic{fail(
 			v.ID(),
 			fmt.Sprintf("shell binary not found in PATH: %s", bin),
-			"install a POSIX shell or set binaries.shell in devbox.yml",
+			"install a POSIX shell or set binaries.shell in workspace.yml",
 		)}
 	}
 	return []validate.Diagnostic{ok(v.ID())}

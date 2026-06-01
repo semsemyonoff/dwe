@@ -41,12 +41,12 @@ var resetRunHookFn = runResetHook
 // package-private — tests in the lifecycle package cannot swap it directly.
 var resetConfirmFn = widgets.RunConfirm
 
-// NewResetCmd builds the `devbox reset` cobra command group.
+// NewResetCmd builds the `dwe reset` cobra command group.
 func NewResetCmd(groupID string, flags *cmdctx.RootFlags) *cobra.Command {
 	cmd := &cobra.Command{
 		Use:          "reset",
 		Short:        "Reset pipeline commands",
-		Long:         `Commands for running the declarative reset pipeline (devbox/reset.yml).`,
+		Long:         `Commands for running the declarative reset pipeline (workspace/reset.yml).`,
 		GroupID:      groupID,
 		SilenceUsage: true,
 	}
@@ -89,8 +89,8 @@ func runResetPlan(cmd *cobra.Command, flags *cmdctx.RootFlags, opts resetPlanOpt
 	return nil
 }
 
-// newResetPlanCmd creates the `devbox reset plan` command.
-// Shows the resolved reset plan from devbox/reset.yml.
+// newResetPlanCmd creates the `dwe reset plan` command.
+// Shows the resolved reset plan from workspace/reset.yml.
 func newResetPlanCmd(flags *cmdctx.RootFlags) *cobra.Command {
 	var format string
 
@@ -108,12 +108,12 @@ func newResetPlanCmd(flags *cmdctx.RootFlags) *cobra.Command {
 	return cmd
 }
 
-// newResetRunCmd creates the `devbox reset run` command.
-// Executes the reset pipeline from devbox/reset.yml, or a per-service reset
-// pipeline from devbox/services/<name>/reset.yml when --service is given.
+// newResetRunCmd creates the `dwe reset run` command.
+// Executes the reset pipeline from workspace/reset.yml, or a per-service reset
+// pipeline from workspace/services/<name>/reset.yml when --service is given.
 // Use --yes to skip confirmation prompts.
 //
-// File logging is controlled by the top-level `log:` field in devbox/reset.yml
+// File logging is controlled by the top-level `log:` field in workspace/reset.yml
 // (default: disabled). Enable with `log: true` to write .dwe/logs/reset.log.
 func newResetRunCmd(flags *cmdctx.RootFlags) *cobra.Command {
 	var yes bool
@@ -123,17 +123,17 @@ func newResetRunCmd(flags *cmdctx.RootFlags) *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "run",
 		Short: "Execute the reset pipeline",
-		Long: `Execute the reset pipeline from devbox/reset.yml.
+		Long: `Execute the reset pipeline from workspace/reset.yml.
 
 When --service <name> is given, resets only that service:
 runs on_disable.before hooks (if enabled), stops and removes the container,
 deletes the service 'dir:' if declared and present on disk, executes
-devbox/services/<name>/reset.yml (if present), then marks the service as
+workspace/services/<name>/reset.yml (if present), then marks the service as
 requiring a subsequent deploy. Volumes are NOT auto-removed; use
 'docker_remove_project_volumes' in services/<name>/reset.yml to opt in.
 
 File logging is disabled by default for reset. Enable it with 'log: true' at
-the top of devbox/reset.yml; output will be written to .dwe/logs/reset.log.`,
+the top of workspace/reset.yml; output will be written to .dwe/logs/reset.log.`,
 		Args:         cobra.NoArgs,
 		SilenceUsage: true,
 		RunE: func(cmd *cobra.Command, args []string) error {
@@ -252,7 +252,7 @@ func resetRunCmd(cmd *cobra.Command, flags *cmdctx.RootFlags, yes bool, skipPref
 	return nil
 }
 
-// resetServiceRunCmd implements `devbox reset run --service <name>`.
+// resetServiceRunCmd implements `dwe reset run --service <name>`.
 // It validates the service, runs preflight, runs on_disable.before hooks
 // (outside the lock), then acquires the project lock and atomically stops
 // the container, executes the per-service reset.yml (if present), and
@@ -280,7 +280,7 @@ func resetServiceRunCmd(cmd *cobra.Command, flags *cmdctx.RootFlags, name string
 		return fmt.Errorf("loading service deploy configs: %w", err)
 	}
 	if svcDeploys[name] == nil {
-		return fmt.Errorf("%w: %s — per-service reset clears deployed state and requires a subsequent deploy; service %q has no deploy.yml, so its deployed state cannot be re-provisioned. Use full 'devbox reset run' instead", deploy.ErrServiceNoDeployFile, name, name)
+		return fmt.Errorf("%w: %s — per-service reset clears deployed state and requires a subsequent deploy; service %q has no deploy.yml, so its deployed state cannot be re-provisioned. Use full 'dwe reset run' instead", deploy.ErrServiceNoDeployFile, name, name)
 	}
 
 	reg, regErr := usercommands.LoadRegistryFromConfigPath(flags.ConfigPath)
@@ -463,7 +463,7 @@ func resetServiceRunCmd(cmd *cobra.Command, flags *cmdctx.RootFlags, name string
 		return fmt.Errorf("updating journal for service %q: %w", name, err)
 	}
 
-	_, _ = fmt.Fprintf(cmd.OutOrStdout(), "Service %q reset. Deploy required: run 'devbox deploy run --service %s'\n", name, name)
+	_, _ = fmt.Fprintf(cmd.OutOrStdout(), "Service %q reset. Deploy required: run 'dwe deploy run --service %s'\n", name, name)
 	return nil
 }
 
@@ -484,7 +484,7 @@ func buildResetServiceConfirmTitle(name, container, dir string, required, dirExi
 	if hasResetYAML {
 		fmt.Fprintf(&b, "\n  • run services/%s/reset.yml", name)
 	}
-	fmt.Fprintf(&b, "\n  • require a subsequent: devbox deploy run --service %s", name)
+	fmt.Fprintf(&b, "\n  • require a subsequent: dwe deploy run --service %s", name)
 	return b.String()
 }
 
@@ -520,7 +520,7 @@ func runResetHook(ctx context.Context, cmd *cobra.Command, cfg *config.DweConfig
 	return resetServiceRunHook(ctx, rc)
 }
 
-// newResetStepCmd creates the `devbox reset step <phase>/<step>` command.
+// newResetStepCmd creates the `dwe reset step <phase>/<step>` command.
 // Runs a single step from the reset pipeline by address.
 func newResetStepCmd(flags *cmdctx.RootFlags) *cobra.Command {
 	var dryRun bool

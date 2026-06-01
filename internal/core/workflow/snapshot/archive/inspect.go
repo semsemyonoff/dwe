@@ -16,7 +16,7 @@ import (
 const (
 	// maxInspectManifestBytes caps the in-archive manifest payload an inspector
 	// will read. The manifest is plain YAML — 1 MiB is generous and protects
-	// `devbox snapshot inspect <tar>` from a malicious tar that points to an
+	// `dwe snapshot inspect <tar>` from a malicious tar that points to an
 	// absurdly large "manifest.yml" entry.
 	maxInspectManifestBytes = 1 << 20
 	// maxInspectEntries caps the number of tar entries scanned before

@@ -85,7 +85,7 @@ func resolveUpdateMode(cfg *config.LifecycleRunConfig, noUpdate bool, updateFlag
 	return mode
 }
 
-// RunRun executes the full run lifecycle driven by devbox/lifecycle.yml.
+// RunRun executes the full run lifecycle driven by workspace/lifecycle.yml.
 func RunRun(ctx RunContext) (err error) {
 	workDir := filepath.Dir(ctx.ConfigPath)
 
@@ -359,7 +359,7 @@ type deploymentGateError struct {
 }
 
 func (e *deploymentGateError) Error() string {
-	return fmt.Sprintf("service %q must be deployed — run `devbox deploy run` first", e.service)
+	return fmt.Sprintf("service %q must be deployed — run `dwe deploy run` first", e.service)
 }
 
 func (e *deploymentGateError) ExitCode() int {

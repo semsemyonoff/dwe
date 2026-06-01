@@ -1,4 +1,4 @@
-// Package info provides the `devbox info` command.
+// Package info provides the `dwe info` command.
 package info
 
 import (
@@ -13,7 +13,7 @@ import (
 	"github.com/spf13/cobra"
 )
 
-// infoJSON is the JSON output shape for `devbox info --output json`.
+// infoJSON is the JSON output shape for `dwe info --output json`.
 type infoJSON struct {
 	Title    string        `json:"title"`
 	Sections []infoSection `json:"sections"`
@@ -34,16 +34,16 @@ type infoItem struct {
 	Value string `json:"value,omitempty"`
 }
 
-// NewCmd builds the `devbox info` command.
+// NewCmd builds the `dwe info` command.
 func NewCmd(groupID string, flags *cmdctx.RootFlags) *cobra.Command {
 	return &cobra.Command{
 		Use:   "info",
 		Short: "Display project info dashboard (URLs, hosts, services, tools)",
-		Long: `Display a styled project dashboard loaded from devbox/info.yml.
+		Long: `Display a styled project dashboard loaded from workspace/info.yml.
 
 Shows project name, URLs, hosts, services, tools, and runtime details.
-The dashboard is driven by Go templates evaluated against the merged devbox config.`,
-		Example:      "  devbox info",
+The dashboard is driven by Go templates evaluated against the merged workspace config.`,
+		Example:      "  dwe info",
 		Args:         cobra.NoArgs,
 		GroupID:      groupID,
 		SilenceUsage: true,
@@ -55,7 +55,7 @@ The dashboard is driven by Go templates evaluated against the merged devbox conf
 
 // Run executes the info dashboard render, writing to cmd.OutOrStdout.
 // Exported so lifecycle commands can chain the info display after a successful
-// `devbox run` / `devbox restart`.
+// `dwe run` / `dwe restart`.
 func Run(cmd *cobra.Command, flags *cmdctx.RootFlags) error {
 	cfg, err := config.LoadConfig(flags.ConfigPath)
 	if err != nil {

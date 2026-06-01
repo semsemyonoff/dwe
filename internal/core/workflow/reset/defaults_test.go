@@ -30,7 +30,7 @@ func TestDefaultResetConfig_Shape(t *testing.T) {
 		{
 			name:      "stop",
 			stepNames: []string{"down"},
-			stepTypes: []string{"devbox"},
+			stepTypes: []string{"dwe"},
 			stepCmds:  []string{"docker down"},
 		},
 		{

@@ -30,7 +30,7 @@ func buildStatusTestRoot() *cobra.Command {
 }
 
 // statusFixture creates a minimal devbox project on disk for end-to-end
-// status command tests and returns the devbox.yml path.
+// status command tests and returns the workspace.yml path.
 // The main service has dir: services/main so CollectGitWorkspace produces rows.
 func statusFixture(t *testing.T) string {
 	t.Helper()
@@ -54,7 +54,7 @@ project:
 	if err := os.WriteFile(filepath.Join(devboxDir, "defaults.yml"), []byte(defaultsYML), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	// Services are loaded from per-folder devbox/services/<name>/ — not from inline devbox.yml.
+	// Services are loaded from per-folder workspace/services/<name>/ — not from inline workspace.yml.
 	// dir: services/main ensures CollectGitWorkspace returns a row (making --no-git non-vacuous).
 	for name, content := range map[string]string{
 		"main":    "type: app\ncontainer: app-main\nrequired: true\ndir: services/main\n",
@@ -295,7 +295,7 @@ func TestStatusCmd_InfraSubcommandRendersOnlyInfra(t *testing.T) {
 }
 
 // TestStatusCmd_UnknownToolsCommand_RemovedFromRoot verifies the rename guard:
-// `devbox tools` should error as unknown after the unification.
+// `dwe tools` should error as unknown after the unification.
 func TestStatusCmd_ToolsRootCmdRemoved(t *testing.T) {
 	configPath := statusFixture(t)
 	root := buildStatusTestRoot()
@@ -304,7 +304,7 @@ func TestStatusCmd_ToolsRootCmdRemoved(t *testing.T) {
 	root.SetErr(&buf)
 	root.SetArgs([]string{"-c", configPath, "tools"})
 	if err := root.Execute(); err == nil {
-		t.Fatal("expected error: 'devbox tools' should be unknown command after unification")
+		t.Fatal("expected error: 'dwe tools' should be unknown command after unification")
 	}
 }
 

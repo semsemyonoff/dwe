@@ -35,7 +35,7 @@ type Context struct {
 	Cfg             *config.DweConfig
 	CommandRegistry any // *usercommands.Registry; nil-tolerant
 
-	// ValidateCfg is the parsed devbox/validate.yml (nil when the load failed
+	// ValidateCfg is the parsed workspace/validate.yml (nil when the load failed
 	// or the file was absent). Single-parse point: the validate command and
 	// preflight populate this once; validators and checks.All* read it.
 	ValidateCfg *config.ValidateConfig
@@ -48,7 +48,7 @@ type Context struct {
 
 	// Stage is the lifecycle stage that triggered validation (e.g. "deploy",
 	// "run", "stop", "restart", "command"). Empty when invoked outside the
-	// preflight hook (i.e. by `devbox validate` directly). Validators can
+	// preflight hook (i.e. by `dwe validate` directly). Validators can
 	// read this to self-skip when their check is irrelevant for the stage
 	// (e.g. env.ports_free skips on "stop").
 	Stage string

@@ -30,7 +30,7 @@ import (
 	"github.com/spf13/cobra"
 )
 
-// validateJSON is the JSON output shape for `devbox validate --output json`.
+// validateJSON is the JSON output shape for `dwe validate --output json`.
 type validateJSON struct {
 	Summary     validateSummaryJSON `json:"summary"`
 	Diagnostics []diagnosticJSON    `json:"diagnostics"`
@@ -166,7 +166,7 @@ Scope targets:
 	configCmd := &cobra.Command{
 		Use:          "config",
 		Short:        "Validate configuration files",
-		Long:         `Check devbox.yml, devbox/services/<name>/service.yml, deploy.yml, reset.yml, and related config files for errors.`,
+		Long:         `Check workspace.yml, workspace/services/<name>/service.yml, deploy.yml, reset.yml, and related config files for errors.`,
 		Args:         cobra.NoArgs,
 		SilenceUsage: true,
 		RunE: func(cmd *cobra.Command, args []string) error {
@@ -208,7 +208,7 @@ Scope targets:
 	cmd.AddCommand(&cobra.Command{
 		Use:          "commands",
 		Short:        "Validate command definitions",
-		Long:         `Check devbox/commands for syntax errors, missing references, and other issues.`,
+		Long:         `Check workspace/commands for syntax errors, missing references, and other issues.`,
 		Args:         cobra.NoArgs,
 		SilenceUsage: true,
 		RunE: func(cmd *cobra.Command, args []string) error {
@@ -228,11 +228,11 @@ Scope targets:
 		},
 	})
 
-	// Checks (project-defined in devbox/validate.yml).
+	// Checks (project-defined in workspace/validate.yml).
 	cmd.AddCommand(&cobra.Command{
 		Use:          "checks [id]",
-		Short:        "Validate project checks from devbox/validate.yml",
-		Long:         `Run project-defined checks from devbox/validate.yml. With an id, runs only that check.`,
+		Short:        "Validate project checks from workspace/validate.yml",
+		Long:         `Run project-defined checks from workspace/validate.yml. With an id, runs only that check.`,
 		Args:         cobra.MaximumNArgs(1),
 		SilenceUsage: true,
 		RunE: func(cmd *cobra.Command, args []string) error {
@@ -247,8 +247,8 @@ Scope targets:
 	// Setup validator.
 	cmd.AddCommand(&cobra.Command{
 		Use:          "setup",
-		Short:        "Validate devbox/setup.yml schema and writes: paths",
-		Long:         `Check devbox/setup.yml for valid question definitions, identifier rules, and target scope constraints.`,
+		Short:        "Validate workspace/setup.yml schema and writes: paths",
+		Long:         `Check workspace/setup.yml for valid question definitions, identifier rules, and target scope constraints.`,
 		Args:         cobra.NoArgs,
 		SilenceUsage: true,
 		RunE: func(cmd *cobra.Command, args []string) error {
@@ -259,8 +259,8 @@ Scope targets:
 	// Translation file validators (i18n domain).
 	cmd.AddCommand(&cobra.Command{
 		Use:          "translations",
-		Short:        "Validate translation files in devbox/i18n/",
-		Long:         `Check devbox/i18n/*.yml files for parse errors, orphan command/group IDs, and unknown render.* keys.`,
+		Short:        "Validate translation files in workspace/i18n/",
+		Long:         `Check workspace/i18n/*.yml files for parse errors, orphan command/group IDs, and unknown render.* keys.`,
 		Args:         cobra.NoArgs,
 		SilenceUsage: true,
 		RunE: func(cmd *cobra.Command, args []string) error {
@@ -272,7 +272,7 @@ Scope targets:
 	cmd.AddCommand(&cobra.Command{
 		Use:          "linters [id]",
 		Short:        "Run external linters (shellcheck, hadolint, generic)",
-		Long:         `Run external linters configured in devbox/validate.yml and autodetected built-ins (shellcheck, hadolint). With an id, runs only that linter.`,
+		Long:         `Run external linters configured in workspace/validate.yml and autodetected built-ins (shellcheck, hadolint). With an id, runs only that linter.`,
 		Args:         cobra.MaximumNArgs(1),
 		SilenceUsage: true,
 		RunE: func(cmd *cobra.Command, args []string) error {
@@ -288,7 +288,7 @@ Scope targets:
 	snapshotCmd := &cobra.Command{
 		Use:          "snapshot [<name>]",
 		Short:        "Validate snapshot config and on-disk snapshot integrity",
-		Long:         `Validate devbox/snapshot.yml and (optionally with --verify) the on-disk integrity of every snapshot under ./snapshots/. Pass a name to scope checks to a single snapshot.`,
+		Long:         `Validate workspace/snapshot.yml and (optionally with --verify) the on-disk integrity of every snapshot under ./snapshots/. Pass a name to scope checks to a single snapshot.`,
 		Args:         cobra.MaximumNArgs(1),
 		SilenceUsage: true,
 		RunE: func(cmd *cobra.Command, args []string) error {
@@ -358,7 +358,7 @@ func runValidate(cmd *cobra.Command, flags *cmdctx.RootFlags, strict, quiet bool
 		// Ignore registry load errors — validators will self-skip on nil.
 	}
 
-	// Single-parse point for devbox/validate.yml. The load result (including
+	// Single-parse point for workspace/validate.yml. The load result (including
 	// any error) is threaded via validate.Context so the config.validate
 	// validator and the checks roster can read it without re-parsing.
 	var (
@@ -542,16 +542,16 @@ func validateScopeLabel(scope []string) string {
 		if len(scope) > 1 {
 			return "project check " + scope[1]
 		}
-		return "your project checks (devbox/validate.yml)"
+		return "your project checks (workspace/validate.yml)"
 	case "linters":
 		if len(scope) > 1 {
 			return "external linter " + scope[1]
 		}
 		return "your external linters"
 	case "i18n":
-		return "your translation files (devbox/i18n/)"
+		return "your translation files (workspace/i18n/)"
 	case "setup":
-		return "devbox/setup.yml"
+		return "workspace/setup.yml"
 	case "snapshot":
 		if len(scope) > 1 {
 			return "snapshot " + scope[1]
@@ -607,7 +607,7 @@ func buildRegistry(cfg *config.DweConfig, validateCfg *config.ValidateConfig, va
 	}
 	// Same deduplication as checksLoadErr: when config.validate is in scope it
 	// already surfaces the parse error, so suppress it from the linters domain
-	// to avoid a duplicate diagnostic in a full `devbox validate` run.
+	// to avoid a duplicate diagnostic in a full `dwe validate` run.
 	lintersLoadErr := validateLoadErr
 	if validate.MatchScope("config", "validate", scope) {
 		lintersLoadErr = nil

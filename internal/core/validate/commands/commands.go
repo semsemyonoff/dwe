@@ -45,10 +45,10 @@ func (v *Validator) Run(ctx validate.Context) []validate.Diagnostic {
 					Severity: validate.SeverityError,
 					Domain:   "commands",
 					Target:   "commands",
-					File:     "devbox/commands",
+					File:     "workspace/commands",
 					Line:     0,
 					Message:  fmt.Sprintf("failed to discover command files: %v", err),
-					Hint:     "check that devbox/commands directory is readable",
+					Hint:     "check that workspace/commands directory is readable",
 				},
 			}
 		}
@@ -203,7 +203,7 @@ func (v *Validator) Run(ctx validate.Context) []validate.Diagnostic {
 	}
 
 	// Reserved-id check: warn when a command's computed top-level ID shadows a
-	// reserved `devbox commands` subcommand (e.g. "list"). Group-qualified IDs
+	// reserved `dwe commands` subcommand (e.g. "list"). Group-qualified IDs
 	// (e.g. "services.list") are not reserved. Daemon source commands are
 	// dropped from byID during registry expansion and are never runnable, so
 	// their IDs do not create real conflicts and are skipped here.
@@ -224,7 +224,7 @@ func (v *Validator) Run(ctx validate.Context) []validate.Diagnostic {
 				File:     relFile,
 				Line:     0,
 				Message: fmt.Sprintf(
-					"command id %q conflicts with the reserved subcommand \"devbox commands %s\".\nThe command will only be reachable from the interactive browser (devbox commands).",
+					"command id %q conflicts with the reserved subcommand \"dwe commands %s\".\nThe command will only be reachable from the interactive browser (dwe commands).",
 					cmd.ID, cmd.ID),
 				Hint: "rename the command or move it under a group (e.g. \"tools." + cmd.ID + "\")",
 			})

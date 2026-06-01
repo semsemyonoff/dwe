@@ -41,8 +41,8 @@ func TestFangHelpOutput(t *testing.T) {
 		t.Fatal("--help produced no output")
 	}
 	// The help output should mention the binary name or usage.
-	if !strings.Contains(stdout, "devbox") {
-		t.Errorf("help output missing 'devbox', got:\n%s", stdout)
+	if !strings.Contains(stdout, "dwe") {
+		t.Errorf("help output missing 'dwe', got:\n%s", stdout)
 	}
 }
 

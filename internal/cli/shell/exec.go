@@ -122,7 +122,7 @@ func runServicesCLI(
 		return err
 	}
 
-	// Validate the resolved mode — catches typos in devbox/services.yml or defaults.yml.
+	// Validate the resolved mode — catches typos in workspace/services.yml or defaults.yml.
 	if !validModes[opts.Mode] {
 		return fmt.Errorf("invalid cli.mode %q for service %q: must be auto, exec, or run", opts.Mode, serviceName)
 	}
@@ -139,7 +139,7 @@ func runServicesCLI(
 			return fmt.Errorf("container %q: %w", fullContainerName, stateErr)
 		}
 		if status != "running" {
-			return fmt.Errorf("container %q is not running — start it with 'devbox run'", fullContainerName)
+			return fmt.Errorf("container %q is not running — start it with 'dwe run'", fullContainerName)
 		}
 		return execCLI(fullContainerName, opts.Shell, opts.User, opts.WorkDir, opts.Env)
 	case "run":
@@ -158,7 +158,7 @@ func runServicesCLI(
 			return execCLI(fullContainerName, opts.Shell, opts.User, opts.WorkDir, opts.Env)
 		default:
 			return fmt.Errorf(
-				"container %q is %s — start it first with 'devbox run'",
+				"container %q is %s — start it first with 'dwe run'",
 				fullContainerName, status,
 			)
 		}

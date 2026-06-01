@@ -31,7 +31,7 @@ func TestResetRunCmd_projectWideCleanup(t *testing.T) {
 	stateDir := filepath.Join(tmpDir, ".dwe", "deploy")
 	statePath := filepath.Join(stateDir, "state.yml")
 
-	// Create minimal devbox.yml + devbox/services/main/service.yml
+	// Create minimal workspace.yml + workspace/services/main/service.yml
 	if err := os.WriteFile(configPath, []byte(`
 schema_version: "2"
 project:
@@ -131,7 +131,7 @@ func TestResetRunCmd_handlesMissingStateFile(t *testing.T) {
 	stateDir := filepath.Join(tmpDir, ".dwe", "deploy")
 	statePath := filepath.Join(stateDir, "state.yml")
 
-	// Create minimal devbox.yml
+	// Create minimal workspace.yml
 	if err := os.WriteFile(configPath, []byte(`
 schema_version: "2"
 project:
@@ -141,7 +141,7 @@ project:
 		t.Fatal(err)
 	}
 
-	// Create devbox/reset.yml + services/main/service.yml
+	// Create workspace/reset.yml + services/main/service.yml
 	resetDir := filepath.Join(tmpDir, "workspace")
 	if err := os.MkdirAll(resetDir, 0o755); err != nil {
 		t.Fatal(err)
@@ -255,7 +255,7 @@ type resetServiceFixtureOpts struct {
 	withDir bool
 }
 
-// makeResetServiceTestDir writes a minimal devbox.yml and service folder for per-service reset tests.
+// makeResetServiceTestDir writes a minimal workspace.yml and service folder for per-service reset tests.
 // deployYML controls whether to write a deploy.yml for the service.
 // resetYML controls whether to write a per-service reset.yml.
 // Returns the config path and the base dir.
@@ -280,7 +280,7 @@ func makeResetServiceFixture(t *testing.T, serviceName string, opts resetService
 	cfgContent := "schema_version: \"2\"\nproject:\n  name: test\n  prefix: devbox\n"
 	cfgPath := filepath.Join(dir, "workspace.yml")
 	if err := os.WriteFile(cfgPath, []byte(cfgContent), 0o644); err != nil {
-		t.Fatalf("write devbox.yml: %v", err)
+		t.Fatalf("write workspace.yml: %v", err)
 	}
 	svcDir := filepath.Join(dir, "workspace", "services", serviceName)
 	if err := os.MkdirAll(svcDir, 0o755); err != nil {
@@ -942,7 +942,7 @@ func TestBuildResetServiceConfirmTitle(t *testing.T) {
 	}{
 		{
 			name:        "minimal",
-			wantContain: []string{`Reset service "pg"?`, `stop and remove container "app-pg"`, `devbox deploy run --service pg`},
+			wantContain: []string{`Reset service "pg"?`, `stop and remove container "app-pg"`, `dwe deploy run --service pg`},
 			wantOmit:    []string{"Warning: this is a required service", "delete directory", "reset.yml"},
 		},
 		{
@@ -999,7 +999,7 @@ func TestResetServiceRun_MandatoryService(t *testing.T) {
 	}
 }
 
-// makeMinimalResetProject writes a bare devbox.yml (no reset.yml, no services)
+// makeMinimalResetProject writes a bare workspace.yml (no reset.yml, no services)
 // so the default reset pipeline fires.
 func makeMinimalResetProject(t *testing.T) string {
 	t.Helper()
@@ -1013,7 +1013,7 @@ func makeMinimalResetProject(t *testing.T) string {
 }
 
 // TestRunResetPlan_DefaultPipelineWhenNoResetYML verifies that a bare project
-// (no devbox/reset.yml) succeeds, includes the docker-down step from the
+// (no workspace/reset.yml) succeeds, includes the docker-down step from the
 // built-in default, and prints the info line on stderr.
 func TestRunResetPlan_DefaultPipelineWhenNoResetYML(t *testing.T) {
 	dir := makeMinimalResetProject(t)
@@ -1032,7 +1032,7 @@ func TestRunResetPlan_DefaultPipelineWhenNoResetYML(t *testing.T) {
 		t.Errorf("plan output missing 'docker down'; got:\n%s", outBuf.String())
 	}
 
-	const wantNotice = "Using built-in default reset pipeline (override with devbox/reset.yml)."
+	const wantNotice = "Using built-in default reset pipeline (override with workspace/reset.yml)."
 	if !strings.Contains(errBuf.String(), wantNotice) {
 		t.Errorf("stderr missing info line %q; got:\n%s", wantNotice, errBuf.String())
 	}
@@ -1056,7 +1056,7 @@ func TestRunResetPlan_JSONModeNoInfoLine(t *testing.T) {
 }
 
 // TestRunResetPlan_UserResetYMLNoInfoLine verifies that a project with a
-// devbox/reset.yml does not emit the default-pipeline info line.
+// workspace/reset.yml does not emit the default-pipeline info line.
 func TestRunResetPlan_UserResetYMLNoInfoLine(t *testing.T) {
 	dir := makeMinimalResetProject(t)
 
@@ -1107,7 +1107,7 @@ func TestRunResetPlan_DefaultPipelineShellFormat(t *testing.T) {
 	}
 
 	// Shell format emits the info line too.
-	const wantNotice = "Using built-in default reset pipeline (override with devbox/reset.yml)."
+	const wantNotice = "Using built-in default reset pipeline (override with workspace/reset.yml)."
 	if !strings.Contains(errBuf.String(), wantNotice) {
 		t.Errorf("stderr missing info line in shell format; got:\n%s", errBuf.String())
 	}

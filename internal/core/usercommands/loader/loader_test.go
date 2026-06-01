@@ -287,7 +287,7 @@ commands:
     type: script
     description: Create database dump
     script:
-      path: devbox/scripts/db/dump-create.sh
+      path: workspace/scripts/db/dump-create.sh
     files:
       dump:
         access: write
@@ -369,7 +369,7 @@ commands:
     type: script
     description: Restore database dump
     script:
-      path: devbox/scripts/db/dump-deploy.sh
+      path: workspace/scripts/db/dump-deploy.sh
     files:
       dump:
         access: read
@@ -462,7 +462,7 @@ commands:
         on_error: remove
         env: DUMP_FILE
     script:
-      path: devbox/scripts/db/dump-create.sh
+      path: workspace/scripts/db/dump-create.sh
     messages:
       success: "Database dump created at ${files.dump.path}"
       error: "Failed to create database dump"
@@ -544,7 +544,7 @@ commands:
         path: /tmp/dumps/mydb.sql.gz
         env: DUMP_FILE
     script:
-      path: devbox/scripts/db/dump-create.sh
+      path: workspace/scripts/db/dump-create.sh
 `)
 
 	_, err := LoadCommandFile(absPath, dir)
@@ -790,7 +790,7 @@ commands:
         required: true
         env: DUMP_FILE
     script:
-      path: devbox/scripts/db/dump-deploy.sh
+      path: workspace/scripts/db/dump-deploy.sh
     messages:
       success: "Database restored from ${files.dump.path}"
       error: "Failed to restore database"

@@ -13,7 +13,7 @@ import (
 )
 
 // ResolvePlan builds the ordered step list from the reset pipeline config.
-// Loads devbox/reset.yml and resolves all phases/steps. When the file is
+// Loads workspace/reset.yml and resolves all phases/steps. When the file is
 // absent, the built-in default pipeline is used.
 // reg (registry) is used to validate files_gate directives and must be non-nil.
 func ResolvePlan(cfg *config.DweConfig, reg *registry.Registry) ([]pipeline.ResolvedStep, error) {
@@ -21,7 +21,7 @@ func ResolvePlan(cfg *config.DweConfig, reg *registry.Registry) ([]pipeline.Reso
 	return steps, err
 }
 
-// LoadAndResolvePlan loads devbox/reset.yml and resolves its phases.
+// LoadAndResolvePlan loads workspace/reset.yml and resolves its phases.
 // Returns the loaded reset config (for inspecting fields like Log), the
 // resolved step list, and whether the built-in default pipeline was used.
 // When the file is absent, the built-in default pipeline is used.

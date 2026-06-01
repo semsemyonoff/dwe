@@ -25,7 +25,7 @@ import (
 	huh "charm.land/huh/v2"
 )
 
-// runCommandByID is the single execution path for both `devbox commands <id>`
+// runCommandByID is the single execution path for both `dwe commands <id>`
 // and the TUI run flow. It handles inspect routing, param prompting,
 // confirmation summary, and dispatch to the runner.
 func runCommandByID(
@@ -139,7 +139,7 @@ func runCommandByID(
 		if ferr != nil {
 			return ferr
 		}
-		res, ferr := runAsk(ctx, "devbox commands › "+def.ID, fields, ask.RunOptions{Input: stdin, Output: stdout})
+		res, ferr := runAsk(ctx, "dwe commands › "+def.ID, fields, ask.RunOptions{Input: stdin, Output: stdout})
 		if ferr != nil {
 			if errors.Is(ferr, huh.ErrUserAborted) {
 				return nil

@@ -656,7 +656,7 @@ func TestFileRecorder_ServiceOnlyRunDoesNotStampProjectHash(t *testing.T) {
 	// This is what previously triggered projectStepsSeen=true incorrectly.
 	envStep := ResolvedStep{
 		Phase: config.DeployPhase{Name: "env", Description: "Environment"},
-		Step:  config.DeployStep{Name: "render-env", Type: "devbox", Cmd: "render env --out .env"},
+		Step:  config.DeployStep{Name: "render-env", Type: "dwe", Cmd: "render env --out .env"},
 	}
 	rec.OnStepStart(envStep.StepAddress(), envStep, "env-hash")
 	rec.OnStepFinish(envStep.StepAddress(), envStep, "env-hash", 3)
@@ -723,7 +723,7 @@ func TestFileRecorder_ServiceOnlyRunPreservesProjectLastRunStatus(t *testing.T) 
 	// Implicit env step (project-scoped) runs first in a service plan.
 	envStep := ResolvedStep{
 		Phase: config.DeployPhase{Name: "env"},
-		Step:  config.DeployStep{Name: "render-env", Type: "devbox", Cmd: "render env"},
+		Step:  config.DeployStep{Name: "render-env", Type: "dwe", Cmd: "render env"},
 	}
 	rec.OnStepStart(envStep.StepAddress(), envStep, "env-hash")
 	rec.OnStepFinish(envStep.StepAddress(), envStep, "env-hash", 2)

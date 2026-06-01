@@ -30,7 +30,7 @@ var paramRefRe = regexp.MustCompile(`\$\{\s*param\.([A-Za-z_][A-Za-z0-9_]*)\s*\}
 
 // daemonStructuralDiagnostics emits per-field diagnostics for type=daemon
 // commands. It replays the model-level checks so users see file/line/hint
-// context at `devbox validate` time, and adds validator-only checks
+// context at `dwe validate` time, and adds validator-only checks
 // (param-reference walks) too rich for the model.
 //
 // The returned `fields` map records which model sentinels are now redundant

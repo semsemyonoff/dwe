@@ -8,7 +8,7 @@ import (
 	"github.com/spf13/cobra"
 )
 
-// NewRestartCmd builds the `devbox restart` cobra command.
+// NewRestartCmd builds the `dwe restart` cobra command.
 func NewRestartCmd(groupID string, flags *cmdctx.RootFlags) *cobra.Command {
 	var yes bool
 	var skipPreflight bool
@@ -18,10 +18,10 @@ func NewRestartCmd(groupID string, flags *cmdctx.RootFlags) *cobra.Command {
 		Short: "Restart the project (stop, then run --no-update)",
 		Long: `Restart the project by running the full stop lifecycle then the full run lifecycle.
 
-The run leg always skips the git update probe (equivalent to 'devbox run --no-update').
+The run leg always skips the git update probe (equivalent to 'dwe run --no-update').
 
-Use 'devbox docker restart' for the low-level compose restart passthrough.`,
-		Example:      `  devbox restart`,
+Use 'dwe docker restart' for the low-level compose restart passthrough.`,
+		Example:      `  dwe restart`,
 		Args:         cobra.NoArgs,
 		GroupID:      groupID,
 		SilenceUsage: true,

@@ -18,7 +18,7 @@ import (
 	"github.com/spf13/cobra"
 )
 
-// NewCmd builds the `devbox snapshot` command group.
+// NewCmd builds the `dwe snapshot` command group.
 //
 // Read-only subcommands (list, current, inspect) ship in this task; the
 // mutating subcommands (create, restore, rollback, remove, pack, unpack) are
@@ -27,9 +27,9 @@ func NewCmd(groupID string, flags *cmdctx.RootFlags) *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "snapshot",
 		Short: "Capture, restore, and manage project snapshots",
-		Long: `Capture the state of a devbox project (databases, indices, devbox
+		Long: `Capture the state of a dwe project (databases, indices, dwe
 local config, deploy state) into a named directory under ./snapshots/<name>/,
-and restore or roll back to it. Workflows live in devbox/snapshot.yml.`,
+and restore or roll back to it. Workflows live in workspace/snapshot.yml.`,
 		GroupID:      groupID,
 		SilenceUsage: true,
 	}
@@ -91,7 +91,7 @@ type snapshotCurrentWrapper struct {
 
 // --- Commands ---
 
-// newSnapshotListCmd: `devbox snapshot list`.
+// newSnapshotListCmd: `dwe snapshot list`.
 func newSnapshotListCmd(flags *cmdctx.RootFlags) *cobra.Command {
 	return &cobra.Command{
 		Use:          "list",
@@ -176,7 +176,7 @@ func renderSnapshotListText(data snapshotListJSON) string {
 	return render.Table(headers, rows)
 }
 
-// newSnapshotCurrentCmd: `devbox snapshot current`.
+// newSnapshotCurrentCmd: `dwe snapshot current`.
 func newSnapshotCurrentCmd(flags *cmdctx.RootFlags) *cobra.Command {
 	return &cobra.Command{
 		Use:          "current",
@@ -255,7 +255,7 @@ func renderSnapshotCurrentText(data snapshotCurrentWrapper) string {
 	return b.String()
 }
 
-// newSnapshotInspectCmd: `devbox snapshot inspect <name|tar-path>`.
+// newSnapshotInspectCmd: `dwe snapshot inspect <name|tar-path>`.
 func newSnapshotInspectCmd(flags *cmdctx.RootFlags) *cobra.Command {
 	return &cobra.Command{
 		Use:               "inspect <name|tar-path>",
@@ -436,7 +436,7 @@ func snapshotNameCompletion(flags *cmdctx.RootFlags) func(*cobra.Command, []stri
 	}
 }
 
-// loadSnapshotConfigOrNil reads devbox/snapshot.yml at baseDir. Missing file
+// loadSnapshotConfigOrNil reads workspace/snapshot.yml at baseDir. Missing file
 // is not an error — the project may not have configured snapshots yet. Other
 // load errors are returned wrapped.
 func loadSnapshotConfigOrNil(baseDir string) (*config.SnapshotConfig, error) {

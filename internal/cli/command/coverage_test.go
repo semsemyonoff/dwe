@@ -249,7 +249,7 @@ func TestPrintCommandInspect_ScriptNilShellDefaultsSh(t *testing.T) {
 
 // --- newCommandListCmd RunE with temp project ---
 
-// makeMinimalProject creates a minimal devbox.yml, docker.yml, and optional commands dir.
+// makeMinimalProject creates a minimal workspace.yml, docker.yml, and optional commands dir.
 func makeMinimalProject(t *testing.T) string {
 	t.Helper()
 	dir := t.TempDir()

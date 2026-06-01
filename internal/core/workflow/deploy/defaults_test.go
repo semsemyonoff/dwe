@@ -29,7 +29,7 @@ func TestDefaultDeployConfig_Shape(t *testing.T) {
 		{
 			name:          "start",
 			stepNames:     []string{"up"},
-			stepTypes:     []string{"devbox"},
+			stepTypes:     []string{"dwe"},
 			stepCmds:      []string{"docker up --wait"},
 			stepUntracked: []bool{true},
 		},
@@ -37,7 +37,7 @@ func TestDefaultDeployConfig_Shape(t *testing.T) {
 			name:      "post-deploy",
 			untracked: true,
 			stepNames: []string{"info", "success"},
-			stepTypes: []string{"devbox", "builtin"},
+			stepTypes: []string{"dwe", "builtin"},
 			stepCmds:  []string{"info", "message"},
 		},
 	}

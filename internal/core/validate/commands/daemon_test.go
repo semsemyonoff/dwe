@@ -12,7 +12,7 @@ import (
 )
 
 // runValidator writes the given command file content to a temporary
-// devbox/commands directory and runs the Validator, returning the produced
+// workspace/commands directory and runs the Validator, returning the produced
 // diagnostics.
 func runValidator(t *testing.T, content string) []validate.Diagnostic {
 	t.Helper()

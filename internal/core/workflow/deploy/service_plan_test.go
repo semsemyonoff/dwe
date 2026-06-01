@@ -178,7 +178,7 @@ func TestFindStep_threePartAddress(t *testing.T) {
 func makeSubsetCfg(services map[string]config.ServiceConfig) *config.DweConfig {
 	return &config.DweConfig{
 		Services: services,
-		Raw:      map[string]any{"__configPath": "/tmp/devbox.yml"},
+		Raw:      map[string]any{"__configPath": "/tmp/workspace.yml"},
 	}
 }
 

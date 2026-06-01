@@ -515,7 +515,7 @@ func TestRenderTogglePlan_SingleServiceDeploy(t *testing.T) {
 	renderTogglePlan(&w, plan)
 	got := w.String()
 	// Single-target deploy renders as a runnable shell command.
-	if !strings.Contains(got, "devbox deploy run --service web") {
+	if !strings.Contains(got, "dwe deploy run --service web") {
 		t.Errorf("want shell-form single deploy, got: %q", got)
 	}
 	if strings.Contains(got, "→ apply step") {
@@ -568,7 +568,7 @@ func TestRenderTogglePlan_FullPlan_NumberedOrder(t *testing.T) {
 	if len(numbered) != 4 {
 		t.Fatalf("want 4 numbered lines, got %d: %v", len(numbered), numbered)
 	}
-	if !strings.HasPrefix(numbered[0], "1.") || !strings.Contains(numbered[0], "devbox commands foo:prepare") {
+	if !strings.HasPrefix(numbered[0], "1.") || !strings.Contains(numbered[0], "dwe commands foo:prepare") {
 		t.Errorf("line 1 wrong: %q", numbered[0])
 	}
 	if !strings.HasPrefix(numbered[1], "2.") || !strings.Contains(numbered[1], "deploy services {bar, foo}") {
@@ -577,7 +577,7 @@ func TestRenderTogglePlan_FullPlan_NumberedOrder(t *testing.T) {
 	if !strings.HasPrefix(numbered[2], "3.") || !strings.Contains(numbered[2], "restart stack") {
 		t.Errorf("line 3 wrong: %q", numbered[2])
 	}
-	if !strings.HasPrefix(numbered[3], "4.") || !strings.Contains(numbered[3], "devbox commands foo:smoke") {
+	if !strings.HasPrefix(numbered[3], "4.") || !strings.Contains(numbered[3], "dwe commands foo:smoke") {
 		t.Errorf("line 4 wrong: %q", numbered[3])
 	}
 }

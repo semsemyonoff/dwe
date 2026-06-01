@@ -146,7 +146,7 @@ docs:
 	require.Equal(t, validate.SeverityOK, diags[0].Severity) // workspace
 }
 
-// writeServicesDir sets up a project root with per-folder services under devbox/services/
+// writeServicesDir sets up a project root with per-folder services under workspace/services/
 // for servicesValidator tests. The body is a YAML fragment shaped like `services: {name: {...}}`.
 // Returns the project root path.
 func writeServicesDir(t *testing.T, body string) string {

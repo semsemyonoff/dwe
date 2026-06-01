@@ -257,10 +257,10 @@ func (m *model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	return m, cmd
 }
 
-// renderTitleBar renders the branded title bar — `{▪} devbox · <project> · Status`
+// renderTitleBar renders the branded title bar — `{▪} dwe · <project> · Status`
 // in accent+bold, wrapped in lipgloss with padding.
 func (m *model) renderTitleBar() string {
-	text := render.LogoMarkPlain() + " devbox · " + m.deps.ProjectName + " · Status"
+	text := render.LogoMarkPlain() + " dwe · " + m.deps.ProjectName + " · Status"
 	return lipgloss.NewStyle().
 		Width(m.width).
 		Padding(0, 1).

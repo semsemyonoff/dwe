@@ -76,13 +76,13 @@ func TestRunCmd_InEnvironmentGroup(t *testing.T) {
 
 // --- config loading error tests (cobra integration) ---
 
-// makeMinimalDevboxYML writes the minimum devbox.yml needed for config.LoadConfig to succeed.
+// makeMinimalDevboxYML writes the minimum workspace.yml needed for config.LoadConfig to succeed.
 func makeMinimalDevboxYML(t *testing.T, dir string) string {
 	t.Helper()
 	cfgPath := filepath.Join(dir, "workspace.yml")
 	content := "schema_version: \"2\"\nproject:\n  name: test\n  prefix: devbox\n"
 	if err := os.WriteFile(cfgPath, []byte(content), 0644); err != nil {
-		t.Fatalf("writing devbox.yml: %v", err)
+		t.Fatalf("writing workspace.yml: %v", err)
 	}
 	return cfgPath
 }

@@ -29,13 +29,13 @@ func (v *deployAfterValidator) Run(ctx validate.Context) []validate.Diagnostic {
 	projectDeployPath := filepath.Join(ctx.ProjectRoot, "workspace", "deploy.yml")
 	diags = append(diags, checkAfterFieldNotAllowed(ctx, projectDeployPath,
 		"config.deploy",
-		`"after" is only valid in devbox/services/<name>/deploy.yml; remove from project-wide deploy.yml`,
+		`"after" is only valid in workspace/services/<name>/deploy.yml; remove from project-wide deploy.yml`,
 	)...)
 
 	projectResetPath := filepath.Join(ctx.ProjectRoot, "workspace", "reset.yml")
 	diags = append(diags, checkAfterFieldNotAllowed(ctx, projectResetPath,
 		"config.reset",
-		`"after" is only valid in devbox/services/<name>/deploy.yml; remove from reset.yml`,
+		`"after" is only valid in workspace/services/<name>/deploy.yml; remove from reset.yml`,
 	)...)
 
 	// Per-service reset.yml files.
@@ -60,7 +60,7 @@ func (v *deployAfterValidator) Run(ctx validate.Context) []validate.Diagnostic {
 		resetPath := filepath.Join(servicesDir, name, "reset.yml")
 		diags = append(diags, checkAfterFieldNotAllowed(ctx, resetPath,
 			"config.services-reset:"+name,
-			fmt.Sprintf(`"after" is only valid in devbox/services/<name>/deploy.yml; remove from %s/reset.yml`, name),
+			fmt.Sprintf(`"after" is only valid in workspace/services/<name>/deploy.yml; remove from %s/reset.yml`, name),
 		)...)
 	}
 

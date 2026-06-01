@@ -52,8 +52,8 @@ func TestDefaultRunConfig_Shape(t *testing.T) {
 	if step.Name != "up" {
 		t.Errorf("step Name = %q, want %q", step.Name, "up")
 	}
-	if step.Type != "devbox" {
-		t.Errorf("step Type = %q, want %q", step.Type, "devbox")
+	if step.Type != "dwe" {
+		t.Errorf("step Type = %q, want %q", step.Type, "dwe")
 	}
 	if step.Cmd != "docker up --wait" {
 		t.Errorf("step Cmd = %q, want %q", step.Cmd, "docker up --wait")

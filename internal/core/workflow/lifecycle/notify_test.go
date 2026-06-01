@@ -122,7 +122,7 @@ func TestRunRun_EarlyConfigFailure_PopulatesEmptyProject(t *testing.T) {
 	pointHomeAtTempDir(t)
 	rec := installRecordingNotifier(t)
 	dir := t.TempDir()
-	// No devbox.yml — RunRun fails at the first config.LoadConfig step.
+	// No workspace.yml — RunRun fails at the first config.LoadConfig step.
 	cfgPath := filepath.Join(dir, "workspace.yml")
 
 	if err := RunRun(RunContext{ConfigPath: cfgPath}); err == nil {

@@ -28,7 +28,7 @@ func DefaultResetConfig() *config.ProjectDeployConfig {
 				Steps: []config.DeployStep{
 					{
 						Name:        "down",
-						Type:        "devbox",
+						Type:        "dwe",
 						Cmd:         "docker down",
 						Description: "Stop and remove all project containers",
 					},

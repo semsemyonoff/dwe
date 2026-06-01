@@ -1,4 +1,4 @@
-// Package status hosts the `devbox status` command tree.
+// Package status hosts the `dwe status` command tree.
 package status
 
 import (
@@ -179,23 +179,23 @@ func shouldUseTUI(noTUI bool, no *noSectionFlags) bool {
 	return isTerminalFn(os.Stdout.Fd())
 }
 
-// NewCmd creates the `devbox status` command tree.
+// NewCmd creates the `dwe status` command tree.
 func NewCmd(groupID string, flags *cmdctx.RootFlags) *cobra.Command {
 	noFlags := &noSectionFlags{}
 	var noTUI bool
 	cmd := &cobra.Command{
 		Use:   "status",
 		Short: "Show stack health and per-section status (read-only)",
-		Long: `Display the running status of the entire devbox stack.
+		Long: `Display the running status of the entire dwe stack.
 
 The default view prints a health indicator followed by all sections in order:
 apps, tools, infra, deploy, topology, git workspace, daemons. Each section is
 also addressable as 'status <section>'; --no-<section> flags suppress sections
 in the default view.`,
-		Example: `  devbox status
-  devbox status apps
-  devbox status deploy main
-  devbox status --no-git --no-topology`,
+		Example: `  dwe status
+  dwe status apps
+  dwe status deploy main
+  dwe status --no-git --no-topology`,
 		GroupID:      groupID,
 		Args:         cobra.NoArgs,
 		SilenceUsage: true,

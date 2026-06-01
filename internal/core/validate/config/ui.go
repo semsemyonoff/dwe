@@ -14,7 +14,7 @@ import (
 
 // uiCommandsKnownKeys lists the YAML keys recognised under ui.commands.
 // Unknown keys are surfaced as warnings by the validator since the
-// devbox.yml loader is lenient and silently ignores them.
+// workspace.yml loader is lenient and silently ignores them.
 var uiCommandsKnownKeys = map[string]bool{
 	"default_expanded_depth": true,
 	"auto_collapse_empty":    true,
@@ -35,7 +35,7 @@ func (v *uiValidator) Run(ctx validate.Context) []validate.Diagnostic {
 
 	data, err := os.ReadFile(configPath)
 	if err != nil {
-		// devboxValidator already surfaces missing/invalid devbox.yml — stay silent.
+		// devboxValidator already surfaces missing/invalid workspace.yml — stay silent.
 		return nil
 	}
 	var top struct {

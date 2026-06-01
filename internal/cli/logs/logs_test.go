@@ -47,7 +47,7 @@ func execCmd(t *testing.T, root *cobra.Command, args ...string) (stdout, stderr 
 	return outBuf.String(), errBuf.String(), err
 }
 
-// writeLogsTestConfig creates a temp dir with devbox.yml and optional service
+// writeLogsTestConfig creates a temp dir with workspace.yml and optional service
 // folders. services maps service name → container template string.
 func writeLogsTestConfig(t *testing.T, dir string, svcs map[string]string) string {
 	t.Helper()
@@ -61,7 +61,7 @@ func writeLogsTestConfigWithDockerBin(t *testing.T, dir string, svcs map[string]
 	t.Helper()
 	content := "schema_version: \"2\"\nproject:\n  name: test\n  prefix: devbox\n"
 	if err := os.WriteFile(filepath.Join(dir, "workspace.yml"), []byte(content), 0o644); err != nil {
-		t.Fatalf("write devbox.yml: %v", err)
+		t.Fatalf("write workspace.yml: %v", err)
 	}
 	for name, container := range svcs {
 		svcDir := filepath.Join(dir, "workspace", "services", name)
@@ -337,7 +337,7 @@ func TestLogsCmd_TextMode_ArgsToDocker(t *testing.T) {
 	}
 }
 
-// logRec mirrors the NDJSON envelope emitted by `devbox logs --output json`.
+// logRec mirrors the NDJSON envelope emitted by `dwe logs --output json`.
 type logRec struct {
 	Ts     string `json:"ts"`
 	Stream string `json:"stream"`

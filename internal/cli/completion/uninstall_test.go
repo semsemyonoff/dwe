@@ -10,7 +10,7 @@ import (
 )
 
 // buildFreshUninstallCmd builds a fresh root command and returns a runner for
-// `devbox completion uninstall`. A fresh root is required per test because
+// `dwe completion uninstall`. A fresh root is required per test because
 // cobra accumulates flag state across Execute() calls.
 func buildFreshUninstallCmd(t *testing.T) func(args ...string) (stdout, stderr string, err error) {
 	t.Helper()

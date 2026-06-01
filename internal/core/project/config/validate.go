@@ -45,7 +45,7 @@ var allowedLinterTypes = map[string]struct{}{
 	"generic": {},
 }
 
-// CheckEntry is a single entry from devbox/validate.yml. The struct stores the
+// CheckEntry is a single entry from workspace/validate.yml. The struct stores the
 // parsed-and-validated form: severity is the diag.Severity enum (validate.yml
 // uses the string spelling on the wire; the loader converts and rejects
 // unknown values at parse time).
@@ -64,7 +64,7 @@ type CheckEntry struct {
 	SourceLine int
 }
 
-// ValidateConfig is the top-level shape of devbox/validate.yml.
+// ValidateConfig is the top-level shape of workspace/validate.yml.
 type ValidateConfig struct {
 	Checks  []CheckEntry
 	Linters []LinterEntry
@@ -166,7 +166,7 @@ func levenshteinDistance(a, b string) int {
 	return prev[len(b)]
 }
 
-// LoadValidateConfig reads and strictly decodes devbox/validate.yml.
+// LoadValidateConfig reads and strictly decodes workspace/validate.yml.
 //
 // Returns (cfg, warnings, nil) on success. Soft issues (unknown stages outside
 // the reserved set) are reported as info-level diagnostics in warnings rather
@@ -202,10 +202,10 @@ func LoadValidateConfig(path string) (*ValidateConfig, []diag.Diagnostic, error)
 	var warnings []diag.Diagnostic
 	seenIDs := make(map[string]int, len(raw.Checks))
 
-	// Diagnostics always reference the canonical "devbox/validate.yml" path
+	// Diagnostics always reference the canonical "workspace/validate.yml" path
 	// regardless of how the file was located on disk — matches what Task 4/5
 	// validators report so users see a consistent reference everywhere.
-	const diagFile = "devbox/validate.yml"
+	const diagFile = "workspace/validate.yml"
 
 	for i, r := range raw.Checks {
 		line := lines[i]

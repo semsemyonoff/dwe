@@ -1,4 +1,4 @@
-// Package logs provides the `devbox logs <service>` command.
+// Package logs provides the `dwe logs <service>` command.
 package logs
 
 import (
@@ -33,7 +33,7 @@ type logsOptions struct {
 	follow bool
 }
 
-// NewCmd builds the `devbox logs <service>` command.
+// NewCmd builds the `dwe logs <service>` command.
 func NewCmd(groupID string, flags *cmdctx.RootFlags) *cobra.Command {
 	var opts logsOptions
 
@@ -44,7 +44,7 @@ func NewCmd(groupID string, flags *cmdctx.RootFlags) *cobra.Command {
 
 In text mode (default), output is passed through unchanged from docker logs.
 With --output json, emits NDJSON: one {"ts","stream","msg"} object per line.`,
-		Example:           "  devbox logs myapp\n  devbox logs myapp --tail 100 --follow\n  devbox logs myapp --output json --since 5m",
+		Example:           "  dwe logs myapp\n  dwe logs myapp --tail 100 --follow\n  dwe logs myapp --output json --since 5m",
 		SilenceUsage:      true,
 		GroupID:           groupID,
 		Args:              cobra.ExactArgs(1),

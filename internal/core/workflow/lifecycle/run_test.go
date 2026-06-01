@@ -425,7 +425,7 @@ func TestRunRun_PullError_ContinuesWithWarning(t *testing.T) {
 
 // --- .env render-and-source tests ---
 
-// TestRunRun_RendersDotEnvBeforePhases is a regression guard: `devbox run`
+// TestRunRun_RendersDotEnvBeforePhases is a regression guard: `dwe run`
 // must regenerate devbox/.env from the current config BEFORE preflight, lock
 // acquisition, git probe, and lifecycle phases, mirroring the implicit
 // render-env step at the head of the deploy pipeline. Lifecycle phases (and

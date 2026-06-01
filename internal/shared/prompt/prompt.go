@@ -136,7 +136,7 @@ func runFromDir(stdout io.Writer, args []string, cwd string, useColor bool) int 
 // 0x7F), C1 controls (0x80–0x9F), LTR/RTL marks (U+200E–U+200F), Bidi
 // embeddings and overrides (U+202A–U+202E), and Bidi isolates (U+2066–U+2069).
 // Starship runs devbox prompt automatically, so this must be safe for untrusted
-// devbox.yml files in cloned repos.
+// workspace.yml files in cloned repos.
 func sanitizeName(s string) string {
 	return strings.Map(func(r rune) rune {
 		if r < 0x20 || r == 0x7F || (r >= 0x80 && r <= 0x9F) ||
@@ -280,7 +280,7 @@ func parseArgs(args []string) (check bool, ok bool) {
 	return false, false
 }
 
-// findRoot walks up from start looking for devbox.yml. Returns the directory
+// findRoot walks up from start looking for workspace.yml. Returns the directory
 // containing it. Does NOT resolve symlinks (intentional: prompt does not care
 // about canonical paths, and skipping EvalSymlinks saves syscalls).
 func findRoot(start string) (string, bool) {
@@ -298,7 +298,7 @@ func findRoot(start string) (string, bool) {
 }
 
 // readProjectName returns the project name and ok=true on success. ok=false
-// signals a hard read/parse failure (corrupted devbox.yml) and the caller
+// signals a hard read/parse failure (corrupted workspace.yml) and the caller
 // should exit silently with code 1.
 func readProjectName(root string) (string, bool) {
 	data, err := os.ReadFile(filepath.Join(root, configFilename))

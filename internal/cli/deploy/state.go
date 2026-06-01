@@ -26,9 +26,9 @@ func newDeployStateCmd(flags *cmdctx.RootFlags) *cobra.Command {
 The deploy state file tracks the outcome and hashes of every deployed step,
 enabling idempotent deploys. Use 'show' to inspect the current state, 'clear'
 to reset the state, or 'repair' to rebuild status aggregates.`,
-		Example: `  devbox deploy state show
-  devbox deploy state clear
-  devbox deploy state repair`,
+		Example: `  dwe deploy state show
+  dwe deploy state clear
+  dwe deploy state repair`,
 		SilenceUsage: true,
 	}
 	cmd.AddCommand(newDeployStateShowCmd(flags))
@@ -45,7 +45,7 @@ func newDeployStateShowCmd(flags *cmdctx.RootFlags) *cobra.Command {
 
 Shows per-step status, timestamps, action hashes, and duration metrics.
 If the state file does not exist, shows a message indicating no state.`,
-		Example: `  devbox deploy state show`,
+		Example: `  dwe deploy state show`,
 		Args:    cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			return deployStateShowCmd(flags, cmd.OutOrStdout())
@@ -62,7 +62,7 @@ func deployStateShowCmd(flags *cmdctx.RootFlags, out io.Writer) error {
 
 	// Check existence before loading to avoid printing zero-value state.
 	if _, err := os.Stat(statePath); errors.Is(err, os.ErrNotExist) {
-		render.Stdout().Info("No deploy state found. Run 'devbox deploy run' to create state.")
+		render.Stdout().Info("No deploy state found. Run 'dwe deploy run' to create state.")
 		return nil
 	}
 
@@ -89,12 +89,12 @@ func newDeployStateClearCmd(flags *cmdctx.RootFlags) *cobra.Command {
 		Short: "Clear the deploy state",
 		Long: `Delete the deploy state file at .dwe/deploy/state.yml.
 
-This removes all step status records, hashes, and run metrics. The next 'devbox deploy run'
+This removes all step status records, hashes, and run metrics. The next 'dwe deploy run'
 will treat all steps as needing to be executed.
 
 In interactive mode (TTY), a confirmation prompt is shown. Use -y/--non-interactive to skip the prompt.`,
-		Example: `  devbox deploy state clear
-  devbox deploy state clear -y`,
+		Example: `  dwe deploy state clear
+  dwe deploy state clear -y`,
 		Args: cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			return deployStateClearCmd(flags, force)
@@ -163,7 +163,7 @@ step records, without modifying any step-level data (hashes, timestamps, etc.).
 
 Use this to fix inconsistencies that may arise from manual edits or unexpected
 process terminations.`,
-		Example: `  devbox deploy state repair`,
+		Example: `  dwe deploy state repair`,
 		Args:    cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			return deployStateRepairCmd(flags)

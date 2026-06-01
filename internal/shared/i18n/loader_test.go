@@ -108,7 +108,7 @@ func TestLoad(t *testing.T) {
 		{
 			name: "built-in only, no project dir",
 			setupFunc: func(t *testing.T) string {
-				// Create a temp dir with no devbox/i18n/ subdirectory
+				// Create a temp dir with no workspace/i18n/ subdirectory
 				dir := t.TempDir()
 				return dir
 			},

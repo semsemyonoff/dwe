@@ -35,7 +35,7 @@ func registryIDCompletion(flags *cmdctx.RootFlags, includePrivate bool) func(*co
 		completions := make([]string, 0, len(defs)+1)
 		if !includePrivate && len(defs) > 0 {
 			// Active Help: hint for run subcommand.
-			completions = cobra.AppendActiveHelp(completions, "Use 'devbox commands --inspect <id>' to see command details")
+			completions = cobra.AppendActiveHelp(completions, "Use 'dwe commands --inspect <id>' to see command details")
 		}
 		translator := i18n.TranslatorOrNop(flags.I18n)
 		for _, d := range defs {

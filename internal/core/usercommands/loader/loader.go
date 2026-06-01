@@ -48,14 +48,14 @@ func ComputeGroup(relPath string) string {
 	return strings.Join(strings.Split(relPath, "/"), ".")
 }
 
-// ReservedTopLevelIDs lists command IDs that shadow built-in `devbox commands`
+// ReservedTopLevelIDs lists command IDs that shadow built-in `dwe commands`
 // subcommands. A user command whose computed ID equals one of these entries is
-// unreachable via `devbox commands <id>` because cobra resolves the subcommand
+// unreachable via `dwe commands <id>` because cobra resolves the subcommand
 // first. The validate/commands validator emits a warning when this happens.
 var ReservedTopLevelIDs = []string{"list"}
 
 // IsReservedTopLevelID reports whether id exactly matches a reserved top-level
-// `devbox commands` subcommand name. Group-qualified ids (e.g. "services.list")
+// `dwe commands` subcommand name. Group-qualified ids (e.g. "services.list")
 // are NOT reserved.
 func IsReservedTopLevelID(id string) bool {
 	return slices.Contains(ReservedTopLevelIDs, id)

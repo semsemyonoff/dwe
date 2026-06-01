@@ -19,7 +19,7 @@ import (
 	"github.com/spf13/cobra"
 )
 
-// NewCmd builds the `devbox services` command tree: bare-form opens a
+// NewCmd builds the `dwe services` command tree: bare-form opens a
 // multi-select toggle; subcommands enable / disable handle individual services.
 func NewCmd(groupID string, flags *cmdctx.RootFlags) *cobra.Command {
 	var apply, printPlan, skipHooks bool
@@ -32,7 +32,7 @@ Required services (including required infra) are always active and shown
 pre-checked / locked. Optional infra services (required: false) appear
 alongside apps and tools.
 
-On submit, changes are written to devbox/local.yml and .env is regenerated.
+On submit, changes are written to workspace/local.yml and .env is regenerated.
 
 Use --print-plan to preview what lifecycle steps will run after the selection
 without making any changes (you will still use the interactive selector).
@@ -41,11 +41,11 @@ Use --apply to execute the plan non-interactively after writing local.yml.
 When stdin is not a TTY (piped or non-interactive) or when --output json is
 set, the command renders a read-only listing of every service and its status
 instead of opening the toggle. For a richer view including topology, deploy
-state, and daemons, run 'devbox status'.`,
-		Example: `  devbox services
-  devbox services --print-plan
-  devbox services enable adminer
-  devbox services disable second`,
+state, and daemons, run 'dwe status'.`,
+		Example: `  dwe services
+  dwe services --print-plan
+  dwe services enable adminer
+  dwe services disable second`,
 		Args:         cobra.NoArgs,
 		SilenceUsage: true,
 		RunE: func(cmd *cobra.Command, args []string) error {
@@ -85,7 +85,7 @@ func runServicesToggle(cmd *cobra.Command, flags *cmdctx.RootFlags, opts singleT
 		}
 	}
 	if togglable == 0 {
-		return fmt.Errorf("nothing to toggle, see 'devbox status'")
+		return fmt.Errorf("nothing to toggle, see 'dwe status'")
 	}
 
 	items := make([]widgets.MultiSelectItem, len(rows))
@@ -325,8 +325,8 @@ func newServiceEnableCmd(flags *cmdctx.RootFlags) *cobra.Command {
 	var apply, printPlan, skipHooks bool
 	cmd := &cobra.Command{
 		Use:   "enable [service]",
-		Short: "Enable an optional service (writes to devbox/local.yml)",
-		Long: `Enable an optional service by writing services.<name>.enabled = true to devbox/local.yml.
+		Short: "Enable an optional service (writes to workspace/local.yml)",
+		Long: `Enable an optional service by writing services.<name>.enabled = true to workspace/local.yml.
 
 The .env file is regenerated automatically after the change.
 Lifecycle hooks defined in on_enable are planned and optionally executed.
@@ -336,7 +336,7 @@ Use --apply to execute the plan non-interactively (useful in CI/scripts).
 
 When no service name is given, an interactive selector shows all currently
 disabled optional services.`,
-		Example:           "  devbox services enable second",
+		Example:           "  dwe services enable second",
 		Args:              cobra.MaximumNArgs(1),
 		ValidArgsFunction: serviceCompletion(flags, completeDisabledOptional),
 		RunE: func(cmd *cobra.Command, args []string) error {
@@ -387,8 +387,8 @@ func newServiceDisableCmd(flags *cmdctx.RootFlags) *cobra.Command {
 	var apply, printPlan, skipHooks bool
 	cmd := &cobra.Command{
 		Use:   "disable [service]",
-		Short: "Disable an optional service (writes to devbox/local.yml)",
-		Long: `Disable an optional service by writing services.<name>.enabled = false to devbox/local.yml.
+		Short: "Disable an optional service (writes to workspace/local.yml)",
+		Long: `Disable an optional service by writing services.<name>.enabled = false to workspace/local.yml.
 
 The .env file is regenerated automatically after the change.
 Lifecycle hooks defined in on_disable are planned and optionally executed.
@@ -398,7 +398,7 @@ Use --apply to execute the plan non-interactively (useful in CI/scripts).
 
 When no service name is given, an interactive selector shows all currently
 enabled optional services.`,
-		Example:           "  devbox services disable second",
+		Example:           "  dwe services disable second",
 		Args:              cobra.MaximumNArgs(1),
 		ValidArgsFunction: serviceCompletion(flags, completeEnabledOptional),
 		RunE: func(cmd *cobra.Command, args []string) error {

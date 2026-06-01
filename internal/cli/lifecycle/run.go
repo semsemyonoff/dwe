@@ -8,7 +8,7 @@ import (
 	"github.com/spf13/cobra"
 )
 
-// NewRunCmd builds the `devbox run` cobra command.
+// NewRunCmd builds the `dwe run` cobra command.
 func NewRunCmd(groupID string, flags *cmdctx.RootFlags) *cobra.Command {
 	var noUpdate bool
 	var updateMode string
@@ -19,15 +19,15 @@ func NewRunCmd(groupID string, flags *cmdctx.RootFlags) *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "run",
 		Short: "Start the project (full lifecycle: update probe → up → wait → info)",
-		Long: `Run the full project lifecycle driven by devbox/lifecycle.yml.
+		Long: `Run the full project lifecycle driven by workspace/lifecycle.yml.
 
 Execution order: optional git update probe → before-run hooks → docker up → docker wait
 → after-run hooks → optional info display → final ready message.
 
-Use 'devbox docker up' for a bare Docker Compose start without hooks or the update probe.`,
-		Example: `  devbox run
-  devbox run --no-update
-  devbox run --update on`,
+Use 'dwe docker up' for a bare Docker Compose start without hooks or the update probe.`,
+		Example: `  dwe run
+  dwe run --no-update
+  dwe run --update on`,
 		Args:         cobra.NoArgs,
 		GroupID:      groupID,
 		SilenceUsage: true,

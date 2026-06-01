@@ -64,8 +64,8 @@ func stepBadge(step config.DeployStep) string {
 		return "[command]"
 	case "builtin":
 		return "[builtin]"
-	case "devbox":
-		return "[devbox]"
+	case "dwe":
+		return "[dwe]"
 	case "shell":
 		return "[shell]"
 	default:
@@ -98,7 +98,7 @@ func StepCommand(step config.DeployStep, devboxBin string) string {
 		return strings.Join(parts, " ")
 	case "builtin":
 		return builtin.Describe(step.Cmd, step.With)
-	case "devbox":
+	case "dwe":
 		return devboxBin + " " + strings.TrimSpace(step.Cmd)
 	case "shell":
 		return strings.TrimSpace(step.Cmd)

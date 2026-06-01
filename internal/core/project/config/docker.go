@@ -11,7 +11,7 @@ import (
 )
 
 // DockerConfig holds Docker Compose execution policy.
-// Loaded separately from devbox/docker.yml + devbox/docker.local.yml.
+// Loaded separately from workspace/docker.yml + devbox/docker.local.yml.
 type DockerConfig struct {
 	// ProjectName is the resolved compose project name.
 	ProjectName string `yaml:"project_name"`
@@ -93,7 +93,7 @@ type DockerArgs struct {
 }
 
 // LoadDockerConfig loads Docker Compose execution policy from
-// devbox/docker.yml (base) and devbox/docker.local.yml (optional overrides).
+// workspace/docker.yml (base) and devbox/docker.local.yml (optional overrides).
 // The project_name field is resolved as a ${...} template against cfg.Raw.
 //
 // Per-key defaults are applied for args: up, logs, run, down. These defaults

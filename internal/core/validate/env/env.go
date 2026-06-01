@@ -1,4 +1,4 @@
-// Package env provides built-in environment probes for `devbox validate`
+// Package env provides built-in environment probes for `dwe validate`
 // and the preflight hook. Each probe is a validate.Validator that inspects
 // the host environment (docker binary, daemon reachability, compose plugin,
 // git/shell binaries, project filesystem permissions) and emits diagnostics

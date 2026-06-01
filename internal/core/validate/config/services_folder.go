@@ -9,7 +9,7 @@ import (
 	"github.com/semsemyonoff/dwe/internal/core/validate"
 )
 
-// knownServiceFiles lists the only filenames allowed in a devbox/services/<name>/ folder.
+// knownServiceFiles lists the only filenames allowed in a workspace/services/<name>/ folder.
 var knownServiceFiles = map[string]bool{
 	"service.yml": true,
 	"deploy.yml":  true,

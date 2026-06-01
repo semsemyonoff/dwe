@@ -17,7 +17,7 @@ import (
 	"github.com/spf13/cobra"
 )
 
-// newRenderAICmd creates the `devbox render ai [service]` command.
+// newRenderAICmd creates the `dwe render ai [service]` command.
 // It generates hub-level agentic docs into each service directory.
 // When a service name is provided only that service is processed;
 // otherwise all services matching the agents docs selection policy are processed.
@@ -28,15 +28,15 @@ func newAICmd(flags *cmdctx.RootFlags) *cobra.Command {
 		Long: `Generate agents documentation files (such as AGENTS.md, CLAUDE.md) for the service hub.
 
 The command reads manifest.yml from the chosen template pack
-(devbox/templates/ai/<pack-name>/) and processes only the entries it declares:
+(workspace/templates/ai/<pack-name>/) and processes only the entries it declares:
 each render entry is rendered to its destination and each symlink entry is
 created. Files inside the pack that are not referenced by the manifest are
 ignored.
 
 Template pack resolution (explicit is strict; implicit chain: service-name → default):
   1. If render.ai.template is set in the service config, use that pack (explicit, strict)
-  2. Otherwise, try devbox/templates/ai/<service-name>/
-  3. If not found, use devbox/templates/ai/default/
+  2. Otherwise, try workspace/templates/ai/<service-name>/
+  3. If not found, use workspace/templates/ai/default/
   4. If none exist, skip with a warning (implicit missing pack)
 
 Services that participate in agents docs rendering:
@@ -181,7 +181,7 @@ func renderAgentsForService(projectRoot, name string, svc config.ServiceConfig, 
 			return err
 		}
 		if fromOverride {
-			w.Info(fmt.Sprintf("using local override: devbox/templates/ai/%s.local/%s", packName, entry.From))
+			w.Info(fmt.Sprintf("using local override: workspace/templates/ai/%s.local/%s", packName, entry.From))
 		}
 		w.Success(fmt.Sprintf("ai → %s", filepath.Join(svc.Dir, entry.To)))
 	}
@@ -237,7 +237,7 @@ func resolveAIHubAnchor(name string, services map[string]config.ServiceConfig) s
 	return shallowest
 }
 
-// validateExplicitAIArg validates the explicit service argument for `devbox render ai <service>`.
+// validateExplicitAIArg validates the explicit service argument for `dwe render ai <service>`.
 // Checks in priority order: not-found → disabled → no-dir → AI docs policy.
 // Returns nil when the service is valid and renderable.
 func validateExplicitAIArg(name string, services map[string]config.ServiceConfig) error {

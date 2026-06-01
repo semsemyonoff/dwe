@@ -1,7 +1,7 @@
 // Package packroot resolves per-file template lookups with a universal
 // sibling-shadow override convention. For any pack <kind>/<name>, a sibling
-// shadow pack at devbox/templates/<kind>/<name>.local/<rel> overrides the
-// canonical devbox/templates/<kind>/<name>/<rel> file. The override pack is
+// shadow pack at workspace/templates/<kind>/<name>.local/<rel> overrides the
+// canonical workspace/templates/<kind>/<name>/<rel> file. The override pack is
 // gitignored by the project's `*.local/` pattern; the canonical pack is
 // tracked. The .dwe/ runtime directory is never consulted here.
 package packroot
@@ -18,8 +18,8 @@ import (
 // Resolve looks up a single relative path inside the named pack with the
 // override convention applied:
 //
-//  1. <projectRoot>/devbox/templates/<kind>/<packName>.local/<rel>
-//  2. <projectRoot>/devbox/templates/<kind>/<packName>/<rel>
+//  1. <projectRoot>/workspace/templates/<kind>/<packName>.local/<rel>
+//  2. <projectRoot>/workspace/templates/<kind>/<packName>/<rel>
 //
 // Either candidate must, when present, exist as a regular file. A
 // non-regular candidate (directory, symlink, device, fifo, ...) is a hard

@@ -322,7 +322,7 @@ func TestRegistryRun_DomainLevelValidator(t *testing.T) {
 func TestRegistryRun_GlobalValidator(t *testing.T) {
 	// A global validator (e.g. a broken validate.yml error) must run for every
 	// scope, including scopes that don't include its own domain. This ensures
-	// "devbox validate env" surfaces a malformed validate.yml instead of
+	// "dwe validate env" surfaces a malformed validate.yml instead of
 	// silently succeeding with zero diagnostics from the checks domain.
 	globalErr := &mockValidator{
 		domain: "checks",

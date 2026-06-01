@@ -20,7 +20,7 @@ func TestLintersDocExamples(t *testing.T) {
   shellcheck:
     enabled: true
     bin: shellcheck
-    paths: [devbox/scripts, scripts]
+    paths: [workspace/scripts, scripts]
     extensions: [.sh, .bash]
     flags: [--severity=warning]
     severity: warning

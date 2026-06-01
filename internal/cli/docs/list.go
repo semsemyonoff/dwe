@@ -20,7 +20,7 @@ type docsListFlags struct {
 	match  string
 }
 
-// docsListEntry is one JSON record in `devbox docs list --output json`.
+// docsListEntry is one JSON record in `dwe docs list --output json`.
 // Field names form an agent-facing contract; keep stable.
 type docsListEntry struct {
 	Source string `json:"source"`

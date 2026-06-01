@@ -28,10 +28,10 @@ func PendingBanner(p *journal.PendingApply) string {
 			services := op.ServiceNames()
 			banner := fmt.Sprintf("⚠ Pending: deploy required for: %s", strings.Join(services, ", "))
 			fmt.Fprintln(&sb, styles.StyleWarning(banner))
-			fmt.Fprintln(&sb, "  Run: "+styles.StyleKey("devbox deploy run"))
+			fmt.Fprintln(&sb, "  Run: "+styles.StyleKey("dwe deploy run"))
 		case journal.PendingRestart:
 			fmt.Fprintln(&sb, styles.StyleWarning("⚠ Pending: restart required"))
-			fmt.Fprintln(&sb, "  Run: "+styles.StyleKey("devbox restart"))
+			fmt.Fprintln(&sb, "  Run: "+styles.StyleKey("dwe restart"))
 		}
 	}
 	return sb.String()

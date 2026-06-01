@@ -23,7 +23,7 @@ import (
 // disappear.
 //
 // Scope: cfg.Services[*].Icon, cfg.Services[*].Info.Paths[*].Icon, and every
-// InfoItem.Icon under devbox/info.yml (recursively into subgroup items).
+// InfoItem.Icon under workspace/info.yml (recursively into subgroup items).
 type iconsValidator struct{}
 
 var _ validate.Validator = (*iconsValidator)(nil)

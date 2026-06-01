@@ -4,104 +4,104 @@ Generated reference for the `dwe` command tree.
 
 ## Commands
 
-- [dwe commands](devbox_commands.md) — Run, inspect, and list dwe commands
-  - [dwe commands list](devbox_commands_list.md) — List available commands
-- [dwe completion](devbox_completion.md) — Generate the autocompletion script for the specified shell
-  - [dwe completion bash](devbox_completion_bash.md) — Generate the autocompletion script for bash
-  - [dwe completion fish](devbox_completion_fish.md) — Generate the autocompletion script for fish
-  - [dwe completion install](devbox_completion_install.md) — Install shell completion for dwe
-  - [dwe completion powershell](devbox_completion_powershell.md) — Generate the autocompletion script for powershell
-  - [dwe completion uninstall](devbox_completion_uninstall.md) — Uninstall shell completion for dwe
-  - [dwe completion zsh](devbox_completion_zsh.md) — Generate the autocompletion script for zsh
-- [dwe compose](devbox_compose.md) — Low-level Docker Compose diagnostics
-  - [dwe compose argv](devbox_compose_argv.md) — Show the full docker compose command that would be executed
-  - [dwe compose files](devbox_compose_files.md) — Print resolved compose file list (base + enabled overlays), one per line
-  - [dwe compose raw](devbox_compose_raw.md) — Run docker compose directly with resolved file list and project name (escape hatch)
-- [dwe deploy](devbox_deploy.md) — Deploy pipeline commands
-  - [dwe deploy plan](devbox_deploy_plan.md) — Show resolved deploy plan
-  - [dwe deploy run](devbox_deploy_run.md) — Execute the deploy plan
-  - [dwe deploy state](devbox_deploy_state.md) — Manage deploy state
-    - [dwe deploy state clear](devbox_deploy_state_clear.md) — Clear the deploy state
-    - [dwe deploy state repair](devbox_deploy_state_repair.md) — Repair the deploy state
-    - [dwe deploy state show](devbox_deploy_state_show.md) — Show the current deploy state
-- [dwe docker](devbox_docker.md) — Docker Compose lifecycle commands
-  - [dwe docker build](devbox_docker_build.md) — Build compose service images
-  - [dwe docker down](devbox_docker_down.md) — Stop and remove compose services
-  - [dwe docker exec](devbox_docker_exec.md) — Execute a command in a running compose service
-  - [dwe docker logs](devbox_docker_logs.md) — View compose service logs
-  - [dwe docker project-name](devbox_docker_project-name.md) — Print the resolved compose project name
-  - [dwe docker ps](devbox_docker_ps.md) — List compose containers
-  - [dwe docker pull](devbox_docker_pull.md) — Pull compose service images
-  - [dwe docker restart](devbox_docker_restart.md) — Restart compose services
-  - [dwe docker run](devbox_docker_run.md) — Run a one-off command in a compose service
-  - [dwe docker stop](devbox_docker_stop.md) — Stop compose services
-  - [dwe docker up](devbox_docker_up.md) — Start compose services
-- [dwe docs](devbox_docs.md) — Browse and manage documentation
-  - [dwe docs cache](devbox_docs_cache.md) — Manage mermaid diagram cache
-    - [dwe docs cache clear](devbox_docs_cache_clear.md) — Clear the mermaid diagram cache
-  - [dwe docs export](devbox_docs_export.md) — Export documentation to a directory
-  - [dwe docs generate](devbox_docs_generate.md) — Generate reference documentation
-  - [dwe docs list](devbox_docs_list.md) — List all available documentation topics
-  - [dwe docs llms-txt](devbox_docs_llms-txt.md) — Emit an llms.txt project index for AI agents
-  - [dwe docs search](devbox_docs_search.md) — Search documentation for a literal substring
-  - [dwe docs show](devbox_docs_show.md) — Show documentation for a topic
-- [dwe info](devbox_info.md) — Display project info dashboard (URLs, hosts, services, tools)
-- [dwe logs](devbox_logs.md) — Stream container logs for a service
-- [dwe prompt](devbox_prompt.md) — Print a compact shell-prompt segment for the current project
-- [dwe render](devbox_render.md) — Render derived artifacts from the merged DWE config
-  - [dwe render ai](devbox_render_ai.md) — Generate hub-level agents docs from template packs
-  - [dwe render env](devbox_render_env.md) — Generate .env from exports.env spec (stdout or --out <file>)
-  - [dwe render git](devbox_render_git.md) — Generate git hooks from template packs
-  - [dwe render ide](devbox_render_ide.md) — Generate IDE configs from template packs
-- [dwe reset](devbox_reset.md) — Reset pipeline commands
-  - [dwe reset plan](devbox_reset_plan.md) — Show resolved reset plan
-  - [dwe reset run](devbox_reset_run.md) — Execute the reset pipeline
-  - [dwe reset step](devbox_reset_step.md) — Run a single reset step by <phase>/<step> address
-- [dwe restart](devbox_restart.md) — Restart the project (stop, then run --no-update)
-- [dwe run](devbox_run.md) — Start the project (full lifecycle: update probe → up → wait → info)
-- [dwe services](devbox_services.md) — Toggle optional services (interactive) or list / enable / disable
-  - [dwe services disable](devbox_services_disable.md) — Disable an optional service (writes to workspace/local.yml)
-  - [dwe services enable](devbox_services_enable.md) — Enable an optional service (writes to workspace/local.yml)
-- [dwe shell](devbox_shell.md) — Open a shell in a service container
-- [dwe snapshot](devbox_snapshot.md) — Capture, restore, and manage project snapshots
-  - [dwe snapshot create](devbox_snapshot_create.md) — Capture the current environment into a named snapshot
-  - [dwe snapshot current](devbox_snapshot_current.md) — Show the snapshot currently restored into the project
-  - [dwe snapshot inspect](devbox_snapshot_inspect.md) — Inspect a snapshot directory or a packed .tar.gz archive
-  - [dwe snapshot list](devbox_snapshot_list.md) — List snapshots in ./snapshots/
-  - [dwe snapshot pack](devbox_snapshot_pack.md) — Pack a snapshot into a .tar.gz archive
-  - [dwe snapshot remove](devbox_snapshot_remove.md) — Delete a snapshot (runs remove: workflow if defined)
-  - [dwe snapshot restore](devbox_snapshot_restore.md) — Restore a snapshot into the current project
-  - [dwe snapshot rollback](devbox_snapshot_rollback.md) — Restore the snapshot named by rollback_target in workspace/snapshot.yml
-  - [dwe snapshot unpack](devbox_snapshot_unpack.md) — Extract a packed snapshot archive into ./snapshots/
-- [dwe status](devbox_status.md) — Show stack health and per-section status (read-only)
-  - [dwe status apps](devbox_status_apps.md) — Show only the apps section
-  - [dwe status daemons](devbox_status_daemons.md) — Show only the daemons section
-  - [dwe status deploy](devbox_status_deploy.md) — Show deploy status (table) or per-service deploy detail
-  - [dwe status git](devbox_status_git.md) — Show only the git workspace section
-  - [dwe status infra](devbox_status_infra.md) — Show only the infra section
-  - [dwe status tools](devbox_status_tools.md) — Show only the tools section
-  - [dwe status topology](devbox_status_topology.md) — Show only the topology section
-- [dwe stop](devbox_stop.md) — Stop the project (full lifecycle: before-stop hooks → docker down → after-stop hooks)
-- [dwe validate](devbox_validate.md) — Validate project configuration and files
-  - [dwe validate checks](devbox_validate_checks.md) — Validate project checks from workspace/validate.yml
-  - [dwe validate commands](devbox_validate_commands.md) — Validate command definitions
-  - [dwe validate config](devbox_validate_config.md) — Validate configuration files
-    - [dwe validate config deploy](devbox_validate_config_deploy.md) — Validate workspace/deploy.yml
-    - [dwe validate config workspace](devbox_validate_config_workspace.md) — Validate main workspace.yml
-    - [dwe validate config docker](devbox_validate_config_docker.md) — Validate workspace/docker.yml
-    - [dwe validate config info](devbox_validate_config_info.md) — Validate workspace/info.yml
-    - [dwe validate config lifecycle](devbox_validate_config_lifecycle.md) — Validate workspace/lifecycle.yml
-    - [dwe validate config reset](devbox_validate_config_reset.md) — Validate workspace/reset.yml (replaces 'dwe reset config check')
-    - [dwe validate config service-deploy](devbox_validate_config_service-deploy.md) — Validate service deploy configs
-    - [dwe validate config services](devbox_validate_config_services.md) — Validate workspace/services/<name>/service.yml
-    - [dwe validate config styles](devbox_validate_config_styles.md) — Validate workspace/styles.yml
-  - [dwe validate env](devbox_validate_env.md) — Validate environment readiness
-  - [dwe validate linters](devbox_validate_linters.md) — Run external linters (shellcheck, hadolint, generic)
-  - [dwe validate setup](devbox_validate_setup.md) — Validate workspace/setup.yml schema and writes: paths
-  - [dwe validate snapshot](devbox_validate_snapshot.md) — Validate snapshot config and on-disk snapshot integrity
-  - [dwe validate templates](devbox_validate_templates.md) — Validate template packs
-    - [dwe validate templates ai](devbox_validate_templates_ai.md) — Validate AI template pack
-    - [dwe validate templates git](devbox_validate_templates_git.md) — Validate git hooks template pack
-    - [dwe validate templates ide](devbox_validate_templates_ide.md) — Validate IDE template pack
-  - [dwe validate translations](devbox_validate_translations.md) — Validate translation files in workspace/i18n/
+- [dwe commands](dwe_commands.md) — Run, inspect, and list dwe commands
+  - [dwe commands list](dwe_commands_list.md) — List available commands
+- [dwe completion](dwe_completion.md) — Generate the autocompletion script for the specified shell
+  - [dwe completion bash](dwe_completion_bash.md) — Generate the autocompletion script for bash
+  - [dwe completion fish](dwe_completion_fish.md) — Generate the autocompletion script for fish
+  - [dwe completion install](dwe_completion_install.md) — Install shell completion for dwe
+  - [dwe completion powershell](dwe_completion_powershell.md) — Generate the autocompletion script for powershell
+  - [dwe completion uninstall](dwe_completion_uninstall.md) — Uninstall shell completion for dwe
+  - [dwe completion zsh](dwe_completion_zsh.md) — Generate the autocompletion script for zsh
+- [dwe compose](dwe_compose.md) — Low-level Docker Compose diagnostics
+  - [dwe compose argv](dwe_compose_argv.md) — Show the full docker compose command that would be executed
+  - [dwe compose files](dwe_compose_files.md) — Print resolved compose file list (base + enabled overlays), one per line
+  - [dwe compose raw](dwe_compose_raw.md) — Run docker compose directly with resolved file list and project name (escape hatch)
+- [dwe deploy](dwe_deploy.md) — Deploy pipeline commands
+  - [dwe deploy plan](dwe_deploy_plan.md) — Show resolved deploy plan
+  - [dwe deploy run](dwe_deploy_run.md) — Execute the deploy plan
+  - [dwe deploy state](dwe_deploy_state.md) — Manage deploy state
+    - [dwe deploy state clear](dwe_deploy_state_clear.md) — Clear the deploy state
+    - [dwe deploy state repair](dwe_deploy_state_repair.md) — Repair the deploy state
+    - [dwe deploy state show](dwe_deploy_state_show.md) — Show the current deploy state
+- [dwe docker](dwe_docker.md) — Docker Compose lifecycle commands
+  - [dwe docker build](dwe_docker_build.md) — Build compose service images
+  - [dwe docker down](dwe_docker_down.md) — Stop and remove compose services
+  - [dwe docker exec](dwe_docker_exec.md) — Execute a command in a running compose service
+  - [dwe docker logs](dwe_docker_logs.md) — View compose service logs
+  - [dwe docker project-name](dwe_docker_project-name.md) — Print the resolved compose project name
+  - [dwe docker ps](dwe_docker_ps.md) — List compose containers
+  - [dwe docker pull](dwe_docker_pull.md) — Pull compose service images
+  - [dwe docker restart](dwe_docker_restart.md) — Restart compose services
+  - [dwe docker run](dwe_docker_run.md) — Run a one-off command in a compose service
+  - [dwe docker stop](dwe_docker_stop.md) — Stop compose services
+  - [dwe docker up](dwe_docker_up.md) — Start compose services
+- [dwe docs](dwe_docs.md) — Browse and manage documentation
+  - [dwe docs cache](dwe_docs_cache.md) — Manage mermaid diagram cache
+    - [dwe docs cache clear](dwe_docs_cache_clear.md) — Clear the mermaid diagram cache
+  - [dwe docs export](dwe_docs_export.md) — Export documentation to a directory
+  - [dwe docs generate](dwe_docs_generate.md) — Generate reference documentation
+  - [dwe docs list](dwe_docs_list.md) — List all available documentation topics
+  - [dwe docs llms-txt](dwe_docs_llms-txt.md) — Emit an llms.txt project index for AI agents
+  - [dwe docs search](dwe_docs_search.md) — Search documentation for a literal substring
+  - [dwe docs show](dwe_docs_show.md) — Show documentation for a topic
+- [dwe info](dwe_info.md) — Display project info dashboard (URLs, hosts, services, tools)
+- [dwe logs](dwe_logs.md) — Stream container logs for a service
+- [dwe prompt](dwe_prompt.md) — Print a compact shell-prompt segment for the current project
+- [dwe render](dwe_render.md) — Render derived artifacts from the merged workspace config
+  - [dwe render ai](dwe_render_ai.md) — Generate hub-level agents docs from template packs
+  - [dwe render env](dwe_render_env.md) — Generate .env from exports.env spec (stdout or --out <file>)
+  - [dwe render git](dwe_render_git.md) — Generate git hooks from template packs
+  - [dwe render ide](dwe_render_ide.md) — Generate IDE configs from template packs
+- [dwe reset](dwe_reset.md) — Reset pipeline commands
+  - [dwe reset plan](dwe_reset_plan.md) — Show resolved reset plan
+  - [dwe reset run](dwe_reset_run.md) — Execute the reset pipeline
+  - [dwe reset step](dwe_reset_step.md) — Run a single reset step by <phase>/<step> address
+- [dwe restart](dwe_restart.md) — Restart the project (stop, then run --no-update)
+- [dwe run](dwe_run.md) — Start the project (full lifecycle: update probe → up → wait → info)
+- [dwe services](dwe_services.md) — Toggle optional services (interactive) or list / enable / disable
+  - [dwe services disable](dwe_services_disable.md) — Disable an optional service (writes to workspace/local.yml)
+  - [dwe services enable](dwe_services_enable.md) — Enable an optional service (writes to workspace/local.yml)
+- [dwe shell](dwe_shell.md) — Open a shell in a service container
+- [dwe snapshot](dwe_snapshot.md) — Capture, restore, and manage project snapshots
+  - [dwe snapshot create](dwe_snapshot_create.md) — Capture the current environment into a named snapshot
+  - [dwe snapshot current](dwe_snapshot_current.md) — Show the snapshot currently restored into the project
+  - [dwe snapshot inspect](dwe_snapshot_inspect.md) — Inspect a snapshot directory or a packed .tar.gz archive
+  - [dwe snapshot list](dwe_snapshot_list.md) — List snapshots in ./snapshots/
+  - [dwe snapshot pack](dwe_snapshot_pack.md) — Pack a snapshot into a .tar.gz archive
+  - [dwe snapshot remove](dwe_snapshot_remove.md) — Delete a snapshot (runs remove: workflow if defined)
+  - [dwe snapshot restore](dwe_snapshot_restore.md) — Restore a snapshot into the current project
+  - [dwe snapshot rollback](dwe_snapshot_rollback.md) — Restore the snapshot named by rollback_target in workspace/snapshot.yml
+  - [dwe snapshot unpack](dwe_snapshot_unpack.md) — Extract a packed snapshot archive into ./snapshots/
+- [dwe status](dwe_status.md) — Show stack health and per-section status (read-only)
+  - [dwe status apps](dwe_status_apps.md) — Show only the apps section
+  - [dwe status daemons](dwe_status_daemons.md) — Show only the daemons section
+  - [dwe status deploy](dwe_status_deploy.md) — Show deploy status (table) or per-service deploy detail
+  - [dwe status git](dwe_status_git.md) — Show only the git workspace section
+  - [dwe status infra](dwe_status_infra.md) — Show only the infra section
+  - [dwe status tools](dwe_status_tools.md) — Show only the tools section
+  - [dwe status topology](dwe_status_topology.md) — Show only the topology section
+- [dwe stop](dwe_stop.md) — Stop the project (full lifecycle: before-stop hooks → docker down → after-stop hooks)
+- [dwe validate](dwe_validate.md) — Validate project configuration and files
+  - [dwe validate checks](dwe_validate_checks.md) — Validate project checks from workspace/validate.yml
+  - [dwe validate commands](dwe_validate_commands.md) — Validate command definitions
+  - [dwe validate config](dwe_validate_config.md) — Validate configuration files
+    - [dwe validate config deploy](dwe_validate_config_deploy.md) — Validate workspace/deploy.yml
+    - [dwe validate config docker](dwe_validate_config_docker.md) — Validate workspace/docker.yml
+    - [dwe validate config info](dwe_validate_config_info.md) — Validate workspace/info.yml
+    - [dwe validate config lifecycle](dwe_validate_config_lifecycle.md) — Validate workspace/lifecycle.yml
+    - [dwe validate config reset](dwe_validate_config_reset.md) — Validate workspace/reset.yml (replaces 'dwe reset config check')
+    - [dwe validate config service-deploy](dwe_validate_config_service-deploy.md) — Validate service deploy configs
+    - [dwe validate config services](dwe_validate_config_services.md) — Validate workspace/services/<name>/service.yml
+    - [dwe validate config styles](dwe_validate_config_styles.md) — Validate workspace/styles.yml
+    - [dwe validate config workspace](dwe_validate_config_workspace.md) — Validate main workspace.yml
+  - [dwe validate env](dwe_validate_env.md) — Validate environment readiness
+  - [dwe validate linters](dwe_validate_linters.md) — Run external linters (shellcheck, hadolint, generic)
+  - [dwe validate setup](dwe_validate_setup.md) — Validate workspace/setup.yml schema and writes: paths
+  - [dwe validate snapshot](dwe_validate_snapshot.md) — Validate snapshot config and on-disk snapshot integrity
+  - [dwe validate templates](dwe_validate_templates.md) — Validate template packs
+    - [dwe validate templates ai](dwe_validate_templates_ai.md) — Validate AI template pack
+    - [dwe validate templates git](dwe_validate_templates_git.md) — Validate git hooks template pack
+    - [dwe validate templates ide](dwe_validate_templates_ide.md) — Validate IDE template pack
+  - [dwe validate translations](dwe_validate_translations.md) — Validate translation files in workspace/i18n/
 - [dwe version](dwe_version.md) — Print version information

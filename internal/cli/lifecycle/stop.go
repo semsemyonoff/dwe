@@ -40,7 +40,7 @@ type StopServiceDeps struct {
 	SkipPreflight bool
 }
 
-// StopService is the public entry point for `devbox stop <name>`.
+// StopService is the public entry point for `dwe stop <name>`.
 // It validates that name is a known service, runs stop-stage preflight, acquires
 // project locks, then delegates to stopServiceLocked.
 func StopService(ctx context.Context, deps StopServiceDeps, name string) error {
@@ -81,7 +81,7 @@ func stopServiceLocked(ctx context.Context, deps StopServiceDeps, name string) e
 	return stopContainerFn(ctx, dockerBin, containerName, docker.DefaultStopTimeoutSec)
 }
 
-// NewStopCmd builds the `devbox stop` cobra command.
+// NewStopCmd builds the `dwe stop` cobra command.
 func NewStopCmd(groupID string, flags *cmdctx.RootFlags) *cobra.Command {
 	var yes bool
 	var skipPreflight bool
@@ -89,17 +89,17 @@ func NewStopCmd(groupID string, flags *cmdctx.RootFlags) *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "stop [service]",
 		Short: "Stop the project (full lifecycle: before-stop hooks → docker down → after-stop hooks)",
-		Long: `Stop the project driven by devbox/lifecycle.yml.
+		Long: `Stop the project driven by workspace/lifecycle.yml.
 
 Execution order: before-stop hooks → docker down → after-stop hooks → final message.
 
 When a service name is given, stops only that service's container directly via
 'docker stop', bypassing compose. This works even after the service has been disabled.
 
-Use 'devbox docker down' for a bare Docker Compose stop-and-remove without hooks.
-Use 'devbox docker stop' for the low-level compose stop (no container removal).`,
-		Example: `  devbox stop
-  devbox stop postgres`,
+Use 'dwe docker down' for a bare Docker Compose stop-and-remove without hooks.
+Use 'dwe docker stop' for the low-level compose stop (no container removal).`,
+		Example: `  dwe stop
+  dwe stop postgres`,
 		Args:         cobra.MaximumNArgs(1),
 		GroupID:      groupID,
 		SilenceUsage: true,

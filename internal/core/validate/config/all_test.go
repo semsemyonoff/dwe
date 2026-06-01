@@ -14,9 +14,8 @@ func TestAllValidators(t *testing.T) {
 	// Create a temporary project with various config files
 	tmpDir := t.TempDir()
 
-	// Create devbox.yml
-	devboxYml := `schema_version: "2"
-project:
+	// Create workspace.yml
+	devboxYml := `project:
   name: test-project
 `
 	require.NoError(t, os.WriteFile(filepath.Join(tmpDir, "workspace.yml"), []byte(devboxYml), 0644))

@@ -11,11 +11,11 @@ import (
 	"github.com/semsemyonoff/dwe/internal/core/validate"
 )
 
-// makeServiceFolder creates a minimal project with a devbox/services directory.
+// makeServiceFolder creates a minimal project with a workspace/services directory.
 func makeServiceFolder(t *testing.T) string {
 	t.Helper()
 	dir := t.TempDir()
-	// Create devbox.yml (not needed by the validator but keeps project structure valid).
+	// Create workspace.yml (not needed by the validator but keeps project structure valid).
 	require.NoError(t, os.MkdirAll(filepath.Join(dir, "workspace"), 0o755))
 	return dir
 }
@@ -32,7 +32,7 @@ func TestServicesFolderValidator(t *testing.T) {
 		{
 			name: "no services directory",
 			setup: func(root string) {
-				// nothing — devbox/services/ does not exist
+				// nothing — workspace/services/ does not exist
 			},
 			wantHasOK:  false,
 			wantErrors: 0,

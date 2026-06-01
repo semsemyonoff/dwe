@@ -35,7 +35,7 @@ func (v *dockerBinValidator) Run(_ validate.Context) []validate.Diagnostic {
 		return []validate.Diagnostic{fail(
 			v.ID(),
 			fmt.Sprintf("docker binary not found in PATH: %s", bin),
-			"install Docker Desktop or set binaries.docker in devbox.yml\nhttps://docs.docker.com/get-docker/",
+			"install Docker Desktop or set binaries.docker in workspace.yml\nhttps://docs.docker.com/get-docker/",
 		)}
 	}
 	return []validate.Diagnostic{ok(v.ID())}

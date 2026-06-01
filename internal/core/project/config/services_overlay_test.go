@@ -29,7 +29,7 @@ func TestValidateServicesOverlay_acceptsEnabledOnly(t *testing.T) {
 // (ports/hosts) have their own positive-path tests below.
 func TestValidateServicesOverlay_rejectsDefinitionField(t *testing.T) {
 	declared := map[string]ServiceConfig{"adminer": {Type: ServiceTypeTool, Container: "adminer"}}
-	for _, layer := range []string{"workspace.yml", "devbox/defaults.yml", "devbox/local.yml"} {
+	for _, layer := range []string{"workspace.yml", "workspace/defaults.yml", "workspace/local.yml"} {
 		raw := map[string]any{
 			"services": map[string]any{
 				"adminer": map[string]any{"container": "stale"},
@@ -49,7 +49,7 @@ func TestValidateServicesOverlay_rejectsDefinitionField(t *testing.T) {
 // TestValidateServicesOverlay_acceptsPortsHosts confirms that per-developer
 // port/host overrides are permitted in overlay layers — a core devbox
 // feature so a developer can resolve port clashes locally without touching
-// shared devbox/services.yml.
+// shared workspace/services.yml.
 func TestValidateServicesOverlay_acceptsPortsHosts(t *testing.T) {
 	declared := map[string]ServiceConfig{"adminer": {Type: ServiceTypeTool, Container: "adminer"}}
 	raw := map[string]any{
@@ -61,7 +61,7 @@ func TestValidateServicesOverlay_acceptsPortsHosts(t *testing.T) {
 			},
 		},
 	}
-	if err := validateServicesOverlay("devbox/local.yml", raw, declared); err != nil {
+	if err := validateServicesOverlay("workspace/local.yml", raw, declared); err != nil {
 		t.Errorf("unexpected error: %v", err)
 	}
 }
@@ -84,7 +84,7 @@ func TestValidateServicesOverlay_rejectsBadPortsShape(t *testing.T) {
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
 			raw := map[string]any{"services": map[string]any{"adminer": map[string]any{"ports": tc.raw}}}
-			err := validateServicesOverlay("devbox/local.yml", raw, declared)
+			err := validateServicesOverlay("workspace/local.yml", raw, declared)
 			if err == nil {
 				t.Fatalf("expected error containing %q", tc.want)
 			}
@@ -110,7 +110,7 @@ func TestValidateServicesOverlay_rejectsBadHostsShape(t *testing.T) {
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
 			raw := map[string]any{"services": map[string]any{"adminer": map[string]any{"hosts": tc.raw}}}
-			err := validateServicesOverlay("devbox/local.yml", raw, declared)
+			err := validateServicesOverlay("workspace/local.yml", raw, declared)
 			if err == nil {
 				t.Fatalf("expected error containing %q", tc.want)
 			}
@@ -122,7 +122,7 @@ func TestValidateServicesOverlay_rejectsBadHostsShape(t *testing.T) {
 }
 
 // TestValidateServicesOverlay_rejectsUnknownService confirms that overlays
-// cannot reference services that are not declared in devbox/services.yml —
+// cannot reference services that are not declared in workspace/services.yml —
 // the canonical "unknown service in overlay" case the merge-after-validate
 // ordering catches.
 func TestValidateServicesOverlay_rejectsUnknownService(t *testing.T) {
@@ -132,7 +132,7 @@ func TestValidateServicesOverlay_rejectsUnknownService(t *testing.T) {
 			"ghost": map[string]any{"enabled": true},
 		},
 	}
-	err := validateServicesOverlay("devbox/local.yml", raw, declared)
+	err := validateServicesOverlay("workspace/local.yml", raw, declared)
 	if err == nil {
 		t.Fatal("expected error for unknown service name")
 	}
@@ -332,7 +332,7 @@ project:
   prefix: devbox
 `
 	if err := os.WriteFile(filepath.Join(dir, "workspace.yml"), []byte(devboxYML), 0o644); err != nil {
-		t.Fatalf("write devbox.yml: %v", err)
+		t.Fatalf("write workspace.yml: %v", err)
 	}
 
 	devboxDir := filepath.Join(dir, "workspace")
@@ -397,7 +397,7 @@ project:
   prefix: devbox
 `
 	if err := os.WriteFile(filepath.Join(dir, "workspace.yml"), []byte(devboxYML), 0o644); err != nil {
-		t.Fatalf("write devbox.yml: %v", err)
+		t.Fatalf("write workspace.yml: %v", err)
 	}
 
 	devboxDir := filepath.Join(dir, "workspace")
@@ -461,7 +461,7 @@ project:
   prefix: devbox
 `
 	if err := os.WriteFile(filepath.Join(dir, "workspace.yml"), []byte(devboxYML), 0o644); err != nil {
-		t.Fatalf("write devbox.yml: %v", err)
+		t.Fatalf("write workspace.yml: %v", err)
 	}
 
 	devboxDir := filepath.Join(dir, "workspace")

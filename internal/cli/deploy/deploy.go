@@ -30,19 +30,19 @@ import (
 	"github.com/spf13/cobra"
 )
 
-// NewCmd builds the `devbox deploy` command tree (plan / run / state) and
+// NewCmd builds the `dwe deploy` command tree (plan / run / state) and
 // the interactive menu shown when invoked with no subcommand in a TTY.
 func NewCmd(groupID string, flags *cmdctx.RootFlags) *cobra.Command {
 	cmd := &cobra.Command{
 		GroupID: groupID,
 		Use:     "deploy",
 		Short:   "Deploy pipeline commands",
-		Long: `Run and inspect the declarative deploy pipeline defined in devbox/deploy.yml.
+		Long: `Run and inspect the declarative deploy pipeline defined in workspace/deploy.yml.
 
 The deploy pipeline consists of phases and steps that install, configure, and migrate
-application services. Use 'devbox deploy plan' to preview before running.`,
-		Example: `  devbox deploy plan
-  devbox deploy run`,
+application services. Use 'dwe deploy plan' to preview before running.`,
+		Example: `  dwe deploy plan
+  dwe deploy run`,
 		SilenceUsage: true,
 		Args:         cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, args []string) error {
@@ -61,7 +61,7 @@ type deployPlanOpts struct {
 	Format      string
 }
 
-// runDeployPlan is the common implementation for `devbox deploy plan` and menu dispatch.
+// runDeployPlan is the common implementation for `dwe deploy plan` and menu dispatch.
 func runDeployPlan(ctx context.Context, cmd *cobra.Command, flags *cmdctx.RootFlags, opts deployPlanOpts) error {
 	cfg, err := config.LoadConfig(flags.ConfigPath)
 	if err != nil {
@@ -123,13 +123,13 @@ func newDeployPlanCmd(flags *cmdctx.RootFlags) *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "plan",
 		Short: "Show resolved deploy plan",
-		Long: `Print all phases and steps from devbox/deploy.yml as they would be executed.
+		Long: `Print all phases and steps from workspace/deploy.yml as they would be executed.
 
 The implicit .env generation step is always shown first. Use --service to filter
 the plan to steps relevant to a specific service. Use --format shell for script-friendly output.`,
-		Example: `  devbox deploy plan
-  devbox deploy plan --service main
-  devbox deploy plan --format shell`,
+		Example: `  dwe deploy plan
+  dwe deploy plan --service main
+  dwe deploy plan --format shell`,
 		Args: cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			opts := deployPlanOpts{
@@ -146,11 +146,11 @@ the plan to steps relevant to a specific service. Use --format shell for script-
 	return cmd
 }
 
-// newDeployRunCmd creates the `devbox deploy run` command.
+// newDeployRunCmd creates the `dwe deploy run` command.
 // It executes the resolved deploy plan step by step with state tracking,
 // idempotency, and optional resumption from prior failed runs.
 //
-// File logging is controlled by the top-level `log:` field in devbox/deploy.yml
+// File logging is controlled by the top-level `log:` field in workspace/deploy.yml
 // (default: enabled). When enabled, devbox status messages are teed to
 // .dwe/logs/deploy.log; child process output (docker, make) goes directly to
 // os.Stdout/os.Stderr so TTY detection works.
@@ -165,7 +165,7 @@ func newDeployRunCmd(flags *cmdctx.RootFlags) *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "run",
 		Short: "Execute the deploy plan",
-		Long: `Execute the full deploy pipeline from devbox/deploy.yml phase by phase.
+		Long: `Execute the full deploy pipeline from workspace/deploy.yml phase by phase.
 
 Steps are run in declaration order. The .env file is regenerated as the implicit
 first step. Use --service to run only the steps relevant to a specific service.
@@ -173,15 +173,15 @@ first step. Use --service to run only the steps relevant to a specific service.
 State tracking allows idempotent deploys: steps that previously succeeded with
 matching hashes are skipped on re-run. Use --force to ignore prior state and
 re-run all steps (when: conditions are still evaluated — for a fully clean
-install run 'devbox reset run && devbox deploy run'). Use --resume to continue
+install run 'dwe reset run && dwe deploy run'). Use --resume to continue
 from the last failed step in a partially deployed project.
 
 File logging is enabled by default for deploy and writes to .dwe/logs/deploy.log.
-Disable it with 'log: false' at the top of devbox/deploy.yml.`,
-		Example: `  devbox deploy run
-  devbox deploy run --service main
-  devbox deploy run --force
-  devbox deploy run --resume`,
+Disable it with 'log: false' at the top of workspace/deploy.yml.`,
+		Example: `  dwe deploy run
+  dwe deploy run --service main
+  dwe deploy run --force
+  dwe deploy run --resume`,
 		Args:         cobra.NoArgs,
 		SilenceUsage: true,
 		RunE: func(cmd *cobra.Command, args []string) error {
@@ -190,7 +190,7 @@ Disable it with 'log: false' at the top of devbox/deploy.yml.`,
 	}
 
 	cmd.Flags().StringVar(&serviceName, "service", "", "deploy a single service only")
-	cmd.Flags().BoolVar(&force, "force", false, "ignore state and re-run all steps (when: still applies; use 'devbox reset run && devbox deploy run' for a true clean install)")
+	cmd.Flags().BoolVar(&force, "force", false, "ignore state and re-run all steps (when: still applies; use 'dwe reset run && dwe deploy run' for a true clean install)")
 	cmd.Flags().BoolVar(&resume, "resume", false, "continue from the last failed step")
 	cmd.Flags().BoolVarP(&nonInteractive, "non-interactive", "y", false, "suppress interactive prompts")
 	cmdctx.AddSkipPreflight(cmd, &skipPreflight)
@@ -267,7 +267,7 @@ type deployRunOpts struct {
 	Silent         bool
 }
 
-// runDeployRun is the common implementation for `devbox deploy run` and menu dispatch.
+// runDeployRun is the common implementation for `dwe deploy run` and menu dispatch.
 func runDeployRun(ctx context.Context, cmd *cobra.Command, flags *cmdctx.RootFlags, opts deployRunOpts) error {
 	var services []string
 	if opts.ServiceName != "" {
@@ -296,7 +296,7 @@ func deployRunCmd(cmd *cobra.Command, flags *cmdctx.RootFlags, serviceName strin
 
 // RunHelper executes the deploy pipeline. It is exported so the service
 // toggle executor can drive deploys with the same orchestration as the
-// `devbox deploy run` cobra command.
+// `dwe deploy run` cobra command.
 func RunHelper(ctx context.Context, cmd *cobra.Command, flags *cmdctx.RootFlags, opts Opts) (err error) {
 	workDir := flags.ProjectRoot()
 	stateDir := filepath.Join(workDir, ".dwe", "deploy")
@@ -615,7 +615,7 @@ func RunHelper(ctx context.Context, cmd *cobra.Command, flags *cmdctx.RootFlags,
 		if allTrackedDeployed && !hasCheckSteps && !hasFilesGateSteps && scopeAllHashMatch && !lastRunFailed {
 			// In-scope state matches and is clean — skip the pipeline.
 			isNoop = true
-			w.Info("already up-to-date, use `devbox reset && devbox deploy` to redeploy")
+			w.Info("already up-to-date, use `dwe reset && dwe deploy` to redeploy")
 			return nil
 		}
 
@@ -623,7 +623,7 @@ func RunHelper(ctx context.Context, cmd *cobra.Command, flags *cmdctx.RootFlags,
 		if !scopeAllHashMatch {
 			if isInteractive {
 				// Prompt for action
-				w.Tip("Tip: 'when:' conditions are always re-evaluated. For a fully clean install (drop service dirs, volumes, etc.) cancel and run 'devbox reset run && devbox deploy run'.")
+				w.Tip("Tip: 'when:' conditions are always re-evaluated. For a fully clean install (drop service dirs, volumes, etc.) cancel and run 'dwe reset run && dwe deploy run'.")
 				choice, err := widgets.RunSelector(
 					"Deployed config changed. Choose action:",
 					[]widgets.SelectorItem{
@@ -662,7 +662,7 @@ func RunHelper(ctx context.Context, cmd *cobra.Command, flags *cmdctx.RootFlags,
 	if !opts.Force && prevIncomplete && !configChangeHandled {
 		if isInteractive {
 			w.Warning("Last deploy run failed or was incomplete.")
-			w.Tip("Tip: 'when:' conditions are always re-evaluated, so partially-installed services may stay skipped. For a fully clean install (drop service dirs, volumes, etc.) cancel and run 'devbox reset run && devbox deploy run'.")
+			w.Tip("Tip: 'when:' conditions are always re-evaluated, so partially-installed services may stay skipped. For a fully clean install (drop service dirs, volumes, etc.) cancel and run 'dwe reset run && dwe deploy run'.")
 			choice, err := widgets.RunSelector(
 				"Failed deploy detected:",
 				[]widgets.SelectorItem{
@@ -683,7 +683,7 @@ func RunHelper(ctx context.Context, cmd *cobra.Command, flags *cmdctx.RootFlags,
 			// choice == 0: resume (default)
 		} else if !opts.Resume {
 			// Non-interactive mode: error unless --resume or --force
-			return fmt.Errorf("last deploy failed or was incomplete; use --resume to continue, --force to re-run all steps (when: still applies), or run 'devbox reset run && devbox deploy run' for a fully clean install")
+			return fmt.Errorf("last deploy failed or was incomplete; use --resume to continue, --force to re-run all steps (when: still applies), or run 'dwe reset run && dwe deploy run' for a fully clean install")
 		}
 	}
 

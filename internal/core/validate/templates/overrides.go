@@ -48,6 +48,6 @@ func overrideDiagnostic(domain, kind, packName, target string, hits []string) *v
 		Domain:   domain,
 		Target:   target,
 		Message:  fmt.Sprintf("using %d local override(s): %s", len(hits), listing),
-		Hint:     fmt.Sprintf("sourced from devbox/templates/%s/%s.local/", kind, packName),
+		Hint:     fmt.Sprintf("sourced from workspace/templates/%s/%s.local/", kind, packName),
 	}
 }

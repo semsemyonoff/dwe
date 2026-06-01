@@ -14,7 +14,7 @@ import (
 	"github.com/spf13/cobra"
 )
 
-// NewCmd builds the `devbox compose` command tree.
+// NewCmd builds the `dwe compose` command tree.
 func NewCmd(groupID string, flags *cmdctx.RootFlags) *cobra.Command {
 	cmd := &cobra.Command{
 		Use:          "compose",
@@ -28,7 +28,7 @@ func NewCmd(groupID string, flags *cmdctx.RootFlags) *cobra.Command {
 	return cmd
 }
 
-// newComposeRawCmd creates the `devbox compose raw` command (formerly `devbox compose run`).
+// newComposeRawCmd creates the `dwe compose raw` command (formerly `dwe compose run`).
 // It resolves the compose file list and project name from config, then delegates
 // to `docker compose` with the user-supplied arguments. All docker compose flags
 // and subcommands can be passed after `--`.
@@ -100,8 +100,8 @@ func extractBareFlag(args []string) (bare bool, rest []string) {
 	return
 }
 
-// newComposeArgvCmd creates the `devbox compose argv` command.
-// It shows the full `docker compose` command that `devbox docker <command>` would
+// newComposeArgvCmd creates the `dwe compose argv` command.
+// It shows the full `docker compose` command that `dwe docker <command>` would
 // execute, without running it. Useful for diagnostics and debugging.
 func newComposeArgvCmd(flags *cmdctx.RootFlags) *cobra.Command {
 	return &cobra.Command{

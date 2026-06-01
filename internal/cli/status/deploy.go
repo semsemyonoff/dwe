@@ -20,7 +20,7 @@ func newStatusDeployCmd(flags *cmdctx.RootFlags) *cobra.Command {
 		Short: "Show deploy status (table) or per-service deploy detail",
 		Long: `With no argument, shows the deploy status table for all tracked services.
 With a service name, shows the per-phase/step deploy breakdown for that service.`,
-		Example:           "  devbox status deploy\n  devbox status deploy main",
+		Example:           "  dwe status deploy\n  dwe status deploy main",
 		Args:              cobra.MaximumNArgs(1),
 		ValidArgsFunction: trackedServiceCompletion(flags),
 		SilenceUsage:      true,

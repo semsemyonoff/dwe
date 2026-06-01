@@ -15,7 +15,7 @@ import (
 	"github.com/spf13/cobra"
 )
 
-// NewCmd builds the `devbox docker` command tree.
+// NewCmd builds the `dwe docker` command tree.
 func NewCmd(groupID string, flags *cmdctx.RootFlags) *cobra.Command {
 	cmd := &cobra.Command{
 		Use:          "docker",
@@ -193,10 +193,10 @@ func newDockerExecCmd(flags *cmdctx.RootFlags) *cobra.Command {
 All arguments after the service name (including --) are forwarded verbatim to
 docker compose exec. Use -- to separate the service name from the command:
 
-	devbox docker exec app-main -- php artisan migrate
+	dwe docker exec app-main -- php artisan migrate
 
 The -- separator allows flags in the command itself to be passed through without
-being consumed by devbox's parser.`,
+being consumed by dwe's parser.`,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			p, err := newDockerPipeline(flags, "exec")
 			if err != nil {
@@ -218,10 +218,10 @@ func newDockerRunCmd(flags *cmdctx.RootFlags) *cobra.Command {
 All arguments after the service name (including --) are forwarded verbatim to
 docker compose run. Use -- to separate the service name from the command:
 
-	devbox docker run app-main -- composer install
+	dwe docker run app-main -- composer install
 
 The -- separator allows flags in the command itself to be passed through without
-being consumed by devbox's parser.`,
+being consumed by dwe's parser.`,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			p, err := newDockerPipeline(flags, "run")
 			if err != nil {

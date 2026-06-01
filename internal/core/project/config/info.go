@@ -8,7 +8,7 @@ import (
 	"gopkg.in/yaml.v3"
 )
 
-// InfoConfig is the top-level structure of devbox/info.yml.
+// InfoConfig is the top-level structure of workspace/info.yml.
 // It describes what to render when showing project info/help.
 type InfoConfig struct {
 	Sections []InfoSection `yaml:"sections"`
@@ -207,7 +207,7 @@ func (i InfoItem) SubgroupHideOnEmpty() bool {
 }
 
 // DefaultInfoConfig returns a synthesized InfoConfig with built-in URLs and Hosts sections.
-// This is used as a fallback when devbox/info.yml is not present.
+// This is used as a fallback when workspace/info.yml is not present.
 // Both auto-blocks have their SourceAutoURLsSpec/SourceAutoHostsSpec pointers populated
 // directly (since UnmarshalYAML does not run on Go-constructed configs).
 func DefaultInfoConfig() *InfoConfig {

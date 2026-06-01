@@ -119,7 +119,7 @@ func (v *GitValidator) validateService(name string, svc config.ServiceConfig, pr
 			Domain:   "templates",
 			Target:   fmt.Sprintf("templates.git:%s", name),
 			Message:  fmt.Sprintf("failed to resolve template pack: %v", err),
-			Hint:     "check render.git.template setting and devbox/templates/git directory",
+			Hint:     "check render.git.template setting and workspace/templates/git directory",
 		}}
 	}
 	if !found {
@@ -129,7 +129,7 @@ func (v *GitValidator) validateService(name string, svc config.ServiceConfig, pr
 			Target:   fmt.Sprintf("templates.git:%s", name),
 			Message:  fmt.Sprintf("template pack not found for service %q", name),
 			Hint: fmt.Sprintf(
-				"create devbox/templates/git/%s or devbox/templates/git/default\n"+
+				"create workspace/templates/git/%s or workspace/templates/git/default\n"+
 					"or set services.%s.render.git.enabled: false in services.yml",
 				name, name,
 			),

@@ -8,7 +8,7 @@ import (
 func makeDeployCfg(phases []config.DeployPhase) *config.DweConfig {
 	return &config.DweConfig{
 		Deploy: &config.ProjectDeployConfig{Phases: phases},
-		Raw:    map[string]any{"__configPath": "/tmp/devbox.yml"},
+		Raw:    map[string]any{"__configPath": "/tmp/workspace.yml"},
 	}
 }
 

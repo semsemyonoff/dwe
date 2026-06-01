@@ -63,7 +63,7 @@ func pickService(cfg *config.DweConfig, serviceName string, selector selectServi
 
 	switch len(enabled) {
 	case 0:
-		return "", fmt.Errorf("no enabled services — enable a service with 'devbox services enable <name>'")
+		return "", fmt.Errorf("no enabled services — enable a service with 'dwe services enable <name>'")
 	case 1:
 		return enabled[0], nil
 	default:
@@ -71,7 +71,7 @@ func pickService(cfg *config.DweConfig, serviceName string, selector selectServi
 	}
 }
 
-// NewCmd builds the `devbox shell` cobra command.
+// NewCmd builds the `dwe shell` cobra command.
 func NewCmd(groupID string, flags *cmdctx.RootFlags) *cobra.Command {
 	var asRoot bool
 	var flagMode string
@@ -91,15 +91,15 @@ Mode controls how the shell is opened (--mode auto|exec|run):
   run   — always start a new container via 'docker compose run --rm'
 
 Shell, user, working directory, and env defaults are read from the service
-cli config block in devbox/services/<name>/service.yml and can be overridden with flags.
+cli config block in workspace/services/<name>/service.yml and can be overridden with flags.
 
 When no service argument is given, the command auto-selects if only one enabled
 service exists, or shows an interactive selector when multiple services are enabled.`,
-		Example: `  devbox shell
-  devbox shell main
-  devbox shell main --root
-  devbox shell main --mode run --shell sh
-  devbox shell main --user deploy --workdir /app`,
+		Example: `  dwe shell
+  dwe shell main
+  dwe shell main --root
+  dwe shell main --mode run --shell sh
+  dwe shell main --user deploy --workdir /app`,
 		Args:              cobra.MaximumNArgs(1),
 		SilenceUsage:      true,
 		ValidArgsFunction: cmdctx.ServiceNameCompletion(flags),

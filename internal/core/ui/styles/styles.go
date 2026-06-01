@@ -415,7 +415,7 @@ func TermWidth() int {
 	return w
 }
 
-// HuhTheme is the package-level huh.Theme built from devbox/styles.yml.
+// HuhTheme is the package-level huh.Theme built from workspace/styles.yml.
 // It defaults to ThemeBase + devbox glyph overrides (no project palette
 // applied) until ApplyStyles is called.
 var HuhTheme huh.Theme = huh.ThemeFunc(func(isDark bool) *huh.Styles {

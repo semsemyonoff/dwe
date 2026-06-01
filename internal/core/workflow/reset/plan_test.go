@@ -48,7 +48,7 @@ func TestFindStep_MissingConfigPath(t *testing.T) {
 func TestResolvePlan_emptyPhasesUsesDefault(t *testing.T) {
 	dir := t.TempDir()
 	writeResetYML(t, dir, `phases: []`)
-	cfg := makeResetCfgWithPath(dir + "/devbox.yml")
+	cfg := makeResetCfgWithPath(dir + "/workspace.yml")
 	steps, err := reset.ResolvePlan(cfg, usercommands.NewEmptyRegistry())
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
@@ -68,7 +68,7 @@ phases:
         type: shell
         cmd: rm -rf services/main/src
 `)
-	cfg := makeResetCfgWithPath(dir + "/devbox.yml")
+	cfg := makeResetCfgWithPath(dir + "/workspace.yml")
 	steps, err := reset.ResolvePlan(cfg, usercommands.NewEmptyRegistry())
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
@@ -90,7 +90,7 @@ func TestResolvePlan_noFileUsesDefault(t *testing.T) {
 	if err := os.MkdirAll(devboxDir, 0o755); err != nil {
 		t.Fatal(err)
 	}
-	cfg := makeResetCfgWithPath(dir + "/devbox.yml")
+	cfg := makeResetCfgWithPath(dir + "/workspace.yml")
 	steps, err := reset.ResolvePlan(cfg, usercommands.NewEmptyRegistry())
 	if err != nil {
 		t.Fatalf("unexpected error with no reset.yml: %v", err)
@@ -117,7 +117,7 @@ func TestLoadAndResolvePlan_noFileReturnsDefaulted(t *testing.T) {
 	if err := os.MkdirAll(devboxDir, 0o755); err != nil {
 		t.Fatal(err)
 	}
-	cfg := makeResetCfgWithPath(dir + "/devbox.yml")
+	cfg := makeResetCfgWithPath(dir + "/workspace.yml")
 	_, steps, defaulted, err := reset.LoadAndResolvePlan(cfg, usercommands.NewEmptyRegistry())
 	if err != nil {
 		t.Fatalf("unexpected error with no reset.yml: %v", err)
@@ -140,7 +140,7 @@ phases:
         type: shell
         cmd: rm -rf services/main/src
 `)
-	cfg := makeResetCfgWithPath(dir + "/devbox.yml")
+	cfg := makeResetCfgWithPath(dir + "/workspace.yml")
 	_, steps, defaulted, err := reset.LoadAndResolvePlan(cfg, usercommands.NewEmptyRegistry())
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
@@ -159,7 +159,7 @@ func TestFindStep_noFileSearchesDefault(t *testing.T) {
 	if err := os.MkdirAll(devboxDir, 0o755); err != nil {
 		t.Fatal(err)
 	}
-	cfg := makeResetCfgWithPath(dir + "/devbox.yml")
+	cfg := makeResetCfgWithPath(dir + "/workspace.yml")
 	// cleanup/remove-volumes is a step in the default pipeline.
 	phase, step, err := reset.FindStep(cfg, "cleanup/remove-volumes")
 	if err != nil {
@@ -188,7 +188,7 @@ phases:
         type: command
         cmd: services.main.db.create
 `)
-	cfg := makeResetCfgWithPath(dir + "/devbox.yml")
+	cfg := makeResetCfgWithPath(dir + "/workspace.yml")
 	phase, step, err := reset.FindStep(cfg, "cleanup/reset-db")
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
@@ -211,7 +211,7 @@ phases:
         type: shell
         cmd: rm -rf services/main/src
 `)
-	cfg := makeResetCfgWithPath(dir + "/devbox.yml")
+	cfg := makeResetCfgWithPath(dir + "/workspace.yml")
 	_, _, err := reset.FindStep(cfg, "cleanup/nonexistent")
 	if err == nil {
 		t.Fatal("expected error for missing step, got nil")
@@ -228,7 +228,7 @@ phases:
         type: shell
         cmd: rm -rf services/main/src
 `)
-	cfg := makeResetCfgWithPath(dir + "/devbox.yml")
+	cfg := makeResetCfgWithPath(dir + "/workspace.yml")
 	_, _, err := reset.FindStep(cfg, "nonexistent/remove-dirs")
 	if err == nil {
 		t.Fatal("expected error for missing phase, got nil")

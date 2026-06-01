@@ -18,7 +18,7 @@ func (v *projectPermsValidator) Run(ctx validate.Context) []validate.Diagnostic 
 		return []validate.Diagnostic{fail(
 			v.ID(),
 			"project root not resolved",
-			"run from inside a devbox project (a directory containing devbox.yml)",
+			"run from inside a devbox project (a directory containing workspace.yml)",
 		)}
 	}
 	devboxDir := filepath.Join(ctx.ProjectRoot, ".dwe")

@@ -99,7 +99,7 @@ func TestLoadTrackedServices_Integration(t *testing.T) {
 
 	testDir := t.TempDir()
 
-	// Create minimal devbox.yml
+	// Create minimal workspace.yml
 	devboxYML := `project:
   name: test
   prefix: devbox
@@ -109,7 +109,7 @@ func TestLoadTrackedServices_Integration(t *testing.T) {
 		[]byte(devboxYML),
 		0644,
 	); err != nil {
-		t.Fatalf("writing devbox.yml: %v", err)
+		t.Fatalf("writing workspace.yml: %v", err)
 	}
 
 	// Create devbox dir

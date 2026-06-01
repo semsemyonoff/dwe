@@ -73,7 +73,7 @@ func TestAll_CorruptConfig_ReturnsErrorValidator(t *testing.T) {
 func TestAll_CorruptConfig_TopLevelDomainLevelGlobal(t *testing.T) {
 	// Regression: _config error was previously a child of lintersGroup, so
 	// Registry.Run's DomainLevel/Global checks never reached it under scoped
-	// queries like `devbox validate linters shellcheck`.
+	// queries like `dwe validate linters shellcheck`.
 	got := All(nil, errors.New("yaml: bad token"), t.TempDir(), nil)
 	if len(got) != 1 {
 		t.Fatalf("expected 1 top-level validator, got %d", len(got))

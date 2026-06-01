@@ -290,7 +290,7 @@ func TestRunFromDirColor(t *testing.T) {
 
 	tests := []struct {
 		name       string
-		styles     string // contents of devbox/styles.yml; empty string means file absent
+		styles     string // contents of workspace/styles.yml; empty string means file absent
 		state      string // contents of .dwe/deploy/state.yml; empty means absent
 		wantStdout string
 	}{

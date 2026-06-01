@@ -298,7 +298,7 @@ func NewHuhAsker(out io.Writer) (
 
 // formatServiceToggleRow renders a single line for the wizard's service
 // multi-select: name colored by type, type badge, container in muted color —
-// mirroring the look of `devbox services`.
+// mirroring the look of `dwe services`.
 func formatServiceToggleRow(t ServiceToggle) string {
 	typeText := t.Type
 	if typeText == "" {

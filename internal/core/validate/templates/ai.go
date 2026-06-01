@@ -109,7 +109,7 @@ func (v *AIValidator) validateService(name string, svc config.ServiceConfig, pro
 			Domain:   "templates",
 			Target:   fmt.Sprintf("templates.ai:%s", name),
 			Message:  fmt.Sprintf("failed to resolve template pack: %v", err),
-			Hint:     "check render.ai.template setting and devbox/templates/ai directory",
+			Hint:     "check render.ai.template setting and workspace/templates/ai directory",
 		}}
 	}
 	if !found {
@@ -119,7 +119,7 @@ func (v *AIValidator) validateService(name string, svc config.ServiceConfig, pro
 			Target:   fmt.Sprintf("templates.ai:%s", name),
 			Message:  fmt.Sprintf("template pack not found for service %q", name),
 			Hint: fmt.Sprintf(
-				"create devbox/templates/ai/%s or devbox/templates/ai/default\n"+
+				"create workspace/templates/ai/%s or workspace/templates/ai/default\n"+
 					"or set services.%s.render.ai.enabled: false in services.yml",
 				name, name,
 			),

@@ -347,7 +347,7 @@ func mutateAndPlan(
 
 	// Step 5: Write pending entries atomically via a single batch call. Always
 	// runs (regardless of stack state) so the deferred work shows up in
-	// `devbox status` until the user actually applies it; AddPendingOps is a
+	// `dwe status` until the user actually applies it; AddPendingOps is a
 	// no-op when there is nothing to record (e.g. all RequiresNone).
 	contributors := buildContributors(cfgNew, toggles, deployedServices)
 	ops := buildPendingOpsFromContributors(contributors)
@@ -556,7 +556,7 @@ func runSingleServiceToggle(
 	}
 
 	// Stack not running and no --apply: hooks/apply are not auto-run. Pending
-	// is already recorded so `devbox status` will remind the user.
+	// is already recorded so `dwe status` will remind the user.
 	if !stackRunning {
 		warnStackStopped(cmd.OutOrStdout(), plan)
 		return nil

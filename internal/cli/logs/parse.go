@@ -5,7 +5,7 @@ import (
 	"time"
 )
 
-// logLineJSON is the NDJSON envelope emitted by `devbox logs --output json`.
+// logLineJSON is the NDJSON envelope emitted by `dwe logs --output json`.
 // One object per line; no array wrapper (streaming-friendly shape).
 type logLineJSON struct {
 	Ts     string `json:"ts"`     // RFC3339Nano timestamp

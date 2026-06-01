@@ -1,4 +1,4 @@
-// Package linters provides external-linter integration for `devbox validate`.
+// Package linters provides external-linter integration for `dwe validate`.
 //
 // Each linter is exposed as an Adapter (the contract for what binary to run,
 // what defaults to use, how to parse output, and which CLI flags are reserved
@@ -6,7 +6,7 @@
 // applies per-linter bounds (timeout, output cap, severity clamp), and emits
 // diagnostics in the standard validate.Diagnostic shape.
 //
-// Linters run only inside `devbox validate` — never in preflight. Preflight
+// Linters run only inside `dwe validate` — never in preflight. Preflight
 // answers "can we run?", not "is the code clean?".
 package linters
 

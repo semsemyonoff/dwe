@@ -16,7 +16,7 @@ import (
 	"github.com/spf13/cobra"
 )
 
-// newRenderIDECmd creates the `devbox render ide [service]` command.
+// newRenderIDECmd creates the `dwe render ide [service]` command.
 // It generates IDE-specific config files into each service directory.
 // When a service name is provided only that service is processed;
 // otherwise all services matching the IDE selection policy are processed.
@@ -27,7 +27,7 @@ func newIDECmd(flags *cmdctx.RootFlags) *cobra.Command {
 		Long: `Generate IDE-specific config files for each enabled service from a template pack.
 
 The command reads manifest.yml from the chosen template pack
-(devbox/templates/ide/<pack-name>/) and renders each declared entry into the
+(workspace/templates/ide/<pack-name>/) and renders each declared entry into the
 corresponding location within the service directory. For example:
   manifest.yml: render: [{from: settings.json.tmpl, to: .vscode/settings.json}]
   → services/main/.vscode/settings.json
@@ -37,8 +37,8 @@ hint. See docs/reference/render/ide.md for the manifest schema and migration.
 
 Template pack resolution (explicit is strict; implicit chain: service-name → default):
   1. If render.ide.template is set in the service config, use that pack (explicit, strict)
-  2. Otherwise, try devbox/templates/ide/<service-name>/
-  3. If not found, use devbox/templates/ide/default/
+  2. Otherwise, try workspace/templates/ide/<service-name>/
+  3. If not found, use workspace/templates/ide/default/
   4. If none exist, skip with a warning (implicit missing pack)
 
 Services that participate in IDE rendering:
@@ -150,7 +150,7 @@ func resolveIDEHubAnchor(name string, services map[string]config.ServiceConfig) 
 	return deepest
 }
 
-// validateExplicitIDEArg validates the explicit service argument for `devbox render ide <service>`.
+// validateExplicitIDEArg validates the explicit service argument for `dwe render ide <service>`.
 // Checks in priority order: not-found → disabled → no-dir → IDE policy.
 // Returns nil when the service is valid and renderable.
 func validateExplicitIDEArg(name string, services map[string]config.ServiceConfig) error {
@@ -241,7 +241,7 @@ func renderIDEConfigs(projectRoot, name string, svc config.ServiceConfig, cfg *c
 			return err
 		}
 		if fromOverride {
-			w.Info(fmt.Sprintf("using local override: devbox/templates/ide/%s.local/%s", packName, entry.From))
+			w.Info(fmt.Sprintf("using local override: workspace/templates/ide/%s.local/%s", packName, entry.From))
 		}
 		w.Success(fmt.Sprintf("ide → %s", filepath.Join(svc.Dir, entry.To)))
 	}

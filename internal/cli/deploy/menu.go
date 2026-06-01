@@ -70,12 +70,12 @@ type deployServiceItem struct {
 	LockedHint string
 }
 
-// runDeployMenu is the entry point for `devbox deploy` without subcommands.
+// runDeployMenu is the entry point for `dwe deploy` without subcommands.
 // It opens an interactive TUI menu if stdin/stdout are TTY, otherwise prints help.
 func runDeployMenu(cmd *cobra.Command, flags *cmdctx.RootFlags) error {
 	if !widgets.IsInteractiveFn(os.Stdin) {
 		_ = cmd.Help()
-		return usageError("devbox deploy: requires a subcommand or interactive TTY")
+		return usageError("dwe deploy: requires a subcommand or interactive TTY")
 	}
 
 	ctx := cmd.Context()
@@ -558,7 +558,7 @@ func selectDeployServiceInteractive(_ context.Context, cmd *cobra.Command, title
 }
 
 // formatDeployServiceLabel renders one row in the service picker, mirroring
-// the look of `devbox services`: service name colored by its type, type badge
+// the look of `dwe services`: service name colored by its type, type badge
 // in matching color, secondary metadata in muted color. A leading status icon
 // (✓ for deployed, · for not) gives at-a-glance deploy state without
 // overriding the per-type palette.
@@ -625,7 +625,7 @@ func relativeTimeForMenu(t time.Time) string {
 
 // buildWizardServiceToggles converts the project's manageable services into
 // the typed list the wizard's multi-select consumes. Mirrors the filter used
-// by `devbox services` (mandatory infra is hidden — it's always-on and not
+// by `dwe services` (mandatory infra is hidden — it's always-on and not
 // meaningful as a toggle row).
 func buildWizardServiceToggles(cfg *config.DweConfig) []setup.ServiceToggle {
 	if cfg == nil {

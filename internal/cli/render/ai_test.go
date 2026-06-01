@@ -38,7 +38,7 @@ func setupServicesConfig(t *testing.T, dir, servicesYML string) {
 	}
 }
 
-// setupAIPack creates an empty pack at <projectRoot>/devbox/templates/ai/test/
+// setupAIPack creates an empty pack at <projectRoot>/workspace/templates/ai/test/
 // for ValidateManifest/RenderTemplateFile tests that need a real packroot
 // layout. Callers populate packDir with fixtures and call the new API with
 // (projectRoot, "test", projectRoot).
@@ -52,7 +52,7 @@ func setupAIPack(t *testing.T) (projectRoot, packDir string) {
 	return projectRoot, packDir
 }
 
-// setupAgentsPackTemplates writes an agents template pack at <dir>/devbox/templates/ai/<packName>/
+// setupAgentsPackTemplates writes an agents template pack at <dir>/workspace/templates/ai/<packName>/
 // and populates it with a directory structure of files.
 func setupAgentsPackTemplates(t *testing.T, dir, packName string, files map[string]string) {
 	t.Helper()
@@ -757,7 +757,7 @@ func TestValidateAgentsManifest_overrideSatisfiesMissingFrom(t *testing.T) {
 	}
 }
 
-// writeAIPackTmpl writes a single .tmpl into <projectRoot>/devbox/templates/ai/test/<rel>.
+// writeAIPackTmpl writes a single .tmpl into <projectRoot>/workspace/templates/ai/test/<rel>.
 func writeAIPackTmpl(t *testing.T, projectRoot, rel, content string) {
 	t.Helper()
 	packDir := filepath.Join(projectRoot, "workspace", "templates", "ai", "test")
@@ -1091,7 +1091,7 @@ func TestEnsureRelativeSymlink_escapeTarget(t *testing.T) {
 func TestNewAICmd_happyPath(t *testing.T) {
 	projectRoot := t.TempDir()
 
-	// Setup devbox.yml
+	// Setup workspace.yml
 	devboxYAML := `schema_version: "2"
 project:
   name: test-project
@@ -1100,7 +1100,7 @@ services:
     enabled: true
 `
 	if err := os.WriteFile(filepath.Join(projectRoot, "workspace.yml"), []byte(devboxYAML), 0o644); err != nil {
-		t.Fatalf("write devbox.yml: %v", err)
+		t.Fatalf("write workspace.yml: %v", err)
 	}
 
 	// Setup services.yml with service details
@@ -1164,7 +1164,7 @@ services:
     enabled: true
 `
 	if err := os.WriteFile(filepath.Join(projectRoot, "workspace.yml"), []byte(devboxYAML), 0o644); err != nil {
-		t.Fatalf("write devbox.yml: %v", err)
+		t.Fatalf("write workspace.yml: %v", err)
 	}
 
 	setupServicesConfig(t, projectRoot, `
@@ -1208,7 +1208,7 @@ services:
     enabled: true
 `
 	if err := os.WriteFile(filepath.Join(projectRoot, "workspace.yml"), []byte(devboxYAML), 0o644); err != nil {
-		t.Fatalf("write devbox.yml: %v", err)
+		t.Fatalf("write workspace.yml: %v", err)
 	}
 
 	setupServicesConfig(t, projectRoot, `
@@ -1291,7 +1291,7 @@ services:
     enabled: true
 `
 	if err := os.WriteFile(filepath.Join(projectRoot, "workspace.yml"), []byte(devboxYAML), 0o644); err != nil {
-		t.Fatalf("write devbox.yml: %v", err)
+		t.Fatalf("write workspace.yml: %v", err)
 	}
 
 	setupServicesConfig(t, projectRoot, `
@@ -1326,7 +1326,7 @@ services:
     enabled: false
 `
 	if err := os.WriteFile(filepath.Join(projectRoot, "workspace.yml"), []byte(devboxYAML), 0o644); err != nil {
-		t.Fatalf("write devbox.yml: %v", err)
+		t.Fatalf("write workspace.yml: %v", err)
 	}
 
 	setupServicesConfig(t, projectRoot, `
@@ -1361,7 +1361,7 @@ services:
     enabled: true
 `
 	if err := os.WriteFile(filepath.Join(projectRoot, "workspace.yml"), []byte(devboxYAML), 0o644); err != nil {
-		t.Fatalf("write devbox.yml: %v", err)
+		t.Fatalf("write workspace.yml: %v", err)
 	}
 
 	setupServicesConfig(t, projectRoot, `
@@ -1398,7 +1398,7 @@ services:
     enabled: true
 `
 	if err := os.WriteFile(filepath.Join(projectRoot, "workspace.yml"), []byte(devboxYAML), 0o644); err != nil {
-		t.Fatalf("write devbox.yml: %v", err)
+		t.Fatalf("write workspace.yml: %v", err)
 	}
 
 	setupServicesConfig(t, projectRoot, `
@@ -1441,7 +1441,7 @@ services:
     enabled: true
 `
 	if err := os.WriteFile(filepath.Join(projectRoot, "workspace.yml"), []byte(devboxYAML), 0o644); err != nil {
-		t.Fatalf("write devbox.yml: %v", err)
+		t.Fatalf("write workspace.yml: %v", err)
 	}
 
 	setupServicesConfig(t, projectRoot, `
@@ -1603,7 +1603,7 @@ services:
     enabled: true
 `
 	if err := os.WriteFile(filepath.Join(projectRoot, "workspace.yml"), []byte(devboxYAML), 0o644); err != nil {
-		t.Fatalf("write devbox.yml: %v", err)
+		t.Fatalf("write workspace.yml: %v", err)
 	}
 
 	setupServicesConfig(t, projectRoot, `

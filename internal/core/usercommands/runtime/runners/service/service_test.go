@@ -33,7 +33,7 @@ const (
 )
 
 // testCompose returns a minimal *docker.Compose for use in tests.
-// Includes realistic per-command defaults matching devbox/docker.yml.
+// Includes realistic per-command defaults matching workspace/docker.yml.
 func testCompose(projectName string, files []string) *docker.Compose {
 	return &docker.Compose{
 		ProjectName: projectName,

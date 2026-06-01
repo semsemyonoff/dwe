@@ -125,10 +125,10 @@ func TestRootCmdRunEIsSet(t *testing.T) {
 }
 
 // TestRootCmdNoConfigShowsHelp verifies that running root from a directory with
-// no devbox.yml still produces help output (no error, no crash).
+// no workspace.yml still produces help output (no error, no crash).
 // The root command is allowlisted for the project.ErrNotFound case.
 func TestRootCmdNoConfigShowsHelp(t *testing.T) {
-	// Run from a temp dir with no devbox.yml so discovery mode returns ErrNotFound.
+	// Run from a temp dir with no workspace.yml so discovery mode returns ErrNotFound.
 	t.Chdir(t.TempDir())
 
 	root := NewRootCmd()
@@ -142,8 +142,8 @@ func TestRootCmdNoConfigShowsHelp(t *testing.T) {
 		t.Errorf("root command returned unexpected error when no project found: %v", err)
 	}
 	out := buf.String()
-	if !strings.Contains(out, "devbox") {
-		t.Errorf("root output should contain 'devbox', got:\n%s", out)
+	if !strings.Contains(out, "dwe") {
+		t.Errorf("root output should contain 'dwe', got:\n%s", out)
 	}
 }
 
@@ -180,13 +180,13 @@ project:
 		t.Errorf("root output should contain project name 'testproject', got:\n%s", out)
 	}
 	// Help must be present (root command name).
-	if !strings.Contains(out, "devbox") {
-		t.Errorf("root output should contain help text with 'devbox', got:\n%s", out)
+	if !strings.Contains(out, "dwe") {
+		t.Errorf("root output should contain help text with 'dwe', got:\n%s", out)
 	}
 }
 
 // TestRootCmdBrandHeaderAlwaysPresent verifies the branded identity line is
-// emitted on `devbox` even when no header.lines is configured.
+// emitted on `dwe` even when no header.lines is configured.
 func TestRootCmdBrandHeaderAlwaysPresent(t *testing.T) {
 	dir := t.TempDir()
 	cfgPath := filepath.Join(dir, "workspace.yml")
@@ -219,7 +219,7 @@ project:
 	}
 }
 
-// TestRootCmdInfoIsNotDuplicated verifies that `devbox info` is a separate code
+// TestRootCmdInfoIsNotDuplicated verifies that `dwe info` is a separate code
 // path from root: the info command still exists as a subcommand.
 func TestRootCmdInfoIsNotDuplicated(t *testing.T) {
 	root := NewRootCmd()
@@ -236,14 +236,14 @@ func TestRootCmdInfoIsNotDuplicated(t *testing.T) {
 }
 
 // TestRootCmd_StylesMissingIsGraceful verifies that root command does not error
-// when devbox/styles.yml is absent (defaults apply).
+// when workspace/styles.yml is absent (defaults apply).
 func TestRootCmd_StylesMissingIsGraceful(t *testing.T) {
 	dir := t.TempDir()
 	cfgPath := filepath.Join(dir, "workspace.yml")
 	if err := os.WriteFile(cfgPath, []byte("schema_version: \"2\"\nproject:\n  name: styletest\n  prefix: devbox\n"), 0644); err != nil {
 		t.Fatalf("writing config: %v", err)
 	}
-	// No devbox/styles.yml — must not cause an error.
+	// No workspace/styles.yml — must not cause an error.
 
 	root := NewRootCmd()
 	var buf bytes.Buffer
@@ -262,7 +262,7 @@ func TestRootCmd_StylesMissingIsGraceful(t *testing.T) {
 	}
 }
 
-// TestRootCmd_StylesWithHeaderRendered verifies that when devbox/styles.yml
+// TestRootCmd_StylesWithHeaderRendered verifies that when workspace/styles.yml
 // contains a header block, root command renders ASCII art without error.
 func TestRootCmd_StylesWithHeaderRendered(t *testing.T) {
 	dir := t.TempDir()

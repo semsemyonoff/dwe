@@ -134,7 +134,7 @@ project:
 		t.Fatal(err)
 	}
 
-	// Per-service deploy.yml in the correct location (devbox/services/main/deploy.yml).
+	// Per-service deploy.yml in the correct location (workspace/services/main/deploy.yml).
 	mainDeployYML := `phases:
   - name: setup
     steps:

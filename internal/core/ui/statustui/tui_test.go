@@ -78,7 +78,7 @@ func TestView_RendersTitleAndTabs(t *testing.T) {
 
 	// Verify title bar contains logo, project name, and "Status"
 	require.Contains(t, content, "▪", "should contain logo")
-	require.Contains(t, content, "devbox", "should contain devbox")
+	require.Contains(t, content, "dwe", "should contain dwe")
 	require.Contains(t, content, "myproject", "should contain project name")
 	require.Contains(t, content, "Status", "should contain Status label")
 
@@ -98,7 +98,7 @@ func TestRenderTitleBar(t *testing.T) {
 	titleBar := m.renderTitleBar()
 
 	require.Contains(t, titleBar, "▪", "should contain logo")
-	require.Contains(t, titleBar, "devbox", "should contain devbox")
+	require.Contains(t, titleBar, "dwe", "should contain dwe")
 	require.Contains(t, titleBar, "awesome-project", "should contain project name")
 	require.Contains(t, titleBar, "Status", "should contain Status label")
 }

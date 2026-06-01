@@ -107,7 +107,7 @@ func TestValidator(t *testing.T) {
 				for _, d := range diags {
 					if d.Severity == validate.SeverityWarning &&
 						d.Target == "commands:list" &&
-						strings.Contains(d.Message, `command id "list" conflicts with the reserved subcommand "devbox commands list"`) &&
+						strings.Contains(d.Message, `command id "list" conflicts with the reserved subcommand "dwe commands list"`) &&
 						strings.Contains(d.Message, "interactive browser") {
 						found = true
 					}

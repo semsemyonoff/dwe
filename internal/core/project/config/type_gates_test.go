@@ -7,7 +7,7 @@ import (
 
 // TestValidateDependsOnTypes_rejectsTool confirms the loader-side gate rejects
 // any depends_on target that resolves to a tool-typed service. The check runs
-// on every LoadConfig path, not just `devbox validate`.
+// on every LoadConfig path, not just `dwe validate`.
 func TestValidateDependsOnTypes_rejectsTool(t *testing.T) {
 	services := map[string]ServiceConfig{
 		"app":     {Type: ServiceTypeApp, Container: "app", DependsOn: []string{"adminer"}},

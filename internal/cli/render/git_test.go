@@ -11,7 +11,7 @@ import (
 	"github.com/semsemyonoff/dwe/internal/shared/render"
 )
 
-// setupGitPack writes a git template pack at devbox/templates/git/<packName>/.
+// setupGitPack writes a git template pack at workspace/templates/git/<packName>/.
 func setupGitPack(t *testing.T, projectRoot, packName string, files map[string]string) {
 	t.Helper()
 	packDir := filepath.Join(projectRoot, "workspace", "templates", "git", packName)
@@ -86,7 +86,7 @@ services:
     enabled: true
 `
 	if err := os.WriteFile(filepath.Join(projectRoot, "workspace.yml"), []byte(devboxYAML), 0o644); err != nil {
-		t.Fatalf("write devbox.yml: %v", err)
+		t.Fatalf("write workspace.yml: %v", err)
 	}
 	setupServicesConfig(t, projectRoot, `
 services:

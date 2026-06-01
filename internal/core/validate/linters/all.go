@@ -38,11 +38,11 @@ func builtinAdapters() map[string]Adapter {
 func All(validateCfg *config.ValidateConfig, validateLoadErr error, baseDir string, userCfg *userpkg.Config) []validate.Validator {
 	if validateLoadErr != nil && !errors.Is(validateLoadErr, os.ErrNotExist) {
 		// Return as a top-level DomainLevel+Global validator so that
-		// `devbox validate linters [id]` surfaces the error rather than silently
+		// `dwe validate linters [id]` surfaces the error rather than silently
 		// producing zero diagnostics. buildRegistry suppresses this when
 		// config.validate is already in scope (to avoid a duplicate diagnostic).
 		return []validate.Validator{newLinterErrorValidator("_config", 0,
-			fmt.Sprintf("devbox/validate.yml: %v", validateLoadErr))}
+			fmt.Sprintf("workspace/validate.yml: %v", validateLoadErr))}
 	}
 	children := buildLinterChildren(validateCfg, baseDir, userCfg)
 	if len(children) == 0 {
@@ -161,7 +161,7 @@ func (v *linterErrorValidator) Run(_ validate.Context) []validate.Diagnostic {
 		Severity: validate.SeverityError,
 		Domain:   Domain,
 		Target:   v.id,
-		File:     "devbox/validate.yml",
+		File:     "workspace/validate.yml",
 		Line:     v.line,
 		Message:  v.message,
 	}}

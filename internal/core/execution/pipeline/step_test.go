@@ -28,8 +28,8 @@ func TestStepBadge_allTypes(t *testing.T) {
 	if got := stepBadge(config.DeployStep{Type: "command", Cmd: "x"}); got != "[command]" {
 		t.Errorf("got %q want [command]", got)
 	}
-	if got := stepBadge(config.DeployStep{Type: "devbox", Cmd: "docker down"}); got != "[devbox]" {
-		t.Errorf("got %q want [devbox]", got)
+	if got := stepBadge(config.DeployStep{Type: "dwe", Cmd: "docker down"}); got != "[dwe]" {
+		t.Errorf("got %q want [dwe]", got)
 	}
 	if got := stepBadge(config.DeployStep{Type: "builtin", Cmd: "service_configs_copy"}); got != "[builtin]" {
 		t.Errorf("got %q want [builtin]", got)

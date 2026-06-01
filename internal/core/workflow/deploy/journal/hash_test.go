@@ -27,9 +27,9 @@ func TestActionHash(t *testing.T) {
 			},
 		},
 		{
-			name: "devbox action",
+			name: "dwe action",
 			action: config.Action{
-				Type: "devbox",
+				Type: "dwe",
 				Cmd:  "run something",
 				With: nil,
 			},

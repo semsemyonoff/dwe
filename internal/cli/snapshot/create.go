@@ -27,7 +27,7 @@ import (
 	"github.com/spf13/cobra"
 )
 
-// newSnapshotCreateCmd: `devbox snapshot create <name> [-d desc] [--using=variant] [-y]`.
+// newSnapshotCreateCmd: `dwe snapshot create <name> [-d desc] [--using=variant] [-y]`.
 func newSnapshotCreateCmd(flags *cmdctx.RootFlags) *cobra.Command {
 	var (
 		description string

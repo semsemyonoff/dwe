@@ -24,7 +24,7 @@ func (v *validateYmlValidator) Domain() string {
 }
 
 func (v *validateYmlValidator) Run(ctx validate.Context) []validate.Diagnostic {
-	const file = "devbox/validate.yml"
+	const file = "workspace/validate.yml"
 
 	if ctx.ValidateCfgLoadErr != nil {
 		// Absent file: silently tolerated (validate.yml is optional).

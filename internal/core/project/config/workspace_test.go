@@ -14,7 +14,7 @@ import (
 	userpkg "github.com/semsemyonoff/dwe/internal/core/project/user"
 )
 
-// sampleDevboxYML reflects the lean devbox.yml (project identity only).
+// sampleDevboxYML reflects the lean workspace.yml (project identity only).
 const sampleDevboxYML = `
 schema_version: "1"
 project:
@@ -120,7 +120,7 @@ runtime:
 state: ""
 `
 
-// writeServicesDir creates per-folder service files under <baseDir>/devbox/services/
+// writeServicesDir creates per-folder service files under <baseDir>/workspace/services/
 // from a YAML fragment shaped like `services: {name: {...}}`.
 func writeServicesDir(t *testing.T, baseDir, servicesYML string) {
 	t.Helper()
@@ -149,7 +149,7 @@ func writeServicesDir(t *testing.T, baseDir, servicesYML string) {
 	}
 }
 
-// writeServiceYAML writes a service.yml file at <baseDir>/devbox/services/<name>/
+// writeServiceYAML writes a service.yml file at <baseDir>/workspace/services/<name>/
 func writeServiceYAML(t *testing.T, baseDir, name, content string) {
 	t.Helper()
 	dir := filepath.Join(baseDir, "workspace", "services", name)
@@ -178,9 +178,9 @@ func writeTempYML(t *testing.T, content string) string {
 
 // writeLayeredFixture creates the file layout used by LoadConfig:
 //
-//	<tmp>/devbox.yml
-//	<tmp>/devbox/defaults.yml   (optional)
-//	<tmp>/devbox/local.yml       (optional)
+//	<tmp>/workspace.yml
+//	<tmp>/workspace/defaults.yml   (optional)
+//	<tmp>/workspace/local.yml       (optional)
 //	<tmp>/devbox/tools.yml       (sampleToolsYML)
 //
 // Tests that need a non-standard tools.yml should call writeFullFixture with an
@@ -206,7 +206,7 @@ func writeFullFixture(t *testing.T, devbox, defaults, user, services, tools stri
 
 	devboxPath := filepath.Join(dir, "workspace.yml")
 	if err := os.WriteFile(devboxPath, []byte(devbox), 0644); err != nil {
-		t.Fatalf("write devbox.yml: %v", err)
+		t.Fatalf("write workspace.yml: %v", err)
 	}
 
 	devboxDir := filepath.Join(dir, "workspace")
@@ -247,7 +247,7 @@ func writeFullFixture(t *testing.T, devbox, defaults, user, services, tools stri
 
 // --- LoadDweConfig (single-file loader) ---
 
-// fullSingleYML is a self-contained devbox.yml with all fields, used to test
+// fullSingleYML is a self-contained workspace.yml with all fields, used to test
 // LoadDweConfig in isolation.
 const fullSingleYML = `
 schema_version: "1"
@@ -325,7 +325,7 @@ state: staging
 		t.Fatalf("LoadConfig: %v", err)
 	}
 
-	// From devbox.yml
+	// From workspace.yml
 	if cfg.Project.Name != "laravel" {
 		t.Errorf("Project.Name = %q", cfg.Project.Name)
 	}
@@ -376,7 +376,7 @@ func TestLoadConfig_noDefaultsFile(t *testing.T) {
 func TestLoadConfig_notFound(t *testing.T) {
 	_, err := LoadConfig(filepath.Join(t.TempDir(), "nonexistent.yml"))
 	if err == nil {
-		t.Error("expected error for missing devbox.yml")
+		t.Error("expected error for missing workspace.yml")
 	}
 }
 
@@ -674,7 +674,7 @@ func TestDetectLegacyComposeOverlays_allowsNewFormat(t *testing.T) {
 }
 
 func TestLoadConfig_nilSafety(t *testing.T) {
-	// A minimal devbox.yml with no tools, runtime, or services should load without panic.
+	// A minimal workspace.yml with no tools, runtime, or services should load without panic.
 	minimalYML := `
 schema_version: "1"
 project:
@@ -966,7 +966,7 @@ func writeDeployFixture(t *testing.T, deployYML string) string {
 	dir := t.TempDir()
 	devboxPath := filepath.Join(dir, "workspace.yml")
 	if err := os.WriteFile(devboxPath, []byte(sampleDevboxYML), 0644); err != nil {
-		t.Fatalf("write devbox.yml: %v", err)
+		t.Fatalf("write workspace.yml: %v", err)
 	}
 	devboxDir := filepath.Join(dir, "workspace")
 	if err := os.MkdirAll(devboxDir, 0755); err != nil {
@@ -3122,7 +3122,7 @@ phases:
 // --- Binary Accessors ---
 
 func TestLoadConfig_rejectsBinariesBlock(t *testing.T) {
-	// LoadConfig rejects devbox.yml with binaries: block and returns migration error
+	// LoadConfig rejects workspace.yml with binaries: block and returns migration error
 	devboxYML := `
 schema_version: "1"
 project:
@@ -3141,7 +3141,7 @@ binaries:
 }
 
 func TestLoadConfig_rejectsToolsBlock(t *testing.T) {
-	// LoadConfig rejects devbox.yml with tools: block and returns migration error
+	// LoadConfig rejects workspace.yml with tools: block and returns migration error
 	devboxYML := `
 schema_version: "1"
 project:

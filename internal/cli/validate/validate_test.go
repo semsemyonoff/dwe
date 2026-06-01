@@ -143,7 +143,7 @@ func TestValidateUsesLoadForValidate(t *testing.T) {
 	// We use a temporary directory to avoid hitting a real project.
 	tmpDir := t.TempDir()
 
-	// Create minimal devbox.yml to pass locate.
+	// Create minimal workspace.yml to pass locate.
 	devboxPath := filepath.Join(tmpDir, "workspace.yml")
 	err := os.WriteFile(devboxPath, []byte(`schema_version: "2"`), 0644)
 	require.NoError(t, err)
@@ -188,7 +188,7 @@ func TestValidateEnvAndChecksSubcommands(t *testing.T) {
 func TestValidateMalformedValidateYmlDoesNotShortCircuit(t *testing.T) {
 	tmpDir := t.TempDir()
 
-	// Minimal devbox.yml so locate succeeds.
+	// Minimal workspace.yml so locate succeeds.
 	devboxPath := filepath.Join(tmpDir, "workspace.yml")
 	require.NoError(t, os.WriteFile(devboxPath, []byte("schema_version: \"2\"\n"), 0o644))
 
@@ -214,7 +214,7 @@ func TestValidateMalformedValidateYmlDoesNotShortCircuit(t *testing.T) {
 }
 
 // TestValidateChecksScopedMalformedValidateYmlSurfacesDiagnostic: running
-// "devbox validate checks" with a malformed validate.yml must surface an error
+// "dwe validate checks" with a malformed validate.yml must surface an error
 // diagnostic (not a raw error) and must not silently return zero diagnostics.
 func TestValidateChecksScopedMalformedValidateYmlSurfacesDiagnostic(t *testing.T) {
 	tmpDir := t.TempDir()
@@ -242,7 +242,7 @@ func TestValidateChecksScopedMalformedValidateYmlSurfacesDiagnostic(t *testing.T
 }
 
 // TestValidateChecksScopedByIDMalformedValidateYmlSurfacesDiagnostic: running
-// "devbox validate checks <id>" on a malformed validate.yml must still surface
+// "dwe validate checks <id>" on a malformed validate.yml must still surface
 // the parse error — not silently return zero diagnostics and exit 0.
 func TestValidateChecksScopedByIDMalformedValidateYmlSurfacesDiagnostic(t *testing.T) {
 	tmpDir := t.TempDir()
@@ -291,7 +291,7 @@ func TestValidateMissingValidateYmlIsSilent(t *testing.T) {
 }
 
 // TestValidateEnvScopedMalformedValidateYmlSurfacesDiagnostic: running
-// "devbox validate env" with a malformed validate.yml must surface an error
+// "dwe validate env" with a malformed validate.yml must surface an error
 // diagnostic. Previously the error was silently dropped because neither the
 // "config" nor "checks" domain ran for an "env" scope.
 func TestValidateEnvScopedMalformedValidateYmlSurfacesDiagnostic(t *testing.T) {
@@ -359,7 +359,7 @@ func TestValidateLintersSubcommand(t *testing.T) {
 	require.True(t, lintersCmd.SilenceUsage)
 }
 
-// TestValidateLintersRunsLintersDomainOnly: `devbox validate linters` scopes
+// TestValidateLintersRunsLintersDomainOnly: `dwe validate linters` scopes
 // execution to the linters domain — output must not contain rows from other
 // domains (config, env, checks, snapshot, templates, commands).
 func TestValidateLintersRunsLintersDomainOnly(t *testing.T) {
@@ -386,7 +386,7 @@ func TestValidateLintersRunsLintersDomainOnly(t *testing.T) {
 	require.NotContains(t, out, "snapshot/")
 }
 
-// TestValidateLintersScopedByIDFiltersToOne: `devbox validate linters shellcheck`
+// TestValidateLintersScopedByIDFiltersToOne: `dwe validate linters shellcheck`
 // must filter rows to just that linter — hadolint (the other autodetected
 // built-in) must not appear.
 func TestValidateLintersScopedByIDFiltersToOne(t *testing.T) {
@@ -459,7 +459,7 @@ func TestValidateLintersStrictUpgradesWarningToError(t *testing.T) {
 }
 
 // TestValidateLintersScopedMalformedValidateYmlSurfacesDiagnostic: running
-// "devbox validate linters" with a malformed validate.yml must surface an error
+// "dwe validate linters" with a malformed validate.yml must surface an error
 // diagnostic (not silently return zero diagnostics).
 func TestValidateLintersScopedMalformedValidateYmlSurfacesDiagnostic(t *testing.T) {
 	tmpDir := t.TempDir()
@@ -495,7 +495,7 @@ func TestValidateSnapshotSubcommand(t *testing.T) {
 }
 
 // TestValidateSnapshotRunsAndSurfacesPerSnapshotDiagnostics walks the full
-// `devbox validate snapshot` flow against a tmp project with a broken
+// `dwe validate snapshot` flow against a tmp project with a broken
 // snapshot directory (missing manifest) and asserts the corresponding error
 // diagnostic shows up.
 func TestValidateSnapshotRunsAndSurfacesPerSnapshotDiagnostics(t *testing.T) {
@@ -590,7 +590,7 @@ func runValidateJSONCmd(t *testing.T, cfgPath string, args ...string) (stdout, s
 	return outBuf.String(), errBuf.String()
 }
 
-// TestValidateCmd_JSONMode_Structure verifies that `devbox validate --output json`
+// TestValidateCmd_JSONMode_Structure verifies that `dwe validate --output json`
 // emits a JSON object with the expected top-level keys.
 func TestValidateCmd_JSONMode_Structure(t *testing.T) {
 	tmpDir := t.TempDir()
@@ -755,7 +755,7 @@ func TestValidateCmd_JSONMode_StrictExitCodePreserved(t *testing.T) {
 }
 
 // TestValidateCmd_JSONMode_ConfigGolden captures the JSON shape for `validate config`
-// against a minimal devbox.yml. The golden file is generated with UPDATE_GOLDEN=1.
+// against a minimal workspace.yml. The golden file is generated with UPDATE_GOLDEN=1.
 func TestValidateCmd_JSONMode_ConfigGolden(t *testing.T) {
 	tmpDir := t.TempDir()
 	devboxPath := filepath.Join(tmpDir, "workspace.yml")

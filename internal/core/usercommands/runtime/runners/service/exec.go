@@ -61,7 +61,7 @@ func (e *ExecRunner) BuildCommand(ctx context.Context, rc spec.RunContext, compo
 		// error rather than a raw compose stderr trace.
 		running, checkErr := isContainerRunning(compose, svc)
 		if checkErr == nil && !running {
-			return nil, fmt.Errorf("service %q is not running (mode: exec-or-fail). Start it with `devbox docker up %s`, or set `mode: exec-or-run` if a one-off ephemeral container is acceptable", svc, svc)
+			return nil, fmt.Errorf("service %q is not running (mode: exec-or-fail). Start it with `dwe docker up %s`, or set `mode: exec-or-run` if a one-off ephemeral container is acceptable", svc, svc)
 		}
 		// On probe error we proceed; compose will fail with its own error if needed.
 	case model.ExecModeExecOrRun:

@@ -28,7 +28,7 @@ import (
 // diagFile is the canonical path reported in diagnostics. Matches what the
 // loader and config.validate validator report so users see a consistent
 // reference regardless of where the file was located on disk.
-const diagFile = "devbox/validate.yml"
+const diagFile = "workspace/validate.yml"
 
 // allowedCommandTypes is the whitelist of user-command types invokable from
 // a check. Heavyweight types (workflow, service_*, devbox, builtin-as-command)
@@ -253,7 +253,7 @@ func targetWithStages(entry config.CheckEntry) string {
 //
 // It also implements validate.GlobalValidator so that the error is surfaced
 // even when the requested scope does not include "config" or "checks" (e.g.
-// "devbox validate env" with a broken validate.yml must not silently succeed).
+// "dwe validate env" with a broken validate.yml must not silently succeed).
 // Duplication with config.validate is prevented upstream: buildRegistry sets
 // checksLoadErr to nil when config.validate is already in scope, so this
 // validator is only created when config.validate will not run.

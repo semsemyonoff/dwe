@@ -21,7 +21,7 @@ func DefaultDeployConfig() *config.ProjectDeployConfig {
 				Steps: []config.DeployStep{
 					{
 						Name:        "up",
-						Type:        "devbox",
+						Type:        "dwe",
 						Cmd:         "docker up --wait",
 						Description: "Start all containers and wait until healthy",
 						Untracked:   true,
@@ -35,7 +35,7 @@ func DefaultDeployConfig() *config.ProjectDeployConfig {
 				Steps: []config.DeployStep{
 					{
 						Name:        "info",
-						Type:        "devbox",
+						Type:        "dwe",
 						Cmd:         "info",
 						Description: "Show environment summary",
 					},

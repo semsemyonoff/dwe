@@ -49,7 +49,7 @@ func (s *Runner) Run(ctx context.Context, rc spec.RunContext) error {
 		shell = "sh"
 	}
 
-	tmpDir, err := os.MkdirTemp("", "devbox-script-*")
+	tmpDir, err := os.MkdirTemp("", "dwe-script-*")
 	if err != nil {
 		return fmt.Errorf("script runner: create temp dir: %w", err)
 	}

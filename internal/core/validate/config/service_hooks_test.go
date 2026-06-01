@@ -13,7 +13,7 @@ import (
 	"github.com/semsemyonoff/dwe/internal/core/validate"
 )
 
-// writeServiceYML creates devbox/services/<name>/service.yml with the given content.
+// writeServiceYML creates workspace/services/<name>/service.yml with the given content.
 func writeServiceYML(t *testing.T, root, name, content string) {
 	t.Helper()
 	dir := filepath.Join(root, "workspace", "services", name)
@@ -21,7 +21,7 @@ func writeServiceYML(t *testing.T, root, name, content string) {
 	require.NoError(t, os.WriteFile(filepath.Join(dir, "service.yml"), []byte(content), 0o644))
 }
 
-// writeDeployYML creates devbox/services/<name>/deploy.yml.
+// writeDeployYML creates workspace/services/<name>/deploy.yml.
 func writeDeployYML(t *testing.T, root, name string) {
 	t.Helper()
 	dir := filepath.Join(root, "workspace", "services", name)

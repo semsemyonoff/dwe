@@ -11,7 +11,7 @@ import (
 )
 
 // ErrServiceNoDeployFile is returned by ResolveServicePlan when the named
-// service exists but has no deploy.yml in devbox/services/<name>/deploy.yml.
+// service exists but has no deploy.yml in workspace/services/<name>/deploy.yml.
 var ErrServiceNoDeployFile = errors.New("deploy: service has no deploy pipeline")
 
 // ResolveServicePlan builds the step list for a single named service.
@@ -31,7 +31,7 @@ func ResolveServicePlan(cfg *config.DweConfig, reg *registry.Registry, serviceNa
 	baseDir := filepath.Dir(cfgPath)
 	svc, declared := cfg.Services[serviceName]
 	if !declared {
-		return nil, fmt.Errorf("service %q is not declared in devbox/services/<name>/service.yml", serviceName)
+		return nil, fmt.Errorf("service %q is not declared in workspace/services/<name>/service.yml", serviceName)
 	}
 	svcDeploys, err := config.LoadServiceDeployConfigs(baseDir, map[string]config.ServiceConfig{
 		serviceName: svc,

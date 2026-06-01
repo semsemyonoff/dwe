@@ -96,7 +96,7 @@ func RunStop(ctx StopContext) error {
 		return err
 	}
 
-	// Stopping the full stack moots any pending restart: the next `devbox run`
+	// Stopping the full stack moots any pending restart: the next `dwe run`
 	// brings everything up in its current local.yml shape, so the restart
 	// reminder is no longer actionable. Pending deploy ops are NOT cleared —
 	// deploy tracks artifact state and survives a stop/run cycle (the run gate

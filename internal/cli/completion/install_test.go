@@ -27,7 +27,7 @@ func buildCompletionTestRoot() *cobra.Command {
 }
 
 // buildFreshInstallCmd builds a fresh root command and returns the install
-// subcommand under `devbox completion install`. A fresh root is required per
+// subcommand under `dwe completion install`. A fresh root is required per
 // test because cobra accumulates flag state across Execute() calls.
 func buildFreshInstallCmd(t *testing.T) func(args ...string) (stdout, stderr string, err error) {
 	t.Helper()

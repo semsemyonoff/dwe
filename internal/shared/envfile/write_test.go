@@ -43,7 +43,7 @@ func TestWrite_createsParentDirs(t *testing.T) {
 
 func TestRegenerate_writesEnvNextToConfig(t *testing.T) {
 	dir := t.TempDir()
-	// Write a minimal devbox.yml so LoadConfig can parse it.
+	// Write a minimal workspace.yml so LoadConfig can parse it.
 	configContent := `
 project:
   name: testproject
@@ -51,7 +51,7 @@ project:
 `
 	configPath := filepath.Join(dir, "workspace.yml")
 	if err := os.WriteFile(configPath, []byte(configContent), 0o644); err != nil {
-		t.Fatalf("WriteFile devbox.yml: %v", err)
+		t.Fatalf("WriteFile workspace.yml: %v", err)
 	}
 
 	envPath, err := Regenerate(configPath)

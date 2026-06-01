@@ -635,7 +635,7 @@ type CommandDef struct {
 	Type CommandType `yaml:"type"`
 	// Description is human-readable help text.
 	Description string `yaml:"description"`
-	// Private hides the command from `devbox command list` but allows
+	// Private hides the command from `dwe command list` but allows
 	// it to be referenced from workflows.
 	Private bool `yaml:"private"`
 	// Confirmation asks the user to confirm before the command is executed.

@@ -1,8 +1,8 @@
 package config
 
 // DocsConfig holds documentation-related configuration loaded from the optional
-// `docs:` block in devbox.yml. The block uses the same lenient loader
-// as the rest of devbox.yml — an absent block and unknown keys are
+// `docs:` block in workspace.yml. The block uses the same lenient loader
+// as the rest of workspace.yml — an absent block and unknown keys are
 // silently ignored at load time; the dedicated `docs` validator surfaces
 // explicit feedback (unknown keys → warning, invalid values → error).
 type DocsConfig struct {

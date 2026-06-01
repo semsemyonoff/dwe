@@ -9,7 +9,7 @@ import (
 	"gopkg.in/yaml.v3"
 )
 
-// LoadSetupYAML reads and parses devbox/setup.yml with strict field decoding.
+// LoadSetupYAML reads and parses workspace/setup.yml with strict field decoding.
 // A missing file is not an error and returns (nil, nil).
 // Unknown YAML fields cause a parse error.
 // Unknown Type values are permitted here (caught by validators).

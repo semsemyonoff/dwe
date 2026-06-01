@@ -11,13 +11,13 @@ import (
 	"github.com/semsemyonoff/dwe/internal/core/project/project"
 )
 
-// makeV2Project creates a minimal v2 devbox.yml in dir and returns the config path.
+// makeV2Project creates a minimal v2 workspace.yml in dir and returns the config path.
 func makeV2Project(t *testing.T, dir string) string {
 	t.Helper()
 	cfgPath := filepath.Join(dir, "workspace.yml")
 	yml := "schema_version: \"2\"\nproject:\n  name: testproject\n  prefix: devbox\n"
 	if err := os.WriteFile(cfgPath, []byte(yml), 0644); err != nil {
-		t.Fatalf("writing devbox.yml: %v", err)
+		t.Fatalf("writing workspace.yml: %v", err)
 	}
 	return cfgPath
 }
@@ -41,7 +41,7 @@ func runRootWithConfig(args []string, configPath string) (string, error) {
 }
 
 // TestRootResolver_ExplicitGoodPathV2 verifies that an explicit --config pointing
-// to a v2 devbox.yml resolves successfully and the command runs.
+// to a v2 workspace.yml resolves successfully and the command runs.
 func TestRootResolver_ExplicitGoodPathV2(t *testing.T) {
 	dir := t.TempDir()
 	cfgPath := makeV2Project(t, dir)
@@ -76,7 +76,7 @@ func TestRootResolver_ExplicitBadPath_AlwaysFatal(t *testing.T) {
 
 
 // TestRootResolver_DiscoveryFromSubdir verifies that running from a subdirectory
-// of a v2 project finds devbox.yml via upward walk.
+// of a v2 project finds workspace.yml via upward walk.
 func TestRootResolver_DiscoveryFromSubdir(t *testing.T) {
 	dir := t.TempDir()
 	makeV2Project(t, dir)
@@ -106,9 +106,9 @@ func TestRootResolver_DiscoveryFromSubdir(t *testing.T) {
 }
 
 // TestRootResolver_NoProject_AllowlistedCommands verifies that allowlisted commands
-// (version, completion, print) succeed when run from a directory with no devbox.yml.
+// (version, completion, print) succeed when run from a directory with no workspace.yml.
 func TestRootResolver_NoProject_AllowlistedVersion(t *testing.T) {
-	t.Chdir(t.TempDir()) // no devbox.yml anywhere
+	t.Chdir(t.TempDir()) // no workspace.yml anywhere
 
 	root := NewRootCmd()
 	var buf bytes.Buffer
@@ -124,7 +124,7 @@ func TestRootResolver_NoProject_AllowlistedVersion(t *testing.T) {
 // TestRootResolver_NoProject_NonAllowlistedFails verifies that non-allowlisted
 // commands fail with ErrNotFound when no project is found via discovery.
 func TestRootResolver_NoProject_NonAllowlistedFails(t *testing.T) {
-	t.Chdir(t.TempDir()) // no devbox.yml anywhere
+	t.Chdir(t.TempDir()) // no workspace.yml anywhere
 
 	root := NewRootCmd()
 	var buf bytes.Buffer
@@ -141,12 +141,12 @@ func TestRootResolver_NoProject_NonAllowlistedFails(t *testing.T) {
 	}
 }
 
-// TestRootResolver_ExplicitDefaultMatchingValue verifies that passing --config devbox.yml
+// TestRootResolver_ExplicitDefaultMatchingValue verifies that passing --config workspace.yml
 // (matching the old default value) is treated as an explicit path, not as discovery mode.
 // Pin this via the Changed flag: the user typed the flag, so Changed must be true.
 func TestRootResolver_ExplicitDefaultMatchingValue(t *testing.T) {
-	// Run from a temp dir that has no devbox.yml.
-	// If the resolver treated "--config devbox.yml" as discovery mode, it would return
+	// Run from a temp dir that has no workspace.yml.
+	// If the resolver treated "--config workspace.yml" as discovery mode, it would return
 	// ErrNotFound (allowlisted root shows help). But since it's explicit, it should fail
 	// because "workspace.yml" doesn't exist in the temp dir.
 	t.Chdir(t.TempDir())
@@ -163,7 +163,7 @@ func TestRootResolver_ExplicitDefaultMatchingValue(t *testing.T) {
 
 	err := root.Execute()
 	if err == nil {
-		t.Fatal("explicit --config devbox.yml (nonexistent) should be fatal, got nil")
+		t.Fatal("explicit --config workspace.yml (nonexistent) should be fatal, got nil")
 	}
 	// Should be an os.ErrNotExist, not ErrNotFound.
 	if errors.Is(err, project.ErrNotFound) {

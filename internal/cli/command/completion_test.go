@@ -81,7 +81,7 @@ func TestRegistryIDCompletion_noSecondArg(t *testing.T) {
 // references the --inspect flag (and not the removed 'commands inspect'
 // subcommand). registryIDCompletion appends this hint when listing public defs.
 func TestCommandsCmd_ActiveHelp_PointsAtInspectFlag(t *testing.T) {
-	const hint = "Use 'devbox commands --inspect <id>' to see command details"
+	const hint = "Use 'dwe commands --inspect <id>' to see command details"
 	appended := cobra.AppendActiveHelp(nil, hint)
 	if len(appended) != 1 {
 		t.Fatalf("AppendActiveHelp: got %d entries", len(appended))

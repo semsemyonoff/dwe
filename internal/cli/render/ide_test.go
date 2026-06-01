@@ -20,7 +20,7 @@ const minimalDevcontainerTpl = `{"name":"{{ .Project.Name }}","service":"{{ .Ser
 const minimalVscodeLaunchTpl = `{"type":"php","pathMappings":{"{{ .ServiceCfg.WorkDirInternal }}":"${workspaceFolder}/src"}}`
 const minimalVscodeSettingsTpl = `{"php.validate.executablePath":"/usr/local/bin/php","editor.formatOnSave":true}`
 
-// setupIDEPackTemplates writes an IDE template pack at <dir>/devbox/templates/ide/<packName>/.
+// setupIDEPackTemplates writes an IDE template pack at <dir>/workspace/templates/ide/<packName>/.
 // Every key is treated as a "from" path (typically ending in .tmpl); a manifest.yml is
 // auto-generated whose `to` paths are the same path with any trailing .tmpl stripped.
 // This matches the legacy walk-based behavior, so tests written against the old layout
@@ -84,7 +84,7 @@ func makeIDECfg(name string) *config.DweConfig {
 	}
 }
 
-// writeIDEPackFile writes a single file into <projectRoot>/devbox/templates/ide/test/<rel>.
+// writeIDEPackFile writes a single file into <projectRoot>/workspace/templates/ide/test/<rel>.
 func writeIDEPackFile(t *testing.T, projectRoot, rel, content string) {
 	t.Helper()
 	packDir := filepath.Join(projectRoot, "workspace", "templates", "ide", "test")

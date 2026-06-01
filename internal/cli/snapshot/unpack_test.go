@@ -35,7 +35,7 @@ func snapshotUnpackProject(t *testing.T) string {
 	if err := os.WriteFile(filepath.Join(devboxDir, "defaults.yml"), []byte("project:\n  name: testproj\n  prefix: testproj\n"), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	// devbox/services/ empty directory (no services defined).
+	// workspace/services/ empty directory (no services defined).
 	if err := os.MkdirAll(filepath.Join(devboxDir, "services"), 0o755); err != nil {
 		t.Fatal(err)
 	}

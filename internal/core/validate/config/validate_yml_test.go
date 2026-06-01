@@ -39,7 +39,7 @@ func TestValidateYmlValidator(t *testing.T) {
 						Severity: validate.SeverityWarning,
 						Domain:   "config",
 						Target:   "validate",
-						File:     "devbox/validate.yml",
+						File:     "workspace/validate.yml",
 						Line:     7,
 						Message:  `check "my-check": stage "deplooy" is not a known preflight stage`,
 					},
@@ -48,7 +48,7 @@ func TestValidateYmlValidator(t *testing.T) {
 			wantLen:  1,
 			wantSev:  validate.SeverityWarning,
 			wantMsg:  `check "my-check": stage "deplooy" is not a known preflight stage`,
-			wantFile: "devbox/validate.yml",
+			wantFile: "workspace/validate.yml",
 		},
 		{
 			name: "ErrNotExist is silently tolerated",
@@ -60,22 +60,22 @@ func TestValidateYmlValidator(t *testing.T) {
 		{
 			name: "strict decode error surfaces as single error diagnostic",
 			ctx: validate.Context{
-				ValidateCfgLoadErr: errors.New("parse devbox/validate.yml: yaml: unmarshal errors:\n  line 3: field foo not found in type config.rawCheckEntry"),
+				ValidateCfgLoadErr: errors.New("parse workspace/validate.yml: yaml: unmarshal errors:\n  line 3: field foo not found in type config.rawCheckEntry"),
 			},
 			wantLen:  1,
 			wantSev:  validate.SeverityError,
-			wantMsg:  "parse devbox/validate.yml: yaml: unmarshal errors:\n  line 3: field foo not found in type config.rawCheckEntry",
-			wantFile: "devbox/validate.yml",
+			wantMsg:  "parse workspace/validate.yml: yaml: unmarshal errors:\n  line 3: field foo not found in type config.rawCheckEntry",
+			wantFile: "workspace/validate.yml",
 		},
 		{
 			name: "unknown severity load error surfaces as error diagnostic",
 			ctx: validate.Context{
-				ValidateCfgLoadErr: errors.New(`parse devbox/validate.yml: check "foo": unknown severity "fatal" (allowed: error, warning, info)`),
+				ValidateCfgLoadErr: errors.New(`parse workspace/validate.yml: check "foo": unknown severity "fatal" (allowed: error, warning, info)`),
 			},
 			wantLen:  1,
 			wantSev:  validate.SeverityError,
-			wantMsg:  `parse devbox/validate.yml: check "foo": unknown severity "fatal" (allowed: error, warning, info)`,
-			wantFile: "devbox/validate.yml",
+			wantMsg:  `parse workspace/validate.yml: check "foo": unknown severity "fatal" (allowed: error, warning, info)`,
+			wantFile: "workspace/validate.yml",
 		},
 	}
 

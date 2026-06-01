@@ -26,7 +26,7 @@ import (
 	"github.com/spf13/cobra"
 )
 
-// newSnapshotRemoveCmd: `devbox snapshot remove <name> [-y]`.
+// newSnapshotRemoveCmd: `dwe snapshot remove <name> [-y]`.
 func newSnapshotRemoveCmd(flags *cmdctx.RootFlags) *cobra.Command {
 	var (
 		yes    bool
@@ -65,7 +65,7 @@ func runSnapshotRemove(cmd *cobra.Command, flags *cmdctx.RootFlags, name string,
 		return err
 	}
 	if snapCfg == nil {
-		return fmt.Errorf("snapshot remove: no devbox/snapshot.yml found at %s", config.SnapshotConfigPath(baseDir))
+		return fmt.Errorf("snapshot remove: no workspace/snapshot.yml found at %s", config.SnapshotConfigPath(baseDir))
 	}
 
 	// Only load the registry when a remove: workflow is defined; the package

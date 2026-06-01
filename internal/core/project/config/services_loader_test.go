@@ -8,7 +8,7 @@ import (
 )
 
 // writeServiceFolder creates a single service folder at
-// <baseDir>/devbox/services/<name>/service.yml with the given content.
+// <baseDir>/workspace/services/<name>/service.yml with the given content.
 func writeServiceFolder(t *testing.T, baseDir, name, content string) {
 	t.Helper()
 	dir := filepath.Join(baseDir, "workspace", "services", name)
@@ -74,7 +74,7 @@ ports:
 	}
 }
 
-// TestLoadServices_missingDir verifies absent devbox/services/ returns empty map (not error).
+// TestLoadServices_missingDir verifies absent workspace/services/ returns empty map (not error).
 func TestLoadServices_missingDir(t *testing.T) {
 	dir := t.TempDir()
 	services, err := LoadServices(dir)
@@ -86,7 +86,7 @@ func TestLoadServices_missingDir(t *testing.T) {
 	}
 }
 
-// TestLoadServices_emptyDir verifies devbox/services/ with no subdirs returns empty map.
+// TestLoadServices_emptyDir verifies workspace/services/ with no subdirs returns empty map.
 func TestLoadServices_emptyDir(t *testing.T) {
 	dir := t.TempDir()
 	if err := os.MkdirAll(filepath.Join(dir, "workspace", "services"), 0755); err != nil {

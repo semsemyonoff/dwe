@@ -1,8 +1,8 @@
 package config
 
 // UIConfig holds UI-related configuration loaded from the optional
-// `ui:` block in devbox.yml. The block uses the same lenient loader
-// as the rest of devbox.yml — an absent block and unknown keys are
+// `ui:` block in workspace.yml. The block uses the same lenient loader
+// as the rest of workspace.yml — an absent block and unknown keys are
 // silently ignored at load time; the dedicated `ui` validator surfaces
 // explicit feedback (unknown keys → warning, invalid values → error).
 type UIConfig struct {
@@ -10,7 +10,7 @@ type UIConfig struct {
 }
 
 // UICommandsConfig configures the interactive command browser used by
-// `devbox commands run` / `inspect` when invoked without an exact ID.
+// `dwe commands run` / `inspect` when invoked without an exact ID.
 //
 // All fields are pointers so the loader can distinguish nil (key absent →
 // use the spec default) from an explicit zero/false value. Plain int/bool

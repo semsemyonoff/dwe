@@ -13,7 +13,7 @@ import (
 	"github.com/spf13/cobra"
 )
 
-// makeMinimalProject writes a bare v2 devbox.yml so config + (empty)
+// makeMinimalProject writes a bare v2 workspace.yml so config + (empty)
 // registry loads succeed. Returns the project root.
 func makeMinimalProject(t *testing.T) string {
 	t.Helper()
@@ -80,7 +80,7 @@ func TestRunDeployPlan_UnknownServiceErrors(t *testing.T) {
 }
 
 // TestRunDeployPlan_DefaultPipelineWhenNoDeployYML verifies that a bare project
-// (no devbox/deploy.yml) succeeds, includes the docker-up step from the built-in
+// (no workspace/deploy.yml) succeeds, includes the docker-up step from the built-in
 // default, and prints the info line on stderr.
 func TestRunDeployPlan_DefaultPipelineWhenNoDeployYML(t *testing.T) {
 	dir := makeMinimalProject(t)
@@ -99,7 +99,7 @@ func TestRunDeployPlan_DefaultPipelineWhenNoDeployYML(t *testing.T) {
 		t.Errorf("plan output missing 'docker up --wait'; got:\n%s", outBuf.String())
 	}
 
-	const wantNotice = "Using built-in default deploy pipeline (override with devbox/deploy.yml)."
+	const wantNotice = "Using built-in default deploy pipeline (override with workspace/deploy.yml)."
 	if !strings.Contains(errBuf.String(), wantNotice) {
 		t.Errorf("stderr missing info line %q; got:\n%s", wantNotice, errBuf.String())
 	}
@@ -148,7 +148,7 @@ func TestRunDeployPlan_ServiceScopeNoInfoLine(t *testing.T) {
 }
 
 // TestRunDeployPlan_UserDeployYMLNoInfoLine verifies that a project with a
-// devbox/deploy.yml does not emit the default-pipeline info line.
+// workspace/deploy.yml does not emit the default-pipeline info line.
 func TestRunDeployPlan_UserDeployYMLNoInfoLine(t *testing.T) {
 	dir := makeMinimalProject(t)
 

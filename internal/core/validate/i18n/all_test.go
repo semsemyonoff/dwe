@@ -15,7 +15,7 @@ import (
 func TestParseError(t *testing.T) {
 	// Per-file parse error
 	pf := i18n.ProjectFile{
-		Path:     "/project/devbox/i18n/ru.yml",
+		Path:     "/project/workspace/i18n/ru.yml",
 		Locale:   "ru",
 		ParseErr: errors.New("unknown field: description"),
 	}
@@ -37,7 +37,7 @@ func TestParseError(t *testing.T) {
 	if d.Domain != "i18n" {
 		t.Errorf("expected domain 'i18n', got %q", d.Domain)
 	}
-	if d.File != "/project/devbox/i18n/ru.yml" {
+	if d.File != "/project/workspace/i18n/ru.yml" {
 		t.Errorf("expected file path in diagnostic, got %q", d.File)
 	}
 	if !strings.Contains(d.Message, "unknown field") {
@@ -57,7 +57,7 @@ func TestOrphanCommand(t *testing.T) {
 
 	// Create a translation file with an orphaned command
 	pf := i18n.ProjectFile{
-		Path:   "/project/devbox/i18n/ru.yml",
+		Path:   "/project/workspace/i18n/ru.yml",
 		Locale: "ru",
 		Bundle: &i18n.Bundle{
 			Commands: map[string]i18n.CommandStrings{
@@ -108,7 +108,7 @@ func TestOrphanGroup(t *testing.T) {
 
 	// Create a translation file with an orphaned group
 	pf := i18n.ProjectFile{
-		Path:   "/project/devbox/i18n/ru.yml",
+		Path:   "/project/workspace/i18n/ru.yml",
 		Locale: "ru",
 		Bundle: &i18n.Bundle{
 			Groups: map[string]i18n.GroupStrings{
@@ -151,7 +151,7 @@ func TestOrphanGroup(t *testing.T) {
 
 func TestUnknownUIKey(t *testing.T) {
 	pf := i18n.ProjectFile{
-		Path:   "/project/devbox/i18n/ru.yml",
+		Path:   "/project/workspace/i18n/ru.yml",
 		Locale: "ru",
 		Bundle: &i18n.Bundle{
 			UI: map[string]string{
@@ -208,7 +208,7 @@ func TestValidTranslation(t *testing.T) {
 
 	// Valid translation file
 	pf := i18n.ProjectFile{
-		Path:   "/project/devbox/i18n/ru.yml",
+		Path:   "/project/workspace/i18n/ru.yml",
 		Locale: "ru",
 		Bundle: &i18n.Bundle{
 			UI: map[string]string{
@@ -251,7 +251,7 @@ func TestValidTranslation(t *testing.T) {
 func TestDirectoryLevelLoadError(t *testing.T) {
 	// Sentinel ProjectFile with Locale == "" indicates directory-level failure
 	pf := i18n.ProjectFile{
-		Path:     "/project/devbox/i18n",
+		Path:     "/project/workspace/i18n",
 		Locale:   "",
 		ParseErr: os.ErrPermission,
 	}
@@ -290,7 +290,7 @@ func TestDirectoryLevelLoadError(t *testing.T) {
 
 func TestParseErrorLocaleField(t *testing.T) {
 	pf := i18n.ProjectFile{
-		Path:     "/project/devbox/i18n/ru.yml",
+		Path:     "/project/workspace/i18n/ru.yml",
 		Locale:   "ru",
 		ParseErr: errors.New("unknown field: bad_key"),
 	}

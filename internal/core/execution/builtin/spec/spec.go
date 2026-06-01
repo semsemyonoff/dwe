@@ -21,7 +21,7 @@ type ExecContext struct {
 	// missing-file (os.ErrNotExist) to &config.DockerConfig{} so builtins can
 	// pass it directly to docker.NewCompose without nil-checks.
 	DockerConfig *config.DockerConfig
-	// ProjectRoot is the absolute path to the project root (directory of devbox.yml).
+	// ProjectRoot is the absolute path to the project root (directory of workspace.yml).
 	ProjectRoot string
 	// Output is the render writer for styled terminal output. All builtin
 	// output flows through this single channel — the executor wires it to

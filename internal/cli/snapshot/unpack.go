@@ -18,7 +18,7 @@ import (
 	"github.com/spf13/cobra"
 )
 
-// newSnapshotUnpackCmd: `devbox snapshot unpack <tar-path> [--as=<name>] [-y]`.
+// newSnapshotUnpackCmd: `dwe snapshot unpack <tar-path> [--as=<name>] [-y]`.
 func newSnapshotUnpackCmd(flags *cmdctx.RootFlags) *cobra.Command {
 	var (
 		asName   string

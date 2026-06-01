@@ -1,4 +1,4 @@
-// Package prompt provides the `devbox prompt` command.
+// Package prompt provides the `dwe prompt` command.
 package prompt
 
 import (
@@ -10,13 +10,13 @@ import (
 	"github.com/spf13/cobra"
 )
 
-// NewCmd builds the `devbox prompt` command.
+// NewCmd builds the `dwe prompt` command.
 func NewCmd(groupID string, _ *cmdctx.RootFlags) *cobra.Command {
 	var check bool
 	cmd := &cobra.Command{
 		Use:   "prompt",
 		Short: "Print a compact shell-prompt segment for the current project",
-		Long: `Print a compact, prompt-ready segment describing the current devbox project.
+		Long: `Print a compact, prompt-ready segment describing the current dwe project.
 
 Designed for shell-prompt integration (e.g. starship). The output is a single
 line of the form '{▪} <project-name> <status-icon>', where the logomark uses
@@ -24,8 +24,8 @@ the project's accent color and the status icon reflects deploy state.
 
 The hot path bypasses cobra and dispatches directly from main; this command
 exists primarily for --help discoverability and shell completion. Exits 0
-inside a devbox project and 1 outside (or on any silent failure).`,
-		Example: "  devbox prompt\n  devbox prompt --check",
+inside a dwe project and 1 outside (or on any silent failure).`,
+		Example: "  dwe prompt\n  dwe prompt --check",
 		Args:    cobra.NoArgs,
 		GroupID: groupID,
 		// Prompt output is consumed by shells — never let cobra print usage or

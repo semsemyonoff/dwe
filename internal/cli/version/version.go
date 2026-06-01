@@ -1,4 +1,4 @@
-// Package version provides the `devbox version` command.
+// Package version provides the `dwe version` command.
 package version
 
 import (
@@ -19,13 +19,13 @@ type versionJSON struct {
 	BuiltBy string `json:"built_by,omitempty"`
 }
 
-// NewCmd builds the `devbox version` command.
+// NewCmd builds the `dwe version` command.
 func NewCmd(groupID string, flags *cmdctx.RootFlags) *cobra.Command {
 	return &cobra.Command{
 		Use:          "version",
 		Short:        "Print version information",
-		Long:         `Print the devbox version, git commit, and build date.`,
-		Example:      "  devbox version",
+		Long:         `Print the dwe version, git commit, and build date.`,
+		Example:      "  dwe version",
 		SilenceUsage: true,
 		GroupID:      groupID,
 		RunE: func(cmd *cobra.Command, args []string) error {

@@ -27,7 +27,7 @@ func DefaultRunConfig() *config.LifecycleRunConfig {
 				Steps: []config.DeployStep{
 					{
 						Name:        "up",
-						Type:        "devbox",
+						Type:        "dwe",
 						Cmd:         "docker up --wait",
 						Description: "Start all containers and wait until healthy",
 					},
@@ -60,7 +60,7 @@ func DefaultStopConfig() *config.LifecycleStopConfig {
 				Steps: []config.DeployStep{
 					{
 						Name:        "down",
-						Type:        "devbox",
+						Type:        "dwe",
 						Cmd:         "docker down",
 						Description: "Stop all containers",
 					},

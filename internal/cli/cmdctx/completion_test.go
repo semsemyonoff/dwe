@@ -14,7 +14,7 @@ func writeV2Project(t *testing.T, dir string) {
 	t.Helper()
 	yml := "schema_version: \"2\"\nproject:\n  name: testproject\n  prefix: devbox\n"
 	if err := os.WriteFile(filepath.Join(dir, "workspace.yml"), []byte(yml), 0o644); err != nil {
-		t.Fatalf("write devbox.yml: %v", err)
+		t.Fatalf("write workspace.yml: %v", err)
 	}
 }
 
@@ -31,7 +31,7 @@ func rootCmdForCompletion(flags *cmdctx.RootFlags, configPath string) *cobra.Com
 }
 
 // TestCompletionConfigPath_subdirDiscovery: __complete from a subdirectory
-// must walk upward and find the v2 devbox.yml.
+// must walk upward and find the v2 workspace.yml.
 func TestCompletionConfigPath_subdirDiscovery(t *testing.T) {
 	projectDir := t.TempDir()
 	writeV2Project(t, projectDir)
@@ -51,7 +51,7 @@ func TestCompletionConfigPath_subdirDiscovery(t *testing.T) {
 	}
 }
 
-// TestCompletionConfigPath_noProject: no devbox.yml anywhere → error
+// TestCompletionConfigPath_noProject: no workspace.yml anywhere → error
 // (caller returns empty completions silently).
 func TestCompletionConfigPath_noProject(t *testing.T) {
 	t.Chdir(t.TempDir())

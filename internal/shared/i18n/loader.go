@@ -33,7 +33,7 @@ func parseBundle(r io.Reader) (*Bundle, error) {
 }
 
 // Load reads embedded built-in files plus optional project overlay from
-// <projectRoot>/devbox/i18n/*.yml. Each locale: built-in → project, project-wins.
+// <projectRoot>/workspace/i18n/*.yml. Each locale: built-in → project, project-wins.
 // Project parse errors are NOT fatal; they are surfaced via LoadProjectBundles for the validator.
 func Load(projectRoot string) (*Store, error) {
 	s := &Store{
@@ -97,7 +97,7 @@ func Load(projectRoot string) (*Store, error) {
 }
 
 // LoadProjectBundles returns per-file parse results for the project layer only.
-// Returns (nil, nil) if devbox/i18n/ is absent.
+// Returns (nil, nil) if workspace/i18n/ is absent.
 // Returns a sentinel ProjectFile with empty Locale for directory-level failures.
 // Returns per-file parse errors in each ProjectFile.ParseErr.
 func LoadProjectBundles(projectRoot string) ([]ProjectFile, error) {

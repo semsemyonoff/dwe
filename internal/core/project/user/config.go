@@ -28,7 +28,7 @@ type Config struct {
 	Language string
 
 	// MermaidTheme overrides the theme used when rendering mermaid diagrams
-	// in the `devbox docs` TUI. Valid values: "auto" (default — follow the
+	// in the `dwe docs` TUI. Valid values: "auto" (default — follow the
 	// terminal background), "dark", "light".
 	MermaidTheme string
 

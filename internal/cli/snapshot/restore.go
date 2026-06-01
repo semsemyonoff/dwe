@@ -27,7 +27,7 @@ import (
 	"github.com/spf13/cobra"
 )
 
-// newSnapshotRestoreCmd: `devbox snapshot restore <name> [-y]`.
+// newSnapshotRestoreCmd: `dwe snapshot restore <name> [-y]`.
 func newSnapshotRestoreCmd(flags *cmdctx.RootFlags) *cobra.Command {
 	var (
 		yes    bool
@@ -50,7 +50,7 @@ func newSnapshotRestoreCmd(flags *cmdctx.RootFlags) *cobra.Command {
 	return cmd
 }
 
-// newSnapshotRollbackCmd: `devbox snapshot rollback [-y]`.
+// newSnapshotRollbackCmd: `dwe snapshot rollback [-y]`.
 func newSnapshotRollbackCmd(flags *cmdctx.RootFlags) *cobra.Command {
 	var (
 		yes    bool
@@ -59,7 +59,7 @@ func newSnapshotRollbackCmd(flags *cmdctx.RootFlags) *cobra.Command {
 	)
 	cmd := &cobra.Command{
 		Use:          "rollback",
-		Short:        "Restore the snapshot named by rollback_target in devbox/snapshot.yml",
+		Short:        "Restore the snapshot named by rollback_target in workspace/snapshot.yml",
 		Args:         cobra.NoArgs,
 		SilenceUsage: true,
 		RunE: func(cmd *cobra.Command, args []string) error {
@@ -89,7 +89,7 @@ func runSnapshotRestore(cmd *cobra.Command, flags *cmdctx.RootFlags, name string
 		return err
 	}
 	if snapCfg == nil {
-		return fmt.Errorf("snapshot %s: no devbox/snapshot.yml found at %s", operation, config.SnapshotConfigPath(baseDir))
+		return fmt.Errorf("snapshot %s: no workspace/snapshot.yml found at %s", operation, config.SnapshotConfigPath(baseDir))
 	}
 
 	reg, err := usercommands.LoadRegistryFromConfigPath(flags.ConfigPath)
@@ -209,13 +209,13 @@ func runSnapshotRollback(cmd *cobra.Command, flags *cmdctx.RootFlags, yes, noLiv
 		return err
 	}
 	if snapCfg == nil {
-		return fmt.Errorf("snapshot rollback: no devbox/snapshot.yml found at %s", config.SnapshotConfigPath(baseDir))
+		return fmt.Errorf("snapshot rollback: no workspace/snapshot.yml found at %s", config.SnapshotConfigPath(baseDir))
 	}
 	if snapCfg.RollbackTarget == "" {
-		return fmt.Errorf("snapshot rollback: rollback_target is not set in devbox/snapshot.yml")
+		return fmt.Errorf("snapshot rollback: rollback_target is not set in workspace/snapshot.yml")
 	}
 	if err := meta.ValidateName(snapCfg.RollbackTarget); err != nil {
-		return fmt.Errorf("snapshot rollback: rollback_target %q in devbox/snapshot.yml: %w", snapCfg.RollbackTarget, err)
+		return fmt.Errorf("snapshot rollback: rollback_target %q in workspace/snapshot.yml: %w", snapCfg.RollbackTarget, err)
 	}
 	return runSnapshotRestore(cmd, flags, snapCfg.RollbackTarget, yes, noLive, silent, "rollback", "snapshot:rollback")
 }

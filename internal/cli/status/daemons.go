@@ -6,7 +6,7 @@ import (
 	"github.com/spf13/cobra"
 )
 
-// newStatusDaemonsCmd creates the `devbox status daemons` subcommand: a
+// newStatusDaemonsCmd creates the `dwe status daemons` subcommand: a
 // stand-alone view of running daemon containers for the current project.
 // Routes through renderSection so the section formatting matches the default
 // orchestrator exactly.

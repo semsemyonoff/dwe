@@ -44,7 +44,7 @@ func TestAllForStage_NilCfgWithLoadErr(t *testing.T) {
 	if v.Domain() != "checks" {
 		t.Errorf("domain: want checks, got %s", v.Domain())
 	}
-	// Must implement GlobalValidator so "devbox validate env" surfaces the error
+	// Must implement GlobalValidator so "dwe validate env" surfaces the error
 	// even though the env scope does not include the checks domain.
 	gv, ok := v.(validate.GlobalValidator)
 	if !ok {
@@ -116,7 +116,7 @@ func TestBuildValidator_UnknownBuiltin(t *testing.T) {
 	if d.Severity != diag.SeverityError || d.Domain != "checks" || d.Target != "x" {
 		t.Errorf("wrong header: %+v", d)
 	}
-	if d.File != "devbox/validate.yml" || d.Line != 7 || d.Hint != "hint" {
+	if d.File != "workspace/validate.yml" || d.Line != 7 || d.Hint != "hint" {
 		t.Errorf("wrong location/hint: %+v", d)
 	}
 }
@@ -293,7 +293,7 @@ func TestBuiltinRunner_FailurePropagatesEntryMeta(t *testing.T) {
 	if d.Hint != "create the file first" {
 		t.Errorf("hint not propagated: %q", d.Hint)
 	}
-	if d.Line != 42 || d.File != "devbox/validate.yml" || d.Target != "exists" {
+	if d.Line != 42 || d.File != "workspace/validate.yml" || d.Target != "exists" {
 		t.Errorf("wrong location: %+v", d)
 	}
 	if !strings.Contains(d.Message, "missing.txt") {

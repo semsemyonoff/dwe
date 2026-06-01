@@ -14,7 +14,7 @@ import (
 	"github.com/semsemyonoff/dwe/internal/shared/tpl"
 )
 
-const diagFile = "devbox/snapshot.yml"
+const diagFile = "workspace/snapshot.yml"
 
 // configLoadableValidator surfaces the outcome of LoadSnapshotConfig.
 // Silent when the file is absent; error when a real parse failure happened.
@@ -61,7 +61,7 @@ func (v *createDefinedValidator) Run(_ validate.Context) []validate.Diagnostic {
 		Domain:   "snapshot",
 		Target:   "create_defined",
 		File:     diagFile,
-		Message:  "no create: workflow defined; `devbox snapshot create` will refuse to run",
+		Message:  "no create: workflow defined; `dwe snapshot create` will refuse to run",
 	}}
 }
 
@@ -84,7 +84,7 @@ func (v *restoreDefinedValidator) Run(_ validate.Context) []validate.Diagnostic 
 			Domain:   "snapshot",
 			Target:   "restore_defined",
 			File:     diagFile,
-			Message:  "restore: block has no steps; `devbox snapshot restore` will refuse to run",
+			Message:  "restore: block has no steps; `dwe snapshot restore` will refuse to run",
 		}}
 	}
 	return []validate.Diagnostic{{
@@ -92,7 +92,7 @@ func (v *restoreDefinedValidator) Run(_ validate.Context) []validate.Diagnostic 
 		Domain:   "snapshot",
 		Target:   "restore_defined",
 		File:     diagFile,
-		Message:  "no restore: workflow defined; `devbox snapshot restore` will refuse to run",
+		Message:  "no restore: workflow defined; `dwe snapshot restore` will refuse to run",
 	}}
 }
 
@@ -215,10 +215,10 @@ func (v *templateScopeValidator) Run(_ validate.Context) []validate.Diagnostic {
 // service set. The check is silent when:
 //   - the manifest is missing or unparseable (perSnapshotValidator already errors),
 //   - the manifest captured no services (older format or unconfigured project),
-//   - the current cfg is nil (validate ran without a loadable devbox.yml),
+//   - the current cfg is nil (validate ran without a loadable workspace.yml),
 //   - or the diff is empty.
 //
-// The diagnostic shares the snapshot's ID so `devbox validate snapshot <name>`
+// The diagnostic shares the snapshot's ID so `dwe validate snapshot <name>`
 // filters this in alongside the other per-snapshot checks.
 type servicesDiffValidator struct {
 	name  string
@@ -299,7 +299,7 @@ func scopeCheck(expr string, scope tpl.SnapshotScope) error {
 // perSnapshotValidator emits manifest_valid / artifacts_exist /
 // last_create_failed / (optional) checksums diagnostics for one snapshot.
 // All four sub-checks share a single Validator ID (the snapshot name) so that
-// `devbox validate snapshot <name>` filters to a single snapshot's checks.
+// `dwe validate snapshot <name>` filters to a single snapshot's checks.
 type perSnapshotValidator struct {
 	baseDir         string
 	cfg             *config.SnapshotConfig

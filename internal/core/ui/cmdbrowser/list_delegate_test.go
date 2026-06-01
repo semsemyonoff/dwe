@@ -54,7 +54,7 @@ func TestCmdDelegate_HeightAndSpacing(t *testing.T) {
 
 func TestCmdDelegate_RendersAllTypes(t *testing.T) {
 	t.Parallel()
-	types := []string{"shell", "script", "workflow", "service_exec", "service_run", "builtin", "devbox"}
+	types := []string{"shell", "script", "workflow", "service_exec", "service_run", "builtin", "dwe"}
 	for _, typ := range types {
 		t.Run(typ, func(t *testing.T) {
 			t.Parallel()

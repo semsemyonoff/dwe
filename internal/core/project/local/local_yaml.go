@@ -9,7 +9,7 @@ import (
 	"gopkg.in/yaml.v3"
 )
 
-// LoadLocalYAML reads and parses devbox/local.yml. A missing file is not an error.
+// LoadLocalYAML reads and parses workspace/local.yml. A missing file is not an error.
 func LoadLocalYAML(localPath string) (map[string]any, error) {
 	local := make(map[string]any)
 	data, err := os.ReadFile(localPath)

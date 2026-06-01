@@ -116,7 +116,7 @@ func TestRunStop_MissingStopSection(t *testing.T) {
 	}
 }
 
-// writeStopTestConfig creates a temp dir with devbox.yml and a service folder.
+// writeStopTestConfig creates a temp dir with workspace.yml and a service folder.
 func writeStopTestConfig(t *testing.T, services map[string]struct {
 	enabled   bool
 	container string
@@ -125,7 +125,7 @@ func writeStopTestConfig(t *testing.T, services map[string]struct {
 	dir := t.TempDir()
 	content := "schema_version: \"2\"\nproject:\n  name: test\n  prefix: devbox\n"
 	if err := os.WriteFile(filepath.Join(dir, "workspace.yml"), []byte(content), 0o644); err != nil {
-		t.Fatalf("write devbox.yml: %v", err)
+		t.Fatalf("write workspace.yml: %v", err)
 	}
 	for name, spec := range services {
 		svcDir := filepath.Join(dir, "workspace", "services", name)

@@ -21,7 +21,7 @@ args:
   run: ["--rm"]
 `
 
-// writeDockerFixture creates devbox/docker.yml and optionally devbox/docker.local.yml
+// writeDockerFixture creates workspace/docker.yml and optionally devbox/docker.local.yml
 // under a temp directory. Returns the base dir path.
 func writeDockerFixture(t *testing.T, docker, local string) string {
 	t.Helper()

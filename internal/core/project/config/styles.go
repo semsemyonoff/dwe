@@ -7,7 +7,7 @@ import (
 	"gopkg.in/yaml.v3"
 )
 
-// StylesConfig is the top-level structure of devbox/styles.yml.
+// StylesConfig is the top-level structure of workspace/styles.yml.
 // It controls colors, the ASCII header, and separator character for all UI output.
 type StylesConfig struct {
 	Header    StylesHeader `yaml:"header"`

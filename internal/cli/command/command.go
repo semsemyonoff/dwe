@@ -37,7 +37,7 @@ type runOpts struct {
 	Locale         string          // active locale code (e.g. "ru", "en")
 }
 
-// NewCmd builds the `devbox commands` command tree.
+// NewCmd builds the `dwe commands` command tree.
 func NewCmd(groupID string, flags *cmdctx.RootFlags) *cobra.Command {
 	var (
 		setFlags    []string

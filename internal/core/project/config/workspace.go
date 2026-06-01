@@ -93,7 +93,7 @@ type DweConfig struct {
 	Docs          DocsConfig           `yaml:"docs"`
 
 	// Services holds the fully resolved service definitions loaded from
-	// devbox/services/<name>/service.yml with Enabled populated from the 3-layer config merge.
+	// workspace/services/<name>/service.yml with Enabled populated from the 3-layer config merge.
 	// Not unmarshalled from the merge — built by LoadConfig.
 	Services map[string]ServiceConfig `yaml:"-"`
 
@@ -107,7 +107,7 @@ type DweConfig struct {
 	userConfig *userpkg.Config `yaml:"-"`
 }
 
-// ProjectDeployConfig holds the project-wide deploy pipeline loaded from devbox/deploy.yml.
+// ProjectDeployConfig holds the project-wide deploy pipeline loaded from workspace/deploy.yml.
 // It is loaded separately and not part of the 3-layer config merge.
 //
 // Log enables/disables file logging at .dwe/logs/<pipeline>.log for the pipeline run.
@@ -124,7 +124,7 @@ func (c *ProjectDeployConfig) LogEnabled() bool {
 	return c != nil && c.Log != nil && *c.Log
 }
 
-// ServiceDeployConfig holds a per-service deploy pipeline loaded from devbox/services/<name>/deploy.yml.
+// ServiceDeployConfig holds a per-service deploy pipeline loaded from workspace/services/<name>/deploy.yml.
 // It is loaded separately and not part of the 3-layer config merge.
 //
 // Log enables/disables file logging at .dwe/logs/<pipeline>.log for the pipeline run.
@@ -539,7 +539,7 @@ type StatusColumn struct {
 	Value string `yaml:"value"`
 }
 
-// ServiceType is the type discriminator for entries in devbox/services/<name>/service.yml.
+// ServiceType is the type discriminator for entries in workspace/services/<name>/service.yml.
 // Decoded natively by gopkg.in/yaml.v3 since it's a named string type.
 type ServiceType string
 
@@ -713,7 +713,7 @@ func allowedFieldsFor(t ServiceType) map[string]bool {
 	}
 }
 
-// ServiceConfig describes a single service entry in devbox/services/<name>/service.yml.
+// ServiceConfig describes a single service entry in workspace/services/<name>/service.yml.
 // The Type field discriminates the per-entry shape (app / tool / infra).
 // The Enabled flag is resolved from the 3-layer config merge (mandatory
 // services are always enabled).
@@ -1061,14 +1061,14 @@ func detectLegacyComposeOverlays(raw map[string]any) error {
 // LoadConfig loads the merged DweConfig by layering:
 //
 //  1. devboxPath (required)
-//  2. <dir>/devbox/defaults.yml (optional, versioned project defaults)
-//  3. <dir>/devbox/local.yml   (optional, local overrides, gitignored)
+//  2. <dir>/workspace/defaults.yml (optional, versioned project defaults)
+//  3. <dir>/workspace/local.yml   (optional, local overrides, gitignored)
 //
 // Later layers win on conflict; maps are merged recursively.
 // The merged raw map is stored in DweConfig.Raw for dot-path resolution.
 //
 // Sequencing:
-//  1. Load devbox/services/<name>/service.yml (canonical service declarations).
+//  1. Load workspace/services/<name>/service.yml (canonical service declarations).
 //  2. Validate each overlay layer against the declared service set
 //     (only services.<name>.enabled permitted in overlays).
 //  3. Merge the raw YAML layers.
@@ -1085,14 +1085,14 @@ func LoadConfig(devboxPath string) (*DweConfig, error) {
 	}
 	var layers []rawLayer
 
-	// Layer 1: devbox.yml (required)
+	// Layer 1: workspace.yml (required)
 	base, err := loadRawYAML(devboxPath)
 	if err != nil {
 		return nil, fmt.Errorf("read %s: %w", devboxPath, err)
 	}
 	layers = append(layers, rawLayer{path: devboxPath, data: base})
 
-	// Layer 2: devbox/defaults.yml (optional)
+	// Layer 2: workspace/defaults.yml (optional)
 	defaultsPath := filepath.Join(baseDir, "workspace", "defaults.yml")
 	if defaults, err := loadRawYAML(defaultsPath); err == nil {
 		layers = append(layers, rawLayer{path: defaultsPath, data: defaults})
@@ -1100,7 +1100,7 @@ func LoadConfig(devboxPath string) (*DweConfig, error) {
 		return nil, fmt.Errorf("read %s: %w", defaultsPath, err)
 	}
 
-	// Layer 3: devbox/local.yml (optional)
+	// Layer 3: workspace/local.yml (optional)
 	localPath := filepath.Join(baseDir, "workspace", "local.yml")
 	if local, err := loadRawYAML(localPath); err == nil {
 		layers = append(layers, rawLayer{path: localPath, data: local})
@@ -1148,7 +1148,7 @@ func LoadConfig(devboxPath string) (*DweConfig, error) {
 
 	// Reject tools: blocks — replaced by services with type:tool
 	if _, ok := merged["tools"]; ok {
-		return nil, fmt.Errorf("tools: no longer supported — define tool entries as services with type: tool in devbox/services/. See docs/reference/config/services/index.md")
+		return nil, fmt.Errorf("tools: no longer supported — define tool entries as services with type: tool in workspace/services/. See docs/reference/config/services/index.md")
 	}
 
 	// Load user-config for binary overrides. On error, log warning and continue
@@ -1171,7 +1171,7 @@ func LoadConfig(devboxPath string) (*DweConfig, error) {
 	cfg.Raw["__configPath"] = devboxPath
 
 	// Step 4: resolve per-service Enabled and per-developer port/host overrides
-	// from the merged overlay (devbox/defaults.yml + devbox/local.yml). The
+	// from the merged overlay (workspace/defaults.yml + workspace/local.yml). The
 	// overlay validator (validateServicesOverlay) has already enforced shape;
 	// here we deep-merge entries by port-name / host-name so a partial override
 	// only touches the listed keys.
@@ -1204,11 +1204,11 @@ func LoadConfig(devboxPath string) (*DweConfig, error) {
 
 	// Type-semantics gates: depends_on targets must not be tool-typed; deploy
 	// files may only exist for app-typed services. These rules fire on every
-	// LoadConfig path (deploy, lifecycle, compose) — not just `devbox validate`.
+	// LoadConfig path (deploy, lifecycle, compose) — not just `dwe validate`.
 	if err := validateDependsOnTypes(services); err != nil {
 		return nil, err
 	}
-	// Load devbox/deploy.yml separately (not merged with config layers).
+	// Load workspace/deploy.yml separately (not merged with config layers).
 	deployPath := filepath.Join(baseDir, "workspace", "deploy.yml")
 	if deployCfg, err := LoadProjectDeployConfig(deployPath); err == nil {
 		cfg.Deploy = deployCfg
@@ -1233,13 +1233,13 @@ func LoadConfig(devboxPath string) (*DweConfig, error) {
 
 // OverlayAllowedKeys is the closed set of per-developer overridable keys
 // under a layer's services.<name> mapping. Structural fields (container,
-// dir, configs, compose, extends, etc.) belong in devbox/services/<name>/service.yml and
+// dir, configs, compose, extends, etc.) belong in workspace/services/<name>/service.yml and
 // are rejected by validateServicesOverlay.
 //
 // Ports and hosts are deliberately overridable: a developer commonly needs
 // to change a port that clashes with something already bound on their host,
 // or switch the `*.local` hostname they use, without editing the shared
-// devbox/services.yml. Each is deep-merged by port-name / host-name on top
+// workspace/services.yml. Each is deep-merged by port-name / host-name on top
 // of the declared map so a partial override only touches the listed entries.
 var OverlayAllowedKeys = map[string]bool{
 	"enabled": true,
@@ -1249,7 +1249,7 @@ var OverlayAllowedKeys = map[string]bool{
 
 // validateServicesOverlay rejects any non-overlay-allowed field under a
 // layer's services.<name> mapping, any services.<name> entry naming a
-// service not declared in devbox/services.yml, and malformed ports/hosts
+// service not declared in workspace/services.yml, and malformed ports/hosts
 // blocks. layerPath is included in error messages so the user knows which
 // file to edit.
 func validateServicesOverlay(layerPath string, raw map[string]any, declared map[string]ServiceConfig) error {
@@ -1263,7 +1263,7 @@ func validateServicesOverlay(layerPath string, raw map[string]any, declared map[
 	}
 	for _, name := range slices.Sorted(maps.Keys(svcMap)) {
 		if _, declaredOK := declared[name]; !declaredOK {
-			return fmt.Errorf("%s: services.%s: unknown service (declared services live in devbox/services/<name>/service.yml)", layerPath, name)
+			return fmt.Errorf("%s: services.%s: unknown service (declared services live in workspace/services/<name>/service.yml)", layerPath, name)
 		}
 		entryRaw := svcMap[name]
 		if entryRaw == nil {
@@ -1275,7 +1275,7 @@ func validateServicesOverlay(layerPath string, raw map[string]any, declared map[
 		}
 		for _, key := range slices.Sorted(maps.Keys(entry)) {
 			if !OverlayAllowedKeys[key] {
-				return fmt.Errorf("%s: services.%s.%s: service definitions belong in devbox/services/<name>/service.yml; overlays may only set %s",
+				return fmt.Errorf("%s: services.%s.%s: service definitions belong in workspace/services/<name>/service.yml; overlays may only set %s",
 					layerPath, name, key, overlayAllowedKeysList())
 			}
 		}
@@ -1339,7 +1339,7 @@ func validateOverlayHosts(layerPath, svcName string, raw any) error {
 }
 
 // LoadServiceFolder loads a single service definition from
-// devbox/services/<name>/service.yml. The service fields are top-level (no
+// workspace/services/<name>/service.yml. The service fields are top-level (no
 // wrapper key). Returns an error wrapping the name if the file is missing or
 // invalid.
 func LoadServiceFolder(baseDir, name string) (*ServiceConfig, error) {
@@ -1431,7 +1431,7 @@ func LoadServiceFolder(baseDir, name string) (*ServiceConfig, error) {
 	return &svc, nil
 }
 
-// LoadServices loads all service definitions from devbox/services/<name>/service.yml
+// LoadServices loads all service definitions from workspace/services/<name>/service.yml
 // per-folder files and resolves `extends:` inheritance. Missing directory →
 // empty map (not an error). Each folder entry is loaded independently and
 // errors are aggregated. For callers that need to apply per-service overlays
@@ -1757,7 +1757,7 @@ func isTruthy(v any) bool {
 	}
 }
 
-// LifecycleConfig holds the full lifecycle pipeline loaded from devbox/lifecycle.yml.
+// LifecycleConfig holds the full lifecycle pipeline loaded from workspace/lifecycle.yml.
 // It is loaded separately and not part of the 3-layer config merge.
 type LifecycleConfig struct {
 	Run  *LifecycleRunConfig  `yaml:"run"`
@@ -1817,7 +1817,7 @@ type LifecycleUpdate struct {
 	Mode string `yaml:"mode"`
 }
 
-// LoadLifecycleConfig loads the lifecycle pipeline from devbox/lifecycle.yml.
+// LoadLifecycleConfig loads the lifecycle pipeline from workspace/lifecycle.yml.
 // The file is loaded standalone — it is not merged with the 3-layer config.
 // Returns os.ErrNotExist when the file is absent (callers may treat it as optional).
 // Lifecycle pipelines must not use deploy_services phases.
@@ -1950,7 +1950,7 @@ func ParseDeployConfigForValidation(path string) (*DeployConfig, error) {
 	return loadDeployConfigDecode(path, true, true)
 }
 
-// LoadProjectDeployConfig loads the project-wide deploy pipeline from devbox/deploy.yml.
+// LoadProjectDeployConfig loads the project-wide deploy pipeline from workspace/deploy.yml.
 // The file is loaded standalone — it is not merged with the 3-layer config.
 // Returns os.ErrNotExist when the file is absent (callers may treat it as optional).
 // The after: field is structurally not allowed in project-wide deploy configs.
@@ -1962,7 +1962,7 @@ func LoadProjectDeployConfig(deployPath string) (*ProjectDeployConfig, error) {
 }
 
 // LoadServiceDeployConfig loads a per-service deploy pipeline from
-// devbox/services/<name>/deploy.yml. Permits the after: field (deploy-time ordering).
+// workspace/services/<name>/deploy.yml. Permits the after: field (deploy-time ordering).
 // Returns os.ErrNotExist when the file is absent (callers may treat it as optional).
 //
 // File logging defaults to enabled (Log=true) when unset. Override with
@@ -2092,7 +2092,7 @@ func validateDependsOnTypes(services map[string]ServiceConfig) error {
 	return errors.Join(diags...)
 }
 
-// LoadServiceDeployConfigs loads per-service deploy pipelines from devbox/services/<name>/deploy.yml.
+// LoadServiceDeployConfigs loads per-service deploy pipelines from workspace/services/<name>/deploy.yml.
 // Only services present in the services map AND having a corresponding deploy file are returned.
 // Missing deploy files are silently skipped (not every service needs a deploy pipeline).
 func LoadServiceDeployConfigs(baseDir string, services map[string]ServiceConfig) (map[string]*ServiceDeployConfig, error) {
@@ -2113,7 +2113,7 @@ func LoadServiceDeployConfigs(baseDir string, services map[string]ServiceConfig)
 }
 
 // LoadServiceResetConfig loads the reset pipeline for a single named service
-// from devbox/services/<name>/reset.yml. Returns (nil, nil) when the file is
+// from workspace/services/<name>/reset.yml. Returns (nil, nil) when the file is
 // absent (the service simply has no reset pipeline). Reset pipelines structurally
 // do not support the after: field (reset is per-service or full, not ordered).
 func LoadServiceResetConfig(baseDir, name string) (*ProjectDeployConfig, error) {
@@ -2129,9 +2129,9 @@ func LoadServiceResetConfig(baseDir, name string) (*ProjectDeployConfig, error) 
 }
 
 // LoadServiceResetConfigs loads all per-service reset pipelines from
-// devbox/services/*/reset.yml. Services without a reset.yml are silently
+// workspace/services/*/reset.yml. Services without a reset.yml are silently
 // omitted from the result (nil entry would not be useful to callers).
-// A missing devbox/services/ directory returns an empty map and nil error.
+// A missing workspace/services/ directory returns an empty map and nil error.
 // Per-folder decode failures are collected and returned via errors.Join.
 func LoadServiceResetConfigs(baseDir string) (map[string]*ProjectDeployConfig, error) {
 	servicesDir := filepath.Join(baseDir, "workspace", "services")
@@ -2219,7 +2219,7 @@ func TopoSortServices(names []string, services map[string]ServiceConfig) ([]stri
 	return order, nil
 }
 
-// LoadDweConfig reads and parses a single devbox.yml file at the given path.
+// LoadDweConfig reads and parses a single workspace.yml file at the given path.
 // Prefer LoadConfig for full layered loading.
 func LoadDweConfig(path string) (*DweConfig, error) {
 	data, err := os.ReadFile(path)

@@ -112,7 +112,7 @@ func (v *IDEValidator) validateService(name string, svc config.ServiceConfig, pr
 			Domain:   "templates",
 			Target:   fmt.Sprintf("templates.ide:%s", name),
 			Message:  fmt.Sprintf("failed to resolve template pack: %v", err),
-			Hint:     "check render.ide.template setting and devbox/templates/ide directory",
+			Hint:     "check render.ide.template setting and workspace/templates/ide directory",
 		}}
 	}
 	if !found {
@@ -122,7 +122,7 @@ func (v *IDEValidator) validateService(name string, svc config.ServiceConfig, pr
 			Target:   fmt.Sprintf("templates.ide:%s", name),
 			Message:  fmt.Sprintf("template pack not found for service %q", name),
 			Hint: fmt.Sprintf(
-				"create devbox/templates/ide/%s or devbox/templates/ide/default\n"+
+				"create workspace/templates/ide/%s or workspace/templates/ide/default\n"+
 					"or set services.%s.render.ide.enabled: false in services.yml",
 				name, name,
 			),

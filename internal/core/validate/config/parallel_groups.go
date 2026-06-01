@@ -91,7 +91,7 @@ func (v *resetParallelGroupsValidator) Run(ctx validate.Context) []validate.Diag
 // validateParallelPhases walks the given phases and emits one diagnostic per
 // parallel-group misconfiguration. Each rule mirrors a sentinel in
 // internal/core/execution/pipeline/resolve.go; users see structured errors before they hit
-// `devbox deploy` / `devbox reset`.
+// `dwe deploy` / `dwe reset`.
 func validateParallelPhases(reg *registry.Registry, phases []config.DeployPhase, baseTarget, file string) []validate.Diagnostic {
 	var diags []validate.Diagnostic
 	for phaseIdx, phase := range phases {

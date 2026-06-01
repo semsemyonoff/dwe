@@ -49,7 +49,7 @@ var stdoutIsTTY = func() bool {
 //     ANSI-stripped copy lands in the on-disk log. When stdoutIsTTY a PTY
 //     is allocated and ptmx → stepWriter so the child sees a real TTY.
 //     If stepWriter is nil (ad-hoc callers outside RunWithOptions, e.g.
-//     `devbox deploy run`), childIO falls back to os.Stdout/os.Stderr.
+//     `dwe deploy run`), childIO falls back to os.Stdout/os.Stderr.
 //
 //   - PARALLEL (parallel=true): the LiveLine block owns the host terminal,
 //     so we must NOT write to os.Stdout from child goroutines.
@@ -174,7 +174,7 @@ func ExecAction(ctx context.Context, a config.Action, actx ActionContext) error 
 		return execBuiltinAction(ctx, a, actx)
 	case "command":
 		return execCommandAction(ctx, a, actx)
-	case "devbox":
+	case "dwe":
 		return execDevboxAction(ctx, a, actx)
 	case "shell":
 		return execShellAction(ctx, a, actx)
@@ -303,7 +303,7 @@ func execCommandAction(ctx context.Context, a config.Action, actx ActionContext)
 // The legacy logWriter argument is mapped to ActionContext.StepWriter so
 // any external caller that supplies a writer still receives child output via
 // the same single durable path. Passing nil yields os.Stdout/os.Stderr
-// passthrough (legacy `devbox deploy run` semantics).
+// passthrough (legacy `dwe deploy run` semantics).
 func ExecStep(ctx context.Context, step config.DeployStep, workDir string, cfg *config.DweConfig, reg *usercommands.Registry, logWriter io.Writer, skipConfirm bool) error {
 	actx := ActionContext{
 		WorkDir:     workDir,

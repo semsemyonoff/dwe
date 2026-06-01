@@ -288,7 +288,7 @@ func renderTogglePlan(w io.Writer, plan TogglePlan) {
 	cmdEntry := func(commandID string) planEntry {
 		return planEntry{
 			icon:    styles.StyleInfo("▶"),
-			body:    fmt.Sprintf("devbox commands %s", commandID),
+			body:    fmt.Sprintf("dwe commands %s", commandID),
 			stylize: styles.StyleKey,
 		}
 	}
@@ -304,7 +304,7 @@ func renderTogglePlan(w io.Writer, plan TogglePlan) {
 			if len(s.Services) == 1 {
 				entries = append(entries, planEntry{
 					icon:    styles.RenderEnabled("↑"),
-					body:    fmt.Sprintf("devbox deploy run --service %s", s.Services[0]),
+					body:    fmt.Sprintf("dwe deploy run --service %s", s.Services[0]),
 					stylize: styles.StyleKey,
 				})
 			} else {

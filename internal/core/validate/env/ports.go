@@ -34,7 +34,7 @@ const composeProjectLabel = "com.docker.compose.project"
 // our own compose containers. It is returned by the exported CollectPortConflicts
 // probe for use by the wizard and other callers.
 type PortConflict struct {
-	Service       string // service name from devbox/services/<name>/
+	Service       string // service name from workspace/services/<name>/
 	PortName      string // port key from service.yml
 	RequestedPort int    // the port number we want to use
 	OccupiedBy    string // human-readable description of who is using it
@@ -153,7 +153,7 @@ func (v *portsFreeValidator) Run(vctx validate.Context) []validate.Diagnostic {
 }
 
 // declaredPort identifies a host port that one of our services declared in
-// devbox/services.yml (or overlays). Service + PortName are kept so the
+// workspace/services.yml (or overlays). Service + PortName are kept so the
 // diagnostic can pinpoint exactly which service expected the port.
 type declaredPort struct {
 	Service  string
@@ -233,7 +233,7 @@ func classifyPortForConflict(dp declaredPort, bindings map[int][]portOwner, ourP
 // it falls back to the lowercased directory basename — the same default that
 // Docker Compose v2 applies when no project_name is configured. Without this
 // fallback, our own containers from a previous deploy would be misidentified as
-// foreign conflicts and block the next `devbox run` / `devbox deploy run`.
+// foreign conflicts and block the next `dwe run` / `dwe deploy run`.
 func resolveComposeProject(baseDir string, cfg *config.DweConfig) string {
 	if baseDir == "" || cfg == nil {
 		return ""

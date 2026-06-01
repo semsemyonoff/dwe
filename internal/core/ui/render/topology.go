@@ -149,7 +149,7 @@ func buildTopoNode(name string, deps map[string][]string, status map[string]Node
 }
 
 // categoryLabel returns the display string for a node category. Labels match
-// the headings used by `devbox status apps/tools/infra` and feed into
+// the headings used by `dwe status apps/tools/infra` and feed into
 // serviceTypeStyle so the topology palette stays in sync with the rest of the
 // CLI.
 func categoryLabel(cat NodeCategory) string {

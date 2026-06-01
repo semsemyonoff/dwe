@@ -181,7 +181,7 @@ func TestDefaultStopConfig_Shape(t *testing.T) {
 		t.Fatalf("expected 1 step, got %d", len(ph.Steps))
 	}
 	step := ph.Steps[0]
-	if step.Type != "devbox" || step.Cmd != "docker down" {
+	if step.Type != "dwe" || step.Cmd != "docker down" {
 		t.Errorf("step = {type:%q cmd:%q}, want {type:devbox cmd:docker down}", step.Type, step.Cmd)
 	}
 }

@@ -18,15 +18,15 @@ import (
 	"github.com/spf13/cobra"
 )
 
-// snapshotTestProject sets up an empty devbox project (devbox.yml + snapshots/
-// dir) and returns the project root. The on-disk devbox.yml is minimal but
+// snapshotTestProject sets up an empty devbox project (workspace.yml + snapshots/
+// dir) and returns the project root. The on-disk workspace.yml is minimal but
 // loadable by config.LoadConfig.
 func snapshotTestProject(t *testing.T) string {
 	t.Helper()
 	dir := t.TempDir()
 	cfg := []byte("schema_version: 1\nproject:\n  name: testproj\n")
 	if err := os.WriteFile(filepath.Join(dir, "workspace.yml"), cfg, 0o644); err != nil {
-		t.Fatalf("write devbox.yml: %v", err)
+		t.Fatalf("write workspace.yml: %v", err)
 	}
 	if err := os.MkdirAll(filepath.Join(dir, "snapshots"), 0o755); err != nil {
 		t.Fatalf("mkdir snapshots: %v", err)

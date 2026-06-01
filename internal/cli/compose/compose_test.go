@@ -484,7 +484,7 @@ func TestComposeFilesCmd_RunE(t *testing.T) {
 }
 
 func TestComposeFilesCmd_RunE_InvalidConfig(t *testing.T) {
-	flags := &cmdctx.RootFlags{ConfigPath: "/nonexistent/devbox.yml"}
+	flags := &cmdctx.RootFlags{ConfigPath: "/nonexistent/workspace.yml"}
 	cmd := newComposeFilesCmd(flags)
 	if err := cmd.RunE(cmd, nil); err == nil {
 		t.Fatal("expected error for invalid config path")
@@ -506,7 +506,7 @@ func TestComposeArgvCmd_RunE(t *testing.T) {
 }
 
 func TestComposeArgvCmd_RunE_InvalidConfig(t *testing.T) {
-	flags := &cmdctx.RootFlags{ConfigPath: "/nonexistent/devbox.yml"}
+	flags := &cmdctx.RootFlags{ConfigPath: "/nonexistent/workspace.yml"}
 	cmd := newComposeArgvCmd(flags)
 	if err := cmd.RunE(cmd, []string{"up"}); err == nil {
 		t.Fatal("expected error for invalid config path")

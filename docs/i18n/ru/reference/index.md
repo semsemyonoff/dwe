@@ -1,4 +1,4 @@
-> Translated from: reference/index.md @ 981959a46f6b
+> Translated from: reference/index.md @ 8b28352a06d9
 
 # Справочная документация DWE
 

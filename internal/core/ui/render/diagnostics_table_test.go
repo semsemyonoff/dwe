@@ -23,7 +23,7 @@ func TestRenderDiagnosticsTable(t *testing.T) {
 			Severity: validate.SeverityError,
 			Domain:   "config",
 			Target:   "config.deploy",
-			File:     "devbox/deploy.yml",
+			File:     "workspace/deploy.yml",
 			Message:  "unknown field \"invalid\"",
 			Hint:     "check field name spelling",
 		},
@@ -33,7 +33,7 @@ func TestRenderDiagnosticsTable(t *testing.T) {
 			Target:   "templates.ide:app",
 			File:     "",
 			Message:  "missing template pack",
-			Hint:     "create devbox/templates/ide/app/",
+			Hint:     "create workspace/templates/ide/app/",
 		},
 	}
 

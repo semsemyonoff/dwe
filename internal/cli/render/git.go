@@ -15,7 +15,7 @@ import (
 	"github.com/spf13/cobra"
 )
 
-// newGitCmd creates the `devbox render git [service]` command.
+// newGitCmd creates the `dwe render git [service]` command.
 func newGitCmd(flags *cmdctx.RootFlags) *cobra.Command {
 	return &cobra.Command{
 		Use:   "git [service]",
@@ -23,7 +23,7 @@ func newGitCmd(flags *cmdctx.RootFlags) *cobra.Command {
 		Long: `Generate shell git hooks for each enabled service from a template pack.
 
 The command reads manifest.yml from the chosen template pack
-(devbox/templates/git/<pack-name>/) and renders each declared entry into
+(workspace/templates/git/<pack-name>/) and renders each declared entry into
 <svc.Dir>/src/.git/hooks/<basename>, with executable mode (0755).
 
 Services whose src/.git is missing or is a file (worktree/submodule pointer)
@@ -31,8 +31,8 @@ are skipped with a warning.
 
 Template pack resolution (explicit is strict; implicit chain: service-name → default):
   1. If render.git.template is set in the service config, use that pack (explicit, strict)
-  2. Otherwise, try devbox/templates/git/<service-name>/
-  3. If not found, use devbox/templates/git/default/
+  2. Otherwise, try workspace/templates/git/<service-name>/
+  3. If not found, use workspace/templates/git/default/
   4. If none exist, skip with a warning (implicit missing pack)
 
 Services that participate in git-hook rendering:
@@ -97,7 +97,7 @@ is rendered.`,
 }
 
 // validateExplicitGitArg validates the explicit service argument for
-// `devbox render git <service>`. Checks: not-found → disabled → no-dir → git policy.
+// `dwe render git <service>`. Checks: not-found → disabled → no-dir → git policy.
 func validateExplicitGitArg(name string, services map[string]config.ServiceConfig) error {
 	svc, ok := services[name]
 	if !ok {

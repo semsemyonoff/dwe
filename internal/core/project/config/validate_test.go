@@ -74,7 +74,7 @@ func TestLoadValidateConfig_unknownStageEmitsWarning(t *testing.T) {
 	if !strings.Contains(w.Message, `"preview"`) {
 		t.Errorf("warning message %q should name the unknown stage", w.Message)
 	}
-	if w.File != "devbox/validate.yml" {
+	if w.File != "workspace/validate.yml" {
 		t.Errorf("warning file = %q", w.File)
 	}
 	if w.Line <= 0 {
