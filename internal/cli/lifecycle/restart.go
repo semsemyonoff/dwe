@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"io"
 
 	"github.com/semsemyonoff/dwe/internal/cli/cmdctx"
 	"github.com/semsemyonoff/dwe/internal/cli/info"
@@ -11,6 +12,7 @@ import (
 	lifecyclepkg "github.com/semsemyonoff/dwe/internal/core/workflow/lifecycle"
 	"github.com/semsemyonoff/dwe/internal/shared/daemon"
 	"github.com/semsemyonoff/dwe/internal/shared/docker"
+	"github.com/semsemyonoff/dwe/internal/shared/render"
 
 	"github.com/spf13/cobra"
 )
@@ -32,7 +34,15 @@ var restartContainerFn = docker.RestartContainer
 // used to resolve the compose project name from workspace/docker.yml so the
 // derived container name matches what docker compose actually created — see
 // config.ResolveComposeProjectName.
-func RestartService(ctx context.Context, baseDir string, cfg *config.DweConfig, name string) error {
+//
+// out receives a single "✓ container restarted: <name>" success line once the
+// docker restart returns. nil is treated as io.Discard so callers that don't
+// care (or tests) can opt out cheaply. Errors are NOT printed here — the cobra
+// RunE surfaces them through cmd.PrintErrln / SilenceErrors machinery.
+func RestartService(ctx context.Context, baseDir string, cfg *config.DweConfig, name string, out io.Writer) error {
+	if out == nil {
+		out = io.Discard
+	}
 	svc, ok := cfg.Services[name]
 	if !ok {
 		return fmt.Errorf("%w: %s", ErrUnknownService, name)
@@ -52,6 +62,7 @@ func RestartService(ctx context.Context, baseDir string, cfg *config.DweConfig, 
 		}
 		return err
 	}
+	render.NewWriter(out).Success("✓ container restarted: " + containerName)
 	return nil
 }
 
@@ -105,7 +116,7 @@ the service has been disabled.`,
 			if err != nil {
 				return fmt.Errorf("loading config: %w", err)
 			}
-			return RestartService(cmd.Context(), flags.ProjectRoot(), cfg, name)
+			return RestartService(cmd.Context(), flags.ProjectRoot(), cfg, name, cmd.OutOrStdout())
 		},
 		ValidArgsFunction: cmdctx.ServiceNameCompletion(flags),
 	}

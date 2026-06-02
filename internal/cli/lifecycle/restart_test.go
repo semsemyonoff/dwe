@@ -1,9 +1,11 @@
 package lifecycle
 
 import (
+	"bytes"
 	"context"
 	"errors"
 	"fmt"
+	"io"
 	"os"
 	"path/filepath"
 	"strings"
@@ -147,7 +149,7 @@ func TestRestartService_UnknownService(t *testing.T) {
 	if err != nil {
 		t.Fatalf("loading config: %v", err)
 	}
-	err = RestartService(context.Background(), filepath.Dir(cfgPath), cfg, "nonexistent")
+	err = RestartService(context.Background(), filepath.Dir(cfgPath), cfg, "nonexistent", io.Discard)
 	if !errors.Is(err, ErrUnknownService) {
 		t.Errorf("expected ErrUnknownService, got %v", err)
 	}
@@ -175,7 +177,7 @@ func TestRestartService_KnownService(t *testing.T) {
 		return nil
 	}
 
-	if err := RestartService(context.Background(), filepath.Dir(cfgPath), cfg, "postgres"); err != nil {
+	if err := RestartService(context.Background(), filepath.Dir(cfgPath), cfg, "postgres", io.Discard); err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
 	wantName := cfg.Project.FullName() + "-pg"
@@ -216,7 +218,7 @@ func TestRestartService_DisabledService(t *testing.T) {
 		return nil
 	}
 
-	if err := RestartService(context.Background(), filepath.Dir(cfgPath), cfg, "redis"); err != nil {
+	if err := RestartService(context.Background(), filepath.Dir(cfgPath), cfg, "redis", io.Discard); err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
 	if !called {
@@ -242,7 +244,7 @@ func TestRestartService_NoSuchContainerProducesHint(t *testing.T) {
 		return fmt.Errorf("%w: %s", docker.ErrNoSuchContainer, name)
 	}
 
-	err = RestartService(context.Background(), filepath.Dir(cfgPath), cfg, "postgres")
+	err = RestartService(context.Background(), filepath.Dir(cfgPath), cfg, "postgres", io.Discard)
 	if err == nil {
 		t.Fatal("expected error, got nil")
 	}
@@ -289,7 +291,7 @@ func TestRestartService_UsesComposeProjectNameFromDockerYAML(t *testing.T) {
 		return nil
 	}
 
-	if err := RestartService(context.Background(), baseDir, cfg, "catalog"); err != nil {
+	if err := RestartService(context.Background(), baseDir, cfg, "catalog", io.Discard); err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
 	// workspace.yml fixture: prefix=dwe, name=test → docker.yml resolves
@@ -335,7 +337,7 @@ func TestRestartService_PropagatesMalformedDockerYAML(t *testing.T) {
 		return nil
 	}
 
-	err = RestartService(context.Background(), baseDir, cfg, "catalog")
+	err = RestartService(context.Background(), baseDir, cfg, "catalog", io.Discard)
 	if err == nil {
 		t.Fatal("expected error from malformed docker.yml, got nil")
 	}
@@ -344,6 +346,68 @@ func TestRestartService_PropagatesMalformedDockerYAML(t *testing.T) {
 	}
 	if called {
 		t.Error("restartContainerFn should NOT be called when project name resolution fails")
+	}
+}
+
+// TestRestartService_EmitsSuccessLine verifies that on a successful per-service
+// restart, a "✓ container restarted: <name>" line is written to the supplied
+// out writer. Without this line the command was silent — the user could not
+// tell whether the container was actually restarted or which one.
+func TestRestartService_EmitsSuccessLine(t *testing.T) {
+	cfgPath := writeStopTestConfig(t, map[string]struct {
+		enabled   bool
+		container string
+	}{
+		"postgres": {enabled: true, container: "pg"},
+	})
+	cfg, err := config.LoadConfig(cfgPath)
+	if err != nil {
+		t.Fatalf("loading config: %v", err)
+	}
+
+	prev := restartContainerFn
+	t.Cleanup(func() { restartContainerFn = prev })
+	restartContainerFn = func(_ context.Context, _, _ string, _ int) error { return nil }
+
+	var buf bytes.Buffer
+	if err := RestartService(context.Background(), filepath.Dir(cfgPath), cfg, "postgres", &buf); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	wantContainer := cfg.Project.FullName() + "-pg"
+	wantLine := "✓ container restarted: " + wantContainer
+	if !strings.Contains(buf.String(), wantLine) {
+		t.Errorf("output %q missing success line %q", buf.String(), wantLine)
+	}
+}
+
+// TestRestartService_NoOutputOnFailure verifies the success line is NOT emitted
+// when restartContainerFn fails — otherwise the user would see a contradictory
+// "✓ restarted" line followed by an error.
+func TestRestartService_NoOutputOnFailure(t *testing.T) {
+	cfgPath := writeStopTestConfig(t, map[string]struct {
+		enabled   bool
+		container string
+	}{
+		"postgres": {enabled: true, container: "pg"},
+	})
+	cfg, err := config.LoadConfig(cfgPath)
+	if err != nil {
+		t.Fatalf("loading config: %v", err)
+	}
+
+	prev := restartContainerFn
+	t.Cleanup(func() { restartContainerFn = prev })
+	restartContainerFn = func(_ context.Context, _, name string, _ int) error {
+		return fmt.Errorf("%w: %s", docker.ErrNoSuchContainer, name)
+	}
+
+	var buf bytes.Buffer
+	err = RestartService(context.Background(), filepath.Dir(cfgPath), cfg, "postgres", &buf)
+	if err == nil {
+		t.Fatal("expected error, got nil")
+	}
+	if buf.Len() != 0 {
+		t.Errorf("expected no output on failure, got %q", buf.String())
 	}
 }
 
