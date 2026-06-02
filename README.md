@@ -2,6 +2,10 @@
 
 *Languages: 🇬🇧 **English** · 🇷🇺 [Русский](docs/i18n/ru/README.md)*
 
+<div align="center">
+  <img src="assets/DWE-horizontal.png" alt="DWE — Dev Workspace Engine" width="500"/>
+</div>
+
 A single-binary CLI for running, configuring, and maintaining containerised local development environments declaratively.
 
 ## Why dwe

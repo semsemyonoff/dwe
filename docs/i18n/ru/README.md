@@ -4,6 +4,10 @@
 
 *Языки: 🇬🇧 [English](../../../README.md) · 🇷🇺 **Русский***
 
+<div align="center">
+  <img src="../../../assets/DWE-horizontal.png" alt="DWE — Dev Workspace Engine" width="500"/>
+</div>
+
 CLI в виде одного бинарника для декларативного запуска, настройки и обслуживания контейнеризованных локальных окружений разработки.
 
 ## Зачем DWE
