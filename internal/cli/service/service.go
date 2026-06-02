@@ -139,8 +139,9 @@ func runServicesToggle(cmd *cobra.Command, flags *cmdctx.RootFlags, opts singleT
 	}
 
 	statePath := filepath.Join(baseDir, journal.DefaultRelPath)
-	deployedServices, journalErr := loadDeployedServices(statePath)
+	snap, journalErr := loadJournalSnapshot(statePath)
 	warnDeployedServicesLoad(cmd.ErrOrStderr(), journalErr)
+	deployedServices := snap.deployed
 
 	// --print-plan: build plan in-memory from the current (pre-mutation) config,
 	// render to stdout, then return without any filesystem mutations.
@@ -163,12 +164,22 @@ func runServicesToggle(cmd *cobra.Command, flags *cmdctx.RootFlags, opts singleT
 	localPath := filepath.Join(baseDir, "workspace", "local.yml")
 	envPath := filepath.Join(baseDir, ".env")
 
-	stackRunning := probeStackOrWarn(cmd.ErrOrStderr(), cfg, baseDir)
+	// Stack has never been deployed: pending makes no sense (the first
+	// `dwe deploy` will pick up the new local.yml fresh). Skip the probe and
+	// any banner/prompt for the no-apply path. With --apply we still probe so
+	// a broken docker setup surfaces an early warning before the deeper
+	// executor error.
+	neverDeployed := !snap.everDeployed
+	stackRunning := true
+	if !neverDeployed || opts.apply {
+		stackRunning = probeStackOrWarn(cmd.ErrOrStderr(), cfg, baseDir)
+	}
 
 	plan, contributors, cfgNew, err := mutateAndPlanBatch(
 		cmd.OutOrStdout(),
 		baseDir, flags.ConfigPath, localPath, envPath, statePath,
 		cfg, reg, svcDeploys, deployedServices,
+		snap.everDeployed,
 		toEnable, toDisable,
 	)
 	if err != nil {
@@ -191,9 +202,20 @@ func runServicesToggle(cmd *cobra.Command, flags *cmdctx.RootFlags, opts singleT
 		Contributors: contributors,
 	}
 
-	// Explicit --apply always executes (even when stack probe reports stopped).
+	// Explicit --apply always executes (even when stack probe reports stopped
+	// or stack has never been deployed — the user opted into the initial
+	// deploy).
 	if opts.apply {
 		return executeTogglePlan(cmd.Context(), deps, plan, execOpts)
+	}
+
+	// Never deployed: print the dwe-deploy hint regardless of plan shape,
+	// since even a RequiresNone toggle won't take effect until the first
+	// deploy. local.yml is updated, no pending was recorded, no hooks/apply
+	// auto-run.
+	if neverDeployed {
+		_, _ = fmt.Fprintln(cmd.OutOrStdout(), "stack has not been deployed yet; run `dwe deploy` to apply.")
+		return nil
 	}
 
 	if len(plan.ApplySteps) == 0 && len(plan.BeforeSteps) == 0 && len(plan.AfterSteps) == 0 {

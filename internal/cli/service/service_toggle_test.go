@@ -560,6 +560,11 @@ func TestServiceEnableCmd_OptionalInfraEnables(t *testing.T) {
 // writeServiceProject writes a dwe project in a temp dir with a single
 // service named "svc". svcYAML is the content of service.yml.
 // Returns (configPath, baseDir).
+//
+// The deploy journal is pre-seeded with "svc" marked as StatusDeployed so the
+// pending-write code path stays active by default — most toggle tests assume
+// the stack has been deployed at least once. Tests that need to exercise the
+// never-deployed path must clear the seed via removeDeploySeed(t, baseDir).
 func writeServiceProject(t *testing.T, svcYAML string) (string, string) {
 	t.Helper()
 	// Default to "stack running" for toggle tests so the existing pending /
@@ -581,7 +586,49 @@ func writeServiceProject(t *testing.T, svcYAML string) (string, string) {
 	if err := os.WriteFile(filepath.Join(svcDir, "service.yml"), []byte(svcYAML), 0o644); err != nil {
 		t.Fatal(err)
 	}
+	seedDeployedServices(t, dir, "svc")
 	return filepath.Join(dir, "workspace.yml"), dir
+}
+
+// seedDeployedServices writes a deploy journal marking the given service names
+// as StatusDeployed. Used by test fixtures to express "the stack has been
+// deployed before" — which is the baseline for the pending-write code path.
+//
+// ConfigHash is set to a stable placeholder ("seeded") rather than the empty
+// string: code paths that compare svc.ConfigHash against a freshly-computed
+// hash (e.g. deploy drift detection) would otherwise treat every seeded
+// service as drifted, masking real drift bugs in downstream tests that reuse
+// this fixture.
+func seedDeployedServices(t *testing.T, baseDir string, names ...string) {
+	t.Helper()
+	state := &journal.ProjectState{
+		SchemaVersion: "1",
+		Project: &journal.ProjectLevelState{
+			Status: journal.StatusDeployed,
+			LastRun: &journal.LastRun{
+				Status: journal.StatusOk,
+			},
+		},
+		Services: make(map[string]*journal.ServiceState, len(names)),
+	}
+	for _, n := range names {
+		state.Services[n] = &journal.ServiceState{
+			Status:     journal.StatusDeployed,
+			ConfigHash: "seeded",
+		}
+	}
+	if err := journal.Save(filepath.Join(baseDir, journal.DefaultRelPath), state); err != nil {
+		t.Fatalf("seed deploy journal: %v", err)
+	}
+}
+
+// removeDeploySeed wipes the deploy journal so the test exercises the
+// never-deployed path (pending writes are skipped).
+func removeDeploySeed(t *testing.T, baseDir string) {
+	t.Helper()
+	if err := journal.Remove(filepath.Join(baseDir, journal.DefaultRelPath)); err != nil {
+		t.Fatalf("remove deploy seed: %v", err)
+	}
 }
 
 func statePath(baseDir string) string {
@@ -743,6 +790,12 @@ func TestSingleToggle_PrintPlan_NoMutation(t *testing.T) {
 	localPath := filepath.Join(baseDir, "workspace", "local.yml")
 	envPath := filepath.Join(baseDir, ".env")
 
+	// Capture the seeded journal so we can verify --print-plan didn't mutate it.
+	seededState, err := os.ReadFile(statePath(baseDir))
+	if err != nil {
+		t.Fatalf("read seeded journal: %v", err)
+	}
+
 	flags := &cmdctx.RootFlags{ConfigPath: configPath}
 	cmd := newServiceEnableCmd(flags)
 	cmd.SetArgs([]string{"--print-plan", "svc"})
@@ -758,8 +811,12 @@ func TestSingleToggle_PrintPlan_NoMutation(t *testing.T) {
 	if _, err := os.Stat(envPath); !os.IsNotExist(err) {
 		t.Error(".env must not be written by --print-plan")
 	}
-	if _, err := os.Stat(statePath(baseDir)); !os.IsNotExist(err) {
-		t.Error("journal state must not be written by --print-plan")
+	got, err := os.ReadFile(statePath(baseDir))
+	if err != nil {
+		t.Fatalf("journal state vanished after --print-plan: %v", err)
+	}
+	if !bytes.Equal(got, seededState) {
+		t.Error("journal state must not be mutated by --print-plan")
 	}
 	if !strings.Contains(out.String(), "step") && !strings.Contains(out.String(), "Plan") &&
 		!strings.Contains(out.String(), "No steps") {
@@ -1164,6 +1221,247 @@ func TestSingleToggle_AllRequiresNone_NoPendingRecord(t *testing.T) {
 	}
 }
 
+// TestSingleToggle_NeverDeployed_SkipsPendingAndBanner verifies that when the
+// stack has never been deployed, a toggle writes local.yml + .env, skips the
+// pending write, skips the "stack not running" banner, and prints a one-line
+// "run dwe deploy" hint instead. The user's next `dwe deploy` will pick up
+// the new state fresh.
+func TestSingleToggle_NeverDeployed_SkipsPendingAndBanner(t *testing.T) {
+	configPath, baseDir := writeServiceProject(t, "type: app\ncontainer: c\n")
+	removeDeploySeed(t, baseDir)
+	localPath := filepath.Join(baseDir, "workspace", "local.yml")
+
+	// detectStackRunning must NOT be called: when never deployed (and no
+	// --apply) we skip the probe entirely. Fail the test if it is.
+	oldDetect := detectStackRunning
+	t.Cleanup(func() { detectStackRunning = oldDetect })
+	detectStackRunning = func(_ *config.DweConfig, _ string) (bool, error) {
+		t.Error("detectStackRunning must not be called when stack has never been deployed")
+		return false, nil
+	}
+
+	oldInteractive := widgets.IsInteractiveFn
+	t.Cleanup(func() { widgets.IsInteractiveFn = oldInteractive })
+	widgets.IsInteractiveFn = func(_ io.Reader) bool { return false }
+
+	flags := &cmdctx.RootFlags{ConfigPath: configPath}
+	cmd := newServiceEnableCmd(flags)
+	cmd.SetArgs([]string{"svc"})
+	var out, errOut bytes.Buffer
+	cmd.SetOut(&out)
+	cmd.SetErr(&errOut)
+
+	if err := cmd.Execute(); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if _, err := os.Stat(localPath); err != nil {
+		t.Fatalf("local.yml must be written: %v", err)
+	}
+	// No pending — the journal must not have been created either.
+	if _, err := os.Stat(statePath(baseDir)); !os.IsNotExist(err) {
+		t.Errorf("journal must not exist when stack never deployed, stat err: %v", err)
+	}
+	if strings.Contains(out.String(), "stack is not running") ||
+		strings.Contains(errOut.String(), "stack is not running") {
+		t.Errorf("must not print stack-not-running banner; stdout=%q stderr=%q", out.String(), errOut.String())
+	}
+	if !strings.Contains(out.String(), "stack has not been deployed yet") {
+		t.Errorf("expected dwe-deploy hint in stdout, got: %q", out.String())
+	}
+}
+
+// TestSingleToggle_NeverDeployed_RequiresNone_StillPrintsHint verifies the
+// hint asymmetry fix: a RequiresNone toggle on a never-deployed stack used
+// to silently exit (empty plan + never-deployed early-returned with no
+// output). Now the hint fires first so the user still gets guidance.
+func TestSingleToggle_NeverDeployed_RequiresNone_StillPrintsHint(t *testing.T) {
+	configPath, baseDir := writeServiceProject(t,
+		"type: app\ncontainer: c\non_enable:\n  requires: none\n")
+	removeDeploySeed(t, baseDir)
+
+	oldInteractive := widgets.IsInteractiveFn
+	t.Cleanup(func() { widgets.IsInteractiveFn = oldInteractive })
+	widgets.IsInteractiveFn = func(_ io.Reader) bool { return false }
+
+	flags := &cmdctx.RootFlags{ConfigPath: configPath}
+	cmd := newServiceEnableCmd(flags)
+	cmd.SetArgs([]string{"svc"})
+	var out bytes.Buffer
+	cmd.SetOut(&out)
+
+	if err := cmd.Execute(); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if !strings.Contains(out.String(), "stack has not been deployed yet") {
+		t.Errorf("expected dwe-deploy hint even with empty plan, got: %q", out.String())
+	}
+}
+
+// TestSingleToggle_FailedDeploy_WritesPending verifies that the new
+// "never-deployed" gate does NOT misfire on a stack whose deploy attempt
+// failed: any service in a non-NotDeployed status (StatusFailed here) counts
+// as "ever deployed", so pending writes still happen.
+func TestSingleToggle_FailedDeploy_WritesPending(t *testing.T) {
+	configPath, baseDir := writeServiceProject(t, "type: app\ncontainer: c\n")
+	// Replace the seed (Deployed) with a failed-deploy state.
+	removeDeploySeed(t, baseDir)
+	failedState := &journal.ProjectState{
+		SchemaVersion: "1",
+		Project: &journal.ProjectLevelState{
+			Status:  journal.StatusFailed,
+			LastRun: &journal.LastRun{Status: journal.StatusFailed},
+		},
+		Services: map[string]*journal.ServiceState{
+			"svc": {Status: journal.StatusFailed, ConfigHash: "seeded"},
+		},
+	}
+	if err := journal.Save(statePath(baseDir), failedState); err != nil {
+		t.Fatalf("seed failed-deploy state: %v", err)
+	}
+
+	oldInteractive := widgets.IsInteractiveFn
+	t.Cleanup(func() { widgets.IsInteractiveFn = oldInteractive })
+	widgets.IsInteractiveFn = func(_ io.Reader) bool { return false }
+
+	flags := &cmdctx.RootFlags{ConfigPath: configPath}
+	cmd := newServiceEnableCmd(flags)
+	cmd.SetArgs([]string{"svc"})
+
+	if err := cmd.Execute(); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	pending := readPending(t, baseDir)
+	if pending == nil || pending.Find(journal.PendingRestart) == nil {
+		t.Errorf("pending must be written on a stack with a prior failed deploy, got %+v", pending)
+	}
+}
+
+// TestSingleToggle_CorruptJournal_WritesPending verifies that a corrupt
+// journal file does NOT cause the never-deployed gate to silently skip the
+// pending write — the warning fires (because journalErr is non-nil) but
+// AddPendingOps still runs and either fixes or hard-fails the file.
+func TestSingleToggle_CorruptJournal_WritesPending(t *testing.T) {
+	configPath, baseDir := writeServiceProject(t, "type: app\ncontainer: c\n")
+	// Overwrite the seed with malformed YAML (unclosed list, bad indentation).
+	if err := os.WriteFile(statePath(baseDir), []byte("services:\n  - [bad\n    not_closed: {{{\n"), 0o644); err != nil {
+		t.Fatalf("write corrupt state: %v", err)
+	}
+
+	oldInteractive := widgets.IsInteractiveFn
+	t.Cleanup(func() { widgets.IsInteractiveFn = oldInteractive })
+	widgets.IsInteractiveFn = func(_ io.Reader) bool { return false }
+
+	// Capture whether AddPendingOps was actually called — the gate must NOT
+	// skip it just because Load failed.
+	var addCalled bool
+	oldAdd := singleToggleAddPendingOps
+	t.Cleanup(func() { singleToggleAddPendingOps = oldAdd })
+	singleToggleAddPendingOps = func(path string, ops []journal.PendingOp, hash string) error {
+		addCalled = true
+		return journal.AddPendingOps(path, ops, hash)
+	}
+
+	flags := &cmdctx.RootFlags{ConfigPath: configPath}
+	cmd := newServiceEnableCmd(flags)
+	cmd.SetArgs([]string{"svc"})
+	var errOut bytes.Buffer
+	cmd.SetErr(&errOut)
+
+	// AddPendingOps will hard-fail on the corrupt file; that's the correct
+	// outcome — surface corruption rather than silently skipping pending.
+	err := cmd.Execute()
+	if err == nil {
+		t.Fatal("expected an error from the pending write against a corrupt journal, got nil")
+	}
+	if !strings.Contains(err.Error(), "writing pending state") {
+		t.Errorf("expected 'writing pending state' in error, got: %v", err)
+	}
+
+	if !addCalled {
+		t.Error("AddPendingOps must still be attempted when the journal is corrupt; silent skip is the bug we're guarding against")
+	}
+	if !strings.Contains(errOut.String(), "could not read deploy journal") {
+		t.Errorf("expected corruption warning on stderr, got: %q", errOut.String())
+	}
+}
+
+// TestSingleToggle_ProjectOnlyDeploy_WritesPending verifies that the gate
+// honors project-level-only deploys (state.Services empty but
+// state.Project.Status == StatusDeployed).
+func TestSingleToggle_ProjectOnlyDeploy_WritesPending(t *testing.T) {
+	configPath, baseDir := writeServiceProject(t, "type: app\ncontainer: c\n")
+	removeDeploySeed(t, baseDir)
+	projectOnly := &journal.ProjectState{
+		SchemaVersion: "1",
+		Project: &journal.ProjectLevelState{
+			Status:  journal.StatusDeployed,
+			LastRun: &journal.LastRun{Status: journal.StatusOk},
+		},
+	}
+	if err := journal.Save(statePath(baseDir), projectOnly); err != nil {
+		t.Fatalf("seed project-only state: %v", err)
+	}
+
+	oldInteractive := widgets.IsInteractiveFn
+	t.Cleanup(func() { widgets.IsInteractiveFn = oldInteractive })
+	widgets.IsInteractiveFn = func(_ io.Reader) bool { return false }
+
+	flags := &cmdctx.RootFlags{ConfigPath: configPath}
+	cmd := newServiceEnableCmd(flags)
+	cmd.SetArgs([]string{"svc"})
+
+	if err := cmd.Execute(); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	pending := readPending(t, baseDir)
+	if pending == nil || pending.Find(journal.PendingRestart) == nil {
+		t.Errorf("pending must be written when only project-level deploy state exists, got %+v", pending)
+	}
+}
+
+// TestSingleToggle_NeverDeployed_Apply_StillProbes verifies that --apply on a
+// never-deployed stack still runs probeStackOrWarn so a broken docker setup
+// surfaces an early diagnostic before the deeper executor error.
+func TestSingleToggle_NeverDeployed_Apply_StillProbes(t *testing.T) {
+	configPath, baseDir := writeServiceProject(t, "type: app\ncontainer: c\n")
+	removeDeploySeed(t, baseDir)
+
+	probeCalled := false
+	oldDetect := detectStackRunning
+	t.Cleanup(func() { detectStackRunning = oldDetect })
+	detectStackRunning = func(_ *config.DweConfig, _ string) (bool, error) {
+		probeCalled = true
+		return false, fmt.Errorf("simulated docker socket missing")
+	}
+
+	// Stub the apply path so it doesn't actually try to run.
+	oldRestart := singleToggleRunRestart
+	t.Cleanup(func() { singleToggleRunRestart = oldRestart })
+	singleToggleRunRestart = func(_ lifecycle.RunContext) error { return nil }
+
+	flags := &cmdctx.RootFlags{ConfigPath: configPath}
+	cmd := newServiceEnableCmd(flags)
+	cmd.SetArgs([]string{"--apply", "svc"})
+	var errOut bytes.Buffer
+	cmd.SetErr(&errOut)
+
+	if err := cmd.Execute(); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if !probeCalled {
+		t.Error("detectStackRunning must be called on --apply even when never deployed (early docker diagnostic)")
+	}
+	if !strings.Contains(errOut.String(), "could not probe stack state") {
+		t.Errorf("expected probe warning on stderr for failed probe, got: %q", errOut.String())
+	}
+	_ = baseDir
+}
+
 // TestSingleToggle_DisableFlow verifies the basic disable flow.
 func TestSingleToggle_DisableFlow(t *testing.T) {
 	// Write a project with svc enabled.
@@ -1186,6 +1484,8 @@ func TestSingleToggle_DisableFlow(t *testing.T) {
 		[]byte("services:\n  svc:\n    enabled: true\n"), 0o600); err != nil {
 		t.Fatal(err)
 	}
+	// Seed the deploy journal so the pending-write path stays active.
+	seedDeployedServices(t, dir, "svc")
 
 	oldInteractive := widgets.IsInteractiveFn
 	t.Cleanup(func() { widgets.IsInteractiveFn = oldInteractive })
@@ -1412,6 +1712,13 @@ func writeMultiServiceProject(t *testing.T, svcContents map[string]string, deplo
 			t.Fatal(err)
 		}
 	}
+	// Pre-seed the deploy journal so the pending-write code path stays active
+	// by default. See writeServiceProject for rationale.
+	names := make([]string, 0, len(svcContents))
+	for name := range svcContents {
+		names = append(names, name)
+	}
+	seedDeployedServices(t, dir, names...)
 	return filepath.Join(dir, "workspace.yml"), dir
 }
 
@@ -1463,6 +1770,12 @@ func TestMultiToggle_PrintPlan_NoMutation(t *testing.T) {
 		return widgets.MultiSelectResult{Kept: []string{"alpha"}, Locked: nil}, nil
 	}
 
+	// Capture the seeded journal so we can verify --print-plan didn't mutate it.
+	seededState, err := os.ReadFile(statePath(baseDir))
+	if err != nil {
+		t.Fatalf("read seeded journal: %v", err)
+	}
+
 	flags := &cmdctx.RootFlags{ConfigPath: configPath}
 	cmd := NewCmd("", flags)
 	cmd.SetArgs([]string{"--print-plan"})
@@ -1479,8 +1792,12 @@ func TestMultiToggle_PrintPlan_NoMutation(t *testing.T) {
 	if _, err := os.Stat(envPath); !os.IsNotExist(err) {
 		t.Error(".env must not be written by --print-plan")
 	}
-	if _, err := os.Stat(statePath(baseDir)); !os.IsNotExist(err) {
-		t.Error("journal state must not be written by --print-plan")
+	got, err := os.ReadFile(statePath(baseDir))
+	if err != nil {
+		t.Fatalf("journal state vanished after --print-plan: %v", err)
+	}
+	if !bytes.Equal(got, seededState) {
+		t.Error("journal state must not be mutated by --print-plan")
 	}
 	outStr := out.String()
 	if !strings.Contains(outStr, "step") && !strings.Contains(outStr, "Plan") &&

@@ -103,27 +103,62 @@ type singleToggleFlags struct {
 	skipHooks bool
 }
 
-// loadDeployedServices returns the set of services currently in the deployed
-// state per the journal at statePath, along with any load error so the caller
-// can surface it. A missing journal returns an empty set and nil error (the
-// safer default — nothing has ever been deployed). A corrupt journal returns
-// the err so the caller can warn rather than silently treating every service
-// as undeployed and over-scheduling deploys for deploy-or-restart toggles.
-func loadDeployedServices(statePath string) (map[string]bool, error) {
+// journalSnapshot captures the two journal-derived signals the toggle flow needs.
+//
+//   - deployed is the per-service "currently deployed" set used to resolve
+//     RequiresDeployOrRestart contributors. Only StatusDeployed counts.
+//   - everDeployed is the "has a deploy ever been attempted on this stack"
+//     signal that gates the pending-write code path. Any prior deploy attempt
+//     (including failed / in-progress / partial / project-only) counts, and a
+//     journal load error is treated as "ever deployed" so we don't silently
+//     skip pending on a corrupt file — AddPendingOps will then hard-fail on
+//     the same corrupt file, surfacing the corruption rather than letting it
+//     drop a toggle's pending intent.
+type journalSnapshot struct {
+	deployed     map[string]bool
+	everDeployed bool
+}
+
+// loadJournalSnapshot loads the deploy journal and derives the two signals the
+// toggle flow needs. A load error is surfaced to the caller (so it can warn)
+// but everDeployed defaults to true on error — see journalSnapshot comment.
+func loadJournalSnapshot(statePath string) (journalSnapshot, error) {
 	state, err := journal.Load(statePath)
 	if err != nil {
-		return map[string]bool{}, err
+		// Corrupt journal: warn upstream, but assume the stack has been
+		// deployed so pending writes still happen. Silently dropping pending
+		// here would be worse than letting AddPendingOps fail later.
+		return journalSnapshot{deployed: map[string]bool{}, everDeployed: true}, err
 	}
-	if state == nil {
-		return map[string]bool{}, nil
-	}
-	out := make(map[string]bool, len(state.Services))
+	// journal.Load never returns (nil, nil): a missing file produces a
+	// zero-value ProjectState with Project=&{}, Services=map{}.
+	snap := journalSnapshot{deployed: make(map[string]bool, len(state.Services))}
 	for name, st := range state.Services {
-		if st != nil && st.Status == journal.StatusDeployed {
-			out[name] = true
+		if st == nil {
+			continue
+		}
+		if st.Status == journal.StatusDeployed {
+			snap.deployed[name] = true
+		}
+		// Any service in a non-empty, non-NotDeployed status means a deploy
+		// has touched this service — failed / in_progress / partial / skipped
+		// all count.
+		if st.Status != "" && st.Status != journal.StatusNotDeployed {
+			snap.everDeployed = true
 		}
 	}
-	return out, nil
+	// Project-level signals: an explicit LastRun or a non-default Project.Status
+	// means a deploy has been attempted (covers project-only deploys, where
+	// state.Services may be empty but Project.Status is StatusDeployed).
+	if state.Project != nil {
+		if state.Project.LastRun != nil {
+			snap.everDeployed = true
+		}
+		if state.Project.Status != "" && state.Project.Status != journal.StatusNotDeployed {
+			snap.everDeployed = true
+		}
+	}
+	return snap, nil
 }
 
 // probeStackOrWarn calls detectStackRunning and prints a warning to errOut if
@@ -150,13 +185,16 @@ func warnStackStopped(out io.Writer, plan TogglePlan) {
 }
 
 // warnDeployedServicesLoad emits a warning to errOut when the journal could
-// not be loaded cleanly; the caller proceeds with an empty deployed-set.
+// not be loaded cleanly. The caller proceeds with an empty per-service
+// deployed set (so RequiresDeployOrRestart contributors fall back to the
+// deploy variant) but everDeployed is still treated as true upstream — the
+// pending write is attempted and either repairs the file or hard-fails.
 func warnDeployedServicesLoad(errOut io.Writer, err error) {
 	if err == nil {
 		return
 	}
 	_, _ = fmt.Fprintln(errOut, styles.StyleWarning(fmt.Sprintf(
-		"⚠ could not read deploy journal (%v); treating all services as undeployed", err)))
+		"⚠ could not read deploy journal (%v); per-service deploy state unknown, pending will still be written", err)))
 }
 
 // captureFileState returns the current bytes of path, or nil if the file is absent.
@@ -265,14 +303,14 @@ func buildPendingOpsFromContributors(contributors []Contributor) []journal.Pendi
 }
 
 // mutateAndPlan performs the locked mutation flow for a single-service toggle:
-// captures pre-state, writes local.yml, regenerates .env, builds the toggle plan,
-// renders it to out, then atomically writes pending ops to the journal.
-// On any failure in steps 2-5, local.yml and .env are restored to their pre-toggle state.
+// captures pre-state, writes local.yml, regenerates .env, builds the toggle
+// plan, renders it to out, then atomically writes pending ops to the journal
+// (only when stackEverDeployed is true). On any failure in steps 2-5,
+// local.yml and .env are restored to their pre-toggle state.
 //
-// Pending is always written when the plan has any apply work. Whether to run
-// that work immediately (vs leaving the banner for the user) is the caller's
-// decision — it depends on `--apply` and stack-running state, not on this
-// helper.
+// Whether to RUN the planned work immediately (vs leaving it deferred) is the
+// caller's decision — it depends on `--apply` and stack-running state, not on
+// this helper.
 func mutateAndPlan(
 	out io.Writer,
 	baseDir, configPath, localPath, envPath, statePath string,
@@ -280,6 +318,7 @@ func mutateAndPlan(
 	reg *registry.Registry,
 	svcDeploys map[string]*config.ServiceDeployConfig,
 	deployedServices map[string]bool,
+	stackEverDeployed bool,
 	name string,
 	direction ToggleDirection,
 ) (TogglePlan, []Contributor, *config.DweConfig, error) {
@@ -345,17 +384,23 @@ func mutateAndPlan(
 	// Step 4: Render plan to stdout.
 	renderTogglePlan(out, plan)
 
-	// Step 5: Write pending entries atomically via a single batch call. Always
-	// runs (regardless of stack state) so the deferred work shows up in
-	// `dwe status` until the user actually applies it; AddPendingOps is a
-	// no-op when there is nothing to record (e.g. all RequiresNone).
+	// Step 5: Write pending entries atomically via a single batch call.
+	// Skipped only when the stack has never been deployed (no prior deploy
+	// attempt of any kind) — pending represents "config drifted since deploy"
+	// and is meaningless before the first deploy. Failed / in-progress /
+	// project-only deploys all count as "ever deployed", and corrupt-journal
+	// load errors default to ever-deployed too (see loadJournalSnapshot).
+	// When the gate opens, AddPendingOps still runs even if contributors yield
+	// zero ops (e.g. all RequiresNone) — it's a no-op then.
 	contributors := buildContributors(cfgNew, toggles, deployedServices)
-	ops := buildPendingOpsFromContributors(contributors)
-	svc := cfgNew.Services[name]
-	configHash := journal.ServiceConfigHash(svc, svcDeploys[name])
-	if err := singleToggleAddPendingOps(statePath, ops, configHash); err != nil {
-		rollback()
-		return TogglePlan{}, nil, nil, fmt.Errorf("writing pending state: %w", err)
+	if stackEverDeployed {
+		ops := buildPendingOpsFromContributors(contributors)
+		svc := cfgNew.Services[name]
+		configHash := journal.ServiceConfigHash(svc, svcDeploys[name])
+		if err := singleToggleAddPendingOps(statePath, ops, configHash); err != nil {
+			rollback()
+			return TogglePlan{}, nil, nil, fmt.Errorf("writing pending state: %w", err)
+		}
 	}
 
 	return plan, contributors, cfgNew, nil
@@ -388,6 +433,7 @@ func mutateAndPlanBatch(
 	reg *registry.Registry,
 	svcDeploys map[string]*config.ServiceDeployConfig,
 	deployedServices map[string]bool,
+	stackEverDeployed bool,
 	toEnable, toDisable []string,
 ) (TogglePlan, []Contributor, *config.DweConfig, error) {
 	releaseLock, err := lock.AcquireProjectLocks(baseDir)
@@ -452,17 +498,20 @@ func mutateAndPlanBatch(
 	// Step 4: Render plan to out.
 	renderTogglePlan(out, plan)
 
-	// Step 5: Write pending entries atomically via a single batch call. Always
-	// runs; AddPendingOps is a no-op when contributors yield no ops.
+	// Step 5: Write pending entries atomically via a single batch call.
+	// Skipped only when the stack has never been deployed — see mutateAndPlan
+	// for the rationale.
 	contributors := buildContributors(cfgNew, toggles, deployedServices)
-	ops := buildPendingOpsFromContributors(contributors)
-	allNames := make([]string, 0, len(toEnable)+len(toDisable))
-	allNames = append(allNames, toEnable...)
-	allNames = append(allNames, toDisable...)
-	configHash := batchServiceConfigHash(cfgNew, svcDeploys, allNames...)
-	if err := multiToggleAddPendingOps(statePath, ops, configHash); err != nil {
-		rollback()
-		return TogglePlan{}, nil, nil, fmt.Errorf("writing pending state: %w", err)
+	if stackEverDeployed {
+		ops := buildPendingOpsFromContributors(contributors)
+		allNames := make([]string, 0, len(toEnable)+len(toDisable))
+		allNames = append(allNames, toEnable...)
+		allNames = append(allNames, toDisable...)
+		configHash := batchServiceConfigHash(cfgNew, svcDeploys, allNames...)
+		if err := multiToggleAddPendingOps(statePath, ops, configHash); err != nil {
+			rollback()
+			return TogglePlan{}, nil, nil, fmt.Errorf("writing pending state: %w", err)
+		}
 	}
 
 	return plan, contributors, cfgNew, nil
@@ -498,8 +547,9 @@ func runSingleServiceToggle(
 	}
 
 	statePath := filepath.Join(baseDir, journal.DefaultRelPath)
-	deployedServices, journalErr := loadDeployedServices(statePath)
+	snap, journalErr := loadJournalSnapshot(statePath)
 	warnDeployedServicesLoad(cmd.ErrOrStderr(), journalErr)
+	deployedServices := snap.deployed
 
 	// --print-plan: pure dry-run — build and render without mutating anything.
 	if opts.printPlan {
@@ -514,12 +564,22 @@ func runSingleServiceToggle(
 	localPath := filepath.Join(baseDir, "workspace", "local.yml")
 	envPath := filepath.Join(baseDir, ".env")
 
-	stackRunning := probeStackOrWarn(cmd.ErrOrStderr(), cfg, baseDir)
+	// Stack has never been deployed: pending makes no sense (the first
+	// `dwe deploy` will pick up the new local.yml fresh). Skip the probe and
+	// any banner/prompt for the no-apply path. With --apply we still probe so
+	// a broken docker setup surfaces an early warning before the deeper
+	// executor error.
+	neverDeployed := !snap.everDeployed
+	stackRunning := true
+	if !neverDeployed || opts.apply {
+		stackRunning = probeStackOrWarn(cmd.ErrOrStderr(), cfg, baseDir)
+	}
 
 	plan, contributors, cfgNew, err := mutateAndPlan(
 		cmd.OutOrStdout(),
 		baseDir, configPath, localPath, envPath, statePath,
 		cfg, reg, svcDeploys, deployedServices,
+		snap.everDeployed,
 		name, direction,
 	)
 	if err != nil {
@@ -545,9 +605,19 @@ func runSingleServiceToggle(
 
 	// Explicit --apply always executes — even when the stack probe says
 	// stopped — because the apply step (deploy/restart) is itself what brings
-	// the stack up.
+	// the stack up. Honored even on a never-deployed stack (the user opted
+	// into the initial deploy).
 	if opts.apply {
 		return executeTogglePlan(ctx, deps, plan, execOpts)
+	}
+
+	// Never deployed: print the dwe-deploy hint regardless of plan shape,
+	// since even a RequiresNone toggle won't take effect until the first
+	// deploy. local.yml is updated, no pending was recorded, no hooks/apply
+	// auto-run.
+	if neverDeployed {
+		_, _ = fmt.Fprintln(cmd.OutOrStdout(), "stack has not been deployed yet; run `dwe deploy` to apply.")
+		return nil
 	}
 
 	if len(plan.ApplySteps) == 0 && len(plan.BeforeSteps) == 0 && len(plan.AfterSteps) == 0 {

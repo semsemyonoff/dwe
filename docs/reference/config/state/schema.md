@@ -51,6 +51,10 @@ Field reference for `.dwe/deploy/state.yml`.
 
 When `dwe services enable` or `dwe services disable` is run without `--apply`, the toggle command writes the local.yml change immediately but defers the apply step. The `pending` field in the state file tracks what still needs to run.
 
+Pending entries are recorded only once a deploy has been attempted at least once on this stack. Any prior attempt counts: the journal lists at least one service in a non-`not_deployed` status (`deployed` / `failed` / `in_progress` / `partial` / `skipped`), OR `project.last_run` is present, OR `project.status` is set to anything other than `not_deployed`. If the journal file is corrupt (load error), the toggle still attempts the pending write so the corruption surfaces — silent pending loss would be worse.
+
+Before any deploy attempt, pending has no meaning — the next `dwe deploy` picks up the new `local.yml` fresh — so the toggle silently updates `local.yml`/`.env`, writes no journal entry, and prints a one-line `run dwe deploy` hint after the plan.
+
 ### pending field schema
 
 | Field | Type | Description |
@@ -70,7 +74,8 @@ When `dwe services enable` or `dwe services disable` is run without `--apply`, t
 
 | Event | Effect on `pending` |
 |-------|---------------------|
-| `dwe services enable/disable` (without `--apply`) | Writes `pending.operations`; adds/merges ops for restart or deploy contributors |
+| `dwe services enable/disable` (without `--apply`), no deploy attempt on record | No-op on `pending`; `local.yml`/`.env` updated and a one-line hint suggests `dwe deploy` |
+| `dwe services enable/disable` (without `--apply`), any deploy attempt on record (incl. failed/partial/project-only) | Writes `pending.operations`; adds/merges ops for restart or deploy contributors |
 | `dwe services enable/disable --apply` success | Clears only the pending ops that this apply step performed (unrelated pending ops from other sessions survive) |
 | `dwe restart` success | Clears the `restart` op; deploy op (if any) survives |
 | `dwe deploy run` (full project) success | Clears the `deploy` op; restart op (if any) survives |
