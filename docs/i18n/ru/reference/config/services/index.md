@@ -1,4 +1,4 @@
-> Translated from: reference/config/services/index.md @ 79c4c6f5dfe1
+> Translated from: reference/config/services/index.md @ 7b6da59c4b35
 
 # Конфигурация сервиса (`workspace/services/<name>/service.yml`)
 

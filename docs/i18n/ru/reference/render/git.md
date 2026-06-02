@@ -1,4 +1,4 @@
-> Translated from: reference/render/git.md @ 71927fb2f636
+> Translated from: reference/render/git.md @ 5833690fc9a8
 
 # dwe render git
 
@@ -92,9 +92,10 @@ flowchart TD
 
 1. Если задано `render.git.template`, пробуется только `workspace/templates/git/<render.git.template>/`. Отсутствие пакета — жёсткая ошибка.
 2. Иначе пробуется `workspace/templates/git/<service-name>/`. Если отсутствует — провалиться дальше.
-3. Иначе используется `workspace/templates/git/default/`. Если отсутствует — пропуск с предупреждением (implicit missing pack).
+3. Иначе обходится цепочка `extends:` предок-за-предком — `workspace/templates/git/<ancestor>/`. Побеждает первый существующий пакет.
+4. Иначе используется `workspace/templates/git/default/`. Если отсутствует — пропуск с предупреждением (implicit missing pack).
 
-Символы имени пакета ограничены (`^[A-Za-z0-9][A-Za-z0-9_-]*$`); небезопасное имя сервиса (точка в начале, дефис в начале, разделители путей) молча пропускает кандидата по имени сервиса и проваливается на `default/`.
+Символы имени пакета ограничены (`^[A-Za-z0-9][A-Za-z0-9_-]*$`); небезопасное имя (точка в начале, дефис в начале, разделители путей) молча пропускает этого кандидата, и обход продолжается со следующим предком или `default/`.
 
 ## Схема manifest
 

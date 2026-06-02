@@ -1,4 +1,4 @@
-> Translated from: reference/config/lifecycle.md @ b8ffdf900870
+> Translated from: reference/config/lifecycle.md @ e2ab2a5d5403
 
 # lifecycle.yml
 

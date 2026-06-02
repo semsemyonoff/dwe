@@ -1,4 +1,4 @@
-> Translated from: reference/config/deploy/index.md @ 48167aec9162
+> Translated from: reference/config/deploy/index.md @ 1994dc664bef
 
 # deploy.yml / reset.yml
 

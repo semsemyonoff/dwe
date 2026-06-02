@@ -1,4 +1,4 @@
-> Translated from: reference/config/services/extends.md @ 820d54a1850b
+> Translated from: reference/config/services/extends.md @ b2a5d22df3d0
 
 # Наследование через `extends`
 
