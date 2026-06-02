@@ -304,6 +304,16 @@ func RunRun(ctx RunContext) (err error) {
 		}
 	}
 
+	// A successful run brings the stack up with the current local.yml shape,
+	// so any pending restart entry is no longer actionable (mirrors RunStop's
+	// post-condition: the next run / current run applies the toggled state).
+	// PendingDeploy ops survive — deploy tracks artifact state separately and
+	// the run gate above already enforces deployed status.
+	statePath := filepath.Join(workDir, journal.DefaultRelPath)
+	if clearErr := journal.ClearPendingForKind(statePath, journal.PendingRestart); clearErr != nil {
+		slog.Warn("clearing pending restart state after run", "err", clearErr)
+	}
+
 	w.Success(runCfg.FinalMessage)
 	return nil
 }

@@ -77,6 +77,8 @@ Before any deploy attempt, pending has no meaning — the next `dwe deploy` pick
 | `dwe services enable/disable` (without `--apply`), no deploy attempt on record | No-op on `pending`; `local.yml`/`.env` updated and a one-line hint suggests `dwe deploy` |
 | `dwe services enable/disable` (without `--apply`), any deploy attempt on record (incl. failed/partial/project-only) | Writes `pending.operations`; adds/merges ops for restart or deploy contributors |
 | `dwe services enable/disable --apply` success | Clears only the pending ops that this apply step performed (unrelated pending ops from other sessions survive) |
+| `dwe run` success | Clears the `restart` op (the run itself satisfies it); deploy op survives |
+| `dwe stop` success | Clears the `restart` op (the next run will pick up toggled state); deploy op survives |
 | `dwe restart` success | Clears the `restart` op; deploy op (if any) survives |
 | `dwe deploy run` (full project) success | Clears the `deploy` op; restart op (if any) survives |
 | `dwe deploy run --service <name>` success | Removes `<name>` from the `deploy` op's service list; if empty, removes the op |

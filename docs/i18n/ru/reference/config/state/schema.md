@@ -1,4 +1,4 @@
-> Translated from: reference/config/state/schema.md @ ce7a067ed322
+> Translated from: reference/config/state/schema.md @ 2ccfc70f5fed
 
 # Схема состояния
 
@@ -53,6 +53,10 @@
 
 Когда `dwe services enable` или `dwe services disable` запускается без `--apply`, команда переключения сразу записывает изменение в local.yml, но откладывает шаг применения. Поле `pending` в файле состояния отслеживает, что ещё нужно выполнить.
 
+Записи pending создаются только после того, как на этом стеке хотя бы раз была предпринята попытка деплоя. Любая предыдущая попытка засчитывается: в журнале есть хотя бы один сервис со статусом, отличным от `not_deployed` (`deployed` / `failed` / `in_progress` / `partial` / `skipped`), ИЛИ присутствует `project.last_run`, ИЛИ `project.status` отличается от `not_deployed`. Если файл журнала повреждён (ошибка загрузки), переключение всё равно пытается записать pending, чтобы повреждение всплыло — тихая потеря pending была бы хуже.
+
+До первой попытки деплоя pending не имеет смысла — следующий `dwe deploy` подхватит новый `local.yml` с нуля — поэтому переключение тихо обновляет `local.yml`/`.env`, не пишет в журнал и печатает однострочную подсказку `run dwe deploy` после плана.
+
 ### Схема поля pending
 
 | Поле | Тип | Описание |
@@ -72,8 +76,11 @@
 
 | Событие | Эффект для `pending` |
 |-------|---------------------|
-| `dwe services enable/disable` (без `--apply`) | Записывает `pending.operations`; добавляет/сливает операции для contributor-ов restart или deploy |
+| `dwe services enable/disable` (без `--apply`), нет попытки деплоя в журнале | Без изменений в `pending`; `local.yml`/`.env` обновляются и выводится подсказка `dwe deploy` |
+| `dwe services enable/disable` (без `--apply`), есть любая попытка деплоя в журнале (в т.ч. failed/partial/project-only) | Записывает `pending.operations`; добавляет/сливает операции для contributor-ов restart или deploy |
 | Успешный `dwe services enable/disable --apply` | Очищает только те pending-операции, которые выполнил данный шаг apply (несвязанные pending-операции из других сессий сохраняются) |
+| Успешный `dwe run` | Очищает операцию `restart` (запуск сам её удовлетворяет); deploy-операция сохраняется |
+| Успешный `dwe stop` | Очищает операцию `restart` (следующий `dwe run` подхватит переключённое состояние); deploy-операция сохраняется |
 | Успешный `dwe restart` | Очищает операцию `restart`; операция deploy (если есть) сохраняется |
 | Успешный `dwe deploy run` (по всему проекту) | Очищает операцию `deploy`; операция restart (если есть) сохраняется |
 | Успешный `dwe deploy run --service <name>` | Удаляет `<name>` из списка сервисов операции `deploy`; если список пуст, удаляет операцию |

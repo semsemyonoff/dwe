@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/semsemyonoff/dwe/internal/core/project/config"
+	"github.com/semsemyonoff/dwe/internal/core/workflow/deploy/journal"
 	"github.com/semsemyonoff/dwe/internal/shared/git"
 )
 
@@ -535,5 +536,48 @@ func TestRunRun_DeploymentGate_NoTrackedServices_Passes(t *testing.T) {
 	err := RunRun(ctx)
 	if err != nil {
 		t.Errorf("expected no error when no tracked services; got: %v", err)
+	}
+}
+
+// TestRunRun_ClearsPendingRestart_KeepsPendingDeploy verifies that a successful
+// `dwe run` clears any stale PendingRestart entry (a toggle recorded while the
+// stack was stopped) but leaves PendingDeploy ops intact — deploy tracks
+// artifact state separately and the run gate enforces it.
+func TestRunRun_ClearsPendingRestart_KeepsPendingDeploy(t *testing.T) {
+	dir := t.TempDir()
+	cfgPath := makeMinimalWorkspaceYML(t, dir)
+	workspaceDir := filepath.Join(dir, "workspace")
+	if err := os.MkdirAll(workspaceDir, 0755); err != nil {
+		t.Fatalf("creating workspace dir: %v", err)
+	}
+	writeLifecycleYML(t, workspaceDir, "done")
+
+	statePath := filepath.Join(dir, journal.DefaultRelPath)
+	if err := os.MkdirAll(filepath.Dir(statePath), 0o755); err != nil {
+		t.Fatalf("mkdir state dir: %v", err)
+	}
+	if err := journal.AddPendingOps(statePath, []journal.PendingOp{
+		{Kind: journal.PendingRestart},
+		{Kind: journal.PendingDeploy, Services: []string{"web"}},
+	}, "stub"); err != nil {
+		t.Fatalf("seed pending: %v", err)
+	}
+
+	if err := RunRun(RunContext{ConfigPath: cfgPath}); err != nil {
+		t.Fatalf("RunRun: %v", err)
+	}
+
+	state, err := journal.Load(statePath)
+	if err != nil {
+		t.Fatalf("loading state after run: %v", err)
+	}
+	if state.Pending == nil {
+		t.Fatal("pending must not be wiped; deploy op should survive run")
+	}
+	if state.Pending.Find(journal.PendingRestart) != nil {
+		t.Errorf("pending restart must be cleared after a successful run, got %+v", state.Pending)
+	}
+	if state.Pending.Find(journal.PendingDeploy) == nil {
+		t.Errorf("pending deploy must survive run (artifact state outlasts runtime), got %+v", state.Pending)
 	}
 }
