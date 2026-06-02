@@ -58,8 +58,6 @@ test-race: embedded-docs
 	go test -race ./internal/core/workflow/deploy/journal ./internal/shared/lock ./internal/core/execution/pipeline
 
 lint:
-	@which golangci-lint > /dev/null 2>&1 || \
-		(curl -sSfL https://raw.githubusercontent.com/golangci/golangci-lint/master/install.sh | sh -s -- -b $(shell go env GOPATH)/bin)
 	golangci-lint run ./...
 
 tidy:

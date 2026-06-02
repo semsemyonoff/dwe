@@ -32,7 +32,7 @@ For AI agent orientation, `dwe docs llms-txt` emits a compact llms.txt index (pr
 
 - `make build` runs `go mod tidy`, syncs `docs/` into `internal/core/docs/embedded/` (via `scripts/sync-embedded-docs.sh`), regenerates `internal/core/docs/content_hashes_gen.go` (via `scripts/gen-docs-content-hashes.sh`), builds `./cmd/dwe`, and writes `bin/dwe`. Run `make build` (not `go build`) after editing docs under `docs/reference/`, `docs/internals/`, or `docs/i18n/` — otherwise the embedded docs in the binary will be stale.
 - `make test` / `make test-v` / `make test-race` run the test suite. They depend on `embedded-docs`, so the sync runs before tests every time. **Always use `make test*` — `go test ./...` directly will see an empty `internal/core/docs/embedded/` tree on a fresh checkout (it is gitignored and generated) and the docs-subsystem tests will fail.**
-- `make lint` installs `golangci-lint` if missing, then runs checks.
+- `make lint` runs `golangci-lint` checks.
 - `make tidy` updates `go.mod` and `go.sum`.
 - `make clean` removes the built binary from `bin/`.
 
