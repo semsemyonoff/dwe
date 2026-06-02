@@ -39,14 +39,14 @@ type projectJSON struct {
 // ── Services (apps / tools / infra) ─────────────────────────────────────────
 
 type serviceJSON struct {
-	Name      string            `json:"name"`
-	Container string            `json:"container_name"`
-	Mandatory bool              `json:"mandatory"`
-	Enabled   bool              `json:"enabled"`
-	Running   bool              `json:"running"`
-	Status    string            `json:"status"` // "running"|"stopped"|"disabled"
-	Ports     map[string]int    `json:"ports,omitempty"`
-	Hosts     map[string]string `json:"hosts,omitempty"`
+	Name      string                            `json:"name"`
+	Container string                            `json:"container_name"`
+	Mandatory bool                              `json:"mandatory"`
+	Enabled   bool                              `json:"enabled"`
+	Running   bool                              `json:"running"`
+	Status    string                            `json:"status"` // "running"|"stopped"|"disabled"
+	Ports     map[string]config.ServicePortSpec `json:"ports,omitempty"`
+	Hosts     map[string]string                 `json:"hosts,omitempty"`
 }
 
 // ── Daemons ──────────────────────────────────────────────────────────────────
@@ -193,8 +193,8 @@ func buildServicesJSON(sc *statusContext, svcType config.ServiceType) []serviceJ
 			Running:   row.Running,
 			Status:    serviceStatusStr(row),
 		}
-		if len(row.Ports) > 0 {
-			j.Ports = row.Ports
+		if svc, ok := sc.Cfg.Services[row.Name]; ok && len(svc.Ports) > 0 {
+			j.Ports = svc.Ports
 		}
 		if len(row.Hosts) > 0 {
 			j.Hosts = row.Hosts

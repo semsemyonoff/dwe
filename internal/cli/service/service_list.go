@@ -18,15 +18,15 @@ type serviceListJSON struct {
 }
 
 type serviceListEntryJSON struct {
-	Name      string            `json:"name"`
-	Type      string            `json:"type"`
-	Container string            `json:"container_name"`
-	Mandatory bool              `json:"mandatory"`
-	Enabled   bool              `json:"enabled"`
-	Running   bool              `json:"running"`
-	Status    string            `json:"status"` // "running"|"stopped"|"disabled"
-	Ports     map[string]int    `json:"ports,omitempty"`
-	Hosts     map[string]string `json:"hosts,omitempty"`
+	Name      string                            `json:"name"`
+	Type      string                            `json:"type"`
+	Container string                            `json:"container_name"`
+	Mandatory bool                              `json:"mandatory"`
+	Enabled   bool                              `json:"enabled"`
+	Running   bool                              `json:"running"`
+	Status    string                            `json:"status"` // "running"|"stopped"|"disabled"
+	Ports     map[string]config.ServicePortSpec `json:"ports,omitempty"`
+	Hosts     map[string]string                 `json:"hosts,omitempty"`
 }
 
 // runServicesList renders the read-only services view used when stdin is not a
@@ -69,8 +69,8 @@ func renderServicesListJSON(cmd *cobra.Command, flags *cmdctx.RootFlags, in stac
 				Running:   row.Running,
 				Status:    serviceListStatus(row.Mandatory, row.Enabled, row.Running),
 			}
-			if len(row.Ports) > 0 {
-				e.Ports = row.Ports
+			if svc, ok := in.Cfg.Services[row.Name]; ok && len(svc.Ports) > 0 {
+				e.Ports = svc.Ports
 			}
 			if len(row.Hosts) > 0 {
 				e.Hosts = row.Hosts

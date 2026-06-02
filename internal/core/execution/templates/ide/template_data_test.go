@@ -13,13 +13,13 @@ func sampleServices() map[string]config.ServiceConfig {
 	return map[string]config.ServiceConfig{
 		"main": {
 			Type:  config.ServiceTypeApp,
-			Ports: map[string]int{"http": 8080, "grpc": 9090},
+			Ports: map[string]config.ServicePortSpec{"http": {Port: 8080}, "grpc": {Port: 9090}},
 			Hosts: map[string]string{"web": "main.localhost"},
 		},
 		"app2": {Type: config.ServiceTypeApp},
 		"db": {
 			Type:  config.ServiceTypeInfra,
-			Ports: map[string]int{"sql": 3306},
+			Ports: map[string]config.ServicePortSpec{"sql": {Port: 3306}},
 		},
 		"adminer": {
 			Type:  config.ServiceTypeTool,

@@ -1,4 +1,4 @@
-> Translated from: reference/config/info.md @ 0b84622c401d
+> Translated from: reference/config/info.md @ c64a4bdc0a44
 
 # info.yml
 
@@ -304,6 +304,8 @@ Subgroup'ы могут быть вложены произвольно.
 | `{{ (index .Services "main").Container }}` | string | Имя контейнера сервиса `main`. |
 | `{{ (index .Services "main").Port "http" }}` | int | Поиск порта по имени. `Port(name)` — метод на `ServiceConfig` (возвращает `0`, если отсутствует). |
 | `{{ (index .Services "main").Host "web" }}` | string | Поиск хоста по имени. `Host(name)` возвращает `""`, если отсутствует. |
+| `{{ (index .Services "main").PortScheme "http" }}` | string | Per-port переопределение схемы из развёрнутой формы записи. Возвращает `""`, если переопределение не задано. |
+| `{{ (index .Services "main").EffectiveScheme "http" .Runtime.UseHTTPS }}` | string | Резолвит эффективную схему URL (`"http"` / `"https"`) по цепочке: per-port → `info.scheme` → `runtime.use_https`. |
 | `{{ .AppServices }}` / `{{ .ToolServices }}` / `{{ .InfraServices }}` | `map[string]ServiceConfig` | Подмножества, отфильтрованные по `type:` — удобно для `{{ range }}` по одной категории. |
 
 ### Функции шаблона

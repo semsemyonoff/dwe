@@ -302,6 +302,8 @@ All `text`, `value`, and `when` fields support Go template syntax evaluated agai
 | `{{ (index .Services "main").Container }}` | string | Container name on the `main` service. |
 | `{{ (index .Services "main").Port "http" }}` | int | Named port lookup. `Port(name)` is a method on `ServiceConfig` (returns `0` if absent). |
 | `{{ (index .Services "main").Host "web" }}` | string | Named host lookup. `Host(name)` returns `""` if absent. |
+| `{{ (index .Services "main").PortScheme "http" }}` | string | Per-port scheme override declared on the entry (rich form). Returns `""` if no override is set. |
+| `{{ (index .Services "main").EffectiveScheme "http" .Runtime.UseHTTPS }}` | string | Resolves the effective URL scheme (`"http"` / `"https"`) through the precedence chain: per-port → `info.scheme` → `runtime.use_https`. |
 | `{{ .AppServices }}` / `{{ .ToolServices }}` / `{{ .InfraServices }}` | `map[string]ServiceConfig` | Filtered subsets by `type:` — handy for `{{ range }}` over a single category. |
 
 ### Template functions

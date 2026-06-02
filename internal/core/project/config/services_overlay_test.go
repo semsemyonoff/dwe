@@ -77,7 +77,7 @@ func TestValidateServicesOverlay_rejectsBadPortsShape(t *testing.T) {
 		want string
 	}{
 		{"not_a_map", "8080", "must be a map"},
-		{"bad_value", map[string]any{"http": "8080"}, "not an integer"},
+		{"bad_value", map[string]any{"http": "8080"}, "must be an integer or a mapping"},
 		{"out_of_range_low", map[string]any{"http": 0}, "out of range"},
 		{"out_of_range_high", map[string]any{"http": 70000}, "out of range"},
 	}
@@ -266,7 +266,7 @@ func TestInjectServicesIntoRaw_portsHostsRoundTrip(t *testing.T) {
 		"with_ports": {
 			Type:      ServiceTypeTool,
 			Container: "wp",
-			Ports:     map[string]int{"http": 80},
+			Ports:     map[string]ServicePortSpec{"http": {Port: 80}},
 			Hosts:     map[string]string{"main": "wp.localhost"},
 		},
 		"without_ports": {
@@ -439,10 +439,10 @@ extends: parent
 		t.Fatalf("LoadConfig: %v", err)
 	}
 
-	if got := cfg.Services["parent"].Ports["http"]; got != 9090 {
+	if got := cfg.Services["parent"].Port("http"); got != 9090 {
 		t.Errorf("parent.ports.http = %d, want 9090 (overlay)", got)
 	}
-	if got := cfg.Services["child"].Ports["http"]; got != 9090 {
+	if got := cfg.Services["child"].Port("http"); got != 9090 {
 		t.Errorf("child.ports.http = %d, want 9090 — child must inherit overlaid parent port, not the pre-overlay service.yml default", got)
 	}
 }
@@ -521,7 +521,7 @@ func TestInjectServicesIntoRaw_dotPathResolution(t *testing.T) {
 		"db": {
 			Type:      ServiceTypeInfra,
 			Container: "db",
-			Ports:     map[string]int{"mysql": 3306},
+			Ports:     map[string]ServicePortSpec{"mysql": {Port: 3306}},
 			Hosts:     map[string]string{"primary": "db.localhost"},
 		},
 	}

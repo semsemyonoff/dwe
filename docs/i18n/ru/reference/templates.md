@@ -1,4 +1,4 @@
-> Translated from: reference/templates.md @ 66d27d1926dd
+> Translated from: reference/templates.md @ f0dcb6e4339e
 
 # Шаблоны
 
@@ -104,7 +104,7 @@ cmd: |
 | `.Service` | имя сервиса (ключ карты в `services:`) |
 | `.ServiceCfg` | эффективная конфигурация сервиса после разрешения `extends` |
 | `.Runtime` | смерженный блок `runtime` (`.Runtime.UseHTTPS`, `.Runtime.SPX.Path`). Порты / хосты на сервис находятся в каждой записи сервиса (см. `.Services` ниже). |
-| `.Services` | сервисы по имени. Используйте `(index .Services "<name>")` для выборки; хелперы записи `.Port "<port-name>"` / `.Host "<host-name>"`. Подмножества по типу — через `.AppServices` / `.ToolServices` / `.InfraServices`. |
+| `.Services` | сервисы по имени. Используйте `(index .Services "<name>")` для выборки; хелперы записи `.Port "<port-name>"` / `.Host "<host-name>"` / `.PortScheme "<port-name>"` (возвращает `""`, если переопределения нет) / `.EffectiveScheme "<port-name>" .Runtime.UseHTTPS` (возвращает `"http"` / `"https"` после прохода по цепочке per-port → сервис → runtime). Подмножества по типу — через `.AppServices` / `.ToolServices` / `.InfraServices`. |
 | `.Cfg` | объединённая конфигурация проекта (продвинутое). `.Cfg.Raw` — это дерево конфига после слияния (`services.*` подставляется из per-service файлов `service.yml`). Точечный синтаксис (`.Cfg.Raw.git.project_prefix`) работает только для identifier-safe ключей; используйте `{{ index .Cfg.Raw "my-key" }}` для ключей с дефисами, точками, ведущими цифрами и т.д. Для типовых случаев предпочитайте выделенные поля выше. |
 
 IDE- и AI-паки рендерятся в отслеживаемые файлы проекта. Избегайте использования developer-local или секретных ключей через `.Cfg.Raw` в этих шаблонах — значения из `local.yml` дадут разные диффы у разных разработчиков. Git-хуки рендерятся в `.git/hooks/` (gitignored) и под это ограничение не попадают.

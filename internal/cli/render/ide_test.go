@@ -77,7 +77,7 @@ func makeIDECfg(name string) *config.DweConfig {
 				Container:       "app-" + name,
 				DirInternal:     "/workspace",
 				WorkDirInternal: "/workspace/src",
-				Ports:           map[string]int{"http": 80},
+				Ports:           map[string]config.ServicePortSpec{"http": {Port: 80}},
 			},
 		},
 		Raw: map[string]any{},
@@ -116,7 +116,7 @@ func TestRenderIDETemplateFile_devcontainer(t *testing.T) {
 			Container:       "app-main",
 			DirInternal:     "/workspace",
 			WorkDirInternal: "/workspace/src",
-			Ports:           map[string]int{"http": 8080},
+			Ports:           map[string]config.ServicePortSpec{"http": {Port: 8080}},
 		},
 		Cfg: &config.DweConfig{Raw: map[string]any{}},
 	}
@@ -1231,7 +1231,7 @@ func TestRenderIDETemplateFile_backwardCompat(t *testing.T) {
 		data := ide.TemplateData{
 			Project:    config.ProjectConfig{Name: "myapp"},
 			Service:    "main",
-			ServiceCfg: config.ServiceConfig{Ports: map[string]int{"http": 8080}},
+			ServiceCfg: config.ServiceConfig{Ports: map[string]config.ServicePortSpec{"http": {Port: 8080}}},
 			Cfg:        cfg,
 		}
 		if _, err := ide.RenderTemplateFile(projectRoot, "test", "settings.json.tmpl", data, "settings.json", hubDir, projectRoot); err != nil {

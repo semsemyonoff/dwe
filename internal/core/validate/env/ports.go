@@ -174,14 +174,14 @@ func collectDeclaredPorts(cfg *config.DweConfig) []declaredPort {
 		if !svc.Enabled {
 			continue
 		}
-		for portName, hostPort := range svc.Ports {
-			if hostPort <= 0 || hostPort > 65535 {
+		for portName, spec := range svc.Ports {
+			if spec.Port <= 0 || spec.Port > 65535 {
 				continue
 			}
 			out = append(out, declaredPort{
 				Service:  name,
 				PortName: portName,
-				HostPort: hostPort,
+				HostPort: spec.Port,
 			})
 		}
 	}

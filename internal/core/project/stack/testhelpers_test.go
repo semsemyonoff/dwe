@@ -36,7 +36,7 @@ func makeServicesCfg(services map[string]config.ServiceConfig, tools map[string]
 			Status:    v.Status,
 		}
 		if v.Port != 0 {
-			svc.Ports = map[string]int{"main": v.Port}
+			svc.Ports = map[string]config.ServicePortSpec{"main": {Port: v.Port}}
 		}
 		if v.Host != "" {
 			svc.Hosts = map[string]string{"main": v.Host}

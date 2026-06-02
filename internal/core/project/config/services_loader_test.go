@@ -4,6 +4,7 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 )
 
@@ -410,7 +411,7 @@ extends: base
 		t.Errorf("parent.Compose corrupted: %v", parent.Compose)
 	}
 
-	child.Ports["http"] = 9999
+	child.Ports["http"] = ServicePortSpec{Port: 9999}
 	child.Hosts["main"] = "mutated.localhost"
 	if parent.Port("http") != 8080 {
 		t.Errorf("parent.Ports corrupted: %v", parent.Ports)
@@ -848,5 +849,575 @@ dir: ./services/child
 	child := services["child"]
 	if child.Container != "child" {
 		t.Errorf("child Container = %q, want %q (folder-name default, not inherited)", child.Container, "child")
+	}
+}
+
+// TestLoadServices_richPortFormAndScheme verifies the new port-spec union
+// decode (bare int + rich {port, scheme} object) and the EffectiveScheme
+// precedence: per-port → info.scheme → runtime fallback.
+func TestLoadServices_richPortFormAndScheme(t *testing.T) {
+	dir := t.TempDir()
+	writeServiceFolder(t, dir, "vite", `
+type: app
+container: vite
+dir: ./services/vite
+ports:
+  http: 5173
+info:
+  scheme: https
+`)
+	writeServiceFolder(t, dir, "api", `
+type: app
+container: api
+dir: ./services/api
+ports:
+  http: 3000
+  admin:
+    port: 9443
+    scheme: https
+`)
+	services, err := LoadServices(dir)
+	if err != nil {
+		t.Fatalf("LoadServices: %v", err)
+	}
+
+	vite := services["vite"]
+	if got := vite.Port("http"); got != 5173 {
+		t.Errorf("vite.Port(http) = %d, want 5173", got)
+	}
+	if got := vite.Info.Scheme; got != "https" {
+		t.Errorf("vite.Info.Scheme = %q, want https", got)
+	}
+	// Service-level info.scheme wins over the runtime fallback for any port
+	// that has no per-port override.
+	if got := vite.EffectiveScheme("http", false); got != "https" {
+		t.Errorf("vite.EffectiveScheme(http, false) = %q, want https (info.scheme override)", got)
+	}
+
+	api := services["api"]
+	if got := api.Port("admin"); got != 9443 {
+		t.Errorf("api.Port(admin) = %d, want 9443", got)
+	}
+	if got := api.PortScheme("admin"); got != "https" {
+		t.Errorf("api.PortScheme(admin) = %q, want https", got)
+	}
+	// Bare-int port falls through to runtime (api has no info.scheme).
+	if got := api.EffectiveScheme("http", false); got != "http" {
+		t.Errorf("api.EffectiveScheme(http, false) = %q, want http (runtime fallback)", got)
+	}
+	if got := api.EffectiveScheme("http", true); got != "https" {
+		t.Errorf("api.EffectiveScheme(http, true) = %q, want https (runtime fallback)", got)
+	}
+	// Per-port override wins regardless of runtime.
+	if got := api.EffectiveScheme("admin", false); got != "https" {
+		t.Errorf("api.EffectiveScheme(admin, false) = %q, want https (per-port override)", got)
+	}
+}
+
+// TestLoadServices_richPortFormUnknownField verifies the rich-form port
+// decoder rejects fields other than {port, scheme} via the loader's strict
+// pre-decode validator.
+func TestLoadServices_richPortFormUnknownField(t *testing.T) {
+	dir := t.TempDir()
+	writeServiceFolder(t, dir, "bad", `
+type: app
+container: bad
+dir: ./services/bad
+ports:
+  http:
+    port: 3000
+    bogus: nope
+`)
+	if _, err := LoadServices(dir); err == nil {
+		t.Fatal("expected error for unknown rich-port field, got nil")
+	}
+}
+
+// TestLoadServices_invalidSchemeRejected verifies validatePortObject rejects
+// scheme values outside {http, https}.
+func TestLoadServices_invalidSchemeRejected(t *testing.T) {
+	dir := t.TempDir()
+	writeServiceFolder(t, dir, "bad", `
+type: app
+container: bad
+dir: ./services/bad
+ports:
+  http:
+    port: 3000
+    scheme: gopher
+`)
+	if _, err := LoadServices(dir); err == nil {
+		t.Fatal("expected error for invalid port scheme, got nil")
+	}
+}
+
+// TestLoadServices_richPortRequiresPortInServiceYml verifies the loader's
+// pre-validator rejects rich-form ports in service.yml that omit `port:` —
+// service definitions must declare their own port number. The overlay layer
+// is allowed to omit port (handled by validateOverlayPorts), but service.yml
+// is not.
+func TestLoadServices_richPortRequiresPortInServiceYml(t *testing.T) {
+	dir := t.TempDir()
+	writeServiceFolder(t, dir, "bad", `
+type: app
+container: bad
+dir: ./services/bad
+ports:
+  http:
+    scheme: https
+`)
+	if _, err := LoadServices(dir); err == nil {
+		t.Fatal("expected error when service.yml omits port: in rich form")
+	}
+}
+
+// TestLoadServices_richPortRejectsNullPort verifies UnmarshalYAML rejects
+// `port: null` explicitly rather than silently coercing to zero.
+func TestLoadServices_richPortRejectsNullPort(t *testing.T) {
+	dir := t.TempDir()
+	writeServiceFolder(t, dir, "bad", `
+type: app
+container: bad
+dir: ./services/bad
+ports:
+  http:
+    port: null
+    scheme: https
+`)
+	if _, err := LoadServices(dir); err == nil {
+		t.Fatal("expected error for null port, got nil")
+	}
+}
+
+// TestLoadConfig_overlaySchemeOnlyOverridesScheme verifies the overlay layer
+// accepts rich-form `{scheme: https}` without `port:` and only overrides
+// the scheme of an inherited port.
+func TestLoadConfig_overlaySchemeOnlyOverridesScheme(t *testing.T) {
+	dir := t.TempDir()
+	cfgYAML := `
+schema_version: "1"
+project:
+  name: tbm
+  prefix: dwe
+`
+	if err := os.WriteFile(filepath.Join(dir, "workspace.yml"), []byte(cfgYAML), 0o644); err != nil {
+		t.Fatalf("write workspace.yml: %v", err)
+	}
+	workspaceDir := filepath.Join(dir, "workspace")
+	if err := os.MkdirAll(workspaceDir, 0o755); err != nil {
+		t.Fatalf("mkdir workspace/: %v", err)
+	}
+	localYML := `
+services:
+  api:
+    ports:
+      http:
+        scheme: https
+`
+	if err := os.WriteFile(filepath.Join(workspaceDir, "local.yml"), []byte(localYML), 0o644); err != nil {
+		t.Fatalf("write local.yml: %v", err)
+	}
+	writeServiceFolder(t, dir, "api", `
+type: app
+container: api
+required: true
+dir: ./services/api
+ports:
+  http: 3000
+`)
+
+	cfg, err := LoadConfig(filepath.Join(dir, "workspace.yml"))
+	if err != nil {
+		t.Fatalf("LoadConfig: %v", err)
+	}
+	api := cfg.Services["api"]
+	if got := api.Port("http"); got != 3000 {
+		t.Errorf("api.Port(http) = %d, want 3000 (preserved from service.yml)", got)
+	}
+	if got := api.PortScheme("http"); got != "https" {
+		t.Errorf("api.PortScheme(http) = %q, want https (overlay)", got)
+	}
+}
+
+// TestLoadConfig_overlayEmptyRichFormRejected verifies an overlay rich-form
+// entry with neither port nor scheme is rejected with a clear diagnostic
+// (not silently accepted as a no-op).
+func TestLoadConfig_overlayEmptyRichFormRejected(t *testing.T) {
+	dir := t.TempDir()
+	cfgYAML := `
+schema_version: "1"
+project:
+  name: tbm
+  prefix: dwe
+`
+	if err := os.WriteFile(filepath.Join(dir, "workspace.yml"), []byte(cfgYAML), 0o644); err != nil {
+		t.Fatalf("write workspace.yml: %v", err)
+	}
+	workspaceDir := filepath.Join(dir, "workspace")
+	if err := os.MkdirAll(workspaceDir, 0o755); err != nil {
+		t.Fatalf("mkdir workspace/: %v", err)
+	}
+	localYML := `
+services:
+  api:
+    ports:
+      http: {}
+`
+	if err := os.WriteFile(filepath.Join(workspaceDir, "local.yml"), []byte(localYML), 0o644); err != nil {
+		t.Fatalf("write local.yml: %v", err)
+	}
+	writeServiceFolder(t, dir, "api", `
+type: app
+container: api
+required: true
+dir: ./services/api
+ports:
+  http: 3000
+`)
+	if _, err := LoadConfig(filepath.Join(dir, "workspace.yml")); err == nil {
+		t.Fatal("expected error for empty rich-form overlay, got nil")
+	}
+}
+
+// TestLoadConfig_overlaySchemeOnlyForUndeclaredPortRejected verifies that
+// applyDeferredOverlaySchemes rejects a scheme-only overlay targeting a port
+// that is neither declared in service.yml nor inherited via extends.
+// Without this guard, a typo like `services.api.ports.htt: {scheme: https}`
+// would silently materialise a `{Port: 0, Scheme: "https"}` entry, leaking
+// an invalid port number into status JSON and env conflict probes.
+func TestLoadConfig_overlaySchemeOnlyForUndeclaredPortRejected(t *testing.T) {
+	dir := t.TempDir()
+	cfgYAML := `
+schema_version: "1"
+project:
+  name: tbm
+  prefix: dwe
+`
+	if err := os.WriteFile(filepath.Join(dir, "workspace.yml"), []byte(cfgYAML), 0o644); err != nil {
+		t.Fatalf("write workspace.yml: %v", err)
+	}
+	workspaceDir := filepath.Join(dir, "workspace")
+	if err := os.MkdirAll(workspaceDir, 0o755); err != nil {
+		t.Fatalf("mkdir workspace/: %v", err)
+	}
+	localYML := `
+services:
+  api:
+    ports:
+      htt:
+        scheme: https
+`
+	if err := os.WriteFile(filepath.Join(workspaceDir, "local.yml"), []byte(localYML), 0o644); err != nil {
+		t.Fatalf("write local.yml: %v", err)
+	}
+	writeServiceFolder(t, dir, "api", `
+type: app
+container: api
+required: true
+dir: ./services/api
+ports:
+  http: 3000
+`)
+	_, err := LoadConfig(filepath.Join(dir, "workspace.yml"))
+	if err == nil {
+		t.Fatal("expected error for scheme-only overlay on undeclared port, got nil")
+	}
+	if !strings.Contains(err.Error(), "scheme-only overlay") {
+		t.Errorf("error %q should mention scheme-only overlay", err.Error())
+	}
+}
+
+// TestLoadConfig_overlaySchemeOnlyOnInheritedPortApplies verifies that a
+// scheme-only overlay on a port the child inherits from its parent via
+// `extends:` is correctly applied AFTER inheritance — the child should end
+// up with the parent's port number plus the overlay's scheme override,
+// without losing the inherited port to a `Port: 0` overlay collision.
+func TestLoadConfig_overlaySchemeOnlyOnInheritedPortApplies(t *testing.T) {
+	dir := t.TempDir()
+	cfgYAML := `
+schema_version: "1"
+project:
+  name: tbm
+  prefix: dwe
+`
+	if err := os.WriteFile(filepath.Join(dir, "workspace.yml"), []byte(cfgYAML), 0o644); err != nil {
+		t.Fatalf("write workspace.yml: %v", err)
+	}
+	workspaceDir := filepath.Join(dir, "workspace")
+	if err := os.MkdirAll(workspaceDir, 0o755); err != nil {
+		t.Fatalf("mkdir workspace/: %v", err)
+	}
+	localYML := `
+services:
+  child:
+    ports:
+      http:
+        scheme: https
+`
+	if err := os.WriteFile(filepath.Join(workspaceDir, "local.yml"), []byte(localYML), 0o644); err != nil {
+		t.Fatalf("write local.yml: %v", err)
+	}
+	writeServiceFolder(t, dir, "parent", `
+type: app
+container: parent
+required: true
+dir: ./services/parent
+ports:
+  http: 3000
+`)
+	writeServiceFolder(t, dir, "child", `
+type: app
+container: child
+required: true
+extends: parent
+dir: ./services/child
+`)
+	cfg, err := LoadConfig(filepath.Join(dir, "workspace.yml"))
+	if err != nil {
+		t.Fatalf("LoadConfig: %v", err)
+	}
+	child := cfg.Services["child"]
+	if got := child.Port("http"); got != 3000 {
+		t.Errorf("child.Port(http) = %d, want 3000 (inherited from parent)", got)
+	}
+	if got := child.PortScheme("http"); got != "https" {
+		t.Errorf("child.PortScheme(http) = %q, want https (overlay)", got)
+	}
+}
+
+// TestLoadConfig_overlayPortNullRejected verifies that an overlay with
+// `port: null` is rejected outright. Without this guard, a typo would
+// manufacture a `Port: 0` entry that bypasses Phase 2's scheme-only handling
+// AND blocks parent port inheritance via the `len(svc.Ports) == 0` check.
+func TestLoadConfig_overlayPortNullRejected(t *testing.T) {
+	dir := t.TempDir()
+	cfgYAML := `
+schema_version: "1"
+project:
+  name: tbm
+  prefix: dwe
+`
+	if err := os.WriteFile(filepath.Join(dir, "workspace.yml"), []byte(cfgYAML), 0o644); err != nil {
+		t.Fatalf("write workspace.yml: %v", err)
+	}
+	workspaceDir := filepath.Join(dir, "workspace")
+	if err := os.MkdirAll(workspaceDir, 0o755); err != nil {
+		t.Fatalf("mkdir workspace/: %v", err)
+	}
+	localYML := `
+services:
+  child:
+    ports:
+      http:
+        port: null
+        scheme: https
+`
+	if err := os.WriteFile(filepath.Join(workspaceDir, "local.yml"), []byte(localYML), 0o644); err != nil {
+		t.Fatalf("write local.yml: %v", err)
+	}
+	writeServiceFolder(t, dir, "parent", `
+type: app
+container: parent
+required: true
+dir: ./services/parent
+ports:
+  http: 3000
+`)
+	writeServiceFolder(t, dir, "child", `
+type: app
+container: child
+required: true
+extends: parent
+dir: ./services/child
+`)
+	_, err := LoadConfig(filepath.Join(dir, "workspace.yml"))
+	if err == nil {
+		t.Fatal("expected error for port: null overlay, got nil")
+	}
+	if !strings.Contains(err.Error(), "cannot be null") {
+		t.Errorf("error %q should mention null rejection", err.Error())
+	}
+}
+
+// TestLoadServices_invalidInfoSchemeRejected verifies the loader rejects
+// info.scheme values outside {"", "http", "https"} at load time, not only
+// in the validate subsystem — EffectiveScheme trusts the field directly.
+func TestLoadServices_invalidInfoSchemeRejected(t *testing.T) {
+	dir := t.TempDir()
+	writeServiceFolder(t, dir, "bad", `
+type: app
+container: bad
+dir: ./services/bad
+info:
+  scheme: ftp
+ports:
+  http: 3000
+`)
+	if _, err := LoadServices(dir); err == nil {
+		t.Fatal("expected error for info.scheme: ftp, got nil")
+	}
+}
+
+// TestLoadConfig_extendsInheritsInfoScheme verifies that a child extending a
+// parent inherits Info.Scheme when the child does not declare its own.
+// EffectiveScheme depends on this for child services to render URLs with
+// the parent's documented scheme.
+func TestLoadConfig_extendsInheritsInfoScheme(t *testing.T) {
+	dir := t.TempDir()
+	cfgYAML := `
+schema_version: "1"
+project:
+  name: tbm
+  prefix: dwe
+`
+	if err := os.WriteFile(filepath.Join(dir, "workspace.yml"), []byte(cfgYAML), 0o644); err != nil {
+		t.Fatalf("write workspace.yml: %v", err)
+	}
+	workspaceDir := filepath.Join(dir, "workspace")
+	if err := os.MkdirAll(workspaceDir, 0o755); err != nil {
+		t.Fatalf("mkdir workspace/: %v", err)
+	}
+	writeServiceFolder(t, dir, "parent", `
+type: app
+container: parent
+required: true
+dir: ./services/parent
+ports:
+  http: 5173
+info:
+  scheme: https
+`)
+	writeServiceFolder(t, dir, "child", `
+type: app
+container: child
+required: true
+extends: parent
+dir: ./services/child
+`)
+	cfg, err := LoadConfig(filepath.Join(dir, "workspace.yml"))
+	if err != nil {
+		t.Fatalf("LoadConfig: %v", err)
+	}
+	child := cfg.Services["child"]
+	if got := child.Port("http"); got != 5173 {
+		t.Errorf("child.Port(http) = %d, want 5173 (inherited)", got)
+	}
+	if got := child.Info.Scheme; got != "https" {
+		t.Errorf("child.Info.Scheme = %q, want https (inherited from parent)", got)
+	}
+	if got := child.EffectiveScheme("http", false); got != "https" {
+		t.Errorf("child.EffectiveScheme(http, false) = %q, want https (inherited from parent)", got)
+	}
+}
+
+// TestLoadConfig_extendsChildInfoSchemeOverridesParent verifies that the
+// child's own Info.Scheme takes precedence over the parent's during extends.
+func TestLoadConfig_extendsChildInfoSchemeOverridesParent(t *testing.T) {
+	dir := t.TempDir()
+	cfgYAML := `
+schema_version: "1"
+project:
+  name: tbm
+  prefix: dwe
+`
+	if err := os.WriteFile(filepath.Join(dir, "workspace.yml"), []byte(cfgYAML), 0o644); err != nil {
+		t.Fatalf("write workspace.yml: %v", err)
+	}
+	workspaceDir := filepath.Join(dir, "workspace")
+	if err := os.MkdirAll(workspaceDir, 0o755); err != nil {
+		t.Fatalf("mkdir workspace/: %v", err)
+	}
+	writeServiceFolder(t, dir, "parent", `
+type: app
+container: parent
+required: true
+dir: ./services/parent
+ports:
+  http: 5173
+info:
+  scheme: https
+`)
+	writeServiceFolder(t, dir, "child", `
+type: app
+container: child
+required: true
+extends: parent
+dir: ./services/child
+info:
+  scheme: http
+`)
+	cfg, err := LoadConfig(filepath.Join(dir, "workspace.yml"))
+	if err != nil {
+		t.Fatalf("LoadConfig: %v", err)
+	}
+	if got := cfg.Services["child"].Info.Scheme; got != "http" {
+		t.Errorf("child.Info.Scheme = %q, want http (child override wins)", got)
+	}
+}
+
+// TestLoadConfig_overlaySchemeOnlyOnParentPropagatesToChild verifies that a
+// scheme-only overlay applied to a parent's own declared port is visible to
+// children that extend the parent — i.e. extends inherits the overlaid
+// scheme, not the pre-overlay one. This was Codex's round-3 finding: applying
+// scheme-only overlays only in Phase 2 (after extends) would clone the
+// parent's pre-overlay Ports map into the child and then mutate only the
+// parent, losing the override on the child side.
+func TestLoadConfig_overlaySchemeOnlyOnParentPropagatesToChild(t *testing.T) {
+	dir := t.TempDir()
+	cfgYAML := `
+schema_version: "1"
+project:
+  name: tbm
+  prefix: dwe
+`
+	if err := os.WriteFile(filepath.Join(dir, "workspace.yml"), []byte(cfgYAML), 0o644); err != nil {
+		t.Fatalf("write workspace.yml: %v", err)
+	}
+	workspaceDir := filepath.Join(dir, "workspace")
+	if err := os.MkdirAll(workspaceDir, 0o755); err != nil {
+		t.Fatalf("mkdir workspace/: %v", err)
+	}
+	localYML := `
+services:
+  parent:
+    ports:
+      http:
+        scheme: https
+`
+	if err := os.WriteFile(filepath.Join(workspaceDir, "local.yml"), []byte(localYML), 0o644); err != nil {
+		t.Fatalf("write local.yml: %v", err)
+	}
+	writeServiceFolder(t, dir, "parent", `
+type: app
+container: parent
+required: true
+dir: ./services/parent
+ports:
+  http: 3000
+`)
+	writeServiceFolder(t, dir, "child", `
+type: app
+container: child
+required: true
+extends: parent
+dir: ./services/child
+`)
+	cfg, err := LoadConfig(filepath.Join(dir, "workspace.yml"))
+	if err != nil {
+		t.Fatalf("LoadConfig: %v", err)
+	}
+	parent := cfg.Services["parent"]
+	child := cfg.Services["child"]
+	if got := parent.PortScheme("http"); got != "https" {
+		t.Errorf("parent.PortScheme(http) = %q, want https", got)
+	}
+	if got := child.Port("http"); got != 3000 {
+		t.Errorf("child.Port(http) = %d, want 3000 (inherited)", got)
+	}
+	if got := child.PortScheme("http"); got != "https" {
+		t.Errorf("child.PortScheme(http) = %q, want https (parent overlay propagated through extends)", got)
+	}
+	if got := child.EffectiveScheme("http", false); got != "https" {
+		t.Errorf("child.EffectiveScheme(http, false) = %q, want https", got)
 	}
 }

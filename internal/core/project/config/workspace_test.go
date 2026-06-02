@@ -607,14 +607,14 @@ func TestValidateConfigKeys_nilMapsAreSafe(t *testing.T) {
 func TestValidateConfigKeys_servicePortsHostsIdentifierSafety(t *testing.T) {
 	tests := []struct {
 		name      string
-		ports     map[string]int
+		ports     map[string]ServicePortSpec
 		hosts     map[string]string
 		wantError bool
 	}{
-		{"valid port key", map[string]int{"http": 3000}, nil, false},
+		{"valid port key", map[string]ServicePortSpec{"http": {Port: 3000}}, nil, false},
 		{"valid host key", nil, map[string]string{"main": "main.localhost"}, false},
-		{"invalid port key dash", map[string]int{"my-port": 3000}, nil, true},
-		{"invalid port key leading digit", map[string]int{"1port": 3000}, nil, true},
+		{"invalid port key dash", map[string]ServicePortSpec{"my-port": {Port: 3000}}, nil, true},
+		{"invalid port key leading digit", map[string]ServicePortSpec{"1port": {Port: 3000}}, nil, true},
 		{"invalid host key dash", nil, map[string]string{"my-host": "x.localhost"}, true},
 		{"invalid host key dot", nil, map[string]string{"my.host": "x.localhost"}, true},
 	}

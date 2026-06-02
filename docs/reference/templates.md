@@ -102,7 +102,7 @@ The data exposed to a template depends on the site. Field access uses dot syntax
 | `.Service` | service name (the map key in `services:`) |
 | `.ServiceCfg` | effective service config after `extends` resolution |
 | `.Runtime` | merged `runtime` block (`.Runtime.UseHTTPS`, `.Runtime.SPX.Path`). Per-service ports / hosts live on each service entry (see `.Services` below). |
-| `.Services` | services keyed by name. Use `(index .Services "<name>")` to fetch; per-entry helpers `.Port "<port-name>"` / `.Host "<host-name>"`. Type-filtered subsets via `.AppServices` / `.ToolServices` / `.InfraServices`. |
+| `.Services` | services keyed by name. Use `(index .Services "<name>")` to fetch; per-entry helpers `.Port "<port-name>"` / `.Host "<host-name>"` / `.PortScheme "<port-name>"` (returns `""` if no override) / `.EffectiveScheme "<port-name>" .Runtime.UseHTTPS` (returns `"http"` / `"https"` resolved through the per-port → service → runtime precedence chain). Type-filtered subsets via `.AppServices` / `.ToolServices` / `.InfraServices`. |
 | `.Cfg` | the merged project config (advanced). `.Cfg.Raw` is the post-merge config tree (`services.*` is injected from per-service `service.yml` files). Dot syntax (`.Cfg.Raw.git.project_prefix`) works only for identifier-safe keys; use `{{ index .Cfg.Raw "my-key" }}` for keys with hyphens, dots, leading digits, etc. Prefer the dedicated fields above for common cases. |
 
 IDE and AI packs render into tracked project files. Avoid consuming developer-local or secret keys via `.Cfg.Raw` in those templates — values from `local.yml` will produce per-developer diffs. Git hooks render under `.git/hooks/` (gitignored) and are not subject to this constraint.

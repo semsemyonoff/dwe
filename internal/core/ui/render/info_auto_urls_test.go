@@ -24,14 +24,14 @@ func TestRenderAutoURLs(t *testing.T) {
 					"nginx": {
 						Type:    config.ServiceTypeInfra,
 						Enabled: true,
-						Ports:   map[string]int{"http": 80},
+						Ports:   map[string]config.ServicePortSpec{"http": {Port: 80}},
 						Hosts:   map[string]string{},
 					},
 					"main": {
 						Type:    config.ServiceTypeApp,
 						Enabled: true,
 						Icon:    "📦",
-						Ports:   map[string]int{},
+						Ports:   map[string]config.ServicePortSpec{},
 						Hosts:   map[string]string{"web": "pilot.local"},
 						Info: config.ServiceInfoBlock{
 							Title:       "Main",
@@ -66,12 +66,12 @@ func TestRenderAutoURLs(t *testing.T) {
 					"nginx": {
 						Type:    config.ServiceTypeInfra,
 						Enabled: true,
-						Ports:   map[string]int{"http": 80},
+						Ports:   map[string]config.ServicePortSpec{"http": {Port: 80}},
 					},
 					"catalog": {
 						Type:    config.ServiceTypeApp,
 						Enabled: true,
-						Ports:   map[string]int{},
+						Ports:   map[string]config.ServicePortSpec{},
 						Hosts:   map[string]string{"web": "pilot.catalog.local"},
 						Info: config.ServiceInfoBlock{
 							Title: "Catalog",
@@ -96,13 +96,13 @@ func TestRenderAutoURLs(t *testing.T) {
 					"nginx": {
 						Type:    config.ServiceTypeInfra,
 						Enabled: true,
-						Ports:   map[string]int{"http": 80},
+						Ports:   map[string]config.ServicePortSpec{"http": {Port: 80}},
 					},
 					"adminer": {
 						Type:    config.ServiceTypeTool,
 						Enabled: true,
 						Icon:    "🔧",
-						Ports:   map[string]int{"http": 8027},
+						Ports:   map[string]config.ServicePortSpec{"http": {Port: 8027}},
 						Hosts:   map[string]string{"web": "pilot.db.local"},
 						Info: config.ServiceInfoBlock{
 							Title: "Adminer",
@@ -128,7 +128,7 @@ func TestRenderAutoURLs(t *testing.T) {
 						Type:    config.ServiceTypeTool,
 						Enabled: true,
 						Icon:    "🔧",
-						Ports:   map[string]int{"http": 6379},
+						Ports:   map[string]config.ServicePortSpec{"http": {Port: 6379}},
 						Hosts:   map[string]string{},
 						Info: config.ServiceInfoBlock{
 							Title: "Redis",
@@ -153,7 +153,7 @@ func TestRenderAutoURLs(t *testing.T) {
 					"main": {
 						Type:    config.ServiceTypeApp,
 						Enabled: true,
-						Ports:   map[string]int{},
+						Ports:   map[string]config.ServicePortSpec{},
 						Hosts:   map[string]string{},
 					},
 				},
@@ -171,12 +171,12 @@ func TestRenderAutoURLs(t *testing.T) {
 					"nginx": {
 						Type:    config.ServiceTypeInfra,
 						Enabled: true,
-						Ports:   map[string]int{"http": 80},
+						Ports:   map[string]config.ServicePortSpec{"http": {Port: 80}},
 					},
 					"main": {
 						Type:    config.ServiceTypeApp,
 						Enabled: true,
-						Ports:   map[string]int{},
+						Ports:   map[string]config.ServicePortSpec{},
 						Hosts:   map[string]string{"web": "pilot.local"},
 						Info: config.ServiceInfoBlock{
 							Title: "Main",
@@ -185,7 +185,7 @@ func TestRenderAutoURLs(t *testing.T) {
 					"catalog": {
 						Type:    config.ServiceTypeApp,
 						Enabled: true,
-						Ports:   map[string]int{},
+						Ports:   map[string]config.ServicePortSpec{},
 						Hosts:   map[string]string{"web": "pilot.catalog.local"},
 						Info: config.ServiceInfoBlock{
 							Title: "Catalog",
@@ -211,12 +211,12 @@ func TestRenderAutoURLs(t *testing.T) {
 					"nginx": {
 						Type:    config.ServiceTypeInfra,
 						Enabled: true,
-						Ports:   map[string]int{"http": 80},
+						Ports:   map[string]config.ServicePortSpec{"http": {Port: 80}},
 					},
 					"main": {
 						Type:    config.ServiceTypeApp,
 						Enabled: true,
-						Ports:   map[string]int{},
+						Ports:   map[string]config.ServicePortSpec{},
 						Hosts:   map[string]string{"web": "pilot.local"},
 						Info: config.ServiceInfoBlock{
 							Title: "Main",
@@ -249,12 +249,12 @@ func TestRenderAutoURLs(t *testing.T) {
 					"nginx": {
 						Type:    config.ServiceTypeInfra,
 						Enabled: true,
-						Ports:   map[string]int{"http": 8080, "admin": 9000},
+						Ports:   map[string]config.ServicePortSpec{"http": {Port: 8080}, "admin": {Port: 9000}},
 					},
 					"main": {
 						Type:    config.ServiceTypeApp,
 						Enabled: true,
-						Ports:   map[string]int{},
+						Ports:   map[string]config.ServicePortSpec{},
 						Hosts:   map[string]string{"web": "pilot.local"},
 						Info: config.ServiceInfoBlock{
 							Title: "Main",
@@ -273,6 +273,72 @@ func TestRenderAutoURLs(t *testing.T) {
 			}, "\n"),
 		},
 		{
+			// Regression: proxy's Info.Scheme must NOT leak onto proxied URLs.
+			// Only a per-port scheme override on the proxy's listener key
+			// participates in the proxy URL scheme; Info.Scheme on the proxy
+			// only affects the proxy's own row (which is filtered out of the
+			// `app`-only Include here).
+			name: "proxy Info.Scheme does not leak to proxied URL",
+			cfg: &config.DweConfig{
+				Runtime: config.RuntimeConfig{UseHTTPS: false},
+				Services: map[string]config.ServiceConfig{
+					"nginx": {
+						Type:    config.ServiceTypeInfra,
+						Enabled: true,
+						Ports:   map[string]config.ServicePortSpec{"http": {Port: 8080}},
+						Info:    config.ServiceInfoBlock{Scheme: "https"},
+					},
+					"main": {
+						Type:    config.ServiceTypeApp,
+						Enabled: true,
+						Ports:   map[string]config.ServicePortSpec{},
+						Hosts:   map[string]string{"web": "pilot.local"},
+						Info:    config.ServiceInfoBlock{Title: "Main"},
+					},
+				},
+			},
+			spec: &config.AutoURLsSpec{
+				Include: []string{"app"},
+				PortVia: "nginx",
+			},
+			wantOut: strings.Join([]string{
+				"",
+				"Main",
+				"  📦 Main — http://pilot.local:8080",
+			}, "\n"),
+		},
+		{
+			// Per-port scheme override on the proxy's listener IS honored —
+			// the proxy is the source of truth for its own listening scheme.
+			name: "proxy per-port scheme override applies to proxied URL",
+			cfg: &config.DweConfig{
+				Runtime: config.RuntimeConfig{UseHTTPS: false},
+				Services: map[string]config.ServiceConfig{
+					"nginx": {
+						Type:    config.ServiceTypeInfra,
+						Enabled: true,
+						Ports:   map[string]config.ServicePortSpec{"http": {Port: 8080, Scheme: "https"}},
+					},
+					"main": {
+						Type:    config.ServiceTypeApp,
+						Enabled: true,
+						Ports:   map[string]config.ServicePortSpec{},
+						Hosts:   map[string]string{"web": "pilot.local"},
+						Info:    config.ServiceInfoBlock{Title: "Main"},
+					},
+				},
+			},
+			spec: &config.AutoURLsSpec{
+				Include: []string{"app"},
+				PortVia: "nginx",
+			},
+			wantOut: strings.Join([]string{
+				"",
+				"Main",
+				"  📦 Main — https://pilot.local:8080",
+			}, "\n"),
+		},
+		{
 			name: "auto-detect port_via picks single infra with ports.http == 80",
 			cfg: &config.DweConfig{
 				Runtime: config.RuntimeConfig{UseHTTPS: false},
@@ -280,12 +346,12 @@ func TestRenderAutoURLs(t *testing.T) {
 					"nginx": {
 						Type:    config.ServiceTypeInfra,
 						Enabled: true,
-						Ports:   map[string]int{"http": 80},
+						Ports:   map[string]config.ServicePortSpec{"http": {Port: 80}},
 					},
 					"main": {
 						Type:    config.ServiceTypeApp,
 						Enabled: true,
-						Ports:   map[string]int{},
+						Ports:   map[string]config.ServicePortSpec{},
 						Hosts:   map[string]string{"web": "pilot.local"},
 						Info: config.ServiceInfoBlock{
 							Title: "Main",
@@ -311,17 +377,17 @@ func TestRenderAutoURLs(t *testing.T) {
 					"nginx": {
 						Type:    config.ServiceTypeInfra,
 						Enabled: true,
-						Ports:   map[string]int{"http": 80},
+						Ports:   map[string]config.ServicePortSpec{"http": {Port: 80}},
 					},
 					"opensearch": {
 						Type:    config.ServiceTypeInfra,
 						Enabled: true,
-						Ports:   map[string]int{"http": 9200},
+						Ports:   map[string]config.ServicePortSpec{"http": {Port: 9200}},
 					},
 					"main": {
 						Type:    config.ServiceTypeApp,
 						Enabled: true,
-						Ports:   map[string]int{},
+						Ports:   map[string]config.ServicePortSpec{},
 						Hosts:   map[string]string{"web": "pilot.local"},
 						Info: config.ServiceInfoBlock{
 							Title: "Main",
@@ -347,12 +413,12 @@ func TestRenderAutoURLs(t *testing.T) {
 					"opensearch": {
 						Type:    config.ServiceTypeInfra,
 						Enabled: true,
-						Ports:   map[string]int{"http": 9200},
+						Ports:   map[string]config.ServicePortSpec{"http": {Port: 9200}},
 					},
 					"main": {
 						Type:    config.ServiceTypeApp,
 						Enabled: true,
-						Ports:   map[string]int{},
+						Ports:   map[string]config.ServicePortSpec{},
 						Hosts:   map[string]string{"web": "pilot.local"},
 						Info: config.ServiceInfoBlock{
 							Title: "Main",
@@ -374,13 +440,13 @@ func TestRenderAutoURLs(t *testing.T) {
 					"nginx": {
 						Type:    config.ServiceTypeInfra,
 						Enabled: true,
-						Ports:   map[string]int{"http": 80},
+						Ports:   map[string]config.ServicePortSpec{"http": {Port: 80}},
 					},
 					"minio": {
 						Type:    config.ServiceTypeInfra,
 						Enabled: true,
 						Icon:    "🔧",
-						Ports:   map[string]int{"api": 9010, "console": 9011},
+						Ports:   map[string]config.ServicePortSpec{"api": {Port: 9010}, "console": {Port: 9011}},
 						Hosts:   map[string]string{"s3": "s3.local", "console": "minio.local"},
 						Info: config.ServiceInfoBlock{
 							Title:       "MinIO Console",
@@ -408,12 +474,12 @@ func TestRenderAutoURLs(t *testing.T) {
 					"nginx": {
 						Type:    config.ServiceTypeInfra,
 						Enabled: true,
-						Ports:   map[string]int{"http": 80},
+						Ports:   map[string]config.ServicePortSpec{"http": {Port: 80}},
 					},
 					"main": {
 						Type:    config.ServiceTypeApp,
 						Enabled: false,
-						Ports:   map[string]int{},
+						Ports:   map[string]config.ServicePortSpec{},
 						Hosts:   map[string]string{"web": "pilot.local"},
 						Info: config.ServiceInfoBlock{
 							Title: "Main",
@@ -435,7 +501,7 @@ func TestRenderAutoURLs(t *testing.T) {
 						Type:    config.ServiceTypeApp,
 						Enabled: true,
 						Hosts:   map[string]string{"web": "pilot.local"},
-						Ports:   map[string]int{},
+						Ports:   map[string]config.ServicePortSpec{},
 						Info: config.ServiceInfoBlock{
 							Title: "Main",
 							Paths: []config.ServiceInfoPath{
@@ -456,13 +522,13 @@ func TestRenderAutoURLs(t *testing.T) {
 					"nginx": {
 						Type:    config.ServiceTypeInfra,
 						Enabled: true,
-						Ports:   map[string]int{"http": 80},
+						Ports:   map[string]config.ServicePortSpec{"http": {Port: 80}},
 					},
 					"main": {
 						Type:    config.ServiceTypeApp,
 						Enabled: true,
 						Hosts:   map[string]string{"web": "pilot.local"},
-						Ports:   map[string]int{},
+						Ports:   map[string]config.ServicePortSpec{},
 						Info: config.ServiceInfoBlock{
 							Title: "Main",
 						},
@@ -485,13 +551,13 @@ func TestRenderAutoURLs(t *testing.T) {
 					"nginx": {
 						Type:    config.ServiceTypeInfra,
 						Enabled: true,
-						Ports:   map[string]int{"https": 443},
+						Ports:   map[string]config.ServicePortSpec{"https": {Port: 443}},
 					},
 					"main": {
 						Type:    config.ServiceTypeApp,
 						Enabled: true,
 						Hosts:   map[string]string{"web": "pilot.local"},
-						Ports:   map[string]int{},
+						Ports:   map[string]config.ServicePortSpec{},
 						Info: config.ServiceInfoBlock{
 							Title: "Main",
 						},
@@ -514,12 +580,12 @@ func TestRenderAutoURLs(t *testing.T) {
 					"nginx": {
 						Type:    config.ServiceTypeInfra,
 						Enabled: true,
-						Ports:   map[string]int{"http": 80},
+						Ports:   map[string]config.ServicePortSpec{"http": {Port: 80}},
 					},
 					"myapp": {
 						Type:    config.ServiceTypeApp,
 						Enabled: true,
-						Ports:   map[string]int{},
+						Ports:   map[string]config.ServicePortSpec{},
 						Hosts:   map[string]string{"web": "myapp.local"},
 						// No Info block at all
 					},
@@ -548,7 +614,7 @@ func TestRenderAutoURLs(t *testing.T) {
 					"main": {
 						Type:    config.ServiceTypeApp,
 						Enabled: true,
-						Ports:   map[string]int{},
+						Ports:   map[string]config.ServicePortSpec{},
 						Hosts:   map[string]string{"web": "pilot.local"},
 					},
 				},
@@ -575,12 +641,12 @@ func TestRenderAutoURLs(t *testing.T) {
 					"nginx": {
 						Type:    config.ServiceTypeInfra,
 						Enabled: true,
-						Ports:   map[string]int{"http": 80},
+						Ports:   map[string]config.ServicePortSpec{"http": {Port: 80}},
 					},
 					"main": {
 						Type:    config.ServiceTypeApp,
 						Enabled: true,
-						Ports:   map[string]int{},
+						Ports:   map[string]config.ServicePortSpec{},
 						Hosts:   map[string]string{"web": "pilot.local"},
 						Info: config.ServiceInfoBlock{
 							Title: "Main",
@@ -589,7 +655,7 @@ func TestRenderAutoURLs(t *testing.T) {
 					"tool1": {
 						Type:    config.ServiceTypeTool,
 						Enabled: true,
-						Ports:   map[string]int{"http": 9000},
+						Ports:   map[string]config.ServicePortSpec{"http": {Port: 9000}},
 						Hosts:   map[string]string{},
 						Info: config.ServiceInfoBlock{
 							Title: "Tool1",
@@ -598,7 +664,7 @@ func TestRenderAutoURLs(t *testing.T) {
 					"infra1": {
 						Type:    config.ServiceTypeInfra,
 						Enabled: true,
-						Ports:   map[string]int{"http": 5000},
+						Ports:   map[string]config.ServicePortSpec{"http": {Port: 5000}},
 						Hosts:   map[string]string{},
 						Info: config.ServiceInfoBlock{
 							Title: "Infra1",
@@ -626,12 +692,12 @@ func TestRenderAutoURLs(t *testing.T) {
 					"nginx": {
 						Type:    config.ServiceTypeInfra,
 						Enabled: true,
-						Ports:   map[string]int{"https": 443},
+						Ports:   map[string]config.ServicePortSpec{"https": {Port: 443}},
 					},
 					"main": {
 						Type:    config.ServiceTypeApp,
 						Enabled: true,
-						Ports:   map[string]int{},
+						Ports:   map[string]config.ServicePortSpec{},
 						Hosts:   map[string]string{"web": "pilot.local"},
 						Info: config.ServiceInfoBlock{
 							Title: "Main",

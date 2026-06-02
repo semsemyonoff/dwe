@@ -1224,8 +1224,8 @@ func TestRenderInfo_AutoURLs_Integration(t *testing.T) {
 				Hosts: map[string]string{
 					"web": "myapp.local",
 				},
-				Ports: map[string]int{
-					"http": 8080,
+				Ports: map[string]config.ServicePortSpec{
+					"http": {Port: 8080},
 				},
 				Info: config.ServiceInfoBlock{
 					Title:       "My App",
@@ -1435,7 +1435,7 @@ func TestRenderInfo_DefaultConfig_WithServices(t *testing.T) {
 				Type:    config.ServiceTypeApp,
 				Enabled: true,
 				Hosts:   map[string]string{"http": "web.local"},
-				Ports:   map[string]int{"http": 8080},
+				Ports:   map[string]config.ServicePortSpec{"http": {Port: 8080}},
 				Info:    config.ServiceInfoBlock{Title: "Web"},
 			},
 		},

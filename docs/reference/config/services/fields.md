@@ -25,7 +25,7 @@ Every field allowed in `workspace/services/<name>/service.yml`, plus the nested 
 | `container` | string | no (defaults to folder name) | all | Docker container name. Omit to use the service folder name as the container name. |
 | `required` | bool | no | all | When true, the service is always enabled; the overlay cannot disable it. |
 | `compose` | list | no | all | Additional compose overlay files activated when the service is enabled. |
-| `ports` | `map[string]int` | no | all | Named container ports. See [`ports` field](#ports-field). |
+| `ports` | `map[string]int \| map[string]{port,scheme}` | no | all | Named container ports. Bare-int shorthand or rich `{port, scheme}` form. See [`ports` field](#ports-field). |
 | `hosts` | `map[string]string` | no | all | Named hostnames. See [`hosts` field](#hosts-field). |
 | `icon` | string | no | all | Visual indicator emoji or symbol used in the `dwe info` dashboard. If omitted, a type default is used: `type: app` → 📦, `type: tool` → 🔧, `type: infra` → 🧱. See [`icon` field](#icon-field). |
 | `info` | block | no | all | Display metadata for the info dashboard — title override, host/port key selection, and sub-paths. See [`info` block](#info-block). |
@@ -47,16 +47,49 @@ Every field allowed in `workspace/services/<name>/service.yml`, plus the nested 
 
 `ports:` is always a map from a port name to a container port. Single-port services need a chosen name (recommendation: `http` for web, `tcp` for raw TCP, role-specific like `mysql` / `amqp` for infra). Port values are defined in `workspace/services/<name>/service.yml`; `workspace/local.yml` overlays may remap individual entries — see the deep-merge behavior in [Load behavior](index.md#load-behavior).
 
+Each port entry accepts two equivalent forms:
+
+- **Shorthand (int)** — the port number. The service-wide scheme applies (from [`info.scheme`](#info-block) → `runtime.use_https` fallback).
+- **Rich form (mapping)** — `{port: <int>, scheme: "http" | "https"}`. Use this when a single service speaks both schemes on different ports (e.g. an API that exposes HTTP on `3000` and an HTTPS admin endpoint on `9443`).
+
 ```yaml
 # workspace/services/rabbitmq/service.yml
 type: infra
 container: rabbitmq
 ports:
-  amqp: 5672
+  amqp: 5672        # shorthand — no scheme override
   admin: 15672
+
+# workspace/services/api/service.yml — mixed schemes on one service
+type: app
+container: api
+ports:
+  http: 3000        # shorthand: scheme inherited from info.scheme / runtime
+  admin:            # rich form: this port speaks HTTPS regardless of the global flag
+    port: 9443
+    scheme: https
 ```
 
-Values are bounded `1..65535` at load time. Scalar shapes (`ports: 80`, `ports: "80"`) are rejected with `ErrServicePortsShape`.
+Values are bounded `1..65535` at load time. Scalar shapes (`ports: 80`, `ports: "80"`) are rejected with `ErrServicePortsShape`. In rich form, the only allowed fields are `port` and `scheme`; `scheme` must be `"http"` or `"https"` (or omitted).
+
+**Overlay precedence.** A `workspace/local.yml` overlay entry may use either form. Overlays merge field-by-field with the inherited spec:
+
+- bare-int (`http: 6000`) — replaces only the port number; any `scheme` declared in `service.yml` is preserved.
+- mapping form (`http: {port: 6000}`) — same effect as the bare-int (only `port` is touched), but useful for forward compatibility with the rich form.
+- mapping form with scheme only (`http: {scheme: https}`) — overrides only the scheme; the inherited port number is preserved. At least one of `port` / `scheme` must be present in an overlay's rich-form entry.
+- mapping form with both fields (`http: {port: 6000, scheme: https}`) — overrides both.
+
+`scheme: null` is treated as "no override" (same as omitting the key).
+
+**Effective scheme.** When dwe renders a URL for a port entry, it picks the scheme by walking the precedence chain:
+
+1. per-port `scheme:` (rich form on this entry);
+2. service-level [`info.scheme`](#info-block);
+3. global `runtime.use_https` (`true` → `https`, `false` → `http`).
+
+This is also exposed to templates as the `ServiceConfig.EffectiveScheme` method — see [Templates](../../templates.md). For dot-path (`from:` / `${...}`) access, per-port schemes are surfaced as a sibling map under `services.<n>.port_schemes.<port-name>` (string), present only for services that actually set an override.
+
+**Reverse-proxy URLs (`port_via`)** intentionally do NOT consult `info.scheme` of the proxy service. They use only a per-port scheme override on the proxy's chosen listener (typically `http` / `https`) plus the global `runtime.use_https` fallback. Setting `info.scheme` on the proxy itself affects only the proxy's own URL row in `dwe info`; it does not propagate to apps routed through it.
 
 ## `hosts` field
 
@@ -122,7 +155,10 @@ info:
 | `title` | string | title-case(folder-name) | Display name for this service in the dashboard (e.g., `"Main Application"`). Replaces the folder-name-derived default. |
 | `primary_host` | string | `web` | Which key from `hosts` to surface in the main URL row (e.g., `console` for a multi-host service). |
 | `primary_port` | string | `http` | Which key from `ports` to surface in the main URL row (e.g., `console` for a multi-port service). |
+| `scheme` | string | — | Per-service URL scheme override (`"http"` or `"https"`). Wins over the global `runtime.use_https`, loses to a per-port `scheme:` on a [rich-form `ports` entry](#ports-field). |
 | `paths` | list | — | Ordered list of sub-paths under the main URL. See [`info.paths` entries](#infopaths-entries) below. |
+
+**When to use `info.scheme`.** Set this when a service speaks one fixed scheme that diverges from the project default — e.g. a Vite dev server running under `@vitejs/plugin-basic-ssl` listens on `https://localhost:5173` while the rest of the project stays on `http://` (OAuth callbacks, plain dev backend). Leaving `info.scheme` empty falls back to `runtime.use_https`, which is the right default for projects that are uniformly HTTP or uniformly HTTPS.
 
 ### `info.paths` entries
 

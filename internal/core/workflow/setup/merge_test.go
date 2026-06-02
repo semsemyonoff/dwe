@@ -85,7 +85,7 @@ func TestBuildOverlay(t *testing.T) {
 				"services": map[string]any{
 					"web": map[string]any{
 						"ports": map[string]any{
-							"http": 8080,
+							"http": map[string]any{"port": 8080},
 						},
 					},
 				},
@@ -163,7 +163,7 @@ func TestBuildPortOverlay(t *testing.T) {
 				"services": map[string]any{
 					"web": map[string]any{
 						"ports": map[string]any{
-							"http": 8080,
+							"http": map[string]any{"port": 8080},
 						},
 					},
 				},
@@ -180,13 +180,13 @@ func TestBuildPortOverlay(t *testing.T) {
 				"services": map[string]any{
 					"web": map[string]any{
 						"ports": map[string]any{
-							"http":  8080,
-							"https": 8443,
+							"http":  map[string]any{"port": 8080},
+							"https": map[string]any{"port": 8443},
 						},
 					},
 					"db": map[string]any{
 						"ports": map[string]any{
-							"psql": 5433,
+							"psql": map[string]any{"port": 5433},
 						},
 					},
 				},
@@ -230,7 +230,7 @@ func TestBuildPortOverlay(t *testing.T) {
 				"services": map[string]any{
 					"web": map[string]any{
 						"ports": map[string]any{
-							"http": 1,
+							"http": map[string]any{"port": 1},
 						},
 					},
 				},
@@ -245,7 +245,7 @@ func TestBuildPortOverlay(t *testing.T) {
 				"services": map[string]any{
 					"web": map[string]any{
 						"ports": map[string]any{
-							"http": 65535,
+							"http": map[string]any{"port": 65535},
 						},
 					},
 				},
@@ -343,7 +343,7 @@ func TestMergeIntoLocal(t *testing.T) {
 				"services": map[string]any{
 					"web": map[string]any{
 						"ports": map[string]any{
-							"http": 8080,
+							"http": map[string]any{"port": 8080},
 						},
 					},
 				},
@@ -353,7 +353,7 @@ func TestMergeIntoLocal(t *testing.T) {
 					"web": map[string]any{
 						"enabled": true,
 						"ports": map[string]any{
-							"http": 8080,
+							"http": map[string]any{"port": 8080},
 						},
 					},
 				},
@@ -370,7 +370,7 @@ func TestMergeIntoLocal(t *testing.T) {
 				"services": map[string]any{
 					"web": map[string]any{
 						"ports": map[string]any{
-							"http": 8080,
+							"http": map[string]any{"port": 8080},
 						},
 					},
 				},
@@ -382,7 +382,7 @@ func TestMergeIntoLocal(t *testing.T) {
 				"services": map[string]any{
 					"web": map[string]any{
 						"ports": map[string]any{
-							"http": 8080,
+							"http": map[string]any{"port": 8080},
 						},
 					},
 				},
@@ -390,7 +390,7 @@ func TestMergeIntoLocal(t *testing.T) {
 			checkUnchanged: true,
 		},
 		{
-			name: "collision: non-map to map in existing",
+			name: "scalar→map collision outside port-leaf path still rejected",
 			existing: map[string]any{
 				"app": "scalar",
 			},
@@ -403,11 +403,13 @@ func TestMergeIntoLocal(t *testing.T) {
 			errMsg:  "cannot merge map",
 		},
 		{
-			name: "collision: non-map to map in nested existing",
+			name: "scalar→map upgrade in nested existing (bare-int port → rich form)",
 			existing: map[string]any{
 				"services": map[string]any{
 					"web": map[string]any{
-						"ports": "scalar",
+						"ports": map[string]any{
+							"http": 5173,
+						},
 					},
 				},
 			},
@@ -415,13 +417,50 @@ func TestMergeIntoLocal(t *testing.T) {
 				"services": map[string]any{
 					"web": map[string]any{
 						"ports": map[string]any{
-							"http": 8080,
+							"http": map[string]any{"port": 8080},
 						},
 					},
 				},
 			},
-			wantErr: true,
-			errMsg:  "cannot merge map",
+			want: map[string]any{
+				"services": map[string]any{
+					"web": map[string]any{
+						"ports": map[string]any{
+							"http": map[string]any{"port": 8080},
+						},
+					},
+				},
+			},
+		},
+		{
+			name: "rich-form overlay preserves existing scheme",
+			existing: map[string]any{
+				"services": map[string]any{
+					"web": map[string]any{
+						"ports": map[string]any{
+							"http": map[string]any{"port": 5173, "scheme": "https"},
+						},
+					},
+				},
+			},
+			overlay: map[string]any{
+				"services": map[string]any{
+					"web": map[string]any{
+						"ports": map[string]any{
+							"http": map[string]any{"port": 8080},
+						},
+					},
+				},
+			},
+			want: map[string]any{
+				"services": map[string]any{
+					"web": map[string]any{
+						"ports": map[string]any{
+							"http": map[string]any{"port": 8080, "scheme": "https"},
+						},
+					},
+				},
+			},
 		},
 		{
 			name: "nil values in overlay ignored",

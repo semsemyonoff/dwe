@@ -66,7 +66,7 @@ func TestServiceConfig_TypeForwarders(t *testing.T) {
 
 func TestServiceConfig_PortHostHelpers(t *testing.T) {
 	s := ServiceConfig{
-		Ports: map[string]int{"http": 8080},
+		Ports: map[string]ServicePortSpec{"http": {Port: 8080}},
 		Hosts: map[string]string{"main": "example.test"},
 	}
 	if got := s.Port("http"); got != 8080 {

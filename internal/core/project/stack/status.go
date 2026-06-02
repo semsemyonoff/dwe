@@ -149,7 +149,7 @@ func collectRowsByType(cfg *config.DweConfig, isRunning ContainerCheckFn, projec
 			Dir:       svc.Dir,
 			Container: svc.Container,
 			Hosts:     svc.Hosts,
-			Ports:     svc.Ports,
+			Ports:     svc.PortNumbers(),
 			Mandatory: svc.Required,
 			Enabled:   svc.Enabled,
 			Running:   running,

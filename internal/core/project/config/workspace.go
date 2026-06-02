@@ -3,6 +3,7 @@ package config
 
 import (
 	"bytes"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"log/slog"
@@ -656,11 +657,106 @@ type ServiceNotes struct {
 }
 
 // ServiceInfoBlock holds display metadata for a service's dashboard entry.
+//
+// Scheme overrides the global runtime.use_https for this service's URLs.
+// Precedence for the effective scheme of a service URL: per-port .Scheme
+// (set via the rich `{port,scheme}` form on a ports entry) → ServiceInfoBlock.Scheme
+// → Runtime.UseHTTPS. Allowed values: "", "http", "https".
 type ServiceInfoBlock struct {
 	Title       string            `yaml:"title,omitempty"`
 	PrimaryHost string            `yaml:"primary_host,omitempty"`
 	PrimaryPort string            `yaml:"primary_port,omitempty"`
+	Scheme      string            `yaml:"scheme,omitempty"`
 	Paths       []ServiceInfoPath `yaml:"paths,omitempty"`
+}
+
+// ServicePortSpec is one entry of ServiceConfig.Ports. The bare-int shorthand
+// (`http: 5173`) decodes to ServicePortSpec{Port: 5173, Scheme: ""}; the rich
+// object form (`http: {port: 5173, scheme: https}`) carries an optional
+// per-port scheme override. Scheme is one of "", "http", "https".
+type ServicePortSpec struct {
+	Port   int    `yaml:"port" json:"port"`
+	Scheme string `yaml:"scheme,omitempty" json:"scheme,omitempty"`
+}
+
+// UnmarshalYAML accepts either a bare integer (scheme inherited) or a mapping
+// {port: int, scheme: string}. Other shapes return an error so the loader's
+// strict decode surfaces a precise diagnostic.
+//
+// The mapping branch enforces strictness directly on the yaml.Node — it walks
+// Content pairs and rejects any key outside {port, scheme}, plus rejects an
+// empty/null `port:` field. yaml.Node.Decode does NOT inherit a parent
+// decoder's KnownFields(true) setting, so this check must live here (not just
+// in a raw-map pre-validator) for strictness to hold regardless of caller.
+func (p *ServicePortSpec) UnmarshalYAML(value *yaml.Node) error {
+	// Scalar — bare int shorthand.
+	if value.Kind == yaml.ScalarNode {
+		// Reject null explicitly: yaml.Decode would silently coerce !!null
+		// to the zero value, masking what is almost certainly a typo.
+		if value.Tag == "!!null" {
+			return fmt.Errorf("port: must be an integer or a mapping {port, scheme}, got null")
+		}
+		var n int
+		if err := value.Decode(&n); err != nil {
+			return fmt.Errorf("port: must be an integer or a mapping {port, scheme}: %w", err)
+		}
+		p.Port = n
+		p.Scheme = ""
+		return nil
+	}
+	if value.Kind != yaml.MappingNode {
+		return fmt.Errorf("port: must be an integer or a mapping {port, scheme}")
+	}
+	// Mapping form — walk pairs to enforce the allowed-fields contract before
+	// decoding into the typed shadow struct.
+	var rawPort, rawScheme *yaml.Node
+	for i := 0; i+1 < len(value.Content); i += 2 {
+		keyNode := value.Content[i]
+		valNode := value.Content[i+1]
+		switch keyNode.Value {
+		case "port":
+			rawPort = valNode
+		case "scheme":
+			rawScheme = valNode
+		default:
+			return fmt.Errorf("port: unknown field %q (allowed: port, scheme)", keyNode.Value)
+		}
+	}
+	if rawPort == nil {
+		return fmt.Errorf("port: missing required field \"port\" in mapping form")
+	}
+	if rawPort.Tag == "!!null" {
+		return fmt.Errorf("port: \"port\" cannot be null")
+	}
+	var portN int
+	if err := rawPort.Decode(&portN); err != nil {
+		return fmt.Errorf("port: %w", err)
+	}
+	p.Port = portN
+	if rawScheme != nil && rawScheme.Tag != "!!null" {
+		var s string
+		if err := rawScheme.Decode(&s); err != nil {
+			return fmt.Errorf("port.scheme: %w", err)
+		}
+		p.Scheme = s
+	} else {
+		p.Scheme = ""
+	}
+	return nil
+}
+
+// MarshalJSON serializes a port spec uniformly as `{port, scheme}`. The
+// scheme field is omitted when empty (no per-port override) so consumers that
+// only care about the port number can read `.port` without branching, while
+// scheme-aware consumers see the override when it is set. The shape is
+// intentionally non-polymorphic — every port entry is an object, never a bare
+// integer — so external tooling can rely on a stable schema.
+func (p ServicePortSpec) MarshalJSON() ([]byte, error) {
+	type rich struct {
+		Port   int    `json:"port"`
+		Scheme string `json:"scheme,omitempty"`
+	}
+	return json.Marshal(rich(p))
 }
 
 // ServiceInfoPath describes a sub-URL under a service's main URL.
@@ -718,28 +814,28 @@ func allowedFieldsFor(t ServiceType) map[string]bool {
 // The Enabled flag is resolved from the 3-layer config merge (mandatory
 // services are always enabled).
 type ServiceConfig struct {
-	Type            ServiceType          `yaml:"type"`
-	Container       string               `yaml:"container"`
-	Required        bool                 `yaml:"required"`
-	Enabled         bool                 `yaml:"-"` // computed: required || services.<name>.enabled
-	Ports           map[string]int       `yaml:"ports,omitempty"`
-	Hosts           map[string]string    `yaml:"hosts,omitempty"`
-	Icon            string               `yaml:"icon,omitempty"`
-	Info            ServiceInfoBlock     `yaml:"info,omitempty"`
-	Dir             string               `yaml:"dir"`
-	DirInternal     string               `yaml:"dir_internal"`
-	WorkDirInternal string               `yaml:"work_dir_internal"`
-	Configs         []ServiceConfigEntry `yaml:"configs"`
-	Dirs            []string             `yaml:"dirs"`
-	Extends         string               `yaml:"extends"`
-	DependsOn       []string             `yaml:"depends_on"`
-	Compose         []string             `yaml:"compose"`
-	CLI             ServiceCLIConfig     `yaml:"cli"`
-	Render          ServiceRenderConfig  `yaml:"render"`
-	Status          []StatusColumn       `yaml:"status,omitempty"`
-	OnEnable        *ServiceToggleHooks  `yaml:"on_enable,omitempty"`
-	OnDisable       *ServiceToggleHooks  `yaml:"on_disable,omitempty"`
-	Notes           *ServiceNotes        `yaml:"notes,omitempty"`
+	Type            ServiceType                `yaml:"type"`
+	Container       string                     `yaml:"container"`
+	Required        bool                       `yaml:"required"`
+	Enabled         bool                       `yaml:"-"` // computed: required || services.<name>.enabled
+	Ports           map[string]ServicePortSpec `yaml:"ports,omitempty"`
+	Hosts           map[string]string          `yaml:"hosts,omitempty"`
+	Icon            string                     `yaml:"icon,omitempty"`
+	Info            ServiceInfoBlock           `yaml:"info,omitempty"`
+	Dir             string                     `yaml:"dir"`
+	DirInternal     string                     `yaml:"dir_internal"`
+	WorkDirInternal string                     `yaml:"work_dir_internal"`
+	Configs         []ServiceConfigEntry       `yaml:"configs"`
+	Dirs            []string                   `yaml:"dirs"`
+	Extends         string                     `yaml:"extends"`
+	DependsOn       []string                   `yaml:"depends_on"`
+	Compose         []string                   `yaml:"compose"`
+	CLI             ServiceCLIConfig           `yaml:"cli"`
+	Render          ServiceRenderConfig        `yaml:"render"`
+	Status          []StatusColumn             `yaml:"status,omitempty"`
+	OnEnable        *ServiceToggleHooks        `yaml:"on_enable,omitempty"`
+	OnDisable       *ServiceToggleHooks        `yaml:"on_disable,omitempty"`
+	Notes           *ServiceNotes              `yaml:"notes,omitempty"`
 }
 
 // IsApp reports whether this service has type "app".
@@ -752,7 +848,44 @@ func (s ServiceConfig) IsTool() bool { return s.Type.IsTool() }
 func (s ServiceConfig) IsInfra() bool { return s.Type.IsInfra() }
 
 // Port returns the host port for the named entry in s.Ports, or 0 if absent.
-func (s ServiceConfig) Port(name string) int { return s.Ports[name] }
+// Use PortScheme for the optional per-port scheme override.
+func (s ServiceConfig) Port(name string) int { return s.Ports[name].Port }
+
+// PortScheme returns the scheme override declared on the named port entry,
+// or "" if none was set. "" means the caller should fall back to
+// s.Info.Scheme, then Runtime.UseHTTPS. Use EffectiveScheme to resolve the
+// full precedence chain.
+func (s ServiceConfig) PortScheme(name string) string { return s.Ports[name].Scheme }
+
+// EffectiveScheme resolves the URL scheme for the named port using the
+// precedence: per-port override → service.Info.Scheme → runtimeUseHTTPS.
+// Returns "http" or "https".
+func (s ServiceConfig) EffectiveScheme(portName string, runtimeUseHTTPS bool) string {
+	if sch := s.PortScheme(portName); sch != "" {
+		return sch
+	}
+	if s.Info.Scheme != "" {
+		return s.Info.Scheme
+	}
+	if runtimeUseHTTPS {
+		return "https"
+	}
+	return "http"
+}
+
+// PortNumbers returns a flattened map of port name → port number, discarding
+// any per-port scheme overrides. Useful for downstream consumers (status
+// rows, conflict probes, simple JSON outputs) that don't carry scheme metadata.
+func (s ServiceConfig) PortNumbers() map[string]int {
+	if len(s.Ports) == 0 {
+		return nil
+	}
+	out := make(map[string]int, len(s.Ports))
+	for k, v := range s.Ports {
+		out[k] = v.Port
+	}
+	return out
+}
 
 // Host returns the hostname for the named entry in s.Hosts, or "" if absent.
 func (s ServiceConfig) Host(name string) string { return s.Hosts[name] }
@@ -1197,6 +1330,12 @@ func LoadConfig(workspacePath string) (*DweConfig, error) {
 	if err := ResolveServiceExtends(services); err != nil {
 		return nil, err
 	}
+	// Phase 2: apply scheme-only port overlays now that every service has its
+	// final inherited port numbers. Scheme-only overlays must reference an
+	// existing port — see applyDeferredOverlaySchemes for the contract.
+	if err := applyDeferredOverlaySchemes(merged, services); err != nil {
+		return nil, err
+	}
 	cfg.Services = services
 
 	// Step 5: inject service definitions into the raw map so dot-paths like
@@ -1300,7 +1439,9 @@ func overlayAllowedKeysList() string {
 
 // validateOverlayPorts rejects malformed `ports:` blocks in overlay layers.
 // Accepts nil (key absent or null) and map[string]any where every value is
-// an integer in the 1..65535 range.
+// either:
+//   - an integer in the 1..65535 range, or
+//   - a mapping {port: int, scheme: "http"|"https"} (per-port scheme override).
 func validateOverlayPorts(layerPath, svcName string, raw any) error {
 	if raw == nil {
 		return nil
@@ -1310,12 +1451,77 @@ func validateOverlayPorts(layerPath, svcName string, raw any) error {
 		return fmt.Errorf("%s: services.%s.ports: %w", layerPath, svcName, ErrServicePortsShape)
 	}
 	for _, portName := range slices.Sorted(maps.Keys(m)) {
-		n, ok := m[portName].(int)
+		switch v := m[portName].(type) {
+		case int:
+			if v < 1 || v > 65535 {
+				return fmt.Errorf("%s: services.%s.ports.%s = %d: %w", layerPath, svcName, portName, v, ErrServicePortOutOfRange)
+			}
+		case map[string]any:
+			if err := validatePortObject(v, portObjectOverlay); err != nil {
+				return fmt.Errorf("%s: services.%s.ports.%s: %w", layerPath, svcName, portName, err)
+			}
+		default:
+			return fmt.Errorf("%s: services.%s.ports.%s: %w (must be an integer or a mapping {port, scheme})", layerPath, svcName, portName, ErrServicePortsShape)
+		}
+	}
+	return nil
+}
+
+// portObjectMode tunes validatePortObject for the two contexts the rich form
+// can appear in. Service-yml requires `port:` (every service must declare its
+// own port number). Overlay allows port to be omitted so a developer can
+// override scheme alone for an inherited port — symmetric with the bare-int
+// overlay form which preserves any existing scheme.
+type portObjectMode int
+
+const (
+	portObjectRequirePort portObjectMode = iota // service.yml decode
+	portObjectOverlay                           // local.yml / defaults.yml
+)
+
+// validatePortObject checks the rich `ports.<key>` object form. Allowed fields
+// are {port, scheme}; when port is present it must be int in range;
+// scheme (when present and non-null) must be "http" / "https" / "".
+func validatePortObject(obj map[string]any, mode portObjectMode) error {
+	for k := range obj {
+		if k != "port" && k != "scheme" {
+			return fmt.Errorf("%w (unknown field %q; allowed: port, scheme)", ErrServicePortsShape, k)
+		}
+	}
+	portRaw, hasPort := obj["port"]
+	if !hasPort && mode == portObjectRequirePort {
+		return fmt.Errorf("%w (missing port)", ErrServicePortsShape)
+	}
+	if hasPort {
+		// Explicit null is rejected — it is ambiguous between "no override"
+		// (which the developer should express by omitting `port:` entirely)
+		// and "set port to nothing", and silently accepting it manufactures
+		// a Port: 0 entry that bypasses Phase 2's scheme-only handling.
+		if portRaw == nil {
+			return fmt.Errorf("%w (port cannot be null; omit the key to inherit, or set an integer)", ErrServicePortsShape)
+		}
+		n, ok := portRaw.(int)
 		if !ok {
-			return fmt.Errorf("%s: services.%s.ports.%s: %w (not an integer)", layerPath, svcName, portName, ErrServicePortsShape)
+			return fmt.Errorf("%w (port is not an integer)", ErrServicePortsShape)
 		}
 		if n < 1 || n > 65535 {
-			return fmt.Errorf("%s: services.%s.ports.%s = %d: %w", layerPath, svcName, portName, n, ErrServicePortOutOfRange)
+			return fmt.Errorf("port = %d: %w", n, ErrServicePortOutOfRange)
+		}
+	}
+	if schRaw, ok := obj["scheme"]; ok && schRaw != nil {
+		s, ok := schRaw.(string)
+		if !ok {
+			return fmt.Errorf("%w (scheme is not a string)", ErrServicePortsShape)
+		}
+		if s != "" && s != "http" && s != "https" {
+			return fmt.Errorf("%w (scheme %q is not one of: http, https)", ErrServicePortsShape, s)
+		}
+	}
+	// Overlay must specify at least one field; an entirely empty `{}` is a
+	// no-op that would silently mask developer intent.
+	if mode == portObjectOverlay && !hasPort {
+		if _, hasScheme := obj["scheme"]; !hasScheme {
+			return fmt.Errorf("%w (overlay must set at least one of: port, scheme)", ErrServicePortsShape)
 		}
 	}
 	return nil
@@ -1387,19 +1593,23 @@ func LoadServiceFolder(baseDir, name string) (*ServiceConfig, error) {
 					diags = append(diags, fmt.Errorf("%w: service %q (type %s): field %q", ErrServiceFieldNotAllowed, name, svcType, key))
 				}
 			}
-			// Ports shape + range.
+			// Ports shape + range. Accepts bare int or mapping {port, scheme}.
 			if v, ok := entry["ports"]; ok && v != nil {
 				if m, isMap := v.(map[string]any); !isMap {
 					diags = append(diags, fmt.Errorf("%w: service %q", ErrServicePortsShape, name))
 				} else {
 					for _, portName := range slices.Sorted(maps.Keys(m)) {
-						n, ok := m[portName].(int)
-						if !ok {
-							diags = append(diags, fmt.Errorf("%w: service %q port %q is not an integer", ErrServicePortsShape, name, portName))
-							continue
-						}
-						if n < 1 || n > 65535 {
-							diags = append(diags, fmt.Errorf("%w: service %q port %q = %d", ErrServicePortOutOfRange, name, portName, n))
+						switch pv := m[portName].(type) {
+						case int:
+							if pv < 1 || pv > 65535 {
+								diags = append(diags, fmt.Errorf("%w: service %q port %q = %d", ErrServicePortOutOfRange, name, portName, pv))
+							}
+						case map[string]any:
+							if err := validatePortObject(pv, portObjectRequirePort); err != nil {
+								diags = append(diags, fmt.Errorf("service %q port %q: %w", name, portName, err))
+							}
+						default:
+							diags = append(diags, fmt.Errorf("%w: service %q port %q is not an integer or a mapping {port, scheme}", ErrServicePortsShape, name, portName))
 						}
 					}
 				}
@@ -1423,6 +1633,15 @@ func LoadServiceFolder(baseDir, name string) (*ServiceConfig, error) {
 	dec.KnownFields(true)
 	if err := dec.Decode(&svc); err != nil {
 		return nil, fmt.Errorf("loading service %q definition: parse: %w", name, err)
+	}
+
+	// Post-decode validation for fields whose allowed-values contract isn't
+	// expressed in the type system. EffectiveScheme trusts svc.Info.Scheme
+	// directly, so a typo like `info.scheme: ftp` must be caught at load
+	// time — relying solely on `dwe validate` would let runtime commands
+	// silently emit non-http schemes.
+	if s := svc.Info.Scheme; s != "" && s != "http" && s != "https" {
+		return nil, fmt.Errorf("loading service %q definition: info.scheme %q is not allowed (must be \"http\" or \"https\")", name, s)
 	}
 
 	// Apply folder-name default to container field if not explicitly set.
@@ -1538,6 +1757,13 @@ func ResolveServiceExtends(services map[string]ServiceConfig) error {
 		if len(svc.Hosts) == 0 && len(parent.Hosts) > 0 {
 			svc.Hosts = maps.Clone(parent.Hosts)
 		}
+		// Inherit Info.Scheme — the service-wide scheme override is semantic,
+		// not cosmetic, so a child that doesn't redeclare it should still get
+		// the parent's URL scheme. Title / primary_host / primary_port are
+		// display-only and deliberately NOT inherited.
+		if svc.Info.Scheme == "" && parent.Info.Scheme != "" {
+			svc.Info.Scheme = parent.Info.Scheme
+		}
 		if svc.CLI.Mode == "" {
 			svc.CLI.Mode = parent.CLI.Mode
 		}
@@ -1644,6 +1870,30 @@ func topoSortServices(services map[string]ServiceConfig) ([]string, error) {
 // declared ports are preserved unless the overlay names the same key; new
 // keys are added. A nil or non-map overlay value is a no-op (the validator
 // would have rejected a malformed shape already).
+//
+// Overlays are FIELD-LEVEL merges, not atomic-entry replacements. Each
+// overlay value may be either:
+//   - a bare int — replaces svc.Ports[name].Port; preserves any existing
+//     Scheme so a developer's local override of just the port number doesn't
+//     accidentally drop a scheme declared in service.yml;
+//   - a mapping `{port?, scheme?}` — replaces only the fields that are
+//     present. Either field may be omitted; omitted fields inherit from the
+//     existing spec. This lets a developer override only the scheme for an
+//     inherited port (`local.yml: {scheme: https}`) without re-typing the
+//     port number, mirroring how bare-int already preserves scheme.
+//   - the literal null value for `scheme:` is treated as "no override", same
+//     as omitting the key — so `{port: 9090, scheme: null}` is identical to
+//     `{port: 9090}` for both validator and loader.
+//
+// **Two-phase apply.** Overlay entries that set a port number (bare-int or
+// rich-form with `port:`) are applied in phase 1 (this function), BEFORE
+// `extends:` inheritance runs — so a parent-level port override propagates
+// to children that don't declare their own ports. Scheme-only entries
+// (rich-form `{scheme: ...}` with no `port:`) are DEFERRED to phase 2
+// (applyDeferredOverlaySchemes) which runs AFTER extends resolution; that
+// way a child can override the scheme of a port it inherited from its
+// parent without manufacturing a `Port: 0` entry that would also block
+// inheritance of the parent's port number.
 func applyOverlayPorts(merged map[string]any, name string, svc *ServiceConfig) {
 	raw, ok := ResolvePath(merged, "services."+name+".ports")
 	if !ok {
@@ -1653,14 +1903,104 @@ func applyOverlayPorts(merged map[string]any, name string, svc *ServiceConfig) {
 	if !ok || len(m) == 0 {
 		return
 	}
-	if svc.Ports == nil {
-		svc.Ports = make(map[string]int, len(m))
-	}
 	for portName, portVal := range m {
-		if n, ok := portVal.(int); ok {
-			svc.Ports[portName] = n
+		switch v := portVal.(type) {
+		case int:
+			if svc.Ports == nil {
+				svc.Ports = make(map[string]ServicePortSpec, len(m))
+			}
+			existing := svc.Ports[portName]
+			existing.Port = v
+			svc.Ports[portName] = existing
+		case map[string]any:
+			_, hasPort := v["port"]
+			if !hasPort {
+				// Scheme-only override. Apply immediately when the target
+				// port is already declared on THIS service (so children
+				// extending it see the overridden scheme via the normal
+				// extends-clone); defer to Phase 2 when the port would
+				// arrive via inheritance from a parent. Distinguishing the
+				// two cases here means scheme-only overlays on parent
+				// services propagate through `extends:` like every other
+				// per-service field, instead of mutating the parent after
+				// the child has already taken a clone.
+				existing, present := svc.Ports[portName]
+				if !present || existing.Port == 0 {
+					continue
+				}
+				if schRaw, hasScheme := v["scheme"]; hasScheme && schRaw != nil {
+					if s, ok := schRaw.(string); ok {
+						existing.Scheme = s
+						svc.Ports[portName] = existing
+					}
+				}
+				continue
+			}
+			if svc.Ports == nil {
+				svc.Ports = make(map[string]ServicePortSpec, len(m))
+			}
+			spec := svc.Ports[portName]
+			if p, ok := v["port"].(int); ok {
+				spec.Port = p
+			}
+			if schRaw, hasScheme := v["scheme"]; hasScheme && schRaw != nil {
+				if s, ok := schRaw.(string); ok {
+					spec.Scheme = s
+				}
+			}
+			svc.Ports[portName] = spec
 		}
 	}
+}
+
+// applyDeferredOverlaySchemes runs after `extends:` inheritance and finalises
+// scheme-only port overlays (rich-form entries with no `port:` field). For
+// each such entry the target port must already exist on the service — either
+// declared in service.yml or inherited from a parent in the extends chain.
+// If the port is missing, the overlay is rejected: silently materialising a
+// `Port: 0` entry would leak an invalid port into status JSON, env conflict
+// probes, and `cfg.Raw`, and the developer's intent (override the scheme of
+// an existing port) is unambiguously different from "create a new port with
+// no number". Bare-int / full-rich entries handled by applyOverlayPorts are
+// skipped here.
+func applyDeferredOverlaySchemes(merged map[string]any, services map[string]ServiceConfig) error {
+	for _, name := range slices.Sorted(maps.Keys(services)) {
+		raw, ok := ResolvePath(merged, "services."+name+".ports")
+		if !ok {
+			continue
+		}
+		m, ok := raw.(map[string]any)
+		if !ok || len(m) == 0 {
+			continue
+		}
+		svc := services[name]
+		var mutated bool
+		for portName, portVal := range m {
+			v, isMap := portVal.(map[string]any)
+			if !isMap {
+				continue
+			}
+			if _, hasPort := v["port"]; hasPort {
+				continue
+			}
+			// Scheme-only entry. Require an existing port to attach to.
+			existing, present := svc.Ports[portName]
+			if !present || existing.Port == 0 {
+				return fmt.Errorf("services.%s.ports.%s: scheme-only overlay targets a port that is neither declared nor inherited", name, portName)
+			}
+			if schRaw, hasScheme := v["scheme"]; hasScheme && schRaw != nil {
+				if s, ok := schRaw.(string); ok {
+					existing.Scheme = s
+					svc.Ports[portName] = existing
+					mutated = true
+				}
+			}
+		}
+		if mutated {
+			services[name] = svc
+		}
+	}
+	return nil
 }
 
 // applyOverlayHosts deep-merges any hosts defined under
@@ -1727,11 +2067,32 @@ func injectServicesIntoRaw(raw map[string]any, services map[string]ServiceConfig
 			entry["configs"] = configs
 		}
 		if len(svc.Ports) > 0 {
+			// Inject the bare port number under services.<name>.ports.<key>
+			// so dot-path resolution (`from: services.main.ports.http`) and
+			// templates (`(index .Services "X").Port "http"`) keep returning
+			// an int — the contract those export rules and templates rely on.
+			//
+			// Per-port scheme overrides are surfaced as a sibling map under
+			// services.<name>.port_schemes.<key> so dot-paths and templates
+			// can read them too (`from: services.main.port_schemes.http`,
+			// `${services.main.port_schemes.admin}`). The sibling is omitted
+			// entirely when no port has a scheme override, so it never appears
+			// for services that opt out of the new feature.
 			ports := make(map[string]any, len(svc.Ports))
+			var schemes map[string]any
 			for k, v := range svc.Ports {
-				ports[k] = v
+				ports[k] = v.Port
+				if v.Scheme != "" {
+					if schemes == nil {
+						schemes = make(map[string]any)
+					}
+					schemes[k] = v.Scheme
+				}
 			}
 			entry["ports"] = ports
+			if schemes != nil {
+				entry["port_schemes"] = schemes
+			}
 		}
 		if len(svc.Hosts) > 0 {
 			hosts := make(map[string]any, len(svc.Hosts))

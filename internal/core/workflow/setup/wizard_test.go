@@ -188,8 +188,12 @@ func TestWizardRunPortConflict(t *testing.T) {
 		t.Fatalf("expected ports in web service")
 	}
 
-	if ports["http"] != 9090 {
-		t.Errorf("expected services.web.ports.http = 9090, got %v", ports["http"])
+	httpEntry, ok := ports["http"].(map[string]any)
+	if !ok {
+		t.Fatalf("expected rich-form ports.http mapping, got %T: %v", ports["http"], ports["http"])
+	}
+	if httpEntry["port"] != 9090 {
+		t.Errorf("expected services.web.ports.http.port = 9090, got %v", httpEntry["port"])
 	}
 }
 

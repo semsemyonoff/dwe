@@ -255,31 +255,82 @@ func (v *servicesValidator) Run(ctx validate.Context) []validate.Diagnostic {
 			}
 		}
 
-		// ports shape + range.
+		// ports shape + range. Accepts bare int or mapping {port, scheme}.
 		if vv, ok := rawEntry["ports"]; ok && vv != nil {
 			m, isMap := vv.(map[string]any)
 			if !isMap {
 				emit(validate.Diagnostic{
 					Severity: validate.SeverityError,
 					Target:   target,
-					Message:  fmt.Sprintf("service %q: ports must be a map of name to port number", name),
+					Message:  fmt.Sprintf("service %q: ports must be a map of name to port number (int) or {port, scheme}", name),
 				})
 			} else {
 				for _, p := range slices.Sorted(maps.Keys(m)) {
-					n, ok := m[p].(int)
-					if !ok {
+					switch pv := m[p].(type) {
+					case int:
+						if pv < 1 || pv > 65535 {
+							emit(validate.Diagnostic{
+								Severity: validate.SeverityError,
+								Target:   target,
+								Message:  fmt.Sprintf("service %q port %q = %d: out of range 1..65535", name, p, pv),
+							})
+						}
+					case map[string]any:
+						for k := range pv {
+							if k != "port" && k != "scheme" {
+								emit(validate.Diagnostic{
+									Severity: validate.SeverityError,
+									Target:   target,
+									Message:  fmt.Sprintf("service %q port %q: unknown field %q", name, p, k),
+									Hint:     "allowed fields: port, scheme",
+								})
+							}
+						}
+						portRaw, hasPort := pv["port"]
+						if !hasPort {
+							emit(validate.Diagnostic{
+								Severity: validate.SeverityError,
+								Target:   target,
+								Message:  fmt.Sprintf("service %q port %q: missing port", name, p),
+							})
+						} else {
+							n, ok := portRaw.(int)
+							if !ok {
+								emit(validate.Diagnostic{
+									Severity: validate.SeverityError,
+									Target:   target,
+									Message:  fmt.Sprintf("service %q port %q: port is not an integer", name, p),
+								})
+							} else if n < 1 || n > 65535 {
+								emit(validate.Diagnostic{
+									Severity: validate.SeverityError,
+									Target:   target,
+									Message:  fmt.Sprintf("service %q port %q = %d: out of range 1..65535", name, p, n),
+								})
+							}
+						}
+						if schRaw, ok := pv["scheme"]; ok && schRaw != nil {
+							s, isStr := schRaw.(string)
+							if !isStr {
+								emit(validate.Diagnostic{
+									Severity: validate.SeverityError,
+									Target:   target,
+									Message:  fmt.Sprintf("service %q port %q: scheme is not a string", name, p),
+								})
+							} else if s != "" && s != "http" && s != "https" {
+								emit(validate.Diagnostic{
+									Severity: validate.SeverityError,
+									Target:   target,
+									Message:  fmt.Sprintf("service %q port %q: scheme %q is not allowed", name, p, s),
+									Hint:     "scheme must be one of: http, https",
+								})
+							}
+						}
+					default:
 						emit(validate.Diagnostic{
 							Severity: validate.SeverityError,
 							Target:   target,
-							Message:  fmt.Sprintf("service %q port %q: not an integer", name, p),
-						})
-						continue
-					}
-					if n < 1 || n > 65535 {
-						emit(validate.Diagnostic{
-							Severity: validate.SeverityError,
-							Target:   target,
-							Message:  fmt.Sprintf("service %q port %q = %d: out of range 1..65535", name, p, n),
+							Message:  fmt.Sprintf("service %q port %q: not an integer or a mapping {port, scheme}", name, p),
 						})
 					}
 				}
@@ -306,6 +357,25 @@ func (v *servicesValidator) Run(ctx validate.Context) []validate.Diagnostic {
 					Message:  fmt.Sprintf("service %q: info must be a map", name),
 				})
 			} else {
+				// Validate scheme: allowed values are "" / "http" / "https".
+				if schRaw, ok := info["scheme"]; ok && schRaw != nil {
+					s, isStr := schRaw.(string)
+					if !isStr {
+						emit(validate.Diagnostic{
+							Severity: validate.SeverityError,
+							Target:   target,
+							Message:  fmt.Sprintf("service %q: info.scheme must be a string", name),
+						})
+					} else if s != "" && s != "http" && s != "https" {
+						emit(validate.Diagnostic{
+							Severity: validate.SeverityError,
+							Target:   target,
+							Message:  fmt.Sprintf("service %q: info.scheme %q is not allowed", name, s),
+							Hint:     "scheme must be one of: http, https",
+						})
+					}
+				}
+
 				// Validate title: check for control characters.
 				if titleRaw, ok := info["title"]; ok && titleRaw != nil {
 					title, isStr := titleRaw.(string)
