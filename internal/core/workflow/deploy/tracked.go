@@ -37,8 +37,16 @@ func TrackedServices(plan []pipeline.ResolvedStep) []string {
 // Returns: tracked service names, service deploy configs (keyed by service name), error.
 // reg (registry) is used to validate files_gate directives and must be non-nil.
 func LoadTrackedServices(cfg *config.DweConfig, reg *registry.Registry, baseDir string) ([]string, map[string]*config.ServiceDeployConfig, error) {
-	// Resolve the full deploy plan to find which services are tracked
+	// Resolve the full deploy plan to find which services are tracked.
+	// Substitute the built-in default pipeline when the project omits
+	// workspace/deploy.yml — mirrors the deploy entrypoint's contract so
+	// read-only callers (status, root summary, lifecycle gate) see the
+	// same tracked set as a real `dwe deploy run`.
+	ensuredDeploy, _ := EnsureDeployConfig(cfg.Deploy)
+	origDeploy := cfg.Deploy
+	cfg.Deploy = ensuredDeploy
 	plan, err := ResolvePlan(cfg, reg)
+	cfg.Deploy = origDeploy
 	if err != nil {
 		return nil, nil, fmt.Errorf("resolving deploy plan: %w", err)
 	}
