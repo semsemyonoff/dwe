@@ -252,6 +252,55 @@ func TestStopService_KnownDisabledService(t *testing.T) {
 	}
 }
 
+// TestStopService_UsesComposeProjectNameFromDockerYAML locks in the same fix
+// as TestRestartService_UsesComposeProjectNameFromDockerYAML for the stop
+// path — when docker.yml overrides project_name with a non-dash separator,
+// per-service stop must target the actual compose-derived container name.
+func TestStopService_UsesComposeProjectNameFromDockerYAML(t *testing.T) {
+	cfgPath := writeStopTestConfig(t, map[string]struct {
+		enabled   bool
+		container string
+	}{
+		"catalog": {enabled: true, container: "app-catalog"},
+	})
+	baseDir := filepath.Dir(cfgPath)
+	workspaceDir := filepath.Join(baseDir, "workspace")
+	if err := os.MkdirAll(workspaceDir, 0o755); err != nil {
+		t.Fatalf("mkdir workspace: %v", err)
+	}
+	dockerYAML := "project_name: \"${project.prefix}_${project.name}\"\n"
+	if err := os.WriteFile(filepath.Join(workspaceDir, "docker.yml"), []byte(dockerYAML), 0o644); err != nil {
+		t.Fatalf("write docker.yml: %v", err)
+	}
+	cfg, err := config.LoadConfig(cfgPath)
+	if err != nil {
+		t.Fatalf("loading config: %v", err)
+	}
+
+	var gotName string
+	prev := stopContainerFn
+	t.Cleanup(func() { stopContainerFn = prev })
+	stopContainerFn = func(_ context.Context, _, name string, _ int) error {
+		gotName = name
+		return nil
+	}
+
+	deps := StopServiceDeps{
+		Cfg:           cfg,
+		CmdRegistry:   nil,
+		BaseDir:       baseDir,
+		ErrOut:        nil,
+		SkipPreflight: true,
+	}
+	if err := StopService(context.Background(), deps, "catalog"); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	wantName := "dwe_test-app-catalog"
+	if gotName != wantName {
+		t.Errorf("container name = %q, want %q (FullName() would yield %q)", gotName, wantName, cfg.Project.FullName()+"-app-catalog")
+	}
+}
+
 func TestStopCmd_OneArg_UnknownService(t *testing.T) {
 	cfgPath := writeStopTestConfig(t, map[string]struct {
 		enabled   bool

@@ -27,12 +27,20 @@ var restartContainerFn = docker.RestartContainer
 // (which does both). Trade-off: faster and works on disabled services, but
 // a concurrent `dwe deploy run` is not blocked and the user gets raw docker
 // errors instead of curated preflight diagnostics when the daemon is down.
-func RestartService(ctx context.Context, cfg *config.DweConfig, name string) error {
+//
+// baseDir is the project root (the directory containing workspace.yml). It is
+// used to resolve the compose project name from workspace/docker.yml so the
+// derived container name matches what docker compose actually created — see
+// config.ResolveComposeProjectName.
+func RestartService(ctx context.Context, baseDir string, cfg *config.DweConfig, name string) error {
 	svc, ok := cfg.Services[name]
 	if !ok {
 		return fmt.Errorf("%w: %s", ErrUnknownService, name)
 	}
-	projectFull := cfg.Project.FullName()
+	projectFull, err := config.ResolveComposeProjectName(baseDir, cfg)
+	if err != nil {
+		return fmt.Errorf("resolving compose project name: %w", err)
+	}
 	containerName, err := daemon.ResolveContainerName(projectFull, svc.Container)
 	if err != nil {
 		return fmt.Errorf("resolving container name for service %q: %w", name, err)
@@ -97,7 +105,7 @@ the service has been disabled.`,
 			if err != nil {
 				return fmt.Errorf("loading config: %w", err)
 			}
-			return RestartService(cmd.Context(), cfg, name)
+			return RestartService(cmd.Context(), flags.ProjectRoot(), cfg, name)
 		},
 		ValidArgsFunction: cmdctx.ServiceNameCompletion(flags),
 	}

@@ -43,7 +43,7 @@ func runServicesList(cmd *cobra.Command, flags *cmdctx.RootFlags) error {
 		return fmt.Errorf("resolving project: %w", err)
 	}
 	dockerBin := config.DockerBin(cfg)
-	isRunning := func(_, container string) bool {
+	isRunning := func(container string) bool {
 		return stack.ContainerRunning(projectName, container, dockerBin)
 	}
 	in := stack.StatusInput{Cfg: cfg, IsRunning: isRunning}

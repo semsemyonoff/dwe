@@ -147,7 +147,7 @@ func TestRestartService_UnknownService(t *testing.T) {
 	if err != nil {
 		t.Fatalf("loading config: %v", err)
 	}
-	err = RestartService(context.Background(), cfg, "nonexistent")
+	err = RestartService(context.Background(), filepath.Dir(cfgPath), cfg, "nonexistent")
 	if !errors.Is(err, ErrUnknownService) {
 		t.Errorf("expected ErrUnknownService, got %v", err)
 	}
@@ -175,7 +175,7 @@ func TestRestartService_KnownService(t *testing.T) {
 		return nil
 	}
 
-	if err := RestartService(context.Background(), cfg, "postgres"); err != nil {
+	if err := RestartService(context.Background(), filepath.Dir(cfgPath), cfg, "postgres"); err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
 	wantName := cfg.Project.FullName() + "-pg"
@@ -216,7 +216,7 @@ func TestRestartService_DisabledService(t *testing.T) {
 		return nil
 	}
 
-	if err := RestartService(context.Background(), cfg, "redis"); err != nil {
+	if err := RestartService(context.Background(), filepath.Dir(cfgPath), cfg, "redis"); err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
 	if !called {
@@ -242,7 +242,7 @@ func TestRestartService_NoSuchContainerProducesHint(t *testing.T) {
 		return fmt.Errorf("%w: %s", docker.ErrNoSuchContainer, name)
 	}
 
-	err = RestartService(context.Background(), cfg, "postgres")
+	err = RestartService(context.Background(), filepath.Dir(cfgPath), cfg, "postgres")
 	if err == nil {
 		t.Fatal("expected error, got nil")
 	}
@@ -250,6 +250,100 @@ func TestRestartService_NoSuchContainerProducesHint(t *testing.T) {
 		if !strings.Contains(err.Error(), want) {
 			t.Errorf("error %q missing %q", err.Error(), want)
 		}
+	}
+}
+
+// TestRestartService_UsesComposeProjectNameFromDockerYAML locks in the fix for
+// a bug where `dwe restart <service>` derived the container name from
+// cfg.Project.FullName() (always "<prefix>-<name>") instead of the compose
+// project name configured in workspace/docker.yml. Projects that override
+// project_name (e.g. "${project.prefix}_${project.name}" with underscore) used
+// to get "no such container" errors because the real container is named after
+// the docker.yml project name.
+func TestRestartService_UsesComposeProjectNameFromDockerYAML(t *testing.T) {
+	cfgPath := writeStopTestConfig(t, map[string]struct {
+		enabled   bool
+		container string
+	}{
+		"catalog": {enabled: true, container: "app-catalog"},
+	})
+	baseDir := filepath.Dir(cfgPath)
+	workspaceDir := filepath.Join(baseDir, "workspace")
+	if err := os.MkdirAll(workspaceDir, 0o755); err != nil {
+		t.Fatalf("mkdir workspace: %v", err)
+	}
+	dockerYAML := "project_name: \"${project.prefix}_${project.name}\"\n"
+	if err := os.WriteFile(filepath.Join(workspaceDir, "docker.yml"), []byte(dockerYAML), 0o644); err != nil {
+		t.Fatalf("write docker.yml: %v", err)
+	}
+	cfg, err := config.LoadConfig(cfgPath)
+	if err != nil {
+		t.Fatalf("loading config: %v", err)
+	}
+
+	var gotName string
+	prev := restartContainerFn
+	t.Cleanup(func() { restartContainerFn = prev })
+	restartContainerFn = func(_ context.Context, _, name string, _ int) error {
+		gotName = name
+		return nil
+	}
+
+	if err := RestartService(context.Background(), baseDir, cfg, "catalog"); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	// workspace.yml fixture: prefix=dwe, name=test → docker.yml resolves
+	// project_name to "dwe_test" (underscore, NOT the FullName() dash).
+	wantName := "dwe_test-app-catalog"
+	if gotName != wantName {
+		t.Errorf("container name = %q, want %q (FullName() would yield %q)", gotName, wantName, cfg.Project.FullName()+"-app-catalog")
+	}
+}
+
+// TestRestartService_PropagatesMalformedDockerYAML verifies that an
+// unresolved/typoed ${...} reference in workspace/docker.yml is surfaced as a
+// real error instead of being silently swallowed in favour of FullName() —
+// otherwise a typo like ${project.naem} would make `dwe restart <svc>`
+// quietly target the wrong container.
+func TestRestartService_PropagatesMalformedDockerYAML(t *testing.T) {
+	cfgPath := writeStopTestConfig(t, map[string]struct {
+		enabled   bool
+		container string
+	}{
+		"catalog": {enabled: true, container: "app-catalog"},
+	})
+	baseDir := filepath.Dir(cfgPath)
+	workspaceDir := filepath.Join(baseDir, "workspace")
+	if err := os.MkdirAll(workspaceDir, 0o755); err != nil {
+		t.Fatalf("mkdir workspace: %v", err)
+	}
+	// Reference an unknown raw-config path so resolveVarTemplate errors out.
+	dockerYAML := "project_name: \"${project.naem}\"\n"
+	if err := os.WriteFile(filepath.Join(workspaceDir, "docker.yml"), []byte(dockerYAML), 0o644); err != nil {
+		t.Fatalf("write docker.yml: %v", err)
+	}
+	cfg, err := config.LoadConfig(cfgPath)
+	if err != nil {
+		t.Fatalf("loading config: %v", err)
+	}
+
+	prev := restartContainerFn
+	t.Cleanup(func() { restartContainerFn = prev })
+	called := false
+	restartContainerFn = func(_ context.Context, _, _ string, _ int) error {
+		called = true
+		return nil
+	}
+
+	err = RestartService(context.Background(), baseDir, cfg, "catalog")
+	if err == nil {
+		t.Fatal("expected error from malformed docker.yml, got nil")
+	}
+	if !strings.Contains(err.Error(), "compose project name") {
+		t.Errorf("error %q missing 'compose project name' prefix", err.Error())
+	}
+	if called {
+		t.Error("restartContainerFn should NOT be called when project name resolution fails")
 	}
 }
 

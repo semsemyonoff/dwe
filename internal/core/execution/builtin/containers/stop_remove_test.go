@@ -232,6 +232,39 @@ func TestDockerStopRemoveContainer_Run_RmFailurePropagates(t *testing.T) {
 	}
 }
 
+// TestDockerStopRemoveContainer_Run_UsesDockerConfigProjectName locks in the
+// fix for `dwe reset run --service <name>` on projects that override
+// workspace/docker.yml project_name (e.g. with an underscore separator). When
+// ectx.DockerConfig.ProjectName is non-empty it must take precedence over
+// cfg.Project.FullName() so the synthetic stop+rm step targets the actual
+// compose-created container, not a dash-joined name that does not exist.
+func TestDockerStopRemoveContainer_Run_UsesDockerConfigProjectName(t *testing.T) {
+	var stopName string
+	swapDockerSeams(t,
+		func(_ context.Context, _, name string, _ int) error {
+			stopName = name
+			return nil
+		},
+		func(_ context.Context, _, _ string) error { return nil },
+	)
+	cfg := &config.DweConfig{}
+	cfg.Project.Name = "tbm"
+	cfg.Project.Prefix = "dwe"
+	ectx, _ := newDockerStopRemoveCtx(cfg)
+	ectx.DockerConfig = &config.DockerConfig{ProjectName: "dwe_tbm"}
+	err := StopRemoveContainer{}.Run(
+		context.Background(),
+		map[string]any{"container_template": "app-catalog"},
+		ectx,
+	)
+	if err != nil {
+		t.Fatalf("Run error: %v", err)
+	}
+	if stopName != "dwe_tbm-app-catalog" {
+		t.Errorf("stop container name = %q, want dwe_tbm-app-catalog (FullName fallback would yield dwe-tbm-app-catalog)", stopName)
+	}
+}
+
 func TestDockerStopRemoveContainer_Run_NoProjectPrefix(t *testing.T) {
 	// Without project.prefix, FullName returns just project.Name.
 	var stopName string

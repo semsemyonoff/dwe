@@ -98,7 +98,7 @@ func loadStatusContext(flags *cmdctx.RootFlags, errW io.Writer) (*statusContext,
 	}
 	topo, topoStatus := stack.ResolveTopology(cfg, dockerCfg, projectName, flags.ProjectRoot())
 	dockerBin := config.DockerBin(cfg)
-	isRunning := func(_, container string) bool {
+	isRunning := func(container string) bool {
 		return stack.ContainerRunning(projectName, container, dockerBin)
 	}
 	return &statusContext{

@@ -72,7 +72,10 @@ func stopServiceLocked(ctx context.Context, deps StopServiceDeps, name string) e
 	if !ok {
 		return fmt.Errorf("%w: %s", ErrUnknownService, name)
 	}
-	projectFull := deps.Cfg.Project.FullName()
+	projectFull, err := config.ResolveComposeProjectName(deps.BaseDir, deps.Cfg)
+	if err != nil {
+		return fmt.Errorf("resolving compose project name: %w", err)
+	}
 	containerName, err := daemon.ResolveContainerName(projectFull, svc.Container)
 	if err != nil {
 		return fmt.Errorf("resolving container name for service %q: %w", name, err)

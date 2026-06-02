@@ -54,7 +54,14 @@ func (StopRemoveContainer) Run(ctx context.Context, with map[string]any, ectx sp
 		return fmt.Errorf("docker_stop_remove_container: config not available")
 	}
 
+	// Prefer the compose project name from workspace/docker.yml (already
+	// resolved into ectx.DockerConfig) so the derived container name matches
+	// what docker compose used at create time. Fall back to FullName() when
+	// docker.yml is absent or its project_name is empty.
 	projectFull := ectx.Config.Project.FullName()
+	if ectx.DockerConfig != nil && ectx.DockerConfig.ProjectName != "" {
+		projectFull = ectx.DockerConfig.ProjectName
+	}
 	fullName, err := daemon.ResolveContainerName(projectFull, spec.GetStringParam(with, "container_template", ""))
 	if err != nil {
 		return err

@@ -188,6 +188,108 @@ args: {}
 	}
 }
 
+func TestResolveComposeProjectName(t *testing.T) {
+	cfg := func() *DweConfig {
+		c := &DweConfig{
+			Raw: map[string]any{
+				"project": map[string]any{
+					"name":   "tbm",
+					"prefix": "dwe",
+				},
+			},
+		}
+		c.Project.Name = "tbm"
+		c.Project.Prefix = "dwe"
+		return c
+	}
+
+	t.Run("empty_baseDir_returns_FullName", func(t *testing.T) {
+		got, err := ResolveComposeProjectName("", cfg())
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if got != "dwe-tbm" {
+			t.Errorf("got %q, want %q", got, "dwe-tbm")
+		}
+	})
+
+	t.Run("missing_docker_yml_falls_back_to_FullName", func(t *testing.T) {
+		baseDir := t.TempDir()
+		got, err := ResolveComposeProjectName(baseDir, cfg())
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if got != "dwe-tbm" {
+			t.Errorf("got %q, want %q", got, "dwe-tbm")
+		}
+	})
+
+	t.Run("docker_yml_with_template_takes_precedence", func(t *testing.T) {
+		baseDir := writeDockerFixture(t, "project_name: \"${project.prefix}_${project.name}\"\n", "")
+		got, err := ResolveComposeProjectName(baseDir, cfg())
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if got != "dwe_tbm" {
+			t.Errorf("got %q, want %q", got, "dwe_tbm")
+		}
+	})
+
+	t.Run("empty_project_name_falls_back_to_FullName", func(t *testing.T) {
+		baseDir := writeDockerFixture(t, "args: {}\n", "")
+		got, err := ResolveComposeProjectName(baseDir, cfg())
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if got != "dwe-tbm" {
+			t.Errorf("got %q, want %q", got, "dwe-tbm")
+		}
+	})
+
+	t.Run("unresolved_template_returns_error", func(t *testing.T) {
+		baseDir := writeDockerFixture(t, "project_name: \"${project.naem}\"\n", "")
+		_, err := ResolveComposeProjectName(baseDir, cfg())
+		if err == nil {
+			t.Fatal("expected error from unresolved ${...} reference, got nil")
+		}
+	})
+
+	// Regression: malformed schema in unrelated fields (e.g. args.up given a
+	// string instead of a sequence) must NOT prevent project_name resolution.
+	// Per-service stop/restart/logs only need project_name and should not
+	// fail because of a typo elsewhere in docker.yml.
+	t.Run("malformed_unrelated_schema_does_not_break_resolution", func(t *testing.T) {
+		yml := `project_name: "${project.prefix}_${project.name}"
+args:
+  up: "not-a-list-this-should-be-a-sequence"
+`
+		baseDir := writeDockerFixture(t, yml, "")
+		got, err := ResolveComposeProjectName(baseDir, cfg())
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if got != "dwe_tbm" {
+			t.Errorf("got %q, want %q", got, "dwe_tbm")
+		}
+	})
+
+	// docker.local.yml override of project_name takes precedence and is also
+	// only-project_name (no full schema decode), so a malformed args block in
+	// local overlay does not break resolution either.
+	t.Run("local_override_takes_precedence", func(t *testing.T) {
+		base := "project_name: \"base-name\"\n"
+		local := "project_name: \"override-name\"\n"
+		baseDir := writeDockerFixture(t, base, local)
+		got, err := ResolveComposeProjectName(baseDir, cfg())
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if got != "override-name" {
+			t.Errorf("got %q, want %q", got, "override-name")
+		}
+	})
+}
+
 func TestResolveVarTemplate(t *testing.T) {
 	raw := map[string]any{
 		"project": map[string]any{

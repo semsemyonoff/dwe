@@ -12,10 +12,11 @@ import (
 	"github.com/semsemyonoff/dwe/internal/core/workflow/deploy/journal"
 )
 
-// ContainerCheckFn reports whether a container with the given name is running
-// under the given compose project. The callback shape lets tests stub Docker
-// state without spawning processes.
-type ContainerCheckFn func(projectFullName, containerName string) bool
+// ContainerCheckFn reports whether the named container is running. Callers
+// close over the compose project name when constructing the callback so the
+// stack/render layer never needs to thread it through. The callback shape
+// lets tests stub Docker state without spawning processes.
+type ContainerCheckFn func(containerName string) bool
 
 // StatusInput bundles the data needed to render the full project status view.
 // Topo/TopoStatus may be nil — topology section is then skipped.
@@ -37,7 +38,7 @@ func HealthIndicator(in StatusInput) string {
 	if in.Cfg == nil {
 		return ""
 	}
-	rows := collectRowsByType(in.Cfg, in.IsRunning, in.Cfg.Project.FullName(), nil)
+	rows := collectRowsByType(in.Cfg, in.IsRunning, nil)
 	return selectHealthIndicator(rows, in.TopoStatus)
 }
 
@@ -65,7 +66,7 @@ func RenderInfra(in StatusInput) (string, []error) {
 }
 
 func renderTypeSection(in StatusInput, t config.ServiceType, title string, withDirCol bool) (string, []error) {
-	rows := collectRowsByType(in.Cfg, in.IsRunning, in.Cfg.Project.FullName(), &t)
+	rows := collectRowsByType(in.Cfg, in.IsRunning, &t)
 	if len(rows) == 0 {
 		return "", nil
 	}
@@ -128,7 +129,7 @@ func rawSubtree(cfg *config.DweConfig, key string) any {
 
 // collectRowsByType returns rows for services matching the given type. When
 // filter is nil, all services are returned (used by health aggregation).
-func collectRowsByType(cfg *config.DweConfig, isRunning ContainerCheckFn, projectFull string, filter *config.ServiceType) []render.ServiceTableRow {
+func collectRowsByType(cfg *config.DweConfig, isRunning ContainerCheckFn, filter *config.ServiceType) []render.ServiceTableRow {
 	if cfg == nil {
 		return nil
 	}
@@ -141,7 +142,7 @@ func collectRowsByType(cfg *config.DweConfig, isRunning ContainerCheckFn, projec
 		}
 		running := false
 		if svc.Required || svc.Enabled {
-			running = isRunning(projectFull, svc.Container)
+			running = isRunning(svc.Container)
 		}
 		rows = append(rows, render.ServiceTableRow{
 			Name:      name,
@@ -182,7 +183,7 @@ func CollectServiceRows(in StatusInput, filter *config.ServiceType) []render.Ser
 	if in.Cfg == nil {
 		return nil
 	}
-	return collectRowsByType(in.Cfg, in.IsRunning, in.Cfg.Project.FullName(), filter)
+	return collectRowsByType(in.Cfg, in.IsRunning, filter)
 }
 
 // ContainerRunning checks if a Docker container is running by full container name.

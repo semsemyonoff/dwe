@@ -99,7 +99,7 @@ func TestBuildTabs_AllRunning(t *testing.T) {
 		},
 		nil,
 	)
-	alwaysRunning := func(_, _ string) bool { return true }
+	alwaysRunning := func(_ string) bool { return true }
 
 	deps := Deps{
 		Cfg:         cfg,
@@ -128,7 +128,7 @@ func TestBuildTabs_AllStopped(t *testing.T) {
 		},
 		nil,
 	)
-	neverRunning := func(_, _ string) bool { return false }
+	neverRunning := func(_ string) bool { return false }
 
 	deps := Deps{
 		Cfg:         cfg,
@@ -151,7 +151,7 @@ func TestBuildTabs_Partial(t *testing.T) {
 		},
 		nil,
 	)
-	partialRunning := func(_, container string) bool {
+	partialRunning := func(container string) bool {
 		return container == "app-main"
 	}
 
@@ -176,7 +176,7 @@ func TestBuildTabs_EmptyService(t *testing.T) {
 
 	deps := Deps{
 		Cfg:         cfg,
-		IsRunning:   func(_, _ string) bool { return false },
+		IsRunning:   func(_ string) bool { return false },
 		ProjectName: "test",
 	}
 
@@ -197,7 +197,7 @@ func TestBuildTabs_WithNilState(t *testing.T) {
 
 	deps := Deps{
 		Cfg:         cfg,
-		IsRunning:   func(_, _ string) bool { return false },
+		IsRunning:   func(_ string) bool { return false },
 		ProjectName: "test",
 		State:       nil, // No deploy state
 	}
@@ -226,7 +226,7 @@ func TestBuildTabs_PrependsWarningOnRenderError(t *testing.T) {
 
 	deps := Deps{
 		Cfg:         cfg,
-		IsRunning:   func(_, _ string) bool { return false },
+		IsRunning:   func(_ string) bool { return false },
 		ProjectName: "test",
 	}
 

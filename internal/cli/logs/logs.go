@@ -75,7 +75,11 @@ func ResolveLogsTarget(flags *cmdctx.RootFlags, serviceName string) (containerNa
 			WithHint("available: "+strings.Join(known, ", ")).
 			WithDetail("requested", serviceName)
 	}
-	containerName, err = daemon.ResolveContainerName(cfg.Project.FullName(), svc.Container)
+	projectFull, err := config.ResolveComposeProjectName(flags.ProjectRoot(), cfg)
+	if err != nil {
+		return "", cfg, cmdctx.ErrWrap("project_invalid_config", err)
+	}
+	containerName, err = daemon.ResolveContainerName(projectFull, svc.Container)
 	if err != nil {
 		return "", cfg, cmdctx.ErrWrap("container_name_invalid", err)
 	}

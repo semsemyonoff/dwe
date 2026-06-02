@@ -234,18 +234,22 @@ func BuildComposeArgs(projectName string, composeFiles []string, command string,
 // ResolveProjectAndDocker returns both the compose project name and the full
 // docker config. If docker.yml does not exist, project name falls back to the
 // config default and dockerCfg is nil (no error).
+//
+// Project-name precedence is delegated to config.ResolveComposeProjectName so
+// stop/restart/logs (which only need the name) and this function (which needs
+// the full DockerConfig) cannot drift apart.
 func ResolveProjectAndDocker(configPath string, cfg *config.DweConfig) (string, *config.DockerConfig, error) {
 	baseDir := filepath.Dir(configPath)
+	projectName, err := config.ResolveComposeProjectName(baseDir, cfg)
+	if err != nil {
+		return "", nil, fmt.Errorf("loading docker config: %w", err)
+	}
 	dockerCfg, err := config.LoadDockerConfig(baseDir, cfg)
 	if err != nil {
 		if errors.Is(err, os.ErrNotExist) {
-			return cfg.Project.FullName(), nil, nil
+			return projectName, nil, nil
 		}
 		return "", nil, fmt.Errorf("loading docker config: %w", err)
-	}
-	projectName := cfg.Project.FullName()
-	if dockerCfg.ProjectName != "" {
-		projectName = dockerCfg.ProjectName
 	}
 	return projectName, dockerCfg, nil
 }

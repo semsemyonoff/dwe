@@ -17,7 +17,7 @@ func TestHealthIndicator_Stopped(t *testing.T) {
 		nil,
 		nil,
 	)
-	neverRunning := func(_, _ string) bool { return false }
+	neverRunning := func(_ string) bool { return false }
 	out := HealthIndicator(StatusInput{Cfg: cfg, IsRunning: neverRunning})
 	if !strings.Contains(out, "○ stopped") {
 		t.Errorf("expected '○ stopped' indicator, got: %q", out)
@@ -36,7 +36,7 @@ func TestHealthIndicator_Running(t *testing.T) {
 		nil,
 		nil,
 	)
-	alwaysRunning := func(_, _ string) bool { return true }
+	alwaysRunning := func(_ string) bool { return true }
 	out := HealthIndicator(StatusInput{Cfg: cfg, IsRunning: alwaysRunning})
 	if !strings.Contains(out, "● running") {
 		t.Errorf("expected '● running' indicator, got: %q", out)
@@ -56,7 +56,7 @@ func TestHealthIndicator_Partial(t *testing.T) {
 		nil,
 		nil,
 	)
-	partialRunning := func(_, container string) bool {
+	partialRunning := func(container string) bool {
 		return container == "app-main"
 	}
 	out := HealthIndicator(StatusInput{Cfg: cfg, IsRunning: partialRunning})
@@ -77,7 +77,7 @@ func TestRenderHealth_ContainsIndicator(t *testing.T) {
 		nil,
 		nil,
 	)
-	neverRunning := func(_, _ string) bool { return false }
+	neverRunning := func(_ string) bool { return false }
 	out := RenderHealth(StatusInput{Cfg: cfg, IsRunning: neverRunning})
 	if !strings.Contains(out, "DWE:") {
 		t.Errorf("output missing 'DWE:' indicator: %q", out)
@@ -93,7 +93,7 @@ func TestRenderHealth_Stopped(t *testing.T) {
 		nil,
 		nil,
 	)
-	neverRunning := func(_, _ string) bool { return false }
+	neverRunning := func(_ string) bool { return false }
 	out := RenderHealth(StatusInput{Cfg: cfg, IsRunning: neverRunning})
 	if !strings.Contains(out, "○ stopped") {
 		t.Errorf("expected '○ stopped' indicator, got: %q", out)
@@ -109,7 +109,7 @@ func TestRenderHealth_Running(t *testing.T) {
 		nil,
 		nil,
 	)
-	alwaysRunning := func(_, _ string) bool { return true }
+	alwaysRunning := func(_ string) bool { return true }
 	out := RenderHealth(StatusInput{Cfg: cfg, IsRunning: alwaysRunning})
 	if !strings.Contains(out, "● running") {
 		t.Errorf("expected '● running' indicator, got: %q", out)
@@ -126,7 +126,7 @@ func TestRenderHealth_Partial(t *testing.T) {
 		nil,
 		nil,
 	)
-	partialRunning := func(_, container string) bool {
+	partialRunning := func(container string) bool {
 		return container == "app-main"
 	}
 	out := RenderHealth(StatusInput{Cfg: cfg, IsRunning: partialRunning})
@@ -144,7 +144,7 @@ func TestRenderApps_ContainsServiceName(t *testing.T) {
 		nil,
 		nil,
 	)
-	out, errs := RenderApps(StatusInput{Cfg: cfg, IsRunning: func(_, _ string) bool { return false }})
+	out, errs := RenderApps(StatusInput{Cfg: cfg, IsRunning: func(_ string) bool { return false }})
 	if len(errs) != 0 {
 		t.Errorf("unexpected errors: %v", errs)
 	}
@@ -163,7 +163,7 @@ func TestRenderInfra_FiltersByType(t *testing.T) {
 			"main": {Type: config.ServiceTypeApp, Container: "app-main", Required: true},
 		},
 	}
-	out, _ := RenderInfra(StatusInput{Cfg: cfg, IsRunning: func(_, _ string) bool { return false }})
+	out, _ := RenderInfra(StatusInput{Cfg: cfg, IsRunning: func(_ string) bool { return false }})
 	if !strings.Contains(out, "Infra") {
 		t.Errorf("infra output missing title: %s", out)
 	}
@@ -184,7 +184,7 @@ func TestRenderTools_ContainsToolName(t *testing.T) {
 		nil,
 		nil,
 	)
-	out, errs := RenderTools(StatusInput{Cfg: cfg, IsRunning: func(_, _ string) bool { return false }})
+	out, errs := RenderTools(StatusInput{Cfg: cfg, IsRunning: func(_ string) bool { return false }})
 	if len(errs) != 0 {
 		t.Errorf("unexpected errors: %v", errs)
 	}
@@ -202,7 +202,7 @@ func TestRenderTopology_NilSkipped(t *testing.T) {
 		nil,
 		nil,
 	)
-	out := RenderTopology(StatusInput{Cfg: cfg, IsRunning: func(_, _ string) bool { return false }})
+	out := RenderTopology(StatusInput{Cfg: cfg, IsRunning: func(_ string) bool { return false }})
 	if out != "" {
 		t.Errorf("expected empty topology output when topo is nil, got: %q", out)
 	}
@@ -225,7 +225,7 @@ func TestRenderTopology_WithStatus(t *testing.T) {
 		"nginx":    render.NodeRunning,
 		"app-main": render.NodeStopped,
 	}
-	out := RenderTopology(StatusInput{Cfg: cfg, IsRunning: func(_, _ string) bool { return false }, Topo: topo, TopoStatus: topoStatus})
+	out := RenderTopology(StatusInput{Cfg: cfg, IsRunning: func(_ string) bool { return false }, Topo: topo, TopoStatus: topoStatus})
 	if !strings.Contains(out, "running") {
 		t.Errorf("expected 'running' status in topology output: %s", out)
 	}
@@ -252,7 +252,7 @@ func TestRenderApps_CustomColumnsAggregateError(t *testing.T) {
 		nil,
 		nil,
 	)
-	_, errs := RenderApps(StatusInput{Cfg: cfg, IsRunning: func(_, _ string) bool { return false }})
+	_, errs := RenderApps(StatusInput{Cfg: cfg, IsRunning: func(_ string) bool { return false }})
 	if len(errs) == 0 {
 		t.Errorf("expected template error to be aggregated")
 	}

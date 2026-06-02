@@ -193,6 +193,71 @@ func applyDockerArgsDefaults(args *DockerArgs, presentKeys map[string]bool) {
 	}
 }
 
+// ResolveComposeProjectName returns the authoritative compose project name —
+// the same identifier `docker compose -p <name>` uses to scope containers,
+// networks, and volumes for the project. It is the single source of truth for
+// any code path that derives a container name as "<project>-<container>"
+// while bypassing compose (per-service stop/restart, per-service reset, log
+// tailing, status probes).
+//
+// Precedence:
+//  1. workspace/docker.yml's resolved project_name (e.g. "${project.prefix}_${project.name}").
+//  2. cfg.Project.FullName() as a fallback when docker.yml is absent or its
+//     project_name is empty — preserves behaviour for minimal projects.
+//
+// Reads ONLY the project_name field (via readDockerProjectName) — does NOT
+// roundtrip through the full DockerConfig schema. This keeps the lightweight
+// per-service paths (restart/stop/logs/reset --service) immune to unrelated
+// schema errors elsewhere in docker.yml (malformed args:, bad volumes:, etc.):
+// a typo in the args block must not break `dwe restart <svc>` when only
+// project_name is needed. Template-resolution errors on project_name itself
+// (e.g. ${project.naem} typo) ARE propagated. os.ErrNotExist on docker.yml
+// triggers the fallback to FullName().
+//
+// baseDir is the project root (the directory containing workspace.yml); an
+// empty baseDir skips the docker.yml read and returns FullName().
+func ResolveComposeProjectName(baseDir string, cfg *DweConfig) (string, error) {
+	if baseDir == "" {
+		return cfg.Project.FullName(), nil
+	}
+	name, err := readDockerProjectName(baseDir, cfg)
+	if err != nil {
+		if errors.Is(err, os.ErrNotExist) {
+			return cfg.Project.FullName(), nil
+		}
+		return "", err
+	}
+	if name == "" {
+		return cfg.Project.FullName(), nil
+	}
+	return name, nil
+}
+
+// readDockerProjectName reads workspace/docker.yml (+ optional
+// docker.local.yml override) as raw maps, deep-merges them, extracts the
+// project_name field, and resolves ${...} templates against cfg.Raw.
+// Intentionally narrow: never decodes into DockerConfig, so unrelated YAML
+// schema errors elsewhere in the file cannot break callers that only need
+// project_name. Returns os.ErrNotExist if docker.yml is absent; empty string
+// if the field is absent or empty; the resolved name otherwise.
+func readDockerProjectName(baseDir string, cfg *DweConfig) (string, error) {
+	base, err := loadRawYAML(filepath.Join(baseDir, "workspace", "docker.yml"))
+	if err != nil {
+		return "", err
+	}
+	localPath := filepath.Join(baseDir, "workspace", "docker.local.yml")
+	if local, lerr := loadRawYAML(localPath); lerr == nil {
+		deepMerge(base, local)
+	} else if !errors.Is(lerr, os.ErrNotExist) {
+		return "", fmt.Errorf("read %s: %w", localPath, lerr)
+	}
+	raw, _ := base["project_name"].(string)
+	if raw == "" {
+		return "", nil
+	}
+	return resolveVarTemplate(raw, cfg.Raw)
+}
+
 // resolveVarTemplate resolves ${dot.path} expressions in s against raw config.
 // This is a lightweight resolver that doesn't need the full tpl package —
 // it only handles the ${key} → value substitution pattern.
