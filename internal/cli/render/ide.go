@@ -8,7 +8,6 @@ import (
 
 	"github.com/semsemyonoff/dwe/internal/cli/cmdctx"
 	"github.com/semsemyonoff/dwe/internal/core/execution/templates/ide"
-	"github.com/semsemyonoff/dwe/internal/core/execution/templates/manifest"
 	"github.com/semsemyonoff/dwe/internal/core/project/config"
 	"github.com/semsemyonoff/dwe/internal/shared/pathsafe"
 	"github.com/semsemyonoff/dwe/internal/shared/render"
@@ -35,11 +34,12 @@ corresponding location within the service directory. For example:
 A manifest.yml is required; packs without one produce an error with a migration
 hint. See docs/reference/render/ide.md for the manifest schema and migration.
 
-Template pack resolution (explicit is strict; implicit chain: service-name → default):
+Template pack resolution (explicit is strict; implicit chain walks the extends chain):
   1. If render.ide.template is set in the service config, use that pack (explicit, strict)
   2. Otherwise, try workspace/templates/ide/<service-name>/
-  3. If not found, use workspace/templates/ide/default/
-  4. If none exist, skip with a warning (implicit missing pack)
+  3. Then walk the service's extends chain — try workspace/templates/ide/<ancestor>/ for each ancestor
+  4. Then use workspace/templates/ide/default/
+  5. If none exist, skip with a warning (implicit missing pack)
 
 Services that participate in IDE rendering:
   - Type 'app' (default) has render.ide.enabled: true by default
@@ -214,16 +214,16 @@ func renderIDEConfigs(projectRoot, name string, svc config.ServiceConfig, cfg *c
 		return err
 	}
 
-	packDir, packName, found, err := ide.ResolveTemplatePack(svc, absRoot, name)
+	packDir, packName, found, err := ide.ResolveTemplatePack(svc, cfg.Services, absRoot, name)
 	if err != nil {
 		return err
 	}
 	if !found {
-		tried := fmt.Sprintf("tried %s, default", name)
-		if manifest.ValidatePackName(name) != nil {
-			tried = "tried default"
+		tried := strings.Join(ide.ImplicitPackCandidates(cfg.Services, name), ", ")
+		if tried == "" {
+			tried = "default"
 		}
-		w.Warning(fmt.Sprintf("ide [%s] — skipped (no template pack found; %s)", name, tried))
+		w.Warning(fmt.Sprintf("ide [%s] — skipped (no template pack found; tried %s)", name, tried))
 		return nil
 	}
 

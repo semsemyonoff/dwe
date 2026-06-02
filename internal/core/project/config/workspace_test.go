@@ -4015,13 +4015,13 @@ func TestServiceConfig_AIRenderEnabledExplicit(t *testing.T) {
 		{
 			name:     "omitted on db type",
 			svc:      ServiceConfig{Type: "db"},
-			wantBool: true,
+			wantBool: false,
 			wantExp:  false,
 		},
 		{
 			name:     "omitted on empty type",
 			svc:      ServiceConfig{Type: ""},
-			wantBool: true,
+			wantBool: false,
 			wantExp:  false,
 		},
 	}
@@ -4061,9 +4061,9 @@ func TestServiceConfig_AIRenderEnabled(t *testing.T) {
 			wantBool: true,
 		},
 		{
-			name:     "db default true",
+			name:     "db default false",
 			svc:      ServiceConfig{Type: "db"},
-			wantBool: true,
+			wantBool: false,
 		},
 	}
 	for _, tt := range tests {

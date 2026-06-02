@@ -20,7 +20,7 @@ import (
 // SkippedService carries information about a service that was skipped during AI rendering.
 type SkippedService struct {
 	Name   string // service name
-	Reason string // "service-disabled" | "ai-disabled" | "empty-dir" | "lost-collision"
+	Reason string // "service-disabled" | "ai-disabled" | "ai-policy" | "empty-dir" | "lost-collision"
 	Dir    string // set for "lost-collision" only
 	Winner string // set for "lost-collision" only (name of the winning service)
 }
@@ -67,6 +67,39 @@ func ValidateServiceNameAsPackKey(s string) error {
 	return nil
 }
 
+// ImplicitPackCandidates returns the implicit-chain pack name candidates for a
+// service: the service name, then each ancestor walked via Extends (in order),
+// then "default". Duplicates and names that fail manifest.ValidatePackName are
+// skipped silently. The 32-hop cycle guard mirrors ExtendsDepth.
+func ImplicitPackCandidates(services map[string]config.ServiceConfig, serviceName string) []string {
+	const maxDepth = 32
+	var out []string
+	seen := make(map[string]bool)
+	add := func(name string) {
+		if name == "" || seen[name] {
+			return
+		}
+		if manifest.ValidatePackName(name) != nil {
+			return
+		}
+		out = append(out, name)
+		seen[name] = true
+	}
+
+	add(serviceName)
+	current := serviceName
+	for range maxDepth {
+		svc, ok := services[current]
+		if !ok || svc.Extends == "" {
+			break
+		}
+		current = svc.Extends
+		add(current)
+	}
+	add("default")
+	return out
+}
+
 // ExtendsDepth computes the depth of a service's extends chain.
 // Returns (depth, capped): depth is the number of hops to the root;
 // capped is true if depth hit the 32-hop limit (defense-in-depth cycle guard).
@@ -105,9 +138,11 @@ func ExtendsRoot(services map[string]config.ServiceConfig, name string) string {
 
 // ResolveTemplatePack resolves a template pack directory for a service.
 // Returns (packDir, packName, found, err). Explicit svc.Render.AI.Template is strict.
-// Implicit chain: service-name → default; returns found=false when exhausted.
-// Semantics: err != nil means hard failure; err == nil && !found means implicit chain exhausted.
-func ResolveTemplatePack(svc config.ServiceConfig, projectRoot, serviceName string) (string, string, bool, error) {
+// Implicit chain: service-name → ancestors via Extends → default; returns
+// found=false when exhausted. Invalid pack names in the chain are skipped
+// silently. Semantics: err != nil means hard failure; err == nil && !found
+// means implicit chain exhausted.
+func ResolveTemplatePack(svc config.ServiceConfig, services map[string]config.ServiceConfig, projectRoot, serviceName string) (string, string, bool, error) {
 	absRoot, err := filepath.Abs(projectRoot)
 	if err != nil {
 		return "", "", false, fmt.Errorf("resolve project root: %w", err)
@@ -138,14 +173,7 @@ func ResolveTemplatePack(svc config.ServiceConfig, projectRoot, serviceName stri
 		return "", "", false, fmt.Errorf("agents template pack %q not found (required by explicit render.ai.template setting)", svc.Render.AI.Template)
 	}
 
-	// Implicit chain: service-name → default. Skip the service-name candidate
-	// silently if the name is not a valid pack name (e.g. ".api"); default is
-	// always tried.
-	var candidates []string
-	if manifest.ValidatePackName(serviceName) == nil {
-		candidates = append(candidates, serviceName)
-	}
-	candidates = append(candidates, "default")
+	candidates := ImplicitPackCandidates(services, serviceName)
 	for _, name := range candidates {
 		candidate := filepath.Join(absRoot, "workspace", "templates", "ai", name)
 		fi, err := os.Lstat(candidate)
@@ -242,6 +270,46 @@ func filterServices(svcs map[string]config.ServiceConfig, t config.ServiceType) 
 		}
 	}
 	return out
+}
+
+// DryRunRender resolves, parses, and executes every render entry in m against
+// data without writing to disk. Returns a map from manifest `from` path to the
+// first error encountered for that entry (parse, source-read, or execution
+// errors — typically missingkey=error). On success returns nil.
+func DryRunRender(projectRoot, packName string, m *Manifest, data TemplateData) map[string]error {
+	if m == nil || data.Cfg == nil {
+		return nil
+	}
+	var failures map[string]error
+	for _, entry := range m.Render {
+		if err := executeTemplateInMemory(projectRoot, packName, entry.From, data); err != nil {
+			if failures == nil {
+				failures = make(map[string]error)
+			}
+			failures[entry.From] = err
+		}
+	}
+	return failures
+}
+
+func executeTemplateInMemory(projectRoot, packName, rel string, data TemplateData) error {
+	sourcePath, _, err := packroot.Resolve(projectRoot, "ai", packName, rel)
+	if err != nil {
+		return fmt.Errorf("resolve template %s: %w", rel, err)
+	}
+	tplBytes, err := os.ReadFile(sourcePath)
+	if err != nil {
+		return fmt.Errorf("read template %s: %w", sourcePath, err)
+	}
+	name := filepath.Base(sourcePath)
+	t, err := template.New(name).Option("missingkey=error").Parse(string(tplBytes))
+	if err != nil {
+		return fmt.Errorf("parse template %s: %w", name, err)
+	}
+	if err := t.Execute(&bytes.Buffer{}, data); err != nil {
+		return fmt.Errorf("render template %s: %w", name, err)
+	}
+	return nil
 }
 
 // RenderTemplateFile resolves rel via packroot (override first, canonical
@@ -413,8 +481,12 @@ func SelectServices(services map[string]config.ServiceConfig) (selected []string
 			allSkipped = append(allSkipped, SkippedService{Name: name, Reason: "service-disabled"})
 			continue
 		}
-		if !svc.AIRenderEnabled() {
-			allSkipped = append(allSkipped, SkippedService{Name: name, Reason: "ai-disabled"})
+		if aiEnabled, explicit := svc.AIRenderEnabledExplicit(); !aiEnabled {
+			reason := "ai-policy"
+			if explicit {
+				reason = "ai-disabled"
+			}
+			allSkipped = append(allSkipped, SkippedService{Name: name, Reason: reason})
 			continue
 		}
 		enabled[name] = svc

@@ -8,7 +8,6 @@ import (
 
 	"github.com/semsemyonoff/dwe/internal/cli/cmdctx"
 	gitpkg "github.com/semsemyonoff/dwe/internal/core/execution/templates/git"
-	"github.com/semsemyonoff/dwe/internal/core/execution/templates/manifest"
 	"github.com/semsemyonoff/dwe/internal/core/project/config"
 	"github.com/semsemyonoff/dwe/internal/shared/render"
 
@@ -29,11 +28,12 @@ The command reads manifest.yml from the chosen template pack
 Services whose src/.git is missing or is a file (worktree/submodule pointer)
 are skipped with a warning.
 
-Template pack resolution (explicit is strict; implicit chain: service-name → default):
+Template pack resolution (explicit is strict; implicit chain walks the extends chain):
   1. If render.git.template is set in the service config, use that pack (explicit, strict)
   2. Otherwise, try workspace/templates/git/<service-name>/
-  3. If not found, use workspace/templates/git/default/
-  4. If none exist, skip with a warning (implicit missing pack)
+  3. Then walk the service's extends chain — try workspace/templates/git/<ancestor>/ for each ancestor
+  4. Then use workspace/templates/git/default/
+  5. If none exist, skip with a warning (implicit missing pack)
 
 Services that participate in git-hook rendering:
   - Type 'app' (default) has render.git.enabled: true by default
@@ -135,7 +135,7 @@ func renderGitHooksForService(projectRoot, name string, svc config.ServiceConfig
 	// typos in render.git.template surface as errors regardless of .git state.
 	var packDir, packName string
 	if svc.Render.Git.Template != "" {
-		packDir, packName, _, err = gitpkg.ResolveTemplatePack(svc, absRoot, name)
+		packDir, packName, _, err = gitpkg.ResolveTemplatePack(svc, cfg.Services, absRoot, name)
 		if err != nil {
 			return err
 		}
@@ -159,16 +159,16 @@ func renderGitHooksForService(projectRoot, name string, svc config.ServiceConfig
 	// For implicit template, resolve now (after .git check).
 	if svc.Render.Git.Template == "" {
 		var found bool
-		packDir, packName, found, err = gitpkg.ResolveTemplatePack(svc, absRoot, name)
+		packDir, packName, found, err = gitpkg.ResolveTemplatePack(svc, cfg.Services, absRoot, name)
 		if err != nil {
 			return err
 		}
 		if !found {
-			tried := fmt.Sprintf("tried %s, default", name)
-			if manifest.ValidatePackName(name) != nil {
-				tried = "tried default"
+			tried := strings.Join(gitpkg.ImplicitPackCandidates(cfg.Services, name), ", ")
+			if tried == "" {
+				tried = "default"
 			}
-			w.Warning(fmt.Sprintf("git [%s] — skipped (no template pack found; %s)", name, tried))
+			w.Warning(fmt.Sprintf("git [%s] — skipped (no template pack found; tried %s)", name, tried))
 			return nil
 		}
 	}

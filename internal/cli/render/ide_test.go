@@ -297,7 +297,7 @@ func TestResolveIDETemplatePack_explicit(t *testing.T) {
 				Dir:     "services/main",
 				Render:  config.ServiceRenderConfig{IDE: config.ServiceIDEConfig{Template: tt.template}},
 			}
-			pack, packName, found, err := ide.ResolveTemplatePack(svc, projectRoot, "main")
+			pack, packName, found, err := ide.ResolveTemplatePack(svc, nil, projectRoot, "main")
 			if (err != nil) != tt.wantError {
 				t.Errorf("want error=%v, got %v", tt.wantError, err)
 			}
@@ -324,7 +324,7 @@ func TestResolveIDETemplatePack_implicit(t *testing.T) {
 	})
 
 	svc := config.ServiceConfig{Type: "app", Enabled: true, Dir: "services/main"}
-	pack, packName, found, err := ide.ResolveTemplatePack(svc, projectRoot, "unknown")
+	pack, packName, found, err := ide.ResolveTemplatePack(svc, nil, projectRoot, "unknown")
 	if err != nil {
 		t.Fatalf("unexpected: %v", err)
 	}
@@ -340,7 +340,7 @@ func TestResolveIDETemplatePack_implicit(t *testing.T) {
 func TestResolveIDETemplatePack_allMissing(t *testing.T) {
 	projectRoot := t.TempDir()
 	svc := config.ServiceConfig{Type: "app", Enabled: true, Dir: "services/main"}
-	_, _, found, err := ide.ResolveTemplatePack(svc, projectRoot, "myservice")
+	_, _, found, err := ide.ResolveTemplatePack(svc, nil, projectRoot, "myservice")
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -360,7 +360,7 @@ func TestResolveIDETemplatePack_implicitPriority(t *testing.T) {
 	})
 
 	svc := config.ServiceConfig{Type: "app", Enabled: true, Dir: "services/main"}
-	pack, packName, found, err := ide.ResolveTemplatePack(svc, projectRoot, "main")
+	pack, packName, found, err := ide.ResolveTemplatePack(svc, nil, projectRoot, "main")
 	if err != nil {
 		t.Fatalf("unexpected: %v", err)
 	}
@@ -384,7 +384,7 @@ func TestResolveIDETemplatePack_explicitStrictSemantics(t *testing.T) {
 		Dir:     "services/main",
 		Render:  config.ServiceRenderConfig{IDE: config.ServiceIDEConfig{Template: "main-deubg"}},
 	}
-	_, _, found, err := ide.ResolveTemplatePack(svc, projectRoot, "main")
+	_, _, found, err := ide.ResolveTemplatePack(svc, nil, projectRoot, "main")
 	if err == nil {
 		t.Fatal("expected error for typo")
 	}
@@ -416,7 +416,7 @@ func TestResolveIDETemplatePack_packIsSymlink(t *testing.T) {
 		Dir:     "services/main",
 		Render:  config.ServiceRenderConfig{IDE: config.ServiceIDEConfig{Template: "custom"}},
 	}
-	_, _, found, err := ide.ResolveTemplatePack(svc, projectRoot, "main")
+	_, _, found, err := ide.ResolveTemplatePack(svc, nil, projectRoot, "main")
 	if err == nil {
 		t.Fatal("expected error for symlinked pack")
 	}
@@ -437,7 +437,7 @@ func TestResolveIDETemplatePack_invalidExplicitTemplateKey(t *testing.T) {
 		Dir:     "services/main",
 		Render:  config.ServiceRenderConfig{IDE: config.ServiceIDEConfig{Template: "foo/bar"}},
 	}
-	_, _, found, err := ide.ResolveTemplatePack(svc, projectRoot, "main")
+	_, _, found, err := ide.ResolveTemplatePack(svc, nil, projectRoot, "main")
 	if err == nil {
 		t.Fatal("want error for invalid render.ide.template")
 	}
@@ -455,7 +455,7 @@ func TestResolveIDETemplatePack_invalidExplicitTemplateKey(t *testing.T) {
 func TestResolveIDETemplatePack_invalidServiceName(t *testing.T) {
 	projectRoot := t.TempDir()
 	svc := config.ServiceConfig{Type: "app", Enabled: true, Dir: "services/main"}
-	_, _, found, err := ide.ResolveTemplatePack(svc, projectRoot, "foo/bar")
+	_, _, found, err := ide.ResolveTemplatePack(svc, nil, projectRoot, "foo/bar")
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -469,7 +469,7 @@ func TestResolveIDETemplatePack_invalidServiceName(t *testing.T) {
 func TestResolveIDETemplatePack_emptyServiceName(t *testing.T) {
 	projectRoot := t.TempDir()
 	svc := config.ServiceConfig{Type: "app", Enabled: true, Dir: "services/main"}
-	_, _, found, err := ide.ResolveTemplatePack(svc, projectRoot, "")
+	_, _, found, err := ide.ResolveTemplatePack(svc, nil, projectRoot, "")
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -483,7 +483,7 @@ func TestResolveIDETemplatePack_emptyServiceName(t *testing.T) {
 func TestResolveIDETemplatePack_leadingDotServiceName(t *testing.T) {
 	projectRoot := t.TempDir()
 	svc := config.ServiceConfig{Type: "app", Enabled: true, Dir: "services/hidden"}
-	_, _, found, err := ide.ResolveTemplatePack(svc, projectRoot, ".hidden")
+	_, _, found, err := ide.ResolveTemplatePack(svc, nil, projectRoot, ".hidden")
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}

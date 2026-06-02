@@ -7,15 +7,38 @@ import (
 )
 
 func TestSelectServices_typeDefaults(t *testing.T) {
-	t.Run("all types selected by default when dir is set", func(t *testing.T) {
+	t.Run("only app type selected by default; non-app skipped as ai-policy", func(t *testing.T) {
 		svcs := map[string]config.ServiceConfig{
 			"app1":    {Enabled: true, Type: config.ServiceTypeApp, Dir: "services/app1"},
 			"db":      {Enabled: true, Type: config.ServiceTypeInfra, Dir: "services/db"},
 			"adminer": {Enabled: true, Type: config.ServiceTypeTool, Dir: "services/adminer"},
 		}
+		selected, skipped := SelectServices(svcs)
+		if len(selected) != 1 || selected[0] != "app1" {
+			t.Errorf("selected=%v want [app1]", selected)
+		}
+		var policySkips []string
+		for _, s := range skipped {
+			if s.Reason == "ai-policy" {
+				policySkips = append(policySkips, s.Name)
+			}
+		}
+		if len(policySkips) != 2 {
+			t.Errorf("ai-policy skips=%v want [adminer db]", policySkips)
+		}
+	})
+
+	t.Run("non-app explicitly opted in is selected", func(t *testing.T) {
+		on := true
+		svcs := map[string]config.ServiceConfig{
+			"db": {
+				Enabled: true, Type: config.ServiceTypeInfra, Dir: "services/db",
+				Render: config.ServiceRenderConfig{AI: config.ServiceAIConfig{Enabled: &on}},
+			},
+		}
 		selected, _ := SelectServices(svcs)
-		if len(selected) != 3 {
-			t.Errorf("selected=%v want all three", selected)
+		if len(selected) != 1 || selected[0] != "db" {
+			t.Errorf("selected=%v want [db]", selected)
 		}
 	})
 

@@ -193,8 +193,7 @@ func TestTemplateValidatorIDs(t *testing.T) {
 	require.Equal(t, "templates", ai.Domain())
 }
 
-func TestTemplateValidatorsIgnoreNonAppServices(t *testing.T) {
-	tr := true
+func TestTemplateValidatorsSkipNonAppByDefault(t *testing.T) {
 	ctx := validate.Context{
 		ProjectRoot: t.TempDir(),
 		Cfg: &config.DweConfig{
@@ -203,21 +202,11 @@ func TestTemplateValidatorsIgnoreNonAppServices(t *testing.T) {
 					Enabled: true,
 					Type:    config.ServiceTypeTool,
 					Dir:     "services/adminer",
-					Render: config.ServiceRenderConfig{
-						IDE: config.ServiceIDEConfig{Enabled: &tr},
-						AI:  config.ServiceAIConfig{Enabled: &tr},
-						Git: config.ServiceGitHooksConfig{Enabled: &tr},
-					},
 				},
 				"db": {
 					Enabled: true,
 					Type:    config.ServiceTypeInfra,
 					Dir:     "services/db",
-					Render: config.ServiceRenderConfig{
-						IDE: config.ServiceIDEConfig{Enabled: &tr},
-						AI:  config.ServiceAIConfig{Enabled: &tr},
-						Git: config.ServiceGitHooksConfig{Enabled: &tr},
-					},
 				},
 			},
 		},
@@ -243,6 +232,66 @@ func TestTemplateValidatorsIgnoreNonAppServices(t *testing.T) {
 				require.NotContains(t, d.Target, "adminer")
 				require.NotContains(t, d.Target, "db")
 			}
+		})
+	}
+}
+
+func TestTemplateValidatorsIncludeOptedInNonAppServices(t *testing.T) {
+	tr := true
+	root := t.TempDir()
+	require.NoError(t, os.MkdirAll(filepath.Join(root, "services", "adminer"), 0o755))
+
+	tests := []struct {
+		name      string
+		validator validate.Validator
+		render    config.ServiceRenderConfig
+		target    string
+	}{
+		{
+			name:      "ide",
+			validator: &IDEValidator{},
+			render:    config.ServiceRenderConfig{IDE: config.ServiceIDEConfig{Enabled: &tr}},
+			target:    "templates.ide:adminer",
+		},
+		{
+			name:      "ai",
+			validator: &AIValidator{},
+			render:    config.ServiceRenderConfig{AI: config.ServiceAIConfig{Enabled: &tr}},
+			target:    "templates.ai:adminer",
+		},
+		{
+			name:      "git",
+			validator: &GitValidator{},
+			render:    config.ServiceRenderConfig{Git: config.ServiceGitHooksConfig{Enabled: &tr}},
+			target:    "templates.git:adminer",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			ctx := validate.Context{
+				ProjectRoot: root,
+				Cfg: &config.DweConfig{
+					Services: map[string]config.ServiceConfig{
+						"adminer": {
+							Enabled: true,
+							Type:    config.ServiceTypeTool,
+							Dir:     "services/adminer",
+							Render:  tt.render,
+						},
+					},
+				},
+			}
+			diags := tt.validator.Run(ctx)
+			// No pack exists, so we expect a per-service warning targeting adminer.
+			var found bool
+			for _, d := range diags {
+				if d.Target == tt.target {
+					found = true
+					break
+				}
+			}
+			require.True(t, found, "expected diagnostic for opted-in non-app service; got %+v", diags)
 		})
 	}
 }

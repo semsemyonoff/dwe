@@ -776,12 +776,14 @@ func (s ServiceConfig) IDERenderEnabled() bool {
 
 // AIRenderEnabledExplicit returns the AI docs render enabled state and whether it was explicitly set.
 // If Enabled is non-nil, returns its value and true.
-// If Enabled is nil, returns true (default enabled for all service types) and false (not explicit).
+// If Enabled is nil, returns true for type "app" (default) or false for other types, and false (not explicit).
+// Only app services have a dedicated source directory to host hub-level agent
+// docs; tools/infra opt in explicitly via render.ai.enabled: true.
 func (s ServiceConfig) AIRenderEnabledExplicit() (enabled bool, explicit bool) {
 	if s.Render.AI.Enabled != nil {
 		return *s.Render.AI.Enabled, true
 	}
-	return true, false
+	return s.IsApp(), false
 }
 
 // AIRenderEnabled returns whether this service should participate in AI docs rendering.

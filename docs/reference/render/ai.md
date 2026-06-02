@@ -57,9 +57,9 @@ A service participates in agent-docs rendering only when **both** flags are true
 | Gate | Source | Default |
 |------|--------|---------|
 | Project-level | `services.<name>.enabled` (3-layer merged + required service override) | depends on service |
-| Agent docs policy | `services.<name>.render.ai.enabled` | `true` for **all** service types |
+| Agent docs policy | `services.<name>.render.ai.enabled` | `true` for `type: app`, `false` for other types |
 
-Note the contrast with IDE rendering: agent docs default to `true` for every type. The rationale is that hub identity (what this directory *is* and how an AI agent should approach it) is useful for every service, not only `app` services.
+Agent docs default to enabled only for `app` services because they are the only service type with a dedicated source directory to host hub-level docs. Tools/infra opt in explicitly with `render.ai.enabled: true`.
 
 If either gate is false, the service is skipped. Skips fall into two groups:
 
@@ -135,7 +135,7 @@ flowchart TD
 Rules:
 
 - **Explicit is strict.** A set `render.ai.template` that doesn't exist is a hard error — no silent fallback.
-- **Implicit chain** (when `render.ai.template` is unset): `<service-name>` → `default`. If the implicit chain exhausts without finding a pack, rendering is skipped with a warning.
+- **Implicit chain** (when `render.ai.template` is unset): `<service-name>` → walk the `extends:` chain ancestor-by-ancestor → `default`. The first existing pack wins. If the implicit chain exhausts without finding a pack, rendering is skipped with a warning. Invalid pack names in the chain (e.g. a leading dot or path separator) are skipped silently and the walk continues.
 - A pack must be a real directory; symlinks at the pack root or in any parent component are rejected.
 - Template-key validation rejects path separators, leading dots, and `..`.
 

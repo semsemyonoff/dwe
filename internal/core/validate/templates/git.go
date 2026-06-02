@@ -3,6 +3,7 @@ package templates
 import (
 	"fmt"
 	"path/filepath"
+	"sort"
 
 	"github.com/semsemyonoff/dwe/internal/core/execution/templates/git"
 	"github.com/semsemyonoff/dwe/internal/core/project/config"
@@ -35,20 +36,20 @@ func (v *GitValidator) Run(ctx validate.Context) []validate.Diagnostic {
 		}}
 	}
 
-	// Template validation is scoped to app services. Tools/infra may have
-	// runtime UI or support containers, but they do not own source hubs.
-	services := appServices(ctx.Cfg.Services)
+	// Validate every service that actually participates in git-hook rendering
+	// at runtime — apps by default plus any non-app service that opted in via
+	// render.git.enabled: true. SelectServices honors the same gating that
+	// `dwe render git` uses, so the validator scope matches what would be
+	// rendered.
+	services := ctx.Cfg.Services
 	selected, skipped := git.SelectServices(services)
 
 	for _, skip := range skipped {
 		var message, hint string
 		switch skip.Reason {
-		case "service-disabled", "git-disabled":
-			// Service or git render explicitly disabled; nothing to report.
+		case "service-disabled", "git-disabled", "git-policy":
+			// Service or git render disabled (explicit or by-policy); nothing to report.
 			continue
-		case "git-policy":
-			message = "service does not render git hooks by default (only 'app' type services render by default)"
-			hint = "set render.git.enabled: true to opt in"
 		case "empty-dir":
 			message = "service has no dir or dir is project root"
 			hint = "set service.dir to a subdirectory path"
@@ -69,7 +70,7 @@ func (v *GitValidator) Run(ctx validate.Context) []validate.Diagnostic {
 
 	for _, name := range selected {
 		svc := services[name]
-		serviceDiags := v.validateService(name, svc, ctx.ProjectRoot)
+		serviceDiags := v.validateService(name, svc, ctx.Cfg, ctx.ProjectRoot)
 		diags = append(diags, serviceDiags...)
 	}
 
@@ -88,7 +89,8 @@ func (v *GitValidator) Run(ctx validate.Context) []validate.Diagnostic {
 // validateService validates one service's git template pack. Returns a slice so
 // the caller can surface both an error (pack/manifest issue) and an info
 // (missing src/.git or worktree pointer) for the same service.
-func (v *GitValidator) validateService(name string, svc config.ServiceConfig, projectRoot string) []validate.Diagnostic {
+func (v *GitValidator) validateService(name string, svc config.ServiceConfig, cfg *config.DweConfig, projectRoot string) []validate.Diagnostic {
+	services := cfg.Services
 	var diags []validate.Diagnostic
 
 	absRoot, err := filepath.Abs(projectRoot)
@@ -112,7 +114,7 @@ func (v *GitValidator) validateService(name string, svc config.ServiceConfig, pr
 		}}
 	}
 
-	packDir, packName, found, err := git.ResolveTemplatePack(svc, absRoot, name)
+	packDir, packName, found, err := git.ResolveTemplatePack(svc, services, absRoot, name)
 	if err != nil {
 		return []validate.Diagnostic{{
 			Severity: validate.SeverityError,
@@ -165,6 +167,35 @@ func (v *GitValidator) validateService(name string, svc config.ServiceConfig, pr
 		})
 	} else if d := overrideDiagnostic("templates", "git", packName, fmt.Sprintf("templates.git:%s", name), getHits()); d != nil {
 		diags = append(diags, *d)
+	}
+
+	// Dry-run render every template against the actual TemplateData so missing
+	// variables, parse errors, or other execution-time failures surface here
+	// instead of at `dwe render git` time.
+	data := git.TemplateData{
+		Project:    cfg.Project,
+		Service:    git.ExtendsRoot(services, name),
+		Resolved:   name,
+		ServiceCfg: svc,
+		Runtime:    cfg.Runtime,
+		Services:   services,
+		Cfg:        cfg,
+	}
+	failures := git.DryRunRender(absRoot, packName, m, data)
+	fromKeys := make([]string, 0, len(failures))
+	for from := range failures {
+		fromKeys = append(fromKeys, from)
+	}
+	sort.Strings(fromKeys)
+	for _, from := range fromKeys {
+		diags = append(diags, validate.Diagnostic{
+			Severity: validate.SeverityError,
+			Domain:   "templates",
+			Target:   fmt.Sprintf("templates.git:%s", name),
+			File:     filepath.Join("workspace", "templates", "git", packName, from),
+			Message:  fmt.Sprintf("template render failed: %v", failures[from]),
+			Hint:     "template references a value not present for this service; check the template's variable usage against the service config",
+		})
 	}
 
 	// Optional advisory diagnostic — does not gate validation.

@@ -119,7 +119,8 @@ flowchart TD
 Rules:
 
 - **Explicit is strict.** If `render.ide.template` is set, only that pack is tried. A missing pack is a hard error — no silent fallback. This protects against typos like `templete:` accidentally resolving to `default/` and rendering surprising content.
-- **Implicit chain** (when `render.ide.template` is unset): `<service-name>` → `default`. Fall-through happens only when the candidate directory is missing; any other filesystem error is a hard error. If the implicit chain exhausts without finding a pack, rendering is skipped with a warning.
+- **Implicit chain** (when `render.ide.template` is unset): `<service-name>` → walk the `extends:` chain ancestor-by-ancestor → `default`. The first existing pack wins. Fall-through happens only when the candidate directory is missing; any other filesystem error is a hard error. If the implicit chain exhausts without finding a pack, rendering is skipped with a warning. Invalid pack names in the chain (leading dot, path separator) are skipped silently and the walk continues.
+- **Why ancestors:** an `extends:` child like `main-debug` typically does not ship its own pack; it inherits the parent's IDE configuration. Falling straight to `default/` would render the wrong content because the default pack is calibrated for unrelated services.
 - A pack must be a **real directory**. Symlinked packs are rejected.
 - The chosen pack must be inside the project root with no symlinked parent components.
 

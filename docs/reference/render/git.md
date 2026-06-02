@@ -90,9 +90,10 @@ For each selected service the renderer picks one pack directory under `workspace
 
 1. If `render.git.template` is set, only `workspace/templates/git/<render.git.template>/` is tried. Missing pack is a hard error.
 2. Otherwise, try `workspace/templates/git/<service-name>/`. If missing, fall through.
-3. Otherwise, use `workspace/templates/git/default/`. If missing, skip with a warning (implicit missing pack).
+3. Otherwise, walk the service's `extends:` chain ancestor-by-ancestor — `workspace/templates/git/<ancestor>/`. The first existing pack wins.
+4. Otherwise, use `workspace/templates/git/default/`. If missing, skip with a warning (implicit missing pack).
 
-Pack-name characters are restricted (`^[A-Za-z0-9][A-Za-z0-9_-]*$`); an unsafe service name (leading dot, leading hyphen, path separators) silently skips the service-name candidate and falls through to `default/`.
+Pack-name characters are restricted (`^[A-Za-z0-9][A-Za-z0-9_-]*$`); an unsafe name (leading dot, leading hyphen, path separators) silently skips that candidate and the walk continues with the next ancestor or `default/`.
 
 ## Manifest schema
 

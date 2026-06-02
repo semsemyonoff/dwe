@@ -9,7 +9,6 @@ import (
 	"github.com/semsemyonoff/dwe/internal/cli/cmdctx"
 	aipkg "github.com/semsemyonoff/dwe/internal/core/execution/templates/ai"
 
-	"github.com/semsemyonoff/dwe/internal/core/execution/templates/manifest"
 	"github.com/semsemyonoff/dwe/internal/core/project/config"
 	"github.com/semsemyonoff/dwe/internal/shared/pathsafe"
 	"github.com/semsemyonoff/dwe/internal/shared/render"
@@ -33,15 +32,16 @@ each render entry is rendered to its destination and each symlink entry is
 created. Files inside the pack that are not referenced by the manifest are
 ignored.
 
-Template pack resolution (explicit is strict; implicit chain: service-name → default):
+Template pack resolution (explicit is strict; implicit chain walks the extends chain):
   1. If render.ai.template is set in the service config, use that pack (explicit, strict)
   2. Otherwise, try workspace/templates/ai/<service-name>/
-  3. If not found, use workspace/templates/ai/default/
-  4. If none exist, skip with a warning (implicit missing pack)
+  3. Then walk the service's extends chain — try workspace/templates/ai/<ancestor>/ for each ancestor
+  4. Then use workspace/templates/ai/default/
+  5. If none exist, skip with a warning (implicit missing pack)
 
 Services that participate in agents docs rendering:
-  - All service types have render.ai.enabled: true by default
-  - Set render.ai.enabled: false to opt out
+  - Type 'app' (default) has render.ai.enabled: true by default
+  - Other types require explicit render.ai.enabled: true in the config
 
 When a service name is given, it is treated as a hub anchor: if multiple
 services share its dir (e.g. main and main-debug both point to services/main),
@@ -83,7 +83,8 @@ parent 'main' identity for the shared hub.`,
 				serviceNames = selected
 
 				// Emit warnings only for actionable skips; policy-based skips
-				// (service-disabled, ai-disabled) are expected and not reported.
+				// (service-disabled, ai-disabled, ai-policy) are expected and
+				// fall through the switch silently.
 				for _, skip := range skipped {
 					switch skip.Reason {
 					case "empty-dir":
@@ -141,16 +142,16 @@ func renderAgentsForService(projectRoot, name string, svc config.ServiceConfig, 
 	}
 
 	// Resolve template pack
-	packDir, packName, found, err := aipkg.ResolveTemplatePack(svc, absRoot, name)
+	packDir, packName, found, err := aipkg.ResolveTemplatePack(svc, cfg.Services, absRoot, name)
 	if err != nil {
 		return err
 	}
 	if !found {
-		tried := fmt.Sprintf("tried %s, default", name)
-		if manifest.ValidatePackName(name) != nil {
-			tried = "tried default"
+		tried := strings.Join(aipkg.ImplicitPackCandidates(cfg.Services, name), ", ")
+		if tried == "" {
+			tried = "default"
 		}
-		w.Warning(fmt.Sprintf("ai [%s] — skipped (no template pack found; %s)", name, tried))
+		w.Warning(fmt.Sprintf("ai [%s] — skipped (no template pack found; tried %s)", name, tried))
 		return nil
 	}
 
@@ -251,8 +252,12 @@ func validateExplicitAIArg(name string, services map[string]config.ServiceConfig
 	if strings.TrimSpace(svc.Dir) == "" || filepath.Clean(svc.Dir) == "." {
 		return fmt.Errorf("service %q has no dir; cannot render agents docs", name)
 	}
-	if !svc.AIRenderEnabled() {
-		return fmt.Errorf("service %q has render.ai.enabled: false", name)
+	enabled, explicit := svc.AIRenderEnabledExplicit()
+	if !enabled {
+		if explicit {
+			return fmt.Errorf("service %q has render.ai.enabled: false", name)
+		}
+		return fmt.Errorf("service %q (type: %s) does not participate in agents docs rendering by default; set render.ai.enabled: true to opt in", name, svc.Type)
 	}
 	return nil
 }

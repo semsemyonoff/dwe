@@ -3,6 +3,7 @@ package templates
 import (
 	"fmt"
 	"path/filepath"
+	"sort"
 
 	"github.com/semsemyonoff/dwe/internal/core/execution/templates/ai"
 	"github.com/semsemyonoff/dwe/internal/core/project/config"
@@ -35,17 +36,20 @@ func (v *AIValidator) Run(ctx validate.Context) []validate.Diagnostic {
 		}}
 	}
 
-	// Template validation is scoped to app services. Tools/infra may have
-	// runtime UI or support containers, but they do not own source hubs.
-	services := appServices(ctx.Cfg.Services)
+	// Validate every service that actually participates in AI rendering at
+	// runtime — apps by default plus any non-app service that opted in via
+	// render.ai.enabled: true. SelectServices honors the same gating that
+	// `dwe render ai` uses, so the validator scope matches what would be
+	// rendered.
+	services := ctx.Cfg.Services
 	selected, skipped := ai.SelectServices(services)
 
 	// Emit info diagnostics for skipped services with actionable reasons
 	for _, skip := range skipped {
 		var message, hint string
 		switch skip.Reason {
-		case "service-disabled", "ai-disabled":
-			// Service or AI render explicitly disabled; nothing to report.
+		case "service-disabled", "ai-disabled", "ai-policy":
+			// Service or AI render disabled (explicit or by-policy); nothing to report.
 			continue
 		case "empty-dir":
 			message = "service has no dir or dir is project root"
@@ -70,7 +74,7 @@ func (v *AIValidator) Run(ctx validate.Context) []validate.Diagnostic {
 	// Validate each selected service's template pack
 	for _, name := range selected {
 		svc := services[name]
-		diags = append(diags, v.validateService(name, svc, ctx.ProjectRoot)...)
+		diags = append(diags, v.validateService(name, svc, ctx.Cfg, ctx.ProjectRoot)...)
 	}
 
 	// If no errors/infos, emit a single OK diagnostic
@@ -90,7 +94,8 @@ func (v *AIValidator) Run(ctx validate.Context) []validate.Diagnostic {
 }
 
 // validateService validates one service's AI template pack.
-func (v *AIValidator) validateService(name string, svc config.ServiceConfig, projectRoot string) []validate.Diagnostic {
+func (v *AIValidator) validateService(name string, svc config.ServiceConfig, cfg *config.DweConfig, projectRoot string) []validate.Diagnostic {
+	services := cfg.Services
 	absRoot, err := filepath.Abs(projectRoot)
 	if err != nil {
 		return []validate.Diagnostic{{
@@ -102,7 +107,7 @@ func (v *AIValidator) validateService(name string, svc config.ServiceConfig, pro
 	}
 
 	// Resolve template pack
-	packDir, packName, found, err := ai.ResolveTemplatePack(svc, absRoot, name)
+	packDir, packName, found, err := ai.ResolveTemplatePack(svc, services, absRoot, name)
 	if err != nil {
 		return []validate.Diagnostic{{
 			Severity: validate.SeverityError,
@@ -155,6 +160,35 @@ func (v *AIValidator) validateService(name string, svc config.ServiceConfig, pro
 	var diags []validate.Diagnostic
 	if d := overrideDiagnostic("templates", "ai", packName, fmt.Sprintf("templates.ai:%s", name), getHits()); d != nil {
 		diags = append(diags, *d)
+	}
+
+	// Dry-run render every template against the actual TemplateData so missing
+	// variables, parse errors, or other execution-time failures surface here
+	// instead of at `dwe render ai` time.
+	data := ai.TemplateData{
+		Project:    cfg.Project,
+		Service:    ai.ExtendsRoot(services, name),
+		Resolved:   name,
+		ServiceCfg: svc,
+		Runtime:    cfg.Runtime,
+		Services:   services,
+		Cfg:        cfg,
+	}
+	failures := ai.DryRunRender(absRoot, packName, m, data)
+	fromKeys := make([]string, 0, len(failures))
+	for from := range failures {
+		fromKeys = append(fromKeys, from)
+	}
+	sort.Strings(fromKeys)
+	for _, from := range fromKeys {
+		diags = append(diags, validate.Diagnostic{
+			Severity: validate.SeverityError,
+			Domain:   "templates",
+			Target:   fmt.Sprintf("templates.ai:%s", name),
+			File:     filepath.Join("workspace", "templates", "ai", packName, from),
+			Message:  fmt.Sprintf("template render failed: %v", failures[from]),
+			Hint:     "template references a value not present for this service; check the template's variable usage against the service config",
+		})
 	}
 	return diags
 }

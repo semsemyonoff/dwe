@@ -84,7 +84,7 @@ func TestResolveAgentsTemplatePack_explicitPackFound(t *testing.T) {
 		}},
 	}
 
-	pack, _, found, err := aipkg.ResolveTemplatePack(svc, projectRoot, "myservice")
+	pack, _, found, err := aipkg.ResolveTemplatePack(svc, nil, projectRoot, "myservice")
 	if err != nil {
 		t.Fatalf("resolveAgentsTemplatePack: %v", err)
 	}
@@ -108,7 +108,7 @@ func TestResolveAgentsTemplatePack_explicitPackMissing(t *testing.T) {
 		}},
 	}
 
-	_, _, found, err := aipkg.ResolveTemplatePack(svc, projectRoot, "myservice")
+	_, _, found, err := aipkg.ResolveTemplatePack(svc, nil, projectRoot, "myservice")
 	if err == nil {
 		t.Fatal("expected error for missing explicit pack")
 	}
@@ -133,7 +133,7 @@ func TestResolveAgentsTemplatePack_implicitServiceName(t *testing.T) {
 		}},
 	}
 
-	pack, _, found, err := aipkg.ResolveTemplatePack(svc, projectRoot, "api")
+	pack, _, found, err := aipkg.ResolveTemplatePack(svc, nil, projectRoot, "api")
 	if err != nil {
 		t.Fatalf("resolveAgentsTemplatePack: %v", err)
 	}
@@ -160,7 +160,7 @@ func TestResolveAgentsTemplatePack_implicitFallbackToDefault(t *testing.T) {
 		}},
 	}
 
-	pack, _, found, err := aipkg.ResolveTemplatePack(svc, projectRoot, "notfound")
+	pack, _, found, err := aipkg.ResolveTemplatePack(svc, nil, projectRoot, "notfound")
 	if err != nil {
 		t.Fatalf("resolveAgentsTemplatePack: %v", err)
 	}
@@ -184,7 +184,7 @@ func TestResolveAgentsTemplatePack_implicitBothMissing(t *testing.T) {
 		}},
 	}
 
-	_, _, found, err := aipkg.ResolveTemplatePack(svc, projectRoot, "myservice")
+	_, _, found, err := aipkg.ResolveTemplatePack(svc, nil, projectRoot, "myservice")
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -217,7 +217,7 @@ func TestResolveAgentsTemplatePack_symlinkedPackRejected(t *testing.T) {
 		}},
 	}
 
-	_, _, found, err := aipkg.ResolveTemplatePack(svc, projectRoot, "myservice")
+	_, _, found, err := aipkg.ResolveTemplatePack(svc, nil, projectRoot, "myservice")
 	if err == nil {
 		t.Fatal("expected error for symlinked pack")
 	}
@@ -248,7 +248,7 @@ func TestResolveAgentsTemplatePack_nonDirPackRejected(t *testing.T) {
 		}},
 	}
 
-	_, _, found, err := aipkg.ResolveTemplatePack(svc, projectRoot, "myservice")
+	_, _, found, err := aipkg.ResolveTemplatePack(svc, nil, projectRoot, "myservice")
 	if err == nil {
 		t.Fatal("expected error for non-dir pack")
 	}
@@ -281,7 +281,7 @@ func TestResolveAgentsTemplatePack_invalidTemplateKey(t *testing.T) {
 				}},
 			}
 
-			_, _, found, err := aipkg.ResolveTemplatePack(svc, projectRoot, "myservice")
+			_, _, found, err := aipkg.ResolveTemplatePack(svc, nil, projectRoot, "myservice")
 			if err == nil {
 				t.Fatalf("expected error for %s", test.label)
 			}
@@ -313,7 +313,7 @@ func TestResolveAgentsTemplatePack_invalidServiceName(t *testing.T) {
 				}},
 			}
 
-			_, _, found, err := aipkg.ResolveTemplatePack(svc, projectRoot, test.serviceName)
+			_, _, found, err := aipkg.ResolveTemplatePack(svc, nil, projectRoot, test.serviceName)
 			if err != nil {
 				t.Fatalf("unexpected error for %s: %v", test.label, err)
 			}
@@ -341,7 +341,7 @@ func TestResolveAgentsTemplatePack_implicitChainPreference(t *testing.T) {
 		}},
 	}
 
-	pack, _, found, err := aipkg.ResolveTemplatePack(svc, projectRoot, "myapi")
+	pack, _, found, err := aipkg.ResolveTemplatePack(svc, nil, projectRoot, "myapi")
 	if err != nil {
 		t.Fatalf("resolveAgentsTemplatePack: %v", err)
 	}
@@ -1475,12 +1475,15 @@ func TestSelectAgentsServices(t *testing.T) {
 		wantSkippedMap map[string]aipkg.SkippedService
 	}{
 		{
-			name: "all enabled distinct dirs - all kept",
+			name: "non-app type dropped as ai-policy by default",
 			services: map[string]config.ServiceConfig{
 				"svc1": {Type: "app", Enabled: true, Dir: "./services/svc1"},
 				"svc2": {Type: "db", Enabled: true, Dir: "./services/svc2"},
 			},
-			wantSelected: []string{"svc1", "svc2"},
+			wantSelected: []string{"svc1"},
+			wantSkippedMap: map[string]aipkg.SkippedService{
+				"svc2": {Name: "svc2", Reason: "ai-policy"},
+			},
 		},
 		{
 			name: "service with Enabled=false dropped as service-disabled",
