@@ -1,30 +1,39 @@
 package lifecycle
 
 import (
+	"context"
+	"errors"
+	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
 
 	"github.com/semsemyonoff/dwe/internal/cli/cmdctx"
+	"github.com/semsemyonoff/dwe/internal/core/project/config"
+	"github.com/semsemyonoff/dwe/internal/shared/docker"
 )
 
 func TestRestartCmd_Use(t *testing.T) {
 	flags := &cmdctx.RootFlags{ConfigPath: "workspace.yml"}
 	cmd := NewRestartCmd(groupEnvironment, flags)
-	if cmd.Use != "restart" {
-		t.Errorf("Use = %q, want %q", cmd.Use, "restart")
+	if cmd.Use != "restart [service]" {
+		t.Errorf("Use = %q, want %q", cmd.Use, "restart [service]")
 	}
 }
 
-func TestRestartCmd_NoArgs(t *testing.T) {
+func TestRestartCmd_MaximumOneArg(t *testing.T) {
 	flags := &cmdctx.RootFlags{ConfigPath: "workspace.yml"}
 	cmd := NewRestartCmd(groupEnvironment, flags)
-	if cmd.Args == nil {
-		t.Error("Args validator should be set (cobra.NoArgs)")
+
+	if err := cmd.Args(cmd, []string{}); err != nil {
+		t.Errorf("expected zero args to be allowed, got: %v", err)
 	}
-	if err := cmd.Args(cmd, []string{"extra"}); err == nil {
-		t.Error("expected error when passing arguments to restart command")
+	if err := cmd.Args(cmd, []string{"postgres"}); err != nil {
+		t.Errorf("expected one arg to be allowed, got: %v", err)
+	}
+	if err := cmd.Args(cmd, []string{"a", "b"}); err == nil {
+		t.Error("expected error when passing two arguments to restart command")
 	}
 }
 
@@ -124,5 +133,143 @@ func TestRunRestart_MissingRunSection_UsesDefault(t *testing.T) {
 	}
 	if !strings.Contains(errBuf.String(), "Using built-in default run pipeline") {
 		t.Errorf("expected info line in stderr, got: %q", errBuf.String())
+	}
+}
+
+func TestRestartService_UnknownService(t *testing.T) {
+	cfgPath := writeStopTestConfig(t, map[string]struct {
+		enabled   bool
+		container string
+	}{
+		"postgres": {enabled: true, container: "pg"},
+	})
+	cfg, err := config.LoadConfig(cfgPath)
+	if err != nil {
+		t.Fatalf("loading config: %v", err)
+	}
+	err = RestartService(context.Background(), cfg, "nonexistent")
+	if !errors.Is(err, ErrUnknownService) {
+		t.Errorf("expected ErrUnknownService, got %v", err)
+	}
+}
+
+func TestRestartService_KnownService(t *testing.T) {
+	cfgPath := writeStopTestConfig(t, map[string]struct {
+		enabled   bool
+		container string
+	}{
+		"postgres": {enabled: true, container: "pg"},
+	})
+	cfg, err := config.LoadConfig(cfgPath)
+	if err != nil {
+		t.Fatalf("loading config: %v", err)
+	}
+
+	var gotName string
+	var gotTimeout int
+	prev := restartContainerFn
+	t.Cleanup(func() { restartContainerFn = prev })
+	restartContainerFn = func(_ context.Context, _, name string, timeout int) error {
+		gotName = name
+		gotTimeout = timeout
+		return nil
+	}
+
+	if err := RestartService(context.Background(), cfg, "postgres"); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	wantName := cfg.Project.FullName() + "-pg"
+	if gotName != wantName {
+		t.Errorf("container name = %q, want %q", gotName, wantName)
+	}
+	if gotTimeout != docker.DefaultStopTimeoutSec {
+		t.Errorf("timeout = %d, want %d", gotTimeout, docker.DefaultStopTimeoutSec)
+	}
+}
+
+func TestRestartService_DisabledService(t *testing.T) {
+	// Disabled services must still be restartable — compose-bypass path.
+	cfgPath := writeStopTestConfig(t, map[string]struct {
+		enabled   bool
+		container string
+	}{
+		"redis": {enabled: false, container: "redis-svc"},
+	})
+	// writeStopTestConfig does not write local.yml, so disable explicitly here.
+	localYML := "services:\n  redis:\n    enabled: false\n"
+	if err := os.WriteFile(filepath.Join(filepath.Dir(cfgPath), "workspace", "local.yml"), []byte(localYML), 0o644); err != nil {
+		t.Fatalf("writing local.yml: %v", err)
+	}
+	cfg, err := config.LoadConfig(cfgPath)
+	if err != nil {
+		t.Fatalf("loading config: %v", err)
+	}
+	if svc, ok := cfg.Services["redis"]; !ok || svc.Enabled {
+		t.Fatalf("test precondition: redis should be present and disabled; ok=%v enabled=%v", ok, svc.Enabled)
+	}
+
+	called := false
+	prev := restartContainerFn
+	t.Cleanup(func() { restartContainerFn = prev })
+	restartContainerFn = func(_ context.Context, _, _ string, _ int) error {
+		called = true
+		return nil
+	}
+
+	if err := RestartService(context.Background(), cfg, "redis"); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if !called {
+		t.Error("RestartContainer was not called for disabled service")
+	}
+}
+
+func TestRestartService_NoSuchContainerProducesHint(t *testing.T) {
+	cfgPath := writeStopTestConfig(t, map[string]struct {
+		enabled   bool
+		container string
+	}{
+		"postgres": {enabled: true, container: "pg"},
+	})
+	cfg, err := config.LoadConfig(cfgPath)
+	if err != nil {
+		t.Fatalf("loading config: %v", err)
+	}
+
+	prev := restartContainerFn
+	t.Cleanup(func() { restartContainerFn = prev })
+	restartContainerFn = func(_ context.Context, _, name string, _ int) error {
+		return fmt.Errorf("%w: %s", docker.ErrNoSuchContainer, name)
+	}
+
+	err = RestartService(context.Background(), cfg, "postgres")
+	if err == nil {
+		t.Fatal("expected error, got nil")
+	}
+	for _, want := range []string{`service "postgres"`, "dwe deploy run", "dwe run"} {
+		if !strings.Contains(err.Error(), want) {
+			t.Errorf("error %q missing %q", err.Error(), want)
+		}
+	}
+}
+
+func TestRestartCmd_OneArg_UnknownService(t *testing.T) {
+	cfgPath := writeStopTestConfig(t, map[string]struct {
+		enabled   bool
+		container string
+	}{
+		"postgres": {enabled: true},
+	})
+
+	prev := restartContainerFn
+	t.Cleanup(func() { restartContainerFn = prev })
+	restartContainerFn = func(_ context.Context, _, _ string, _ int) error { return nil }
+
+	flags := &cmdctx.RootFlags{ConfigPath: cfgPath, Root: filepath.Dir(cfgPath)}
+	cmd := NewRestartCmd(groupEnvironment, flags)
+	cmd.SilenceErrors = true
+	err := cmd.RunE(cmd, []string{"nonexistent"})
+	if !errors.Is(err, ErrUnknownService) {
+		t.Errorf("expected ErrUnknownService, got %v", err)
 	}
 }

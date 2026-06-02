@@ -63,7 +63,7 @@ var ContentHashes = map[string]string{
 	"reference/cli/dwe_reset_plan.md":                     "0136d2706195",
 	"reference/cli/dwe_reset_run.md":                      "263bead2c901",
 	"reference/cli/dwe_reset_step.md":                     "149f251beb75",
-	"reference/cli/dwe_restart.md":                        "3ad3e8835199",
+	"reference/cli/dwe_restart.md":                        "0147cf7533fb",
 	"reference/cli/dwe_run.md":                            "2a617d38588e",
 	"reference/cli/dwe_services.md":                       "eaa6f25761c7",
 	"reference/cli/dwe_services_disable.md":               "eb9ddfb86af8",

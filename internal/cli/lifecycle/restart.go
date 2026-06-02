@@ -1,12 +1,51 @@
 package lifecycle
 
 import (
+	"context"
+	"errors"
+	"fmt"
+
 	"github.com/semsemyonoff/dwe/internal/cli/cmdctx"
 	"github.com/semsemyonoff/dwe/internal/cli/info"
+	"github.com/semsemyonoff/dwe/internal/core/project/config"
 	lifecyclepkg "github.com/semsemyonoff/dwe/internal/core/workflow/lifecycle"
+	"github.com/semsemyonoff/dwe/internal/shared/daemon"
+	"github.com/semsemyonoff/dwe/internal/shared/docker"
 
 	"github.com/spf13/cobra"
 )
+
+// restartContainerFn is a seam for docker.RestartContainer so tests can inject
+// fake docker behavior without a real Docker daemon.
+var restartContainerFn = docker.RestartContainer
+
+// RestartService restarts a single service's container directly via
+// `docker restart`, bypassing docker compose and lifecycle hooks.
+//
+// This path is intentionally lightweight: it runs no preflight checks and
+// acquires no project locks, so it is NOT symmetric with `dwe stop <name>`
+// (which does both). Trade-off: faster and works on disabled services, but
+// a concurrent `dwe deploy run` is not blocked and the user gets raw docker
+// errors instead of curated preflight diagnostics when the daemon is down.
+func RestartService(ctx context.Context, cfg *config.DweConfig, name string) error {
+	svc, ok := cfg.Services[name]
+	if !ok {
+		return fmt.Errorf("%w: %s", ErrUnknownService, name)
+	}
+	projectFull := cfg.Project.FullName()
+	containerName, err := daemon.ResolveContainerName(projectFull, svc.Container)
+	if err != nil {
+		return fmt.Errorf("resolving container name for service %q: %w", name, err)
+	}
+	dockerBin := config.DockerBin(cfg)
+	if err := restartContainerFn(ctx, dockerBin, containerName, docker.DefaultStopTimeoutSec); err != nil {
+		if errors.Is(err, docker.ErrNoSuchContainer) {
+			return fmt.Errorf("service %q has no container — run `dwe deploy run` or `dwe run` first", name)
+		}
+		return err
+	}
+	return nil
+}
 
 // NewRestartCmd builds the `dwe restart` cobra command.
 func NewRestartCmd(groupID string, flags *cmdctx.RootFlags) *cobra.Command {
@@ -14,40 +53,53 @@ func NewRestartCmd(groupID string, flags *cmdctx.RootFlags) *cobra.Command {
 	var skipPreflight bool
 
 	cmd := &cobra.Command{
-		Use:   "restart",
+		Use:   "restart [service]",
 		Short: "Restart the project (stop, then run --no-update)",
 		Long: `Restart the project by running the full stop lifecycle then the full run lifecycle.
 
 The run leg always skips the git update probe (equivalent to 'dwe run --no-update').
 
-Use 'dwe docker restart' for the low-level compose restart passthrough.`,
-		Example:      `  dwe restart`,
-		Args:         cobra.NoArgs,
+When a service name is given, restarts only that service's container directly via
+'docker restart', bypassing compose and lifecycle hooks. This works even after
+the service has been disabled.`,
+		Example: `  dwe restart
+  dwe restart postgres`,
+		Args:         cobra.MaximumNArgs(1),
 		GroupID:      groupID,
 		SilenceUsage: true,
 		RunE: func(cmd *cobra.Command, args []string) error {
-			return lifecyclepkg.RunRestart(lifecyclepkg.RunContext{
-				Ctx:        cmd.Context(),
-				ConfigPath: flags.ConfigPath,
-				Yes:        yes,
-				// lifecycle commands are not migrated to JSON output; suppress
-				// the chained info display in JSON mode to avoid a mixed
-				// text+JSON stream on stdout.
-				ShowInfo: func() error {
-					if flags.Output == "json" {
-						return nil
-					}
-					return info.Run(cmd, flags)
-				},
-				SkipPreflight: skipPreflight,
-				ErrOut:        cmd.ErrOrStderr(),
-				Translator:    flags.I18n,
-				Locale:        flags.Locale,
-				OnDefaultUsed: func(p lifecyclepkg.DefaultedPipeline) {
-					cmdctx.EmitDefaultNotice(cmd, flags, string(p), "lifecycle")
-				},
-			})
+			if len(args) == 0 {
+				return lifecyclepkg.RunRestart(lifecyclepkg.RunContext{
+					Ctx:        cmd.Context(),
+					ConfigPath: flags.ConfigPath,
+					Yes:        yes,
+					// lifecycle commands are not migrated to JSON output; suppress
+					// the chained info display in JSON mode to avoid a mixed
+					// text+JSON stream on stdout.
+					ShowInfo: func() error {
+						if flags.Output == "json" {
+							return nil
+						}
+						return info.Run(cmd, flags)
+					},
+					SkipPreflight: skipPreflight,
+					ErrOut:        cmd.ErrOrStderr(),
+					Translator:    flags.I18n,
+					Locale:        flags.Locale,
+					OnDefaultUsed: func(p lifecyclepkg.DefaultedPipeline) {
+						cmdctx.EmitDefaultNotice(cmd, flags, string(p), "lifecycle")
+					},
+				})
+			}
+			// Per-service restart: container-level, no preflight, no locks.
+			name := args[0]
+			cfg, err := config.LoadConfig(flags.ConfigPath)
+			if err != nil {
+				return fmt.Errorf("loading config: %w", err)
+			}
+			return RestartService(cmd.Context(), cfg, name)
 		},
+		ValidArgsFunction: cmdctx.ServiceNameCompletion(flags),
 	}
 
 	cmd.Flags().BoolVarP(&yes, "yes", "y", false, "skip confirmation prompts inside hook steps")
