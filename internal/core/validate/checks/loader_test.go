@@ -4,6 +4,7 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"reflect"
 	"strings"
 	"testing"
 
@@ -26,7 +27,7 @@ func runOne(t *testing.T, v validate.Validator) []validate.Diagnostic {
 // --- AllForStage ---
 
 func TestAllForStage_NilCfg(t *testing.T) {
-	if got := AllForStage(nil, nil, "", nil, ""); len(got) != 0 {
+	if got := AllForStage(nil, nil, "", nil, "", nil, false); len(got) != 0 {
 		t.Errorf("nil cfg with nil loadErr should yield empty slice, got %d", len(got))
 	}
 }
@@ -36,7 +37,7 @@ func TestAllForStage_NilCfgWithLoadErr(t *testing.T) {
 	// validator in the "checks" domain so scoped "checks" runs surface the
 	// failure via the normal diagnostic table rather than silently returning zero.
 	loadErr := errors.New("yaml: line 1: unknown field")
-	vs := AllForStage(nil, loadErr, "", nil, "")
+	vs := AllForStage(nil, loadErr, "", nil, "", nil, false)
 	if len(vs) != 1 {
 		t.Fatalf("want 1 synthetic validator, got %d", len(vs))
 	}
@@ -70,7 +71,7 @@ func TestAllForStage_NilCfgWithLoadErr(t *testing.T) {
 
 func TestAllForStage_NilCfgErrNotExist(t *testing.T) {
 	// os.ErrNotExist means the file is absent (silently tolerated) — no validator.
-	vs := AllForStage(nil, os.ErrNotExist, "", nil, "")
+	vs := AllForStage(nil, os.ErrNotExist, "", nil, "", nil, false)
 	if len(vs) != 0 {
 		t.Errorf("ErrNotExist should yield empty slice, got %d", len(vs))
 	}
@@ -83,9 +84,45 @@ func TestAllForStage_FiltersByStage(t *testing.T) {
 		{ID: "b", Type: "builtin", Cmd: "file_exists", With: map[string]any{"path": "AGENTS.md"},
 			Stages: []string{"run"}, Severity: diag.SeverityError},
 	}}
-	vs := AllForStage(cfg, nil, "", nil, "deploy")
+	vs := AllForStage(cfg, nil, "", nil, "deploy", nil, false)
 	if len(vs) != 1 || vs[0].ID() != "a" {
 		t.Fatalf("expected [a], got %#v", ids(vs))
+	}
+}
+
+func TestAllForStage_ServicesGate(t *testing.T) {
+	cfg := &config.ValidateConfig{Checks: []config.CheckEntry{
+		{ID: "ungated", Type: "builtin", Cmd: "file_exists", With: map[string]any{"path": "AGENTS.md"},
+			Stages: []string{"deploy"}, Severity: diag.SeverityError},
+		{ID: "api-only", Type: "builtin", Cmd: "file_exists", With: map[string]any{"path": "AGENTS.md"},
+			Stages: []string{"deploy"}, Services: []string{"api"}, Severity: diag.SeverityError},
+		{ID: "worker-only", Type: "builtin", Cmd: "file_exists", With: map[string]any{"path": "AGENTS.md"},
+			Stages: []string{"deploy"}, Services: []string{"worker"}, Severity: diag.SeverityError},
+	}}
+	services := map[string]config.ServiceConfig{
+		"api":    {Enabled: true},
+		"worker": {Enabled: false},
+	}
+
+	// Default gate: ungated + api-only pass, worker-only is filtered out.
+	got := ids(AllForStage(cfg, nil, "", nil, "deploy", services, false))
+	want := []string{"ungated", "api-only"}
+	if !reflect.DeepEqual(got, want) {
+		t.Fatalf("default gate: got %v, want %v", got, want)
+	}
+
+	// skipServicesGate=true: every stage-matching entry assembles.
+	got = ids(AllForStage(cfg, nil, "", nil, "deploy", services, true))
+	want = []string{"ungated", "api-only", "worker-only"}
+	if !reflect.DeepEqual(got, want) {
+		t.Fatalf("skipServicesGate: got %v, want %v", got, want)
+	}
+
+	// nil services map → entries with services: are filtered out (no enabled service exists).
+	got = ids(AllForStage(cfg, nil, "", nil, "deploy", nil, false))
+	want = []string{"ungated"}
+	if !reflect.DeepEqual(got, want) {
+		t.Fatalf("nil services: got %v, want %v", got, want)
 	}
 }
 

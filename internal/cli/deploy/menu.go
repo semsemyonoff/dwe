@@ -686,7 +686,7 @@ func runPreWizardPreflight(ctx context.Context, cfg *config.DweConfig, baseDir s
 			break
 		}
 	}
-	for _, v := range valchecks.AllForStage(validateCfg, nil, baseDir, cmdRegistry, "deploy") {
+	for _, v := range valchecks.AllForStage(validateCfg, nil, baseDir, cmdRegistry, "deploy", cfg.Services, false) {
 		reg.Register(v)
 	}
 

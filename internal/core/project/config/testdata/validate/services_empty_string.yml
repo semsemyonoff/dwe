@@ -1,0 +1,9 @@
+checks:
+  - id: bad-services
+    description: services list contains empty string
+    stages: [deploy]
+    services: [api, ""]
+    type: builtin
+    cmd: shell
+    with:
+      cmd: 'true'

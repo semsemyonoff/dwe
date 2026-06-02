@@ -53,11 +53,16 @@ type CheckEntry struct {
 	ID          string
 	Description string
 	Stages      []string
-	Severity    diag.Severity
-	Hint        string
-	Type        string
-	Cmd         string
-	With        map[string]any
+	// Services optionally restricts the check to projects where at least one
+	// of the named services is enabled. nil/empty → no gating, the check
+	// always runs when its stage matches. Unknown names are caught by the
+	// config-domain validator (loader has no view of cfg.Services).
+	Services []string
+	Severity diag.Severity
+	Hint     string
+	Type     string
+	Cmd      string
+	With     map[string]any
 	// SourceLine is the 1-based line number of the entry's first key in
 	// validate.yml, captured during YAML node traversal. Diagnostics reference
 	// this so users can jump straight to the offending entry.
@@ -107,6 +112,7 @@ type rawCheckEntry struct {
 	ID          string         `yaml:"id"`
 	Description string         `yaml:"description"`
 	Stages      []string       `yaml:"stages"`
+	Services    []string       `yaml:"services"`
 	Severity    string         `yaml:"severity"`
 	Hint        string         `yaml:"hint"`
 	Type        string         `yaml:"type"`
@@ -228,6 +234,14 @@ func LoadValidateConfig(path string) (*ValidateConfig, []diag.Diagnostic, error)
 		if len(r.Stages) == 0 {
 			return nil, nil, fmt.Errorf("parse %s: check %q: stages is required and must be non-empty", path, r.ID)
 		}
+		if r.Services != nil && len(r.Services) == 0 {
+			return nil, nil, fmt.Errorf("parse %s: check %q: services must be non-empty when present", path, r.ID)
+		}
+		for j, svc := range r.Services {
+			if svc == "" {
+				return nil, nil, fmt.Errorf("parse %s: check %q: services[%d] is empty", path, r.ID, j)
+			}
+		}
 		sev, err := parseSeverity(r.Severity)
 		if err != nil {
 			return nil, nil, fmt.Errorf("parse %s: check %q: %w", path, r.ID, err)
@@ -241,6 +255,7 @@ func LoadValidateConfig(path string) (*ValidateConfig, []diag.Diagnostic, error)
 			ID:          r.ID,
 			Description: r.Description,
 			Stages:      append([]string(nil), r.Stages...),
+			Services:    append([]string(nil), r.Services...),
 			Severity:    sev,
 			Hint:        r.Hint,
 			Type:        r.Type,

@@ -15,3 +15,21 @@ func MatchStage(entry config.CheckEntry, stage string) bool {
 	}
 	return slices.Contains(entry.Stages, stage)
 }
+
+// MatchServices reports whether entry's services-gate is satisfied for the
+// given merged service map. Entries with no services: clause pass unconditionally.
+// Otherwise the gate is OR: at least one listed service must be Enabled.
+// Unknown service names (typos) are NOT silently ignored here — they evaluate
+// as "not enabled" and contribute nothing to the OR; the config-domain
+// validator surfaces them as load-time diagnostics so users see the typo.
+func MatchServices(entry config.CheckEntry, services map[string]config.ServiceConfig) bool {
+	if len(entry.Services) == 0 {
+		return true
+	}
+	for _, name := range entry.Services {
+		if svc, ok := services[name]; ok && svc.Enabled {
+			return true
+		}
+	}
+	return false
+}

@@ -8,7 +8,7 @@ package docs
 var ContentHashes = map[string]string{
 	"README.md":                                           "84cf63a12214",
 	"internals/architecture.md":                           "4fe04c86171c",
-	"internals/packages.md":                               "d65b674e853c",
+	"internals/packages.md":                               "f80ab0eba784",
 	"reference/cli/dwe.md":                                "3a98df74db87",
 	"reference/cli/dwe_commands.md":                       "2b6486cb54ac",
 	"reference/cli/dwe_commands_list.md":                  "24fa793bdf18",
@@ -152,7 +152,7 @@ var ContentHashes = map[string]string{
 	"reference/config/styles.md":                          "7ff608a7d636",
 	"reference/config/ui.md":                              "5380219a7ad5",
 	"reference/config/userconfig.md":                      "8ca47488a9bd",
-	"reference/config/validate.md":                        "a526059c46c1",
+	"reference/config/validate.md":                        "6a4facf4c65a",
 	"reference/config/workspace.md":                       "3eeabec0d42d",
 	"reference/docs/browser.md":                           "4446f0ddf857",
 	"reference/docs/commands.md":                          "4b6c920ee97c",

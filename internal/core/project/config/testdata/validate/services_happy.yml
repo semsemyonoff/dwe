@@ -1,0 +1,9 @@
+checks:
+  - id: api-jwt-secret
+    description: services-scoped check
+    stages: [deploy]
+    services: [api, worker]
+    type: builtin
+    cmd: shell
+    with:
+      cmd: 'true'

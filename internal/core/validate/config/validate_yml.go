@@ -2,6 +2,7 @@ package config
 
 import (
 	"errors"
+	"fmt"
 	"os"
 
 	"github.com/semsemyonoff/dwe/internal/core/validate"
@@ -41,6 +42,47 @@ func (v *validateYmlValidator) Run(ctx validate.Context) []validate.Diagnostic {
 		}}
 	}
 
-	// Successful load: pass through any soft warnings produced by the loader.
-	return ctx.ValidateCfgWarnings
+	// Successful load: pass through any soft warnings produced by the loader,
+	// then append semantic checks that need the merged project config (the
+	// loader has no view of cfg.Services).
+	extra := validateUnknownServiceRefs(ctx, file)
+	if len(extra) == 0 {
+		return ctx.ValidateCfgWarnings
+	}
+	// Defensive copy so appending the extras cannot mutate the caller's
+	// warnings slice via shared capacity. Today LoadValidateConfig builds the
+	// warnings slice with `var warnings []Diagnostic` (cap=0 — safe), but the
+	// alias would be silently dangerous if that ever changes.
+	out := make([]validate.Diagnostic, 0, len(ctx.ValidateCfgWarnings)+len(extra))
+	out = append(out, ctx.ValidateCfgWarnings...)
+	out = append(out, extra...)
+	return out
+}
+
+// validateUnknownServiceRefs walks checks[].services[] and emits one error
+// per unknown service name. The loader cannot perform this check (no view of
+// cfg.Services); it lives here so a single `dwe validate` pass surfaces typos
+// like services: [api-server] when only "api" exists.
+func validateUnknownServiceRefs(ctx validate.Context, file string) []validate.Diagnostic {
+	if ctx.ValidateCfg == nil || ctx.Cfg == nil {
+		return nil
+	}
+	var diags []validate.Diagnostic
+	for _, entry := range ctx.ValidateCfg.Checks {
+		for _, svc := range entry.Services {
+			if _, ok := ctx.Cfg.Services[svc]; ok {
+				continue
+			}
+			diags = append(diags, validate.Diagnostic{
+				Severity: validate.SeverityError,
+				Domain:   "config",
+				Target:   "validate",
+				File:     file,
+				Line:     entry.SourceLine,
+				Message:  fmt.Sprintf("check %q: unknown service %q in services: list", entry.ID, svc),
+				Hint:     "Service names must match a key under workspace/services.yml.",
+			})
+		}
+	}
+	return diags
 }

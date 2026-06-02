@@ -72,9 +72,18 @@ func severityString(s validate.Severity) string {
 func buildValidateData(diags []validate.Diagnostic, summary validate.Summary) validateJSON {
 	diagnostics := make([]diagnosticJSON, 0, len(diags))
 	for _, d := range diags {
+		// d.Target is a display-oriented label and may carry multi-line
+		// decoration (e.g. `id\n(stages)\n[services]` for checks-domain
+		// entries). The JSON scope is a machine identifier — take only the
+		// first line so consumers see a stable `<domain>/<id>` regardless
+		// of presentation-layer metadata.
 		scope := d.Domain
 		if d.Target != "" {
-			scope = d.Domain + "/" + d.Target
+			target := d.Target
+			if i := strings.IndexByte(target, '\n'); i >= 0 {
+				target = target[:i]
+			}
+			scope = d.Domain + "/" + target
 		}
 		diagnostics = append(diagnostics, diagnosticJSON{
 			Severity: severityString(d.Severity),
@@ -596,7 +605,24 @@ func buildRegistry(cfg *config.DweConfig, validateCfg *config.ValidateConfig, va
 	if validate.MatchScope("config", "validate", scope) {
 		checksLoadErr = nil
 	}
-	for _, v := range valchecks.AllForStage(validateCfg, checksLoadErr, baseDir, cmdReg, stage) {
+	// Explicit-by-ID escape hatch: `dwe validate checks <id>` bypasses the
+	// services-gate so users can inspect a check whose target services are
+	// all disabled. Normal-run (no id) keeps the gate so disabled-service
+	// checks stay silent — matching preflight behaviour.
+	skipServicesGate := len(scope) == 2 && scope[0] == "checks"
+	// runValidate tolerates a nil cfg on the errPartialLoad path. Two things
+	// to handle there: (a) avoid the nil deref on cfg.Services, and (b) avoid
+	// silently dropping every services-gated check (the user can't see which
+	// services are enabled when the project failed to load — better to show
+	// every check so failures surface alongside the parse error). Forcing the
+	// gate off on a nil cfg gives the user the maximum signal.
+	var checkServices map[string]config.ServiceConfig
+	if cfg != nil {
+		checkServices = cfg.Services
+	} else {
+		skipServicesGate = true
+	}
+	for _, v := range valchecks.AllForStage(validateCfg, checksLoadErr, baseDir, cmdReg, stage, checkServices, skipServicesGate) {
 		reg.Register(v)
 	}
 	for _, v := range valsnap.All(cfg, snapCfg, snapCfgErr, baseDir, cmdReg, verifyChecksums) {

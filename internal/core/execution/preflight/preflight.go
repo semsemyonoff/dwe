@@ -120,7 +120,7 @@ func Run(ctx context.Context, cfg *config.DweConfig, cmdRegistry *usercommands.R
 	// Pass nil loadErr: config.validate (registered above) already emits the
 	// parse error diagnostic. Passing it here too would produce a duplicate
 	// row in the preflight table and double-count it in the summary.
-	for _, v := range valchecks.AllForStage(validateCfg, nil, baseDir, cmdRegistry, stage) {
+	for _, v := range valchecks.AllForStage(validateCfg, nil, baseDir, cmdRegistry, stage, cfg.Services, false) {
 		reg.Register(v)
 	}
 

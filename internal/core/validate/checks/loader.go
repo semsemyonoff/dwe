@@ -52,13 +52,19 @@ var allowedBuiltinCmds = map[string]struct{}{
 }
 
 // AllForStage produces synthetic validators for every entry whose Stages
-// contains stage. An empty stage returns all entries.
+// contains stage AND whose Services-gate is satisfied by the given services
+// map. An empty stage matches every entry; a nil services map disables the
+// services-gate entirely (every entry passes).
+//
+// When skipServicesGate is true, the services: filter is bypassed entirely —
+// used by `dwe validate checks <id>` explicit-by-ID runs so users can inspect
+// a check whose services are all disabled.
 //
 // When cfg is nil and loadErr is a real parse error (not os.ErrNotExist), a
 // synthetic error validator in the "checks" domain is returned so callers
 // scoped to "checks" still surface the validate.yml failure via the normal
 // diagnostic table rather than silently producing zero results.
-func AllForStage(cfg *config.ValidateConfig, loadErr error, baseDir string, cmdRegistry *registry.Registry, stage string) []validate.Validator {
+func AllForStage(cfg *config.ValidateConfig, loadErr error, baseDir string, cmdRegistry *registry.Registry, stage string, services map[string]config.ServiceConfig, skipServicesGate bool) []validate.Validator {
 	if cfg == nil {
 		if loadErr != nil && !errors.Is(loadErr, os.ErrNotExist) {
 			return []validate.Validator{&validateYmlErrValidator{err: loadErr}}
@@ -69,6 +75,9 @@ func AllForStage(cfg *config.ValidateConfig, loadErr error, baseDir string, cmdR
 	for i := range cfg.Checks {
 		entry := cfg.Checks[i]
 		if !MatchStage(entry, stage) {
+			continue
+		}
+		if !skipServicesGate && !MatchServices(entry, services) {
 			continue
 		}
 		out = append(out, buildValidator(entry, baseDir, cmdRegistry))
@@ -233,13 +242,18 @@ func okDiagnostic(entry config.CheckEntry) validate.Diagnostic {
 
 // targetWithStages renders the check id with the stages it applies to on a
 // second line so the diagnostics table makes the stage scope visible without
-// a dedicated column (no other domain has stages). A check with no stages
-// is rendered as just the id.
+// a dedicated column (no other domain has stages). When a services-gate is
+// declared, it is appended on a third line. A check with no stages and no
+// services is rendered as just the id.
 func targetWithStages(entry config.CheckEntry) string {
-	if len(entry.Stages) == 0 {
-		return entry.ID
+	out := entry.ID
+	if len(entry.Stages) > 0 {
+		out += "\n(" + strings.Join(entry.Stages, ", ") + ")"
 	}
-	return entry.ID + "\n(" + strings.Join(entry.Stages, ", ") + ")"
+	if len(entry.Services) > 0 {
+		out += "\n[" + strings.Join(entry.Services, ", ") + "]"
+	}
+	return out
 }
 
 // validateYmlErrValidator surfaces a validate.yml parse failure inside the

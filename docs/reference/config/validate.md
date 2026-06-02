@@ -10,6 +10,7 @@ Project readiness checks.
 - [Top-level fields](#top-level-fields)
 - [Check entry fields](#check-entry-fields)
 - [Stages](#stages)
+- [Service gating](#service-gating)
 - [Available builtins](#available-builtins)
   - [`shell`](#shell)
   - [`file_exists`](#file_exists)
@@ -89,6 +90,7 @@ Unknown top-level fields are rejected at load time (strict decoding).
 | `id` | string | yes | Unique identifier. Becomes the diagnostic `Target`. |
 | `description` | string | yes | Human-readable summary shown in the diagnostic table. |
 | `stages` | list of strings | yes | Stages that trigger this check (see [Stages](#stages)). |
+| `services` | list of strings | no | Restricts the check to projects where at least one of the named services is enabled (see [Service gating](#service-gating)). |
 | `type` | string | yes | One of `builtin` or `command`. Unknown values are rejected. |
 | `cmd` | string | yes | Builtin name (for `type: builtin`) or user-command ID (for `type: command`). |
 | `severity` | string | no | One of `error` (default), `warning`, `info`. Unknown values are rejected. |
@@ -99,6 +101,8 @@ Schema rules enforced at load time:
 
 - `id` must be unique across entries.
 - `stages` must be non-empty.
+- `services` must be non-empty when the key is present (omit the key entirely to run unconditionally). Empty strings inside the list are rejected.
+- Unknown service names (typos like `services: [aap]` when only `api` exists) surface as `config.validate` error diagnostics at run time, not as load errors — the loader has no view of the merged services map.
 - `type` must be `builtin` or `command`.
 - `severity` must be `error` / `warning` / `info` if present.
 - `with:` shape validity (required keys, types) is checked against the target builtin's `Validate` method — failures surface as `checks.<id>` diagnostics at run time, not as load errors.
@@ -122,6 +126,20 @@ Unknown stages are accepted (open enum) but produce a **warning** at load time s
 - Special notes: `restart` is composite (uses both stop and run stages, no separate preflight); `reset` uses the stop stage only
 
 Unknown stages can still be invoked explicitly with `dwe validate --stage <name>` if needed (e.g. for custom validation workflows).
+
+## Service gating
+
+`services:` restricts a check to projects where at least one of the listed services is enabled. The semantics are OR:
+
+- Omit the field → check always runs (when its stage matches).
+- `services: [api]` → check runs iff `api` is enabled.
+- `services: [api, worker]` → check runs iff `api` OR `worker` is enabled. All services disabled → check is silently skipped (no row in the diagnostics table).
+
+`services:` and `stages:` are independent AND filters: stage matches first, then services. A check with `stages: [deploy]` and `services: [api]` runs only when both conditions hold.
+
+Behaviour is identical in preflight and `dwe validate` (no flag, no environment override). One escape hatch: `dwe validate checks <id>` with an explicit id bypasses the services-gate so users can inspect a check whose target services are all disabled — useful when debugging the gate itself.
+
+Unknown service names produce an error diagnostic in the `config.validate` target so typos surface early; the gated check itself does not run during the same pass (the unknown name contributes nothing to the OR).
 
 ## Available builtins
 
@@ -257,7 +275,23 @@ checks:
       keys: [DATABASE_URL, REDIS_URL, JWT_SECRET]
 ```
 
-**4. Corporate VPN reachable (tcp_reachable):**
+**4. Service-scoped check (services gate):**
+
+```yaml
+  - id: api-jwt-secret
+    description: JWT_SECRET configured for API
+    stages: [run, deploy]
+    services: [api]                  # only runs when api is enabled
+    severity: error
+    hint: Set JWT_SECRET in services/api/.env
+    type: builtin
+    cmd: env_keys_present
+    with:
+      file: services/api/.env
+      keys: [JWT_SECRET]
+```
+
+**5. Corporate VPN reachable (tcp_reachable):**
 
 ```yaml
   - id: corporate-vpn
@@ -273,7 +307,7 @@ checks:
       timeout: 2s
 ```
 
-**5. Project dependency script (type: command):**
+**6. Project dependency script (type: command):**
 
 ```yaml
   - id: project-deps
@@ -298,7 +332,7 @@ commands:
       command -v psql
 ```
 
-**6. Compose plugin v2 only (executable_in_path):**
+**7. Compose plugin v2 only (executable_in_path):**
 
 ```yaml
   - id: jq-installed

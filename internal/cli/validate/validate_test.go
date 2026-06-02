@@ -185,6 +185,51 @@ func TestValidateEnvAndChecksSubcommands(t *testing.T) {
 // TestValidateMalformedValidateYmlDoesNotShortCircuit: a malformed validate.yml
 // must NOT abort the validate run — the config.validate validator surfaces the
 // load failure inline alongside diagnostics from other domains.
+// TestValidatePartialLoadWithServicesGatedCheck guards against a regression:
+// when LoadConfig fails (errPartialLoad), cfg is nil — buildRegistry must not
+// panic when reading cfg.Services for the AllForStage services-gate, and a
+// services-gated check should still appear in the output (gate forced off so
+// the user sees every check alongside the parse error).
+func TestValidatePartialLoadWithServicesGatedCheck(t *testing.T) {
+	tmpDir := t.TempDir()
+
+	// Workspace.yml that LoadConfig will reject (unknown top-level field with
+	// strict decoding). This sets cfg=nil + errPartialLoad in loadForValidate.
+	workspacePath := filepath.Join(tmpDir, "workspace.yml")
+	require.NoError(t, os.WriteFile(workspacePath, []byte("schema_version: \"2\"\nbogus_root: true\n"), 0o644))
+
+	// Valid validate.yml with a services-gated check — gate would normally
+	// drop it because we have no merged services map.
+	require.NoError(t, os.MkdirAll(filepath.Join(tmpDir, "workspace"), 0o755))
+	vYml := filepath.Join(tmpDir, "workspace", "validate.yml")
+	require.NoError(t, os.WriteFile(vYml, []byte(`checks:
+  - id: gated-shell
+    description: gated shell check
+    stages: [deploy]
+    services: [api]
+    type: builtin
+    cmd: shell
+    with:
+      cmd: 'true'
+`), 0o644))
+
+	flags := &cmdctx.RootFlags{ConfigPath: workspacePath}
+	cmd := NewCmd("", flags)
+
+	var output bytes.Buffer
+	cmd.SetOut(&output)
+	cmd.SetErr(&output)
+	cmd.SetArgs([]string{})
+	// Must NOT panic on cfg.Services deref. Execute returns an error because
+	// validation failed (workspace.yml parse error surfaces as a diagnostic),
+	// which is the expected partial-load behaviour — we only care that no
+	// panic occurs and that the gated check id is still surfaced.
+	_ = cmd.Execute()
+
+	out := output.String()
+	require.Contains(t, out, "gated-shell", "services-gated check must still appear when cfg failed to load")
+}
+
 func TestValidateMalformedValidateYmlDoesNotShortCircuit(t *testing.T) {
 	tmpDir := t.TempDir()
 
@@ -588,6 +633,57 @@ func runValidateJSONCmd(t *testing.T, cfgPath string, args ...string) (stdout, s
 	cmd.SetArgs(args)
 	_ = cmd.Execute()
 	return outBuf.String(), errBuf.String()
+}
+
+// TestValidateCmd_JSONMode_ScopeStableForGatedCheck verifies that the JSON
+// `scope` field does NOT carry the multi-line (stages)/[services] decoration
+// that targetWithStages adds to Diagnostic.Target for human display. Machine
+// consumers must see a stable `checks/<id>` identifier — adding/removing
+// services or stages must not change scope.
+func TestValidateCmd_JSONMode_ScopeStableForGatedCheck(t *testing.T) {
+	tmpDir := t.TempDir()
+	workspacePath := filepath.Join(tmpDir, "workspace.yml")
+	require.NoError(t, os.WriteFile(workspacePath, []byte("schema_version: \"2\"\n"), 0o644))
+
+	require.NoError(t, os.MkdirAll(filepath.Join(tmpDir, "workspace"), 0o755))
+	vYml := filepath.Join(tmpDir, "workspace", "validate.yml")
+	require.NoError(t, os.WriteFile(vYml, []byte(`checks:
+  - id: jwt-secret
+    description: gated check
+    stages: [deploy]
+    services: [api]
+    type: builtin
+    cmd: shell
+    with:
+      cmd: 'true'
+`), 0o644))
+
+	stdout, _ := runValidateJSONCmd(t, workspacePath, "checks", "jwt-secret")
+
+	var got map[string]json.RawMessage
+	require.NoError(t, json.Unmarshal([]byte(stdout), &got))
+	var diagnostics []diagnosticJSON
+	require.NoError(t, json.Unmarshal(got["diagnostics"], &diagnostics))
+	require.NotEmpty(t, diagnostics, "expected at least one diagnostic row")
+
+	for _, d := range diagnostics {
+		require.NotContains(t, d.Scope, "\n",
+			"JSON scope must not carry presentation-layer newlines: %q", d.Scope)
+		require.NotContains(t, d.Scope, "(",
+			"JSON scope must not include the stages decoration: %q", d.Scope)
+		require.NotContains(t, d.Scope, "[",
+			"JSON scope must not include the services decoration: %q", d.Scope)
+	}
+
+	// And the gated check itself must appear with the stable id-only scope.
+	found := false
+	for _, d := range diagnostics {
+		if d.Scope == "checks/jwt-secret" {
+			found = true
+			break
+		}
+	}
+	require.True(t, found, "gated check must serialize as checks/jwt-secret; got %+v", diagnostics)
 }
 
 // TestValidateCmd_JSONMode_Structure verifies that `dwe validate --output json`

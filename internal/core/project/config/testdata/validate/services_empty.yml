@@ -1,0 +1,9 @@
+checks:
+  - id: bad-services
+    description: services key present but empty
+    stages: [deploy]
+    services: []
+    type: builtin
+    cmd: shell
+    with:
+      cmd: 'true'

@@ -3,8 +3,10 @@ package config
 import (
 	"errors"
 	"os"
+	"strings"
 	"testing"
 
+	"github.com/semsemyonoff/dwe/internal/core/project/config"
 	"github.com/semsemyonoff/dwe/internal/core/validate"
 )
 
@@ -105,5 +107,43 @@ func TestValidateYmlValidator(t *testing.T) {
 				t.Errorf("Target = %q, want %q", d.Target, "validate")
 			}
 		})
+	}
+}
+
+func TestValidateYmlValidator_UnknownServiceRefs(t *testing.T) {
+	cfg := &config.DweConfig{Services: map[string]config.ServiceConfig{
+		"api":    {Enabled: true},
+		"worker": {Enabled: false},
+	}}
+	vcfg := &config.ValidateConfig{Checks: []config.CheckEntry{
+		{ID: "ok", Services: []string{"api", "worker"}, SourceLine: 5},
+		{ID: "typo", Services: []string{"api", "wokrer"}, SourceLine: 12},
+		{ID: "no-services", SourceLine: 20},
+	}}
+
+	diags := (&validateYmlValidator{}).Run(validate.Context{Cfg: cfg, ValidateCfg: vcfg})
+	if len(diags) != 1 {
+		t.Fatalf("expected 1 diagnostic for the typo, got %d: %+v", len(diags), diags)
+	}
+	d := diags[0]
+	if d.Severity != validate.SeverityError {
+		t.Errorf("severity: want error, got %v", d.Severity)
+	}
+	if !strings.Contains(d.Message, `"wokrer"`) {
+		t.Errorf("message should name the unknown service: %q", d.Message)
+	}
+	if d.Line != 12 {
+		t.Errorf("line: want 12 (from CheckEntry.SourceLine), got %d", d.Line)
+	}
+}
+
+func TestValidateYmlValidator_SkipsWhenCfgMissing(t *testing.T) {
+	// Defensive: nil Cfg or nil ValidateCfg must not panic and must return nothing.
+	v := &validateYmlValidator{}
+	if got := v.Run(validate.Context{Cfg: nil, ValidateCfg: &config.ValidateConfig{Checks: []config.CheckEntry{{ID: "x", Services: []string{"api"}}}}}); len(got) != 0 {
+		t.Errorf("nil Cfg should produce no diagnostics, got %d", len(got))
+	}
+	if got := v.Run(validate.Context{Cfg: &config.DweConfig{}, ValidateCfg: nil}); len(got) != 0 {
+		t.Errorf("nil ValidateCfg should produce no diagnostics, got %d", len(got))
 	}
 }

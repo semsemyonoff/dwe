@@ -232,6 +232,8 @@ func TestLoadValidateConfig_errors(t *testing.T) {
 		{"duplicateID", "duplicate_id.yml", "duplicate id"},
 		{"unknownSeverity", "unknown_severity.yml", "unknown severity"},
 		{"unknownType", "unknown_type.yml", "unknown type"},
+		{"servicesEmpty", "services_empty.yml", "services must be non-empty when present"},
+		{"servicesEmptyString", "services_empty_string.yml", "services[1] is empty"},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
@@ -243,6 +245,31 @@ func TestLoadValidateConfig_errors(t *testing.T) {
 				t.Fatalf("error %q does not contain %q", err.Error(), tc.substring)
 			}
 		})
+	}
+}
+
+func TestLoadValidateConfig_servicesParsed(t *testing.T) {
+	cfg, _, err := LoadValidateConfig(filepath.Join("testdata", "validate", "services_happy.yml"))
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if len(cfg.Checks) != 1 {
+		t.Fatalf("expected 1 check, got %d", len(cfg.Checks))
+	}
+	got := cfg.Checks[0].Services
+	if len(got) != 2 || got[0] != "api" || got[1] != "worker" {
+		t.Fatalf("services not parsed correctly: %#v", got)
+	}
+
+	// happy.yml has no services: key; expect nil/empty after parse.
+	cfg2, _, err := LoadValidateConfig(filepath.Join("testdata", "validate", "happy.yml"))
+	if err != nil {
+		t.Fatalf("unexpected error loading happy.yml: %v", err)
+	}
+	for _, c := range cfg2.Checks {
+		if len(c.Services) != 0 {
+			t.Errorf("check %q: expected no services, got %#v", c.ID, c.Services)
+		}
 	}
 }
 
