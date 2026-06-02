@@ -1,4 +1,4 @@
-> Translated from: reference/config/state/schema.md @ 2ccfc70f5fed
+> Translated from: reference/config/state/schema.md @ b0747020d238
 
 # Схема состояния
 

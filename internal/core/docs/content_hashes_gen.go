@@ -148,7 +148,7 @@ var ContentHashes = map[string]string{
 	"reference/config/state/hashing.md":                   "e5639ee9d79e",
 	"reference/config/state/index.md":                     "f005464d1b6a",
 	"reference/config/state/management.md":                "c8ec98eacca2",
-	"reference/config/state/schema.md":                    "2ccfc70f5fed",
+	"reference/config/state/schema.md":                    "b0747020d238",
 	"reference/config/styles.md":                          "7ff608a7d636",
 	"reference/config/ui.md":                              "5380219a7ad5",
 	"reference/config/userconfig.md":                      "8ca47488a9bd",
