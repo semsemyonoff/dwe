@@ -16,6 +16,11 @@ import (
 // readable on a wide-but-normal terminal instead of expanding indefinitely.
 const diagnosticTextWrapWidth = 44
 
+// zebraBackground tints every other data row to improve scanability. Subtle
+// adaptive shade so it reads as "different" without competing with severity
+// foreground colors.
+var zebraBackground = lipgloss.AdaptiveColor{Light: "#F1F5F9", Dark: "#1F2937"}
+
 // DiagnosticRow holds data for one row in the diagnostics Lipgloss table.
 type DiagnosticRow struct {
 	Severity validate.Severity
@@ -64,18 +69,29 @@ func DiagnosticsTable(rows []DiagnosticRow) string {
 	t := table.New().
 		Border(lipgloss.RoundedBorder()).
 		BorderStyle(styles.BorderStyle()).
+		BorderRow(true).
 		Headers("STATUS", "DOMAIN", "TARGET", "FILE", "MESSAGE", "HINT").
 		StyleFunc(func(row, col int) lipgloss.Style {
 			if row == table.HeaderRow {
-				return styles.AccentStyle().Bold(true)
+				h := styles.AccentStyle().Bold(true)
+				if col == 0 {
+					h = h.AlignHorizontal(lipgloss.Center)
+				}
+				return h
 			}
-			if row < 0 || row >= len(cellStyles) {
-				return lipgloss.NewStyle()
+			style := lipgloss.NewStyle()
+			if row >= 0 && row < len(cellStyles) {
+				if s, ok := cellStyles[row][col]; ok {
+					style = s
+				}
 			}
-			if style, ok := cellStyles[row][col]; ok {
-				return style
+			if col == 0 {
+				style = style.AlignHorizontal(lipgloss.Center)
 			}
-			return lipgloss.NewStyle()
+			if row >= 0 && row%2 == 1 {
+				style = style.Background(zebraBackground)
+			}
+			return style
 		})
 
 	for _, r := range stringRows {
