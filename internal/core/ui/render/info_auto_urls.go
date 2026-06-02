@@ -26,16 +26,16 @@ func renderAutoURLs(cfg *config.DweConfig, spec *config.AutoURLsSpec) string {
 		include = []string{"app", "tool"}
 	}
 
-	// Resolve port_via service and port.
+	// Resolve port_via service. The listener port on the proxy is chosen
+	// per-routed-service inside buildMainURL/buildPathURL, because the
+	// routed service's info.scheme can pin the proxy listener key.
 	var portViaService *config.ServiceConfig
-	var portViaPort int
 	if spec.PortVia != "" {
 		if svc, ok := cfg.Services[spec.PortVia]; ok {
 			portViaService = &svc
-			portViaPort = pickProxyPort(svc, cfg.Runtime.UseHTTPS)
 		}
 	} else {
-		portViaService, portViaPort = autoDetectPortVia(cfg)
+		portViaService = autoDetectPortVia(cfg)
 	}
 
 	ordered := config.DeployOrder(cfg, include)
@@ -69,7 +69,7 @@ func renderAutoURLs(cfg *config.DweConfig, spec *config.AutoURLsSpec) string {
 
 		var mainURL string
 		if host != "" || port != 0 {
-			mainURL = buildMainURL(cfg, svc, portKey, host, port, portViaService, portViaPort)
+			mainURL = buildMainURL(cfg, svc, portKey, host, port, portViaService)
 		}
 
 		hidePathsSet := make(map[string]bool)
@@ -93,7 +93,7 @@ func renderAutoURLs(cfg *config.DweConfig, spec *config.AutoURLsSpec) string {
 			if hidePathsSet[p.Name] {
 				continue
 			}
-			pathURL := buildPathURL(cfg, svc, portKey, p, host, port, portViaService, portViaPort)
+			pathURL := buildPathURL(cfg, svc, portKey, p, host, port, portViaService)
 			if pathURL == "" {
 				continue
 			}
@@ -131,10 +131,11 @@ func renderAutoURLs(cfg *config.DweConfig, spec *config.AutoURLsSpec) string {
 }
 
 // autoDetectPortVia finds the single infra service with ports.http == 80 or ports.https == 443.
-// Returns nil, 0 if 0 or >1 candidates found, or if cfg is nil.
-func autoDetectPortVia(cfg *config.DweConfig) (*config.ServiceConfig, int) {
+// Returns nil if 0 or >1 candidates found, or if cfg is nil. The chosen proxy
+// listener port is resolved per-routed-service later via resolveProxyTarget.
+func autoDetectPortVia(cfg *config.DweConfig) *config.ServiceConfig {
 	if cfg == nil {
-		return nil, 0
+		return nil
 	}
 
 	var candidates []*config.ServiceConfig
@@ -150,22 +151,27 @@ func autoDetectPortVia(cfg *config.DweConfig) (*config.ServiceConfig, int) {
 	}
 
 	if len(candidates) == 1 {
-		return candidates[0], pickProxyPort(*candidates[0], cfg.Runtime.UseHTTPS)
+		return candidates[0]
 	}
 
-	return nil, 0
+	return nil
 }
 
-// pickProxyPort returns the chosen reverse-proxy listening port for the
-// candidate service. The selection uses cfg.Runtime.UseHTTPS as a tie-breaker
-// between the two well-known proxy keys (http==80 vs https==443). Per-service
-// info.scheme intentionally does NOT participate here — the proxy itself is
-// global, so a single bool is the right resolution input.
-func pickProxyPort(svc config.ServiceConfig, useHTTPS bool) int {
-	if useHTTPS {
-		return svc.Port("https")
+// resolveProxyTarget picks the proxy listener key ("http" or "https") and the
+// corresponding port number for routing `routed` through `proxy`. The key is
+// chosen as:
+//   - routed.Info.Scheme when it is "http" or "https" (per-service pin),
+//   - else the global proxyPortKey(useHTTPS) default.
+//
+// This is the seam that lets a single shared reverse-proxy serve mixed-scheme
+// stacks: a routed service can declare info.scheme: https to be looked up
+// against the proxy's https listener while its sibling stays on http.
+func resolveProxyTarget(routed, proxy config.ServiceConfig, useHTTPS bool) (string, int) {
+	key := routed.Info.Scheme
+	if key != "http" && key != "https" {
+		key = proxyPortKey(useHTTPS)
 	}
-	return svc.Port("http")
+	return key, proxy.Port(key)
 }
 
 // buildMainURL returns the URL portion (without the row prefix) for a service.
@@ -175,19 +181,20 @@ func pickProxyPort(svc config.ServiceConfig, useHTTPS bool) int {
 //   - only ports → "http(s)://localhost:<port>"
 //   - neither → ""
 //
-// The proxied URL uses proxyScheme — derived ONLY from the proxy service's
-// per-port scheme override (if any) plus the global runtime.use_https. The
-// proxy is global; the proxy service's info.scheme is intentionally NOT
-// consulted (it would otherwise leak to every routed-through service).
-// The direct URL uses svc.EffectiveScheme so per-service info.scheme and
-// per-port overrides on the routed service apply.
+// The proxied URL uses proxyScheme — derived from the routed service's
+// info.scheme (per-service pin), then a per-port scheme override on the
+// proxy's chosen listener, then runtime.use_https. The proxy service's own
+// info.scheme is intentionally NOT consulted (it would otherwise leak to
+// every routed-through service). The direct URL uses svc.EffectiveScheme so
+// per-service info.scheme and per-port overrides on the routed service apply.
 func buildMainURL(cfg *config.DweConfig, svc config.ServiceConfig, portKey, host string, port int,
-	portVia *config.ServiceConfig, portViaPort int) string {
+	portVia *config.ServiceConfig) string {
 
 	var urls []string
 
 	if host != "" && portVia != nil {
-		urls = append(urls, buildProxiedURL(proxyScheme(*portVia, cfg.Runtime.UseHTTPS), host, portViaPort))
+		proxyKey, proxyPort := resolveProxyTarget(svc, *portVia, cfg.Runtime.UseHTTPS)
+		urls = append(urls, buildProxiedURL(proxyScheme(svc, *portVia, proxyKey, cfg.Runtime.UseHTTPS), host, proxyPort))
 	}
 
 	if port > 0 {
@@ -201,15 +208,20 @@ func buildMainURL(cfg *config.DweConfig, svc config.ServiceConfig, portKey, host
 	return strings.Join(urls, " | ")
 }
 
-// proxyScheme returns the scheme used for proxied URLs through svc. Resolution
-// is intentionally narrower than ServiceConfig.EffectiveScheme: only a per-port
-// scheme override on the selected listener key (`http` or `https` per
-// useHTTPS) participates, then the global useHTTPS fallback. svc.Info.Scheme
-// is deliberately skipped because it would leak the proxy's own dashboard
-// scheme onto every service routed through it.
-func proxyScheme(svc config.ServiceConfig, useHTTPS bool) string {
-	key := proxyPortKey(useHTTPS)
-	if sch := svc.PortScheme(key); sch != "" {
+// proxyScheme returns the scheme used for proxied URLs when `routed` is routed
+// through `proxy` on the listener identified by `key`. Precedence:
+//  1. routed.Info.Scheme — per-service pin owned by the routed service;
+//  2. proxy.PortScheme(key) — per-port override on the proxy's listener;
+//  3. useHTTPS fallback.
+//
+// proxy.Info.Scheme is deliberately skipped: the proxy's service-level scheme
+// describes the proxy's own dashboard URL row and must not leak onto every
+// service routed through it.
+func proxyScheme(routed, proxy config.ServiceConfig, key string, useHTTPS bool) string {
+	if s := routed.Info.Scheme; s == "http" || s == "https" {
+		return s
+	}
+	if sch := proxy.PortScheme(key); sch != "" {
 		return sch
 	}
 	if useHTTPS {
@@ -238,7 +250,7 @@ func buildProxiedURL(scheme, host string, port int) string {
 // buildPathURL returns the full URL for a sub-path row, or "" if it cannot be
 // assembled (e.g. host-only without portVia and no direct port).
 func buildPathURL(cfg *config.DweConfig, svc config.ServiceConfig, portKey string, path config.ServiceInfoPath,
-	host string, port int, portVia *config.ServiceConfig, portViaPort int) string {
+	host string, port int, portVia *config.ServiceConfig) string {
 
 	if path.Path == "" {
 		return ""
@@ -251,7 +263,8 @@ func buildPathURL(cfg *config.DweConfig, svc config.ServiceConfig, portKey strin
 	var baseURL string
 	switch {
 	case hasHost && hasPortVia:
-		baseURL = buildProxiedURL(proxyScheme(*portVia, cfg.Runtime.UseHTTPS), host, portViaPort)
+		proxyKey, proxyPort := resolveProxyTarget(svc, *portVia, cfg.Runtime.UseHTTPS)
+		baseURL = buildProxiedURL(proxyScheme(svc, *portVia, proxyKey, cfg.Runtime.UseHTTPS), host, proxyPort)
 	case hasPort:
 		directScheme := svc.EffectiveScheme(portKey, cfg.Runtime.UseHTTPS)
 		baseURL = fmt.Sprintf("%s://localhost:%d", directScheme, port)

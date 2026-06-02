@@ -89,7 +89,13 @@ Values are bounded `1..65535` at load time. Scalar shapes (`ports: 80`, `ports: 
 
 This is also exposed to templates as the `ServiceConfig.EffectiveScheme` method — see [Templates](../../templates.md). For dot-path (`from:` / `${...}`) access, per-port schemes are surfaced as a sibling map under `services.<n>.port_schemes.<port-name>` (string), present only for services that actually set an override.
 
-**Reverse-proxy URLs (`port_via`)** intentionally do NOT consult `info.scheme` of the proxy service. They use only a per-port scheme override on the proxy's chosen listener (typically `http` / `https`) plus the global `runtime.use_https` fallback. Setting `info.scheme` on the proxy itself affects only the proxy's own URL row in `dwe info`; it does not propagate to apps routed through it.
+**Reverse-proxy URLs (`port_via`).** Resolution for a routed service's proxied URL walks a separate chain that intentionally skips the proxy's own service-level `info.scheme` (the proxy's scheme would otherwise leak onto every routed service). The chain is:
+
+1. `info.scheme` of the **routed** service — pins both the URL scheme and which proxy listener (`http` vs `https` port key) is looked up;
+2. per-port `scheme:` override on the proxy's listener entry;
+3. global `runtime.use_https`.
+
+This lets one shared proxy serve mixed-scheme stacks. Declare `ports.http: 80` and `ports.https: 443` on the proxy, then set `info.scheme: https` on the individual routed services that the proxy terminates TLS for; siblings without an override stay on `http`. Setting `info.scheme` on the proxy itself still affects only the proxy's own URL row in `dwe info` — it does not propagate to apps routed through it.
 
 ## `hosts` field
 

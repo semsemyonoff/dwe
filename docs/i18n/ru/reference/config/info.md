@@ -1,4 +1,4 @@
-> Translated from: reference/config/info.md @ c64a4bdc0a44
+> Translated from: reference/config/info.md @ c912284867c2
 
 # info.yml
 
@@ -196,7 +196,7 @@ footer: true
 - только `ports[primary_port]` → `http://localhost:<port>`
 - ни того, ни другого → строка молча пропускается
 
-`<proxied URL>` использует порты сервиса `port_via` для выбора схемы/порта; `<direct URL>` использует собственный порт сервиса. Порты `:80` и `:443` в выводе опускаются.
+`<proxied URL>` использует порты сервиса `port_via` для выбора схемы/порта, но `info.scheme` самого маршрутизируемого сервиса (если задан) имеет более высокий приоритет и также задаёт, какой listener прокси (`http` или `https`) будет использован — полная цепочка приоритета описана в [URL'ы через reverse-proxy в services/fields.md](services/fields.md#поле-ports). `<direct URL>` использует собственный порт сервиса. Порты `:80` и `:443` в выводе опускаются.
 
 ### `auto-hosts`
 

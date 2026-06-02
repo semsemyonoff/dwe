@@ -147,12 +147,16 @@ func buildAutoURLsData(cfg *config.DweConfig, spec *config.AutoURLsSpec) []infoI
 		include = []string{"app", "tool"}
 	}
 
-	portViaService, portViaPort := autoDetectPortViaData(cfg)
+	// Mirror renderAutoURLs: when PortVia is explicit, do NOT also run
+	// auto-detection — an explicit-but-missing name must yield no proxy
+	// (host-only rows), not silently fall back to an auto-detected proxy.
+	var portViaService *config.ServiceConfig
 	if spec.PortVia != "" {
 		if svc, ok := cfg.Services[spec.PortVia]; ok {
 			portViaService = &svc
-			portViaPort = pickProxyPortData(svc, cfg.Runtime.UseHTTPS)
 		}
+	} else {
+		portViaService = autoDetectPortViaData(cfg)
 	}
 
 	ordered := config.DeployOrder(cfg, include)
@@ -177,7 +181,7 @@ func buildAutoURLsData(cfg *config.DweConfig, spec *config.AutoURLsSpec) []infoI
 
 		title := svc.DisplayTitle(svcName)
 		if host != "" || port != 0 {
-			mainURL := buildMainURLData(cfg, svc, portKey, host, port, portViaService, portViaPort)
+			mainURL := buildMainURLData(cfg, svc, portKey, host, port, portViaService)
 			if mainURL != "" {
 				items = append(items, infoItem{Type: "url", Label: title, Value: mainURL})
 			}
@@ -191,7 +195,7 @@ func buildAutoURLsData(cfg *config.DweConfig, spec *config.AutoURLsSpec) []infoI
 			if hidePathsSet[p.Name] {
 				continue
 			}
-			pathURL := buildPathURLData(cfg, svc, portKey, p, host, port, portViaService, portViaPort)
+			pathURL := buildPathURLData(cfg, svc, portKey, p, host, port, portViaService)
 			if pathURL == "" {
 				continue
 			}
@@ -201,26 +205,34 @@ func buildAutoURLsData(cfg *config.DweConfig, spec *config.AutoURLsSpec) []infoI
 	return items
 }
 
-// pickProxyPortData mirrors render.pickProxyPort — selects the reverse-proxy
-// listening port using the global UseHTTPS bool as the tie-breaker between
-// the well-known "http" and "https" port keys.
-func pickProxyPortData(svc config.ServiceConfig, useHTTPS bool) int {
-	if useHTTPS {
-		return svc.Port("https")
+// resolveProxyTargetData mirrors render.resolveProxyTarget — picks the proxy
+// listener key and port for routing `routed` through `proxy`. The key is
+// chosen as routed.Info.Scheme when set ("http"/"https"), else the
+// useHTTPS-driven default.
+func resolveProxyTargetData(routed, proxy config.ServiceConfig, useHTTPS bool) (string, int) {
+	key := routed.Info.Scheme
+	if key != "http" && key != "https" {
+		if useHTTPS {
+			key = "https"
+		} else {
+			key = "http"
+		}
 	}
-	return svc.Port("http")
+	return key, proxy.Port(key)
 }
 
-// proxySchemeData mirrors render.proxyScheme — derives the scheme for proxied
-// URLs from a per-port override on the listener key or the global UseHTTPS
-// fallback. Skips svc.Info.Scheme so the proxy's own dashboard scheme cannot
-// leak onto every routed-through service.
-func proxySchemeData(svc config.ServiceConfig, useHTTPS bool) string {
-	key := "http"
-	if useHTTPS {
-		key = "https"
+// proxySchemeData mirrors render.proxyScheme — precedence:
+//  1. routed.Info.Scheme,
+//  2. proxy.PortScheme(key),
+//  3. useHTTPS fallback.
+//
+// proxy.Info.Scheme is deliberately skipped so the proxy's own dashboard
+// scheme cannot leak onto every routed-through service.
+func proxySchemeData(routed, proxy config.ServiceConfig, key string, useHTTPS bool) string {
+	if s := routed.Info.Scheme; s == "http" || s == "https" {
+		return s
 	}
-	if sch := svc.PortScheme(key); sch != "" {
+	if sch := proxy.PortScheme(key); sch != "" {
 		return sch
 	}
 	if useHTTPS {
@@ -277,9 +289,9 @@ func buildAutoHostsData(cfg *config.DweConfig, spec *config.AutoHostsSpec) []inf
 // URL building helpers — logic duplicated from core/ui/info_auto_urls.go.
 // core/ui is a string-only sink (returns styled strings); the cli layer owns data extraction.
 
-func autoDetectPortViaData(cfg *config.DweConfig) (*config.ServiceConfig, int) {
+func autoDetectPortViaData(cfg *config.DweConfig) *config.ServiceConfig {
 	if cfg == nil {
-		return nil, 0
+		return nil
 	}
 	var candidates []*config.ServiceConfig
 	for _, name := range config.DeployOrder(cfg, []string{"infra"}) {
@@ -292,16 +304,17 @@ func autoDetectPortViaData(cfg *config.DweConfig) (*config.ServiceConfig, int) {
 		}
 	}
 	if len(candidates) == 1 {
-		return candidates[0], pickProxyPortData(*candidates[0], cfg.Runtime.UseHTTPS)
+		return candidates[0]
 	}
-	return nil, 0
+	return nil
 }
 
 func buildMainURLData(cfg *config.DweConfig, svc config.ServiceConfig, portKey, host string, port int,
-	portVia *config.ServiceConfig, portViaPort int) string {
+	portVia *config.ServiceConfig) string {
 	var urls []string
 	if host != "" && portVia != nil {
-		urls = append(urls, buildProxiedURLData(proxySchemeData(*portVia, cfg.Runtime.UseHTTPS), host, portViaPort))
+		proxyKey, proxyPort := resolveProxyTargetData(svc, *portVia, cfg.Runtime.UseHTTPS)
+		urls = append(urls, buildProxiedURLData(proxySchemeData(svc, *portVia, proxyKey, cfg.Runtime.UseHTTPS), host, proxyPort))
 	}
 	if port > 0 {
 		directScheme := svc.EffectiveScheme(portKey, cfg.Runtime.UseHTTPS)
@@ -321,14 +334,15 @@ func buildProxiedURLData(scheme, host string, port int) string {
 }
 
 func buildPathURLData(cfg *config.DweConfig, svc config.ServiceConfig, portKey string, path config.ServiceInfoPath,
-	host string, port int, portVia *config.ServiceConfig, portViaPort int) string {
+	host string, port int, portVia *config.ServiceConfig) string {
 	if path.Path == "" {
 		return ""
 	}
 	var baseURL string
 	switch {
 	case host != "" && portVia != nil:
-		baseURL = buildProxiedURLData(proxySchemeData(*portVia, cfg.Runtime.UseHTTPS), host, portViaPort)
+		proxyKey, proxyPort := resolveProxyTargetData(svc, *portVia, cfg.Runtime.UseHTTPS)
+		baseURL = buildProxiedURLData(proxySchemeData(svc, *portVia, proxyKey, cfg.Runtime.UseHTTPS), host, proxyPort)
 	case port > 0:
 		directScheme := svc.EffectiveScheme(portKey, cfg.Runtime.UseHTTPS)
 		baseURL = fmt.Sprintf("%s://localhost:%d", directScheme, port)

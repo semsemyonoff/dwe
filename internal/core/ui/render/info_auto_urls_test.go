@@ -308,6 +308,54 @@ func TestRenderAutoURLs(t *testing.T) {
 			}, "\n"),
 		},
 		{
+			// Routed-service info.scheme drives the proxied URL scheme AND
+			// pins which proxy listener (http vs https) the routed service
+			// is looked up against — even though the project's global
+			// runtime.use_https is false (so siblings without an override
+			// stay on http). The proxy declares both listeners so the per-
+			// service pin can resolve to a real port.
+			name: "routed service info.scheme overrides proxied URL with mixed-scheme proxy",
+			cfg: &config.DweConfig{
+				Runtime: config.RuntimeConfig{UseHTTPS: false},
+				Services: map[string]config.ServiceConfig{
+					"nginx": {
+						Type:    config.ServiceTypeInfra,
+						Enabled: true,
+						Ports: map[string]config.ServicePortSpec{
+							"http":  {Port: 80},
+							"https": {Port: 443},
+						},
+					},
+					"storefront": {
+						Type:    config.ServiceTypeApp,
+						Enabled: true,
+						Ports:   map[string]config.ServicePortSpec{},
+						Hosts:   map[string]string{"web": "tbm.shop.local"},
+						Info:    config.ServiceInfoBlock{Title: "Storefront", Scheme: "https"},
+					},
+					"main": {
+						Type:    config.ServiceTypeApp,
+						Enabled: true,
+						Ports:   map[string]config.ServicePortSpec{},
+						Hosts:   map[string]string{"web": "tbm.local"},
+						Info:    config.ServiceInfoBlock{Title: "Main"},
+					},
+				},
+			},
+			spec: &config.AutoURLsSpec{
+				Include: []string{"app"},
+				PortVia: "nginx",
+			},
+			wantOut: strings.Join([]string{
+				"",
+				"Main",
+				"  📦 Main — http://tbm.local",
+				"",
+				"Storefront",
+				"  📦 Storefront — https://tbm.shop.local",
+			}, "\n"),
+		},
+		{
 			// Per-port scheme override on the proxy's listener IS honored —
 			// the proxy is the source of truth for its own listening scheme.
 			name: "proxy per-port scheme override applies to proxied URL",

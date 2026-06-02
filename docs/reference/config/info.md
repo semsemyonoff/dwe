@@ -194,7 +194,7 @@ Services without an `info` block are included in the `include` types but render 
 - only `ports[primary_port]` → `http://localhost:<port>`
 - neither → row silently omitted
 
-`<proxied URL>` uses the `port_via` service's ports for scheme/port selection; `<direct URL>` uses the service's own port. Ports `:80` and `:443` are omitted from output.
+`<proxied URL>` uses the `port_via` service's ports for scheme/port selection, but the routed service's own `info.scheme` (when set) takes precedence and also pins which proxy listener (`http` vs `https`) is looked up — see [Reverse-proxy URLs in services/fields.md](services/fields.md#ports-field) for the full precedence chain. `<direct URL>` uses the service's own port. Ports `:80` and `:443` are omitted from output.
 
 ### `auto-hosts`
 
