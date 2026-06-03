@@ -278,14 +278,14 @@ This task focuses on (a) making sure `dwe validate` surfaces these diagnostics n
 - Modify: `internal/core/project/local/local_yaml_test.go` (round-trip test)
 - Possibly Modify: `internal/core/validate/config/` tests for the workspace validator
 
-- [ ] **`dwe validate` integration check**: the existing `workspaceValidator` surfaces `LoadConfig` errors as diagnostics, but per Codex round-2 review its `Diagnostic.File` field attribution currently points to `workspace.yml` even for errors originating in `local.yml` — the specific path appears only in the error message. Add an integration test exercising the new validators (`validateOverlayCompose`, `validateLocalCompose`) via `dwe validate config workspace`: fixture project with a malformed `local.yml`, run validate, assert the error message text contains `workspace/local.yml` (NOT assert on `Diagnostic.File`, which will say `workspace.yml`). Document this attribution quirk in the test's comment so a future cleanup PR knows it can tighten the assertion if/when `workspaceValidator` is improved.
-- [ ] If improving `Diagnostic.File` attribution proves trivial during this work (e.g. a one-line annotation when the underlying error is a `*LayerError` or similar), do it; otherwise file as Post-Completion follow-up.
-- [ ] **Round-trip preservation test**: write a test in `local_yaml_test.go` that:
+- [x] **`dwe validate` integration check**: the existing `workspaceValidator` surfaces `LoadConfig` errors as diagnostics, but per Codex round-2 review its `Diagnostic.File` field attribution currently points to `workspace.yml` even for errors originating in `local.yml` — the specific path appears only in the error message. Add an integration test exercising the new validators (`validateOverlayCompose`, `validateLocalCompose`) via `dwe validate config workspace`: fixture project with a malformed `local.yml`, run validate, assert the error message text contains `workspace/local.yml` (NOT assert on `Diagnostic.File`, which will say `workspace.yml`). Document this attribution quirk in the test's comment so a future cleanup PR knows it can tighten the assertion if/when `workspaceValidator` is improved.
+- [x] If improving `Diagnostic.File` attribution proves trivial during this work (e.g. a one-line annotation when the underlying error is a `*LayerError` or similar), do it; otherwise file as Post-Completion follow-up. (Deferred — non-trivial, would require introducing a typed `*LayerError` and threading it through every loader error site. Filed as Post-Completion follow-up.)
+- [x] **Round-trip preservation test**: write a test in `local_yaml_test.go` that:
   1. Writes a `local.yml` containing both `compose.extra` and `services.<name>.compose.extra` (plus `enabled`/`ports`/`hosts` entries).
   2. Loads via `LoadLocalYAML`, applies `ApplyServiceTogglesToYAML` (the `dwe services enable/disable` write path) to flip a service's enabled bit.
   3. Writes back via `WriteLocalYAML`, reloads, and asserts ALL `compose.extra` entries (both layers) survive untouched.
   4. Since the loader uses `map[string]any`, this should be automatic — the test pins the behavior so a future refactor to typed structs doesn't silently drop unknown keys.
-- [ ] Run tests — must pass before Task 4.
+- [x] Run tests — must pass before Task 4.
 
 ### Task 4: Path safety + existence validation
 

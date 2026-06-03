@@ -3,7 +3,10 @@ package local
 import (
 	"os"
 	"path/filepath"
+	"reflect"
 	"testing"
+
+	"github.com/semsemyonoff/dwe/internal/core/project/config"
 )
 
 func TestLoadLocalYAML_MissingFile(t *testing.T) {
@@ -243,6 +246,122 @@ func TestWriteLocalYAML_Atomic_NoTempFilesOnSuccess(t *testing.T) {
 
 	if fileCount != 1 {
 		t.Errorf("expected 1 file, got %d", fileCount)
+	}
+}
+
+// TestRoundTrip_ServiceTogglePreservesComposeExtra pins behavior: a local.yml
+// containing project-wide compose.extra and per-service compose.extra entries
+// must survive a ApplyServiceTogglesToYAML + WriteLocalYAML + LoadLocalYAML
+// round-trip. The LoadLocalYAML loader stores everything as map[string]any so
+// preservation is automatic; this test guards against a future refactor to
+// typed structs that would silently drop unknown keys.
+func TestRoundTrip_ServiceTogglePreservesComposeExtra(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "local.yml")
+
+	initial := map[string]any{
+		"compose": map[string]any{
+			"extra": []any{"compose.local.yml", "extra/two.yml"},
+		},
+		"services": map[string]any{
+			"web": map[string]any{
+				"enabled": true,
+				"ports":   map[string]any{"http": 3001},
+				"compose": map[string]any{
+					"extra": []any{"compose/web.local.yml"},
+				},
+			},
+			"api": map[string]any{
+				"enabled": true,
+				"hosts":   map[string]any{"api": "api.local"},
+				"compose": map[string]any{
+					"extra": []any{"compose/api.local.yml", "compose/api.extra.yml"},
+				},
+			},
+		},
+	}
+	if err := WriteLocalYAML(path, initial); err != nil {
+		t.Fatalf("initial write: %v", err)
+	}
+
+	loaded, err := LoadLocalYAML(path)
+	if err != nil {
+		t.Fatalf("initial load: %v", err)
+	}
+
+	cfg := &config.DweConfig{
+		Services: map[string]config.ServiceConfig{
+			"web": {Required: false},
+			"api": {Required: false},
+		},
+	}
+	// Flip api's enabled bit (the toggle-write path used by `dwe services disable`).
+	if err := ApplyServiceTogglesToYAML(cfg, loaded, nil, []string{"api"}); err != nil {
+		t.Fatalf("apply toggles: %v", err)
+	}
+
+	if err := WriteLocalYAML(path, loaded); err != nil {
+		t.Fatalf("write after toggle: %v", err)
+	}
+
+	reloaded, err := LoadLocalYAML(path)
+	if err != nil {
+		t.Fatalf("reload after toggle: %v", err)
+	}
+
+	// Project-wide compose.extra survives.
+	projectCompose, ok := reloaded["compose"].(map[string]any)
+	if !ok {
+		t.Fatalf("project-wide compose block lost; got %T (%v)", reloaded["compose"], reloaded["compose"])
+	}
+	wantProjectExtra := []any{"compose.local.yml", "extra/two.yml"}
+	if !reflect.DeepEqual(projectCompose["extra"], wantProjectExtra) {
+		t.Errorf("project-wide compose.extra: want %v, got %v", wantProjectExtra, projectCompose["extra"])
+	}
+
+	svcMap, ok := reloaded["services"].(map[string]any)
+	if !ok {
+		t.Fatalf("services block lost; got %T", reloaded["services"])
+	}
+
+	// web: untouched — compose.extra + ports survive, enabled still true.
+	webEntry, ok := svcMap["web"].(map[string]any)
+	if !ok {
+		t.Fatalf("web entry lost; got %T", svcMap["web"])
+	}
+	if webEntry["enabled"] != true {
+		t.Errorf("web.enabled: want true, got %v", webEntry["enabled"])
+	}
+	webCompose, ok := webEntry["compose"].(map[string]any)
+	if !ok {
+		t.Fatalf("web.compose lost; got %T", webEntry["compose"])
+	}
+	wantWebExtra := []any{"compose/web.local.yml"}
+	if !reflect.DeepEqual(webCompose["extra"], wantWebExtra) {
+		t.Errorf("web.compose.extra: want %v, got %v", wantWebExtra, webCompose["extra"])
+	}
+	if _, ok := webEntry["ports"].(map[string]any); !ok {
+		t.Errorf("web.ports lost; got %T", webEntry["ports"])
+	}
+
+	// api: enabled flipped to false, but compose.extra + hosts must survive.
+	apiEntry, ok := svcMap["api"].(map[string]any)
+	if !ok {
+		t.Fatalf("api entry lost; got %T", svcMap["api"])
+	}
+	if apiEntry["enabled"] != false {
+		t.Errorf("api.enabled: want false (toggled), got %v", apiEntry["enabled"])
+	}
+	apiCompose, ok := apiEntry["compose"].(map[string]any)
+	if !ok {
+		t.Fatalf("api.compose lost; got %T", apiEntry["compose"])
+	}
+	wantAPIExtra := []any{"compose/api.local.yml", "compose/api.extra.yml"}
+	if !reflect.DeepEqual(apiCompose["extra"], wantAPIExtra) {
+		t.Errorf("api.compose.extra: want %v, got %v", wantAPIExtra, apiCompose["extra"])
+	}
+	if _, ok := apiEntry["hosts"].(map[string]any); !ok {
+		t.Errorf("api.hosts lost; got %T", apiEntry["hosts"])
 	}
 }
 

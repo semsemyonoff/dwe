@@ -118,6 +118,103 @@ docs:
 	hasDiag(t, diags, validate.SeverityError, "non-negative")
 }
 
+// TestWorkspaceValidator_LocalComposeMalformed exercises the validate-surface
+// for the new local.yml overlay validators (validateLocalCompose,
+// validateOverlayCompose, validateNonLocalCompose). LoadConfig surfaces these
+// as workspaceValidator diagnostics. NOTE: Diagnostic.File currently
+// attributes to workspace.yml even when the underlying error originates in
+// local.yml — the local.yml path appears only in the error message. A future
+// cleanup PR could tighten attribution to the originating layer; for now, we
+// assert on the message text. Tighten the File assertion if/when that lands.
+func TestWorkspaceValidator_LocalComposeMalformed(t *testing.T) {
+	tests := []struct {
+		name        string
+		workspace   string
+		serviceYML  map[string]string // service name → service.yml body
+		localYML    string
+		wantMessage string
+	}{
+		{
+			name: "project-wide compose.extra wrong shape in local.yml",
+			workspace: `project:
+  name: test
+  prefix: test
+`,
+			localYML: `compose:
+  extra: "not-a-list"
+`,
+			wantMessage: "workspace/local.yml",
+		},
+		{
+			name: "project-wide compose.extra non-string entry in local.yml",
+			workspace: `project:
+  name: test
+  prefix: test
+`,
+			localYML: `compose:
+  extra:
+    - 123
+`,
+			wantMessage: "compose.extra",
+		},
+		{
+			name: "per-service compose.extra wrong shape in local.yml",
+			workspace: `project:
+  name: test
+  prefix: test
+`,
+			serviceYML: map[string]string{
+				"web": "type: app\ncontainer: web\ndir: web\n",
+			},
+			localYML: `services:
+  web:
+    compose:
+      extra: "not-a-list"
+`,
+			wantMessage: "services.web.compose.extra",
+		},
+		{
+			name: "compose.extra in workspace.yml rejected",
+			workspace: `project:
+  name: test
+  prefix: test
+compose:
+  extra:
+    - foo.yml
+`,
+			wantMessage: "per-developer overlays belong in workspace/local.yml",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			root := t.TempDir()
+			require.NoError(t, os.MkdirAll(filepath.Join(root, "workspace", "services"), 0o755))
+			require.NoError(t, os.WriteFile(filepath.Join(root, "workspace.yml"), []byte(tt.workspace), 0o644))
+			for name, body := range tt.serviceYML {
+				dir := filepath.Join(root, "workspace", "services", name)
+				require.NoError(t, os.MkdirAll(dir, 0o755))
+				require.NoError(t, os.WriteFile(filepath.Join(dir, "service.yml"), []byte(body), 0o644))
+			}
+			if tt.localYML != "" {
+				require.NoError(t, os.WriteFile(filepath.Join(root, "workspace", "local.yml"), []byte(tt.localYML), 0o644))
+			}
+
+			ctx := validate.Context{
+				ProjectRoot: root,
+				ConfigPath:  filepath.Join(root, "workspace.yml"),
+			}
+			v := &workspaceValidator{}
+			diags := v.Run(ctx)
+
+			// Find the error diagnostic with the expected substring in the message.
+			// (Diagnostic.File attribution quirk: points to workspace.yml even
+			// for local.yml-originated errors — assert the message instead.)
+			hasDiag(t, diags, validate.SeverityError, tt.wantMessage)
+		})
+	}
+}
+
 func TestWorkspaceValidator_DocsValidation_ValidConfig(t *testing.T) {
 	// Write a dwe project with valid docs config
 	root := t.TempDir()
