@@ -13,7 +13,7 @@ import (
 
 func rootCmdForServiceCompletion(flags *cmdctx.RootFlags, configPath string) *cobra.Command {
 	root := &cobra.Command{Use: "dwe"}
-	root.PersistentFlags().StringVarP(&flags.ConfigPath, "config", "c", "", "")
+	root.PersistentFlags().StringVar(&flags.ConfigPath, "config", "", "")
 	if configPath != "" {
 		_ = root.PersistentFlags().Set("config", configPath)
 	}

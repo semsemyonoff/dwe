@@ -23,7 +23,7 @@ import (
 // flags.Output should be set to "json" (and optionally Pretty=true) before use.
 func buildStatusJSONRoot(flags *cmdctx.RootFlags) *cobra.Command {
 	root := &cobra.Command{Use: "dwe", SilenceUsage: true, SilenceErrors: true}
-	root.PersistentFlags().StringVarP(&flags.ConfigPath, "config", "c", "", "")
+	root.PersistentFlags().StringVar(&flags.ConfigPath, "config", "", "")
 	root.AddGroup(&cobra.Group{ID: "environment", Title: "Environment Commands:"})
 	root.AddCommand(NewCmd("environment", flags))
 	return root
@@ -36,7 +36,7 @@ func runStatusJSON(t *testing.T, configPath string, flags *cmdctx.RootFlags, sub
 	var buf bytes.Buffer
 	root.SetOut(&buf)
 	root.SetErr(&bytes.Buffer{})
-	args := append([]string{"-c", configPath, "status"}, subArgs...)
+	args := append([]string{"--config", configPath, "status"}, subArgs...)
 	root.SetArgs(args)
 	if err := root.Execute(); err != nil {
 		t.Fatalf("Execute: %v", err)
@@ -317,7 +317,7 @@ func TestStatusCmd_JSONMode_DeployDetailUnknownService_Errors(t *testing.T) {
 	var buf bytes.Buffer
 	root.SetOut(&buf)
 	root.SetErr(&bytes.Buffer{})
-	root.SetArgs([]string{"-c", configPath, "status", "deploy", "nonexistent"})
+	root.SetArgs([]string{"--config", configPath, "status", "deploy", "nonexistent"})
 	err := root.Execute()
 	if err == nil {
 		t.Fatal("expected error for unknown service in JSON mode")
@@ -335,7 +335,7 @@ func TestStatusCmd_JSONMode_CompositeNoSectionFlags(t *testing.T) {
 	var buf bytes.Buffer
 	root.SetOut(&buf)
 	root.SetErr(&bytes.Buffer{})
-	root.SetArgs([]string{"-c", configPath, "status", "--no-apps", "--no-tools"})
+	root.SetArgs([]string{"--config", configPath, "status", "--no-apps", "--no-tools"})
 	if err := root.Execute(); err != nil {
 		t.Fatalf("execute: %v", err)
 	}

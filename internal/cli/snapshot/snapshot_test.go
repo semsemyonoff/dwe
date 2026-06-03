@@ -470,7 +470,7 @@ func TestSnapshotNameCompletion(t *testing.T) {
 	fn := snapshotNameCompletion(flags)
 	// Pass a real cobra.Command — completion contract reads Lookup("config") off root.
 	root := &cobra.Command{Use: "dwe"}
-	root.PersistentFlags().StringVarP(&flags.ConfigPath, "config", "c", flags.ConfigPath, "")
+	root.PersistentFlags().StringVar(&flags.ConfigPath, "config", flags.ConfigPath, "")
 	names, dir := fn(root, nil, "")
 	if dir != cobra.ShellCompDirectiveNoFileComp {
 		t.Errorf("directive = %v", dir)

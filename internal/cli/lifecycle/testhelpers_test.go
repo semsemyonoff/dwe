@@ -49,7 +49,7 @@ const (
 // (now-cyclic) import of the cli root package.
 func buildLifecycleTestRoot(flags *cmdctx.RootFlags) *cobra.Command {
 	root := &cobra.Command{Use: "dwe"}
-	root.PersistentFlags().StringVarP(&flags.ConfigPath, "config", "c", "", "path to workspace.yml")
+	root.PersistentFlags().StringVar(&flags.ConfigPath, "config", "", "path to workspace.yml")
 	root.AddGroup(
 		&cobra.Group{ID: groupEnvironment, Title: "Environment Commands:"},
 		&cobra.Group{ID: groupPipelines, Title: "Pipeline Commands:"},

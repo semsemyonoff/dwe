@@ -243,9 +243,9 @@ func initRootCmd(flags *cmdctx.RootFlags) *cobra.Command {
 			return runRoot(cmd, flags)
 		},
 	}
-	cmd.PersistentFlags().StringVarP(
+	cmd.PersistentFlags().StringVar(
 		&flags.ConfigPath,
-		"config", "c",
+		"config",
 		"",
 		"path to workspace.yml (default: auto-discover from cwd upward)",
 	)

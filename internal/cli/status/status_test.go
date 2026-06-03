@@ -23,7 +23,7 @@ import (
 func buildStatusTestRoot() *cobra.Command {
 	flags := &cmdctx.RootFlags{}
 	root := &cobra.Command{Use: "dwe", SilenceUsage: true}
-	root.PersistentFlags().StringVarP(&flags.ConfigPath, "config", "c", "", "")
+	root.PersistentFlags().StringVar(&flags.ConfigPath, "config", "", "")
 	root.AddGroup(&cobra.Group{ID: "environment", Title: "Environment Commands:"})
 	root.AddCommand(NewCmd("environment", flags))
 	return root
@@ -167,7 +167,7 @@ func TestStatusCmd_DefaultPrintsHealthAndSections(t *testing.T) {
 	var buf bytes.Buffer
 	root.SetOut(&buf)
 	root.SetErr(&buf)
-	root.SetArgs([]string{"-c", configPath, "status"})
+	root.SetArgs([]string{"--config", configPath, "status"})
 	if err := root.Execute(); err != nil {
 		t.Fatalf("execute: %v", err)
 	}
@@ -185,7 +185,7 @@ func TestStatusCmd_NoAppsFlagSuppressesSection(t *testing.T) {
 	var buf bytes.Buffer
 	root.SetOut(&buf)
 	root.SetErr(&buf)
-	root.SetArgs([]string{"-c", configPath, "status", "--no-apps", "--no-tools", "--no-infra", "--no-deploy", "--no-topology", "--no-git", "--no-daemons"})
+	root.SetArgs([]string{"--config", configPath, "status", "--no-apps", "--no-tools", "--no-infra", "--no-deploy", "--no-topology", "--no-git", "--no-daemons"})
 	if err := root.Execute(); err != nil {
 		t.Fatalf("execute: %v", err)
 	}
@@ -219,7 +219,7 @@ func TestStatusCmd_EachNoFlag_SuppressesItsSection(t *testing.T) {
 			var buf bytes.Buffer
 			root.SetOut(&buf)
 			root.SetErr(&buf)
-			root.SetArgs([]string{"-c", configPath, "status", tt.flag})
+			root.SetArgs([]string{"--config", configPath, "status", tt.flag})
 			if err := root.Execute(); err != nil {
 				t.Fatalf("execute: %v", err)
 			}
@@ -240,7 +240,7 @@ func TestStatusCmd_AppsSubcommandRendersOnlyApps(t *testing.T) {
 	var buf bytes.Buffer
 	root.SetOut(&buf)
 	root.SetErr(&buf)
-	root.SetArgs([]string{"-c", configPath, "status", "apps"})
+	root.SetArgs([]string{"--config", configPath, "status", "apps"})
 	if err := root.Execute(); err != nil {
 		t.Fatalf("execute: %v", err)
 	}
@@ -259,7 +259,7 @@ func TestStatusCmd_ToolsSubcommandRendersOnlyTools(t *testing.T) {
 	var buf bytes.Buffer
 	root.SetOut(&buf)
 	root.SetErr(&buf)
-	root.SetArgs([]string{"-c", configPath, "status", "tools"})
+	root.SetArgs([]string{"--config", configPath, "status", "tools"})
 	if err := root.Execute(); err != nil {
 		t.Fatalf("execute: %v", err)
 	}
@@ -281,7 +281,7 @@ func TestStatusCmd_InfraSubcommandRendersOnlyInfra(t *testing.T) {
 	var buf bytes.Buffer
 	root.SetOut(&buf)
 	root.SetErr(&buf)
-	root.SetArgs([]string{"-c", configPath, "status", "infra"})
+	root.SetArgs([]string{"--config", configPath, "status", "infra"})
 	if err := root.Execute(); err != nil {
 		t.Fatalf("execute: %v", err)
 	}
@@ -302,7 +302,7 @@ func TestStatusCmd_ToolsRootCmdRemoved(t *testing.T) {
 	var buf bytes.Buffer
 	root.SetOut(&buf)
 	root.SetErr(&buf)
-	root.SetArgs([]string{"-c", configPath, "tools"})
+	root.SetArgs([]string{"--config", configPath, "tools"})
 	if err := root.Execute(); err == nil {
 		t.Fatal("expected error: 'dwe tools' should be unknown command after unification")
 	}
@@ -314,7 +314,7 @@ func TestStatusCmd_DaemonsSubcommandRuns(t *testing.T) {
 	var buf bytes.Buffer
 	root.SetOut(&buf)
 	root.SetErr(&buf)
-	root.SetArgs([]string{"-c", configPath, "status", "daemons"})
+	root.SetArgs([]string{"--config", configPath, "status", "daemons"})
 	if err := root.Execute(); err != nil {
 		t.Fatalf("execute: %v", err)
 	}
@@ -346,7 +346,7 @@ func TestStatusDeployCmd_UnknownService_Errors(t *testing.T) {
 	var buf bytes.Buffer
 	root.SetOut(&buf)
 	root.SetErr(&buf)
-	root.SetArgs([]string{"-c", configPath, "status", "deploy", "definitely-not-a-service"})
+	root.SetArgs([]string{"--config", configPath, "status", "deploy", "definitely-not-a-service"})
 	err := root.Execute()
 	if err == nil {
 		t.Fatalf("expected error for unknown service")
@@ -362,7 +362,7 @@ func TestStatusCmd_RejectsPositionalArg_E2E(t *testing.T) {
 	var buf bytes.Buffer
 	root.SetOut(&buf)
 	root.SetErr(&buf)
-	root.SetArgs([]string{"-c", configPath, "status", "stray"})
+	root.SetArgs([]string{"--config", configPath, "status", "stray"})
 	err := root.Execute()
 	if err == nil {
 		t.Fatal("expected error: status accepts no positional args")
@@ -375,7 +375,7 @@ func TestStatusDeployCmd_NoArgs_RunsWithoutError(t *testing.T) {
 	var buf bytes.Buffer
 	root.SetOut(&buf)
 	root.SetErr(&buf)
-	root.SetArgs([]string{"-c", configPath, "status", "deploy"})
+	root.SetArgs([]string{"--config", configPath, "status", "deploy"})
 	if err := root.Execute(); err != nil {
 		t.Fatalf("status deploy with no args should succeed: %v", err)
 	}
@@ -387,7 +387,7 @@ func TestStatusDeployCmd_TwoArgs_Rejected(t *testing.T) {
 	var buf bytes.Buffer
 	root.SetOut(&buf)
 	root.SetErr(&buf)
-	root.SetArgs([]string{"-c", configPath, "status", "deploy", "a", "b"})
+	root.SetArgs([]string{"--config", configPath, "status", "deploy", "a", "b"})
 	if err := root.Execute(); err == nil {
 		t.Fatal("expected error: status deploy accepts at most 1 arg")
 	}
@@ -399,7 +399,7 @@ func TestStatusCmd_TopologySubcommandRuns(t *testing.T) {
 	var buf bytes.Buffer
 	root.SetOut(&buf)
 	root.SetErr(&buf)
-	root.SetArgs([]string{"-c", configPath, "status", "topology"})
+	root.SetArgs([]string{"--config", configPath, "status", "topology"})
 	if err := root.Execute(); err != nil {
 		t.Fatalf("status topology should succeed: %v", err)
 	}
@@ -414,7 +414,7 @@ func TestStatusCmd_GitSubcommandRuns(t *testing.T) {
 	var buf bytes.Buffer
 	root.SetOut(&buf)
 	root.SetErr(&buf)
-	root.SetArgs([]string{"-c", configPath, "status", "git"})
+	root.SetArgs([]string{"--config", configPath, "status", "git"})
 	if err := root.Execute(); err != nil {
 		t.Fatalf("status git should succeed: %v", err)
 	}
@@ -454,7 +454,7 @@ func TestStatusCmd_ShowsPendingBanner_DefaultView(t *testing.T) {
 	var buf bytes.Buffer
 	root.SetOut(&buf)
 	root.SetErr(&buf)
-	root.SetArgs([]string{"-c", configPath, "status"})
+	root.SetArgs([]string{"--config", configPath, "status"})
 	if err := root.Execute(); err != nil {
 		t.Fatalf("execute: %v", err)
 	}
@@ -476,7 +476,7 @@ func TestStatusCmd_ShowsPendingBanner_AppsSubcommand(t *testing.T) {
 	var buf bytes.Buffer
 	root.SetOut(&buf)
 	root.SetErr(&buf)
-	root.SetArgs([]string{"-c", configPath, "status", "apps"})
+	root.SetArgs([]string{"--config", configPath, "status", "apps"})
 	if err := root.Execute(); err != nil {
 		t.Fatalf("execute: %v", err)
 	}
@@ -492,7 +492,7 @@ func TestStatusCmd_ShowsPendingBanner_DeploySubcommand(t *testing.T) {
 	var buf bytes.Buffer
 	root.SetOut(&buf)
 	root.SetErr(&buf)
-	root.SetArgs([]string{"-c", configPath, "status", "deploy"})
+	root.SetArgs([]string{"--config", configPath, "status", "deploy"})
 	if err := root.Execute(); err != nil {
 		t.Fatalf("execute: %v", err)
 	}
@@ -509,7 +509,7 @@ func TestStatusCmd_NoBanner_WhenNoPending(t *testing.T) {
 	var buf bytes.Buffer
 	root.SetOut(&buf)
 	root.SetErr(&buf)
-	root.SetArgs([]string{"-c", configPath, "status"})
+	root.SetArgs([]string{"--config", configPath, "status"})
 	if err := root.Execute(); err != nil {
 		t.Fatalf("execute: %v", err)
 	}
@@ -556,7 +556,7 @@ func TestStatus_TopLevel_PlainPath_WritesAccurateState_Running(t *testing.T) {
 	root.SetOut(&buf)
 	root.SetErr(&buf)
 	// --no-tui forces the plain branch (cobra's test root may not have a TTY anyway).
-	root.SetArgs([]string{"-c", configPath, "status", "--no-tui"})
+	root.SetArgs([]string{"--config", configPath, "status", "--no-tui"})
 	if err := root.Execute(); err != nil {
 		t.Fatalf("execute: %v", err)
 	}
@@ -578,7 +578,7 @@ func TestStatus_TopLevel_JsonPath_WritesAccurateState_Partial(t *testing.T) {
 	var buf bytes.Buffer
 	root.SetOut(&buf)
 	root.SetErr(&bytes.Buffer{})
-	root.SetArgs([]string{"-c", configPath, "status"})
+	root.SetArgs([]string{"--config", configPath, "status"})
 	if err := root.Execute(); err != nil {
 		t.Fatalf("execute: %v", err)
 	}
@@ -597,7 +597,7 @@ func TestStatus_TopLevel_PlainPath_WritesStopped(t *testing.T) {
 	var buf bytes.Buffer
 	root.SetOut(&buf)
 	root.SetErr(&buf)
-	root.SetArgs([]string{"-c", configPath, "status", "--no-tui"})
+	root.SetArgs([]string{"--config", configPath, "status", "--no-tui"})
 	if err := root.Execute(); err != nil {
 		t.Fatalf("execute: %v", err)
 	}
@@ -619,7 +619,7 @@ func TestStatus_SubCommand_DoesNotWriteCache(t *testing.T) {
 			var buf bytes.Buffer
 			root.SetOut(&buf)
 			root.SetErr(&buf)
-			root.SetArgs([]string{"-c", configPath, "status", subcmd})
+			root.SetArgs([]string{"--config", configPath, "status", subcmd})
 			if err := root.Execute(); err != nil {
 				t.Fatalf("execute: %v", err)
 			}
@@ -645,7 +645,7 @@ func TestStatus_CacheWriteFailure_DoesNotFailCommand(t *testing.T) {
 	var buf bytes.Buffer
 	root.SetOut(&buf)
 	root.SetErr(&buf)
-	root.SetArgs([]string{"-c", configPath, "status", "--no-tui"})
+	root.SetArgs([]string{"--config", configPath, "status", "--no-tui"})
 	if err := root.Execute(); err != nil {
 		t.Fatalf("status should succeed despite cache write failure: %v", err)
 	}
@@ -733,7 +733,7 @@ func TestStatusSubcommands_NeverInvokeTUI(t *testing.T) {
 			var buf bytes.Buffer
 			root.SetOut(&buf)
 			root.SetErr(&buf)
-			root.SetArgs([]string{"-c", configPath, "status", subcmd})
+			root.SetArgs([]string{"--config", configPath, "status", subcmd})
 
 			err := root.Execute()
 			if err != nil {

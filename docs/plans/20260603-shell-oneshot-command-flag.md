@@ -273,12 +273,12 @@ cmd.PersistentFlags().StringVar(           // was StringVarP
 - Modify: `internal/cli/status/status_json_test.go`
 - Modify: `internal/cli/snapshot/snapshot_test.go`
 
-- [ ] in `internal/cli/root.go` lines 246-251: change `StringVarP(&flags.ConfigPath, "config", "c", "", ...)` to `StringVar(&flags.ConfigPath, "config", "", ...)` — keep description text unchanged.
-- [ ] in each of the six test-helper files: change `StringVarP(&flags.ConfigPath, "config", "c", ..., ...)` to `StringVar(&flags.ConfigPath, "config", ..., ...)`. Keep the default-value argument unchanged.
-- [ ] grep the entire `internal/cli/` tree for any test that passes the literal `"-c"` flag arg to a test command: `grep -rn '"-c"' internal/cli/` and switch any matches to `"--config"`.
-- [ ] run focused tests to confirm no regression from the long-form path: `go test ./internal/cli/lifecycle/... ./internal/cli/cmdctx/... ./internal/cli/status/... ./internal/cli/snapshot/...`
-- [ ] verify the root command still binds `--config` correctly: `go test ./internal/cli/ -run TestRoot` (or whatever root test exists).
-- [ ] run tests — must pass before next task.
+- [x] in `internal/cli/root.go` lines 246-251: change `StringVarP(&flags.ConfigPath, "config", "c", "", ...)` to `StringVar(&flags.ConfigPath, "config", "", ...)` — keep description text unchanged.
+- [x] in each of the six test-helper files: change `StringVarP(&flags.ConfigPath, "config", "c", ..., ...)` to `StringVar(&flags.ConfigPath, "config", ..., ...)`. Keep the default-value argument unchanged.
+- [x] grep the entire `internal/cli/` tree for any test that passes the literal `"-c"` flag arg to a test command: `grep -rn '"-c"' internal/cli/` and switch any matches to `"--config"`.
+- [x] run focused tests to confirm no regression from the long-form path: `go test ./internal/cli/lifecycle/... ./internal/cli/cmdctx/... ./internal/cli/status/... ./internal/cli/snapshot/...`
+- [x] verify the root command still binds `--config` correctly: `go test ./internal/cli/ -run TestRoot` (or whatever root test exists).
+- [x] run tests — must pass before next task.
 
 ### Task 2: Add `-c, --command` flag declaration + validation
 

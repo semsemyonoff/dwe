@@ -22,7 +22,7 @@ func writeV2Project(t *testing.T, dir string) {
 // persistent flag, optionally pre-set as if --config were passed on the CLI.
 func rootCmdForCompletion(flags *cmdctx.RootFlags, configPath string) *cobra.Command {
 	root := &cobra.Command{Use: "dwe"}
-	root.PersistentFlags().StringVarP(&flags.ConfigPath, "config", "c", "", "")
+	root.PersistentFlags().StringVar(&flags.ConfigPath, "config", "", "")
 	if configPath != "" {
 		_ = root.PersistentFlags().Set("config", configPath)
 	}
