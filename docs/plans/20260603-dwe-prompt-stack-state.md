@@ -285,17 +285,17 @@ Stack-icon colors:
 - Modify: `internal/shared/prompt/prompt.go`
 - Modify: `internal/shared/prompt/prompt_test.go`
 
-- [ ] add `stackKind` enum (`stackNone | stackRunning | stackPartial | stackStopped`) with `icon()` and `color(palette)` methods
-- [ ] add `promptCacheStub` for YAML decode: `updated_at` (`time.Time`), `state` (string)
-- [ ] add `cacheTTL = 2 * time.Minute` constant
-- [ ] add `readCache(path string) (state stackKind, updatedAt time.Time, ok bool)` — returns ok=false on I/O error, parse error, or unknown state string
-- [ ] add `readStack(root, composeProject string, now time.Time) stackKind` that reads cache and returns it if fresh; otherwise returns `stackNone` (refresh added in Task 4)
-- [ ] update `render` to emit stack-icon when `stack != stackNone`
-- [ ] thread `stack` through `runFromDir`
-- [ ] write `TestReadCache_Valid`, `TestReadCache_Missing`, `TestReadCache_BadState`, `TestReadCache_BadYAML`, `TestReadCache_BadTimestamp`
-- [ ] write `TestReadStack_FreshCache_UsesValue`, `TestReadStack_StaleCache_NoRefresh_Yet` (returns `stackNone` in this task, updated in Task 4)
-- [ ] write render tests for all stack-icon variants × with/without service × NO_COLOR
-- [ ] run `go test ./internal/shared/prompt/...` — must pass before next task
+- [x] add `stackKind` enum (`stackNone | stackRunning | stackPartial | stackStopped`) with `icon()` and `color(palette)` methods
+- [x] add `promptCacheStub` for YAML decode: `updated_at` (`time.Time`), `state` (string)
+- [x] add `cacheTTL = 2 * time.Minute` constant
+- [x] add `readCache(path string) (state stackKind, updatedAt time.Time, ok bool)` — returns ok=false on I/O error, parse error, or unknown state string
+- [x] add `readStack(root, composeProject string, now time.Time) stackKind` that reads cache and returns it if fresh; otherwise returns `stackNone` (refresh added in Task 4)
+- [x] update `render` to emit stack-icon when `stack != stackNone`
+- [x] thread `stack` through `runFromDir`
+- [x] write `TestReadCache_Valid`, `TestReadCache_Missing`, `TestReadCache_BadState`, `TestReadCache_BadYAML`, `TestReadCache_BadTimestamp`
+- [x] write `TestReadStack_FreshCache_UsesValue`, `TestReadStack_StaleCache_NoRefresh_Yet` (returns `stackNone` in this task, updated in Task 4)
+- [x] write render tests for all stack-icon variants × with/without service × NO_COLOR
+- [x] run `go test ./internal/shared/prompt/...` — must pass before next task
 
 ### Task 4: Add docker-ps refresh with 150ms timeout
 

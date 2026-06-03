@@ -6,6 +6,7 @@ import (
 	"path/filepath"
 	"strconv"
 	"testing"
+	"time"
 )
 
 func writeFile(t *testing.T, path, content string) {
@@ -562,7 +563,7 @@ func TestRenderStripControlCharsFromName(t *testing.T) {
 	// shell prompt. Call render directly to bypass YAML (which rejects bare control
 	// bytes anyway — this exercises the sanitization layer that matters at runtime).
 	pal := palette{accent: color{enabled: false}}
-	got := render("evil\x1b[31mred\nline", "", statusNone, pal, false)
+	got := render("evil\x1b[31mred\nline", "", statusNone, stackNone, pal, false)
 	want := "{▪} evil[31mredline\n"
 	if got != want {
 		t.Errorf("render with control chars: got %q, want %q", got, want)
@@ -675,7 +676,7 @@ func TestRenderServiceTagSanitized(t *testing.T) {
 	// Render directly: service name with control chars + Bidi must be stripped
 	// before reaching the output. Ensures detectService -> render handoff is safe.
 	pal := palette{accent: color{enabled: false}}
-	got := render("p", "ev\x1b[31mil\nsvc", statusNone, pal, false)
+	got := render("p", "ev\x1b[31mil\nsvc", statusNone, stackNone, pal, false)
 	want := "{▪} p [ev[31milsvc]\n"
 	if got != want {
 		t.Errorf("render with control chars in service: got %q, want %q", got, want)
@@ -688,10 +689,10 @@ func TestRenderServiceTagSanitized(t *testing.T) {
 func TestReadPaletteMuted(t *testing.T) {
 	t.Parallel()
 	tests := []struct {
-		name              string
-		styles            string
+		name                string
+		styles              string
 		wantR, wantG, wantB uint8
-		wantEnabled       bool
+		wantEnabled         bool
 	}{
 		{name: "default_when_absent", wantR: 0x6B, wantG: 0x72, wantB: 0x80, wantEnabled: true},
 		{name: "default_when_empty", styles: "colors:\n  muted: \"\"\n", wantR: 0x6B, wantG: 0x72, wantB: 0x80, wantEnabled: true},
@@ -748,5 +749,263 @@ func TestParseHex(t *testing.T) {
 					tt.in, r, g, b, ok, tt.wantR, tt.wantG, tt.wantB, tt.wantOK)
 			}
 		})
+	}
+}
+
+func TestReadCache(t *testing.T) {
+	t.Parallel()
+
+	when := time.Date(2026, 6, 3, 12, 0, 0, 0, time.UTC)
+	whenStr := when.Format(time.RFC3339)
+
+	tests := []struct {
+		name        string
+		write       bool
+		content     string
+		wantState   stackKind
+		wantUpdated time.Time
+		wantOK      bool
+	}{
+		{
+			name:        "valid_running",
+			write:       true,
+			content:     "updated_at: " + whenStr + "\nstate: running\n",
+			wantState:   stackRunning,
+			wantUpdated: when,
+			wantOK:      true,
+		},
+		{
+			name:        "valid_partial",
+			write:       true,
+			content:     "updated_at: " + whenStr + "\nstate: partial\n",
+			wantState:   stackPartial,
+			wantUpdated: when,
+			wantOK:      true,
+		},
+		{
+			name:        "valid_stopped",
+			write:       true,
+			content:     "updated_at: " + whenStr + "\nstate: stopped\n",
+			wantState:   stackStopped,
+			wantUpdated: when,
+			wantOK:      true,
+		},
+		{
+			name:   "missing_file",
+			write:  false,
+			wantOK: false,
+		},
+		{
+			name:    "bad_state",
+			write:   true,
+			content: "updated_at: " + whenStr + "\nstate: weird\n",
+			wantOK:  false,
+		},
+		{
+			name:    "empty_state",
+			write:   true,
+			content: "updated_at: " + whenStr + "\n",
+			wantOK:  false,
+		},
+		{
+			name:    "bad_yaml",
+			write:   true,
+			content: "state: [running\n  - oops\n",
+			wantOK:  false,
+		},
+		{
+			name:    "bad_timestamp_unparseable",
+			write:   true,
+			content: "updated_at: not-a-time\nstate: running\n",
+			wantOK:  false, // yaml.Unmarshal into time.Time fails on a non-RFC3339 string
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+			dir := t.TempDir()
+			path := filepath.Join(dir, "prompt-cache.yml")
+			if tt.write {
+				writeFile(t, path, tt.content)
+			}
+			state, updatedAt, ok := readCache(path)
+			if ok != tt.wantOK {
+				t.Fatalf("ok: got %v, want %v (state=%v)", ok, tt.wantOK, state)
+			}
+			if !tt.wantOK {
+				return
+			}
+			if state != tt.wantState {
+				t.Errorf("state: got %v, want %v", state, tt.wantState)
+			}
+			if !updatedAt.Equal(tt.wantUpdated) {
+				t.Errorf("updatedAt: got %v, want %v", updatedAt, tt.wantUpdated)
+			}
+		})
+	}
+}
+
+func TestReadStack(t *testing.T) {
+	t.Parallel()
+
+	now := time.Date(2026, 6, 3, 12, 0, 0, 0, time.UTC)
+	fresh := now.Add(-30 * time.Second).Format(time.RFC3339)
+	stale := now.Add(-5 * time.Minute).Format(time.RFC3339)
+
+	tests := []struct {
+		name    string
+		content string // cache content; empty means absent
+		want    stackKind
+	}{
+		{name: "no_cache_returns_none", content: "", want: stackNone},
+		{name: "fresh_running", content: "updated_at: " + fresh + "\nstate: running\n", want: stackRunning},
+		{name: "fresh_partial", content: "updated_at: " + fresh + "\nstate: partial\n", want: stackPartial},
+		{name: "fresh_stopped", content: "updated_at: " + fresh + "\nstate: stopped\n", want: stackStopped},
+		// Task 3: stale cache returns stackNone (no refresh yet). Task 4 will change this.
+		{name: "stale_no_refresh_yet", content: "updated_at: " + stale + "\nstate: running\n", want: stackNone},
+		{name: "bad_state_returns_none", content: "updated_at: " + fresh + "\nstate: weird\n", want: stackNone},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+			root := t.TempDir()
+			if tt.content != "" {
+				writeFile(t, filepath.Join(root, ".dwe", "prompt-cache.yml"), tt.content)
+			}
+			if got := readStack(root, "p", now); got != tt.want {
+				t.Errorf("readStack: got %v, want %v", got, tt.want)
+			}
+		})
+	}
+}
+
+func TestStackKindIconAndColor(t *testing.T) {
+	t.Parallel()
+	pal := palette{
+		success: color{r: 0x22, g: 0xC5, b: 0x5E, enabled: true},
+		warning: color{r: 0xF5, g: 0x9E, b: 0x0B, enabled: true},
+		muted:   color{r: 0x6B, g: 0x72, b: 0x80, enabled: true},
+	}
+	tests := []struct {
+		s        stackKind
+		wantIcon string
+		wantC    color
+	}{
+		{s: stackNone, wantIcon: "", wantC: color{}},
+		{s: stackRunning, wantIcon: "●", wantC: pal.success},
+		{s: stackPartial, wantIcon: "◐", wantC: pal.warning},
+		{s: stackStopped, wantIcon: "○", wantC: pal.muted},
+	}
+	for _, tt := range tests {
+		if got := tt.s.icon(); got != tt.wantIcon {
+			t.Errorf("stackKind(%d).icon() = %q, want %q", tt.s, got, tt.wantIcon)
+		}
+		if got := tt.s.color(pal); got != tt.wantC {
+			t.Errorf("stackKind(%d).color() = %+v, want %+v", tt.s, got, tt.wantC)
+		}
+	}
+}
+
+func TestRenderStackIcon(t *testing.T) {
+	t.Parallel()
+	pal := palette{
+		accent:  color{r: 0x2E, g: 0xC3, b: 0xEB, enabled: true},
+		success: color{r: 0x22, g: 0xC5, b: 0x5E, enabled: true},
+		warning: color{r: 0xF5, g: 0x9E, b: 0x0B, enabled: true},
+		muted:   color{r: 0x6B, g: 0x72, b: 0x80, enabled: true},
+	}
+
+	tests := []struct {
+		name     string
+		service  string
+		status   statusKind
+		stack    stackKind
+		useColor bool
+		want     string
+	}{
+		{name: "stack_none_omitted", want: "{▪} p\n"},
+		{name: "running_no_color", stack: stackRunning, want: "{▪} p ●\n"},
+		{name: "partial_no_color", stack: stackPartial, want: "{▪} p ◐\n"},
+		{name: "stopped_no_color", stack: stackStopped, want: "{▪} p ○\n"},
+		{
+			name: "running_with_status_no_color", status: statusDeployed, stack: stackRunning,
+			want: "{▪} p ✓ ●\n",
+		},
+		{
+			name: "service_and_running_no_color", service: "api", stack: stackRunning,
+			want: "{▪} p [api] ●\n",
+		},
+		{
+			name: "service_status_running_no_color", service: "api", status: statusDeployed, stack: stackRunning,
+			want: "{▪} p [api] ✓ ●\n",
+		},
+		{
+			name: "running_with_color", stack: stackRunning, useColor: true,
+			want: "{" + sgr(0x2E, 0xC3, 0xEB, "▪") + "} p " + sgr(0x22, 0xC5, 0x5E, "●") + "\n",
+		},
+		{
+			name: "partial_with_color", stack: stackPartial, useColor: true,
+			want: "{" + sgr(0x2E, 0xC3, 0xEB, "▪") + "} p " + sgr(0xF5, 0x9E, 0x0B, "◐") + "\n",
+		},
+		{
+			name: "stopped_with_color", stack: stackStopped, useColor: true,
+			want: "{" + sgr(0x2E, 0xC3, 0xEB, "▪") + "} p " + sgr(0x6B, 0x72, 0x80, "○") + "\n",
+		},
+		{
+			name: "service_status_stack_with_color", service: "api", status: statusDeployed, stack: stackRunning, useColor: true,
+			want: "{" + sgr(0x2E, 0xC3, 0xEB, "▪") + "} p [api] " + sgr(0x22, 0xC5, 0x5E, "✓") + " " + sgr(0x22, 0xC5, 0x5E, "●") + "\n",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+			got := render("p", tt.service, tt.status, tt.stack, pal, tt.useColor)
+			if got != tt.want {
+				t.Errorf("render: got %q, want %q", got, tt.want)
+			}
+		})
+	}
+}
+
+func TestRunFromDirStackIconFromFreshCache(t *testing.T) {
+	t.Parallel()
+	// Integration check that runFromDir reads the cache and emits the stack
+	// icon. Uses a far-future timestamp so the cache stays fresh relative to
+	// time.Now() inside runFromDir.
+	root := t.TempDir()
+	writeFile(t, filepath.Join(root, "workspace.yml"), "project:\n  name: p\n")
+	future := time.Now().Add(30 * time.Second).UTC().Format(time.RFC3339)
+	writeFile(t, filepath.Join(root, ".dwe", "prompt-cache.yml"),
+		"updated_at: "+future+"\nstate: running\n")
+	var buf bytes.Buffer
+	if code := runFromDir(&buf, nil, root, false); code != 0 {
+		t.Fatalf("exit: %d (stdout=%q)", code, buf.String())
+	}
+	got := buf.String()
+	want := "{▪} p ●\n"
+	if got != want {
+		t.Errorf("stdout: got %q, want %q", got, want)
+	}
+}
+
+func TestRunFromDirStackIconStaleCacheOmitted(t *testing.T) {
+	t.Parallel()
+	// In Task 3, a stale cache (>2min) yields stackNone — no refresh yet.
+	root := t.TempDir()
+	writeFile(t, filepath.Join(root, "workspace.yml"), "project:\n  name: p\n")
+	past := time.Now().Add(-10 * time.Minute).UTC().Format(time.RFC3339)
+	writeFile(t, filepath.Join(root, ".dwe", "prompt-cache.yml"),
+		"updated_at: "+past+"\nstate: running\n")
+	var buf bytes.Buffer
+	if code := runFromDir(&buf, nil, root, false); code != 0 {
+		t.Fatalf("exit: %d (stdout=%q)", code, buf.String())
+	}
+	got := buf.String()
+	want := "{▪} p\n"
+	if got != want {
+		t.Errorf("stdout: got %q, want %q", got, want)
 	}
 }

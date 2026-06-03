@@ -10,14 +10,16 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
+	"time"
 
 	"gopkg.in/yaml.v3"
 )
 
 const (
-	configFilename = "workspace.yml"
-	stateRelPath   = ".dwe/deploy/state.yml"
-	stylesRelPath  = "workspace/styles.yml"
+	configFilename     = "workspace.yml"
+	stateRelPath       = ".dwe/deploy/state.yml"
+	stylesRelPath      = "workspace/styles.yml"
+	promptCacheRelPath = ".dwe/prompt-cache.yml"
 
 	defaultAccent  = "#2EC3EB"
 	defaultSuccess = "#22C55E"
@@ -26,6 +28,8 @@ const (
 	defaultMuted   = "#6B7280"
 
 	sgrReset = "\x1b[39m"
+
+	cacheTTL = 2 * time.Minute
 )
 
 type workspaceStub struct {
@@ -39,6 +43,11 @@ type stateStub struct {
 		Status string `yaml:"status"`
 	} `yaml:"project"`
 	Pending *struct{} `yaml:"pending"`
+}
+
+type promptCacheStub struct {
+	UpdatedAt time.Time `yaml:"updated_at"`
+	State     string    `yaml:"state"`
 }
 
 type stylesStub struct {
@@ -73,6 +82,39 @@ func (s statusKind) icon() string {
 		return "✗"
 	}
 	return ""
+}
+
+type stackKind int
+
+const (
+	stackNone stackKind = iota
+	stackRunning
+	stackPartial
+	stackStopped
+)
+
+func (s stackKind) icon() string {
+	switch s {
+	case stackRunning:
+		return "●"
+	case stackPartial:
+		return "◐"
+	case stackStopped:
+		return "○"
+	}
+	return ""
+}
+
+func (s stackKind) color(p palette) color {
+	switch s {
+	case stackRunning:
+		return p.success
+	case stackPartial:
+		return p.warning
+	case stackStopped:
+		return p.muted
+	}
+	return color{}
 }
 
 // color holds a resolved RGB triple. enabled=false means the source token was
@@ -126,8 +168,9 @@ func runFromDir(stdout io.Writer, args []string, cwd string, useColor bool) int 
 	status := readStatus(root)
 	pal := readPalette(root)
 	service := detectService(cwd, root)
+	stack := readStack(root, name, time.Now())
 
-	out := render(name, service, status, pal, useColor)
+	out := render(name, service, status, stack, pal, useColor)
 	if _, err := io.WriteString(stdout, out); err != nil {
 		return 1
 	}
@@ -153,7 +196,7 @@ func sanitizeName(s string) string {
 	}, s)
 }
 
-func render(name, service string, status statusKind, pal palette, useColor bool) string {
+func render(name, service string, status statusKind, stack stackKind, pal palette, useColor bool) string {
 	var sb strings.Builder
 	sb.Grow(96)
 	sb.WriteByte('{')
@@ -168,6 +211,10 @@ func render(name, service string, status statusKind, pal palette, useColor bool)
 	if icon := status.icon(); icon != "" {
 		sb.WriteByte(' ')
 		writeGlyph(&sb, icon, statusColor(status, pal), useColor)
+	}
+	if icon := stack.icon(); icon != "" {
+		sb.WriteByte(' ')
+		writeGlyph(&sb, icon, stack.color(pal), useColor)
 	}
 	sb.WriteByte('\n')
 	return sb.String()
@@ -274,6 +321,48 @@ func readStatus(root string) statusKind {
 		return statusDeployed
 	}
 	return statusNone
+}
+
+// readCache reads <root>/.dwe/prompt-cache.yml. Returns ok=false on any I/O,
+// parse, or unknown-state-string error. UpdatedAt zero with ok=true is allowed
+// (caller treats a zero timestamp as immediately stale).
+func readCache(path string) (state stackKind, updatedAt time.Time, ok bool) {
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return stackNone, time.Time{}, false
+	}
+	var stub promptCacheStub
+	if err := yaml.Unmarshal(data, &stub); err != nil {
+		return stackNone, time.Time{}, false
+	}
+	switch stub.State {
+	case "running":
+		state = stackRunning
+	case "partial":
+		state = stackPartial
+	case "stopped":
+		state = stackStopped
+	default:
+		return stackNone, time.Time{}, false
+	}
+	return state, stub.UpdatedAt, true
+}
+
+// readStack returns the current stack state for the rendered prompt. When a
+// fresh cache (<cacheTTL old) exists, returns its value. Otherwise returns
+// stackNone (Task 4 will add a sync refresh path that may produce a value).
+// composeProject is plumbed in now so callers don't change in Task 4.
+func readStack(root, composeProject string, now time.Time) stackKind {
+	_ = composeProject
+	path := filepath.Join(root, promptCacheRelPath)
+	state, updatedAt, ok := readCache(path)
+	if !ok {
+		return stackNone
+	}
+	if now.Sub(updatedAt) > cacheTTL {
+		return stackNone
+	}
+	return state
 }
 
 // parseArgs returns (checkMode, ok). ok=false means args are malformed and the
