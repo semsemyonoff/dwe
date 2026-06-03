@@ -363,9 +363,9 @@ Stack-icon colors:
 - Create: `internal/core/project/stack/promptstate.go`
 - Create: `internal/core/project/stack/promptstate_test.go`
 
-- [ ] implement `HealthState(h Health) string` — `HealthRunning→"running"`, `HealthPartial→"partial"`, `HealthStopped→"stopped"`, default→`"stopped"`. Pure function. Uses string literals matching `promptcache.State*` (could also import `shared/promptcache` for the constants, but to keep `core/` independent of `shared/promptcache` we duplicate the three literal strings — they are part of the on-disk schema and trivial)
-- [ ] write `TestHealthState_AllMappings` table-driven with all four cases (3 known + 1 unknown)
-- [ ] run `go test ./internal/core/project/stack/...` — must pass before next task
+- [x] implement `HealthState(h Health) string` — `HealthRunning→"running"`, `HealthPartial→"partial"`, `HealthStopped→"stopped"`, default→`"stopped"`. Pure function. Uses string literals matching `promptcache.State*` (could also import `shared/promptcache` for the constants, but to keep `core/` independent of `shared/promptcache` we duplicate the three literal strings — they are part of the on-disk schema and trivial)
+- [x] write `TestHealthState_AllMappings` table-driven with all four cases (3 known + 1 unknown)
+- [x] run `go test ./internal/core/project/stack/...` — must pass before next task
 
 ### Task 7: Wire cache writes / invalidations into mutating commands
 
