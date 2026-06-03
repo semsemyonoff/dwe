@@ -195,10 +195,15 @@ func runSnapshotRestore(cmd *cobra.Command, flags *cmdctx.RootFlags, name string
 
 	if runErr != nil {
 		if errors.As(runErr, new(*snapshotpkg.RestoreCancelledError)) {
+			// User declined the confirmation prompt — no mutations occurred.
 			_, _ = fmt.Fprintf(stderr, "snapshot %s cancelled\n", operation)
 			return runErr
 		}
 		writeRestoreOutcome(stderr, operation, res)
+		// Restore may have partially mutated workspace/container state before
+		// failing; invalidate so the next prompt refresh or `dwe status`
+		// reflects ground truth.
+		_ = promptcache.Remove(baseDir)
 		if errors.Is(runErr, context.Canceled) || errors.Is(runErr, context.DeadlineExceeded) {
 			return &snapshotInterruptedError{wrapped: runErr}
 		}

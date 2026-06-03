@@ -283,20 +283,19 @@ func runDeployRun(ctx context.Context, cmd *cobra.Command, flags *cmdctx.RootFla
 	if opts.ServiceName != "" {
 		services = []string{opts.ServiceName}
 	}
-	if err := runHelperFn(ctx, cmd, flags, Opts{
+	err := runHelperFn(ctx, cmd, flags, Opts{
 		Services:       services,
 		Force:          opts.Force,
 		Resume:         opts.Resume,
 		NonInteractive: opts.NonInteractive,
 		SkipPreflight:  opts.SkipPreflight,
 		Silent:         opts.Silent,
-	}); err != nil {
-		return err
-	}
-	// Deploy may no-op via the "already up-to-date" path; invalidate so the
-	// next prompt refresh or `dwe status` reflects ground truth.
+	})
+	// Invalidate regardless of outcome: a failed deploy may have partially
+	// mutated container state, and a successful no-op may have left containers
+	// stopped. Let the next prompt refresh or `dwe status` reflect ground truth.
 	_ = promptcache.Remove(flags.ProjectRoot())
-	return nil
+	return err
 }
 
 func deployRunCmd(cmd *cobra.Command, flags *cmdctx.RootFlags, serviceName string, force bool, resume bool, nonInteractive bool, skipPreflight bool, silent bool) error {

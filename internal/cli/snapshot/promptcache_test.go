@@ -108,7 +108,7 @@ func TestSnapshotRollback_InvalidatesCache(t *testing.T) {
 	}
 }
 
-func TestSnapshotRollback_Failure_LeavesCacheUntouched(t *testing.T) {
+func TestSnapshotRollback_Failure_InvalidatesCache(t *testing.T) {
 	base := snapshotProjectWithConfig(t)
 	if err := promptcache.Write(base, promptcache.StateRunning); err != nil {
 		t.Fatalf("seed cache: %v", err)
@@ -128,13 +128,14 @@ func TestSnapshotRollback_Failure_LeavesCacheUntouched(t *testing.T) {
 	if err := runSnapshotRollback(cmd, flags, true, true, true); err == nil {
 		t.Fatal("expected error from stubbed rollback failure")
 	}
-	if got := readCacheState(t, base); got != promptcache.StateRunning {
-		t.Errorf("cache should remain untouched on rollback failure; got %q want %q",
-			got, promptcache.StateRunning)
+	// A failed rollback may have partially mutated workspace/container state;
+	// cache must be invalidated so the next prompt reflects reality.
+	if got := readCacheState(t, base); got != "" {
+		t.Errorf("cache should be invalidated on rollback failure; got %q", got)
 	}
 }
 
-func TestSnapshotRestore_Failure_LeavesCacheUntouched(t *testing.T) {
+func TestSnapshotRestore_Failure_InvalidatesCache(t *testing.T) {
 	base := snapshotProjectWithConfig(t)
 	if err := promptcache.Write(base, promptcache.StateRunning); err != nil {
 		t.Fatalf("seed cache: %v", err)
@@ -154,8 +155,9 @@ func TestSnapshotRestore_Failure_LeavesCacheUntouched(t *testing.T) {
 	if err := runSnapshotRestore(cmd, flags, "snap", true, true, true, "restore", "snapshot:restore"); err == nil {
 		t.Fatal("expected error from stubbed restore failure")
 	}
-	if got := readCacheState(t, base); got != promptcache.StateRunning {
-		t.Errorf("cache should remain untouched on failure; got %q want %q",
-			got, promptcache.StateRunning)
+	// A failed restore may have partially mutated workspace/container state;
+	// cache must be invalidated so the next prompt reflects reality.
+	if got := readCacheState(t, base); got != "" {
+		t.Errorf("cache should be invalidated on restore failure; got %q", got)
 	}
 }

@@ -75,7 +75,7 @@ func TestDeployRun_WithService_InvalidatesCache(t *testing.T) {
 	}
 }
 
-func TestDeployRun_Failure_LeavesCacheUntouched(t *testing.T) {
+func TestDeployRun_Failure_InvalidatesCache(t *testing.T) {
 	dir := t.TempDir()
 	if err := promptcache.Write(dir, promptcache.StateRunning); err != nil {
 		t.Fatalf("seed cache: %v", err)
@@ -92,8 +92,9 @@ func TestDeployRun_Failure_LeavesCacheUntouched(t *testing.T) {
 	if err := runDeployRun(context.Background(), cmd, flags, deployRunOpts{}); err == nil {
 		t.Fatal("expected deploy failure")
 	}
-	if got := readCacheState(t, dir); got != promptcache.StateRunning {
-		t.Errorf("cache should remain untouched on failure; got %q want %q",
-			got, promptcache.StateRunning)
+	// A failed deploy may have partially mutated container state; cache must be
+	// invalidated so the next prompt refresh or `dwe status` reflects reality.
+	if got := readCacheState(t, dir); got != "" {
+		t.Errorf("cache should be invalidated on failure; got %q", got)
 	}
 }
