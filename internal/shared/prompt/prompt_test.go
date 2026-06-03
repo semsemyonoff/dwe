@@ -995,14 +995,15 @@ func TestRenderStackIcon(t *testing.T) {
 
 func TestRunFromDirStackIconFromFreshCache(t *testing.T) {
 	t.Parallel()
-	// Integration check that runFromDir reads the cache and emits the stack
-	// icon. Uses a far-future timestamp so the cache stays fresh relative to
-	// time.Now() inside runFromDir.
+	// Integration check that runFromDir reads a fresh cache entry and emits the
+	// stack icon without hitting docker. Cache timestamp is 30 s in the past,
+	// well within the 2-minute TTL, so readStack returns the cached state
+	// directly and never calls dockerPsFunc.
 	root := t.TempDir()
 	writeFile(t, filepath.Join(root, "workspace.yml"), "project:\n  name: p\n")
-	future := time.Now().Add(30 * time.Second).UTC().Format(time.RFC3339)
+	recent := time.Now().Add(-30 * time.Second).UTC().Format(time.RFC3339)
 	writeFile(t, filepath.Join(root, ".dwe", "prompt-cache.yml"),
-		"updated_at: "+future+"\nstate: running\n")
+		"updated_at: "+recent+"\nstate: running\n")
 	var buf bytes.Buffer
 	if code := runFromDir(&buf, nil, root, false); code != 0 {
 		t.Fatalf("exit: %d (stdout=%q)", code, buf.String())
@@ -1361,6 +1362,92 @@ func TestWriteCache_AllStates(t *testing.T) {
 			}
 			if !bytes.Contains(data, []byte("state: "+tc.want)) {
 				t.Errorf("expected state: %s in %q", tc.want, data)
+			}
+		})
+	}
+}
+
+func TestReadComposeProjectName(t *testing.T) {
+	t.Parallel()
+	cases := []struct {
+		name         string
+		workspaceYML string
+		dockerYML    string
+		displayName  string
+		want         string
+	}{
+		{
+			name:         "no_prefix_uses_display_name",
+			workspaceYML: "project:\n  name: myapp\n",
+			displayName:  "myapp",
+			want:         "myapp",
+		},
+		{
+			name:         "prefix_prepended",
+			workspaceYML: "project:\n  name: myapp\n  prefix: myorg\n",
+			displayName:  "myapp",
+			want:         "myorg-myapp",
+		},
+		{
+			name:         "docker_yml_literal_overrides_prefix",
+			workspaceYML: "project:\n  name: myapp\n  prefix: myorg\n",
+			dockerYML:    "project_name: custom-name\n",
+			displayName:  "myapp",
+			want:         "custom-name",
+		},
+		{
+			name:         "docker_yml_template_syntax_falls_back_to_prefix",
+			workspaceYML: "project:\n  name: myapp\n  prefix: myorg\n",
+			dockerYML:    "project_name: ${project.prefix}-${project.name}\n",
+			displayName:  "myapp",
+			want:         "myorg-myapp",
+		},
+		{
+			name:         "docker_yml_absent_falls_back_to_prefix",
+			workspaceYML: "project:\n  name: myapp\n  prefix: myorg\n",
+			displayName:  "myapp",
+			want:         "myorg-myapp",
+		},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			root := t.TempDir()
+			writeFile(t, filepath.Join(root, "workspace.yml"), tc.workspaceYML)
+			if tc.dockerYML != "" {
+				writeFile(t, filepath.Join(root, "workspace", "docker.yml"), tc.dockerYML)
+			}
+			got := readComposeProjectName(root, tc.displayName)
+			if got != tc.want {
+				t.Errorf("readComposeProjectName: got %q, want %q", got, tc.want)
+			}
+		})
+	}
+}
+
+func TestReadDockerProjectNameLiteral(t *testing.T) {
+	t.Parallel()
+	cases := []struct {
+		name      string
+		dockerYML string
+		want      string
+	}{
+		{name: "absent_returns_empty", dockerYML: "", want: ""},
+		{name: "literal_name", dockerYML: "project_name: custom\n", want: "custom"},
+		{name: "template_returns_empty", dockerYML: "project_name: ${project.name}\n", want: ""},
+		{name: "empty_field_returns_empty", dockerYML: "project_name: \"\"\n", want: ""},
+		{name: "no_field_returns_empty", dockerYML: "services:\n  web: {}\n", want: ""},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			root := t.TempDir()
+			if tc.dockerYML != "" {
+				writeFile(t, filepath.Join(root, "workspace", "docker.yml"), tc.dockerYML)
+			}
+			got := readDockerProjectNameLiteral(root)
+			if got != tc.want {
+				t.Errorf("readDockerProjectNameLiteral: got %q, want %q", got, tc.want)
 			}
 		})
 	}

@@ -48,7 +48,8 @@ func realDockerPs(ctx context.Context, composeProject string) ([]byte, error) {
 
 type workspaceStub struct {
 	Project struct {
-		Name string `yaml:"name"`
+		Name   string `yaml:"name"`
+		Prefix string `yaml:"prefix"`
 	} `yaml:"project"`
 }
 
@@ -178,11 +179,12 @@ func runFromDir(stdout io.Writer, args []string, cwd string, useColor bool) int 
 	if !ok {
 		return 1
 	}
+	composeName := readComposeProjectName(root, name)
 
 	status := readStatus(root)
 	pal := readPalette(root)
 	service := detectService(cwd, root)
-	stack := readStack(root, name, time.Now())
+	stack := readStack(root, composeName, time.Now())
 
 	out := render(name, service, status, stack, pal, useColor)
 	if _, err := io.WriteString(stdout, out); err != nil {
@@ -367,7 +369,8 @@ func readCache(path string) (state stackKind, updatedAt time.Time, ok bool) {
 // out via refreshStack and applies the no-downgrade rule: the cache is
 // rewritten only when the refreshed state is stackRunning. On refresh failure
 // or a zero-result (stackStopped), the cache is left untouched and the stale
-// value (if any) is returned. composeProject is the workspace.yml project name.
+// value (if any) is returned. composeProject is the Docker Compose project name
+// (may differ from project.name when a prefix or docker.yml project_name is set).
 func readStack(root, composeProject string, now time.Time) stackKind {
 	path := filepath.Join(root, promptCacheRelPath)
 	cachedState, updatedAt, cacheOK := readCache(path)
@@ -526,4 +529,51 @@ func readProjectName(root string) (string, bool) {
 		return filepath.Base(root), true
 	}
 	return stub.Project.Name, true
+}
+
+// readComposeProjectName returns the Docker Compose project name used to label
+// containers (the value Docker writes to the com.docker.compose.project label).
+// It mirrors the precedence of config.ResolveComposeProjectName:
+//  1. workspace/docker.yml project_name (literal only; template values fall back)
+//  2. project.prefix + "-" + project.name when prefix is set
+//  3. project.name (same as displayName)
+//
+// displayName is the already-resolved display name so workspace.yml need not be
+// re-read. The return value is always non-empty.
+func readComposeProjectName(root, displayName string) string {
+	if dockerName := readDockerProjectNameLiteral(root); dockerName != "" {
+		return dockerName
+	}
+	data, err := os.ReadFile(filepath.Join(root, configFilename))
+	if err != nil {
+		return displayName
+	}
+	var stub workspaceStub
+	if err := yaml.Unmarshal(data, &stub); err != nil {
+		return displayName
+	}
+	if stub.Project.Prefix != "" {
+		return stub.Project.Prefix + "-" + displayName
+	}
+	return displayName
+}
+
+// readDockerProjectNameLiteral reads project_name from workspace/docker.yml.
+// Returns empty string if the file is absent, unreadable, the field is absent,
+// or the value contains template syntax (${...}) that the prompt cannot resolve
+// without the full config loader.
+func readDockerProjectNameLiteral(root string) string {
+	data, err := os.ReadFile(filepath.Join(root, "workspace", "docker.yml"))
+	if err != nil {
+		return ""
+	}
+	var m map[string]any
+	if err := yaml.Unmarshal(data, &m); err != nil {
+		return ""
+	}
+	name, _ := m["project_name"].(string)
+	if strings.Contains(name, "${") {
+		return ""
+	}
+	return name
 }
