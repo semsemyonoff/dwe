@@ -114,6 +114,51 @@ func TestAggregateHealthFromTopo_Empty(t *testing.T) {
 	}
 }
 
+// --- HealthFromStatusInput ---
+
+func TestHealthFromStatusInput_TopoTakesPrecedenceOverRows(t *testing.T) {
+	// Topo says everything running; service rows say nothing running. Topo wins.
+	in := StatusInput{
+		Cfg:       nil, // doesn't matter — topo path is taken
+		IsRunning: func(string) bool { return false },
+		TopoStatus: map[string]render.NodeStatus{
+			"nginx":    render.NodeRunning,
+			"app-main": render.NodeRunning,
+		},
+	}
+	if got := HealthFromStatusInput(in); got != HealthRunning {
+		t.Errorf("HealthFromStatusInput = %d, want HealthRunning (%d)", got, HealthRunning)
+	}
+}
+
+func TestHealthFromStatusInput_RowsFallbackWhenTopoEmpty(t *testing.T) {
+	// Without topology data, the function falls back to row aggregation. Since
+	// Cfg is nil here, collectRowsByType returns nil → AggregateHealth → stopped.
+	in := StatusInput{
+		Cfg:        nil,
+		IsRunning:  func(string) bool { return true },
+		TopoStatus: nil,
+	}
+	if got := HealthFromStatusInput(in); got != HealthStopped {
+		t.Errorf("HealthFromStatusInput = %d, want HealthStopped (%d)", got, HealthStopped)
+	}
+}
+
+func TestHealthFromStatusInput_RowsFallbackWhenTopoOnlyDisabled(t *testing.T) {
+	// A topo map that only contains disabled nodes is NOT runtime data —
+	// HasRuntimeStatuses returns false, so the fallback to row aggregation kicks in.
+	in := StatusInput{
+		Cfg:       nil,
+		IsRunning: func(string) bool { return true },
+		TopoStatus: map[string]render.NodeStatus{
+			"app-second": render.NodeDisabled,
+		},
+	}
+	if got := HealthFromStatusInput(in); got != HealthStopped {
+		t.Errorf("HealthFromStatusInput = %d, want HealthStopped (rows fallback when topo is only-disabled), got %d", got, HealthStopped)
+	}
+}
+
 // --- HasRuntimeStatuses ---
 
 func TestHasRuntimeStatuses_EmptyMap(t *testing.T) {

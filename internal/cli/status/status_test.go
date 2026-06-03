@@ -519,6 +519,132 @@ func TestStatusCmd_NoBanner_WhenNoPending(t *testing.T) {
 	}
 }
 
+// readPromptCacheState extracts the `state:` value from the YAML file at the
+// project root. Returns "" when the file is absent or malformed — tests treat
+// these as "no write happened" (since promptcache.Write is best-effort).
+func readPromptCacheState(t *testing.T, projectRoot string) string {
+	t.Helper()
+	raw, err := os.ReadFile(filepath.Join(projectRoot, ".dwe", "prompt-cache.yml"))
+	if err != nil {
+		return ""
+	}
+	for line := range strings.SplitSeq(string(raw), "\n") {
+		if v, ok := strings.CutPrefix(line, "state: "); ok {
+			return strings.TrimSpace(v)
+		}
+	}
+	return ""
+}
+
+// withStubContainerRunning installs a stub for containerRunningFn and restores
+// it on test cleanup. Must NOT be called from t.Parallel() tests.
+func withStubContainerRunning(t *testing.T, stub func(project, container, bin string) bool) {
+	t.Helper()
+	prev := containerRunningFn
+	t.Cleanup(func() { containerRunningFn = prev })
+	containerRunningFn = stub
+}
+
+func TestStatus_TopLevel_PlainPath_WritesAccurateState_Running(t *testing.T) {
+	// statusFixture has main (required, container=app-main) and adminer
+	// (enabled, container=adminer). Stub all containers as running → HealthRunning.
+	withStubContainerRunning(t, func(_, _, _ string) bool { return true })
+
+	configPath := statusFixture(t)
+	root := buildStatusTestRoot()
+	var buf bytes.Buffer
+	root.SetOut(&buf)
+	root.SetErr(&buf)
+	// --no-tui forces the plain branch (cobra's test root may not have a TTY anyway).
+	root.SetArgs([]string{"-c", configPath, "status", "--no-tui"})
+	if err := root.Execute(); err != nil {
+		t.Fatalf("execute: %v", err)
+	}
+	got := readPromptCacheState(t, filepath.Dir(configPath))
+	if got != "running" {
+		t.Errorf("prompt-cache state = %q, want %q", got, "running")
+	}
+}
+
+func TestStatus_TopLevel_JsonPath_WritesAccurateState_Partial(t *testing.T) {
+	// Stub: only "app-main" running → main running, adminer stopped → partial.
+	withStubContainerRunning(t, func(_, container, _ string) bool {
+		return container == "app-main"
+	})
+
+	configPath := statusFixture(t)
+	flags := &cmdctx.RootFlags{Output: "json"}
+	root := buildStatusJSONRoot(flags)
+	var buf bytes.Buffer
+	root.SetOut(&buf)
+	root.SetErr(&bytes.Buffer{})
+	root.SetArgs([]string{"-c", configPath, "status"})
+	if err := root.Execute(); err != nil {
+		t.Fatalf("execute: %v", err)
+	}
+	got := readPromptCacheState(t, filepath.Dir(configPath))
+	if got != "partial" {
+		t.Errorf("prompt-cache state = %q, want %q", got, "partial")
+	}
+}
+
+func TestStatus_TopLevel_PlainPath_WritesStopped(t *testing.T) {
+	// No stub override → default real Docker probe fails (no Docker in tests) → stopped.
+	withStubContainerRunning(t, func(_, _, _ string) bool { return false })
+
+	configPath := statusFixture(t)
+	root := buildStatusTestRoot()
+	var buf bytes.Buffer
+	root.SetOut(&buf)
+	root.SetErr(&buf)
+	root.SetArgs([]string{"-c", configPath, "status", "--no-tui"})
+	if err := root.Execute(); err != nil {
+		t.Fatalf("execute: %v", err)
+	}
+	got := readPromptCacheState(t, filepath.Dir(configPath))
+	if got != "stopped" {
+		t.Errorf("prompt-cache state = %q, want %q", got, "stopped")
+	}
+}
+
+func TestStatus_SubCommand_DoesNotWriteCache(t *testing.T) {
+	withStubContainerRunning(t, func(_, _, _ string) bool { return true })
+
+	configPath := statusFixture(t)
+	root := buildStatusTestRoot()
+	var buf bytes.Buffer
+	root.SetOut(&buf)
+	root.SetErr(&buf)
+	root.SetArgs([]string{"-c", configPath, "status", "apps"})
+	if err := root.Execute(); err != nil {
+		t.Fatalf("execute: %v", err)
+	}
+	cachePath := filepath.Join(filepath.Dir(configPath), ".dwe", "prompt-cache.yml")
+	if _, err := os.Stat(cachePath); !os.IsNotExist(err) {
+		t.Errorf("subcommand `status apps` must not create %s (err=%v)", cachePath, err)
+	}
+}
+
+func TestStatus_CacheWriteFailure_DoesNotFailCommand(t *testing.T) {
+	withStubContainerRunning(t, func(_, _, _ string) bool { return true })
+
+	configPath := statusFixture(t)
+	// Plant a directory at the cache file path so atomic rename inside
+	// promptcache.Write fails. The status command must still succeed.
+	cachePath := filepath.Join(filepath.Dir(configPath), ".dwe", "prompt-cache.yml")
+	if err := os.MkdirAll(cachePath, 0o755); err != nil {
+		t.Fatalf("setup: planting directory at cache path: %v", err)
+	}
+	root := buildStatusTestRoot()
+	var buf bytes.Buffer
+	root.SetOut(&buf)
+	root.SetErr(&buf)
+	root.SetArgs([]string{"-c", configPath, "status", "--no-tui"})
+	if err := root.Execute(); err != nil {
+		t.Fatalf("status should succeed despite cache write failure: %v", err)
+	}
+}
+
 func TestShouldUseTUI_Matrix(t *testing.T) {
 	tests := []struct {
 		name      string

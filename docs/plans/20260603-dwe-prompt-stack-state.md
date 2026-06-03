@@ -428,29 +428,29 @@ Tests:
 
 The top-level `dwe status` RunE (`internal/cli/status/status.go:202+`) branches into JSON, TUI, or plain output. `stack.RenderHealth` is only called on the plain-text branch (line 253). So we cannot hook the cache write next to `RenderHealth` — it would miss JSON and TUI users.
 
-- [ ] in the top-level `RunE`, after `loadStatusContext(flags, ...)` returns successfully and BEFORE the JSON/TUI/plain branching, compute the aggregated Health once:
+- [x] in the top-level `RunE`, after `loadStatusContext(flags, ...)` returns successfully and BEFORE the JSON/TUI/plain branching, compute the aggregated Health once:
   ```go
   in := sc.statusInput()
   health := stack.HealthFromStatusInput(in)   // new helper, see below
   _ = promptcache.Write(sc.ProjectRoot, stack.HealthState(health))
   ```
-- [ ] refactor `internal/core/project/stack/status.go`:
+- [x] refactor `internal/core/project/stack/status.go`:
   - extract the topology-vs-rows selection logic currently inline in `selectHealthIndicator` (status.go:162-177) into a new exported function `HealthFromStatusInput(in StatusInput) Health` in `internal/core/project/stack/health.go`
   - extract the `Health → glyph` formatting (the `switch health` block) into a small unexported `formatHealthIndicator(health Health) string` in `status.go`
   - rewrite `HealthIndicator(in StatusInput) string` to call `formatHealthIndicator(HealthFromStatusInput(in))` — same observable behavior
   - delete the inline aggregation from `selectHealthIndicator` (or remove the function entirely if it has no other callers)
-- [ ] add unit tests for `HealthFromStatusInput` mirroring the existing `TestAggregateHealth_*` cases, plus:
+- [x] add unit tests for `HealthFromStatusInput` mirroring the existing `TestAggregateHealth_*` cases, plus:
   - `TestHealthFromStatusInput_TopoTakesPrecedenceOverRows` (topo has runtime statuses → rows are ignored)
   - `TestHealthFromStatusInput_RowsFallbackWhenTopoEmpty`
   - `TestHealthFromStatusInput_RowsFallbackWhenTopoOnlyDisabled`
-- [ ] do NOT add the cache write to per-section status subcommands (`dwe status deploy`, `dwe status apps`, etc.) — only the top-level `dwe status` performs full aggregation
-- [ ] do NOT add to `dwe logs` or any other read-only command — `status` is special because it already computes the answer
-- [ ] add `TestStatus_TopLevel_PlainPath_WritesAccurateState_Running` (stub `IsRunning` to always-true; run plain branch; assert `.dwe/prompt-cache.yml` content == `running`)
-- [ ] add `TestStatus_TopLevel_JsonPath_WritesAccurateState_Partial` (stub partial; run with `--output json`; assert cache content == `partial`)
-- [ ] add `TestStatus_TopLevel_PlainPath_WritesStopped`
-- [ ] add `TestStatus_SubCommand_DoesNotWriteCache` (run `dwe status deploy`; verify `.dwe/prompt-cache.yml` is unchanged / absent)
-- [ ] add `TestStatus_CacheWriteFailure_DoesNotFailCommand` (skip-as-root pattern)
-- [ ] run `go test ./internal/cli/status/... ./internal/core/project/stack/...` — must pass before next task
+- [x] do NOT add the cache write to per-section status subcommands (`dwe status deploy`, `dwe status apps`, etc.) — only the top-level `dwe status` performs full aggregation
+- [x] do NOT add to `dwe logs` or any other read-only command — `status` is special because it already computes the answer
+- [x] add `TestStatus_TopLevel_PlainPath_WritesAccurateState_Running` (stub `IsRunning` to always-true; run plain branch; assert `.dwe/prompt-cache.yml` content == `running`)
+- [x] add `TestStatus_TopLevel_JsonPath_WritesAccurateState_Partial` (stub partial; run with `--output json`; assert cache content == `partial`)
+- [x] add `TestStatus_TopLevel_PlainPath_WritesStopped`
+- [x] add `TestStatus_SubCommand_DoesNotWriteCache` (run `dwe status deploy`; verify `.dwe/prompt-cache.yml` is unchanged / absent)
+- [x] add `TestStatus_CacheWriteFailure_DoesNotFailCommand` (skip-as-root pattern)
+- [x] run `go test ./internal/cli/status/... ./internal/core/project/stack/...` — must pass before next task
 
 ### Task 9: Verify acceptance criteria
 

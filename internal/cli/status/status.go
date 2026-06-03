@@ -17,16 +17,19 @@ import (
 	"github.com/semsemyonoff/dwe/internal/core/usercommands"
 	"github.com/semsemyonoff/dwe/internal/core/workflow/deploy"
 	"github.com/semsemyonoff/dwe/internal/core/workflow/deploy/journal"
+	"github.com/semsemyonoff/dwe/internal/shared/promptcache"
 
 	"github.com/charmbracelet/x/term"
 	"github.com/spf13/cobra"
 )
 
-// Test seams for TTY detection and TUI dispatch.
-// Tests override these via assignment to suppress TUI or verify dispatch logic.
+// Test seams for TTY detection, TUI dispatch, and container probing. Tests
+// override these via assignment to suppress TUI or stub Docker without
+// spawning processes.
 var (
-	isTerminalFn   = term.IsTerminal
-	runStatusTUIFn = statustui.Run
+	isTerminalFn       = term.IsTerminal
+	runStatusTUIFn     = statustui.Run
+	containerRunningFn = stack.ContainerRunning
 )
 
 // section identifies one of the renderable status sections used by the
@@ -99,7 +102,7 @@ func loadStatusContext(flags *cmdctx.RootFlags, errW io.Writer) (*statusContext,
 	topo, topoStatus := stack.ResolveTopology(cfg, dockerCfg, projectName, flags.ProjectRoot())
 	dockerBin := config.DockerBin(cfg)
 	isRunning := func(container string) bool {
-		return stack.ContainerRunning(projectName, container, dockerBin)
+		return containerRunningFn(projectName, container, dockerBin)
 	}
 	return &statusContext{
 		Cfg:         cfg,
@@ -204,6 +207,11 @@ in the default view.`,
 			if err != nil {
 				return err
 			}
+			// Opportunistic prompt-cache refresh. Best-effort: errors are
+			// intentionally ignored — the cache is observability, not correctness.
+			// Hooked at the top-level RunE only (NOT in subcommands) because only
+			// the top-level performs the full aggregation.
+			_ = promptcache.Write(sc.ProjectRoot, stack.HealthState(stack.HealthFromStatusInput(sc.statusInput())))
 			// JSON mode: skip TUI entirely regardless of TTY state.
 			if flags.Output == "json" {
 				return renderStatusJSON(cmd, sc, noFlags, flags)

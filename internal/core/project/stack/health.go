@@ -47,6 +47,22 @@ func HasRuntimeStatuses(topoStatus map[string]render.NodeStatus) bool {
 	return false
 }
 
+// HealthFromStatusInput aggregates the overall stack Health from a StatusInput.
+// Topology runtime statuses (when present, i.e. at least one non-disabled entry)
+// take precedence over service-row aggregation. A nil Cfg degrades to
+// HealthStopped via the empty-rows path in AggregateHealth.
+//
+// This is the single source of truth for status aggregation, used by both the
+// rendered health indicator and the opportunistic prompt-cache write performed
+// at the top of the `dwe status` RunE.
+func HealthFromStatusInput(in StatusInput) Health {
+	if HasRuntimeStatuses(in.TopoStatus) {
+		return AggregateHealthFromTopo(in.TopoStatus)
+	}
+	rows := collectRowsByType(in.Cfg, in.IsRunning, nil)
+	return AggregateHealth(rows)
+}
+
 // AggregateHealthFromTopo computes stack health from topology node statuses.
 // All non-disabled nodes are treated as active (including infrastructure containers
 // such as nginx, db, redis that are not tracked in cfg.Services). Returns HealthStopped

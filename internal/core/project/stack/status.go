@@ -33,13 +33,12 @@ type StatusInput struct {
 }
 
 // HealthIndicator returns just the health indicator glyph and state (e.g., "● running")
-// without the "DWE: " prefix.
+// without the "DWE: " prefix. Returns "" when no config is loaded.
 func HealthIndicator(in StatusInput) string {
 	if in.Cfg == nil {
 		return ""
 	}
-	rows := collectRowsByType(in.Cfg, in.IsRunning, nil)
-	return selectHealthIndicator(rows, in.TopoStatus)
+	return formatHealthIndicator(HealthFromStatusInput(in))
 }
 
 // RenderHealth returns the "DWE: ●/◐/○ ..." indicator line (no trailing newline).
@@ -159,13 +158,10 @@ func collectRowsByType(cfg *config.DweConfig, isRunning ContainerCheckFn, filter
 	return rows
 }
 
-func selectHealthIndicator(svcRows []render.ServiceTableRow, topoStatus map[string]render.NodeStatus) string {
-	var health Health
-	if HasRuntimeStatuses(topoStatus) {
-		health = AggregateHealthFromTopo(topoStatus)
-	} else {
-		health = AggregateHealth(svcRows)
-	}
+// formatHealthIndicator renders a Health value as its glyph + label string.
+// Stays unexported: callers should aggregate via HealthFromStatusInput and
+// then call HealthIndicator (which handles the nil-Cfg case).
+func formatHealthIndicator(health Health) string {
 	switch health {
 	case HealthRunning:
 		return styles.RenderEnabled("● running")
