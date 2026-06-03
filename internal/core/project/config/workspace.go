@@ -1490,6 +1490,9 @@ func validateServicesOverlay(layerPath string, raw map[string]any, declared map[
 				// Local-only per-service overlay: defer to shape check below.
 				continue
 			}
+			if key == "compose" {
+				return fmt.Errorf("%s: services.%s.compose: per-developer compose overlays (compose.extra) belong in workspace/local.yml, not in shared overlay files", layerPath, name)
+			}
 			if !OverlayAllowedKeys[key] {
 				return fmt.Errorf("%s: services.%s.%s: service definitions belong in workspace/services/<name>/service.yml; overlays may only set %s",
 					layerPath, name, key, overlayAllowedKeysList())
@@ -2229,6 +2232,12 @@ func validateLocalComposeExtraPaths(baseDir string, projectExtra []string, servi
 	}
 	for _, name := range slices.Sorted(maps.Keys(services)) {
 		svc := services[name]
+		if !svc.Enabled {
+			// Disabled services are excluded from composeFiles(); skip path
+			// validation so a developer who disables a service and hasn't yet
+			// created its overlay file doesn't hit a spurious "file not found".
+			continue
+		}
 		for i, p := range svc.LocalComposeExtra {
 			field := fmt.Sprintf("workspace/local.yml: services.%s.compose.extra[%d]", name, i)
 			if err := validateComposeExtraPath(baseDir, p, field); err != nil {
@@ -2239,7 +2248,7 @@ func validateLocalComposeExtraPaths(baseDir string, projectExtra []string, servi
 	return nil
 }
 
-// validateComposeExtraPath runs the three-step path safety check against a
+// validateComposeExtraPath runs the four-step path safety check against a
 // single local.yml overlay entry. See validateLocalComposeExtraPaths for the
 // ordering rationale.
 func validateComposeExtraPath(baseDir, p, field string) error {
@@ -2249,6 +2258,9 @@ func validateComposeExtraPath(baseDir, p, field string) error {
 	abs := filepath.Join(baseDir, p)
 	if _, err := pathsafe.ContainedRel(baseDir, abs); err != nil {
 		return fmt.Errorf("%s: %w (path %q escapes project root)", field, err, p)
+	}
+	if err := pathsafe.CheckNoSymlinks(baseDir, abs, "compose overlay"); err != nil {
+		return fmt.Errorf("%s: %w", field, err)
 	}
 	if _, err := os.Stat(abs); err != nil {
 		if errors.Is(err, os.ErrNotExist) {

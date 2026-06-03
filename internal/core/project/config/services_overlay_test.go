@@ -555,8 +555,7 @@ func TestValidateServicesOverlay_acceptsLocalCompose(t *testing.T) {
 
 // TestValidateServicesOverlay_rejectsNonLocalCompose confirms that
 // services.<name>.compose is rejected in non-local layers (defaults.yml,
-// workspace.yml) with the existing "service definitions belong in
-// workspace/services/<name>/service.yml" hint.
+// workspace.yml) with a hint pointing to workspace/local.yml.
 func TestValidateServicesOverlay_rejectsNonLocalCompose(t *testing.T) {
 	declared := map[string]ServiceConfig{"dev": {Type: ServiceTypeApp, Container: "dev"}}
 	for _, layer := range []string{"workspace.yml", "workspace/defaults.yml"} {
@@ -572,8 +571,8 @@ func TestValidateServicesOverlay_rejectsNonLocalCompose(t *testing.T) {
 			t.Errorf("%s: expected error for compose in non-local layer", layer)
 			continue
 		}
-		if !strings.Contains(err.Error(), "service definitions belong in workspace/services") {
-			t.Errorf("%s: error %q should reference service.yml hint", layer, err)
+		if !strings.Contains(err.Error(), "workspace/local.yml") {
+			t.Errorf("%s: error %q should reference workspace/local.yml", layer, err)
 		}
 	}
 }
@@ -1033,6 +1032,83 @@ project:
 				t.Errorf("LoadConfig error = %v, want substring %q", err, tt.wantErr)
 			}
 		})
+	}
+}
+
+// TestLoadConfig_localComposeExtraSymlinkRejected confirms that a symlink
+// inside the project root that points outside is rejected by validateComposeExtraPath.
+func TestLoadConfig_localComposeExtraSymlinkRejected(t *testing.T) {
+	dir := t.TempDir()
+	outside := t.TempDir()
+	outsideFile := filepath.Join(outside, "target.yml")
+	if err := os.WriteFile(outsideFile, []byte("services: {}\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	// Create a symlink inside the project root pointing outside.
+	symlinkPath := filepath.Join(dir, "escape.yml")
+	if err := os.Symlink(outsideFile, symlinkPath); err != nil {
+		t.Fatal(err)
+	}
+	workspaceYML := `schema_version: "2"
+project:
+  name: test
+  prefix: dwe
+`
+	if err := os.WriteFile(filepath.Join(dir, "workspace.yml"), []byte(workspaceYML), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	workspaceDir := filepath.Join(dir, "workspace")
+	if err := os.MkdirAll(workspaceDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	localYML := `compose:
+  extra:
+    - escape.yml
+`
+	if err := os.WriteFile(filepath.Join(workspaceDir, "local.yml"), []byte(localYML), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	_, err := LoadConfig(filepath.Join(dir, "workspace.yml"))
+	if err == nil {
+		t.Fatal("LoadConfig: expected error for symlink overlay, got nil")
+	}
+	if !strings.Contains(err.Error(), "symlink") {
+		t.Errorf("LoadConfig error = %v, want substring %q", err, "symlink")
+	}
+}
+
+// TestLoadConfig_localComposeExtraDisabledServiceSkipsExistenceCheck confirms
+// that a disabled service's compose.extra path is not required to exist — it
+// mirrors composeFiles() which skips disabled services entirely.
+func TestLoadConfig_localComposeExtraDisabledServiceSkipsExistenceCheck(t *testing.T) {
+	dir := t.TempDir()
+	workspaceYML := `schema_version: "2"
+project:
+  name: test
+  prefix: dwe
+`
+	if err := os.WriteFile(filepath.Join(dir, "workspace.yml"), []byte(workspaceYML), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	workspaceDir := filepath.Join(dir, "workspace")
+	if err := os.MkdirAll(workspaceDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	writeServiceFolder(t, dir, "adminer", "type: tool\ncontainer: adminer\n")
+	// The overlay file does NOT exist — but adminer is disabled, so LoadConfig must succeed.
+	localYML := `services:
+  adminer:
+    enabled: false
+    compose:
+      extra:
+        - nonexistent.yml
+`
+	if err := os.WriteFile(filepath.Join(workspaceDir, "local.yml"), []byte(localYML), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	_, err := LoadConfig(filepath.Join(dir, "workspace.yml"))
+	if err != nil {
+		t.Fatalf("LoadConfig: unexpected error for disabled service with missing overlay: %v", err)
 	}
 }
 
