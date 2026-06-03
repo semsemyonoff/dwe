@@ -162,13 +162,7 @@ service exists, or shows an interactive selector when multiple services are enab
 			}
 			processEnv := compose.BuildEnv()
 			dockerBin := compose.BinName()
-			stateFn := func(name string) (string, error) {
-				return containerStateStatus(name, processEnv, dockerBin)
-			}
-			execFn := func(containerName, shell, u, workDir string, env map[string]string) error {
-				return dockerExecCLI(containerName, shell, u, workDir, env, processEnv, dockerBin)
-			}
-			return runServicesCLI(cfg, compose, serviceName, shellFlags, stateFn, execFn, composeRunCLI)
+			return dispatchShell(cfg, compose, serviceName, shellFlags, processEnv, dockerBin)
 		},
 	}
 

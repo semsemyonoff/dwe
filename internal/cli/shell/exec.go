@@ -394,6 +394,32 @@ func composeRunOneShot(compose *docker.Compose, serviceName, shell, u, workDir s
 	return wrapExitError(runInteractive(compose.BuildEnv(), compose.BaseDir, compose.BinName(), args...))
 }
 
+// dispatchShell routes to the one-shot path when flags.command is set, else to
+// the interactive path. It is the single seam tests use to drive both branches
+// without going through cobra plumbing.
+func dispatchShell(
+	cfg *config.DweConfig,
+	compose *docker.Compose,
+	serviceName string,
+	flags shellCLIFlags,
+	processEnv []string,
+	dockerBin string,
+) error {
+	stateFn := func(name string) (string, error) {
+		return containerStateStatus(name, processEnv, dockerBin)
+	}
+	if flags.command != "" {
+		execOneFn := func(c, sh, u, w string, env map[string]string, cmd string) error {
+			return dockerExecOneShot(c, sh, u, w, env, cmd, processEnv, dockerBin)
+		}
+		return runOneShotCommand(cfg, compose, serviceName, flags, stateFn, execOneFn, composeRunOneShot)
+	}
+	execFn := func(c, sh, u, w string, env map[string]string) error {
+		return dockerExecCLI(c, sh, u, w, env, processEnv, dockerBin)
+	}
+	return runServicesCLI(cfg, compose, serviceName, flags, stateFn, execFn, composeRunCLI)
+}
+
 // oneShotExecFunc executes a single command in a running container.
 type oneShotExecFunc func(containerName, shell, u, workDir string, env map[string]string, command string) error
 

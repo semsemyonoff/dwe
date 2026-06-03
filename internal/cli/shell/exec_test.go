@@ -7,6 +7,7 @@ import (
 	"os"
 	"os/exec"
 	"reflect"
+	"slices"
 	"strings"
 	"testing"
 
@@ -456,5 +457,97 @@ func TestRunOneShotCommand_statePropagatesArbitraryError(t *testing.T) {
 	err := runOneShotCommand(makeOneShotConfig(), &docker.Compose{ProjectName: "p"}, "main", shellCLIFlags{mode: "auto", command: "x"}, stateFn, execFn, runFn)
 	if err == nil || !strings.Contains(err.Error(), "docker daemon unreachable") {
 		t.Errorf("want propagated state error, got %v", err)
+	}
+}
+
+// --- dispatchShell: routing + exit-code envelope ---
+
+// TestDispatchShell_routesOnCommandFlag confirms the interactive branch runs
+// when flags.command is empty and the one-shot branch runs when it is set.
+// We use mode="run" to skip the state probe and inspect the captured argv:
+// interactive composeRunCLI appends just `<shell>`; one-shot appends
+// `<shell> -c "<command>"`.
+func TestDispatchShell_routesOnCommandFlag(t *testing.T) {
+	withTTYDetector(t, false, false)
+	cfg := makeOneShotConfig()
+	cmp := &docker.Compose{ProjectName: "dwe-app"}
+
+	t.Run("interactive when command empty", func(t *testing.T) {
+		calls := withFakeRunInteractive(t, nil)
+		err := dispatchShell(cfg, cmp, "main", shellCLIFlags{mode: "run"}, nil, "docker")
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if len(*calls) != 1 {
+			t.Fatalf("want 1 runInteractive call, got %d", len(*calls))
+		}
+		args := (*calls)[0].args
+		// composeRunCLI appends "-it" (hardcoded) and ends with `<service> <shell>`.
+		if args[len(args)-1] != "bash" {
+			t.Errorf("interactive path should end with shell, got args: %v", args)
+		}
+		if !slices.Contains(args, "-it") {
+			t.Errorf("interactive composeRunCLI should pass -it; args: %v", args)
+		}
+	})
+
+	t.Run("one-shot when command set", func(t *testing.T) {
+		calls := withFakeRunInteractive(t, nil)
+		err := dispatchShell(cfg, cmp, "main", shellCLIFlags{mode: "run", command: "echo hi"}, nil, "docker")
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if len(*calls) != 1 {
+			t.Fatalf("want 1 runInteractive call, got %d", len(*calls))
+		}
+		args := (*calls)[0].args
+		if len(args) < 3 {
+			t.Fatalf("args too short for one-shot: %v", args)
+		}
+		tail := args[len(args)-3:]
+		want := []string{"bash", "-c", "echo hi"}
+		if !reflect.DeepEqual(tail, want) {
+			t.Errorf("one-shot path tail: got %v, want %v (full args: %v)", tail, want, args)
+		}
+	})
+}
+
+// TestDispatchShell_exitCodePropagation_endToEnd proves that a child *exec.ExitError
+// flows through dispatchShell → one-shot helper → wrapExitError to a
+// shellCommandExitError that satisfies interface{ ExitCode() int }. main.go
+// extracts this and calls os.Exit, so this is the wiring under test.
+func TestDispatchShell_exitCodePropagation_endToEnd(t *testing.T) {
+	withTTYDetector(t, false, false)
+	withFakeRunInteractive(t, mustExitError(t, 7))
+	cfg := makeOneShotConfig()
+	cmp := &docker.Compose{ProjectName: "dwe-app"}
+	err := dispatchShell(cfg, cmp, "main", shellCLIFlags{mode: "run", command: "exit 7"}, nil, "docker")
+	var ec interface{ ExitCode() int }
+	if !errors.As(err, &ec) {
+		t.Fatalf("expected ExitCode-bearing error, got %T: %v", err, err)
+	}
+	if ec.ExitCode() != 7 {
+		t.Errorf("ExitCode: got %d, want 7", ec.ExitCode())
+	}
+}
+
+// TestDispatchShell_nonExitErrorBypassesWrapping confirms that non-exit errors
+// (e.g. docker daemon unreachable) flow through unchanged and do NOT satisfy
+// interface{ ExitCode() int } — main.go falls back to cmdctx.ExitCodeFor.
+func TestDispatchShell_nonExitErrorBypassesWrapping(t *testing.T) {
+	withTTYDetector(t, false, false)
+	withFakeRunInteractive(t, errors.New("docker daemon unreachable"))
+	cfg := makeOneShotConfig()
+	cmp := &docker.Compose{ProjectName: "p"}
+	err := dispatchShell(cfg, cmp, "main", shellCLIFlags{mode: "run", command: "x"}, nil, "docker")
+	if err == nil {
+		t.Fatal("expected error, got nil")
+	}
+	var ec interface{ ExitCode() int }
+	if errors.As(err, &ec) {
+		t.Errorf("non-exit error must NOT implement ExitCode(); got: %T", err)
+	}
+	if !strings.Contains(err.Error(), "docker daemon unreachable") {
+		t.Errorf("error should pass through verbatim, got %q", err.Error())
 	}
 }
