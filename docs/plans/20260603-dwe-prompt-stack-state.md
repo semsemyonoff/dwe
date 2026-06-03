@@ -303,32 +303,32 @@ Stack-icon colors:
 - Modify: `internal/shared/prompt/prompt.go`
 - Modify: `internal/shared/prompt/prompt_test.go`
 
-- [ ] add `refreshTimeout = 150 * time.Millisecond` constant
-- [ ] add package-level `dockerPsFunc = realDockerPs` for test injection; `realDockerPs(ctx, project) ([]byte, error)` shells out to `docker ps -q --filter label=com.docker.compose.project=<project>`
-- [ ] add `refreshStack(ctx, composeProject) (stackKind, bool)` — invokes `dockerPsFunc`, counts non-empty lines, returns `stackRunning` if count > 0 else `stackStopped`; on context timeout or exec error returns `(stackNone, false)`
-- [ ] add atomic `writeCache(path string, state stackKind, now time.Time) error` using `os.CreateTemp` in the same dir + `os.Rename`. Skip write when `state == stackNone`. Best-effort: returns error but caller ignores it.
-- [ ] update `readStack` to call `refreshStack` when cache is stale or missing. **INVARIANTS**:
+- [x] add `refreshTimeout = 150 * time.Millisecond` constant
+- [x] add package-level `dockerPsFunc = realDockerPs` for test injection; `realDockerPs(ctx, project) ([]byte, error)` shells out to `docker ps -q --filter label=com.docker.compose.project=<project>`
+- [x] add `refreshStack(ctx, composeProject) (stackKind, bool)` — invokes `dockerPsFunc`, counts non-empty lines, returns `stackRunning` if count > 0 else `stackStopped`; on context timeout or exec error returns `(stackNone, false)`
+- [x] add atomic `writeCache(path string, state stackKind, now time.Time) error` using `os.CreateTemp` in the same dir + `os.Rename`. Skip write when `state == stackNone`. Best-effort: returns error but caller ignores it.
+- [x] update `readStack` to call `refreshStack` when cache is stale or missing. **INVARIANTS**:
   - `writeCache` is invoked ONLY when `refreshStack` returns `ok=true`. On refresh failure: return stale cache value if any, else `stackNone`. Never write `stackNone` to disk.
   - **`refreshStack` write rule**: writes the cache ONLY when refreshed state is `stackRunning`. When refreshed state is `stackStopped` (zero containers matched), the cache is NOT written. Return values for the current render in the zero-result case:
     - stale cache exists → return the stale cached state (treat zero-result as "indistinguishable from wrong label; trust the prior authoritative writer")
     - no prior cache → return `stackNone` (omit the stack icon)
     Stopped writes are reserved exclusively for authoritative writers (lifecycle commands + `dwe status`).
-- [ ] update `TestReadStack_StaleCache_NoRefresh_Yet` → `TestReadStack_StaleCache_RefreshOk` (cache rewritten with new state and timestamp)
-- [ ] add `TestReadStack_StaleCache_RefreshFail_FallbackToStale`
-- [ ] add `TestReadStack_NoCache_RefreshFail_ReturnsNone`
-- [ ] add `TestReadStack_NoCache_RefreshFail_DoesNotPoisonCache` (verify no file is created)
-- [ ] add `TestReadStack_StaleRunningCache_RefreshReturnsZero_ReturnsStaleNoWrite` (prior cache=running, docker ps returns 0 → no write, returns `stackRunning` from stale cache)
-- [ ] add `TestReadStack_StalePartialCache_RefreshReturnsZero_ReturnsStaleNoWrite` (same for partial)
-- [ ] add `TestReadStack_NoCache_RefreshReturnsZero_ReturnsNoneNoWrite` (no prior cache, docker ps returns 0 → no file created, returns `stackNone`)
-- [ ] add `TestReadStack_NoCache_RefreshReturnsRunning_Writes` (no prior cache, docker ps returns count > 0 → cache file created with state=running)
-- [ ] add `TestReadStack_StaleRunningCache_RefreshReturnsRunning_RefreshesTimestamp` (running→running allowed; timestamp updates)
-- [ ] add `TestReadStack_StaleStoppedCache_RefreshReturnsRunning_Promotes` (stopped→running allowed)
-- [ ] add `TestRefreshStack_TimeoutReturnsNone` (stub `dockerPsFunc` to block on `<-ctx.Done()`)
-- [ ] add `TestRefreshStack_OneRunningContainer_ReturnsRunning` (stub returns "abc123\n")
-- [ ] add `TestRefreshStack_NoContainers_ReturnsStopped` (stub returns "")
-- [ ] add `TestWriteCache_PanicDuringWrite_OriginalFileUntouched` (write then recover from panic; verify the existing cache file content is unchanged — half-written `.tmp` may remain but does not affect correctness)
-- [ ] add `TestWriteCache_LeftoverTmp_DoesNotBreakNextWrite` (pre-create a stale `.tmp` and verify the next `writeCache` still succeeds)
-- [ ] run `go test ./internal/shared/prompt/...` — must pass before next task
+- [x] update `TestReadStack_StaleCache_NoRefresh_Yet` → `TestReadStack_StaleCache_RefreshOk` (cache rewritten with new state and timestamp)
+- [x] add `TestReadStack_StaleCache_RefreshFail_FallbackToStale`
+- [x] add `TestReadStack_NoCache_RefreshFail_ReturnsNone`
+- [x] add `TestReadStack_NoCache_RefreshFail_DoesNotPoisonCache` (verify no file is created)
+- [x] add `TestReadStack_StaleRunningCache_RefreshReturnsZero_ReturnsStaleNoWrite` (prior cache=running, docker ps returns 0 → no write, returns `stackRunning` from stale cache)
+- [x] add `TestReadStack_StalePartialCache_RefreshReturnsZero_ReturnsStaleNoWrite` (same for partial)
+- [x] add `TestReadStack_NoCache_RefreshReturnsZero_ReturnsNoneNoWrite` (no prior cache, docker ps returns 0 → no file created, returns `stackNone`)
+- [x] add `TestReadStack_NoCache_RefreshReturnsRunning_Writes` (no prior cache, docker ps returns count > 0 → cache file created with state=running)
+- [x] add `TestReadStack_StaleRunningCache_RefreshReturnsRunning_RefreshesTimestamp` (running→running allowed; timestamp updates)
+- [x] add `TestReadStack_StaleStoppedCache_RefreshReturnsRunning_Promotes` (stopped→running allowed)
+- [x] add `TestRefreshStack_TimeoutReturnsNone` (stub `dockerPsFunc` to block on `<-ctx.Done()`)
+- [x] add `TestRefreshStack_OneRunningContainer_ReturnsRunning` (stub returns "abc123\n")
+- [x] add `TestRefreshStack_NoContainers_ReturnsStopped` (stub returns "")
+- [x] add `TestWriteCache_PanicDuringWrite_OriginalFileUntouched` (write then recover from panic; verify the existing cache file content is unchanged — half-written `.tmp` may remain but does not affect correctness) — implemented as `TestWriteCache_FailureMode_OriginalFileUntouched` (read-only dir injection instead of panic, same atomic-rename invariant)
+- [x] add `TestWriteCache_LeftoverTmp_DoesNotBreakNextWrite` (pre-create a stale `.tmp` and verify the next `writeCache` still succeeds)
+- [x] run `go test ./internal/shared/prompt/...` — must pass before next task
 
 ### Task 5: Create `internal/shared/promptcache` package (leaf)
 

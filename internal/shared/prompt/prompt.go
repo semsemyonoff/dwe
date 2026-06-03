@@ -5,8 +5,11 @@
 package prompt
 
 import (
+	"bytes"
+	"context"
 	"io"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strconv"
 	"strings"
@@ -29,8 +32,19 @@ const (
 
 	sgrReset = "\x1b[39m"
 
-	cacheTTL = 2 * time.Minute
+	cacheTTL       = 2 * time.Minute
+	refreshTimeout = 150 * time.Millisecond
 )
+
+// dockerPsFunc shells out to `docker ps -q --filter label=com.docker.compose.project=<project>`.
+// Package-level for test injection.
+var dockerPsFunc = realDockerPs
+
+func realDockerPs(ctx context.Context, composeProject string) ([]byte, error) {
+	cmd := exec.CommandContext(ctx, "docker", "ps", "-q",
+		"--filter", "label=com.docker.compose.project="+composeProject)
+	return cmd.Output()
+}
 
 type workspaceStub struct {
 	Project struct {
@@ -349,20 +363,97 @@ func readCache(path string) (state stackKind, updatedAt time.Time, ok bool) {
 }
 
 // readStack returns the current stack state for the rendered prompt. When a
-// fresh cache (<cacheTTL old) exists, returns its value. Otherwise returns
-// stackNone (Task 4 will add a sync refresh path that may produce a value).
-// composeProject is plumbed in now so callers don't change in Task 4.
+// fresh cache (<cacheTTL old) exists, returns its value. Otherwise it shells
+// out via refreshStack and applies the no-downgrade rule: the cache is
+// rewritten only when the refreshed state is stackRunning. On refresh failure
+// or a zero-result (stackStopped), the cache is left untouched and the stale
+// value (if any) is returned. composeProject is the workspace.yml project name.
 func readStack(root, composeProject string, now time.Time) stackKind {
-	_ = composeProject
 	path := filepath.Join(root, promptCacheRelPath)
-	state, updatedAt, ok := readCache(path)
-	if !ok {
+	cachedState, updatedAt, cacheOK := readCache(path)
+	if cacheOK && now.Sub(updatedAt) <= cacheTTL {
+		return cachedState
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), refreshTimeout)
+	defer cancel()
+	fresh, refreshOK := refreshStack(ctx, composeProject)
+	if !refreshOK {
+		if cacheOK {
+			return cachedState
+		}
 		return stackNone
 	}
-	if now.Sub(updatedAt) > cacheTTL {
-		return stackNone
+	if fresh == stackRunning {
+		_ = writeCache(path, fresh, now)
+		return fresh
 	}
-	return state
+	// Zero-result: never write stopped from prompt refresh. Return stale if any.
+	if cacheOK {
+		return cachedState
+	}
+	return stackNone
+}
+
+// refreshStack invokes dockerPsFunc with the given context. Returns
+// (stackRunning, true) when at least one container matches the compose project
+// label, (stackStopped, true) on zero matches, and (stackNone, false) on any
+// exec or context-timeout failure. Never returns stackPartial — prompt refresh
+// is binary.
+func refreshStack(ctx context.Context, composeProject string) (stackKind, bool) {
+	out, err := dockerPsFunc(ctx, composeProject)
+	if err != nil {
+		return stackNone, false
+	}
+	if ctx.Err() != nil {
+		return stackNone, false
+	}
+	trimmed := bytes.TrimSpace(out)
+	if len(trimmed) == 0 {
+		return stackStopped, true
+	}
+	return stackRunning, true
+}
+
+// writeCache atomically rewrites <root>/.dwe/prompt-cache.yml with the given
+// state and timestamp. Best-effort: returns an error but callers ignore it.
+// Skips writes when state == stackNone (never poisons the cache).
+func writeCache(path string, state stackKind, now time.Time) error {
+	var s string
+	switch state {
+	case stackRunning:
+		s = "running"
+	case stackPartial:
+		s = "partial"
+	case stackStopped:
+		s = "stopped"
+	default:
+		return nil
+	}
+	dir := filepath.Dir(path)
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		return err
+	}
+	body := "updated_at: " + now.UTC().Format(time.RFC3339) + "\nstate: " + s + "\n"
+	tmp, err := os.CreateTemp(dir, "prompt-cache-*.tmp")
+	if err != nil {
+		return err
+	}
+	tmpName := tmp.Name()
+	if _, err := tmp.WriteString(body); err != nil {
+		_ = tmp.Close()
+		_ = os.Remove(tmpName)
+		return err
+	}
+	if err := tmp.Close(); err != nil {
+		_ = os.Remove(tmpName)
+		return err
+	}
+	if err := os.Rename(tmpName, path); err != nil {
+		_ = os.Remove(tmpName)
+		return err
+	}
+	return nil
 }
 
 // parseArgs returns (checkMode, ok). ok=false means args are malformed and the

@@ -2,12 +2,35 @@ package prompt
 
 import (
 	"bytes"
+	"context"
+	"errors"
 	"os"
 	"path/filepath"
 	"strconv"
 	"testing"
 	"time"
 )
+
+// TestMain installs a fail-fast docker stub so unit tests never spawn a real
+// docker process. Tests that need specific refresh behavior swap it via
+// swapDockerPs (which must NOT call t.Parallel — see swapDockerPs docs).
+func TestMain(m *testing.M) {
+	dockerPsFunc = func(_ context.Context, _ string) ([]byte, error) {
+		return nil, errors.New("test stub: docker disabled")
+	}
+	os.Exit(m.Run())
+}
+
+// swapDockerPs replaces dockerPsFunc for the test's duration. Callers must NOT
+// call t.Parallel(). The Go testing framework runs non-parallel top-level
+// tests sequentially before any parallel test resumes, so swaps performed in
+// non-parallel tests do not race with parallel readers.
+func swapDockerPs(t *testing.T, fn func(context.Context, string) ([]byte, error)) {
+	t.Helper()
+	prev := dockerPsFunc
+	dockerPsFunc = fn
+	t.Cleanup(func() { dockerPsFunc = prev })
+}
 
 func writeFile(t *testing.T, path, content string) {
 	t.Helper()
@@ -862,8 +885,8 @@ func TestReadStack(t *testing.T) {
 		{name: "fresh_running", content: "updated_at: " + fresh + "\nstate: running\n", want: stackRunning},
 		{name: "fresh_partial", content: "updated_at: " + fresh + "\nstate: partial\n", want: stackPartial},
 		{name: "fresh_stopped", content: "updated_at: " + fresh + "\nstate: stopped\n", want: stackStopped},
-		// Task 3: stale cache returns stackNone (no refresh yet). Task 4 will change this.
-		{name: "stale_no_refresh_yet", content: "updated_at: " + stale + "\nstate: running\n", want: stackNone},
+		// Stale + default fail-fast docker stub → refresh fails → fall back to stale cached value.
+		{name: "stale_refresh_fail_falls_back_to_stale", content: "updated_at: " + stale + "\nstate: running\n", want: stackRunning},
 		{name: "bad_state_returns_none", content: "updated_at: " + fresh + "\nstate: weird\n", want: stackNone},
 	}
 
@@ -991,9 +1014,10 @@ func TestRunFromDirStackIconFromFreshCache(t *testing.T) {
 	}
 }
 
-func TestRunFromDirStackIconStaleCacheOmitted(t *testing.T) {
+func TestRunFromDirStackIconStaleCacheRefreshFailFallsBackToStale(t *testing.T) {
 	t.Parallel()
-	// In Task 3, a stale cache (>2min) yields stackNone — no refresh yet.
+	// Stale cache + failing docker stub (set by TestMain default) → readStack
+	// falls back to the stale cached value rather than omitting the icon.
 	root := t.TempDir()
 	writeFile(t, filepath.Join(root, "workspace.yml"), "project:\n  name: p\n")
 	past := time.Now().Add(-10 * time.Minute).UTC().Format(time.RFC3339)
@@ -1004,8 +1028,336 @@ func TestRunFromDirStackIconStaleCacheOmitted(t *testing.T) {
 		t.Fatalf("exit: %d (stdout=%q)", code, buf.String())
 	}
 	got := buf.String()
-	want := "{▪} p\n"
+	want := "{▪} p ●\n"
 	if got != want {
 		t.Errorf("stdout: got %q, want %q", got, want)
+	}
+}
+
+// Task 4 tests: refresh path. These tests MUST NOT call t.Parallel — they
+// swap the package-level dockerPsFunc and rely on Go's test framework running
+// non-parallel top-level tests sequentially before parallel tests resume.
+
+func TestRefreshStack_TimeoutReturnsNone(t *testing.T) {
+	swapDockerPs(t, func(ctx context.Context, _ string) ([]byte, error) {
+		<-ctx.Done()
+		return nil, ctx.Err()
+	})
+	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Millisecond)
+	defer cancel()
+	state, ok := refreshStack(ctx, "p")
+	if ok || state != stackNone {
+		t.Errorf("got (%v, %v), want (stackNone, false)", state, ok)
+	}
+}
+
+func TestRefreshStack_OneRunningContainer_ReturnsRunning(t *testing.T) {
+	swapDockerPs(t, func(_ context.Context, _ string) ([]byte, error) {
+		return []byte("abc123\n"), nil
+	})
+	state, ok := refreshStack(context.Background(), "p")
+	if !ok || state != stackRunning {
+		t.Errorf("got (%v, %v), want (stackRunning, true)", state, ok)
+	}
+}
+
+func TestRefreshStack_NoContainers_ReturnsStopped(t *testing.T) {
+	swapDockerPs(t, func(_ context.Context, _ string) ([]byte, error) {
+		return []byte(""), nil
+	})
+	state, ok := refreshStack(context.Background(), "p")
+	if !ok || state != stackStopped {
+		t.Errorf("got (%v, %v), want (stackStopped, true)", state, ok)
+	}
+}
+
+func TestRefreshStack_WhitespaceOnly_ReturnsStopped(t *testing.T) {
+	swapDockerPs(t, func(_ context.Context, _ string) ([]byte, error) {
+		return []byte("   \n  \n"), nil
+	})
+	state, ok := refreshStack(context.Background(), "p")
+	if !ok || state != stackStopped {
+		t.Errorf("got (%v, %v), want (stackStopped, true)", state, ok)
+	}
+}
+
+func TestReadStack_StaleCache_RefreshOk(t *testing.T) {
+	swapDockerPs(t, func(_ context.Context, _ string) ([]byte, error) {
+		return []byte("abc\n"), nil
+	})
+	root := t.TempDir()
+	now := time.Date(2026, 6, 3, 12, 0, 0, 0, time.UTC)
+	stale := now.Add(-5 * time.Minute).Format(time.RFC3339)
+	cachePath := filepath.Join(root, ".dwe", "prompt-cache.yml")
+	writeFile(t, cachePath, "updated_at: "+stale+"\nstate: stopped\n")
+
+	got := readStack(root, "p", now)
+	if got != stackRunning {
+		t.Fatalf("readStack: got %v, want stackRunning", got)
+	}
+	state, updatedAt, ok := readCache(cachePath)
+	if !ok || state != stackRunning {
+		t.Fatalf("expected cache state=running ok=true, got ok=%v state=%v", ok, state)
+	}
+	if !updatedAt.Equal(now) {
+		t.Errorf("expected updatedAt=%v, got %v", now, updatedAt)
+	}
+}
+
+func TestReadStack_StaleCache_RefreshFail_FallbackToStale(t *testing.T) {
+	swapDockerPs(t, func(_ context.Context, _ string) ([]byte, error) {
+		return nil, errors.New("docker fail")
+	})
+	root := t.TempDir()
+	now := time.Date(2026, 6, 3, 12, 0, 0, 0, time.UTC)
+	staleStr := now.Add(-5 * time.Minute).Format(time.RFC3339)
+	cachePath := filepath.Join(root, ".dwe", "prompt-cache.yml")
+	writeFile(t, cachePath, "updated_at: "+staleStr+"\nstate: partial\n")
+
+	got := readStack(root, "p", now)
+	if got != stackPartial {
+		t.Errorf("readStack: got %v, want stackPartial (stale fallback)", got)
+	}
+	_, updatedAt, ok := readCache(cachePath)
+	if !ok || updatedAt.Format(time.RFC3339) != staleStr {
+		t.Errorf("cache modified; expected stale timestamp %q unchanged, got %q ok=%v",
+			staleStr, updatedAt.Format(time.RFC3339), ok)
+	}
+}
+
+func TestReadStack_NoCache_RefreshFail_ReturnsNone(t *testing.T) {
+	swapDockerPs(t, func(_ context.Context, _ string) ([]byte, error) {
+		return nil, errors.New("docker fail")
+	})
+	root := t.TempDir()
+	now := time.Date(2026, 6, 3, 12, 0, 0, 0, time.UTC)
+	if got := readStack(root, "p", now); got != stackNone {
+		t.Errorf("readStack: got %v, want stackNone", got)
+	}
+}
+
+func TestReadStack_NoCache_RefreshFail_DoesNotPoisonCache(t *testing.T) {
+	swapDockerPs(t, func(_ context.Context, _ string) ([]byte, error) {
+		return nil, errors.New("docker fail")
+	})
+	root := t.TempDir()
+	_ = readStack(root, "p", time.Now())
+	cachePath := filepath.Join(root, ".dwe", "prompt-cache.yml")
+	if _, err := os.Stat(cachePath); !errors.Is(err, os.ErrNotExist) {
+		t.Errorf("expected no cache file, got stat err=%v", err)
+	}
+}
+
+func TestReadStack_StaleRunningCache_RefreshReturnsZero_ReturnsStaleNoWrite(t *testing.T) {
+	swapDockerPs(t, func(_ context.Context, _ string) ([]byte, error) {
+		return []byte(""), nil
+	})
+	root := t.TempDir()
+	now := time.Date(2026, 6, 3, 12, 0, 0, 0, time.UTC)
+	staleStr := now.Add(-5 * time.Minute).Format(time.RFC3339)
+	cachePath := filepath.Join(root, ".dwe", "prompt-cache.yml")
+	writeFile(t, cachePath, "updated_at: "+staleStr+"\nstate: running\n")
+
+	got := readStack(root, "p", now)
+	if got != stackRunning {
+		t.Errorf("readStack: got %v, want stackRunning (stale)", got)
+	}
+	_, updatedAt, ok := readCache(cachePath)
+	if !ok || updatedAt.Format(time.RFC3339) != staleStr {
+		t.Errorf("expected cache unchanged; got updatedAt=%v ok=%v",
+			updatedAt.Format(time.RFC3339), ok)
+	}
+}
+
+func TestReadStack_StalePartialCache_RefreshReturnsZero_ReturnsStaleNoWrite(t *testing.T) {
+	swapDockerPs(t, func(_ context.Context, _ string) ([]byte, error) {
+		return []byte(""), nil
+	})
+	root := t.TempDir()
+	now := time.Date(2026, 6, 3, 12, 0, 0, 0, time.UTC)
+	staleStr := now.Add(-5 * time.Minute).Format(time.RFC3339)
+	cachePath := filepath.Join(root, ".dwe", "prompt-cache.yml")
+	writeFile(t, cachePath, "updated_at: "+staleStr+"\nstate: partial\n")
+
+	got := readStack(root, "p", now)
+	if got != stackPartial {
+		t.Errorf("readStack: got %v, want stackPartial", got)
+	}
+	_, updatedAt, ok := readCache(cachePath)
+	if !ok || updatedAt.Format(time.RFC3339) != staleStr {
+		t.Errorf("expected cache unchanged; got updatedAt=%v ok=%v",
+			updatedAt.Format(time.RFC3339), ok)
+	}
+}
+
+func TestReadStack_NoCache_RefreshReturnsZero_ReturnsNoneNoWrite(t *testing.T) {
+	swapDockerPs(t, func(_ context.Context, _ string) ([]byte, error) {
+		return []byte(""), nil
+	})
+	root := t.TempDir()
+	if got := readStack(root, "p", time.Now()); got != stackNone {
+		t.Errorf("readStack: got %v, want stackNone", got)
+	}
+	cachePath := filepath.Join(root, ".dwe", "prompt-cache.yml")
+	if _, err := os.Stat(cachePath); !errors.Is(err, os.ErrNotExist) {
+		t.Errorf("expected no cache file, got stat err=%v", err)
+	}
+}
+
+func TestReadStack_NoCache_RefreshReturnsRunning_Writes(t *testing.T) {
+	swapDockerPs(t, func(_ context.Context, _ string) ([]byte, error) {
+		return []byte("abc\n"), nil
+	})
+	root := t.TempDir()
+	now := time.Date(2026, 6, 3, 12, 0, 0, 0, time.UTC)
+	if got := readStack(root, "p", now); got != stackRunning {
+		t.Errorf("readStack: got %v, want stackRunning", got)
+	}
+	state, updatedAt, ok := readCache(filepath.Join(root, ".dwe", "prompt-cache.yml"))
+	if !ok || state != stackRunning {
+		t.Errorf("expected cache state=running, ok=%v state=%v", ok, state)
+	}
+	if !updatedAt.Equal(now) {
+		t.Errorf("expected updatedAt=%v, got %v", now, updatedAt)
+	}
+}
+
+func TestReadStack_StaleRunningCache_RefreshReturnsRunning_RefreshesTimestamp(t *testing.T) {
+	swapDockerPs(t, func(_ context.Context, _ string) ([]byte, error) {
+		return []byte("xyz\n"), nil
+	})
+	root := t.TempDir()
+	now := time.Date(2026, 6, 3, 12, 0, 0, 0, time.UTC)
+	staleStr := now.Add(-10 * time.Minute).Format(time.RFC3339)
+	cachePath := filepath.Join(root, ".dwe", "prompt-cache.yml")
+	writeFile(t, cachePath, "updated_at: "+staleStr+"\nstate: running\n")
+
+	got := readStack(root, "p", now)
+	if got != stackRunning {
+		t.Errorf("readStack: got %v, want stackRunning", got)
+	}
+	state, updatedAt, ok := readCache(cachePath)
+	if !ok || state != stackRunning {
+		t.Fatalf("cache state ok=%v state=%v", ok, state)
+	}
+	if !updatedAt.Equal(now) {
+		t.Errorf("expected updatedAt=%v, got %v", now, updatedAt)
+	}
+}
+
+func TestReadStack_StaleStoppedCache_RefreshReturnsRunning_Promotes(t *testing.T) {
+	swapDockerPs(t, func(_ context.Context, _ string) ([]byte, error) {
+		return []byte("xyz\n"), nil
+	})
+	root := t.TempDir()
+	now := time.Date(2026, 6, 3, 12, 0, 0, 0, time.UTC)
+	staleStr := now.Add(-10 * time.Minute).Format(time.RFC3339)
+	cachePath := filepath.Join(root, ".dwe", "prompt-cache.yml")
+	writeFile(t, cachePath, "updated_at: "+staleStr+"\nstate: stopped\n")
+
+	got := readStack(root, "p", now)
+	if got != stackRunning {
+		t.Errorf("readStack: got %v, want stackRunning (promoted)", got)
+	}
+	state, _, _ := readCache(cachePath)
+	if state != stackRunning {
+		t.Errorf("expected cache state=running, got %v", state)
+	}
+}
+
+// TestWriteCache_FailureMode_OriginalFileUntouched verifies the atomic
+// guarantee: if writeCache fails (CreateTemp denied in a read-only dir), the
+// pre-existing cache content is preserved. This is the "panic during write"
+// invariant — even when the write path is interrupted, the original survives.
+func TestWriteCache_FailureMode_OriginalFileUntouched(t *testing.T) {
+	if os.Geteuid() == 0 {
+		t.Skip("requires non-root to enforce 0o555 directory permissions")
+	}
+	root := t.TempDir()
+	dir := filepath.Join(root, ".dwe")
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	cachePath := filepath.Join(dir, "prompt-cache.yml")
+	original := "updated_at: 2026-01-01T00:00:00Z\nstate: running\n"
+	writeFile(t, cachePath, original)
+
+	if err := os.Chmod(dir, 0o555); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = os.Chmod(dir, 0o755) })
+
+	if err := writeCache(cachePath, stackStopped, time.Now()); err == nil {
+		t.Fatalf("expected writeCache to fail with read-only dir, got nil")
+	}
+	got, err := os.ReadFile(cachePath)
+	if err != nil {
+		t.Fatalf("read original: %v", err)
+	}
+	if string(got) != original {
+		t.Errorf("original modified after failed writeCache; got %q, want %q", got, original)
+	}
+}
+
+func TestWriteCache_LeftoverTmp_DoesNotBreakNextWrite(t *testing.T) {
+	root := t.TempDir()
+	dir := filepath.Join(root, ".dwe")
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	// Pre-seed a stale .tmp file as if a prior write was interrupted.
+	stale := filepath.Join(dir, "prompt-cache-leftover.tmp")
+	if err := os.WriteFile(stale, []byte("garbage"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	cachePath := filepath.Join(dir, "prompt-cache.yml")
+	now := time.Date(2026, 6, 3, 12, 0, 0, 0, time.UTC)
+	if err := writeCache(cachePath, stackRunning, now); err != nil {
+		t.Fatalf("writeCache: %v", err)
+	}
+	state, updatedAt, ok := readCache(cachePath)
+	if !ok || state != stackRunning {
+		t.Errorf("expected cache state=running, got state=%v ok=%v", state, ok)
+	}
+	if !updatedAt.Equal(now) {
+		t.Errorf("expected updatedAt=%v, got %v", now, updatedAt)
+	}
+}
+
+func TestWriteCache_SkipsWhenStateNone(t *testing.T) {
+	root := t.TempDir()
+	cachePath := filepath.Join(root, ".dwe", "prompt-cache.yml")
+	if err := writeCache(cachePath, stackNone, time.Now()); err != nil {
+		t.Fatalf("writeCache(stackNone) should return nil, got %v", err)
+	}
+	if _, err := os.Stat(cachePath); !errors.Is(err, os.ErrNotExist) {
+		t.Errorf("expected no file for stackNone write, got stat err=%v", err)
+	}
+}
+
+func TestWriteCache_AllStates(t *testing.T) {
+	cases := []struct {
+		state stackKind
+		want  string
+	}{
+		{stackRunning, "running"},
+		{stackPartial, "partial"},
+		{stackStopped, "stopped"},
+	}
+	for _, tc := range cases {
+		root := t.TempDir()
+		cachePath := filepath.Join(root, ".dwe", "prompt-cache.yml")
+		now := time.Date(2026, 6, 3, 12, 0, 0, 0, time.UTC)
+		if err := writeCache(cachePath, tc.state, now); err != nil {
+			t.Fatalf("writeCache(%v): %v", tc.state, err)
+		}
+		data, err := os.ReadFile(cachePath)
+		if err != nil {
+			t.Fatalf("read: %v", err)
+		}
+		if !bytes.Contains(data, []byte("state: "+tc.want)) {
+			t.Errorf("expected state: %s in %q", tc.want, data)
+		}
 	}
 }
