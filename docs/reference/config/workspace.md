@@ -332,7 +332,7 @@ Docker Compose merges later `-f` files on top of earlier ones — the project-wi
 - Paths are **relative to the project root** (the directory holding `workspace.yml`) and stored as written; downstream resolution sets `cmd.Dir` to the project root.
 - **Absolute paths are rejected** (`/etc/...` / `~/...` — would bypass containment).
 - **`..` escapes are rejected** by `pathsafe.ContainedRel`.
-- **Each path must exist** at config-load time; missing files are a hard error showing both the as-written and resolved absolute paths.
+- **Each path must exist** at config-load time; missing files are a hard error showing both the as-written and resolved absolute paths. **Exception:** existence is not checked for disabled services — developers may stage overlay entries in `local.yml` before creating the file, and disabled services are excluded from `ComposeFiles()` at runtime. Structural safety checks (absolute-path rejection, containment, symlink) still run for disabled-service overlays because `ComposeFilesAll()` (used by `dwe docker --all`) includes them.
 - Duplicate paths between layers (or within a layer) are **not** deduplicated — Docker Compose tolerates duplicates; let it surface any issue.
 - `compose.extra` in `workspace.yml`, `defaults.yml`, or `service.yml` is rejected with a diagnostic pointing at `workspace/local.yml`.
 

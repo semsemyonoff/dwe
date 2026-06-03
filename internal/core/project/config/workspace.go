@@ -2214,12 +2214,16 @@ func applyLocalComposeExtra(localRaw map[string]any, name string, svc *ServiceCo
 }
 
 // validateLocalComposeExtraPaths walks every path in projectExtra and each
-// services[name].LocalComposeExtra and enforces three rules in order:
+// services[name].LocalComposeExtra and enforces rules in order:
 //
 //  1. Absolute paths are rejected (filepath.Join(baseDir, "/x") returns "/x",
 //     bypassing containment — so this check MUST come first).
 //  2. Containment under baseDir via pathsafe.ContainedRel.
-//  3. Existence via os.Stat.
+//  3. Symlink safety via pathsafe.CheckNoSymlinks.
+//  4. Existence via os.Stat (skipped for disabled services — developers may
+//     stage overlay entries before creating the file, and disabled services
+//     are excluded from ComposeFiles(); structural checks 1-3 still run
+//     because ComposeFilesAll includes disabled-service paths for --all).
 //
 // Errors carry the local.yml field path and, for missing files, both the
 // as-written and resolved absolute paths for easy debugging.
@@ -2232,28 +2236,52 @@ func validateLocalComposeExtraPaths(baseDir string, projectExtra []string, servi
 	}
 	for _, name := range slices.Sorted(maps.Keys(services)) {
 		svc := services[name]
-		if !svc.Enabled {
-			// Disabled services are excluded from composeFiles(); skip path
-			// validation so a developer who disables a service and hasn't yet
-			// created its overlay file doesn't hit a spurious "file not found".
-			continue
-		}
 		for i, p := range svc.LocalComposeExtra {
 			field := fmt.Sprintf("workspace/local.yml: services.%s.compose.extra[%d]", name, i)
-			if err := validateComposeExtraPath(baseDir, p, field); err != nil {
-				return err
+			if svc.Enabled {
+				if err := validateComposeExtraPath(baseDir, p, field); err != nil {
+					return err
+				}
+			} else {
+				if err := validateComposeExtraPathSafety(baseDir, p, field); err != nil {
+					return err
+				}
 			}
 		}
 	}
 	return nil
 }
 
-// validateComposeExtraPath runs the four-step path safety check against a
+// validateComposeExtraPath runs the full four-step path safety check against a
 // single local.yml overlay entry. See validateLocalComposeExtraPaths for the
 // ordering rationale.
 func validateComposeExtraPath(baseDir, p, field string) error {
+	if err := validateComposeExtraPathSafety(baseDir, p, field); err != nil {
+		return err
+	}
+	abs := filepath.Join(baseDir, p)
+	if _, err := os.Stat(abs); err != nil {
+		if errors.Is(err, os.ErrNotExist) {
+			return fmt.Errorf("%s: file not found: %q (resolved to %q)", field, p, abs)
+		}
+		return fmt.Errorf("%s: stat %q (resolved to %q): %w", field, p, abs, err)
+	}
+	return nil
+}
+
+// validateComposeExtraPathSafety runs structural safety checks (steps 1-3) for
+// a single compose overlay path without requiring the file to exist. Used for
+// disabled-service overlays that appear in ComposeFilesAll but not ComposeFiles.
+func validateComposeExtraPathSafety(baseDir, p, field string) error {
 	if filepath.IsAbs(p) {
 		return fmt.Errorf("%s: absolute paths are not permitted (got %q); use a path relative to the project root", field, p)
+	}
+	// Reject unclean paths (containing "..", ".", or redundant separators) before
+	// filepath.Join, which would clean them away and cause CheckNoSymlinks to walk a
+	// different path than Docker Compose receives (e.g. "link/../evil.yml" erases the
+	// "link" symlink component, bypassing the symlink check).
+	if filepath.Clean(p) != p {
+		return fmt.Errorf("%s: path %q must be clean (no \"..\", \".\", or redundant separators); use a canonical relative path", field, p)
 	}
 	abs := filepath.Join(baseDir, p)
 	if _, err := pathsafe.ContainedRel(baseDir, abs); err != nil {
@@ -2261,12 +2289,6 @@ func validateComposeExtraPath(baseDir, p, field string) error {
 	}
 	if err := pathsafe.CheckNoSymlinks(baseDir, abs, "compose overlay"); err != nil {
 		return fmt.Errorf("%s: %w", field, err)
-	}
-	if _, err := os.Stat(abs); err != nil {
-		if errors.Is(err, os.ErrNotExist) {
-			return fmt.Errorf("%s: file not found: %q (resolved to %q)", field, p, abs)
-		}
-		return fmt.Errorf("%s: stat %q (resolved to %q): %w", field, p, abs, err)
 	}
 	return nil
 }

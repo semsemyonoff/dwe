@@ -988,6 +988,27 @@ func TestLoadConfig_localComposeExtraPathValidation(t *testing.T) {
 `,
 			wantErr: "file not found",
 		},
+		{
+			name: "unclean_path_via_clean_bypass_rejected",
+			// "link/../x.yml" would be cleaned by filepath.Join to "x.yml" before
+			// CheckNoSymlinks runs, hiding the "link" symlink from the check.
+			localYML: `compose:
+  extra:
+    - link/../x.yml
+`,
+			wantErr: "must be clean",
+		},
+		{
+			name: "per_service_unclean_path_via_clean_bypass_rejected",
+			localYML: `services:
+  adminer:
+    enabled: true
+    compose:
+      extra:
+        - sub/../x.yml
+`,
+			wantErr: "must be clean",
+		},
 	}
 
 	for _, tt := range tests {
@@ -1110,6 +1131,100 @@ project:
 	if err != nil {
 		t.Fatalf("LoadConfig: unexpected error for disabled service with missing overlay: %v", err)
 	}
+}
+
+// TestLoadConfig_localComposeExtraDisabledServiceStructuralChecksStillApply
+// verifies that the structural path safety checks (absolute path rejection and
+// containment) still apply for disabled services even though the existence check
+// is skipped. ComposeFilesAll includes disabled-service paths for --all, so
+// letting an absolute or escaping path through would be a safety hole.
+func TestLoadConfig_localComposeExtraDisabledServiceStructuralChecksStillApply(t *testing.T) {
+	workspaceYML := `schema_version: "2"
+project:
+  name: test
+  prefix: dwe
+`
+	writeProject := func(t *testing.T, localYML string) (string, error) {
+		t.Helper()
+		dir := t.TempDir()
+		if err := os.WriteFile(filepath.Join(dir, "workspace.yml"), []byte(workspaceYML), 0o644); err != nil {
+			t.Fatal(err)
+		}
+		workspaceDir := filepath.Join(dir, "workspace")
+		if err := os.MkdirAll(workspaceDir, 0o755); err != nil {
+			t.Fatal(err)
+		}
+		writeServiceFolder(t, dir, "adminer", "type: tool\ncontainer: adminer\n")
+		if err := os.WriteFile(filepath.Join(workspaceDir, "local.yml"), []byte(localYML), 0o644); err != nil {
+			t.Fatal(err)
+		}
+		_, err := LoadConfig(filepath.Join(dir, "workspace.yml"))
+		return dir, err
+	}
+
+	t.Run("absolute path rejected even when service disabled", func(t *testing.T) {
+		_, err := writeProject(t, `services:
+  adminer:
+    enabled: false
+    compose:
+      extra:
+        - /etc/passwd
+`)
+		if err == nil {
+			t.Fatal("expected error for absolute path in disabled service overlay, got nil")
+		}
+		if !strings.Contains(err.Error(), "absolute paths are not permitted") {
+			t.Errorf("error = %v, want substring %q", err, "absolute paths are not permitted")
+		}
+	})
+
+	t.Run("path escape rejected even when service disabled", func(t *testing.T) {
+		_, err := writeProject(t, `services:
+  adminer:
+    enabled: false
+    compose:
+      extra:
+        - ../escape.yml
+`)
+		if err == nil {
+			t.Fatal("expected error for path escape in disabled service overlay, got nil")
+		}
+		if !strings.Contains(err.Error(), "escapes project root") {
+			t.Errorf("error = %v, want substring %q", err, "escapes project root")
+		}
+	})
+
+	t.Run("unclean path with dotdot via clean bypass rejected when service disabled", func(t *testing.T) {
+		// "link/../evil.yml" would be cleaned by filepath.Join to "evil.yml" before
+		// CheckNoSymlinks runs, hiding the "link" symlink component from the check.
+		// The clean-path guard must fire BEFORE the join to prevent this bypass.
+		_, err := writeProject(t, `services:
+  adminer:
+    enabled: false
+    compose:
+      extra:
+        - link/../evil.yml
+`)
+		if err == nil {
+			t.Fatal("expected error for unclean path in disabled service overlay, got nil")
+		}
+		if !strings.Contains(err.Error(), "must be clean") {
+			t.Errorf("error = %v, want substring %q", err, "must be clean")
+		}
+	})
+
+	t.Run("missing file still allowed when service disabled", func(t *testing.T) {
+		_, err := writeProject(t, `services:
+  adminer:
+    enabled: false
+    compose:
+      extra:
+        - nonexistent-but-safe.yml
+`)
+		if err != nil {
+			t.Errorf("LoadConfig: unexpected error for disabled service with missing overlay: %v", err)
+		}
+	})
 }
 
 // TestLoadConfig_localComposeExtraDuplicatePathsAllowed confirms that the same
