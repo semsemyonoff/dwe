@@ -219,6 +219,8 @@ resources:
 
 Local overrides for the docker policy. Gitignored. Use `workspace/docker.local.example.yml` as a starting template.
 
+> **`docker.local.yml` vs `local.yml → compose.extra`.** For compose **policy** (project name, per-subcommand args, process env) → `docker.local.yml` (this file). For compose **service overlays** (extra `-f` files injecting env vars, volumes, ports on containers) → `local.yml`'s `compose.extra` / `services.<name>.compose.extra`. They are independent surfaces — see [`workspace.md`](workspace.md#compose-overlays).
+
 Common overrides:
 
 ```yaml

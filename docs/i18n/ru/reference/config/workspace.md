@@ -1,4 +1,4 @@
-> Translated from: reference/config/workspace.md @ 3eeabec0d42d
+> Translated from: reference/config/workspace.md @ 28232c7c6d85
 
 # workspace.yml / defaults.yml / local.yml
 
@@ -21,6 +21,7 @@
   - [`compose`](#compose)
   - [`ide`](#ide)
 - [workspace/local.yml](#workspacelocalyml)
+  - [Compose-оверлеи](#compose-оверлеи)
 - [Частые ловушки](#частые-ловушки)
 - [Связанные команды](#связанные-команды)
 
@@ -291,6 +292,80 @@ runtime:
 > Переопределения портов / хостов на разработчика поддерживаются через `local.yml`. Используйте `services.<name>.ports` или `services.<name>.hosts` для переопределения конкретных записей; значения глубоко мержатся по ключу поверх проектных деклараций в `workspace/services/<name>/service.yml`.
 
 Если `local.yml` не существует, слой 3 молча пропускается.
+
+### Compose-оверлеи
+
+`local.yml` — единственное место, откуда можно подмешать дополнительные Docker Compose overlay-файлы в цепочку `docker compose -f …`, которую собирает `dwe`. Доступны два слоя:
+
+- **На уровне проекта** — `compose.extra: [<path>, …]` добавляется в самый конец списка `-f` при каждом вызове `dwe docker`, независимо от того, какие сервисы включены.
+- **На уровне сервиса** — `services.<name>.compose.extra: [<path>, …]` добавляется сразу после собственных compose-файлов сервиса (из `workspace/services/<name>/service.yml`). Сервисный блок переиспользует тот же enabled-gate: оверлеи отключённого сервиса **не** попадают в активный список `-f`, но появляются под `dwe docker --all`.
+
+```yaml
+# workspace/local.yml — gitignored, на разработчика
+
+compose:
+  extra:
+    - compose.local.yml             # добавляется последним (на уровне проекта)
+
+services:
+  dev:
+    compose:
+      extra:
+        - compose/dev.local.yml     # добавляется после compose-файлов services/dev
+```
+
+Итоговый порядок, собираемый `composeFiles()`:
+
+```
+compose.base
+  → tools  (alpha-sorted) — каждый: svc.compose… + svc.local-extras…
+  → infra  (alpha-sorted) — каждый: svc.compose… + svc.local-extras…
+  → apps   (alpha-sorted) — каждый: svc.compose… + svc.local-extras…
+  → compose.extra…                  (на уровне проекта, всегда последним)
+```
+
+Docker Compose мержит более поздние `-f`-файлы поверх более ранних — поэтому слой на уровне проекта может переопределить per-service оверлеи. Если это нежелательно, ограничьте переопределение блоком конкретного сервиса.
+
+**Правила схемы:**
+
+- Оба слоя принимают **только** ключ `extra:` внутри `compose:` — всё остальное считается жёсткой ошибкой.
+- Пути **относительны корню проекта** (директории с `workspace.yml`) и хранятся как написаны; нижестоящий код выставляет `cmd.Dir` в корень проекта.
+- **Абсолютные пути отвергаются** (`/etc/...` / `~/...` — обошли бы containment).
+- **`..`-побеги отвергаются** через `pathsafe.ContainedRel`.
+- **Каждый путь должен существовать** на момент загрузки конфига; отсутствие файла — жёсткая ошибка с указанием как написанного, так и резолвленного абсолютного пути.
+- Дублирующиеся пути между слоями (или внутри слоя) **не** дедуплицируются — Docker Compose терпит дубликаты; пусть он сам сообщит о проблеме, если она будет.
+- `compose.extra` в `workspace.yml`, `defaults.yml` или `service.yml` отвергается с диагностикой, указывающей на `workspace/local.yml`.
+
+**Не путайте с `docker.local.yml`:** `docker.local.yml` переопределяет **политику** выполнения compose (имя проекта, аргументы подкоманд, окружение процесса). `local.yml → compose.extra` добавляет compose-**оверлеи сервисов** (env, тома, порты в контейнерах). Это независимые поверхности — см. [`docker.md`](docker.md) про файл политики.
+
+**Наследование:** когда сервис имеет `extends: <parent>` в своём `service.yml`, ребёнок наследует `services.<parent>.compose.extra` из `local.yml` только если сам ребёнок ничего не объявил. Если у ребёнка есть собственный `services.<child>.compose.extra`, выигрывает список ребёнка (без мерджа).
+
+**Мотивирующий пример — git-идентичность разработчика внутри контейнера `dev`:**
+
+```yaml
+# workspace/compose/dev.local.yml — также gitignored
+services:
+  dev:
+    environment:
+      GIT_CONFIG_COUNT: "2"
+      GIT_CONFIG_KEY_0: user.name
+      GIT_CONFIG_VALUE_0: Jane Doe
+      GIT_CONFIG_KEY_1: user.email
+      GIT_CONFIG_VALUE_1: jane@example.com
+```
+
+```yaml
+# workspace/local.yml
+services:
+  dev:
+    compose:
+      extra:
+        - compose/dev.local.yml
+```
+
+Коммиты, сделанные внутри контейнера `dev`, теперь используют project-specific идентичность разработчика без правки `~/.gitconfig` на хосте и без изменения какого-либо git-tracked файла в репозитории.
+
+**Добавьте файлы оверлеев в gitignore** вместе с самим `local.yml` — это per-developer артефакты.
 
 ## Частые ловушки
 

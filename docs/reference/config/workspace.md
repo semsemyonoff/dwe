@@ -19,6 +19,7 @@ The three layers of the merged DWE config.
   - [`compose`](#compose)
   - [`ide`](#ide)
 - [workspace/local.yml](#workspacelocalyml)
+  - [Compose overlays](#compose-overlays)
 - [Common pitfalls](#common-pitfalls)
 - [Related commands](#related-commands)
 
@@ -289,6 +290,80 @@ runtime:
 > Per-developer port / host overrides are supported via `local.yml`. Use `services.<name>.ports` or `services.<name>.hosts` to override specific entries; the values are deep-merged by key on top of the project-level declarations in `workspace/services/<name>/service.yml`.
 
 If `local.yml` does not exist, layer 3 is silently skipped.
+
+### Compose overlays
+
+`local.yml` is the only place that can inject extra Docker Compose overlay files into the `docker compose -f …` chain assembled by `dwe`. Two layers are available:
+
+- **Project-wide** — `compose.extra: [<path>, …]` appended last to every `dwe docker` invocation, regardless of which services are enabled.
+- **Per-service** — `services.<name>.compose.extra: [<path>, …]` appended right after that service's own compose files (from `workspace/services/<name>/service.yml`). The per-service block reuses the same enabled-gate: a disabled service's overlays do **not** appear in the active `-f` list, but they do appear under `dwe docker --all`.
+
+```yaml
+# workspace/local.yml — gitignored, per-developer
+
+compose:
+  extra:
+    - compose.local.yml             # appended last (project-wide)
+
+services:
+  dev:
+    compose:
+      extra:
+        - compose/dev.local.yml     # appended after services/dev/compose files
+```
+
+Final emission order assembled by `composeFiles()`:
+
+```
+compose.base
+  → tools  (alpha-sorted) — each: svc.compose… + svc.local-extras…
+  → infra  (alpha-sorted) — each: svc.compose… + svc.local-extras…
+  → apps   (alpha-sorted) — each: svc.compose… + svc.local-extras…
+  → compose.extra…                  (project-wide, always last)
+```
+
+Docker Compose merges later `-f` files on top of earlier ones — the project-wide layer therefore can override per-service overlays. If that is unwanted, scope the override to a per-service block instead.
+
+**Schema rules:**
+
+- Both layers accept **only** the `extra:` key under `compose:` — anything else is a hard error.
+- Paths are **relative to the project root** (the directory holding `workspace.yml`) and stored as written; downstream resolution sets `cmd.Dir` to the project root.
+- **Absolute paths are rejected** (`/etc/...` / `~/...` — would bypass containment).
+- **`..` escapes are rejected** by `pathsafe.ContainedRel`.
+- **Each path must exist** at config-load time; missing files are a hard error showing both the as-written and resolved absolute paths.
+- Duplicate paths between layers (or within a layer) are **not** deduplicated — Docker Compose tolerates duplicates; let it surface any issue.
+- `compose.extra` in `workspace.yml`, `defaults.yml`, or `service.yml` is rejected with a diagnostic pointing at `workspace/local.yml`.
+
+**Don't confuse with `docker.local.yml`:** `docker.local.yml` overrides compose execution **policy** (project name, per-subcommand args, process env). `local.yml → compose.extra` adds compose **service overlays** (env, volumes, ports on containers). They are independent surfaces — see [`docker.md`](docker.md) for the policy file.
+
+**Inheritance:** when a service has `extends: <parent>` in its `service.yml`, the child inherits the parent's `services.<parent>.compose.extra` from `local.yml` only when the child does not declare its own. If the child has its own `services.<child>.compose.extra`, the child's list wins (no merge).
+
+**Motivating example — per-developer git identity inside the `dev` container:**
+
+```yaml
+# workspace/compose/dev.local.yml — also gitignored
+services:
+  dev:
+    environment:
+      GIT_CONFIG_COUNT: "2"
+      GIT_CONFIG_KEY_0: user.name
+      GIT_CONFIG_VALUE_0: Jane Doe
+      GIT_CONFIG_KEY_1: user.email
+      GIT_CONFIG_VALUE_1: jane@example.com
+```
+
+```yaml
+# workspace/local.yml
+services:
+  dev:
+    compose:
+      extra:
+        - compose/dev.local.yml
+```
+
+Commits made inside the `dev` container now use the developer's project-specific identity without touching `~/.gitconfig` on the host or any git-tracked file in the repo.
+
+**Gitignore the overlay files** along with `local.yml` itself — they are per-developer artifacts.
 
 ## Common pitfalls
 

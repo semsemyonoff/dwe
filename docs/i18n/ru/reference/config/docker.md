@@ -1,4 +1,4 @@
-> Translated from: reference/config/docker.md @ 42382c74ee85
+> Translated from: reference/config/docker.md @ ee5720572cfc
 
 # docker.yml / docker.local.yml
 
@@ -220,6 +220,8 @@ resources:
 ## docker.local.yml
 
 Локальные переопределения для политики docker. Gitignored. Используйте `workspace/docker.local.example.yml` как стартовый шаблон.
+
+> **`docker.local.yml` vs `local.yml → compose.extra`.** Для **политики** выполнения compose (имя проекта, аргументы подкоманд, окружение процесса) → `docker.local.yml` (этот файл). Для **оверлеев сервисов** в compose (дополнительные `-f`-файлы, вкатывающие env-переменные, тома, порты в контейнерах) → `compose.extra` / `services.<name>.compose.extra` в `local.yml`. Это независимые поверхности — см. [`workspace.md`](workspace.md#compose-оверлеи).
 
 Распространённые переопределения:
 

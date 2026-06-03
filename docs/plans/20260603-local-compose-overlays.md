@@ -314,17 +314,17 @@ This task focuses on (a) making sure `dwe validate` surfaces these diagnostics n
 - Modify: `docs/reference/config/docker.md` (add a short cross-reference distinguishing `docker.local.yml` from `local.yml → compose.extra`)
 - Modify: `docs/internals/packages.md` (add invariant under the `project/config/workspace.go` / `composeFiles` description)
 
-- [ ] In `workspace.md` under the `local.yml` section, document:
+- [x] In `workspace.md` under the `local.yml` section, document:
   - schema for `compose.extra` (project-wide) and `services.<name>.compose.extra` (per-service)
   - ordering rules (per-service after service.compose, project-wide always last)
   - per-service overlays inherit enabled-gate
   - paths relative to project root, must exist, no `..` escapes
   - full GIT_CONFIG_* example for the motivating use case
   - guidance: add `local.yml` and any referenced overlay files to `.gitignore`
-- [ ] In `docker.md`, add a short note: "for compose **policy** (project name, args, env) → `docker.local.yml`; for compose **service overlays** → `local.yml → compose.extra`. They are independent surfaces."
-- [ ] In `packages.md`, under `project/config/workspace.go`, add an invariant bullet: "per-service `compose.extra` overlays from local.yml are emitted inside the same `all || svc.Enabled` gate as `svc.Compose`; project-wide `compose.extra` is appended strictly last to `composeFiles()` output."
-- [ ] Run `make build` to regenerate embedded docs and content hashes.
-- [ ] Run `make test` — embedded-docs-dependent tests must pass.
+- [x] In `docker.md`, add a short note: "for compose **policy** (project name, args, env) → `docker.local.yml`; for compose **service overlays** → `local.yml → compose.extra`. They are independent surfaces."
+- [x] In `packages.md`, under `project/config/workspace.go`, add an invariant bullet: "per-service `compose.extra` overlays from local.yml are emitted inside the same `all || svc.Enabled` gate as `svc.Compose`; project-wide `compose.extra` is appended strictly last to `composeFiles()` output."
+- [x] Run `make build` to regenerate embedded docs and content hashes.
+- [x] Run `make test` — embedded-docs-dependent tests must pass.
 
 ### Task 6: Russian documentation updates
 
@@ -332,11 +332,11 @@ This task focuses on (a) making sure `dwe validate` surfaces these diagnostics n
 - Modify: `docs/i18n/ru/reference/config/workspace.md`
 - Modify: `docs/i18n/ru/reference/config/docker.md`
 
-- [ ] Translate the new `workspace.md` "Compose overlays" subsection into Russian, preserving the YAML examples verbatim (only prose translated). Keep terminology consistent with the rest of the Russian docs (e.g. use of "сервис", "оверлей", "локальный").
-- [ ] Translate the new `docker.md` cross-reference paragraph.
-- [ ] Run `make build` again to refresh embedded docs.
-- [ ] Run `make test`.
-- [ ] Note: `docs/internals/packages.md` has no Russian translation in the repo — no RU internals update needed. If `docs/i18n/ru/internals/` is later added, this plan needs revisiting.
+- [x] Translate the new `workspace.md` "Compose overlays" subsection into Russian, preserving the YAML examples verbatim (only prose translated). Keep terminology consistent with the rest of the Russian docs (e.g. use of "сервис", "оверлей", "локальный").
+- [x] Translate the new `docker.md` cross-reference paragraph.
+- [x] Run `make build` again to refresh embedded docs.
+- [x] Run `make test`.
+- [x] Note: `docs/internals/packages.md` has no Russian translation in the repo — no RU internals update needed. If `docs/i18n/ru/internals/` is later added, this plan needs revisiting.
 
 ### Task 7: Verify acceptance criteria
 
