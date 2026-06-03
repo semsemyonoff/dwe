@@ -18,7 +18,7 @@ Full output shape (each tail segment is independently optional):
 
 - `{▪}` — the DWE logomark; the inner square is coloured with the project's `accent` token from `workspace/styles.yml`.
 - `<project>` — `project.name` from `workspace.yml`, falling back to the directory basename.
-- `[<service>]` — present only when `cwd` is under `workspace/services/<name>/…`. The bracket frame is plain; the inner name is sanitized. Derived from a string-prefix check of `cwd` vs `root` (zero IO).
+- `[<service>]` — present when `cwd` is under a service's source directory. For each `workspace/services/<name>/`, the `dir:` field from `service.yml` is resolved relative to the project root and matched against `cwd` (deepest match wins on nested layouts; the `extends:` chain is followed when a child has no own `dir`). Services whose `dir:` resolves to the project root (`dir: .`) or outside it (`dir: ..`, absolute paths outside root) are silently skipped. The bracket frame is plain; the inner name is sanitized. One `os.ReadDir` plus one small YAML read per service per prompt invocation — sub-millisecond on typical projects; `service.yml` files larger than 64 KB are skipped on the hot path.
 - `<deploy-icon>` — `✓`/`⟳`/`⚠`/`✗` reflecting the deploy-state journal at `.dwe/deploy/state.yml`. Omitted when no deploy state exists.
 - `<stack-icon>` — `●`/`◐`/`○` reflecting live container state. Backed by `.dwe/prompt-cache.yml` (see [Stack icon](#stack-icon)). Omitted when neither cache nor refresh produce a value.
 
@@ -142,6 +142,8 @@ Cache writes are best-effort everywhere: neither prompt refresh nor lifecycle co
 - **Custom docker binary**: `binaries.docker: podman` (or any non-`docker` value) bypasses prompt-driven refresh — `shared/prompt` hardcodes `docker` to keep the hot path config-free. Lifecycle commands and `dwe status` still write the cache with the correct binary, so the icon remains accurate during active use; only the 2-minute idle refresh is a no-op.
 - **Templated compose project name**: projects whose `workspace/docker.yml` sets `project_name` to a template (e.g. `${project.prefix}_${project.name}`) will see `docker ps` return zero rows from prompt refresh because `shared/prompt` does not load `docker.yml`. Combined with the no-downgrade rule, prompt refresh simply writes nothing — the icon stays correct as long as lifecycle commands and `dwe status` (which use the real compose name) keep the cache populated.
 - **Manual `docker stop` outside dwe**: not detected by prompt refresh (no-downgrade rule). Run `dwe status` to refresh the cached state.
+- **Services without `dir:`**: tool/infra services (and any app without a source mount) never appear as `[<service>]` in the prompt — they have no source directory for `cwd` to be under. The prompt still renders the project, deploy, and stack segments normally.
+- **Symlinked paths**: `dwe prompt` does not call `filepath.EvalSymlinks` on either `cwd` or the resolved `dir:`. If `cwd` was reached through a symlink while `dir:` points at the canonical path (or vice versa), the service tag silently disappears. Use real paths in `service.yml`'s `dir:` to avoid surprises.
 - **Shell-specific quoting**: sh, bash, and zsh accept the `command` / `when` strings as written. Fish users may need to adjust quoting in `starship.toml` if their Starship config wraps commands differently.
 
 ## Before / after
@@ -158,10 +160,10 @@ With the segment (project root):
 {▪} my-project ✓ ● ~/code/my-project ❯
 ```
 
-With the segment (inside `workspace/services/api/`):
+With the segment (inside the `api` service's source dir — assuming `workspace/services/api/service.yml` has `dir: ./services/api`):
 
 ```
-{▪} my-project [api] ✓ ● ~/code/my-project/workspace/services/api ❯
+{▪} my-project [api] ✓ ● ~/code/my-project/services/api ❯
 ```
 
 (The DWE logomark and icons are coloured in real terminals.)

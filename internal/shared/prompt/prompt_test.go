@@ -4,9 +4,11 @@ import (
 	"bytes"
 	"context"
 	"errors"
+	"fmt"
 	"os"
 	"path/filepath"
 	"strconv"
+	"strings"
 	"testing"
 	"time"
 )
@@ -596,44 +598,369 @@ func TestRenderStripControlCharsFromName(t *testing.T) {
 	}
 }
 
+// seedServices writes workspace/services/<name>/service.yml fixtures with the
+// given `dir:` values, plus any extra subdirs to mkdir under root.
+func seedServices(t *testing.T, root string, dirsByName map[string]string) {
+	t.Helper()
+	for name, dir := range dirsByName {
+		yml := "type: app\ncontainer: " + name + "\n"
+		if dir != "" {
+			yml += "dir: " + dir + "\n"
+		}
+		writeFile(t, filepath.Join(root, "workspace", "services", name, "service.yml"), yml)
+	}
+}
+
+// seedServiceYAML writes a single service.yml with arbitrary content (used for
+// extends and edge-case fixtures that seedServices's simple map can't express).
+func seedServiceYAML(t *testing.T, root, name, body string) {
+	t.Helper()
+	writeFile(t, filepath.Join(root, "workspace", "services", name, "service.yml"), body)
+}
+
 func TestDetectService(t *testing.T) {
 	t.Parallel()
-	sep := string(filepath.Separator)
-	root := sep + filepath.Join("tmp", "proj")
-	servicesDir := filepath.Join(root, "workspace", "services")
 
-	tests := []struct {
-		name string
-		cwd  string
-		want string
-	}{
-		{name: "cwd_equals_root", cwd: root, want: ""},
-		{name: "cwd_at_workspace", cwd: filepath.Join(root, "workspace"), want: ""},
-		{name: "cwd_at_services_dir_no_child", cwd: servicesDir, want: ""},
-		{name: "cwd_at_services_dir_trailing_sep", cwd: servicesDir + sep, want: ""},
-		{name: "cwd_at_service_root", cwd: filepath.Join(servicesDir, "api"), want: "api"},
-		{name: "cwd_in_service_subdir", cwd: filepath.Join(servicesDir, "api", "src", "handlers"), want: "api"},
-		{name: "cwd_outside_root", cwd: sep + filepath.Join("var", "log"), want: ""},
-		{name: "cwd_sibling_of_root", cwd: sep + filepath.Join("tmp", "proj-other", "workspace", "services", "api"), want: ""},
-		{name: "service_name_with_control_chars_extracted_raw", cwd: filepath.Join(servicesDir, "ev\x1bil"), want: "ev\x1bil"},
-		{name: "service_name_hyphenated", cwd: filepath.Join(servicesDir, "my-svc", "deep"), want: "my-svc"},
-	}
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			t.Parallel()
-			if got := detectService(tt.cwd, root); got != tt.want {
-				t.Errorf("detectService(%q, %q) = %q, want %q", tt.cwd, root, got, tt.want)
-			}
+	t.Run("services_dir_missing_returns_empty", func(t *testing.T) {
+		t.Parallel()
+		root := t.TempDir()
+		if got := detectService(root, root); got != "" {
+			t.Errorf("got %q, want empty", got)
+		}
+	})
+
+	t.Run("cwd_in_resolved_service_dir", func(t *testing.T) {
+		t.Parallel()
+		root := t.TempDir()
+		seedServices(t, root, map[string]string{"backend": "./services/backend"})
+		cwd := filepath.Join(root, "services", "backend")
+		if err := os.MkdirAll(cwd, 0o755); err != nil {
+			t.Fatal(err)
+		}
+		if got := detectService(cwd, root); got != "backend" {
+			t.Errorf("got %q, want backend", got)
+		}
+	})
+
+	t.Run("cwd_in_deep_subdir_of_service_dir", func(t *testing.T) {
+		t.Parallel()
+		root := t.TempDir()
+		seedServices(t, root, map[string]string{"backend": "./services/backend"})
+		cwd := filepath.Join(root, "services", "backend", "src", "api")
+		if err := os.MkdirAll(cwd, 0o755); err != nil {
+			t.Fatal(err)
+		}
+		if got := detectService(cwd, root); got != "backend" {
+			t.Errorf("got %q, want backend", got)
+		}
+	})
+
+	t.Run("cwd_at_root_no_match", func(t *testing.T) {
+		t.Parallel()
+		root := t.TempDir()
+		seedServices(t, root, map[string]string{"backend": "./services/backend"})
+		if got := detectService(root, root); got != "" {
+			t.Errorf("got %q, want empty", got)
+		}
+	})
+
+	t.Run("config_dir_no_longer_matches", func(t *testing.T) {
+		t.Parallel()
+		root := t.TempDir()
+		seedServices(t, root, map[string]string{"backend": "./services/backend"})
+		// Standing inside workspace/services/backend (the config dir) must NOT
+		// produce a service tag — only the source dir (./services/backend) does.
+		cwd := filepath.Join(root, "workspace", "services", "backend")
+		if got := detectService(cwd, root); got != "" {
+			t.Errorf("got %q, want empty (config dir is not a source mount)", got)
+		}
+	})
+
+	t.Run("longest_match_wins_on_nested_dirs", func(t *testing.T) {
+		t.Parallel()
+		root := t.TempDir()
+		seedServices(t, root, map[string]string{
+			"outer": "./code",
+			"inner": "./code/inner",
 		})
-	}
+		cwd := filepath.Join(root, "code", "inner", "sub")
+		if err := os.MkdirAll(cwd, 0o755); err != nil {
+			t.Fatal(err)
+		}
+		if got := detectService(cwd, root); got != "inner" {
+			t.Errorf("got %q, want inner (longest match)", got)
+		}
+	})
+
+	t.Run("service_without_dir_field_skipped", func(t *testing.T) {
+		t.Parallel()
+		root := t.TempDir()
+		seedServices(t, root, map[string]string{"db": ""}) // no dir
+		if got := detectService(filepath.Join(root, "anywhere"), root); got != "" {
+			t.Errorf("got %q, want empty", got)
+		}
+	})
+
+	t.Run("malformed_service_yml_skipped", func(t *testing.T) {
+		t.Parallel()
+		root := t.TempDir()
+		writeFile(t, filepath.Join(root, "workspace", "services", "broken", "service.yml"),
+			"::: not yaml :::")
+		seedServices(t, root, map[string]string{"backend": "./services/backend"})
+		cwd := filepath.Join(root, "services", "backend", "src")
+		if err := os.MkdirAll(cwd, 0o755); err != nil {
+			t.Fatal(err)
+		}
+		if got := detectService(cwd, root); got != "backend" {
+			t.Errorf("got %q, want backend (malformed sibling ignored)", got)
+		}
+	})
+
+	t.Run("cwd_outside_any_service_dir", func(t *testing.T) {
+		t.Parallel()
+		root := t.TempDir()
+		seedServices(t, root, map[string]string{"backend": "./services/backend"})
+		cwd := filepath.Join(root, "docs")
+		if err := os.MkdirAll(cwd, 0o755); err != nil {
+			t.Fatal(err)
+		}
+		if got := detectService(cwd, root); got != "" {
+			t.Errorf("got %q, want empty", got)
+		}
+	})
+
+	t.Run("sibling_path_does_not_match_via_prefix", func(t *testing.T) {
+		t.Parallel()
+		// Defends against the classic prefix-bug: `services/backend` must not
+		// match `services/backend-other` via raw HasPrefix.
+		root := t.TempDir()
+		seedServices(t, root, map[string]string{"backend": "./services/backend"})
+		cwd := filepath.Join(root, "services", "backend-other", "src")
+		if err := os.MkdirAll(cwd, 0o755); err != nil {
+			t.Fatal(err)
+		}
+		if got := detectService(cwd, root); got != "" {
+			t.Errorf("got %q, want empty (sibling not under backend)", got)
+		}
+	})
+
+	t.Run("dir_dot_resolves_to_root_is_skipped", func(t *testing.T) {
+		t.Parallel()
+		// `dir: .` would make resolved == root, which would catch every cwd in
+		// the project. Must be silently skipped — otherwise standing in
+		// workspace/ or docs/ would render [whole-repo].
+		root := t.TempDir()
+		seedServices(t, root, map[string]string{"whole-repo": "."})
+		if got := detectService(root, root); got != "" {
+			t.Errorf("at root: got %q, want empty (dir: . must not catch root)", got)
+		}
+		sub := filepath.Join(root, "docs")
+		if err := os.MkdirAll(sub, 0o755); err != nil {
+			t.Fatal(err)
+		}
+		if got := detectService(sub, root); got != "" {
+			t.Errorf("at subdir: got %q, want empty (dir: . must not catch subdirs)", got)
+		}
+	})
+
+	t.Run("dir_parent_traversal_is_skipped", func(t *testing.T) {
+		t.Parallel()
+		// `dir: ..` resolves above root and could pollute prompts in unrelated
+		// sibling projects sharing the parent. Must be silently skipped.
+		root := t.TempDir()
+		seedServices(t, root, map[string]string{"escaped": ".."})
+		// cwd at root itself — even there, dir:.. cannot win.
+		if got := detectService(root, root); got != "" {
+			t.Errorf("got %q, want empty (dir: .. must not match anything)", got)
+		}
+	})
+
+	t.Run("dir_absolute_inside_root_matches", func(t *testing.T) {
+		t.Parallel()
+		root := t.TempDir()
+		// Construct an absolute path inside root and seed it as `dir:`.
+		// filepath.Join(root, "/abs") would sandbox it under root — the fix
+		// must use the absolute path verbatim.
+		absDir := filepath.Join(root, "abs", "code")
+		seedServices(t, root, map[string]string{"app": absDir})
+		cwd := filepath.Join(absDir, "src")
+		if err := os.MkdirAll(cwd, 0o755); err != nil {
+			t.Fatal(err)
+		}
+		if got := detectService(cwd, root); got != "app" {
+			t.Errorf("got %q, want app (absolute dir inside root must match)", got)
+		}
+	})
+
+	t.Run("dir_absolute_outside_root_skipped", func(t *testing.T) {
+		t.Parallel()
+		root := t.TempDir()
+		// Absolute path pointing somewhere outside root — must be skipped so
+		// we don't tag /etc or another project's tree.
+		seedServices(t, root, map[string]string{"foreign": "/etc"})
+		if got := detectService("/etc", root); got != "" {
+			t.Errorf("got %q, want empty (absolute dir outside root must not match)", got)
+		}
+	})
+
+	t.Run("unclean_cwd_with_trailing_separator_matches", func(t *testing.T) {
+		t.Parallel()
+		// $PWD-honoring shells can pass cwd with a trailing slash; the new
+		// detector must clean cwd before comparing to resolved.
+		root := t.TempDir()
+		seedServices(t, root, map[string]string{"backend": "./services/backend"})
+		cwd := filepath.Join(root, "services", "backend") + string(filepath.Separator)
+		if err := os.MkdirAll(cwd, 0o755); err != nil {
+			t.Fatal(err)
+		}
+		if got := detectService(cwd, root); got != "backend" {
+			t.Errorf("got %q, want backend (trailing separator must not break match)", got)
+		}
+	})
+
+	t.Run("unclean_cwd_with_dot_segment_matches", func(t *testing.T) {
+		t.Parallel()
+		root := t.TempDir()
+		seedServices(t, root, map[string]string{"backend": "./services/backend"})
+		// cwd with embedded `.` segment, e.g. PWD=/proj/./services/backend
+		cwd := filepath.Join(root, "services", "backend")
+		if err := os.MkdirAll(cwd, 0o755); err != nil {
+			t.Fatal(err)
+		}
+		sep := string(filepath.Separator)
+		dirty := root + sep + "." + sep + filepath.Join("services", "backend")
+		if got := detectService(dirty, root); got != "backend" {
+			t.Errorf("got %q, want backend (embedded . segment must not break match)", got)
+		}
+	})
+
+	t.Run("extends_inherits_dir_from_parent", func(t *testing.T) {
+		t.Parallel()
+		// Child service with no own dir but `extends: parent` must inherit
+		// parent's dir so the child is still detectable.
+		root := t.TempDir()
+		seedServices(t, root, map[string]string{"main": "./code/main"})
+		seedServiceYAML(t, root, "main-debug", "type: app\ncontainer: main-debug\nextends: main\n")
+		cwd := filepath.Join(root, "code", "main", "src")
+		if err := os.MkdirAll(cwd, 0o755); err != nil {
+			t.Fatal(err)
+		}
+		// Both services resolve to the same dir; first-seen-by-ReadDir order
+		// (alphabetical) wins. "main" sorts before "main-debug" → "main".
+		if got := detectService(cwd, root); got != "main" {
+			t.Errorf("got %q, want main (alphabetically first when two services share a resolved dir)", got)
+		}
+	})
+
+	t.Run("extends_child_unique_dir_match_when_parent_disabled", func(t *testing.T) {
+		t.Parallel()
+		// Only the extends child exists with inherited dir from a parent
+		// that itself is absent → child still detectable via the chain.
+		root := t.TempDir()
+		seedServices(t, root, map[string]string{"parent": "./code/shared"})
+		seedServiceYAML(t, root, "child", "type: app\ncontainer: child\nextends: parent\n")
+		// Remove the parent's source dir from the equation by cd-ing into a
+		// location only reachable through the inherited dir.
+		cwd := filepath.Join(root, "code", "shared", "deep")
+		if err := os.MkdirAll(cwd, 0o755); err != nil {
+			t.Fatal(err)
+		}
+		got := detectService(cwd, root)
+		if got != "parent" && got != "child" {
+			t.Errorf("got %q, want parent or child (both share inherited dir)", got)
+		}
+	})
+
+	t.Run("extends_cycle_does_not_hang", func(t *testing.T) {
+		t.Parallel()
+		// a → b → a cycle: resolveDir must short-circuit. Both end up with
+		// empty resolved dir and are skipped.
+		root := t.TempDir()
+		seedServiceYAML(t, root, "a", "type: app\ncontainer: a\nextends: b\n")
+		seedServiceYAML(t, root, "b", "type: app\ncontainer: b\nextends: a\n")
+		if got := detectService(filepath.Join(root, "anywhere"), root); got != "" {
+			t.Errorf("got %q, want empty (cycle must not produce a match)", got)
+		}
+	})
+
+	t.Run("extends_dead_end_no_match", func(t *testing.T) {
+		t.Parallel()
+		// Child extends a non-existent parent → resolveDir returns "" → skip.
+		root := t.TempDir()
+		seedServiceYAML(t, root, "orphan", "type: app\ncontainer: orphan\nextends: ghost\n")
+		if got := detectService(filepath.Join(root, "anywhere"), root); got != "" {
+			t.Errorf("got %q, want empty (missing extends parent must not match)", got)
+		}
+	})
+
+	t.Run("extends_long_chain_resolves", func(t *testing.T) {
+		t.Parallel()
+		// A 12-edge chain (13 nodes) must still resolve — the cap was removed
+		// and the per-walk seen-set is the only stopper. Tests both the
+		// off-by-one fix and that no fresh ceiling crept back in.
+		root := t.TempDir()
+		const chainLen = 13
+		for i := range chainLen - 1 {
+			seedServiceYAML(t, root, fmt.Sprintf("s%02d", i),
+				fmt.Sprintf("type: app\ncontainer: s%02d\nextends: s%02d\n", i, i+1))
+		}
+		// Final node carries the dir.
+		seedServices(t, root, map[string]string{
+			fmt.Sprintf("s%02d", chainLen-1): "./code/leaf",
+		})
+		cwd := filepath.Join(root, "code", "leaf")
+		if err := os.MkdirAll(cwd, 0o755); err != nil {
+			t.Fatal(err)
+		}
+		// Among the chain, the leaf service AND every inheriting child resolve
+		// to the same dir → alphabetically first wins ("s00" — head of chain).
+		if got := detectService(cwd, root); got != "s00" {
+			t.Errorf("got %q, want s00 (long chain must resolve through every link)", got)
+		}
+	})
+
+	t.Run("oversized_service_yml_is_skipped", func(t *testing.T) {
+		t.Parallel()
+		// A service.yml larger than the hot-path cap (64 KB) must be skipped
+		// rather than read/parsed — guards the shell prompt against pathological
+		// generated YAML or anchor-expansion bombs.
+		root := t.TempDir()
+		// Build a >64 KB YAML that *would* parse to a valid dir if read.
+		var buf strings.Builder
+		buf.WriteString("type: app\ncontainer: big\ndir: ./services/big\n")
+		// Pad with a long comment to push the file over the cap.
+		buf.WriteString("# ")
+		buf.WriteString(strings.Repeat("x", 70*1024))
+		buf.WriteByte('\n')
+		seedServiceYAML(t, root, "big", buf.String())
+		// Also seed a normal sibling so detect still functions for valid entries.
+		seedServices(t, root, map[string]string{"small": "./code/small"})
+		cwd := filepath.Join(root, "services", "big")
+		if err := os.MkdirAll(cwd, 0o755); err != nil {
+			t.Fatal(err)
+		}
+		if got := detectService(cwd, root); got != "" {
+			t.Errorf("got %q, want empty (oversized service.yml must be skipped on hot path)", got)
+		}
+		// Sanity: small sibling still detects normally.
+		smallCwd := filepath.Join(root, "code", "small")
+		if err := os.MkdirAll(smallCwd, 0o755); err != nil {
+			t.Fatal(err)
+		}
+		if got := detectService(smallCwd, root); got != "small" {
+			t.Errorf("normal sibling: got %q, want small", got)
+		}
+	})
 }
 
 func TestRunFromDirServiceTag(t *testing.T) {
 	t.Parallel()
 
+	// Each test seeds workspace/services/api/service.yml with `dir: ./code/api`
+	// and runs the prompt with cwd inside that resolved source path.
 	tests := []struct {
 		name       string
-		serviceSub string // path under <root>/workspace/services/ where the prompt is run; empty = root
+		sourceSub  string // path under <root>/code/api where the prompt is run; empty = root
 		state      string // .dwe/deploy/state.yml contents; empty = absent
 		useColor   bool
 		wantStdout string
@@ -644,23 +971,23 @@ func TestRunFromDirServiceTag(t *testing.T) {
 		},
 		{
 			name:       "service_root_no_status_no_color",
-			serviceSub: "api",
+			sourceSub:  ".",
 			wantStdout: "{▪} p [api]\n",
 		},
 		{
 			name:       "service_deep_subdir_no_status_no_color",
-			serviceSub: filepath.Join("api", "src", "handlers"),
+			sourceSub:  filepath.Join("src", "handlers"),
 			wantStdout: "{▪} p [api]\n",
 		},
 		{
 			name:       "service_with_status_no_color",
-			serviceSub: "api",
+			sourceSub:  ".",
 			state:      "project:\n  status: deployed\n",
 			wantStdout: "{▪} p [api] ✓\n",
 		},
 		{
 			name:       "service_with_status_color",
-			serviceSub: "api",
+			sourceSub:  ".",
 			state:      "project:\n  status: deployed\n",
 			useColor:   true,
 			wantStdout: "{" + sgr(0x2E, 0xC3, 0xEB, "▪") + "} p [api] " + sgr(0x22, 0xC5, 0x5E, "✓") + "\n",
@@ -672,12 +999,13 @@ func TestRunFromDirServiceTag(t *testing.T) {
 			t.Parallel()
 			root := t.TempDir()
 			writeFile(t, filepath.Join(root, "workspace.yml"), "project:\n  name: p\n")
+			seedServices(t, root, map[string]string{"api": "./code/api"})
 			if tt.state != "" {
 				writeFile(t, filepath.Join(root, ".dwe/deploy/state.yml"), tt.state)
 			}
 			cwd := root
-			if tt.serviceSub != "" {
-				cwd = filepath.Join(root, "workspace", "services", tt.serviceSub)
+			if tt.sourceSub != "" {
+				cwd = filepath.Join(root, "code", "api", tt.sourceSub)
 				if err := os.MkdirAll(cwd, 0o755); err != nil {
 					t.Fatal(err)
 				}

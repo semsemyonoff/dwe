@@ -473,27 +473,122 @@ func parseArgs(args []string) (check bool, ok bool) {
 	return false, false
 }
 
-// detectService returns the service folder name when cwd is under
-// <root>/workspace/services/<name>[/...], or "" otherwise. Returns "" when cwd
-// is exactly the services directory with no child segment.
-// Does NOT resolve symlinks (mirrors findRoot's policy).
+// serviceDirStub is the minimal slice of service.yml needed by detectService.
+type serviceDirStub struct {
+	Dir     string `yaml:"dir"`
+	Extends string `yaml:"extends"`
+}
+
+// detectService returns the name of the service whose source directory
+// (`dir:` field in <root>/workspace/services/<name>/service.yml, resolved
+// relative to root) contains cwd. When multiple services match (nested dirs),
+// the deepest match wins. Returns "" when no service matches or when
+// workspace/services/ is missing/unreadable.
+//
+// Two-pass: read every service.yml stub once, then walk the `extends:` chain
+// so a child that inherits `dir:` from a parent is still detectable. Cycles
+// short-circuit safely via a per-walk seen-set.
+//
+// Skips silently when resolved dir would be the project root or escape it
+// (`dir: .`, `dir: ..`, absolute paths outside root) — those would otherwise
+// tag every cwd in (or above) the project. Does NOT resolve symlinks
+// (mirrors findRoot's policy).
 func detectService(cwd, root string) string {
-	prefix := filepath.Join(root, "workspace", "services")
-	if cwd == prefix {
+	servicesRoot := filepath.Join(root, "workspace", "services")
+	entries, err := os.ReadDir(servicesRoot)
+	if err != nil {
 		return ""
 	}
-	prefixSep := prefix + string(filepath.Separator)
-	if !strings.HasPrefix(cwd, prefixSep) {
-		return ""
+
+	type stubInfo struct {
+		dir     string
+		extends string
 	}
-	rest := cwd[len(prefixSep):]
-	if rest == "" {
-		return ""
+	stubs := make(map[string]stubInfo, len(entries))
+	// maxServiceYAMLBytes guards against pathological service.yml files on the
+	// prompt hot path: a generated or YAML-anchor-bomb file would otherwise
+	// freeze the shell. Typical service.yml is <2 KB.
+	const maxServiceYAMLBytes = 64 * 1024
+	for _, e := range entries {
+		if !e.IsDir() {
+			continue
+		}
+		path := filepath.Join(servicesRoot, e.Name(), "service.yml")
+		fi, err := os.Stat(path)
+		if err != nil || fi.Size() > maxServiceYAMLBytes {
+			continue
+		}
+		data, err := os.ReadFile(path)
+		if err != nil {
+			continue
+		}
+		var stub serviceDirStub
+		if err := yaml.Unmarshal(data, &stub); err != nil {
+			continue
+		}
+		stubs[e.Name()] = stubInfo{dir: stub.Dir, extends: stub.Extends}
 	}
-	if head, _, ok := strings.Cut(rest, string(filepath.Separator)); ok {
-		return head
+
+	// resolveDir walks the extends chain until it finds a non-empty dir.
+	// The seen map provides cycle safety; no depth cap (the main config loader
+	// supports arbitrary acyclic chains via topo-sort, the prompt matches).
+	resolveDir := func(name string) string {
+		seen := make(map[string]struct{})
+		for {
+			info, ok := stubs[name]
+			if !ok {
+				return ""
+			}
+			if info.dir != "" {
+				return info.dir
+			}
+			if info.extends == "" {
+				return ""
+			}
+			if _, dup := seen[name]; dup {
+				return ""
+			}
+			seen[name] = struct{}{}
+			name = info.extends
+		}
 	}
-	return rest
+
+	sep := string(filepath.Separator)
+	cwdClean := filepath.Clean(cwd)
+	rootClean := filepath.Clean(root)
+	rootPrefix := rootClean + sep
+	var bestName string
+	var bestLen int
+	for _, e := range entries {
+		if !e.IsDir() {
+			continue
+		}
+		name := e.Name()
+		dir := resolveDir(name)
+		if dir == "" {
+			continue
+		}
+		var resolved string
+		if filepath.IsAbs(dir) {
+			resolved = filepath.Clean(dir)
+		} else {
+			resolved = filepath.Clean(filepath.Join(rootClean, dir))
+		}
+		// Reject paths equal to root (e.g. `dir: .`) or outside root
+		// (`dir: ..`, absolute paths outside the project) — they would
+		// tag every cwd in the project or other projects.
+		if resolved == rootClean || !strings.HasPrefix(resolved, rootPrefix) {
+			continue
+		}
+		if cwdClean != resolved && !strings.HasPrefix(cwdClean, resolved+sep) {
+			continue
+		}
+		if len(resolved) > bestLen {
+			bestName = name
+			bestLen = len(resolved)
+		}
+	}
+	return bestName
 }
 
 // findRoot walks up from start looking for workspace.yml. Returns the directory

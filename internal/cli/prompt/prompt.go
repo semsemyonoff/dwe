@@ -26,9 +26,12 @@ line of the form:
 Segments:
   - {▪}            DWE logomark, colored with the project's accent token.
   - <project>      project.name from workspace.yml.
-  - [<service>]    optional: present only when cwd is under
-                   workspace/services/<name>/...; the surrounding brackets are
-                   plain, the inner name is sanitized.
+  - [<service>]    optional: present when cwd is under a service's source
+                   directory. For each workspace/services/<name>/, the 'dir:'
+                   field from service.yml is resolved relative to root and
+                   matched against cwd (deepest match wins on nested layouts;
+                   the 'extends:' chain is followed when a child has no own
+                   dir). The brackets are plain, the inner name is sanitized.
   - <deploy-icon>  optional: ✓/⟳/⚠/✗ reflecting the deploy-state journal at
                    .dwe/deploy/state.yml (success/pending/partial/failed).
   - <stack-icon>   optional: ●/◐/○ reflecting live container state
