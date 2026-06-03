@@ -192,6 +192,19 @@ func TestNewCmd_commandFlag_unsetSkipsValidation(t *testing.T) {
 	}
 }
 
+func TestNewCmd_helpText_describesOneShotMode(t *testing.T) {
+	cmd := NewCmd("", &cmdctx.RootFlags{})
+	if !strings.Contains(cmd.Long, "-c") {
+		t.Errorf("cmd.Long should mention the -c flag, got: %q", cmd.Long)
+	}
+	if !strings.Contains(cmd.Long, "exit code") {
+		t.Errorf("cmd.Long should mention 'exit code', got: %q", cmd.Long)
+	}
+	if !strings.Contains(cmd.Example, `dwe shell main -c "composer install"`) {
+		t.Errorf("cmd.Example should include the composer install example, got: %q", cmd.Example)
+	}
+}
+
 func TestPickService_nonInteractiveSelector_singleEnabled_autoSelectsWithoutSelector(t *testing.T) {
 	// Even with a non-TTY error selector, single-service auto-select works without calling selector.
 	cfg := makeTestConfig(map[string]config.ServiceConfig{

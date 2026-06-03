@@ -338,12 +338,12 @@ cmd.PersistentFlags().StringVar(           // was StringVarP
 - Modify: `internal/cli/shell/shell.go`
 - Modify: `internal/cli/shell/shell_test.go`
 
-- [ ] in `internal/cli/shell/shell.go`: extend `Long:` with a paragraph describing the one-shot mode: when `-c "<command>"` is set, the command is evaluated by the container's resolved shell; dwe exits with the command's exit code; TTY is allocated only if both stdin and stdout are terminals; banners are suppressed.
-- [ ] in `internal/cli/shell/shell.go`: extend `Example:` with two new lines:
+- [x] in `internal/cli/shell/shell.go`: extend `Long:` with a paragraph describing the one-shot mode: when `-c "<command>"` is set, the command is evaluated by the container's resolved shell; dwe exits with the command's exit code; TTY is allocated only if both stdin and stdout are terminals; banners are suppressed.
+- [x] in `internal/cli/shell/shell.go`: extend `Example:` with two new lines:
   - `  dwe shell main -c "composer install"`
   - `  dwe shell main -c "php artisan migrate" --mode run`
-- [ ] write a small smoke test asserting `cmd.Long` contains the substring `-c` and the phrase "exit code", and `cmd.Example` contains `dwe shell main -c "composer install"`. This guards against accidental help-text regression.
-- [ ] run tests: `go test ./internal/cli/shell/...` — must pass before next task.
+- [x] write a small smoke test asserting `cmd.Long` contains the substring `-c` and the phrase "exit code", and `cmd.Example` contains `dwe shell main -c "composer install"`. This guards against accidental help-text regression.
+- [x] run tests: `go test ./internal/cli/shell/...` — must pass before next task.
 
 ### Task 6: Verify acceptance criteria + regenerate embedded docs + full test suite
 

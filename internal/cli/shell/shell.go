@@ -96,12 +96,19 @@ Shell, user, working directory, and env defaults are read from the service
 cli config block in workspace/services/<name>/service.yml and can be overridden with flags.
 
 When no service argument is given, the command auto-selects if only one enabled
-service exists, or shows an interactive selector when multiple services are enabled.`,
+service exists, or shows an interactive selector when multiple services are enabled.
+
+With -c "<command>", the command is evaluated by the container's resolved shell
+(e.g. 'bash -c "<command>"') and dwe exits with the command's exit code. TTY is
+allocated only when both stdin and stdout are terminals, so piping works cleanly.
+dwe's own connection banners are suppressed so the child's stdout is untouched.`,
 		Example: `  dwe shell
   dwe shell main
   dwe shell main --root
   dwe shell main --mode run --shell sh
-  dwe shell main --user deploy --workdir /app`,
+  dwe shell main --user deploy --workdir /app
+  dwe shell main -c "composer install"
+  dwe shell main -c "php artisan migrate" --mode run`,
 		Args:              cobra.MaximumNArgs(1),
 		SilenceUsage:      true,
 		ValidArgsFunction: cmdctx.ServiceNameCompletion(flags),
