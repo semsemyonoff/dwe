@@ -22,9 +22,17 @@ import (
 	snapshotpkg "github.com/semsemyonoff/dwe/internal/core/workflow/snapshot"
 	"github.com/semsemyonoff/dwe/internal/core/workflow/snapshot/meta"
 	"github.com/semsemyonoff/dwe/internal/shared/lock"
+	"github.com/semsemyonoff/dwe/internal/shared/promptcache"
 	"github.com/semsemyonoff/dwe/internal/shared/render"
 
 	"github.com/spf13/cobra"
+)
+
+// snapshotRestoreFn and snapshotRollbackFn are seams for the underlying
+// workflow calls so tests can stub them without seeding real archive files.
+var (
+	snapshotRestoreFn  = snapshotpkg.Restore
+	snapshotRollbackFn = snapshotpkg.Rollback
 )
 
 // newSnapshotRestoreCmd: `dwe snapshot restore <name> [-y]`.
@@ -180,9 +188,9 @@ func runSnapshotRestore(cmd *cobra.Command, flags *cmdctx.RootFlags, name string
 		runErr error
 	)
 	if operation == "rollback" {
-		res, runErr = snapshotpkg.Rollback(ctx, params)
+		res, runErr = snapshotRollbackFn(ctx, params)
 	} else {
-		res, runErr = snapshotpkg.Restore(ctx, params)
+		res, runErr = snapshotRestoreFn(ctx, params)
 	}
 
 	if runErr != nil {
@@ -198,6 +206,9 @@ func runSnapshotRestore(cmd *cobra.Command, flags *cmdctx.RootFlags, name string
 	}
 
 	writeRestoreOutcome(stderr, operation, res)
+	// Post-restore state is arbitrary — invalidate the prompt stack cache so
+	// the next prompt refresh / `dwe status` reflects ground truth.
+	_ = promptcache.Remove(baseDir)
 	return nil
 }
 

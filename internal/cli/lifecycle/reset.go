@@ -21,6 +21,7 @@ import (
 	"github.com/semsemyonoff/dwe/internal/core/workflow/deploy/journal"
 	"github.com/semsemyonoff/dwe/internal/core/workflow/reset"
 	"github.com/semsemyonoff/dwe/internal/shared/lock"
+	"github.com/semsemyonoff/dwe/internal/shared/promptcache"
 	"github.com/semsemyonoff/dwe/internal/shared/render"
 	"github.com/semsemyonoff/dwe/internal/shared/tpl"
 
@@ -250,6 +251,9 @@ func resetRunCmd(cmd *cobra.Command, flags *cmdctx.RootFlags, yes bool, skipPref
 		return fmt.Errorf("cleaning deploy state after reset: %w", err)
 	}
 
+	// Project-wide reset is a teardown (docker down + volume removal): stack is stopped.
+	_ = promptcache.Write(workDir, promptcache.StateStopped)
+
 	if logEnabled {
 		w.Info("Reset log saved to: " + logPath)
 	}
@@ -469,6 +473,9 @@ func resetServiceRunCmd(cmd *cobra.Command, flags *cmdctx.RootFlags, name string
 	if err := journal.ReplaceServiceWithPending(statePath, name, pendingOp, configHash); err != nil {
 		return fmt.Errorf("updating journal for service %q: %w", name, err)
 	}
+
+	// Per-service reset touched only one container; aggregate state is unknown.
+	_ = promptcache.Remove(workDir)
 
 	_, _ = fmt.Fprintf(cmd.OutOrStdout(), "Service %q reset. Deploy required: run 'dwe deploy run --service %s'\n", name, name)
 	return nil

@@ -16,6 +16,7 @@ import (
 	"github.com/semsemyonoff/dwe/internal/shared/daemon"
 	"github.com/semsemyonoff/dwe/internal/shared/docker"
 	"github.com/semsemyonoff/dwe/internal/shared/lock"
+	"github.com/semsemyonoff/dwe/internal/shared/promptcache"
 
 	"github.com/spf13/cobra"
 )
@@ -109,7 +110,7 @@ Use 'dwe docker stop' for the low-level compose stop (no container removal).`,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			if len(args) == 0 {
 				// Full-stack stop via lifecycle.
-				return lifecyclepkg.RunStop(lifecyclepkg.StopContext{
+				if err := lifecyclepkg.RunStop(lifecyclepkg.StopContext{
 					Ctx:           cmd.Context(),
 					ConfigPath:    flags.ConfigPath,
 					Yes:           yes,
@@ -120,7 +121,11 @@ Use 'dwe docker stop' for the low-level compose stop (no container removal).`,
 					OnDefaultUsed: func(p lifecyclepkg.DefaultedPipeline) {
 						cmdctx.EmitDefaultNotice(cmd, flags, string(p), "lifecycle")
 					},
-				})
+				}); err != nil {
+					return err
+				}
+				_ = promptcache.Write(flags.ProjectRoot(), promptcache.StateStopped)
+				return nil
 			}
 			// Per-service stop.
 			name := args[0]
@@ -147,6 +152,7 @@ Use 'dwe docker stop' for the low-level compose stop (no container removal).`,
 			if err := StopService(cmd.Context(), deps, name); err != nil {
 				return err
 			}
+			_ = promptcache.Remove(flags.ProjectRoot())
 			return nil
 		},
 		ValidArgsFunction: cmdctx.ServiceNameCompletion(flags),

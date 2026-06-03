@@ -4,6 +4,7 @@ import (
 	"github.com/semsemyonoff/dwe/internal/cli/cmdctx"
 	"github.com/semsemyonoff/dwe/internal/cli/info"
 	lifecyclepkg "github.com/semsemyonoff/dwe/internal/core/workflow/lifecycle"
+	"github.com/semsemyonoff/dwe/internal/shared/promptcache"
 
 	"github.com/spf13/cobra"
 )
@@ -32,7 +33,7 @@ Use 'dwe docker up' for a bare Docker Compose start without hooks or the update 
 		GroupID:      groupID,
 		SilenceUsage: true,
 		RunE: func(cmd *cobra.Command, args []string) error {
-			return lifecyclepkg.RunRun(lifecyclepkg.RunContext{
+			if err := lifecyclepkg.RunRun(lifecyclepkg.RunContext{
 				Ctx:        cmd.Context(),
 				ConfigPath: flags.ConfigPath,
 				NoUpdate:   noUpdate,
@@ -55,7 +56,11 @@ Use 'dwe docker up' for a bare Docker Compose start without hooks or the update 
 				OnDefaultUsed: func(p lifecyclepkg.DefaultedPipeline) {
 					cmdctx.EmitDefaultNotice(cmd, flags, string(p), "lifecycle")
 				},
-			})
+			}); err != nil {
+				return err
+			}
+			_ = promptcache.Write(flags.ProjectRoot(), promptcache.StateRunning)
+			return nil
 		},
 	}
 

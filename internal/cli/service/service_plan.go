@@ -18,6 +18,7 @@ import (
 	"github.com/semsemyonoff/dwe/internal/core/workflow/deploy/journal"
 	"github.com/semsemyonoff/dwe/internal/core/workflow/lifecycle"
 	"github.com/semsemyonoff/dwe/internal/shared/lock"
+	"github.com/semsemyonoff/dwe/internal/shared/promptcache"
 	"github.com/semsemyonoff/dwe/internal/shared/tpl"
 
 	"github.com/spf13/cobra"
@@ -483,6 +484,11 @@ func executeTogglePlan(ctx context.Context, deps ExecuteDeps, plan TogglePlan, o
 				return fmt.Errorf("after hook %q: %w", step.CommandID, err)
 			}
 		}
+	}
+
+	// Whole plan (apply + pending-clear + after-hooks) succeeded — stack is running.
+	if len(plan.ApplySteps) > 0 {
+		_ = promptcache.Write(deps.BaseDir, promptcache.StateRunning)
 	}
 
 	return nil

@@ -383,42 +383,42 @@ Helper placement: invalidation is exposed via `promptcache.Remove(root)` (added 
 
 Per-site actions (matching the writer matrix in Solution Overview):
 
-- [ ] `run.go`: after `RunRun` returns nil → `_ = promptcache.Write(root, promptcache.StateRunning)`
-- [ ] `restart.go`:
+- [x] `run.go`: after `RunRun` returns nil → `_ = promptcache.Write(root, promptcache.StateRunning)`
+- [x] `restart.go`:
   - project-wide branch (no service arg, line ~91): `_ = promptcache.Write(root, promptcache.StateRunning)`
   - per-service branch (`RestartService` path, line ~119): `_ = promptcache.Remove(root)`
-- [ ] `stop.go`:
+- [x] `stop.go`:
   - no `--service` (full stack stop): `_ = promptcache.Write(root, promptcache.StateStopped)`
   - `--service <n>`: `_ = promptcache.Remove(root)`
-- [ ] `reset.go`:
+- [x] `reset.go`:
   - project-wide `resetRunCmd` (post `journal.Remove(statePath)` success): `_ = promptcache.Write(root, promptcache.StateStopped)` (teardown — `docker down` + volume removal)
   - per-service `resetServiceRunCmd`: `_ = promptcache.Remove(root)`
-- [ ] `deploy/deploy.go`:
+- [x] `deploy/deploy.go`:
   - `runDeployRun` no `--service`: `_ = promptcache.Remove(root)` (deploy may no-op via "already up-to-date" path at `deploy.go:623`; invalidation lets the next prompt refresh or `dwe status` reflect ground truth)
   - `runDeployRun --service <n>` (line ~162): `_ = promptcache.Remove(root)`
-- [ ] `service/service_plan.go`: at the very end of `executeTogglePlan` (after pending-clear AND after-hooks, only when the whole plan returned nil): `_ = promptcache.Write(root, promptcache.StateRunning)`. Do NOT hook into `singleToggleRunDeploy` or `singleToggleRunRestart` — those are sub-steps that can succeed while a later phase fails.
-- [ ] `snapshot/restore.go`:
+- [x] `service/service_plan.go`: at the very end of `executeTogglePlan` (after pending-clear AND after-hooks, only when the whole plan returned nil): `_ = promptcache.Write(root, promptcache.StateRunning)`. Do NOT hook into `singleToggleRunDeploy` or `singleToggleRunRestart` — those are sub-steps that can succeed while a later phase fails.
+- [x] `snapshot/restore.go`:
   - on successful `runSnapshotRestore`: `_ = promptcache.Remove(root)`
   - on successful `runSnapshotRollback`: `_ = promptcache.Remove(root)`
 
 Tests:
 
-- [ ] `TestRun_WritesRunning_OnSuccess`
-- [ ] `TestStop_NoFlag_WritesStopped`
-- [ ] `TestStop_WithService_InvalidatesCache` (pre-seed cache, run stop --service, assert file absent)
-- [ ] `TestRestart_NoArg_WritesRunning_OnSuccess`
-- [ ] `TestRestart_WithService_InvalidatesCache`
-- [ ] `TestReset_ProjectWide_WritesStopped` (not running!)
-- [ ] `TestReset_PerService_InvalidatesCache`
-- [ ] `TestDeployRun_NoService_InvalidatesCache` (deploy is invalidate-only; verify cache file is absent after deploy regardless of noop/real-work)
-- [ ] `TestDeployRun_WithService_InvalidatesCache`
-- [ ] `TestExecuteTogglePlan_FullSuccess_WritesRunning` (verify ordering: write happens AFTER pending-clear and after-hooks complete)
-- [ ] `TestExecuteTogglePlan_FailureAfterDeploy_DoesNotWrite` (deploy succeeds, after-hook fails → no cache write)
-- [ ] `TestSnapshotRestore_InvalidatesCache` (pre-seed cache, run restore, assert file absent)
-- [ ] `TestSnapshotRollback_InvalidatesCache`
-- [ ] `TestRun_CacheWriteFailure_DoesNotFailCommand` — chmod `.dwe/` to 0500 to simulate; skip on root via `if os.Geteuid() == 0 { t.Skip("requires non-root") }`. Assert command still exits 0.
-- [ ] **Integration test** (new file `internal/shared/prompt/integration_test.go`): seed `.dwe/prompt-cache.yml` via `promptcache.Write(root, StateRunning)`, then invoke `prompt.runFromDir(...)` with a stub `dockerPsFunc` (any value — cache is fresh) and assert the rendered output contains the `●` glyph in the correct position. Repeat for `partial`/`stopped`. Repeat with cache invalidated (file removed) + stub `dockerPsFunc` returning `"abc\n"` → assert running icon. This is the end-to-end "writer → reader" loop the prior review flagged as missing.
-- [ ] run `go test ./internal/cli/lifecycle/... ./internal/cli/deploy/... ./internal/cli/service/... ./internal/cli/snapshot/... ./internal/shared/prompt/...` — must pass before next task
+- [x] `TestRun_WritesRunning_OnSuccess`
+- [x] `TestStop_NoFlag_WritesStopped`
+- [x] `TestStop_WithService_InvalidatesCache` (pre-seed cache, run stop --service, assert file absent)
+- [x] `TestRestart_NoArg_WritesRunning_OnSuccess`
+- [x] `TestRestart_WithService_InvalidatesCache`
+- [x] `TestReset_ProjectWide_WritesStopped` (not running!)
+- [x] `TestReset_PerService_InvalidatesCache`
+- [x] `TestDeployRun_NoService_InvalidatesCache` (deploy is invalidate-only; verify cache file is absent after deploy regardless of noop/real-work)
+- [x] `TestDeployRun_WithService_InvalidatesCache`
+- [x] `TestExecuteTogglePlan_FullSuccess_WritesRunning` (verify ordering: write happens AFTER pending-clear and after-hooks complete)
+- [x] `TestExecuteTogglePlan_FailureAfterDeploy_DoesNotWrite` (deploy succeeds, after-hook fails → no cache write)
+- [x] `TestSnapshotRestore_InvalidatesCache` (pre-seed cache, run restore, assert file absent)
+- [x] `TestSnapshotRollback_InvalidatesCache`
+- [x] `TestRun_CacheWriteFailure_DoesNotFailCommand` — implemented by planting a directory at `.dwe/prompt-cache.yml` so the atomic rename inside `promptcache.Write` fails; command still exits 0
+- [x] **Integration test** (new file `internal/shared/prompt/integration_test.go`): seed `.dwe/prompt-cache.yml` via `promptcache.Write(root, StateRunning)`, then invoke `prompt.runFromDir(...)` with a stub `dockerPsFunc` (any value — cache is fresh) and assert the rendered output contains the `●` glyph in the correct position. Repeat for `partial`/`stopped`. Repeat with cache invalidated (file removed) + stub `dockerPsFunc` returning `"abc\n"` → assert running icon. This is the end-to-end "writer → reader" loop the prior review flagged as missing.
+- [x] run `go test ./internal/cli/lifecycle/... ./internal/cli/deploy/... ./internal/cli/service/... ./internal/cli/snapshot/... ./internal/shared/prompt/...` — must pass before next task
 
 ### Task 8: Wire opportunistic accurate cache writes into top-level `dwe status`
 

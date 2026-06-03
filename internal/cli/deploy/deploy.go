@@ -25,6 +25,7 @@ import (
 	"github.com/semsemyonoff/dwe/internal/core/workflow/deploy/journal"
 	"github.com/semsemyonoff/dwe/internal/shared/docker"
 	"github.com/semsemyonoff/dwe/internal/shared/lock"
+	"github.com/semsemyonoff/dwe/internal/shared/promptcache"
 	sharedrender "github.com/semsemyonoff/dwe/internal/shared/render"
 
 	"github.com/spf13/cobra"
@@ -272,20 +273,30 @@ type deployRunOpts struct {
 	Silent         bool
 }
 
+// runHelperFn is a seam for RunHelper so tests can drive runDeployRun without
+// exercising the full deploy pipeline.
+var runHelperFn = RunHelper
+
 // runDeployRun is the common implementation for `dwe deploy run` and menu dispatch.
 func runDeployRun(ctx context.Context, cmd *cobra.Command, flags *cmdctx.RootFlags, opts deployRunOpts) error {
 	var services []string
 	if opts.ServiceName != "" {
 		services = []string{opts.ServiceName}
 	}
-	return RunHelper(ctx, cmd, flags, Opts{
+	if err := runHelperFn(ctx, cmd, flags, Opts{
 		Services:       services,
 		Force:          opts.Force,
 		Resume:         opts.Resume,
 		NonInteractive: opts.NonInteractive,
 		SkipPreflight:  opts.SkipPreflight,
 		Silent:         opts.Silent,
-	})
+	}); err != nil {
+		return err
+	}
+	// Deploy may no-op via the "already up-to-date" path; invalidate so the
+	// next prompt refresh or `dwe status` reflects ground truth.
+	_ = promptcache.Remove(flags.ProjectRoot())
+	return nil
 }
 
 func deployRunCmd(cmd *cobra.Command, flags *cmdctx.RootFlags, serviceName string, force bool, resume bool, nonInteractive bool, skipPreflight bool, silent bool) error {

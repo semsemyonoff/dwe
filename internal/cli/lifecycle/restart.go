@@ -12,6 +12,7 @@ import (
 	lifecyclepkg "github.com/semsemyonoff/dwe/internal/core/workflow/lifecycle"
 	"github.com/semsemyonoff/dwe/internal/shared/daemon"
 	"github.com/semsemyonoff/dwe/internal/shared/docker"
+	"github.com/semsemyonoff/dwe/internal/shared/promptcache"
 	"github.com/semsemyonoff/dwe/internal/shared/render"
 
 	"github.com/spf13/cobra"
@@ -88,7 +89,7 @@ the service has been disabled.`,
 		SilenceUsage: true,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			if len(args) == 0 {
-				return lifecyclepkg.RunRestart(lifecyclepkg.RunContext{
+				if err := lifecyclepkg.RunRestart(lifecyclepkg.RunContext{
 					Ctx:        cmd.Context(),
 					ConfigPath: flags.ConfigPath,
 					Yes:        yes,
@@ -108,7 +109,11 @@ the service has been disabled.`,
 					OnDefaultUsed: func(p lifecyclepkg.DefaultedPipeline) {
 						cmdctx.EmitDefaultNotice(cmd, flags, string(p), "lifecycle")
 					},
-				})
+				}); err != nil {
+					return err
+				}
+				_ = promptcache.Write(flags.ProjectRoot(), promptcache.StateRunning)
+				return nil
 			}
 			// Per-service restart: container-level, no preflight, no locks.
 			name := args[0]
@@ -116,7 +121,11 @@ the service has been disabled.`,
 			if err != nil {
 				return fmt.Errorf("loading config: %w", err)
 			}
-			return RestartService(cmd.Context(), flags.ProjectRoot(), cfg, name, cmd.OutOrStdout())
+			if err := RestartService(cmd.Context(), flags.ProjectRoot(), cfg, name, cmd.OutOrStdout()); err != nil {
+				return err
+			}
+			_ = promptcache.Remove(flags.ProjectRoot())
+			return nil
 		},
 		ValidArgsFunction: cmdctx.ServiceNameCompletion(flags),
 	}
