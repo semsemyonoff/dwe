@@ -456,7 +456,12 @@ func resetServiceRunCmd(cmd *cobra.Command, flags *cmdctx.RootFlags, name string
 		Translator:   flags.I18n,
 		Locale:       flags.Locale,
 	}
-	if runErr := pipeline.RunWithOptions(runOpts); runErr != nil {
+	runErr := pipeline.RunWithOptions(runOpts)
+	// Invalidate regardless of outcome: a failed reset may have partially
+	// mutated container state (e.g. the stop step succeeded before a later
+	// step failed). Let the next prompt refresh reflect ground truth.
+	_ = promptcache.Remove(workDir)
+	if runErr != nil {
 		if errors.Is(runErr, pipeline.ErrSilent) && logEnabled {
 			w.Warning("Full output saved to: " + logPath)
 		}
@@ -475,9 +480,6 @@ func resetServiceRunCmd(cmd *cobra.Command, flags *cmdctx.RootFlags, name string
 	if err := journal.ReplaceServiceWithPending(statePath, name, pendingOp, configHash); err != nil {
 		return fmt.Errorf("updating journal for service %q: %w", name, err)
 	}
-
-	// Per-service reset touched only one container; aggregate state is unknown.
-	_ = promptcache.Remove(workDir)
 
 	_, _ = fmt.Fprintf(cmd.OutOrStdout(), "Service %q reset. Deploy required: run 'dwe deploy run --service %s'\n", name, name)
 	return nil

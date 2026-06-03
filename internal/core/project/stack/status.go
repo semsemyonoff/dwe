@@ -140,7 +140,7 @@ func collectRowsByType(cfg *config.DweConfig, isRunning ContainerCheckFn, filter
 			continue
 		}
 		running := false
-		if svc.Required || svc.Enabled {
+		if (svc.Required || svc.Enabled) && isRunning != nil {
 			running = isRunning(svc.Container)
 		}
 		rows = append(rows, render.ServiceTableRow{
