@@ -352,23 +352,23 @@ cmd.PersistentFlags().StringVar(           // was StringVarP
 - Modify (auto-generated): `docs/reference/cli/dwe.md` and per-command CLI reference pages
 - Modify (auto-generated): `internal/core/docs/embedded/...` and `internal/core/docs/content_hashes_gen.go`
 
-- [ ] run `make embedded-docs` — pre-sync embedded docs tree.
-- [ ] run `make test` — full suite must pass.
-- [ ] run `make build` — produces `bin/dwe` with current embedded docs.
-- [ ] run `bin/dwe docs generate` from inside this repo's CLI project (or from any working directory if the command is project-independent) to refresh `docs/reference/cli/*.md` with the new flag set.
-- [ ] inspect `git diff docs/reference/cli/` — confirm only expected pages changed: `dwe_shell.md` gains the `-c, --command` flag block; all pages drop the `-c` shorthand from the root flag block; no unrelated drift in other CLI reference pages.
-- [ ] run `make build` again to re-embed the regenerated docs into the binary.
-- [ ] run `make test` — second pass to confirm embedded-docs tests pass with regenerated content.
-- [ ] run `make lint` — must pass.
-- [ ] verify acceptance criteria from Overview:
-  - `dwe shell <svc> -c "<command>"` runs the command and exits with its code.
-  - `dwe shell <svc> -c ""` errors.
-  - `dwe -c /tmp/whatever` errors with cobra "unknown shorthand flag".
-  - `dwe --config /tmp/whatever` still parses.
-  - Interactive `dwe shell` behavior unchanged when `-c` is unset.
-- [ ] confirm no new files were added under `docs/i18n/ru/reference/cli/` and the existing Russian docs are not affected.
-- [ ] verify test coverage for new code paths in `internal/cli/shell/` is at least as high as the existing file's coverage (`go test ./internal/cli/shell/... -cover`).
-- [ ] run tests one final time: `make test`.
+- [x] run `make embedded-docs` — pre-sync embedded docs tree.
+- [x] run `make test` — full suite must pass.
+- [x] run `make build` — produces `bin/dwe` with current embedded docs.
+- [x] run `bin/dwe docs generate --scope cli --out docs/reference` to refresh `docs/reference/cli/*.md` with the new flag set. (Default `--scope all` requires a dwe project; used `--scope cli` to scope regen to CLI pages only.)
+- [x] inspect `git diff docs/reference/cli/` — confirmed only expected pages changed: `dwe_shell.md` gains the `-c, --command` flag block; all pages drop the `-c` shorthand from the root flag block; no unrelated drift in other CLI reference pages. (Note: `dwe docs generate --scope cli` also overwrote `docs/reference/index.md` with a stub version — reverted via `git checkout` since it is not a CLI page and was hand-curated.)
+- [x] run `make build` again to re-embed the regenerated docs into the binary.
+- [x] run `make test` — second pass passes with regenerated content.
+- [x] run `make lint` — passes (0 issues).
+- [x] verify acceptance criteria from Overview:
+  - `dwe shell <svc> -c "<command>"` runs the command and exits with its code. (verified via unit tests — `TestDispatchShell_exitCodePropagation_endToEnd` confirms code 7 propagation; manual smoke requires Docker — see Post-Completion.)
+  - `dwe shell <svc> -c ""` errors. (verified via `shell_test.go` table case.)
+  - `dwe -c /tmp/whatever` errors with cobra "unknown shorthand flag". (verified: produces `Unknown shorthand flag: 'c' in -c.`)
+  - `dwe --config /tmp/whatever` still parses. (verified: parses then fails on missing file as expected.)
+  - Interactive `dwe shell` behavior unchanged when `-c` is unset. (verified via `TestDispatchShell_routesOnCommandFlag` — empty `command` routes to interactive dispatch.)
+- [x] confirmed no new files added under `docs/i18n/ru/reference/cli/` (directory does not exist).
+- [x] verified test coverage for `internal/cli/shell/`: 59.9% of statements (`go test ./internal/cli/shell/... -cover`).
+- [x] ran tests one final time: `make test` — all pass.
 
 ### Task 7: Final — documentation cleanup + move plan to completed
 
