@@ -913,6 +913,239 @@ func TestApplyLocalComposeExtra_sourceGating(t *testing.T) {
 	}
 }
 
+// TestLoadConfig_localComposeExtraPathValidation covers Task 4: every overlay
+// path declared in workspace/local.yml is checked in three stages —
+// absolute-rejection, containment under the project root, and existence.
+// Paths are stored as-written (relative form) on the typed config so docker
+// compose resolves them via cmd.Dir = baseDir, matching ServiceConfig.Compose.
+func TestLoadConfig_localComposeExtraPathValidation(t *testing.T) {
+	tests := []struct {
+		name      string
+		localYML  string
+		wantErr   string // substring
+		setupFile string // relative path to touch before LoadConfig (so existence passes for that fixture)
+	}{
+		{
+			name: "relative_path_inside_root_ok",
+			localYML: `compose:
+  extra:
+    - compose.local.yml
+`,
+			setupFile: "compose.local.yml",
+		},
+		{
+			name: "absolute_path_rejected",
+			localYML: `compose:
+  extra:
+    - /etc/passwd
+`,
+			wantErr: "absolute paths are not permitted",
+		},
+		{
+			name: "escape_rejected",
+			localYML: `compose:
+  extra:
+    - ../escape.yml
+`,
+			wantErr: "escapes project root",
+		},
+		{
+			name: "missing_file_rejected",
+			localYML: `compose:
+  extra:
+    - missing.yml
+`,
+			wantErr: "file not found",
+		},
+		{
+			name: "per_service_absolute_rejected",
+			localYML: `services:
+  adminer:
+    enabled: true
+    compose:
+      extra:
+        - /tmp/x.yml
+`,
+			wantErr: "services.adminer.compose.extra",
+		},
+		{
+			name: "per_service_escape_rejected",
+			localYML: `services:
+  adminer:
+    enabled: true
+    compose:
+      extra:
+        - ../escape.yml
+`,
+			wantErr: "services.adminer.compose.extra",
+		},
+		{
+			name: "per_service_missing_rejected",
+			localYML: `services:
+  adminer:
+    enabled: true
+    compose:
+      extra:
+        - gone.yml
+`,
+			wantErr: "file not found",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			dir := t.TempDir()
+			workspaceYML := `schema_version: "2"
+project:
+  name: test
+  prefix: dwe
+`
+			if err := os.WriteFile(filepath.Join(dir, "workspace.yml"), []byte(workspaceYML), 0o644); err != nil {
+				t.Fatal(err)
+			}
+			workspaceDir := filepath.Join(dir, "workspace")
+			if err := os.MkdirAll(workspaceDir, 0o755); err != nil {
+				t.Fatal(err)
+			}
+			writeServiceFolder(t, dir, "adminer", "type: tool\ncontainer: adminer\n")
+			if tt.setupFile != "" {
+				full := filepath.Join(dir, tt.setupFile)
+				if err := os.MkdirAll(filepath.Dir(full), 0o755); err != nil {
+					t.Fatal(err)
+				}
+				if err := os.WriteFile(full, []byte("services: {}\n"), 0o644); err != nil {
+					t.Fatal(err)
+				}
+			}
+			if err := os.WriteFile(filepath.Join(workspaceDir, "local.yml"), []byte(tt.localYML), 0o644); err != nil {
+				t.Fatal(err)
+			}
+			_, err := LoadConfig(filepath.Join(dir, "workspace.yml"))
+			if tt.wantErr == "" {
+				if err != nil {
+					t.Fatalf("LoadConfig: unexpected error: %v", err)
+				}
+				return
+			}
+			if err == nil {
+				t.Fatalf("LoadConfig: expected error containing %q, got nil", tt.wantErr)
+			}
+			if !strings.Contains(err.Error(), tt.wantErr) {
+				t.Errorf("LoadConfig error = %v, want substring %q", err, tt.wantErr)
+			}
+		})
+	}
+}
+
+// TestLoadConfig_localComposeExtraDuplicatePathsAllowed confirms that the same
+// path declared in both project-wide compose.extra and per-service
+// compose.extra is NOT deduped (docker compose tolerates duplicates).
+func TestLoadConfig_localComposeExtraDuplicatePathsAllowed(t *testing.T) {
+	dir := t.TempDir()
+	workspaceYML := `schema_version: "2"
+project:
+  name: test
+  prefix: dwe
+`
+	if err := os.WriteFile(filepath.Join(dir, "workspace.yml"), []byte(workspaceYML), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	workspaceDir := filepath.Join(dir, "workspace")
+	if err := os.MkdirAll(workspaceDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	writeServiceFolder(t, dir, "adminer", "type: tool\ncontainer: adminer\n")
+	if err := os.WriteFile(filepath.Join(dir, "shared.local.yml"), []byte("services: {}\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	localYML := `compose:
+  extra:
+    - shared.local.yml
+services:
+  adminer:
+    enabled: true
+    compose:
+      extra:
+        - shared.local.yml
+`
+	if err := os.WriteFile(filepath.Join(workspaceDir, "local.yml"), []byte(localYML), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	cfg, err := LoadConfig(filepath.Join(dir, "workspace.yml"))
+	if err != nil {
+		t.Fatalf("LoadConfig: %v", err)
+	}
+	if got, want := cfg.Compose.Extra, []string{"shared.local.yml"}; !equalStrings(got, want) {
+		t.Errorf("cfg.Compose.Extra = %v, want %v", got, want)
+	}
+	if got, want := cfg.Services["adminer"].LocalComposeExtra, []string{"shared.local.yml"}; !equalStrings(got, want) {
+		t.Errorf("adminer.LocalComposeExtra = %v, want %v", got, want)
+	}
+}
+
+// TestLoadConfig_localComposeExtraPathsPreservedAsWritten asserts that paths
+// are stored RELATIVE on the typed config (matching ServiceConfig.Compose
+// semantics — docker.Compose resolves via cmd.Dir = baseDir).
+func TestLoadConfig_localComposeExtraPathsPreservedAsWritten(t *testing.T) {
+	dir := t.TempDir()
+	workspaceYML := `schema_version: "2"
+project:
+  name: test
+  prefix: dwe
+`
+	if err := os.WriteFile(filepath.Join(dir, "workspace.yml"), []byte(workspaceYML), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	workspaceDir := filepath.Join(dir, "workspace")
+	if err := os.MkdirAll(workspaceDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	writeServiceFolder(t, dir, "adminer", "type: tool\ncontainer: adminer\n")
+	if err := os.MkdirAll(filepath.Join(dir, "compose"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	for _, p := range []string{"top.yml", "compose/svc.yml"} {
+		if err := os.WriteFile(filepath.Join(dir, p), []byte("services: {}\n"), 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+	localYML := `compose:
+  extra:
+    - top.yml
+services:
+  adminer:
+    enabled: true
+    compose:
+      extra:
+        - compose/svc.yml
+`
+	if err := os.WriteFile(filepath.Join(workspaceDir, "local.yml"), []byte(localYML), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	cfg, err := LoadConfig(filepath.Join(dir, "workspace.yml"))
+	if err != nil {
+		t.Fatalf("LoadConfig: %v", err)
+	}
+	// Stored as written: relative path, no baseDir prefix, no Clean rewrite.
+	if got, want := cfg.Compose.Extra, []string{"top.yml"}; !equalStrings(got, want) {
+		t.Errorf("cfg.Compose.Extra = %v, want %v (must be stored as-written)", got, want)
+	}
+	if got, want := cfg.Services["adminer"].LocalComposeExtra, []string{"compose/svc.yml"}; !equalStrings(got, want) {
+		t.Errorf("adminer.LocalComposeExtra = %v, want %v (must be stored as-written)", got, want)
+	}
+	// Sanity: paths must NOT have been absolutized.
+	for _, p := range cfg.Compose.Extra {
+		if filepath.IsAbs(p) {
+			t.Errorf("project-wide path was absolutized: %q", p)
+		}
+	}
+	for _, p := range cfg.Services["adminer"].LocalComposeExtra {
+		if filepath.IsAbs(p) {
+			t.Errorf("per-service path was absolutized: %q", p)
+		}
+	}
+}
+
 func equalStrings(a, b []string) bool {
 	if len(a) != len(b) {
 		return false

@@ -293,19 +293,19 @@ This task focuses on (a) making sure `dwe validate` surfaces these diagnostics n
 - Modify: `internal/core/project/config/workspace.go` (right after post-decode injection from Task 1)
 - Modify: `internal/core/project/config/workspace_test.go`
 
-- [ ] After post-decode injection populates `Compose.Extra` and per-service `LocalComposeExtra`, walk each path and validate IN THIS ORDER:
+- [x] After post-decode injection populates `Compose.Extra` and per-service `LocalComposeExtra`, walk each path and validate IN THIS ORDER:
   1. **Absolute rejection**: `if filepath.IsAbs(p) → hard error`. Must come BEFORE the join, since `filepath.Join(baseDir, "/x.yml")` returns `/x.yml` and bypasses containment.
   2. **Containment**: compute `abs := filepath.Join(baseDir, p)` then `pathsafe.ContainedRel(baseDir, abs)` — on error wrap with the local.yml field path that produced the bad value. (Pattern mirrors `internal/core/validate/linters/walk.go:65`.)
   3. **Existence**: `os.Stat(abs)`; missing file → hard error including the as-written path AND the absolute path for easy debugging.
-- [ ] Store paths **as written** (relative form) on the typed config — do NOT replace with absolute paths. Downstream `composeFiles` returns these relative paths; `docker.Compose` resolves them via `cmd.Dir = c.BaseDir` (compose.go:132), matching how `ServiceConfig.Compose` paths already behave.
-- [ ] Tests:
+- [x] Store paths **as written** (relative form) on the typed config — do NOT replace with absolute paths. Downstream `composeFiles` returns these relative paths; `docker.Compose` resolves them via `cmd.Dir = c.BaseDir` (compose.go:132), matching how `ServiceConfig.Compose` paths already behave.
+- [x] Tests:
   - relative path inside project root passes validation
   - absolute path (e.g. `/etc/passwd`) → error referencing `filepath.IsAbs` rejection
   - `../` escape → error referencing `pathsafe.ContainedRel` diagnostic + field path
   - missing file → error showing both as-written and absolute path
   - duplicate path between project-wide and per-service is allowed (no dedup)
   - paths-as-written are preserved through `cfg.Compose.Extra` / `cfg.Services[name].LocalComposeExtra` (not absolutized)
-- [ ] Run tests — must pass before Task 5.
+- [x] Run tests — must pass before Task 5.
 
 ### Task 5: English documentation updates
 

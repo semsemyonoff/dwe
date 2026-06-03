@@ -17,6 +17,7 @@ import (
 	"github.com/semsemyonoff/dwe/internal/core/execution/condition"
 	"github.com/semsemyonoff/dwe/internal/core/execution/filesgate"
 	userpkg "github.com/semsemyonoff/dwe/internal/core/project/user"
+	"github.com/semsemyonoff/dwe/internal/shared/pathsafe"
 
 	"gopkg.in/yaml.v3"
 )
@@ -1380,6 +1381,14 @@ func LoadConfig(workspacePath string) (*DweConfig, error) {
 	// strictly last by composeFiles().
 	cfg.Compose.Extra = extractProjectLocalComposeExtra(localRaw)
 
+	// Validate all local.yml overlay paths (project-wide + per-service) for
+	// absolute-rejection, containment, and existence. Runs BEFORE
+	// ResolveServiceExtends so parent paths are validated once; inherited
+	// child copies reuse the same (already-valid) entries.
+	if err := validateLocalComposeExtraPaths(baseDir, &cfg, services); err != nil {
+		return nil, err
+	}
+
 	// Resolve `extends:` inheritance AFTER per-service overlay merges so children
 	// inherit the already-overlaid parent values (e.g. local.yml overrides on the
 	// parent's hosts/ports propagate into children that don't override themselves).
@@ -2192,6 +2201,55 @@ func applyLocalComposeExtra(localRaw map[string]any, name string, svc *ServiceCo
 		}
 	}
 	svc.LocalComposeExtra = extra
+}
+
+// validateLocalComposeExtraPaths walks every path in cfg.Compose.Extra and each
+// services[name].LocalComposeExtra and enforces three rules in order:
+//
+//  1. Absolute paths are rejected (filepath.Join(baseDir, "/x") returns "/x",
+//     bypassing containment — so this check MUST come first).
+//  2. Containment under baseDir via pathsafe.ContainedRel.
+//  3. Existence via os.Stat.
+//
+// Errors carry the local.yml field path and, for missing files, both the
+// as-written and resolved absolute paths for easy debugging.
+func validateLocalComposeExtraPaths(baseDir string, cfg *DweConfig, services map[string]ServiceConfig) error {
+	for i, p := range cfg.Compose.Extra {
+		field := fmt.Sprintf("workspace/local.yml: compose.extra[%d]", i)
+		if err := validateComposeExtraPath(baseDir, p, field); err != nil {
+			return err
+		}
+	}
+	for _, name := range slices.Sorted(maps.Keys(services)) {
+		svc := services[name]
+		for i, p := range svc.LocalComposeExtra {
+			field := fmt.Sprintf("workspace/local.yml: services.%s.compose.extra[%d]", name, i)
+			if err := validateComposeExtraPath(baseDir, p, field); err != nil {
+				return err
+			}
+		}
+	}
+	return nil
+}
+
+// validateComposeExtraPath runs the three-step path safety check against a
+// single local.yml overlay entry. See validateLocalComposeExtraPaths for the
+// ordering rationale.
+func validateComposeExtraPath(baseDir, p, field string) error {
+	if filepath.IsAbs(p) {
+		return fmt.Errorf("%s: absolute paths are not permitted (got %q); use a path relative to the project root", field, p)
+	}
+	abs := filepath.Join(baseDir, p)
+	if _, err := pathsafe.ContainedRel(baseDir, abs); err != nil {
+		return fmt.Errorf("%s: %w (path %q escapes project root)", field, err, p)
+	}
+	if _, err := os.Stat(abs); err != nil {
+		if errors.Is(err, os.ErrNotExist) {
+			return fmt.Errorf("%s: file not found: %q (resolved to %q)", field, p, abs)
+		}
+		return fmt.Errorf("%s: stat %q (resolved to %q): %w", field, p, abs, err)
+	}
+	return nil
 }
 
 // extractProjectLocalComposeExtra returns the project-wide compose.extra list
