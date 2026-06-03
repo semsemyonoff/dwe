@@ -7,12 +7,22 @@ Use `dwe prompt` to render a compact, project-aware segment inside your [Starshi
 `dwe prompt` prints a single line for the current shell's working directory:
 
 ```
-{▪} my-project ✓
+{▪} my-project ✓ ●
 ```
 
-- `{▪}` — the DWE logomark; the inner square is coloured with the project's `accent` token from `workspace/styles.yml`
-- `my-project` — `project.name` from `workspace.yml`, falling back to the directory basename
-- `✓`/`⟳`/`⚠`/`✗` — optional status icon coloured from the project's `success`/`warning`/`danger` tokens, omitted when no deploy state exists
+Full output shape (each tail segment is independently optional):
+
+```
+{▪} <project> [<service>] <deploy-icon> <stack-icon>
+```
+
+- `{▪}` — the DWE logomark; the inner square is coloured with the project's `accent` token from `workspace/styles.yml`.
+- `<project>` — `project.name` from `workspace.yml`, falling back to the directory basename.
+- `[<service>]` — present only when `cwd` is under `workspace/services/<name>/…`. The bracket frame is plain; the inner name is sanitized. Derived from a string-prefix check of `cwd` vs `root` (zero IO).
+- `<deploy-icon>` — `✓`/`⟳`/`⚠`/`✗` reflecting the deploy-state journal at `.dwe/deploy/state.yml`. Omitted when no deploy state exists.
+- `<stack-icon>` — `●`/`◐`/`○` reflecting live container state. Backed by `.dwe/prompt-cache.yml` (see [Stack icon](#stack-icon)). Omitted when neither cache nor refresh produce a value.
+
+Only the `{▪} <project>` prefix is a stability guarantee — every other tail segment may be absent depending on project state.
 
 When the shell is outside any DWE project, the command exits with code `1` and prints nothing — Starship hides the segment via its `when =` predicate.
 
@@ -35,7 +45,7 @@ The `when = "dwe prompt --check"` predicate is silent and exit-only: Starship ru
 
 ## Customisation
 
-`dwe prompt` only colours the logomark and the status icon — the braces, project name, and surrounding whitespace are plain. That leaves the rest free for Starship's `style` and `format` to re-style without fighting embedded ANSI:
+`dwe prompt` only colours the logomark and the icons — the braces, project name, service tag, and surrounding whitespace are plain. That leaves the rest free for Starship's `style` and `format` to re-style without fighting embedded ANSI:
 
 ```toml
 [custom.dwe]
@@ -47,7 +57,7 @@ style   = "dimmed cyan"
 
 The colour escapes inside the segment use `\x1b[39m` (default foreground only) so they do not reset surrounding attributes.
 
-## Status icons
+## Deploy icon
 
 Evaluated in this precedence order — first match wins:
 
@@ -61,18 +71,77 @@ Evaluated in this precedence order — first match wins:
 
 Failed and partial outrank pending so the prompt surfaces broken state first — you need to know things are wrong *before* thinking about applying pending changes.
 
+## Stack icon
+
+The stack icon reflects live Docker container state. It is independent of the deploy icon — a project can show `✓ ○` (deploy succeeded, containers manually stopped).
+
+| State | Glyph | Colour token | Meaning |
+| --- | --- | --- | --- |
+| running | `●` | `success` | all expected containers up |
+| partial | `◐` | `warning` | some containers up, some down |
+| stopped | `○` | `muted` (new token; default `#6B7280`, overridable via `workspace/styles.yml` `colors.muted`) | no containers running |
+| _(none)_ | — | — | no cache and refresh produced no usable value |
+
+### Cache
+
+State is read from a stale-while-revalidate cache at `.dwe/prompt-cache.yml`:
+
+```yaml
+updated_at: 2026-06-03T12:34:56Z   # RFC3339 UTC
+state: running                      # running | partial | stopped
+```
+
+- **TTL**: 2 minutes. Fresh-cache reads are pure file I/O — no `docker ps`.
+- **Stale or missing**: prompt shells out to `docker ps -q --filter label=com.docker.compose.project=<project>` with a **150 ms hard timeout**. On timeout or any error, no cache write occurs.
+- **Atomic writes**: tmp-file + rename in the same directory, so concurrent prompts cannot corrupt the file.
+
+### Writer map
+
+Different sites know different things about the stack. Each site picks the safest action — write when confident, invalidate when scoped, never lie:
+
+| Site | Action |
+| --- | --- |
+| `dwe run` | write `running` |
+| `dwe restart` (no service arg) | write `running` |
+| `dwe restart <service>` | invalidate (remove cache file) |
+| `dwe stop` (no `--service`) | write `stopped` |
+| `dwe stop --service <n>` | invalidate |
+| `dwe deploy run` (no `--service`) | invalidate (deploy can no-op via "already up-to-date") |
+| `dwe deploy run --service <n>` | invalidate |
+| `dwe reset run` (project-wide teardown) | write `stopped` |
+| `dwe reset run --service <n>` | invalidate |
+| `dwe services enable/disable --apply` | write `running` (after the entire toggle plan including after-hooks completes) |
+| `dwe status` (top-level) | write the exact aggregated `Health` (`running`/`partial`/`stopped`) |
+| `dwe status <subcommand>` | no write (section-scoped) |
+| `dwe snapshot restore` / `rollback` | invalidate (post-restore state is arbitrary) |
+| `dwe prompt` (sync refresh) | write `running` if `docker ps` count > 0 — **never `stopped`** |
+
+### No-downgrade rule on prompt refresh
+
+`dwe prompt`'s own sync refresh only ever writes `running`. A zero-result from `docker ps` is indistinguishable between:
+
+- a genuinely stopped stack, and
+- a wrong label filter (templated `docker.yml.project_name` is not loaded by the prompt — see [Known limitations](#known-limitations)).
+
+Allowing prompt refresh to write `stopped` would either (a) downgrade a correct `running` left by an authoritative writer (lifecycle / status), or (b) write a wrong `stopped` to an absent cache after invalidation. Reserving `stopped` writes for authoritative writers keeps the cache honest.
+
+Cache writes are best-effort everywhere: neither prompt refresh nor lifecycle commands fail when cache I/O fails. The cache is observability, not correctness.
+
 ## Behaviour in non-color terminals
 
 `dwe prompt` follows the [NO_COLOR](https://no-color.org/) spec: if the `NO_COLOR` environment variable is set to *any* value (including the empty string), all ANSI escapes are suppressed and the output is plain runes only.
 
 ```
-{▪} my-project ✓
+{▪} my-project ✓ ●
 ```
 
 ## Known limitations
 
 - **Light/dark auto-detect**: the prompt always uses the dark variant of the palette. Most terminals are dark; light-terminal support can be added later via `COLORFGBG` if there is demand.
 - **No `-c` flag**: `dwe prompt` always walks up from `$PWD`. This is intentional — the shell prompt reflects the shell's current directory, not an arbitrary project pointer.
+- **Custom docker binary**: `binaries.docker: podman` (or any non-`docker` value) bypasses prompt-driven refresh — `shared/prompt` hardcodes `docker` to keep the hot path config-free. Lifecycle commands and `dwe status` still write the cache with the correct binary, so the icon remains accurate during active use; only the 2-minute idle refresh is a no-op.
+- **Templated compose project name**: projects whose `workspace/docker.yml` sets `project_name` to a template (e.g. `${project.prefix}_${project.name}`) will see `docker ps` return zero rows from prompt refresh because `shared/prompt` does not load `docker.yml`. Combined with the no-downgrade rule, prompt refresh simply writes nothing — the icon stays correct as long as lifecycle commands and `dwe status` (which use the real compose name) keep the cache populated.
+- **Manual `docker stop` outside dwe**: not detected by prompt refresh (no-downgrade rule). Run `dwe status` to refresh the cached state.
 - **Shell-specific quoting**: sh, bash, and zsh accept the `command` / `when` strings as written. Fish users may need to adjust quoting in `starship.toml` if their Starship config wraps commands differently.
 
 ## Before / after
@@ -83,10 +152,16 @@ Without the segment:
 ~/code/my-project ❯
 ```
 
-With the segment:
+With the segment (project root):
 
 ```
-{▪} my-project ✓ ~/code/my-project ❯
+{▪} my-project ✓ ● ~/code/my-project ❯
 ```
 
-(The DWE logomark and status icon are coloured in real terminals.)
+With the segment (inside `workspace/services/api/`):
+
+```
+{▪} my-project [api] ✓ ● ~/code/my-project/workspace/services/api ❯
+```
+
+(The DWE logomark and icons are coloured in real terminals.)

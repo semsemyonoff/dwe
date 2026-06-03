@@ -47,7 +47,6 @@ Generated reference for the `dwe` command tree.
   - [dwe docs show](dwe_docs_show.md) — Show documentation for a topic
 - [dwe info](dwe_info.md) — Display project info dashboard (URLs, hosts, services, tools)
 - [dwe logs](dwe_logs.md) — Stream container logs for a service
-- [dwe prompt](dwe_prompt.md) — Print a compact shell-prompt segment for the current project
 - [dwe render](dwe_render.md) — Render derived artifacts from the merged workspace config
   - [dwe render ai](dwe_render_ai.md) — Generate hub-level agents docs from template packs
   - [dwe render env](dwe_render_env.md) — Generate .env from exports.env spec (stdout or --out <file>)

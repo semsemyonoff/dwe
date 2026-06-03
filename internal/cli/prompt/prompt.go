@@ -19,8 +19,28 @@ func NewCmd(groupID string, _ *cmdctx.RootFlags) *cobra.Command {
 		Long: `Print a compact, prompt-ready segment describing the current dwe project.
 
 Designed for shell-prompt integration (e.g. starship). The output is a single
-line of the form '{▪} <project-name> <status-icon>', where the logomark uses
-the project's accent color and the status icon reflects deploy state.
+line of the form:
+
+    {▪} <project> [<service>] <deploy-icon> <stack-icon>
+
+Segments:
+  - {▪}            DWE logomark, colored with the project's accent token.
+  - <project>      project.name from workspace.yml.
+  - [<service>]    optional: present only when cwd is under
+                   workspace/services/<name>/...; the surrounding brackets are
+                   plain, the inner name is sanitized.
+  - <deploy-icon>  optional: ✓/⟳/⚠/✗ reflecting the deploy-state journal at
+                   .dwe/deploy/state.yml (success/pending/partial/failed).
+  - <stack-icon>   optional: ●/◐/○ reflecting live container state
+                   (running/partial/stopped). Backed by a stale-while-revalidate
+                   cache at .dwe/prompt-cache.yml (TTL 2 min); on stale cache
+                   prompt shells out to 'docker ps' with a 150 ms hard timeout.
+                   Authoritative writers (lifecycle commands, dwe status) keep
+                   the cache accurate; the prompt itself never downgrades a
+                   cached "running" to "stopped".
+
+Only the '{▪} <project>' prefix is a stability guarantee — every other segment
+is optional and may be absent.
 
 The hot path bypasses cobra and dispatches directly from main; this command
 exists primarily for --help discoverability and shell completion. Exits 0

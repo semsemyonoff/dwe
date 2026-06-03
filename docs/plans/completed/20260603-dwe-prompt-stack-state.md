@@ -477,8 +477,8 @@ The top-level `dwe status` RunE (`internal/cli/status/status.go:202+`) branches 
 - Modify: `docs/internals/packages.md`
 - Modify: `AGENTS.md` (CLAUDE.md is a symlink — do not overwrite the symlink or its target structurally; only append to relevant sections)
 
-- [ ] update the `Long` text in `internal/cli/prompt/prompt.go` to document `{▪} project [service] <deploy> <stack>\n` and the four-segment contract
-- [ ] update `docs/reference/cli/starship.md` with:
+- [x] update the `Long` text in `internal/cli/prompt/prompt.go` to document `{▪} project [service] <deploy> <stack>\n` and the four-segment contract
+- [x] update `docs/reference/cli/starship.md` with:
   - new output format examples (with and without service tag, with and without stack icon)
   - cache: location (`.dwe/prompt-cache.yml`), TTL (2 min), TTL-driven refresh via `docker ps`
   - writer map (lifecycle / status / snapshot / prompt-refresh) with semantics
@@ -487,13 +487,13 @@ The top-level `dwe status` RunE (`internal/cli/status/status.go:202+`) branches 
     - custom docker binary (`binaries.docker`) bypasses prompt refresh
     - templated compose project name (`docker.yml` `project_name`) bypasses prompt refresh — fresh state only after lifecycle command or `dwe status`
     - manual `docker stop` outside dwe is not detected by prompt refresh (no-downgrade rule) — run `dwe status` to refresh
-- [ ] in `docs/internals/packages.md`, update `internal/shared/prompt/` section (cache reads, docker exec, no-downgrade rule) and add `internal/shared/promptcache/` section. Note in `internal/core/project/stack/` the new `HealthState` and `HealthFromStatusInput` functions.
-- [ ] in `AGENTS.md` "Critical Patterns" section, add a one-liner about the prompt-cache contract (who writes / invalidates / refreshes; layering)
-- [ ] run `make build` to regenerate `internal/core/docs/embedded/` and `content_hashes_gen.go`
-- [ ] check whether `docs/reference/cli/dwe_prompt.md` is regenerated or removed; if removed and we want to keep it, run `dwe docs generate --include-hidden` (or document this as the new behavior)
-- [ ] verify embedded-docs tests pass: `go test ./internal/core/docs/...`
-- [ ] check Russian translation hashes in `docs/i18n/` (commit `13769541` shows the convention for stale-hash refresh — only relevant if `docs/reference/render/` or `docs/internals/packages.md` have RU translations that need re-hashing)
-- [ ] move this plan to `docs/plans/completed/`
+- [x] in `docs/internals/packages.md`, update `internal/shared/prompt/` section (cache reads, docker exec, no-downgrade rule) and add `internal/shared/promptcache/` section. Note in `internal/core/project/stack/` the new `HealthState` and `HealthFromStatusInput` functions.
+- [x] in `AGENTS.md` "Critical Patterns" section, add a one-liner about the prompt-cache contract (who writes / invalidates / refreshes; layering)
+- [x] run `make build` to regenerate `internal/core/docs/embedded/` and `content_hashes_gen.go`
+- [x] check whether `docs/reference/cli/dwe_prompt.md` is regenerated or removed; if removed and we want to keep it, run `dwe docs generate --include-hidden` (or document this as the new behavior) — regenerated indexes (dwe.md, index.md) drop the prompt entry since `Hidden:true`; the orphan `dwe_prompt.md` was deleted to keep the cli reference consistent with the hand-maintained `starship.md` canonical doc
+- [x] verify embedded-docs tests pass: `go test ./internal/core/docs/...`
+- [x] check Russian translation hashes in `docs/i18n/` (commit `13769541` shows the convention for stale-hash refresh — only relevant if `docs/reference/render/` or `docs/internals/packages.md` have RU translations that need re-hashing) — no RU translations exist for `docs/internals/**` or `docs/reference/cli/**`; no hashes to refresh
+- [x] move this plan to `docs/plans/completed/`
 
 ## Post-Completion
 
