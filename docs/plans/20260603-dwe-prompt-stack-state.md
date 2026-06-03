@@ -256,12 +256,12 @@ Stack-icon colors:
 - Modify: `internal/cli/prompt/prompt.go`
 - Modify: `internal/cli/prompt/prompt_test.go`
 
-- [ ] add `Hidden: true` to the `cobra.Command` literal in `NewCmd`
-- [ ] keep `Long` description (still visible via `dwe prompt --help`)
-- [ ] add test asserting `cmd.Hidden == true`
-- [ ] add test verifying `dwe prompt --help` still emits help (cobra's auto-help still works on hidden commands — `cmd.Help()` returns non-empty output)
-- [ ] verify `internal/cli/root_test.go:44` test still passes (iterates via `Commands()`, which sees hidden commands)
-- [ ] run `go test ./internal/cli/prompt/... ./internal/cli/...` — must pass before next task
+- [x] add `Hidden: true` to the `cobra.Command` literal in `NewCmd`
+- [x] keep `Long` description (still visible via `dwe prompt --help`)
+- [x] add test asserting `cmd.Hidden == true`
+- [x] add test verifying `dwe prompt --help` still emits help (cobra's auto-help still works on hidden commands — `cmd.Help()` returns non-empty output)
+- [x] verify `internal/cli/root_test.go:44` test still passes (iterates via `Commands()`, which sees hidden commands)
+- [x] run `go test ./internal/cli/prompt/... ./internal/cli/...` — must pass before next task
 
 ### Task 2: Add `detectService` and `muted` palette to `shared/prompt`
 

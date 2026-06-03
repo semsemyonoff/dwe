@@ -28,6 +28,46 @@ func TestNewPromptCmd_UseAndFlags(t *testing.T) {
 	if !cmd.SilenceErrors {
 		t.Error("expected SilenceErrors=true")
 	}
+	if !cmd.Hidden {
+		t.Error("expected Hidden=true so prompt is omitted from `dwe --help`")
+	}
+}
+
+func TestPromptCmd_HelpStillWorks(t *testing.T) {
+	// Hidden commands still respond to --help; verify the help block is non-empty
+	// and contains the command name.
+	cmd := prompt.NewCmd("", &cmdctx.RootFlags{})
+	var buf bytes.Buffer
+	cmd.SetOut(&buf)
+	cmd.SetErr(&buf)
+	cmd.SetArgs([]string{"--help"})
+	if err := cmd.Execute(); err != nil {
+		t.Fatalf("prompt --help returned error: %v", err)
+	}
+	out := buf.String()
+	if !strings.Contains(out, "prompt") {
+		t.Errorf("expected help output to mention `prompt`, got %q", out)
+	}
+}
+
+func TestPromptCmd_HiddenFromRootHelp(t *testing.T) {
+	// Hidden commands should not be listed in the parent's `--help` output, but
+	// must still appear in Commands() (so callers can find them programmatically).
+	root := cli.NewRootCmd()
+	var buf bytes.Buffer
+	root.SetOut(&buf)
+	root.SetErr(&buf)
+	root.SetArgs([]string{"--help"})
+	if err := root.Execute(); err != nil {
+		t.Fatalf("root --help returned error: %v", err)
+	}
+	help := buf.String()
+	for line := range strings.SplitSeq(help, "\n") {
+		trimmed := strings.TrimSpace(line)
+		if strings.HasPrefix(trimmed, "prompt ") || trimmed == "prompt" {
+			t.Errorf("hidden `prompt` command leaked into root --help listing: %q", line)
+		}
+	}
 }
 
 func TestPromptRegisteredAtRoot(t *testing.T) {

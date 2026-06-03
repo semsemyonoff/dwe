@@ -28,6 +28,7 @@ inside a dwe project and 1 outside (or on any silent failure).`,
 		Example: "  dwe prompt\n  dwe prompt --check",
 		Args:    cobra.NoArgs,
 		GroupID: groupID,
+		Hidden:  true,
 		// Prompt output is consumed by shells — never let cobra print usage or
 		// error banners that would corrupt the rendered prompt line.
 		SilenceUsage:  true,
