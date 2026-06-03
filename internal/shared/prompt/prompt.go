@@ -633,8 +633,9 @@ func readProjectName(root string) (string, bool) {
 //  2. project.prefix + "-" + project.name when prefix is set
 //  3. project.name (same as displayName)
 //
-// displayName is the already-resolved display name so workspace.yml need not be
-// re-read. The return value is always non-empty.
+// displayName is passed in as the fallback name (used when workspace.yml is
+// unreadable or when no prefix is configured). The return value is always
+// non-empty.
 func readComposeProjectName(root, displayName string) string {
 	if dockerName := readDockerProjectNameLiteral(root); dockerName != "" {
 		return dockerName
@@ -648,7 +649,7 @@ func readComposeProjectName(root, displayName string) string {
 		return displayName
 	}
 	if stub.Project.Prefix != "" {
-		return stub.Project.Prefix + "-" + displayName
+		return stub.Project.Prefix + "-" + stub.Project.Name
 	}
 	return displayName
 }
