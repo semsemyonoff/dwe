@@ -1381,18 +1381,18 @@ func LoadConfig(workspacePath string) (*DweConfig, error) {
 	// strictly last by composeFiles().
 	cfg.Compose.Extra = extractProjectLocalComposeExtra(localRaw)
 
-	// Validate all local.yml overlay paths (project-wide + per-service) for
-	// absolute-rejection, containment, and existence. Runs BEFORE
-	// ResolveServiceExtends so parent paths are validated once; inherited
-	// child copies reuse the same (already-valid) entries.
-	if err := validateLocalComposeExtraPaths(baseDir, cfg.Compose.Extra, services); err != nil {
-		return nil, err
-	}
-
 	// Resolve `extends:` inheritance AFTER per-service overlay merges so children
 	// inherit the already-overlaid parent values (e.g. local.yml overrides on the
 	// parent's hosts/ports propagate into children that don't override themselves).
 	if err := ResolveServiceExtends(services); err != nil {
+		return nil, err
+	}
+
+	// Validate all local.yml overlay paths (project-wide + per-service) for
+	// absolute-rejection, containment, and existence. Runs AFTER
+	// ResolveServiceExtends so enabled children that inherit LocalComposeExtra
+	// from a disabled parent (skipped in validation) are still checked.
+	if err := validateLocalComposeExtraPaths(baseDir, cfg.Compose.Extra, services); err != nil {
 		return nil, err
 	}
 	// Phase 2: apply scheme-only port overlays now that every service has its
