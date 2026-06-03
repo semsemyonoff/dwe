@@ -336,26 +336,26 @@ Stack-icon colors:
 - Create: `internal/shared/promptcache/promptcache.go`
 - Create: `internal/shared/promptcache/promptcache_test.go`
 
-- [ ] declare package `promptcache` with string constants `StateRunning`, `StatePartial`, `StateStopped` (no enum type)
-- [ ] implement `Write(root, state string) error`:
+- [x] declare package `promptcache` with string constants `StateRunning`, `StatePartial`, `StateStopped` (no enum type)
+- [x] implement `Write(root, state string) error`:
   - validates state ∈ {`StateRunning`, `StatePartial`, `StateStopped`} — return error otherwise
   - ensures `<root>/.dwe/` exists (`os.MkdirAll` with 0755)
   - encodes `{updated_at: time.Now().UTC().Format(time.RFC3339), state: <state>}` to YAML
   - atomic write: `os.CreateTemp(<root>/.dwe/, "prompt-cache-*.tmp")` + write + close + `os.Rename`
-- [ ] implement `Remove(root string) error`:
+- [x] implement `Remove(root string) error`:
   - removes `<root>/.dwe/prompt-cache.yml` if it exists
   - returns `nil` on `os.ErrNotExist` (idempotent)
   - returns the underlying error otherwise
   - this is the public invalidation API used by sibling CLI packages (snapshot/restore, lifecycle scoped operations)
-- [ ] write `TestWrite_CreatesFile_WithRightShape` (read back YAML and verify both keys)
-- [ ] write `TestWrite_CreatesDweDirIfMissing`
-- [ ] write `TestWrite_RejectsInvalidState` (e.g. `"unknown"`, empty string)
-- [ ] write `TestWrite_Atomic_OnRenameFailure_OriginalUntouched` (pre-seed cache, force tmp rename to fail via permission; verify original content intact)
-- [ ] write `TestWrite_ConcurrentSafeAtomicRename` (10 goroutines calling Write simultaneously; verify the file always parses and ends with a valid state)
-- [ ] write `TestRemove_DeletesExistingFile`
-- [ ] write `TestRemove_IdempotentWhenAbsent`
-- [ ] verify **zero `internal/core/*` imports** in `promptcache.go` (`grep -E "internal/core" promptcache.go` must be empty)
-- [ ] run `go test ./internal/shared/promptcache/...` — must pass before next task
+- [x] write `TestWrite_CreatesFile_WithRightShape` (read back YAML and verify both keys)
+- [x] write `TestWrite_CreatesDweDirIfMissing`
+- [x] write `TestWrite_RejectsInvalidState` (e.g. `"unknown"`, empty string)
+- [x] write `TestWrite_Atomic_OnRenameFailure_OriginalUntouched` (pre-seed cache, force tmp rename to fail via permission; verify original content intact)
+- [x] write `TestWrite_ConcurrentSafeAtomicRename` (10 goroutines calling Write simultaneously; verify the file always parses and ends with a valid state)
+- [x] write `TestRemove_DeletesExistingFile`
+- [x] write `TestRemove_IdempotentWhenAbsent`
+- [x] verify **zero `internal/core/*` imports** in `promptcache.go` (`grep -E "internal/core" promptcache.go` must be empty)
+- [x] run `go test ./internal/shared/promptcache/...` — must pass before next task
 
 ### Task 6: Add `core/project/stack.HealthState`
 
