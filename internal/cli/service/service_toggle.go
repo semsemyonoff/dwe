@@ -540,6 +540,7 @@ func runSingleServiceToggle(
 	if regErr != nil {
 		return fmt.Errorf("loading command registry: %w", regErr)
 	}
+	_ = reg.ApplyVisibility(cfg, baseDir)
 
 	svcDeploys, err := config.LoadServiceDeployConfigs(baseDir, cfg.Services)
 	if err != nil {

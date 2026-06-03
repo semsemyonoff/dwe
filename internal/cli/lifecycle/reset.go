@@ -73,7 +73,7 @@ func runResetPlan(cmd *cobra.Command, flags *cmdctx.RootFlags, opts resetPlanOpt
 	if err != nil {
 		return fmt.Errorf("loading command registry: %w", err)
 	}
-	_ = reg.ApplyVisibility(cfg, flags.Root)
+	_ = reg.ApplyVisibility(cfg, flags.ProjectRoot())
 	_, steps, defaulted, err := reset.LoadAndResolvePlan(cfg, reg)
 	if err != nil {
 		return fmt.Errorf("resolving reset plan: %w", err)

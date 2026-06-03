@@ -87,7 +87,7 @@ func runDeployPlan(ctx context.Context, cmd *cobra.Command, flags *cmdctx.RootFl
 	// see Hidden=true on user commands gated by the active config.
 	// Fail-open — per-expression eval failures are logged and treated as
 	// visible.
-	_ = reg.ApplyVisibility(cfg, flags.Root)
+	_ = reg.ApplyVisibility(cfg, flags.ProjectRoot())
 
 	var steps []pipeline.ResolvedStep
 	if opts.ServiceName != "" {
@@ -364,7 +364,7 @@ func RunHelper(ctx context.Context, cmd *cobra.Command, flags *cmdctx.RootFlags,
 		reg = nil
 	}
 	if reg != nil {
-		_ = reg.ApplyVisibility(cfg, flags.Root)
+		_ = reg.ApplyVisibility(cfg, flags.ProjectRoot())
 	}
 
 	runPreflight := opts.PreflightFn
