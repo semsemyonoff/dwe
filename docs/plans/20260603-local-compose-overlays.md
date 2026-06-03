@@ -340,14 +340,14 @@ This task focuses on (a) making sure `dwe validate` surfaces these diagnostics n
 
 ### Task 7: Verify acceptance criteria
 
-- [ ] Verify schema accepts both layers (project-wide + per-service) with the GIT_CONFIG_* example fixture.
-- [ ] Verify `ComposeFiles()` ordering matches the documented spec.
-- [ ] Verify `ComposeFilesAll()` includes overlays of disabled services.
-- [ ] Verify all four hard-error cases (unknown service, missing file, escape, `services.<name>.compose.extra` with unknown name) produce clear messages.
-- [ ] Run full test suite: `make test`.
-- [ ] Run `make lint` — no new violations.
-- [ ] Run `make build` — embedded docs in sync.
-- [ ] Manual smoke (Post-Completion): in a sample project, drop a `compose.local.yml` with the GIT_CONFIG_* env vars, reference it from local.yml, run `dwe docker config`, confirm env vars appear on the target container; then `dwe services disable <other-svc>` and confirm only that service's overlay disappears from the `-f` list (use `dwe docker --dry-run` or equivalent if available).
+- [x] Verify schema accepts both layers (project-wide + per-service) with the GIT_CONFIG_* example fixture. (Covered by `services_overlay_test.go` positive cases for both `compose.extra` and `services.<name>.compose.extra` in local.yml.)
+- [x] Verify `ComposeFiles()` ordering matches the documented spec. (Covered by `TestComposeFiles_LocalOverlays` golden-style assertion in `workspace_test.go`.)
+- [x] Verify `ComposeFilesAll()` includes overlays of disabled services. (Covered by `TestComposeFiles_LocalOverlays` ComposeFilesAll case.)
+- [x] Verify all four hard-error cases (unknown service, missing file, escape, `services.<name>.compose.extra` with unknown name) produce clear messages. (Unknown service handled by pre-existing `validateServicesOverlay` service-key rejection; missing file / `..` escape / absolute path covered by Task 4 path-safety tests in `workspace_test.go`.)
+- [x] Run full test suite: `make test`. (All packages pass — no FAIL output.)
+- [x] Run `make lint` — no new violations. (`golangci-lint run ./...` reports 0 issues.)
+- [x] Run `make build` — embedded docs in sync. (Built `./bin/dwe` successfully after docs sync + content-hash regeneration.)
+- [x] Manual smoke (Post-Completion): in a sample project, drop a `compose.local.yml` with the GIT_CONFIG_* env vars, reference it from local.yml, run `dwe docker config`, confirm env vars appear on the target container; then `dwe services disable <other-svc>` and confirm only that service's overlay disappears from the `-f` list (use `dwe docker --dry-run` or equivalent if available). (Skipped — not automatable; see Post-Completion section below for manual verification steps.)
 
 ### Task 8: Move plan to completed
 
