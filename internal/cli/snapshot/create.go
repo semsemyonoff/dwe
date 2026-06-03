@@ -21,6 +21,7 @@ import (
 	snapshotpkg "github.com/semsemyonoff/dwe/internal/core/workflow/snapshot"
 	"github.com/semsemyonoff/dwe/internal/core/workflow/snapshot/meta"
 	"github.com/semsemyonoff/dwe/internal/shared/lock"
+	"github.com/semsemyonoff/dwe/internal/shared/promptcache"
 	"github.com/semsemyonoff/dwe/internal/shared/render"
 	"github.com/semsemyonoff/dwe/internal/shared/version"
 
@@ -165,6 +166,10 @@ func runSnapshotCreate(cmd *cobra.Command, flags *cmdctx.RootFlags, name, descri
 		}
 		// Manifest already persisted with status=interrupted; exit 130 for SIGINT.
 		writeCreateOutcome(stderr, res)
+		// Create workflow may have partially mutated container state before
+		// failing; invalidate so the next prompt refresh or `dwe status`
+		// reflects ground truth.
+		_ = promptcache.Remove(baseDir)
 		if errors.Is(runErr, context.Canceled) || errors.Is(runErr, context.DeadlineExceeded) {
 			return &snapshotInterruptedError{wrapped: runErr}
 		}
@@ -172,6 +177,9 @@ func runSnapshotCreate(cmd *cobra.Command, flags *cmdctx.RootFlags, name, descri
 	}
 
 	writeCreateOutcome(stderr, res)
+	// Create workflow may have stopped/restarted containers; invalidate so the
+	// next prompt refresh reflects ground truth.
+	_ = promptcache.Remove(baseDir)
 	return nil
 }
 
