@@ -12,9 +12,63 @@ import (
 	"strings"
 
 	"github.com/semsemyonoff/dwe/internal/core/project/config"
+	"github.com/semsemyonoff/dwe/internal/core/ui/widgets"
 	"github.com/semsemyonoff/dwe/internal/shared/docker"
 	"github.com/semsemyonoff/dwe/internal/shared/render"
 )
+
+// ttyDetector is the seam tests use to drive TTY auto-detect branches without
+// touching real stdio. Defaults to widgets.IsInteractiveFn.
+var ttyDetector = widgets.IsInteractiveFn
+
+// stdioInteractive returns true when both host stdin and host stdout are TTYs.
+func stdioInteractive() bool {
+	return ttyDetector(os.Stdin) && ttyDetector(os.Stdout)
+}
+
+// dockerExecTTYFlags returns ["-i", "-t"] when interactive, else ["-i"].
+// Stdin is always wired so piped input still reaches the child.
+func dockerExecTTYFlags() []string {
+	if stdioInteractive() {
+		return []string{"-i", "-t"}
+	}
+	return []string{"-i"}
+}
+
+// composeRunTTYFlags returns the TTY flag vector for `docker compose run`.
+// Compose allocates a TTY by default; -T disables it. Stdin stays wired.
+func composeRunTTYFlags() []string {
+	if stdioInteractive() {
+		return []string{"-i"}
+	}
+	return []string{"-i", "-T"}
+}
+
+// shellCommandExitError carries a child command's exact exit code through
+// cobra/fang. cmd/dwe/main.go extracts `interface{ ExitCode() int }` and calls
+// os.Exit with that code; its errHandler also suppresses Fang's "Error:" banner
+// for ExitCode-bearing errors so only the child's stdout/stderr is visible.
+type shellCommandExitError struct {
+	code       int
+	underlying error
+}
+
+func (e *shellCommandExitError) Error() string { return e.underlying.Error() }
+func (e *shellCommandExitError) ExitCode() int { return e.code }
+func (e *shellCommandExitError) Unwrap() error { return e.underlying }
+
+// wrapExitError converts an *exec.ExitError into a *shellCommandExitError so the
+// child's exit code propagates to os.Exit. Non-exit errors are returned unchanged.
+func wrapExitError(err error) error {
+	if err == nil {
+		return nil
+	}
+	var exitErr *exec.ExitError
+	if errors.As(err, &exitErr) {
+		return &shellCommandExitError{code: exitErr.ExitCode(), underlying: exitErr}
+	}
+	return err
+}
 
 // shellOptions holds fully resolved shell session parameters after applying
 // flag -> config -> default priority.
@@ -279,7 +333,10 @@ func composeRunCLI(compose *docker.Compose, serviceName, shell, u, workDir strin
 // for the child process (nil means inherit unchanged). workDir is the cwd for the
 // child (empty inherits the parent CWD); compose-aware callers must pass
 // compose.BaseDir so relative `-f` paths resolve against the project root.
-func runInteractive(processEnv []string, workDir, name string, args ...string) error {
+//
+// Exposed as a package variable so tests can inject a fake without spawning a
+// real child process (used by one-shot helpers to drive exit-code wrapping).
+var runInteractive = func(processEnv []string, workDir, name string, args ...string) error {
 	cmd := exec.Command(name, args...)
 	cmd.Dir = workDir
 	cmd.Stdin = os.Stdin
@@ -287,4 +344,118 @@ func runInteractive(processEnv []string, workDir, name string, args ...string) e
 	cmd.Stderr = os.Stderr
 	cmd.Env = processEnv
 	return cmd.Run()
+}
+
+// dockerExecOneShot runs a single command in a running container via
+// `docker exec <ttyFlags> [-u u] [-w workDir] [-e K=V ...] <container> <shell> -c "<command>"`
+// and exits without printing a banner. On *exec.ExitError, the error is wrapped
+// as *shellCommandExitError so main.go can preserve the child's exit code.
+func dockerExecOneShot(containerName, shell, u, workDir string, env map[string]string, command string, processEnv []string, dockerBin string) error {
+	args := []string{"exec"}
+	args = append(args, dockerExecTTYFlags()...)
+	if u != "" {
+		args = append(args, "-u", u)
+	}
+	if workDir != "" {
+		args = append(args, "-w", workDir)
+	}
+	for _, k := range slices.Sorted(maps.Keys(env)) {
+		args = append(args, "-e", k+"="+env[k])
+	}
+	args = append(args, containerName, shell, "-c", command)
+	// Silent: no render.Stdout().Info — script stdout must stay clean.
+	return wrapExitError(runInteractive(processEnv, "", dockerBin, args...))
+}
+
+// composeRunOneShot starts a fresh container via `docker compose run --rm` and
+// runs `<shell> -c "<command>"` inside it, silently.
+func composeRunOneShot(compose *docker.Compose, serviceName, shell, u, workDir string, env map[string]string, command string) error {
+	args := []string{"compose"}
+	if compose.ProjectName != "" {
+		args = append(args, "-p", compose.ProjectName)
+	}
+	for _, f := range compose.Files {
+		args = append(args, "-f", f)
+	}
+	args = append(args, compose.GlobalArgs...)
+	args = append(args, "run", "--rm")
+	args = append(args, composeRunTTYFlags()...)
+	if u != "" {
+		args = append(args, "-u", u)
+	}
+	if workDir != "" {
+		args = append(args, "-w", workDir)
+	}
+	for _, k := range slices.Sorted(maps.Keys(env)) {
+		args = append(args, "-e", k+"="+env[k])
+	}
+	args = append(args, serviceName, shell, "-c", command)
+	// Silent: no render.Stdout().Info.
+	return wrapExitError(runInteractive(compose.BuildEnv(), compose.BaseDir, compose.BinName(), args...))
+}
+
+// oneShotExecFunc executes a single command in a running container.
+type oneShotExecFunc func(containerName, shell, u, workDir string, env map[string]string, command string) error
+
+// oneShotRunFunc starts a fresh container and runs a single command in it.
+type oneShotRunFunc func(compose *docker.Compose, serviceName, shell, u, workDir string, env map[string]string, command string) error
+
+// runOneShotCommand mirrors runServicesCLI's mode switch but invokes the one-shot
+// helpers. getState/execOneShot/runOneShot are injected for testability.
+func runOneShotCommand(
+	cfg *config.DweConfig,
+	compose *docker.Compose,
+	serviceName string,
+	flags shellCLIFlags,
+	getState func(string) (string, error),
+	execOneShot oneShotExecFunc,
+	runOneShot oneShotRunFunc,
+) error {
+	svc, ok := cfg.Services[serviceName]
+	if !ok {
+		return fmt.Errorf("service %q not found", serviceName)
+	}
+	if svc.Container == "" {
+		return fmt.Errorf("service %q has no container defined", serviceName)
+	}
+
+	opts, err := resolveShellOptions(flags, svc.CLI, svc)
+	if err != nil {
+		return err
+	}
+
+	if !validModes[opts.Mode] {
+		return fmt.Errorf("invalid cli.mode %q for service %q: must be auto, exec, or run", opts.Mode, serviceName)
+	}
+
+	fullContainerName := compose.ProjectName + "-" + svc.Container
+
+	switch opts.Mode {
+	case "exec":
+		status, stateErr := getState(fullContainerName)
+		if stateErr != nil {
+			return fmt.Errorf("container %q: %w", fullContainerName, stateErr)
+		}
+		if status != "running" {
+			return fmt.Errorf("container %q is not running — start it with 'dwe run'", fullContainerName)
+		}
+		return execOneShot(fullContainerName, opts.Shell, opts.User, opts.WorkDir, opts.Env, flags.command)
+	case "run":
+		return runOneShot(compose, svc.Container, opts.Shell, opts.User, opts.WorkDir, opts.Env, flags.command)
+	default: // "auto"
+		status, stateErr := getState(fullContainerName)
+		switch {
+		case errors.Is(stateErr, errContainerNotFound):
+			return runOneShot(compose, svc.Container, opts.Shell, opts.User, opts.WorkDir, opts.Env, flags.command)
+		case stateErr != nil:
+			return fmt.Errorf("container %q: %w", fullContainerName, stateErr)
+		case status == "running":
+			return execOneShot(fullContainerName, opts.Shell, opts.User, opts.WorkDir, opts.Env, flags.command)
+		default:
+			return fmt.Errorf(
+				"container %q is %s — start it first with 'dwe run'",
+				fullContainerName, status,
+			)
+		}
+	}
 }
