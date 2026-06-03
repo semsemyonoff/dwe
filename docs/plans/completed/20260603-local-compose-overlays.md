@@ -351,9 +351,9 @@ This task focuses on (a) making sure `dwe validate` surfaces these diagnostics n
 
 ### Task 8: Move plan to completed
 
-- [ ] Verify all checkboxes above are marked `[x]`.
-- [ ] `mkdir -p docs/plans/completed`.
-- [ ] `git mv docs/plans/20260603-local-compose-overlays.md docs/plans/completed/`.
+- [x] Verify all checkboxes above are marked `[x]`.
+- [x] `mkdir -p docs/plans/completed`.
+- [x] `git mv docs/plans/20260603-local-compose-overlays.md docs/plans/completed/`.
 
 ## Post-Completion
 
