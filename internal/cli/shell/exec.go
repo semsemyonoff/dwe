@@ -274,7 +274,10 @@ func containerStateStatus(containerName string, processEnv []string, dockerBin s
 			Status string `json:"Status"`
 		} `json:"State"`
 	}
-	if err := json.Unmarshal(out, &items); err != nil || len(items) == 0 || items[0].State == nil {
+	if err := json.Unmarshal(out, &items); err != nil {
+		return "", fmt.Errorf("parsing docker inspect output: %w", err)
+	}
+	if len(items) == 0 || items[0].State == nil {
 		// Object exists but has no usable State — treat as not found.
 		return "", errContainerNotFound
 	}
@@ -284,7 +287,8 @@ func containerStateStatus(containerName string, processEnv []string, dockerBin s
 // dockerExecCLI runs an interactive shell in a running container via docker exec.
 // processEnv is the OS-level environment for the docker process itself (e.g. DOCKER_CLI_HINTS=false).
 func dockerExecCLI(containerName, shell, u, workDir string, env map[string]string, processEnv []string, dockerBin string) error {
-	args := []string{"exec", "-it"}
+	args := []string{"exec"}
+	args = append(args, dockerExecTTYFlags()...)
 	if u != "" {
 		args = append(args, "-u", u)
 	}
@@ -312,7 +316,8 @@ func composeRunCLI(compose *docker.Compose, serviceName, shell, u, workDir strin
 		args = append(args, "-f", f)
 	}
 	args = append(args, compose.GlobalArgs...)
-	args = append(args, "run", "--rm", "-it")
+	args = append(args, "run", "--rm")
+	args = append(args, composeRunTTYFlags()...)
 	if u != "" {
 		args = append(args, "-u", u)
 	}

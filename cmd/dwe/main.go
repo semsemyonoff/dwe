@@ -103,7 +103,7 @@ func configPathFromArgs() (path string, explicit bool) {
 	fs := pflag.NewFlagSet("pre-parse", pflag.ContinueOnError)
 	fs.ParseErrorsAllowlist.UnknownFlags = true
 	fs.SetOutput(io.Discard)
-	cp := fs.StringP("config", "c", "", "")
+	cp := fs.String("config", "", "")
 	_ = fs.Parse(os.Args[1:])
 	f := fs.Lookup("config")
 	if f != nil && f.Changed {

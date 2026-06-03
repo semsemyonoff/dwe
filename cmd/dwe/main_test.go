@@ -78,14 +78,16 @@ func TestConfigPathFromArgs(t *testing.T) {
 		}
 	})
 
-	t.Run("short -c flag", func(t *testing.T) {
+	t.Run("short -c flag is not recognized by pre-parser", func(t *testing.T) {
+		// -c was dropped as a --config shorthand so it can be used by dwe shell -c.
+		// The pre-parser must not absorb it; cobra handles -c on the shell subcommand.
 		origArgs := os.Args
 		os.Args = []string{"dwe", "-c", "/other/workspace.yml"}
 		defer func() { os.Args = origArgs }()
 
 		path, explicit := configPathFromArgs()
-		if path != "/other/workspace.yml" || !explicit {
-			t.Errorf("want (\"/other/workspace.yml\", true), got (%q, %v)", path, explicit)
+		if path != "" || explicit {
+			t.Errorf("want (\"\", false) — -c is not a --config shorthand, got (%q, %v)", path, explicit)
 		}
 	})
 

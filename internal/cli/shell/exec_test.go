@@ -149,6 +149,41 @@ func TestWrapExitError_nilPassthrough(t *testing.T) {
 	}
 }
 
+// --- resolveShellOptions: env validation ---
+
+func TestResolveShellOptions_envValidation(t *testing.T) {
+	cases := []struct {
+		name    string
+		envVars []string
+		wantErr string
+	}{
+		{"missing equals", []string{"NOEQUALS"}, `--env "NOEQUALS": expected KEY=VALUE format`},
+		{"empty key", []string{"=value"}, `--env "=value": expected KEY=VALUE format`},
+		{"valid single", []string{"FOO=bar"}, ""},
+		{"valid value with equals", []string{"FOO=bar=baz"}, ""},
+		{"empty value is valid", []string{"FOO="}, ""},
+	}
+	svc := config.ServiceConfig{Container: "c"}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			flags := shellCLIFlags{envVars: tc.envVars}
+			_, err := resolveShellOptions(flags, config.ServiceCLIConfig{}, svc)
+			if tc.wantErr == "" {
+				if err != nil {
+					t.Errorf("unexpected error: %v", err)
+				}
+				return
+			}
+			if err == nil {
+				t.Fatalf("expected error containing %q, got nil", tc.wantErr)
+			}
+			if !strings.Contains(err.Error(), tc.wantErr) {
+				t.Errorf("error %q does not contain %q", err.Error(), tc.wantErr)
+			}
+		})
+	}
+}
+
 // --- dockerExecOneShot / composeRunOneShot: argv shape, silence, exit code ---
 
 // withFakeRunInteractive captures every call to runInteractive and (optionally)
@@ -482,12 +517,15 @@ func TestDispatchShell_routesOnCommandFlag(t *testing.T) {
 			t.Fatalf("want 1 runInteractive call, got %d", len(*calls))
 		}
 		args := (*calls)[0].args
-		// composeRunCLI appends "-it" (hardcoded) and ends with `<service> <shell>`.
+		// composeRunCLI uses composeRunTTYFlags(); non-interactive (false,false) → ["-i","-T"].
 		if args[len(args)-1] != "bash" {
 			t.Errorf("interactive path should end with shell, got args: %v", args)
 		}
-		if !slices.Contains(args, "-it") {
-			t.Errorf("interactive composeRunCLI should pass -it; args: %v", args)
+		if slices.Contains(args, "-it") {
+			t.Errorf("composeRunCLI must not emit hardcoded -it; args: %v", args)
+		}
+		if !slices.Contains(args, "-T") {
+			t.Errorf("composeRunCLI with non-TTY should pass -T; args: %v", args)
 		}
 	})
 
