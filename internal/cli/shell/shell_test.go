@@ -1,9 +1,13 @@
 package shell
 
 import (
+	"bytes"
 	"fmt"
+	"io"
+	"strings"
 	"testing"
 
+	"github.com/semsemyonoff/dwe/internal/cli/cmdctx"
 	"github.com/semsemyonoff/dwe/internal/core/project/config"
 )
 
@@ -101,6 +105,90 @@ func TestPickService_nonInteractiveSelector_multipleEnabled_returnsError(t *test
 	_, err := pickService(cfg, "", nonTTYSelector)
 	if err == nil {
 		t.Fatal("expected non-interactive error, got nil")
+	}
+}
+
+// --- -c / --command flag wiring ---
+
+func TestNewCmd_commandFlag_registered(t *testing.T) {
+	cmd := NewCmd("", &cmdctx.RootFlags{})
+	flag := cmd.Flags().Lookup("command")
+	if flag == nil {
+		t.Fatal("expected --command flag to be registered")
+	}
+	if flag.Shorthand != "c" {
+		t.Errorf("want shorthand %q, got %q", "c", flag.Shorthand)
+	}
+	if flag.DefValue != "" {
+		t.Errorf("want default %q, got %q", "", flag.DefValue)
+	}
+}
+
+func TestNewCmd_commandFlag_validation(t *testing.T) {
+	tests := []struct {
+		name     string
+		args     []string
+		wantErr  bool
+		errMatch string
+	}{
+		{
+			name:     "explicit empty errors",
+			args:     []string{"-c", ""},
+			wantErr:  true,
+			errMatch: "cannot be empty or whitespace-only",
+		},
+		{
+			name:     "whitespace only errors",
+			args:     []string{"-c", "   "},
+			wantErr:  true,
+			errMatch: "cannot be empty or whitespace-only",
+		},
+		{
+			name:     "tabs and newlines errors",
+			args:     []string{"-c", "\t \n"},
+			wantErr:  true,
+			errMatch: "cannot be empty or whitespace-only",
+		},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			cmd := NewCmd("", &cmdctx.RootFlags{})
+			cmd.SetArgs(tc.args)
+			cmd.SetOut(io.Discard)
+			cmd.SetErr(io.Discard)
+			err := cmd.Execute()
+			if tc.wantErr {
+				if err == nil {
+					t.Fatal("expected error, got nil")
+				}
+				if !strings.Contains(err.Error(), tc.errMatch) {
+					t.Errorf("error %q does not contain %q", err.Error(), tc.errMatch)
+				}
+				return
+			}
+			if err != nil {
+				t.Fatalf("unexpected error: %v", err)
+			}
+		})
+	}
+}
+
+// TestNewCmd_commandFlag_validationGate confirms the validator is gated on
+// `Changed("command")`, not on an empty string. An unset flag must NOT trigger
+// the "empty or whitespace-only" error; instead the command continues into
+// LoadConfig and fails there (proving the gate works).
+func TestNewCmd_commandFlag_unsetSkipsValidation(t *testing.T) {
+	cmd := NewCmd("", &cmdctx.RootFlags{ConfigPath: "/nonexistent/path/workspace.yml"})
+	var stderr bytes.Buffer
+	cmd.SetArgs([]string{}) // no -c
+	cmd.SetOut(io.Discard)
+	cmd.SetErr(&stderr)
+	err := cmd.Execute()
+	if err == nil {
+		t.Fatal("expected an error from config load, got nil")
+	}
+	if strings.Contains(err.Error(), "cannot be empty or whitespace-only") {
+		t.Errorf("validator fired without -c flag: %v", err)
 	}
 }
 

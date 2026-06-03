@@ -287,14 +287,14 @@ cmd.PersistentFlags().StringVar(           // was StringVarP
 - Modify: `internal/cli/shell/exec.go`
 - Modify: `internal/cli/shell/shell_test.go`
 
-- [ ] in `internal/cli/shell/exec.go`: add `command string` field to the `shellCLIFlags` struct (just below `envVars`).
-- [ ] in `internal/cli/shell/shell.go`: declare `var flagCommand string` alongside the other flag-bound locals in `NewCmd`.
-- [ ] in `internal/cli/shell/shell.go`: register the flag with `cmd.Flags().StringVarP(&flagCommand, "command", "c", "", "run a single command via `<shell> -c \"…\"` and exit (non-interactive)")` after the existing `--env` flag.
-- [ ] in `internal/cli/shell/shell.go` `RunE`: import `strings`, add empty/whitespace-only validation right after the mode validation: `if flagCommand != "" && strings.TrimSpace(flagCommand) == "" { return fmt.Errorf("-c/--command cannot be empty or whitespace-only") }`.
-- [ ] in `internal/cli/shell/shell.go` `RunE`: assign `shellFlags.command = flagCommand` when building the struct. (Dispatch branch comes in Task 4.)
-- [ ] write tests in `internal/cli/shell/shell_test.go`: table case `-c ""` → error; table case `-c "   "` → error; table case `-c "echo hi"` → no validation error (use a stub for the rest of `RunE`, or assert error only). Cover the validation in isolation if `RunE` is hard to invoke without docker.
-- [ ] write a test confirming `cmd.Flags().Lookup("command")` exists, shorthand is `"c"`, default value is `""`.
-- [ ] run tests: `go test ./internal/cli/shell/...` — must pass before next task.
+- [x] in `internal/cli/shell/exec.go`: add `command string` field to the `shellCLIFlags` struct (just below `envVars`). (NOTE: struct lives in `shell.go`, not `exec.go` — added there.)
+- [x] in `internal/cli/shell/shell.go`: declare `var flagCommand string` alongside the other flag-bound locals in `NewCmd`.
+- [x] in `internal/cli/shell/shell.go`: register the flag with `cmd.Flags().StringVarP(&flagCommand, "command", "c", "", "run a single command via `<shell> -c \"…\"` and exit (non-interactive)")` after the existing `--env` flag.
+- [x] in `internal/cli/shell/shell.go` `RunE`: import `strings`, add empty/whitespace-only validation right after the mode validation. Gate is `cmd.Flags().Changed("command")` (not `flagCommand != ""`) so an explicit `-c ""` correctly fails fast — `flagCommand != ""` would silently accept it.
+- [x] in `internal/cli/shell/shell.go` `RunE`: assign `shellFlags.command = flagCommand` when building the struct. (Dispatch branch comes in Task 4.)
+- [x] write tests in `internal/cli/shell/shell_test.go`: table case `-c ""` → error; table case `-c "   "` → error; table case `-c "\t \n"` → error. Plus a no-flag case that confirms the validator is gated on `Changed`, not on empty.
+- [x] write a test confirming `cmd.Flags().Lookup("command")` exists, shorthand is `"c"`, default value is `""`.
+- [x] run tests: `go test ./internal/cli/shell/...` — must pass before next task.
 
 ### Task 3: Implement one-shot helpers (TTY auto-detect + exec + compose-run + dispatcher)
 

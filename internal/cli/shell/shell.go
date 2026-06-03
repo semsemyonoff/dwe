@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"slices"
+	"strings"
 
 	"github.com/semsemyonoff/dwe/internal/cli/cmdctx"
 	"github.com/semsemyonoff/dwe/internal/core/project/config"
@@ -79,6 +80,7 @@ func NewCmd(groupID string, flags *cmdctx.RootFlags) *cobra.Command {
 	var flagUser string
 	var flagWorkDir string
 	var flagEnvVars []string
+	var flagCommand string
 
 	cmd := &cobra.Command{
 		Use:   "shell [service]",
@@ -111,6 +113,10 @@ service exists, or shows an interactive selector when multiple services are enab
 			// Validate --mode value.
 			if flagMode != "" && !validModes[flagMode] {
 				return fmt.Errorf("--mode must be one of: auto, exec, run (got %q)", flagMode)
+			}
+			// Validate -c/--command: explicit empty/whitespace-only string is a usage error.
+			if cmd.Flags().Changed("command") && strings.TrimSpace(flagCommand) == "" {
+				return fmt.Errorf("-c/--command cannot be empty or whitespace-only")
 			}
 
 			cfg, err := config.LoadConfig(flags.ConfigPath)
@@ -152,6 +158,7 @@ service exists, or shows an interactive selector when multiple services are enab
 				user:    flagUser,
 				workDir: flagWorkDir,
 				envVars: flagEnvVars,
+				command: flagCommand,
 			}
 			processEnv := compose.BuildEnv()
 			dockerBin := compose.BinName()
@@ -171,6 +178,7 @@ service exists, or shows an interactive selector when multiple services are enab
 	cmd.Flags().StringVar(&flagUser, "user", "", "user to run as inside the container")
 	cmd.Flags().StringVar(&flagWorkDir, "workdir", "", "working directory inside the container")
 	cmd.Flags().StringArrayVar(&flagEnvVars, "env", nil, "set an environment variable (KEY=VALUE); overrides service cli.env config")
+	cmd.Flags().StringVarP(&flagCommand, "command", "c", "", "run a single command via `<shell> -c \"…\"` and exit (non-interactive)")
 	cmd.GroupID = groupID
 	return cmd
 }
@@ -183,4 +191,5 @@ type shellCLIFlags struct {
 	user    string
 	workDir string
 	envVars []string // KEY=VALUE pairs from --env flags; override service cli.env config
+	command string   // non-empty triggers one-shot mode (`<shell> -c "<command>"`)
 }
