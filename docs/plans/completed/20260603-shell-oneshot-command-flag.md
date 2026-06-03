@@ -377,10 +377,10 @@ cmd.PersistentFlags().StringVar(           // was StringVarP
 - Modify: `CLAUDE.md` (only if a new critical pattern emerged).
 - Move: `docs/plans/20260603-shell-oneshot-command-flag.md` → `docs/plans/completed/`.
 
-- [ ] decide whether the one-shot exit-code-propagation pattern (`propagateExit` calls `os.Exit` directly) is load-bearing enough to be a CLAUDE.md critical pattern. If yes, add a brief entry under `## Critical Patterns`. If no, skip.
-- [ ] decide whether `docs/internals/packages.md` § `internal/cli/shell/` needs a paragraph describing the interactive-vs-one-shot dispatch split. Add if it would save a future reader investigation time.
-- [ ] move this plan file to `docs/plans/completed/` (create the directory if needed: `mkdir -p docs/plans/completed`).
-- [ ] run tests one last time to confirm no regressions from documentation edits: `make test`.
+- [x] decide whether the one-shot exit-code-propagation pattern is load-bearing enough to be a CLAUDE.md critical pattern. Decision: SKIP — pattern is already established via `validate.validationFailedError`, `deploy.deployCancelledError`, `snapshot.snapshotInterruptedError`, `completion.completionExitError`; the `*shellCommandExitError` uses the same `interface{ ExitCode() int }` contract; no new rule emerged worth a Critical Patterns entry.
+- [x] decide whether `docs/internals/packages.md` § `internal/cli/shell/` needs a paragraph describing the interactive-vs-one-shot dispatch split. Decision: ADD — the existing entry enumerates all functions in `exec.go`, so the new helpers (`dispatchShell`, `runOneShotCommand`, `dockerExecOneShot`, `composeRunOneShot`, `dockerExecTTYFlags`, `composeRunTTYFlags`, `ttyDetector` seam, `shellCommandExitError`) belong there to keep the listing current. Added.
+- [x] move this plan file to `docs/plans/completed/` (create the directory if needed: `mkdir -p docs/plans/completed`).
+- [x] run tests one last time to confirm no regressions from documentation edits: `make test`.
 
 ## Post-Completion
 
