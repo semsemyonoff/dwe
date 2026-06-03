@@ -17,7 +17,7 @@ func TestValidateServicesOverlay_acceptsEnabledOnly(t *testing.T) {
 			"adminer": map[string]any{"enabled": true},
 		},
 	}
-	if err := validateServicesOverlay("path/to/defaults.yml", raw, declared); err != nil {
+	if err := validateServicesOverlay("path/to/defaults.yml", raw, declared, false); err != nil {
 		t.Errorf("unexpected error: %v", err)
 	}
 }
@@ -35,7 +35,7 @@ func TestValidateServicesOverlay_rejectsDefinitionField(t *testing.T) {
 				"adminer": map[string]any{"container": "stale"},
 			},
 		}
-		err := validateServicesOverlay(layer, raw, declared)
+		err := validateServicesOverlay(layer, raw, declared, layer == "workspace/local.yml")
 		if err == nil {
 			t.Errorf("%s: expected error for stale definition field", layer)
 			continue
@@ -61,7 +61,7 @@ func TestValidateServicesOverlay_acceptsPortsHosts(t *testing.T) {
 			},
 		},
 	}
-	if err := validateServicesOverlay("workspace/local.yml", raw, declared); err != nil {
+	if err := validateServicesOverlay("workspace/local.yml", raw, declared, true); err != nil {
 		t.Errorf("unexpected error: %v", err)
 	}
 }
@@ -84,7 +84,7 @@ func TestValidateServicesOverlay_rejectsBadPortsShape(t *testing.T) {
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
 			raw := map[string]any{"services": map[string]any{"adminer": map[string]any{"ports": tc.raw}}}
-			err := validateServicesOverlay("workspace/local.yml", raw, declared)
+			err := validateServicesOverlay("workspace/local.yml", raw, declared, true)
 			if err == nil {
 				t.Fatalf("expected error containing %q", tc.want)
 			}
@@ -110,7 +110,7 @@ func TestValidateServicesOverlay_rejectsBadHostsShape(t *testing.T) {
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
 			raw := map[string]any{"services": map[string]any{"adminer": map[string]any{"hosts": tc.raw}}}
-			err := validateServicesOverlay("workspace/local.yml", raw, declared)
+			err := validateServicesOverlay("workspace/local.yml", raw, declared, true)
 			if err == nil {
 				t.Fatalf("expected error containing %q", tc.want)
 			}
@@ -132,7 +132,7 @@ func TestValidateServicesOverlay_rejectsUnknownService(t *testing.T) {
 			"ghost": map[string]any{"enabled": true},
 		},
 	}
-	err := validateServicesOverlay("workspace/local.yml", raw, declared)
+	err := validateServicesOverlay("workspace/local.yml", raw, declared, true)
 	if err == nil {
 		t.Fatal("expected error for unknown service name")
 	}
@@ -143,7 +143,7 @@ func TestValidateServicesOverlay_rejectsUnknownService(t *testing.T) {
 
 func TestValidateServicesOverlay_noServicesBlock(t *testing.T) {
 	declared := map[string]ServiceConfig{"adminer": {Type: ServiceTypeTool}}
-	if err := validateServicesOverlay("workspace.yml", map[string]any{"project": "x"}, declared); err != nil {
+	if err := validateServicesOverlay("workspace.yml", map[string]any{"project": "x"}, declared, false); err != nil {
 		t.Errorf("missing services block should not error: %v", err)
 	}
 }
@@ -533,4 +533,394 @@ func TestInjectServicesIntoRaw_dotPathResolution(t *testing.T) {
 	if v, ok := ResolvePath(raw, "services.db.hosts.primary"); !ok || v != "db.localhost" {
 		t.Errorf("services.db.hosts.primary = (%v, %v), want (db.localhost, true)", v, ok)
 	}
+}
+
+// TestValidateServicesOverlay_acceptsLocalCompose confirms that
+// services.<name>.compose.extra is accepted in workspace/local.yml.
+func TestValidateServicesOverlay_acceptsLocalCompose(t *testing.T) {
+	declared := map[string]ServiceConfig{"dev": {Type: ServiceTypeApp, Container: "dev"}}
+	raw := map[string]any{
+		"services": map[string]any{
+			"dev": map[string]any{
+				"compose": map[string]any{
+					"extra": []any{"compose.local.yml", "compose/dev.local.yml"},
+				},
+			},
+		},
+	}
+	if err := validateServicesOverlay("workspace/local.yml", raw, declared, true); err != nil {
+		t.Errorf("unexpected error: %v", err)
+	}
+}
+
+// TestValidateServicesOverlay_rejectsNonLocalCompose confirms that
+// services.<name>.compose is rejected in non-local layers (defaults.yml,
+// workspace.yml) with the existing "service definitions belong in
+// workspace/services/<name>/service.yml" hint.
+func TestValidateServicesOverlay_rejectsNonLocalCompose(t *testing.T) {
+	declared := map[string]ServiceConfig{"dev": {Type: ServiceTypeApp, Container: "dev"}}
+	for _, layer := range []string{"workspace.yml", "workspace/defaults.yml"} {
+		raw := map[string]any{
+			"services": map[string]any{
+				"dev": map[string]any{
+					"compose": map[string]any{"extra": []any{"x.yml"}},
+				},
+			},
+		}
+		err := validateServicesOverlay(layer, raw, declared, false)
+		if err == nil {
+			t.Errorf("%s: expected error for compose in non-local layer", layer)
+			continue
+		}
+		if !strings.Contains(err.Error(), "service definitions belong in workspace/services") {
+			t.Errorf("%s: error %q should reference service.yml hint", layer, err)
+		}
+	}
+}
+
+// TestValidateOverlayCompose covers the per-service compose-block shape
+// checker in workspace/local.yml.
+func TestValidateOverlayCompose(t *testing.T) {
+	declared := map[string]ServiceConfig{"dev": {Type: ServiceTypeApp, Container: "dev"}}
+	cases := []struct {
+		name string
+		raw  any
+		want string
+	}{
+		{"not_a_map", "x.yml", "must be a mapping"},
+		{"unknown_subkey", map[string]any{"foo": "bar"}, "unknown field"},
+		{"extra_not_a_list", map[string]any{"extra": "x.yml"}, "must be a list of strings"},
+		{"non_string_entry", map[string]any{"extra": []any{123}}, "must be a string"},
+		{"empty_string_entry", map[string]any{"extra": []any{""}}, "must be a non-empty string"},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			raw := map[string]any{
+				"services": map[string]any{
+					"dev": map[string]any{"compose": tc.raw},
+				},
+			}
+			err := validateServicesOverlay("workspace/local.yml", raw, declared, true)
+			if err == nil {
+				t.Fatalf("expected error containing %q", tc.want)
+			}
+			if !strings.Contains(err.Error(), tc.want) {
+				t.Errorf("error %q should contain %q", err, tc.want)
+			}
+		})
+	}
+}
+
+// TestValidateLocalCompose covers the project-wide compose.extra shape check
+// in workspace/local.yml. Other top-level keys (state:, runtime:) must remain
+// accepted — only the shape of `compose:` is validated.
+func TestValidateLocalCompose(t *testing.T) {
+	t.Run("accepts_extra_list", func(t *testing.T) {
+		raw := map[string]any{
+			"compose": map[string]any{
+				"extra": []any{"compose.local.yml"},
+			},
+		}
+		if err := validateLocalCompose("workspace/local.yml", raw); err != nil {
+			t.Errorf("unexpected error: %v", err)
+		}
+	})
+
+	t.Run("accepts_unknown_top_level_keys", func(t *testing.T) {
+		// local.yml legitimately carries other convention keys (state, runtime, …).
+		raw := map[string]any{
+			"state":   map[string]any{"foo": "bar"},
+			"runtime": map[string]any{"x": "y"},
+		}
+		if err := validateLocalCompose("workspace/local.yml", raw); err != nil {
+			t.Errorf("unexpected error for unknown top-level keys: %v", err)
+		}
+	})
+
+	t.Run("rejects_unknown_subkey", func(t *testing.T) {
+		raw := map[string]any{
+			"compose": map[string]any{"foo": "bar"},
+		}
+		err := validateLocalCompose("workspace/local.yml", raw)
+		if err == nil || !strings.Contains(err.Error(), "unknown field") {
+			t.Errorf("expected 'unknown field' error, got: %v", err)
+		}
+	})
+
+	t.Run("rejects_base_in_local", func(t *testing.T) {
+		// compose.base belongs in workspace.yml.
+		raw := map[string]any{
+			"compose": map[string]any{"base": "compose.yml"},
+		}
+		err := validateLocalCompose("workspace/local.yml", raw)
+		if err == nil || !strings.Contains(err.Error(), "unknown field") {
+			t.Errorf("expected 'unknown field' for compose.base in local.yml, got: %v", err)
+		}
+	})
+
+	t.Run("rejects_extra_non_list", func(t *testing.T) {
+		raw := map[string]any{
+			"compose": map[string]any{"extra": "x.yml"},
+		}
+		err := validateLocalCompose("workspace/local.yml", raw)
+		if err == nil || !strings.Contains(err.Error(), "must be a list of strings") {
+			t.Errorf("expected 'must be a list of strings' error, got: %v", err)
+		}
+	})
+
+	t.Run("accepts_no_compose_block", func(t *testing.T) {
+		if err := validateLocalCompose("workspace/local.yml", map[string]any{}); err != nil {
+			t.Errorf("missing compose block should not error: %v", err)
+		}
+	})
+}
+
+// TestValidateNonLocalCompose confirms that compose.extra in non-local
+// layers is rejected with a hint pointing to workspace/local.yml, while
+// compose.base remains accepted (unaffected).
+func TestValidateNonLocalCompose(t *testing.T) {
+	t.Run("rejects_extra_in_workspace_yml", func(t *testing.T) {
+		raw := map[string]any{
+			"compose": map[string]any{"extra": []any{"x.yml"}},
+		}
+		err := validateNonLocalCompose("workspace.yml", raw)
+		if err == nil {
+			t.Fatal("expected error for compose.extra in workspace.yml")
+		}
+		if !strings.Contains(err.Error(), "workspace/local.yml") {
+			t.Errorf("error %q should point to workspace/local.yml", err)
+		}
+	})
+
+	t.Run("rejects_extra_in_defaults", func(t *testing.T) {
+		raw := map[string]any{
+			"compose": map[string]any{"extra": []any{"x.yml"}},
+		}
+		err := validateNonLocalCompose("workspace/defaults.yml", raw)
+		if err == nil {
+			t.Fatal("expected error for compose.extra in defaults.yml")
+		}
+	})
+
+	t.Run("accepts_compose_base", func(t *testing.T) {
+		raw := map[string]any{
+			"compose": map[string]any{"base": "compose.yml"},
+		}
+		if err := validateNonLocalCompose("workspace.yml", raw); err != nil {
+			t.Errorf("compose.base in workspace.yml should be accepted: %v", err)
+		}
+	})
+
+	t.Run("accepts_no_compose", func(t *testing.T) {
+		if err := validateNonLocalCompose("workspace.yml", map[string]any{}); err != nil {
+			t.Errorf("missing compose block should not error: %v", err)
+		}
+	})
+}
+
+// TestLoadConfig_localComposeExtraInjection verifies that local.yml entries
+// for both project-wide (compose.extra) and per-service
+// (services.<name>.compose.extra) reach cfg.Compose.Extra and
+// cfg.Services[name].LocalComposeExtra respectively.
+func TestLoadConfig_localComposeExtraInjection(t *testing.T) {
+	dir := t.TempDir()
+	cfgYAML := `schema_version: "2"
+project:
+  name: test
+  prefix: dwe
+`
+	if err := os.WriteFile(filepath.Join(dir, "workspace.yml"), []byte(cfgYAML), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	workspaceDir := filepath.Join(dir, "workspace")
+	if err := os.MkdirAll(workspaceDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	writeServiceFolder(t, dir, "dev", "type: app\ncontainer: app-dev\nrequired: true\ndir: ./services/dev\n")
+	writeServiceFolder(t, dir, "adminer", "type: tool\ncontainer: adminer\n")
+
+	// Touch the overlay files so existence checks (Task 4) — not yet in effect
+	// for Task 1 — won't pre-emptively trip us up later.
+	for _, f := range []string{"compose.local.yml", "compose/dev.local.yml", "tools.local.yml"} {
+		full := filepath.Join(dir, f)
+		if err := os.MkdirAll(filepath.Dir(full), 0o755); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(full, []byte("services: {}\n"), 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	localYML := `compose:
+  extra:
+    - compose.local.yml
+services:
+  dev:
+    compose:
+      extra:
+        - compose/dev.local.yml
+  adminer:
+    enabled: true
+    compose:
+      extra:
+        - tools.local.yml
+`
+	if err := os.WriteFile(filepath.Join(workspaceDir, "local.yml"), []byte(localYML), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	cfg, err := LoadConfig(filepath.Join(dir, "workspace.yml"))
+	if err != nil {
+		t.Fatalf("LoadConfig: %v", err)
+	}
+
+	if got, want := cfg.Compose.Extra, []string{"compose.local.yml"}; !equalStrings(got, want) {
+		t.Errorf("cfg.Compose.Extra = %v, want %v", got, want)
+	}
+	if got, want := cfg.Services["dev"].LocalComposeExtra, []string{"compose/dev.local.yml"}; !equalStrings(got, want) {
+		t.Errorf("dev.LocalComposeExtra = %v, want %v", got, want)
+	}
+	if got, want := cfg.Services["adminer"].LocalComposeExtra, []string{"tools.local.yml"}; !equalStrings(got, want) {
+		t.Errorf("adminer.LocalComposeExtra = %v, want %v", got, want)
+	}
+}
+
+// TestLoadConfig_backwardCompatNoComposeBlock confirms that an existing
+// local.yml with only enabled/ports/hosts (no compose: block) loads cleanly
+// and leaves Compose.Extra / LocalComposeExtra empty.
+func TestLoadConfig_backwardCompatNoComposeBlock(t *testing.T) {
+	dir := t.TempDir()
+	cfgYAML := `schema_version: "2"
+project:
+  name: test
+  prefix: dwe
+`
+	if err := os.WriteFile(filepath.Join(dir, "workspace.yml"), []byte(cfgYAML), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	workspaceDir := filepath.Join(dir, "workspace")
+	if err := os.MkdirAll(workspaceDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	writeServiceFolder(t, dir, "adminer", "type: tool\ncontainer: adminer\n")
+	localYML := `services:
+  adminer:
+    enabled: true
+`
+	if err := os.WriteFile(filepath.Join(workspaceDir, "local.yml"), []byte(localYML), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	cfg, err := LoadConfig(filepath.Join(dir, "workspace.yml"))
+	if err != nil {
+		t.Fatalf("LoadConfig: %v", err)
+	}
+	if len(cfg.Compose.Extra) != 0 {
+		t.Errorf("cfg.Compose.Extra should be empty, got %v", cfg.Compose.Extra)
+	}
+	if len(cfg.Services["adminer"].LocalComposeExtra) != 0 {
+		t.Errorf("adminer.LocalComposeExtra should be empty, got %v", cfg.Services["adminer"].LocalComposeExtra)
+	}
+}
+
+// TestLoadConfig_extendsInheritsParentLocalComposeExtra is the inheritance
+// counterpart for LocalComposeExtra: a child service with extends: but no
+// compose.extra of its own MUST inherit the parent's LocalComposeExtra. When
+// the child has its own non-empty LocalComposeExtra, child's wins (no merge).
+func TestLoadConfig_extendsInheritsParentLocalComposeExtra(t *testing.T) {
+	dir := t.TempDir()
+	cfgYAML := `schema_version: "1"
+project:
+  name: tbm
+  prefix: dwe
+`
+	if err := os.WriteFile(filepath.Join(dir, "workspace.yml"), []byte(cfgYAML), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	workspaceDir := filepath.Join(dir, "workspace")
+	if err := os.MkdirAll(workspaceDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	for _, p := range []string{"parent.local.yml", "child.local.yml"} {
+		if err := os.WriteFile(filepath.Join(dir, p), []byte("services: {}\n"), 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+	writeServiceFolder(t, dir, "parent", `
+type: app
+container: app-parent
+required: true
+dir: ./services/parent
+`)
+	writeServiceFolder(t, dir, "inheritor", `
+type: app
+container: app-inheritor
+required: false
+extends: parent
+`)
+	writeServiceFolder(t, dir, "overrider", `
+type: app
+container: app-overrider
+required: false
+extends: parent
+`)
+	localYML := `services:
+  parent:
+    compose:
+      extra:
+        - parent.local.yml
+  inheritor:
+    enabled: true
+  overrider:
+    enabled: true
+    compose:
+      extra:
+        - child.local.yml
+`
+	if err := os.WriteFile(filepath.Join(workspaceDir, "local.yml"), []byte(localYML), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	cfg, err := LoadConfig(filepath.Join(dir, "workspace.yml"))
+	if err != nil {
+		t.Fatalf("LoadConfig: %v", err)
+	}
+	if got, want := cfg.Services["parent"].LocalComposeExtra, []string{"parent.local.yml"}; !equalStrings(got, want) {
+		t.Errorf("parent.LocalComposeExtra = %v, want %v", got, want)
+	}
+	if got, want := cfg.Services["inheritor"].LocalComposeExtra, []string{"parent.local.yml"}; !equalStrings(got, want) {
+		t.Errorf("inheritor.LocalComposeExtra = %v, want %v (must inherit from parent)", got, want)
+	}
+	if got, want := cfg.Services["overrider"].LocalComposeExtra, []string{"child.local.yml"}; !equalStrings(got, want) {
+		t.Errorf("overrider.LocalComposeExtra = %v, want %v (child wins)", got, want)
+	}
+}
+
+// TestApplyLocalComposeExtra_sourceGating is the defense-in-depth assertion
+// that injection ONLY reads from the local.yml raw map. A non-local layer that
+// somehow carries services.<name>.compose.extra (bypassing the pre-merge
+// validator in this test) MUST NOT populate LocalComposeExtra.
+func TestApplyLocalComposeExtra_sourceGating(t *testing.T) {
+	svc := ServiceConfig{Type: ServiceTypeTool, Container: "adminer"}
+	// Pass nil localRaw — simulates "no local.yml present". Even if a stray
+	// non-local layer carried the field, applyLocalComposeExtra never sees it.
+	applyLocalComposeExtra(nil, "adminer", &svc)
+	if len(svc.LocalComposeExtra) != 0 {
+		t.Errorf("LocalComposeExtra should remain empty when localRaw is nil; got %v", svc.LocalComposeExtra)
+	}
+	// And when localRaw exists but lacks the entry: also no-op.
+	applyLocalComposeExtra(map[string]any{"services": map[string]any{"other": map[string]any{"compose": map[string]any{"extra": []any{"x.yml"}}}}}, "adminer", &svc)
+	if len(svc.LocalComposeExtra) != 0 {
+		t.Errorf("LocalComposeExtra should remain empty for unrelated service; got %v", svc.LocalComposeExtra)
+	}
+}
+
+func equalStrings(a, b []string) bool {
+	if len(a) != len(b) {
+		return false
+	}
+	for i := range a {
+		if a[i] != b[i] {
+			return false
+		}
+	}
+	return true
 }

@@ -210,42 +210,42 @@ After validation passes and the typed `DweConfig` is built, inject from the raw 
 - Possibly Create: `internal/core/project/config/testdata/local-overlays/...` fixture project (workspace.yml + minimal services + local.yml + dummy overlay files)
 
 **Schema:**
-- [ ] Add `Extra []string `yaml:"-"`` to `ComposeConfig` (workspace.go:376). `yaml:"-"` is deliberate — never decodable from any file.
-- [ ] Add `LocalComposeExtra []string `yaml:"-"`` to `ServiceConfig` (workspace.go:832).
-- [ ] Confirm `LocalComposeExtra` is NOT added to `allowedFieldsFor()` (workspace.go:776) and `servicesAllowedFields` in `internal/core/validate/config/workspace.go` is NOT extended.
+- [x] Add `Extra []string `yaml:"-"`` to `ComposeConfig` (workspace.go:376). `yaml:"-"` is deliberate — never decodable from any file.
+- [x] Add `LocalComposeExtra []string `yaml:"-"`` to `ServiceConfig` (workspace.go:832).
+- [x] Confirm `LocalComposeExtra` is NOT added to `allowedFieldsFor()` (workspace.go:776) and `servicesAllowedFields` in `internal/core/validate/config/workspace.go` is NOT extended.
 
 **Overlay validators (pre-merge):**
-- [ ] Do NOT add `"compose"` to `OverlayAllowedKeys`. Instead, inline a layer-gated branch in `validateServicesOverlay`'s key loop (workspace.go:1417–1422): when `key == "compose"` AND `layerPath == localPath`, accept and delegate to `validateOverlayCompose`. Otherwise fall through to the existing rejection. Pass `localPath` (or a `isLocalLayer bool`) into `validateServicesOverlay` — locate the call at workspace.go:1259 and update the signature accordingly.
-- [ ] Add `validateOverlayCompose(layerPath, svcName string, raw any) error` next to `validateOverlayPorts` (workspace.go:1445). Accept `nil`; otherwise require `raw` to be `map[string]any` with exactly one key `extra` whose value is `[]any` of strings. Reject empty/non-string entries with field-path-bearing errors.
-- [ ] Add new function `validateLocalCompose(layerPath string, raw map[string]any) error`: validate ONLY the shape of `raw["compose"]` when present. Do NOT whitelist other top-level keys — local.yml legitimately carries other convention keys (e.g. `state:`, `runtime:`) and rejecting them would break existing files. Under `compose` accept only `extra: [<string>, …]` (reuse the same shape check as `validateOverlayCompose`). Wire it into `LoadConfig` right next to the `validateServicesOverlay` call (workspace.go:1259), guarded to run ONLY when `layer.path == localPath`.
-- [ ] Add sibling function `validateNonLocalCompose(layerPath string, raw map[string]any) error`: when `layer.path != localPath` AND `raw["compose"]["extra"]` is present, return a hard error: `<layerPath>: compose.extra: per-developer overlays belong in workspace/local.yml, not in this file`. Wire it into the same per-layer loop as `validateLocalCompose` (mutually exclusive guard). `compose.base` is left untouched.
+- [x] Do NOT add `"compose"` to `OverlayAllowedKeys`. Instead, inline a layer-gated branch in `validateServicesOverlay`'s key loop (workspace.go:1417–1422): when `key == "compose"` AND `layerPath == localPath`, accept and delegate to `validateOverlayCompose`. Otherwise fall through to the existing rejection. Pass `localPath` (or a `isLocalLayer bool`) into `validateServicesOverlay` — locate the call at workspace.go:1259 and update the signature accordingly.
+- [x] Add `validateOverlayCompose(layerPath, svcName string, raw any) error` next to `validateOverlayPorts` (workspace.go:1445). Accept `nil`; otherwise require `raw` to be `map[string]any` with exactly one key `extra` whose value is `[]any` of strings. Reject empty/non-string entries with field-path-bearing errors.
+- [x] Add new function `validateLocalCompose(layerPath string, raw map[string]any) error`: validate ONLY the shape of `raw["compose"]` when present. Do NOT whitelist other top-level keys — local.yml legitimately carries other convention keys (e.g. `state:`, `runtime:`) and rejecting them would break existing files. Under `compose` accept only `extra: [<string>, …]` (reuse the same shape check as `validateOverlayCompose`). Wire it into `LoadConfig` right next to the `validateServicesOverlay` call (workspace.go:1259), guarded to run ONLY when `layer.path == localPath`.
+- [x] Add sibling function `validateNonLocalCompose(layerPath string, raw map[string]any) error`: when `layer.path != localPath` AND `raw["compose"]["extra"]` is present, return a hard error: `<layerPath>: compose.extra: per-developer overlays belong in workspace/local.yml, not in this file`. Wire it into the same per-layer loop as `validateLocalCompose` (mutually exclusive guard). `compose.base` is left untouched.
 
 **Post-decode injection:**
-- [ ] Locate the existing function that injects `enabled`/`ports`/`hosts` from the local.yml raw map onto typed services (search around workspace.go:1238–1310 for the loop that walks `raw["services"]` after decode). Mirror its structure for compose.extra: walk `local["services"][name]["compose"]["extra"]`, write the resulting `[]string` into `cfg.Services[name].LocalComposeExtra`. Source the data ONLY from the local.yml layer (defense in depth — should be unreachable since pre-merge validators reject `services.<name>.compose` outside local.yml, but explicit source-gating prevents future regressions).
-- [ ] Order this injection BEFORE `ResolveServiceExtends` so the resolver sees populated parent values.
-- [ ] **Update `ResolveServiceExtends`** (find via grep) to include `LocalComposeExtra` in its inheritance copy logic: if a child has zero-length `LocalComposeExtra`, copy the parent's slice (deep copy to avoid aliasing); if the child has its own non-empty slice, it wins (no merge, no append — keeps semantics simple). This matches how `Compose`/`Ports`/`Hosts` are handled.
-- [ ] Add sibling injection for project-wide: walk `local["compose"]["extra"]`, write into `cfg.Compose.Extra` (only from local.yml layer).
+- [x] Locate the existing function that injects `enabled`/`ports`/`hosts` from the local.yml raw map onto typed services (search around workspace.go:1238–1310 for the loop that walks `raw["services"]` after decode). Mirror its structure for compose.extra: walk `local["services"][name]["compose"]["extra"]`, write the resulting `[]string` into `cfg.Services[name].LocalComposeExtra`. Source the data ONLY from the local.yml layer (defense in depth — should be unreachable since pre-merge validators reject `services.<name>.compose` outside local.yml, but explicit source-gating prevents future regressions).
+- [x] Order this injection BEFORE `ResolveServiceExtends` so the resolver sees populated parent values.
+- [x] **Update `ResolveServiceExtends`** (find via grep) to include `LocalComposeExtra` in its inheritance copy logic: if a child has zero-length `LocalComposeExtra`, copy the parent's slice (deep copy to avoid aliasing); if the child has its own non-empty slice, it wins (no merge, no append — keeps semantics simple). This matches how `Compose`/`Ports`/`Hosts` are handled.
+- [x] Add sibling injection for project-wide: walk `local["compose"]["extra"]`, write into `cfg.Compose.Extra` (only from local.yml layer).
 
 **Tests:**
-- [ ] Extend `services_overlay_test.go`:
+- [x] Extend `services_overlay_test.go`:
   - positive: `services.<name>.compose.extra: [a.yml, b.yml]` in local.yml accepted
   - negative: `services.<name>.compose: {extra: [...]}` in `defaults.yml` or `workspace.yml` rejected with the existing "service definitions belong in workspace/services/<name>/service.yml" message (layer-gate check)
   - negative: `services.<name>.compose: {foo: bar}` in local.yml rejected (unknown subkey under compose)
   - negative: `services.<name>.compose.extra: "string-not-list"` rejected
   - negative: `services.<name>.compose.extra: [123]` rejected (non-string entry)
-- [ ] Add tests for `validateLocalCompose`:
+- [x] Add tests for `validateLocalCompose`:
   - positive: `compose.extra: [x.yml]` accepted
   - negative: `compose: {foo: bar}` rejected
   - negative: `compose.extra` non-list rejected
   - positive: local.yml WITHOUT `compose:` section but WITH unknown top-level keys (e.g. `state:`, `runtime:`) is accepted — no whitelist
-- [ ] Add tests for `validateNonLocalCompose`:
+- [x] Add tests for `validateNonLocalCompose`:
   - negative: `compose.extra: [x]` in `workspace.yml` or `defaults.yml` → rejected with clear message pointing to `workspace/local.yml`
   - positive: `compose.base: compose.yml` in `workspace.yml` is unaffected
-- [ ] Add load-end-to-end tests in `workspace_test.go`: load a fixture project with local.yml containing both project-wide and per-service overlays; assert `cfg.Compose.Extra` and `cfg.Services[name].LocalComposeExtra` are populated as expected.
-- [ ] Inheritance test: a child service with `extends:` parent inherits parent's `LocalComposeExtra` when child has none; child's wins when both present.
-- [ ] Backward-compat test: load a fixture with a local.yml that contains ONLY `services.<name>.enabled` — assert zero-length `Extra` slices and no error.
-- [ ] Source-gating test: hand-construct a layer set where a non-local layer somehow carries `services.<name>.compose.extra` (bypass validator in test), confirm injection does NOT write to `LocalComposeExtra` for that layer. Defense-in-depth assertion.
-- [ ] Run tests — must pass before Task 2.
+- [x] Add load-end-to-end tests in `workspace_test.go`: load a fixture project with local.yml containing both project-wide and per-service overlays; assert `cfg.Compose.Extra` and `cfg.Services[name].LocalComposeExtra` are populated as expected. (Implemented in `services_overlay_test.go` next to the existing overlay e2e cases — same package, same conventions.)
+- [x] Inheritance test: a child service with `extends:` parent inherits parent's `LocalComposeExtra` when child has none; child's wins when both present.
+- [x] Backward-compat test: load a fixture with a local.yml that contains ONLY `services.<name>.enabled` — assert zero-length `Extra` slices and no error.
+- [x] Source-gating test: hand-construct a layer set where a non-local layer somehow carries `services.<name>.compose.extra` (bypass validator in test), confirm injection does NOT write to `LocalComposeExtra` for that layer. Defense-in-depth assertion.
+- [x] Run tests — must pass before Task 2.
 
 ### Task 2: Extend `composeFiles` to emit local overlays in order
 

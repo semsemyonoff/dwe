@@ -373,8 +373,15 @@ func (s DeployStep) Action() Action {
 
 // ComposeConfig holds Docker Compose file declarations.
 // Base is always included; tool and service overlays live inside each tool/service entry.
+//
+// Extra carries project-wide per-developer overlay files appended LAST to the
+// `-f` chain in [DweConfig.ComposeFiles]/[DweConfig.ComposeFilesAll]. It is
+// populated only by explicit post-decode injection from `workspace/local.yml`
+// (`compose.extra`) — the `yaml:"-"` tag makes it unreachable from any other
+// YAML source.
 type ComposeConfig struct {
-	Base string `yaml:"base"`
+	Base  string   `yaml:"base"`
+	Extra []string `yaml:"-"`
 }
 
 // ProjectConfig holds project identity fields.
@@ -830,12 +837,18 @@ type ServiceConfig struct {
 	Extends         string                     `yaml:"extends"`
 	DependsOn       []string                   `yaml:"depends_on"`
 	Compose         []string                   `yaml:"compose"`
-	CLI             ServiceCLIConfig           `yaml:"cli"`
-	Render          ServiceRenderConfig        `yaml:"render"`
-	Status          []StatusColumn             `yaml:"status,omitempty"`
-	OnEnable        *ServiceToggleHooks        `yaml:"on_enable,omitempty"`
-	OnDisable       *ServiceToggleHooks        `yaml:"on_disable,omitempty"`
-	Notes           *ServiceNotes              `yaml:"notes,omitempty"`
+	// LocalComposeExtra carries per-developer overlay files appended right after
+	// svc.Compose in [DweConfig.composeFiles] under the same `all || svc.Enabled`
+	// gate. Populated only by explicit post-decode injection from
+	// `workspace/local.yml` (`services.<name>.compose.extra`) — the `yaml:"-"`
+	// tag makes it unreachable from any git-tracked service.yml.
+	LocalComposeExtra []string            `yaml:"-"`
+	CLI               ServiceCLIConfig    `yaml:"cli"`
+	Render            ServiceRenderConfig `yaml:"render"`
+	Status            []StatusColumn      `yaml:"status,omitempty"`
+	OnEnable          *ServiceToggleHooks `yaml:"on_enable,omitempty"`
+	OnDisable         *ServiceToggleHooks `yaml:"on_disable,omitempty"`
+	Notes             *ServiceNotes       `yaml:"notes,omitempty"`
 }
 
 // IsApp reports whether this service has type "app".
@@ -1237,8 +1250,10 @@ func LoadConfig(workspacePath string) (*DweConfig, error) {
 
 	// Layer 3: workspace/local.yml (optional)
 	localPath := filepath.Join(baseDir, "workspace", "local.yml")
+	var localRaw map[string]any
 	if local, err := loadRawYAML(localPath); err == nil {
 		layers = append(layers, rawLayer{path: localPath, data: local})
+		localRaw = local
 	} else if !errors.Is(err, os.ErrNotExist) {
 		return nil, fmt.Errorf("read %s: %w", localPath, err)
 	}
@@ -1256,8 +1271,18 @@ func LoadConfig(workspacePath string) (*DweConfig, error) {
 	// before merging. This is the ordering that catches "silently wrong"
 	// overlays that would otherwise be tolerated by the deep merge.
 	for _, layer := range layers {
-		if err := validateServicesOverlay(layer.path, layer.data, services); err != nil {
+		isLocal := layer.path == localPath
+		if err := validateServicesOverlay(layer.path, layer.data, services, isLocal); err != nil {
 			return nil, err
+		}
+		if isLocal {
+			if err := validateLocalCompose(layer.path, layer.data); err != nil {
+				return nil, err
+			}
+		} else {
+			if err := validateNonLocalCompose(layer.path, layer.data); err != nil {
+				return nil, err
+			}
 		}
 	}
 
@@ -1321,8 +1346,19 @@ func LoadConfig(workspacePath string) (*DweConfig, error) {
 		}
 		applyOverlayPorts(merged, name, &svc)
 		applyOverlayHosts(merged, name, &svc)
+		// Per-service local compose overlays are sourced ONLY from local.yml
+		// (not the merged map) so a stray compose:extra in workspace.yml /
+		// defaults.yml — which validateNonLocalCompose rejects — cannot leak
+		// in via a future loader bug. Injected BEFORE ResolveServiceExtends so
+		// children inherit the parent's populated LocalComposeExtra.
+		applyLocalComposeExtra(localRaw, name, &svc)
 		services[name] = svc
 	}
+
+	// Project-wide local compose overlays: sibling of per-service injection,
+	// source-gated to local.yml. Populates cfg.Compose.Extra; later appended
+	// strictly last by composeFiles().
+	cfg.Compose.Extra = extractProjectLocalComposeExtra(localRaw)
 
 	// Resolve `extends:` inheritance AFTER per-service overlay merges so children
 	// inherit the already-overlaid parent values (e.g. local.yml overrides on the
@@ -1393,7 +1429,13 @@ var OverlayAllowedKeys = map[string]bool{
 // service not declared in workspace/services.yml, and malformed ports/hosts
 // blocks. layerPath is included in error messages so the user knows which
 // file to edit.
-func validateServicesOverlay(layerPath string, raw map[string]any, declared map[string]ServiceConfig) error {
+//
+// isLocal is true when this layer is `workspace/local.yml`. It gates the
+// per-service `compose:` block to local.yml only — that key is per-developer
+// overlay extra; allowing it in defaults.yml or workspace.yml would silently
+// pass validation but never be injected (post-decode injection is source-gated
+// to local.yml), which is confusing.
+func validateServicesOverlay(layerPath string, raw map[string]any, declared map[string]ServiceConfig, isLocal bool) error {
 	svcRaw, ok := raw["services"]
 	if !ok || svcRaw == nil {
 		return nil
@@ -1415,6 +1457,10 @@ func validateServicesOverlay(layerPath string, raw map[string]any, declared map[
 			return fmt.Errorf("%s: services.%s: must be a mapping", layerPath, name)
 		}
 		for _, key := range slices.Sorted(maps.Keys(entry)) {
+			if key == "compose" && isLocal {
+				// Local-only per-service overlay: defer to shape check below.
+				continue
+			}
 			if !OverlayAllowedKeys[key] {
 				return fmt.Errorf("%s: services.%s.%s: service definitions belong in workspace/services/<name>/service.yml; overlays may only set %s",
 					layerPath, name, key, overlayAllowedKeysList())
@@ -1425,6 +1471,102 @@ func validateServicesOverlay(layerPath string, raw map[string]any, declared map[
 		}
 		if err := validateOverlayHosts(layerPath, name, entry["hosts"]); err != nil {
 			return err
+		}
+		if isLocal {
+			if err := validateOverlayCompose(layerPath, name, entry["compose"]); err != nil {
+				return err
+			}
+		}
+	}
+	return nil
+}
+
+// validateOverlayCompose rejects malformed `compose:` blocks under a service
+// entry in workspace/local.yml. Accepts nil (key absent) and the shape
+// `{extra: [<string>, ...]}`; rejects unknown subkeys, non-list `extra`,
+// and non-string entries.
+func validateOverlayCompose(layerPath, svcName string, raw any) error {
+	if raw == nil {
+		return nil
+	}
+	m, ok := raw.(map[string]any)
+	if !ok {
+		return fmt.Errorf("%s: services.%s.compose: must be a mapping with key 'extra'", layerPath, svcName)
+	}
+	for _, key := range slices.Sorted(maps.Keys(m)) {
+		if key != "extra" {
+			return fmt.Errorf("%s: services.%s.compose.%s: unknown field (only 'extra' is allowed)", layerPath, svcName, key)
+		}
+	}
+	extraRaw, ok := m["extra"]
+	if !ok || extraRaw == nil {
+		return nil
+	}
+	return validateComposeExtraList(fmt.Sprintf("%s: services.%s.compose.extra", layerPath, svcName), extraRaw)
+}
+
+// validateLocalCompose validates the SHAPE of `raw["compose"]` in
+// workspace/local.yml. It does NOT whitelist other top-level keys: local.yml
+// legitimately carries `state:`, `runtime:`, etc. so rejecting unknown
+// top-level keys would break existing files. Under `compose` it accepts only
+// `extra: [<string>, ...]` — `compose.base` belongs in workspace.yml and
+// must not be overridden per-developer.
+func validateLocalCompose(layerPath string, raw map[string]any) error {
+	composeRaw, ok := raw["compose"]
+	if !ok || composeRaw == nil {
+		return nil
+	}
+	m, ok := composeRaw.(map[string]any)
+	if !ok {
+		return fmt.Errorf("%s: compose: must be a mapping", layerPath)
+	}
+	for _, key := range slices.Sorted(maps.Keys(m)) {
+		if key != "extra" {
+			return fmt.Errorf("%s: compose.%s: unknown field (only 'extra' is allowed in local.yml)", layerPath, key)
+		}
+	}
+	extraRaw, ok := m["extra"]
+	if !ok || extraRaw == nil {
+		return nil
+	}
+	return validateComposeExtraList(fmt.Sprintf("%s: compose.extra", layerPath), extraRaw)
+}
+
+// validateNonLocalCompose rejects `compose.extra` in any layer OTHER than
+// workspace/local.yml. `compose.extra` is per-developer overlay configuration
+// and belongs in local.yml — silently accepting it in workspace.yml /
+// defaults.yml would never trigger injection (which is source-gated to
+// local.yml), confusing users. `compose.base` is unaffected.
+func validateNonLocalCompose(layerPath string, raw map[string]any) error {
+	composeRaw, ok := raw["compose"]
+	if !ok || composeRaw == nil {
+		return nil
+	}
+	m, ok := composeRaw.(map[string]any)
+	if !ok {
+		return nil
+	}
+	if _, hasExtra := m["extra"]; hasExtra {
+		return fmt.Errorf("%s: compose.extra: per-developer overlays belong in workspace/local.yml, not in this file", layerPath)
+	}
+	return nil
+}
+
+// validateComposeExtraList checks the shared shape of a `compose.extra` list:
+// must be a non-nil sequence of non-empty strings. fieldPath is used as the
+// error prefix (e.g. "workspace/local.yml: services.dev.compose.extra").
+func validateComposeExtraList(fieldPath string, raw any) error {
+	list, ok := raw.([]any)
+	if !ok {
+		return fmt.Errorf("%s: must be a list of strings", fieldPath)
+	}
+	for i, item := range list {
+		s, ok := item.(string)
+		if !ok {
+			return fmt.Errorf("%s[%d]: must be a string (got %T)", fieldPath, i, item)
+		}
+		if s == "" {
+			return fmt.Errorf("%s[%d]: must be a non-empty string", fieldPath, i)
 		}
 	}
 	return nil
@@ -1751,6 +1893,9 @@ func ResolveServiceExtends(services map[string]ServiceConfig) error {
 		if len(svc.Compose) == 0 && len(parent.Compose) > 0 {
 			svc.Compose = slices.Clone(parent.Compose)
 		}
+		if len(svc.LocalComposeExtra) == 0 && len(parent.LocalComposeExtra) > 0 {
+			svc.LocalComposeExtra = slices.Clone(parent.LocalComposeExtra)
+		}
 		if len(svc.Ports) == 0 && len(parent.Ports) > 0 {
 			svc.Ports = maps.Clone(parent.Ports)
 		}
@@ -2001,6 +2146,57 @@ func applyDeferredOverlaySchemes(merged map[string]any, services map[string]Serv
 		}
 	}
 	return nil
+}
+
+// applyLocalComposeExtra copies any `services.<name>.compose.extra` list from
+// the workspace/local.yml raw map onto svc.LocalComposeExtra. Source-gated to
+// the local layer (caller passes localRaw, which is nil when local.yml does
+// not exist). validateOverlayCompose has already enforced shape — every entry
+// is a non-empty string. A nil/missing path is a no-op.
+func applyLocalComposeExtra(localRaw map[string]any, name string, svc *ServiceConfig) {
+	if localRaw == nil {
+		return
+	}
+	raw, ok := ResolvePath(localRaw, "services."+name+".compose.extra")
+	if !ok {
+		return
+	}
+	list, ok := raw.([]any)
+	if !ok || len(list) == 0 {
+		return
+	}
+	extra := make([]string, 0, len(list))
+	for _, item := range list {
+		if s, ok := item.(string); ok && s != "" {
+			extra = append(extra, s)
+		}
+	}
+	svc.LocalComposeExtra = extra
+}
+
+// extractProjectLocalComposeExtra returns the project-wide compose.extra list
+// from workspace/local.yml's raw map, or nil if absent. validateLocalCompose
+// has already enforced shape. Source-gated to the local layer (caller passes
+// localRaw, which is nil when local.yml does not exist).
+func extractProjectLocalComposeExtra(localRaw map[string]any) []string {
+	if localRaw == nil {
+		return nil
+	}
+	raw, ok := ResolvePath(localRaw, "compose.extra")
+	if !ok {
+		return nil
+	}
+	list, ok := raw.([]any)
+	if !ok || len(list) == 0 {
+		return nil
+	}
+	extra := make([]string, 0, len(list))
+	for _, item := range list {
+		if s, ok := item.(string); ok && s != "" {
+			extra = append(extra, s)
+		}
+	}
+	return extra
 }
 
 // applyOverlayHosts deep-merges any hosts defined under
