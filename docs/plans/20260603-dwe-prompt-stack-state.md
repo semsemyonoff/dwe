@@ -269,15 +269,15 @@ Stack-icon colors:
 - Modify: `internal/shared/prompt/prompt.go`
 - Modify: `internal/shared/prompt/prompt_test.go`
 
-- [ ] add `detectService(cwd, root string) string` — derives service name from string-prefix check (`<root>/workspace/services/<name>` followed by `/` or end-of-path). Returns empty when not under services or exactly at `workspace/services` with no child. Add doc comment noting "does not resolve symlinks (mirrors findRoot)."
-- [ ] add `defaultMuted = "#6B7280"` constant
-- [ ] extend `stylesStub.Colors` with `Muted string`
-- [ ] extend `palette` struct with `muted color` and `readPalette` to resolve it via `resolveColor(stub.Colors.Muted, defaultMuted)`
-- [ ] update `render` to emit `[<service>]` (sanitized via existing `sanitizeName`) between project name and deploy-icon when service != ""
-- [ ] thread `service` through `runFromDir` from `detectService(cwd, root)`
-- [ ] add table-driven `TestDetectService` covering: cwd == root, cwd at `workspace/`, cwd at `workspace/services/`, cwd at `workspace/services/foo`, cwd at `workspace/services/foo/src/api`, cwd not under root (defensive), trailing slashes, name with control chars (still extracted; sanitization happens at render)
-- [ ] update render tests to cover combinations: with/without service, NO_COLOR on/off, control chars in service name
-- [ ] run `go test ./internal/shared/prompt/...` — must pass before next task
+- [x] add `detectService(cwd, root string) string` — derives service name from string-prefix check (`<root>/workspace/services/<name>` followed by `/` or end-of-path). Returns empty when not under services or exactly at `workspace/services` with no child. Add doc comment noting "does not resolve symlinks (mirrors findRoot)."
+- [x] add `defaultMuted = "#6B7280"` constant
+- [x] extend `stylesStub.Colors` with `Muted string`
+- [x] extend `palette` struct with `muted color` and `readPalette` to resolve it via `resolveColor(stub.Colors.Muted, defaultMuted)`
+- [x] update `render` to emit `[<service>]` (sanitized via existing `sanitizeName`) between project name and deploy-icon when service != ""
+- [x] thread `service` through `runFromDir` from `detectService(cwd, root)`
+- [x] add table-driven `TestDetectService` covering: cwd == root, cwd at `workspace/`, cwd at `workspace/services/`, cwd at `workspace/services/foo`, cwd at `workspace/services/foo/src/api`, cwd not under root (defensive), trailing slashes, name with control chars (still extracted; sanitization happens at render)
+- [x] update render tests to cover combinations: with/without service, NO_COLOR on/off, control chars in service name
+- [x] run `go test ./internal/shared/prompt/...` — must pass before next task
 
 ### Task 3: Add cache reader (no refresh yet) and stack-icon render
 

@@ -562,13 +562,161 @@ func TestRenderStripControlCharsFromName(t *testing.T) {
 	// shell prompt. Call render directly to bypass YAML (which rejects bare control
 	// bytes anyway — this exercises the sanitization layer that matters at runtime).
 	pal := palette{accent: color{enabled: false}}
-	got := render("evil\x1b[31mred\nline", statusNone, pal, false)
+	got := render("evil\x1b[31mred\nline", "", statusNone, pal, false)
 	want := "{▪} evil[31mredline\n"
 	if got != want {
 		t.Errorf("render with control chars: got %q, want %q", got, want)
 	}
 	if containsEsc(got) {
 		t.Errorf("output still contains ESC sequence: %q", got)
+	}
+}
+
+func TestDetectService(t *testing.T) {
+	t.Parallel()
+	sep := string(filepath.Separator)
+	root := sep + filepath.Join("tmp", "proj")
+	servicesDir := filepath.Join(root, "workspace", "services")
+
+	tests := []struct {
+		name string
+		cwd  string
+		want string
+	}{
+		{name: "cwd_equals_root", cwd: root, want: ""},
+		{name: "cwd_at_workspace", cwd: filepath.Join(root, "workspace"), want: ""},
+		{name: "cwd_at_services_dir_no_child", cwd: servicesDir, want: ""},
+		{name: "cwd_at_services_dir_trailing_sep", cwd: servicesDir + sep, want: ""},
+		{name: "cwd_at_service_root", cwd: filepath.Join(servicesDir, "api"), want: "api"},
+		{name: "cwd_in_service_subdir", cwd: filepath.Join(servicesDir, "api", "src", "handlers"), want: "api"},
+		{name: "cwd_outside_root", cwd: sep + filepath.Join("var", "log"), want: ""},
+		{name: "cwd_sibling_of_root", cwd: sep + filepath.Join("tmp", "proj-other", "workspace", "services", "api"), want: ""},
+		{name: "service_name_with_control_chars_extracted_raw", cwd: filepath.Join(servicesDir, "ev\x1bil"), want: "ev\x1bil"},
+		{name: "service_name_hyphenated", cwd: filepath.Join(servicesDir, "my-svc", "deep"), want: "my-svc"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+			if got := detectService(tt.cwd, root); got != tt.want {
+				t.Errorf("detectService(%q, %q) = %q, want %q", tt.cwd, root, got, tt.want)
+			}
+		})
+	}
+}
+
+func TestRunFromDirServiceTag(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name       string
+		serviceSub string // path under <root>/workspace/services/ where the prompt is run; empty = root
+		state      string // .dwe/deploy/state.yml contents; empty = absent
+		useColor   bool
+		wantStdout string
+	}{
+		{
+			name:       "no_service_no_status_no_color",
+			wantStdout: "{▪} p\n",
+		},
+		{
+			name:       "service_root_no_status_no_color",
+			serviceSub: "api",
+			wantStdout: "{▪} p [api]\n",
+		},
+		{
+			name:       "service_deep_subdir_no_status_no_color",
+			serviceSub: filepath.Join("api", "src", "handlers"),
+			wantStdout: "{▪} p [api]\n",
+		},
+		{
+			name:       "service_with_status_no_color",
+			serviceSub: "api",
+			state:      "project:\n  status: deployed\n",
+			wantStdout: "{▪} p [api] ✓\n",
+		},
+		{
+			name:       "service_with_status_color",
+			serviceSub: "api",
+			state:      "project:\n  status: deployed\n",
+			useColor:   true,
+			wantStdout: "{" + sgr(0x2E, 0xC3, 0xEB, "▪") + "} p [api] " + sgr(0x22, 0xC5, 0x5E, "✓") + "\n",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+			root := t.TempDir()
+			writeFile(t, filepath.Join(root, "workspace.yml"), "project:\n  name: p\n")
+			if tt.state != "" {
+				writeFile(t, filepath.Join(root, ".dwe/deploy/state.yml"), tt.state)
+			}
+			cwd := root
+			if tt.serviceSub != "" {
+				cwd = filepath.Join(root, "workspace", "services", tt.serviceSub)
+				if err := os.MkdirAll(cwd, 0o755); err != nil {
+					t.Fatal(err)
+				}
+			}
+			var buf bytes.Buffer
+			code := runFromDir(&buf, nil, cwd, tt.useColor)
+			if code != 0 {
+				t.Fatalf("exit: %d (stdout=%q)", code, buf.String())
+			}
+			if got := buf.String(); got != tt.wantStdout {
+				t.Errorf("stdout: got %q, want %q", got, tt.wantStdout)
+			}
+		})
+	}
+}
+
+func TestRenderServiceTagSanitized(t *testing.T) {
+	t.Parallel()
+	// Render directly: service name with control chars + Bidi must be stripped
+	// before reaching the output. Ensures detectService -> render handoff is safe.
+	pal := palette{accent: color{enabled: false}}
+	got := render("p", "ev\x1b[31mil\nsvc", statusNone, pal, false)
+	want := "{▪} p [ev[31milsvc]\n"
+	if got != want {
+		t.Errorf("render with control chars in service: got %q, want %q", got, want)
+	}
+	if containsEsc(got) {
+		t.Errorf("output still contains ESC sequence: %q", got)
+	}
+}
+
+func TestReadPaletteMuted(t *testing.T) {
+	t.Parallel()
+	tests := []struct {
+		name              string
+		styles            string
+		wantR, wantG, wantB uint8
+		wantEnabled       bool
+	}{
+		{name: "default_when_absent", wantR: 0x6B, wantG: 0x72, wantB: 0x80, wantEnabled: true},
+		{name: "default_when_empty", styles: "colors:\n  muted: \"\"\n", wantR: 0x6B, wantG: 0x72, wantB: 0x80, wantEnabled: true},
+		{name: "custom_token_applied", styles: "colors:\n  muted: \"#112233\"\n", wantR: 0x11, wantG: 0x22, wantB: 0x33, wantEnabled: true},
+		{name: "malformed_disables", styles: "colors:\n  muted: \"bogus\"\n", wantEnabled: false},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+			root := t.TempDir()
+			if tt.styles != "" {
+				writeFile(t, filepath.Join(root, "workspace/styles.yml"), tt.styles)
+			}
+			pal := readPalette(root)
+			if pal.muted.enabled != tt.wantEnabled {
+				t.Fatalf("muted.enabled: got %v, want %v", pal.muted.enabled, tt.wantEnabled)
+			}
+			if !tt.wantEnabled {
+				return
+			}
+			if pal.muted.r != tt.wantR || pal.muted.g != tt.wantG || pal.muted.b != tt.wantB {
+				t.Errorf("muted RGB: got (%d,%d,%d), want (%d,%d,%d)",
+					pal.muted.r, pal.muted.g, pal.muted.b, tt.wantR, tt.wantG, tt.wantB)
+			}
+		})
 	}
 }
 

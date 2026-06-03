@@ -23,6 +23,7 @@ const (
 	defaultSuccess = "#22C55E"
 	defaultWarning = "#F59E0B"
 	defaultDanger  = "#EF4444"
+	defaultMuted   = "#6B7280"
 
 	sgrReset = "\x1b[39m"
 )
@@ -46,6 +47,7 @@ type stylesStub struct {
 		Success string `yaml:"success"`
 		Warning string `yaml:"warning"`
 		Danger  string `yaml:"danger"`
+		Muted   string `yaml:"muted"`
 	} `yaml:"colors"`
 }
 
@@ -86,6 +88,7 @@ type palette struct {
 	success color
 	warning color
 	danger  color
+	muted   color
 }
 
 // Run resolves the current working directory and dispatches to runFromDir.
@@ -122,8 +125,9 @@ func runFromDir(stdout io.Writer, args []string, cwd string, useColor bool) int 
 
 	status := readStatus(root)
 	pal := readPalette(root)
+	service := detectService(cwd, root)
 
-	out := render(name, status, pal, useColor)
+	out := render(name, service, status, pal, useColor)
 	if _, err := io.WriteString(stdout, out); err != nil {
 		return 1
 	}
@@ -149,13 +153,18 @@ func sanitizeName(s string) string {
 	}, s)
 }
 
-func render(name string, status statusKind, pal palette, useColor bool) string {
+func render(name, service string, status statusKind, pal palette, useColor bool) string {
 	var sb strings.Builder
 	sb.Grow(96)
 	sb.WriteByte('{')
 	writeGlyph(&sb, "▪", pal.accent, useColor)
 	sb.WriteString("} ")
 	sb.WriteString(sanitizeName(name))
+	if service != "" {
+		sb.WriteString(" [")
+		sb.WriteString(sanitizeName(service))
+		sb.WriteByte(']')
+	}
 	if icon := status.icon(); icon != "" {
 		sb.WriteByte(' ')
 		writeGlyph(&sb, icon, statusColor(status, pal), useColor)
@@ -207,6 +216,7 @@ func readPalette(root string) palette {
 		success: resolveColor(stub.Colors.Success, defaultSuccess),
 		warning: resolveColor(stub.Colors.Warning, defaultWarning),
 		danger:  resolveColor(stub.Colors.Danger, defaultDanger),
+		muted:   resolveColor(stub.Colors.Muted, defaultMuted),
 	}
 }
 
@@ -278,6 +288,29 @@ func parseArgs(args []string) (check bool, ok bool) {
 		}
 	}
 	return false, false
+}
+
+// detectService returns the service folder name when cwd is under
+// <root>/workspace/services/<name>[/...], or "" otherwise. Returns "" when cwd
+// is exactly the services directory with no child segment.
+// Does NOT resolve symlinks (mirrors findRoot's policy).
+func detectService(cwd, root string) string {
+	prefix := filepath.Join(root, "workspace", "services")
+	if cwd == prefix {
+		return ""
+	}
+	prefixSep := prefix + string(filepath.Separator)
+	if !strings.HasPrefix(cwd, prefixSep) {
+		return ""
+	}
+	rest := cwd[len(prefixSep):]
+	if rest == "" {
+		return ""
+	}
+	if head, _, ok := strings.Cut(rest, string(filepath.Separator)); ok {
+		return head
+	}
+	return rest
 }
 
 // findRoot walks up from start looking for workspace.yml. Returns the directory
