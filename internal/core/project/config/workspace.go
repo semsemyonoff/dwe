@@ -428,8 +428,13 @@ func filterServicesByType(svcs map[string]ServiceConfig, t ServiceType) map[stri
 
 // ComposeFiles returns the ordered list of compose files for the project:
 // base file first, then enabled tool overlays (sorted by key), then enabled
-// service overlays (sorted by service name). This is the canonical file list
-// used by all compose-aware CLI operations.
+// service overlays (sorted by service name). Per-service local overlays from
+// workspace/local.yml (services.<name>.compose.extra) are emitted immediately
+// after each service's own compose files, inside the same enabled-gate.
+// Project-wide local overlays from workspace/local.yml (compose.extra) are
+// appended last so last-wins compose semantics let a single local file patch
+// anything. This is the canonical file list used by all compose-aware CLI
+// operations.
 func (c *DweConfig) ComposeFiles() []string {
 	return c.composeFiles(false)
 }
@@ -437,11 +442,17 @@ func (c *DweConfig) ComposeFiles() []string {
 // ComposeFilesAll returns the ordered list of all configured compose files,
 // regardless of whether overlays are enabled: base file first, then all tool
 // overlays (sorted by key), then all service overlays (sorted by service name).
-// This is used by --all flags to override the active set.
+// Per-service local overlays from workspace/local.yml are included for every
+// service regardless of its enabled state; project-wide local overlays are
+// always appended last. Used by --all flags to override the active set.
 func (c *DweConfig) ComposeFilesAll() []string {
 	return c.composeFiles(true)
 }
 
+// composeFiles assembles the ordered -f chain for docker compose. Per-service
+// local overlays (svc.LocalComposeExtra) reuse the same `all || svc.Enabled`
+// gate as svc.Compose. Project-wide local overlays (c.Compose.Extra) are
+// appended unconditionally at the very end.
 func (c *DweConfig) composeFiles(all bool) []string {
 	files := make([]string, 0, 1+len(c.Services))
 	if c.Compose.Base != "" {
@@ -459,14 +470,23 @@ func (c *DweConfig) composeFiles(all bool) []string {
 			if !match(svc.Type) {
 				continue
 			}
-			if (all || svc.Enabled) && len(svc.Compose) > 0 {
-				files = append(files, svc.Compose...)
+			if all || svc.Enabled {
+				if len(svc.Compose) > 0 {
+					files = append(files, svc.Compose...)
+				}
+				if len(svc.LocalComposeExtra) > 0 {
+					files = append(files, svc.LocalComposeExtra...)
+				}
 			}
 		}
 	}
 	emitGroup(func(t ServiceType) bool { return t == ServiceTypeTool })
 	emitGroup(func(t ServiceType) bool { return t == ServiceTypeInfra })
 	emitGroup(func(t ServiceType) bool { return t == ServiceTypeApp || t == "" })
+
+	if len(c.Compose.Extra) > 0 {
+		files = append(files, c.Compose.Extra...)
+	}
 
 	return files
 }

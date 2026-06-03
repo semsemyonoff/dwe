@@ -3798,6 +3798,281 @@ compose:
 	}
 }
 
+// --- Local compose overlays (compose.extra / LocalComposeExtra) ---
+
+func TestComposeFiles_LocalOverlays(t *testing.T) {
+	t.Parallel()
+
+	type want struct {
+		active []string
+		all    []string
+	}
+
+	cases := []struct {
+		name string
+		cfg  *DweConfig
+		want want
+	}{
+		{
+			name: "per-service overlay present when enabled",
+			cfg: &DweConfig{
+				Compose: ComposeConfig{Base: "compose.yaml"},
+				Services: map[string]ServiceConfig{
+					"api": {
+						Type:              ServiceTypeApp,
+						Enabled:           true,
+						Compose:           []string{"compose/api.yml"},
+						LocalComposeExtra: []string{"compose/api.local.yml"},
+					},
+				},
+			},
+			want: want{
+				active: []string{"compose.yaml", "compose/api.yml", "compose/api.local.yml"},
+				all:    []string{"compose.yaml", "compose/api.yml", "compose/api.local.yml"},
+			},
+		},
+		{
+			name: "per-service overlay omitted when disabled (active) but included in all",
+			cfg: &DweConfig{
+				Compose: ComposeConfig{Base: "compose.yaml"},
+				Services: map[string]ServiceConfig{
+					"api": {
+						Type:              ServiceTypeApp,
+						Enabled:           false,
+						Compose:           []string{"compose/api.yml"},
+						LocalComposeExtra: []string{"compose/api.local.yml"},
+					},
+				},
+			},
+			want: want{
+				active: []string{"compose.yaml"},
+				all:    []string{"compose.yaml", "compose/api.yml", "compose/api.local.yml"},
+			},
+		},
+		{
+			name: "project-wide overlay always last",
+			cfg: &DweConfig{
+				Compose: ComposeConfig{
+					Base:  "compose.yaml",
+					Extra: []string{"compose.local.yml"},
+				},
+				Services: map[string]ServiceConfig{
+					"api": {
+						Type:    ServiceTypeApp,
+						Enabled: true,
+						Compose: []string{"compose/api.yml"},
+					},
+				},
+			},
+			want: want{
+				active: []string{"compose.yaml", "compose/api.yml", "compose.local.yml"},
+				all:    []string{"compose.yaml", "compose/api.yml", "compose.local.yml"},
+			},
+		},
+		{
+			name: "deterministic order across groups (tools, infra, apps)",
+			cfg: &DweConfig{
+				Compose: ComposeConfig{
+					Base:  "compose.yaml",
+					Extra: []string{"compose.local.yml"},
+				},
+				Services: map[string]ServiceConfig{
+					"zebra-app": {
+						Type:              ServiceTypeApp,
+						Enabled:           true,
+						Compose:           []string{"compose/zebra-app.yml"},
+						LocalComposeExtra: []string{"compose/zebra-app.local.yml"},
+					},
+					"apple-app": {
+						Type:              ServiceTypeApp,
+						Enabled:           true,
+						Compose:           []string{"compose/apple-app.yml"},
+						LocalComposeExtra: []string{"compose/apple-app.local.yml"},
+					},
+					"mango-tool": {
+						Type:              ServiceTypeTool,
+						Enabled:           true,
+						Compose:           []string{"compose/mango-tool.yml"},
+						LocalComposeExtra: []string{"compose/mango-tool.local.yml"},
+					},
+					"apple-tool": {
+						Type:              ServiceTypeTool,
+						Enabled:           true,
+						Compose:           []string{"compose/apple-tool.yml"},
+						LocalComposeExtra: []string{"compose/apple-tool.local.yml"},
+					},
+					"db-infra": {
+						Type:              ServiceTypeInfra,
+						Enabled:           true,
+						Compose:           []string{"compose/db-infra.yml"},
+						LocalComposeExtra: []string{"compose/db-infra.local.yml"},
+					},
+				},
+			},
+			want: want{
+				active: []string{
+					"compose.yaml",
+					"compose/apple-tool.yml", "compose/apple-tool.local.yml",
+					"compose/mango-tool.yml", "compose/mango-tool.local.yml",
+					"compose/db-infra.yml", "compose/db-infra.local.yml",
+					"compose/apple-app.yml", "compose/apple-app.local.yml",
+					"compose/zebra-app.yml", "compose/zebra-app.local.yml",
+					"compose.local.yml",
+				},
+				all: []string{
+					"compose.yaml",
+					"compose/apple-tool.yml", "compose/apple-tool.local.yml",
+					"compose/mango-tool.yml", "compose/mango-tool.local.yml",
+					"compose/db-infra.yml", "compose/db-infra.local.yml",
+					"compose/apple-app.yml", "compose/apple-app.local.yml",
+					"compose/zebra-app.yml", "compose/zebra-app.local.yml",
+					"compose.local.yml",
+				},
+			},
+		},
+		{
+			name: "overlay-only service (no svc.Compose) still emits overlay when enabled",
+			cfg: &DweConfig{
+				Compose: ComposeConfig{Base: "compose.yaml"},
+				Services: map[string]ServiceConfig{
+					"api": {
+						Type:              ServiceTypeApp,
+						Enabled:           true,
+						LocalComposeExtra: []string{"compose/api.local.yml"},
+					},
+				},
+			},
+			want: want{
+				active: []string{"compose.yaml", "compose/api.local.yml"},
+				all:    []string{"compose.yaml", "compose/api.local.yml"},
+			},
+		},
+		{
+			name: "overlay-only service omitted when disabled (active)",
+			cfg: &DweConfig{
+				Compose: ComposeConfig{Base: "compose.yaml"},
+				Services: map[string]ServiceConfig{
+					"api": {
+						Type:              ServiceTypeApp,
+						Enabled:           false,
+						LocalComposeExtra: []string{"compose/api.local.yml"},
+					},
+				},
+			},
+			want: want{
+				active: []string{"compose.yaml"},
+				all:    []string{"compose.yaml", "compose/api.local.yml"},
+			},
+		},
+		{
+			name: "no local overlays anywhere → backward-compatible output",
+			cfg: &DweConfig{
+				Compose: ComposeConfig{Base: "compose.yaml"},
+				Services: map[string]ServiceConfig{
+					"api": {
+						Type:    ServiceTypeApp,
+						Enabled: true,
+						Compose: []string{"compose/api.yml"},
+					},
+				},
+			},
+			want: want{
+				active: []string{"compose.yaml", "compose/api.yml"},
+				all:    []string{"compose.yaml", "compose/api.yml"},
+			},
+		},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			active := tc.cfg.ComposeFiles()
+			if !slicesEqual(active, tc.want.active) {
+				t.Errorf("ComposeFiles() = %v, want %v", active, tc.want.active)
+			}
+			all := tc.cfg.ComposeFilesAll()
+			if !slicesEqual(all, tc.want.all) {
+				t.Errorf("ComposeFilesAll() = %v, want %v", all, tc.want.all)
+			}
+		})
+	}
+}
+
+func TestComposeFiles_LocalOverlays_GoldenFullPipeline(t *testing.T) {
+	t.Parallel()
+
+	// Pins the FULL expected -f list for a mixed-group scenario. Any future
+	// regression in iteration order or overlay placement will trip this test.
+	cfg := &DweConfig{
+		Compose: ComposeConfig{
+			Base:  "compose.yaml",
+			Extra: []string{"compose.local.yml", "compose.local.2.yml"},
+		},
+		Services: map[string]ServiceConfig{
+			"adminer": {
+				Type:              ServiceTypeTool,
+				Enabled:           true,
+				Compose:           []string{"compose/tools/adminer.yml"},
+				LocalComposeExtra: []string{"compose/tools/adminer.local.yml"},
+			},
+			"mailhog": {
+				Type:    ServiceTypeTool,
+				Enabled: true,
+				Compose: []string{"compose/tools/mailhog.yml"},
+			},
+			"postgres": {
+				Type:              ServiceTypeInfra,
+				Enabled:           true,
+				Compose:           []string{"compose/infra/postgres.yml"},
+				LocalComposeExtra: []string{"compose/infra/postgres.local.yml"},
+			},
+			"redis": {
+				Type:    ServiceTypeInfra,
+				Enabled: false, // disabled — excluded in active
+				Compose: []string{"compose/infra/redis.yml"},
+			},
+			"api": {
+				Type:              ServiceTypeApp,
+				Enabled:           true,
+				Compose:           []string{"compose/apps/api.yml"},
+				LocalComposeExtra: []string{"compose/apps/api.local.yml"},
+			},
+			"web": {
+				Type:    ServiceTypeApp,
+				Enabled: true,
+				Compose: []string{"compose/apps/web.yml"},
+			},
+		},
+	}
+
+	wantActive := []string{
+		"compose.yaml",
+		"compose/tools/adminer.yml", "compose/tools/adminer.local.yml",
+		"compose/tools/mailhog.yml",
+		"compose/infra/postgres.yml", "compose/infra/postgres.local.yml",
+		"compose/apps/api.yml", "compose/apps/api.local.yml",
+		"compose/apps/web.yml",
+		"compose.local.yml", "compose.local.2.yml",
+	}
+	if got := cfg.ComposeFiles(); !slicesEqual(got, wantActive) {
+		t.Errorf("ComposeFiles() mismatch:\n got: %v\nwant: %v", got, wantActive)
+	}
+
+	wantAll := []string{
+		"compose.yaml",
+		"compose/tools/adminer.yml", "compose/tools/adminer.local.yml",
+		"compose/tools/mailhog.yml",
+		"compose/infra/postgres.yml", "compose/infra/postgres.local.yml",
+		"compose/infra/redis.yml",
+		"compose/apps/api.yml", "compose/apps/api.local.yml",
+		"compose/apps/web.yml",
+		"compose.local.yml", "compose.local.2.yml",
+	}
+	if got := cfg.ComposeFilesAll(); !slicesEqual(got, wantAll) {
+		t.Errorf("ComposeFilesAll() mismatch:\n got: %v\nwant: %v", got, wantAll)
+	}
+}
+
 // --- ServiceConfig.IDE field ---
 
 // TestServiceConfig_IDERenderEnabledExplicit tests the tristate logic for IDE rendering.

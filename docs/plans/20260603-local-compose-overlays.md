@@ -253,19 +253,19 @@ After validation passes and the typed `DweConfig` is built, inject from the raw 
 - Modify: `internal/core/project/config/workspace.go` (lines 438–465)
 - Modify: `internal/core/project/config/workspace_test.go`
 
-- [ ] In `composeFiles(all bool)`, inside the existing `emitGroup` closure, after `files = append(files, svc.Compose...)` add a sibling `files = append(files, svc.LocalComposeExtra...)`. Both appends MUST live inside the same `if (all || svc.Enabled)` block — local overlays reuse the existing enabled-gate, not a separate one.
-- [ ] After the three `emitGroup` calls, append `c.Compose.Extra...` (project-wide, unconditional).
-- [ ] Verify the per-service overlay iteration uses the existing `emitGroup` / alpha-sort path (`slices.Sorted(maps.Keys(c.Services))`) — do NOT add a fresh `range cfg.Services` anywhere. Map iteration without sort would make golden tests flaky (per CLAUDE.md § `info.yml` auto-blocks, this rule applies project-wide to any service iteration in rendered output).
-- [ ] Update godoc on `ComposeFiles` / `ComposeFilesAll` / `composeFiles` to mention local overlays and their ordering.
-- [ ] Write table-driven test `TestComposeFiles_LocalOverlays`:
+- [x] In `composeFiles(all bool)`, inside the existing `emitGroup` closure, after `files = append(files, svc.Compose...)` add a sibling `files = append(files, svc.LocalComposeExtra...)`. Both appends MUST live inside the same `if (all || svc.Enabled)` block — local overlays reuse the existing enabled-gate, not a separate one.
+- [x] After the three `emitGroup` calls, append `c.Compose.Extra...` (project-wide, unconditional).
+- [x] Verify the per-service overlay iteration uses the existing `emitGroup` / alpha-sort path (`slices.Sorted(maps.Keys(c.Services))`) — do NOT add a fresh `range cfg.Services` anywhere. Map iteration without sort would make golden tests flaky (per CLAUDE.md § `info.yml` auto-blocks, this rule applies project-wide to any service iteration in rendered output).
+- [x] Update godoc on `ComposeFiles` / `ComposeFilesAll` / `composeFiles` to mention local overlays and their ordering.
+- [x] Write table-driven test `TestComposeFiles_LocalOverlays`:
   - per-service overlay present when service enabled
   - per-service overlay absent when service disabled (under `ComposeFiles`)
   - per-service overlay present when service disabled (under `ComposeFilesAll`)
   - project-wide overlay always last
   - deterministic order across tools→infra→apps groups (alpha-sorted within group)
   - overlay-only (no `svc.Compose`) service still emits overlays
-- [ ] Write a golden-style assertion: a single test case fixes the FULL expected `-f` list (base + tool overlays + tool local + infra overlays + infra local + app overlays + app local + project-wide local) and compares slice equality. This catches any future regression in iteration order.
-- [ ] Run tests — must pass before Task 3.
+- [x] Write a golden-style assertion: a single test case fixes the FULL expected `-f` list (base + tool overlays + tool local + infra overlays + infra local + app overlays + app local + project-wide local) and compares slice equality. This catches any future regression in iteration order.
+- [x] Run tests — must pass before Task 3.
 
 ### Task 3: `dwe validate` surface + round-trip preservation
 
