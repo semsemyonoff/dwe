@@ -739,8 +739,7 @@ project:
 	writeServiceFolder(t, dir, "dev", "type: app\ncontainer: app-dev\nrequired: true\ndir: ./services/dev\n")
 	writeServiceFolder(t, dir, "adminer", "type: tool\ncontainer: adminer\n")
 
-	// Touch the overlay files so existence checks (Task 4) — not yet in effect
-	// for Task 1 — won't pre-emptively trip us up later.
+	// Touch the overlay files so the existence check in validateLocalComposeExtraPaths passes.
 	for _, f := range []string{"compose.local.yml", "compose/dev.local.yml", "tools.local.yml"} {
 		full := filepath.Join(dir, f)
 		if err := os.MkdirAll(filepath.Dir(full), 0o755); err != nil {
@@ -966,7 +965,7 @@ func TestLoadConfig_localComposeExtraPathValidation(t *testing.T) {
       extra:
         - /tmp/x.yml
 `,
-			wantErr: "services.adminer.compose.extra",
+			wantErr: "absolute paths are not permitted",
 		},
 		{
 			name: "per_service_escape_rejected",
@@ -977,7 +976,7 @@ func TestLoadConfig_localComposeExtraPathValidation(t *testing.T) {
       extra:
         - ../escape.yml
 `,
-			wantErr: "services.adminer.compose.extra",
+			wantErr: "escapes project root",
 		},
 		{
 			name: "per_service_missing_rejected",

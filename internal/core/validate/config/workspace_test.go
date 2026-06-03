@@ -184,6 +184,42 @@ compose:
 `,
 			wantMessage: "per-developer overlays belong in workspace/local.yml",
 		},
+		{
+			name: "project-wide absolute path rejected",
+			workspace: `project:
+  name: test
+  prefix: test
+`,
+			localYML: `compose:
+  extra:
+    - /etc/x.yml
+`,
+			wantMessage: "absolute paths are not permitted",
+		},
+		{
+			name: "project-wide escape path rejected",
+			workspace: `project:
+  name: test
+  prefix: test
+`,
+			localYML: `compose:
+  extra:
+    - ../escape.yml
+`,
+			wantMessage: "escapes project root",
+		},
+		{
+			name: "project-wide missing file rejected",
+			workspace: `project:
+  name: test
+  prefix: test
+`,
+			localYML: `compose:
+  extra:
+    - gone.yml
+`,
+			wantMessage: "file not found",
+		},
 	}
 
 	for _, tt := range tests {

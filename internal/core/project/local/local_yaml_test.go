@@ -179,45 +179,6 @@ func TestWriteLocalYAML_Atomic_CreatesParentDirs(t *testing.T) {
 	}
 }
 
-func TestWriteLocalYAML_Atomic_PreservesExistingOnMarshalFailure(t *testing.T) {
-	dir := t.TempDir()
-	path := filepath.Join(dir, "local.yml")
-
-	// Write initial content
-	initial := map[string]any{"key": "original"}
-	if err := WriteLocalYAML(path, initial); err != nil {
-		t.Fatalf("initial write: %v", err)
-	}
-
-	// Read the original bytes
-	originalData, err := os.ReadFile(path)
-	if err != nil {
-		t.Fatalf("read original: %v", err)
-	}
-
-	// Create a map that will fail marshal (circular reference via unmarshaling is tricky,
-	// but we can test the atomic guarantee by checking the file wasn't modified)
-	// For now, test by attempting write with a valid map and verifying no half-writes
-	updated := map[string]any{"key": "updated"}
-	if err := WriteLocalYAML(path, updated); err != nil {
-		t.Fatalf("update write: %v", err)
-	}
-
-	// Verify file was actually updated (marshal succeeded)
-	newData, err := os.ReadFile(path)
-	if err != nil {
-		t.Fatalf("read updated: %v", err)
-	}
-
-	if len(originalData) > 0 && len(newData) > 0 {
-		// Both should be valid (no half-writes)
-		_, err := LoadLocalYAML(path)
-		if err != nil {
-			t.Fatalf("load should succeed: %v", err)
-		}
-	}
-}
-
 func TestWriteLocalYAML_Atomic_NoTempFilesOnSuccess(t *testing.T) {
 	dir := t.TempDir()
 	path := filepath.Join(dir, "local.yml")

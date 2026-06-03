@@ -62,6 +62,7 @@ The three files share a single namespace — the same key in different layers is
 | Service port / host values | [`workspace/services/<name>/service.yml`](services/index.md) (project-level definitions) and `local.yml` (per-developer overrides, deep-merged by entry name) |
 | Personal credentials (`db.user`, `db.password`) | `local.yml` |
 | Enabling debug / optional services | `local.yml` |
+| Per-developer Docker Compose overlay files (`compose.extra`) | `local.yml` only — rejected with an error in all other layers |
 | Wizard-generated configuration | `local.yml` (written by `dwe deploy` when answering setup questions or port conflicts) |
 
 Service definitions themselves (apps, tools, infra — including their ports / hosts) live in [`workspace/services/<name>/service.yml`](services/index.md) per-folder files, which are loaded separately and not part of this merge. The 3-layer overlay carries `services.<name>.enabled`, `services.<name>.ports`, and `services.<name>.hosts`. Port and host maps are deep-merged by entry name so a partial override only touches the listed keys.
@@ -262,8 +263,9 @@ compose:
 | Field | Description |
 |-------|-------------|
 | `compose.base` | Base compose file (always included) |
+| `compose.extra` | **Not valid here.** Per-developer overlay files belong in `local.yml`. See [Compose overlays](#compose-overlays). |
 
-Service-specific overlays live under `services.<name>.compose` (a list of file paths per service entry) in [`workspace/services/<name>/service.yml`](services/index.md). The compose-file emission order is `base → tools (sorted) → infra (sorted) → apps (sorted)`.
+Service-specific overlays live under `services.<name>.compose` (a list of file paths per service entry) in [`workspace/services/<name>/service.yml`](services/index.md). The full compose-file emission order (including per-developer overlays) is documented under [Compose overlays](#compose-overlays) in `local.yml`.
 
 ---
 

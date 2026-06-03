@@ -1385,7 +1385,7 @@ func LoadConfig(workspacePath string) (*DweConfig, error) {
 	// absolute-rejection, containment, and existence. Runs BEFORE
 	// ResolveServiceExtends so parent paths are validated once; inherited
 	// child copies reuse the same (already-valid) entries.
-	if err := validateLocalComposeExtraPaths(baseDir, &cfg, services); err != nil {
+	if err := validateLocalComposeExtraPaths(baseDir, cfg.Compose.Extra, services); err != nil {
 		return nil, err
 	}
 
@@ -2177,22 +2177,20 @@ func applyDeferredOverlaySchemes(merged map[string]any, services map[string]Serv
 	return nil
 }
 
-// applyLocalComposeExtra copies any `services.<name>.compose.extra` list from
-// the workspace/local.yml raw map onto svc.LocalComposeExtra. Source-gated to
-// the local layer (caller passes localRaw, which is nil when local.yml does
-// not exist). validateOverlayCompose has already enforced shape — every entry
-// is a non-empty string. A nil/missing path is a no-op.
-func applyLocalComposeExtra(localRaw map[string]any, name string, svc *ServiceConfig) {
+// rawExtraStrings extracts a compose.extra list from localRaw at path and
+// returns the non-empty string entries. Returns nil when localRaw is nil,
+// the path is absent, or the value is not a []any.
+func rawExtraStrings(localRaw map[string]any, path string) []string {
 	if localRaw == nil {
-		return
+		return nil
 	}
-	raw, ok := ResolvePath(localRaw, "services."+name+".compose.extra")
+	raw, ok := ResolvePath(localRaw, path)
 	if !ok {
-		return
+		return nil
 	}
 	list, ok := raw.([]any)
 	if !ok || len(list) == 0 {
-		return
+		return nil
 	}
 	extra := make([]string, 0, len(list))
 	for _, item := range list {
@@ -2200,10 +2198,19 @@ func applyLocalComposeExtra(localRaw map[string]any, name string, svc *ServiceCo
 			extra = append(extra, s)
 		}
 	}
-	svc.LocalComposeExtra = extra
+	return extra
 }
 
-// validateLocalComposeExtraPaths walks every path in cfg.Compose.Extra and each
+// applyLocalComposeExtra copies any `services.<name>.compose.extra` list from
+// the workspace/local.yml raw map onto svc.LocalComposeExtra. Source-gated to
+// the local layer (caller passes localRaw, which is nil when local.yml does
+// not exist). validateOverlayCompose has already enforced shape — every entry
+// is a non-empty string. A nil/missing path is a no-op.
+func applyLocalComposeExtra(localRaw map[string]any, name string, svc *ServiceConfig) {
+	svc.LocalComposeExtra = rawExtraStrings(localRaw, "services."+name+".compose.extra")
+}
+
+// validateLocalComposeExtraPaths walks every path in projectExtra and each
 // services[name].LocalComposeExtra and enforces three rules in order:
 //
 //  1. Absolute paths are rejected (filepath.Join(baseDir, "/x") returns "/x",
@@ -2213,8 +2220,8 @@ func applyLocalComposeExtra(localRaw map[string]any, name string, svc *ServiceCo
 //
 // Errors carry the local.yml field path and, for missing files, both the
 // as-written and resolved absolute paths for easy debugging.
-func validateLocalComposeExtraPaths(baseDir string, cfg *DweConfig, services map[string]ServiceConfig) error {
-	for i, p := range cfg.Compose.Extra {
+func validateLocalComposeExtraPaths(baseDir string, projectExtra []string, services map[string]ServiceConfig) error {
+	for i, p := range projectExtra {
 		field := fmt.Sprintf("workspace/local.yml: compose.extra[%d]", i)
 		if err := validateComposeExtraPath(baseDir, p, field); err != nil {
 			return err
@@ -2257,24 +2264,7 @@ func validateComposeExtraPath(baseDir, p, field string) error {
 // has already enforced shape. Source-gated to the local layer (caller passes
 // localRaw, which is nil when local.yml does not exist).
 func extractProjectLocalComposeExtra(localRaw map[string]any) []string {
-	if localRaw == nil {
-		return nil
-	}
-	raw, ok := ResolvePath(localRaw, "compose.extra")
-	if !ok {
-		return nil
-	}
-	list, ok := raw.([]any)
-	if !ok || len(list) == 0 {
-		return nil
-	}
-	extra := make([]string, 0, len(list))
-	for _, item := range list {
-		if s, ok := item.(string); ok && s != "" {
-			extra = append(extra, s)
-		}
-	}
-	return extra
+	return rawExtraStrings(localRaw, "compose.extra")
 }
 
 // applyOverlayHosts deep-merges any hosts defined under
