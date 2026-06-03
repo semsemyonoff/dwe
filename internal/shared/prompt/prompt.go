@@ -371,8 +371,11 @@ func readCache(path string) (state stackKind, updatedAt time.Time, ok bool) {
 func readStack(root, composeProject string, now time.Time) stackKind {
 	path := filepath.Join(root, promptCacheRelPath)
 	cachedState, updatedAt, cacheOK := readCache(path)
-	if cacheOK && now.Sub(updatedAt) <= cacheTTL {
-		return cachedState
+	if cacheOK {
+		age := now.Sub(updatedAt)
+		if age >= 0 && age <= cacheTTL {
+			return cachedState
+		}
 	}
 
 	ctx, cancel := context.WithTimeout(context.Background(), refreshTimeout)
@@ -403,9 +406,6 @@ func readStack(root, composeProject string, now time.Time) stackKind {
 func refreshStack(ctx context.Context, composeProject string) (stackKind, bool) {
 	out, err := dockerPsFunc(ctx, composeProject)
 	if err != nil {
-		return stackNone, false
-	}
-	if ctx.Err() != nil {
 		return stackNone, false
 	}
 	trimmed := bytes.TrimSpace(out)

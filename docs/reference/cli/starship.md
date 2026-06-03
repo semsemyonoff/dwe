@@ -79,7 +79,7 @@ The stack icon reflects live Docker container state. It is independent of the de
 | --- | --- | --- | --- |
 | running | `●` | `success` | all expected containers up |
 | partial | `◐` | `warning` | some containers up, some down |
-| stopped | `○` | `muted` (new token; default `#6B7280`, overridable via `workspace/styles.yml` `colors.muted`) | no containers running |
+| stopped | `○` | `muted` (prompt fallback `#6B7280`; overridable via `workspace/styles.yml` `colors.muted`) | no containers running |
 | _(none)_ | — | — | no cache and refresh produced no usable value |
 
 ### Cache

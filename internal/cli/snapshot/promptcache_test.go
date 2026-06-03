@@ -108,6 +108,32 @@ func TestSnapshotRollback_InvalidatesCache(t *testing.T) {
 	}
 }
 
+func TestSnapshotRollback_Failure_LeavesCacheUntouched(t *testing.T) {
+	base := snapshotProjectWithConfig(t)
+	if err := promptcache.Write(base, promptcache.StateRunning); err != nil {
+		t.Fatalf("seed cache: %v", err)
+	}
+
+	prev := snapshotRollbackFn
+	t.Cleanup(func() { snapshotRollbackFn = prev })
+	snapshotRollbackFn = func(_ context.Context, _ snapshot.RestoreParams) (*snapshot.RestoreResult, error) {
+		return nil, errors.New("rollback failed")
+	}
+
+	flags := &cmdctx.RootFlags{
+		ConfigPath: filepath.Join(base, "workspace.yml"),
+		Root:       base,
+	}
+	cmd, _, _ := makeTestCmd(t)
+	if err := runSnapshotRollback(cmd, flags, true, true, true); err == nil {
+		t.Fatal("expected error from stubbed rollback failure")
+	}
+	if got := readCacheState(t, base); got != promptcache.StateRunning {
+		t.Errorf("cache should remain untouched on rollback failure; got %q want %q",
+			got, promptcache.StateRunning)
+	}
+}
+
 func TestSnapshotRestore_Failure_LeavesCacheUntouched(t *testing.T) {
 	base := snapshotProjectWithConfig(t)
 	if err := promptcache.Write(base, promptcache.StateRunning); err != nil {

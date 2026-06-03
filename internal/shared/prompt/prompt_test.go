@@ -1337,6 +1337,7 @@ func TestWriteCache_SkipsWhenStateNone(t *testing.T) {
 }
 
 func TestWriteCache_AllStates(t *testing.T) {
+	t.Parallel()
 	cases := []struct {
 		state stackKind
 		want  string
@@ -1346,18 +1347,21 @@ func TestWriteCache_AllStates(t *testing.T) {
 		{stackStopped, "stopped"},
 	}
 	for _, tc := range cases {
-		root := t.TempDir()
-		cachePath := filepath.Join(root, ".dwe", "prompt-cache.yml")
-		now := time.Date(2026, 6, 3, 12, 0, 0, 0, time.UTC)
-		if err := writeCache(cachePath, tc.state, now); err != nil {
-			t.Fatalf("writeCache(%v): %v", tc.state, err)
-		}
-		data, err := os.ReadFile(cachePath)
-		if err != nil {
-			t.Fatalf("read: %v", err)
-		}
-		if !bytes.Contains(data, []byte("state: "+tc.want)) {
-			t.Errorf("expected state: %s in %q", tc.want, data)
-		}
+		t.Run(tc.want, func(t *testing.T) {
+			t.Parallel()
+			root := t.TempDir()
+			cachePath := filepath.Join(root, ".dwe", "prompt-cache.yml")
+			now := time.Date(2026, 6, 3, 12, 0, 0, 0, time.UTC)
+			if err := writeCache(cachePath, tc.state, now); err != nil {
+				t.Fatalf("writeCache(%v): %v", tc.state, err)
+			}
+			data, err := os.ReadFile(cachePath)
+			if err != nil {
+				t.Fatalf("read: %v", err)
+			}
+			if !bytes.Contains(data, []byte("state: "+tc.want)) {
+				t.Errorf("expected state: %s in %q", tc.want, data)
+			}
+		})
 	}
 }

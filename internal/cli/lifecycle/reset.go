@@ -243,6 +243,11 @@ func resetRunCmd(cmd *cobra.Command, flags *cmdctx.RootFlags, yes bool, skipPref
 		return err
 	}
 
+	// Pipeline succeeded (docker down already ran) — containers are stopped regardless
+	// of what journal cleanup does below. Write the cache now so that a subsequent
+	// journal.Remove failure doesn't leave the prompt showing a stale "running" state.
+	_ = promptcache.Write(workDir, promptcache.StateStopped)
+
 	// After reset succeeds, clean up the deploy state entirely.
 	// Reset steps are always project-scoped (service == ""), so the whole state file is cleared.
 	// Failure here is a hard error: leaving a stale deployed state would allow
@@ -250,9 +255,6 @@ func resetRunCmd(cmd *cobra.Command, flags *cmdctx.RootFlags, yes bool, skipPref
 	if err := journal.Remove(statePath); err != nil {
 		return fmt.Errorf("cleaning deploy state after reset: %w", err)
 	}
-
-	// Project-wide reset is a teardown (docker down + volume removal): stack is stopped.
-	_ = promptcache.Write(workDir, promptcache.StateStopped)
 
 	if logEnabled {
 		w.Info("Reset log saved to: " + logPath)

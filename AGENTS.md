@@ -12,7 +12,7 @@ The executable entrypoint lives in `cmd/dwe`; most code is under `internal/`. Te
 
 - **`internal/cli/`** — cobra command tree. Composition root in `cli/root.go`; no domain logic. One subpackage per command subtree, each exporting `NewCmd(groupID, flags)`.
 - **`internal/core/`** — domain logic, subclustered into `project/` (what is a DWE project), `execution/` (pipeline engine), `workflow/` (deploy / lifecycle / reset / snapshot / setup), `usercommands/` (declarative command system), `validate/` (static project validation), `docs/` (embedded docs subsystem), `ui/` (domain-aware renderers — sink layer, imported only by `cli/`), and `notify/` (desktop notifications).
-- **`internal/shared/`** — leaf infrastructure (`docker/`, `git/`, `daemon/`, `lock/`, `pathsafe/`, `envfile/`, `render/`, `liveui/`, `tpl/`, `i18n/`, `version/`, `prompt/`).
+- **`internal/shared/`** — leaf infrastructure (`docker/`, `git/`, `daemon/`, `lock/`, `pathsafe/`, `envfile/`, `render/`, `liveui/`, `tpl/`, `i18n/`, `version/`, `prompt/`, `promptcache/`).
 
 **Per-package responsibilities, invariants, and cross-package contracts live in [`docs/internals/packages.md`](docs/internals/packages.md).** Read the relevant section there before modifying any package — it captures non-obvious load-bearing details (sequencing, sentinels, allowlists, render ordering, cross-cutting CLI patterns like JSON output mode and display-string localization) that are expensive to re-derive from the code.
 

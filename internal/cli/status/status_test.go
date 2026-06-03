@@ -608,20 +608,26 @@ func TestStatus_TopLevel_PlainPath_WritesStopped(t *testing.T) {
 }
 
 func TestStatus_SubCommand_DoesNotWriteCache(t *testing.T) {
+	// Must NOT use t.Parallel() — withStubContainerRunning mutates a package-level seam.
 	withStubContainerRunning(t, func(_, _, _ string) bool { return true })
 
-	configPath := statusFixture(t)
-	root := buildStatusTestRoot()
-	var buf bytes.Buffer
-	root.SetOut(&buf)
-	root.SetErr(&buf)
-	root.SetArgs([]string{"-c", configPath, "status", "apps"})
-	if err := root.Execute(); err != nil {
-		t.Fatalf("execute: %v", err)
-	}
-	cachePath := filepath.Join(filepath.Dir(configPath), ".dwe", "prompt-cache.yml")
-	if _, err := os.Stat(cachePath); !os.IsNotExist(err) {
-		t.Errorf("subcommand `status apps` must not create %s (err=%v)", cachePath, err)
+	subcommands := []string{"apps", "tools", "infra", "deploy", "topology", "git", "daemons"}
+	for _, subcmd := range subcommands {
+		t.Run(subcmd, func(t *testing.T) {
+			configPath := statusFixture(t)
+			root := buildStatusTestRoot()
+			var buf bytes.Buffer
+			root.SetOut(&buf)
+			root.SetErr(&buf)
+			root.SetArgs([]string{"-c", configPath, "status", subcmd})
+			if err := root.Execute(); err != nil {
+				t.Fatalf("execute: %v", err)
+			}
+			cachePath := filepath.Join(filepath.Dir(configPath), ".dwe", "prompt-cache.yml")
+			if _, err := os.Stat(cachePath); !os.IsNotExist(err) {
+				t.Errorf("subcommand `status %s` must not create %s (err=%v)", subcmd, cachePath, err)
+			}
+		})
 	}
 }
 

@@ -78,7 +78,7 @@ that token (see [Light / dark resolution](#light--dark-resolution)).
 | `success` | OK / running / enabled states; success notifications; `[--yes ON]` indicator |
 | `warning` | Warning diagnostics; partial / degraded states |
 | `danger`  | Error diagnostics; failed notifications |
-| `muted`   | Secondary text — counts, separators, dimmed list rows, tree glyphs, inactive pagination, command/flag descriptions |
+| `muted`   | Secondary text — counts, separators, dimmed list rows, tree glyphs, inactive pagination, command/flag descriptions; and the `○` stopped stack icon in `dwe prompt` |
 | `border`  | Default (unfocused) panel and table borders |
 | `text`    | Default body text. Empty means "let the terminal pick the foreground color" — recommended in nearly all cases |
 
