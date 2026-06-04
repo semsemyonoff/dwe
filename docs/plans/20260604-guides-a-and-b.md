@@ -248,16 +248,16 @@ Several guides touch the same commands (`dwe logs`, `dwe status`, `dwe info`). T
 **Files:**
 - Create: `docs/guides/author-project-commands.md`
 
-- [ ] write H1 + intro framing "I want `dwe db.seed`"
-- [ ] section: file layout → command ID convention (`workspace/commands/db/seed.yml` → `db.seed`)
-- [ ] section: `type: shell` simplest case — `cmd:`, environment, `DWE_BIN`/`COMPOSE_*` contract
-- [ ] section: `type: service_exec` — `service`, `mode: exec-or-fail|exec-or-run`, `user:`, `workdir_from:`
-- [ ] section: `type: workflow` — `steps:` with `command:` / `confirm:` / `with:` / `when:`
-- [ ] section: `params:` — `required:`, `default:`, `default_from:`, `pattern:`, `--set` from CLI
-- [ ] section: `confirmation: true` + `--yes` / `-y` for scripted use
-- [ ] section: `notify: true` for top-level operations
-- [ ] section: visibility — `private: true` to hide from `dwe commands list`
-- [ ] verify rendering
+- [x] write H1 + intro framing "I want `dwe db.seed`"
+- [x] section: file layout → command ID convention (`workspace/commands/db/seed.yml` → `db.seed`)
+- [x] section: `type: shell` simplest case — `cmd:`, environment, `DWE_BIN`/`COMPOSE_*` contract
+- [x] section: `type: service_exec` — `service`, `mode: exec-or-fail|exec-or-run`, `user:`, `workdir_from:`
+- [x] section: `type: workflow` — `steps:` with `command:` / `confirm:` / `with:` / `when:`
+- [x] section: `params:` — `required:`, `default:`, `default_from:`, `pattern:`, `--set` from CLI
+- [x] section: `confirmation: true` + `--yes` / `-y` for scripted use
+- [x] section: `notify: true` for top-level operations
+- [x] section: visibility — `private: true` to hide from `dwe commands list`
+- [x] verify rendering
 
 ### Task 7: EN guide — `background-daemons.md`
 
