@@ -226,12 +226,12 @@ subdir entries.
 - Create: `internal/core/workflow/scaffold/gitignore.go`
 - Create: `internal/core/workflow/scaffold/gitignore_test.go`
 
-- [ ] implement merge: if absent → create with the full DWE block; if present → append only
+- [x] implement merge: if absent → create with the full DWE block; if present → append only
       the DWE lines not already present, under a `# dwe` marker comment
-- [ ] preserve the user's existing content and trailing-newline handling exactly
-- [ ] write tests: absent → created with full block; present-without-block → block appended
-- [ ] write tests: present-with-some-lines → only missing lines added; idempotent on re-run
-- [ ] run tests — must pass before Task 4
+- [x] preserve the user's existing content and trailing-newline handling exactly
+- [x] write tests: absent → created with full block; present-without-block → block appended
+- [x] write tests: present-with-some-lines → only missing lines added; idempotent on re-run
+- [x] run tests — must pass before Task 4
 
 ### Task 4: AGENTS.md ↔ CLAUDE.md symlink with copy fallback
 
