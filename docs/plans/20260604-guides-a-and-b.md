@@ -339,18 +339,18 @@ Several guides touch the same commands (`dwe logs`, `dwe status`, `dwe info`). T
 **Files:**
 - Create: `docs/guides/write-snapshot-workflows.md`
 
-- [ ] write H1 + intro framing "authoring my own snapshot.yml"
-- [ ] section: minimal snapshot.yml — a single `db.dump` step
-- [ ] section: `${snapshot.path}` namespace — scope-gated, only inside snapshot workflows
-- [ ] section: workflows reuse your existing user commands (no special magic)
-- [ ] section: `variants:` — `db-only`, `with-search`, named alternative step lists
-- [ ] section: `require_matching_config: true` and what `config_hash` mismatch means
-- [ ] section: `services_mismatch.policy: warn|block|ignore`
-- [ ] section: `local_yml.preserve_keys` — keep machine-specific ports / hosts on restore
-- [ ] section: `pack.exclude` for excluding ephemeral files from tarballs
-- [ ] section: `rollback_target` for one-key returns
-- [ ] section: `remove:` workflow — cleanup of external resources (e.g. delete S3 objects on `snapshot remove`)
-- [ ] verify rendering
+- [x] write H1 + intro framing "authoring my own snapshot.yml"
+- [x] section: minimal snapshot.yml — a single `db.dump` step
+- [x] section: `${snapshot.path}` namespace — scope-gated, only inside snapshot workflows
+- [x] section: workflows reuse your existing user commands (no special magic)
+- [x] section: `variants:` — `db-only`, `with-search`, named alternative step lists
+- [x] section: `require_matching_config: true` and what `config_hash` mismatch means
+- [x] section: `services_mismatch.policy: warn|block|ignore`
+- [x] section: `local_yml.preserve_keys` — keep machine-specific ports / hosts on restore
+- [x] section: `pack.exclude` for excluding ephemeral files from tarballs
+- [x] section: `rollback_target` for one-key returns
+- [x] section: `remove:` workflow — cleanup of external resources (e.g. delete S3 objects on `snapshot remove`)
+- [x] verify rendering
 
 ### Task 13: Update `docs/guides/index.md`
 
