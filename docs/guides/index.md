@@ -6,10 +6,11 @@ Guides sit alongside the [reference](../reference/index.md) (schemas, command su
 
 ## Pages
 
-### Joining and using a project
+### Starting and joining a project
 
-For developers who joined an existing DWE project and want to get productive.
+For developers bootstrapping a new project or getting productive in an existing one.
 
+- [Starting a new project with `dwe init`](start-a-new-project.md) — no `workspace.yml` yet; scaffold a minimal-but-complete project that validates clean on the first run.
 - [Joining a DWE project](joining-a-project.md) — you cloned a repo with a `workspace.yml`; what to run first and what ends up on disk.
 - [Daily workflow](daily-workflow.md) — the small handful of commands you reach for every day: status, services, shell, commands, logs, stop/restart.
 - [Troubleshooting](troubleshooting.md) — your stack misbehaves; a triage map from `dwe validate` and `dwe logs` down to `dwe compose raw`.

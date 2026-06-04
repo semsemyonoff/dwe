@@ -370,13 +370,17 @@ subdir entries.
 - [x] verify coverage of new packages meets project standard (cli/scaffold 69.9%, core/workflow/scaffold 84.3%)
 
 ### Task 11: [Final] Documentation
-- [ ] add a `§ internal/cli/scaffold` note under "CLI (`internal/cli/`)" and a
+- [x] add a `§ internal/cli/scaffold` note under "CLI (`internal/cli/`)" and a
       `§ workflow/scaffold` note under "Core — Workflow" in `docs/internals/packages.md`
       (capture: inert-override rationale, `[[ ]]` delimiter choice, no-preflight/no-locks, illegal `init` pkg name)
-- [ ] add a `docs/guides/` page "Starting a new project with `dwe init`" (+ i18n stub if required)
-- [ ] run `make build` so embedded docs are not stale; sanity-check `dwe init --help`
-- [ ] update `AGENTS.md`/`CLAUDE.md` (repo root) only if a new cross-cutting pattern emerged
-- [ ] move this plan to `docs/plans/completed/` (`mkdir -p docs/plans/completed`)
+- [x] add a `docs/guides/` page "Starting a new project with `dwe init`" (+ i18n stub if required)
+      — `docs/guides/start-a-new-project.md`, linked from the guides index; RU stub at
+      `docs/i18n/ru/guides/start-a-new-project.md` with translation-freshness header hash
+- [x] run `make build` so embedded docs are not stale; sanity-check `dwe init --help`
+- [x] update `AGENTS.md`/`CLAUDE.md` (repo root) only if a new cross-cutting pattern emerged
+      — skipped: `init` is purely additive; its load-bearing details live in `docs/internals/packages.md`,
+      no new repo-wide cross-cutting pattern emerged
+- [x] move this plan to `docs/plans/completed/` (`mkdir -p docs/plans/completed`)
 
 ## Post-Completion
 *Items requiring manual intervention or external systems — informational only*
