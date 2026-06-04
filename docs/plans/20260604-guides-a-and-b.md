@@ -295,15 +295,15 @@ Several guides touch the same commands (`dwe logs`, `dwe status`, `dwe info`). T
 **Files:**
 - Create: `docs/guides/shared-ide-and-agent-config.md`
 
-- [ ] write H1 + intro framing "everyone on the team should have the same VS Code + AGENTS.md"
-- [ ] section: template pack layout — `workspace/templates/{ide,ai,git}/<pack>/`
-- [ ] section: required `manifest.yml` — shared `render:` + (per-kind) `symlinks:`
-- [ ] section: pack resolution chain (explicit → service-name → extends-ancestor → default)
-- [ ] section: per-renderer specifics — IDE/git deepest-wins; AI shallowest-wins (with why)
-- [ ] section: dry run — `dwe render ide`, `dwe render ai`, `dwe render git`
-- [ ] section: `<pack>.local/` shadow pack for personal overrides — input substitution, not output redirection
-- [ ] section: what ends up tracked vs gitignored
-- [ ] verify rendering
+- [x] write H1 + intro framing "everyone on the team should have the same VS Code + AGENTS.md"
+- [x] section: template pack layout — `workspace/templates/{ide,ai,git}/<pack>/`
+- [x] section: required `manifest.yml` — shared `render:` + (per-kind) `symlinks:`
+- [x] section: pack resolution chain (explicit → service-name → extends-ancestor → default)
+- [x] section: per-renderer specifics — IDE/git deepest-wins; AI shallowest-wins (with why)
+- [x] section: dry run — `dwe render ide`, `dwe render ai`, `dwe render git`
+- [x] section: `<pack>.local/` shadow pack for personal overrides — input substitution, not output redirection
+- [x] section: what ends up tracked vs gitignored
+- [x] verify rendering
 
 ### Task 10: EN guide — `localize-for-your-team.md`
 
