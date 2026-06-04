@@ -66,14 +66,11 @@ func DiagnosticsTable(rows []DiagnosticRow) string {
 		}
 	}
 
-	t := table.New().
-		Border(lipgloss.RoundedBorder()).
-		BorderStyle(styles.BorderStyle()).
+	t := baseTable("STATUS", "DOMAIN", "TARGET", "FILE", "MESSAGE", "HINT").
 		BorderRow(true).
-		Headers("STATUS", "DOMAIN", "TARGET", "FILE", "MESSAGE", "HINT").
 		StyleFunc(func(row, col int) lipgloss.Style {
 			if row == table.HeaderRow {
-				h := styles.AccentStyle().Bold(true)
+				h := headerRowStyle()
 				if col == 0 {
 					h = h.AlignHorizontal(lipgloss.Center)
 				}
@@ -94,11 +91,7 @@ func DiagnosticsTable(rows []DiagnosticRow) string {
 			return style
 		})
 
-	for _, r := range stringRows {
-		t.Row(r...)
-	}
-
-	return t.String()
+	return renderRows(t, stringRows)
 }
 
 // severityGlyph returns the glyph for a severity level.

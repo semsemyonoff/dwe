@@ -1,6 +1,7 @@
 package render
 
 import (
+	"fmt"
 	"strings"
 	"testing"
 
@@ -173,6 +174,19 @@ func TestFormatPortsCell(t *testing.T) {
 	got := formatPortsCell(map[string]int{"amqp": 5672, "admin": 15672})
 	if got != "admin=15672, amqp=5672" {
 		t.Errorf("multi port: got %q, want sorted name=value pairs", got)
+	}
+}
+
+func TestSortedKVPairs(t *testing.T) {
+	if got := SortedKVPairs(map[string]string{}, func(v string) string { return v }); got != "" {
+		t.Errorf("empty map: got %q, want empty string", got)
+	}
+	if got := SortedKVPairs(map[string]string{"web": "app.local"}, func(v string) string { return v }); got != "web=app.local" {
+		t.Errorf("single entry: got %q, want web=app.local", got)
+	}
+	got := SortedKVPairs(map[string]int{"http": 80, "amqp": 5672}, func(v int) string { return fmt.Sprintf("%d", v) })
+	if got != "amqp=5672, http=80" {
+		t.Errorf("multi entry: got %q, want sorted name=value pairs", got)
 	}
 }
 

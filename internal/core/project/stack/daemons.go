@@ -177,16 +177,7 @@ func prettyParams(s string) string {
 	if len(m) == 0 {
 		return ""
 	}
-	keys := make([]string, 0, len(m))
-	for k := range m {
-		keys = append(keys, k)
-	}
-	sort.Strings(keys)
-	parts := make([]string, 0, len(keys))
-	for _, k := range keys {
-		parts = append(parts, fmt.Sprintf("%s=%v", k, m[k]))
-	}
-	return strings.Join(parts, ", ")
+	return render.SortedKVPairs(m, func(v any) string { return fmt.Sprintf("%v", v) })
 }
 
 // parseDockerTime parses the timestamp shape docker emits in `CreatedAt`.

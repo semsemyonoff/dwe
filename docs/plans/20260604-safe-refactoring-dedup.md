@@ -253,10 +253,10 @@ Tasks are ordered **safest / highest-value first**: pure deletions and named-con
 - Modify: `internal/core/ui/render/{table,gitworkspace,diagnostics_table}.go`; `internal/core/project/stack/daemons.go`
 - Modify: matching `*_test.go`
 
-- [ ] Add `baseTable()` constructor + `headerRowStyle()` + `renderRows()` epilogue for the 6 renderers (`table.go:21,196,256,342`; `gitworkspace.go:44`; `diagnostics_table.go:69`). NOTE: `DiagnosticsTable` header branch is a superset (adds col-0 center) — use the post-config escape hatch, not the shared header helper.
-- [ ] Unify `formatHostsCell`/`formatPortsCell`/daemon `prettyParams` via a generic sorted-`key=value`-pairs helper parameterized by value verb (`table.go:70,94`; `daemons.go:180`) — risk low (verb difference).
-- [ ] Confirm ALL render assertion tests pass unchanged and stack golden tests produce zero diffs.
-- [ ] `make test && make lint` — must pass.
+- [x] Add `baseTable()` constructor + `headerRowStyle()` + `renderRows()` epilogue for the 6 renderers (`table.go:21,196,256,342`; `gitworkspace.go:44`; `diagnostics_table.go:69`). NOTE: `DiagnosticsTable` header branch is a superset (adds col-0 center) — use the post-config escape hatch, not the shared header helper. (`DiagnosticsTable` chains `.BorderRow(true)` after `baseTable`; col-0 center applied to `headerRowStyle()` result.)
+- [x] Unify `formatHostsCell`/`formatPortsCell`/daemon `prettyParams` via a generic sorted-`key=value`-pairs helper parameterized by value verb (`table.go:70,94`; `daemons.go:180`) — risk low (verb difference). Exported generic `render.SortedKVPairs[V](m, format func(V) string)`; uses a stringifier func (not a verb string) to avoid Go 1.24 non-constant-format-string vet warnings. `stack` already imports `render`, so `prettyParams` delegates cleanly.
+- [x] Confirm ALL render assertion tests pass unchanged and stack golden tests produce zero diffs.
+- [x] `make test && make lint` — must pass.
 
 ### Task 14: Unify per-kind render/validate/status command boilerplate
 **Theme 12 — priority medium / effort small / risk low.** User-facing strings passed verbatim. The full render RunE-skeleton merge is **deferred** (higher risk).

@@ -11,6 +11,45 @@ import (
 	"github.com/semsemyonoff/dwe/internal/core/ui/styles"
 )
 
+// baseTable constructs a Lipgloss table builder with the shared rounded
+// border and border style applied and the given headers set. Callers chain a
+// StyleFunc (and, for the diagnostics table, BorderRow) before rendering.
+func baseTable(headers ...string) *table.Table {
+	return table.New().
+		Border(lipgloss.RoundedBorder()).
+		BorderStyle(styles.BorderStyle()).
+		Headers(headers...)
+}
+
+// headerRowStyle is the shared style for the header row of every table.
+func headerRowStyle() lipgloss.Style {
+	return styles.AccentStyle().Bold(true)
+}
+
+// renderRows appends each data row to the table builder and returns the
+// rendered string — the common epilogue across all table renderers.
+func renderRows(t *table.Table, rows [][]string) string {
+	for _, r := range rows {
+		t.Row(r...)
+	}
+	return t.String()
+}
+
+// SortedKVPairs renders a map as `key=value` pairs sorted by key and
+// comma-joined. The value is stringified via format. Empty map → "".
+func SortedKVPairs[V any](m map[string]V, format func(V) string) string {
+	keys := make([]string, 0, len(m))
+	for k := range m {
+		keys = append(keys, k)
+	}
+	slices.Sort(keys)
+	parts := make([]string, 0, len(keys))
+	for _, k := range keys {
+		parts = append(parts, k+"="+format(m[k]))
+	}
+	return strings.Join(parts, ", ")
+}
+
 // Table builds and returns a Lipgloss table string using the shared
 // border and accent style vars. Headers and rows are rendered with the
 // package-level table styles (configurable via ApplyStyles).
@@ -18,22 +57,15 @@ import (
 // headers contains the column names; rows contains the data rows, each a slice
 // of strings with the same length as headers.
 func Table(headers []string, rows [][]string) string {
-	t := table.New().
-		Border(lipgloss.RoundedBorder()).
-		BorderStyle(styles.BorderStyle()).
-		Headers(headers...).
+	t := baseTable(headers...).
 		StyleFunc(func(row, _ int) lipgloss.Style {
 			if row == table.HeaderRow {
-				return styles.AccentStyle().Bold(true)
+				return headerRowStyle()
 			}
 			return lipgloss.NewStyle()
 		})
 
-	for _, r := range rows {
-		t.Row(r...)
-	}
-
-	return t.String()
+	return renderRows(t, rows)
 }
 
 // ServiceTableRow holds data for one row in the services Lipgloss table.
@@ -79,16 +111,7 @@ func formatHostsCell(hosts map[string]string) string {
 			return v
 		}
 	}
-	names := make([]string, 0, len(hosts))
-	for k := range hosts {
-		names = append(names, k)
-	}
-	slices.Sort(names)
-	parts := make([]string, 0, len(names))
-	for _, n := range names {
-		parts = append(parts, fmt.Sprintf("%s=%s", n, hosts[n]))
-	}
-	return strings.Join(parts, ", ")
+	return SortedKVPairs(hosts, func(v string) string { return v })
 }
 
 // formatPortsCell renders a service's ports map as a single table cell.
@@ -103,16 +126,7 @@ func formatPortsCell(ports map[string]int) string {
 			return fmt.Sprintf("%d", v)
 		}
 	}
-	names := make([]string, 0, len(ports))
-	for k := range ports {
-		names = append(names, k)
-	}
-	slices.Sort(names)
-	parts := make([]string, 0, len(names))
-	for _, n := range names {
-		parts = append(parts, fmt.Sprintf("%s=%d", n, ports[n]))
-	}
-	return strings.Join(parts, ", ")
+	return SortedKVPairs(ports, func(v int) string { return fmt.Sprintf("%d", v) })
 }
 
 // ServicesTable renders a styled Lipgloss table of services.
@@ -193,13 +207,10 @@ func ServicesTable(rows []ServiceTableRow, extraCols []string, withDirCol bool) 
 		headers = append([]string{"NAME", "CONTAINER", "HOSTS", "PORTS", "STATE", "RUNNING"}, extraCols...)
 		stateCol, runCol = 4, 5
 	}
-	t := table.New().
-		Border(lipgloss.RoundedBorder()).
-		BorderStyle(styles.BorderStyle()).
-		Headers(headers...).
+	t := baseTable(headers...).
 		StyleFunc(func(row, col int) lipgloss.Style {
 			if row == table.HeaderRow {
-				return styles.AccentStyle().Bold(true)
+				return headerRowStyle()
 			}
 			if row < 0 || row >= len(cellStyles) {
 				return lipgloss.NewStyle()
@@ -215,11 +226,7 @@ func ServicesTable(rows []ServiceTableRow, extraCols []string, withDirCol bool) 
 			}
 		})
 
-	for _, r := range stringRows {
-		t.Row(r...)
-	}
-
-	return t.String()
+	return renderRows(t, stringRows)
 }
 
 // extraCell returns the value for col in extras, or "—" if missing.
@@ -253,20 +260,14 @@ func DaemonTable(rows []DaemonTableRow) string {
 		}
 		stringRows[i] = []string{r.ID, params, r.Container, r.Uptime}
 	}
-	t := table.New().
-		Border(lipgloss.RoundedBorder()).
-		BorderStyle(styles.BorderStyle()).
-		Headers("ID", "PARAMS", "CONTAINER", "UPTIME").
+	t := baseTable("ID", "PARAMS", "CONTAINER", "UPTIME").
 		StyleFunc(func(row, _ int) lipgloss.Style {
 			if row == table.HeaderRow {
-				return styles.AccentStyle().Bold(true)
+				return headerRowStyle()
 			}
 			return lipgloss.NewStyle()
 		})
-	for _, r := range stringRows {
-		t.Row(r...)
-	}
-	return t.String()
+	return renderRows(t, stringRows)
 }
 
 // DeployStatusRow holds data for one row in the deploy status table.
@@ -339,13 +340,10 @@ func DeployStatus(rows []DeployStatusRow) string {
 		deltaStyles[i] = r.ConfigDelta
 	}
 
-	t := table.New().
-		Border(lipgloss.RoundedBorder()).
-		BorderStyle(styles.BorderStyle()).
-		Headers("SERVICE", "STATUS", "CONFIG", "PREV HASH", "CURR HASH", "LAST FAILED").
+	t := baseTable("SERVICE", "STATUS", "CONFIG", "PREV HASH", "CURR HASH", "LAST FAILED").
 		StyleFunc(func(row, col int) lipgloss.Style {
 			if row == table.HeaderRow {
-				return styles.AccentStyle().Bold(true)
+				return headerRowStyle()
 			}
 			if row < 0 || row >= len(statusStyles) {
 				return lipgloss.NewStyle()
@@ -360,9 +358,5 @@ func DeployStatus(rows []DeployStatusRow) string {
 			}
 		})
 
-	for _, r := range stringRows {
-		t.Row(r...)
-	}
-
-	return t.String()
+	return renderRows(t, stringRows)
 }
