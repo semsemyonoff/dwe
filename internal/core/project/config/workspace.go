@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"log/slog"
 	"maps"
 	"os"
@@ -2490,7 +2491,11 @@ func LoadLifecycleConfig(path string) (*LifecycleConfig, error) {
 	var cfg LifecycleConfig
 	dec := yaml.NewDecoder(bytes.NewReader(data))
 	dec.KnownFields(true)
-	if err := dec.Decode(&cfg); err != nil {
+	// An empty document (a file that is entirely blank lines / comments, like a
+	// freshly-scaffolded inert pipeline) decodes to io.EOF with a zero-valued
+	// cfg. Treat that exactly like an absent file: callers already default the
+	// pipeline, so the built-in default stays active until the user uncomments.
+	if err := dec.Decode(&cfg); err != nil && !errors.Is(err, io.EOF) {
 		return nil, fmt.Errorf("parse %s: %w", path, err)
 	}
 	if cfg.Run != nil {
@@ -2547,7 +2552,11 @@ func loadProjectDeployConfigDecode(path string, defaultLog bool) (*ProjectDeploy
 	var cfg ProjectDeployConfig
 	dec := yaml.NewDecoder(bytes.NewReader(data))
 	dec.KnownFields(true)
-	if err := dec.Decode(&cfg); err != nil {
+	// An empty document (a file that is entirely blank lines / comments, like a
+	// freshly-scaffolded inert pipeline) decodes to io.EOF with a zero-valued
+	// cfg. Treat that exactly like an absent file: callers already default the
+	// pipeline, so the built-in default stays active until the user uncomments.
+	if err := dec.Decode(&cfg); err != nil && !errors.Is(err, io.EOF) {
 		return nil, fmt.Errorf("parse %s: %w", path, err)
 	}
 	if err := validatePhaseSteps(cfg.Phases, true); err != nil {
@@ -2568,7 +2577,11 @@ func loadServiceDeployConfigDecode(path string, defaultLog bool) (*ServiceDeploy
 	var cfg ServiceDeployConfig
 	dec := yaml.NewDecoder(bytes.NewReader(data))
 	dec.KnownFields(true)
-	if err := dec.Decode(&cfg); err != nil {
+	// An empty document (a file that is entirely blank lines / comments, like a
+	// freshly-scaffolded inert pipeline) decodes to io.EOF with a zero-valued
+	// cfg. Treat that exactly like an absent file: callers already default the
+	// pipeline, so the built-in default stays active until the user uncomments.
+	if err := dec.Decode(&cfg); err != nil && !errors.Is(err, io.EOF) {
 		return nil, fmt.Errorf("parse %s: %w", path, err)
 	}
 	if err := validatePhaseSteps(cfg.Phases, false); err != nil {
@@ -2589,7 +2602,11 @@ func loadDeployConfigDecode(path string, allowDeployServices bool, defaultLog bo
 	var cfg DeployConfig
 	dec := yaml.NewDecoder(bytes.NewReader(data))
 	dec.KnownFields(true)
-	if err := dec.Decode(&cfg); err != nil {
+	// An empty document (a file that is entirely blank lines / comments, like a
+	// freshly-scaffolded inert pipeline) decodes to io.EOF with a zero-valued
+	// cfg. Treat that exactly like an absent file: callers already default the
+	// pipeline, so the built-in default stays active until the user uncomments.
+	if err := dec.Decode(&cfg); err != nil && !errors.Is(err, io.EOF) {
 		return nil, fmt.Errorf("parse %s: %w", path, err)
 	}
 	if err := validatePhaseSteps(cfg.Phases, allowDeployServices); err != nil {

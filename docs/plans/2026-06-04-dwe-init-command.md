@@ -342,16 +342,25 @@ subdir entries.
 **Files:**
 - Create: `internal/core/workflow/scaffold/validity_test.go`
 
-- [ ] scaffold a project into a temp dir with default `Options`, then `config.LoadConfig`
+- [x] scaffold a project into a temp dir with default `Options`, then `config.LoadConfig`
       the result and assert no error
-- [ ] run `validate/config.All()` (and `validate/templates.All()` if templates are scaffolded)
+- [x] run `validate/config.All()` (and `validate/templates.All()` if templates are scaffolded)
       over the loaded config and assert **zero error-severity diagnostics** — guards the
       active-minimal `service.yml` and inert files
-- [ ] assert the rendered `styles.yml` round-trips through `LoadStylesConfig` with the form's
+- [x] assert the rendered `styles.yml` round-trips through `LoadStylesConfig` with the form's
       title/tagline/accent preserved (catches the flat-`title:` regression from the review)
-- [ ] write a variant with `Service == ""` (valid-but-empty) → loads clean (validate may
+- [x] write a variant with `Service == ""` (valid-but-empty) → loads clean (validate may
       emit a non-error "no services" notice only)
-- [ ] run tests — must pass before Task 10
+- [x] run tests — must pass before Task 10
+
+> Implementation note: the load-bearing test caught a real defect — the fully-commented
+> inert pipeline files (`deploy.yml`/`lifecycle.yml`) decode to an empty YAML document
+> (`io.EOF`), which the strict `KnownFields(true)` loaders rejected, breaking the
+> "inert override = built-in default stays active" contract. Fixed by tolerating `io.EOF`
+> in the four strict pipeline decoders (`loadProjectDeployConfigDecode`,
+> `loadServiceDeployConfigDecode`, `loadDeployConfigDecode`, `LoadLifecycleConfig` in
+> `internal/core/project/config/workspace.go`): an empty document now behaves identically
+> to an absent file (zero-valued config → callers apply the built-in default).
 
 ### Task 10: Verify acceptance criteria
 - [ ] verify all Overview requirements implemented (two modes, idempotency, `--force`, JSON, symlink, inert overrides)
