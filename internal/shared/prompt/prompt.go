@@ -629,7 +629,7 @@ func readProjectName(root string) (string, bool) {
 // readComposeProjectName returns the Docker Compose project name used to label
 // containers (the value Docker writes to the com.docker.compose.project label).
 // It mirrors the precedence of config.ResolveComposeProjectName:
-//  1. workspace/docker.yml project_name (literal only; template values fall back)
+//  1. workspace/docker.local.yml project_name, then workspace/docker.yml (literal only; template values fall back)
 //  2. project.prefix + "-" + project.name when prefix is set
 //  3. project.name (same as displayName)
 //
@@ -654,22 +654,25 @@ func readComposeProjectName(root, displayName string) string {
 	return displayName
 }
 
-// readDockerProjectNameLiteral reads project_name from workspace/docker.yml.
-// Returns empty string if the file is absent, unreadable, the field is absent,
-// or the value contains template syntax (${...}) that the prompt cannot resolve
-// without the full config loader.
+// readDockerProjectNameLiteral reads project_name from workspace/docker.yml and
+// workspace/docker.local.yml, with the local file taking precedence (mirroring
+// the deep-merge in config.readDockerProjectName). Returns empty string if
+// neither file defines a literal project_name (absent, unreadable, field
+// missing, or value contains template syntax the prompt cannot resolve).
 func readDockerProjectNameLiteral(root string) string {
-	data, err := os.ReadFile(filepath.Join(root, "workspace", "docker.yml"))
-	if err != nil {
-		return ""
+	for _, rel := range []string{"workspace/docker.local.yml", "workspace/docker.yml"} {
+		data, err := os.ReadFile(filepath.Join(root, rel))
+		if err != nil {
+			continue
+		}
+		var m map[string]any
+		if err := yaml.Unmarshal(data, &m); err != nil {
+			continue
+		}
+		name, _ := m["project_name"].(string)
+		if name != "" && !strings.Contains(name, "${") {
+			return name
+		}
 	}
-	var m map[string]any
-	if err := yaml.Unmarshal(data, &m); err != nil {
-		return ""
-	}
-	name, _ := m["project_name"].(string)
-	if strings.Contains(name, "${") {
-		return ""
-	}
-	return name
+	return ""
 }
