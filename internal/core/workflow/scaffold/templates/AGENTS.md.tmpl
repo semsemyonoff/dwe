@@ -1,0 +1,37 @@
+# [[ .Name ]] — DWE project
+
+This repository is a **DWE** (Dev Workspace Engine) project: a Docker-based local
+development environment managed by the `dwe` CLI.
+
+## Orientation for AI agents
+
+Run this once to load a project-aware index of services, commands, and docs:
+
+```
+dwe docs llms-txt
+```
+
+It emits a compact llms.txt snapshot (project context, services, commands, and
+pointers into the built-in docs subsystem) designed to be loaded once and then
+navigated on demand.
+
+## Useful commands
+
+- `dwe` — project dashboard / header
+- `dwe info` — environment summary (URLs, hosts, ports)
+- `dwe validate` — static project-config validation
+- `dwe deploy` — bring the stack up
+- `dwe docs <topic>` — built-in reference (config schemas, guides)
+
+## Config layout
+
+- `workspace.yml` — project identity (name, prefix)
+- `workspace/defaults.yml` — versioned defaults (service toggles, exports)
+- `workspace/styles.yml` — CLI branding and palette
+- `workspace/services/<name>/service.yml` — per-service definitions
+- `workspace/{deploy,lifecycle,info,docker}.yml` — optional overrides. They ship
+  fully commented; the built-in defaults stay active until you uncomment. An
+  active override **replaces** the whole built-in pipeline, so edit them whole.
+
+> `CLAUDE.md` is a symlink to this file (a copy on platforms without symlinks).
+> Edit `AGENTS.md`.

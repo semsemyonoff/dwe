@@ -1,0 +1,36 @@
+# workspace/styles.yml — CLI branding and semantic color palette.
+#
+# Omitting this file entirely produces the built-in defaults. Empty / missing
+# color tokens fall back to the built-in light or dark default for that token.
+# Run `dwe docs config styles`.
+
+header:
+[[- if .Branding.Title ]]
+  lines:
+    - "[[ .Branding.Title ]]"
+[[- else ]]
+  # lines:
+  #   - "Welcome to"
+  #   - "My Project"
+[[- end ]]
+  # font: doom
+[[- if .Branding.Tagline ]]
+  tagline: "[[ .Branding.Tagline ]]"
+[[- else ]]
+  # tagline: "Local dev, container-orchestrated."
+[[- end ]]
+
+colors:
+[[- if .Branding.Accent ]]
+  accent:  "[[ .Branding.Accent ]]"
+[[- else ]]
+  # accent:  "#2EC3EB"
+[[- end ]]
+  # success: "#22C55E"
+  # warning: "#F59E0B"
+  # danger:  "#EF4444"
+  # muted:   "#9AA3BB"
+  # border:  "#334155"
+  # text:    ""
+
+# separator: "·"

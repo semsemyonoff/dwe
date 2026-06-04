@@ -1,0 +1,36 @@
+# .dwe/config — per-project DWE user overrides (committed, all-commented).
+#
+# This file pins per-developer preferences for THIS project without touching the
+# global ~/.config/dwe/config. It is read by every `dwe` invocation run inside
+# the project and is layered: global config < this file < environment variables.
+#
+# Syntax: flat `key = value` lines. Full-line `#` comments only (an inline `#`
+# after a space is a parse error). Booleans accept 1/true/yes and 0/false/no.
+# Unknown keys are warnings, not errors. Uncomment a line to activate it.
+#
+# Every key below is shown with its default. Run `dwe docs config userconfig`
+# for the authoritative reference.
+
+# --- Locale and TUI ---
+# Preferred locale for translated strings. Unset → $LANG → en.
+# language = en
+# Mermaid theme for the `dwe docs` TUI: auto | dark | light. Default: auto.
+# mermaid_theme = auto
+
+# --- Binary overrides ---
+# Absolute path DWE uses when invoking each external binary. Empty is rejected.
+# binary_docker = docker
+# binary_git    = git
+# binary_dwe    = dwe
+# binary_shell  = sh
+# binary_mmdc   = mmdc
+
+# --- Notifications ---
+# Master gate for desktop notifications. Default: false.
+# notify_enabled          = false
+# Per-surface gates (only consulted when notify_enabled is true).
+# notify_deploy_enabled   = true
+# notify_run_enabled      = true
+# notify_commands_enabled = true
+# Comma-separated channel list (e.g. native).
+# notify_channels         = native

@@ -1,0 +1,30 @@
+# workspace/info.yml — `dwe info` dashboard (INERT MIRROR).
+#
+# When this file is absent the built-in default dashboard is rendered. This file
+# is shipped fully commented so that default stays active. Uncomment to take
+# full control of the dashboard layout — an active info.yml replaces the
+# built-in dashboard entirely.
+#
+# Authoritative behavior: the built-in `dwe info` fallback dashboard.
+# Schema, item types, and template expressions: `dwe docs config info`
+#
+# sections:
+#   - id: project
+#     title: "Project"
+#     items:
+#       - type: definition
+#         name: "Name"
+#         value: "{{ .Project.Name }}"
+#       - type: definition
+#         name: "Prefix"
+#         value: "{{ .Project.Prefix }}"
+#   - id: urls
+#     title: "URLs"
+#     items:
+#       - type: auto-urls
+#   - id: hosts
+#     title: "Hosts"
+#     items:
+#       - type: auto-hosts
+#
+# footer: true

@@ -264,23 +264,27 @@ subdir entries.
 - Create: `internal/core/workflow/scaffold/templates/workspace/services/app/service.yml.tmpl`
 - Create: `internal/core/workflow/scaffold/templates_content_test.go`
 
-- [ ] author active `.tmpl` files (`workspace.yml`, `defaults.yml`, `styles.yml`, `service.yml`,
-      `AGENTS.md`, `dot-gitignore`) with `[[ ]]` placeholders + commented optional fields;
-      `service.yml` keeps `type`+`container` active only
-- [ ] `styles.yml.tmpl`: render the **nested** schema — `header.lines: [ [[ .Branding.Title ]] ]`,
+- [x] author active `.tmpl` files (`workspace.yml`, `defaults.yml`, `styles.yml`, `service.yml`,
+      `AGENTS.md`) with `[[ ]]` placeholders + commented optional fields;
+      `service.yml` keeps `type`+`container` active only.
+      NOTE: `dot-gitignore` is intentionally NOT a template — the DWE block is the Go const
+      `dweGitignoreBlock` in `gitignore.go` (single source of truth, applied via the separate
+      `applyGitignore` append-merge path). Adding a template would make `renderPlan` double-emit `.gitignore`.
+- [x] `styles.yml.tmpl`: render the **nested** schema — `header.lines: [ [[ .Branding.Title ]] ]`,
       `header.tagline: [[ .Branding.Tagline ]]`, `colors.accent: [[ .Branding.Accent ]]`; comment
-      out `header.font` + the other `colors.*` (no top-level `title:` key — it does not exist)
-- [ ] author inert references (`deploy/lifecycle/info/docker`) fully commented, each with a
+      out `header.font` + the other `colors.*` (no top-level `title:` key — it does not exist).
+      Empty branding falls back to commented placeholders via `[[- if ]]` guards.
+- [x] author inert references (`deploy/lifecycle/info/docker`) fully commented, each with a
       header: "built-in default is ACTIVE; uncomment to override — REPLACES the whole pipeline.
       Authoritative default: `<Default*Config constructor>` / `docs/reference/config/<x>.md`"
       (the source pointer is the only drift guard — these files cannot be tested for divergence)
-- [ ] author `dot-dwe/config` as an all-commented user-config template (ralphex model:
+- [x] author `dot-dwe/config` as an all-commented user-config template (ralphex model:
       full-line comments, every option documented with default)
-- [ ] `AGENTS.md.tmpl`: brief project context + "run `dwe docs llms-txt` for the full index"
-- [ ] write tests: every embedded template renders without error for representative `Options`
-- [ ] write tests: every `.yml`/`.tmpl-rendered` output parses as YAML; inert files are
+- [x] `AGENTS.md.tmpl`: brief project context + "run `dwe docs llms-txt` for the full index"
+- [x] write tests: every embedded template renders without error for representative `Options`
+- [x] write tests: every `.yml`/`.tmpl-rendered` output parses as YAML; inert files are
       100% comment/blank lines
-- [ ] run tests — must pass before Task 6
+- [x] run tests — must pass before Task 6
 
 ### Task 6: Scaffold orchestration
 

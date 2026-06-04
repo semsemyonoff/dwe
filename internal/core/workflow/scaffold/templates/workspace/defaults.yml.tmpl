@@ -1,0 +1,36 @@
+# workspace/defaults.yml — versioned project defaults (layer 2 of 3).
+#
+# Tracked by git. Everything here is overridable per-developer in
+# workspace/local.yml (gitignored). Run `dwe docs config workspace`.
+
+# Compose base file (always included by the Docker control plane).
+compose:
+  base: compose.yaml
+
+# Service toggles. Service definitions live in
+# workspace/services/<name>/service.yml; this overlay only flips enabled state
+# (allowed keys per entry: enabled, ports, hosts).
+[[- if .Service ]]
+services:
+  [[ .Service ]]:
+    enabled: true
+[[- else ]]
+# services:
+#   <name>:
+#     enabled: true
+[[- end ]]
+
+# runtime:
+#   use_https: false
+#   spx:
+#     path: ""
+
+# state: ""
+
+# Declarative .env export rules. Each rule maps a dot-path in the merged config
+# to an environment variable. See `dwe docs config workspace`.
+# exports:
+#   env:
+#     - name: APP_PORT
+#       from: services.<name>.ports.http
+#       format: int

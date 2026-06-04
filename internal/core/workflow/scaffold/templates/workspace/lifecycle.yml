@@ -1,0 +1,36 @@
+# workspace/lifecycle.yml — run / stop pipelines (INERT MIRROR).
+#
+# The built-in default run and stop pipelines are ACTIVE. This file is shipped
+# fully commented so the defaults keep running untouched. Uncomment a section to
+# override it — each section (run, stop) is full-replacement, not a merge, so
+# copy every phase you still want, then edit. (The stop pipeline always has an
+# auto-reap phase prepended by the engine regardless of what you author here.)
+#
+# Authoritative defaults: lifecycle.DefaultRunConfig() / DefaultStopConfig()
+#   (internal/core/workflow/lifecycle/defaults.go)
+# Schema and field reference: `dwe docs config lifecycle`
+#
+# run:
+#   update:
+#     mode: "off"
+#   show_info: true
+#   final_message: "Project is ready for work!"
+#   phases:
+#     - name: start
+#       description: "Start containers and wait for health"
+#       steps:
+#         - name: up
+#           type: dwe
+#           cmd: "docker up --wait"
+#           description: "Start all containers and wait until healthy"
+#
+# stop:
+#   final_message: "Project is stopped. Have a nice day!"
+#   phases:
+#     - name: stop
+#       description: "Stop containers"
+#       steps:
+#         - name: down
+#           type: dwe
+#           cmd: "docker down"
+#           description: "Stop all containers"

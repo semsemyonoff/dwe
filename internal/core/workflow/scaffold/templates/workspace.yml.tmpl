@@ -1,0 +1,19 @@
+# workspace.yml — structural identity for this DWE project (layer 1 of 3).
+#
+# This is the only required project file. workspace/defaults.yml (layer 2) and
+# workspace/local.yml (layer 3, gitignored) layer on top of it; keys absent here
+# fall through to those layers. Run `dwe docs config workspace` for the full
+# merge model.
+
+project:
+  name: "[[ .Name ]]"
+  prefix: "[[ .Prefix ]]"
+
+# Optional blocks below share the same namespace across all three layers, but by
+# convention versioned defaults live in workspace/defaults.yml. Uncomment here
+# only to pin something structural to layer 1.
+#
+# runtime:
+#   use_https: false
+#
+# state: ""

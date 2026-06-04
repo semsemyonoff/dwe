@@ -1,0 +1,38 @@
+# workspace/deploy.yml — project deploy pipeline (INERT MIRROR).
+#
+# The built-in default deploy pipeline is ACTIVE. This file is shipped fully
+# commented so the default keeps running untouched. Uncomment to override —
+# doing so REPLACES the whole pipeline (composition is full-replacement, not a
+# merge), so copy every phase you still want, then edit.
+#
+# Authoritative default: deploy.DefaultDeployConfig()
+#   (internal/core/workflow/deploy/defaults.go)
+# Schema and field reference: `dwe docs config deploy`
+#
+# log: true
+# phases:
+#   - name: services
+#     description: "Deploy all enabled services (resolved by dependency order)"
+#     deploy_services: true
+#   - name: start
+#     description: "Start containers and wait for health"
+#     steps:
+#       - name: up
+#         type: dwe
+#         cmd: "docker up --wait"
+#         description: "Start all containers and wait until healthy"
+#         untracked: true
+#   - name: post-deploy
+#     description: "Post-deploy summary (runs only if all prior phases succeeded)"
+#     untracked: true
+#     steps:
+#       - name: info
+#         type: dwe
+#         cmd: "info"
+#         description: "Show environment summary"
+#       - name: success
+#         type: builtin
+#         cmd: message
+#         with:
+#           level: success
+#           text: "Deploy completed successfully"
