@@ -183,12 +183,11 @@ func ExecAction(ctx context.Context, a config.Action, actx ActionContext) error 
 	}
 }
 
-// execShellAction runs a shell command via sh -c.
-func execShellAction(ctx context.Context, a config.Action, actx ActionContext) error {
-	shell := config.ShellBin(actx.Cfg)
-	cmd := exec.CommandContext(ctx, shell, "-c", strings.TrimSpace(a.Cmd)) //nolint:gosec
-	bindCancelTerm(cmd)
-	cmd.Dir = actx.WorkDir
+// runChildCmd wires the child process I/O (stdin, stdout/stderr via childIO)
+// and runs it, normalizing a non-zero exit into an "exit status N" error.
+// Shared by execShellAction and execDweAction, whose only difference is how
+// the *exec.Cmd is constructed.
+func runChildCmd(cmd *exec.Cmd, actx ActionContext) error {
 	if !actx.Parallel {
 		cmd.Stdin = os.Stdin
 	}
@@ -205,24 +204,20 @@ func execShellAction(ctx context.Context, a config.Action, actx ActionContext) e
 	return nil
 }
 
+// execShellAction runs a shell command via sh -c.
+func execShellAction(ctx context.Context, a config.Action, actx ActionContext) error {
+	shell := config.ShellBin(actx.Cfg)
+	cmd := exec.CommandContext(ctx, shell, "-c", strings.TrimSpace(a.Cmd)) //nolint:gosec
+	bindCancelTerm(cmd)
+	cmd.Dir = actx.WorkDir
+	return runChildCmd(cmd, actx)
+}
+
 // execDweAction runs a dwe subcommand.
 func execDweAction(ctx context.Context, a config.Action, actx ActionContext) error {
 	shell := config.ShellBin(actx.Cfg)
 	cmd := buildDweCmd(ctx, a.Cmd, actx.WorkDir, shell, config.DweBin(actx.Cfg), actx.SkipConfirm)
-	if !actx.Parallel {
-		cmd.Stdin = os.Stdin
-	}
-	stdout, stderr, cleanup := childIO(actx.StepWriter, actx.Parallel)
-	defer cleanup()
-	cmd.Stdout, cmd.Stderr = stdout, stderr
-
-	if err := cmd.Run(); err != nil {
-		if exitErr, ok := errors.AsType[*exec.ExitError](err); ok {
-			return fmt.Errorf("exit status %d", exitErr.ExitCode())
-		}
-		return err
-	}
-	return nil
+	return runChildCmd(cmd, actx)
 }
 
 // execBuiltinAction executes a builtin action. Builtin output is routed
@@ -567,6 +562,27 @@ func RunWithOptions(opts RunOptions) error {
 	return nil
 }
 
+// failGateStep reports a files_gate setup/probe failure for a step that has not
+// yet been started: it emits StartStep then FailStep/OnStepFail with err and
+// returns ErrSilent so the caller aborts the pipeline. Shared by the six
+// files_gate error paths in executeStepBody.
+func failGateStep(opts RunOptions, rs ResolvedStep, addr string, stepIndex, stepTotal int, stepHash string, err error) error {
+	opts.Reporter.StartStep(addr, rs.Step, stepIndex, stepTotal)
+	opts.Reporter.FailStep(addr, rs.Step, stepIndex, stepTotal, err)
+	opts.Recorder.OnStepFail(addr, rs, stepHash, 0, err)
+	return ErrSilent
+}
+
+// skipStateStep reports a journal-driven "already deployed" skip: it emits
+// StartStep then SkipStep/OnStepSkip with the canonical state messages and
+// returns nil. Shared by the readable-gate and gateless skip paths.
+func skipStateStep(opts RunOptions, rs ResolvedStep, addr string, stepIndex, stepTotal int, stepHash string) error {
+	opts.Reporter.StartStep(addr, rs.Step, stepIndex, stepTotal)
+	opts.Reporter.SkipStep(addr, rs.Step, stepIndex, stepTotal, "state: already deployed")
+	opts.Recorder.OnStepSkip(addr, rs, stepHash, "state")
+	return nil
+}
+
 // executeStepBody runs the per-step pipeline for a single resolved step (or a
 // single sub-step inside a parallel group). It handles step-level when,
 // files_gate vs SkipDecider, ExecAction, post-step hook, and check action.
@@ -625,21 +641,15 @@ func executeStepBody(ctx context.Context, opts RunOptions, rs ResolvedStep, addr
 	if rs.FilesGate != nil && rs.FilesGate.State == filesgate.StateReadable {
 		decision := opts.SkipDecider(addr, rs, stepHash)
 		if decision == journal.Skip {
-			opts.Reporter.StartStep(addr, rs.Step, stepIndex, stepTotal)
-			opts.Reporter.SkipStep(addr, rs.Step, stepIndex, stepTotal, "state: already deployed")
-			opts.Recorder.OnStepSkip(addr, rs, stepHash, "state")
-			return nil
+			return skipStateStep(opts, rs, addr, stepIndex, stepTotal, stepHash)
 		}
 	}
 
 	if rs.FilesGate != nil {
 		// Guard: runtime must have a registry to evaluate gates.
 		if opts.Registry == nil {
-			opts.Reporter.StartStep(addr, rs.Step, stepIndex, stepTotal)
-			err := fmt.Errorf("files_gate on step %q requires command registry but none was provided to the executor", addr)
-			opts.Reporter.FailStep(addr, rs.Step, stepIndex, stepTotal, err)
-			opts.Recorder.OnStepFail(addr, rs, stepHash, 0, err)
-			return ErrSilent
+			return failGateStep(opts, rs, addr, stepIndex, stepTotal, stepHash,
+				fmt.Errorf("files_gate on step %q requires command registry but none was provided to the executor", addr))
 		}
 
 		targetCmd := rs.FilesGate.Command
@@ -649,11 +659,8 @@ func executeStepBody(ctx context.Context, opts RunOptions, rs ResolvedStep, addr
 
 		def, err := opts.Registry.Get(targetCmd)
 		if err != nil {
-			opts.Reporter.StartStep(addr, rs.Step, stepIndex, stepTotal)
-			err = fmt.Errorf("files_gate on step %q references unknown command %q: %w", addr, targetCmd, err)
-			opts.Reporter.FailStep(addr, rs.Step, stepIndex, stepTotal, err)
-			opts.Recorder.OnStepFail(addr, rs, stepHash, 0, err)
-			return ErrSilent
+			return failGateStep(opts, rs, addr, stepIndex, stepTotal, stepHash,
+				fmt.Errorf("files_gate on step %q references unknown command %q: %w", addr, targetCmd, err))
 		}
 
 		gateWith := rs.FilesGate.With
@@ -662,29 +669,20 @@ func executeStepBody(ctx context.Context, opts RunOptions, rs ResolvedStep, addr
 		}
 		runCtx, err := usercommands.BuildRunContext(opts.Config, opts.Registry, def, gateWith, opts.WorkDir)
 		if err != nil {
-			opts.Reporter.StartStep(addr, rs.Step, stepIndex, stepTotal)
-			err := fmt.Errorf("files_gate on step %q: building context for command %q: %w", addr, targetCmd, err)
-			opts.Reporter.FailStep(addr, rs.Step, stepIndex, stepTotal, err)
-			opts.Recorder.OnStepFail(addr, rs, stepHash, 0, err)
-			return ErrSilent
+			return failGateStep(opts, rs, addr, stepIndex, stepTotal, stepHash,
+				fmt.Errorf("files_gate on step %q: building context for command %q: %w", addr, targetCmd, err))
 		}
 
 		ids, err := spec.ResolveRequireIDs(rs.FilesGate.Require, def.Files)
 		if err != nil {
-			opts.Reporter.StartStep(addr, rs.Step, stepIndex, stepTotal)
-			err := fmt.Errorf("files_gate on step %q: %w", addr, err)
-			opts.Reporter.FailStep(addr, rs.Step, stepIndex, stepTotal, err)
-			opts.Recorder.OnStepFail(addr, rs, stepHash, 0, err)
-			return ErrSilent
+			return failGateStep(opts, rs, addr, stepIndex, stepTotal, stepHash,
+				fmt.Errorf("files_gate on step %q: %w", addr, err))
 		}
 
 		probeResults, err := usercommands.ComputeFilePathsProbe(runCtx, ids)
 		if err != nil {
-			opts.Reporter.StartStep(addr, rs.Step, stepIndex, stepTotal)
-			err := fmt.Errorf("files_gate on step %q: probing files: %w", addr, err)
-			opts.Reporter.FailStep(addr, rs.Step, stepIndex, stepTotal, err)
-			opts.Recorder.OnStepFail(addr, rs, stepHash, 0, err)
-			return ErrSilent
+			return failGateStep(opts, rs, addr, stepIndex, stepTotal, stepHash,
+				fmt.Errorf("files_gate on step %q: probing files: %w", addr, err))
 		}
 
 		var offendingIDs []string
@@ -702,11 +700,8 @@ func executeStepBody(ctx context.Context, opts RunOptions, rs ResolvedStep, addr
 				}
 			}
 		default:
-			opts.Reporter.StartStep(addr, rs.Step, stepIndex, stepTotal)
-			err := fmt.Errorf("files_gate on step %q: invalid state %q (must be \"readable\" or \"missing\")", addr, rs.FilesGate.State)
-			opts.Reporter.FailStep(addr, rs.Step, stepIndex, stepTotal, err)
-			opts.Recorder.OnStepFail(addr, rs, stepHash, 0, err)
-			return ErrSilent
+			return failGateStep(opts, rs, addr, stepIndex, stepTotal, stepHash,
+				fmt.Errorf("files_gate on step %q: invalid state %q (must be \"readable\" or \"missing\")", addr, rs.FilesGate.State))
 		}
 
 		if len(offendingIDs) > 0 {
@@ -723,10 +718,7 @@ func executeStepBody(ctx context.Context, opts RunOptions, rs ResolvedStep, addr
 		// Step 3c: No gate present — consult skip decision.
 		decision := opts.SkipDecider(addr, rs, stepHash)
 		if decision == journal.Skip {
-			opts.Reporter.StartStep(addr, rs.Step, stepIndex, stepTotal)
-			opts.Reporter.SkipStep(addr, rs.Step, stepIndex, stepTotal, "state: already deployed")
-			opts.Recorder.OnStepSkip(addr, rs, stepHash, "state")
-			return nil
+			return skipStateStep(opts, rs, addr, stepIndex, stepTotal, stepHash)
 		}
 	}
 

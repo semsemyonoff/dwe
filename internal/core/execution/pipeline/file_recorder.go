@@ -98,6 +98,53 @@ func (r *FileRecorder) OnPipelineStart(name string, totalSteps int) {
 	}
 }
 
+// ensureProjectPhaseSteps lazily initializes the project-scope state subtree
+// (Project → Phases → Phases[phase] → Steps) so callers can write a step entry.
+// Idempotent: existing nodes are left untouched. Caller must hold r.mu.
+func (r *FileRecorder) ensureProjectPhaseSteps(phaseName string) {
+	if r.state.Project == nil {
+		r.state.Project = &journal.ProjectLevelState{}
+	}
+	if r.state.Project.Phases == nil {
+		r.state.Project.Phases = make(map[string]*journal.PhaseState)
+	}
+	if r.state.Project.Phases[phaseName] == nil {
+		r.state.Project.Phases[phaseName] = &journal.PhaseState{
+			Steps: make(map[string]*journal.StepState),
+		}
+	}
+	if r.state.Project.Phases[phaseName].Steps == nil {
+		r.state.Project.Phases[phaseName].Steps = make(map[string]*journal.StepState)
+	}
+}
+
+// ensureServicePhaseSteps lazily initializes the service-scope state subtree
+// (Services → Services[svc] → Phases → Phases[phase] → Steps) so callers can
+// write a step entry. Idempotent: existing nodes are left untouched. Caller
+// must hold r.mu.
+func (r *FileRecorder) ensureServicePhaseSteps(service, phaseName string) {
+	if r.state.Services == nil {
+		r.state.Services = make(map[string]*journal.ServiceState)
+	}
+	if r.state.Services[service] == nil {
+		r.state.Services[service] = &journal.ServiceState{
+			Phases:  make(map[string]*journal.PhaseState),
+			LastRun: &journal.LastRun{},
+		}
+	}
+	if r.state.Services[service].Phases == nil {
+		r.state.Services[service].Phases = make(map[string]*journal.PhaseState)
+	}
+	if r.state.Services[service].Phases[phaseName] == nil {
+		r.state.Services[service].Phases[phaseName] = &journal.PhaseState{
+			Steps: make(map[string]*journal.StepState),
+		}
+	}
+	if r.state.Services[service].Phases[phaseName].Steps == nil {
+		r.state.Services[service].Phases[phaseName].Steps = make(map[string]*journal.StepState)
+	}
+}
+
 // OnStepStart is called immediately before a step executes.
 func (r *FileRecorder) OnStepStart(addr string, rs ResolvedStep, actionHash string) {
 	r.mu.Lock()
@@ -105,40 +152,11 @@ func (r *FileRecorder) OnStepStart(addr string, rs ResolvedStep, actionHash stri
 	// Initialize phase if not present
 	if rs.Service == "" {
 		// Project-scope step
-		if r.state.Project == nil {
-			r.state.Project = &journal.ProjectLevelState{}
-		}
-		if r.state.Project.Phases == nil {
-			r.state.Project.Phases = make(map[string]*journal.PhaseState)
-		}
-		if r.state.Project.Phases[rs.Phase.Name] == nil {
-			r.state.Project.Phases[rs.Phase.Name] = &journal.PhaseState{
-				Steps: make(map[string]*journal.StepState),
-			}
-		}
-		if r.state.Project.Phases[rs.Phase.Name].Steps == nil {
-			r.state.Project.Phases[rs.Phase.Name].Steps = make(map[string]*journal.StepState)
-		}
+		r.ensureProjectPhaseSteps(rs.Phase.Name)
 		// Note: we don't mark the step's status here; that happens in Finish/Fail
 	} else {
 		// Service-scope step
-		if r.state.Services[rs.Service] == nil {
-			r.state.Services[rs.Service] = &journal.ServiceState{
-				Phases:  make(map[string]*journal.PhaseState),
-				LastRun: &journal.LastRun{},
-			}
-		}
-		if r.state.Services[rs.Service].Phases == nil {
-			r.state.Services[rs.Service].Phases = make(map[string]*journal.PhaseState)
-		}
-		if r.state.Services[rs.Service].Phases[rs.Phase.Name] == nil {
-			r.state.Services[rs.Service].Phases[rs.Phase.Name] = &journal.PhaseState{
-				Steps: make(map[string]*journal.StepState),
-			}
-		}
-		if r.state.Services[rs.Service].Phases[rs.Phase.Name].Steps == nil {
-			r.state.Services[rs.Service].Phases[rs.Phase.Name].Steps = make(map[string]*journal.StepState)
-		}
+		r.ensureServicePhaseSteps(rs.Service, rs.Phase.Name)
 
 		// Mark the service in_progress before executing the first actual step so that a
 		// process crash before OnPipelineFinish is detectable via Recompute().
@@ -209,44 +227,12 @@ func (r *FileRecorder) OnStepFail(addr string, rs ResolvedStep, actionHash strin
 	if rs.Service == "" {
 		// Project-scope step — initialize maps if not yet set up by OnStepStart
 		// (files_gate failures call OnStepFail without a preceding OnStepStart).
-		if r.state.Project == nil {
-			r.state.Project = &journal.ProjectLevelState{}
-		}
-		if r.state.Project.Phases == nil {
-			r.state.Project.Phases = make(map[string]*journal.PhaseState)
-		}
-		if r.state.Project.Phases[rs.Phase.Name] == nil {
-			r.state.Project.Phases[rs.Phase.Name] = &journal.PhaseState{
-				Steps: make(map[string]*journal.StepState),
-			}
-		}
-		if r.state.Project.Phases[rs.Phase.Name].Steps == nil {
-			r.state.Project.Phases[rs.Phase.Name].Steps = make(map[string]*journal.StepState)
-		}
+		r.ensureProjectPhaseSteps(rs.Phase.Name)
 		r.state.Project.Phases[rs.Phase.Name].Steps[rs.Step.Name] = stepState
 		r.state.Project.Phases[rs.Phase.Name].Status = journal.StatusFailed
 	} else {
 		// Service-scope step — initialize maps if not yet set up by OnStepStart.
-		if r.state.Services == nil {
-			r.state.Services = make(map[string]*journal.ServiceState)
-		}
-		if r.state.Services[rs.Service] == nil {
-			r.state.Services[rs.Service] = &journal.ServiceState{
-				Phases:  make(map[string]*journal.PhaseState),
-				LastRun: &journal.LastRun{},
-			}
-		}
-		if r.state.Services[rs.Service].Phases == nil {
-			r.state.Services[rs.Service].Phases = make(map[string]*journal.PhaseState)
-		}
-		if r.state.Services[rs.Service].Phases[rs.Phase.Name] == nil {
-			r.state.Services[rs.Service].Phases[rs.Phase.Name] = &journal.PhaseState{
-				Steps: make(map[string]*journal.StepState),
-			}
-		}
-		if r.state.Services[rs.Service].Phases[rs.Phase.Name].Steps == nil {
-			r.state.Services[rs.Service].Phases[rs.Phase.Name].Steps = make(map[string]*journal.StepState)
-		}
+		r.ensureServicePhaseSteps(rs.Service, rs.Phase.Name)
 		r.state.Services[rs.Service].Phases[rs.Phase.Name].Steps[rs.Step.Name] = stepState
 		r.state.Services[rs.Service].Phases[rs.Phase.Name].Status = journal.StatusFailed
 	}
@@ -278,43 +264,14 @@ func (r *FileRecorder) OnStepSkip(addr string, rs ResolvedStep, actionHash strin
 
 	if rs.Service == "" {
 		// Project-scope step — initialize maps if not yet set up by OnStepStart
-		if r.state.Project == nil {
-			r.state.Project = &journal.ProjectLevelState{}
-		}
-		if r.state.Project.Phases == nil {
-			r.state.Project.Phases = make(map[string]*journal.PhaseState)
-		}
-		if r.state.Project.Phases[rs.Phase.Name] == nil {
-			r.state.Project.Phases[rs.Phase.Name] = &journal.PhaseState{
-				Steps: make(map[string]*journal.StepState),
-			}
-		}
-		if r.state.Project.Phases[rs.Phase.Name].Steps == nil {
-			r.state.Project.Phases[rs.Phase.Name].Steps = make(map[string]*journal.StepState)
-		}
+		r.ensureProjectPhaseSteps(rs.Phase.Name)
 		r.state.Project.Phases[rs.Phase.Name].Steps[rs.Step.Name] = stepState
 		// Recompute phase status so a previously-failed phase is cleared when all
 		// its steps either succeeded or were skipped in this run.
 		r.state.Project.Phases[rs.Phase.Name].Status = phaseStatusFromSteps(r.state.Project.Phases[rs.Phase.Name].Steps)
 	} else {
 		// Service-scope step — initialize maps if not yet set up by OnStepStart
-		if r.state.Services[rs.Service] == nil {
-			r.state.Services[rs.Service] = &journal.ServiceState{
-				Phases:  make(map[string]*journal.PhaseState),
-				LastRun: &journal.LastRun{},
-			}
-		}
-		if r.state.Services[rs.Service].Phases == nil {
-			r.state.Services[rs.Service].Phases = make(map[string]*journal.PhaseState)
-		}
-		if r.state.Services[rs.Service].Phases[rs.Phase.Name] == nil {
-			r.state.Services[rs.Service].Phases[rs.Phase.Name] = &journal.PhaseState{
-				Steps: make(map[string]*journal.StepState),
-			}
-		}
-		if r.state.Services[rs.Service].Phases[rs.Phase.Name].Steps == nil {
-			r.state.Services[rs.Service].Phases[rs.Phase.Name].Steps = make(map[string]*journal.StepState)
-		}
+		r.ensureServicePhaseSteps(rs.Service, rs.Phase.Name)
 		r.state.Services[rs.Service].Phases[rs.Phase.Name].Steps[rs.Step.Name] = stepState
 		// Recompute phase status so a previously-failed phase is cleared when all
 		// its steps either succeeded or were skipped in this run.

@@ -132,12 +132,12 @@ Tasks are ordered **safest / highest-value first**: pure deletions and named-con
 - Modify: `internal/core/execution/pipeline/file_recorder.go`
 - Modify: matching `*_test.go`
 
-- [ ] Extract `failGateStep(...)` for the 6 identical `StartStep→FailStep→OnStepFail→return ErrSilent` blocks (`executor.go:638,652,665,674,683,705`).
-- [ ] Extract `skipStateStep(...)` for the 2 byte-identical state-skip blocks (`executor.go:625,722`).
-- [ ] Extract `runChildCmd(...)` for the 13-line child-run tail shared by `execShellAction`/`execDweAction` (`executor.go:191,212`).
-- [ ] Extract `ensureProjectPhaseSteps`/`ensureServicePhaseSteps` for the journal-map nil-init ladders in `FileRecorder` (`file_recorder.go:106,209,279`) — risk low (touches recorder state); keep nil-init order identical.
-- [ ] Update/extend `pipeline` tests for the new helpers; confirm `files_gate` golden/behavior tests unchanged.
-- [ ] `make test && make lint` — must pass.
+- [x] Extract `failGateStep(...)` for the 6 identical `StartStep→FailStep→OnStepFail→return ErrSilent` blocks (`executor.go:638,652,665,674,683,705`).
+- [x] Extract `skipStateStep(...)` for the 2 byte-identical state-skip blocks (`executor.go:625,722`).
+- [x] Extract `runChildCmd(...)` for the 13-line child-run tail shared by `execShellAction`/`execDweAction` (`executor.go:191,212`).
+- [x] Extract `ensureProjectPhaseSteps`/`ensureServicePhaseSteps` for the journal-map nil-init ladders in `FileRecorder` (`file_recorder.go:106,209,279`) — risk low (touches recorder state); keep nil-init order identical.
+- [x] Update/extend `pipeline` tests for the new helpers; confirm `files_gate` golden/behavior tests unchanged.
+- [x] `make test && make lint` — must pass.
 
 ### Task 6: Unify plan-time & validation walkers
 **Theme 7 — priority medium / effort small / risk none.** Cold paths (plan/validate time); prefix/error strings provably equal.

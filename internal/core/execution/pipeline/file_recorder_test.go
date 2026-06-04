@@ -946,3 +946,41 @@ func TestFileRecorder_ConcurrentStepEvents(t *testing.T) {
 		assert.Equal(t, fmt.Sprintf("hash-%02d", i), steps[name].ActionHash)
 	}
 }
+
+// TestEnsureProjectPhaseSteps_LazyInitAndIdempotent verifies the extracted
+// project-scope nil-init helper builds the full subtree on an empty state and
+// leaves existing nodes untouched on a second call.
+func TestEnsureProjectPhaseSteps_LazyInitAndIdempotent(t *testing.T) {
+	rec := &FileRecorder{state: &journal.ProjectState{}}
+
+	rec.ensureProjectPhaseSteps("setup")
+	require.NotNil(t, rec.state.Project)
+	require.NotNil(t, rec.state.Project.Phases)
+	require.NotNil(t, rec.state.Project.Phases["setup"])
+	require.NotNil(t, rec.state.Project.Phases["setup"].Steps)
+
+	// Seed a step, then re-run: the existing phase/steps map must survive.
+	rec.state.Project.Phases["setup"].Steps["a"] = &journal.StepState{Status: journal.StatusOk}
+	rec.ensureProjectPhaseSteps("setup")
+	assert.Equal(t, journal.StatusOk, rec.state.Project.Phases["setup"].Steps["a"].Status)
+	assert.Len(t, rec.state.Project.Phases["setup"].Steps, 1)
+}
+
+// TestEnsureServicePhaseSteps_LazyInitAndIdempotent verifies the extracted
+// service-scope nil-init helper builds the full subtree (including the Services
+// map) on an empty state and is idempotent on re-entry.
+func TestEnsureServicePhaseSteps_LazyInitAndIdempotent(t *testing.T) {
+	rec := &FileRecorder{state: &journal.ProjectState{}}
+
+	rec.ensureServicePhaseSteps("main", "deploy")
+	require.NotNil(t, rec.state.Services)
+	require.NotNil(t, rec.state.Services["main"])
+	require.NotNil(t, rec.state.Services["main"].LastRun)
+	require.NotNil(t, rec.state.Services["main"].Phases["deploy"])
+	require.NotNil(t, rec.state.Services["main"].Phases["deploy"].Steps)
+
+	rec.state.Services["main"].Phases["deploy"].Steps["a"] = &journal.StepState{Status: journal.StatusFailed}
+	rec.ensureServicePhaseSteps("main", "deploy")
+	assert.Equal(t, journal.StatusFailed, rec.state.Services["main"].Phases["deploy"].Steps["a"].Status)
+	assert.Len(t, rec.state.Services["main"].Phases["deploy"].Steps, 1)
+}
