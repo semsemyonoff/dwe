@@ -288,6 +288,26 @@ func TestScaffold_ClaudeSymlink(t *testing.T) {
 	}
 }
 
+// TestScaffold_InvalidServiceRejected verifies that service names containing
+// path separators or traversal components are rejected before any disk write.
+func TestScaffold_InvalidServiceRejected(t *testing.T) {
+	bad := []string{"../etc", "../../root", "a/b", `a\b`, "..", "."}
+	for _, svc := range bad {
+		dir := t.TempDir()
+		opts := scaffoldOptions(dir)
+		opts.Service = svc
+		_, err := Scaffold(opts)
+		if err == nil {
+			t.Errorf("service %q: expected error, got nil", svc)
+		}
+		// No files should have been written.
+		entries, _ := os.ReadDir(dir)
+		if len(entries) != 0 {
+			t.Errorf("service %q: wrote files to disk despite invalid name: %v", svc, entries)
+		}
+	}
+}
+
 func contains(s []string, want string) bool {
 	return slices.Contains(s, want)
 }

@@ -86,7 +86,15 @@ npx skills add semsemyonoff/dwe --skill dwe -a claude-code
 
 ## Quickstart
 
-Enter a project directory containing `workspace.yml` and run any command — DWE walks upward from the working directory to locate the project root.
+**Starting from scratch?** Scaffold a new project with a single command:
+
+```sh
+dwe init my-project    # interactive: prompts for name, prefix, branding
+cd my-project
+dwe validate           # check the scaffolded config
+```
+
+**Joining an existing project?** Enter a project directory containing `workspace.yml` and run any command — DWE walks upward from the working directory to locate the project root.
 
 Validate the project before the first deploy:
 

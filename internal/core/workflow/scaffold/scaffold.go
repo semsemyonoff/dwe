@@ -79,6 +79,9 @@ type Result struct {
 // ancestor workspace.yml is found, Result.NestedWarning is set and the caller
 // decides how to surface it.
 func Scaffold(opts Options) (Result, error) {
+	if opts.Service != "" && (strings.ContainsAny(opts.Service, "/\\") || opts.Service == "." || opts.Service == "..") {
+		return Result{}, fmt.Errorf("scaffold: invalid service name %q: must be a single directory name with no path separators", opts.Service)
+	}
 	target := opts.TargetDir
 	if target == "" {
 		cwd, err := os.Getwd()
@@ -125,25 +128,26 @@ func Scaffold(opts Options) (Result, error) {
 	// .gitignore is merged (not part of the rendered plan): created when absent,
 	// append-merged when present, and a no-op when it already carries the block.
 	giPath := filepath.Join(absTarget, ".gitignore")
-	giExisted := fileExists(giPath)
 	giWritten, err := applyGitignore(giPath)
 	if err != nil {
 		return Result{}, err
 	}
-	switch {
-	case giWritten && !giExisted:
+	if giWritten {
+		// Report as created whether the file was new or append-merged, so the change is visible.
 		result.Created = append(result.Created, ".gitignore")
-	case giWritten:
-		// Existing file was append-merged; report as created so the change is visible.
-		result.Created = append(result.Created, ".gitignore")
-	default:
+	} else {
 		result.Skipped = append(result.Skipped, ".gitignore")
 	}
 
 	// CLAUDE.md mirrors AGENTS.md (symlink, or a copy where symlinks are
 	// unavailable). AGENTS.md was just written above, so it is on disk for the
 	// copy fallback.
-	claudeExisted := fileExists(filepath.Join(absTarget, "CLAUDE.md"))
+	//
+	// Use os.Stat (not Lstat) so a dangling symlink — where the inode exists but
+	// the target does not — is treated as absent: linkClaudeMd will fix it and
+	// the file correctly appears as Created rather than Skipped.
+	_, claudeStatErr := os.Stat(filepath.Join(absTarget, "CLAUDE.md"))
+	claudeExisted := claudeStatErr == nil
 	fallback, err := linkClaudeMd(absTarget)
 	if err != nil {
 		return Result{}, err
@@ -199,12 +203,6 @@ func detectNestedProject(target string) (bool, error) {
 		}
 		dir = parent
 	}
-}
-
-// fileExists reports whether path currently exists (file, dir, or symlink).
-func fileExists(path string) bool {
-	_, err := os.Lstat(path)
-	return err == nil
 }
 
 // sortedKeys returns the plan's output paths in deterministic order, so writes

@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"io"
 	"os"
 	"path/filepath"
@@ -235,6 +236,52 @@ func TestFormAbortWritesNothing(t *testing.T) {
 	}
 	if _, err := os.Stat(filepath.Join(dir, "workspace.yml")); !os.IsNotExist(err) {
 		t.Errorf("aborted run wrote workspace.yml: stat err = %v", err)
+	}
+}
+
+// TestFormErrorSurfaces verifies that a non-abort error returned by the form is
+// propagated to the caller rather than swallowed.
+func TestFormErrorSurfaces(t *testing.T) {
+	dir := t.TempDir()
+
+	origInteractive := widgets.IsInteractiveFn
+	origForm := runFormFn
+	t.Cleanup(func() {
+		widgets.IsInteractiveFn = origInteractive
+		runFormFn = origForm
+	})
+	widgets.IsInteractiveFn = func(io.Reader) bool { return true }
+	runFormFn = func(_ context.Context, _ formInput, _ io.Reader, _ io.Writer) (formInput, error) {
+		return formInput{}, errors.New("form exploded")
+	}
+
+	flags := &cmdctx.RootFlags{Output: "text"}
+	_, err := runCmd(t, flags, dir, "--name", "x")
+	if err == nil {
+		t.Fatal("expected non-nil error when form returns a non-abort error")
+	}
+}
+
+// TestEmptyNameAfterFormErrors verifies that an empty name returned by the form
+// produces a user-facing error rather than a silent zero-value scaffold.
+func TestEmptyNameAfterFormErrors(t *testing.T) {
+	dir := t.TempDir()
+
+	origInteractive := widgets.IsInteractiveFn
+	origForm := runFormFn
+	t.Cleanup(func() {
+		widgets.IsInteractiveFn = origInteractive
+		runFormFn = origForm
+	})
+	widgets.IsInteractiveFn = func(io.Reader) bool { return true }
+	runFormFn = func(_ context.Context, _ formInput, _ io.Reader, _ io.Writer) (formInput, error) {
+		return formInput{Name: "   ", Prefix: "x"}, nil
+	}
+
+	flags := &cmdctx.RootFlags{Output: "text"}
+	_, err := runCmd(t, flags, dir)
+	if err == nil {
+		t.Fatal("expected error when form returns an empty name")
 	}
 }
 

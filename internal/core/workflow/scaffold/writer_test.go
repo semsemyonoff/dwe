@@ -82,6 +82,14 @@ func TestWriteFile_ForceOverwrites(t *testing.T) {
 	if string(got) != "name: replaced\n" {
 		t.Fatalf("force did not overwrite: %q", got)
 	}
+
+	info, err := os.Stat(path)
+	if err != nil {
+		t.Fatalf("stat after force overwrite: %v", err)
+	}
+	if perm := info.Mode().Perm(); perm != filePerm {
+		t.Fatalf("perm after force = %o, want %o", perm, filePerm)
+	}
 }
 
 func TestWriteFile_CreatesNestedDirs(t *testing.T) {
