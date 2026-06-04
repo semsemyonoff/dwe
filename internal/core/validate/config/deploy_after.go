@@ -67,16 +67,10 @@ func (v *deployAfterValidator) Run(ctx validate.Context) []validate.Diagnostic {
 	// --- Cross-service after: validation for per-service deploy configs ---
 
 	// Determine the services map.
-	var services map[string]config.ServiceConfig
-	if ctx.Cfg != nil && ctx.Cfg.Services != nil {
-		services = ctx.Cfg.Services
-	} else {
-		loaded, err := config.LoadServices(ctx.ProjectRoot)
-		if err != nil {
-			// Can't cross-reference; skip.
-			return diags
-		}
-		services = loaded
+	services, ok := resolveServices(ctx)
+	if !ok {
+		// Can't cross-reference; skip.
+		return diags
 	}
 
 	if len(services) == 0 {

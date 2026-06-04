@@ -21,23 +21,17 @@ func (v *serviceHooksValidator) Run(ctx validate.Context) []validate.Diagnostic 
 	var diags []validate.Diagnostic
 
 	// Resolve the services map.
-	var services map[string]config.ServiceConfig
-	if ctx.Cfg != nil && ctx.Cfg.Services != nil {
-		services = ctx.Cfg.Services
-	} else {
-		loaded, err := config.LoadServices(ctx.ProjectRoot)
-		if err != nil {
-			// Can't resolve; skip silently (other validators will surface load errors).
-			return diags
-		}
-		services = loaded
+	services, ok := resolveServices(ctx)
+	if !ok {
+		// Can't resolve; skip silently (other validators will surface load errors).
+		return diags
 	}
 
 	if len(services) == 0 {
 		return diags
 	}
 
-	reg, _ := ctx.CommandRegistry.(*registry.Registry)
+	reg := registryFrom(ctx)
 
 	servicesDir := filepath.Join(ctx.ProjectRoot, "workspace", "services")
 

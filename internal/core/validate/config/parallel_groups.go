@@ -23,7 +23,7 @@ func (v *parallelGroupsValidator) Run(ctx validate.Context) []validate.Diagnosti
 	if ctx.Cfg == nil {
 		return nil
 	}
-	reg, _ := ctx.CommandRegistry.(*registry.Registry)
+	reg := registryFrom(ctx)
 
 	var diags []validate.Diagnostic
 	deployPath := filepath.Join(ctx.ProjectRoot, "workspace", "deploy.yml")
@@ -52,7 +52,7 @@ func (v *lifecycleParallelGroupsValidator) Run(ctx validate.Context) []validate.
 	if ctx.Cfg == nil {
 		return nil
 	}
-	reg, _ := ctx.CommandRegistry.(*registry.Registry)
+	reg := registryFrom(ctx)
 	lifecyclePath := filepath.Join(ctx.ProjectRoot, "workspace", "lifecycle.yml")
 	lifecycleCfg, err := config.LoadLifecycleConfig(lifecyclePath)
 	if err != nil {
@@ -79,7 +79,7 @@ func (v *resetParallelGroupsValidator) Run(ctx validate.Context) []validate.Diag
 	if ctx.Cfg == nil {
 		return nil
 	}
-	reg, _ := ctx.CommandRegistry.(*registry.Registry)
+	reg := registryFrom(ctx)
 	resetPath := filepath.Join(ctx.ProjectRoot, "workspace", "reset.yml")
 	resetCfg, err := config.LoadResetConfig(resetPath)
 	if err != nil {

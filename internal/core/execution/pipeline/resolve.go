@@ -116,19 +116,12 @@ func ResolvePhaseSteps(cfg *config.DweConfig, reg *registry.Registry, phase conf
 // resolveLeafStep resolves a single leaf-style DeployStep. Returns ok=false when
 // the step's template `when:` evaluates to false (step is filtered out).
 func resolveLeafStep(cfg *config.DweConfig, reg *registry.Registry, phase config.DeployPhase, service string, step config.DeployStep, phaseRuntimeWhen *condition.Condition) (ResolvedStep, bool, error) {
-	var stepRuntimeWhen *condition.Condition
-	if step.When != nil {
-		if step.When.IsRuntime() {
-			stepRuntimeWhen = step.When
-		} else if step.When.Type == condition.TypeTemplate {
-			ok, err := tpl.EvalCondition(step.When.Expr, cfg)
-			if err != nil {
-				return ResolvedStep{}, false, fmt.Errorf("evaluating when condition for step %s: %w", stepPrefix(phase, service, step.Name), err)
-			}
-			if !ok {
-				return ResolvedStep{}, false, nil
-			}
-		}
+	stepRuntimeWhen, keep, err := resolveStepWhen(cfg, step, stepPrefix(phase, service, step.Name))
+	if err != nil {
+		return ResolvedStep{}, false, err
+	}
+	if !keep {
+		return ResolvedStep{}, false, nil
 	}
 	if step.Type == "builtin" {
 		// Engine-synthetic phases (underscore-prefixed) may use KindInternal builtins.
@@ -180,19 +173,12 @@ func resolveParallelStep(cfg *config.DweConfig, reg *registry.Registry, phase co
 		return nil, fmt.Errorf("step %s: %w", prefix, ErrEmptyParallelSteps)
 	}
 
-	var stepRuntimeWhen *condition.Condition
-	if step.When != nil {
-		if step.When.IsRuntime() {
-			stepRuntimeWhen = step.When
-		} else if step.When.Type == condition.TypeTemplate {
-			ok, err := tpl.EvalCondition(step.When.Expr, cfg)
-			if err != nil {
-				return nil, fmt.Errorf("evaluating when condition for step %s: %w", prefix, err)
-			}
-			if !ok {
-				return nil, nil
-			}
-		}
+	stepRuntimeWhen, keep, err := resolveStepWhen(cfg, step, prefix)
+	if err != nil {
+		return nil, err
+	}
+	if !keep {
+		return nil, nil
 	}
 
 	subs := make([]ResolvedStep, 0, len(step.Parallel.Steps))
@@ -261,6 +247,31 @@ func resolveParallelStep(cfg *config.DweConfig, reg *registry.Registry, phase co
 			Steps:         subs,
 		},
 	}, nil
+}
+
+// resolveStepWhen evaluates a step's `when:` at plan time. A runtime condition
+// is returned as runtimeWhen (to attach to the resolved step) with keep=true; a
+// template condition is evaluated immediately and keep reports whether the step
+// survives filtering (keep=false when it evaluates to false). prefix names the
+// step for error messages. when: nil or a non-template/non-runtime condition
+// yields (nil, true, nil).
+func resolveStepWhen(cfg *config.DweConfig, step config.DeployStep, prefix string) (runtimeWhen *condition.Condition, keep bool, err error) {
+	if step.When == nil {
+		return nil, true, nil
+	}
+	if step.When.IsRuntime() {
+		return step.When, true, nil
+	}
+	if step.When.Type == condition.TypeTemplate {
+		ok, evalErr := tpl.EvalCondition(step.When.Expr, cfg)
+		if evalErr != nil {
+			return nil, false, fmt.Errorf("evaluating when condition for step %s: %w", prefix, evalErr)
+		}
+		if !ok {
+			return nil, false, nil
+		}
+	}
+	return nil, true, nil
 }
 
 // checkInteractive rejects a sub-step that would require an interactive prompt

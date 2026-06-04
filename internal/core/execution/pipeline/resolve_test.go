@@ -3,8 +3,10 @@ package pipeline
 import (
 	"errors"
 	"runtime"
+	"strings"
 	"testing"
 
+	"github.com/semsemyonoff/dwe/internal/core/execution/condition"
 	"github.com/semsemyonoff/dwe/internal/core/execution/filesgate"
 	"github.com/semsemyonoff/dwe/internal/core/project/config"
 	"github.com/semsemyonoff/dwe/internal/core/usercommands/model"
@@ -596,4 +598,53 @@ func TestResolvePhaseSteps_subStepOverridesRejectsNonWorkflowTarget(t *testing.T
 	if !errors.Is(err, ErrSubStepOverridesInvalid) {
 		t.Fatalf("expected ErrSubStepOverridesInvalid, got %v", err)
 	}
+}
+
+func TestResolveStepWhen(t *testing.T) {
+	cfg := &config.DweConfig{}
+
+	t.Run("nil when keeps step with no runtime condition", func(t *testing.T) {
+		rt, keep, err := resolveStepWhen(cfg, config.DeployStep{Name: "s"}, "init/s")
+		if err != nil || !keep || rt != nil {
+			t.Fatalf("got rt=%v keep=%v err=%v", rt, keep, err)
+		}
+	})
+
+	t.Run("runtime condition is returned and step kept", func(t *testing.T) {
+		c := &condition.Condition{Type: condition.TypeShell, Cmd: "true"}
+		rt, keep, err := resolveStepWhen(cfg, config.DeployStep{Name: "s", When: c}, "init/s")
+		if err != nil || !keep || rt != c {
+			t.Fatalf("got rt=%v keep=%v err=%v", rt, keep, err)
+		}
+	})
+
+	t.Run("template true keeps step, no runtime condition", func(t *testing.T) {
+		c := &condition.Condition{Type: condition.TypeTemplate, Expr: "true"}
+		rt, keep, err := resolveStepWhen(cfg, config.DeployStep{Name: "s", When: c}, "init/s")
+		if err != nil || !keep || rt != nil {
+			t.Fatalf("got rt=%v keep=%v err=%v", rt, keep, err)
+		}
+	})
+
+	t.Run("template false filters step out", func(t *testing.T) {
+		c := &condition.Condition{Type: condition.TypeTemplate, Expr: "false"}
+		rt, keep, err := resolveStepWhen(cfg, config.DeployStep{Name: "s", When: c}, "init/s")
+		if err != nil || keep || rt != nil {
+			t.Fatalf("got rt=%v keep=%v err=%v", rt, keep, err)
+		}
+	})
+
+	t.Run("template error is wrapped with step prefix", func(t *testing.T) {
+		c := &condition.Condition{Type: condition.TypeTemplate, Expr: "{{ .Nope.Missing }}"}
+		_, keep, err := resolveStepWhen(cfg, config.DeployStep{Name: "s", When: c}, "init/s")
+		if err == nil {
+			t.Fatal("expected error")
+		}
+		if keep {
+			t.Fatal("expected keep=false on error")
+		}
+		if !strings.Contains(err.Error(), "evaluating when condition for step init/s") {
+			t.Fatalf("unexpected error message: %v", err)
+		}
+	})
 }

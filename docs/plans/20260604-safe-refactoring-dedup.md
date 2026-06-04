@@ -147,12 +147,12 @@ Tasks are ordered **safest / highest-value first**: pure deletions and named-con
 - Modify: `internal/core/validate/config/deploy_files_gate.go`, `parallel_groups.go`, `service_hooks.go`, `deploy_after.go`
 - Modify: matching `*_test.go`
 
-- [ ] Unify the step-level `when:` resolution shared by `resolveLeafStep`/`resolveParallelStep` (`resolve.go:119,183`).
-- [ ] Extract the files-gate phase walker duplicated 4× in `deploy_files_gate.go:89,139,261,357`.
-- [ ] Extract `registryFrom(...)` for the 7× `CommandRegistry` type-assertion (`parallel_groups.go:26,55,82`; `service_hooks.go:40`; `deploy_files_gate.go:71,246,341`).
-- [ ] Extract `resolveServices(...)` for the 2 identical service-map resolution blocks (`deploy_after.go:70`; `service_hooks.go:24`).
-- [ ] Add/extend validator tests as needed; confirm diagnostic output unchanged.
-- [ ] `make test && make lint` — must pass.
+- [x] Unify the step-level `when:` resolution shared by `resolveLeafStep`/`resolveParallelStep` (`resolve.go:119,183`).
+- [x] Extract the files-gate phase walker duplicated 4× in `deploy_files_gate.go:89,139,261,357`.
+- [x] Extract `registryFrom(...)` for the 7× `CommandRegistry` type-assertion (`parallel_groups.go:26,55,82`; `service_hooks.go:40`; `deploy_files_gate.go:71,246,341`).
+- [x] Extract `resolveServices(...)` for the 2 identical service-map resolution blocks (`deploy_after.go:70`; `service_hooks.go:24`).
+- [x] Add/extend validator tests as needed; confirm diagnostic output unchanged (added `TestResolveStepWhen`; existing validator golden/behavior tests cover the walker/registry/services extractions).
+- [x] `make test && make lint` — must pass.
 
 ### Task 7: Factor load-or-mutate & union/dedup boilerplate in the deploy journal
 **Theme 10 — priority medium / effort small / risk none.** One Load + one Save preserved; hash map is key-sorted (insertion order irrelevant).
