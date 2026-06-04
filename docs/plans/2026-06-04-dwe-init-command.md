@@ -213,12 +213,12 @@ subdir entries.
 - Create: `internal/core/workflow/scaffold/writer.go`
 - Create: `internal/core/workflow/scaffold/writer_test.go`
 
-- [ ] implement `writeFile(path string, data []byte, force bool) (written bool, err error)`:
+- [x] implement `writeFile(path string, data []byte, force bool) (written bool, err error)`:
       skip (return `false`) if the file exists and `!force`; else temp-file + `rename`, creating parent dirs
-- [ ] ensure parent directory creation (`os.MkdirAll`) and 0644/0755 perms
-- [ ] write tests: new file is written; existing file is skipped; `force` overwrites
-- [ ] write tests: nested path creates intermediate dirs; atomicity (no partial file on error)
-- [ ] run tests — must pass before Task 3
+- [x] ensure parent directory creation (`os.MkdirAll`) and 0644/0755 perms
+- [x] write tests: new file is written; existing file is skipped; `force` overwrites
+- [x] write tests: nested path creates intermediate dirs; atomicity (no partial file on error)
+- [x] run tests — must pass before Task 3
 
 ### Task 3: `.gitignore` append-merge
 
