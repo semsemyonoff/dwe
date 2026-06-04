@@ -378,9 +378,9 @@ Tasks are ordered **safest / highest-value first**: pure deletions and named-con
 - [x] Run `make build` to confirm the binary still builds. `Built: ./bin/dwe`.
 
 ### Task 22: [Final] Update documentation & close out
-- [ ] Update `docs/internals/packages.md` only if a new shared/leaf package (Task 8 extends-chain, Task 11 host-id owner) warrants a per-package note.
-- [ ] Update `CLAUDE.md` "Critical Patterns" only if a new cross-package helper becomes a convention worth recording (e.g. `cmdctx.AcquireProjectLocksOrReport`, `config.LoadDockerConfigOrEmpty`).
-- [ ] Move this plan to `docs/plans/completed/` (`mkdir -p docs/plans/completed`).
+- [x] Update `docs/internals/packages.md` only if a new shared/leaf package (Task 8 extends-chain, Task 11 host-id owner) warrants a per-package note. Added per-package bullets for `internal/core/execution/templates/packcommon/` (extends-walk trio + shared `TemplateData` + kind-parameterized `DryRunRender`; ai/ide/git keep type/var aliases) and `internal/shared/hostid/` (single-read `Current() Info`; `envfile` + `tpl` delegate), plus a delegation note on the existing `envfile` bullet.
+- [x] Update `CLAUDE.md` "Critical Patterns" only if a new cross-package helper becomes a convention worth recording (e.g. `cmdctx.AcquireProjectLocksOrReport`, `config.LoadDockerConfigOrEmpty`). Extended the "Preflight + locks ordering" pattern to mandate `cmdctx.AcquireProjectLocksOrReport` at CLI sites, and added a new "Config-load helpers" pattern recording `config.LoadConfigOrWrap` (kept distinct from the `project_invalid_config` typed contract) and `config.LoadDockerConfigOrEmpty`. (Edited `AGENTS.md` — `CLAUDE.md` is a symlink to it.)
+- [x] Move this plan to `docs/plans/completed/` (`mkdir -p docs/plans/completed`).
 
 ## Post-Completion
 *Items requiring manual intervention or external decision — no checkboxes, informational only.*
