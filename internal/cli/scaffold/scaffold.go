@@ -225,7 +225,7 @@ func resolveName(nameFlag string, args []string) (string, error) {
 		return strings.TrimSpace(nameFlag), nil
 	}
 	if len(args) > 0 && strings.TrimSpace(args[0]) != "" {
-		return strings.TrimSpace(args[0]), nil
+		return filepath.Base(strings.TrimSpace(args[0])), nil
 	}
 	cwd, err := os.Getwd()
 	if err != nil {

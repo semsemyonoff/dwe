@@ -47,7 +47,7 @@ func linkClaudeMd(dir string, force bool) (fallback bool, err error) {
 	if readErr != nil {
 		return false, fmt.Errorf("scaffold: read %s for copy fallback: %w", agentsPath, readErr)
 	}
-	if _, writeErr := writeFile(claudePath, data, false); writeErr != nil {
+	if _, writeErr := writeFile(claudePath, data, true); writeErr != nil {
 		return false, fmt.Errorf("scaffold: write CLAUDE.md copy fallback: %w", writeErr)
 	}
 	return true, nil
