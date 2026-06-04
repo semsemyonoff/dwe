@@ -58,8 +58,12 @@ var runFormFn = func(ctx context.Context, in formInput, stdin io.Reader, stdout 
 			Required: true,
 			Default:  in.Name,
 			Validate: func(s string) error {
-				if strings.TrimSpace(s) == "" {
+				s = strings.TrimSpace(s)
+				if s == "" {
 					return errors.New("project name is required")
+				}
+				if strings.ContainsAny(s, "/\\") {
+					return errors.New("project name must not contain path separators")
 				}
 				return nil
 			},
@@ -221,11 +225,22 @@ func runInit(cmd *cobra.Command, flags *cmdctx.RootFlags, args []string, f initF
 // resolveName resolves the project name: --name wins, then the positional [name]
 // arg, then the current directory's base name.
 func resolveName(nameFlag string, args []string) (string, error) {
-	if strings.TrimSpace(nameFlag) != "" {
-		return strings.TrimSpace(nameFlag), nil
+	if n := strings.TrimSpace(nameFlag); n != "" {
+		if strings.ContainsAny(n, "/\\") {
+			return "", cmdctx.Err("scaffold_invalid_name",
+				fmt.Sprintf("%q is not a valid project name: must not contain path separators", n)).
+				WithHint(`use a simple name like "my-project"`)
+		}
+		return n, nil
 	}
 	if len(args) > 0 && strings.TrimSpace(args[0]) != "" {
-		return filepath.Base(strings.TrimSpace(args[0])), nil
+		name := filepath.Base(strings.TrimSpace(args[0]))
+		if name == "." || name == ".." || strings.ContainsAny(name, "/\\") {
+			return "", cmdctx.Err("scaffold_invalid_name",
+				fmt.Sprintf("%q does not yield a usable project name", args[0])).
+				WithHint(`pass a --name flag or run interactively`)
+		}
+		return name, nil
 	}
 	cwd, err := os.Getwd()
 	if err != nil {

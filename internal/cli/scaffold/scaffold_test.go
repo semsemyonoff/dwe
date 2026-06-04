@@ -95,6 +95,27 @@ func TestResolveName(t *testing.T) {
 			t.Errorf("got %q, want my-proj", got)
 		}
 	})
+
+	t.Run("name flag with path separator is rejected", func(t *testing.T) {
+		_, err := resolveName("foo/bar", nil)
+		if err == nil {
+			t.Fatal("expected error for name with slash, got nil")
+		}
+	})
+
+	t.Run("positional arg / is rejected", func(t *testing.T) {
+		_, err := resolveName("", []string{"/"})
+		if err == nil {
+			t.Fatal("expected error for positional arg /, got nil")
+		}
+	})
+
+	t.Run("positional arg . is rejected", func(t *testing.T) {
+		_, err := resolveName("", []string{"."})
+		if err == nil {
+			t.Fatal("expected error for positional arg ., got nil")
+		}
+	})
 }
 
 // TestNonInteractiveScaffold verifies a flag-driven run maps flags to the right
