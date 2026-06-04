@@ -346,224 +346,262 @@ func printInspectAt(w io.Writer, def *usercommands.CommandDef, cfg *config.DweCo
 			}
 		}
 	case usercommands.CommandTypeWorkflow:
-		sub("Steps")
-		for i, step := range def.Steps {
-			switch {
-			case step.Confirm != "":
-				def2(fmt.Sprintf("[%d] confirm", i), step.Confirm, 4)
-			case step.Parallel != nil:
-				p := step.Parallel
-				label := fmt.Sprintf("[%d] parallel", i)
-				var meta []string
-				if p.MaxConcurrent > 0 {
-					meta = append(meta, fmt.Sprintf("max_concurrent=%d", p.MaxConcurrent))
-				}
-				if p.FailFast != nil {
-					meta = append(meta, fmt.Sprintf("fail_fast=%v", *p.FailFast))
-				}
-				desc := fmt.Sprintf("%d sub-steps", len(p.Steps))
-				if len(meta) > 0 {
-					desc += "  " + strings.Join(meta, ", ")
-				}
-				if step.When != "" {
-					desc += "  when: " + step.When
-				}
-				def2(label, desc, 4)
-				for j, sub := range p.Steps {
-					subDesc := sub.Command + inspectStepDescription(reg, translator, locale, sub.Command)
-					if sub.When != "" {
-						subDesc += "  when: " + sub.When
-					}
-					if sub.ContinueOnError {
-						subDesc += "  (continue_on_error)"
-					}
-					def2(fmt.Sprintf("  [%d.%d]", i, j), subDesc, 6)
-				}
-			default:
-				label := fmt.Sprintf("[%d]", i)
-				desc := step.Command + inspectStepDescription(reg, translator, locale, step.Command)
-				if len(step.With) > 0 {
-					var pairs []string
-					for k, v := range step.With {
-						pairs = append(pairs, k+"="+v)
-					}
-					sort.Strings(pairs)
-					desc += "  with: " + strings.Join(pairs, ", ")
-				}
-				if step.When != "" {
-					desc += "  when: " + step.When
-				}
-				if step.ContinueOnError {
-					desc += "  (continue_on_error)"
-				}
-				def2(label, desc, 4)
-			}
-		}
+		inspectWorkflowSteps(def2, sub, def, reg, translator, locale)
 	}
 
-	if def.DerivedFromDaemon != "" && def.SourceDaemon != nil {
-		sub("Daemon")
-		ds := def.SourceDaemon
-		def2("container_template", ds.ContainerTemplate, 4)
-		if ds.OnAlreadyRunning != "" {
-			def2("on_already_running", ds.OnAlreadyRunning, 4)
-		}
-		if ds.AutoRemove != nil {
-			def2("auto_remove", fmt.Sprintf("%v", *ds.AutoRemove), 4)
-		}
-		if ds.StopTimeout != "" {
-			def2("stop_timeout", ds.StopTimeout, 4)
-		}
-		// Execution fields live in def.With for synthetic commands (registry
-		// expansion packs Service/User/Workdir/Argv/etc into the rendered map).
-		if def.With != nil {
-			withStr := func(key string) string {
-				if v, ok := def.With[key]; ok {
-					if s, ok := v.(string); ok {
-						return s
-					}
-				}
-				return ""
-			}
-			if s := withStr("service"); s != "" {
-				def2("service", s, 4)
-			}
-			if s := withStr("user"); s != "" {
-				def2("user", s, 4)
-			}
-			if s := withStr("workdir"); s != "" {
-				def2("workdir", s, 4)
-			}
-			if s := withStr("workdir_from"); s != "" {
-				def2("workdir_from", s, 4)
-			}
-			if argv, ok := def.With["argv"].([]any); ok && len(argv) > 0 {
-				parts := make([]string, 0, len(argv))
-				for _, a := range argv {
-					if s, ok := a.(string); ok {
-						parts = append(parts, s)
-					}
-				}
-				if len(parts) > 0 {
-					def2("argv", strings.Join(parts, " "), 4)
-				}
-			}
-		}
-		if cfg != nil {
-			sub("Container")
-			defaults := make(map[string]any, len(def.Params))
-			for name, p := range def.Params {
-				defaults[name] = p.Default
-			}
-			rendered, err := tpl.RenderCommand(ds.ContainerTemplate, &tpl.RenderContext{
-				Raw:    cfg.Raw,
-				Params: defaults,
-			})
-			if err == nil {
-				name, err := daemon.ResolveContainerName(cfg.Project.FullName(), rendered)
-				if err == nil {
-					def2("resolved (with default params)", name, 4)
-				}
-			}
-		}
-	}
-
-	if len(def.Params) > 0 {
-		sub("Params")
-		var names []string
-		for name := range def.Params {
-			names = append(names, name)
-		}
-		sort.Strings(names)
-		for _, name := range names {
-			p := def.Params[name]
-			desc := string(p.Type)
-			paramDesc := translator.ParamDescription(locale, def.ID, name, p.Description)
-			if paramDesc != "" {
-				desc = paramDesc + " (" + string(p.Type) + ")"
-			}
-			if p.Required {
-				desc += " [required]"
-			}
-			if p.Default != "" {
-				desc += " [default: " + p.Default + "]"
-			}
-			if p.DefaultFrom != "" {
-				desc += " [default_from: " + p.DefaultFrom + "]"
-			}
-			def2(name, desc, 4)
-		}
-	}
-
-	if len(def.Context) > 0 {
-		sub("Context")
-		var names []string
-		for name := range def.Context {
-			names = append(names, name)
-		}
-		sort.Strings(names)
-		for _, name := range names {
-			c := def.Context[name]
-			desc := "from: " + c.From
-			if c.Required {
-				desc += " [required]"
-			}
-			if c.Env != "" {
-				desc += " [env: " + c.Env + "]"
-			}
-			def2(name, desc, 4)
-		}
-	}
-
-	if len(def.Env) > 0 {
-		sub("Env")
-		var keys []string
-		for k := range def.Env {
-			keys = append(keys, k)
-		}
-		sort.Strings(keys)
-		for _, k := range keys {
-			def2(k, def.Env[k], 4)
-		}
-	}
-
-	if len(def.Files) > 0 {
-		sub("Files")
-		var fids []string
-		for fid := range def.Files {
-			fids = append(fids, fid)
-		}
-		sort.Strings(fids)
-		for _, fid := range fids {
-			f := def.Files[fid]
-			desc := string(f.Access)
-			if f.Path != "" {
-				desc += "  path: " + f.Path
-			} else if len(f.Candidates) > 0 {
-				desc += fmt.Sprintf("  candidates: %d", len(f.Candidates))
-			}
-			if f.Env != "" {
-				desc += "  env: " + f.Env
-			}
-			var flags []string
-			if f.Required {
-				flags = append(flags, "required")
-			}
-			if f.Mkdir {
-				flags = append(flags, "mkdir")
-			}
-			if f.Overwrite {
-				flags = append(flags, "overwrite")
-			}
-			if f.OnError != "" {
-				flags = append(flags, "on_error: "+string(f.OnError))
-			}
-			if len(flags) > 0 {
-				desc += "  [" + strings.Join(flags, ", ") + "]"
-			}
-			def2(fid, desc, 4)
-		}
-	}
+	inspectDaemonSection(def2, sub, def, cfg)
+	inspectParamsSection(def2, sub, def, translator, locale)
+	inspectContextSection(def2, sub, def)
+	inspectEnvSection(def2, sub, def)
+	inspectFilesSection(def2, sub, def)
 
 	_, _ = fmt.Fprintln(w, render.SectionTitle(""))
+}
+
+// inspectDef2 writes a name/value definition line at the given indent.
+type inspectDef2 = func(name, value string, indent int)
+
+// inspectSub writes a sub-section header.
+type inspectSub = func(title string)
+
+// inspectWorkflowSteps renders the Steps section for a workflow command.
+func inspectWorkflowSteps(def2 inspectDef2, sub inspectSub, def *usercommands.CommandDef, reg *usercommands.Registry, translator i18n.Translator, locale string) {
+	sub("Steps")
+	for i, step := range def.Steps {
+		switch {
+		case step.Confirm != "":
+			def2(fmt.Sprintf("[%d] confirm", i), step.Confirm, 4)
+		case step.Parallel != nil:
+			p := step.Parallel
+			label := fmt.Sprintf("[%d] parallel", i)
+			var meta []string
+			if p.MaxConcurrent > 0 {
+				meta = append(meta, fmt.Sprintf("max_concurrent=%d", p.MaxConcurrent))
+			}
+			if p.FailFast != nil {
+				meta = append(meta, fmt.Sprintf("fail_fast=%v", *p.FailFast))
+			}
+			desc := fmt.Sprintf("%d sub-steps", len(p.Steps))
+			if len(meta) > 0 {
+				desc += "  " + strings.Join(meta, ", ")
+			}
+			if step.When != "" {
+				desc += "  when: " + step.When
+			}
+			def2(label, desc, 4)
+			for j, sub := range p.Steps {
+				subDesc := sub.Command + inspectStepDescription(reg, translator, locale, sub.Command)
+				if sub.When != "" {
+					subDesc += "  when: " + sub.When
+				}
+				if sub.ContinueOnError {
+					subDesc += "  (continue_on_error)"
+				}
+				def2(fmt.Sprintf("  [%d.%d]", i, j), subDesc, 6)
+			}
+		default:
+			label := fmt.Sprintf("[%d]", i)
+			desc := step.Command + inspectStepDescription(reg, translator, locale, step.Command)
+			if len(step.With) > 0 {
+				var pairs []string
+				for k, v := range step.With {
+					pairs = append(pairs, k+"="+v)
+				}
+				sort.Strings(pairs)
+				desc += "  with: " + strings.Join(pairs, ", ")
+			}
+			if step.When != "" {
+				desc += "  when: " + step.When
+			}
+			if step.ContinueOnError {
+				desc += "  (continue_on_error)"
+			}
+			def2(label, desc, 4)
+		}
+	}
+}
+
+// inspectDaemonSection renders the Daemon (and resolved Container) section for a
+// synthetic daemon-derived command.
+func inspectDaemonSection(def2 inspectDef2, sub inspectSub, def *usercommands.CommandDef, cfg *config.DweConfig) {
+	if def.DerivedFromDaemon == "" || def.SourceDaemon == nil {
+		return
+	}
+	sub("Daemon")
+	ds := def.SourceDaemon
+	def2("container_template", ds.ContainerTemplate, 4)
+	if ds.OnAlreadyRunning != "" {
+		def2("on_already_running", ds.OnAlreadyRunning, 4)
+	}
+	if ds.AutoRemove != nil {
+		def2("auto_remove", fmt.Sprintf("%v", *ds.AutoRemove), 4)
+	}
+	if ds.StopTimeout != "" {
+		def2("stop_timeout", ds.StopTimeout, 4)
+	}
+	// Execution fields live in def.With for synthetic commands (registry
+	// expansion packs Service/User/Workdir/Argv/etc into the rendered map).
+	if def.With != nil {
+		withStr := func(key string) string {
+			if v, ok := def.With[key]; ok {
+				if s, ok := v.(string); ok {
+					return s
+				}
+			}
+			return ""
+		}
+		if s := withStr("service"); s != "" {
+			def2("service", s, 4)
+		}
+		if s := withStr("user"); s != "" {
+			def2("user", s, 4)
+		}
+		if s := withStr("workdir"); s != "" {
+			def2("workdir", s, 4)
+		}
+		if s := withStr("workdir_from"); s != "" {
+			def2("workdir_from", s, 4)
+		}
+		if argv, ok := def.With["argv"].([]any); ok && len(argv) > 0 {
+			parts := make([]string, 0, len(argv))
+			for _, a := range argv {
+				if s, ok := a.(string); ok {
+					parts = append(parts, s)
+				}
+			}
+			if len(parts) > 0 {
+				def2("argv", strings.Join(parts, " "), 4)
+			}
+		}
+	}
+	if cfg != nil {
+		sub("Container")
+		defaults := make(map[string]any, len(def.Params))
+		for name, p := range def.Params {
+			defaults[name] = p.Default
+		}
+		rendered, err := tpl.RenderCommand(ds.ContainerTemplate, &tpl.RenderContext{
+			Raw:    cfg.Raw,
+			Params: defaults,
+		})
+		if err == nil {
+			name, err := daemon.ResolveContainerName(cfg.Project.FullName(), rendered)
+			if err == nil {
+				def2("resolved (with default params)", name, 4)
+			}
+		}
+	}
+}
+
+// inspectParamsSection renders the Params section.
+func inspectParamsSection(def2 inspectDef2, sub inspectSub, def *usercommands.CommandDef, translator i18n.Translator, locale string) {
+	if len(def.Params) == 0 {
+		return
+	}
+	sub("Params")
+	var names []string
+	for name := range def.Params {
+		names = append(names, name)
+	}
+	sort.Strings(names)
+	for _, name := range names {
+		p := def.Params[name]
+		desc := string(p.Type)
+		paramDesc := translator.ParamDescription(locale, def.ID, name, p.Description)
+		if paramDesc != "" {
+			desc = paramDesc + " (" + string(p.Type) + ")"
+		}
+		if p.Required {
+			desc += " [required]"
+		}
+		if p.Default != "" {
+			desc += " [default: " + p.Default + "]"
+		}
+		if p.DefaultFrom != "" {
+			desc += " [default_from: " + p.DefaultFrom + "]"
+		}
+		def2(name, desc, 4)
+	}
+}
+
+// inspectContextSection renders the Context section.
+func inspectContextSection(def2 inspectDef2, sub inspectSub, def *usercommands.CommandDef) {
+	if len(def.Context) == 0 {
+		return
+	}
+	sub("Context")
+	var names []string
+	for name := range def.Context {
+		names = append(names, name)
+	}
+	sort.Strings(names)
+	for _, name := range names {
+		c := def.Context[name]
+		desc := "from: " + c.From
+		if c.Required {
+			desc += " [required]"
+		}
+		if c.Env != "" {
+			desc += " [env: " + c.Env + "]"
+		}
+		def2(name, desc, 4)
+	}
+}
+
+// inspectEnvSection renders the Env section.
+func inspectEnvSection(def2 inspectDef2, sub inspectSub, def *usercommands.CommandDef) {
+	if len(def.Env) == 0 {
+		return
+	}
+	sub("Env")
+	var keys []string
+	for k := range def.Env {
+		keys = append(keys, k)
+	}
+	sort.Strings(keys)
+	for _, k := range keys {
+		def2(k, def.Env[k], 4)
+	}
+}
+
+// inspectFilesSection renders the Files section.
+func inspectFilesSection(def2 inspectDef2, sub inspectSub, def *usercommands.CommandDef) {
+	if len(def.Files) == 0 {
+		return
+	}
+	sub("Files")
+	var fids []string
+	for fid := range def.Files {
+		fids = append(fids, fid)
+	}
+	sort.Strings(fids)
+	for _, fid := range fids {
+		f := def.Files[fid]
+		desc := string(f.Access)
+		if f.Path != "" {
+			desc += "  path: " + f.Path
+		} else if len(f.Candidates) > 0 {
+			desc += fmt.Sprintf("  candidates: %d", len(f.Candidates))
+		}
+		if f.Env != "" {
+			desc += "  env: " + f.Env
+		}
+		var flags []string
+		if f.Required {
+			flags = append(flags, "required")
+		}
+		if f.Mkdir {
+			flags = append(flags, "mkdir")
+		}
+		if f.Overwrite {
+			flags = append(flags, "overwrite")
+		}
+		if f.OnError != "" {
+			flags = append(flags, "on_error: "+string(f.OnError))
+		}
+		if len(flags) > 0 {
+			desc += "  [" + strings.Join(flags, ", ") + "]"
+		}
+		def2(fid, desc, 4)
+	}
 }

@@ -508,73 +508,7 @@ func RunHelper(ctx context.Context, cmd *cobra.Command, flags *cmdctx.RootFlags,
 	// to that service only; for multi-service, aggregated; otherwise whole project.
 	// When targeting a never-deployed service, all scope* vars stay zero so no gate
 	// fires and the deploy proceeds silently.
-	var (
-		scopeStatus        journal.Status
-		scopeAllHashMatch  bool
-		scopeLastRunStatus journal.Status
-	)
-	switch {
-	case len(opts.Services) == 0:
-		scopeStatus = state.Project.Status
-		scopeAllHashMatch = state.Project.ConfigHash == projectHash
-		if state.Project.LastRun != nil {
-			scopeLastRunStatus = state.Project.LastRun.Status
-		}
-	case len(opts.Services) == 1:
-		name := opts.Services[0]
-		if svc, ok := state.Services[name]; ok {
-			scopeStatus = svc.Status
-			scopeAllHashMatch = svc.ConfigHash == serviceHashes[name]
-			if svc.LastRun != nil {
-				scopeLastRunStatus = svc.LastRun.Status
-			}
-		}
-	default:
-		// Multi-service: aggregate across all targeted services.
-		allDeployed := true
-		allHashMatch := true
-		for _, name := range opts.Services {
-			svc, ok := state.Services[name]
-			if !ok {
-				allDeployed = false
-				allHashMatch = false
-				continue
-			}
-			switch svc.Status {
-			case journal.StatusFailed:
-				scopeStatus = journal.StatusFailed
-				allDeployed = false
-			case journal.StatusPartial:
-				if scopeStatus != journal.StatusFailed {
-					scopeStatus = journal.StatusPartial
-				}
-				allDeployed = false
-			case journal.StatusDeployed:
-				if scopeStatus == "" {
-					scopeStatus = journal.StatusDeployed
-				}
-			default:
-				allDeployed = false
-			}
-			if svc.ConfigHash != serviceHashes[name] {
-				allHashMatch = false
-			}
-			if svc.LastRun != nil {
-				switch svc.LastRun.Status {
-				case journal.StatusFailed:
-					scopeLastRunStatus = journal.StatusFailed
-				case journal.StatusInProgress:
-					if scopeLastRunStatus != journal.StatusFailed {
-						scopeLastRunStatus = journal.StatusInProgress
-					}
-				}
-			}
-		}
-		if allDeployed {
-			scopeStatus = journal.StatusDeployed
-		}
-		scopeAllHashMatch = allHashMatch
-	}
+	scopeStatus, scopeAllHashMatch, scopeLastRunStatus := computeScopeState(opts, state, projectHash, serviceHashes)
 
 	if !opts.Force && scopeStatus == journal.StatusDeployed {
 		// Check if all hashes match and there are no check: or files_gate: steps.
@@ -823,6 +757,77 @@ func RunHelper(ctx context.Context, cmd *cobra.Command, flags *cmdctx.RootFlags,
 		w.Info("Deploy log saved to: " + logPath)
 	}
 	return nil
+}
+
+// computeScopeState derives the deploy-gate state for the run's scope. For a
+// project-wide run (no opts.Services) it reflects project state; for a single
+// service it reflects that service's state; for multiple services it aggregates
+// status/last-run across all targeted services. A never-deployed scope returns
+// all zero values so no gate fires and the deploy proceeds silently.
+func computeScopeState(opts Opts, state *journal.ProjectState, projectHash string, serviceHashes map[string]string) (scopeStatus journal.Status, scopeAllHashMatch bool, scopeLastRunStatus journal.Status) {
+	switch {
+	case len(opts.Services) == 0:
+		scopeStatus = state.Project.Status
+		scopeAllHashMatch = state.Project.ConfigHash == projectHash
+		if state.Project.LastRun != nil {
+			scopeLastRunStatus = state.Project.LastRun.Status
+		}
+	case len(opts.Services) == 1:
+		name := opts.Services[0]
+		if svc, ok := state.Services[name]; ok {
+			scopeStatus = svc.Status
+			scopeAllHashMatch = svc.ConfigHash == serviceHashes[name]
+			if svc.LastRun != nil {
+				scopeLastRunStatus = svc.LastRun.Status
+			}
+		}
+	default:
+		// Multi-service: aggregate across all targeted services.
+		allDeployed := true
+		allHashMatch := true
+		for _, name := range opts.Services {
+			svc, ok := state.Services[name]
+			if !ok {
+				allDeployed = false
+				allHashMatch = false
+				continue
+			}
+			switch svc.Status {
+			case journal.StatusFailed:
+				scopeStatus = journal.StatusFailed
+				allDeployed = false
+			case journal.StatusPartial:
+				if scopeStatus != journal.StatusFailed {
+					scopeStatus = journal.StatusPartial
+				}
+				allDeployed = false
+			case journal.StatusDeployed:
+				if scopeStatus == "" {
+					scopeStatus = journal.StatusDeployed
+				}
+			default:
+				allDeployed = false
+			}
+			if svc.ConfigHash != serviceHashes[name] {
+				allHashMatch = false
+			}
+			if svc.LastRun != nil {
+				switch svc.LastRun.Status {
+				case journal.StatusFailed:
+					scopeLastRunStatus = journal.StatusFailed
+				case journal.StatusInProgress:
+					if scopeLastRunStatus != journal.StatusFailed {
+						scopeLastRunStatus = journal.StatusInProgress
+					}
+				}
+			}
+		}
+		if allDeployed {
+			scopeStatus = journal.StatusDeployed
+		}
+		scopeAllHashMatch = allHashMatch
+	}
+	return scopeStatus, scopeAllHashMatch, scopeLastRunStatus
 }
 
 // clearDeployedPending clears pending deploy entries for the services actually

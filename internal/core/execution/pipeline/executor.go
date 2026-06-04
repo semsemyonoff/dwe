@@ -583,6 +583,116 @@ func skipStateStep(opts RunOptions, rs ResolvedStep, addr string, stepIndex, ste
 	return nil
 }
 
+// evalFilesGate resolves the Step-3 files_gate / journal-skip interaction for a
+// single step. It emits the appropriate skip/fail reporter+recorder events and
+// returns a tri-state outcome:
+//   - proceed=true, err=nil: gate satisfied (or absent and not journal-skipped);
+//     the caller should execute the step.
+//   - proceed=false, err=nil: the step was skipped (journal-skip or gate not
+//     satisfied); the caller should return nil.
+//   - proceed=false, err=ErrSilent: gate setup/probe failed; the caller should
+//     abort the pipeline.
+//
+// Asymmetric by gate state:
+//   - state: missing (producer pattern) — bypass SkipDecider entirely; the
+//     gate alone decides. The artifact's filesystem state is the source of
+//     truth, and a deleted artifact must re-run the producer regardless of
+//     what the journal recorded.
+//   - state: readable (consumer pattern) — consult SkipDecider first. If
+//     the journal says Skip, honor it without probing the gate. This keeps
+//     destructive consumers (e.g. drop+restore) idempotent: the gate fires
+//     once, and subsequent runs short-circuit via the journal. To force a
+//     re-check, use an explicit check: directive, the same lever as any
+//     other step.
+//   - no gate — consult SkipDecider.
+func evalFilesGate(opts RunOptions, rs ResolvedStep, addr string, stepIndex, stepTotal int, stepHash string) (proceed bool, err error) {
+	if rs.FilesGate != nil && rs.FilesGate.State == filesgate.StateReadable {
+		decision := opts.SkipDecider(addr, rs, stepHash)
+		if decision == journal.Skip {
+			return false, skipStateStep(opts, rs, addr, stepIndex, stepTotal, stepHash)
+		}
+	}
+
+	if rs.FilesGate != nil {
+		// Guard: runtime must have a registry to evaluate gates.
+		if opts.Registry == nil {
+			return false, failGateStep(opts, rs, addr, stepIndex, stepTotal, stepHash,
+				fmt.Errorf("files_gate on step %q requires command registry but none was provided to the executor", addr))
+		}
+
+		targetCmd := rs.FilesGate.Command
+		if targetCmd == "" {
+			targetCmd = rs.Step.Cmd
+		}
+
+		def, err := opts.Registry.Get(targetCmd)
+		if err != nil {
+			return false, failGateStep(opts, rs, addr, stepIndex, stepTotal, stepHash,
+				fmt.Errorf("files_gate on step %q references unknown command %q: %w", addr, targetCmd, err))
+		}
+
+		gateWith := rs.FilesGate.With
+		if len(gateWith) == 0 {
+			gateWith = rs.Step.With
+		}
+		runCtx, err := usercommands.BuildRunContext(opts.Config, opts.Registry, def, gateWith, opts.WorkDir)
+		if err != nil {
+			return false, failGateStep(opts, rs, addr, stepIndex, stepTotal, stepHash,
+				fmt.Errorf("files_gate on step %q: building context for command %q: %w", addr, targetCmd, err))
+		}
+
+		ids, err := spec.ResolveRequireIDs(rs.FilesGate.Require, def.Files)
+		if err != nil {
+			return false, failGateStep(opts, rs, addr, stepIndex, stepTotal, stepHash,
+				fmt.Errorf("files_gate on step %q: %w", addr, err))
+		}
+
+		probeResults, err := usercommands.ComputeFilePathsProbe(runCtx, ids)
+		if err != nil {
+			return false, failGateStep(opts, rs, addr, stepIndex, stepTotal, stepHash,
+				fmt.Errorf("files_gate on step %q: probing files: %w", addr, err))
+		}
+
+		var offendingIDs []string
+		switch rs.FilesGate.State {
+		case filesgate.StateReadable:
+			for _, id := range ids {
+				if !probeResults[id].Resolved {
+					offendingIDs = append(offendingIDs, id)
+				}
+			}
+		case filesgate.StateMissing:
+			for _, id := range ids {
+				if probeResults[id].Resolved {
+					offendingIDs = append(offendingIDs, id)
+				}
+			}
+		default:
+			return false, failGateStep(opts, rs, addr, stepIndex, stepTotal, stepHash,
+				fmt.Errorf("files_gate on step %q: invalid state %q (must be \"readable\" or \"missing\")", addr, rs.FilesGate.State))
+		}
+
+		if len(offendingIDs) > 0 {
+			opts.Reporter.StartStep(addr, rs.Step, stepIndex, stepTotal)
+			reason := FormatFilesGate(rs.FilesGate, offendingIDs...)
+			opts.Reporter.SkipStep(addr, rs.Step, stepIndex, stepTotal, reason)
+			opts.Recorder.OnStepSkip(addr, rs, stepHash, reason)
+			return false, nil
+		}
+		// Gate satisfied — proceed to execution. For state: readable, the
+		// journal-skip check above already cleared us; for state: missing,
+		// the gate alone authorises the run.
+		return true, nil
+	}
+
+	// No gate present — consult skip decision.
+	decision := opts.SkipDecider(addr, rs, stepHash)
+	if decision == journal.Skip {
+		return false, skipStateStep(opts, rs, addr, stepIndex, stepTotal, stepHash)
+	}
+	return true, nil
+}
+
 // executeStepBody runs the per-step pipeline for a single resolved step (or a
 // single sub-step inside a parallel group). It handles step-level when,
 // files_gate vs SkipDecider, ExecAction, post-step hook, and check action.
@@ -624,102 +734,11 @@ func executeStepBody(ctx context.Context, opts RunOptions, rs ResolvedStep, addr
 		}
 	}
 
-	// Step 3: files_gate / journal-skip interaction.
-	//
-	// Asymmetric by gate state:
-	//   - state: missing (producer pattern) — bypass SkipDecider entirely; the
-	//     gate alone decides. The artifact's filesystem state is the source of
-	//     truth, and a deleted artifact must re-run the producer regardless of
-	//     what the journal recorded.
-	//   - state: readable (consumer pattern) — consult SkipDecider first. If
-	//     the journal says Skip, honor it without probing the gate. This keeps
-	//     destructive consumers (e.g. drop+restore) idempotent: the gate fires
-	//     once, and subsequent runs short-circuit via the journal. To force a
-	//     re-check, use an explicit check: directive, the same lever as any
-	//     other step.
-	//   - no gate — consult SkipDecider (Step 3c below).
-	if rs.FilesGate != nil && rs.FilesGate.State == filesgate.StateReadable {
-		decision := opts.SkipDecider(addr, rs, stepHash)
-		if decision == journal.Skip {
-			return skipStateStep(opts, rs, addr, stepIndex, stepTotal, stepHash)
-		}
-	}
-
-	if rs.FilesGate != nil {
-		// Guard: runtime must have a registry to evaluate gates.
-		if opts.Registry == nil {
-			return failGateStep(opts, rs, addr, stepIndex, stepTotal, stepHash,
-				fmt.Errorf("files_gate on step %q requires command registry but none was provided to the executor", addr))
-		}
-
-		targetCmd := rs.FilesGate.Command
-		if targetCmd == "" {
-			targetCmd = rs.Step.Cmd
-		}
-
-		def, err := opts.Registry.Get(targetCmd)
-		if err != nil {
-			return failGateStep(opts, rs, addr, stepIndex, stepTotal, stepHash,
-				fmt.Errorf("files_gate on step %q references unknown command %q: %w", addr, targetCmd, err))
-		}
-
-		gateWith := rs.FilesGate.With
-		if len(gateWith) == 0 {
-			gateWith = rs.Step.With
-		}
-		runCtx, err := usercommands.BuildRunContext(opts.Config, opts.Registry, def, gateWith, opts.WorkDir)
-		if err != nil {
-			return failGateStep(opts, rs, addr, stepIndex, stepTotal, stepHash,
-				fmt.Errorf("files_gate on step %q: building context for command %q: %w", addr, targetCmd, err))
-		}
-
-		ids, err := spec.ResolveRequireIDs(rs.FilesGate.Require, def.Files)
-		if err != nil {
-			return failGateStep(opts, rs, addr, stepIndex, stepTotal, stepHash,
-				fmt.Errorf("files_gate on step %q: %w", addr, err))
-		}
-
-		probeResults, err := usercommands.ComputeFilePathsProbe(runCtx, ids)
-		if err != nil {
-			return failGateStep(opts, rs, addr, stepIndex, stepTotal, stepHash,
-				fmt.Errorf("files_gate on step %q: probing files: %w", addr, err))
-		}
-
-		var offendingIDs []string
-		switch rs.FilesGate.State {
-		case filesgate.StateReadable:
-			for _, id := range ids {
-				if !probeResults[id].Resolved {
-					offendingIDs = append(offendingIDs, id)
-				}
-			}
-		case filesgate.StateMissing:
-			for _, id := range ids {
-				if probeResults[id].Resolved {
-					offendingIDs = append(offendingIDs, id)
-				}
-			}
-		default:
-			return failGateStep(opts, rs, addr, stepIndex, stepTotal, stepHash,
-				fmt.Errorf("files_gate on step %q: invalid state %q (must be \"readable\" or \"missing\")", addr, rs.FilesGate.State))
-		}
-
-		if len(offendingIDs) > 0 {
-			opts.Reporter.StartStep(addr, rs.Step, stepIndex, stepTotal)
-			reason := FormatFilesGate(rs.FilesGate, offendingIDs...)
-			opts.Reporter.SkipStep(addr, rs.Step, stepIndex, stepTotal, reason)
-			opts.Recorder.OnStepSkip(addr, rs, stepHash, reason)
-			return nil
-		}
-		// Gate satisfied — proceed to execution. For state: readable, the
-		// journal-skip check above already cleared us; for state: missing,
-		// the gate alone authorises the run.
-	} else {
-		// Step 3c: No gate present — consult skip decision.
-		decision := opts.SkipDecider(addr, rs, stepHash)
-		if decision == journal.Skip {
-			return skipStateStep(opts, rs, addr, stepIndex, stepTotal, stepHash)
-		}
+	// Step 3: files_gate / journal-skip interaction. evalFilesGate emits the
+	// skip/fail events and returns a tri-state outcome (proceed / skip-nil /
+	// fail-ErrSilent).
+	if proceed, err := evalFilesGate(opts, rs, addr, stepIndex, stepTotal, stepHash); !proceed {
+		return err
 	}
 
 	// Step 4: Execute the step.

@@ -337,12 +337,12 @@ Tasks are ordered **safest / highest-value first**: pure deletions and named-con
 - Modify: `internal/cli/deploy/deploy.go`; `internal/cli/command/inspect.go`; `internal/cli/docs/generate.go`; `internal/core/execution/pipeline/executor.go`
 - Modify: matching `*_test.go`
 
-- [ ] Split the scope-status switch out of the 520-line `RunHelper` (`deploy.go:315-836`, scope arm `:519-585`).
-- [ ] Split `printInspectAt` (`inspect.go:242-585`) into per-section render helpers (5 trailing sections + workflow arm).
-- [ ] Split the 288-line `writeCommandMarkdown` (`generate.go:161-448`) into per-section helpers.
-- [ ] Split `executeStepBody`'s 84-line files_gate probe into `evalFilesGate` (`executor.go:579-886`, probe `:635-718`) — keep the `files_gate` decision contract intact. NOTE: this builds ON Task 5 (which already extracted `failGateStep`/`skipStateStep` from the same block), so `evalFilesGate` will wrap those helper calls. The block has THREE exit paths — spell out a tri-state return contract: `proceed` / `skip-nil` / `fail-ErrSilent`. Confirm Task 5 landed first.
-- [ ] Confirm inspect/markdown/deploy golden & behavior tests unchanged.
-- [ ] `make test && make lint` — must pass.
+- [x] Split the scope-status switch out of the 520-line `RunHelper` into `computeScopeState(opts, state, projectHash, serviceHashes)` (`deploy.go`).
+- [x] Split `printInspectAt` into per-section render helpers (`inspectWorkflowSteps`/`inspectDaemonSection`/`inspectParamsSection`/`inspectContextSection`/`inspectEnvSection`/`inspectFilesSection`); section closures `def2`/`sub` passed via `inspectDef2`/`inspectSub` type aliases.
+- [x] Split the 288-line `writeCommandMarkdown` into per-section helpers (`writeCommandTypeDetails`/`writeCommandWorkflowSteps`/`writeCommandParams`/`writeCommandContext`/`writeCommandFiles`/`writeCommandEnv`); each carries its own length guard.
+- [x] Split `executeStepBody`'s files_gate probe into `evalFilesGate` (`executor.go`) — wraps Task 5's `failGateStep`/`skipStateStep`; tri-state contract realized as `(proceed bool, err error)`: `(true,nil)`=proceed / `(false,nil)`=skip / `(false,ErrSilent)`=fail. `files_gate` readable/missing asymmetry preserved verbatim.
+- [x] Confirm inspect/markdown/deploy golden & behavior tests unchanged. (cli/command, cli/deploy, cli/docs, core/execution/pipeline all green; zero golden diffs.)
+- [x] `make test && make lint` — must pass. (Both green; `make lint` reports 0 issues.)
 
 ### Task 19: Consolidate setup-validator boilerplate
 **Theme 15 — priority low / effort medium / risk low.** Bundle both findings; ripples into `all.go` + `validators_test.go` construction sites.

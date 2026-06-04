@@ -198,6 +198,19 @@ func writeCommandMarkdown(def *usercommands.CommandDef, dir string, reg *usercom
 	}
 	sb.WriteString("\n")
 
+	writeCommandTypeDetails(&sb, def, reg, store, locale)
+	writeCommandParams(&sb, def, store, locale)
+	writeCommandContext(&sb, def, store, locale)
+	writeCommandFiles(&sb, def, store, locale)
+	writeCommandEnv(&sb, def, store, locale)
+
+	filename := def.LocalName + ".md"
+	return os.WriteFile(filepath.Join(dir, filename), []byte(sb.String()), 0o644)
+}
+
+// writeCommandTypeDetails writes the type-specific detail section (command/argv/
+// script/with/steps) for a command's markdown.
+func writeCommandTypeDetails(sb *strings.Builder, def *usercommands.CommandDef, reg *usercommands.Registry, store *i18n.Store, locale string) {
 	commandHeader := store.T(locale, "docs.section.command", "Command")
 	argvHeader := store.T(locale, "docs.section.argv", "Argv")
 	scriptHeader := store.T(locale, "docs.section.script", "Script")
@@ -209,30 +222,29 @@ func writeCommandMarkdown(def *usercommands.CommandDef, dir string, reg *usercom
 	scriptLabel := store.T(locale, "docs.property.script", "Script")
 	builtinLabel := store.T(locale, "docs.property.builtin", "Builtin")
 
-	// Type-specific details.
 	switch def.Type {
 	case usercommands.CommandTypeShell, usercommands.CommandTypeDwe:
 		if def.Cmd != "" {
-			fmt.Fprintf(&sb, "## %s\n\n```sh\n%s\n```\n\n", commandHeader, def.Cmd)
+			fmt.Fprintf(sb, "## %s\n\n```sh\n%s\n```\n\n", commandHeader, def.Cmd)
 		}
 		if len(def.Argv) > 0 {
-			fmt.Fprintf(&sb, "## %s\n\n```\n%s\n```\n\n", argvHeader, strings.Join(def.Argv, " "))
+			fmt.Fprintf(sb, "## %s\n\n```\n%s\n```\n\n", argvHeader, strings.Join(def.Argv, " "))
 		}
 		if def.Workdir != "" {
-			fmt.Fprintf(&sb, "**%s:** `%s`\n\n", workdirLabel, def.Workdir)
+			fmt.Fprintf(sb, "**%s:** `%s`\n\n", workdirLabel, def.Workdir)
 		}
 	case usercommands.CommandTypeServiceExec, usercommands.CommandTypeServiceRun:
 		if def.Service != "" {
-			fmt.Fprintf(&sb, "**%s:** `%s`\n\n", serviceLabel, def.Service)
+			fmt.Fprintf(sb, "**%s:** `%s`\n\n", serviceLabel, def.Service)
 		}
 		if def.Cmd != "" {
-			fmt.Fprintf(&sb, "## %s\n\n```sh\n%s\n```\n\n", commandHeader, def.Cmd)
+			fmt.Fprintf(sb, "## %s\n\n```sh\n%s\n```\n\n", commandHeader, def.Cmd)
 		}
 		if len(def.Argv) > 0 {
-			fmt.Fprintf(&sb, "## %s\n\n```\n%s\n```\n\n", argvHeader, strings.Join(def.Argv, " "))
+			fmt.Fprintf(sb, "## %s\n\n```\n%s\n```\n\n", argvHeader, strings.Join(def.Argv, " "))
 		}
 		if len(def.ComposeArgs) > 0 {
-			fmt.Fprintf(&sb, "**%s:** `%s`\n\n", composeArgsLabel, strings.Join(def.ComposeArgs, " "))
+			fmt.Fprintf(sb, "**%s:** `%s`\n\n", composeArgsLabel, strings.Join(def.ComposeArgs, " "))
 		}
 	case usercommands.CommandTypeScript:
 		if def.Script != nil {
@@ -240,218 +252,237 @@ func writeCommandMarkdown(def *usercommands.CommandDef, dir string, reg *usercom
 			if shell == "" {
 				shell = "sh"
 			}
-			fmt.Fprintf(&sb, "**%s:** `%s`\n\n", shellLabel, shell)
+			fmt.Fprintf(sb, "**%s:** `%s`\n\n", shellLabel, shell)
 			if def.Script.Path != "" {
-				fmt.Fprintf(&sb, "**%s:** `%s`\n\n", scriptLabel, def.Script.Path)
+				fmt.Fprintf(sb, "**%s:** `%s`\n\n", scriptLabel, def.Script.Path)
 			}
 			if def.Script.Run != "" {
-				fmt.Fprintf(&sb, "## %s\n\n```sh\n%s\n```\n\n", scriptHeader, def.Script.Run)
+				fmt.Fprintf(sb, "## %s\n\n```sh\n%s\n```\n\n", scriptHeader, def.Script.Run)
 			}
 		}
 		if def.Workdir != "" {
-			fmt.Fprintf(&sb, "**%s:** `%s`\n\n", workdirLabel, def.Workdir)
+			fmt.Fprintf(sb, "**%s:** `%s`\n\n", workdirLabel, def.Workdir)
 		}
 	case usercommands.CommandTypeBuiltin:
 		if def.Cmd != "" {
-			fmt.Fprintf(&sb, "**%s:** `%s`\n\n", builtinLabel, def.Cmd)
+			fmt.Fprintf(sb, "**%s:** `%s`\n\n", builtinLabel, def.Cmd)
 		}
 		if len(def.With) > 0 {
-			fmt.Fprintf(&sb, "## %s\n\n", withHeader)
+			fmt.Fprintf(sb, "## %s\n\n", withHeader)
 			var keys []string
 			for k := range def.With {
 				keys = append(keys, k)
 			}
 			sort.Strings(keys)
 			for _, k := range keys {
-				fmt.Fprintf(&sb, "- `%s`: `%v`\n", k, def.With[k])
+				fmt.Fprintf(sb, "- `%s`: `%v`\n", k, def.With[k])
 			}
 			sb.WriteString("\n")
 		}
 	case usercommands.CommandTypeWorkflow:
-		if len(def.Steps) > 0 {
-			stepsHeader := store.T(locale, "docs.section.steps", "Steps")
-			parallelLabel := store.T(locale, "docs.workflow.parallel", "parallel")
-			subStepsLabel := store.T(locale, "docs.workflow.sub_steps", "sub-steps")
-			sb.WriteString("## " + stepsHeader + "\n\n")
-			for i, step := range def.Steps {
-				switch {
-				case step.Confirm != "":
-					fmt.Fprintf(&sb, "%d. **confirm:** %s\n", i+1, step.Confirm)
-				case step.Parallel != nil:
-					p := step.Parallel
-					var meta []string
-					if p.MaxConcurrent > 0 {
-						meta = append(meta, fmt.Sprintf("max_concurrent=%d", p.MaxConcurrent))
+		writeCommandWorkflowSteps(sb, def, reg, store, locale)
+	}
+}
+
+// writeCommandWorkflowSteps writes the Steps section for a workflow command.
+func writeCommandWorkflowSteps(sb *strings.Builder, def *usercommands.CommandDef, reg *usercommands.Registry, store *i18n.Store, locale string) {
+	if len(def.Steps) == 0 {
+		return
+	}
+	stepsHeader := store.T(locale, "docs.section.steps", "Steps")
+	parallelLabel := store.T(locale, "docs.workflow.parallel", "parallel")
+	subStepsLabel := store.T(locale, "docs.workflow.sub_steps", "sub-steps")
+	sb.WriteString("## " + stepsHeader + "\n\n")
+	for i, step := range def.Steps {
+		switch {
+		case step.Confirm != "":
+			fmt.Fprintf(sb, "%d. **confirm:** %s\n", i+1, step.Confirm)
+		case step.Parallel != nil:
+			p := step.Parallel
+			var meta []string
+			if p.MaxConcurrent > 0 {
+				meta = append(meta, fmt.Sprintf("max_concurrent=%d", p.MaxConcurrent))
+			}
+			if p.FailFast != nil {
+				meta = append(meta, fmt.Sprintf("fail_fast=%v", *p.FailFast))
+			}
+			line := fmt.Sprintf("%d. **%s:** %d %s", i+1, parallelLabel, len(p.Steps), subStepsLabel)
+			if len(meta) > 0 {
+				line += " (" + strings.Join(meta, ", ") + ")"
+			}
+			if step.When != "" {
+				line += " (when: " + step.When + ")"
+			}
+			if step.ContinueOnError {
+				line += " (continue_on_error)"
+			}
+			sb.WriteString(line + "\n")
+			for _, sub := range p.Steps {
+				subLine := "   - `" + sub.Command + "`"
+				if desc := stepCommandDescription(reg, store, locale, sub.Command); desc != "" {
+					subLine += " — " + desc
+				}
+				if len(sub.With) > 0 {
+					var pairs []string
+					for k, v := range sub.With {
+						pairs = append(pairs, k+"="+v)
 					}
-					if p.FailFast != nil {
-						meta = append(meta, fmt.Sprintf("fail_fast=%v", *p.FailFast))
-					}
-					line := fmt.Sprintf("%d. **%s:** %d %s", i+1, parallelLabel, len(p.Steps), subStepsLabel)
-					if len(meta) > 0 {
-						line += " (" + strings.Join(meta, ", ") + ")"
-					}
-					if step.When != "" {
-						line += " (when: " + step.When + ")"
-					}
-					if step.ContinueOnError {
-						line += " (continue_on_error)"
+					sort.Strings(pairs)
+					subLine += " (with: " + strings.Join(pairs, ", ") + ")"
+				}
+				if sub.When != "" {
+					subLine += " (when: " + sub.When + ")"
+				}
+				if sub.ContinueOnError {
+					subLine += " (continue_on_error)"
+				}
+				sb.WriteString(subLine + "\n")
+			}
+		default:
+			line := fmt.Sprintf("%d. `%s`", i+1, step.Command)
+			if desc := stepCommandDescription(reg, store, locale, step.Command); desc != "" {
+				line += " — " + desc
+			}
+			if len(step.With) > 0 {
+				var pairs []string
+				for k, v := range step.With {
+					pairs = append(pairs, k+"="+v)
+				}
+				sort.Strings(pairs)
+				line += " (with: " + strings.Join(pairs, ", ") + ")"
+			}
+			if step.When != "" {
+				line += " (when: " + step.When + ")"
+			}
+			if step.ContinueOnError {
+				line += " (continue_on_error)"
+			}
+			sb.WriteString(line + "\n")
+		}
+	}
+	sb.WriteString("\n")
+}
+
+// writeCommandParams writes the Parameters table.
+func writeCommandParams(sb *strings.Builder, def *usercommands.CommandDef, store *i18n.Store, locale string) {
+	if len(def.Params) == 0 {
+		return
+	}
+	parametersHeader := store.T(locale, "docs.section.parameters", "Parameters")
+	sb.WriteString("## " + parametersHeader + "\n\n")
+	sb.WriteString("| Name | Type | Required | Default | Description |\n|---|---|---|---|---|\n")
+	var names []string
+	for name := range def.Params {
+		names = append(names, name)
+	}
+	sort.Strings(names)
+	for _, name := range names {
+		p := def.Params[name]
+		required := ""
+		if p.Required {
+			required = "yes"
+		}
+		defVal := p.Default
+		if defVal == "" && p.DefaultFrom != "" {
+			defVal = fmt.Sprintf("from `%s`", p.DefaultFrom)
+		}
+		paramDesc := store.ParamDescription(locale, def.ID, name, p.Description)
+		fmt.Fprintf(sb, "| `%s` | `%s` | %s | %s | %s |\n",
+			name, p.Type, required, defVal, paramDesc)
+	}
+	sb.WriteString("\n")
+}
+
+// writeCommandContext writes the Context table.
+func writeCommandContext(sb *strings.Builder, def *usercommands.CommandDef, store *i18n.Store, locale string) {
+	if len(def.Context) == 0 {
+		return
+	}
+	contextHeader := store.T(locale, "docs.section.context", "Context")
+	sb.WriteString("## " + contextHeader + "\n\n")
+	sb.WriteString("| Name | From | Required | Env |\n|---|---|---|---|\n")
+	var names []string
+	for name := range def.Context {
+		names = append(names, name)
+	}
+	sort.Strings(names)
+	for _, name := range names {
+		c := def.Context[name]
+		required := ""
+		if c.Required {
+			required = "yes"
+		}
+		fmt.Fprintf(sb, "| `%s` | `%s` | %s | %s |\n", name, c.From, required, c.Env)
+	}
+	sb.WriteString("\n")
+}
+
+// writeCommandFiles writes the Files section.
+func writeCommandFiles(sb *strings.Builder, def *usercommands.CommandDef, store *i18n.Store, locale string) {
+	if len(def.Files) == 0 {
+		return
+	}
+	filesHeader := store.T(locale, "docs.section.files", "Files")
+	sb.WriteString("## " + filesHeader + "\n\n")
+	var fileIDs []string
+	for id := range def.Files {
+		fileIDs = append(fileIDs, id)
+	}
+	sort.Strings(fileIDs)
+	for _, id := range fileIDs {
+		f := def.Files[id]
+		attrs := string(f.Access)
+		if f.Required {
+			attrs += ", required"
+		}
+		fmt.Fprintf(sb, "### `%s` (%s)\n\n", id, attrs)
+		if f.Env != "" {
+			fmt.Fprintf(sb, "**Env:** `%s`\n\n", f.Env)
+		}
+		if f.Path != "" {
+			fmt.Fprintf(sb, "**Path:** `%s`\n\n", f.Path)
+		}
+		if len(f.Candidates) > 0 {
+			sb.WriteString("**Candidates:**\n\n")
+			for i, c := range f.Candidates {
+				if c.Glob != "" {
+					line := fmt.Sprintf("%d. glob: `%s`", i+1, c.Glob)
+					if c.Match != "" {
+						line += fmt.Sprintf(" (match: `%s`", c.Match)
+						if c.Sort != "" {
+							line += fmt.Sprintf(", sort: %s", string(c.Sort))
+						}
+						line += ")"
+					} else if c.Sort != "" {
+						line += fmt.Sprintf(" (sort: %s)", string(c.Sort))
 					}
 					sb.WriteString(line + "\n")
-					for _, sub := range p.Steps {
-						subLine := "   - `" + sub.Command + "`"
-						if desc := stepCommandDescription(reg, store, locale, sub.Command); desc != "" {
-							subLine += " — " + desc
-						}
-						if len(sub.With) > 0 {
-							var pairs []string
-							for k, v := range sub.With {
-								pairs = append(pairs, k+"="+v)
-							}
-							sort.Strings(pairs)
-							subLine += " (with: " + strings.Join(pairs, ", ") + ")"
-						}
-						if sub.When != "" {
-							subLine += " (when: " + sub.When + ")"
-						}
-						if sub.ContinueOnError {
-							subLine += " (continue_on_error)"
-						}
-						sb.WriteString(subLine + "\n")
-					}
-				default:
-					line := fmt.Sprintf("%d. `%s`", i+1, step.Command)
-					if desc := stepCommandDescription(reg, store, locale, step.Command); desc != "" {
-						line += " — " + desc
-					}
-					if len(step.With) > 0 {
-						var pairs []string
-						for k, v := range step.With {
-							pairs = append(pairs, k+"="+v)
-						}
-						sort.Strings(pairs)
-						line += " (with: " + strings.Join(pairs, ", ") + ")"
-					}
-					if step.When != "" {
-						line += " (when: " + step.When + ")"
-					}
-					if step.ContinueOnError {
-						line += " (continue_on_error)"
-					}
-					sb.WriteString(line + "\n")
+				} else if c.Path != "" {
+					fmt.Fprintf(sb, "%d. path: `%s`\n", i+1, c.Path)
 				}
 			}
 			sb.WriteString("\n")
 		}
 	}
+}
 
-	if len(def.Params) > 0 {
-		parametersHeader := store.T(locale, "docs.section.parameters", "Parameters")
-		sb.WriteString("## " + parametersHeader + "\n\n")
-		sb.WriteString("| Name | Type | Required | Default | Description |\n|---|---|---|---|---|\n")
-		var names []string
-		for name := range def.Params {
-			names = append(names, name)
-		}
-		sort.Strings(names)
-		for _, name := range names {
-			p := def.Params[name]
-			required := ""
-			if p.Required {
-				required = "yes"
-			}
-			defVal := p.Default
-			if defVal == "" && p.DefaultFrom != "" {
-				defVal = fmt.Sprintf("from `%s`", p.DefaultFrom)
-			}
-			paramDesc := store.ParamDescription(locale, def.ID, name, p.Description)
-			fmt.Fprintf(&sb, "| `%s` | `%s` | %s | %s | %s |\n",
-				name, p.Type, required, defVal, paramDesc)
-		}
-		sb.WriteString("\n")
+// writeCommandEnv writes the Environment Variables table.
+func writeCommandEnv(sb *strings.Builder, def *usercommands.CommandDef, store *i18n.Store, locale string) {
+	if len(def.Env) == 0 {
+		return
 	}
-
-	if len(def.Context) > 0 {
-		contextHeader := store.T(locale, "docs.section.context", "Context")
-		sb.WriteString("## " + contextHeader + "\n\n")
-		sb.WriteString("| Name | From | Required | Env |\n|---|---|---|---|\n")
-		var names []string
-		for name := range def.Context {
-			names = append(names, name)
-		}
-		sort.Strings(names)
-		for _, name := range names {
-			c := def.Context[name]
-			required := ""
-			if c.Required {
-				required = "yes"
-			}
-			fmt.Fprintf(&sb, "| `%s` | `%s` | %s | %s |\n", name, c.From, required, c.Env)
-		}
-		sb.WriteString("\n")
+	envHeader := store.T(locale, "docs.section.environment", "Environment Variables")
+	sb.WriteString("## " + envHeader + "\n\n")
+	sb.WriteString("| Name | Value |\n|---|---|\n")
+	var keys []string
+	for k := range def.Env {
+		keys = append(keys, k)
 	}
-
-	if len(def.Files) > 0 {
-		filesHeader := store.T(locale, "docs.section.files", "Files")
-		sb.WriteString("## " + filesHeader + "\n\n")
-		var fileIDs []string
-		for id := range def.Files {
-			fileIDs = append(fileIDs, id)
-		}
-		sort.Strings(fileIDs)
-		for _, id := range fileIDs {
-			f := def.Files[id]
-			attrs := string(f.Access)
-			if f.Required {
-				attrs += ", required"
-			}
-			fmt.Fprintf(&sb, "### `%s` (%s)\n\n", id, attrs)
-			if f.Env != "" {
-				fmt.Fprintf(&sb, "**Env:** `%s`\n\n", f.Env)
-			}
-			if f.Path != "" {
-				fmt.Fprintf(&sb, "**Path:** `%s`\n\n", f.Path)
-			}
-			if len(f.Candidates) > 0 {
-				sb.WriteString("**Candidates:**\n\n")
-				for i, c := range f.Candidates {
-					if c.Glob != "" {
-						line := fmt.Sprintf("%d. glob: `%s`", i+1, c.Glob)
-						if c.Match != "" {
-							line += fmt.Sprintf(" (match: `%s`", c.Match)
-							if c.Sort != "" {
-								line += fmt.Sprintf(", sort: %s", string(c.Sort))
-							}
-							line += ")"
-						} else if c.Sort != "" {
-							line += fmt.Sprintf(" (sort: %s)", string(c.Sort))
-						}
-						sb.WriteString(line + "\n")
-					} else if c.Path != "" {
-						fmt.Fprintf(&sb, "%d. path: `%s`\n", i+1, c.Path)
-					}
-				}
-				sb.WriteString("\n")
-			}
-		}
+	sort.Strings(keys)
+	for _, k := range keys {
+		fmt.Fprintf(sb, "| `%s` | `%s` |\n", k, def.Env[k])
 	}
-
-	if len(def.Env) > 0 {
-		envHeader := store.T(locale, "docs.section.environment", "Environment Variables")
-		sb.WriteString("## " + envHeader + "\n\n")
-		sb.WriteString("| Name | Value |\n|---|---|\n")
-		var keys []string
-		for k := range def.Env {
-			keys = append(keys, k)
-		}
-		sort.Strings(keys)
-		for _, k := range keys {
-			fmt.Fprintf(&sb, "| `%s` | `%s` |\n", k, def.Env[k])
-		}
-		sb.WriteString("\n")
-	}
-
-	filename := def.LocalName + ".md"
-	return os.WriteFile(filepath.Join(dir, filename), []byte(sb.String()), 0o644)
+	sb.WriteString("\n")
 }
 
 // genCommandsIndex writes the commands reference index.
