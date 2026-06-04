@@ -45,12 +45,6 @@ func (r *RunRunner) Run(ctx context.Context, rc spec.RunContext) error {
 	if err != nil {
 		return err
 	}
-	used, cleanup := runio.ParallelChildIO(rc, c, runio.StdoutOf(rc))
-	defer cleanup()
-	if !used {
-		c.Stdout = runio.StdoutOf(rc)
-		c.Stderr = runio.StderrOf(rc)
-		c.Stdin = runio.StdinOrOS(rc)
-	}
+	defer runio.WireChildIO(rc, c)()
 	return c.Run()
 }

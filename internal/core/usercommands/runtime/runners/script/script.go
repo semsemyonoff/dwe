@@ -205,13 +205,7 @@ func (s *Runner) execScript(ctx context.Context, rc spec.RunContext, shell, scri
 		}
 	}
 
-	used, cleanup := runio.ParallelChildIO(rc, c, runio.StdoutOf(rc))
-	defer cleanup()
-	if !used {
-		c.Stdout = runio.StdoutOf(rc)
-		c.Stderr = runio.StderrOf(rc)
-		c.Stdin = runio.StdinOrOS(rc)
-	}
+	defer runio.WireChildIO(rc, c)()
 
 	if err := c.Run(); err != nil {
 		if exitErr, ok := err.(*exec.ExitError); ok {

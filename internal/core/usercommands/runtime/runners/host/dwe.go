@@ -54,13 +54,7 @@ func (r *DweRunner) Run(ctx context.Context, rc spec.RunContext) error {
 		}
 	}
 
-	used, cleanup := runio.ParallelChildIO(rc, cmd, runio.StdoutOf(rc))
-	defer cleanup()
-	if !used {
-		cmd.Stdout = runio.StdoutOf(rc)
-		cmd.Stderr = runio.StderrOf(rc)
-		cmd.Stdin = runio.StdinOrOS(rc)
-	}
+	defer runio.WireChildIO(rc, cmd)()
 	return cmd.Run()
 }
 

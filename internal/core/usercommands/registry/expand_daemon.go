@@ -24,22 +24,10 @@ func expandDaemon(src model.CommandDef) []model.CommandDef {
 
 	// effectiveService/User/Workdir/WorkdirFrom mirror validateDaemonType's
 	// resolution: runner.* overrides top-level fields when set.
-	effectiveService := src.Service
-	if src.Runner != nil && src.Runner.Service != "" {
-		effectiveService = src.Runner.Service
-	}
-	effectiveUser := src.User
-	if src.Runner != nil && src.Runner.User != "" {
-		effectiveUser = src.Runner.User
-	}
-	effectiveWorkdir := src.Workdir
-	if src.Runner != nil && src.Runner.Workdir != "" {
-		effectiveWorkdir = src.Runner.Workdir
-	}
-	effectiveWorkdirFrom := src.WorkdirFrom
-	if src.Runner != nil && src.Runner.WorkdirFrom != "" {
-		effectiveWorkdirFrom = src.Runner.WorkdirFrom
-	}
+	effectiveService := src.EffectiveService()
+	effectiveUser := src.EffectiveUser()
+	effectiveWorkdir := src.EffectiveWorkdir()
+	effectiveWorkdirFrom := src.EffectiveWorkdirFrom()
 
 	// label_params: keys are declared param names, values are template literals
 	// rendered at runtime to the user's --set values. renderBuiltinWith walks

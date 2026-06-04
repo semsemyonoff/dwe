@@ -44,15 +44,35 @@ type Registry struct {
 	root *GroupNode
 }
 
-// NewEmptyRegistry returns an empty Registry with no commands.
-// Useful as a safe fallback when the commands directory does not exist.
-func NewEmptyRegistry() *Registry {
+// newRegistry returns a Registry with initialized maps and an established
+// root group node. Shared by every Registry constructor.
+func newRegistry() *Registry {
 	reg := &Registry{
 		byID:   make(map[string]*model.CommandDef),
 		groups: make(map[string]*GroupNode),
 	}
 	reg.root = reg.ensureGroup("")
 	return reg
+}
+
+// sortGroups orders every group's Commands (by LocalName) and Children (by
+// Name) for deterministic traversal. Called once after all command files
+// have been inserted.
+func (r *Registry) sortGroups() {
+	for _, gn := range r.groups {
+		sort.Slice(gn.Commands, func(i, j int) bool {
+			return gn.Commands[i].LocalName < gn.Commands[j].LocalName
+		})
+		sort.Slice(gn.Children, func(i, j int) bool {
+			return gn.Children[i].Name < gn.Children[j].Name
+		})
+	}
+}
+
+// NewEmptyRegistry returns an empty Registry with no commands.
+// Useful as a safe fallback when the commands directory does not exist.
+func NewEmptyRegistry() *Registry {
+	return newRegistry()
 }
 
 // LoadRegistry discovers all command files under baseDir, loads them, and
@@ -64,12 +84,7 @@ func LoadRegistry(baseDir string) (*Registry, error) {
 		return nil, fmt.Errorf("load registry: %w", err)
 	}
 
-	reg := &Registry{
-		byID:   make(map[string]*model.CommandDef),
-		groups: make(map[string]*GroupNode),
-	}
-
-	reg.root = reg.ensureGroup("")
+	reg := newRegistry()
 
 	for _, path := range paths {
 		cf, err := loader.LoadCommandFile(path, baseDir)
@@ -82,14 +97,7 @@ func LoadRegistry(baseDir string) (*Registry, error) {
 		}
 	}
 
-	for _, gn := range reg.groups {
-		sort.Slice(gn.Commands, func(i, j int) bool {
-			return gn.Commands[i].LocalName < gn.Commands[j].LocalName
-		})
-		sort.Slice(gn.Children, func(i, j int) bool {
-			return gn.Children[i].Name < gn.Children[j].Name
-		})
-	}
+	reg.sortGroups()
 
 	return reg, nil
 }
@@ -238,12 +246,11 @@ func (r *Registry) Groups() *GroupNode {
 	return r.root
 }
 
-// Validate performs cross-registry validation:
-//   - Workflow steps that reference a command ID must exist in the registry.
-//   - Workflow steps that reference a private command ID are allowed (private
-//     commands are intended to be called from workflows).
-func (r *Registry) Validate() error {
-	var errs []string
+// scanUnknownCommandRefs walks every workflow command's step tree (recursing
+// into parallel sub-steps) and invokes visit for each non-empty step.Command
+// that does not resolve to a registered command ID. Shared by Validate and
+// Diagnostics so both report the identical set of unknown references.
+func (r *Registry) scanUnknownCommandRefs(visit func(cmd *model.CommandDef, path string, step model.WorkflowStep)) {
 	for _, cmd := range r.byID {
 		if cmd.Type != model.CommandTypeWorkflow {
 			continue
@@ -253,12 +260,23 @@ func (r *Registry) Validate() error {
 				return
 			}
 			if _, ok := r.byID[step.Command]; !ok {
-				errs = append(errs,
-					fmt.Sprintf("command %q %s: references unknown command %q",
-						cmd.ID, path, step.Command))
+				visit(cmd, path, step)
 			}
 		})
 	}
+}
+
+// Validate performs cross-registry validation:
+//   - Workflow steps that reference a command ID must exist in the registry.
+//   - Workflow steps that reference a private command ID are allowed (private
+//     commands are intended to be called from workflows).
+func (r *Registry) Validate() error {
+	var errs []string
+	r.scanUnknownCommandRefs(func(cmd *model.CommandDef, path string, step model.WorkflowStep) {
+		errs = append(errs,
+			fmt.Sprintf("command %q %s: references unknown command %q",
+				cmd.ID, path, step.Command))
+	})
 	if len(errs) > 0 {
 		sort.Strings(errs)
 		return fmt.Errorf("registry validation failed:\n  %s", strings.Join(errs, "\n  "))
@@ -299,23 +317,13 @@ func WalkWorkflowSteps(steps []model.WorkflowStep, parentPath string, visit func
 // reported with a path-qualified location.
 func (r *Registry) Diagnostics() []ValidationIssue {
 	var issues []ValidationIssue
-	for _, cmd := range r.byID {
-		if cmd.Type != model.CommandTypeWorkflow {
-			continue
-		}
-		WalkWorkflowSteps(cmd.Steps, "step", func(path string, step model.WorkflowStep) {
-			if step.Command == "" {
-				return
-			}
-			if _, ok := r.byID[step.Command]; !ok {
-				issues = append(issues, ValidationIssue{
-					CommandID: cmd.ID,
-					Path:      path,
-					Message:   fmt.Sprintf("references unknown command %q", step.Command),
-				})
-			}
+	r.scanUnknownCommandRefs(func(cmd *model.CommandDef, path string, step model.WorkflowStep) {
+		issues = append(issues, ValidationIssue{
+			CommandID: cmd.ID,
+			Path:      path,
+			Message:   fmt.Sprintf("references unknown command %q", step.Command),
 		})
-	}
+	})
 	// Sort for determinism: by command ID, then by path
 	sort.Slice(issues, func(i, j int) bool {
 		if issues[i].CommandID != issues[j].CommandID {
@@ -330,12 +338,7 @@ func (r *Registry) Diagnostics() []ValidationIssue {
 // without rereading from disk. The parameter type is *model.CommandFile (return type
 // of loader.LoadCommandFile).
 func BuildRegistryFromParsed(files []*model.CommandFile) (*Registry, error) {
-	reg := &Registry{
-		byID:   make(map[string]*model.CommandDef),
-		groups: make(map[string]*GroupNode),
-	}
-
-	reg.root = reg.ensureGroup("")
+	reg := newRegistry()
 
 	// Check for duplicate command IDs across all files
 	for _, cf := range files {
@@ -344,14 +347,7 @@ func BuildRegistryFromParsed(files []*model.CommandFile) (*Registry, error) {
 		}
 	}
 
-	for _, gn := range reg.groups {
-		sort.Slice(gn.Commands, func(i, j int) bool {
-			return gn.Commands[i].LocalName < gn.Commands[j].LocalName
-		})
-		sort.Slice(gn.Children, func(i, j int) bool {
-			return gn.Children[i].Name < gn.Children[j].Name
-		})
-	}
+	reg.sortGroups()
 
 	return reg, nil
 }

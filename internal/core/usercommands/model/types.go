@@ -816,6 +816,42 @@ func (c *CommandDef) EffectiveConfirmationText() string {
 // DefaultConfirmationText is the fallback prompt for confirmation-enabled commands.
 const DefaultConfirmationText = "Are you sure?"
 
+// EffectiveService returns the compose service the command targets:
+// Runner.Service when the runner override is set, otherwise the top-level
+// Service. Mirrors the resolution every service/daemon runner applies.
+func (c *CommandDef) EffectiveService() string {
+	if c.Runner != nil && c.Runner.Service != "" {
+		return c.Runner.Service
+	}
+	return c.Service
+}
+
+// EffectiveUser returns the container user: Runner.User when set, else User.
+func (c *CommandDef) EffectiveUser() UserMode {
+	if c.Runner != nil && c.Runner.User != "" {
+		return c.Runner.User
+	}
+	return c.User
+}
+
+// EffectiveWorkdir returns the working directory literal: Runner.Workdir when
+// set, else Workdir.
+func (c *CommandDef) EffectiveWorkdir() string {
+	if c.Runner != nil && c.Runner.Workdir != "" {
+		return c.Runner.Workdir
+	}
+	return c.Workdir
+}
+
+// EffectiveWorkdirFrom returns the workdir dot-path: Runner.WorkdirFrom when
+// set, else WorkdirFrom.
+func (c *CommandDef) EffectiveWorkdirFrom() string {
+	if c.Runner != nil && c.Runner.WorkdirFrom != "" {
+		return c.Runner.WorkdirFrom
+	}
+	return c.WorkdirFrom
+}
+
 func (c *CommandDef) validateCommandType() error {
 	if c.Type == CommandTypeShell {
 		hasCmd := c.Cmd != ""
@@ -892,10 +928,7 @@ func (c *CommandDef) validateScriptType() error {
 }
 
 func (c *CommandDef) validateServiceType() error {
-	effectiveService := c.Service
-	if c.Runner != nil && c.Runner.Service != "" {
-		effectiveService = c.Runner.Service
-	}
+	effectiveService := c.EffectiveService()
 	if effectiveService == "" {
 		return fmt.Errorf("service is required for type=%s", c.Type)
 	}
@@ -1029,10 +1062,7 @@ func (c *CommandDef) validateDaemonType() error {
 	}
 
 	// service: required, literal.
-	effectiveService := c.Service
-	if c.Runner != nil && c.Runner.Service != "" {
-		effectiveService = c.Runner.Service
-	}
+	effectiveService := c.EffectiveService()
 	if effectiveService == "" {
 		errs = append(errs, ErrDaemonServiceRequired)
 	} else if strings.Contains(effectiveService, "${") || strings.Contains(effectiveService, "{{") {

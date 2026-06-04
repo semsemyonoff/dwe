@@ -44,10 +44,7 @@ func daemonStructuralDiagnostics(cmd model.CommandDef, relFile string) ([]valida
 	target := fmt.Sprintf("commands:%s", cmd.ID)
 
 	// service: required, literal.
-	effective := cmd.Service
-	if cmd.Runner != nil && cmd.Runner.Service != "" {
-		effective = cmd.Runner.Service
-	}
+	effective := cmd.EffectiveService()
 	if effective == "" {
 		fields["service"] = true
 		out = append(out, validate.Diagnostic{

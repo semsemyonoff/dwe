@@ -194,6 +194,80 @@ func TestCommandDef_EffectiveConfirmationText_Default(t *testing.T) {
 	}
 }
 
+func TestCommandDef_EffectiveAccessors(t *testing.T) {
+	tests := []struct {
+		name            string
+		cmd             CommandDef
+		wantService     string
+		wantUser        UserMode
+		wantWorkdir     string
+		wantWorkdirFrom string
+	}{
+		{
+			name: "top-level only",
+			cmd: CommandDef{
+				Service:     "app",
+				User:        UserMode("www-data"),
+				Workdir:     "/srv",
+				WorkdirFrom: "services.app.workdir",
+			},
+			wantService:     "app",
+			wantUser:        UserMode("www-data"),
+			wantWorkdir:     "/srv",
+			wantWorkdirFrom: "services.app.workdir",
+		},
+		{
+			name: "runner overrides all",
+			cmd: CommandDef{
+				Service:     "app",
+				User:        UserMode("www-data"),
+				Workdir:     "/srv",
+				WorkdirFrom: "services.app.workdir",
+				Runner: &RunnerDef{
+					Service:     "worker",
+					User:        UserMode("root"),
+					Workdir:     "/work",
+					WorkdirFrom: "services.worker.workdir",
+				},
+			},
+			wantService:     "worker",
+			wantUser:        UserMode("root"),
+			wantWorkdir:     "/work",
+			wantWorkdirFrom: "services.worker.workdir",
+		},
+		{
+			name: "empty runner fields fall back to top-level",
+			cmd: CommandDef{
+				Service:     "app",
+				User:        UserMode("www-data"),
+				Workdir:     "/srv",
+				WorkdirFrom: "services.app.workdir",
+				Runner:      &RunnerDef{},
+			},
+			wantService:     "app",
+			wantUser:        UserMode("www-data"),
+			wantWorkdir:     "/srv",
+			wantWorkdirFrom: "services.app.workdir",
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := tt.cmd.EffectiveService(); got != tt.wantService {
+				t.Errorf("EffectiveService() = %q, want %q", got, tt.wantService)
+			}
+			if got := tt.cmd.EffectiveUser(); got != tt.wantUser {
+				t.Errorf("EffectiveUser() = %q, want %q", got, tt.wantUser)
+			}
+			if got := tt.cmd.EffectiveWorkdir(); got != tt.wantWorkdir {
+				t.Errorf("EffectiveWorkdir() = %q, want %q", got, tt.wantWorkdir)
+			}
+			if got := tt.cmd.EffectiveWorkdirFrom(); got != tt.wantWorkdirFrom {
+				t.Errorf("EffectiveWorkdirFrom() = %q, want %q", got, tt.wantWorkdirFrom)
+			}
+		})
+	}
+}
+
 func TestParseCommandFile_ServiceExec(t *testing.T) {
 	yaml := `
 commands:

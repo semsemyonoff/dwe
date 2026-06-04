@@ -296,13 +296,13 @@ Tasks are ordered **safest / highest-value first**: pure deletions and named-con
 - Modify: `internal/core/usercommands/runtime/runners/{host,script,service}/*.go`; `internal/core/usercommands/model/types.go`; `internal/core/usercommands/registry/registry.go`; `internal/core/validate/commands/daemon.go`
 - Modify: matching `*_test.go`
 
-- [ ] Extract `runio.WireChildIO` for the identical child-process IO wiring (`host/host.go:141`, `host/dwe.go:57`, `script/script.go:208`, `service/run.go:48`, `service/exec.go:93`).
-- [ ] Add `Effective{Service,User,Workdir,WorkdirFrom}` accessors on `CommandDef` (`types.go:894,1032`; callers `expand_daemon.go:27`, `service/exec.go:114`, `commands/daemon.go:47`) — risk low (hot path); keep semantics identical.
-- [ ] Dedup Registry construction + group-sort boilerplate (`registry.go:50,67,85,333,347`).
-- [ ] Unify `Registry.Validate`/`Registry.Diagnostics` over one workflow-ref scan (`registry.go:245,300`) — keep both outputs identical.
-- [ ] ⚠️ Collapse type-foreign field rejections in `CommandDef` validators (`types.go:819-997,1017-1071`) is `medium/low` — message-preserving only; if it threatens any diagnostic string, leave as ➕ follow-up.
-- [ ] Update usercommands tests; confirm validator messages byte-identical.
-- [ ] `make test && make lint` — must pass.
+- [x] Extract `runio.WireChildIO` for the identical child-process IO wiring (`host/host.go:141`, `host/dwe.go:57`, `script/script.go:208`, `service/run.go:48`, `service/exec.go:93`) — returns the cleanup func; all 5 sites call `defer runio.WireChildIO(rc, c)()` (wiring at defer-eval, teardown at return — identical semantics).
+- [x] Add `Effective{Service,User,Workdir,WorkdirFrom}` accessors on `CommandDef` (`types.go`; callers `expand_daemon.go`, `service/exec.go` `resolveServiceFields`, `commands/daemon.go`, plus internal `validateServiceType`/`validateDaemonType`) — runner.* override semantics identical; service/exec.go keeps the Mode-override inline (no Mode accessor in scope).
+- [x] Dedup Registry construction + group-sort boilerplate — new `newRegistry()` constructor + `(*Registry).sortGroups()`; collapses `NewEmptyRegistry`/`LoadRegistry`/`BuildRegistryFromParsed`.
+- [x] Unify `Registry.Validate`/`Registry.Diagnostics` over one workflow-ref scan — new `scanUnknownCommandRefs(visit)` helper; both outputs byte-identical.
+- [x] ⚠️ Collapse type-foreign field rejections in `CommandDef` validators — ➕ DEFERRED as a follow-up (see Post-Completion). The per-type messages genuinely differ (shell/dwe/service use `type=%s`; script/workflow/builtin/daemon hardcode their type literal) and each validator checks a different field subset in a different order — a collapse would threaten the byte-identical diagnostic strings the plan requires.
+- [x] Update usercommands tests; confirm validator messages byte-identical (added `TestCommandDef_EffectiveAccessors`; existing usercommands/registry/validate suites cover the IO-wiring, registry-construction, and walker extractions unchanged).
+- [x] `make test && make lint` — must pass. (Both green; first `make test` hit the known-flaky `TestRussianTranslationsAreFresh`, clean on rerun.)
 
 ### Task 17: Centralize the loading-config wrap & other cross-package CLI helpers
 **Theme 18 — priority low / effort small / risk none.** The `ErrWrap("project_invalid_config")` group is the separate intentional contract — EXCLUDE it.

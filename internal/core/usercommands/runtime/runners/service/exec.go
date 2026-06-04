@@ -90,13 +90,7 @@ func (e *ExecRunner) Run(ctx context.Context, rc spec.RunContext) error {
 	if err != nil {
 		return err
 	}
-	used, cleanup := runio.ParallelChildIO(rc, c, runio.StdoutOf(rc))
-	defer cleanup()
-	if !used {
-		c.Stdout = runio.StdoutOf(rc)
-		c.Stderr = runio.StderrOf(rc)
-		c.Stdin = runio.StdinOrOS(rc)
-	}
+	defer runio.WireChildIO(rc, c)()
 	return c.Run()
 }
 
@@ -111,29 +105,15 @@ func (e *ExecRunner) Run(ctx context.Context, rc spec.RunContext) error {
 func resolveServiceFields(ctx spec.RunContext) (svc string, user model.UserMode, workdir string, mode model.ExecMode, err error) {
 	cmd := ctx.Cmd
 
-	svc = cmd.Service
-	user = cmd.User
+	svc = cmd.EffectiveService()
+	user = cmd.EffectiveUser()
 	mode = cmd.Mode
-
-	wdLiteral := cmd.Workdir
-	wdFrom := cmd.WorkdirFrom
-	if cmd.Runner != nil {
-		if cmd.Runner.Service != "" {
-			svc = cmd.Runner.Service
-		}
-		if cmd.Runner.User != "" {
-			user = cmd.Runner.User
-		}
-		if cmd.Runner.Mode != "" {
-			mode = cmd.Runner.Mode
-		}
-		if cmd.Runner.Workdir != "" {
-			wdLiteral = cmd.Runner.Workdir
-		}
-		if cmd.Runner.WorkdirFrom != "" {
-			wdFrom = cmd.Runner.WorkdirFrom
-		}
+	if cmd.Runner != nil && cmd.Runner.Mode != "" {
+		mode = cmd.Runner.Mode
 	}
+
+	wdLiteral := cmd.EffectiveWorkdir()
+	wdFrom := cmd.EffectiveWorkdirFrom()
 
 	if svc, err = tpl.RenderCommand(svc, ctx.Render); err != nil {
 		err = fmt.Errorf("render service: %w", err)

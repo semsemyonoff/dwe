@@ -158,6 +158,22 @@ func ParallelChildIO(rc spec.RunContext, c *exec.Cmd, stdoutSink io.Writer) (use
 	return true, cleanup
 }
 
+// WireChildIO wires c's stdout/stderr/stdin for execution and returns the
+// cleanup func the caller must defer. When running as a parallel sub-step it
+// allocates a PTY via ParallelChildIO (and the returned cleanup tears it
+// down); otherwise it points c at the context's stdout/stderr/stdin defaults
+// and the cleanup is a no-op. Call as `defer runio.WireChildIO(rc, c)()` so
+// the wiring happens immediately and the teardown runs at function return.
+func WireChildIO(rc spec.RunContext, c *exec.Cmd) func() {
+	used, cleanup := ParallelChildIO(rc, c, StdoutOf(rc))
+	if !used {
+		c.Stdout = StdoutOf(rc)
+		c.Stderr = StderrOf(rc)
+		c.Stdin = StdinOrOS(rc)
+	}
+	return cleanup
+}
+
 // BuildRenderedEnv renders all env values (which may contain ${...} expressions)
 // and returns the final string→string map.
 func BuildRenderedEnv(cmd *model.CommandDef, ctx spec.RunContext) (map[string]string, error) {
