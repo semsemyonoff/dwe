@@ -271,6 +271,28 @@ var deployStepLeafOnlyFields = []string{
 	"type", "cmd", "with", "check", "files_gate", "continue_on_error", "sub_step_overrides",
 }
 
+// checkKnownFields enforces that value is a YAML mapping whose keys all appear
+// in allowed. It compensates for yaml.v3 bypassing KnownFields(true) inside
+// custom UnmarshalYAML implementations. mappingDesc names the mapping in the
+// wrong-kind error ("<mappingDesc> must be a mapping, got kind N"); typeName is
+// the Go type named in the unknown-field error ("field X not found in type
+// <typeName>"). The returned map records which allowed keys were seen so callers
+// can run follow-up cross-field checks.
+func checkKnownFields(value *yaml.Node, mappingDesc, typeName string, allowed map[string]bool) (map[string]bool, error) {
+	if value.Kind != yaml.MappingNode {
+		return nil, fmt.Errorf("%s must be a mapping, got kind %d", mappingDesc, value.Kind)
+	}
+	seen := make(map[string]bool, len(value.Content)/2)
+	for i := 0; i < len(value.Content)-1; i += 2 {
+		key := value.Content[i].Value
+		if !allowed[key] {
+			return nil, fmt.Errorf("field %s not found in type %s", key, typeName)
+		}
+		seen[key] = true
+	}
+	return seen, nil
+}
+
 // UnmarshalYAML enforces:
 //   - mapping shape only
 //   - explicit known-field allow-list (compensates for yaml.v3 bypass of KnownFields(true)
@@ -282,16 +304,9 @@ var deployStepLeafOnlyFields = []string{
 // internal/core/execution/pipeline.ResolvePhaseSteps so it can return a typed sentinel
 // (ErrEmptyParallelSteps) without an import cycle.
 func (s *DeployStep) UnmarshalYAML(value *yaml.Node) error {
-	if value.Kind != yaml.MappingNode {
-		return fmt.Errorf("deploy step must be a mapping, got kind %d", value.Kind)
-	}
-	seen := make(map[string]bool, len(value.Content)/2)
-	for i := 0; i < len(value.Content)-1; i += 2 {
-		key := value.Content[i].Value
-		if !deployStepKnownFields[key] {
-			return fmt.Errorf("field %s not found in type config.DeployStep", key)
-		}
-		seen[key] = true
+	seen, err := checkKnownFields(value, "deploy step", "config.DeployStep", deployStepKnownFields)
+	if err != nil {
+		return err
 	}
 	if seen["parallel"] {
 		for _, leaf := range deployStepLeafOnlyFields {
@@ -319,14 +334,8 @@ var parallelGroupKnownFields = map[string]bool{
 
 // UnmarshalYAML enforces the known-field allow-list on the parallel: mapping.
 func (p *ParallelGroup) UnmarshalYAML(value *yaml.Node) error {
-	if value.Kind != yaml.MappingNode {
-		return fmt.Errorf("parallel must be a mapping, got kind %d", value.Kind)
-	}
-	for i := 0; i < len(value.Content)-1; i += 2 {
-		key := value.Content[i].Value
-		if !parallelGroupKnownFields[key] {
-			return fmt.Errorf("field %s not found in type config.ParallelGroup", key)
-		}
+	if _, err := checkKnownFields(value, "parallel", "config.ParallelGroup", parallelGroupKnownFields); err != nil {
+		return err
 	}
 	type rawParallelGroup ParallelGroup
 	var raw rawParallelGroup
@@ -909,8 +918,15 @@ func (s ServiceConfig) Host(name string) string { return s.Hosts[name] }
 // If Enabled is non-nil, returns its value and true.
 // If Enabled is nil, returns true for type "app" (default) or false for other types, and false (not explicit).
 func (s ServiceConfig) IDERenderEnabledExplicit() (enabled bool, explicit bool) {
-	if s.Render.IDE.Enabled != nil {
-		return *s.Render.IDE.Enabled, true
+	return s.renderEnabledExplicit(s.Render.IDE.Enabled)
+}
+
+// renderEnabledExplicit resolves a render toggle: if the explicit pointer is
+// non-nil it is authoritative; otherwise app services default on, others off.
+// Shared by the IDE/AI/Git per-kind RenderEnabledExplicit accessors.
+func (s ServiceConfig) renderEnabledExplicit(enabled *bool) (bool, bool) {
+	if enabled != nil {
+		return *enabled, true
 	}
 	return s.IsApp(), false
 }
@@ -928,10 +944,7 @@ func (s ServiceConfig) IDERenderEnabled() bool {
 // Only app services have a dedicated source directory to host hub-level agent
 // docs; tools/infra opt in explicitly via render.ai.enabled: true.
 func (s ServiceConfig) AIRenderEnabledExplicit() (enabled bool, explicit bool) {
-	if s.Render.AI.Enabled != nil {
-		return *s.Render.AI.Enabled, true
-	}
-	return s.IsApp(), false
+	return s.renderEnabledExplicit(s.Render.AI.Enabled)
 }
 
 // AIRenderEnabled returns whether this service should participate in AI docs rendering.
@@ -945,10 +958,7 @@ func (s ServiceConfig) AIRenderEnabled() bool {
 // If Enabled is non-nil, returns its value and true.
 // If Enabled is nil, returns true for type "app" (default) or false for other types, and false (not explicit).
 func (s ServiceConfig) GitRenderEnabledExplicit() (enabled bool, explicit bool) {
-	if s.Render.Git.Enabled != nil {
-		return *s.Render.Git.Enabled, true
-	}
-	return s.IsApp(), false
+	return s.renderEnabledExplicit(s.Render.Git.Enabled)
 }
 
 // GitRenderEnabled returns whether this service should participate in git-hooks rendering.
@@ -1171,15 +1181,22 @@ func ValidIdentifierKey(s string) bool {
 func validateConfigKeys(cfg *DweConfig) error {
 	for _, svcName := range slices.Sorted(maps.Keys(cfg.Services)) {
 		svc := cfg.Services[svcName]
-		for _, k := range slices.Sorted(maps.Keys(svc.Ports)) {
-			if !ValidIdentifierKey(k) {
-				return fmt.Errorf("service %q: invalid ports key %q: must match ^[A-Za-z_][A-Za-z0-9_]*$ (identifier-safe for template dot syntax)", svcName, k)
-			}
+		if err := validateIdentifierKeys(svcName, "ports", svc.Ports); err != nil {
+			return err
 		}
-		for _, k := range slices.Sorted(maps.Keys(svc.Hosts)) {
-			if !ValidIdentifierKey(k) {
-				return fmt.Errorf("service %q: invalid hosts key %q: must match ^[A-Za-z_][A-Za-z0-9_]*$ (identifier-safe for template dot syntax)", svcName, k)
-			}
+		if err := validateIdentifierKeys(svcName, "hosts", svc.Hosts); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// validateIdentifierKeys checks that every key in keys is identifier-safe for
+// Go template dot syntax. kind ("ports"/"hosts") names the map in the error.
+func validateIdentifierKeys[V any](svcName, kind string, keys map[string]V) error {
+	for _, k := range slices.Sorted(maps.Keys(keys)) {
+		if !ValidIdentifierKey(k) {
+			return fmt.Errorf("service %q: invalid %s key %q: must match ^[A-Za-z_][A-Za-z0-9_]*$ (identifier-safe for template dot syntax)", svcName, kind, k)
 		}
 	}
 	return nil
@@ -1830,34 +1847,52 @@ func LoadServices(baseDir string) (map[string]ServiceConfig, error) {
 // It does NOT resolve `extends:` — callers must follow up with
 // [ResolveServiceExtends] when extends-aware data is needed.
 func loadServiceFolders(baseDir string) (map[string]ServiceConfig, error) {
+	return walkServiceFolders(baseDir, "loading services", func(name string) (ServiceConfig, bool, error) {
+		svc, err := LoadServiceFolder(baseDir, name)
+		if err != nil {
+			return ServiceConfig{}, false, err
+		}
+		return *svc, true, nil
+	})
+}
+
+// walkServiceFolders iterates each subdirectory of workspace/services/, calling
+// load for each service name. Results where load reports keep=true are collected
+// into a map keyed by service name (keep=false silently drops the entry). A
+// missing services directory yields an empty map and nil error. Per-folder load
+// errors are collected and returned joined; errLabel prefixes both the ReadDir
+// failure and the joined per-folder errors.
+func walkServiceFolders[T any](baseDir, errLabel string, load func(name string) (val T, keep bool, err error)) (map[string]T, error) {
 	servicesDir := filepath.Join(baseDir, "workspace", "services")
 	entries, err := os.ReadDir(servicesDir)
 	if err != nil {
 		if errors.Is(err, os.ErrNotExist) {
-			return map[string]ServiceConfig{}, nil
+			return map[string]T{}, nil
 		}
-		return nil, fmt.Errorf("loading services: %w", err)
+		return nil, fmt.Errorf("%s: %w", errLabel, err)
 	}
 
-	services := make(map[string]ServiceConfig)
+	result := make(map[string]T)
 	var loadErrs []error
 	for _, entry := range entries {
 		if !entry.IsDir() {
 			continue
 		}
 		name := entry.Name()
-		svc, err := LoadServiceFolder(baseDir, name)
+		val, keep, err := load(name)
 		if err != nil {
 			loadErrs = append(loadErrs, err)
 			continue
 		}
-		services[name] = *svc
+		if keep {
+			result[name] = val
+		}
 	}
 	if len(loadErrs) > 0 {
-		return nil, fmt.Errorf("loading services: %w", errors.Join(loadErrs...))
+		return nil, fmt.Errorf("%s: %w", errLabel, errors.Join(loadErrs...))
 	}
 
-	return services, nil
+	return result, nil
 }
 
 // ResolveServiceExtends resolves `extends:` inheritance across the given
@@ -2792,35 +2827,13 @@ func LoadServiceResetConfig(baseDir, name string) (*ProjectDeployConfig, error) 
 // A missing workspace/services/ directory returns an empty map and nil error.
 // Per-folder decode failures are collected and returned via errors.Join.
 func LoadServiceResetConfigs(baseDir string) (map[string]*ProjectDeployConfig, error) {
-	servicesDir := filepath.Join(baseDir, "workspace", "services")
-	entries, err := os.ReadDir(servicesDir)
-	if err != nil {
-		if errors.Is(err, os.ErrNotExist) {
-			return map[string]*ProjectDeployConfig{}, nil
-		}
-		return nil, fmt.Errorf("loading service reset configs: %w", err)
-	}
-
-	result := make(map[string]*ProjectDeployConfig)
-	var loadErrs []error
-	for _, entry := range entries {
-		if !entry.IsDir() {
-			continue
-		}
-		name := entry.Name()
+	return walkServiceFolders(baseDir, "loading service reset configs", func(name string) (*ProjectDeployConfig, bool, error) {
 		cfg, err := LoadServiceResetConfig(baseDir, name)
 		if err != nil {
-			loadErrs = append(loadErrs, err)
-			continue
+			return nil, false, err
 		}
-		if cfg != nil {
-			result[name] = cfg
-		}
-	}
-	if len(loadErrs) > 0 {
-		return nil, fmt.Errorf("loading service reset configs: %w", errors.Join(loadErrs...))
-	}
-	return result, nil
+		return cfg, cfg != nil, nil
+	})
 }
 
 // TopoSortServices returns service names in dependency order (dependencies first).

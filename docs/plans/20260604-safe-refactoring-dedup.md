@@ -235,16 +235,16 @@ Tasks are ordered **safest / highest-value first**: pure deletions and named-con
 - Modify: `internal/core/project/config/{workspace,info,styles}.go`; `internal/cli/lifecycle/{stop,restart,reset}.go`; `internal/cli/deploy/{deploy,menu}.go`; `internal/core/ui/render/deploy_info.go`
 - Modify: matching `*_test.go`
 
-- [ ] Dedup per-service container resolution shared by stop/restart (`stop.go:71`; `restart.go:43`).
-- [ ] Extract the services-folder directory-walk loop (`workspace.go:1852,2814`).
-- [ ] Share the known-fields skeleton of the 2 custom `UnmarshalYAML` decoders (`workspace.go:304,341`) — keep strict-decode semantics exact.
-- [ ] Factor the 3 `*RenderEnabledExplicit` method bodies (`workspace.go:931,950,967`).
-- [ ] Merge the 2 identical auto-block include validators (`info.go:336,346`).
-- [ ] Dedup the identifier-key validation error in `validateConfigKeys` (`workspace.go:1192`).
-- [ ] Collapse the `ErrSilent` log-tail reporting (`reset.go:239,464`; `deploy.go:810`) — risk low.
-- [ ] Dedup `padRight`/`runeLen` across `deploy/menu.go:615` and `ui/render/deploy_info.go:115` (pick one owner).
-- [ ] Confirm strict-decode and config golden tests unchanged.
-- [ ] `make test && make lint` — must pass.
+- [x] Dedup per-service container resolution shared by stop/restart (`stop.go:71`; `restart.go:43`) — new `resolveServiceContainer(baseDir, cfg, name)` in `lifecycle/stop.go`; restart.go drops its now-unused `daemon` import.
+- [x] Extract the services-folder directory-walk loop (`workspace.go:1852,2814`) — generic `walkServiceFolders[T]` collapses `loadServiceFolders` + `LoadServiceResetConfigs` (per-folder keep-flag handles the `cfg != nil` filter; errLabel keeps both wrap strings byte-identical).
+- [x] Share the known-fields skeleton of the 2 custom `UnmarshalYAML` decoders (`workspace.go:304,341`) — new `checkKnownFields(value, mappingDesc, typeName, allowed)`; error strings byte-identical, returns `seen` map for the DeployStep parallel/leaf check.
+- [x] Factor the 3 `*RenderEnabledExplicit` method bodies (`workspace.go:931,950,967`) — delegate to unexported `renderEnabledExplicit(*bool)`.
+- [x] Merge the 2 identical auto-block include validators (`info.go:336,346`) — shared `validateIncludeValues(include, itemPath)`.
+- [x] Dedup the identifier-key validation error in `validateConfigKeys` (`workspace.go:1192`) — generic `validateIdentifierKeys[V](svcName, kind, keys)`.
+- [x] Collapse the `ErrSilent` log-tail reporting (`reset.go:239,464`; `deploy.go:810`) — new `cmdctx.WarnSilentLog(w, err, logEnabled, logPath)` (cli→core pipeline import is layering-safe).
+- [x] Dedup `padRight`/`runeLen` across `deploy/menu.go:615` and `ui/render/deploy_info.go:115` — owner is `core/ui/render` (exported `PadRight`/`RuneLen`); deploy/menu.go drops its local copies and calls `render.PadRight`/`render.RuneLen`.
+- [x] Confirm strict-decode and config golden tests unchanged. (config + validate suites green; no golden diffs.)
+- [x] `make test && make lint` — must pass. (Both green; first `make test` run hit the known-flaky `TestRussianTranslationsAreFresh`, clean on rerun.)
 
 ### Task 13: Consolidate Lipgloss table scaffolding & map-cell formatting in core/ui/render
 **Theme 4 — priority medium / effort small / risk none→low.** Covered by **assertion-based** tests (`table_test.go`: `TestFormatHostsCell`, `TestRenderTable_UsesTableStyles`, …) — a stronger exact-output net than golden snapshots. `stack/daemons.go` output is golden-covered. Expect all to pass unchanged.

@@ -69,20 +69,32 @@ func StopService(ctx context.Context, deps StopServiceDeps, name string) error {
 // stopServiceLocked is the package-internal core used by reset (Task 16), which
 // has already run preflight and holds the project locks.
 func stopServiceLocked(ctx context.Context, deps StopServiceDeps, name string) error {
-	svc, ok := deps.Cfg.Services[name]
-	if !ok {
-		return fmt.Errorf("%w: %s", ErrUnknownService, name)
-	}
-	projectFull, err := config.ResolveComposeProjectName(deps.BaseDir, deps.Cfg)
+	containerName, err := resolveServiceContainer(deps.BaseDir, deps.Cfg, name)
 	if err != nil {
-		return fmt.Errorf("resolving compose project name: %w", err)
-	}
-	containerName, err := daemon.ResolveContainerName(projectFull, svc.Container)
-	if err != nil {
-		return fmt.Errorf("resolving container name for service %q: %w", name, err)
+		return err
 	}
 	dockerBin := config.DockerBin(deps.Cfg)
 	return stopContainerFn(ctx, dockerBin, containerName, docker.DefaultStopTimeoutSec)
+}
+
+// resolveServiceContainer validates that name is a known service and resolves
+// its docker container name from the compose project name. Shared by the
+// per-service stop and restart paths (both bypass compose and act on the
+// container directly).
+func resolveServiceContainer(baseDir string, cfg *config.DweConfig, name string) (string, error) {
+	svc, ok := cfg.Services[name]
+	if !ok {
+		return "", fmt.Errorf("%w: %s", ErrUnknownService, name)
+	}
+	projectFull, err := config.ResolveComposeProjectName(baseDir, cfg)
+	if err != nil {
+		return "", fmt.Errorf("resolving compose project name: %w", err)
+	}
+	containerName, err := daemon.ResolveContainerName(projectFull, svc.Container)
+	if err != nil {
+		return "", fmt.Errorf("resolving container name for service %q: %w", name, err)
+	}
+	return containerName, nil
 }
 
 // NewStopCmd builds the `dwe stop` cobra command.

@@ -10,7 +10,6 @@ import (
 	"github.com/semsemyonoff/dwe/internal/cli/info"
 	"github.com/semsemyonoff/dwe/internal/core/project/config"
 	lifecyclepkg "github.com/semsemyonoff/dwe/internal/core/workflow/lifecycle"
-	"github.com/semsemyonoff/dwe/internal/shared/daemon"
 	"github.com/semsemyonoff/dwe/internal/shared/docker"
 	"github.com/semsemyonoff/dwe/internal/shared/promptcache"
 	"github.com/semsemyonoff/dwe/internal/shared/render"
@@ -44,17 +43,9 @@ func RestartService(ctx context.Context, baseDir string, cfg *config.DweConfig, 
 	if out == nil {
 		out = io.Discard
 	}
-	svc, ok := cfg.Services[name]
-	if !ok {
-		return fmt.Errorf("%w: %s", ErrUnknownService, name)
-	}
-	projectFull, err := config.ResolveComposeProjectName(baseDir, cfg)
+	containerName, err := resolveServiceContainer(baseDir, cfg, name)
 	if err != nil {
-		return fmt.Errorf("resolving compose project name: %w", err)
-	}
-	containerName, err := daemon.ResolveContainerName(projectFull, svc.Container)
-	if err != nil {
-		return fmt.Errorf("resolving container name for service %q: %w", name, err)
+		return err
 	}
 	dockerBin := config.DockerBin(cfg)
 	if err := restartContainerFn(ctx, dockerBin, containerName, docker.DefaultStopTimeoutSec); err != nil {

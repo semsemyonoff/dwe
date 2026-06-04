@@ -427,14 +427,14 @@ func selectMenuItemInteractive(_ context.Context, cmd *cobra.Command, _ *journal
 	// Right-pad the action label so descriptions line up across options.
 	labelWidth := 0
 	for _, d := range defs {
-		if w := runeLen(d.label); w > labelWidth {
+		if w := render.RuneLen(d.label); w > labelWidth {
 			labelWidth = w
 		}
 	}
 
 	options := make([]huh.Option[string], 0, len(defs))
 	for _, d := range defs {
-		label := padRight(d.label, labelWidth)
+		label := render.PadRight(d.label, labelWidth)
 		// Action label in accent, description muted (FG-only so huh's bold
 		// wrapper on the selected row still wins).
 		key := styles.StyleServiceOptionName("app", label) + "  " + styles.StyleOptionMuted(d.description)
@@ -503,7 +503,7 @@ func selectDeployServiceInteractive(_ context.Context, cmd *cobra.Command, title
 	// Pre-compute column widths so all rows align (status · type · name · meta).
 	nameW := 0
 	for _, it := range items {
-		if w := runeLen(it.Name); w > nameW {
+		if w := render.RuneLen(it.Name); w > nameW {
 			nameW = w
 		}
 	}
@@ -576,7 +576,7 @@ func formatDeployServiceLabel(it deployServiceItem, nameWidth int) string {
 		statusIcon = styles.StyleOptionSuccess("✓")
 	}
 
-	name := padRight(it.Name, nameWidth)
+	name := render.PadRight(it.Name, nameWidth)
 	coloredName := styles.StyleServiceOptionName(it.Type, name)
 	typeBadge := styles.StyleServiceOptionType(it.Type, "["+typeText+"]")
 
@@ -610,15 +610,6 @@ func formatServiceMeta(it deployServiceItem) string {
 		parts = append(parts, it.LockedHint)
 	}
 	return strings.Join(parts, " · ")
-}
-
-func runeLen(s string) int { return len([]rune(s)) }
-
-func padRight(s string, w int) string {
-	if n := runeLen(s); n < w {
-		return s + strings.Repeat(" ", w-n)
-	}
-	return s
 }
 
 // relativeTimeForMenu is a thin wrapper so menu code uses one timebase.

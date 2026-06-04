@@ -229,9 +229,7 @@ func resetRunCmd(cmd *cobra.Command, flags *cmdctx.RootFlags, yes bool, skipPref
 	}
 
 	if err := pipeline.RunWithOptions(opts); err != nil {
-		if errors.Is(err, pipeline.ErrSilent) && logEnabled {
-			w.Warning("Full output saved to: " + logPath)
-		}
+		cmdctx.WarnSilentLog(w, err, logEnabled, logPath)
 		return err
 	}
 
@@ -447,9 +445,7 @@ func resetServiceRunCmd(cmd *cobra.Command, flags *cmdctx.RootFlags, name string
 	// step failed). Let the next prompt refresh reflect ground truth.
 	_ = promptcache.Remove(workDir)
 	if runErr != nil {
-		if errors.Is(runErr, pipeline.ErrSilent) && logEnabled {
-			w.Warning("Full output saved to: " + logPath)
-		}
+		cmdctx.WarnSilentLog(w, runErr, logEnabled, logPath)
 		return runErr
 	}
 	if logEnabled {

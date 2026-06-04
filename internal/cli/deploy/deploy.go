@@ -800,9 +800,7 @@ func RunHelper(ctx context.Context, cmd *cobra.Command, flags *cmdctx.RootFlags,
 	}
 
 	if pipeErr := pipeline.RunWithOptions(runOpts); pipeErr != nil {
-		if errors.Is(pipeErr, pipeline.ErrSilent) && logEnabled {
-			w.Warning("Full output saved to: " + logPath)
-		}
+		cmdctx.WarnSilentLog(w, pipeErr, logEnabled, logPath)
 		if recErr := recorder.Err(); recErr != nil {
 			if errors.Is(pipeErr, pipeline.ErrSilent) {
 				w.Warning("deploy state could not be saved: " + recErr.Error())

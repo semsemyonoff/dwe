@@ -80,12 +80,12 @@ func DeployInfo(state *journal.ProjectState, now time.Time, rows []DeployInfoRow
 	typeBadgeW := typeW + 2 // brackets
 
 	for _, r := range rows {
-		name := padRight(r.Name, nameW)
+		name := PadRight(r.Name, nameW)
 		typeText := r.Type
 		if typeText == "" {
 			typeText = "-"
 		}
-		typeBadge := padRight("["+typeText+"]", typeBadgeW)
+		typeBadge := PadRight("["+typeText+"]", typeBadgeW)
 
 		var icon, when string
 		if r.DeployedAt.IsZero() {
@@ -112,9 +112,12 @@ func FormatRelativeTime(t, now time.Time) string {
 	return relativeTime(t, now)
 }
 
-// padRight right-pads s with spaces to width w (counting runes, not bytes).
-func padRight(s string, w int) string {
-	if n := len([]rune(s)); n < w {
+// RuneLen returns the number of runes (not bytes) in s.
+func RuneLen(s string) int { return len([]rune(s)) }
+
+// PadRight right-pads s with spaces to width w (counting runes, not bytes).
+func PadRight(s string, w int) string {
+	if n := RuneLen(s); n < w {
 		return s + strings.Repeat(" ", w-n)
 	}
 	return s

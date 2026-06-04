@@ -334,23 +334,22 @@ func validateItems(items []InfoItem, pathPrefix string) error {
 }
 
 func validateAutoURLsSpec(spec *AutoURLsSpec, itemPath string) error {
-	// Validate include[] values
-	for _, inc := range spec.Include {
-		if inc != "app" && inc != "tool" && inc != "infra" {
-			return fmt.Errorf("info: %s: include value %q not in {app, tool, infra}", itemPath, inc)
-		}
-	}
-	return nil
+	return validateIncludeValues(spec.Include, itemPath)
 }
 
 func validateAutoHostsSpec(spec *AutoHostsSpec, itemPath string) error {
-	// Validate include[] values
-	for _, inc := range spec.Include {
+	// IP validation happens in validator with net.ParseIP (happens only when non-empty)
+	return validateIncludeValues(spec.Include, itemPath)
+}
+
+// validateIncludeValues enforces that every include[] entry of an auto-urls /
+// auto-hosts block names a known service type.
+func validateIncludeValues(include []string, itemPath string) error {
+	for _, inc := range include {
 		if inc != "app" && inc != "tool" && inc != "infra" {
 			return fmt.Errorf("info: %s: include value %q not in {app, tool, infra}", itemPath, inc)
 		}
 	}
-	// IP validation happens in validator with net.ParseIP (happens only when non-empty)
 	return nil
 }
 
