@@ -264,15 +264,15 @@ Several guides touch the same commands (`dwe logs`, `dwe status`, `dwe info`). T
 **Files:**
 - Create: `docs/guides/background-daemons.md`
 
-- [ ] write H1 + intro framing "long-running queue worker / watcher"
-- [ ] section: anatomy of `type: daemon` block — `service`, `argv`, `daemon.container_template`
-- [ ] section: the 4 virtual commands (`.start` / `.logs` / `.stop` / `.restart`) — what each does
-- [ ] section: multi-instance daemons via `params:` (e.g. one worker per queue name)
-- [ ] section: `on_already_running: error|noop`, `auto_remove`, `stop_timeout`
-- [ ] section: visibility via labels and `dwe status daemons`
-- [ ] section: auto-reap on `dwe stop` (no opt-out); behavior under `dwe restart` — stop leg reaps every daemon, run leg does NOT restart them (call `<id>.start` explicitly after restart if you need them back)
-- [ ] section: security — never put secrets in `params:`, use `env:` instead (label visibility)
-- [ ] verify rendering
+- [x] write H1 + intro framing "long-running queue worker / watcher"
+- [x] section: anatomy of `type: daemon` block — `service`, `argv`, `daemon.container_template`
+- [x] section: the 4 virtual commands (`.start` / `.logs` / `.stop` / `.restart`) — what each does
+- [x] section: multi-instance daemons via `params:` (e.g. one worker per queue name)
+- [x] section: `on_already_running: error|noop`, `auto_remove`, `stop_timeout`
+- [x] section: visibility via labels and `dwe status daemons`
+- [x] section: auto-reap on `dwe stop` (no opt-out); behavior under `dwe restart` — stop leg reaps every daemon, run leg does NOT restart them (call `<id>.start` explicitly after restart if you need them back)
+- [x] section: security — never put secrets in `params:`, use `env:` instead (label visibility)
+- [x] verify rendering
 
 ### Task 8: EN guide — `preflight-checks.md`
 
