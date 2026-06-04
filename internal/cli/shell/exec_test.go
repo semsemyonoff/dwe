@@ -366,6 +366,24 @@ func TestComposeRunOneShot_wrapsExitError(t *testing.T) {
 	}
 }
 
+func TestComposeRunOneShot_neverAllocatesPTY(t *testing.T) {
+	// Even in an interactive terminal, one-shot compose commands must not allocate
+	// a PTY so that stdout stays clean for piping.
+	withTTYDetector(t, true, true)
+	calls := withFakeRunInteractive(t, nil)
+	cmp := &docker.Compose{ProjectName: "p"}
+	if err := composeRunOneShot(cmp, "main", "sh", "", "", nil, "echo hi"); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if len(*calls) != 1 {
+		t.Fatalf("want 1 runInteractive call, got %d", len(*calls))
+	}
+	args := (*calls)[0].args
+	if !slices.Contains(args, "-T") {
+		t.Errorf("expected -T in args to suppress PTY allocation; got: %v", args)
+	}
+}
+
 // --- runOneShotCommand: full mode × state matrix ---
 
 // fakeStateFn returns a stub state func driven by table values.

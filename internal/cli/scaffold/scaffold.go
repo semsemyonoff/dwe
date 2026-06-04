@@ -186,7 +186,7 @@ func runInit(cmd *cobra.Command, flags *cmdctx.RootFlags, args []string, f initF
 		},
 	}
 
-	if interactive(flags, f.yes) {
+	if interactive(cmd.InOrStdin(), flags, f.yes) {
 		collected, ferr := runFormFn(cmd.Context(), in, cmd.InOrStdin(), cmd.OutOrStdout())
 		if ferr != nil {
 			if errors.Is(ferr, huh.ErrUserAborted) {
@@ -251,8 +251,8 @@ func resolveName(nameFlag string, args []string) (string, error) {
 
 // interactive reports whether the form should be shown: a real TTY on both ends,
 // not --yes, and not JSON output mode.
-func interactive(flags *cmdctx.RootFlags, yes bool) bool {
-	return widgets.IsInteractiveFn(os.Stdin) && !yes && flags.Output != "json"
+func interactive(stdin io.Reader, flags *cmdctx.RootFlags, yes bool) bool {
+	return widgets.IsInteractiveFn(stdin) && !yes && flags.Output != "json"
 }
 
 // initJSON is the machine-readable result shape for --output json.

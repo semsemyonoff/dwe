@@ -80,7 +80,7 @@ func validateUnknownServiceRefs(ctx validate.Context, file string) []validate.Di
 				File:     file,
 				Line:     entry.SourceLine,
 				Message:  fmt.Sprintf("check %q: unknown service %q in services: list", entry.ID, svc),
-				Hint:     "Service names must match a key under workspace/services.yml.",
+				Hint:     "Service names must match a folder under workspace/services/ (each folder has a service.yml).",
 			})
 		}
 	}

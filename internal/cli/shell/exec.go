@@ -399,7 +399,7 @@ func composeRunOneShot(compose *docker.Compose, serviceName, shell, u, workDir s
 		args = append(args, "--rm")
 	}
 	args = append(args, runArgs...)
-	args = append(args, composeRunTTYFlags()...)
+	args = append(args, "-i", "-T") // never allocate a PTY for one-shot commands
 	if u != "" {
 		args = append(args, "-u", u)
 	}
