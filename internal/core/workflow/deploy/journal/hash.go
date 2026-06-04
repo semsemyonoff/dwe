@@ -320,6 +320,35 @@ func serviceConfigToMap(svc config.ServiceConfig) map[string]any {
 	return m
 }
 
+// phasesToMap converts a slice of deploy phases to the []any representation
+// used by both project and service deploy-config hash maps.
+func phasesToMap(phases []config.DeployPhase) []any {
+	result := make([]any, len(phases))
+	for i, phase := range phases {
+		p := map[string]any{
+			"name":            phase.Name,
+			"description":     phase.Description,
+			"untracked":       phase.Untracked,
+			"deploy_services": phase.DeployServices,
+		}
+
+		if phase.When != nil {
+			p["when"] = conditionToMap(phase.When)
+		}
+
+		if len(phase.Steps) > 0 {
+			steps := make([]any, len(phase.Steps))
+			for j, step := range phase.Steps {
+				steps[j] = deployStepToMap(step)
+			}
+			p["steps"] = steps
+		}
+
+		result[i] = p
+	}
+	return result
+}
+
 // projectDeployConfigToMap converts a ProjectDeployConfig to a map for hashing purposes.
 func projectDeployConfigToMap(cfg *config.ProjectDeployConfig) map[string]any {
 	if cfg == nil {
@@ -333,30 +362,7 @@ func projectDeployConfigToMap(cfg *config.ProjectDeployConfig) map[string]any {
 	}
 
 	if len(cfg.Phases) > 0 {
-		phases := make([]any, len(cfg.Phases))
-		for i, phase := range cfg.Phases {
-			p := map[string]any{
-				"name":            phase.Name,
-				"description":     phase.Description,
-				"untracked":       phase.Untracked,
-				"deploy_services": phase.DeployServices,
-			}
-
-			if phase.When != nil {
-				p["when"] = conditionToMap(phase.When)
-			}
-
-			if len(phase.Steps) > 0 {
-				steps := make([]any, len(phase.Steps))
-				for j, step := range phase.Steps {
-					steps[j] = deployStepToMap(step)
-				}
-				p["steps"] = steps
-			}
-
-			phases[i] = p
-		}
-		m["phases"] = phases
+		m["phases"] = phasesToMap(cfg.Phases)
 	}
 
 	return m
@@ -380,30 +386,7 @@ func serviceDeployConfigToMap(cfg *config.ServiceDeployConfig) map[string]any {
 	}
 
 	if len(cfg.Phases) > 0 {
-		phases := make([]any, len(cfg.Phases))
-		for i, phase := range cfg.Phases {
-			p := map[string]any{
-				"name":            phase.Name,
-				"description":     phase.Description,
-				"untracked":       phase.Untracked,
-				"deploy_services": phase.DeployServices,
-			}
-
-			if phase.When != nil {
-				p["when"] = conditionToMap(phase.When)
-			}
-
-			if len(phase.Steps) > 0 {
-				steps := make([]any, len(phase.Steps))
-				for j, step := range phase.Steps {
-					steps[j] = deployStepToMap(step)
-				}
-				p["steps"] = steps
-			}
-
-			phases[i] = p
-		}
-		m["phases"] = phases
+		m["phases"] = phasesToMap(cfg.Phases)
 	}
 
 	return m

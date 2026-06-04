@@ -1,11 +1,45 @@
 package journal
 
 import (
+	"errors"
 	"fmt"
 	"slices"
 	"sort"
 	"time"
 )
+
+// errSkipSave is a sentinel returned by a mutateState fn to skip the save step.
+// Use it to signal "loaded, inspected, nothing changed — no write needed".
+var errSkipSave = errors.New("skip save")
+
+// mutateState is the load→mutate→save envelope shared by all pending mutators.
+// fn receives the loaded state and may mutate it in place. If fn returns
+// errSkipSave the save is skipped and mutateState returns nil. Any other
+// non-nil error is returned as-is without saving.
+func mutateState(path string, fn func(*ProjectState) error) error {
+	state, err := Load(path)
+	if err != nil {
+		return err
+	}
+	if err := fn(state); err != nil {
+		if errors.Is(err, errSkipSave) {
+			return nil
+		}
+		return err
+	}
+	return Save(path, state)
+}
+
+// sortedUniq returns a sorted, deduplicated copy of ss.
+// Adjacent duplicate elements (after sorting) are removed.
+func sortedUniq(ss []string) []string {
+	if len(ss) == 0 {
+		return ss
+	}
+	out := slices.Clone(ss)
+	sort.Strings(out)
+	return slices.Compact(out)
+}
 
 // PendingKind identifies the type of pending operation.
 type PendingKind string
@@ -65,12 +99,10 @@ func AddPendingOp(path string, op PendingOp, configHash string) error {
 	if op.Kind == PendingKindUnspecified {
 		return fmt.Errorf("cannot add pending op with unspecified kind")
 	}
-	state, err := Load(path)
-	if err != nil {
-		return err
-	}
-	applyPendingOp(state, op, configHash)
-	return Save(path, state)
+	return mutateState(path, func(state *ProjectState) error {
+		applyPendingOp(state, op, configHash)
+		return nil
+	})
 }
 
 // AddPendingOps atomically applies all ops in one load+save cycle.
@@ -85,42 +117,36 @@ func AddPendingOps(path string, ops []PendingOp, configHash string) error {
 			return fmt.Errorf("cannot add pending op with unspecified kind")
 		}
 	}
-	state, err := Load(path)
-	if err != nil {
-		return err
-	}
-	for _, op := range ops {
-		applyPendingOp(state, op, configHash)
-	}
-	return Save(path, state)
+	return mutateState(path, func(state *ProjectState) error {
+		for _, op := range ops {
+			applyPendingOp(state, op, configHash)
+		}
+		return nil
+	})
 }
 
 // ClearPending sets Pending to nil unconditionally and saves.
 // Only callers that applied EVERY pending op should use this (e.g. full-project reset).
 func ClearPending(path string) error {
-	state, err := Load(path)
-	if err != nil {
-		return err
-	}
-	if state.Pending == nil {
+	return mutateState(path, func(state *ProjectState) error {
+		if state.Pending == nil {
+			return errSkipSave
+		}
+		state.Pending = nil
 		return nil
-	}
-	state.Pending = nil
-	return Save(path, state)
+	})
 }
 
 // ClearPendingForKind removes every op of the given kind from Operations.
 // If Operations becomes empty, sets Pending to nil.
 func ClearPendingForKind(path string, kind PendingKind) error {
-	state, err := Load(path)
-	if err != nil {
-		return err
-	}
-	if state.Pending == nil {
+	return mutateState(path, func(state *ProjectState) error {
+		if state.Pending == nil {
+			return errSkipSave
+		}
+		removePendingKind(state, kind)
 		return nil
-	}
-	removePendingKind(state, kind)
-	return Save(path, state)
+	})
 }
 
 // ClearPendingForServices removes named services from the deploy op (or the whole restart op).
@@ -128,15 +154,13 @@ func ClearPendingForKind(path string, kind PendingKind) error {
 // For PendingRestart: services arg is ignored; removes the whole restart op.
 // If Operations becomes empty, sets Pending to nil.
 func ClearPendingForServices(path string, kind PendingKind, services []string) error {
-	state, err := Load(path)
-	if err != nil {
-		return err
-	}
-	if state.Pending == nil {
+	return mutateState(path, func(state *ProjectState) error {
+		if state.Pending == nil {
+			return errSkipSave
+		}
+		clearPendingForServices(state, kind, services)
 		return nil
-	}
-	clearPendingForServices(state, kind, services)
-	return Save(path, state)
+	})
 }
 
 // ClearPendingOps atomically clears multiple ops in one load+save cycle.
@@ -151,17 +175,15 @@ func ClearPendingOps(path string, clears []PendingClear) error {
 			return fmt.Errorf("cannot clear pending op with unspecified kind")
 		}
 	}
-	state, err := Load(path)
-	if err != nil {
-		return err
-	}
-	if state.Pending == nil {
+	return mutateState(path, func(state *ProjectState) error {
+		if state.Pending == nil {
+			return errSkipSave
+		}
+		for _, c := range clears {
+			clearPendingForServices(state, c.Kind, c.Services)
+		}
 		return nil
-	}
-	for _, c := range clears {
-		clearPendingForServices(state, c.Kind, c.Services)
-	}
-	return Save(path, state)
+	})
 }
 
 // ReplaceServiceWithPending atomically removes serviceName from state.Services and
@@ -171,20 +193,18 @@ func ReplaceServiceWithPending(path string, serviceName string, op PendingOp, co
 	if op.Kind == PendingKindUnspecified {
 		return fmt.Errorf("cannot add pending op with unspecified kind")
 	}
-	state, err := Load(path)
-	if err != nil {
-		return err
-	}
-	delete(state.Services, serviceName)
-	// Recompute aggregates after removal (same as RemoveService does).
-	if len(state.Services) == 0 && (state.Project == nil || len(state.Project.Phases) == 0) {
-		state.Project = &ProjectLevelState{}
-		state.Services = make(map[string]*ServiceState)
-	} else {
-		Recompute(state)
-	}
-	applyPendingOp(state, op, configHash)
-	return Save(path, state)
+	return mutateState(path, func(state *ProjectState) error {
+		delete(state.Services, serviceName)
+		// Recompute aggregates after removal (same as RemoveService does).
+		if len(state.Services) == 0 && (state.Project == nil || len(state.Project.Phases) == 0) {
+			state.Project = &ProjectLevelState{}
+			state.Services = make(map[string]*ServiceState)
+		} else {
+			Recompute(state)
+		}
+		applyPendingOp(state, op, configHash)
+		return nil
+	})
 }
 
 // applyPendingOp merges op into state.Pending in memory.
@@ -201,10 +221,7 @@ func applyPendingOp(state *ProjectState, op PendingOp, configHash string) {
 	if existing != nil {
 		if op.Kind == PendingDeploy {
 			// Merge service names: union, dedup, sort.
-			merged := append(slices.Clone(existing.Services), op.Services...)
-			sort.Strings(merged)
-			merged = slices.Compact(merged)
-			existing.Services = merged
+			existing.Services = sortedUniq(append(existing.Services, op.Services...))
 		}
 		// For PendingRestart, no merge needed — restart is stack-wide.
 		return
@@ -212,10 +229,7 @@ func applyPendingOp(state *ProjectState, op PendingOp, configHash string) {
 	// New kind: append.
 	newOp := PendingOp{Kind: op.Kind}
 	if op.Kind == PendingDeploy {
-		svcs := slices.Clone(op.Services)
-		sort.Strings(svcs)
-		svcs = slices.Compact(svcs)
-		newOp.Services = svcs
+		newOp.Services = sortedUniq(op.Services)
 	}
 	state.Pending.Operations = append(state.Pending.Operations, newOp)
 }

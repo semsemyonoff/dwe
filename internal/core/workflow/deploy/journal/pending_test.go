@@ -475,6 +475,69 @@ func TestReplaceServiceWithPending_AtomicWriteFailure(t *testing.T) {
 	assert.Nil(t, s.Pending, "no pending must be written after failed write")
 }
 
+// TestSortedUniq verifies the sortedUniq helper across edge cases.
+func TestSortedUniq(t *testing.T) {
+	tests := []struct {
+		name string
+		in   []string
+		want []string
+	}{
+		{
+			name: "empty slice",
+			in:   []string{},
+			want: []string{},
+		},
+		{
+			name: "nil slice",
+			in:   nil,
+			want: nil,
+		},
+		{
+			name: "single element",
+			in:   []string{"a"},
+			want: []string{"a"},
+		},
+		{
+			name: "already sorted and unique",
+			in:   []string{"a", "b", "c"},
+			want: []string{"a", "b", "c"},
+		},
+		{
+			name: "duplicates present",
+			in:   []string{"b", "a", "b", "c", "a"},
+			want: []string{"a", "b", "c"},
+		},
+		{
+			name: "unsorted with duplicates",
+			in:   []string{"z", "a", "m", "a", "z"},
+			want: []string{"a", "m", "z"},
+		},
+		{
+			name: "all same",
+			in:   []string{"x", "x", "x"},
+			want: []string{"x"},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := sortedUniq(tt.in)
+			assert.Equal(t, tt.want, got)
+		})
+	}
+}
+
+// TestSortedUniq_DoesNotMutateInput verifies that sortedUniq does not modify the input slice.
+func TestSortedUniq_DoesNotMutateInput(t *testing.T) {
+	in := []string{"c", "a", "b", "a"}
+	orig := make([]string, len(in))
+	copy(orig, in)
+
+	_ = sortedUniq(in)
+
+	assert.Equal(t, orig, in, "input slice must not be mutated")
+}
+
 // Ensure PendingKind constants have expected values.
 func TestPendingKindValues(t *testing.T) {
 	assert.Equal(t, PendingKind(""), PendingKindUnspecified)

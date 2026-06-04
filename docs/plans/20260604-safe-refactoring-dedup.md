@@ -161,11 +161,11 @@ Tasks are ordered **safest / highest-value first**: pure deletions and named-con
 - Modify: `internal/core/workflow/deploy/journal/pending.go`, `internal/core/workflow/deploy/journal/hash.go`
 - Modify: matching `*_test.go`
 
-- [ ] Factor the `Load→mutate→Save` envelope shared by the 7 mutators (4 also share `Pending==nil` short-circuit) — `pending.go:64,100,170`.
-- [ ] Add `sortedUniq` helper for the 2 dedup/sort copies in `applyPendingOp` (`pending.go:202,213`).
-- [ ] Factor `phasesToMap` shared by project/service deploy-config hashing (`hash.go:335,382`).
-- [ ] Write unit test for `sortedUniq`; confirm hash stability tests unchanged.
-- [ ] `make test && make lint` — must pass.
+- [x] Factor the `Load→mutate→Save` envelope shared by the 7 mutators (4 also share `Pending==nil` short-circuit) — `pending.go:64,100,170`.
+- [x] Add `sortedUniq` helper for the 2 dedup/sort copies in `applyPendingOp` (`pending.go:202,213`).
+- [x] Factor `phasesToMap` shared by project/service deploy-config hashing (`hash.go:335,382`).
+- [x] Write unit test for `sortedUniq`; confirm hash stability tests unchanged.
+- [x] `make test && make lint` — must pass.
 
 ### Task 8: Consolidate the ai/ide/git template-package **infrastructure** trio
 **Theme 9 — priority medium / effort small / risk none.** Byte-identical infra (NOT the validators — those are the rejected item). Per-kind collision policy (AI shallowest vs IDE/git deepest) stays in the separate resolvers.
