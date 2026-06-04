@@ -411,11 +411,11 @@ Several guides touch the same commands (`dwe logs`, `dwe status`, `dwe info`). T
 **Files:**
 - Modify: `docs/i18n/ru/guides/index.md`
 
-- [ ] confirm current file already uses the `> Translated from: guides/index.md @ <hash>` header (it should — `starship.md` does); if not, add the header
-- [ ] update the hash in the header to the value harvested in Task 14 (after Task 13 modified `docs/guides/index.md`, its hash changed)
-- [ ] restructure `## Страницы` (or equivalent) into the three groups, matching the EN index
-- [ ] list all 12 new guides under the right groups; keep starship under "Интеграции"
-- [ ] preserve "См. также" footer
+- [x] confirm current file already uses the `> Translated from: guides/index.md @ <hash>` header (it should — `starship.md` does); if not, add the header
+- [x] update the hash in the header to the value harvested in Task 14 (after Task 13 modified `docs/guides/index.md`, its hash changed)
+- [x] restructure `## Страницы` (or equivalent) into the three groups, matching the EN index
+- [x] list all 12 new guides under the right groups; keep starship under "Интеграции"
+- [x] preserve "См. также" footer
 
 ### Task 17: Final `make build` + verification
 
