@@ -171,15 +171,15 @@ Several guides touch the same commands (`dwe logs`, `dwe status`, `dwe info`). T
 **Files:**
 - Create: `docs/guides/joining-a-project.md`
 
-- [ ] write H1 + intro framing the "I just cloned a DWE repo" scenario
-- [ ] section: prerequisites (docker daemon running, `dwe` binary on PATH)
-- [ ] section: first-run sanity check (`dwe` no-args / `dwe validate`)
-- [ ] section: `dwe deploy` — setup wizard, port-conflict resolution, what gets written to `workspace/local.yml`
-- [ ] section: `dwe info` — what the dashboard shows, where URLs come from
-- [ ] section: `dwe run` — what "running" looks like, where logs live
-- [ ] section: what now lives on disk (`.dwe/`, `volumes/`, `snapshots/`) — all gitignored
-- [ ] section: "where to next" — link to `daily-workflow.md`, `troubleshooting.md`
-- [ ] verify rendering: write file, eyeball markdown structure
+- [x] write H1 + intro framing the "I just cloned a DWE repo" scenario
+- [x] section: prerequisites (docker daemon running, `dwe` binary on PATH)
+- [x] section: first-run sanity check (`dwe` no-args / `dwe validate`)
+- [x] section: `dwe deploy` — setup wizard, port-conflict resolution, what gets written to `workspace/local.yml`
+- [x] section: `dwe info` — what the dashboard shows, where URLs come from
+- [x] section: `dwe run` — what "running" looks like, where logs live
+- [x] section: what now lives on disk (`.dwe/`, `volumes/`, `snapshots/`) — all gitignored
+- [x] section: "where to next" — link to `daily-workflow.md`, `troubleshooting.md`
+- [x] verify rendering: write file, eyeball markdown structure
 
 ### Task 2: EN guide — `daily-workflow.md`
 
