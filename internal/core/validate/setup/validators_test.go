@@ -35,7 +35,7 @@ func TestParseValidator(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			v := &parseValidator{err: tt.err, path: tt.path}
+			v := &parseValidator{baseValidator: baseValidator{id: "parse"}, err: tt.err, path: tt.path}
 			diags := v.Run(validate.Context{})
 			if len(diags) != tt.count {
 				t.Errorf("expected %d diags, got %d", tt.count, len(diags))
@@ -91,7 +91,7 @@ func TestTypeKnownValidator(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			v := &typeKnownValidator{cfg: tt.cfg}
+			v := &typeKnownValidator{newCfg("type_known", tt.cfg)}
 			diags := v.Run(validate.Context{})
 			if len(diags) != tt.count {
 				t.Errorf("expected %d diags, got %d", tt.count, len(diags))
@@ -144,7 +144,7 @@ func TestIdRequiredValidator(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			v := &idRequiredValidator{cfg: tt.cfg}
+			v := &idRequiredValidator{newCfg("id_required", tt.cfg)}
 			diags := v.Run(validate.Context{})
 			if len(diags) != tt.count {
 				t.Errorf("expected %d diags, got %d", tt.count, len(diags))
@@ -199,7 +199,7 @@ func TestIdUniqueValidator(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			v := &idUniqueValidator{cfg: tt.cfg}
+			v := &idUniqueValidator{newCfg("id_unique", tt.cfg)}
 			diags := v.Run(validate.Context{})
 			if len(diags) != tt.count {
 				t.Errorf("expected %d diags, got %d", tt.count, len(diags))
@@ -241,7 +241,7 @@ func TestWritesRequiredValidator(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			v := &writesRequiredValidator{cfg: tt.cfg}
+			v := &writesRequiredValidator{newCfg("writes_required", tt.cfg)}
 			diags := v.Run(validate.Context{})
 			if len(diags) != tt.count {
 				t.Errorf("expected %d diags, got %d", tt.count, len(diags))
@@ -284,7 +284,7 @@ func TestWritesUniqueValidator(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			v := &writesUniqueValidator{cfg: tt.cfg}
+			v := &writesUniqueValidator{newCfg("writes_unique", tt.cfg)}
 			diags := v.Run(validate.Context{})
 			if len(diags) != tt.count {
 				t.Errorf("expected %d diags, got %d", tt.count, len(diags))
@@ -345,7 +345,7 @@ func TestWritesSyntaxValidator(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			v := &writesSyntaxValidator{cfg: tt.cfg}
+			v := &writesSyntaxValidator{newCfg("writes_syntax", tt.cfg)}
 			diags := v.Run(validate.Context{})
 			if len(diags) != tt.count {
 				t.Errorf("expected %d diags, got %d", tt.count, len(diags))
@@ -423,7 +423,7 @@ func TestWritesScopeValidator(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			v := &writesScopeValidator{cfg: tt.cfg}
+			v := &writesScopeValidator{newCfg("writes_scope", tt.cfg)}
 			diags := v.Run(validate.Context{})
 			if len(diags) != tt.count {
 				t.Errorf("expected %d diags, got %d", tt.count, len(diags))
@@ -490,7 +490,7 @@ func TestOptionsValidValidator(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			v := &optionsValidValidator{cfg: tt.cfg}
+			v := &optionsValidValidator{newCfg("options_valid", tt.cfg)}
 			diags := v.Run(validate.Context{})
 			if len(diags) != tt.count {
 				t.Errorf("expected %d diags, got %d", tt.count, len(diags))
@@ -540,7 +540,7 @@ func TestValidateExclusiveValidator(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			v := &validateExclusiveValidator{cfg: tt.cfg}
+			v := &validateExclusiveValidator{newCfg("validate_exclusive", tt.cfg)}
 			diags := v.Run(validate.Context{})
 			if len(diags) != tt.count {
 				t.Errorf("expected %d diags, got %d", tt.count, len(diags))
@@ -590,7 +590,7 @@ func TestValidateOnlyOnInputValidator(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			v := &validateOnlyOnInputValidator{cfg: tt.cfg}
+			v := &validateOnlyOnInputValidator{newCfg("validate_only_on_input", tt.cfg)}
 			diags := v.Run(validate.Context{})
 			if len(diags) != tt.count {
 				t.Errorf("expected %d diags, got %d", tt.count, len(diags))
@@ -631,7 +631,7 @@ func TestValidatePresetKnownValidator(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			v := &validatePresetKnownValidator{cfg: tt.cfg}
+			v := &validatePresetKnownValidator{newCfg("validate_preset_known", tt.cfg)}
 			diags := v.Run(validate.Context{})
 			if len(diags) != tt.count {
 				t.Errorf("expected %d diags, got %d", tt.count, len(diags))
@@ -672,7 +672,7 @@ func TestValidateRegexCompilesValidator(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			v := &validateRegexCompilesValidator{cfg: tt.cfg}
+			v := &validateRegexCompilesValidator{newCfg("validate_regex_compiles", tt.cfg)}
 			diags := v.Run(validate.Context{})
 			if len(diags) != tt.count {
 				t.Errorf("expected %d diags, got %d", tt.count, len(diags))
@@ -740,7 +740,7 @@ func TestTypeWritesConsistentValidator(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			v := &typeWritesConsistentValidator{cfg: tt.cfg}
+			v := &typeWritesConsistentValidator{newCfg("type_writes_consistent", tt.cfg)}
 			diags := v.Run(validate.Context{})
 			if len(diags) != tt.count {
 				t.Errorf("expected %d diags, got %d", tt.count, len(diags))
@@ -781,7 +781,7 @@ func TestRequiredConsistentValidator(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			v := &requiredConsistentValidator{cfg: tt.cfg}
+			v := &requiredConsistentValidator{newCfg("required_consistent", tt.cfg)}
 			diags := v.Run(validate.Context{})
 			if len(diags) != tt.count {
 				t.Errorf("expected %d diags, got %d", tt.count, len(diags))

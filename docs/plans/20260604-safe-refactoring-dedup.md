@@ -351,10 +351,10 @@ Tasks are ordered **safest / highest-value first**: pure deletions and named-con
 - Modify: `internal/core/validate/setup/validators.go`, `internal/core/validate/setup/all.go`
 - Modify: `internal/core/validate/setup/validators_test.go`
 
-- [ ] Collapse the per-type `ID()`/`Domain()` one-liners + `cfg==nil` guard via an embedded base (`validators.go:80-173`; update construction in `all.go:15`).
-- [ ] Drop the redundant `target` arg from `makeError`/`makeWarning` (always equals the validator's own ID) — convert the two free functions to methods (`validators.go:16,100,121`).
-- [ ] Update `validators_test.go` construction sites; confirm every setup diagnostic message byte-identical.
-- [ ] `make test && make lint` — must pass.
+- [x] Collapse the per-type `ID()`/`Domain()` one-liners + `cfg==nil` guard via an embedded base (`validators.go:80-173`; update construction in `all.go:15`). Added `baseValidator{id}` (provides `ID()`/`Domain()` + the diagnostic constructors) and `cfgValidator{baseValidator; cfg}` whose `questions()` folds the nil-config guard into iteration (nil cfg → no questions → empty diags, behavior-identical). Each cfg-driven validator is now `struct{ cfgValidator }` and ranges over `v.questions()`; `parseValidator` embeds `baseValidator` only. Construction goes through `newCfg(id, cfg)`.
+- [x] Drop the redundant `target` arg from `makeError`/`makeWarning` (always equals the validator's own ID) — convert the two free functions to methods (`validators.go:16,100,121`). All three constructors (`makeError`/`makeWarning`/`makeErrorWithHint`) are now methods on `baseValidator` reading `b.id` as `Target`; all call sites use `v.makeError(msg)` etc.
+- [x] Update `validators_test.go` construction sites; confirm every setup diagnostic message byte-identical. Construction sites swapped to `newCfg("<id>", tt.cfg)` (and `parseValidator` to the embedded-base form); message text unchanged, existing count-based tests stay green.
+- [x] `make test && make lint` — must pass. (Both green; `make lint` reports 0 issues.)
 
 ### Task 20: TUI Update-handler dedups (statustui, cmdbrowser palette/tree)
 **Theme 20 — priority low / effort small / risk low.** Keep mutations inside `Update` (View()-purity invariant) and the v2-lipgloss bridge contract.
