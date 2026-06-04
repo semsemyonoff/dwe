@@ -114,11 +114,7 @@ func TestLoadHelpColorScheme(t *testing.T) {
 			t.Fatal(err)
 		}
 
-		orig, _ := os.Getwd()
-		if err := os.Chdir(subdir); err != nil {
-			t.Fatal(err)
-		}
-		defer func() { _ = os.Chdir(orig) }()
+		t.Chdir(subdir)
 
 		// Discovery mode: configPath="", explicit=false
 		cs := loadHelpColorScheme("", false)
@@ -128,11 +124,7 @@ func TestLoadHelpColorScheme(t *testing.T) {
 	})
 
 	t.Run("no project anywhere returns nil silently", func(t *testing.T) {
-		orig, _ := os.Getwd()
-		if err := os.Chdir(os.TempDir()); err != nil {
-			t.Fatal(err)
-		}
-		defer func() { _ = os.Chdir(orig) }()
+		t.Chdir(os.TempDir())
 
 		// Ensure we are not inside any dwe project.
 		cs := loadHelpColorScheme("", false)
@@ -157,11 +149,7 @@ func TestLoadHelpColorScheme(t *testing.T) {
 		root := t.TempDir()
 		makeProject(t, root, true) // schema_version: "1"
 
-		orig, _ := os.Getwd()
-		if err := os.Chdir(root); err != nil {
-			t.Fatal(err)
-		}
-		defer func() { _ = os.Chdir(orig) }()
+		t.Chdir(root)
 
 		// Locate is schema-agnostic: it finds the file regardless of schema_version.
 		// So styles should be loaded even for a legacy project.

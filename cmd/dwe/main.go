@@ -95,7 +95,7 @@ func isPromptInvocation(argv []string) bool {
 	return len(rest) == 1 && rest[0] == "--check"
 }
 
-// configPathFromArgs extracts the --config / -c flag value from os.Args before
+// configPathFromArgs extracts the --config flag value from os.Args before
 // cobra parses them. Uses pflag (the same parser Cobra uses internally) so flag
 // semantics match exactly. Returns ("", false) when the flag is absent or
 // unparseable, and (path, true) when explicitly supplied.

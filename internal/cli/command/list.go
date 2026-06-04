@@ -219,7 +219,7 @@ func resolveCommandID(reg *usercommands.Registry, args []string, includePrivate 
 		// Try as a group prefix.
 		var defs []*usercommands.CommandDef
 		if includePrivate {
-			defs = reg.ListAll(arg)
+			defs = reg.ListAllIncludingHidden(arg)
 		} else {
 			defs = reg.List(arg)
 		}
@@ -231,7 +231,7 @@ func resolveCommandID(reg *usercommands.Registry, args []string, includePrivate 
 	// No arg — show full list.
 	var defs []*usercommands.CommandDef
 	if includePrivate {
-		defs = reg.ListAll("")
+		defs = reg.ListAllIncludingHidden("")
 	} else {
 		defs = reg.List("")
 	}
