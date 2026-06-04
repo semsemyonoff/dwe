@@ -214,28 +214,16 @@ Scope targets:
 	cmd.AddCommand(templatesCmd)
 
 	// Commands validator.
-	cmd.AddCommand(&cobra.Command{
-		Use:          "commands",
-		Short:        "Validate command definitions",
-		Long:         `Check workspace/commands for syntax errors, missing references, and other issues.`,
-		Args:         cobra.NoArgs,
-		SilenceUsage: true,
-		RunE: func(cmd *cobra.Command, args []string) error {
-			return runValidate(cmd, flags, strict, quiet, stage, false, []string{"commands"})
-		},
-	})
+	cmd.AddCommand(newValidateLeafCmd(flags, &strict, &quiet, &stage, "commands",
+		"Validate command definitions",
+		`Check workspace/commands for syntax errors, missing references, and other issues.`,
+		"commands"))
 
 	// Env probes.
-	cmd.AddCommand(&cobra.Command{
-		Use:          "env",
-		Short:        "Validate environment readiness",
-		Long:         `Run built-in environment probes (docker binary, docker daemon, compose plugin, git/shell binaries, .dwe writable).`,
-		Args:         cobra.NoArgs,
-		SilenceUsage: true,
-		RunE: func(cmd *cobra.Command, args []string) error {
-			return runValidate(cmd, flags, strict, quiet, stage, false, []string{"env"})
-		},
-	})
+	cmd.AddCommand(newValidateLeafCmd(flags, &strict, &quiet, &stage, "env",
+		"Validate environment readiness",
+		`Run built-in environment probes (docker binary, docker daemon, compose plugin, git/shell binaries, .dwe writable).`,
+		"env"))
 
 	// Checks (project-defined in workspace/validate.yml).
 	cmd.AddCommand(&cobra.Command{
@@ -254,28 +242,16 @@ Scope targets:
 	})
 
 	// Setup validator.
-	cmd.AddCommand(&cobra.Command{
-		Use:          "setup",
-		Short:        "Validate workspace/setup.yml schema and writes: paths",
-		Long:         `Check workspace/setup.yml for valid question definitions, identifier rules, and target scope constraints.`,
-		Args:         cobra.NoArgs,
-		SilenceUsage: true,
-		RunE: func(cmd *cobra.Command, args []string) error {
-			return runValidate(cmd, flags, strict, quiet, stage, false, []string{"setup"})
-		},
-	})
+	cmd.AddCommand(newValidateLeafCmd(flags, &strict, &quiet, &stage, "setup",
+		"Validate workspace/setup.yml schema and writes: paths",
+		`Check workspace/setup.yml for valid question definitions, identifier rules, and target scope constraints.`,
+		"setup"))
 
 	// Translation file validators (i18n domain).
-	cmd.AddCommand(&cobra.Command{
-		Use:          "translations",
-		Short:        "Validate translation files in workspace/i18n/",
-		Long:         `Check workspace/i18n/*.yml files for parse errors, orphan command/group IDs, and unknown render.* keys.`,
-		Args:         cobra.NoArgs,
-		SilenceUsage: true,
-		RunE: func(cmd *cobra.Command, args []string) error {
-			return runValidate(cmd, flags, strict, quiet, stage, false, []string{"i18n"})
-		},
-	})
+	cmd.AddCommand(newValidateLeafCmd(flags, &strict, &quiet, &stage, "translations",
+		"Validate translation files in workspace/i18n/",
+		`Check workspace/i18n/*.yml files for parse errors, orphan command/group IDs, and unknown render.* keys.`,
+		"i18n"))
 
 	// External linters (shellcheck, hadolint, generic).
 	cmd.AddCommand(&cobra.Command{
@@ -312,6 +288,23 @@ Scope targets:
 	cmd.AddCommand(snapshotCmd)
 
 	return cmd
+}
+
+// newValidateLeafCmd creates a single-scope validate leaf command (commands,
+// env, setup, translations) — each runs the validators for exactly one scope
+// with no positional args. scope is the validator-domain key (note that the
+// `translations` command maps to the "i18n" scope).
+func newValidateLeafCmd(flags *cmdctx.RootFlags, strict, quiet *bool, stage *string, use, short, long, scope string) *cobra.Command {
+	return &cobra.Command{
+		Use:          use,
+		Short:        short,
+		Long:         long,
+		Args:         cobra.NoArgs,
+		SilenceUsage: true,
+		RunE: func(cmd *cobra.Command, args []string) error {
+			return runValidate(cmd, flags, *strict, *quiet, *stage, false, []string{scope})
+		},
+	}
 }
 
 // newValidateConfigSubCmd creates a leaf command for a single config validator.

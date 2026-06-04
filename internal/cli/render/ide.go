@@ -84,14 +84,9 @@ the IDE collision-policy winner (deepest extends) is rendered. This means
 
 				// Emit warnings only for actionable skips; policy-based skips
 				// (service-disabled, ide-disabled, ide-policy) are expected and not reported.
-				for _, skip := range skipped {
-					switch skip.Reason {
-					case "empty-dir":
-						w.Warning(fmt.Sprintf("ide [%s] — skipped (service has no dir or dir is project root)", skip.Name))
-					case "lost-collision":
-						w.Warning(fmt.Sprintf("ide [%s] — skipped (dir %s rendered by %s)", skip.Name, skip.Dir, skip.Winner))
-					}
-				}
+				warnSelectionSkips(w, "ide", skipped, func(s ide.SkippedService) (string, string, string, string) {
+					return s.Reason, s.Name, s.Dir, s.Winner
+				})
 
 				if len(serviceNames) == 0 {
 					w.Info("no services match the IDE rendering policy")
@@ -154,24 +149,8 @@ func resolveIDEHubAnchor(name string, services map[string]config.ServiceConfig) 
 // Checks in priority order: not-found → disabled → no-dir → IDE policy.
 // Returns nil when the service is valid and renderable.
 func validateExplicitIDEArg(name string, services map[string]config.ServiceConfig) error {
-	svc, ok := services[name]
-	if !ok {
-		return fmt.Errorf("service %q not found in config", name)
-	}
-	if !svc.Enabled {
-		return fmt.Errorf("service %q is disabled at the project level", name)
-	}
-	if strings.TrimSpace(svc.Dir) == "" || filepath.Clean(svc.Dir) == "." {
-		return fmt.Errorf("service %q has no dir; cannot render IDE files", name)
-	}
-	enabled, explicit := svc.IDERenderEnabledExplicit()
-	if !enabled {
-		if explicit {
-			return fmt.Errorf("service %q has render.ide.enabled: false", name)
-		}
-		return fmt.Errorf("service %q (type: %s) does not participate in IDE rendering by default; set render.ide.enabled: true to opt in", name, svc.Type)
-	}
-	return nil
+	return validateExplicitRenderArg(name, services, "ide", "IDE files", "IDE rendering",
+		func(s config.ServiceConfig) (bool, bool) { return s.IDERenderEnabledExplicit() })
 }
 
 // renderIDEConfigs generates IDE config files for a single service using the
@@ -219,11 +198,7 @@ func renderIDEConfigs(projectRoot, name string, svc config.ServiceConfig, cfg *c
 		return err
 	}
 	if !found {
-		tried := strings.Join(ide.ImplicitPackCandidates(cfg.Services, name), ", ")
-		if tried == "" {
-			tried = "default"
-		}
-		w.Warning(fmt.Sprintf("ide [%s] — skipped (no template pack found; tried %s)", name, tried))
+		warnNoPack(w, "ide", cfg.Services, name)
 		return nil
 	}
 

@@ -85,14 +85,9 @@ parent 'main' identity for the shared hub.`,
 				// Emit warnings only for actionable skips; policy-based skips
 				// (service-disabled, ai-disabled, ai-policy) are expected and
 				// fall through the switch silently.
-				for _, skip := range skipped {
-					switch skip.Reason {
-					case "empty-dir":
-						w.Warning(fmt.Sprintf("ai [%s] — skipped (service has no dir or dir is project root)", skip.Name))
-					case "lost-collision":
-						w.Warning(fmt.Sprintf("ai [%s] — skipped (dir %s rendered by %s)", skip.Name, skip.Dir, skip.Winner))
-					}
-				}
+				warnSelectionSkips(w, "ai", skipped, func(s aipkg.SkippedService) (string, string, string, string) {
+					return s.Reason, s.Name, s.Dir, s.Winner
+				})
 
 				if len(serviceNames) == 0 {
 					w.Info("no services match the ai-docs rendering policy")
@@ -147,11 +142,7 @@ func renderAgentsForService(projectRoot, name string, svc config.ServiceConfig, 
 		return err
 	}
 	if !found {
-		tried := strings.Join(aipkg.ImplicitPackCandidates(cfg.Services, name), ", ")
-		if tried == "" {
-			tried = "default"
-		}
-		w.Warning(fmt.Sprintf("ai [%s] — skipped (no template pack found; tried %s)", name, tried))
+		warnNoPack(w, "ai", cfg.Services, name)
 		return nil
 	}
 
@@ -242,22 +233,6 @@ func resolveAIHubAnchor(name string, services map[string]config.ServiceConfig) s
 // Checks in priority order: not-found → disabled → no-dir → AI docs policy.
 // Returns nil when the service is valid and renderable.
 func validateExplicitAIArg(name string, services map[string]config.ServiceConfig) error {
-	svc, ok := services[name]
-	if !ok {
-		return fmt.Errorf("service %q not found in config", name)
-	}
-	if !svc.Enabled {
-		return fmt.Errorf("service %q is disabled at the project level", name)
-	}
-	if strings.TrimSpace(svc.Dir) == "" || filepath.Clean(svc.Dir) == "." {
-		return fmt.Errorf("service %q has no dir; cannot render agents docs", name)
-	}
-	enabled, explicit := svc.AIRenderEnabledExplicit()
-	if !enabled {
-		if explicit {
-			return fmt.Errorf("service %q has render.ai.enabled: false", name)
-		}
-		return fmt.Errorf("service %q (type: %s) does not participate in agents docs rendering by default; set render.ai.enabled: true to opt in", name, svc.Type)
-	}
-	return nil
+	return validateExplicitRenderArg(name, services, "ai", "agents docs", "agents docs rendering",
+		func(s config.ServiceConfig) (bool, bool) { return s.AIRenderEnabledExplicit() })
 }

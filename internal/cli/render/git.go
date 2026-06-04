@@ -4,7 +4,6 @@ import (
 	"fmt"
 	"path/filepath"
 	"sort"
-	"strings"
 
 	"github.com/semsemyonoff/dwe/internal/cli/cmdctx"
 	gitpkg "github.com/semsemyonoff/dwe/internal/core/execution/templates/git"
@@ -70,14 +69,9 @@ is rendered.`,
 				selected, skipped := gitpkg.SelectServices(cfg.Services)
 				serviceNames = selected
 
-				for _, skip := range skipped {
-					switch skip.Reason {
-					case "empty-dir":
-						w.Warning(fmt.Sprintf("git [%s] — skipped (service has no dir or dir is project root)", skip.Name))
-					case "lost-collision":
-						w.Warning(fmt.Sprintf("git [%s] — skipped (dir %s rendered by %s)", skip.Name, skip.Dir, skip.Winner))
-					}
-				}
+				warnSelectionSkips(w, "git", skipped, func(s gitpkg.SkippedService) (string, string, string, string) {
+					return s.Reason, s.Name, s.Dir, s.Winner
+				})
 
 				if len(serviceNames) == 0 {
 					w.Info("no services match the git-hook rendering policy")
@@ -99,24 +93,8 @@ is rendered.`,
 // validateExplicitGitArg validates the explicit service argument for
 // `dwe render git <service>`. Checks: not-found → disabled → no-dir → git policy.
 func validateExplicitGitArg(name string, services map[string]config.ServiceConfig) error {
-	svc, ok := services[name]
-	if !ok {
-		return fmt.Errorf("service %q not found in config", name)
-	}
-	if !svc.Enabled {
-		return fmt.Errorf("service %q is disabled at the project level", name)
-	}
-	if strings.TrimSpace(svc.Dir) == "" || filepath.Clean(svc.Dir) == "." {
-		return fmt.Errorf("service %q has no dir; cannot render git hooks", name)
-	}
-	enabled, explicit := svc.GitRenderEnabledExplicit()
-	if !enabled {
-		if explicit {
-			return fmt.Errorf("service %q has render.git.enabled: false", name)
-		}
-		return fmt.Errorf("service %q (type: %s) does not participate in git-hook rendering by default; set render.git.enabled: true to opt in", name, svc.Type)
-	}
-	return nil
+	return validateExplicitRenderArg(name, services, "git", "git hooks", "git-hook rendering",
+		func(s config.ServiceConfig) (bool, bool) { return s.GitRenderEnabledExplicit() })
 }
 
 // renderGitHooksForService renders all hooks for a single service.
@@ -164,11 +142,7 @@ func renderGitHooksForService(projectRoot, name string, svc config.ServiceConfig
 			return err
 		}
 		if !found {
-			tried := strings.Join(gitpkg.ImplicitPackCandidates(cfg.Services, name), ", ")
-			if tried == "" {
-				tried = "default"
-			}
-			w.Warning(fmt.Sprintf("git [%s] — skipped (no template pack found; tried %s)", name, tried))
+			warnNoPack(w, "git", cfg.Services, name)
 			return nil
 		}
 	}

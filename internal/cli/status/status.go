@@ -243,14 +243,42 @@ in the default view.`,
 	cmd.Flags().BoolVar(&noFlags.noGit, "no-git", false, "suppress the git workspace section")
 	cmd.Flags().BoolVar(&noFlags.noDaemons, "no-daemons", false, "suppress the daemons section")
 
-	cmd.AddCommand(newStatusAppsCmd(flags))
-	cmd.AddCommand(newStatusToolsCmd(flags))
-	cmd.AddCommand(newStatusInfraCmd(flags))
-	cmd.AddCommand(newStatusDaemonsCmd(flags))
+	cmd.AddCommand(newStatusSectionCmd(flags, "apps", "Show only the apps section", sectionApps, true))
+	cmd.AddCommand(newStatusSectionCmd(flags, "tools", "Show only the tools section", sectionTools, true))
+	cmd.AddCommand(newStatusSectionCmd(flags, "infra", "Show only the infra section", sectionInfra, true))
+	cmd.AddCommand(newStatusSectionCmd(flags, "daemons", "Show only the daemons section", sectionDaemons, false))
 	cmd.AddCommand(newStatusDeployCmd(flags))
-	cmd.AddCommand(newStatusTopologyCmd(flags))
-	cmd.AddCommand(newStatusGitCmd(flags))
+	cmd.AddCommand(newStatusSectionCmd(flags, "topology", "Show only the topology section", sectionTopology, false))
+	cmd.AddCommand(newStatusSectionCmd(flags, "git", "Show only the git workspace section", sectionGit, false))
 	return cmd
+}
+
+// newStatusSectionCmd builds a single-section status subcommand (apps, tools,
+// infra, daemons, topology, git). All six share the same load → JSON-or-text
+// dispatch; withPendingBanner selects whether the pending-ops banner is emitted
+// before the section body in text mode (the app/tool/infra sections show it,
+// the daemons/topology/git sections do not). Routing through renderSection keeps
+// the per-section formatting identical to the default orchestrator.
+func newStatusSectionCmd(flags *cmdctx.RootFlags, use, short string, sec section, withPendingBanner bool) *cobra.Command {
+	return &cobra.Command{
+		Use:          use,
+		Short:        short,
+		Args:         cobra.NoArgs,
+		SilenceUsage: true,
+		RunE: func(cmd *cobra.Command, args []string) error {
+			sc, err := loadStatusContext(flags, cmd.ErrOrStderr())
+			if err != nil {
+				return err
+			}
+			if flags.Output == "json" {
+				return renderStatusSectionJSON(cmd, sc, sec, flags)
+			}
+			if withPendingBanner && sc.State != nil {
+				writeNonEmpty(cmd.OutOrStdout(), render.PendingBanner(sc.State.Pending))
+			}
+			return renderSection(cmd.Context(), cmd.OutOrStdout(), cmd.ErrOrStderr(), sc.statusInput(), sc, sec)
+		},
+	}
 }
 
 func renderDefaultStatus(cmd *cobra.Command, sc *statusContext, no *noSectionFlags) error {

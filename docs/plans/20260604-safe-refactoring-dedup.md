@@ -265,13 +265,13 @@ Tasks are ordered **safest / highest-value first**: pure deletions and named-con
 - Modify: `internal/cli/render/{ai,ide,git}.go`; `internal/cli/status/{apps,tools,infra,daemons,topology,git}.go`; `internal/cli/validate/validate.go`
 - Modify: matching `*_test.go`
 
-- [ ] Unify the 3 `validateExplicit{AI,IDE,Git}Arg` funcs (`ai.go:244`; `ide.go:156`; `git.go:101`).
-- [ ] Extract `warnSelectionSkips` + `warnNoPack` in render ai/ide/git (`ai.go:88,149`; `ide.go:87,221`; `git.go:73,166`).
-- [ ] Collapse the 6 uniform status section subcommands into one helper (`status/apps.go:10`, `tools.go:10`, `infra.go:10`, `daemons.go:13`, `topology.go:9`, `git.go:9`) — pass section literals in.
-- [ ] Extract `newValidateLeafCmd` for the 4 single-scope validate leaves (`validate.go:217,229,257,269`).
-- [ ] ⚠️ DEFER: the render ai/ide/git RunE-skeleton merge (`ai.go:54`, `ide.go:55`, `git.go:48`) is `medium/medium` — do last or skip; if attempted, run full suite and review carefully.
-- [ ] Confirm status/render command tests unchanged.
-- [ ] `make test && make lint` — must pass.
+- [x] Unify the 3 `validateExplicit{AI,IDE,Git}Arg` funcs (`ai.go:244`; `ide.go:156`; `git.go:101`) — thin wrappers now delegate to `validateExplicitRenderArg` in new `render/common.go` (kind/no-dir-artifact/participates/accessor parameterized; message strings byte-identical). The `TestValidateExplicitIDEArg` table still passes against the wrapper.
+- [x] Extract `warnSelectionSkips` + `warnNoPack` in render ai/ide/git (`ai.go:88,149`; `ide.go:87,221`; `git.go:73,166`) — both live in `render/common.go`. `warnSelectionSkips` is generic over the per-kind `SkippedService` value with a `(reason,name,dir,winner)` extractor (the three types stay separate per the rejected-merge note); `warnNoPack` calls `packcommon.ImplicitPackCandidates` directly (identical output to the per-package aliases).
+- [x] Collapse the 6 uniform status section subcommands into one helper (`status/apps.go:10`, `tools.go:10`, `infra.go:10`, `daemons.go:13`, `topology.go:9`, `git.go:9`) — new `newStatusSectionCmd(flags, use, short, sec, withPendingBanner)` in `status.go`; the 6 per-file constructors deleted, registration updated. `withPendingBanner` preserves the apps/tools/infra-only pending banner.
+- [x] Extract `newValidateLeafCmd` for the 4 single-scope validate leaves (`validate.go:217,229,257,269`) — commands/env/setup/translations now built via the shared helper (scope key passed in; `translations`→`i18n` mapping preserved).
+- [x] ⚠️ DEFER: the render ai/ide/git RunE-skeleton merge (`ai.go:54`, `ide.go:55`, `git.go:48`) — intentionally NOT done (medium/medium, higher risk); left for a separate carefully-reviewed change per Post-Completion.
+- [x] Confirm status/render command tests unchanged — `cli/render`, `cli/status`, `cli/validate` suites all green, zero golden diffs.
+- [x] `make test && make lint` — must pass. (Both green.)
 
 ### Task 15: Extract local helpers in the service-toggle & snapshot command flows
 **Theme 8 — priority medium / effort medium / risk low.** Two items carry test-seam coupling — scope carefully.
