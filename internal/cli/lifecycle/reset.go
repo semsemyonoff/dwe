@@ -191,12 +191,9 @@ func resetRunCmd(cmd *cobra.Command, flags *cmdctx.RootFlags, yes bool, skipPref
 	}
 	defer releaseLocks()
 
-	dockerCfg, err := config.LoadDockerConfig(workDir, cfg)
+	dockerCfg, err := config.LoadDockerConfigOrEmpty(workDir, cfg)
 	if err != nil {
-		if !errors.Is(err, os.ErrNotExist) {
-			return fmt.Errorf("loading docker config: %w", err)
-		}
-		dockerCfg = &config.DockerConfig{}
+		return err
 	}
 
 	resetCfg, steps, defaulted, err := reset.LoadAndResolvePlan(cfg, reg)
@@ -359,12 +356,9 @@ func resetServiceRunCmd(cmd *cobra.Command, flags *cmdctx.RootFlags, name string
 
 	// Docker config is needed by the pipeline for any docker-related builtins
 	// (and is always present in opts so the executor doesn't need to nil-check).
-	dockerCfg, loadErr := config.LoadDockerConfig(baseDir, cfg)
-	if loadErr != nil {
-		if !errors.Is(loadErr, os.ErrNotExist) {
-			return fmt.Errorf("loading docker config: %w", loadErr)
-		}
-		dockerCfg = &config.DockerConfig{}
+	dockerCfg, err := config.LoadDockerConfigOrEmpty(baseDir, cfg)
+	if err != nil {
+		return err
 	}
 
 	// Assemble combined step list: synthetic baseline phases first, then any

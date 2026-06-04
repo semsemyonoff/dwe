@@ -384,12 +384,9 @@ func RunHelper(ctx context.Context, cmd *cobra.Command, flags *cmdctx.RootFlags,
 	}
 	defer releaseLocks()
 
-	dockerCfg, err := config.LoadDockerConfig(workDir, cfg)
+	dockerCfg, err := config.LoadDockerConfigOrEmpty(workDir, cfg)
 	if err != nil {
-		if !errors.Is(err, os.ErrNotExist) {
-			return fmt.Errorf("loading docker config: %w", err)
-		}
-		dockerCfg = &config.DockerConfig{}
+		return err
 	}
 	if err := docker.EnsureVolumes(dockerCfg.Resources, dockerCfg.ProjectName, "deploy", config.DockerBin(cfg), sharedrender.Stdout()); err != nil {
 		return fmt.Errorf("ensuring volumes: %w", err)

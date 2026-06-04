@@ -3,7 +3,6 @@ package shell
 import (
 	"errors"
 	"fmt"
-	"os"
 	"slices"
 	"strings"
 
@@ -131,12 +130,9 @@ dwe's own connection banners are suppressed so the child's stdout is untouched.`
 				return fmt.Errorf("loading config: %w", err)
 			}
 			baseDir := flags.ProjectRoot()
-			dockerCfg, err := config.LoadDockerConfig(baseDir, cfg)
+			dockerCfg, err := config.LoadDockerConfigOrEmpty(baseDir, cfg)
 			if err != nil {
-				if !errors.Is(err, os.ErrNotExist) {
-					return fmt.Errorf("loading docker config: %w", err)
-				}
-				dockerCfg = &config.DockerConfig{}
+				return err
 			}
 			compose := docker.NewCompose(cfg, dockerCfg, baseDir)
 

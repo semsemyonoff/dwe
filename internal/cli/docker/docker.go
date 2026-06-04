@@ -1,9 +1,7 @@
 package docker
 
 import (
-	"errors"
 	"fmt"
-	"os"
 	"slices"
 
 	"github.com/semsemyonoff/dwe/internal/cli/cmdctx"
@@ -56,12 +54,9 @@ func newDockerPipeline(flags *cmdctx.RootFlags, command string) (*dockerPipeline
 	}
 
 	baseDir := flags.ProjectRoot()
-	dockerCfg, err := config.LoadDockerConfig(baseDir, cfg)
+	dockerCfg, err := config.LoadDockerConfigOrEmpty(baseDir, cfg)
 	if err != nil {
-		if !errors.Is(err, os.ErrNotExist) {
-			return nil, fmt.Errorf("loading docker config: %w", err)
-		}
-		dockerCfg = &config.DockerConfig{}
+		return nil, err
 	}
 
 	// Auto-generate .env before these commands.
@@ -335,12 +330,9 @@ func newDockerProjectNameCmd(flags *cmdctx.RootFlags) *cobra.Command {
 			}
 
 			baseDir := flags.ProjectRoot()
-			dockerCfg, err := config.LoadDockerConfig(baseDir, cfg)
+			dockerCfg, err := config.LoadDockerConfigOrEmpty(baseDir, cfg)
 			if err != nil {
-				if !errors.Is(err, os.ErrNotExist) {
-					return fmt.Errorf("loading docker config: %w", err)
-				}
-				dockerCfg = &config.DockerConfig{}
+				return err
 			}
 
 			name := dockerCfg.ProjectName

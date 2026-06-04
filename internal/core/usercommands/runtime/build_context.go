@@ -1,9 +1,7 @@
 package runtime
 
 import (
-	"errors"
 	"fmt"
-	"os"
 
 	"github.com/semsemyonoff/dwe/internal/core/project/config"
 	"github.com/semsemyonoff/dwe/internal/core/usercommands/model"
@@ -98,12 +96,9 @@ func buildRunContext(
 	}
 
 	// Load docker config, tolerating missing file.
-	dockerCfg, err := config.LoadDockerConfig(workDir, cfg)
+	dockerCfg, err := config.LoadDockerConfigOrEmpty(workDir, cfg)
 	if err != nil {
-		if !errors.Is(err, os.ErrNotExist) {
-			return RunContext{}, fmt.Errorf("loading docker config: %w", err)
-		}
-		dockerCfg = &config.DockerConfig{}
+		return RunContext{}, err
 	}
 
 	// Return the populated context without IO fields.

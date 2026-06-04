@@ -117,12 +117,12 @@ Tasks are ordered **safest / highest-value first**: pure deletions and named-con
 - Modify: `internal/cli/deploy/deploy.go`; `internal/cli/lifecycle/reset.go`; `internal/cli/compose/compose.go`; `internal/cli/docker/docker.go`; `internal/cli/shell/shell.go`; `internal/core/usercommands/runtime/build_context.go`
 - Modify: `internal/core/project/config/docker_test.go`
 
-- [ ] Add `func LoadDockerConfigOrEmpty(baseDir string, cfg *DweConfig) (*DockerConfig, error)` next to `LoadDockerConfig`: returns `(&DockerConfig{}, nil)` on `os.ErrNotExist`, wrapped error otherwise.
-- [ ] Collapse sites: `deploy.go:392`, `reset.go:199,371`, `compose.go:54,119`, `docker.go:59,338`, `shell.go:134`, `build_context.go:101`.
-- [ ] Remove the now-orphaned `os` import in `compose.go`, `shell.go`, `docker.go` (only if no other `os.` use remains — verify with `rg`).
-- [ ] Leave `command/daemonset.go:108` inlined (returns a cobra directive, not an error) and the builtin `containers/*` nil-fallback untouched.
-- [ ] Write unit tests for `LoadDockerConfigOrEmpty` (missing file → empty, malformed → wrapped error).
-- [ ] `make test && make lint` — must pass.
+- [x] Add `func LoadDockerConfigOrEmpty(baseDir string, cfg *DweConfig) (*DockerConfig, error)` next to `LoadDockerConfig`: returns `(&DockerConfig{}, nil)` on `os.ErrNotExist`, wrapped error otherwise.
+- [x] Collapse sites: `deploy.go:392`, `reset.go:199,371`, `compose.go:54,119`, `docker.go:59,338`, `shell.go:134`, `build_context.go:101`.
+- [x] Remove the now-orphaned `os` import in `compose.go`, `shell.go`, `docker.go` (only if no other `os.` use remains — verify with `rg`). Also removed unused `errors` from `docker.go` and `build_context.go`.
+- [x] Leave `command/daemonset.go:108` inlined (returns a cobra directive, not an error) and the builtin `containers/*` nil-fallback untouched.
+- [x] Write unit tests for `LoadDockerConfigOrEmpty` (missing file → empty, malformed → wrapped error).
+- [x] `make test && make lint` — must pass. (Only pre-existing TestRussianTranslationsAreFresh failure in docs package, unrelated to this task.)
 
 ### Task 5: Extract reporter/recorder boilerplate in the pipeline executor & FileRecorder
 **Theme 6 — priority medium / effort small / risk none→low.** `files_gate` decision logic stays put; only reporting/recording tails collapse.

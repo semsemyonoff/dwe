@@ -92,6 +92,22 @@ type DockerArgs struct {
 	Build   []string `yaml:"build"`
 }
 
+// LoadDockerConfigOrEmpty loads Docker Compose execution policy like
+// LoadDockerConfig, but treats a missing docker.yml as an empty config instead
+// of an error. Returns (&DockerConfig{}, nil) when docker.yml does not exist,
+// and a wrapped error (with prefix "loading docker config: ") for any other
+// failure.
+func LoadDockerConfigOrEmpty(baseDir string, cfg *DweConfig) (*DockerConfig, error) {
+	dcfg, err := LoadDockerConfig(baseDir, cfg)
+	if err != nil {
+		if errors.Is(err, os.ErrNotExist) {
+			return &DockerConfig{}, nil
+		}
+		return nil, fmt.Errorf("loading docker config: %w", err)
+	}
+	return dcfg, nil
+}
+
 // LoadDockerConfig loads Docker Compose execution policy from
 // workspace/docker.yml (base) and workspace/docker.local.yml (optional overrides).
 // The project_name field is resolved as a ${...} template against cfg.Raw.

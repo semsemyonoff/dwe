@@ -3,6 +3,7 @@ package config
 import (
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 )
 
@@ -592,5 +593,55 @@ args:
 	}
 	if !slicesEqual(dcfg.Args.Down, []string{"--remove-orphans"}) {
 		t.Errorf("Down args = %v, want [--remove-orphans] (default applied)", dcfg.Args.Down)
+	}
+}
+
+// TestLoadDockerConfigOrEmpty_MissingFile verifies that a missing docker.yml
+// returns an empty DockerConfig and nil error (not an os.ErrNotExist error).
+func TestLoadDockerConfigOrEmpty_MissingFile(t *testing.T) {
+	dir := t.TempDir()
+	// Create workspace dir but no docker.yml
+	if err := os.MkdirAll(filepath.Join(dir, "workspace"), 0755); err != nil {
+		t.Fatalf("mkdir workspace/: %v", err)
+	}
+	cfg := &DweConfig{Raw: map[string]any{}}
+
+	dcfg, err := LoadDockerConfigOrEmpty(dir, cfg)
+	if err != nil {
+		t.Fatalf("LoadDockerConfigOrEmpty missing file: want nil error, got %v", err)
+	}
+	if dcfg == nil {
+		t.Fatal("LoadDockerConfigOrEmpty: want non-nil DockerConfig, got nil")
+	}
+	// Returned config should be zero-value (empty project name, no args)
+	if dcfg.ProjectName != "" {
+		t.Errorf("ProjectName = %q, want empty", dcfg.ProjectName)
+	}
+	if len(dcfg.Args.Up) != 0 {
+		t.Errorf("Args.Up = %v, want empty", dcfg.Args.Up)
+	}
+}
+
+// TestLoadDockerConfigOrEmpty_MalformedYAML verifies that a malformed docker.yml
+// returns an error with the "loading docker config:" prefix.
+func TestLoadDockerConfigOrEmpty_MalformedYAML(t *testing.T) {
+	dir := t.TempDir()
+	workspaceDir := filepath.Join(dir, "workspace")
+	if err := os.MkdirAll(workspaceDir, 0755); err != nil {
+		t.Fatalf("mkdir workspace/: %v", err)
+	}
+	// Write invalid YAML (tabs are not allowed as indentation in YAML)
+	malformed := "project_name: ok\nargs:\n\tup: [bad"
+	if err := os.WriteFile(filepath.Join(workspaceDir, "docker.yml"), []byte(malformed), 0644); err != nil {
+		t.Fatalf("write docker.yml: %v", err)
+	}
+	cfg := &DweConfig{Raw: map[string]any{}}
+
+	_, err := LoadDockerConfigOrEmpty(dir, cfg)
+	if err == nil {
+		t.Fatal("LoadDockerConfigOrEmpty malformed YAML: want error, got nil")
+	}
+	if !strings.Contains(err.Error(), "loading docker config:") {
+		t.Errorf("error %q does not contain %q", err.Error(), "loading docker config:")
 	}
 }
