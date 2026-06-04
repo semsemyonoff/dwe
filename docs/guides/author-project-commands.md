@@ -1,6 +1,6 @@
 # Authoring project commands
 
-Your project keeps growing a longer README of incantations: "run this to seed the DB", "run this to rebuild the front-end", "run this when the queue is misbehaving". This guide walks through replacing those snippets with first-class `dwe <id>` commands the whole team can discover via `dwe commands`, run with `dwe cmd <id>`, and compose into larger workflows.
+Your project's README keeps accumulating copy-paste command snippets: "run this to seed the DB", "run this to rebuild the front-end", "run this when the queue is misbehaving". This guide walks through replacing those snippets with first-class `dwe <id>` commands the whole team can discover via `dwe commands`, run with `dwe cmd <id>`, and compose into larger workflows.
 
 The full schema lives in [`../reference/config/commands/index.md`](../reference/config/commands/index.md); this page covers the three types you will reach for most often (`shell`, `service_exec`, `workflow`) and the directives that make them safe to ship.
 

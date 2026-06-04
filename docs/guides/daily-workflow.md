@@ -1,6 +1,24 @@
 # Daily Workflow
 
-After [joining a project](joining-a-project.md) and getting a green first deploy, your day-to-day with DWE settles into a small handful of commands. This guide walks through them in roughly the order you'll reach for them: check status, toggle services, drop into a shell, run a project command, tail logs, stop or restart.
+After [joining a project](joining-a-project.md) and getting a green first deploy, your day-to-day with DWE settles into a small handful of commands. This guide walks through them in roughly the order you'll reach for them: bring the stack up, check status, toggle services, drop into a shell, run a project command, tail logs, stop or restart.
+
+## Bringing the stack up
+
+The first thing each day is to start the stack:
+
+```shell
+dwe run
+```
+
+This starts every enabled service via Docker Compose, wrapping the `docker up` + health-wait sequence with an optional git update probe and any before/after-run hooks. A deploy produces a known-good state on disk; `dwe run` is what actually brings the containers up.
+
+`dwe run` gates on a green deploy: if a tracked service has never been deployed, it stops with "run `dwe deploy run` first" rather than starting against a half-provisioned environment. To skip the git update probe:
+
+```shell
+dwe run --no-update
+```
+
+`dwe stop` and `dwe restart` are the bookends — covered in [stop and restart](#stop-and-restart) below.
 
 ## Quick status
 

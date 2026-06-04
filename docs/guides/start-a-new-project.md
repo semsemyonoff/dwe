@@ -8,9 +8,8 @@ This is the mirror image of [Joining a DWE project](joining-a-project.md): that 
 
 `dwe init` is the only DWE command that runs **outside** a project — it creates one rather than acting inside one. It is:
 
-- **Opinionated but inert.** It writes a real, working starter (one active `app` service, the built-in deploy/lifecycle pipelines) plus a set of commented override files you can grow into. Nothing it ships is half-configured.
+- **A skeleton to configure, not a running stack.** It writes a minimal but valid project structure — `workspace.yml`, `workspace/defaults.yml`, one enabled `app` service stub (just `type` + `container`), a base `compose.yaml`, and a set of commented override files. You fill in the real service config — image or build, ports, hosts — from there. The override files ship fully commented, so the built-in deploy/lifecycle defaults stay in effect until you deliberately take one over.
 - **Safe to re-run.** On a directory with no `workspace.yml` it fills gaps and never overwrites an existing file unless you pass `--force`. If a project already exists there, it refuses to clobber it silently: interactively it asks you to confirm a recreate, and non-interactively it stops unless `--force` is passed.
-- **Quiet about machine state.** There is no project yet, so it runs no preflight and takes no locks. It only touches the filesystem.
 
 ## Interactive run
 
@@ -102,10 +101,15 @@ Two things are worth understanding:
 
 ```shell
 dwe validate     # confirm the fresh project is internally consistent
-dwe deploy run   # bring the starter stack up
 ```
 
-A fresh `dwe init` is designed to validate clean immediately. From here, the usual authoring path applies: [add a service](add-a-service.md), [author project commands](author-project-commands.md), [brand the dashboard](brand-your-project.md), and uncomment an override file when you genuinely need to reshape a pipeline.
+A fresh `dwe init` is designed to validate clean immediately. The scaffolded `app` service is only a stub (`type` + `container`), so configure it — image or build, ports, hosts — in `workspace/services/app/service.yml` before bringing the stack up:
+
+```shell
+dwe deploy run   # bring the configured stack up
+```
+
+From there the usual authoring path applies: [add a service](add-a-service.md), [author project commands](author-project-commands.md), [brand the dashboard](brand-your-project.md), and uncomment an override file when you genuinely need to reshape a pipeline.
 
 ## Edge cases
 
