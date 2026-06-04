@@ -175,11 +175,11 @@ Tasks are ordered **safest / highest-value first**: pure deletions and named-con
 - Modify: `internal/core/execution/templates/ai/ai.go`, `ide/ide.go`, `git/git.go`
 - Modify: matching `*_test.go`
 
-- [ ] Extract the extends-walk trio (`ImplicitPackCandidates`/`ExtendsDepth`/`ExtendsRoot` + the 9×-duplicated `const maxDepth = 32`) into one shared leaf package (`ai.go:74,106,126`; `ide.go:45,77,97`; `git.go:50,80,100`).
-- [ ] Extract the identical `TemplateData` struct + `AppServices/ToolServices/InfraServices` + `filterServices` to a shared type; keep call sites compiling via type aliases (`ai.go:240`; `ide.go:312`; `git.go:355`).
-- [ ] Collapse `DryRunRender`/`executeTemplateInMemory` (differ only by the kind literal) — `ai.go:279,295`; `ide.go:351,367`; `git.go:394,410`.
-- [ ] Confirm render golden tests for all three packs unchanged.
-- [ ] `make test && make lint` — must pass.
+- [x] Extract the extends-walk trio (`ImplicitPackCandidates`/`ExtendsDepth`/`ExtendsRoot` + the 9×-duplicated `const maxDepth = 32`) into one shared leaf package (new `internal/core/execution/templates/packcommon/`; ai/ide/git keep backward-compatible `var` aliases for the external callers in `cli/render` and `validate/templates`).
+- [x] Extract the identical `TemplateData` struct + `AppServices/ToolServices/InfraServices` + `filterServices` to a shared type; keep call sites compiling via type aliases (`type TemplateData = packcommon.TemplateData` in all three packages).
+- [x] Collapse `DryRunRender`/`executeTemplateInMemory` (differ only by the kind literal) — per-package `DryRunRender` now delegates to `packcommon.DryRunRender(kind, …)`.
+- [x] Confirm render golden tests for all three packs unchanged.
+- [x] `make test && make lint` — must pass.
 
 ### Task 9: Collapse lifecycle & snapshot workflow boilerplate
 **Theme 11 — priority medium / effort small / risk low.** Preflight/lock ordering and journal semantics preserved; run/stop keep their regErr-vs-lock asymmetry per-file.

@@ -17,6 +17,7 @@ import (
 	"text/template"
 
 	"github.com/semsemyonoff/dwe/internal/core/execution/templates/manifest"
+	"github.com/semsemyonoff/dwe/internal/core/execution/templates/packcommon"
 	"github.com/semsemyonoff/dwe/internal/core/execution/templates/packroot"
 	"github.com/semsemyonoff/dwe/internal/core/project/config"
 	"github.com/semsemyonoff/dwe/internal/shared/pathsafe"
@@ -44,71 +45,16 @@ const (
 )
 
 // ImplicitPackCandidates returns the implicit-chain pack name candidates for a
-// service: the service name, then each ancestor walked via Extends (in order),
-// then "default". Duplicates and names that fail manifest.ValidatePackName are
-// skipped silently. The 32-hop cycle guard mirrors ExtendsDepth.
-func ImplicitPackCandidates(services map[string]config.ServiceConfig, serviceName string) []string {
-	const maxDepth = 32
-	var out []string
-	seen := make(map[string]bool)
-	add := func(name string) {
-		if name == "" || seen[name] {
-			return
-		}
-		if manifest.ValidatePackName(name) != nil {
-			return
-		}
-		out = append(out, name)
-		seen[name] = true
-	}
-
-	add(serviceName)
-	current := serviceName
-	for range maxDepth {
-		svc, ok := services[current]
-		if !ok || svc.Extends == "" {
-			break
-		}
-		current = svc.Extends
-		add(current)
-	}
-	add("default")
-	return out
-}
+// service. See packcommon.ImplicitPackCandidates.
+var ImplicitPackCandidates = packcommon.ImplicitPackCandidates
 
 // ExtendsDepth computes the depth of a service's extends chain.
-func ExtendsDepth(services map[string]config.ServiceConfig, name string) (int, bool) {
-	const maxDepth = 32
-	depth := 0
-	current := name
-	for {
-		if depth >= maxDepth {
-			return maxDepth, true
-		}
-		svc, ok := services[current]
-		if !ok || svc.Extends == "" {
-			return depth, false
-		}
-		current = svc.Extends
-		depth++
-	}
-}
+// See packcommon.ExtendsDepth.
+var ExtendsDepth = packcommon.ExtendsDepth
 
-// ExtendsRoot walks the extends chain from name and returns the chain root
-// (first ancestor with empty Extends). Returns name itself when the service
-// has no extends or is unknown. The 32-hop cycle guard mirrors ExtendsDepth.
-func ExtendsRoot(services map[string]config.ServiceConfig, name string) string {
-	const maxDepth = 32
-	current := name
-	for range maxDepth {
-		svc, ok := services[current]
-		if !ok || svc.Extends == "" {
-			return current
-		}
-		current = svc.Extends
-	}
-	return current
-}
+// ExtendsRoot walks the extends chain from name and returns the chain root.
+// See packcommon.ExtendsRoot.
+var ExtendsRoot = packcommon.ExtendsRoot
 
 // ResolveTemplatePack resolves a git template pack directory for a service.
 // Returns (packDir, packName, found, err). Explicit svc.Render.Git.Template is strict.
@@ -344,87 +290,15 @@ func ValidateManifest(m *manifest.File, projectRoot, packName, destRoot string, 
 	return manifest.ValidateSourcesWith(m, resolve, s, label)
 }
 
-// TemplateData is passed to git-hook templates.
-//
-// Service is the canonical config identity (root of the extends chain) — use
-// it for raw-config lookups keyed by service name (e.g. `(index .Cfg.Raw.git.hooks .Service)`).
-// Resolved is the actual rendering service (the deepest-extends collision
-// winner) and equals Service when the rendering service has no extends chain.
-// ServiceCfg is the merged service block of the rendering service (Resolved),
-// so fields like .ServiceCfg.Container reflect the extender's overlay.
-type TemplateData struct {
-	Project    config.ProjectConfig
-	Service    string
-	Resolved   string
-	ServiceCfg config.ServiceConfig
-	Runtime    config.RuntimeConfig
-	Services   map[string]config.ServiceConfig
-	Cfg        *config.DweConfig
-}
-
-// AppServices returns services whose Type is "app".
-func (d TemplateData) AppServices() map[string]config.ServiceConfig {
-	return filterServices(d.Services, config.ServiceTypeApp)
-}
-
-// ToolServices returns services whose Type is "tool".
-func (d TemplateData) ToolServices() map[string]config.ServiceConfig {
-	return filterServices(d.Services, config.ServiceTypeTool)
-}
-
-// InfraServices returns services whose Type is "infra".
-func (d TemplateData) InfraServices() map[string]config.ServiceConfig {
-	return filterServices(d.Services, config.ServiceTypeInfra)
-}
-
-func filterServices(svcs map[string]config.ServiceConfig, t config.ServiceType) map[string]config.ServiceConfig {
-	out := make(map[string]config.ServiceConfig, len(svcs))
-	for name, svc := range svcs {
-		if svc.Type == t {
-			out[name] = svc
-		}
-	}
-	return out
-}
+// TemplateData is passed to git-hook templates. Alias to the shared schema.
+type TemplateData = packcommon.TemplateData
 
 // DryRunRender resolves, parses, and executes every render entry in m against
 // data without writing to disk. Returns a map from manifest `from` path to the
 // first error encountered for that entry (parse, source-read, or execution
 // errors — typically missingkey=error). On success returns nil.
 func DryRunRender(projectRoot, packName string, m *manifest.File, data TemplateData) map[string]error {
-	if m == nil || data.Cfg == nil {
-		return nil
-	}
-	var failures map[string]error
-	for _, entry := range m.Render {
-		if err := executeTemplateInMemory(projectRoot, packName, entry.From, data); err != nil {
-			if failures == nil {
-				failures = make(map[string]error)
-			}
-			failures[entry.From] = err
-		}
-	}
-	return failures
-}
-
-func executeTemplateInMemory(projectRoot, packName, rel string, data TemplateData) error {
-	sourcePath, _, err := packroot.Resolve(projectRoot, "git", packName, rel)
-	if err != nil {
-		return fmt.Errorf("resolve template %s: %w", rel, err)
-	}
-	tplBytes, err := os.ReadFile(sourcePath)
-	if err != nil {
-		return fmt.Errorf("read template %s: %w", sourcePath, err)
-	}
-	name := filepath.Base(sourcePath)
-	t, err := template.New(name).Option("missingkey=error").Parse(string(tplBytes))
-	if err != nil {
-		return fmt.Errorf("parse template %s: %w", name, err)
-	}
-	if err := t.Execute(&bytes.Buffer{}, data); err != nil {
-		return fmt.Errorf("render template %s: %w", name, err)
-	}
-	return nil
+	return packcommon.DryRunRender("git", projectRoot, packName, m, data)
 }
 
 // Context carries the inputs for rendering all hooks for one service.
