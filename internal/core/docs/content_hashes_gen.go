@@ -8,9 +8,12 @@ package docs
 var ContentHashes = map[string]string{
 	"README.md":                                "45ca88e32b0c",
 	"guides/add-a-service.md":                  "de5f1af8b48b",
+	"guides/author-project-commands.md":        "3f1bb72f6c19",
+	"guides/background-daemons.md":             "cbd42c65deb0",
 	"guides/daily-workflow.md":                 "d6776417ac0f",
 	"guides/index.md":                          "10d8990cc235",
 	"guides/joining-a-project.md":              "e16e4503323f",
+	"guides/preflight-checks.md":               "0ac09d8b4b04",
 	"guides/starship.md":                       "154d2eb5680a",
 	"guides/switching-tasks-with-snapshots.md": "83b43f46c197",
 	"guides/troubleshooting.md":                "98c9915902f3",

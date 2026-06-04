@@ -279,16 +279,16 @@ Several guides touch the same commands (`dwe logs`, `dwe status`, `dwe info`). T
 **Files:**
 - Create: `docs/guides/preflight-checks.md`
 
-- [ ] write H1 + intro framing "fail fast, with a useful message"
-- [ ] section: built-in `env.*` probes (docker bin, docker daemon, docker compose, git, shell, project perms, ports free)
-- [ ] section: declaring a check in `workspace/validate.yml` (`type: builtin` vs `type: command`)
-- [ ] section: built-in check kinds — `shell`, `file_exists`, `executable_in_path`, `env_keys_present`, `tcp_reachable`
-- [ ] section: `stages:` (deploy / run / stop / command) — what triggers each
-- [ ] section: `services:` gating — OR over enabled services
-- [ ] section: `severity:` (error / warning / info) + `--strict` flag
-- [ ] section: optional linters block (shellcheck / hadolint)
-- [ ] section: standalone invocation — `dwe validate checks <id>`
-- [ ] verify rendering
+- [x] write H1 + intro framing "fail fast, with a useful message"
+- [x] section: built-in `env.*` probes (docker bin, docker daemon, docker compose, git, shell, project perms, ports free)
+- [x] section: declaring a check in `workspace/validate.yml` (`type: builtin` vs `type: command`)
+- [x] section: built-in check kinds — `shell`, `file_exists`, `executable_in_path`, `env_keys_present`, `tcp_reachable`
+- [x] section: `stages:` (deploy / run / stop / command) — what triggers each
+- [x] section: `services:` gating — OR over enabled services
+- [x] section: `severity:` (error / warning / info) + `--strict` flag
+- [x] section: optional linters block (shellcheck / hadolint)
+- [x] section: standalone invocation — `dwe validate checks <id>`
+- [x] verify rendering
 
 ### Task 9: EN guide — `shared-ide-and-agent-config.md`
 
