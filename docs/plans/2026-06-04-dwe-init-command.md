@@ -195,17 +195,17 @@ subdir entries.
 - Create: `internal/core/workflow/scaffold/templates.go` (`go:embed`, walker, renderer)
 - Create: `internal/core/workflow/scaffold/templates_test.go`
 
-- [ ] define `Options` and `Result` structs in `scaffold.go`
-- [ ] add `//go:embed templates` FS and a `renderPlan(opts) (map[string][]byte, error)` that
+- [x] define `Options` and `Result` structs in `scaffold.go`
+- [x] add `//go:embed templates` FS and a `renderPlan(opts) (map[string][]byte, error)` that
       walks the FS: `.tmpl` → `text/template` with `Delims("[[", "]]")` (strip suffix), else verbatim
-- [ ] map embedded path → output path (e.g. `templates/dot-gitignore.tmpl` → `.gitignore`,
+- [x] map embedded path → output path (e.g. `templates/dot-gitignore.tmpl` → `.gitignore`,
       `templates/dot-dwe/config` → `.dwe/config`) so embed can carry dotfiles —
       **`go:embed` excludes `.`/`_`-prefixed names; use the `dot-` rename, NOT `all:`**
       (`all:` would also pull in `_`-prefixed files and editor junk)
-- [ ] write tests: a `.tmpl` renders with `[[ .Name ]]`/`[[ .Prefix ]]` substitution
-- [ ] write tests: a verbatim file containing literal `{{ .Project.Name }}` is copied unchanged
-- [ ] write tests: unknown template key / parse error surfaces an error
-- [ ] run tests — must pass before Task 2
+- [x] write tests: a `.tmpl` renders with `[[ .Name ]]`/`[[ .Prefix ]]` substitution
+- [x] write tests: a verbatim file containing literal `{{ .Project.Name }}` is copied unchanged
+- [x] write tests: unknown template key / parse error surfaces an error
+- [x] run tests — must pass before Task 2
 
 ### Task 2: Atomic file writer with skip/force semantics
 

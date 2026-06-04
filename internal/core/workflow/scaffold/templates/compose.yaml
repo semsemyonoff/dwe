@@ -1,0 +1,8 @@
+# Base compose file for this DWE project.
+#
+# DWE merges this base with per-service compose overlays it generates from
+# workspace/services/<name>/service.yml. Add project-wide compose configuration
+# here (named volumes, networks, shared settings); per-service containers are
+# managed by DWE and normally do not need a hand-written entry.
+#
+# Referenced from workspace/defaults.yml as `compose.base: compose.yaml`.
