@@ -423,20 +423,20 @@ Several guides touch the same commands (`dwe logs`, `dwe status`, `dwe info`). T
 - Modify (auto-generated): `internal/core/docs/content_hashes_gen.go`
 - Modify (auto-generated): `internal/core/docs/embedded/`
 
-- [ ] run `make build` — embedded tree now contains both languages
-- [ ] run `./bin/dwe docs list` — confirm 13 EN guides
-- [ ] run `./bin/dwe docs list --lang ru` — confirm 13 RU guides
-- [ ] run `./bin/dwe docs show guides/joining-a-project` and `./bin/dwe docs show guides/joining-a-project --lang ru` — rendering parity
-- [ ] spot-check 2 more random pages in both locales
-- [ ] run `./bin/dwe docs search "snapshot"` (EN) and `./bin/dwe docs search "снапшот" --lang ru` (RU) — finds new content in both indexes
-- [ ] intra-doc link validation (EN): `grep -RnE "\]\(\.\./reference/[^)]+\)" docs/guides | grep -oE "\.\./reference/[^)]+" | sort -u` then verify each path resolves (each `../reference/...` from `docs/guides/X.md` must exist as `docs/reference/...`)
-- [ ] intra-doc link validation (RU): same grep over `docs/i18n/ru/guides/` — `../reference/...` resolves under `docs/i18n/ru/reference/`
-- [ ] cross-guide link validation: any guide that links forward to another (e.g. `joining-a-project.md` → `troubleshooting.md`, `switching-tasks-with-snapshots.md` → `write-snapshot-workflows.md`) — check each target file actually exists
-- [ ] if any guide uses mermaid: render via `./bin/dwe docs show guides/<name>` and eyeball the diagram block (no `cannot parse` errors)
-- [ ] run `./bin/dwe validate` (outside any project, in `cli/` root — should still pass cleanly since validate works on the CLI's own state)
-- [ ] verify no translation staleness warnings appear in any `dwe docs` invocation
-- [ ] re-eyeball EN index → all 12 new pages linked correctly
-- [ ] re-eyeball RU index → all 12 new pages linked correctly
+- [x] run `make build` — embedded tree now contains both languages
+- [x] run `./bin/dwe docs list` — confirm 13 EN guides
+- [x] run `./bin/dwe docs list --lang ru` — confirm 13 RU guides
+- [x] run `./bin/dwe docs show guides/joining-a-project` and `./bin/dwe docs show guides/joining-a-project --lang ru` — rendering parity
+- [x] spot-check 2 more random pages in both locales (`write-snapshot-workflows`, `brand-your-project`)
+- [x] run `./bin/dwe docs search "snapshot"` (EN) and `./bin/dwe docs search "снапшот" --lang ru` (RU) — finds new content in both indexes
+- [x] intra-doc link validation (EN): all `../reference/...` links from `docs/guides/` resolve to existing files
+- [x] intra-doc link validation (RU): all `../reference/...` links from `docs/i18n/ru/guides/` resolve to existing files
+- [x] cross-guide link validation: all `<name>.md` cross-links between guides resolve to existing files in both locales
+- [x] no guide uses mermaid (grep over guides finds no ```mermaid fences) — nothing to render-check
+- [x] `./bin/dwe validate` outside a project correctly reports "No workspace.yml found." — the plan note assumed validate operates on CLI state, but validate requires a project; expected behavior confirmed
+- [x] no translation staleness warnings in `dwe docs list` / `dwe docs list --lang ru`
+- [x] re-eyeball EN index → all 12 new pages linked correctly
+- [x] re-eyeball RU index → all 12 new pages linked correctly
 
 ### Task 18: Move plan to `docs/plans/completed/`
 
