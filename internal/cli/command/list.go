@@ -135,7 +135,7 @@ Use --all to include private commands.`,
 			if flags.Output == "json" {
 				translator := i18n.TranslatorOrNop(flags.I18n)
 				data := buildCommandsListJSON(reg, groupFilter, showAll, translator, flags.Locale)
-				return cmdctx.WriteData(flags, cmd, data, func(commandsListJSON) string { return "" })
+				return cmdctx.WriteJSON(flags, cmd, data)
 			}
 			root := reg.Groups()
 			nodes := buildTreeNodes(root, groupFilter, showAll, i18n.TranslatorOrNop(flags.I18n), flags.Locale)

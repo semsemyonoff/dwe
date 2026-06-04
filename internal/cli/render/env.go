@@ -35,9 +35,9 @@ Output goes to stdout by default; use --out to write directly to a file.`,
 }
 
 func runRenderEnv(flags *cmdctx.RootFlags, outputPath string) error {
-	cfg, err := config.LoadConfig(flags.ConfigPath)
+	cfg, err := config.LoadConfigOrWrap(flags.ConfigPath)
 	if err != nil {
-		return fmt.Errorf("loading config: %w", err)
+		return err
 	}
 
 	if outputPath == "" {

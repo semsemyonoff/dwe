@@ -82,12 +82,19 @@ func renderTypeSection(in StatusInput, t config.ServiceType, title string, withD
 			rows[i].Extras = cells
 		}
 	}
+	return wrapSection(title, render.ServicesTable(rows, extraCols, withDirCol)), errs
+}
+
+// wrapSection renders a status section as a SectionTitle line followed by the
+// body, each terminated with a newline. It is the shared envelope used by the
+// services / topology / deploy / daemons section renderers.
+func wrapSection(title, body string) string {
 	var b strings.Builder
 	b.WriteString(render.SectionTitle(title))
 	b.WriteByte('\n')
-	b.WriteString(render.ServicesTable(rows, extraCols, withDirCol))
+	b.WriteString(body)
 	b.WriteByte('\n')
-	return b.String(), errs
+	return b.String()
 }
 
 // RenderTopology returns the Topology section, or an empty string when
@@ -101,12 +108,7 @@ func RenderTopology(in StatusInput) string {
 	if rendered == "" {
 		return ""
 	}
-	var b strings.Builder
-	b.WriteString(render.SectionTitle("Topology"))
-	b.WriteByte('\n')
-	b.WriteString(rendered)
-	b.WriteByte('\n')
-	return b.String()
+	return wrapSection("Topology", rendered)
 }
 
 // buildServiceTemplateData prepares the template data map for a service row's

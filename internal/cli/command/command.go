@@ -99,7 +99,7 @@ Without an id, an interactive selector lists public commands. With a group prefi
 					}
 					translator := i18n.TranslatorOrNop(flags.I18n)
 					data := buildCommandInspectJSON(def, translator, flags.Locale)
-					return cmdctx.WriteData(flags, cmd, data, func(commandInspectJSON) string { return "" })
+					return cmdctx.WriteJSON(flags, cmd, data)
 				}
 				return runCommandByID(
 					cmd.Context(),

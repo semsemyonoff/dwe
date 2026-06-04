@@ -80,9 +80,9 @@ func runSnapshotRestore(cmd *cobra.Command, flags *cmdctx.RootFlags, name string
 		return err
 	}
 
-	cfg, err := config.LoadConfig(flags.ConfigPath)
+	cfg, err := config.LoadConfigOrWrap(flags.ConfigPath)
 	if err != nil {
-		return fmt.Errorf("loading config: %w", err)
+		return err
 	}
 
 	snapCfg, err := loadSnapshotConfigOrNil(baseDir)

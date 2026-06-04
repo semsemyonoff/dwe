@@ -83,9 +83,9 @@ func runDeployMenu(cmd *cobra.Command, flags *cmdctx.RootFlags) error {
 	localPath := filepath.Join(baseDir, "workspace", "local.yml")
 	setupPath := filepath.Join(baseDir, "workspace", "setup.yml")
 
-	cfg, err := config.LoadConfig(flags.ConfigPath)
+	cfg, err := config.LoadConfigOrWrap(flags.ConfigPath)
 	if err != nil {
-		return fmt.Errorf("loading config: %w", err)
+		return err
 	}
 
 	existing, err := localpkg.LoadLocalYAML(localPath)

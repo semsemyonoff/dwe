@@ -52,9 +52,9 @@ parent 'main' identity for the shared hub.`,
 		SilenceUsage:      true,
 		ValidArgsFunction: cmdctx.ServiceNameCompletion(flags),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			cfg, err := config.LoadConfig(flags.ConfigPath)
+			cfg, err := config.LoadConfigOrWrap(flags.ConfigPath)
 			if err != nil {
-				return fmt.Errorf("loading config: %w", err)
+				return err
 			}
 
 			projectRoot := flags.ProjectRoot()

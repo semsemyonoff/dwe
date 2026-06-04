@@ -90,6 +90,13 @@ func WriteData[T any](flags *RootFlags, cmd *cobra.Command, data T, renderText f
 	return err
 }
 
+// WriteJSON emits data as JSON when --output json is set and writes nothing in
+// text mode. Use it for JSON-only payloads that have no text representation
+// (it is WriteData with an empty text renderer).
+func WriteJSON[T any](flags *RootFlags, cmd *cobra.Command, data T) error {
+	return WriteData(flags, cmd, data, func(T) string { return "" })
+}
+
 // WriteError writes a JSON error envelope to stderr when in JSON mode.
 // In text mode it is a no-op (fang's default error handler takes care of it).
 func WriteError(flags *RootFlags, cmd *cobra.Command, err error) {

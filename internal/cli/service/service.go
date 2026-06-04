@@ -19,6 +19,14 @@ import (
 	"github.com/spf13/cobra"
 )
 
+// addToggleFlags wires the shared --apply / --print-plan / --skip-hooks flags
+// onto a services toggle command (the interactive root plus enable/disable).
+func addToggleFlags(cmd *cobra.Command, apply, printPlan, skipHooks *bool) {
+	cmd.Flags().BoolVar(apply, "apply", false, "execute the plan non-interactively after writing local.yml")
+	cmd.Flags().BoolVar(printPlan, "print-plan", false, "preview what would happen without making any changes")
+	cmd.Flags().BoolVar(skipHooks, "skip-hooks", false, "skip before/after hook commands when applying")
+}
+
 // NewCmd builds the `dwe services` command tree: bare-form opens a
 // multi-select toggle; subcommands enable / disable handle individual services.
 func NewCmd(groupID string, flags *cmdctx.RootFlags) *cobra.Command {
@@ -57,9 +65,7 @@ state, and daemons, run 'dwe status'.`,
 			})
 		},
 	}
-	cmd.Flags().BoolVar(&apply, "apply", false, "execute the plan non-interactively after writing local.yml")
-	cmd.Flags().BoolVar(&printPlan, "print-plan", false, "preview what would happen without making any changes")
-	cmd.Flags().BoolVar(&skipHooks, "skip-hooks", false, "skip before/after hook commands when applying")
+	addToggleFlags(cmd, &apply, &printPlan, &skipHooks)
 	cmd.AddCommand(newServiceEnableCmd(flags))
 	cmd.AddCommand(newServiceDisableCmd(flags))
 	return cmd
@@ -73,9 +79,9 @@ func runServicesToggle(cmd *cobra.Command, flags *cmdctx.RootFlags, opts singleT
 		return runServicesList(cmd, flags)
 	}
 
-	cfg, err := config.LoadConfig(flags.ConfigPath)
+	cfg, err := config.LoadConfigOrWrap(flags.ConfigPath)
 	if err != nil {
-		return fmt.Errorf("loading config: %w", err)
+		return err
 	}
 
 	rows := services.BuildRows(cfg)
@@ -265,26 +271,28 @@ type selectToggleFn func(title string, items []widgets.SelectorItem) (int, error
 var defaultSelectToggle selectToggleFn = widgets.RunSelector
 
 // pickServiceToEnable returns the name of a disabled non-required service to enable.
-func pickServiceToEnable(cfg *config.DweConfig, selector selectToggleFn) (string, error) {
-	var candidates []string
+// manageableOptionalServices returns the sorted names of manageable, optional
+// (non-required) services whose enabled state matches wantEnabled. It backs both
+// the interactive pickers and the shell-completion candidate lists.
+func manageableOptionalServices(cfg *config.DweConfig, wantEnabled bool) []string {
+	var names []string
 	for _, name := range services.SortedNames(cfg.Services) {
 		svc := cfg.Services[name]
-		if services.IsManageable(svc) && !svc.Required && !svc.Enabled {
-			candidates = append(candidates, name)
+		if services.IsManageable(svc) && !svc.Required && svc.Enabled == wantEnabled {
+			names = append(names, name)
 		}
 	}
+	return names
+}
+
+func pickServiceToEnable(cfg *config.DweConfig, selector selectToggleFn) (string, error) {
+	candidates := manageableOptionalServices(cfg, false)
 	return pickToggleCandidates(cfg, candidates, "disabled", "Select a service to enable:", selector)
 }
 
 // pickServiceToDisable returns the name of an enabled non-required service to disable.
 func pickServiceToDisable(cfg *config.DweConfig, selector selectToggleFn) (string, error) {
-	var candidates []string
-	for _, name := range services.SortedNames(cfg.Services) {
-		svc := cfg.Services[name]
-		if services.IsManageable(svc) && !svc.Required && svc.Enabled {
-			candidates = append(candidates, name)
-		}
-	}
+	candidates := manageableOptionalServices(cfg, true)
 	return pickToggleCandidates(cfg, candidates, "enabled", "Select a service to disable:", selector)
 }
 
@@ -339,9 +347,9 @@ disabled optional services.`,
 		Args:              cobra.MaximumNArgs(1),
 		ValidArgsFunction: serviceCompletion(flags, completeDisabledOptional),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			cfg, err := config.LoadConfig(flags.ConfigPath)
+			cfg, err := config.LoadConfigOrWrap(flags.ConfigPath)
 			if err != nil {
-				return fmt.Errorf("loading config: %w", err)
+				return err
 			}
 			name := ""
 			if len(args) == 1 {
@@ -377,9 +385,7 @@ disabled optional services.`,
 		},
 		SilenceUsage: true,
 	}
-	cmd.Flags().BoolVar(&apply, "apply", false, "execute the plan non-interactively after writing local.yml")
-	cmd.Flags().BoolVar(&printPlan, "print-plan", false, "preview what would happen without making any changes")
-	cmd.Flags().BoolVar(&skipHooks, "skip-hooks", false, "skip before/after hook commands when applying")
+	addToggleFlags(cmd, &apply, &printPlan, &skipHooks)
 	return cmd
 }
 
@@ -403,9 +409,9 @@ enabled optional services.`,
 		Args:              cobra.MaximumNArgs(1),
 		ValidArgsFunction: serviceCompletion(flags, completeEnabledOptional),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			cfg, err := config.LoadConfig(flags.ConfigPath)
+			cfg, err := config.LoadConfigOrWrap(flags.ConfigPath)
 			if err != nil {
-				return fmt.Errorf("loading config: %w", err)
+				return err
 			}
 			name := ""
 			if len(args) == 1 {
@@ -440,9 +446,7 @@ enabled optional services.`,
 		},
 		SilenceUsage: true,
 	}
-	cmd.Flags().BoolVar(&apply, "apply", false, "execute the plan non-interactively after writing local.yml")
-	cmd.Flags().BoolVar(&printPlan, "print-plan", false, "preview what would happen without making any changes")
-	cmd.Flags().BoolVar(&skipHooks, "skip-hooks", false, "skip before/after hook commands when applying")
+	addToggleFlags(cmd, &apply, &printPlan, &skipHooks)
 	return cmd
 }
 
@@ -467,23 +471,7 @@ func serviceCompletion(flags *cmdctx.RootFlags, filter serviceFilter) func(*cobr
 		if err != nil {
 			return nil, cobra.ShellCompDirectiveNoFileComp
 		}
-		var names []string
-		for _, name := range services.SortedNames(cfg.Services) {
-			svc := cfg.Services[name]
-			if svc.Required || !services.IsManageable(svc) {
-				continue
-			}
-			switch filter {
-			case completeDisabledOptional:
-				if !svc.Enabled {
-					names = append(names, name)
-				}
-			case completeEnabledOptional:
-				if svc.Enabled {
-					names = append(names, name)
-				}
-			}
-		}
+		names := manageableOptionalServices(cfg, filter == completeEnabledOptional)
 		return names, cobra.ShellCompDirectiveNoFileComp
 	}
 }

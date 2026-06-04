@@ -34,9 +34,9 @@ type serviceListEntryJSON struct {
 // and Infra sections (same style as `dwe status`); JSON mode emits a single
 // `{"services":[...]}` array covering all configured services.
 func runServicesList(cmd *cobra.Command, flags *cmdctx.RootFlags) error {
-	cfg, err := config.LoadConfig(flags.ConfigPath)
+	cfg, err := config.LoadConfigOrWrap(flags.ConfigPath)
 	if err != nil {
-		return fmt.Errorf("loading config: %w", err)
+		return err
 	}
 	projectName, _, err := stack.ResolveProjectAndDocker(flags.ConfigPath, cfg)
 	if err != nil {
@@ -78,25 +78,20 @@ func renderServicesListJSON(cmd *cobra.Command, flags *cmdctx.RootFlags, in stac
 			entries = append(entries, e)
 		}
 	}
-	return cmdctx.WriteData(flags, cmd, serviceListJSON{Services: entries}, func(serviceListJSON) string { return "" })
+	return cmdctx.WriteJSON(flags, cmd, serviceListJSON{Services: entries})
 }
 
 func renderServicesListText(out, errW io.Writer, in stack.StatusInput) error {
-	body, errs := stack.RenderApps(in)
-	writeNonEmpty(out, body)
-	if len(errs) > 0 {
-		_, _ = fmt.Fprintf(errW, "warning: %d custom status expression(s) failed to render\n", len(errs))
+	renderSection := func(render func(stack.StatusInput) (string, []error)) {
+		body, errs := render(in)
+		writeNonEmpty(out, body)
+		if len(errs) > 0 {
+			_, _ = fmt.Fprintf(errW, "warning: %d custom status expression(s) failed to render\n", len(errs))
+		}
 	}
-	body, errs = stack.RenderTools(in)
-	writeNonEmpty(out, body)
-	if len(errs) > 0 {
-		_, _ = fmt.Fprintf(errW, "warning: %d custom status expression(s) failed to render\n", len(errs))
-	}
-	body, errs = stack.RenderInfra(in)
-	writeNonEmpty(out, body)
-	if len(errs) > 0 {
-		_, _ = fmt.Fprintf(errW, "warning: %d custom status expression(s) failed to render\n", len(errs))
-	}
+	renderSection(stack.RenderApps)
+	renderSection(stack.RenderTools)
+	renderSection(stack.RenderInfra)
 	return nil
 }
 

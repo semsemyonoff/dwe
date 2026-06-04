@@ -108,9 +108,9 @@ the service has been disabled.`,
 			}
 			// Per-service restart: container-level, no preflight, no locks.
 			name := args[0]
-			cfg, err := config.LoadConfig(flags.ConfigPath)
+			cfg, err := config.LoadConfigOrWrap(flags.ConfigPath)
 			if err != nil {
-				return fmt.Errorf("loading config: %w", err)
+				return err
 			}
 			if err := RestartService(cmd.Context(), flags.ProjectRoot(), cfg, name, cmd.OutOrStdout()); err != nil {
 				return err

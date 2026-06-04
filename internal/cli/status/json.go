@@ -394,7 +394,7 @@ func renderStatusJSON(cmd *cobra.Command, sc *statusContext, no *noSectionFlags,
 	if !no.noGit {
 		data.Git = buildGitJSON(ctx, sc)
 	}
-	return cmdctx.WriteData(flags, cmd, data, func(statusJSON) string { return "" })
+	return cmdctx.WriteJSON(flags, cmd, data)
 }
 
 // renderStatusSectionJSON emits a single status section as a JSON object with
@@ -403,43 +403,26 @@ func renderStatusSectionJSON(cmd *cobra.Command, sc *statusContext, s section, f
 	ctx := cmd.Context()
 	switch s {
 	case sectionApps:
-		rows := buildServicesJSON(sc, config.ServiceTypeApp)
-		if rows == nil {
-			rows = []serviceJSON{}
-		}
-		return cmdctx.WriteData(flags, cmd, appsStatusJSON{Apps: rows}, func(appsStatusJSON) string { return "" })
+		rows := emptyIfNil(buildServicesJSON(sc, config.ServiceTypeApp))
+		return cmdctx.WriteJSON(flags, cmd, appsStatusJSON{Apps: rows})
 	case sectionTools:
-		rows := buildServicesJSON(sc, config.ServiceTypeTool)
-		if rows == nil {
-			rows = []serviceJSON{}
-		}
-		return cmdctx.WriteData(flags, cmd, toolsStatusJSON{Tools: rows}, func(toolsStatusJSON) string { return "" })
+		rows := emptyIfNil(buildServicesJSON(sc, config.ServiceTypeTool))
+		return cmdctx.WriteJSON(flags, cmd, toolsStatusJSON{Tools: rows})
 	case sectionInfra:
-		rows := buildServicesJSON(sc, config.ServiceTypeInfra)
-		if rows == nil {
-			rows = []serviceJSON{}
-		}
-		return cmdctx.WriteData(flags, cmd, infraStatusJSON{Infra: rows}, func(infraStatusJSON) string { return "" })
+		rows := emptyIfNil(buildServicesJSON(sc, config.ServiceTypeInfra))
+		return cmdctx.WriteJSON(flags, cmd, infraStatusJSON{Infra: rows})
 	case sectionDaemons:
-		daemons := buildDaemonsJSON(ctx, sc)
-		if daemons == nil {
-			daemons = []daemonJSON{}
-		}
-		return cmdctx.WriteData(flags, cmd, daemonsStatusJSON{Daemons: daemons}, func(daemonsStatusJSON) string { return "" })
+		daemons := emptyIfNil(buildDaemonsJSON(ctx, sc))
+		return cmdctx.WriteJSON(flags, cmd, daemonsStatusJSON{Daemons: daemons})
 	case sectionDeploy:
-		return cmdctx.WriteData(flags, cmd,
-			deployTableStatusJSON{Deploy: buildDeployTableJSON(sc)},
-			func(deployTableStatusJSON) string { return "" })
+		return cmdctx.WriteJSON(flags, cmd,
+			deployTableStatusJSON{Deploy: buildDeployTableJSON(sc)})
 	case sectionTopology:
-		return cmdctx.WriteData(flags, cmd,
-			topologyStatusJSON{Topology: buildTopologyJSON(sc)},
-			func(topologyStatusJSON) string { return "" })
+		return cmdctx.WriteJSON(flags, cmd,
+			topologyStatusJSON{Topology: buildTopologyJSON(sc)})
 	case sectionGit:
-		rows := buildGitJSON(ctx, sc)
-		if rows == nil {
-			rows = []gitRowJSON{}
-		}
-		return cmdctx.WriteData(flags, cmd, gitStatusJSON{Git: rows}, func(gitStatusJSON) string { return "" })
+		rows := emptyIfNil(buildGitJSON(ctx, sc))
+		return cmdctx.WriteJSON(flags, cmd, gitStatusJSON{Git: rows})
 	}
 	return nil
 }
@@ -450,12 +433,20 @@ func renderDeployDetailJSON(cmd *cobra.Command, sc *statusContext, serviceName s
 	if err != nil {
 		return err
 	}
-	return cmdctx.WriteData(flags, cmd,
-		deployDetailStatusJSON{Deploy: detail},
-		func(deployDetailStatusJSON) string { return "" })
+	return cmdctx.WriteJSON(flags, cmd,
+		deployDetailStatusJSON{Deploy: detail})
 }
 
 // ── Local helpers ─────────────────────────────────────────────────────────────
+
+// emptyIfNil normalizes a nil slice to a non-nil empty slice so per-section JSON
+// payloads serialize as `[]` rather than `null`.
+func emptyIfNil[T any](s []T) []T {
+	if s == nil {
+		return []T{}
+	}
+	return s
+}
 
 func healthStr(h stack.Health) string {
 	switch h {

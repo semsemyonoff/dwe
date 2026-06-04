@@ -48,9 +48,9 @@ type dockerPipeline struct {
 var envRegenCommands = []string{"up", "run", "exec", "restart", "build"}
 
 func newDockerPipeline(flags *cmdctx.RootFlags, command string) (*dockerPipeline, error) {
-	cfg, err := config.LoadConfig(flags.ConfigPath)
+	cfg, err := config.LoadConfigOrWrap(flags.ConfigPath)
 	if err != nil {
-		return nil, fmt.Errorf("loading config: %w", err)
+		return nil, err
 	}
 
 	baseDir := flags.ProjectRoot()
@@ -324,9 +324,9 @@ func newDockerProjectNameCmd(flags *cmdctx.RootFlags) *cobra.Command {
 		Short: "Print the resolved compose project name",
 		Args:  cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, args []string) error {
-			cfg, err := config.LoadConfig(flags.ConfigPath)
+			cfg, err := config.LoadConfigOrWrap(flags.ConfigPath)
 			if err != nil {
-				return fmt.Errorf("loading config: %w", err)
+				return err
 			}
 
 			baseDir := flags.ProjectRoot()

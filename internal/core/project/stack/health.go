@@ -25,6 +25,12 @@ func AggregateHealth(rows []render.ServiceTableRow) Health {
 			}
 		}
 	}
+	return healthFromCounts(active, running)
+}
+
+// healthFromCounts maps active/running service counts to a Health level. It is
+// the shared reduction tail of AggregateHealth and AggregateHealthFromTopo.
+func healthFromCounts(active, running int) Health {
 	if active == 0 || running == 0 {
 		return HealthStopped
 	}
@@ -79,11 +85,5 @@ func AggregateHealthFromTopo(topoStatus map[string]render.NodeStatus) Health {
 			running++
 		}
 	}
-	if active == 0 || running == 0 {
-		return HealthStopped
-	}
-	if running < active {
-		return HealthPartial
-	}
-	return HealthRunning
+	return healthFromCounts(active, running)
 }

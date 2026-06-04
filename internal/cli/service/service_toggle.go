@@ -593,9 +593,9 @@ func runSingleServiceToggle(
 	baseDir := flags.ProjectRoot()
 	configPath := flags.ConfigPath
 
-	cfg, err := config.LoadConfig(configPath)
+	cfg, err := config.LoadConfigOrWrap(configPath)
 	if err != nil {
-		return fmt.Errorf("loading config: %w", err)
+		return err
 	}
 
 	reg, regErr := usercommands.LoadRegistryFromConfigPath(configPath)

@@ -4,7 +4,6 @@ import (
 	"fmt"
 	"io"
 	"slices"
-	"strings"
 	"time"
 
 	"github.com/semsemyonoff/dwe/internal/core/project/config"
@@ -38,12 +37,7 @@ func DeployStatus(in StatusInput) string {
 			LastFailedStep:  row.LastFailedStep,
 		}
 	}
-	var b strings.Builder
-	b.WriteString(render.SectionTitle("Deploy Status"))
-	b.WriteByte('\n')
-	b.WriteString(render.DeployStatus(uiRows))
-	b.WriteByte('\n')
-	return b.String()
+	return wrapSection("Deploy Status", render.DeployStatus(uiRows))
 }
 
 // BuildDeployStatusView assembles a view model joining current config hashes

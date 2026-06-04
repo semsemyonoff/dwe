@@ -42,9 +42,9 @@ func newComposeRawCmd(flags *cmdctx.RootFlags) *cobra.Command {
 			// Parse --bare flag manually (DisableFlagParsing is on).
 			bare, passArgs := extractBareFlag(args)
 
-			cfg, err := config.LoadConfig(flags.ConfigPath)
+			cfg, err := config.LoadConfigOrWrap(flags.ConfigPath)
 			if err != nil {
-				return fmt.Errorf("loading config: %w", err)
+				return err
 			}
 
 			// Use docker policy project name for consistency with dwe docker commands.
@@ -105,9 +105,9 @@ func newComposeArgvCmd(flags *cmdctx.RootFlags) *cobra.Command {
 		Short: "Show the full docker compose command that would be executed",
 		Args:  cobra.MinimumNArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			cfg, err := config.LoadConfig(flags.ConfigPath)
+			cfg, err := config.LoadConfigOrWrap(flags.ConfigPath)
 			if err != nil {
-				return fmt.Errorf("loading config: %w", err)
+				return err
 			}
 
 			baseDir := flags.ProjectRoot()
@@ -136,9 +136,9 @@ func newComposeFilesCmd(flags *cmdctx.RootFlags) *cobra.Command {
 		Short: "Print resolved compose file list (base + enabled overlays), one per line",
 		Args:  cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, args []string) error {
-			cfg, err := config.LoadConfig(flags.ConfigPath)
+			cfg, err := config.LoadConfigOrWrap(flags.ConfigPath)
 			if err != nil {
-				return fmt.Errorf("loading config: %w", err)
+				return err
 			}
 			for _, f := range cfg.ComposeFiles() {
 				_, _ = fmt.Fprintln(cmd.OutOrStdout(), f)

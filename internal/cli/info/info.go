@@ -73,7 +73,7 @@ func Run(cmd *cobra.Command, flags *cmdctx.RootFlags) error {
 		if err != nil {
 			return cmdctx.ErrWrap("info_render_failed", err)
 		}
-		return cmdctx.WriteData(flags, cmd, data, func(infoJSON) string { return "" })
+		return cmdctx.WriteJSON(flags, cmd, data)
 	}
 
 	stylesCfg := flags.StylesCfg

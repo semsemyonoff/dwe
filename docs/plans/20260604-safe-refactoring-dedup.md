@@ -316,19 +316,19 @@ Tasks are ordered **safest / highest-value first**: pure deletions and named-con
 - Modify: `internal/cli/render/{env,git,ai}.go`; `internal/cli/service/{service,service_list}.go`; `internal/cli/compose/compose.go`; `internal/cli/lifecycle/restart.go`; `internal/cli/docker/docker.go`; `internal/cli/deploy/deploy.go`; `internal/cli/lifecycle/reset.go`; `internal/cli/status/json.go`; `internal/cli/info/info.go`; `internal/cli/shell/exec.go`; `internal/cli/root.go`; `internal/core/project/stack/{status,deploystatus,daemons,health}.go`; `internal/core/execution/pipeline/plain.go`
 - Modify: matching `*_test.go`
 
-- [ ] Centralize the `loading config: %w` wrap after `config.LoadConfig` per the helper-home decision above. Live sites (from `rg`, ~29): `render/{env.go:39,git.go:50,ai.go:56,ide.go:58}`, `service/{service.go:77,371,435, service_list.go:38, service_toggle.go:536}`, `compose/compose.go:{48,115,149}`, `lifecycle/{restart.go:121, reset.go:69,167,278,554, stop.go:134}`, `docker/docker.go:{54,334}`, `deploy/{deploy.go:68,356, menu.go:88}`, `shell/shell.go:131`, `snapshot/{create,restore,remove}.go`, and — only under option (a) — `core/workflow/lifecycle/{run.go:127, stop.go:50}`. Leave the `ErrWrap("project_invalid_config")` group untouched (verify each candidate is the plain `fmt.Errorf("loading config: %w", …)` form, not the typed contract).
-- [ ] Extract `addToggleFlags` for repeated toggle-flag wiring (`service.go:60,407,470`).
-- [ ] Dedup the render-warning loop in `renderServicesListText` (`service_list.go:84`).
-- [ ] Unify the candidate-collection filter in `pick*`/`serviceCompletion` (`service.go:295,497`).
-- [ ] Replace the empty text-renderer closure with a `WriteJSON` helper (`status/json.go:397-455`; `info/info.go:76`).
-- [ ] Factor `emptyIfNil` for nil-slice normalization (`status/json.go:405-442`).
-- [ ] Extract `wrapSection` for the section-wrapper block in stack renderers (`stack/status.go:85,104`; `deploystatus.go:41`; `daemons.go:254`).
-- [ ] Dedup the Health reduction tail in `AggregateHealth`/`FromTopo` (`health.go:28,82`).
-- [ ] Collapse the `index>0 [N/M]` emit branches in `PlainReporter` (`plain.go:247,272,298,328`).
-- [ ] Extract the `-u/-w/-e` docker arg-append block + compose-run argv prefix + container-target resolution preamble in `shell/exec.go` (`:297-411`, `:315/387`, `:166/460`).
-- [ ] Consolidate deploy-summary counting in `runRoot`/`runRootJSON` (`root.go:410,477`).
-- [ ] Confirm JSON-output and stack golden tests unchanged.
-- [ ] `make test && make lint` — must pass.
+- [x] Centralize the `loading config: %w` wrap after `config.LoadConfig` per the helper-home decision above. Chose **option (a)**: added `config.LoadConfigOrWrap(workspacePath) (*DweConfig, error)` next to `LoadConfig`, collapsing all 29 plain-wrap sites (27 cli + the 2 `core/workflow/lifecycle/{run,stop}.go` sites) via a paired-pattern `perl` rewrite. The `ErrWrap("project_invalid_config")` group is untouched (those are the typed contract, not the plain `fmt.Errorf("loading config: %w", …)` form). Unit tests added for the helper (success + canonical-prefix/unwrap-to-`os.ErrNotExist` error case).
+- [x] Extract `addToggleFlags` for repeated toggle-flag wiring (`service.go:60,407,470`) — new `addToggleFlags(cmd, *apply, *printPlan, *skipHooks)`; flag descriptions byte-identical.
+- [x] Dedup the render-warning loop in `renderServicesListText` (`service_list.go:84`) — local `renderSection` closure over `RenderApps/Tools/Infra`.
+- [x] Unify the candidate-collection filter in `pick*`/`serviceCompletion` (`service.go:295,497`) — new `manageableOptionalServices(cfg, wantEnabled)`; `serviceCompletion` maps `filter == completeEnabledOptional` to the bool (only two filter constants exist, so exhaustive).
+- [x] Replace the empty text-renderer closure with a `WriteJSON` helper — new `cmdctx.WriteJSON[T]` (WriteData with empty text renderer); applied at all `func(T) string { return "" }` sites (status/json.go, info/info.go, command/{command,list}.go, service_list.go, validate.go).
+- [x] Factor `emptyIfNil` for nil-slice normalization (`status/json.go:405-442`) — generic `emptyIfNil[T]` in the local-helpers section; five per-section cases collapsed.
+- [x] Extract `wrapSection` for the section-wrapper block in stack renderers (`stack/status.go:85,104`; `deploystatus.go:41`; `daemons.go:254`) — shared `wrapSection(title, body)` in status.go; removed now-unused `strings` import from deploystatus.go.
+- [x] Dedup the Health reduction tail in `AggregateHealth`/`FromTopo` (`health.go:28,82`) — new `healthFromCounts(active, running)`.
+- [x] Collapse the `index>0 [N/M]` emit branches in `PlainReporter` (`plain.go:247,272,298,328`) — new `stepIndexPrefix(index, total)` returning `"[N/M] "` or `""`; format strings stay constant literals (no vet warning).
+- [x] Extract the `-u/-w/-e` docker arg-append block + compose-run argv prefix + container-target resolution preamble in `shell/exec.go` — new `appendUserWorkdirEnvArgs`, `composeRunArgv`, and `resolveShellTarget` (returns svc/opts/fullContainerName); restart-style comments preserved in the resolver.
+- [x] Consolidate deploy-summary counting in `runRoot`/`runRootJSON` (`root.go:410,477`) — new `countDeployedServices(state, tracked)`.
+- [x] Confirm JSON-output and stack golden tests unchanged. (cli + stack + pipeline suites green, zero golden diffs.)
+- [x] `make test && make lint` — must pass. (Both green; one initial `make test` blip was the known-flaky `TestRussianTranslationsAreFresh`, clean on rerun.)
 
 ### Task 18: Split oversized functions into named section helpers
 **Theme 16 — priority medium / effort medium / risk none.** Pure cut-and-paste; each target has per-section test coverage; none is a genuine hot path.

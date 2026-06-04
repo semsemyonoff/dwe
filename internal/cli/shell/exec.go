@@ -45,6 +45,43 @@ func composeRunTTYFlags() []string {
 	return []string{"-i", "-T"}
 }
 
+// appendUserWorkdirEnvArgs appends the shared -u / -w / -e flags onto a docker
+// exec or compose run argv. Env vars are emitted in sorted key order so the
+// resulting argv is deterministic.
+func appendUserWorkdirEnvArgs(args []string, u, workDir string, env map[string]string) []string {
+	if u != "" {
+		args = append(args, "-u", u)
+	}
+	if workDir != "" {
+		args = append(args, "-w", workDir)
+	}
+	for _, k := range slices.Sorted(maps.Keys(env)) {
+		args = append(args, "-e", k+"="+env[k])
+	}
+	return args
+}
+
+// composeRunArgv builds the shared
+// `compose [-p name] [-f file...] <global args> run [--rm] <run args...>`
+// prefix used by the interactive and one-shot compose-run flows.
+func composeRunArgv(compose *docker.Compose) []string {
+	args := []string{"compose"}
+	if compose.ProjectName != "" {
+		args = append(args, "-p", compose.ProjectName)
+	}
+	for _, f := range compose.Files {
+		args = append(args, "-f", f)
+	}
+	args = append(args, compose.GlobalArgs...)
+	args = append(args, "run")
+	runArgs := compose.CommandArgs["run"]
+	if !slices.Contains(runArgs, "--rm") {
+		args = append(args, "--rm")
+	}
+	args = append(args, runArgs...)
+	return args
+}
+
 // shellCommandExitError carries a child command's exact exit code through
 // cobra/fang. cmd/dwe/main.go extracts `interface{ ExitCode() int }` and calls
 // os.Exit with that code; its errHandler also suppresses Fang's "Error:" banner
@@ -151,6 +188,41 @@ type shellExecFunc func(containerName, shell, u, workDir string, env map[string]
 // shellRunFunc is the function signature for starting a new container shell.
 type shellRunFunc func(compose *docker.Compose, serviceName, shell, u, workDir string, env map[string]string) error
 
+// resolveShellTarget resolves the service, its shell options, and the
+// fully-qualified container name shared by the interactive (runServicesCLI) and
+// one-shot (runOneShotCommand) flows. It validates the service exists, has a
+// container, and carries a valid cli.mode.
+func resolveShellTarget(cfg *config.DweConfig, compose *docker.Compose, serviceName string, flags shellCLIFlags) (config.ServiceConfig, shellOptions, string, error) {
+	svc, ok := cfg.Services[serviceName]
+	if !ok {
+		return config.ServiceConfig{}, shellOptions{}, "", fmt.Errorf("service %q not found", serviceName)
+	}
+	if svc.Container == "" {
+		return config.ServiceConfig{}, shellOptions{}, "", fmt.Errorf("service %q has no container defined", serviceName)
+	}
+
+	opts, err := resolveShellOptions(flags, svc.CLI, svc)
+	if err != nil {
+		return config.ServiceConfig{}, shellOptions{}, "", err
+	}
+
+	// Validate the resolved mode — catches typos in workspace/services.yml or defaults.yml.
+	if !validModes[opts.Mode] {
+		return config.ServiceConfig{}, shellOptions{}, "", fmt.Errorf("invalid cli.mode %q for service %q: must be auto, exec, or run", opts.Mode, serviceName)
+	}
+
+	// Resolve the authoritative compose project name (handles absent docker.yml).
+	projectFull, err := config.ResolveComposeProjectName(compose.BaseDir, cfg)
+	if err != nil {
+		return config.ServiceConfig{}, shellOptions{}, "", fmt.Errorf("resolving compose project name: %w", err)
+	}
+	fullContainerName, err := daemon.ResolveContainerName(projectFull, svc.Container)
+	if err != nil {
+		return config.ServiceConfig{}, shellOptions{}, "", err
+	}
+	return svc, opts, fullContainerName, nil
+}
+
 // runServicesCLI resolves the container state and either execs into a running
 // container or starts a new one via docker compose run.
 // getState, execCLI, and runCLI are injected for testability.
@@ -163,30 +235,7 @@ func runServicesCLI(
 	execCLI shellExecFunc,
 	runCLI shellRunFunc,
 ) error {
-	svc, ok := cfg.Services[serviceName]
-	if !ok {
-		return fmt.Errorf("service %q not found", serviceName)
-	}
-	if svc.Container == "" {
-		return fmt.Errorf("service %q has no container defined", serviceName)
-	}
-
-	opts, err := resolveShellOptions(flags, svc.CLI, svc)
-	if err != nil {
-		return err
-	}
-
-	// Validate the resolved mode — catches typos in workspace/services.yml or defaults.yml.
-	if !validModes[opts.Mode] {
-		return fmt.Errorf("invalid cli.mode %q for service %q: must be auto, exec, or run", opts.Mode, serviceName)
-	}
-
-	// Resolve the authoritative compose project name (handles absent docker.yml).
-	projectFull, err := config.ResolveComposeProjectName(compose.BaseDir, cfg)
-	if err != nil {
-		return fmt.Errorf("resolving compose project name: %w", err)
-	}
-	fullContainerName, err := daemon.ResolveContainerName(projectFull, svc.Container)
+	svc, opts, fullContainerName, err := resolveShellTarget(cfg, compose, serviceName, flags)
 	if err != nil {
 		return err
 	}
@@ -294,15 +343,7 @@ func containerStateStatus(containerName string, processEnv []string, dockerBin s
 func dockerExecCLI(containerName, shell, u, workDir string, env map[string]string, processEnv []string, dockerBin string) error {
 	args := []string{"exec"}
 	args = append(args, dockerExecTTYFlags()...)
-	if u != "" {
-		args = append(args, "-u", u)
-	}
-	if workDir != "" {
-		args = append(args, "-w", workDir)
-	}
-	for _, k := range slices.Sorted(maps.Keys(env)) {
-		args = append(args, "-e", k+"="+env[k])
-	}
+	args = appendUserWorkdirEnvArgs(args, u, workDir, env)
 	args = append(args, containerName, shell)
 
 	render.Stdout().Info(fmt.Sprintf("exec → %s", containerName))
@@ -313,30 +354,9 @@ func dockerExecCLI(containerName, shell, u, workDir string, env map[string]strin
 // composeRunCLI starts a new temporary container via docker compose run --rm.
 // It uses the shared Compose struct for project name, file list, and global args.
 func composeRunCLI(compose *docker.Compose, serviceName, shell, u, workDir string, env map[string]string) error {
-	args := []string{"compose"}
-	if compose.ProjectName != "" {
-		args = append(args, "-p", compose.ProjectName)
-	}
-	for _, f := range compose.Files {
-		args = append(args, "-f", f)
-	}
-	args = append(args, compose.GlobalArgs...)
-	args = append(args, "run")
-	runArgs := compose.CommandArgs["run"]
-	if !slices.Contains(runArgs, "--rm") {
-		args = append(args, "--rm")
-	}
-	args = append(args, runArgs...)
+	args := composeRunArgv(compose)
 	args = append(args, composeRunTTYFlags()...)
-	if u != "" {
-		args = append(args, "-u", u)
-	}
-	if workDir != "" {
-		args = append(args, "-w", workDir)
-	}
-	for _, k := range slices.Sorted(maps.Keys(env)) {
-		args = append(args, "-e", k+"="+env[k])
-	}
+	args = appendUserWorkdirEnvArgs(args, u, workDir, env)
 	args = append(args, serviceName, shell)
 
 	render.Stdout().Info(fmt.Sprintf("run → %s (new container)", serviceName))
@@ -368,15 +388,7 @@ var runInteractive = func(processEnv []string, workDir, name string, args ...str
 // No PTY is allocated (-t omitted) so stdout stays clean for piping.
 func dockerExecOneShot(containerName, shell, u, workDir string, env map[string]string, command string, processEnv []string, dockerBin string) error {
 	args := []string{"exec", "-i"}
-	if u != "" {
-		args = append(args, "-u", u)
-	}
-	if workDir != "" {
-		args = append(args, "-w", workDir)
-	}
-	for _, k := range slices.Sorted(maps.Keys(env)) {
-		args = append(args, "-e", k+"="+env[k])
-	}
+	args = appendUserWorkdirEnvArgs(args, u, workDir, env)
 	args = append(args, containerName, shell, "-c", command)
 	// Silent: no render.Stdout().Info — script stdout must stay clean.
 	return wrapExitError(runInteractive(processEnv, "", dockerBin, args...))
@@ -385,30 +397,9 @@ func dockerExecOneShot(containerName, shell, u, workDir string, env map[string]s
 // composeRunOneShot starts a fresh container via `docker compose run --rm` and
 // runs `<shell> -c "<command>"` inside it, silently.
 func composeRunOneShot(compose *docker.Compose, serviceName, shell, u, workDir string, env map[string]string, command string) error {
-	args := []string{"compose"}
-	if compose.ProjectName != "" {
-		args = append(args, "-p", compose.ProjectName)
-	}
-	for _, f := range compose.Files {
-		args = append(args, "-f", f)
-	}
-	args = append(args, compose.GlobalArgs...)
-	args = append(args, "run")
-	runArgs := compose.CommandArgs["run"]
-	if !slices.Contains(runArgs, "--rm") {
-		args = append(args, "--rm")
-	}
-	args = append(args, runArgs...)
+	args := composeRunArgv(compose)
 	args = append(args, "-i", "-T") // never allocate a PTY for one-shot commands
-	if u != "" {
-		args = append(args, "-u", u)
-	}
-	if workDir != "" {
-		args = append(args, "-w", workDir)
-	}
-	for _, k := range slices.Sorted(maps.Keys(env)) {
-		args = append(args, "-e", k+"="+env[k])
-	}
+	args = appendUserWorkdirEnvArgs(args, u, workDir, env)
 	args = append(args, serviceName, shell, "-c", command)
 	// Silent: no render.Stdout().Info.
 	return wrapExitError(runInteractive(compose.BuildEnv(), compose.BaseDir, compose.BinName(), args...))
@@ -457,28 +448,7 @@ func runOneShotCommand(
 	execOneShot oneShotExecFunc,
 	runOneShot oneShotRunFunc,
 ) error {
-	svc, ok := cfg.Services[serviceName]
-	if !ok {
-		return fmt.Errorf("service %q not found", serviceName)
-	}
-	if svc.Container == "" {
-		return fmt.Errorf("service %q has no container defined", serviceName)
-	}
-
-	opts, err := resolveShellOptions(flags, svc.CLI, svc)
-	if err != nil {
-		return err
-	}
-
-	if !validModes[opts.Mode] {
-		return fmt.Errorf("invalid cli.mode %q for service %q: must be auto, exec, or run", opts.Mode, serviceName)
-	}
-
-	projectFull, err := config.ResolveComposeProjectName(compose.BaseDir, cfg)
-	if err != nil {
-		return fmt.Errorf("resolving compose project name: %w", err)
-	}
-	fullContainerName, err := daemon.ResolveContainerName(projectFull, svc.Container)
+	svc, opts, fullContainerName, err := resolveShellTarget(cfg, compose, serviceName, flags)
 	if err != nil {
 		return err
 	}

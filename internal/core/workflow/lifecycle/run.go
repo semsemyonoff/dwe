@@ -122,9 +122,9 @@ func RunRun(ctx RunContext) (err error) {
 		}()
 	}
 
-	cfg, err := config.LoadConfig(ctx.ConfigPath)
+	cfg, err := config.LoadConfigOrWrap(ctx.ConfigPath)
 	if err != nil {
-		return fmt.Errorf("loading config: %w", err)
+		return err
 	}
 	projectName = cfg.Project.Name
 

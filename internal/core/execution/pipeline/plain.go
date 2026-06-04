@@ -244,13 +244,19 @@ func (r *PlainReporter) StartStep(stepAddr string, step config.DeployStep, index
 	}
 	r.mu.Lock()
 	r.currentStepAddr = stepAddr
-	if index > 0 {
-		r.emit(render.Blue, fmt.Sprintf("  %s [%d/%d] %s", iconRunning, index, total, label))
-	} else {
-		r.emit(render.Blue, fmt.Sprintf("  %s %s", iconRunning, label))
-	}
+	r.emit(render.Blue, fmt.Sprintf("  %s %s%s", iconRunning, stepIndexPrefix(index, total), label))
 	r.mu.Unlock()
 	r.live.SetText(footer)
+}
+
+// stepIndexPrefix returns the "[N/M] " progress prefix for tracked steps
+// (index > 0), or "" for untracked steps (index == 0). It is the shared
+// conditional used by the StartStep / SkipStep / FinishStep / FailStep lines.
+func stepIndexPrefix(index, total int) string {
+	if index > 0 {
+		return fmt.Sprintf("[%d/%d] ", index, total)
+	}
+	return ""
 }
 
 // SkipStep prints a warning when a step is skipped due to a when condition:
@@ -269,11 +275,7 @@ func (r *PlainReporter) SkipStep(stepAddr string, _ config.DeployStep, index int
 	if entry, isSub := r.subs[stepAddr]; isSub && entry.groupAddr != "" && r.inBlockMode && r.ttyMode {
 		r.live.SetBlockRowFinal(entry.blockRowIdx, liveui.BlockRowSkipped, formatSkippedLabel(entry.pipelineIdx, entry.pipelineTotal, entry.subName, reason))
 	}
-	if index > 0 {
-		r.emit(render.Yellow, fmt.Sprintf("  %s [%d/%d] Skipped: %s (%s)", iconSkipped, index, total, stepAddr, reason))
-	} else {
-		r.emit(render.Yellow, fmt.Sprintf("  %s Skipped: %s (%s)", iconSkipped, stepAddr, reason))
-	}
+	r.emit(render.Yellow, fmt.Sprintf("  %s %sSkipped: %s (%s)", iconSkipped, stepIndexPrefix(index, total), stepAddr, reason))
 	r.dropSubStepLocked(stepAddr, statusSkipped)
 }
 
@@ -295,11 +297,7 @@ func (r *PlainReporter) FinishStep(stepAddr string, _ config.DeployStep, index i
 	if entry, isSub := r.subs[stepAddr]; isSub && entry.groupAddr != "" && r.inBlockMode && r.ttyMode {
 		r.live.SetBlockRowFinal(entry.blockRowIdx, liveui.BlockRowDone, formatDoneLabel(entry.pipelineIdx, entry.pipelineTotal, entry.subName))
 	}
-	if index > 0 {
-		r.emit(render.Green, fmt.Sprintf("  %s [%d/%d] Done: %s", iconDone, index, total, stepAddr))
-	} else {
-		r.emit(render.Green, fmt.Sprintf("  %s Done: %s", iconDone, stepAddr))
-	}
+	r.emit(render.Green, fmt.Sprintf("  %s %sDone: %s", iconDone, stepIndexPrefix(index, total), stepAddr))
 	r.flushSubStepLocked(stepAddr, statusOk)
 }
 
@@ -325,11 +323,7 @@ func (r *PlainReporter) FailStep(stepAddr string, _ config.DeployStep, index int
 		if r.inBlockMode && r.ttyMode {
 			r.live.SetBlockRowFinal(entry.blockRowIdx, liveui.BlockRowFailed, formatFailedLabel(entry.pipelineIdx, entry.pipelineTotal, entry.subName))
 		}
-		if index > 0 {
-			r.emit(render.Red, fmt.Sprintf("  %s [%d/%d] Failed: %s", iconFailed, index, total, stepAddr))
-		} else {
-			r.emit(render.Red, fmt.Sprintf("  %s Failed: %s", iconFailed, stepAddr))
-		}
+		r.emit(render.Red, fmt.Sprintf("  %s %sFailed: %s", iconFailed, stepIndexPrefix(index, total), stepAddr))
 		r.flushSubStepLocked(stepAddr, statusFailed)
 		if err != nil {
 			r.emit(render.Red, "  "+err.Error())

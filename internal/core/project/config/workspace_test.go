@@ -380,6 +380,35 @@ func TestLoadConfig_notFound(t *testing.T) {
 	}
 }
 
+func TestLoadConfigOrWrap_success(t *testing.T) {
+	path := writeFullFixture(t, sampleWorkspaceYML, "", "", "", noToolsYML)
+	cfg, err := LoadConfigOrWrap(path)
+	if err != nil {
+		t.Fatalf("LoadConfigOrWrap: %v", err)
+	}
+	if cfg == nil || cfg.Project.Name != "laravel" {
+		t.Fatalf("LoadConfigOrWrap returned unexpected cfg: %+v", cfg)
+	}
+}
+
+func TestLoadConfigOrWrap_wrapsError(t *testing.T) {
+	missing := filepath.Join(t.TempDir(), "nonexistent.yml")
+	cfg, err := LoadConfigOrWrap(missing)
+	if err == nil {
+		t.Fatal("expected error for missing workspace.yml")
+	}
+	if cfg != nil {
+		t.Errorf("cfg = %+v, want nil on error", cfg)
+	}
+	if !strings.HasPrefix(err.Error(), "loading config: ") {
+		t.Errorf("error %q missing canonical %q prefix", err.Error(), "loading config: ")
+	}
+	// The wrap must preserve the underlying error chain for errors.Is callers.
+	if !errors.Is(err, os.ErrNotExist) {
+		t.Errorf("wrapped error does not unwrap to os.ErrNotExist: %v", err)
+	}
+}
+
 // --- helpers ---
 
 func TestProjectFullName_noPrefix(t *testing.T) {

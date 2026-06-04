@@ -242,12 +242,7 @@ func RenderDaemons(rows []statusview.DaemonRow) (string, []error) {
 	if body == "" {
 		return "", nil
 	}
-	var b strings.Builder
-	b.WriteString(render.SectionTitle("Daemons"))
-	b.WriteByte('\n')
-	b.WriteString(body)
-	b.WriteByte('\n')
-	return b.String(), nil
+	return wrapSection("Daemons", body), nil
 }
 
 // formatUptime renders a Duration in a compact human-friendly form.

@@ -1225,6 +1225,19 @@ func detectLegacyComposeOverlays(raw map[string]any) error {
 	return fmt.Errorf("%s. Found overlays: %v", legacyComposeOverlaysMsg, keys)
 }
 
+// LoadConfigOrWrap loads the project config and, on failure, returns the error
+// wrapped with the canonical "loading config: %w" prefix used across the CLI
+// and workflow layers. It centralizes the ~29 identical load-and-wrap blocks so
+// the prefix stays consistent. Use this instead of hand-wrapping; the typed
+// project_invalid_config contract (cmdctx.ErrWrap) is a separate path.
+func LoadConfigOrWrap(workspacePath string) (*DweConfig, error) {
+	cfg, err := LoadConfig(workspacePath)
+	if err != nil {
+		return nil, fmt.Errorf("loading config: %w", err)
+	}
+	return cfg, nil
+}
+
 // LoadConfig loads the merged DweConfig by layering:
 //
 //  1. workspacePath (required)

@@ -64,9 +64,9 @@ type deployPlanOpts struct {
 
 // runDeployPlan is the common implementation for `dwe deploy plan` and menu dispatch.
 func runDeployPlan(ctx context.Context, cmd *cobra.Command, flags *cmdctx.RootFlags, opts deployPlanOpts) error {
-	cfg, err := config.LoadConfig(flags.ConfigPath)
+	cfg, err := config.LoadConfigOrWrap(flags.ConfigPath)
 	if err != nil {
-		return fmt.Errorf("loading config: %w", err)
+		return err
 	}
 
 	// Apply deploy default when no deploy.yml is on disk (cfg.Deploy has empty
@@ -350,9 +350,9 @@ func RunHelper(ctx context.Context, cmd *cobra.Command, flags *cmdctx.RootFlags,
 
 	// Load cfg + registry BEFORE acquiring the deploy lock so preflight can
 	// reject without leaving a stale lock file in .dwe/deploy/.
-	cfg, err := config.LoadConfig(flags.ConfigPath)
+	cfg, err := config.LoadConfigOrWrap(flags.ConfigPath)
 	if err != nil {
-		return fmt.Errorf("loading config: %w", err)
+		return err
 	}
 	projectName = cfg.Project.Name
 

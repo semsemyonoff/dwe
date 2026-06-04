@@ -64,9 +64,9 @@ type resetPlanOpts struct {
 // Out/Err writers before calling; stderr receives the default-pipeline notice
 // when reset.yml is absent.
 func runResetPlan(cmd *cobra.Command, flags *cmdctx.RootFlags, opts resetPlanOpts) error {
-	cfg, err := config.LoadConfig(flags.ConfigPath)
+	cfg, err := config.LoadConfigOrWrap(flags.ConfigPath)
 	if err != nil {
-		return fmt.Errorf("loading config: %w", err)
+		return err
 	}
 	reg, err := usercommands.LoadRegistryFromConfigPath(flags.ConfigPath)
 	if err != nil {
@@ -161,9 +161,9 @@ func resetRunCmd(cmd *cobra.Command, flags *cmdctx.RootFlags, yes bool, skipPref
 
 	// Load cfg + registry BEFORE acquiring locks so preflight can reject
 	// without leaving a stale lock file.
-	cfg, err := config.LoadConfig(flags.ConfigPath)
+	cfg, err := config.LoadConfigOrWrap(flags.ConfigPath)
 	if err != nil {
-		return fmt.Errorf("loading config: %w", err)
+		return err
 	}
 
 	reg, regErr := usercommands.LoadRegistryFromConfigPath(flags.ConfigPath)
@@ -263,9 +263,9 @@ func resetServiceRunCmd(cmd *cobra.Command, flags *cmdctx.RootFlags, name string
 	statePath := filepath.Join(workDir, journal.DefaultRelPath)
 	baseDir := workDir
 
-	cfg, err := config.LoadConfig(flags.ConfigPath)
+	cfg, err := config.LoadConfigOrWrap(flags.ConfigPath)
 	if err != nil {
-		return fmt.Errorf("loading config: %w", err)
+		return err
 	}
 
 	// Validation: service must exist.
@@ -530,9 +530,9 @@ func newResetStepCmd(flags *cmdctx.RootFlags) *cobra.Command {
 		Args:         cobra.ExactArgs(1),
 		SilenceUsage: true,
 		RunE: func(cmd *cobra.Command, args []string) error {
-			cfg, err := config.LoadConfig(flags.ConfigPath)
+			cfg, err := config.LoadConfigOrWrap(flags.ConfigPath)
 			if err != nil {
-				return fmt.Errorf("loading config: %w", err)
+				return err
 			}
 
 			address := args[0]

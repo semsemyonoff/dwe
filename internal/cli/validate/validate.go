@@ -432,7 +432,7 @@ func runValidate(cmd *cobra.Command, flags *cmdctx.RootFlags, strict, quiet bool
 	// failures (the exit code conveys severity; the envelope would be redundant).
 	if flags.Output == "json" {
 		data := buildValidateData(diags, summary)
-		if err := cmdctx.WriteData(flags, cmd, data, func(validateJSON) string { return "" }); err != nil {
+		if err := cmdctx.WriteJSON(flags, cmd, data); err != nil {
 			return err
 		}
 		if validate.ExitCode(summary, strict) != 0 {

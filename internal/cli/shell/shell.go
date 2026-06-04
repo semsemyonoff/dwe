@@ -125,9 +125,9 @@ dwe's own connection banners are suppressed so the child's stdout is untouched.`
 				return fmt.Errorf("-c/--command cannot be empty or whitespace-only")
 			}
 
-			cfg, err := config.LoadConfig(flags.ConfigPath)
+			cfg, err := config.LoadConfigOrWrap(flags.ConfigPath)
 			if err != nil {
-				return fmt.Errorf("loading config: %w", err)
+				return err
 			}
 			baseDir := flags.ProjectRoot()
 			dockerCfg, err := config.LoadDockerConfigOrEmpty(baseDir, cfg)

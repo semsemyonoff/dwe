@@ -42,9 +42,9 @@ type StopContext struct {
 func RunStop(ctx StopContext) error {
 	workDir := filepath.Dir(ctx.ConfigPath)
 
-	cfg, err := config.LoadConfig(ctx.ConfigPath)
+	cfg, err := config.LoadConfigOrWrap(ctx.ConfigPath)
 	if err != nil {
-		return fmt.Errorf("loading config: %w", err)
+		return err
 	}
 
 	// Hoist registry load ahead of preflight (nil-tolerant — preflight will

@@ -410,18 +410,12 @@ func runRootJSON(cmd *cobra.Command, flags *cmdctx.RootFlags) error {
 			reg, _ := usercommands.LoadRegistryFromConfigPath(flags.ConfigPath)
 			tracked, _, terr := deploy.LoadTrackedServices(cfg, reg, flags.Root)
 			if terr == nil && len(tracked) > 0 {
-				deployedCount := 0
-				for _, svcName := range tracked {
-					if svc, ok := state.Services[svcName]; ok && svc != nil && svc.Status == journal.StatusDeployed {
-						deployedCount++
-					}
-				}
 				projectStatus := ""
 				if state.Project != nil {
 					projectStatus = string(state.Project.Status)
 				}
 				data.DeploySummary = &rootDeploySummaryJSON{
-					Deployed: deployedCount,
+					Deployed: countDeployedServices(state, tracked),
 					Total:    len(tracked),
 					Status:   projectStatus,
 				}
@@ -430,6 +424,19 @@ func runRootJSON(cmd *cobra.Command, flags *cmdctx.RootFlags) error {
 	}
 
 	return cmdctx.WriteData(flags, cmd, data, func(r rootJSON) string { return "" })
+}
+
+// countDeployedServices counts how many of the tracked services carry a
+// StatusDeployed entry in the journal state. Shared by the text and JSON root
+// summary builders.
+func countDeployedServices(state *journal.ProjectState, tracked []string) int {
+	n := 0
+	for _, svcName := range tracked {
+		if svc, ok := state.Services[svcName]; ok && svc != nil && svc.Status == journal.StatusDeployed {
+			n++
+		}
+	}
+	return n
 }
 
 // runRoot is the handler for `dwe` with no subcommand.
@@ -477,20 +484,13 @@ func runRoot(cmd *cobra.Command, flags *cmdctx.RootFlags) error {
 			reg, _ := usercommands.LoadRegistryFromConfigPath(flags.ConfigPath)
 			tracked, _, err := deploy.LoadTrackedServices(cfg, reg, flags.Root)
 			if err == nil && len(tracked) > 0 {
-				// Count how many tracked services are deployed.
-				deployedCount := 0
-				for _, svcName := range tracked {
-					if svc, ok := state.Services[svcName]; ok && svc != nil && svc.Status == journal.StatusDeployed {
-						deployedCount++
-					}
-				}
 				// Build summary view.
 				var projectStatus journal.Status
 				if state.Project != nil {
 					projectStatus = state.Project.Status
 				}
 				deploySummary = &statusview.DeploySummary{
-					Deployed:      deployedCount,
+					Deployed:      countDeployedServices(state, tracked),
 					Total:         len(tracked),
 					ProjectStatus: projectStatus,
 				}

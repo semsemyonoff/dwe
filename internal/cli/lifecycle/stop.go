@@ -141,9 +141,9 @@ Use 'dwe docker stop' for the low-level compose stop (no container removal).`,
 			}
 			// Per-service stop.
 			name := args[0]
-			cfg, err := config.LoadConfig(flags.ConfigPath)
+			cfg, err := config.LoadConfigOrWrap(flags.ConfigPath)
 			if err != nil {
-				return fmt.Errorf("loading config: %w", err)
+				return err
 			}
 			reg, regErr := usercommands.LoadRegistryFromConfigPath(flags.ConfigPath)
 			if regErr != nil {
