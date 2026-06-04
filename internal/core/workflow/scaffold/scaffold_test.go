@@ -321,3 +321,50 @@ func TestScaffold_InvalidServiceRejected(t *testing.T) {
 func contains(s []string, want string) bool {
 	return slices.Contains(s, want)
 }
+
+func TestResolveTarget(t *testing.T) {
+	dir := t.TempDir()
+	abs, err := ResolveTarget(dir)
+	if err != nil {
+		t.Fatalf("ResolveTarget: %v", err)
+	}
+	if !filepath.IsAbs(abs) {
+		t.Errorf("ResolveTarget(%q) = %q, want absolute path", dir, abs)
+	}
+
+	// Empty target resolves to the working directory.
+	cwd, err := os.Getwd()
+	if err != nil {
+		t.Fatal(err)
+	}
+	got, err := ResolveTarget("")
+	if err != nil {
+		t.Fatalf("ResolveTarget(\"\"): %v", err)
+	}
+	if got != cwd {
+		t.Errorf("ResolveTarget(\"\") = %q, want cwd %q", got, cwd)
+	}
+}
+
+func TestHasProjectConfig(t *testing.T) {
+	dir := t.TempDir()
+
+	has, err := HasProjectConfig(dir)
+	if err != nil {
+		t.Fatalf("HasProjectConfig (absent): %v", err)
+	}
+	if has {
+		t.Error("HasProjectConfig reported true for an empty directory")
+	}
+
+	if err := os.WriteFile(filepath.Join(dir, "workspace.yml"), []byte("project: {}\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	has, err = HasProjectConfig(dir)
+	if err != nil {
+		t.Fatalf("HasProjectConfig (present): %v", err)
+	}
+	if !has {
+		t.Error("HasProjectConfig reported false despite workspace.yml present")
+	}
+}

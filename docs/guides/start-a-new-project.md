@@ -9,7 +9,7 @@ This is the mirror image of [Joining a DWE project](joining-a-project.md): that 
 `dwe init` is the only DWE command that runs **outside** a project — it creates one rather than acting inside one. It is:
 
 - **Opinionated but inert.** It writes a real, working starter (one active `app` service, the built-in deploy/lifecycle pipelines) plus a set of commented override files you can grow into. Nothing it ships is half-configured.
-- **Idempotent.** It fills gaps and never overwrites an existing file unless you pass `--force`, so it is safe to re-run on a partially set-up directory.
+- **Safe to re-run.** On a directory with no `workspace.yml` it fills gaps and never overwrites an existing file unless you pass `--force`. If a project already exists there, it refuses to clobber it silently: interactively it asks you to confirm a recreate, and non-interactively it stops unless `--force` is passed.
 - **Quiet about machine state.** There is no project yet, so it runs no preflight and takes no locks. It only touches the filesystem.
 
 ## Interactive run
@@ -24,13 +24,13 @@ A short form asks for:
 
 - **Project name** (required) — written to `workspace.yml` as `project.name`.
 - **Compose prefix** (default `dwe`) — the `project.prefix` that namespaces your Docker resources.
-- **Branding** (optional) — a title, tagline, and accent color rendered into `workspace/styles.yml`. Leave these blank for a generic header; you can always [brand it later](brand-your-project.md).
+- **Branding** (optional) — a title, a tagline (the short subtitle under the header), and an accent color (a 6-digit hex code such as `#2EC3EB`) rendered into `workspace/styles.yml`. Each field is validated as you type. Leave these blank for a generic header; you can always [brand it later](brand-your-project.md).
 
 The whole form is collected before anything is written to disk, so a mid-form `Ctrl-C` leaves the directory untouched.
 
 ## Non-interactive run
 
-`dwe init` switches to flag-driven mode automatically when stdin/stdout is not a TTY (CI, scripts, pipes), or when you pass `--yes` or `--output json`. Drive everything from flags:
+`dwe init` switches to flag-driven mode automatically when stdin/stdout is not a TTY (CI, scripts, pipes), or when you pass `--default` or `--output json`. Drive everything from flags:
 
 ```shell
 dwe init --name my-project --prefix acme --service api
@@ -39,7 +39,7 @@ dwe init --name my-project --prefix acme --service api
 Or take all defaults without the form:
 
 ```shell
-dwe init my-project --yes
+dwe init my-project --default
 ```
 
 A positional `[name]` creates the project in `./<name>/` instead of the current directory. Name resolution precedence is `--name` → positional `[name]` → the current directory's basename.
@@ -50,10 +50,10 @@ A positional `[name]` creates the project in `./<name>/` instead of the current 
 | --- | --- | --- |
 | `--name` | `[name]` arg, else cwd basename | project name in `workspace.yml` |
 | `--prefix` | `dwe` | compose/project prefix |
-| `--brand-title` / `--tagline` / `--accent` | empty | `workspace/styles.yml` branding |
+| `--brand-title` / `--tagline` / `--accent` | empty | `workspace/styles.yml` branding (accent is a 6-digit hex like `#2EC3EB`) |
 | `--service` | `app` | starter service folder name; `""` creates none |
-| `--force` | off | overwrite existing files instead of skipping |
-| `-y, --yes` | off | skip the form, take all defaults |
+| `-f, --force` | off | recreate an existing project / overwrite existing files |
+| `-d, --default` | off | skip the form, take all defaults |
 | `--output json` | text | machine-readable report (implies non-interactive) |
 
 With `--output json` you get a structured report instead of prose:
@@ -109,6 +109,7 @@ A fresh `dwe init` is designed to validate clean immediately. From here, the usu
 
 ## Edge cases
 
+- **A project already exists.** If the target directory already has a `workspace.yml`, `dwe init` will not silently overwrite it. Interactively it asks you to confirm recreating it (and recreates everything with `--force` on yes); non-interactively it stops with an error telling you to pass `--force`.
 - **Existing `.gitignore` / `.editorconfig`.** `.gitignore` is append-merged; `.editorconfig` is written only when absent. Neither is clobbered.
 - **Nested projects.** If an ancestor directory already has a `workspace.yml`, `dwe init` warns (`nested_warning` in JSON) but does not block — sometimes a nested project is what you want.
 - **No starter service.** `--service ""` scaffolds a valid, service-less project; add services later with `dwe init`-style folders under `workspace/services/`.

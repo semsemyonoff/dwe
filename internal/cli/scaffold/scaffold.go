@@ -17,6 +17,7 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"regexp"
 	"strings"
 
 	"github.com/semsemyonoff/dwe/internal/cli/cmdctx"
@@ -35,6 +36,83 @@ const defaultPrefix = "dwe"
 // defaultService is the starter service folder created unless --service is
 // overridden (an explicit empty value scaffolds no service).
 const defaultService = "app"
+
+// prefixPattern constrains the compose/project prefix to the character set
+// Docker Compose accepts for a project name: it combines with the project name
+// as "${prefix}-${name}", so it must be lowercase alphanumerics plus dash /
+// underscore, starting with an alphanumeric.
+var prefixPattern = regexp.MustCompile(`^[a-z0-9][a-z0-9_-]*$`)
+
+// hexColorPattern matches a 6-digit "#RRGGBB" hex color — the format
+// workspace/styles.yml expects for colors.accent.
+var hexColorPattern = regexp.MustCompile(`^#[0-9A-Fa-f]{6}$`)
+
+// validateName checks a project-name entry: required, no path separators, no
+// control characters (it becomes a directory segment and a YAML scalar).
+func validateName(s string) error {
+	s = strings.TrimSpace(s)
+	if s == "" {
+		return errors.New("project name is required")
+	}
+	if strings.ContainsAny(s, `/\`) {
+		return errors.New("must not contain path separators (/ or \\)")
+	}
+	if hasControlChars(s) {
+		return errors.New("must not contain control characters")
+	}
+	return nil
+}
+
+// validatePrefix checks a compose/project prefix. An empty value is accepted —
+// it falls back to the built-in default ("dwe").
+func validatePrefix(s string) error {
+	s = strings.TrimSpace(s)
+	if s == "" {
+		return nil
+	}
+	if !prefixPattern.MatchString(s) {
+		return errors.New("must be lowercase letters, digits, '-' or '_', starting with a letter or digit")
+	}
+	return nil
+}
+
+// validateAccent checks the optional branding accent color. An empty value is
+// accepted (the built-in palette default is used).
+func validateAccent(s string) error {
+	s = strings.TrimSpace(s)
+	if s == "" {
+		return nil
+	}
+	if !hexColorPattern.MatchString(s) {
+		return errors.New(`must be a 6-digit hex color like "#2EC3EB"`)
+	}
+	return nil
+}
+
+// brandTextValidator returns a validator for an optional single-line branding
+// string (title / tagline): empty is allowed, but control characters and line
+// breaks are rejected because the value is rendered into a single-line YAML
+// scalar in workspace/styles.yml.
+func brandTextValidator(label string) func(string) error {
+	return func(s string) error {
+		s = strings.TrimSpace(s)
+		if s == "" {
+			return nil
+		}
+		if hasControlChars(s) {
+			return fmt.Errorf("%s must not contain control characters or line breaks", label)
+		}
+		return nil
+	}
+}
+
+// hasControlChars reports whether s contains any C0/C1 control character or DEL
+// (this also covers tabs, carriage returns, and newlines).
+func hasControlChars(s string) bool {
+	return strings.ContainsFunc(s, func(r rune) bool {
+		return r < 0x20 || r == 0x7f || (r >= 0x80 && r <= 0x9f)
+	})
+}
 
 // formInput carries the values a form collects (and the flag-derived defaults
 // that pre-fill it). It is the seam between flag/option plumbing and the huh
@@ -57,41 +135,39 @@ var runFormFn = func(ctx context.Context, in formInput, stdin io.Reader, stdout 
 			Title:    "Project name",
 			Required: true,
 			Default:  in.Name,
-			Validate: func(s string) error {
-				s = strings.TrimSpace(s)
-				if s == "" {
-					return errors.New("project name is required")
-				}
-				if strings.ContainsAny(s, "/\\") {
-					return errors.New("project name must not contain path separators")
-				}
-				return nil
-			},
+			Validate: validateName,
 		},
 		{
-			Key:     "prefix",
-			Kind:    ask.FieldInput,
-			Title:   "Compose prefix",
-			Default: in.Prefix,
+			Key:         "prefix",
+			Kind:        ask.FieldInput,
+			Title:       "Compose prefix",
+			Description: "Prefixes the Docker Compose project name as \"<prefix>-<name>\"; lowercase letters, digits, '-' or '_'",
+			Default:     in.Prefix,
+			Validate:    validatePrefix,
 		},
 		{
 			Key:         "brand_title",
 			Kind:        ask.FieldInput,
 			Title:       "Branding title (optional)",
-			Description: "Shown in the project header; leave blank for a generic header",
+			Description: "Headline shown in the project header (workspace/styles.yml → header.lines); leave blank for a generic header",
 			Default:     in.Branding.Title,
+			Validate:    brandTextValidator("title"),
 		},
 		{
-			Key:     "tagline",
-			Kind:    ask.FieldInput,
-			Title:   "Tagline (optional)",
-			Default: in.Branding.Tagline,
+			Key:         "tagline",
+			Kind:        ask.FieldInput,
+			Title:       "Tagline (optional)",
+			Description: "Short subtitle rendered under the header (workspace/styles.yml → header.tagline); e.g. \"Local dev, container-orchestrated.\"",
+			Default:     in.Branding.Tagline,
+			Validate:    brandTextValidator("tagline"),
 		},
 		{
-			Key:     "accent",
-			Kind:    ask.FieldInput,
-			Title:   "Accent color (optional)",
-			Default: in.Branding.Accent,
+			Key:         "accent",
+			Kind:        ask.FieldInput,
+			Title:       "Accent color (optional)",
+			Description: "Primary UI color as a 6-digit hex code, e.g. \"#2EC3EB\" (workspace/styles.yml → colors.accent)",
+			Default:     in.Branding.Accent,
+			Validate:    validateAccent,
 		},
 	}
 
@@ -111,16 +187,28 @@ var runFormFn = func(ctx context.Context, in formInput, stdin io.Reader, stdout 
 	}, nil
 }
 
+// confirmRecreateFn asks the user to confirm recreating a project that already
+// exists in the target directory. It is a package-level var so tests can drive
+// the confirm / decline / abort branches without a real TTY. The default
+// delegates to widgets.RunConfirm, which returns widgets.ErrCancelled on
+// Esc / Ctrl-C.
+var confirmRecreateFn = func(target string) (bool, error) {
+	title := fmt.Sprintf(
+		"A DWE project already exists at %s.\nRecreate it from scratch? This overwrites existing files.",
+		target)
+	return widgets.RunConfirm(title, "Recreate", "Cancel")
+}
+
 // initFlags collects the raw flag values bound by NewCmd.
 type initFlags struct {
-	name       string
-	prefix     string
-	brandTitle string
-	tagline    string
-	accent     string
-	service    string
-	force      bool
-	yes        bool
+	name        string
+	prefix      string
+	brandTitle  string
+	tagline     string
+	accent      string
+	service     string
+	force       bool
+	useDefaults bool
 }
 
 // NewCmd builds the `dwe init` command.
@@ -132,14 +220,17 @@ func NewCmd(groupID string, flags *cmdctx.RootFlags) *cobra.Command {
 		Short: "Scaffold a new DWE project",
 		Long: `Scaffold a fresh DWE project in the current directory (or ./<name>/ when a
 name is given). Interactive by default; falls back to flag-driven defaults when
-stdin/stdout is not a TTY, or when --yes / --output json is set.
+stdin/stdout is not a TTY, or when --default / --output json is set.
 
-The command fills gaps and never overwrites existing files unless --force is set,
-so it is safe to re-run on a partially set-up project.`,
+If a project already exists in the target directory, init asks for confirmation
+before recreating it (and recreates with --force on yes); in non-interactive mode
+it refuses unless --force is passed. Otherwise it fills gaps and never overwrites
+existing files unless --force is set.`,
 		Example: `  dwe init
   dwe init my-project
   dwe init --name my-project --prefix acme --service api
-  dwe init --yes --output json`,
+  dwe init --default --output json
+  dwe init --force            # recreate an existing project`,
 		Args:         cobra.MaximumNArgs(1),
 		GroupID:      groupID,
 		SilenceUsage: true,
@@ -154,8 +245,8 @@ so it is safe to re-run on a partially set-up project.`,
 	cmd.Flags().StringVar(&f.tagline, "tagline", "", "branding tagline written to workspace/styles.yml")
 	cmd.Flags().StringVar(&f.accent, "accent", "", "branding accent color written to workspace/styles.yml")
 	cmd.Flags().StringVar(&f.service, "service", defaultService, `starter service folder name ("" creates none)`)
-	cmd.Flags().BoolVar(&f.force, "force", false, "overwrite existing files instead of skipping them")
-	cmd.Flags().BoolVarP(&f.yes, "yes", "y", false, "skip the interactive form and take all defaults")
+	cmd.Flags().BoolVarP(&f.force, "force", "f", false, "recreate an existing project / overwrite existing files")
+	cmd.Flags().BoolVarP(&f.useDefaults, "default", "d", false, "skip the interactive form and take all defaults")
 
 	return cmd
 }
@@ -176,6 +267,43 @@ func runInit(cmd *cobra.Command, flags *cmdctx.RootFlags, args []string, f initF
 		return err
 	}
 
+	isInteractive := interactive(cmd.InOrStdin(), flags, f.useDefaults)
+
+	// Existing-project gate: when a workspace.yml already lives in the target,
+	// recreating is destructive. Require explicit consent — interactive
+	// confirmation, or --force when non-interactive — before continuing.
+	force := f.force
+	if !force {
+		absTarget, terr := core.ResolveTarget(targetDir)
+		if terr != nil {
+			return cmdctx.ErrWrap("scaffold_target", terr)
+		}
+		exists, terr := core.HasProjectConfig(absTarget)
+		if terr != nil {
+			return cmdctx.ErrWrap("scaffold_target", terr)
+		}
+		if exists {
+			if !isInteractive {
+				return cmdctx.Err("scaffold_project_exists",
+					fmt.Sprintf("a DWE project already exists at %s", absTarget)).
+					WithHint("pass --force to recreate it from scratch")
+			}
+			confirmed, cerr := confirmRecreateFn(absTarget)
+			if cerr != nil {
+				if errors.Is(cerr, widgets.ErrCancelled) {
+					// Declined at the prompt — clean exit, nothing on disk.
+					return nil
+				}
+				return cmdctx.ErrWrap("scaffold_confirm_failed", cerr)
+			}
+			if !confirmed {
+				return nil
+			}
+			// Consent granted: recreate everything, overwriting in place.
+			force = true
+		}
+	}
+
 	in := formInput{
 		Name:   name,
 		Prefix: f.prefix,
@@ -186,7 +314,7 @@ func runInit(cmd *cobra.Command, flags *cmdctx.RootFlags, args []string, f initF
 		},
 	}
 
-	if interactive(cmd.InOrStdin(), flags, f.yes) {
+	if isInteractive {
 		collected, ferr := runFormFn(cmd.Context(), in, cmd.InOrStdin(), cmd.OutOrStdout())
 		if ferr != nil {
 			if errors.Is(ferr, huh.ErrUserAborted) {
@@ -198,13 +326,19 @@ func runInit(cmd *cobra.Command, flags *cmdctx.RootFlags, args []string, f initF
 		in = collected
 	}
 
+	// Validate the final values uniformly. The interactive form already enforces
+	// these, but flag-driven (non-interactive) values reach here unchecked.
+	if verr := validateInput(in); verr != nil {
+		return verr
+	}
+
 	opts := core.Options{
 		TargetDir: targetDir,
 		Name:      strings.TrimSpace(in.Name),
 		Prefix:    strings.TrimSpace(in.Prefix),
 		Service:   f.service,
 		Branding:  in.Branding,
-		Force:     f.force,
+		Force:     force,
 	}
 	if opts.Prefix == "" {
 		opts.Prefix = defaultPrefix
@@ -220,6 +354,30 @@ func runInit(cmd *cobra.Command, flags *cmdctx.RootFlags, args []string, f initF
 	}
 
 	return writeResult(flags, cmd, res)
+}
+
+// validateInput re-checks the resolved form/flag values before scaffolding,
+// mapping any failure to a typed, user-facing error. It guards the
+// non-interactive path, where flag values bypass the form's per-field
+// validators.
+func validateInput(in formInput) error {
+	if err := validatePrefix(in.Prefix); err != nil {
+		return cmdctx.Err("scaffold_invalid_prefix",
+			fmt.Sprintf("invalid prefix %q: %v", strings.TrimSpace(in.Prefix), err)).
+			WithHint("use lowercase letters, digits, '-' or '_'")
+	}
+	if err := brandTextValidator("title")(in.Branding.Title); err != nil {
+		return cmdctx.Err("scaffold_invalid_branding", err.Error())
+	}
+	if err := brandTextValidator("tagline")(in.Branding.Tagline); err != nil {
+		return cmdctx.Err("scaffold_invalid_branding", err.Error())
+	}
+	if err := validateAccent(in.Branding.Accent); err != nil {
+		return cmdctx.Err("scaffold_invalid_accent",
+			fmt.Sprintf("invalid accent color %q: %v", strings.TrimSpace(in.Branding.Accent), err)).
+			WithHint(`use a 6-digit hex color like "#2EC3EB"`)
+	}
+	return nil
 }
 
 // resolveName resolves the project name: --name wins, then the positional [name]
@@ -250,9 +408,9 @@ func resolveName(nameFlag string, args []string) (string, error) {
 }
 
 // interactive reports whether the form should be shown: a real TTY on both ends,
-// not --yes, and not JSON output mode.
-func interactive(stdin io.Reader, flags *cmdctx.RootFlags, yes bool) bool {
-	return widgets.IsInteractiveFn(stdin) && !yes && flags.Output != "json"
+// not --default, and not JSON output mode.
+func interactive(stdin io.Reader, flags *cmdctx.RootFlags, useDefaults bool) bool {
+	return widgets.IsInteractiveFn(stdin) && !useDefaults && flags.Output != "json"
 }
 
 // initJSON is the machine-readable result shape for --output json.

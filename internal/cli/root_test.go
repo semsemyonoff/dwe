@@ -95,9 +95,9 @@ func TestInitCmdRunsWithoutProject(t *testing.T) {
 	var buf bytes.Buffer
 	root.SetOut(&buf)
 	root.SetErr(&buf)
-	// --yes forces non-interactive defaults; nothing should error on the
+	// --default forces non-interactive defaults; nothing should error on the
 	// missing project.
-	root.SetArgs([]string{"init", "--yes", "--output", "json"})
+	root.SetArgs([]string{"init", "--default", "--output", "json"})
 
 	if err := root.Execute(); err != nil {
 		t.Fatalf("dwe init returned unexpected error outside a project: %v", err)

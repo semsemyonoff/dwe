@@ -137,15 +137,6 @@ project:
   name: "myproj"
   prefix: "dwe"
 
-# Optional blocks below share the same namespace across all three layers, but by
-# convention versioned defaults live in workspace/defaults.yml. Uncomment here
-# only to pin something structural to layer 1.
-#
-# runtime:
-#   use_https: false
-#
-# state: ""
-
 --------
 === workspace/defaults.yml ===
 # workspace/defaults.yml — versioned project defaults (layer 2 of 3).

@@ -6,7 +6,7 @@ package docs
 // Generated from docs/reference, docs/guides, and docs/internals at build time.
 // See docs/reference/docs/index.md for details on the hash-based staleness check.
 var ContentHashes = map[string]string{
-	"README.md":                                "45ca88e32b0c",
+	"README.md":                                "266dde616d95",
 	"guides/add-a-service.md":                  "2efb25e1a48a",
 	"guides/author-project-commands.md":        "3f1bb72f6c19",
 	"guides/background-daemons.md":             "cbd42c65deb0",
@@ -18,12 +18,12 @@ var ContentHashes = map[string]string{
 	"guides/preflight-checks.md":               "0ac09d8b4b04",
 	"guides/shared-ide-and-agent-config.md":    "0b09e49f2aeb",
 	"guides/starship.md":                       "154d2eb5680a",
-	"guides/start-a-new-project.md":            "81289f9f4f89",
+	"guides/start-a-new-project.md":            "8f5b9af4c72c",
 	"guides/switching-tasks-with-snapshots.md": "83b43f46c197",
 	"guides/troubleshooting.md":                "98c9915902f3",
 	"guides/write-snapshot-workflows.md":       "a5a1f22c2cb2",
 	"internals/architecture.md":                "4fe04c86171c",
-	"internals/packages.md":                    "a095ff157124",
+	"internals/packages.md":                    "582e681e9431",
 	"reference/concepts/architecture.md":       "78d8799363b8",
 	"reference/concepts/docker.md":             "20dcf0c6b589",
 	"reference/concepts/getting-started.md":    "a3c68d8cbd91",

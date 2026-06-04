@@ -90,17 +90,9 @@ func Scaffold(opts Options) (Result, error) {
 		})) {
 		return Result{}, fmt.Errorf("scaffold: invalid service name %q: must be a single directory name with no path separators, spaces, or control characters", opts.Service)
 	}
-	target := opts.TargetDir
-	if target == "" {
-		cwd, err := os.Getwd()
-		if err != nil {
-			return Result{}, fmt.Errorf("scaffold: resolve working directory: %w", err)
-		}
-		target = cwd
-	}
-	absTarget, err := filepath.Abs(target)
+	absTarget, err := ResolveTarget(opts.TargetDir)
 	if err != nil {
-		return Result{}, fmt.Errorf("scaffold: resolve target %s: %w", target, err)
+		return Result{}, err
 	}
 
 	result := Result{Target: absTarget}
@@ -170,6 +162,44 @@ func Scaffold(opts Options) (Result, error) {
 	sort.Strings(result.Created)
 	sort.Strings(result.Skipped)
 	return result, nil
+}
+
+// ResolveTarget resolves the absolute target directory for the given TargetDir.
+// An empty TargetDir means the current working directory. It is exported so the
+// cli/ layer can compute the same path Scaffold will write to (e.g. to detect a
+// pre-existing project before deciding whether to prompt for confirmation).
+func ResolveTarget(targetDir string) (string, error) {
+	target := targetDir
+	if target == "" {
+		cwd, err := os.Getwd()
+		if err != nil {
+			return "", fmt.Errorf("scaffold: resolve working directory: %w", err)
+		}
+		target = cwd
+	}
+	abs, err := filepath.Abs(target)
+	if err != nil {
+		return "", fmt.Errorf("scaffold: resolve target %s: %w", target, err)
+	}
+	return abs, nil
+}
+
+// HasProjectConfig reports whether absTarget already contains a DWE project
+// config (workspace.yml) — i.e. a project has already been created there. The
+// cli/ layer uses this to require confirmation (interactive) or --force
+// (non-interactive) before recreating an existing project. absTarget must be a
+// resolved path (see ResolveTarget); unlike detectNestedProject this inspects
+// the target directory itself, not its ancestors.
+func HasProjectConfig(absTarget string) (bool, error) {
+	candidate := filepath.Join(absTarget, project.ConfigFilename)
+	switch _, err := os.Stat(candidate); {
+	case err == nil:
+		return true, nil
+	case os.IsNotExist(err):
+		return false, nil
+	default:
+		return false, fmt.Errorf("scaffold: stat %s: %w", candidate, err)
+	}
 }
 
 // applyServicePlan rewrites the embedded service-template output paths to the
