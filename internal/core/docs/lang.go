@@ -8,6 +8,11 @@ import (
 	"strings"
 )
 
+// i18nFilePath returns the FS path for a translated file: "i18n/<locale>/<rel>".
+func i18nFilePath(locale, rel string) string {
+	return fmt.Sprintf("i18n/%s/%s", locale, rel)
+}
+
 // ResolveContent resolves documentation content with language fallback.
 // It reads from the specified root (built-in or project docs) and applies the following logic:
 //
@@ -36,8 +41,7 @@ func ResolveContent(root DocRoot, relPath, locale string) (content []byte, sourc
 	}
 
 	// Try to read from i18n/<locale>/<relPath>
-	i18nPath := fmt.Sprintf("i18n/%s/%s", locale, relPath)
-	translatedContent, err := fs.ReadFile(root.FS, i18nPath)
+	translatedContent, err := fs.ReadFile(root.FS, i18nFilePath(locale, relPath))
 	if err == nil {
 		// Successfully read the translation.
 		// Check the content-hash header to determine staleness.
@@ -113,8 +117,7 @@ func AvailableLocalesFor(roots []DocRoot, relPath string) []string {
 			}
 
 			// Check if this locale has a variant of the requested file
-			localizePath := fmt.Sprintf("i18n/%s/%s", locale, relPath)
-			_, err := fs.Stat(root.FS, localizePath)
+			_, err := fs.Stat(root.FS, i18nFilePath(locale, relPath))
 			if err == nil {
 				locales = append(locales, locale)
 				seenLocales[locale] = true

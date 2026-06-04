@@ -128,7 +128,7 @@ func runDeployMenu(cmd *cobra.Command, flags *cmdctx.RootFlags) error {
 		((setupCfg != nil && len(setupCfg.Questions) > 0) || len(conflicts) > 0)
 
 	// Load journal once for the menu session.
-	statePath := filepath.Join(baseDir, ".dwe", "deploy", "state.yml")
+	statePath := filepath.Join(baseDir, journal.DefaultRelPath)
 	state, err := journal.Load(statePath)
 	if err != nil {
 		state = nil

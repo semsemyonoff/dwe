@@ -77,7 +77,7 @@ func wrapPortLeaf(answer any) (any, bool) {
 func BuildPortOverlay(overrides map[PortKey]int) (map[string]any, error) {
 	overlay := make(map[string]any)
 	for key, port := range overrides {
-		if port < 1 || port > 65535 {
+		if port < minPort || port > maxPort {
 			return nil, fmt.Errorf("port override %s.%s: %d out of range (1..65535)", key.Service, key.PortName, port)
 		}
 		path := fmt.Sprintf("services.%s.ports.%s", key.Service, key.PortName)

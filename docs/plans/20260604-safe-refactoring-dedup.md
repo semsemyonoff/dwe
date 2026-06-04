@@ -86,14 +86,14 @@ Tasks are ordered **safest / highest-value first**: pure deletions and named-con
 - Modify: `internal/core/project/config/styles.go`
 - Modify: matching `*_test.go` for the new `binOverride` helper
 
-- [ ] Collapse the 5 binary accessors (`workspace.go:29-84`) to delegate to unexported `binOverride(cfg *DweConfig, key, def string) string`; keep all 5 exported signatures byte-for-byte.
-- [ ] Replace hand-rolled deploy paths with `lock.DeployLockPath(workDir)` and `journal.DefaultRelPath` (`state.go:60,111,178`; `deploy.go:317`; `menu.go:131`) — verify byte-identical strings. NOTE: `DefaultRelPath` is a `/`-joined string literal while the hand-rolled paths use variadic `filepath.Join`; the swap is `filepath.Join(workDir, journal.DefaultRelPath)` and is equivalent only after `filepath.Join` cleaning (darwin/linux are the only targets).
-- [ ] Hoist the legacy `compose.overlays` migration sentence to package `const legacyComposeOverlaysMsg` (no trailing period), referenced from both `workspace.go:1221,1228`.
-- [ ] Add `const (minPort = 1; maxPort = 65535)` in `setup` and replace the 5 comparisons (`validate.go:63`, `merge.go:80`, `wizard.go:212`, `huh.go:382,447`); keep message strings verbatim.
-- [ ] Add unexported `i18nFilePath(locale, rel)` in `docs/lang.go`, use at `:39,116` (avoid clashing with existing `i18nPath` local).
-- [ ] Change `os.IsNotExist` → `errors.Is(err, os.ErrNotExist)` in `styles.go:44` (add `errors` import).
-- [ ] Write unit tests for `binOverride` (override-present / override-empty→default).
-- [ ] `make test && make lint` — must pass.
+- [x] Collapse the 5 binary accessors (`workspace.go:29-84`) to delegate to unexported `binOverride(cfg *DweConfig, key, def string) string`; keep all 5 exported signatures byte-for-byte.
+- [x] Replace hand-rolled deploy paths with `lock.DeployLockPath(workDir)` and `journal.DefaultRelPath` (`state.go:60,111,178`; `deploy.go:317`; `menu.go:131`) — verify byte-identical strings. NOTE: `DefaultRelPath` is a `/`-joined string literal while the hand-rolled paths use variadic `filepath.Join`; the swap is `filepath.Join(workDir, journal.DefaultRelPath)` and is equivalent only after `filepath.Join` cleaning (darwin/linux are the only targets).
+- [x] Hoist the legacy `compose.overlays` migration sentence to package `const legacyComposeOverlaysMsg` (no trailing period), referenced from both `workspace.go:1221,1228`.
+- [x] Add `const (minPort = 1; maxPort = 65535)` in `setup` and replace the 5 comparisons (`validate.go:63`, `merge.go:80`, `wizard.go:212`, `huh.go:382,447`); keep message strings verbatim.
+- [x] Add unexported `i18nFilePath(locale, rel)` in `docs/lang.go`, use at `:39,116` (avoid clashing with existing `i18nPath` local).
+- [x] Change `os.IsNotExist` → `errors.Is(err, os.ErrNotExist)` in `styles.go:44` (add `errors` import).
+- [x] Write unit tests for `binOverride` (override-present / override-empty→default).
+- [x] `make test && make lint` — must pass (pre-existing TestRussianTranslationsAreFresh failure unrelated to this task).
 
 ### Task 3: Centralize project-lock acquire + ProjectLockHeldError report
 **Theme 1 — priority high / effort small / risk none.** 8 byte-identical 9-line blocks across 3 packages. Lock-ordering invariant stays inside `AcquireProjectLocks`; only the error-report wrapper is extracted.

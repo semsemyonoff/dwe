@@ -18,6 +18,12 @@ const (
 	PresetNonEmpty = "non-empty"
 )
 
+// Port range constants used for validation across the setup package.
+const (
+	minPort = 1
+	maxPort = 65535
+)
+
 // ValidateAndCoerce validates a raw string answer against a question's validate spec
 // and returns the properly typed value. Each preset defines both the validation rules
 // and the typed return value (e.g., port → int).
@@ -60,7 +66,7 @@ func coercePort(raw string) (any, error) {
 	if err != nil {
 		return nil, fmt.Errorf("invalid port: %w", err)
 	}
-	if port < 1 || port > 65535 {
+	if port < minPort || port > maxPort {
 		return nil, fmt.Errorf("port %d out of range (1..65535)", port)
 	}
 	return port, nil

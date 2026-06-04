@@ -379,7 +379,7 @@ func buildPortValidator() func(string) error {
 			return fmt.Errorf("must be a number")
 		}
 
-		if port < 1 || port > 65535 {
+		if port < minPort || port > maxPort {
 			return fmt.Errorf("port out of range (1..65535)")
 		}
 
@@ -444,7 +444,7 @@ func coercePortOverrides(conflicts []env.PortConflict, raws map[string]string) (
 			return nil, fmt.Errorf("port %s/%s: must be a number", conflict.Service, conflict.PortName)
 		}
 
-		if port < 1 || port > 65535 {
+		if port < minPort || port > maxPort {
 			return nil, fmt.Errorf("port %s/%s: %d out of range (1..65535)", conflict.Service, conflict.PortName, port)
 		}
 

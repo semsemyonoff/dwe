@@ -314,8 +314,7 @@ func deployRunCmd(cmd *cobra.Command, flags *cmdctx.RootFlags, serviceName strin
 // `dwe deploy run` cobra command.
 func RunHelper(ctx context.Context, cmd *cobra.Command, flags *cmdctx.RootFlags, opts Opts) (err error) {
 	workDir := flags.ProjectRoot()
-	stateDir := filepath.Join(workDir, ".dwe", "deploy")
-	statePath := filepath.Join(stateDir, "state.yml")
+	statePath := filepath.Join(workDir, journal.DefaultRelPath)
 
 	// Install notifier defer before any error-returning step so even an
 	// early config-load failure produces a "deploy failed" notification.

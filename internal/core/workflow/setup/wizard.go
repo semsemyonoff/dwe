@@ -209,7 +209,7 @@ func validateAnswerForQuestion(q Question, answer any) error {
 				return fmt.Errorf("question %q (type: input, preset: port): expected int, got %T", q.ID, answer)
 			}
 			// Defensive range check (should already have been validated by coercion).
-			if port < 1 || port > 65535 {
+			if port < minPort || port > maxPort {
 				return fmt.Errorf("question %q (type: input, preset: port): port %d out of range (1..65535)", q.ID, port)
 			}
 			// No further re-validation for port; the coercion pass already enforced it.

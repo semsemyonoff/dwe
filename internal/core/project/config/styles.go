@@ -1,6 +1,7 @@
 package config
 
 import (
+	"errors"
 	"fmt"
 	"os"
 
@@ -41,7 +42,7 @@ type StylesColors struct {
 func LoadStylesConfig(path string) (*StylesConfig, error) {
 	data, err := os.ReadFile(path)
 	if err != nil {
-		if os.IsNotExist(err) {
+		if errors.Is(err, os.ErrNotExist) {
 			return &StylesConfig{}, nil
 		}
 		return &StylesConfig{}, fmt.Errorf("read %s: %w", path, err)

@@ -57,8 +57,7 @@ If the state file does not exist, shows a message indicating no state.`,
 
 func deployStateShowCmd(flags *cmdctx.RootFlags, out io.Writer) error {
 	workDir := flags.ProjectRoot()
-	stateDir := filepath.Join(workDir, ".dwe", "deploy")
-	statePath := filepath.Join(stateDir, "state.yml")
+	statePath := filepath.Join(workDir, journal.DefaultRelPath)
 
 	// Check existence before loading to avoid printing zero-value state.
 	if _, err := os.Stat(statePath); errors.Is(err, os.ErrNotExist) {
@@ -108,9 +107,8 @@ In interactive mode (TTY), a confirmation prompt is shown. Use -y/--non-interact
 
 func deployStateClearCmd(flags *cmdctx.RootFlags, force bool) error {
 	workDir := flags.ProjectRoot()
-	stateDir := filepath.Join(workDir, ".dwe", "deploy")
-	statePath := filepath.Join(stateDir, "state.yml")
-	lockPath := filepath.Join(stateDir, "deploy.lock")
+	statePath := filepath.Join(workDir, journal.DefaultRelPath)
+	lockPath := lock.DeployLockPath(workDir)
 
 	// Acquire deploy lock to prevent concurrent deploy from overwriting the clear.
 	lck, err := lock.Acquire(lockPath)
@@ -175,9 +173,8 @@ process terminations.`,
 
 func deployStateRepairCmd(flags *cmdctx.RootFlags) error {
 	workDir := flags.ProjectRoot()
-	stateDir := filepath.Join(workDir, ".dwe", "deploy")
-	statePath := filepath.Join(stateDir, "state.yml")
-	lockPath := filepath.Join(stateDir, "deploy.lock")
+	statePath := filepath.Join(workDir, journal.DefaultRelPath)
+	lockPath := lock.DeployLockPath(workDir)
 
 	// Acquire deploy lock to prevent racing with an in-progress deploy's flush.
 	lck, err := lock.Acquire(lockPath)

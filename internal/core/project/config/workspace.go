@@ -23,65 +23,45 @@ import (
 	"gopkg.in/yaml.v3"
 )
 
-// DweBin returns the configured dwe binary name (default: "dwe").
-// Checks user-config overrides first, then falls back to the built-in default.
-// Safe when cfg is nil.
-func DweBin(cfg *DweConfig) string {
+// legacyComposeOverlaysMsg is the base migration message for the removed
+// compose.overlays key. No trailing period — callers append context.
+const legacyComposeOverlaysMsg = "compose.overlays is no longer supported; move overlay files to individual services (type: tool): services.<name>.compose instead. See docs/reference/config/workspace.md for migration details"
+
+// binOverride returns the user-configured override for the named binary, or
+// def when cfg is nil, cfg.userConfig is nil, or no override is present.
+func binOverride(cfg *DweConfig, key, def string) string {
 	if cfg != nil && cfg.userConfig != nil {
-		if path, ok := cfg.userConfig.BinaryOverride("dwe"); ok {
+		if path, ok := cfg.userConfig.BinaryOverride(key); ok {
 			return path
 		}
 	}
-	return "dwe"
+	return def
 }
+
+// DweBin returns the configured dwe binary name (default: "dwe").
+// Checks user-config overrides first, then falls back to the built-in default.
+// Safe when cfg is nil.
+func DweBin(cfg *DweConfig) string { return binOverride(cfg, "dwe", "dwe") }
 
 // DockerBin returns the configured docker binary name (default: "docker").
 // Checks user-config overrides first, then falls back to the built-in default.
 // Safe when cfg is nil.
-func DockerBin(cfg *DweConfig) string {
-	if cfg != nil && cfg.userConfig != nil {
-		if path, ok := cfg.userConfig.BinaryOverride("docker"); ok {
-			return path
-		}
-	}
-	return "docker"
-}
+func DockerBin(cfg *DweConfig) string { return binOverride(cfg, "docker", "docker") }
 
 // ShellBin returns the configured shell binary name (default: "sh").
 // Checks user-config overrides first, then falls back to the built-in default.
 // Safe when cfg is nil.
-func ShellBin(cfg *DweConfig) string {
-	if cfg != nil && cfg.userConfig != nil {
-		if path, ok := cfg.userConfig.BinaryOverride("shell"); ok {
-			return path
-		}
-	}
-	return "sh"
-}
+func ShellBin(cfg *DweConfig) string { return binOverride(cfg, "shell", "sh") }
 
 // GitBin returns the configured git binary name (default: "git").
 // Checks user-config overrides first, then falls back to the built-in default.
 // Safe when cfg is nil.
-func GitBin(cfg *DweConfig) string {
-	if cfg != nil && cfg.userConfig != nil {
-		if path, ok := cfg.userConfig.BinaryOverride("git"); ok {
-			return path
-		}
-	}
-	return "git"
-}
+func GitBin(cfg *DweConfig) string { return binOverride(cfg, "git", "git") }
 
 // MmdcBin returns the configured mmdc binary name (default: "mmdc").
 // Checks user-config overrides first, then falls back to the built-in default.
 // Safe when cfg is nil.
-func MmdcBin(cfg *DweConfig) string {
-	if cfg != nil && cfg.userConfig != nil {
-		if path, ok := cfg.userConfig.BinaryOverride("mmdc"); ok {
-			return path
-		}
-	}
-	return "mmdc"
-}
+func MmdcBin(cfg *DweConfig) string { return binOverride(cfg, "mmdc", "mmdc") }
 
 // DweConfig is the merged top-level dwe configuration.
 // It is produced by layering workspace.yml → workspace/defaults.yml → workspace/local.yml.
@@ -1218,14 +1198,14 @@ func detectLegacyComposeOverlays(raw map[string]any) error {
 	}
 	overlays, ok := overlaysRaw.(map[string]any)
 	if !ok || len(overlays) == 0 {
-		return fmt.Errorf("compose.overlays is no longer supported; move overlay files to individual services (type: tool): services.<name>.compose instead. See docs/reference/config/workspace.md for migration details")
+		return fmt.Errorf("%s", legacyComposeOverlaysMsg)
 	}
 	var keys []string
 	for k := range overlays {
 		keys = append(keys, k)
 	}
 	sort.Strings(keys)
-	return fmt.Errorf("compose.overlays is no longer supported; move overlay files to individual services (type: tool): services.<name>.compose instead. See docs/reference/config/workspace.md for migration details. Found overlays: %v", keys)
+	return fmt.Errorf("%s. Found overlays: %v", legacyComposeOverlaysMsg, keys)
 }
 
 // LoadConfig loads the merged DweConfig by layering:

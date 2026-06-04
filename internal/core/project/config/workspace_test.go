@@ -3246,6 +3246,75 @@ func TestBinaryAccessorPartialUserConfigOverrides(t *testing.T) {
 	}
 }
 
+func TestBinOverride(t *testing.T) {
+	tests := []struct {
+		name string
+		cfg  *DweConfig
+		key  string
+		def  string
+		want string
+	}{
+		{
+			name: "nil cfg returns default",
+			cfg:  nil,
+			key:  "docker",
+			def:  "docker",
+			want: "docker",
+		},
+		{
+			name: "cfg with nil userConfig returns default",
+			cfg:  &DweConfig{},
+			key:  "docker",
+			def:  "docker",
+			want: "docker",
+		},
+		{
+			name: "override present returns override",
+			cfg: &DweConfig{
+				userConfig: &userpkg.Config{
+					Binaries: map[string]string{"docker": "podman"},
+				},
+			},
+			key:  "docker",
+			def:  "docker",
+			want: "podman",
+		},
+		{
+			name: "override key missing returns default",
+			cfg: &DweConfig{
+				userConfig: &userpkg.Config{
+					Binaries: map[string]string{"git": "/opt/git"},
+				},
+			},
+			key:  "docker",
+			def:  "docker",
+			want: "docker",
+		},
+		{
+			name: "override present with empty-string value overrides default",
+			cfg: &DweConfig{
+				userConfig: &userpkg.Config{
+					Binaries: map[string]string{"docker": ""},
+				},
+			},
+			key: "docker",
+			def: "docker",
+			// BinaryOverride returns ("", true) for an empty-string entry,
+			// so binOverride returns the empty string (override wins).
+			want: "",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := binOverride(tt.cfg, tt.key, tt.def)
+			if got != tt.want {
+				t.Errorf("binOverride(%v, %q, %q) = %q, want %q", tt.cfg, tt.key, tt.def, got, tt.want)
+			}
+		})
+	}
+}
+
 func TestLoadConfig_docsDefaults(t *testing.T) {
 	// Test that docs config defaults to empty string and 0, which resolve to "auto" and 100 MB
 	path := writeLayeredFixture(t, sampleWorkspaceYML, sampleDefaultsYML, "")
