@@ -293,15 +293,15 @@ subdir entries.
 - Create: `internal/core/workflow/scaffold/scaffold_test.go`
 - Create: `internal/core/workflow/scaffold/testdata/` (golden fixtures)
 
-- [ ] implement `Scaffold(opts Options) (Result, error)`: resolve target dir (mkdir for named
+- [x] implement `Scaffold(opts Options) (Result, error)`: resolve target dir (mkdir for named
       target), render plan, write each file (skip/force), run `.gitignore` merge + symlink,
       omit the `app` service when `Service == ""`, accumulate `Created`/`Skipped`
-- [ ] detect an ancestor `workspace.yml` and surface a warning signal in `Result`
+- [x] detect an ancestor `workspace.yml` and surface a warning signal in `Result`
       (CLI decides how to present); do not block
-- [ ] write tests: full run into temp dir → golden tree + contents match `testdata/`
-- [ ] write tests: idempotency (2nd run → all skipped, no diffs); `--force` overwrites;
+- [x] write tests: full run into temp dir → golden tree + contents match `testdata/`
+- [x] write tests: idempotency (2nd run → all skipped, no diffs); `--force` overwrites;
       named-target creates `./<name>/`; `Service==""` omits the service folder
-- [ ] run tests — must pass before Task 7
+- [x] run tests — must pass before Task 7
 
 ### Task 7: CLI command package
 

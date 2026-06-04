@@ -1,0 +1,378 @@
+=== .dwe/config ===
+# .dwe/config — per-project DWE user overrides (committed, all-commented).
+#
+# This file pins per-developer preferences for THIS project without touching the
+# global ~/.config/dwe/config. It is read by every `dwe` invocation run inside
+# the project and is layered: global config < this file < environment variables.
+#
+# Syntax: flat `key = value` lines. Full-line `#` comments only (an inline `#`
+# after a space is a parse error). Booleans accept 1/true/yes and 0/false/no.
+# Unknown keys are warnings, not errors. Uncomment a line to activate it.
+#
+# Every key below is shown with its default. Run `dwe docs config userconfig`
+# for the authoritative reference.
+
+# --- Locale and TUI ---
+# Preferred locale for translated strings. Unset → $LANG → en.
+# language = en
+# Mermaid theme for the `dwe docs` TUI: auto | dark | light. Default: auto.
+# mermaid_theme = auto
+
+# --- Binary overrides ---
+# Absolute path DWE uses when invoking each external binary. Empty is rejected.
+# binary_docker = docker
+# binary_git    = git
+# binary_dwe    = dwe
+# binary_shell  = sh
+# binary_mmdc   = mmdc
+
+# --- Notifications ---
+# Master gate for desktop notifications. Default: false.
+# notify_enabled          = false
+# Per-surface gates (only consulted when notify_enabled is true).
+# notify_deploy_enabled   = true
+# notify_run_enabled      = true
+# notify_commands_enabled = true
+# Comma-separated channel list (e.g. native).
+# notify_channels         = native
+
+--------
+=== .editorconfig ===
+# EditorConfig — https://editorconfig.org
+root = true
+
+[*]
+charset = utf-8
+end_of_line = lf
+insert_final_newline = true
+trim_trailing_whitespace = true
+indent_style = space
+indent_size = 2
+
+[*.go]
+indent_style = tab
+indent_size = 4
+
+[Makefile]
+indent_style = tab
+
+[*.md]
+trim_trailing_whitespace = false
+
+--------
+=== .gitignore ===
+# dwe — runtime data (managed by the CLI)
+.dwe/deploy/
+.dwe/snapshots/
+.dwe/logs/
+.dwe/prompt-cache.yml
+# dwe — per-developer overrides
+workspace/local.yml
+workspace/docker.local.yml
+# dwe — container data
+volumes/
+snapshots/
+
+--------
+=== AGENTS.md ===
+# myproj — DWE project
+
+This repository is a **DWE** (Dev Workspace Engine) project: a Docker-based local
+development environment managed by the `dwe` CLI.
+
+## Orientation for AI agents
+
+Run this once to load a project-aware index of services, commands, and docs:
+
+```
+dwe docs llms-txt
+```
+
+It emits a compact llms.txt snapshot (project context, services, commands, and
+pointers into the built-in docs subsystem) designed to be loaded once and then
+navigated on demand.
+
+## Useful commands
+
+- `dwe` — project dashboard / header
+- `dwe info` — environment summary (URLs, hosts, ports)
+- `dwe validate` — static project-config validation
+- `dwe deploy` — bring the stack up
+- `dwe docs <topic>` — built-in reference (config schemas, guides)
+
+## Config layout
+
+- `workspace.yml` — project identity (name, prefix)
+- `workspace/defaults.yml` — versioned defaults (service toggles, exports)
+- `workspace/styles.yml` — CLI branding and palette
+- `workspace/services/<name>/service.yml` — per-service definitions
+- `workspace/{deploy,lifecycle,info,docker}.yml` — optional overrides. They ship
+  fully commented; the built-in defaults stay active until you uncomment. An
+  active override **replaces** the whole built-in pipeline, so edit them whole.
+
+> `CLAUDE.md` is a symlink to this file (a copy on platforms without symlinks).
+> Edit `AGENTS.md`.
+
+--------
+=== compose.yaml ===
+# Base compose file for this DWE project.
+#
+# DWE merges this base with per-service compose overlays it generates from
+# workspace/services/<name>/service.yml. Add project-wide compose configuration
+# here (named volumes, networks, shared settings); per-service containers are
+# managed by DWE and normally do not need a hand-written entry.
+#
+# Referenced from workspace/defaults.yml as `compose.base: compose.yaml`.
+
+--------
+=== workspace.yml ===
+# workspace.yml — structural identity for this DWE project (layer 1 of 3).
+#
+# This is the only required project file. workspace/defaults.yml (layer 2) and
+# workspace/local.yml (layer 3, gitignored) layer on top of it; keys absent here
+# fall through to those layers. Run `dwe docs config workspace` for the full
+# merge model.
+
+project:
+  name: "myproj"
+  prefix: "dwe"
+
+# Optional blocks below share the same namespace across all three layers, but by
+# convention versioned defaults live in workspace/defaults.yml. Uncomment here
+# only to pin something structural to layer 1.
+#
+# runtime:
+#   use_https: false
+#
+# state: ""
+
+--------
+=== workspace/defaults.yml ===
+# workspace/defaults.yml — versioned project defaults (layer 2 of 3).
+#
+# Tracked by git. Everything here is overridable per-developer in
+# workspace/local.yml (gitignored). Run `dwe docs config workspace`.
+
+# Compose base file (always included by the Docker control plane).
+compose:
+  base: compose.yaml
+
+# Service toggles. Service definitions live in
+# workspace/services/<name>/service.yml; this overlay only flips enabled state
+# (allowed keys per entry: enabled, ports, hosts).
+services:
+  app:
+    enabled: true
+
+# runtime:
+#   use_https: false
+#   spx:
+#     path: ""
+
+# state: ""
+
+# Declarative .env export rules. Each rule maps a dot-path in the merged config
+# to an environment variable. See `dwe docs config workspace`.
+# exports:
+#   env:
+#     - name: APP_PORT
+#       from: services.<name>.ports.http
+#       format: int
+
+--------
+=== workspace/deploy.yml ===
+# workspace/deploy.yml — project deploy pipeline (INERT MIRROR).
+#
+# The built-in default deploy pipeline is ACTIVE. This file is shipped fully
+# commented so the default keeps running untouched. Uncomment to override —
+# doing so REPLACES the whole pipeline (composition is full-replacement, not a
+# merge), so copy every phase you still want, then edit.
+#
+# Authoritative default: deploy.DefaultDeployConfig()
+#   (internal/core/workflow/deploy/defaults.go)
+# Schema and field reference: `dwe docs config deploy`
+#
+# log: true
+# phases:
+#   - name: services
+#     description: "Deploy all enabled services (resolved by dependency order)"
+#     deploy_services: true
+#   - name: start
+#     description: "Start containers and wait for health"
+#     steps:
+#       - name: up
+#         type: dwe
+#         cmd: "docker up --wait"
+#         description: "Start all containers and wait until healthy"
+#         untracked: true
+#   - name: post-deploy
+#     description: "Post-deploy summary (runs only if all prior phases succeeded)"
+#     untracked: true
+#     steps:
+#       - name: info
+#         type: dwe
+#         cmd: "info"
+#         description: "Show environment summary"
+#       - name: success
+#         type: builtin
+#         cmd: message
+#         with:
+#           level: success
+#           text: "Deploy completed successfully"
+
+--------
+=== workspace/docker.yml ===
+# workspace/docker.yml — Docker Compose execution policy (INERT MIRROR).
+#
+# This file controls how `dwe docker` builds and runs `docker compose` commands
+# (project name, per-subcommand args, process env). It is shipped fully
+# commented; with no docker.yml the built-in policy applies. Uncomment to
+# override — an active docker.yml replaces the built-in policy.
+#
+# Per-developer overrides go in workspace/docker.local.yml (gitignored), which
+# is deep-merged on top of this file.
+# Schema and field reference: `dwe docs config docker`
+#
+# project_name: "${project.prefix}-${project.name}"
+#
+# args:
+#   global: ["--ansi", "always", "--progress", "tty"]
+#   up: ["-d", "--remove-orphans"]
+#   logs: ["-f"]
+#   run: ["--rm"]
+#   pull: []
+#   build: []
+#
+# process_env:
+#   DOCKER_CLI_HINTS: "false"
+
+--------
+=== workspace/info.yml ===
+# workspace/info.yml — `dwe info` dashboard (INERT MIRROR).
+#
+# When this file is absent the built-in default dashboard is rendered. This file
+# is shipped fully commented so that default stays active. Uncomment to take
+# full control of the dashboard layout — an active info.yml replaces the
+# built-in dashboard entirely.
+#
+# Authoritative behavior: the built-in `dwe info` fallback dashboard.
+# Schema, item types, and template expressions: `dwe docs config info`
+#
+# sections:
+#   - id: project
+#     title: "Project"
+#     items:
+#       - type: definition
+#         name: "Name"
+#         value: "{{ .Project.Name }}"
+#       - type: definition
+#         name: "Prefix"
+#         value: "{{ .Project.Prefix }}"
+#   - id: urls
+#     title: "URLs"
+#     items:
+#       - type: auto-urls
+#   - id: hosts
+#     title: "Hosts"
+#     items:
+#       - type: auto-hosts
+#
+# footer: true
+
+--------
+=== workspace/lifecycle.yml ===
+# workspace/lifecycle.yml — run / stop pipelines (INERT MIRROR).
+#
+# The built-in default run and stop pipelines are ACTIVE. This file is shipped
+# fully commented so the defaults keep running untouched. Uncomment a section to
+# override it — each section (run, stop) is full-replacement, not a merge, so
+# copy every phase you still want, then edit. (The stop pipeline always has an
+# auto-reap phase prepended by the engine regardless of what you author here.)
+#
+# Authoritative defaults: lifecycle.DefaultRunConfig() / DefaultStopConfig()
+#   (internal/core/workflow/lifecycle/defaults.go)
+# Schema and field reference: `dwe docs config lifecycle`
+#
+# run:
+#   update:
+#     mode: "off"
+#   show_info: true
+#   final_message: "Project is ready for work!"
+#   phases:
+#     - name: start
+#       description: "Start containers and wait for health"
+#       steps:
+#         - name: up
+#           type: dwe
+#           cmd: "docker up --wait"
+#           description: "Start all containers and wait until healthy"
+#
+# stop:
+#   final_message: "Project is stopped. Have a nice day!"
+#   phases:
+#     - name: stop
+#       description: "Stop containers"
+#       steps:
+#         - name: down
+#           type: dwe
+#           cmd: "docker down"
+#           description: "Stop all containers"
+
+--------
+=== workspace/services/app/service.yml ===
+# workspace/services/app/service.yml — the "app" starter service.
+#
+# type + container are active; every other field is an optional, commented
+# example. The folder name (app) is the service's map key — there is
+# no `name:` field. Run `dwe docs config services`.
+
+type: app
+container: "app"
+
+# required: true              # always-on; removes the enable/disable toggle
+# dir: "./app"            # host source directory for this app
+# depends_on: []
+# ports:
+#   http: 8080
+# hosts:
+#   web: "app.localhost"
+# icon: "📦"
+# render:
+#   ide:
+#     enabled: true
+
+--------
+=== workspace/styles.yml ===
+# workspace/styles.yml — CLI branding and semantic color palette.
+#
+# Omitting this file entirely produces the built-in defaults. Empty / missing
+# color tokens fall back to the built-in light or dark default for that token.
+# Run `dwe docs config styles`.
+
+header:
+  lines:
+    - "My Project"
+  # font: doom
+  tagline: "ship it"
+
+colors:
+  accent:  "#ff8800"
+  # success: "#22C55E"
+  # warning: "#F59E0B"
+  # danger:  "#EF4444"
+  # muted:   "#9AA3BB"
+  # border:  "#334155"
+  # text:    ""
+
+# separator: "·"
+
+--------
+DIR .dwe
+--------
+DIR workspace
+--------
+DIR workspace/services
+--------
+DIR workspace/services/app
+--------
+SYMLINK CLAUDE.md -> AGENTS.md
