@@ -1,6 +1,6 @@
 # Guides
 
-Task-oriented recipes and integrations for DWE. Each page solves a concrete user-facing problem ("how do I plug DWE into my shell prompt?", "how do I wire DWE into my CI?") rather than describing a single command or config field.
+Task-oriented recipes and integrations for DWE. Each page solves a concrete user-facing problem rather than describing a single command or config field.
 
 Guides sit alongside the [reference](../reference/index.md) (schemas, command surface, template engine) — the reference tells you *what* exists, guides tell you *how to use it together*.
 
@@ -14,7 +14,7 @@ For developers bootstrapping a new project or getting productive in an existing 
 - [Joining a DWE project](joining-a-project.md) — you cloned a repo with a `workspace.yml`; what to run first and what ends up on disk.
 - [Daily workflow](daily-workflow.md) — the small handful of commands you reach for every day: status, services, shell, commands, logs, stop/restart.
 - [Troubleshooting](troubleshooting.md) — your stack misbehaves; a triage map from `dwe validate` and `dwe logs` down to `dwe compose raw`.
-- [Switching tasks with snapshots](switching-tasks-with-snapshots.md) — feature paused, hotfix incoming; the snapshot create/restore cookbook.
+- [Switching tasks with snapshots](switching-tasks-with-snapshots.md) — save your current environment, switch to other work, and restore it later; the snapshot create/restore cookbook.
 
 ### Authoring and maintaining a project
 
