@@ -309,20 +309,20 @@ subdir entries.
 - Create: `internal/cli/scaffold/scaffold.go` (`NewCmd`, flags, mode, form, output)
 - Create: `internal/cli/scaffold/scaffold_test.go`
 
-- [ ] implement `NewCmd(groupID string, flags *cmdctx.RootFlags) *cobra.Command` with
+- [x] implement `NewCmd(groupID string, flags *cmdctx.RootFlags) *cobra.Command` with
       `Use: "init"`, positional `[name]`, and all flags (`--name/--prefix/--brand-title/--tagline/--accent/--service/--force/-y`)
-- [ ] put the form behind an injectable func var (`runFormFn`, mirror
+- [x] put the form behind an injectable func var (`runFormFn`, mirror
       `internal/cli/command/runbyid.go`) so the abort path is testable without driving real `huh`;
       keep flag→Options mapping + output shaping in plain functions outside the form seam
-- [ ] mode selection: interactive iff `IsInteractiveFn(os.Stdin) && !yes && flags.Output != "json"`;
+- [x] mode selection: interactive iff `IsInteractiveFn(os.Stdin) && !yes && flags.Output != "json"`;
       run the form via `runFormFn` → `ask.Run` (name required w/ validation, prefix default `dwe`,
       skippable branding), flags pre-fill field defaults; assemble `Options`
-- [ ] non-interactive: resolve name from `--name` → `[name]` → cwd basename; call `Scaffold`
-- [ ] output: JSON → `cmdctx.WriteData` `{target, created, skipped, symlink_fallback, nested_warning}`;
+- [x] non-interactive: resolve name from `--name` → `[name]` → cwd basename; call `Scaffold`
+- [x] output: JSON → `cmdctx.WriteData` `{target, created, skipped, symlink_fallback, nested_warning}`;
       text → grouped created/skipped list + symlink-fallback note + next-steps footer; errors via `cmdctx.Err`/`ErrWrap`
-- [ ] write tests: flag-driven non-interactive maps to the correct `Options`; JSON output shape;
+- [x] write tests: flag-driven non-interactive maps to the correct `Options`; JSON output shape;
       `huh.ErrUserAborted` from the injected `runFormFn` → clean exit, nothing written
-- [ ] run tests — must pass before Task 8
+- [x] run tests — must pass before Task 8
 
 ### Task 8: Wire into the root command tree
 
