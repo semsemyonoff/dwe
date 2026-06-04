@@ -217,15 +217,15 @@ Several guides touch the same commands (`dwe logs`, `dwe status`, `dwe info`). T
 **Files:**
 - Create: `docs/guides/switching-tasks-with-snapshots.md`
 
-- [ ] write H1 + intro framing the feature-paused-by-hotfix scenario
-- [ ] section: the `baseline` pattern (one snapshot per stable starting point)
-- [ ] section: full cycle — `snapshot create wip-X` → `snapshot restore baseline` → hotfix → `snapshot restore wip-X`
-- [ ] section: `rollback_target` + `dwe snapshot rollback` for one-key returns
-- [ ] section: `snapshot list` / `inspect` for digging into a snapshot
-- [ ] section: handing a snapshot to a teammate — `snapshot pack` / `unpack`
-- [ ] section: what snapshot does NOT do (no container recreate, no deploy replay)
-- [ ] section: link forward to `write-snapshot-workflows.md` for authoring
-- [ ] verify rendering
+- [x] write H1 + intro framing the feature-paused-by-hotfix scenario
+- [x] section: the `baseline` pattern (one snapshot per stable starting point)
+- [x] section: full cycle — `snapshot create wip-X` → `snapshot restore baseline` → hotfix → `snapshot restore wip-X`
+- [x] section: `rollback_target` + `dwe snapshot rollback` for one-key returns
+- [x] section: `snapshot list` / `inspect` for digging into a snapshot
+- [x] section: handing a snapshot to a teammate — `snapshot pack` / `unpack`
+- [x] section: what snapshot does NOT do (no container recreate, no deploy replay)
+- [x] section: link forward to `write-snapshot-workflows.md` for authoring
+- [x] verify rendering
 
 ### Task 5: EN guide — `add-a-service.md`
 
