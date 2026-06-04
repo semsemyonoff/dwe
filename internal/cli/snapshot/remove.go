@@ -4,16 +4,10 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"log/slog"
 	"os"
-	"os/signal"
-	"syscall"
-	"time"
 
 	"github.com/semsemyonoff/dwe/internal/cli/cmdctx"
-	"github.com/semsemyonoff/dwe/internal/core/notify"
 	"github.com/semsemyonoff/dwe/internal/core/project/config"
-	userpkg "github.com/semsemyonoff/dwe/internal/core/project/user"
 	"github.com/semsemyonoff/dwe/internal/core/ui/widgets"
 	"github.com/semsemyonoff/dwe/internal/core/usercommands"
 	"github.com/semsemyonoff/dwe/internal/core/usercommands/model"
@@ -63,8 +57,8 @@ func runSnapshotRemove(cmd *cobra.Command, flags *cmdctx.RootFlags, name string,
 	if err != nil {
 		return err
 	}
-	if snapCfg == nil {
-		return fmt.Errorf("snapshot remove: no workspace/snapshot.yml found at %s", config.SnapshotConfigPath(baseDir))
+	if err := requireSnapshotConfig(snapCfg, "remove", baseDir); err != nil {
+		return err
 	}
 
 	// Only load the registry when a remove: workflow is defined; the package
@@ -84,34 +78,11 @@ func runSnapshotRemove(cmd *cobra.Command, flags *cmdctx.RootFlags, name string,
 	}
 	defer releaseLocks()
 
-	if !silent {
-		start := time.Now()
-		ucfg, ucfgErr := userpkg.Load(baseDir)
-		if ucfgErr != nil {
-			slog.Warn("userconfig load failed; notifications disabled for this run", "err", ucfgErr)
-			ucfg = nil
-		}
-		n := cmdctx.NewNotifier(ucfg)
-		defer func() {
-			if errors.As(err, new(*snapshotpkg.RemoveCancelledError)) {
-				return
-			}
-			n.Notify(context.Background(), notify.Event{
-				Kind:      notify.OpCommand,
-				Operation: "snapshot:remove",
-				Outcome:   notify.OutcomeFromErr(err),
-				Duration:  time.Since(start),
-				Err:       err,
-				Project:   cfg.Project.Name,
-			})
-		}()
-	}
+	defer installSnapshotNotifier(baseDir, "snapshot:remove", cfg.Project.Name, silent, &err, func(e error) bool {
+		return errors.As(e, new(*snapshotpkg.RemoveCancelledError))
+	})()
 
-	parentCtx := cmd.Context()
-	if parentCtx == nil {
-		parentCtx = context.Background()
-	}
-	ctx, stop := signal.NotifyContext(parentCtx, os.Interrupt, syscall.SIGTERM)
+	ctx, stop := signalAwareContext(cmd.Context())
 	defer stop()
 
 	stdout := cmd.OutOrStdout()

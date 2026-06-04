@@ -1613,6 +1613,73 @@ func TestBuildContributors(t *testing.T) {
 	}
 }
 
+// TestPartitionContributors verifies the shared split into the sorted deploy
+// set and the restart flag (RequiresNone ignored).
+func TestPartitionContributors(t *testing.T) {
+	tests := []struct {
+		name           string
+		contributors   []Contributor
+		wantDeploy     []string
+		wantHasRestart bool
+	}{
+		{
+			name:           "empty → nil deploy, no restart",
+			contributors:   nil,
+			wantDeploy:     nil,
+			wantHasRestart: false,
+		},
+		{
+			name: "none only → nothing",
+			contributors: []Contributor{
+				{Service: "a", Requires: config.RequiresNone},
+			},
+			wantDeploy:     nil,
+			wantHasRestart: false,
+		},
+		{
+			name: "restart only",
+			contributors: []Contributor{
+				{Service: "a", Requires: config.RequiresRestart},
+				{Service: "b", Requires: config.RequiresRestart},
+			},
+			wantDeploy:     nil,
+			wantHasRestart: true,
+		},
+		{
+			name: "deploy set is sorted",
+			contributors: []Contributor{
+				{Service: "c", Requires: config.RequiresDeploy},
+				{Service: "a", Requires: config.RequiresDeploy},
+				{Service: "b", Requires: config.RequiresDeploy},
+			},
+			wantDeploy:     []string{"a", "b", "c"},
+			wantHasRestart: false,
+		},
+		{
+			name: "mixed",
+			contributors: []Contributor{
+				{Service: "z", Requires: config.RequiresDeploy},
+				{Service: "y", Requires: config.RequiresRestart},
+				{Service: "x", Requires: config.RequiresNone},
+				{Service: "a", Requires: config.RequiresDeploy},
+			},
+			wantDeploy:     []string{"a", "z"},
+			wantHasRestart: true,
+		},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			deploy, hasRestart := partitionContributors(tc.contributors)
+			if !slices.Equal(deploy, tc.wantDeploy) {
+				t.Errorf("deploy = %v, want %v", deploy, tc.wantDeploy)
+			}
+			if hasRestart != tc.wantHasRestart {
+				t.Errorf("hasRestart = %v, want %v", hasRestart, tc.wantHasRestart)
+			}
+		})
+	}
+}
+
 // TestBuildPendingOpsFromContributors verifies op collapsing.
 func TestBuildPendingOpsFromContributors(t *testing.T) {
 	tests := []struct {

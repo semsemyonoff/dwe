@@ -275,14 +275,12 @@ func buildContributors(cfg *config.DweConfig, toggles []ToggleAction, deployedSe
 	return contributors
 }
 
-// buildPendingOpsFromContributors builds the PendingOp slice for journal.AddPendingOps.
-// Deploy contributors collapse into one {PendingDeploy, sorted services} op.
-// Restart contributors collapse into a single {PendingRestart} op (no service list).
-// RequiresNone contributors produce no ops. An empty (non-nil) slice is returned
-// when all contributors are RequiresNone — journal.AddPendingOps treats that as a no-op.
-func buildPendingOpsFromContributors(contributors []Contributor) []journal.PendingOp {
-	var deployServices []string
-	hasRestart := false
+// partitionContributors splits a Contributors slice into the sorted set of
+// deploy-requiring service names and a flag for whether any contributor
+// requires a restart. RequiresNone contributors are ignored. The deploy slice
+// is sorted (a no-op on the nil/empty case) so callers get a deterministic
+// order. Shared by buildPendingOpsFromContributors and buildPendingClears.
+func partitionContributors(contributors []Contributor) (deployServices []string, hasRestart bool) {
 	for _, c := range contributors {
 		switch c.Requires {
 		case config.RequiresDeploy:
@@ -291,9 +289,19 @@ func buildPendingOpsFromContributors(contributors []Contributor) []journal.Pendi
 			hasRestart = true
 		}
 	}
+	sort.Strings(deployServices)
+	return deployServices, hasRestart
+}
+
+// buildPendingOpsFromContributors builds the PendingOp slice for journal.AddPendingOps.
+// Deploy contributors collapse into one {PendingDeploy, sorted services} op.
+// Restart contributors collapse into a single {PendingRestart} op (no service list).
+// RequiresNone contributors produce no ops. An empty (non-nil) slice is returned
+// when all contributors are RequiresNone — journal.AddPendingOps treats that as a no-op.
+func buildPendingOpsFromContributors(contributors []Contributor) []journal.PendingOp {
+	deployServices, hasRestart := partitionContributors(contributors)
 	ops := make([]journal.PendingOp, 0)
 	if len(deployServices) > 0 {
-		sort.Strings(deployServices)
 		ops = append(ops, journal.PendingOp{Kind: journal.PendingDeploy, Services: deployServices})
 	}
 	if hasRestart {
@@ -517,6 +525,60 @@ func mutateAndPlanBatch(
 	return plan, contributors, cfgNew, nil
 }
 
+// decideToggleApply runs the apply-decision prefix shared by the single- and
+// multi-service toggle flows. It resolves every case that does NOT require an
+// interactive confirmation prompt, returning handled=true together with the
+// error (if any) the caller should return immediately.
+//
+// When handled is false an apply step is pending and the stack is running with
+// no --apply flag: the caller owns the remaining confirm/hint behaviour, which
+// differs between the single flow (TTY-gated, prints a --apply hint when
+// non-interactive) and the multi flow (always interactive at that point).
+func decideToggleApply(
+	ctx context.Context,
+	out io.Writer,
+	deps ExecuteDeps,
+	plan TogglePlan,
+	execOpts ExecuteOptions,
+	apply, neverDeployed, stackRunning bool,
+) (handled bool, err error) {
+	// Explicit --apply always executes — even when the stack probe says stopped
+	// or the stack has never been deployed — because the apply step (deploy/
+	// restart) is itself what brings the stack up.
+	if apply {
+		return true, executeTogglePlan(ctx, deps, plan, execOpts)
+	}
+
+	// Never deployed: print the dwe-deploy hint regardless of plan shape, since
+	// even a RequiresNone toggle won't take effect until the first deploy.
+	// local.yml is updated, no pending was recorded, no hooks/apply auto-run.
+	if neverDeployed {
+		_, _ = fmt.Fprintln(out, "stack has not been deployed yet; run `dwe deploy` to apply.")
+		return true, nil
+	}
+
+	if len(plan.ApplySteps) == 0 && len(plan.BeforeSteps) == 0 && len(plan.AfterSteps) == 0 {
+		// No work to defer or apply.
+		return true, nil
+	}
+
+	// Stack not running and no --apply: hooks/apply are not auto-run. Pending is
+	// already recorded so `dwe status` will remind the user.
+	if !stackRunning {
+		warnStackStopped(out, plan)
+		return true, nil
+	}
+
+	if len(plan.ApplySteps) == 0 {
+		// Hooks exist but no apply step — execute immediately without prompting.
+		return true, executeTogglePlan(ctx, deps, plan, execOpts)
+	}
+
+	// An apply step is pending and the stack is running — the caller decides how
+	// to confirm.
+	return false, nil
+}
+
 // runSingleServiceToggle implements the full enable/disable mutation flow for a
 // single named service. Handles --print-plan (dry-run), --apply (execute without
 // prompt), TTY (prompt), and non-TTY (defer with hint) modes.
@@ -604,38 +666,8 @@ func runSingleServiceToggle(
 		Contributors: contributors,
 	}
 
-	// Explicit --apply always executes — even when the stack probe says
-	// stopped — because the apply step (deploy/restart) is itself what brings
-	// the stack up. Honored even on a never-deployed stack (the user opted
-	// into the initial deploy).
-	if opts.apply {
-		return executeTogglePlan(ctx, deps, plan, execOpts)
-	}
-
-	// Never deployed: print the dwe-deploy hint regardless of plan shape,
-	// since even a RequiresNone toggle won't take effect until the first
-	// deploy. local.yml is updated, no pending was recorded, no hooks/apply
-	// auto-run.
-	if neverDeployed {
-		_, _ = fmt.Fprintln(cmd.OutOrStdout(), "stack has not been deployed yet; run `dwe deploy` to apply.")
-		return nil
-	}
-
-	if len(plan.ApplySteps) == 0 && len(plan.BeforeSteps) == 0 && len(plan.AfterSteps) == 0 {
-		// No work to defer or apply.
-		return nil
-	}
-
-	// Stack not running and no --apply: hooks/apply are not auto-run. Pending
-	// is already recorded so `dwe status` will remind the user.
-	if !stackRunning {
-		warnStackStopped(cmd.OutOrStdout(), plan)
-		return nil
-	}
-
-	if len(plan.ApplySteps) == 0 {
-		// Hooks exist but no apply step — execute immediately without prompting.
-		return executeTogglePlan(ctx, deps, plan, execOpts)
+	if handled, err := decideToggleApply(ctx, cmd.OutOrStdout(), deps, plan, execOpts, opts.apply, neverDeployed, stackRunning); handled {
+		return err
 	}
 
 	if widgets.IsInteractiveFn(cmd.InOrStdin()) {

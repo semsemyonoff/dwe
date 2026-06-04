@@ -203,35 +203,8 @@ func runServicesToggle(cmd *cobra.Command, flags *cmdctx.RootFlags, opts singleT
 		Contributors: contributors,
 	}
 
-	// Explicit --apply always executes (even when stack probe reports stopped
-	// or stack has never been deployed — the user opted into the initial
-	// deploy).
-	if opts.apply {
-		return executeTogglePlan(cmd.Context(), deps, plan, execOpts)
-	}
-
-	// Never deployed: print the dwe-deploy hint regardless of plan shape,
-	// since even a RequiresNone toggle won't take effect until the first
-	// deploy. local.yml is updated, no pending was recorded, no hooks/apply
-	// auto-run.
-	if neverDeployed {
-		_, _ = fmt.Fprintln(cmd.OutOrStdout(), "stack has not been deployed yet; run `dwe deploy` to apply.")
-		return nil
-	}
-
-	if len(plan.ApplySteps) == 0 && len(plan.BeforeSteps) == 0 && len(plan.AfterSteps) == 0 {
-		return nil
-	}
-
-	// Stack not running and no --apply: pending already recorded; defer apply.
-	if !stackRunning {
-		warnStackStopped(cmd.OutOrStdout(), plan)
-		return nil
-	}
-
-	if len(plan.ApplySteps) == 0 {
-		// Hooks exist but no apply step — execute immediately without prompting.
-		return executeTogglePlan(cmd.Context(), deps, plan, execOpts)
+	if handled, err := decideToggleApply(cmd.Context(), cmd.OutOrStdout(), deps, plan, execOpts, opts.apply, neverDeployed, stackRunning); handled {
+		return err
 	}
 
 	// We're always in TTY here (checked at the top), so prompt the user.

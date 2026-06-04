@@ -280,14 +280,14 @@ Tasks are ordered **safest / highest-value first**: pure deletions and named-con
 - Modify: `internal/cli/service/{service,service_toggle,service_plan}.go`; `internal/cli/snapshot/{create,restore,remove}.go`
 - Modify: matching `*_test.go`
 
-- [ ] Share the contributor-partitioning loop between the 2 pending builders (`service_toggle.go:283`; `service_plan.go:499`).
-- [ ] Extract `decideToggleApply` prefix shared by single/multi toggle flows (`service_toggle.go:607`; `service.go:205`) — risk low.
-- [ ] Extract `installSnapshotNotifier` for the notifier-defer setup in create/restore/remove (`create.go:96`; `restore.go:119`; `remove.go:92`) — keep notifier ordering snapshot-scoped.
-- [ ] Extract `signalAwareContext` (parentCtx-default + `signal.NotifyContext`) — `create.go:121`; `restore.go:142`; `remove.go:115`.
-- [ ] Extract `requireSnapshotConfig` for the 3 nil-config guards (`restore.go:99,228`; `remove.go:67`).
-- [ ] ⚠️ `mutateAndPlan`/`mutateAndPlanBatch` ~90-line dedup (`service_toggle.go:314,429`) is `medium/low` with merge test-seam coupling — do carefully, keep the merge seam testable; if risky, leave a ➕ follow-up note instead of forcing.
-- [ ] Update toggle/snapshot tests for extracted helpers; confirm pending-state behavior unchanged.
-- [ ] `make test && make lint` — must pass.
+- [x] Share the contributor-partitioning loop between the 2 pending builders (`service_toggle.go:283`; `service_plan.go:499`) — new `partitionContributors` in `service_toggle.go` returns the sorted deploy set + restart flag; `buildPendingOpsFromContributors` and `buildPendingClears` both delegate (op-vs-clear assembly stays per-builder).
+- [x] Extract `decideToggleApply` prefix shared by single/multi toggle flows (`service_toggle.go:607`; `service.go:205`) — risk low. New `decideToggleApply(ctx, out, deps, plan, execOpts, apply, neverDeployed, stackRunning) (handled bool, err error)` resolves every non-prompt case; the divergent confirm tail (single: TTY-gated + `--apply` hint; multi: always-prompt) stays per-flow.
+- [x] Extract `installSnapshotNotifier` for the notifier-defer setup in create/restore/remove (`create.go:96`; `restore.go:119`; `remove.go:92`) — new helper in `snapshot/helpers.go`; returns a finalize closure deferred as `defer installSnapshotNotifier(...)()` (load at defer-eval, notify at return); per-kind cancellation predicate passed in; notifier ordering preserved (registered before the signal-context stop defer).
+- [x] Extract `signalAwareContext` (parentCtx-default + `signal.NotifyContext`) — `create.go:121`; `restore.go:142`; `remove.go:115`. New helper in `snapshot/helpers.go`.
+- [x] Extract `requireSnapshotConfig` for the 3 nil-config guards (`restore.go:99,228`; `remove.go:67`) — new helper in `snapshot/helpers.go`; create's guard kept inline (it also requires a `create:` block, different message).
+- [x] ⚠️ `mutateAndPlan`/`mutateAndPlanBatch` ~90-line dedup (`service_toggle.go:314,429`) — ➕ DEFERRED as a follow-up (see Post-Completion). Not forced: the two flows use distinct test seams (`singleToggleAddPendingOps` vs `multiToggleAddPendingOps`) that exist specifically for independent write-failure injection, and diverge in config-hash computation (`journal.ServiceConfigHash` vs `batchServiceConfigHash`); merging would compromise the seam design for marginal gain.
+- [x] Update toggle/snapshot tests for extracted helpers; confirm pending-state behavior unchanged. Added `TestPartitionContributors` and `snapshot/helpers_test.go` (`requireSnapshotConfig`/`signalAwareContext`/`installSnapshotNotifier`); existing toggle/snapshot suites cover `decideToggleApply` and the notifier-deferred flows unchanged.
+- [x] `make test && make lint` — must pass.
 
 ### Task 16: Tidy model/runner accessors & validators in usercommands
 **Theme 14 — priority medium / effort small / risk low.** Field-rejection and override accessors carry user-facing-message / hot-path coupling — keep messages identical.
@@ -391,6 +391,7 @@ Tasks are ordered **safest / highest-value first**: pure deletions and named-con
 **Deferred higher-risk items (kept out of the safe sweep):**
 - Render ai/ide/git RunE-skeleton merge (Task 14) — `medium/medium`. Pursue only as a separate, carefully-reviewed change.
 - `mutateAndPlan`/`mutateAndPlanBatch` full merge (Task 15) and the `CommandDef` type-foreign field-rejection collapse (Task 16) — `medium/low` with test-seam / message coupling. Acceptable to land as their own follow-up PRs if they add friction.
+  - ➕ Follow-up (Task 15): `mutateAndPlan`/`mutateAndPlanBatch` left un-merged. The two share steps 0–4 (lock → capture pre-state → write local.yml → reload + regen .env → build plan → render) but diverge at step 5: distinct `journal.AddPendingOps` seams (`singleToggleAddPendingOps` vs `multiToggleAddPendingOps`, kept separate so tests inject write failures independently) and distinct config-hash computation (`journal.ServiceConfigHash(svc, …)` vs `batchServiceConfigHash(…)`). A safe merge would thread both the seam and the hash-fn as parameters; worth doing only alongside a test refactor that keeps the two failure-injection paths covered.
 
 **Explicitly out of scope (rejected by analysis):**
 - Merging the ai/ide/git **validator** types — divergent concrete types, divergent collision policy, git-only logic. Not safe; do not attempt as part of this plan.

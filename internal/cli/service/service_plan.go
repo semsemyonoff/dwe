@@ -497,20 +497,9 @@ func executeTogglePlan(ctx context.Context, deps ExecuteDeps, plan TogglePlan, o
 // buildPendingClears translates a Contributors slice into the minimal set of
 // PendingClear entries needed to remove exactly the contributor-owned pending ops.
 func buildPendingClears(contributors []Contributor) []journal.PendingClear {
-	var deployServices []string
-	hasRestart := false
-	for _, c := range contributors {
-		switch c.Requires {
-		case config.RequiresDeploy:
-			deployServices = append(deployServices, c.Service)
-		case config.RequiresRestart:
-			hasRestart = true
-		}
-	}
-
+	deployServices, hasRestart := partitionContributors(contributors)
 	var clears []journal.PendingClear
 	if len(deployServices) > 0 {
-		sort.Strings(deployServices)
 		clears = append(clears, journal.PendingClear{Kind: journal.PendingDeploy, Services: deployServices})
 	}
 	if hasRestart {

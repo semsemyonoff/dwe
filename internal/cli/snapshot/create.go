@@ -5,16 +5,10 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"log/slog"
 	"os"
-	"os/signal"
-	"syscall"
-	"time"
 
 	"github.com/semsemyonoff/dwe/internal/cli/cmdctx"
-	"github.com/semsemyonoff/dwe/internal/core/notify"
 	"github.com/semsemyonoff/dwe/internal/core/project/config"
-	userpkg "github.com/semsemyonoff/dwe/internal/core/project/user"
 	"github.com/semsemyonoff/dwe/internal/core/ui/widgets"
 	"github.com/semsemyonoff/dwe/internal/core/usercommands"
 	"github.com/semsemyonoff/dwe/internal/core/usercommands/model"
@@ -88,36 +82,13 @@ func runSnapshotCreate(cmd *cobra.Command, flags *cmdctx.RootFlags, name, descri
 	// Install notifier defer for end-of-run desktop notification. Suppress
 	// the notification on user cancellation (overwrite refused) — it is
 	// intentional, not a failure.
-	if !silent {
-		start := time.Now()
-		ucfg, ucfgErr := userpkg.Load(baseDir)
-		if ucfgErr != nil {
-			slog.Warn("userconfig load failed; notifications disabled for this run", "err", ucfgErr)
-			ucfg = nil
-		}
-		n := cmdctx.NewNotifier(ucfg)
-		defer func() {
-			if errors.As(err, new(*snapshotpkg.CreateCancelledError)) {
-				return
-			}
-			n.Notify(context.Background(), notify.Event{
-				Kind:      notify.OpCommand,
-				Operation: "snapshot:create",
-				Outcome:   notify.OutcomeFromErr(err),
-				Duration:  time.Since(start),
-				Err:       err,
-				Project:   cfg.Project.Name,
-			})
-		}()
-	}
+	defer installSnapshotNotifier(baseDir, "snapshot:create", cfg.Project.Name, silent, &err, func(e error) bool {
+		return errors.As(e, new(*snapshotpkg.CreateCancelledError))
+	})()
 
 	// Install SIGINT/SIGTERM-aware context so the workflow can be cancelled
 	// and we still write the manifest with status=interrupted in the defer.
-	parentCtx := cmd.Context()
-	if parentCtx == nil {
-		parentCtx = context.Background()
-	}
-	ctx, stop := signal.NotifyContext(parentCtx, os.Interrupt, syscall.SIGTERM)
+	ctx, stop := signalAwareContext(cmd.Context())
 	defer stop()
 
 	stdout := cmd.OutOrStdout()
