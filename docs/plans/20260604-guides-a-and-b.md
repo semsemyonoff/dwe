@@ -357,11 +357,11 @@ Several guides touch the same commands (`dwe logs`, `dwe status`, `dwe info`). T
 **Files:**
 - Modify: `docs/guides/index.md`
 
-- [ ] keep H1 + intro paragraph
-- [ ] restructure `## Pages` into three groups: "Joining and using a project", "Authoring and maintaining a project", "Integrations"
-- [ ] place all 12 new guides under the right group; keep `starship.md` under Integrations
-- [ ] preserve the "See also" footer
-- [ ] verify rendering — index is the entry point and must show all guides correctly
+- [x] keep H1 + intro paragraph
+- [x] restructure `## Pages` into three groups: "Joining and using a project", "Authoring and maintaining a project", "Integrations"
+- [x] place all 12 new guides under the right group; keep `starship.md` under Integrations
+- [x] preserve the "See also" footer
+- [x] verify rendering — index is the entry point and must show all guides correctly
 
 ### Task 14: First `make build` — mint content hashes for new EN files
 
