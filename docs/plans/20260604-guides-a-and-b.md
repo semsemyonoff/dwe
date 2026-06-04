@@ -232,16 +232,16 @@ Several guides touch the same commands (`dwe logs`, `dwe status`, `dwe info`). T
 **Files:**
 - Create: `docs/guides/add-a-service.md`
 
-- [ ] write H1 + intro framing "adding `worker` next to `web`"
-- [ ] section: choose `type:` (app / tool / infra) — when each fits
-- [ ] section: minimal folder layout — `workspace/services/worker/service.yml`
-- [ ] section: optionally inherit shared fields from an existing app service via `extends:` (app-only) and which fields propagate
-- [ ] section: compose overlay — `compose/services/worker.yml` example wired via `service.yml: compose:`
-- [ ] section: register the toggle in `workspace/defaults.yml: services.worker.enabled`
-- [ ] section: optional deploy steps — `workspace/services/worker/deploy.yml`
-- [ ] section: optional render packs (IDE/AI/git) for app services
-- [ ] section: verification — `dwe validate config services`, `dwe services enable worker`, `dwe deploy run --service worker`
-- [ ] verify rendering
+- [x] write H1 + intro framing "adding `worker` next to `web`"
+- [x] section: choose `type:` (app / tool / infra) — when each fits
+- [x] section: minimal folder layout — `workspace/services/worker/service.yml`
+- [x] section: optionally inherit shared fields from an existing app service via `extends:` (app-only) and which fields propagate
+- [x] section: compose overlay — `compose/services/worker.yml` example wired via `service.yml: compose:`
+- [x] section: register the toggle in `workspace/defaults.yml: services.worker.enabled`
+- [x] section: optional deploy steps — `workspace/services/worker/deploy.yml`
+- [x] section: optional render packs (IDE/AI/git) for app services
+- [x] section: verification — `dwe validate config services`, `dwe services enable worker`, `dwe deploy run --service worker`
+- [x] verify rendering
 
 ### Task 6: EN guide — `author-project-commands.md`
 
