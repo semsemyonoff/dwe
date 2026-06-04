@@ -369,12 +369,12 @@ Several guides touch the same commands (`dwe logs`, `dwe status`, `dwe info`). T
 - Modify (auto-generated): `internal/core/docs/content_hashes_gen.go`
 - Modify (auto-generated): `internal/core/docs/embedded/` (full sync)
 
-- [ ] run `make build`
-- [ ] verify `bin/dwe` builds cleanly
-- [ ] run `./bin/dwe docs list` — confirm all 13 EN guides (12 new + starship) appear under `guides/`
-- [ ] run `./bin/dwe docs show guides/joining-a-project` — confirm rendering works
-- [ ] `git diff internal/core/docs/content_hashes_gen.go` — confirm 12 new `guides/<name>.md` entries appear AND 1 modified entry for `guides/index.md`; sanity-checks against wrong-path writes
-- [ ] read `internal/core/docs/content_hashes_gen.go` and note hashes for each new `guides/<name>.md` entry **and** for the modified `guides/index.md` (the RU index header needs the new hash too) — these are the values that go into RU translation headers
+- [x] run `make build`
+- [x] verify `bin/dwe` builds cleanly
+- [x] run `./bin/dwe docs list` — confirm all 13 EN guides (12 new + starship) appear under `guides/`
+- [x] run `./bin/dwe docs show guides/joining-a-project` — confirm rendering works
+- [x] `git diff internal/core/docs/content_hashes_gen.go` — confirm 12 new `guides/<name>.md` entries appear AND 1 modified entry for `guides/index.md`; sanity-checks against wrong-path writes
+- [x] read `internal/core/docs/content_hashes_gen.go` and note hashes for each new `guides/<name>.md` entry **and** for the modified `guides/index.md` (the RU index header needs the new hash too) — these are the values that go into RU translation headers
 
 ### Task 15: Russian translations — all 12 guides
 
