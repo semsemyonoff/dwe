@@ -83,11 +83,44 @@ func mapEmbedPath(path string) string {
 	return strings.TrimSuffix(out, templateSuffix)
 }
 
+// yamlEsc escapes a string for safe interpolation inside a YAML double-quoted
+// scalar. It handles backslashes, double-quotes, C0 controls (U+0000–U+001F),
+// DEL (U+007F), and C1 controls (U+0080–U+009F) that yaml.v3 rejects as
+// illegal control characters.
+func yamlEsc(s string) string {
+	var b strings.Builder
+	b.Grow(len(s))
+	for _, r := range s {
+		switch r {
+		case '\\':
+			b.WriteString(`\\`)
+		case '"':
+			b.WriteString(`\"`)
+		case '\n':
+			b.WriteString(`\n`)
+		case '\r':
+			b.WriteString(`\r`)
+		case '\t':
+			b.WriteString(`\t`)
+		case '\x00':
+			b.WriteString(`\0`)
+		default:
+			if r < 0x20 || r == 0x7f || (r >= 0x80 && r <= 0x9f) {
+				fmt.Fprintf(&b, `\u%04X`, r)
+			} else {
+				b.WriteRune(r)
+			}
+		}
+	}
+	return b.String()
+}
+
 // renderTemplate parses and executes a single template with custom [[ ]]
 // delimiters, so literal Go-template syntax ({{ .Project.Name }}) inside inert
 // reference files is never interpreted.
 func renderTemplate(name string, data []byte, opts Options) ([]byte, error) {
 	tmpl, err := template.New(name).
+		Funcs(template.FuncMap{"yamlEsc": yamlEsc}).
 		Delims("[[", "]]").
 		Option("missingkey=error").
 		Parse(string(data))

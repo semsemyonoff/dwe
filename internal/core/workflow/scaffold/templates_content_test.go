@@ -130,7 +130,7 @@ func TestEmbeddedTemplates_StylesRendersNestedBranding(t *testing.T) {
 
 func TestEmbeddedTemplates_ServiceTogglePresentOnlyWhenNamed(t *testing.T) {
 	with := string(mustRender(t, newTestOptions())["workspace/defaults.yml"])
-	if !strings.Contains(with, "services:\n  app:\n    enabled: true") {
+	if !strings.Contains(with, "services:\n  \"app\":\n    enabled: true") {
 		t.Errorf("defaults.yml with Service=app missing active toggle:\n%s", with)
 	}
 
@@ -171,4 +171,89 @@ func mustRender(t *testing.T, opts Options) map[string][]byte {
 		t.Fatalf("renderPlan: %v", err)
 	}
 	return plan
+}
+
+// TestYamlEsc_ControlCharsProduceValidYAML verifies that control characters in
+// Name, Prefix, and each Branding field produce YAML that parses cleanly, and
+// that the round-tripped value matches the original input.
+func TestYamlEsc_ControlCharsProduceValidYAML(t *testing.T) {
+	controls := []struct {
+		label string
+		value string
+	}{
+		{"newline", "foo\nbar"},
+		{"tab", "foo\tbar"},
+		{"carriage-return", "foo\rbar"},
+		{"nul", "foo\x00bar"},
+		{"bell", "foo\x07bar"},
+		{"backspace", "foo\x08bar"},
+		{"escape", "foo\x1bbar"},
+		{"del", "foo\x7fbar"},
+		{"c1-pad", "foo\u0080bar"},
+		{"c1-nel", "foo\u0085bar"},
+		{"c1-ocs", "foo\u009fbar"},
+	}
+
+	for _, ctrl := range controls {
+		t.Run(ctrl.label+"/name", func(t *testing.T) {
+			opts := Options{Name: ctrl.value, Prefix: "dwe"}
+			assertYAMLRoundTrip(t, opts, "workspace.yml", "project.name", ctrl.value)
+		})
+		t.Run(ctrl.label+"/prefix", func(t *testing.T) {
+			opts := Options{Name: "myproj", Prefix: ctrl.value}
+			assertYAMLRoundTrip(t, opts, "workspace.yml", "project.prefix", ctrl.value)
+		})
+		t.Run(ctrl.label+"/title", func(t *testing.T) {
+			opts := Options{Name: "myproj", Prefix: "dwe", Branding: Branding{Title: ctrl.value, Tagline: "t", Accent: "#ff0000"}}
+			assertYAMLRoundTrip(t, opts, "workspace/styles.yml", "header.lines[0]", ctrl.value)
+		})
+		t.Run(ctrl.label+"/tagline", func(t *testing.T) {
+			opts := Options{Name: "myproj", Prefix: "dwe", Branding: Branding{Title: "T", Tagline: ctrl.value, Accent: "#ff0000"}}
+			assertYAMLRoundTrip(t, opts, "workspace/styles.yml", "header.tagline", ctrl.value)
+		})
+		t.Run(ctrl.label+"/accent", func(t *testing.T) {
+			opts := Options{Name: "myproj", Prefix: "dwe", Branding: Branding{Title: "T", Tagline: "t", Accent: ctrl.value}}
+			assertYAMLRoundTrip(t, opts, "workspace/styles.yml", "colors.accent", ctrl.value)
+		})
+	}
+}
+
+// assertYAMLRoundTrip renders the plan, confirms YAML parses, then checks that
+// the value at fieldDesc matches want. fieldDesc is a human-readable label only
+// (used in error messages); the caller decides which struct field to inspect.
+func assertYAMLRoundTrip(t *testing.T, opts Options, path, fieldDesc, want string) {
+	t.Helper()
+	plan, err := renderPlan(opts)
+	if err != nil {
+		t.Fatalf("renderPlan: %v", err)
+	}
+	data, ok := plan[path]
+	if !ok {
+		t.Fatalf("missing %q in plan", path)
+	}
+	var out any
+	if err := yaml.Unmarshal(data, &out); err != nil {
+		t.Fatalf("%s with %q: YAML parse failed: %v\n---\n%s", fieldDesc, want, err, data)
+	}
+	// Spot-check workspace.yml round-trip values via typed struct.
+	if path == "workspace.yml" {
+		var ws struct {
+			Project struct {
+				Name   string `yaml:"name"`
+				Prefix string `yaml:"prefix"`
+			} `yaml:"project"`
+		}
+		if err := yaml.Unmarshal(data, &ws); err != nil {
+			t.Fatalf("%s round-trip parse: %v", fieldDesc, err)
+		}
+		var got string
+		if fieldDesc == "project.name" {
+			got = ws.Project.Name
+		} else {
+			got = ws.Project.Prefix
+		}
+		if got != want {
+			t.Errorf("%s round-trip: got %q, want %q\n---\n%s", fieldDesc, got, want, data)
+		}
+	}
 }

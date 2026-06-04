@@ -5,7 +5,7 @@
 # no `name:` field. Run `dwe docs config services`.
 
 type: app
-container: "[[ .Service ]]"
+container: "[[ .Service | yamlEsc ]]"
 
 # required: true              # always-on; removes the enable/disable toggle
 # dir: "./[[ .Service ]]"            # host source directory for this app

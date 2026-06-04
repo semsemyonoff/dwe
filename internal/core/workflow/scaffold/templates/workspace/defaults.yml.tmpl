@@ -12,7 +12,7 @@ compose:
 # (allowed keys per entry: enabled, ports, hosts).
 [[- if .Service ]]
 services:
-  [[ .Service ]]:
+  "[[ .Service | yamlEsc ]]":
     enabled: true
 [[- else ]]
 # services:

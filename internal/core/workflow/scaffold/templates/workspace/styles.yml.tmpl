@@ -7,7 +7,7 @@
 header:
 [[- if .Branding.Title ]]
   lines:
-    - "[[ .Branding.Title ]]"
+    - "[[ .Branding.Title | yamlEsc ]]"
 [[- else ]]
   # lines:
   #   - "Welcome to"
@@ -15,14 +15,14 @@ header:
 [[- end ]]
   # font: doom
 [[- if .Branding.Tagline ]]
-  tagline: "[[ .Branding.Tagline ]]"
+  tagline: "[[ .Branding.Tagline | yamlEsc ]]"
 [[- else ]]
   # tagline: "Local dev, container-orchestrated."
 [[- end ]]
 
 colors:
 [[- if .Branding.Accent ]]
-  accent:  "[[ .Branding.Accent ]]"
+  accent:  "[[ .Branding.Accent | yamlEsc ]]"
 [[- else ]]
   # accent:  "#2EC3EB"
 [[- end ]]

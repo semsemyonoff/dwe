@@ -161,7 +161,7 @@ compose:
 # workspace/services/<name>/service.yml; this overlay only flips enabled state
 # (allowed keys per entry: enabled, ports, hosts).
 services:
-  app:
+  "app":
     enabled: true
 
 # runtime:

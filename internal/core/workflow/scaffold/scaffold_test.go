@@ -289,9 +289,17 @@ func TestScaffold_ClaudeSymlink(t *testing.T) {
 }
 
 // TestScaffold_InvalidServiceRejected verifies that service names containing
-// path separators or traversal components are rejected before any disk write.
+// path separators, traversal components, or control characters are rejected
+// before any disk write.
 func TestScaffold_InvalidServiceRejected(t *testing.T) {
-	bad := []string{"../etc", "../../root", "a/b", `a\b`, "..", "."}
+	bad := []string{
+		"../etc", "../../root", "a/b", `a\b`, "..", ".",
+		"api\nports:\n  http: 9999", "svc\x00null", "tab\there",
+		// C1 controls: yaml.v3 rejects them in quoted scalars
+		"svc\u0080name",
+		// YAML line-break runes break comment lines in service.yml.tmpl
+		"svc\u0085name", "svc\u2028name", "svc\u2029name",
+	}
 	for _, svc := range bad {
 		dir := t.TempDir()
 		opts := scaffoldOptions(dir)

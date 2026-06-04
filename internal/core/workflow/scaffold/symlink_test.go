@@ -20,7 +20,7 @@ func TestLinkClaudeMd_Symlink(t *testing.T) {
 	dir := t.TempDir()
 	seedAgents(t, dir)
 
-	fallback, err := linkClaudeMd(dir)
+	fallback, err := linkClaudeMd(dir, false)
 	if err != nil {
 		t.Fatalf("linkClaudeMd: %v", err)
 	}
@@ -58,7 +58,7 @@ func TestLinkClaudeMd_CopyFallback(t *testing.T) {
 		return errors.New("symlinks not supported")
 	}
 
-	fallback, err := linkClaudeMd(dir)
+	fallback, err := linkClaudeMd(dir, false)
 	if err != nil {
 		t.Fatalf("linkClaudeMd: %v", err)
 	}
@@ -98,7 +98,7 @@ func TestLinkClaudeMd_PreexistingTargetLeftUntouched(t *testing.T) {
 		return nil
 	}
 
-	fallback, err := linkClaudeMd(dir)
+	fallback, err := linkClaudeMd(dir, false)
 	if err != nil {
 		t.Fatalf("linkClaudeMd: %v", err)
 	}
@@ -115,6 +115,32 @@ func TestLinkClaudeMd_PreexistingTargetLeftUntouched(t *testing.T) {
 	}
 }
 
+func TestLinkClaudeMd_ForceOverwritesExisting(t *testing.T) {
+	dir := t.TempDir()
+	seedAgents(t, dir)
+
+	claudePath := filepath.Join(dir, "CLAUDE.md")
+	if err := os.WriteFile(claudePath, []byte("# stale CLAUDE.md\n"), 0o644); err != nil {
+		t.Fatalf("seed stale CLAUDE.md: %v", err)
+	}
+
+	fallback, err := linkClaudeMd(dir, true)
+	if err != nil {
+		t.Fatalf("linkClaudeMd(force): %v", err)
+	}
+	if fallback {
+		t.Fatal("expected fallback=false when the symlink succeeds after force")
+	}
+
+	target, err := os.Readlink(claudePath)
+	if err != nil {
+		t.Fatalf("expected CLAUDE.md to be a symlink after force: %v", err)
+	}
+	if target != "AGENTS.md" {
+		t.Fatalf("symlink target = %q, want AGENTS.md", target)
+	}
+}
+
 func TestLinkClaudeMd_MissingAgentsCopyFallbackErrors(t *testing.T) {
 	dir := t.TempDir()
 	// No AGENTS.md seeded.
@@ -125,7 +151,7 @@ func TestLinkClaudeMd_MissingAgentsCopyFallbackErrors(t *testing.T) {
 		return errors.New("symlinks not supported")
 	}
 
-	if _, err := linkClaudeMd(dir); err == nil {
+	if _, err := linkClaudeMd(dir, false); err == nil {
 		t.Fatal("expected an error when AGENTS.md is missing on the copy-fallback path")
 	}
 }

@@ -19,13 +19,19 @@ var symlinkFn = os.Symlink
 // verbatim copy of AGENTS.md and returns fallback=true.
 //
 // AGENTS.md is the canonical file and must already exist in dir; it is read for the
-// copy fallback. linkClaudeMd never overwrites an existing CLAUDE.md: a pre-existing
-// target is treated as a satisfied fill-gaps result (fallback=false, no error).
-func linkClaudeMd(dir string) (fallback bool, err error) {
+// copy fallback. Without force, a pre-existing CLAUDE.md is left untouched
+// (fallback=false, no error). With force, an existing CLAUDE.md is removed and
+// re-created to keep it in sync with the freshly overwritten AGENTS.md.
+func linkClaudeMd(dir string, force bool) (fallback bool, err error) {
 	claudePath := filepath.Join(dir, "CLAUDE.md")
 	if _, statErr := os.Stat(claudePath); statErr == nil {
-		// CLAUDE.md already present (symlink or copy from a prior run): leave it be.
-		return false, nil
+		if !force {
+			// CLAUDE.md already present and force not requested: leave it be.
+			return false, nil
+		}
+		if rmErr := os.Remove(claudePath); rmErr != nil {
+			return false, fmt.Errorf("scaffold: remove existing %s: %w", claudePath, rmErr)
+		}
 	} else if !os.IsNotExist(statErr) {
 		return false, fmt.Errorf("scaffold: stat %s: %w", claudePath, statErr)
 	}

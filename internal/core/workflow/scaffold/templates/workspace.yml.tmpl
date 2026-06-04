@@ -6,8 +6,8 @@
 # merge model.
 
 project:
-  name: "[[ .Name ]]"
-  prefix: "[[ .Prefix ]]"
+  name: "[[ .Name | yamlEsc ]]"
+  prefix: "[[ .Prefix | yamlEsc ]]"
 
 # Optional blocks below share the same namespace across all three layers, but by
 # convention versioned defaults live in workspace/defaults.yml. Uncomment here
