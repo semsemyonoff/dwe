@@ -648,7 +648,7 @@ func readComposeProjectName(root, displayName string) string {
 	if err := yaml.Unmarshal(data, &stub); err != nil {
 		return displayName
 	}
-	if stub.Project.Prefix != "" {
+	if stub.Project.Prefix != "" && stub.Project.Name != "" {
 		return stub.Project.Prefix + "-" + stub.Project.Name
 	}
 	return displayName
