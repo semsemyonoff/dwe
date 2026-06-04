@@ -325,14 +325,14 @@ Several guides touch the same commands (`dwe logs`, `dwe status`, `dwe info`). T
 **Files:**
 - Create: `docs/guides/brand-your-project.md`
 
-- [ ] write H1 + intro framing "make this look like *our* project"
-- [ ] section: `workspace/styles.yml` — `header.lines` + `header.font` (figlet) + `header.tagline`
-- [ ] section: 7 semantic color tokens (accent / success / warning / danger / muted / border / text); light/dark auto-resolution; how to override
-- [ ] section: `separator` character
-- [ ] section: `workspace/info.yml` — sections, item types (`definition` / `info` / `warning` / `auto-urls` / `auto-hosts` / `subgroup` / `separator`)
-- [ ] section: conditional visibility — `when:` expressions inside `info.yml`
-- [ ] section: emoji safety — rule only (use emoji with default presentation; text-default codepoints like `🛢` / `🗄` / `⚙` are dropped at render to keep tables aligned); link to `../reference/config/services/fields.md` for the full explanation
-- [ ] verify rendering
+- [x] write H1 + intro framing "make this look like *our* project"
+- [x] section: `workspace/styles.yml` — `header.lines` + `header.font` (figlet) + `header.tagline`
+- [x] section: 7 semantic color tokens (accent / success / warning / danger / muted / border / text); light/dark auto-resolution; how to override
+- [x] section: `separator` character
+- [x] section: `workspace/info.yml` — sections, item types (`definition` / `info` / `warning` / `auto-urls` / `auto-hosts` / `subgroup` / `separator`)
+- [x] section: conditional visibility — `when:` expressions inside `info.yml`
+- [x] section: emoji safety — rule only (use emoji with default presentation; text-default codepoints like `🛢` / `🗄` / `⚙` are dropped at render to keep tables aligned); link to `../reference/config/services/fields.md` for the full explanation
+- [x] verify rendering
 
 ### Task 12: EN guide — `write-snapshot-workflows.md`
 
