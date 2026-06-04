@@ -741,3 +741,24 @@ func TestStoreAvailableLocales(t *testing.T) {
 		})
 	}
 }
+
+// TestResolveLocalizedNilBundle exercises the resolveLocalized guard for a nil
+// *Bundle present in the locales map: it must be skipped, not dereferenced, and
+// resolution must continue to the en bundle.
+func TestResolveLocalizedNilBundle(t *testing.T) {
+	s := &Store{
+		locales: map[string]*Bundle{
+			"ru": nil, // present key, nil bundle
+			"en": {UI: map[string]string{"ui.test": "English"}},
+		},
+	}
+	if got := s.T("ru", "ui.test", "fallback"); got != "English" {
+		t.Errorf("T with nil ru bundle = %q, want English (via en)", got)
+	}
+
+	// nil bundle in both requested and en → fallback.
+	s2 := &Store{locales: map[string]*Bundle{"ru": nil, "en": nil}}
+	if got := s2.T("ru", "ui.test", "fallback"); got != "fallback" {
+		t.Errorf("T with nil ru+en bundles = %q, want fallback", got)
+	}
+}

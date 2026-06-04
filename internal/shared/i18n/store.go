@@ -37,243 +37,97 @@ func (s *Store) ClampLocale(locale string) string {
 	return "en"
 }
 
+// resolveLocalized runs extract against the requested locale's bundle, then the
+// "en" bundle, returning the first non-empty result. When neither yields a
+// value it returns fallback. Nil store / nil locale map short-circuit to
+// fallback. extract is nil-safe: map indexing on absent keys (or nil sub-maps)
+// returns the zero value, which is treated as "not found".
+func (s *Store) resolveLocalized(locale, fallback string, extract func(*Bundle) string) string {
+	if s == nil || s.locales == nil {
+		return fallback
+	}
+	if bundle, ok := s.locales[locale]; ok && bundle != nil {
+		if v := extract(bundle); v != "" {
+			return v
+		}
+	}
+	if bundle, ok := s.locales["en"]; ok && bundle != nil {
+		if v := extract(bundle); v != "" {
+			return v
+		}
+	}
+	return fallback
+}
+
 // T resolves a ui.* key for the given locale.
 // uiKey is the bare key name under the "ui:" YAML block — no "ui." prefix (e.g. "docs.section.properties").
 // Lookup chain: locale → "en" → fallback → ""
 func (s *Store) T(locale, uiKey, fallback string) string {
-	if s == nil || s.locales == nil {
-		return fallback
-	}
-
-	// Try exact locale
-	if bundle, ok := s.locales[locale]; ok && bundle != nil && bundle.UI != nil {
-		if val, ok := bundle.UI[uiKey]; ok && val != "" {
-			return val
-		}
-	}
-
-	// Fall back to English
-	if bundle, ok := s.locales["en"]; ok && bundle != nil && bundle.UI != nil {
-		if val, ok := bundle.UI[uiKey]; ok && val != "" {
-			return val
-		}
-	}
-
-	// Final fallback to provided arg, then empty
-	if fallback != "" {
-		return fallback
-	}
-	return ""
+	return s.resolveLocalized(locale, fallback, func(b *Bundle) string {
+		return b.UI[uiKey]
+	})
 }
 
 // CommandDescription looks up a command's description.
 // Lookup chain: locale → "en" → fallback → ""
 func (s *Store) CommandDescription(locale, commandID, fallback string) string {
-	if s == nil || s.locales == nil {
-		return fallback
-	}
-
-	if bundle, ok := s.locales[locale]; ok && bundle != nil && bundle.Commands != nil {
-		if cs, ok := bundle.Commands[commandID]; ok && cs.Description != "" {
-			return cs.Description
-		}
-	}
-
-	if bundle, ok := s.locales["en"]; ok && bundle != nil && bundle.Commands != nil {
-		if cs, ok := bundle.Commands[commandID]; ok && cs.Description != "" {
-			return cs.Description
-		}
-	}
-
-	if fallback != "" {
-		return fallback
-	}
-	return ""
+	return s.resolveLocalized(locale, fallback, func(b *Bundle) string {
+		return b.Commands[commandID].Description
+	})
 }
 
 // CommandConfirmationText looks up a command's confirmation text.
 // Lookup chain: locale → "en" → fallback → ""
 func (s *Store) CommandConfirmationText(locale, commandID, fallback string) string {
-	if s == nil || s.locales == nil {
-		return fallback
-	}
-
-	if bundle, ok := s.locales[locale]; ok && bundle != nil && bundle.Commands != nil {
-		if cs, ok := bundle.Commands[commandID]; ok && cs.ConfirmationText != "" {
-			return cs.ConfirmationText
-		}
-	}
-
-	if bundle, ok := s.locales["en"]; ok && bundle != nil && bundle.Commands != nil {
-		if cs, ok := bundle.Commands[commandID]; ok && cs.ConfirmationText != "" {
-			return cs.ConfirmationText
-		}
-	}
-
-	if fallback != "" {
-		return fallback
-	}
-	return ""
+	return s.resolveLocalized(locale, fallback, func(b *Bundle) string {
+		return b.Commands[commandID].ConfirmationText
+	})
 }
 
 // ParamDescription looks up a parameter's description.
 // Lookup chain: locale → "en" → fallback → ""
 func (s *Store) ParamDescription(locale, commandID, paramName, fallback string) string {
-	if s == nil || s.locales == nil {
-		return fallback
-	}
-
-	if bundle, ok := s.locales[locale]; ok && bundle != nil && bundle.Commands != nil {
-		if cs, ok := bundle.Commands[commandID]; ok && cs.Params != nil {
-			if ps, ok := cs.Params[paramName]; ok && ps.Description != "" {
-				return ps.Description
-			}
-		}
-	}
-
-	if bundle, ok := s.locales["en"]; ok && bundle != nil && bundle.Commands != nil {
-		if cs, ok := bundle.Commands[commandID]; ok && cs.Params != nil {
-			if ps, ok := cs.Params[paramName]; ok && ps.Description != "" {
-				return ps.Description
-			}
-		}
-	}
-
-	if fallback != "" {
-		return fallback
-	}
-	return ""
+	return s.resolveLocalized(locale, fallback, func(b *Bundle) string {
+		return b.Commands[commandID].Params[paramName].Description
+	})
 }
 
 // GroupTitle looks up a group's title.
 // Lookup chain: locale → "en" → fallback → ""
 func (s *Store) GroupTitle(locale, groupID, fallback string) string {
-	if s == nil || s.locales == nil {
-		return fallback
-	}
-
-	if bundle, ok := s.locales[locale]; ok && bundle != nil && bundle.Groups != nil {
-		if gs, ok := bundle.Groups[groupID]; ok && gs.Title != "" {
-			return gs.Title
-		}
-	}
-
-	if bundle, ok := s.locales["en"]; ok && bundle != nil && bundle.Groups != nil {
-		if gs, ok := bundle.Groups[groupID]; ok && gs.Title != "" {
-			return gs.Title
-		}
-	}
-
-	if fallback != "" {
-		return fallback
-	}
-	return ""
+	return s.resolveLocalized(locale, fallback, func(b *Bundle) string {
+		return b.Groups[groupID].Title
+	})
 }
 
 // GroupDescription looks up a group's description.
 // Lookup chain: locale → "en" → fallback → ""
 func (s *Store) GroupDescription(locale, groupID, fallback string) string {
-	if s == nil || s.locales == nil {
-		return fallback
-	}
-
-	if bundle, ok := s.locales[locale]; ok && bundle != nil && bundle.Groups != nil {
-		if gs, ok := bundle.Groups[groupID]; ok && gs.Description != "" {
-			return gs.Description
-		}
-	}
-
-	if bundle, ok := s.locales["en"]; ok && bundle != nil && bundle.Groups != nil {
-		if gs, ok := bundle.Groups[groupID]; ok && gs.Description != "" {
-			return gs.Description
-		}
-	}
-
-	if fallback != "" {
-		return fallback
-	}
-	return ""
+	return s.resolveLocalized(locale, fallback, func(b *Bundle) string {
+		return b.Groups[groupID].Description
+	})
 }
 
 // CommandSuccessMessage looks up a command's success message.
 // Lookup chain: locale → "en" → fallback → ""
 func (s *Store) CommandSuccessMessage(locale, commandID, fallback string) string {
-	if s == nil || s.locales == nil {
-		return fallback
-	}
-
-	if bundle, ok := s.locales[locale]; ok && bundle != nil && bundle.Commands != nil {
-		if cs, ok := bundle.Commands[commandID]; ok && cs.Messages.Success != "" {
-			return cs.Messages.Success
-		}
-	}
-
-	if bundle, ok := s.locales["en"]; ok && bundle != nil && bundle.Commands != nil {
-		if cs, ok := bundle.Commands[commandID]; ok && cs.Messages.Success != "" {
-			return cs.Messages.Success
-		}
-	}
-
-	if fallback != "" {
-		return fallback
-	}
-	return ""
+	return s.resolveLocalized(locale, fallback, func(b *Bundle) string {
+		return b.Commands[commandID].Messages.Success
+	})
 }
 
 // CommandErrorMessage looks up a command's error message.
 // Lookup chain: locale → "en" → fallback → ""
 func (s *Store) CommandErrorMessage(locale, commandID, fallback string) string {
-	if s == nil || s.locales == nil {
-		return fallback
-	}
-
-	if bundle, ok := s.locales[locale]; ok && bundle != nil && bundle.Commands != nil {
-		if cs, ok := bundle.Commands[commandID]; ok && cs.Messages.Error != "" {
-			return cs.Messages.Error
-		}
-	}
-
-	if bundle, ok := s.locales["en"]; ok && bundle != nil && bundle.Commands != nil {
-		if cs, ok := bundle.Commands[commandID]; ok && cs.Messages.Error != "" {
-			return cs.Messages.Error
-		}
-	}
-
-	if fallback != "" {
-		return fallback
-	}
-	return ""
+	return s.resolveLocalized(locale, fallback, func(b *Bundle) string {
+		return b.Commands[commandID].Messages.Error
+	})
 }
 
 // ParamOptionLabel looks up a parameter option's localized label.
 // Lookup chain: locale → "en" → fallback → ""
 func (s *Store) ParamOptionLabel(locale, commandID, paramName, optionValue, fallback string) string {
-	if s == nil || s.locales == nil {
-		return fallback
-	}
-
-	if bundle, ok := s.locales[locale]; ok && bundle != nil && bundle.Commands != nil {
-		if cs, ok := bundle.Commands[commandID]; ok && cs.Params != nil {
-			if ps, ok := cs.Params[paramName]; ok && ps.Options != nil {
-				if label, ok := ps.Options[optionValue]; ok && label != "" {
-					return label
-				}
-			}
-		}
-	}
-
-	if bundle, ok := s.locales["en"]; ok && bundle != nil && bundle.Commands != nil {
-		if cs, ok := bundle.Commands[commandID]; ok && cs.Params != nil {
-			if ps, ok := cs.Params[paramName]; ok && ps.Options != nil {
-				if label, ok := ps.Options[optionValue]; ok && label != "" {
-					return label
-				}
-			}
-		}
-	}
-
-	if fallback != "" {
-		return fallback
-	}
-	return ""
+	return s.resolveLocalized(locale, fallback, func(b *Bundle) string {
+		return b.Commands[commandID].Params[paramName].Options[optionValue]
+	})
 }

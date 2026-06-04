@@ -216,6 +216,19 @@ func (c *Compose) BuildInternalArgs(command string, extraArgs ...string) []strin
 	return args
 }
 
+// splitNonEmptyLines splits docker probe output into trimmed, non-empty lines.
+// Used by the ps-based queries (container IDs, service names) which emit one
+// value per line. Returns nil when there are no non-empty lines.
+func splitNonEmptyLines(out []byte) []string {
+	var lines []string
+	for line := range strings.SplitSeq(strings.TrimSpace(string(out)), "\n") {
+		if line = strings.TrimSpace(line); line != "" {
+			lines = append(lines, line)
+		}
+	}
+	return lines
+}
+
 // output runs an internal probe command and returns its stdout.
 // ProcessEnv is applied so that daemon/context overrides (e.g. DOCKER_HOST)
 // are consistent with Exec-based lifecycle commands.
@@ -236,13 +249,7 @@ func (c *Compose) ContainerIDs() ([]string, error) {
 		return nil, fmt.Errorf("%s compose ps -q: %w", c.BinName(), err)
 	}
 
-	var ids []string
-	for line := range strings.SplitSeq(strings.TrimSpace(string(out)), "\n") {
-		if line = strings.TrimSpace(line); line != "" {
-			ids = append(ids, line)
-		}
-	}
-	return ids, nil
+	return splitNonEmptyLines(out), nil
 }
 
 // HealthStatus returns the health status of a container by ID, using this
@@ -269,13 +276,7 @@ func (c *Compose) RunningServices(ctx context.Context, services []string) ([]str
 		return nil, fmt.Errorf("%s compose ps --services: %w", c.BinName(), err)
 	}
 
-	var names []string
-	for line := range strings.SplitSeq(strings.TrimSpace(string(out)), "\n") {
-		if line = strings.TrimSpace(line); line != "" {
-			names = append(names, line)
-		}
-	}
-	return names, nil
+	return splitNonEmptyLines(out), nil
 }
 
 // ContainerIDsFor returns the IDs of running containers for the given services.
@@ -293,11 +294,5 @@ func (c *Compose) ContainerIDsFor(services []string) ([]string, error) {
 		return nil, fmt.Errorf("%s compose ps -q: %w", c.BinName(), err)
 	}
 
-	var ids []string
-	for line := range strings.SplitSeq(strings.TrimSpace(string(out)), "\n") {
-		if line = strings.TrimSpace(line); line != "" {
-			ids = append(ids, line)
-		}
-	}
-	return ids, nil
+	return splitNonEmptyLines(out), nil
 }

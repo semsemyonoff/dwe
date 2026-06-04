@@ -2,39 +2,20 @@ package envfile
 
 import (
 	"fmt"
-	"os/user"
-	"runtime"
 	"strings"
 
 	"github.com/semsemyonoff/dwe/internal/core/project/config"
+	"github.com/semsemyonoff/dwe/internal/shared/hostid"
 )
 
 // HostUID returns the UID to use for container builds.
 // On macOS, Docker Desktop runs containers in a Linux VM where host UIDs don't
 // map directly, so 1000 is the conventional user UID inside the image.
 // On Linux, the actual host UID is used so file permissions match.
-func HostUID() string {
-	if runtime.GOOS == "darwin" {
-		return "1000"
-	}
-	u, err := user.Current()
-	if err != nil {
-		return "1000"
-	}
-	return u.Uid
-}
+func HostUID() string { return hostid.UID() }
 
 // HostGID returns the GID to use for container builds (same platform logic as HostUID).
-func HostGID() string {
-	if runtime.GOOS == "darwin" {
-		return "1000"
-	}
-	u, err := user.Current()
-	if err != nil {
-		return "1000"
-	}
-	return u.Gid
-}
+func HostGID() string { return hostid.GID() }
 
 // BuildContent renders the .env content from the export spec.
 //

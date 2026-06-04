@@ -3,13 +3,12 @@ package tpl
 import (
 	"bytes"
 	"fmt"
-	"os/user"
 	"regexp"
-	"runtime"
 	"strings"
 	"text/template"
 
 	"github.com/semsemyonoff/dwe/internal/core/execution/condition"
+	"github.com/semsemyonoff/dwe/internal/shared/hostid"
 )
 
 // ResolvedFile represents a single resolved file path artifact.
@@ -81,17 +80,7 @@ type HostInfo struct {
 // time. On Linux, the actual host UID/GID is returned so file permissions
 // match.
 func CurrentHostInfo() HostInfo {
-	h := HostInfo{UID: "1000", GID: "1000"}
-	if runtime.GOOS == "darwin" {
-		return h
-	}
-	u, err := user.Current()
-	if err != nil {
-		return h
-	}
-	h.UID = u.Uid
-	h.GID = u.Gid
-	return h
+	return HostInfo(hostid.Current())
 }
 
 // varPattern matches ${identifier} and ${dot.path} expressions.

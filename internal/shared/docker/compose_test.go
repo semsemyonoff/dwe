@@ -585,3 +585,26 @@ func TestBuildArgs_BuildWithForceFlags(t *testing.T) {
 		}
 	}
 }
+
+func TestSplitNonEmptyLines(t *testing.T) {
+	tests := []struct {
+		name string
+		in   string
+		want []string
+	}{
+		{"empty", "", nil},
+		{"whitespace only", "  \n\t\n  ", nil},
+		{"single", "abc", []string{"abc"}},
+		{"multiple", "a\nb\nc", []string{"a", "b", "c"}},
+		{"trims and drops blanks", "  a  \n\n  b\n", []string{"a", "b"}},
+		{"trailing newline", "id1\nid2\n", []string{"id1", "id2"}},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := splitNonEmptyLines([]byte(tt.in))
+			if !slices.Equal(got, tt.want) {
+				t.Errorf("splitNonEmptyLines(%q) = %v, want %v", tt.in, got, tt.want)
+			}
+		})
+	}
+}

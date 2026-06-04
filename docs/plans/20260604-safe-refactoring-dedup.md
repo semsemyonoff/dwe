@@ -220,13 +220,13 @@ Tasks are ordered **safest / highest-value first**: pure deletions and named-con
 - Modify: `internal/shared/docker/{stop,compose}.go`; `internal/shared/lock/lock.go`; `internal/shared/i18n/store.go`; `internal/shared/envfile/render.go`; `internal/shared/tpl/render_command.go`
 - Modify: matching `*_test.go`
 
-- [ ] Extract `runDirect` for the 3 direct-docker container funcs (`docker/stop.go:23,54,82`).
-- [ ] Collapse the docker-ps line-splitting loop 3× (`docker/compose.go:239,272,296`).
-- [ ] Factor `finalizeAcquire` for the lock-acquire success path 2× (`lock.go:59,87`) — keep inode-race handling.
-- [ ] Collapse the 9 locale→en→fallback lookups in the i18n store (`store.go:43,71,96,121-279`) — keep nil-store-returns-fallback semantics.
-- [ ] ⚠️ `risk=low` (NOT none): unify the host-id platform logic shared by `envfile/render.go:16,28` and `tpl/render_command.go:83`. The shapes DIFFER — `envfile` exposes two funcs `HostUID() string` / `HostGID() string`; `tpl` exposes one `CurrentHostInfo() HostInfo` returning a `{UID,GID}` struct. They share only the platform ladder (darwin→"1000", `user.Current()` error→"1000"). This is NOT a mechanical move: decide the shared form (two-string API vs struct API), name the owning leaf explicitly, and keep it test-compatible — `render_command_test.go` builds `HostInfo{...}` literals directly. `tpl` and `envfile` import neither each other, so either direction is cycle-free. If reconciling the two APIs adds friction, leave a ➕ follow-up instead of forcing.
-- [ ] Add/extend tests for the new helpers; confirm i18n/lock behavior tests unchanged.
-- [ ] `make test && make lint` — must pass.
+- [x] Extract `runDirect` for the 3 direct-docker container funcs (`docker/stop.go:23,54,82`).
+- [x] Collapse the docker-ps line-splitting loop 3× (`docker/compose.go:239,272,296`) — new `splitNonEmptyLines` helper.
+- [x] Factor `finalizeAcquire` for the lock-acquire success path 2× (`lock.go:59,87`) — keep inode-race handling.
+- [x] Collapse the 9 locale→en→fallback lookups in the i18n store (`store.go:43,71,96,121-279`) — keep nil-store-returns-fallback semantics. New `resolveLocalized` helper with per-method extract closures (map-index zero values are nil-safe).
+- [x] ⚠️ `risk=low` (NOT none): unify the host-id platform logic shared by `envfile/render.go:16,28` and `tpl/render_command.go:83`. Resolved cleanly via a new leaf package `internal/shared/hostid` exposing `Current() Info` (single `user.Current()` read) plus `UID()`/`GID()` convenience funcs. `envfile.HostUID/HostGID` delegate; `tpl.CurrentHostInfo` returns `HostInfo(hostid.Current())` (identical-field struct conversion) so `HostInfo` literals in `render_command_test.go` stay valid. No friction — no follow-up needed.
+- [x] Add/extend tests for the new helpers; confirm i18n/lock behavior tests unchanged. Added `hostid_test.go`, `splitNonEmptyLines` table test, and `resolveLocalized` nil-bundle test; existing store/lock/docker behavior tests cover the rest.
+- [x] `make test && make lint` — must pass. (Both green; the one-off TestRussianTranslationsAreFresh blip cleared on rerun, unrelated to this task.)
 
 ### Task 12: Per-service & per-config-loader helper extractions in core/config & lifecycle
 **Theme 17 — priority medium / effort small / risk none→low.** Strict-decode and per-service-symmetry contracts preserved (they govern surfaces/file-layout, not loader scaffolding).

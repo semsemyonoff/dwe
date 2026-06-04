@@ -57,28 +57,7 @@ func Acquire(path string) (*Lock, error) {
 	// Attempt non-blocking exclusive lock
 	if err := syscall.Flock(int(file.Fd()), syscall.LOCK_EX|syscall.LOCK_NB); err == nil {
 		// Lock acquired successfully
-		if _, err := file.Seek(0, 0); err != nil {
-			_ = file.Close()
-			return nil, fmt.Errorf("seek lock file: %w", err)
-		}
-		if err := file.Truncate(0); err != nil {
-			_ = file.Close()
-			return nil, fmt.Errorf("truncate lock file: %w", err)
-		}
-
-		// Write current PID to the lock file
-		pid := os.Getpid()
-		pidStr := strconv.Itoa(pid)
-		if _, err := file.WriteString(pidStr); err != nil {
-			_ = file.Close()
-			return nil, fmt.Errorf("write pid to lock file: %w", err)
-		}
-		if err := file.Sync(); err != nil {
-			_ = file.Close()
-			return nil, fmt.Errorf("sync lock file: %w", err)
-		}
-
-		return &Lock{path: path, file: file}, nil
+		return finalizeAcquire(file, path)
 	}
 
 	// Lock is held; check if the holding process is alive
@@ -86,27 +65,7 @@ func Acquire(path string) (*Lock, error) {
 		// Stale lock was cleaned; retry once
 		if err := syscall.Flock(int(file.Fd()), syscall.LOCK_EX|syscall.LOCK_NB); err == nil {
 			// Retry succeeded
-			if _, err := file.Seek(0, 0); err != nil {
-				_ = file.Close()
-				return nil, fmt.Errorf("seek lock file: %w", err)
-			}
-			if err := file.Truncate(0); err != nil {
-				_ = file.Close()
-				return nil, fmt.Errorf("truncate lock file: %w", err)
-			}
-
-			pid := os.Getpid()
-			pidStr := strconv.Itoa(pid)
-			if _, err := file.WriteString(pidStr); err != nil {
-				_ = file.Close()
-				return nil, fmt.Errorf("write pid to lock file: %w", err)
-			}
-			if err := file.Sync(); err != nil {
-				_ = file.Close()
-				return nil, fmt.Errorf("sync lock file: %w", err)
-			}
-
-			return &Lock{path: path, file: file}, nil
+			return finalizeAcquire(file, path)
 		}
 	}
 
@@ -115,6 +74,36 @@ func Acquire(path string) (*Lock, error) {
 	// Lock is held by a live process
 	heldPID, _ := readPIDFromLockFile(path)
 	return nil, &HeldError{PID: heldPID, err: ErrLockHeld}
+}
+
+// finalizeAcquire writes the current PID into a freshly-locked file and returns
+// the Lock. It runs after a successful Flock (initial attempt or post-stale
+// retry): the file offset is rewound, the previous holder's PID truncated, and
+// the current PID written and synced. On any I/O failure the file is closed and
+// the error wrapped.
+func finalizeAcquire(file *os.File, path string) (*Lock, error) {
+	if _, err := file.Seek(0, 0); err != nil {
+		_ = file.Close()
+		return nil, fmt.Errorf("seek lock file: %w", err)
+	}
+	if err := file.Truncate(0); err != nil {
+		_ = file.Close()
+		return nil, fmt.Errorf("truncate lock file: %w", err)
+	}
+
+	// Write current PID to the lock file
+	pid := os.Getpid()
+	pidStr := strconv.Itoa(pid)
+	if _, err := file.WriteString(pidStr); err != nil {
+		_ = file.Close()
+		return nil, fmt.Errorf("write pid to lock file: %w", err)
+	}
+	if err := file.Sync(); err != nil {
+		_ = file.Close()
+		return nil, fmt.Errorf("sync lock file: %w", err)
+	}
+
+	return &Lock{path: path, file: file}, nil
 }
 
 // Release releases the lock. The lock file is intentionally left on disk so
