@@ -363,11 +363,11 @@ subdir entries.
 > to an absent file (zero-valued config → callers apply the built-in default).
 
 ### Task 10: Verify acceptance criteria
-- [ ] verify all Overview requirements implemented (two modes, idempotency, `--force`, JSON, symlink, inert overrides)
-- [ ] verify edge cases: existing `.gitignore`/`.editorconfig`, nested-project warning, `--service ""`, non-TTY auto non-interactive
-- [ ] run full suite: `make test`
-- [ ] run `make lint`
-- [ ] verify coverage of new packages meets project standard
+- [x] verify all Overview requirements implemented (two modes, idempotency, `--force`, JSON, symlink, inert overrides)
+- [x] verify edge cases: existing `.gitignore`/`.editorconfig`, nested-project warning, `--service ""`, non-TTY auto non-interactive
+- [x] run full suite: `make test`
+- [x] run `make lint`
+- [x] verify coverage of new packages meets project standard (cli/scaffold 69.9%, core/workflow/scaffold 84.3%)
 
 ### Task 11: [Final] Documentation
 - [ ] add a `§ internal/cli/scaffold` note under "CLI (`internal/cli/`)" and a
