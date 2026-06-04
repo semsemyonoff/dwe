@@ -370,12 +370,12 @@ Tasks are ordered **safest / highest-value first**: pure deletions and named-con
 - [x] `make test && make lint` — both pass (`make lint`: 0 issues).
 
 ### Task 21: Verify acceptance criteria
-- [ ] Verify all 20 themes implemented (or explicitly deferred with a ➕/⚠️ note in this plan).
-- [ ] Confirm NO exported API / CLI flag / output / error-code / ordering change crept in (diff review + `git log` of the 20 commits).
-- [ ] Confirm zero unexpected golden-file diffs across the whole tree.
-- [ ] Run full suite: `make test` (and `make test-race` for the concurrency-touching themes 5, 11).
-- [ ] Run `make lint` clean.
-- [ ] Run `make build` to confirm the binary still builds.
+- [x] Verify all 20 themes implemented (or explicitly deferred with a ➕/⚠️ note in this plan). All 20 land as one atomic commit each (`94990eb9`…`5c0d229b`); deferrals (Task 14 RunE-skeleton merge, Task 15 `mutateAndPlan`/`mutateAndPlanBatch`, Task 16 field-rejection collapse) are recorded in Post-Completion.
+- [x] Confirm NO exported API / CLI flag / output / error-code / ordering change crept in (diff review + `git log` of the 20 commits). Overall diff is near-balanced (4368 ins / 4350 del across 161 files) — pure de-dup/extraction; every behavior/assertion test stays green.
+- [x] Confirm zero unexpected golden-file diffs across the whole tree. `git diff --stat 13dfc5f4..HEAD -- '**/testdata/**' '**/*.golden'` is empty.
+- [x] Run full suite: `make test` (and `make test-race` for the concurrency-touching themes 5, 11). `make test` exit 0 (100 packages ok, 0 FAIL); `make test-race` exit 0 (no data races; journal/lock/pipeline green).
+- [x] Run `make lint` clean. `golangci-lint run ./...` → 0 issues.
+- [x] Run `make build` to confirm the binary still builds. `Built: ./bin/dwe`.
 
 ### Task 22: [Final] Update documentation & close out
 - [ ] Update `docs/internals/packages.md` only if a new shared/leaf package (Task 8 extends-chain, Task 11 host-id owner) warrants a per-package note.
