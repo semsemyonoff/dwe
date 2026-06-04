@@ -201,20 +201,6 @@ func ValidateTemplateKey(s string) error {
 	return nil
 }
 
-// ValidateServiceNameAsPackKey validates a service name as an implicit pack key.
-func ValidateServiceNameAsPackKey(s string) error {
-	if s == "" {
-		return fmt.Errorf("service name is empty")
-	}
-	if strings.ContainsAny(s, "/\\") {
-		return fmt.Errorf("service name %q contains path separator", s)
-	}
-	if s == ".." || strings.HasPrefix(s, "../") || strings.HasPrefix(s, "..\\") {
-		return fmt.Errorf("service name %q is a path traversal", s)
-	}
-	return nil
-}
-
 // ResolveTemplatePack resolves a template pack directory for a service.
 // Returns (packDir, packName, found, err). Explicit svc.Render.IDE.Template is strict.
 // Implicit chain: serviceName → ancestors via Extends → default; returns

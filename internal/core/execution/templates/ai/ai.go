@@ -34,39 +34,6 @@ type SymlinkEntry = manifest.SymlinkEntry
 // Manifest defines the agents template pack manifest. Alias to the shared schema.
 type Manifest = manifest.File
 
-// ValidateTemplateKey validates that s is a single directory key without path traversal.
-// It rejects path separators, absolute paths, and leading dots (which subsumes "..").
-func ValidateTemplateKey(s string) error {
-	if s == "" {
-		return nil // empty is valid (field is optional)
-	}
-	// Reject path separators
-	if strings.ContainsAny(s, "/\\") {
-		return fmt.Errorf("template key %q contains path separator", s)
-	}
-	// Reject leading dots (subsumes ".." and hidden-file keys)
-	if strings.HasPrefix(s, ".") {
-		return fmt.Errorf("template key %q starts with dot", s)
-	}
-	return nil
-}
-
-// ValidateServiceNameAsPackKey validates that a service name is safe to use as an
-// implicit AI template pack directory name. Less restrictive than ValidateTemplateKey:
-// allows leading dots since service names are YAML map keys, not user-typed path components.
-func ValidateServiceNameAsPackKey(s string) error {
-	if s == "" {
-		return fmt.Errorf("service name is empty")
-	}
-	if strings.ContainsAny(s, "/\\") {
-		return fmt.Errorf("service name %q contains path separator", s)
-	}
-	if s == ".." || strings.HasPrefix(s, "../") || strings.HasPrefix(s, "..\\") {
-		return fmt.Errorf("service name %q is a path traversal", s)
-	}
-	return nil
-}
-
 // ImplicitPackCandidates returns the implicit-chain pack name candidates for a
 // service: the service name, then each ancestor walked via Extends (in order),
 // then "default". Duplicates and names that fail manifest.ValidatePackName are

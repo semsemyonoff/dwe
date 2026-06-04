@@ -50,7 +50,9 @@ func TestRender(t *testing.T) {
 		},
 	}
 
-	placeholderFunc := PlaceholderForRendering
+	placeholderFunc := func(i int) MermaidPlaceholder {
+		return MermaidPlaceholder{Text: "<📊 [rendering...]>"}
+	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -133,19 +135,6 @@ func TestRenderWithMermaid(t *testing.T) {
 				tt.check(t, result)
 			}
 		})
-	}
-}
-
-func TestRawMarkdown(t *testing.T) {
-	input := []byte("# Heading\n\n```mermaid\ndiagram\n```")
-	result := RawMarkdown(input)
-
-	if !bytes.Equal(result.Output, input) {
-		t.Errorf("expected raw output to match input")
-	}
-
-	if len(result.Diagrams) != 0 {
-		t.Errorf("expected no diagrams in raw markdown, got %d", len(result.Diagrams))
 	}
 }
 

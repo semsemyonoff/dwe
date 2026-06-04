@@ -68,12 +68,12 @@ Tasks are ordered **safest / highest-value first**: pure deletions and named-con
 - Modify: `internal/core/docs/render/glamour.go`
 - Modify/Delete tests covering only the removed symbols (e.g. `internal/core/docs/render/glamour_test.go` cases)
 
-- [ ] `rg` to re-confirm zero production callers for each symbol before deleting.
-- [ ] Delete `ValidateServiceNameAsPackKey` from `ai/ai.go:57` AND `ide/ide.go:205` (identical, 0 callers; real validation goes through `manifest.ValidatePackName`).
-- [ ] Delete `ai.ValidateTemplateKey` (`ai/ai.go:39`); KEEP `ide.ValidateTemplateKey` (live: `render/ide_test.go:854`).
-- [ ] Delete production-unused render helpers `RawMarkdown`, `PlaceholderFor*`, `ExtractMermaidBlocks` (`glamour.go:64,72,79,86,93,106`) plus the `mermaidBlockRE`/`newlineRE` vars used only by `ExtractMermaidBlocks`. KEEP `ThemeFromBackground` (live: `show.go:257`).
-- [ ] Remove now-orphaned test cases that only covered the deleted symbols.
-- [ ] `make test && make lint` — must pass before next task.
+- [x] `rg` to re-confirm zero production callers for each symbol before deleting.
+- [x] Delete `ValidateServiceNameAsPackKey` from `ai/ai.go:57` AND `ide/ide.go:205` (identical, 0 callers; real validation goes through `manifest.ValidatePackName`).
+- [x] Delete `ai.ValidateTemplateKey` (`ai/ai.go:39`); KEEP `ide.ValidateTemplateKey` (live: `render/ide_test.go:854`).
+- [x] Delete production-unused render helpers `RawMarkdown`, `PlaceholderFor*`, `ExtractMermaidBlocks` (`glamour.go:64,72,79,86,93,106`) plus the `mermaidBlockRE`/`newlineRE` vars used only by `ExtractMermaidBlocks`. KEEP `ThemeFromBackground` (live: `show.go:257`).
+- [x] Remove now-orphaned test cases that only covered the deleted symbols.
+- [x] `make test && make lint` — must pass before next task.
 
 ### Task 2: Hoist repeated literals & not-exist guards into named constants/helpers
 **Theme 5 — priority high / effort trivial / risk none.** Six independent, output-identical consolidations.
