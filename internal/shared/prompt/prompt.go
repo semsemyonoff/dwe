@@ -659,6 +659,11 @@ func readComposeProjectName(root, displayName string) string {
 // the deep-merge in config.readDockerProjectName). Returns empty string if
 // neither file defines a literal project_name (absent, unreadable, field
 // missing, or value contains template syntax the prompt cannot resolve).
+//
+// Precedence: docker.local.yml is checked first. If it defines project_name
+// (even as a template), docker.yml is not consulted — the local override wins
+// and a template value causes an empty return so the caller uses the
+// prefix+name fallback rather than a stale literal from the base file.
 func readDockerProjectNameLiteral(root string) string {
 	for _, rel := range []string{"workspace/docker.local.yml", "workspace/docker.yml"} {
 		data, err := os.ReadFile(filepath.Join(root, rel))
@@ -670,9 +675,13 @@ func readDockerProjectNameLiteral(root string) string {
 			continue
 		}
 		name, _ := m["project_name"].(string)
-		if name != "" && !strings.Contains(name, "${") {
-			return name
+		if name == "" {
+			continue // not defined in this file; try the next
 		}
+		if strings.Contains(name, "${") {
+			return "" // template value; cannot resolve here — use fallback
+		}
+		return name
 	}
 	return ""
 }
