@@ -1756,15 +1756,21 @@ func TestReadComposeProjectName(t *testing.T) {
 func TestReadDockerProjectNameLiteral(t *testing.T) {
 	t.Parallel()
 	cases := []struct {
-		name      string
-		dockerYML string
-		want      string
+		name           string
+		dockerYML      string
+		dockerLocalYML string
+		want           string
 	}{
-		{name: "absent_returns_empty", dockerYML: "", want: ""},
+		{name: "absent_returns_empty", want: ""},
 		{name: "literal_name", dockerYML: "project_name: custom\n", want: "custom"},
 		{name: "template_returns_empty", dockerYML: "project_name: ${project.name}\n", want: ""},
 		{name: "empty_field_returns_empty", dockerYML: "project_name: \"\"\n", want: ""},
 		{name: "no_field_returns_empty", dockerYML: "services:\n  web: {}\n", want: ""},
+		// local file takes precedence
+		{name: "local_literal_overrides_base", dockerYML: "project_name: base\n", dockerLocalYML: "project_name: local-override\n", want: "local-override"},
+		{name: "local_template_blocks_base", dockerYML: "project_name: base\n", dockerLocalYML: "project_name: ${project.name}\n", want: ""},
+		// explicit empty in local must block fallthrough to base docker.yml
+		{name: "local_empty_blocks_base", dockerYML: "project_name: base\n", dockerLocalYML: "project_name: \"\"\n", want: ""},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
@@ -1772,6 +1778,9 @@ func TestReadDockerProjectNameLiteral(t *testing.T) {
 			root := t.TempDir()
 			if tc.dockerYML != "" {
 				writeFile(t, filepath.Join(root, "workspace", "docker.yml"), tc.dockerYML)
+			}
+			if tc.dockerLocalYML != "" {
+				writeFile(t, filepath.Join(root, "workspace", "docker.local.yml"), tc.dockerLocalYML)
 			}
 			got := readDockerProjectNameLiteral(root)
 			if got != tc.want {

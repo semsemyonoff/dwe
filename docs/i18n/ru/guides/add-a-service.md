@@ -1,4 +1,4 @@
-> Translated from: guides/add-a-service.md @ de5f1af8b48b
+> Translated from: guides/add-a-service.md @ 2efb25e1a48a
 
 # Добавление сервиса
 
@@ -181,15 +181,22 @@ dwe validate config services
 
 Команда прогоняет per-service проверки схемы: обязательные поля по типу, разрешённые поля по типу, валидные диапазоны портов, корректно сформированная цепочка `extends:`, отсутствие циклов в `depends_on`.
 
-Если валидация прошла, включите сервис и задеплойте:
+Если валидация прошла, включите сервис и запустите стек:
 
 ```shell
-dwe services enable worker         # если он был выключен в local.yml
-dwe deploy run --service worker    # прогон только deploy-шагов этого сервиса
-dwe run                            # поднять стек
-dwe status                         # убедиться, что новый сервис поднялся
+dwe services enable worker    # если он был выключен в local.yml
+dwe run                       # поднять стек
+dwe status                    # убедиться, что новый сервис поднялся
 ```
 
-`dwe deploy run --service <имя>` целится в один сервис. Удобно при итеративной работе — не надо ждать перепрогона всего пайплайна.
+Если вы добавили `deploy.yml` для `worker`, можно сначала прогнать только его deploy-шаги:
+
+```shell
+dwe deploy run --service worker    # только если у worker есть deploy.yml
+dwe run
+dwe status
+```
+
+`dwe deploy run --service <имя>` завершается ошибкой, если у сервиса нет `deploy.yml` — это не замена `dwe run` и не способ запустить сервис без deploy-пайплайна.
 
 Если что-то падает — смотрите `dwe logs worker` и [`troubleshooting.md`](troubleshooting.md) о распространённых модах отказа.

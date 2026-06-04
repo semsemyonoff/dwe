@@ -179,15 +179,22 @@ dwe validate config services
 
 This runs the service-specific schema checks: required fields per type, allowed fields per type, valid port ranges, well-formed `extends:` chain, no `depends_on` cycle.
 
-If validation passes, enable and deploy the service:
+If validation passes, enable and start the service:
 
 ```shell
-dwe services enable worker         # if it was disabled in local.yml
-dwe deploy run --service worker    # run just this service's deploy steps
-dwe run                            # start the stack
-dwe status                         # confirm the new service is up
+dwe services enable worker    # if it was disabled in local.yml
+dwe run                       # start the stack
+dwe status                    # confirm the new service is up
 ```
 
-`dwe deploy run --service <name>` targets a single service. Useful when iterating — you don't need to wait for the full pipeline to re-run other services' steps.
+If you added a `deploy.yml` for `worker`, you can run only that service's deploy steps before starting the stack:
+
+```shell
+dwe deploy run --service worker    # only valid when worker has a deploy.yml
+dwe run
+dwe status
+```
+
+`dwe deploy run --service <name>` errors when the service has no `deploy.yml` — it is not a substitute for `dwe run` and cannot be used to start a service that has no deploy pipeline.
 
 If something fails, check `dwe logs worker` and see [`troubleshooting.md`](troubleshooting.md) for the common failure modes.

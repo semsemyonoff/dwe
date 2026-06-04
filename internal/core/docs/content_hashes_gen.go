@@ -7,7 +7,7 @@ package docs
 // See docs/reference/docs/index.md for details on the hash-based staleness check.
 var ContentHashes = map[string]string{
 	"README.md":                                "45ca88e32b0c",
-	"guides/add-a-service.md":                  "de5f1af8b48b",
+	"guides/add-a-service.md":                  "2efb25e1a48a",
 	"guides/author-project-commands.md":        "3f1bb72f6c19",
 	"guides/background-daemons.md":             "cbd42c65deb0",
 	"guides/brand-your-project.md":             "366dbdc7658e",
@@ -22,7 +22,7 @@ var ContentHashes = map[string]string{
 	"guides/troubleshooting.md":                "98c9915902f3",
 	"guides/write-snapshot-workflows.md":       "a5a1f22c2cb2",
 	"internals/architecture.md":                "4fe04c86171c",
-	"internals/packages.md":                    "cc67e4c3d213",
+	"internals/packages.md":                    "4a485a4beee0",
 	"reference/concepts/architecture.md":       "78d8799363b8",
 	"reference/concepts/docker.md":             "20dcf0c6b589",
 	"reference/concepts/getting-started.md":    "a3c68d8cbd91",

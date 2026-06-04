@@ -674,9 +674,13 @@ func readDockerProjectNameLiteral(root string) string {
 		if err := yaml.Unmarshal(data, &m); err != nil {
 			continue
 		}
-		name, _ := m["project_name"].(string)
+		rawName, exists := m["project_name"]
+		if !exists {
+			continue // key not present in this file; try the next
+		}
+		name, _ := rawName.(string)
 		if name == "" {
-			continue // not defined in this file; try the next
+			return "" // explicit empty override clears the base value; caller falls back to prefix+name
 		}
 		if strings.Contains(name, "${") {
 			return "" // template value; cannot resolve here — use fallback

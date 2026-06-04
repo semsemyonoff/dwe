@@ -64,8 +64,7 @@ func wrapExitError(err error) error {
 	if err == nil {
 		return nil
 	}
-	var exitErr *exec.ExitError
-	if errors.As(err, &exitErr) {
+	if exitErr, ok := errors.AsType[*exec.ExitError](err); ok {
 		return &shellCommandExitError{code: exitErr.ExitCode(), underlying: exitErr}
 	}
 	return err
@@ -264,8 +263,7 @@ func containerStateStatus(containerName string, processEnv []string, dockerBin s
 	cmd.Env = processEnv
 	out, err := cmd.Output()
 	if err != nil {
-		var exitErr *exec.ExitError
-		if errors.As(err, &exitErr) {
+		if exitErr, ok := errors.AsType[*exec.ExitError](err); ok {
 			if strings.Contains(strings.ToLower(string(exitErr.Stderr)), "no such object") {
 				return "", errContainerNotFound
 			}
@@ -323,7 +321,12 @@ func composeRunCLI(compose *docker.Compose, serviceName, shell, u, workDir strin
 		args = append(args, "-f", f)
 	}
 	args = append(args, compose.GlobalArgs...)
-	args = append(args, "run", "--rm")
+	args = append(args, "run")
+	runArgs := compose.CommandArgs["run"]
+	if !slices.Contains(runArgs, "--rm") {
+		args = append(args, "--rm")
+	}
+	args = append(args, runArgs...)
 	args = append(args, composeRunTTYFlags()...)
 	if u != "" {
 		args = append(args, "-u", u)
@@ -390,7 +393,12 @@ func composeRunOneShot(compose *docker.Compose, serviceName, shell, u, workDir s
 		args = append(args, "-f", f)
 	}
 	args = append(args, compose.GlobalArgs...)
-	args = append(args, "run", "--rm")
+	args = append(args, "run")
+	runArgs := compose.CommandArgs["run"]
+	if !slices.Contains(runArgs, "--rm") {
+		args = append(args, "--rm")
+	}
+	args = append(args, runArgs...)
 	args = append(args, composeRunTTYFlags()...)
 	if u != "" {
 		args = append(args, "-u", u)
