@@ -363,11 +363,11 @@ Tasks are ordered **safest / highest-value first**: pure deletions and named-con
 - Modify: `internal/core/ui/statustui/tui.go`; `internal/core/ui/cmdbrowser/{palette,tree_render}.go`
 - Modify: matching `*_test.go`
 
-- [ ] Extract `setActiveTab` to collapse the 7 tab-switch blocks in statustui (`tui.go:170-232`).
-- [ ] Add `fgStyle` helper for the 12 v2-lipgloss palette accessors (`palette.go:19-139`).
-- [ ] Unify `renderOpt`/`renderFilter` tree renderers (`tree_render.go:10,54`) — `renderFilter` has thinner golden coverage, so run the full suite.
-- [ ] Confirm cmdbrowser/statustui golden tests unchanged.
-- [ ] `make test && make lint` — must pass.
+- [x] Extract `setActiveTab` to collapse the 7 tab-switch blocks in statustui (`tui.go:170-232`) — out-of-range indices are ignored, preserving the per-key guard the explicit Tab1–Tab5 blocks carried. NextTab/PrevTab indices are always in-range (len>0 guarded earlier), so behavior is byte-identical.
+- [x] Add `fgStyle` helper for the 12 v2-lipgloss palette accessors (`palette.go:19-139`) — `fgStyle(color)` is the shared `lipgloss.NewStyle().Foreground(lipgloss.Color(color))` constructor; all 9 accessors plus the chained `apply*` constructions (ActivePaginationDot/InactivePaginationDot/DefaultFilterCharacterMatch/NoItems/FilterMatch/help key+desc/viewport HighlightStyle) delegate to it.
+- [x] Unify `renderOpt`/`renderFilter` tree renderers (`tree_render.go:10,54`) — both delegate to new `renderTree(focused, showCounts, f)`; `f == nil` selects the plain `(N)` path, `f != nil` the filter `(M/N)` + dim-on-no-match path. Single nil check is the only divergence. Ran the full suite (`renderFilter` thinner golden coverage noted).
+- [x] Confirm cmdbrowser/statustui golden tests unchanged — zero diffs; both package suites green.
+- [x] `make test && make lint` — both pass (`make lint`: 0 issues).
 
 ### Task 21: Verify acceptance criteria
 - [ ] Verify all 20 themes implemented (or explicitly deferred with a ➕/⚠️ note in this plan).

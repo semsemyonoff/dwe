@@ -331,6 +331,35 @@ func TestUpdate_DigitJump(t *testing.T) {
 	require.Equal(t, 0, newM.(*model).active)
 }
 
+// Test setActiveTab ignores out-of-range indices, preserving the per-key guard
+// the explicit Tab1–Tab5 blocks used to carry (e.g. Tab5 with only 3 tabs).
+func TestSetActiveTab_OutOfRangeNoop(t *testing.T) {
+	ctx := context.Background()
+	m := newModel(Deps{ProjectName: "test"}, ctx, 100, 30)
+	m.tabs = []tab{
+		{"Services", "content1"},
+		{"Deploy", "content2"},
+		{"Topology", "content3"},
+	}
+	m.active = 1
+	m.reloadGen = 7
+	m.loading = false
+
+	// Index past the tab count is ignored: active and reloadGen unchanged.
+	m.setActiveTab(4)
+	require.Equal(t, 1, m.active, "out-of-range index should not change active")
+	require.Equal(t, uint64(7), m.reloadGen, "out-of-range index should leave reloadGen untouched")
+
+	// Negative index is ignored too.
+	m.setActiveTab(-1)
+	require.Equal(t, 1, m.active)
+
+	// In-range index switches and resets the pending-reload generation.
+	m.setActiveTab(2)
+	require.Equal(t, 2, m.active)
+	require.Equal(t, uint64(0), m.reloadGen, "valid switch should reset reloadGen")
+}
+
 // Test Reload action
 func TestUpdate_ReloadFiresCmd(t *testing.T) {
 	ctx := context.Background()

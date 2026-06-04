@@ -122,6 +122,19 @@ func (m *model) Init() tea.Cmd {
 	return tea.Batch(m.spinner.Tick, buildTabsCmd(m.ctx, m.deps, m.loadGen))
 }
 
+// setActiveTab switches to the tab at idx, resets the pending-reload generation,
+// and scrolls the viewport to the top. Out-of-range indices are ignored, which
+// preserves the per-key guard the explicit tab-switch blocks used to carry.
+func (m *model) setActiveTab(idx int) {
+	if idx < 0 || idx >= len(m.tabs) {
+		return
+	}
+	m.active = idx
+	m.reloadGen = 0
+	m.viewport.SetContent(m.tabs[m.active].content)
+	m.viewport.GotoTop()
+}
+
 // Update processes messages and returns the updated model and a command.
 func (m *model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
@@ -169,66 +182,31 @@ func (m *model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		// Handle tab navigation
 		switch {
 		case key.Matches(msg, m.keys.NextTab):
-			m.active = (m.active + 1) % len(m.tabs)
-			m.reloadGen = 0
-			if len(m.tabs) > m.active {
-				m.viewport.SetContent(m.tabs[m.active].content)
-				m.viewport.GotoTop()
-			}
+			m.setActiveTab((m.active + 1) % len(m.tabs))
 			return m, nil
 
 		case key.Matches(msg, m.keys.PrevTab):
-			m.active = (m.active - 1 + len(m.tabs)) % len(m.tabs)
-			m.reloadGen = 0
-			if len(m.tabs) > m.active {
-				m.viewport.SetContent(m.tabs[m.active].content)
-				m.viewport.GotoTop()
-			}
+			m.setActiveTab((m.active - 1 + len(m.tabs)) % len(m.tabs))
 			return m, nil
 
 		case key.Matches(msg, m.keys.Tab1):
-			if 0 < len(m.tabs) {
-				m.active = 0
-				m.reloadGen = 0
-				m.viewport.SetContent(m.tabs[m.active].content)
-				m.viewport.GotoTop()
-			}
+			m.setActiveTab(0)
 			return m, nil
 
 		case key.Matches(msg, m.keys.Tab2):
-			if 1 < len(m.tabs) {
-				m.active = 1
-				m.reloadGen = 0
-				m.viewport.SetContent(m.tabs[m.active].content)
-				m.viewport.GotoTop()
-			}
+			m.setActiveTab(1)
 			return m, nil
 
 		case key.Matches(msg, m.keys.Tab3):
-			if 2 < len(m.tabs) {
-				m.active = 2
-				m.reloadGen = 0
-				m.viewport.SetContent(m.tabs[m.active].content)
-				m.viewport.GotoTop()
-			}
+			m.setActiveTab(2)
 			return m, nil
 
 		case key.Matches(msg, m.keys.Tab4):
-			if 3 < len(m.tabs) {
-				m.active = 3
-				m.reloadGen = 0
-				m.viewport.SetContent(m.tabs[m.active].content)
-				m.viewport.GotoTop()
-			}
+			m.setActiveTab(3)
 			return m, nil
 
 		case key.Matches(msg, m.keys.Tab5):
-			if 4 < len(m.tabs) {
-				m.active = 4
-				m.reloadGen = 0
-				m.viewport.SetContent(m.tabs[m.active].content)
-				m.viewport.GotoTop()
-			}
+			m.setActiveTab(4)
 			return m, nil
 
 		case key.Matches(msg, m.keys.Reload):

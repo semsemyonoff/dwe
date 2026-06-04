@@ -14,59 +14,66 @@ import (
 	"charm.land/lipgloss/v2"
 )
 
+// fgStyle is the shared constructor behind every palette accessor: a fresh v2
+// lipgloss style whose only set field is the foreground color. Centralizing it
+// keeps the v1→v2 bridge in one place and the accessors as thin color slots.
+func fgStyle(color string) lipgloss.Style {
+	return lipgloss.NewStyle().Foreground(lipgloss.Color(color))
+}
+
 // paletteFocusBorder returns the v2 lipgloss style used for focused-panel
 // borders in the two-panel command browser.
 func paletteFocusBorder() lipgloss.Style {
-	return lipgloss.NewStyle().Foreground(lipgloss.Color(styles.ColorAccent()))
+	return fgStyle(styles.ColorAccent())
 }
 
 // paletteDescription returns the v2 lipgloss style used for secondary
 // description text (item subtitles, faint captions).
 func paletteDescription() lipgloss.Style {
-	return lipgloss.NewStyle().Foreground(lipgloss.Color(styles.ColorMuted()))
+	return fgStyle(styles.ColorMuted())
 }
 
 // paletteTreeCount returns the v2 lipgloss style used for "(N)" counters in
 // the left tree.
 func paletteTreeCount() lipgloss.Style {
-	return lipgloss.NewStyle().Foreground(lipgloss.Color(styles.ColorMuted()))
+	return fgStyle(styles.ColorMuted())
 }
 
 // paletteTreeArrow returns the v2 lipgloss style used for tree disclosure
 // glyphs (▸/▾).
 func paletteTreeArrow() lipgloss.Style {
-	return lipgloss.NewStyle().Foreground(lipgloss.Color(styles.ColorMuted()))
+	return fgStyle(styles.ColorMuted())
 }
 
 // paletteKey returns the v2 lipgloss style used for high-prominence labels
 // (titles, breadcrumb path, filter query header). Bold is intentionally NOT
 // applied here so callers can compose it (`paletteKey().Bold(true)`).
 func paletteKey() lipgloss.Style {
-	return lipgloss.NewStyle().Foreground(lipgloss.Color(styles.ColorAccent()))
+	return fgStyle(styles.ColorAccent())
 }
 
 // paletteSuccess returns the v2 lipgloss style used for success/enabled
 // accents (e.g. the "[--yes ON]" toggle).
 func paletteSuccess() lipgloss.Style {
-	return lipgloss.NewStyle().Foreground(lipgloss.Color(styles.ColorSuccess()))
+	return fgStyle(styles.ColorSuccess())
 }
 
 // paletteFilterMatch returns the v2 lipgloss style used to highlight
 // characters matched by the active filter inside the command list.
 func paletteFilterMatch() lipgloss.Style {
-	return lipgloss.NewStyle().Foreground(lipgloss.Color(styles.ColorAccent()))
+	return fgStyle(styles.ColorAccent())
 }
 
 // palettePaginationActive returns the v2 lipgloss style for the active
 // pagination dot.
 func palettePaginationActive() lipgloss.Style {
-	return lipgloss.NewStyle().Foreground(lipgloss.Color(styles.ColorAccent()))
+	return fgStyle(styles.ColorAccent())
 }
 
 // palettePaginationInactive returns the v2 lipgloss style for inactive
 // pagination dots.
 func palettePaginationInactive() lipgloss.Style {
-	return lipgloss.NewStyle().Foreground(lipgloss.Color(styles.ColorMuted()))
+	return fgStyle(styles.ColorMuted())
 }
 
 // paginationDotGlyph is the bullet character bubbles/v2 uses for pagination
@@ -78,16 +85,10 @@ const paginationDotGlyph = "•"
 // onto our exposed Color*() accessors are replaced.
 func applyListStyles(l *list.Model) {
 	s := l.Styles
-	s.ActivePaginationDot = lipgloss.NewStyle().
-		Foreground(lipgloss.Color(styles.ColorAccent())).
-		SetString(paginationDotGlyph)
-	s.InactivePaginationDot = lipgloss.NewStyle().
-		Foreground(lipgloss.Color(styles.ColorMuted())).
-		SetString(paginationDotGlyph)
-	s.DefaultFilterCharacterMatch = lipgloss.NewStyle().
-		Foreground(lipgloss.Color(styles.ColorAccent())).
-		Underline(true)
-	s.NoItems = lipgloss.NewStyle().Foreground(lipgloss.Color(styles.ColorMuted()))
+	s.ActivePaginationDot = fgStyle(styles.ColorAccent()).SetString(paginationDotGlyph)
+	s.InactivePaginationDot = fgStyle(styles.ColorMuted()).SetString(paginationDotGlyph)
+	s.DefaultFilterCharacterMatch = fgStyle(styles.ColorAccent()).Underline(true)
+	s.NoItems = fgStyle(styles.ColorMuted())
 	l.Styles = s
 }
 
@@ -100,17 +101,15 @@ func applyItemStyles(s *list.DefaultItemStyles) {
 	s.NormalDesc = s.NormalDesc.Foreground(desc)
 	s.SelectedDesc = s.SelectedDesc.Foreground(desc)
 	s.DimmedDesc = s.DimmedDesc.Foreground(desc)
-	s.FilterMatch = lipgloss.NewStyle().
-		Foreground(lipgloss.Color(styles.ColorAccent())).
-		Underline(true)
+	s.FilterMatch = fgStyle(styles.ColorAccent()).Underline(true)
 }
 
 // applyHelpStyles overwrites the palette-driven fields on a bubbles/v2
 // help.Styles. Key labels pick up the accent color (high-prominence keys);
 // descriptions and separators share the muted color for a secondary look.
 func applyHelpStyles(s *help.Styles) {
-	key := lipgloss.NewStyle().Foreground(lipgloss.Color(styles.ColorAccent()))
-	desc := lipgloss.NewStyle().Foreground(lipgloss.Color(styles.ColorMuted()))
+	key := fgStyle(styles.ColorAccent())
+	desc := fgStyle(styles.ColorMuted())
 	s.ShortKey = key
 	s.FullKey = key
 	s.ShortDesc = desc
@@ -133,7 +132,5 @@ func applyHelpStyles(s *help.Styles) {
 // changes.
 func applyViewportStyles(vp *viewport.Model) {
 	vp.Style = lipgloss.NewStyle()
-	vp.HighlightStyle = lipgloss.NewStyle().
-		Foreground(lipgloss.Color(styles.ColorAccent())).
-		Reverse(true)
+	vp.HighlightStyle = fgStyle(styles.ColorAccent()).Reverse(true)
 }
