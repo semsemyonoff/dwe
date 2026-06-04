@@ -310,15 +310,15 @@ Several guides touch the same commands (`dwe logs`, `dwe status`, `dwe info`). T
 **Files:**
 - Create: `docs/guides/localize-for-your-team.md`
 
-- [ ] write H1 + intro framing "we work in Russian (or DE / FR / …)"
-- [ ] section: locale resolution chain — `--lang` flag → userconfig → `$LANG` → en
-- [ ] section: file layout — `workspace/i18n/<lang>.yml`, strict decode
-- [ ] section: what gets translated — `commands.<id>.{description,confirmation_text,messages.*}`, `params.*.description`, `groups.<id>.{title,description}`, `ui.docs.*`
-- [ ] section: what does NOT — cobra command descriptions (`dwe deploy --help` stays English), error messages, long-form reference docs (separate scope)
-- [ ] section: worked example — EN command source + matching `ru.yml`
-- [ ] section: validation — `dwe validate translations`
-- [ ] section: per-invocation switching — `DWE_LANGUAGE=ru dwe commands list`
-- [ ] verify rendering
+- [x] write H1 + intro framing "we work in Russian (or DE / FR / …)"
+- [x] section: locale resolution chain — `--lang` flag → userconfig → `$LANG` → en
+- [x] section: file layout — `workspace/i18n/<lang>.yml`, strict decode
+- [x] section: what gets translated — `commands.<id>.{description,confirmation_text,messages.*}`, `params.*.description`, `groups.<id>.{title,description}`, `ui.docs.*`
+- [x] section: what does NOT — cobra command descriptions (`dwe deploy --help` stays English), error messages, long-form reference docs (separate scope)
+- [x] section: worked example — EN command source + matching `ru.yml`
+- [x] section: validation — `dwe validate translations`
+- [x] section: per-invocation switching — `DWE_LANGUAGE=ru dwe commands list`
+- [x] verify rendering
 
 ### Task 11: EN guide — `brand-your-project.md`
 
