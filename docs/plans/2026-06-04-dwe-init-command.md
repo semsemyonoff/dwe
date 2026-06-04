@@ -329,13 +329,13 @@ subdir entries.
 **Files:**
 - Modify: `internal/cli/root.go`
 
-- [ ] add `root.AddCommand(cmdScaffold.NewCmd(groupConfiguration, flags))` in the configuration group
-- [ ] add `path == "dwe init"` to `allowedWithoutProject(cmd)` — it matches on
+- [x] add `root.AddCommand(cmdScaffold.NewCmd(groupConfiguration, flags))` in the configuration group
+- [x] add `path == "dwe init"` to `allowedWithoutProject(cmd)` — it matches on
       `cmd.CommandPath()` (`root.go:293-300`), so the bare string `"init"` would never match
       (mirror the existing `"dwe version"` / `"dwe prompt"` entries)
-- [ ] write tests: `dwe init` runs outside a project (no `project_not_found`); `--help` succeeds;
+- [x] write tests: `dwe init` runs outside a project (no `project_not_found`); `--help` succeeds;
       command is registered under the right group
-- [ ] run tests — must pass before Task 9
+- [x] run tests — must pass before Task 9
 
 ### Task 9: Fresh-init validity integration test (load-bearing)
 

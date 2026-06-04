@@ -22,6 +22,7 @@ import (
 	cmdLogs "github.com/semsemyonoff/dwe/internal/cli/logs"
 	cmdPrompt "github.com/semsemyonoff/dwe/internal/cli/prompt"
 	cmdRender "github.com/semsemyonoff/dwe/internal/cli/render"
+	cmdScaffold "github.com/semsemyonoff/dwe/internal/cli/scaffold"
 	cmdService "github.com/semsemyonoff/dwe/internal/cli/service"
 	cmdShell "github.com/semsemyonoff/dwe/internal/cli/shell"
 	cmdSnapshot "github.com/semsemyonoff/dwe/internal/cli/snapshot"
@@ -87,6 +88,7 @@ func NewRootCmdWithFlags() (*cobra.Command, *cmdctx.RootFlags) {
 	root.AddCommand(cmdPrompt.NewCmd(groupEnvironment, flags))
 
 	// Configuration group: services, tools, rendering, validation.
+	root.AddCommand(cmdScaffold.NewCmd(groupConfiguration, flags))
 	root.AddCommand(cmdService.NewCmd(groupConfiguration, flags))
 	root.AddCommand(cmdRender.NewCmd(groupConfiguration, flags))
 	root.AddCommand(cmdValidate.NewCmd(groupConfiguration, flags))
@@ -293,6 +295,7 @@ func resolveLocalization(flags *cmdctx.RootFlags) {
 func allowedWithoutProject(cmd *cobra.Command) bool {
 	path := cmd.CommandPath()
 	return path == "dwe" ||
+		path == "dwe init" ||
 		path == "dwe version" ||
 		path == "dwe prompt" ||
 		strings.HasPrefix(path, "dwe completion") ||

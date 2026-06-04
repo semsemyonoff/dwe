@@ -47,8 +47,8 @@ func TestCommandGroups(t *testing.T) {
 		}
 	}
 
-	// Configuration group: services, render, validate
-	for _, name := range []string{"services", "render", "validate"} {
+	// Configuration group: init, services, render, validate
+	for _, name := range []string{"init", "services", "render", "validate"} {
 		if cmdGroupID[name] != groupConfiguration {
 			t.Errorf("command %q groupID = %q, want %q", name, cmdGroupID[name], groupConfiguration)
 		}
@@ -66,6 +66,65 @@ func TestCommandGroups(t *testing.T) {
 		if cmdGroupID[name] != groupAdvanced {
 			t.Errorf("command %q groupID = %q, want %q", name, cmdGroupID[name], groupAdvanced)
 		}
+	}
+}
+
+// TestInitCmdRegisteredInConfigurationGroup verifies the `init` command is
+// wired into the root tree under the configuration group.
+func TestInitCmdRegisteredInConfigurationGroup(t *testing.T) {
+	root := NewRootCmd()
+	for _, c := range root.Commands() {
+		if c.Name() == "init" {
+			if c.GroupID != groupConfiguration {
+				t.Errorf("init command groupID = %q, want %q", c.GroupID, groupConfiguration)
+			}
+			return
+		}
+	}
+	t.Error("init command not found in root commands")
+}
+
+// TestInitCmdRunsWithoutProject verifies `dwe init` is allowlisted to run
+// outside an existing project — discovery returns ErrNotFound but the command
+// must proceed (it creates a project) rather than failing with project_not_found.
+func TestInitCmdRunsWithoutProject(t *testing.T) {
+	// Run from an empty temp dir so discovery returns ErrNotFound.
+	t.Chdir(t.TempDir())
+
+	root := NewRootCmd()
+	var buf bytes.Buffer
+	root.SetOut(&buf)
+	root.SetErr(&buf)
+	// --yes forces non-interactive defaults; nothing should error on the
+	// missing project.
+	root.SetArgs([]string{"init", "--yes", "--output", "json"})
+
+	if err := root.Execute(); err != nil {
+		t.Fatalf("dwe init returned unexpected error outside a project: %v", err)
+	}
+	// A workspace.yml must have been scaffolded into the cwd.
+	if _, err := os.Stat("workspace.yml"); err != nil {
+		t.Errorf("expected workspace.yml to be scaffolded, stat error: %v", err)
+	}
+}
+
+// TestInitCmdHelpSucceeds verifies `dwe init --help` runs cleanly without a
+// project (the hidden __complete / help paths bypass PersistentPreRunE, but the
+// explicit allowlist also covers the normal help path).
+func TestInitCmdHelpSucceeds(t *testing.T) {
+	t.Chdir(t.TempDir())
+
+	root := NewRootCmd()
+	var buf bytes.Buffer
+	root.SetOut(&buf)
+	root.SetErr(&buf)
+	root.SetArgs([]string{"init", "--help"})
+
+	if err := root.Execute(); err != nil {
+		t.Fatalf("dwe init --help returned error: %v", err)
+	}
+	if !strings.Contains(buf.String(), "init") {
+		t.Errorf("expected help output to mention 'init', got:\n%s", buf.String())
 	}
 }
 
