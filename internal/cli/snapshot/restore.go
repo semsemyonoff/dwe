@@ -21,7 +21,6 @@ import (
 	"github.com/semsemyonoff/dwe/internal/core/usercommands/model"
 	snapshotpkg "github.com/semsemyonoff/dwe/internal/core/workflow/snapshot"
 	"github.com/semsemyonoff/dwe/internal/core/workflow/snapshot/meta"
-	"github.com/semsemyonoff/dwe/internal/shared/lock"
 	"github.com/semsemyonoff/dwe/internal/shared/promptcache"
 	"github.com/semsemyonoff/dwe/internal/shared/render"
 
@@ -106,13 +105,9 @@ func runSnapshotRestore(cmd *cobra.Command, flags *cmdctx.RootFlags, name string
 	}
 	_ = reg.ApplyVisibility(cfg, baseDir)
 
-	releaseLocks, err := lock.AcquireProjectLocks(baseDir)
+	releaseLocks, err := cmdctx.AcquireProjectLocksOrReport(baseDir, render.Stdout())
 	if err != nil {
-		if phe, ok := errors.AsType[*lock.ProjectLockHeldError](err); ok {
-			render.Stdout().Error(phe.Error())
-			return phe
-		}
-		return fmt.Errorf("acquiring project locks: %w", err)
+		return err
 	}
 	defer releaseLocks()
 

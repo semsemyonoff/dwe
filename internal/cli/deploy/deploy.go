@@ -378,13 +378,9 @@ func RunHelper(ctx context.Context, cmd *cobra.Command, flags *cmdctx.RootFlags,
 
 	// Acquire deploy + snapshot project locks to prevent parallel deploys
 	// and to be mutually exclusive with snapshot mutating operations.
-	releaseLocks, err := lock.AcquireProjectLocks(workDir)
+	releaseLocks, err := cmdctx.AcquireProjectLocksOrReport(workDir, sharedrender.Stdout())
 	if err != nil {
-		if phe, ok := errors.AsType[*lock.ProjectLockHeldError](err); ok {
-			sharedrender.Stdout().Error(phe.Error())
-			return phe
-		}
-		return fmt.Errorf("acquiring project locks: %w", err)
+		return err
 	}
 	defer releaseLocks()
 

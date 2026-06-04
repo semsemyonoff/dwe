@@ -1,14 +1,12 @@
 package snapshot
 
 import (
-	"errors"
 	"fmt"
 
 	"github.com/semsemyonoff/dwe/internal/cli/cmdctx"
 	"github.com/semsemyonoff/dwe/internal/core/project/config"
 	"github.com/semsemyonoff/dwe/internal/core/workflow/snapshot/archive"
 	"github.com/semsemyonoff/dwe/internal/core/workflow/snapshot/meta"
-	"github.com/semsemyonoff/dwe/internal/shared/lock"
 	"github.com/semsemyonoff/dwe/internal/shared/render"
 
 	"github.com/spf13/cobra"
@@ -47,13 +45,9 @@ func runSnapshotPack(cmd *cobra.Command, flags *cmdctx.RootFlags, name, outPath 
 		return err
 	}
 
-	releaseLocks, err := lock.AcquireProjectLocks(baseDir)
+	releaseLocks, err := cmdctx.AcquireProjectLocksOrReport(baseDir, render.Stdout())
 	if err != nil {
-		if phe, ok := errors.AsType[*lock.ProjectLockHeldError](err); ok {
-			render.Stdout().Error(phe.Error())
-			return phe
-		}
-		return fmt.Errorf("acquiring project locks: %w", err)
+		return err
 	}
 	defer releaseLocks()
 

@@ -103,11 +103,11 @@ Tasks are ordered **safest / highest-value first**: pure deletions and named-con
 - Modify: `internal/cli/deploy/deploy.go`; `internal/cli/lifecycle/reset.go`; `internal/cli/snapshot/{create,restore,remove,pack,unpack}.go`
 - Create: `internal/cli/cmdctx/locks_test.go`
 
-- [ ] Add `func AcquireProjectLocksOrReport(baseDir string, w *render.Writer) (release func(), err error)` to `cmdctx`: wraps `lock.AcquireProjectLocks`; on `*lock.ProjectLockHeldError` print via `w.Error(phe.Error())` and return `phe` unchanged (preserving exit code 2); else wrap `acquiring project locks: %w`. (cmdctx already imports `shared/render`; adding `shared/lock` is layering-safe.)
-- [ ] Collapse all 8 sites: `deploy.go:382`, `reset.go:189,359`, `snapshot/create.go:83`, `restore.go:109`, `remove.go:82`, `pack.go:50`, `unpack.go:61` to `release, err := cmdctx.AcquireProjectLocksOrReport(dir, render.Stdout()); if err != nil { return err }; defer release()`. Keep `defer release()` at each call site.
-- [ ] ⚠️ Note (do NOT auto-fix here): `lifecycle/stop.go:61` acquires the same locks but omits the `ProjectLockHeldError` branch — surface as a follow-up question, decide intentional vs bug separately.
-- [ ] Write unit test for `AcquireProjectLocksOrReport` covering held-error (exit code 2 preserved) and generic-error wrap.
-- [ ] `make test && make lint` — must pass.
+- [x] Add `func AcquireProjectLocksOrReport(baseDir string, w *render.Writer) (release func(), err error)` to `cmdctx`: wraps `lock.AcquireProjectLocks`; on `*lock.ProjectLockHeldError` print via `w.Error(phe.Error())` and return `phe` unchanged (preserving exit code 2); else wrap `acquiring project locks: %w`. (cmdctx already imports `shared/render`; adding `shared/lock` is layering-safe.)
+- [x] Collapse all 8 sites: `deploy.go:382`, `reset.go:189,359`, `snapshot/create.go:83`, `restore.go:109`, `remove.go:82`, `pack.go:50`, `unpack.go:61` to `release, err := cmdctx.AcquireProjectLocksOrReport(dir, render.Stdout()); if err != nil { return err }; defer release()`. Keep `defer release()` at each call site.
+- [x] ⚠️ Note (do NOT auto-fix here): `lifecycle/stop.go:61` acquires the same locks but omits the `ProjectLockHeldError` branch — surface as a follow-up question, decide intentional vs bug separately.
+- [x] Write unit test for `AcquireProjectLocksOrReport` covering held-error (exit code 2 preserved) and generic-error wrap.
+- [x] `make test && make lint` — must pass.
 
 ### Task 4: Add `config.LoadDockerConfigOrEmpty` for the os.ErrNotExist fallback
 **Theme 2 — priority high / effort small / risk none.** ~10 sites of the load-or-empty idiom with identical `loading docker config: %w` wrap.

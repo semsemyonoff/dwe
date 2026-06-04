@@ -20,7 +20,6 @@ import (
 	"github.com/semsemyonoff/dwe/internal/core/workflow/deploy"
 	"github.com/semsemyonoff/dwe/internal/core/workflow/deploy/journal"
 	"github.com/semsemyonoff/dwe/internal/core/workflow/reset"
-	"github.com/semsemyonoff/dwe/internal/shared/lock"
 	"github.com/semsemyonoff/dwe/internal/shared/promptcache"
 	"github.com/semsemyonoff/dwe/internal/shared/render"
 	"github.com/semsemyonoff/dwe/internal/shared/tpl"
@@ -186,13 +185,9 @@ func resetRunCmd(cmd *cobra.Command, flags *cmdctx.RootFlags, yes bool, skipPref
 
 	// Acquire deploy + snapshot project locks to prevent parallel resets
 	// and to be mutually exclusive with snapshot mutating operations.
-	releaseLocks, err := lock.AcquireProjectLocks(workDir)
+	releaseLocks, err := cmdctx.AcquireProjectLocksOrReport(workDir, render.Stdout())
 	if err != nil {
-		if phe, ok := errors.AsType[*lock.ProjectLockHeldError](err); ok {
-			render.Stdout().Error(phe.Error())
-			return phe
-		}
-		return fmt.Errorf("acquiring project locks: %w", err)
+		return err
 	}
 	defer releaseLocks()
 
@@ -356,13 +351,9 @@ func resetServiceRunCmd(cmd *cobra.Command, flags *cmdctx.RootFlags, name string
 	}
 
 	// Acquire project locks around container stop, reset.yml, and journal update.
-	releaseLocks, err := lock.AcquireProjectLocks(baseDir)
+	releaseLocks, err := cmdctx.AcquireProjectLocksOrReport(baseDir, render.Stdout())
 	if err != nil {
-		if phe, ok := errors.AsType[*lock.ProjectLockHeldError](err); ok {
-			render.Stdout().Error(phe.Error())
-			return phe
-		}
-		return fmt.Errorf("acquiring project locks: %w", err)
+		return err
 	}
 	defer releaseLocks()
 
