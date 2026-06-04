@@ -13,6 +13,7 @@ import (
 
 	"github.com/semsemyonoff/dwe/internal/core/project/config"
 	"github.com/semsemyonoff/dwe/internal/core/ui/widgets"
+	"github.com/semsemyonoff/dwe/internal/shared/daemon"
 	"github.com/semsemyonoff/dwe/internal/shared/docker"
 	"github.com/semsemyonoff/dwe/internal/shared/render"
 )
@@ -181,9 +182,15 @@ func runServicesCLI(
 		return fmt.Errorf("invalid cli.mode %q for service %q: must be auto, exec, or run", opts.Mode, serviceName)
 	}
 
-	// Container name matches the container_name field in compose.yaml:
-	// <project-full-name>-<container>, e.g. dwe-laravel-app-main.
-	fullContainerName := compose.ProjectName + "-" + svc.Container
+	// Resolve the authoritative compose project name (handles absent docker.yml).
+	projectFull, err := config.ResolveComposeProjectName(compose.BaseDir, cfg)
+	if err != nil {
+		return fmt.Errorf("resolving compose project name: %w", err)
+	}
+	fullContainerName, err := daemon.ResolveContainerName(projectFull, svc.Container)
+	if err != nil {
+		return err
+	}
 
 	switch opts.Mode {
 	case "exec":
@@ -459,7 +466,14 @@ func runOneShotCommand(
 		return fmt.Errorf("invalid cli.mode %q for service %q: must be auto, exec, or run", opts.Mode, serviceName)
 	}
 
-	fullContainerName := compose.ProjectName + "-" + svc.Container
+	projectFull, err := config.ResolveComposeProjectName(compose.BaseDir, cfg)
+	if err != nil {
+		return fmt.Errorf("resolving compose project name: %w", err)
+	}
+	fullContainerName, err := daemon.ResolveContainerName(projectFull, svc.Container)
+	if err != nil {
+		return err
+	}
 
 	switch opts.Mode {
 	case "exec":
