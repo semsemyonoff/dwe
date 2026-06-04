@@ -1,4 +1,4 @@
-> Translated from: reference/render/ide.md @ 549b38d5b4b2
+> Translated from: reference/render/ide.md @ 43038f7761e6
 
 # dwe render ide
 
@@ -313,4 +313,4 @@ services/main/
 
 - [блок `services.<name>.render.ide`](../config/services/fields.md) — `enabled`, `template`, наследование через `extends`
 - [`render ai`](ai.md) — родственная команда с противоположной политикой коллизий
-- CLI-справочник: [`dwe render ide`](../cli/dwe_render_ide.md)
+- Запустите `dwe render ide --help`, чтобы увидеть актуальный CLI-интерфейс

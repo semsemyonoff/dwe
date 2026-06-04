@@ -1,4 +1,4 @@
-> Translated from: reference/render/git.md @ 5833690fc9a8
+> Translated from: reference/render/git.md @ f8537aeb98f0
 
 # dwe render git
 
@@ -270,4 +270,4 @@ services/main/src/.git/hooks/
 - [`render ide`](ide.md) — родственная команда с той же политикой «глубочайший выигрывает»
 - [`render ai`](ai.md) — родственная команда (поверхностнейший выигрывает), разделяющая схему manifest
 - [Обзор render](index.md) — общая схема manifest и механизм локальных оверрайдов
-- CLI-справочник: [`dwe render git`](../cli/dwe_render_git.md)
+- Запустите `dwe render git --help`, чтобы увидеть актуальный CLI-интерфейс

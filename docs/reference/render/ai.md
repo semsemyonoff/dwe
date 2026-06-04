@@ -368,4 +368,4 @@ Errors are returned as command failures and name the offending service so the so
 
 - [`services.<name>.render.ai` block](../config/services/fields.md#renderai-block) — `enabled`, `template`, inheritance via `extends`
 - [`render ide`](ide.md) — companion command with the opposite (deepest-wins) collision policy
-- CLI reference: [`dwe render ai`](../cli/dwe_render_ai.md)
+- Run `dwe render ai --help` for the live CLI surface

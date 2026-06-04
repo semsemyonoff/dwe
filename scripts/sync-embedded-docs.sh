@@ -12,6 +12,7 @@ EMBEDDED_DIR="$REPO_ROOT/internal/core/docs/embedded"
 # Source trees to sync
 SOURCES=(
 	"$DOCS_ROOT/reference"
+	"$DOCS_ROOT/guides"
 	"$DOCS_ROOT/internals"
 	"$DOCS_ROOT/i18n"
 )

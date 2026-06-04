@@ -260,4 +260,4 @@ Walk-through:
 
 - [`exports.env` rule schema](../config/workspace.md#exportsenv) — full field reference, formats
 - [Dot-path resolution](../config/workspace.md#dot-path-resolution) — how `from` and `when` paths navigate the merged config
-- CLI reference: [`dwe render env`](../cli/dwe_render_env.md)
+- Run `dwe render env --help` for the live CLI surface

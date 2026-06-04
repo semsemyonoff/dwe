@@ -268,4 +268,4 @@ A follow-up plan will add worktree support. Until then, services with worktree c
 - [`render ide`](ide.md) — companion command with the same deepest-wins collision policy
 - [`render ai`](ai.md) — companion command (shallowest-wins) sharing the manifest schema
 - [Render overview](index.md) — shared manifest schema and local-override mechanism
-- CLI reference: [`dwe render git`](../cli/dwe_render_git.md)
+- Run `dwe render git --help` for the live CLI surface

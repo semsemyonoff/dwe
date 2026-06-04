@@ -24,10 +24,7 @@ import (
 
 type docsFlags struct {
 	output         string
-	format         string
-	scope          string
 	lang           string
-	includeHidden  bool
 	includePrivate bool
 }
 
@@ -39,7 +36,7 @@ func NewCmd(groupID string, flags *cmdctx.RootFlags) *cobra.Command {
 		Long: `Browse and manage dwe documentation.
 
 View documentation interactively with a TUI browser or display specific topics.
-Generate reference documentation for the CLI and command registry.`,
+Generate reference documentation for the declarative command registry.`,
 		GroupID:      groupID,
 		Args:         cobra.NoArgs,
 		SilenceUsage: true,

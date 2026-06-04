@@ -41,8 +41,6 @@ Topics are matched case-insensitively with fuzzy substring matching if exact mat
 When more than one topic matches and there is no unique closest segment, the command
 lists the candidates and exits with an error — pass a more specific path to
 disambiguate. Common examples:
-  - "dwe" alone is ambiguous (both "reference/cli/dwe" and
-    "reference/config/dwe" match); pass "config/dwe" or "cli/dwe".
   - Multi-page topics like "config/services" are ambiguous on their own;
     pass the specific sub-page, e.g. "config/services/index",
     "config/services/fields", or "config/services/examples".

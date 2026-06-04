@@ -1,4 +1,4 @@
-> Translated from: reference/render/env.md @ 8c5f47e9cd4f
+> Translated from: reference/render/env.md @ 491ea7327041
 
 # dwe render env
 
@@ -262,4 +262,4 @@ TOOL_ADMINER=true
 
 - [схема правил `exports.env`](../config/workspace.md) — полный справочник по полям и форматам
 - [Разрешение dot-path](../config/workspace.md) — как пути `from` и `when` ходят по объединённой конфигурации
-- CLI-справочник: [`dwe render env`](../cli/dwe_render_env.md)
+- Запустите `dwe render env --help`, чтобы увидеть актуальный CLI-интерфейс

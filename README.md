@@ -176,7 +176,9 @@ Reference documentation lives under `docs/reference/` and is also embedded in th
 - [Render packs](docs/reference/render/index.md) — `dwe render env / ide / ai / git` — manifest schema, collision policies, local overrides.
 - [Documentation subsystem](docs/reference/docs/index.md) — the `dwe docs` browser, non-interactive subcommands, translations, content-hash staleness.
 - [Templates](docs/reference/templates.md) — the shared template engine: `{{ ... }}` vs `${ ... }`, sprout registries, render context per site.
-- [CLI reference](docs/reference/cli/index.md) — auto-generated command tree (regenerate with `dwe docs generate`).
+- [Guides](docs/guides/index.md) — task-oriented recipes and integrations (e.g. Starship prompt).
+
+Run `dwe --help` (or any subcommand with `--help`) for the live CLI surface.
 
 Useful one-liners:
 

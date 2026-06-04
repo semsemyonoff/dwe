@@ -146,4 +146,4 @@ For IDE/AI, a local override that produces a different rendered output is a work
 - [`workspace.yml` / `defaults.yml` / `local.yml`](../config/workspace.md) — merged config layers and dot-path resolution (used by `render env`)
 - [service definitions (`workspace/services/*/service.yml`)](../config/services/index.md) — service definitions, `ide` / `ai` / `git` blocks, `extends` chains
 - [Templates](../templates.md) — Go template syntax, sprout helpers, render context (shared with info / commands / pipelines)
-- CLI reference: [`dwe render`](../cli/dwe_render.md), [`dwe render env`](../cli/dwe_render_env.md), [`dwe render ide`](../cli/dwe_render_ide.md), [`dwe render ai`](../cli/dwe_render_ai.md), [`dwe render git`](../cli/dwe_render_git.md)
+- Run `dwe render --help` (or `dwe render <subcommand> --help`) for the live CLI surface

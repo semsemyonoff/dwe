@@ -15,11 +15,11 @@ func TestCompilePathGlob(t *testing.T) {
 		{"double star prefix", "reference/**", "reference/config/sub/x", true},
 		{"double star suffix", "**/services", "reference/config/services", true},
 		{"double star around", "reference/**/services", "reference/config/services", true},
-		{"double star around deep", "reference/**/services", "reference/cli/dwe_services", false},
+		{"double star around deep", "reference/**/services", "reference/render/env_services", false},
 		{"question mark one char", "config/?", "config/a", true},
 		{"question mark not slash", "config/?", "config/sub/x", false},
 		{"escape dot", "config.yml", "configXyml", false},
-		{"miss", "reference/cli/*", "reference/config/services", false},
+		{"miss", "reference/render/*", "reference/config/services", false},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {

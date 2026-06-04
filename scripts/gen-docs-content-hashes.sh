@@ -2,7 +2,7 @@
 # Generate content-hash manifest for embedded documentation.
 # Usage: gen-docs-content-hashes.sh <output-file>
 # Generates a Go source file with SHA256 hashes of all markdown files
-# in docs/reference and docs/internals.
+# in docs/reference, docs/guides, and docs/internals.
 
 set -e
 
@@ -18,18 +18,18 @@ cd "$REPO_ROOT"
     echo "package docs"
     echo ""
     echo "// ContentHashes maps relative file paths to their content SHA256 hashes (first 12 hex chars)."
-    echo "// Generated from docs/reference and docs/internals at build time."
+    echo "// Generated from docs/reference, docs/guides, and docs/internals at build time."
     echo "// See docs/reference/docs/index.md for details on the hash-based staleness check."
     echo "var ContentHashes = map[string]string{"
 
     # Build map entries from all markdown files. We feed two inputs into the
     # same pipeline so the output stays sorted and there is one hash branch:
-    #   - markdown files under docs/reference and docs/internals
+    #   - markdown files under docs/reference, docs/guides, and docs/internals
     #     (relpath = "${file#docs/}", e.g. "reference/config/workspace.md")
     #   - the repo-root README.md as a flat top-level topic
     #     (relpath = "README.md")
     {
-        find docs/reference docs/internals -name "*.md" -type f 2>/dev/null
+        find docs/reference docs/guides docs/internals -name "*.md" -type f 2>/dev/null
         if [ -f "README.md" ]; then
             echo "README.md"
         fi

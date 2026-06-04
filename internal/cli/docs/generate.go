@@ -5,7 +5,6 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
-	"slices"
 	"sort"
 	"strings"
 
@@ -15,9 +14,7 @@ import (
 	"github.com/semsemyonoff/dwe/internal/core/usercommands"
 	"github.com/semsemyonoff/dwe/internal/shared/i18n"
 
-	"github.com/charmbracelet/x/ansi"
 	"github.com/spf13/cobra"
-	cobradoc "github.com/spf13/cobra/doc"
 )
 
 func newDocsGenerateCmd(flags *cmdctx.RootFlags) *cobra.Command {
@@ -26,14 +23,10 @@ func newDocsGenerateCmd(flags *cmdctx.RootFlags) *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "generate",
 		Short: "Generate reference documentation",
-		Long: `Generate reference documentation for the dwe CLI command tree and/or the
-declarative command registry (workspace/commands/).
-
-Supported formats: markdown, yaml, man, all
-Supported scopes:  all, cli, commands`,
+		Long: `Generate reference documentation for the declarative command registry
+(workspace/commands/) as markdown.`,
 		Example: `  dwe docs generate
-  dwe docs generate --format markdown --scope cli --out docs/reference
-  dwe docs generate --format all --scope all --include-private`,
+  dwe docs generate --lang ru --include-private`,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			return runDocsGenerate(cmd, flags, df)
 		},
@@ -41,10 +34,7 @@ Supported scopes:  all, cli, commands`,
 	}
 
 	cmd.Flags().StringVar(&df.output, "out", "docs/reference", "Output directory for generated docs")
-	cmd.Flags().StringVar(&df.format, "format", "markdown", "Output format: markdown, yaml, man, all")
-	cmd.Flags().StringVar(&df.scope, "scope", "all", "Scope: all, cli, commands")
 	cmd.Flags().StringVar(&df.lang, "lang", "", "Language code (default: from userconfig / $LANG)")
-	cmd.Flags().BoolVar(&df.includeHidden, "include-hidden", false, "Include hidden CLI commands")
 	cmd.Flags().BoolVar(&df.includePrivate, "include-private", false, "Include private registry commands")
 
 	return cmd
@@ -55,124 +45,50 @@ func runDocsGenerate(cmd *cobra.Command, rflags *cmdctx.RootFlags, df *docsFlags
 		return err
 	}
 
-	// Resolve output dir relative to project root.
 	projectRoot := rflags.ProjectRoot()
 	if projectRoot == "" {
-		// No project found — only --scope cli is allowed without a project.
-		requestedScopes := resolveScopes(df.scope)
-		if requestedScopes["commands"] {
-			scopeLabel := "commands scope"
-			if df.scope == "all" {
-				scopeLabel = "all scope (which includes commands)"
-			}
-			return fmt.Errorf("%s requires a dwe project; use --scope cli to generate CLI reference docs without a project", scopeLabel)
-		}
-		var cwdErr error
-		projectRoot, cwdErr = os.Getwd()
-		if cwdErr != nil {
-			return fmt.Errorf("getwd: %w", cwdErr)
-		}
+		return fmt.Errorf("dwe docs generate requires a dwe project (workspace.yml not found)")
 	}
 	outDir := df.output
 	if !filepath.IsAbs(outDir) {
 		outDir = filepath.Join(projectRoot, outDir)
 	}
 
-	formats := resolveFormats(df.format)
-	scopes := resolveScopes(df.scope)
+	reg, err := usercommands.LoadRegistryFromConfigPath(rflags.ConfigPath)
+	if err != nil {
+		return err
+	}
+	// Apply hide: visibility so generated docs match the runtime CLI
+	// surface — parity with `dwe docs llms-txt`. Best-effort: cfg load
+	// errors are tolerated; ApplyVisibility is fail-open on per-expression
+	// failures.
+	cfg, _ := config.LoadConfig(rflags.ConfigPath)
+	_ = reg.ApplyVisibility(cfg, rflags.ProjectRoot())
 
-	if scopes["cli"] {
-		cliDir := filepath.Join(outDir, "cli")
-		if err := os.MkdirAll(cliDir, 0o755); err != nil {
-			return fmt.Errorf("creating cli output dir: %w", err)
-		}
-		root := cmd.Root()
-		// Strip ANSI from help fields so generated docs stay clean. The root
-		// command's Long is decorated with accent escapes for terminal help
-		// (see cli.ApplyHelpBranding); markdown/yaml/man output must not carry
-		// raw escape sequences.
-		stripANSIFromTree(root)
-		// cobra/doc already skips Hidden commands; no pre-processing needed.
-		for _, fmt_ := range formats {
-			if err := genCLIDocs(root, cliDir, fmt_); err != nil {
-				return fmt.Errorf("generating cli docs (%s): %w", fmt_, err)
-			}
-			// cobra's stock generators skip hidden commands; when --include-hidden
-			// is set, generate their pages explicitly so index links are not broken.
-			if df.includeHidden {
-				switch fmt_ {
-				case "markdown":
-					if err := genHiddenCLIMarkdown(root, cliDir); err != nil {
-						return fmt.Errorf("generating hidden cli docs: %w", err)
-					}
-				case "yaml":
-					if err := genHiddenCLIYaml(root, cliDir); err != nil {
-						return fmt.Errorf("generating hidden cli docs (yaml): %w", err)
-					}
-				case "man":
-					if err := genHiddenCLIMan(root, cliDir); err != nil {
-						return fmt.Errorf("generating hidden cli docs (man): %w", err)
-					}
-				}
-			}
-		}
-		// The CLI index is a markdown file — only generate it when markdown output
-		// is included in the requested formats. For yaml/man-only runs the index
-		// would link to .md files that were never produced.
-		if slices.Contains(formats, "markdown") {
-			if err := genCLIIndex(root, cliDir, df.includeHidden); err != nil {
-				return fmt.Errorf("generating cli index: %w", err)
-			}
-		}
-		_, _ = fmt.Fprintf(cmd.OutOrStdout(), "%s CLI docs written to %s\n", render.LogoMark(), cliDir)
+	// Resolve locale: explicit --lang flag takes precedence, then fall back to rflags.Locale
+	// (which is already clamped to available locales in root PersistentPreRunE).
+	// Clamp explicit --lang too so an unavailable locale doesn't produce English content
+	// under a foreign-language path (e.g. commands/ru/ when no ru.yml exists).
+	resolvedLocale := rflags.Locale
+	if df.lang != "" {
+		resolvedLocale = rflags.I18n.ClampLocale(i18n.ResolveLocale(df.lang, "", ""))
 	}
 
-	if scopes["commands"] {
-		reg, err := usercommands.LoadRegistryFromConfigPath(rflags.ConfigPath)
-		if err != nil {
-			return err
-		}
-		// Apply hide: visibility so generated docs match the runtime CLI
-		// surface — parity with `dwe docs llms-txt`. Best-effort: cfg load
-		// errors are tolerated; ApplyVisibility is fail-open on per-expression
-		// failures.
-		cfg, _ := config.LoadConfig(rflags.ConfigPath)
-		_ = reg.ApplyVisibility(cfg, rflags.ProjectRoot())
-
-		// Resolve locale: explicit --lang flag takes precedence, then fall back to rflags.Locale
-		// (which is already clamped to available locales in root PersistentPreRunE).
-		// Clamp explicit --lang too so an unavailable locale doesn't produce English content
-		// under a foreign-language path (e.g. commands/ru/ when no ru.yml exists).
-		resolvedLocale := rflags.Locale
-		if df.lang != "" {
-			resolvedLocale = rflags.I18n.ClampLocale(i18n.ResolveLocale(df.lang, "", ""))
-		}
-
-		// commandsDir now includes the language: commands/<lang>
-		langDir := filepath.Join("commands", resolvedLocale)
-		commandsDir := filepath.Join(outDir, langDir)
-		if err := os.MkdirAll(commandsDir, 0o755); err != nil {
-			return fmt.Errorf("creating commands output dir: %w", err)
-		}
-		// Registry docs only support markdown. When yaml/man are also in the format
-		// list (e.g. --format all), inform the user that those formats are skipped
-		// rather than silently producing nothing.
-		if slices.Contains(formats, "yaml") || slices.Contains(formats, "man") {
-			_, _ = fmt.Fprintf(cmd.OutOrStdout(), "%s note: registry docs only support markdown; yaml/man formats skipped for commands scope\n", render.LogoMark())
-		}
-		for _, fmt_ := range formats {
-			if err := genRegistryDocs(reg, commandsDir, fmt_, df.includePrivate, rflags.I18n, resolvedLocale); err != nil {
-				return fmt.Errorf("generating commands docs (%s): %w", fmt_, err)
-			}
-		}
-		if err := genCommandsIndex(reg, commandsDir, df.includePrivate, rflags.I18n, resolvedLocale); err != nil {
-			return fmt.Errorf("generating commands index: %w", err)
-		}
-		_, _ = fmt.Fprintf(cmd.OutOrStdout(), "%s Command docs written to %s\n", render.LogoMark(), commandsDir)
+	// commandsDir now includes the language: commands/<lang>
+	langDir := filepath.Join("commands", resolvedLocale)
+	commandsDir := filepath.Join(outDir, langDir)
+	if err := os.MkdirAll(commandsDir, 0o755); err != nil {
+		return fmt.Errorf("creating commands output dir: %w", err)
 	}
+	if err := genRegistryMarkdown(reg, commandsDir, df.includePrivate, rflags.I18n, resolvedLocale); err != nil {
+		return fmt.Errorf("generating commands docs: %w", err)
+	}
+	if err := genCommandsIndex(reg, commandsDir, df.includePrivate, rflags.I18n, resolvedLocale); err != nil {
+		return fmt.Errorf("generating commands index: %w", err)
+	}
+	_, _ = fmt.Fprintf(cmd.OutOrStdout(), "%s Command docs written to %s\n", render.LogoMark(), commandsDir)
 
-	// Top-level index.
-	if err := genTopLevelIndex(outDir, scopes); err != nil {
+	if err := genTopLevelIndex(outDir); err != nil {
 		return fmt.Errorf("generating top-level index: %w", err)
 	}
 
@@ -180,196 +96,11 @@ func runDocsGenerate(cmd *cobra.Command, rflags *cmdctx.RootFlags, df *docsFlags
 }
 
 func validateDocsFlags(df *docsFlags) error {
-	validFormats := map[string]bool{"markdown": true, "yaml": true, "man": true, "all": true}
-	if !validFormats[df.format] {
-		return fmt.Errorf("--format %q is not valid; must be one of: markdown, yaml, man, all", df.format)
-	}
-	validScopes := map[string]bool{"all": true, "cli": true, "commands": true}
-	if !validScopes[df.scope] {
-		return fmt.Errorf("--scope %q is not valid; must be one of: all, cli, commands", df.scope)
-	}
-	// Registry docs only support markdown; reject non-markdown when the scope
-	// would exclusively generate registry output (scope=commands).
-	if df.scope == "commands" && df.format != "markdown" && df.format != "all" {
-		return fmt.Errorf("--format %q is not supported for --scope commands; registry docs only support markdown (use --format markdown or --format all)", df.format)
-	}
 	// --lang all is reserved for future multi-locale generation; reject it now.
 	if df.lang == "all" {
 		return fmt.Errorf("--lang all is not supported; specify a single locale (e.g. --lang en)")
 	}
 	return nil
-}
-
-// resolveFormats expands "all" to the full list; otherwise returns the single format.
-func resolveFormats(format string) []string {
-	if format == "all" {
-		return []string{"markdown", "yaml", "man"}
-	}
-	return []string{format}
-}
-
-// resolveScopes returns a set of active scopes.
-func resolveScopes(scope string) map[string]bool {
-	if scope == "all" {
-		return map[string]bool{"cli": true, "commands": true}
-	}
-	return map[string]bool{scope: true}
-}
-
-// genCLIDocs generates docs for the CLI command tree in the given format.
-func genCLIDocs(root *cobra.Command, dir, format string) error {
-	switch format {
-	case "markdown":
-		return cobradoc.GenMarkdownTree(root, dir)
-	case "yaml":
-		return cobradoc.GenYamlTree(root, dir)
-	case "man":
-		header := &cobradoc.GenManHeader{
-			Title:   "DWE",
-			Section: "1",
-		}
-		return cobradoc.GenManTree(root, header, dir)
-	default:
-		return fmt.Errorf("unknown format %q", format)
-	}
-}
-
-// genHiddenCLIMarkdown generates markdown pages for hidden commands that cobra's
-// stock GenMarkdownTree skips. Called only when --include-hidden is set so that
-// every entry written to cli/index.md has a corresponding file.
-func genHiddenCLIMarkdown(root *cobra.Command, dir string) error {
-	return walkAllCommands(root, func(cmd *cobra.Command) error {
-		if !cmd.Hidden {
-			return nil
-		}
-		filename := strings.ReplaceAll(cmd.CommandPath(), " ", "_") + ".md"
-		f, err := os.Create(filepath.Join(dir, filename))
-		if err != nil {
-			return fmt.Errorf("creating doc file for %s: %w", cmd.CommandPath(), err)
-		}
-		if err := cobradoc.GenMarkdown(cmd, f); err != nil {
-			_ = f.Close()
-			return err
-		}
-		return f.Close()
-	})
-}
-
-// genHiddenCLIYaml generates yaml docs for hidden commands that cobra's
-// stock GenYamlTree skips. Called only when --include-hidden is set.
-func genHiddenCLIYaml(root *cobra.Command, dir string) error {
-	return walkAllCommands(root, func(cmd *cobra.Command) error {
-		if !cmd.Hidden {
-			return nil
-		}
-		filename := strings.ReplaceAll(cmd.CommandPath(), " ", "_") + ".yaml"
-		f, err := os.Create(filepath.Join(dir, filename))
-		if err != nil {
-			return fmt.Errorf("creating yaml doc file for %s: %w", cmd.CommandPath(), err)
-		}
-		if err := cobradoc.GenYaml(cmd, f); err != nil {
-			_ = f.Close()
-			return err
-		}
-		return f.Close()
-	})
-}
-
-// genHiddenCLIMan generates man pages for hidden commands that cobra's
-// stock GenManTree skips. Called only when --include-hidden is set.
-func genHiddenCLIMan(root *cobra.Command, dir string) error {
-	header := &cobradoc.GenManHeader{
-		Title:   "DWE",
-		Section: "1",
-	}
-	return walkAllCommands(root, func(cmd *cobra.Command) error {
-		if !cmd.Hidden {
-			return nil
-		}
-		basename := strings.ReplaceAll(cmd.CommandPath(), " ", "-")
-		filename := basename + "." + header.Section
-		f, err := os.Create(filepath.Join(dir, filename))
-		if err != nil {
-			return fmt.Errorf("creating man doc file for %s: %w", cmd.CommandPath(), err)
-		}
-		if err := cobradoc.GenMan(cmd, header, f); err != nil {
-			_ = f.Close()
-			return err
-		}
-		return f.Close()
-	})
-}
-
-// stripANSIFromTree removes ANSI escape sequences from Short/Long fields
-// across every command in the tree, including hidden ones. Mutates in place
-// (docs gen is a terminal subcommand — the process exits right after).
-func stripANSIFromTree(root *cobra.Command) {
-	_ = walkAllCommands(root, func(c *cobra.Command) error {
-		c.Short = ansi.Strip(c.Short)
-		c.Long = ansi.Strip(c.Long)
-		return nil
-	})
-}
-
-// walkAllCommands visits every command in the tree, including hidden ones.
-func walkAllCommands(cmd *cobra.Command, fn func(*cobra.Command) error) error {
-	if err := fn(cmd); err != nil {
-		return err
-	}
-	for _, sub := range cmd.Commands() {
-		if err := walkAllCommands(sub, fn); err != nil {
-			return err
-		}
-	}
-	return nil
-}
-
-// genCLIIndex writes a markdown index of all CLI usercommands.
-func genCLIIndex(root *cobra.Command, dir string, includeHidden bool) error {
-	var sb strings.Builder
-	sb.WriteString("# CLI Reference\n\n")
-	sb.WriteString("Generated reference for the `dwe` command tree.\n\n")
-	sb.WriteString("## Commands\n\n")
-
-	writeCLIIndexEntries(&sb, root, includeHidden, 0)
-
-	indexPath := filepath.Join(dir, "index.md")
-	return os.WriteFile(indexPath, []byte(sb.String()), 0o644)
-}
-
-func writeCLIIndexEntries(sb *strings.Builder, cmd *cobra.Command, includeHidden bool, depth int) {
-	if cmd.Hidden && !includeHidden {
-		return
-	}
-	// Skip cobra's built-in help subcommand — cobradoc.GenMarkdownTree does not
-	// generate a file for it, so linking to it would produce a broken reference.
-	if cmd.Name() == "help" {
-		return
-	}
-	if depth > 0 {
-		indent := strings.Repeat("  ", depth-1)
-		name := cmd.CommandPath()
-		// Link to the generated markdown file: cobra uses underscores for spaces.
-		slug := strings.ReplaceAll(name, " ", "_") + ".md"
-		short := cmd.Short
-		if short == "" {
-			short = name
-		}
-		fmt.Fprintf(sb, "%s- [%s](%s) — %s\n", indent, name, slug, short)
-	}
-	for _, sub := range cmd.Commands() {
-		writeCLIIndexEntries(sb, sub, includeHidden, depth+1)
-	}
-}
-
-// genRegistryDocs generates documentation for each registry command.
-func genRegistryDocs(reg *usercommands.Registry, dir, format string, includePrivate bool, store *i18n.Store, locale string) error {
-	// We always use markdown for the registry; yaml/man are CLI-specific.
-	// For non-markdown formats we skip (registry has no cobra representation).
-	if format != "markdown" {
-		return nil
-	}
-	return genRegistryMarkdown(reg, dir, includePrivate, store, locale)
 }
 
 // genRegistryMarkdown writes one markdown file per command group and one file
@@ -779,32 +510,28 @@ func genCommandsIndex(reg *usercommands.Registry, dir string, includePrivate boo
 }
 
 // genTopLevelIndex writes a top-level docs/reference/index.md.
-func genTopLevelIndex(outDir string, scopes map[string]bool) error {
+func genTopLevelIndex(outDir string) error {
 	var sb strings.Builder
 	sb.WriteString("# dwe Reference Documentation\n\n")
 	sb.WriteString("Generated reference documentation for dwe.\n\n")
 	sb.WriteString("## Sections\n\n")
-	if scopes["cli"] {
-		sb.WriteString("- [CLI Reference](cli/index.md) — `dwe` command tree\n")
-	}
-	if scopes["commands"] {
-		// List language subdirectories under commands/
-		commandsDir := filepath.Join(outDir, "commands")
-		entries, err := os.ReadDir(commandsDir)
-		wroteDir := false
-		if err == nil {
-			for _, entry := range entries {
-				if entry.IsDir() {
-					lang := entry.Name()
-					fmt.Fprintf(&sb, "- [Commands Reference (lang=%s)](commands/%s/index.md) — declarative command registry\n", lang, lang)
-					wroteDir = true
-				}
+
+	// List language subdirectories under commands/
+	commandsDir := filepath.Join(outDir, "commands")
+	entries, err := os.ReadDir(commandsDir)
+	wroteDir := false
+	if err == nil {
+		for _, entry := range entries {
+			if entry.IsDir() {
+				lang := entry.Name()
+				fmt.Fprintf(&sb, "- [Commands Reference (lang=%s)](commands/%s/index.md) — declarative command registry\n", lang, lang)
+				wroteDir = true
 			}
 		}
-		// Fallback if commands dir doesn't exist yet (shouldn't happen in normal flow)
-		if !wroteDir {
-			sb.WriteString("- [Commands Reference](commands/index.md) — declarative command registry\n")
-		}
+	}
+	// Fallback if commands dir doesn't exist yet (shouldn't happen in normal flow)
+	if !wroteDir {
+		sb.WriteString("- [Commands Reference](commands/index.md) — declarative command registry\n")
 	}
 	sb.WriteString("\n")
 

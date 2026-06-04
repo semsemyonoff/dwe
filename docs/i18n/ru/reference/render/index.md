@@ -1,4 +1,4 @@
-> Translated from: reference/render/index.md @ 772a9968010c
+> Translated from: reference/render/index.md @ 7e99914baba8
 
 # Справочник Render
 
@@ -148,4 +148,4 @@ Override — это **подмена входа**, а не перенаправ�
 - [`workspace.yml` / `defaults.yml` / `local.yml`](../config/workspace.md) — слои объединённой конфигурации и разрешение dot-path (используется `render env`)
 - [определения сервисов (`workspace/services/*/service.yml`)](../config/services/index.md) — определения сервисов, блоки `ide` / `ai` / `git`, цепочки `extends`
 - [Шаблоны](../templates.md) — синтаксис Go-шаблонов, помощники sprout, render-контекст (общий с info / commands / pipelines)
-- CLI-справочник: [`dwe render`](../cli/dwe_render.md), [`dwe render env`](../cli/dwe_render_env.md), [`dwe render ide`](../cli/dwe_render_ide.md), [`dwe render ai`](../cli/dwe_render_ai.md), [`dwe render git`](../cli/dwe_render_git.md)
+- Запустите `dwe render --help` (или `dwe render <подкоманда> --help`), чтобы увидеть актуальный CLI-интерфейс

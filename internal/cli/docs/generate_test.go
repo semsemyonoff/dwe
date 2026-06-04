@@ -3,7 +3,6 @@ package docs
 import (
 	"os"
 	"path/filepath"
-	"slices"
 	"strings"
 	"testing"
 
@@ -16,86 +15,22 @@ import (
 func TestValidateDocsFlags(t *testing.T) {
 	t.Run("valid flags", func(t *testing.T) {
 		cases := []docsFlags{
-			{format: "markdown", scope: "all"},
-			{format: "yaml", scope: "cli"},
-			{format: "man", scope: "cli"},
-			{format: "all", scope: "all"},
-			{format: "markdown", scope: "commands"},
-			{format: "all", scope: "commands"},
+			{},
+			{lang: "en"},
+			{lang: "ru"},
+			{includePrivate: true},
 		}
 		for _, df := range cases {
 			if err := validateDocsFlags(&df); err != nil {
-				t.Errorf("expected no error for format=%s scope=%s, got: %v", df.format, df.scope, err)
+				t.Errorf("expected no error for %+v, got: %v", df, err)
 			}
 		}
 	})
 
-	t.Run("non-markdown format with commands scope", func(t *testing.T) {
-		for _, format := range []string{"yaml", "man"} {
-			df := docsFlags{format: format, scope: "commands"}
-			if err := validateDocsFlags(&df); err == nil {
-				t.Errorf("expected error for format=%s scope=commands", format)
-			}
-		}
-	})
-
-	t.Run("invalid format", func(t *testing.T) {
-		df := docsFlags{format: "html", scope: "all"}
+	t.Run("lang=all rejected", func(t *testing.T) {
+		df := docsFlags{lang: "all"}
 		if err := validateDocsFlags(&df); err == nil {
-			t.Error("expected error for invalid format")
-		}
-	})
-
-	t.Run("invalid scope", func(t *testing.T) {
-		df := docsFlags{format: "markdown", scope: "invalid"}
-		if err := validateDocsFlags(&df); err == nil {
-			t.Error("expected error for invalid scope")
-		}
-	})
-}
-
-// TestResolveFormats checks format expansion.
-func TestResolveFormats(t *testing.T) {
-	t.Run("all expands to three formats", func(t *testing.T) {
-		got := resolveFormats("all")
-		if len(got) != 3 {
-			t.Errorf("expected 3 formats, got %d: %v", len(got), got)
-		}
-		for _, f := range []string{"markdown", "yaml", "man"} {
-			if !slices.Contains(got, f) {
-				t.Errorf("expected format %q in result", f)
-			}
-		}
-	})
-
-	t.Run("single format returned as-is", func(t *testing.T) {
-		got := resolveFormats("markdown")
-		if len(got) != 1 || got[0] != "markdown" {
-			t.Errorf("expected [markdown], got %v", got)
-		}
-	})
-}
-
-// TestResolveScopes checks scope expansion.
-func TestResolveScopes(t *testing.T) {
-	t.Run("all expands to cli+commands", func(t *testing.T) {
-		got := resolveScopes("all")
-		if !got["cli"] || !got["commands"] {
-			t.Errorf("expected both cli and commands, got %v", got)
-		}
-	})
-
-	t.Run("cli only", func(t *testing.T) {
-		got := resolveScopes("cli")
-		if !got["cli"] || got["commands"] {
-			t.Errorf("expected only cli, got %v", got)
-		}
-	})
-
-	t.Run("commands only", func(t *testing.T) {
-		got := resolveScopes("commands")
-		if got["cli"] || !got["commands"] {
-			t.Errorf("expected only commands, got %v", got)
+			t.Error("expected error for lang=all")
 		}
 	})
 }
@@ -196,8 +131,7 @@ func TestGenCommandsIndexIncludePrivate(t *testing.T) {
 func TestGenTopLevelIndex(t *testing.T) {
 	dir := t.TempDir()
 
-	scopes := map[string]bool{"cli": true, "commands": true}
-	if err := genTopLevelIndex(dir, scopes); err != nil {
+	if err := genTopLevelIndex(dir); err != nil {
 		t.Fatalf("genTopLevelIndex: %v", err)
 	}
 
@@ -207,31 +141,11 @@ func TestGenTopLevelIndex(t *testing.T) {
 	}
 
 	content := string(data)
-	if !strings.Contains(content, "CLI Reference") {
-		t.Errorf("missing CLI Reference link: %s", content)
-	}
 	if !strings.Contains(content, "Commands Reference") {
 		t.Errorf("missing Commands Reference link: %s", content)
 	}
-}
-
-// TestGenTopLevelIndexCliOnly checks that commands section is omitted with cli scope.
-func TestGenTopLevelIndexCliOnly(t *testing.T) {
-	dir := t.TempDir()
-
-	scopes := map[string]bool{"cli": true}
-	if err := genTopLevelIndex(dir, scopes); err != nil {
-		t.Fatalf("genTopLevelIndex: %v", err)
-	}
-
-	data, err := os.ReadFile(filepath.Join(dir, "index.md"))
-	if err != nil {
-		t.Fatalf("index.md not written: %v", err)
-	}
-
-	content := string(data)
-	if strings.Contains(content, "Commands Reference") {
-		t.Errorf("commands section should not appear with cli-only scope: %s", content)
+	if strings.Contains(content, "CLI Reference") {
+		t.Errorf("CLI Reference should not appear (cli scope removed): %s", content)
 	}
 }
 
@@ -375,9 +289,6 @@ services:
 	}
 	df := &docsFlags{
 		output:         outputDir,
-		format:         "markdown",
-		scope:          "commands",
-		includeHidden:  false,
 		includePrivate: false,
 	}
 
@@ -403,39 +314,6 @@ services:
 	commandsIndex := filepath.Join(outputDir, "commands", "en", "index.md")
 	if _, err := os.Stat(commandsIndex); err != nil {
 		t.Errorf("commands/en/index.md not written: %v", err)
-	}
-}
-
-// TestCLIIndexNotGeneratedWithoutMarkdown verifies that genCLIIndex is never
-// called (and therefore no broken .md links are produced) when the format list
-// does not contain markdown.
-func TestCLIIndexNotGeneratedWithoutMarkdown(t *testing.T) {
-	dir := t.TempDir()
-
-	// Simulate a yaml-only run: only .yaml files are produced, no index.md.
-	formats := resolveFormats("yaml")
-	if slices.Contains(formats, "markdown") {
-		t.Fatal("yaml-only format list should not contain markdown")
-	}
-
-	formats2 := resolveFormats("all")
-	if !slices.Contains(formats2, "markdown") {
-		t.Fatal("all format list should contain markdown")
-	}
-
-	// Write an index directly to confirm the function still works correctly.
-	root := buildDocsTestRoot(&cmdctx.RootFlags{})
-	if err := genCLIIndex(root, dir, false); err != nil {
-		t.Fatalf("genCLIIndex: %v", err)
-	}
-	// All entries in the index must end with .md, not .yaml or .1
-	data, err := os.ReadFile(filepath.Join(dir, "index.md"))
-	if err != nil {
-		t.Fatal(err)
-	}
-	content := string(data)
-	if strings.Contains(content, ".yaml)") || strings.Contains(content, ".1)") {
-		t.Errorf("CLI index contains non-.md links: %s", content)
 	}
 }
 

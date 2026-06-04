@@ -311,4 +311,4 @@ Errors are returned as command failures and name the offending service so the so
 
 - [`services.<name>.render.ide` block](../config/services/fields.md#renderide-block) — `enabled`, `template`, inheritance via `extends`
 - [`render ai`](ai.md) — companion command with the opposite collision policy
-- CLI reference: [`dwe render ide`](../cli/dwe_render_ide.md)
+- Run `dwe render ide --help` for the live CLI surface

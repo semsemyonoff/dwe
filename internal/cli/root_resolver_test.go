@@ -169,66 +169,23 @@ func TestRootResolver_ExplicitDefaultMatchingValue(t *testing.T) {
 	}
 }
 
-// TestRootResolver_DocsScope_NoProject_CLIWorks verifies that docs generate --scope cli
-// works without a project (uses cwd as output root).
-func TestRootResolver_DocsScope_NoProject_CLIWorks(t *testing.T) {
-	tmpDir := t.TempDir()
-	t.Chdir(tmpDir)
-
-	root := NewRootCmd()
-	var buf bytes.Buffer
-	root.SetOut(&buf)
-	root.SetErr(&buf)
-	// Use a temp output dir so we don't pollute cwd.
-	outDir := filepath.Join(tmpDir, "docs")
-	root.SetArgs([]string{"docs", "generate", "--scope", "cli", "--out", outDir})
-
-	if err := root.Execute(); err != nil {
-		t.Errorf("docs generate --scope cli without project should succeed, got: %v", err)
-	}
-}
-
-// TestRootResolver_DocsScope_NoProject_CommandsFails verifies that docs generate
-// --scope commands fails with a clear error when no project is found.
-func TestRootResolver_DocsScope_NoProject_CommandsFails(t *testing.T) {
+// TestRootResolver_DocsGenerate_NoProjectFails verifies that docs generate
+// fails with a clear error when no project is found.
+func TestRootResolver_DocsGenerate_NoProjectFails(t *testing.T) {
 	t.Chdir(t.TempDir())
 
 	root := NewRootCmd()
 	var buf bytes.Buffer
 	root.SetOut(&buf)
 	root.SetErr(&buf)
-	root.SetArgs([]string{"docs", "generate", "--scope", "commands"})
+	root.SetArgs([]string{"docs", "generate"})
 
 	err := root.Execute()
 	if err == nil {
-		t.Fatal("docs generate --scope commands without project should fail, got nil")
+		t.Fatal("docs generate without project should fail, got nil")
 	}
 	if !strings.Contains(err.Error(), "dwe project") {
 		t.Errorf("error should mention 'dwe project', got: %v", err)
-	}
-}
-
-// TestRootResolver_DocsScope_NoProject_AllFails verifies that docs generate
-// --scope all fails with a clear error when no project is found, and that the
-// error message names "all scope" rather than just "commands scope".
-func TestRootResolver_DocsScope_NoProject_AllFails(t *testing.T) {
-	t.Chdir(t.TempDir())
-
-	root := NewRootCmd()
-	var buf bytes.Buffer
-	root.SetOut(&buf)
-	root.SetErr(&buf)
-	root.SetArgs([]string{"docs", "generate", "--scope", "all"})
-
-	err := root.Execute()
-	if err == nil {
-		t.Fatal("docs generate --scope all without project should fail, got nil")
-	}
-	if !strings.Contains(err.Error(), "dwe project") {
-		t.Errorf("error should mention 'dwe project', got: %v", err)
-	}
-	if !strings.Contains(err.Error(), "all scope") {
-		t.Errorf("error should mention 'all scope', got: %v", err)
 	}
 }
 
