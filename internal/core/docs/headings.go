@@ -30,7 +30,7 @@ func ParseDoc(content []byte) (title string, headings []Heading) {
 		trim := strings.TrimSpace(line)
 
 		// Track fenced code blocks (``` or ~~~). Anything inside is skipped.
-		if strings.HasPrefix(trim, "```") || strings.HasPrefix(trim, "~~~") {
+		if IsFenceLine(trim) {
 			inFence = !inFence
 			continue
 		}

@@ -42,13 +42,7 @@ func Search(roots []DocRoot, query, locale string) []SearchHit {
 
 	for _, t := range topics {
 		// Find the doc root that actually contains this topic.
-		var root DocRoot
-		for _, r := range roots {
-			if r.Name == t.Source {
-				root = r
-				break
-			}
-		}
+		root := RootByName(roots, t.Source)
 		if root.Name == "" {
 			continue
 		}
@@ -96,7 +90,7 @@ func searchInDoc(content []byte, needle string) map[string]int {
 		line := scanner.Text()
 		trim := strings.TrimSpace(line)
 
-		if strings.HasPrefix(trim, "```") || strings.HasPrefix(trim, "~~~") {
+		if IsFenceLine(trim) {
 			inFence = !inFence
 		} else if !inFence {
 			if lvl, text := parseHeadingLine(line); lvl == 2 || lvl == 3 {

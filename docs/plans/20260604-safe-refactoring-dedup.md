@@ -203,15 +203,15 @@ Tasks are ordered **safest / highest-value first**: pure deletions and named-con
 - Modify: `internal/cli/command/{inspect,list}.go`; `internal/cli/docs/{show,list,search,export,llmstxt,generate}.go`; `internal/core/docs/{search,headings,anchor}.go`; `internal/core/docs/tui/{model,diagram_inline,heading_anchors}.go`
 - Modify: matching `*_test.go`
 
-- [ ] Extract `buildParamEntriesJSON` shared by `inspect.go:151` / `list.go:78`.
-- [ ] Dedup the `Script.Shell` empty-default-to-`sh` logic (`inspect.go:119,328`).
-- [ ] Extract `docsCfgLang` for the user-config-lang block (`show.go:110`, `list.go:81`, `search.go:78`, `export.go:55`, `llmstxt.go:68`). NOTE: keep `docs.go` cfgLang inline (its global-config lookup differs).
-- [ ] Extract `listCommandsByGroup` shared by `generate.go:109,452` index builders.
-- [ ] Extract `Model.diagramTheme` (`tui/model.go:374`; `diagram_inline.go:67,159`).
-- [ ] Extract `RootByName` for adjacent DocRoot-by-name lookups (`tui/model.go:242,256`; `docs/search.go:45`).
-- [ ] Extract `isFenceLine` markdown-fence predicate (`headings.go:33`; `anchor.go:61,111`; `search.go:99`; `tui/heading_anchors.go:48`).
-- [ ] Confirm docs golden/markdown tests unchanged.
-- [ ] `make test && make lint` — must pass.
+- [x] Extract `buildParamEntriesJSON` shared by `inspect.go:151` / `list.go:78`.
+- [x] Dedup the `Script.Shell` empty-default-to-`sh` logic (`inspect.go:119,328`).
+- [x] Extract `docsCfgLang` for the user-config-lang block (`show.go:110`, `list.go:81`, `search.go:78`, `export.go:55`, `llmstxt.go:68`). NOTE: keep `docs.go` cfgLang inline (its global-config lookup differs).
+- [x] Extract `listCommandsByGroup` shared by `generate.go:109,452` index builders.
+- [x] Extract `Model.diagramTheme` (`tui/model.go:374`; `diagram_inline.go:67,159`).
+- [x] Extract `RootByName` for adjacent DocRoot-by-name lookups (`tui/model.go:242,256`; `docs/search.go:45`).
+- [x] Extract `isFenceLine` markdown-fence predicate (`headings.go:33`; `anchor.go:61,111`; `search.go:99`; `tui/heading_anchors.go:48`).
+- [x] Confirm docs golden/markdown tests unchanged.
+- [x] `make test && make lint` — must pass.
 
 ### Task 11: Centralize repeated infrastructure helpers in internal/shared
 **Theme 19 — priority medium / effort small / risk none→low.** i18n nil-store→fallback and lock inode-race invariants preserved. (The host-id sub-item is `low`, not `none` — see below.)

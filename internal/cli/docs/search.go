@@ -7,7 +7,6 @@ import (
 
 	"github.com/semsemyonoff/dwe/internal/cli/cmdctx"
 	coredocs "github.com/semsemyonoff/dwe/internal/core/docs"
-	userpkg "github.com/semsemyonoff/dwe/internal/core/project/user"
 	"github.com/semsemyonoff/dwe/internal/shared/i18n"
 
 	"github.com/spf13/cobra"
@@ -75,13 +74,7 @@ func runDocsSearch(cmd *cobra.Command, rflags *cmdctx.RootFlags, df *docsSearchF
 		return fmt.Errorf("no documentation sources available with --source=%s", df.source)
 	}
 
-	var cfgLang string
-	if projectRoot != "" {
-		ucfg, err := userpkg.Load(projectRoot)
-		if err == nil && ucfg != nil {
-			cfgLang = ucfg.Language
-		}
-	}
+	cfgLang := docsCfgLang(projectRoot)
 	locale := i18n.ResolveLocale(df.lang, cfgLang, os.Getenv("LANG"))
 
 	hits := coredocs.Search(roots, query, locale)

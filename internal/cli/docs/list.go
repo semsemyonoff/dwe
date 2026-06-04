@@ -8,7 +8,6 @@ import (
 
 	"github.com/semsemyonoff/dwe/internal/cli/cmdctx"
 	coredocs "github.com/semsemyonoff/dwe/internal/core/docs"
-	userpkg "github.com/semsemyonoff/dwe/internal/core/project/user"
 	"github.com/semsemyonoff/dwe/internal/shared/i18n"
 
 	"github.com/spf13/cobra"
@@ -77,14 +76,7 @@ func runDocsList(cmd *cobra.Command, rflags *cmdctx.RootFlags, df *docsListFlags
 		return cmdctx.WriteData(rflags, cmd, []docsListEntry{}, renderDocsListText)
 	}
 
-	// Load user config to get the configured language
-	var cfgLang string
-	if projectRoot != "" {
-		ucfg, err := userpkg.Load(projectRoot)
-		if err == nil && ucfg != nil {
-			cfgLang = ucfg.Language
-		}
-	}
+	cfgLang := docsCfgLang(projectRoot)
 
 	// Resolve the locale
 	locale := i18n.ResolveLocale(df.lang, cfgLang, os.Getenv("LANG"))

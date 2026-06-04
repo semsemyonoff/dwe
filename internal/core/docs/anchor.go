@@ -58,7 +58,7 @@ func ParseHeadingSlugs(content []byte) []HeadingInfo {
 	inFence := false
 	for _, line := range lines {
 		trim := strings.TrimSpace(stripEOL(line))
-		if strings.HasPrefix(trim, "```") || strings.HasPrefix(trim, "~~~") {
+		if IsFenceLine(trim) {
 			inFence = !inFence
 			continue
 		}
@@ -108,7 +108,7 @@ func SliceByAnchor(content []byte, anchor string) (sliced []byte, matchedSlug st
 		offset += len(line)
 
 		trim := strings.TrimSpace(stripEOL(line))
-		if strings.HasPrefix(trim, "```") || strings.HasPrefix(trim, "~~~") {
+		if IsFenceLine(trim) {
 			inFence = !inFence
 			continue
 		}

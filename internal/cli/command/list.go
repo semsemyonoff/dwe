@@ -66,34 +66,42 @@ func buildCommandsListJSON(reg *usercommands.Registry, groupFilter string, showA
 	return commandsListJSON{Commands: entries}
 }
 
+// buildParamEntriesJSON converts a CommandDef's params map to a sorted slice
+// of paramEntryJSON. Returns nil when the params map is empty. Shared by both
+// the list and inspect JSON serialization paths.
+func buildParamEntriesJSON(def *usercommands.CommandDef, translator i18n.Translator, locale string) []paramEntryJSON {
+	if len(def.Params) == 0 {
+		return nil
+	}
+	names := make([]string, 0, len(def.Params))
+	for name := range def.Params {
+		names = append(names, name)
+	}
+	sort.Strings(names)
+	entries := make([]paramEntryJSON, 0, len(names))
+	for _, name := range names {
+		p := def.Params[name]
+		entries = append(entries, paramEntryJSON{
+			Name:        name,
+			Type:        string(p.Type),
+			Required:    p.Required,
+			Default:     p.Default,
+			Description: translator.ParamDescription(locale, def.ID, name, p.Description),
+		})
+	}
+	return entries
+}
+
 // commandDefToEntryJSON converts a single CommandDef to its JSON list entry.
 func commandDefToEntryJSON(def *usercommands.CommandDef, translator i18n.Translator, locale string) commandEntryJSON {
-	entry := commandEntryJSON{
+	return commandEntryJSON{
 		ID:      def.ID,
 		Group:   def.Group,
 		Title:   def.LocalName,
 		Type:    string(def.Type),
 		Private: def.Private,
+		Params:  buildParamEntriesJSON(def, translator, locale),
 	}
-	if len(def.Params) > 0 {
-		names := make([]string, 0, len(def.Params))
-		for name := range def.Params {
-			names = append(names, name)
-		}
-		sort.Strings(names)
-		entry.Params = make([]paramEntryJSON, 0, len(names))
-		for _, name := range names {
-			p := def.Params[name]
-			entry.Params = append(entry.Params, paramEntryJSON{
-				Name:        name,
-				Type:        string(p.Type),
-				Required:    p.Required,
-				Default:     p.Default,
-				Description: translator.ParamDescription(locale, def.ID, name, p.Description),
-			})
-		}
-	}
-	return entry
 }
 
 func newCommandListCmd(flags *cmdctx.RootFlags) *cobra.Command {

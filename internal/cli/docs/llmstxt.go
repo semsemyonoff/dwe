@@ -9,7 +9,6 @@ import (
 	coredocs "github.com/semsemyonoff/dwe/internal/core/docs"
 	"github.com/semsemyonoff/dwe/internal/core/docs/llmstxt"
 	"github.com/semsemyonoff/dwe/internal/core/project/config"
-	userpkg "github.com/semsemyonoff/dwe/internal/core/project/user"
 	"github.com/semsemyonoff/dwe/internal/core/usercommands"
 	"github.com/semsemyonoff/dwe/internal/shared/i18n"
 
@@ -65,13 +64,7 @@ func runDocsLlmsTxt(cmd *cobra.Command, rflags *cmdctx.RootFlags, df *docsLlmsTx
 	}
 
 	// Resolve locale: flag → user config lang → $LANG → en.
-	var cfgLang string
-	if projectRoot != "" {
-		if ucfg, err := userpkg.Load(projectRoot); err == nil && ucfg != nil {
-			cfgLang = ucfg.Language
-		}
-	}
-	locale := i18n.ResolveLocale(df.lang, cfgLang, os.Getenv("LANG"))
+	locale := i18n.ResolveLocale(df.lang, docsCfgLang(projectRoot), os.Getenv("LANG"))
 
 	// Collect doc topics from embedded sources.
 	docTopics := coredocs.AllTopics(coredocs.Sources(projectRoot), locale)

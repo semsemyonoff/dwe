@@ -95,6 +95,22 @@ func runDocsGenerate(cmd *cobra.Command, rflags *cmdctx.RootFlags, df *docsFlags
 	return nil
 }
 
+// listCommandsByGroup groups defs by their Group field, returning a sorted
+// slice of group IDs and a map of group → commands. The groups slice is sorted
+// ascending so index pages and directory trees are stable across runs.
+func listCommandsByGroup(defs []*usercommands.CommandDef) (groups []string, byGroup map[string][]*usercommands.CommandDef) {
+	byGroup = make(map[string][]*usercommands.CommandDef)
+	for _, def := range defs {
+		g := def.Group
+		if _, seen := byGroup[g]; !seen {
+			groups = append(groups, g)
+		}
+		byGroup[g] = append(byGroup[g], def)
+	}
+	sort.Strings(groups)
+	return groups, byGroup
+}
+
 func validateDocsFlags(df *docsFlags) error {
 	// --lang all is reserved for future multi-locale generation; reject it now.
 	if df.lang == "all" {
@@ -114,16 +130,7 @@ func genRegistryMarkdown(reg *usercommands.Registry, dir string, includePrivate 
 	}
 
 	// Group by group ID.
-	byGroup := make(map[string][]*usercommands.CommandDef)
-	var groups []string
-	for _, def := range all {
-		g := def.Group
-		if _, seen := byGroup[g]; !seen {
-			groups = append(groups, g)
-		}
-		byGroup[g] = append(byGroup[g], def)
-	}
-	sort.Strings(groups)
+	groups, byGroup := listCommandsByGroup(all)
 
 	for _, group := range groups {
 		defs := byGroup[group]
@@ -464,16 +471,7 @@ func genCommandsIndex(reg *usercommands.Registry, dir string, includePrivate boo
 		sb.WriteString("No commands defined.\n")
 	} else {
 		// Group by group.
-		byGroup := make(map[string][]*usercommands.CommandDef)
-		var groups []string
-		for _, def := range defs {
-			g := def.Group
-			if _, seen := byGroup[g]; !seen {
-				groups = append(groups, g)
-			}
-			byGroup[g] = append(byGroup[g], def)
-		}
-		sort.Strings(groups)
+		groups, byGroup := listCommandsByGroup(defs)
 
 		for _, group := range groups {
 			groupLabel := group

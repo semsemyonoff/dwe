@@ -11,7 +11,6 @@ import (
 	"github.com/semsemyonoff/dwe/internal/core/docs/render"
 	pipeline "github.com/semsemyonoff/dwe/internal/core/execution/pipeline"
 	"github.com/semsemyonoff/dwe/internal/core/project/config"
-	userpkg "github.com/semsemyonoff/dwe/internal/core/project/user"
 	"github.com/semsemyonoff/dwe/internal/shared/i18n"
 
 	"github.com/charmbracelet/x/term"
@@ -106,15 +105,8 @@ func runDocsShow(cmd *cobra.Command, rflags *cmdctx.RootFlags, df *docsShowFlags
 		cfg = &config.DweConfig{}
 	}
 
-	// Load user config to get the configured language
-	var cfgLang string
 	projectRoot := rflags.ProjectRoot()
-	if projectRoot != "" {
-		ucfg, err := userpkg.Load(projectRoot)
-		if err == nil && ucfg != nil {
-			cfgLang = ucfg.Language
-		}
-	}
+	cfgLang := docsCfgLang(projectRoot)
 
 	// Parse topic to extract anchor
 	topicPath, anchor, err := coredocs.ParseTopic(topic)
@@ -164,13 +156,7 @@ func runDocsShow(cmd *cobra.Command, rflags *cmdctx.RootFlags, df *docsShowFlags
 	}
 
 	// Find the root that contains the resolved topic
-	var sourceRoot coredocs.DocRoot
-	for _, r := range roots {
-		if r.Name == resolved.Source {
-			sourceRoot = r
-			break
-		}
-	}
+	sourceRoot := coredocs.RootByName(roots, resolved.Source)
 
 	// Resolve content with language fallback and staleness check
 	content, sourceLang, isStale, err := coredocs.ResolveContent(sourceRoot, resolved.Path+".md", locale)

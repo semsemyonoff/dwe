@@ -78,6 +78,15 @@ type messagesJSON struct {
 	Error   string `json:"error,omitempty"`
 }
 
+// scriptShell returns s.Shell if non-empty, otherwise the portable default "sh".
+// Used wherever a ScriptDef's effective shell is displayed or serialised.
+func scriptShell(s *usercommands.ScriptDef) string {
+	if s.Shell != "" {
+		return s.Shell
+	}
+	return "sh"
+}
+
 // buildCommandInspectJSON converts a CommandDef to its JSON inspect representation.
 func buildCommandInspectJSON(def *usercommands.CommandDef, translator i18n.Translator, locale string) commandInspectJSON {
 	data := commandInspectJSON{
@@ -116,12 +125,8 @@ func buildCommandInspectJSON(def *usercommands.CommandDef, translator i18n.Trans
 		data.Argv = def.Argv
 	case usercommands.CommandTypeScript:
 		if def.Script != nil {
-			shell := def.Script.Shell
-			if shell == "" {
-				shell = "sh"
-			}
 			data.Script = &scriptDefJSON{
-				Shell:   shell,
+				Shell:   scriptShell(def.Script),
 				Path:    def.Script.Path,
 				Plan:    def.Script.Plan,
 				Run:     def.Script.Run,
@@ -148,24 +153,7 @@ func buildCommandInspectJSON(def *usercommands.CommandDef, translator i18n.Trans
 		}
 	}
 
-	if len(def.Params) > 0 {
-		names := make([]string, 0, len(def.Params))
-		for name := range def.Params {
-			names = append(names, name)
-		}
-		sort.Strings(names)
-		data.Params = make([]paramEntryJSON, 0, len(names))
-		for _, name := range names {
-			p := def.Params[name]
-			data.Params = append(data.Params, paramEntryJSON{
-				Name:        name,
-				Type:        string(p.Type),
-				Required:    p.Required,
-				Default:     p.Default,
-				Description: translator.ParamDescription(locale, def.ID, name, p.Description),
-			})
-		}
-	}
+	data.Params = buildParamEntriesJSON(def, translator, locale)
 
 	if len(def.Env) > 0 {
 		data.Env = def.Env
@@ -325,11 +313,7 @@ func printInspectAt(w io.Writer, def *usercommands.CommandDef, cfg *config.DweCo
 		}
 	case usercommands.CommandTypeScript:
 		if def.Script != nil {
-			shell := def.Script.Shell
-			if shell == "" {
-				shell = "sh"
-			}
-			def2("script.shell", shell, 2)
+			def2("script.shell", scriptShell(def.Script), 2)
 			if def.Script.Path != "" {
 				def2("script.path", def.Script.Path, 2)
 			}

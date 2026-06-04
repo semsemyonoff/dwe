@@ -12,6 +12,15 @@ import (
 	"github.com/semsemyonoff/dwe/internal/core/docs/render"
 )
 
+// diagramTheme returns the mermaid.Theme corresponding to the model's current
+// Theme string. "light" maps to ThemeLight; everything else maps to ThemeDark.
+func (m *Model) diagramTheme() mermaid.Theme {
+	if m.Theme == "light" {
+		return mermaid.ThemeLight
+	}
+	return mermaid.ThemeDark
+}
+
 // resolveMermaidTheme maps the user-config value ("auto" | "dark" | "light")
 // to the concrete theme name passed to mmdc. "auto" probes the terminal
 // background via lipgloss; anything else is a hard override so the user
@@ -64,10 +73,7 @@ func (m *Model) inlineDiagrams(output string, diagrams []render.DiagramRef) stri
 		return output
 	}
 
-	theme := mermaid.ThemeDark
-	if m.Theme == "light" {
-		theme = mermaid.ThemeLight
-	}
+	theme := m.diagramTheme()
 	lookuper, _ := m.MermaidRenderer.(mermaid.Lookuper)
 	current := -1
 	if m.DiagramState != nil {
@@ -156,10 +162,7 @@ func (m *Model) openCurrentDiagram() error {
 	if !ok {
 		return nil
 	}
-	theme := mermaid.ThemeDark
-	if m.Theme == "light" {
-		theme = mermaid.ThemeLight
-	}
+	theme := m.diagramTheme()
 	png, ok := lookuper.Lookup(diag.Source, theme, diagramRenderWidth())
 	if !ok {
 		return nil

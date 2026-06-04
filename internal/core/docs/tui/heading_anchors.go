@@ -7,6 +7,8 @@ import (
 	"regexp"
 	"strconv"
 	"strings"
+
+	"github.com/semsemyonoff/dwe/internal/core/docs"
 )
 
 // headingMarkerRE matches the unique anchor we inject before every H2/H3
@@ -45,7 +47,7 @@ func preprocessHeadings(input []byte) []byte {
 	for scanner.Scan() {
 		line := scanner.Text()
 		trim := strings.TrimSpace(line)
-		if strings.HasPrefix(trim, "```") || strings.HasPrefix(trim, "~~~") {
+		if docs.IsFenceLine(trim) {
 			inFence = !inFence
 			out.WriteString(line)
 			out.WriteByte('\n')

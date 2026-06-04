@@ -239,12 +239,7 @@ func (m *Model) loadTopic(node *TreeNode) (tea.Cmd, error) {
 
 	var sourceRoot docs.DocRoot
 	if node.RootName != "" {
-		for _, root := range m.Roots {
-			if root.Name == node.RootName {
-				sourceRoot = root
-				break
-			}
-		}
+		sourceRoot = docs.RootByName(m.Roots, node.RootName)
 	}
 	if sourceRoot.Name == "" {
 		topicPath := strings.TrimSuffix(path, ".md")
@@ -253,12 +248,7 @@ func (m *Model) loadTopic(node *TreeNode) (tea.Cmd, error) {
 			m.Viewport.SetContent("Error: " + err.Error())
 			return nil, err
 		}
-		for _, root := range m.Roots {
-			if root.Name == resolved.Source {
-				sourceRoot = root
-				break
-			}
-		}
+		sourceRoot = docs.RootByName(m.Roots, resolved.Source)
 	}
 
 	// Snapshot everything the goroutine needs so we never touch m from
@@ -370,11 +360,8 @@ func (m *Model) applyTopicLoaded(msg topicLoadedMsg) tea.Cmd {
 	}
 	m.ensurePrefetch()
 	items := make([]WorkItem, len(msg.Diagrams))
+	theme := m.diagramTheme()
 	for i, diag := range msg.Diagrams {
-		theme := mermaid.ThemeDark
-		if m.Theme == "light" {
-			theme = mermaid.ThemeLight
-		}
 		items[i] = WorkItem{
 			Source: diag.Source,
 			Theme:  theme,

@@ -7,7 +7,6 @@ import (
 	"github.com/semsemyonoff/dwe/internal/cli/cmdctx"
 	coredocs "github.com/semsemyonoff/dwe/internal/core/docs"
 	"github.com/semsemyonoff/dwe/internal/core/docs/export"
-	userpkg "github.com/semsemyonoff/dwe/internal/core/project/user"
 	"github.com/semsemyonoff/dwe/internal/shared/i18n"
 
 	"github.com/spf13/cobra"
@@ -51,16 +50,8 @@ Examples:
 }
 
 func runDocsExport(cmd *cobra.Command, rflags *cmdctx.RootFlags, df *docsExportFlags, targetDir string) error {
-	// Load user config to get the configured language
-	var cfgLang string
 	projectRoot := rflags.ProjectRoot()
-	if projectRoot != "" {
-		ucfg, err := userpkg.Load(projectRoot)
-		if err == nil && ucfg != nil {
-			cfgLang = ucfg.Language
-		}
-	}
-
+	cfgLang := docsCfgLang(projectRoot)
 	// Resolve the locale: use --lang flag, fallback to userconfig, then env
 	locale := i18n.ResolveLocale(df.lang, cfgLang, os.Getenv("LANG"))
 
