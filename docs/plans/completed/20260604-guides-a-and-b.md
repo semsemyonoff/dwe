@@ -443,9 +443,9 @@ Several guides touch the same commands (`dwe logs`, `dwe status`, `dwe info`). T
 **Files:**
 - Modify: `docs/plans/20260604-guides-a-and-b.md` (move)
 
-- [ ] `mkdir -p docs/plans/completed`
-- [ ] `mv docs/plans/20260604-guides-a-and-b.md docs/plans/completed/`
-- [ ] confirm all checkboxes in the plan are `[x]`
+- [x] `mkdir -p docs/plans/completed`
+- [x] `mv docs/plans/20260604-guides-a-and-b.md docs/plans/completed/`
+- [x] confirm all checkboxes in the plan are `[x]`
 
 ## Post-Completion
 
