@@ -186,15 +186,15 @@ Several guides touch the same commands (`dwe logs`, `dwe status`, `dwe info`). T
 **Files:**
 - Create: `docs/guides/daily-workflow.md`
 
-- [ ] write H1 + intro framing "day-to-day commands you'll reach for"
-- [ ] section: quick status (`dwe status`, `dwe status apps`, sections, `--no-*` toggles)
-- [ ] section: toggling optional services (`dwe services`, interactive vs CLI `enable`/`disable`, pending vs `--apply`, when to re-run `deploy`)
-- [ ] section: shell access (`dwe shell <svc>`, `--mode auto|exec|run`, `-c` one-shot, `--root`/`--user`, `--workdir`)
-- [ ] section: running project commands (`dwe commands`, `dwe cmd <id>`, `--set`, `--yes`, `--silent`)
-- [ ] section: viewing logs (`dwe logs <svc>`, follow mode, exit semantics)
-- [ ] section: re-checking project state (one-paragraph cross-link to `joining-a-project.md` for `dwe info`)
-- [ ] section: stop / restart (`dwe stop [svc]`, `dwe restart`, what's compose-bypass vs full lifecycle)
-- [ ] verify rendering
+- [x] write H1 + intro framing "day-to-day commands you'll reach for"
+- [x] section: quick status (`dwe status`, `dwe status apps`, sections, `--no-*` toggles)
+- [x] section: toggling optional services (`dwe services`, interactive vs CLI `enable`/`disable`, pending vs `--apply`, when to re-run `deploy`)
+- [x] section: shell access (`dwe shell <svc>`, `--mode auto|exec|run`, `-c` one-shot, `--root`/`--user`, `--workdir`)
+- [x] section: running project commands (`dwe commands`, `dwe cmd <id>`, `--set`, `--yes`, `--silent`)
+- [x] section: viewing logs (`dwe logs <svc>`, follow mode, exit semantics)
+- [x] section: re-checking project state (one-paragraph cross-link to `joining-a-project.md` for `dwe info`)
+- [x] section: stop / restart (`dwe stop [svc]`, `dwe restart`, what's compose-bypass vs full lifecycle)
+- [x] verify rendering
 
 ### Task 3: EN guide — `troubleshooting.md`
 
