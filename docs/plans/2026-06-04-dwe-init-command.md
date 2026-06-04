@@ -239,12 +239,12 @@ subdir entries.
 - Create: `internal/core/workflow/scaffold/symlink.go`
 - Create: `internal/core/workflow/scaffold/symlink_test.go`
 
-- [ ] implement `linkClaudeMd(dir string) (fallback bool, err error)`: `os.Symlink("AGENTS.md", dir/CLAUDE.md)`;
+- [x] implement `linkClaudeMd(dir string) (fallback bool, err error)`: `os.Symlink("AGENTS.md", dir/CLAUDE.md)`;
       on error (or pre-existing target) write `CLAUDE.md` as a verbatim copy and return `fallback=true`
-- [ ] make the symlink call injectable (func var) so the fallback path is testable
-- [ ] write tests: POSIX symlink is created and resolves to `AGENTS.md`
-- [ ] write tests: injected symlink failure → copy fallback written, `fallback=true`
-- [ ] run tests — must pass before Task 5
+- [x] make the symlink call injectable (func var) so the fallback path is testable
+- [x] write tests: POSIX symlink is created and resolves to `AGENTS.md`
+- [x] write tests: injected symlink failure → copy fallback written, `fallback=true`
+- [x] run tests — must pass before Task 5
 
 ### Task 5: Author the template content files
 
