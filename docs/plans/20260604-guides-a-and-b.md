@@ -201,16 +201,16 @@ Several guides touch the same commands (`dwe logs`, `dwe status`, `dwe info`). T
 **Files:**
 - Create: `docs/guides/troubleshooting.md`
 
-- [ ] write H1 + intro framing "your stack is misbehaving"
-- [ ] section: first-look triage (`dwe validate`, `dwe status`, `dwe logs <svc>`)
-- [ ] section: "port already in use" — `dwe validate env` (`env.ports_free`), remap in `local.yml` using deep-merge ports overlay
-- [ ] section: "docker not running" — `dwe validate env` (`env.docker_daemon`, `env.docker_bin`)
-- [ ] section: "container won't come up" — `dwe logs`, `dwe compose argv up`, `dwe compose files`
-- [ ] section: "deploy keeps failing" — `dwe deploy plan` for resolved view, `dwe deploy state show` for journal, `dwe deploy state clear` to force re-run
-- [ ] section: "pulled a teammate's branch, deploy says no changes but my service broke" — config_hash mismatch / stale `.dwe/deploy/state.yml`; remedy is `dwe deploy state clear` and re-deploy
-- [ ] section: "nuclear option" — `dwe reset run` semantics (what survives, what doesn't); pre-snapshot pattern for volumes
-- [ ] section: escape hatch — `dwe compose raw -- <args>` and when to reach for it
-- [ ] verify rendering
+- [x] write H1 + intro framing "your stack is misbehaving"
+- [x] section: first-look triage (`dwe validate`, `dwe status`, `dwe logs <svc>`)
+- [x] section: "port already in use" — `dwe validate env` (`env.ports_free`), remap in `local.yml` using deep-merge ports overlay
+- [x] section: "docker not running" — `dwe validate env` (`env.docker_daemon`, `env.docker_bin`)
+- [x] section: "container won't come up" — `dwe logs`, `dwe compose argv up`, `dwe compose files`
+- [x] section: "deploy keeps failing" — `dwe deploy plan` for resolved view, `dwe deploy state show` for journal, `dwe deploy state clear` to force re-run
+- [x] section: "pulled a teammate's branch, deploy says no changes but my service broke" — config_hash mismatch / stale `.dwe/deploy/state.yml`; remedy is `dwe deploy state clear` and re-deploy
+- [x] section: "nuclear option" — `dwe reset run` semantics (what survives, what doesn't); pre-snapshot pattern for volumes
+- [x] section: escape hatch — `dwe compose raw -- <args>` and when to reach for it
+- [x] verify rendering
 
 ### Task 4: EN guide — `switching-tasks-with-snapshots.md`
 
