@@ -70,6 +70,16 @@ func TestImplicitPackCandidates(t *testing.T) {
 	if got := ImplicitPackCandidates(bad, "x/y"); !reflect.DeepEqual(got, []string{"default"}) {
 		t.Fatalf("ImplicitPackCandidates(invalid) = %v, want [default]", got)
 	}
+
+	// A cyclic extends chain must terminate (maxDepth bound) and the seen-set
+	// must dedup so each name appears once before "default".
+	cyclic := map[string]config.ServiceConfig{
+		"loopA": {Extends: "loopB"},
+		"loopB": {Extends: "loopA"},
+	}
+	if got := ImplicitPackCandidates(cyclic, "loopA"); !reflect.DeepEqual(got, []string{"loopA", "loopB", "default"}) {
+		t.Fatalf("ImplicitPackCandidates(cyclic) = %v, want [loopA loopB default]", got)
+	}
 }
 
 func TestTemplateDataServiceAccessors(t *testing.T) {

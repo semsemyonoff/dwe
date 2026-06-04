@@ -790,6 +790,38 @@ func TestRequiredConsistentValidator(t *testing.T) {
 	}
 }
 
+// TestValidatorTargetMatchesID locks in the refactor that moved a diagnostic's
+// Target from a hardcoded literal to the embedded baseValidator.id: every
+// emitted diagnostic must carry Target == validator.ID() and Domain == "setup".
+// The per-validator tests above only assert diagnostic counts, so a Target/ID
+// drift would otherwise slip through.
+func TestValidatorTargetMatchesID(t *testing.T) {
+	cases := []struct {
+		validator validate.Validator
+	}{
+		{&typeKnownValidator{newCfg("type_known", &setup.Config{Questions: []setup.Question{{ID: "q1", Type: "invalid"}}})}},
+		{&idRequiredValidator{newCfg("id_required", &setup.Config{Questions: []setup.Question{{ID: "", Type: setup.TypeInput}}})}},
+		{&writesScopeValidator{newCfg("writes_scope", &setup.Config{Questions: []setup.Question{{ID: "q1", Writes: "info.x"}}})}},
+		{&validateRegexCompilesValidator{newCfg("validate_regex_compiles", &setup.Config{Questions: []setup.Question{{ID: "q1", Validate: &setup.ValidateSpec{Regex: "[invalid("}}}})}},
+	}
+	for _, tc := range cases {
+		t.Run(tc.validator.ID(), func(t *testing.T) {
+			diags := tc.validator.Run(validate.Context{})
+			if len(diags) == 0 {
+				t.Fatalf("expected at least one diagnostic for %q", tc.validator.ID())
+			}
+			for i, d := range diags {
+				if d.Target != tc.validator.ID() {
+					t.Errorf("diag[%d].Target = %q, want %q", i, d.Target, tc.validator.ID())
+				}
+				if d.Domain != "setup" {
+					t.Errorf("diag[%d].Domain = %q, want \"setup\"", i, d.Domain)
+				}
+			}
+		})
+	}
+}
+
 // Test error constants used in tests.
 var (
 	ErrNotFound       = os.ErrNotExist
