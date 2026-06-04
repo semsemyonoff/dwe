@@ -295,6 +295,8 @@ func TestScaffold_InvalidServiceRejected(t *testing.T) {
 	bad := []string{
 		"../etc", "../../root", "a/b", `a\b`, "..", ".",
 		"api\nports:\n  http: 9999", "svc\x00null", "tab\there",
+		// spaces: Docker container names cannot contain spaces
+		"my app", "svc name",
 		// C1 controls: yaml.v3 rejects them in quoted scalars
 		"svc\u0080name",
 		// YAML line-break runes break comment lines in service.yml.tmpl

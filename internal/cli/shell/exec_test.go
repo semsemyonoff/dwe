@@ -255,16 +255,29 @@ func TestDockerExecOneShot_argv_and_silence(t *testing.T) {
 	}
 }
 
-func TestDockerExecOneShot_interactive_addsTFlag(t *testing.T) {
+func TestDockerExecOneShot_neverAllocatesPTY(t *testing.T) {
+	// Even in an interactive terminal, one-shot commands must not allocate a PTY
+	// (-t omitted) so stdout stays clean for piping.
 	withTTYDetector(t, true, true)
 	calls := withFakeRunInteractive(t, nil)
 	if err := dockerExecOneShot("c", "bash", "", "", nil, "x", nil, "docker"); err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
-	// Expect "-i", "-t" at positions 1, 2.
 	c := (*calls)[0]
-	if len(c.args) < 3 || c.args[0] != "exec" || c.args[1] != "-i" || c.args[2] != "-t" {
-		t.Errorf("interactive TTY flags missing: %v", c.args)
+	for _, arg := range c.args {
+		if arg == "-t" {
+			t.Errorf("dockerExecOneShot must not pass -t; got args: %v", c.args)
+		}
+	}
+	// -i must still be present so stdin is wired.
+	found := false
+	for _, arg := range c.args {
+		if arg == "-i" {
+			found = true
+		}
+	}
+	if !found {
+		t.Errorf("dockerExecOneShot must pass -i; got args: %v", c.args)
 	}
 }
 

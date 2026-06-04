@@ -15,6 +15,7 @@ import (
 	"path/filepath"
 	"sort"
 	"strings"
+	"unicode"
 
 	"github.com/semsemyonoff/dwe/internal/core/project/project"
 )
@@ -81,12 +82,13 @@ type Result struct {
 func Scaffold(opts Options) (Result, error) {
 	if opts.Service != "" && (strings.ContainsAny(opts.Service, "/\\") || opts.Service == "." || opts.Service == ".." ||
 		strings.ContainsFunc(opts.Service, func(r rune) bool {
-			// Reject C0/C1 controls and DEL (yaml.v3 illegal), plus YAML line-break
-			// runes NEL (U+0085), LS (U+2028), PS (U+2029) which break comment lines
-			// in service.yml.tmpl where .Service is interpolated without yamlEsc.
-			return r < 0x20 || r == 0x7f || (r >= 0x80 && r <= 0x9f) || r == 0x85 || r == 0x2028 || r == 0x2029
+			// Reject space and all Unicode whitespace (Docker container names cannot
+			// contain spaces), all C0/C1 controls and DEL (yaml.v3 illegal), plus any
+			// remaining Unicode space separator runes (U+2028 LS, U+2029 PS, NBSP,
+			// etc.) that break comment lines in service.yml.tmpl.
+			return r <= 0x20 || r == 0x7f || (r >= 0x80 && r <= 0x9f) || unicode.IsSpace(r)
 		})) {
-		return Result{}, fmt.Errorf("scaffold: invalid service name %q: must be a single directory name with no path separators or control characters", opts.Service)
+		return Result{}, fmt.Errorf("scaffold: invalid service name %q: must be a single directory name with no path separators, spaces, or control characters", opts.Service)
 	}
 	target := opts.TargetDir
 	if target == "" {

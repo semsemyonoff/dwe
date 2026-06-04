@@ -362,12 +362,12 @@ var runInteractive = func(processEnv []string, workDir, name string, args ...str
 }
 
 // dockerExecOneShot runs a single command in a running container via
-// `docker exec <ttyFlags> [-u u] [-w workDir] [-e K=V ...] <container> <shell> -c "<command>"`
+// `docker exec -i [-u u] [-w workDir] [-e K=V ...] <container> <shell> -c "<command>"`
 // and exits without printing a banner. On *exec.ExitError, the error is wrapped
 // as *shellCommandExitError so main.go can preserve the child's exit code.
+// No PTY is allocated (-t omitted) so stdout stays clean for piping.
 func dockerExecOneShot(containerName, shell, u, workDir string, env map[string]string, command string, processEnv []string, dockerBin string) error {
-	args := []string{"exec"}
-	args = append(args, dockerExecTTYFlags()...)
+	args := []string{"exec", "-i"}
 	if u != "" {
 		args = append(args, "-u", u)
 	}
