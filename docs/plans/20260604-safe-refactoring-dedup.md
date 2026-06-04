@@ -189,12 +189,12 @@ Tasks are ordered **safest / highest-value first**: pure deletions and named-con
 - Modify: `internal/core/workflow/lifecycle/{run,stop}.go`
 - Modify: matching `*_test.go`
 
-- [ ] Extract `classifyRunErr` (runErr→status,failedStep) shared by snapshot create/restore (`create.go:206`; `restore.go:261`).
-- [ ] Extract `absOrSelf` for the snapshot-dir fallback (`create.go:185`; `restore.go:238`; `remove.go:106`).
-- [ ] Collapse the clear-pending-restart journal write in lifecycle run/stop (`run.go:312,348`; `stop.go:109`).
-- [ ] Hoist the registry-load + `ApplyVisibility` prelude in run/stop (`run.go:141`; `stop.go:55`) — keep the per-file regErr-vs-lock asymmetry.
-- [ ] Add/extend tests; confirm lifecycle ordering tests unchanged.
-- [ ] `make test && make lint` — must pass.
+- [x] Extract `classifyRunErr` (runErr→status,failedStep) shared by snapshot create/restore (`create.go:206`; `restore.go:261`).
+- [x] Extract `absOrSelf` for the snapshot-dir fallback (`create.go:185`; `restore.go:238`; `remove.go:106`).
+- [x] Collapse the clear-pending-restart journal write in lifecycle run/stop (`run.go:312,348`; `stop.go:109`).
+- [x] Hoist the registry-load + `ApplyVisibility` prelude in run/stop (`run.go:141`; `stop.go:55`) — keep the per-file regErr-vs-lock asymmetry.
+- [x] Add/extend tests; confirm lifecycle ordering tests unchanged.
+- [x] `make test && make lint` — must pass.
 
 ### Task 10: Localized command/completion & docs-package helper extractions
 **Theme 13 — priority medium / effort trivial / risk none.** Identical small blocks, identical output.

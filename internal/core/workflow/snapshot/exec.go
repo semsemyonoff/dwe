@@ -2,15 +2,43 @@ package snapshot
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"io"
+	"path/filepath"
 
 	"github.com/semsemyonoff/dwe/internal/core/project/config"
 	"github.com/semsemyonoff/dwe/internal/core/usercommands/model"
 	"github.com/semsemyonoff/dwe/internal/core/usercommands/registry"
 	"github.com/semsemyonoff/dwe/internal/core/usercommands/runtime"
+	"github.com/semsemyonoff/dwe/internal/core/workflow/snapshot/meta"
 	"github.com/semsemyonoff/dwe/internal/shared/tpl"
 )
+
+// classifyRunErr maps a workflow run error to a manifest status and failed-step
+// string. A nil error yields ("ok", ""); a cancellation/deadline yields
+// ("interrupted", err.Error()); any other error yields ("failed", err.Error()).
+// Shared by Create and Restore so both record the same status taxonomy.
+func classifyRunErr(runErr error) (status, failedStep string) {
+	switch {
+	case runErr == nil:
+		return meta.StatusOk, ""
+	case errors.Is(runErr, context.Canceled), errors.Is(runErr, context.DeadlineExceeded):
+		return meta.StatusInterrupted, runErr.Error()
+	default:
+		return meta.StatusFailed, runErr.Error()
+	}
+}
+
+// absOrSelf returns the absolute form of p, falling back to p unchanged when
+// filepath.Abs fails. Used to build ${snapshot.dir} for workflow variables.
+func absOrSelf(p string) string {
+	abs, err := filepath.Abs(p)
+	if err != nil {
+		return p
+	}
+	return abs
+}
 
 // ExecParams describes one invocation of a snapshot workflow (create, restore,
 // remove, rollback). The workflow body is reused from the parsed snapshot

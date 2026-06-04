@@ -138,16 +138,7 @@ func RunRun(ctx RunContext) (err error) {
 	// Hoist registry load ahead of preflight so type: command checks can
 	// dispatch. nil-tolerant: load failure does not abort — preflight will
 	// surface unknown-command diagnostics for any checks that referenced it.
-	reg, regErr := usercommands.LoadRegistryFromConfigPath(ctx.ConfigPath)
-	if regErr != nil {
-		reg = nil
-	}
-	// Apply hide: visibility so the workflow runner's Hidden-target skip
-	// fires consistently for user commands invoked from lifecycle phases.
-	// Fail-open — eval failures are logged and the command stays visible.
-	if reg != nil {
-		_ = reg.ApplyVisibility(cfg, workDir)
-	}
+	reg, regErr := loadRegistryWithVisibility(ctx.ConfigPath, cfg, workDir)
 
 	lifecyclePath := filepath.Join(workDir, "workspace", "lifecycle.yml")
 
@@ -309,10 +300,7 @@ func RunRun(ctx RunContext) (err error) {
 	// post-condition: the next run / current run applies the toggled state).
 	// PendingDeploy ops survive — deploy tracks artifact state separately and
 	// the run gate above already enforces deployed status.
-	statePath := filepath.Join(workDir, journal.DefaultRelPath)
-	if clearErr := journal.ClearPendingForKind(statePath, journal.PendingRestart); clearErr != nil {
-		slog.Warn("clearing pending restart state after run", "err", clearErr)
-	}
+	clearPendingRestart(workDir, "clearing pending restart state after run")
 
 	w.Success(runCfg.FinalMessage)
 	return nil
@@ -345,11 +333,7 @@ func RunRestart(ctx RunContext) error {
 	// Restart-kind covers the whole stack; any pending deploy op for specific services
 	// is a separate op and must survive (the restart did not redeploy those services).
 	if !ctx.SkipClearPending {
-		workDir := filepath.Dir(ctx.ConfigPath)
-		statePath := filepath.Join(workDir, journal.DefaultRelPath)
-		if clearErr := journal.ClearPendingForKind(statePath, journal.PendingRestart); clearErr != nil {
-			slog.Warn("clearing pending restart state after success", "err", clearErr)
-		}
+		clearPendingRestart(filepath.Dir(ctx.ConfigPath), "clearing pending restart state after success")
 	}
 	return nil
 }

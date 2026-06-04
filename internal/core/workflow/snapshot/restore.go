@@ -235,11 +235,7 @@ func Restore(ctx context.Context, p RestoreParams) (*RestoreResult, error) {
 		return nil, fmt.Errorf("snapshot %q: restore workspace files: %w", p.Name, err)
 	}
 
-	absSnapDir, absErr := filepath.Abs(snapDir)
-	if absErr != nil {
-		absSnapDir = snapDir
-	}
-	vars := meta.BuildSnapshotVars(m.Name, absSnapDir, m.Description, m.Variant, m.CreatedAt)
+	vars := meta.BuildSnapshotVars(m.Name, absOrSelf(snapDir), m.Description, m.Variant, m.CreatedAt)
 
 	start := now()
 	runErr := RunWorkflow(ctx, ExecParams{
@@ -258,18 +254,7 @@ func Restore(ctx context.Context, p RestoreParams) (*RestoreResult, error) {
 	finishedAt := now()
 	durationMs := finishedAt.Sub(start).Milliseconds()
 
-	status := meta.StatusOk
-	failedStep := ""
-	switch {
-	case runErr == nil:
-		// keep StatusOk
-	case errors.Is(runErr, context.Canceled), errors.Is(runErr, context.DeadlineExceeded):
-		status = meta.StatusInterrupted
-		failedStep = runErr.Error()
-	default:
-		status = meta.StatusFailed
-		failedStep = runErr.Error()
-	}
+	status, failedStep := classifyRunErr(runErr)
 
 	m.LastRestore = &meta.LastRestore{
 		At:         finishedAt.UTC(),

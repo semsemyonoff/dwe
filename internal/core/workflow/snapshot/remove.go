@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"io"
 	"os"
-	"path/filepath"
 	"time"
 
 	"github.com/semsemyonoff/dwe/internal/core/project/config"
@@ -103,10 +102,6 @@ func Remove(ctx context.Context, p RemoveParams) (*RemoveResult, error) {
 			return nil, fmt.Errorf("snapshot %q: %w", p.Name, err)
 		}
 		if len(wf.Steps) > 0 {
-			absSnapDir, absErr := filepath.Abs(snapDir)
-			if absErr != nil {
-				absSnapDir = snapDir
-			}
 			var (
 				name      = p.Name
 				desc      string
@@ -119,7 +114,7 @@ func Remove(ctx context.Context, p RemoveParams) (*RemoveResult, error) {
 				variant = m.Variant
 				createdAt = m.CreatedAt
 			}
-			vars := meta.BuildSnapshotVars(name, absSnapDir, desc, variant, createdAt)
+			vars := meta.BuildSnapshotVars(name, absOrSelf(snapDir), desc, variant, createdAt)
 			if err := RunWorkflow(ctx, ExecParams{
 				Cfg:                 p.Cfg,
 				Registry:            p.Registry,

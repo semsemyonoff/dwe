@@ -5,13 +5,10 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"log/slog"
 	"os"
 	"path/filepath"
 
 	"github.com/semsemyonoff/dwe/internal/core/project/config"
-	"github.com/semsemyonoff/dwe/internal/core/usercommands"
-	"github.com/semsemyonoff/dwe/internal/core/workflow/deploy/journal"
 	"github.com/semsemyonoff/dwe/internal/shared/i18n"
 	"github.com/semsemyonoff/dwe/internal/shared/lock"
 	"github.com/semsemyonoff/dwe/internal/shared/render"
@@ -52,15 +49,7 @@ func RunStop(ctx StopContext) error {
 
 	// Hoist registry load ahead of preflight (nil-tolerant — preflight will
 	// surface unknown-command diagnostics for any type: command checks).
-	reg, regErr := usercommands.LoadRegistryFromConfigPath(ctx.ConfigPath)
-	if regErr != nil {
-		reg = nil
-	}
-	// Apply hide: visibility so user commands referenced by stop phases see
-	// Hidden=true on commands gated by the active config. Fail-open.
-	if reg != nil {
-		_ = reg.ApplyVisibility(cfg, workDir)
-	}
+	reg, regErr := loadRegistryWithVisibility(ctx.ConfigPath, cfg, workDir)
 
 	errOut := ctx.ErrOut
 	if errOut == nil {
@@ -106,10 +95,7 @@ func RunStop(ctx StopContext) error {
 	// reminder is no longer actionable. Pending deploy ops are NOT cleared —
 	// deploy tracks artifact state and survives a stop/run cycle (the run gate
 	// would catch any undeployed tracked service anyway).
-	statePath := filepath.Join(workDir, journal.DefaultRelPath)
-	if clearErr := journal.ClearPendingForKind(statePath, journal.PendingRestart); clearErr != nil {
-		slog.Warn("clearing pending restart state after stop", "err", clearErr)
-	}
+	clearPendingRestart(workDir, "clearing pending restart state after stop")
 
 	render.Stdout().Success(stopCfg.FinalMessage)
 	return nil

@@ -182,11 +182,7 @@ func Create(ctx context.Context, p CreateParams) (*CreateResult, error) {
 	}
 
 	createdAt := now().UTC()
-	absSnapDir, absErr := filepath.Abs(snapDir)
-	if absErr != nil {
-		absSnapDir = snapDir
-	}
-	vars := meta.BuildSnapshotVars(p.Name, absSnapDir, p.Description, p.Variant, createdAt)
+	vars := meta.BuildSnapshotVars(p.Name, absOrSelf(snapDir), p.Description, p.Variant, createdAt)
 
 	// Run the workflow. On success or failure we still write a manifest.
 	runErr := RunWorkflow(ctx, ExecParams{
@@ -203,18 +199,7 @@ func Create(ctx context.Context, p CreateParams) (*CreateResult, error) {
 		StepObserverFactory: p.StepObserverFactory,
 	})
 
-	status := meta.StatusOk
-	failedStep := ""
-	switch {
-	case runErr == nil:
-		// keep StatusOk
-	case errors.Is(runErr, context.Canceled), errors.Is(runErr, context.DeadlineExceeded):
-		status = meta.StatusInterrupted
-		failedStep = runErr.Error()
-	default:
-		status = meta.StatusFailed
-		failedStep = runErr.Error()
-	}
+	status, failedStep := classifyRunErr(runErr)
 
 	artifacts, scanErr := meta.ScanArtifacts(snapDir)
 	if scanErr != nil {
