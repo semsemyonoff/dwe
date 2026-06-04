@@ -392,19 +392,19 @@ Several guides touch the same commands (`dwe logs`, `dwe status`, `dwe info`). T
 - Create: `docs/i18n/ru/guides/brand-your-project.md`
 - Create: `docs/i18n/ru/guides/write-snapshot-workflows.md`
 
-- [ ] write `ru/guides/joining-a-project.md` with `> Translated from: guides/joining-a-project.md @ <hash>` header
-- [ ] write `ru/guides/daily-workflow.md` with hash header
-- [ ] write `ru/guides/troubleshooting.md` with hash header
-- [ ] write `ru/guides/switching-tasks-with-snapshots.md` with hash header
-- [ ] write `ru/guides/add-a-service.md` with hash header
-- [ ] write `ru/guides/author-project-commands.md` with hash header
-- [ ] write `ru/guides/background-daemons.md` with hash header
-- [ ] write `ru/guides/preflight-checks.md` with hash header
-- [ ] write `ru/guides/shared-ide-and-agent-config.md` with hash header
-- [ ] write `ru/guides/localize-for-your-team.md` with hash header
-- [ ] write `ru/guides/brand-your-project.md` with hash header
-- [ ] write `ru/guides/write-snapshot-workflows.md` with hash header
-- [ ] terminology consistency check across all 12: project/проект, service/сервис, deploy/деплой, lifecycle/жизненный цикл match `starship.md` translation style
+- [x] write `ru/guides/joining-a-project.md` with `> Translated from: guides/joining-a-project.md @ <hash>` header
+- [x] write `ru/guides/daily-workflow.md` with hash header
+- [x] write `ru/guides/troubleshooting.md` with hash header
+- [x] write `ru/guides/switching-tasks-with-snapshots.md` with hash header
+- [x] write `ru/guides/add-a-service.md` with hash header
+- [x] write `ru/guides/author-project-commands.md` with hash header
+- [x] write `ru/guides/background-daemons.md` with hash header
+- [x] write `ru/guides/preflight-checks.md` with hash header
+- [x] write `ru/guides/shared-ide-and-agent-config.md` with hash header
+- [x] write `ru/guides/localize-for-your-team.md` with hash header
+- [x] write `ru/guides/brand-your-project.md` with hash header
+- [x] write `ru/guides/write-snapshot-workflows.md` with hash header
+- [x] terminology consistency check across all 12: project/проект, service/сервис, deploy/деплой, lifecycle/жизненный цикл match `starship.md` translation style
 
 ### Task 16: Update `docs/i18n/ru/guides/index.md`
 

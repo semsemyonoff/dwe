@@ -1,4 +1,4 @@
-> Translated from: guides/index.md @ 10d8990cc235
+> Translated from: guides/index.md @ 5cb945768580
 
 # Руководства
 
