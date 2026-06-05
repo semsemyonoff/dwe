@@ -19,6 +19,14 @@ type TreeNode struct {
 	// handler uses it to scroll the viewport to the heading after loading the
 	// parent file.
 	Heading *docs.Heading
+
+	// IndexNode, when non-nil, is the docs.Node of an `index.md` file that
+	// lives directly inside this directory. The directory then borrows the
+	// index file's H1 as its tree label (see nodeLabel) and displays the
+	// index file's content when selected (see contentNodeFor); the index.md
+	// itself is folded away and never appears as a separate row. Only set on
+	// directory nodes.
+	IndexNode *docs.Node
 }
 
 type TreeWidget struct {
@@ -208,6 +216,13 @@ func (tw *TreeWidget) addNodeAsChild(node *docs.Node, parent *TreeNode, rootName
 	switch {
 	case node.IsDir && node.Children != nil:
 		for _, child := range node.Children {
+			// Fold an `index.md` into the directory itself: it becomes the
+			// directory's displayed content and label (see nodeLabel /
+			// contentNodeFor) instead of showing up as its own row.
+			if !child.IsDir && child.Name == "index.md" {
+				treeNode.IndexNode = child
+				continue
+			}
 			tw.addNodeAsChild(child, treeNode, rootName)
 		}
 	case !node.IsDir && len(node.Headings) > 0:
@@ -347,6 +362,10 @@ func nodeLabel(node *TreeNode) string {
 		return node.Heading.Text
 	}
 	if node.Node.IsDir {
+		// A directory with a folded index.md reads as that file's H1.
+		if node.IndexNode != nil && node.IndexNode.Title != "" {
+			return node.IndexNode.Title
+		}
 		return node.Node.Name
 	}
 	if node.Node.Title != "" {

@@ -93,6 +93,13 @@ type Model struct {
 	// words; this map is authoritative.
 	currentHeadingLines []int
 
+	// currentDiagramLines maps each diagram index to the rendered viewport
+	// line where its placeholder sits (in document order, ascending). Built
+	// per-load from the diagram markers in the rendered output and used by
+	// syncActiveDiagram to make the diagram in view the active one as the
+	// user scrolls.
+	currentDiagramLines []int
+
 	// Per-session temp dir for "open diagram" exports. One dir per Model so
 	// concurrent `dwe docs` sessions don't race on the same temp filename.
 	// Lazily created on first export; left on disk at exit (os cleans /tmp).
@@ -221,7 +228,11 @@ func (m *Model) loadTopic(node *TreeNode) (tea.Cmd, error) {
 	m.StatusBar.SetProgress(0, 0)
 	m.loadGen++
 
-	if node == nil || node.Node == nil || node.Node.IsDir {
+	// Resolve the markdown that backs this row: the file node itself, the
+	// folded index.md for a directory that has one, or nothing for a plain
+	// directory (blank viewport).
+	cn := contentNodeFor(node)
+	if cn == nil {
 		m.Viewport.SetContent("")
 		m.AvailableLocales = []string{}
 		m.CurrentSourceLang = "en"
@@ -234,7 +245,7 @@ func (m *Model) loadTopic(node *TreeNode) (tea.Cmd, error) {
 		return nil, nil
 	}
 
-	path := node.Node.Path
+	path := cn.Path
 	m.AvailableLocales = docs.AvailableLocalesFor(m.Roots, path)
 
 	var sourceRoot docs.DocRoot
@@ -328,6 +339,7 @@ func (m *Model) applyTopicLoaded(msg topicLoadedMsg) tea.Cmd {
 	m.lastRenderedOutput = msg.Output
 	m.lastRenderedDiagrams = msg.Diagrams
 	m.currentHeadingLines = msg.HeadingLines
+	m.currentDiagramLines = diagramLineIndices(msg.Output, len(msg.Diagrams))
 	m.Viewport.SetContent(m.inlineDiagrams(msg.Output, msg.Diagrams))
 	m.StatusBar.SetPath(msg.Path)
 	m.StatusBar.SetLanguage(msg.SourceLang)
@@ -341,6 +353,10 @@ func (m *Model) applyTopicLoaded(msg topicLoadedMsg) tea.Cmd {
 	} else {
 		m.Viewport.ScrollToLine(0)
 	}
+
+	// Make the diagram in view the active one for the position we landed on
+	// (top of page, or the heading we scrolled to).
+	m.syncActiveDiagram()
 
 	if len(msg.Diagrams) == 0 {
 		return nil
@@ -485,12 +501,17 @@ func (m *Model) selectCursor() tea.Cmd {
 		return nil
 	}
 	m.CurrentTopic = node
-	if m.Tree.IsDir(node) {
+
+	// A plain directory (no folded index.md) has no content to show — let
+	// loadTopic blank the viewport. Directories that fold an index.md flow
+	// through the same already-loaded / heading-scroll path as files.
+	cn := contentNodeFor(node)
+	if cn == nil {
 		cmd, _ := m.loadTopic(node)
 		return cmd
 	}
 
-	alreadyLoaded := m.currentlyLoadedPath == node.Node.Path && m.currentlyLoadedLocale == m.Locale
+	alreadyLoaded := m.currentlyLoadedPath == cn.Path && m.currentlyLoadedLocale == m.Locale
 	if alreadyLoaded {
 		if idx := headingIndex(node); idx >= 0 {
 			m.scrollToHeading(idx)
@@ -519,6 +540,19 @@ func (m *Model) scrollToHeading(idx int) {
 		return
 	}
 	m.Viewport.ScrollToLine(line)
+}
+
+// contentNodeFor returns the docs.Node whose markdown backs a tree row:
+// the row's own file node, the folded index.md node for a directory that
+// has one, or nil for a plain directory (which renders a blank viewport).
+func contentNodeFor(node *TreeNode) *docs.Node {
+	if node == nil || node.Node == nil {
+		return nil
+	}
+	if node.Node.IsDir {
+		return node.IndexNode // nil when the directory has no index.md
+	}
+	return node.Node
 }
 
 // headingIndex returns the source index of a heading TreeNode (its
@@ -745,6 +779,7 @@ func (m *Model) handleKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 			cmd = m.selectCursor()
 		} else {
 			m.Viewport.ScrollUp()
+			m.syncActiveDiagram()
 		}
 	case key.Matches(msg, m.Keys.Down):
 		if m.FocusZone == FocusTree {
@@ -752,6 +787,7 @@ func (m *Model) handleKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 			cmd = m.selectCursor()
 		} else {
 			m.Viewport.ScrollDown()
+			m.syncActiveDiagram()
 		}
 	case key.Matches(msg, m.Keys.Left):
 		if m.FocusZone == FocusTree {
@@ -767,6 +803,7 @@ func (m *Model) handleKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 			cmd = m.selectCursor()
 		} else {
 			m.Viewport.ScrollStart()
+			m.syncActiveDiagram()
 		}
 	case key.Matches(msg, m.Keys.End):
 		if m.FocusZone == FocusTree {
@@ -774,6 +811,7 @@ func (m *Model) handleKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 			cmd = m.selectCursor()
 		} else {
 			m.Viewport.ScrollEnd()
+			m.syncActiveDiagram()
 		}
 	case key.Matches(msg, m.Keys.Tab):
 		if m.FocusZone == FocusTree {

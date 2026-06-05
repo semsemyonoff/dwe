@@ -67,7 +67,7 @@ func (m *Model) renderTwoPanel() tea.View {
 	}
 
 	treePanel := treeStyle.Render(m.renderTree())
-	viewportPanel := viewportStyle.Render(m.Viewport.View())
+	viewportPanel := m.applyViewportScrollbar(viewportStyle.Render(m.Viewport.View()))
 
 	body := lipgloss.JoinHorizontal(lipgloss.Top, treePanel, viewportPanel)
 	totalWidth := lw + rw
@@ -247,10 +247,10 @@ func (m *Model) renderTreeRows(inner int, accent, muted lipgloss.Style) []string
 			label = node.Heading.Text
 		case node.Node.IsDir && node.Expanded:
 			glyph = "▼ "
-			label = node.Node.Name
+			label = nodeLabel(node)
 		case node.Node.IsDir:
 			glyph = "▶ "
-			label = node.Node.Name
+			label = nodeLabel(node)
 		default:
 			if len(node.Children) > 0 {
 				if node.Expanded {
@@ -394,6 +394,65 @@ func truncateLabel(s string, width int) string {
 		}
 	}
 	return "…"
+}
+
+// Scrollbar runes. The viewport panel's normal border (`scrollbarBorderRune`,
+// `│`) is the overdraw target; on the thumb rows it becomes a solid accent
+// block (`█`) and on the remaining rows a muted shaded track (`░`), so the
+// whole right column reads as a scrollbar with a clearly visible thumb rather
+// than a faint border tick.
+const (
+	scrollbarBorderRune = "│"
+	scrollbarThumbGlyph = "█"
+	scrollbarTrackGlyph = "░"
+)
+
+// applyViewportScrollbar overdraws a proportional scrollbar onto the right
+// border of the already-rendered viewport panel: a muted shaded track down
+// the full content height with a solid accent thumb at the current position.
+// It returns the panel unchanged when the whole document fits (nothing to
+// scroll). Thumb size and position mirror the bubbles viewport's own
+// offset/total so the bar tracks 1:1 with scrolling.
+func (m *Model) applyViewportScrollbar(panel string) string {
+	lines := strings.Split(panel, "\n")
+	if len(lines) < 3 {
+		return panel // no content rows between the top/bottom border rows
+	}
+	vh := len(lines) - 2 // rows between the border rows
+	total := m.Viewport.TotalLines()
+	if vh <= 0 || total <= vh {
+		return panel // everything is visible — no scrollbar needed
+	}
+
+	thumbSize := vh * vh / total
+	thumbSize = min(max(thumbSize, 1), vh)
+	maxStart := vh - thumbSize
+	thumbStart := 0
+	if denom := total - vh; denom > 0 {
+		thumbStart = min(m.Viewport.YOffset()*maxStart/denom, maxStart)
+	}
+
+	thumb := lipgloss.NewStyle().Foreground(lipgloss.Color(styles.ColorAccent())).Bold(true).Render(scrollbarThumbGlyph)
+	track := lipgloss.NewStyle().Foreground(lipgloss.Color(styles.ColorMuted())).Render(scrollbarTrackGlyph)
+	for i := range vh {
+		glyph := track
+		if i >= thumbStart && i < thumbStart+thumbSize {
+			glyph = thumb
+		}
+		lines[1+i] = replaceLastRune(lines[1+i], scrollbarBorderRune, glyph) // 1+i skips the top border row
+	}
+	return strings.Join(lines, "\n")
+}
+
+// replaceLastRune swaps the last occurrence of old in line for repl, leaving
+// any surrounding ANSI styling intact. Used to overwrite the panel's rightmost
+// border rune with the scrollbar thumb.
+func replaceLastRune(line, old, repl string) string {
+	idx := strings.LastIndex(line, old)
+	if idx < 0 {
+		return line
+	}
+	return line[:idx] + repl + line[idx+len(old):]
 }
 
 func (m *Model) getNodeDepth(node *TreeNode) int {

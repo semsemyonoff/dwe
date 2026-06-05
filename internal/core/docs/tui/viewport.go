@@ -67,3 +67,20 @@ func (w *ViewportWidget) ScrollToLine(line int) {
 func (w *ViewportWidget) Content() string {
 	return w.content
 }
+
+// YOffset returns the index of the first visible content line. Used by the
+// scrollbar and by diagram focus tracking.
+func (w *ViewportWidget) YOffset() int {
+	return w.v.YOffset()
+}
+
+// VisibleHeight returns the number of content rows the viewport shows at once.
+func (w *ViewportWidget) VisibleHeight() int {
+	return w.v.Height()
+}
+
+// TotalLines returns the total number of content lines (the full document
+// height in rendered rows), used to size the scrollbar thumb.
+func (w *ViewportWidget) TotalLines() int {
+	return w.v.TotalLineCount()
+}

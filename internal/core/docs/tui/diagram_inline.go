@@ -10,6 +10,7 @@ import (
 
 	"github.com/semsemyonoff/dwe/internal/core/docs/mermaid"
 	"github.com/semsemyonoff/dwe/internal/core/docs/render"
+	"github.com/semsemyonoff/dwe/internal/core/ui/styles"
 )
 
 // diagramTheme returns the mermaid.Theme corresponding to the model's current
@@ -90,7 +91,10 @@ func (m *Model) inlineDiagrams(output string, diagrams []render.DiagramRef) stri
 
 // diagramPlaceholder returns the inline text shown in place of a mermaid
 // block. State is encoded as a single line so glamour's word-wrap leaves
-// it intact and the user sees what's happening at a glance.
+// it intact and the user sees what's happening at a glance. The currently
+// selected diagram — the one `o` will open — is rendered in the accent
+// color and bold (with a `▸` marker); the rest are muted so it's obvious
+// which one is active without reading the counter.
 func (m *Model) diagramPlaceholder(index, total int, current bool, src string, theme mermaid.Theme, width int, lookuper mermaid.Lookuper) string {
 	prefix := fmt.Sprintf("📊 Diagram %d/%d", index+1, total)
 	if current {
@@ -99,16 +103,41 @@ func (m *Model) diagramPlaceholder(index, total int, current bool, src string, t
 		prefix = "  " + prefix
 	}
 
-	if lookuper == nil {
-		return fmt.Sprintf("<%s — rendering disabled · `y` source>", prefix)
+	cached := false
+	if lookuper != nil {
+		_, cached = lookuper.Lookup(src, theme, width)
 	}
-	if _, cached := lookuper.Lookup(src, theme, width); cached {
-		return fmt.Sprintf("<%s — `o` open · `y` source · `[`/`]` switch>", prefix)
+
+	var text string
+	switch {
+	case lookuper == nil:
+		text = fmt.Sprintf("<%s — rendering disabled · `y` source>", prefix)
+	case cached:
+		text = fmt.Sprintf("<%s — `o` open · `y` source · `[` prev · `]` next>", prefix)
+	case m.prefetchFinished():
+		text = fmt.Sprintf("<%s — render failed · `y` source>", prefix)
+	default:
+		text = fmt.Sprintf("<%s — rendering…>", prefix)
 	}
-	if m.prefetchFinished() {
-		return fmt.Sprintf("<%s — render failed · `y` source>", prefix)
+
+	if current {
+		return diagramActiveStyle().Render(text)
 	}
-	return fmt.Sprintf("<%s — rendering…>", prefix)
+	return diagramInactiveStyle().Render(text)
+}
+
+// diagramActiveStyle / diagramInactiveStyle style the inline diagram
+// placeholders. The styles are rebuilt per call (cheap) so a runtime theme
+// change is picked up without caching stale palette colors. They are applied
+// after glamour has already rendered the surrounding markdown — the
+// placeholder marker is substituted post-render — so the injected SGR codes
+// don't interfere with glamour's own styling.
+func diagramActiveStyle() lipgloss.Style {
+	return lipgloss.NewStyle().Foreground(lipgloss.Color(styles.ColorAccent())).Bold(true)
+}
+
+func diagramInactiveStyle() lipgloss.Style {
+	return lipgloss.NewStyle().Foreground(lipgloss.Color(styles.ColorMuted()))
 }
 
 // prefetchFinished reports whether the worker pool has reported a tick for
@@ -144,6 +173,85 @@ func (m *Model) refreshDiagramView() {
 			m.Viewport.ScrollToLine(i)
 			return
 		}
+	}
+}
+
+// diagramLineIndices returns, for each diagram index 0..n-1, the rendered
+// viewport line where its placeholder marker sits — or -1 if the marker was
+// not found. The markers survive glamour as single tokens (see
+// diagramMarker); scanning the rendered output once and stripping ANSI per
+// line locates them reliably. Markers appear in document order so the result
+// is ascending (ignoring -1s).
+func diagramLineIndices(output string, n int) []int {
+	if n == 0 {
+		return nil
+	}
+	res := make([]int, n)
+	for i := range res {
+		res[i] = -1
+	}
+	for li, line := range strings.Split(output, "\n") {
+		plain := stripANSI(line)
+		for i := range n {
+			if res[i] < 0 && strings.Contains(plain, diagramMarker(i)) {
+				res[i] = li
+			}
+		}
+	}
+	return res
+}
+
+// activeDiagramForOffset returns the index of the diagram that should be
+// active for the current scroll position: the topmost diagram visible in the
+// viewport, or — when none is visible — the last one scrolled past (so it
+// stays selected until the next appears), falling back to the first diagram
+// when the view sits above them all. Returns -1 when there are no diagrams.
+func (m *Model) activeDiagramForOffset() int {
+	lines := m.currentDiagramLines
+	if len(lines) == 0 {
+		return -1
+	}
+	top := m.Viewport.YOffset()
+	bottom := top + m.Viewport.VisibleHeight()
+
+	firstVisible, lastAbove := -1, -1
+	for i, ln := range lines {
+		if ln < 0 {
+			continue
+		}
+		if firstVisible < 0 && ln >= top && ln < bottom {
+			firstVisible = i
+		}
+		if ln < top {
+			lastAbove = i
+		}
+	}
+	switch {
+	case firstVisible >= 0:
+		return firstVisible
+	case lastAbove >= 0:
+		return lastAbove
+	default:
+		return 0
+	}
+}
+
+// syncActiveDiagram recomputes the active diagram from the scroll position and,
+// if it changed, re-inlines the rendered output so the highlight moves to the
+// diagram now in view. It deliberately does NOT scroll — the user is driving
+// the viewport — which is what separates it from refreshDiagramView (the
+// `[`/`]` manual switch, which jumps the viewport to the chosen diagram).
+func (m *Model) syncActiveDiagram() {
+	if m.DiagramState == nil || len(m.DiagramState.Diagrams) == 0 {
+		return
+	}
+	idx := m.activeDiagramForOffset()
+	if idx < 0 || idx == m.DiagramState.Current {
+		return
+	}
+	m.DiagramState.Current = idx
+	if m.lastRenderedOutput != "" && len(m.lastRenderedDiagrams) > 0 {
+		m.Viewport.SetContent(m.inlineDiagrams(m.lastRenderedOutput, m.lastRenderedDiagrams))
 	}
 }
 
