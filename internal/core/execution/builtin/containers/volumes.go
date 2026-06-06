@@ -3,12 +3,21 @@ package containers
 import (
 	"context"
 	"fmt"
+	"io"
 	"os/exec"
 	"strings"
 
 	"github.com/semsemyonoff/dwe/internal/core/execution/builtin/spec"
 
 	"github.com/semsemyonoff/dwe/internal/core/project/config"
+)
+
+// listVolumesFn / removeVolumesFn are test seams: production shells out to
+// `docker volume ls -q` / `docker volume rm`; tests inject stubs to capture
+// invocations and feed fake volume listings without spawning real subprocesses.
+var (
+	listVolumesFn   = listDockerVolumes
+	removeVolumesFn = removeDockerVolumes
 )
 
 // RemoveProjectVolumes implements docker_remove_project_volumes.
@@ -26,13 +35,19 @@ func (RemoveProjectVolumes) Describe(with map[string]any) string {
 
 // Run executes the docker_remove_project_volumes builtin.
 func (RemoveProjectVolumes) Run(ctx context.Context, with map[string]any, ectx spec.ExecContext) error {
-	// Use the pre-loaded docker config from spec.ExecContext; callers normalise
-	// os.ErrNotExist to &config.DockerConfig{} so we never load it here.
-	dockerCfg := ectx.DockerConfig
-	if dockerCfg == nil {
-		dockerCfg = &config.DockerConfig{}
+	if ectx.Config == nil {
+		return fmt.Errorf("docker_remove_project_volumes: config not available")
 	}
-	projectName := dockerCfg.ProjectName
+
+	// Resolve the compose project name through the single source of truth
+	// (ResolveComposeProjectName) so a project without docker.yml — or with no
+	// project_name field — falls back to the default "<prefix>-<name>", exactly
+	// like `docker compose -p` and per-service reset. Reading the raw
+	// DockerConfig.ProjectName here would hard-fail on those projects.
+	projectName, err := config.ResolveComposeProjectName(ectx.ProjectRoot, ectx.Config)
+	if err != nil {
+		return fmt.Errorf("resolve project name: %w", err)
+	}
 	if projectName == "" {
 		return fmt.Errorf("could not resolve project name — cannot remove volumes safely")
 	}
@@ -40,16 +55,15 @@ func (RemoveProjectVolumes) Run(ctx context.Context, with map[string]any, ectx s
 	dockerBin := config.DockerBin(ectx.Config)
 
 	// List all volumes.
-	out, err := exec.CommandContext(ctx, dockerBin, "volume", "ls", "-q").Output() //nolint:gosec
+	all, err := listVolumesFn(ctx, dockerBin)
 	if err != nil {
 		return fmt.Errorf("listing docker volumes: %w", err)
 	}
 
 	prefix := projectName + "_"
 	var toRemove []string
-	for vol := range strings.SplitSeq(strings.TrimSpace(string(out)), "\n") {
-		vol = strings.TrimSpace(vol)
-		if vol != "" && strings.HasPrefix(vol, prefix) {
+	for _, vol := range all {
+		if strings.HasPrefix(vol, prefix) {
 			toRemove = append(toRemove, vol)
 		}
 	}
@@ -64,13 +78,34 @@ func (RemoveProjectVolumes) Run(ctx context.Context, with map[string]any, ectx s
 	}
 
 	ectx.Output.Info(fmt.Sprintf("removing %d volume(s) with prefix %q", len(toRemove), prefix))
-	args := append([]string{"volume", "rm"}, toRemove...)
-	cmd := exec.CommandContext(ctx, dockerBin, args...) //nolint:gosec
-	cmdOut := ectx.Output.Writer()
-	cmd.Stdout = cmdOut
-	cmd.Stderr = cmdOut
-	if err := cmd.Run(); err != nil {
+	if err := removeVolumesFn(ctx, dockerBin, toRemove, ectx.Output.Writer()); err != nil {
 		return fmt.Errorf("docker volume rm: %w", err)
 	}
 	return nil
+}
+
+// listDockerVolumes returns every docker volume name (`docker volume ls -q`),
+// with blank lines trimmed out.
+func listDockerVolumes(ctx context.Context, dockerBin string) ([]string, error) {
+	out, err := exec.CommandContext(ctx, dockerBin, "volume", "ls", "-q").Output() //nolint:gosec
+	if err != nil {
+		return nil, err
+	}
+	var names []string
+	for vol := range strings.SplitSeq(strings.TrimSpace(string(out)), "\n") {
+		if vol = strings.TrimSpace(vol); vol != "" {
+			names = append(names, vol)
+		}
+	}
+	return names, nil
+}
+
+// removeDockerVolumes removes the given volumes (`docker volume rm <vols...>`),
+// streaming docker's output to w.
+func removeDockerVolumes(ctx context.Context, dockerBin string, vols []string, w io.Writer) error {
+	args := append([]string{"volume", "rm"}, vols...)
+	cmd := exec.CommandContext(ctx, dockerBin, args...) //nolint:gosec
+	cmd.Stdout = w
+	cmd.Stderr = w
+	return cmd.Run()
 }
