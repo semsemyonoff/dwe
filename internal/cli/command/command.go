@@ -129,7 +129,7 @@ Without an id, an interactive selector lists public commands. With a group prefi
 				skipConfirmFromTUI bool
 				forceFormFromTUI   bool
 			)
-			selector := makeBrowserSelector(cfg, reg, cmdbrowser.ModeRun, false, &skipConfirmFromTUI, &forceFormFromTUI, i18n.TranslatorOrNop(flags.I18n), flags.Locale)
+			selector := makeBrowserSelector(cfg, reg, cmdbrowser.ModeRun, false, &skipConfirmFromTUI, &forceFormFromTUI, i18n.TranslatorOrNop(flags.I18n), flags.Locale, flags.ProjectRoot())
 			if !widgets.IsInteractiveFn(cmd.InOrStdin()) {
 				selector = func(_ []*usercommands.CommandDef, _ string) (string, error) {
 					return "", fmt.Errorf("no exact command ID given; pass a full command ID or run in an interactive terminal")

@@ -291,6 +291,32 @@ args:
 	})
 }
 
+func TestComposeProjectName(t *testing.T) {
+	cfg := &DweConfig{}
+	cfg.Project.Name = "tbm"
+	cfg.Project.Prefix = "dwe"
+
+	tests := []struct {
+		name      string
+		dockerCfg *DockerConfig
+		cfg       *DweConfig
+		want      string
+	}{
+		{"docker_yml_project_name_wins", &DockerConfig{ProjectName: "dwe_tbm"}, cfg, "dwe_tbm"},
+		{"empty_project_name_falls_back_to_FullName", &DockerConfig{}, cfg, "dwe-tbm"},
+		{"nil_dockerCfg_falls_back_to_FullName", nil, cfg, "dwe-tbm"},
+		{"nil_cfg_returns_empty", &DockerConfig{}, nil, ""},
+		{"both_nil_returns_empty", nil, nil, ""},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := ComposeProjectName(tc.dockerCfg, tc.cfg); got != tc.want {
+				t.Errorf("ComposeProjectName = %q, want %q", got, tc.want)
+			}
+		})
+	}
+}
+
 func TestResolveVarTemplate(t *testing.T) {
 	raw := map[string]any{
 		"project": map[string]any{

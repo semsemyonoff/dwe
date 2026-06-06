@@ -114,7 +114,7 @@ func daemonSetCompletion(flags *cmdctx.RootFlags) func(*cobra.Command, []string,
 		}
 
 		compose := docker.NewCompose(cfg, dockerCfg, projectRoot)
-		out, err := daemonSetShellOutFn(cmd.Context(), compose, cfg.Project.FullName(), def.DerivedFromDaemon)
+		out, err := daemonSetShellOutFn(cmd.Context(), compose, config.ComposeProjectName(dockerCfg, cfg), def.DerivedFromDaemon)
 		if err != nil {
 			return nil, cobra.ShellCompDirectiveNoFileComp
 		}

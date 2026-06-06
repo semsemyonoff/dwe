@@ -227,3 +227,28 @@ func TestCollectDaemons_ShellSeam(t *testing.T) {
 		t.Fatalf("expected 1 row id=services.main.queue, got %+v", rows)
 	}
 }
+
+func TestCollectDaemons_HonorsDockerYmlProjectName(t *testing.T) {
+	cfg := makeServicesCfg(
+		map[string]config.ServiceConfig{
+			"main": {Type: "app", Container: "app-main", Required: true},
+		},
+		map[string]testTool(nil),
+		nil,
+		nil,
+	)
+	cfg.Project.Name = "proj" // FullName() == "proj"
+	orig := daemonsShellOutFn
+	defer func() { daemonsShellOutFn = orig }()
+	var gotProject string
+	daemonsShellOutFn = func(_ context.Context, _ *docker.Compose, projectFull string) ([]byte, error) {
+		gotProject = projectFull
+		return nil, nil
+	}
+	// A docker.yml project_name override must scope the daemon label filter,
+	// not the dash-joined FullName, so daemons match compose-managed services.
+	CollectDaemons(context.Background(), cfg, &config.DockerConfig{ProjectName: "dwe_proj"}, "")
+	if gotProject != "dwe_proj" {
+		t.Errorf("projectFull = %q, want %q (docker.yml project_name, not FullName 'proj')", gotProject, "dwe_proj")
+	}
+}

@@ -164,7 +164,7 @@ type selectCommandFn func(defs []*usercommands.CommandDef, title string) (string
 //
 // For ModeInspect the skipConfirmOut / forceFormOut pointers are unused
 // (their key bindings are disabled in inspect mode); pass nil.
-func makeBrowserSelector(cfg *config.DweConfig, reg *usercommands.Registry, mode cmdbrowser.Mode, includePrivate bool, skipConfirmOut, forceFormOut *bool, translator i18n.Translator, locale string) selectCommandFn {
+func makeBrowserSelector(cfg *config.DweConfig, reg *usercommands.Registry, mode cmdbrowser.Mode, includePrivate bool, skipConfirmOut, forceFormOut *bool, translator i18n.Translator, locale, baseDir string) selectCommandFn {
 	return func(defs []*usercommands.CommandDef, title string) (string, error) {
 		items := make([]cmdbrowser.Item, len(defs))
 		for i, d := range defs {
@@ -177,7 +177,7 @@ func makeBrowserSelector(cfg *config.DweConfig, reg *usercommands.Registry, mode
 				ParamCount:  len(d.Params),
 				Inspect: func(width int) string {
 					var buf bytes.Buffer
-					printInspectAt(&buf, curDef, cfg, reg, width, translator, locale)
+					printInspectAt(&buf, curDef, cfg, reg, width, translator, locale, baseDir)
 					return buf.String()
 				},
 			}

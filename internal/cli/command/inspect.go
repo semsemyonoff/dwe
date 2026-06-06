@@ -221,13 +221,15 @@ func inspectStepDescription(reg *usercommands.Registry, translator i18n.Translat
 // (e.g. an inspect viewport narrower than the terminal), use
 // [printInspectAt] with the explicit width — otherwise values wrap to the
 // terminal and get silently clipped when the viewport renders.
-func printInspect(w io.Writer, def *usercommands.CommandDef, cfg *config.DweConfig, reg *usercommands.Registry, translator i18n.Translator, locale string) {
-	printInspectAt(w, def, cfg, reg, 0, translator, locale)
+func printInspect(w io.Writer, def *usercommands.CommandDef, cfg *config.DweConfig, reg *usercommands.Registry, translator i18n.Translator, locale, baseDir string) {
+	printInspectAt(w, def, cfg, reg, 0, translator, locale, baseDir)
 }
 
 // printInspectAt is [printInspect] with an explicit wrap width. maxWidth == 0
-// falls back to the terminal width.
-func printInspectAt(w io.Writer, def *usercommands.CommandDef, cfg *config.DweConfig, reg *usercommands.Registry, maxWidth int, translator i18n.Translator, locale string) {
+// falls back to the terminal width. baseDir is the project root used to resolve
+// the daemon container name honoring docker.yml project_name; "" degrades to
+// cfg.Project.FullName().
+func printInspectAt(w io.Writer, def *usercommands.CommandDef, cfg *config.DweConfig, reg *usercommands.Registry, maxWidth int, translator i18n.Translator, locale, baseDir string) {
 	def2 := func(name, value string, indent int) {
 		_, _ = fmt.Fprintln(w, render.DefinitionAt(name, value, indent, "", maxWidth))
 	}
@@ -349,7 +351,7 @@ func printInspectAt(w io.Writer, def *usercommands.CommandDef, cfg *config.DweCo
 		inspectWorkflowSteps(def2, sub, def, reg, translator, locale)
 	}
 
-	inspectDaemonSection(def2, sub, def, cfg)
+	inspectDaemonSection(def2, sub, def, cfg, baseDir)
 	inspectParamsSection(def2, sub, def, translator, locale)
 	inspectContextSection(def2, sub, def)
 	inspectEnvSection(def2, sub, def)
@@ -423,7 +425,7 @@ func inspectWorkflowSteps(def2 inspectDef2, sub inspectSub, def *usercommands.Co
 
 // inspectDaemonSection renders the Daemon (and resolved Container) section for a
 // synthetic daemon-derived command.
-func inspectDaemonSection(def2 inspectDef2, sub inspectSub, def *usercommands.CommandDef, cfg *config.DweConfig) {
+func inspectDaemonSection(def2 inspectDef2, sub inspectSub, def *usercommands.CommandDef, cfg *config.DweConfig, baseDir string) {
 	if def.DerivedFromDaemon == "" || def.SourceDaemon == nil {
 		return
 	}
@@ -485,7 +487,14 @@ func inspectDaemonSection(def2 inspectDef2, sub inspectSub, def *usercommands.Co
 			Params: defaults,
 		})
 		if err == nil {
-			name, err := daemon.ResolveContainerName(cfg.Project.FullName(), rendered)
+			// Honor docker.yml project_name so the displayed name matches the
+			// container the daemon builtins actually create. baseDir == "" (or a
+			// template-resolution error) degrades to FullName().
+			projectName, perr := config.ResolveComposeProjectName(baseDir, cfg)
+			if perr != nil {
+				projectName = cfg.Project.FullName()
+			}
+			name, err := daemon.ResolveContainerName(projectName, rendered)
 			if err == nil {
 				def2("resolved (with default params)", name, 4)
 			}

@@ -105,7 +105,7 @@ func (DaemonStart) Run(ctx context.Context, with map[string]any, ectx spec.ExecC
 		dockerCfg = &config.DockerConfig{}
 	}
 
-	projectFull := ectx.Config.Project.FullName()
+	projectFull := config.ComposeProjectName(dockerCfg, ectx.Config)
 	containerTemplate := spec.GetStringParam(with, "container_template", "")
 	fullName, err := daemon.ResolveContainerName(projectFull, containerTemplate)
 	if err != nil {

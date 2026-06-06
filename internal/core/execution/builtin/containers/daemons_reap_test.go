@@ -131,6 +131,26 @@ func TestDaemonsReap_Run_ListError(t *testing.T) {
 	}
 }
 
+func TestDaemonsReap_Run_HonorsDockerYmlProjectName(t *testing.T) {
+	orig := listDaemonsFn
+	defer func() { listDaemonsFn = orig }()
+	var gotProject string
+	listDaemonsFn = func(_ context.Context, _ *docker.Compose, projectFull string) ([]string, error) {
+		gotProject = projectFull
+		return nil, nil // no daemons → early return after capturing the project name
+	}
+
+	var buf bytes.Buffer
+	ectx := newReapExecContext(&buf) // cfg.Project.Name = "testproj" → FullName() == "testproj"
+	ectx.DockerConfig = &config.DockerConfig{ProjectName: "dwe_testproj"}
+	if err := (DaemonsReap{}).Run(context.Background(), nil, ectx); err != nil {
+		t.Fatalf("Run error: %v", err)
+	}
+	if gotProject != "dwe_testproj" {
+		t.Errorf("projectFull = %q, want %q (docker.yml project_name, not FullName 'testproj')", gotProject, "dwe_testproj")
+	}
+}
+
 func TestDaemonsReap_Run_NoDaemons(t *testing.T) {
 	orig := listDaemonsFn
 	defer func() { listDaemonsFn = orig }()

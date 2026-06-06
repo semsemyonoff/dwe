@@ -249,6 +249,29 @@ func ResolveComposeProjectName(baseDir string, cfg *DweConfig) (string, error) {
 	return name, nil
 }
 
+// ComposeProjectName returns the compose project name from an already-loaded
+// DockerConfig, without re-reading docker.yml from disk. It is the in-memory
+// sibling of ResolveComposeProjectName for callers that already hold the
+// resolved DockerConfig (pipeline builtins via spec.ExecContext.DockerConfig,
+// status collectors, completion paths): the resolved docker.yml project_name
+// when set, else the canonical "<prefix>-<name>" (cfg.Project.FullName()).
+//
+// Both arguments are nil-safe. Use this for any compose-bypass path that
+// derives a container, network, or volume name as "<project>-<...>" (e.g. the
+// daemon builtins and daemon status/completion) so daemons land on the same
+// project name as compose-managed services. dockerCfg.ProjectName is assumed
+// already template-resolved (LoadDockerConfig resolves it); this helper does
+// no template expansion.
+func ComposeProjectName(dockerCfg *DockerConfig, cfg *DweConfig) string {
+	if dockerCfg != nil && dockerCfg.ProjectName != "" {
+		return dockerCfg.ProjectName
+	}
+	if cfg != nil {
+		return cfg.Project.FullName()
+	}
+	return ""
+}
+
 // readDockerProjectName reads workspace/docker.yml (+ optional
 // docker.local.yml override) as raw maps, deep-merges them, extracts the
 // project_name field, and resolves ${...} templates against cfg.Raw.

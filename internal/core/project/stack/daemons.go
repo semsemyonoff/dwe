@@ -74,7 +74,7 @@ func CollectDaemons(ctx context.Context, cfg *config.DweConfig, dockerCfg *confi
 		dockerCfg = &config.DockerConfig{}
 	}
 	compose := docker.NewCompose(cfg, dockerCfg, baseDir)
-	projectFull := cfg.Project.FullName()
+	projectFull := config.ComposeProjectName(dockerCfg, cfg)
 	out, err := daemonsShellOutFn(ctx, compose, projectFull)
 	if err != nil {
 		return nil, []error{fmt.Errorf("docker ps: %w", err)}

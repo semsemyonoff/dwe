@@ -1,4 +1,4 @@
-> Translated from: reference/config/commands/types.md @ f35db8259798
+> Translated from: reference/config/commands/types.md @ 1d9d18f2d930
 
 # Типы команд
 
@@ -571,7 +571,7 @@ db.wait-target:
 
 Каждая виртуальная команда появляется в реестре, браузере `dwe cmd`, completion, `inspect` и может ссылаться из workflow. Исходная команда `<base>` **не** запускается сама по себе — запускаются только четыре виртуальные команды.
 
-Имена контейнеров автоматически префиксуются `ProjectConfig.FullName()` (так что один проект может работать на нескольких checkout-ах одновременно), и каждый контейнер несёт стандартизированные метки, чтобы `dwe status daemons`, completion и `_auto_reap_daemons` могли найти их через `docker ps` — **без отдельного файла состояния**.
+Имена контейнеров автоматически префиксуются разрешённым именем compose-проекта — `project_name` из `workspace/docker.yml`, если оно задано, иначе `ProjectConfig.FullName()` (`<prefix>-<name>`) — так что демоны попадают в ту же project-область, что и сервисы под управлением compose (и один проект может работать на нескольких checkout-ах одновременно). Каждый контейнер несёт стандартизированные метки, чтобы `dwe status daemons`, completion и `_auto_reap_daemons` могли найти их через `docker ps` — **без отдельного файла состояния**.
 
 ### YAML-форма
 
