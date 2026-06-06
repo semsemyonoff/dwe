@@ -92,6 +92,27 @@ func writeTempServiceConfig(t *testing.T, services map[string]struct {
 	return filepath.Join(dir, "workspace.yml")
 }
 
+// TestDetectStackRunning_MissingDockerYML asserts the probe tolerates an absent
+// (optional) workspace/docker.yml: it must NOT fail at the config-load step.
+// Before the fix, LoadDockerConfig surfaced os.ErrNotExist and detectStackRunning
+// returned a "loading docker config" error, which probeStackOrWarn rendered as a
+// spurious "could not probe stack state ...; proceeding as if stack is running"
+// warning on every `dwe services enable/disable` in a project without docker.yml.
+func TestDetectStackRunning_MissingDockerYML(t *testing.T) {
+	dir := t.TempDir() // deliberately no workspace/docker.yml
+	cfg := &config.DweConfig{}
+	cfg.Project.Name = "test"
+	cfg.Project.Prefix = "dwe"
+
+	// Real detectStackRunning (not seamed). The docker probe itself may still
+	// fail (no daemon / no compose file) — that is fine; we only assert the
+	// optional missing docker.yml is no longer the failure point.
+	_, err := detectStackRunning(cfg, dir)
+	if err != nil && strings.Contains(err.Error(), "loading docker config") {
+		t.Fatalf("missing docker.yml must not surface as a config-load error, got: %v", err)
+	}
+}
+
 func TestServicesToggle_NonTTY_RendersListTable(t *testing.T) {
 	configPath := writeTempServiceConfig(t, map[string]struct {
 		required  bool
