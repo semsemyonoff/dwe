@@ -39,10 +39,15 @@ func DefaultResetConfig() *config.ProjectDeployConfig {
 				Description: "Remove project volumes and generated service data",
 				Steps: []config.DeployStep{
 					{
-						Name:        "remove-volumes",
-						Type:        "builtin",
-						Cmd:         "docker_remove_project_volumes",
-						Description: "Remove all Docker volumes belonging to this project",
+						Name: "remove-volumes",
+						Type: "builtin",
+						Cmd:  "docker_remove_project_volumes",
+						// A volume that can't be removed (e.g. still in use by a
+						// foreign container, or a transient docker error) must not
+						// abort the whole reset — the service-data cleanup below
+						// should still run. The failure is still reported.
+						ContinueOnError: true,
+						Description:     "Remove all Docker volumes belonging to this project",
 					},
 					{
 						Name: "remove-services",

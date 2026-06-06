@@ -1,4 +1,4 @@
-> Translated from: reference/config/reset.md @ 457610720e99
+> Translated from: reference/config/reset.md @ 1f81b9372746
 
 # Reset
 
@@ -14,7 +14,7 @@ dwe reset run [--yes]
 
 **Reset-пайплайн по умолчанию** (срабатывает, если `workspace/reset.yml` отсутствует):
 
-Фазы: `pre` (confirm-промпт: "This will stop containers, remove project volumes, and delete generated data.") → `stop` (`type: dwe`, `cmd: "docker down"`) → `cleanup` (удалить все volume'ы проекта, удалить директорию `services/`).
+Фазы: `pre` (confirm-промпт: "This will stop containers, remove project volumes, and delete generated data.") → `stop` (`type: dwe`, `cmd: "docker down"`) → `cleanup` (удалить все volume'ы проекта, затем удалить директорию `services/`). Шаг удаления volume'ов выполняется с `continue_on_error: true`, поэтому volume, который не удалось удалить (например, всё ещё используется или временная ошибка docker), логируется, но **не** прерывает reset — очистка `services/` всё равно выполняется.
 
 При успехе журнал состояния деплоя удаляется целиком, так что каждый сервис в `dwe status` показывается как не задеплоенный.
 

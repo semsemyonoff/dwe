@@ -79,6 +79,12 @@ func TestDefaultResetConfig_Shape(t *testing.T) {
 		t.Error("confirm step missing 'message' key in With")
 	}
 
+	// remove-volumes must be resilient: a failed volume removal must not abort
+	// the rest of the destructive reset (service-data cleanup still runs).
+	if removeVolsStep := cfg.Phases[2].Steps[0]; !removeVolsStep.ContinueOnError {
+		t.Error("remove-volumes step must set ContinueOnError so a volume-removal failure does not abort the reset")
+	}
+
 	// remove-services step must have paths in With
 	removeSvcsStep := cfg.Phases[2].Steps[1]
 	if removeSvcsStep.With == nil {

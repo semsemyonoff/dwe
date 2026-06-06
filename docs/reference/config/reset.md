@@ -13,7 +13,7 @@ Executes `workspace/reset.yml`. The file is **optional** — when absent, DWE us
 
 **Default reset pipeline** (fires when `workspace/reset.yml` is absent):
 
-Phases: `pre` (confirm prompt: "This will stop containers, remove project volumes, and delete generated data.") → `stop` (`type: dwe`, `cmd: "docker down"`) → `cleanup` (remove all project volumes, remove `services/` directory).
+Phases: `pre` (confirm prompt: "This will stop containers, remove project volumes, and delete generated data.") → `stop` (`type: dwe`, `cmd: "docker down"`) → `cleanup` (remove all project volumes, then remove the `services/` directory). The volume-removal step runs with `continue_on_error: true`, so a volume that cannot be removed (e.g. still in use, or a transient docker error) is reported but does **not** abort the reset — the `services/` cleanup still runs.
 
 On success the entire deploy state journal is
 removed, so every service appears as not-deployed in `dwe status`.
