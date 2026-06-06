@@ -512,8 +512,11 @@ func TestLogsCmd_Follow_JSONMode_CancellationClean(t *testing.T) {
 		done <- result{stdout, err}
 	}()
 
-	// Give the fake docker enough time to start and emit its 3 lines.
-	time.Sleep(400 * time.Millisecond)
+	// Give the fake docker enough time to start and emit its 3 lines before we
+	// cancel. A short window flakes under heavy parallel load (the fake process
+	// may not be scheduled in time); 2s leaves ample headroom — the fake holds
+	// the stream open with `sleep 30`, so the extra wait only adds slack.
+	time.Sleep(2 * time.Second)
 	proc, findErr := os.FindProcess(os.Getpid())
 	if findErr != nil {
 		t.Fatalf("os.FindProcess: %v", findErr)

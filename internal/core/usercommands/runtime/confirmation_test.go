@@ -49,6 +49,9 @@ func TestRunCommand_Confirmation_NonTTY_YInputRunsCommand(t *testing.T) {
 }
 
 func TestRunCommand_Confirmation_NonTTY_NInputAbortsCommand(t *testing.T) {
+	// render.Writer.Confirm short-circuits to "yes" when $CI is set (GitHub
+	// Actions sets CI=true); clear it so the "n" abort path is exercised.
+	t.Setenv("CI", "")
 	origIsInteractive := widgets.IsInteractiveFn
 	t.Cleanup(func() { widgets.IsInteractiveFn = origIsInteractive })
 	widgets.IsInteractiveFn = func(_ io.Reader) bool { return false }
@@ -81,6 +84,9 @@ func TestRunCommand_Confirmation_NonTTY_NInputAbortsCommand(t *testing.T) {
 }
 
 func TestRunCommand_Confirmation_DefaultText(t *testing.T) {
+	// render.Writer.Confirm short-circuits (and skips writing the prompt) when
+	// $CI is set (GitHub Actions sets CI=true); clear it so the prompt renders.
+	t.Setenv("CI", "")
 	origIsInteractive := widgets.IsInteractiveFn
 	t.Cleanup(func() { widgets.IsInteractiveFn = origIsInteractive })
 	widgets.IsInteractiveFn = func(_ io.Reader) bool { return false }
