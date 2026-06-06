@@ -105,7 +105,7 @@ func (DaemonStart) Run(ctx context.Context, with map[string]any, ectx spec.ExecC
 		dockerCfg = &config.DockerConfig{}
 	}
 
-	projectFull := ectx.Config.Project.FullName()
+	projectFull := config.ComposeProjectName(dockerCfg, ectx.Config)
 	containerTemplate := spec.GetStringParam(with, "container_template", "")
 	fullName, err := daemon.ResolveContainerName(projectFull, containerTemplate)
 	if err != nil {
@@ -156,13 +156,22 @@ func (DaemonStart) Run(ctx context.Context, with map[string]any, ectx spec.ExecC
 
 	compose := docker.NewCompose(ectx.Config, dockerCfg, ectx.ProjectRoot)
 
-	// Best-effort pre-check via docker ps for the resolved container name.
-	if running, _ := isDaemonRunning(ctx, compose, fullName); running {
-		if onAlreadyRunning == "noop" {
-			_, _ = fmt.Fprintf(ectx.Output.Writer(), "daemon already running: %s\n", fullName)
-			return nil
+	// Best-effort pre-check via docker ps. Check both the canonical name and the
+	// legacy FullName-scoped name (when they differ): a daemon started before
+	// docker.yml project_name was honored runs under the FullName-derived name,
+	// and starting again would spawn a duplicate background worker.
+	for _, p := range config.ComposeProjectNameCandidates(dockerCfg, ectx.Config) {
+		name, nerr := daemon.ResolveContainerName(p, containerTemplate)
+		if nerr != nil {
+			continue
 		}
-		return fmt.Errorf("%w: %s", daemon.ErrDaemonAlreadyRunning, fullName)
+		if running, _ := isDaemonRunning(ctx, compose, name); running {
+			if onAlreadyRunning == "noop" {
+				_, _ = fmt.Fprintf(ectx.Output.Writer(), "daemon already running: %s\n", name)
+				return nil
+			}
+			return fmt.Errorf("%w: %s", daemon.ErrDaemonAlreadyRunning, name)
+		}
 	}
 
 	extraArgs := buildStartExtraArgs(startArgsInput{

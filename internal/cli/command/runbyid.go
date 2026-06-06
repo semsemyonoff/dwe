@@ -53,7 +53,7 @@ func runCommandByID(
 	// Inspect is allowed on hidden commands (informational) so users can
 	// debug why a command disappeared from listings.
 	if opts.Inspect {
-		printInspect(stdout, def, cfg, reg, opts.Translator, opts.Locale)
+		printInspect(stdout, def, cfg, reg, opts.Translator, opts.Locale, projectRoot)
 		return nil
 	}
 

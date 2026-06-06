@@ -227,3 +227,30 @@ func TestCollectDaemons_ShellSeam(t *testing.T) {
 		t.Fatalf("expected 1 row id=services.main.queue, got %+v", rows)
 	}
 }
+
+func TestCollectDaemons_DualScopeQueriesBothNames(t *testing.T) {
+	cfg := makeServicesCfg(
+		map[string]config.ServiceConfig{
+			"main": {Type: "app", Container: "app-main", Required: true},
+		},
+		map[string]testTool(nil),
+		nil,
+		nil,
+	)
+	cfg.Project.Name = "proj" // FullName() == "proj"
+	orig := daemonsShellOutFn
+	defer func() { daemonsShellOutFn = orig }()
+	var queried []string
+	daemonsShellOutFn = func(_ context.Context, _ *docker.Compose, projectFull string) ([]byte, error) {
+		queried = append(queried, projectFull)
+		return nil, nil
+	}
+	// A docker.yml project_name override scopes the daemon label filter; status
+	// must ALSO sweep the legacy FullName scope so daemons from before the
+	// naming change still show up during the transition.
+	CollectDaemons(context.Background(), cfg, &config.DockerConfig{ProjectName: "dwe_proj"}, "")
+	want := []string{"dwe_proj", "proj"}
+	if len(queried) != len(want) || queried[0] != want[0] || queried[1] != want[1] {
+		t.Errorf("queried scopes = %v, want %v", queried, want)
+	}
+}

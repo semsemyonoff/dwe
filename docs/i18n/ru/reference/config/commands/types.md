@@ -1,4 +1,4 @@
-> Translated from: reference/config/commands/types.md @ f35db8259798
+> Translated from: reference/config/commands/types.md @ 154eee847284
 
 # Типы команд
 
@@ -571,7 +571,7 @@ db.wait-target:
 
 Каждая виртуальная команда появляется в реестре, браузере `dwe cmd`, completion, `inspect` и может ссылаться из workflow. Исходная команда `<base>` **не** запускается сама по себе — запускаются только четыре виртуальные команды.
 
-Имена контейнеров автоматически префиксуются `ProjectConfig.FullName()` (так что один проект может работать на нескольких checkout-ах одновременно), и каждый контейнер несёт стандартизированные метки, чтобы `dwe status daemons`, completion и `_auto_reap_daemons` могли найти их через `docker ps` — **без отдельного файла состояния**.
+Имена контейнеров автоматически префиксуются разрешённым именем compose-проекта — `project_name` из `workspace/docker.yml`, если оно задано, иначе `ProjectConfig.FullName()` (`<prefix>-<name>`) — так что демоны попадают в ту же project-область, что и сервисы под управлением compose (и один проект может работать на нескольких checkout-ах одновременно). Каждый контейнер несёт стандартизированные метки, чтобы `dwe status daemons`, completion и `_auto_reap_daemons` могли найти их через `docker ps` — **без отдельного файла состояния**.
 
 ### YAML-форма
 
@@ -619,7 +619,7 @@ commands:
 <project.full>-<rendered container_template>
 ```
 
-`project.full` — это `ProjectConfig.FullName()` — `<prefix>-<name>`, если задано `prefix:`, иначе `<name>`. Post-render regex `^[a-zA-Z0-9_][a-zA-Z0-9_.-]*$` — авторитетная защита; недопустимые символы в отрендеренных значениях шаблона дают сбой во время выполнения, даже если `pattern:` параметра случайно их разрешил.
+`project.full` — это разрешённое имя compose-проекта: `project_name` из `workspace/docker.yml`, если задано, иначе `ProjectConfig.FullName()` (`<prefix>-<name>`, если задан `prefix:`, иначе `<name>`) — так что демоны попадают в ту же project-область, что и сервисы под управлением compose. Post-render regex `^[a-zA-Z0-9_][a-zA-Z0-9_.-]*$` — авторитетная защита; недопустимые символы в отрендеренных значениях шаблона дают сбой во время выполнения, даже если `pattern:` параметра случайно их разрешил.
 
 ### Стандартные метки
 

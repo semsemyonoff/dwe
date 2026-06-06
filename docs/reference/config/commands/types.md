@@ -569,7 +569,7 @@ The most useful builtins to expose as commands tend to be the long-running, idem
 
 Each virtual command appears in the registry, the `dwe cmd` browser, completion, `inspect`, and is referenceable from workflows. The source `<base>` command is **not** runnable on its own — only the four virtual commands are.
 
-Container names are auto-prefixed with `ProjectConfig.FullName()` (so the same project can run on multiple checkouts side by side) and every container carries standardised labels so `dwe status daemons`, completion, and `_auto_reap_daemons` can find them via `docker ps` — **no separate state file**.
+Container names are auto-prefixed with the resolved compose project name — `workspace/docker.yml`'s `project_name` if set, otherwise `ProjectConfig.FullName()` (`<prefix>-<name>`) — so daemons share the same project scope as compose-managed services (and the same project can run on multiple checkouts side by side). Every container carries standardised labels so `dwe status daemons`, completion, and `_auto_reap_daemons` can find them via `docker ps` — **no separate state file**.
 
 ### YAML form
 
@@ -617,7 +617,7 @@ commands:
 <project.full>-<rendered container_template>
 ```
 
-`project.full` is `ProjectConfig.FullName()` — `<prefix>-<name>` if `prefix:` is set, else `<name>`. The post-render regex `^[a-zA-Z0-9_][a-zA-Z0-9_.-]*$` is the authoritative defense; invalid characters in rendered template values fail at runtime even if the param's `pattern:` happened to permit them.
+`project.full` is the resolved compose project name — `workspace/docker.yml`'s `project_name` if set, otherwise `ProjectConfig.FullName()` (`<prefix>-<name>` if `prefix:` is set, else `<name>`) — so daemons share the project scope of compose-managed services. The post-render regex `^[a-zA-Z0-9_][a-zA-Z0-9_.-]*$` is the authoritative defense; invalid characters in rendered template values fail at runtime even if the param's `pattern:` happened to permit them.
 
 ### Standard labels
 

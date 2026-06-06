@@ -74,15 +74,33 @@ func CollectDaemons(ctx context.Context, cfg *config.DweConfig, dockerCfg *confi
 		dockerCfg = &config.DockerConfig{}
 	}
 	compose := docker.NewCompose(cfg, dockerCfg, baseDir)
-	projectFull := cfg.Project.FullName()
-	out, err := daemonsShellOutFn(ctx, compose, projectFull)
-	if err != nil {
-		return nil, []error{fmt.Errorf("docker ps: %w", err)}
+
+	// Query both the canonical project name and the legacy FullName scope (when
+	// they differ) so daemons created before docker.yml project_name was honored
+	// still appear in status across the naming transition. Rows are unioned and
+	// deduped by container name.
+	candidates := config.ComposeProjectNameCandidates(dockerCfg, cfg)
+	var rows []statusview.DaemonRow
+	var perrs []error
+	seen := make(map[string]bool)
+	for _, projectFull := range candidates {
+		out, err := daemonsShellOutFn(ctx, compose, projectFull)
+		if err != nil {
+			return nil, []error{fmt.Errorf("docker ps: %w", err)}
+		}
+		if len(out) == 0 {
+			continue
+		}
+		parsed, errs := parseDaemonRows(bytes.NewReader(out))
+		perrs = append(perrs, errs...)
+		for _, r := range parsed {
+			if seen[r.Container] {
+				continue
+			}
+			seen[r.Container] = true
+			rows = append(rows, r)
+		}
 	}
-	if len(out) == 0 {
-		return nil, nil
-	}
-	rows, perrs := parseDaemonRows(bytes.NewReader(out))
 	sort.Slice(rows, func(i, j int) bool {
 		if rows[i].ID != rows[j].ID {
 			return rows[i].ID < rows[j].ID

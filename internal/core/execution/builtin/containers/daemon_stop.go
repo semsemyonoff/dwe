@@ -2,6 +2,7 @@ package containers
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"os/exec"
@@ -15,6 +16,37 @@ import (
 	"github.com/semsemyonoff/dwe/internal/shared/daemon"
 	"github.com/semsemyonoff/dwe/internal/shared/docker"
 )
+
+// errDaemonNoSuchContainer signals that the target container does not exist
+// (idempotent stop). The drain loop skips it and moves to the next scope.
+var errDaemonNoSuchContainer = errors.New("no such container")
+
+// daemonStopFn is a test seam: production stops one container via `docker stop`;
+// tests inject a stub to drive the dual-scope drain loop without subprocesses.
+var daemonStopFn = stopDaemonContainer
+
+// stopDaemonContainer issues `docker stop -t <secs> <name>`. It returns
+// errDaemonNoSuchContainer when the container is absent so the caller can treat
+// the stop as idempotent; any other docker failure is returned wrapped.
+func stopDaemonContainer(ctx context.Context, compose *docker.Compose, name string, secs int) error {
+	args := []string{"stop", "-t", strconv.Itoa(secs), name}
+	cmd := exec.CommandContext(ctx, compose.BinName(), args...) //nolint:gosec
+	cmd.Env = compose.BuildEnv()
+	cmd.Stdout = io.Discard
+	var stderr strings.Builder
+	cmd.Stderr = &stderr
+	if err := cmd.Run(); err != nil {
+		errOut := strings.TrimSpace(stderr.String())
+		if strings.Contains(errOut, "No such container") {
+			return errDaemonNoSuchContainer
+		}
+		if errOut != "" {
+			return fmt.Errorf("docker stop: %w: %s", err, errOut)
+		}
+		return fmt.Errorf("docker stop: %w", err)
+	}
+	return nil
+}
 
 // defaultStopTimeout mirrors docker.DefaultStopTimeoutSec as a duration.
 // Converting here keeps stop_timeout parsing independent of the docker package.
@@ -76,8 +108,9 @@ func (DaemonStop) Run(ctx context.Context, with map[string]any, ectx spec.ExecCo
 		dockerCfg = &config.DockerConfig{}
 	}
 
-	projectFull := ectx.Config.Project.FullName()
-	fullName, err := daemon.ResolveContainerName(projectFull, spec.GetStringParam(with, "container_template", ""))
+	template := spec.GetStringParam(with, "container_template", "")
+	projectFull := config.ComposeProjectName(dockerCfg, ectx.Config)
+	fullName, err := daemon.ResolveContainerName(projectFull, template)
 	if err != nil {
 		return err
 	}
@@ -86,23 +119,29 @@ func (DaemonStop) Run(ctx context.Context, with map[string]any, ectx spec.ExecCo
 
 	compose := docker.NewCompose(ectx.Config, dockerCfg, ectx.ProjectRoot)
 
-	args := []string{"stop", "-t", strconv.Itoa(secs), fullName}
-	cmd := exec.CommandContext(ctx, compose.BinName(), args...) //nolint:gosec
-	cmd.Env = compose.BuildEnv()
-	cmd.Stdout = io.Discard
-	var stderr strings.Builder
-	cmd.Stderr = &stderr
-	if err := cmd.Run(); err != nil {
-		errOut := stderr.String()
-		if strings.Contains(errOut, "No such container") {
-			_, _ = fmt.Fprintf(ectx.Output.Writer(), "no daemon to stop: %s\n", fullName)
-			return nil
+	// Stop the daemon under the canonical name AND the legacy FullName-scoped name
+	// (when they differ). We must drain EVERY scope, not stop-and-return on the
+	// first hit: the prior duplicate-spawn bug can leave both a legacy and a
+	// canonical container running, and `.restart` (= .stop then .start) would
+	// otherwise leave the legacy one alive and then noop/error on start. Only
+	// "No such container" is skipped; any other docker error is fatal.
+	stoppedAny := false
+	for _, p := range config.ComposeProjectNameCandidates(dockerCfg, ectx.Config) {
+		name, nerr := daemon.ResolveContainerName(p, template)
+		if nerr != nil {
+			continue // primary was already validated above
 		}
-		if errOut != "" {
-			return fmt.Errorf("docker stop: %w: %s", err, strings.TrimSpace(errOut))
+		if serr := daemonStopFn(ctx, compose, name, secs); serr != nil {
+			if errors.Is(serr, errDaemonNoSuchContainer) {
+				continue // this scope has no container; try the next
+			}
+			return serr
 		}
-		return fmt.Errorf("docker stop: %w", err)
+		stoppedAny = true
+		_, _ = fmt.Fprintf(ectx.Output.Writer(), "✓ daemon stopped: %s\n", name)
 	}
-	_, _ = fmt.Fprintf(ectx.Output.Writer(), "✓ daemon stopped: %s\n", fullName)
+	if !stoppedAny {
+		_, _ = fmt.Fprintf(ectx.Output.Writer(), "no daemon to stop: %s\n", fullName)
+	}
 	return nil
 }

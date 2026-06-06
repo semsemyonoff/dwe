@@ -60,17 +60,31 @@ func (DaemonsReap) Run(ctx context.Context, _ map[string]any, ectx spec.ExecCont
 		dockerCfg = &config.DockerConfig{}
 	}
 
-	projectFull := ectx.Config.Project.FullName()
 	compose := docker.NewCompose(ectx.Config, dockerCfg, ectx.ProjectRoot)
 
-	names, err := listDaemonsFn(ctx, compose, projectFull)
-	if err != nil {
-		// Reap is best-effort: if docker is unreachable (daemon down,
-		// permission denied, remote-context unavailable) we warn and exit
-		// successfully rather than failing the entire stop pipeline.
-		_, _ = fmt.Fprintf(ectx.Output.Writer(), "warning: daemons_reap: %v\n", err)
-		return nil
+	// Reap across both the canonical project name and the legacy FullName scope
+	// (when they differ) so daemons started before docker.yml project_name was
+	// honored are still cleaned up on the next stop/run. Union, deduped.
+	candidates := config.ComposeProjectNameCandidates(dockerCfg, ectx.Config)
+	var names []string
+	seen := make(map[string]bool)
+	for _, projectFull := range candidates {
+		found, err := listDaemonsFn(ctx, compose, projectFull)
+		if err != nil {
+			// Reap is best-effort: if docker is unreachable (daemon down,
+			// permission denied, remote-context unavailable) we warn and exit
+			// successfully rather than failing the entire stop pipeline.
+			_, _ = fmt.Fprintf(ectx.Output.Writer(), "warning: daemons_reap: %v\n", err)
+			return nil
+		}
+		for _, n := range found {
+			if !seen[n] {
+				seen[n] = true
+				names = append(names, n)
+			}
+		}
 	}
+	sort.Strings(names)
 	if len(names) == 0 {
 		_, _ = fmt.Fprintln(ectx.Output.Writer(), "no daemons running")
 		return nil
