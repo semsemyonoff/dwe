@@ -79,6 +79,13 @@ func TestDefaultResetConfig_Shape(t *testing.T) {
 		t.Error("confirm step missing 'message' key in With")
 	}
 
+	// remove-volumes resilience is handled inside the builtin (per-volume rm is
+	// best-effort), NOT via step-level continue_on_error — that would also
+	// swallow fatal listing/resolution errors. Lock in that it is not set.
+	if removeVolsStep := cfg.Phases[2].Steps[0]; removeVolsStep.ContinueOnError {
+		t.Error("remove-volumes step must NOT set ContinueOnError; per-volume best-effort lives in the builtin")
+	}
+
 	// remove-services step must have paths in With
 	removeSvcsStep := cfg.Phases[2].Steps[1]
 	if removeSvcsStep.With == nil {

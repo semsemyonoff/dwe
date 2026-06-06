@@ -108,6 +108,36 @@ func TestNewCompose(t *testing.T) {
 	}
 }
 
+func TestNewCompose_DefaultsProjectNameToFullName(t *testing.T) {
+	cfg := &config.DweConfig{Compose: config.ComposeConfig{Base: "compose.yaml"}}
+	cfg.Project.Prefix = "dwe"
+	cfg.Project.Name = "laravel"
+
+	// docker.yml absent → empty DockerConfig → ProjectName must fall back to
+	// FullName so every compose call carries -p "dwe-laravel" instead of
+	// silently scoping resources by the project directory basename.
+	c := NewCompose(cfg, &config.DockerConfig{}, "")
+	if c.ProjectName != "dwe-laravel" {
+		t.Errorf("ProjectName = %q, want %q (FullName fallback)", c.ProjectName, "dwe-laravel")
+	}
+	args := c.BuildArgs("up")
+	if len(args) < 3 || args[1] != "-p" || args[2] != "dwe-laravel" {
+		t.Errorf("BuildArgs should pass -p dwe-laravel, got %v", args)
+	}
+}
+
+func TestNewCompose_DockerYmlProjectNameWins(t *testing.T) {
+	cfg := &config.DweConfig{Compose: config.ComposeConfig{Base: "compose.yaml"}}
+	cfg.Project.Prefix = "dwe"
+	cfg.Project.Name = "laravel"
+
+	// An explicit project_name (e.g. underscore separator) overrides FullName.
+	c := NewCompose(cfg, &config.DockerConfig{ProjectName: "dwe_laravel"}, "")
+	if c.ProjectName != "dwe_laravel" {
+		t.Errorf("ProjectName = %q, want %q (docker.yml wins)", c.ProjectName, "dwe_laravel")
+	}
+}
+
 func TestBuildArgs_FullPipeline(t *testing.T) {
 	c := &Compose{
 		ProjectName: "myproject",

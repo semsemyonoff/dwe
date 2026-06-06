@@ -388,7 +388,13 @@ func RunHelper(ctx context.Context, cmd *cobra.Command, flags *cmdctx.RootFlags,
 	if err != nil {
 		return err
 	}
-	if err := docker.EnsureVolumes(dockerCfg.Resources, dockerCfg.ProjectName, "deploy", config.DockerBin(cfg), sharedrender.Stdout()); err != nil {
+	// Resolve the compose project name (docker.yml project_name -> else FullName)
+	// so non-shared managed volumes are prefixed with the same name compose uses.
+	composeProject, err := config.ResolveComposeProjectName(workDir, cfg)
+	if err != nil {
+		return fmt.Errorf("resolving compose project name: %w", err)
+	}
+	if err := docker.EnsureVolumes(dockerCfg.Resources, composeProject, "deploy", config.DockerBin(cfg), sharedrender.Stdout()); err != nil {
 		return fmt.Errorf("ensuring volumes: %w", err)
 	}
 

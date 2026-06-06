@@ -126,11 +126,27 @@ func TestCollectDeclaredPorts_NilCfg(t *testing.T) {
 }
 
 func TestResolveComposeProject_NoDockerYml_FallsBackToBasename(t *testing.T) {
+	// Degenerate case: no docker.yml AND no project.name → FullName() is empty,
+	// so compose itself defaults to the directory basename and we match that.
 	dir := t.TempDir()
 	got := resolveComposeProject(dir, &config.DweConfig{})
 	want := strings.ToLower(filepath.Base(dir))
 	if got != want {
 		t.Errorf("resolveComposeProject = %q, want %q (dir basename fallback)", got, want)
+	}
+}
+
+func TestResolveComposeProject_NoDockerYml_FallsBackToFullName(t *testing.T) {
+	// Realistic case: a project with a name but no docker.yml. buildCompose now
+	// stamps -p "<prefix>-<name>" on every compose call, so the conflict check
+	// must resolve to the same FullName — NOT the directory basename — or our own
+	// prior-deploy containers get misflagged as foreign conflicts.
+	dir := t.TempDir()
+	cfg := &config.DweConfig{}
+	cfg.Project.Prefix = "dwe"
+	cfg.Project.Name = "laravel"
+	if got, want := resolveComposeProject(dir, cfg), "dwe-laravel"; got != want {
+		t.Errorf("resolveComposeProject = %q, want %q (FullName, not basename)", got, want)
 	}
 }
 

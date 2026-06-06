@@ -45,9 +45,14 @@ import (
 //
 // Seamed so tests can force a value without spawning docker.
 var detectStackRunning = func(cfg *config.DweConfig, baseDir string) (bool, error) {
-	dockerCfg, err := config.LoadDockerConfig(baseDir, cfg)
+	// docker.yml is optional; a missing file must not degrade the probe into the
+	// "unknown state" warning path. LoadDockerConfigOrEmpty maps os.ErrNotExist
+	// to an empty &DockerConfig{}, which probes correctly (compose derives the
+	// project from the canonical name like every other empty-config path).
+	dockerCfg, err := config.LoadDockerConfigOrEmpty(baseDir, cfg)
 	if err != nil {
-		return false, fmt.Errorf("loading docker config: %w", err)
+		// LoadDockerConfigOrEmpty already wraps with "loading docker config: ".
+		return false, err
 	}
 	ids, err := docker.NewCompose(cfg, dockerCfg, baseDir).ContainerIDs()
 	if err != nil {

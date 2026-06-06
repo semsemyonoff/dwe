@@ -39,9 +39,15 @@ func DefaultResetConfig() *config.ProjectDeployConfig {
 				Description: "Remove project volumes and generated service data",
 				Steps: []config.DeployStep{
 					{
-						Name:        "remove-volumes",
-						Type:        "builtin",
-						Cmd:         "docker_remove_project_volumes",
+						Name: "remove-volumes",
+						Type: "builtin",
+						Cmd:  "docker_remove_project_volumes",
+						// No continue_on_error: the builtin already makes individual
+						// `docker volume rm` failures best-effort (a stuck volume is
+						// reported and skipped, not fatal), while keeping project-name
+						// resolution and `docker volume ls` failures fatal so a broken
+						// docker setup aborts the reset instead of silently clearing
+						// the journal with volumes left behind.
 						Description: "Remove all Docker volumes belonging to this project",
 					},
 					{

@@ -229,11 +229,17 @@ func classifyPortForConflict(dp declaredPort, bindings map[int][]portOwner, ourP
 }
 
 // resolveComposeProject returns the compose project name for the current dwe
-// project. It reads docker.yml first; if that is absent or has no project_name,
-// it falls back to the lowercased directory basename — the same default that
-// Docker Compose v2 applies when no project_name is configured. Without this
-// fallback, our own containers from a previous deploy would be misidentified as
-// foreign conflicts and block the next `dwe run` / `dwe deploy run`.
+// project — the value Docker writes to the com.docker.compose.project label,
+// which this check matches running containers against to tell our own
+// prior-deploy stack (reuse, not a conflict) from a foreign project.
+//
+// It mirrors the exact precedence buildCompose stamps onto every `docker
+// compose` invocation: the resolved docker.yml project_name, else the canonical
+// "<prefix>-<name>" (cfg.Project.FullName()), else — only when FullName is empty
+// — the lowercased directory basename that Docker Compose v2 itself defaults to.
+// Keeping this aligned with buildCompose is load-bearing: if it returned the
+// basename while compose now labels with FullName, our own containers would be
+// misidentified as foreign conflicts and block the next `dwe run` / `dwe deploy run`.
 func resolveComposeProject(baseDir string, cfg *config.DweConfig) string {
 	if baseDir == "" || cfg == nil {
 		return ""
@@ -241,6 +247,9 @@ func resolveComposeProject(baseDir string, cfg *config.DweConfig) string {
 	dockerCfg, err := config.LoadDockerConfig(baseDir, cfg)
 	if err == nil && dockerCfg != nil && dockerCfg.ProjectName != "" {
 		return dockerCfg.ProjectName
+	}
+	if full := cfg.Project.FullName(); full != "" {
+		return full
 	}
 	return strings.ToLower(filepath.Base(baseDir))
 }
