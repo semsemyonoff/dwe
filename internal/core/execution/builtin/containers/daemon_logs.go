@@ -46,23 +46,38 @@ func (DaemonLogs) Run(ctx context.Context, with map[string]any, ectx spec.ExecCo
 		dockerCfg = &config.DockerConfig{}
 	}
 
+	template := spec.GetStringParam(with, "container_template", "")
 	projectFull := config.ComposeProjectName(dockerCfg, ectx.Config)
-	fullName, err := daemon.ResolveContainerName(projectFull, spec.GetStringParam(with, "container_template", ""))
+	fullName, err := daemon.ResolveContainerName(projectFull, template)
 	if err != nil {
 		return err
 	}
 
 	compose := docker.NewCompose(ectx.Config, dockerCfg, ectx.ProjectRoot)
 
-	running, probeErr := isDaemonRunning(ctx, compose, fullName)
-	if probeErr != nil {
-		return fmt.Errorf("docker_daemon_logs: probe failed: %w", probeErr)
+	// Tail whichever scope is actually running: the canonical name first, then
+	// the legacy FullName-scoped name (when they differ) for a daemon started
+	// before docker.yml project_name was honored.
+	targetName := ""
+	for _, p := range config.ComposeProjectNameCandidates(dockerCfg, ectx.Config) {
+		name, nerr := daemon.ResolveContainerName(p, template)
+		if nerr != nil {
+			continue
+		}
+		running, probeErr := isDaemonRunning(ctx, compose, name)
+		if probeErr != nil {
+			return fmt.Errorf("docker_daemon_logs: probe failed: %w", probeErr)
+		}
+		if running {
+			targetName = name
+			break
+		}
 	}
-	if !running {
+	if targetName == "" {
 		return fmt.Errorf("%w: %s (start it with .start)", daemon.ErrDaemonNotRunning, fullName)
 	}
 
-	args := []string{"logs", "-f", "--tail=100", fullName}
+	args := []string{"logs", "-f", "--tail=100", targetName}
 	cmd := exec.CommandContext(ctx, compose.BinName(), args...) //nolint:gosec
 	cmd.Env = compose.BuildEnv()
 	cmd.Stdout = ectx.Output.Writer()

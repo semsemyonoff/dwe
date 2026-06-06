@@ -272,6 +272,33 @@ func ComposeProjectName(dockerCfg *DockerConfig, cfg *DweConfig) string {
 	return ""
 }
 
+// ComposeProjectNameCandidates returns the compose project name(s) a
+// compose-bypass daemon lookup should consider, canonical name first:
+//
+//  1. ComposeProjectName(dockerCfg, cfg) — the name daemons are created under now.
+//  2. cfg.Project.FullName() — the LEGACY scope, included only when it differs
+//     from (1). Before docker.yml project_name was honored, daemon containers were
+//     named/labeled with FullName even when project_name was set; this second
+//     candidate lets stop/reap/status/completion still find those daemons across
+//     the one-time naming transition.
+//
+// Empty values are dropped, so the result is never empty unless both names are
+// empty (a project with no project.name). When project_name is absent or equal
+// to FullName the slice has a single element — there is no legacy scope to sweep.
+func ComposeProjectNameCandidates(dockerCfg *DockerConfig, cfg *DweConfig) []string {
+	primary := ComposeProjectName(dockerCfg, cfg)
+	var out []string
+	if primary != "" {
+		out = append(out, primary)
+	}
+	if cfg != nil {
+		if full := cfg.Project.FullName(); full != "" && full != primary {
+			out = append(out, full)
+		}
+	}
+	return out
+}
+
 // readDockerProjectName reads workspace/docker.yml (+ optional
 // docker.local.yml override) as raw maps, deep-merges them, extracts the
 // project_name field, and resolves ${...} templates against cfg.Raw.

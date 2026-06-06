@@ -76,8 +76,9 @@ func (DaemonStop) Run(ctx context.Context, with map[string]any, ectx spec.ExecCo
 		dockerCfg = &config.DockerConfig{}
 	}
 
+	template := spec.GetStringParam(with, "container_template", "")
 	projectFull := config.ComposeProjectName(dockerCfg, ectx.Config)
-	fullName, err := daemon.ResolveContainerName(projectFull, spec.GetStringParam(with, "container_template", ""))
+	fullName, err := daemon.ResolveContainerName(projectFull, template)
 	if err != nil {
 		return err
 	}
@@ -86,23 +87,34 @@ func (DaemonStop) Run(ctx context.Context, with map[string]any, ectx spec.ExecCo
 
 	compose := docker.NewCompose(ectx.Config, dockerCfg, ectx.ProjectRoot)
 
-	args := []string{"stop", "-t", strconv.Itoa(secs), fullName}
-	cmd := exec.CommandContext(ctx, compose.BinName(), args...) //nolint:gosec
-	cmd.Env = compose.BuildEnv()
-	cmd.Stdout = io.Discard
-	var stderr strings.Builder
-	cmd.Stderr = &stderr
-	if err := cmd.Run(); err != nil {
-		errOut := stderr.String()
-		if strings.Contains(errOut, "No such container") {
-			_, _ = fmt.Fprintf(ectx.Output.Writer(), "no daemon to stop: %s\n", fullName)
-			return nil
+	// Try the canonical name first, then the legacy FullName-scoped name (when
+	// they differ): a daemon started before docker.yml project_name was honored
+	// runs under the FullName-derived name. The first container that exists is
+	// stopped; only when none exist do we report "no daemon to stop".
+	for _, p := range config.ComposeProjectNameCandidates(dockerCfg, ectx.Config) {
+		name, nerr := daemon.ResolveContainerName(p, template)
+		if nerr != nil {
+			continue // primary was already validated above
 		}
-		if errOut != "" {
-			return fmt.Errorf("docker stop: %w: %s", err, strings.TrimSpace(errOut))
+		args := []string{"stop", "-t", strconv.Itoa(secs), name}
+		cmd := exec.CommandContext(ctx, compose.BinName(), args...) //nolint:gosec
+		cmd.Env = compose.BuildEnv()
+		cmd.Stdout = io.Discard
+		var stderr strings.Builder
+		cmd.Stderr = &stderr
+		if rerr := cmd.Run(); rerr != nil {
+			errOut := stderr.String()
+			if strings.Contains(errOut, "No such container") {
+				continue // try the legacy scope
+			}
+			if errOut != "" {
+				return fmt.Errorf("docker stop: %w: %s", rerr, strings.TrimSpace(errOut))
+			}
+			return fmt.Errorf("docker stop: %w", rerr)
 		}
-		return fmt.Errorf("docker stop: %w", err)
+		_, _ = fmt.Fprintf(ectx.Output.Writer(), "✓ daemon stopped: %s\n", name)
+		return nil
 	}
-	_, _ = fmt.Fprintf(ectx.Output.Writer(), "✓ daemon stopped: %s\n", fullName)
+	_, _ = fmt.Fprintf(ectx.Output.Writer(), "no daemon to stop: %s\n", fullName)
 	return nil
 }

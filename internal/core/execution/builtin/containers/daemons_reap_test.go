@@ -131,13 +131,13 @@ func TestDaemonsReap_Run_ListError(t *testing.T) {
 	}
 }
 
-func TestDaemonsReap_Run_HonorsDockerYmlProjectName(t *testing.T) {
+func TestDaemonsReap_Run_DualScopeQueriesBothNames(t *testing.T) {
 	orig := listDaemonsFn
 	defer func() { listDaemonsFn = orig }()
-	var gotProject string
+	var queried []string
 	listDaemonsFn = func(_ context.Context, _ *docker.Compose, projectFull string) ([]string, error) {
-		gotProject = projectFull
-		return nil, nil // no daemons → early return after capturing the project name
+		queried = append(queried, projectFull)
+		return nil, nil // no daemons → captures the project names then returns
 	}
 
 	var buf bytes.Buffer
@@ -146,8 +146,30 @@ func TestDaemonsReap_Run_HonorsDockerYmlProjectName(t *testing.T) {
 	if err := (DaemonsReap{}).Run(context.Background(), nil, ectx); err != nil {
 		t.Fatalf("Run error: %v", err)
 	}
-	if gotProject != "dwe_testproj" {
-		t.Errorf("projectFull = %q, want %q (docker.yml project_name, not FullName 'testproj')", gotProject, "dwe_testproj")
+	// Reap must query the canonical project_name first, then the legacy FullName
+	// scope, so daemons from before the naming change are still cleaned up.
+	want := []string{"dwe_testproj", "testproj"}
+	if len(queried) != len(want) || queried[0] != want[0] || queried[1] != want[1] {
+		t.Errorf("queried scopes = %v, want %v", queried, want)
+	}
+}
+
+func TestDaemonsReap_Run_NoLegacyScopeWhenNamesMatch(t *testing.T) {
+	orig := listDaemonsFn
+	defer func() { listDaemonsFn = orig }()
+	var queried []string
+	listDaemonsFn = func(_ context.Context, _ *docker.Compose, projectFull string) ([]string, error) {
+		queried = append(queried, projectFull)
+		return nil, nil
+	}
+
+	var buf bytes.Buffer
+	ectx := newReapExecContext(&buf) // no docker.yml override → primary == FullName
+	if err := (DaemonsReap{}).Run(context.Background(), nil, ectx); err != nil {
+		t.Fatalf("Run error: %v", err)
+	}
+	if want := []string{"testproj"}; len(queried) != 1 || queried[0] != want[0] {
+		t.Errorf("queried scopes = %v, want %v (single scope when no override)", queried, want)
 	}
 }
 

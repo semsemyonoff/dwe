@@ -114,9 +114,17 @@ func daemonSetCompletion(flags *cmdctx.RootFlags) func(*cobra.Command, []string,
 		}
 
 		compose := docker.NewCompose(cfg, dockerCfg, projectRoot)
-		out, err := daemonSetShellOutFn(cmd.Context(), compose, config.ComposeProjectName(dockerCfg, cfg), def.DerivedFromDaemon)
-		if err != nil {
-			return nil, cobra.ShellCompDirectiveNoFileComp
+		// Sweep both the canonical project name and the legacy FullName scope
+		// (when they differ) so completion still suggests values from daemons
+		// started before docker.yml project_name was honored. NDJSON outputs
+		// concatenate cleanly for the line-based parser below.
+		var out []byte
+		for _, projectFull := range config.ComposeProjectNameCandidates(dockerCfg, cfg) {
+			b, err := daemonSetShellOutFn(cmd.Context(), compose, projectFull, def.DerivedFromDaemon)
+			if err != nil {
+				return nil, cobra.ShellCompDirectiveNoFileComp
+			}
+			out = append(out, b...)
 		}
 
 		values := parseDaemonParamValuesForKey(bytes.NewReader(out), key)

@@ -317,6 +317,40 @@ func TestComposeProjectName(t *testing.T) {
 	}
 }
 
+func TestComposeProjectNameCandidates(t *testing.T) {
+	mk := func(name, prefix string) *DweConfig {
+		c := &DweConfig{}
+		c.Project.Name = name
+		c.Project.Prefix = prefix
+		return c
+	}
+	tests := []struct {
+		name      string
+		dockerCfg *DockerConfig
+		cfg       *DweConfig
+		want      []string
+	}{
+		{"override_differs_yields_both", &DockerConfig{ProjectName: "dwe_tbm"}, mk("tbm", "dwe"), []string{"dwe_tbm", "dwe-tbm"}},
+		{"no_override_single", &DockerConfig{}, mk("tbm", "dwe"), []string{"dwe-tbm"}},
+		{"override_equals_fullname_single", &DockerConfig{ProjectName: "dwe-tbm"}, mk("tbm", "dwe"), []string{"dwe-tbm"}},
+		{"nil_dockerCfg_single", nil, mk("tbm", "dwe"), []string{"dwe-tbm"}},
+		{"both_empty_returns_empty", &DockerConfig{}, &DweConfig{}, nil},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			got := ComposeProjectNameCandidates(tc.dockerCfg, tc.cfg)
+			if len(got) != len(tc.want) {
+				t.Fatalf("candidates = %v, want %v", got, tc.want)
+			}
+			for i := range got {
+				if got[i] != tc.want[i] {
+					t.Errorf("candidates[%d] = %q, want %q (full: %v)", i, got[i], tc.want[i], got)
+				}
+			}
+		})
+	}
+}
+
 func TestResolveVarTemplate(t *testing.T) {
 	raw := map[string]any{
 		"project": map[string]any{
