@@ -227,6 +227,9 @@ func TestRunCommand_NilCmd_ReturnsErrorNoNotify(t *testing.T) {
 // TestRunCommand_NotifyTrue_CommandAborted_NoEvent verifies that an explicit
 // user confirmation refusal (commandAbortedError) does not fire a notification.
 func TestRunCommand_NotifyTrue_CommandAborted_NoEvent(t *testing.T) {
+	// render.Writer.Confirm short-circuits to "yes" when $CI is set (GitHub
+	// Actions sets CI=true); clear it so the "n" abort actually fires.
+	t.Setenv("CI", "")
 	origIsInteractive := widgets.IsInteractiveFn
 	t.Cleanup(func() { widgets.IsInteractiveFn = origIsInteractive })
 	widgets.IsInteractiveFn = func(io.Reader) bool { return false }
