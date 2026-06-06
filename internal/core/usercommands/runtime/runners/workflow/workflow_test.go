@@ -461,6 +461,9 @@ func TestWorkflowRunner_ConfirmStep_NonTTY_CIEnv(t *testing.T) {
 }
 
 func TestWorkflowRunner_ConfirmStep_NonTTY_NInput(t *testing.T) {
+	// render.Writer.Confirm short-circuits to "yes" when $CI is set (GitHub
+	// Actions sets CI=true); clear it so the "n" abort path is exercised.
+	t.Setenv("CI", "")
 	origIsInteractive := widgets.IsInteractiveFn
 	t.Cleanup(func() { widgets.IsInteractiveFn = origIsInteractive })
 
