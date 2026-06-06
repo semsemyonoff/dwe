@@ -75,9 +75,23 @@ func buildCompose(cfg *config.DweConfig, dockerCfg *config.DockerConfig, files [
 		"build":   dockerCfg.Args.Build,
 	}
 
+	// Project name precedence mirrors config.ResolveComposeProjectName and
+	// `dwe docker project-name`: the resolved docker.yml project_name, else the
+	// canonical "<prefix>-<name>" (cfg.Project.FullName()). Without this fallback
+	// an absent/empty docker.yml left ProjectName empty, so BuildArgs omitted -p
+	// and docker compose v2 silently scoped resources by the directory basename
+	// — diverging from every name-resolution path (status/stop/logs/reset/prompt)
+	// that already uses FullName(). Always passing -p keeps one compose project
+	// name across the whole tool. (FullName() is empty only for a project with no
+	// project.name, where compose's own basename default still applies.)
+	projectName := dockerCfg.ProjectName
+	if projectName == "" {
+		projectName = cfg.Project.FullName()
+	}
+
 	return &Compose{
 		Bin:         config.DockerBin(cfg),
-		ProjectName: dockerCfg.ProjectName,
+		ProjectName: projectName,
 		Files:       files,
 		GlobalArgs:  dockerCfg.Args.Global,
 		CommandArgs: cmdArgs,
