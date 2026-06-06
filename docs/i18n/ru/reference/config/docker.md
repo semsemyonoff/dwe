@@ -1,4 +1,4 @@
-> Translated from: reference/config/docker.md @ ee5720572cfc
+> Translated from: reference/config/docker.md @ b9c5baed9b15
 
 # docker.yml / docker.local.yml
 
@@ -198,8 +198,8 @@ resources:
 
 | Поле | Описание |
 |-------|-------------|
-| `volumes.<key>.name` | Базовое имя тома. Реальное имя в Docker зависит от `shared`: shared-тома используют `name` как есть; non-shared тома сохраняются как `<project_name>_<name>`, чтобы разделять жизненный цикл и область действия с compose-проектом (соответствуя соглашению Docker Compose для именованных томов, объявленных внутри `compose.yaml`). |
-| `volumes.<key>.shared` | Если `true`, том независим от проекта: реальное имя в Docker равно `name`, и том переживает project reset'ы. Если `false` (по умолчанию), том привязан к проекту — runtime добавляет префикс `<project_name>_`, и `docker_remove_project_volumes` (reset-билтин) удаляет его вместе с проектом. |
+| `volumes.<key>.name` | Базовое имя тома. Реальное имя в Docker зависит от `shared`: shared-тома используют `name` как есть (пишите туда полное литеральное имя — префикс не применяется); non-shared тома сохраняются как `<project_name>_<name>`, чтобы разделять жизненный цикл и область действия с compose-проектом (соответствуя соглашению Docker Compose для именованных томов, объявленных внутри `compose.yaml`). |
+| `volumes.<key>.shared` | Если `true`, том независим от проекта: реальное имя в Docker равно `name`, и том переживает project reset'ы. Если `false` (по умолчанию), том привязан к проекту — runtime добавляет префикс `<project_name>_`, и `docker_remove_project_volumes` (reset-билтин) удаляет его вместе с проектом. Здесь `<project_name>` — **разрешённое** имя compose-проекта: `project_name` из этого файла, если задан, иначе дефолт `<prefix>-<name>` — так что non-shared тома получают префикс единообразно даже когда `project_name` опущен. |
 | `volumes.<key>.ensure_before` | Триггеры, идемпотентно создающие том при его отсутствии. Поддерживаемые значения: `up`, `deploy`. |
 
 ```yaml

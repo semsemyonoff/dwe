@@ -51,7 +51,8 @@ var detectStackRunning = func(cfg *config.DweConfig, baseDir string) (bool, erro
 	// project from the canonical name like every other empty-config path).
 	dockerCfg, err := config.LoadDockerConfigOrEmpty(baseDir, cfg)
 	if err != nil {
-		return false, fmt.Errorf("loading docker config: %w", err)
+		// LoadDockerConfigOrEmpty already wraps with "loading docker config: ".
+		return false, err
 	}
 	ids, err := docker.NewCompose(cfg, dockerCfg, baseDir).ContainerIDs()
 	if err != nil {

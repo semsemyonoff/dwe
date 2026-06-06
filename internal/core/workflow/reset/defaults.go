@@ -42,12 +42,13 @@ func DefaultResetConfig() *config.ProjectDeployConfig {
 						Name: "remove-volumes",
 						Type: "builtin",
 						Cmd:  "docker_remove_project_volumes",
-						// A volume that can't be removed (e.g. still in use by a
-						// foreign container, or a transient docker error) must not
-						// abort the whole reset — the service-data cleanup below
-						// should still run. The failure is still reported.
-						ContinueOnError: true,
-						Description:     "Remove all Docker volumes belonging to this project",
+						// No continue_on_error: the builtin already makes individual
+						// `docker volume rm` failures best-effort (a stuck volume is
+						// reported and skipped, not fatal), while keeping project-name
+						// resolution and `docker volume ls` failures fatal so a broken
+						// docker setup aborts the reset instead of silently clearing
+						// the journal with volumes left behind.
+						Description: "Remove all Docker volumes belonging to this project",
 					},
 					{
 						Name: "remove-services",

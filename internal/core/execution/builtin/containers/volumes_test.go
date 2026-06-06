@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"context"
 	"errors"
-	"io"
 	"strings"
 	"testing"
 
@@ -17,19 +16,19 @@ import (
 // --- RemoveProjectVolumes ---
 
 // swapVolumeSeams replaces the list/remove seams and registers cleanup.
-func swapVolumeSeams(t *testing.T, list func(context.Context, string) ([]string, error), remove func(context.Context, string, []string, io.Writer) error) {
+func swapVolumeSeams(t *testing.T, list func(context.Context, string) ([]string, error), remove func(context.Context, string, string) error) {
 	t.Helper()
 	prevList := listVolumesFn
-	prevRemove := removeVolumesFn
+	prevRemove := removeVolumeFn
 	t.Cleanup(func() {
 		listVolumesFn = prevList
-		removeVolumesFn = prevRemove
+		removeVolumeFn = prevRemove
 	})
 	if list != nil {
 		listVolumesFn = list
 	}
 	if remove != nil {
-		removeVolumesFn = remove
+		removeVolumeFn = remove
 	}
 }
 
@@ -69,8 +68,8 @@ func TestDockerRemoveVolumes_Run_DefaultProjectName(t *testing.T) {
 				"",                     // blank (defensive)
 			}, nil
 		},
-		func(_ context.Context, _ string, vols []string, _ io.Writer) error {
-			removed = vols
+		func(_ context.Context, _ string, vol string) error {
+			removed = append(removed, vol)
 			return nil
 		},
 	)
@@ -103,7 +102,7 @@ func TestDockerRemoveVolumes_Run_NoMatches(t *testing.T) {
 		func(context.Context, string) ([]string, error) {
 			return []string{"unrelated_a", "unrelated_b"}, nil
 		},
-		func(context.Context, string, []string, io.Writer) error {
+		func(context.Context, string, string) error {
 			removeCalled = true
 			return nil
 		},
@@ -118,10 +117,54 @@ func TestDockerRemoveVolumes_Run_NoMatches(t *testing.T) {
 		t.Fatalf("Run error: %v", err)
 	}
 	if removeCalled {
-		t.Error("removeVolumesFn was invoked despite no matching volumes")
+		t.Error("removeVolumeFn was invoked despite no matching volumes")
 	}
 	if !strings.Contains(buf.String(), `no volumes found with prefix "demo_"`) {
 		t.Errorf("missing no-volumes line; got %q", buf.String())
+	}
+}
+
+// TestDockerRemoveVolumes_Run_PerVolumeBestEffort verifies that a single volume
+// that cannot be removed (e.g. still in use) is reported and skipped, while the
+// remaining volumes are still removed and the step succeeds — so a stuck volume
+// never aborts the surrounding reset. This is why the default reset pipeline
+// does NOT need step-level continue_on_error.
+func TestDockerRemoveVolumes_Run_PerVolumeBestEffort(t *testing.T) {
+	rmErr := errors.New("volume is in use")
+	var attempted []string
+	swapVolumeSeams(t,
+		func(context.Context, string) ([]string, error) {
+			return []string{"demo_a", "demo_b", "demo_c"}, nil
+		},
+		func(_ context.Context, _ string, vol string) error {
+			attempted = append(attempted, vol)
+			if vol == "demo_b" {
+				return rmErr
+			}
+			return nil
+		},
+	)
+
+	cfg := &config.DweConfig{}
+	cfg.Project.Name = "demo"
+	buf := &bytes.Buffer{}
+	ectx := spec.ExecContext{Config: cfg, Output: render.NewWriter(buf)}
+
+	if err := (RemoveProjectVolumes{}).Run(context.Background(), nil, ectx); err != nil {
+		t.Fatalf("per-volume rm failure must be best-effort (nil), got: %v", err)
+	}
+	if want := []string{"demo_a", "demo_b", "demo_c"}; !equalStrings(attempted, want) {
+		t.Errorf("attempted = %v, want all %v (must continue past the failure)", attempted, want)
+	}
+	out := buf.String()
+	if !strings.Contains(out, `could not remove volume "demo_b"`) {
+		t.Errorf("missing failure warning for demo_b; got %q", out)
+	}
+	if !strings.Contains(out, "left in place") || !strings.Contains(out, "demo_b") {
+		t.Errorf("missing left-in-place summary; got %q", out)
+	}
+	if !strings.Contains(out, "removed 2 volume(s)") {
+		t.Errorf("missing removed-count summary; got %q", out)
 	}
 }
 
@@ -160,6 +203,9 @@ func TestDockerRemoveVolumes_Run_NilConfig(t *testing.T) {
 	}
 }
 
+// TestDockerRemoveVolumes_Run_ListError verifies that a `docker volume ls`
+// failure is FATAL (returns an error) — so reset aborts rather than clearing the
+// journal with volumes left behind.
 func TestDockerRemoveVolumes_Run_ListError(t *testing.T) {
 	listErr := errors.New("docker volume ls: cannot connect to daemon")
 	swapVolumeSeams(t,

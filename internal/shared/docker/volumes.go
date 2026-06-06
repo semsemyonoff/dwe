@@ -12,10 +12,13 @@ import (
 // It is idempotent: existing volumes are left untouched.
 // Only volumes whose ensure_before list contains command are processed.
 //
-// projectName is the resolved compose project name (from DockerConfig.ProjectName);
-// it is used to prefix non-shared volume names so the runtime matches the
-// "<project>_<name>" scheme that Docker Compose itself applies to named
-// volumes. Shared volumes ignore the prefix.
+// projectName MUST be the resolved compose project name — pass
+// config.ResolveComposeProjectName(baseDir, cfg) (docker.yml project_name, else
+// "<prefix>-<name>"), NOT the raw DockerConfig.ProjectName, which is empty when
+// project_name is omitted. It prefixes non-shared volume names so the runtime
+// matches the "<project>_<name>" scheme Docker Compose itself applies to named
+// volumes; passing an empty projectName would create bare-named volumes that
+// diverge from the compose/-p and reset scopes. Shared volumes ignore the prefix.
 //
 // bin is the Docker-compatible binary (e.g. "docker", "podman"); pass
 // config.DockerBin(cfg) at the call site.

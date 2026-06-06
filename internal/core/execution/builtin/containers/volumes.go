@@ -3,7 +3,6 @@ package containers
 import (
 	"context"
 	"fmt"
-	"io"
 	"os/exec"
 	"strings"
 
@@ -12,12 +11,13 @@ import (
 	"github.com/semsemyonoff/dwe/internal/core/project/config"
 )
 
-// listVolumesFn / removeVolumesFn are test seams: production shells out to
-// `docker volume ls -q` / `docker volume rm`; tests inject stubs to capture
-// invocations and feed fake volume listings without spawning real subprocesses.
+// listVolumesFn / removeVolumeFn are test seams: production shells out to
+// `docker volume ls -q` / `docker volume rm <vol>`; tests inject stubs to
+// capture invocations and feed fake volume listings without spawning real
+// subprocesses.
 var (
-	listVolumesFn   = listDockerVolumes
-	removeVolumesFn = removeDockerVolumes
+	listVolumesFn  = listDockerVolumes
+	removeVolumeFn = removeDockerVolume
 )
 
 // RemoveProjectVolumes implements docker_remove_project_volumes.
@@ -34,6 +34,14 @@ func (RemoveProjectVolumes) Describe(with map[string]any) string {
 }
 
 // Run executes the docker_remove_project_volumes builtin.
+//
+// Failure model: project-name resolution and volume LISTING are fatal (they
+// indicate the step cannot run correctly, so the caller — e.g. reset — should
+// abort rather than silently skip cleanup). Individual `docker volume rm`
+// failures are best-effort: a volume that cannot be dropped (still in use, etc.)
+// is reported and skipped so it never aborts the surrounding pipeline. This is
+// why the default reset pipeline does NOT wrap this step in continue_on_error —
+// that would also swallow the fatal listing/resolution errors.
 func (RemoveProjectVolumes) Run(ctx context.Context, with map[string]any, ectx spec.ExecContext) error {
 	if ectx.Config == nil {
 		return fmt.Errorf("docker_remove_project_volumes: config not available")
@@ -54,7 +62,7 @@ func (RemoveProjectVolumes) Run(ctx context.Context, with map[string]any, ectx s
 
 	dockerBin := config.DockerBin(ectx.Config)
 
-	// List all volumes.
+	// List all volumes (fatal on failure — see the method doc).
 	all, err := listVolumesFn(ctx, dockerBin)
 	if err != nil {
 		return fmt.Errorf("listing docker volumes: %w", err)
@@ -73,13 +81,28 @@ func (RemoveProjectVolumes) Run(ctx context.Context, with map[string]any, ectx s
 		return nil
 	}
 
-	if err := ctx.Err(); err != nil {
-		return err
+	ectx.Output.Info(fmt.Sprintf("removing %d volume(s) with prefix %q", len(toRemove), prefix))
+
+	// Per-volume best-effort: a single stuck volume must not abort the reset.
+	var removed int
+	var failed []string
+	for _, vol := range toRemove {
+		if err := ctx.Err(); err != nil {
+			return err
+		}
+		if rmErr := removeVolumeFn(ctx, dockerBin, vol); rmErr != nil {
+			failed = append(failed, vol)
+			ectx.Output.Error(fmt.Sprintf("could not remove volume %q: %v", vol, rmErr))
+			continue
+		}
+		removed++
 	}
 
-	ectx.Output.Info(fmt.Sprintf("removing %d volume(s) with prefix %q", len(toRemove), prefix))
-	if err := removeVolumesFn(ctx, dockerBin, toRemove, ectx.Output.Writer()); err != nil {
-		return fmt.Errorf("docker volume rm: %w", err)
+	if removed > 0 {
+		ectx.Output.Success(fmt.Sprintf("removed %d volume(s)", removed))
+	}
+	if len(failed) > 0 {
+		ectx.Output.Info(fmt.Sprintf("%d volume(s) left in place: %s", len(failed), strings.Join(failed, ", ")))
 	}
 	return nil
 }
@@ -100,12 +123,16 @@ func listDockerVolumes(ctx context.Context, dockerBin string) ([]string, error) 
 	return names, nil
 }
 
-// removeDockerVolumes removes the given volumes (`docker volume rm <vols...>`),
-// streaming docker's output to w.
-func removeDockerVolumes(ctx context.Context, dockerBin string, vols []string, w io.Writer) error {
-	args := append([]string{"volume", "rm"}, vols...)
-	cmd := exec.CommandContext(ctx, dockerBin, args...) //nolint:gosec
-	cmd.Stdout = w
-	cmd.Stderr = w
-	return cmd.Run()
+// removeDockerVolume removes a single docker volume (`docker volume rm <vol>`).
+// On failure it returns an error carrying docker's stderr so the caller can
+// report exactly why the volume could not be removed.
+func removeDockerVolume(ctx context.Context, dockerBin, vol string) error {
+	out, err := exec.CommandContext(ctx, dockerBin, "volume", "rm", vol).CombinedOutput() //nolint:gosec
+	if err != nil {
+		if msg := strings.TrimSpace(string(out)); msg != "" {
+			return fmt.Errorf("%w: %s", err, msg)
+		}
+		return err
+	}
+	return nil
 }

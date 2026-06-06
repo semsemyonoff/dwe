@@ -196,8 +196,8 @@ resources:
 
 | Field | Description |
 |-------|-------------|
-| `volumes.<key>.name` | Base volume name. The actual Docker name depends on `shared`: shared volumes use `name` verbatim; non-shared volumes are stored as `<project_name>_<name>` so they share their lifecycle and scope with the compose project (matching the convention Docker Compose uses for named volumes declared inside `compose.yaml`). |
-| `volumes.<key>.shared` | When `true`, the volume is project-independent: the actual Docker name equals `name` and the volume persists across project resets. When `false` (default), the volume is project-scoped — the runtime prepends `<project_name>_` and `docker_remove_project_volumes` (the reset builtin) cleans it up alongside the project. |
+| `volumes.<key>.name` | Base volume name. The actual Docker name depends on `shared`: shared volumes use `name` verbatim (write the full literal name there — no prefix is applied); non-shared volumes are stored as `<project_name>_<name>` so they share their lifecycle and scope with the compose project (matching the convention Docker Compose uses for named volumes declared inside `compose.yaml`). |
+| `volumes.<key>.shared` | When `true`, the volume is project-independent: the actual Docker name equals `name` and the volume persists across project resets. When `false` (default), the volume is project-scoped — the runtime prepends `<project_name>_` and `docker_remove_project_volumes` (the reset builtin) cleans it up alongside the project. Here `<project_name>` is the **resolved** compose project name — `project_name` from this file if set, otherwise the default `<prefix>-<name>` — so non-shared volumes are prefixed consistently even when `project_name` is omitted. |
 | `volumes.<key>.ensure_before` | Triggers that idempotently create the volume if missing. Supported values: `up`, `deploy`. |
 
 ```yaml

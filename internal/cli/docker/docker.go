@@ -66,8 +66,16 @@ func newDockerPipeline(flags *cmdctx.RootFlags, command string) (*dockerPipeline
 		}
 	}
 
-	// Ensure declared Docker resources exist before the command runs.
-	if err := dockerpkg.EnsureVolumes(dockerCfg.Resources, dockerCfg.ProjectName, command, config.DockerBin(cfg), render.Stdout()); err != nil {
+	// Ensure declared Docker resources exist before the command runs. Use the
+	// resolved compose project name (docker.yml project_name -> else FullName) so
+	// non-shared volumes are prefixed with the SAME project name compose uses;
+	// passing the raw (possibly empty) dockerCfg.ProjectName would create bare-
+	// named volumes that diverge from the compose/-p and reset scopes.
+	projectName, err := config.ResolveComposeProjectName(baseDir, cfg)
+	if err != nil {
+		return nil, fmt.Errorf("resolving compose project name: %w", err)
+	}
+	if err := dockerpkg.EnsureVolumes(dockerCfg.Resources, projectName, command, config.DockerBin(cfg), render.Stdout()); err != nil {
 		return nil, fmt.Errorf("ensuring volumes: %w", err)
 	}
 
