@@ -54,7 +54,18 @@ func newComposeRawCmd(flags *cmdctx.RootFlags) *cobra.Command {
 				return err
 			}
 
-			composeArgs := []string{"-p", dockerCfg.ProjectName}
+			// Resolve the project name the same way every other path does
+			// (docker.yml project_name -> else "<prefix>-<name>") so this escape
+			// hatch targets the same compose project even when docker.yml is
+			// absent — passing the raw (possibly empty) field would emit `-p ""`.
+			composeProject, err := config.ResolveComposeProjectName(baseDir, cfg)
+			if err != nil {
+				return err
+			}
+			var composeArgs []string
+			if composeProject != "" {
+				composeArgs = append(composeArgs, "-p", composeProject)
+			}
 			if !bare {
 				for _, f := range cfg.ComposeFiles() {
 					composeArgs = append(composeArgs, "-f", f)
