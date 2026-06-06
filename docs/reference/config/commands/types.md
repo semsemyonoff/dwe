@@ -617,7 +617,7 @@ commands:
 <project.full>-<rendered container_template>
 ```
 
-`project.full` is `ProjectConfig.FullName()` — `<prefix>-<name>` if `prefix:` is set, else `<name>`. The post-render regex `^[a-zA-Z0-9_][a-zA-Z0-9_.-]*$` is the authoritative defense; invalid characters in rendered template values fail at runtime even if the param's `pattern:` happened to permit them.
+`project.full` is the resolved compose project name — `workspace/docker.yml`'s `project_name` if set, otherwise `ProjectConfig.FullName()` (`<prefix>-<name>` if `prefix:` is set, else `<name>`) — so daemons share the project scope of compose-managed services. The post-render regex `^[a-zA-Z0-9_][a-zA-Z0-9_.-]*$` is the authoritative defense; invalid characters in rendered template values fail at runtime even if the param's `pattern:` happened to permit them.
 
 ### Standard labels
 

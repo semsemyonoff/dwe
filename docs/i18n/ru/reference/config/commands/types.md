@@ -1,4 +1,4 @@
-> Translated from: reference/config/commands/types.md @ 1d9d18f2d930
+> Translated from: reference/config/commands/types.md @ 154eee847284
 
 # Типы команд
 
@@ -619,7 +619,7 @@ commands:
 <project.full>-<rendered container_template>
 ```
 
-`project.full` — это `ProjectConfig.FullName()` — `<prefix>-<name>`, если задано `prefix:`, иначе `<name>`. Post-render regex `^[a-zA-Z0-9_][a-zA-Z0-9_.-]*$` — авторитетная защита; недопустимые символы в отрендеренных значениях шаблона дают сбой во время выполнения, даже если `pattern:` параметра случайно их разрешил.
+`project.full` — это разрешённое имя compose-проекта: `project_name` из `workspace/docker.yml`, если задано, иначе `ProjectConfig.FullName()` (`<prefix>-<name>`, если задан `prefix:`, иначе `<name>`) — так что демоны попадают в ту же project-область, что и сервисы под управлением compose. Post-render regex `^[a-zA-Z0-9_][a-zA-Z0-9_.-]*$` — авторитетная защита; недопустимые символы в отрендеренных значениях шаблона дают сбой во время выполнения, даже если `pattern:` параметра случайно их разрешил.
 
 ### Стандартные метки
 
