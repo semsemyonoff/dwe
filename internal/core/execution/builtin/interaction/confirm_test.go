@@ -245,6 +245,9 @@ func TestConfirmBuiltin_NonTTY_StdinY(t *testing.T) {
 
 // TestConfirmBuiltin_NonTTY_StdinN verifies that piped "n" input aborts via fallback.
 func TestConfirmBuiltin_NonTTY_StdinN(t *testing.T) {
+	// render.Writer.Confirm short-circuits to "yes" when $CI is set (GitHub
+	// Actions sets CI=true); clear it so the real stdin Y/n read is exercised.
+	t.Setenv("CI", "")
 	origIsInteractive := widgets.IsInteractiveFn
 	t.Cleanup(func() { widgets.IsInteractiveFn = origIsInteractive })
 
