@@ -118,7 +118,7 @@ func writeNonEmpty(w io.Writer, s string) {
 		return
 	}
 	_, _ = fmt.Fprint(w, s)
-	if len(s) == 0 || s[len(s)-1] != '\n' {
+	if s[len(s)-1] != '\n' {
 		_, _ = fmt.Fprintln(w)
 	}
 }

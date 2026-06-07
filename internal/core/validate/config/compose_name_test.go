@@ -61,97 +61,85 @@ compose:
   base: docker-compose.yml
 `
 
-func TestComposeProjectNameValidator_DivergentNameWarns(t *testing.T) {
+// TestComposeProjectNameValidator covers name-divergence detection, docker.yml
+// precedence, interpolation skips, and compose multi-file last-`-f`-wins
+// semantics. Resolved project name is always "dwe-shop" (project.name=shop,
+// prefix=dwe) unless a case sets dockerYML. A case with extra != "" wires a
+// project-wide overlay (override.yml) after the base via local.yml.
+func TestComposeProjectNameValidator(t *testing.T) {
 	t.Parallel()
-	// Resolved name is "dwe-shop"; the compose file declares "legacy_shop".
-	root := writeComposeNameProject(t, composeNameWorkspaceYML, "name: legacy_shop\nservices: {}\n", "")
-	diags := runComposeNameValidator(t, root)
-
-	d := hasDiag(t, diags, validate.SeverityWarning, "silently overridden")
-	require.Contains(t, d.Message, "legacy_shop")
-	require.Contains(t, d.Message, "dwe-shop")
-	require.Equal(t, "config.compose_project_name", d.Target)
-	require.Equal(t, "docker-compose.yml", d.File)
-}
-
-func TestComposeProjectNameValidator_MatchingNameIsSilent(t *testing.T) {
-	t.Parallel()
-	root := writeComposeNameProject(t, composeNameWorkspaceYML, "name: dwe-shop\nservices: {}\n", "")
-	diags := runComposeNameValidator(t, root)
-	require.Empty(t, diags)
-}
-
-func TestComposeProjectNameValidator_NoTopLevelNameIsSilent(t *testing.T) {
-	t.Parallel()
-	root := writeComposeNameProject(t, composeNameWorkspaceYML, "services: {}\n", "")
-	diags := runComposeNameValidator(t, root)
-	require.Empty(t, diags)
-}
-
-func TestComposeProjectNameValidator_InterpolatedNameSkipped(t *testing.T) {
-	t.Parallel()
-	root := writeComposeNameProject(t, composeNameWorkspaceYML, "name: ${COMPOSE_PROJECT_NAME}\nservices: {}\n", "")
-	diags := runComposeNameValidator(t, root)
-	require.Empty(t, diags)
-}
-
-func TestComposeProjectNameValidator_DockerYMLProjectNameWins(t *testing.T) {
-	t.Parallel()
-	// docker.yml project_name overrides FullName(); the compose name: must match it.
-	root := writeComposeNameProject(t,
-		composeNameWorkspaceYML,
-		"name: dwe-shop\nservices: {}\n",
-		"project_name: prod_shop\n",
-	)
-	diags := runComposeNameValidator(t, root)
-	d := hasDiag(t, diags, validate.SeverityWarning, "silently overridden")
-	require.Contains(t, d.Message, "dwe-shop")  // declared
-	require.Contains(t, d.Message, "prod_shop") // resolved via docker.yml
+	tests := []struct {
+		name       string
+		base       string // docker-compose.yml body
+		extra      string // override.yml body; "" → single-file project
+		dockerYML  string // workspace/docker.yml; "" → none (mutually exclusive with extra)
+		wantWarn   bool
+		wantFile   string   // expected Diagnostic.File when wantWarn
+		wantMsgHas []string // substrings expected in the warning message
+	}{
+		{
+			name: "divergent name warns", base: "name: legacy_shop\nservices: {}\n",
+			wantWarn: true, wantFile: "docker-compose.yml",
+			wantMsgHas: []string{"legacy_shop", "dwe-shop"},
+		},
+		{name: "matching name is silent", base: "name: dwe-shop\nservices: {}\n"},
+		{name: "no top-level name is silent", base: "services: {}\n"},
+		{name: "interpolated name skipped", base: "name: ${COMPOSE_PROJECT_NAME}\nservices: {}\n"},
+		{
+			name: "docker.yml project_name wins",
+			base: "name: dwe-shop\nservices: {}\n", dockerYML: "project_name: prod_shop\n",
+			wantWarn: true, wantFile: "docker-compose.yml",
+			wantMsgHas: []string{"dwe-shop", "prod_shop"},
+		},
+		{
+			// Later -f corrects the base name → effective name aligns → no warn.
+			name: "later file overrides name (no warn)",
+			base: "name: legacy\nservices: {}\n", extra: "name: dwe-shop\nservices: {}\n",
+		},
+		{
+			// Effective name is the overlay's; warning points at the overlay.
+			name: "later file diverges (warn on overlay)",
+			base: "name: dwe-shop\nservices: {}\n", extra: "name: other\nservices: {}\n",
+			wantWarn: true, wantFile: "override.yml", wantMsgHas: []string{"other"},
+		},
+		{
+			// Overlay declares no name → earlier divergent name still effective.
+			name: "later file without name keeps earlier warning",
+			base: "name: legacy\nservices: {}\n", extra: "services: {}\n",
+			wantWarn: true, wantFile: "docker-compose.yml", wantMsgHas: []string{"legacy"},
+		},
+		{
+			// Overlay's interpolated name wins the override but is unresolvable.
+			name: "later interpolated name silent",
+			base: "name: legacy\nservices: {}\n", extra: "name: ${COMPOSE_PROJECT_NAME}\nservices: {}\n",
+		},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			var root string
+			if tc.extra != "" {
+				root = writeComposeNameProjectExtra(t, tc.base, tc.extra)
+			} else {
+				root = writeComposeNameProject(t, composeNameWorkspaceYML, tc.base, tc.dockerYML)
+			}
+			diags := runComposeNameValidator(t, root)
+			if !tc.wantWarn {
+				require.Empty(t, diags)
+				return
+			}
+			d := hasDiag(t, diags, validate.SeverityWarning, "silently overridden")
+			require.Equal(t, "config.compose_project_name", d.Target)
+			require.Equal(t, tc.wantFile, d.File)
+			for _, s := range tc.wantMsgHas {
+				require.Contains(t, d.Message, s)
+			}
+		})
+	}
 }
 
 func TestComposeProjectNameValidator_NilCfgIsSilent(t *testing.T) {
 	t.Parallel()
 	diags := (&composeProjectNameValidator{}).Run(validate.Context{ProjectRoot: t.TempDir()})
-	require.Empty(t, diags)
-}
-
-// Multi-file last-wins: the later `-f` file's top-level name: is what compose
-// would use, so a divergent base name corrected by a later overlay must NOT warn.
-func TestComposeProjectNameValidator_LaterFileOverridesNameNoWarn(t *testing.T) {
-	t.Parallel()
-	// base declares "legacy", overlay corrects to the resolved "dwe-shop".
-	root := writeComposeNameProjectExtra(t, "name: legacy\nservices: {}\n", "name: dwe-shop\nservices: {}\n")
-	diags := runComposeNameValidator(t, root)
-	require.Empty(t, diags)
-}
-
-// The warning points at the LAST file that declares a divergent name.
-func TestComposeProjectNameValidator_LaterFileDivergesWarnsOnOverlay(t *testing.T) {
-	t.Parallel()
-	// base matches, overlay diverges → effective name is the overlay's.
-	root := writeComposeNameProjectExtra(t, "name: dwe-shop\nservices: {}\n", "name: other\nservices: {}\n")
-	diags := runComposeNameValidator(t, root)
-	d := hasDiag(t, diags, validate.SeverityWarning, "silently overridden")
-	require.Contains(t, d.Message, "other")
-	require.Equal(t, "override.yml", d.File)
-}
-
-// A later file without a top-level name: does not override the earlier name, so
-// the earlier divergent name still warns (pointing at the file that declared it).
-func TestComposeProjectNameValidator_LaterFileNoNameKeepsEarlierWarning(t *testing.T) {
-	t.Parallel()
-	root := writeComposeNameProjectExtra(t, "name: legacy\nservices: {}\n", "services: {}\n")
-	diags := runComposeNameValidator(t, root)
-	d := hasDiag(t, diags, validate.SeverityWarning, "silently overridden")
-	require.Contains(t, d.Message, "legacy")
-	require.Equal(t, "docker-compose.yml", d.File)
-}
-
-// A later file with an interpolated name overrides the effective name but is
-// unresolvable, so we cannot prove divergence → stay silent.
-func TestComposeProjectNameValidator_LaterInterpolatedNameSilent(t *testing.T) {
-	t.Parallel()
-	root := writeComposeNameProjectExtra(t, "name: legacy\nservices: {}\n", "name: ${COMPOSE_PROJECT_NAME}\nservices: {}\n")
-	diags := runComposeNameValidator(t, root)
 	require.Empty(t, diags)
 }
