@@ -4,7 +4,9 @@ import (
 	"context"
 	"os"
 	"path/filepath"
+	"sync/atomic"
 	"testing"
+	"testing/synctest"
 	"time"
 )
 
@@ -111,42 +113,53 @@ func TestFileCacheKeyVariesWithWidth(t *testing.T) {
 }
 
 func TestFileCacheConcurrentMisses(t *testing.T) {
-	cacheDir := t.TempDir()
+	// Concurrent same-key misses must collapse to ONE underlying render via
+	// singleflight. The render holds open (blocks on `release`) so every caller
+	// is forced into the dedup window; synctest.Wait returns only once all bubble
+	// goroutines are durably blocked — one inside onRender, the rest parked in
+	// singleflight — which removes the timing race that previously let a fast
+	// runner finish the first render before the others entered (flaky "got 2").
+	synctest.Test(t, func(t *testing.T) {
+		cacheDir := t.TempDir()
 
-	renderCount := 0
-	underlying := &mockRenderer{
-		png: []byte("PNG_DATA"),
-		onRender: func() {
-			renderCount++
-		},
-	}
-
-	versionFunc := func() string { return "1.0" }
-	cache := NewFileCache(cacheDir, 10*1024*1024, underlying, versionFunc)
-
-	ctx := context.Background()
-	src := "graph LR"
-	theme := ThemeDark
-	width := 100
-
-	// Spawn multiple concurrent renders (should deduplicate via singleflight).
-	done := make(chan error, 3)
-	for range 3 {
-		go func() {
-			_, err := cache.Render(ctx, src, theme, width)
-			done <- err
-		}()
-	}
-
-	for range 3 {
-		if err := <-done; err != nil {
-			t.Fatalf("concurrent render failed: %v", err)
+		var renderCount atomic.Int32
+		release := make(chan struct{})
+		underlying := &mockRenderer{
+			png: []byte("PNG_DATA"),
+			onRender: func() {
+				renderCount.Add(1)
+				<-release // keep the single in-flight render open until all callers park
+			},
 		}
-	}
 
-	if renderCount != 1 {
-		t.Errorf("expected 1 underlying render for concurrent misses, got %d", renderCount)
-	}
+		cache := NewFileCache(cacheDir, 10*1024*1024, underlying, func() string { return "1.0" })
+
+		const n = 3
+		done := make(chan error, n)
+		for range n {
+			go func() {
+				_, err := cache.Render(context.Background(), "graph LR", ThemeDark, 100)
+				done <- err
+			}()
+		}
+
+		// All n callers are now durably blocked: one in onRender, the rest waiting
+		// on it inside singleflight. Exactly one underlying render may have started.
+		synctest.Wait()
+		if got := renderCount.Load(); got != 1 {
+			t.Errorf("expected 1 underlying render for concurrent misses, got %d", got)
+		}
+
+		close(release)
+		for range n {
+			if err := <-done; err != nil {
+				t.Fatalf("concurrent render failed: %v", err)
+			}
+		}
+		if got := renderCount.Load(); got != 1 {
+			t.Errorf("render count changed after release: got %d, want 1", got)
+		}
+	})
 }
 
 func TestFileCacheCreatesDirIfMissing(t *testing.T) {
