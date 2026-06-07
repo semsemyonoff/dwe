@@ -105,24 +105,28 @@ Runtime precedence: `--no-update` flag > `--update <mode>` flag > YAML `update.m
 
 ## `.gitignore` conventions
 
-A typical project's `.gitignore` excludes three DWE-owned trees:
+A typical project's `.gitignore` excludes four DWE-owned trees:
 
 ```text
 # DWE runtime artifacts
 /.dwe/
 
-# Container bind-mount targets
-/volumes/
+# Service sources (root-anchored — keeps workspace/services/ tracked)
+/services/
 
 # Unpacked snapshot stash
 /snapshots/
+
+# Database and other dumps
+/backups/
 ```
 
 The rationale, per folder:
 
 - **`.dwe/`** holds the deploy journal (`state.yml`), project locks (`deploy.lock`, `snapshot.lock`), command logs (`logs/`), and per-project user-config overrides. Everything in it is regenerable from the config tree and the running containers. Tracking it would just couple commit history to local timing.
-- **`volumes/`** holds bind-mount targets that containers write into (database data dirs, build caches, generated artifacts). Tracking it would couple the repo to container output.
+- **`/services/`** holds the source checkouts of the application services (`<hub>/src/` and working dirs). Each `src/` is its own repository, checked out per machine — the project repo must not track another repo's contents. The leading slash anchors the pattern to the project root so the tracked `workspace/services/` config tree is untouched.
 - **`snapshots/`** holds the unpacked working copy of an active snapshot. Snapshot archives themselves live wherever the snapshot workflow puts them — usually a separate path or a shared volume. The runtime stash should not be tracked.
+- **`backups/`** holds database and other dumps produced during development. They are generated artifacts that vary per machine, so tracking them would couple the repo to local data.
 
 Two related conventions live elsewhere:
 

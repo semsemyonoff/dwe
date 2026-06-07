@@ -8,8 +8,8 @@ import (
 )
 
 // countLines counts how many lines of s equal want exactly (after trimming
-// surrounding whitespace), so substring matches like ".dwe/snapshots/" do not
-// inflate the count for the bare "snapshots/" pattern.
+// surrounding whitespace), so a longer line containing want as a substring does
+// not inflate the count for a shorter pattern.
 func countLines(s, want string) int {
 	n := 0
 	for line := range strings.SplitSeq(s, "\n") {
@@ -72,24 +72,24 @@ func TestMergeGitignore_PresentWithoutBlock(t *testing.T) {
 
 func TestMergeGitignore_PresentWithSomeLines(t *testing.T) {
 	// The user already ignores two of the DWE patterns.
-	existing := []byte("volumes/\nsnapshots/\nbuild/\n")
+	existing := []byte("backups/\nsnapshots/\nbuild/\n")
 	merged, changed := mergeGitignore(existing)
 	if !changed {
 		t.Fatal("expected changed=true when some DWE patterns are missing")
 	}
 	got := string(merged)
 
-	// Already-present patterns are NOT duplicated (count exact lines, so that
-	// e.g. ".dwe/snapshots/" does not match the bare "snapshots/" pattern).
-	if n := countLines(got, "volumes/"); n != 1 {
-		t.Fatalf("volumes/ appears %d times, want 1:\n%s", n, got)
+	// Already-present patterns are NOT duplicated (count exact lines so a
+	// longer line does not match a shorter pattern as a substring).
+	if n := countLines(got, "backups/"); n != 1 {
+		t.Fatalf("backups/ appears %d times, want 1:\n%s", n, got)
 	}
 	if n := countLines(got, "snapshots/"); n != 1 {
 		t.Fatalf("snapshots/ appears %d times, want 1:\n%s", n, got)
 	}
 	// Missing patterns are appended.
-	if !strings.Contains(got, ".dwe/deploy/") {
-		t.Fatalf("missing pattern .dwe/deploy/ not appended:\n%s", got)
+	if !strings.Contains(got, ".dwe/") {
+		t.Fatalf("missing pattern .dwe/ not appended:\n%s", got)
 	}
 }
 

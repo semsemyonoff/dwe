@@ -62,15 +62,14 @@ trim_trailing_whitespace = false
 --------
 === .gitignore ===
 # dwe — runtime data (managed by the CLI)
-.dwe/deploy/
-.dwe/snapshots/
-.dwe/logs/
-.dwe/prompt-cache.yml
+.dwe/
 # dwe — per-developer overrides
 workspace/local.yml
 workspace/docker.local.yml
+# dwe — service sources (root-anchored so workspace/services/ stays tracked)
+/services/
 # dwe — container data
-volumes/
+backups/
 snapshots/
 
 --------

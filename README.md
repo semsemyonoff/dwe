@@ -149,7 +149,7 @@ Full write-up: [`docs/reference/concepts/architecture.md`](docs/reference/concep
 
 ## Project layout
 
-A typical project keeps its declarative tree under `workspace/`, Docker Compose overlays under `compose/`, and runtime data under `.dwe/` / `volumes/` / `snapshots/`.
+A typical project keeps its declarative tree under `workspace/`, Docker Compose overlays under `compose/`, and runtime data under `.dwe/` / `snapshots/` / `backups/`.
 
 ```text
 my-project/
@@ -166,10 +166,12 @@ my-project/
 │   ├── info.yml               # info dashboard
 │   ├── validate.yml           # readiness checks
 │   └── docker.yml             # compose file list + topology
-├── compose/                   # tracked Docker Compose overlays
+├── compose/                   # tracked Docker Compose overlays (per service)
 ├── configs/                   # tracked per-service config templates
-├── volumes/                   # gitignored bind-mount targets
+├── images/                    # tracked image builds (<service>/Dockerfile)
+├── services/                  # gitignored service sources (<hub>/src/)
 ├── snapshots/                 # gitignored snapshot stash
+├── backups/                   # gitignored DB/other dumps
 └── .dwe/                      # gitignored CLI runtime data (state, locks, logs)
 ```
 

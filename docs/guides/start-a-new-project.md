@@ -95,7 +95,7 @@ With `--output json` you get a structured report instead of prose:
 Two things are worth understanding:
 
 - **The override files ship commented out on purpose.** DWE pipeline composition is *full-replacement* — an active `workspace/deploy.yml` replaces the entire built-in deploy pipeline, so a half-edited file silently drops phases. `deploy.yml`, `lifecycle.yml`, `info.yml`, and `docker.yml` therefore arrive fully commented; the built-in default stays active until you deliberately uncomment and own the whole pipeline. Each file's header points at the authoritative default it mirrors.
-- **`.gitignore` is merged, not overwritten.** If the directory already has a `.gitignore`, `dwe init` appends only the DWE runtime lines it is missing, under a `# dwe` marker. Re-running is a no-op. The runtime subdirs (`.dwe/deploy/`, `.dwe/snapshots/`, `.dwe/logs/`, `.dwe/prompt-cache.yml`) are ignored individually so the committed `.dwe/config` template stays tracked.
+- **`.gitignore` is merged, not overwritten.** If the directory already has a `.gitignore`, `dwe init` appends only the DWE runtime lines it is missing, under a `# dwe` marker. Re-running is a no-op. The entire `.dwe/` directory is ignored — it holds CLI-managed runtime data and the per-developer `.dwe/config`, none of which belongs in version control.
 
 ## After init
 
