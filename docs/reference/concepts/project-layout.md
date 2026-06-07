@@ -18,46 +18,68 @@ What a typical DWE project looks like on disk: the tracked config tree under `wo
 A DWE project is any directory whose root contains a `workspace.yml`. The CLI walks upward from the current working directory to find it. Around that anchor, three folder families coexist:
 
 - The **tracked config tree** under `workspace/` and the project-root config files — checked in, versioned, the source of truth for project shape.
-- The **tracked runtime overlays** — Docker Compose files under `compose/` and per-service config templates under `configs/`. DWE does not generate these; they live alongside the config tree and are referenced from it.
-- The **runtime data** that DWE and the containers produce — `.dwe/` (CLI bookkeeping), `volumes/` (bind-mount targets), and `snapshots/` (unpacked snapshot stash). Gitignored.
+- The **tracked runtime overlays** — Docker Compose files under `compose/`, per-service config templates under `configs/`, and image build contexts (`images/<service>/Dockerfile`) for services built from source. DWE does not generate these; they live alongside the config tree and are referenced from it.
+- The **runtime data** that DWE and the containers produce — `.dwe/` (CLI bookkeeping), `snapshots/` (unpacked snapshot stash), and `backups/` (database and other dumps). Gitignored. Persistent container data lives in Docker-managed named volumes.
 
 ```mermaid
-flowchart TD
+flowchart LR
   Root["project/"]
+  RootFiles["workspace.yml<br/>.gitignore · README.md"]
 
-  Root --> RootFiles["workspace.yml<br/>.gitignore<br/>README.md"]
-  Root --> DWEDir["workspace/<br/>config tree (tracked)"]
-  Root --> ComposeDir["compose/<br/>compose overlays (tracked)"]
-  Root --> ConfigsDir["configs/<br/>per-service templates (tracked)"]
-  Root --> VolumesDir["volumes/<br/>container bind-mounts (gitignored)"]
-  Root --> SnapsDir["snapshots/<br/>unpacked snapshots (gitignored)"]
-  Root --> DotDir[".dwe/<br/>CLI runtime data (gitignored)"]
+  subgraph workspace["workspace/ — config tree (tracked)"]
+    direction TB
+    WSServices["services/&lt;name&gt;/"]
+    WSCommands["commands/"]
+    WSTemplates["templates/"]
+    WSI18n["i18n/"]
+    WSScripts["scripts/"]
+    WSPipelines["deploy · lifecycle · reset · info<br/>setup · validate · defaults · local (.yml)"]
+  end
 
-  DWEDir --> DWEServices["services/<name>/"]
-  DWEDir --> DWECommands["commands/"]
-  DWEDir --> DWETemplates["templates/"]
-  DWEDir --> DWEI18n["i18n/"]
-  DWEDir --> DWEScripts["scripts/"]
-  DWEDir --> DWEPipelines["deploy.yml<br/>lifecycle.yml<br/>reset.yml<br/>info.yml<br/>setup.yml<br/>validate.yml<br/>defaults.yml<br/>local.yml"]
+  subgraph compose["compose/ — overlays (tracked)"]
+    direction TB
+    CInfra["infra/"]
+    CSvc["&lt;service&gt;/ — one folder per app service"]
+    CTools["tools/"]
+  end
 
-  ComposeDir --> ComposeInfra["infra/"]
-  ComposeDir --> ComposeServices["services/"]
-  ComposeDir --> ComposeTools["tools/"]
+  subgraph other["other tracked"]
+    direction TB
+    ConfigsDir["configs/&lt;service&gt;/ — config templates"]
+    ImagesDir["images/&lt;service&gt;/Dockerfile — image builds"]
+  end
 
-  DotDir --> DotDeploy["deploy/<br/>state.yml · deploy.lock"]
-  DotDir --> DotSnaps["snapshots/<br/>current · snapshot.lock"]
-  DotDir --> DotLogs["logs/<br/>deploy.log · run.log · stop.log · reset.log"]
-  DotDir --> DotConfig["config<br/>per-project userconfig override"]
+  subgraph srcdir["services/ — service sources (gitignored)"]
+    direction TB
+    SrcHub["&lt;hub&gt;/ — one folder per app"]
+  end
+
+  subgraph runtime["runtime data (gitignored)"]
+    direction TB
+    DotDir[".dwe/ — state · locks · logs · config"]
+    SnapsDir["snapshots/ — unpacked snapshots"]
+    BackupsDir["backups/ — database/other dumps"]
+  end
+
+  Root --> RootFiles
+  Root --> workspace
+  Root --> compose
+  Root --> other
+  Root --> srcdir
+  Root --> runtime
+
+  WSServices --> WSSvcFiles["service.yml — required<br/>deploy.yml · reset.yml — optional"]
+  SrcHub --> SrcHubDetail["src/ — service source<br/>… — build/runtime working dirs"]
 ```
 
-Folder names other than `workspace.yml` and `workspace/` are conventions, not requirements. The CLI is happy to find `compose/` files anywhere — services reference them by relative path in `service.yml` (`compose: [compose/services/web.yml]`). The folders below describe the layout most projects converge on; the only constraints the CLI imposes are the per-service folder under `workspace/services/` and the project-root `workspace.yml`.
+Folder names other than `workspace.yml` and `workspace/` are conventions, not requirements. The CLI is happy to find `compose/` files anywhere — services reference them by relative path in `service.yml` (`compose: [compose/web/overlay.yml]`). The folders below describe the layout most projects converge on; the only constraints the CLI imposes are the per-service folder under `workspace/services/` and the project-root `workspace.yml`.
 
 ## Root files
 
 | File | Purpose | Reader | Writer | Tracked |
 |------|---------|--------|--------|---------|
 | `workspace.yml` | Project identity: `project.name`, `project.prefix`, optional binary overrides | CLI on every invocation | Author manually | yes |
-| `.gitignore` | Hides `.dwe/`, `volumes/`, `snapshots/`, and `workspace/local.yml` from version control | git | Author manually | yes |
+| `.gitignore` | Hides `.dwe/`, `/services/`, `snapshots/`, `backups/`, and `workspace/local.yml` from version control | git | Author manually | yes |
 | `README.md` | Project-specific entry point (not the DWE CLI README) | humans | Author manually | yes |
 
 A minimal `workspace.yml`:
@@ -77,10 +99,10 @@ Everything declarative about a project — services, pipelines, commands, templa
 | Path | Purpose | Reader | Writer | Tracked |
 |------|---------|--------|--------|---------|
 | `workspace/defaults.yml` | Versioned project defaults: `services.<name>.enabled`, `runtime`, `state`, `exports.env`, `compose`, `ide` | CLI (merge layer 2) | Author manually | yes |
-| `workspace/local.yml` | Per-developer overrides on top of `defaults.yml`: port overrides, enabled flags, credentials, wizard answers | CLI (merge layer 3) | Author manually + setup wizard | no |
+| `workspace/local.yml` | Per-developer overrides on top of `defaults.yml`: port overrides, enabled flags, credentials, wizard answers | CLI (merge layer 3) | Author manually + setup wizard + `dwe services enable/disable` | no |
 | `workspace/services/<name>/` | One folder per service. Folder name is the service ID — there is no `name:` field. | CLI service loader | Author manually | yes (except `local.yml` overrides) |
 | `workspace/commands/` | Declarative user commands surfaced under `dwe <name>` | CLI command registry | Author manually | yes |
-| `workspace/templates/` | Template packs consumed by `dwe render` (env / ide / ai / git) | CLI render pipeline | Author manually | yes |
+| `workspace/templates/` | Template packs consumed by `dwe render` — one subdir per kind: `ai/`, `git/`, `ide/`, each holding `<pack>/manifest.yml` + files (`render env` uses no pack) | CLI render pipeline | Author manually | yes |
 | `workspace/i18n/` | Per-locale string overrides (`<lang>.yml`); paired with embedded defaults | CLI i18n store | Author manually + translators | yes |
 | `workspace/scripts/` | Shell scripts referenced from declarative commands and pipelines | Pipeline steps + user commands | Author manually | yes |
 | `workspace/deploy.yml` | Top-level deploy orchestrator pipeline. Optional — DWE has a built-in default. | Deploy executor | Author manually | yes |
@@ -97,7 +119,7 @@ Everything declarative about a project — services, pipelines, commands, templa
 
 ### Per-service folder
 
-Each service lives in `workspace/services/<name>/`. The folder name is the canonical service ID; renaming the folder renames the service. The folder always has `service.yml`; optional `deploy.yml` and `reset.yml` declare per-service pipelines that the orchestrator inlines at the right point in topological order.
+The configuration for each service lives in `workspace/services/<name>/`. The folder name is the canonical service ID; renaming the folder renames the service. The folder always has `service.yml`; optional `deploy.yml` and `reset.yml` declare per-service pipelines that the orchestrator inlines at the right point in topological order.
 
 ```text
 workspace/services/web/
@@ -125,10 +147,10 @@ Each layer is optional; missing keys fall through to the layer below. Service-po
 | Path | Purpose | Reader | Writer | Tracked |
 |------|---------|--------|--------|---------|
 | `compose/infra/` | Overlays for `type: infra` services (databases, queues, caches) | Docker Compose via DWE | Author manually | yes |
-| `compose/services/` | Overlays for `type: app` services | Docker Compose via DWE | Author manually | yes |
+| `compose/<service>/` | Overlay for a specific `type: app` service — one folder per app | Docker Compose via DWE | Author manually | yes |
 | `compose/tools/` | Overlays for `type: tool` services (admin UIs, one-shot utilities) | Docker Compose via DWE | Author manually | yes |
 
-A typical service overlay declares the container image, mounts from the project's `volumes/` and `configs/` folders, and any environment exported from `defaults.yml`:
+A typical service overlay declares the container image, mounts from the project's `configs/` folder, and any environment exported from `defaults.yml`:
 
 ```yaml
 services:
@@ -144,18 +166,49 @@ services:
 
 The compose file list also picks up `workspace/docker.local.yml` last, so per-developer overrides (alternate images, debug ports, extra volumes) compose on top of the tracked overlays without editing them. See [`docker.yml`](../config/docker.md) and [Docker integration](docker.md) for the full assembly.
 
-## Per-service runtime data
+## Service images (`images/`)
 
-Two folders typically sit next to the config tree and hold runtime data that the containers read or write.
+Services built from source — rather than pulled from a registry — keep their build context under `images/<service>/`, with a `Dockerfile` at its root. The compose overlay points `build:` at that folder:
+
+```yaml
+services:
+  web:
+    build:
+      context: ../images/web
+    container_name: ${PROJECT}-web
+```
+
+`images/` is tracked: the Dockerfile and its build context are part of the project. The folder name is the service name, referenced by the overlay's `build.context`.
+
+## Config templates and dumps
+
+Two folders typically sit next to the config tree.
 
 | Path | Purpose | Reader | Writer | Tracked |
 |------|---------|--------|--------|---------|
 | `configs/<service>/…` | Per-service config templates copied into containers via `service.yml.configs:` | Containers (read) | Author manually | yes |
-| `volumes/<service>/…` | Bind-mount targets for persisted container data (databases, uploads, caches) | Containers (read/write) | Containers (write) | no |
+| `backups/…` | Database and other dumps produced during development | Operator / project commands | Operator / project commands | no |
 
-`configs/` is tracked because the templates are part of the project; `volumes/` is gitignored because it contains generated runtime data that varies per machine.
+`configs/` is tracked because the templates are part of the project; `backups/` is gitignored because it holds generated dumps that vary per machine.
 
-The exact folder names are conventions — services reference them by relative path in the compose overlay and the `configs:` block of `service.yml`. A project may use `etc/` instead of `configs/`, or split volumes per service folder (`workspace/services/<name>/var/`). The layout above is the most common shape.
+Persistent container data (databases, uploads, caches) lives in Docker-managed named volumes.
+
+The exact folder names are conventions — `configs/` is referenced by relative path in the compose overlay and the `configs:` block of `service.yml`. A project may use `etc/` instead of `configs/`. The layout above is the most common shape.
+
+## Service sources (`services/`)
+
+The gitignored project-root `services/` directory holds the **source code** of the application services — checked out or cloned per machine, never tracked by the project repo. It is created on demand (e.g. by a deploy step or a project command) rather than scaffolded.
+
+Inside it, one folder per app — its *hub* — groups everything that app owns; each hub has at least a `src/` directory with the service source:
+
+```text
+services/                # gitignored
+└── <hub>/               # one folder per app
+    ├── src/             # service source (its own git repo / worktree)
+    └── …                # build output, working dirs, etc.
+```
+
+The `src/` checkout is a normal nested repository — its own `.gitignore` is the application's concern, not DWE's. Compose overlays bind-mount from here (`./services/<hub>/src:/var/www/html`), and `dwe render git` installs hooks at `services/<hub>/src/.git/hooks/`. Because the whole tree is root-anchored under `/services/` in `.gitignore`, the tracked `workspace/services/` config tree is unaffected.
 
 ## Runtime-managed `.dwe/`
 
@@ -186,13 +239,14 @@ A clean `.gitignore` for a DWE project covers the runtime-managed paths. The run
 
 ```text
 .dwe/
-volumes/
+/services/
 snapshots/
+backups/
 workspace/local.yml
 workspace/docker.local.yml
 ```
 
-Everything else — `workspace.yml`, the rest of `workspace/`, all of `compose/`, all of `configs/` — is tracked. Authors edit the tracked tree; the CLI writes only inside the gitignored folders (with one exception: the setup wizard appends merged answers to `workspace/local.yml`, which is itself gitignored).
+Everything else — `workspace.yml`, the rest of `workspace/`, all of `compose/`, all of `configs/` — is tracked. Authors edit the tracked tree; the CLI writes only inside the gitignored folders (with one exception: the setup wizard and `dwe services enable/disable` append to `workspace/local.yml`, which is itself gitignored).
 
 ## Where to go next
 

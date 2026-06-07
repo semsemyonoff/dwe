@@ -102,9 +102,9 @@ When the stack is wedged badly enough that step-by-step diagnosis is more expens
 dwe reset run
 ```
 
-`dwe reset run` stops every container, removes them, and runs the project's reset pipeline (`workspace/reset.yml`). What survives a reset is project-defined — typically the `volumes/` tree with your databases and caches stays, the journal and runtime state do not. Read the project's `reset.yml` (and `dwe reset plan` for the resolved step list) before assuming what it preserves.
+`dwe reset run` stops every container, removes them, and runs the project's reset pipeline (`workspace/reset.yml`). What survives a reset is project-defined — typically the Docker named volumes with your databases and caches stay, the journal and runtime state do not. Read the project's `reset.yml` (and `dwe reset plan` for the resolved step list) before assuming what it preserves.
 
-If you also want to wipe stateful data, opt in explicitly. The project's reset pipeline may expose a `docker_remove_project_volumes` step — check `dwe reset plan` — or you can delete `volumes/` by hand after a clean stop.
+If you also want to wipe stateful data, opt in explicitly. The project's reset pipeline may expose a `docker_remove_project_volumes` step — check `dwe reset plan` — or you can remove the Docker named volumes by hand after a clean stop.
 
 **Before any destructive reset, snapshot.** Even a one-line `dwe snapshot create pre-reset` gives you a rollback if the reset is more aggressive than expected. See [`switching-tasks-with-snapshots.md`](switching-tasks-with-snapshots.md) for the snapshot surface.
 

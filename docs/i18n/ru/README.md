@@ -1,4 +1,4 @@
-> Translated from: README.md @ 266dde616d95
+> Translated from: README.md @ b4480600793e
 
 # DWE — Dev Workspace Engine
 
@@ -151,7 +151,7 @@ flowchart LR
 
 ## Раскладка проекта
 
-Типичный проект хранит декларативное дерево в `workspace/`, оверлеи Docker Compose в `compose/` и runtime-данные в `.dwe/` / `volumes/` / `snapshots/`.
+Типичный проект хранит декларативное дерево в `workspace/`, оверлеи Docker Compose в `compose/` и runtime-данные в `.dwe/` / `snapshots/` / `backups/`.
 
 ```text
 my-project/
@@ -168,10 +168,12 @@ my-project/
 │   ├── info.yml            # информационная панель
 │   ├── validate.yml        # проверки готовности
 │   └── docker.yml          # список compose-файлов + топология
-├── compose/                # отслеживаемые оверлеи Docker Compose
+├── compose/                # отслеживаемые оверлеи Docker Compose (по сервисам)
 ├── configs/                # отслеживаемые шаблоны конфигов сервисов
-├── volumes/                # gitignored bind-mount цели
+├── images/                 # отслеживаемые сборки образов (<service>/Dockerfile)
+├── services/               # gitignored исходники сервисов (<hub>/src/)
 ├── snapshots/              # gitignored хранилище снапшотов
+├── backups/                # gitignored дампы БД и прочее
 └── .dwe/                # gitignored runtime-данные CLI (state, locks, logs)
 ```
 

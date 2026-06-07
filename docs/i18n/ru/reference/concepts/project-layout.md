@@ -1,4 +1,4 @@
-> Translated from: reference/concepts/project-layout.md @ fe1231fae96f
+> Translated from: reference/concepts/project-layout.md @ 5b115b8f4dbd
 
 # Раскладка проекта
 
@@ -20,46 +20,68 @@
 Проект DWE — это любая директория, корень которой содержит `workspace.yml`. CLI поднимается вверх от текущей рабочей директории, чтобы найти его. Вокруг этого якоря сосуществуют три семейства папок:
 
 - **Отслеживаемое дерево конфигурации** в `workspace/` и корневые конфигурационные файлы — закоммичены, версионируются, источник истины для структуры проекта.
-- **Отслеживаемые runtime-оверлеи** — файлы Docker Compose в `compose/` и шаблоны конфигов сервисов в `configs/`. DWE не генерирует их; они лежат рядом с деревом конфигурации, и на них ссылаются из него.
-- **Runtime-данные**, которые производят DWE и контейнеры — `.dwe/` (служебные данные CLI), `volumes/` (цели bind-mount) и `snapshots/` (распакованное хранилище снапшотов). Gitignored.
+- **Отслеживаемые runtime-оверлеи** — файлы Docker Compose в `compose/`, шаблоны конфигов сервисов в `configs/` и контексты сборки образов (`images/<service>/Dockerfile`) для сервисов, собираемых из исходников. DWE не генерирует их; они лежат рядом с деревом конфигурации, и на них ссылаются из него.
+- **Runtime-данные**, которые производят DWE и контейнеры — `.dwe/` (служебные данные CLI), `snapshots/` (распакованное хранилище снапшотов) и `backups/` (дампы БД и прочее). Gitignored. Персистентные данные контейнеров живут в именованных томах Docker.
 
 ```mermaid
-flowchart TD
+flowchart LR
   Root["project/"]
+  RootFiles["workspace.yml<br/>.gitignore · README.md"]
 
-  Root --> RootFiles["workspace.yml<br/>.gitignore<br/>README.md"]
-  Root --> DWEDir["workspace/<br/>дерево конфигурации (отслеживается)"]
-  Root --> ComposeDir["compose/<br/>оверлеи compose (отслеживается)"]
-  Root --> ConfigsDir["configs/<br/>шаблоны сервисов (отслеживается)"]
-  Root --> VolumesDir["volumes/<br/>bind-mount контейнеров (gitignored)"]
-  Root --> SnapsDir["snapshots/<br/>распакованные снапшоты (gitignored)"]
-  Root --> DotDir[".dwe/<br/>runtime-данные CLI (gitignored)"]
+  subgraph workspace["workspace/ — дерево конфигурации (tracked)"]
+    direction TB
+    WSServices["services/&lt;name&gt;/"]
+    WSCommands["commands/"]
+    WSTemplates["templates/"]
+    WSI18n["i18n/"]
+    WSScripts["scripts/"]
+    WSPipelines["deploy · lifecycle · reset · info<br/>setup · validate · defaults · local (.yml)"]
+  end
 
-  DWEDir --> DWEServices["services/<name>/"]
-  DWEDir --> DWECommands["commands/"]
-  DWEDir --> DWETemplates["templates/"]
-  DWEDir --> DWEI18n["i18n/"]
-  DWEDir --> DWEScripts["scripts/"]
-  DWEDir --> DWEPipelines["deploy.yml<br/>lifecycle.yml<br/>reset.yml<br/>info.yml<br/>setup.yml<br/>validate.yml<br/>defaults.yml<br/>local.yml"]
+  subgraph compose["compose/ — оверлеи (tracked)"]
+    direction TB
+    CInfra["infra/"]
+    CSvc["&lt;service&gt;/ — папка на каждый app-сервис"]
+    CTools["tools/"]
+  end
 
-  ComposeDir --> ComposeInfra["infra/"]
-  ComposeDir --> ComposeServices["services/"]
-  ComposeDir --> ComposeTools["tools/"]
+  subgraph other["прочее (tracked)"]
+    direction TB
+    ConfigsDir["configs/&lt;service&gt;/ — шаблоны конфигов"]
+    ImagesDir["images/&lt;service&gt;/Dockerfile — сборки образов"]
+  end
 
-  DotDir --> DotDeploy["deploy/<br/>state.yml · deploy.lock"]
-  DotDir --> DotSnaps["snapshots/<br/>current · snapshot.lock"]
-  DotDir --> DotLogs["logs/<br/>deploy.log · run.log · stop.log · reset.log"]
-  DotDir --> DotConfig["config<br/>per-project оверрайд userconfig"]
+  subgraph srcdir["services/ — исходники сервисов (gitignored)"]
+    direction TB
+    SrcHub["&lt;hub&gt;/ — папка на каждый app"]
+  end
+
+  subgraph runtime["runtime-данные (gitignored)"]
+    direction TB
+    DotDir[".dwe/ — state · locks · logs · config"]
+    SnapsDir["snapshots/ — распакованные снапшоты"]
+    BackupsDir["backups/ — дампы БД и прочее"]
+  end
+
+  Root --> RootFiles
+  Root --> workspace
+  Root --> compose
+  Root --> other
+  Root --> srcdir
+  Root --> runtime
+
+  WSServices --> WSSvcFiles["service.yml — обязателен<br/>deploy.yml · reset.yml — опционально"]
+  SrcHub --> SrcHubDetail["src/ — исходники сервиса<br/>… — рабочие папки сборки/runtime"]
 ```
 
-Имена папок, отличные от `workspace.yml` и `workspace/`, — это конвенции, а не требования. CLI спокойно находит `compose/`-файлы где угодно — сервисы ссылаются на них относительным путём в `service.yml` (`compose: [compose/services/web.yml]`). Папки ниже описывают раскладку, к которой приходит большинство проектов; единственные ограничения, которые накладывает CLI, — папка на сервис в `workspace/services/` и `workspace.yml` в корне проекта.
+Имена папок, отличные от `workspace.yml` и `workspace/`, — это конвенции, а не требования. CLI спокойно находит `compose/`-файлы где угодно — сервисы ссылаются на них относительным путём в `service.yml` (`compose: [compose/web/overlay.yml]`). Папки ниже описывают раскладку, к которой приходит большинство проектов; единственные ограничения, которые накладывает CLI, — папка на сервис в `workspace/services/` и `workspace.yml` в корне проекта.
 
 ## Корневые файлы
 
 | Файл | Назначение | Читатель | Писатель | Отслеживается |
 |------|---------|--------|--------|---------|
 | `workspace.yml` | Идентификация проекта: `project.name`, `project.prefix`, опциональные переопределения бинарников | CLI на каждом вызове | Автор вручную | да |
-| `.gitignore` | Исключает `.dwe/`, `volumes/`, `snapshots/` и `workspace/local.yml` из контроля версий | git | Автор вручную | да |
+| `.gitignore` | Исключает `.dwe/`, `/services/`, `snapshots/`, `backups/` и `workspace/local.yml` из контроля версий | git | Автор вручную | да |
 | `README.md` | Точка входа в документацию проекта (не README DWE CLI) | люди | Автор вручную | да |
 
 Минимальный `workspace.yml`:
@@ -79,10 +101,10 @@ project:
 | Путь | Назначение | Читатель | Писатель | Отслеживается |
 |------|---------|--------|--------|---------|
 | `workspace/defaults.yml` | Версионированные значения по умолчанию: `services.<name>.enabled`, `runtime`, `state`, `exports.env`, `compose`, `ide` | CLI (слой merge 2) | Автор вручную | да |
-| `workspace/local.yml` | Переопределения на разработчика поверх `defaults.yml`: порты, флаги enabled, креды, ответы мастера | CLI (слой merge 3) | Автор вручную + setup wizard | нет |
+| `workspace/local.yml` | Переопределения на разработчика поверх `defaults.yml`: порты, флаги enabled, креды, ответы мастера | CLI (слой merge 3) | Автор вручную + setup wizard + `dwe services enable/disable` | нет |
 | `workspace/services/<name>/` | Одна папка на сервис. Имя папки — это ID сервиса, поля `name:` нет. | Загрузчик сервисов CLI | Автор вручную | да (кроме оверрайдов `local.yml`) |
 | `workspace/commands/` | Декларативные пользовательские команды, доступные как `dwe <name>` | Реестр команд CLI | Автор вручную | да |
-| `workspace/templates/` | Template-паки для `dwe render` (env / ide / ai / git) | Render-пайплайн CLI | Автор вручную | да |
+| `workspace/templates/` | Template-паки для `dwe render` — по подкаталогу на вид: `ai/`, `git/`, `ide/`, в каждом `<pack>/manifest.yml` + файлы (`render env` пак не использует) | Render-пайплайн CLI | Автор вручную | да |
 | `workspace/i18n/` | Переопределения строк по локалям (`<lang>.yml`); сливаются со встроенными дефолтами | i18n-стор CLI | Автор вручную + переводчики | да |
 | `workspace/scripts/` | Shell-скрипты, на которые ссылаются декларативные команды и пайплайны | Шаги пайплайна + пользовательские команды | Автор вручную | да |
 | `workspace/deploy.yml` | Верхнеуровневый оркестратор пайплайна деплоя. Опционально — у DWE есть встроенный дефолт. | Исполнитель deploy | Автор вручную | да |
@@ -99,7 +121,7 @@ project:
 
 ### Папка на сервис
 
-Каждый сервис лежит в `workspace/services/<name>/`. Имя папки — это канонический ID сервиса; переименование папки переименовывает и сервис. Папка всегда содержит `service.yml`; опциональные `deploy.yml` и `reset.yml` объявляют пайплайны конкретного сервиса, которые оркестратор встраивает в нужной точке в топологическом порядке.
+Конфигурация каждого сервиса лежит в `workspace/services/<name>/`. Имя папки — это канонический ID сервиса; переименование папки переименовывает и сервис. Папка всегда содержит `service.yml`; опциональные `deploy.yml` и `reset.yml` объявляют пайплайны конкретного сервиса, которые оркестратор встраивает в нужной точке в топологическом порядке.
 
 ```text
 workspace/services/web/
@@ -127,10 +149,10 @@ Allowlist полей по типу (какие поля может объявл�
 | Путь | Назначение | Читатель | Писатель | Отслеживается |
 |------|---------|--------|--------|---------|
 | `compose/infra/` | Оверлеи для сервисов `type: infra` (БД, очереди, кэши) | Docker Compose через DWE | Автор вручную | да |
-| `compose/services/` | Оверлеи для сервисов `type: app` | Docker Compose через DWE | Автор вручную | да |
+| `compose/<service>/` | Оверлей конкретного сервиса `type: app` — папка на каждый app | Docker Compose через DWE | Автор вручную | да |
 | `compose/tools/` | Оверлеи для сервисов `type: tool` (админ-UI, одноразовые утилиты) | Docker Compose через DWE | Автор вручную | да |
 
-Типичный оверлей сервиса объявляет образ контейнера, монтирование из `volumes/` и `configs/` проекта и любое окружение, экспортированное из `defaults.yml`:
+Типичный оверлей сервиса объявляет образ контейнера, монтирование из папки `configs/` проекта и любое окружение, экспортированное из `defaults.yml`:
 
 ```yaml
 services:
@@ -146,18 +168,49 @@ services:
 
 Список compose-файлов также включает `workspace/docker.local.yml` в самом конце, так что переопределения на разработчика (альтернативные образы, debug-порты, дополнительные тома) накладываются поверх отслеживаемых оверлеев без их редактирования. Полная сборка — в [`docker.yml`](../config/docker.md) и [Интеграции с Docker](docker.md).
 
-## Runtime-данные сервисов
+## Образы сервисов (`images/`)
 
-Две папки обычно соседствуют с деревом конфигурации и хранят runtime-данные, которые читают или пишут контейнеры.
+Сервисы, собираемые из исходников (а не тянущиеся из реестра), хранят контекст сборки в `images/<service>/` с `Dockerfile` в корне. Compose-оверлей указывает `build:` на эту папку:
+
+```yaml
+services:
+  web:
+    build:
+      context: ../images/web
+    container_name: ${PROJECT}-web
+```
+
+`images/` отслеживается: Dockerfile и контекст сборки — часть проекта. Имя папки — это имя сервиса, на которое ссылается `build.context` оверлея.
+
+## Шаблоны конфигов и дампы
+
+Две папки обычно соседствуют с деревом конфигурации.
 
 | Путь | Назначение | Читатель | Писатель | Отслеживается |
 |------|---------|--------|--------|---------|
 | `configs/<service>/…` | Шаблоны конфигов сервиса, копируемые в контейнеры через `service.yml.configs:` | Контейнеры (чтение) | Автор вручную | да |
-| `volumes/<service>/…` | Цели bind-mount для персистентных данных контейнеров (БД, загрузки, кэши) | Контейнеры (чтение/запись) | Контейнеры (запись) | нет |
+| `backups/…` | Дампы БД и прочее, создаваемые во время разработки | Оператор / команды проекта | Оператор / команды проекта | нет |
 
-`configs/` отслеживается, потому что шаблоны — часть проекта; `volumes/` gitignored, потому что содержит сгенерированные runtime-данные, которые различаются от машины к машине.
+`configs/` отслеживается, потому что шаблоны — часть проекта; `backups/` gitignored, потому что содержит сгенерированные дампы, которые различаются от машины к машине.
 
-Точные имена папок — это конвенции: сервисы ссылаются на них относительным путём в compose-оверлее и в блоке `configs:` `service.yml`. Проект может использовать `etc/` вместо `configs/` или разбить тома по папкам сервисов (`workspace/services/<name>/var/`). Раскладка выше — самая распространённая форма.
+Персистентные данные контейнеров (БД, загрузки, кэши) живут в именованных томах Docker.
+
+Точные имена папок — это конвенции: на `configs/` сервисы ссылаются относительным путём в compose-оверлее и в блоке `configs:` `service.yml`. Проект может использовать `etc/` вместо `configs/`. Раскладка выше — самая распространённая форма.
+
+## Исходники сервисов (`services/`)
+
+Gitignored project-root каталог `services/` хранит **исходный код** сервисов-приложений — он выкачивается/клонируется на каждой машине и никогда не отслеживается репозиторием проекта. Создаётся по требованию (например, шагом деплоя или командой проекта), а не скаффолдингом.
+
+Внутри — по одной папке на приложение (его *хаб*), которая группирует всё, чем владеет это приложение; в каждом хабе есть как минимум `src/` с исходниками сервиса:
+
+```text
+services/                # gitignored
+└── <hub>/               # папка на каждое приложение
+    ├── src/             # исходники сервиса (свой git-репозиторий / worktree)
+    └── …                # вывод сборки, рабочие папки и т.п.
+```
+
+Чекаут `src/` — это обычный вложенный репозиторий, его `.gitignore` — забота приложения, а не DWE. Compose-оверлеи монтируют отсюда (`./services/<hub>/src:/var/www/html`), а `dwe render git` ставит хуки в `services/<hub>/src/.git/hooks/`. Поскольку всё дерево привязано к корню как `/services/` в `.gitignore`, отслеживаемое дерево `workspace/services/` не затрагивается.
 
 ## Управляемый runtime каталог `.dwe/`
 
@@ -188,13 +241,14 @@ services:
 
 ```text
 .dwe/
-volumes/
+/services/
 snapshots/
+backups/
 workspace/local.yml
 workspace/docker.local.yml
 ```
 
-Всё остальное — `workspace.yml`, остальная часть `workspace/`, весь `compose/`, весь `configs/` — отслеживается. Авторы редактируют отслеживаемое дерево; CLI пишет только внутрь gitignored-папок (с одним исключением: setup wizard добавляет смерженные ответы в `workspace/local.yml`, который и сам gitignored).
+Всё остальное — `workspace.yml`, остальная часть `workspace/`, весь `compose/`, весь `configs/` — отслеживается. Авторы редактируют отслеживаемое дерево; CLI пишет только внутрь gitignored-папок (с одним исключением: setup wizard и `dwe services enable/disable` дописывают в `workspace/local.yml`, который и сам gitignored).
 
 ## Что читать дальше
 

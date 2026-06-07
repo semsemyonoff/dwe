@@ -76,9 +76,11 @@ A first deploy creates several gitignored directories at the project root:
 | Path | Owner | Purpose |
 |------|-------|---------|
 | `.dwe/` | DWE | Deploy journal, project lock files, prompt cache, internal state. Safe to delete; DWE rebuilds it on next run. |
-| `volumes/` | Docker | Bind-mount targets for stateful services (databases, caches, message queues). **Contains your data** — delete with care. |
 | `snapshots/` | DWE | Saved checkpoints created via `dwe snapshot create`. Empty on a fresh project. |
+| `backups/` | You / project commands | Database and other dumps produced during development. |
 | `workspace/local.yml` | You | Machine-local overrides (ports, hosts, enabled services). Edited by the setup wizard and by `dwe services enable/disable`. |
+
+Stateful service data (databases, caches, message queues) lives in Docker-managed named volumes, not in a project-root folder. **It contains your data** — remove it with care (see `docker volume ls` / `dwe reset`).
 
 Everything under `workspace/` *except* `local.yml` is checked into git and shared with the team. Everything else in the table above stays on your machine.
 
