@@ -17,20 +17,20 @@ const gitignoreMarker = "# dwe (managed by the CLI)"
 // the pattern lines missing from it are appended under gitignoreMarker (see
 // mergeGitignore).
 //
-// We ignore the .dwe/ runtime subdirs/files individually (not .dwe/ wholesale) so
-// the committed .dwe/config template stays tracked. The real lock files
-// (.dwe/deploy/deploy.lock, .dwe/snapshots/snapshot.lock) are already covered by
-// the subdir entries, so there is no separate *.lock line.
+// We ignore the entire .dwe/ directory wholesale: everything under it is
+// CLI-managed runtime data or per-developer config (.dwe/config), none of which
+// belongs in version control. This also covers the lock files
+// (.dwe/deploy/deploy.lock, .dwe/snapshots/snapshot.lock) and any runtime
+// artifacts added under .dwe/ in the future.
 const dweGitignoreBlock = `# dwe — runtime data (managed by the CLI)
-.dwe/deploy/
-.dwe/snapshots/
-.dwe/logs/
-.dwe/prompt-cache.yml
+.dwe/
 # dwe — per-developer overrides
 workspace/local.yml
 workspace/docker.local.yml
+# dwe — service sources (root-anchored so workspace/services/ stays tracked)
+/services/
 # dwe — container data
-volumes/
+backups/
 snapshots/
 `
 
