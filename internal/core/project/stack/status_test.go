@@ -56,8 +56,8 @@ func TestHealthIndicator_Partial(t *testing.T) {
 		nil,
 		nil,
 	)
-	partialRunning := func(container string) bool {
-		return container == "app-main"
+	partialRunning := func(composeService string) bool {
+		return composeService == "app-main"
 	}
 	out := HealthIndicator(StatusInput{Cfg: cfg, IsRunning: partialRunning})
 	if !strings.Contains(out, "◐ partial") {
@@ -126,8 +126,8 @@ func TestRenderHealth_Partial(t *testing.T) {
 		nil,
 		nil,
 	)
-	partialRunning := func(container string) bool {
-		return container == "app-main"
+	partialRunning := func(composeService string) bool {
+		return composeService == "app-main"
 	}
 	out := RenderHealth(StatusInput{Cfg: cfg, IsRunning: partialRunning})
 	if !strings.Contains(out, "◐ partial") {

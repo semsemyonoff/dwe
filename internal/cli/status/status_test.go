@@ -536,19 +536,20 @@ func readPromptCacheState(t *testing.T, projectRoot string) string {
 	return ""
 }
 
-// withStubContainerRunning installs a stub for containerRunningFn and restores
-// it on test cleanup. Must NOT be called from t.Parallel() tests.
-func withStubContainerRunning(t *testing.T, stub func(project, container, bin string) bool) {
+// withStubContainerRunning installs a stub for serviceRunningFn and restores
+// it on test cleanup. Must NOT be called from t.Parallel() tests. The stub's
+// second argument is the compose service name (svc.Container).
+func withStubContainerRunning(t *testing.T, stub func(project, service, bin string, processEnv []string) bool) {
 	t.Helper()
-	prev := containerRunningFn
-	t.Cleanup(func() { containerRunningFn = prev })
-	containerRunningFn = stub
+	prev := serviceRunningFn
+	t.Cleanup(func() { serviceRunningFn = prev })
+	serviceRunningFn = stub
 }
 
 func TestStatus_TopLevel_PlainPath_WritesAccurateState_Running(t *testing.T) {
 	// statusFixture has main (required, container=app-main) and adminer
 	// (enabled, container=adminer). Stub all containers as running → HealthRunning.
-	withStubContainerRunning(t, func(_, _, _ string) bool { return true })
+	withStubContainerRunning(t, func(_, _, _ string, _ []string) bool { return true })
 
 	configPath := statusFixture(t)
 	root := buildStatusTestRoot()
@@ -567,9 +568,10 @@ func TestStatus_TopLevel_PlainPath_WritesAccurateState_Running(t *testing.T) {
 }
 
 func TestStatus_TopLevel_JsonPath_WritesAccurateState_Partial(t *testing.T) {
-	// Stub: only "app-main" running → main running, adminer stopped → partial.
-	withStubContainerRunning(t, func(_, container, _ string) bool {
-		return container == "app-main"
+	// Stub: only "app-main" (main's container) running → main running,
+	// adminer stopped → partial.
+	withStubContainerRunning(t, func(_, composeService, _ string, _ []string) bool {
+		return composeService == "app-main"
 	})
 
 	configPath := statusFixture(t)
@@ -590,7 +592,7 @@ func TestStatus_TopLevel_JsonPath_WritesAccurateState_Partial(t *testing.T) {
 
 func TestStatus_TopLevel_PlainPath_WritesStopped(t *testing.T) {
 	// No stub override → default real Docker probe fails (no Docker in tests) → stopped.
-	withStubContainerRunning(t, func(_, _, _ string) bool { return false })
+	withStubContainerRunning(t, func(_, _, _ string, _ []string) bool { return false })
 
 	configPath := statusFixture(t)
 	root := buildStatusTestRoot()
@@ -609,7 +611,7 @@ func TestStatus_TopLevel_PlainPath_WritesStopped(t *testing.T) {
 
 func TestStatus_SubCommand_DoesNotWriteCache(t *testing.T) {
 	// Must NOT use t.Parallel() — withStubContainerRunning mutates a package-level seam.
-	withStubContainerRunning(t, func(_, _, _ string) bool { return true })
+	withStubContainerRunning(t, func(_, _, _ string, _ []string) bool { return true })
 
 	subcommands := []string{"apps", "tools", "infra", "deploy", "topology", "git", "daemons"}
 	for _, subcmd := range subcommands {
@@ -632,7 +634,7 @@ func TestStatus_SubCommand_DoesNotWriteCache(t *testing.T) {
 }
 
 func TestStatus_CacheWriteFailure_DoesNotFailCommand(t *testing.T) {
-	withStubContainerRunning(t, func(_, _, _ string) bool { return true })
+	withStubContainerRunning(t, func(_, _, _ string, _ []string) bool { return true })
 
 	configPath := statusFixture(t)
 	// Plant a directory at the cache file path so atomic rename inside

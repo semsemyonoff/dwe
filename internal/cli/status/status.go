@@ -17,6 +17,7 @@ import (
 	"github.com/semsemyonoff/dwe/internal/core/usercommands"
 	"github.com/semsemyonoff/dwe/internal/core/workflow/deploy"
 	"github.com/semsemyonoff/dwe/internal/core/workflow/deploy/journal"
+	"github.com/semsemyonoff/dwe/internal/shared/docker"
 	"github.com/semsemyonoff/dwe/internal/shared/promptcache"
 
 	"github.com/charmbracelet/x/term"
@@ -27,9 +28,9 @@ import (
 // override these via assignment to suppress TUI or stub Docker without
 // spawning processes.
 var (
-	isTerminalFn       = term.IsTerminal
-	runStatusTUIFn     = statustui.Run
-	containerRunningFn = stack.ContainerRunning
+	isTerminalFn     = term.IsTerminal
+	runStatusTUIFn   = statustui.Run
+	serviceRunningFn = stack.ServiceRunning
 )
 
 // section identifies one of the renderable status sections used by the
@@ -101,8 +102,14 @@ func loadStatusContext(flags *cmdctx.RootFlags, errW io.Writer) (*statusContext,
 	}
 	topo, topoStatus := stack.ResolveTopology(cfg, dockerCfg, projectName, flags.ProjectRoot())
 	dockerBin := config.DockerBin(cfg)
-	isRunning := func(container string) bool {
-		return containerRunningFn(projectName, container, dockerBin)
+	// Thread docker.yml process_env (DOCKER_HOST / DOCKER_CONTEXT) into the probe
+	// so status targets the same daemon as lifecycle commands and `dwe shell`.
+	var processEnv []string
+	if dockerCfg != nil {
+		processEnv = docker.MergeEnv(dockerCfg.ProcessEnv)
+	}
+	isRunning := func(service string) bool {
+		return serviceRunningFn(projectName, service, dockerBin, processEnv)
 	}
 	return &statusContext{
 		Cfg:         cfg,

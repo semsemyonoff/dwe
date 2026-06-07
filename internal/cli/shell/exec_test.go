@@ -384,6 +384,61 @@ func TestComposeRunOneShot_neverAllocatesPTY(t *testing.T) {
 	}
 }
 
+// --- compose service identity: svc.Container, not the map key ---
+
+// TestRunServicesCLI_TargetsContainerField proves the probe and `docker compose
+// run` target svc.Container (the com.docker.compose.service value), NOT the dwe
+// folder key, when the two differ (service "main" with container: "app-main").
+// A regression here would make shell auto/exec/run miss a running container and
+// start a duplicate for any service with a custom container: field.
+func TestRunServicesCLI_TargetsContainerField(t *testing.T) {
+	cfg := &config.DweConfig{
+		Services: map[string]config.ServiceConfig{
+			"main": {Container: "app-main", CLI: config.ServiceCLIConfig{Shell: "bash"}},
+		},
+	}
+	cmp := &docker.Compose{ProjectName: "dwe-shop"}
+
+	t.Run("auto running execs discovered container, probes by container field", func(t *testing.T) {
+		var probed string
+		probe := func(svc string) (string, string, error) {
+			probed = svc
+			return "real-running-name", "running", nil
+		}
+		var execName string
+		execFn := func(name, _, _, _ string, _ map[string]string) error { execName = name; return nil }
+		runFn := func(*docker.Compose, string, string, string, string, map[string]string) error {
+			t.Fatal("run must not be called when container is running")
+			return nil
+		}
+		if err := runServicesCLI(cfg, cmp, "main", shellCLIFlags{mode: "auto"}, probe, execFn, runFn); err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if probed != "app-main" {
+			t.Errorf("probe service: got %q, want %q (svc.Container)", probed, "app-main")
+		}
+		if execName != "real-running-name" {
+			t.Errorf("exec target: got %q, want the probe-discovered container name", execName)
+		}
+	})
+
+	t.Run("run mode passes container field to compose run", func(t *testing.T) {
+		probe := func(string) (string, string, error) { return "", "", errContainerNotFound }
+		execFn := func(string, string, string, string, map[string]string) error { return nil }
+		var ranService string
+		runFn := func(_ *docker.Compose, svc, _, _, _ string, _ map[string]string) error {
+			ranService = svc
+			return nil
+		}
+		if err := runServicesCLI(cfg, cmp, "main", shellCLIFlags{mode: "run"}, probe, execFn, runFn); err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if ranService != "app-main" {
+			t.Errorf("compose run service: got %q, want %q (svc.Container)", ranService, "app-main")
+		}
+	})
+}
+
 // --- runOneShotCommand: full mode × state matrix ---
 
 // fakeStateFn returns a stub state func driven by table values.
@@ -465,12 +520,12 @@ func TestRunOneShotCommand_modeStateMatrix(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			inv := &fakeOneShotInvocation{}
 			execFn, runFn := newFakeOneShotHandlers(inv)
-			stateFn := func(_ string) (string, error) {
-				return tc.state.status, tc.state.err
+			probeFn := func(_ string) (string, string, error) {
+				return "main-app", tc.state.status, tc.state.err
 			}
 			cmp := &docker.Compose{ProjectName: "dwe-app"}
 			flags := shellCLIFlags{mode: tc.mode, command: "echo hi"}
-			err := runOneShotCommand(makeOneShotConfig(), cmp, "main", flags, stateFn, execFn, runFn)
+			err := runOneShotCommand(makeOneShotConfig(), cmp, "main", flags, probeFn, execFn, runFn)
 			if tc.wantErrSubstring != "" {
 				if err == nil {
 					t.Fatalf("expected error containing %q, got nil", tc.wantErrSubstring)
@@ -499,8 +554,8 @@ func TestRunOneShotCommand_modeStateMatrix(t *testing.T) {
 func TestRunOneShotCommand_unknownService(t *testing.T) {
 	inv := &fakeOneShotInvocation{}
 	execFn, runFn := newFakeOneShotHandlers(inv)
-	stateFn := func(string) (string, error) { return "", nil }
-	err := runOneShotCommand(makeOneShotConfig(), &docker.Compose{}, "missing", shellCLIFlags{command: "x"}, stateFn, execFn, runFn)
+	probeFn := func(string) (string, string, error) { return "", "", nil }
+	err := runOneShotCommand(makeOneShotConfig(), &docker.Compose{}, "missing", shellCLIFlags{command: "x"}, probeFn, execFn, runFn)
 	if err == nil || !strings.Contains(err.Error(), "not found") {
 		t.Errorf("want service-not-found error, got %v", err)
 	}
@@ -509,8 +564,8 @@ func TestRunOneShotCommand_unknownService(t *testing.T) {
 func TestRunOneShotCommand_invalidMode(t *testing.T) {
 	inv := &fakeOneShotInvocation{}
 	execFn, runFn := newFakeOneShotHandlers(inv)
-	stateFn := func(string) (string, error) { return "", nil }
-	err := runOneShotCommand(makeOneShotConfig(), &docker.Compose{}, "main", shellCLIFlags{mode: "bogus", command: "x"}, stateFn, execFn, runFn)
+	probeFn := func(string) (string, string, error) { return "", "", nil }
+	err := runOneShotCommand(makeOneShotConfig(), &docker.Compose{}, "main", shellCLIFlags{mode: "bogus", command: "x"}, probeFn, execFn, runFn)
 	if err == nil || !strings.Contains(err.Error(), "invalid cli.mode") {
 		t.Errorf("want invalid-mode error, got %v", err)
 	}
@@ -519,8 +574,8 @@ func TestRunOneShotCommand_invalidMode(t *testing.T) {
 func TestRunOneShotCommand_statePropagatesArbitraryError(t *testing.T) {
 	inv := &fakeOneShotInvocation{}
 	execFn, runFn := newFakeOneShotHandlers(inv)
-	stateFn := func(string) (string, error) { return "", errors.New("docker daemon unreachable") }
-	err := runOneShotCommand(makeOneShotConfig(), &docker.Compose{ProjectName: "p"}, "main", shellCLIFlags{mode: "auto", command: "x"}, stateFn, execFn, runFn)
+	probeFn := func(string) (string, string, error) { return "", "", errors.New("docker daemon unreachable") }
+	err := runOneShotCommand(makeOneShotConfig(), &docker.Compose{ProjectName: "p"}, "main", shellCLIFlags{mode: "auto", command: "x"}, probeFn, execFn, runFn)
 	if err == nil || !strings.Contains(err.Error(), "docker daemon unreachable") {
 		t.Errorf("want propagated state error, got %v", err)
 	}
