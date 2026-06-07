@@ -2,7 +2,6 @@ package stack
 
 import (
 	"maps"
-	"os/exec"
 	"slices"
 	"strings"
 
@@ -10,13 +9,17 @@ import (
 	"github.com/semsemyonoff/dwe/internal/core/ui/render"
 	"github.com/semsemyonoff/dwe/internal/core/ui/styles"
 	"github.com/semsemyonoff/dwe/internal/core/workflow/deploy/journal"
+	"github.com/semsemyonoff/dwe/internal/shared/docker"
 )
 
-// ContainerCheckFn reports whether the named container is running. Callers
-// close over the compose project name when constructing the callback so the
-// stack/render layer never needs to thread it through. The callback shape
-// lets tests stub Docker state without spawning processes.
-type ContainerCheckFn func(containerName string) bool
+// ContainerCheckFn reports whether the given compose service's container is
+// running. Callers close over the compose project name when constructing the
+// callback so the stack/render layer never needs to thread it through. The
+// argument is the compose service name — which in dwe is svc.Container (the
+// value compose stamps into the com.docker.compose.service label), NOT a guessed
+// container name — see ServiceRunning. The callback shape lets tests stub Docker
+// state without spawning processes.
+type ContainerCheckFn func(composeService string) bool
 
 // StatusInput bundles the data needed to render the full project status view.
 // Topo/TopoStatus may be nil — topology section is then skipped.
@@ -143,6 +146,8 @@ func collectRowsByType(cfg *config.DweConfig, isRunning ContainerCheckFn, filter
 		}
 		running := false
 		if (svc.Required || svc.Enabled) && isRunning != nil {
+			// svc.Container is the compose service name (com.docker.compose.service);
+			// it defaults to the folder key but may be overridden in service.yml.
 			running = isRunning(svc.Container)
 		}
 		rows = append(rows, render.ServiceTableRow{
@@ -184,19 +189,20 @@ func CollectServiceRows(in StatusInput, filter *config.ServiceType) []render.Ser
 	return collectRowsByType(in.Cfg, in.IsRunning, filter)
 }
 
-// ContainerRunning checks if a Docker container is running by full container name.
-// Uses docker inspect to get an exact name match (docker ps name filter uses substring
-// matching against the full /name path which is not portable across Docker versions).
-// dockerBin is the Docker-compatible binary (e.g. "docker", "podman").
-func ContainerRunning(projectFullName, containerName, dockerBin string) bool {
-	fullName := projectFullName + "-" + containerName
-	out, err := exec.Command(
-		dockerBin, "inspect", //nolint:gosec
-		"--format", "{{.State.Status}}",
-		fullName,
-	).Output()
-	if err != nil {
-		return false
-	}
-	return strings.TrimSpace(string(out)) == "running"
+// ServiceRunning reports whether the compose service composeService has at
+// least one running container in the project projectName. composeService is the
+// com.docker.compose.service label value — in dwe that is svc.Container (which
+// defaults to the folder key but may be overridden in service.yml), NOT a
+// guessed "<project>-<container>" name. It delegates to
+// docker.ServiceContainerName, which matches on the com.docker.compose.project /
+// com.docker.compose.service labels (correct under any container_name override
+// and compose's default "<project>-<service>-<index>" naming) and excludes
+// ephemeral one-off `compose run` containers so a service is not reported
+// running on the strength of a transient `dwe shell --mode run` container alone.
+// dockerBin is the Docker-compatible binary (e.g. "docker", "podman");
+// processEnv carries DOCKER_HOST / DOCKER_CONTEXT overrides from docker.yml
+// process_env so the probe targets the same daemon as lifecycle commands.
+func ServiceRunning(projectName, composeService, dockerBin string, processEnv []string) bool {
+	name, err := docker.ServiceContainerName(dockerBin, processEnv, projectName, composeService, true)
+	return err == nil && name != ""
 }

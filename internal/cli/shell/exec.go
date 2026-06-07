@@ -1,7 +1,6 @@
 package shell
 
 import (
-	"encoding/json"
 	"errors"
 	"fmt"
 	"maps"
@@ -13,7 +12,6 @@ import (
 
 	"github.com/semsemyonoff/dwe/internal/core/project/config"
 	"github.com/semsemyonoff/dwe/internal/core/ui/widgets"
-	"github.com/semsemyonoff/dwe/internal/shared/daemon"
 	"github.com/semsemyonoff/dwe/internal/shared/docker"
 	"github.com/semsemyonoff/dwe/internal/shared/render"
 )
@@ -188,87 +186,88 @@ type shellExecFunc func(containerName, shell, u, workDir string, env map[string]
 // shellRunFunc is the function signature for starting a new container shell.
 type shellRunFunc func(compose *docker.Compose, serviceName, shell, u, workDir string, env map[string]string) error
 
-// resolveShellTarget resolves the service, its shell options, and the
-// fully-qualified container name shared by the interactive (runServicesCLI) and
-// one-shot (runOneShotCommand) flows. It validates the service exists, has a
-// container, and carries a valid cli.mode.
-func resolveShellTarget(cfg *config.DweConfig, compose *docker.Compose, serviceName string, flags shellCLIFlags) (config.ServiceConfig, shellOptions, string, error) {
+// resolveShellTarget resolves the shell options shared by the interactive
+// (runServicesCLI) and one-shot (runOneShotCommand) flows. It validates the
+// service exists, has a container, and carries a valid cli.mode.
+//
+// It no longer derives a "<project>-<container>" name: the running container is
+// located by compose labels at probe time (see serviceContainerState), which is
+// correct under custom container_name and compose's default
+// "<project>-<service>-<index>" naming.
+//
+// It returns the compose service name (svc.Container) the probe and `docker
+// compose run` must target — svc.Container is the value compose stamps into the
+// com.docker.compose.service label and the service key dwe uses everywhere
+// (topology, stop, logs); it defaults to the folder key but may be overridden in
+// service.yml, so callers must use it rather than the user-facing serviceName.
+func resolveShellTarget(cfg *config.DweConfig, serviceName string, flags shellCLIFlags) (shellOptions, string, error) {
 	svc, ok := cfg.Services[serviceName]
 	if !ok {
-		return config.ServiceConfig{}, shellOptions{}, "", fmt.Errorf("service %q not found", serviceName)
+		return shellOptions{}, "", fmt.Errorf("service %q not found", serviceName)
 	}
 	if svc.Container == "" {
-		return config.ServiceConfig{}, shellOptions{}, "", fmt.Errorf("service %q has no container defined", serviceName)
+		return shellOptions{}, "", fmt.Errorf("service %q has no container defined", serviceName)
 	}
 
 	opts, err := resolveShellOptions(flags, svc.CLI, svc)
 	if err != nil {
-		return config.ServiceConfig{}, shellOptions{}, "", err
+		return shellOptions{}, "", err
 	}
 
 	// Validate the resolved mode — catches typos in workspace/services.yml or defaults.yml.
 	if !validModes[opts.Mode] {
-		return config.ServiceConfig{}, shellOptions{}, "", fmt.Errorf("invalid cli.mode %q for service %q: must be auto, exec, or run", opts.Mode, serviceName)
+		return shellOptions{}, "", fmt.Errorf("invalid cli.mode %q for service %q: must be auto, exec, or run", opts.Mode, serviceName)
 	}
 
-	// Resolve the authoritative compose project name (handles absent docker.yml).
-	projectFull, err := config.ResolveComposeProjectName(compose.BaseDir, cfg)
-	if err != nil {
-		return config.ServiceConfig{}, shellOptions{}, "", fmt.Errorf("resolving compose project name: %w", err)
-	}
-	fullContainerName, err := daemon.ResolveContainerName(projectFull, svc.Container)
-	if err != nil {
-		return config.ServiceConfig{}, shellOptions{}, "", err
-	}
-	return svc, opts, fullContainerName, nil
+	return opts, svc.Container, nil
 }
 
 // runServicesCLI resolves the container state and either execs into a running
 // container or starts a new one via docker compose run.
-// getState, execCLI, and runCLI are injected for testability.
+// probe, execCLI, and runCLI are injected for testability.
 func runServicesCLI(
 	cfg *config.DweConfig,
 	compose *docker.Compose,
 	serviceName string,
 	flags shellCLIFlags,
-	getState func(string) (string, error),
+	probe containerProbeFunc,
 	execCLI shellExecFunc,
 	runCLI shellRunFunc,
 ) error {
-	svc, opts, fullContainerName, err := resolveShellTarget(cfg, compose, serviceName, flags)
+	opts, composeService, err := resolveShellTarget(cfg, serviceName, flags)
 	if err != nil {
 		return err
 	}
 
 	switch opts.Mode {
 	case "exec":
-		// Always exec; error if container is not running.
-		status, stateErr := getState(fullContainerName)
+		// Always exec; error if the service's container is not running.
+		name, status, stateErr := probe(composeService)
 		if stateErr != nil {
-			return fmt.Errorf("container %q: %w", fullContainerName, stateErr)
+			return fmt.Errorf("service %q: %w", serviceName, stateErr)
 		}
 		if status != "running" {
-			return fmt.Errorf("container %q is not running — start it with 'dwe run'", fullContainerName)
+			return fmt.Errorf("service %q is not running — start it with 'dwe run'", serviceName)
 		}
-		return execCLI(fullContainerName, opts.Shell, opts.User, opts.WorkDir, opts.Env)
+		return execCLI(name, opts.Shell, opts.User, opts.WorkDir, opts.Env)
 	case "run":
 		// Always start a new container, regardless of current state.
-		return runCLI(compose, svc.Container, opts.Shell, opts.User, opts.WorkDir, opts.Env)
+		return runCLI(compose, composeService, opts.Shell, opts.User, opts.WorkDir, opts.Env)
 	default: // "auto"
-		status, stateErr := getState(fullContainerName)
+		name, status, stateErr := probe(composeService)
 		switch {
 		case errors.Is(stateErr, errContainerNotFound):
 			// Container does not exist — start a new one via compose run.
-			return runCLI(compose, svc.Container, opts.Shell, opts.User, opts.WorkDir, opts.Env)
+			return runCLI(compose, composeService, opts.Shell, opts.User, opts.WorkDir, opts.Env)
 		case stateErr != nil:
 			// Real Docker error (daemon down, permission denied, etc.) — surface it.
-			return fmt.Errorf("container %q: %w", fullContainerName, stateErr)
+			return fmt.Errorf("service %q: %w", serviceName, stateErr)
 		case status == "running":
-			return execCLI(fullContainerName, opts.Shell, opts.User, opts.WorkDir, opts.Env)
+			return execCLI(name, opts.Shell, opts.User, opts.WorkDir, opts.Env)
 		default:
 			return fmt.Errorf(
-				"container %q is %s — start it first with 'dwe run'",
-				fullContainerName, status,
+				"service %q container is %s — start it first with 'dwe run'",
+				serviceName, status,
 			)
 		}
 	}
@@ -292,50 +291,57 @@ func resolveUser(flagUser, configUser string, asRoot bool) string {
 	return ""
 }
 
-// errContainerNotFound is returned by containerStateStatus when the container
-// does not exist (docker inspect "No such object"). It is distinct from a real
-// Docker error (daemon down, permission denied, etc.) so callers can choose to
-// fall back to "docker compose run" only for the absent-container case.
+// errContainerNotFound is returned by serviceContainerState when no container
+// carries the compose labels for the service. It is distinct from a real Docker
+// error (daemon down, permission denied, etc.) so callers can choose to fall
+// back to "docker compose run" only for the absent-container case.
 var errContainerNotFound = fmt.Errorf("container not found")
 
-// containerStateStatus returns the Docker state status string for a container
-// (e.g. "running", "exited", "paused"). Returns errContainerNotFound when the
-// container does not exist, or the original Docker error for all other failures
-// (daemon unreachable, permission denied, etc.).
-// processEnv is applied to the docker process so that DOCKER_HOST / DOCKER_CONTEXT
-// overrides from docker.yml process_env are honoured for the probe.
+// containerProbeFunc resolves a compose service's running container name and
+// Docker state. Injected so tests drive the state machine without spawning a
+// real docker process.
+type containerProbeFunc func(service string) (containerName, status string, err error)
+
+// serviceContainerState locates the container for compose service `service` in
+// project `projectName` by matching the compose project + service labels, and
+// returns its actual name (for `docker exec`) plus a coarse state ("running" or
+// "stopped"). Returns errContainerNotFound when no labelled container exists, or
+// the original Docker error for all other failures (daemon unreachable,
+// permission denied, etc.). processEnv is applied to the docker process so
+// DOCKER_HOST / DOCKER_CONTEXT overrides from docker.yml process_env are honoured.
 //
-// Uses raw JSON output from docker inspect to avoid Docker's template engine
-// raising "map has no entry for key" errors on containers without a State field.
-func containerStateStatus(containerName string, processEnv []string, dockerBin string) (string, error) {
-	cmd := exec.Command(dockerBin, "inspect", containerName) //nolint:gosec
-	cmd.Env = processEnv
-	out, err := cmd.Output()
+// It resolves the container via docker.ServiceContainerName, which probes by the
+// compose project + service labels and prefers a long-lived service container
+// over an ephemeral one-off `compose run` container (so a concurrent `dwe shell
+// --mode run` session is never exec'd into by mistake). A first
+// `--filter status=running` pass yields the running container to exec into; a
+// second `--all` pass distinguishes "stopped" from "absent". Empty stdout from a
+// zero-exit `docker ps` unambiguously means "no match", and a real Docker error
+// exits non-zero and is surfaced — so auto mode never silently starts a
+// duplicate container on a probe hiccup.
+func serviceContainerState(projectName, service string, processEnv []string, dockerBin string) (string, string, error) {
+	if projectName == "" || service == "" {
+		// Without both labels we cannot identify the container; treat as absent
+		// so auto mode falls through to `docker compose run` rather than guessing.
+		return "", "", errContainerNotFound
+	}
+
+	running, err := docker.ServiceContainerName(dockerBin, processEnv, projectName, service, true)
 	if err != nil {
-		if exitErr, ok := errors.AsType[*exec.ExitError](err); ok {
-			if strings.Contains(strings.ToLower(string(exitErr.Stderr)), "no such object") {
-				return "", errContainerNotFound
-			}
-			if len(exitErr.Stderr) > 0 {
-				return "", fmt.Errorf("%s", strings.TrimSpace(string(exitErr.Stderr)))
-			}
-		}
-		return "", err
+		return "", "", err
 	}
-	// docker inspect returns a JSON array; parse the first element's State.Status.
-	var items []struct {
-		State *struct {
-			Status string `json:"Status"`
-		} `json:"State"`
+	if running != "" {
+		return running, "running", nil
 	}
-	if err := json.Unmarshal(out, &items); err != nil {
-		return "", fmt.Errorf("parsing docker inspect output: %w", err)
+
+	any, err := docker.ServiceContainerName(dockerBin, processEnv, projectName, service, false)
+	if err != nil {
+		return "", "", err
 	}
-	if len(items) == 0 || items[0].State == nil {
-		// Object exists but has no usable State — treat as not found.
-		return "", errContainerNotFound
+	if any != "" {
+		return any, "stopped", nil
 	}
-	return items[0].State.Status, nil
+	return "", "", errContainerNotFound
 }
 
 // dockerExecCLI runs an interactive shell in a running container via docker exec.
@@ -416,19 +422,19 @@ func dispatchShell(
 	processEnv []string,
 	dockerBin string,
 ) error {
-	stateFn := func(name string) (string, error) {
-		return containerStateStatus(name, processEnv, dockerBin)
+	probeFn := func(service string) (string, string, error) {
+		return serviceContainerState(compose.ProjectName, service, processEnv, dockerBin)
 	}
 	if flags.command != "" {
 		execOneFn := func(c, sh, u, w string, env map[string]string, cmd string) error {
 			return dockerExecOneShot(c, sh, u, w, env, cmd, processEnv, dockerBin)
 		}
-		return runOneShotCommand(cfg, compose, serviceName, flags, stateFn, execOneFn, composeRunOneShot)
+		return runOneShotCommand(cfg, compose, serviceName, flags, probeFn, execOneFn, composeRunOneShot)
 	}
 	execFn := func(c, sh, u, w string, env map[string]string) error {
 		return dockerExecCLI(c, sh, u, w, env, processEnv, dockerBin)
 	}
-	return runServicesCLI(cfg, compose, serviceName, flags, stateFn, execFn, composeRunCLI)
+	return runServicesCLI(cfg, compose, serviceName, flags, probeFn, execFn, composeRunCLI)
 }
 
 // oneShotExecFunc executes a single command in a running container.
@@ -438,46 +444,46 @@ type oneShotExecFunc func(containerName, shell, u, workDir string, env map[strin
 type oneShotRunFunc func(compose *docker.Compose, serviceName, shell, u, workDir string, env map[string]string, command string) error
 
 // runOneShotCommand mirrors runServicesCLI's mode switch but invokes the one-shot
-// helpers. getState/execOneShot/runOneShot are injected for testability.
+// helpers. probe/execOneShot/runOneShot are injected for testability.
 func runOneShotCommand(
 	cfg *config.DweConfig,
 	compose *docker.Compose,
 	serviceName string,
 	flags shellCLIFlags,
-	getState func(string) (string, error),
+	probe containerProbeFunc,
 	execOneShot oneShotExecFunc,
 	runOneShot oneShotRunFunc,
 ) error {
-	svc, opts, fullContainerName, err := resolveShellTarget(cfg, compose, serviceName, flags)
+	opts, composeService, err := resolveShellTarget(cfg, serviceName, flags)
 	if err != nil {
 		return err
 	}
 
 	switch opts.Mode {
 	case "exec":
-		status, stateErr := getState(fullContainerName)
+		name, status, stateErr := probe(composeService)
 		if stateErr != nil {
-			return fmt.Errorf("container %q: %w", fullContainerName, stateErr)
+			return fmt.Errorf("service %q: %w", serviceName, stateErr)
 		}
 		if status != "running" {
-			return fmt.Errorf("container %q is not running — start it with 'dwe run'", fullContainerName)
+			return fmt.Errorf("service %q is not running — start it with 'dwe run'", serviceName)
 		}
-		return execOneShot(fullContainerName, opts.Shell, opts.User, opts.WorkDir, opts.Env, flags.command)
+		return execOneShot(name, opts.Shell, opts.User, opts.WorkDir, opts.Env, flags.command)
 	case "run":
-		return runOneShot(compose, svc.Container, opts.Shell, opts.User, opts.WorkDir, opts.Env, flags.command)
+		return runOneShot(compose, composeService, opts.Shell, opts.User, opts.WorkDir, opts.Env, flags.command)
 	default: // "auto"
-		status, stateErr := getState(fullContainerName)
+		name, status, stateErr := probe(composeService)
 		switch {
 		case errors.Is(stateErr, errContainerNotFound):
-			return runOneShot(compose, svc.Container, opts.Shell, opts.User, opts.WorkDir, opts.Env, flags.command)
+			return runOneShot(compose, composeService, opts.Shell, opts.User, opts.WorkDir, opts.Env, flags.command)
 		case stateErr != nil:
-			return fmt.Errorf("container %q: %w", fullContainerName, stateErr)
+			return fmt.Errorf("service %q: %w", serviceName, stateErr)
 		case status == "running":
-			return execOneShot(fullContainerName, opts.Shell, opts.User, opts.WorkDir, opts.Env, flags.command)
+			return execOneShot(name, opts.Shell, opts.User, opts.WorkDir, opts.Env, flags.command)
 		default:
 			return fmt.Errorf(
-				"container %q is %s — start it first with 'dwe run'",
-				fullContainerName, status,
+				"service %q container is %s — start it first with 'dwe run'",
+				serviceName, status,
 			)
 		}
 	}

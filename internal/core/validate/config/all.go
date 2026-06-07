@@ -28,5 +28,6 @@ func All() []validate.Validator {
 		&lifecycleParallelGroupsValidator{},
 		&resetParallelGroupsValidator{},
 		&iconsValidator{},
+		&composeProjectNameValidator{},
 	}
 }

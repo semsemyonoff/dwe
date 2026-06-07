@@ -7,6 +7,7 @@ import (
 	"github.com/semsemyonoff/dwe/internal/cli/cmdctx"
 	"github.com/semsemyonoff/dwe/internal/core/project/config"
 	"github.com/semsemyonoff/dwe/internal/core/project/stack"
+	"github.com/semsemyonoff/dwe/internal/shared/docker"
 
 	"github.com/spf13/cobra"
 )
@@ -38,13 +39,19 @@ func runServicesList(cmd *cobra.Command, flags *cmdctx.RootFlags) error {
 	if err != nil {
 		return err
 	}
-	projectName, _, err := stack.ResolveProjectAndDocker(flags.ConfigPath, cfg)
+	projectName, dockerCfg, err := stack.ResolveProjectAndDocker(flags.ConfigPath, cfg)
 	if err != nil {
 		return fmt.Errorf("resolving project: %w", err)
 	}
 	dockerBin := config.DockerBin(cfg)
-	isRunning := func(container string) bool {
-		return stack.ContainerRunning(projectName, container, dockerBin)
+	// Honor docker.yml process_env (DOCKER_HOST / DOCKER_CONTEXT) so the probe
+	// targets the same daemon as lifecycle commands.
+	var processEnv []string
+	if dockerCfg != nil {
+		processEnv = docker.MergeEnv(dockerCfg.ProcessEnv)
+	}
+	isRunning := func(service string) bool {
+		return stack.ServiceRunning(projectName, service, dockerBin, processEnv)
 	}
 	in := stack.StatusInput{Cfg: cfg, IsRunning: isRunning}
 
@@ -111,7 +118,7 @@ func writeNonEmpty(w io.Writer, s string) {
 		return
 	}
 	_, _ = fmt.Fprint(w, s)
-	if len(s) == 0 || s[len(s)-1] != '\n' {
+	if s[len(s)-1] != '\n' {
 		_, _ = fmt.Fprintln(w)
 	}
 }

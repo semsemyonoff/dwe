@@ -19,6 +19,7 @@ import (
 	"github.com/semsemyonoff/dwe/internal/core/project/config"
 	"github.com/semsemyonoff/dwe/internal/core/validate"
 	"github.com/semsemyonoff/dwe/internal/shared/daemon"
+	"github.com/semsemyonoff/dwe/internal/shared/docker"
 )
 
 // portsProbeTimeout caps the `docker ps` invocation so a hung daemon does not
@@ -28,7 +29,7 @@ const portsProbeTimeout = 5 * time.Second
 // composeProjectLabel is the standard label every container created via
 // `docker compose` carries. We use it to distinguish our containers (which
 // are expected to bind the declared ports) from foreign processes.
-const composeProjectLabel = "com.docker.compose.project"
+const composeProjectLabel = docker.ComposeProjectLabel
 
 // PortConflict describes a host port that is in use by something other than
 // our own compose containers. It is returned by the exported CollectPortConflicts
