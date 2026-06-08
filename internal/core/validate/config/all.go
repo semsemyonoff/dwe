@@ -25,6 +25,7 @@ func All() []validate.Validator {
 		&deployAfterValidator{},
 		&serviceHooksValidator{},
 		&generatedValidator{},
+		&deprecationsValidator{},
 		&parallelGroupsValidator{},
 		&lifecycleParallelGroupsValidator{},
 		&resetParallelGroupsValidator{},

@@ -265,11 +265,11 @@ generated:
 - Modify: `internal/core/execution/builtin/services/configs_copy.go` (single-site runtime warning)
 - Create/Modify: corresponding `*_test.go`
 
-- [ ] `dwe validate` config-domain: emit `SeverityWarning` (with `File:Line` + migration hint) for `configs:`/`mountpoint` in `service.yml` and for `service_configs_copy`/`service_configs_check` in `deploy.yml`/`reset.yml`
-- [ ] runtime: emit a SINGLE deprecation notice via `ectx.Output.Warning` (`*render.Writer.Warning` @ output.go:63) from **`ConfigsCopy.Run` only** — do NOT also warn from `ConfigsCheck.Run` (it runs as the copy step's check → would double-warn per step)
-- [ ] confirm `SeverityWarning` does not change exit code (deploy/validate still succeed)
-- [ ] write tests: validator emits warning at the right location; severity is Warning (non-fatal); exactly one runtime notice per copy step
-- [ ] run `make test` — must pass before next task
+- [x] `dwe validate` config-domain: emit `SeverityWarning` (with `File:Line` + migration hint) for `configs:`/`mountpoint` in `service.yml` and for `service_configs_copy`/`service_configs_check` in `deploy.yml`/`reset.yml` (new `deprecationsValidator` in `validate/config/deprecations.go`; yaml-node walk supplies precise lines)
+- [x] runtime: emit a SINGLE deprecation notice via `ectx.Output.Warning` (`*render.Writer.Warning` @ output.go:63) from **`ConfigsCopy.Run` only** — do NOT also warn from `ConfigsCheck.Run` (it runs as the copy step's check → would double-warn per step)
+- [x] confirm `SeverityWarning` does not change exit code (deploy/validate still succeed) — `validate.ExitCode` only fails on errors (warnings only under `--strict`); tests assert zero error-severity diagnostics
+- [x] write tests: validator emits warning at the right location; severity is Warning (non-fatal); exactly one runtime notice per copy step
+- [x] run `make test` — must pass before next task
 
 ### Task 13: Documentation + re-embed
 
