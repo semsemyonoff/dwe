@@ -164,11 +164,11 @@ generated:
 - Create: `internal/core/execution/templates/config/config_test.go`
 - Create: `internal/core/execution/templates/config/testdata/...`
 
-- [ ] implement `config` pack resolution (convention service→`extends`→`default` + `.local` via `packroot.Resolve`) and manifest load/validate (`manifest.File`, `render: from→to`)
-- [ ] implement `RenderConfigs(cfg, service, store)`: build the per-service `tpl.RenderContext` (merged config + `Generated` = store[service], per Task 3); render each manifest entry via `CompileVarSyntax`+engine into `<svc.Dir>/<to>` where `to` is the manifest entry (authors target the app tree by writing `to: src/...` — `src/` is a usage convention, NOT a hardcoded join), mode **replace**; pathsafe destination guards
-- [ ] iterate services via `config.DeployOrder(...)` where multiple are processed (deterministic golden output)
-- [ ] write tests: pack resolution + `.local` override; render writes under `src/`; `${generated.x}` replay from store; replace overwrites; path-escape rejected
-- [ ] run `make test` — must pass before next task
+- [x] implement `config` pack resolution (convention service→`extends`→`default` + `.local` via `packroot.Resolve`) and manifest load/validate (`manifest.File`, `render: from→to`)
+- [x] implement `RenderConfigs(cfg, service, store)`: build the per-service `tpl.RenderContext` (merged config + `Generated` = store[service], per Task 3); render each manifest entry via `CompileVarSyntax`+engine into `<svc.Dir>/<to>` where `to` is the manifest entry (authors target the app tree by writing `to: src/...` — `src/` is a usage convention, NOT a hardcoded join), mode **replace**; pathsafe destination guards
+- [x] iterate services via `config.DeployOrder(...)` where multiple are processed (deterministic golden output) — `RenderConfigsAll` iterates `DeployOrder`; `RenderConfigs` is single-service
+- [x] write tests: pack resolution + `.local` override; render writes under `src/`; `${generated.x}` replay from store; replace overwrites; path-escape rejected
+- [x] run `make test` — must pass before next task
 
 ### Task 5: `HarvestGenerated` core + regex extraction
 
