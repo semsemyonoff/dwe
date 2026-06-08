@@ -203,12 +203,12 @@ generated:
 - Modify: `internal/core/execution/builtin/services/services.go` (`Builtins()` @ L8-11)
 - Create/Modify: `internal/core/execution/builtin/services/*_test.go`
 
-- [ ] implement `service_configs_render` (KindAction; `with: {service, mode?}`, default `replace`) → `RenderConfigs`; `Validate`/`Describe`/`Run`
-- [ ] implement `service_configs_render_check` (KindAction, used as a `check:`) verifying rendered outputs exist/are current — its PRESENCE forces the render step to re-run every deploy via the `hasCheck → Run` lever in `journal/decision.go:38-62` (`if hasCheck { return Run }`); mirrors `service_configs_copy`+`service_configs_check`. The user pairs it on the render step via `check:`.
-- [ ] implement `service_generated_harvest` (KindAction; `with: {service}`) → `HarvestGenerated`
-- [ ] register all three in `services.Builtins()`
-- [ ] write tests: `Validate` rejects bad params; `Run` renders/harvests against a temp project; **render re-runs on an unchanged redeploy when paired with the check** (this test fails until the check builtin exists — it motivates it); registry has no dup panic
-- [ ] run `make test` — must pass before next task
+- [x] implement `service_configs_render` (KindAction; `with: {service, mode?}`, default `replace`) → `RenderConfigs`; `Validate`/`Describe`/`Run`
+- [x] implement `service_configs_render_check` (KindAction, used as a `check:`) verifying rendered outputs exist/are current — its PRESENCE forces the render step to re-run every deploy via the `hasCheck → Run` lever in `journal/decision.go:38-62` (`if hasCheck { return Run }`); mirrors `service_configs_copy`+`service_configs_check`. The user pairs it on the render step via `check:`. (Helper `config.CheckRendered` centralizes pack/manifest resolution + target existence.)
+- [x] implement `service_generated_harvest` (KindAction; `with: {service}`) → `HarvestGenerated`
+- [x] register all three in `services.Builtins()`
+- [x] write tests: `Validate` rejects bad params; `Run` renders/harvests against a temp project; **render re-runs on an unchanged redeploy when paired with the check** (this test fails until the check builtin exists — it motivates it); registry has no dup panic (updated `allBuiltinNames`)
+- [x] run `make test` — must pass before next task
 
 ### Task 8: `generated-missing` predicate
 
