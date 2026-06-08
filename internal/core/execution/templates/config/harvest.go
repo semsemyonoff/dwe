@@ -126,6 +126,10 @@ func extractGenerated(absRoot, absHubDir, serviceName, field string, spec projec
 	}
 
 	for line := range strings.SplitSeq(string(data), "\n") {
+		// Tolerate CRLF files: strip a trailing carriage return so an anchored
+		// pattern like `^APP_KEY=(.*)$` does not capture a stray \r into the
+		// secret (which would silently corrupt the harvested value).
+		line = strings.TrimSuffix(line, "\r")
 		m := re.FindStringSubmatch(line)
 		if m == nil {
 			continue

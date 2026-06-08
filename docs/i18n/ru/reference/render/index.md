@@ -1,4 +1,4 @@
-> Translated from: reference/render/index.md @ b2d20b912cb3
+> Translated from: reference/render/index.md @ 5a0e41f982dc
 
 # Справочник Render
 
@@ -22,7 +22,7 @@
 | `dwe render git` | shell git-хуки на каждый сервис, в `<svc.Dir>/src/.git/hooks/<basename>` (режим `0755`) | пакеты шаблонов в `workspace/templates/git/<pack>/`, управляемые `manifest.yml` |
 | `dwe render config` | config-файлы по каждому сервису (`.env`, `env.php`, …) внутри hub-каталога сервиса, с воспроизведением собранных секретов | пакеты шаблонов в `workspace/templates/config/<pack>/`, управляемые `manifest.yml` |
 
-Все четыре подкоманды читают одну и ту же объединённую конфигурацию (`workspace.yml` → `workspace/defaults.yml` → `workspace/local.yml`, с объявлениями сервисов из `workspace/services/<name>/service.yml`). Различаются они тем, что итерируют и куда пишут.
+Все пять подкоманд читают одну и ту же объединённую конфигурацию (`workspace.yml` → `workspace/defaults.yml` → `workspace/local.yml`, с объявлениями сервисов из `workspace/services/<name>/service.yml`). Различаются они тем, что итерируют и куда пишут.
 
 ## Общий конвейер
 

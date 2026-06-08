@@ -63,6 +63,26 @@ func TestHarvestGenerated_dotenv(t *testing.T) {
 	}
 }
 
+func TestHarvestGenerated_crlfLineEndings(t *testing.T) {
+	root := t.TempDir()
+	// Windows (CRLF) line endings must not leak a trailing \r into the captured
+	// secret — an anchored `(.*)$` would otherwise grab the carriage return.
+	writeServiceFile(t, root, "services/main", "configs/.env",
+		"APP_NAME=demo\r\nAPP_KEY=base64:Xa3secret==\r\nDB_HOST=db\r\n")
+
+	cfg := cfgWithGenerated("main", "services/main", map[string]projectconfig.GeneratedField{
+		"app_key": {File: "configs/.env", Pattern: `^APP_KEY=(.*)$`},
+	})
+	store := generatedstore.New()
+
+	if _, err := HarvestGenerated(root, cfg, "main", store); err != nil {
+		t.Fatalf("HarvestGenerated: %v", err)
+	}
+	if got := store.Get("main", "app_key"); got != "base64:Xa3secret==" {
+		t.Errorf("store value = %q, want base64:Xa3secret== (no trailing \\r)", got)
+	}
+}
+
 func TestHarvestGenerated_phpArray(t *testing.T) {
 	root := t.TempDir()
 	writeServiceFile(t, root, "services/magento", "configs/env.php",

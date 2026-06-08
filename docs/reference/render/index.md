@@ -20,7 +20,7 @@
 | `dwe render git` | Per-service shell git hooks at `<svc.Dir>/src/.git/hooks/<basename>` (mode `0755`) | Template packs under `workspace/templates/git/<pack>/` driven by `manifest.yml` |
 | `dwe render config` | Per-service config files (`.env`, `env.php`, …) inside each service hub, replaying harvested secrets | Template packs under `workspace/templates/config/<pack>/` driven by `manifest.yml` |
 
-All four subcommands read the same merged config (`workspace.yml` → `workspace/defaults.yml` → `workspace/local.yml`, with per-service declarations from `workspace/services/<name>/service.yml` joined in). They differ in what they iterate and where they write.
+All five subcommands read the same merged config (`workspace.yml` → `workspace/defaults.yml` → `workspace/local.yml`, with per-service declarations from `workspace/services/<name>/service.yml` joined in). They differ in what they iterate and where they write.
 
 ## Common pipeline
 

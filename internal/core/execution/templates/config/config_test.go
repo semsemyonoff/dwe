@@ -193,34 +193,6 @@ func TestRenderConfigs_explicitPinNotFound(t *testing.T) {
 	}
 }
 
-func TestRenderConfigsAll_deterministicDeployOrder(t *testing.T) {
-	root := t.TempDir()
-	// One shared "default" pack resolves for both services via the implicit chain.
-	writePack(t, root, "default", "render:\n  - from: env.tmpl\n    to: src/.env\n", map[string]string{
-		"env.tmpl": "ok\n",
-	})
-
-	cfg := &projectconfig.DweConfig{
-		Raw: map[string]any{},
-		Services: map[string]projectconfig.ServiceConfig{
-			"zebra": {Type: projectconfig.ServiceTypeApp, Enabled: true, Dir: "services/zebra"},
-			"alpha": {Type: projectconfig.ServiceTypeApp, Enabled: true, Dir: "services/alpha"},
-		},
-	}
-
-	results, err := RenderConfigsAll(root, cfg, generatedstore.New())
-	if err != nil {
-		t.Fatalf("RenderConfigsAll: %v", err)
-	}
-	if len(results) != 2 {
-		t.Fatalf("expected 2 results, got %d", len(results))
-	}
-	// DeployOrder sorts alphabetically within the app type group.
-	if results[0].Service != "alpha" || results[1].Service != "zebra" {
-		t.Errorf("non-deterministic order: %s, %s", results[0].Service, results[1].Service)
-	}
-}
-
 func mustRead(t *testing.T, path string) string {
 	t.Helper()
 	b, err := os.ReadFile(path)

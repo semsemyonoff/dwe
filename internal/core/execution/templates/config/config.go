@@ -227,27 +227,6 @@ func RenderConfigs(projectRoot string, cfg *projectconfig.DweConfig, serviceName
 	return res, nil
 }
 
-// RenderConfigsAll renders config packs for every enabled service that has one,
-// iterating in config.DeployOrder so multi-service output is deterministic
-// (never a map range). Services without a config pack are skipped (Found=false
-// results are omitted). The first hard error aborts and is returned.
-func RenderConfigsAll(projectRoot string, cfg *projectconfig.DweConfig, store *generatedstore.Store) ([]Result, error) {
-	if cfg == nil {
-		return nil, errors.New("config render: nil cfg")
-	}
-	var results []Result
-	for _, name := range projectconfig.DeployOrder(cfg, []string{"app", "tool", "infra"}) {
-		res, err := RenderConfigs(projectRoot, cfg, name, store)
-		if err != nil {
-			return nil, err
-		}
-		if res.Found {
-			results = append(results, res)
-		}
-	}
-	return results, nil
-}
-
 // renderTemplateFile resolves rel via packroot (override first, canonical
 // fallback), renders it with the ${...} substrate against ctx, and writes the
 // result to dest under absHubDir (mode replace). It enforces that dest stays
