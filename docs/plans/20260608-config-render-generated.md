@@ -151,11 +151,11 @@ generated:
 - Modify (only if config needs more service fields): `internal/core/project/config/workspace.go` (`injectServicesIntoRaw`)
 - Modify/Create: `internal/shared/tpl/*_test.go`
 
-- [ ] add a `Generated map[string]string` field to `tpl.RenderContext` (per-service generated values for the render pass)
-- [ ] add `case "generated":` to `CompileVarSyntax` routing to a resolver (mirror `resolveMap` @ :263) returning the value or `""` if absent. ⚠️ **(codex) all `${...}` resolvers are ALREADY lenient** — `resolve`/`resolveMap` return `""` for missing paths (render_command.go:248-270), so `generated` just follows the same convention; there is NO strict-vs-lenient distinction to enforce
-- [ ] ⚠️ **(codex) use `${services.<name>...}`, NOT `${raw.services...}`** — there is no `raw` namespace; `${X}` → `{{ resolve .Raw "X" }}` and services live at `Raw["services"]` (confirmed form `${services.app.ports.http}`). This exposes only the **CURATED subset** from `injectServicesIntoRaw` (type/container/dirs/configs/ports/hosts/…), NOT `render`/`generated`/arbitrary fields; an omitted field renders `""` (lenient). Decide per template need: (a) restrict to the injected subset and document it, or (b) extend `injectServicesIntoRaw`. Top-level config uses bare `${databases.x}` etc.; a singular `${service....}` would need a new `case "service":`
-- [ ] write tests: `${generated.x}` resolves from `RenderContext.Generated`; absent → `""` (consistent with existing `.Raw` leniency); `${services.<name>.<injected-field>}` resolves; an uninjected field renders `""` (documents the limitation); namespaces coexist
-- [ ] run `make test` — must pass before next task
+- [x] add a `Generated map[string]string` field to `tpl.RenderContext` (per-service generated values for the render pass)
+- [x] add `case "generated":` to `CompileVarSyntax` routing to a resolver (mirror `resolveMap` @ :263) returning the value or `""` if absent. ⚠️ **(codex) all `${...}` resolvers are ALREADY lenient** — `resolve`/`resolveMap` return `""` for missing paths (render_command.go:248-270), so `generated` just follows the same convention; there is NO strict-vs-lenient distinction to enforce
+- [x] ⚠️ **(codex) use `${services.<name>...}`, NOT `${raw.services...}`** — there is no `raw` namespace; `${X}` → `{{ resolve .Raw "X" }}` and services live at `Raw["services"]` (confirmed form `${services.app.ports.http}`). This exposes only the **CURATED subset** from `injectServicesIntoRaw` (type/container/dirs/configs/ports/hosts/…), NOT `render`/`generated`/arbitrary fields; an omitted field renders `""` (lenient). Decision: (a) restrict to the injected subset and document it — no `injectServicesIntoRaw` extension needed for Task 3 (`${generated.*}` covers the per-service generated values; config templates use the injected subset for service fields). Top-level config uses bare `${databases.x}` etc.; a singular `${service....}` would need a new `case "service":`
+- [x] write tests: `${generated.x}` resolves from `RenderContext.Generated`; absent → `""` (consistent with existing `.Raw` leniency); `${services.<name>.<injected-field>}` resolves; an uninjected field renders `""` (documents the limitation); namespaces coexist
+- [x] run `make test` — must pass before next task
 
 ### Task 4: Config render kind — pack resolution + `RenderConfigs` core
 

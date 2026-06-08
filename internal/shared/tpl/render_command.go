@@ -33,6 +33,11 @@ type RenderContext struct {
 	// created_at) when rendering inside a snapshot workflow scope. Visibility
 	// is gated by SnapshotScope — see SnapshotScope and validateSnapshotScope.
 	Snapshot map[string]any
+	// Generated holds the current service's harvested generated values
+	// (field name → value) replayed during a config render pass. Populated
+	// from the generated-value store (.dwe/generated.yml). Absent keys
+	// resolve to "" — consistent with all other ${...} resolvers.
+	Generated map[string]string
 	// SnapshotScope governs which ${snapshot.*} keys are allowed at compile
 	// time. Zero value (SnapshotScopeNone) makes any ${snapshot.*} reference
 	// a compile error.
@@ -107,6 +112,11 @@ var varPattern = regexp.MustCompile(`\$\{([a-zA-Z_][a-zA-Z0-9_.]*)\}`)
 //	${host.uid}      →  {{ .Host.UID }}
 //	${host.gid}      →  {{ .Host.GID }}
 //
+// The special namespace "generated" resolves harvested generated values for
+// the current service (config render pass):
+//
+//	${generated.app_key} → {{ resolveGenerated .Generated "app_key" }}
+//
 // Literal Go template expressions ({{ }}) are left unchanged.
 // A literal dollar sign can be written as $$ (passed through as-is, not rewritten).
 func CompileVarSyntax(input string) string {
@@ -151,6 +161,10 @@ func CompileVarSyntax(input string) string {
 		case "snapshot":
 			if hasTail {
 				return fmt.Sprintf(`{{ resolveMap .Snapshot %q }}`, tail)
+			}
+		case "generated":
+			if hasTail {
+				return fmt.Sprintf(`{{ resolveGenerated .Generated %q }}`, tail)
 			}
 		}
 
@@ -242,6 +256,7 @@ func commandFuncMap() template.FuncMap {
 	fm["resolve"] = resolveRaw
 	fm["resolveMap"] = resolveMap
 	fm["resolveFile"] = resolveFile
+	fm["resolveGenerated"] = resolveGenerated
 	return fm
 }
 
@@ -261,6 +276,19 @@ func resolveRaw(raw map[string]any, dotPath string) any {
 // resolveMap resolves a key in a flat string→any map.
 // Returns "" when the key is not found.
 func resolveMap(m map[string]any, key string) any {
+	if m == nil {
+		return ""
+	}
+	if v, ok := m[key]; ok {
+		return v
+	}
+	return ""
+}
+
+// resolveGenerated resolves a generated-value field for the current service.
+// Returns "" when the field is absent — consistent with the other lenient
+// ${...} resolvers (resolve/resolveMap).
+func resolveGenerated(m map[string]string, key string) any {
 	if m == nil {
 		return ""
 	}
