@@ -124,12 +124,12 @@ generated:
 - Create: `internal/shared/generatedstore/store.go`
 - Create: `internal/shared/generatedstore/store_test.go`
 
-- [ ] define `Store` (`map[string]map[string]string`, service → field → value) and `DefaultRelPath = ".dwe/generated.yml"`
-- [ ] implement `Load(path)` (missing → empty store; corrupt → error, NOT swallowed) and `Save(path)` (atomic temp + rename, mirror `journal.Save`)
-- [ ] implement accessors: `Has(svc, field)`, `Get(svc, field)`, `SetIfAbsent(svc, field, val) bool`, `ClearService(svc)`, `ClearAll()`, `IsEmpty()`
-- [ ] write tests for Load/Save round-trip, missing-file, corrupt-file error, atomicity, multi-line block scalar
-- [ ] write tests for SetIfAbsent (no-overwrite), Has/Get, ClearService vs ClearAll scoping
-- [ ] run `make test` — must pass before next task
+- [x] define `Store` (`map[string]map[string]string`, service → field → value) and `DefaultRelPath = ".dwe/generated.yml"`
+- [x] implement `Load(path)` (missing → empty store; corrupt → error, NOT swallowed) and `Save(path)` (atomic temp + rename, mirror `journal.Save`)
+- [x] implement accessors: `Has(svc, field)`, `Get(svc, field)`, `SetIfAbsent(svc, field, val) bool`, `ClearService(svc)`, `ClearAll()`, `IsEmpty()`
+- [x] write tests for Load/Save round-trip, missing-file, corrupt-file error, atomicity, multi-line block scalar
+- [x] write tests for SetIfAbsent (no-overwrite), Has/Get, ClearService vs ClearAll scoping
+- [x] run `make test` — must pass before next task
 
 ### Task 2: `service.yml` schema — `render.config` + `generated:` (+ allowlists)
 
