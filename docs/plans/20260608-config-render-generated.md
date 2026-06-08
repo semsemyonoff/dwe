@@ -176,11 +176,11 @@ generated:
 - Create: `internal/core/execution/templates/config/harvest.go`
 - Create: `internal/core/execution/templates/config/harvest_test.go`
 
-- [ ] implement `HarvestGenerated(cfg, service, store)`: iterate the service's `generated:` fields, read `<svc.Dir>/<file>` (pathsafe), apply `pattern` (regex, capture group 1), `SetIfAbsent` into the store, then `Save`
-- [ ] handle errors precisely: missing file, no regex match, no capture group — surface, don't silently skip
-- [ ] write tests: extract from a dotenv file and a php-array file; write-if-absent (no overwrite); missing file / no-match / no-capture errors
-- [ ] write tests: multi-field service harvests all declared fields
-- [ ] run `make test` — must pass before next task
+- [x] implement `HarvestGenerated(cfg, service, store)`: iterate the service's `generated:` fields, read `<svc.Dir>/<file>` (pathsafe), apply `pattern` (regex, capture group 1), `SetIfAbsent` into the store, then `Save`
+- [x] handle errors precisely: missing file, no regex match, no capture group — surface, don't silently skip
+- [x] write tests: extract from a dotenv file and a php-array file; write-if-absent (no overwrite); missing file / no-match / no-capture errors
+- [x] write tests: multi-field service harvests all declared fields
+- [x] run `make test` — must pass before next task
 
 ### Task 6: CLI `dwe render config [service]` (+ `--harvest`)
 
