@@ -2031,6 +2031,17 @@ func ResolveServiceExtends(services map[string]ServiceConfig) error {
 		if svc.Render.Git.Template == "" {
 			svc.Render.Git.Template = parent.Render.Git.Template
 		}
+		if svc.Render.Config == nil && parent.Render.Config != nil {
+			cfg := *parent.Render.Config
+			svc.Render.Config = &cfg
+		}
+		// Distinguish an omitted `generated:` (nil → inherit) from an explicitly
+		// empty `generated: {}` (non-nil → child wholly replaces with nothing).
+		// Using len()==0 would conflate the two and make a child that
+		// deliberately cleared the map silently inherit the parent's keys.
+		if svc.Generated == nil && len(parent.Generated) > 0 {
+			svc.Generated = maps.Clone(parent.Generated)
+		}
 		services[name] = svc
 	}
 

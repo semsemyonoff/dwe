@@ -392,7 +392,10 @@ func renderConfigsForRun(cfg *config.DweConfig, workDir string, w *render.Writer
 		return fmt.Errorf("loading generated store: %w", err)
 	}
 
-	for _, name := range config.DeployOrder(cfg, []string{"app", "tool", "infra"}) {
+	// Config rendering is app-only: only app services may declare dir / render /
+	// generated (see allowedFieldsFor). Iterating tool/infra here would resolve
+	// the implicit `default` pack for a service with no hub dir and error.
+	for _, name := range config.DeployOrder(cfg, []string{"app"}) {
 		if missing := missingGeneratedKeys(cfg.Services[name], store, name); len(missing) > 0 {
 			w.Warning(fmt.Sprintf(
 				"skipping config render for %q: generated value(s) %s missing from store — run `dwe deploy run` to mint them",

@@ -421,6 +421,106 @@ extends: base
 	}
 }
 
+// TestLoadServices_extendsInheritsRenderConfigAndGenerated verifies a child app
+// service inherits the parent's render.config pin and generated: declarations
+// (mirroring render.ide/ai/git inheritance). Without this, a child loses the
+// parent's config pack and its generated-key safety checks (run-render skip,
+// generated-missing predicate, validator cross-check) silently break.
+func TestLoadServices_extendsInheritsRenderConfigAndGenerated(t *testing.T) {
+	dir := t.TempDir()
+	writeServiceFolder(t, dir, "base", `
+type: app
+container: app-base
+dir: ./services/base
+render:
+  config:
+    template: laravel
+generated:
+  app_key:
+    file: src/.env
+    pattern: '^APP_KEY=(.*)$'
+`)
+	writeServiceFolder(t, dir, "child", `
+type: app
+container: app-child
+extends: base
+`)
+	services, err := LoadServices(dir)
+	if err != nil {
+		t.Fatalf("LoadServices: %v", err)
+	}
+	child := services["child"]
+
+	if child.Render.Config == nil || child.Render.Config.Template != "laravel" {
+		t.Fatalf("child.Render.Config = %+v, want inherited template laravel", child.Render.Config)
+	}
+	gen, ok := child.Generated["app_key"]
+	if !ok {
+		t.Fatalf("child.Generated missing inherited app_key: %v", child.Generated)
+	}
+	if gen.File != "src/.env" || gen.Pattern != "^APP_KEY=(.*)$" {
+		t.Errorf("child.Generated[app_key] = %+v, want inherited file/pattern", gen)
+	}
+
+	// Defensive copy: mutating the child must not corrupt the parent.
+	parent := services["base"]
+	child.Render.Config.Template = "MUTATED"
+	child.Generated["app_key"] = GeneratedField{File: "MUTATED", Pattern: "MUTATED"}
+	if parent.Render.Config.Template != "laravel" {
+		t.Errorf("parent.Render.Config corrupted: %+v", parent.Render.Config)
+	}
+	if parent.Generated["app_key"].File != "src/.env" {
+		t.Errorf("parent.Generated corrupted: %+v", parent.Generated["app_key"])
+	}
+
+	// A child that redeclares either field keeps its own value (no overwrite).
+	writeServiceFolder(t, dir, "child2", `
+type: app
+container: app-child2
+extends: base
+render:
+  config:
+    template: symfony
+generated:
+  own_key:
+    file: src/own.env
+    pattern: '^OWN=(.*)$'
+`)
+	services2, err := LoadServices(dir)
+	if err != nil {
+		t.Fatalf("LoadServices (child2): %v", err)
+	}
+	child2 := services2["child2"]
+	if child2.Render.Config == nil || child2.Render.Config.Template != "symfony" {
+		t.Errorf("child2.Render.Config = %+v, want own symfony", child2.Render.Config)
+	}
+	if _, ok := child2.Generated["own_key"]; !ok {
+		t.Errorf("child2.Generated lost its own declaration: %v", child2.Generated)
+	}
+	if _, ok := child2.Generated["app_key"]; ok {
+		t.Errorf("child2.Generated should not merge parent keys when it declares its own: %v", child2.Generated)
+	}
+
+	// An explicitly empty `generated: {}` is the child declaring its own (empty)
+	// map and must wholly replace the parent's — NOT inherit it. Conflating this
+	// with an omitted key (len()==0) would make a child that intentionally
+	// cleared its generated declarations silently harvest/replay parent fields.
+	writeServiceFolder(t, dir, "child3", `
+type: app
+container: app-child3
+extends: base
+generated: {}
+`)
+	services3, err := LoadServices(dir)
+	if err != nil {
+		t.Fatalf("LoadServices (child3): %v", err)
+	}
+	child3 := services3["child3"]
+	if len(child3.Generated) != 0 {
+		t.Errorf("child3.Generated = %v, want empty (explicit generated: {} wholly replaces parent)", child3.Generated)
+	}
+}
+
 // TestLoadServices_extendsCrossType verifies app extends infra returns ErrServiceExtendsCrossType.
 func TestLoadServices_extendsCrossType(t *testing.T) {
 	dir := t.TempDir()

@@ -1,4 +1,4 @@
-> Translated from: reference/render/config.md @ efdc93d6d033
+> Translated from: reference/render/config.md @ ea900000fb55
 
 # `render config`
 
@@ -209,22 +209,27 @@ render:
 ## Использование CLI
 
 ```bash
-dwe render config              # render every enabled service that resolves a pack (DeployOrder)
+dwe render config              # render every enabled app service that resolves a pack (DeployOrder)
 dwe render config main         # render only the `main` service
 dwe render config main --harvest   # harvest-only pass: read on-disk values into the store, NO render
 ```
 
-- **Без аргумента** каждый включённый сервис обрабатывается в `DeployOrder`
-  (детерминированно); сервис без пакета конфигов молча пропускается.
+- **Без аргумента** каждый включённый **app**-сервис обрабатывается в
+  `DeployOrder` (детерминированно); сервис без пакета конфигов молча
+  пропускается. Рендер конфигов работает только для app-сервисов — лишь
+  app-сервисы могут объявлять `dir` / `render` / `generated`, поэтому
+  tool- / infra-сервисы не перебираются.
 - С **явным `[service]`** аргумент валидируется (должен существовать, быть
   включённым и иметь hub-каталог); отсутствующий пакет всплывает предупреждением.
 - **`--harvest`** переключает на harvest-only проход (`HarvestGenerated`, **без**
   рендера) — для бутстрапа уже закоммиченных секретов существующего проекта в
   хранилище, прежде чем они перестанут коммититься.
 
-Команда **read-only** в отношении проектных локов: она не запускает preflight и
-не захватывает локи, как и рендереры ide/ai/git. (`--harvest` всё же пишет
-хранилище, но не захватывает проектных локов.)
+Путь рендера по умолчанию **read-only** в отношении проектных локов: он не
+запускает preflight и не захватывает локи, как и рендереры ide/ai/git.
+**`--harvest`** изменяет общее хранилище сгенерированных значений, поэтому он
+сначала захватывает проектные локи (как builtin harvest при деплое и `reset
+--clear-generated`), чтобы не затереть конкурентного писателя в хранилище.
 
 ## Builtin-ы конвейера
 

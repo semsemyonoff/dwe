@@ -207,22 +207,26 @@ is rejected.
 ## CLI usage
 
 ```bash
-dwe render config              # render every enabled service that resolves a pack (DeployOrder)
+dwe render config              # render every enabled app service that resolves a pack (DeployOrder)
 dwe render config main         # render only the `main` service
 dwe render config main --harvest   # harvest-only pass: read on-disk values into the store, NO render
 ```
 
-- With **no argument**, every enabled service is processed in `DeployOrder`
-  (deterministic); a service with no config pack is skipped silently.
+- With **no argument**, every enabled **app** service is processed in
+  `DeployOrder` (deterministic); a service with no config pack is skipped
+  silently. Config rendering is app-only — only app services may declare
+  `dir` / `render` / `generated`, so tool / infra services are not iterated.
 - With an **explicit `[service]`**, the argument is validated (must exist, be
   enabled, and have a hub dir); a missing pack surfaces a warning.
 - **`--harvest`** switches to a harvest-only pass (`HarvestGenerated`, **no**
   render) — for bootstrapping an existing project's already-committed secrets
   into the store before they stop being committed.
 
-The command is **read-only** with respect to project locks: it runs no preflight
-and acquires no locks, matching the ide/ai/git renderers. (`--harvest` does write
-the store, but acquires no project locks.)
+The default render path is **read-only** with respect to project locks: it runs
+no preflight and acquires no locks, matching the ide/ai/git renderers.
+**`--harvest`** mutates the shared generated-value store, so it acquires the
+project locks first (mirroring the deploy harvest builtin and `reset
+--clear-generated`) to avoid clobbering a concurrent store writer.
 
 ## Pipeline builtins
 

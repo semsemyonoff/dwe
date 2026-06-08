@@ -27,8 +27,11 @@ import (
 // regex, and write-if-absent stores it — NO render runs. This bootstraps an
 // existing project's already-committed secrets into the store.
 //
-// The command is read-only with respect to project locks: it runs no preflight
-// and acquires no locks, matching the ide/ai/git renderers.
+// The default render path is read-only with respect to project locks: it runs
+// no preflight and acquires no locks, matching the ide/ai/git renderers. The
+// --harvest path mutates the shared generated-value store, so it acquires the
+// project locks first (mirroring the deploy harvest builtin and reset
+// --clear-generated) to avoid clobbering a concurrent store writer.
 func newConfigCmd(flags *cmdctx.RootFlags) *cobra.Command {
 	var harvest bool
 
@@ -76,10 +79,6 @@ already-committed values before they stop being committed.`,
 			w := render.Stdout()
 
 			storePath := filepath.Join(projectRoot, generatedstore.DefaultRelPath)
-			store, err := generatedstore.Load(storePath)
-			if err != nil {
-				return fmt.Errorf("load generated store: %w", err)
-			}
 
 			// Determine which services to process. An explicit argument is
 			// validated thoroughly; no argument means every enabled service in
@@ -94,11 +93,35 @@ already-committed values before they stop being committed.`,
 				}
 				serviceNames = []string{name}
 			} else {
-				serviceNames = config.DeployOrder(cfg, []string{"app", "tool", "infra"})
+				// Config rendering is app-only: only app services may declare
+				// dir / render / generated. Iterating tool/infra would resolve
+				// the implicit `default` pack for a dir-less service and error.
+				serviceNames = config.DeployOrder(cfg, []string{"app"})
 			}
 
+			// --harvest mutates the shared generated-value store (load → write →
+			// save). Acquire the project locks first so a concurrent deploy
+			// harvest or `reset --clear-generated` cannot be clobbered by a stale
+			// in-memory copy; load the store only once the lock is held. The
+			// render path is read-only wrt the store and stays lock-free, like
+			// the ide/ai/git renderers.
 			if harvest {
+				release, err := cmdctx.AcquireProjectLocksOrReport(projectRoot, w)
+				if err != nil {
+					return err
+				}
+				defer release()
+
+				store, err := generatedstore.Load(storePath)
+				if err != nil {
+					return fmt.Errorf("load generated store: %w", err)
+				}
 				return harvestConfigs(projectRoot, cfg, serviceNames, store, w, explicit)
+			}
+
+			store, err := generatedstore.Load(storePath)
+			if err != nil {
+				return fmt.Errorf("load generated store: %w", err)
 			}
 			return renderConfigs(projectRoot, cfg, serviceNames, store, w, explicit)
 		},

@@ -712,6 +712,36 @@ func TestRenderConfigsForRun_AbsentPack_NoError(t *testing.T) {
 	}
 }
 
+// TestRenderConfigsForRun_SkipsNonAppServices guards the app-only iteration:
+// tool/infra services cannot declare a dir, so the implicit `default` pack would
+// resolve for them and error at RenderConfigs. The run-render loop iterates only
+// app services, so an enabled tool service alongside a default pack is a no-op,
+// and the app service still renders.
+func TestRenderConfigsForRun_SkipsNonAppServices(t *testing.T) {
+	root := t.TempDir()
+	writeConfigPackFixture(t, root, "default",
+		"render:\n  - from: env.tmpl\n    to: src/.env\n",
+		map[string]string{"env.tmpl": "DB=${databases.magento}\n"})
+
+	cfg := &config.DweConfig{
+		Raw: map[string]any{"databases": map[string]any{"magento": "pgsql"}},
+		Services: map[string]config.ServiceConfig{
+			"main": {Type: config.ServiceTypeApp, Enabled: true, Dir: "services/main"},
+			// Tool/infra services have no Dir; iterating them would resolve the
+			// default pack and error.
+			"cli":   {Type: config.ServiceTypeTool, Enabled: true},
+			"redis": {Type: config.ServiceTypeInfra, Enabled: true},
+		},
+	}
+	buf := &bytes.Buffer{}
+	if err := renderConfigsForRun(cfg, root, render.NewWriter(buf)); err != nil {
+		t.Fatalf("renderConfigsForRun must skip non-app services, got: %v", err)
+	}
+	if got := mustReadFile(t, filepath.Join(root, "services", "main", "src", ".env")); got != "DB=pgsql\n" {
+		t.Errorf("app service should still render; got %q", got)
+	}
+}
+
 // writeConfigRenderProject builds a full on-disk project with a single app
 // service "main" (service.yml), a config pack named "default", and a pre-written
 // rendered file holding sentinel. When deployYML is non-empty it is written as
