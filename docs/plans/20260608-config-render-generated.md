@@ -285,11 +285,11 @@ generated:
 - [x] run `make test` — must pass before next task
 
 ### Task 14: Verify acceptance criteria
-- [ ] verify all Overview requirements: render replaces copy; `generated:` harvest+replay; render check-pairing re-runs; gate predicate; run auto-render; reset opt-in clear; deprecation warnings
-- [ ] verify edge cases: empty-store bootstrap, store-clear → regeneration, render re-run on template edit, multi-field service, path-escape rejection, non-interactive reset, **run-render-after-gate (reset-cleared store does NOT blank on `dwe run`)**, **post-pull config re-render**, reset-failure does-not-clear-store
-- [ ] run full suite: `make test` and `make lint`
-- [ ] verify deterministic golden output (service iteration via `DeployOrder`)
-- [ ] verify coverage on new packages meets project norm
+- [x] verify all Overview requirements: render replaces copy; `generated:` harvest+replay; render check-pairing re-runs; gate predicate; run auto-render; reset opt-in clear; deprecation warnings — all implemented: `service_configs_render`/`RenderConfigs`, `HarvestGenerated`/`${generated.*}`, `service_configs_render_check` + `hasCheck → Run` lever (decision_test.go), `generated-missing` predicate, `renderConfigsForRun`, `--clear-generated`, `deprecationsValidator` + single runtime notice
+- [x] verify edge cases: empty-store bootstrap, store-clear → regeneration, render re-run on template edit, multi-field service, path-escape rejection, non-interactive reset, **run-render-after-gate (reset-cleared store does NOT blank on `dwe run`)**, **post-pull config re-render**, reset-failure does-not-clear-store — all covered by named passing tests (TestRunRun_GateFails_DoesNotBlankConfig, TestRenderConfigsForRun_MissingGeneratedKey_SkipsService, TestRunRun_RendersFreshTemplateAtRunTime, TestHarvestGenerated_multiField, TestRenderConfigs_pathEscapeRejected, TestResolveClearGenerated_NonInteractiveNoFlag, TestResetServiceRun_PipelineFailure_StoreNotCleared, TestResetServiceRun_JournalFailure_StoreNotCleared)
+- [x] run full suite: `make test` (all packages ok, no FAIL/panic) and `make lint` (0 issues)
+- [x] verify deterministic golden output (service iteration via `DeployOrder`) — confirmed at config.go:239, run.go:395, render/config.go:97; TestRenderConfigsAll_deterministicDeployOrder
+- [x] verify coverage on new packages meets project norm — generatedstore 78.9%, templates/config 65.6%, cli/render 72.0%, builtin/services 88.7%, condition 94.8%
 
 ### Task 15: [Final] Update project docs and close out
 - [ ] update `AGENTS.md` "Critical Patterns" with the generated-store / config-render contract (render check-pairing; `${...}` substrate; store leaf placement) if a load-bearing invariant emerged (edit `AGENTS.md`, NOT the `CLAUDE.md` symlink)
