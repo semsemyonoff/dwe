@@ -292,9 +292,9 @@ generated:
 - [x] verify coverage on new packages meets project norm — generatedstore 78.9%, templates/config 65.6%, cli/render 72.0%, builtin/services 88.7%, condition 94.8%
 
 ### Task 15: [Final] Update project docs and close out
-- [ ] update `AGENTS.md` "Critical Patterns" with the generated-store / config-render contract (render check-pairing; `${...}` substrate; store leaf placement) if a load-bearing invariant emerged (edit `AGENTS.md`, NOT the `CLAUDE.md` symlink)
-- [ ] update `docs/internals/packages.md` for new/changed package responsibilities
-- [ ] move this plan to `docs/plans/completed/`
+- [x] update `AGENTS.md` "Critical Patterns" with the generated-store / config-render contract (render check-pairing; `${...}` substrate; store leaf placement) — added "Config render + generated-once values" bullet (4 load-bearing contracts: `${...}` substrate, render check-pairing, harvest-not-mint store, run-render ordering); edited `AGENTS.md`, not the `CLAUDE.md` symlink
+- [x] update `docs/internals/packages.md` for new/changed package responsibilities — new entries for `internal/shared/generatedstore/` and `internal/core/execution/templates/config/`; augmented builtin/services (config-render trio + copy deprecation), condition (`generated-missing` + `ParseGeneratedMissing`), `shared/tpl` (`generated` namespace), workflow/lifecycle (`renderConfigsForRun`), validate config (`generated`/`deprecations` validators), cli/render (`render config`), cli/lifecycle (`reset --clear-generated`)
+- [x] move this plan to `docs/plans/completed/`
 
 ## Post-Completion
 *Items requiring manual intervention or external systems — informational only*
