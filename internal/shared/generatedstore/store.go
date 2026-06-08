@@ -55,7 +55,9 @@ func Load(path string) (*Store, error) {
 }
 
 // Save writes the store atomically to disk using write-temp + rename. Ensures
-// the parent directory exists (mode 0o755) and the file is mode 0o644.
+// the parent directory exists (mode 0o755) and the file is mode 0o600 — the
+// store holds service-minted secrets, so it matches the .env secret convention
+// (see internal/shared/envfile.Write) rather than world-readable 0o644.
 func Save(path string, s *Store) error {
 	if s == nil {
 		return fmt.Errorf("cannot save nil generated store")
@@ -87,7 +89,7 @@ func Save(path string, s *Store) error {
 	if err := tmpFile.Close(); err != nil {
 		return fmt.Errorf("failed to close temp file: %w", err)
 	}
-	if err := os.Chmod(tmpPath, 0o644); err != nil {
+	if err := os.Chmod(tmpPath, 0o600); err != nil {
 		return fmt.Errorf("failed to set file permissions: %w", err)
 	}
 	if err := os.Rename(tmpPath, path); err != nil {
