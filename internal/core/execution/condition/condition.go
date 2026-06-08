@@ -18,6 +18,8 @@ import (
 	"strings"
 
 	"gopkg.in/yaml.v3"
+
+	"github.com/semsemyonoff/dwe/internal/shared/generatedstore"
 )
 
 // Kind classifies a when expression.
@@ -69,6 +71,8 @@ func IsRuntime(expr string) bool {
 //	dir-not-empty <path>  — true if path is a directory with at least one entry
 //	file-exists  <path>   — true if path is an existing file
 //	file-missing <path>   — true if path does not exist or is not a regular file
+//	generated-missing <svc> <field> — true if the field is absent from the
+//	    generated-value store (.dwe/generated.yml) or the store is missing
 func EvalBuiltin(predicate, projectRoot string) (bool, error) {
 	predicate = strings.TrimSpace(predicate)
 	parts := strings.SplitN(predicate, " ", 2)
@@ -96,9 +100,32 @@ func EvalBuiltin(predicate, projectRoot string) (bool, error) {
 		return isFileExisting(path), nil
 	case "file-missing":
 		return !isFileExisting(path), nil
+	case "generated-missing":
+		// "generated-missing <svc> <field>" — NOT a single path. Re-split rel
+		// (the whole remaining string from SplitN above) on whitespace into its
+		// two sub-args; do NOT reuse the joined path/rel single-path variable.
+		return evalGeneratedMissing(rel, projectRoot)
 	default:
 		return false, fmt.Errorf("unknown builtin predicate %q", verb)
 	}
+}
+
+// evalGeneratedMissing implements the "generated-missing <svc> <field>" predicate.
+// It is true when the field is absent from the generated-value store (or the store
+// file is missing entirely), so it gates a service's generate step to run only on
+// the first deploy. args is the whitespace-joined "<svc> <field>" string.
+func evalGeneratedMissing(args, projectRoot string) (bool, error) {
+	sub := strings.Fields(args)
+	if len(sub) != 2 {
+		return false, fmt.Errorf("builtin predicate \"generated-missing\": expected \"<svc> <field>\", got %q", args)
+	}
+	svc, field := sub[0], sub[1]
+	storePath := filepath.Join(projectRoot, generatedstore.DefaultRelPath)
+	store, err := generatedstore.Load(storePath)
+	if err != nil {
+		return false, err
+	}
+	return !store.Has(svc, field), nil
 }
 
 // EvalCmd runs the shell command in projectRoot via "sh -c <command>".

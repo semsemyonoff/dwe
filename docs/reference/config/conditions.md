@@ -56,6 +56,9 @@ when:
 | `dir-not-empty <path>` | path is a directory with at least one entry |
 | `file-exists <path>` | path is an existing regular file |
 | `file-missing <path>` | path is missing or not a regular file |
+| `generated-missing <svc> <field>` | the `<field>` value is absent from the generated-value store (`.dwe/generated.yml`), or the store file is missing |
+
+Unlike the other predicates, `generated-missing` takes **two** sub-arguments — a service name and a generated-field name — rather than a path. It reads the durable per-service store at `.dwe/generated.yml` and is used to gate a service's secret-generation step so it runs only on the first deploy (when no value has been harvested yet). See [services/fields.md](services/fields.md) for the `generated:` declaration and [render/config.md](../render/config.md) for the harvest/replay flow.
 
 **Portability:** Predicates are evaluated through hardcoded `sh -c` (not the project's configured shell binary) to ensure POSIX portability and consistency regardless of the project's shell choice.
 

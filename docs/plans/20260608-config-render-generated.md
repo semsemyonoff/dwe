@@ -216,11 +216,11 @@ generated:
 - Modify: `internal/core/execution/condition/condition.go` (`EvalBuiltin` @ :72; add `case "generated-missing":` in `switch verb` @ :85-101)
 - Modify/Create: `internal/core/execution/condition/condition_test.go`
 
-- [ ] add `case "generated-missing":` — ⚠️ `EvalBuiltin` does `SplitN(predicate," ",2)` (@:74), so `parts[1]` is the **whole** remaining string and L81-83 would join it with `projectRoot` as a path. The case MUST **re-split `parts[1]` on whitespace** into `<svc>`/`<field>` itself — do NOT reuse the single-path `path`/`rel` variable
-- [ ] validate exactly two sub-args (own error message); resolve store via `baseDir`(=projectRoot) + `generatedstore.DefaultRelPath`; true when field absent or store missing
-- [ ] write tests: present → false; absent → true; missing store → true; wrong sub-arg count → error; correct 2-arg whitespace split
-- [ ] update `docs/reference/config/conditions.md` predicate table (build deferred to Task 13)
-- [ ] run `make test` — must pass before next task
+- [x] add `case "generated-missing":` — ⚠️ `EvalBuiltin` does `SplitN(predicate," ",2)` (@:74), so `parts[1]` is the **whole** remaining string and L81-83 would join it with `projectRoot` as a path. The case MUST **re-split `parts[1]` on whitespace** into `<svc>`/`<field>` itself — do NOT reuse the single-path `path`/`rel` variable
+- [x] validate exactly two sub-args (own error message); resolve store via `baseDir`(=projectRoot) + `generatedstore.DefaultRelPath`; true when field absent or store missing
+- [x] write tests: present → false; absent → true; missing store → true; wrong sub-arg count → error; correct 2-arg whitespace split
+- [x] update `docs/reference/config/conditions.md` predicate table (build deferred to Task 13)
+- [x] run `make test` — must pass before next task
 
 ### Task 9: `dwe run` preamble auto-render
 
