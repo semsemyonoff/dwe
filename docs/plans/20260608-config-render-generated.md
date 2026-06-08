@@ -279,10 +279,10 @@ generated:
 - Modify: `docs/reference/config/deploy/builtins.md` (add `service_configs_render`/`service_configs_render_check`/`service_generated_harvest`; mark copy builtins deprecated)
 - Modify: `docs/reference/config/conditions.md` (add `generated-missing` predicate)
 
-- [ ] write the new reference pages and deprecation notices; cross-link `generated:` ↔ `render config` ↔ predicate; document the `${...}` config-template substrate
-- [ ] run `make build` to sync + re-embed docs (`internal/core/docs/embedded/`) and regenerate content hashes
-- [ ] adjust docs-subsystem golden references if any change
-- [ ] run `make test` — must pass before next task
+- [x] write the new reference pages and deprecation notices; cross-link `generated:` ↔ `render config` ↔ predicate; document the `${...}` config-template substrate (new `docs/reference/render/config.md`; `services/fields.md` `render.config`+`generated` sections + `configs:`/`mountpoint` deprecation; `deploy/builtins.md` three new builtins + copy-builtin deprecation; `conditions.md` predicate already added in Task 8; `render/index.md` linked the new page)
+- [x] run `make build` to sync + re-embed docs (`internal/core/docs/embedded/`) and regenerate content hashes
+- [x] adjust docs-subsystem golden references if any change (Russian translations refreshed for `conditions.md`, `deploy/builtins.md`, `services/fields.md`, `render/index.md`, plus new `render/config.md` translation — `TestRussianTranslationsAreFresh` passes)
+- [x] run `make test` — must pass before next task
 
 ### Task 14: Verify acceptance criteria
 - [ ] verify all Overview requirements: render replaces copy; `generated:` harvest+replay; render check-pairing re-runs; gate predicate; run auto-render; reset opt-in clear; deprecation warnings
