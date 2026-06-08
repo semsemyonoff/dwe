@@ -189,11 +189,11 @@ generated:
 - Modify: `internal/cli/render/render.go` (command tree)
 - Create: `internal/cli/render/config_test.go`
 
-- [ ] add `config` subcommand under `dwe render` (optional `[service]` → one; none → all eligible; same pack resolution as ide/ai/git; read-only wrt locks — no preflight/locks)
-- [ ] default action renders via `RenderConfigs`; `--harvest` flag switches to a **harvest-only** pass (`HarvestGenerated`, NO render) — for bootstrapping an existing project's already-committed values
-- [ ] resolve store path from baseDir; route output through the standard writer (cli is the single stdout writer); note this builtin/command is opt-in (no `dwe init` scaffold wiring, matching today's user-authored copy)
-- [ ] write tests: render path renders expected files; `--harvest` populates store from on-disk values without rendering; service selection (one vs all)
-- [ ] run `make test` — must pass before next task
+- [x] add `config` subcommand under `dwe render` (optional `[service]` → one; none → all eligible; same pack resolution as ide/ai/git; read-only wrt locks — no preflight/locks)
+- [x] default action renders via `RenderConfigs`; `--harvest` flag switches to a **harvest-only** pass (`HarvestGenerated`, NO render) — for bootstrapping an existing project's already-committed values
+- [x] resolve store path from baseDir; route output through the standard writer (cli is the single stdout writer); note this builtin/command is opt-in (no `dwe init` scaffold wiring, matching today's user-authored copy)
+- [x] write tests: render path renders expected files; `--harvest` populates store from on-disk values without rendering; service selection (one vs all)
+- [x] run `make test` — must pass before next task
 
 ### Task 7: Pipeline builtins — `service_configs_render` (+ check) + `service_generated_harvest`
 
