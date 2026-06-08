@@ -6,6 +6,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
 	"testing"
 
 	"github.com/semsemyonoff/dwe/internal/core/execution/builtin/spec"
@@ -264,6 +265,62 @@ func TestServiceGeneratedHarvest_Run_MissingFile_Errors(t *testing.T) {
 	ectx, _ := renderExecCtx(t, root, map[string]any{}, generated)
 	if err := (GeneratedHarvest{}).Run(context.Background(), map[string]any{"service": "main"}, ectx); err == nil {
 		t.Fatal("expected error for missing generated file")
+	}
+}
+
+// TestServiceGeneratedHarvest_Run_ConcurrentServices guards the lost-update
+// race: two harvest steps for different services placed in the same parallel:
+// group each load → mutate → save the whole store. Without serialization the
+// last writer drops the other service's just-harvested secret. Both keys must
+// survive. Run with -race to also catch the concurrent map access.
+func TestServiceGeneratedHarvest_Run_ConcurrentServices(t *testing.T) {
+	root := t.TempDir()
+
+	svcNames := []string{"alpha", "beta"}
+	services := map[string]config.ServiceConfig{}
+	for _, name := range svcNames {
+		envPath := filepath.Join(root, "services", name, "src", ".env")
+		if err := os.MkdirAll(filepath.Dir(envPath), 0o755); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(envPath, []byte("APP_KEY=minted-"+name+"\n"), 0o644); err != nil {
+			t.Fatal(err)
+		}
+		services[name] = config.ServiceConfig{
+			Type:    config.ServiceTypeApp,
+			Enabled: true,
+			Dir:     filepath.Join("services", name),
+			Generated: map[string]config.GeneratedField{
+				"app_key": {File: "src/.env", Pattern: `^APP_KEY=(.*)$`},
+			},
+		}
+	}
+
+	cfg := &config.DweConfig{Raw: map[string]any{}, Services: services}
+
+	var wg sync.WaitGroup
+	errs := make([]error, len(svcNames))
+	for i, name := range svcNames {
+		wg.Go(func() {
+			ectx := spec.ExecContext{Config: cfg, ProjectRoot: root, Output: render.NewWriter(&bytes.Buffer{})}
+			errs[i] = (GeneratedHarvest{}).Run(context.Background(), map[string]any{"service": name}, ectx)
+		})
+	}
+	wg.Wait()
+	for i, err := range errs {
+		if err != nil {
+			t.Fatalf("Run %s: %v", svcNames[i], err)
+		}
+	}
+
+	store, err := generatedstore.Load(filepath.Join(root, generatedstore.DefaultRelPath))
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, name := range svcNames {
+		if got := store.Get(name, "app_key"); got != "minted-"+name {
+			t.Errorf("service %s lost its harvested value: got %q, want minted-%s", name, got, name)
+		}
 	}
 }
 
