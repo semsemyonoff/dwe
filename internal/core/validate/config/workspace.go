@@ -115,6 +115,7 @@ var servicesAllowedFields = map[config.ServiceType]map[string]bool{
 		"depends_on": true,
 		"dir":        true, "dir_internal": true, "work_dir_internal": true,
 		"configs": true, "dirs": true, "extends": true, "cli": true, "render": true,
+		"generated": true,
 	},
 	config.ServiceTypeInfra: {
 		"type": true, "container": true, "required": true, "compose": true,

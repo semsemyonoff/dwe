@@ -138,11 +138,11 @@ generated:
 - Modify: `internal/core/validate/config/workspace.go`
 - Modify/Create: `internal/core/project/config/*_test.go`
 
-- [ ] add a `Config *RenderConfigSection` (`template string`) field to the typed `ServiceRenderConfig` struct (workspace.go:548-552) — render sub-fields are struct-enforced under top-level `KnownFields(true)`, NOT a nested allowlist map, so `render` itself needs no allowlist change
-- [ ] add `Generated map[string]GeneratedField` (`File`, `Pattern`) to `ServiceConfig`; since `generated` is a NEW top-level service field, add it to the app field allowlist in `allowedFieldsFor` (**@ L804-808; `render` already at L807**) AND `servicesAllowedFields` (**@ L110; `render` at L117**)
-- [ ] keep deprecated `configs:` in both allowlists so strict decode doesn't hard-error
-- [ ] write tests: `service.yml` with `render.config` + `generated:` decodes; deprecated `configs:` still decodes; unknown sibling still hard-errors
-- [ ] run `make test` — must pass before next task
+- [x] add a `Config *RenderConfigSection` (`template string`) field to the typed `ServiceRenderConfig` struct (workspace.go:548-552) — render sub-fields are struct-enforced under top-level `KnownFields(true)`, NOT a nested allowlist map, so `render` itself needs no allowlist change
+- [x] add `Generated map[string]GeneratedField` (`File`, `Pattern`) to `ServiceConfig`; since `generated` is a NEW top-level service field, add it to the app field allowlist in `allowedFieldsFor` (**@ L804-808; `render` already at L807**) AND `servicesAllowedFields` (**@ L110; `render` at L117**)
+- [x] keep deprecated `configs:` in both allowlists so strict decode doesn't hard-error
+- [x] write tests: `service.yml` with `render.config` + `generated:` decodes; deprecated `configs:` still decodes; unknown sibling still hard-errors
+- [x] run `make test` — must pass before next task
 
 ### Task 3: Config render context + `generated` namespace
 
