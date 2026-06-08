@@ -252,11 +252,11 @@ generated:
 - Modify/Create: `internal/core/validate/config/` (validator for the new fields)
 - Create: corresponding `*_test.go`
 
-- [ ] validate `generated.<field>`: `pattern` required and compiles as a regex with **≥1 capture group** (else `SeverityError`); `file` is a pathsafe contained-relative path (no `../`); field name is a valid `${generated.<name>}` identifier
-- [ ] validate `render.config.template` like ide/ai/git (warn if a pinned pack doesn't resolve)
-- [ ] optional cross-check: `generated-missing <svc> <field>` in pipelines references a declared `generated:` field — reuse the same two-arg parser finalized in Task 8 (don't re-implement)
-- [ ] write tests: invalid regex / missing capture group → error; path escape → error; bad field name → error; valid declaration → clean
-- [ ] run `make test` — must pass before next task
+- [x] validate `generated.<field>`: `pattern` required and compiles as a regex with **≥1 capture group** (else `SeverityError`); `file` is a pathsafe contained-relative path (no `../`); field name is a valid `${generated.<name>}` identifier
+- [x] validate `render.config.template` like ide/ai/git (warn if a pinned pack doesn't resolve)
+- [x] optional cross-check: `generated-missing <svc> <field>` in pipelines references a declared `generated:` field — reuse the same two-arg parser finalized in Task 8 (exported `condition.ParseGeneratedMissing`)
+- [x] write tests: invalid regex / missing capture group → error; path escape → error; bad field name → error; valid declaration → clean
+- [x] run `make test` — must pass before next task
 
 ### Task 12: Deprecation warnings for the copy mechanism
 

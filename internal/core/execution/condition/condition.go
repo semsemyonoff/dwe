@@ -110,16 +110,28 @@ func EvalBuiltin(predicate, projectRoot string) (bool, error) {
 	}
 }
 
+// ParseGeneratedMissing splits the "<svc> <field>" argument string of a
+// generated-missing predicate into its two sub-args. It is the single parser
+// shared by the runtime evaluator (evalGeneratedMissing) and static validation
+// (internal/core/validate/config) so both agree on arity and whitespace
+// splitting. args is everything after the "generated-missing" verb.
+func ParseGeneratedMissing(args string) (svc, field string, err error) {
+	sub := strings.Fields(args)
+	if len(sub) != 2 {
+		return "", "", fmt.Errorf("builtin predicate \"generated-missing\": expected \"<svc> <field>\", got %q", args)
+	}
+	return sub[0], sub[1], nil
+}
+
 // evalGeneratedMissing implements the "generated-missing <svc> <field>" predicate.
 // It is true when the field is absent from the generated-value store (or the store
 // file is missing entirely), so it gates a service's generate step to run only on
 // the first deploy. args is the whitespace-joined "<svc> <field>" string.
 func evalGeneratedMissing(args, projectRoot string) (bool, error) {
-	sub := strings.Fields(args)
-	if len(sub) != 2 {
-		return false, fmt.Errorf("builtin predicate \"generated-missing\": expected \"<svc> <field>\", got %q", args)
+	svc, field, err := ParseGeneratedMissing(args)
+	if err != nil {
+		return false, err
 	}
-	svc, field := sub[0], sub[1]
 	storePath := filepath.Join(projectRoot, generatedstore.DefaultRelPath)
 	store, err := generatedstore.Load(storePath)
 	if err != nil {

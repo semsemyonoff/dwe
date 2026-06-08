@@ -399,6 +399,22 @@ func TestEvalBuiltin_generatedMissing_whitespaceSplit(t *testing.T) {
 	}
 }
 
+func TestParseGeneratedMissing(t *testing.T) {
+	svc, field, err := condition.ParseGeneratedMissing("  main   app_key  ")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if svc != "main" || field != "app_key" {
+		t.Errorf("got (%q, %q), want (main, app_key)", svc, field)
+	}
+
+	for _, args := range []string{"main", "main app_key extra", "", "   "} {
+		if _, _, err := condition.ParseGeneratedMissing(args); err == nil {
+			t.Errorf("ParseGeneratedMissing(%q): expected error", args)
+		}
+	}
+}
+
 func TestEvalBuiltin_generatedMissing_isRuntimeAndRoutes(t *testing.T) {
 	root := t.TempDir()
 	if !condition.IsRuntime("generated-missing main app_key") {
