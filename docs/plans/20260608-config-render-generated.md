@@ -240,11 +240,11 @@ generated:
 - Modify: `internal/cli/lifecycle/reset.go` (`resetRunCmd` @ :157 / pipeline via `RunWithOptions` :217-231; `resetServiceRunCmd` @ :260; `resetConfirmFn` seam :321-327)
 - Modify/Create: `internal/cli/lifecycle/reset_test.go`
 
-- [ ] add `--clear-generated` flag; clear the store **only after the FULL reset succeeds — including the post-pipeline journal cleanup** (codex): `journal.Remove` for full reset (@ reset.go:241-246) / `journal.ReplaceServiceWithPending` for per-service (@ :455-461), NOT merely after `RunWithOptions` returns. Scoped by `--service`/all via `generatedstore.ClearService`/`ClearAll` + `Save`. Never clear if the pipeline OR the journal mutation failed — else a deployed-journal + empty-store mismatch makes the run gate trust a service with no secrets
-- [ ] ⚠️ **(codex) full reset has NO command-level confirm to hook after**: confirmation is a PIPELINE step (`reset/defaults.go:13-22`), not a `resetRunCmd` prompt. So for interactive (TTY + store non-empty), decide the prompt at the **command level up front** — "also clear N generated values? (forces regeneration on next deploy) [y/N]", default No, remember the decision, then clear post-success. Per-service path reuses the existing `resetConfirmFn` seam (:321-327). Non-interactive: flag only, no prompt
-- [ ] default behavior unchanged: store preserved
-- [ ] write tests: flag clears scoped store after full success; **pipeline failure → store NOT cleared**; **journal-cleanup failure (force `journal.Remove`/`ReplaceServiceWithPending` to fail) → store NOT cleared**; non-interactive without flag preserves; interactive prompt decision honored (mock confirm via the real seam); empty store → no prompt
-- [ ] run `make test` — must pass before next task
+- [x] add `--clear-generated` flag; clear the store **only after the FULL reset succeeds — including the post-pipeline journal cleanup** (codex): `journal.Remove` for full reset (@ reset.go:241-246) / `journal.ReplaceServiceWithPending` for per-service (@ :455-461), NOT merely after `RunWithOptions` returns. Scoped by `--service`/all via `generatedstore.ClearService`/`ClearAll` + `Save`. Never clear if the pipeline OR the journal mutation failed — else a deployed-journal + empty-store mismatch makes the run gate trust a service with no secrets
+- [x] ⚠️ **(codex) full reset has NO command-level confirm to hook after**: confirmation is a PIPELINE step (`reset/defaults.go:13-22`), not a `resetRunCmd` prompt. So for interactive (TTY + store non-empty), decide the prompt at the **command level up front** — "also clear N generated values? (forces regeneration on next deploy) [y/N]", default No, remember the decision, then clear post-success. Per-service path reuses the existing `resetConfirmFn` seam (:321-327). Non-interactive: flag only, no prompt
+- [x] default behavior unchanged: store preserved
+- [x] write tests: flag clears scoped store after full success; **pipeline failure → store NOT cleared**; **journal-cleanup failure (force `journal.Remove`/`ReplaceServiceWithPending` to fail) → store NOT cleared**; non-interactive without flag preserves; interactive prompt decision honored (mock confirm via the real seam); empty store → no prompt
+- [x] run `make test` — must pass before next task
 
 ### Task 11: New validation for `generated:` / `render.config`
 
