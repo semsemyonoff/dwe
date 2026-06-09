@@ -51,6 +51,25 @@ func TestSaveLoadRoundTrip(t *testing.T) {
 	}
 }
 
+func TestSaveUsesSecretFilePermissions(t *testing.T) {
+	path := filepath.Join(t.TempDir(), DefaultRelPath)
+	s := New()
+	s.SetIfAbsent("main", "app_key", "base64:Xa3==")
+
+	if err := Save(path, s); err != nil {
+		t.Fatalf("Save: %v", err)
+	}
+
+	info, err := os.Stat(path)
+	if err != nil {
+		t.Fatalf("Stat: %v", err)
+	}
+	// The store holds service secrets, so the file must not be world/group readable.
+	if perm := info.Mode().Perm(); perm != 0o600 {
+		t.Errorf("file mode = %o, want 0600", perm)
+	}
+}
+
 func TestSaveNilStore(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "generated.yml")
 	if err := Save(path, nil); err == nil {
