@@ -20,6 +20,7 @@ import (
 	valchecks "github.com/semsemyonoff/dwe/internal/core/validate/checks"
 	valconfig "github.com/semsemyonoff/dwe/internal/core/validate/config"
 	valenv "github.com/semsemyonoff/dwe/internal/core/validate/env"
+	"github.com/semsemyonoff/dwe/internal/shared/trace"
 )
 
 // Error is returned when preflight surfaces any error-severity diagnostic.
@@ -104,9 +105,11 @@ func Run(ctx context.Context, cfg *config.DweConfig, cmdRegistry *usercommands.R
 		errOut = io.Discard
 	}
 	if skip {
+		trace.Decision(ctx, "preflight skipped (--skip-preflight) for stage %q", stage)
 		_, _ = fmt.Fprintln(errOut, "preflight skipped (--skip-preflight)")
 		return nil
 	}
+	trace.Decision(ctx, "preflight running for stage %q", stage)
 
 	validateCfg, warnings, loadErr := config.LoadValidateConfig(config.ValidateConfigPath(baseDir))
 
@@ -163,6 +166,8 @@ func Run(ctx context.Context, cfg *config.DweConfig, cmdRegistry *usercommands.R
 	}
 	summary := validate.Aggregate(diags)
 	blocking := validate.ExitCode(summary, false) != 0
+	trace.Decision(ctx, "preflight result for stage %q: %d error(s), %d warning(s), %d info(s) — blocking=%t",
+		stage, summary.Errors, summary.Warnings, summary.Infos, blocking)
 	if len(filtered) > 0 {
 		header := preflightHeader(stage, blocking)
 		if blocking {

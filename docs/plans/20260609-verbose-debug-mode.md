@@ -189,10 +189,10 @@ Startup (`initRootCmd`): parse flags → `lvl := levelFrom(verbose, debug, os.Ge
 - Modify: `internal/core/execution/preflight/` (`preflight.Run`)
 - Modify: corresponding `*_test.go`
 
-- [ ] emit `trace.Decision(ctx, …)` at the executor skip/run reason sites: `SkipPhase` (L496), phase-when `SkipStep` (L535), `skipStateStep` "state: already deployed" (L581), files-gate skip (`FormatFilesGate`, L677), and the `SkipDecider` Run/Skip outcome (L610/L689) — these have the reason string + `addr` in scope. **Do not** touch `journal/decision.go` (pure function)
-- [ ] emit `trace.Decision` per check result in `preflight.Run` (decide deliberately: surface pass/fail summary, not every info-level noise)
-- [ ] write tests: skip/run reasons printed at Verbose (`when:`, `state:`, files-gate); preflight results printed; all silent at `LevelOff`
-- [ ] run tests — must pass before next task
+- [x] emit `trace.Decision(ctx, …)` at the executor skip/run reason sites: `SkipPhase`, phase-when `SkipStep`, step-level `when` skip, `skipStateStep` "state: already deployed", files-gate skip (`FormatFilesGate`), parallel-group `when` skip, and the `SkipDecider` Run/Skip outcome — these have the reason string + `addr` in scope. `skipStateStep`/`evalFilesGate` now thread `ctx`. **Did not** touch `journal/decision.go` (pure function)
+- [x] emit `trace.Decision` in `preflight.Run` (skip-bypass notice + running notice + pass/fail summary with error/warning/info counts and blocking flag — not per-info noise)
+- [x] write tests: skip/run reasons printed at Verbose (`when:`, phase `when:`, `state:`); preflight running/result decisions printed; all silent at `LevelOff`
+- [x] run tests — must pass before next task
 
 ### Task 8: Debug firehose (timings/env/config/cache) + slog handler
 

@@ -506,6 +506,7 @@ func RunWithOptions(opts RunOptions) error {
 					phaseSkipped = true
 					phaseWhenMsg = FormatCondition(rs.PhaseWhen)
 					opts.Reporter.SkipPhase(phaseKey, rs.Phase, "when: "+phaseWhenMsg)
+					trace.Decision(ctx, "skip phase %s — when false: %s", phaseKey, phaseWhenMsg)
 				}
 			}
 		}
@@ -545,6 +546,7 @@ func RunWithOptions(opts RunOptions) error {
 		if phaseSkipped {
 			opts.Reporter.StartStep(addr, rs.Step, stepIndex, stepTotal)
 			opts.Reporter.SkipStep(addr, rs.Step, stepIndex, stepTotal, "phase when: "+phaseWhenMsg)
+			trace.Decision(ctx, "skip step %s — phase when false: %s", addr, phaseWhenMsg)
 			if rs.Parallel != nil {
 				// Record each sub-step as skipped so the journal does not
 				// treat them as never-attempted on the next run.
@@ -588,10 +590,11 @@ func failGateStep(opts RunOptions, rs ResolvedStep, addr string, stepIndex, step
 // skipStateStep reports a journal-driven "already deployed" skip: it emits
 // StartStep then SkipStep/OnStepSkip with the canonical state messages and
 // returns nil. Shared by the readable-gate and gateless skip paths.
-func skipStateStep(opts RunOptions, rs ResolvedStep, addr string, stepIndex, stepTotal int, stepHash string) error {
+func skipStateStep(ctx context.Context, opts RunOptions, rs ResolvedStep, addr string, stepIndex, stepTotal int, stepHash string) error {
 	opts.Reporter.StartStep(addr, rs.Step, stepIndex, stepTotal)
 	opts.Reporter.SkipStep(addr, rs.Step, stepIndex, stepTotal, "state: already deployed")
 	opts.Recorder.OnStepSkip(addr, rs, stepHash, "state")
+	trace.Decision(ctx, "skip step %s — state: already deployed", addr)
 	return nil
 }
 
@@ -617,11 +620,11 @@ func skipStateStep(opts RunOptions, rs ResolvedStep, addr string, stepIndex, ste
 //     re-check, use an explicit check: directive, the same lever as any
 //     other step.
 //   - no gate — consult SkipDecider.
-func evalFilesGate(opts RunOptions, rs ResolvedStep, addr string, stepIndex, stepTotal int, stepHash string) (proceed bool, err error) {
+func evalFilesGate(ctx context.Context, opts RunOptions, rs ResolvedStep, addr string, stepIndex, stepTotal int, stepHash string) (proceed bool, err error) {
 	if rs.FilesGate != nil && rs.FilesGate.State == filesgate.StateReadable {
 		decision := opts.SkipDecider(addr, rs, stepHash)
 		if decision == journal.Skip {
-			return false, skipStateStep(opts, rs, addr, stepIndex, stepTotal, stepHash)
+			return false, skipStateStep(ctx, opts, rs, addr, stepIndex, stepTotal, stepHash)
 		}
 	}
 
@@ -689,6 +692,7 @@ func evalFilesGate(opts RunOptions, rs ResolvedStep, addr string, stepIndex, ste
 			reason := FormatFilesGate(rs.FilesGate, offendingIDs...)
 			opts.Reporter.SkipStep(addr, rs.Step, stepIndex, stepTotal, reason)
 			opts.Recorder.OnStepSkip(addr, rs, stepHash, reason)
+			trace.Decision(ctx, "skip step %s — %s", addr, reason)
 			return false, nil
 		}
 		// Gate satisfied — proceed to execution. For state: readable, the
@@ -700,8 +704,9 @@ func evalFilesGate(opts RunOptions, rs ResolvedStep, addr string, stepIndex, ste
 	// No gate present — consult skip decision.
 	decision := opts.SkipDecider(addr, rs, stepHash)
 	if decision == journal.Skip {
-		return false, skipStateStep(opts, rs, addr, stepIndex, stepTotal, stepHash)
+		return false, skipStateStep(ctx, opts, rs, addr, stepIndex, stepTotal, stepHash)
 	}
+	trace.Decision(ctx, "run step %s — state changed or check forces re-run", addr)
 	return true, nil
 }
 
@@ -727,6 +732,7 @@ func executeStepBody(ctx context.Context, opts RunOptions, rs ResolvedStep, addr
 			opts.Reporter.StartStep(addr, rs.Step, stepIndex, stepTotal)
 			opts.Reporter.SkipStep(addr, rs.Step, stepIndex, stepTotal, "when: "+FormatCondition(rs.RuntimeWhen))
 			opts.Recorder.OnStepSkip(addr, rs, stepHash, "when: "+FormatCondition(rs.RuntimeWhen))
+			trace.Decision(ctx, "skip step %s — when false: %s", addr, FormatCondition(rs.RuntimeWhen))
 			return nil
 		}
 	}
@@ -749,7 +755,7 @@ func executeStepBody(ctx context.Context, opts RunOptions, rs ResolvedStep, addr
 	// Step 3: files_gate / journal-skip interaction. evalFilesGate emits the
 	// skip/fail events and returns a tri-state outcome (proceed / skip-nil /
 	// fail-ErrSilent).
-	if proceed, err := evalFilesGate(opts, rs, addr, stepIndex, stepTotal, stepHash); !proceed {
+	if proceed, err := evalFilesGate(ctx, opts, rs, addr, stepIndex, stepTotal, stepHash); !proceed {
 		return err
 	}
 
@@ -944,6 +950,7 @@ func executeParallelGroup(parentCtx context.Context, opts RunOptions, rs Resolve
 			reason := "when: " + FormatCondition(rs.RuntimeWhen)
 			opts.Reporter.StartStep(addr, rs.Step, leadIdx, total)
 			opts.Reporter.SkipStep(addr, rs.Step, leadIdx, total, reason)
+			trace.Decision(parentCtx, "skip group %s — when false: %s", addr, FormatCondition(rs.RuntimeWhen))
 			for _, sub := range rs.Parallel.Steps {
 				opts.Recorder.OnStepSkip(sub.StepAddress(), sub, journal.StepHash(sub.Step), "parent group when=false")
 			}
