@@ -252,6 +252,9 @@ var allBuiltinNames = []string{
 	// services/
 	"service_configs_copy",
 	"service_configs_check",
+	"service_configs_render",
+	"service_configs_render_check",
+	"service_generated_harvest",
 	"service_dirs_ensure",
 	// fs/
 	"file_exists",
@@ -264,7 +267,7 @@ var allBuiltinNames = []string{
 	"message",
 }
 
-// TestRegistryHasAllNames asserts the registry contains exactly the 19 expected
+// TestRegistryHasAllNames asserts the registry contains exactly the expected
 // builtin names — guards against accidental drops or duplications when entries
 // move between subpackages.
 func TestRegistryHasAllNames(t *testing.T) {

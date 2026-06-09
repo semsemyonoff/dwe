@@ -1,6 +1,7 @@
 package lifecycle
 
 import (
+	"bytes"
 	"errors"
 	"os"
 	"path/filepath"
@@ -10,7 +11,9 @@ import (
 
 	"github.com/semsemyonoff/dwe/internal/core/project/config"
 	"github.com/semsemyonoff/dwe/internal/core/workflow/deploy/journal"
+	"github.com/semsemyonoff/dwe/internal/shared/generatedstore"
 	"github.com/semsemyonoff/dwe/internal/shared/git"
+	"github.com/semsemyonoff/dwe/internal/shared/render"
 )
 
 // --- resolveUpdateMode tests (unexported, same package) ---
@@ -579,5 +582,293 @@ func TestRunRun_ClearsPendingRestart_KeepsPendingDeploy(t *testing.T) {
 	}
 	if state.Pending.Find(journal.PendingDeploy) == nil {
 		t.Errorf("pending deploy must survive run (artifact state outlasts runtime), got %+v", state.Pending)
+	}
+}
+
+// --- run-preamble config render (renderConfigsForRun) ---
+
+// mustReadFile reads path or fails the test.
+func mustReadFile(t *testing.T, path string) string {
+	t.Helper()
+	b, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatalf("read %s: %v", path, err)
+	}
+	return string(b)
+}
+
+// writeConfigPackFixture writes a config template pack (manifest + sources)
+// under workspace/templates/config/<name>/ within root.
+func writeConfigPackFixture(t *testing.T, root, name, manifest string, sources map[string]string) {
+	t.Helper()
+	packDir := filepath.Join(root, "workspace", "templates", "config", name)
+	if err := os.MkdirAll(packDir, 0o755); err != nil {
+		t.Fatalf("mkdir pack: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(packDir, "manifest.yml"), []byte(manifest), 0o644); err != nil {
+		t.Fatalf("write manifest: %v", err)
+	}
+	for rel, content := range sources {
+		p := filepath.Join(packDir, rel)
+		if err := os.MkdirAll(filepath.Dir(p), 0o755); err != nil {
+			t.Fatalf("mkdir source dir: %v", err)
+		}
+		if err := os.WriteFile(p, []byte(content), 0o644); err != nil {
+			t.Fatalf("write source: %v", err)
+		}
+	}
+}
+
+// appServiceCfg builds an in-memory config with a single enabled app service
+// "main" rooted at services/main, plus the given Raw map and generated fields.
+func appServiceCfg(raw map[string]any, generated map[string]config.GeneratedField) *config.DweConfig {
+	return &config.DweConfig{
+		Raw: raw,
+		Services: map[string]config.ServiceConfig{
+			"main": {
+				Type:      config.ServiceTypeApp,
+				Enabled:   true,
+				Dir:       "services/main",
+				Generated: generated,
+			},
+		},
+	}
+}
+
+func TestRenderConfigsForRun_RendersAndReplays(t *testing.T) {
+	root := t.TempDir()
+	writeConfigPackFixture(t, root, "default",
+		"render:\n  - from: env.tmpl\n    to: src/.env\n",
+		map[string]string{"env.tmpl": "DB=${databases.magento}\nAPP_KEY=${generated.app_key}\n"})
+
+	store := generatedstore.New()
+	store.SetIfAbsent("main", "app_key", "base64:secret==")
+	if err := generatedstore.Save(filepath.Join(root, generatedstore.DefaultRelPath), store); err != nil {
+		t.Fatal(err)
+	}
+
+	cfg := appServiceCfg(
+		map[string]any{"databases": map[string]any{"magento": "pgsql"}},
+		map[string]config.GeneratedField{"app_key": {File: "src/.env", Pattern: `^APP_KEY=(.*)$`}},
+	)
+	buf := &bytes.Buffer{}
+	if err := renderConfigsForRun(cfg, root, render.NewWriter(buf)); err != nil {
+		t.Fatalf("renderConfigsForRun: %v", err)
+	}
+
+	got := mustReadFile(t, filepath.Join(root, "services", "main", "src", ".env"))
+	if got != "DB=pgsql\nAPP_KEY=base64:secret==\n" {
+		t.Errorf("rendered content = %q", got)
+	}
+}
+
+// TestRenderConfigsForRun_MissingGeneratedKey_SkipsService verifies the run-only
+// non-destructive guard: a service that declares a generated: key whose value is
+// absent from the store is SKIPPED (no render) with a hint — never overwritten
+// with a blanked secret.
+func TestRenderConfigsForRun_MissingGeneratedKey_SkipsService(t *testing.T) {
+	root := t.TempDir()
+	writeConfigPackFixture(t, root, "default",
+		"render:\n  - from: env.tmpl\n    to: src/.env\n",
+		map[string]string{"env.tmpl": "APP_KEY=${generated.app_key}\n"})
+
+	dest := filepath.Join(root, "services", "main", "src", ".env")
+	if err := os.MkdirAll(filepath.Dir(dest), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	const sentinel = "APP_KEY=base64:live-secret==\n"
+	if err := os.WriteFile(dest, []byte(sentinel), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	// Store is empty → the declared app_key is missing.
+	cfg := appServiceCfg(
+		map[string]any{},
+		map[string]config.GeneratedField{"app_key": {File: "src/.env", Pattern: `^APP_KEY=(.*)$`}},
+	)
+	buf := &bytes.Buffer{}
+	if err := renderConfigsForRun(cfg, root, render.NewWriter(buf)); err != nil {
+		t.Fatalf("renderConfigsForRun: %v", err)
+	}
+
+	if got := mustReadFile(t, dest); got != sentinel {
+		t.Errorf("config file was rewritten; want preserved %q, got %q", sentinel, got)
+	}
+	out := buf.String()
+	if !strings.Contains(out, "skipping config render") || !strings.Contains(out, "app_key") {
+		t.Errorf("expected skip hint mentioning app_key, got: %q", out)
+	}
+}
+
+func TestRenderConfigsForRun_AbsentPack_NoError(t *testing.T) {
+	root := t.TempDir()
+	cfg := appServiceCfg(map[string]any{}, nil)
+	buf := &bytes.Buffer{}
+	if err := renderConfigsForRun(cfg, root, render.NewWriter(buf)); err != nil {
+		t.Fatalf("renderConfigsForRun with no pack should succeed: %v", err)
+	}
+	if _, err := os.Stat(filepath.Join(root, "services", "main", "src", ".env")); !os.IsNotExist(err) {
+		t.Errorf("no file should be written when no pack resolves")
+	}
+}
+
+// TestRenderConfigsForRun_SkipsNonAppServices guards the app-only iteration:
+// tool/infra services cannot declare a dir, so the implicit `default` pack would
+// resolve for them and error at RenderConfigs. The run-render loop iterates only
+// app services, so an enabled tool service alongside a default pack is a no-op,
+// and the app service still renders.
+func TestRenderConfigsForRun_SkipsNonAppServices(t *testing.T) {
+	root := t.TempDir()
+	writeConfigPackFixture(t, root, "default",
+		"render:\n  - from: env.tmpl\n    to: src/.env\n",
+		map[string]string{"env.tmpl": "DB=${databases.magento}\n"})
+
+	cfg := &config.DweConfig{
+		Raw: map[string]any{"databases": map[string]any{"magento": "pgsql"}},
+		Services: map[string]config.ServiceConfig{
+			"main": {Type: config.ServiceTypeApp, Enabled: true, Dir: "services/main"},
+			// Tool/infra services have no Dir; iterating them would resolve the
+			// default pack and error.
+			"cli":   {Type: config.ServiceTypeTool, Enabled: true},
+			"redis": {Type: config.ServiceTypeInfra, Enabled: true},
+		},
+	}
+	buf := &bytes.Buffer{}
+	if err := renderConfigsForRun(cfg, root, render.NewWriter(buf)); err != nil {
+		t.Fatalf("renderConfigsForRun must skip non-app services, got: %v", err)
+	}
+	if got := mustReadFile(t, filepath.Join(root, "services", "main", "src", ".env")); got != "DB=pgsql\n" {
+		t.Errorf("app service should still render; got %q", got)
+	}
+}
+
+// writeConfigRenderProject builds a full on-disk project with a single app
+// service "main" (service.yml), a config pack named "default", and a pre-written
+// rendered file holding sentinel. When deployYML is non-empty it is written as
+// the service's deploy.yml (making the service tracked by the deploy gate).
+// Returns the workspace.yml path.
+func writeConfigRenderProject(t *testing.T, dir, tmpl, sentinel, deployYML string) string {
+	t.Helper()
+	cfgPath := filepath.Join(dir, "workspace.yml")
+	if err := os.WriteFile(cfgPath, []byte("project:\n  name: test\n  prefix: dwe\n"), 0o644); err != nil {
+		t.Fatalf("write workspace.yml: %v", err)
+	}
+	svcDir := filepath.Join(dir, "workspace", "services", "main")
+	if err := os.MkdirAll(svcDir, 0o755); err != nil {
+		t.Fatalf("mkdir service: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(svcDir, "service.yml"),
+		[]byte("type: app\ncontainer: app-main\nrequired: true\ndir: ./services/main\n"), 0o644); err != nil {
+		t.Fatalf("write service.yml: %v", err)
+	}
+	if deployYML != "" {
+		if err := os.WriteFile(filepath.Join(svcDir, "deploy.yml"), []byte(deployYML), 0o644); err != nil {
+			t.Fatalf("write deploy.yml: %v", err)
+		}
+	}
+	writeLifecycleYML(t, filepath.Join(dir, "workspace"), "done")
+	writeConfigPackFixture(t, dir, "default",
+		"render:\n  - from: env.tmpl\n    to: src/.env\n",
+		map[string]string{"env.tmpl": tmpl})
+
+	dest := filepath.Join(dir, "services", "main", "src", ".env")
+	if err := os.MkdirAll(filepath.Dir(dest), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(dest, []byte(sentinel), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	return cfgPath
+}
+
+// TestRunRun_GateFails_DoesNotBlankConfig is the central safety test: a tracked
+// service that is NOT deployed makes `dwe run` fail the gate. Because config
+// render runs only AFTER the gate, the on-disk config file must be left
+// untouched (never blanked).
+func TestRunRun_GateFails_DoesNotBlankConfig(t *testing.T) {
+	stubRunPhases(t)
+	dir := t.TempDir()
+	const sentinel = "APP_KEY=base64:live==\n"
+	deployYML := "phases:\n  - name: setup\n    steps:\n      - name: noop\n        type: shell\n        cmd: \"true\"\n"
+	cfgPath := writeConfigRenderProject(t, dir, "APP_KEY=${generated.app_key}\n", sentinel, deployYML)
+
+	// No journal state → main is not StatusDeployed → gate fails.
+	err := RunRun(RunContext{ConfigPath: cfgPath})
+	if err == nil {
+		t.Fatal("expected deployment gate error, got nil")
+	}
+	var gate *deploymentGateError
+	if !errors.As(err, &gate) {
+		t.Fatalf("expected deploymentGateError, got %T: %v", err, err)
+	}
+
+	if got := mustReadFile(t, filepath.Join(dir, "services", "main", "src", ".env")); got != sentinel {
+		t.Errorf("config blanked despite gate failure; want %q, got %q", sentinel, got)
+	}
+}
+
+// TestRunRun_DeployedService_RendersAndReplays drives the full run path with a
+// deployed tracked service and verifies the config is re-rendered after the gate
+// with the stored generated value replayed.
+func TestRunRun_DeployedService_RendersAndReplays(t *testing.T) {
+	stubRunPhases(t)
+	dir := t.TempDir()
+	deployYML := "phases:\n  - name: setup\n    steps:\n      - name: noop\n        type: shell\n        cmd: \"true\"\n"
+	cfgPath := writeConfigRenderProject(t, dir, "APP_KEY=${generated.app_key}\n", "stale\n", deployYML)
+
+	statePath := filepath.Join(dir, journal.DefaultRelPath)
+	if err := journal.Save(statePath, &journal.ProjectState{
+		SchemaVersion: "1",
+		Services: map[string]*journal.ServiceState{
+			"main": {Status: journal.StatusDeployed},
+		},
+	}); err != nil {
+		t.Fatalf("seed deployed state: %v", err)
+	}
+
+	store := generatedstore.New()
+	store.SetIfAbsent("main", "app_key", "base64:replayed==")
+	if err := generatedstore.Save(filepath.Join(dir, generatedstore.DefaultRelPath), store); err != nil {
+		t.Fatal(err)
+	}
+
+	if err := RunRun(RunContext{ConfigPath: cfgPath}); err != nil {
+		t.Fatalf("RunRun: %v", err)
+	}
+
+	got := mustReadFile(t, filepath.Join(dir, "services", "main", "src", ".env"))
+	if got != "APP_KEY=base64:replayed==\n" {
+		t.Errorf("config not re-rendered with replayed value; got %q", got)
+	}
+}
+
+// TestRunRun_RendersFreshTemplateAtRunTime verifies the run-preamble render
+// reads the CURRENT on-disk template at run time rather than reusing a stale
+// pre-rendered output. This is the substance of the post-pull guarantee: the
+// render call is placed after the post-pull config reload (and before lifecycle
+// phases), so a template that changed since the last deploy — whether by a pull
+// or a manual edit — renders fresh. (The git-pull leg itself cannot be exercised
+// in-process: lifecycle update mode "on" maps to ActionSkip in git.Decide, so
+// the pull never fires under test; the on-disk template change models the
+// post-reload state directly.)
+func TestRunRun_RendersFreshTemplateAtRunTime(t *testing.T) {
+	stubRunPhases(t)
+	dir := t.TempDir()
+	// Untracked service (no deploy.yml) → gate passes trivially; the pre-rendered
+	// file holds a stale value from an earlier deploy.
+	cfgPath := writeConfigRenderProject(t, dir, "V=before\n", "V=stale\n", "")
+
+	// The template on disk changed since the last render (models a pull / edit).
+	writeConfigPackFixture(t, dir, "default",
+		"render:\n  - from: env.tmpl\n    to: src/.env\n",
+		map[string]string{"env.tmpl": "V=after\n"})
+
+	if err := RunRun(RunContext{ConfigPath: cfgPath}); err != nil {
+		t.Fatalf("RunRun: %v", err)
+	}
+
+	got := mustReadFile(t, filepath.Join(dir, "services", "main", "src", ".env"))
+	if got != "V=after\n" {
+		t.Errorf("config not re-rendered from current template; got %q", got)
 	}
 }

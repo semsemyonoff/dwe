@@ -1,4 +1,4 @@
-> Translated from: reference/config/deploy/builtins.md @ 2bdb5a2bec93
+> Translated from: reference/config/deploy/builtins.md @ aaa1dccb5490
 
 # Доступные билтины
 
@@ -8,6 +8,9 @@
 
 - [Каталог](#каталог)
 - [`service_dirs_ensure`](#service_dirs_ensure)
+- [`service_configs_render`](#service_configs_render)
+- [`service_configs_render_check`](#service_configs_render_check)
+- [`service_generated_harvest`](#service_generated_harvest)
 - [`service_configs_copy`](#service_configs_copy)
 - [`service_configs_check`](#service_configs_check)
 - [`message`](#message)
@@ -24,8 +27,11 @@
 | Билтин | Назначение |
 |--------|------------|
 | `service_dirs_ensure` | Создаёт директории хаба сервиса |
-| `service_configs_copy` | Копирует шаблонные конфиг-файлы в хаб сервиса |
-| `service_configs_check` | Проверяет, что шаблонные конфиг-файлы существуют в хабе сервиса |
+| `service_configs_render` | Рендерит конфиг-файлы из шаблон-пака в хаб сервиса (воспроизводит сгенерированные значения) |
+| `service_configs_render_check` | Проверяет, что отрендеренные цели конфигов существуют; добавление как `check:` перезапускает рендер при каждом деплое |
+| `service_generated_harvest` | Собирает поля `generated:` сервиса в хранилище сгенерированных значений (запись-если-отсутствует) |
+| `service_configs_copy` | **⚠️ Устарело** — копирует шаблонные конфиг-файлы в хаб сервиса |
+| `service_configs_check` | **⚠️ Устарело** — проверяет, что скопированные конфиг-файлы существуют в хабе сервиса |
 | `message` | Печатает стилизованное сообщение уровня info/success/warning/error |
 | `confirm` | Интерактивный Y/n промпт (пропускается при `--yes`) |
 | `docker_remove_project_volumes` | Удаляет все тома, имя которых начинается с имени compose-проекта |
@@ -56,7 +62,53 @@
 
 Безопасность: `src` всегда использует семантику `skip` в режиме `recreate` (исходный код никогда не удаляется). Все остальные директории — включая `configs`, если она перечислена в `dirs:` — вычищаются при `recreate`.
 
+## `service_configs_render`
+
+Рендерит конфиг-файлы сервиса из шаблон-пака конфигов (`workspace/templates/config/<pack>/`) в директорию хаба сервиса (`svc.Dir`), воспроизводя любые собранные значения `${generated.<name>}` из хранилища сгенерированных значений (`.dwe/generated.yml`). Это рендер-основанный преемник устаревшего `service_configs_copy`.
+
+| Параметр | Тип | По умолчанию | Описание |
+|----------|-----|--------------|----------|
+| `service` | string | обязательно | Ключ сервиса |
+| `mode` | string | `replace` | Поддерживается только `replace` (перезапись) |
+
+Рендеринг конфигов **opt-in**: сервис без разрешимого пака конфигов — это no-op. Сочетайте этот шаг с `check:` `service_configs_render_check`, чтобы он перезапускался при каждом деплое. См. [render config](../../render/config.md) для субстрата, разрешения пака и полного потока деплоя.
+
+```yaml
+- name: render-configs
+  type: builtin
+  cmd: service_configs_render
+  with:
+    service: main
+  check:
+    type: builtin
+    cmd: service_configs_render_check
+    with:
+      service: main
+```
+
+## `service_configs_render_check`
+
+Проверяет, что каждая цель рендера пака конфигов для сервиса существует на диске. Его основное назначение структурное: добавление как `check:` шага `service_configs_render` заставляет этот шаг перезапускаться при каждом деплое (рычаг `hasCheck → Run` в `journal/decision.go` обходит пропуск по action-hash), так что правки шаблонов и очистки хранилища всегда вступают в силу — в точности зеркалируя `service_configs_copy` + `service_configs_check`.
+
+| Параметр | Тип | По умолчанию | Описание |
+|----------|-----|--------------|----------|
+| `service` | string | обязательно | Ключ сервиса |
+
+Сервису без разрешимого пака конфигов нечего проверять, и он no-op. Возвращает ошибку с перечислением отсутствующих отрендеренных файлов, что приводит к падению проверки.
+
+## `service_generated_harvest`
+
+Читает каждое из объявленных полей `generated:` сервиса из его файла на диске, извлекает значение по регекспу поля (группа захвата 1) и **записью-если-отсутствует** сохраняет его в хранилище сгенерированных значений (`.dwe/generated.yml`). Хранилище сохраняется атомарно при записи нового значения.
+
+| Параметр | Тип | По умолчанию | Описание |
+|----------|-----|--------------|----------|
+| `service` | string | обязательно | Ключ сервиса |
+
+«Собрать, а не сгенерировать»: собственный генератор сервиса (например, `php artisan key:generate`) пишет секрет; DWE только считывает его обратно и воспроизводит при последующих рендерах. Запись-если-отсутствует означает, что значение, уже находящееся в хранилище, сохраняется, поэтому повторный деплой — это no-op. Сервис без полей `generated:` — это no-op. Отсутствующий файл, паттерн, не совпавший ни с одной строкой, паттерн без группы захвата или захваченное пустое значение выдаются как ошибки — никогда не пропускаются молча. См. [блок `generated`](../services/fields.md#generated-block) и [render config](../../render/config.md).
+
 ## `service_configs_copy`
+
+> **⚠️ Устарело.** Заменено на [`service_configs_render`](#service_configs_render) + [`service_generated_harvest`](#service_generated_harvest). Продолжает работать, но `dwe validate` выдаёт предупреждение, и при каждом шаге копирования срабатывает однократное runtime-уведомление об устаревании. См. [render config](../../render/config.md) для миграции. Будет удалено в отдельном phase-2 (мажорном) этапе.
 
 Копирует шаблонные конфиг-файлы из `configs/services/<service>/` в `services/<service>/configs/`. Создаёт директорию назначения `configs/`, если её нет — это канонический путь создания `configs/` (билтин `service_dirs_ensure` её не создаёт).
 
@@ -76,6 +128,8 @@
 Когда у соответствующей записи `configs[]` есть `mountpoint`, билтин также создаёт пустой файл в `<service-dir>/<mountpoint>`, чтобы Docker Desktop virtiofs мог наложить поверх него вложенный файловый bind mount.
 
 ## `service_configs_check`
+
+> **⚠️ Устарело.** Компаньон-`check:` устаревшего [`service_configs_copy`](#service_configs_copy). Для рендер-основанных конфигов используйте [`service_configs_render_check`](#service_configs_render_check).
 
 Проверяет, что все шаблонные конфиг-файлы, декларированные в `service.yml` сервиса, существуют в его хабе после шага `service_configs_copy`. Используйте как действие `check:`, чтобы убедиться, что конфиги успешно развёрнуты.
 

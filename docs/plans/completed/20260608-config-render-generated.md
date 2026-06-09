@@ -124,12 +124,12 @@ generated:
 - Create: `internal/shared/generatedstore/store.go`
 - Create: `internal/shared/generatedstore/store_test.go`
 
-- [ ] define `Store` (`map[string]map[string]string`, service → field → value) and `DefaultRelPath = ".dwe/generated.yml"`
-- [ ] implement `Load(path)` (missing → empty store; corrupt → error, NOT swallowed) and `Save(path)` (atomic temp + rename, mirror `journal.Save`)
-- [ ] implement accessors: `Has(svc, field)`, `Get(svc, field)`, `SetIfAbsent(svc, field, val) bool`, `ClearService(svc)`, `ClearAll()`, `IsEmpty()`
-- [ ] write tests for Load/Save round-trip, missing-file, corrupt-file error, atomicity, multi-line block scalar
-- [ ] write tests for SetIfAbsent (no-overwrite), Has/Get, ClearService vs ClearAll scoping
-- [ ] run `make test` — must pass before next task
+- [x] define `Store` (`map[string]map[string]string`, service → field → value) and `DefaultRelPath = ".dwe/generated.yml"`
+- [x] implement `Load(path)` (missing → empty store; corrupt → error, NOT swallowed) and `Save(path)` (atomic temp + rename, mirror `journal.Save`)
+- [x] implement accessors: `Has(svc, field)`, `Get(svc, field)`, `SetIfAbsent(svc, field, val) bool`, `ClearService(svc)`, `ClearAll()`, `IsEmpty()`
+- [x] write tests for Load/Save round-trip, missing-file, corrupt-file error, atomicity, multi-line block scalar
+- [x] write tests for SetIfAbsent (no-overwrite), Has/Get, ClearService vs ClearAll scoping
+- [x] run `make test` — must pass before next task
 
 ### Task 2: `service.yml` schema — `render.config` + `generated:` (+ allowlists)
 
@@ -138,11 +138,11 @@ generated:
 - Modify: `internal/core/validate/config/workspace.go`
 - Modify/Create: `internal/core/project/config/*_test.go`
 
-- [ ] add a `Config *RenderConfigSection` (`template string`) field to the typed `ServiceRenderConfig` struct (workspace.go:548-552) — render sub-fields are struct-enforced under top-level `KnownFields(true)`, NOT a nested allowlist map, so `render` itself needs no allowlist change
-- [ ] add `Generated map[string]GeneratedField` (`File`, `Pattern`) to `ServiceConfig`; since `generated` is a NEW top-level service field, add it to the app field allowlist in `allowedFieldsFor` (**@ L804-808; `render` already at L807**) AND `servicesAllowedFields` (**@ L110; `render` at L117**)
-- [ ] keep deprecated `configs:` in both allowlists so strict decode doesn't hard-error
-- [ ] write tests: `service.yml` with `render.config` + `generated:` decodes; deprecated `configs:` still decodes; unknown sibling still hard-errors
-- [ ] run `make test` — must pass before next task
+- [x] add a `Config *RenderConfigSection` (`template string`) field to the typed `ServiceRenderConfig` struct (workspace.go:548-552) — render sub-fields are struct-enforced under top-level `KnownFields(true)`, NOT a nested allowlist map, so `render` itself needs no allowlist change
+- [x] add `Generated map[string]GeneratedField` (`File`, `Pattern`) to `ServiceConfig`; since `generated` is a NEW top-level service field, add it to the app field allowlist in `allowedFieldsFor` (**@ L804-808; `render` already at L807**) AND `servicesAllowedFields` (**@ L110; `render` at L117**)
+- [x] keep deprecated `configs:` in both allowlists so strict decode doesn't hard-error
+- [x] write tests: `service.yml` with `render.config` + `generated:` decodes; deprecated `configs:` still decodes; unknown sibling still hard-errors
+- [x] run `make test` — must pass before next task
 
 ### Task 3: Config render context + `generated` namespace
 
@@ -151,11 +151,11 @@ generated:
 - Modify (only if config needs more service fields): `internal/core/project/config/workspace.go` (`injectServicesIntoRaw`)
 - Modify/Create: `internal/shared/tpl/*_test.go`
 
-- [ ] add a `Generated map[string]string` field to `tpl.RenderContext` (per-service generated values for the render pass)
-- [ ] add `case "generated":` to `CompileVarSyntax` routing to a resolver (mirror `resolveMap` @ :263) returning the value or `""` if absent. ⚠️ **(codex) all `${...}` resolvers are ALREADY lenient** — `resolve`/`resolveMap` return `""` for missing paths (render_command.go:248-270), so `generated` just follows the same convention; there is NO strict-vs-lenient distinction to enforce
-- [ ] ⚠️ **(codex) use `${services.<name>...}`, NOT `${raw.services...}`** — there is no `raw` namespace; `${X}` → `{{ resolve .Raw "X" }}` and services live at `Raw["services"]` (confirmed form `${services.app.ports.http}`). This exposes only the **CURATED subset** from `injectServicesIntoRaw` (type/container/dirs/configs/ports/hosts/…), NOT `render`/`generated`/arbitrary fields; an omitted field renders `""` (lenient). Decide per template need: (a) restrict to the injected subset and document it, or (b) extend `injectServicesIntoRaw`. Top-level config uses bare `${databases.x}` etc.; a singular `${service....}` would need a new `case "service":`
-- [ ] write tests: `${generated.x}` resolves from `RenderContext.Generated`; absent → `""` (consistent with existing `.Raw` leniency); `${services.<name>.<injected-field>}` resolves; an uninjected field renders `""` (documents the limitation); namespaces coexist
-- [ ] run `make test` — must pass before next task
+- [x] add a `Generated map[string]string` field to `tpl.RenderContext` (per-service generated values for the render pass)
+- [x] add `case "generated":` to `CompileVarSyntax` routing to a resolver (mirror `resolveMap` @ :263) returning the value or `""` if absent. ⚠️ **(codex) all `${...}` resolvers are ALREADY lenient** — `resolve`/`resolveMap` return `""` for missing paths (render_command.go:248-270), so `generated` just follows the same convention; there is NO strict-vs-lenient distinction to enforce
+- [x] ⚠️ **(codex) use `${services.<name>...}`, NOT `${raw.services...}`** — there is no `raw` namespace; `${X}` → `{{ resolve .Raw "X" }}` and services live at `Raw["services"]` (confirmed form `${services.app.ports.http}`). This exposes only the **CURATED subset** from `injectServicesIntoRaw` (type/container/dirs/configs/ports/hosts/…), NOT `render`/`generated`/arbitrary fields; an omitted field renders `""` (lenient). Decision: (a) restrict to the injected subset and document it — no `injectServicesIntoRaw` extension needed for Task 3 (`${generated.*}` covers the per-service generated values; config templates use the injected subset for service fields). Top-level config uses bare `${databases.x}` etc.; a singular `${service....}` would need a new `case "service":`
+- [x] write tests: `${generated.x}` resolves from `RenderContext.Generated`; absent → `""` (consistent with existing `.Raw` leniency); `${services.<name>.<injected-field>}` resolves; an uninjected field renders `""` (documents the limitation); namespaces coexist
+- [x] run `make test` — must pass before next task
 
 ### Task 4: Config render kind — pack resolution + `RenderConfigs` core
 
@@ -164,11 +164,11 @@ generated:
 - Create: `internal/core/execution/templates/config/config_test.go`
 - Create: `internal/core/execution/templates/config/testdata/...`
 
-- [ ] implement `config` pack resolution (convention service→`extends`→`default` + `.local` via `packroot.Resolve`) and manifest load/validate (`manifest.File`, `render: from→to`)
-- [ ] implement `RenderConfigs(cfg, service, store)`: build the per-service `tpl.RenderContext` (merged config + `Generated` = store[service], per Task 3); render each manifest entry via `CompileVarSyntax`+engine into `<svc.Dir>/<to>` where `to` is the manifest entry (authors target the app tree by writing `to: src/...` — `src/` is a usage convention, NOT a hardcoded join), mode **replace**; pathsafe destination guards
-- [ ] iterate services via `config.DeployOrder(...)` where multiple are processed (deterministic golden output)
-- [ ] write tests: pack resolution + `.local` override; render writes under `src/`; `${generated.x}` replay from store; replace overwrites; path-escape rejected
-- [ ] run `make test` — must pass before next task
+- [x] implement `config` pack resolution (convention service→`extends`→`default` + `.local` via `packroot.Resolve`) and manifest load/validate (`manifest.File`, `render: from→to`)
+- [x] implement `RenderConfigs(cfg, service, store)`: build the per-service `tpl.RenderContext` (merged config + `Generated` = store[service], per Task 3); render each manifest entry via `CompileVarSyntax`+engine into `<svc.Dir>/<to>` where `to` is the manifest entry (authors target the app tree by writing `to: src/...` — `src/` is a usage convention, NOT a hardcoded join), mode **replace**; pathsafe destination guards
+- [x] iterate services via `config.DeployOrder(...)` where multiple are processed (deterministic golden output) — `RenderConfigsAll` iterates `DeployOrder`; `RenderConfigs` is single-service
+- [x] write tests: pack resolution + `.local` override; render writes under `src/`; `${generated.x}` replay from store; replace overwrites; path-escape rejected
+- [x] run `make test` — must pass before next task
 
 ### Task 5: `HarvestGenerated` core + regex extraction
 
@@ -176,11 +176,11 @@ generated:
 - Create: `internal/core/execution/templates/config/harvest.go`
 - Create: `internal/core/execution/templates/config/harvest_test.go`
 
-- [ ] implement `HarvestGenerated(cfg, service, store)`: iterate the service's `generated:` fields, read `<svc.Dir>/<file>` (pathsafe), apply `pattern` (regex, capture group 1), `SetIfAbsent` into the store, then `Save`
-- [ ] handle errors precisely: missing file, no regex match, no capture group — surface, don't silently skip
-- [ ] write tests: extract from a dotenv file and a php-array file; write-if-absent (no overwrite); missing file / no-match / no-capture errors
-- [ ] write tests: multi-field service harvests all declared fields
-- [ ] run `make test` — must pass before next task
+- [x] implement `HarvestGenerated(cfg, service, store)`: iterate the service's `generated:` fields, read `<svc.Dir>/<file>` (pathsafe), apply `pattern` (regex, capture group 1), `SetIfAbsent` into the store, then `Save`
+- [x] handle errors precisely: missing file, no regex match, no capture group — surface, don't silently skip
+- [x] write tests: extract from a dotenv file and a php-array file; write-if-absent (no overwrite); missing file / no-match / no-capture errors
+- [x] write tests: multi-field service harvests all declared fields
+- [x] run `make test` — must pass before next task
 
 ### Task 6: CLI `dwe render config [service]` (+ `--harvest`)
 
@@ -189,11 +189,11 @@ generated:
 - Modify: `internal/cli/render/render.go` (command tree)
 - Create: `internal/cli/render/config_test.go`
 
-- [ ] add `config` subcommand under `dwe render` (optional `[service]` → one; none → all eligible; same pack resolution as ide/ai/git; read-only wrt locks — no preflight/locks)
-- [ ] default action renders via `RenderConfigs`; `--harvest` flag switches to a **harvest-only** pass (`HarvestGenerated`, NO render) — for bootstrapping an existing project's already-committed values
-- [ ] resolve store path from baseDir; route output through the standard writer (cli is the single stdout writer); note this builtin/command is opt-in (no `dwe init` scaffold wiring, matching today's user-authored copy)
-- [ ] write tests: render path renders expected files; `--harvest` populates store from on-disk values without rendering; service selection (one vs all)
-- [ ] run `make test` — must pass before next task
+- [x] add `config` subcommand under `dwe render` (optional `[service]` → one; none → all eligible; same pack resolution as ide/ai/git; read-only wrt locks — no preflight/locks)
+- [x] default action renders via `RenderConfigs`; `--harvest` flag switches to a **harvest-only** pass (`HarvestGenerated`, NO render) — for bootstrapping an existing project's already-committed values
+- [x] resolve store path from baseDir; route output through the standard writer (cli is the single stdout writer); note this builtin/command is opt-in (no `dwe init` scaffold wiring, matching today's user-authored copy)
+- [x] write tests: render path renders expected files; `--harvest` populates store from on-disk values without rendering; service selection (one vs all)
+- [x] run `make test` — must pass before next task
 
 ### Task 7: Pipeline builtins — `service_configs_render` (+ check) + `service_generated_harvest`
 
@@ -203,12 +203,12 @@ generated:
 - Modify: `internal/core/execution/builtin/services/services.go` (`Builtins()` @ L8-11)
 - Create/Modify: `internal/core/execution/builtin/services/*_test.go`
 
-- [ ] implement `service_configs_render` (KindAction; `with: {service, mode?}`, default `replace`) → `RenderConfigs`; `Validate`/`Describe`/`Run`
-- [ ] implement `service_configs_render_check` (KindAction, used as a `check:`) verifying rendered outputs exist/are current — its PRESENCE forces the render step to re-run every deploy via the `hasCheck → Run` lever in `journal/decision.go:38-62` (`if hasCheck { return Run }`); mirrors `service_configs_copy`+`service_configs_check`. The user pairs it on the render step via `check:`.
-- [ ] implement `service_generated_harvest` (KindAction; `with: {service}`) → `HarvestGenerated`
-- [ ] register all three in `services.Builtins()`
-- [ ] write tests: `Validate` rejects bad params; `Run` renders/harvests against a temp project; **render re-runs on an unchanged redeploy when paired with the check** (this test fails until the check builtin exists — it motivates it); registry has no dup panic
-- [ ] run `make test` — must pass before next task
+- [x] implement `service_configs_render` (KindAction; `with: {service, mode?}`, default `replace`) → `RenderConfigs`; `Validate`/`Describe`/`Run`
+- [x] implement `service_configs_render_check` (KindAction, used as a `check:`) verifying rendered outputs exist/are current — its PRESENCE forces the render step to re-run every deploy via the `hasCheck → Run` lever in `journal/decision.go:38-62` (`if hasCheck { return Run }`); mirrors `service_configs_copy`+`service_configs_check`. The user pairs it on the render step via `check:`. (Helper `config.CheckRendered` centralizes pack/manifest resolution + target existence.)
+- [x] implement `service_generated_harvest` (KindAction; `with: {service}`) → `HarvestGenerated`
+- [x] register all three in `services.Builtins()`
+- [x] write tests: `Validate` rejects bad params; `Run` renders/harvests against a temp project; **render re-runs on an unchanged redeploy when paired with the check** (this test fails until the check builtin exists — it motivates it); registry has no dup panic (updated `allBuiltinNames`)
+- [x] run `make test` — must pass before next task
 
 ### Task 8: `generated-missing` predicate
 
@@ -216,11 +216,11 @@ generated:
 - Modify: `internal/core/execution/condition/condition.go` (`EvalBuiltin` @ :72; add `case "generated-missing":` in `switch verb` @ :85-101)
 - Modify/Create: `internal/core/execution/condition/condition_test.go`
 
-- [ ] add `case "generated-missing":` — ⚠️ `EvalBuiltin` does `SplitN(predicate," ",2)` (@:74), so `parts[1]` is the **whole** remaining string and L81-83 would join it with `projectRoot` as a path. The case MUST **re-split `parts[1]` on whitespace** into `<svc>`/`<field>` itself — do NOT reuse the single-path `path`/`rel` variable
-- [ ] validate exactly two sub-args (own error message); resolve store via `baseDir`(=projectRoot) + `generatedstore.DefaultRelPath`; true when field absent or store missing
-- [ ] write tests: present → false; absent → true; missing store → true; wrong sub-arg count → error; correct 2-arg whitespace split
-- [ ] update `docs/reference/config/conditions.md` predicate table (build deferred to Task 13)
-- [ ] run `make test` — must pass before next task
+- [x] add `case "generated-missing":` — ⚠️ `EvalBuiltin` does `SplitN(predicate," ",2)` (@:74), so `parts[1]` is the **whole** remaining string and L81-83 would join it with `projectRoot` as a path. The case MUST **re-split `parts[1]` on whitespace** into `<svc>`/`<field>` itself — do NOT reuse the single-path `path`/`rel` variable
+- [x] validate exactly two sub-args (own error message); resolve store via `baseDir`(=projectRoot) + `generatedstore.DefaultRelPath`; true when field absent or store missing
+- [x] write tests: present → false; absent → true; missing store → true; wrong sub-arg count → error; correct 2-arg whitespace split
+- [x] update `docs/reference/config/conditions.md` predicate table (build deferred to Task 13)
+- [x] run `make test` — must pass before next task
 
 ### Task 9: `dwe run` preamble auto-render
 
@@ -228,11 +228,11 @@ generated:
 - Modify: `internal/core/workflow/lifecycle/run.go`
 - Modify/Create: `internal/core/workflow/lifecycle/run_test.go`
 
-- [ ] auto-render service configs via `RenderConfigs` (replay from store) in a helper, called **AFTER the deployment gate (~:265, tracked services must be `StatusDeployed`) AND after the post-pull cfg reload (~:235-246), but BEFORE lifecycle phases (~:288)** — NOT at the early `.env` render (:134). do NOT run generate/harvest on `run`
-- [ ] ⚠️ **(codex) ordering IS the safety argument**: render must run only after the gate passes. At :134 it would run *before* the gate at :265, so a `reset --clear-generated` (which un-deploys: full reset removes state @ reset.go:241-246, per-service marks pending-deploy @ :455-461) followed by `dwe run` would blank secrets at :134 before the gate rejects the run. Post-gate placement is also post-reload, so a `git pull` that changed templates is not rendered stale
-- [ ] ⚠️ **(codex) run-render must be non-destructive when replay data is absent**: the gate only proves `StatusDeployed` in the journal, NOT that the store holds the keys (a deleted/upgraded `.dwe/generated.yml` with a deployed journal is possible). So in the run-preamble, for each service declaring `generated:` keys, if ANY declared key is MISSING from the store, **skip that service's render** (emit a hint to run `dwe deploy`/harvest) instead of rendering blank. Deploy render stays lenient (first deploy mints); this guard is run-only
-- [ ] write tests: `run` renders configs after the gate and replays stored values; **reset-cleared store → `dwe run` fails the gate WITHOUT rewriting/blanking any config file**; **deployed service + missing store key → run SKIPS that service's render (no blanking) with a hint**; **post-pull template change → configs re-rendered fresh before phases**; absent pack → skip (no error)
-- [ ] run `make test` — must pass before next task
+- [x] auto-render service configs via `RenderConfigs` (replay from store) in a helper (`renderConfigsForRun`), called **AFTER the deployment gate AND after the post-pull cfg reload, but BEFORE lifecycle phases (RunPhases)** — NOT at the early `.env` render. do NOT run generate/harvest on `run`
+- [x] ⚠️ **(codex) ordering IS the safety argument**: render runs only after the gate passes (the `renderConfigsForRun` call is textually after the gate block and after the post-pull reload). A `reset --clear-generated` followed by `dwe run` fails the gate before render is reached, so secrets are never blanked
+- [x] ⚠️ **(codex) run-render is non-destructive when replay data is absent**: `missingGeneratedKeys` checks each service's declared `generated:` keys against the store; if ANY is missing, that service's render is SKIPPED with a `dwe deploy run` hint instead of rendering blank. Deploy render stays lenient (first deploy mints); this guard is run-only
+- [x] write tests: `run` renders configs after the gate and replays stored values (`TestRunRun_DeployedService_RendersAndReplays` + helper `TestRenderConfigsForRun_RendersAndReplays`); **gate-failure → no config rewritten/blanked** (`TestRunRun_GateFails_DoesNotBlankConfig`); **deployed service + missing store key → run SKIPS render with a hint** (`TestRenderConfigsForRun_MissingGeneratedKey_SkipsService`); **template change → configs re-rendered fresh at run time before phases** (`TestRunRun_RendersFreshTemplateAtRunTime`); absent pack → skip, no error (`TestRenderConfigsForRun_AbsentPack_NoError`)
+- [x] run `make test` — must pass before next task
 
 ### Task 10: Reset `--clear-generated` + interactive prompt
 
@@ -240,11 +240,11 @@ generated:
 - Modify: `internal/cli/lifecycle/reset.go` (`resetRunCmd` @ :157 / pipeline via `RunWithOptions` :217-231; `resetServiceRunCmd` @ :260; `resetConfirmFn` seam :321-327)
 - Modify/Create: `internal/cli/lifecycle/reset_test.go`
 
-- [ ] add `--clear-generated` flag; clear the store **only after the FULL reset succeeds — including the post-pipeline journal cleanup** (codex): `journal.Remove` for full reset (@ reset.go:241-246) / `journal.ReplaceServiceWithPending` for per-service (@ :455-461), NOT merely after `RunWithOptions` returns. Scoped by `--service`/all via `generatedstore.ClearService`/`ClearAll` + `Save`. Never clear if the pipeline OR the journal mutation failed — else a deployed-journal + empty-store mismatch makes the run gate trust a service with no secrets
-- [ ] ⚠️ **(codex) full reset has NO command-level confirm to hook after**: confirmation is a PIPELINE step (`reset/defaults.go:13-22`), not a `resetRunCmd` prompt. So for interactive (TTY + store non-empty), decide the prompt at the **command level up front** — "also clear N generated values? (forces regeneration on next deploy) [y/N]", default No, remember the decision, then clear post-success. Per-service path reuses the existing `resetConfirmFn` seam (:321-327). Non-interactive: flag only, no prompt
-- [ ] default behavior unchanged: store preserved
-- [ ] write tests: flag clears scoped store after full success; **pipeline failure → store NOT cleared**; **journal-cleanup failure (force `journal.Remove`/`ReplaceServiceWithPending` to fail) → store NOT cleared**; non-interactive without flag preserves; interactive prompt decision honored (mock confirm via the real seam); empty store → no prompt
-- [ ] run `make test` — must pass before next task
+- [x] add `--clear-generated` flag; clear the store **only after the FULL reset succeeds — including the post-pipeline journal cleanup** (codex): `journal.Remove` for full reset (@ reset.go:241-246) / `journal.ReplaceServiceWithPending` for per-service (@ :455-461), NOT merely after `RunWithOptions` returns. Scoped by `--service`/all via `generatedstore.ClearService`/`ClearAll` + `Save`. Never clear if the pipeline OR the journal mutation failed — else a deployed-journal + empty-store mismatch makes the run gate trust a service with no secrets
+- [x] ⚠️ **(codex) full reset has NO command-level confirm to hook after**: confirmation is a PIPELINE step (`reset/defaults.go:13-22`), not a `resetRunCmd` prompt. So for interactive (TTY + store non-empty), decide the prompt at the **command level up front** — "also clear N generated values? (forces regeneration on next deploy) [y/N]", default No, remember the decision, then clear post-success. Per-service path reuses the existing `resetConfirmFn` seam (:321-327). Non-interactive: flag only, no prompt
+- [x] default behavior unchanged: store preserved
+- [x] write tests: flag clears scoped store after full success; **pipeline failure → store NOT cleared**; **journal-cleanup failure (force `journal.Remove`/`ReplaceServiceWithPending` to fail) → store NOT cleared**; non-interactive without flag preserves; interactive prompt decision honored (mock confirm via the real seam); empty store → no prompt
+- [x] run `make test` — must pass before next task
 
 ### Task 11: New validation for `generated:` / `render.config`
 
@@ -252,11 +252,11 @@ generated:
 - Modify/Create: `internal/core/validate/config/` (validator for the new fields)
 - Create: corresponding `*_test.go`
 
-- [ ] validate `generated.<field>`: `pattern` required and compiles as a regex with **≥1 capture group** (else `SeverityError`); `file` is a pathsafe contained-relative path (no `../`); field name is a valid `${generated.<name>}` identifier
-- [ ] validate `render.config.template` like ide/ai/git (warn if a pinned pack doesn't resolve)
-- [ ] optional cross-check: `generated-missing <svc> <field>` in pipelines references a declared `generated:` field — reuse the same two-arg parser finalized in Task 8 (don't re-implement)
-- [ ] write tests: invalid regex / missing capture group → error; path escape → error; bad field name → error; valid declaration → clean
-- [ ] run `make test` — must pass before next task
+- [x] validate `generated.<field>`: `pattern` required and compiles as a regex with **≥1 capture group** (else `SeverityError`); `file` is a pathsafe contained-relative path (no `../`); field name is a valid `${generated.<name>}` identifier
+- [x] validate `render.config.template` like ide/ai/git (warn if a pinned pack doesn't resolve)
+- [x] optional cross-check: `generated-missing <svc> <field>` in pipelines references a declared `generated:` field — reuse the same two-arg parser finalized in Task 8 (exported `condition.ParseGeneratedMissing`)
+- [x] write tests: invalid regex / missing capture group → error; path escape → error; bad field name → error; valid declaration → clean
+- [x] run `make test` — must pass before next task
 
 ### Task 12: Deprecation warnings for the copy mechanism
 
@@ -265,11 +265,11 @@ generated:
 - Modify: `internal/core/execution/builtin/services/configs_copy.go` (single-site runtime warning)
 - Create/Modify: corresponding `*_test.go`
 
-- [ ] `dwe validate` config-domain: emit `SeverityWarning` (with `File:Line` + migration hint) for `configs:`/`mountpoint` in `service.yml` and for `service_configs_copy`/`service_configs_check` in `deploy.yml`/`reset.yml`
-- [ ] runtime: emit a SINGLE deprecation notice via `ectx.Output.Warning` (`*render.Writer.Warning` @ output.go:63) from **`ConfigsCopy.Run` only** — do NOT also warn from `ConfigsCheck.Run` (it runs as the copy step's check → would double-warn per step)
-- [ ] confirm `SeverityWarning` does not change exit code (deploy/validate still succeed)
-- [ ] write tests: validator emits warning at the right location; severity is Warning (non-fatal); exactly one runtime notice per copy step
-- [ ] run `make test` — must pass before next task
+- [x] `dwe validate` config-domain: emit `SeverityWarning` (with `File:Line` + migration hint) for `configs:`/`mountpoint` in `service.yml` and for `service_configs_copy`/`service_configs_check` in `deploy.yml`/`reset.yml` (new `deprecationsValidator` in `validate/config/deprecations.go`; yaml-node walk supplies precise lines)
+- [x] runtime: emit a SINGLE deprecation notice via `ectx.Output.Warning` (`*render.Writer.Warning` @ output.go:63) from **`ConfigsCopy.Run` only** — do NOT also warn from `ConfigsCheck.Run` (it runs as the copy step's check → would double-warn per step)
+- [x] confirm `SeverityWarning` does not change exit code (deploy/validate still succeed) — `validate.ExitCode` only fails on errors (warnings only under `--strict`); tests assert zero error-severity diagnostics
+- [x] write tests: validator emits warning at the right location; severity is Warning (non-fatal); exactly one runtime notice per copy step
+- [x] run `make test` — must pass before next task
 
 ### Task 13: Documentation + re-embed
 
@@ -279,22 +279,22 @@ generated:
 - Modify: `docs/reference/config/deploy/builtins.md` (add `service_configs_render`/`service_configs_render_check`/`service_generated_harvest`; mark copy builtins deprecated)
 - Modify: `docs/reference/config/conditions.md` (add `generated-missing` predicate)
 
-- [ ] write the new reference pages and deprecation notices; cross-link `generated:` ↔ `render config` ↔ predicate; document the `${...}` config-template substrate
-- [ ] run `make build` to sync + re-embed docs (`internal/core/docs/embedded/`) and regenerate content hashes
-- [ ] adjust docs-subsystem golden references if any change
-- [ ] run `make test` — must pass before next task
+- [x] write the new reference pages and deprecation notices; cross-link `generated:` ↔ `render config` ↔ predicate; document the `${...}` config-template substrate (new `docs/reference/render/config.md`; `services/fields.md` `render.config`+`generated` sections + `configs:`/`mountpoint` deprecation; `deploy/builtins.md` three new builtins + copy-builtin deprecation; `conditions.md` predicate already added in Task 8; `render/index.md` linked the new page)
+- [x] run `make build` to sync + re-embed docs (`internal/core/docs/embedded/`) and regenerate content hashes
+- [x] adjust docs-subsystem golden references if any change (Russian translations refreshed for `conditions.md`, `deploy/builtins.md`, `services/fields.md`, `render/index.md`, plus new `render/config.md` translation — `TestRussianTranslationsAreFresh` passes)
+- [x] run `make test` — must pass before next task
 
 ### Task 14: Verify acceptance criteria
-- [ ] verify all Overview requirements: render replaces copy; `generated:` harvest+replay; render check-pairing re-runs; gate predicate; run auto-render; reset opt-in clear; deprecation warnings
-- [ ] verify edge cases: empty-store bootstrap, store-clear → regeneration, render re-run on template edit, multi-field service, path-escape rejection, non-interactive reset, **run-render-after-gate (reset-cleared store does NOT blank on `dwe run`)**, **post-pull config re-render**, reset-failure does-not-clear-store
-- [ ] run full suite: `make test` and `make lint`
-- [ ] verify deterministic golden output (service iteration via `DeployOrder`)
-- [ ] verify coverage on new packages meets project norm
+- [x] verify all Overview requirements: render replaces copy; `generated:` harvest+replay; render check-pairing re-runs; gate predicate; run auto-render; reset opt-in clear; deprecation warnings — all implemented: `service_configs_render`/`RenderConfigs`, `HarvestGenerated`/`${generated.*}`, `service_configs_render_check` + `hasCheck → Run` lever (decision_test.go), `generated-missing` predicate, `renderConfigsForRun`, `--clear-generated`, `deprecationsValidator` + single runtime notice
+- [x] verify edge cases: empty-store bootstrap, store-clear → regeneration, render re-run on template edit, multi-field service, path-escape rejection, non-interactive reset, **run-render-after-gate (reset-cleared store does NOT blank on `dwe run`)**, **post-pull config re-render**, reset-failure does-not-clear-store — all covered by named passing tests (TestRunRun_GateFails_DoesNotBlankConfig, TestRenderConfigsForRun_MissingGeneratedKey_SkipsService, TestRunRun_RendersFreshTemplateAtRunTime, TestHarvestGenerated_multiField, TestRenderConfigs_pathEscapeRejected, TestResolveClearGenerated_NonInteractiveNoFlag, TestResetServiceRun_PipelineFailure_StoreNotCleared, TestResetServiceRun_JournalFailure_StoreNotCleared)
+- [x] run full suite: `make test` (all packages ok, no FAIL/panic) and `make lint` (0 issues)
+- [x] verify deterministic golden output (service iteration via `DeployOrder`) — confirmed at config.go:239, run.go:395, render/config.go:97; TestRenderConfigsAll_deterministicDeployOrder
+- [x] verify coverage on new packages meets project norm — generatedstore 78.9%, templates/config 65.6%, cli/render 72.0%, builtin/services 88.7%, condition 94.8%
 
 ### Task 15: [Final] Update project docs and close out
-- [ ] update `AGENTS.md` "Critical Patterns" with the generated-store / config-render contract (render check-pairing; `${...}` substrate; store leaf placement) if a load-bearing invariant emerged (edit `AGENTS.md`, NOT the `CLAUDE.md` symlink)
-- [ ] update `docs/internals/packages.md` for new/changed package responsibilities
-- [ ] move this plan to `docs/plans/completed/`
+- [x] update `AGENTS.md` "Critical Patterns" with the generated-store / config-render contract (render check-pairing; `${...}` substrate; store leaf placement) — added "Config render + generated-once values" bullet (4 load-bearing contracts: `${...}` substrate, render check-pairing, harvest-not-mint store, run-render ordering); edited `AGENTS.md`, not the `CLAUDE.md` symlink
+- [x] update `docs/internals/packages.md` for new/changed package responsibilities — new entries for `internal/shared/generatedstore/` and `internal/core/execution/templates/config/`; augmented builtin/services (config-render trio + copy deprecation), condition (`generated-missing` + `ParseGeneratedMissing`), `shared/tpl` (`generated` namespace), workflow/lifecycle (`renderConfigsForRun`), validate config (`generated`/`deprecations` validators), cli/render (`render config`), cli/lifecycle (`reset --clear-generated`)
+- [x] move this plan to `docs/plans/completed/`
 
 ## Post-Completion
 *Items requiring manual intervention or external systems — informational only*

@@ -656,6 +656,122 @@ func TestRenderCommand_ServicesNestedPortsHosts(t *testing.T) {
 	}
 }
 
+// ---- Generated namespace ----
+
+func TestCompileVarSyntax_generated(t *testing.T) {
+	got := CompileVarSyntax("${generated.app_key}")
+	want := `{{ resolveGenerated .Generated "app_key" }}`
+	if got != want {
+		t.Errorf("got %q, want %q", got, want)
+	}
+}
+
+func TestCompileVarSyntax_generatedInContext(t *testing.T) {
+	in := "APP_KEY=${generated.app_key}"
+	got := CompileVarSyntax(in)
+	if !strings.Contains(got, `{{ resolveGenerated .Generated "app_key" }}`) {
+		t.Errorf("generated namespace not compiled in %q", got)
+	}
+}
+
+func TestRenderCommand_generatedResolution(t *testing.T) {
+	ctx := &RenderContext{
+		Generated: map[string]string{
+			"app_key": "base64:Xa3==",
+		},
+	}
+	got, err := RenderCommand("APP_KEY=${generated.app_key}", ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got != "APP_KEY=base64:Xa3==" {
+		t.Errorf("got %q, want APP_KEY=base64:Xa3==", got)
+	}
+}
+
+func TestRenderCommand_generatedMissingKey(t *testing.T) {
+	ctx := &RenderContext{
+		Generated: map[string]string{},
+	}
+	got, err := RenderCommand("${generated.app_key}", ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	// absent key → empty string (lenient, consistent with .Raw resolvers)
+	if got != "" {
+		t.Errorf("got %q, want empty string for absent generated key", got)
+	}
+}
+
+func TestRenderCommand_generatedNilMap(t *testing.T) {
+	ctx := &RenderContext{}
+	got, err := RenderCommand("${generated.app_key}", ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got != "" {
+		t.Errorf("got %q, want empty string for nil generated map", got)
+	}
+}
+
+// TestRenderCommand_servicesInjectedSubset documents that only the curated
+// subset injected by injectServicesIntoRaw resolves via ${services.<name>...};
+// an uninjected/omitted field renders "" (lenient).
+func TestRenderCommand_servicesInjectedSubset(t *testing.T) {
+	ctx := &RenderContext{
+		Raw: map[string]any{
+			"services": map[string]any{
+				"main": map[string]any{
+					"container": "app-main",
+					"ports": map[string]any{
+						"http": 8080,
+					},
+				},
+			},
+		},
+	}
+	cases := []struct {
+		expr string
+		want string
+	}{
+		{"${services.main.container}", "app-main"},
+		{"${services.main.ports.http}", "8080"},
+		// "render"/"generated"/arbitrary fields are NOT injected → ""
+		{"${services.main.render.config.template}", ""},
+		{"${services.main.generated.app_key}", ""},
+	}
+	for _, tc := range cases {
+		got, err := RenderCommand(tc.expr, ctx)
+		if err != nil {
+			t.Fatalf("RenderCommand(%q): %v", tc.expr, err)
+		}
+		if got != tc.want {
+			t.Errorf("RenderCommand(%q) = %q, want %q", tc.expr, got, tc.want)
+		}
+	}
+}
+
+// TestRenderCommand_generatedCoexistsWithNamespaces verifies the generated
+// namespace works alongside the other ${...} namespaces in one template.
+func TestRenderCommand_generatedCoexistsWithNamespaces(t *testing.T) {
+	ctx := &RenderContext{
+		Raw: map[string]any{
+			"databases": map[string]any{"magento": "magentodb"},
+		},
+		Generated: map[string]string{"crypt_key": "241f4fa6"},
+		Host:      HostInfo{UID: "1000", GID: "1000"},
+	}
+	expr := "db=${databases.magento} key=${generated.crypt_key} uid=${host.uid}"
+	got, err := RenderCommand(expr, ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := "db=magentodb key=241f4fa6 uid=1000"
+	if got != want {
+		t.Errorf("got %q, want %q", got, want)
+	}
+}
+
 func TestEvalCommandCondition_typoOnBuiltinVerb(t *testing.T) {
 	ctx := &RenderContext{}
 	// dir-emty (typo) instead of dir-empty

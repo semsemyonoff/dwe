@@ -1,8 +1,8 @@
-> Translated from: reference/templates.md @ f0dcb6e4339e
+> Translated from: reference/templates.md @ 3b4f23d59622
 
 # Шаблоны
 
-Go-шаблоны (с библиотекой функций [go-sprout](https://docs.atom.codes/sprout/)) вычисляются в нескольких точках DWE: элементах info-дашборда, декларативных командах, условиях `when:` пайплайнов, билтине `message` и render-паках IDE / AI. Эта страница — единый справочник по движку шаблонов, доступным хелперам и соглашениям, общим для всех мест.
+Go-шаблоны (с библиотекой функций [go-sprout](https://docs.atom.codes/sprout/)) вычисляются в нескольких точках DWE: элементах info-дашборда, декларативных командах, условиях `when:` пайплайнов, билтине `message` и render-паках IDE / AI / git / config. Эта страница — единый справочник по движку шаблонов, доступным хелперам и соглашениям, общим для всех мест. Обратите внимание: **config**-render-пак отличается от остальных видов рендера — он использует подложку-сокращение `${...}` (lenient — отсутствующее → `""`), а не строгий синтаксис `{{ ... }}` пакетов ide/ai/git.
 
 ## Содержание
 
@@ -31,6 +31,7 @@ Go-шаблоны (с библиотекой функций [go-sprout](https://
 | `workspace/templates/git/<pack>/**/*.tmpl` | `{{ ... }}` | Контекст render-пака (`.Project`, `.Service`, `.ServiceCfg`, `.Runtime`, `.Services`, `.Cfg`) | Строгий режим. См. [render/git.md](render/git.md) |
 | `workspace/templates/ide/<pack>/**/*.tmpl` | `{{ ... }}` | Контекст render-пака (`.Project`, `.Service`, `.ServiceCfg`, `.Runtime`, `.Services`, `.Cfg`) | Строгий режим. См. [render/ide.md](render/ide.md) |
 | `workspace/templates/ai/<pack>/**/*.tmpl` | `{{ ... }}` | Контекст render-пака (`.Project`, `.Service`, `.ServiceCfg`, `.Runtime`, `.Services`, `.Cfg`) | Строгий режим. См. [render/ai.md](render/ai.md) |
+| `workspace/templates/config/<pack>/**` | `${...}` | Разрешённая конфигурация проекта (`.Raw`) + курируемый поднабор `${services.<name>...}` + `${generated.<name>}` | Lenient (отсутствующее → `""`). См. [render/config.md](render/config.md) |
 | `params.*.default_from`, `context.*.from` | — | — | Только plain dot-paths (без template-выражений). |
 
 ## Два синтаксиса: shorthand и полные шаблоны
@@ -59,6 +60,7 @@ path: "${param.dump_dir}/${param.database}{{ if .Params.dump_date }}_{{ now | da
 | `${context.<name>}` | Разрешённое значение контекста |
 | `${files.<id>.path}` | Абсолютный путь разрешённого файла-артефакта |
 | `${host.uid}` / `${host.gid}` | Эффективные UID/GID (1000:1000 на macOS, реальные значения на Linux) |
+| `${generated.<name>}` | Значение по сервису, собранное в `.dwe/generated.yml` (только config-render-паки; отсутствующее → `""`). См. [render/config.md](render/config.md) |
 
 Всё, что не совпадает с известным неймспейсом (`${foo}`, `${a.b.c}`), трактуется как dot-path lookup в `Raw`. Литерал `$$` пропускается без изменений.
 

@@ -27,6 +27,8 @@ flowchart LR
 - `configs` — child wholly replaces parent when set (child has its own list); parent's list is used only when child omits the key.
 - `cli.env` — recursive map merge: parent provides defaults, child overrides per key.
 - `render.ide.enabled`, `render.ide.template`, `render.ai.enabled`, `render.ai.template`, `render.git.enabled`, and `render.git.template` — inherited like scalar fields. Child's explicit `enabled: true|false` or non-empty `template` override the parent's; omitted values inherit from parent. This allows grandchildren to inherit settings indirectly.
+- `render.config` — inherited wholesale when the child declares no `render.config:` block of its own (parent's block is cloned); a child that declares its own `render.config:` keeps it and does not merge with the parent's.
+- `generated` — inherited when the child declares no `generated:` map of its own (parent's map is cloned); a child with its own `generated:` map wholly replaces the parent's, not merged.
 - `compose` — inherited when the child declares no `compose:` list of its own (parent's list is cloned); the child's own list wholly replaces the parent's, not merged.
 - `container`, `required`, `depends_on` — never inherited. A child that omits `container` defaults to its service folder name at load time. Each child specifies its own `depends_on`.
 

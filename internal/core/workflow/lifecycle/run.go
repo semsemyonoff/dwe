@@ -8,9 +8,12 @@ import (
 	"log/slog"
 	"os"
 	"path/filepath"
+	"sort"
+	"strings"
 	"time"
 
 	"github.com/semsemyonoff/dwe/internal/core/execution/preflight"
+	configpack "github.com/semsemyonoff/dwe/internal/core/execution/templates/config"
 	"github.com/semsemyonoff/dwe/internal/core/notify"
 	"github.com/semsemyonoff/dwe/internal/core/project/config"
 	userpkg "github.com/semsemyonoff/dwe/internal/core/project/user"
@@ -19,6 +22,7 @@ import (
 	"github.com/semsemyonoff/dwe/internal/core/workflow/deploy"
 	"github.com/semsemyonoff/dwe/internal/core/workflow/deploy/journal"
 	"github.com/semsemyonoff/dwe/internal/shared/envfile"
+	"github.com/semsemyonoff/dwe/internal/shared/generatedstore"
 	"github.com/semsemyonoff/dwe/internal/shared/git"
 	"github.com/semsemyonoff/dwe/internal/shared/i18n"
 	"github.com/semsemyonoff/dwe/internal/shared/lock"
@@ -285,6 +289,17 @@ func RunRun(ctx RunContext) (err error) {
 		}
 	}
 
+	// Re-render service config files from their template packs, replaying any
+	// harvested ${generated.<name>} values from the store. Placed AFTER the
+	// deployment gate (so a reset-cleared / un-deployed store can never blank a
+	// secret before the gate rejects the run) and AFTER the post-pull reload
+	// (so templates that changed with an update render fresh), but BEFORE
+	// lifecycle phases observe the files. Run only replays — it never mints or
+	// harvests (that happens at deploy time).
+	if err := renderConfigsForRun(cfg, workDir, w); err != nil {
+		return err
+	}
+
 	if err := RunPhases(cfg, reg, workDir, runCfg.Phases, "run", "run", ctx.Yes, runCfg.LogEnabled(), ctx.Translator, ctx.Locale); err != nil {
 		return err
 	}
@@ -351,6 +366,61 @@ func renderAndSourceDotEnv(cfg *config.DweConfig, workDir string) error {
 		return fmt.Errorf("sourcing .env: %w", err)
 	}
 	return nil
+}
+
+// renderConfigsForRun re-renders every enabled service's config pack from the
+// current config, replaying harvested ${generated.<name>} values from the
+// generated-value store. It is the run-preamble counterpart to the deploy-time
+// service_configs_render builtin and runs only after the deployment gate has
+// passed and any post-pull config reload has completed, but before lifecycle
+// phases observe the files. It deliberately:
+//   - does NOT mint or harvest (run replays only — minting happens at deploy);
+//   - is non-destructive when replay data is absent: if a service declares
+//     generated: keys and ANY is missing from the store, that service's render
+//     is SKIPPED (with a hint) rather than overwriting a config with a blanked
+//     secret. The deploy render stays lenient (first deploy mints the value);
+//     this guard is run-only because the gate only proves StatusDeployed in the
+//     journal, NOT that the store still holds the keys (a deleted / upgraded
+//     .dwe/generated.yml with a deployed journal is possible).
+//
+// A service with no config pack is skipped silently (config rendering is
+// opt-in). The first hard render error aborts the run.
+func renderConfigsForRun(cfg *config.DweConfig, workDir string, w *render.Writer) error {
+	storePath := filepath.Join(workDir, generatedstore.DefaultRelPath)
+	store, err := generatedstore.Load(storePath)
+	if err != nil {
+		return fmt.Errorf("loading generated store: %w", err)
+	}
+
+	// Config rendering is app-only: only app services may declare dir / render /
+	// generated (see allowedFieldsFor). Iterating tool/infra here would resolve
+	// the implicit `default` pack for a service with no hub dir and error.
+	for _, name := range config.DeployOrder(cfg, []string{"app"}) {
+		if missing := missingGeneratedKeys(cfg.Services[name], store, name); len(missing) > 0 {
+			w.Warning(fmt.Sprintf(
+				"skipping config render for %q: generated value(s) %s missing from store — run `dwe deploy run` to mint them",
+				name, strings.Join(missing, ", ")))
+			continue
+		}
+		if _, err := configpack.RenderConfigs(workDir, cfg, name, store); err != nil {
+			return fmt.Errorf("rendering config for service %q: %w", name, err)
+		}
+	}
+	return nil
+}
+
+// missingGeneratedKeys returns the sorted list of generated field names declared
+// by svc that are absent from the store for serviceName. An empty result means
+// every declared key (if any) is present and replay is safe.
+func missingGeneratedKeys(svc config.ServiceConfig, store *generatedstore.Store, serviceName string) []string {
+	var missing []string
+	for field := range svc.Generated {
+		if !store.Has(serviceName, field) {
+			missing = append(missing, field)
+		}
+	}
+	sort.Strings(missing)
+	return missing
 }
 
 // deploymentGateError is returned when the run gate detects an undeployed tracked service.

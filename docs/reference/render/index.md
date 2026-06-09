@@ -18,8 +18,9 @@
 | `dwe render ide` | Per-service IDE config files inside each service hub | Template packs under `workspace/templates/ide/<pack>/` driven by `manifest.yml` |
 | `dwe render ai` | Hub-level agent docs (`AGENTS.md`, `CLAUDE.md` symlink, …) | Template packs under `workspace/templates/ai/<pack>/` driven by `manifest.yml` |
 | `dwe render git` | Per-service shell git hooks at `<svc.Dir>/src/.git/hooks/<basename>` (mode `0755`) | Template packs under `workspace/templates/git/<pack>/` driven by `manifest.yml` |
+| `dwe render config` | Per-service config files (`.env`, `env.php`, …) inside each service hub, replaying harvested secrets | Template packs under `workspace/templates/config/<pack>/` driven by `manifest.yml` |
 
-All four subcommands read the same merged config (`workspace.yml` → `workspace/defaults.yml` → `workspace/local.yml`, with per-service declarations from `workspace/services/<name>/service.yml` joined in). They differ in what they iterate and where they write.
+All five subcommands read the same merged config (`workspace.yml` → `workspace/defaults.yml` → `workspace/local.yml`, with per-service declarations from `workspace/services/<name>/service.yml` joined in). They differ in what they iterate and where they write.
 
 ## Common pipeline
 
@@ -140,6 +141,7 @@ For IDE/AI, a local override that produces a different rendered output is a work
 - [`render ide`](ide.md) — IDE template packs: pack resolution, manifest schema, deepest-wins collision policy, per-service rendering
 - [`render ai`](ai.md) — Agent docs template packs: manifest schema, shallowest-wins collision policy, render + symlink entries
 - [`render git`](git.md) — Shell git hooks: manifest-driven hook rendering into `<svc.Dir>/src/.git/hooks/`, deepest-wins, mode `0755`
+- [`render config`](config.md) — Service config files: `${...}` substrate, `${generated.<name>}` replay, harvest-not-mint secrets, opt-in pack resolution
 
 ## Related references
 

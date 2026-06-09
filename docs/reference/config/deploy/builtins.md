@@ -6,6 +6,9 @@ Builtins are engine-internal Go functions invoked from a step via `type: builtin
 
 - [Catalogue](#catalogue)
 - [`service_dirs_ensure`](#service_dirs_ensure)
+- [`service_configs_render`](#service_configs_render)
+- [`service_configs_render_check`](#service_configs_render_check)
+- [`service_generated_harvest`](#service_generated_harvest)
 - [`service_configs_copy`](#service_configs_copy)
 - [`service_configs_check`](#service_configs_check)
 - [`message`](#message)
@@ -22,8 +25,11 @@ Builtins are engine-internal Go functions invoked from a step via `type: builtin
 | Builtin | Purpose |
 |---------|---------|
 | `service_dirs_ensure` | Create service hub directories |
-| `service_configs_copy` | Copy template config files into the service hub |
-| `service_configs_check` | Verify that template config files exist in the service hub |
+| `service_configs_render` | Render config files from a template pack into the service hub (replays generated values) |
+| `service_configs_render_check` | Verify rendered config targets exist; pairing it as a `check:` re-runs the render every deploy |
+| `service_generated_harvest` | Harvest the service's `generated:` fields into the generated-value store (write-if-absent) |
+| `service_configs_copy` | **⚠️ Deprecated** — copy template config files into the service hub |
+| `service_configs_check` | **⚠️ Deprecated** — verify that copied config files exist in the service hub |
 | `message` | Print a styled message at info/success/warning/error level |
 | `confirm` | Interactive Y/n prompt (skipped under `--yes`) |
 | `docker_remove_project_volumes` | Remove all volumes whose name is prefixed with the compose project name |
@@ -54,7 +60,53 @@ Mode behavior:
 
 Safety: `src` always uses `skip` semantics in `recreate` mode (never removes source code). All other dirs — including `configs` if listed in `dirs:` — are wiped under `recreate`.
 
+## `service_configs_render`
+
+Renders a service's config files from a config template pack (`workspace/templates/config/<pack>/`) into the service hub dir (`svc.Dir`), replaying any harvested `${generated.<name>}` values from the generated-value store (`.dwe/generated.yml`). This is the render-based successor to the deprecated `service_configs_copy`.
+
+| Parameter | Type | Default | Description |
+|-----------|------|---------|-------------|
+| `service` | string | required | Service key |
+| `mode` | string | `replace` | Only `replace` (overwrite) is supported |
+
+Config rendering is **opt-in**: a service with no resolvable config pack is a no-op. Pair this step with a `service_configs_render_check` `check:` so it re-runs every deploy. See [render config](../../render/config.md) for the substrate, pack resolution, and full deploy flow.
+
+```yaml
+- name: render-configs
+  type: builtin
+  cmd: service_configs_render
+  with:
+    service: main
+  check:
+    type: builtin
+    cmd: service_configs_render_check
+    with:
+      service: main
+```
+
+## `service_configs_render_check`
+
+Verifies that every config-pack render target for the service exists on disk. Its primary purpose is structural: pairing it as the `check:` of a `service_configs_render` step forces that step to re-run on every deploy (the `hasCheck → Run` lever in `journal/decision.go` bypasses the action-hash skip), so template edits and store clears always take effect — exactly mirroring `service_configs_copy` + `service_configs_check`.
+
+| Parameter | Type | Default | Description |
+|-----------|------|---------|-------------|
+| `service` | string | required | Service key |
+
+A service with no resolvable config pack has nothing to check and is a no-op. Returns an error listing any missing rendered files, which fails the check.
+
+## `service_generated_harvest`
+
+Reads each of the service's declared `generated:` fields from its on-disk file, extracts the value via the field's regex (capture group 1), and **write-if-absent** stores it into the generated-value store (`.dwe/generated.yml`). The store is saved atomically when a new value is written.
+
+| Parameter | Type | Default | Description |
+|-----------|------|---------|-------------|
+| `service` | string | required | Service key |
+
+"Harvest, not mint": the service's own generator (e.g. `php artisan key:generate`) writes the secret; DWE only reads it back and replays it on later renders. Write-if-absent means a value already in the store is preserved, so a redeploy is a no-op. A service with no `generated:` fields is a no-op. A missing file, a pattern that matches no line, a pattern with no capture group, or a captured empty value are surfaced as errors — never silently skipped. See the [`generated` block](../services/fields.md#generated-block) and [render config](../../render/config.md).
+
 ## `service_configs_copy`
+
+> **⚠️ Deprecated.** Superseded by [`service_configs_render`](#service_configs_render) + [`service_generated_harvest`](#service_generated_harvest). It keeps working but `dwe validate` emits a warning and a single runtime deprecation notice fires per copy step. See [render config](../../render/config.md) for the migration. Removed in a separate phase-2 (major) effort.
 
 Copies template config files from `configs/services/<service>/` into `services/<service>/configs/`. Creates the destination `configs/` directory if it does not exist — this is the canonical path for `configs/` creation (the `service_dirs_ensure` builtin does not create it).
 
@@ -74,6 +126,8 @@ Mode behaviour:
 When the corresponding `configs[]` entry has a `mountpoint`, the builtin also touches an empty file at `<service-dir>/<mountpoint>` so Docker Desktop virtiofs can place a nested file bind mount over it.
 
 ## `service_configs_check`
+
+> **⚠️ Deprecated.** The `check:` companion of the deprecated [`service_configs_copy`](#service_configs_copy). For render-based configs use [`service_configs_render_check`](#service_configs_render_check) instead.
 
 Verifies that all template config files declared in the service's `service.yml` exist in the service hub after a `service_configs_copy` step. Use as a `check:` action to assert that configs were successfully deployed.
 

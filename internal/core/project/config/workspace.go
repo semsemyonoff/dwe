@@ -544,11 +544,20 @@ type ServiceGitHooksConfig struct {
 	Template string `yaml:"template"`
 }
 
+// RenderConfigSection holds config-file rendering settings for a service. An
+// optional Template pins a specific template pack; otherwise the pack is
+// resolved by convention (service name → extends chain → default) plus an
+// optional `.local` sibling override.
+type RenderConfigSection struct {
+	Template string `yaml:"template"`
+}
+
 // ServiceRenderConfig holds all rendering-related configuration for a service.
 type ServiceRenderConfig struct {
-	IDE ServiceIDEConfig      `yaml:"ide"`
-	AI  ServiceAIConfig       `yaml:"ai"`
-	Git ServiceGitHooksConfig `yaml:"git"`
+	IDE    ServiceIDEConfig      `yaml:"ide"`
+	AI     ServiceAIConfig       `yaml:"ai"`
+	Git    ServiceGitHooksConfig `yaml:"git"`
+	Config *RenderConfigSection  `yaml:"config"`
 }
 
 // StatusColumn declares one custom column rendered in the status table for a
@@ -804,7 +813,7 @@ func allowedFieldsFor(t ServiceType) map[string]bool {
 		for _, k := range []string{
 			"depends_on",
 			"dir", "dir_internal", "work_dir_internal",
-			"configs", "dirs", "extends", "cli", "render",
+			"configs", "dirs", "extends", "cli", "render", "generated",
 		} {
 			out[k] = true
 		}
@@ -825,6 +834,15 @@ func allowedFieldsFor(t ServiceType) map[string]bool {
 	default:
 		return map[string]bool{}
 	}
+}
+
+// GeneratedField declares one service-minted value that DWE harvests and
+// replays. File is the output file (relative to the service hub dir) the
+// service writes the value into; Pattern is a regex whose first capture group
+// extracts the value (e.g. `^APP_KEY=(.*)$`).
+type GeneratedField struct {
+	File    string `yaml:"file"`
+	Pattern string `yaml:"pattern"`
 }
 
 // ServiceConfig describes a single service entry in workspace/services/<name>/service.yml.
@@ -856,10 +874,14 @@ type ServiceConfig struct {
 	LocalComposeExtra []string            `yaml:"-"`
 	CLI               ServiceCLIConfig    `yaml:"cli"`
 	Render            ServiceRenderConfig `yaml:"render"`
-	Status            []StatusColumn      `yaml:"status,omitempty"`
-	OnEnable          *ServiceToggleHooks `yaml:"on_enable,omitempty"`
-	OnDisable         *ServiceToggleHooks `yaml:"on_disable,omitempty"`
-	Notes             *ServiceNotes       `yaml:"notes,omitempty"`
+	// Generated declares per-service values that the service itself mints (e.g.
+	// Laravel APP_KEY) and DWE harvests back into a durable store
+	// (.dwe/generated.yml) to replay on subsequent renders. Keyed by field name.
+	Generated map[string]GeneratedField `yaml:"generated,omitempty"`
+	Status    []StatusColumn            `yaml:"status,omitempty"`
+	OnEnable  *ServiceToggleHooks       `yaml:"on_enable,omitempty"`
+	OnDisable *ServiceToggleHooks       `yaml:"on_disable,omitempty"`
+	Notes     *ServiceNotes             `yaml:"notes,omitempty"`
 }
 
 // IsApp reports whether this service has type "app".
@@ -2008,6 +2030,17 @@ func ResolveServiceExtends(services map[string]ServiceConfig) error {
 		}
 		if svc.Render.Git.Template == "" {
 			svc.Render.Git.Template = parent.Render.Git.Template
+		}
+		if svc.Render.Config == nil && parent.Render.Config != nil {
+			cfg := *parent.Render.Config
+			svc.Render.Config = &cfg
+		}
+		// Distinguish an omitted `generated:` (nil → inherit) from an explicitly
+		// empty `generated: {}` (non-nil → child wholly replaces with nothing).
+		// Using len()==0 would conflate the two and make a child that
+		// deliberately cleared the map silently inherit the parent's keys.
+		if svc.Generated == nil && len(parent.Generated) > 0 {
+			svc.Generated = maps.Clone(parent.Generated)
 		}
 		services[name] = svc
 	}

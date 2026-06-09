@@ -16,17 +16,20 @@ func NewCmd(groupID string, flags *cmdctx.RootFlags) *cobra.Command {
 		Long: `Generate files derived from the merged workspace config (workspace.yml + defaults.yml + local.yml).
 
 Subcommands:
-  env  — generate .env from the exports.env spec
-  ide  — generate IDE config files from template packs
-  ai   — generate hub-level agents documentation from template packs
-  git  — generate shell git hooks from template packs`,
+  env     — generate .env from the exports.env spec
+  config  — render service config files from template packs
+  ide     — generate IDE config files from template packs
+  ai      — generate hub-level agents documentation from template packs
+  git     — generate shell git hooks from template packs`,
 		Example: `  dwe render env --out .env
+  dwe render config
   dwe render ide
   dwe render ai
   dwe render git`,
 		SilenceUsage: true,
 	}
 	cmd.AddCommand(newEnvCmd(flags))
+	cmd.AddCommand(newConfigCmd(flags))
 	cmd.AddCommand(newIDECmd(flags))
 	cmd.AddCommand(newAICmd(flags))
 	cmd.AddCommand(newGitCmd(flags))

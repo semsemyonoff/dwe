@@ -1,6 +1,6 @@
 # Templates
 
-Go templates (with the [go-sprout](https://docs.atom.codes/sprout/) function library) are evaluated across multiple DWE surfaces: info dashboard items, declarative commands, pipeline `when:` conditions, the `message` builtin, and the IDE / AI render packs. This page is the single reference for the template engine, the available helpers, and the conventions shared by every site.
+Go templates (with the [go-sprout](https://docs.atom.codes/sprout/) function library) are evaluated across multiple DWE surfaces: info dashboard items, declarative commands, pipeline `when:` conditions, the `message` builtin, and the IDE / AI / git / config render packs. This page is the single reference for the template engine, the available helpers, and the conventions shared by every site. Note that the **config** render pack diverges from the other render kinds: it uses the `${...}` shorthand substrate (lenient — absent → `""`), not the strict `{{ ... }}` syntax of the ide/ai/git packs.
 
 ## Contents
 
@@ -29,6 +29,7 @@ Go templates (with the [go-sprout](https://docs.atom.codes/sprout/) function lib
 | `workspace/templates/git/<pack>/**/*.tmpl` | `{{ ... }}` | Render-pack context (`.Project`, `.Service`, `.ServiceCfg`, `.Runtime`, `.Services`, `.Cfg`) | Strict mode. See [render/git.md](render/git.md) |
 | `workspace/templates/ide/<pack>/**/*.tmpl` | `{{ ... }}` | Render-pack context (`.Project`, `.Service`, `.ServiceCfg`, `.Runtime`, `.Services`, `.Cfg`) | Strict mode. See [render/ide.md](render/ide.md) |
 | `workspace/templates/ai/<pack>/**/*.tmpl` | `{{ ... }}` | Render-pack context (`.Project`, `.Service`, `.ServiceCfg`, `.Runtime`, `.Services`, `.Cfg`) | Strict mode. See [render/ai.md](render/ai.md) |
+| `workspace/templates/config/<pack>/**` | `${...}` | Resolved project config (`.Raw`) + curated `${services.<name>...}` subset + `${generated.<name>}` | Lenient (absent → `""`). See [render/config.md](render/config.md) |
 | `params.*.default_from`, `context.*.from` | — | — | Plain dot-paths only (no template expressions). |
 
 ## Two syntaxes: shorthand and full templates
@@ -57,6 +58,7 @@ Rule of thumb: use `${...}` for plain lookups; reach for `{{ ... }}` whenever yo
 | `${context.<name>}` | Resolved context value |
 | `${files.<id>.path}` | Absolute path of a resolved file artefact |
 | `${host.uid}` / `${host.gid}` | Effective UID/GID (1000:1000 on macOS, real values on Linux) |
+| `${generated.<name>}` | Per-service value harvested into `.dwe/generated.yml` (config render packs only; absent → `""`). See [render/config.md](render/config.md) |
 
 Anything that doesn't match a known namespace (`${foo}`, `${a.b.c}`) is treated as a dot-path lookup against `Raw`. A literal `$$` passes through unchanged.
 
