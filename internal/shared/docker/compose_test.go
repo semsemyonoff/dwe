@@ -1,6 +1,7 @@
 package docker
 
 import (
+	"context"
 	"os"
 	"path/filepath"
 	"runtime"
@@ -9,6 +10,7 @@ import (
 	"testing"
 
 	"github.com/semsemyonoff/dwe/internal/core/project/config"
+	"github.com/semsemyonoff/dwe/internal/shared/trace"
 )
 
 // TestExec_RunsInBaseDir guarantees that docker compose subprocesses inherit
@@ -484,7 +486,7 @@ func TestNewCompose_DefaultBinWhenNotSet(t *testing.T) {
 }
 
 func TestFormatCommandQuotesUnsafeArgs(t *testing.T) {
-	got := formatCommand([]string{
+	got := trace.FormatCommand([]string{
 		"docker",
 		"compose",
 		"exec",
@@ -498,7 +500,7 @@ func TestFormatCommandQuotesUnsafeArgs(t *testing.T) {
 	})
 	want := "docker compose exec -e MYSQL_PWD db -- sh -c 'echo '\\''hello world'\\'''"
 	if got != want {
-		t.Fatalf("formatCommand = %q, want %q", got, want)
+		t.Fatalf("trace.FormatCommand = %q, want %q", got, want)
 	}
 }
 
@@ -614,6 +616,110 @@ func TestBuildArgs_BuildWithForceFlags(t *testing.T) {
 			t.Errorf("BuildArgs[%d] = %q, want %q", i, got, expected[i])
 		}
 	}
+}
+
+// writeStub builds an executable shell stub at tmp/<name> that runs body and
+// returns its absolute path. Skips on Windows (sh-based).
+func writeStub(t *testing.T, body string) string {
+	t.Helper()
+	if runtime.GOOS == "windows" {
+		t.Skip("shell stub is sh-based")
+	}
+	dir := t.TempDir()
+	path := filepath.Join(dir, "docker-stub")
+	if err := os.WriteFile(path, []byte("#!/bin/sh\n"+body+"\n"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	return path
+}
+
+// captureTrace points the trace sink at a buffer at the given level for the
+// duration of the test, restoring LevelOff afterwards.
+func captureTrace(t *testing.T, lvl trace.Level) *strings.Builder {
+	t.Helper()
+	buf := &strings.Builder{}
+	trace.Configure(buf, lvl)
+	t.Cleanup(func() { trace.Configure(nil, trace.LevelOff) })
+	return buf
+}
+
+func TestExec_EchoesAtVerbose(t *testing.T) {
+	stub := writeStub(t, "exit 0")
+	buf := captureTrace(t, trace.LevelVerbose)
+
+	c := &Compose{Bin: stub}
+	if err := c.Exec("ps"); err != nil {
+		t.Fatalf("Exec: %v", err)
+	}
+
+	want := "$ " + trace.FormatCommand(append([]string{stub}, c.BuildArgs("ps")...))
+	got := strings.TrimSpace(buf.String())
+	if got != want {
+		t.Fatalf("echo = %q, want %q", got, want)
+	}
+}
+
+func TestExec_EchoesEvenOnFailure(t *testing.T) {
+	stub := writeStub(t, "exit 7")
+	buf := captureTrace(t, trace.LevelVerbose)
+
+	c := &Compose{Bin: stub}
+	if err := c.Exec("ps"); err == nil {
+		t.Fatal("Exec: expected error from failing stub")
+	}
+	if !strings.Contains(buf.String(), "$ ") {
+		t.Fatalf("expected command echo even on failure, got %q", buf.String())
+	}
+}
+
+func TestExec_SilentAtLevelOff(t *testing.T) {
+	stub := writeStub(t, "exit 0")
+	buf := captureTrace(t, trace.LevelOff)
+
+	c := &Compose{Bin: stub}
+	if err := c.Exec("ps"); err != nil {
+		t.Fatalf("Exec: %v", err)
+	}
+	if buf.Len() != 0 {
+		t.Fatalf("expected no output at LevelOff, got %q", buf.String())
+	}
+}
+
+func TestProbe_EchoesOnlyAtDebug(t *testing.T) {
+	stub := writeStub(t, "exit 0") // prints nothing → empty probe result
+
+	t.Run("verbose is silent", func(t *testing.T) {
+		buf := captureTrace(t, trace.LevelVerbose)
+		c := &Compose{Bin: stub}
+		if _, err := c.ContainerIDs(); err != nil {
+			t.Fatalf("ContainerIDs: %v", err)
+		}
+		if _, err := c.RunningServices(context.Background(), []string{"app"}); err != nil {
+			t.Fatalf("RunningServices: %v", err)
+		}
+		if buf.Len() != 0 {
+			t.Fatalf("read-only probes must not echo at Verbose, got %q", buf.String())
+		}
+	})
+
+	t.Run("debug echoes", func(t *testing.T) {
+		buf := captureTrace(t, trace.LevelDebug)
+		c := &Compose{Bin: stub}
+		if _, err := c.ContainerIDs(); err != nil {
+			t.Fatalf("ContainerIDs: %v", err)
+		}
+		if !strings.Contains(buf.String(), "ps") || !strings.Contains(buf.String(), "$ ") {
+			t.Fatalf("expected probe echo at Debug, got %q", buf.String())
+		}
+
+		buf2 := captureTrace(t, trace.LevelDebug)
+		if _, err := c.RunningServices(context.Background(), []string{"app"}); err != nil {
+			t.Fatalf("RunningServices: %v", err)
+		}
+		if !strings.Contains(buf2.String(), "--services") {
+			t.Fatalf("expected RunningServices probe echo at Debug, got %q", buf2.String())
+		}
+	})
 }
 
 func TestSplitNonEmptyLines(t *testing.T) {

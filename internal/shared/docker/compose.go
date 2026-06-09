@@ -12,6 +12,7 @@ import (
 	"strings"
 
 	"github.com/semsemyonoff/dwe/internal/core/project/config"
+	"github.com/semsemyonoff/dwe/internal/shared/trace"
 )
 
 // Compose encapsulates the state needed to build and execute docker compose commands.
@@ -148,28 +149,12 @@ func (c *Compose) Exec(command string, extraArgs ...string) error {
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
 	cmd.Env = c.BuildEnv()
+	// User-facing lifecycle command — echo at Verbose+.
+	trace.Command(context.Background(), bin, args...)
 	if err := cmd.Run(); err != nil {
-		return fmt.Errorf("%s: %w", formatCommand(append([]string{bin}, args...)), err)
+		return fmt.Errorf("%s: %w", trace.FormatCommand(append([]string{bin}, args...)), err)
 	}
 	return nil
-}
-
-func formatCommand(args []string) string {
-	quoted := make([]string, len(args))
-	for i, arg := range args {
-		quoted[i] = quoteArg(arg)
-	}
-	return strings.Join(quoted, " ")
-}
-
-func quoteArg(arg string) string {
-	if arg == "" {
-		return "''"
-	}
-	if strings.ContainsAny(arg, " \t\n\"'\\$`|&;()<>*?[#~=%") {
-		return "'" + strings.ReplaceAll(arg, "'", "'\\''") + "'"
-	}
-	return arg
 }
 
 // MergeEnv returns the current process environment with overrides applied.
@@ -250,6 +235,10 @@ func (c *Compose) output(args []string) ([]byte, error) {
 	cmd := exec.Command(c.BinName(), args...)
 	cmd.Dir = c.BaseDir
 	cmd.Env = c.BuildEnv()
+	// Read-only probe — echo only at Debug to keep `dwe status -v` quiet.
+	if trace.Enabled(trace.LevelDebug) {
+		trace.Command(context.Background(), c.BinName(), args...)
+	}
 	return cmd.Output()
 }
 
@@ -285,6 +274,10 @@ func (c *Compose) RunningServices(ctx context.Context, services []string) ([]str
 	cmd := exec.CommandContext(ctx, c.BinName(), args...) //nolint:gosec
 	cmd.Dir = c.BaseDir
 	cmd.Env = c.BuildEnv()
+	// Read-only probe — echo only at Debug to keep `dwe status -v` quiet.
+	if trace.Enabled(trace.LevelDebug) {
+		trace.Command(ctx, c.BinName(), args...)
+	}
 	out, err := cmd.Output()
 	if err != nil {
 		return nil, fmt.Errorf("%s compose ps --services: %w", c.BinName(), err)

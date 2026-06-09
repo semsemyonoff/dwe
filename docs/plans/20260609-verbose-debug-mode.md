@@ -153,11 +153,11 @@ Startup (`initRootCmd`): parse flags → `lvl := levelFrom(verbose, debug, os.Ge
 - Modify: `internal/shared/docker/compose.go`
 - Modify: `internal/shared/docker/compose_test.go`
 
-- [ ] call `trace.Command(context.Background(), c.BinName(), args...)` before `cmd.Run()` in `Exec()` (Verbose)
-- [ ] call `trace.Command` at **Debug gating** before the probe runs in `output()` and `RunningServices()` (read-only `ps` probes — keep them out of Verbose to avoid `dwe status -v` spam): emit only when `trace.Enabled(trace.LevelDebug)` (or via a Debug-only emit helper)
-- [ ] update `Exec()` error wrap to use `trace.FormatCommand`; remove local `formatCommand`/`quoteArg`
-- [ ] write tests: `Exec` echoes once at Verbose just before run; `output`/`RunningServices` echo only at Debug, never at Verbose; `LevelOff` silent; error-wrap golden stays byte-identical to `trace.FormatCommand`
-- [ ] run tests — must pass before next task
+- [x] call `trace.Command(context.Background(), c.BinName(), args...)` before `cmd.Run()` in `Exec()` (Verbose)
+- [x] call `trace.Command` at **Debug gating** before the probe runs in `output()` and `RunningServices()` (read-only `ps` probes — keep them out of Verbose to avoid `dwe status -v` spam): emit only when `trace.Enabled(trace.LevelDebug)` (or via a Debug-only emit helper)
+- [x] update `Exec()` error wrap to use `trace.FormatCommand`; remove local `formatCommand`/`quoteArg`
+- [x] write tests: `Exec` echoes once at Verbose just before run; `output`/`RunningServices` echo only at Debug, never at Verbose; `LevelOff` silent; error-wrap golden stays byte-identical to `trace.FormatCommand`
+- [x] run tests — must pass before next task
 
 ### Task 5: Command echo for raw docker (stop/restart/rm) and git
 
