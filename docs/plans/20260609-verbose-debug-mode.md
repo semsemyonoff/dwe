@@ -128,11 +128,11 @@ Startup (`initRootCmd`): parse flags → `lvl := levelFrom(verbose, debug, os.Ge
 - Modify: `internal/cli/root.go`
 - Modify: nearest existing root/flags test (e.g. `internal/cli/root_test.go`)
 
-- [ ] add `Verbose bool` and `Debug bool` to `cmdctx.RootFlags`
-- [ ] register persistent flags in `initRootCmd`: `-v/--verbose`, `--debug` (no `-d`); help text per flag
-- [ ] compute level (`--debug` OR truthy `DWE_DEBUG` → Debug; else `--verbose` → Verbose; flag beats env) and call `trace.Configure(os.Stderr, lvl)` (slog install deferred to Task 8)
-- [ ] write tests: flags set level; `DWE_DEBUG=1` (no flag) → Debug; `DWE_DEBUG=0` → unchanged (off unless `--verbose`); `--verbose`+`DWE_DEBUG=1` → Debug; no flags → Off
-- [ ] run tests — must pass before next task
+- [x] add `Verbose bool` and `Debug bool` to `cmdctx.RootFlags`
+- [x] register persistent flags in `initRootCmd`: `-v/--verbose`, `--debug` (no `-d`); help text per flag
+- [x] compute level (`--debug` OR truthy `DWE_DEBUG` → Debug; else `--verbose` → Verbose; flag beats env) and call `trace.Configure(os.Stderr, lvl)` (slog install deferred to Task 8)
+- [x] write tests: flags set level; `DWE_DEBUG=1` (no flag) → Debug; `DWE_DEBUG=0` → unchanged (off unless `--verbose`); `--verbose`+`DWE_DEBUG=1` → Debug; no flags → Off
+- [x] run tests — must pass before next task
 
 ### Task 3: Live-view routing + parallel attribution
 

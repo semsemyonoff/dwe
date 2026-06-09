@@ -40,6 +40,7 @@ import (
 	"github.com/semsemyonoff/dwe/internal/core/workflow/deploy/journal"
 	"github.com/semsemyonoff/dwe/internal/shared/i18n"
 	sharedrender "github.com/semsemyonoff/dwe/internal/shared/render"
+	"github.com/semsemyonoff/dwe/internal/shared/trace"
 	"github.com/semsemyonoff/dwe/internal/shared/version"
 
 	"github.com/spf13/cobra"
@@ -161,6 +162,11 @@ func initRootCmd(flags *cmdctx.RootFlags) *cobra.Command {
 		// The validate command bypasses schema validation so it can report schema errors
 		// as diagnostics instead of aborting before the validators run.
 		PersistentPreRunE: func(cmd *cobra.Command, args []string) error {
+			// (0) Configure the diagnostic sink as early as possible so that
+			// any subsequent setup (config load, styles) can emit trace lines.
+			// The slog handler install at LevelDebug is deferred to a later task.
+			trace.Configure(os.Stderr, levelFrom(flags.Verbose, flags.Debug, os.Getenv("DWE_DEBUG")))
+
 			// (1) Validate --output before anything else so invalid values are
 			// rejected cleanly before lipgloss or fang styles are applied.
 			switch flags.Output {
@@ -263,8 +269,45 @@ func initRootCmd(flags *cmdctx.RootFlags) *cobra.Command {
 		false,
 		"pretty-print JSON output (only with --output json)",
 	)
+	cmd.PersistentFlags().BoolVarP(
+		&flags.Verbose,
+		"verbose", "v",
+		false,
+		"echo executed commands and key pipeline decisions to stderr",
+	)
+	cmd.PersistentFlags().BoolVar(
+		&flags.Debug,
+		"debug",
+		false,
+		"emit the full diagnostic firehose to stderr (superset of --verbose; also DWE_DEBUG=1)",
+	)
 
 	return cmd
+}
+
+// levelFrom maps the diagnostic flags and DWE_DEBUG env to a trace level.
+// The --debug flag or a truthy DWE_DEBUG selects Debug; --verbose selects
+// Verbose; otherwise Off. The flag wins on conflict, but since either source
+// only ever raises the level, an explicit --debug and a truthy DWE_DEBUG agree.
+func levelFrom(verbose, debug bool, dweDebug string) trace.Level {
+	if debug || debugEnvTruthy(dweDebug) {
+		return trace.LevelDebug
+	}
+	if verbose {
+		return trace.LevelVerbose
+	}
+	return trace.LevelOff
+}
+
+// debugEnvTruthy reports whether DWE_DEBUG is set to a truthy value. It is
+// truthy when set and not one of the recognised falsey tokens (case-insensitive).
+func debugEnvTruthy(v string) bool {
+	switch strings.ToLower(strings.TrimSpace(v)) {
+	case "", "0", "false", "no", "off":
+		return false
+	default:
+		return true
+	}
 }
 
 func resolveLocalization(flags *cmdctx.RootFlags) {
