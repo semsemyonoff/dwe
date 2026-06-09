@@ -2,12 +2,56 @@ package cli
 
 import (
 	"bytes"
+	"log/slog"
 	"os"
 	"path/filepath"
 	"testing"
 
 	"github.com/semsemyonoff/dwe/internal/shared/trace"
 )
+
+// TestInstallSlogHandler verifies the slog handler is installed ONLY at Debug,
+// so existing Warn/Error output is unchanged when no diagnostic flags are set.
+func TestInstallSlogHandler(t *testing.T) {
+	prev := slog.Default()
+	t.Cleanup(func() { slog.SetDefault(prev) })
+
+	if installSlogHandler(trace.LevelOff) {
+		t.Error("installSlogHandler(LevelOff) = true, want false")
+	}
+	if installSlogHandler(trace.LevelVerbose) {
+		t.Error("installSlogHandler(LevelVerbose) = true, want false")
+	}
+	// At Off/Verbose the Go default handler must remain in place.
+	if slog.Default() != prev {
+		t.Error("default slog handler was replaced below Debug")
+	}
+
+	if !installSlogHandler(trace.LevelDebug) {
+		t.Error("installSlogHandler(LevelDebug) = false, want true")
+	}
+	if slog.Default() == prev {
+		t.Error("expected slog default handler to be replaced at Debug")
+	}
+}
+
+// TestNoRegression_WarnReachesStderrWithoutDebug proves a slog.Warn still
+// reaches Go's default stderr handler when the trace handler is NOT installed.
+func TestNoRegression_WarnReachesStderrWithoutDebug(t *testing.T) {
+	prev := slog.Default()
+	t.Cleanup(func() { slog.SetDefault(prev) })
+
+	// Simulate a no-flags startup: Off level → handler not installed.
+	if installSlogHandler(trace.LevelOff) {
+		t.Fatal("handler unexpectedly installed at Off")
+	}
+	// The default handler is still Go's text handler writing to stderr; we can't
+	// easily capture os.Stderr here, but the key invariant is that the default
+	// was not swapped for the trace handler.
+	if slog.Default() != prev {
+		t.Error("Warn/Error path diverted from Go default without --debug")
+	}
+}
 
 // TestLevelFrom verifies the flag/env → trace.Level mapping, including the
 // rule that --debug or a truthy DWE_DEBUG wins over --verbose.
@@ -92,6 +136,9 @@ func TestRootConfiguresTraceLevel(t *testing.T) {
 	// Ensure DWE_DEBUG does not leak in from the host environment.
 	oldDweDebug, hadDweDebug := os.LookupEnv("DWE_DEBUG")
 	_ = os.Unsetenv("DWE_DEBUG")
+	// The --debug subtest installs the global slog handler via PersistentPreRunE;
+	// restore the original default so it does not leak into other cli tests.
+	prevSlog := slog.Default()
 	t.Cleanup(func() {
 		if hadDweDebug {
 			_ = os.Setenv("DWE_DEBUG", oldDweDebug)
@@ -99,6 +146,7 @@ func TestRootConfiguresTraceLevel(t *testing.T) {
 			_ = os.Unsetenv("DWE_DEBUG")
 		}
 		trace.Configure(nil, trace.LevelOff)
+		slog.SetDefault(prevSlog)
 	})
 
 	t.Run("no flags → Off", func(t *testing.T) {

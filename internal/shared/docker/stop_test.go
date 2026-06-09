@@ -225,6 +225,54 @@ func TestRunDirect_EchoesEvenOnFailure(t *testing.T) {
 	}
 }
 
+func TestRunDirect_DebugEmitsTiming(t *testing.T) {
+	dir := t.TempDir()
+	fakeBin := filepath.Join(dir, "docker")
+	if err := os.WriteFile(fakeBin, []byte("#!/bin/sh\nexit 0\n"), 0o755); err != nil {
+		t.Fatalf("writing fake docker: %v", err)
+	}
+	buf := captureTrace(t, trace.LevelDebug)
+
+	if err := StopContainer(context.Background(), fakeBin, "mycontainer", 1); err != nil {
+		t.Fatalf("StopContainer: %v", err)
+	}
+	if !strings.Contains(buf.String(), "↳ exit 0 in") {
+		t.Fatalf("expected timing line at Debug, got %q", buf.String())
+	}
+}
+
+func TestRunDirect_DebugReportsNonZeroExit(t *testing.T) {
+	dir := t.TempDir()
+	fakeBin := filepath.Join(dir, "docker")
+	if err := os.WriteFile(fakeBin, []byte("#!/bin/sh\necho 'permission denied' >&2\nexit 4\n"), 0o755); err != nil {
+		t.Fatalf("writing fake docker: %v", err)
+	}
+	buf := captureTrace(t, trace.LevelDebug)
+
+	if err := StopContainer(context.Background(), fakeBin, "mycontainer", 1); err == nil {
+		t.Fatal("expected error from failing stub")
+	}
+	if !strings.Contains(buf.String(), "↳ exit 4 in") {
+		t.Fatalf("expected non-zero exit timing line at Debug, got %q", buf.String())
+	}
+}
+
+func TestRunDirect_VerboseHasNoTiming(t *testing.T) {
+	dir := t.TempDir()
+	fakeBin := filepath.Join(dir, "docker")
+	if err := os.WriteFile(fakeBin, []byte("#!/bin/sh\nexit 0\n"), 0o755); err != nil {
+		t.Fatalf("writing fake docker: %v", err)
+	}
+	buf := captureTrace(t, trace.LevelVerbose)
+
+	if err := StopContainer(context.Background(), fakeBin, "mycontainer", 1); err != nil {
+		t.Fatalf("StopContainer: %v", err)
+	}
+	if strings.Contains(buf.String(), "↳ exit") {
+		t.Fatalf("verbose must not emit timing, got %q", buf.String())
+	}
+}
+
 func TestRunDirect_SilentAtLevelOff(t *testing.T) {
 	dir := t.TempDir()
 	fakeBin := filepath.Join(dir, "docker")

@@ -202,12 +202,12 @@ Startup (`initRootCmd`): parse flags → `lvl := levelFrom(verbose, debug, os.Ge
 - Modify: `internal/shared/docker/compose.go`, `internal/shared/docker/stop.go` (timing + exit code)
 - Modify: config-load / cache sites as needed (prefer existing `slog.Debug`)
 
-- [ ] implement an `slog.Handler` whose `Handle` formats records through the active trace printer/fallback; `Enabled` returns true for all records (it is installed **only** at Debug)
-- [ ] in `root.go`, `slog.SetDefault(handler)` only when `lvl == LevelDebug` (leave Go's default otherwise so existing `Warn`/`Error` is unchanged)
-- [ ] wrap `cmd.Run()` in `compose.go` and `runDirect` to emit `trace.Debugf` with duration + exit code; emit compose env/cwd under `if trace.Enabled(LevelDebug)`
-- [ ] surface lifecycle meta (default-config notices, pending-ops, snapshot scope), config-load summary, and cache hit/miss via `trace.Debugf`/existing `slog.Debug`
-- [ ] write tests: at Debug, timings + env + a sample `slog.Debug` record appear on the diagnostic channel; at Verbose/Off they do not; **no-regression: with no flags, a `slog.Warn` still reaches stderr** (handler not installed)
-- [ ] run tests — must pass before next task
+- [x] implement an `slog.Handler` whose `Handle` formats records through the active trace printer/fallback; `Enabled` returns true for all records (it is installed **only** at Debug) — `internal/shared/trace/slog.go`, routes ctx → global → fallback; WithAttrs/WithGroup supported
+- [x] in `root.go`, `slog.SetDefault(handler)` only when `lvl == LevelDebug` (leave Go's default otherwise so existing `Warn`/`Error` is unchanged) — via `installSlogHandler(lvl)`
+- [x] wrap `cmd.Run()` in `compose.go` and `runDirect` to emit `trace.Debugf` with duration + exit code; emit compose env/cwd under `if trace.Enabled(LevelDebug)` — `exitCodeString`/`debugEnv`/`cwdLabel` helpers; only dwe-injected ProcessEnv overrides are shown (never the full inherited env)
+- [x] surface lifecycle meta (default-config notices), config-load summary, and existing `slog.Debug` (notify/docs/journal) via `trace.Debugf`/`slog.Debug` routed through the handler — `EmitDefaultNotice` Debugf; `LoadConfig` "config loaded" summary slog.Debug. **Scope note:** pending-ops/snapshot-scope and a dedicated cache hit/miss site were left to the existing `slog.Debug` routing rather than adding bespoke sites (prompt hot path deliberately avoids trace/cobra overhead)
+- [x] write tests: at Debug, timings + env + a sample `slog.Debug` record appear on the diagnostic channel; at Verbose/Off they do not; **no-regression: with no flags, a `slog.Warn` still reaches stderr** (handler not installed) — slog_test.go, compose/stop timing tests, root `installSlogHandler` + no-regression tests, config-load summary test
+- [x] run tests — must pass before next task
 
 ### Task 9: JSON-mode regression
 

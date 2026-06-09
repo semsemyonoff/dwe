@@ -164,8 +164,12 @@ func initRootCmd(flags *cmdctx.RootFlags) *cobra.Command {
 		PersistentPreRunE: func(cmd *cobra.Command, args []string) error {
 			// (0) Configure the diagnostic sink as early as possible so that
 			// any subsequent setup (config load, styles) can emit trace lines.
-			// The slog handler install at LevelDebug is deferred to a later task.
-			trace.Configure(os.Stderr, levelFrom(flags.Verbose, flags.Debug, os.Getenv("DWE_DEBUG")))
+			// At Debug, route Go's default slog logger through the same sink so
+			// existing slog.Debug records join the firehose; at lower levels the
+			// handler is NOT installed, so Warn/Error behaviour is unchanged.
+			lvl := levelFrom(flags.Verbose, flags.Debug, os.Getenv("DWE_DEBUG"))
+			trace.Configure(os.Stderr, lvl)
+			installSlogHandler(lvl)
 
 			// (1) Validate --output before anything else so invalid values are
 			// rejected cleanly before lipgloss or fang styles are applied.
@@ -297,6 +301,18 @@ func levelFrom(verbose, debug bool, dweDebug string) trace.Level {
 		return trace.LevelVerbose
 	}
 	return trace.LevelOff
+}
+
+// installSlogHandler routes Go's default slog logger through the trace sink,
+// but ONLY at Debug. Returning true reports that the handler was installed.
+// At Off/Verbose the Go default handler is left in place so existing
+// slog.Warn/Error output reaches stderr unchanged (the no-regression contract).
+func installSlogHandler(lvl trace.Level) bool {
+	if lvl != trace.LevelDebug {
+		return false
+	}
+	slog.SetDefault(slog.New(trace.NewSlogHandler()))
+	return true
 }
 
 // debugEnvTruthy reports whether DWE_DEBUG is set to a truthy value. It is

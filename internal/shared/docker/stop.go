@@ -7,6 +7,7 @@ import (
 	"os/exec"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/semsemyonoff/dwe/internal/shared/trace"
 )
@@ -30,7 +31,10 @@ func runDirect(ctx context.Context, dockerBin, label string, onNoSuchContainer e
 	cmd.Stdout = io.Discard
 	var stderr strings.Builder
 	cmd.Stderr = &stderr
-	if err := cmd.Run(); err != nil {
+	start := time.Now()
+	err := cmd.Run()
+	trace.Debugf(ctx, "  ↳ exit %s in %s", exitCodeString(err), time.Since(start))
+	if err != nil {
 		errOut := stderr.String()
 		if IsNoSuchContainerErr(errOut) {
 			return onNoSuchContainer

@@ -2,7 +2,9 @@ package docker
 
 import (
 	"context"
+	"errors"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"runtime"
 	"slices"
@@ -720,6 +722,66 @@ func TestProbe_EchoesOnlyAtDebug(t *testing.T) {
 			t.Fatalf("expected RunningServices probe echo at Debug, got %q", buf2.String())
 		}
 	})
+}
+
+func TestExec_DebugEmitsTimingEnvAndCwd(t *testing.T) {
+	stub := writeStub(t, "exit 0")
+	baseDir := t.TempDir()
+	buf := captureTrace(t, trace.LevelDebug)
+
+	c := &Compose{Bin: stub, BaseDir: baseDir, ProcessEnv: map[string]string{"DOCKER_CLI_HINTS": "false"}}
+	if err := c.Exec("ps"); err != nil {
+		t.Fatalf("Exec: %v", err)
+	}
+	out := buf.String()
+	for _, want := range []string{"$ ", "cwd=" + baseDir, "env=DOCKER_CLI_HINTS=false", "↳ exit 0 in"} {
+		if !strings.Contains(out, want) {
+			t.Errorf("debug output %q missing %q", out, want)
+		}
+	}
+}
+
+func TestExec_DebugReportsNonZeroExit(t *testing.T) {
+	stub := writeStub(t, "exit 7")
+	buf := captureTrace(t, trace.LevelDebug)
+
+	c := &Compose{Bin: stub}
+	if err := c.Exec("ps"); err == nil {
+		t.Fatal("Exec: expected error from failing stub")
+	}
+	if !strings.Contains(buf.String(), "↳ exit 7 in") {
+		t.Errorf("debug output missing non-zero exit code: %q", buf.String())
+	}
+}
+
+func TestExec_VerboseHasNoTimingOrEnv(t *testing.T) {
+	stub := writeStub(t, "exit 0")
+	buf := captureTrace(t, trace.LevelVerbose)
+
+	c := &Compose{Bin: stub, BaseDir: t.TempDir(), ProcessEnv: map[string]string{"K": "v"}}
+	if err := c.Exec("ps"); err != nil {
+		t.Fatalf("Exec: %v", err)
+	}
+	out := buf.String()
+	for _, unwanted := range []string{"cwd=", "env=", "↳ exit"} {
+		if strings.Contains(out, unwanted) {
+			t.Errorf("verbose output should not contain %q, got %q", unwanted, out)
+		}
+	}
+}
+
+func TestExitCodeString(t *testing.T) {
+	if got := exitCodeString(nil); got != "0" {
+		t.Errorf("exitCodeString(nil) = %q, want %q", got, "0")
+	}
+	stub := writeStub(t, "exit 5")
+	err := exec.Command(stub).Run()
+	if got := exitCodeString(err); got != "5" {
+		t.Errorf("exitCodeString(exit 5) = %q, want %q", got, "5")
+	}
+	if got := exitCodeString(errors.New("did not start")); got != "?" {
+		t.Errorf("exitCodeString(plain err) = %q, want %q", got, "?")
+	}
 }
 
 func TestSplitNonEmptyLines(t *testing.T) {
