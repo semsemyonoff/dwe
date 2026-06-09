@@ -220,11 +220,11 @@ Startup (`initRootCmd`): parse flags → `lvl := levelFrom(verbose, debug, os.Ge
 
 ### Task 10: Verify acceptance criteria
 
-- [ ] verify Overview requirements: `-v`/`--debug`/`DWE_DEBUG`, superset, combinability, stderr-only, JSON-clean, probe echoes Debug-only
-- [ ] verify edge cases: no flags → zero overhead + slog handler not installed; live-view not garbled; parallel attribution; nested `dwe` routing
-- [ ] run full suite: `make test` and `make test-race` (trace + routing)
-- [ ] run `make build` and `dwe --help` to confirm flag help renders
-- [ ] verify coverage of `trace` and the emit sites
+- [x] verify Overview requirements: `-v`/`--debug`/`DWE_DEBUG`, superset, combinability, stderr-only, JSON-clean, probe echoes Debug-only — confirmed in code (`levelFrom`/`installSlogHandler` in `root.go`) and via runtime smoke against `dwe-v2-good` fixture: `dwe info --output json --debug` emits a single valid JSON doc on stdout with the `DEBUG config loaded` line on stderr only; `-v` shows 0 Debug lines, `DWE_DEBUG=1` shows them, `DWE_DEBUG=0`/no-flags show none
+- [x] verify edge cases: no flags → zero overhead + slog handler not installed; live-view not garbled; parallel attribution; nested `dwe` routing — automated coverage: `TestNoRegression_WarnReachesStderrWithoutDebug` + `TestInstallSlogHandler` (handler not installed at Off/Verbose), `trace.LevelOff` early-return tests (zero overhead), `TestConcurrentEmitWithCtxPrinter` (-race), `executor_parallel_test.go`/`plain_trace_test.go`/`executor_trace_test.go` (parallel attribution + nested save/restore routing). The live-view "not garbled" visual check remains a manual Post-Completion smoke
+- [x] run full suite: `make test` and `make test-race` (trace + routing) — both pass, no failures
+- [x] run `make build` and `dwe --help` to confirm flag help renders — both `-v --verbose` and `--debug` appear in help
+- [x] verify coverage of `trace` and the emit sites — trace 92.6%, docker 77.6%, git 87.0%, pipeline 79.9%, preflight 54.0%, cli 76.0%
 
 ### Task 11: Documentation and finalize
 
