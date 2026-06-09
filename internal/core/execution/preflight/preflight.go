@@ -97,7 +97,7 @@ type RunFn = func(ctx context.Context, cfg *config.DweConfig, cmdRegistry *userc
 // bypass (type: command checks invoke arbitrary user scripts that could
 // mutate state).
 //
-// cmdRegistry is nil-tolerant: checks.AllForStage produces unknown-command
+// cmdRegistry is nil-tolerant: checks.AllForStages produces unknown-command
 // diagnostics for any type: command entry when nil.
 func Run(ctx context.Context, cfg *config.DweConfig, cmdRegistry *usercommands.Registry, baseDir, stage string, skip bool, errOut io.Writer) error {
 	if errOut == nil {

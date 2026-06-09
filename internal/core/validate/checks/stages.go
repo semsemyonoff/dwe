@@ -25,7 +25,7 @@ func MatchAnyStage(entry config.CheckEntry, stages []string) bool {
 		return true
 	}
 	for _, s := range stages {
-		if slices.Contains(entry.Stages, s) {
+		if MatchStage(entry, s) {
 			return true
 		}
 	}
