@@ -3,8 +3,12 @@ package git
 import (
 	"context"
 	"errors"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
+
+	"github.com/semsemyonoff/dwe/internal/shared/trace"
 )
 
 // --- stub runner ---
@@ -223,5 +227,66 @@ func TestPullFFOnly_Error(t *testing.T) {
 	_, err := pullFFOnlyWith("git", "/repo", r)
 	if err == nil {
 		t.Error("expected error on pull failure")
+	}
+}
+
+// --- trace echo tests (exercise the real execRunner, which holds the emit) ---
+
+// captureTrace points the trace sink at a buffer at the given level for the
+// duration of the test, restoring LevelOff afterwards.
+func captureTrace(t *testing.T, lvl trace.Level) *strings.Builder {
+	t.Helper()
+	buf := &strings.Builder{}
+	trace.Configure(buf, lvl)
+	t.Cleanup(func() { trace.Configure(nil, trace.LevelOff) })
+	return buf
+}
+
+func writeFakeGit(t *testing.T, body string) string {
+	t.Helper()
+	path := filepath.Join(t.TempDir(), "git")
+	if err := os.WriteFile(path, []byte("#!/bin/sh\n"+body+"\n"), 0o755); err != nil {
+		t.Fatalf("writing fake git: %v", err)
+	}
+	return path
+}
+
+func TestExecRunner_EchoesAtVerbose(t *testing.T) {
+	fakeGit := writeFakeGit(t, "exit 0")
+	buf := captureTrace(t, trace.LevelVerbose)
+
+	_, _, err := (execRunner{}).Run(context.Background(), t.TempDir(), fakeGit, "status", "--porcelain")
+	if err != nil {
+		t.Fatalf("Run: %v", err)
+	}
+
+	want := "$ " + trace.FormatCommand([]string{fakeGit, "status", "--porcelain"})
+	if got := strings.TrimSpace(buf.String()); got != want {
+		t.Fatalf("echo = %q, want %q", got, want)
+	}
+}
+
+func TestExecRunner_EchoesEvenOnFailure(t *testing.T) {
+	fakeGit := writeFakeGit(t, "exit 1")
+	buf := captureTrace(t, trace.LevelVerbose)
+
+	_, _, err := (execRunner{}).Run(context.Background(), "/repo", fakeGit, "rev-parse", "HEAD")
+	if err == nil {
+		t.Fatal("expected error from failing stub")
+	}
+	if !strings.Contains(buf.String(), "$ ") {
+		t.Fatalf("expected command echo even on failure, got %q", buf.String())
+	}
+}
+
+func TestExecRunner_SilentAtLevelOff(t *testing.T) {
+	fakeGit := writeFakeGit(t, "exit 0")
+	buf := captureTrace(t, trace.LevelOff)
+
+	if _, _, err := (execRunner{}).Run(context.Background(), t.TempDir(), fakeGit, "status"); err != nil {
+		t.Fatalf("Run: %v", err)
+	}
+	if buf.Len() != 0 {
+		t.Fatalf("expected no output at LevelOff, got %q", buf.String())
 	}
 }

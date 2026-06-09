@@ -167,10 +167,10 @@ Startup (`initRootCmd`): parse flags → `lvl := levelFrom(verbose, debug, os.Ge
 - Modify: `internal/shared/git/git.go`
 - Modify: `internal/shared/git/git_test.go`
 
-- [ ] emit `trace.Command(ctx, dockerBin, args...)` in `runDirect()` (one site covers Stop/Restart/Remove) at Verbose, before `cmd.Run()`
-- [ ] emit `trace.Command(ctx, args[0], args[1:]...)` in `execRunner.Run()` (git.go:35) at Verbose, before `cmd.Run()`
-- [ ] write tests: stop/restart/rm and git echo at Verbose (ctx threaded), silent at `LevelOff`; echo present even when the command fails
-- [ ] run tests — must pass before next task
+- [x] emit `trace.Command(ctx, dockerBin, args...)` in `runDirect()` (one site covers Stop/Restart/Remove) at Verbose, before `cmd.Run()`
+- [x] emit `trace.Command(ctx, args[0], args[1:]...)` in `execRunner.Run()` (git.go:35) at Verbose, before `cmd.Run()`
+- [x] write tests: stop/restart/rm and git echo at Verbose (ctx threaded), silent at `LevelOff`; echo present even when the command fails
+- [x] run tests — must pass before next task
 
 ### Task 6: Command echo in the execution engine (shell / dwe / command actions)
 

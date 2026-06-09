@@ -7,6 +7,8 @@ import (
 	"os/exec"
 	"strconv"
 	"strings"
+
+	"github.com/semsemyonoff/dwe/internal/shared/trace"
 )
 
 // DefaultStopTimeoutSec is the default timeout passed to `docker stop -t`.
@@ -23,6 +25,7 @@ func runDirect(ctx context.Context, dockerBin, label string, onNoSuchContainer e
 	if dockerBin == "" {
 		dockerBin = "docker"
 	}
+	trace.Command(ctx, dockerBin, args...)
 	cmd := exec.CommandContext(ctx, dockerBin, args...) //nolint:gosec
 	cmd.Stdout = io.Discard
 	var stderr strings.Builder

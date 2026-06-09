@@ -7,6 +7,8 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"github.com/semsemyonoff/dwe/internal/shared/trace"
 )
 
 func TestStopContainer_NoSuchContainer(t *testing.T) {
@@ -163,6 +165,79 @@ func TestRemoveContainer_GenericError(t *testing.T) {
 		if !strings.Contains(msg, want) {
 			t.Errorf("error %q missing %q", msg, want)
 		}
+	}
+}
+
+func TestRunDirect_EchoesAtVerbose(t *testing.T) {
+	dir := t.TempDir()
+	fakeBin := filepath.Join(dir, "docker")
+	if err := os.WriteFile(fakeBin, []byte("#!/bin/sh\nexit 0\n"), 0o755); err != nil {
+		t.Fatalf("writing fake docker: %v", err)
+	}
+
+	cases := []struct {
+		name string
+		run  func() error
+		want string
+	}{
+		{
+			name: "stop",
+			run:  func() error { return StopContainer(context.Background(), fakeBin, "mycontainer", 3) },
+			want: "$ " + trace.FormatCommand([]string{fakeBin, "stop", "-t", "3", "mycontainer"}),
+		},
+		{
+			name: "restart",
+			run:  func() error { return RestartContainer(context.Background(), fakeBin, "mycontainer", 3) },
+			want: "$ " + trace.FormatCommand([]string{fakeBin, "restart", "-t", "3", "mycontainer"}),
+		},
+		{
+			name: "rm",
+			run:  func() error { return RemoveContainer(context.Background(), fakeBin, "mycontainer") },
+			want: "$ " + trace.FormatCommand([]string{fakeBin, "rm", "-f", "mycontainer"}),
+		},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			buf := captureTrace(t, trace.LevelVerbose)
+			if err := tc.run(); err != nil {
+				t.Fatalf("%s: %v", tc.name, err)
+			}
+			if got := strings.TrimSpace(buf.String()); got != tc.want {
+				t.Fatalf("echo = %q, want %q", got, tc.want)
+			}
+		})
+	}
+}
+
+func TestRunDirect_EchoesEvenOnFailure(t *testing.T) {
+	dir := t.TempDir()
+	fakeBin := filepath.Join(dir, "docker")
+	if err := os.WriteFile(fakeBin, []byte("#!/bin/sh\necho 'permission denied' >&2\nexit 1\n"), 0o755); err != nil {
+		t.Fatalf("writing fake docker: %v", err)
+	}
+	buf := captureTrace(t, trace.LevelVerbose)
+
+	if err := StopContainer(context.Background(), fakeBin, "mycontainer", 1); err == nil {
+		t.Fatal("expected error from failing stub")
+	}
+	if !strings.Contains(buf.String(), "$ ") {
+		t.Fatalf("expected command echo even on failure, got %q", buf.String())
+	}
+}
+
+func TestRunDirect_SilentAtLevelOff(t *testing.T) {
+	dir := t.TempDir()
+	fakeBin := filepath.Join(dir, "docker")
+	if err := os.WriteFile(fakeBin, []byte("#!/bin/sh\nexit 0\n"), 0o755); err != nil {
+		t.Fatalf("writing fake docker: %v", err)
+	}
+	buf := captureTrace(t, trace.LevelOff)
+
+	if err := StopContainer(context.Background(), fakeBin, "mycontainer", 1); err != nil {
+		t.Fatalf("StopContainer: %v", err)
+	}
+	if buf.Len() != 0 {
+		t.Fatalf("expected no output at LevelOff, got %q", buf.String())
 	}
 }
 
