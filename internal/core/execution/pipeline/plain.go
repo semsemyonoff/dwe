@@ -11,6 +11,7 @@ import (
 	"github.com/semsemyonoff/dwe/internal/core/ui/widgets"
 	"github.com/semsemyonoff/dwe/internal/shared/liveui"
 	"github.com/semsemyonoff/dwe/internal/shared/render"
+	"github.com/semsemyonoff/dwe/internal/shared/trace"
 )
 
 // Icons used in step output lines. Aliased from liveui for backwards-
@@ -117,7 +118,20 @@ type PlainReporter struct {
 	// and every public call is a no-op except Println, which writes the
 	// data line straight to the screen writer (matching the legacy path).
 	live *liveui.LiveLine
+
+	// restoreTrace pops this reporter's global trace LinePrinter, installed
+	// by StartPipeline and removed by FinishPipeline. nil outside an active
+	// pipeline. Lifecycle calls are sequential, so it needs no extra guard.
+	restoreTrace func()
 }
+
+// livePrinter routes trace diagnostic lines through the reporter's LiveLine,
+// the mutex-guarded screen path that frames each line above the sticky footer
+// (safe even during block/parallel mode). It is the safe global baseline for
+// pipeline-scoped trace emits that lack a per-sub-step ctx printer.
+type livePrinter struct{ live *liveui.LiveLine }
+
+func (p livePrinter) PrintLine(s string) { p.live.Println(s) }
 
 // NewPlainReporter creates a PlainReporter.
 //
@@ -186,6 +200,15 @@ func (r *PlainReporter) StartPipeline(name string, _ int) {
 	// pipeline label rather than the spinner alone.
 	r.live.SetText("Starting " + name + "...")
 	r.live.Start()
+	// Install this reporter as the global trace printer so pipeline-scoped
+	// diagnostics route through the live-view's safe screen path instead of
+	// raw stderr. Restored in FinishPipeline. SetPrinter's save/restore stack
+	// handles nested dwe pipelines (sequential, no concurrent mutation). Gated
+	// on Enabled so a normal (diagnostics-off) run never touches the global
+	// stack — zero overhead and no cross-call coupling.
+	if trace.Enabled(trace.LevelVerbose) {
+		r.restoreTrace = trace.SetPrinter(livePrinter{live: r.live})
+	}
 }
 
 // EnterPhase prints the phase label line:
@@ -353,6 +376,13 @@ func (r *PlainReporter) FinishPipeline(success bool) {
 	// a failed pipeline left the spinner ticker running until process exit
 	// — cannot reoccur. stopOnce makes a redundant Close-time Stop a no-op.
 	defer r.live.Stop()
+	// Pop the global trace printer on BOTH success and failure paths before
+	// the early return, so a later non-pipeline emit falls back to stderr and
+	// a nested pipeline's save/restore stack stays balanced.
+	if r.restoreTrace != nil {
+		r.restoreTrace()
+		r.restoreTrace = nil
+	}
 	if !success {
 		return
 	}

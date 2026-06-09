@@ -27,7 +27,16 @@ import (
 	"github.com/semsemyonoff/dwe/internal/shared/i18n"
 	"github.com/semsemyonoff/dwe/internal/shared/liveui"
 	"github.com/semsemyonoff/dwe/internal/shared/render"
+	"github.com/semsemyonoff/dwe/internal/shared/trace"
 )
+
+// writerLinePrinter routes trace diagnostic lines to an io.Writer (the
+// per-sub-step StepWriter in parallel mode), so concurrent sub-steps attribute
+// their command echoes to their own sub-step log/output rather than the shared
+// global printer. Safe for concurrent use because each sub-step owns its writer.
+type writerLinePrinter struct{ w io.Writer }
+
+func (p writerLinePrinter) PrintLine(s string) { _, _ = io.WriteString(p.w, s+"\n") }
 
 // stdoutIsTTY reports whether os.Stdout is attached to a terminal.
 // Overridable for tests.
@@ -783,6 +792,12 @@ func executeStepBody(ctx context.Context, opts RunOptions, rs ResolvedStep, addr
 		})
 		stepWriter = &liveui.ANSIOnlyStripper{W: tee}
 		flushTee = tee.Flush
+		// Attribute this sub-step's trace emits (command echoes, decisions) to
+		// its own writer instead of the shared global printer, so concurrent
+		// sub-steps do not interleave. The ctx override beats the global
+		// printer in trace's resolution precedence; both body and check use
+		// this ctx below.
+		ctx = trace.WithLinePrinter(ctx, writerLinePrinter{w: stepWriter})
 		// tee.Flush must run BEFORE any reporter end-of-step event so the
 		// trailing non-newline-terminated tail (delivered as final=false via
 		// lineTee.Flush) is recorded in PlainReporter.inProgress in time

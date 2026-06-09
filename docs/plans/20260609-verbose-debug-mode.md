@@ -141,11 +141,11 @@ Startup (`initRootCmd`): parse flags → `lvl := levelFrom(verbose, debug, os.Ge
 - Modify: `internal/core/execution/pipeline/executor.go` (parallel sub-step spawn path)
 - Modify: `internal/core/execution/pipeline/*_test.go`
 
-- [ ] add a `LinePrinter` to `PlainReporter` whose `PrintLine` calls `r.live.Println`; `SetPrinter` it in `StartPipeline` (L180) and `restore()` in `FinishPipeline` (L350)
-- [ ] in the parallel sub-step path, derive a per-sub-step `LinePrinter` over the sub-step's `StepWriter`/`LogWriter` and attach it via `trace.WithLinePrinter(ctx, p)` for that goroutine's ctx
-- [ ] confirm `r.live.Println` is the screen path (no `LogSanitizer`); add explicit ANSI stripping for trace lines only if a manual check shows bleed
-- [ ] write tests (using direct `trace.Command`/`Decision` calls + a fake `LiveLine`/capture printer): pipeline emit routes through the reporter printer, not raw stderr; parallel sub-step ctx routes to the sub-step writer; `restore` returns to previous destination; nested pipelines save/restore correctly
-- [ ] run tests — must pass before next task
+- [x] add a `LinePrinter` to `PlainReporter` whose `PrintLine` calls `r.live.Println`; `SetPrinter` it in `StartPipeline` (L180) and `restore()` in `FinishPipeline` (L350)
+- [x] in the parallel sub-step path, derive a per-sub-step `LinePrinter` over the sub-step's `StepWriter`/`LogWriter` and attach it via `trace.WithLinePrinter(ctx, p)` for that goroutine's ctx
+- [x] confirm `r.live.Println` is the screen path (no `LogSanitizer`); add explicit ANSI stripping for trace lines only if a manual check shows bleed
+- [x] write tests (using direct `trace.Command`/`Decision` calls + a fake `LiveLine`/capture printer): pipeline emit routes through the reporter printer, not raw stderr; parallel sub-step ctx routes to the sub-step writer; `restore` returns to previous destination; nested pipelines save/restore correctly
+- [x] run tests — must pass before next task
 
 ### Task 4: Command echo at the docker compose chokepoint
 
