@@ -2,6 +2,8 @@ package builtin
 
 import (
 	"context"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 
@@ -93,6 +95,53 @@ func TestConfigKeysPresentRun(t *testing.T) {
 				t.Fatalf("want error containing %q, got %v", tt.wantErr, err)
 			}
 		})
+	}
+}
+
+// TestConfigKeysPresentRun_endToEndFromLoadedConfig proves the documented
+// post-setup recipe actually works: a top-level value written to local.yml
+// (the wizard's legal write target) survives LoadConfig into cfg.Raw and
+// resolves through the builtin. Guards against the docs advertising a path the
+// config loader rejects — e.g. services.<name>.env.* is NOT a legal local.yml
+// overlay key, so it must NOT be the documented example.
+func TestConfigKeysPresentRun_endToEndFromLoadedConfig(t *testing.T) {
+	t.Parallel()
+	dir := t.TempDir()
+	if err := os.WriteFile(filepath.Join(dir, "workspace.yml"),
+		[]byte("schema_version: \"2\"\nproject:\n  name: test\n  prefix: dwe\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	svcDir := filepath.Join(dir, "workspace", "services", "app")
+	if err := os.MkdirAll(svcDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(svcDir, "service.yml"),
+		[]byte("type: app\ncontainer: app\nrequired: true\ndir: ./services/app\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	// db.api_key is a legal top-level wizard/local.yml write target (see
+	// docs/reference/config/setup.md write-scope); app.log_level is present-but-empty.
+	localYML := "db:\n  api_key: secret123\napp:\n  log_level: \"\"\n"
+	if err := os.WriteFile(filepath.Join(dir, "workspace", "local.yml"), []byte(localYML), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	cfg, err := config.LoadConfig(filepath.Join(dir, "workspace.yml"))
+	if err != nil {
+		t.Fatalf("LoadConfig: %v", err)
+	}
+	ectx := spec.ExecContext{Config: cfg}
+	b := ConfigKeysPresent{}
+	ctx := context.Background()
+
+	if err := b.Run(ctx, map[string]any{"keys": []any{"db.api_key"}}, ectx); err != nil {
+		t.Fatalf("db.api_key should resolve from loaded local.yml, got %v", err)
+	}
+	if err := b.Run(ctx, map[string]any{"keys": []any{"app.log_level"}}, ectx); err == nil || !strings.Contains(err.Error(), "app.log_level") {
+		t.Fatalf("empty app.log_level should be reported missing, got %v", err)
+	}
+	if err := b.Run(ctx, map[string]any{"keys": []any{"db.missing"}}, ectx); err == nil || !strings.Contains(err.Error(), "db.missing") {
+		t.Fatalf("absent db.missing should be reported missing, got %v", err)
 	}
 }
 

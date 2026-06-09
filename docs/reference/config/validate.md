@@ -206,15 +206,15 @@ Error message: `missing or empty keys: A, B, C`.
 
 Verifies one or more dot-paths resolve to non-empty values in the **merged DWE configuration** — the `workspace.yml` / `defaults.yml` / `local.yml` layers after merging. This is the config-aware counterpart of `env_keys_present`: instead of reading an on-disk `.env`, it reads the in-memory merged config, so it sees `local.yml` overlays immediately and does not depend on whether a rendered `.env` has been materialised yet.
 
-Addressing is the same dot-path the setup wizard uses in its `writes:` field, so the path you assert is exactly the path the wizard wrote — e.g. `services.db.env.DB_PASSWORD` or `workspace.domain`. Pair it with [`stages: [post-setup]`](#deploy-vs-post-setup-when-in-the-deploy-flow-a-check-runs) so it runs after the wizard populates `local.yml`.
+Addressing is the same dot-path the setup wizard uses in its `writes:` field, so the path you assert is exactly the path the wizard wrote — e.g. `db.api_key` or `app.log_level`. Pair it with [`stages: [post-setup]`](#deploy-vs-post-setup-when-in-the-deploy-flow-a-check-runs) so it runs after the wizard populates `local.yml`.
 
 | Key | Type | Required | Description |
 |-----|------|----------|-------------|
 | `keys` | list of strings | yes | Dot-paths into the merged config; each must resolve to a non-empty value. |
 
-A path is "missing" when it does not resolve, when it resolves to `null`, or when it renders to the empty string. Non-string scalars (numbers, booleans) count as present. Error message: `missing or empty keys: services.db.env.DB_PASSWORD, workspace.domain`.
+A path is "missing" when it does not resolve, when it resolves to `null`, or when it renders to the empty string. Non-string scalars (numbers, booleans) count as present. Error message: `missing or empty keys: db.api_key, app.log_level`.
 
-Coverage note: paths are resolved against the merged workspace layers (plus injected service entries). Values set via `local.yml` — the wizard's write target — are always reachable; for the rendered-`.env` flow use `env_keys_present` instead.
+**Which paths are reachable.** Assert the same paths the wizard can write — see the [setup `writes:` scope](setup.md#write-scope-rules). Top-level custom namespaces (`db.*`, `app.*`, `user.*`, …) survive the merge into the config and resolve here. Under `services.<name>`, `local.yml` accepts **only** `enabled`, `ports.<name>`, and `hosts.<name>` — both the wizard and the config loader reject anything else, so a per-service **secret** cannot live at `services.<name>.env.*` in `local.yml`. Keep service secrets in the service's rendered `.env` and assert them with `env_keys_present` instead; use `config_keys_present` for the top-level values the wizard writes.
 
 ### `tcp_reachable`
 
@@ -325,20 +325,20 @@ checks:
 **5. Wizard-supplied value required before deploy (post-setup + config_keys_present):**
 
 ```yaml
-  - id: app-key-set
-    description: APP_KEY must be set before deploy
+  - id: db-api-key-set
+    description: db.api_key must be set before deploy
     stages: [post-setup]             # final preflight only — after the setup wizard
     severity: error
     hint: |
       Run `dwe deploy` and complete the wizard, or set
-      services.app.env.APP_KEY in workspace/local.yml.
+      db.api_key in workspace/local.yml.
     type: builtin
     cmd: config_keys_present
     with:
-      keys: [services.app.env.APP_KEY]
+      keys: [db.api_key]
 ```
 
-The setup wizard writes `services.app.env.APP_KEY` into `local.yml`; this check asserts the same dot-path is set. Because it is `post-setup`, it is skipped at the early pre-wizard gate (so the wizard is reachable) and runs at the final preflight — catching a missing value before deploy starts, including on `dwe deploy run` where no wizard runs.
+The setup wizard writes `db.api_key` into `local.yml` (a top-level path — `services.<name>.env.*` is **not** a legal wizard/`local.yml` target, see the builtin's reachability note above); this check asserts the same dot-path is set. Because it is `post-setup`, it is skipped at the early pre-wizard gate (so the wizard is reachable) and runs at the final preflight — catching a missing value before deploy starts, including on `dwe deploy run` where no wizard runs.
 
 **6. Corporate VPN reachable (tcp_reachable):**
 
