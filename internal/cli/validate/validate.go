@@ -169,7 +169,7 @@ Scope targets:
 
 	cmd.PersistentFlags().BoolVar(&strict, "strict", false, "treat warnings as errors (exit code 1)")
 	cmd.PersistentFlags().BoolVar(&quiet, "quiet", false, "hide ok/info rows")
-	cmd.PersistentFlags().StringVar(&stage, "stage", "", "filter checks by stage (deploy, run, stop, command)")
+	cmd.PersistentFlags().StringVar(&stage, "stage", "", "filter checks by stage (deploy, run, stop, command, post-setup)")
 
 	// Config validators subtree.
 	configCmd := &cobra.Command{

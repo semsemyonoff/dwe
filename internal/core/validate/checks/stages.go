@@ -16,6 +16,22 @@ func MatchStage(entry config.CheckEntry, stage string) bool {
 	return slices.Contains(entry.Stages, stage)
 }
 
+// MatchAnyStage reports whether entry participates in ANY of the given stages.
+// An empty (nil or zero-length) stages slice matches every entry, mirroring
+// MatchStage's empty-stage semantics. The deploy final preflight uses this to
+// run both the "deploy" and "post-setup" stages in a single pass.
+func MatchAnyStage(entry config.CheckEntry, stages []string) bool {
+	if len(stages) == 0 {
+		return true
+	}
+	for _, s := range stages {
+		if slices.Contains(entry.Stages, s) {
+			return true
+		}
+	}
+	return false
+}
+
 // MatchServices reports whether entry's services-gate is satisfied for the
 // given merged service map. Entries with no services: clause pass unconditionally.
 // Otherwise the gate is OR: at least one listed service must be Enabled.

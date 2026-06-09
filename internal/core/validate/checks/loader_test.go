@@ -90,6 +90,34 @@ func TestAllForStage_FiltersByStage(t *testing.T) {
 	}
 }
 
+func TestAllForStages_UnionMatching(t *testing.T) {
+	cfg := &config.ValidateConfig{Checks: []config.CheckEntry{
+		{ID: "deploy-only", Type: "builtin", Cmd: "file_exists", With: map[string]any{"path": "AGENTS.md"},
+			Stages: []string{"deploy"}, Severity: diag.SeverityError},
+		{ID: "post-setup-only", Type: "builtin", Cmd: "file_exists", With: map[string]any{"path": "AGENTS.md"},
+			Stages: []string{"post-setup"}, Severity: diag.SeverityError},
+		{ID: "run-only", Type: "builtin", Cmd: "file_exists", With: map[string]any{"path": "AGENTS.md"},
+			Stages: []string{"run"}, Severity: diag.SeverityError},
+	}}
+
+	// The early pre-wizard gate queries only "deploy": a post-setup-only check
+	// is intentionally excluded there.
+	if got := ids(AllForStage(cfg, nil, "", nil, "deploy", nil, false)); !reflect.DeepEqual(got, []string{"deploy-only"}) {
+		t.Fatalf("early gate (deploy): got %v, want [deploy-only]", got)
+	}
+
+	// The deploy final preflight queries {deploy, post-setup}: both run.
+	got := ids(AllForStages(cfg, nil, "", nil, []string{"deploy", "post-setup"}, nil, false))
+	if !reflect.DeepEqual(got, []string{"deploy-only", "post-setup-only"}) {
+		t.Fatalf("final preflight union: got %v, want [deploy-only post-setup-only]", got)
+	}
+
+	// An empty stages slice matches every entry (parity with AllForStage("")).
+	if got := ids(AllForStages(cfg, nil, "", nil, nil, nil, false)); len(got) != 3 {
+		t.Fatalf("empty stages should match all 3, got %v", got)
+	}
+}
+
 func TestAllForStage_ServicesGate(t *testing.T) {
 	cfg := &config.ValidateConfig{Checks: []config.CheckEntry{
 		{ID: "ungated", Type: "builtin", Cmd: "file_exists", With: map[string]any{"path": "AGENTS.md"},

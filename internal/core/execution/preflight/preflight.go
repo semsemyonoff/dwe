@@ -67,6 +67,23 @@ func preflightActionLabel(stage string) string {
 	}
 }
 
+// stagesForPreflight maps a lifecycle stage to the set of validate.yml check
+// stages this final preflight runs. For "deploy" it returns {deploy,
+// post-setup} so post-setup checks (skipped at the early pre-wizard gate) run
+// here. Every other stage maps to itself; an empty stage maps to nil, which
+// AllForStages treats as "match every check" (preserving the prior
+// empty-stage behavior).
+func stagesForPreflight(stage string) []string {
+	switch stage {
+	case "":
+		return nil
+	case "deploy":
+		return []string{"deploy", "post-setup"}
+	default:
+		return []string{stage}
+	}
+}
+
 // RunFn is the signature of Run. Commands that want a swappable preflight
 // (e.g. for tests, or to override the implementation) accept a RunFn and
 // default to Run when nil.
@@ -120,7 +137,15 @@ func Run(ctx context.Context, cfg *config.DweConfig, cmdRegistry *usercommands.R
 	// Pass nil loadErr: config.validate (registered above) already emits the
 	// parse error diagnostic. Passing it here too would produce a duplicate
 	// row in the preflight table and double-count it in the summary.
-	for _, v := range valchecks.AllForStage(validateCfg, nil, baseDir, cmdRegistry, stage, cfg.Services, false) {
+	//
+	// The deploy flow has two preflight moments: an early pre-wizard gate
+	// (cli/deploy/menu.go, which queries only the "deploy" stage) and this
+	// final run immediately before the pipeline. For the deploy stage we also
+	// query "post-setup" so checks tagged stages: [post-setup] run here — they
+	// are skipped at the early gate (they don't carry "deploy") and execute
+	// only after the setup wizard has populated local.yml, or right before
+	// deploy when no wizard runs. See docs/reference/config/validate.md.
+	for _, v := range valchecks.AllForStages(validateCfg, nil, baseDir, cmdRegistry, stagesForPreflight(stage), cfg.Services, false) {
 		reg.Register(v)
 	}
 

@@ -33,6 +33,34 @@ func TestMatchStage(t *testing.T) {
 	}
 }
 
+func TestMatchAnyStage(t *testing.T) {
+	deployOnly := config.CheckEntry{Stages: []string{"deploy"}}
+	postSetupOnly := config.CheckEntry{Stages: []string{"post-setup"}}
+	multi := config.CheckEntry{Stages: []string{"run", "post-setup"}}
+
+	cases := []struct {
+		name   string
+		entry  config.CheckEntry
+		stages []string
+		want   bool
+	}{
+		{"empty slice matches all", deployOnly, nil, true},
+		{"deploy gate keeps deploy", deployOnly, []string{"deploy"}, true},
+		{"deploy gate skips post-setup", postSetupOnly, []string{"deploy"}, false},
+		{"union keeps deploy", deployOnly, []string{"deploy", "post-setup"}, true},
+		{"union keeps post-setup", postSetupOnly, []string{"deploy", "post-setup"}, true},
+		{"union skips unrelated run-only", config.CheckEntry{Stages: []string{"run"}}, []string{"deploy", "post-setup"}, false},
+		{"any-of matches second stage", multi, []string{"deploy", "post-setup"}, true},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := MatchAnyStage(tc.entry, tc.stages); got != tc.want {
+				t.Errorf("MatchAnyStage(%v, %v) = %v, want %v", tc.entry.Stages, tc.stages, got, tc.want)
+			}
+		})
+	}
+}
+
 func TestMatchServices(t *testing.T) {
 	services := map[string]config.ServiceConfig{
 		"api":           {Enabled: true},

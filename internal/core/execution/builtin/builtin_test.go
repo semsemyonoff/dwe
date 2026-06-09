@@ -240,6 +240,7 @@ var allBuiltinNames = []string{
 	// root (cross-cutting predicates)
 	"shell",
 	"tcp_reachable",
+	"config_keys_present",
 	// containers/
 	"docker_daemon_start",
 	"docker_daemon_logs",
