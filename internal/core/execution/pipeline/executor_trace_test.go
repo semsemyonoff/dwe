@@ -45,10 +45,12 @@ func TestExecShellAction_EchoesCommand(t *testing.T) {
 	}
 }
 
-// TestExecDweAction_EchoesCommand asserts execDweAction echoes the nested
-// `dwe <args>` form at Verbose. A pre-cancelled context makes runChildCmd's
-// cmd.Run() return immediately (exec checks ctx before launching) so the test
-// never re-executes the test binary as a child dwe process.
+// TestExecDweAction_EchoesCommand asserts execDweAction echoes the nested dwe
+// invocation as the `sh -c '<dwe-bin> <cmd>'` form it actually runs, at Verbose,
+// using the resolved binary (not a hard-coded "dwe") so the echo matches what
+// buildDweCmd executes. A pre-cancelled context makes runChildCmd's cmd.Run()
+// return immediately (exec checks ctx before launching) so the test never
+// re-executes the test binary as a child dwe process.
 func TestExecDweAction_EchoesCommand(t *testing.T) {
 	var buf bytes.Buffer
 	trace.Configure(&buf, trace.LevelVerbose)
@@ -61,8 +63,37 @@ func TestExecDweAction_EchoesCommand(t *testing.T) {
 	// Error is expected (context canceled); we only assert the echo fired first.
 	_ = execDweAction(ctx, config.Action{Type: "dwe", Cmd: "deploy run"}, actx)
 
-	if !strings.Contains(buf.String(), "$ dwe deploy run") {
-		t.Fatalf("dwe echo missing: %q", buf.String())
+	bin := resolveDweBin(config.DweBin(actx.Cfg))
+	want := "$ " + trace.FormatCommand([]string{config.ShellBin(actx.Cfg), "-c", dweShellPayload(bin, "deploy run")})
+	if !strings.Contains(buf.String(), want) {
+		t.Fatalf("dwe echo missing: want %q in %q", want, buf.String())
+	}
+}
+
+// TestExecDweAction_EchoesQuotedArgsFaithfully is the regression guard for the
+// bug where strings.Fields split a.Cmd and re-quoted each fragment, mangling
+// quoted arguments. The command runs through `sh -c`, so a quoted value must be
+// echoed verbatim (one logical argument), not as separate quote-containing words.
+func TestExecDweAction_EchoesQuotedArgsFaithfully(t *testing.T) {
+	var buf bytes.Buffer
+	trace.Configure(&buf, trace.LevelVerbose)
+	defer trace.Configure(nil, trace.LevelOff)
+
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+
+	actx := ActionContext{WorkDir: t.TempDir(), Cfg: &config.DweConfig{Raw: map[string]any{}}}
+	_ = execDweAction(ctx, config.Action{Type: "dwe", Cmd: `render env --path "foo bar"`}, actx)
+
+	bin := resolveDweBin(config.DweBin(actx.Cfg))
+	want := "$ " + trace.FormatCommand([]string{config.ShellBin(actx.Cfg), "-c", dweShellPayload(bin, `render env --path "foo bar"`)})
+	if !strings.Contains(buf.String(), want) {
+		t.Fatalf("quoted-arg dwe echo mangled: want %q in %q", want, buf.String())
+	}
+	// The old strings.Fields behaviour would have emitted the value split into
+	// two quote-containing words — make sure that never reappears.
+	if strings.Contains(buf.String(), `'"foo'`) {
+		t.Fatalf("quoted arg was split into fragments: %q", buf.String())
 	}
 }
 

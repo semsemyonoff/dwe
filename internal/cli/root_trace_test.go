@@ -35,6 +35,45 @@ func TestInstallSlogHandler(t *testing.T) {
 	}
 }
 
+// TestInstallSlogHandler_RestoresAfterDebug proves that a --debug run followed
+// by a non-debug run in the SAME process reverts the global slog default, so
+// the trace handler (which emits every record unconditionally) does not leak
+// slog.Debug output once the flag is gone.
+func TestInstallSlogHandler_RestoresAfterDebug(t *testing.T) {
+	prev := slog.Default()
+	t.Cleanup(func() {
+		slog.SetDefault(prev)
+		slogTraceActive = false
+	})
+
+	// First run: --debug installs the trace handler.
+	if !installSlogHandler(trace.LevelDebug) {
+		t.Fatal("installSlogHandler(LevelDebug) = false, want true")
+	}
+	if slog.Default() == prev {
+		t.Fatal("trace handler was not installed at Debug")
+	}
+
+	// Second run in the same process: no flags must restore the original.
+	if installSlogHandler(trace.LevelOff) {
+		t.Error("installSlogHandler(LevelOff) = true, want false")
+	}
+	if slog.Default() != prev {
+		t.Error("default slog handler was not restored after dropping below Debug")
+	}
+
+	// Same for a later --verbose run.
+	if !installSlogHandler(trace.LevelDebug) {
+		t.Fatal("re-install at Debug failed")
+	}
+	if installSlogHandler(trace.LevelVerbose) {
+		t.Error("installSlogHandler(LevelVerbose) = true, want false")
+	}
+	if slog.Default() != prev {
+		t.Error("default slog handler was not restored at Verbose after Debug")
+	}
+}
+
 // TestNoRegression_WarnReachesStderrWithoutDebug proves a slog.Warn still
 // reaches Go's default stderr handler when the trace handler is NOT installed.
 func TestNoRegression_WarnReachesStderrWithoutDebug(t *testing.T) {

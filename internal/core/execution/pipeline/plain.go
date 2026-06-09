@@ -3,6 +3,7 @@ package pipeline
 import (
 	"fmt"
 	"io"
+	"os"
 	"strings"
 	"sync"
 	"time"
@@ -126,12 +127,15 @@ type PlainReporter struct {
 }
 
 // livePrinter routes trace diagnostic lines through the reporter's LiveLine,
-// the mutex-guarded screen path that frames each line above the sticky footer
-// (safe even during block/parallel mode). It is the safe global baseline for
+// the mutex-guarded path that frames each line above the sticky footer (safe
+// even during block/parallel mode). It uses PrintlnDiag so the line text lands
+// on the diagnostics writer (stderr) rather than the screen (stdout) — keeping
+// verbose/debug output off stdout per the documented contract — while the
+// footer framing still uses termOut. It is the safe global baseline for
 // pipeline-scoped trace emits that lack a per-sub-step ctx printer.
 type livePrinter struct{ live *liveui.LiveLine }
 
-func (p livePrinter) PrintLine(s string) { p.live.Println(s) }
+func (p livePrinter) PrintLine(s string) { p.live.PrintlnDiag(s) }
 
 // NewPlainReporter creates a PlainReporter.
 //
@@ -158,6 +162,11 @@ func NewPlainReporter(screen *render.Writer, logFile io.Writer, termOut io.Write
 		now:     time.Now,
 	}
 	r.live = liveui.NewLiveLine(termOut, screen.Writer(), tty)
+	// Diagnostic trace lines (verbose/debug) routed through livePrinter must
+	// land on stderr, never the screen (stdout) — see the trace routing-
+	// precedence contract. The footer framing still uses termOut; only the line
+	// text is diverted to stderr.
+	r.live.SetDiagWriter(os.Stderr)
 	// Register package-level prompt hooks so huh-based prompts (RunConfirm,
 	// RunSelector, RunMultiSelect) pause/resume the LiveLine automatically.
 	// Only one PlainReporter is expected per process; nested deploys are not

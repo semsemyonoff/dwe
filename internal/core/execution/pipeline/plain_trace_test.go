@@ -10,16 +10,28 @@ import (
 	"github.com/semsemyonoff/dwe/internal/shared/trace"
 )
 
+// newDiagReporter returns a buffer-backed reporter whose diagnostics writer is
+// captured separately from the screen, so trace-routing tests can assert that
+// diagnostic lines land on the diag (stderr) channel and never on the screen
+// (stdout).
+func newDiagReporter() (r *PlainReporter, screen, diag *bytes.Buffer) {
+	r, screen = newBufReporter()
+	diag = &bytes.Buffer{}
+	r.live.SetDiagWriter(diag)
+	return r, screen, diag
+}
+
 // TestPlainReporterRoutesTraceThroughLiveView asserts that while a pipeline is
-// active, trace emits route through the reporter's LiveLine (the safe screen
-// path) rather than the configured fallback writer, and that FinishPipeline
-// pops the printer so later emits fall back to stderr.
+// active, trace emits route through the reporter's LiveLine framing onto the
+// DIAGNOSTICS writer (stderr), never the screen (stdout) and never the
+// configured fallback writer, and that FinishPipeline pops the printer so later
+// emits fall back to stderr.
 func TestPlainReporterRoutesTraceThroughLiveView(t *testing.T) {
 	var fallback bytes.Buffer
 	trace.Configure(&fallback, trace.LevelVerbose)
 	defer trace.Configure(nil, trace.LevelOff)
 
-	r, buf := newBufReporter()
+	r, screen, diag := newDiagReporter()
 	r.StartPipeline("deploy", 0)
 
 	trace.Command(context.Background(), "docker", "ps")
@@ -27,17 +39,20 @@ func TestPlainReporterRoutesTraceThroughLiveView(t *testing.T) {
 	if fallback.Len() != 0 {
 		t.Fatalf("trace leaked to fallback while pipeline active: %q", fallback.String())
 	}
-	if got := stripANSI(buf.String()); !strings.Contains(got, "$ docker ps") {
-		t.Fatalf("trace did not route through live view: %q", got)
+	if screen.Len() != 0 {
+		t.Fatalf("trace leaked to the screen (stdout) while pipeline active: %q", screen.String())
+	}
+	if got := stripANSI(diag.String()); !strings.Contains(got, "$ docker ps") {
+		t.Fatalf("trace did not route to the diagnostics writer: %q", got)
 	}
 
 	// FinishPipeline pops the printer; later emits fall back to stderr.
 	r.FinishPipeline(true)
-	buf.Reset()
+	diag.Reset()
 	fallback.Reset()
 	trace.Decision(context.Background(), "after pipeline")
-	if buf.Len() != 0 {
-		t.Fatalf("trace still routed to live view after finish: %q", buf.String())
+	if diag.Len() != 0 {
+		t.Fatalf("trace still routed to live view after finish: %q", diag.String())
 	}
 	if !strings.Contains(fallback.String(), "after pipeline") {
 		t.Fatalf("trace did not fall back to configured writer: %q", fallback.String())
@@ -51,14 +66,14 @@ func TestPlainReporterFinishPipelineFailureRestoresTrace(t *testing.T) {
 	trace.Configure(&fallback, trace.LevelVerbose)
 	defer trace.Configure(nil, trace.LevelOff)
 
-	r, buf := newBufReporter()
+	r, _, diag := newDiagReporter()
 	r.StartPipeline("deploy", 0)
 	r.FinishPipeline(false)
 
-	buf.Reset()
+	diag.Reset()
 	trace.Decision(context.Background(), "post-failure")
-	if buf.Len() != 0 {
-		t.Fatalf("trace still routed to live view after failed finish: %q", buf.String())
+	if diag.Len() != 0 {
+		t.Fatalf("trace still routed to live view after failed finish: %q", diag.String())
 	}
 	if !strings.Contains(fallback.String(), "post-failure") {
 		t.Fatalf("trace did not fall back after failed finish: %q", fallback.String())
@@ -66,36 +81,37 @@ func TestPlainReporterFinishPipelineFailureRestoresTrace(t *testing.T) {
 }
 
 // TestPlainReporterNestedTraceRestore asserts nested pipelines save/restore the
-// global trace printer correctly: inner emits route to the inner reporter, and
-// after the inner pipeline finishes, outer emits route back to the outer one.
+// global trace printer correctly: inner emits route to the inner reporter's
+// diagnostics writer, and after the inner pipeline finishes, outer emits route
+// back to the outer one.
 func TestPlainReporterNestedTraceRestore(t *testing.T) {
 	var fallback bytes.Buffer
 	trace.Configure(&fallback, trace.LevelVerbose)
 	defer trace.Configure(nil, trace.LevelOff)
 
-	rA, bufA := newBufReporter()
-	rB, bufB := newBufReporter()
+	rA, _, diagA := newDiagReporter()
+	rB, _, diagB := newDiagReporter()
 
 	rA.StartPipeline("deploy", 0)
 	rB.StartPipeline("nested", 0)
 
 	trace.Decision(context.Background(), "inner")
-	if !strings.Contains(stripANSI(bufB.String()), "inner") {
-		t.Fatalf("inner emit not routed to nested reporter: %q", bufB.String())
+	if !strings.Contains(stripANSI(diagB.String()), "inner") {
+		t.Fatalf("inner emit not routed to nested reporter: %q", diagB.String())
 	}
-	if strings.Contains(bufA.String(), "inner") {
-		t.Fatalf("inner emit leaked to outer reporter: %q", bufA.String())
+	if strings.Contains(diagA.String(), "inner") {
+		t.Fatalf("inner emit leaked to outer reporter: %q", diagA.String())
 	}
 
 	rB.FinishPipeline(true)
-	bufA.Reset()
-	bufB.Reset()
+	diagA.Reset()
+	diagB.Reset()
 	trace.Decision(context.Background(), "outer")
-	if !strings.Contains(stripANSI(bufA.String()), "outer") {
-		t.Fatalf("outer emit not routed to outer reporter after nested finish: %q", bufA.String())
+	if !strings.Contains(stripANSI(diagA.String()), "outer") {
+		t.Fatalf("outer emit not routed to outer reporter after nested finish: %q", diagA.String())
 	}
-	if strings.Contains(bufB.String(), "outer") {
-		t.Fatalf("outer emit leaked to nested reporter: %q", bufB.String())
+	if strings.Contains(diagB.String(), "outer") {
+		t.Fatalf("outer emit leaked to nested reporter: %q", diagB.String())
 	}
 
 	rA.FinishPipeline(true)

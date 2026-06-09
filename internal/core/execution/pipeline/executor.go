@@ -158,11 +158,8 @@ type ActionContext struct {
 // dwe subcommands also skip confirmation prompts. The supplied ctx
 // propagates cancellation into the child via exec.CommandContext.
 func buildDweCmd(ctx context.Context, dweArg, workDir, shell, dweBin string, skipConfirm bool) *exec.Cmd {
-	bin, err := os.Executable()
-	if err != nil {
-		bin = dweBin
-	}
-	cmd := exec.CommandContext(ctx, shell, "-c", shellQuote(bin)+" "+strings.TrimSpace(dweArg)) //nolint:gosec
+	bin := resolveDweBin(dweBin)
+	cmd := exec.CommandContext(ctx, shell, "-c", dweShellPayload(bin, dweArg)) //nolint:gosec
 	bindCancelTerm(cmd)
 	cmd.Dir = workDir
 	cmd.Env = append(os.Environ(), "CLICOLOR_FORCE=1")
@@ -224,9 +221,20 @@ func execShellAction(ctx context.Context, a config.Action, actx ActionContext) e
 }
 
 // execDweAction runs a dwe subcommand.
+//
+// The trace echo mirrors the actual execution: buildDweCmd runs the command as
+// `sh -c '<dwe-bin> <cmd>'`, so a.Cmd is shell text (it may contain quotes,
+// pipes, &&, …) — splitting it on whitespace would mangle quoted arguments
+// (`--path "foo bar"` would echo as two literal quote-containing words). Echo
+// the `sh -c '<dwe-bin> <cmd>'` form instead, building the exact `-c` payload
+// via the shared dweShellPayload helper (same resolveDweBin + shellQuote path
+// buildDweCmd uses) so the diagnostic is byte-identical to what runs — the real
+// binary (`./bin/dwe`, a test build, or a relocated binary, shell-quoted so a
+// path with spaces stays copy-pasteable) plus the verbatim command.
 func execDweAction(ctx context.Context, a config.Action, actx ActionContext) error {
 	shell := config.ShellBin(actx.Cfg)
-	trace.Command(ctx, "dwe", strings.Fields(strings.TrimSpace(a.Cmd))...)
+	bin := resolveDweBin(config.DweBin(actx.Cfg))
+	trace.Command(ctx, shell, "-c", dweShellPayload(bin, a.Cmd))
 	cmd := buildDweCmd(ctx, a.Cmd, actx.WorkDir, shell, config.DweBin(actx.Cfg), actx.SkipConfirm)
 	return runChildCmd(cmd, actx)
 }
@@ -1138,4 +1146,24 @@ func FormatFilesGate(fg *filesgate.FilesGate, ids ...string) string {
 // Embedded single quotes are escaped via the \' idiom.
 func shellQuote(s string) string {
 	return "'" + strings.ReplaceAll(s, "'", "'\\''") + "'"
+}
+
+// dweShellPayload builds the `sh -c` payload for a dwe: step: the resolved
+// binary (shell-quoted so a path with spaces or metacharacters stays a single,
+// copy-pasteable word) followed by the verbatim command text. Shared by
+// buildDweCmd (execution) and execDweAction's trace echo so the diagnostic is
+// byte-identical to what actually runs.
+func dweShellPayload(bin, cmd string) string {
+	return shellQuote(bin) + " " + strings.TrimSpace(cmd)
+}
+
+// resolveDweBin returns the dwe binary a dwe: step actually invokes: the running
+// executable when available (so `./bin/dwe`, a test build, or a relocated binary
+// is reflected faithfully), falling back to the configured bin. Shared by
+// buildDweCmd and execDweAction's trace echo so the diagnostic matches what runs.
+func resolveDweBin(dweBin string) string {
+	if bin, err := os.Executable(); err == nil {
+		return bin
+	}
+	return dweBin
 }

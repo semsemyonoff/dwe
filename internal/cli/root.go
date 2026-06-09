@@ -9,6 +9,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
 
 	"github.com/semsemyonoff/dwe/internal/cli/cmdctx"
 	cmdCommand "github.com/semsemyonoff/dwe/internal/cli/command"
@@ -303,16 +304,37 @@ func levelFrom(verbose, debug bool, dweDebug string) trace.Level {
 	return trace.LevelOff
 }
 
+// slogState tracks the global slog handler swap so it can be reverted. The CLI
+// is normally one-shot (PersistentPreRunE runs once per process), but embedded
+// or repeated Execute callers may invoke commands at different levels in the
+// same process; without a revert, a prior --debug run would leave the
+// trace handler installed — and because it emits every record regardless of the
+// trace level, slog.Debug output would keep leaking after the flag is gone.
+var (
+	slogPristineOnce sync.Once
+	slogPristine     *slog.Logger // Go's default logger captured before any swap
+	slogTraceActive  bool         // true while the trace handler is the default
+)
+
 // installSlogHandler routes Go's default slog logger through the trace sink,
 // but ONLY at Debug. Returning true reports that the handler was installed.
-// At Off/Verbose the Go default handler is left in place so existing
-// slog.Warn/Error output reaches stderr unchanged (the no-regression contract).
+// At Off/Verbose the Go default handler is restored if a prior call installed
+// the trace handler, and otherwise left untouched — so existing slog.Warn/Error
+// output reaches stderr unchanged (the no-regression contract) and a previous
+// --debug run does not leak into a later non-debug run in the same process.
 func installSlogHandler(lvl trace.Level) bool {
-	if lvl != trace.LevelDebug {
-		return false
+	slogPristineOnce.Do(func() { slogPristine = slog.Default() })
+
+	if lvl == trace.LevelDebug {
+		slog.SetDefault(slog.New(trace.NewSlogHandler()))
+		slogTraceActive = true
+		return true
 	}
-	slog.SetDefault(slog.New(trace.NewSlogHandler()))
-	return true
+	if slogTraceActive {
+		slog.SetDefault(slogPristine)
+		slogTraceActive = false
+	}
+	return false
 }
 
 // debugEnvTruthy reports whether DWE_DEBUG is set to a truthy value. It is
