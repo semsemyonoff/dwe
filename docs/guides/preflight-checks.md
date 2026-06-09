@@ -1,250 +1,76 @@
 # Preflight checks
 
-A deploy that fails three minutes in because `ghcr.io` rejected the pull is worse than one that refuses to start at all. Preflight checks are the readiness gate the CLI runs before any deploy step, container start, or stop touches your machine — they answer "is the world ready?" and abort with a useful diagnostic if it isn't.
+A deploy that fails three minutes in because `ghcr.io` rejected the pull is worse than one that refuses to start at all. Preflight is the readiness gate DWE runs before any deploy step, container start, or stop touches your machine — it answers "is the world ready?" and aborts with a useful diagnostic if it isn't.
 
-DWE ships seven hardcoded environment probes (docker / git / shell / ports) plus a declarative `workspace/validate.yml` where you add the project-specific ones — "are we logged into the registry?", "is `DATABASE_URL` set?", "is the corporate VPN up?". This guide walks through both layers.
+Two layers run on every preflight: seven hardcoded host probes (docker / git / shell / ports — you can't disable them) and the project-specific checks you declare in `workspace/validate.yml`. This guide is the **authoring workflow**; the field-by-field schema — every probe, builtin, stage, and severity — lives in [`../reference/config/validate.md`](../reference/config/validate.md).
 
-Full schema lives in [`../reference/config/validate.md`](../reference/config/validate.md); this page covers the authoring patterns you'll reach for.
+## Add your first check
 
-## Built-in `env.*` probes
-
-Seven probes are hardcoded in the CLI and run on every `dwe validate` invocation and every preflight (so you cannot disable them). They cover the host-level prerequisites every DWE project shares:
-
-| Probe | Fails when |
-|---|---|
-| `env.docker_bin` | `docker` is not on `PATH` (or the configured override is missing). |
-| `env.docker_daemon` | The docker daemon socket is not reachable. |
-| `env.docker_compose` | The Compose v2 plugin is missing or too old. |
-| `env.git_bin` | `git` is not on `PATH`. |
-| `env.shell_bin` | The configured shell is missing. |
-| `env.project_perms` | Project root is not writable. |
-| `env.ports_free` | A host port declared by an enabled service is held by a foreign process or another compose project. (Self-skips on the `stop` stage.) |
-
-You can run them in isolation:
-
-```shell
-dwe validate env                # all seven
-dwe validate env ports_free     # one probe
-```
-
-That's the right first command when something feels off — see [`troubleshooting.md`](troubleshooting.md).
-
-## Declaring a check in `validate.yml`
-
-Project-specific checks go into `workspace/validate.yml`. Each entry has an ID, a description, the stages it runs on, and a body — either a built-in inspection kind or a user command:
+A check is an ID, a description, the stages it runs on, and a body. Drop this into `workspace/validate.yml`:
 
 ```yaml
-# workspace/validate.yml
 checks:
   - id: ghcr-login
     description: Authenticated against ghcr.io
     stages: [deploy]
-    severity: error
-    hint: |
-      Run `docker login ghcr.io` with a personal access token.
+    hint: Run `docker login ghcr.io` with a personal access token.
     type: builtin
     cmd: shell
     with:
       cmd: docker pull ghcr.io/owner/private-image:latest --quiet
       timeout: 30s
-
-  - id: project-deps
-    description: Required CLIs installed
-    stages: [run]
-    type: command
-    cmd: deps.check
 ```
 
-Two `type:` values are accepted:
+Now `dwe deploy run` refuses to start until the pull succeeds, printing your `hint` if it doesn't. The file is optional — with no `validate.yml`, only the host probes run.
 
-- **`type: builtin`** — dispatches to one of the five built-in check kinds below. The check body lives in `with:`.
-- **`type: command`** — dispatches to a declarative user command from `workspace/commands/`. The target must be `type: shell` or `type: script` — workflow, service_exec, and others are rejected at load time. `with:` is passed through as the command's `params:` payload.
+The body is either `type: builtin` — a built-in inspection kind such as `shell`, `file_exists`, `env_keys_present`, `config_keys_present`, or `tcp_reachable` ([full list with parameters](../reference/config/validate.md#available-builtins)) — or `type: command`, which dispatches to a `shell`/`script` user command from `workspace/commands/`.
 
-The file is optional: when absent, only the `env.*` probes run.
+## Choosing when a check runs
 
-## Built-in check kinds
+`stages:` decides which lifecycle moment fires the check — `deploy`, `run`, `stop`, or `post-setup` (full table in the [reference](../reference/config/validate.md#stages)). The one worth calling out here:
 
-Five inspection kinds are available under `type: builtin`. All of them are also usable as deploy-step `check:` bodies, so you can reuse the same shape across pipelines.
+- A check that depends on a value the **setup wizard** writes into `local.yml` must use `stages: [post-setup]`, not `[deploy]`. A `[deploy]` check also runs at the early pre-wizard gate, where that value isn't set yet — so it would block you before you can even reach the wizard. `post-setup` runs **only** at the final preflight: after the wizard, or immediately before deploy when there's no wizard (e.g. `dwe deploy run`).
 
-### `shell`
+`services: [api]` further gates a check to when a named service is enabled (OR semantics across the list). Stage and service gates are independent ANDs — see [service gating](../reference/config/validate.md#service-gating).
 
-Runs a one-liner under POSIX `sh -c`. Exit 0 = pass.
+## Recipe: require a value before deploy
+
+The wizard asks for a value and writes it to `local.yml`; a `post-setup` check guarantees it's actually set before deploy — and catches it on `dwe deploy run` too, where the wizard never runs:
 
 ```yaml
-- id: registry-reachable
-  description: ghcr.io reachable
-  stages: [deploy]
-  type: builtin
-  cmd: shell
-  with:
-    cmd: curl -fsS -o /dev/null https://ghcr.io/v2/
-    timeout: 5s
+checks:
+  - id: db-api-key-set
+    description: db.api_key must be set before deploy
+    stages: [post-setup]
+    hint: Run `dwe deploy` and complete the wizard, or set db.api_key in workspace/local.yml.
+    type: builtin
+    cmd: config_keys_present
+    with:
+      keys: [db.api_key]
 ```
 
-The shell is always `sh` regardless of the project's configured shell — keeps checks portable across hosts.
+`config_keys_present` reads the **merged config in memory**, so it sees the wizard's `local.yml` write immediately — no dependency on a rendered `.env`. Assert the same dot-path the wizard's `writes:` uses: a top-level namespace like `db.*` or `app.*`. (Per-service secrets cannot live at `services.<name>.env.*` in `local.yml` — keep those in the service's `.env` and assert them with `env_keys_present` instead.) Details: [`config_keys_present`](../reference/config/validate.md#config_keys_present).
 
-### `file_exists`
+## Running checks on demand
 
-Verifies a file is present on disk (relative to project root).
-
-```yaml
-- id: db-dump-present
-  description: Seed dump exists for first-run import
-  stages: [deploy]
-  severity: warning
-  hint: Download from s3://team-dumps/latest.sql and place at .dwe/seed.sql
-  type: builtin
-  cmd: file_exists
-  with:
-    path: .dwe/seed.sql
-```
-
-### `executable_in_path`
-
-Verifies a binary resolves via `PATH`.
-
-```yaml
-- id: jq-installed
-  description: jq available for compose introspection
-  stages: [deploy]
-  severity: warning
-  type: builtin
-  cmd: executable_in_path
-  with:
-    name: jq
-```
-
-### `env_keys_present`
-
-Verifies one or more keys exist with non-empty values in a `.env`-style file. `KEY=`, `KEY=""`, and `KEY=''` all count as empty.
-
-```yaml
-- id: app-secrets
-  description: Required app secrets configured in .env
-  stages: [run, deploy]
-  severity: error
-  hint: |
-    Copy .env.example to .env and fill in:
-      DATABASE_URL, REDIS_URL, JWT_SECRET
-  type: builtin
-  cmd: env_keys_present
-  with:
-    file: .env
-    keys: [DATABASE_URL, REDIS_URL, JWT_SECRET]
-```
-
-### `tcp_reachable`
-
-Attempts a TCP dial to `host:port`.
-
-```yaml
-- id: corporate-vpn
-  description: Internal git mirror is reachable (VPN up?)
-  stages: [deploy, run]
-  severity: error
-  hint: Connect to the corporate VPN and retry.
-  type: builtin
-  cmd: tcp_reachable
-  with:
-    host: git.internal.example.com
-    port: 22
-    timeout: 2s
-```
-
-## Stages
-
-A check runs whenever the caller's stage is in its `stages:` list. There are four reserved stages with built-in hooks:
-
-| Stage | Triggered by |
-|---|---|
-| `deploy` | `dwe deploy run`, `dwe validate --stage deploy` |
-| `run` | `dwe run`, `dwe restart` (run leg), `dwe validate --stage run` |
-| `stop` | `dwe stop`, `dwe restart` (stop leg), `dwe validate --stage stop` |
-| `command` | `dwe validate --stage command` (reserved; no automatic hook yet) |
-
-`dwe validate` without `--stage` runs every check regardless of stage. `dwe restart` is composite (it fires both `stop` and `run` legs). `dwe reset run` uses the `stop` stage only.
-
-Typos in `stages:` produce a warning at load time with a near-match suggestion, so `stages: [deplooy]` won't silently never run.
-
-## Service gating
-
-Some checks only make sense when a particular service is enabled — a JWT secret matters only if the API container is on. Use `services:` to OR-gate:
-
-```yaml
-- id: api-jwt-secret
-  description: JWT_SECRET configured for API
-  stages: [run, deploy]
-  services: [api]              # only runs when api is enabled
-  severity: error
-  hint: Set JWT_SECRET in services/api/.env
-  type: builtin
-  cmd: env_keys_present
-  with:
-    file: services/api/.env
-    keys: [JWT_SECRET]
-```
-
-Semantics:
-
-- Omit `services:` → the check always runs (when its stage matches).
-- `services: [api]` → runs iff `api` is enabled in the current local config.
-- `services: [api, worker]` → runs iff `api` OR `worker` is enabled. All listed services disabled → silent skip.
-
-Service gating and stage filtering are independent AND filters: stage matches first, then the service gate.
-
-## Severity and `--strict`
-
-Each check declares a severity that controls how preflight reacts when it fails:
-
-| `severity:` | Default? | Effect on exit code |
-|---|---|---|
-| `error` | yes | Preflight fails; deploy/run/stop aborts. |
-| `warning` | no | Diagnostic printed; pipeline proceeds. With `dwe validate --strict`, warnings become errors. |
-| `info` | no | Diagnostic printed; never blocks. |
-
-`error` is the default — leave it off for the common case. Reach for `warning` when the check surfaces a soft expectation (e.g. "you probably want a seed dump"), and `info` for advisory output.
-
-## Linters (validate-only)
-
-`workspace/validate.yml` also exposes a `linters:` block for running well-known external linters (shellcheck, hadolint) and arbitrary `type: generic` adapters. Linters run on `dwe validate` only — they do **not** run in preflight. Preflight answers "can we run?", not "is the code clean?".
-
-```yaml
-linters:
-  shellcheck:
-    paths: [workspace/scripts, scripts]
-    severity: warning
-  hadolint:
-    paths: ["."]
-    filenames: [Dockerfile]
-```
-
-Built-in adapters autodetect: if the binary is on `PATH` and matching files exist, the linter runs; otherwise it silently skips. Set `enabled: false` to opt out explicitly. See [`../reference/config/validate.md#external-linters`](../reference/config/validate.md#external-linters) for the full schema.
-
-## Standalone invocation
-
-You don't have to wait for `dwe deploy` to fire a check — you can invoke any of them directly:
+You don't have to wait for `dwe deploy` to fire a check:
 
 ```shell
-dwe validate                        # every domain (env, config, checks, linters)
-dwe validate env                    # only the seven hardcoded env probes
-dwe validate checks                 # only declarative checks
-dwe validate checks ghcr-login      # one check by ID
-dwe validate linters                # only linters
-dwe validate linters shellcheck     # one linter
+dwe validate                     # every domain (env, config, checks, linters)
+dwe validate env                 # only the seven host probes
+dwe validate checks              # only declarative checks
+dwe validate checks ghcr-login   # one check by ID (also bypasses the services gate)
+dwe validate --stage deploy      # only checks bound to a stage
 ```
 
-`dwe validate checks <id>` also bypasses the `services:` gate, so you can sanity-check a gated entry even when its target services are all disabled.
+Useful flags: `--strict` (warnings exit non-zero), `--quiet` (hide ok/info rows). While iterating, every lifecycle command accepts `--skip-preflight` to bypass the gate entirely — use it sparingly, it skips the host probes too.
 
-Useful flags:
+`dwe validate env` is the right first command when something feels off — see [`troubleshooting.md`](troubleshooting.md).
 
-- `--stage <name>` — restrict `checks.*` to one stage.
-- `--strict` — warnings exit non-zero.
-- `--quiet` — hide `ok` / `info` rows.
-
-If a check is firing too often or too eagerly in preflight while you iterate, every lifecycle command accepts `--skip-preflight`. Use it sparingly — it bypasses every probe, including the env ones.
+> `validate.yml` also has a `linters:` block (shellcheck / hadolint / custom adapters). Linters run on `dwe validate` only — **never** in preflight, which answers "can we run?", not "is the code clean?". Schema: [external linters](../reference/config/validate.md#external-linters).
 
 ## Cross-links
 
-- [`../reference/config/validate.md`](../reference/config/validate.md) — full schema, validator domains, linter adapter rules.
+- [`../reference/config/validate.md`](../reference/config/validate.md) — full schema: every probe, builtin, stage, severity, and the `linters:` block.
 - [`troubleshooting.md`](troubleshooting.md) — what to do when a probe fails.
 - [`author-project-commands.md`](author-project-commands.md) — authoring the user commands that `type: command` checks dispatch to.

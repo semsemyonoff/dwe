@@ -15,7 +15,7 @@ var ContentHashes = map[string]string{
 	"guides/index.md":                          "2e2325e6e19a",
 	"guides/joining-a-project.md":              "ad1e96c2da83",
 	"guides/localize-for-your-team.md":         "4f05df74f37c",
-	"guides/preflight-checks.md":               "0ac09d8b4b04",
+	"guides/preflight-checks.md":               "0118a90a2c11",
 	"guides/shared-ide-and-agent-config.md":    "0b09e49f2aeb",
 	"guides/starship.md":                       "154d2eb5680a",
 	"guides/start-a-new-project.md":            "b85e2f834152",
