@@ -114,12 +114,12 @@ Startup (`initRootCmd`): parse flags → `lvl := levelFrom(verbose, debug, os.Ge
 - Create: `internal/shared/trace/trace.go`
 - Create: `internal/shared/trace/trace_test.go`
 
-- [ ] create `trace.go` with `Level` enum, `atomic.Int32` level, mutex-guarded global printer slot, ctx key for the override printer
-- [ ] implement `Configure`, `Enabled`, ctx-aware `Command`/`Decision`/`Debugf`, `SetPrinter`/`restore`, `WithLinePrinter`, `LinePrinter`, `FormatCommand` (lift `quoteArg`/`formatCommand` from `docker/compose.go`)
-- [ ] implement printer resolution precedence: ctx override → global → configured fallback writer; `LevelOff` is a zero-alloc early return
-- [ ] write tests: each method emits only at/above its level; `LevelOff` silent; `Enabled` gating; precedence (ctx beats global beats fallback); `SetPrinter` save/restore + nested restore ordering; `FormatCommand` quoting (port existing quoting cases)
-- [ ] write error/edge tests: nil writer / nil printer safety; concurrent emit-with-ctx-printer while global printer is set (run `-race`)
-- [ ] run tests — must pass before next task
+- [x] create `trace.go` with `Level` enum, `atomic.Int32` level, mutex-guarded global printer slot, ctx key for the override printer
+- [x] implement `Configure`, `Enabled`, ctx-aware `Command`/`Decision`/`Debugf`, `SetPrinter`/`restore`, `WithLinePrinter`, `LinePrinter`, `FormatCommand` (lift `quoteArg`/`formatCommand` from `docker/compose.go`)
+- [x] implement printer resolution precedence: ctx override → global → configured fallback writer; `LevelOff` is a zero-alloc early return
+- [x] write tests: each method emits only at/above its level; `LevelOff` silent; `Enabled` gating; precedence (ctx beats global beats fallback); `SetPrinter` save/restore + nested restore ordering; `FormatCommand` quoting (port existing quoting cases)
+- [x] write error/edge tests: nil writer / nil printer safety; concurrent emit-with-ctx-printer while global printer is set (run `-race`)
+- [x] run tests — must pass before next task
 
 ### Task 2: Wire flags and `Configure` in root
 
