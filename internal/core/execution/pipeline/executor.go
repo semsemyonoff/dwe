@@ -216,6 +216,7 @@ func runChildCmd(cmd *exec.Cmd, actx ActionContext) error {
 // execShellAction runs a shell command via sh -c.
 func execShellAction(ctx context.Context, a config.Action, actx ActionContext) error {
 	shell := config.ShellBin(actx.Cfg)
+	trace.Command(ctx, shell, "-c", strings.TrimSpace(a.Cmd))
 	cmd := exec.CommandContext(ctx, shell, "-c", strings.TrimSpace(a.Cmd)) //nolint:gosec
 	bindCancelTerm(cmd)
 	cmd.Dir = actx.WorkDir
@@ -225,6 +226,7 @@ func execShellAction(ctx context.Context, a config.Action, actx ActionContext) e
 // execDweAction runs a dwe subcommand.
 func execDweAction(ctx context.Context, a config.Action, actx ActionContext) error {
 	shell := config.ShellBin(actx.Cfg)
+	trace.Command(ctx, "dwe", strings.Fields(strings.TrimSpace(a.Cmd))...)
 	cmd := buildDweCmd(ctx, a.Cmd, actx.WorkDir, shell, config.DweBin(actx.Cfg), actx.SkipConfirm)
 	return runChildCmd(cmd, actx)
 }
@@ -268,6 +270,7 @@ func execCommandAction(ctx context.Context, a config.Action, actx ActionContext)
 	if err != nil {
 		return fmt.Errorf("command %q: %w", a.Cmd, err)
 	}
+	trace.Command(ctx, "dwe", a.Cmd)
 	rctx, err := usercommands.BuildRunContext(actx.Cfg, actx.Reg, def, a.With, actx.WorkDir)
 	if err != nil {
 		return err

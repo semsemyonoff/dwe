@@ -178,9 +178,9 @@ Startup (`initRootCmd`): parse flags → `lvl := levelFrom(verbose, debug, os.Ge
 - Modify: `internal/core/execution/pipeline/executor.go`
 - Modify: `internal/core/execution/pipeline/executor_test.go`
 
-- [ ] in `ExecAction` (or each `exec*Action`), emit `trace.Command(ctx, …)` for `execShellAction` (`sh -c …`), `execDweAction` (nested `dwe …`), `execCommandAction` (resolved user command) before dispatch, using the action's `ctx` (so parallel sub-steps attribute via Task 3)
-- [ ] write tests: each action type echoes at Verbose; a parallel group attributes each sub-step's echo to its sub-step writer (exercises Task 3 routing end-to-end); silent at `LevelOff`
-- [ ] run tests — must pass before next task
+- [x] in `ExecAction` (or each `exec*Action`), emit `trace.Command(ctx, …)` for `execShellAction` (`sh -c …`), `execDweAction` (nested `dwe …`), `execCommandAction` (resolved user command) before dispatch, using the action's `ctx` (so parallel sub-steps attribute via Task 3)
+- [x] write tests: each action type echoes at Verbose; a parallel group attributes each sub-step's echo to its sub-step writer (exercises Task 3 routing end-to-end); silent at `LevelOff`
+- [x] run tests — must pass before next task
 
 ### Task 7: Decision emits (executor reason sites + preflight)
 
