@@ -234,11 +234,11 @@ Startup (`initRootCmd`): parse flags → `lvl := levelFrom(verbose, debug, os.Ge
 - Modify: `AGENTS.md` (Critical Patterns: short `trace` routing-precedence entry; edit `AGENTS.md`, **not** the `CLAUDE.md` symlink)
 - Modify: `internal/cli/root.go` flag help wording if needed
 
-- [ ] write the "Verbose & debug output" section: when `-v` vs `--debug`/`DWE_DEBUG`, what each surfaces, stderr-only + JSON behavior, where to look
-- [ ] mirror into `docs/i18n/ru/guides/troubleshooting.md`
-- [ ] add the `trace` Critical-Patterns entry to `AGENTS.md`
-- [ ] run `make build` (sync embedded docs) then `make test`
-- [ ] move this plan to `docs/plans/completed/`
+- [x] write the "Verbose & debug output" section: when `-v` vs `--debug`/`DWE_DEBUG`, what each surfaces, stderr-only + JSON behavior, where to look
+- [x] mirror into `docs/i18n/ru/guides/troubleshooting.md` (header hash refreshed to match the regenerated English content hash; `TestRussianTranslationsAreFresh` passes)
+- [x] add the `trace` Critical-Patterns entry to `AGENTS.md`
+- [x] run `make build` (sync embedded docs) then `make test` — both pass, no failures
+- [x] move this plan to `docs/plans/completed/`
 
 ## Post-Completion
 

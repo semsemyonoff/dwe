@@ -20,7 +20,7 @@ var ContentHashes = map[string]string{
 	"guides/starship.md":                       "154d2eb5680a",
 	"guides/start-a-new-project.md":            "b85e2f834152",
 	"guides/switching-tasks-with-snapshots.md": "83b43f46c197",
-	"guides/troubleshooting.md":                "98b1755a311a",
+	"guides/troubleshooting.md":                "2f377475d796",
 	"guides/write-snapshot-workflows.md":       "a5a1f22c2cb2",
 	"internals/architecture.md":                "4fe04c86171c",
 	"internals/packages.md":                    "e225f48bf02f",
