@@ -214,9 +214,9 @@ Startup (`initRootCmd`): parse flags → `lvl := levelFrom(verbose, debug, os.Ge
 **Files:**
 - Create/Modify: `internal/cli/*_test.go`
 
-- [ ] add a test running a read-only command with `-v --output json` and `--debug --output json`: assert stdout is a single valid JSON document; diagnostics only on stderr
-- [ ] verify the error envelope remains the final stderr structure when an error occurs with `-v`
-- [ ] run tests — must pass before next task
+- [x] add a test running a read-only command with `-v --output json` and `--debug --output json`: assert stdout is a single valid JSON document; diagnostics only on stderr — `internal/cli/root_json_diag_test.go` (`TestRootJSON_DiagnosticFlagsKeepStdoutClean`); captures the real `os.Stderr` via an `os.Pipe` to prove the `config loaded` debug line routes to stderr, never stdout
+- [x] verify the error envelope remains the final stderr structure when an error occurs with `-v` — `TestRootJSON_ErrorEnvelopeWithVerbose`: `dwe info --output json -v` with no project yields a clean single-document `{"error":{"code":"project_not_found",…}}` envelope via `cmdctx.WriteError` (mirroring main.go's errHandler), with empty stdout
+- [x] run tests — must pass before next task
 
 ### Task 10: Verify acceptance criteria
 
