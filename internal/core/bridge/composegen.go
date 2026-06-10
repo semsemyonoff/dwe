@@ -2,6 +2,7 @@ package bridge
 
 import (
 	"bytes"
+	"context"
 	"errors"
 	"fmt"
 	"os"
@@ -13,6 +14,7 @@ import (
 	"github.com/semsemyonoff/dwe/internal/core/bridge/shimassets"
 	"github.com/semsemyonoff/dwe/internal/core/project/config"
 	shareddaemon "github.com/semsemyonoff/dwe/internal/shared/daemon"
+	"github.com/semsemyonoff/dwe/internal/shared/trace"
 
 	"gopkg.in/yaml.v3"
 )
@@ -166,6 +168,17 @@ func BuildOverlaySpec(baseDir string, cfg *config.DweConfig, arch ArchResolver, 
 		BridgeDir: DefaultBridgeDir(baseDir),
 		Project:   cfg.Project.FullName(),
 	}
+	// Container names are derived as "<project>-<container>" while bypassing
+	// compose, so the prefix MUST be the compose project name (docker.yml
+	// project_name when set — config.ResolveComposeProjectName is the single
+	// source of truth for that derivation), never Project.FullName().
+	// spec.Project intentionally stays FullName: it is the DWE_BRIDGE_PROJECT
+	// diagnostic identity, not a container prefix.
+	composeProject, err := config.ResolveComposeProjectName(baseDir, cfg)
+	if err != nil {
+		composeProject = cfg.Project.FullName()
+		logf("bridge: resolving compose project name: %v; using %q", err, composeProject)
+	}
 	for _, name := range config.DeployOrder(cfg, []string{"app", "tool", "infra"}) {
 		svc := cfg.Services[name]
 		if !svc.BridgeEnabled() {
@@ -180,7 +193,7 @@ func BuildOverlaySpec(baseDir string, cfg *config.DweConfig, arch ArchResolver, 
 		}
 		entry := OverlayService{
 			Name:            svc.Container,
-			ShimFile:        shimassets.FileName(resolveShimArch(name, svc.Container, spec.Project, arch, logf)),
+			ShimFile:        shimassets.FileName(resolveShimArch(name, svc.Container, composeProject, arch, logf)),
 			ShimPath:        svc.BridgeShimPath(),
 			UnreachableWarn: svc.BridgeOnUnreachable() == config.BridgeOnUnreachableWarn,
 		}
@@ -196,13 +209,14 @@ func BuildOverlaySpec(baseDir string, cfg *config.DweConfig, arch ArchResolver, 
 // resolveShimArch picks the shim architecture for one service: the image
 // architecture reported by the resolver when it is one we ship a shim for,
 // the host arch otherwise (with a warning — the wrong-arch window self-heals
-// at the next regeneration).
-func resolveShimArch(name, containerTemplate, projectFull string, arch ArchResolver, logf func(format string, args ...any)) string {
+// at the next regeneration). composeProject is the compose project name the
+// container-name derivation prefixes with.
+func resolveShimArch(name, containerTemplate, composeProject string, arch ArchResolver, logf func(format string, args ...any)) string {
 	host := hostShimArch()
 	if arch == nil {
 		return host
 	}
-	containerName, err := shareddaemon.ResolveContainerName(projectFull, containerTemplate)
+	containerName, err := shareddaemon.ResolveContainerName(composeProject, containerTemplate)
 	if err == nil {
 		var raw string
 		raw, err = arch(containerName)
@@ -213,9 +227,29 @@ func resolveShimArch(name, containerTemplate, projectFull string, arch ArchResol
 			logf("bridge: service %q image architecture %q has no shim; falling back to host arch %s", name, raw, host)
 			return host
 		}
+		if isNoSuchContainer(err) {
+			// Expected whenever the container does not exist yet (first
+			// deploy, after reset) — the host-arch fallback is correct for
+			// native images and re-resolves at the next start, so this is a
+			// -v decision line, not a user-facing warning. The one case the
+			// fallback gets wrong (emulated foreign-arch image → shim exec
+			// format error in the container) is covered in the bridge
+			// troubleshooting docs.
+			trace.Decision(context.Background(),
+				"bridge: service %q has no container yet; shim arch falls back to host %s (re-resolved at next start)",
+				name, host)
+			return host
+		}
 	}
 	logf("bridge: resolving image architecture for service %q: %v; falling back to host arch %s", name, err, host)
 	return host
+}
+
+// isNoSuchContainer matches the docker CLI's "No such container" inspect
+// failure — the one expected resolver error (nothing deployed yet) among
+// genuine diagnostics like an unreachable docker daemon.
+func isNoSuchContainer(err error) bool {
+	return err != nil && strings.Contains(strings.ToLower(err.Error()), "no such container")
 }
 
 // overlayDoc / overlayService / overlayMount mirror the compose schema

@@ -943,7 +943,7 @@ func writeBridgeFixture(t *testing.T) (workspacePath string) {
 	svcDir := filepath.Join(tmpDir, "workspace", "services", "web")
 	require.NoError(t, os.MkdirAll(svcDir, 0o755))
 	require.NoError(t, os.WriteFile(filepath.Join(svcDir, "service.yml"), []byte(
-		"type: app\nbridge:\n  on_unreachable: sometimes\n",
+		"type: app\nbridge:\n  enabled: true\n  on_unreachable: sometimes\n",
 	), 0o644))
 	return workspacePath
 }

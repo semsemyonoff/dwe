@@ -31,6 +31,16 @@ func shortTempDir(t *testing.T) string {
 	return dir
 }
 
+// stubDaemonEnviron pins the daemon-side environment seam so tests asserting
+// exact subprocess env slices do not pick up the real test-process identity
+// variables (HOME, TMPDIR, …).
+func stubDaemonEnviron(t *testing.T, env ...string) {
+	t.Helper()
+	restore := daemonEnviron
+	daemonEnviron = func() []string { return env }
+	t.Cleanup(func() { daemonEnviron = restore })
+}
+
 // fakeProcess is the in-process Process substitute behind the exec seam.
 // A per-test script goroutine plays the subprocess: it reads p.stdinR,
 // writes p.stdoutW / p.stderrW, consumes p.signals, and calls p.finish.
@@ -191,6 +201,7 @@ func tcpClientDir(t *testing.T, d *Daemon) string {
 
 func TestSession_TCPHappyPath(t *testing.T) {
 	t.Setenv("PATH", "/host/usr/bin") // the daemon's own (host) PATH, forced onto the subprocess
+	stubDaemonEnviron(t, "HOME=/Users/host")
 	rec := &launchRecorder{}
 	d := startDaemon(t, fakeLauncher(rec, func(p *fakeProcess) {
 		_, _ = p.stdoutW.Write([]byte("out-data"))
@@ -204,6 +215,7 @@ func TestSession_TCPHappyPath(t *testing.T) {
 	opts.Env = []string{
 		"PATH=/workspace/evil:/usr/bin", // container-controlled — must NOT reach the host subprocess
 		"GIT_INDEX_FILE=/workspace/.git/index",
+		"HOME=/home/www-data", // container identity — replaced by the daemon's value
 		"DWE_BRIDGE_DIR=/dwe-bridge",
 		"DWE_PROJECT_ROOT=/elsewhere",
 		"DWE_INVOKED_FROM=spoofed",
@@ -226,6 +238,7 @@ func TestSession_TCPHappyPath(t *testing.T) {
 	}
 	wantEnv := []string{
 		"GIT_INDEX_FILE=/workspace/.git/index",
+		"HOME=/Users/host",   // host identity wins over the container's
 		"PATH=/host/usr/bin", // forced to the daemon's PATH, client's stripped
 		"DWE_INVOKED_FROM=container",
 		"DWE_NONINTERACTIVE=1",
@@ -527,20 +540,39 @@ func TestSession_ConnLossTerminatesSubprocess(t *testing.T) {
 
 func TestSubprocessEnv(t *testing.T) {
 	t.Setenv("PATH", "/host/usr/bin") // the daemon's own (host) PATH
+	stubDaemonEnviron(t,
+		"HOME=/Users/host",                // host identity — forwarded
+		"DOCKER_HOST=unix:///host/docker", // host docker endpoint — forwarded
+		"SSH_AUTH_SOCK=/host/agent.sock",  // host agent — forwarded
+		"EDITOR=vim",                      // not in the identity set — ignored
+		"PATH=/ignored",                   // PATH goes through hostPath, not here
+		"DWE_INVOKED_FROM=host",           // not identity — ignored
+	)
+
 	in := []string{
-		"PATH=/workspace/evil:/usr/bin", // container-controlled — must NOT pass through
-		"LD_PRELOAD=/workspace/evil.so", // loader hijack — dropped by prefix
-		"DYLD_INSERT_LIBRARIES=/evil",   // macOS loader hijack — dropped by prefix
-		"BASH_ENV=/workspace/rc.sh",     // shell-startup hijack — dropped
-		"IFS=:",                         // word-split hijack — dropped
-		"DWE_BRIDGE_DIR=/dwe-bridge",    // shim strip set, re-filtered
-		"DWE_PROJECT_ROOT=/elsewhere",   // discovery override, re-filtered
-		"DWE_INVOKED_FROM=host",         // host-controlled, never client-set
-		"DWE_NONINTERACTIVE=0",          // host-controlled, never client-set
+		"PATH=/workspace/evil:/usr/bin",      // container-controlled — must NOT pass through
+		"LD_PRELOAD=/workspace/evil.so",      // loader hijack — dropped by prefix
+		"DYLD_INSERT_LIBRARIES=/evil",        // macOS loader hijack — dropped by prefix
+		"BASH_ENV=/workspace/rc.sh",          // shell-startup hijack — dropped
+		"IFS=:",                              // word-split hijack — dropped
+		"DWE_BRIDGE_DIR=/dwe-bridge",         // shim strip set, re-filtered
+		"DWE_PROJECT_ROOT=/elsewhere",        // discovery override, re-filtered
+		"DWE_INVOKED_FROM=host",              // host-controlled, never client-set
+		"DWE_NONINTERACTIVE=0",               // host-controlled, never client-set
+		"HOME=/home/www-data",                // container identity — dropped, host value wins
+		"USER=www-data",                      // container identity — dropped
+		"TMPDIR=/tmp/container",              // container identity — dropped
+		"DOCKER_HOST=tcp://evil:2375",        // container-steered docker endpoint — dropped
+		"DOCKER_CONFIG=/workspace/.docker",   // container docker config — dropped by prefix
+		"COMPOSE_FILE=/workspace/evil.yml",   // container compose steering — dropped by prefix
+		"XDG_CONFIG_HOME=/workspace/.config", // container config dirs — dropped by prefix
 		"TERM=xterm",
 	}
 	want := []string{
 		"TERM=xterm",
+		"HOME=/Users/host", // the daemon's identity values, in daemon environ order
+		"DOCKER_HOST=unix:///host/docker",
+		"SSH_AUTH_SOCK=/host/agent.sock",
 		"PATH=/host/usr/bin", // forced to the daemon's PATH, not the client's
 		"DWE_INVOKED_FROM=container",
 		"DWE_NONINTERACTIVE=1",

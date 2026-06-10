@@ -4815,9 +4815,9 @@ func TestServiceConfig_BridgeEnabledExplicit(t *testing.T) {
 			wantExp:  true,
 		},
 		{
-			name:     "omitted on app type",
+			name:     "omitted on app type defaults off (strict opt-in)",
 			svc:      ServiceConfig{Type: "app"},
-			wantBool: true,
+			wantBool: false,
 			wantExp:  false,
 		},
 		{
@@ -4870,9 +4870,9 @@ func TestServiceConfig_BridgeEnabled(t *testing.T) {
 			wantBool: false,
 		},
 		{
-			name:     "app default true",
+			name:     "app default false (strict opt-in)",
 			svc:      ServiceConfig{Type: "app"},
-			wantBool: true,
+			wantBool: false,
 		},
 		{
 			name:     "infra default false",
@@ -5038,13 +5038,14 @@ services:
 		t.Errorf("grandchild-multi-hop Bridge.OnUnreachable should inherit warn, got %q", grandchild.Bridge.OnUnreachable)
 	}
 
-	// Neither side set bridge: tristate stays nil (app default applies via accessor).
+	// Neither side set bridge: tristate stays nil (the strict opt-in default
+	// — off for every type — applies via the accessor).
 	unsetChild := services["unset-child"]
 	if unsetChild.Bridge.Enabled != nil {
 		t.Errorf("unset-child Bridge.Enabled should stay nil, got %v", *unsetChild.Bridge.Enabled)
 	}
-	if !unsetChild.BridgeEnabled() {
-		t.Error("unset-child BridgeEnabled() should default true for type app")
+	if unsetChild.BridgeEnabled() {
+		t.Error("unset-child BridgeEnabled() should default false (bridge is strictly opt-in)")
 	}
 	if unsetChild.Bridge.ShimPath != "" || unsetChild.BridgeShimPath() != DefaultBridgeShimPath {
 		t.Errorf("unset-child shim path: raw %q, resolved %q", unsetChild.Bridge.ShimPath, unsetChild.BridgeShimPath())

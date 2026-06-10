@@ -45,7 +45,7 @@ Every field allowed in `workspace/services/<name>/service.yml`, plus the nested 
 | `cli` | block | no | **app** | `dwe shell` defaults — see [`cli` block](#cli-block). |
 | `render` | block | no | **app** | Nested template-render policy (`ide` / `ai` / `git` / `config`) — see [`render` block](#render-block). |
 | `generated` | block | no | **app** | Per-service service-minted values DWE harvests and replays — see [`generated` block](#generated-block). |
-| `bridge` | block | no | all (**app** defaults on; tool/infra default off) | Host-bridge opt-in — mount the `dwe` shim into this service's container so `dwe` works from inside it. See [`bridge` block](#bridge-block). |
+| `bridge` | block | no | all (off by default — strictly opt-in) | Host-bridge opt-in — mount the `dwe` shim into this service's container so `dwe` works from inside it. See [`bridge` block](#bridge-block). |
 
 ## `ports` field
 
@@ -621,22 +621,22 @@ A service's generation step is typically gated by the [`generated-missing <svc> 
 
 ## `bridge` block
 
-Opt a service into the [host bridge](../../bridge.md) — DWE mounts a small static `dwe` shim into the container so `dwe` commands (git hooks, project commands, read-only diagnostics) run from inside the container by forwarding to a host-side daemon. For `type: app` the bridge is on by default; `tool` / `infra` default off.
+Opt a service into the [host bridge](../../bridge.md) — DWE mounts a small static `dwe` shim into the container so `dwe` commands (git hooks, project commands, read-only diagnostics) run from inside the container by forwarding to a host-side daemon. The bridge is off by default for every service type — opt in explicitly with `enabled: true`.
 
 ```yaml
 # workspace/services/main/service.yml
 type: app
 dir: ./services/main
 bridge:
-  enabled: true                    # default: true for type: app, false otherwise
+  enabled: true                    # default: false — the bridge is strictly opt-in
   # shim_path: /usr/local/bin/dwe  # mount-point override (base-image collision)
   # on_unreachable: fail           # fail | warn — shim policy when the daemon is down
 ```
 
 | Field | Type | Required | Default | Description |
 |-------|------|----------|---------|-------------|
-| `enabled` | bool (tristate) | no | `true` for `type: app`, `false` for `tool` / `infra` | Inject the shim binary and bridge mounts into this service's container. |
+| `enabled` | bool (tristate) | no | `false` (every type) | Inject the shim binary and bridge mounts into this service's container. |
 | `shim_path` | string | no | `/usr/local/bin/dwe` | Absolute container path the shim is mounted at; override when the base image already ships a file there. |
 | `on_unreachable` | string | no | `fail` | `fail` — shim prints an error and exits 1 when the host daemon is unreachable (a hook blocks the commit); `warn` — print a warning and exit 0. |
 
-`bridge.enabled` is a tristate that inherits through service [`extends:`](extends.md) the same way `render.git.enabled` does: an explicit child value wins, an unset child inherits the parent, and the type-based default applies only when neither sets it. `shim_path` and `on_unreachable` inherit when the child leaves them empty. A bridge-enabled `type: app` service should declare the `dir` / `dir_internal` pair — the shim's working-directory translation maps over it, and `dwe validate` (the `bridge` domain) warns when it is missing. See [Host bridge](../../bridge.md) for transports, the in-container command policy, the generated compose overlay, and daemon lifecycle.
+`bridge.enabled` is a tristate that inherits through service [`extends:`](extends.md) the same way `render.git.enabled` does: an explicit child value wins, an unset child inherits the parent, and the off default applies only when neither sets it. `shim_path` and `on_unreachable` inherit when the child leaves them empty. A bridge-enabled `type: app` service should declare the `dir` / `dir_internal` pair — the shim's working-directory translation maps over it, and `dwe validate` (the `bridge` domain) warns when it is missing. See [Host bridge](../../bridge.md) for transports, the in-container command policy, the generated compose overlay, and daemon lifecycle.

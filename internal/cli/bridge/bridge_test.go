@@ -33,8 +33,9 @@ func fixtureFlags(t *testing.T, bridgeEnabled bool) *cmdctx.RootFlags {
 	ws := "schema_version: \"2\"\nproject:\n  name: test\n  prefix: dwe\n"
 	mustWrite(t, filepath.Join(dir, "workspace.yml"), ws)
 	svc := "type: app\ncontainer: app-main\nrequired: true\n"
-	if !bridgeEnabled {
-		svc += "bridge:\n  enabled: false\n"
+	if bridgeEnabled {
+		// The bridge is strictly opt-in — no service type enables it by default.
+		svc += "bridge:\n  enabled: true\n"
 	}
 	mustWrite(t, filepath.Join(dir, "workspace", "services", "main", "service.yml"), svc)
 	return &cmdctx.RootFlags{ConfigPath: filepath.Join(dir, "workspace.yml"), Root: dir}

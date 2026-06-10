@@ -278,6 +278,42 @@ var dangerousEnvNames = map[string]struct{}{
 // container inject code into any host process the bridged dwe spawns.
 var dangerousEnvPrefixes = []string{"LD_", "DYLD_"}
 
+// hostIdentityEnvNames are process-identity and config-resolution variables
+// that must reflect the HOST user, not the container. The forked dwe (and the
+// docker / git / ssh it spawns) resolves docker contexts (~/.docker/config.json),
+// git config, and agent sockets through them — a container HOME silently sends
+// the docker CLI to the default unix:///var/run/docker.sock, which does not
+// exist on a Docker Desktop / OrbStack mac. Client values are dropped; the
+// daemon's own values are appended instead (absent ones stay absent).
+var hostIdentityEnvNames = []string{"HOME", "USER", "LOGNAME", "TMPDIR", "SSH_AUTH_SOCK"}
+
+// hostIdentityEnvPrefixes are the variable families steering how the host
+// talks to docker (DOCKER_HOST, DOCKER_CONFIG, DOCKER_CONTEXT, COMPOSE_* …)
+// plus XDG config-dir resolution — host-controlled for the same reason as
+// PATH: a container must not choose which docker endpoint or config files the
+// host-side dwe uses.
+var hostIdentityEnvPrefixes = []string{"DOCKER_", "COMPOSE_", "XDG_"}
+
+// isHostIdentityEnv reports whether name belongs to the host-identity set.
+func isHostIdentityEnv(name string) bool {
+	return slices.Contains(hostIdentityEnvNames, name) || hasAnyPrefix(name, hostIdentityEnvPrefixes)
+}
+
+// daemonEnviron is the daemon's own environment; injectable for tests.
+var daemonEnviron = os.Environ
+
+// hostIdentityEnv returns the daemon's own values for the host-identity set,
+// in environ order; variables the daemon itself lacks are simply absent.
+func hostIdentityEnv() []string {
+	var out []string
+	for _, kv := range daemonEnviron() {
+		if name, _, ok := strings.Cut(kv, "="); ok && isHostIdentityEnv(name) {
+			out = append(out, kv)
+		}
+	}
+	return out
+}
+
 // hostPath returns the daemon's own PATH so a bridged subprocess resolves
 // docker / git / sh against host binaries, never container-controlled
 // directories. Falls back to a conservative default if the daemon somehow has
@@ -292,9 +328,10 @@ func hostPath() string {
 // subprocessEnv builds the subprocess environment from the HELLO env: the
 // shim's strip set is re-applied (defense-in-depth — the daemon does not
 // trust the client to have filtered), execution-hijacking variables (loader
-// families, shell-startup files, PATH) are dropped, the host-controlled
-// variables are dropped, and the daemon-owned values (host PATH plus the two
-// host-controlled DWE_* vars) are appended.
+// families, shell-startup files, PATH) are dropped, the host-controlled and
+// host-identity variables are dropped, and the daemon-owned values (the
+// host-identity set, host PATH, and the two host-controlled DWE_* vars) are
+// appended.
 func subprocessEnv(env []string) []string {
 	clean := make([]string, 0, len(env)+len(hostControlledEnv)+1)
 	for _, kv := range bridgeclient.StripEnv(env) {
@@ -308,8 +345,12 @@ func subprocessEnv(env []string) []string {
 		if hasAnyPrefix(name, dangerousEnvPrefixes) {
 			continue
 		}
+		if isHostIdentityEnv(name) {
+			continue
+		}
 		clean = append(clean, kv)
 	}
+	clean = append(clean, hostIdentityEnv()...)
 	return append(clean,
 		"PATH="+hostPath(),
 		EnvInvokedFrom+"="+InvokedFromContainer,

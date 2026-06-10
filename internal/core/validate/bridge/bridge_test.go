@@ -12,14 +12,16 @@ import (
 	"github.com/semsemyonoff/dwe/internal/core/validate"
 )
 
-// appSvc returns a fully-valid bridged app service; tests mutate single
-// fields to isolate one diagnostic each.
+// appSvc returns a fully-valid bridged app service (the bridge is strictly
+// opt-in, so the toggle is explicit); tests mutate single fields to isolate
+// one diagnostic each.
 func appSvc(mut func(*devconfig.ServiceConfig)) devconfig.ServiceConfig {
 	svc := devconfig.ServiceConfig{
 		Type:        devconfig.ServiceTypeApp,
 		Container:   "app-main",
 		Dir:         "./services/main",
 		DirInternal: "/workspace",
+		Bridge:      devconfig.ServiceBridgeConfig{Enabled: new(true)},
 	}
 	if mut != nil {
 		mut(&svc)

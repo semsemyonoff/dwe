@@ -999,8 +999,9 @@ func (s ServiceConfig) IDERenderEnabledExplicit() (enabled bool, explicit bool) 
 
 // renderEnabledExplicit resolves a render toggle: if the explicit pointer is
 // non-nil it is authoritative; otherwise app services default on, others off.
-// Shared by the IDE/AI/Git per-kind RenderEnabledExplicit accessors and the
-// bridge toggle (BridgeEnabledExplicit), which follows the same tristate shape.
+// Shared by the IDE/AI/Git per-kind RenderEnabledExplicit accessors. The
+// bridge toggle (BridgeEnabledExplicit) shares the tristate shape but NOT the
+// app default — the bridge is strictly opt-in.
 func (s ServiceConfig) renderEnabledExplicit(enabled *bool) (bool, bool) {
 	if enabled != nil {
 		return *enabled, true
@@ -1047,9 +1048,15 @@ func (s ServiceConfig) GitRenderEnabled() bool {
 
 // BridgeEnabledExplicit returns the host-bridge enabled state and whether it was explicitly set.
 // If Enabled is non-nil, returns its value and true.
-// If Enabled is nil, returns true for type "app" (default) or false for other types, and false (not explicit).
+// If Enabled is nil, returns false for EVERY service type, and false (not
+// explicit) — unlike the render toggles there is no app default: the bridge
+// mounts a host-controlled binary into the container and opens a
+// container→host command channel, so it is strictly opt-in per service.
 func (s ServiceConfig) BridgeEnabledExplicit() (enabled bool, explicit bool) {
-	return s.renderEnabledExplicit(s.Bridge.Enabled)
+	if s.Bridge.Enabled != nil {
+		return *s.Bridge.Enabled, true
+	}
+	return false, false
 }
 
 // BridgeEnabled returns whether this service should receive the host-bridge

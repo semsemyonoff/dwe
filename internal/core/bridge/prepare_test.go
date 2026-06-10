@@ -10,14 +10,16 @@ import (
 	"github.com/semsemyonoff/dwe/internal/shared/lock"
 )
 
-// prepareTestConfig returns a config with one bridged app; bridged toggles
-// the service-level enable so the same shape covers both gate outcomes.
+// prepareTestConfig returns a config with one bridge-opted-in app; bridged
+// toggles the service-level enable so the same shape covers both gate
+// outcomes (bridge.enabled itself stays explicitly on — the default is off).
 func prepareTestConfig(bridged bool) *config.DweConfig {
 	return &config.DweConfig{
 		Project: config.ProjectConfig{Name: "proj", Prefix: "acme"},
 		Services: map[string]config.ServiceConfig{
-			"main": {Type: config.ServiceTypeApp, Container: "app-main", Enabled: bridged},
-			"db":   {Type: config.ServiceTypeInfra, Container: "db", Enabled: true},
+			"main": {Type: config.ServiceTypeApp, Container: "app-main", Enabled: bridged,
+				Bridge: config.ServiceBridgeConfig{Enabled: new(true)}},
+			"db": {Type: config.ServiceTypeInfra, Container: "db", Enabled: true},
 		},
 	}
 }
@@ -30,7 +32,14 @@ func TestAnyBridgeEnabled(t *testing.T) {
 		cfg  *config.DweConfig
 		want bool
 	}{
-		{"enabled app defaults on", prepareTestConfig(true), true},
+		{"enabled app opted in", prepareTestConfig(true), true},
+		{
+			"app without bridge block defaults off",
+			&config.DweConfig{Services: map[string]config.ServiceConfig{
+				"main": {Type: config.ServiceTypeApp, Container: "app-main", Enabled: true},
+			}},
+			false,
+		},
 		{"disabled app does not count", prepareTestConfig(false), false},
 		{"nil services", &config.DweConfig{}, false},
 		{

@@ -1,6 +1,7 @@
 package bridge
 
 import (
+	"bytes"
 	"errors"
 	"fmt"
 	"os"
@@ -10,25 +11,31 @@ import (
 	"testing"
 
 	"github.com/semsemyonoff/dwe/internal/core/project/config"
+	"github.com/semsemyonoff/dwe/internal/shared/trace"
 )
 
-// composegenTestConfig covers the selection matrix: bridged-by-default app,
-// app with overrides, bridge-disabled app, disabled app, default-off infra,
-// and explicitly opted-in infra.
+// composegenTestConfig covers the selection matrix: opted-in app with
+// overrides, plain opted-in app, default-off app (bridge is strictly
+// opt-in), explicitly disabled app, disabled service, default-off infra,
+// and opted-in infra.
 func composegenTestConfig() *config.DweConfig {
 	return &config.DweConfig{
 		Project: config.ProjectConfig{Name: "shop", Prefix: "acme"},
 		Services: map[string]config.ServiceConfig{
 			"admin": {Type: config.ServiceTypeApp, Container: "app-admin", Enabled: true,
 				Dir: "./services/admin", DirInternal: "/srv/admin",
-				Bridge: config.ServiceBridgeConfig{ShimPath: "/opt/dwe/bin/dwe", OnUnreachable: config.BridgeOnUnreachableWarn}},
+				Bridge: config.ServiceBridgeConfig{Enabled: new(true), ShimPath: "/opt/dwe/bin/dwe", OnUnreachable: config.BridgeOnUnreachableWarn}},
 			"main": {Type: config.ServiceTypeApp, Container: "app-main", Enabled: true,
-				Dir: "./services/main", DirInternal: "/workspace"},
+				Dir: "./services/main", DirInternal: "/workspace",
+				Bridge: config.ServiceBridgeConfig{Enabled: new(true)}},
+			"plain": {Type: config.ServiceTypeApp, Container: "app-plain", Enabled: true,
+				Dir: "./services/plain", DirInternal: "/srv/plain"},
 			"legacy": {Type: config.ServiceTypeApp, Container: "app-legacy", Enabled: true,
 				Dir: "./services/legacy", DirInternal: "/srv/legacy",
 				Bridge: config.ServiceBridgeConfig{Enabled: new(false)}},
 			"paused": {Type: config.ServiceTypeApp, Container: "app-paused", Enabled: false,
-				Dir: "./services/paused", DirInternal: "/srv/paused"},
+				Dir: "./services/paused", DirInternal: "/srv/paused",
+				Bridge: config.ServiceBridgeConfig{Enabled: new(true)}},
 			"redis": {Type: config.ServiceTypeInfra, Container: "redis", Enabled: true},
 			"queue": {Type: config.ServiceTypeInfra, Container: "queue", Enabled: true,
 				Bridge: config.ServiceBridgeConfig{Enabled: new(true)}},
@@ -79,7 +86,7 @@ func TestBuildOverlaySpec_archFallbackOnResolverError(t *testing.T) {
 	logf := func(format string, args ...any) {
 		warnings = append(warnings, fmt.Sprintf(format, args...))
 	}
-	failing := func(string) (string, error) { return "", errors.New("no such container") }
+	failing := func(string) (string, error) { return "", errors.New("docker daemon unreachable") }
 
 	spec := BuildOverlaySpec("/host/proj", composegenTestConfig(), failing, logf)
 
@@ -96,6 +103,68 @@ func TestBuildOverlaySpec_archFallbackOnResolverError(t *testing.T) {
 		if !strings.Contains(w, "falling back to host arch") {
 			t.Errorf("warning %q does not mention the host-arch fallback", w)
 		}
+	}
+}
+
+func TestBuildOverlaySpec_missingContainerSilentFallback(t *testing.T) {
+	var buf bytes.Buffer
+	trace.Configure(&buf, trace.LevelVerbose)
+	t.Cleanup(func() { trace.Configure(nil, trace.LevelOff) })
+
+	var notes []string
+	logf := func(format string, args ...any) {
+		notes = append(notes, fmt.Sprintf(format, args...))
+	}
+	// The docker CLI's first-deploy shape: nothing created yet.
+	missing := func(name string) (string, error) {
+		return "", fmt.Errorf("Error response from daemon: No such container: %s", name)
+	}
+
+	spec := BuildOverlaySpec("/host/proj", composegenTestConfig(), missing, logf)
+
+	wantShim := "shim-linux-" + hostShimArch()
+	for _, svc := range spec.Services {
+		if svc.ShimFile != wantShim {
+			t.Errorf("service %s: ShimFile = %q, want host fallback %q", svc.Name, svc.ShimFile, wantShim)
+		}
+	}
+	// A missing container is the expected fresh-start state: no user-facing
+	// warning, only a -v decision line per service.
+	if len(notes) != 0 {
+		t.Errorf("missing container must not warn, got %v", notes)
+	}
+	if got := buf.String(); strings.Count(got, "has no container yet") != len(spec.Services) {
+		t.Errorf("want one -v decision line per service (%d), got trace:\n%s", len(spec.Services), got)
+	}
+}
+
+func TestBuildOverlaySpec_composeProjectNameFromDockerYML(t *testing.T) {
+	// docker.yml's project_name (here with an underscore) is the prefix
+	// compose names containers with — the arch resolver must receive it, not
+	// Project.FullName(); DWE_BRIDGE_PROJECT stays the FullName identity.
+	dir := t.TempDir()
+	if err := os.MkdirAll(filepath.Join(dir, "workspace"), 0o755); err != nil {
+		t.Fatalf("MkdirAll: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(dir, "workspace", "docker.yml"),
+		[]byte("project_name: acme_shop\n"), 0o644); err != nil {
+		t.Fatalf("WriteFile: %v", err)
+	}
+
+	var seen []string
+	resolver := func(containerName string) (string, error) {
+		seen = append(seen, containerName)
+		return "arm64", nil
+	}
+
+	spec := BuildOverlaySpec(dir, composegenTestConfig(), resolver, nil)
+
+	want := []string{"acme_shop-app-admin", "acme_shop-app-main", "acme_shop-queue"}
+	if !reflect.DeepEqual(seen, want) {
+		t.Errorf("resolver saw %v, want %v", seen, want)
+	}
+	if spec.Project != "acme-shop" {
+		t.Errorf("spec.Project = %q, want the FullName identity %q", spec.Project, "acme-shop")
 	}
 }
 
@@ -276,7 +345,8 @@ func TestRegenerateOverlay_skipsServiceWithoutContainer(t *testing.T) {
 	cfg := &config.DweConfig{
 		Project: config.ProjectConfig{Name: "shop"},
 		Services: map[string]config.ServiceConfig{
-			"main": {Type: config.ServiceTypeApp, Enabled: true, Dir: "./services/main"},
+			"main": {Type: config.ServiceTypeApp, Enabled: true, Dir: "./services/main",
+				Bridge: config.ServiceBridgeConfig{Enabled: new(true)}},
 		},
 	}
 	var warnings []string

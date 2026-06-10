@@ -1,4 +1,4 @@
-> Translated from: reference/config/services/fields.md @ e6efcfcc3883
+> Translated from: reference/config/services/fields.md @ b0f7a887ac32
 
 # Справочник полей сервиса
 

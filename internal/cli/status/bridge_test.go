@@ -3,6 +3,7 @@ package status
 import (
 	"bytes"
 	"errors"
+	"fmt"
 	"os"
 	"path/filepath"
 	"testing"
@@ -10,18 +11,18 @@ import (
 	"github.com/semsemyonoff/dwe/internal/core/bridge"
 )
 
-// init stubs the bridge-ensure seam for the whole test binary: the status
-// fixtures contain required (→ enabled) app services, which are
-// bridge-enabled by default, and the real bridge.Ensure would spawn a
-// detached daemon via os.Executable() — re-executing the test binary (the
-// documented recursion hazard). Bridge tests install recorders instead.
+// init stubs the bridge-ensure seam for the whole test binary: the
+// bridge-on fixtures below opt a service into the bridge, and the real
+// bridge.Ensure would spawn a detached daemon via os.Executable() —
+// re-executing the test binary (the documented recursion hazard). Bridge
+// tests install recorders instead.
 func init() {
 	bridgeEnsureFn = func(bridge.EnsureConfig) (bool, error) { return false, nil }
 }
 
-// statusFixtureBridgeOff builds a project whose only enabled service opts
-// out of the bridge, so AnyBridgeEnabled is false.
-func statusFixtureBridgeOff(t *testing.T) string {
+// statusFixtureBridge builds a minimal project with one required app whose
+// bridge toggle is explicit (the bridge is strictly opt-in; no type default).
+func statusFixtureBridge(t *testing.T, enabled bool) string {
 	t.Helper()
 	dir := t.TempDir()
 	cfgYAML := "schema_version: \"2\"\nproject:\n  name: test\n  prefix: dwe\n"
@@ -29,7 +30,7 @@ func statusFixtureBridgeOff(t *testing.T) string {
 		t.Fatal(err)
 	}
 	svcDir := filepath.Join(dir, "workspace", "services", "main")
-	svcYML := "type: app\ncontainer: app-main\nrequired: true\nbridge:\n  enabled: false\n"
+	svcYML := fmt.Sprintf("type: app\ncontainer: app-main\nrequired: true\nbridge:\n  enabled: %t\n", enabled)
 	if err := writeFile(t, filepath.Join(svcDir, "service.yml"), svcYML); err != nil {
 		t.Fatal(err)
 	}
@@ -63,7 +64,7 @@ func recordBridgeEnsure(t *testing.T, err error) *[]bridge.EnsureConfig {
 // bridge-enabled by default.
 func TestStatusCmd_TopLevel_EnsuresBridgeDaemon(t *testing.T) {
 	calls := recordBridgeEnsure(t, nil)
-	configPath := statusFixture(t)
+	configPath := statusFixtureBridge(t, true)
 	root := buildStatusTestRoot()
 	var buf bytes.Buffer
 	root.SetOut(&buf)
@@ -85,7 +86,7 @@ func TestStatusCmd_TopLevel_EnsuresBridgeDaemon(t *testing.T) {
 // --debug only).
 func TestStatusCmd_TopLevel_EnsureErrorIsSwallowed(t *testing.T) {
 	recordBridgeEnsure(t, errors.New("spawn refused"))
-	configPath := statusFixture(t)
+	configPath := statusFixtureBridge(t, true)
 	root := buildStatusTestRoot()
 	var buf bytes.Buffer
 	root.SetOut(&buf)
@@ -104,7 +105,7 @@ func TestStatusCmd_TopLevel_EnsureErrorIsSwallowed(t *testing.T) {
 // fully passive.
 func TestStatusCmd_Subcommands_DoNotEnsure(t *testing.T) {
 	calls := recordBridgeEnsure(t, nil)
-	configPath := statusFixture(t)
+	configPath := statusFixtureBridge(t, true)
 	root := buildStatusTestRoot()
 	var buf bytes.Buffer
 	root.SetOut(&buf)
@@ -122,7 +123,7 @@ func TestStatusCmd_Subcommands_DoNotEnsure(t *testing.T) {
 // the gate must skip the ensure entirely (no daemon for nothing).
 func TestStatusCmd_NoBridgedServices_NoEnsure(t *testing.T) {
 	calls := recordBridgeEnsure(t, nil)
-	configPath := statusFixtureBridgeOff(t)
+	configPath := statusFixtureBridge(t, false)
 	root := buildStatusTestRoot()
 	var buf bytes.Buffer
 	root.SetOut(&buf)
