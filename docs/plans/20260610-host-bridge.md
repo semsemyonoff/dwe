@@ -777,24 +777,38 @@ Rejected (do not re-litigate):
 - Modify: `.goreleaser.yaml`
 - Modify: `.gitignore`
 
-- [ ] `scripts/build-shims.sh`: `CGO_ENABLED=0 GOOS=linux GOARCH={amd64,arm64}
+- [x] `scripts/build-shims.sh`: `CGO_ENABLED=0 GOOS=linux GOARCH={amd64,arm64}
       go build -trimpath -ldflags "-s -w" ./cmd/dwe-shim` →
       `internal/core/bridge/shimassets/bin/shim-linux-<arch>` (gitignored,
       mirrors embedded-docs pattern)
-- [ ] `shimassets`: `//go:embed all:bin` + the COMMITTED placeholder
+- [x] `shimassets`: `//go:embed all:bin` + the COMMITTED placeholder
       `bin/.gitkeep` so the embed pattern always matches on fresh checkout —
       `//go:embed` against an empty gitignored dir is a hard compile error
       for the whole module (vet/lint compile too); `Materialize(baseDir)`
       skips non-`shim-*` entries → `.dwe/bridge/shim-linux-*` (0755,
-      write-if-changed)
-- [ ] Makefile: `shims` target; add as prerequisite to `build`, `test`,
+      write-if-changed) — writes are atomic (same-dir temp + rename: a
+      half-written shim must never be observable at the bind-mount source
+      of a running container); content-current files get a mode repair
+      (chmod only, mtime untouched); package stays a leaf (no import of
+      parent `core/bridge` — composegen will reference shim names)
+- [x] Makefile: `shims` target; add as prerequisite to `build`, `test`,
       `test-v` AND `test-race` (same shape as `embedded-docs`); note in
       target comment that this adds two cached cross-compiles to every test
       run and why it is load-bearing for module compilation
-- [ ] `.goreleaser.yaml`: add shim build to before-hooks
-- [ ] write tests: Materialize creates files with mode 0755, idempotent
-      (no rewrite when unchanged), overwrites on content change
-- [ ] run `make test` — must pass before task 7
+- [x] `.goreleaser.yaml`: add shim build to before-hooks (step 3, before
+      gen-completions; `goreleaser check` validates)
+- [x] write tests: Materialize creates files with mode 0755, idempotent
+      (no rewrite when unchanged), overwrites on content change — via an
+      fs-injectable `materializeFS` core over `fstest.MapFS`, plus
+      placeholder-skip, mode-repair, 0700 bridge-dir, and a real-embed
+      shape test that passes both fresh-checkout and post-`make shims`
+- ➕ [x] anchored the root `.gitignore` `bin/` pattern to `/bin/` — the
+      unanchored form matched nested bin dirs and would have ignored the
+      committed `shimassets/bin/.gitkeep`; added
+      `/internal/core/bridge/shimassets/bin/shim-*` ignore
+- [x] run `make test` — must pass before task 7 (full suite ok; `make lint`:
+      0 issues; fresh-checkout simulation — shims removed, placeholder only —
+      compiles and tests green; static shims ≈ 2.8 MB each)
 
 ### Task 7: Compose overlay generation + chain registration
 

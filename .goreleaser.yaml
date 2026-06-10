@@ -6,12 +6,16 @@ project_name: dwe
 #   1. sync embedded docs (without it cmd/dwe does not compile)
 #   2. regen the docs content-hash table (cheap; keeps the binary's manifest
 #      consistent with the embedded tree)
-#   3. generate shell completions via `go run ./cmd/dwe completion <shell>`,
+#   3. cross-compile the bridge shims into the shimassets embed tree, so the
+#      release binaries carry real shim payloads (the committed bin/.gitkeep
+#      only guarantees the //go:embed pattern compiles)
+#   4. generate shell completions via `go run ./cmd/dwe completion <shell>`,
 #      so the resulting files reflect the exact cobra tree of this commit.
 before:
   hooks:
     - ./scripts/sync-embedded-docs.sh
     - ./scripts/gen-docs-content-hashes.sh
+    - ./scripts/build-shims.sh
     - ./scripts/gen-completions.sh
 
 builds:
