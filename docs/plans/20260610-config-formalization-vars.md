@@ -182,11 +182,11 @@ Dependencies identified: changes are confined to `internal/core/project/config`,
 
 ### Task 8: Verify acceptance criteria
 
-- [ ] Verify: enabling update is a one-liner in `workspace.yml`/`local.yml` and does NOT blank lifecycle `run` phases.
-- [ ] Verify: `update: { mode: on }` actually prompts+pulls on a behind+clean TTY repo and warns in CI (the dead-`on` regression is gone).
-- [ ] Verify: unknown root key produces the helpful hard error; `vars:` accepts arbitrary nested content; `${vars.*}` and `from: vars.*` resolve.
-- [ ] Verify 3-layer override precedence for `update.mode` and that `defaults.yml`/`local.yml` share the same strict key set.
-- [ ] Run full suite: `make test` (and `make test-race` if quick) and `make lint` — all green.
+- [x] Verify: enabling update is a one-liner in `workspace.yml`/`local.yml` and does NOT blank lifecycle `run` phases. (Test-verified: `TestRunRun_UpdateEnabledViaTopLevelConfig_ProbesAndKeepsDefaultPhases` in `lifecycle/run_test.go` — top-level `update:` triggers the git probe while default `run` phases stay intact.)
+- [x] Verify: `update: { mode: on }` actually prompts+pulls on a behind+clean TTY repo and warns in CI (the dead-`on` regression is gone). (Test-verified: `git/policy_test.go` `on/behind-tty` → `ActionPullPrompt`, `on/behind-ci` → `ActionWarn`; `ModeOn` is now wired through `Decide`.)
+- [x] Verify: unknown root key produces the helpful hard error; `vars:` accepts arbitrary nested content; `${vars.*}` and `from: vars.*` resolve. (Test-verified: `workspace_test.go` unknown-top-level-key cases assert the `"unknown top-level key"` hint; `ResolvePath(cfg.Raw, "vars.db.password")` / `vars.my_custom.timeout` resolve arbitrary nested content.)
+- [x] Verify 3-layer override precedence for `update.mode` and that `defaults.yml`/`local.yml` share the same strict key set. (Test-verified: `workspace_test.go` defaults-`on` → workspace-`off` → local-`on` yields `on` (last-layer-wins); unknown-key rejection runs per layer across all three files.)
+- [x] Run full suite: `make test` (and `make test-race` if quick) and `make lint` — all green. (`make test`: 0 failures incl. the formerly-failing `TestRussianTranslationsAreFresh`; `make test-race`: 0 failures/races; `make lint`: 0 issues.)
 
 ### Task 9: Finalize
 
