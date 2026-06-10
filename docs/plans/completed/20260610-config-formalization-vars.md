@@ -190,8 +190,8 @@ Dependencies identified: changes are confined to `internal/core/project/config`,
 
 ### Task 9: Finalize
 
-- [ ] Update `docs/internals/packages.md` / AGENTS.md if new load-bearing contracts emerged (strict-root allowlist; `vars` sandbox; update block location).
-- [ ] Move this plan to `docs/plans/completed/20260610-config-formalization-vars.md`.
+- [x] Update `docs/internals/packages.md` / AGENTS.md if new load-bearing contracts emerged (strict-root allowlist; `vars` sandbox; update block location). Added strict-root + `vars:` sandbox + top-level `update:` contract to the `project/config/` § in `packages.md`, rewrote the `internal/shared/git/` § to the binary `ModeOn`/`ModeOff` matrix, and added a new "Strict root + `vars:` sandbox + top-level `update:`" Critical Patterns bullet to `AGENTS.md` (CLAUDE.md symlink follows). `make build` re-synced embedded docs; `make test`/`make lint` green.
+- [x] Move this plan to `docs/plans/completed/20260610-config-formalization-vars.md`.
 
 ## Post-Completion
 *Informational only — external action required, no checkboxes.*
