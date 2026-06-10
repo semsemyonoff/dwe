@@ -27,19 +27,23 @@ import (
 // All user commands live under the `commands` subtree, so the allowlist is
 // static over top-level command names — no registry knowledge is needed.
 var bridgeAllowedTopLevel = map[string]bool{
-	"commands":   true, // user commands — the primary bridge use case (hooks)
-	"status":     true, // read-only diagnostics
-	"info":       true,
-	"validate":   true,
-	"logs":       true,
-	"docs":       true, // read-only; useful to AI agents in the devcontainer
-	"prompt":     true, // container terminal prompt
-	"version":    true, // service commands
-	"completion": true,
-	"help":       true,
+	"commands": true, // user commands — the primary bridge use case (hooks)
+	"status":   true, // read-only diagnostics
+	"info":     true,
+	"logs":     true,
+	"docs":     true, // read-only; useful to AI agents in the devcontainer
+	"prompt":   true, // container terminal prompt
+	"version":  true, // service commands
+	"help":     true,
+	// `validate` and `completion` are deliberately absent: validation targets
+	// the host workspace and completion scripts are installed on the host —
+	// neither belongs to the container surface.
+	//
 	// cobra's hidden completion machinery is read-only and bypasses
-	// PersistentPreRunE anyway; allowlisted so the visibility walk and any
-	// future gate placement never break shell completion.
+	// PersistentPreRunE anyway; allowlisted so a completion script already
+	// baked into an image keeps degrading silently instead of injecting a
+	// policy error into the shell, even though the user-facing `completion`
+	// generator is host-only.
 	"__complete":       true,
 	"__completeNoDesc": true,
 }

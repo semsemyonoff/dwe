@@ -2,7 +2,6 @@ package command
 
 import (
 	"errors"
-	"os"
 	"os/signal"
 	"syscall"
 
@@ -31,12 +30,11 @@ var (
 // route treats it as a successful no-op.
 var errCommandsListed = errors.New("command list printed instead of interactive selection")
 
-// nonInteractiveEnv reports whether DWE_NONINTERACTIVE is truthy ("1" or
-// "true"). The bridge daemon force-sets it for container invocations and CI
-// pipelines set it by hand — both must behave identically to a non-TTY pipe.
+// nonInteractiveEnv reports whether DWE_NONINTERACTIVE is truthy — thin alias
+// over the shared cmdctx.NonInteractiveEnv (also consumed by the bare
+// `dwe docs` list fallback).
 func nonInteractiveEnv() bool {
-	v := os.Getenv("DWE_NONINTERACTIVE")
-	return v == "1" || v == "true"
+	return cmdctx.NonInteractiveEnv()
 }
 
 // runOpts carries the per-invocation options for runCommandByID.

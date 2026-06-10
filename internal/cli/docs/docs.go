@@ -41,9 +41,13 @@ Generate reference documentation for the declarative command registry.`,
 		Args:         cobra.NoArgs,
 		SilenceUsage: true,
 		RunE: func(cmd *cobra.Command, args []string) error {
-			// Check if we're in a TTY
-			if !term.IsTerminal(int(os.Stdout.Fd())) {
-				return errors.New("dwe docs without arguments requires a TTY; use 'dwe docs show <topic>' or 'dwe docs list' for non-interactive use")
+			// No TTY for the docs browser (pipe / CI) or forced
+			// non-interactive (DWE_NONINTERACTIVE=1 — the bridge daemon sets
+			// it for every container invocation): print the `docs list`
+			// output instead of erroring, mirroring bare `dwe commands`.
+			if !term.IsTerminal(int(os.Stdout.Fd())) || cmdctx.NonInteractiveEnv() {
+				// source "all" mirrors the list subcommand's flag default.
+				return runDocsList(cmd, flags, &docsListFlags{source: "all"})
 			}
 
 			// Get terminal dimensions

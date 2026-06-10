@@ -29,16 +29,21 @@ func TestBridgeCommandAllowed_table(t *testing.T) {
 		{"dwe status", true},
 		{"dwe status services", true},
 		{"dwe info", true},
-		{"dwe validate", true},
 		{"dwe logs", true},
 		{"dwe docs", true},
 		{"dwe docs llms-txt", true},
 		{"dwe prompt", true},
 		{"dwe version", true},
-		{"dwe completion", true},
-		{"dwe completion bash", true},
 		{"dwe help", true},
+		// The hidden machinery stays allowed (baked-in completion scripts must
+		// degrade silently), the user-facing generator does not.
 		{"dwe __complete", true},
+		{"dwe completion", false},
+		{"dwe completion bash", false},
+
+		// Host-side concerns removed from the container surface.
+		{"dwe validate", false},
+		{"dwe validate config", false},
 
 		// The single nested exception inside an otherwise blocked subtree.
 		{"dwe bridge status", true},
@@ -238,7 +243,7 @@ func TestApplyBridgeContainerVisibility_realTree(t *testing.T) {
 	t.Setenv(bridgecore.EnvInvokedFrom, bridgecore.InvokedFromContainer)
 	root := NewRootCmd()
 
-	hidden := []string{"stop", "restart", "reset", "run", "deploy", "services", "snapshot", "render", "init", "shell", "docker", "compose"}
+	hidden := []string{"stop", "restart", "reset", "run", "deploy", "services", "snapshot", "render", "init", "shell", "docker", "compose", "validate", "completion"}
 	for _, name := range hidden {
 		if cmd := findTopLevel(t, root, name); !cmd.Hidden {
 			t.Errorf("blocked command %q must be hidden in container context", name)
@@ -246,7 +251,7 @@ func TestApplyBridgeContainerVisibility_realTree(t *testing.T) {
 	}
 	// `prompt` is allowlisted but excluded here: it is Hidden by design on
 	// the host too (prompt hot-path pattern), independent of bridge context.
-	visible := []string{"commands", "status", "info", "validate", "logs", "docs", "version", "completion"}
+	visible := []string{"commands", "status", "info", "logs", "docs", "version"}
 	for _, name := range visible {
 		if cmd := findTopLevel(t, root, name); cmd.Hidden {
 			t.Errorf("allowlisted command %q must stay visible in container context", name)
