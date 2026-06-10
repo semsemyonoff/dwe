@@ -156,10 +156,10 @@ Dependencies identified: changes are confined to `internal/core/project/config`,
 - Modify: `internal/core/validate/config/workspace.go`
 - Modify: `internal/core/validate/config/workspace_test.go` (or nearest validator test)
 
-- [ ] **No separate unknown-top-level-key check.** `workspaceValidator.Run` already calls `config.LoadConfig` (validate/config/workspace.go:50) and converts a load error into a `SeverityError` diagnostic (51-58). Once strict-root hard-fails on an unknown key (Task 1) AND on bad `update.mode` (Task 3 load-time validation), those are *already* surfaced as diagnostics-as-data via that path — a check added in the `else` branch (59-86) would be unreachable dead code. Skip it.
-- [ ] (Optional, only if Task 3 did NOT add load-time `update.mode` validation) emit an **error** diagnostic for `update.mode ∉ {on, off}` in the reachable `else` branch. If Task 3 added load-time validation, this whole task may reduce to tests only.
-- [ ] Write tests: unknown root key → error diagnostic (via the LoadConfig-error path); bad `update.mode` → error diagnostic; clean config → no diagnostics.
-- [ ] `make test` — must pass before Task 7.
+- [x] **No separate unknown-top-level-key check.** `workspaceValidator.Run` already calls `config.LoadConfig` (validate/config/workspace.go:50) and converts a load error into a `SeverityError` diagnostic (51-58). Once strict-root hard-fails on an unknown key (Task 1) AND on bad `update.mode` (Task 3 load-time validation), those are *already* surfaced as diagnostics-as-data via that path — a check added in the `else` branch (59-86) would be unreachable dead code. Skip it. (Confirmed: Task 1 + Task 3 load-time checks are in place at workspace.go:1453 and :1462; no validator production change needed.)
+- [x] (Optional, only if Task 3 did NOT add load-time `update.mode` validation) emit an **error** diagnostic for `update.mode ∉ {on, off}` in the reachable `else` branch. If Task 3 added load-time validation, this whole task may reduce to tests only. (Task 3 DID add load-time validation → this task reduced to tests only; no else-branch check added.)
+- [x] Write tests: unknown root key → error diagnostic (via the LoadConfig-error path); bad `update.mode` → error diagnostic; clean config → no diagnostics. Added `TestWorkspaceValidator_UnknownRootKey`, `TestWorkspaceValidator_BadUpdateMode`, `TestWorkspaceValidator_GoodUpdateMode`.
+- [x] `make test` — passes (only the pre-existing branch-HEAD `TestRussianTranslationsAreFresh` for `validate.md` fails — unrelated, covered by Task 7). validate/config package + lint clean.
 
 ### Task 7: Docs rewrite + file-layout convention + embedded sync
 
