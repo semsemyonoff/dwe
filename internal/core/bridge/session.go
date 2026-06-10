@@ -1,0 +1,274 @@
+package bridge
+
+import (
+	"fmt"
+	"io"
+	"net"
+	"path/filepath"
+	"slices"
+	"strings"
+	"sync"
+	"syscall"
+	"time"
+
+	"github.com/semsemyonoff/dwe/internal/shared/bridgeclient"
+	"github.com/semsemyonoff/dwe/internal/shared/bridgeproto"
+)
+
+// helloTimeout bounds how long an accepted connection may sit without
+// delivering its HELLO frame, so half-open connections cannot pile up.
+const helloTimeout = 10 * time.Second
+
+// outputChunkSize bounds a single STDOUT/STDERR frame payload (well under
+// bridgeproto.MaxPayload).
+const outputChunkSize = 32 * 1024
+
+// launchFailureExitCode mirrors the shell's "command not found" convention:
+// a subprocess that could not be started still ends the session with an
+// ordinary STDERR + EXIT pair, not a protocol ERROR (those are reserved for
+// the D4 code set).
+const launchFailureExitCode = 127
+
+// handleConn runs one session: auth + HELLO validation (design D5), then the
+// subprocess proxy. One connection carries exactly one command.
+func (d *Daemon) handleConn(conn net.Conn) {
+	defer func() { _ = conn.Close() }()
+	if d.isClosed() {
+		d.sendError(conn, bridgeproto.ErrCodeDaemonShuttingDown, "bridge daemon is shutting down")
+		return
+	}
+	hello, cwd, ok := d.acceptHello(conn)
+	if !ok {
+		return
+	}
+	d.runSession(conn, hello, cwd)
+}
+
+// acceptHello reads and validates the HELLO frame, authenticating the
+// connection first (token on TCP, peercred on unix — design D5). On any
+// failure it sends the corresponding ERROR frame and reports !ok.
+func (d *Daemon) acceptHello(conn net.Conn) (bridgeproto.Hello, string, bool) {
+	_ = conn.SetReadDeadline(time.Now().Add(helloTimeout))
+	frameType, payload, err := bridgeproto.ReadFrame(conn)
+	if err != nil {
+		d.logf("bridge: reading hello: %v", err)
+		return bridgeproto.Hello{}, "", false
+	}
+	_ = conn.SetReadDeadline(time.Time{})
+	if frameType != bridgeproto.FrameHello {
+		d.logf("bridge: first frame is %s, want hello", frameType)
+		return bridgeproto.Hello{}, "", false
+	}
+	hello, err := bridgeproto.DecodeHello(payload)
+	if err != nil {
+		d.logf("bridge: %v", err)
+		return bridgeproto.Hello{}, "", false
+	}
+
+	if unixConn, isUnix := conn.(*net.UnixConn); isUnix {
+		same, err := bridgeproto.PeerIsSameUser(unixConn)
+		if err != nil || !same {
+			d.sendError(conn, bridgeproto.ErrCodeAuthFailed,
+				"unix peer credentials do not match the daemon user")
+			return bridgeproto.Hello{}, "", false
+		}
+	} else if !bridgeproto.TokenEqual(d.token, hello.Token) {
+		d.sendError(conn, bridgeproto.ErrCodeAuthFailed,
+			"invalid or missing bridge token")
+		return bridgeproto.Hello{}, "", false
+	}
+
+	if hello.ProtocolVersion != bridgeproto.ProtocolVersion {
+		d.sendError(conn, bridgeproto.ErrCodeVersionMismatch,
+			fmt.Sprintf("daemon speaks protocol %d, shim sent %d",
+				bridgeproto.ProtocolVersion, hello.ProtocolVersion))
+		return bridgeproto.Hello{}, "", false
+	}
+
+	cwd, err := validateCwd(hello.Cwd, d.root)
+	if err != nil {
+		d.sendError(conn, bridgeproto.ErrCodeCwdOutsideProject, err.Error())
+		return bridgeproto.Hello{}, "", false
+	}
+
+	if hello.TTY {
+		d.sendError(conn, bridgeproto.ErrCodeTTYUnsupported,
+			"the bridge never allocates a pty; run interactive commands on the host")
+		return bridgeproto.Hello{}, "", false
+	}
+
+	return hello, cwd, true
+}
+
+// runSession forks the dwe subprocess through the exec seam and pumps frames
+// until it exits (design D5 steps 3–5).
+func (d *Daemon) runSession(conn net.Conn, hello bridgeproto.Hello, cwd string) {
+	launch := d.cfg.Launch
+	if launch == nil {
+		launch = launchOS
+	}
+	proc, err := launch(LaunchSpec{
+		ExecPath: d.cfg.ExecPath,
+		Argv:     hello.Argv,
+		Dir:      cwd,
+		Env:      subprocessEnv(hello.Env),
+	})
+	if err != nil {
+		msg := fmt.Sprintf("dwe bridge: starting dwe subprocess: %v\n", err)
+		_ = bridgeproto.WriteFrame(conn, bridgeproto.FrameStderr, []byte(msg))
+		_ = bridgeproto.WriteFrame(conn, bridgeproto.FrameExit,
+			bridgeproto.EncodeExitPayload(launchFailureExitCode))
+		return
+	}
+
+	// exited closes once the subprocess has been reaped, so the connection
+	// reader can tell "our EXIT frame closed the conn" from "the container
+	// went away mid-command". The reader joins the sessions group (it ends
+	// when handleConn closes the conn), keeping Close deterministic.
+	exited := make(chan struct{})
+	d.sessions.Go(func() { d.pumpConn(conn, proc, exited) })
+
+	var outputs sync.WaitGroup
+	outputs.Add(2)
+	go pumpOutput(conn, bridgeproto.FrameStdout, proc.Stdout(), &outputs)
+	go pumpOutput(conn, bridgeproto.FrameStderr, proc.Stderr(), &outputs)
+
+	// Wait must come after both pipes hit EOF (os/exec closes them on Wait).
+	outputs.Wait()
+	code := proc.Wait()
+	close(exited)
+	_ = bridgeproto.WriteFrame(conn, bridgeproto.FrameExit,
+		bridgeproto.EncodeExitPayload(int32(code))) //nolint:gosec // exit codes fit int32
+}
+
+// pumpConn consumes client frames: STDIN/STDIN_CLOSE feed the subprocess
+// stdin, SIGNAL forwards to the process group. A read error means the shim
+// connection is gone — either we closed it after EXIT (exited is closed) or
+// the container died mid-command, in which case the subprocess gets SIGTERM,
+// the grace window, then SIGKILL (design D5 step 4).
+func (d *Daemon) pumpConn(conn net.Conn, proc Process, exited <-chan struct{}) {
+	stdin := proc.Stdin()
+	stdinOpen := true
+	for {
+		frameType, payload, err := bridgeproto.ReadFrame(conn)
+		if err != nil {
+			select {
+			case <-exited:
+			default:
+				d.terminate(proc, exited)
+			}
+			return
+		}
+		switch frameType {
+		case bridgeproto.FrameStdin:
+			if stdinOpen {
+				if _, err := stdin.Write(payload); err != nil {
+					_ = stdin.Close()
+					stdinOpen = false
+				}
+			}
+		case bridgeproto.FrameStdinClose:
+			if stdinOpen {
+				_ = stdin.Close()
+				stdinOpen = false
+			}
+		case bridgeproto.FrameSignal:
+			num, err := bridgeproto.DecodeSignalPayload(payload)
+			if err != nil {
+				continue
+			}
+			sig := syscall.Signal(num)
+			// V1 forwards only SIGINT/SIGTERM (design D4); anything else
+			// from a non-standard client is dropped.
+			if sig != syscall.SIGINT && sig != syscall.SIGTERM {
+				continue
+			}
+			_ = proc.Signal(sig)
+		default:
+			// Unknown frame types are skipped for forward compatibility
+			// within a protocol version.
+		}
+	}
+}
+
+// terminate gives the subprocess SIGTERM, then SIGKILL when it outlives the
+// grace window. exited unblocks the wait as soon as the main session
+// goroutine reaps the process.
+func (d *Daemon) terminate(proc Process, exited <-chan struct{}) {
+	_ = proc.Signal(syscall.SIGTERM)
+	select {
+	case <-exited:
+	case <-time.After(d.grace()):
+		_ = proc.Kill()
+	}
+}
+
+// pumpOutput chunks one subprocess pipe into frames. After a connection
+// write fails the pipe is still drained to EOF, so the subprocess never
+// blocks on a full pipe and Wait can reap it.
+func pumpOutput(conn net.Conn, frameType bridgeproto.FrameType, r io.Reader, wg *sync.WaitGroup) {
+	defer wg.Done()
+	buf := make([]byte, outputChunkSize)
+	connOK := true
+	for {
+		n, err := r.Read(buf)
+		if n > 0 && connOK {
+			if bridgeproto.WriteFrame(conn, frameType, buf[:n]) != nil {
+				connOK = false
+			}
+		}
+		if err != nil {
+			return
+		}
+	}
+}
+
+// sendError emits a protocol ERROR frame; the shim renders it and exits 1.
+func (d *Daemon) sendError(conn net.Conn, code, message string) {
+	payload, err := bridgeproto.EncodeError(bridgeproto.ErrorInfo{Code: code, Message: message})
+	if err != nil {
+		d.logf("bridge: %v", err)
+		return
+	}
+	_ = bridgeproto.WriteFrame(conn, bridgeproto.FrameError, payload)
+	d.logf("bridge: rejected connection: %s: %s", code, message)
+}
+
+// validateCwd enforces the D5 containment rule: the (already translated)
+// HELLO cwd must realpath-resolve inside the realpath'd project root. The
+// resolved path becomes the subprocess working directory.
+func validateCwd(cwd, root string) (string, error) {
+	if !filepath.IsAbs(cwd) {
+		return "", fmt.Errorf("cwd %q is not an absolute host path", cwd)
+	}
+	resolved, err := filepath.EvalSymlinks(cwd)
+	if err != nil {
+		return "", fmt.Errorf("cwd %q does not resolve on the host: %v", cwd, err)
+	}
+	if resolved != root && !strings.HasPrefix(resolved, root+string(filepath.Separator)) {
+		return "", fmt.Errorf("cwd %q is outside the project root", cwd)
+	}
+	return resolved, nil
+}
+
+// hostControlledEnv are the variables force-set below; client-sent values
+// are stripped first so a container can never spoof them (design D7).
+var hostControlledEnv = []string{EnvInvokedFrom, EnvNonInteractive}
+
+// subprocessEnv builds the subprocess environment from the HELLO env: the
+// shim's strip set is re-applied (defense-in-depth — the daemon does not
+// trust the client to have filtered), the host-controlled variables are
+// dropped, and their daemon-owned values appended.
+func subprocessEnv(env []string) []string {
+	clean := make([]string, 0, len(env)+len(hostControlledEnv))
+	for _, kv := range bridgeclient.StripEnv(env) {
+		name, _, _ := strings.Cut(kv, "=")
+		if slices.Contains(hostControlledEnv, name) {
+			continue
+		}
+		clean = append(clean, kv)
+	}
+	return append(clean,
+		EnvInvokedFrom+"="+InvokedFromContainer,
+		EnvNonInteractive+"=1")
+}

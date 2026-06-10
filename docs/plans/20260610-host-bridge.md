@@ -673,29 +673,48 @@ Rejected (do not re-litigate):
 - Create: `internal/core/bridge/session.go`
 - Create: `internal/core/bridge/session_test.go`
 
-- [ ] listeners per D3: unix `host.sock` (0660) + TCP `127.0.0.1:0`;
+- [x] listeners per D3: unix `host.sock` (0660) + TCP `127.0.0.1:0`;
       best-effort extra bind on docker gateway IP (injectable resolver);
       write `port` after bind, `token` (0600) if absent; `DWE_BRIDGE_BIND`
       override
-- [ ] per-connection auth + HELLO validation per D5 (token / peercred,
+- [x] per-connection auth + HELLO validation per D5 (token / peercred,
       protocol version, realpath cwd containment, `tty:true` → ERROR
       `tty_unsupported`)
-- [ ] subprocess launch behind an injectable exec seam (launcher func/field;
+- [x] subprocess launch behind an injectable exec seam (launcher func/field;
       production = own executable via `os.Executable()`): `dwe <argv...>` with
       translated cwd, filtered env + `DWE_INVOKED_FROM=container` +
       `DWE_NONINTERACTIVE=1`, own process group; plain pipes.
       ⚠️ tests MUST substitute the seam — calling `os.Executable()` from a
       test recursively re-executes the test binary (documented hazard, see
-      `internal/cli/lifecycle/testhelpers_test.go:27`)
-- [ ] pump per D5: STDIN/STDIN_CLOSE → subprocess stdin, stdout/stderr →
+      `internal/cli/lifecycle/testhelpers_test.go:27`) — `Config.Launch`
+      seam; production `launchOS` resolves `os.Executable()` lazily so an
+      injected launcher never touches it
+- [x] pump per D5: STDIN/STDIN_CLOSE → subprocess stdin, stdout/stderr →
       frames, SIGNAL → signal to process group, conn close → SIGTERM, 5 s
       grace, SIGKILL; EXIT frame with real code
-- [ ] write tests (no Docker, fake launcher via the exec seam): real
+- [x] write tests (no Docker, fake launcher via the exec seam): real
       `bridgeclient` against daemon on loopback + tmpdir socket — happy path,
       auth_failed, cwd_outside_project, tty_unsupported, version_mismatch,
       signal forwarding, exit-code passthrough, `DWE_BRIDGE_BIND` override
       parsing
-- [ ] run tests — must pass before task 5
+- [x] run tests — must pass before task 5 (`make test`: 107 packages ok;
+      `make lint`: 0 issues; `-race` clean; goleak `TestMain` guards the
+      accept/session goroutines; module cross-compiles for windows/amd64 and
+      linux amd64/arm64)
+- ➕ [x] `exec.go` (`LaunchSpec`/`Process`/`LaunchFunc` seam + `launchOS`) with
+      `exec_unix.go`/`exec_windows.go` split (Setpgid + group signaling,
+      mirrors `core/docs/mermaid` build-tag shape); signal deaths map to the
+      shell convention 128+sig; launch failure → STDERR + EXIT 127 (ordinary
+      stream, protocol ERROR frames stay reserved for the D4 code set)
+- ➕ [x] daemon re-filter reuses `bridgeclient.StripEnv` (single strip-set
+      source) then drops/forces the host-controlled `DWE_INVOKED_FROM` /
+      `DWE_NONINTERACTIVE`; exported env contract consts (`EnvInvokedFrom`,
+      `InvokedFromContainer`, `EnvNonInteractive`) for the task-9 policy
+- ➕ [x] daemon-side SIGNAL allowlist (only SIGINT/SIGTERM forwarded, per D4
+      V1 scope); 10 s HELLO deadline so half-open connections cannot pile up;
+      `daemon_shutting_down` ERROR for connections accepted during Close;
+      `listeners_test.go` covers bind-override parsing/integration, file
+      modes, stale-socket recovery, and token stability across restarts
 
 ### Task 5: Daemon process lifecycle — ensure, auto-stop, logging
 
