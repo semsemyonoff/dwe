@@ -244,19 +244,28 @@ func bridgedTTYChildIO(rc spec.RunContext, c *exec.Cmd) (used bool, cleanup func
 			// has exited and closed its copy by the time cleanup runs).
 			_ = tty.Close()
 			<-outDone
-			if stdinFile != nil {
-				// Unblock the stdin pump: a pending Read on the real stdin
-				// would outlive this step and steal bytes meant for the next
-				// one. File deadlines work on ttys and pipes alike.
-				_ = stdinFile.SetReadDeadline(time.Now())
+			if stdinFile != nil && stdinFile.SetReadDeadline(time.Now()) == nil {
+				// Deadline-capable stdin: interrupt the parked Read, reap the
+				// pump (a pending Read would outlive this step and steal bytes
+				// meant for the next one), then clear the deadline for whoever
+				// reads stdin next.
 				_ = ptmx.Close()
 				<-stdinDone
 				_ = stdinFile.SetReadDeadline(time.Time{})
-			} else {
-				// Non-file stdin (tests, in-memory readers): the pump ends
-				// with the process; closing the master keeps it from writing.
-				_ = ptmx.Close()
+				return
 			}
+			// Deadline-incapable stdin — and that IS the normal bridge shape:
+			// the daemon forks this dwe with fd 0 as a plain blocking pipe
+			// (exec.Cmd StdinPipe), which Go cannot poll, so SetReadDeadline
+			// fails and the parked Read cannot be interrupted. Waiting for the
+			// pump here would deadlock the whole session after every child
+			// exit (the v1 bridged-command hang). Close the master and abandon
+			// the goroutine instead: a late read fails its ptmx write and
+			// exits, and process exit reaps a still-parked one. Cost: a
+			// keystroke arriving in that window feeds the dying pump instead
+			// of the next step — accepted over hanging every bridged command.
+			// Non-file stdin (in-memory readers in tests) takes the same path.
+			_ = ptmx.Close()
 		})
 	}
 	return true, cleanup
