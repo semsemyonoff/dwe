@@ -210,13 +210,6 @@ func RunRun(ctx RunContext) (err error) {
 		switch action {
 		case git.ActionWarn:
 			w.Warning(msg)
-		case git.ActionPullAuto:
-			moved, pullErr := GitPullFFOnlyFunc(config.GitBin(cfg), workDir)
-			if pullErr != nil {
-				w.Warning(fmt.Sprintf("git pull --ff-only failed: %v", pullErr))
-			} else {
-				pulled = moved
-			}
 		case git.ActionPullPrompt:
 			confirmed, confirmErr := widgets.RunConfirm(
 				fmt.Sprintf("Update available: %s — pull now?", msg),

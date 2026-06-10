@@ -143,12 +143,12 @@ Dependencies identified: changes are confined to `internal/core/project/config`,
 - Modify: `internal/shared/git/policy_test.go`
 - Modify: `internal/core/workflow/lifecycle/run.go` (line ~208 mode mapping)
 
-- [ ] Replace `ModePrompt`/`ModeAuto`/`ModeCheck` with `ModeOn` (keep `ModeOff`); map `on` to the former `prompt` behavior in `Decide` (TTY → `ActionPullPrompt`; non-TTY → `ActionWarn` "behind … skipping in non-interactive").
-- [ ] Retain all guard branches: not-repo/off → skip; dirty/no-upstream/fetch-failed/diverged → warn; up-to-date → skip.
-- [ ] Ensure `run.go` passes the resolved mode as `git.UpdateMode("on"|"off")` matching the new constants.
-- [ ] `Decide` no longer returns `ActionPullAuto` (no `auto` mode) → the `case git.ActionPullAuto:` in run.go:212-218 is now unreachable. Decide its fate: keep the `ActionPullAuto` constant + case as harmless dead code, OR remove both. Recommend removing the switch case and keeping the constant unused-but-defined only if something else needs it (it doesn't — remove case).
-- [ ] Rewrite `policy_test.go`: remove prompt/auto/check cases; add `on` (behind+TTY → prompt; behind+CI → warn; up-to-date → skip; dirty/diverged/no-upstream/fetch-failed → warn) and `off` (always skip).
-- [ ] `make test` — must pass before Task 6.
+- [x] Replace `ModePrompt`/`ModeAuto`/`ModeCheck` with `ModeOn` (keep `ModeOff`); map `on` to the former `prompt` behavior in `Decide` (TTY → `ActionPullPrompt`; non-TTY → `ActionWarn` "behind … skipping in non-interactive").
+- [x] Retain all guard branches: not-repo/off → skip; dirty/no-upstream/fetch-failed/diverged → warn; up-to-date → skip.
+- [x] Ensure `run.go` passes the resolved mode as `git.UpdateMode("on"|"off")` matching the new constants. (Already passed `git.UpdateMode(effectiveMode)`; effectiveMode is now constrained to `on`/`off` upstream.)
+- [x] `Decide` no longer returns `ActionPullAuto` (no `auto` mode) → removed both the unreachable `case git.ActionPullAuto:` in run.go AND the now-dead `ActionPullAuto` constant in policy.go (nothing else referenced it).
+- [x] Rewrite `policy_test.go`: remove prompt/auto/check cases; add `on` (behind+TTY → prompt; behind+CI → warn; up-to-date → skip; dirty/diverged/no-upstream/fetch-failed → warn) and `off` (always skip).
+- [x] `make test` — passes (only the pre-existing branch-HEAD `TestRussianTranslationsAreFresh` for `validate.md` fails — unrelated, covered by Task 7). Lint clean on `git` + `lifecycle` packages.
 
 ### Task 6: Add validate diagnostic for `update.mode`
 
