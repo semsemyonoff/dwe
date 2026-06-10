@@ -4,6 +4,7 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"testing"
 
@@ -150,6 +151,40 @@ func TestLoadValidateConfig_restartStageNote(t *testing.T) {
 	w := warnings[0]
 	if !strings.Contains(w.Hint, "composite") {
 		t.Errorf("hint should mention that restart is composite: %q", w.Hint)
+	}
+}
+
+func TestLoadValidateConfig_postSetupStageNoWarning(t *testing.T) {
+	// post-setup is a reserved stage (deploy final preflight), so it must load
+	// without an unknown-stage warning.
+	content := `checks:
+  - id: app-key-present
+    description: app key must be set before deploy
+    stages: [post-setup]
+    type: builtin
+    cmd: config_keys_present
+    with:
+      keys: [db.api_key]
+`
+	tmpfile, err := os.CreateTemp("", "validate-*.yml")
+	if err != nil {
+		t.Fatalf("failed to create temp file: %v", err)
+	}
+	defer func() { _ = os.Remove(tmpfile.Name()) }()
+	if _, err := tmpfile.Write([]byte(content)); err != nil {
+		t.Fatalf("failed to write temp file: %v", err)
+	}
+	_ = tmpfile.Close()
+
+	cfg, warnings, err := LoadValidateConfig(tmpfile.Name())
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if len(warnings) != 0 {
+		t.Fatalf("post-setup is reserved; want 0 warnings, got %d: %+v", len(warnings), warnings)
+	}
+	if len(cfg.Checks) != 1 || !slices.Contains(cfg.Checks[0].Stages, "post-setup") {
+		t.Fatalf("check did not retain post-setup stage: %+v", cfg.Checks)
 	}
 }
 

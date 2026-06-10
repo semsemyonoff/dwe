@@ -45,6 +45,7 @@
 //	root (KindPredicate)
 //	- shell                         — exit-code predicate via /bin/sh
 //	- tcp_reachable                 — TCP host:port reachability predicate
+//	- config_keys_present           — verify merged-config dot-paths resolve to non-empty values
 package builtin
 
 import (
@@ -92,8 +93,9 @@ var registry = buildRegistry()
 func buildRegistry() map[string]spec.Entry {
 	r := map[string]spec.Entry{
 		// KindPredicate: read-only checks for check: positions and validate.yml
-		"shell":         {Impl: Shell{}, Kind: spec.KindPredicate},
-		"tcp_reachable": {Impl: TCPReachable{}, Kind: spec.KindPredicate},
+		"shell":               {Impl: Shell{}, Kind: spec.KindPredicate},
+		"tcp_reachable":       {Impl: TCPReachable{}, Kind: spec.KindPredicate},
+		"config_keys_present": {Impl: ConfigKeysPresent{}, Kind: spec.KindPredicate},
 	}
 	for _, src := range []map[string]spec.Entry{
 		containers.Builtins(),

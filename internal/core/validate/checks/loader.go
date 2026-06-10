@@ -44,11 +44,12 @@ var allowedCommandTypes = map[model.CommandType]struct{}{
 // service_dirs_ensure) and interactive ones (confirm, docker_daemon_logs) are
 // intentionally excluded — checks must not produce side effects.
 var allowedBuiltinCmds = map[string]struct{}{
-	"shell":              {},
-	"file_exists":        {},
-	"executable_in_path": {},
-	"env_keys_present":   {},
-	"tcp_reachable":      {},
+	"shell":               {},
+	"file_exists":         {},
+	"executable_in_path":  {},
+	"env_keys_present":    {},
+	"tcp_reachable":       {},
+	"config_keys_present": {},
 }
 
 // AllForStage produces synthetic validators for every entry whose Stages
@@ -65,6 +66,21 @@ var allowedBuiltinCmds = map[string]struct{}{
 // scoped to "checks" still surface the validate.yml failure via the normal
 // diagnostic table rather than silently producing zero results.
 func AllForStage(cfg *config.ValidateConfig, loadErr error, baseDir string, cmdRegistry *registry.Registry, stage string, services map[string]config.ServiceConfig, skipServicesGate bool) []validate.Validator {
+	var stages []string
+	if stage != "" {
+		stages = []string{stage}
+	}
+	return AllForStages(cfg, loadErr, baseDir, cmdRegistry, stages, services, skipServicesGate)
+}
+
+// AllForStages is the multi-stage form of AllForStage: an entry is included
+// when its Stages contains ANY of the requested stages. An empty stages slice
+// matches every entry (same as AllForStage with an empty stage). The deploy
+// final preflight passes {"deploy", "post-setup"} so post-setup checks — which
+// are skipped at the early pre-wizard gate (it queries only "deploy") — run
+// here, immediately before the pipeline. All other semantics (services-gate,
+// skipServicesGate, nil-cfg load-error handling) match AllForStage.
+func AllForStages(cfg *config.ValidateConfig, loadErr error, baseDir string, cmdRegistry *registry.Registry, stages []string, services map[string]config.ServiceConfig, skipServicesGate bool) []validate.Validator {
 	if cfg == nil {
 		if loadErr != nil && !errors.Is(loadErr, os.ErrNotExist) {
 			return []validate.Validator{&validateYmlErrValidator{err: loadErr}}
@@ -74,7 +90,7 @@ func AllForStage(cfg *config.ValidateConfig, loadErr error, baseDir string, cmdR
 	out := make([]validate.Validator, 0, len(cfg.Checks))
 	for i := range cfg.Checks {
 		entry := cfg.Checks[i]
-		if !MatchStage(entry, stage) {
+		if !MatchAnyStage(entry, stages) {
 			continue
 		}
 		if !skipServicesGate && !MatchServices(entry, services) {
@@ -99,7 +115,7 @@ func buildValidator(entry config.CheckEntry, baseDir string, cmdRegistry *regist
 		}
 		if _, ok := allowedBuiltinCmds[entry.Cmd]; !ok {
 			return cached(entry, fmt.Sprintf(
-				"checks may only use builtins: shell, file_exists, executable_in_path, env_keys_present, tcp_reachable (got: %s)", entry.Cmd))
+				"checks may only use builtins: shell, file_exists, executable_in_path, env_keys_present, tcp_reachable, config_keys_present (got: %s)", entry.Cmd))
 		}
 		if err := builtin.Validate(entry.Cmd, entry.With, builtin.CtxPredicate); err != nil {
 			return cached(entry, err.Error())
