@@ -1195,9 +1195,22 @@ Rejected (do not re-litigate):
 
 ### Task 14: [Final] Update documentation and close out
 
-- [ ] update README feature list if bridge warrants a mention
-- [ ] verify AGENTS.md/packages.md entries from task 12 still match final code
-- [ ] move this plan to `docs/plans/completed/`
+- [x] update README feature list if bridge warrants a mention — added a
+      "Why dwe" bullet (shim in dev containers, hooks/commands work
+      identically) + reconciled the "no DWE daemon" claims in README
+      Architecture and `docs/reference/concepts/architecture.md` (lines 46
+      and the hard-lines list) with the bridge daemon exception; RU mirrors
+      updated with bumped freshness headers (`docs/i18n/ru/README.md`,
+      `docs/i18n/ru/reference/concepts/architecture.md`)
+- [x] verify AGENTS.md/packages.md entries from task 12 still match final
+      code — all referenced symbols exist (`bridgeAllowedTopLevel`,
+      `bridgeclient.StripEnv`, `BridgeOverlayRelPath`, env contract consts,
+      `Prepare`/`RegenerateOverlay`/`Ensure`/`Cycle`/`StopDaemon`/
+      `ProbeDaemon`/`AnyBridgeEnabled`, `shimassets.FileName`/`Status`/
+      `Materialize`, the `ensureDaemonFn`/`stopDaemonFn`/`probeDaemonFn`
+      seams); no code commits landed after the task-12 docs commit
+      (task 13 touched only this plan file)
+- [x] move this plan to `docs/plans/completed/`
 
 ## Post-Completion
 

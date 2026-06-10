@@ -43,7 +43,7 @@ flowchart LR
   Dev -->|"http://*.localhost<br/>tcp ports"| Containers
 ```
 
-The CLI itself is a single static binary with docs and pipelines embedded. There is no DWE daemon, no companion service, no plugin loader — every invocation is short-lived and stateless except for what it writes under `.dwe/`.
+The CLI itself is a single static binary with docs and pipelines embedded. There is no companion service, no plugin loader — every invocation is short-lived and stateless except for what it writes under `.dwe/`. The one resident piece is the optional [host-bridge daemon](../bridge.md): a stateless forwarder spawned while the stack is up so dev containers can reach `dwe` on the host, stopping itself when the stack goes down.
 
 ## Division of responsibility
 
@@ -120,7 +120,7 @@ A few hard lines that keep the architecture predictable:
 
 - **DWE does not replace `docker` or `docker compose`.** Every container operation shells out. There is no embedded compose engine.
 - **DWE does not install Docker.** The host is expected to have `docker` and `docker compose` on the path. DWE shells out via configurable binary overrides (`docker_bin`), but it does not bootstrap the engine.
-- **DWE does not run as a daemon.** No background process, no socket, no tray app. Every command starts fresh, reads config, does its work, exits.
+- **DWE does not run as a daemon.** No background process, no socket, no tray app. Every command starts fresh, reads config, does its work, exits. The one exception is the [host bridge](../bridge.md): while the stack is up, a per-project forwarder daemon serves `dwe` invocations from inside dev containers and auto-stops when the last container goes down.
 - **DWE does not make network calls on the normal path.** No phone-home, no update check, no template fetch. The only network traffic is whatever the user puts inside a pipeline step or user command (a `curl` in a `type: shell` step, a `docker pull` from a registry, a `git push` in a hook).
 - **DWE does not manage `/etc/hosts` or a proxy.** Hostnames like `my-project.localhost` resolve via the OS resolver (`*.localhost` is loopback by RFC), or via whatever local DNS / reverse proxy the developer runs. DWE renders the hostnames into config and into the info dashboard; routing them is outside its scope.
 

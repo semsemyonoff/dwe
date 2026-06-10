@@ -6,7 +6,7 @@ package docs
 // Generated from docs/reference, docs/guides, and docs/internals at build time.
 // See docs/reference/docs/index.md for details on the hash-based staleness check.
 var ContentHashes = map[string]string{
-	"README.md":                                "94ed59b1e01b",
+	"README.md":                                "e32085632b86",
 	"guides/add-a-service.md":                  "2efb25e1a48a",
 	"guides/author-project-commands.md":        "e0530b338f1f",
 	"guides/background-daemons.md":             "cbd42c65deb0",
@@ -25,7 +25,7 @@ var ContentHashes = map[string]string{
 	"internals/architecture.md":                "4fe04c86171c",
 	"internals/packages.md":                    "f2135532f7bd",
 	"reference/bridge.md":                      "5d13e61897f4",
-	"reference/concepts/architecture.md":       "78d8799363b8",
+	"reference/concepts/architecture.md":       "186bac809a2e",
 	"reference/concepts/docker.md":             "20dcf0c6b589",
 	"reference/concepts/getting-started.md":    "a3c68d8cbd91",
 	"reference/concepts/git.md":                "bd5e782e6911",
