@@ -571,18 +571,30 @@ Rejected (do not re-litigate):
 - Create: `internal/shared/bridgeproto/frame_test.go`
 - Create: `internal/shared/bridgeproto/token_test.go`
 
-- [ ] frame reader/writer over `io.Reader`/`io.Writer`: length-prefixed BE
+- [x] frame reader/writer over `io.Reader`/`io.Writer`: length-prefixed BE
       uint32 + 1-byte type + payload; max-payload guard; typed constants for
       0x01–0x09 (D4)
-- [ ] HELLO/ERROR structs + JSON marshal helpers; `ProtocolVersion` const;
+- [x] HELLO/ERROR structs + JSON marshal helpers; `ProtocolVersion` const;
       ERROR code constants (D4)
-- [ ] token: generate (crypto/rand, 32 bytes hex), write/read file (0600),
+- [x] token: generate (crypto/rand, 32 bytes hex), write/read file (0600),
       constant-time compare
-- [ ] peercred check behind build tags: `SO_PEERCRED` (linux) /
+- [x] peercred check behind build tags: `SO_PEERCRED` (linux) /
       `LOCAL_PEERCRED` (darwin), `uid == os.Getuid()` predicate
-- [ ] write tests: round-trip for every frame type, truncated/oversized input
+- [x] write tests: round-trip for every frame type, truncated/oversized input
       errors, HELLO marshal/unmarshal, token compare (match/mismatch/length)
-- [ ] run tests — must pass before task 2
+- [x] run tests — must pass before task 2
+- ➕ [x] `peercred.go` (shared `PeerUID`/`PeerIsSameUser` predicate) +
+      `peercred_other.go` (`!linux && !darwin` fail-closed stub, mirrors
+      `shared/lock` fallback shape) + `peercred_test.go` (same-process
+      socketpair coverage, runs on both linux and darwin)
+- ➕ [x] `TokenEqual` rejects empty tokens (both sides) so a missing token
+      file can never authenticate; WriteFrame emits header+payload in a
+      single `Write` so concurrent frame writers on a `net.Conn` cannot
+      interleave
+- ⚠️ fixed pre-existing `make test` failure unrelated to bridge: RU
+      translation header hash for `reference/config/validate.md` was not
+      bumped in c8d3fa76 (content was already in sync; header now
+      `@ ac703a3b947c`)
 
 ### Task 2: Service config — `BridgeConfig` + both allowlists
 
