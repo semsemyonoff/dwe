@@ -1,0 +1,157 @@
+# yaml-language-server: $schema=https://storage.googleapis.com/coderabbit_public_assets/schema.v2.json
+#
+# CodeRabbit configuration for dwe (Dev Workspace Engine) — a Go CLI.
+# Docs: https://docs.coderabbit.ai/reference/configuration
+# Project conventions that drive the review guidance below live in AGENTS.md
+# (canonical; CLAUDE.md is a symlink) and docs/internals/packages.md.
+
+language: en-US
+tone_instructions: "Be concise and technical. Assume a senior Go engineer; skip basics, focus on correctness, concurrency, error handling, and the project conventions in AGENTS.md."
+
+reviews:
+  profile: assertive
+  # Don't gate merges on resolving every comment — comments are advisory.
+  request_changes_workflow: false
+  high_level_summary: true
+  review_status: true
+  collapse_walkthrough: false
+  sequence_diagrams: true
+  # Skip the AI poem — keep PR comments signal-only.
+  poem: false
+
+  auto_review:
+    enabled: true
+    # Re-review only the new commits when a branch is pushed.
+    auto_incremental_review: true
+    drafts: false
+    base_branches:
+      - main
+      - dev
+    # Skip release-automation / dependency-bump PRs.
+    ignore_title_keywords:
+      - "chore(release)"
+      - "[skip ci]"
+    ignore_usernames:
+      - "dependabot[bot]"
+      - "renovate[bot]"
+      - "goreleaser[bot]"
+
+  # Files excluded from review entirely. Generated, embedded, and build
+  # artifacts only — everything else stays reviewable.
+  path_filters:
+    # Generated docs tree synced from docs/ by scripts/sync-embedded-docs.sh.
+    - "!internal/core/docs/embedded/**"
+    # Generated Go sources (e.g. content_hashes_gen.go).
+    - "!**/*_gen.go"
+    # Generated shell completions and GoReleaser output.
+    - "!completions/**"
+    - "!dist/**"
+    - "!bin/**"
+    # Compiled test binaries and module checksums.
+    - "!**/*.test"
+    - "!go.sum"
+    # Vendored/license boilerplate.
+    - "!LICENSE"
+
+  # Path-scoped guidance. Each block teaches the reviewer the load-bearing
+  # contracts for that area so it flags real violations, not style nits the
+  # linters already catch.
+  path_instructions:
+    - path: "internal/**/*.go"
+      instructions: |
+        Go 1.26. gofmt + goimports formatting and golangci-lint (errcheck,
+        govet, staticcheck, revive, gocritic, modernize) already run in CI — do
+        NOT repeat pure style/format nits. Focus on:
+        - Error handling: wrap with %w; check every returned error.
+        - Concurrency: goroutine/channel ownership, races, lock ordering.
+        - Use the nil-safe binary accessors (config.DweBin/DockerBin/ShellBin/
+          GitBin/MmdcBin) — never read cfg.Binaries.* fields directly.
+        - Respect the three-layer architecture: cli/ (cobra, no domain logic)
+          → core/ (domain) → shared/ (leaf infra). Flag upward imports.
+    - path: "internal/cli/**/*.go"
+      instructions: |
+        Read-only commands MUST route output through cmdctx.WriteData[T] /
+        cmdctx.WriteError to honor --output json. Use typed errors (cmdctx.Err,
+        cmdctx.ErrWrap) that carry exit codes. Never read def.Description
+        directly in display code — thread rflags.I18n and use store.* helpers.
+        Lifecycle commands (deploy/run/stop/restart/reset) must call
+        preflight.Run BEFORE side effects, then acquire project locks via
+        cmdctx.AcquireProjectLocksOrReport — never lock.Acquire directly.
+        cli/ is the single writer to stdout/stderr; stack/ and ui/render/
+        return strings, never take an io.Writer.
+    - path: "**/*_test.go"
+      instructions: |
+        Prefer table-driven tests for command parsing, config resolution, and
+        runner behavior. Every behavior change should update nearby coverage.
+        Tests run via `make test` (it syncs embedded docs first) — `go test`
+        directly fails on a fresh checkout. Flag map-iteration-order assumptions
+        in golden tests; service iteration must go through config.DeployOrder.
+    - path: "**/testdata/**"
+      instructions: |
+        These are fixtures and golden files, some intentionally malformed (e.g.
+        shellcheck/sample.sh, fake-mmdc.sh). Do NOT lint their contents or
+        suggest fixing them. Only flag a change if a golden file looks updated
+        unintentionally relative to the code change in the same PR.
+    - path: "docs/**/*.md"
+      instructions: |
+        User-facing docs. Keep behavior and docs aligned: schema, command, or
+        hook changes must be reflected here. After editing docs the author must
+        run `make build` to re-embed them. Russian translations live under
+        docs/i18n/ru/ — flag when an English page changes but its ru/ mirror
+        does not.
+    - path: ".github/workflows/**"
+      instructions: |
+        GitHub Actions. Pin action versions, keep least-privilege permissions,
+        and remember CI relies on the embedded-docs make target before lint and
+        test. Flag missing concurrency cancellation or unpinned third-party
+        actions.
+
+  tools:
+    # Go linting — reuse the project's committed golangci-lint v2 config so
+    # CodeRabbit's findings match CI exactly.
+    golangci-lint:
+      enabled: true
+      config_file: .golangci.yml
+    # Secret scanning.
+    gitleaks:
+      enabled: true
+    # GitHub Actions workflow linting.
+    actionlint:
+      enabled: true
+    # YAML (workspace configs, CI, GoReleaser, this file).
+    yamllint:
+      enabled: true
+    # Shell scripts under scripts/.
+    shellcheck:
+      enabled: true
+    # Markdown docs.
+    markdownlint:
+      enabled: true
+    # Surface CI check results in the review.
+    github-checks:
+      enabled: true
+    # Prose grammar in docs/PR text — keep but it's low priority.
+    languagetool:
+      enabled: true
+
+chat:
+  # No ASCII art in chat replies.
+  art: false
+  auto_reply: true
+
+knowledge_base:
+  learnings:
+    scope: auto
+  # Treat the project's canonical guidance as code guidelines so reviews are
+  # anchored to the documented conventions.
+  code_guidelines:
+    enabled: true
+    filePatterns:
+      - "AGENTS.md"
+      - "docs/internals/**"
+
+# Generated docstrings/tests opt-in. Off by default to avoid unsolicited
+# code-suggestion noise on a project with established patterns.
+code_generation:
+  docstrings:
+    language: en-US
