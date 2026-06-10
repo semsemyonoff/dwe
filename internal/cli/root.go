@@ -116,6 +116,11 @@ func NewRootCmdWithFlags() (*cobra.Command, *cmdctx.RootFlags) {
 		completion.AttachInstallUninstall(completionCmd, flags)
 	}
 
+	// Container command policy: in container context blocked commands
+	// disappear from help listings and shell completion; the run-time gate
+	// lives in the root PersistentPreRunE.
+	applyBridgeContainerVisibility(root)
+
 	return root, flags
 }
 
@@ -193,6 +198,14 @@ func initRootCmd(flags *cmdctx.RootFlags) *cobra.Command {
 				_ = os.Setenv("NO_COLOR", "1")
 				cmd.Root().SilenceErrors = true
 				cmd.Root().SilenceUsage = true
+			}
+
+			// (2b) Container command policy: when forked by the bridge daemon
+			// (DWE_INVOKED_FROM=container) only allowlisted commands proceed
+			// (default-deny). Before project resolution, so blocked commands
+			// fail with the policy error regardless of project state.
+			if err := bridgePolicyGate(cmd); err != nil {
+				return err
 			}
 
 			// (3) Detect whether --config/-c was explicitly supplied.

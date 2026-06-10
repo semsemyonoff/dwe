@@ -2,7 +2,7 @@ package command
 
 import (
 	"errors"
-	"fmt"
+	"os"
 	"os/signal"
 	"syscall"
 
@@ -25,6 +25,19 @@ var (
 	runUserCommand = usercommands.RunCommand
 	notifyContext  = signal.NotifyContext
 )
+
+// errCommandsListed is the sentinel returned by the non-interactive selector
+// fallback after it printed the command list instead of selecting — the run
+// route treats it as a successful no-op.
+var errCommandsListed = errors.New("command list printed instead of interactive selection")
+
+// nonInteractiveEnv reports whether DWE_NONINTERACTIVE is truthy ("1" or
+// "true"). The bridge daemon force-sets it for container invocations and CI
+// pipelines set it by hand — both must behave identically to a non-TTY pipe.
+func nonInteractiveEnv() bool {
+	v := os.Getenv("DWE_NONINTERACTIVE")
+	return v == "1" || v == "true"
+}
 
 // runOpts carries the per-invocation options for runCommandByID.
 type runOpts struct {
@@ -130,14 +143,25 @@ Without an id, an interactive selector lists public commands. With a group prefi
 				forceFormFromTUI   bool
 			)
 			selector := makeBrowserSelector(cfg, reg, cmdbrowser.ModeRun, false, &skipConfirmFromTUI, &forceFormFromTUI, i18n.TranslatorOrNop(flags.I18n), flags.Locale, flags.ProjectRoot())
-			if !widgets.IsInteractiveFn(cmd.InOrStdin()) {
+			if !widgets.IsInteractiveFn(cmd.InOrStdin()) || nonInteractiveEnv() {
+				// No TTY for the browser (CI pipe) or forced non-interactive
+				// (DWE_NONINTERACTIVE=1 — the bridge daemon sets it for every
+				// container invocation): print `commands list` output instead
+				// of erroring, so bare `dwe commands` stays useful.
 				selector = func(_ []*usercommands.CommandDef, _ string) (string, error) {
-					return "", fmt.Errorf("no exact command ID given; pass a full command ID or run in an interactive terminal")
+					groupFilter := ""
+					if len(args) == 1 {
+						groupFilter = args[0]
+					}
+					if err := writeCommandsList(cmd, flags, reg, groupFilter, false); err != nil {
+						return "", err
+					}
+					return "", errCommandsListed
 				}
 			}
 			id, err := resolveCommandID(reg, args, false, cfg.Project.Name, selector)
 			if err != nil {
-				if errors.Is(err, widgets.ErrCancelled) {
+				if errors.Is(err, widgets.ErrCancelled) || errors.Is(err, errCommandsListed) {
 					return nil
 				}
 				return err

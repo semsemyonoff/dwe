@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"io"
 	"maps"
-	"os"
 	"regexp"
 	"sort"
 	"strings"
@@ -79,8 +78,7 @@ func runCommandByID(
 		return err
 	}
 
-	nonInteractiveEnv := os.Getenv("DWE_NONINTERACTIVE") == "1" || os.Getenv("DWE_NONINTERACTIVE") == "true"
-	skipPrompts := opts.Yes || nonInteractiveEnv
+	skipPrompts := opts.Yes || nonInteractiveEnv()
 	canPromptHuh := widgets.IsInteractiveFn(stdin) && !skipPrompts
 
 	prefilled := resolve.ParamDefaults(def.Params, provided, cfg)

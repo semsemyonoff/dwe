@@ -955,27 +955,51 @@ Rejected (do not re-litigate):
 - Create: `internal/cli/bridgepolicy_test.go`
 - Modify: commands-browser entry point (bare `dwe commands` fallback)
 
-- [ ] static allowlist predicate per D9 over resolved cobra command path:
+- [x] static allowlist predicate per D9 over resolved cobra command path:
       allow `commands` subtree, `status`, `info`, `validate`, `logs`, `docs`,
       `prompt`, `bridge status`, `version`, `completion`, `help`;
-      default-deny the rest
-- [ ] gate inside the EXISTING root `PersistentPreRunE`
+      default-deny the rest — `bridgeCommandAllowed` in
+      `internal/cli/bridgepolicy.go`: prefix allow over top-level names +
+      the single nested `bridge status` exception; bare `dwe` (read-only
+      summary + help) and cobra's `__complete`/`__completeNoDesc` machinery
+      also allowed
+- [x] gate inside the EXISTING root `PersistentPreRunE`
       (`internal/cli/root.go:165` — the single pre-RunE hook; do NOT add a
       second persistent hook anywhere, cobra replaces instead of chaining);
       blocked → typed `cmdctx.Err("bridge_command_blocked")` with run-on-host
-      hint and suicide explanation for stop/restart/reset
-- [ ] hide blocked commands from help and shell completion when
-      `DWE_INVOKED_FROM=container` (dynamic `Hidden` at tree build)
-- [ ] bare `dwe commands`/`dwe cmd`: replace the current non-interactive
+      hint and suicide explanation for stop/restart/reset — gate sits as
+      step (2b), after output-mode validation / JSON side-effects and BEFORE
+      project resolution, so blocked commands fail with the policy error
+      regardless of project state; error carries `details.command`
+- [x] hide blocked commands from help and shell completion when
+      `DWE_INVOKED_FROM=container` (dynamic `Hidden` at tree build) —
+      `applyBridgeContainerVisibility` at the end of `NewRootCmdWithFlags`;
+      recursion keeps a blocked parent visible when any descendant is
+      allowed (the task-10 `bridge status` shape — structurally tested now)
+- [x] bare `dwe commands`/`dwe cmd`: replace the current non-interactive
       error (`internal/cli/command/command.go:133` via
       `widgets.IsInteractiveFn`) with `commands list` output; trigger on
       non-tty stdin OR truthy `DWE_NONINTERACTIVE` (match the
       `{"1","true"}` set used in `runbyid.go:82`) so CI pipes and bridge
-      behave identically
-- [ ] write tests: table-driven allow/deny incl. nested paths
+      behave identically — fallback selector prints via the extracted
+      `writeCommandsList` (shared with `commands list`, JSON + text) and
+      returns the `errCommandsListed` sentinel (exit 0); group-prefix args
+      print the filtered list; the `{"1","true"}` check is centralized in
+      `nonInteractiveEnv()` and reused by `runbyid.go`
+- [x] write tests: table-driven allow/deny incl. nested paths
       (`bridge status` vs `bridge stop`), flags-before-subcommand parsing,
-      hidden filtering, JSON error envelope shape, browser→list fallback
-- [ ] run tests — must pass before task 10
+      hidden filtering, JSON error envelope shape, browser→list fallback —
+      `internal/cli/bridgepolicy_test.go` (predicate table, suicide vs
+      generic hint, gate-inactive env values, blocked via Execute,
+      `--output json deploy run` + envelope shape, allowed `version` runs,
+      real-tree hidden/visible sets, host no-op, parent-with-allowed-child)
+      + `internal/cli/command/listfallback_test.go` (non-tty list, env
+      trigger 1/true, JSON list, group filter, exact-ID still runs,
+      `nonInteractiveEnv` table). NOTE: `prompt` is allowlisted but stays
+      `Hidden` on the host too by design (prompt hot-path pattern)
+- [x] run tests — must pass before task 10 (`make test`: 109 packages ok;
+      `make lint`: 0 issues; `-race` clean on `cli` + `cli/command`; module
+      cross-compiles for windows/amd64 and linux/arm64)
 
 ### Task 10: `dwe bridge` CLI subtree
 

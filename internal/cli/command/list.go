@@ -132,24 +132,31 @@ Use --all to include private commands.`,
 			// is fail-open — per-expression failures log + treat as visible.
 			cfg, _ := config.LoadConfig(flags.ConfigPath)
 			_ = reg.ApplyVisibility(cfg, flags.ProjectRoot())
-			if flags.Output == "json" {
-				translator := i18n.TranslatorOrNop(flags.I18n)
-				data := buildCommandsListJSON(reg, groupFilter, showAll, translator, flags.Locale)
-				return cmdctx.WriteJSON(flags, cmd, data)
-			}
-			root := reg.Groups()
-			nodes := buildTreeNodes(root, groupFilter, showAll, i18n.TranslatorOrNop(flags.I18n), flags.Locale)
-			if len(nodes) == 0 {
-				_, _ = fmt.Fprintln(cmd.OutOrStdout(), "No commands found.")
-				return nil
-			}
-			printTreeNodes(cmd.OutOrStdout(), nodes)
-			return nil
+			return writeCommandsList(cmd, flags, reg, groupFilter, showAll)
 		},
 		SilenceUsage: true,
 	}
 	cmd.Flags().BoolVar(&showAll, "all", false, "Include private commands")
 	return cmd
+}
+
+// writeCommandsList renders the command list for reg — the JSON DTO in JSON
+// mode, the styled tree otherwise. Shared by `commands list` and the
+// non-interactive fallback of the bare `dwe commands` browser. Callers are
+// responsible for reg.ApplyVisibility.
+func writeCommandsList(cmd *cobra.Command, flags *cmdctx.RootFlags, reg *usercommands.Registry, groupFilter string, showAll bool) error {
+	translator := i18n.TranslatorOrNop(flags.I18n)
+	if flags.Output == "json" {
+		data := buildCommandsListJSON(reg, groupFilter, showAll, translator, flags.Locale)
+		return cmdctx.WriteJSON(flags, cmd, data)
+	}
+	nodes := buildTreeNodes(reg.Groups(), groupFilter, showAll, translator, flags.Locale)
+	if len(nodes) == 0 {
+		_, _ = fmt.Fprintln(cmd.OutOrStdout(), "No commands found.")
+		return nil
+	}
+	printTreeNodes(cmd.OutOrStdout(), nodes)
+	return nil
 }
 
 // selectCommandFn is the function signature for interactive command selection.
