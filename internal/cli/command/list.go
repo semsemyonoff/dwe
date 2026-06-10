@@ -315,7 +315,7 @@ func groupNodeToChildren(gn *usercommands.GroupNode, includePrivate bool, transl
 		}
 	}
 	for _, cmd := range gn.Commands {
-		if cmd.Hidden {
+		if cmd.Hidden || cmd.BridgeHidden {
 			continue
 		}
 		if !includePrivate && cmd.Private {

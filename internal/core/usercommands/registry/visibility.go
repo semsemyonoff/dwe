@@ -4,6 +4,8 @@ import (
 	"log/slog"
 
 	"github.com/semsemyonoff/dwe/internal/core/project/config"
+	"github.com/semsemyonoff/dwe/internal/core/usercommands/model"
+	"github.com/semsemyonoff/dwe/internal/shared/bridgeclient"
 	"github.com/semsemyonoff/dwe/internal/shared/tpl"
 )
 
@@ -54,6 +56,12 @@ func (r *Registry) ApplyVisibility(cfg *config.DweConfig, projectRoot string) er
 	// passes into a single walk would silently break cascade for
 	// descendants visited before their parent in map-iteration order.
 	r.applyGroupVisibility(r.root, false, rctx, projectRoot)
+
+	// Container-surface visibility is a separate axis from Hide: it gates
+	// listing/completion/inspect/direct invocation but NOT executability
+	// (workflow steps keep running non-bridged sub-commands host-side), so
+	// it gets its own resolved field instead of folding into Hidden.
+	r.applyBridgeVisibility()
 
 	for _, cmd := range r.byID {
 		parent, ok := r.groups[cmd.Group]
@@ -111,6 +119,42 @@ func (r *Registry) applyGroupVisibility(node *GroupNode, parentHidden bool, rctx
 	}
 	for _, child := range node.Children {
 		r.applyGroupVisibility(child, node.Hidden, rctx, projectRoot)
+	}
+}
+
+// applyBridgeVisibility resolves CommandDef.BridgeHidden for every command:
+// outside a bridged invocation everything is visible (explicitly reset so
+// the pass stays idempotent); inside one, a command is visible only when the
+// field-wise merge of its own `bridge:` block over the nearest ancestor
+// group's effective block admits the calling service (opt-in default — no
+// block anywhere means host-only). Pure data, no expressions: unlike Hide
+// there is no failure mode and no fail-open path to worry about.
+func (r *Registry) applyBridgeVisibility() {
+	if !bridgeclient.InContainer() {
+		for _, cmd := range r.byID {
+			cmd.BridgeHidden = false
+		}
+		return
+	}
+	caller := bridgeclient.CallingService()
+	eff := make(map[string]*model.BridgeDef, len(r.groups))
+	collectEffectiveBridge(r.root, nil, eff)
+	for _, cmd := range r.byID {
+		cmd.BridgeHidden = !model.MergeBridge(eff[cmd.Group], cmd.Bridge).AllowedFrom(caller)
+	}
+}
+
+// collectEffectiveBridge walks the group tree depth-first, merging each
+// node's `group.bridge` block over its parent's effective block (deeper
+// files override shallower ones field-wise) into eff keyed by group ID.
+func collectEffectiveBridge(node *GroupNode, parent *model.BridgeDef, eff map[string]*model.BridgeDef) {
+	if node == nil {
+		return
+	}
+	cur := model.MergeBridge(parent, node.Meta.Bridge)
+	eff[node.ID] = cur
+	for _, child := range node.Children {
+		collectEffectiveBridge(child, cur, eff)
 	}
 }
 

@@ -88,8 +88,8 @@ The container command surface is deliberately reduced — **allowlist, default-d
 
 | Allowed from a container | Why |
 |---|---|
-| `dwe commands <cmd>` / `dwe cmd <cmd>` | the primary case — hooks and project commands |
-| bare `dwe commands` / `dwe cmd` | no TTY over the bridge → prints the `commands list` output instead of the interactive browser |
+| `dwe commands <cmd>` / `dwe cmd <cmd>` | the primary case — hooks and project commands; only commands opted in via [`bridge:`](#per-command-opt-in) |
+| bare `dwe commands` / `dwe cmd` | no TTY over the bridge → prints the `commands list` output (filtered to bridged commands) instead of the interactive browser |
 | `status`, `info`, `logs` | read-only diagnostics |
 | `docs` (including `llms-txt`) | read-only; useful to AI agents working in the devcontainer — bare `dwe docs` prints the `docs list` output (no TTY for the browser) |
 | `prompt` | container terminal prompt segment |
@@ -104,6 +104,22 @@ The container command surface is deliberately reduced — **allowlist, default-d
 | `render`, `setup`, `init`, `shell` | mutate workspace files or are interactive |
 | `bridge` (everything except `status`) | `bridge stop` is suicide for the bridge itself |
 | `validate`, `completion` | host-side concerns: validation targets the host workspace, completion scripts are installed on the host (a completion script already baked into an image keeps degrading silently — the hidden completion machinery stays reachable) |
+
+### Per-command opt-in
+
+Inside the allowlisted `dwe cmd` / `dwe commands` surface there is a second, per-command gate: a user command is reachable from a container **only when its definition opts in** via a `bridge:` block (on the command or its file's `group:` header) — see [command directives § Bridge visibility](config/commands/directives.md#bridge-visibility). Without it the command stays host-only: filtered from container listings and completion, and rejected on direct invocation with `command_not_bridged` plus a remediation hint.
+
+```yaml
+commands:
+  cs.all:
+    type: service_exec
+    cmd: composer cs
+    bridge:
+      enabled: true        # reachable from every bridged container
+      services: [main]     # …or only from these (workspace service keys)
+```
+
+`bridge.services` matches against the calling container's identity, which the overlay injects as `DWE_BRIDGE_SERVICE=<service key>` and the shim forwards. The identity is container-reported and therefore **advisory** — a UX boundary that keeps, say, php commands out of an nginx container's listing, not a security boundary; the security boundary remains the top-level allowlist above plus the daemon's env hardening. Workflow execution is never gated: a bridged workflow runs its non-bridged sub-commands host-side as usual.
 
 Mechanics worth knowing:
 
@@ -134,6 +150,7 @@ services:
       DWE_HOST_WORKSPACE: /Users/foo/projects/my-proj/services/main
       DWE_CONTAINER_WORKSPACE: /var/www/html
       DWE_BRIDGE_PROJECT: my-proj
+      DWE_BRIDGE_SERVICE: main
     extra_hosts:
       - host.docker.internal:host-gateway
 ```
@@ -198,9 +215,10 @@ Inside a bridged container the overlay sets:
 | `DWE_BRIDGE_DIR` | in-container mount point of the host's `.dwe/bridge` (`/dwe-bridge`) |
 | `DWE_HOST_WORKSPACE` / `DWE_CONTAINER_WORKSPACE` | the service's host hub dir (`<root>/<dir>`) and its in-container mount (`dir_internal`) — the prefix pair the shim rewrites working directories with |
 | `DWE_BRIDGE_PROJECT` | project name, used in shim diagnostics |
+| `DWE_BRIDGE_SERVICE` | the service's workspace key — the calling-container identity that per-command [`bridge.services`](config/commands/directives.md#bridge-visibility) lists match against. The one bridge variable that IS forwarded to the host (its consumer is the host-side `dwe`); container-reported, hence advisory |
 | `DWE_BRIDGE_UNREACHABLE` | only present with `on_unreachable: warn` |
 
-The shim strips these (plus any `DWE_PROJECT_ROOT*`) from the environment it forwards, and the daemon re-filters the same set on arrival. The daemon also drops execution-hijacking variables before forking — the dynamic-loader families (`LD_*`, `DYLD_*`), shell-startup hooks (`BASH_ENV`, `ENV`, `SHELLOPTS`, `BASHOPTS`), `IFS`, and `PATH` — and force-sets `PATH` to the host daemon's own value, so a container can never redirect the `docker`/`git`/`sh` binaries the host-side `dwe` invokes by bare name. Host-identity variables are replaced the same way: the container's `HOME`, `USER`, `LOGNAME`, `TMPDIR`, `SSH_AUTH_SOCK`, and the `DOCKER_*` / `COMPOSE_*` / `XDG_*` families are dropped and the daemon's own values forwarded instead — a container `HOME` would otherwise break docker context resolution on the host (the CLI would fall back to `/var/run/docker.sock`, absent on Docker Desktop / OrbStack macs). It then force-sets two host-controlled variables for the forked `dwe`: `DWE_INVOKED_FROM=container` (activates the command policy — client-sent values are discarded, so it cannot be spoofed from the container) and `DWE_NONINTERACTIVE=1`. `--output json` payloads are identical in both contexts.
+The shim strips these — except `DWE_BRIDGE_SERVICE` — (plus any `DWE_PROJECT_ROOT*`) from the environment it forwards, and the daemon re-filters the same set on arrival. The daemon also drops execution-hijacking variables before forking — the dynamic-loader families (`LD_*`, `DYLD_*`), shell-startup hooks (`BASH_ENV`, `ENV`, `SHELLOPTS`, `BASHOPTS`), `IFS`, and `PATH` — and force-sets `PATH` to the host daemon's own value, so a container can never redirect the `docker`/`git`/`sh` binaries the host-side `dwe` invokes by bare name. Host-identity variables are replaced the same way: the container's `HOME`, `USER`, `LOGNAME`, `TMPDIR`, `SSH_AUTH_SOCK`, and the `DOCKER_*` / `COMPOSE_*` / `XDG_*` families are dropped and the daemon's own values forwarded instead — a container `HOME` would otherwise break docker context resolution on the host (the CLI would fall back to `/var/run/docker.sock`, absent on Docker Desktop / OrbStack macs). It then force-sets two host-controlled variables for the forked `dwe`: `DWE_INVOKED_FROM=container` (activates the command policy — client-sent values are discarded, so it cannot be spoofed from the container) and `DWE_NONINTERACTIVE=1`. `--output json` payloads are identical in both contexts.
 
 The command's argument vector is passed through untranslated — only the working directory is rewritten. Relative paths therefore work everywhere; absolute container paths in arguments will not resolve on the host (a documented limitation).
 

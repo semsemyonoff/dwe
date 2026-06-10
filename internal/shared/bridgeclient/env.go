@@ -1,6 +1,49 @@
 package bridgeclient
 
-import "strings"
+import (
+	"os"
+	"strings"
+)
+
+// Host-controlled variables of the bridge env contract (design D7): the
+// daemon strips any client-sent value and force-sets its own on every forked
+// subprocess, so a container can never spoof them. Defined here (the leaf
+// both core/ and cli/ import) so consumers like the command registry need no
+// dependency on core/bridge; core/bridge aliases them for daemon-side code.
+const (
+	// EnvInvokedFrom marks a dwe process as bridge-forked; the CLI command
+	// policy and command bridge-visibility key off InvokedFromContainer.
+	EnvInvokedFrom = "DWE_INVOKED_FROM"
+	// InvokedFromContainer is the EnvInvokedFrom value set by the daemon.
+	InvokedFromContainer = "container"
+	// EnvNonInteractive forces the existing non-interactive contract (as in
+	// CI) on every bridged invocation — the bridge never allocates a pty.
+	EnvNonInteractive = "DWE_NONINTERACTIVE"
+)
+
+// EnvBridgeService names the service whose shim initiated this bridged
+// invocation. The compose overlay injects it per service (the value is the
+// workspace/services/<name> key); the shim forwards it and the daemon passes
+// it through — its consumer is the host-side dwe, which filters per-command
+// bridge visibility by it. Intentionally NOT in the strip set. ADVISORY ONLY:
+// a container controls its own environment and can claim another service's
+// name — per-service command visibility is a UX boundary between containers
+// of one project, not a security boundary (that remains the top-level command
+// allowlist plus the daemon env hardening).
+const EnvBridgeService = "DWE_BRIDGE_SERVICE"
+
+// InContainer reports whether this dwe process runs on behalf of a container
+// shim (the daemon force-sets EnvInvokedFrom on every bridged subprocess).
+func InContainer() bool {
+	return os.Getenv(EnvInvokedFrom) == InvokedFromContainer
+}
+
+// CallingService returns the service name whose shim initiated this bridged
+// invocation, or "" outside the bridge / when the overlay predates the
+// variable. See EnvBridgeService for the trust caveat.
+func CallingService() string {
+	return os.Getenv(EnvBridgeService)
+}
 
 // strippedEnvNames are bridge-internal variables the shim never forwards to
 // the host (design D7). The daemon re-filters the same set defense-in-depth

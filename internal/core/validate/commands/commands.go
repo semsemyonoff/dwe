@@ -131,10 +131,14 @@ func (v *Validator) Run(ctx validate.Context) []validate.Diagnostic {
 
 			diags = append(diags, notifyDaemonDiagnostics(cmd, relFile)...)
 			diags = append(diags, hideDiagnostics(cmd, relFile)...)
+			diags = append(diags, bridgeDiagnostics(
+				fmt.Sprintf("commands:%s", cmd.ID), cmd.ID, relFile, cmd.Bridge, ctx.Cfg)...)
 		}
 		if cf.Group.Hide != "" {
 			diags = append(diags, groupHideDiagnostics(cf.GroupID, cf.Group.Hide, relFile)...)
 		}
+		diags = append(diags, bridgeDiagnostics(
+			fmt.Sprintf("group:%s", cf.GroupID), fmt.Sprintf("group %q", cf.GroupID), relFile, cf.Group.Bridge, ctx.Cfg)...)
 	}
 
 	// Fallback: surface cmd.Validate() failures that are not already covered by

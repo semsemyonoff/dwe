@@ -13,6 +13,7 @@ import (
 
 	"github.com/semsemyonoff/dwe/internal/core/bridge/shimassets"
 	"github.com/semsemyonoff/dwe/internal/core/project/config"
+	"github.com/semsemyonoff/dwe/internal/shared/bridgeclient"
 	shareddaemon "github.com/semsemyonoff/dwe/internal/shared/daemon"
 	"github.com/semsemyonoff/dwe/internal/shared/trace"
 
@@ -136,6 +137,12 @@ type OverlaySpec struct {
 type OverlayService struct {
 	// Name is the compose service name (service.yml `container:`).
 	Name string
+	// Key is the workspace service key (the cfg.Services map key, i.e. the
+	// workspace/services/<key> folder name) — the identity DWE_BRIDGE_SERVICE
+	// reports and command-level `bridge.services:` lists match against.
+	// Distinct from Name: tbm-style projects name containers `app-main` for
+	// service key `main`.
+	Key string
 	// ShimFile is the materialized shim binary name (shim-linux-<arch>),
 	// chosen per image architecture at each regeneration.
 	ShimFile string
@@ -193,6 +200,7 @@ func BuildOverlaySpec(baseDir string, cfg *config.DweConfig, arch ArchResolver, 
 		}
 		entry := OverlayService{
 			Name:            svc.Container,
+			Key:             name,
 			ShimFile:        shimassets.FileName(resolveShimArch(name, svc.Container, composeProject, arch, logf)),
 			ShimPath:        svc.BridgeShimPath(),
 			UnreachableWarn: svc.BridgeOnUnreachable() == config.BridgeOnUnreachableWarn,
@@ -301,10 +309,14 @@ func RenderOverlay(spec OverlaySpec) ([]byte, error) {
 	for _, svc := range spec.Services {
 		// Env names are the D7 contract read by the shim
 		// (bridgeclient.OptionsFromEnv) and stripped from forwarded env on
-		// both sides (bridgeclient.StripEnv).
+		// both sides (bridgeclient.StripEnv). DWE_BRIDGE_SERVICE is the one
+		// exception: it is FORWARDED to the host (deliberately not in the
+		// strip set) — the host-side dwe filters per-command bridge
+		// visibility by it. Container-reported, hence advisory only.
 		env := map[string]string{
-			"DWE_BRIDGE_DIR":     BridgeMountTarget,
-			"DWE_BRIDGE_PROJECT": spec.Project,
+			"DWE_BRIDGE_DIR":              BridgeMountTarget,
+			"DWE_BRIDGE_PROJECT":          spec.Project,
+			bridgeclient.EnvBridgeService: svc.Key,
 		}
 		if svc.HostWorkspace != "" && svc.ContainerWorkspace != "" {
 			env["DWE_HOST_WORKSPACE"] = svc.HostWorkspace

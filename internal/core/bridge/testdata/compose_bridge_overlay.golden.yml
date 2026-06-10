@@ -13,6 +13,7 @@ services:
     environment:
       DWE_BRIDGE_DIR: /dwe-bridge
       DWE_BRIDGE_PROJECT: acme-shop
+      DWE_BRIDGE_SERVICE: admin
       DWE_BRIDGE_UNREACHABLE: warn
       DWE_CONTAINER_WORKSPACE: /srv/admin
       DWE_HOST_WORKSPACE: /host/proj/services/admin
@@ -31,6 +32,7 @@ services:
     environment:
       DWE_BRIDGE_DIR: /dwe-bridge
       DWE_BRIDGE_PROJECT: acme-shop
+      DWE_BRIDGE_SERVICE: main
       DWE_CONTAINER_WORKSPACE: /workspace
       DWE_HOST_WORKSPACE: /host/proj/services/main
     extra_hosts:
@@ -48,5 +50,6 @@ services:
     environment:
       DWE_BRIDGE_DIR: /dwe-bridge
       DWE_BRIDGE_PROJECT: acme-shop
+      DWE_BRIDGE_SERVICE: queue
     extra_hosts:
       - host.docker.internal:host-gateway

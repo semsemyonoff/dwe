@@ -43,6 +43,13 @@ func runCommandByID(
 		return cmdctx.ErrWrap("command_unknown", err).WithDetail("id", id)
 	}
 
+	// Bridge guard sits BEFORE the inspect route: unlike Hidden (where
+	// inspect is the debug aid for "why did my command disappear"), the
+	// container surface is a hard gate — inspect is rejected too.
+	if err := bridgeGuard(def); err != nil {
+		return err
+	}
+
 	// Normalize Translator to never be nil; tests or edge cases might not set it.
 	if opts.Translator == nil {
 		opts.Translator = i18n.NopTranslator{}

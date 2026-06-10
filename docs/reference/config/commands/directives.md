@@ -5,6 +5,7 @@ Directives common to **all** command types unless noted otherwise. Type-specific
 ## Contents
 
 - [Identity and visibility](#identity-and-visibility)
+- [Bridge visibility](#bridge-visibility)
 - [Confirmation](#confirmation)
 - [Confirmation flow](#confirmation-flow)
 - [Messages](#messages)
@@ -23,6 +24,7 @@ Directives common to **all** command types unless noted otherwise. Type-specific
 | `description` | string | — | Human-readable description shown in the DWE CLI (selectors, `commands list`, `commands inspect`) |
 | `private` | bool | `false` | Hides from `dwe commands list` and blocks direct `commands run`; still callable from workflows and pipelines |
 | `hide` | string | `""` | Condition expression. When truthy at runtime, the command is treated as if it does not exist: invisible in `dwe commands`, completion, and TUI; rejected on direct invocation; and workflow steps targeting it are auto-skipped with `SkipReason="hidden"`. Same syntax as workflow step `when:` — see [Hide condition](#hide-condition) below. |
+| `bridge` | block | absent | Opts the command in to the container surface of the [host bridge](../../bridge.md) — without it the command is host-only and invisible to the in-container `dwe` shim. See [Bridge visibility](#bridge-visibility) below. |
 | `notify` | bool | `false` | Fire a desktop notification when the command finishes. See [Notifications](#notifications) below. |
 
 ## Hide condition
@@ -57,6 +59,47 @@ commands:
     hide: '{{ eq (index .services "db" "engine") "sqlite" }}'
     cmd: db reset --engine
 ```
+
+## Bridge visibility
+
+`bridge:` controls whether the command can be listed and invoked **from inside a container** through the [host bridge](../../bridge.md) shim. The default is opt-in: a command with no `bridge:` block anywhere is host-only — invisible in container listings/completion and rejected on direct invocation with `command_not_bridged`.
+
+| Field | Type | Default | Description |
+|-------|------|---------|-------------|
+| `bridge.enabled` | bool | `false` | Opt the command in to the container surface. |
+| `bridge.services` | list | all | Restrict visibility to the containers of the named services (`workspace/services/<name>` folder names). Absent or empty means every bridge-enabled service. |
+
+The same block is valid on the file's `group:` header, where it sets the default for every command in the file. Inheritance is **field-wise**: an absent command field inherits the group value, a set one overrides it — so a command can flip `enabled: false` under an enabling group, or widen/narrow `services` on its own.
+
+```yaml
+group:
+  title: Code style
+  bridge:
+    enabled: true          # every command in this file…
+    services: [main]       # …but only from the main container
+
+commands:
+  all:
+    type: service_exec
+    cmd: composer cs       # inherits: bridged, main only
+  fix-deps:
+    type: shell
+    cmd: brew install something
+    bridge:
+      enabled: false       # host-only exception
+  report:
+    type: service_exec
+    cmd: composer cs:report
+    bridge:
+      services: [main, admin]   # widened, still enabled via group
+```
+
+Semantics worth knowing:
+
+- **Execution is never gated.** A bridged workflow happily runs non-bridged sub-commands — the gate covers the container *invocation surface*, not what the host may execute on a container's behalf.
+- **No magic from `service:`.** A `service_exec` command targeting `main` is not auto-restricted to the `main` container; restriction is always explicit via `bridge.services`.
+- **The caller identity is advisory.** The shim reports its service via `DWE_BRIDGE_SERVICE` (overlay-injected); a container could claim another name. `bridge.services` is a UX boundary between containers of one project — the security boundary stays the bridge's [top-level command allowlist](../../bridge.md#container-command-policy).
+- `dwe validate` warns when `bridge.services` names an unknown service or one whose `service.yml` has the bridge disabled.
 
 ## Confirmation
 

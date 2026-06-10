@@ -126,6 +126,9 @@ func (r *Registry) addCommandFile(cf *model.CommandFile) error {
 	if cf.Group.Hide != "" {
 		gn.Meta.Hide = cf.Group.Hide
 	}
+	if cf.Group.Bridge != nil {
+		gn.Meta.Bridge = cf.Group.Bridge
+	}
 
 	names := make([]string, 0, len(cf.Commands))
 	for n := range cf.Commands {
@@ -223,6 +226,12 @@ func (r *Registry) ListAllIncludingHidden(groupPrefix string) []*model.CommandDe
 func (r *Registry) list(groupPrefix string, includePrivate, includeHidden bool) []*model.CommandDef {
 	var result []*model.CommandDef
 	for id, cmd := range r.byID {
+		// BridgeHidden is filtered unconditionally: from a container the
+		// command does not exist on ANY listing surface — including the
+		// inspect-on-hidden escape hatch, which is a host-side debug aid.
+		if cmd.BridgeHidden {
+			continue
+		}
 		if !includeHidden && cmd.Hidden {
 			continue
 		}

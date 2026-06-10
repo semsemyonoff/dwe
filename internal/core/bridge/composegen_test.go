@@ -68,12 +68,12 @@ func TestBuildOverlaySpec_selectionAndFields(t *testing.T) {
 		BridgeDir: "/host/proj/.dwe/bridge",
 		Project:   "acme-shop",
 		Services: []OverlayService{
-			{Name: "app-admin", ShimFile: "shim-linux-amd64", ShimPath: "/opt/dwe/bin/dwe",
+			{Name: "app-admin", Key: "admin", ShimFile: "shim-linux-amd64", ShimPath: "/opt/dwe/bin/dwe",
 				HostWorkspace: "/host/proj/services/admin", ContainerWorkspace: "/srv/admin",
 				UnreachableWarn: true},
-			{Name: "app-main", ShimFile: "shim-linux-arm64", ShimPath: "/usr/local/bin/dwe",
+			{Name: "app-main", Key: "main", ShimFile: "shim-linux-arm64", ShimPath: "/usr/local/bin/dwe",
 				HostWorkspace: "/host/proj/services/main", ContainerWorkspace: "/workspace"},
-			{Name: "queue", ShimFile: "shim-linux-arm64", ShimPath: "/usr/local/bin/dwe"},
+			{Name: "queue", Key: "queue", ShimFile: "shim-linux-arm64", ShimPath: "/usr/local/bin/dwe"},
 		},
 	}
 	if !reflect.DeepEqual(spec, want) {

@@ -6,6 +6,41 @@ import (
 	"testing"
 )
 
+func TestStripEnv_ForwardsBridgeService(t *testing.T) {
+	in := []string{"DWE_BRIDGE_SERVICE=main", "DWE_BRIDGE_PROJECT=p", "TERM=xterm"}
+	got := StripEnv(in)
+	want := []string{"DWE_BRIDGE_SERVICE=main", "TERM=xterm"}
+	if !slices.Equal(got, want) {
+		t.Errorf("StripEnv(%v) = %v, want %v (DWE_BRIDGE_SERVICE is host-consumed, must pass)", in, got, want)
+	}
+}
+
+func TestInContainer(t *testing.T) {
+	t.Setenv(EnvInvokedFrom, InvokedFromContainer)
+	if !InContainer() {
+		t.Error("InContainer() = false with DWE_INVOKED_FROM=container")
+	}
+	t.Setenv(EnvInvokedFrom, "host")
+	if InContainer() {
+		t.Error("InContainer() = true with DWE_INVOKED_FROM=host")
+	}
+	_ = os.Unsetenv(EnvInvokedFrom)
+	if InContainer() {
+		t.Error("InContainer() = true with the variable unset")
+	}
+}
+
+func TestCallingService(t *testing.T) {
+	t.Setenv(EnvBridgeService, "admin")
+	if got := CallingService(); got != "admin" {
+		t.Errorf("CallingService() = %q, want %q", got, "admin")
+	}
+	_ = os.Unsetenv(EnvBridgeService)
+	if got := CallingService(); got != "" {
+		t.Errorf("CallingService() = %q, want empty when unset", got)
+	}
+}
+
 func TestForceColorEnv(t *testing.T) {
 	tests := []struct {
 		name string

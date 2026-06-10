@@ -19,20 +19,24 @@ import (
 	"strconv"
 	"sync"
 	"time"
+
+	"github.com/semsemyonoff/dwe/internal/shared/bridgeclient"
 )
 
 // Environment variables of the bridge env contract (design D7). They are
 // host-controlled: the daemon strips any client-sent value and force-sets
-// its own, so a container can never spoof them.
+// its own, so a container can never spoof them. The canonical definitions
+// live in shared/bridgeclient (the leaf both core/ and cli/ can import);
+// these aliases keep the daemon-side call sites reading naturally.
 const (
 	// EnvInvokedFrom marks a dwe process as bridge-forked; the CLI command
 	// policy keys off InvokedFromContainer.
-	EnvInvokedFrom = "DWE_INVOKED_FROM"
+	EnvInvokedFrom = bridgeclient.EnvInvokedFrom
 	// InvokedFromContainer is the EnvInvokedFrom value set by the daemon.
-	InvokedFromContainer = "container"
+	InvokedFromContainer = bridgeclient.InvokedFromContainer
 	// EnvNonInteractive forces the existing non-interactive contract (as in
 	// CI) on every bridged invocation — the bridge never allocates a pty.
-	EnvNonInteractive = "DWE_NONINTERACTIVE"
+	EnvNonInteractive = bridgeclient.EnvNonInteractive
 )
 
 // BindOverrideEnv lists override TCP bind addresses for exotic setups

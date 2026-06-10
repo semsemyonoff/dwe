@@ -108,6 +108,9 @@ Without an id, an interactive selector lists public commands. With a group prefi
 					if err != nil {
 						return cmdctx.ErrWrap("command_unknown", err).WithDetail("id", args[0])
 					}
+					if err := bridgeGuard(def); err != nil {
+						return err
+					}
 					translator := i18n.TranslatorOrNop(flags.I18n)
 					data := buildCommandInspectJSON(def, translator, flags.Locale)
 					return cmdctx.WriteJSON(flags, cmd, data)
