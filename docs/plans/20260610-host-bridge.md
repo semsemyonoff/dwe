@@ -818,33 +818,60 @@ Rejected (do not re-litigate):
 - Create: `internal/core/bridge/testdata/` (golden files)
 - Modify: `internal/core/project/config/workspace.go` (composeFiles)
 
-- [ ] render `.dwe/compose.bridge.yml` per D8 — single dwe-owned file with
+- [x] render `.dwe/compose.bridge.yml` per D8 — single dwe-owned file with
       the GENERATED header, containing exactly the currently enabled
       bridge-enabled services: RO mounts (`.dwe/bridge` → `/dwe-bridge`,
       shim → `shim_path`), env block (`DWE_BRIDGE_DIR`,
       `DWE_HOST_WORKSPACE`, `DWE_CONTAINER_WORKSPACE`,
       `DWE_BRIDGE_PROJECT`, conditional `DWE_BRIDGE_UNREACHABLE`),
-      `extra_hosts: host.docker.internal:host-gateway`
-- [ ] shim arch per service via `docker inspect` image Architecture
+      `extra_hosts: host.docker.internal:host-gateway` —
+      `RenderOverlay(OverlaySpec)` pure renderer + `BuildOverlaySpec`
+      (cfg → spec) in `internal/core/bridge/composegen.go`
+- [x] shim arch per service via `docker inspect` image Architecture
       (injectable runner; image not pulled / inspect failed → fallback to
       HOST arch (`runtime.GOARCH` → linux equivalent) with warning — dev
       containers virtually always run the host's native arch; never
-      hardcode amd64)
-- [ ] regeneration semantics: atomic write-if-changed on every compose-up
+      hardcode amd64) — `DockerArchResolver` (container inspect `{{.Image}}`
+      → image inspect `{{.Architecture}}`, two-step because pre-first-deploy
+      there is no container and the image name lives in user compose files;
+      injectable `CommandOutput` seam); `shimassets.FileName(arch)` exported
+      as the single shim-name source
+- [x] regeneration semantics: atomic write-if-changed on every compose-up
       command (the prepare hook's overlay step ALWAYS runs); DELETE the file
       when no enabled service has bridge enabled; keep the render function
-      pure (config in → YAML out) for golden tests
-- [ ] `composeFiles()`: insert `.dwe/compose.bridge.yml` after app overlays
+      pure (config in → YAML out) for golden tests — `RegenerateOverlay`
+      returns a `changed` bool; same-dir temp + rename like shimassets
+- [x] `composeFiles()`: insert `.dwe/compose.bridge.yml` after app overlays
       and BEFORE the local.yml overlays (local keeps the last word — D8
       chain position) when the file exists; iterate services via
       `config.DeployOrder` (golden stability — never `range cfg.Services`)
-- [ ] write tests: golden overlay for multi-service config (enabled/disabled
+      — `config.BridgeOverlayRelPath` const; existence is stat'd at CALL
+      time (`bridgeOverlayExists` via `Raw["__configPath"]`), not at load
+      time — the prepare hook regenerates/deletes the file after LoadConfig
+      and before compose args are built, so a load-time snapshot would go
+      stale within the very command that mutates it
+- [x] write tests: golden overlay for multi-service config (enabled/disabled
       mix — disabled services absent from output, `shim_path` override,
       `on_unreachable: warn`), arch fallback, write-if-changed (identical
       content → no rewrite), deletion when nothing bridged, chain insertion
       position (before local overlays), toggle round-trip: disable →
       regenerated without the service; re-enable → back in
-- [ ] run tests — must pass before task 8
+- ➕ [x] design-reference deviations from the D8 sketch, both deliberate:
+      (1) mount sources are ABSOLUTE host paths, not `./.dwe/bridge` —
+      relative sources in a compose file resolve against the project
+      directory (the FIRST `-f` file's dir), which shifts with
+      `compose.base`; the overlay is regenerated machine state, so baked
+      absolute paths self-heal. (2) `DWE_HOST_WORKSPACE` /
+      `DWE_CONTAINER_WORKSPACE` are the per-service hub mapping
+      (`<root>/<svc.dir>` ↔ `svc.dir_internal`), not project root ↔
+      `/workspace` — dwe app containers mount the service hub, not the
+      project root, and the pair must mirror an actual bind mount for the
+      shim's prefix rewrite to land on a real host path; services without a
+      `dir`/`dir_internal` pair omit both vars (untranslated cwds are then
+      rejected by the daemon containment check, per D7)
+- [x] run tests — must pass before task 8 (`make test`: full suite ok;
+      `make lint`: 0 issues; `-race` clean on bridge + config; module
+      cross-compiles for windows/amd64 and linux/arm64)
 
 ### Task 8: Lifecycle integration
 

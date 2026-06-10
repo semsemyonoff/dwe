@@ -31,6 +31,11 @@ var embedded embed.FS
 // (the committed .gitkeep placeholder) is skipped.
 const shimPrefix = "shim-"
 
+// FileName returns the shim file name for a linux GOARCH (e.g.
+// "shim-linux-amd64"). Single naming source shared by the build script
+// outputs, Materialize targets, and the compose overlay mount sources.
+func FileName(arch string) string { return shimPrefix + "linux-" + arch }
+
 // shimPerm makes materialized shims executable — they are bind-mounted as
 // `/usr/local/bin/dwe` (or bridge.shim_path) inside containers.
 const shimPerm = 0o755

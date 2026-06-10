@@ -417,15 +417,22 @@ func filterServicesByType(svcs map[string]ServiceConfig, t ServiceType) map[stri
 	return out
 }
 
+// BridgeOverlayRelPath is the project-root-relative path of the generated
+// host-bridge compose overlay (design D8). Slash-separated and stored as
+// written in the -f chain like every other compose path; the file itself is
+// dwe-owned machine state written by internal/core/bridge.
+const BridgeOverlayRelPath = ".dwe/compose.bridge.yml"
+
 // ComposeFiles returns the ordered list of compose files for the project:
 // base file first, then enabled tool overlays (sorted by key), then enabled
 // service overlays (sorted by service name). Per-service local overlays from
 // workspace/local.yml (services.<name>.compose.extra) are emitted immediately
 // after each service's own compose files, inside the same enabled-gate.
-// Project-wide local overlays from workspace/local.yml (compose.extra) are
-// appended last so last-wins compose semantics let a single local file patch
-// anything. This is the canonical file list used by all compose-aware CLI
-// operations.
+// The generated host-bridge overlay (BridgeOverlayRelPath) follows the
+// service groups when it exists on disk. Project-wide local overlays from
+// workspace/local.yml (compose.extra) are appended last so last-wins compose
+// semantics let a single local file patch anything. This is the canonical
+// file list used by all compose-aware CLI operations.
 func (c *DweConfig) ComposeFiles() []string {
 	return c.composeFiles(false)
 }
@@ -475,11 +482,34 @@ func (c *DweConfig) composeFiles(all bool) []string {
 	emitGroup(func(t ServiceType) bool { return t == ServiceTypeInfra })
 	emitGroup(func(t ServiceType) bool { return t == ServiceTypeApp || t == "" })
 
+	// Generated host-bridge overlay: after the service overlays, BEFORE the
+	// project-wide local.yml overlays — local.yml stays the user
+	// customization channel and keeps the last word over anything the bridge
+	// overlay sets (design D8 chain position).
+	if c.bridgeOverlayExists() {
+		files = append(files, BridgeOverlayRelPath)
+	}
+
 	if len(c.Compose.Extra) > 0 {
 		files = append(files, c.Compose.Extra...)
 	}
 
 	return files
+}
+
+// bridgeOverlayExists reports whether the generated host-bridge overlay is
+// present for this config's project root. The check runs at call time — the
+// bridge prepare hook regenerates or deletes the file after LoadConfig and
+// before compose args are built, so a load-time snapshot would go stale
+// within the very command that mutates it. Configs built without LoadConfig
+// (no __configPath in Raw) never include the overlay.
+func (c *DweConfig) bridgeOverlayExists() bool {
+	cfgPath, ok := c.Raw["__configPath"].(string)
+	if !ok || cfgPath == "" {
+		return false
+	}
+	_, err := os.Stat(filepath.Join(filepath.Dir(cfgPath), filepath.FromSlash(BridgeOverlayRelPath)))
+	return err == nil
 }
 
 // ServiceConfigEntry represents one config file declared under a service's configs list.
