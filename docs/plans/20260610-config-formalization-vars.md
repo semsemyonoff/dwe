@@ -88,13 +88,13 @@ Dependencies identified: changes are confined to `internal/core/project/config`,
 - Modify: `internal/core/project/config/workspace.go`
 - Modify/Create: `internal/core/project/config/workspace_test.go` (or a focused `*_test.go` near the loader)
 
-- [ ] Add `Vars map[string]any \`yaml:"vars"\`` to `DweConfig` (top-level, alongside `project`/`runtime`/…).
-- [ ] Define a single source-of-truth allowlist of permitted top-level keys `{project, runtime, state, exports, compose, ui, docs, services, vars, update}` (a package-level set/slice).
-- [ ] In `LoadConfig`, place the allowlist check AFTER the existing `binaries:`/`tools:` legacy rejections (workspace.go ~1366) and BEFORE `__configPath`/`injectServicesIntoRaw`; iterate the merged map's top-level keys and hard-error on any key not in the allowlist, with the `vars:` hint message. Preserve the dedicated `binaries`/`tools` messages (either by ordering after them or special-casing them in the loop).
-- [ ] Ensure `vars` survives into `Raw` (it already will — it's a normal merged key) so `${vars.*}` and `from: vars.*` resolve unchanged.
-- [ ] Write tests: known keys load OK; unknown root key → error with hint; `vars:` with arbitrary nested free-form structure loads and is reachable via `ResolvePath(cfg.Raw, "vars.x.y")`; 3-layer merge keeps `vars` from `defaults.yml`.
-- [ ] Write error-case tests: unknown key in each layer (`workspace.yml`, `defaults.yml`, `local.yml`) is rejected.
-- [ ] `make test` — must pass before Task 2.
+- [x] Add `Vars map[string]any \`yaml:"vars"\`` to `DweConfig` (top-level, alongside `project`/`runtime`/…).
+- [x] Define a single source-of-truth allowlist of permitted top-level keys `{project, runtime, state, exports, compose, ui, docs, services, vars, update}` (a package-level set/slice). NOTE: also includes `schema_version` (reserved forward-compat metadata, used pervasively in fixtures) — without it ~36 existing fixtures would be rejected.
+- [x] In `LoadConfig`, place the allowlist check AFTER the existing `binaries:`/`tools:` legacy rejections (workspace.go ~1366) and BEFORE `__configPath`/`injectServicesIntoRaw`; iterate the merged map's top-level keys and hard-error on any key not in the allowlist, with the `vars:` hint message. Preserve the dedicated `binaries`/`tools` messages (special-cased to skip in the loop; rejections run earlier). Iterates per layer so the error names the source file.
+- [x] Ensure `vars` survives into `Raw` (it already will — it's a normal merged key) so `${vars.*}` and `from: vars.*` resolve unchanged.
+- [x] Write tests: known keys load OK; unknown root key → error with hint; `vars:` with arbitrary nested free-form structure loads and is reachable via `ResolvePath(cfg.Raw, "vars.x.y")`; 3-layer merge keeps `vars` from `defaults.yml`.
+- [x] Write error-case tests: unknown key in each layer (`workspace.yml`, `defaults.yml`, `local.yml`) is rejected. Also migrated the one breaking LoadConfig-path inline test (`config_keys_present_test.go`) early so the suite stays green (Task 2 covers the rest).
+- [x] `make test` — config + builtin packages pass. (Pre-existing unrelated failure: `TestRussianTranslationsAreFresh` for `validate.md`, present on branch HEAD before my changes; covered by Task 7.)
 
 ### Task 2: Migrate repo `testdata/` fixtures + our own docs examples to `vars.*`
 

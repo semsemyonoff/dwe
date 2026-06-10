@@ -27,6 +27,36 @@ import (
 // compose.overlays key. No trailing period — callers append context.
 const legacyComposeOverlaysMsg = "compose.overlays is no longer supported; move overlay files to individual services (type: tool): services.<name>.compose instead. See docs/reference/config/workspace.md for migration details"
 
+// allowedRootKeys is the strict allowlist of permitted top-level keys in the
+// merged 3-layer project config (workspace.yml / workspace/defaults.yml /
+// workspace/local.yml). Any other key is a hard error at load time — arbitrary,
+// free-form values must live under the vars: sandbox. schema_version is reserved
+// forward-compat metadata: tolerated at the root but not interpreted. binaries
+// and tools are intentionally absent — they are rejected earlier in LoadConfig
+// with dedicated migration messages.
+var allowedRootKeys = []string{
+	"schema_version",
+	"project",
+	"runtime",
+	"state",
+	"exports",
+	"compose",
+	"ui",
+	"docs",
+	"services",
+	"vars",
+	"update",
+}
+
+// allowedRootKeySet is the membership index over allowedRootKeys.
+var allowedRootKeySet = func() map[string]struct{} {
+	m := make(map[string]struct{}, len(allowedRootKeys))
+	for _, k := range allowedRootKeys {
+		m[k] = struct{}{}
+	}
+	return m
+}()
+
 // binOverride returns the user-configured override for the named binary, or
 // def when cfg is nil, cfg.userConfig is nil, or no override is present.
 func binOverride(cfg *DweConfig, key, def string) string {
@@ -74,6 +104,12 @@ type DweConfig struct {
 	Deploy  *ProjectDeployConfig `yaml:"-"`
 	UI      UIConfig             `yaml:"ui"`
 	Docs    DocsConfig           `yaml:"docs"`
+
+	// Vars is the single legal home for arbitrary, free-form project values.
+	// The root of the merged config is strict (see allowedRootKeys), but the
+	// contents of vars: are unvalidated and may nest arbitrarily. References
+	// resolve via Raw dot-paths (`${vars.db.password}`, `from: vars.db.user`).
+	Vars map[string]any `yaml:"vars"`
 
 	// Services holds the fully resolved service definitions loaded from
 	// workspace/services/<name>/service.yml with Enabled populated from the 3-layer config merge.
@@ -1363,6 +1399,32 @@ func LoadConfig(workspacePath string) (*DweConfig, error) {
 	// Reject tools: blocks — replaced by services with type:tool
 	if _, ok := merged["tools"]; ok {
 		return nil, fmt.Errorf("tools: no longer supported — define tool entries as services with type: tool in workspace/services/. See docs/reference/config/services/index.md")
+	}
+
+	// Strict root: reject any top-level key outside allowedRootKeys. Custom,
+	// free-form values must live under vars:. This runs AFTER the dedicated
+	// binaries:/tools: rejections above (so their migration messages win) and
+	// BEFORE __configPath / injectServicesIntoRaw add internal keys to merged.
+	// Iterate per layer so the error names the source file that introduced the
+	// offending key; keys are sorted for a deterministic message.
+	for _, layer := range layers {
+		keys := make([]string, 0, len(layer.data))
+		for k := range layer.data {
+			keys = append(keys, k)
+		}
+		sort.Strings(keys)
+		for _, key := range keys {
+			if _, ok := allowedRootKeySet[key]; ok {
+				continue
+			}
+			// binaries:/tools: are rejected above with dedicated messages; skip
+			// them defensively so a future reordering can't clobber those.
+			if key == "binaries" || key == "tools" {
+				continue
+			}
+			return nil, fmt.Errorf("%s: unknown top-level key %q — move custom values under \"vars:\" (e.g. vars.%s.*); allowed top-level keys: %s",
+				layer.path, key, key, strings.Join(allowedRootKeys, ", "))
+		}
 	}
 
 	// Load user-config for binary overrides. On error, log warning and continue

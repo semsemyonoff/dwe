@@ -347,6 +347,125 @@ state: staging
 	}
 }
 
+// --- strict root allowlist + vars: sandbox (Task 1) ---
+
+func TestLoadConfig_strictRoot_allowedKeysLoad(t *testing.T) {
+	// All formalized top-level keys + schema_version + vars: load without error.
+	wsYML := `
+schema_version: "1"
+project:
+  name: laravel
+  prefix: dwe
+runtime:
+  use_https: false
+state: ""
+vars:
+  db:
+    user: root
+    password: secret
+  my_custom:
+    timeout: 30
+`
+	path := writeFullFixture(t, wsYML, "", "", "", noToolsYML)
+	cfg, err := LoadConfig(path)
+	if err != nil {
+		t.Fatalf("LoadConfig: %v", err)
+	}
+	// vars: survives into Raw and resolves by dot-path.
+	if v, ok := ResolvePath(cfg.Raw, "vars.db.password"); !ok || v != "secret" {
+		t.Errorf("vars.db.password = %v (ok=%v), want secret", v, ok)
+	}
+	if v, ok := ResolvePath(cfg.Raw, "vars.my_custom.timeout"); !ok || v != 30 {
+		t.Errorf("vars.my_custom.timeout = %v (ok=%v), want 30", v, ok)
+	}
+	// The typed Vars field is also populated.
+	if cfg.Vars == nil {
+		t.Fatal("cfg.Vars should be populated")
+	}
+	if db, ok := cfg.Vars["db"].(map[string]any); !ok || db["user"] != "root" {
+		t.Errorf("cfg.Vars[db][user] = %v, want root", cfg.Vars["db"])
+	}
+}
+
+func TestLoadConfig_strictRoot_unknownKeyRejected(t *testing.T) {
+	// An unknown top-level key in each layer is rejected with the vars: hint.
+	cases := []struct {
+		name             string
+		ws, defaults, lc string
+		wantFile         string
+	}{
+		{
+			name:     "workspace.yml",
+			ws:       sampleWorkspaceYML + "\ndb:\n  user: root\n",
+			wantFile: "workspace.yml",
+		},
+		{
+			name:     "defaults.yml",
+			ws:       sampleWorkspaceYML,
+			defaults: "schema_version: \"1\"\nmy_custom:\n  x: 1\n",
+			wantFile: "defaults.yml",
+		},
+		{
+			name:     "local.yml",
+			ws:       sampleWorkspaceYML,
+			lc:       "app:\n  log_level: debug\n",
+			wantFile: "local.yml",
+		},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			path := writeFullFixture(t, tc.ws, tc.defaults, tc.lc, "", noToolsYML)
+			_, err := LoadConfig(path)
+			if err == nil {
+				t.Fatal("expected error for unknown top-level key")
+			}
+			if !strings.Contains(err.Error(), "unknown top-level key") {
+				t.Errorf("error = %q, want 'unknown top-level key'", err)
+			}
+			if !strings.Contains(err.Error(), "vars:") {
+				t.Errorf("error = %q, want vars: hint", err)
+			}
+			if !strings.Contains(err.Error(), tc.wantFile) {
+				t.Errorf("error = %q, want layer file %q", err, tc.wantFile)
+			}
+		})
+	}
+}
+
+func TestLoadConfig_strictRoot_varsFromDefaultsMerges(t *testing.T) {
+	// vars: declared in defaults.yml survives the 3-layer merge and is reachable.
+	defaults := "schema_version: \"1\"\nvars:\n  db:\n    host: dbhost\n"
+	path := writeFullFixture(t, sampleWorkspaceYML, defaults, "", "", noToolsYML)
+	cfg, err := LoadConfig(path)
+	if err != nil {
+		t.Fatalf("LoadConfig: %v", err)
+	}
+	if v, ok := ResolvePath(cfg.Raw, "vars.db.host"); !ok || v != "dbhost" {
+		t.Errorf("vars.db.host = %v (ok=%v), want dbhost (from defaults)", v, ok)
+	}
+}
+
+func TestLoadConfig_strictRoot_legacyKeysKeepDedicatedMessages(t *testing.T) {
+	// binaries:/tools: must still emit their dedicated migration messages — the
+	// generic allowlist error must not clobber them.
+	t.Run("tools", func(t *testing.T) {
+		ws := sampleWorkspaceYML + "\ntools:\n  web:\n    image: nginx\n"
+		path := writeFullFixture(t, ws, "", "", "", noToolsYML)
+		_, err := LoadConfig(path)
+		if err == nil || !strings.Contains(err.Error(), "tools: no longer supported") {
+			t.Fatalf("want dedicated tools message, got %v", err)
+		}
+	})
+	t.Run("binaries", func(t *testing.T) {
+		ws := sampleWorkspaceYML + "\nbinaries:\n  docker: /usr/bin/docker\n"
+		path := writeFullFixture(t, ws, "", "", "", noToolsYML)
+		_, err := LoadConfig(path)
+		if err == nil || !strings.Contains(err.Error(), "binaries: moved") {
+			t.Fatalf("want dedicated binaries message, got %v", err)
+		}
+	})
+}
+
 func TestLoadConfig_noOptionalFiles(t *testing.T) {
 	// Works fine when defaults.yml, local.yml, and tools.yml are absent.
 	path := writeFullFixture(t, sampleWorkspaceYML, "", "", "", noToolsYML)
