@@ -466,6 +466,86 @@ func TestLoadConfig_strictRoot_legacyKeysKeepDedicatedMessages(t *testing.T) {
 	})
 }
 
+func TestUpdateConfig_EffectiveMode(t *testing.T) {
+	cases := []struct {
+		name string
+		cfg  *UpdateConfig
+		want string
+	}{
+		{name: "nil block", cfg: nil, want: "off"},
+		{name: "present empty mode", cfg: &UpdateConfig{}, want: "on"},
+		{name: "explicit on", cfg: &UpdateConfig{Mode: "on"}, want: "on"},
+		{name: "explicit off", cfg: &UpdateConfig{Mode: "off"}, want: "off"},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := tc.cfg.EffectiveMode(); got != tc.want {
+				t.Errorf("EffectiveMode() = %q, want %q", got, tc.want)
+			}
+		})
+	}
+}
+
+func TestLoadConfig_update_absentBlockIsOff(t *testing.T) {
+	// No update: block at all → EffectiveMode off, Update field nil.
+	path := writeFullFixture(t, sampleWorkspaceYML, "", "", "", noToolsYML)
+	cfg, err := LoadConfig(path)
+	if err != nil {
+		t.Fatalf("LoadConfig: %v", err)
+	}
+	if cfg.Update != nil {
+		t.Errorf("cfg.Update = %+v, want nil", cfg.Update)
+	}
+	if got := cfg.Update.EffectiveMode(); got != "off" {
+		t.Errorf("EffectiveMode() = %q, want off", got)
+	}
+}
+
+func TestLoadConfig_update_threeLayerMerge(t *testing.T) {
+	// defaults on → workspace off → local on. local.yml wins (last-layer-wins
+	// scalar merge): final resolved mode is on.
+	ws := sampleWorkspaceYML + "\nupdate:\n  mode: off\n"
+	defaults := "schema_version: \"1\"\nupdate:\n  mode: on\n"
+	lc := "update:\n  mode: on\n"
+	path := writeFullFixture(t, ws, defaults, lc, "", noToolsYML)
+	cfg, err := LoadConfig(path)
+	if err != nil {
+		t.Fatalf("LoadConfig: %v", err)
+	}
+	if cfg.Update == nil {
+		t.Fatal("cfg.Update should be populated")
+	}
+	if got := cfg.Update.EffectiveMode(); got != "on" {
+		t.Errorf("EffectiveMode() = %q, want on (local.yml override)", got)
+	}
+}
+
+func TestLoadConfig_update_presentEmptyMode(t *testing.T) {
+	// update: with no mode → EffectiveMode on (writing the key is the opt-in).
+	ws := sampleWorkspaceYML + "\nupdate: {}\n"
+	path := writeFullFixture(t, ws, "", "", "", noToolsYML)
+	cfg, err := LoadConfig(path)
+	if err != nil {
+		t.Fatalf("LoadConfig: %v", err)
+	}
+	if got := cfg.Update.EffectiveMode(); got != "on" {
+		t.Errorf("EffectiveMode() = %q, want on", got)
+	}
+}
+
+func TestLoadConfig_update_invalidModeRejected(t *testing.T) {
+	// A bad value must hard-error at load time, not silently fall through.
+	ws := sampleWorkspaceYML + "\nupdate:\n  mode: yes-please\n"
+	path := writeFullFixture(t, ws, "", "", "", noToolsYML)
+	_, err := LoadConfig(path)
+	if err == nil {
+		t.Fatal("expected error for invalid update.mode")
+	}
+	if !strings.Contains(err.Error(), "update.mode") {
+		t.Errorf("error = %q, want 'update.mode'", err)
+	}
+}
+
 func TestLoadConfig_noOptionalFiles(t *testing.T) {
 	// Works fine when defaults.yml, local.yml, and tools.yml are absent.
 	path := writeFullFixture(t, sampleWorkspaceYML, "", "", "", noToolsYML)

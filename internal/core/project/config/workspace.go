@@ -105,6 +105,13 @@ type DweConfig struct {
 	UI      UIConfig             `yaml:"ui"`
 	Docs    DocsConfig           `yaml:"docs"`
 
+	// Update is the formalized top-level self-update policy. It participates in
+	// the 3-layer merge (scalar mode last-layer-wins), so a project author sets
+	// the policy in workspace.yml and a developer overrides it in local.yml.
+	// A pointer so a missing block (nil → off) is distinguishable from a present
+	// block with an empty mode (→ on). See UpdateConfig.EffectiveMode.
+	Update *UpdateConfig `yaml:"update"`
+
 	// Vars is the single legal home for arbitrary, free-form project values.
 	// The root of the merged config is strict (see allowedRootKeys), but the
 	// contents of vars: are unvalidated and may nest arbitrarily. References
@@ -124,6 +131,27 @@ type DweConfig struct {
 	// and .dwe/config. Used by binary accessors to resolve engine binary overrides.
 	// Nil if load failed (graceful degradation).
 	userConfig *userpkg.Config `yaml:"-"`
+}
+
+// UpdateConfig is the formalized top-level self-update policy block. Mode must be
+// one of: on, off. A missing block (nil) means off; a present block with an empty
+// mode means on (writing the update: key is itself the opt-in).
+type UpdateConfig struct {
+	Mode string `yaml:"mode"`
+}
+
+// EffectiveMode returns the resolved update mode before any CLI flag is applied.
+// Precedence: missing block (nil) → off; block present with empty mode → on;
+// block present with mode set → that value (on or off). CLI flags
+// (--no-update, --update) override this at the run consumer.
+func (c *UpdateConfig) EffectiveMode() string {
+	if c == nil {
+		return "off"
+	}
+	if c.Mode == "" {
+		return "on"
+	}
+	return c.Mode
 }
 
 // ProjectDeployConfig holds the project-wide deploy pipeline loaded from workspace/deploy.yml.
@@ -1425,6 +1453,14 @@ func LoadConfig(workspacePath string) (*DweConfig, error) {
 			return nil, fmt.Errorf("%s: unknown top-level key %q — move custom values under \"vars:\" (e.g. vars.%s.*); allowed top-level keys: %s",
 				layer.path, key, key, strings.Join(allowedRootKeys, ", "))
 		}
+	}
+
+	// Value-validate the formalized update: block. The strict-root allowlist only
+	// checks key names; without this a bad value (update: {mode: yes}) would load
+	// and then silently ActionSkip at run-time. Mirrors the old lifecycle loader's
+	// update.mode check; an empty mode is the present-but-default opt-in (→ on).
+	if cfg.Update != nil && cfg.Update.Mode != "" && !ValidUpdateMode(cfg.Update.Mode) {
+		return nil, fmt.Errorf("%s: update.mode %q is invalid; must be one of: on, off", workspacePath, cfg.Update.Mode)
 	}
 
 	// Load user-config for binary overrides. On error, log warning and continue

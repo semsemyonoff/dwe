@@ -113,12 +113,12 @@ Dependencies identified: changes are confined to `internal/core/project/config`,
 - Modify: `internal/core/project/config/workspace.go`
 - Modify: `internal/core/project/config/workspace_test.go`
 
-- [ ] Add `type UpdateConfig struct { Mode string \`yaml:"mode"\` }` and `Update *UpdateConfig \`yaml:"update"\`` to `DweConfig`.
-- [ ] Add `func (c *UpdateConfig) EffectiveMode() string` (nil → "off"; empty mode → "on"; else the mode), porting semantics from the old `LifecycleRunConfig.EffectiveMode`.
-- [ ] Confirm `update` is in the Task 1 allowlist; confirm scalar `mode` merges last-layer-wins through `deepMerge`.
-- [ ] **Load-time value validation (parity with the old lifecycle loader at workspace.go:2590):** when the `update:` block is present, hard-error in `LoadConfig` on `mode ∉ {on,off}` (reuse `ValidUpdateMode`). The allowlist only checks key *names*; without this, a bad value (`update: {mode: yes}`) would pass load and silently `ActionSkip` at run-time. (Task 6 still adds the equivalent `dwe validate` diagnostic.)
-- [ ] Write tests: `EffectiveMode` (nil/empty/on/off); 3-layer merge override (defaults `on` → workspace `off` → local `on` yields `on`); absent block → "off".
-- [ ] `make test` — must pass before Task 4.
+- [x] Add `type UpdateConfig struct { Mode string \`yaml:"mode"\` }` and `Update *UpdateConfig \`yaml:"update"\`` to `DweConfig`.
+- [x] Add `func (c *UpdateConfig) EffectiveMode() string` (nil → "off"; empty mode → "on"; else the mode), porting semantics from the old `LifecycleRunConfig.EffectiveMode`.
+- [x] Confirm `update` is in the Task 1 allowlist; confirm scalar `mode` merges last-layer-wins through `deepMerge`. (Verified: `update` already in `allowedRootKeys`; 3-layer merge test confirms last-layer-wins.)
+- [x] **Load-time value validation (parity with the old lifecycle loader at workspace.go:2590):** when the `update:` block is present, hard-error in `LoadConfig` on `mode ∉ {on,off}` (reuse `ValidUpdateMode`). The allowlist only checks key *names*; without this, a bad value (`update: {mode: yes}`) would pass load and silently `ActionSkip` at run-time. (Task 6 still adds the equivalent `dwe validate` diagnostic.)
+- [x] Write tests: `EffectiveMode` (nil/empty/on/off); 3-layer merge override (defaults `on` → workspace `off` → local `on` yields `on`); absent block → "off". Also added present-empty-mode → "on" and invalid-mode-rejected cases.
+- [x] `make test` — must pass before Task 4. (Config package green; only pre-existing unrelated `TestRussianTranslationsAreFresh` for `validate.md` fails — branch-HEAD, covered by Task 7.)
 
 ### Task 4: Remove `run.update` from lifecycle; repoint the run consumer
 
