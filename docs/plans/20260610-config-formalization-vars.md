@@ -102,10 +102,10 @@ Dependencies identified: changes are confined to `internal/core/project/config`,
 - Modify: every `testdata/**/{workspace,defaults,local}.yml` fixture using root custom keys
 - Modify: docs examples touched in later doc tasks are handled in Task 7; here only fixtures + any inline test YAML
 
-- [ ] **Scope note:** only YAML that flows through `LoadConfig` is affected by strict-root. Tests that build `DweConfig.Raw` directly via map literals (e.g. `usercommands/resolve/resolve_test.go:81-82`, `shared/envfile/render_test.go:157-159`) BYPASS LoadConfig and stay valid — do NOT migrate them. `prompt_test.go:261`'s `unknown_top_level` is in `.dwe/deploy/state.yml` (different schema) — also unaffected.
-- [ ] Confirmed LoadConfig-path case to migrate: `internal/core/execution/builtin/config_keys_present_test.go:124` (`localYML := "db:\n…\napp:\n…"` loaded via LoadConfig ~line 114) → wrap under `vars:` and update its `config_keys_present` paths to `vars.db.*`/`vars.app.*`.
-- [ ] Grep all `testdata/**/{workspace,defaults,local}.yml` fixtures + inline LoadConfig-path YAML literals for root custom keys (`db:`, `app:`, `user:`, `my_custom:`, etc.) and wrap them under `vars:`; update referencing dot-paths (`from: db.x` → `from: vars.db.x`; `${db.x}` → `${vars.db.x}`; command `DefaultFrom`).
-- [ ] `make test` — confirm strict-root no longer fails fixtures; fix any stragglers. Must pass before Task 3.
+- [x] **Scope note:** only YAML that flows through `LoadConfig` is affected by strict-root. Tests that build `DweConfig.Raw` directly via map literals (e.g. `usercommands/resolve/resolve_test.go:81-82`, `shared/envfile/render_test.go:157-159`) BYPASS LoadConfig and stay valid — do NOT migrate them. `prompt_test.go:261`'s `unknown_top_level` is in `.dwe/deploy/state.yml` (different schema) — also unaffected. Verified: these were left untouched.
+- [x] Confirmed LoadConfig-path case to migrate: `internal/core/execution/builtin/config_keys_present_test.go:124` → already migrated to `vars.*` during Task 1 (it was the one breaking LoadConfig-path inline test; wrapped under `vars:` with `vars.db.*`/`vars.app.*` paths).
+- [x] Grep all `testdata/**/{workspace,defaults,local}.yml` fixtures + inline LoadConfig-path YAML literals for root custom keys (`db:`, `app:`, `user:`, `my_custom:`, etc.). Exhaustive column-0 scan found NO offending keys: the 2 static `workspace.yml` fixtures are clean, and the only inline custom-root-key literals are the Task 1 strict-root error-case tests (which intentionally test rejection and must stay). No `from:`/`${...}` dot-paths needed repointing.
+- [x] `make test` — strict-root rejects no fixtures: full suite green except the pre-existing unrelated `TestRussianTranslationsAreFresh` (`validate.md`, branch-HEAD failure covered by Task 7). All config/builtin/loader/LoadConfig-path tests pass.
 
 ### Task 3: Add formalized top-level `update:` block + 3-layer merge wiring
 
