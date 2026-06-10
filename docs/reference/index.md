@@ -11,6 +11,7 @@ User-facing reference for the DWE CLI: project configuration, render packs, the 
 - [Render packs (`render/`)](render/index.md) — `dwe render env`, `render ide`, `render ai`, `render git`; pack manifest schema, collision policies, local overrides
 - [Documentation subsystem (`docs/`)](docs/index.md) — the `dwe docs` TUI browser, non-interactive subcommands (`show`, `list`, `export`, `llms-txt`, `cache clear`), translations and the content-hash staleness check
 - [Templates (`templates.md`)](templates.md) — the shared Go-template engine: `{{ ... }}` vs `${ ... }`, sprout registries, render context per site, command-scope resolvers
+- [Host bridge (`bridge.md`)](bridge.md) — run `dwe` from inside dev containers: the shim binary and host daemon, transports, the in-container command policy, the generated compose overlay, `dwe bridge` subcommands
 
 ## See also
 

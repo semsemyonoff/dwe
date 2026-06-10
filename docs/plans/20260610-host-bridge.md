@@ -1111,20 +1111,36 @@ Rejected (do not re-litigate):
 - Modify: `docs/internals/packages.md`
 - Modify: `AGENTS.md` (NOT `CLAUDE.md` — it is a symlink)
 
-- [ ] `docs/reference/bridge.md`: `bridge:` schema, transport behavior matrix
+- [x] `docs/reference/bridge.md`: `bridge:` schema, transport behavior matrix
       (D2), command policy table (D9), `.dwe/bridge/` contents (D8),
       troubleshooting (UFW / rootless / "daemon not running"), `dwe bridge`
-      subcommands
-- [ ] RU translation under `docs/i18n/ru/reference/`
-- [ ] `docs/internals/packages.md`: sections for `bridgeproto`,
+      subcommands — also covers the generated overlay model (D8), daemon
+      lifecycle table (D6), env contract (D7), and limitations (D11);
+      registered in `docs/reference/index.md` Sections (top-level page,
+      peer of `templates.md`)
+- [x] RU translation under `docs/i18n/ru/reference/` — full translation with
+      the `> Translated from: reference/bridge.md @ <hash>` freshness header;
+      RU `reference/index.md` updated too (new section line + bumped header
+      hash — `TestRussianTranslationsAreFresh` enforces both)
+- [x] `docs/internals/packages.md`: sections for `bridgeproto`,
       `bridgeclient`, `core/bridge`, `cli/bridge` — invariants (stateless
       daemon, env override contract D7, default-deny policy D9, overlay
-      regeneration model D8)
-- [ ] `AGENTS.md`: add Critical Patterns entry (bridge env contract +
-      policy allowlist + both-allowlists reminder)
-- [ ] run `make build` (re-syncs embedded docs + content hashes) and verify
-      `dwe docs` serves the new page
-- [ ] run `make test` — must pass before task 13
+      regeneration model D8) — new `## Core — Bridge` section (daemon/
+      lifecycle/composegen+prepare/shimassets bullets), two leaf bullets in
+      § Shared, `cli/bridge` bullet + a third cross-cutting "Container
+      command policy" bullet in § CLI, layout tree line, and a
+      `validate/bridge` bullet in § Core — Validation; `cmd/dwe-shim` bullet
+      in § Entrypoint
+- [x] `AGENTS.md`: add Critical Patterns entry (bridge env contract +
+      policy allowlist + both-allowlists reminder) — also covers the overlay
+      regeneration/deletion model, the bridge-private flock (never
+      AcquireProjectLocks), and the daemon-seam test recursion hazard
+- [x] run `make build` (re-syncs embedded docs + content hashes) and verify
+      `dwe docs` serves the new page — `docs list` shows `reference/bridge`;
+      `docs show reference/bridge.md` renders in en and ru (ru resolves
+      fresh via the new content hash)
+- [x] run `make test` — must pass before task 13 (110 packages ok;
+      `make lint`: 0 issues)
 
 ### Task 13: Verify acceptance criteria
 
