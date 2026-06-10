@@ -190,6 +190,7 @@ func tcpClientDir(t *testing.T, d *Daemon) string {
 }
 
 func TestSession_TCPHappyPath(t *testing.T) {
+	t.Setenv("PATH", "/host/usr/bin") // the daemon's own (host) PATH, forced onto the subprocess
 	rec := &launchRecorder{}
 	d := startDaemon(t, fakeLauncher(rec, func(p *fakeProcess) {
 		_, _ = p.stdoutW.Write([]byte("out-data"))
@@ -201,7 +202,7 @@ func TestSession_TCPHappyPath(t *testing.T) {
 	var stdout, stderr bytes.Buffer
 	opts := clientOptions(d, tcpClientDir(t, d), &stdout, &stderr)
 	opts.Env = []string{
-		"PATH=/usr/bin",
+		"PATH=/workspace/evil:/usr/bin", // container-controlled — must NOT reach the host subprocess
 		"GIT_INDEX_FILE=/workspace/.git/index",
 		"DWE_BRIDGE_DIR=/dwe-bridge",
 		"DWE_PROJECT_ROOT=/elsewhere",
@@ -224,8 +225,8 @@ func TestSession_TCPHappyPath(t *testing.T) {
 		t.Errorf("spec argv = %v, want %v (pass-through)", got, want)
 	}
 	wantEnv := []string{
-		"PATH=/usr/bin",
 		"GIT_INDEX_FILE=/workspace/.git/index",
+		"PATH=/host/usr/bin", // forced to the daemon's PATH, client's stripped
 		"DWE_INVOKED_FROM=container",
 		"DWE_NONINTERACTIVE=1",
 	}
@@ -525,17 +526,22 @@ func TestSession_ConnLossTerminatesSubprocess(t *testing.T) {
 }
 
 func TestSubprocessEnv(t *testing.T) {
+	t.Setenv("PATH", "/host/usr/bin") // the daemon's own (host) PATH
 	in := []string{
-		"PATH=/usr/bin",
-		"DWE_BRIDGE_DIR=/dwe-bridge",  // shim strip set, re-filtered
-		"DWE_PROJECT_ROOT=/elsewhere", // discovery override, re-filtered
-		"DWE_INVOKED_FROM=host",       // host-controlled, never client-set
-		"DWE_NONINTERACTIVE=0",        // host-controlled, never client-set
+		"PATH=/workspace/evil:/usr/bin", // container-controlled — must NOT pass through
+		"LD_PRELOAD=/workspace/evil.so", // loader hijack — dropped by prefix
+		"DYLD_INSERT_LIBRARIES=/evil",   // macOS loader hijack — dropped by prefix
+		"BASH_ENV=/workspace/rc.sh",     // shell-startup hijack — dropped
+		"IFS=:",                         // word-split hijack — dropped
+		"DWE_BRIDGE_DIR=/dwe-bridge",    // shim strip set, re-filtered
+		"DWE_PROJECT_ROOT=/elsewhere",   // discovery override, re-filtered
+		"DWE_INVOKED_FROM=host",         // host-controlled, never client-set
+		"DWE_NONINTERACTIVE=0",          // host-controlled, never client-set
 		"TERM=xterm",
 	}
 	want := []string{
-		"PATH=/usr/bin",
 		"TERM=xterm",
+		"PATH=/host/usr/bin", // forced to the daemon's PATH, not the client's
 		"DWE_INVOKED_FROM=container",
 		"DWE_NONINTERACTIVE=1",
 	}

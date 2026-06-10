@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"io"
 	"net"
+	"os"
 	"path/filepath"
 	"slices"
 	"strings"
@@ -255,20 +256,72 @@ func validateCwd(cwd, root string) (string, error) {
 // are stripped first so a container can never spoof them (design D7).
 var hostControlledEnv = []string{EnvInvokedFrom, EnvNonInteractive}
 
+// dangerousEnvNames are exact-match variables a container could set to hijack
+// execution of the host-side dwe or its grandchild processes (docker / git /
+// sh, all resolved by bare name). The bridge crosses a container→host trust
+// boundary, so these are always dropped daemon-side regardless of what the
+// client sent. The dynamic-loader families (LD_*, DYLD_*) are stripped by
+// prefix in subprocessEnv. PATH is dropped here and force-replaced with the
+// daemon's own PATH so bare-name binary lookups resolve against host
+// directories, never container-controlled ones.
+var dangerousEnvNames = map[string]struct{}{
+	"PATH":      {}, // force-replaced with the daemon's PATH below
+	"BASH_ENV":  {}, // sourced by non-interactive bash (sh -c) at startup
+	"ENV":       {}, // sourced by POSIX sh at startup
+	"SHELLOPTS": {},
+	"BASHOPTS":  {},
+	"IFS":       {}, // alters shell word splitting of the command payload
+}
+
+// dangerousEnvPrefixes match the dynamic-linker variable families
+// (LD_PRELOAD, LD_LIBRARY_PATH, LD_AUDIT, DYLD_INSERT_LIBRARIES, …) that let a
+// container inject code into any host process the bridged dwe spawns.
+var dangerousEnvPrefixes = []string{"LD_", "DYLD_"}
+
+// hostPath returns the daemon's own PATH so a bridged subprocess resolves
+// docker / git / sh against host binaries, never container-controlled
+// directories. Falls back to a conservative default if the daemon somehow has
+// no PATH in its own environment.
+func hostPath() string {
+	if p := os.Getenv("PATH"); p != "" {
+		return p
+	}
+	return "/usr/local/bin:/usr/bin:/bin"
+}
+
 // subprocessEnv builds the subprocess environment from the HELLO env: the
 // shim's strip set is re-applied (defense-in-depth — the daemon does not
-// trust the client to have filtered), the host-controlled variables are
-// dropped, and their daemon-owned values appended.
+// trust the client to have filtered), execution-hijacking variables (loader
+// families, shell-startup files, PATH) are dropped, the host-controlled
+// variables are dropped, and the daemon-owned values (host PATH plus the two
+// host-controlled DWE_* vars) are appended.
 func subprocessEnv(env []string) []string {
-	clean := make([]string, 0, len(env)+len(hostControlledEnv))
+	clean := make([]string, 0, len(env)+len(hostControlledEnv)+1)
 	for _, kv := range bridgeclient.StripEnv(env) {
 		name, _, _ := strings.Cut(kv, "=")
 		if slices.Contains(hostControlledEnv, name) {
 			continue
 		}
+		if _, dangerous := dangerousEnvNames[name]; dangerous {
+			continue
+		}
+		if hasAnyPrefix(name, dangerousEnvPrefixes) {
+			continue
+		}
 		clean = append(clean, kv)
 	}
 	return append(clean,
+		"PATH="+hostPath(),
 		EnvInvokedFrom+"="+InvokedFromContainer,
 		EnvNonInteractive+"=1")
+}
+
+// hasAnyPrefix reports whether s starts with any of the given prefixes.
+func hasAnyPrefix(s string, prefixes []string) bool {
+	for _, p := range prefixes {
+		if strings.HasPrefix(s, p) {
+			return true
+		}
+	}
+	return false
 }
