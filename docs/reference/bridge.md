@@ -2,7 +2,7 @@
 
 The host bridge lets `dwe` commands run from **inside dev containers** — git hooks (`exec dwe commands lint`), project commands, and read-only diagnostics work identically on the host and in a container terminal (VS Code Dev Containers and similar). DWE mounts a small static shim binary into bridge-enabled service containers as `dwe`; the shim forwards every invocation to a host-side daemon, which runs the real `dwe` on the host and streams output and the exit code back.
 
-For `type: app` services the bridge is on by default — a fresh project needs no configuration. Everything below is reference detail: the `bridge:` schema, transports, the in-container command policy, the generated compose overlay, daemon lifecycle, and troubleshooting.
+The bridge is **off by default for every service type** — opt a service in with `bridge.enabled: true`. Everything below is reference detail: the `bridge:` schema, transports, the in-container command policy, the generated compose overlay, daemon lifecycle, and troubleshooting.
 
 ## Contents
 
@@ -45,18 +45,18 @@ type: app
 dir: ./services/main
 dir_internal: /var/www/html
 bridge:
-  enabled: true                    # default: true for type: app, false otherwise
+  enabled: true                    # default: false — the bridge is strictly opt-in
   # shim_path: /usr/local/bin/dwe  # mount point override (base-image collision)
   # on_unreachable: fail           # fail | warn — shim policy when the daemon is down
 ```
 
 | Field | Default | Meaning |
 |---|---|---|
-| `enabled` | `true` for `type: app`, `false` for `tool` / `infra` | inject the shim binary and bridge mounts into this service's container |
+| `enabled` | `false` (every type) | inject the shim binary and bridge mounts into this service's container |
 | `shim_path` | `/usr/local/bin/dwe` | absolute container path the shim is mounted at; override when the base image already ships a file there |
 | `on_unreachable` | `fail` | `fail` — shim prints an error and exits 1 when the host daemon is unreachable (a hook blocks the commit); `warn` — print a warning and exit 0 |
 
-`bridge.enabled` is a tristate and inherits through service [`extends:`](config/services/extends.md) the same way `render.git.enabled` does: an explicit value in the child wins, an unset child inherits the parent, and the type-based default applies only when neither sets it. `shim_path` and `on_unreachable` inherit when the child leaves them empty.
+`bridge.enabled` is a tristate and inherits through service [`extends:`](config/services/extends.md) the same way `render.git.enabled` does: an explicit value in the child wins, an unset child inherits the parent, and the off default applies only when neither sets it. `shim_path` and `on_unreachable` inherit when the child leaves them empty.
 
 A bridge-enabled service should declare the `dir` / `dir_internal` pair — it is what the shim's working-directory translation maps over. Without it the bridge mounts fine, but the daemon rejects every in-container invocation with a containment error (`dwe validate` warns about this).
 
@@ -90,11 +90,11 @@ The container command surface is deliberately reduced — **allowlist, default-d
 |---|---|
 | `dwe commands <cmd>` / `dwe cmd <cmd>` | the primary case — hooks and project commands |
 | bare `dwe commands` / `dwe cmd` | no TTY over the bridge → prints the `commands list` output instead of the interactive browser |
-| `status`, `info`, `validate`, `logs` | read-only diagnostics |
-| `docs` (including `llms-txt`) | read-only; useful to AI agents working in the devcontainer |
+| `status`, `info`, `logs` | read-only diagnostics |
+| `docs` (including `llms-txt`) | read-only; useful to AI agents working in the devcontainer — bare `dwe docs` prints the `docs list` output (no TTY for the browser) |
 | `prompt` | container terminal prompt segment |
 | `bridge status` | bridge self-diagnostics |
-| `version`, help, completion | service commands |
+| `version`, help | service commands |
 
 | Blocked | Why |
 |---|---|
@@ -103,13 +103,14 @@ The container command surface is deliberately reduced — **allowlist, default-d
 | `snapshot` | restore stops the stack; create is heavy and takes project locks |
 | `render`, `setup`, `init`, `shell` | mutate workspace files or are interactive |
 | `bridge` (everything except `status`) | `bridge stop` is suicide for the bridge itself |
+| `validate`, `completion` | host-side concerns: validation targets the host workspace, completion scripts are installed on the host (a completion script already baked into an image keeps degrading silently — the hidden completion machinery stays reachable) |
 
 Mechanics worth knowing:
 
 - A blocked command fails with a `bridge_command_blocked` error and a run-on-host hint; the suicidal lifecycle commands additionally explain *why* (e.g. "it would stop the container it was invoked from").
 - Blocked commands are **invisible** in `--help` listings and shell completion inside containers, not "visible but failing".
 - The policy is inherited by nested invocations: a `type: dwe` user command spawns a child `dwe` with the same environment, so a hook hiding `dwe stop` inside a project command cannot kill the container.
-- Every bridged command runs non-interactively (the same degradation as piping output on the host: plain progress output, no colors, no prompts). Interactive commands are blocked outright; the bridge never allocates a pseudo-terminal.
+- Every bridged command runs non-interactively (plain progress output, no prompts). Interactive TUIs are blocked outright; the bridge protocol itself never allocates a pseudo-terminal. Colors survive, though: when the shim's stdout is a terminal it forwards `CLICOLOR_FORCE=1` and `COLORTERM=truecolor`, so the host-side `dwe` keeps ANSI colors and the full host palette across the bridge pipe (help and long output always render the dark palette on pipes — the same default lipgloss uses). And when the container's stdin AND stdout are both terminals, the shim adds `DWE_BRIDGE_STDIN_TTY=1` and the host runners give user-command children a local PTY — `docker compose exec` then allocates a container TTY, so isatty-keyed tools (phpcs, PHPUnit, ripgrep, …) colorize exactly like a host run, with stderr merged into stdout just as in any terminal session. Set `NO_COLOR` in the container to opt out; piped shim output (`dwe cmd foo | grep …` or `cat dump.sql | dwe cmd db.import`) automatically stays plain and PTY-free.
 
 ## The generated compose overlay
 
@@ -139,7 +140,7 @@ services:
 
 - **Chain position**: the overlay sits after the project's own compose files and **before** the `workspace/local.yml` overlays — `local.yml` keeps the last word over anything the bridge sets (compose later-file-wins), so per-developer customization goes through [`local.yml`](config/workspace.md), never through editing the generated file.
 - **Self-healing**: the file always contains exactly the currently enabled and bridge-enabled services, so toggling a service off can never leave a stale fragment that breaks `compose up`. Moved project directories, changed image architectures, and edited `bridge:` settings are all picked up at the next start.
-- **Shim architecture** is chosen per service at each regeneration from the image's reported architecture (`docker inspect`); when that cannot be resolved (nothing deployed yet), the host architecture is used with a warning and self-heals on the next regeneration.
+- **Shim architecture** is chosen per service at each regeneration from the image's reported architecture (`docker inspect` against the container named `<compose project name>-<container>`, honoring `docker.yml`'s `project_name`); when the container does not exist yet (first deploy, after a reset) the host architecture is used silently (a `-v` decision line records it), and any other resolution failure falls back the same way with a warning — both self-heal on the next regeneration.
 - The TCP port and the token are deliberately **not** in the overlay — the shim reads them from the mounted `/dwe-bridge` files, so a daemon restart never requires regenerating the overlay or recreating containers.
 - All mounts are read-only; connecting to a unix socket works on a read-only bind mount (the same mechanism that makes `docker.sock:ro` work).
 
@@ -199,7 +200,7 @@ Inside a bridged container the overlay sets:
 | `DWE_BRIDGE_PROJECT` | project name, used in shim diagnostics |
 | `DWE_BRIDGE_UNREACHABLE` | only present with `on_unreachable: warn` |
 
-The shim strips these (plus any `DWE_PROJECT_ROOT*`) from the environment it forwards, and the daemon re-filters the same set on arrival. The daemon also drops execution-hijacking variables before forking — the dynamic-loader families (`LD_*`, `DYLD_*`), shell-startup hooks (`BASH_ENV`, `ENV`, `SHELLOPTS`, `BASHOPTS`), `IFS`, and `PATH` — and force-sets `PATH` to the host daemon's own value, so a container can never redirect the `docker`/`git`/`sh` binaries the host-side `dwe` invokes by bare name. It then force-sets two host-controlled variables for the forked `dwe`: `DWE_INVOKED_FROM=container` (activates the command policy — client-sent values are discarded, so it cannot be spoofed from the container) and `DWE_NONINTERACTIVE=1`. `--output json` payloads are identical in both contexts.
+The shim strips these (plus any `DWE_PROJECT_ROOT*`) from the environment it forwards, and the daemon re-filters the same set on arrival. The daemon also drops execution-hijacking variables before forking — the dynamic-loader families (`LD_*`, `DYLD_*`), shell-startup hooks (`BASH_ENV`, `ENV`, `SHELLOPTS`, `BASHOPTS`), `IFS`, and `PATH` — and force-sets `PATH` to the host daemon's own value, so a container can never redirect the `docker`/`git`/`sh` binaries the host-side `dwe` invokes by bare name. Host-identity variables are replaced the same way: the container's `HOME`, `USER`, `LOGNAME`, `TMPDIR`, `SSH_AUTH_SOCK`, and the `DOCKER_*` / `COMPOSE_*` / `XDG_*` families are dropped and the daemon's own values forwarded instead — a container `HOME` would otherwise break docker context resolution on the host (the CLI would fall back to `/var/run/docker.sock`, absent on Docker Desktop / OrbStack macs). It then force-sets two host-controlled variables for the forked `dwe`: `DWE_INVOKED_FROM=container` (activates the command policy — client-sent values are discarded, so it cannot be spoofed from the container) and `DWE_NONINTERACTIVE=1`. `--output json` payloads are identical in both contexts.
 
 The command's argument vector is passed through untranslated — only the working directory is rewritten. Relative paths therefore work everywhere; absolute container paths in arguments will not resolve on the host (a documented limitation).
 
@@ -221,6 +222,8 @@ The command's argument vector is passed through untranslated — only the workin
 **Rootless Docker on Linux** — `host-gateway` is broken there, so TCP is unavailable; the unix-socket path covers rootless setups. Note that user-namespace remapping can shift the peer uid the daemon sees; if peercred auth fails, run the stack non-rootless or consult the project's issue tracker for the token-on-unix fallback status.
 
 **The base image already has `/usr/local/bin/dwe`** — set `bridge.shim_path` to a different absolute path that wins in the container's `PATH`.
+
+**`dwe` in the container fails with "exec format error" right after the first start** — the shim architecture is resolved from the existing container, so the very first start of an *emulated foreign-arch* image (e.g. an amd64-only image on an arm64 mac) falls back to the host architecture and mounts the wrong shim. Start the stack again: with the container now present the architecture resolves from the image and the overlay self-heals. Native-arch images are unaffected.
 
 **Where to look** — `dwe bridge status` (daemon liveness, transports, shim state), `dwe bridge logs` (daemon stderr, including startup panics), and `dwe validate` (the `bridge` domain checks `on_unreachable` values, `shim_path` absoluteness, and the workspace mapping; `dwe validate bridge` scopes to it).
 

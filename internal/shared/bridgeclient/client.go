@@ -18,6 +18,8 @@ import (
 	"time"
 
 	"github.com/semsemyonoff/dwe/internal/shared/bridgeproto"
+
+	"golang.org/x/term"
 )
 
 // Default tuning. Unix dial is fast-fail (a dead socket inode on Docker
@@ -99,10 +101,26 @@ func (o Options) withDefaults() Options {
 	return o
 }
 
+// stdoutIsTerminal / stdinIsTerminal are the production tty probes behind
+// the color forcing and the stdin-tty signal in OptionsFromEnv; injectable
+// for tests.
+var (
+	stdoutIsTerminal = func() bool { return term.IsTerminal(int(os.Stdout.Fd())) }
+	stdinIsTerminal  = func() bool { return term.IsTerminal(int(os.Stdin.Fd())) }
+)
+
 // OptionsFromEnv builds Options for the shim binary from the process
-// environment and the given argument vector (os.Args[1:]).
+// environment and the given argument vector (os.Args[1:]). When the shim's
+// stdout is a terminal the forwarded env requests colored host output via
+// ForceColorEnv — the host-side dwe only ever sees a pipe and would
+// otherwise downgrade to no-color.
 func OptionsFromEnv(argv []string, signals <-chan os.Signal) Options {
 	cwd, _ := os.Getwd()
+	env := os.Environ()
+	if stdoutIsTerminal() {
+		env = ForceColorEnv(env)
+	}
+	env = SetStdinTTYEnv(env, stdinIsTerminal())
 	return Options{
 		BridgeDir:          os.Getenv("DWE_BRIDGE_DIR"),
 		HostWorkspace:      os.Getenv("DWE_HOST_WORKSPACE"),
@@ -110,7 +128,7 @@ func OptionsFromEnv(argv []string, signals <-chan os.Signal) Options {
 		Project:            os.Getenv("DWE_BRIDGE_PROJECT"),
 		Unreachable:        os.Getenv("DWE_BRIDGE_UNREACHABLE"),
 		Argv:               argv,
-		Env:                os.Environ(),
+		Env:                env,
 		Cwd:                cwd,
 		Term:               os.Getenv("TERM"),
 		Stdin:              os.Stdin,
