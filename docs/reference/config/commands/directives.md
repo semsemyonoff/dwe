@@ -153,7 +153,7 @@ params:
     description: Database name to create
     required: true
     default: "laravel"          # literal fallback
-    default_from: db.database   # dot-path into merged config
+    default_from: vars.db.database   # dot-path into merged config
     env: DB_NAME                # injected as env var
     pattern: ^[a-zA-Z0-9_-]+$   # anchored regex (string/path only)
 ```
@@ -270,7 +270,7 @@ context:
 
 ```yaml
 env:
-  MYSQL_PWD: "${db.password}"
+  MYSQL_PWD: "${vars.db.password}"
   TIMESTAMP: "{{ now | date \"2006-01-02_15-04-05\" }}"
   NON_INTERACTIVE: "{{ if .Params.no_prompt }}1{{ else }}0{{ end }}"
 ```

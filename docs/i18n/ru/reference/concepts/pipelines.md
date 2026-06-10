@@ -1,4 +1,4 @@
-> Translated from: reference/concepts/pipelines.md @ e0bec1d2ecab
+> Translated from: reference/concepts/pipelines.md @ 1c7e68a1df61
 
 # Пайплайны
 
@@ -170,7 +170,7 @@ steps:
       files_gate:
         state: readable
         command: services.main.db.dump-deploy
-        with: { database: "${db.stock_database}" }
+        with: { database: "${vars.db.stock_database}" }
 ```
 
 Workflow остаётся непрозрачным и переиспользуемым; решение о стробировании принадлежит шагу пайплайна, который его вызвал. Переопределения применяются только тогда, когда workflow вызван через породивший шаг; тот же workflow, вызванный ad-hoc (`dwe commands run …`) или как sub-step другого workflow, запускается как написано. В v1 переопределяется только `files_gate`, и переопределения не могут нацеливаться на sub-step, чья команда сама является workflow.

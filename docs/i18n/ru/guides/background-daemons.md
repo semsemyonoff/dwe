@@ -1,4 +1,4 @@
-> Translated from: guides/background-daemons.md @ cbd42c65deb0
+> Translated from: guides/background-daemons.md @ a1ac57f930bd
 
 # Фоновые демоны
 
@@ -172,7 +172,7 @@ commands:
         default: default
         pattern: ^[a-zA-Z0-9_-]+$
     env:
-      QUEUE_TOKEN: ${secrets.queue_token}   # OK — значения идут через env, не через метки
+      QUEUE_TOKEN: ${vars.secrets.queue_token}   # OK — значения идут через env, не через метки
     argv:
       - php
       - artisan

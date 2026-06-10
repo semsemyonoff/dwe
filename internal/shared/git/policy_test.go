@@ -48,6 +48,12 @@ func TestDecide(t *testing.T) {
 		// diverged → warn
 		{"on/diverged", diverged, ModeOn, true, ActionWarn, false},
 		{"on/diverged-ci", diverged, ModeOn, false, ActionWarn, false},
+
+		// unknown/legacy mode string (e.g. a stale "auto"/"prompt" surviving an old
+		// config) is neither ModeOn nor ModeOff → falls through to the safe default
+		// skip rather than pulling unprompted.
+		{"unknown/behind", behind, UpdateMode("auto"), true, ActionSkip, true},
+		{"unknown/clean", clean, UpdateMode("prompt"), true, ActionSkip, true},
 	}
 
 	for _, tt := range tests {

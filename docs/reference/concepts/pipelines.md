@@ -168,7 +168,7 @@ A `type: command` step that targets a workflow can attach per-sub-step gating to
       files_gate:
         state: readable
         command: services.main.db.dump-deploy
-        with: { database: "${db.stock_database}" }
+        with: { database: "${vars.db.stock_database}" }
 ```
 
 The workflow stays opaque and reusable; the gating decision belongs to the pipeline step that invoked it. Overrides only apply when the workflow is invoked via the originating step; the same workflow invoked ad-hoc (`dwe commands run …`) or as a sub-step of another workflow runs as written. In v1 only `files_gate` is overridable, and overrides cannot target a sub-step whose command is itself a workflow.

@@ -365,6 +365,13 @@ vars:
     password: secret
   my_custom:
     timeout: 30
+  # Names that are root-forbidden (legacy or unknown top-level keys) are perfectly
+  # fine NESTED inside the vars: sandbox — the strict-root check applies only one
+  # level up. This pins the "unvalidated/nestable inside" half of the contract.
+  tools:
+    php: docker
+  binaries:
+    docker: /usr/local/bin/docker
 `
 	path := writeFullFixture(t, wsYML, "", "", "", noToolsYML)
 	cfg, err := LoadConfig(path)
@@ -377,6 +384,13 @@ vars:
 	}
 	if v, ok := ResolvePath(cfg.Raw, "vars.my_custom.timeout"); !ok || v != 30 {
 		t.Errorf("vars.my_custom.timeout = %v (ok=%v), want 30", v, ok)
+	}
+	// Root-forbidden names nested under vars: are accepted and resolvable.
+	if v, ok := ResolvePath(cfg.Raw, "vars.tools.php"); !ok || v != "docker" {
+		t.Errorf("vars.tools.php = %v (ok=%v), want docker", v, ok)
+	}
+	if v, ok := ResolvePath(cfg.Raw, "vars.binaries.docker"); !ok || v != "/usr/local/bin/docker" {
+		t.Errorf("vars.binaries.docker = %v (ok=%v), want /usr/local/bin/docker", v, ok)
 	}
 	// The typed Vars field is also populated.
 	if cfg.Vars == nil {

@@ -2601,8 +2601,9 @@ type LifecycleConfig struct {
 }
 
 // LifecycleRunConfig holds the run lifecycle pipeline configuration.
-// Update is a pointer so a missing block (nil) is distinguishable from a present
-// block with defaults — writing the update: key is itself the opt-in.
+// The self-update policy is no longer carried here — it moved to the formalized
+// top-level update: block (see UpdateConfig); enabling updates no longer touches
+// the run phases.
 type LifecycleRunConfig struct {
 	ShowInfo     bool          `yaml:"show_info"`
 	FinalMessage string        `yaml:"final_message"`

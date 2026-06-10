@@ -53,7 +53,7 @@ Rule of thumb: use `${...}` for plain lookups; reach for `{{ ... }}` whenever yo
 
 | Expression | Resolved as |
 |------------|-------------|
-| `${db.user}` | Dot-path into the merged DWE config (`Raw`) |
+| `${vars.db.user}` | Dot-path into the merged DWE config (`Raw`) |
 | `${param.<name>}` | Resolved param value |
 | `${context.<name>}` | Resolved context value |
 | `${files.<id>.path}` | Absolute path of a resolved file artefact |
@@ -142,7 +142,7 @@ env:
   TAGS: "{{ range $i, $t := .Params.tags }}{{ if $i }},{{ end }}{{ $t }}{{ end }}"
 
 # with / default
-cmd: "mariadb -u${db.user}{{ with .Params.database }} -D{{ . }}{{ end }}"
+cmd: "mariadb -u${vars.db.user}{{ with .Params.database }} -D{{ . }}{{ end }}"
 env:
   REGION: '{{ or .Params.region "us-east-1" }}'
 ```
@@ -199,7 +199,7 @@ Three additional helpers are available **only** inside `workspace/commands/` tem
 
 | Helper | Signature | Use |
 |--------|-----------|-----|
-| `resolve` | `resolve .Raw "db.host"` | Dot-path lookup in merged config. Equivalent to `${db.host}`. |
+| `resolve` | `resolve .Raw "vars.db.host"` | Dot-path lookup in merged config. Equivalent to `${vars.db.host}`. |
 | `resolveMap` | `resolveMap .Params "name"` | Key lookup in a flat `map[string]any`. Equivalent to `${param.name}` / `${context.name}`. |
 | `resolveFile` | `resolveFile .Files "id" "path"` | Subkey lookup in a resolved file artefact. Equivalent to `${files.id.path}`. |
 
@@ -227,7 +227,7 @@ Other sites (info, commands, pipeline conditions, `message`) use lenient renderi
 | Conditional value | `{{ if eq .State "ready" }}Ready{{ else }}Not ready{{ end }}` |
 | Empty-guarded block | `{{ with .Params.database }} -D{{ . }}{{ end }}` |
 | Join list | `{{ join "," .Params.tags }}` |
-| Raw config lookup | `{{ resolve .Raw "db.host" }}` (commands only) |
+| Raw config lookup | `{{ resolve .Raw "vars.db.host" }}` (commands only) |
 | Build URL | `{{ appURL ((index .Services "main").Host "web") ((index .Services "main").Port "http") .Runtime.UseHTTPS }}` |
 
 ## Conventions and gotchas

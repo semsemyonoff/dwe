@@ -238,12 +238,12 @@ phases:
             files_gate:
               state: readable
               command: services.main.db.dump-deploy
-              with: { database: "${db.stock_database}" }
+              with: { database: "${vars.db.stock_database}" }
           deploy-price:
             files_gate:
               state: readable
               command: services.main.db.dump-deploy
-              with: { database: "${db.price_database}" }
+              with: { database: "${vars.db.price_database}" }
 ```
 
 The referenced workflow stays opaque and reusable:

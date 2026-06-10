@@ -1,4 +1,4 @@
-> Translated from: reference/config/commands/templating.md @ 88312e5c52ba
+> Translated from: reference/config/commands/templating.md @ 83c036d6f6e2
 
 # Шаблонизация в файлах команд
 
@@ -26,7 +26,7 @@ DWE использует два слоя интерполяции в опред�
 | `.Files` | Разрешённые файловые артефакты (карта по идентификатору файла; у каждого есть поле `.Path`) |
 | `.Host.UID` / `.Host.GID` | Строки UID/GID хоста |
 
-Namespace-ы `${...}` (`${db.x}`, `${param.x}`, `${context.x}`, `${files.id.path}`, `${host.uid}`) маршрутизируются в те же поля. Полную таблицу namespace-ов см. в [Шаблонах](../../templates.md).
+Namespace-ы `${...}` (`${vars.db.x}`, `${param.x}`, `${context.x}`, `${files.id.path}`, `${host.uid}`) маршрутизируются в те же поля. Полную таблицу namespace-ов см. в [Шаблонах](../../templates.md).
 
 ## Резолверы уровня команды
 

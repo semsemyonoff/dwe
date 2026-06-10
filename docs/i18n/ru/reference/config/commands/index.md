@@ -1,4 +1,4 @@
-> Translated from: reference/config/commands/index.md @ 00c09ea2b287
+> Translated from: reference/config/commands/index.md @ 7f71f723faa7
 
 # commands/
 
@@ -149,11 +149,11 @@ db.create:
       required: true
       pattern: ^[a-zA-Z0-9_-]+$
   env:
-    MYSQL_PWD: "${db.password}"
+    MYSQL_PWD: "${vars.db.password}"
   messages:
     success: "Database `${param.database}` is ready."
     error: "Failed to create database `${param.database}`."
-  cmd: "mariadb -u${db.user} -e 'CREATE DATABASE IF NOT EXISTS `${param.database}` CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;'"
+  cmd: "mariadb -u${vars.db.user} -e 'CREATE DATABASE IF NOT EXISTS `${param.database}` CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;'"
 ```
 
 ### Команда script с файловыми артефактами
@@ -165,11 +165,11 @@ db.dump-create:
   params:
     database:
       type: string
-      default_from: db.database
+      default_from: vars.db.database
       pattern: ^[a-zA-Z0-9_-]+$
     dump_dir:
       type: string
-      default_from: db.backup_dir
+      default_from: vars.db.backup_dir
       required: true
       pattern: ^[^*?\[\]]+$
     dump_date:
@@ -177,8 +177,8 @@ db.dump-create:
       default: true
   env:
     DB_NAME: "${param.database}"
-    DB_USER: "${db.user}"
-    MYSQL_PWD: "${db.password}"
+    DB_USER: "${vars.db.user}"
+    MYSQL_PWD: "${vars.db.password}"
   files:
     dump:
       access: write
@@ -204,10 +204,10 @@ db.dump-deploy:
   confirmation_text: "This will DROP and recreate `${param.target_database}`. Continue?"
   params:
     target_database:
-      default_from: db.database
+      default_from: vars.db.database
       required: true
     dump_dir:
-      default_from: db.backup_dir
+      default_from: vars.db.backup_dir
       required: true
   files:
     dump:
@@ -231,11 +231,11 @@ reset-and-bootstrap:
   type: workflow
   description: Drop, recreate, and bootstrap the main service
   steps:
-    - confirm: "Drop and re-bootstrap `${db.database}`?"
+    - confirm: "Drop and re-bootstrap `${vars.db.database}`?"
 
     - command: db.drop
       with:
-        database: "${db.database}"
+        database: "${vars.db.database}"
 
     - command: services.main.db.create
 

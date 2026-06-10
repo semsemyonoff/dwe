@@ -1,4 +1,4 @@
-> Translated from: reference/templates.md @ 3b4f23d59622
+> Translated from: reference/templates.md @ f52bd35c1f8a
 
 # Шаблоны
 
@@ -55,7 +55,7 @@ path: "${param.dump_dir}/${param.database}{{ if .Params.dump_date }}_{{ now | da
 
 | Выражение | Резолвится как |
 |-----------|----------------|
-| `${db.user}` | Dot-path в смерженном dwe-конфиге (`Raw`) |
+| `${vars.db.user}` | Dot-path в смерженном dwe-конфиге (`Raw`) |
 | `${param.<name>}` | Разрешённое значение параметра |
 | `${context.<name>}` | Разрешённое значение контекста |
 | `${files.<id>.path}` | Абсолютный путь разрешённого файла-артефакта |
@@ -144,7 +144,7 @@ env:
   TAGS: "{{ range $i, $t := .Params.tags }}{{ if $i }},{{ end }}{{ $t }}{{ end }}"
 
 # with / default
-cmd: "mariadb -u${db.user}{{ with .Params.database }} -D{{ . }}{{ end }}"
+cmd: "mariadb -u${vars.db.user}{{ with .Params.database }} -D{{ . }}{{ end }}"
 env:
   REGION: '{{ or .Params.region "us-east-1" }}'
 ```
@@ -201,7 +201,7 @@ value: '{{ appURL ((index .Services "adminer").Host "web") ((index .Services "ma
 
 | Хелпер | Сигнатура | Применение |
 |--------|-----------|------------|
-| `resolve` | `resolve .Raw "db.host"` | Dot-path lookup в смерженном конфиге. Эквивалентно `${db.host}`. |
+| `resolve` | `resolve .Raw "vars.db.host"` | Dot-path lookup в смерженном конфиге. Эквивалентно `${vars.db.host}`. |
 | `resolveMap` | `resolveMap .Params "name"` | Lookup ключа в плоской `map[string]any`. Эквивалентно `${param.name}` / `${context.name}`. |
 | `resolveFile` | `resolveFile .Files "id" "path"` | Lookup подключа в разрешённом файле-артефакте. Эквивалентно `${files.id.path}`. |
 
@@ -230,7 +230,7 @@ value: '{{ appURL ((index .Services "adminer").Host "web") ((index .Services "ma
 | Условное значение | `{{ if eq .State "ready" }}Ready{{ else }}Not ready{{ end }}` |
 | Блок с защитой от пустоты | `{{ with .Params.database }} -D{{ . }}{{ end }}` |
 | Объединить список | `{{ join "," .Params.tags }}` |
-| Lookup сырого конфига | `{{ resolve .Raw "db.host" }}` (только команды) |
+| Lookup сырого конфига | `{{ resolve .Raw "vars.db.host" }}` (только команды) |
 | Сборка URL | `{{ appURL ((index .Services "main").Host "web") ((index .Services "main").Port "http") .Runtime.UseHTTPS }}` |
 
 ## Соглашения и подводные камни

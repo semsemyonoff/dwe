@@ -166,7 +166,7 @@ local_yml:
   preserve_keys:
     - services.main.ports
     - services.db.ports
-    - host.shell
+    - vars.host.shell
 ```
 
 - Dot-paths address nested mapping keys; array-index segments (`services[0].ports`) are not supported — `local.yml` is maps-of-maps.

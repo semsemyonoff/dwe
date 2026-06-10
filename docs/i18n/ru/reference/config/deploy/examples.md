@@ -1,4 +1,4 @@
-> Translated from: reference/config/deploy/examples.md @ 506a024a4be4
+> Translated from: reference/config/deploy/examples.md @ 9b73243f0382
 
 # Примеры и паттерны
 
@@ -240,12 +240,12 @@ phases:
             files_gate:
               state: readable
               command: services.main.db.dump-deploy
-              with: { database: "${db.stock_database}" }
+              with: { database: "${vars.db.stock_database}" }
           deploy-price:
             files_gate:
               state: readable
               command: services.main.db.dump-deploy
-              with: { database: "${db.price_database}" }
+              with: { database: "${vars.db.price_database}" }
 ```
 
 Целевой воркфлоу остаётся непрозрачным и переиспользуемым:
