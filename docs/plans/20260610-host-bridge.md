@@ -1144,19 +1144,54 @@ Rejected (do not re-litigate):
 
 ### Task 13: Verify acceptance criteria
 
-- [ ] cross-check implementation against § Design Reference invariants:
+- [x] cross-check implementation against § Design Reference invariants:
       default-deny policy (D9), RO mounts (D8), always `tty:false` (D11),
       daemon-controlled `DWE_INVOKED_FROM` (D7), overlay regenerated on ALL
       compose-up commands and deleted when nothing bridged (D8), disabling a
       bridged service must NOT break `compose up` (regeneration, D8),
       local.yml overlays override the bridge overlay (chain order, D8),
-      per-project token isolation (D6), no `0.0.0.0` binds (D3)
-- [ ] backward-compat check: project with no `bridge:` config produces no
-      overlay, starts no daemon, all existing golden tests untouched
-- [ ] run full suite: `make test` and `make test-race`
-- [ ] run `make lint`; `gofmt`/`goimports` clean
-- [ ] `make build` + `make snapshot` dry-run builds with embedded shims;
-      record binary size delta (expected ≈ +4 MB)
+      per-project token isolation (D6), no `0.0.0.0` binds (D3) — all
+      verified in code: default-deny `bridgeAllowedTopLevel` map + single
+      nested `bridge status` exception, gated in root `PersistentPreRunE`
+      (`internal/cli/bridgepolicy.go`); both overlay binds carry
+      `read_only: true` (`composegen.go`); shim HELLO hardcodes `tty: false`
+      (`bridgeclient/client.go:146`) and the daemon answers `tty:true` with
+      `tty_unsupported` (`session.go`); daemon re-filters client env through
+      `bridgeclient.StripEnv` then force-sets `DWE_INVOKED_FROM=container` +
+      `DWE_NONINTERACTIVE=1` (`session.go`); `bridge.Prepare` fires from
+      `deploy.RunHelper` + `lifecycle.RunRun` (restart and
+      `services … --apply` delegate to those — task-8 verification) and its
+      overlay step always runs, deleting the file when nothing is bridged
+      (`prepare.go`, `RegenerateOverlay`; toggle round-trip test); bridge
+      overlay is appended before the project-wide local.yml extras in
+      `composeFiles()` (local keeps the last word); token lives per-project
+      under `.dwe/bridge/` with constant-time compare
+      (`bridgeproto/token.go`, `crypto/subtle`) and survives restarts; no
+      `0.0.0.0` literal anywhere in code — default binds are `127.0.0.1` +
+      docker gateway IP only (`listeners.go`)
+- [x] backward-compat check: project with no `bridge:` config produces no
+      overlay, starts no daemon, all existing golden tests untouched —
+      ⚠️ reconciled against D8 (authoritative): `bridge.enabled` defaults ON
+      for `type: app` (task-2 decision, headline of
+      `docs/reference/bridge.md`), so an existing project WITH app services
+      gets the overlay + daemon on its next compose-up; opt-out is
+      `bridge.enabled: false`. The literal "no overlay, no daemon" holds for
+      every project where no enabled service resolves bridge-enabled
+      (`TestPrepare_NothingBridged_DeletesOverlaySkipsDaemon`,
+      `TestAnyBridgeEnabled`, `TestRegenerateOverlay_writeIfChangedAndDelete`);
+      all existing golden tests untouched — full suite green
+- [x] run full suite: `make test` and `make test-race` — both pass (exit 0)
+- [x] run `make lint`; `gofmt`/`goimports` clean — 0 issues; both formatters
+      emit nothing
+- [x] `make build` + `make snapshot` dry-run builds with embedded shims;
+      record binary size delta (expected ≈ +4 MB) — snapshot release
+      succeeded (4 build targets, archives, deb/rpm, brew cask); dist
+      binaries verified to embed both shims (`cmd/dwe-shim` buildinfo marker
+      present 10×, absent in a main-branch build); size delta vs main
+      `make build`: 34,575,010 − 28,343,890 bytes = **+6.2 MB** (≈ 5.6 MB =
+      embedded shims, amd64 2.84 MB + arm64 2.75 MB; remainder = new bridge
+      packages + embedded bridge docs en/ru) — above the ≈ +4 MB estimate
+      because each static shim is ≈ 2.8 MB, not ≈ 2 MB
 
 ### Task 14: [Final] Update documentation and close out
 
