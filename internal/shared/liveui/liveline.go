@@ -70,6 +70,12 @@ type blockRow struct {
 type LiveLine struct {
 	termOut io.Writer
 	screen  io.Writer
+	// diag is the destination for diagnostic data lines emitted via
+	// [LiveLine.PrintlnDiag] (verbose/debug trace). It is stderr in production
+	// so diagnostics honour the "stderr only" contract even while the footer is
+	// active, while the footer framing keeps using termOut. nil → falls back to
+	// screen. Set once (before Start) via SetDiagWriter; read without the mutex.
+	diag    io.Writer
 	enabled atomic.Bool // set once at construction; Stop() flips it to false
 
 	mu       sync.Mutex
@@ -130,6 +136,11 @@ func NewLiveLine(termOut, screen io.Writer, enabled bool) *LiveLine {
 	ll.enabled.Store(enabled)
 	return ll
 }
+
+// SetDiagWriter sets the destination for diagnostic lines emitted via
+// [LiveLine.PrintlnDiag]. Call it once, before Start, while the LiveLine is not
+// yet in concurrent use. A nil writer leaves PrintlnDiag falling back to screen.
+func (l *LiveLine) SetDiagWriter(w io.Writer) { l.diag = w }
 
 // Start begins the ticker (when enabled) and paints the initial footer row.
 // Idempotent: subsequent calls are no-ops.
@@ -500,24 +511,43 @@ func (l *LiveLine) renderBlockRowLocked(idx int) string {
 //
 // All three steps run under the LiveLine mutex so concurrent Println calls
 // produce well-formed output.
-func (l *LiveLine) Println(rawLine string) {
+func (l *LiveLine) Println(rawLine string) { l.printlnTo(l.screen, rawLine) }
+
+// PrintlnDiag writes a diagnostic data line ABOVE the footer exactly like
+// [LiveLine.Println], but routes the line text to the diagnostics writer
+// (stderr in production) instead of the screen (stdout). The cursor framing
+// still goes to termOut, so the sticky live view stays intact while the
+// diagnostic bytes land on stderr — preserving the "verbose/debug output goes
+// to stderr only" contract even while a pipeline owns the screen. Falls back to
+// the screen when no diagnostics writer was configured.
+func (l *LiveLine) PrintlnDiag(rawLine string) {
+	dataW := l.diag
+	if dataW == nil {
+		dataW = l.screen
+	}
+	l.printlnTo(dataW, rawLine)
+}
+
+// printlnTo is the shared implementation of Println / PrintlnDiag. dataW is the
+// destination for the line text; the footer framing always uses termOut.
+func (l *LiveLine) printlnTo(dataW io.Writer, rawLine string) {
 	if !l.enabled.Load() {
 		// After Stop() enabled flips to false; writes are safe no-ops on
-		// termOut and still need to land on screen if a caller writes "late".
-		// We still write to screen to preserve the disabled-mode contract.
-		_, _ = io.WriteString(l.screen, rawLine+"\n")
+		// termOut and still need to land on dataW if a caller writes "late".
+		// We still write to dataW to preserve the disabled-mode contract.
+		_, _ = io.WriteString(dataW, rawLine+"\n")
 		return
 	}
 	l.mu.Lock()
 	if !l.started || l.stopped {
-		// Behave like disabled: write to screen only.
+		// Behave like disabled: write to dataW only.
 		l.mu.Unlock()
-		_, _ = io.WriteString(l.screen, rawLine+"\n")
+		_, _ = io.WriteString(dataW, rawLine+"\n")
 		return
 	}
 	if l.paused {
 		// Footer is already erased; just write the line.
-		_, _ = io.WriteString(l.screen, rawLine+"\n")
+		_, _ = io.WriteString(dataW, rawLine+"\n")
 		l.mu.Unlock()
 		return
 	}
@@ -532,7 +562,7 @@ func (l *LiveLine) Println(rawLine string) {
 		// Back to top of cleared area.
 		l.writeTerm(fmt.Sprintf("\x1b[%dA", n))
 		// Data line lands on the topmost cleared row.
-		_, _ = io.WriteString(l.screen, rawLine+"\n")
+		_, _ = io.WriteString(dataW, rawLine+"\n")
 		// Repaint block rows then footer; \n advances cursor below the footer.
 		for i := range l.blockRows {
 			l.writeTerm(l.renderBlockRowLocked(i) + "\n")
@@ -543,7 +573,7 @@ func (l *LiveLine) Println(rawLine string) {
 	}
 	// Up to the footer row, clear it; write data on that row; repaint footer.
 	l.writeTerm("\x1b[1A\r\x1b[2K")
-	_, _ = io.WriteString(l.screen, rawLine+"\n")
+	_, _ = io.WriteString(dataW, rawLine+"\n")
 	l.writeTerm(l.renderFooterLocked() + "\n")
 	l.mu.Unlock()
 }

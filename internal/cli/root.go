@@ -9,6 +9,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
 
 	"github.com/semsemyonoff/dwe/internal/cli/cmdctx"
 	cmdCommand "github.com/semsemyonoff/dwe/internal/cli/command"
@@ -40,6 +41,7 @@ import (
 	"github.com/semsemyonoff/dwe/internal/core/workflow/deploy/journal"
 	"github.com/semsemyonoff/dwe/internal/shared/i18n"
 	sharedrender "github.com/semsemyonoff/dwe/internal/shared/render"
+	"github.com/semsemyonoff/dwe/internal/shared/trace"
 	"github.com/semsemyonoff/dwe/internal/shared/version"
 
 	"github.com/spf13/cobra"
@@ -161,6 +163,15 @@ func initRootCmd(flags *cmdctx.RootFlags) *cobra.Command {
 		// The validate command bypasses schema validation so it can report schema errors
 		// as diagnostics instead of aborting before the validators run.
 		PersistentPreRunE: func(cmd *cobra.Command, args []string) error {
+			// (0) Configure the diagnostic sink as early as possible so that
+			// any subsequent setup (config load, styles) can emit trace lines.
+			// At Debug, route Go's default slog logger through the same sink so
+			// existing slog.Debug records join the firehose; at lower levels the
+			// handler is NOT installed, so Warn/Error behaviour is unchanged.
+			lvl := levelFrom(flags.Verbose, flags.Debug, os.Getenv("DWE_DEBUG"))
+			trace.Configure(os.Stderr, lvl)
+			installSlogHandler(lvl)
+
 			// (1) Validate --output before anything else so invalid values are
 			// rejected cleanly before lipgloss or fang styles are applied.
 			switch flags.Output {
@@ -263,8 +274,78 @@ func initRootCmd(flags *cmdctx.RootFlags) *cobra.Command {
 		false,
 		"pretty-print JSON output (only with --output json)",
 	)
+	cmd.PersistentFlags().BoolVarP(
+		&flags.Verbose,
+		"verbose", "v",
+		false,
+		"echo executed commands and key pipeline decisions to stderr",
+	)
+	cmd.PersistentFlags().BoolVar(
+		&flags.Debug,
+		"debug",
+		false,
+		"emit the full diagnostic firehose to stderr (superset of --verbose; also DWE_DEBUG=1)",
+	)
 
 	return cmd
+}
+
+// levelFrom maps the diagnostic flags and DWE_DEBUG env to a trace level.
+// The --debug flag or a truthy DWE_DEBUG selects Debug; --verbose selects
+// Verbose; otherwise Off. The flag wins on conflict, but since either source
+// only ever raises the level, an explicit --debug and a truthy DWE_DEBUG agree.
+func levelFrom(verbose, debug bool, dweDebug string) trace.Level {
+	if debug || debugEnvTruthy(dweDebug) {
+		return trace.LevelDebug
+	}
+	if verbose {
+		return trace.LevelVerbose
+	}
+	return trace.LevelOff
+}
+
+// slogState tracks the global slog handler swap so it can be reverted. The CLI
+// is normally one-shot (PersistentPreRunE runs once per process), but embedded
+// or repeated Execute callers may invoke commands at different levels in the
+// same process; without a revert, a prior --debug run would leave the
+// trace handler installed — and because it emits every record regardless of the
+// trace level, slog.Debug output would keep leaking after the flag is gone.
+var (
+	slogPristineOnce sync.Once
+	slogPristine     *slog.Logger // Go's default logger captured before any swap
+	slogTraceActive  bool         // true while the trace handler is the default
+)
+
+// installSlogHandler routes Go's default slog logger through the trace sink,
+// but ONLY at Debug. Returning true reports that the handler was installed.
+// At Off/Verbose the Go default handler is restored if a prior call installed
+// the trace handler, and otherwise left untouched — so existing slog.Warn/Error
+// output reaches stderr unchanged (the no-regression contract) and a previous
+// --debug run does not leak into a later non-debug run in the same process.
+func installSlogHandler(lvl trace.Level) bool {
+	slogPristineOnce.Do(func() { slogPristine = slog.Default() })
+
+	if lvl == trace.LevelDebug {
+		slog.SetDefault(slog.New(trace.NewSlogHandler()))
+		slogTraceActive = true
+		return true
+	}
+	if slogTraceActive {
+		slog.SetDefault(slogPristine)
+		slogTraceActive = false
+	}
+	return false
+}
+
+// debugEnvTruthy reports whether DWE_DEBUG is set to a truthy value. It is
+// truthy when set and not one of the recognised falsey tokens (case-insensitive).
+func debugEnvTruthy(v string) bool {
+	switch strings.ToLower(strings.TrimSpace(v)) {
+	case "", "0", "false", "no", "off":
+		return false
+	default:
+		return true
+	}
 }
 
 func resolveLocalization(flags *cmdctx.RootFlags) {

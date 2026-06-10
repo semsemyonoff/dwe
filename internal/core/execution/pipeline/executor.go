@@ -27,7 +27,16 @@ import (
 	"github.com/semsemyonoff/dwe/internal/shared/i18n"
 	"github.com/semsemyonoff/dwe/internal/shared/liveui"
 	"github.com/semsemyonoff/dwe/internal/shared/render"
+	"github.com/semsemyonoff/dwe/internal/shared/trace"
 )
+
+// writerLinePrinter routes trace diagnostic lines to an io.Writer (the
+// per-sub-step StepWriter in parallel mode), so concurrent sub-steps attribute
+// their command echoes to their own sub-step log/output rather than the shared
+// global printer. Safe for concurrent use because each sub-step owns its writer.
+type writerLinePrinter struct{ w io.Writer }
+
+func (p writerLinePrinter) PrintLine(s string) { _, _ = io.WriteString(p.w, s+"\n") }
 
 // stdoutIsTTY reports whether os.Stdout is attached to a terminal.
 // Overridable for tests.
@@ -149,11 +158,8 @@ type ActionContext struct {
 // dwe subcommands also skip confirmation prompts. The supplied ctx
 // propagates cancellation into the child via exec.CommandContext.
 func buildDweCmd(ctx context.Context, dweArg, workDir, shell, dweBin string, skipConfirm bool) *exec.Cmd {
-	bin, err := os.Executable()
-	if err != nil {
-		bin = dweBin
-	}
-	cmd := exec.CommandContext(ctx, shell, "-c", shellQuote(bin)+" "+strings.TrimSpace(dweArg)) //nolint:gosec
+	bin := resolveDweBin(dweBin)
+	cmd := exec.CommandContext(ctx, shell, "-c", dweShellPayload(bin, dweArg)) //nolint:gosec
 	bindCancelTerm(cmd)
 	cmd.Dir = workDir
 	cmd.Env = append(os.Environ(), "CLICOLOR_FORCE=1")
@@ -207,6 +213,7 @@ func runChildCmd(cmd *exec.Cmd, actx ActionContext) error {
 // execShellAction runs a shell command via sh -c.
 func execShellAction(ctx context.Context, a config.Action, actx ActionContext) error {
 	shell := config.ShellBin(actx.Cfg)
+	trace.Command(ctx, shell, "-c", strings.TrimSpace(a.Cmd))
 	cmd := exec.CommandContext(ctx, shell, "-c", strings.TrimSpace(a.Cmd)) //nolint:gosec
 	bindCancelTerm(cmd)
 	cmd.Dir = actx.WorkDir
@@ -214,8 +221,20 @@ func execShellAction(ctx context.Context, a config.Action, actx ActionContext) e
 }
 
 // execDweAction runs a dwe subcommand.
+//
+// The trace echo mirrors the actual execution: buildDweCmd runs the command as
+// `sh -c '<dwe-bin> <cmd>'`, so a.Cmd is shell text (it may contain quotes,
+// pipes, &&, …) — splitting it on whitespace would mangle quoted arguments
+// (`--path "foo bar"` would echo as two literal quote-containing words). Echo
+// the `sh -c '<dwe-bin> <cmd>'` form instead, building the exact `-c` payload
+// via the shared dweShellPayload helper (same resolveDweBin + shellQuote path
+// buildDweCmd uses) so the diagnostic is byte-identical to what runs — the real
+// binary (`./bin/dwe`, a test build, or a relocated binary, shell-quoted so a
+// path with spaces stays copy-pasteable) plus the verbatim command.
 func execDweAction(ctx context.Context, a config.Action, actx ActionContext) error {
 	shell := config.ShellBin(actx.Cfg)
+	bin := resolveDweBin(config.DweBin(actx.Cfg))
+	trace.Command(ctx, shell, "-c", dweShellPayload(bin, a.Cmd))
 	cmd := buildDweCmd(ctx, a.Cmd, actx.WorkDir, shell, config.DweBin(actx.Cfg), actx.SkipConfirm)
 	return runChildCmd(cmd, actx)
 }
@@ -259,6 +278,7 @@ func execCommandAction(ctx context.Context, a config.Action, actx ActionContext)
 	if err != nil {
 		return fmt.Errorf("command %q: %w", a.Cmd, err)
 	}
+	trace.Command(ctx, "dwe", a.Cmd)
 	rctx, err := usercommands.BuildRunContext(actx.Cfg, actx.Reg, def, a.With, actx.WorkDir)
 	if err != nil {
 		return err
@@ -494,6 +514,7 @@ func RunWithOptions(opts RunOptions) error {
 					phaseSkipped = true
 					phaseWhenMsg = FormatCondition(rs.PhaseWhen)
 					opts.Reporter.SkipPhase(phaseKey, rs.Phase, "when: "+phaseWhenMsg)
+					trace.Decision(ctx, "skip phase %s — when false: %s", phaseKey, phaseWhenMsg)
 				}
 			}
 		}
@@ -533,6 +554,7 @@ func RunWithOptions(opts RunOptions) error {
 		if phaseSkipped {
 			opts.Reporter.StartStep(addr, rs.Step, stepIndex, stepTotal)
 			opts.Reporter.SkipStep(addr, rs.Step, stepIndex, stepTotal, "phase when: "+phaseWhenMsg)
+			trace.Decision(ctx, "skip step %s — phase when false: %s", addr, phaseWhenMsg)
 			if rs.Parallel != nil {
 				// Record each sub-step as skipped so the journal does not
 				// treat them as never-attempted on the next run.
@@ -576,10 +598,11 @@ func failGateStep(opts RunOptions, rs ResolvedStep, addr string, stepIndex, step
 // skipStateStep reports a journal-driven "already deployed" skip: it emits
 // StartStep then SkipStep/OnStepSkip with the canonical state messages and
 // returns nil. Shared by the readable-gate and gateless skip paths.
-func skipStateStep(opts RunOptions, rs ResolvedStep, addr string, stepIndex, stepTotal int, stepHash string) error {
+func skipStateStep(ctx context.Context, opts RunOptions, rs ResolvedStep, addr string, stepIndex, stepTotal int, stepHash string) error {
 	opts.Reporter.StartStep(addr, rs.Step, stepIndex, stepTotal)
 	opts.Reporter.SkipStep(addr, rs.Step, stepIndex, stepTotal, "state: already deployed")
 	opts.Recorder.OnStepSkip(addr, rs, stepHash, "state")
+	trace.Decision(ctx, "skip step %s — state: already deployed", addr)
 	return nil
 }
 
@@ -605,11 +628,11 @@ func skipStateStep(opts RunOptions, rs ResolvedStep, addr string, stepIndex, ste
 //     re-check, use an explicit check: directive, the same lever as any
 //     other step.
 //   - no gate — consult SkipDecider.
-func evalFilesGate(opts RunOptions, rs ResolvedStep, addr string, stepIndex, stepTotal int, stepHash string) (proceed bool, err error) {
+func evalFilesGate(ctx context.Context, opts RunOptions, rs ResolvedStep, addr string, stepIndex, stepTotal int, stepHash string) (proceed bool, err error) {
 	if rs.FilesGate != nil && rs.FilesGate.State == filesgate.StateReadable {
 		decision := opts.SkipDecider(addr, rs, stepHash)
 		if decision == journal.Skip {
-			return false, skipStateStep(opts, rs, addr, stepIndex, stepTotal, stepHash)
+			return false, skipStateStep(ctx, opts, rs, addr, stepIndex, stepTotal, stepHash)
 		}
 	}
 
@@ -677,6 +700,7 @@ func evalFilesGate(opts RunOptions, rs ResolvedStep, addr string, stepIndex, ste
 			reason := FormatFilesGate(rs.FilesGate, offendingIDs...)
 			opts.Reporter.SkipStep(addr, rs.Step, stepIndex, stepTotal, reason)
 			opts.Recorder.OnStepSkip(addr, rs, stepHash, reason)
+			trace.Decision(ctx, "skip step %s — %s", addr, reason)
 			return false, nil
 		}
 		// Gate satisfied — proceed to execution. For state: readable, the
@@ -688,8 +712,9 @@ func evalFilesGate(opts RunOptions, rs ResolvedStep, addr string, stepIndex, ste
 	// No gate present — consult skip decision.
 	decision := opts.SkipDecider(addr, rs, stepHash)
 	if decision == journal.Skip {
-		return false, skipStateStep(opts, rs, addr, stepIndex, stepTotal, stepHash)
+		return false, skipStateStep(ctx, opts, rs, addr, stepIndex, stepTotal, stepHash)
 	}
+	trace.Decision(ctx, "run step %s — state changed or check forces re-run", addr)
 	return true, nil
 }
 
@@ -715,6 +740,7 @@ func executeStepBody(ctx context.Context, opts RunOptions, rs ResolvedStep, addr
 			opts.Reporter.StartStep(addr, rs.Step, stepIndex, stepTotal)
 			opts.Reporter.SkipStep(addr, rs.Step, stepIndex, stepTotal, "when: "+FormatCondition(rs.RuntimeWhen))
 			opts.Recorder.OnStepSkip(addr, rs, stepHash, "when: "+FormatCondition(rs.RuntimeWhen))
+			trace.Decision(ctx, "skip step %s — when false: %s", addr, FormatCondition(rs.RuntimeWhen))
 			return nil
 		}
 	}
@@ -737,7 +763,7 @@ func executeStepBody(ctx context.Context, opts RunOptions, rs ResolvedStep, addr
 	// Step 3: files_gate / journal-skip interaction. evalFilesGate emits the
 	// skip/fail events and returns a tri-state outcome (proceed / skip-nil /
 	// fail-ErrSilent).
-	if proceed, err := evalFilesGate(opts, rs, addr, stepIndex, stepTotal, stepHash); !proceed {
+	if proceed, err := evalFilesGate(ctx, opts, rs, addr, stepIndex, stepTotal, stepHash); !proceed {
 		return err
 	}
 
@@ -783,6 +809,12 @@ func executeStepBody(ctx context.Context, opts RunOptions, rs ResolvedStep, addr
 		})
 		stepWriter = &liveui.ANSIOnlyStripper{W: tee}
 		flushTee = tee.Flush
+		// Attribute this sub-step's trace emits (command echoes, decisions) to
+		// its own writer instead of the shared global printer, so concurrent
+		// sub-steps do not interleave. The ctx override beats the global
+		// printer in trace's resolution precedence; both body and check use
+		// this ctx below.
+		ctx = trace.WithLinePrinter(ctx, writerLinePrinter{w: stepWriter})
 		// tee.Flush must run BEFORE any reporter end-of-step event so the
 		// trailing non-newline-terminated tail (delivered as final=false via
 		// lineTee.Flush) is recorded in PlainReporter.inProgress in time
@@ -926,6 +958,7 @@ func executeParallelGroup(parentCtx context.Context, opts RunOptions, rs Resolve
 			reason := "when: " + FormatCondition(rs.RuntimeWhen)
 			opts.Reporter.StartStep(addr, rs.Step, leadIdx, total)
 			opts.Reporter.SkipStep(addr, rs.Step, leadIdx, total, reason)
+			trace.Decision(parentCtx, "skip group %s — when false: %s", addr, FormatCondition(rs.RuntimeWhen))
 			for _, sub := range rs.Parallel.Steps {
 				opts.Recorder.OnStepSkip(sub.StepAddress(), sub, journal.StepHash(sub.Step), "parent group when=false")
 			}
@@ -1113,4 +1146,24 @@ func FormatFilesGate(fg *filesgate.FilesGate, ids ...string) string {
 // Embedded single quotes are escaped via the \' idiom.
 func shellQuote(s string) string {
 	return "'" + strings.ReplaceAll(s, "'", "'\\''") + "'"
+}
+
+// dweShellPayload builds the `sh -c` payload for a dwe: step: the resolved
+// binary (shell-quoted so a path with spaces or metacharacters stays a single,
+// copy-pasteable word) followed by the verbatim command text. Shared by
+// buildDweCmd (execution) and execDweAction's trace echo so the diagnostic is
+// byte-identical to what actually runs.
+func dweShellPayload(bin, cmd string) string {
+	return shellQuote(bin) + " " + strings.TrimSpace(cmd)
+}
+
+// resolveDweBin returns the dwe binary a dwe: step actually invokes: the running
+// executable when available (so `./bin/dwe`, a test build, or a relocated binary
+// is reflected faithfully), falling back to the configured bin. Shared by
+// buildDweCmd and execDweAction's trace echo so the diagnostic matches what runs.
+func resolveDweBin(dweBin string) string {
+	if bin, err := os.Executable(); err == nil {
+		return bin
+	}
+	return dweBin
 }

@@ -1467,6 +1467,21 @@ func LoadConfig(workspacePath string) (*DweConfig, error) {
 		return nil, err
 	}
 
+	// Debug firehose: summarise the resolved config. Visible only when the
+	// trace slog handler is installed (dwe --debug / DWE_DEBUG); otherwise this
+	// is a no-op Debug record dropped by Go's default handler.
+	enabled := 0
+	for _, svc := range services {
+		if svc.Enabled {
+			enabled++
+		}
+	}
+	slog.Debug("config loaded",
+		"path", workspacePath,
+		"services", len(services),
+		"enabled", enabled,
+		"layers", len(layers))
+
 	return &cfg, nil
 }
 
