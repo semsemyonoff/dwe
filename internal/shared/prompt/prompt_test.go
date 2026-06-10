@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"slices"
 	"strconv"
 	"strings"
 	"testing"
@@ -17,7 +18,7 @@ import (
 // docker process. Tests that need specific refresh behavior swap it via
 // swapDockerPs (which must NOT call t.Parallel — see swapDockerPs docs).
 func TestMain(m *testing.M) {
-	dockerPsFunc = func(_ context.Context, _ string) ([]byte, error) {
+	dockerPsFunc = func(_ context.Context, _ string, _ []string) ([]byte, error) {
 		return nil, errors.New("test stub: docker disabled")
 	}
 	os.Exit(m.Run())
@@ -27,7 +28,7 @@ func TestMain(m *testing.M) {
 // call t.Parallel(). The Go testing framework runs non-parallel top-level
 // tests sequentially before any parallel test resumes, so swaps performed in
 // non-parallel tests do not race with parallel readers.
-func swapDockerPs(t *testing.T, fn func(context.Context, string) ([]byte, error)) {
+func swapDockerPs(t *testing.T, fn func(context.Context, string, []string) ([]byte, error)) {
 	t.Helper()
 	prev := dockerPsFunc
 	dockerPsFunc = fn
@@ -1368,50 +1369,50 @@ func TestRunFromDirStackIconStaleCacheRefreshFailFallsBackToStale(t *testing.T) 
 // non-parallel top-level tests sequentially before parallel tests resume.
 
 func TestRefreshStack_TimeoutReturnsNone(t *testing.T) {
-	swapDockerPs(t, func(ctx context.Context, _ string) ([]byte, error) {
+	swapDockerPs(t, func(ctx context.Context, _ string, _ []string) ([]byte, error) {
 		<-ctx.Done()
 		return nil, ctx.Err()
 	})
 	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Millisecond)
 	defer cancel()
-	state, ok := refreshStack(ctx, "p")
+	state, ok := refreshStack(ctx, "p", nil)
 	if ok || state != stackNone {
 		t.Errorf("got (%v, %v), want (stackNone, false)", state, ok)
 	}
 }
 
 func TestRefreshStack_OneRunningContainer_ReturnsRunning(t *testing.T) {
-	swapDockerPs(t, func(_ context.Context, _ string) ([]byte, error) {
+	swapDockerPs(t, func(_ context.Context, _ string, _ []string) ([]byte, error) {
 		return []byte("abc123\n"), nil
 	})
-	state, ok := refreshStack(context.Background(), "p")
+	state, ok := refreshStack(context.Background(), "p", nil)
 	if !ok || state != stackRunning {
 		t.Errorf("got (%v, %v), want (stackRunning, true)", state, ok)
 	}
 }
 
 func TestRefreshStack_NoContainers_ReturnsStopped(t *testing.T) {
-	swapDockerPs(t, func(_ context.Context, _ string) ([]byte, error) {
+	swapDockerPs(t, func(_ context.Context, _ string, _ []string) ([]byte, error) {
 		return []byte(""), nil
 	})
-	state, ok := refreshStack(context.Background(), "p")
+	state, ok := refreshStack(context.Background(), "p", nil)
 	if !ok || state != stackStopped {
 		t.Errorf("got (%v, %v), want (stackStopped, true)", state, ok)
 	}
 }
 
 func TestRefreshStack_WhitespaceOnly_ReturnsStopped(t *testing.T) {
-	swapDockerPs(t, func(_ context.Context, _ string) ([]byte, error) {
+	swapDockerPs(t, func(_ context.Context, _ string, _ []string) ([]byte, error) {
 		return []byte("   \n  \n"), nil
 	})
-	state, ok := refreshStack(context.Background(), "p")
+	state, ok := refreshStack(context.Background(), "p", nil)
 	if !ok || state != stackStopped {
 		t.Errorf("got (%v, %v), want (stackStopped, true)", state, ok)
 	}
 }
 
 func TestReadStack_StaleCache_RefreshOk(t *testing.T) {
-	swapDockerPs(t, func(_ context.Context, _ string) ([]byte, error) {
+	swapDockerPs(t, func(_ context.Context, _ string, _ []string) ([]byte, error) {
 		return []byte("abc\n"), nil
 	})
 	root := t.TempDir()
@@ -1434,7 +1435,7 @@ func TestReadStack_StaleCache_RefreshOk(t *testing.T) {
 }
 
 func TestReadStack_StaleCache_RefreshFail_FallbackToStale(t *testing.T) {
-	swapDockerPs(t, func(_ context.Context, _ string) ([]byte, error) {
+	swapDockerPs(t, func(_ context.Context, _ string, _ []string) ([]byte, error) {
 		return nil, errors.New("docker fail")
 	})
 	root := t.TempDir()
@@ -1455,7 +1456,7 @@ func TestReadStack_StaleCache_RefreshFail_FallbackToStale(t *testing.T) {
 }
 
 func TestReadStack_NoCache_RefreshFail_ReturnsNone(t *testing.T) {
-	swapDockerPs(t, func(_ context.Context, _ string) ([]byte, error) {
+	swapDockerPs(t, func(_ context.Context, _ string, _ []string) ([]byte, error) {
 		return nil, errors.New("docker fail")
 	})
 	root := t.TempDir()
@@ -1466,7 +1467,7 @@ func TestReadStack_NoCache_RefreshFail_ReturnsNone(t *testing.T) {
 }
 
 func TestReadStack_NoCache_RefreshFail_DoesNotPoisonCache(t *testing.T) {
-	swapDockerPs(t, func(_ context.Context, _ string) ([]byte, error) {
+	swapDockerPs(t, func(_ context.Context, _ string, _ []string) ([]byte, error) {
 		return nil, errors.New("docker fail")
 	})
 	root := t.TempDir()
@@ -1478,7 +1479,7 @@ func TestReadStack_NoCache_RefreshFail_DoesNotPoisonCache(t *testing.T) {
 }
 
 func TestReadStack_StaleRunningCache_RefreshReturnsZero_ReturnsStaleNoWrite(t *testing.T) {
-	swapDockerPs(t, func(_ context.Context, _ string) ([]byte, error) {
+	swapDockerPs(t, func(_ context.Context, _ string, _ []string) ([]byte, error) {
 		return []byte(""), nil
 	})
 	root := t.TempDir()
@@ -1499,7 +1500,7 @@ func TestReadStack_StaleRunningCache_RefreshReturnsZero_ReturnsStaleNoWrite(t *t
 }
 
 func TestReadStack_StalePartialCache_RefreshReturnsZero_ReturnsStaleNoWrite(t *testing.T) {
-	swapDockerPs(t, func(_ context.Context, _ string) ([]byte, error) {
+	swapDockerPs(t, func(_ context.Context, _ string, _ []string) ([]byte, error) {
 		return []byte(""), nil
 	})
 	root := t.TempDir()
@@ -1519,8 +1520,177 @@ func TestReadStack_StalePartialCache_RefreshReturnsZero_ReturnsStaleNoWrite(t *t
 	}
 }
 
+func TestReadStack_StaleAtTrustCap_RefreshReturnsZero_ReturnsStale(t *testing.T) {
+	swapDockerPs(t, func(_ context.Context, _ string, _ []string) ([]byte, error) {
+		return []byte(""), nil
+	})
+	root := t.TempDir()
+	now := time.Date(2026, 6, 3, 12, 0, 0, 0, time.UTC)
+	atCapStr := now.Add(-staleTrustCap).Format(time.RFC3339)
+	cachePath := filepath.Join(root, ".dwe", "prompt-cache.yml")
+	writeFile(t, cachePath, "updated_at: "+atCapStr+"\nstate: running\n")
+
+	got := readStack(root, "p", now)
+	if got != stackRunning {
+		t.Errorf("readStack: got %v, want stackRunning (stale within trust cap)", got)
+	}
+}
+
+func TestReadStack_StaleBeyondTrustCap_RefreshReturnsZero_ReturnsStoppedNoWrite(t *testing.T) {
+	swapDockerPs(t, func(_ context.Context, _ string, _ []string) ([]byte, error) {
+		return []byte(""), nil
+	})
+	root := t.TempDir()
+	now := time.Date(2026, 6, 3, 12, 0, 0, 0, time.UTC)
+	beyondStr := now.Add(-staleTrustCap - time.Minute).Format(time.RFC3339)
+	cachePath := filepath.Join(root, ".dwe", "prompt-cache.yml")
+	writeFile(t, cachePath, "updated_at: "+beyondStr+"\nstate: running\n")
+
+	got := readStack(root, "p", now)
+	if got != stackStopped {
+		t.Errorf("readStack: got %v, want stackStopped (confirmed zero-probe beyond trust cap)", got)
+	}
+	_, updatedAt, ok := readCache(cachePath)
+	if !ok || updatedAt.Format(time.RFC3339) != beyondStr {
+		t.Errorf("expected cache unchanged; got updatedAt=%v ok=%v",
+			updatedAt.Format(time.RFC3339), ok)
+	}
+}
+
+func TestReadStack_StaleBeyondTrustCap_RefreshFail_FallbackToStale(t *testing.T) {
+	swapDockerPs(t, func(_ context.Context, _ string, _ []string) ([]byte, error) {
+		return nil, errors.New("docker fail")
+	})
+	root := t.TempDir()
+	now := time.Date(2026, 6, 3, 12, 0, 0, 0, time.UTC)
+	beyondStr := now.Add(-staleTrustCap - time.Hour).Format(time.RFC3339)
+	cachePath := filepath.Join(root, ".dwe", "prompt-cache.yml")
+	writeFile(t, cachePath, "updated_at: "+beyondStr+"\nstate: running\n")
+
+	got := readStack(root, "p", now)
+	if got != stackRunning {
+		t.Errorf("readStack: got %v, want stackRunning (unconfirmed zero never downgrades)", got)
+	}
+}
+
+func TestReadStack_FutureTimestampCache_RefreshReturnsZero_ReturnsStopped(t *testing.T) {
+	swapDockerPs(t, func(_ context.Context, _ string, _ []string) ([]byte, error) {
+		return []byte(""), nil
+	})
+	root := t.TempDir()
+	now := time.Date(2026, 6, 3, 12, 0, 0, 0, time.UTC)
+	futureStr := now.Add(5 * time.Minute).Format(time.RFC3339)
+	cachePath := filepath.Join(root, ".dwe", "prompt-cache.yml")
+	writeFile(t, cachePath, "updated_at: "+futureStr+"\nstate: running\n")
+
+	got := readStack(root, "p", now)
+	if got != stackStopped {
+		t.Errorf("readStack: got %v, want stackStopped (future timestamp is not trusted)", got)
+	}
+}
+
+func TestRunFromDirStackIconStaleBeyondTrustCapZeroProbeShowsStopped(t *testing.T) {
+	// A stack stopped outside dwe: cache says running but is long past the
+	// trust cap, and docker ps confirms zero containers → render ○ (stopped)
+	// instead of the stale ● (running).
+	swapDockerPs(t, func(_ context.Context, _ string, _ []string) ([]byte, error) {
+		return []byte(""), nil
+	})
+	root := t.TempDir()
+	writeFile(t, filepath.Join(root, "workspace.yml"), "project:\n  name: p\n")
+	past := time.Now().Add(-staleTrustCap - time.Hour).UTC().Format(time.RFC3339)
+	writeFile(t, filepath.Join(root, ".dwe", "prompt-cache.yml"),
+		"updated_at: "+past+"\nstate: running\n")
+	var buf bytes.Buffer
+	if code := runFromDir(&buf, nil, root, false); code != 0 {
+		t.Fatalf("exit: %d (stdout=%q)", code, buf.String())
+	}
+	got := buf.String()
+	want := "{▪} p ○\n"
+	if got != want {
+		t.Errorf("stdout: got %q, want %q", got, want)
+	}
+}
+
+func TestReadDockerProcessEnv(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name      string
+		base      string // workspace/docker.yml; empty = absent
+		local     string // workspace/docker.local.yml; empty = absent
+		wantNil   bool
+		wantPairs []string
+	}{
+		{name: "no_files_inherits", wantNil: true},
+		{name: "no_process_env_inherits", base: "project_name: p\n", wantNil: true},
+		{
+			name:      "base_only",
+			base:      "process_env:\n  DOCKER_HOST: tcp://example:2375\n",
+			wantPairs: []string{"DOCKER_HOST=tcp://example:2375"},
+		},
+		{
+			name:      "local_overrides_per_key",
+			base:      "process_env:\n  DOCKER_HOST: tcp://base:2375\n  DOCKER_CLI_HINTS: \"false\"\n",
+			local:     "process_env:\n  DOCKER_HOST: tcp://local:2375\n",
+			wantPairs: []string{"DOCKER_HOST=tcp://local:2375", "DOCKER_CLI_HINTS=false"},
+		},
+		{
+			// The strict loader errors on non-string values; the lenient
+			// prompt reader skips them instead.
+			name:    "non_string_values_skipped",
+			base:    "process_env:\n  PORT: 123\n",
+			wantNil: true,
+		},
+		{name: "bad_yaml_skipped", base: "process_env: [oops\n", wantNil: true},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+			root := t.TempDir()
+			if tt.base != "" {
+				writeFile(t, filepath.Join(root, "workspace", "docker.yml"), tt.base)
+			}
+			if tt.local != "" {
+				writeFile(t, filepath.Join(root, "workspace", "docker.local.yml"), tt.local)
+			}
+			got := readDockerProcessEnv(root)
+			if tt.wantNil {
+				if got != nil {
+					t.Fatalf("expected nil env (inherit unchanged), got %d entries", len(got))
+				}
+				return
+			}
+			for _, pair := range tt.wantPairs {
+				if !slices.Contains(got, pair) {
+					t.Errorf("env missing %q", pair)
+				}
+			}
+		})
+	}
+}
+
+func TestReadStack_ProbeReceivesProcessEnv(t *testing.T) {
+	var gotEnv []string
+	swapDockerPs(t, func(_ context.Context, _ string, env []string) ([]byte, error) {
+		gotEnv = env
+		return []byte("abc\n"), nil
+	})
+	root := t.TempDir()
+	writeFile(t, filepath.Join(root, "workspace", "docker.yml"),
+		"process_env:\n  DOCKER_HOST: tcp://example:2375\n")
+	// No cache file → readStack goes straight to the probe.
+	if got := readStack(root, "p", time.Now()); got != stackRunning {
+		t.Fatalf("readStack: got %v, want stackRunning", got)
+	}
+	if !slices.Contains(gotEnv, "DOCKER_HOST=tcp://example:2375") {
+		t.Errorf("probe env missing DOCKER_HOST override; got %d entries", len(gotEnv))
+	}
+}
+
 func TestReadStack_NoCache_RefreshReturnsZero_ReturnsNoneNoWrite(t *testing.T) {
-	swapDockerPs(t, func(_ context.Context, _ string) ([]byte, error) {
+	swapDockerPs(t, func(_ context.Context, _ string, _ []string) ([]byte, error) {
 		return []byte(""), nil
 	})
 	root := t.TempDir()
@@ -1534,7 +1704,7 @@ func TestReadStack_NoCache_RefreshReturnsZero_ReturnsNoneNoWrite(t *testing.T) {
 }
 
 func TestReadStack_NoCache_RefreshReturnsRunning_Writes(t *testing.T) {
-	swapDockerPs(t, func(_ context.Context, _ string) ([]byte, error) {
+	swapDockerPs(t, func(_ context.Context, _ string, _ []string) ([]byte, error) {
 		return []byte("abc\n"), nil
 	})
 	root := t.TempDir()
@@ -1552,7 +1722,7 @@ func TestReadStack_NoCache_RefreshReturnsRunning_Writes(t *testing.T) {
 }
 
 func TestReadStack_StaleRunningCache_RefreshReturnsRunning_RefreshesTimestamp(t *testing.T) {
-	swapDockerPs(t, func(_ context.Context, _ string) ([]byte, error) {
+	swapDockerPs(t, func(_ context.Context, _ string, _ []string) ([]byte, error) {
 		return []byte("xyz\n"), nil
 	})
 	root := t.TempDir()
@@ -1575,7 +1745,7 @@ func TestReadStack_StaleRunningCache_RefreshReturnsRunning_RefreshesTimestamp(t 
 }
 
 func TestReadStack_StaleStoppedCache_RefreshReturnsRunning_Promotes(t *testing.T) {
-	swapDockerPs(t, func(_ context.Context, _ string) ([]byte, error) {
+	swapDockerPs(t, func(_ context.Context, _ string, _ []string) ([]byte, error) {
 		return []byte("xyz\n"), nil
 	})
 	root := t.TempDir()
