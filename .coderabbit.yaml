@@ -19,6 +19,12 @@ reviews:
   # Skip the AI poem — keep PR comments signal-only.
   poem: false
 
+  pre_merge_checks:
+    # Disable the docstring-coverage gate — Go exported-symbol doc comments are
+    # already enforced by revive's `exported` rule in golangci-lint.
+    docstrings:
+      mode: "off"
+
   auto_review:
     enabled: true
     # Re-review only the new commits when a branch is pushed.
