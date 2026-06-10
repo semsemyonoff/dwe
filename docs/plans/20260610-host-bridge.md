@@ -1061,20 +1061,47 @@ Rejected (do not re-litigate):
 - Create: `internal/core/validate/bridge/bridge_test.go`
 - Modify: `internal/cli/validate/validate.go` (cross-domain wiring)
 
-- [ ] validators: `on_unreachable` enum (`fail`|`warn`), `shim_path` must be
+- [x] validators: `on_unreachable` enum (`fail`|`warn`), `shim_path` must be
       absolute, `bridge.enabled: true` on a service without a container
-      target → warning
-- [ ] register the domain: add a `valbridge.All()` iteration alongside the
+      target → warning — single `servicesValidator` (domain `bridge`, ID
+      `services`); enum/path checks fire regardless of the enabled toggle
+      (a typo'd value is wrong config even when inert); shim_path uses
+      `path.IsAbs`, not `filepath.IsAbs` — it is a Linux container path and
+      a Windows host must not reject `/usr/local/bin/dwe`
+- [x] register the domain: add a `valbridge.All()` iteration alongside the
       existing domain loops in `internal/cli/validate/validate.go`
       (lines ~577–634 — THIS is the cross-domain registration site; the
       domain's own `All()` merely mirrors the per-domain shape of
       `internal/core/validate/config/all.go`). Participates in `dwe validate`
       only — NOT preflight (preflight consumes only `valconfig.All()`;
-      bridge config errors must not block unrelated lifecycle)
-- [ ] severity levels consistent with existing domains (error vs warning)
-- [ ] write tests: table-driven diagnostics per validator (valid, invalid
-      enum, relative path, non-container service), severity codes
-- [ ] run tests — must pass before task 12
+      bridge config errors must not block unrelated lifecycle) — also added
+      the `dwe validate bridge` leaf subcommand, the scope label, and the
+      scope-target lines in the validate help (every other domain has a
+      scoped entry point; the policy allowlist covers it via the `validate`
+      top-level prefix)
+- [x] severity levels consistent with existing domains (error vs warning) —
+      invalid enum / relative shim_path = error (matches the service-hooks
+      enum errors); enabled-but-unusable bridge = warning
+- [x] write tests: table-driven diagnostics per validator (valid, invalid
+      enum, relative path, non-container service), severity codes —
+      `internal/core/validate/bridge/bridge_test.go` (diagnostic table,
+      no-diag table, per-service independence + sorted order, disk-load
+      fallback, silent skip on service load error) +
+      `internal/cli/validate/validate_test.go` (subtree shape, scoped run
+      bridge-rows-only, full-run registration, text header + exit code)
+- ➕ [x] "service without a container target" needed reinterpretation:
+      `container:` defaults to the folder name at load time, so the literal
+      check is unreachable on loaded configs (kept anyway for literal-built
+      configs, mirroring the `BuildOverlaySpec` skip). The reachable hazard —
+      found as the task-7 ➕ deviation — is a bridge-enabled service without
+      the `dir`/`dir_internal` workspace mapping: the overlay omits
+      `DWE_HOST_WORKSPACE`/`DWE_CONTAINER_WORKSPACE`, shim cwd translation is
+      unavailable, and the daemon containment check (D7) rejects every
+      in-container invocation → warning, with a type-aware hint
+      (apps: declare the pair; tool/infra cannot declare `dir` under strict
+      decode → opt out or mount the workspace at an identical path)
+- [x] run tests — must pass before task 12 (`make test`: full suite ok;
+      `make lint`: 0 issues; `-race` clean on both touched packages)
 
 ### Task 12: Docs, i18n, AGENTS.md
 

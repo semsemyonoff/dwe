@@ -931,3 +931,84 @@ func TestValidateCmd_JSONMode_TextBehaviorUnchanged(t *testing.T) {
 	// Must contain "validation result" summary line.
 	require.Contains(t, got, "validation result", "text mode must produce summary line")
 }
+
+// writeBridgeFixture creates a minimal project whose single app service
+// carries an invalid bridge.on_unreachable value and no dir/dir_internal
+// mapping — one error + one warning from the bridge domain.
+func writeBridgeFixture(t *testing.T) (workspacePath string) {
+	t.Helper()
+	tmpDir := t.TempDir()
+	workspacePath = filepath.Join(tmpDir, "workspace.yml")
+	require.NoError(t, os.WriteFile(workspacePath, []byte("schema_version: \"2\"\n"), 0o644))
+	svcDir := filepath.Join(tmpDir, "workspace", "services", "web")
+	require.NoError(t, os.MkdirAll(svcDir, 0o755))
+	require.NoError(t, os.WriteFile(filepath.Join(svcDir, "service.yml"), []byte(
+		"type: app\nbridge:\n  on_unreachable: sometimes\n",
+	), 0o644))
+	return workspacePath
+}
+
+func TestValidateBridgeSubcommand(t *testing.T) {
+	cmd := NewCmd("", &cmdctx.RootFlags{})
+	bridgeCmd, _, _ := cmd.Find([]string{"bridge"})
+	require.NotNil(t, bridgeCmd)
+	require.Equal(t, "bridge", bridgeCmd.Name())
+	require.NotNil(t, bridgeCmd.Args)
+	require.True(t, bridgeCmd.SilenceUsage)
+}
+
+// TestValidateBridgeRunsBridgeDomainOnly: `dwe validate bridge` scopes
+// execution to the bridge domain and surfaces the bridge diagnostics.
+func TestValidateBridgeRunsBridgeDomainOnly(t *testing.T) {
+	workspacePath := writeBridgeFixture(t)
+
+	stdout, _ := runValidateJSONCmd(t, workspacePath, "bridge")
+
+	var got validateJSON
+	require.NoError(t, json.Unmarshal([]byte(stdout), &got))
+	require.Equal(t, 1, got.Summary.Error)
+	require.Equal(t, 1, got.Summary.Warning)
+	require.Len(t, got.Diagnostics, 2)
+	for _, d := range got.Diagnostics {
+		require.True(t, strings.HasPrefix(d.Scope, "bridge/"),
+			"scoped run must emit only bridge-domain rows, got scope %q", d.Scope)
+	}
+}
+
+// TestValidateFullRunIncludesBridgeDomain: the bridge domain is registered in
+// buildRegistry, so an unscoped `dwe validate` surfaces its diagnostics too.
+func TestValidateFullRunIncludesBridgeDomain(t *testing.T) {
+	workspacePath := writeBridgeFixture(t)
+
+	stdout, _ := runValidateJSONCmd(t, workspacePath)
+
+	var got validateJSON
+	require.NoError(t, json.Unmarshal([]byte(stdout), &got))
+	var bridgeScopes []string
+	for _, d := range got.Diagnostics {
+		if strings.HasPrefix(d.Scope, "bridge/") {
+			bridgeScopes = append(bridgeScopes, d.Scope)
+		}
+	}
+	require.Len(t, bridgeScopes, 2, "full run must include the bridge domain rows")
+	require.Equal(t, "bridge/bridge.services:web", bridgeScopes[0])
+}
+
+// TestValidateBridgeTextHeader: text mode shows the bridge-specific scope
+// label so the user knows what was checked.
+func TestValidateBridgeTextHeader(t *testing.T) {
+	workspacePath := writeBridgeFixture(t)
+
+	flags := &cmdctx.RootFlags{ConfigPath: workspacePath}
+	cmd := NewCmd("", flags)
+	var output bytes.Buffer
+	cmd.SetOut(&output)
+	cmd.SetErr(&output)
+	cmd.SetArgs([]string{"bridge"})
+	err := cmd.Execute()
+	require.Error(t, err, "the invalid enum must drive a non-zero exit")
+
+	out := output.String()
+	require.Contains(t, out, "host-bridge service settings")
+	require.Contains(t, out, `"sometimes"`)
+}
