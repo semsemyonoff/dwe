@@ -255,6 +255,17 @@ func TestLiveLine_PrintlnDiagFallsBackToScreen(t *testing.T) {
 	l := NewLiveLine(&term, &scr, false) // disabled: straight-to-data-writer path
 	l.PrintlnDiag("$ docker ps")
 	require.Equal(t, "$ docker ps\n", scr.String())
+
+	// Active live mode with no diag writer: the line still falls back to the
+	// screen (data) writer and must not bleed into the term (footer) channel.
+	var term2, scr2 bytes.Buffer
+	l2 := newTestLiveLine(&term2, &scr2, true)
+	l2.SetText("phase: running")
+	l2.Start()
+	l2.PrintlnDiag("$ docker ps")
+	l2.Stop()
+	require.Equal(t, "$ docker ps\n", scr2.String())
+	require.NotContains(t, stripANSIBytes(term2.Bytes()), "docker ps")
 }
 
 func TestLiveLine_CursorInvariantSingle(t *testing.T) {

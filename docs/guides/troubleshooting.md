@@ -140,7 +140,7 @@ DWE_DEBUG=1 dwe run # env equivalent of --debug
 The two are designed to combine cleanly with everything else:
 
 - **Read-only probes stay out of verbose.** `dwe status -v` does *not* spam `docker compose ps` — those probes are Debug-only. Use `dwe status --debug` if you want to see them.
-- **JSON stays clean.** `dwe status -v --output json | jq .` parses: the JSON document is the only thing on stdout, every diagnostic line is on stderr. The same holds for `--debug`. If a command errors, the `{"error":{…}}` envelope is still the final structure on stderr.
+- **JSON stays clean.** `dwe status -v --output json | jq .` parses: the JSON document is the only thing on stdout, every diagnostic line is on stderr. The same holds for `--debug`. For non-diagnostic commands, if the command errors the `{"error":{…}}` envelope is still the final structure on stderr. Diagnostic commands like `dwe validate` are the exception — they always emit diagnostics-as-data on stdout, even at severity=error.
 - **Zero overhead when off.** With neither flag set, there is no diagnostic output, no slog handler is installed, and existing `Warn`/`Error` behavior is unchanged.
 
 Where to look: redirect stderr to a file to keep the diagnostics separate from normal output —

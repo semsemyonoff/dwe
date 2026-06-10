@@ -255,7 +255,7 @@ func TestNilWriterAndNilPrinterSafe(t *testing.T) {
 	Debugf(context.Background(), "y")
 
 	// nil ctx must not panic in printerFrom.
-	if p := printerFrom(context.TODO()); p != nil {
+	if p := printerFrom(nil); p != nil {
 		t.Fatalf("expected nil printer, got %v", p)
 	}
 }
