@@ -36,6 +36,65 @@ func TestParseBindOverride(t *testing.T) {
 	}
 }
 
+func TestRejectWildcardBinds(t *testing.T) {
+	tests := []struct {
+		name    string
+		in      []string
+		want    []string
+		dropped bool
+	}{
+		{"loopback kept", []string{"127.0.0.1"}, []string{"127.0.0.1"}, false},
+		{"gateway kept", []string{"172.17.0.1"}, []string{"172.17.0.1"}, false},
+		{"ipv4 wildcard dropped", []string{"0.0.0.0"}, []string{}, true},
+		{"ipv6 wildcard dropped", []string{"::"}, []string{}, true},
+		{"ipv6 long wildcard dropped", []string{"0:0:0:0:0:0:0:0"}, []string{}, true},
+		{"wildcard removed from mix", []string{"0.0.0.0", "192.0.2.1"}, []string{"192.0.2.1"}, true},
+		{"non-ip hostname kept", []string{"host.docker.internal"}, []string{"host.docker.internal"}, false},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			var logged []string
+			got := rejectWildcardBinds(tt.in, func(format string, args ...any) {
+				logged = append(logged, format)
+			})
+			if !slices.Equal(got, tt.want) {
+				t.Errorf("rejectWildcardBinds(%v) = %v, want %v", tt.in, got, tt.want)
+			}
+			if dropped := len(logged) > 0; dropped != tt.dropped {
+				t.Errorf("warning logged = %v, want %v (lines: %q)", dropped, tt.dropped, logged)
+			}
+		})
+	}
+}
+
+// TestStart_WildcardBindRejected pins the design D3 no-LAN-exposure guarantee:
+// DWE_BRIDGE_BIND=0.0.0.0 must NOT bind all interfaces — it is filtered out
+// (with a warning) and the daemon falls back to the safe loopback default,
+// still reachable over the TCP client path.
+func TestStart_WildcardBindRejected(t *testing.T) {
+	rec := &launchRecorder{}
+	var logged []string
+	d := startDaemon(t, fakeLauncher(rec, exitScript(5)), func(cfg *Config) {
+		cfg.BindOverride = "0.0.0.0"
+		// No gateway resolver: the only bind must come from the loopback
+		// fallback, proving the wildcard was dropped rather than honored.
+		cfg.Logf = func(format string, args ...any) {
+			logged = append(logged, format)
+		}
+	})
+
+	if !slices.ContainsFunc(logged, func(s string) bool {
+		return strings.Contains(s, "wildcard bind address")
+	}) {
+		t.Errorf("log lines %q missing the wildcard-rejection warning", logged)
+	}
+
+	var stdout, stderr bytes.Buffer
+	if code := bridgeclient.Run(clientOptions(d, tcpClientDir(t, d), &stdout, &stderr)); code != 5 {
+		t.Errorf("Run = %d, want 5 over the loopback fallback (stderr: %q)", code, stderr.String())
+	}
+}
+
 func TestStart_WritesPortAndTokenFiles(t *testing.T) {
 	rec := &launchRecorder{}
 	d := startDaemon(t, fakeLauncher(rec, exitScript(0)), nil)

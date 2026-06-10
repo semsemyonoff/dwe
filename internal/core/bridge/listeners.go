@@ -43,6 +43,28 @@ func ParseBindOverride(s string) []string {
 	})
 }
 
+// rejectWildcardBinds drops unspecified addresses (0.0.0.0, ::, and their
+// equivalents) from a DWE_BRIDGE_BIND override. Design D3 forbids binding all
+// interfaces — the no-LAN-exposure guarantee — so a wildcard entry is filtered
+// out (with a warning) rather than honored, even when the user set it
+// explicitly. Specific addresses (loopback, the docker gateway, a chosen host
+// IP) are the legitimate "exotic setup" override and pass through unchanged. A
+// fully-wildcard override collapses to an empty list, which the caller treats
+// as "no override" and falls back to the safe 127.0.0.1 + gateway default.
+func rejectWildcardBinds(addrs []string, logf func(string, ...any)) []string {
+	kept := make([]string, 0, len(addrs))
+	for _, addr := range addrs {
+		if ip := net.ParseIP(addr); ip != nil && ip.IsUnspecified() {
+			if logf != nil {
+				logf("bridge: ignoring wildcard bind address %q from %s — binding all interfaces is not allowed (no LAN exposure)", addr, BindOverrideEnv)
+			}
+			continue
+		}
+		kept = append(kept, addr)
+	}
+	return kept
+}
+
 // ensureTokenFile reads the project token, generating and persisting a fresh
 // one (mode 0600) when the file is absent or empty.
 func ensureTokenFile(path string) (string, error) {
@@ -89,7 +111,7 @@ func (d *Daemon) openUnixListener() (net.Listener, error) {
 // gateway IP on native Linux, silently skipped where the interface does not
 // exist (macOS). Never 0.0.0.0.
 func (d *Daemon) openTCPListeners() ([]net.Listener, int, error) {
-	addrs := ParseBindOverride(d.cfg.BindOverride)
+	addrs := rejectWildcardBinds(ParseBindOverride(d.cfg.BindOverride), d.logf)
 	if len(addrs) == 0 {
 		addrs = []string{"127.0.0.1"}
 		if d.cfg.GatewayIP != nil {

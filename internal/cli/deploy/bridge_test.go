@@ -1,6 +1,7 @@
 package deploy
 
 import (
+	"bytes"
 	"context"
 	"errors"
 	"io"
@@ -15,6 +16,7 @@ import (
 	"github.com/semsemyonoff/dwe/internal/core/project/config"
 	"github.com/semsemyonoff/dwe/internal/core/usercommands"
 	"github.com/semsemyonoff/dwe/internal/shared/lock"
+	sharedrender "github.com/semsemyonoff/dwe/internal/shared/render"
 
 	"github.com/spf13/cobra"
 )
@@ -32,6 +34,65 @@ func recordBridgePrepare(t *testing.T, err error) *[]bridge.PrepareOptions {
 		return err
 	}
 	return &calls
+}
+
+// recordBridgeEnsure swaps the post-deploy daemon re-ensure seam for a
+// recorder returning err.
+func recordBridgeEnsure(t *testing.T, err error) *[]bridge.EnsureConfig {
+	t.Helper()
+	var calls []bridge.EnsureConfig
+	prev := bridgeEnsureFn
+	t.Cleanup(func() { bridgeEnsureFn = prev })
+	bridgeEnsureFn = func(cfg bridge.EnsureConfig) (bool, error) {
+		calls = append(calls, cfg)
+		return false, err
+	}
+	return &calls
+}
+
+func enabledBool() *bool { v := true; return &v }
+
+// TestReEnsureBridgeDaemon_GatedAndBestEffort pins the post-deploy re-ensure
+// (the fix for a daemon that auto-stops during a slow service-deploy phase):
+// it fires only when an enabled service is bridged, and an ensure failure
+// warns without panicking.
+func TestReEnsureBridgeDaemon_GatedAndBestEffort(t *testing.T) {
+	bridged := &config.DweConfig{Services: map[string]config.ServiceConfig{
+		"app": {Type: "app", Enabled: true, Bridge: config.ServiceBridgeConfig{Enabled: enabledBool()}},
+	}}
+	unbridged := &config.DweConfig{Services: map[string]config.ServiceConfig{
+		"db": {Type: "infra", Enabled: true},
+	}}
+
+	t.Run("fires when bridged", func(t *testing.T) {
+		calls := recordBridgeEnsure(t, nil)
+		w := sharedrender.NewWriter(io.Discard)
+		reEnsureBridgeDaemon(bridged, "/abs/project", w)
+		if len(*calls) != 1 {
+			t.Fatalf("ensure called %d times, want 1", len(*calls))
+		}
+		if (*calls)[0].ProjectRoot != "/abs/project" {
+			t.Errorf("ensure ProjectRoot = %q, want /abs/project", (*calls)[0].ProjectRoot)
+		}
+	})
+
+	t.Run("skipped when no service bridged", func(t *testing.T) {
+		calls := recordBridgeEnsure(t, nil)
+		reEnsureBridgeDaemon(unbridged, "/abs/project", sharedrender.NewWriter(io.Discard))
+		if len(*calls) != 0 {
+			t.Errorf("ensure called %d times with no bridged service, want 0", len(*calls))
+		}
+	})
+
+	t.Run("ensure error warns, never fatal", func(t *testing.T) {
+		recordBridgeEnsure(t, errors.New("spawn failed"))
+		var buf bytes.Buffer
+		// Must not panic; the warning is best-effort.
+		reEnsureBridgeDaemon(bridged, "/abs/project", sharedrender.NewWriter(&buf))
+		if !strings.Contains(buf.String(), "re-ensuring daemon") {
+			t.Errorf("output = %q, want a re-ensure warning", buf.String())
+		}
+	})
 }
 
 func writeDeployTestWorkspace(t *testing.T) (dir, cfgPath string) {

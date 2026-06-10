@@ -24,7 +24,7 @@ var ContentHashes = map[string]string{
 	"guides/write-snapshot-workflows.md":       "a5a1f22c2cb2",
 	"internals/architecture.md":                "4fe04c86171c",
 	"internals/packages.md":                    "f2135532f7bd",
-	"reference/bridge.md":                      "5d13e61897f4",
+	"reference/bridge.md":                      "64b882cb4d9d",
 	"reference/concepts/architecture.md":       "186bac809a2e",
 	"reference/concepts/docker.md":             "20dcf0c6b589",
 	"reference/concepts/getting-started.md":    "a3c68d8cbd91",
