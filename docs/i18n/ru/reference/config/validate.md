@@ -383,7 +383,7 @@ commands:
       command -v psql
 ```
 
-**8. Только compose-плагин v2 (executable_in_path):**
+**8. Исполняемый файл в PATH (executable_in_path):**
 
 ```yaml
   - id: jq-installed

@@ -164,7 +164,7 @@ func TestLoadValidateConfig_postSetupStageNoWarning(t *testing.T) {
     type: builtin
     cmd: config_keys_present
     with:
-      keys: [services.app.env.APP_KEY]
+      keys: [db.api_key]
 `
 	tmpfile, err := os.CreateTemp("", "validate-*.yml")
 	if err != nil {

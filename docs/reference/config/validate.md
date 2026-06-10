@@ -381,7 +381,7 @@ commands:
       command -v psql
 ```
 
-**8. Compose plugin v2 only (executable_in_path):**
+**8. Executable in PATH (executable_in_path):**
 
 ```yaml
   - id: jq-installed
