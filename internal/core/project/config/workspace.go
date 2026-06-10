@@ -560,6 +560,29 @@ type ServiceRenderConfig struct {
 	Config *RenderConfigSection  `yaml:"config"`
 }
 
+// DefaultBridgeShimPath is the container path the host-bridge shim binary is
+// mounted at unless bridge.shim_path overrides it (base-image collision).
+const DefaultBridgeShimPath = "/usr/local/bin/dwe"
+
+// Bridge on_unreachable policy values: fail makes the shim exit 1 when the
+// host daemon is unreachable (a hook must block the commit), warn makes it
+// print a warning and exit 0.
+const (
+	BridgeOnUnreachableFail = "fail"
+	BridgeOnUnreachableWarn = "warn"
+)
+
+// ServiceBridgeConfig holds host-bridge settings for a service: whether the
+// shim binary and bridge mounts are injected into the container (enabled —
+// tristate, defaults on for type app), where the shim is mounted (shim_path),
+// and the shim's policy when the host daemon is unreachable (on_unreachable:
+// fail | warn).
+type ServiceBridgeConfig struct {
+	Enabled       *bool  `yaml:"enabled"`
+	ShimPath      string `yaml:"shim_path"`
+	OnUnreachable string `yaml:"on_unreachable"`
+}
+
 // StatusColumn declares one custom column rendered in the status table for a
 // service or tool. Value is a hermetic Go template evaluated via tpl.Render.
 type StatusColumn struct {
@@ -802,7 +825,7 @@ func allowedFieldsFor(t ServiceType) map[string]bool {
 	common := []string{
 		"type", "container", "required", "compose",
 		"ports", "hosts", "icon", "info", "status",
-		"on_enable", "on_disable", "notes",
+		"on_enable", "on_disable", "notes", "bridge",
 	}
 	switch t {
 	case ServiceTypeApp:
@@ -874,6 +897,7 @@ type ServiceConfig struct {
 	LocalComposeExtra []string            `yaml:"-"`
 	CLI               ServiceCLIConfig    `yaml:"cli"`
 	Render            ServiceRenderConfig `yaml:"render"`
+	Bridge            ServiceBridgeConfig `yaml:"bridge"`
 	// Generated declares per-service values that the service itself mints (e.g.
 	// Laravel APP_KEY) and DWE harvests back into a durable store
 	// (.dwe/generated.yml) to replay on subsequent renders. Keyed by field name.
@@ -945,7 +969,8 @@ func (s ServiceConfig) IDERenderEnabledExplicit() (enabled bool, explicit bool) 
 
 // renderEnabledExplicit resolves a render toggle: if the explicit pointer is
 // non-nil it is authoritative; otherwise app services default on, others off.
-// Shared by the IDE/AI/Git per-kind RenderEnabledExplicit accessors.
+// Shared by the IDE/AI/Git per-kind RenderEnabledExplicit accessors and the
+// bridge toggle (BridgeEnabledExplicit), which follows the same tristate shape.
 func (s ServiceConfig) renderEnabledExplicit(enabled *bool) (bool, bool) {
 	if enabled != nil {
 		return *enabled, true
@@ -988,6 +1013,39 @@ func (s ServiceConfig) GitRenderEnabledExplicit() (enabled bool, explicit bool) 
 func (s ServiceConfig) GitRenderEnabled() bool {
 	enabled, _ := s.GitRenderEnabledExplicit()
 	return enabled
+}
+
+// BridgeEnabledExplicit returns the host-bridge enabled state and whether it was explicitly set.
+// If Enabled is non-nil, returns its value and true.
+// If Enabled is nil, returns true for type "app" (default) or false for other types, and false (not explicit).
+func (s ServiceConfig) BridgeEnabledExplicit() (enabled bool, explicit bool) {
+	return s.renderEnabledExplicit(s.Bridge.Enabled)
+}
+
+// BridgeEnabled returns whether this service should receive the host-bridge
+// shim mount and env block in the generated compose overlay.
+// It's a simple wrapper around BridgeEnabledExplicit that discards the explicit flag.
+func (s ServiceConfig) BridgeEnabled() bool {
+	enabled, _ := s.BridgeEnabledExplicit()
+	return enabled
+}
+
+// BridgeShimPath returns the container path the shim binary is mounted at:
+// bridge.shim_path when set, DefaultBridgeShimPath otherwise.
+func (s ServiceConfig) BridgeShimPath() string {
+	if s.Bridge.ShimPath != "" {
+		return s.Bridge.ShimPath
+	}
+	return DefaultBridgeShimPath
+}
+
+// BridgeOnUnreachable returns the shim's unreachable-daemon policy:
+// bridge.on_unreachable when set, BridgeOnUnreachableFail otherwise.
+func (s ServiceConfig) BridgeOnUnreachable() string {
+	if s.Bridge.OnUnreachable != "" {
+		return s.Bridge.OnUnreachable
+	}
+	return BridgeOnUnreachableFail
 }
 
 // DisplayIcon returns the resolved icon for this service.
@@ -2049,6 +2107,16 @@ func ResolveServiceExtends(services map[string]ServiceConfig) error {
 		if svc.Render.Config == nil && parent.Render.Config != nil {
 			cfg := *parent.Render.Config
 			svc.Render.Config = &cfg
+		}
+		if svc.Bridge.Enabled == nil && parent.Bridge.Enabled != nil {
+			v := *parent.Bridge.Enabled
+			svc.Bridge.Enabled = &v
+		}
+		if svc.Bridge.ShimPath == "" {
+			svc.Bridge.ShimPath = parent.Bridge.ShimPath
+		}
+		if svc.Bridge.OnUnreachable == "" {
+			svc.Bridge.OnUnreachable = parent.Bridge.OnUnreachable
 		}
 		// Distinguish an omitted `generated:` (nil → inherit) from an explicitly
 		// empty `generated: {}` (non-nil → child wholly replaces with nothing).

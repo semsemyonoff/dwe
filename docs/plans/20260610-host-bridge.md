@@ -603,19 +603,29 @@ Rejected (do not re-litigate):
 - Modify: `internal/core/validate/config/workspace.go`
 - Modify: nearby `*_test.go` for both packages
 
-- [ ] add `BridgeConfig` to service config: `Enabled *bool`, `ShimPath string`,
-      `OnUnreachable string` (yaml `bridge:`, D8 schema)
-- [ ] nil-safe accessor (e.g. `svc.BridgeEnabled()`): default true for
+- [x] add `BridgeConfig` to service config: `Enabled *bool`, `ShimPath string`,
+      `OnUnreachable string` (yaml `bridge:`, D8 schema) — named
+      `ServiceBridgeConfig` to match the package convention
+      (`ServiceCLIConfig`/`ServiceRenderConfig`); adds constants
+      `DefaultBridgeShimPath`, `BridgeOnUnreachableFail/Warn`
+- [x] nil-safe accessor (e.g. `svc.BridgeEnabled()`): default true for
       `type: app`, false otherwise; default shim path
-      `/usr/local/bin/dwe` + `on_unreachable: fail`
-- [ ] inherit via `extends:` in `ResolveServiceExtends()` — tristate copy,
+      `/usr/local/bin/dwe` + `on_unreachable: fail` —
+      `BridgeEnabled()`/`BridgeEnabledExplicit()` (reuses the shared
+      `renderEnabledExplicit` tristate helper), `BridgeShimPath()`,
+      `BridgeOnUnreachable()`
+- [x] inherit via `extends:` in `ResolveServiceExtends()` — tristate copy,
       same shape as `render.git.enabled`
-- [ ] add `bridge` to `allowedFieldsFor()` AND `servicesAllowedFields` (strict
-      `KnownFields(true)` decode — both or it hard-errors)
-- [ ] write tests: load with/without `bridge:`, extends inheritance (set/unset
+- [x] add `bridge` to `allowedFieldsFor()` AND `servicesAllowedFields` (strict
+      `KnownFields(true)` decode — both or it hard-errors) — added to the
+      common field set (all three service types can opt in; the tristate
+      default only turns it on for apps, matching the D8 "false otherwise"
+      semantics and the task-11 validator over non-app services)
+- [x] write tests: load with/without `bridge:`, extends inheritance (set/unset
       parent/child), unknown sub-field rejected by strict decode, defaults per
       service type
-- [ ] run tests — must pass before task 3
+- [x] run tests — must pass before task 3 (`make test`: 105 packages ok;
+      `make lint`: 0 issues)
 
 ### Task 3: Shim client core + `cmd/dwe-shim`
 
