@@ -254,8 +254,10 @@ func TestNilWriterAndNilPrinterSafe(t *testing.T) {
 	Decision(context.Background(), "x")
 	Debugf(context.Background(), "y")
 
-	// nil ctx must not panic in printerFrom.
-	if p := printerFrom(nil); p != nil {
+	// nil ctx must not panic in printerFrom. A typed-nil variable exercises the
+	// ctx == nil branch without tripping staticcheck SA1012 (nil-literal ctx).
+	var nilCtx context.Context
+	if p := printerFrom(nilCtx); p != nil {
 		t.Fatalf("expected nil printer, got %v", p)
 	}
 }
