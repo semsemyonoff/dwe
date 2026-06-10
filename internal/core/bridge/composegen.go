@@ -314,8 +314,14 @@ func RenderOverlay(spec OverlaySpec) ([]byte, error) {
 // off; shim materialization and daemon ensure are the steps that get
 // skipped, never this one.
 func RegenerateOverlay(baseDir string, cfg *config.DweConfig, arch ArchResolver, logf func(format string, args ...any)) (bool, error) {
+	return regenerateOverlayFromSpec(baseDir, BuildOverlaySpec(baseDir, cfg, arch, logf))
+}
+
+// regenerateOverlayFromSpec is the spec-driven core of RegenerateOverlay,
+// shared with Prepare (which also needs the spec for its skip decision and
+// must not resolve architectures twice).
+func regenerateOverlayFromSpec(baseDir string, spec OverlaySpec) (bool, error) {
 	path := OverlayPath(baseDir)
-	spec := BuildOverlaySpec(baseDir, cfg, arch, logf)
 	if len(spec.Services) == 0 {
 		err := os.Remove(path)
 		switch {

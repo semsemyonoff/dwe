@@ -881,7 +881,7 @@ Rejected (do not re-litigate):
 - Modify: `internal/cli/status/` (best-effort ensure)
 - Modify: nearby `*_test.go`
 
-- [ ] bridge prepare hook (overlay regenerate-or-delete + shim materialize +
+- [x] bridge prepare hook (overlay regenerate-or-delete + shim materialize +
       daemon ensure) on every compose-up command: `deploy run`, `run`
       (whole-stack and `<svc>`), `services … --apply` — AFTER preflight and
       `AcquireProjectLocksOrReport`, BEFORE `compose up`. The overlay step
@@ -891,22 +891,61 @@ Rejected (do not re-litigate):
       the full `run` lifecycle leg (`internal/cli/lifecycle/restart.go` —
       stop-then-run), so the prepare hook fires there transitively — verify
       this during implementation; if restart turns out to have its own
-      compose-up call, add it to this set explicitly
-- [ ] daemon step variant: for `deploy run` and whole-stack `restart` the
+      compose-up call, add it to this set explicitly — hook implemented as
+      `bridge.Prepare(PrepareOptions)` (`internal/core/bridge/prepare.go`);
+      call sites: `RunRun` (after the deployment gate AND post-pull reload,
+      before `RunPhases` — the overlay must reflect the freshest config and
+      `composeFiles` stats it at call time) and `deploy.RunHelper` (after
+      locks). VERIFIED: whole-stack restart = `RunStop`+`RunRun`, no own
+      compose-up; `services … --apply` delegates exclusively to
+      `deploy.RunHelper` / `lifecycle.RunRestart` (both hook transitively).
+      NOTE: `dwe run` takes no service arg in this codebase (cobra `NoArgs`)
+      — the per-service compose-up is `deploy run --service`, covered by the
+      RunHelper hook
+- [x] daemon step variant: for `deploy run` and whole-stack `restart` the
       prepare hook's daemon step is **cycle** (SIGTERM → ensure, D6) — a
       single action REPLACING plain ensure, not ensure followed by a separate
-      cycle (that would SIGTERM the daemon just spawned)
-- [ ] SIGTERM daemon in whole-stack `stop` and `reset run`; per-service
-      variants untouched (D6 table)
-- [ ] best-effort ensure in top-level `dwe status` (errors swallowed, traced
+      cycle (that would SIGTERM the daemon just spawned) —
+      `PrepareOptions.CycleDaemon`: RunHelper passes true always;
+      `RunRestart` sets `RunContext.BridgeDaemonCycle` on its inner `RunRun`
+      (plain `dwe run` keeps ensure). Deploy's hook sits deliberately BEFORE
+      the already-up-to-date no-op gate: the D6 remedy "re-run `dwe deploy`"
+      must refresh shims + daemon even when the pipeline no-ops
+- [x] SIGTERM daemon in whole-stack `stop` and `reset run`; per-service
+      variants untouched (D6 table) — `RunStop` signals after the stop
+      phases succeed (workflow seam `BridgeStopDaemonFunc`); whole-stack
+      `resetRunCmd` signals after pipeline success (cli seam
+      `bridgeStopDaemonFn`); both best-effort (warning, never fatal — the
+      daemon auto-stops on zero containers anyway); a FAILED reset does NOT
+      signal (stack state unknown, daemon stays for diagnostics)
+- [x] best-effort ensure in top-level `dwe status` (errors swallowed, traced
       via `trace.Debugf` only) — acquires NO project locks and runs NO
       preflight (status stays read-only; ensure's `daemon.pid` flock is a
-      separate, bridge-private lock)
-- [ ] write tests: hook ordering with fake bridge manager (prepare called
+      separate, bridge-private lock) — `ensureBridgeDaemon` gated on new
+      `bridge.AnyBridgeEnabled(cfg)`; top-level RunE only (section
+      subcommands stay passive, mirroring the prompt-cache hook)
+- [x] write tests: hook ordering with fake bridge manager (prepare called
       before compose up, not called when disabled), stop/reset SIGTERM path,
       per-service commands do not touch daemon; existing lifecycle tests stay
-      green
-- [ ] run tests — must pass before task 9
+      green — `core/bridge/prepare_test.go` (overlay write/delete, daemon
+      skip when nothing bridged, ensure-noop vs cycle ordering, spawn-error
+      propagation), `workflow/lifecycle/bridge_test.go` (prepare-before-
+      phases, gate-failure → no prepare, stop-after-phases, restart
+      interleave + cycle flag, non-fatal stop error),
+      `cli/deploy/bridge_test.go` (cycle after locks, not called on
+      lock-held/preflight-fail, locks released on hook failure),
+      `cli/lifecycle/bridge_test.go` (whole-stack reset SIGTERM, failed
+      pipeline → no SIGTERM, per-service reset/stop/restart untouched),
+      `cli/status/bridge_test.go` (top-level ensure, swallowed error,
+      subcommand + bridge-off → no ensure); test-binary init stubs added in
+      workflow/lifecycle, cli/lifecycle, cli/status (real seams probe docker
+      and spawn via os.Executable() — the documented recursion hazard)
+- ➕ [x] `bridge.AnyBridgeEnabled` helper + `regenerateOverlayFromSpec` split
+      (Prepare builds the overlay spec once for both the regenerate step and
+      its skip decision — no double arch resolution)
+- [x] run tests — must pass before task 9 (`make test`: 109 packages ok;
+      `make lint`: 0 issues; `-race` clean on all five touched packages;
+      module cross-compiles for windows/amd64 and linux/arm64)
 
 ### Task 9: Container command policy
 
