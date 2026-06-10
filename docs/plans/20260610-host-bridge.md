@@ -727,24 +727,45 @@ Rejected (do not re-litigate):
 - Create: `internal/cli/bridge/daemon.go` (hidden `bridge daemon` entry)
 - Modify: `internal/cli/root.go` (register subtree)
 
-- [ ] register hidden `dwe bridge daemon --project-root` subcommand NOW (not
+- [x] register hidden `dwe bridge daemon --project-root` subcommand NOW (not
       in task 10) — it is the process ensure spawns, so the system is
       end-to-end runnable from this task; rest of the subtree lands in task 10
-- [ ] ensure (idempotent) per D6: try flock `.dwe/bridge/daemon.pid` —
+      (`internal/cli/bridge` registered in the Advanced group; `dwe bridge
+      daemon` added to `allowedWithoutProject` — it takes everything from
+      `--project-root`, cwd discovery must not gate a detached spawn)
+- [x] ensure (idempotent) per D6: try flock `.dwe/bridge/daemon.pid` —
       acquired ⇒ stale: clean `host.sock`/`port`, spawn detached
       `dwe bridge daemon --project-root <abs>` (double-fork + setsid);
       not acquired ⇒ alive, no-op; `Cycle()` = SIGTERM-by-pidfile + ensure;
-      spawn goes through an injectable seam for tests
-- [ ] graceful shutdown per D6: remove `host.sock`/`port` (keep `token`),
-      release flock, exit
-- [ ] auto-stop per D6: subscribe `docker events --filter label=<project>`
+      spawn goes through an injectable seam for tests — `Ensure`/`Cycle`/
+      `StopDaemon` over `shared/lock` (bridge-private flock; Ensure releases
+      the probe flock before spawning — the daemon re-acquires it at startup
+      and a spawn-race loser exits cleanly); production spawn = `Setsid` +
+      released process handle in `spawn_unix.go` (windows stub mirrors
+      `exec_windows.go`)
+- [x] graceful shutdown per D6: remove `host.sock`/`port` (keep `token`),
+      release flock, exit — Daemon.Close (task 4) + deferred flock release in
+      the `bridge daemon` RunE; SIGTERM/SIGINT via `signal.NotifyContext`
+- [x] auto-stop per D6: subscribe `docker events --filter label=<project>`
       via injectable docker runner, fallback `docker ps` poll 60 s, startup
-      grace 10 s, zero containers → shutdown
-- [ ] daemon stderr → `.dwe/bridge/daemon.log` (append; rotation out of scope)
-- [ ] write tests: ensure no-op when flock held, stale cleanup path, cycle
+      grace 10 s, zero containers → shutdown — `RunAutoStop` with injectable
+      `Subscribe`/`CountRunning`; production hooks filter on
+      `com.docker.compose.project=<resolved name>` (the label every other dwe
+      probe matches; the D6 `dwe.project` label does not exist in the
+      codebase) via `config.ResolveComposeProjectName`; count errors are
+      logged and retried, never fatal
+- [x] daemon stderr → `.dwe/bridge/daemon.log` (append; rotation out of scope)
+      — the detached spawn redirects the child's stdout/stderr to daemon.log,
+      so panics land there too; daemon logs via stderr with timestamps
+- [x] write tests: ensure no-op when flock held, stale cleanup path, cycle
       ordering, auto-stop state machine against scripted fake events/ps
       (start → grace → zero → shutdown; events stream drop → poll fallback)
-- [ ] run tests — must pass before task 6
+- ➕ [x] `internal/cli/bridge/daemon_test.go`: hidden flag, required/absolute
+      `--project-root` validation, already-running exit-0 path (flock held),
+      missing-workspace.yml failure — no Docker, no real daemon
+- [x] run tests — must pass before task 6 (`make test`: all packages ok;
+      `make lint`: 0 issues; `-race` clean on both new packages; module
+      cross-compiles for windows/amd64 and linux/arm64)
 
 ### Task 6: Shim build + embed + materialization
 

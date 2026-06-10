@@ -11,6 +11,7 @@ import (
 	"strings"
 	"sync"
 
+	cmdBridge "github.com/semsemyonoff/dwe/internal/cli/bridge"
 	"github.com/semsemyonoff/dwe/internal/cli/cmdctx"
 	cmdCommand "github.com/semsemyonoff/dwe/internal/cli/command"
 	"github.com/semsemyonoff/dwe/internal/cli/completion"
@@ -104,6 +105,7 @@ func NewRootCmdWithFlags() (*cobra.Command, *cmdctx.RootFlags) {
 	root.AddCommand(cmdCommand.NewCmd(groupAdvanced, flags))
 	root.AddCommand(cmdDocker.NewCmd(groupAdvanced, flags))
 	root.AddCommand(cmdCompose.NewCmd(groupAdvanced, flags))
+	root.AddCommand(cmdBridge.NewCmd(groupAdvanced, flags))
 	root.AddCommand(cmdDocs.NewCmd(groupAdvanced, flags))
 
 	// Add the built-in Cobra completion command to the Advanced group,
@@ -379,6 +381,9 @@ func allowedWithoutProject(cmd *cobra.Command) bool {
 		path == "dwe init" ||
 		path == "dwe version" ||
 		path == "dwe prompt" ||
+		// The daemon takes everything from --project-root; cwd-based
+		// discovery must not gate it (it is spawned detached).
+		path == "dwe bridge daemon" ||
 		strings.HasPrefix(path, "dwe completion") ||
 		strings.HasPrefix(path, "dwe docs")
 }
