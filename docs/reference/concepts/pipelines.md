@@ -180,6 +180,6 @@ This is the canonical answer to "I want per-element gating in a workflow without
 - [`deploy.yml` / `reset.yml` reference](../config/deploy/index.md) — top-level fields, phase fields, step fields, idempotency and state journal interaction.
 - [Step execution types](../config/deploy/steps.md) — `shell`, `dwe`, `command`, `builtin`; `cmd: shell` builtin vs `type: shell` step.
 - [Conditions catalogue](../config/conditions.md) — every predicate and typed action available to `when:` / `check:` / `files_gate:`.
-- [`lifecycle.yml`](../config/lifecycle.md) — `run:` / `stop:` pipelines, `run.update` probe, hook phase conventions.
+- [`lifecycle.yml`](../config/lifecycle.md) — `run:` / `stop:` pipelines, self-update probe (top-level [`update:` block](../config/workspace.md#the-update-block)), hook phase conventions.
 - [Reset](../config/reset.md) — project-wide and per-service reset, the always-on baseline, pending-state lifecycle.
 - [State and locks](state-and-locks.md) — how the deploy journal records hashes and decides what to skip, and how `deploy.lock` / `snapshot.lock` serialise concurrent runs.

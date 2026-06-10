@@ -171,14 +171,14 @@ Dependencies identified: changes are confined to `internal/core/project/config`,
 - Modify: `docs/reference/concepts/git.md` (where update mode lives)
 - Modify (i18n — hand-maintained Russian translations, no validator catches staleness): `docs/i18n/ru/reference/config/lifecycle.md` (documents `update:` under `run:` at ~78-80, 125, 211, 254-256) and `docs/i18n/ru/reference/concepts/git.md` (~86-91). Keep parity with the English changes, or add a tracked note explicitly deferring the translation.
 
-- [ ] Rewrite `workspace.md` convention section to document `vars:` (strict root + sandbox) and the recommended file-layout convention (defaults.yml: vars+exports; workspace.yml: compact blocks; local.yml: overrides).
-- [ ] Document the formalized `update:` block in the chosen location; remove `run.update` from `lifecycle.md`.
-- [ ] Migrate every `db.*`/`app.*`/`user.*` root example across `setup.md`/`validate.md`/`snapshot.md`/`git.md` to `vars.*`.
-- [ ] Update the Russian i18n markdown (`docs/i18n/ru/reference/config/lifecycle.md`, `docs/i18n/ru/reference/concepts/git.md`) to match — move `update:` out of `run:`, or leave a tracked deferral note.
-- [ ] If a per-package internals note is warranted, add it to `docs/internals/packages.md` (AGENTS.md is canonical; CLAUDE.md is its symlink).
-- [ ] Run `make build` (syncs `internal/core/docs/embedded/` + regenerates `content_hashes_gen.go`).
-- [ ] Write/adjust any doc-presence tests if the docs subsystem asserts specific pages; ensure golden/hash tests pass.
-- [ ] `make test` — docs-subsystem tests must pass before Task 8.
+- [x] Rewrite `workspace.md` convention section to document `vars:` (strict root + sandbox) and the recommended file-layout convention (defaults.yml: vars+exports; workspace.yml: compact blocks; local.yml: overrides). Added new `## Strict root + the vars: sandbox` section, `### The update: block` (replacing the old open-namespace "Project convention keys" section), and `## Recommended file-layout convention` table. Updated the layer table + dot-path examples to `vars.*`.
+- [x] Document the formalized `update:` block in the chosen location; remove `run.update` from `lifecycle.md`. Chose `workspace.md` (`### The update: block`) as the home; rewrote `lifecycle.md`'s `## run.update` → `## Self-update probe` pointer, removed the `update.mode` rows/examples/validation bullets, and updated `concepts/git.md` + `concepts/pipelines.md` cross-links to the top-level block.
+- [x] Migrate every `db.*`/`app.*`/`user.*` root example across `setup.md`/`validate.md`/`snapshot.md`/`git.md` to `vars.*`. Migrated all `writes:` targets + prose in `setup.md` (incl. `secrets.*`/`workspace.root`/`cache.*`/`debug.*` → `vars.*`) and `config_keys_present` examples in `validate.md`. `snapshot.md`/`git.md` had no root custom-key config examples (their `db.*` are user-command names / a service named `db`) — left unchanged.
+- [x] Update the Russian i18n markdown to match. Translated content parity for ru `lifecycle.md`, `concepts/git.md`, `concepts/pipelines.md`, plus the mechanical `vars.*` migration in ru `setup.md`/`validate.md` and the new strict-root/`vars`/`update`/file-layout sections in ru `workspace.md`; fixed ru cross-link anchors to translated slugs; refreshed all 6 `> Translated from: … @ <hash>` headers to the regenerated English content hashes (incl. the pre-existing `validate.md` staleness).
+- [x] If a per-package internals note is warranted, add it to `docs/internals/packages.md` — deferred to Task 9, which explicitly covers the strict-root allowlist / `vars` sandbox / update-block-location contracts in `packages.md` / AGENTS.md.
+- [x] Run `make build` (syncs `internal/core/docs/embedded/` + regenerates `content_hashes_gen.go`).
+- [x] Write/adjust any doc-presence tests if the docs subsystem asserts specific pages; ensure golden/hash tests pass. No new tests needed; the existing docs-subsystem golden/hash tests (incl. `TestRussianTranslationsAreFresh`) pass.
+- [x] `make test` — docs-subsystem tests pass; full `make test` green (0 failures), `make lint` clean.
 
 ### Task 8: Verify acceptance criteria
 

@@ -1,4 +1,4 @@
-> Translated from: reference/concepts/pipelines.md @ 2f98eeebd73f
+> Translated from: reference/concepts/pipelines.md @ e0bec1d2ecab
 
 # Пайплайны
 
@@ -182,6 +182,6 @@ Workflow остаётся непрозрачным и переиспользуе
 - [Справочник `deploy.yml` / `reset.yml`](../config/deploy/index.md) — поля верхнего уровня, поля фаз, поля шагов, идемпотентность и взаимодействие с журналом состояния.
 - [Типы выполнения шагов](../config/deploy/steps.md) — `shell`, `dwe`, `command`, `builtin`; `cmd: shell` builtin vs `type: shell` step.
 - [Каталог условий](../config/conditions.md) — каждый предикат и типизированное действие, доступные для `when:` / `check:` / `files_gate:`.
-- [`lifecycle.yml`](../config/lifecycle.md) — пайплайны `run:` / `stop:`, проба `run.update`, конвенции hook-фаз.
+- [`lifecycle.yml`](../config/lifecycle.md) — пайплайны `run:` / `stop:`, проба самообновления (верхнеуровневый [блок `update:`](../config/workspace.md#блок-update)), конвенции hook-фаз.
 - [Reset](../config/reset.md) — общий и сервисный reset, всегда включённая базовая линия, жизненный цикл pending-состояния.
 - [Состояние и блокировки](state-and-locks.md) — как журнал deploy записывает хэши и решает, что пропустить, и как `deploy.lock` / `snapshot.lock` сериализуют конкурентные запуски.
