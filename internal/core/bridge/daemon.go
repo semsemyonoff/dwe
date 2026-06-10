@@ -149,7 +149,12 @@ func (d *Daemon) Start() error {
 	}
 	d.port = port
 
-	if err := os.WriteFile(d.PortPath(), []byte(strconv.Itoa(port)+"\n"), portFilePerm); err != nil {
+	// Write the port file atomically (temp + rename): the shim reads it
+	// concurrently during the daemon restart window, and a non-atomic
+	// truncate-then-write could expose an empty or partial file. A parse
+	// error is not os.ErrNotExist, so the shim's readPortToken would NOT
+	// retry it — atomicity keeps the reader from ever seeing a partial port.
+	if err := writePortFileAtomic(d.PortPath(), port); err != nil {
 		_ = unixLn.Close()
 		for _, ln := range tcpLns {
 			_ = ln.Close()
@@ -200,6 +205,31 @@ func (d *Daemon) SocketPath() string { return SocketPath(d.bridgeDir) }
 
 // PortPath returns the TCP port file path.
 func (d *Daemon) PortPath() string { return PortPath(d.bridgeDir) }
+
+// writePortFileAtomic writes the port number to path via a temp file in the
+// same directory followed by a rename, so a concurrent shim reader never
+// observes a truncated or empty port file (see the call site in Start).
+func writePortFileAtomic(path string, port int) error {
+	dir := filepath.Dir(path)
+	tmp, err := os.CreateTemp(dir, ".port-*")
+	if err != nil {
+		return err
+	}
+	tmpName := tmp.Name()
+	defer func() { _ = os.Remove(tmpName) }() // no-op once renamed
+	if _, err := tmp.WriteString(strconv.Itoa(port) + "\n"); err != nil {
+		_ = tmp.Close()
+		return err
+	}
+	if err := tmp.Chmod(portFilePerm); err != nil {
+		_ = tmp.Close()
+		return err
+	}
+	if err := tmp.Close(); err != nil {
+		return err
+	}
+	return os.Rename(tmpName, path)
+}
 
 // TokenPath returns the token file path.
 func (d *Daemon) TokenPath() string { return filepath.Join(d.bridgeDir, tokenFileName) }

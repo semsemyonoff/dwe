@@ -51,6 +51,15 @@ func TestStart_WritesPortAndTokenFiles(t *testing.T) {
 	if port != d.Port() {
 		t.Errorf("port file = %d, want bound port %d", port, d.Port())
 	}
+	portInfo, err := os.Stat(d.PortPath())
+	if err != nil {
+		t.Fatalf("stat port file: %v", err)
+	}
+	// The port file is written atomically (temp + rename); the temp file's
+	// chmod must survive the rename as the public 0644 (it is not a secret).
+	if mode := portInfo.Mode().Perm(); mode != 0o644 {
+		t.Errorf("port file mode = %o, want 0644", mode)
+	}
 
 	tokenInfo, err := os.Stat(d.TokenPath())
 	if err != nil {
