@@ -636,24 +636,34 @@ Rejected (do not re-litigate):
 - Create: `internal/shared/bridgeclient/client_test.go`
 - Create: `cmd/dwe-shim/main.go`
 
-- [ ] transport select per D2: `$DWE_BRIDGE_DIR/host.sock` dial (300 ms
+- [x] transport select per D2: `$DWE_BRIDGE_DIR/host.sock` dial (300 ms
       timeout) → read `port`+`token` (retry 2×100 ms on missing) → TCP
       `host.docker.internal:<port>`
-- [ ] HELLO build: cwd translation per D7, env stripping per D7, always
+- [x] HELLO build: cwd translation per D7, env stripping per D7, always
       `tty: false` (D11)
-- [ ] pump loop: stdin → STDIN frames (+STDIN_CLOSE on EOF), STDOUT/STDERR →
+- [x] pump loop: stdin → STDIN frames (+STDIN_CLOSE on EOF), STDOUT/STDERR →
       local fds, SIGINT/SIGTERM → SIGNAL frames, EXIT → os.Exit(code), ERROR →
       human message per code
-- [ ] unreachable policy per D10 (message format, exit 1 vs
+- [x] unreachable policy per D10 (message format, exit 1 vs
       `DWE_BRIDGE_UNREACHABLE=warn` → exit 0)
-- [ ] `cmd/dwe-shim/main.go`: thin main over bridgeclient; no cobra, no
+- [x] `cmd/dwe-shim/main.go`: thin main over bridgeclient; no cobra, no
       lipgloss (mirror `internal/shared/prompt` philosophy)
-- [ ] write tests: in-process fake server over loopback TCP and tmpdir unix
+- [x] write tests: in-process fake server over loopback TCP and tmpdir unix
       socket — happy path (stdout/stderr/exit code), unix→tcp fallback, token
       passed on TCP only, cwd translation table, env stripping table,
       unreachable fail vs warn, `version_mismatch` ERROR renders the
       "re-run `dwe deploy`" message verbatim
-- [ ] run tests — must pass before task 4
+- [x] run tests — must pass before task 4 (`make test`: 106 packages ok;
+      `make lint`: 0 issues; cross-compiles verified for linux amd64/arm64
+      and windows/amd64; static linux/arm64 shim ≈ 2.8 MB)
+- ➕ [x] dead-connection unreachable mapping: a connection that drops before
+      delivering ANY frame is treated as unreachable (Docker Desktop's host
+      proxy can accept the TCP connect and only then discover nothing
+      listens host-side — would otherwise surface as a cryptic
+      "connection lost: EOF" instead of the D10 message)
+- ➕ [x] explicit `DWE_BRIDGE_DIR is not set` diagnostic when the shim runs
+      outside a bridged container (clearer than the generic unreachable
+      message)
 
 ### Task 4: Daemon session core — listeners, auth, subprocess proxy
 
