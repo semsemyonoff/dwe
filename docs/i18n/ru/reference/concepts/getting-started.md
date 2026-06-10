@@ -1,4 +1,4 @@
-> Translated from: reference/concepts/getting-started.md @ a3c68d8cbd91
+> Translated from: reference/concepts/getting-started.md @ 717063d52e74
 
 # Начало работы
 
@@ -139,7 +139,7 @@ dwe run --no-update
 dwe run --update on
 ```
 
-Правило приоритета: `--no-update` > `--update` > `lifecycle.yml.update.mode` — см. [`lifecycle.yml`](../config/lifecycle.md).
+Правило приоритета: `--no-update` > `--update` > верхнеуровневый `update.mode` после мерджа — см. [блок `update:`](../config/workspace.md#блок-update).
 
 Остановите стек через `dwe stop` (запускает `before-stop` хуки → `docker compose down` → `after-stop` хуки). Перезапустите через `dwe restart` (stop + run с флагом `--no-update`).
 

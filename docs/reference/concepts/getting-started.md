@@ -137,7 +137,7 @@ dwe run --no-update
 dwe run --update on
 ```
 
-The precedence rule is `--no-update` > `--update` > `lifecycle.yml.update.mode` — see [`lifecycle.yml`](../config/lifecycle.md).
+The precedence rule is `--no-update` > `--update` > the merged top-level `update.mode` — see [the `update:` block](../config/workspace.md#the-update-block).
 
 Stop the stack with `dwe stop` (runs `before-stop` hooks → `docker compose down` → `after-stop` hooks). Restart with `dwe restart` (stop + run with `--no-update`).
 

@@ -547,6 +547,40 @@ func TestLoadConfig_update_presentEmptyMode(t *testing.T) {
 	}
 }
 
+func TestLoadConfig_update_presentNullValue(t *testing.T) {
+	// A bare `update:` (null value) is also the opt-in: writing the key is
+	// itself the opt-in (present-but-empty → on). deepMerge drops the nil value,
+	// so this guards the presence-normalization that keeps the contract.
+	ws := sampleWorkspaceYML + "\nupdate:\n"
+	path := writeFullFixture(t, ws, "", "", "", noToolsYML)
+	cfg, err := LoadConfig(path)
+	if err != nil {
+		t.Fatalf("LoadConfig: %v", err)
+	}
+	if cfg.Update == nil {
+		t.Fatal("Update should be a present (empty) block, got nil")
+	}
+	if got := cfg.Update.EffectiveMode(); got != "on" {
+		t.Errorf("EffectiveMode() = %q, want on", got)
+	}
+}
+
+func TestLoadConfig_update_explicitModeSurvivesNullOverride(t *testing.T) {
+	// defaults.yml sets mode: off; local.yml writes a bare `update:` (null).
+	// The explicit mode survives the merge (the merged block is not empty), so
+	// EffectiveMode stays off — a null override does not silently re-enable.
+	defaults := "schema_version: \"1\"\nupdate:\n  mode: off\n"
+	lc := "update:\n"
+	path := writeFullFixture(t, sampleWorkspaceYML, defaults, lc, "", noToolsYML)
+	cfg, err := LoadConfig(path)
+	if err != nil {
+		t.Fatalf("LoadConfig: %v", err)
+	}
+	if got := cfg.Update.EffectiveMode(); got != "off" {
+		t.Errorf("EffectiveMode() = %q, want off (explicit mode survives null override)", got)
+	}
+}
+
 func TestLoadConfig_update_invalidModeRejected(t *testing.T) {
 	// A bad value must hard-error at load time, not silently fall through.
 	ws := sampleWorkspaceYML + "\nupdate:\n  mode: yes-please\n"

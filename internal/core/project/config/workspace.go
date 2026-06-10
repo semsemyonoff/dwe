@@ -1455,6 +1455,22 @@ func LoadConfig(workspacePath string) (*DweConfig, error) {
 		}
 	}
 
+	// Normalize a present-but-null update: block. Writing the update: key is
+	// itself the opt-in (present-but-empty → on), but a bare `update:` parses to
+	// a nil value which deepMerge skips, so the struct round-trip would yield a
+	// nil Update (→ off) and silently drop the opt-in. Treat a present update:
+	// key in any layer as a present (empty) block when the merge left it nil.
+	// When some layer carries an explicit mode, deepMerge preserves it and
+	// cfg.Update is already non-nil, so this leaves layered modes untouched.
+	if cfg.Update == nil {
+		for _, layer := range layers {
+			if _, ok := layer.data["update"]; ok {
+				cfg.Update = &UpdateConfig{}
+				break
+			}
+		}
+	}
+
 	// Value-validate the formalized update: block. The strict-root allowlist only
 	// checks key names; without this a bad value (update: {mode: yes}) would load
 	// and then silently ActionSkip at run-time. Mirrors the old lifecycle loader's
