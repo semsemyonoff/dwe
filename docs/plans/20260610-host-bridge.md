@@ -1008,18 +1008,51 @@ Rejected (do not re-litigate):
 - Create: `internal/cli/bridge/start.go`, `stop.go`, `status.go`, `logs.go`
 - Create: `internal/cli/bridge/bridge_test.go`
 
-- [ ] extend the subtree registered in task 5 (`NewCmd(groupID, flags)` +
-      hidden `bridge daemon` already exist) with the user-facing commands
-- [ ] `start` / `stop`: ensure / SIGTERM-by-pidfile; clear messages when
-      project has no bridge-enabled services
-- [ ] `status`: liveness (flock probe), pid, uptime, transports (sock path,
+- [x] extend the subtree registered in task 5 (`NewCmd(groupID, flags)` +
+      hidden `bridge daemon` already exist) with the user-facing commands —
+      `start.go`/`stop.go`/`status.go`/`logs.go`, all `cobra.NoArgs`; each
+      daemon-touching call goes through a same-package seam
+      (`ensureDaemonFn`/`stopDaemonFn`/`probeDaemonFn` — the os.Executable
+      recursion hazard again, plus an init() stub for the whole test binary
+      mirroring cli/status)
+- [x] `start` / `stop`: ensure / SIGTERM-by-pidfile; clear messages when
+      project has no bridge-enabled services — start refuses with typed
+      `bridge_not_enabled` + enable hint (a daemon for zero bridged services
+      is useless); stop stays a clean idempotent no-op and appends the
+      "no enabled service has the host bridge enabled" explanation to its
+      not-running message
+- [x] `status`: liveness (flock probe), pid, uptime, transports (sock path,
       tcp port), shim materialization state — through `cmdctx.WriteData[T]`
-      (JSON mode contract) with human renderer
-- [ ] `logs --tail N`: read `.dwe/bridge/daemon.log`
-- [ ] write tests: status JSON golden (running/stopped), logs tail, args
+      (JSON mode contract) with human renderer — liveness via new
+      `bridge.ProbeDaemon` (pidfile-flock probe; StopDaemon refactored over
+      it); uptime = pidfile mtime (written exactly once, by the daemon's own
+      startup acquire); shim state via new `shimassets.Status`
+      (current/stale/missing, fs-injectable like Materialize); socket/port
+      read from the bridge dir files so a stopped daemon shows neither
+- [x] `logs --tail N`: read `.dwe/bridge/daemon.log` — default 50, 0 = all,
+      negative → `invalid_tail` (exit 2, same code as `dwe logs`); missing
+      file → stderr notice in text mode, `{"lines":[]}` in JSON
+- [x] write tests: status JSON golden (running/stopped), logs tail, args
       validation; display strings via i18n store helpers (no raw
-      `def.Description` reads)
-- [ ] run tests — must pass before task 11
+      `def.Description` reads — the bridge subtree renders no user-command
+      defs at all, only static cobra strings, so the i18n constraint is
+      satisfied vacuously) — `cli/bridge/bridge_test.go` (subtree shape,
+      per-command NoArgs, start/stop messages + JSON shapes + error wrapping,
+      status running/stopped goldens via probe/shims/now seams, real-probe
+      fresh-project smoke, logs tail/0/negative/missing/JSON);
+      `ensure_test.go` ProbeDaemon coverage (no pidfile / stale / held with
+      backdated mtime); `shimassets_test.go` Status coverage (current+stale
+      mix, missing, placeholder-only, real-embed shape)
+- ➕ [x] package-level `bridge.SocketPath`/`PortPath(bridgeDir)` twins of the
+      Daemon methods (probe-only callers have no Daemon instance); updated
+      the task-9 `bridgepolicy_test.go` real-tree visibility test that pinned
+      the pre-task-10 shape (bridge parent now stays visible for
+      `bridge status`; start/stop/logs hide in container context — exactly
+      the anticipated parent-with-allowed-child rule)
+- [x] run tests — must pass before task 11 (`make test`: full suite ok;
+      `make lint`: 0 issues; `-race` clean on core/bridge, shimassets,
+      cli/bridge, cli; module cross-compiles for windows/amd64 and
+      linux/arm64)
 
 ### Task 11: Validation domain `validate/bridge`
 

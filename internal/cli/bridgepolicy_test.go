@@ -252,12 +252,24 @@ func TestApplyBridgeContainerVisibility_realTree(t *testing.T) {
 			t.Errorf("allowlisted command %q must stay visible in container context", name)
 		}
 	}
-	// The bridge subtree currently carries only the (already hidden) daemon
-	// entry — no allowed descendant exists yet, so the whole node hides.
-	// Once `bridge status` lands, the parent-with-allowed-child rule (tested
-	// below) keeps `bridge` visible.
-	if cmd := findTopLevel(t, root, "bridge"); !cmd.Hidden {
-		t.Error("bridge subtree without an allowed descendant must be hidden")
+	// The bridge subtree: the parent-with-allowed-child rule keeps `bridge`
+	// visible for the allowlisted `bridge status`, while its blocked
+	// siblings (start/stop/logs) hide.
+	bridgeCmd := findTopLevel(t, root, "bridge")
+	if bridgeCmd.Hidden {
+		t.Error("bridge subtree must stay visible: `bridge status` is allowed")
+	}
+	for _, sub := range bridgeCmd.Commands() {
+		switch sub.Name() {
+		case "status":
+			if sub.Hidden {
+				t.Error("bridge status must stay visible in container context")
+			}
+		case "start", "stop", "logs":
+			if !sub.Hidden {
+				t.Errorf("bridge %s must be hidden in container context", sub.Name())
+			}
+		}
 	}
 }
 

@@ -79,6 +79,67 @@ func materializeFS(fsys fs.FS, baseDir string) ([]string, error) {
 	return paths, nil
 }
 
+// Shim materialization states reported by Status.
+const (
+	// StateCurrent: the materialized file matches the embedded shim.
+	StateCurrent = "current"
+	// StateStale: the file exists but differs from the embedded shim (an
+	// older dwe materialized it — the next prepare hook rewrites it).
+	StateStale = "stale"
+	// StateMissing: the shim has not been materialized yet.
+	StateMissing = "missing"
+)
+
+// ShimState describes one embedded shim's materialization state in a project
+// (consumed by `dwe bridge status`).
+type ShimState struct {
+	// Name is the shim file name (e.g. "shim-linux-amd64").
+	Name string
+	// Path is the materialization target under <baseDir>/.dwe/bridge.
+	Path string
+	// State is one of StateCurrent, StateStale, StateMissing.
+	State string
+}
+
+// Status compares each embedded shim against its materialized copy under
+// `<baseDir>/.dwe/bridge` without writing anything. On a fresh checkout
+// (placeholder-only embed tree) it returns an empty slice.
+func Status(baseDir string) ([]ShimState, error) {
+	return statusFS(embedded, baseDir)
+}
+
+// statusFS is the fs-injectable core of Status for tests.
+func statusFS(fsys fs.FS, baseDir string) ([]ShimState, error) {
+	entries, err := fs.ReadDir(fsys, "bin")
+	if err != nil {
+		return nil, fmt.Errorf("bridge shims: reading embedded bin: %w", err)
+	}
+	bridgeDir := filepath.Join(baseDir, ".dwe", "bridge")
+	states := []ShimState{}
+	for _, e := range entries {
+		if e.IsDir() || !strings.HasPrefix(e.Name(), shimPrefix) {
+			continue
+		}
+		data, err := fs.ReadFile(fsys, path.Join("bin", e.Name()))
+		if err != nil {
+			return nil, fmt.Errorf("bridge shims: reading embedded %s: %w", e.Name(), err)
+		}
+		dst := filepath.Join(bridgeDir, e.Name())
+		state := StateCurrent
+		existing, err := os.ReadFile(dst)
+		switch {
+		case errors.Is(err, os.ErrNotExist):
+			state = StateMissing
+		case err != nil:
+			return nil, fmt.Errorf("bridge shims: reading %s: %w", dst, err)
+		case !bytes.Equal(existing, data):
+			state = StateStale
+		}
+		states = append(states, ShimState{Name: e.Name(), Path: dst, State: state})
+	}
+	return states, nil
+}
+
 // writeIfChanged replaces dst only when its content differs, via a same-dir
 // temp file + rename — a half-written shim must never be observable at the
 // bind-mount source path of a running container.

@@ -162,6 +162,84 @@ func TestMaterializePlaceholderOnlyIsNoop(t *testing.T) {
 	}
 }
 
+func TestStatusReportsPerShimState(t *testing.T) {
+	fsys := testFS(map[string]string{
+		".gitkeep":         "",
+		"shim-linux-amd64": "amd64-payload",
+		"shim-linux-arm64": "arm64-payload",
+	})
+	baseDir := t.TempDir()
+
+	// shim-linux-amd64 materialized current, shim-linux-arm64 stale.
+	if _, err := materializeFS(fsys, baseDir); err != nil {
+		t.Fatalf("materializeFS: %v", err)
+	}
+	arm := filepath.Join(baseDir, ".dwe", "bridge", "shim-linux-arm64")
+	if err := os.WriteFile(arm, []byte("old-build"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+
+	states, err := statusFS(fsys, baseDir)
+	if err != nil {
+		t.Fatalf("statusFS: %v", err)
+	}
+	want := map[string]string{
+		"shim-linux-amd64": StateCurrent,
+		"shim-linux-arm64": StateStale,
+	}
+	if len(states) != len(want) {
+		t.Fatalf("got %d states %v, want %d", len(states), states, len(want))
+	}
+	for _, s := range states {
+		if wantState := want[s.Name]; s.State != wantState {
+			t.Errorf("%s state = %q, want %q", s.Name, s.State, wantState)
+		}
+		if wantPath := filepath.Join(baseDir, ".dwe", "bridge", s.Name); s.Path != wantPath {
+			t.Errorf("%s path = %q, want %q", s.Name, s.Path, wantPath)
+		}
+	}
+}
+
+func TestStatusMissingBeforeMaterialize(t *testing.T) {
+	fsys := testFS(map[string]string{"shim-linux-amd64": "payload"})
+	baseDir := t.TempDir() // no .dwe/bridge at all
+
+	states, err := statusFS(fsys, baseDir)
+	if err != nil {
+		t.Fatalf("statusFS: %v", err)
+	}
+	if len(states) != 1 || states[0].State != StateMissing {
+		t.Errorf("states = %v, want one %q entry", states, StateMissing)
+	}
+}
+
+func TestStatusPlaceholderOnlyIsEmpty(t *testing.T) {
+	states, err := statusFS(testFS(map[string]string{".gitkeep": ""}), t.TempDir())
+	if err != nil {
+		t.Fatalf("statusFS: %v", err)
+	}
+	if len(states) != 0 {
+		t.Errorf("states = %v, want none (fresh-checkout embed tree)", states)
+	}
+}
+
+// TestStatusEmbedded exercises the real embed tree (shape-only — see
+// TestMaterializeEmbedded for why the count is not asserted).
+func TestStatusEmbedded(t *testing.T) {
+	states, err := Status(t.TempDir())
+	if err != nil {
+		t.Fatalf("Status: %v", err)
+	}
+	for _, s := range states {
+		if !strings.HasPrefix(s.Name, "shim-") {
+			t.Errorf("non-shim entry %q in status", s.Name)
+		}
+		if s.State != StateMissing {
+			t.Errorf("%s state = %q, want %q in an empty project", s.Name, s.State, StateMissing)
+		}
+	}
+}
+
 // TestMaterializeEmbedded exercises the real embed tree. It must pass both on
 // a fresh checkout (placeholder only — zero shims) and after `make shims`
 // (two linux shims), so it asserts shape, not count.

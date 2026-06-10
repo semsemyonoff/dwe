@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"net"
 	"os"
+	"path/filepath"
 	"strconv"
 	"strings"
 	"unicode"
@@ -24,6 +25,14 @@ const (
 	sockPerm      = 0o660
 	portFilePerm  = 0o644 // not a secret, unlike the 0600 token
 )
+
+// SocketPath returns the unix transport socket path inside bridgeDir
+// (package-level twin of Daemon.SocketPath for probe-only callers like
+// `dwe bridge status`).
+func SocketPath(bridgeDir string) string { return filepath.Join(bridgeDir, sockFileName) }
+
+// PortPath returns the TCP port file path inside bridgeDir.
+func PortPath(bridgeDir string) string { return filepath.Join(bridgeDir, portFileName) }
 
 // ParseBindOverride splits a BindOverrideEnv value into bind addresses:
 // comma- or whitespace-separated, empty entries dropped. An empty result

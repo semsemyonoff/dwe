@@ -9,10 +9,11 @@ import (
 	"github.com/spf13/cobra"
 )
 
-// NewCmd builds the `dwe bridge` command tree. The user-facing
-// start/stop/status/logs subcommands land with the bridge CLI task; until
-// then the tree carries only the hidden daemon entry so the daemon process
-// the ensure step spawns is runnable end-to-end.
+// NewCmd builds the `dwe bridge` command tree: the user-facing
+// start/stop/status/logs subcommands plus the hidden `bridge daemon`
+// foreground entry that the lifecycle ensure spawns. From inside containers
+// only `bridge status` is reachable (design D9 — `bridge stop` would be
+// suicide for the bridge itself).
 func NewCmd(groupID string, flags *cmdctx.RootFlags) *cobra.Command {
 	cmd := &cobra.Command{
 		GroupID: groupID,
@@ -31,6 +32,10 @@ for manual control and diagnostics.`,
 			return cmd.Help()
 		},
 	}
+	cmd.AddCommand(newStartCmd(flags))
+	cmd.AddCommand(newStopCmd(flags))
+	cmd.AddCommand(newStatusCmd(flags))
+	cmd.AddCommand(newLogsCmd(flags))
 	cmd.AddCommand(newDaemonCmd(flags))
 	return cmd
 }

@@ -170,34 +170,58 @@ func Cycle(cfg EnsureConfig) (started bool, err error) {
 	return Ensure(cfg)
 }
 
+// DaemonProbe is the result of the pidfile-flock liveness probe.
+type DaemonProbe struct {
+	// Running reports whether a live process holds the pidfile flock.
+	Running bool
+	// PID is the flock holder's pid; 0 when not running or when the pidfile
+	// content was unreadable.
+	PID int
+	// StartedAt approximates the daemon start time: the pidfile is written
+	// exactly once per daemon lifetime — by its own startup acquire — so the
+	// file mtime is the start time while the flock is held.
+	StartedAt time.Time
+}
+
+// ProbeDaemon performs the pidfile-flock liveness probe (design D6): the
+// flock held means a daemon is alive; acquired (and released again) means no
+// daemon. A missing pidfile is a clean not-running result.
+func ProbeDaemon(bridgeDir string) (DaemonProbe, error) {
+	pidPath := PidPath(bridgeDir)
+	info, err := os.Stat(pidPath)
+	if err != nil {
+		if errors.Is(err, os.ErrNotExist) {
+			return DaemonProbe{}, nil
+		}
+		return DaemonProbe{}, fmt.Errorf("bridge: probing daemon pidfile: %w", err)
+	}
+	l, err := lock.Acquire(pidPath)
+	if err == nil {
+		// Nobody holds the flock — no live daemon.
+		return DaemonProbe{}, l.Release()
+	}
+	held, ok := errors.AsType[*lock.HeldError](err)
+	if !ok {
+		return DaemonProbe{}, fmt.Errorf("bridge: probing daemon pidfile: %w", err)
+	}
+	return DaemonProbe{Running: true, PID: held.PID, StartedAt: info.ModTime()}, nil
+}
+
 // StopDaemon delivers SIGTERM to the daemon holding the pidfile flock
 // (design D6: whole-stack stop / reset run). A missing pidfile or a stale
 // one (holder dead) is a clean no-op. Returns signaled=true when a live
 // daemon was sent the signal; it shuts down asynchronously — Cycle is the
 // caller that waits.
 func StopDaemon(bridgeDir string) (signaled bool, err error) {
-	pidPath := PidPath(bridgeDir)
-	if _, err := os.Stat(pidPath); err != nil {
-		if errors.Is(err, os.ErrNotExist) {
-			return false, nil
-		}
-		return false, fmt.Errorf("bridge: probing daemon pidfile: %w", err)
+	probe, err := ProbeDaemon(bridgeDir)
+	if err != nil {
+		return false, err
 	}
-	l, err := lock.Acquire(pidPath)
-	if err == nil {
-		// Nobody holds the flock — no live daemon.
-		_ = l.Release()
+	if !probe.Running || probe.PID <= 0 {
 		return false, nil
 	}
-	held, ok := errors.AsType[*lock.HeldError](err)
-	if !ok {
-		return false, fmt.Errorf("bridge: probing daemon pidfile: %w", err)
-	}
-	if held.PID <= 0 {
-		return false, nil
-	}
-	if err := terminateDaemon(held.PID); err != nil {
-		return false, fmt.Errorf("bridge: signaling daemon (pid %d): %w", held.PID, err)
+	if err := terminateDaemon(probe.PID); err != nil {
+		return false, fmt.Errorf("bridge: signaling daemon (pid %d): %w", probe.PID, err)
 	}
 	return true, nil
 }

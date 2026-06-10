@@ -196,10 +196,10 @@ func (d *Daemon) Port() int { return d.port }
 func (d *Daemon) BridgeDir() string { return d.bridgeDir }
 
 // SocketPath returns the unix transport socket path.
-func (d *Daemon) SocketPath() string { return filepath.Join(d.bridgeDir, sockFileName) }
+func (d *Daemon) SocketPath() string { return SocketPath(d.bridgeDir) }
 
 // PortPath returns the TCP port file path.
-func (d *Daemon) PortPath() string { return filepath.Join(d.bridgeDir, portFileName) }
+func (d *Daemon) PortPath() string { return PortPath(d.bridgeDir) }
 
 // TokenPath returns the token file path.
 func (d *Daemon) TokenPath() string { return filepath.Join(d.bridgeDir, tokenFileName) }

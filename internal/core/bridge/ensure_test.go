@@ -159,6 +159,71 @@ func TestEnsureSpawnErrorPropagates(t *testing.T) {
 	}
 }
 
+func TestProbeDaemonNoPidfile(t *testing.T) {
+	dir := t.TempDir()
+	bridgeDir := filepath.Join(dir, ".dwe", "bridge") // never created
+
+	probe, err := ProbeDaemon(bridgeDir)
+	if err != nil {
+		t.Fatalf("ProbeDaemon: %v", err)
+	}
+	if probe.Running || probe.PID != 0 {
+		t.Errorf("probe = %+v, want zero (not running)", probe)
+	}
+	if _, err := os.Stat(bridgeDir); !errors.Is(err, os.ErrNotExist) {
+		t.Errorf("ProbeDaemon must not create the bridge dir (err = %v)", err)
+	}
+}
+
+func TestProbeDaemonStalePidfile(t *testing.T) {
+	bridgeDir := t.TempDir()
+	// Pidfile exists but nobody holds the flock — a dead daemon.
+	l, err := lock.Acquire(PidPath(bridgeDir))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := l.Release(); err != nil {
+		t.Fatal(err)
+	}
+
+	probe, err := ProbeDaemon(bridgeDir)
+	if err != nil {
+		t.Fatalf("ProbeDaemon: %v", err)
+	}
+	if probe.Running {
+		t.Error("Running = true, want false (stale pidfile)")
+	}
+}
+
+func TestProbeDaemonReportsHolder(t *testing.T) {
+	bridgeDir := t.TempDir()
+	held, err := lock.Acquire(PidPath(bridgeDir))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = held.Release() }()
+	// The pidfile is written once, at daemon startup — its mtime is the
+	// start time. Backdate it to verify StartedAt comes from the stat.
+	started := time.Now().Add(-time.Hour).Truncate(time.Second)
+	if err := os.Chtimes(PidPath(bridgeDir), started, started); err != nil {
+		t.Fatal(err)
+	}
+
+	probe, err := ProbeDaemon(bridgeDir)
+	if err != nil {
+		t.Fatalf("ProbeDaemon: %v", err)
+	}
+	if !probe.Running {
+		t.Fatal("Running = false, want true (flock held)")
+	}
+	if probe.PID != os.Getpid() {
+		t.Errorf("PID = %d, want %d", probe.PID, os.Getpid())
+	}
+	if !probe.StartedAt.Equal(started) {
+		t.Errorf("StartedAt = %v, want pidfile mtime %v", probe.StartedAt, started)
+	}
+}
+
 func TestStopDaemonNoPidfile(t *testing.T) {
 	dir := t.TempDir()
 	bridgeDir := filepath.Join(dir, ".dwe", "bridge") // never created
