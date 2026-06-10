@@ -2703,8 +2703,6 @@ info:
 
 const sampleLifecycleYML = `
 run:
-  update:
-    mode: on
   show_info: true
   final_message: "Project is ready for work!"
   phases:
@@ -2744,12 +2742,6 @@ func TestLoadLifecycleConfig_happyPath(t *testing.T) {
 	}
 	if cfg.Run == nil {
 		t.Fatal("cfg.Run should not be nil")
-	}
-	if cfg.Run.Update == nil {
-		t.Fatal("cfg.Run.Update should not be nil")
-	}
-	if cfg.Run.Update.Mode != "on" {
-		t.Errorf("cfg.Run.Update.Mode = %q, want on", cfg.Run.Update.Mode)
 	}
 	if !cfg.Run.ShowInfo {
 		t.Error("cfg.Run.ShowInfo should be true")
@@ -2810,33 +2802,14 @@ run:
 	}
 }
 
-func TestLoadLifecycleConfig_defaultMode(t *testing.T) {
-	// update block present but mode omitted — EffectiveMode should default to "on".
-	yml := `
-run:
-  update: {}
-  phases:
-    - name: start
-      steps:
-        - name: up
-          type: dwe
-          cmd: "docker up"
-`
-	path := writeLifecycleFixture(t, yml)
-	cfg, err := LoadLifecycleConfig(path)
-	if err != nil {
-		t.Fatalf("LoadLifecycleConfig: %v", err)
-	}
-	if cfg.Run.EffectiveMode() != "on" {
-		t.Errorf("EffectiveMode() = %q, want on when mode omitted with empty update block", cfg.Run.EffectiveMode())
-	}
-}
-
-func TestLoadLifecycleConfig_invalidUpdateMode(t *testing.T) {
+func TestLoadLifecycleConfig_RejectsUpdateBlock(t *testing.T) {
+	// The update: block was lifted out of lifecycle.yml into the top-level
+	// update: config block. The strict (KnownFields) lifecycle loader must now
+	// reject any lingering run.update as an unknown field.
 	yml := `
 run:
   update:
-    mode: invalid-mode
+    mode: on
   phases:
     - name: start
       steps:
@@ -2847,7 +2820,7 @@ run:
 	path := writeLifecycleFixture(t, yml)
 	_, err := LoadLifecycleConfig(path)
 	if err == nil {
-		t.Fatal("expected error for invalid update.mode, got nil")
+		t.Fatal("expected error for run.update (moved to top-level update: block), got nil")
 	}
 }
 
@@ -2937,138 +2910,6 @@ stop:
 	}
 	if cfg.Stop.FinalMessage != "Custom stop message" {
 		t.Errorf("Stop.FinalMessage = %q, want preserved value", cfg.Stop.FinalMessage)
-	}
-}
-
-// --- EffectiveMode ---
-
-func TestEffectiveMode(t *testing.T) {
-	cases := []struct {
-		name string
-		cfg  *LifecycleRunConfig
-		want string
-	}{
-		{
-			name: "update block omitted",
-			cfg:  &LifecycleRunConfig{Update: nil},
-			want: "off",
-		},
-		{
-			name: "update block present mode omitted",
-			cfg:  &LifecycleRunConfig{Update: &LifecycleUpdate{Mode: ""}},
-			want: "on",
-		},
-		{
-			name: "mode on",
-			cfg:  &LifecycleRunConfig{Update: &LifecycleUpdate{Mode: "on"}},
-			want: "on",
-		},
-		{
-			name: "mode off",
-			cfg:  &LifecycleRunConfig{Update: &LifecycleUpdate{Mode: "off"}},
-			want: "off",
-		},
-	}
-
-	for _, tc := range cases {
-		t.Run(tc.name, func(t *testing.T) {
-			got := tc.cfg.EffectiveMode()
-			if got != tc.want {
-				t.Errorf("EffectiveMode() = %q, want %q", got, tc.want)
-			}
-		})
-	}
-}
-
-// Tests for rejection of old mode values and enabled: field (Task 18)
-
-func TestLoadLifecycleConfig_RejectsOldModePrompt(t *testing.T) {
-	yml := `
-run:
-  update:
-    mode: prompt
-  phases:
-    - name: start
-      steps:
-        - name: up
-          type: dwe
-          cmd: "docker up"
-`
-	path := writeLifecycleFixture(t, yml)
-	_, err := LoadLifecycleConfig(path)
-	if err == nil {
-		t.Fatal("expected error for old mode value 'prompt'")
-	}
-	if !strings.Contains(err.Error(), "must be one of: on, off") {
-		t.Errorf("error message = %q, should mention valid modes", err.Error())
-	}
-}
-
-func TestLoadLifecycleConfig_RejectsOldModeAuto(t *testing.T) {
-	yml := `
-run:
-  update:
-    mode: auto
-  phases:
-    - name: start
-      steps:
-        - name: up
-          type: dwe
-          cmd: "docker up"
-`
-	path := writeLifecycleFixture(t, yml)
-	_, err := LoadLifecycleConfig(path)
-	if err == nil {
-		t.Fatal("expected error for old mode value 'auto'")
-	}
-	if !strings.Contains(err.Error(), "must be one of: on, off") {
-		t.Errorf("error message = %q, should mention valid modes", err.Error())
-	}
-}
-
-func TestLoadLifecycleConfig_RejectsOldModeCheck(t *testing.T) {
-	yml := `
-run:
-  update:
-    mode: check
-  phases:
-    - name: start
-      steps:
-        - name: up
-          type: dwe
-          cmd: "docker up"
-`
-	path := writeLifecycleFixture(t, yml)
-	_, err := LoadLifecycleConfig(path)
-	if err == nil {
-		t.Fatal("expected error for old mode value 'check'")
-	}
-	if !strings.Contains(err.Error(), "must be one of: on, off") {
-		t.Errorf("error message = %q, should mention valid modes", err.Error())
-	}
-}
-
-func TestLoadLifecycleConfig_RejectsEnabledField(t *testing.T) {
-	yml := `
-run:
-  update:
-    enabled: true
-    mode: on
-  phases:
-    - name: start
-      steps:
-        - name: up
-          type: dwe
-          cmd: "docker up"
-`
-	path := writeLifecycleFixture(t, yml)
-	_, err := LoadLifecycleConfig(path)
-	if err == nil {
-		t.Fatal("expected error for 'enabled' field")
-	}
-	// KnownFields should catch this during YAML decode
-	if !strings.Contains(err.Error(), "unknown") && !strings.Contains(err.Error(), "field") {
-		t.Errorf("error message = %q, should mention unknown field", err.Error())
 	}
 }
 

@@ -17,7 +17,6 @@ const (
 // DefaultRunConfig returns a freshly-allocated default run pipeline. Callers may mutate the result safely.
 func DefaultRunConfig() *config.LifecycleRunConfig {
 	return &config.LifecycleRunConfig{
-		Update:       &config.LifecycleUpdate{Mode: "off"},
 		ShowInfo:     true,
 		FinalMessage: "Project is ready for work!",
 		Phases: []config.DeployPhase{

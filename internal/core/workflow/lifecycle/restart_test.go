@@ -188,7 +188,12 @@ func TestRunRestart_OnlyRunSectionPresent_StopUsesDefault(t *testing.T) {
 
 func TestRunRestart_NoUpdatePropagated(t *testing.T) {
 	dir := t.TempDir()
-	cfgPath := makeMinimalWorkspaceYML(t, dir)
+	cfgPath := filepath.Join(dir, "workspace.yml")
+	// Enable update in the top-level config so the test proves restart's forced
+	// NoUpdate=true suppresses an otherwise-enabled update probe.
+	if err := os.WriteFile(cfgPath, []byte("project:\n  name: test\n  prefix: dwe\nupdate:\n  mode: on\n"), 0644); err != nil {
+		t.Fatalf("writing workspace.yml: %v", err)
+	}
 
 	workspaceDir := filepath.Join(dir, "workspace")
 	if err := os.MkdirAll(workspaceDir, 0755); err != nil {
@@ -203,8 +208,6 @@ func TestRunRestart_NoUpdatePropagated(t *testing.T) {
           type: shell
           cmd: "true"
 run:
-  update:
-    mode: on
   final_message: "Ready."
   phases:
     - name: s

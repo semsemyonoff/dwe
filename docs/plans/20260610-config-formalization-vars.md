@@ -129,12 +129,12 @@ Dependencies identified: changes are confined to `internal/core/project/config`,
 - Modify: `internal/cli/lifecycle/run.go` (flag help at ~67-68 — `--no-update`/`--update` help says "regardless of lifecycle.yml config"; update to reference the `update:` block)
 - Modify: lifecycle + workspace `*_test.go` as needed
 
-- [ ] Delete `run.update` struct field, loader normalization, and the lifecycle-side mode validation; keep the rest of `LifecycleRunConfig` (phases, show_info, final_message, log) intact.
-- [ ] Repoint `resolveUpdateMode` to read `cfg.Update.EffectiveMode()` (main config) instead of `runCfg.Update`; preserve CLI precedence `--no-update` > `--update` > config and the `ValidUpdateMode` check at `run.go:149-150`.
-- [ ] Drop `Update: …` from `DefaultRunConfig` (defaults.go:20) and fix the `--no-update`/`--update` flag help in `internal/cli/lifecycle/run.go:67-68`.
-- [ ] Verify `EnsureRunConfig`/`DefaultRunConfig` and the default `start` phase no longer reference update — enabling update must not touch phases (the core fix).
-- [ ] Write/adjust tests: enabling update via main config leaves default `run` phases intact; remove tests asserting `run.update` behavior; lifecycle run still resolves mode correctly from the new location.
-- [ ] `make test` — must pass before Task 5.
+- [x] Delete `run.update` struct field, loader normalization, and the lifecycle-side mode validation; keep the rest of `LifecycleRunConfig` (phases, show_info, final_message, log) intact. (Also removed the now-orphaned `LifecycleUpdate` type and `LifecycleRunConfig.EffectiveMode`.)
+- [x] Repoint `resolveUpdateMode` to read `cfg.Update.EffectiveMode()` (main config) instead of `runCfg.Update`; preserve CLI precedence `--no-update` > `--update` > config and the `ValidUpdateMode` check at `run.go:149-150` (signature now takes `*config.UpdateConfig`; nil-safe via `EffectiveMode`).
+- [x] Drop `Update: …` from `DefaultRunConfig` (defaults.go:20) and fix the `--no-update`/`--update` flag help in `internal/cli/lifecycle/run.go:67-68`.
+- [x] Verify `EnsureRunConfig`/`DefaultRunConfig` and the default `start` phase no longer reference update — enabling update must not touch phases (the core fix). New test `TestRunRun_UpdateEnabledViaTopLevelConfig_ProbesAndKeepsDefaultPhases` proves it.
+- [x] Write/adjust tests: enabling update via main config leaves default `run` phases intact (new test); removed obsolete `run.update` tests (`TestEffectiveMode`, `TestLoadLifecycleConfig_defaultMode`/`_invalidUpdateMode`/`_RejectsOldMode*`/`_RejectsEnabledField`), added `TestLoadLifecycleConfig_RejectsUpdateBlock` (KnownFields now rejects lingering `run.update`); migrated `resolveUpdateMode` tests to `*config.UpdateConfig`; repointed `restart_test.go` to enable update via top-level workspace.yml.
+- [x] `make test` — passes (only the pre-existing branch-HEAD `TestRussianTranslationsAreFresh` for `validate.md` fails — unrelated, covered by Task 7). Lint clean on affected packages.
 
 ### Task 5: Collapse `git.Decide` to on/off and fix the dead `on`
 

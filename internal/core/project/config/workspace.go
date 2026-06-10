@@ -2604,34 +2604,16 @@ type LifecycleConfig struct {
 // Update is a pointer so a missing block (nil) is distinguishable from a present
 // block with defaults — writing the update: key is itself the opt-in.
 type LifecycleRunConfig struct {
-	Update       *LifecycleUpdate `yaml:"update"`
-	ShowInfo     bool             `yaml:"show_info"`
-	FinalMessage string           `yaml:"final_message"`
-	Log          *bool            `yaml:"log"`
-	Phases       []DeployPhase    `yaml:"phases"`
+	ShowInfo     bool          `yaml:"show_info"`
+	FinalMessage string        `yaml:"final_message"`
+	Log          *bool         `yaml:"log"`
+	Phases       []DeployPhase `yaml:"phases"`
 }
 
 // LogEnabled reports whether file logging is enabled for the run pipeline.
 // Defaults to false when unset; loader normalizes nil to false.
 func (cfg *LifecycleRunConfig) LogEnabled() bool {
 	return cfg != nil && cfg.Log != nil && *cfg.Log
-}
-
-// EffectiveMode returns the resolved update mode before any CLI flag is applied.
-// Precedence: missing block → off; update block present with empty mode → on;
-// update block present with mode set → that value (on or off).
-// CLI flags (--no-update, --update) override this.
-func (cfg *LifecycleRunConfig) EffectiveMode() string {
-	if cfg == nil {
-		return "off"
-	}
-	if cfg.Update == nil {
-		return "off"
-	}
-	if cfg.Update.Mode == "" {
-		return "on"
-	}
-	return cfg.Update.Mode
 }
 
 // LifecycleStopConfig holds the stop lifecycle pipeline configuration.
@@ -2645,12 +2627,6 @@ type LifecycleStopConfig struct {
 // Defaults to false when unset; loader normalizes nil to false.
 func (cfg *LifecycleStopConfig) LogEnabled() bool {
 	return cfg != nil && cfg.Log != nil && *cfg.Log
-}
-
-// LifecycleUpdate configures the optional git update probe run at the start of dwe run.
-// Mode must be one of: on, off.
-type LifecycleUpdate struct {
-	Mode string `yaml:"mode"`
 }
 
 // LoadLifecycleConfig loads the lifecycle pipeline from workspace/lifecycle.yml.
@@ -2682,13 +2658,6 @@ func LoadLifecycleConfig(path string) (*LifecycleConfig, error) {
 		if cfg.Run.Log == nil {
 			f := false
 			cfg.Run.Log = &f
-		}
-		if cfg.Run.Update != nil {
-			if cfg.Run.Update.Mode != "" {
-				if !ValidUpdateMode(cfg.Run.Update.Mode) {
-					return nil, fmt.Errorf("lifecycle run: update.mode %q is invalid; must be one of: on, off", cfg.Run.Update.Mode)
-				}
-			}
 		}
 	}
 	if cfg.Stop != nil {
