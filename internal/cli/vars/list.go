@@ -77,7 +77,7 @@ func runVarsList(cmd *cobra.Command, flags *cmdctx.RootFlags, namespace string) 
 
 	data := buildVarsListJSON(items, namespace)
 	return cmdctx.WriteData(flags, cmd, data, func(varsListJSON) string {
-		return uirender.RenderVarsList(items, namespace)
+		return uirender.VarsList(items, namespace)
 	})
 }
 

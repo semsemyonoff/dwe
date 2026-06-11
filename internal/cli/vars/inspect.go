@@ -98,7 +98,7 @@ func runVarsInspect(cmd *cobra.Command, flags *cmdctx.RootFlags, path string) er
 
 	data := buildInspectJSON(path, layered, origin, scan.Usages)
 	return cmdctx.WriteData(flags, cmd, data, func(varInspectJSON) string {
-		return uirender.RenderVarInspect(inspect, 0)
+		return uirender.VarInspectView(inspect, 0)
 	})
 }
 

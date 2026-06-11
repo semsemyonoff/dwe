@@ -261,12 +261,12 @@ Dependencies identified: new packages `internal/cli/vars/`, `internal/core/proje
 
 ### Task 12: Verify acceptance criteria
 
-- [ ] `dwe vars get/list/inspect/set` work end-to-end against a fixture project (text + `--output json`).
-- [ ] `set` preserves comments/formatting in `local.yml`; so do `services enable/disable` and the setup wizard (round-trip parity test green).
-- [ ] `inspect` maps `${vars.x}` and structural `from:`/`default_from:`/`when:` usages, with exact + namespace-prefix matching, file:line + line text, and the dynamic-paths caveat.
-- [ ] No-arg `dwe vars` opens the TUI; non-interactive/container falls back to `list`; `set` is reachable (and path-confined) from the container; `dwe commands` browser unaffected.
-- [ ] JSON mode keeps stdout clean (typed errors on stderr); completion returns `vars.*` leaves.
-- [ ] Run full suite: `make test` (+ `make test-race` if quick) and `make lint` — all green.
+- [x] `dwe vars get/list/inspect/set` work end-to-end against a fixture project (text + `--output json`). (Verified against a temp project: `list`/`get` (scalar+subtree)/`inspect`/`set` in both text and JSON; `set` wrote a typed int and config reload reflected it.)
+- [x] `set` preserves comments/formatting in `local.yml`; so do `services enable/disable` and the setup wizard (round-trip parity test green). (Smoke test: header + inline comments survived `vars set vars.db.port 6000`; round-trip/parity tests in Tasks 1–2 green.)
+- [x] `inspect` maps `${vars.x}` and structural `from:`/`default_from:`/`when:` usages, with exact + namespace-prefix matching, file:line + line text, and the dynamic-paths caveat. (Verified: `inspect vars.db.host` found `${vars.db.host}` in `info.yml` + a deploy `cmd`, with `file:line` + line text + caveat.)
+- [x] No-arg `dwe vars` opens the TUI; non-interactive/container falls back to `list`; `set` is reachable (and path-confined) from the container; `dwe commands` browser unaffected. (Piped `dwe vars` → list; container `set` gated by `bridge.vars_writable` (allowed match writes, non-match → `vars_not_container_writable`); path confinement rejects `project.name`; `cmdbrowser`/`cli/command` regression tests green.)
+- [x] JSON mode keeps stdout clean (typed errors on stderr); completion returns `vars.*` leaves. (Not-found JSON: empty stdout, `vars_not_found` envelope on stderr, exit 1; `__complete vars get` returns all `vars.*` leaves.)
+- [x] Run full suite: `make test` (+ `make test-race` if quick) and `make lint` — all green. (`make test` green; `make lint` green after renaming `RenderVar*` → `VarValue`/`VarsList`/`VarInspectView` to match the package's no-`Render`-prefix convention; `go test -race` green on all touched packages.)
 
 ### Task 13: Finalize
 

@@ -105,7 +105,7 @@ func buildVarsBrowserItems(cfg *config.DweConfig, flags *cmdctx.RootFlags) ([]cm
 // inlineBrowserValue renders a leaf value on a single line for the browser row
 // description: scalars verbatim, composites flattened to space-separated YAML.
 func inlineBrowserValue(value any) string {
-	rendered, err := uirender.RenderVarValue(value)
+	rendered, err := uirender.VarValue(value)
 	if err != nil {
 		return ""
 	}
@@ -133,5 +133,5 @@ func renderVarInspectFor(flags *cmdctx.RootFlags, path string, width int) string
 		Origin:      originDisplay(flags, layered.Origin),
 		Usages:      scan.Usages,
 	}
-	return uirender.RenderVarInspect(inspect, width)
+	return uirender.VarInspectView(inspect, width)
 }

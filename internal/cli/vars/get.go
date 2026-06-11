@@ -38,7 +38,7 @@ subtree as YAML.`,
 			if !ok {
 				return notFoundError(path)
 			}
-			rendered, rerr := uirender.RenderVarValue(value)
+			rendered, rerr := uirender.VarValue(value)
 			if rerr != nil && flags.Output != "json" {
 				// Composite marshal failure is vanishingly unlikely for a
 				// yaml-decoded value; surface it rather than print nothing.

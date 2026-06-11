@@ -33,7 +33,7 @@ func TestRenderVarValue(t *testing.T) {
 	}
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
-			got, err := render.RenderVarValue(tc.value)
+			got, err := render.VarValue(tc.value)
 			if (err != nil) != tc.wantErr {
 				t.Fatalf("err = %v, wantErr %v", err, tc.wantErr)
 			}
@@ -52,7 +52,7 @@ func TestRenderVarsList(t *testing.T) {
 	}
 
 	t.Run("unfiltered shows all leaves with values and badges", func(t *testing.T) {
-		out := render.RenderVarsList(items, "")
+		out := render.VarsList(items, "")
 		for _, want := range []string{
 			"vars.db.host", "localhost", "[default]",
 			"vars.db.port", "5432", "[local]",
@@ -65,7 +65,7 @@ func TestRenderVarsList(t *testing.T) {
 	})
 
 	t.Run("namespace filter keeps only matching leaves", func(t *testing.T) {
-		out := render.RenderVarsList(items, "vars.db")
+		out := render.VarsList(items, "vars.db")
 		if !strings.Contains(out, "vars.db.host") || !strings.Contains(out, "vars.db.port") {
 			t.Errorf("filtered output missing db leaves:\n%s", out)
 		}
@@ -77,24 +77,24 @@ func TestRenderVarsList(t *testing.T) {
 	t.Run("namespace dot-boundary does not match sibling prefix", func(t *testing.T) {
 		extra := append([]render.VarListItem{}, items...)
 		extra = append(extra, render.VarListItem{Path: "vars.dbx.host", Value: "x"})
-		out := render.RenderVarsList(extra, "vars.db")
+		out := render.VarsList(extra, "vars.db")
 		if strings.Contains(out, "vars.dbx.host") {
 			t.Errorf("dot-boundary filter leaked vars.dbx.host:\n%s", out)
 		}
 	})
 
 	t.Run("no match returns empty", func(t *testing.T) {
-		if out := render.RenderVarsList(items, "vars.nope"); out != "" {
+		if out := render.VarsList(items, "vars.nope"); out != "" {
 			t.Errorf("expected empty, got %q", out)
 		}
 	})
 
 	t.Run("deterministic ordering preserves input order", func(t *testing.T) {
-		out := render.RenderVarsList(items, "")
+		out := render.VarsList(items, "")
 		hostIdx := strings.Index(out, "vars.db.host")
 		portIdx := strings.Index(out, "vars.db.port")
 		appIdx := strings.Index(out, "vars.app.name")
-		if !(hostIdx < portIdx && portIdx < appIdx) {
+		if hostIdx >= portIdx || portIdx >= appIdx {
 			t.Errorf("ordering not preserved: host=%d port=%d app=%d", hostIdx, portIdx, appIdx)
 		}
 	})
@@ -102,7 +102,7 @@ func TestRenderVarsList(t *testing.T) {
 
 func TestRenderVarInspect(t *testing.T) {
 	t.Run("author only, no local override, no usages", func(t *testing.T) {
-		out := render.RenderVarInspect(render.VarInspect{
+		out := render.VarInspectView(render.VarInspect{
 			Path:        "vars.db.host",
 			Author:      "localhost",
 			AuthorOK:    true,
@@ -124,7 +124,7 @@ func TestRenderVarInspect(t *testing.T) {
 	})
 
 	t.Run("with local override and usages", func(t *testing.T) {
-		out := render.RenderVarInspect(render.VarInspect{
+		out := render.VarInspectView(render.VarInspect{
 			Path:        "vars.db.host",
 			Author:      "localhost",
 			AuthorOK:    true,
@@ -154,7 +154,7 @@ func TestRenderVarInspect(t *testing.T) {
 	})
 
 	t.Run("subtree values render inline", func(t *testing.T) {
-		out := render.RenderVarInspect(render.VarInspect{
+		out := render.VarInspectView(render.VarInspect{
 			Path:        "vars.db",
 			Author:      map[string]any{"host": "localhost"},
 			AuthorOK:    true,

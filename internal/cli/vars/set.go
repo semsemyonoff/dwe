@@ -134,7 +134,7 @@ func runVarsSet(cmd *cobra.Command, flags *cmdctx.RootFlags, path, rawValue stri
 	effective, _ := varsusage.ResolveVar(newCfg, path)
 	data := varSetJSON{Var: path, Value: effective}
 	return cmdctx.WriteData(flags, cmd, data, func(d varSetJSON) string {
-		rendered, _ := uirender.RenderVarValue(d.Value)
+		rendered, _ := uirender.VarValue(d.Value)
 		return fmt.Sprintf("✓ set %s = %s", d.Var, strings.TrimRight(rendered, "\n"))
 	})
 }
@@ -269,7 +269,7 @@ func inlineFormValue(v any) string {
 	if v == nil {
 		return "null"
 	}
-	rendered, err := uirender.RenderVarValue(v)
+	rendered, err := uirender.VarValue(v)
 	if err != nil {
 		return fmt.Sprintf("%v", v)
 	}

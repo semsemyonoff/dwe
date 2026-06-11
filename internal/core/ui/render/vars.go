@@ -39,11 +39,11 @@ type VarInspect struct {
 // dynamically-built dot-paths or Go-template field access (.Vars.x).
 const usageCaveat = "Note: dynamically-built var paths are not tracked."
 
-// RenderVarValue formats a single var's effective value for `dwe vars get`. A
+// VarValue formats a single var's effective value for `dwe vars get`. A
 // scalar (string/number/bool/null) renders as a bare line suitable for piping;
 // a namespace subtree (map or sequence) renders as indented YAML. Returns an
 // error only when a composite value fails to marshal.
-func RenderVarValue(value any) (string, error) {
+func VarValue(value any) (string, error) {
 	switch value.(type) {
 	case map[string]any, []any:
 		out, err := yaml.Marshal(value)
@@ -56,10 +56,10 @@ func RenderVarValue(value any) (string, error) {
 	}
 }
 
-// RenderVarsList formats a flat, styled list of var leaves. When namespace is
+// VarsList formats a flat, styled list of var leaves. When namespace is
 // non-empty, only leaves at or under that namespace (exact path or a real dot
 // boundary below it) are shown. Returns an empty string when nothing matches.
-func RenderVarsList(items []VarListItem, namespace string) string {
+func VarsList(items []VarListItem, namespace string) string {
 	filtered := make([]VarListItem, 0, len(items))
 	for _, it := range items {
 		if namespaceMatches(it.Path, namespace) {
@@ -94,9 +94,9 @@ func RenderVarsList(items []VarListItem, namespace string) string {
 	return sb.String()
 }
 
-// RenderVarInspect formats the per-layer block, origin, and grouped usages for
+// VarInspectView formats the per-layer block, origin, and grouped usages for
 // `dwe vars inspect`. width bounds usage-line wrapping (<=0 → terminal width).
-func RenderVarInspect(in VarInspect, width int) string {
+func VarInspectView(in VarInspect, width int) string {
 	if width <= 0 {
 		width = styles.TermWidth()
 	}
@@ -162,10 +162,10 @@ func layerLine(label string, value any, ok bool) string {
 // accentMatch bolds occurrences of the queried path (and the bare vars head)
 // inside a source line so the reference stands out.
 func accentMatch(line, path string) string {
-	if path != "" && strings.Contains(line, path) {
-		return styles.MutedStyle().Render(line[:strings.Index(line, path)]) +
+	if before, after, found := strings.Cut(line, path); path != "" && found {
+		return styles.MutedStyle().Render(before) +
 			styles.StyleKey(path) +
-			styles.MutedStyle().Render(line[strings.Index(line, path)+len(path):])
+			styles.MutedStyle().Render(after)
 	}
 	return styles.MutedStyle().Render(line)
 }
