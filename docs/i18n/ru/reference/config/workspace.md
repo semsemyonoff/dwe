@@ -1,4 +1,4 @@
-> Translated from: reference/config/workspace.md @ 642f4ba64c15
+> Translated from: reference/config/workspace.md @ e0a07a8598f4
 
 # workspace.yml / defaults.yml / local.yml
 
@@ -133,6 +133,8 @@ vars:
 - Пользовательские команды / проверки `config_keys_present`: `vars.db.api_key`
 
 Резолвер не изменился; `vars.*` резолвится через `DweConfig.Raw` по dot-path так же, как `services.*`. Миграция проекта со старого открытого пространства имён чисто механическая: оберните прежние корневые ключи под `vars:` и добавьте каждой ссылке префикс `vars.`.
+
+Команда [`dwe vars`](vars.md) перечисляет, читает, редактирует и трассирует каждое значение под этим блоком — см. [`vars.md`](vars.md) про подкоманды, модель слоёв author/local/effective, запись в `local.yml` с сохранением комментариев, статическое сканирование использований и allowlist контейнерной записи `bridge.vars_writable`.
 
 ## workspace.yml
 

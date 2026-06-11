@@ -252,12 +252,12 @@ Dependencies identified: new packages `internal/cli/vars/`, `internal/core/proje
 - Modify: `docs/reference/config/workspace.md` cross-links if a new page is added
 - Optional: llms-txt index mention
 
-- [ ] Write the reference page covering `get`/`set`/`inspect`/`list` + no-arg TUI, the author/local/effective model, comment-preserving `local.yml` writes (now also for services/setup), the static usage scan and its "dynamic paths not tracked" caveat, JSON output, and container behavior.
-- [ ] Document the new `bridge.vars_writable` config block (purpose, `vars.*` pattern syntax, deny-by-default, host-vs-container semantics) and that `dwe render config` is reachable from a container — in `vars.md` and/or the appropriate config reference; cross-link from `workspace.md`'s root-keys/`update:`-style section. Note the scope distinction from per-service `services.<name>.bridge:`.
-- [ ] Add the Russian translation with parity; refresh the content-hash header.
-- [ ] Run `make build` (syncs `internal/core/docs/embedded/` + regenerates `content_hashes_gen.go`).
-- [ ] Verify docs-subsystem golden/hash tests (incl. `TestRussianTranslationsAreFresh`) pass.
-- [ ] `make test` — docs-subsystem green.
+- [x] Write the reference page covering `get`/`set`/`inspect`/`list` + no-arg TUI, the author/local/effective model, comment-preserving `local.yml` writes (now also for services/setup), the static usage scan and its "dynamic paths not tracked" caveat, JSON output, and container behavior. (`docs/reference/config/vars.md`; cross-linked from `workspace.md` `vars:` section + `index.md` Pages list.)
+- [x] Document the new `bridge.vars_writable` config block (purpose, `vars.*` pattern syntax, deny-by-default, host-vs-container semantics) and that `dwe render config` is reachable from a container — in `vars.md` and/or the appropriate config reference; cross-link from `workspace.md`'s root-keys/`update:`-style section. Note the scope distinction from per-service `services.<name>.bridge:`. (In `vars.md` § Container behavior — dot-boundary matcher, deny-by-default, `render config --harvest` host-only block, scope distinction documented.)
+- [x] Add the Russian translation with parity; refresh the content-hash header. (`docs/i18n/ru/reference/config/vars.md` @ d0e66ae04baf; RU `index.md`/`workspace.md` cross-links added + headers refreshed to 9d89429fa8a3 / e0a07a8598f4.)
+- [x] Run `make build` (syncs `internal/core/docs/embedded/` + regenerates `content_hashes_gen.go`).
+- [x] Verify docs-subsystem golden/hash tests (incl. `TestRussianTranslationsAreFresh`) pass. (`go test ./internal/core/docs/...` green.)
+- [x] `make test` — docs-subsystem green. (Full suite green.)
 
 ### Task 12: Verify acceptance criteria
 

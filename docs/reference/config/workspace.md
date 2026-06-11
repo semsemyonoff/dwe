@@ -133,6 +133,8 @@ vars:
 
 The resolver is unchanged; `vars.*` resolves through `DweConfig.Raw` by dot-path just like `services.*`. Migrating a project from the old open namespace is purely mechanical: wrap the former root keys under `vars:` and prefix every reference with `vars.`.
 
+The [`dwe vars`](vars.md) command enumerates, reads, edits, and traces every value under this block — see [`vars.md`](vars.md) for the subcommands, the author/local/effective layer model, comment-preserving `local.yml` writes, the static usage scan, and the `bridge.vars_writable` container-write allowlist.
+
 ## workspace.yml
 
 **Purpose**: Project identity and structural skeleton. Tracked by git. Rarely changes after initial setup.
