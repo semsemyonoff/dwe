@@ -6,7 +6,12 @@ import (
 )
 
 func TestRelToBase(t *testing.T) {
-	base := filepath.FromSlash("/home/user/project")
+	// Build base and the outside-base path from t.TempDir()/filepath.Join so
+	// filepath.IsAbs treats them as absolute on every OS — Unix-rooted literals
+	// like "/home/..." are not absolute on Windows and would steer relToBase
+	// down the wrong branch.
+	base := t.TempDir()
+	outside := filepath.Join(filepath.Dir(base), "outside", "passwd")
 
 	tests := []struct {
 		name string
@@ -30,8 +35,8 @@ func TestRelToBase(t *testing.T) {
 		},
 		{
 			name: "absolute outside base keeps original",
-			file: filepath.FromSlash("/etc/passwd"),
-			want: filepath.FromSlash("/etc/passwd"),
+			file: outside,
+			want: outside,
 		},
 	}
 

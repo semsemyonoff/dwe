@@ -117,6 +117,14 @@ func collectFiles(baseDir string, paths, exts, filenames []string, pathsAreDefau
 					// dir is then the walk target, so p == target). filepath.Rel
 					// cleans both operands, so a trailing slash on baseDir can't
 					// defeat the match.
+					//
+					// rerr is always nil in practice: baseDir is absolute (the
+					// validator builds it so, same contract pathsafe.ContainedRel
+					// relies on at line 70) and p is absolute (WalkDir descends an
+					// absolute target). filepath.Rel only errors when one path is
+					// absolute and the other relative, which can't happen here. The
+					// rerr == nil guard fails open (walk the dir on the impossible
+					// error) rather than skipping a tree we couldn't classify.
 					if rel, rerr := filepath.Rel(baseDir, p); rerr == nil && rel == "services" {
 						return filepath.SkipDir
 					}
