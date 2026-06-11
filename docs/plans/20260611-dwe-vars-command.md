@@ -190,11 +190,11 @@ Dependencies identified: new packages `internal/cli/vars/`, `internal/core/proje
 - Create: `internal/cli/vars/inspect.go`
 - Modify: `internal/cli/vars/vars_test.go` (or add `inspect_test.go`)
 
-- [ ] Wire `inspect <var>`: per-layer resolution (Task 3) + usage scan (Task 4) → `RenderVarInspect` (Task 5).
-- [ ] JSON mode: `{var, layers:{author,local,effective}, origin, usages:[...]}` via `cmdctx.WriteData`.
-- [ ] Reuse the same `ValidArgsFunction` completion as `get`.
-- [ ] Write tests: inspect text + JSON for a var with author-only, with local override, with/without usages; not-found error.
-- [ ] `make embedded-docs` once, then `go test ./internal/cli/vars/...` (focused) — must pass before Task 8.
+- [x] Wire `inspect <var>`: per-layer resolution (Task 3) + usage scan (Task 4) → `RenderVarInspect` (Task 5). (`inspect.go` `runVarsInspect`: `config.ResolveLayeredPath` + `varsusage.ScanUsages` → `uirender.RenderVarInspect`; unresolved-everywhere + no-usage path → typed `vars_not_found`.)
+- [x] JSON mode: `{var, layers:{author,local,effective}, origin, usages:[...]}` via `cmdctx.WriteData`. (`varInspectJSON`/`varInspectLayers`/`varInspectUsage`; layers carry `*_set` presence flags so explicit-null is distinguishable from absent; origin is project-relative.)
+- [x] Reuse the same `ValidArgsFunction` completion as `get`. (`ValidArgsFunction: leafCompletion(flags)`.)
+- [x] Write tests: inspect text + JSON for a var with author-only, with local override, with/without usages; not-found error. (`inspect_test.go`: `TestVarsInspect_Text_LocalOverride`, `_JSON_LocalOverride`, `_AuthorOnly_NoLocal`, `_WithUsages`(+`_Text`), `_NamespacePrefixMatch`, `_NotFound`, `_JSONStdoutClean`.)
+- [x] `make embedded-docs` once, then `go test ./internal/cli/vars/...` (focused) — must pass before Task 8. (Passing; `golangci-lint` clean.)
 
 ### Task 8: `dwe vars set` (value arg + huh form) + container-write config allowlist
 

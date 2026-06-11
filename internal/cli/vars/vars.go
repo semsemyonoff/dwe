@@ -64,6 +64,7 @@ output).`,
 
 	cmd.AddCommand(newVarsGetCmd(flags))
 	cmd.AddCommand(newVarsListCmd(flags))
+	cmd.AddCommand(newVarsInspectCmd(flags))
 	return cmd
 }
 
