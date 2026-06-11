@@ -589,6 +589,9 @@ services:
 	if err != nil {
 		t.Fatalf("load store: %v", err)
 	}
+	if store.Has("main", "app_key") {
+		t.Errorf("explicit alias harvest should skip, not redirect to store main.app_key")
+	}
 	if store.Has("main-debug", "app_key") {
 		t.Errorf("explicit alias harvest minted a spurious main-debug.app_key store key")
 	}
