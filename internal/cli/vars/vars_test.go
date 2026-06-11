@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/semsemyonoff/dwe/internal/cli/cmdctx"
@@ -70,10 +71,14 @@ func TestVarsList_Text(t *testing.T) {
 	if err != nil {
 		t.Fatalf("vars list: %v", err)
 	}
-	for _, want := range []string{"vars.app.name", "vars.db.host", "vars.db.port", "override-host"} {
+	// Text rows display the path with the vars. prefix stripped.
+	for _, want := range []string{"app.name", "db.host", "db.port", "override-host"} {
 		if !bytes.Contains([]byte(out), []byte(want)) {
 			t.Errorf("list output missing %q\ngot:\n%s", want, out)
 		}
+	}
+	if bytes.Contains([]byte(out), []byte("vars.db.host")) {
+		t.Errorf("list text should strip the vars. prefix\ngot:\n%s", out)
 	}
 }
 
@@ -138,6 +143,65 @@ func TestVarsList_NamespaceFilter(t *testing.T) {
 			t.Errorf("unexpected leaf under vars.db filter: %q", e.Path)
 		}
 	}
+}
+
+// TestVars_PrefixOptional exercises prefix-less input across get / list /
+// inspect and asserts the canonical vars.* path survives into JSON.
+func TestVars_PrefixOptional(t *testing.T) {
+	cfgPath, root := writeVarsFixture(t)
+
+	t.Run("get without prefix", func(t *testing.T) {
+		flags := &cmdctx.RootFlags{ConfigPath: cfgPath, Root: root, Output: "json"}
+		out, _, err := runVarsCmd(t, flags, "get", "db.host")
+		if err != nil {
+			t.Fatalf("get db.host: %v", err)
+		}
+		var data varGetJSON
+		if e := json.Unmarshal([]byte(out), &data); e != nil {
+			t.Fatalf("unmarshal: %v\nraw: %s", e, out)
+		}
+		if data.Var != "vars.db.host" {
+			t.Errorf("var: want canonical vars.db.host, got %q", data.Var)
+		}
+		if data.Value != "override-host" {
+			t.Errorf("value: want override-host, got %v", data.Value)
+		}
+	})
+
+	t.Run("list namespace without prefix", func(t *testing.T) {
+		flags := &cmdctx.RootFlags{ConfigPath: cfgPath, Root: root, Output: "json"}
+		out, _, err := runVarsCmd(t, flags, "list", "db")
+		if err != nil {
+			t.Fatalf("list db: %v", err)
+		}
+		var data varsListJSON
+		if e := json.Unmarshal([]byte(out), &data); e != nil {
+			t.Fatalf("unmarshal: %v", e)
+		}
+		if len(data.Vars) != 2 {
+			t.Fatalf("list db: want 2 leaves, got %d: %+v", len(data.Vars), data.Vars)
+		}
+		for _, e := range data.Vars {
+			if e.Path != "vars.db.host" && e.Path != "vars.db.port" {
+				t.Errorf("unexpected leaf: %q (want canonical vars.db.*)", e.Path)
+			}
+		}
+	})
+
+	t.Run("inspect without prefix", func(t *testing.T) {
+		flags := &cmdctx.RootFlags{ConfigPath: cfgPath, Root: root, Output: "json"}
+		out, _, err := runVarsCmd(t, flags, "inspect", "db.host")
+		if err != nil {
+			t.Fatalf("inspect db.host: %v", err)
+		}
+		var data varInspectJSON
+		if e := json.Unmarshal([]byte(out), &data); e != nil {
+			t.Fatalf("unmarshal: %v", e)
+		}
+		if data.Var != "vars.db.host" {
+			t.Errorf("var: want canonical vars.db.host, got %q", data.Var)
+		}
+	})
 }
 
 func TestVarsBare_DispatchesToList(t *testing.T) {
@@ -280,21 +344,55 @@ func TestVarsGet_JSONStdoutClean(t *testing.T) {
 func TestLeafCompletion_ReturnsLeaves(t *testing.T) {
 	cfgPath, root := writeVarsFixture(t)
 	flags := &cmdctx.RootFlags{ConfigPath: cfgPath, Root: root}
-
 	fn := leafCompletion(flags)
+
+	// Empty / prefix-less input → the stripped shorthand forms.
 	got, directive := fn(&cobra.Command{}, nil, "")
 	if directive != cobra.ShellCompDirectiveNoFileComp {
 		t.Errorf("directive: want NoFileComp, got %v", directive)
 	}
-	want := map[string]bool{"vars.app.name": false, "vars.db.host": false, "vars.db.port": false}
+	wantStripped := map[string]bool{"app.name": false, "db.host": false, "db.port": false}
 	for _, c := range got {
-		if _, ok := want[c]; ok {
-			want[c] = true
+		if strings.HasPrefix(c, "vars.") {
+			t.Errorf("prefix-less completion should be stripped, got %q", c)
+		}
+		if _, ok := wantStripped[c]; ok {
+			wantStripped[c] = true
 		}
 	}
-	for leaf, seen := range want {
+	for leaf, seen := range wantStripped {
 		if !seen {
-			t.Errorf("completion missing leaf %q (got %v)", leaf, got)
+			t.Errorf("completion missing stripped leaf %q (got %v)", leaf, got)
+		}
+	}
+
+	// Once the user starts typing the vars. prefix, the canonical full paths
+	// are offered so prefix-style typing still completes.
+	full, _ := fn(&cobra.Command{}, nil, "vars.")
+	wantFull := map[string]bool{"vars.app.name": false, "vars.db.host": false, "vars.db.port": false}
+	for _, c := range full {
+		if _, ok := wantFull[c]; ok {
+			wantFull[c] = true
+		}
+	}
+	for leaf, seen := range wantFull {
+		if !seen {
+			t.Errorf("prefix completion missing full leaf %q (got %v)", leaf, full)
+		}
+	}
+}
+
+func TestNormalizeVarPath(t *testing.T) {
+	tests := []struct{ in, want string }{
+		{"db.host", "vars.db.host"},      // shorthand gets the prefix
+		{"vars.db.host", "vars.db.host"}, // already qualified — unchanged
+		{"vars", "vars"},                 // bare root — unchanged
+		{"db", "vars.db"},                // single shorthand segment
+		{"", ""},                         // empty namespace passes through
+	}
+	for _, tc := range tests {
+		if got := normalizeVarPath(tc.in); got != tc.want {
+			t.Errorf("normalizeVarPath(%q) = %q, want %q", tc.in, got, tc.want)
 		}
 	}
 }

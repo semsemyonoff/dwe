@@ -23,14 +23,14 @@ type VarListItem struct {
 // var, as produced by config.ResolveLayeredPath + varsusage.ScanUsages. The
 // renderer is pure formatting; callers supply already-resolved data.
 type VarInspect struct {
-	Path        string
-	Author      any
-	AuthorOK    bool
-	Local       any
-	LocalOK     bool
-	Effective   any
-	EffectiveOK bool
-	// Origin is the (display-ready) file path supplying the effective value.
+	Path      string
+	Default   any
+	DefaultOK bool
+	Local     any
+	LocalOK   bool
+	Current   any
+	CurrentOK bool
+	// Origin is the (display-ready) file path supplying the current value.
 	Origin string
 	Usages []varsusage.Usage
 }
@@ -39,10 +39,20 @@ type VarInspect struct {
 // dynamically-built dot-paths or Go-template field access (.Vars.x).
 const usageCaveat = "Note: dynamically-built var paths are not tracked."
 
+// DisplayVarPath strips the leading `vars.` namespace for DISPLAY only — under
+// `dwe vars` every path is a var, so the prefix is noise on screen. Storage,
+// JSON, completion, and source-line matching keep the canonical full path; this
+// is purely cosmetic for the text/TUI surfaces.
+func DisplayVarPath(path string) string {
+	return strings.TrimPrefix(path, "vars.")
+}
+
 // VarValue formats a single var's effective value for `dwe vars get`. A
 // scalar (string/number/bool/null) renders as a bare line suitable for piping;
 // a namespace subtree (map or sequence) renders as indented YAML. Returns an
-// error only when a composite value fails to marshal.
+// error only when a composite value fails to marshal. This is the UNSTYLED form
+// — used for JSON reuse, the set-form description, and as the substrate for the
+// styled variants. Color stripping for pipes is handled by the renderer.
 func VarValue(value any) (string, error) {
 	switch value.(type) {
 	case map[string]any, []any:
@@ -54,6 +64,80 @@ func VarValue(value any) (string, error) {
 	default:
 		return scalarString(value), nil
 	}
+}
+
+// VarValueStyled is the colored form of VarValue for `dwe vars get`'s human
+// output: a scalar — the sole thing the user asked for — is accented so it
+// stands out; a namespace subtree (a partial-path match) has its YAML keys
+// accented and values themed so it matches the rest of the vars surface. On a
+// pipe every style collapses to a no-op, so the text stays byte-identical to the
+// unstyled VarValue.
+func VarValueStyled(value any) (string, error) {
+	raw, err := VarValue(value)
+	if err != nil {
+		return "", err
+	}
+	switch value.(type) {
+	case map[string]any, []any:
+		return styleYAMLBlock(raw), nil
+	default:
+		return styles.StyleInfo(raw), nil
+	}
+}
+
+// styleYAMLBlock colors a marshalled YAML subtree line by line: mapping keys in
+// the accent color, the `:` / `-` punctuation muted, and scalar values themed.
+// When the palette is in no-color mode every Render is identity, so the output
+// is byte-identical to the input (keeps `dwe vars get vars.db | …` pipe-clean).
+func styleYAMLBlock(raw string) string {
+	lines := strings.Split(raw, "\n")
+	for i, line := range lines {
+		lines[i] = styleYAMLLine(line)
+	}
+	return strings.Join(lines, "\n")
+}
+
+func styleYAMLLine(line string) string {
+	indent := line[:len(line)-len(strings.TrimLeft(line, " "))]
+	rest := line[len(indent):]
+	if rest == "" {
+		return line
+	}
+
+	// Sequence item marker (`- `), possibly followed by a scalar or a key:value.
+	dash := ""
+	switch {
+	case rest == "-":
+		return indent + styles.MutedStyle().Render("-")
+	case strings.HasPrefix(rest, "- "):
+		dash = styles.MutedStyle().Render("- ")
+		rest = rest[2:]
+	}
+
+	// `key: value` — split on the first ": " (YAML's key/value boundary; values
+	// that themselves contain a colon keep theirs because Cut takes the first).
+	if key, val, ok := strings.Cut(rest, ": "); ok {
+		return indent + dash + styles.AccentStyle().Render(key) +
+			styles.MutedStyle().Render(": ") + styles.TextStyle().Render(val)
+	}
+	// `key:` — a parent mapping key with no inline value.
+	if k, ok := strings.CutSuffix(rest, ":"); ok {
+		return indent + dash + styles.AccentStyle().Render(k) + styles.MutedStyle().Render(":")
+	}
+	// Bare scalar (e.g. a sequence element).
+	return indent + dash + styles.TextStyle().Render(rest)
+}
+
+// VarSetConfirmation is the styled one-line confirmation printed after `dwe vars
+// set` writes: a green check, the var path as an accented key, and the new
+// value. Mirrors the palette used by list/inspect so the command family reads
+// consistently.
+func VarSetConfirmation(path, value string) string {
+	return styles.SuccessStyle().Render("✓") + " " +
+		styles.MutedStyle().Render("set") + " " +
+		styles.StyleKey(DisplayVarPath(path)) + " " +
+		styles.MutedStyle().Render("=") + " " +
+		styles.TextStyle().Render(value)
 }
 
 // VarsList formats a flat, styled list of var leaves. When namespace is
@@ -70,28 +154,40 @@ func VarsList(items []VarListItem, namespace string) string {
 		return ""
 	}
 
-	// Align the value column under the widest path.
+	// Align the value column under the widest (display) path.
 	pathWidth := 0
 	for _, it := range filtered {
-		if n := len(it.Path); n > pathWidth {
+		if n := len(DisplayVarPath(it.Path)); n > pathWidth {
 			pathWidth = n
 		}
 	}
 
 	var sb strings.Builder
 	for _, it := range filtered {
-		pad := strings.Repeat(" ", pathWidth-len(it.Path))
-		sb.WriteString(styles.StyleKey(it.Path))
+		disp := DisplayVarPath(it.Path)
+		pad := strings.Repeat(" ", pathWidth-len(disp))
+		sb.WriteString(styles.StyleKey(disp))
 		sb.WriteString(pad)
 		sb.WriteString("  ")
 		sb.WriteString(styles.TextStyle().Render(inlineValue(it.Value)))
 		if it.Layer != "" {
 			sb.WriteString("  ")
-			sb.WriteString(styles.MutedStyle().Render("[" + it.Layer + "]"))
+			sb.WriteString(styleLayerBadge(it.Layer))
 		}
 		sb.WriteByte('\n')
 	}
 	return sb.String()
+}
+
+// styleLayerBadge colors a list row's layer badge: a `local` override is the
+// notable case (the dev has diverged from the team default), so it gets the
+// accent color; `default` stays muted to recede.
+func styleLayerBadge(layer string) string {
+	label := "[" + layer + "]"
+	if layer == "local" {
+		return styles.AccentStyle().Render(label)
+	}
+	return styles.MutedStyle().Render(label)
 }
 
 // VarInspectView formats the per-layer block, origin, and grouped usages for
@@ -102,12 +198,12 @@ func VarInspectView(in VarInspect, width int) string {
 	}
 
 	var sb strings.Builder
-	sb.WriteString(renderSectionTitle(in.Path))
+	sb.WriteString(renderSectionTitle(DisplayVarPath(in.Path)))
 	sb.WriteByte('\n')
 
-	sb.WriteString(layerLine("Author", in.Author, in.AuthorOK))
+	sb.WriteString(layerLine("Default", in.Default, in.DefaultOK))
 	sb.WriteString(layerLine("Local", in.Local, in.LocalOK))
-	sb.WriteString(layerLine("Effective", in.Effective, in.EffectiveOK))
+	sb.WriteString(layerLine("Current", in.Current, in.CurrentOK))
 
 	if in.Origin != "" {
 		sb.WriteString("  ")
@@ -159,15 +255,16 @@ func layerLine(label string, value any, ok bool) string {
 	return "  " + styles.AccentStyle().Render(label) + pad + styles.MutedStyle().Render(styles.DefSep) + " " + rhs + "\n"
 }
 
-// accentMatch bolds occurrences of the queried path (and the bare vars head)
-// inside a source line so the reference stands out.
+// accentMatch renders a source line bright (TextStyle) so the code stands out,
+// with occurrences of the queried path accented (StyleKey) on top so the
+// reference itself pops within the line.
 func accentMatch(line, path string) string {
 	if before, after, found := strings.Cut(line, path); path != "" && found {
-		return styles.MutedStyle().Render(before) +
+		return styles.TextStyle().Render(before) +
 			styles.StyleKey(path) +
-			styles.MutedStyle().Render(after)
+			styles.TextStyle().Render(after)
 	}
-	return styles.MutedStyle().Render(line)
+	return styles.TextStyle().Render(line)
 }
 
 // namespaceMatches reports whether path is at or under namespace. An empty

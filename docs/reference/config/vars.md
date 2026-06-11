@@ -42,12 +42,20 @@ Every var is resolved across the three config layers:
 
 | Layer | Source | Meaning |
 |-------|--------|---------|
-| **author** | `workspace.yml` / `defaults.yml` | The tracked, team-shared default |
+| **default** | `workspace.yml` / `defaults.yml` | The tracked, team-shared default |
 | **local** | `workspace/local.yml` | The gitignored, per-developer override |
-| **effective** | post-merge | What `${vars.x}` actually resolves to (local wins) |
+| **current** | post-merge | What `${vars.x}` actually resolves to (local wins) |
 
 The **origin** of a var is the highest layer that yields a value — the file that
 "wins" the merge for that path.
+
+> **The `vars.` prefix is optional.** Under `dwe vars` every path is a var, so
+> `get`, `set`, `inspect`, and the `list` namespace filter all accept the
+> shorthand: `dwe vars get db.host` is identical to `dwe vars get vars.db.host`.
+> The prefix is also stripped from display output (it stays canonical in JSON,
+> completion, and storage). A non-`vars` head is normalized into the sandbox
+> (`project.name` → `vars.project.name`), never resolved against real project
+> config — so the read confinement and container-write allowlist still hold.
 
 ## Subcommands
 
@@ -57,9 +65,9 @@ The **origin** of a var is the highest layer that yields a value — the file th
 dwe vars list [namespace]
 ```
 
-Flat list of every `vars.*` leaf with its effective value and a layer badge
+Flat list of every `vars.*` leaf with its current value and a layer badge
 (`local` when a `local.yml` override is in effect, otherwise `default`). An
-optional `namespace` argument filters to a subtree (e.g. `dwe vars list vars.db`),
+optional `namespace` argument filters to a subtree (e.g. `dwe vars list db`),
 mirroring `dwe commands list`.
 
 ### `dwe vars get`
@@ -70,7 +78,7 @@ dwe vars get <var>
 
 Print a single value. A leaf path prints the scalar; a namespace path
 (`vars.db`) prints the whole subtree as YAML. The value shown is the
-**effective** (post-merge) value. A path that resolves to nothing is a typed
+**current** (post-merge) value. A path that resolves to nothing is a typed
 `vars_not_found` error. Reads are **confined to `vars.*`** — a path whose first
 segment is not `vars` (e.g. `project.name`) is reported as `vars_not_found`
 rather than resolved against the rest of the project config, so the
@@ -84,13 +92,13 @@ dwe vars inspect <var>
 
 The full picture for one var:
 
-- **Per-layer values** — author default, local override, effective.
+- **Per-layer values** — default (team-shared), local override, current (post-merge).
 - **Origin** — the project-relative file that wins the merge.
 - **Every static usage** — each place the var is referenced, as `file:line`
   with the matched line text. See [the static usage scan](#the-static-usage-scan).
 
 A var that resolves nowhere *and* has no usages is `vars_not_found`. Inspect
-matches both an exact path and a namespace prefix: `dwe vars inspect vars.db`
+matches both an exact path and a namespace prefix: `dwe vars inspect db`
 surfaces usages of `vars.db.host`, `vars.db.user`, etc. Like `get`, inspection
 is **confined to `vars.*`** — a non-`vars` path is `vars_not_found`.
 
@@ -108,7 +116,7 @@ and formatting (see [comment-preserving writes](#comment-preserving-localyml-wri
   boundary (see [container behavior](#container-behavior-and-bridgevars_writable)).
 - **Value coercion** — the `value` argument is parsed as a single YAML scalar.
   Typed scalars become typed: `true` / `false` → bool, `42` → int, `1.5` → float,
-  bare text → string. **Explicitly quoting** keeps it a string: `set vars.x '"42"'`
+  bare text → string. **Explicitly quoting** keeps it a string: `set x '"42"'`
   writes the string `"42"`. Maps (`{a: b}`) and sequences (`[a]`) are rejected —
   a var is a leaf. Pinned ambiguous cases:
 
@@ -170,9 +178,12 @@ syntaxes are tracked:
 1. **`${vars.x}` template references** — in fields rendered via the `${...}`
    engine (declarative command `cmd` / `env` / `with`, `info.yml` `text` /
    `value`, scalar `when:`, `docker.yml` `project_name`, confirm prompts) and in
-   render templates under `workspace/services/*/render/**` (arbitrary text →
-   regex pass). Internal whitespace (`${ vars.x }`) and a leading digit do not
-   match — the scanner reuses the renderer's own pattern.
+   config render templates under `workspace/templates/config/**` (arbitrary text
+   → line scan for both `${vars.x}` and `{{ resolve .Raw "vars.x" }}`). These are
+   the templates the config render subsystem materializes; the sibling ide / ai /
+   git packs use the raw `{{ }}` substrate (no `${...}` resolution) and are not
+   scanned. Internal whitespace (`${ vars.x }`) and a leading digit do not match
+   — the scanner reuses the renderer's own pattern.
 2. **Structural `vars.x` dot-paths** — the values of `from:` / `default_from:`,
    and references inside a typed `when.expr` (not a bare `when: vars.x` scalar).
 
@@ -197,7 +208,7 @@ stderr.
 |---------|-------|
 | `get` | `{"var": "...", "value": <any>}` |
 | `list` | `{"vars": [{"path": "...", "value": <any>, "layer": "local|default"}]}` |
-| `inspect` | `{"var": "...", "layers": {"author": <any>, "author_set": <bool>, "local": ..., "local_set": ..., "effective": ..., "effective_set": ...}, "origin": "...", "usages": [{"file": "...", "line": N, "kind": "...", "text": "..."}]}` |
+| `inspect` | `{"var": "...", "layers": {"default": <any>, "default_set": <bool>, "local": ..., "local_set": ..., "current": ..., "current_set": ...}, "origin": "...", "usages": [{"file": "...", "line": N, "kind": "...", "text": "..."}]}` |
 | `set` (with value) | `{"var": "...", "value": <any>}` |
 
 The `*_set` booleans on `inspect` layers distinguish an explicit `null` value
@@ -256,7 +267,7 @@ read-only render crosses the boundary.
 
 ## Related commands
 
-- `dwe vars get <var>` — print a var's effective value
+- `dwe vars get <var>` — print a var's current value
 - `dwe vars list [namespace]` — enumerate `vars.*` leaves
 - `dwe vars inspect <var>` — per-layer values, origin, and usages
 - `dwe vars set <var> [value]` — write a `local.yml` override (comment-preserving)

@@ -74,6 +74,21 @@ func TestVarsSet_ScalarCoercion(t *testing.T) {
 	}
 }
 
+// TestVarsSet_PrefixOptional sets a var by its shorthand (no vars. prefix) and
+// confirms it writes the canonical vars.db.host leaf.
+func TestVarsSet_PrefixOptional(t *testing.T) {
+	cfgPath, root := writeVarsFixture(t)
+	flags := &cmdctx.RootFlags{ConfigPath: cfgPath, Root: root}
+
+	if _, _, err := runVarsCmd(t, flags, "set", "db.host", "shorthost"); err != nil {
+		t.Fatalf("vars set db.host: %v", err)
+	}
+	got, ok := reloadVar(t, cfgPath, "vars.db.host")
+	if !ok || got != "shorthost" {
+		t.Errorf("set via shorthand: want vars.db.host=shorthost, got %v (ok=%v)", got, ok)
+	}
+}
+
 func TestVarsSet_PreservesComments(t *testing.T) {
 	root := t.TempDir()
 	cfgPath := filepath.Join(root, "workspace.yml")
@@ -141,7 +156,10 @@ project:
 }
 
 func TestVarsSet_PathConfinement(t *testing.T) {
-	tests := []string{"project.name", "vars", "vars..host", "runtime"}
+	// Structurally-invalid targets are still rejected: the bare vars root and any
+	// path with an empty segment. (A non-vars first segment is no longer an error
+	// — it is normalized under vars.*, see TestVarsSet_NonVarsHeadNormalizes.)
+	tests := []string{"vars", "vars..host", ".host"}
 	for _, path := range tests {
 		t.Run(path, func(t *testing.T) {
 			cfgPath, root := writeVarsFixture(t)
@@ -155,6 +173,26 @@ func TestVarsSet_PathConfinement(t *testing.T) {
 				t.Fatalf("want vars_path_invalid, got %v", err)
 			}
 		})
+	}
+}
+
+// TestVarsSet_NonVarsHeadNormalizes pins the prefix-optional semantics: a target
+// whose head segment is not "vars" (e.g. project.name) is NOT an escape — it is
+// normalized under the sandbox and writes vars.project.name. The sandbox can
+// never be left; container writes stay allowlist-gated on the normalized path.
+func TestVarsSet_NonVarsHeadNormalizes(t *testing.T) {
+	cfgPath, root := writeVarsFixture(t)
+	flags := &cmdctx.RootFlags{ConfigPath: cfgPath, Root: root}
+
+	if _, _, err := runVarsCmd(t, flags, "set", "project.name", "x"); err != nil {
+		t.Fatalf("set project.name should normalize, got error: %v", err)
+	}
+	if _, ok := reloadVar(t, cfgPath, "vars.project.name"); !ok {
+		t.Error("set project.name should have written vars.project.name")
+	}
+	// It must NOT have written the real top-level project.name.
+	if v, _ := reloadVar(t, cfgPath, "project.name"); v == "x" {
+		t.Error("set must not write outside the vars sandbox")
 	}
 }
 
@@ -230,8 +268,9 @@ func TestVarsSet_InteractiveForm(t *testing.T) {
 	if _, _, err := runVarsCmd(t, flags, "set", "vars.db.host"); err != nil {
 		t.Fatalf("vars set (form): %v", err)
 	}
-	if !strings.Contains(gotTitle, "vars.db.host") {
-		t.Errorf("form title missing var path: %q", gotTitle)
+	// The form title shows the display path (vars. prefix stripped).
+	if !strings.Contains(gotTitle, "db.host") || strings.Contains(gotTitle, "vars.db.host") {
+		t.Errorf("form title should show the stripped path: %q", gotTitle)
 	}
 	got, ok := reloadVar(t, cfgPath, "vars.db.host")
 	if !ok || got != "formhost" {

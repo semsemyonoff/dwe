@@ -38,8 +38,9 @@ func TestScanUsages(t *testing.T) {
 				{"workspace/commands/foo.yml", 4, "from"},
 				{"workspace/commands/foo.yml", 9, "template"},
 				{"workspace/deploy.yml", 4, "template"},
-				{"workspace/services/app/render/config.tmpl", 1, "template"},
 				{"workspace/services/app/service.yml", 6, "template"},
+				{"workspace/templates/config/app/config.yaml", 2, "template"},
+				{"workspace/templates/config/app/env.tmpl", 1, "template"},
 			},
 		},
 		{
@@ -49,8 +50,16 @@ func TestScanUsages(t *testing.T) {
 				{"workspace/commands/foo.yml", 4, "from"},
 				{"workspace/commands/foo.yml", 9, "template"},
 				{"workspace/deploy.yml", 4, "template"},
-				{"workspace/services/app/render/config.tmpl", 1, "template"},
 				{"workspace/services/app/service.yml", 6, "template"},
+				{"workspace/templates/config/app/config.yaml", 2, "template"},
+				{"workspace/templates/config/app/env.tmpl", 1, "template"},
+			},
+		},
+		{
+			name:  "vars ref in a YAML-bodied config template is scanned (not skipped as a manifest)",
+			query: "vars.yaml.dbname",
+			want: []loc{
+				{"workspace/templates/config/app/config.yaml", 3, "template"},
 			},
 		},
 		{
@@ -61,11 +70,18 @@ func TestScanUsages(t *testing.T) {
 			},
 		},
 		{
-			name:  "default_from and render template both found",
+			name:  "default_from and config template both found",
 			query: "vars.region",
 			want: []loc{
 				{"workspace/commands/foo.yml", 7, "default_from"},
-				{"workspace/services/app/render/config.tmpl", 2, "template"},
+				{"workspace/templates/config/app/env.tmpl", 2, "template"},
+			},
+		},
+		{
+			name:  "config template Go-template resolve form is matched",
+			query: "vars.tmpl.flag",
+			want: []loc{
+				{"workspace/templates/config/app/env.tmpl", 3, "template"},
 			},
 		},
 		{

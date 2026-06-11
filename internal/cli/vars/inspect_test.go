@@ -38,7 +38,10 @@ func TestVarsInspect_Text_LocalOverride(t *testing.T) {
 		t.Fatalf("vars inspect: %v", err)
 	}
 	// Author layer = localhost, local override = override-host, effective = override-host.
-	for _, want := range []string{"vars.db.host", "localhost", "override-host", "local.yml"} {
+	// The displayed title strips the vars. prefix; the canonical path stays in
+	// JSON and source-line matches. "db.host" is also a substring of any
+	// ${vars.db.host} usage, so this holds whether or not the fixture has usages.
+	for _, want := range []string{"db.host", "localhost", "override-host", "local.yml"} {
 		if !bytes.Contains([]byte(out), []byte(want)) {
 			t.Errorf("inspect output missing %q\ngot:\n%s", want, out)
 		}
@@ -63,21 +66,21 @@ func TestVarsInspect_JSON_LocalOverride(t *testing.T) {
 	if data.Var != "vars.db.host" {
 		t.Errorf("var: want vars.db.host, got %q", data.Var)
 	}
-	if data.Layers.Author != "localhost" || !data.Layers.AuthorSet {
-		t.Errorf("author layer: want localhost set, got %v (set=%v)", data.Layers.Author, data.Layers.AuthorSet)
+	if data.Layers.Default != "localhost" || !data.Layers.DefaultSet {
+		t.Errorf("author layer: want localhost set, got %v (set=%v)", data.Layers.Default, data.Layers.DefaultSet)
 	}
 	if data.Layers.Local != "override-host" || !data.Layers.LocalSet {
 		t.Errorf("local layer: want override-host set, got %v (set=%v)", data.Layers.Local, data.Layers.LocalSet)
 	}
-	if data.Layers.Effective != "override-host" || !data.Layers.EffectiveSet {
-		t.Errorf("effective layer: want override-host set, got %v (set=%v)", data.Layers.Effective, data.Layers.EffectiveSet)
+	if data.Layers.Current != "override-host" || !data.Layers.CurrentSet {
+		t.Errorf("effective layer: want override-host set, got %v (set=%v)", data.Layers.Current, data.Layers.CurrentSet)
 	}
 	if filepath.ToSlash(data.Origin) != "workspace/local.yml" {
 		t.Errorf("origin: want workspace/local.yml, got %q", data.Origin)
 	}
 }
 
-func TestVarsInspect_AuthorOnly_NoLocal(t *testing.T) {
+func TestVarsInspect_DefaultOnly_NoLocal(t *testing.T) {
 	cfgPath, root := writeVarsFixture(t)
 	flags := &cmdctx.RootFlags{ConfigPath: cfgPath, Root: root, Output: "json"}
 
@@ -90,8 +93,8 @@ func TestVarsInspect_AuthorOnly_NoLocal(t *testing.T) {
 	if e := json.Unmarshal([]byte(out), &data); e != nil {
 		t.Fatalf("unmarshal: %v\nraw: %s", e, out)
 	}
-	if !data.Layers.AuthorSet || data.Layers.Author != "myapp" {
-		t.Errorf("author: want myapp set, got %v (set=%v)", data.Layers.Author, data.Layers.AuthorSet)
+	if !data.Layers.DefaultSet || data.Layers.Default != "myapp" {
+		t.Errorf("author: want myapp set, got %v (set=%v)", data.Layers.Default, data.Layers.DefaultSet)
 	}
 	if data.Layers.LocalSet {
 		t.Errorf("local layer should be unset for vars.app.name, got %v", data.Layers.Local)

@@ -60,21 +60,21 @@ func LocalLayerPath(workspacePath string) string {
 }
 
 // LayeredValue describes a dot-path resolved at each config layer plus the file
-// that supplies the effective value. Author is the merge of all non-local
+// that supplies the current value. Default is the merge of all non-local
 // layers (workspace.yml + defaults.yml); Local is workspace/local.yml alone;
-// Effective is the full 3-layer merge — what ${...} / ResolvePath see at
+// Current is the full 3-layer merge — what ${...} / ResolvePath see at
 // runtime. The *OK fields report whether the path was present at that layer.
 //
 // An explicit null in local.yml is present-but-nil (LocalOK true, Local nil)
-// and, per deepMerge's nil-skip, does NOT win the effective value — so Origin
+// and, per deepMerge's nil-skip, does NOT win the current value — so Origin
 // stays on the lower layer it failed to override.
 type LayeredValue struct {
-	Author      any
-	AuthorOK    bool
-	Local       any
-	LocalOK     bool
-	Effective   any
-	EffectiveOK bool
+	Default   any
+	DefaultOK bool
+	Local     any
+	LocalOK   bool
+	Current   any
+	CurrentOK bool
 	// Origin is the path of the highest-precedence layer whose value at the
 	// resolved path is non-nil, or "" when the path is unresolved everywhere.
 	Origin string
@@ -82,7 +82,7 @@ type LayeredValue struct {
 
 // ResolveLayeredPath resolves a dot-path across the three config layers,
 // reporting the value at each layer and the source file that supplies the
-// effective value. It reuses LoadLayers (so it cannot drift from
+// current value. It reuses LoadLayers (so it cannot drift from
 // LoadConfig's layer set), deepMerge (the runtime merge semantics, including
 // nil-skip), and ResolvePath.
 func ResolveLayeredPath(workspacePath, path string) (LayeredValue, error) {
@@ -94,28 +94,28 @@ func ResolveLayeredPath(workspacePath, path string) (LayeredValue, error) {
 }
 
 func resolveLayeredPath(layers []Layer, localPath, path string) LayeredValue {
-	author := make(map[string]any)
-	effective := make(map[string]any)
+	defaults := make(map[string]any)
+	current := make(map[string]any)
 	var local map[string]any
 	for _, l := range layers {
 		// Deep-copy before merging: deepMerge shares nested-map references for
-		// absent keys, so building author and effective from the same layers
+		// absent keys, so building defaults and current from the same layers
 		// would otherwise cross-contaminate (and mutate l.Data, which the Origin
 		// scan below reads). Each merged view gets its own copy.
-		effective = deepMergeCopy(effective, l.Data)
+		current = deepMergeCopy(current, l.Data)
 		if l.Path == localPath {
 			local = l.Data
 		} else {
-			author = deepMergeCopy(author, l.Data)
+			defaults = deepMergeCopy(defaults, l.Data)
 		}
 	}
 
 	var lv LayeredValue
-	lv.Author, lv.AuthorOK = ResolvePath(author, path)
+	lv.Default, lv.DefaultOK = ResolvePath(defaults, path)
 	if local != nil {
 		lv.Local, lv.LocalOK = ResolvePath(local, path)
 	}
-	lv.Effective, lv.EffectiveOK = ResolvePath(effective, path)
+	lv.Current, lv.CurrentOK = ResolvePath(current, path)
 
 	// Origin: the highest-precedence layer (local last) whose value at path is
 	// non-nil. The non-nil guard mirrors deepMerge's nil-skip so an explicit

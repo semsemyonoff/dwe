@@ -29,9 +29,10 @@ func newVarsListCmd(flags *cmdctx.RootFlags) *cobra.Command {
 		Long: `Enumerate every leaf under vars: with its effective value and the layer
 that supplies it (local override vs author default).
 
-An optional namespace narrows the output to a sub-tree (e.g. vars.db).`,
+An optional namespace narrows the output to a sub-tree (e.g. db); the vars.
+prefix is optional ("db" and "vars.db" are equivalent).`,
 		Example: `  dwe vars list
-  dwe vars list vars.db
+  dwe vars list db
   dwe vars list --output json`,
 		Args:              cobra.MaximumNArgs(1),
 		SilenceUsage:      true,
@@ -51,6 +52,10 @@ An optional namespace narrows the output to a sub-tree (e.g. vars.db).`,
 // resolves each effective value and layer badge, and writes the JSON list or
 // the styled text table. Shared by `vars list` and the bare `vars` fallback.
 func runVarsList(cmd *cobra.Command, flags *cmdctx.RootFlags, namespace string) error {
+	// The vars. prefix is optional on the namespace filter too: `vars list db`
+	// narrows to vars.db. Empty (no filter) passes through unchanged.
+	namespace = normalizeVarPath(namespace)
+
 	cfg, err := loadConfigForVars(flags)
 	if err != nil {
 		return err

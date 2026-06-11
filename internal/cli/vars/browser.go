@@ -67,10 +67,18 @@ func runVarsBrowser(cmd *cobra.Command, flags *cmdctx.RootFlags) error {
 		// huh form opens with inspect-style per-layer info). The narrow/short
 		// fallback returns ActionRun rather than ActionEdit, so the intent is
 		// taken from a valid Idx, not the Action.
-		if err := runVarsSet(cmd, flags, leaves[res.Idx], "", false); err != nil {
+		committed, err := runVarsSet(cmd, flags, leaves[res.Idx], "", false)
+		if err != nil {
 			return err
 		}
-		// Loop: reload + rebuild so further edits build on the previous write.
+		if committed {
+			// Close the browser after a successful edit so the `✓ set …`
+			// confirmation (printed by the write path) is the final thing on
+			// screen. An aborted form leaves committed=false and falls through
+			// to the loop, reopening the browser to pick another var or quit.
+			return nil
+		}
+		// Form aborted — loop: reload + rebuild and reopen the browser.
 	}
 }
 
@@ -91,7 +99,11 @@ func buildVarsBrowserItems(cfg *config.DweConfig, flags *cmdctx.RootFlags) ([]cm
 		path := leaf // capture for the closures below
 		value, _ := varsusage.ResolveVar(cfg, path)
 		items = append(items, cmdbrowser.Item{
-			ID:          path,
+			// ID drives the namespace tree for DISPLAY; the `vars.` prefix is
+			// stripped here (redundant under `dwe vars`). Resolution/editing uses
+			// the parallel `leaves` slice via Result.Idx, NOT this ID, so the
+			// canonical path is preserved where it matters.
+			ID:          uirender.DisplayVarPath(path),
 			Description: inlineBrowserValue(value),
 			Type:        layerBadge(layers, localPath, path),
 			Inspect: func(width int) string {
@@ -123,15 +135,15 @@ func renderVarInspectFor(flags *cmdctx.RootFlags, path string, width int) string
 	}
 	scan, _ := varsusage.ScanUsages(flags.ProjectRoot(), path)
 	inspect := uirender.VarInspect{
-		Path:        path,
-		Author:      layered.Author,
-		AuthorOK:    layered.AuthorOK,
-		Local:       layered.Local,
-		LocalOK:     layered.LocalOK,
-		Effective:   layered.Effective,
-		EffectiveOK: layered.EffectiveOK,
-		Origin:      originDisplay(flags, layered.Origin),
-		Usages:      scan.Usages,
+		Path:      path,
+		Default:   layered.Default,
+		DefaultOK: layered.DefaultOK,
+		Local:     layered.Local,
+		LocalOK:   layered.LocalOK,
+		Current:   layered.Current,
+		CurrentOK: layered.CurrentOK,
+		Origin:    originDisplay(flags, layered.Origin),
+		Usages:    scan.Usages,
 	}
 	return uirender.VarInspectView(inspect, width)
 }

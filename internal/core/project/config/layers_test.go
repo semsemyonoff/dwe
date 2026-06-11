@@ -89,15 +89,15 @@ func TestResolveLayeredPath(t *testing.T) {
 		check     func(t *testing.T, lv LayeredValue)
 	}{
 		{
-			name:      "author only",
+			name:      "default only",
 			ws:        "vars:\n  db:\n    host: localhost\n",
 			path:      "vars.db.host",
 			wantEff:   "localhost",
 			wantEffOK: true,
 			wantOrig:  "ws",
 			check: func(t *testing.T, lv LayeredValue) {
-				if lv.Author != "localhost" || !lv.AuthorOK {
-					t.Errorf("author = %v,%v", lv.Author, lv.AuthorOK)
+				if lv.Default != "localhost" || !lv.DefaultOK {
+					t.Errorf("default = %v,%v", lv.Default, lv.DefaultOK)
 				}
 				if lv.LocalOK {
 					t.Errorf("local should be absent, got %v", lv.Local)
@@ -105,7 +105,7 @@ func TestResolveLayeredPath(t *testing.T) {
 			},
 		},
 		{
-			name:      "local overrides author",
+			name:      "local overrides default",
 			ws:        "vars:\n  db:\n    host: localhost\n",
 			local:     "vars:\n  db:\n    host: 10.0.0.1\n",
 			path:      "vars.db.host",
@@ -113,8 +113,8 @@ func TestResolveLayeredPath(t *testing.T) {
 			wantEffOK: true,
 			wantOrig:  "local",
 			check: func(t *testing.T, lv LayeredValue) {
-				if lv.Author != "localhost" || !lv.AuthorOK {
-					t.Errorf("author = %v,%v", lv.Author, lv.AuthorOK)
+				if lv.Default != "localhost" || !lv.DefaultOK {
+					t.Errorf("default = %v,%v", lv.Default, lv.DefaultOK)
 				}
 				if lv.Local != "10.0.0.1" || !lv.LocalOK {
 					t.Errorf("local = %v,%v", lv.Local, lv.LocalOK)
@@ -122,7 +122,7 @@ func TestResolveLayeredPath(t *testing.T) {
 			},
 		},
 		{
-			name:      "defaults layer feeds author",
+			name:      "defaults layer feeds default",
 			ws:        "vars:\n  a: 1\n",
 			defaults:  "vars:\n  b: 2\n",
 			path:      "vars.b",
@@ -160,9 +160,9 @@ func TestResolveLayeredPath(t *testing.T) {
 			wantEffOK: true,
 			wantOrig:  "local",
 			check: func(t *testing.T, lv LayeredValue) {
-				m, ok := lv.Effective.(map[string]any)
+				m, ok := lv.Current.(map[string]any)
 				if !ok {
-					t.Fatalf("effective subtree = %T, want map", lv.Effective)
+					t.Fatalf("effective subtree = %T, want map", lv.Current)
 				}
 				if m["host"] != "localhost" || m["port"] != 5432 {
 					t.Errorf("merged subtree = %v", m)
@@ -178,11 +178,11 @@ func TestResolveLayeredPath(t *testing.T) {
 			if err != nil {
 				t.Fatalf("ResolveLayeredPath: %v", err)
 			}
-			if lv.EffectiveOK != tt.wantEffOK {
-				t.Errorf("EffectiveOK = %v, want %v", lv.EffectiveOK, tt.wantEffOK)
+			if lv.CurrentOK != tt.wantEffOK {
+				t.Errorf("EffectiveOK = %v, want %v", lv.CurrentOK, tt.wantEffOK)
 			}
-			if tt.wantEff != nil && lv.Effective != tt.wantEff {
-				t.Errorf("Effective = %v (%T), want %v", lv.Effective, lv.Effective, tt.wantEff)
+			if tt.wantEff != nil && lv.Current != tt.wantEff {
+				t.Errorf("Effective = %v (%T), want %v", lv.Current, lv.Current, tt.wantEff)
 			}
 			wantOrigin := map[string]string{
 				"ws":       ws,

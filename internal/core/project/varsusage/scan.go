@@ -58,8 +58,13 @@ type ScanResult struct {
 //   - typed when (mapping with expr): expr is a Go template; a bare vars.x token
 //     inside it (e.g. {{ resolve .Raw "vars.x" }}) is matched structurally.
 //
-// Render templates under workspace/services/*/render/** are arbitrary text (not
-// YAML) and are scanned with a whole-file ${vars.x} regex pass.
+// Config render templates under workspace/templates/config/** are arbitrary
+// text (not YAML) and are scanned line-by-line for both the ${vars.x} shorthand
+// and bare vars.x tokens inside Go-template {{ }} blocks — these are the files
+// the config render subsystem (RenderConfigs) materializes through
+// tpl.RenderCommand, where ${vars.x} resolves. The sibling ide/ai/git template
+// packs use the raw {{ }} substrate over packcommon.TemplateData (no ${...}
+// resolution), so a ${vars.x} there is inert and is NOT scanned.
 //
 // The top-level vars: sandbox is EXCLUDED from the YAML walk: its values are
 // config data resolved by dot-path (ResolvePath), never re-rendered through the
@@ -132,8 +137,8 @@ func ScanUsages(projectRoot, queryPath string) (ScanResult, error) {
 		res.Usages = append(res.Usages, hits...)
 	}
 
-	// 2. Render templates under workspace/services/*/render/** — raw text regex.
-	renderHits, err := scanRenderTemplates(projectRoot, workspace, queryPath)
+	// 2. Config render templates under workspace/templates/config/** — raw text.
+	renderHits, err := scanConfigTemplates(projectRoot, workspace, queryPath)
 	if err != nil {
 		return res, err
 	}
@@ -143,8 +148,11 @@ func ScanUsages(projectRoot, queryPath string) (ScanResult, error) {
 	return res, nil
 }
 
-// collectYAMLFiles returns every *.yml/*.yaml file under the workspace tree,
-// EXCLUDING the per-service render/ subtrees (those are scanned as raw text).
+// collectYAMLFiles returns every *.yml/*.yaml file under the workspace tree.
+// Template-pack manifests (workspace/templates/*/*/manifest.yml) are included —
+// their from:/to: values are template filenames, never vars.* dot-paths, so
+// they never produce a false structural hit; the *.tmpl bodies under those
+// packs are non-YAML and scanned separately as raw text (scanConfigTemplates).
 func collectYAMLFiles(workspace string) ([]string, error) {
 	var out []string
 	err := filepath.WalkDir(workspace, func(path string, d os.DirEntry, err error) error {
@@ -155,9 +163,6 @@ func collectYAMLFiles(workspace string) ([]string, error) {
 			return err
 		}
 		if d.IsDir() {
-			if d.Name() == "render" {
-				return filepath.SkipDir
-			}
 			return nil
 		}
 		switch strings.ToLower(filepath.Ext(path)) {
@@ -297,45 +302,50 @@ func templateHits(val *yaml.Node, queryPath, rel string, lines []string) []Usage
 	return hits
 }
 
-func scanRenderTemplates(projectRoot, workspace, queryPath string) ([]Usage, error) {
-	servicesDir := filepath.Join(workspace, "services")
-	entries, err := os.ReadDir(servicesDir)
-	if err != nil {
-		if os.IsNotExist(err) {
-			return nil, nil
-		}
-		return nil, err
-	}
+// scanConfigTemplates walks workspace/templates/config/** and raw-text scans the
+// template bodies for vars references. Only the "config" pack kind is scanned:
+// it is the one rendered through the ${...} substrate (RenderConfigs). The
+// .local override siblings (workspace/templates/config/<name>.local/) live under
+// the same root and are covered by the walk. Only the pack manifest itself
+// (manifest.yml) is skipped — its structured from:/to: fields are covered by the
+// YAML walk. Every other file is a render body the runtime feeds verbatim through
+// tpl.RenderCommand REGARDLESS of extension, so a YAML-bodied output (e.g. a pack
+// rendering `from: config.yaml`) is scanned too — a blanket .yml/.yaml skip would
+// miss real ${vars.x} references inside such templates.
+func scanConfigTemplates(projectRoot, workspace, queryPath string) ([]Usage, error) {
+	configDir := filepath.Join(workspace, "templates", "config")
 	var hits []Usage
-	for _, e := range entries {
-		if !e.IsDir() {
-			continue
+	walkErr := filepath.WalkDir(configDir, func(path string, d os.DirEntry, err error) error {
+		if err != nil {
+			if os.IsNotExist(err) {
+				return nil
+			}
+			return err
 		}
-		renderDir := filepath.Join(servicesDir, e.Name(), "render")
-		walkErr := filepath.WalkDir(renderDir, func(path string, d os.DirEntry, err error) error {
-			if err != nil {
-				if os.IsNotExist(err) {
-					return nil
-				}
-				return err
-			}
-			if d.IsDir() {
-				return nil
-			}
-			fileHits, err := scanRawTextFile(projectRoot, path, queryPath)
-			if err != nil {
-				return nil
-			}
-			hits = append(hits, fileHits...)
+		if d.IsDir() {
 			return nil
-		})
-		if walkErr != nil && !os.IsNotExist(walkErr) {
-			return nil, walkErr
 		}
+		switch strings.ToLower(filepath.Base(path)) {
+		case "manifest.yml", "manifest.yaml":
+			return nil // pack manifest: structured fields handled by the YAML walk
+		}
+		fileHits, err := scanRawTextFile(projectRoot, path, queryPath)
+		if err != nil {
+			return nil
+		}
+		hits = append(hits, fileHits...)
+		return nil
+	})
+	if walkErr != nil && !os.IsNotExist(walkErr) {
+		return nil, walkErr
 	}
 	return hits, nil
 }
 
+// scanRawTextFile scans a non-YAML template body line by line, matching both
+// reference forms a config template can render: the ${vars.x} shorthand and
+// bare vars.x tokens inside a Go-template {{ }} block (e.g.
+// {{ resolve .Raw "vars.x" }}).
 func scanRawTextFile(projectRoot, absPath, queryPath string) ([]Usage, error) {
 	data, err := os.ReadFile(absPath)
 	if err != nil {
@@ -344,14 +354,27 @@ func scanRawTextFile(projectRoot, absPath, queryPath string) ([]Usage, error) {
 	rel := relPath(projectRoot, absPath)
 	var hits []Usage
 	for i, line := range strings.Split(string(data), "\n") {
+		matched := false
+		// (a) ${vars.x} shorthand.
 		for _, m := range tpl.VarPattern.FindAllStringSubmatch(line, -1) {
 			inner := m[1]
 			if head, _, _ := strings.Cut(inner, "."); head != VarsPrefix {
 				continue
 			}
 			if refMatches(inner, queryPath) {
-				hits = append(hits, Usage{File: rel, Line: i + 1, Kind: "template", Text: strings.TrimSpace(line)})
+				matched = true
 			}
+		}
+		// (b) bare vars.x tokens inside Go-template {{ }} blocks.
+		for _, block := range goTemplateBlock.FindAllString(line, -1) {
+			for _, ref := range varDotPath.FindAllString(block, -1) {
+				if refMatches(ref, queryPath) {
+					matched = true
+				}
+			}
+		}
+		if matched {
+			hits = append(hits, Usage{File: rel, Line: i + 1, Kind: "template", Text: strings.TrimSpace(line)})
 		}
 	}
 	return hits, nil

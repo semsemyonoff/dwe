@@ -23,12 +23,12 @@ type varInspectJSON struct {
 // reports presence so a JSON consumer can distinguish an explicit null from an
 // absent layer (a bare null value alone is ambiguous).
 type varInspectLayers struct {
-	Author       any  `json:"author"`
-	AuthorSet    bool `json:"author_set"`
-	Local        any  `json:"local"`
-	LocalSet     bool `json:"local_set"`
-	Effective    any  `json:"effective"`
-	EffectiveSet bool `json:"effective_set"`
+	Default    any  `json:"default"`
+	DefaultSet bool `json:"default_set"`
+	Local      any  `json:"local"`
+	LocalSet   bool `json:"local_set"`
+	Current    any  `json:"current"`
+	CurrentSet bool `json:"current_set"`
 }
 
 // varInspectUsage is one static reference: its file (relative to the project
@@ -50,14 +50,17 @@ ${vars.x} in rendered fields and render templates, plus structural
 from: / default_from: / when: references.
 
 Dynamically-built var paths and Go-template field access (.Vars.x) cannot be
-tracked statically and are not reported.`,
-		Example: `  dwe vars inspect vars.db.host
-  dwe vars inspect vars.db.host --output json`,
+tracked statically and are not reported.
+
+The vars. prefix is optional: "db.host" and "vars.db.host" are equivalent.`,
+		Example: `  dwe vars inspect db.host
+  dwe vars inspect db.host --output json`,
 		Args:              cobra.ExactArgs(1),
 		SilenceUsage:      true,
 		ValidArgsFunction: leafCompletion(flags),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			return runVarsInspect(cmd, flags, args[0])
+			// The vars. prefix is optional — "db.host" inspects "vars.db.host".
+			return runVarsInspect(cmd, flags, normalizeVarPath(args[0]))
 		},
 	}
 	return cmd
@@ -86,21 +89,21 @@ func runVarsInspect(cmd *cobra.Command, flags *cmdctx.RootFlags, path string) er
 	}
 
 	// A path unresolved at every layer AND referenced nowhere does not exist.
-	if !layered.AuthorOK && !layered.LocalOK && !layered.EffectiveOK && len(scan.Usages) == 0 {
+	if !layered.DefaultOK && !layered.LocalOK && !layered.CurrentOK && len(scan.Usages) == 0 {
 		return notFoundError(path)
 	}
 
 	origin := originDisplay(flags, layered.Origin)
 	inspect := uirender.VarInspect{
-		Path:        path,
-		Author:      layered.Author,
-		AuthorOK:    layered.AuthorOK,
-		Local:       layered.Local,
-		LocalOK:     layered.LocalOK,
-		Effective:   layered.Effective,
-		EffectiveOK: layered.EffectiveOK,
-		Origin:      origin,
-		Usages:      scan.Usages,
+		Path:      path,
+		Default:   layered.Default,
+		DefaultOK: layered.DefaultOK,
+		Local:     layered.Local,
+		LocalOK:   layered.LocalOK,
+		Current:   layered.Current,
+		CurrentOK: layered.CurrentOK,
+		Origin:    origin,
+		Usages:    scan.Usages,
 	}
 
 	data := buildInspectJSON(path, layered, origin, scan.Usages)
@@ -123,12 +126,12 @@ func buildInspectJSON(path string, layered config.LayeredValue, origin string, u
 	return varInspectJSON{
 		Var: path,
 		Layers: varInspectLayers{
-			Author:       layered.Author,
-			AuthorSet:    layered.AuthorOK,
-			Local:        layered.Local,
-			LocalSet:     layered.LocalOK,
-			Effective:    layered.Effective,
-			EffectiveSet: layered.EffectiveOK,
+			Default:    layered.Default,
+			DefaultSet: layered.DefaultOK,
+			Local:      layered.Local,
+			LocalSet:   layered.LocalOK,
+			Current:    layered.Current,
+			CurrentSet: layered.CurrentOK,
 		},
 		Origin: origin,
 		Usages: entries,

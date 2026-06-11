@@ -44,11 +44,12 @@ Subcommands:
   inspect  show per-layer values, origin file, and every static usage
 
 Without a subcommand the leaves are listed (an optional namespace narrows the
-output).`,
+output). The vars. prefix is optional on every path argument: "db.host" and
+"vars.db.host" are equivalent.`,
 		Example: `  dwe vars
   dwe vars list
-  dwe vars list vars.db
-  dwe vars get vars.db.host`,
+  dwe vars list db
+  dwe vars get db.host`,
 		Args:              cobra.MaximumNArgs(1),
 		SilenceUsage:      true,
 		ValidArgsFunction: namespaceCompletion(flags),
@@ -91,7 +92,7 @@ func loadConfigForVars(flags *cmdctx.RootFlags) (*config.DweConfig, error) {
 // It is the shared completion for the <var> arg of get / inspect / set. Errors
 // yield empty completions silently (completion never surfaces errors).
 func leafCompletion(flags *cmdctx.RootFlags) func(*cobra.Command, []string, string) ([]string, cobra.ShellCompDirective) {
-	return func(cmd *cobra.Command, args []string, _ string) ([]string, cobra.ShellCompDirective) {
+	return func(cmd *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
 		if len(args) != 0 {
 			return nil, cobra.ShellCompDirectiveNoFileComp
 		}
@@ -103,7 +104,7 @@ func leafCompletion(flags *cmdctx.RootFlags) func(*cobra.Command, []string, stri
 		if err != nil {
 			return nil, cobra.ShellCompDirectiveNoFileComp
 		}
-		return varsusage.EnumerateVars(cfg), cobra.ShellCompDirectiveNoFileComp
+		return varCompletionForms(varsusage.EnumerateVars(cfg), toComplete), cobra.ShellCompDirectiveNoFileComp
 	}
 }
 
@@ -111,7 +112,7 @@ func leafCompletion(flags *cmdctx.RootFlags) func(*cobra.Command, []string, stri
 // and their interior namespaces (so `dwe vars list vars.db<TAB>` works). Used
 // for the bare `vars` / `vars list` namespace arg.
 func namespaceCompletion(flags *cmdctx.RootFlags) func(*cobra.Command, []string, string) ([]string, cobra.ShellCompDirective) {
-	return func(cmd *cobra.Command, args []string, _ string) ([]string, cobra.ShellCompDirective) {
+	return func(cmd *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
 		if len(args) != 0 {
 			return nil, cobra.ShellCompDirectiveNoFileComp
 		}
@@ -123,7 +124,8 @@ func namespaceCompletion(flags *cmdctx.RootFlags) func(*cobra.Command, []string,
 		if err != nil {
 			return nil, cobra.ShellCompDirectiveNoFileComp
 		}
-		return namespaceCandidates(varsusage.EnumerateVars(cfg)), cobra.ShellCompDirectiveNoFileComp
+		cands := namespaceCandidates(varsusage.EnumerateVars(cfg))
+		return varCompletionForms(cands, toComplete), cobra.ShellCompDirectiveNoFileComp
 	}
 }
 
@@ -154,6 +156,38 @@ func namespaceCandidates(leaves []string) []string {
 // notFoundError builds the typed not-found error for a missing var path.
 func notFoundError(path string) error {
 	return cmdctx.Err("vars_not_found", fmt.Sprintf("var %q not found", path)).WithDetail("var", path)
+}
+
+// normalizeVarPath lets users drop the redundant vars. prefix on input: under
+// `dwe vars` every path is a var, so "db.host" is accepted as "vars.db.host".
+// An already-qualified path (head segment "vars" — "vars.db.host" or the bare
+// "vars" root) is returned unchanged. This is the single input-normalization
+// point for get / set / inspect / list; storage, JSON, completion candidates,
+// and usage matching all keep the canonical vars.* form. An empty string (the
+// no-namespace case) passes through untouched.
+func normalizeVarPath(p string) string {
+	if p == "" {
+		return p
+	}
+	if head, _, _ := strings.Cut(p, "."); head == varsusage.VarsPrefix {
+		return p
+	}
+	return varsusage.VarsPrefix + "." + p
+}
+
+// varCompletionForms matches completion candidates to what the user is typing:
+// once the input begins with "vars." the canonical full paths are offered;
+// otherwise the prefix-stripped forms are (the now-preferred shorthand). Both
+// resolve identically at run time via normalizeVarPath.
+func varCompletionForms(cands []string, toComplete string) []string {
+	if strings.HasPrefix(toComplete, varsusage.VarsPrefix+".") {
+		return cands
+	}
+	out := make([]string, len(cands))
+	for i, c := range cands {
+		out[i] = strings.TrimPrefix(c, varsusage.VarsPrefix+".")
+	}
+	return out
 }
 
 // isVarsPath reports whether a dot-path lives in the vars.* sandbox (head
