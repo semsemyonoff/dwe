@@ -1,4 +1,4 @@
-> Translated from: reference/config/workspace.md @ 8b83a271483f
+> Translated from: reference/config/workspace.md @ 642f4ba64c15
 
 # workspace.yml / defaults.yml / local.yml
 
@@ -103,7 +103,7 @@ Dot-path'ы используются:
 project · runtime · state · exports · compose · ui · docs · services · vars · update
 ```
 
-(`schema_version` также допускается как зарезервированные forward-compat метаданные.) Любой другой ключ верхнего уровня — в *любом* слое — это жёсткая ошибка при загрузке:
+(`schema_version` также входит в allowlist как зарезервированные forward-compat метаданные — обычный член списка, не отдельное исключение.) Любой другой ключ верхнего уровня — в *любом* слое — это жёсткая ошибка при загрузке:
 
 ```text
 workspace.yml: unknown top-level key "db" — move custom values under "vars:" (e.g. vars.db.*)
@@ -167,7 +167,7 @@ update:
 
 | Поле | Тип | По умолчанию | Описание |
 |-------|------|---------|-------------|
-| `update.mode` | string | `off`, когда блок отсутствует; `on`, когда блок присутствует с пустым `mode` | Одно из `on`, `off`. Само написание ключа `update:` — это opt-in. |
+| `update.mode` | string | `off`, когда блок отсутствует; `on`, когда блок присутствует, но `mode` не задан или пуст | Одно из `on`, `off`. Само написание ключа `update:` — это opt-in. |
 
 Поведение mode:
 
@@ -176,7 +176,7 @@ update:
 | `on` | да | с согласия | Интерактивный TTY: спрашивает перед `git pull --ff-only`. Non-TTY / CI: предупреждает «отстаёт, пропускаю» и продолжает. |
 | `off` | нет | нет | Проба выключена (то же, что флаг `--no-update`). |
 
-Семантика разрешения (`UpdateConfig.EffectiveMode()`): отсутствующий блок (`nil`) → `off`; присутствующий, но пустой блок → `on`; иначе буквальный `mode`. Плохое значение (например, `update: { mode: yes }`) — жёсткая ошибка при загрузке конфига и error-диагностика `dwe validate`.
+Семантика разрешения (`UpdateConfig.EffectiveMode()`): отсутствующий блок (`nil`) → `off`; присутствующий блок, у которого `mode` не задан или пуст → `on`; иначе буквальный `mode`. Плохое значение (например, `update: { mode: yes }`) — жёсткая ошибка при загрузке конфига и error-диагностика `dwe validate`.
 
 Приоритет в runtime при `dwe run`: флаг `--no-update` > флаг `--update <mode>` > `update.mode` из смерженного конфига.
 

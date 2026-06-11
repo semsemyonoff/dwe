@@ -102,7 +102,7 @@ The **root** of the merged 3-layer config is strict. After the three layers are 
 project · runtime · state · exports · compose · ui · docs · services · vars · update
 ```
 
-(`schema_version` is also tolerated as reserved forward-compat metadata.) Any other top-level key — in *any* layer — is a hard load-time error:
+(`schema_version` is also included in the allowlist as reserved forward-compat metadata — a plain member, not a special-cased exception.) Any other top-level key — in *any* layer — is a hard load-time error:
 
 ```text
 workspace.yml: unknown top-level key "db" — move custom values under "vars:" (e.g. vars.db.*)
@@ -166,7 +166,7 @@ update:
 
 | Field | Type | Default | Description |
 |-------|------|---------|-------------|
-| `update.mode` | string | `off` when the block is absent; `on` when the block is present with an empty `mode` | One of `on`, `off`. Writing the `update:` key is itself the opt-in. |
+| `update.mode` | string | `off` when the block is absent; `on` when the block is present but `mode` is unset or empty | One of `on`, `off`. Writing the `update:` key is itself the opt-in. |
 
 Mode behaviour:
 
@@ -175,7 +175,7 @@ Mode behaviour:
 | `on` | yes | with consent | Interactive TTY: prompts before `git pull --ff-only`. Non-TTY / CI: warns "behind, skipping" and continues. |
 | `off` | no | no | Probe disabled (same as the `--no-update` flag). |
 
-Resolution semantics (`UpdateConfig.EffectiveMode()`): a missing block (`nil`) → `off`; a present-but-empty block → `on`; otherwise the literal `mode`. A bad value (e.g. `update: { mode: yes }`) is a hard error at config-load time and a `dwe validate` error diagnostic.
+Resolution semantics (`UpdateConfig.EffectiveMode()`): a missing block (`nil`) → `off`; a present block whose `mode` is unset or empty → `on`; otherwise the literal `mode`. A bad value (e.g. `update: { mode: yes }`) is a hard error at config-load time and a `dwe validate` error diagnostic.
 
 Runtime precedence at `dwe run`: `--no-update` flag > `--update <mode>` flag > `update.mode` from the merged config.
 
