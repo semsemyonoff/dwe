@@ -1,4 +1,4 @@
-> Translated from: reference/config/commands/types.md @ 154eee847284
+> Translated from: reference/config/commands/types.md @ 4b9fe0d1e458
 
 # Типы команд
 
@@ -123,8 +123,8 @@ db.dump-create:
   type: script
   description: Create a database dump file
   params:
-    database: { default_from: db.database, pattern: ^[a-zA-Z0-9_-]+$ }
-    dump_dir: { default_from: db.backup_dir, required: true }
+    database: { default_from: vars.db.database, pattern: ^[a-zA-Z0-9_-]+$ }
+    dump_dir: { default_from: vars.db.backup_dir, required: true }
   files:
     dump:
       access: write
@@ -135,7 +135,7 @@ db.dump-create:
       env: DUMP_FILE
   env:
     DB_NAME: "${param.database}"
-    MYSQL_PWD: "${db.password}"
+    MYSQL_PWD: "${vars.db.password}"
   script:
     path: workspace/scripts/db/dump-create.sh
     shell: bash
@@ -285,8 +285,8 @@ db.create:
   params:
     database: { required: true, pattern: ^[a-zA-Z0-9_-]+$ }
   env:
-    MYSQL_PWD: "${db.password}"
-  cmd: "mariadb -u${db.user} -e 'CREATE DATABASE IF NOT EXISTS `${param.database}`;'"
+    MYSQL_PWD: "${vars.db.password}"
+  cmd: "mariadb -u${vars.db.user} -e 'CREATE DATABASE IF NOT EXISTS `${param.database}`;'"
 ```
 
 ### compose_args
@@ -372,7 +372,7 @@ bootstrap:
 ```yaml
 - command: db.create
   with:
-    database: "${db.database}"
+    database: "${vars.db.database}"
 
 - command: services.main.db.dump-deploy
   with:
@@ -431,7 +431,7 @@ steps:
   - confirm: "This will drop the database. Continue?"
   - command: db.drop
     with:
-      database: "${db.database}"
+      database: "${vars.db.database}"
 ```
 
 Confirm-шаги тихо пропускаются под `--yes` или `DWE_NONINTERACTIVE=1`. Иначе huh выводит запрос на TTY, а fallback `[y/N]` через stdin обрабатывает piped-ввод.

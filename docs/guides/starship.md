@@ -92,7 +92,8 @@ state: running                      # running | partial | stopped
 ```
 
 - **TTL**: 2 minutes. Fresh-cache reads are pure file I/O — no `docker ps`.
-- **Stale or missing**: prompt shells out to `docker ps -q --filter label=com.docker.compose.project=<project>` with a **150 ms hard timeout**. On timeout or any error, no cache write occurs.
+- **Stale or missing**: prompt shells out to `docker ps -q --filter label=com.docker.compose.project=<project>` with a **150 ms hard timeout**. The probe applies `process_env` overrides from `workspace/docker.yml` / `docker.local.yml` (e.g. `DOCKER_HOST`, `DOCKER_CONTEXT`), so it targets the same daemon as lifecycle commands. On timeout or any error, no cache write occurs.
+- **Stale trust cap**: 10 minutes (5× TTL). A stale cached value survives a confirmed zero-result refresh only within the cap; past it the prompt renders `stopped` (still without writing the cache), so a stack stopped outside dwe converges to `○` instead of showing `●` indefinitely. An unconfirmed zero (docker error / timeout) never downgrades, at any age.
 - **Atomic writes**: tmp-file + rename in the same directory, so concurrent prompts cannot corrupt the file.
 
 ### Writer map
@@ -125,6 +126,8 @@ Different sites know different things about the stack. Each site picks the safes
 
 Allowing prompt refresh to write `stopped` would either (a) downgrade a correct `running` left by an authoritative writer (lifecycle / status), or (b) write a wrong `stopped` to an absent cache after invalidation. Reserving `stopped` writes for authoritative writers keeps the cache honest.
 
+The rule bounds *writes*, not *rendering*: once the cached value is older than the 10-minute stale trust cap, a confirmed zero-result refresh renders the icon as `stopped` for that prompt (the cache file is still not touched). Within the cap the stale value wins, which keeps a wrong-label zero from flickering a healthy stack's icon.
+
 Cache writes are best-effort everywhere: neither prompt refresh nor lifecycle commands fail when cache I/O fails. The cache is observability, not correctness.
 
 ## Behaviour in non-color terminals
@@ -139,9 +142,9 @@ Cache writes are best-effort everywhere: neither prompt refresh nor lifecycle co
 
 - **Light/dark auto-detect**: the prompt always uses the dark variant of the palette. Most terminals are dark; light-terminal support can be added later via `COLORFGBG` if there is demand.
 - **No `-c` flag**: `dwe prompt` always walks up from `$PWD`. This is intentional — the shell prompt reflects the shell's current directory, not an arbitrary project pointer.
-- **Custom docker binary**: `binaries.docker: podman` (or any non-`docker` value) bypasses prompt-driven refresh — `shared/prompt` hardcodes `docker` to keep the hot path config-free. Lifecycle commands and `dwe status` still write the cache with the correct binary, so the icon remains accurate during active use; only the 2-minute idle refresh is a no-op.
-- **Templated compose project name**: projects whose `workspace/docker.yml` sets `project_name` to a template (e.g. `${project.prefix}_${project.name}`) will see `docker ps` return zero rows from prompt refresh because `shared/prompt` does not load `docker.yml`. Combined with the no-downgrade rule, prompt refresh simply writes nothing — the icon stays correct as long as lifecycle commands and `dwe status` (which use the real compose name) keep the cache populated.
-- **Manual `docker stop` outside dwe**: not detected by prompt refresh (no-downgrade rule). Run `dwe status` to refresh the cached state.
+- **Custom docker binary**: `binaries.docker: podman` (or any non-`docker` value) bypasses prompt-driven refresh — `shared/prompt` hardcodes the `docker` binary name on the hot path. `process_env` overrides (`DOCKER_HOST`, `DOCKER_CONTEXT`, …) *are* applied to the probe, so multi-daemon setups work; only the binary name is fixed. Lifecycle commands and `dwe status` still write the cache with the correct binary, so the icon remains accurate during active use; only the 2-minute idle refresh is a no-op.
+- **Templated compose project name**: projects whose `workspace/docker.yml` sets `project_name` to a template (e.g. `${project.prefix}_${project.name}`) will see `docker ps` return zero rows from prompt refresh — `shared/prompt` reads only a *literal* `project_name` and falls back to `prefix-name` for template values. Combined with the no-downgrade rule, prompt refresh writes nothing — the icon stays correct as long as lifecycle commands and `dwe status` (which use the real compose name) keep the cache fresher than the 10-minute trust cap. Beyond the cap the persistent zero-result renders `○` even for a running stack until the next authoritative write; if that bites, set a literal `project_name` (e.g. in `workspace/docker.local.yml`).
+- **Manual `docker stop` outside dwe**: the cache is not rewritten by prompt refresh (no-downgrade rule), so the icon keeps showing the stale state for up to the 10-minute trust cap; after that a confirmed zero-result renders `○` on each prompt. Run `dwe status` to refresh the cached state immediately.
 - **Services without `dir:`**: tool/infra services (and any app without a source mount) never appear as `[<service>]` in the prompt — they have no source directory for `cwd` to be under. The prompt still renders the project, deploy, and stack segments normally.
 - **Symlinked paths**: `dwe prompt` does not call `filepath.EvalSymlinks` on either `cwd` or the resolved `dir:`. If `cwd` was reached through a symlink while `dir:` points at the canonical path (or vice versa), the service tag silently disappears. Use real paths in `service.yml`'s `dir:` to avoid surprises.
 - **Shell-specific quoting**: sh, bash, and zsh accept the `command` / `when` strings as written. Fish users may need to adjust quoting in `starship.toml` if their Starship config wraps commands differently.

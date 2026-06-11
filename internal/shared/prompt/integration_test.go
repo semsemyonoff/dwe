@@ -53,7 +53,7 @@ func TestPromptCacheIntegration_InvalidatedCache_RefreshHitsDockerPs(t *testing.
 	writeFile(t, filepath.Join(root, "workspace.yml"),
 		"project:\n  name: testproject\n")
 
-	swapDockerPs(t, func(_ context.Context, _ string) ([]byte, error) {
+	swapDockerPs(t, func(_ context.Context, _ string, _ []string) ([]byte, error) {
 		return []byte("abc123\n"), nil
 	})
 

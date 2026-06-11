@@ -24,7 +24,7 @@ Templates inside `workspace/commands/` render against `RenderContext`:
 | `.Files` | Resolved file artefacts (map keyed by file id; each has a `.Path` field) |
 | `.Host.UID` / `.Host.GID` | Host UID/GID strings |
 
-The `${...}` namespaces (`${db.x}`, `${param.x}`, `${context.x}`, `${files.id.path}`, `${host.uid}`) route into these same fields. See [Templates](../../templates.md) for the full namespace table.
+The `${...}` namespaces (`${vars.db.x}`, `${param.x}`, `${context.x}`, `${files.id.path}`, `${host.uid}`) route into these same fields. See [Templates](../../templates.md) for the full namespace table.
 
 ## Command-scope resolvers
 

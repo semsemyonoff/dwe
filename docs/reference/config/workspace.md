@@ -8,9 +8,11 @@ The three layers of the merged DWE config.
 - [What belongs in each layer](#what-belongs-in-each-layer)
 - [Dot-path resolution](#dot-path-resolution)
   - [Where service fields come from](#where-service-fields-come-from)
+- [Strict root + the `vars:` sandbox](#strict-root--the-vars-sandbox)
 - [workspace.yml](#workspaceyml)
   - [Field reference](#field-reference)
-  - [Project convention keys](#project-convention-keys)
+  - [The `update:` block](#the-update-block)
+- [Recommended file-layout convention](#recommended-file-layout-convention)
 - [workspace/defaults.yml](#workspacedefaultsyml)
   - [`services` overlay](#services-overlay)
   - [`runtime`](#runtime)
@@ -57,10 +59,10 @@ The three files share a single namespace — the same key in different layers is
 | Optional service enabled state (across all types) | `defaults.yml` (overrideable in `local.yml`) |
 | Export rules (`exports.env`) | `defaults.yml` |
 | IDE config defaults | `defaults.yml` |
-| `db` block defaults | `defaults.yml` |
+| `vars.db.*` block defaults | `defaults.yml` |
 | Active state | `local.yml` |
 | Service port / host values | [`workspace/services/<name>/service.yml`](services/index.md) (project-level definitions) and `local.yml` (per-developer overrides, deep-merged by entry name) |
-| Personal credentials (`db.user`, `db.password`) | `local.yml` |
+| Personal credentials (`vars.db.user`, `vars.db.password`) | `local.yml` |
 | Enabling debug / optional services | `local.yml` |
 | Per-developer Docker Compose overlay files (`compose.extra`) | `local.yml` only — rejected with an error in all other layers |
 | Wizard-generated configuration | `local.yml` (written by `dwe deploy` when answering setup questions or port conflicts) |
@@ -79,6 +81,7 @@ A dot-path is a `.`-separated key chain that navigates the merged YAML map. Exam
 - `services.adminer.enabled` → `false`
 - `services.main.container` → `"app-main"`
 - `services.main.hosts.web` → `"app.localhost"`
+- `vars.db.user` → `"root"` (free-form values live under [`vars:`](#strict-root--the-vars-sandbox))
 
 Dot-paths are consumed by:
 
@@ -90,6 +93,45 @@ Dot-paths are consumed by:
 ### Where service fields come from
 
 `services.<name>.*` paths in the merged map are populated from each `workspace/services/<name>/service.yml` (the canonical service declaration, which carries `type:`). Every overlay layer is validated against the declared field set, the 3 layers are merged, then `enabled` is resolved per service (required wins; otherwise the merged overlay value, defaulting to `false`). Each resolved service — including its nested `ports` / `hosts` maps and resolved fields like `container`, `dir`, `compose` — becomes available under `services.<name>` in the merged config. Export rules and templates can therefore use `services.main.container`, `services.main.ports.http`, `services.adminer.hosts.web`, `services.catalog.enabled`, etc. without separate awareness of the per-service folder structure.
+
+## Strict root + the `vars:` sandbox
+
+The **root** of the merged 3-layer config is strict. After the three layers are merged, DWE checks the top-level keys against a fixed allowlist:
+
+```text
+project · runtime · state · exports · compose · ui · docs · services · vars · update
+```
+
+(`schema_version` is also included in the allowlist as reserved forward-compat metadata — a plain member, not a special-cased exception.) Any other top-level key — in *any* layer — is a hard load-time error:
+
+```text
+workspace.yml: unknown top-level key "db" — move custom values under "vars:" (e.g. vars.db.*)
+```
+
+This makes typos in formalized keys (`runtim:`, `exprots:`) fail loudly instead of being silently swallowed, and lets the schema tighten without colliding with project-specific values. The same error is surfaced as a `dwe validate` error diagnostic.
+
+### `vars:` — the home for free-form values
+
+Arbitrary, project-specific values live under a single typed block, `vars:`. The root is strict, but **inside `vars:` anything goes** — any keys, any nesting, no validation:
+
+```yaml
+vars:
+  db:
+    database: myapp
+    user: root
+    password: secret
+  app:
+    timeout: 30
+    retries: 3
+```
+
+`vars` is a normal merged key, so its contents are reachable by dot-path exactly like before — only the prefix changes:
+
+- Export rules: `from: vars.db.user`
+- `${...}` templates: `${vars.db.database}`
+- Custom commands / `config_keys_present` checks: `vars.db.api_key`
+
+The resolver is unchanged; `vars.*` resolves through `DweConfig.Raw` by dot-path just like `services.*`. Migrating a project from the old open namespace is purely mechanical: wrap the former root keys under `vars:` and prefix every reference with `vars.`.
 
 ## workspace.yml
 
@@ -113,29 +155,31 @@ project:
 
 `project.prefix` and `project.name` combine to form the Docker Compose project name via the template in `docker.yml` (`${project.prefix}-${project.name}`).
 
-## Project convention keys
+### The `update:` block
 
-Beyond the typed fields documented above, `workspace.yml`, `defaults.yml`, and `local.yml` support an open namespace of convention keys. These keys are not interpreted by the CLI directly — they are exposed via dot-paths in the merged config and consumed by export rules, templates, and custom commands.
-
-Common convention keys include:
-
-- `db.*` — Database credentials and metadata (e.g., `db.database`, `db.user`, `db.password`) — consumed by export rules to populate `DB_*` env variables.
-- Custom project settings — Any top-level key you add is accessible via dot-path (e.g., `my_setting.value` in a template).
-
-Example:
+The optional top-level `update:` block controls the self-update probe that `dwe run` performs against the project-root git repository before executing any lifecycle phase. It is a formalized block that participates in the 3-layer merge (scalar `mode` is last-layer-wins), so a project author can set policy in `workspace.yml` and a developer can override it in `local.yml`.
 
 ```yaml
-db:
-  database: myapp
-  user: root
-  password: secret
-
-my_custom:
-  timeout: 30
-  retries: 3
+update:
+  mode: on            # on | off
 ```
 
-These can be referenced in export rules (`from: db.user`), templates (`${db.database}`), and used by custom commands or scripts. The open namespace allows projects to extend the config schema without CLI changes.
+| Field | Type | Default | Description |
+|-------|------|---------|-------------|
+| `update.mode` | string | `off` when the block is absent; `on` when the block is present but `mode` is unset or empty | One of `on`, `off`. Writing the `update:` key is itself the opt-in. |
+
+Mode behaviour:
+
+| Mode | Fetches | Pulls | Behaviour when behind |
+|------|---------|-------|------------------------|
+| `on` | yes | with consent | Interactive TTY: prompts before `git pull --ff-only`. Non-TTY / CI: warns "behind, skipping" and continues. |
+| `off` | no | no | Probe disabled (same as the `--no-update` flag). |
+
+Resolution semantics (`UpdateConfig.EffectiveMode()`): a missing block (`nil`) → `off`; a present block whose `mode` is unset or empty → `on`; otherwise the literal `mode`. A bad value (e.g. `update: { mode: yes }`) is a hard error at config-load time and a `dwe validate` error diagnostic.
+
+Runtime precedence at `dwe run`: `--no-update` flag > `--update <mode>` flag > `update.mode` from the merged config.
+
+This block decouples *enabling update* from the lifecycle phases. (It previously lived under `run.update` in `lifecycle.yml`, where writing it blanked `run.phases`; see [`lifecycle.md`](lifecycle.md) and [git integration → update probe](../concepts/git.md#update-probe-dwe-run).)
 
 ### `docs`
 
@@ -154,6 +198,20 @@ docs:
 - `off`: Never render diagrams; always show code blocks.
 
 **`docs.cache_size_mb`**: Maximum size in MB for the mermaid diagram cache (PNG files stored in `$XDG_CACHE_HOME/dwe/mermaid/`). Cache uses LRU eviction when over the limit. Default is 100 MB. Must be non-negative; zero defaults to 100.
+
+---
+
+## Recommended file-layout convention
+
+All three layers share the same strict key set, so any block *can* appear in any layer. The following split is a **convention only** — violating it is not an error — but it keeps the layers readable:
+
+| Layer | Holds | Why |
+|-------|-------|-----|
+| `workspace.yml` | Compact formalized blocks: `project`, `ui`, `update` | Small, structural, rarely changes |
+| `defaults.yml` | The bulky blocks: `vars`, `exports`, `services` overlay, `runtime` | Versioned team defaults; the biggest content |
+| `local.yml` | Personal overrides: `state`, `vars.db.password`, service toggles, `compose.extra`, `update.mode` | Per-developer, gitignored |
+
+For example, a project author enables update policy in `workspace.yml` (`update: { mode: on }`) and a developer who wants to skip the probe locally overrides it in `local.yml` (`update: { mode: off }`).
 
 ---
 

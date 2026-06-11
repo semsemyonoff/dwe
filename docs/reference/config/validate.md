@@ -30,7 +30,7 @@ Project readiness checks.
 
 `workspace/validate.yml` declares project-level readiness checks. The CLI consumes these from two entry points:
 
-- `dwe validate` — runs every check (plus YAML-shape validators in the `config`, `templates`, and `commands` domains, plus environment probes in the `env` domain) and reports diagnostics.
+- `dwe validate` — runs every check (plus YAML-shape validators in the `config`, `templates`, `commands`, and `bridge` domains, plus environment probes in the `env` domain) and reports diagnostics.
 - Preflight hook on `dwe deploy run`, `dwe run`, `dwe stop`, and `dwe restart` — runs the subset of checks bound to the relevant stage before any side effect on Docker, git, or the filesystem.
 
 The goal is to surface user-actionable problems ("you're not logged into ghcr.io", "DATABASE_URL is empty in `.env`", "VPN is down") BEFORE deploy steps fail mid-way with cryptic errors.
@@ -206,15 +206,15 @@ Error message: `missing or empty keys: A, B, C`.
 
 Verifies one or more dot-paths resolve to non-empty values in the **merged DWE configuration** — the `workspace.yml` / `defaults.yml` / `local.yml` layers after merging. This is the config-aware counterpart of `env_keys_present`: instead of reading an on-disk `.env`, it reads the in-memory merged config, so it sees `local.yml` overlays immediately and does not depend on whether a rendered `.env` has been materialised yet.
 
-Addressing is the same dot-path the setup wizard uses in its `writes:` field, so the path you assert is exactly the path the wizard wrote — e.g. `db.api_key` or `app.log_level`. Pair it with [`stages: [post-setup]`](#deploy-vs-post-setup-when-in-the-deploy-flow-a-check-runs) so it runs after the wizard populates `local.yml`.
+Addressing is the same dot-path the setup wizard uses in its `writes:` field, so the path you assert is exactly the path the wizard wrote — e.g. `vars.db.api_key` or `vars.app.log_level`. Pair it with [`stages: [post-setup]`](#deploy-vs-post-setup-when-in-the-deploy-flow-a-check-runs) so it runs after the wizard populates `local.yml`.
 
 | Key | Type | Required | Description |
 |-----|------|----------|-------------|
 | `keys` | list of strings | yes | Dot-paths into the merged config; each must resolve to a non-empty value. |
 
-A path is "missing" when it does not resolve, when it resolves to `null`, or when it renders to the empty string. Non-string scalars (numbers, booleans) count as present. Error message: `missing or empty keys: db.api_key, app.log_level`.
+A path is "missing" when it does not resolve, when it resolves to `null`, or when it renders to the empty string. Non-string scalars (numbers, booleans) count as present. Error message: `missing or empty keys: vars.db.api_key, vars.app.log_level`.
 
-**Which paths are reachable.** Assert the same paths the wizard can write — see the [setup `writes:` scope](setup.md#write-scope-rules). Top-level custom namespaces (`db.*`, `app.*`, `user.*`, …) survive the merge into the config and resolve here. Under `services.<name>`, `local.yml` accepts **only** `enabled`, `ports.<name>`, and `hosts.<name>` — both the wizard and the config loader reject anything else, so a per-service **secret** cannot live at `services.<name>.env.*` in `local.yml`. Keep service secrets in the service's rendered `.env` and assert them with `env_keys_present` instead; use `config_keys_present` for the top-level values the wizard writes.
+**Which paths are reachable.** Assert the same paths the wizard can write — see the [setup `writes:` scope](setup.md#write-scope-rules). Custom values live under the [`vars:` sandbox](workspace.md#strict-root--the-vars-sandbox) (`vars.db.*`, `vars.app.*`, …) — the merged config root is strict, so free-form keys must be nested under `vars:` to survive the merge and resolve here. Under `services.<name>`, `local.yml` accepts **only** `enabled`, `ports.<name>`, and `hosts.<name>` — both the wizard and the config loader reject anything else, so a per-service **secret** cannot live at `services.<name>.env.*` in `local.yml`. Keep service secrets in the service's rendered `.env` and assert them with `env_keys_present` instead; use `config_keys_present` for the top-level values the wizard writes.
 
 ### `tcp_reachable`
 
@@ -326,19 +326,19 @@ checks:
 
 ```yaml
   - id: db-api-key-set
-    description: db.api_key must be set before deploy
+    description: vars.db.api_key must be set before deploy
     stages: [post-setup]             # final preflight only — after the setup wizard
     severity: error
     hint: |
       Run `dwe deploy` and complete the wizard, or set
-      db.api_key in workspace/local.yml.
+      vars.db.api_key in workspace/local.yml.
     type: builtin
     cmd: config_keys_present
     with:
-      keys: [db.api_key]
+      keys: [vars.db.api_key]
 ```
 
-The setup wizard writes `db.api_key` into `local.yml` (a top-level path — `services.<name>.env.*` is **not** a legal wizard/`local.yml` target, see the builtin's reachability note above); this check asserts the same dot-path is set. Because it is `post-setup`, it is skipped at the early pre-wizard gate (so the wizard is reachable) and runs at the final preflight — catching a missing value before deploy starts, including on `dwe deploy run` where no wizard runs.
+The setup wizard writes `vars.db.api_key` into `local.yml` (a path under the [`vars:` sandbox](workspace.md#strict-root--the-vars-sandbox) — `services.<name>.env.*` is **not** a legal wizard/`local.yml` target, see the builtin's reachability note above); this check asserts the same dot-path is set. Because it is `post-setup`, it is skipped at the early pre-wizard gate (so the wizard is reachable) and runs at the final preflight — catching a missing value before deploy starts, including on `dwe deploy run` where no wizard runs.
 
 **6. Corporate VPN reachable (tcp_reachable):**
 
@@ -396,7 +396,8 @@ commands:
 
 ## CLI flags
 
-- `dwe validate` — runs `config.*`, `templates.*`, `commands.*`, `env.*`, and all `checks.*`. Optional positional scope narrows the run (e.g. `dwe validate env`, `dwe validate checks ghcr-login`).
+- `dwe validate` — runs `config.*`, `templates.*`, `commands.*`, `bridge.*`, `env.*`, and all `checks.*`. Optional positional scope narrows the run (e.g. `dwe validate env`, `dwe validate checks ghcr-login`, `dwe validate bridge`).
+- `dwe validate bridge` — static checks on per-service `bridge:` blocks only: `on_unreachable` enum (`fail` / `warn`), `shim_path` absoluteness, and the bridged-service `dir` / `dir_internal` workspace mapping the shim translates over. Validate-only — the bridge domain does not participate in preflight.
 - `dwe validate --stage <name>` — local flag on the `validate` command. Filters `checks.*` by stage. `env.*` and other domains are unaffected (they have no stages).
 - `dwe validate --strict` — treat warnings as errors (exit 1).
 - `dwe validate --quiet` — hide ok / info rows.

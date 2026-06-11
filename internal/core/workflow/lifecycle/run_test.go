@@ -19,59 +19,47 @@ import (
 // --- resolveUpdateMode tests (unexported, same package) ---
 
 func TestResolveUpdateMode_UpdateBlockOmitted_NoFlag(t *testing.T) {
-	cfg := &config.LifecycleRunConfig{Update: nil}
-	if got := resolveUpdateMode(cfg, false, ""); got != "off" {
+	if got := resolveUpdateMode(nil, false, ""); got != "off" {
 		t.Errorf("resolveUpdateMode = %q, want %q", got, "off")
 	}
 }
 
 func TestResolveUpdateMode_ModeOn_NoFlag(t *testing.T) {
-	cfg := &config.LifecycleRunConfig{
-		Update: &config.LifecycleUpdate{Mode: "on"},
-	}
+	cfg := &config.UpdateConfig{Mode: "on"}
 	if got := resolveUpdateMode(cfg, false, ""); got != "on" {
 		t.Errorf("resolveUpdateMode = %q, want %q", got, "on")
 	}
 }
 
 func TestResolveUpdateMode_ModeOff_NoFlag(t *testing.T) {
-	cfg := &config.LifecycleRunConfig{
-		Update: &config.LifecycleUpdate{Mode: "off"},
-	}
+	cfg := &config.UpdateConfig{Mode: "off"}
 	if got := resolveUpdateMode(cfg, false, ""); got != "off" {
 		t.Errorf("resolveUpdateMode = %q, want %q", got, "off")
 	}
 }
 
 func TestResolveUpdateMode_NoUpdateFlag_ForcesOff(t *testing.T) {
-	cfg := &config.LifecycleRunConfig{
-		Update: &config.LifecycleUpdate{Mode: "on"},
-	}
+	cfg := &config.UpdateConfig{Mode: "on"}
 	if got := resolveUpdateMode(cfg, true, ""); got != "off" {
 		t.Errorf("resolveUpdateMode with NoUpdate = %q, want %q", got, "off")
 	}
 }
 
 func TestResolveUpdateMode_UpdateFlag_OverridesYAML(t *testing.T) {
-	cfg := &config.LifecycleRunConfig{
-		Update: &config.LifecycleUpdate{Mode: "off"},
-	}
+	cfg := &config.UpdateConfig{Mode: "off"}
 	if got := resolveUpdateMode(cfg, false, "on"); got != "on" {
 		t.Errorf("resolveUpdateMode with UpdateMode=on = %q, want %q", got, "on")
 	}
 }
 
 func TestResolveUpdateMode_UpdateFlag_OverridesOmittedBlock(t *testing.T) {
-	cfg := &config.LifecycleRunConfig{Update: nil}
-	if got := resolveUpdateMode(cfg, false, "on"); got != "on" {
+	if got := resolveUpdateMode(nil, false, "on"); got != "on" {
 		t.Errorf("resolveUpdateMode with UpdateMode=on (no block) = %q, want %q", got, "on")
 	}
 }
 
 func TestResolveUpdateMode_NoUpdateTakesPrecedenceOverUpdateFlag(t *testing.T) {
-	cfg := &config.LifecycleRunConfig{
-		Update: &config.LifecycleUpdate{Mode: "on"},
-	}
+	cfg := &config.UpdateConfig{Mode: "on"}
 	if got := resolveUpdateMode(cfg, true, "on"); got != "off" {
 		t.Errorf("resolveUpdateMode with NoUpdate + UpdateMode=on = %q, want %q", got, "off")
 	}
@@ -261,7 +249,7 @@ func TestRunRun_UpdateFlagOff_SkipsFetch(t *testing.T) {
 	if err := os.MkdirAll(workspaceDir, 0755); err != nil {
 		t.Fatalf("creating workspace dir: %v", err)
 	}
-	yaml := "run:\n  update:\n    mode: on\n  phases:\n    - name: s\n      steps:\n        - name: n\n          type: shell\n          cmd: \"true\"\n"
+	yaml := "run:\n  phases:\n    - name: s\n      steps:\n        - name: n\n          type: shell\n          cmd: \"true\"\n"
 	if err := os.WriteFile(filepath.Join(workspaceDir, "lifecycle.yml"), []byte(yaml), 0644); err != nil {
 		t.Fatalf("writing lifecycle.yml: %v", err)
 	}
@@ -316,6 +304,51 @@ func TestRunRun_UpdateBlockOmitted_DefaultsToOffNoFetch(t *testing.T) {
 	}
 	if fetchCalled {
 		t.Error("git fetch should NOT be called when update: block is omitted (effective mode = off)")
+	}
+}
+
+// TestRunRun_UpdateEnabledViaTopLevelConfig_ProbesAndKeepsDefaultPhases is the
+// core regression guard for this refactor: enabling update lives in the
+// top-level workspace.yml update: block (NOT lifecycle.yml run.update), so it
+// must trigger the git probe WITHOUT blanking the default run phases. With no
+// lifecycle.yml present, EnsureRunConfig must still supply the default `start`
+// phase even though update is enabled elsewhere.
+func TestRunRun_UpdateEnabledViaTopLevelConfig_ProbesAndKeepsDefaultPhases(t *testing.T) {
+	stubRunPhases(t)
+
+	dir := t.TempDir()
+	cfgPath := filepath.Join(dir, "workspace.yml")
+	if err := os.WriteFile(cfgPath, []byte("project:\n  name: test\n  prefix: dwe\nupdate:\n  mode: on\n"), 0644); err != nil {
+		t.Fatalf("writing workspace.yml: %v", err)
+	}
+	// No lifecycle.yml — run phases come from the built-in default.
+
+	origProbe := GitProbeFunc
+	t.Cleanup(func() { GitProbeFunc = origProbe })
+
+	fetchCalled := false
+	GitProbeFunc = func(_, workDir string, fetch bool) (git.Status, error) {
+		if fetch {
+			fetchCalled = true
+		}
+		// Not a repo → Decide returns ActionSkip; the run proceeds.
+		return git.Status{IsRepo: false}, nil
+	}
+
+	var called []DefaultedPipeline
+	ctx := RunContext{
+		ConfigPath:    cfgPath,
+		OnDefaultUsed: func(p DefaultedPipeline) { called = append(called, p) },
+	}
+	if err := RunRun(ctx); err != nil {
+		t.Errorf("unexpected error: %v", err)
+	}
+	if !fetchCalled {
+		t.Error("git fetch SHOULD be called when update is enabled via the top-level config")
+	}
+	// The default run pipeline must still fire — enabling update does not touch phases.
+	if len(called) != 1 || called[0] != DefaultedRun {
+		t.Errorf("OnDefaultUsed calls = %v, want [%q] (default run phases must survive)", called, DefaultedRun)
 	}
 }
 
@@ -697,6 +730,85 @@ func TestRenderConfigsForRun_MissingGeneratedKey_SkipsService(t *testing.T) {
 	out := buf.String()
 	if !strings.Contains(out, "skipping config render") || !strings.Contains(out, "app_key") {
 		t.Errorf("expected skip hint mentioning app_key, got: %q", out)
+	}
+}
+
+// TestRenderConfigsForRun_ExtendsChildSharingHub_NotRendered guards the
+// extends-alias case: a child (main-debug) that extends a parent (main) and
+// inherits the parent's hub dir is a config-render alias — its ${generated.*}
+// values are minted under the PARENT's store key, never its own. The run loop
+// must render the shared hub via the parent only, and must NOT emit a false
+// "skipping config render" warning for the child.
+func TestRenderConfigsForRun_ExtendsChildSharingHub_NotRendered(t *testing.T) {
+	root := t.TempDir()
+	writeConfigPackFixture(t, root, "default",
+		"render:\n  - from: env.tmpl\n    to: src/.env\n",
+		map[string]string{"env.tmpl": "APP_KEY=${generated.app_key}\n"})
+
+	store := generatedstore.New()
+	store.SetIfAbsent("main", "app_key", "base64:secret==") // only under the parent
+	if err := generatedstore.Save(filepath.Join(root, generatedstore.DefaultRelPath), store); err != nil {
+		t.Fatal(err)
+	}
+
+	// Both services share Dir services/main; main-debug extends main with the
+	// parent's Generated cloned in (no own store entry). Mirrors the post-
+	// ResolveServiceExtends shape of a debug sidecar.
+	gen := map[string]config.GeneratedField{"app_key": {File: "src/.env", Pattern: `^APP_KEY=(.*)$`}}
+	cfg := &config.DweConfig{
+		Raw: map[string]any{},
+		Services: map[string]config.ServiceConfig{
+			"main":       {Type: config.ServiceTypeApp, Enabled: true, Dir: "services/main", Generated: gen},
+			"main-debug": {Type: config.ServiceTypeApp, Enabled: true, Dir: "services/main", Extends: "main", Generated: gen},
+		},
+	}
+	buf := &bytes.Buffer{}
+	if err := renderConfigsForRun(cfg, root, render.NewWriter(buf)); err != nil {
+		t.Fatalf("renderConfigsForRun: %v", err)
+	}
+
+	if got := mustReadFile(t, filepath.Join(root, "services", "main", "src", ".env")); got != "APP_KEY=base64:secret==\n" {
+		t.Errorf("shared hub render = %q", got)
+	}
+	if strings.Contains(buf.String(), "skipping config render") {
+		t.Errorf("extends-alias child produced a false skip warning: %q", buf.String())
+	}
+}
+
+// TestRenderConfigsForRun_ExtendsChildOwnDir_StillRendered guards against
+// over-skipping: an extends child that declares its OWN dir is a genuine,
+// independent render target (generated values minted under its own name), so it
+// must still render — only a child sharing the parent's hub is an alias.
+func TestRenderConfigsForRun_ExtendsChildOwnDir_StillRendered(t *testing.T) {
+	root := t.TempDir()
+	writeConfigPackFixture(t, root, "default",
+		"render:\n  - from: env.tmpl\n    to: src/.env\n",
+		map[string]string{"env.tmpl": "APP_KEY=${generated.app_key}\n"})
+
+	store := generatedstore.New()
+	store.SetIfAbsent("main", "app_key", "base64:main==")
+	store.SetIfAbsent("variant", "app_key", "base64:variant==")
+	if err := generatedstore.Save(filepath.Join(root, generatedstore.DefaultRelPath), store); err != nil {
+		t.Fatal(err)
+	}
+
+	gen := map[string]config.GeneratedField{"app_key": {File: "src/.env", Pattern: `^APP_KEY=(.*)$`}}
+	cfg := &config.DweConfig{
+		Raw: map[string]any{},
+		Services: map[string]config.ServiceConfig{
+			"main":    {Type: config.ServiceTypeApp, Enabled: true, Dir: "services/main", Generated: gen},
+			"variant": {Type: config.ServiceTypeApp, Enabled: true, Dir: "services/variant", Extends: "main", Generated: gen},
+		},
+	}
+	buf := &bytes.Buffer{}
+	if err := renderConfigsForRun(cfg, root, render.NewWriter(buf)); err != nil {
+		t.Fatalf("renderConfigsForRun: %v", err)
+	}
+	if got := mustReadFile(t, filepath.Join(root, "services", "variant", "src", ".env")); got != "APP_KEY=base64:variant==\n" {
+		t.Errorf("own-dir extends child should render its own hub; got %q", got)
+	}
+	if strings.Contains(buf.String(), "skipping config render") {
+		t.Errorf("own-dir extends child should not be skipped: %q", buf.String())
 	}
 }
 

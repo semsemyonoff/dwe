@@ -13,6 +13,7 @@ import (
 	"time"
 
 	"github.com/semsemyonoff/dwe/internal/cli/cmdctx"
+	"github.com/semsemyonoff/dwe/internal/core/bridge"
 	pipeline "github.com/semsemyonoff/dwe/internal/core/execution/pipeline"
 	"github.com/semsemyonoff/dwe/internal/core/execution/preflight"
 	"github.com/semsemyonoff/dwe/internal/core/notify"
@@ -277,6 +278,39 @@ type deployRunOpts struct {
 // exercising the full deploy pipeline.
 var runHelperFn = RunHelper
 
+// bridgePrepareFn is the seam for the bridge prepare hook (design D8/D6):
+// overlay regenerate-or-delete, shim materialization, daemon cycle. Tests
+// inject a recorder — the real hook probes docker and spawns a daemon via
+// os.Executable() (the documented test-recursion hazard).
+var bridgePrepareFn = bridge.Prepare
+
+// bridgeEnsureFn re-ensures the bridge daemon AFTER a successful deploy. The
+// prepare hook above CYCLES the daemon before the pipeline runs, but the
+// default pipeline executes the service-deploy phase (builds, dependency
+// installs — easily minutes) before `docker up` starts containers. The
+// daemon's auto-stop fires once its 10s startup grace elapses with zero
+// labeled containers running, so a slow setup can shut it down before the
+// stack comes up — leaving containers with the shim/overlay but no daemon for
+// hooks. Re-ensuring after the pipeline succeeds (containers now up) revives a
+// stopped daemon, and is a no-op when it survived. The cycle already SIGTERMed
+// any older-build daemon, so this never resurrects a stale one. Tests inject a
+// recorder — the real ensure spawns via os.Executable() (the test-recursion
+// hazard). See § Core — Bridge.
+var bridgeEnsureFn = bridge.Ensure
+
+// reEnsureBridgeDaemon re-ensures the bridge daemon after a successful deploy
+// when at least one enabled service is bridged. Best-effort: a daemon hiccup
+// warns but never fails the deploy — the next lifecycle command or
+// `dwe status` re-ensures regardless.
+func reEnsureBridgeDaemon(cfg *config.DweConfig, workDir string, w *sharedrender.Writer) {
+	if !bridge.AnyBridgeEnabled(cfg) {
+		return
+	}
+	if _, err := bridgeEnsureFn(bridge.EnsureConfig{ProjectRoot: workDir}); err != nil {
+		w.Warning(fmt.Sprintf("host bridge: re-ensuring daemon after deploy: %v", err))
+	}
+}
+
 // runDeployRun is the common implementation for `dwe deploy run` and menu dispatch.
 func runDeployRun(ctx context.Context, cmd *cobra.Command, flags *cmdctx.RootFlags, opts deployRunOpts) error {
 	var services []string
@@ -383,6 +417,25 @@ func RunHelper(ctx context.Context, cmd *cobra.Command, flags *cmdctx.RootFlags,
 		return err
 	}
 	defer releaseLocks()
+
+	// Bridge prepare hook (design D8/D6): regenerate the compose overlay,
+	// materialize shim binaries, and CYCLE the daemon — deploy must never
+	// leave a daemon from an older dwe build running, and the cycle REPLACES
+	// the plain ensure. Deliberately ahead of the up-to-date gate below: the
+	// documented remedy for an outdated shim or daemon is "re-run
+	// `dwe deploy`", which must refresh them even when the deploy pipeline
+	// itself turns out to be a no-op.
+	if err := bridgePrepareFn(bridge.PrepareOptions{
+		BaseDir:     workDir,
+		Cfg:         cfg,
+		DockerBin:   config.DockerBin(cfg),
+		CycleDaemon: true,
+		Logf: func(format string, args ...any) {
+			sharedrender.Stdout().Warning(fmt.Sprintf(format, args...))
+		},
+	}); err != nil {
+		return fmt.Errorf("preparing host bridge: %w", err)
+	}
 
 	dockerCfg, err := config.LoadDockerConfigOrEmpty(workDir, cfg)
 	if err != nil {
@@ -758,6 +811,12 @@ func RunHelper(ctx context.Context, cmd *cobra.Command, flags *cmdctx.RootFlags,
 	}
 
 	clearDeployedPending(statePath, opts, steps)
+
+	// Re-ensure the bridge daemon now that the deploy succeeded and containers
+	// are up: a slow service-deploy phase can outlast the daemon's auto-stop
+	// grace, leaving it dead after the prepare hook cycled it (see
+	// bridgeEnsureFn).
+	reEnsureBridgeDaemon(cfg, workDir, w)
 
 	if logEnabled {
 		w.Info("Deploy log saved to: " + logPath)

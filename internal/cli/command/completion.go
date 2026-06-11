@@ -32,11 +32,12 @@ func registryIDCompletion(flags *cmdctx.RootFlags, includePrivate bool) func(*co
 		// Best-effort visibility application: ApplyVisibility is fail-open
 		// (per-expression failures log via slog and treat the entry as
 		// visible) so this never short-circuits completions on a bad hide
-		// expression. cfg load errors fall through with no filter — the
-		// pre-PR behavior of always-show is preserved.
-		if cfg, cfgErr := config.LoadConfig(configPath); cfgErr == nil {
-			_ = reg.ApplyVisibility(cfg, projectRoot)
-		}
+		// expression. A cfg load error still applies the pass with nil cfg
+		// (tolerated, same as `commands list`): hide expressions fail open
+		// to visible, while the env-only bridge gate keeps filtering the
+		// container surface even on a broken project.
+		cfg, _ := config.LoadConfig(configPath)
+		_ = reg.ApplyVisibility(cfg, projectRoot)
 		var defs []*usercommands.CommandDef
 		if includePrivate {
 			// Inspect path: surface Hidden commands so users can tab-discover

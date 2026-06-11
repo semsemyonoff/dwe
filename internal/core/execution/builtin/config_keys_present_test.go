@@ -99,11 +99,11 @@ func TestConfigKeysPresentRun(t *testing.T) {
 }
 
 // TestConfigKeysPresentRun_endToEndFromLoadedConfig proves the documented
-// post-setup recipe actually works: a top-level value written to local.yml
-// (the wizard's legal write target) survives LoadConfig into cfg.Raw and
-// resolves through the builtin. Guards against the docs advertising a path the
-// config loader rejects — e.g. services.<name>.env.* is NOT a legal local.yml
-// overlay key, so it must NOT be the documented example.
+// post-setup recipe actually works: a value written to local.yml under the
+// vars: sandbox (the wizard's legal write target) survives LoadConfig into
+// cfg.Raw and resolves through the builtin. Guards against the docs advertising
+// a path the config loader rejects — e.g. services.<name>.env.* is NOT a legal
+// local.yml overlay key, so it must NOT be the documented example.
 func TestConfigKeysPresentRun_endToEndFromLoadedConfig(t *testing.T) {
 	t.Parallel()
 	dir := t.TempDir()
@@ -119,9 +119,10 @@ func TestConfigKeysPresentRun_endToEndFromLoadedConfig(t *testing.T) {
 		[]byte("type: app\ncontainer: app\nrequired: true\ndir: ./services/app\n"), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	// db.api_key is a legal top-level wizard/local.yml write target (see
-	// docs/reference/config/setup.md write-scope); app.log_level is present-but-empty.
-	localYML := "db:\n  api_key: secret123\napp:\n  log_level: \"\"\n"
+	// vars.db.api_key is a legal local.yml write target under the vars: sandbox
+	// (the strict root rejects arbitrary top-level keys — see
+	// docs/reference/config/workspace.md); vars.app.log_level is present-but-empty.
+	localYML := "vars:\n  db:\n    api_key: secret123\n  app:\n    log_level: \"\"\n"
 	if err := os.WriteFile(filepath.Join(dir, "workspace", "local.yml"), []byte(localYML), 0o644); err != nil {
 		t.Fatal(err)
 	}
@@ -134,14 +135,14 @@ func TestConfigKeysPresentRun_endToEndFromLoadedConfig(t *testing.T) {
 	b := ConfigKeysPresent{}
 	ctx := context.Background()
 
-	if err := b.Run(ctx, map[string]any{"keys": []any{"db.api_key"}}, ectx); err != nil {
-		t.Fatalf("db.api_key should resolve from loaded local.yml, got %v", err)
+	if err := b.Run(ctx, map[string]any{"keys": []any{"vars.db.api_key"}}, ectx); err != nil {
+		t.Fatalf("vars.db.api_key should resolve from loaded local.yml, got %v", err)
 	}
-	if err := b.Run(ctx, map[string]any{"keys": []any{"app.log_level"}}, ectx); err == nil || !strings.Contains(err.Error(), "app.log_level") {
-		t.Fatalf("empty app.log_level should be reported missing, got %v", err)
+	if err := b.Run(ctx, map[string]any{"keys": []any{"vars.app.log_level"}}, ectx); err == nil || !strings.Contains(err.Error(), "vars.app.log_level") {
+		t.Fatalf("empty vars.app.log_level should be reported missing, got %v", err)
 	}
-	if err := b.Run(ctx, map[string]any{"keys": []any{"db.missing"}}, ectx); err == nil || !strings.Contains(err.Error(), "db.missing") {
-		t.Fatalf("absent db.missing should be reported missing, got %v", err)
+	if err := b.Run(ctx, map[string]any{"keys": []any{"vars.db.missing"}}, ectx); err == nil || !strings.Contains(err.Error(), "vars.db.missing") {
+		t.Fatalf("absent vars.db.missing should be reported missing, got %v", err)
 	}
 }
 

@@ -1,4 +1,4 @@
-> Translated from: reference/config/validate.md @ 1709ddc5afc0
+> Translated from: reference/config/validate.md @ b6e11551b987
 
 # validate.yml
 
@@ -32,7 +32,7 @@
 
 `workspace/validate.yml` объявляет проверки готовности уровня проекта. CLI использует их из двух точек входа:
 
-- `dwe validate` — запускает каждую проверку (плюс YAML-shape валидаторы в доменах `config`, `templates` и `commands`, плюс environment-probe'ы в домене `env`) и выводит диагностику.
+- `dwe validate` — запускает каждую проверку (плюс YAML-shape валидаторы в доменах `config`, `templates`, `commands` и `bridge`, плюс environment-probe'ы в домене `env`) и выводит диагностику.
 - Хук preflight в `dwe deploy run`, `dwe run`, `dwe stop` и `dwe restart` — запускает подмножество проверок, связанных с соответствующей стадией, до любого побочного эффекта на Docker, git или файловую систему.
 
 Цель — заранее показать проблемы, которые пользователь может починить («вы не залогинены в ghcr.io», «DATABASE_URL пуст в `.env`», «VPN лёг») ДО того, как шаги деплоя упадут на середине с непонятными ошибками.
@@ -208,15 +208,15 @@ checks:
 
 Проверяет, что один или несколько точечных путей резолвятся в непустые значения в **смерженной конфигурации DWE** — слоях `workspace.yml` / `defaults.yml` / `local.yml` после слияния. Это конфиг-ориентированный аналог `env_keys_present`: вместо чтения `.env` с диска он читает смерженный конфиг в памяти, поэтому сразу видит оверлеи `local.yml` и не зависит от того, материализован ли уже отрендеренный `.env`.
 
-Адресация — тот же точечный путь, который setup-визард использует в поле `writes:`, так что проверяемый путь — ровно тот, в который визард записал — например `db.api_key` или `app.log_level`. Сочетайте с [`stages: [post-setup]`](#deploy-vs-post-setup-когда-в-потоке-деплоя-запускается-проверка), чтобы проверка запускалась после того, как визард заполнит `local.yml`.
+Адресация — тот же точечный путь, который setup-визард использует в поле `writes:`, так что проверяемый путь — ровно тот, в который визард записал — например `vars.db.api_key` или `vars.app.log_level`. Сочетайте с [`stages: [post-setup]`](#deploy-vs-post-setup-когда-в-потоке-деплоя-запускается-проверка), чтобы проверка запускалась после того, как визард заполнит `local.yml`.
 
 | Ключ | Тип | Обязательное | Описание |
 |-----|------|----------|-------------|
 | `keys` | list of strings | да | Точечные пути в смерженный конфиг; каждый должен резолвиться в непустое значение. |
 
-Путь считается «отсутствующим», когда он не резолвится, когда резолвится в `null` или когда рендерится в пустую строку. Нескалярные строки — числа, булевы — считаются присутствующими. Сообщение об ошибке: `missing or empty keys: db.api_key, app.log_level`.
+Путь считается «отсутствующим», когда он не резолвится, когда резолвится в `null` или когда рендерится в пустую строку. Нескалярные строки — числа, булевы — считаются присутствующими. Сообщение об ошибке: `missing or empty keys: vars.db.api_key, vars.app.log_level`.
 
-**Какие пути достижимы.** Проверяйте те же пути, которые может писать визард — см. [scope `writes:` в setup](setup.md#write-scope-rules). Кастомные top-level неймспейсы (`db.*`, `app.*`, `user.*`, …) переживают слияние в конфиг и резолвятся здесь. Под `services.<name>` в `local.yml` допускаются **только** `enabled`, `ports.<name>` и `hosts.<name>` — и визард, и загрузчик конфига отвергают всё остальное, поэтому посервисный **секрет** не может жить по пути `services.<name>.env.*` в `local.yml`. Держите посервисные секреты в отрендеренном `.env` сервиса и проверяйте их через `env_keys_present`; `config_keys_present` — для top-level значений, которые пишет визард.
+**Какие пути достижимы.** Проверяйте те же пути, которые может писать визард — см. [scope `writes:` в setup](setup.md#write-scope-rules). Кастомные значения живут в [песочнице `vars:`](workspace.md#строгий-корень--песочница-vars) (`vars.db.*`, `vars.app.*`, …) — корень смерженного конфига строгий, поэтому свободные ключи должны быть вложены под `vars:`, чтобы пережить слияние и резолвиться здесь. Под `services.<name>` в `local.yml` допускаются **только** `enabled`, `ports.<name>` и `hosts.<name>` — и визард, и загрузчик конфига отвергают всё остальное, поэтому посервисный **секрет** не может жить по пути `services.<name>.env.*` в `local.yml`. Держите посервисные секреты в отрендеренном `.env` сервиса и проверяйте их через `env_keys_present`; `config_keys_present` — для top-level значений, которые пишет визард.
 
 ### `tcp_reachable`
 
@@ -328,19 +328,19 @@ checks:
 
 ```yaml
   - id: db-api-key-set
-    description: db.api_key must be set before deploy
+    description: vars.db.api_key must be set before deploy
     stages: [post-setup]             # только финальный preflight — после setup-визарда
     severity: error
     hint: |
       Run `dwe deploy` and complete the wizard, or set
-      db.api_key in workspace/local.yml.
+      vars.db.api_key in workspace/local.yml.
     type: builtin
     cmd: config_keys_present
     with:
-      keys: [db.api_key]
+      keys: [vars.db.api_key]
 ```
 
-Setup-визард пишет `db.api_key` в `local.yml` (top-level путь — `services.<name>.env.*` НЕ является легальной целью визарда/`local.yml`, см. заметку о достижимости выше); эта проверка утверждает, что тот же точечный путь задан. Поскольку она `post-setup`, на раннем pre-wizard gate она пропускается (чтобы визард был достижим) и запускается на финальном preflight — ловя незаданное значение до старта деплоя, включая `dwe deploy run`, где визарда нет.
+Setup-визард пишет `vars.db.api_key` в `local.yml` (путь под [песочницей `vars:`](workspace.md#строгий-корень--песочница-vars) — `services.<name>.env.*` НЕ является легальной целью визарда/`local.yml`, см. заметку о достижимости выше); эта проверка утверждает, что тот же точечный путь задан. Поскольку она `post-setup`, на раннем pre-wizard gate она пропускается (чтобы визард был достижим) и запускается на финальном preflight — ловя незаданное значение до старта деплоя, включая `dwe deploy run`, где визарда нет.
 
 **6. Корпоративный VPN доступен (tcp_reachable):**
 
@@ -398,7 +398,8 @@ commands:
 
 ## CLI-флаги
 
-- `dwe validate` — запускает `config.*`, `templates.*`, `commands.*`, `env.*` и все `checks.*`. Опциональный позиционный scope сужает запуск (например, `dwe validate env`, `dwe validate checks ghcr-login`).
+- `dwe validate` — запускает `config.*`, `templates.*`, `commands.*`, `bridge.*`, `env.*` и все `checks.*`. Опциональный позиционный scope сужает запуск (например, `dwe validate env`, `dwe validate checks ghcr-login`, `dwe validate bridge`).
+- `dwe validate bridge` — статические проверки только per-service блоков `bridge:`: enum `on_unreachable` (`fail` / `warn`), абсолютность `shim_path` и маппинг `dir` / `dir_internal` сервиса с включённым мостом, поверх которого работает shim. Только для validate — домен bridge не участвует в preflight.
 - `dwe validate --stage <name>` — локальный флаг команды `validate`. Фильтрует `checks.*` по стадии. `env.*` и другие домены не затрагиваются (у них нет стадий).
 - `dwe validate --strict` — трактовать предупреждения как ошибки (exit 1).
 - `dwe validate --quiet` — скрыть строки ok / info.

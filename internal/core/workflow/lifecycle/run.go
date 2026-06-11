@@ -12,6 +12,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/semsemyonoff/dwe/internal/core/bridge"
 	"github.com/semsemyonoff/dwe/internal/core/execution/preflight"
 	configpack "github.com/semsemyonoff/dwe/internal/core/execution/templates/config"
 	"github.com/semsemyonoff/dwe/internal/core/notify"
@@ -74,12 +75,18 @@ type RunContext struct {
 	// (either run or stop) and was substituted with a built-in default. CLI
 	// uses this to emit the info line on stderr.
 	OnDefaultUsed func(DefaultedPipeline)
+	// BridgeDaemonCycle makes the bridge prepare hook CYCLE the daemon
+	// (SIGTERM → ensure) instead of plain ensure. Set by RunRestart on its
+	// inner RunRun call: a restarted stack must never keep a daemon from an
+	// older dwe build (design D6). The cycle REPLACES ensure — never both.
+	BridgeDaemonCycle bool
 }
 
-// resolveUpdateMode applies CLI flag precedence on top of the lifecycle config's effective mode.
-// Precedence: NoUpdate > UpdateMode flag > LifecycleRunConfig.EffectiveMode()
-func resolveUpdateMode(cfg *config.LifecycleRunConfig, noUpdate bool, updateFlag string) string {
-	mode := cfg.EffectiveMode()
+// resolveUpdateMode applies CLI flag precedence on top of the top-level update
+// block's effective mode.
+// Precedence: NoUpdate > UpdateMode flag > UpdateConfig.EffectiveMode()
+func resolveUpdateMode(update *config.UpdateConfig, noUpdate bool, updateFlag string) string {
+	mode := update.EffectiveMode()
 	if updateFlag != "" {
 		mode = updateFlag
 	}
@@ -196,7 +203,7 @@ func RunRun(ctx RunContext) (err error) {
 		defaultNotified = true
 	}
 
-	effectiveMode := resolveUpdateMode(runCfg, ctx.NoUpdate, ctx.UpdateMode)
+	effectiveMode := resolveUpdateMode(cfg.Update, ctx.NoUpdate, ctx.UpdateMode)
 
 	w := render.Stdout()
 	var pulled bool
@@ -209,13 +216,6 @@ func RunRun(ctx RunContext) (err error) {
 		switch action {
 		case git.ActionWarn:
 			w.Warning(msg)
-		case git.ActionPullAuto:
-			moved, pullErr := GitPullFFOnlyFunc(config.GitBin(cfg), workDir)
-			if pullErr != nil {
-				w.Warning(fmt.Sprintf("git pull --ff-only failed: %v", pullErr))
-			} else {
-				pulled = moved
-			}
 		case git.ActionPullPrompt:
 			confirmed, confirmErr := widgets.RunConfirm(
 				fmt.Sprintf("Update available: %s — pull now?", msg),
@@ -300,6 +300,24 @@ func RunRun(ctx RunContext) (err error) {
 		return err
 	}
 
+	// Bridge prepare hook (design D8/D6): regenerate the compose overlay (or
+	// delete it when nothing is bridged), materialize shim binaries, and
+	// ensure (or cycle) the host-bridge daemon. Placed AFTER the deployment
+	// gate and post-pull reload (the overlay must reflect the freshest
+	// config) and BEFORE the phases — composeFiles stats the overlay at call
+	// time, so the docker-up step sees exactly what this call produced.
+	if err := BridgePrepareFunc(bridge.PrepareOptions{
+		BaseDir:     workDir,
+		Cfg:         cfg,
+		DockerBin:   config.DockerBin(cfg),
+		CycleDaemon: ctx.BridgeDaemonCycle,
+		Logf: func(format string, args ...any) {
+			w.Warning(fmt.Sprintf(format, args...))
+		},
+	}); err != nil {
+		return fmt.Errorf("preparing host bridge: %w", err)
+	}
+
 	if err := RunPhases(cfg, reg, workDir, runCfg.Phases, "run", "run", ctx.Yes, runCfg.LogEnabled(), ctx.Translator, ctx.Locale); err != nil {
 		return err
 	}
@@ -340,6 +358,11 @@ func RunRestart(ctx RunContext) error {
 	// operation, not a user-invoked run. Spec: restart fires zero
 	// notifications.
 	ctx.SkipNotify = true
+	// Whole-stack restart cycles the bridge daemon (design D6). The stop leg
+	// above already SIGTERMed it; the cycle in the run leg's prepare hook
+	// tolerates an already-dead daemon and closes the race where a plain
+	// ensure probes the pidfile while the old daemon is still exiting.
+	ctx.BridgeDaemonCycle = true
 	if err := RunRun(ctx); err != nil {
 		return err
 	}
@@ -385,6 +408,14 @@ func renderAndSourceDotEnv(cfg *config.DweConfig, workDir string) error {
 //
 // A service with no config pack is skipped silently (config rendering is
 // opt-in). The first hard render error aborts the run.
+//
+// An extends child that shares its parent's hub dir is also skipped silently:
+// its config render is a byte-identical alias of the parent's (same resolved
+// pack + hub), and its ${generated.*} values live under the PARENT's store key
+// (it has no own deploy.yml, hence no own generate/harvest). The parent renders
+// the shared hub; the child must not be rendered separately — see
+// config.SharesExtendsParentHub. This mirrors deploy, which never schedules a
+// render for such a child at all.
 func renderConfigsForRun(cfg *config.DweConfig, workDir string, w *render.Writer) error {
 	storePath := filepath.Join(workDir, generatedstore.DefaultRelPath)
 	store, err := generatedstore.Load(storePath)
@@ -396,7 +427,15 @@ func renderConfigsForRun(cfg *config.DweConfig, workDir string, w *render.Writer
 	// generated (see allowedFieldsFor). Iterating tool/infra here would resolve
 	// the implicit `default` pack for a service with no hub dir and error.
 	for _, name := range config.DeployOrder(cfg, []string{"app"}) {
-		if missing := missingGeneratedKeys(cfg.Services[name], store, name); len(missing) > 0 {
+		svc := cfg.Services[name]
+		// An extends child sharing the parent's hub is a config-render alias of
+		// the parent (parent owns the hub and the harvested generated values).
+		// Rendering it again is redundant and would falsely trip the
+		// missing-generated-key guard below (its keys are under the parent name).
+		if config.SharesExtendsParentHub(svc, cfg.Services) {
+			continue
+		}
+		if missing := missingGeneratedKeys(svc, store, name); len(missing) > 0 {
 			w.Warning(fmt.Sprintf(
 				"skipping config render for %q: generated value(s) %s missing from store — run `dwe deploy run` to mint them",
 				name, strings.Join(missing, ", ")))

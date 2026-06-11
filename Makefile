@@ -11,10 +11,21 @@ LDFLAGS  := -X $(MODULE)/internal/shared/version.Version=$(VERSION) \
             -X $(MODULE)/internal/shared/version.BuiltBy=make
 
 .PHONY: build test test-v test-race clean tidy lint embedded-docs gen-docs-manifest \
-        completions release-check snapshot release
+        shims completions release-check snapshot release
 
 embedded-docs:
 	@./scripts/sync-embedded-docs.sh
+
+# Cross-compile the bridge shim (cmd/dwe-shim, linux amd64+arm64) into the
+# gitignored internal/core/bridge/shimassets/bin/ embed tree. A prerequisite
+# of build and EVERY test target: it adds two cross-compiles per run (cached
+# by the go build cache — unchanged rebuilds are near-instant), and it is
+# load-bearing for module compilation/testing — the committed bin/.gitkeep
+# only keeps the `//go:embed all:bin` pattern matching on a fresh checkout;
+# without this target the embedded tree holds no real shim payloads, so the
+# built dwe could not materialize shims into .dwe/bridge.
+shims:
+	@./scripts/build-shims.sh
 
 gen-docs-manifest:
 	@./scripts/gen-docs-content-hashes.sh
@@ -22,7 +33,7 @@ gen-docs-manifest:
 completions: embedded-docs gen-docs-manifest
 	@./scripts/gen-completions.sh
 
-build: tidy embedded-docs gen-docs-manifest
+build: tidy embedded-docs gen-docs-manifest shims
 	@mkdir -p $(BIN_DIR)
 	go build -ldflags "$(LDFLAGS)" -o $(BIN_DIR)/$(BINARY_NAME) ./cmd/dwe
 	@echo "Built: $(BIN_DIR)/$(BINARY_NAME)"
@@ -48,13 +59,13 @@ snapshot:
 release:
 	@$(GORELEASER) release --clean
 
-test: embedded-docs
+test: embedded-docs shims
 	go test ./...
 
-test-v: embedded-docs
+test-v: embedded-docs shims
 	go test -v ./...
 
-test-race: embedded-docs
+test-race: embedded-docs shims
 	go test -race ./internal/core/workflow/deploy/journal ./internal/shared/lock ./internal/core/execution/pipeline
 
 lint:

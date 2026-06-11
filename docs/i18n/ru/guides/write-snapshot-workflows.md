@@ -1,4 +1,4 @@
-> Translated from: guides/write-snapshot-workflows.md @ a5a1f22c2cb2
+> Translated from: guides/write-snapshot-workflows.md @ 1b87b72a80f8
 
 # Написание снапшот-воркфлоу
 
@@ -174,7 +174,7 @@ local_yml:
   preserve_keys:
     - services.main.ports
     - services.db.ports
-    - host.shell
+    - vars.host.shell
 ```
 
 - Dot-пути указывают на вложенные ключи маппингов. Сегменты с индексами массива (`services[0].ports`) не поддерживаются.

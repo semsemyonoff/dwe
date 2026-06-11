@@ -14,14 +14,6 @@ func TestDefaultRunConfig_Shape(t *testing.T) {
 		t.Fatal("DefaultRunConfig() returned nil")
 	}
 
-	// update.mode: off
-	if cfg.Update == nil {
-		t.Fatal("Update must be non-nil")
-	}
-	if cfg.Update.Mode != "off" {
-		t.Errorf("Update.Mode = %q, want %q", cfg.Update.Mode, "off")
-	}
-
 	// show_info: true
 	if !cfg.ShowInfo {
 		t.Error("ShowInfo must be true")

@@ -102,8 +102,8 @@ commands:
         required: true
         pattern: ^[a-zA-Z0-9_-]+$
     env:
-      MYSQL_PWD: "${db.password}"
-    cmd: "mariadb -u${db.user} -e 'CREATE DATABASE IF NOT EXISTS `${param.database}`;'"
+      MYSQL_PWD: "${vars.db.password}"
+    cmd: "mariadb -u${vars.db.user} -e 'CREATE DATABASE IF NOT EXISTS `${param.database}`;'"
 ```
 
 Key fields:
@@ -136,7 +136,7 @@ commands:
       - command: db.start
       - command: db.create
         with:
-          database: "${db.database}"
+          database: "${vars.db.database}"
       - command: composer-install
       - command: migrate
       - command: db.seed.run
@@ -183,12 +183,12 @@ commands:
         description: Database name to create
         required: true
         default: "app"              # literal fallback
-        default_from: db.database   # dot-path into merged config (preferred)
+        default_from: vars.db.database   # dot-path into merged config (preferred)
         env: DB_NAME                # exposes the resolved value as $DB_NAME
         pattern: ^[a-zA-Z0-9_-]+$   # anchored regex (string/path only)
     env:
-      MYSQL_PWD: "${db.password}"
-    cmd: "mariadb -u${db.user} -e 'CREATE DATABASE `${param.database}`;'"
+      MYSQL_PWD: "${vars.db.password}"
+    cmd: "mariadb -u${vars.db.user} -e 'CREATE DATABASE `${param.database}`;'"
 ```
 
 Resolution order, top to bottom:
@@ -219,10 +219,10 @@ commands:
     params:
       database:
         required: true
-        default_from: db.database
+        default_from: vars.db.database
     env:
-      MYSQL_PWD: "${db.password}"
-    cmd: "mariadb -u${db.user} -e 'DROP DATABASE IF EXISTS `${param.database}`;'"
+      MYSQL_PWD: "${vars.db.password}"
+    cmd: "mariadb -u${vars.db.user} -e 'DROP DATABASE IF EXISTS `${param.database}`;'"
 ```
 
 `confirmation_text:` supports `${...}` templating so you can echo back the values the user is about to act on. The prompt is bypassed in three cases:
