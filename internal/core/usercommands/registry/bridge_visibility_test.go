@@ -4,6 +4,7 @@ import (
 	"os"
 	"testing"
 
+	"github.com/semsemyonoff/dwe/internal/core/project/config"
 	"github.com/semsemyonoff/dwe/internal/shared/bridgeclient"
 )
 
@@ -153,6 +154,110 @@ func TestApplyBridgeVisibility_ReapplyOnHostResets(t *testing.T) {
 		"cs.all":         false,
 		"plain.unmarked": false,
 	})
+}
+
+// extendsChainCfg declares main ← admin ← reports (each extends the previous)
+// plus an unrelated standalone service.
+func extendsChainCfg() *config.DweConfig {
+	return &config.DweConfig{
+		Services: map[string]config.ServiceConfig{
+			"main":       {Type: "app"},
+			"admin":      {Type: "app", Extends: "main"},
+			"reports":    {Type: "app", Extends: "admin"},
+			"standalone": {Type: "app"},
+		},
+	}
+}
+
+func TestApplyBridgeVisibility_ExtendsChildInheritsParentRights(t *testing.T) {
+	containerEnv(t, "admin")
+	reg := bridgeTestRegistry(t)
+	if err := reg.ApplyVisibility(extendsChainCfg(), ""); err != nil {
+		t.Fatalf("ApplyVisibility: %v", err)
+	}
+	assertBridgeHidden(t, reg, map[string]bool{
+		"cs.all":        false, // restricted to main; admin extends main
+		"cs.host-only":  true,  // explicit false still wins
+		"cs.admin-only": false, // direct match unaffected
+	})
+}
+
+func TestApplyBridgeVisibility_ExtendsTransitiveGrandchild(t *testing.T) {
+	containerEnv(t, "reports")
+	reg := bridgeTestRegistry(t)
+	if err := reg.ApplyVisibility(extendsChainCfg(), ""); err != nil {
+		t.Fatalf("ApplyVisibility: %v", err)
+	}
+	assertBridgeHidden(t, reg, map[string]bool{
+		"cs.all":        false, // reports → admin → main
+		"cs.admin-only": false, // admin is on the chain too
+	})
+}
+
+func TestApplyBridgeVisibility_ExtendsUnrelatedServiceStillRejected(t *testing.T) {
+	containerEnv(t, "standalone")
+	reg := bridgeTestRegistry(t)
+	if err := reg.ApplyVisibility(extendsChainCfg(), ""); err != nil {
+		t.Fatalf("ApplyVisibility: %v", err)
+	}
+	assertBridgeHidden(t, reg, map[string]bool{
+		"cs.all":       true,  // no extends path to main
+		"plain.marked": false, // unrestricted untouched
+	})
+}
+
+func TestApplyBridgeVisibility_ExtendsParentNotAdmittedForChildList(t *testing.T) {
+	containerEnv(t, "main") // parent calling a command scoped to its child
+	reg := bridgeTestRegistry(t)
+	if err := reg.ApplyVisibility(extendsChainCfg(), ""); err != nil {
+		t.Fatalf("ApplyVisibility: %v", err)
+	}
+	assertBridgeHidden(t, reg, map[string]bool{
+		"cs.admin-only": true, // rights flow child←parent, never parent←child
+	})
+}
+
+func TestCallerExtendsChain(t *testing.T) {
+	cfg := extendsChainCfg()
+	tests := []struct {
+		name   string
+		cfg    *config.DweConfig
+		caller string
+		want   []string
+	}{
+		{"nil cfg degrades to exact match", nil, "admin", []string{"admin"}},
+		{"empty caller", cfg, "", []string{""}},
+		{"no extends", cfg, "main", []string{"main"}},
+		{"single hop", cfg, "admin", []string{"admin", "main"}},
+		{"two hops", cfg, "reports", []string{"reports", "admin", "main"}},
+		{"unknown caller", cfg, "ghost", []string{"ghost"}},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := callerExtendsChain(tt.cfg, tt.caller)
+			if len(got) != len(tt.want) {
+				t.Fatalf("chain = %v, want %v", got, tt.want)
+			}
+			for i := range got {
+				if got[i] != tt.want[i] {
+					t.Fatalf("chain = %v, want %v", got, tt.want)
+				}
+			}
+		})
+	}
+}
+
+func TestCallerExtendsChain_CycleSafe(t *testing.T) {
+	cfg := &config.DweConfig{
+		Services: map[string]config.ServiceConfig{
+			"a": {Type: "app", Extends: "b"},
+			"b": {Type: "app", Extends: "a"},
+		},
+	}
+	got := callerExtendsChain(cfg, "a")
+	if len(got) != 2 || got[0] != "a" || got[1] != "b" {
+		t.Fatalf("cycle chain = %v, want [a b]", got)
+	}
 }
 
 func TestApplyBridgeVisibility_DaemonSyntheticsInherit(t *testing.T) {

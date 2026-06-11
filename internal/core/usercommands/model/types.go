@@ -357,13 +357,27 @@ func MergeBridge(parent, child *BridgeDef) *BridgeDef {
 // or empty caller identity (safe degradation for overlays predating
 // DWE_BRIDGE_SERVICE).
 func (b *BridgeDef) AllowedFrom(callingService string) bool {
+	return b.AllowedFromChain([]string{callingService})
+}
+
+// AllowedFromChain is AllowedFrom over the caller's identity chain: the
+// calling service itself followed by its service-level `extends:` ancestors.
+// A service that extends another inherits the parent's command rights, so
+// listing the parent in bridge.services admits every (transitive) child.
+// The reverse does not hold — listing a child never admits its parent.
+func (b *BridgeDef) AllowedFromChain(chain []string) bool {
 	if b == nil || b.Enabled == nil || !*b.Enabled {
 		return false
 	}
 	if len(b.Services) == 0 {
 		return true
 	}
-	return slices.Contains(b.Services, callingService)
+	for _, caller := range chain {
+		if slices.Contains(b.Services, caller) {
+			return true
+		}
+	}
+	return false
 }
 
 // ParamWidget identifies the form widget type for prompting a parameter.

@@ -61,7 +61,7 @@ func (r *Registry) ApplyVisibility(cfg *config.DweConfig, projectRoot string) er
 	// listing/completion/inspect/direct invocation but NOT executability
 	// (workflow steps keep running non-bridged sub-commands host-side), so
 	// it gets its own resolved field instead of folding into Hidden.
-	r.applyBridgeVisibility()
+	r.applyBridgeVisibility(cfg)
 
 	for _, cmd := range r.byID {
 		parent, ok := r.groups[cmd.Group]
@@ -127,20 +127,45 @@ func (r *Registry) applyGroupVisibility(node *GroupNode, parentHidden bool, rctx
 // the pass stays idempotent); inside one, a command is visible only when the
 // field-wise merge of its own `bridge:` block over the nearest ancestor
 // group's effective block admits the calling service (opt-in default — no
-// block anywhere means host-only). Pure data, no expressions: unlike Hide
-// there is no failure mode and no fail-open path to worry about.
-func (r *Registry) applyBridgeVisibility() {
+// block anywhere means host-only). The caller is matched through its
+// service-level `extends:` chain: a child service inherits the parent's
+// command rights. Pure data, no expressions: unlike Hide there is no
+// failure mode and no fail-open path to worry about.
+func (r *Registry) applyBridgeVisibility(cfg *config.DweConfig) {
 	if !bridgeclient.InContainer() {
 		for _, cmd := range r.byID {
 			cmd.BridgeHidden = false
 		}
 		return
 	}
-	caller := bridgeclient.CallingService()
+	chain := callerExtendsChain(cfg, bridgeclient.CallingService())
 	eff := make(map[string]*model.BridgeDef, len(r.groups))
 	collectEffectiveBridge(r.root, nil, eff)
 	for _, cmd := range r.byID {
-		cmd.BridgeHidden = !model.MergeBridge(eff[cmd.Group], cmd.Bridge).AllowedFrom(caller)
+		cmd.BridgeHidden = !model.MergeBridge(eff[cmd.Group], cmd.Bridge).AllowedFromChain(chain)
+	}
+}
+
+// callerExtendsChain returns the caller's identity chain for bridge.services
+// matching: the calling service itself, then its `extends:` ancestors in
+// order. nil cfg (broken config on completion paths) or a caller absent from
+// the services map degrades to exact-name matching — fail closed for scoped
+// commands rather than guessing. The visited set caps malformed extends
+// cycles (the loader rejects them, but visibility must never spin).
+func callerExtendsChain(cfg *config.DweConfig, caller string) []string {
+	chain := []string{caller}
+	if cfg == nil || caller == "" {
+		return chain
+	}
+	visited := map[string]bool{caller: true}
+	for cur := caller; ; {
+		svc, ok := cfg.Services[cur]
+		if !ok || svc.Extends == "" || visited[svc.Extends] {
+			return chain
+		}
+		cur = svc.Extends
+		visited[cur] = true
+		chain = append(chain, cur)
 	}
 }
 

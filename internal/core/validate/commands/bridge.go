@@ -47,7 +47,7 @@ func bridgeDiagnostics(target, label, relFile string, b *model.BridgeDef, cfg *c
 			})
 			continue
 		}
-		if !svc.BridgeEnabled() {
+		if !svc.BridgeEnabled() && !hasBridgeEnabledDescendant(cfg, name) {
 			diags = append(diags, validate.Diagnostic{
 				Severity: validate.SeverityWarning,
 				Domain:   "commands",
@@ -59,4 +59,29 @@ func bridgeDiagnostics(target, label, relFile string, b *model.BridgeDef, cfg *c
 		}
 	}
 	return diags
+}
+
+// hasBridgeEnabledDescendant reports whether any bridge-enabled service
+// extends (transitively) the named one. Listing a bridge-disabled parent in
+// bridge.services is still effective — its children inherit the parent's
+// command rights through the extends chain — so it must not warn.
+func hasBridgeEnabledDescendant(cfg *config.DweConfig, parent string) bool {
+	for childName, child := range cfg.Services {
+		if childName == parent || !child.BridgeEnabled() {
+			continue
+		}
+		visited := map[string]bool{childName: true}
+		for cur := child.Extends; cur != "" && !visited[cur]; {
+			if cur == parent {
+				return true
+			}
+			visited[cur] = true
+			next, ok := cfg.Services[cur]
+			if !ok {
+				break
+			}
+			cur = next.Extends
+		}
+	}
+	return false
 }

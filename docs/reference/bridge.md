@@ -119,7 +119,7 @@ commands:
       services: [main]     # …or only from these (workspace service keys)
 ```
 
-`bridge.services` matches against the calling container's identity, which the overlay injects as `DWE_BRIDGE_SERVICE=<service key>` and the shim forwards. The identity is container-reported and therefore **advisory** — a UX boundary that keeps, say, php commands out of an nginx container's listing, not a security boundary; the security boundary remains the top-level allowlist above plus the daemon's env hardening. Workflow execution is never gated: a bridged workflow runs its non-bridged sub-commands host-side as usual.
+`bridge.services` matches against the calling container's identity, which the overlay injects as `DWE_BRIDGE_SERVICE=<service key>` and the shim forwards. The identity is container-reported and therefore **advisory** — a UX boundary that keeps, say, php commands out of an nginx container's listing, not a security boundary; the security boundary remains the top-level allowlist above plus the daemon's env hardening. Matching is `extends:`-aware: a service that [extends](config/services/extends.md) another inherits the parent's command rights, so `services: [main]` also admits containers of services extending `main` (never the reverse). Workflow execution is never gated: a bridged workflow runs its non-bridged sub-commands host-side as usual.
 
 Mechanics worth knowing:
 

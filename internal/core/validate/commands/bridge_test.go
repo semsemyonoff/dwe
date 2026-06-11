@@ -62,6 +62,53 @@ func TestBridgeDiagnostics_BridgeDisabledService_Warning(t *testing.T) {
 	}
 }
 
+// TestBridgeDiagnostics_DisabledParentWithEnabledChild_Silent: listing a
+// bridge-disabled parent stays effective when a bridge-enabled child extends
+// it (the child inherits the parent's command rights), so no warning.
+func TestBridgeDiagnostics_DisabledParentWithEnabledChild_Silent(t *testing.T) {
+	on := true
+	cfg := &config.DweConfig{
+		Services: map[string]config.ServiceConfig{
+			"base":  {Type: "app"}, // bridge off — the default
+			"admin": {Type: "app", Extends: "base", Bridge: config.ServiceBridgeConfig{Enabled: &on}},
+		},
+	}
+	b := &model.BridgeDef{Enabled: &on, Services: []string{"base"}}
+	if got := bridgeDiagnostics("commands:x", "x", "f.yml", b, cfg); len(got) != 0 {
+		t.Errorf("disabled parent with bridge-enabled child must be silent; got %+v", got)
+	}
+}
+
+func TestBridgeDiagnostics_DisabledParentTransitiveChild_Silent(t *testing.T) {
+	on := true
+	cfg := &config.DweConfig{
+		Services: map[string]config.ServiceConfig{
+			"base":    {Type: "app"},
+			"mid":     {Type: "app", Extends: "base"},
+			"reports": {Type: "app", Extends: "mid", Bridge: config.ServiceBridgeConfig{Enabled: &on}},
+		},
+	}
+	b := &model.BridgeDef{Enabled: &on, Services: []string{"base"}}
+	if got := bridgeDiagnostics("commands:x", "x", "f.yml", b, cfg); len(got) != 0 {
+		t.Errorf("transitive bridge-enabled grandchild must silence the warning; got %+v", got)
+	}
+}
+
+func TestBridgeDiagnostics_DisabledParentDisabledChildren_StillWarns(t *testing.T) {
+	on := true
+	cfg := &config.DweConfig{
+		Services: map[string]config.ServiceConfig{
+			"base":  {Type: "app"},
+			"admin": {Type: "app", Extends: "base"}, // bridge off too
+		},
+	}
+	b := &model.BridgeDef{Enabled: &on, Services: []string{"base"}}
+	diags := bridgeDiagnostics("commands:x", "x", "f.yml", b, cfg)
+	if len(diags) != 1 || !strings.Contains(diags[0].Message, "bridge disabled") {
+		t.Fatalf("expected the disabled warning to survive, got %+v", diags)
+	}
+}
+
 func TestBridgeDiagnostics_EmptyServicesList_Warning(t *testing.T) {
 	on := true
 	b := &model.BridgeDef{Enabled: &on, Services: []string{}}

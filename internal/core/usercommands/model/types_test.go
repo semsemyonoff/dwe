@@ -534,6 +534,33 @@ func TestBridgeDef_AllowedFrom(t *testing.T) {
 	}
 }
 
+func TestBridgeDef_AllowedFromChain(t *testing.T) {
+	on, off := true, false
+	scoped := &BridgeDef{Enabled: &on, Services: []string{"main"}}
+	tests := []struct {
+		name    string
+		def     *BridgeDef
+		chain   []string
+		allowed bool
+	}{
+		{"nil def", nil, []string{"main"}, false},
+		{"disabled ignores chain", &BridgeDef{Enabled: &off}, []string{"main"}, false},
+		{"caller itself matches", scoped, []string{"main"}, true},
+		{"ancestor matches", scoped, []string{"admin", "main"}, true},
+		{"grandparent matches", scoped, []string{"queue", "admin", "main"}, true},
+		{"no chain member matches", scoped, []string{"admin", "other"}, false},
+		{"child listed, parent calling", scoped, []string{"base"}, false},
+		{"empty services admits any chain", &BridgeDef{Enabled: &on}, []string{"x", "y"}, true},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := tt.def.AllowedFromChain(tt.chain); got != tt.allowed {
+				t.Errorf("AllowedFromChain(%v) = %v, want %v", tt.chain, got, tt.allowed)
+			}
+		})
+	}
+}
+
 func TestParseCommandFile_PrivateCommand(t *testing.T) {
 	yaml := `
 commands:
