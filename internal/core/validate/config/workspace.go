@@ -8,6 +8,7 @@ import (
 	"os"
 	"path/filepath"
 	"slices"
+	"strings"
 	"unicode"
 
 	"gopkg.in/yaml.v3"
@@ -82,6 +83,22 @@ func (v *workspaceValidator) Run(ctx validate.Context) []validate.Diagnostic {
 				File:     relPath(ctx.ProjectRoot, configPath),
 				Message:  fmt.Sprintf("docs.cache_size_mb: %d is invalid; must be non-negative", cfg.Docs.CacheSizeMB),
 			})
+		}
+
+		// Validate bridge.vars_writable entries are vars.* patterns. The
+		// container-write gate fails closed on a malformed entry (it matches
+		// nothing), so a stray pattern silently denies rather than load-fails —
+		// surface it as a diagnostic so the author notices a typo.
+		for _, pat := range config.BridgeVarsWritable(cfg) {
+			if !strings.HasPrefix(pat, "vars.") || pat == "vars." {
+				diags = append(diags, validate.Diagnostic{
+					Severity: validate.SeverityError,
+					Domain:   "config",
+					Target:   "config.workspace.bridge.vars_writable",
+					File:     relPath(ctx.ProjectRoot, configPath),
+					Message:  fmt.Sprintf("bridge.vars_writable: %q is invalid; must be a vars.* path (e.g. vars.db.host) or wildcard (vars.db.*)", pat),
+				})
+			}
 		}
 	}
 

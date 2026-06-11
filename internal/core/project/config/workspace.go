@@ -46,6 +46,7 @@ var allowedRootKeys = []string{
 	"services",
 	"vars",
 	"update",
+	"bridge",
 }
 
 // allowedRootKeySet is the membership index over allowedRootKeys.
@@ -112,6 +113,16 @@ type DweConfig struct {
 	// block with an empty mode (→ on). See UpdateConfig.EffectiveMode.
 	Update *UpdateConfig `yaml:"update"`
 
+	// Bridge is the project-wide container-write policy for `dwe vars set`. It
+	// is the deny-by-default allowlist of vars.* paths a containerized caller
+	// (bridge-forked dwe) may mutate; nil/empty means no container writes. It
+	// participates in the 3-layer merge (the list is last-layer-wins, so a
+	// developer may widen/narrow it in local.yml). Distinct in scope from the
+	// per-service services.<name>.bridge: block in service.yml (which gates
+	// per-command container reachability) — this top-level block is policy, not
+	// enablement. See BridgeConfig.
+	Bridge *BridgeConfig `yaml:"bridge"`
+
 	// Vars is the single legal home for arbitrary, free-form project values.
 	// The root of the merged config is strict (see allowedRootKeys), but the
 	// contents of vars: are unvalidated and may nest arbitrarily. References
@@ -152,6 +163,66 @@ func (c *UpdateConfig) EffectiveMode() string {
 		return "on"
 	}
 	return c.Mode
+}
+
+// BridgeConfig is the formalized top-level container-write policy block
+// (`bridge:`). VarsWritable is the deny-by-default allowlist of vars.* path
+// patterns that a containerized `dwe vars set` may mutate on the host. From the
+// host the command is unrestricted; this gate applies only when invoked from
+// inside a container (the bridge daemon force-sets the marker env). Each pattern
+// is either an exact path (`vars.db.host`) or a dot-boundary wildcard
+// (`vars.db.*`). An empty/absent list means no container writes.
+type BridgeConfig struct {
+	VarsWritable []string `yaml:"vars_writable"`
+}
+
+// BridgeVarsWritable returns the configured container-write allowlist, or nil
+// when no bridge: block (or no vars_writable: list) is present. Safe when cfg is
+// nil. An empty/nil result means no var is container-writable (the safe
+// default).
+func BridgeVarsWritable(cfg *DweConfig) []string {
+	if cfg == nil || cfg.Bridge == nil {
+		return nil
+	}
+	return cfg.Bridge.VarsWritable
+}
+
+// VarsWritableAllows reports whether target (a vars.* dot-path) is permitted by
+// the allowlist, using dot-boundary semantics — never a naive prefix match:
+//
+//   - an exact pattern (`vars.db.host`) matches only the identical path;
+//   - a trailing-wildcard pattern (`vars.db.*`) matches only a path strictly
+//     beneath the base, i.e. target begins with base + "." — so `vars.db.*`
+//     allows `vars.db.host` but DENIES `vars.db`, `vars.dbx.host`, and
+//     `vars.database.host`.
+//
+// Malformed patterns fail closed (match nothing): an empty pattern, a bare
+// `*`/`.*` (empty base), or a `*` anywhere other than a trailing `.*`.
+func VarsWritableAllows(patterns []string, target string) bool {
+	for _, p := range patterns {
+		if p == "" {
+			continue
+		}
+		if base, ok := strings.CutSuffix(p, ".*"); ok {
+			// Trailing-wildcard. Base must be non-empty and contain no stray
+			// '*' (which would be an interior wildcard — unsupported).
+			if base == "" || strings.Contains(base, "*") {
+				continue
+			}
+			if strings.HasPrefix(target, base+".") {
+				return true
+			}
+			continue
+		}
+		// Exact pattern. A '*' anywhere is malformed for an exact match.
+		if strings.Contains(p, "*") {
+			continue
+		}
+		if target == p {
+			return true
+		}
+	}
+	return false
 }
 
 // ProjectDeployConfig holds the project-wide deploy pipeline loaded from workspace/deploy.yml.
