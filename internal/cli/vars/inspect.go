@@ -68,6 +68,13 @@ tracked statically and are not reported.`,
 // path must resolve at some layer (or have a usage) — an entirely unknown path
 // is a typed not-found error, mirroring `get`.
 func runVarsInspect(cmd *cobra.Command, flags *cmdctx.RootFlags, path string) error {
+	// Confine inspection to the vars.* sandbox — mirrors `get`. Without this a
+	// container could resolve arbitrary project config (per-layer values, origin
+	// file) through the bridge-reachable `vars` surface.
+	if !isVarsPath(path) {
+		return notFoundError(path)
+	}
+
 	layered, err := config.ResolveLayeredPath(flags.ConfigPath, path)
 	if err != nil {
 		return cmdctx.ErrWrap("project_invalid_config", err)

@@ -279,6 +279,38 @@ func TestApplyOverlayToNode_RejectMapOverAlias(t *testing.T) {
 	}
 }
 
+// A key reachable only through a `<<: *anchor` merge must not be shadowed by a
+// silently-appended explicit override (which YAML resolves as a full replace of
+// the merged subtree). The plan's merge-key guard requires rejecting this.
+func TestApplyOverlayToNode_RejectAppendIntoMergeKeyMapping(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "local.yml")
+	writeFixture(t, path, "defaults: &d\n  db:\n    host: localhost\nvars:\n  <<: *d\n")
+	doc, _ := LoadLocalYAMLNode(path)
+	// vars.db is merge-inherited (only `<<` is an explicit pair under vars).
+	err := ApplyOverlayToNode(doc, map[string]any{
+		"vars": map[string]any{"db": map[string]any{"port": 5432}},
+	})
+	if err == nil {
+		t.Fatal("expected append into merge-key mapping to be rejected")
+	}
+}
+
+// A scalar overlay onto a brand-new key in a merge-bearing mapping is likewise
+// rejected — it may shadow a merge-inherited scalar.
+func TestApplyOverlayToNode_RejectScalarAppendIntoMergeKeyMapping(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "local.yml")
+	writeFixture(t, path, "defaults: &d\n  host: localhost\nvars:\n  <<: *d\n")
+	doc, _ := LoadLocalYAMLNode(path)
+	err := ApplyOverlayToNode(doc, map[string]any{
+		"vars": map[string]any{"host": "other"},
+	})
+	if err == nil {
+		t.Fatal("expected scalar append into merge-key mapping to be rejected")
+	}
+}
+
 func TestApplyOverlayToNode_RejectScalarOverMap(t *testing.T) {
 	dir := t.TempDir()
 	path := filepath.Join(dir, "local.yml")

@@ -155,3 +155,16 @@ func namespaceCandidates(leaves []string) []string {
 func notFoundError(path string) error {
 	return cmdctx.Err("vars_not_found", fmt.Sprintf("var %q not found", path)).WithDetail("var", path)
 }
+
+// isVarsPath reports whether a dot-path lives in the vars.* sandbox (head
+// segment == "vars"). The read subcommands (get / inspect) confine to it so a
+// non-vars path (e.g. project.name, __configPath, services.<x>) cannot be read
+// through the vars surface — which matters because `vars` is reachable from a
+// container (bridgeAllowedTopLevel) and would otherwise leak arbitrary host
+// project config across the bridge trust boundary. `set` has its own stricter
+// confinement (validateVarsSetPath). The bare `vars` namespace is allowed so
+// `get vars` can print the whole subtree.
+func isVarsPath(path string) bool {
+	head, _, _ := strings.Cut(path, ".")
+	return head == varsusage.VarsPrefix
+}

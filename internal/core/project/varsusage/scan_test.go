@@ -1,6 +1,8 @@
 package varsusage
 
 import (
+	"os"
+	"path/filepath"
 	"reflect"
 	"testing"
 )
@@ -144,6 +146,49 @@ func TestScanUsages_TextCaptured(t *testing.T) {
 	want := `expr: '{{ resolve .Raw "vars.feature.flag" }}'`
 	if res.Usages[0].Text != want {
 		t.Errorf("Text = %q, want %q", res.Usages[0].Text, want)
+	}
+}
+
+// TestScanUsages_SkipsVarsBlock pins that a ${vars.x} reference appearing inside
+// the vars: sandbox itself is NOT reported: vars: values are config data
+// (resolved by dot-path), never re-rendered through the template engine, so a
+// key named value/cmd/from inside vars: is not a runtime usage.
+func TestScanUsages_SkipsVarsBlock(t *testing.T) {
+	dir := t.TempDir()
+	mustWrite := func(rel, content string) {
+		t.Helper()
+		full := filepath.Join(dir, rel)
+		if err := os.MkdirAll(filepath.Dir(full), 0o755); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(full, []byte(content), 0o600); err != nil {
+			t.Fatal(err)
+		}
+	}
+	// local.yml has a vars: block whose values name template-looking keys and a
+	// structural from: — none of which are rendered. A real usage lives in a
+	// command file so the scan isn't trivially empty.
+	mustWrite("workspace/local.yml", "vars:\n  some:\n    value: \"${vars.secret}\"\n    from: vars.secret\n  secret: shh\n")
+	mustWrite("workspace/commands/foo.yml", "cmd: echo ${vars.secret}\n")
+
+	res, err := ScanUsages(dir, "vars.secret")
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, u := range res.Usages {
+		if u.File == "workspace/local.yml" {
+			t.Errorf("vars: block value should not be reported as a usage: %+v", u)
+		}
+	}
+	// The genuine command-file usage must still be found.
+	var foundCmd bool
+	for _, u := range res.Usages {
+		if u.File == "workspace/commands/foo.yml" {
+			foundCmd = true
+		}
+	}
+	if !foundCmd {
+		t.Errorf("expected the command-file usage to be found, got %v", locsOf(res))
 	}
 }
 

@@ -71,7 +71,10 @@ dwe vars get <var>
 Print a single value. A leaf path prints the scalar; a namespace path
 (`vars.db`) prints the whole subtree as YAML. The value shown is the
 **effective** (post-merge) value. A path that resolves to nothing is a typed
-`vars_not_found` error.
+`vars_not_found` error. Reads are **confined to `vars.*`** — a path whose first
+segment is not `vars` (e.g. `project.name`) is reported as `vars_not_found`
+rather than resolved against the rest of the project config, so the
+container-reachable `vars` surface cannot leak arbitrary host config.
 
 ### `dwe vars inspect`
 
@@ -88,7 +91,8 @@ The full picture for one var:
 
 A var that resolves nowhere *and* has no usages is `vars_not_found`. Inspect
 matches both an exact path and a namespace prefix: `dwe vars inspect vars.db`
-surfaces usages of `vars.db.host`, `vars.db.user`, etc.
+surfaces usages of `vars.db.host`, `vars.db.user`, etc. Like `get`, inspection
+is **confined to `vars.*`** — a non-`vars` path is `vars_not_found`.
 
 ### `dwe vars set`
 
@@ -174,6 +178,10 @@ syntaxes are tracked:
 
 Matching is by exact path **or** namespace prefix: `${vars.db.host}` counts
 toward both `vars.db.host` and `vars.db`.
+
+The top-level `vars:` block itself is **not** scanned: its values are config
+data resolved by dot-path, never re-rendered, so a `${vars.x}` or `from:` that
+appears *inside* `vars:` is not a runtime usage.
 
 **Caveat (printed in the output):** dynamically-built paths and Go-template
 field accesses (`.Vars.x` / `.Raw.vars.x` in `{{ ... }}` templates) are **not

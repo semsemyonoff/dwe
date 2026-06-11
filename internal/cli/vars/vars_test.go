@@ -230,6 +230,31 @@ func TestVarsGet_NotFound(t *testing.T) {
 	}
 }
 
+// Reads are confined to the vars.* sandbox: a non-vars path (project config,
+// injected keys, other top-level config) must be reported as not-found rather
+// than resolved — otherwise a container could read arbitrary host project
+// config through the bridge-reachable `vars` surface.
+func TestVarsGetInspect_NonVarsPathNotFound(t *testing.T) {
+	cfgPath, root := writeVarsFixture(t)
+	flags := &cmdctx.RootFlags{ConfigPath: cfgPath, Root: root}
+
+	for _, sub := range []string{"get", "inspect"} {
+		for _, path := range []string{"project.name", "__configPath", "vars2.x"} {
+			_, _, err := runVarsCmd(t, flags, sub, path)
+			if err == nil {
+				t.Fatalf("%s %q: expected not-found error, got nil", sub, path)
+			}
+			ce, ok := err.(*cmdctx.CodedError)
+			if !ok {
+				t.Fatalf("%s %q: error is not *CodedError: %T (%v)", sub, path, err, err)
+			}
+			if ce.Code != "vars_not_found" {
+				t.Errorf("%s %q: error code want vars_not_found, got %q", sub, path, ce.Code)
+			}
+		}
+	}
+}
+
 func TestVarsGet_JSONStdoutClean(t *testing.T) {
 	cfgPath, root := writeVarsFixture(t)
 	flags := &cmdctx.RootFlags{ConfigPath: cfgPath, Root: root, Output: "json"}

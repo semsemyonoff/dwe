@@ -54,6 +54,11 @@ type ScanResult struct {
 // Render templates under workspace/services/*/render/** are arbitrary text (not
 // YAML) and are scanned with a whole-file ${vars.x} regex pass.
 //
+// The top-level vars: sandbox is EXCLUDED from the YAML walk: its values are
+// config data resolved by dot-path (ResolvePath), never re-rendered through the
+// template engine, so a ${vars.x} / from: appearing inside vars: is not a
+// runtime usage (see scanYAMLFile).
+//
 // CAVEAT (surfaced to the user): Go-template FIELD access of the form .Vars.x /
 // .Raw.vars.x inside info-item text or condition exprs is NOT tracked, and
 // dynamically-built dot-paths cannot be tracked statically.
@@ -169,9 +174,30 @@ func scanYAMLFile(projectRoot, absPath, queryPath string) ([]Usage, error) {
 	lines := strings.Split(string(data), "\n")
 
 	var hits []Usage
-	walkYAML(doc.Content[0], func(keyName string, valNode *yaml.Node) {
+	visit := func(keyName string, valNode *yaml.Node) {
 		hits = append(hits, hitsForField(keyName, valNode, queryPath, rel, lines)...)
-	})
+	}
+	root := doc.Content[0]
+	// Skip the top-level vars: sandbox subtree. Its values are config DATA,
+	// resolved by dot-path (ResolvePath) and never re-rendered through the
+	// template engine — so a key named value/cmd/from/when *inside* vars: is not
+	// a runtime usage. Scanning it would mis-report e.g. `vars.x.value:
+	// "${vars.y}"` as a usage of vars.y. vars: is only meaningful at the file
+	// root (workspace.yml / defaults.yml / local.yml), so the skip is scoped
+	// there; a key literally named "vars" nested elsewhere is still scanned.
+	if root.Kind == yaml.MappingNode {
+		for i := 0; i+1 < len(root.Content); i += 2 {
+			key := root.Content[i]
+			val := root.Content[i+1]
+			if key.Value == VarsPrefix {
+				continue
+			}
+			visit(key.Value, val)
+			walkYAML(val, visit)
+		}
+	} else {
+		walkYAML(root, visit)
+	}
 	return hits, nil
 }
 

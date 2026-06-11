@@ -30,6 +30,12 @@ subtree as YAML.`,
 		ValidArgsFunction: leafCompletion(flags),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			path := args[0]
+			// Confine reads to the vars.* sandbox: a non-vars path is reported as
+			// not-found rather than resolved against the full project config (which
+			// `vars` reachability from a container would otherwise leak).
+			if !isVarsPath(path) {
+				return notFoundError(path)
+			}
 			cfg, err := loadConfigForVars(flags)
 			if err != nil {
 				return err
