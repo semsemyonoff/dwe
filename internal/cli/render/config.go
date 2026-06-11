@@ -8,6 +8,7 @@ import (
 	"github.com/semsemyonoff/dwe/internal/cli/cmdctx"
 	configpack "github.com/semsemyonoff/dwe/internal/core/execution/templates/config"
 	"github.com/semsemyonoff/dwe/internal/core/project/config"
+	"github.com/semsemyonoff/dwe/internal/shared/bridgeclient"
 	"github.com/semsemyonoff/dwe/internal/shared/generatedstore"
 	"github.com/semsemyonoff/dwe/internal/shared/render"
 
@@ -70,6 +71,19 @@ already-committed values before they stop being committed.`,
 		SilenceUsage:      true,
 		ValidArgsFunction: cmdctx.ServiceNameCompletion(flags),
 		RunE: func(cmd *cobra.Command, args []string) error {
+			// `render config` is the one render subcommand reachable from a
+			// container (it regenerates config after a `vars set`). But
+			// --harvest mutates host state — write-if-absent into
+			// .dwe/generated.yml, acquiring project locks — a container-write
+			// path that bypasses the bridge.vars_writable allowlist entirely.
+			// Reject it from the container; only the read-only render is
+			// container-reachable.
+			if harvest && bridgeclient.InContainer() {
+				return cmdctx.Err("render_harvest_host_only",
+					"render config --harvest is not available from inside a container").
+					WithHint("run `dwe render config --harvest` on the host instead")
+			}
+
 			cfg, err := config.LoadConfigOrWrap(flags.ConfigPath)
 			if err != nil {
 				return err

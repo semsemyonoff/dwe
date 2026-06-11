@@ -35,6 +35,24 @@ func TestBridgeCommandAllowed_table(t *testing.T) {
 		{"dwe prompt", true},
 		{"dwe version", true},
 		{"dwe help", true},
+
+		// vars subtree: read subcommands always reachable; `set` reachable but
+		// runtime-gated by bridge.vars_writable inside the command itself.
+		{"dwe vars", true},
+		{"dwe vars get", true},
+		{"dwe vars list", true},
+		{"dwe vars inspect", true},
+		{"dwe vars set", true},
+
+		// The `render config` nested exception: a container may regenerate its
+		// config after a `vars set`. Every other render subcommand stays
+		// host-only, and bare `render` is blocked.
+		{"dwe render config", true},
+		{"dwe render config main", true},
+		{"dwe render env", false},
+		{"dwe render ide", false},
+		{"dwe render ai", false},
+		{"dwe render git", false},
 		// The hidden machinery stays allowed (baked-in completion scripts must
 		// degrade silently), the user-facing generator does not.
 		{"dwe __complete", true},
@@ -243,7 +261,7 @@ func TestApplyBridgeContainerVisibility_realTree(t *testing.T) {
 	t.Setenv(bridgecore.EnvInvokedFrom, bridgecore.InvokedFromContainer)
 	root := NewRootCmd()
 
-	hidden := []string{"stop", "restart", "reset", "run", "deploy", "services", "snapshot", "render", "init", "shell", "docker", "compose", "validate", "completion"}
+	hidden := []string{"stop", "restart", "reset", "run", "deploy", "services", "snapshot", "init", "shell", "docker", "compose", "validate", "completion"}
 	for _, name := range hidden {
 		if cmd := findTopLevel(t, root, name); !cmd.Hidden {
 			t.Errorf("blocked command %q must be hidden in container context", name)
@@ -251,7 +269,8 @@ func TestApplyBridgeContainerVisibility_realTree(t *testing.T) {
 	}
 	// `prompt` is allowlisted but excluded here: it is Hidden by design on
 	// the host too (prompt hot-path pattern), independent of bridge context.
-	visible := []string{"commands", "status", "info", "logs", "docs", "version"}
+	// `render` stays visible for its allowed `config` child (verified below).
+	visible := []string{"commands", "status", "info", "logs", "docs", "version", "vars"}
 	for _, name := range visible {
 		if cmd := findTopLevel(t, root, name); cmd.Hidden {
 			t.Errorf("allowlisted command %q must stay visible in container context", name)
@@ -273,6 +292,26 @@ func TestApplyBridgeContainerVisibility_realTree(t *testing.T) {
 		case "start", "stop", "logs":
 			if !sub.Hidden {
 				t.Errorf("bridge %s must be hidden in container context", sub.Name())
+			}
+		}
+	}
+
+	// The render subtree: the parent-with-allowed-child rule keeps `render`
+	// visible for the allowlisted `render config`, while its host-only
+	// siblings (env/ide/ai/git) hide.
+	renderCmd := findTopLevel(t, root, "render")
+	if renderCmd.Hidden {
+		t.Error("render subtree must stay visible: `render config` is allowed")
+	}
+	for _, sub := range renderCmd.Commands() {
+		switch sub.Name() {
+		case "config":
+			if sub.Hidden {
+				t.Error("render config must stay visible in container context")
+			}
+		case "env", "ide", "ai", "git":
+			if !sub.Hidden {
+				t.Errorf("render %s must be hidden in container context", sub.Name())
 			}
 		}
 	}

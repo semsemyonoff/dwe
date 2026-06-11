@@ -1,12 +1,14 @@
 package render
 
 import (
+	"errors"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
 
 	"github.com/semsemyonoff/dwe/internal/cli/cmdctx"
+	"github.com/semsemyonoff/dwe/internal/shared/bridgeclient"
 	"github.com/semsemyonoff/dwe/internal/shared/generatedstore"
 )
 
@@ -242,6 +244,96 @@ services:
 	// --harvest must NOT have rendered the config pack.
 	if _, err := os.Stat(filepath.Join(projectRoot, "services", "main", "src", ".env")); err == nil {
 		t.Error("--harvest must not render config templates")
+	}
+}
+
+// TestNewConfigCmd_harvestRejectedInContainer verifies that --harvest is blocked
+// when invoked from inside a container. `render config` is the one render
+// subcommand reachable over the bridge (it regenerates config after `vars set`),
+// but --harvest mutates host state (.dwe/generated.yml) and would bypass the
+// bridge.vars_writable allowlist, so only the read-only render is reachable.
+func TestNewConfigCmd_harvestRejectedInContainer(t *testing.T) {
+	projectRoot := t.TempDir()
+
+	cfgYAML := `schema_version: "2"
+project:
+  name: test-project
+services:
+  main:
+    enabled: true
+`
+	if err := os.WriteFile(filepath.Join(projectRoot, "workspace.yml"), []byte(cfgYAML), 0o644); err != nil {
+		t.Fatalf("write workspace.yml: %v", err)
+	}
+	setupServicesConfig(t, projectRoot, `
+services:
+  main:
+    type: app
+    dir: services/main
+    container: test-main
+`)
+
+	t.Setenv(bridgeclient.EnvInvokedFrom, bridgeclient.InvokedFromContainer)
+
+	flags := &cmdctx.RootFlags{ConfigPath: filepath.Join(projectRoot, "workspace.yml")}
+	cmd := newConfigCmd(flags)
+	if err := cmd.Flags().Set("harvest", "true"); err != nil {
+		t.Fatalf("set --harvest: %v", err)
+	}
+	err := cmd.RunE(cmd, []string{})
+	if err == nil {
+		t.Fatal("expected render config --harvest to be rejected from a container")
+	}
+	ce, ok := errors.AsType[*cmdctx.CodedError](err)
+	if !ok {
+		t.Fatalf("expected *cmdctx.CodedError, got %T: %v", err, err)
+	}
+	if ce.Code != "render_harvest_host_only" {
+		t.Errorf("code: want render_harvest_host_only, got %q", ce.Code)
+	}
+}
+
+// TestNewConfigCmd_renderAllowedInContainer verifies the read-only render path
+// (no --harvest) is reachable from inside a container — the intended use case
+// (regenerate config in-container after a `vars set`).
+func TestNewConfigCmd_renderAllowedInContainer(t *testing.T) {
+	projectRoot := t.TempDir()
+
+	cfgYAML := `schema_version: "2"
+project:
+  name: test-project
+services:
+  main:
+    enabled: true
+`
+	if err := os.WriteFile(filepath.Join(projectRoot, "workspace.yml"), []byte(cfgYAML), 0o644); err != nil {
+		t.Fatalf("write workspace.yml: %v", err)
+	}
+	setupServicesConfig(t, projectRoot, `
+services:
+  main:
+    type: app
+    dir: services/main
+    container: test-main
+`)
+	setupConfigPack(t, projectRoot, "default", map[string]string{
+		"manifest.yml": "render:\n  - from: env.tmpl\n    to: src/.env\n",
+		"env.tmpl":     "APP=${project.name}\n",
+	})
+	if err := os.MkdirAll(filepath.Join(projectRoot, "services", "main"), 0o755); err != nil {
+		t.Fatalf("create hub dir: %v", err)
+	}
+
+	t.Setenv(bridgeclient.EnvInvokedFrom, bridgeclient.InvokedFromContainer)
+
+	flags := &cmdctx.RootFlags{ConfigPath: filepath.Join(projectRoot, "workspace.yml")}
+	cmd := newConfigCmd(flags)
+	if err := cmd.RunE(cmd, []string{"main"}); err != nil {
+		t.Fatalf("read-only render must be reachable from a container: %v", err)
+	}
+	got := mustReadFile(t, filepath.Join(projectRoot, "services", "main", "src", ".env"))
+	if got != "APP=test-project\n" {
+		t.Errorf("rendered content = %q, want %q", got, "APP=test-project\n")
 	}
 }
 
