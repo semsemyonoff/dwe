@@ -347,6 +347,256 @@ services:
 	}
 }
 
+// TestNewConfigCmd_extendsAliasChildNotRendered is the data-loss regression: a
+// no-arg `dwe render config` must NOT render an extends child that shares its
+// parent's hub dir. The child's ${generated.*} value lives under the PARENT's
+// store key (it has no own harvest), so a lenient render of the child would
+// blank the shared secret the parent just wrote.
+func TestNewConfigCmd_extendsAliasChildNotRendered(t *testing.T) {
+	projectRoot := t.TempDir()
+
+	cfgYAML := `schema_version: "2"
+project:
+  name: test-project
+services:
+  main:
+    enabled: true
+  main-debug:
+    enabled: true
+`
+	if err := os.WriteFile(filepath.Join(projectRoot, "workspace.yml"), []byte(cfgYAML), 0o644); err != nil {
+		t.Fatalf("write workspace.yml: %v", err)
+	}
+	// main-debug extends main with no own dir → inherits services/main as its
+	// hub (the post-ResolveServiceExtends shape of a debug sidecar).
+	setupServicesConfig(t, projectRoot, `
+services:
+  main:
+    type: app
+    dir: services/main
+    container: test-main
+    generated:
+      app_key:
+        file: src/.env
+        pattern: '^APP_KEY=(.*)$'
+  main-debug:
+    type: app
+    container: test-main-debug
+    extends: main
+`)
+	setupConfigPack(t, projectRoot, "default", map[string]string{
+		"manifest.yml": "render:\n  - from: env.tmpl\n    to: src/.env\n",
+		"env.tmpl":     "APP_KEY=${generated.app_key}\n",
+	})
+	if err := os.MkdirAll(filepath.Join(projectRoot, "services", "main"), 0o755); err != nil {
+		t.Fatalf("create hub dir: %v", err)
+	}
+
+	// app_key is stored under the PARENT ("main") only — never "main-debug".
+	store := generatedstore.New()
+	store.SetIfAbsent("main", "app_key", "base64:secret==")
+	if err := generatedstore.Save(filepath.Join(projectRoot, generatedstore.DefaultRelPath), store); err != nil {
+		t.Fatalf("seed store: %v", err)
+	}
+
+	flags := &cmdctx.RootFlags{ConfigPath: filepath.Join(projectRoot, "workspace.yml")}
+	cmd := newConfigCmd(flags)
+	if err := cmd.RunE(cmd, []string{}); err != nil {
+		t.Fatalf("RunE: %v", err)
+	}
+
+	// The shared hub file must still hold the secret main wrote — not blanked by
+	// a main-debug render whose store lookup is empty.
+	got := mustReadFile(t, filepath.Join(projectRoot, "services", "main", "src", ".env"))
+	if got != "APP_KEY=base64:secret==\n" {
+		t.Errorf("shared hub secret blanked by extends-alias render; got %q", got)
+	}
+}
+
+// TestNewConfigCmd_extendsAliasChildExplicitSkips verifies that explicitly
+// naming the alias child (`dwe render config main-debug`) does not blank the
+// shared hub either — it is skipped with an informational pointer to the parent.
+func TestNewConfigCmd_extendsAliasChildExplicitSkips(t *testing.T) {
+	projectRoot := t.TempDir()
+
+	cfgYAML := `schema_version: "2"
+project:
+  name: test-project
+services:
+  main:
+    enabled: true
+  main-debug:
+    enabled: true
+`
+	if err := os.WriteFile(filepath.Join(projectRoot, "workspace.yml"), []byte(cfgYAML), 0o644); err != nil {
+		t.Fatalf("write workspace.yml: %v", err)
+	}
+	setupServicesConfig(t, projectRoot, `
+services:
+  main:
+    type: app
+    dir: services/main
+    container: test-main
+    generated:
+      app_key:
+        file: src/.env
+        pattern: '^APP_KEY=(.*)$'
+  main-debug:
+    type: app
+    container: test-main-debug
+    extends: main
+`)
+	setupConfigPack(t, projectRoot, "default", map[string]string{
+		"manifest.yml": "render:\n  - from: env.tmpl\n    to: src/.env\n",
+		"env.tmpl":     "APP_KEY=${generated.app_key}\n",
+	})
+	hubEnv := filepath.Join(projectRoot, "services", "main", "src", ".env")
+	if err := os.MkdirAll(filepath.Dir(hubEnv), 0o755); err != nil {
+		t.Fatalf("create hub dir: %v", err)
+	}
+	const sentinel = "APP_KEY=base64:live==\n"
+	if err := os.WriteFile(hubEnv, []byte(sentinel), 0o644); err != nil {
+		t.Fatalf("seed hub .env: %v", err)
+	}
+
+	flags := &cmdctx.RootFlags{ConfigPath: filepath.Join(projectRoot, "workspace.yml")}
+	cmd := newConfigCmd(flags)
+	if err := cmd.RunE(cmd, []string{"main-debug"}); err != nil {
+		t.Fatalf("RunE: %v", err)
+	}
+	if got := mustReadFile(t, hubEnv); got != sentinel {
+		t.Errorf("explicit alias render blanked the shared hub; want %q, got %q", sentinel, got)
+	}
+}
+
+// TestNewConfigCmd_extendsAliasChildNotHarvested is the harvest-path counterpart
+// of the render-path skip: a no-arg `dwe render config --harvest` must NOT mint a
+// store key under the alias child's own name. Its generated value belongs to the
+// PARENT (same shared hub file); harvesting it under "main-debug" too would create
+// a spurious second entry for the identical secret.
+func TestNewConfigCmd_extendsAliasChildNotHarvested(t *testing.T) {
+	projectRoot := t.TempDir()
+
+	cfgYAML := `schema_version: "2"
+project:
+  name: test-project
+services:
+  main:
+    enabled: true
+  main-debug:
+    enabled: true
+`
+	if err := os.WriteFile(filepath.Join(projectRoot, "workspace.yml"), []byte(cfgYAML), 0o644); err != nil {
+		t.Fatalf("write workspace.yml: %v", err)
+	}
+	setupServicesConfig(t, projectRoot, `
+services:
+  main:
+    type: app
+    dir: services/main
+    container: test-main
+    generated:
+      app_key:
+        file: src/.env
+        pattern: '^APP_KEY=(.*)$'
+  main-debug:
+    type: app
+    container: test-main-debug
+    extends: main
+`)
+	// Seed the shared hub's on-disk secret so the parent harvest finds a value.
+	hubEnv := filepath.Join(projectRoot, "services", "main", "src", ".env")
+	if err := os.MkdirAll(filepath.Dir(hubEnv), 0o755); err != nil {
+		t.Fatalf("create hub dir: %v", err)
+	}
+	if err := os.WriteFile(hubEnv, []byte("APP_KEY=base64:secret==\n"), 0o644); err != nil {
+		t.Fatalf("seed hub .env: %v", err)
+	}
+
+	flags := &cmdctx.RootFlags{ConfigPath: filepath.Join(projectRoot, "workspace.yml")}
+	cmd := newConfigCmd(flags)
+	if err := cmd.Flags().Set("harvest", "true"); err != nil {
+		t.Fatalf("set --harvest: %v", err)
+	}
+	if err := cmd.RunE(cmd, []string{}); err != nil {
+		t.Fatalf("RunE: %v", err)
+	}
+
+	store, err := generatedstore.Load(filepath.Join(projectRoot, generatedstore.DefaultRelPath))
+	if err != nil {
+		t.Fatalf("load store: %v", err)
+	}
+	if !store.Has("main", "app_key") {
+		t.Errorf("parent harvest did not store main.app_key")
+	}
+	if store.Has("main-debug", "app_key") {
+		t.Errorf("extends-alias child minted a spurious main-debug.app_key store key")
+	}
+}
+
+// TestNewConfigCmd_extendsAliasChildExplicitHarvestSkips verifies that explicitly
+// naming the alias child (`dwe render config main-debug --harvest`) does not mint
+// a child store key either — it is skipped with an informational pointer to the
+// parent.
+func TestNewConfigCmd_extendsAliasChildExplicitHarvestSkips(t *testing.T) {
+	projectRoot := t.TempDir()
+
+	cfgYAML := `schema_version: "2"
+project:
+  name: test-project
+services:
+  main:
+    enabled: true
+  main-debug:
+    enabled: true
+`
+	if err := os.WriteFile(filepath.Join(projectRoot, "workspace.yml"), []byte(cfgYAML), 0o644); err != nil {
+		t.Fatalf("write workspace.yml: %v", err)
+	}
+	setupServicesConfig(t, projectRoot, `
+services:
+  main:
+    type: app
+    dir: services/main
+    container: test-main
+    generated:
+      app_key:
+        file: src/.env
+        pattern: '^APP_KEY=(.*)$'
+  main-debug:
+    type: app
+    container: test-main-debug
+    extends: main
+`)
+	hubEnv := filepath.Join(projectRoot, "services", "main", "src", ".env")
+	if err := os.MkdirAll(filepath.Dir(hubEnv), 0o755); err != nil {
+		t.Fatalf("create hub dir: %v", err)
+	}
+	if err := os.WriteFile(hubEnv, []byte("APP_KEY=base64:secret==\n"), 0o644); err != nil {
+		t.Fatalf("seed hub .env: %v", err)
+	}
+
+	flags := &cmdctx.RootFlags{ConfigPath: filepath.Join(projectRoot, "workspace.yml")}
+	cmd := newConfigCmd(flags)
+	if err := cmd.Flags().Set("harvest", "true"); err != nil {
+		t.Fatalf("set --harvest: %v", err)
+	}
+	if err := cmd.RunE(cmd, []string{"main-debug"}); err != nil {
+		t.Fatalf("RunE: %v", err)
+	}
+
+	store, err := generatedstore.Load(filepath.Join(projectRoot, generatedstore.DefaultRelPath))
+	if err != nil {
+		t.Fatalf("load store: %v", err)
+	}
+	if store.Has("main", "app_key") {
+		t.Errorf("explicit alias harvest should skip, not redirect to store main.app_key")
+	}
+	if store.Has("main-debug", "app_key") {
+		t.Errorf("explicit alias harvest minted a spurious main-debug.app_key store key")
+	}
+}
+
 func mustReadFile(t *testing.T, path string) string {
 	t.Helper()
 	b, err := os.ReadFile(path)

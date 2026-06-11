@@ -1521,3 +1521,36 @@ dir: ./services/child
 		t.Errorf("child.EffectiveScheme(http, false) = %q, want https", got)
 	}
 }
+
+// TestSharesExtendsParentHub covers the config-render alias predicate: an
+// extends child that inherited its parent's hub dir is an alias (skip), while a
+// child with its own dir, a non-extends service, or a dangling parent is not.
+func TestSharesExtendsParentHub(t *testing.T) {
+	services := map[string]ServiceConfig{
+		"main":       {Type: ServiceTypeApp, Dir: "services/main"},
+		"main-debug": {Type: ServiceTypeApp, Dir: "services/main", Extends: "main"},    // inherited hub → alias
+		"variant":    {Type: ServiceTypeApp, Dir: "services/variant", Extends: "main"}, // own dir → not alias
+		"standalone": {Type: ServiceTypeApp, Dir: "services/standalone"},               // no extends → not alias
+		"orphan":     {Type: ServiceTypeApp, Dir: "services/orphan", Extends: "ghost"}, // dangling parent → not alias
+		"dirless":    {Type: ServiceTypeApp, Extends: "main"},                          // no own dir set → not alias (guarded)
+	}
+
+	tests := []struct {
+		name string
+		want bool
+	}{
+		{"main", false},
+		{"main-debug", true},
+		{"variant", false},
+		{"standalone", false},
+		{"orphan", false},
+		{"dirless", false},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := SharesExtendsParentHub(services[tc.name], services); got != tc.want {
+				t.Errorf("SharesExtendsParentHub(%q) = %v, want %v", tc.name, got, tc.want)
+			}
+		})
+	}
+}

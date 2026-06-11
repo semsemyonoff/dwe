@@ -700,6 +700,85 @@ func TestRenderConfigsForRun_MissingGeneratedKey_SkipsService(t *testing.T) {
 	}
 }
 
+// TestRenderConfigsForRun_ExtendsChildSharingHub_NotRendered guards the
+// extends-alias case: a child (main-debug) that extends a parent (main) and
+// inherits the parent's hub dir is a config-render alias — its ${generated.*}
+// values are minted under the PARENT's store key, never its own. The run loop
+// must render the shared hub via the parent only, and must NOT emit a false
+// "skipping config render" warning for the child.
+func TestRenderConfigsForRun_ExtendsChildSharingHub_NotRendered(t *testing.T) {
+	root := t.TempDir()
+	writeConfigPackFixture(t, root, "default",
+		"render:\n  - from: env.tmpl\n    to: src/.env\n",
+		map[string]string{"env.tmpl": "APP_KEY=${generated.app_key}\n"})
+
+	store := generatedstore.New()
+	store.SetIfAbsent("main", "app_key", "base64:secret==") // only under the parent
+	if err := generatedstore.Save(filepath.Join(root, generatedstore.DefaultRelPath), store); err != nil {
+		t.Fatal(err)
+	}
+
+	// Both services share Dir services/main; main-debug extends main with the
+	// parent's Generated cloned in (no own store entry). Mirrors the post-
+	// ResolveServiceExtends shape of a debug sidecar.
+	gen := map[string]config.GeneratedField{"app_key": {File: "src/.env", Pattern: `^APP_KEY=(.*)$`}}
+	cfg := &config.DweConfig{
+		Raw: map[string]any{},
+		Services: map[string]config.ServiceConfig{
+			"main":       {Type: config.ServiceTypeApp, Enabled: true, Dir: "services/main", Generated: gen},
+			"main-debug": {Type: config.ServiceTypeApp, Enabled: true, Dir: "services/main", Extends: "main", Generated: gen},
+		},
+	}
+	buf := &bytes.Buffer{}
+	if err := renderConfigsForRun(cfg, root, render.NewWriter(buf)); err != nil {
+		t.Fatalf("renderConfigsForRun: %v", err)
+	}
+
+	if got := mustReadFile(t, filepath.Join(root, "services", "main", "src", ".env")); got != "APP_KEY=base64:secret==\n" {
+		t.Errorf("shared hub render = %q", got)
+	}
+	if strings.Contains(buf.String(), "skipping config render") {
+		t.Errorf("extends-alias child produced a false skip warning: %q", buf.String())
+	}
+}
+
+// TestRenderConfigsForRun_ExtendsChildOwnDir_StillRendered guards against
+// over-skipping: an extends child that declares its OWN dir is a genuine,
+// independent render target (generated values minted under its own name), so it
+// must still render — only a child sharing the parent's hub is an alias.
+func TestRenderConfigsForRun_ExtendsChildOwnDir_StillRendered(t *testing.T) {
+	root := t.TempDir()
+	writeConfigPackFixture(t, root, "default",
+		"render:\n  - from: env.tmpl\n    to: src/.env\n",
+		map[string]string{"env.tmpl": "APP_KEY=${generated.app_key}\n"})
+
+	store := generatedstore.New()
+	store.SetIfAbsent("main", "app_key", "base64:main==")
+	store.SetIfAbsent("variant", "app_key", "base64:variant==")
+	if err := generatedstore.Save(filepath.Join(root, generatedstore.DefaultRelPath), store); err != nil {
+		t.Fatal(err)
+	}
+
+	gen := map[string]config.GeneratedField{"app_key": {File: "src/.env", Pattern: `^APP_KEY=(.*)$`}}
+	cfg := &config.DweConfig{
+		Raw: map[string]any{},
+		Services: map[string]config.ServiceConfig{
+			"main":    {Type: config.ServiceTypeApp, Enabled: true, Dir: "services/main", Generated: gen},
+			"variant": {Type: config.ServiceTypeApp, Enabled: true, Dir: "services/variant", Extends: "main", Generated: gen},
+		},
+	}
+	buf := &bytes.Buffer{}
+	if err := renderConfigsForRun(cfg, root, render.NewWriter(buf)); err != nil {
+		t.Fatalf("renderConfigsForRun: %v", err)
+	}
+	if got := mustReadFile(t, filepath.Join(root, "services", "variant", "src", ".env")); got != "APP_KEY=base64:variant==\n" {
+		t.Errorf("own-dir extends child should render its own hub; got %q", got)
+	}
+	if strings.Contains(buf.String(), "skipping config render") {
+		t.Errorf("own-dir extends child should not be skipped: %q", buf.String())
+	}
+}
+
 func TestRenderConfigsForRun_AbsentPack_NoError(t *testing.T) {
 	root := t.TempDir()
 	cfg := appServiceCfg(map[string]any{}, nil)
