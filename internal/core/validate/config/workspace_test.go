@@ -366,6 +366,67 @@ update:
 	require.Equal(t, "config.workspace", diags[0].Target)
 }
 
+// TestVarsWritablePatternValid pins the structural grammar the validator uses to
+// flag bridge.vars_writable typos that would otherwise silently fail-closed.
+func TestVarsWritablePatternValid(t *testing.T) {
+	cases := []struct {
+		pat  string
+		want bool
+	}{
+		// Valid: exact vars path, trailing wildcard, the broad vars.* form.
+		{"vars.db.host", true},
+		{"vars.db.*", true},
+		{"vars.*", true},
+		{"vars.a.b.c", true},
+		// Invalid: non-vars namespace.
+		{"project.name", false},
+		{"db.host", false},
+		// Invalid: bare prefix.
+		{"vars.", false},
+		{"", false},
+		// Invalid: interior wildcard (would match nothing in the matcher).
+		{"vars.*.host", false},
+		{"vars.db.*.x", false},
+		{"vars.d*b.host", false},
+		// Invalid: exact pattern carrying a stray '*'.
+		{"vars.db*", false},
+	}
+	for _, tc := range cases {
+		if got := varsWritablePatternValid(tc.pat); got != tc.want {
+			t.Errorf("varsWritablePatternValid(%q) = %v, want %v", tc.pat, got, tc.want)
+		}
+	}
+}
+
+// TestWorkspaceValidator_BadVarsWritablePattern asserts an interior-wildcard typo
+// in bridge.vars_writable surfaces a diagnostic (it would otherwise silently deny
+// every container write).
+func TestWorkspaceValidator_BadVarsWritablePattern(t *testing.T) {
+	root := t.TempDir()
+	require.NoError(t, os.MkdirAll(filepath.Join(root, "workspace", "services"), 0o755))
+
+	workspaceYML := `
+project:
+  name: test
+  prefix: test
+bridge:
+  vars_writable:
+    - vars.*.host
+`
+	require.NoError(t, os.WriteFile(filepath.Join(root, "workspace.yml"), []byte(workspaceYML), 0o644))
+
+	ctx := validate.Context{
+		ProjectRoot: root,
+		ConfigPath:  filepath.Join(root, "workspace.yml"),
+	}
+
+	v := &workspaceValidator{}
+	diags := v.Run(ctx)
+
+	d := hasDiag(t, diags, validate.SeverityError, "vars_writable")
+	require.Equal(t, "config.workspace.bridge.vars_writable", d.Target)
+}
+
 // writeServicesDir sets up a project root with per-folder services under workspace/services/
 // for servicesValidator tests. The body is a YAML fragment shaped like `services: {name: {...}}`.
 // Returns the project root path.

@@ -110,7 +110,8 @@ and formatting (see [comment-preserving writes](#comment-preserving-localyml-wri
 
   | Input | Result |
   |-------|--------|
-  | `""` (empty arg) | empty string |
+  | `""` (empty arg, shell-stripped) | YAML null |
+  | `'""'` (quoted empty literal) | empty string |
   | `null`, `~` | YAML null |
   | `yes` / `no` / `on` / `off` | string (not a YAML-1.1 bool) |
   | `0755`, `01` (leading zero) | string (no lossy octal reinterpretation) |

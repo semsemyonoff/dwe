@@ -330,3 +330,63 @@ vars:
 		t.Errorf("host write: want renamed, got %v (ok=%v)", got, ok)
 	}
 }
+
+// TestCaptureRestoreLocalState exercises the rollback helpers directly: capture
+// returns the current bytes (nil when absent), and restore reinstates them —
+// crucially, a nil capture (file was absent pre-write) removes the file again so
+// a failed write does not leave a partial local.yml behind.
+func TestCaptureRestoreLocalState(t *testing.T) {
+	t.Run("existing-file round-trips", func(t *testing.T) {
+		dir := t.TempDir()
+		p := filepath.Join(dir, "local.yml")
+		original := []byte("vars:\n  db:\n    host: orig # keep me\n")
+		if err := os.WriteFile(p, original, 0o600); err != nil {
+			t.Fatalf("seed: %v", err)
+		}
+
+		captured, err := captureLocalState(p)
+		if err != nil {
+			t.Fatalf("captureLocalState: %v", err)
+		}
+		if string(captured) != string(original) {
+			t.Fatalf("captured %q, want %q", captured, original)
+		}
+
+		// Simulate a write that clobbered the file, then roll back.
+		if err := os.WriteFile(p, []byte("garbage\n"), 0o600); err != nil {
+			t.Fatalf("clobber: %v", err)
+		}
+		restoreLocalState(p, captured)
+
+		got, err := os.ReadFile(p)
+		if err != nil {
+			t.Fatalf("read after restore: %v", err)
+		}
+		if string(got) != string(original) {
+			t.Errorf("restore: got %q, want %q", got, original)
+		}
+	})
+
+	t.Run("absent-file capture removes on restore", func(t *testing.T) {
+		dir := t.TempDir()
+		p := filepath.Join(dir, "local.yml")
+
+		captured, err := captureLocalState(p)
+		if err != nil {
+			t.Fatalf("captureLocalState(absent): %v", err)
+		}
+		if captured != nil {
+			t.Fatalf("captured = %q, want nil for absent file", captured)
+		}
+
+		// Simulate a write that created the file, then roll back to "absent".
+		if err := os.WriteFile(p, []byte("created\n"), 0o600); err != nil {
+			t.Fatalf("create: %v", err)
+		}
+		restoreLocalState(p, captured)
+
+		if _, err := os.Stat(p); !os.IsNotExist(err) {
+			t.Errorf("restore of nil capture should remove the file, stat err = %v", err)
+		}
+	})
+}

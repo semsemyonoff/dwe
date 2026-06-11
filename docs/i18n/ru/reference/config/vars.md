@@ -1,4 +1,4 @@
-> Translated from: reference/config/vars.md @ d0e66ae04baf
+> Translated from: reference/config/vars.md @ 944d78146f8d
 
 # `dwe vars` — работа с песочницей `vars:`
 
@@ -116,7 +116,8 @@ dwe vars set <var> [value]
 
   | Ввод | Результат |
   |------|-----------|
-  | `""` (пустой аргумент) | пустая строка |
+  | `""` (пустой аргумент, съеден shell) | YAML null |
+  | `'""'` (явный пустой литерал) | пустая строка |
   | `null`, `~` | YAML null |
   | `yes` / `no` / `on` / `off` | строка (не bool YAML 1.1) |
   | `0755`, `01` (ведущий ноль) | строка (без потери при octal-реинтерпретации) |

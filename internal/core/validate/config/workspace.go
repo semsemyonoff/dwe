@@ -90,7 +90,7 @@ func (v *workspaceValidator) Run(ctx validate.Context) []validate.Diagnostic {
 		// nothing), so a stray pattern silently denies rather than load-fails —
 		// surface it as a diagnostic so the author notices a typo.
 		for _, pat := range config.BridgeVarsWritable(cfg) {
-			if !strings.HasPrefix(pat, "vars.") || pat == "vars." {
+			if !varsWritablePatternValid(pat) {
 				diags = append(diags, validate.Diagnostic{
 					Severity: validate.SeverityError,
 					Domain:   "config",
@@ -103,6 +103,27 @@ func (v *workspaceValidator) Run(ctx validate.Context) []validate.Diagnostic {
 	}
 
 	return diags
+}
+
+// varsWritablePatternValid reports whether a bridge.vars_writable entry is a
+// well-formed, vars-namespaced pattern that config.VarsWritableAllows can match.
+// It mirrors the matcher's structural rules so a typo that would silently
+// fail-closed (e.g. an interior wildcard `vars.*.host`, or a non-vars path) is
+// surfaced as a diagnostic instead of quietly denying every container write.
+func varsWritablePatternValid(pat string) bool {
+	if base, ok := strings.CutSuffix(pat, ".*"); ok {
+		// Trailing wildcard: base must be non-empty, vars-namespaced, and carry
+		// no interior '*' (only the single trailing `.*` is supported).
+		if base == "" || strings.Contains(base, "*") {
+			return false
+		}
+		return base == "vars" || strings.HasPrefix(base, "vars.")
+	}
+	// Exact pattern: no '*' anywhere, vars-namespaced, not the bare prefix.
+	if strings.Contains(pat, "*") {
+		return false
+	}
+	return strings.HasPrefix(pat, "vars.") && pat != "vars."
 }
 
 type servicesValidator struct{}
