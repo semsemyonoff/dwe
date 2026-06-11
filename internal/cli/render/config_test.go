@@ -469,6 +469,131 @@ services:
 	}
 }
 
+// TestNewConfigCmd_extendsAliasChildNotHarvested is the harvest-path counterpart
+// of the render-path skip: a no-arg `dwe render config --harvest` must NOT mint a
+// store key under the alias child's own name. Its generated value belongs to the
+// PARENT (same shared hub file); harvesting it under "main-debug" too would create
+// a spurious second entry for the identical secret.
+func TestNewConfigCmd_extendsAliasChildNotHarvested(t *testing.T) {
+	projectRoot := t.TempDir()
+
+	cfgYAML := `schema_version: "2"
+project:
+  name: test-project
+services:
+  main:
+    enabled: true
+  main-debug:
+    enabled: true
+`
+	if err := os.WriteFile(filepath.Join(projectRoot, "workspace.yml"), []byte(cfgYAML), 0o644); err != nil {
+		t.Fatalf("write workspace.yml: %v", err)
+	}
+	setupServicesConfig(t, projectRoot, `
+services:
+  main:
+    type: app
+    dir: services/main
+    container: test-main
+    generated:
+      app_key:
+        file: src/.env
+        pattern: '^APP_KEY=(.*)$'
+  main-debug:
+    type: app
+    container: test-main-debug
+    extends: main
+`)
+	// Seed the shared hub's on-disk secret so the parent harvest finds a value.
+	hubEnv := filepath.Join(projectRoot, "services", "main", "src", ".env")
+	if err := os.MkdirAll(filepath.Dir(hubEnv), 0o755); err != nil {
+		t.Fatalf("create hub dir: %v", err)
+	}
+	if err := os.WriteFile(hubEnv, []byte("APP_KEY=base64:secret==\n"), 0o644); err != nil {
+		t.Fatalf("seed hub .env: %v", err)
+	}
+
+	flags := &cmdctx.RootFlags{ConfigPath: filepath.Join(projectRoot, "workspace.yml")}
+	cmd := newConfigCmd(flags)
+	if err := cmd.Flags().Set("harvest", "true"); err != nil {
+		t.Fatalf("set --harvest: %v", err)
+	}
+	if err := cmd.RunE(cmd, []string{}); err != nil {
+		t.Fatalf("RunE: %v", err)
+	}
+
+	store, err := generatedstore.Load(filepath.Join(projectRoot, generatedstore.DefaultRelPath))
+	if err != nil {
+		t.Fatalf("load store: %v", err)
+	}
+	if !store.Has("main", "app_key") {
+		t.Errorf("parent harvest did not store main.app_key")
+	}
+	if store.Has("main-debug", "app_key") {
+		t.Errorf("extends-alias child minted a spurious main-debug.app_key store key")
+	}
+}
+
+// TestNewConfigCmd_extendsAliasChildExplicitHarvestSkips verifies that explicitly
+// naming the alias child (`dwe render config main-debug --harvest`) does not mint
+// a child store key either — it is skipped with an informational pointer to the
+// parent.
+func TestNewConfigCmd_extendsAliasChildExplicitHarvestSkips(t *testing.T) {
+	projectRoot := t.TempDir()
+
+	cfgYAML := `schema_version: "2"
+project:
+  name: test-project
+services:
+  main:
+    enabled: true
+  main-debug:
+    enabled: true
+`
+	if err := os.WriteFile(filepath.Join(projectRoot, "workspace.yml"), []byte(cfgYAML), 0o644); err != nil {
+		t.Fatalf("write workspace.yml: %v", err)
+	}
+	setupServicesConfig(t, projectRoot, `
+services:
+  main:
+    type: app
+    dir: services/main
+    container: test-main
+    generated:
+      app_key:
+        file: src/.env
+        pattern: '^APP_KEY=(.*)$'
+  main-debug:
+    type: app
+    container: test-main-debug
+    extends: main
+`)
+	hubEnv := filepath.Join(projectRoot, "services", "main", "src", ".env")
+	if err := os.MkdirAll(filepath.Dir(hubEnv), 0o755); err != nil {
+		t.Fatalf("create hub dir: %v", err)
+	}
+	if err := os.WriteFile(hubEnv, []byte("APP_KEY=base64:secret==\n"), 0o644); err != nil {
+		t.Fatalf("seed hub .env: %v", err)
+	}
+
+	flags := &cmdctx.RootFlags{ConfigPath: filepath.Join(projectRoot, "workspace.yml")}
+	cmd := newConfigCmd(flags)
+	if err := cmd.Flags().Set("harvest", "true"); err != nil {
+		t.Fatalf("set --harvest: %v", err)
+	}
+	if err := cmd.RunE(cmd, []string{"main-debug"}); err != nil {
+		t.Fatalf("RunE: %v", err)
+	}
+
+	store, err := generatedstore.Load(filepath.Join(projectRoot, generatedstore.DefaultRelPath))
+	if err != nil {
+		t.Fatalf("load store: %v", err)
+	}
+	if store.Has("main-debug", "app_key") {
+		t.Errorf("explicit alias harvest minted a spurious main-debug.app_key store key")
+	}
+}
+
 func mustReadFile(t *testing.T, path string) string {
 	t.Helper()
 	b, err := os.ReadFile(path)
