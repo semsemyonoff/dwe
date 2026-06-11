@@ -99,11 +99,11 @@ func TestConfigKeysPresentRun(t *testing.T) {
 }
 
 // TestConfigKeysPresentRun_endToEndFromLoadedConfig proves the documented
-// post-setup recipe actually works: a top-level value written to local.yml
-// (the wizard's legal write target) survives LoadConfig into cfg.Raw and
-// resolves through the builtin. Guards against the docs advertising a path the
-// config loader rejects — e.g. services.<name>.env.* is NOT a legal local.yml
-// overlay key, so it must NOT be the documented example.
+// post-setup recipe actually works: a value written to local.yml under the
+// vars: sandbox (the wizard's legal write target) survives LoadConfig into
+// cfg.Raw and resolves through the builtin. Guards against the docs advertising
+// a path the config loader rejects — e.g. services.<name>.env.* is NOT a legal
+// local.yml overlay key, so it must NOT be the documented example.
 func TestConfigKeysPresentRun_endToEndFromLoadedConfig(t *testing.T) {
 	t.Parallel()
 	dir := t.TempDir()
