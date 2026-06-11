@@ -587,8 +587,8 @@ func buildRegistry(cfg *config.DweConfig, validateCfg *config.ValidateConfig, va
 	for _, v := range valconfig.All() {
 		reg.Register(v)
 	}
-	// Bridge domain participates in `dwe validate` only — preflight consumes
-	// valconfig.All() exclusively, so bridge config mistakes never block
+	// Bridge domain participates in `dwe validate` only — preflight never
+	// registers valbridge validators, so bridge config mistakes never block
 	// unrelated lifecycle commands.
 	for _, v := range valbridge.All() {
 		reg.Register(v)

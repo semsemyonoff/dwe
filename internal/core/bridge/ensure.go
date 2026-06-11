@@ -107,9 +107,13 @@ func Ensure(cfg EnsureConfig) (started bool, err error) {
 		return false, err
 	}
 	// Created here (0700, design D3) rather than by lock.Acquire, whose
-	// MkdirAll would apply a more permissive mode.
+	// MkdirAll would apply a more permissive mode. The explicit Chmod
+	// tightens a pre-existing dir too — MkdirAll leaves existing modes alone.
 	if err := os.MkdirAll(bridgeDir, bridgeDirPerm); err != nil {
 		return false, fmt.Errorf("bridge: creating bridge dir: %w", err)
+	}
+	if err := os.Chmod(bridgeDir, bridgeDirPerm); err != nil {
+		return false, fmt.Errorf("bridge: tightening bridge dir permissions: %w", err)
 	}
 
 	l, err := lock.Acquire(PidPath(bridgeDir))

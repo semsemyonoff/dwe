@@ -1,6 +1,7 @@
 package bridge
 
 import (
+	"bufio"
 	"errors"
 	"fmt"
 	"os"
@@ -44,7 +45,7 @@ func runLogs(cmd *cobra.Command, flags *cmdctx.RootFlags, tail int) error {
 			WithDetail("value", tail)
 	}
 	logPath := corebridge.LogPath(corebridge.DefaultBridgeDir(flags.ProjectRoot()))
-	data, err := os.ReadFile(logPath)
+	lines, err := readTailLines(logPath, tail)
 	if err != nil {
 		if !errors.Is(err, os.ErrNotExist) {
 			return cmdctx.ErrWrap("bridge_logs_failed", err)
@@ -58,21 +59,44 @@ func runLogs(cmd *cobra.Command, flags *cmdctx.RootFlags, tail int) error {
 		}
 		return cmdctx.WriteData(flags, cmd, bridgeLogsJSON{Lines: []string{}}, renderLogsText)
 	}
-	return cmdctx.WriteData(flags, cmd, bridgeLogsJSON{Lines: tailLines(string(data), tail)}, renderLogsText)
+	return cmdctx.WriteData(flags, cmd, bridgeLogsJSON{Lines: lines}, renderLogsText)
 }
 
-// tailLines returns the last n lines of content (all lines when n == 0),
-// dropping the trailing newline-induced empty element.
-func tailLines(content string, n int) []string {
-	content = strings.TrimRight(content, "\n")
-	if content == "" {
-		return []string{}
+// readTailLines streams the file and returns its last n lines (all lines
+// when n == 0). The append-only daemon log has no rotation, so with n > 0
+// memory stays bounded by a ring of n lines instead of the whole file.
+func readTailLines(path string, n int) ([]string, error) {
+	f, err := os.Open(path)
+	if err != nil {
+		return nil, err
 	}
-	lines := strings.Split(content, "\n")
-	if n > 0 && len(lines) > n {
-		lines = lines[len(lines)-n:]
+	defer func() { _ = f.Close() }()
+	sc := bufio.NewScanner(f)
+	sc.Buffer(make([]byte, 0, 64*1024), 4*1024*1024)
+	if n <= 0 {
+		lines := []string{}
+		for sc.Scan() {
+			lines = append(lines, sc.Text())
+		}
+		return lines, sc.Err()
 	}
-	return lines
+	ring := make([]string, n)
+	total := 0
+	for sc.Scan() {
+		ring[total%n] = sc.Text()
+		total++
+	}
+	if err := sc.Err(); err != nil {
+		return nil, err
+	}
+	if total <= n {
+		return ring[:total], nil
+	}
+	lines := make([]string, 0, n)
+	for i := total - n; i < total; i++ {
+		lines = append(lines, ring[i%n])
+	}
+	return lines, nil
 }
 
 func renderLogsText(d bridgeLogsJSON) string {

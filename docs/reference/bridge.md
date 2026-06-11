@@ -21,7 +21,7 @@ The bridge is **off by default for every service type** — opt a service in wit
 
 ## How it works
 
-```
+```text
 git commit (in container)
   └─> .git/hooks/pre-commit
        └─> exec dwe commands lint        ← the shim, not the real dwe

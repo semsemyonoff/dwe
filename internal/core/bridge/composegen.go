@@ -10,6 +10,7 @@ import (
 	"path/filepath"
 	"runtime"
 	"strings"
+	"time"
 
 	"github.com/semsemyonoff/dwe/internal/core/bridge/shimassets"
 	"github.com/semsemyonoff/dwe/internal/core/project/config"
@@ -62,10 +63,18 @@ type ArchResolver func(containerName string) (string, error)
 // a binary with args and return its trimmed stdout.
 type CommandOutput func(name string, args ...string) (string, error)
 
+// archProbeTimeout bounds each docker inspect probe. Bridge prepare runs
+// inside deploy/run while the project locks are held, so a hung docker
+// daemon must not wedge the lifecycle command — a timed-out probe is just
+// an error and the caller falls back to the host architecture.
+const archProbeTimeout = 10 * time.Second
+
 // execCommandOutput is the production CommandOutput (os/exec backed); exit
 // errors surface their stderr, mirroring the other docker probes here.
 func execCommandOutput(name string, args ...string) (string, error) {
-	out, err := exec.Command(name, args...).Output() //nolint:gosec
+	ctx, cancel := context.WithTimeout(context.Background(), archProbeTimeout)
+	defer cancel()
+	out, err := exec.CommandContext(ctx, name, args...).Output() //nolint:gosec
 	if err != nil {
 		if exitErr, ok := errors.AsType[*exec.ExitError](err); ok && len(exitErr.Stderr) > 0 {
 			return "", errors.New(strings.TrimSpace(string(exitErr.Stderr)))

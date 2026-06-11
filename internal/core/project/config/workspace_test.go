@@ -4975,6 +4975,13 @@ services:
     extends: parent
     bridge:
       shim_path: /opt/child/dwe
+  child-override-unreachable:
+    type: app
+    container: child-override-unreachable
+    required: false
+    extends: parent
+    bridge:
+      on_unreachable: fail
   grandchild-multi-hop:
     type: app
     container: grandchild
@@ -5028,6 +5035,14 @@ services:
 	}
 	if childOvrP.Bridge.ShimPath != "/opt/child/dwe" {
 		t.Errorf("child-override-path Bridge.ShimPath = %q, want /opt/child/dwe", childOvrP.Bridge.ShimPath)
+	}
+
+	childOvrU := services["child-override-unreachable"]
+	if childOvrU.Bridge.OnUnreachable != "fail" {
+		t.Errorf("child-override-unreachable Bridge.OnUnreachable = %q, want explicit fail over parent's warn", childOvrU.Bridge.OnUnreachable)
+	}
+	if childOvrU.Bridge.ShimPath != "/opt/parent/dwe" {
+		t.Errorf("child-override-unreachable Bridge.ShimPath should inherit /opt/parent/dwe, got %q", childOvrU.Bridge.ShimPath)
 	}
 
 	grandchild := services["grandchild-multi-hop"]

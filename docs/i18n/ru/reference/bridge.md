@@ -1,4 +1,4 @@
-> Translated from: reference/bridge.md @ bfb3117ead7d
+> Translated from: reference/bridge.md @ 1b5927284961
 
 # Хост-бридж
 
@@ -23,7 +23,7 @@
 
 ## Как это работает
 
-```
+```text
 git commit (в контейнере)
   └─> .git/hooks/pre-commit
        └─> exec dwe commands lint        ← shim, а не настоящий dwe

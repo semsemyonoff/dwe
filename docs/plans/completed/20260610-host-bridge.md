@@ -115,7 +115,7 @@ Summary of key decisions:
 
 Execution flow of one `dwe commands lint` from a container:
 
-```
+```text
 git commit (in container)
   └─> .git/hooks/pre-commit
        └─> exec dwe commands lint           ← shim, not real dwe
@@ -175,7 +175,7 @@ if a decision changes during implementation.
 
 ### D2. Transport selection (shim algorithm)
 
-```
+```text
 1. $DWE_BRIDGE_DIR/host.sock exists?
    → unix dial, timeout 300 ms
      success → proceed (auth: peercred)          ← native Linux
@@ -215,7 +215,7 @@ No platform detection anywhere — both sides always try/offer both transports.
 
 Length-prefixed binary frames, identical on both transports:
 
-```
+```text
 [4 bytes payload length, big-endian uint32]
 [1 byte frame type]
 [payload]
@@ -393,7 +393,7 @@ regeneration.
 `.dwe/bridge/` on the host (the overlay itself lives one level up, at
 `.dwe/compose.bridge.yml`):
 
-```
+```text
 .dwe/bridge/
 ├── host.sock              ← created by daemon at runtime (unix transport)
 ├── port                   ← actual TCP port, written after bind
@@ -484,7 +484,7 @@ Mechanics:
 Both transports failed → one-line diagnostic to stderr with project name and
 remedy:
 
-```
+```text
 dwe bridge: host daemon is not running for project "my-proj"
             (start the stack on the host: `dwe run`, or `dwe bridge start`)
 ```

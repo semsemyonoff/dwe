@@ -71,7 +71,7 @@ func launchOS(spec LaunchSpec) (Process, error) {
 		return nil, fmt.Errorf("opening stderr pipe: %w", err)
 	}
 	if err := cmd.Start(); err != nil {
-		return nil, err
+		return nil, fmt.Errorf("starting dwe: %w", err)
 	}
 	return &osProcess{cmd: cmd, stdin: stdin, stdout: stdout, stderr: stderr}, nil
 }

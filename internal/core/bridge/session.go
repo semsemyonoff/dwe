@@ -53,16 +53,20 @@ func (d *Daemon) acceptHello(conn net.Conn) (bridgeproto.Hello, string, bool) {
 	frameType, payload, err := bridgeproto.ReadFrame(conn)
 	if err != nil {
 		d.logf("bridge: reading hello: %v", err)
+		d.sendError(conn, bridgeproto.ErrCodeBadHello, "could not read HELLO frame")
 		return bridgeproto.Hello{}, "", false
 	}
 	_ = conn.SetReadDeadline(time.Time{})
 	if frameType != bridgeproto.FrameHello {
 		d.logf("bridge: first frame is %s, want hello", frameType)
+		d.sendError(conn, bridgeproto.ErrCodeBadHello,
+			fmt.Sprintf("first frame is %s, want hello", frameType))
 		return bridgeproto.Hello{}, "", false
 	}
 	hello, err := bridgeproto.DecodeHello(payload)
 	if err != nil {
 		d.logf("bridge: %v", err)
+		d.sendError(conn, bridgeproto.ErrCodeBadHello, "malformed HELLO payload")
 		return bridgeproto.Hello{}, "", false
 	}
 

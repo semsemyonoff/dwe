@@ -22,6 +22,9 @@ const (
 	ErrCodeTTYUnsupported = "tty_unsupported"
 	// ErrCodeDaemonShuttingDown — connection arrived during graceful shutdown.
 	ErrCodeDaemonShuttingDown = "daemon_shutting_down"
+	// ErrCodeBadHello — the first frame was unreadable, not HELLO, or
+	// undecodable. Best-effort: the peer may not speak the protocol at all.
+	ErrCodeBadHello = "bad_hello"
 )
 
 // Winsize is the terminal size reported in HELLO. Informational only in V1
