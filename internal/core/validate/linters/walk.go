@@ -12,12 +12,17 @@ import (
 	"github.com/semsemyonoff/dwe/internal/shared/pathsafe"
 )
 
-// skipDirs are directory basenames the walker always skips regardless of
-// adapter. Limited to .git because it is universal enough to hardcode;
-// adapter-specific noise (node_modules, vendor) is left to the user to
-// express via narrower paths:.
+// skipDirs are directory basenames the walker always skips when it encounters
+// them during descent (never when named explicitly in paths:). These are
+// universal dependency/VCS trees whose contents are third-party noise — e.g.
+// hadolint's default "." scan would otherwise lint vendored Dockerfiles under
+// services/.../vendor/laravel/sail/runtimes/. A user who genuinely wants to
+// lint one of these dirs can still name it directly in paths:, which bypasses
+// the descent guard.
 var skipDirs = map[string]struct{}{
-	".git": {},
+	".git":         {},
+	"vendor":       {},
+	"node_modules": {},
 }
 
 // collectFiles walks the project under baseDir for each entry in paths,
@@ -101,6 +106,18 @@ func collectFiles(baseDir string, paths, exts, filenames []string, pathsAreDefau
 			if d.IsDir() {
 				if p != target {
 					if _, skip := skipDirs[name]; skip {
+						return filepath.SkipDir
+					}
+					// Skip the project-root services/ tree: it holds cloned
+					// service *source code* (each service's `dir:`), not DWE's
+					// own files. Linters validate the DWE project, not the apps
+					// it orchestrates. Root-level only — workspace/services/<name>/
+					// (DWE-managed files) and any nested services/ are untouched.
+					// Naming services/ explicitly in paths: bypasses this (the
+					// dir is then the walk target, so p == target). filepath.Rel
+					// cleans both operands, so a trailing slash on baseDir can't
+					// defeat the match.
+					if rel, rerr := filepath.Rel(baseDir, p); rerr == nil && rel == "services" {
 						return filepath.SkipDir
 					}
 				}

@@ -2,6 +2,7 @@ package render
 
 import (
 	"fmt"
+	"sort"
 	"strings"
 	"unicode/utf8"
 
@@ -15,6 +16,11 @@ import (
 // Keep MESSAGE/HINT narrow enough that the six-column diagnostics table stays
 // readable on a wide-but-normal terminal instead of expanding indefinitely.
 const diagnosticTextWrapWidth = 44
+
+// diagnosticFileWrapWidth bounds the FILE column. Paths have no spaces, so a
+// long relative path (e.g. services/api/src/vendor/.../Dockerfile) would widen
+// the whole table; wrapPath breaks them on "/" boundaries instead.
+const diagnosticFileWrapWidth = 40
 
 // zebraBackground tints every other data row to improve scanability. Subtle
 // adaptive shade so it reads as "different" without competing with severity
@@ -31,10 +37,51 @@ type DiagnosticRow struct {
 	Hint     string
 }
 
-// DiagnosticsTable renders a styled Lipgloss table of validation diagnostics.
+// DiagnosticsTable renders a styled Lipgloss table of validation diagnostics
+// with a DOMAIN column. Used by preflight and the deploy menu, where rows span
+// only the env + checks domains and the column aids scanning.
 // Columns: STATUS / DOMAIN / TARGET / FILE / MESSAGE / HINT.
 // Status glyphs color-coded by severity: ✓ OK (green), ⓘ info (dim), ⚠ warning (yellow), ✗ error (red).
 func DiagnosticsTable(rows []DiagnosticRow) string {
+	return diagnosticsTable(rows, true)
+}
+
+// DiagnosticsByDomain renders one titled table per domain (no DOMAIN column).
+// Rows are expected pre-sorted (severity desc within a domain); domains are
+// ordered canonically (see domainDisplayOrder) with unknown domains appended
+// alphabetically. Returns "" when there are no rows so the caller can skip an
+// empty bordered box. Used by `dwe validate`.
+func DiagnosticsByDomain(rows []DiagnosticRow) string {
+	if len(rows) == 0 {
+		return ""
+	}
+
+	groups := make(map[string][]DiagnosticRow)
+	var order []string
+	for _, r := range rows {
+		if _, seen := groups[r.Domain]; !seen {
+			order = append(order, r.Domain)
+		}
+		groups[r.Domain] = append(groups[r.Domain], r)
+	}
+	sortDomainsForDisplay(order)
+
+	var b strings.Builder
+	for i, d := range order {
+		if i > 0 {
+			b.WriteString("\n\n")
+		}
+		b.WriteString(domainTitle(d, groups[d]))
+		b.WriteByte('\n')
+		b.WriteString(diagnosticsTable(groups[d], false))
+	}
+	return b.String()
+}
+
+// diagnosticsTable renders the diagnostics table, optionally including the
+// DOMAIN column. STATUS is always column 0 (its centering/glyph styling keys
+// off that), so dropping DOMAIN shifts only the prose columns.
+func diagnosticsTable(rows []DiagnosticRow, showDomain bool) string {
 	stringRows := make([][]string, len(rows))
 	cellStyles := make([]map[int]lipgloss.Style, len(rows))
 
@@ -42,23 +89,25 @@ func DiagnosticsTable(rows []DiagnosticRow) string {
 		statusGlyph := severityGlyph(r.Severity)
 		statusStyle := severityStyle(r.Severity)
 
-		// File may be empty; use "—" as placeholder.
+		// File may be empty; use "—" as placeholder. Wrap on "/" so a long
+		// relative path does not widen the whole table.
 		fileStr := r.File
 		if fileStr == "" {
 			fileStr = "—"
+		} else {
+			fileStr = wrapPath(fileStr, diagnosticFileWrapWidth)
 		}
 
 		// Message and Hint are the only unbounded prose columns. Wrap them
 		// before table rendering so one long diagnostic does not widen the
 		// whole table past a normal terminal.
-		stringRows[i] = []string{
-			statusGlyph,
-			r.Domain,
-			r.Target,
-			fileStr,
-			wrapDiagnosticText(r.Message),
-			wrapDiagnosticText(r.Hint),
+		cells := make([]string, 0, 6)
+		cells = append(cells, statusGlyph)
+		if showDomain {
+			cells = append(cells, r.Domain)
 		}
+		cells = append(cells, r.Target, fileStr, wrapDiagnosticText(r.Message), wrapDiagnosticText(r.Hint))
+		stringRows[i] = cells
 
 		// Per-column styles: only the status column is styled; others inherit base.
 		cellStyles[i] = map[int]lipgloss.Style{
@@ -66,20 +115,33 @@ func DiagnosticsTable(rows []DiagnosticRow) string {
 		}
 	}
 
-	t := baseTable("STATUS", "DOMAIN", "TARGET", "FILE", "MESSAGE", "HINT").
+	headers := make([]string, 0, 6)
+	headers = append(headers, "STATUS")
+	if showDomain {
+		headers = append(headers, "DOMAIN")
+	}
+	headers = append(headers, "TARGET", "FILE", "MESSAGE", "HINT")
+
+	t := baseTable(headers...).
 		BorderRow(true).
 		StyleFunc(func(row, col int) lipgloss.Style {
+			// One column of horizontal padding on every cell so content never
+			// abuts the vertical border. This is load-bearing for URL hints:
+			// when a link exactly fills its column, a terminal's link detector
+			// would otherwise grab the adjoining "│" (encoding it as %E2%94%82)
+			// and produce a dead link. The trailing pad space gives it a clean
+			// boundary to stop at.
 			if row == table.HeaderRow {
-				h := headerRowStyle()
+				h := headerRowStyle().Padding(0, 1)
 				if col == 0 {
 					h = h.AlignHorizontal(lipgloss.Center)
 				}
 				return h
 			}
-			style := lipgloss.NewStyle()
+			style := lipgloss.NewStyle().Padding(0, 1)
 			if row >= 0 && row < len(cellStyles) {
 				if s, ok := cellStyles[row][col]; ok {
-					style = s
+					style = s.Padding(0, 1)
 				}
 			}
 			if col == 0 {
@@ -92,6 +154,114 @@ func DiagnosticsTable(rows []DiagnosticRow) string {
 		})
 
 	return renderRows(t, stringRows)
+}
+
+// domainDisplayOrder is the canonical ordering for per-domain tables, mirroring
+// the order validators are assembled in. Domains absent from this list sort
+// after these, alphabetically.
+var domainDisplayOrder = []string{
+	"config", "templates", "commands", "env", "i18n",
+	"checks", "linters", "snapshot", "setup",
+}
+
+// domainLabels maps a diagnostic domain to a human-friendly table title. A
+// domain without an entry falls back to its raw key.
+var domainLabels = map[string]string{
+	"config":    "Configuration",
+	"templates": "Template packs",
+	"commands":  "Commands",
+	"env":       "Environment",
+	"i18n":      "Translations",
+	"checks":    "Project checks",
+	"linters":   "Linters",
+	"snapshot":  "Snapshots",
+	"setup":     "Setup wizard",
+}
+
+// sortDomainsForDisplay orders domains by domainDisplayOrder, with unknown
+// domains appended alphabetically after the known set.
+func sortDomainsForDisplay(domains []string) {
+	rank := make(map[string]int, len(domainDisplayOrder))
+	for i, d := range domainDisplayOrder {
+		rank[d] = i
+	}
+	sort.SliceStable(domains, func(i, j int) bool {
+		ri, oki := rank[domains[i]]
+		rj, okj := rank[domains[j]]
+		switch {
+		case oki && okj:
+			return ri < rj
+		case oki != okj:
+			return oki // known domains sort before unknown
+		default:
+			return domains[i] < domains[j]
+		}
+	})
+}
+
+// domainTitle returns the styled per-domain section title, colored by the worst
+// severity present in that domain's rows (red on any error, yellow on any
+// warning, else the neutral section-title style).
+func domainTitle(domain string, rows []DiagnosticRow) string {
+	label, ok := domainLabels[domain]
+	if !ok {
+		label = domain
+	}
+	worst := validate.SeverityOK
+	for _, r := range rows {
+		if r.Severity > worst {
+			worst = r.Severity
+		}
+	}
+	switch worst {
+	case validate.SeverityError:
+		return styles.StyleFailed(label)
+	case validate.SeverityWarning:
+		return styles.StyleWarning(label)
+	default:
+		return styles.StyleSectionTitle(label)
+	}
+}
+
+// wrapPath breaks a path on "/" boundaries so the FILE column stays within
+// width. The separator stays with the preceding segment; a single segment
+// wider than width is hard-split via splitDisplayWidth.
+func wrapPath(s string, width int) string {
+	if s == "" || width <= 0 || lipgloss.Width(s) <= width {
+		return s
+	}
+
+	var out []string
+	current := ""
+	flush := func() {
+		if current != "" {
+			out = append(out, current)
+			current = ""
+		}
+	}
+	for _, part := range strings.SplitAfter(s, "/") {
+		if part == "" {
+			continue
+		}
+		for lipgloss.Width(part) > width {
+			head, tail := splitDisplayWidth(part, width)
+			flush()
+			out = append(out, head)
+			part = tail
+		}
+		if current == "" {
+			current = part
+			continue
+		}
+		if lipgloss.Width(current+part) <= width {
+			current += part
+			continue
+		}
+		flush()
+		current = part
+	}
+	flush()
+	return strings.Join(out, "\n")
 }
 
 // severityGlyph returns the glyph for a severity level.
@@ -162,6 +332,13 @@ func wrapText(s string, width int) string {
 	return strings.Join(lines, "\n")
 }
 
+// isURLToken reports whether a whitespace-delimited token is a URL that must
+// not be split across lines (so it stays copyable). A scheme separator is a
+// good-enough signal for the http(s) links we emit as diagnostic hints.
+func isURLToken(word string) bool {
+	return strings.Contains(word, "://")
+}
+
 func wrapLine(line string, width int) string {
 	if lipgloss.Width(line) <= width {
 		return line
@@ -175,7 +352,10 @@ func wrapLine(line string, width int) string {
 	var out []string
 	current := ""
 	for _, word := range words {
-		for lipgloss.Width(word) > width {
+		// URLs are kept whole even when they exceed the column width — a
+		// hard-split mid-URL produces an uncopyable link. They still break
+		// onto their own line (on the surrounding spaces), just never mid-token.
+		for !isURLToken(word) && lipgloss.Width(word) > width {
 			head, tail := splitDisplayWidth(word, width)
 			if current != "" {
 				out = append(out, current)

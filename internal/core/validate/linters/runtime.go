@@ -6,6 +6,8 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
+	"path/filepath"
+	"strings"
 	"sync/atomic"
 	"time"
 
@@ -253,7 +255,11 @@ func (v *linterValidator) Run(vctx validate.Context) []validate.Diagnostic {
 		}
 	}
 
-	// 9. defensive stamping in case adapter omitted Target/Domain.
+	// 9. defensive stamping in case adapter omitted Target/Domain, plus
+	// path relativization. Linters echo back the absolute file paths the
+	// walker handed them (collectFiles joins baseDir), which blows up the
+	// FILE column in the diagnostics table. Rewrite each finding's File to a
+	// project-root-relative path so the table stays narrow.
 	for i := range findings {
 		if findings[i].Domain == "" {
 			findings[i].Domain = Domain
@@ -261,6 +267,7 @@ func (v *linterValidator) Run(vctx validate.Context) []validate.Diagnostic {
 		if findings[i].Target == "" {
 			findings[i].Target = v.ID()
 		}
+		findings[i].File = relToBase(v.baseDir, findings[i].File)
 	}
 	for i := range operationalDiags {
 		if operationalDiags[i].Domain == "" {
@@ -272,6 +279,22 @@ func (v *linterValidator) Run(vctx validate.Context) []validate.Diagnostic {
 	}
 
 	return append(operationalDiags, findings...)
+}
+
+// relToBase rewrites an absolute file path to one relative to baseDir. It is a
+// no-op for empty or already-relative paths (the fake-linter and any adapter
+// that reports relative paths pass through unchanged), and falls back to the
+// original path when the file escapes baseDir (filepath.Rel yields a ".."
+// prefix) or relativization errors — better a long path than a wrong one.
+func relToBase(baseDir, file string) string {
+	if file == "" || baseDir == "" || !filepath.IsAbs(file) {
+		return file
+	}
+	rel, err := filepath.Rel(baseDir, file)
+	if err != nil || rel == ".." || strings.HasPrefix(rel, ".."+string(filepath.Separator)) {
+		return file
+	}
+	return rel
 }
 
 // boundedWriter is an io.Writer with a hard byte cap. Writes past the cap are

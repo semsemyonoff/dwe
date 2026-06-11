@@ -80,7 +80,7 @@ func (v *Validator) Run(ctx validate.Context) []validate.Diagnostic {
 				Target:   "commands",
 				File:     relFile,
 				Line:     0,
-				Message:  fmt.Sprintf("failed to parse: %v", err),
+				Message:  fmt.Sprintf("failed to parse: %s", stripParseFilePrefix(err, path)),
 				Hint:     "check YAML syntax and structure",
 			})
 			continue
@@ -288,6 +288,17 @@ func All() []validate.Validator {
 	return []validate.Validator{
 		&Validator{},
 	}
+}
+
+// stripParseFilePrefix removes the loader's "parse command file <path>: "
+// wrapper from a parse error. The diagnostic carries the file separately in its
+// File column, so the absolute path embedded by loader.ParseCommandFile is
+// redundant noise that widens the MESSAGE column. We anchor the strip on the
+// exact path the loader was handed (rather than guessing at the first ": "), so
+// a path containing ": " can't leave remnants; anything that is not this
+// wrapper passes through unchanged.
+func stripParseFilePrefix(err error, path string) string {
+	return strings.TrimPrefix(err.Error(), "parse command file "+path+": ")
 }
 
 func sortedCommandNames(cf *model.CommandFile) []string {

@@ -931,3 +931,57 @@ func TestValidateCmd_JSONMode_TextBehaviorUnchanged(t *testing.T) {
 	// Must contain "validation result" summary line.
 	require.Contains(t, got, "validation result", "text mode must produce summary line")
 }
+
+func TestParseSeverityLevels(t *testing.T) {
+	tests := []struct {
+		name    string
+		raw     string
+		want    map[validate.Severity]struct{}
+		wantErr bool
+	}{
+		{name: "empty is nil", raw: "", want: nil},
+		{name: "whitespace only is nil", raw: "  ", want: nil},
+		{
+			name: "single",
+			raw:  "error",
+			want: map[validate.Severity]struct{}{validate.SeverityError: {}},
+		},
+		{
+			name: "comma list with spacing and case",
+			raw:  " Error , warning ",
+			want: map[validate.Severity]struct{}{validate.SeverityError: {}, validate.SeverityWarning: {}},
+		},
+		{name: "unknown token errors", raw: "error,bogus", wantErr: true},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got, err := parseSeverityLevels(tt.raw)
+			if tt.wantErr {
+				require.Error(t, err)
+				return
+			}
+			require.NoError(t, err)
+			require.Equal(t, tt.want, got)
+		})
+	}
+}
+
+func TestFilterByLevels(t *testing.T) {
+	diags := []validate.Diagnostic{
+		{Severity: validate.SeverityOK},
+		{Severity: validate.SeverityWarning},
+		{Severity: validate.SeverityError},
+	}
+
+	// Nil set is a pass-through.
+	require.Len(t, filterByLevels(diags, nil), 3)
+
+	set := map[validate.Severity]struct{}{validate.SeverityError: {}, validate.SeverityWarning: {}}
+	got := filterByLevels(diags, set)
+	require.Len(t, got, 2)
+	for _, d := range got {
+		_, ok := set[d.Severity]
+		require.True(t, ok)
+	}
+}

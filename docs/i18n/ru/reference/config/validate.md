@@ -1,4 +1,4 @@
-> Translated from: reference/config/validate.md @ 2e0005dfc3f6
+> Translated from: reference/config/validate.md @ 1709ddc5afc0
 
 # validate.yml
 
@@ -402,6 +402,7 @@ commands:
 - `dwe validate --stage <name>` — локальный флаг команды `validate`. Фильтрует `checks.*` по стадии. `env.*` и другие домены не затрагиваются (у них нет стадий).
 - `dwe validate --strict` — трактовать предупреждения как ошибки (exit 1).
 - `dwe validate --quiet` — скрыть строки ok / info.
+- `dwe validate --level <levels>` — показать только указанные уровни серьёзности (через запятую: `ok`, `info`, `warning`, `error`; например `--level error,warning`). Только для отображения — не влияет ни на итоговые счётчики, ни на код выхода. Применяется и к таблице, и к `--output json`.
 - `--skip-preflight` — локальный флаг для `deploy run`, `run`, `stop` и `restart`. Если задан, preflight печатает `preflight skipped (--skip-preflight)` в stderr и НЕ запускает валидаторов. Флаг — это полноценный байпас: проверки `type: command` вызывают произвольные пользовательские скрипты, поэтому CLI не запускает их под флагом, который пользователь назвал «skip».
 
 ## Диагностический вывод
