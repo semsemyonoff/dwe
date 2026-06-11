@@ -53,6 +53,77 @@ type diagnosticJSON struct {
 	Hint     string `json:"hint,omitempty"`
 }
 
+// severityNames maps the lowercase level tokens accepted by --level (and emitted
+// by severityString) to their validate.Severity. Kept as the single source of
+// truth for both parsing and shell completion.
+var severityNames = map[string]validate.Severity{
+	"ok":      validate.SeverityOK,
+	"info":    validate.SeverityInfo,
+	"warning": validate.SeverityWarning,
+	"error":   validate.SeverityError,
+}
+
+// parseSeverityLevels turns the comma-separated --level value into a set of
+// severities to display. An empty value yields a nil set, meaning "show all".
+// An unknown token is a typed user error so JSON mode reports it cleanly.
+func parseSeverityLevels(raw string) (map[validate.Severity]struct{}, error) {
+	raw = strings.TrimSpace(raw)
+	if raw == "" {
+		return nil, nil
+	}
+	set := make(map[validate.Severity]struct{})
+	for tok := range strings.SplitSeq(raw, ",") {
+		tok = strings.ToLower(strings.TrimSpace(tok))
+		if tok == "" {
+			continue
+		}
+		sev, ok := severityNames[tok]
+		if !ok {
+			return nil, cmdctx.Err("validate_invalid_level",
+				fmt.Sprintf("unknown severity level %q (valid: ok, info, warning, error)", tok)).
+				WithHint("pass a comma-separated list, e.g. --level error,warning")
+		}
+		set[sev] = struct{}{}
+	}
+	if len(set) == 0 {
+		return nil, nil
+	}
+	return set, nil
+}
+
+// filterByLevels keeps only diagnostics whose severity is in set. A nil/empty
+// set is a pass-through (no --level given → show everything).
+func filterByLevels(diags []validate.Diagnostic, set map[validate.Severity]struct{}) []validate.Diagnostic {
+	if len(set) == 0 {
+		return diags
+	}
+	out := make([]validate.Diagnostic, 0, len(diags))
+	for _, d := range diags {
+		if _, ok := set[d.Severity]; ok {
+			out = append(out, d)
+		}
+	}
+	return out
+}
+
+// completeLevels offers severity names for `--level` shell completion, honoring
+// the comma-separated form by completing the final token in place.
+func completeLevels(_ *cobra.Command, _ []string, toComplete string) ([]string, cobra.ShellCompDirective) {
+	prefix := ""
+	last := toComplete
+	if i := strings.LastIndex(toComplete, ","); i >= 0 {
+		prefix = toComplete[:i+1]
+		last = toComplete[i+1:]
+	}
+	var out []string
+	for _, name := range []string{"ok", "info", "warning", "error"} {
+		if strings.HasPrefix(name, last) {
+			out = append(out, prefix+name)
+		}
+	}
+	return out, cobra.ShellCompDirectiveNoFileComp | cobra.ShellCompDirectiveNoSpace
+}
+
 // severityString converts a validate.Severity to its JSON string representation.
 func severityString(s validate.Severity) string {
 	switch s {
@@ -126,6 +197,7 @@ func (e *validationFailedError) ExitCode() int {
 func NewCmd(groupID string, flags *cmdctx.RootFlags) *cobra.Command {
 	var strict, quiet bool
 	var stage string
+	var level string
 	var verifyChecksums bool
 
 	cmd := &cobra.Command{
@@ -135,8 +207,9 @@ func NewCmd(groupID string, flags *cmdctx.RootFlags) *cobra.Command {
 		Long: `Check project configuration files, template packs, command definitions, environment readiness, and project checks for errors and warnings.
 
 Validation runs statically without executing any commands or starting services. Results are
-reported in a table with severity levels (ok, info, warning, error). Use --strict to
-treat warnings as errors. Use --quiet to hide ok/info rows.
+reported as one table per domain with severity levels (ok, info, warning, error). Use --strict
+to treat warnings as errors, --quiet to hide ok/info rows, and --level to show only specific
+severities (comma-separated, e.g. --level error,warning).
 
 Severity levels:
   ✓ ok      - validation passed
@@ -172,6 +245,8 @@ Scope targets:
 	cmd.PersistentFlags().BoolVar(&strict, "strict", false, "treat warnings as errors (exit code 1)")
 	cmd.PersistentFlags().BoolVar(&quiet, "quiet", false, "hide ok/info rows")
 	cmd.PersistentFlags().StringVar(&stage, "stage", "", "filter checks by stage (deploy, run, stop, command, post-setup)")
+	cmd.PersistentFlags().StringVar(&level, "level", "", "show only these severity levels (comma-separated: ok, info, warning, error)")
+	_ = cmd.RegisterFlagCompletionFunc("level", completeLevels)
 
 	// Config validators subtree.
 	configCmd := &cobra.Command{
@@ -432,14 +507,26 @@ func runValidate(cmd *cobra.Command, flags *cmdctx.RootFlags, strict, quiet bool
 	registry := buildRegistry(cfg, validateCfg, validateLoadErr, snapCfg, snapCfgErr, setupCfg, setupCfgErr, setupPath, projectRoot, cmdReg, stage, verifyChecksums, scope, userCfg)
 	diags := registry.Run(ctx, scope...)
 
-	// Compute summary first so the header can reflect overall severity.
+	// Compute summary first so the header can reflect overall severity. The
+	// summary (and therefore the exit code) is always computed over the full
+	// diagnostic set — the --level filter below is display-only.
 	summary := validate.Aggregate(diags)
+
+	// Optional severity filter (--level): like --quiet, it only narrows which
+	// diagnostics are shown (in both text and JSON). It never changes the
+	// summary counts or the exit code.
+	levelRaw, _ := cmd.Flags().GetString("level")
+	levelSet, levelErr := parseSeverityLevels(levelRaw)
+	if levelErr != nil {
+		return levelErr
+	}
+	displayDiags := filterByLevels(diags, levelSet)
 
 	// JSON mode: emit data DTO and preserve exit code via validationFailedError.
 	// Diagnostics ARE the data — no error envelope is emitted for validation
 	// failures (the exit code conveys severity; the envelope would be redundant).
 	if flags.Output == "json" {
-		data := buildValidateData(diags, summary)
+		data := buildValidateData(displayDiags, summary)
 		if err := cmdctx.WriteJSON(flags, cmd, data); err != nil {
 			return err
 		}
@@ -449,11 +536,12 @@ func runValidate(cmd *cobra.Command, flags *cmdctx.RootFlags, strict, quiet bool
 		return nil
 	}
 
-	// Text mode: render the diagnostics table (skip when no rows to avoid an empty bordered box).
-	rows := render.FormatDiagnostics(diags, quiet)
+	// Text mode: render one table per domain (skip when no rows to avoid an
+	// empty bordered box).
+	rows := render.FormatDiagnostics(displayDiags, quiet)
 	_, _ = fmt.Fprintln(cmd.OutOrStdout(), styleValidateHeader(validateHeader(scope, stage), summary))
 	if len(rows) > 0 {
-		_, _ = fmt.Fprintln(cmd.OutOrStdout(), render.DiagnosticsTable(rows))
+		_, _ = fmt.Fprintln(cmd.OutOrStdout(), render.DiagnosticsByDomain(rows))
 	}
 	summaryLine := render.FormatSummary(summary)
 	if partialLoadErr != nil {

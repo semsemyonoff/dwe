@@ -1,6 +1,7 @@
 package commands
 
 import (
+	"errors"
 	"os"
 	"path/filepath"
 	"strings"
@@ -718,6 +719,54 @@ func TestParamValidationDiagnostics(t *testing.T) {
 			v := &Validator{}
 			diags := v.Run(validate.Context{ProjectRoot: dir})
 			tc.checkDiag(t, diags)
+		})
+	}
+}
+
+func TestStripParseFilePrefix(t *testing.T) {
+	tests := []struct {
+		name string
+		err  error
+		path string
+		want string
+	}{
+		{
+			name: "strips loader wrapper with absolute path",
+			err:  errors.New("parse command file /Users/x/workspace/commands/a.yml: command \"c\": field \"bridge\" not allowed"),
+			path: "/Users/x/workspace/commands/a.yml",
+			want: "command \"c\": field \"bridge\" not allowed",
+		},
+		{
+			name: "strips wrapper before yaml error",
+			err:  errors.New("parse command file /abs/b.yml: YAML parse error: yaml: line 4: bad"),
+			path: "/abs/b.yml",
+			want: "YAML parse error: yaml: line 4: bad",
+		},
+		{
+			name: "path containing colon-space is stripped exactly",
+			err:  errors.New("parse command file /abs/build: prod/a.yml: command \"c\": bad"),
+			path: "/abs/build: prod/a.yml",
+			want: "command \"c\": bad",
+		},
+		{
+			name: "non-wrapper message passes through",
+			err:  errors.New("some other error: detail"),
+			path: "/abs/x.yml",
+			want: "some other error: detail",
+		},
+		{
+			name: "mismatched path passes through unchanged",
+			err:  errors.New("parse command file /abs/c.yml: oops"),
+			path: "/different/path.yml",
+			want: "parse command file /abs/c.yml: oops",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := stripParseFilePrefix(tt.err, tt.path); got != tt.want {
+				t.Errorf("stripParseFilePrefix() = %q, want %q", got, tt.want)
+			}
 		})
 	}
 }

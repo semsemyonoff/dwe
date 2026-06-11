@@ -20,6 +20,14 @@ import (
 // Domain is the diagnostic domain stamped on every linter-produced diagnostic.
 const Domain = "linters"
 
+// Rule-documentation base URLs used to build diagnostic hints. shellcheckWikiBase
+// is shared: the shellcheck adapter links its own SC findings, and the hadolint
+// adapter links the SC codes hadolint surfaces from its embedded shellcheck.
+const (
+	shellcheckWikiBase = "https://www.shellcheck.net/wiki/"
+	hadolintWikiBase   = "https://github.com/hadolint/hadolint/wiki/"
+)
+
 // Adapter is the contract between the linters runtime and a specific linter
 // integration (shellcheck, hadolint, generic, ...). Adapters are pure value
 // types: no I/O, no goroutines, no state — the runtime owns the subprocess

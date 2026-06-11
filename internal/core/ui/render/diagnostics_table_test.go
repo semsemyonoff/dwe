@@ -95,6 +95,65 @@ func TestRenderDiagnosticsTable_WrapsLongMessageAndHint(t *testing.T) {
 	}
 }
 
+func TestDiagnosticsByDomain(t *testing.T) {
+	rows := []DiagnosticRow{
+		{Severity: validate.SeverityError, Domain: "linters", Target: "hadolint", File: "Dockerfile", Message: "pin versions"},
+		{Severity: validate.SeverityWarning, Domain: "config", Target: "config.workspace", File: "workspace.yml", Message: "deprecated field"},
+		{Severity: validate.SeverityOK, Domain: "config", Target: "config.docker", File: "workspace/docker.yml"},
+	}
+
+	output := DiagnosticsByDomain(rows)
+
+	// Per-domain titles are rendered (human labels), not the raw DOMAIN column.
+	for _, want := range []string{"Configuration", "Linters", "hadolint", "deprecated field"} {
+		if !strings.Contains(output, want) {
+			t.Errorf("output missing %q:\n%s", want, output)
+		}
+	}
+	// The DOMAIN column header must be gone in the per-domain layout.
+	if strings.Contains(output, "DOMAIN") {
+		t.Errorf("per-domain output should not contain a DOMAIN column:\n%s", output)
+	}
+	// config sorts before linters in domainDisplayOrder.
+	if i, j := strings.Index(output, "Configuration"), strings.Index(output, "Linters"); i < 0 || j < 0 || i > j {
+		t.Errorf("expected Configuration before Linters, got config@%d linters@%d", i, j)
+	}
+}
+
+func TestDiagnosticsByDomain_Empty(t *testing.T) {
+	if got := DiagnosticsByDomain(nil); got != "" {
+		t.Errorf("expected empty string for no rows, got %q", got)
+	}
+}
+
+func TestSortDomainsForDisplay(t *testing.T) {
+	domains := []string{"zeta", "linters", "config", "alpha", "commands"}
+	sortDomainsForDisplay(domains)
+	want := []string{"config", "commands", "linters", "alpha", "zeta"}
+	for i := range want {
+		if domains[i] != want[i] {
+			t.Fatalf("sortDomainsForDisplay = %v, want %v", domains, want)
+		}
+	}
+}
+
+func TestWrapPath(t *testing.T) {
+	const width = 20
+	got := wrapPath("services/catalog/src/docker/Dockerfile", width)
+	for line := range strings.SplitSeq(got, "\n") {
+		if w := lipgloss.Width(line); w > width {
+			t.Fatalf("wrapped path line width = %d, want <= %d: %q", w, width, line)
+		}
+	}
+	if !strings.Contains(got, "\n") {
+		t.Fatalf("expected long path to wrap, got %q", got)
+	}
+	// Short paths pass through untouched.
+	if got := wrapPath("workspace.yml", width); got != "workspace.yml" {
+		t.Fatalf("short path should not wrap, got %q", got)
+	}
+}
+
 func TestFormatDiagnostics_Quiet(t *testing.T) {
 	diags := []validate.Diagnostic{
 		{Severity: validate.SeverityOK, Domain: "config", Target: "config.dwe"},
@@ -147,6 +206,42 @@ func TestWrapDiagnosticText_LongToken(t *testing.T) {
 	for line := range strings.SplitSeq(wrapped, "\n") {
 		if got := lipgloss.Width(line); got > diagnosticTextWrapWidth {
 			t.Fatalf("wrapped line width = %d, want <= %d: %q", got, diagnosticTextWrapWidth, line)
+		}
+	}
+}
+
+func TestWrapDiagnosticText_KeepsURLWhole(t *testing.T) {
+	url := "https://github.com/hadolint/hadolint/wiki/DL3008"
+	if w := lipgloss.Width(url); w <= diagnosticTextWrapWidth {
+		t.Fatalf("test precondition: URL width %d should exceed wrap width %d", w, diagnosticTextWrapWidth)
+	}
+
+	// Bare URL stays on a single line.
+	if got := wrapDiagnosticText(url); strings.Contains(got, "\n") {
+		t.Errorf("bare URL must not be split, got:\n%s", got)
+	}
+
+	// URL embedded in prose breaks onto its own line but stays intact.
+	wrapped := wrapDiagnosticText("see " + url + " for details")
+	if !strings.Contains(wrapped, url) {
+		t.Errorf("URL must survive wrapping intact, got:\n%s", wrapped)
+	}
+}
+
+func TestDiagnosticsTable_URLDoesNotTouchBorder(t *testing.T) {
+	url := "https://github.com/hadolint/hadolint/wiki/DL3008"
+	rows := []DiagnosticRow{
+		{Severity: validate.SeverityWarning, Domain: "linters", Target: "hadolint", File: "Dockerfile", Message: "pin versions", Hint: url},
+	}
+
+	for _, output := range []string{DiagnosticsTable(rows), DiagnosticsByDomain(rows)} {
+		if !strings.Contains(output, url) {
+			t.Fatalf("URL missing from output:\n%s", output)
+		}
+		// The cell padding must keep the URL off the border, otherwise a
+		// terminal link detector swallows the "│" into the link.
+		if strings.Contains(output, url+"│") {
+			t.Errorf("URL abuts the border (no padding):\n%s", output)
 		}
 	}
 }

@@ -108,6 +108,14 @@ func TestHadolintParseOutput(t *testing.T) {
 		if !contains(diags[0].Message, "DL3008") {
 			t.Errorf("diag[0] message missing code: %q", diags[0].Message)
 		}
+		// DL codes link to the hadolint wiki; SC codes (shellcheck rules
+		// surfaced by hadolint) link to the shellcheck wiki.
+		if want := "https://github.com/hadolint/hadolint/wiki/DL3008"; diags[0].Hint != want {
+			t.Errorf("diag[0] hint: want %q, got %q", want, diags[0].Hint)
+		}
+		if want := "https://www.shellcheck.net/wiki/SC2086"; diags[3].Hint != want {
+			t.Errorf("diag[3] hint: want %q, got %q", want, diags[3].Hint)
+		}
 	})
 
 	t.Run("empty stdout + non-zero exit + stderr → internal failure error", func(t *testing.T) {
@@ -156,4 +164,21 @@ func TestHadolintParseOutput(t *testing.T) {
 			t.Fatal("want parse error, got nil")
 		}
 	})
+}
+
+func TestHadolintRuleURL(t *testing.T) {
+	tests := []struct {
+		code string
+		want string
+	}{
+		{"DL3008", "https://github.com/hadolint/hadolint/wiki/DL3008"},
+		{"DL4006", "https://github.com/hadolint/hadolint/wiki/DL4006"},
+		{"SC2086", "https://www.shellcheck.net/wiki/SC2086"},
+		{"", ""},
+	}
+	for _, tt := range tests {
+		if got := hadolintRuleURL(tt.code); got != tt.want {
+			t.Errorf("hadolintRuleURL(%q) = %q, want %q", tt.code, got, tt.want)
+		}
+	}
 }
