@@ -159,12 +159,12 @@ Dependencies identified: new packages `internal/cli/vars/`, `internal/core/proje
 - Create: `internal/core/ui/render/vars.go`
 - Create: `internal/core/ui/render/vars_test.go`
 
-- [ ] `RenderVarValue(...)` — scalar or YAML subtree string for `get`.
-- [ ] `RenderVarsList(...)` — flat list of leaves (path + effective value + layer badge), namespace-filterable; styled via `styles` palette; returns string.
-- [ ] `RenderVarInspect(...)` — the per-layer block (`author`/`local`/`effective`), origin file, and grouped usages (relative path, `file:line`, line text with the matched fragment accented), plus the "dynamic paths not tracked" caveat. Width-aware wrapping.
-- [ ] Ensure all functions RETURN strings (no `io.Writer`); per section-renderer contract only `cli/` writes stdout.
-- [ ] Write tests: golden output for list (filtered/unfiltered), inspect (with/without local override, with/without usages), value (scalar/subtree). Use deterministic ordering.
-- [ ] `make embedded-docs` once, then `go test ./internal/core/ui/render/...` (focused) — must pass before Task 6.
+- [x] `RenderVarValue(...)` — scalar or YAML subtree string for `get`.
+- [x] `RenderVarsList(...)` — flat list of leaves (path + effective value + layer badge), namespace-filterable; styled via `styles` palette; returns string.
+- [x] `RenderVarInspect(...)` — the per-layer block (`author`/`local`/`effective`), origin file, and grouped usages (relative path, `file:line`, line text with the matched fragment accented), plus the "dynamic paths not tracked" caveat. Width-aware wrapping.
+- [x] Ensure all functions RETURN strings (no `io.Writer`); per section-renderer contract only `cli/` writes stdout.
+- [x] Write tests: golden output for list (filtered/unfiltered), inspect (with/without local override, with/without usages), value (scalar/subtree). Use deterministic ordering.
+- [x] `make embedded-docs` once, then `go test ./internal/core/ui/render/...` (focused) — must pass before Task 6.
 
 ### Task 6: `dwe vars` command skeleton + `get` + `list` + registration
 
