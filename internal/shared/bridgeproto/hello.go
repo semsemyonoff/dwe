@@ -16,7 +16,11 @@ const (
 	ErrCodeAuthFailed = "auth_failed"
 	// ErrCodeVersionMismatch — HELLO protocol_version differs from the daemon's.
 	ErrCodeVersionMismatch = "version_mismatch"
-	// ErrCodeCwdOutsideProject — translated cwd resolves outside the project root.
+	// ErrCodeCwdOutsideProject — translated cwd resolves outside the project
+	// root. No longer emitted: the daemon now falls back to its project root
+	// for any cwd it cannot place inside the project (hooks routinely cd
+	// outside the container mount). Kept for wire compatibility with shims
+	// materialized by older dwe builds.
 	ErrCodeCwdOutsideProject = "cwd_outside_project"
 	// ErrCodeTTYUnsupported — HELLO requested a tty; the bridge never allocates one.
 	ErrCodeTTYUnsupported = "tty_unsupported"

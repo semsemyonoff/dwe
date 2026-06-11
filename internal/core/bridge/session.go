@@ -90,10 +90,9 @@ func (d *Daemon) acceptHello(conn net.Conn) (bridgeproto.Hello, string, bool) {
 		return bridgeproto.Hello{}, "", false
 	}
 
-	cwd, err := validateCwd(hello.Cwd, d.root)
-	if err != nil {
-		d.sendError(conn, bridgeproto.ErrCodeCwdOutsideProject, err.Error())
-		return bridgeproto.Hello{}, "", false
+	cwd, note := resolveCwd(hello.Cwd, d.root)
+	if note != "" {
+		d.logf("bridge: %s; running from project root", note)
 	}
 
 	if hello.TTY {
@@ -242,18 +241,29 @@ func (d *Daemon) sendError(conn net.Conn, code, message string) {
 // validateCwd enforces the D5 containment rule: the (already translated)
 // HELLO cwd must realpath-resolve inside the realpath'd project root. The
 // resolved path becomes the subprocess working directory.
-func validateCwd(cwd, root string) (string, error) {
+// resolveCwd maps the client-reported cwd onto a host working directory for
+// the forked dwe. A cwd that resolves inside the project is used as-is; any
+// other shape FALLS BACK to the daemon's own project root with a log note
+// instead of rejecting the session. The untranslatable shapes are routine —
+// a git hook or script that cd'd outside the service's dir/dir_internal
+// mapping (e.g. a host-layout `cd ../..` walking out of the container
+// mount) sends `/` or a container-only path here — and rejection would
+// break every such hook. The fallback cannot be abused to point the host
+// dwe at foreign state: the substituted root is the daemon's pinned project
+// root, never a client-chosen path, and an in-project cwd is what a
+// host-side run from the root would use anyway.
+func resolveCwd(cwd, root string) (resolved, note string) {
 	if !filepath.IsAbs(cwd) {
-		return "", fmt.Errorf("cwd %q is not an absolute host path", cwd)
+		return root, fmt.Sprintf("cwd %q is not an absolute host path", cwd)
 	}
 	resolved, err := filepath.EvalSymlinks(cwd)
 	if err != nil {
-		return "", fmt.Errorf("cwd %q does not resolve on the host: %v", cwd, err)
+		return root, fmt.Sprintf("cwd %q does not resolve on the host: %v", cwd, err)
 	}
 	if resolved != root && !strings.HasPrefix(resolved, root+string(filepath.Separator)) {
-		return "", fmt.Errorf("cwd %q is outside the project root", cwd)
+		return root, fmt.Sprintf("cwd %q is outside the project root", cwd)
 	}
-	return resolved, nil
+	return resolved, ""
 }
 
 // hostControlledEnv are the variables force-set below; client-sent values

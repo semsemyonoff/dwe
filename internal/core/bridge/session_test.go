@@ -391,23 +391,32 @@ func TestSession_AuthFailedOnWrongToken(t *testing.T) {
 	}
 }
 
-func TestSession_CwdOutsideProject(t *testing.T) {
+// TestSession_CwdOutsideProjectFallsBackToRoot pins the hook-friendly cwd
+// contract: a cwd the daemon cannot place inside the project (a hook that
+// cd'd out of the container mount sends `/`, an untranslated container path
+// may not exist on the host at all) must not kill the session — the forked
+// dwe runs from the daemon's own project root instead.
+func TestSession_CwdOutsideProjectFallsBackToRoot(t *testing.T) {
 	rec := &launchRecorder{}
 	d := startDaemon(t, fakeLauncher(rec, exitScript(0)), nil)
 	outside := shortTempDir(t)
 
-	var stdout, stderr bytes.Buffer
-	opts := clientOptions(d, tcpClientDir(t, d), &stdout, &stderr)
-	opts.Cwd = outside // exists on the host but is not inside the project
+	for _, cwd := range []string{outside, "/", "/var/www/html-that-does-not-exist"} {
+		var stdout, stderr bytes.Buffer
+		opts := clientOptions(d, tcpClientDir(t, d), &stdout, &stderr)
+		opts.Cwd = cwd
 
-	if code := bridgeclient.Run(opts); code != 1 {
-		t.Errorf("Run = %d, want 1", code)
-	}
-	if got := stderr.String(); !strings.Contains(got, "outside the project root") {
-		t.Errorf("stderr = %q, want the containment message", got)
-	}
-	if len(rec.specs) != 0 {
-		t.Error("subprocess launched despite cwd outside the project")
+		before := len(rec.specs)
+		if code := bridgeclient.Run(opts); code != 0 {
+			t.Errorf("cwd %q: Run = %d, want 0 (stderr: %s)", cwd, code, stderr.String())
+			continue
+		}
+		if len(rec.specs) != before+1 {
+			t.Fatalf("cwd %q: subprocess not launched", cwd)
+		}
+		if got := rec.specs[before].Dir; got != d.root {
+			t.Errorf("cwd %q: spec.Dir = %q, want project root %q", cwd, got, d.root)
+		}
 	}
 }
 
@@ -582,7 +591,7 @@ func TestSubprocessEnv(t *testing.T) {
 	}
 }
 
-func TestValidateCwd(t *testing.T) {
+func TestResolveCwd(t *testing.T) {
 	root := shortTempDir(t)
 	resolvedRoot, err := filepath.EvalSymlinks(root)
 	if err != nil {
@@ -602,32 +611,30 @@ func TestValidateCwd(t *testing.T) {
 	t.Cleanup(func() { _ = os.RemoveAll(sibling) })
 
 	tests := []struct {
-		name    string
-		cwd     string
-		want    string
-		wantErr string
+		name     string
+		cwd      string
+		want     string
+		wantNote string // non-empty means fallback to root with this note
 	}{
 		{"project root", root, resolvedRoot, ""},
 		{"subdir", sub, filepath.Join(resolvedRoot, "sub"), ""},
-		{"outside", outside, "", "outside the project root"},
-		{"sibling prefix is not containment", sibling, "", "outside the project root"},
-		{"nonexistent", filepath.Join(root, "missing"), "", "does not resolve"},
-		{"relative", "sub", "", "not an absolute host path"},
+		{"outside falls back", outside, resolvedRoot, "outside the project root"},
+		{"sibling prefix is not containment", sibling, resolvedRoot, "outside the project root"},
+		{"nonexistent falls back", filepath.Join(root, "missing"), resolvedRoot, "does not resolve"},
+		{"relative falls back", "sub", resolvedRoot, "not an absolute host path"},
+		{"slash falls back (hook cd'd out of the mount)", "/", resolvedRoot, "outside the project root"},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got, err := validateCwd(tt.cwd, resolvedRoot)
-			if tt.wantErr != "" {
-				if err == nil || !strings.Contains(err.Error(), tt.wantErr) {
-					t.Fatalf("validateCwd(%q) err = %v, want containing %q", tt.cwd, err, tt.wantErr)
-				}
-				return
+			got, note := resolveCwd(tt.cwd, resolvedRoot)
+			if tt.wantNote == "" && note != "" {
+				t.Fatalf("resolveCwd(%q) note = %q, want none", tt.cwd, note)
 			}
-			if err != nil {
-				t.Fatalf("validateCwd(%q): %v", tt.cwd, err)
+			if tt.wantNote != "" && !strings.Contains(note, tt.wantNote) {
+				t.Fatalf("resolveCwd(%q) note = %q, want containing %q", tt.cwd, note, tt.wantNote)
 			}
 			if got != tt.want {
-				t.Errorf("validateCwd(%q) = %q, want %q", tt.cwd, got, tt.want)
+				t.Errorf("resolveCwd(%q) = %q, want %q", tt.cwd, got, tt.want)
 			}
 		})
 	}

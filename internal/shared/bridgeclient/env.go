@@ -139,8 +139,8 @@ func SetStdinTTYEnv(env []string, stdinIsTTY bool) []string {
 
 // TranslateCwd rewrites a container working directory to the host path per
 // design D7: a cwd inside containerWS gets its prefix replaced with hostWS;
-// anything else is returned as-is (the daemon then rejects it with a
-// containment error). Matching is path-boundary aware ("/workspace" does not
+// anything else is returned as-is (the daemon then falls back to running
+// from its project root). Matching is path-boundary aware ("/workspace" does not
 // match "/workspaces") and paths are container-side, hence always
 // slash-separated.
 func TranslateCwd(cwd, containerWS, hostWS string) string {

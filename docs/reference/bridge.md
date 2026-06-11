@@ -58,7 +58,7 @@ bridge:
 
 `bridge.enabled` is a tristate and inherits through service [`extends:`](config/services/extends.md) the same way `render.git.enabled` does: an explicit value in the child wins, an unset child inherits the parent, and the off default applies only when neither sets it. `shim_path` and `on_unreachable` inherit when the child leaves them empty.
 
-A bridge-enabled service should declare the `dir` / `dir_internal` pair — it is what the shim's working-directory translation maps over. Without it the bridge mounts fine, but the daemon rejects every in-container invocation with a containment error (`dwe validate` warns about this).
+A bridge-enabled service should declare the `dir` / `dir_internal` pair — it is what the shim's working-directory translation maps over. Without it there is no working-directory translation, so every in-container invocation runs from the project root instead of the current directory (`dwe validate` warns about this).
 
 ## Transports
 
@@ -80,7 +80,7 @@ Selection, per invocation:
 
 The daemon always listens on the unix socket and on `127.0.0.1` with an ephemeral OS-assigned port (no port collisions, no LAN exposure — never `0.0.0.0`). On native Linux it additionally binds the docker bridge gateway IP (usually `172.17.0.1`) so containers can reach it; the generated overlay adds `extra_hosts: host.docker.internal:host-gateway` to every bridged service, which is required on Linux and harmless elsewhere. Exotic setups can override the listen addresses with the `DWE_BRIDGE_BIND` environment variable (a comma- or whitespace-separated address list) when starting the daemon. Wildcard addresses (`0.0.0.0`, `::`) are rejected from the override — binding all interfaces would break the no-LAN-exposure guarantee, so such an entry is ignored with a warning and the daemon falls back to the loopback default.
 
-Isolation is per project: each project has its own socket, port, and token under its own `.dwe/bridge/`; a container of one project connecting to another project's port fails authentication, and the daemon additionally rejects working directories outside its own project root.
+Isolation is per project: each project has its own socket, port, and token under its own `.dwe/bridge/`; a container of one project connecting to another project's port fails authentication, and the daemon never runs a command outside its own project root — an out-of-project working directory is replaced by the project root.
 
 ## Command policy inside containers
 
@@ -226,7 +226,7 @@ The command's argument vector is passed through untranslated — only the workin
 
 - **No interactive commands.** The bridge never allocates a pseudo-terminal; the policy blocks interactive commands, and everything else runs in the same non-interactive mode as CI.
 - **Absolute container paths in arguments** are not translated — use relative paths (the working directory is translated for you).
-- **Services without a `dir` / `dir_internal` pair** get no working-directory translation; the daemon then rejects in-container invocations with a containment error. `dwe validate` flags this.
+- **Services without a `dir` / `dir_internal` pair** get no working-directory translation; in-container invocations then run from the project root rather than the current directory. `dwe validate` flags this.
 - **Windows containers** and a Windows host-side dwe are out of scope; WSL2 with dwe installed in the distro works as the Linux case.
 
 ## Troubleshooting
@@ -238,6 +238,8 @@ The command's argument vector is passed through untranslated — only the workin
 **Bridged command hangs or fails only on native Linux** — UFW/firewalld may drop traffic arriving from the docker bridge network onto the gateway IP. The unix-socket transport is unaffected; if you need TCP, allow input from the docker bridge interface.
 
 **Rootless Docker on Linux** — `host-gateway` is broken there, so TCP is unavailable; the unix-socket path covers rootless setups. Note that user-namespace remapping can shift the peer uid the daemon sees; if peercred auth fails, run the stack non-rootless or consult the project's issue tracker for the token-on-unix fallback status.
+
+**A bridged command runs from the project root instead of the current directory** — the shim could not translate the container cwd to a host path (only the service's `dir` / `dir_internal` mapping is translatable), so the daemon fell back to the project root. Typical trigger: a git hook or script that `cd`'d out of the container mount before calling `dwe` (e.g. a host-layout `cd "$(git rev-parse --show-toplevel)/../../.."` lands on `/`). Commands keep working — `dwe bridge logs` records the fallback. Hooks don't need any `cd` at all: `dwe` discovers the project by walking up from any directory inside it.
 
 **The base image already has `/usr/local/bin/dwe`** — set `bridge.shim_path` to a different absolute path that wins in the container's `PATH`.
 
