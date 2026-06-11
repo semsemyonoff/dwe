@@ -613,6 +613,20 @@ func TestLoadConfig_update_invalidModeRejected(t *testing.T) {
 	}
 }
 
+func TestLoadConfig_update_invalidModeNamesSourceLayer(t *testing.T) {
+	// An invalid override in local.yml must be attributed to local.yml, not the
+	// top-level workspace.yml path — the message names the layer that supplied it.
+	lc := "update:\n  mode: bogus\n"
+	path := writeFullFixture(t, sampleWorkspaceYML, "", lc, "", noToolsYML)
+	_, err := LoadConfig(path)
+	if err == nil {
+		t.Fatal("expected error for invalid update.mode in local.yml")
+	}
+	if !strings.Contains(err.Error(), "update.mode") || !strings.Contains(err.Error(), "local.yml") {
+		t.Errorf("error = %q, want it to mention update.mode and local.yml", err)
+	}
+}
+
 func TestLoadConfig_noOptionalFiles(t *testing.T) {
 	// Works fine when defaults.yml, local.yml, and tools.yml are absent.
 	path := writeFullFixture(t, sampleWorkspaceYML, "", "", "", noToolsYML)

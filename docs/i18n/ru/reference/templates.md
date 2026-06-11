@@ -1,4 +1,4 @@
-> Translated from: reference/templates.md @ f52bd35c1f8a
+> Translated from: reference/templates.md @ ea25d28ee1fa
 
 # Шаблоны
 
@@ -62,7 +62,7 @@ path: "${param.dump_dir}/${param.database}{{ if .Params.dump_date }}_{{ now | da
 | `${host.uid}` / `${host.gid}` | Эффективные UID/GID (1000:1000 на macOS, реальные значения на Linux) |
 | `${generated.<name>}` | Значение по сервису, собранное в `.dwe/generated.yml` (только config-render-паки; отсутствующее → `""`). См. [render/config.md](render/config.md) |
 
-Всё, что не совпадает с известным неймспейсом (`${foo}`, `${a.b.c}`), трактуется как dot-path lookup в `Raw`. Литерал `$$` пропускается без изменений.
+Всё, что не совпадает с известным неймспейсом (`${foo}`, `${a.b.c}`), трактуется как dot-path lookup в `Raw`. **Для пользовательских значений конфига предпочитайте `${vars.*}`** — они живут под блоком `vars:` в YAML; строгий корень отвергает свободные ключи верхнего уровня, поэтому `vars:` — их единственный дом. Литерал `$$` пропускается без изменений.
 
 ### Квотинг шаблонов внутри YAML
 

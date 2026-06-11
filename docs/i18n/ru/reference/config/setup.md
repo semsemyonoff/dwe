@@ -1,4 +1,4 @@
-> Translated from: reference/config/setup.md @ 5e17e9e4f291
+> Translated from: reference/config/setup.md @ f8ea5717e00e
 
 # setup.yml
 
@@ -339,7 +339,7 @@ Multi-choice список. Разработчик выбирает ноль ил
 - writes: vars.custom.setting             # ✓ allowed
 ```
 
-Визард пишет типизированное значение ответа дословно (string для `input` / `select` / `confirm`, slice для `multiselect`) и доверяет потребляющему конфигу (шаблоны, экспорты и т.д.) обрабатывать его адекватно.
+Визард пишет типизированное значение ответа дословно (string для `input` / `select`, bool для `confirm`, slice для `multiselect`) и доверяет потребляющему конфигу (шаблоны, экспорты и т.д.) обрабатывать его адекватно.
 
 ## Примеры
 

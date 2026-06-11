@@ -54,7 +54,7 @@ var ContentHashes = map[string]string{
 	"reference/config/services/extends.md":     "31ea4dfb5614",
 	"reference/config/services/fields.md":      "be00b3e8c9b1",
 	"reference/config/services/index.md":       "7b6da59c4b35",
-	"reference/config/setup.md":                "5e17e9e4f291",
+	"reference/config/setup.md":                "f8ea5717e00e",
 	"reference/config/snapshot.md":             "b82d30fabf87",
 	"reference/config/state/hashing.md":        "e5639ee9d79e",
 	"reference/config/state/index.md":          "f005464d1b6a",
@@ -76,5 +76,5 @@ var ContentHashes = map[string]string{
 	"reference/render/git.md":                  "f8537aeb98f0",
 	"reference/render/ide.md":                  "43038f7761e6",
 	"reference/render/index.md":                "5a0e41f982dc",
-	"reference/templates.md":                   "f52bd35c1f8a",
+	"reference/templates.md":                   "ea25d28ee1fa",
 }

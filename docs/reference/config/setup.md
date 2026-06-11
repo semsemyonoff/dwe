@@ -337,7 +337,7 @@ Custom values belong under the [`vars:` sandbox](workspace.md#strict-root--the-v
 - writes: vars.custom.setting             # ✓ allowed
 ```
 
-The wizard writes the typed answer value verbatim (string for `input` / `select` / `confirm`, slice for `multiselect`) and trusts the consuming config (templates, exports, etc.) to handle it appropriately.
+The wizard writes the typed answer value verbatim (string for `input` / `select`, bool for `confirm`, slice for `multiselect`) and trusts the consuming config (templates, exports, etc.) to handle it appropriately.
 
 ## Examples
 

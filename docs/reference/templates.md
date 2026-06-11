@@ -60,7 +60,7 @@ Rule of thumb: use `${...}` for plain lookups; reach for `{{ ... }}` whenever yo
 | `${host.uid}` / `${host.gid}` | Effective UID/GID (1000:1000 on macOS, real values on Linux) |
 | `${generated.<name>}` | Per-service value harvested into `.dwe/generated.yml` (config render packs only; absent → `""`). See [render/config.md](render/config.md) |
 
-Anything that doesn't match a known namespace (`${foo}`, `${a.b.c}`) is treated as a dot-path lookup against `Raw`. A literal `$$` passes through unchanged.
+Anything that doesn't match a known namespace (`${foo}`, `${a.b.c}`) is treated as a dot-path lookup against `Raw`. **Prefer `${vars.*}` for user-defined config values** stored under the `vars:` block in YAML — the strict root rejects free-form top-level keys, so `vars:` is their single home. A literal `$$` passes through unchanged.
 
 ### Quoting templates inside YAML
 

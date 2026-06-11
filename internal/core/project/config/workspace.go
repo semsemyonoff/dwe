@@ -1471,7 +1471,22 @@ func LoadConfig(workspacePath string) (*DweConfig, error) {
 	// and then silently ActionSkip at run-time. Mirrors the old lifecycle loader's
 	// update.mode check; an empty mode is the present-but-default opt-in (→ on).
 	if cfg.Update != nil && cfg.Update.Mode != "" && !ValidUpdateMode(cfg.Update.Mode) {
-		return nil, fmt.Errorf("%s: update.mode %q is invalid; must be one of: on, off", workspacePath, cfg.Update.Mode)
+		// Attribute the bad value to the layer that actually supplied it — the
+		// highest-precedence layer setting a non-empty update.mode wins the
+		// merge — so the message names the right file (mirrors the per-layer
+		// strict-root / legacy-key errors above). Falls back to workspacePath.
+		modePath := workspacePath
+		for _, layer := range slices.Backward(layers) {
+			updMap, ok := layer.data["update"].(map[string]any)
+			if !ok {
+				continue
+			}
+			if mode, ok := updMap["mode"].(string); ok && mode != "" {
+				modePath = layer.path
+				break
+			}
+		}
+		return nil, fmt.Errorf("%s: update.mode %q is invalid; must be one of: on, off", modePath, cfg.Update.Mode)
 	}
 
 	// Load user-config for binary overrides. On error, log warning and continue
