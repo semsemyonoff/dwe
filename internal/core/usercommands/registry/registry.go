@@ -127,7 +127,10 @@ func (r *Registry) addCommandFile(cf *model.CommandFile) error {
 		gn.Meta.Hide = cf.Group.Hide
 	}
 	if cf.Group.Bridge != nil {
-		gn.Meta.Bridge = cf.Group.Bridge
+		// Field-wise like MergeBridge everywhere else — a later file that
+		// sets only `enabled` must not wholesale-drop an earlier file's
+		// `services` restriction on the same group node.
+		gn.Meta.Bridge = model.MergeBridge(gn.Meta.Bridge, cf.Group.Bridge)
 	}
 
 	names := make([]string, 0, len(cf.Commands))

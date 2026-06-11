@@ -67,9 +67,9 @@ commands:
 | Field | Type | Default | Description |
 |-------|------|---------|-------------|
 | `bridge.enabled` | bool | `false` | Opt the command in to the container surface. |
-| `bridge.services` | list | all | Restrict visibility to the containers of the named services (`workspace/services/<name>` folder names). Absent or empty means every bridge-enabled service. |
+| `bridge.services` | list | all | Restrict visibility to the containers of the named services (`workspace/services/<name>` folder names). Absent means "inherit from the group, or all services when nowhere set"; an explicit `services: []` overrides an inherited restriction back to all services. |
 
-The same block is valid on the file's `group:` header, where it sets the default for every command in the file. Inheritance is **field-wise**: an absent command field inherits the group value, a set one overrides it — so a command can flip `enabled: false` under an enabling group, or widen/narrow `services` on its own.
+The same block is valid on the file's `group:` header, where it sets the default for every command in the file. Inheritance is **field-wise**: an absent command field inherits the group value, a set one overrides it — so a command can flip `enabled: false` under an enabling group, or widen/narrow `services` on its own. For `services` the absent/empty distinction matters: an omitted field inherits the group list, while an explicit `services: []` is a declared override back to "all services" (`dwe validate` flags the empty list so the intent stays visible).
 
 ```yaml
 group:

@@ -3,6 +3,7 @@ package command
 import (
 	"context"
 	"errors"
+	"io"
 	"os"
 	"path/filepath"
 	"strings"
@@ -147,8 +148,8 @@ func TestBridgeGate_InspectRejectedInContainer(t *testing.T) {
 	cmd := NewCmd("", flags)
 	cmd.SetContext(context.Background())
 	cmd.SetArgs([]string{"--inspect", "tools.unmarked"})
-	cmd.SetOut(os.NewFile(0, os.DevNull))
-	cmd.SetErr(os.NewFile(0, os.DevNull))
+	cmd.SetOut(io.Discard)
+	cmd.SetErr(io.Discard)
 	err := cmd.Execute()
 	var ce *cmdctx.CodedError
 	if !errors.As(err, &ce) || ce.Code != "command_not_bridged" {

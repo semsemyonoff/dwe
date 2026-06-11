@@ -102,6 +102,41 @@ func TestEnsureCreatesBridgeDirRestrictive(t *testing.T) {
 	}
 }
 
+func TestEnsureRejectsSymlinkedBridgeDir(t *testing.T) {
+	cfg, spawned := ensureTestSetup(t)
+	bridgeDir := DefaultBridgeDir(cfg.ProjectRoot)
+	if err := os.MkdirAll(filepath.Dir(bridgeDir), 0o755); err != nil {
+		t.Fatalf("mkdir .dwe: %v", err)
+	}
+	target := t.TempDir()
+	if err := os.Symlink(target, bridgeDir); err != nil {
+		t.Fatalf("symlink: %v", err)
+	}
+
+	if _, err := Ensure(cfg); err == nil || !strings.Contains(err.Error(), "symlink") {
+		t.Fatalf("Ensure must refuse a symlinked bridge dir, got %v", err)
+	}
+	if len(*spawned) != 0 {
+		t.Errorf("no daemon must be spawned through a symlink, got %d", len(*spawned))
+	}
+}
+
+func TestEnsureRejectsSymlinkedDweDir(t *testing.T) {
+	cfg, spawned := ensureTestSetup(t)
+	dweDir := filepath.Dir(DefaultBridgeDir(cfg.ProjectRoot))
+	target := t.TempDir()
+	if err := os.Symlink(target, dweDir); err != nil {
+		t.Fatalf("symlink: %v", err)
+	}
+
+	if _, err := Ensure(cfg); err == nil || !strings.Contains(err.Error(), "symlink") {
+		t.Fatalf("Ensure must refuse a symlinked .dwe dir, got %v", err)
+	}
+	if len(*spawned) != 0 {
+		t.Errorf("no daemon must be spawned through a symlink, got %d", len(*spawned))
+	}
+}
+
 func TestEnsureForwardsExecPath(t *testing.T) {
 	cfg, spawned := ensureTestSetup(t)
 	cfg.ExecPath = "/opt/dwe/bin/dwe"

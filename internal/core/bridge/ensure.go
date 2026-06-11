@@ -94,6 +94,29 @@ func (cfg EnsureConfig) waitTimeout() time.Duration {
 	return defaultCycleWait
 }
 
+// rejectSymlinkComponents refuses to operate when the dwe-owned tail of the
+// bridge path (the last two components — `.dwe/bridge` in the default
+// layout) is a symlink: the daemon chmods the dir and writes the auth token
+// inside, and a planted link (e.g. from a container with the project root
+// bind-mounted) would redirect both onto an attacker-chosen host path. Only
+// the dwe-owned components are checked — the project root itself may
+// legitimately sit behind symlinks (`/tmp` on macOS).
+func rejectSymlinkComponents(bridgeDir string) error {
+	for _, p := range []string{filepath.Dir(bridgeDir), bridgeDir} {
+		fi, err := os.Lstat(p)
+		if err != nil {
+			if errors.Is(err, os.ErrNotExist) {
+				continue // not created yet — MkdirAll will make a real dir
+			}
+			return fmt.Errorf("bridge: probing %s: %w", p, err)
+		}
+		if fi.Mode()&os.ModeSymlink != 0 {
+			return fmt.Errorf("bridge: %s is a symlink; refusing to manage daemon state through it", p)
+		}
+	}
+	return nil
+}
+
 // Ensure makes sure a bridge daemon is running for the project (idempotent,
 // design D6): the pidfile flock acquired means the previous daemon is dead —
 // its stale endpoints are removed and a fresh detached daemon spawned; the
@@ -109,6 +132,9 @@ func Ensure(cfg EnsureConfig) (started bool, err error) {
 	// Created here (0700, design D3) rather than by lock.Acquire, whose
 	// MkdirAll would apply a more permissive mode. The explicit Chmod
 	// tightens a pre-existing dir too — MkdirAll leaves existing modes alone.
+	if err := rejectSymlinkComponents(bridgeDir); err != nil {
+		return false, err
+	}
 	if err := os.MkdirAll(bridgeDir, bridgeDirPerm); err != nil {
 		return false, fmt.Errorf("bridge: creating bridge dir: %w", err)
 	}

@@ -485,9 +485,12 @@ func TestMergeBridge(t *testing.T) {
 		{"child inherits enabled, overrides services",
 			&BridgeDef{Enabled: &on, Services: []string{"main"}},
 			&BridgeDef{Services: []string{"admin"}}, &on, []string{"admin"}},
-		{"empty child services inherit",
+		{"nil child services inherit",
 			&BridgeDef{Enabled: &on, Services: []string{"main"}},
-			&BridgeDef{Enabled: &on, Services: []string{}}, &on, []string{"main"}},
+			&BridgeDef{Enabled: &on}, &on, []string{"main"}},
+		{"explicit empty child services widen to all",
+			&BridgeDef{Enabled: &on, Services: []string{"main"}},
+			&BridgeDef{Enabled: &on, Services: []string{}}, &on, []string{}},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {

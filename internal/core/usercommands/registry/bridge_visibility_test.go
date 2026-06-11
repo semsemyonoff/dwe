@@ -156,6 +156,39 @@ func TestApplyBridgeVisibility_ReapplyOnHostResets(t *testing.T) {
 	})
 }
 
+// TestApplyBridgeVisibility_ExplicitEmptyServicesWidens pins the Services
+// tristate: an omitted command field inherits the group restriction, while an
+// explicit `services: []` is a declared override back to "all services".
+func TestApplyBridgeVisibility_ExplicitEmptyServicesWidens(t *testing.T) {
+	containerEnv(t, "other")
+	reg := mustRegistry(t, map[string]string{
+		"cs.yml": `
+group:
+  title: CS
+  bridge:
+    enabled: true
+    services: [main]
+
+commands:
+  anywhere:
+    type: shell
+    cmd: echo hi
+    bridge:
+      services: []
+  restricted:
+    type: shell
+    cmd: echo no
+`,
+	})
+	if err := reg.ApplyVisibility(nil, ""); err != nil {
+		t.Fatalf("ApplyVisibility: %v", err)
+	}
+	assertBridgeHidden(t, reg, map[string]bool{
+		"cs.anywhere":   false, // explicit [] widens to all services
+		"cs.restricted": true,  // omitted field inherits [main]
+	})
+}
+
 // extendsChainCfg declares main ← admin ← reports (each extends the previous)
 // plus an unrelated standalone service.
 func extendsChainCfg() *config.DweConfig {

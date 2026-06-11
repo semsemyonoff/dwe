@@ -11,8 +11,11 @@ import (
 )
 
 func TestDocsRootNonTTY(t *testing.T) {
-	// Without a TTY (the test process stdout is a pipe under `go test`) bare
-	// `dwe docs` falls back to the `docs list` output instead of erroring.
+	// Bare `dwe docs` without a TTY falls back to the `docs list` output
+	// instead of erroring. DWE_NONINTERACTIVE pins the non-interactive branch
+	// deterministically — the ambient stdout is usually a pipe under
+	// `go test`, but the test must not depend on how it was invoked.
+	t.Setenv("DWE_NONINTERACTIVE", "1")
 	cmd := NewCmd("", &cmdctx.RootFlags{
 		ConfigPath: "",
 		Root:       "",

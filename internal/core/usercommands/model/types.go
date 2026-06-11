@@ -334,6 +334,10 @@ type BridgeDef struct {
 
 // MergeBridge returns the field-wise composition of child over parent:
 // a set child field wins, an absent one inherits. Either side may be nil.
+// Services is a tristate too: an omitted field (nil) inherits the parent
+// list, while an explicit `services: []` (non-nil empty — YAML distinguishes
+// them) overrides it to "all services", the same meaning the validator's
+// empty-list warning documents.
 func MergeBridge(parent, child *BridgeDef) *BridgeDef {
 	if child == nil {
 		return parent
@@ -345,7 +349,7 @@ func MergeBridge(parent, child *BridgeDef) *BridgeDef {
 	if child.Enabled != nil {
 		out.Enabled = child.Enabled
 	}
-	if len(child.Services) > 0 {
+	if child.Services != nil {
 		out.Services = child.Services
 	}
 	return out
