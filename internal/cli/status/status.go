@@ -10,6 +10,7 @@ import (
 	"strings"
 
 	"github.com/semsemyonoff/dwe/internal/cli/cmdctx"
+	"github.com/semsemyonoff/dwe/internal/core/bridge"
 	"github.com/semsemyonoff/dwe/internal/core/project/config"
 	"github.com/semsemyonoff/dwe/internal/core/project/stack"
 	"github.com/semsemyonoff/dwe/internal/core/ui/render"
@@ -19,19 +20,37 @@ import (
 	"github.com/semsemyonoff/dwe/internal/core/workflow/deploy/journal"
 	"github.com/semsemyonoff/dwe/internal/shared/docker"
 	"github.com/semsemyonoff/dwe/internal/shared/promptcache"
+	"github.com/semsemyonoff/dwe/internal/shared/trace"
 
 	"github.com/charmbracelet/x/term"
 	"github.com/spf13/cobra"
 )
 
-// Test seams for TTY detection, TUI dispatch, and container probing. Tests
-// override these via assignment to suppress TUI or stub Docker without
-// spawning processes.
+// Test seams for TTY detection, TUI dispatch, container probing, and the
+// bridge-daemon ensure. Tests override these via assignment to suppress TUI
+// or stub Docker without spawning processes (the real bridge.Ensure spawns a
+// detached daemon via os.Executable() — the documented recursion hazard).
 var (
 	isTerminalFn     = term.IsTerminal
 	runStatusTUIFn   = statustui.Run
 	serviceRunningFn = stack.ServiceRunning
+	bridgeEnsureFn   = bridge.Ensure
 )
+
+// ensureBridgeDaemon is the best-effort bridge-daemon ensure of the
+// top-level `dwe status` (design D6): status already asserts "is the stack
+// alive" cheaply, so it revives a dead daemon in passing. It acquires NO
+// project locks and runs NO preflight — status stays read-only (the daemon
+// pidfile flock is a separate, bridge-private lock). Errors are swallowed
+// and surfaced only under --debug via trace.
+func ensureBridgeDaemon(ctx context.Context, sc *statusContext) {
+	if !bridge.AnyBridgeEnabled(sc.Cfg) {
+		return
+	}
+	if _, err := bridgeEnsureFn(bridge.EnsureConfig{ProjectRoot: sc.ProjectRoot}); err != nil {
+		trace.Debugf(ctx, "bridge: best-effort daemon ensure failed: %v", err)
+	}
+}
 
 // section identifies one of the renderable status sections used by the
 // default `status` command and by the per-section subcommands.
@@ -219,6 +238,9 @@ in the default view.`,
 			// Hooked at the top-level RunE only (NOT in subcommands) because only
 			// the top-level performs the full aggregation.
 			_ = promptcache.Write(sc.ProjectRoot, stack.HealthState(stack.HealthFromStatusInput(sc.statusInput())))
+			// Best-effort bridge-daemon ensure (design D6) — top-level only,
+			// mirroring the prompt-cache hook above.
+			ensureBridgeDaemon(cmd.Context(), sc)
 			// JSON mode: skip TUI entirely regardless of TTY state.
 			if flags.Output == "json" {
 				return renderStatusJSON(cmd, sc, noFlags, flags)

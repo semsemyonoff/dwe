@@ -7,6 +7,7 @@ import (
 	"path/filepath"
 	"testing"
 
+	"github.com/semsemyonoff/dwe/internal/core/bridge"
 	"github.com/semsemyonoff/dwe/internal/core/project/config"
 	"github.com/semsemyonoff/dwe/internal/core/usercommands"
 	"github.com/semsemyonoff/dwe/internal/shared/i18n"
@@ -15,10 +16,48 @@ import (
 // init replaces PreflightFunc with a no-op for the test binary so lifecycle
 // tests don't pick up the host's docker / compose / git binaries and fail
 // preflight. Tests that exercise preflight behavior explicitly swap it back.
+// The bridge seams are stubbed for the same reason: the real prepare hook
+// resolves image architectures via docker and spawns a detached daemon via
+// os.Executable() — re-executing the test binary (the documented recursion
+// hazard). Bridge tests install recorders via recordBridgeSeams.
 func init() {
 	PreflightFunc = func(_ context.Context, _ *config.DweConfig, _ *usercommands.Registry, _, _ string, _ bool, _ io.Writer) error {
 		return nil
 	}
+	BridgePrepareFunc = func(bridge.PrepareOptions) error { return nil }
+	BridgeStopDaemonFunc = func(string) (bool, error) { return false, nil }
+}
+
+// bridgeSeamRecorder captures every bridge-seam invocation in order, so tests
+// can assert both the calls and their position relative to other recorded
+// events appended to the same slice.
+type bridgeSeamRecorder struct {
+	events   *[]string
+	prepares []bridge.PrepareOptions
+	stops    []string
+}
+
+// recordBridgeSeams installs recording fakes for both bridge seams for the
+// duration of the test. events receives "bridge-prepare" / "bridge-stop"
+// markers; pass a shared slice to interleave with other recorded steps.
+func recordBridgeSeams(t *testing.T, events *[]string) *bridgeSeamRecorder {
+	t.Helper()
+	rec := &bridgeSeamRecorder{events: events}
+	prevPrepare, prevStop := BridgePrepareFunc, BridgeStopDaemonFunc
+	t.Cleanup(func() {
+		BridgePrepareFunc, BridgeStopDaemonFunc = prevPrepare, prevStop
+	})
+	BridgePrepareFunc = func(opts bridge.PrepareOptions) error {
+		rec.prepares = append(rec.prepares, opts)
+		*rec.events = append(*rec.events, "bridge-prepare")
+		return nil
+	}
+	BridgeStopDaemonFunc = func(bridgeDir string) (bool, error) {
+		rec.stops = append(rec.stops, bridgeDir)
+		*rec.events = append(*rec.events, "bridge-stop")
+		return true, nil
+	}
+	return rec
 }
 
 // stubRunPhases replaces RunPhasesFunc with a no-op for the duration of a test.

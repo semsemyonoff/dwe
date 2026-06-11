@@ -12,6 +12,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/semsemyonoff/dwe/internal/core/bridge"
 	"github.com/semsemyonoff/dwe/internal/core/execution/preflight"
 	configpack "github.com/semsemyonoff/dwe/internal/core/execution/templates/config"
 	"github.com/semsemyonoff/dwe/internal/core/notify"
@@ -74,6 +75,11 @@ type RunContext struct {
 	// (either run or stop) and was substituted with a built-in default. CLI
 	// uses this to emit the info line on stderr.
 	OnDefaultUsed func(DefaultedPipeline)
+	// BridgeDaemonCycle makes the bridge prepare hook CYCLE the daemon
+	// (SIGTERM → ensure) instead of plain ensure. Set by RunRestart on its
+	// inner RunRun call: a restarted stack must never keep a daemon from an
+	// older dwe build (design D6). The cycle REPLACES ensure — never both.
+	BridgeDaemonCycle bool
 }
 
 // resolveUpdateMode applies CLI flag precedence on top of the lifecycle config's effective mode.
@@ -300,6 +306,24 @@ func RunRun(ctx RunContext) (err error) {
 		return err
 	}
 
+	// Bridge prepare hook (design D8/D6): regenerate the compose overlay (or
+	// delete it when nothing is bridged), materialize shim binaries, and
+	// ensure (or cycle) the host-bridge daemon. Placed AFTER the deployment
+	// gate and post-pull reload (the overlay must reflect the freshest
+	// config) and BEFORE the phases — composeFiles stats the overlay at call
+	// time, so the docker-up step sees exactly what this call produced.
+	if err := BridgePrepareFunc(bridge.PrepareOptions{
+		BaseDir:     workDir,
+		Cfg:         cfg,
+		DockerBin:   config.DockerBin(cfg),
+		CycleDaemon: ctx.BridgeDaemonCycle,
+		Logf: func(format string, args ...any) {
+			w.Warning(fmt.Sprintf(format, args...))
+		},
+	}); err != nil {
+		return fmt.Errorf("preparing host bridge: %w", err)
+	}
+
 	if err := RunPhases(cfg, reg, workDir, runCfg.Phases, "run", "run", ctx.Yes, runCfg.LogEnabled(), ctx.Translator, ctx.Locale); err != nil {
 		return err
 	}
@@ -340,6 +364,11 @@ func RunRestart(ctx RunContext) error {
 	// operation, not a user-invoked run. Spec: restart fires zero
 	// notifications.
 	ctx.SkipNotify = true
+	// Whole-stack restart cycles the bridge daemon (design D6). The stop leg
+	// above already SIGTERMed it; the cycle in the run leg's prepare hook
+	// tolerates an already-dead daemon and closes the race where a plain
+	// ensure probes the pidfile while the old daemon is still exiting.
+	ctx.BridgeDaemonCycle = true
 	if err := RunRun(ctx); err != nil {
 		return err
 	}

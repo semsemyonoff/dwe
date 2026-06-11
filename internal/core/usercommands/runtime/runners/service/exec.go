@@ -280,15 +280,15 @@ func buildDockerComposeCmd(
 		args = append(args, "--workdir", workdir)
 	}
 
-	// Forward colour-forcing env vars into the container when running as a
-	// workflow parallel sub-step. The captured stdout is then dumped to the
-	// user's terminal verbatim (failure dumps + always_show_output), so we
-	// want the child to keep its colours even though docker compose attaches
-	// a pipe rather than a TTY.
+	// Forward colour-forcing env vars into the container when the output is
+	// captured or piped but still lands on a terminal: workflow parallel
+	// sub-steps (LineTee failure dumps + always_show_output) and color-forced
+	// bridge runs alike. The child keeps its colours even though docker
+	// compose attaches a pipe rather than a TTY.
 	if envVars == nil {
 		envVars = make(map[string]string)
 	}
-	for _, kv := range runio.ParallelColorForceEnv(rc) {
+	for _, kv := range runio.ColorForceEnv(rc) {
 		// kv is "KEY=VALUE"; split once.
 		if eq := strings.IndexByte(kv, '='); eq > 0 {
 			k, v := kv[:eq], kv[eq+1:]

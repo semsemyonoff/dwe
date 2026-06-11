@@ -101,7 +101,7 @@ func daemonSetCompletion(flags *cmdctx.RootFlags) func(*cobra.Command, []string,
 		// (slog.Warn) and the command is treated as visible — the completion
 		// path stays usable on a typo.
 		_ = reg.ApplyVisibility(cfg, projectRoot)
-		if def.Hidden {
+		if def.Hidden || def.BridgeHidden {
 			return nil, cobra.ShellCompDirectiveNoFileComp
 		}
 

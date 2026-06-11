@@ -10,6 +10,7 @@ import (
 	"strings"
 
 	"github.com/semsemyonoff/dwe/internal/cli/cmdctx"
+	"github.com/semsemyonoff/dwe/internal/core/bridge"
 	"github.com/semsemyonoff/dwe/internal/core/execution/condition"
 	pipeline "github.com/semsemyonoff/dwe/internal/core/execution/pipeline"
 	"github.com/semsemyonoff/dwe/internal/core/project/config"
@@ -256,6 +257,14 @@ func resetRunCmd(cmd *cobra.Command, flags *cmdctx.RootFlags, yes bool, skipPref
 	// of what journal cleanup does below. Write the cache now so that a subsequent
 	// journal.Remove failure doesn't leave the prompt showing a stale "running" state.
 	_ = promptcache.Write(workDir, promptcache.StateStopped)
+
+	// Whole-stack reset also stops the host-bridge daemon (design D6); the
+	// per-service variant never touches it. Best-effort: the daemon
+	// auto-stops once zero labeled containers remain, so a signaling failure
+	// must not fail the reset.
+	if _, err := bridgeStopDaemonFn(bridge.DefaultBridgeDir(workDir)); err != nil {
+		w.Warning(fmt.Sprintf("stopping bridge daemon: %v", err))
+	}
 
 	// After reset succeeds, clean up the deploy state entirely.
 	// Reset steps are always project-scoped (service == ""), so the whole state file is cleared.

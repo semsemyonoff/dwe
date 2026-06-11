@@ -417,15 +417,22 @@ func filterServicesByType(svcs map[string]ServiceConfig, t ServiceType) map[stri
 	return out
 }
 
+// BridgeOverlayRelPath is the project-root-relative path of the generated
+// host-bridge compose overlay (design D8). Slash-separated and stored as
+// written in the -f chain like every other compose path; the file itself is
+// dwe-owned machine state written by internal/core/bridge.
+const BridgeOverlayRelPath = ".dwe/compose.bridge.yml"
+
 // ComposeFiles returns the ordered list of compose files for the project:
 // base file first, then enabled tool overlays (sorted by key), then enabled
 // service overlays (sorted by service name). Per-service local overlays from
 // workspace/local.yml (services.<name>.compose.extra) are emitted immediately
 // after each service's own compose files, inside the same enabled-gate.
-// Project-wide local overlays from workspace/local.yml (compose.extra) are
-// appended last so last-wins compose semantics let a single local file patch
-// anything. This is the canonical file list used by all compose-aware CLI
-// operations.
+// The generated host-bridge overlay (BridgeOverlayRelPath) follows the
+// service groups when it exists on disk. Project-wide local overlays from
+// workspace/local.yml (compose.extra) are appended last so last-wins compose
+// semantics let a single local file patch anything. This is the canonical
+// file list used by all compose-aware CLI operations.
 func (c *DweConfig) ComposeFiles() []string {
 	return c.composeFiles(false)
 }
@@ -475,11 +482,34 @@ func (c *DweConfig) composeFiles(all bool) []string {
 	emitGroup(func(t ServiceType) bool { return t == ServiceTypeInfra })
 	emitGroup(func(t ServiceType) bool { return t == ServiceTypeApp || t == "" })
 
+	// Generated host-bridge overlay: after the service overlays, BEFORE the
+	// project-wide local.yml overlays — local.yml stays the user
+	// customization channel and keeps the last word over anything the bridge
+	// overlay sets (design D8 chain position).
+	if c.bridgeOverlayExists() {
+		files = append(files, BridgeOverlayRelPath)
+	}
+
 	if len(c.Compose.Extra) > 0 {
 		files = append(files, c.Compose.Extra...)
 	}
 
 	return files
+}
+
+// bridgeOverlayExists reports whether the generated host-bridge overlay is
+// present for this config's project root. The check runs at call time — the
+// bridge prepare hook regenerates or deletes the file after LoadConfig and
+// before compose args are built, so a load-time snapshot would go stale
+// within the very command that mutates it. Configs built without LoadConfig
+// (no __configPath in Raw) never include the overlay.
+func (c *DweConfig) bridgeOverlayExists() bool {
+	cfgPath, ok := c.Raw["__configPath"].(string)
+	if !ok || cfgPath == "" {
+		return false
+	}
+	_, err := os.Stat(filepath.Join(filepath.Dir(cfgPath), filepath.FromSlash(BridgeOverlayRelPath)))
+	return err == nil
 }
 
 // ServiceConfigEntry represents one config file declared under a service's configs list.
@@ -558,6 +588,29 @@ type ServiceRenderConfig struct {
 	AI     ServiceAIConfig       `yaml:"ai"`
 	Git    ServiceGitHooksConfig `yaml:"git"`
 	Config *RenderConfigSection  `yaml:"config"`
+}
+
+// DefaultBridgeShimPath is the container path the host-bridge shim binary is
+// mounted at unless bridge.shim_path overrides it (base-image collision).
+const DefaultBridgeShimPath = "/usr/local/bin/dwe"
+
+// Bridge on_unreachable policy values: fail makes the shim exit 1 when the
+// host daemon is unreachable (a hook must block the commit), warn makes it
+// print a warning and exit 0.
+const (
+	BridgeOnUnreachableFail = "fail"
+	BridgeOnUnreachableWarn = "warn"
+)
+
+// ServiceBridgeConfig holds host-bridge settings for a service: whether the
+// shim binary and bridge mounts are injected into the container (enabled —
+// tristate, defaults on for type app), where the shim is mounted (shim_path),
+// and the shim's policy when the host daemon is unreachable (on_unreachable:
+// fail | warn).
+type ServiceBridgeConfig struct {
+	Enabled       *bool  `yaml:"enabled"`
+	ShimPath      string `yaml:"shim_path"`
+	OnUnreachable string `yaml:"on_unreachable"`
 }
 
 // StatusColumn declares one custom column rendered in the status table for a
@@ -802,7 +855,7 @@ func allowedFieldsFor(t ServiceType) map[string]bool {
 	common := []string{
 		"type", "container", "required", "compose",
 		"ports", "hosts", "icon", "info", "status",
-		"on_enable", "on_disable", "notes",
+		"on_enable", "on_disable", "notes", "bridge",
 	}
 	switch t {
 	case ServiceTypeApp:
@@ -874,6 +927,7 @@ type ServiceConfig struct {
 	LocalComposeExtra []string            `yaml:"-"`
 	CLI               ServiceCLIConfig    `yaml:"cli"`
 	Render            ServiceRenderConfig `yaml:"render"`
+	Bridge            ServiceBridgeConfig `yaml:"bridge"`
 	// Generated declares per-service values that the service itself mints (e.g.
 	// Laravel APP_KEY) and DWE harvests back into a durable store
 	// (.dwe/generated.yml) to replay on subsequent renders. Keyed by field name.
@@ -945,7 +999,9 @@ func (s ServiceConfig) IDERenderEnabledExplicit() (enabled bool, explicit bool) 
 
 // renderEnabledExplicit resolves a render toggle: if the explicit pointer is
 // non-nil it is authoritative; otherwise app services default on, others off.
-// Shared by the IDE/AI/Git per-kind RenderEnabledExplicit accessors.
+// Shared by the IDE/AI/Git per-kind RenderEnabledExplicit accessors. The
+// bridge toggle (BridgeEnabledExplicit) shares the tristate shape but NOT the
+// app default — the bridge is strictly opt-in.
 func (s ServiceConfig) renderEnabledExplicit(enabled *bool) (bool, bool) {
 	if enabled != nil {
 		return *enabled, true
@@ -988,6 +1044,45 @@ func (s ServiceConfig) GitRenderEnabledExplicit() (enabled bool, explicit bool) 
 func (s ServiceConfig) GitRenderEnabled() bool {
 	enabled, _ := s.GitRenderEnabledExplicit()
 	return enabled
+}
+
+// BridgeEnabledExplicit returns the host-bridge enabled state and whether it was explicitly set.
+// If Enabled is non-nil, returns its value and true.
+// If Enabled is nil, returns false for EVERY service type, and false (not
+// explicit) — unlike the render toggles there is no app default: the bridge
+// mounts a host-controlled binary into the container and opens a
+// container→host command channel, so it is strictly opt-in per service.
+func (s ServiceConfig) BridgeEnabledExplicit() (enabled bool, explicit bool) {
+	if s.Bridge.Enabled != nil {
+		return *s.Bridge.Enabled, true
+	}
+	return false, false
+}
+
+// BridgeEnabled returns whether this service should receive the host-bridge
+// shim mount and env block in the generated compose overlay.
+// It's a simple wrapper around BridgeEnabledExplicit that discards the explicit flag.
+func (s ServiceConfig) BridgeEnabled() bool {
+	enabled, _ := s.BridgeEnabledExplicit()
+	return enabled
+}
+
+// BridgeShimPath returns the container path the shim binary is mounted at:
+// bridge.shim_path when set, DefaultBridgeShimPath otherwise.
+func (s ServiceConfig) BridgeShimPath() string {
+	if s.Bridge.ShimPath != "" {
+		return s.Bridge.ShimPath
+	}
+	return DefaultBridgeShimPath
+}
+
+// BridgeOnUnreachable returns the shim's unreachable-daemon policy:
+// bridge.on_unreachable when set, BridgeOnUnreachableFail otherwise.
+func (s ServiceConfig) BridgeOnUnreachable() string {
+	if s.Bridge.OnUnreachable != "" {
+		return s.Bridge.OnUnreachable
+	}
+	return BridgeOnUnreachableFail
 }
 
 // DisplayIcon returns the resolved icon for this service.
@@ -2049,6 +2144,16 @@ func ResolveServiceExtends(services map[string]ServiceConfig) error {
 		if svc.Render.Config == nil && parent.Render.Config != nil {
 			cfg := *parent.Render.Config
 			svc.Render.Config = &cfg
+		}
+		if svc.Bridge.Enabled == nil && parent.Bridge.Enabled != nil {
+			v := *parent.Bridge.Enabled
+			svc.Bridge.Enabled = &v
+		}
+		if svc.Bridge.ShimPath == "" {
+			svc.Bridge.ShimPath = parent.Bridge.ShimPath
+		}
+		if svc.Bridge.OnUnreachable == "" {
+			svc.Bridge.OnUnreachable = parent.Bridge.OnUnreachable
 		}
 		// Distinguish an omitted `generated:` (nil → inherit) from an explicitly
 		// empty `generated: {}` (non-nil → child wholly replaces with nothing).

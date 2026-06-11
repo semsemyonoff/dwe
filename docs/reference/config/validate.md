@@ -30,7 +30,7 @@ Project readiness checks.
 
 `workspace/validate.yml` declares project-level readiness checks. The CLI consumes these from two entry points:
 
-- `dwe validate` — runs every check (plus YAML-shape validators in the `config`, `templates`, and `commands` domains, plus environment probes in the `env` domain) and reports diagnostics.
+- `dwe validate` — runs every check (plus YAML-shape validators in the `config`, `templates`, `commands`, and `bridge` domains, plus environment probes in the `env` domain) and reports diagnostics.
 - Preflight hook on `dwe deploy run`, `dwe run`, `dwe stop`, and `dwe restart` — runs the subset of checks bound to the relevant stage before any side effect on Docker, git, or the filesystem.
 
 The goal is to surface user-actionable problems ("you're not logged into ghcr.io", "DATABASE_URL is empty in `.env`", "VPN is down") BEFORE deploy steps fail mid-way with cryptic errors.
@@ -396,7 +396,8 @@ commands:
 
 ## CLI flags
 
-- `dwe validate` — runs `config.*`, `templates.*`, `commands.*`, `env.*`, and all `checks.*`. Optional positional scope narrows the run (e.g. `dwe validate env`, `dwe validate checks ghcr-login`).
+- `dwe validate` — runs `config.*`, `templates.*`, `commands.*`, `bridge.*`, `env.*`, and all `checks.*`. Optional positional scope narrows the run (e.g. `dwe validate env`, `dwe validate checks ghcr-login`, `dwe validate bridge`).
+- `dwe validate bridge` — static checks on per-service `bridge:` blocks only: `on_unreachable` enum (`fail` / `warn`), `shim_path` absoluteness, and the bridged-service `dir` / `dir_internal` workspace mapping the shim translates over. Validate-only — the bridge domain does not participate in preflight.
 - `dwe validate --stage <name>` — local flag on the `validate` command. Filters `checks.*` by stage. `env.*` and other domains are unaffected (they have no stages).
 - `dwe validate --strict` — treat warnings as errors (exit 1).
 - `dwe validate --quiet` — hide ok / info rows.

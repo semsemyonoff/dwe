@@ -1,4 +1,4 @@
-> Translated from: reference/index.md @ aea3fce52202
+> Translated from: reference/index.md @ 5e6ca8a446a4
 
 # Справочная документация DWE
 
@@ -13,6 +13,7 @@
 - [Render-паки (`render/`)](render/index.md) — `dwe render env`, `render ide`, `render ai`, `render git`; схема манифеста пака, политики коллизий, локальные оверрайды
 - [Подсистема документации (`docs/`)](docs/index.md) — TUI-браузер `dwe docs`, неинтерактивные подкоманды (`show`, `list`, `export`, `llms-txt`, `cache clear`), переводы и проверка свежести через хэш контента
 - [Шаблоны (`templates.md`)](templates.md) — общий движок Go-шаблонов: `{{ ... }}` vs `${ ... }`, реестры sprout, контекст рендеринга по местам использования, резолверы команд
+- [Хост-бридж (`bridge.md`)](bridge.md) — запуск `dwe` изнутри dev-контейнеров: shim-бинарник и хостовый демон, транспорты, политика команд в контейнере, генерируемый compose-оверлей, подкоманды `dwe bridge`
 
 ## См. также
 
