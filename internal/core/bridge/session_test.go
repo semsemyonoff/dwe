@@ -591,6 +591,17 @@ func TestSubprocessEnv(t *testing.T) {
 	}
 }
 
+// slashNote is the fallback note resolveCwd emits for "/": on unix it is an
+// absolute path outside the root; on Windows filepath.IsAbs("/") is false
+// (rooted but drive-relative), so the absoluteness gate fires first. Either
+// way the cwd falls back to the project root — only the note differs.
+func slashNote() string {
+	if filepath.IsAbs("/") {
+		return "outside the project root"
+	}
+	return "not an absolute host path"
+}
+
 func TestResolveCwd(t *testing.T) {
 	root := shortTempDir(t)
 	resolvedRoot, err := filepath.EvalSymlinks(root)
@@ -622,7 +633,7 @@ func TestResolveCwd(t *testing.T) {
 		{"sibling prefix is not containment", sibling, resolvedRoot, "outside the project root"},
 		{"nonexistent falls back", filepath.Join(root, "missing"), resolvedRoot, "does not resolve"},
 		{"relative falls back", "sub", resolvedRoot, "not an absolute host path"},
-		{"slash falls back (hook cd'd out of the mount)", "/", resolvedRoot, "outside the project root"},
+		{"slash falls back (hook cd'd out of the mount)", "/", resolvedRoot, slashNote()},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
