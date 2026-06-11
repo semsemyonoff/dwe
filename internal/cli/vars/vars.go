@@ -20,9 +20,11 @@ import (
 // groupConfiguration in cli/root.go, alongside the other config-mutation
 // commands (service / render / validate / scaffold).
 //
-// With no positional arg the bare command currently falls back to `vars list`
-// (the interactive TUI browser arrives in a later task). The get / list
-// subcommands are read-only; set (added later) writes local.yml overrides.
+// With no positional arg the bare command opens the interactive TUI browser
+// on a real terminal; in non-interactive / container / JSON mode (or when a
+// namespace arg narrows the output) it falls back to `vars list`. The
+// get / list / inspect subcommands are read-only; set writes local.yml
+// overrides.
 func NewCmd(groupID string, flags *cmdctx.RootFlags) *cobra.Command {
 	cmd := &cobra.Command{
 		Use:     "vars [namespace]",
@@ -51,14 +53,19 @@ output).`,
 		SilenceUsage:      true,
 		ValidArgsFunction: namespaceCompletion(flags),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			// No-arg (and namespace-filtered) bare invocation lists leaves. The
-			// interactive TUI browser is wired in a later task; for now the
-			// command stays useful by mirroring `vars list`.
 			namespace := ""
 			if len(args) > 0 {
 				namespace = args[0]
 			}
-			return runVarsList(cmd, flags, namespace)
+			// A namespace filter, JSON output, or any non-interactive context
+			// (CI pipe, DWE_NONINTERACTIVE, the bridge daemon's container forks)
+			// lists leaves. A bare invocation on a real terminal opens the TUI
+			// browser. Mirrors `dwe commands`' interactive/non-interactive split.
+			if namespace != "" || flags.Output == "json" ||
+				!isInteractive(cmd.InOrStdin()) || cmdctx.NonInteractiveEnv() {
+				return runVarsList(cmd, flags, namespace)
+			}
+			return runVarsBrowser(cmd, flags)
 		},
 	}
 

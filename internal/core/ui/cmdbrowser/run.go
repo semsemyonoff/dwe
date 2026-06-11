@@ -18,11 +18,14 @@ import (
 type Action int
 
 // Action values returned in Result.Action. ActionUnknown sits at iota 0 so
-// a zero-value Result is detectable as "not set".
+// a zero-value Result is detectable as "not set". ActionEdit is the additive
+// vars-browser intent (see ModeEdit); it is appended at the end so the existing
+// command-browser values keep their numbers.
 const (
 	ActionUnknown Action = iota
 	ActionRun
 	ActionInspect
+	ActionEdit
 )
 
 // Mode selects which intent the TUI is gathering. ModeUnknown sits at iota 0
@@ -34,11 +37,15 @@ type Mode int
 
 // Mode values selecting the TUI intent. ModeUnknown sits at iota 0; the
 // applyDefaults promotion treats it as ModeRun (the only auto-defaulted
-// field in Options).
+// field in Options). ModeEdit is the additive vars-browser mode: Enter returns
+// ActionEdit and the footer/breadcrumb adapt, but the ModeRun-only
+// edit-params / skip-confirm bindings stay off — the command browser is
+// untouched.
 const (
 	ModeUnknown Mode = iota
 	ModeRun
 	ModeInspect
+	ModeEdit
 )
 
 // Item is one row in the browser. The caller precomputes Inspect by
