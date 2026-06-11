@@ -27,6 +27,36 @@ import (
 // compose.overlays key. No trailing period — callers append context.
 const legacyComposeOverlaysMsg = "compose.overlays is no longer supported; move overlay files to individual services (type: tool): services.<name>.compose instead. See docs/reference/config/workspace.md for migration details"
 
+// allowedRootKeys is the strict allowlist of permitted top-level keys in the
+// merged 3-layer project config (workspace.yml / workspace/defaults.yml /
+// workspace/local.yml). Any other key is a hard error at load time — arbitrary,
+// free-form values must live under the vars: sandbox. schema_version is reserved
+// forward-compat metadata: tolerated at the root but not interpreted. binaries
+// and tools are intentionally absent — they are rejected earlier in LoadConfig
+// with dedicated migration messages.
+var allowedRootKeys = []string{
+	"schema_version",
+	"project",
+	"runtime",
+	"state",
+	"exports",
+	"compose",
+	"ui",
+	"docs",
+	"services",
+	"vars",
+	"update",
+}
+
+// allowedRootKeySet is the membership index over allowedRootKeys.
+var allowedRootKeySet = func() map[string]struct{} {
+	m := make(map[string]struct{}, len(allowedRootKeys))
+	for _, k := range allowedRootKeys {
+		m[k] = struct{}{}
+	}
+	return m
+}()
+
 // binOverride returns the user-configured override for the named binary, or
 // def when cfg is nil, cfg.userConfig is nil, or no override is present.
 func binOverride(cfg *DweConfig, key, def string) string {
@@ -75,6 +105,19 @@ type DweConfig struct {
 	UI      UIConfig             `yaml:"ui"`
 	Docs    DocsConfig           `yaml:"docs"`
 
+	// Update is the formalized top-level self-update policy. It participates in
+	// the 3-layer merge (scalar mode last-layer-wins), so a project author sets
+	// the policy in workspace.yml and a developer overrides it in local.yml.
+	// A pointer so a missing block (nil → off) is distinguishable from a present
+	// block with an empty mode (→ on). See UpdateConfig.EffectiveMode.
+	Update *UpdateConfig `yaml:"update"`
+
+	// Vars is the single legal home for arbitrary, free-form project values.
+	// The root of the merged config is strict (see allowedRootKeys), but the
+	// contents of vars: are unvalidated and may nest arbitrarily. References
+	// resolve via Raw dot-paths (`${vars.db.password}`, `from: vars.db.user`).
+	Vars map[string]any `yaml:"vars"`
+
 	// Services holds the fully resolved service definitions loaded from
 	// workspace/services/<name>/service.yml with Enabled populated from the 3-layer config merge.
 	// Not unmarshalled from the merge — built by LoadConfig.
@@ -88,6 +131,27 @@ type DweConfig struct {
 	// and .dwe/config. Used by binary accessors to resolve engine binary overrides.
 	// Nil if load failed (graceful degradation).
 	userConfig *userpkg.Config `yaml:"-"`
+}
+
+// UpdateConfig is the formalized top-level self-update policy block. Mode must be
+// one of: on, off. A missing block (nil) means off; a present block with an empty
+// mode means on (writing the update: key is itself the opt-in).
+type UpdateConfig struct {
+	Mode string `yaml:"mode"`
+}
+
+// EffectiveMode returns the resolved update mode before any CLI flag is applied.
+// Precedence: missing block (nil) → off; block present with empty mode → on;
+// block present with mode set → that value (on or off). CLI flags
+// (--no-update, --update) override this at the run consumer.
+func (c *UpdateConfig) EffectiveMode() string {
+	if c == nil {
+		return "off"
+	}
+	if c.Mode == "" {
+		return "on"
+	}
+	return c.Mode
 }
 
 // ProjectDeployConfig holds the project-wide deploy pipeline loaded from workspace/deploy.yml.
@@ -1450,14 +1514,74 @@ func LoadConfig(workspacePath string) (*DweConfig, error) {
 		return nil, fmt.Errorf("unmarshal merged config: %w", err)
 	}
 
-	// Reject binaries: blocks — they've moved to user-config
-	if _, ok := merged["binaries"]; ok {
-		return nil, fmt.Errorf("binaries: moved to ~/.config/dwe/config — use binary_docker=/path, binary_git=/path, etc. See docs/reference/config/workspace.md")
+	// Strict root + legacy-block rejection, iterated per layer so the error names
+	// the source file. deepMerge drops nil values, so a layer carrying ONLY a
+	// `binaries:`/`tools:` key never reaches the merged map — the per-layer pass
+	// is the only place that sees it (a layer with just those keys would
+	// otherwise load silently). This runs BEFORE __configPath /
+	// injectServicesIntoRaw add internal keys. The binaries:/tools: rejections
+	// come first so their migration messages win over the strict-root "unknown
+	// top-level key" message; keys are sorted for a deterministic error.
+	for _, layer := range layers {
+		if _, ok := layer.data["binaries"]; ok {
+			return nil, fmt.Errorf("%s: binaries: moved to ~/.config/dwe/config — use binary_docker=/path, binary_git=/path, etc. See docs/reference/config/workspace.md", layer.path)
+		}
+		if _, ok := layer.data["tools"]; ok {
+			return nil, fmt.Errorf("%s: tools: no longer supported — define tool entries as services with type: tool in workspace/services/. See docs/reference/config/services/index.md", layer.path)
+		}
+		keys := make([]string, 0, len(layer.data))
+		for k := range layer.data {
+			keys = append(keys, k)
+		}
+		sort.Strings(keys)
+		for _, key := range keys {
+			if _, ok := allowedRootKeySet[key]; ok {
+				continue
+			}
+			return nil, fmt.Errorf("%s: unknown top-level key %q — move custom values under \"vars:\" (e.g. vars.%s.*); allowed top-level keys: %s",
+				layer.path, key, key, strings.Join(allowedRootKeys, ", "))
+		}
 	}
 
-	// Reject tools: blocks — replaced by services with type:tool
-	if _, ok := merged["tools"]; ok {
-		return nil, fmt.Errorf("tools: no longer supported — define tool entries as services with type: tool in workspace/services/. See docs/reference/config/services/index.md")
+	// Normalize a present-but-null update: block. Writing the update: key is
+	// itself the opt-in (present-but-empty → on), but a bare `update:` parses to
+	// a nil value which deepMerge skips, so the struct round-trip would yield a
+	// nil Update (→ off) and silently drop the opt-in. Treat a present update:
+	// key in any layer as a present (empty) block when the merge left it nil.
+	// When some layer carries an explicit mode, deepMerge preserves it and
+	// cfg.Update is already non-nil, so this leaves layered modes untouched — a
+	// bare `update:` does NOT re-enable over a lower layer's explicit mode: off
+	// (see TestLoadConfig_update_explicitModeSurvivesNullOverride).
+	if cfg.Update == nil {
+		for _, layer := range layers {
+			if _, ok := layer.data["update"]; ok {
+				cfg.Update = &UpdateConfig{}
+				break
+			}
+		}
+	}
+
+	// Value-validate the formalized update: block. The strict-root allowlist only
+	// checks key names; without this a bad value (update: {mode: yes}) would load
+	// and then silently ActionSkip at run-time. Mirrors the old lifecycle loader's
+	// update.mode check; an empty mode is the present-but-default opt-in (→ on).
+	if cfg.Update != nil && cfg.Update.Mode != "" && !ValidUpdateMode(cfg.Update.Mode) {
+		// Attribute the bad value to the layer that actually supplied it — the
+		// highest-precedence layer setting a non-empty update.mode wins the
+		// merge — so the message names the right file (mirrors the per-layer
+		// strict-root / legacy-key errors above). Falls back to workspacePath.
+		modePath := workspacePath
+		for _, layer := range slices.Backward(layers) {
+			updMap, ok := layer.data["update"].(map[string]any)
+			if !ok {
+				continue
+			}
+			if mode, ok := updMap["mode"].(string); ok && mode != "" {
+				modePath = layer.path
+				break
+			}
+		}
+		return nil, fmt.Errorf("%s: update.mode %q is invalid; must be one of: on, off", modePath, cfg.Update.Mode)
 	}
 
 	// Load user-config for binary overrides. On error, log warning and continue
@@ -2634,37 +2758,20 @@ type LifecycleConfig struct {
 }
 
 // LifecycleRunConfig holds the run lifecycle pipeline configuration.
-// Update is a pointer so a missing block (nil) is distinguishable from a present
-// block with defaults — writing the update: key is itself the opt-in.
+// The self-update policy is no longer carried here — it moved to the formalized
+// top-level update: block (see UpdateConfig); enabling updates no longer touches
+// the run phases.
 type LifecycleRunConfig struct {
-	Update       *LifecycleUpdate `yaml:"update"`
-	ShowInfo     bool             `yaml:"show_info"`
-	FinalMessage string           `yaml:"final_message"`
-	Log          *bool            `yaml:"log"`
-	Phases       []DeployPhase    `yaml:"phases"`
+	ShowInfo     bool          `yaml:"show_info"`
+	FinalMessage string        `yaml:"final_message"`
+	Log          *bool         `yaml:"log"`
+	Phases       []DeployPhase `yaml:"phases"`
 }
 
 // LogEnabled reports whether file logging is enabled for the run pipeline.
 // Defaults to false when unset; loader normalizes nil to false.
 func (cfg *LifecycleRunConfig) LogEnabled() bool {
 	return cfg != nil && cfg.Log != nil && *cfg.Log
-}
-
-// EffectiveMode returns the resolved update mode before any CLI flag is applied.
-// Precedence: missing block → off; update block present with empty mode → on;
-// update block present with mode set → that value (on or off).
-// CLI flags (--no-update, --update) override this.
-func (cfg *LifecycleRunConfig) EffectiveMode() string {
-	if cfg == nil {
-		return "off"
-	}
-	if cfg.Update == nil {
-		return "off"
-	}
-	if cfg.Update.Mode == "" {
-		return "on"
-	}
-	return cfg.Update.Mode
 }
 
 // LifecycleStopConfig holds the stop lifecycle pipeline configuration.
@@ -2678,12 +2785,6 @@ type LifecycleStopConfig struct {
 // Defaults to false when unset; loader normalizes nil to false.
 func (cfg *LifecycleStopConfig) LogEnabled() bool {
 	return cfg != nil && cfg.Log != nil && *cfg.Log
-}
-
-// LifecycleUpdate configures the optional git update probe run at the start of dwe run.
-// Mode must be one of: on, off.
-type LifecycleUpdate struct {
-	Mode string `yaml:"mode"`
 }
 
 // LoadLifecycleConfig loads the lifecycle pipeline from workspace/lifecycle.yml.
@@ -2715,13 +2816,6 @@ func LoadLifecycleConfig(path string) (*LifecycleConfig, error) {
 		if cfg.Run.Log == nil {
 			f := false
 			cfg.Run.Log = &f
-		}
-		if cfg.Run.Update != nil {
-			if cfg.Run.Update.Mode != "" {
-				if !ValidUpdateMode(cfg.Run.Update.Mode) {
-					return nil, fmt.Errorf("lifecycle run: update.mode %q is invalid; must be one of: on, off", cfg.Run.Update.Mode)
-				}
-			}
 		}
 	}
 	if cfg.Stop != nil {

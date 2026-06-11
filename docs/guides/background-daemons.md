@@ -170,7 +170,7 @@ commands:
         default: default
         pattern: ^[a-zA-Z0-9_-]+$
     env:
-      QUEUE_TOKEN: ${secrets.queue_token}   # OK — values flow through env, not labels
+      QUEUE_TOKEN: ${vars.secrets.queue_token}   # OK — values flow through env, not labels
     argv:
       - php
       - artisan

@@ -82,10 +82,11 @@ type RunContext struct {
 	BridgeDaemonCycle bool
 }
 
-// resolveUpdateMode applies CLI flag precedence on top of the lifecycle config's effective mode.
-// Precedence: NoUpdate > UpdateMode flag > LifecycleRunConfig.EffectiveMode()
-func resolveUpdateMode(cfg *config.LifecycleRunConfig, noUpdate bool, updateFlag string) string {
-	mode := cfg.EffectiveMode()
+// resolveUpdateMode applies CLI flag precedence on top of the top-level update
+// block's effective mode.
+// Precedence: NoUpdate > UpdateMode flag > UpdateConfig.EffectiveMode()
+func resolveUpdateMode(update *config.UpdateConfig, noUpdate bool, updateFlag string) string {
+	mode := update.EffectiveMode()
 	if updateFlag != "" {
 		mode = updateFlag
 	}
@@ -202,7 +203,7 @@ func RunRun(ctx RunContext) (err error) {
 		defaultNotified = true
 	}
 
-	effectiveMode := resolveUpdateMode(runCfg, ctx.NoUpdate, ctx.UpdateMode)
+	effectiveMode := resolveUpdateMode(cfg.Update, ctx.NoUpdate, ctx.UpdateMode)
 
 	w := render.Stdout()
 	var pulled bool
@@ -215,13 +216,6 @@ func RunRun(ctx RunContext) (err error) {
 		switch action {
 		case git.ActionWarn:
 			w.Warning(msg)
-		case git.ActionPullAuto:
-			moved, pullErr := GitPullFFOnlyFunc(config.GitBin(cfg), workDir)
-			if pullErr != nil {
-				w.Warning(fmt.Sprintf("git pull --ff-only failed: %v", pullErr))
-			} else {
-				pulled = moved
-			}
 		case git.ActionPullPrompt:
 			confirmed, confirmErr := widgets.RunConfirm(
 				fmt.Sprintf("Update available: %s — pull now?", msg),

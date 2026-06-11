@@ -1,4 +1,4 @@
-> Translated from: reference/config/commands/directives.md @ 570149c190af
+> Translated from: reference/config/commands/directives.md @ 79c35d82a923
 
 # Директивы команд
 
@@ -199,7 +199,7 @@ params:
     description: Database name to create
     required: true
     default: "laravel"          # literal fallback
-    default_from: db.database   # dot-path into merged config
+    default_from: vars.db.database   # dot-path into merged config
     env: DB_NAME                # injected as env var
     pattern: ^[a-zA-Z0-9_-]+$   # anchored regex (string/path only)
 ```
@@ -254,22 +254,22 @@ params:
     type: string
     widget: select
     description: Database to use
-    options: ${databases}
-    default_from: config.default_db
+    options: ${vars.databases}
+    default_from: vars.default_db
 
   # Multiple selections
   services:
     type: string
     widget: multiselect
     description: Services to enable
-    options: ${services_list}
+    options: ${vars.services_list}
     separator: ","
 ```
 
 | Поле | Тип | По умолчанию | Описание |
 |-------|------|---------|-------------|
 | `widget` | enum | выводится из `type` | Одно из `input`, `select`, `multiselect`, `confirm`. Выводится как `confirm` для `bool`; `select` если присутствует `options`; `input` для string/int/path без options |
-| `options` | список или ссылка | — | Статический список значений-опций, список объектов `{value, label}`, либо ссылка-точечный путь в конфиг (например, `${databases}`) |
+| `options` | список или ссылка | — | Статический список значений-опций, список объектов `{value, label}`, либо ссылка-точечный путь в конфиг (например, `${vars.databases}`) |
 | `separator` | string | `" "` | Разделитель для склейки результатов multiselect; используется только при `widget: multiselect` |
 
 Рендеринг виджета:
@@ -283,7 +283,7 @@ params:
 
 - **Статический список** (`options: [a, b, c]`) — список литеральный.
 - **Опции с метками** (`options: [{value: x, label: X}, ...]`) — value используется внутренне, label показывается пользователю.
-- **Ссылка на конфиг** (`options: ${databases}`) — форма разрешает точечный путь из вашего объединённого конфига (workspace.yml + defaults.yml + local.yml) во время выполнения. Разрешённое значение может быть скалярным списком (`[a, b, c]`) или картой (`{x: X, y: Y}` → опции с value=ключ, label=значение). Пустые или отсутствующие ссылки ловятся с понятной ошибкой при попытке открыть форму.
+- **Ссылка на конфиг** (`options: ${vars.databases}`) — форма разрешает точечный путь из вашего объединённого конфига (workspace.yml + defaults.yml + local.yml) во время выполнения. Разрешённое значение может быть скалярным списком (`[a, b, c]`) или картой (`{x: X, y: Y}` → опции с value=ключ, label=значение). Пустые или отсутствующие ссылки ловятся с понятной ошибкой при попытке открыть форму.
 
 Валидация:
 
@@ -316,7 +316,7 @@ context:
 
 ```yaml
 env:
-  MYSQL_PWD: "${db.password}"
+  MYSQL_PWD: "${vars.db.password}"
   TIMESTAMP: "{{ now | date \"2006-01-02_15-04-05\" }}"
   NON_INTERACTIVE: "{{ if .Params.no_prompt }}1{{ else }}0{{ end }}"
 ```

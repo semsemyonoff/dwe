@@ -279,6 +279,93 @@ docs:
 	require.Equal(t, validate.SeverityOK, diags[0].Severity) // workspace
 }
 
+// TestWorkspaceValidator_UnknownRootKey asserts that a strict-root violation
+// (a custom key not under vars:) surfaces as a SeverityError diagnostic via the
+// LoadConfig-error path. The check itself lives in the loader (Task 1); the
+// validator only mirrors load errors as diagnostics-as-data.
+func TestWorkspaceValidator_UnknownRootKey(t *testing.T) {
+	root := t.TempDir()
+	require.NoError(t, os.MkdirAll(filepath.Join(root, "workspace", "services"), 0o755))
+
+	workspaceYML := `
+project:
+  name: test
+  prefix: test
+db:
+  host: localhost
+`
+	require.NoError(t, os.WriteFile(filepath.Join(root, "workspace.yml"), []byte(workspaceYML), 0o644))
+
+	ctx := validate.Context{
+		ProjectRoot: root,
+		ConfigPath:  filepath.Join(root, "workspace.yml"),
+	}
+
+	v := &workspaceValidator{}
+	diags := v.Run(ctx)
+
+	d := hasDiag(t, diags, validate.SeverityError, "unknown top-level key")
+	require.Equal(t, "config.workspace", d.Target)
+	require.Contains(t, d.Message, "vars:")
+}
+
+// TestWorkspaceValidator_BadUpdateMode asserts that an out-of-range update.mode
+// surfaces as a SeverityError diagnostic via the LoadConfig-error path. The
+// load-time value check lives in the loader (Task 3).
+func TestWorkspaceValidator_BadUpdateMode(t *testing.T) {
+	root := t.TempDir()
+	require.NoError(t, os.MkdirAll(filepath.Join(root, "workspace", "services"), 0o755))
+
+	workspaceYML := `
+project:
+  name: test
+  prefix: test
+update:
+  mode: yes-please
+`
+	require.NoError(t, os.WriteFile(filepath.Join(root, "workspace.yml"), []byte(workspaceYML), 0o644))
+
+	ctx := validate.Context{
+		ProjectRoot: root,
+		ConfigPath:  filepath.Join(root, "workspace.yml"),
+	}
+
+	v := &workspaceValidator{}
+	diags := v.Run(ctx)
+
+	d := hasDiag(t, diags, validate.SeverityError, "update.mode")
+	require.Equal(t, "config.workspace", d.Target)
+	require.Contains(t, d.Message, "on, off")
+}
+
+// TestWorkspaceValidator_GoodUpdateMode asserts a valid update block produces no
+// error diagnostic — the workspace check stays SeverityOK.
+func TestWorkspaceValidator_GoodUpdateMode(t *testing.T) {
+	root := t.TempDir()
+	require.NoError(t, os.MkdirAll(filepath.Join(root, "workspace", "services"), 0o755))
+
+	workspaceYML := `
+project:
+  name: test
+  prefix: test
+update:
+  mode: on
+`
+	require.NoError(t, os.WriteFile(filepath.Join(root, "workspace.yml"), []byte(workspaceYML), 0o644))
+
+	ctx := validate.Context{
+		ProjectRoot: root,
+		ConfigPath:  filepath.Join(root, "workspace.yml"),
+	}
+
+	v := &workspaceValidator{}
+	diags := v.Run(ctx)
+
+	require.True(t, len(diags) > 0, "expected at least 1 diagnostic (workspace)")
+	require.Equal(t, validate.SeverityOK, diags[0].Severity)
+	require.Equal(t, "config.workspace", diags[0].Target)
+}
+
 // writeServicesDir sets up a project root with per-folder services under workspace/services/
 // for servicesValidator tests. The body is a YAML fragment shaped like `services: {name: {...}}`.
 // Returns the project root path.

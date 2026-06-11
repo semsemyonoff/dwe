@@ -1,4 +1,4 @@
-> Translated from: reference/concepts/git.md @ bd5e782e6911
+> Translated from: reference/concepts/git.md @ 302556753f0a
 
 # Интеграция с Git
 
@@ -83,13 +83,12 @@ flowchart TD
 
 ## Проба обновления (`dwe run`)
 
-Пайплайн `run:` в `workspace/lifecycle.yml` может объявить блок `update:`. Если он присутствует, `dwe run` проверяет репозиторий корня проекта до выполнения любой фазы:
+Верхнеуровневый [блок `update:`](../config/workspace.md#блок-update) в `workspace.yml` / `local.yml` управляет пробой самообновления. Когда `mode: on`, `dwe run` проверяет репозиторий корня проекта до выполнения любой фазы:
 
 ```yaml
-# workspace/lifecycle.yml
-run:
-  update:
-    mode: on   # on | off
+# workspace.yml (или workspace/local.yml)
+update:
+  mode: on   # on | off
 ```
 
 Два режима:
@@ -103,7 +102,7 @@ run:
 
 Когда режим `on`, рабочее дерево чистое, behind > 0, ahead = 0 и сессия интерактивна, DWE запрашивает подтверждение перед запуском `git pull --ff-only` (таймаут 2 мин). Успешный pull перезагружает `DweConfig`, `LifecycleConfig` и реестр команд in-process до выполнения фаз, так что остаток `dwe run` видит состояние после обновления.
 
-Приоритет в runtime: флаг `--no-update` > флаг `--update <mode>` > YAML `update.mode`. Справочник по полю: [`config/lifecycle.md`](../config/lifecycle.md#runupdate).
+Приоритет в runtime: флаг `--no-update` > флаг `--update <mode>` > `update.mode` из смердженной конфигурации. Справочник по полю: [`config/workspace.md` → блок `update:`](../config/workspace.md#блок-update).
 
 ## Конвенции `.gitignore`
 
@@ -150,6 +149,6 @@ DWE не выполняет Git-операций, о которых пользо
 
 - [`dwe render git`](../render/git.md) — полный справочник по полям рендеринга хуков: схема манифеста, шаблонные переменные, защитные проверки path-safety, выходные сообщения.
 - [`services.<name>.render.git`](../config/services/fields.md#rendergit-block) — активация на сервис, закрепление шаблона, наследование.
-- [`lifecycle.yml` → run.update](../config/lifecycle.md#runupdate) — конфигурация пробы обновления.
+- [`workspace.yml` → блок `update:`](../config/workspace.md#блок-update) — конфигурация пробы обновления.
 - [Шаблоны](../templates.md) — Go text template движок, реестры хелперов, строгий режим.
 - [Раскладка проекта](project-layout.md) — где `workspace/templates/git/`, `<svc.Dir>/src/` и `.dwe/` располагаются в дереве проекта.

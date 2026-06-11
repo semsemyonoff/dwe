@@ -168,7 +168,7 @@ A `type: command` step that targets a workflow can attach per-sub-step gating to
       files_gate:
         state: readable
         command: services.main.db.dump-deploy
-        with: { database: "${db.stock_database}" }
+        with: { database: "${vars.db.stock_database}" }
 ```
 
 The workflow stays opaque and reusable; the gating decision belongs to the pipeline step that invoked it. Overrides only apply when the workflow is invoked via the originating step; the same workflow invoked ad-hoc (`dwe commands run …`) or as a sub-step of another workflow runs as written. In v1 only `files_gate` is overridable, and overrides cannot target a sub-step whose command is itself a workflow.
@@ -180,6 +180,6 @@ This is the canonical answer to "I want per-element gating in a workflow without
 - [`deploy.yml` / `reset.yml` reference](../config/deploy/index.md) — top-level fields, phase fields, step fields, idempotency and state journal interaction.
 - [Step execution types](../config/deploy/steps.md) — `shell`, `dwe`, `command`, `builtin`; `cmd: shell` builtin vs `type: shell` step.
 - [Conditions catalogue](../config/conditions.md) — every predicate and typed action available to `when:` / `check:` / `files_gate:`.
-- [`lifecycle.yml`](../config/lifecycle.md) — `run:` / `stop:` pipelines, `run.update` probe, hook phase conventions.
+- [`lifecycle.yml`](../config/lifecycle.md) — `run:` / `stop:` pipelines, self-update probe (top-level [`update:` block](../config/workspace.md#the-update-block)), hook phase conventions.
 - [Reset](../config/reset.md) — project-wide and per-service reset, the always-on baseline, pending-state lifecycle.
 - [State and locks](state-and-locks.md) — how the deploy journal records hashes and decides what to skip, and how `deploy.lock` / `snapshot.lock` serialise concurrent runs.

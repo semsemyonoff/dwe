@@ -7,7 +7,7 @@ Run / stop pipeline declarations driving `dwe run`, `dwe stop`, and `dwe restart
 - [Purpose](#purpose)
 - [Pipeline shape](#pipeline-shape)
 - [Structure](#structure)
-- [`run.update`](#runupdate)
+- [Self-update probe](#self-update-probe)
 - [`run.show_info` / `run.final_message`](#runshow_info--runfinal_message)
 - [`stop.final_message`](#stopfinal_message)
 - [`log` (file logging)](#log-file-logging)
@@ -22,7 +22,7 @@ Run / stop pipeline declarations driving `dwe run`, `dwe stop`, and `dwe restart
 
 `workspace/lifecycle.yml` declares two pipelines:
 
-- **`run:`** — executed by `dwe run` (and `dwe restart`, after stop). Wraps the standard `docker up` + `docker wait` sequence with optional update probe and pre/post hook phases.
+- **`run:`** — executed by `dwe run` (and `dwe restart`, after stop). Wraps the standard `docker up` + `docker wait` sequence with optional pre/post hook phases. The self-update probe is configured separately in the top-level [`update:` block](workspace.md#the-update-block), not here.
 - **`stop:`** — executed by `dwe stop` (and the first half of `dwe restart`). Wraps `docker down` with optional pre/post hook phases.
 
 This file is loaded on its own and is **not** part of the 3-layer config merge.
@@ -35,7 +35,6 @@ When `lifecycle.yml` is absent or a section is absent, DWE substitutes a built-i
 
 | Field | Value |
 |-------|-------|
-| `update.mode` | `off` (no git probe) |
 | `show_info` | `true` |
 | `final_message` | `Project is ready for work!` |
 | Phases | Single `start` phase: one `type: dwe` step with `cmd: "docker up --wait"` |
@@ -75,8 +74,6 @@ flowchart LR
 
 ```yaml
 run:
-  update:
-    mode: on            # on | off
   show_info: true
   final_message: "Project is ready for work!"
   log: false            # tee status + child stdout/stderr to .dwe/logs/run.log
@@ -116,24 +113,13 @@ Phases and steps use the same shape as [deploy.yml](deploy/index.md): `name`, `d
 
 `deploy_services: true` is **not** allowed in lifecycle pipelines.
 
-## `run.update`
+## Self-update probe
 
-The optional update probe runs before any phase. It can fetch from the upstream remote, detect drift, and (depending on `mode`) pull `--ff-only`. A successful pull triggers in-process reload of `DweConfig`, `LifecycleConfig`, and the command registry before phases execute.
+The optional self-update probe runs before any phase. It can fetch from the upstream remote, detect drift, and (with consent) pull `--ff-only`. A successful pull triggers in-process reload of `DweConfig`, `LifecycleConfig`, and the command registry before phases execute.
 
-| Field | Type | Default | Description |
-|-------|------|---------|-------------|
-| `update.mode` | string | `on` (when the `update:` block is present) | One of `on`, `off`. Writing the `update:` key is itself the opt-in. |
+The probe is **no longer configured here.** It is driven by the formalized top-level [`update:` block](workspace.md#the-update-block) in `workspace.yml` / `local.yml` (`mode: on | off`), which participates in the 3-layer merge. This was lifted out of `lifecycle.yml` so that enabling update is a one-liner that does not blank `run.phases`.
 
-Mode behaviour:
-
-| Mode | Fetches | Pulls | Behaviour when behind |
-|------|---------|-------|------------------------|
-| `on` | yes | with consent | Prompts before pulling; on non-TTY, checks for upstream drift and warns (check semantics). |
-| `off` | no | no | Probe disabled (same as `--no-update` flag). |
-
-Layered precedence at runtime: `--no-update` flag > `--update <mode>` flag > `EffectiveMode()` from YAML.
-
-When the probe finds a dirty tree, no upstream, or a fetch failure it warns and continues — the run pipeline is never blocked by the probe.
+Runtime precedence at `dwe run`: `--no-update` flag > `--update <mode>` flag > `update.mode` from the merged config. See the [`update:` block reference](workspace.md#the-update-block) and [git integration → update probe](../concepts/git.md#update-probe-dwe-run) for full behaviour.
 
 ## `run.show_info` / `run.final_message`
 
@@ -208,8 +194,6 @@ run:
 ```yaml
 # workspace/lifecycle.yml
 run:
-  update:
-    mode: on
   show_info: true
   final_message: "Project is ready for work!"
   phases:
@@ -239,8 +223,7 @@ stop:
 On load, the file is checked for:
 
 - Each step in `run.phases` and `stop.phases` has a `type:` field with one of `shell`, `dwe`, `command`, `builtin`.
-- `update.mode`, when set, is one of `on`, `off`. Old values (`prompt`, `auto`, `check`) are rejected with a clear error.
-- `update.enabled` is not allowed (removed in favor of `mode: off` to disable the probe).
+- A `run.update` block is rejected — the self-update probe moved to the top-level [`update:` block](workspace.md#the-update-block). The strict `lifecycle.yml` decoder hard-errors on the unknown `update` key under `run:`.
 - `deploy_services: true` is rejected (only valid in `deploy.yml`).
 - `final_message` and `log` are normalized to defaults when absent.
 
@@ -251,7 +234,7 @@ Lifecycle phases use the same `parallel:` step-group container as `deploy.yml`. 
 ## Common pitfalls
 
 - **Forgetting `continue_on_error: true` on hook steps** — without it, a failing pre-stop hook aborts the entire stop sequence and containers are never stopped.
-- **Using `update: {}` with `enabled: true`** — the `enabled` field is no longer supported. Writing the `update:` key is itself the opt-in; use `mode: off` to disable the probe, or omit the `update:` key entirely.
+- **Putting `update:` under `run:`** — the self-update probe no longer lives in `lifecycle.yml`. A `run.update` block is rejected at load time; move it to the top-level [`update:` block](workspace.md#the-update-block) in `workspace.yml` / `local.yml`.
 - **Adding `deploy_services` phases** — they are deploy-only. Lifecycle pipelines call services via `type: command` references instead.
 - **Editing `lifecycle.yml` to use direct `docker compose` calls** — the public API is `type: dwe` with `cmd: "docker up"`. Direct `docker compose` calls bypass policy from `docker.yml`.
 

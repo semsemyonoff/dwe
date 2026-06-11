@@ -347,6 +347,286 @@ state: staging
 	}
 }
 
+// --- strict root allowlist + vars: sandbox (Task 1) ---
+
+func TestLoadConfig_strictRoot_allowedKeysLoad(t *testing.T) {
+	// All formalized top-level keys + schema_version + vars: load without error.
+	wsYML := `
+schema_version: "1"
+project:
+  name: laravel
+  prefix: dwe
+runtime:
+  use_https: false
+state: ""
+vars:
+  db:
+    user: root
+    password: secret
+  my_custom:
+    timeout: 30
+  # Names that are root-forbidden (legacy or unknown top-level keys) are perfectly
+  # fine NESTED inside the vars: sandbox — the strict-root check applies only one
+  # level up. This pins the "unvalidated/nestable inside" half of the contract.
+  tools:
+    php: docker
+  binaries:
+    docker: /usr/local/bin/docker
+`
+	path := writeFullFixture(t, wsYML, "", "", "", noToolsYML)
+	cfg, err := LoadConfig(path)
+	if err != nil {
+		t.Fatalf("LoadConfig: %v", err)
+	}
+	// vars: survives into Raw and resolves by dot-path.
+	if v, ok := ResolvePath(cfg.Raw, "vars.db.password"); !ok || v != "secret" {
+		t.Errorf("vars.db.password = %v (ok=%v), want secret", v, ok)
+	}
+	if v, ok := ResolvePath(cfg.Raw, "vars.my_custom.timeout"); !ok || v != 30 {
+		t.Errorf("vars.my_custom.timeout = %v (ok=%v), want 30", v, ok)
+	}
+	// Root-forbidden names nested under vars: are accepted and resolvable.
+	if v, ok := ResolvePath(cfg.Raw, "vars.tools.php"); !ok || v != "docker" {
+		t.Errorf("vars.tools.php = %v (ok=%v), want docker", v, ok)
+	}
+	if v, ok := ResolvePath(cfg.Raw, "vars.binaries.docker"); !ok || v != "/usr/local/bin/docker" {
+		t.Errorf("vars.binaries.docker = %v (ok=%v), want /usr/local/bin/docker", v, ok)
+	}
+	// The typed Vars field is also populated.
+	if cfg.Vars == nil {
+		t.Fatal("cfg.Vars should be populated")
+	}
+	if db, ok := cfg.Vars["db"].(map[string]any); !ok || db["user"] != "root" {
+		t.Errorf("cfg.Vars[db][user] = %v, want root", cfg.Vars["db"])
+	}
+}
+
+func TestLoadConfig_strictRoot_unknownKeyRejected(t *testing.T) {
+	// An unknown top-level key in each layer is rejected with the vars: hint.
+	cases := []struct {
+		name             string
+		ws, defaults, lc string
+		wantFile         string
+	}{
+		{
+			name:     "workspace.yml",
+			ws:       sampleWorkspaceYML + "\ndb:\n  user: root\n",
+			wantFile: "workspace.yml",
+		},
+		{
+			name:     "defaults.yml",
+			ws:       sampleWorkspaceYML,
+			defaults: "schema_version: \"1\"\nmy_custom:\n  x: 1\n",
+			wantFile: "defaults.yml",
+		},
+		{
+			name:     "local.yml",
+			ws:       sampleWorkspaceYML,
+			lc:       "app:\n  log_level: debug\n",
+			wantFile: "local.yml",
+		},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			path := writeFullFixture(t, tc.ws, tc.defaults, tc.lc, "", noToolsYML)
+			_, err := LoadConfig(path)
+			if err == nil {
+				t.Fatal("expected error for unknown top-level key")
+			}
+			if !strings.Contains(err.Error(), "unknown top-level key") {
+				t.Errorf("error = %q, want 'unknown top-level key'", err)
+			}
+			if !strings.Contains(err.Error(), "vars:") {
+				t.Errorf("error = %q, want vars: hint", err)
+			}
+			if !strings.Contains(err.Error(), tc.wantFile) {
+				t.Errorf("error = %q, want layer file %q", err, tc.wantFile)
+			}
+		})
+	}
+}
+
+func TestLoadConfig_strictRoot_varsFromDefaultsMerges(t *testing.T) {
+	// vars: declared in defaults.yml survives the 3-layer merge and is reachable.
+	defaults := "schema_version: \"1\"\nvars:\n  db:\n    host: dbhost\n"
+	path := writeFullFixture(t, sampleWorkspaceYML, defaults, "", "", noToolsYML)
+	cfg, err := LoadConfig(path)
+	if err != nil {
+		t.Fatalf("LoadConfig: %v", err)
+	}
+	if v, ok := ResolvePath(cfg.Raw, "vars.db.host"); !ok || v != "dbhost" {
+		t.Errorf("vars.db.host = %v (ok=%v), want dbhost (from defaults)", v, ok)
+	}
+}
+
+func TestLoadConfig_strictRoot_legacyKeysKeepDedicatedMessages(t *testing.T) {
+	// binaries:/tools: must still emit their dedicated migration messages — the
+	// generic allowlist error must not clobber them.
+	t.Run("tools", func(t *testing.T) {
+		ws := sampleWorkspaceYML + "\ntools:\n  web:\n    image: nginx\n"
+		path := writeFullFixture(t, ws, "", "", "", noToolsYML)
+		_, err := LoadConfig(path)
+		if err == nil || !strings.Contains(err.Error(), "tools: no longer supported") {
+			t.Fatalf("want dedicated tools message, got %v", err)
+		}
+	})
+	t.Run("binaries", func(t *testing.T) {
+		ws := sampleWorkspaceYML + "\nbinaries:\n  docker: /usr/bin/docker\n"
+		path := writeFullFixture(t, ws, "", "", "", noToolsYML)
+		_, err := LoadConfig(path)
+		if err == nil || !strings.Contains(err.Error(), "binaries: moved") {
+			t.Fatalf("want dedicated binaries message, got %v", err)
+		}
+	})
+	// A layer carrying ONLY a bare (null) legacy key is dropped by deepMerge and
+	// never reaches the merged map; the per-layer pass is the only place that
+	// catches it. Guards against a removed top-level block loading silently.
+	t.Run("tools bare in defaults layer", func(t *testing.T) {
+		defaults := "schema_version: \"1\"\ntools:\n"
+		path := writeFullFixture(t, sampleWorkspaceYML, defaults, "", "", noToolsYML)
+		_, err := LoadConfig(path)
+		if err == nil || !strings.Contains(err.Error(), "tools: no longer supported") {
+			t.Fatalf("want dedicated tools message from defaults layer, got %v", err)
+		}
+	})
+	t.Run("binaries bare in local layer", func(t *testing.T) {
+		lc := "binaries:\n"
+		path := writeFullFixture(t, sampleWorkspaceYML, "", lc, "", noToolsYML)
+		_, err := LoadConfig(path)
+		if err == nil || !strings.Contains(err.Error(), "binaries: moved") {
+			t.Fatalf("want dedicated binaries message from local layer, got %v", err)
+		}
+	})
+}
+
+func TestUpdateConfig_EffectiveMode(t *testing.T) {
+	cases := []struct {
+		name string
+		cfg  *UpdateConfig
+		want string
+	}{
+		{name: "nil block", cfg: nil, want: "off"},
+		{name: "present empty mode", cfg: &UpdateConfig{}, want: "on"},
+		{name: "explicit on", cfg: &UpdateConfig{Mode: "on"}, want: "on"},
+		{name: "explicit off", cfg: &UpdateConfig{Mode: "off"}, want: "off"},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := tc.cfg.EffectiveMode(); got != tc.want {
+				t.Errorf("EffectiveMode() = %q, want %q", got, tc.want)
+			}
+		})
+	}
+}
+
+func TestLoadConfig_update_absentBlockIsOff(t *testing.T) {
+	// No update: block at all → EffectiveMode off, Update field nil.
+	path := writeFullFixture(t, sampleWorkspaceYML, "", "", "", noToolsYML)
+	cfg, err := LoadConfig(path)
+	if err != nil {
+		t.Fatalf("LoadConfig: %v", err)
+	}
+	if cfg.Update != nil {
+		t.Errorf("cfg.Update = %+v, want nil", cfg.Update)
+	}
+	if got := cfg.Update.EffectiveMode(); got != "off" {
+		t.Errorf("EffectiveMode() = %q, want off", got)
+	}
+}
+
+func TestLoadConfig_update_threeLayerMerge(t *testing.T) {
+	// defaults on → workspace off → local on. local.yml wins (last-layer-wins
+	// scalar merge): final resolved mode is on.
+	ws := sampleWorkspaceYML + "\nupdate:\n  mode: off\n"
+	defaults := "schema_version: \"1\"\nupdate:\n  mode: on\n"
+	lc := "update:\n  mode: on\n"
+	path := writeFullFixture(t, ws, defaults, lc, "", noToolsYML)
+	cfg, err := LoadConfig(path)
+	if err != nil {
+		t.Fatalf("LoadConfig: %v", err)
+	}
+	if cfg.Update == nil {
+		t.Fatal("cfg.Update should be populated")
+	}
+	if got := cfg.Update.EffectiveMode(); got != "on" {
+		t.Errorf("EffectiveMode() = %q, want on (local.yml override)", got)
+	}
+}
+
+func TestLoadConfig_update_presentEmptyMode(t *testing.T) {
+	// update: with no mode → EffectiveMode on (writing the key is the opt-in).
+	ws := sampleWorkspaceYML + "\nupdate: {}\n"
+	path := writeFullFixture(t, ws, "", "", "", noToolsYML)
+	cfg, err := LoadConfig(path)
+	if err != nil {
+		t.Fatalf("LoadConfig: %v", err)
+	}
+	if got := cfg.Update.EffectiveMode(); got != "on" {
+		t.Errorf("EffectiveMode() = %q, want on", got)
+	}
+}
+
+func TestLoadConfig_update_presentNullValue(t *testing.T) {
+	// A bare `update:` (null value) is also the opt-in: writing the key is
+	// itself the opt-in (present-but-empty → on). deepMerge drops the nil value,
+	// so this guards the presence-normalization that keeps the contract.
+	ws := sampleWorkspaceYML + "\nupdate:\n"
+	path := writeFullFixture(t, ws, "", "", "", noToolsYML)
+	cfg, err := LoadConfig(path)
+	if err != nil {
+		t.Fatalf("LoadConfig: %v", err)
+	}
+	if cfg.Update == nil {
+		t.Fatal("Update should be a present (empty) block, got nil")
+	}
+	if got := cfg.Update.EffectiveMode(); got != "on" {
+		t.Errorf("EffectiveMode() = %q, want on", got)
+	}
+}
+
+func TestLoadConfig_update_explicitModeSurvivesNullOverride(t *testing.T) {
+	// defaults.yml sets mode: off; local.yml writes a bare `update:` (null).
+	// The explicit mode survives the merge (the merged block is not empty), so
+	// EffectiveMode stays off — a null override does not silently re-enable.
+	defaults := "schema_version: \"1\"\nupdate:\n  mode: off\n"
+	lc := "update:\n"
+	path := writeFullFixture(t, sampleWorkspaceYML, defaults, lc, "", noToolsYML)
+	cfg, err := LoadConfig(path)
+	if err != nil {
+		t.Fatalf("LoadConfig: %v", err)
+	}
+	if got := cfg.Update.EffectiveMode(); got != "off" {
+		t.Errorf("EffectiveMode() = %q, want off (explicit mode survives null override)", got)
+	}
+}
+
+func TestLoadConfig_update_invalidModeRejected(t *testing.T) {
+	// A bad value must hard-error at load time, not silently fall through.
+	ws := sampleWorkspaceYML + "\nupdate:\n  mode: yes-please\n"
+	path := writeFullFixture(t, ws, "", "", "", noToolsYML)
+	_, err := LoadConfig(path)
+	if err == nil {
+		t.Fatal("expected error for invalid update.mode")
+	}
+	if !strings.Contains(err.Error(), "update.mode") {
+		t.Errorf("error = %q, want 'update.mode'", err)
+	}
+}
+
+func TestLoadConfig_update_invalidModeNamesSourceLayer(t *testing.T) {
+	// An invalid override in local.yml must be attributed to local.yml, not the
+	// top-level workspace.yml path — the message names the layer that supplied it.
+	lc := "update:\n  mode: bogus\n"
+	path := writeFullFixture(t, sampleWorkspaceYML, "", lc, "", noToolsYML)
+	_, err := LoadConfig(path)
+	if err == nil {
+		t.Fatal("expected error for invalid update.mode in local.yml")
+	}
+	if !strings.Contains(err.Error(), "update.mode") || !strings.Contains(err.Error(), "local.yml") {
+		t.Errorf("error = %q, want it to mention update.mode and local.yml", err)
+	}
+}
+
 func TestLoadConfig_noOptionalFiles(t *testing.T) {
 	// Works fine when defaults.yml, local.yml, and tools.yml are absent.
 	path := writeFullFixture(t, sampleWorkspaceYML, "", "", "", noToolsYML)
@@ -2504,8 +2784,6 @@ info:
 
 const sampleLifecycleYML = `
 run:
-  update:
-    mode: on
   show_info: true
   final_message: "Project is ready for work!"
   phases:
@@ -2545,12 +2823,6 @@ func TestLoadLifecycleConfig_happyPath(t *testing.T) {
 	}
 	if cfg.Run == nil {
 		t.Fatal("cfg.Run should not be nil")
-	}
-	if cfg.Run.Update == nil {
-		t.Fatal("cfg.Run.Update should not be nil")
-	}
-	if cfg.Run.Update.Mode != "on" {
-		t.Errorf("cfg.Run.Update.Mode = %q, want on", cfg.Run.Update.Mode)
 	}
 	if !cfg.Run.ShowInfo {
 		t.Error("cfg.Run.ShowInfo should be true")
@@ -2611,33 +2883,14 @@ run:
 	}
 }
 
-func TestLoadLifecycleConfig_defaultMode(t *testing.T) {
-	// update block present but mode omitted — EffectiveMode should default to "on".
-	yml := `
-run:
-  update: {}
-  phases:
-    - name: start
-      steps:
-        - name: up
-          type: dwe
-          cmd: "docker up"
-`
-	path := writeLifecycleFixture(t, yml)
-	cfg, err := LoadLifecycleConfig(path)
-	if err != nil {
-		t.Fatalf("LoadLifecycleConfig: %v", err)
-	}
-	if cfg.Run.EffectiveMode() != "on" {
-		t.Errorf("EffectiveMode() = %q, want on when mode omitted with empty update block", cfg.Run.EffectiveMode())
-	}
-}
-
-func TestLoadLifecycleConfig_invalidUpdateMode(t *testing.T) {
+func TestLoadLifecycleConfig_RejectsUpdateBlock(t *testing.T) {
+	// The update: block was lifted out of lifecycle.yml into the top-level
+	// update: config block. The strict (KnownFields) lifecycle loader must now
+	// reject any lingering run.update as an unknown field.
 	yml := `
 run:
   update:
-    mode: invalid-mode
+    mode: on
   phases:
     - name: start
       steps:
@@ -2648,7 +2901,7 @@ run:
 	path := writeLifecycleFixture(t, yml)
 	_, err := LoadLifecycleConfig(path)
 	if err == nil {
-		t.Fatal("expected error for invalid update.mode, got nil")
+		t.Fatal("expected error for run.update (moved to top-level update: block), got nil")
 	}
 }
 
@@ -2738,138 +2991,6 @@ stop:
 	}
 	if cfg.Stop.FinalMessage != "Custom stop message" {
 		t.Errorf("Stop.FinalMessage = %q, want preserved value", cfg.Stop.FinalMessage)
-	}
-}
-
-// --- EffectiveMode ---
-
-func TestEffectiveMode(t *testing.T) {
-	cases := []struct {
-		name string
-		cfg  *LifecycleRunConfig
-		want string
-	}{
-		{
-			name: "update block omitted",
-			cfg:  &LifecycleRunConfig{Update: nil},
-			want: "off",
-		},
-		{
-			name: "update block present mode omitted",
-			cfg:  &LifecycleRunConfig{Update: &LifecycleUpdate{Mode: ""}},
-			want: "on",
-		},
-		{
-			name: "mode on",
-			cfg:  &LifecycleRunConfig{Update: &LifecycleUpdate{Mode: "on"}},
-			want: "on",
-		},
-		{
-			name: "mode off",
-			cfg:  &LifecycleRunConfig{Update: &LifecycleUpdate{Mode: "off"}},
-			want: "off",
-		},
-	}
-
-	for _, tc := range cases {
-		t.Run(tc.name, func(t *testing.T) {
-			got := tc.cfg.EffectiveMode()
-			if got != tc.want {
-				t.Errorf("EffectiveMode() = %q, want %q", got, tc.want)
-			}
-		})
-	}
-}
-
-// Tests for rejection of old mode values and enabled: field (Task 18)
-
-func TestLoadLifecycleConfig_RejectsOldModePrompt(t *testing.T) {
-	yml := `
-run:
-  update:
-    mode: prompt
-  phases:
-    - name: start
-      steps:
-        - name: up
-          type: dwe
-          cmd: "docker up"
-`
-	path := writeLifecycleFixture(t, yml)
-	_, err := LoadLifecycleConfig(path)
-	if err == nil {
-		t.Fatal("expected error for old mode value 'prompt'")
-	}
-	if !strings.Contains(err.Error(), "must be one of: on, off") {
-		t.Errorf("error message = %q, should mention valid modes", err.Error())
-	}
-}
-
-func TestLoadLifecycleConfig_RejectsOldModeAuto(t *testing.T) {
-	yml := `
-run:
-  update:
-    mode: auto
-  phases:
-    - name: start
-      steps:
-        - name: up
-          type: dwe
-          cmd: "docker up"
-`
-	path := writeLifecycleFixture(t, yml)
-	_, err := LoadLifecycleConfig(path)
-	if err == nil {
-		t.Fatal("expected error for old mode value 'auto'")
-	}
-	if !strings.Contains(err.Error(), "must be one of: on, off") {
-		t.Errorf("error message = %q, should mention valid modes", err.Error())
-	}
-}
-
-func TestLoadLifecycleConfig_RejectsOldModeCheck(t *testing.T) {
-	yml := `
-run:
-  update:
-    mode: check
-  phases:
-    - name: start
-      steps:
-        - name: up
-          type: dwe
-          cmd: "docker up"
-`
-	path := writeLifecycleFixture(t, yml)
-	_, err := LoadLifecycleConfig(path)
-	if err == nil {
-		t.Fatal("expected error for old mode value 'check'")
-	}
-	if !strings.Contains(err.Error(), "must be one of: on, off") {
-		t.Errorf("error message = %q, should mention valid modes", err.Error())
-	}
-}
-
-func TestLoadLifecycleConfig_RejectsEnabledField(t *testing.T) {
-	yml := `
-run:
-  update:
-    enabled: true
-    mode: on
-  phases:
-    - name: start
-      steps:
-        - name: up
-          type: dwe
-          cmd: "docker up"
-`
-	path := writeLifecycleFixture(t, yml)
-	_, err := LoadLifecycleConfig(path)
-	if err == nil {
-		t.Fatal("expected error for 'enabled' field")
-	}
-	// KnownFields should catch this during YAML decode
-	if !strings.Contains(err.Error(), "unknown") && !strings.Contains(err.Error(), "field") {
-		t.Errorf("error message = %q, should mention unknown field", err.Error())
 	}
 }
 

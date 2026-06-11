@@ -23,43 +23,37 @@ func TestDecide(t *testing.T) {
 		{"off/not-repo", notRepo, ModeOff, true, ActionSkip, true},
 		{"off/clean-behind", behind, ModeOff, true, ActionSkip, true},
 		{"off/dirty", dirty, ModeOff, true, ActionSkip, true},
+		{"off/behind-ci", behind, ModeOff, false, ActionSkip, true},
 
-		// not a repo
-		{"prompt/not-repo", notRepo, ModePrompt, true, ActionSkip, true},
-		{"auto/not-repo", notRepo, ModeAuto, true, ActionSkip, true},
+		// not a repo → skip
+		{"on/not-repo", notRepo, ModeOn, true, ActionSkip, true},
 
-		// dirty worktree → warn regardless of mode
-		{"prompt/dirty", dirty, ModePrompt, true, ActionWarn, false},
-		{"auto/dirty", dirty, ModeAuto, true, ActionWarn, false},
-		{"check/dirty", dirty, ModeCheck, true, ActionWarn, false},
+		// dirty worktree → warn
+		{"on/dirty", dirty, ModeOn, true, ActionWarn, false},
 
 		// no upstream → warn
-		{"prompt/no-upstream", noUpstream, ModePrompt, true, ActionWarn, false},
-		{"auto/no-upstream", noUpstream, ModeAuto, true, ActionWarn, false},
+		{"on/no-upstream", noUpstream, ModeOn, true, ActionWarn, false},
 
 		// fetch failed → warn
-		{"prompt/fetch-failed", fetchFailed, ModePrompt, true, ActionWarn, false},
-		{"auto/fetch-failed", fetchFailed, ModeAuto, true, ActionWarn, false},
+		{"on/fetch-failed", fetchFailed, ModeOn, true, ActionWarn, false},
 
 		// up to date → skip
-		{"prompt/up-to-date", clean, ModePrompt, true, ActionSkip, true},
-		{"auto/up-to-date", clean, ModeAuto, true, ActionSkip, true},
+		{"on/up-to-date", clean, ModeOn, true, ActionSkip, true},
 
-		// behind, mode=auto → pull
-		{"auto/behind", behind, ModeAuto, true, ActionPullAuto, true},
-		{"auto/behind-ci", behind, ModeAuto, false, ActionPullAuto, true},
-
-		// behind, mode=prompt+TTY → prompt
-		{"prompt/behind-tty", behind, ModePrompt, true, ActionPullPrompt, false},
-		// behind, mode=prompt+CI → warn
-		{"prompt/behind-ci", behind, ModePrompt, false, ActionWarn, false},
-
-		// behind, mode=check → warn
-		{"check/behind", behind, ModeCheck, true, ActionWarn, false},
+		// behind, mode=on + TTY → prompt
+		{"on/behind-tty", behind, ModeOn, true, ActionPullPrompt, false},
+		// behind, mode=on + CI → warn
+		{"on/behind-ci", behind, ModeOn, false, ActionWarn, false},
 
 		// diverged → warn
-		{"prompt/diverged", diverged, ModePrompt, true, ActionWarn, false},
-		{"auto/diverged", diverged, ModeAuto, true, ActionWarn, false},
+		{"on/diverged", diverged, ModeOn, true, ActionWarn, false},
+		{"on/diverged-ci", diverged, ModeOn, false, ActionWarn, false},
+
+		// unknown/legacy mode string (e.g. a stale "auto"/"prompt" surviving an old
+		// config) is neither ModeOn nor ModeOff → falls through to the safe default
+		// skip rather than pulling unprompted.
+		{"unknown/behind", behind, UpdateMode("auto"), true, ActionSkip, true},
+		{"unknown/clean", clean, UpdateMode("prompt"), true, ActionSkip, true},
 	}
 
 	for _, tt := range tests {

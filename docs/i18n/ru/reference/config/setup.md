@@ -1,4 +1,4 @@
-> Translated from: reference/config/setup.md @ 9c89a25376ef
+> Translated from: reference/config/setup.md @ f8ea5717e00e
 
 # setup.yml
 
@@ -52,7 +52,7 @@ questions:
     description: Personal access token for private repos (optional)
     type: input
     required: false
-    writes: db.api_key
+    writes: vars.db.api_key
 
   - id: enable-postgres
     title: Enable PostgreSQL?
@@ -73,7 +73,7 @@ questions:
     title: Preferred language
     type: select
     required: true
-    writes: app.locale
+    writes: vars.app.locale
     options:
       - value: en
         label: English
@@ -85,7 +85,7 @@ questions:
   - id: enable-caching
     title: Use Redis caching?
     type: confirm
-    writes: app.cache.enable
+    writes: vars.app.cache.enable
 ```
 
 Файл опционален. Если он отсутствует, визард (если вызван) обрабатывает только port-конфликты.
@@ -140,7 +140,7 @@ questions:
   type: input
   title: Database password
   required: true
-  writes: db.password
+  writes: vars.db.password
 ```
 
 ### `select`
@@ -155,7 +155,7 @@ Single-choice выпадающий список. Разработчик выби
   type: select
   title: Logging level
   required: true
-  writes: app.log_level
+  writes: vars.app.log_level
   options:
     - value: debug
       label: Debug (verbose)
@@ -176,7 +176,7 @@ Multi-choice список. Разработчик выбирает ноль ил
 - id: plugins
   type: multiselect
   title: Plugins to enable
-  writes: app.plugins
+  writes: vars.app.plugins
   options:
     - value: auth
       label: Authentication
@@ -197,7 +197,7 @@ Multi-choice список. Разработчик выбирает ноль ил
 - id: enable-debug
   type: confirm
   title: Enable debug mode?
-  writes: app.debug
+  writes: vars.app.debug
 ```
 
 Замечание: `required: true` на confirm — это no-op и даёт предупреждение валидации. Confirm всегда возвращает валидный ответ (либо true, либо false).
@@ -244,7 +244,7 @@ Multi-choice список. Разработчик выбирает ноль ил
 - id: workspace-dir
   type: input
   title: Workspace directory
-  writes: app.workspace
+  writes: vars.app.workspace
   validate:
     preset: path
 ```
@@ -257,7 +257,7 @@ Multi-choice список. Разработчик выбирает ноль ил
 - id: api-key
   type: input
   title: API key
-  writes: db.api_key
+  writes: vars.db.api_key
   validate:
     preset: non-empty
 ```
@@ -270,7 +270,7 @@ Multi-choice список. Разработчик выбирает ноль ил
 - id: app-name
   type: input
   title: Application name
-  writes: app.name
+  writes: vars.app.name
   # No validation; any input is accepted
 ```
 
@@ -282,7 +282,7 @@ Multi-choice список. Разработчик выбирает ноль ил
 - id: email
   type: input
   title: Email address
-  writes: user.email
+  writes: vars.user.email
   validate:
     regex: "^[a-z0-9+._-]+@[a-z0-9.-]+$"
 ```
@@ -329,17 +329,17 @@ Multi-choice список. Разработчик выбирает ноль ил
 
 ### Не-сервисные пути
 
-Везде в остальном `local.yml` (кастомные ключи верхнего уровня, `db.*`, `app.*` и т.д.) разрешён любой dot-path и допустим любой тип вопроса:
+Кастомные значения принадлежат [песочнице `vars:`](workspace.md#строгий-корень--песочница-vars). Корень смерженного конфига строгий — ключ верхнего уровня `db:` / `app:` / `custom:` в `local.yml` отвергается при загрузке — поэтому пишите кастомные ответы под `vars.*`, где разрешена любая вложенность и допустим любой тип вопроса:
 
 ```yaml
-- writes: db.name                    # ✓ allowed
-- writes: db.connection.host         # ✓ allowed
-- writes: db.connection.port         # ✓ allowed
-- writes: app.feature_flags          # ✓ allowed
-- writes: custom.setting             # ✓ allowed
+- writes: vars.db.name                    # ✓ allowed
+- writes: vars.db.connection.host         # ✓ allowed
+- writes: vars.db.connection.port         # ✓ allowed
+- writes: vars.app.feature_flags          # ✓ allowed
+- writes: vars.custom.setting             # ✓ allowed
 ```
 
-Визард пишет типизированное значение ответа дословно (string для `input` / `select` / `confirm`, slice для `multiselect`) и доверяет потребляющему конфигу (шаблоны, экспорты и т.д.) обрабатывать его адекватно.
+Визард пишет типизированное значение ответа дословно (string для `input` / `select`, bool для `confirm`, slice для `multiselect`) и доверяет потребляющему конфигу (шаблоны, экспорты и т.д.) обрабатывать его адекватно.
 
 ## Примеры
 
@@ -360,7 +360,7 @@ questions:
     title: GitHub personal access token
     description: Used for private repo access. Leave blank to skip.
     required: false
-    writes: secrets.github_token
+    writes: vars.secrets.github_token
     validate:
       preset: non-empty
 
@@ -401,7 +401,7 @@ questions:
     title: Plugins to enable
     description: Select any combination (space to toggle, enter to confirm)
     required: false
-    writes: app.plugins
+    writes: vars.app.plugins
     options:
       - value: auth
         label: Authentication
@@ -421,7 +421,7 @@ questions:
     type: input
     title: Workspace root directory
     required: true
-    writes: workspace.root
+    writes: vars.workspace.root
     validate:
       preset: path
 
@@ -429,7 +429,7 @@ questions:
     type: select
     title: Cache backend
     required: true
-    writes: cache.backend
+    writes: vars.cache.backend
     options:
       - value: redis
         label: Redis
@@ -441,7 +441,7 @@ questions:
   - id: enable-profiling
     type: confirm
     title: Enable performance profiling?
-    writes: debug.profiling
+    writes: vars.debug.profiling
 ```
 
 ## Связанные команды

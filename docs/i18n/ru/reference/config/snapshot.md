@@ -1,4 +1,4 @@
-> Translated from: reference/config/snapshot.md @ e4faf8aeaa9b
+> Translated from: reference/config/snapshot.md @ b82d30fabf87
 
 # snapshot.yml
 
@@ -168,7 +168,7 @@ local_yml:
   preserve_keys:
     - services.main.ports
     - services.db.ports
-    - host.shell
+    - vars.host.shell
 ```
 
 - Dot-пути адресуют вложенные ключи маппинга; сегменты с индексом массива (`services[0].ports`) не поддерживаются — `local.yml` представляет собой maps-of-maps.
