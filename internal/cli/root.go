@@ -30,6 +30,7 @@ import (
 	cmdSnapshot "github.com/semsemyonoff/dwe/internal/cli/snapshot"
 	cmdStatus "github.com/semsemyonoff/dwe/internal/cli/status"
 	cmdValidate "github.com/semsemyonoff/dwe/internal/cli/validate"
+	cmdVars "github.com/semsemyonoff/dwe/internal/cli/vars"
 	cmdVersion "github.com/semsemyonoff/dwe/internal/cli/version"
 	"github.com/semsemyonoff/dwe/internal/core/project/config"
 	"github.com/semsemyonoff/dwe/internal/core/project/project"
@@ -95,6 +96,7 @@ func NewRootCmdWithFlags() (*cobra.Command, *cmdctx.RootFlags) {
 	root.AddCommand(cmdService.NewCmd(groupConfiguration, flags))
 	root.AddCommand(cmdRender.NewCmd(groupConfiguration, flags))
 	root.AddCommand(cmdValidate.NewCmd(groupConfiguration, flags))
+	root.AddCommand(cmdVars.NewCmd(groupConfiguration, flags))
 
 	// Pipelines group: deploy, reset, snapshot.
 	root.AddCommand(cmdDeploy.NewCmd(groupPipelines, flags))

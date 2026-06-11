@@ -175,14 +175,14 @@ Dependencies identified: new packages `internal/cli/vars/`, `internal/core/proje
 - Create: `internal/cli/vars/vars_test.go`
 - Modify: `internal/cli/root.go` (register `cmdVars.NewCmd(groupConfiguration, flags)`)
 
-- [ ] `NewCmd(groupID, flags)` building the `vars` cobra tree (aliases optional), with `get`/`list` subcommands and a `RunE` that dispatches the no-arg case (TUI in Task 9; for now wire to `list` so the command is usable).
-- [ ] Implement `get <var>`: resolve effective value, render via `RenderVarValue`; JSON via `cmdctx.WriteData` (`{var,value}`); not-found → typed error.
-- [ ] Implement `list [namespace]`: enumerate leaves, optional namespace filter (mirror `commands list`), render via `RenderVarsList`; JSON `{vars:[...]}`.
-- [ ] Add `ValidArgsFunction` for `<var>` completing `vars.*` leaves via `cmdctx.CompletionConfigPath` (silent empty + `NoFileComp` on error).
-- [ ] Localize display strings via `rflags.I18n`/`store.*` (no direct `Description` reads); storage/scan stay English.
-- [ ] Register in `root.go`; confirm `dwe vars --help` and `dwe vars list` work.
-- [ ] Write tests: `get`/`list` text + JSON, namespace filter, not-found error + exit code, JSON-mode stdout cleanliness, completion returns leaves.
-- [ ] `make embedded-docs` once, then `go test ./internal/cli/vars/... ./internal/cli/...` (focused) — must pass before Task 7.
+- [x] `NewCmd(groupID, flags)` building the `vars` cobra tree (aliases optional), with `get`/`list` subcommands and a `RunE` that dispatches the no-arg case (TUI in Task 9; for now wire to `list` so the command is usable).
+- [x] Implement `get <var>`: resolve effective value, render via `RenderVarValue`; JSON via `cmdctx.WriteData` (`{var,value}`); not-found → typed error.
+- [x] Implement `list [namespace]`: enumerate leaves, optional namespace filter (mirror `commands list`), render via `RenderVarsList`; JSON `{vars:[...]}`.
+- [x] Add `ValidArgsFunction` for `<var>` completing `vars.*` leaves via `cmdctx.CompletionConfigPath` (silent empty + `NoFileComp` on error).
+- [x] Localize display strings via `rflags.I18n`/`store.*` (no direct `Description` reads); storage/scan stay English. (N/A here — vars command exposes config values, not user-command `def.Description`; cobra Short/Long are static. No direct `Description` reads exist.)
+- [x] Register in `root.go`; confirm `dwe vars --help` and `dwe vars list` work.
+- [x] Write tests: `get`/`list` text + JSON, namespace filter, not-found error + exit code, JSON-mode stdout cleanliness, completion returns leaves.
+- [x] `make embedded-docs` once, then `go test ./internal/cli/vars/... ./internal/cli/...` (focused) — must pass before Task 7.
 
 ### Task 7: `dwe vars inspect`
 
