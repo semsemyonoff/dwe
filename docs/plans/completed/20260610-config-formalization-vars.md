@@ -194,6 +194,7 @@ Dependencies identified: changes are confined to `internal/core/project/config`,
 - [x] Move this plan to `docs/plans/completed/20260610-config-formalization-vars.md`.
 
 ## Post-Completion
+
 *Informational only — external action required, no checkboxes.*
 
 **External system updates:**

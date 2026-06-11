@@ -98,7 +98,7 @@ Dot-paths are consumed by:
 
 The **root** of the merged 3-layer config is strict. After the three layers are merged, DWE checks the top-level keys against a fixed allowlist:
 
-```
+```text
 project · runtime · state · exports · compose · ui · docs · services · vars · update
 ```
 

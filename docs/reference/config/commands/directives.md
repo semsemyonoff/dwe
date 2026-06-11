@@ -208,22 +208,22 @@ params:
     type: string
     widget: select
     description: Database to use
-    options: ${databases}
-    default_from: config.default_db
+    options: ${vars.databases}
+    default_from: vars.default_db
 
   # Multiple selections
   services:
     type: string
     widget: multiselect
     description: Services to enable
-    options: ${services_list}
+    options: ${vars.services_list}
     separator: ","
 ```
 
 | Field | Type | Default | Description |
 |-------|------|---------|-------------|
 | `widget` | enum | inferred from `type` | One of `input`, `select`, `multiselect`, `confirm`. Inferred as `confirm` for `bool`; `select` if `options` present; `input` for string/int/path without options |
-| `options` | list or ref | — | Static list of option values, list of `{value, label}` objects, or a dot-path reference to config (e.g., `${databases}`) |
+| `options` | list or ref | — | Static list of option values, list of `{value, label}` objects, or a dot-path reference to config (e.g., `${vars.databases}`) |
 | `separator` | string | `" "` | Joining separator for multiselect results; used only when `widget: multiselect` |
 
 Widget rendering:
@@ -237,7 +237,7 @@ Options resolution:
 
 - **Static list** (`options: [a, b, c]`) — the list is literal.
 - **Labeled options** (`options: [{value: x, label: X}, ...]`) — value is used internally, label is shown to the user.
-- **Config reference** (`options: ${databases}`) — the form resolves the dot-path from your merged config (workspace.yml + defaults.yml + local.yml) at runtime. The resolved value can be a scalar list (`[a, b, c]`) or a map (`{x: X, y: Y}` → options with value=key, label=value). Empty or missing references are caught with a clear error when you try to open the form.
+- **Config reference** (`options: ${vars.databases}`) — the form resolves the dot-path from your merged config (workspace.yml + defaults.yml + local.yml) at runtime. The resolved value can be a scalar list (`[a, b, c]`) or a map (`{x: X, y: Y}` → options with value=key, label=value). Empty or missing references are caught with a clear error when you try to open the form.
 
 Validation:
 

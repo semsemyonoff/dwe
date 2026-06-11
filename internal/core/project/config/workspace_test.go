@@ -478,6 +478,25 @@ func TestLoadConfig_strictRoot_legacyKeysKeepDedicatedMessages(t *testing.T) {
 			t.Fatalf("want dedicated binaries message, got %v", err)
 		}
 	})
+	// A layer carrying ONLY a bare (null) legacy key is dropped by deepMerge and
+	// never reaches the merged map; the per-layer pass is the only place that
+	// catches it. Guards against a removed top-level block loading silently.
+	t.Run("tools bare in defaults layer", func(t *testing.T) {
+		defaults := "schema_version: \"1\"\ntools:\n"
+		path := writeFullFixture(t, sampleWorkspaceYML, defaults, "", "", noToolsYML)
+		_, err := LoadConfig(path)
+		if err == nil || !strings.Contains(err.Error(), "tools: no longer supported") {
+			t.Fatalf("want dedicated tools message from defaults layer, got %v", err)
+		}
+	})
+	t.Run("binaries bare in local layer", func(t *testing.T) {
+		lc := "binaries:\n"
+		path := writeFullFixture(t, sampleWorkspaceYML, "", lc, "", noToolsYML)
+		_, err := LoadConfig(path)
+		if err == nil || !strings.Contains(err.Error(), "binaries: moved") {
+			t.Fatalf("want dedicated binaries message from local layer, got %v", err)
+		}
+	})
 }
 
 func TestUpdateConfig_EffectiveMode(t *testing.T) {

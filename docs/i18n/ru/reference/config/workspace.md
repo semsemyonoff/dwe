@@ -1,4 +1,4 @@
-> Translated from: reference/config/workspace.md @ ae29cad4cb94
+> Translated from: reference/config/workspace.md @ 8b83a271483f
 
 # workspace.yml / defaults.yml / local.yml
 
@@ -99,7 +99,7 @@ Dot-path'ы используются:
 
 **Корень** смерженного трёхслойного конфига строгий. После слияния трёх слоёв DWE проверяет ключи верхнего уровня по фиксированному allowlist'у:
 
-```
+```text
 project · runtime · state · exports · compose · ui · docs · services · vars · update
 ```
 

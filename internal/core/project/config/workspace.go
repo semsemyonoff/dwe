@@ -1419,23 +1419,21 @@ func LoadConfig(workspacePath string) (*DweConfig, error) {
 		return nil, fmt.Errorf("unmarshal merged config: %w", err)
 	}
 
-	// Reject binaries: blocks — they've moved to user-config
-	if _, ok := merged["binaries"]; ok {
-		return nil, fmt.Errorf("binaries: moved to ~/.config/dwe/config — use binary_docker=/path, binary_git=/path, etc. See docs/reference/config/workspace.md")
-	}
-
-	// Reject tools: blocks — replaced by services with type:tool
-	if _, ok := merged["tools"]; ok {
-		return nil, fmt.Errorf("tools: no longer supported — define tool entries as services with type: tool in workspace/services/. See docs/reference/config/services/index.md")
-	}
-
-	// Strict root: reject any top-level key outside allowedRootKeys. Custom,
-	// free-form values must live under vars:. This runs AFTER the dedicated
-	// binaries:/tools: rejections above (so their migration messages win) and
-	// BEFORE __configPath / injectServicesIntoRaw add internal keys to merged.
-	// Iterate per layer so the error names the source file that introduced the
-	// offending key; keys are sorted for a deterministic message.
+	// Strict root + legacy-block rejection, iterated per layer so the error names
+	// the source file. deepMerge drops nil values, so a layer carrying ONLY a
+	// `binaries:`/`tools:` key never reaches the merged map — the per-layer pass
+	// is the only place that sees it (a layer with just those keys would
+	// otherwise load silently). This runs BEFORE __configPath /
+	// injectServicesIntoRaw add internal keys. The binaries:/tools: rejections
+	// come first so their migration messages win over the strict-root "unknown
+	// top-level key" message; keys are sorted for a deterministic error.
 	for _, layer := range layers {
+		if _, ok := layer.data["binaries"]; ok {
+			return nil, fmt.Errorf("%s: binaries: moved to ~/.config/dwe/config — use binary_docker=/path, binary_git=/path, etc. See docs/reference/config/workspace.md", layer.path)
+		}
+		if _, ok := layer.data["tools"]; ok {
+			return nil, fmt.Errorf("%s: tools: no longer supported — define tool entries as services with type: tool in workspace/services/. See docs/reference/config/services/index.md", layer.path)
+		}
 		keys := make([]string, 0, len(layer.data))
 		for k := range layer.data {
 			keys = append(keys, k)
@@ -1443,11 +1441,6 @@ func LoadConfig(workspacePath string) (*DweConfig, error) {
 		sort.Strings(keys)
 		for _, key := range keys {
 			if _, ok := allowedRootKeySet[key]; ok {
-				continue
-			}
-			// binaries:/tools: are rejected above with dedicated messages; skip
-			// them defensively so a future reordering can't clobber those.
-			if key == "binaries" || key == "tools" {
 				continue
 			}
 			return nil, fmt.Errorf("%s: unknown top-level key %q — move custom values under \"vars:\" (e.g. vars.%s.*); allowed top-level keys: %s",
@@ -1461,7 +1454,9 @@ func LoadConfig(workspacePath string) (*DweConfig, error) {
 	// nil Update (→ off) and silently drop the opt-in. Treat a present update:
 	// key in any layer as a present (empty) block when the merge left it nil.
 	// When some layer carries an explicit mode, deepMerge preserves it and
-	// cfg.Update is already non-nil, so this leaves layered modes untouched.
+	// cfg.Update is already non-nil, so this leaves layered modes untouched — a
+	// bare `update:` does NOT re-enable over a lower layer's explicit mode: off
+	// (see TestLoadConfig_update_explicitModeSurvivesNullOverride).
 	if cfg.Update == nil {
 		for _, layer := range layers {
 			if _, ok := layer.data["update"]; ok {
