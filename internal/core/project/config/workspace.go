@@ -1439,36 +1439,27 @@ func LoadConfig(workspacePath string) (*DweConfig, error) {
 	baseDir := filepath.Dir(workspacePath)
 
 	// Read each layer separately so the cross-layer overlay validator can
-	// attribute errors to a specific source file.
+	// attribute errors to a specific source file. LoadLayers is the shared
+	// loader (also used by ResolveLayeredPath for `dwe vars inspect`), so the two
+	// cannot drift on file set / optional handling / error wording.
+	configLayers, err := LoadLayers(workspacePath)
+	if err != nil {
+		return nil, err
+	}
 	type rawLayer struct {
 		path string
 		data map[string]any
 	}
-	var layers []rawLayer
-
-	// Layer 1: workspace.yml (required)
-	base, err := loadRawYAML(workspacePath)
-	if err != nil {
-		return nil, fmt.Errorf("read %s: %w", workspacePath, err)
+	layers := make([]rawLayer, 0, len(configLayers))
+	for _, l := range configLayers {
+		layers = append(layers, rawLayer{path: l.Path, data: l.Data})
 	}
-	layers = append(layers, rawLayer{path: workspacePath, data: base})
-
-	// Layer 2: workspace/defaults.yml (optional)
-	defaultsPath := filepath.Join(baseDir, "workspace", "defaults.yml")
-	if defaults, err := loadRawYAML(defaultsPath); err == nil {
-		layers = append(layers, rawLayer{path: defaultsPath, data: defaults})
-	} else if !errors.Is(err, os.ErrNotExist) {
-		return nil, fmt.Errorf("read %s: %w", defaultsPath, err)
-	}
-
-	// Layer 3: workspace/local.yml (optional)
-	localPath := filepath.Join(baseDir, "workspace", "local.yml")
+	localPath := LocalLayerPath(workspacePath)
 	var localRaw map[string]any
-	if local, err := loadRawYAML(localPath); err == nil {
-		layers = append(layers, rawLayer{path: localPath, data: local})
-		localRaw = local
-	} else if !errors.Is(err, os.ErrNotExist) {
-		return nil, fmt.Errorf("read %s: %w", localPath, err)
+	for _, l := range configLayers {
+		if l.Path == localPath {
+			localRaw = l.Data
+		}
 	}
 
 	// Step 1: load per-service folders — the canonical service declarations.
