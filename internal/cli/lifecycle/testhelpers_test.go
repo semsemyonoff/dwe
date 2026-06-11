@@ -6,6 +6,7 @@ import (
 	"testing"
 
 	"github.com/semsemyonoff/dwe/internal/cli/cmdctx"
+	"github.com/semsemyonoff/dwe/internal/core/bridge"
 	"github.com/semsemyonoff/dwe/internal/core/project/config"
 	"github.com/semsemyonoff/dwe/internal/core/usercommands"
 	lifecyclepkg "github.com/semsemyonoff/dwe/internal/core/workflow/lifecycle"
@@ -15,11 +16,16 @@ import (
 )
 
 // init stubs PreflightFunc so CLI integration tests don't require a real
-// Docker / git environment on the host.
+// Docker / git environment on the host. The bridge seams are stubbed for the
+// same reason: the real prepare hook probes docker for image architectures
+// and spawns a detached daemon via os.Executable() — re-executing the test
+// binary (the documented recursion hazard).
 func init() {
 	lifecyclepkg.PreflightFunc = func(_ context.Context, _ *config.DweConfig, _ *usercommands.Registry, _, _ string, _ bool, _ io.Writer) error {
 		return nil
 	}
+	lifecyclepkg.BridgePrepareFunc = func(bridge.PrepareOptions) error { return nil }
+	lifecyclepkg.BridgeStopDaemonFunc = func(string) (bool, error) { return false, nil }
 }
 
 // stubRunPhases replaces RunPhasesFunc with a no-op for the duration of t.

@@ -42,6 +42,7 @@ func expandDaemon(src model.CommandDef) []model.CommandDef {
 			Description:       src.Description,
 			Private:           src.Private,
 			Hide:              src.Hide,
+			Bridge:            src.Bridge,
 			Params:            src.Params,
 			Context:           src.Context,
 			Env:               src.Env,

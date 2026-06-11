@@ -15,6 +15,7 @@ import (
 	"github.com/semsemyonoff/dwe/internal/core/ui/styles"
 	"github.com/semsemyonoff/dwe/internal/core/usercommands"
 	"github.com/semsemyonoff/dwe/internal/core/validate"
+	valbridge "github.com/semsemyonoff/dwe/internal/core/validate/bridge"
 	valchecks "github.com/semsemyonoff/dwe/internal/core/validate/checks"
 	valcmds "github.com/semsemyonoff/dwe/internal/core/validate/commands"
 	valconfig "github.com/semsemyonoff/dwe/internal/core/validate/config"
@@ -148,7 +149,7 @@ Exit code:
   1 - one or more errors, or warnings with --strict
 
 Scope targets:
-  dwe validate                                   - all (config + templates + commands + env + checks + linters + translations + snapshot)
+  dwe validate                                   - all (config + templates + commands + env + checks + linters + translations + snapshot + bridge)
   dwe validate config                            - all config validators
   dwe validate config <workspace|services|...>   - specific config validator
   dwe validate templates                         - all template validators (ide, ai, git)
@@ -159,6 +160,7 @@ Scope targets:
   dwe validate linters [id]                      - external linters from workspace/validate.yml + autodetected built-ins
   dwe validate translations                      - translation files in workspace/i18n/
   dwe validate snapshot [<name>]                 - snapshot config + on-disk integrity
+  dwe validate bridge                            - host-bridge service settings (bridge: blocks)
 `,
 		Args:         cobra.NoArgs,
 		SilenceUsage: true,
@@ -286,6 +288,12 @@ Scope targets:
 	}
 	snapshotCmd.Flags().BoolVar(&verifyChecksums, "verify", false, "recompute artifact sha256 and compare against the manifest")
 	cmd.AddCommand(snapshotCmd)
+
+	// Host-bridge service settings (bridge domain).
+	cmd.AddCommand(newValidateLeafCmd(flags, &strict, &quiet, &stage, "bridge",
+		"Validate host-bridge service settings",
+		`Check per-service bridge: blocks in workspace/services/<name>/service.yml — the on_unreachable policy, shim_path, and the workspace mapping bridged services need for working-directory translation.`,
+		"bridge"))
 
 	return cmd
 }
@@ -523,7 +531,7 @@ func validateHeader(scope []string, stage string) string {
 // validateScopeLabel produces a human label for the scope being validated.
 func validateScopeLabel(scope []string) string {
 	if len(scope) == 0 {
-		return "your project (config, templates, commands, environment, project checks, linters, translations, and snapshots)"
+		return "your project (config, templates, commands, environment, project checks, linters, translations, snapshots, and host-bridge settings)"
 	}
 	switch scope[0] {
 	case "config":
@@ -559,6 +567,8 @@ func validateScopeLabel(scope []string) string {
 			return "snapshot " + scope[1]
 		}
 		return "your snapshot configuration and on-disk snapshots"
+	case "bridge":
+		return "your host-bridge service settings (bridge: blocks in service.yml)"
 	}
 	return strings.Join(scope, " ")
 }
@@ -575,6 +585,12 @@ func validateScopeLabel(scope []string) string {
 func buildRegistry(cfg *config.DweConfig, validateCfg *config.ValidateConfig, validateLoadErr error, snapCfg *config.SnapshotConfig, snapCfgErr error, setupCfg *setup.Config, setupCfgErr error, setupPath string, baseDir string, cmdReg *usercommands.Registry, stage string, verifyChecksums bool, scope []string, userCfg *userpkg.Config) *validate.Registry {
 	reg := validate.NewRegistry()
 	for _, v := range valconfig.All() {
+		reg.Register(v)
+	}
+	// Bridge domain participates in `dwe validate` only — preflight never
+	// registers valbridge validators, so bridge config mistakes never block
+	// unrelated lifecycle commands.
+	for _, v := range valbridge.All() {
 		reg.Register(v)
 	}
 	for _, v := range valtmpl.All() {

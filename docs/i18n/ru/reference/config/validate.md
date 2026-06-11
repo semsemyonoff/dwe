@@ -1,4 +1,4 @@
-> Translated from: reference/config/validate.md @ e5ba2ec39671
+> Translated from: reference/config/validate.md @ effd0a17eb19
 
 # validate.yml
 
@@ -32,7 +32,7 @@
 
 `workspace/validate.yml` объявляет проверки готовности уровня проекта. CLI использует их из двух точек входа:
 
-- `dwe validate` — запускает каждую проверку (плюс YAML-shape валидаторы в доменах `config`, `templates` и `commands`, плюс environment-probe'ы в домене `env`) и выводит диагностику.
+- `dwe validate` — запускает каждую проверку (плюс YAML-shape валидаторы в доменах `config`, `templates`, `commands` и `bridge`, плюс environment-probe'ы в домене `env`) и выводит диагностику.
 - Хук preflight в `dwe deploy run`, `dwe run`, `dwe stop` и `dwe restart` — запускает подмножество проверок, связанных с соответствующей стадией, до любого побочного эффекта на Docker, git или файловую систему.
 
 Цель — заранее показать проблемы, которые пользователь может починить («вы не залогинены в ghcr.io», «DATABASE_URL пуст в `.env`», «VPN лёг») ДО того, как шаги деплоя упадут на середине с непонятными ошибками.
@@ -398,7 +398,8 @@ commands:
 
 ## CLI-флаги
 
-- `dwe validate` — запускает `config.*`, `templates.*`, `commands.*`, `env.*` и все `checks.*`. Опциональный позиционный scope сужает запуск (например, `dwe validate env`, `dwe validate checks ghcr-login`).
+- `dwe validate` — запускает `config.*`, `templates.*`, `commands.*`, `bridge.*`, `env.*` и все `checks.*`. Опциональный позиционный scope сужает запуск (например, `dwe validate env`, `dwe validate checks ghcr-login`, `dwe validate bridge`).
+- `dwe validate bridge` — статические проверки только per-service блоков `bridge:`: enum `on_unreachable` (`fail` / `warn`), абсолютность `shim_path` и маппинг `dir` / `dir_internal` сервиса с включённым мостом, поверх которого работает shim. Только для validate — домен bridge не участвует в preflight.
 - `dwe validate --stage <name>` — локальный флаг команды `validate`. Фильтрует `checks.*` по стадии. `env.*` и другие домены не затрагиваются (у них нет стадий).
 - `dwe validate --strict` — трактовать предупреждения как ошибки (exit 1).
 - `dwe validate --quiet` — скрыть строки ok / info.

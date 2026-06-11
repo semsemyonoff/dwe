@@ -14,6 +14,7 @@ A single-binary CLI for running, configuring, and maintaining containerised loca
 - Deploy, run, stop, restart, reset, and snapshot share the same pipeline engine, so behaviour is consistent across operations.
 - Container orchestration sits on top of plain Docker Compose files the project already owns — no synthetic compose generation, no hidden lock-in.
 - Per-developer overrides live in tracked `defaults.yml` plus gitignored `local.yml`; the same project boots cleanly on every workstation.
+- The [host bridge](docs/reference/bridge.md) mounts a tiny `dwe` shim into dev containers, so git hooks and project commands work identically on the host and inside a devcontainer terminal.
 - Embedded docs and i18n make `dwe docs` and translated UIs work without network access or out-of-band assets.
 
 ## Install
@@ -143,7 +144,7 @@ flowchart LR
 
 - DWE owns the project model, the ordered compose file list, env rendering, lifecycle orchestration, locks, and the state journal under `.dwe/`.
 - Docker owns containers, networks, volumes, image layers, and health reporting. The only handshake is the argv DWE passes to `docker compose` and the exit code it returns.
-- Every invocation is short-lived and stateless: no DWE daemon, no plugin loader, no network on the normal path. Uninstalling DWE leaves the compose files under `compose/` as valid standalone `docker compose` input.
+- Every invocation is short-lived and stateless: no plugin loader, no network on the normal path, and no resident process except the per-project [host-bridge](docs/reference/bridge.md) daemon that serves dev containers while the stack is up. Uninstalling DWE leaves the compose files under `compose/` as valid standalone `docker compose` input.
 
 Full write-up: [`docs/reference/concepts/architecture.md`](docs/reference/concepts/architecture.md).
 

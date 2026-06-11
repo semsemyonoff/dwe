@@ -189,6 +189,87 @@ dir: ./not-allowed
 	}
 }
 
+// TestLoadServices_bridgeBlock verifies the bridge block decodes on every
+// service type and that omitting it leaves the tristate nil with type-based
+// accessor defaults.
+func TestLoadServices_bridgeBlock(t *testing.T) {
+	dir := t.TempDir()
+	writeServiceFolder(t, dir, "web", `
+type: app
+container: app-web
+dir: ./services/web
+bridge:
+  enabled: false
+  shim_path: /opt/dwe/bin/dwe
+  on_unreachable: warn
+`)
+	writeServiceFolder(t, dir, "worker", `
+type: infra
+container: worker
+bridge:
+  enabled: true
+`)
+	writeServiceFolder(t, dir, "adminer", `
+type: tool
+container: adminer
+`)
+	services, err := LoadServices(dir)
+	if err != nil {
+		t.Fatalf("LoadServices: %v", err)
+	}
+
+	web := services["web"]
+	if web.Bridge.Enabled == nil || *web.Bridge.Enabled != false {
+		t.Errorf("web Bridge.Enabled = %v, want explicit false", web.Bridge.Enabled)
+	}
+	if web.BridgeShimPath() != "/opt/dwe/bin/dwe" {
+		t.Errorf("web BridgeShimPath() = %q, want /opt/dwe/bin/dwe", web.BridgeShimPath())
+	}
+	if web.BridgeOnUnreachable() != BridgeOnUnreachableWarn {
+		t.Errorf("web BridgeOnUnreachable() = %q, want warn", web.BridgeOnUnreachable())
+	}
+
+	worker := services["worker"]
+	if !worker.BridgeEnabled() {
+		t.Error("worker (infra) with explicit enabled: true should report BridgeEnabled() true")
+	}
+
+	adminer := services["adminer"]
+	if adminer.Bridge.Enabled != nil {
+		t.Errorf("adminer Bridge.Enabled should be nil when omitted, got %v", *adminer.Bridge.Enabled)
+	}
+	if adminer.BridgeEnabled() {
+		t.Error("adminer (tool, omitted) should default BridgeEnabled() false")
+	}
+	if adminer.BridgeShimPath() != DefaultBridgeShimPath {
+		t.Errorf("adminer BridgeShimPath() = %q, want default %q", adminer.BridgeShimPath(), DefaultBridgeShimPath)
+	}
+	if adminer.BridgeOnUnreachable() != BridgeOnUnreachableFail {
+		t.Errorf("adminer BridgeOnUnreachable() = %q, want fail", adminer.BridgeOnUnreachable())
+	}
+}
+
+// TestLoadServices_bridgeUnknownSubField verifies the strict KnownFields decode
+// rejects unknown keys inside the bridge block.
+func TestLoadServices_bridgeUnknownSubField(t *testing.T) {
+	dir := t.TempDir()
+	writeServiceFolder(t, dir, "web", `
+type: app
+container: app-web
+dir: ./services/web
+bridge:
+  enabled: true
+  bogus: 1
+`)
+	_, err := LoadServices(dir)
+	if err == nil {
+		t.Fatal("expected error for unknown bridge sub-field, got nil")
+	}
+	if !strings.Contains(err.Error(), "bogus") {
+		t.Errorf("err = %v, want mention of unknown field %q", err, "bogus")
+	}
+}
+
 // TestLoadServices_infraWithExtends verifies infra+extends returns ErrServiceExtendsCrossType.
 func TestLoadServices_infraWithExtends(t *testing.T) {
 	dir := t.TempDir()
@@ -1519,5 +1600,38 @@ dir: ./services/child
 	}
 	if got := child.EffectiveScheme("http", false); got != "https" {
 		t.Errorf("child.EffectiveScheme(http, false) = %q, want https", got)
+	}
+}
+
+// TestSharesExtendsParentHub covers the config-render alias predicate: an
+// extends child that inherited its parent's hub dir is an alias (skip), while a
+// child with its own dir, a non-extends service, or a dangling parent is not.
+func TestSharesExtendsParentHub(t *testing.T) {
+	services := map[string]ServiceConfig{
+		"main":       {Type: ServiceTypeApp, Dir: "services/main"},
+		"main-debug": {Type: ServiceTypeApp, Dir: "services/main", Extends: "main"},    // inherited hub → alias
+		"variant":    {Type: ServiceTypeApp, Dir: "services/variant", Extends: "main"}, // own dir → not alias
+		"standalone": {Type: ServiceTypeApp, Dir: "services/standalone"},               // no extends → not alias
+		"orphan":     {Type: ServiceTypeApp, Dir: "services/orphan", Extends: "ghost"}, // dangling parent → not alias
+		"dirless":    {Type: ServiceTypeApp, Extends: "main"},                          // no own dir set → not alias (guarded)
+	}
+
+	tests := []struct {
+		name string
+		want bool
+	}{
+		{"main", false},
+		{"main-debug", true},
+		{"variant", false},
+		{"standalone", false},
+		{"orphan", false},
+		{"dirless", false},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := SharesExtendsParentHub(services[tc.name], services); got != tc.want {
+				t.Errorf("SharesExtendsParentHub(%q) = %v, want %v", tc.name, got, tc.want)
+			}
+		})
 	}
 }

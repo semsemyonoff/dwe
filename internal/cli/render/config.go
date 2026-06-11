@@ -140,6 +140,20 @@ already-committed values before they stop being committed.`,
 func renderConfigs(projectRoot string, cfg *config.DweConfig, names []string, store *generatedstore.Store, w *render.Writer, explicit bool) error {
 	rendered := 0
 	for _, name := range names {
+		// An extends child sharing its parent's hub is a config-render alias of
+		// the parent (same pack + hub → identical output) whose ${generated.*}
+		// values live under the PARENT's store key. Rendering it here is at best
+		// redundant and at worst destructive: its generated values are absent
+		// under its own name, so a lenient render would blank the shared secret
+		// the parent just wrote. The parent renders the shared hub; skip the
+		// alias. See config.SharesExtendsParentHub.
+		if config.SharesExtendsParentHub(cfg.Services[name], cfg.Services) {
+			if explicit {
+				parent := cfg.Services[name].Extends
+				w.Info(fmt.Sprintf("config [%s] shares %q's config hub (extends) — render %q instead", name, parent, parent))
+			}
+			continue
+		}
 		res, err := configpack.RenderConfigs(projectRoot, cfg, name, store)
 		if err != nil {
 			return fmt.Errorf("service %s: %w", name, err)
@@ -171,6 +185,17 @@ func renderConfigs(projectRoot string, cfg *config.DweConfig, names []string, st
 func harvestConfigs(projectRoot string, cfg *config.DweConfig, names []string, store *generatedstore.Store, w *render.Writer, explicit bool) error {
 	harvested := 0
 	for _, name := range names {
+		// Skip extends-alias children: their generated value belongs to the
+		// parent (same shared hub file), so harvesting under the child's own name
+		// would mint a spurious store entry. The parent harvests the shared hub.
+		// See config.SharesExtendsParentHub.
+		if config.SharesExtendsParentHub(cfg.Services[name], cfg.Services) {
+			if explicit {
+				parent := cfg.Services[name].Extends
+				w.Info(fmt.Sprintf("config harvest [%s] shares %q's config hub (extends) — harvest %q instead", name, parent, parent))
+			}
+			continue
+		}
 		res, err := configpack.HarvestGenerated(projectRoot, cfg, name, store)
 		if err != nil {
 			return fmt.Errorf("service %s: %w", name, err)

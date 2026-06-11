@@ -1,5 +1,5 @@
-# Binaries
-bin/
+# Binaries (anchored: nested bin/ dirs like shimassets/bin hold committed files)
+/bin/
 /dwe
 *.test
 
@@ -16,6 +16,12 @@ bin/
 # Generated: synced from docs/ by scripts/sync-embedded-docs.sh on `make build`
 # and `make test*` (which depend on the embedded-docs target).
 /internal/core/docs/embedded/
+
+# Generated: bridge shims cross-compiled by scripts/build-shims.sh on
+# `make build` and `make test*` (which depend on the shims target). The
+# committed bin/.gitkeep keeps the //go:embed all:bin pattern matching on a
+# fresh checkout.
+/internal/core/bridge/shimassets/bin/shim-*
 
 # Release artifacts (GoReleaser output and generated completion scripts).
 /dist/

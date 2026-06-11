@@ -496,6 +496,37 @@ services:
 	hasDiag(t, diags, validate.SeverityError, "extends only permitted for type app")
 }
 
+func TestServicesValidator_BridgeFieldAllowedAllTypes(t *testing.T) {
+	body := `
+services:
+  api:
+    type: app
+    container: api
+    dir: ./services/api
+    bridge:
+      enabled: true
+      shim_path: /opt/bin/dwe
+      on_unreachable: warn
+  worker:
+    type: infra
+    container: worker
+    bridge:
+      enabled: true
+  adminer:
+    type: tool
+    container: adminer
+    bridge:
+      enabled: false
+`
+	root := writeServicesDir(t, body)
+	diags := (&servicesValidator{}).Run(validate.Context{ProjectRoot: root})
+	for _, d := range diags {
+		require.NotEqual(t, validate.SeverityError, d.Severity, "unexpected error: %s", d.Message)
+		require.NotEqual(t, validate.SeverityWarning, d.Severity, "unexpected warning: %s", d.Message)
+	}
+	hasDiag(t, diags, validate.SeverityOK, "")
+}
+
 func TestServicesValidator_InfraExtendsRejected(t *testing.T) {
 	body := `
 services:

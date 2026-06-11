@@ -4909,6 +4909,285 @@ func TestLoadConfig_GitNotInjectedIntoRaw(t *testing.T) {
 	}
 }
 
+// TestServiceConfig_BridgeEnabledExplicit tests the tristate logic for the host bridge.
+func TestServiceConfig_BridgeEnabledExplicit(t *testing.T) {
+	tests := []struct {
+		name     string
+		svc      ServiceConfig
+		wantBool bool
+		wantExp  bool
+	}{
+		{
+			name:     "explicit true",
+			svc:      ServiceConfig{Bridge: ServiceBridgeConfig{Enabled: ptr(true)}}, //nolint:modernize
+			wantBool: true,
+			wantExp:  true,
+		},
+		{
+			name:     "explicit false on app type",
+			svc:      ServiceConfig{Type: "app", Bridge: ServiceBridgeConfig{Enabled: ptr(false)}}, //nolint:modernize
+			wantBool: false,
+			wantExp:  true,
+		},
+		{
+			name:     "explicit true on infra type",
+			svc:      ServiceConfig{Type: "infra", Bridge: ServiceBridgeConfig{Enabled: ptr(true)}}, //nolint:modernize
+			wantBool: true,
+			wantExp:  true,
+		},
+		{
+			name:     "omitted on app type defaults off (strict opt-in)",
+			svc:      ServiceConfig{Type: "app"},
+			wantBool: false,
+			wantExp:  false,
+		},
+		{
+			name:     "omitted on infra type",
+			svc:      ServiceConfig{Type: "infra"},
+			wantBool: false,
+			wantExp:  false,
+		},
+		{
+			name:     "omitted on tool type",
+			svc:      ServiceConfig{Type: "tool"},
+			wantBool: false,
+			wantExp:  false,
+		},
+		{
+			name:     "omitted on empty type",
+			svc:      ServiceConfig{Type: ""},
+			wantBool: false,
+			wantExp:  false,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got, gotExp := tt.svc.BridgeEnabledExplicit()
+			if got != tt.wantBool {
+				t.Errorf("BridgeEnabledExplicit() bool = %v, want %v", got, tt.wantBool)
+			}
+			if gotExp != tt.wantExp {
+				t.Errorf("BridgeEnabledExplicit() explicit = %v, want %v", gotExp, tt.wantExp)
+			}
+		})
+	}
+}
+
+// TestServiceConfig_BridgeEnabled tests the simple bool wrapper.
+func TestServiceConfig_BridgeEnabled(t *testing.T) {
+	tests := []struct {
+		name     string
+		svc      ServiceConfig
+		wantBool bool
+	}{
+		{
+			name:     "explicit true",
+			svc:      ServiceConfig{Bridge: ServiceBridgeConfig{Enabled: ptr(true)}}, //nolint:modernize
+			wantBool: true,
+		},
+		{
+			name:     "explicit false",
+			svc:      ServiceConfig{Type: "app", Bridge: ServiceBridgeConfig{Enabled: ptr(false)}}, //nolint:modernize
+			wantBool: false,
+		},
+		{
+			name:     "app default false (strict opt-in)",
+			svc:      ServiceConfig{Type: "app"},
+			wantBool: false,
+		},
+		{
+			name:     "infra default false",
+			svc:      ServiceConfig{Type: "infra"},
+			wantBool: false,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := tt.svc.BridgeEnabled(); got != tt.wantBool {
+				t.Errorf("BridgeEnabled() = %v, want %v", got, tt.wantBool)
+			}
+		})
+	}
+}
+
+// TestServiceConfig_BridgeShimPath tests the shim mount path default and override.
+func TestServiceConfig_BridgeShimPath(t *testing.T) {
+	tests := []struct {
+		name string
+		svc  ServiceConfig
+		want string
+	}{
+		{
+			name: "default when unset",
+			svc:  ServiceConfig{Type: "app"},
+			want: DefaultBridgeShimPath,
+		},
+		{
+			name: "explicit override",
+			svc:  ServiceConfig{Type: "app", Bridge: ServiceBridgeConfig{ShimPath: "/opt/bin/dwe"}},
+			want: "/opt/bin/dwe",
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := tt.svc.BridgeShimPath(); got != tt.want {
+				t.Errorf("BridgeShimPath() = %q, want %q", got, tt.want)
+			}
+		})
+	}
+}
+
+// TestServiceConfig_BridgeOnUnreachable tests the unreachable-daemon policy default and override.
+func TestServiceConfig_BridgeOnUnreachable(t *testing.T) {
+	tests := []struct {
+		name string
+		svc  ServiceConfig
+		want string
+	}{
+		{
+			name: "default fail when unset",
+			svc:  ServiceConfig{Type: "app"},
+			want: BridgeOnUnreachableFail,
+		},
+		{
+			name: "explicit warn",
+			svc:  ServiceConfig{Type: "app", Bridge: ServiceBridgeConfig{OnUnreachable: BridgeOnUnreachableWarn}},
+			want: BridgeOnUnreachableWarn,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := tt.svc.BridgeOnUnreachable(); got != tt.want {
+				t.Errorf("BridgeOnUnreachable() = %q, want %q", got, tt.want)
+			}
+		})
+	}
+}
+
+// TestLoadServicesConfig_BridgeExtends tests bridge block inheritance through extends.
+func TestLoadServicesConfig_BridgeExtends(t *testing.T) {
+	yml := `
+services:
+  parent:
+    type: app
+    container: parent
+    required: true
+    dir: ./services/parent
+    bridge:
+      enabled: false
+      shim_path: /opt/parent/dwe
+      on_unreachable: warn
+  child-inherit:
+    type: app
+    container: child-inherit
+    required: false
+    extends: parent
+  child-override-enabled:
+    type: app
+    container: child-override-enabled
+    required: false
+    extends: parent
+    bridge:
+      enabled: true
+  child-override-path:
+    type: app
+    container: child-override-path
+    required: false
+    extends: parent
+    bridge:
+      shim_path: /opt/child/dwe
+  child-override-unreachable:
+    type: app
+    container: child-override-unreachable
+    required: false
+    extends: parent
+    bridge:
+      on_unreachable: fail
+  grandchild-multi-hop:
+    type: app
+    container: grandchild
+    required: false
+    extends: child-inherit
+  unset-parent:
+    type: app
+    container: unset-parent
+    required: true
+    dir: ./services/unset-parent
+  unset-child:
+    type: app
+    container: unset-child
+    required: false
+    extends: unset-parent
+`
+	dir := t.TempDir()
+	writeServicesDir(t, dir, yml)
+	services, err := LoadServices(dir)
+	if err != nil {
+		t.Fatalf("LoadServices: %v", err)
+	}
+
+	parent := services["parent"]
+	if parent.Bridge.Enabled == nil || *parent.Bridge.Enabled != false {
+		t.Errorf("parent Bridge.Enabled should be false, got %v", parent.Bridge.Enabled)
+	}
+
+	childInh := services["child-inherit"]
+	if childInh.Bridge.Enabled == nil || *childInh.Bridge.Enabled != false {
+		t.Errorf("child-inherit Bridge.Enabled should inherit false from parent, got %v", childInh.Bridge.Enabled)
+	}
+	if childInh.Bridge.ShimPath != "/opt/parent/dwe" {
+		t.Errorf("child-inherit Bridge.ShimPath should inherit /opt/parent/dwe, got %q", childInh.Bridge.ShimPath)
+	}
+	if childInh.Bridge.OnUnreachable != "warn" {
+		t.Errorf("child-inherit Bridge.OnUnreachable should inherit warn, got %q", childInh.Bridge.OnUnreachable)
+	}
+
+	childOvrE := services["child-override-enabled"]
+	if childOvrE.Bridge.Enabled == nil || *childOvrE.Bridge.Enabled != true {
+		t.Errorf("child-override-enabled Bridge.Enabled should be true, got %v", childOvrE.Bridge.Enabled)
+	}
+	if childOvrE.Bridge.ShimPath != "/opt/parent/dwe" {
+		t.Errorf("child-override-enabled Bridge.ShimPath should inherit /opt/parent/dwe, got %q", childOvrE.Bridge.ShimPath)
+	}
+
+	childOvrP := services["child-override-path"]
+	if childOvrP.Bridge.Enabled == nil || *childOvrP.Bridge.Enabled != false {
+		t.Errorf("child-override-path Bridge.Enabled should inherit false from parent, got %v", childOvrP.Bridge.Enabled)
+	}
+	if childOvrP.Bridge.ShimPath != "/opt/child/dwe" {
+		t.Errorf("child-override-path Bridge.ShimPath = %q, want /opt/child/dwe", childOvrP.Bridge.ShimPath)
+	}
+
+	childOvrU := services["child-override-unreachable"]
+	if childOvrU.Bridge.OnUnreachable != "fail" {
+		t.Errorf("child-override-unreachable Bridge.OnUnreachable = %q, want explicit fail over parent's warn", childOvrU.Bridge.OnUnreachable)
+	}
+	if childOvrU.Bridge.ShimPath != "/opt/parent/dwe" {
+		t.Errorf("child-override-unreachable Bridge.ShimPath should inherit /opt/parent/dwe, got %q", childOvrU.Bridge.ShimPath)
+	}
+
+	grandchild := services["grandchild-multi-hop"]
+	if grandchild.Bridge.Enabled == nil || *grandchild.Bridge.Enabled != false {
+		t.Errorf("grandchild-multi-hop Bridge.Enabled should inherit false from parent chain, got %v", grandchild.Bridge.Enabled)
+	}
+	if grandchild.Bridge.OnUnreachable != "warn" {
+		t.Errorf("grandchild-multi-hop Bridge.OnUnreachable should inherit warn, got %q", grandchild.Bridge.OnUnreachable)
+	}
+
+	// Neither side set bridge: tristate stays nil (the strict opt-in default
+	// — off for every type — applies via the accessor).
+	unsetChild := services["unset-child"]
+	if unsetChild.Bridge.Enabled != nil {
+		t.Errorf("unset-child Bridge.Enabled should stay nil, got %v", *unsetChild.Bridge.Enabled)
+	}
+	if unsetChild.BridgeEnabled() {
+		t.Error("unset-child BridgeEnabled() should default false (bridge is strictly opt-in)")
+	}
+	if unsetChild.Bridge.ShimPath != "" || unsetChild.BridgeShimPath() != DefaultBridgeShimPath {
+		t.Errorf("unset-child shim path: raw %q, resolved %q", unsetChild.Bridge.ShimPath, unsetChild.BridgeShimPath())
+	}
+}
+
 // ptr is a helper to create a pointer to a value.
 // nolint: unused,modernize // used in test table initialization
 func ptr[T any](v T) *T {
