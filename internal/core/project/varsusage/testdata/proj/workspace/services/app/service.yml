@@ -4,3 +4,4 @@ info:
   - value: "${ vars.db.host }"
   - value: "${1vars.db}"
   - text: "real ${vars.db.host}"
+  - text: 'panel {{ resolve .Raw "vars.ui.label" }}'

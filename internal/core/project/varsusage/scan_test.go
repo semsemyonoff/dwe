@@ -76,6 +76,13 @@ func TestScanUsages(t *testing.T) {
 			},
 		},
 		{
+			name:  "info text Go-template resolve form is matched",
+			query: "vars.ui.label",
+			want: []loc{
+				{"workspace/services/app/service.yml", 7, "template"},
+			},
+		},
+		{
 			name:  "reference only inside a YAML comment is not matched",
 			query: "vars.commented.out",
 			want:  nil,

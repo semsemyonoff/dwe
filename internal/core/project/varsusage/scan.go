@@ -40,10 +40,17 @@ type ScanResult struct {
 // each YAML file's node tree and inspects ONLY the value scalars of the fields
 // listed below, keyed by the field's render engine:
 //
-//   - templatedKeys  — scalar values rendered through tpl.CompileVarSyntax /
-//     RenderCommand (the ${...} shorthand). Matched with the renderer's OWN
-//     pattern (tpl.VarPattern), filtered to head segment == "vars".
-//     cmd / text / value / project_name / confirm: direct scalar fields.
+//   - templatedKeys  — scalar values rendered through a template engine. Two
+//     engines are in play and a templated field may use either, so each scalar
+//     is matched BOTH ways: (a) the ${...} shorthand via tpl.CompileVarSyntax /
+//     RenderCommand, matched with the renderer's OWN pattern (tpl.VarPattern)
+//     filtered to head segment == "vars"; and (b) the bare vars.x token form
+//     inside a Go-template {{ }} block (e.g. {{ resolve .Raw "vars.x" }}), which
+//     is how info.yml text/value/title and custom-column value reference vars —
+//     those fields render through tpl.Render (the Go-template engine), where a
+//     ${...} literal is inert. Matching both is the safe direction for a
+//     "where is this used" check (over-report, never miss a real reference).
+//     cmd / text / value / title / project_name / confirm: direct scalar fields.
 //     env / with: mappings whose *values* are templated.
 //     when (scalar form only): command/workflow when supports ${...}.
 //   - structuralKeys — from / default_from: the value IS a config dot-path; a
@@ -59,14 +66,16 @@ type ScanResult struct {
 // template engine, so a ${vars.x} / from: appearing inside vars: is not a
 // runtime usage (see scanYAMLFile).
 //
-// CAVEAT (surfaced to the user): Go-template FIELD access of the form .Vars.x /
-// .Raw.vars.x inside info-item text or condition exprs is NOT tracked, and
-// dynamically-built dot-paths cannot be tracked statically.
+// CAVEAT (surfaced to the user): Go-template FIELD access of the form .Vars.x
+// (capital V, sprig-style direct field) is NOT tracked; only the function-call
+// form (resolve .Raw "vars.x") and the ${...} shorthand are. Dynamically-built
+// dot-paths cannot be tracked statically.
 var (
 	templatedKeys = map[string]bool{
 		"cmd":          true,
 		"text":         true,
 		"value":        true,
+		"title":        true,
 		"project_name": true,
 		"confirm":      true,
 		"when":         true, // scalar form only; mapping form handled separately
@@ -87,6 +96,11 @@ var (
 // boundary keeps it from matching the Go-template field form .Vars.db (capital
 // V), which is documented as not tracked.
 var varDotPath = regexp.MustCompile(`\bvars(?:\.[A-Za-z_][A-Za-z0-9_]*)+`)
+
+// goTemplateBlock matches a single Go-template action ({{ ... }}). Restricting
+// the bare-vars.x scan to inside these blocks keeps literal shell/text tokens
+// (e.g. `grep vars.host`) from being mistaken for references.
+var goTemplateBlock = regexp.MustCompile(`\{\{.*?\}\}`)
 
 // ScanUsages walks a project's workspace tree and returns every static usage of
 // the queried var path (e.g. "vars.db.host"). Matching is exact OR at a dot
@@ -253,16 +267,31 @@ func hitsForField(keyName string, val *yaml.Node, queryPath, rel string, lines [
 	return hits
 }
 
-// templateHits matches ${vars.x} references inside a scalar value.
+// templateHits matches vars references inside a templated scalar value, in both
+// engines: the ${vars.x} shorthand and the bare vars.x token form inside a
+// Go-template {{ }} block (e.g. {{ resolve .Raw "vars.x" }}). A given field may
+// render through either engine, so both forms are checked.
 func templateHits(val *yaml.Node, queryPath, rel string, lines []string) []Usage {
 	var hits []Usage
+	add := func() {
+		hits = append(hits, Usage{File: rel, Line: val.Line, Kind: "template", Text: lineText(lines, val.Line)})
+	}
+	// (a) ${vars.x} shorthand.
 	for _, m := range tpl.VarPattern.FindAllStringSubmatch(val.Value, -1) {
 		inner := m[1]
 		if head, _, _ := strings.Cut(inner, "."); head != VarsPrefix {
 			continue
 		}
 		if refMatches(inner, queryPath) {
-			hits = append(hits, Usage{File: rel, Line: val.Line, Kind: "template", Text: lineText(lines, val.Line)})
+			add()
+		}
+	}
+	// (b) bare vars.x tokens inside Go-template {{ }} blocks.
+	for _, block := range goTemplateBlock.FindAllString(val.Value, -1) {
+		for _, ref := range varDotPath.FindAllString(block, -1) {
+			if refMatches(ref, queryPath) {
+				add()
+			}
 		}
 	}
 	return hits
