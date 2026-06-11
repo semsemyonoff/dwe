@@ -1,0 +1,7 @@
+# deploy ${vars.commented.out} lives only in this comment
+steps:
+  - name: migrate
+    cmd: "migrate --host=${vars.db.host}"
+    when:
+      type: template
+      expr: '{{ resolve .Raw "vars.feature.flag" }}'

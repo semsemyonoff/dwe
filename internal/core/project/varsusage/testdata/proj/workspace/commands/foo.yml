@@ -1,0 +1,10 @@
+description: "ignore ${vars.db.host} in the description (not rendered)"
+context:
+  dbhost:
+    from: vars.db.host
+params:
+  region:
+    default_from: vars.region
+env:
+  DB_HOST: "${vars.db.host}"
+when: vars.db.host

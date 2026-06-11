@@ -91,6 +91,12 @@ func CurrentHostInfo() HostInfo {
 // varPattern matches ${identifier} and ${dot.path} expressions.
 var varPattern = regexp.MustCompile(`\$\{([a-zA-Z_][a-zA-Z0-9_.]*)\}`)
 
+// VarPattern is the exported ${...} matcher used by CompileVarSyntax. Capture
+// group 1 is the inner dot-path. The static usage scanner (varsusage) reuses it
+// so its notion of a ${vars.x} reference stays byte-identical to what the
+// renderer actually rewrites — no internal whitespace, no leading digit.
+var VarPattern = varPattern
+
 // CompileVarSyntax rewrites ${...} expressions into Go template calls.
 //
 // Simple vars and dot-paths are rewritten using the resolve helper:
