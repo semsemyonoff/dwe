@@ -145,48 +145,58 @@ func TestValidateServiceToggle_OptionalService(t *testing.T) {
 	}
 }
 
-func TestApplyServiceTogglesToYAML_AllOrNothing(t *testing.T) {
+func TestServiceTogglesOverlay_AllOrNothing(t *testing.T) {
 	cfg := &config.DweConfig{
 		Services: map[string]config.ServiceConfig{
 			"main":   {Required: true},
 			"second": {Required: false},
 		},
 	}
-	local := map[string]any{}
 
-	// "second" is valid; "main" is mandatory — batch must reject before writing.
-	err := ApplyServiceTogglesToYAML(cfg, local, []string{"second"}, []string{"main"})
+	// "second" is valid; "main" is mandatory — batch must reject before building.
+	overlay, err := ServiceTogglesOverlay(cfg, []string{"second"}, []string{"main"})
 	if err == nil {
 		t.Fatal("expected error for mandatory toggle, got nil")
 	}
 
-	// local must not have been modified.
-	if _, ok := local["services"]; ok {
-		t.Error("local map must not be modified when batch validation fails")
+	// No overlay must be produced when validation fails.
+	if overlay != nil {
+		t.Errorf("overlay must be nil when batch validation fails, got %v", overlay)
 	}
 }
 
-func TestApplyServiceTogglesToYAML_AppliesChanges(t *testing.T) {
+func TestServiceTogglesOverlay_AppliesChanges(t *testing.T) {
 	cfg := &config.DweConfig{
 		Services: map[string]config.ServiceConfig{
 			"second": {Required: false},
 			"third":  {Required: false},
 		},
 	}
-	local := map[string]any{}
 
-	if err := ApplyServiceTogglesToYAML(cfg, local, []string{"second"}, []string{"third"}); err != nil {
+	overlay, err := ServiceTogglesOverlay(cfg, []string{"second"}, []string{"third"})
+	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
 
-	svcMap, ok := local["services"].(map[string]any)
+	svcMap, ok := overlay["services"].(map[string]any)
 	if !ok {
-		t.Fatal("local[services] missing or wrong type")
+		t.Fatal("overlay[services] missing or wrong type")
 	}
 	if secondEntry, _ := svcMap["second"].(map[string]any); secondEntry["enabled"] != true {
 		t.Errorf("second should be enabled=true, got %v", secondEntry)
 	}
 	if thirdEntry, _ := svcMap["third"].(map[string]any); thirdEntry["enabled"] != false {
 		t.Errorf("third should be enabled=false, got %v", thirdEntry)
+	}
+}
+
+func TestServiceTogglesOverlay_EmptyIsNoop(t *testing.T) {
+	cfg := &config.DweConfig{Services: map[string]config.ServiceConfig{}}
+	overlay, err := ServiceTogglesOverlay(cfg, nil, nil)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if overlay != nil {
+		t.Errorf("empty toggle set should yield a nil overlay, got %v", overlay)
 	}
 }

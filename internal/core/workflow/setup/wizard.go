@@ -123,38 +123,36 @@ func Run(ctx context.Context, deps WizardDeps) error {
 		return nil
 	}
 
-	// Load existing local.yml (if any).
-	existing, err := localpkg.LoadLocalYAML(deps.LocalPath)
+	// Load existing local.yml as a document node so comments/formatting and any
+	// keys the developer wrote survive the merge.
+	doc, err := localpkg.LoadLocalYAMLNode(deps.LocalPath)
 	if err != nil {
 		return fmt.Errorf("read existing local.yml: %w", err)
 	}
 
-	// Merge overlays sequentially.
-	merged, err := MergeIntoLocal(existing, qOverlay)
-	if err != nil {
-		return fmt.Errorf("merge question overlay: %w", err)
-	}
-
-	merged, err = MergeIntoLocal(merged, pOverlay)
-	if err != nil {
-		return fmt.Errorf("merge port overlay: %w", err)
-	}
-
-	if len(sOverlay) > 0 {
-		merged, err = MergeIntoLocal(merged, sOverlay)
-		if err != nil {
-			return fmt.Errorf("merge service-toggles overlay: %w", err)
+	// Apply overlays sequentially (last wins on a leaf conflict, matching the
+	// former deep-merge precedence). The node-aware guard inside ApplyOverlayToNode
+	// reproduces the old validateMergeable contract — it rejects a map-over-scalar
+	// collision except the legacy bare-int port-leaf upgrade. Empty overlays are
+	// skipped so we never write spurious keys.
+	for _, ov := range []struct {
+		label   string
+		overlay map[string]any
+	}{
+		{"merge question overlay", qOverlay},
+		{"merge port overlay", pOverlay},
+		{"merge service-toggles overlay", sOverlay},
+	} {
+		if len(ov.overlay) == 0 {
+			continue
+		}
+		if err := localpkg.ApplyOverlayToNode(doc, ov.overlay); err != nil {
+			return fmt.Errorf("%s: %w", ov.label, err)
 		}
 	}
 
-	// Defensive: if the merged map happens to be empty (e.g. existing
-	// local.yml was empty and both overlays were empty), don't write either.
-	if len(merged) == 0 {
-		return nil
-	}
-
 	// Write atomically.
-	if err := localpkg.WriteLocalYAML(deps.LocalPath, merged); err != nil {
+	if err := localpkg.WriteLocalYAMLNode(deps.LocalPath, doc); err != nil {
 		return fmt.Errorf("write local.yml: %w", err)
 	}
 
