@@ -138,6 +138,10 @@ func TestCoerceScalar(t *testing.T) {
 		{raw: "0x1F", want: "0x1F"}, // non-canonical int form kept verbatim
 		{raw: "+3", want: "+3"},
 		{raw: "1.2.3", want: "1.2.3"},
+		{raw: ".inf", want: ".inf"},   // non-finite float kept verbatim (not JSON-representable)
+		{raw: "-.inf", want: "-.inf"}, // (else `--output json` reads crash)
+		{raw: ".nan", want: ".nan"},
+		{raw: ".NaN", want: ".NaN"},
 		{raw: "2024-01-02", want: "2024-01-02"}, // timestamp kept as string
 		{raw: "", want: nil},                    // empty arg → null
 		{raw: "null", want: nil},

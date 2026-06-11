@@ -7,6 +7,7 @@ package varsusage
 
 import (
 	"fmt"
+	"math"
 	"sort"
 	"strconv"
 
@@ -117,7 +118,11 @@ func CoerceScalar(raw string) (any, error) {
 		return n.Value, nil
 	case "!!float":
 		var f float64
-		if err := n.Decode(&f); err != nil {
+		if err := n.Decode(&f); err != nil || math.IsInf(f, 0) || math.IsNaN(f) {
+			// Non-finite (.inf/-.inf/.nan) is not JSON-representable and would
+			// crash `--output json` reads (and poison stored values for bridge
+			// clients, which always run non-interactively). Keep verbatim as a
+			// string, consistent with the non-canonical-int handling above.
 			return n.Value, nil
 		}
 		return f, nil
