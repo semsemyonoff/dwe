@@ -414,6 +414,14 @@ func renderAndSourceDotEnv(cfg *config.DweConfig, workDir string) error {
 //
 // A service with no config pack is skipped silently (config rendering is
 // opt-in). The first hard render error aborts the run.
+//
+// An extends child that shares its parent's hub dir is also skipped silently:
+// its config render is a byte-identical alias of the parent's (same resolved
+// pack + hub), and its ${generated.*} values live under the PARENT's store key
+// (it has no own deploy.yml, hence no own generate/harvest). The parent renders
+// the shared hub; the child must not be rendered separately — see
+// config.SharesExtendsParentHub. This mirrors deploy, which never schedules a
+// render for such a child at all.
 func renderConfigsForRun(cfg *config.DweConfig, workDir string, w *render.Writer) error {
 	storePath := filepath.Join(workDir, generatedstore.DefaultRelPath)
 	store, err := generatedstore.Load(storePath)
@@ -425,7 +433,15 @@ func renderConfigsForRun(cfg *config.DweConfig, workDir string, w *render.Writer
 	// generated (see allowedFieldsFor). Iterating tool/infra here would resolve
 	// the implicit `default` pack for a service with no hub dir and error.
 	for _, name := range config.DeployOrder(cfg, []string{"app"}) {
-		if missing := missingGeneratedKeys(cfg.Services[name], store, name); len(missing) > 0 {
+		svc := cfg.Services[name]
+		// An extends child sharing the parent's hub is a config-render alias of
+		// the parent (parent owns the hub and the harvested generated values).
+		// Rendering it again is redundant and would falsely trip the
+		// missing-generated-key guard below (its keys are under the parent name).
+		if config.SharesExtendsParentHub(svc, cfg.Services) {
+			continue
+		}
+		if missing := missingGeneratedKeys(svc, store, name); len(missing) > 0 {
 			w.Warning(fmt.Sprintf(
 				"skipping config render for %q: generated value(s) %s missing from store — run `dwe deploy run` to mint them",
 				name, strings.Join(missing, ", ")))

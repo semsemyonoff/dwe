@@ -2168,6 +2168,32 @@ func ResolveServiceExtends(services map[string]ServiceConfig) error {
 	return nil
 }
 
+// SharesExtendsParentHub reports whether svc is an `extends` child that resolves
+// to the same hub dir as its parent — i.e. its config render targets the exact
+// pack + hub the parent already renders, producing byte-identical output. Such a
+// child is a config-render ALIAS: it has no own deploy.yml, so it never runs its
+// own generate/harvest and its ${generated.*} values are minted under the
+// PARENT's store key (e.g. a debug sidecar that extends the app and bind-mounts
+// the same source — see § Config render in docs/internals/packages.md).
+//
+// Whole-project config-render iterations (renderConfigsForRun, the no-arg
+// `dwe render config`) MUST skip the alias: the parent is the authoritative
+// render target, and rendering the alias again is at best redundant and at worst
+// destructive — because the alias's generated values are absent under its own
+// name, a lenient render would blank the shared secret, and the run-path guard
+// would emit a spurious "missing from store" skip warning. A child that declares
+// its OWN dir is a genuine, independent render target and is NOT an alias.
+func SharesExtendsParentHub(svc ServiceConfig, services map[string]ServiceConfig) bool {
+	if svc.Extends == "" || svc.Dir == "" {
+		return false
+	}
+	parent, ok := services[svc.Extends]
+	if !ok {
+		return false
+	}
+	return svc.Dir == parent.Dir
+}
+
 // topoSortServices returns service names in topological order (parents before
 // children) so that multi-level extends chains are resolved correctly.
 // Returns an error if a cycle or unknown parent is detected.
