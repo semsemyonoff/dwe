@@ -1,4 +1,4 @@
-> Translated from: reference/config/reset.md @ e5330b63272f
+> Translated from: reference/config/reset.md @ 702ea8f95a98
 
 # Reset
 
@@ -7,7 +7,7 @@
 ## Reset всего проекта
 
 ```
-dwe reset run [--yes]
+dwe reset run [--yes] [--skip-preflight] [--clear-generated]
 ```
 
 Выполняет `workspace/reset.yml`. Файл **опционален** — если он отсутствует, DWE использует встроенный reset-пайплайн по умолчанию и печатает одну info-строку в stderr: `Using built-in default reset pipeline (override with workspace/reset.yml).` Info-строка подавляется в режиме `--output json`.
@@ -21,11 +21,13 @@ dwe reset run [--yes]
 | Опция | Описание |
 |-------|----------|
 | `--yes` / `-y` | Пропустить confirm-промпты внутри reset-шагов |
+| `--skip-preflight` | Обойти environment-пробы и проверки проекта перед запуском |
+| `--clear-generated` | Также очистить store собранных сгенерированных значений (`.dwe/generated.yml`), чтобы секреты перегенерировались при следующем деплое (по умолчанию сохраняются) |
 
 ## Per-service reset
 
 ```
-dwe reset run --service <name> [--yes] [--skip-preflight]
+dwe reset run --service <name> [--yes] [--skip-preflight] [--clear-generated]
 ```
 
 Сбрасывает отдельный сервис, не затрагивая остальной проект:
@@ -56,6 +58,7 @@ dwe reset run --service <name> [--yes] [--skip-preflight]
 | `--service <name>` | Сбросить только этот сервис |
 | `--yes` / `-y` | Пропустить confirm-промпт |
 | `--skip-preflight` | Обойти environment-пробы перед запуском |
+| `--clear-generated` | Также очистить собранные сгенерированные значения этого сервиса (`.dwe/generated.yml`); форсирует перегенерацию при следующем деплое |
 
 ### Per-service `reset.yml`
 
@@ -77,4 +80,4 @@ phases:
 |---------|------------------|
 | `dwe reset run --service <name>` | Удаляет `state.services.<name>`, пишет `PendingDeploy` для `<name>` |
 | `dwe deploy run --service <name>` | Очищает `PendingDeploy` для `<name>` при успехе |
-| `dwe reset run` (полный проект) | Удаляет весь файл состояния (семантика `ClearPending`) |
+| `dwe reset run` (полный проект) | Удаляет весь файл состояния (`journal.Remove`) |

@@ -1,4 +1,4 @@
-> Translated from: reference/templates.md @ ea25d28ee1fa
+> Translated from: reference/templates.md @ af37f3b26145
 
 # Шаблоны
 
@@ -181,15 +181,15 @@ value: '{{ appURL ((index .Services "adminer").Host "web") ((index .Services "ma
 | Регистр | Примеры | Описание |
 |---------|---------|----------|
 | `std` | `default`, `ternary`, `empty`, `coalesce` | Дефолты, условия, проверки на пустоту |
-| `strings` | `hasSuffix`, `hasPrefix`, `lower`, `upper`, `trim`, `replace`, `split` | Манипуляции со строками |
+| `strings` | `hasSuffix`, `hasPrefix`, `toLower`, `toUpper`, `trim`, `replace`, `split` | Манипуляции со строками |
 | `numeric` | `add`, `sub`, `mul`, `div`, `max`, `min` | Числовые операции |
 | `slices` | `first`, `last`, `slice`, `join`, `reverse`, `uniq` | Операции над списками/массивами |
 | `maps` | `keys`, `values`, `has`, `pick`, `omit` | Операции над map'ами/объектами |
-| `regexp` | `regexMatch`, `regexReplace`, `regexSplit` | Сопоставление по регулярным выражениям |
-| `conversion` | `toInt`, `toFloat`, `toString`, `toBool` | Преобразование типов |
-| `time` | `now`, `date`, `dateFormat`, `duration` | Операции с датой/временем |
+| `regexp` | `regexMatch`, `regexReplaceAll`, `regexSplit` | Сопоставление по регулярным выражениям |
+| `conversion` | `toInt`, `toFloat64`, `toString`, `toBool` | Преобразование типов |
+| `time` | `now`, `date`, `dateInZone`, `duration` | Операции с датой/временем |
 | `filesystem` | `pathBase`, `pathDir`, `pathExt`, `pathClean`, `osBase`, `osDir` | Манипуляции с путями |
-| `semver` | `semverCompare`, `semverSort` | Операции над семантическими версиями |
+| `semver` | `semver`, `semverCompare` | Операции над семантическими версиями |
 
 **Герметичность по построению.** Набор хелперов собран без единой функции, которая обращалась бы к окружению, файловой системе, сети или random/crypto-источникам. Sprout-функции `shuffle` (math/rand, засеянный из crypto) и `hello` (debug-заглушка) намеренно удалены.
 
@@ -197,13 +197,14 @@ value: '{{ appURL ((index .Services "adminer").Host "web") ((index .Services "ma
 
 ## Резолверы scope команд
 
-Три дополнительных хелпера доступны **только** внутри шаблонов `workspace/commands/`. Они принимают сырые map'ы и проходят по dot-path'ам, возвращая `""` для отсутствующего ключа (без template-ошибки).
+Четыре дополнительных хелпера доступны **только** внутри шаблонов `workspace/commands/`. Они принимают сырые map'ы и проходят по dot-path'ам, возвращая `""` для отсутствующего ключа (без template-ошибки).
 
 | Хелпер | Сигнатура | Применение |
 |--------|-----------|------------|
 | `resolve` | `resolve .Raw "vars.db.host"` | Dot-path lookup в смерженном конфиге. Эквивалентно `${vars.db.host}`. |
 | `resolveMap` | `resolveMap .Params "name"` | Lookup ключа в плоской `map[string]any`. Эквивалентно `${param.name}` / `${context.name}`. |
 | `resolveFile` | `resolveFile .Files "id" "path"` | Lookup подключа в разрешённом файле-артефакте. Эквивалентно `${files.id.path}`. |
+| `resolveGenerated` | `resolveGenerated .Generated "app_key"` | Per-service значение, собранное (harvested) на проходе config-рендера. Эквивалентно `${generated.app_key}`. |
 
 Они существуют, чтобы shorthand `${...}` мог разворачиваться в переносимую Go-template форму и чтобы авторы могли дотянуться до сырого конфига, когда точечный стиль `.Raw.<x>.<y>` неудобен (ключи с точками, числовые ключи и т.д.).
 

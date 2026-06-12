@@ -18,7 +18,7 @@ dwe docs
 Show a specific topic in the terminal:
 ```bash
 dwe docs show config/services/fields
-dwe docs show config/workspace#binary-overrides
+dwe docs show config/userconfig#binary-overrides
 ```
 
 List all available topics:
@@ -62,15 +62,17 @@ If `./docs/` is absent or empty, the Project branch is omitted.
 
 ## Configuration reference
 
-### `binaries.mmdc`
+### mmdc binary override
 
 Path or name of the mermaid-cli executable. Defaults to `mmdc` (searched on `$PATH`).
 
-```yaml
-binaries:
-  mmdc: /usr/local/bin/mmdc   # Absolute path
-  mmdc: mmdc                   # Name on $PATH (default)
+This is overridden in the user-config file (`~/.config/dwe/config`, or `.dwe/config` in a project) as a flat `binary_mmdc` key — **not** in `workspace.yml`:
+
+```ini
+binary_mmdc = /usr/local/bin/mmdc   # Absolute path; omit to use `mmdc` on $PATH (default)
 ```
+
+See [config/userconfig](../config/userconfig.md) for the full binary-override list.
 
 ### `docs.mermaid`
 

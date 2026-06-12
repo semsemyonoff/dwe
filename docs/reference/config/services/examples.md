@@ -55,7 +55,7 @@ The `on_enable`, `on_disable`, and `notes` blocks control what happens when a se
 
 ```yaml
 on_enable:
-  requires: none | restart | deploy   # what to trigger after writing local.yml
+  requires: none | restart | deploy | deploy-or-restart  # what to trigger after writing local.yml
   before: [command-id]                # user commands run before the toggle is written
   after: [command-id]                 # user commands run after the toggle is written
 on_disable:
@@ -66,7 +66,7 @@ on_disable:
 
 | Field | Default | Description |
 |-------|---------|-------------|
-| `requires` | `restart` | What must happen for the change to take effect. `none` → write local.yml only; `restart` → trigger `dwe restart`; `deploy` → trigger `dwe deploy run --service <name>`. `deploy` is forbidden on `on_disable`. |
+| `requires` | `restart` | What must happen for the change to take effect. `none` → write local.yml only; `restart` → trigger `dwe restart`; `deploy` → trigger `dwe deploy run --service <name>`; `deploy-or-restart` → deploy when the service has never been deployed, else restart (`on_enable` only). `deploy` and `deploy-or-restart` are forbidden on `on_disable`. |
 | `before` | — | User command IDs (from `workspace/commands/`) to run before the toggle write. Each must be `type: shell` or `type: script`. |
 | `after` | — | User command IDs to run after the toggle write. Same type constraint applies. |
 

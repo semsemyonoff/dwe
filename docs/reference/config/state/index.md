@@ -14,7 +14,7 @@ The deploy state file (`.dwe/deploy/state.yml`) turns the deploy pipeline from "
 
 > **Note** — only deploy pipelines have a state file. [`type: daemon`](../commands/types.md#type-daemon) commands have **no on-disk registry**: `docker ps` (filtered on the standard `dwe.project` / `dwe.daemon.id` / `dwe.daemon.params` labels) is the single source of truth for which daemons are running. There is no journal to drift, lock, or invalidate; a `docker stop` issued outside DWE is reflected immediately on the next `dwe status daemons` read.
 
-Every step executed during `dwe deploy run` is recorded: its status (ok, failed, partial, in_progress, skipped), the timestamp it finished, its `action_hash` (fingerprint of the step body), and how long it took to run.
+Every step executed during `dwe deploy run` is recorded: its status (ok, failed, skipped), the timestamp it finished, its `action_hash` (fingerprint of the step body), and how long it took to run.
 
 On the next `dwe deploy run`, each step's `action_hash` is compared to the recorded hash. Steps that succeeded with matching hashes are **skipped** (unless they have a `check:` action, which always runs to re-validate idempotency). Steps whose hash changed, or that previously failed, are **re-run**.
 

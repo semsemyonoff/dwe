@@ -1,4 +1,4 @@
-> Translated from: reference/config/commands/types.md @ 4b9fe0d1e458
+> Translated from: reference/config/commands/types.md @ a2bbc0e5307f
 
 # Типы команд
 
@@ -317,11 +317,11 @@ artisan-tinker:
   argv: [php, artisan, tinker]
 ```
 
-`mode` для этого типа фиксирован как `run` — поле может быть опущено (значение по умолчанию) или явно задано как `run`; любое другое значение отвергается на этапе загрузки.
+`mode` — недопустимое поле для `service_run` (он всегда использует `docker compose run --rm`) — любое указание `mode:` отвергается на этапе загрузки; опускайте его.
 
 ### Блок переопределения runner
 
-И `service_exec`, и `service_run` принимают блок `runner:` для переопределения `service` / `user` / `workdir` / `workdir_from` / `mode` без дублирования остального определения. Ненулевые поля в `runner:` побеждают верхнеуровневые поля.
+И `service_exec`, и `service_run` принимают блок `runner:` для переопределения `service` / `user` / `workdir` / `workdir_from` (а для `service_exec` — также `mode`) без дублирования остального определения. `runner.mode` отвергается для `service_run`, который всегда использует `docker compose run`. Ненулевые поля в `runner:` побеждают верхнеуровневые поля.
 
 ```yaml
 queue-worker:
@@ -438,7 +438,7 @@ Confirm-шаги тихо пропускаются под `--yes` или `DWE_NO
 
 ### Параллельные подшаги
 
-Шаг workflow может объявить блок `parallel:`, который разворачивает группу подшагов конкурентно. Это зеркалит схему `parallel:` пайплайна в [deploy → Группы параллельных шагов](../deploy/examples.md) — те же регуляторы `max_concurrent` / `fail_fast` и тот же live-block UI — но живёт внутри workflow, чтобы группу можно было переиспользовать между пайплайнами и вызывать ad-hoc через `dwe commands`.
+Шаг workflow может объявить блок `parallel:`, который разворачивает группу подшагов конкурентно. Это зеркалит схему `parallel:` пайплайна в [deploy → Группы параллельных шагов](../deploy/examples.md#параллельные-группы-шагов) — те же регуляторы `max_concurrent` / `fail_fast` и тот же live-block UI — но живёт внутри workflow, чтобы группу можно было переиспользовать между пайплайнами и вызывать ad-hoc через `dwe commands`.
 
 ```yaml
 services.all.composer-install:
@@ -473,7 +473,7 @@ services.all.composer-install:
 
 #### Композиция
 
-- **Ad-hoc**: `dwe commands run <workflow-id>` запускает live-block самого workflow на терминале. Ctrl-C распространяется как SIGINT через `signal.NotifyContext`, что отменяет группу и даёт детям до 5 с на выход до эскалации до SIGTERM.
+- **Ad-hoc**: `dwe commands <workflow-id>` (алиас `dwe cmd <workflow-id>`) запускает live-block самого workflow на терминале. Ctrl-C распространяется как SIGINT через `signal.NotifyContext`, что отменяет группу и даёт детям до 5 с на выход до эскалации до SIGTERM.
 - **Внутри последовательного шага пайплайна**: когда `cmd:` последовательного шага пайплайна разрешается в workflow с блоком `parallel:`, футер пайплайна приостанавливается на время тела шага (существующий контракт `SuspendForExec` / `ResumeAfterExec`), и workflow рендерит собственные строки блока в этом промежутке. Счётчик шагов пайплайна продвигается ровно на один — подшаги НЕ считаются шагами пайплайна.
 - **Внутри параллельной группы пайплайна ИЛИ другого параллельного workflow**: отвергается во время выполнения. Только один live-block может владеть терминалом одновременно. Ошибка — сентинел `ErrWorkflowNestedParallel`.
 
@@ -491,7 +491,7 @@ services.all.composer-install:
 
 #### Именование подшагов и переопределения из пайплайна
 
-Каждый подшаг workflow может задать явный `name:` (опционально). При отсутствии эффективное имя по умолчанию — указанная `command`. Это имя — ручка, которую пайплайн использует для `sub_step_overrides:` — см. [deploy → Нацеливание на подшаги workflow с переопределениями](../deploy/examples.md). Когда два подшага в одном workflow имеют одно и то же эффективное имя, переопределение из пайплайна, нацеленное на это имя, отвергается на этапе планирования как неоднозначное; задайте подшагам явные `name:`, чтобы их различать.
+Каждый подшаг workflow может задать явный `name:` (опционально). При отсутствии эффективное имя по умолчанию — указанная `command`. Это имя — ручка, которую пайплайн использует для `sub_step_overrides:` — см. [deploy → Нацеливание на подшаги workflow с переопределениями](../deploy/examples.md#прицеливание-в-под-шаги-воркфлоу-через-переопределения). Когда два подшага в одном workflow имеют одно и то же эффективное имя, переопределение из пайплайна, нацеленное на это имя, отвергается на этапе планирования как неоднозначное; задайте подшагам явные `name:`, чтобы их различать.
 
 ```yaml
 commands:
@@ -633,7 +633,7 @@ commands:
 
 ### Поведение виртуальных команд
 
-- **`.start`** — выпускает `docker compose run -d --name <full> --no-deps --entrypoint "" [--rm] [--user …] [--workdir …] -e K1 -e K2 --label dwe.project=… --label dwe.daemon.id=… --label dwe.daemon.params=… <service> <argv…>`. **Значения** env передаются через окружение дочернего процесса (`cmd.Env`), никогда через хостовый argv, так что секреты не появляются в `ps` или `/proc/<pid>/cmdline`. `--no-deps` оставляет работающий стек нетронутым; `--entrypoint ""` гарантирует, что фактически запускается пользовательский `argv:`. При `on_already_running: error` плюс ошибке конфликта имён docker builtin выдаёт `ErrDaemonAlreadyRunning`; при `noop` та же ошибка проглатывается, и `.start` завершается успешно.
+- **`.start`** — выпускает `docker compose run -d --no-deps --entrypoint "" [--rm] --name <full> [--user …] [--workdir …] -e K1 -e K2 --label dwe.project=… --label dwe.daemon.id=… --label dwe.daemon.params=… <service> <argv…>`. **Значения** env передаются через окружение дочернего процесса (`cmd.Env`), никогда через хостовый argv, так что секреты не появляются в `ps` или `/proc/<pid>/cmdline`. `--no-deps` оставляет работающий стек нетронутым; `--entrypoint ""` гарантирует, что фактически запускается пользовательский `argv:`. При `on_already_running: error` плюс ошибке конфликта имён docker builtin выдаёт `ErrDaemonAlreadyRunning`; при `noop` та же ошибка проглатывается, и `.start` завершается успешно.
 - **`.logs`** — запускает `docker logs -f --tail=100 <full>` на переднем плане. Ctrl-C посылает `SIGINT` только процессу `docker logs` (мягкое отсоединение через `cmd.Cancel`); контейнер никогда не получает сигнал. Если контейнер не запущен, `.logs` ошибается с подсказкой, указывающей на `.start`.
 - **`.stop`** — запускает `docker stop -t <stop_timeout-в-секундах> <full>`. Отсутствующий контейнер **не** ошибка (идемпотентная остановка).
 - **`.restart`** — виртуальный `type: workflow` из `<base>.stop`, за которым следует `<base>.start`. Шаги workflow явно прокидывают каждый объявленный `param.<name>` через `with:`, так что `dwe cmd queue.restart --set name=emails` перезапускает демон `emails` (а не default).
@@ -667,7 +667,7 @@ commands:
 
 ### Недопустимые поля
 
-Исходная команда daemon отвергает поля, конфликтующие с её декларативной формой: `script:`, `steps:`, `cmd:` (действие неявно), `mode`, `runner:` (у каждой виртуальной команды свой раннер). Используйте `params:` / `context:` / `env:` / `files:` / `messages:` / `argv` / `service` / `workdir` / `workdir_from` / `user` / `compose_args` как на любом раннере сервиса. Всё это перетекает в виртуальный вызов `.start`.
+Исходная команда daemon отвергает поля, конфликтующие с её декларативной формой: `script:`, `steps:`, `cmd:` (действие неявно), `mode`. Используйте `params:` / `context:` / `env:` / `files:` / `messages:` / `argv` / `service` / `workdir` / `workdir_from` / `user` / `compose_args` / `runner` как на любом раннере сервиса. Всё это перетекает в виртуальный вызов `.start`.
 
 ### Сквозной поток
 

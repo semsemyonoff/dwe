@@ -1,4 +1,4 @@
-> Translated from: guides/starship.md @ 35f45dbae5a0
+> Translated from: guides/starship.md @ a3973b41ec18
 
 # Интеграция со Starship
 
@@ -108,7 +108,7 @@ state: running                      # running | partial | stopped
 | `dwe restart` (без аргумента-сервиса) | пишет `running` |
 | `dwe restart <service>` | инвалидирует (удаляет файл кэша) |
 | `dwe stop` (без `--service`) | пишет `stopped` |
-| `dwe stop --service <n>` | инвалидирует |
+| `dwe stop <service>` | инвалидирует |
 | `dwe deploy run` (без `--service`) | инвалидирует (деплой может оказаться no-op из-за «already up-to-date») |
 | `dwe deploy run --service <n>` | инвалидирует |
 | `dwe reset run` (полная остановка проекта) | пишет `stopped` |

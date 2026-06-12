@@ -19,7 +19,6 @@ The three layers of the merged DWE config.
   - [`state`](#state)
   - [`exports.env`](#exportsenv)
   - [`compose`](#compose)
-  - [`ide`](#ide)
 - [workspace/local.yml](#workspacelocalyml)
   - [Compose overlays](#compose-overlays)
 - [Common pitfalls](#common-pitfalls)
@@ -58,7 +57,6 @@ The three files share a single namespace — the same key in different layers is
 | Service structural definitions (container / compose / status / render) | [`workspace/services/<name>/service.yml`](services/index.md) |
 | Optional service enabled state (across all types) | `defaults.yml` (overrideable in `local.yml`) |
 | Export rules (`exports.env`) | `defaults.yml` |
-| IDE config defaults | `defaults.yml` |
 | `vars.db.*` block defaults | `defaults.yml` |
 | Active state | `local.yml` |
 | Service port / host values | [`workspace/services/<name>/service.yml`](services/index.md) (project-level definitions) and `local.yml` (per-developer overrides, deep-merged by entry name) |
@@ -457,7 +455,7 @@ Commits made inside the `dev` container now use the developer's project-specific
 - **Committing `local.yml`** — it is gitignored for a reason (may contain credentials).
 - **Setting `state:` in `defaults.yml`** — state is inherently per-user, put it in `local.yml`.
 - **Scalar collision** — if `defaults.yml` sets `state: ""` and `local.yml` sets `state: staging`, the effective value is `staging`. If `local.yml` omits `state`, the `defaults.yml` value wins.
-- **Lists replace, maps merge** — maps are deep-merged: redeclaring `services` in `local.yml` only overrides the keys you list, the rest fall through from `defaults.yml`. Lists, by contrast, are replaced wholesale: setting `args.global: ["--ansi", "always"]` in `local.yml` discards every entry the lower layers had, so include the full list you want.
+- **Lists replace, maps merge** — maps are deep-merged: redeclaring `services` in `local.yml` only overrides the keys you list, the rest fall through from `defaults.yml`. Lists, by contrast, are replaced wholesale: setting `bridge.vars_writable: ["vars.db.*"]` in `local.yml` discards every entry the lower layers had, so include the full list you want.
 
 ## Optional `ui:` block
 

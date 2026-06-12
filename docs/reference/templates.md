@@ -179,15 +179,15 @@ The following registries from [go-sprout](https://docs.atom.codes/sprout/registr
 | Registry | Examples | Description |
 |----------|----------|-------------|
 | `std` | `default`, `ternary`, `empty`, `coalesce` | Defaults, conditionals, emptiness checks |
-| `strings` | `hasSuffix`, `hasPrefix`, `lower`, `upper`, `trim`, `replace`, `split` | String manipulation |
+| `strings` | `hasSuffix`, `hasPrefix`, `toLower`, `toUpper`, `trim`, `replace`, `split` | String manipulation |
 | `numeric` | `add`, `sub`, `mul`, `div`, `max`, `min` | Numeric operations |
 | `slices` | `first`, `last`, `slice`, `join`, `reverse`, `uniq` | List/array operations |
 | `maps` | `keys`, `values`, `has`, `pick`, `omit` | Map/object operations |
-| `regexp` | `regexMatch`, `regexReplace`, `regexSplit` | Regular expression matching |
-| `conversion` | `toInt`, `toFloat`, `toString`, `toBool` | Type conversion |
-| `time` | `now`, `date`, `dateFormat`, `duration` | Date/time operations |
+| `regexp` | `regexMatch`, `regexReplaceAll`, `regexSplit` | Regular expression matching |
+| `conversion` | `toInt`, `toFloat64`, `toString`, `toBool` | Type conversion |
+| `time` | `now`, `date`, `dateInZone`, `duration` | Date/time operations |
 | `filesystem` | `pathBase`, `pathDir`, `pathExt`, `pathClean`, `osBase`, `osDir` | Path manipulation |
-| `semver` | `semverCompare`, `semverSort` | Semantic version operations |
+| `semver` | `semver`, `semverCompare` | Semantic version operations |
 
 **Hermetic by construction.** The helper set is built without any function that touches the environment, filesystem, network, or random/crypto sources. Sprout's `shuffle` (math/rand seeded from crypto) and `hello` (debug stub) are deliberately removed.
 
@@ -195,13 +195,14 @@ For full per-function documentation see the [sprout registries reference](https:
 
 ## Command-scope resolvers
 
-Three additional helpers are available **only** inside `workspace/commands/` templates. They accept raw maps and walk dot-paths, returning `""` for any missing key (no template error).
+Four additional helpers are available **only** inside `workspace/commands/` templates. They accept raw maps and walk dot-paths, returning `""` for any missing key (no template error).
 
 | Helper | Signature | Use |
 |--------|-----------|-----|
 | `resolve` | `resolve .Raw "vars.db.host"` | Dot-path lookup in merged config. Equivalent to `${vars.db.host}`. |
 | `resolveMap` | `resolveMap .Params "name"` | Key lookup in a flat `map[string]any`. Equivalent to `${param.name}` / `${context.name}`. |
 | `resolveFile` | `resolveFile .Files "id" "path"` | Subkey lookup in a resolved file artefact. Equivalent to `${files.id.path}`. |
+| `resolveGenerated` | `resolveGenerated .Generated "app_key"` | Per-service harvested value (config render pass). Equivalent to `${generated.app_key}`. |
 
 These exist so the `${...}` shorthand can be expanded to portable Go-template form, and so authors can reach raw config when the dotted `.Raw.<x>.<y>` style is awkward (keys with dots, numeric keys, etc.).
 

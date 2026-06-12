@@ -1,4 +1,4 @@
-> Translated from: reference/config/services/index.md @ 7b6da59c4b35
+> Translated from: reference/config/services/index.md @ 9b55856383cf
 
 # Конфигурация сервиса (`workspace/services/<name>/service.yml`)
 
@@ -72,9 +72,11 @@
 | `extends`         |   ✓   |   —    |    —    |
 | `cli`             |   ✓   |   —    |    —    |
 | `render`          |   ✓   |   —    |    —    |
+| `generated`       |   ✓   |   —    |    —    |
 | `on_enable`       |   ✓   |   ✓    |    ✓    |
 | `on_disable`      |   ✓   |   ✓    |    ✓    |
 | `notes`           |   ✓   |   ✓    |    ✓    |
+| `bridge`          |   ✓   |   ✓    |    ✓    |
 
 Запрещённое поле — фатальная ошибка загрузки (`ErrServiceFieldNotAllowed`). Валидация агрегирует нарушения каждого файла через `errors.Join`, поэтому один проход разбора выявляет сразу все проблемы.
 
@@ -208,7 +210,7 @@ info:
 
 ## Связанные команды
 
-- `dwe shell [service]` — открыть shell в контейнере сервиса (только `type: app`).
+- `dwe shell [service]` — открыть shell в контейнере любого включённого сервиса (блок умолчаний `cli:` действует только для `type: app`; tool/infra используют встроенные умолчания bash/auto).
 - `dwe status` — составное представление только для чтения: разделы apps + tools + infra, у каждого свои `status:` колонки.
 - `dwe status apps` / `dwe status tools` / `dwe status infra` — таблицы по типам.
 - `dwe services` — интерактивный мультивыбор для переключения каждого необязательного сервиса всех типов.

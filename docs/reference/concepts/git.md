@@ -18,7 +18,7 @@ A DWE project has its *own* Git repository at the project root — the one that 
 
 DWE treats those two layers identically: it never assumes a particular VCS lives at the project root, and it never reaches into one service's repo to learn about another. Every Git operation either targets the project root (the update probe) or targets exactly one `<svc.Dir>/src/` (hook rendering, workspace probe). There is no global "fetch everything" surface.
 
-The CLI shells out to the host `git` binary. The binary path resolves through the standard accessor (`config.GitBin(cfg)`) so a project can pin a specific version via `binaries.git` in `workspace.yml` if needed. Empty means "look up `git` on `$PATH`".
+The CLI shells out to the host `git` binary. The binary path resolves through the standard accessor (`config.GitBin(cfg)`) so a user can pin a specific path via `binary_git=/path` in `~/.config/dwe/config` if needed. Empty means "look up `git` on `$PATH`".
 
 ## Hook rendering
 

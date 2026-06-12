@@ -35,7 +35,7 @@ flowchart TD
   R -- "конец" --> OUT["stdout / файл"]
 ```
 
-Список правил экспорта живёт под `exports.env` в `workspace/defaults.yml` (см. [справочник по exports.env](../config/workspace.md)). Порядок правил в YAML задаёт порядок строк на выходе.
+Список правил экспорта живёт под `exports.env` в `workspace/defaults.yml` (см. [справочник по exports.env](../config/workspace.md#exportsenv)). Порядок правил в YAML задаёт порядок строк на выходе.
 
 ## Системные переменные
 
@@ -260,6 +260,6 @@ TOOL_ADMINER=true
 
 ## Связанные справочники
 
-- [схема правил `exports.env`](../config/workspace.md) — полный справочник по полям и форматам
-- [Разрешение dot-path](../config/workspace.md) — как пути `from` и `when` ходят по объединённой конфигурации
+- [схема правил `exports.env`](../config/workspace.md#exportsenv) — полный справочник по полям и форматам
+- [Разрешение dot-path](../config/workspace.md#разрешение-dot-path) — как пути `from` и `when` ходят по объединённой конфигурации
 - Запустите `dwe render env --help`, чтобы увидеть актуальный CLI-интерфейс

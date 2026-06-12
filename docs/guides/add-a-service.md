@@ -133,16 +133,18 @@ If your service needs setup at deploy time — install dependencies, run migrati
 
 ```yaml
 # workspace/services/worker/deploy.yml
-steps:
-  - id: install-deps
-    type: shell
-    cmd: |
-      $DWE_BIN shell worker -c "npm install"
-  - id: run-migrations
-    type: shell
-    when: "${services.queue.enabled}"
-    cmd: |
-      $DWE_BIN shell worker -c "npm run migrate"
+phases:
+  - name: setup
+    steps:
+      - name: install-deps
+        type: shell
+        cmd: |
+          $DWE_BIN shell worker -c "npm install"
+      - name: run-migrations
+        type: shell
+        when: { type: template, expr: "{{ .Services.queue.Enabled }}" }
+        cmd: |
+          $DWE_BIN shell worker -c "npm run migrate"
 ```
 
 These steps run on `dwe deploy` for every enabled service that has a `deploy.yml`, in the order the deploy pipeline computes. Steps may be skipped via the journal when the relevant config hash hasn't changed — that is automatic.
@@ -158,7 +160,7 @@ For `type: app` services, DWE can render per-service files from shared template 
 ```yaml
 # workspace/services/worker/service.yml
 render:
-  config: { enabled: true, template: node }
+  config: { template: node }
   ide:    { enabled: true, template: node }
   ai:     { enabled: true, template: node }
   git:    { enabled: true, template: node }

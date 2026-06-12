@@ -1,4 +1,4 @@
-> Translated from: reference/config/index.md @ 9d89429fa8a3
+> Translated from: reference/config/index.md @ 9ef2195f42e7
 
 # Справочник конфигурации
 
@@ -33,7 +33,7 @@
 | `workspace/commands/` | да | отдельный | Декларативные определения команд (по группе на файл) |
 | `workspace/validate.yml` | да | отдельный | Проверки готовности проекта (preflight + `dwe validate`) |
 | `workspace/snapshot.yml` | да | отдельный | Snapshot-workflow'ы: create / restore / remove (`dwe snapshot`) |
-| `workspace/i18n/*.yml` | нет (ignored) | отдельный | Переводы пользовательских команд и UI-строк (опционально; один файл на язык) |
+| `workspace/i18n/*.yml` | да | отдельный | Переводы пользовательских команд и UI-строк (опционально; один файл на язык) |
 
 ## Runtime-артефакты
 

@@ -274,7 +274,7 @@ If neither `preset` nor `regex` is set, the input is accepted as-is (any non-emp
 
 ### Custom regex
 
-Validate the input against a regular expression pattern. The input must match the pattern in full.
+Validate the input against a regular expression pattern. The pattern is matched as an un-anchored Go regex (substring match); add ^ and $ anchors yourself to require a full match.
 
 ```yaml
 - id: email
@@ -298,7 +298,6 @@ These top-level keys are reserved and cannot be written by the wizard:
 - `info.*` — immutable project metadata
 - `styles.*` — UI color configuration
 - `docker.*` — engine policy configuration
-- `binaries.*` — binary override configuration
 
 Attempting to write to any of these triggers a validation error.
 

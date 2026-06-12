@@ -22,7 +22,7 @@ Deploy and reset pipeline declarations.
 
 All three are loaded separately and are not merged with the 3-layer config.
 
-Both `workspace/deploy.yml` and `workspace/reset.yml` are optional. When absent, DWE substitutes a built-in default pipeline and prints one info line to stderr: `Using built-in default <deploy|reset> pipeline (override with DWE/<deploy|reset>.yml).` The info line is suppressed in `--output json` mode.
+Both `workspace/deploy.yml` and `workspace/reset.yml` are optional. When absent, DWE substitutes a built-in default pipeline and prints one info line to stderr: `Using built-in default <deploy|reset> pipeline (override with workspace/<deploy|reset>.yml).` The info line is suppressed in `--output json` mode.
 
 **Default deploy pipeline** (fires when `workspace/deploy.yml` is absent):
 

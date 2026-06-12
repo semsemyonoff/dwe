@@ -81,7 +81,7 @@ sequenceDiagram
   Dev->>CLI: dwe run
   CLI->>FS: read workspace.yml + workspace/
   CLI->>FS: write .env (envfile.Regenerate)
-  CLI->>FS: acquire .dwe/deploy.lock
+  CLI->>FS: acquire .dwe/deploy/deploy.lock
   CLI->>Engine: docker compose -p <proj> -f base -f svc1 -f svc2 up -d --wait
   Engine-->>CLI: containers ready
   CLI->>Engine: docker compose ps --services --status running

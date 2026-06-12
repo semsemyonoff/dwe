@@ -1,4 +1,4 @@
-> Translated from: reference/render/index.md @ 5a0e41f982dc
+> Translated from: reference/render/index.md @ 99b43c7c23a8
 
 # Справочник Render
 
@@ -63,7 +63,7 @@ flowchart LR
 | Итерирует сервисы | нет | да | да | да |
 | Читает шаблоны с диска | нет | да (через manifest) | да (через manifest) | да (через manifest) |
 | Пер-сервисное поле opt-in | — | `services.<name>.render.ide.enabled` | `services.<name>.render.ai.enabled` | `services.<name>.render.git.enabled` |
-| Политика opt-in по умолчанию | — | `true` для `type: app`; `false` иначе | `true` для всех типов | `true` для `type: app`; `false` иначе |
+| Политика opt-in по умолчанию | — | `true` для `type: app`; `false` иначе | `true` для `type: app`; `false` иначе | `true` для `type: app`; `false` иначе |
 | Политика коллизий при общем `dir` | — | выигрывает самый глубокий `extends` (per-variant override) | выигрывает самый поверхностный `extends` (каноническая идентичность hub) | выигрывает самый глубокий `extends` (per-variant хуки) |
 | Файл manifest | — | `manifest.yml` объявляет `render` (+ `symlinks`) | `manifest.yml` объявляет `render` + `symlinks` | `manifest.yml` объявляет только `render` |
 | Поддерживаются симлинки | нет | да (относительные, внутри hub) | да (относительные, внутри hub) | нет — `to` должен быть basename |

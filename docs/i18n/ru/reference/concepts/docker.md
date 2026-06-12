@@ -1,4 +1,4 @@
-> Translated from: reference/concepts/docker.md @ 20dcf0c6b589
+> Translated from: reference/concepts/docker.md @ bd45f3552625
 
 # Интеграция с Docker
 
@@ -32,7 +32,7 @@ DWE никогда не предлагает пользователю вводи
 
 ## Имя проекта
 
-Имя compose-проекта — это значение `-p <name>`, передаваемое в каждый вызов `docker compose`. Это также префикс, который Docker Compose использует для собственных конвенций именования ресурсов: контейнеры (`<project>_<service>_<n>`), сети (`<project>_default`) и именованные тома (`<project>_<vol>`).
+Имя compose-проекта — это значение `-p <name>`, передаваемое в каждый вызов `docker compose`. Это также префикс, который Docker Compose использует для собственных конвенций именования ресурсов: контейнеры (`<project>-<service>-<n>`), сети (`<project>_default`) и именованные тома (`<project>_<vol>`).
 
 DWE разрешает имя из `workspace/docker.yml`:
 
@@ -95,7 +95,7 @@ process_env:
 
 Docker Compose создаёт именованные тома лениво: первый `docker compose up`, ссылающийся на том, создаёт его. DWE добавляет сверху два слоя:
 
-- **Привязка к проекту.** Тома, объявленные в `resources.volumes` в `workspace/docker.yml`, получают префикс `<project_name>_`, соответствующий собственной конвенции имён Compose для `volumes:`, объявленных внутри `compose.yaml`. Том с ключом `build_artifacts` и `shared: false` становится фактическим Docker-томом `myorg-shop_build_artifacts`.
+- **Привязка к проекту.** Тома, объявленные в `resources.volumes` в `workspace/docker.yml`, получают префикс `<project_name>_`, соответствующий собственной конвенции имён Compose для `volumes:`, объявленных внутри `compose.yaml`. Том с `name: build_artifacts` и `shared: false` становится фактическим Docker-томом `myorg-shop_build_artifacts` (префикс применяется к полю `name:`, а не к ключу map).
 - **Shared-режим.** `shared: true` отказывается от префикса. Том создаётся с именем как есть, переживает запуски `dwe reset` на этом проекте — и переиспользуется любым другим проектом DWE, объявляющим то же shared-имя. Канонический пример — кэш тулчейна языка (composer, npm, go-build), разделяемый между проектами.
 
 `ensure_before: [up, deploy]` запускает идемпотентное создание в этих точках входа. Не-shared тома, привязанные к проекту, — это также то, что собирает `docker_remove_project_volumes` во время reset: билтин перечисляет каждый Docker-том, имя которого начинается с `<project_name>_`, и удаляет его. Shared-тома под префикс не подпадают и выживают.

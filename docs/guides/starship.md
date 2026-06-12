@@ -106,7 +106,7 @@ Different sites know different things about the stack. Each site picks the safes
 | `dwe restart` (no service arg) | write `running` |
 | `dwe restart <service>` | invalidate (remove cache file) |
 | `dwe stop` (no `--service`) | write `stopped` |
-| `dwe stop --service <n>` | invalidate |
+| `dwe stop <service>` | invalidate |
 | `dwe deploy run` (no `--service`) | invalidate (deploy can no-op via "already up-to-date") |
 | `dwe deploy run --service <n>` | invalidate |
 | `dwe reset run` (project-wide teardown) | write `stopped` |

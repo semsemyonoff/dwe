@@ -132,6 +132,8 @@ The container command surface is deliberately reduced — **allowlist, default-d
 | `status`, `info`, `logs` | read-only diagnostics |
 | `docs` (including `llms-txt`) | read-only; useful to AI agents working in the devcontainer — bare `dwe docs` prints the `docs list` output (no TTY for the browser) |
 | `prompt` | container terminal prompt segment |
+| `vars` (`get`/`list`/`inspect`; `set` gated by `bridge.vars_writable`) | read the vars sandbox; container writes are deny-by-default per the top-level [`bridge.vars_writable`](../config/vars.md#container-behavior-and-bridgevars_writable) allowlist |
+| `render config` | regenerate config files after a container-side `vars set` (`--harvest` stays host-only); other render subcommands (`env`/`ide`/`ai`/`git`) are host-only |
 | `bridge status` | bridge self-diagnostics |
 | `version`, help | service commands |
 
@@ -140,7 +142,7 @@ The container command surface is deliberately reduced — **allowlist, default-d
 | `stop`, `restart`, `reset` | suicidal: they stop / recreate the container they were invoked from |
 | `deploy`, `run`, `services` | the stack is managed from the host |
 | `snapshot` | restore stops the stack; create is heavy and takes project locks |
-| `render`, `setup`, `init`, `shell` | mutate workspace files or are interactive |
+| `render` (except `render config`), `setup`, `init`, `shell` | mutate workspace files or are interactive — only `render config` is carved out (see above) |
 | `bridge` (everything except `status`) | `bridge stop` is suicide for the bridge itself |
 | `validate`, `completion` | host-side concerns: validation targets the host workspace, completion scripts are installed on the host (a completion script already baked into an image keeps degrading silently — the hidden completion machinery stays reachable) |
 

@@ -29,11 +29,11 @@ dwe deploy run --resume
 
 Use this after a failed deploy to pick up where it left off, rather than re-running already-completed steps.
 
-In non-interactive mode (no TTY, no `--yes` flag):
+In non-interactive mode (no TTY, no `-y`/`--non-interactive` flag):
 - If the last run was failed/partial, you must use `--resume` or `--force` to proceed
 - Without a flag, the command exits with an error (fail-safe for CI)
 
-In interactive mode (TTY without `--yes`):
+In interactive mode (TTY without `-y`/`--non-interactive`):
 - If the last run was failed/partial, you are prompted to choose: resume, re-run all steps (state ignored — `when:` still applies), or cancel
 
 ### `-y` / `--non-interactive`

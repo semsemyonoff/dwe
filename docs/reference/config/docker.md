@@ -231,10 +231,6 @@ project_name: "personal-laravel"
 args:
   global: ["--ansi", "always"]
 
-# Disable auto .env generation (pre-generated in CI)
-env:
-  auto_generate: false
-
 # Suppress Docker hints
 process_env:
   DOCKER_CLI_HINTS: "false"
@@ -245,11 +241,11 @@ process_env:
 - **Direct `docker compose` in Makefiles or YAML** — always use `dwe docker`. Direct calls bypass policy args, project name, and `.env` auto-generation.
 - **Adding compose flags in Make recipes** — flags belong in `docker.yml` args section, not in Make. Make lifecycle targets call `dwe docker` with no flags.
 - **Overriding args partially** — `args.up` in `docker.local.yml` replaces the tracked list, not appends to it. Include all flags you need.
-- **Disabling `auto_generate` globally** — if you disable it, you must regenerate `.env` manually before compose commands that depend on it.
+- **Expecting to pre-generate `.env` in CI** — `.env` is always regenerated before `{up, run, exec, restart, build}` and this cannot be disabled (see [Purpose](#purpose)). Any pre-generated `.env` will be overwritten; there is no config toggle for it.
 
 ## Related commands
 
-- `dwe docker up|down|stop|restart|logs|ps|exec|run|wait|pull|build` — lifecycle and image-management commands
+- `dwe docker up|down|stop|restart|logs|ps|exec|run|pull|build` — lifecycle and image-management commands (`up` accepts `--wait` to block until services are healthy)
 - `dwe compose files` — show active compose file list
 - `dwe compose argv` — show full effective argv
 - `dwe render env` — manually regenerate `.env`

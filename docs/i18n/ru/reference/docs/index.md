@@ -1,4 +1,4 @@
-> Translated from: reference/docs/index.md @ 1e4f2448d727
+> Translated from: reference/docs/index.md @ ed2cd4ebfc08
 
 # Подсистема документации
 
@@ -20,7 +20,7 @@ dwe docs
 Показ конкретной темы в терминале:
 ```bash
 dwe docs show config/services/fields
-dwe docs show config/workspace#binary-overrides
+dwe docs show config/userconfig#переопределения-бинарей
 ```
 
 Список всех доступных тем:
@@ -64,15 +64,17 @@ Project
 
 ## Справочник конфигурации
 
-### `binaries.mmdc`
+### Переопределение бинарника mmdc
 
 Путь или имя исполняемого файла mermaid-cli. По умолчанию `mmdc` (ищется в `$PATH`).
 
-```yaml
-binaries:
-  mmdc: /usr/local/bin/mmdc   # абсолютный путь
-  mmdc: mmdc                   # имя в $PATH (по умолчанию)
+Это переопределяется в файле пользовательской конфигурации (`~/.config/dwe/config` или `.dwe/config` в проекте) как плоский ключ `binary_mmdc` — **а не** в `workspace.yml`:
+
+```ini
+binary_mmdc = /usr/local/bin/mmdc   # абсолютный путь; опустите, чтобы использовать `mmdc` в $PATH (по умолчанию)
 ```
+
+См. [config/userconfig](../config/userconfig.md) для полного списка переопределений бинарников.
 
 ### `docs.mermaid`
 

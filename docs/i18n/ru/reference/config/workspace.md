@@ -1,4 +1,4 @@
-> Translated from: reference/config/workspace.md @ 189a07138a4a
+> Translated from: reference/config/workspace.md @ efef2ee4a6fd
 
 # workspace.yml / defaults.yml / local.yml
 
@@ -21,7 +21,6 @@
   - [`state`](#state)
   - [`exports.env`](#exportsenv)
   - [`compose`](#compose)
-  - [`ide`](#ide)
 - [workspace/local.yml](#workspacelocalyml)
   - [Compose-оверлеи](#compose-оверлеи)
 - [Частые ловушки](#частые-ловушки)
@@ -60,7 +59,6 @@ flowchart TB
 | Структурные определения сервисов (container / compose / status / render) | [`workspace/services/<name>/service.yml`](services/index.md) |
 | Опциональное состояние enabled для сервисов (для всех типов) | `defaults.yml` (переопределяемо в `local.yml`) |
 | Правила экспорта (`exports.env`) | `defaults.yml` |
-| Дефолты IDE-конфига | `defaults.yml` |
 | Дефолты блока `vars.db.*` | `defaults.yml` |
 | Активное состояние | `local.yml` |
 | Значения портов / хостов сервисов | [`workspace/services/<name>/service.yml`](services/index.md) (проектные определения) и `local.yml` (переопределения на разработчика, deep-merge по имени записи) |
@@ -348,8 +346,9 @@ compose:
 | Поле | Описание |
 |-------|-------------|
 | `compose.base` | Базовый compose-файл (всегда подключается) |
+| `compose.extra` | **Здесь невалидно.** Файлы оверлеев на разработчика принадлежат `local.yml`. См. [Compose-оверлеи](#compose-оверлеи). |
 
-Оверлеи для конкретных сервисов находятся под `services.<name>.compose` (список путей к файлам для каждой записи сервиса) в [`workspace/services/<name>/service.yml`](services/index.md). Порядок вывода compose-файлов — `base → tools (sorted) → infra (sorted) → apps (sorted)`.
+Оверлеи для конкретных сервисов находятся под `services.<name>.compose` (список путей к файлам для каждой записи сервиса) в [`workspace/services/<name>/service.yml`](services/index.md). Полный порядок вывода compose-файлов (включая оверлеи на разработчика) описан в разделе [Compose-оверлеи](#compose-оверлеи) в `local.yml`.
 
 ---
 
@@ -457,7 +456,7 @@ services:
 - **Коммит `local.yml`** — он gitignored не просто так (может содержать креды).
 - **Указание `state:` в `defaults.yml`** — состояние по своей природе индивидуальное, кладите его в `local.yml`.
 - **Коллизия скаляров** — если `defaults.yml` выставляет `state: ""`, а `local.yml` выставляет `state: staging`, эффективное значение — `staging`. Если `local.yml` опускает `state`, выигрывает значение из `defaults.yml`.
-- **Списки заменяют, карты мерджатся** — карты deep-merge'атся: повторная декларация `services` в `local.yml` переопределяет только перечисленные ключи, остальные проваливаются из `defaults.yml`. Списки же заменяются целиком: выставление `args.global: ["--ansi", "always"]` в `local.yml` отбрасывает каждую запись, которую имели нижние слои, поэтому включайте полный нужный список.
+- **Списки заменяют, карты мерджатся** — карты deep-merge'атся: повторная декларация `services` в `local.yml` переопределяет только перечисленные ключи, остальные проваливаются из `defaults.yml`. Списки же заменяются целиком: выставление `bridge.vars_writable: ["vars.db.*"]` в `local.yml` отбрасывает каждую запись, которую имели нижние слои, поэтому включайте полный нужный список.
 
 ## Опциональный блок `ui:`
 

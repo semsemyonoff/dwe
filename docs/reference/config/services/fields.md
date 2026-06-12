@@ -460,7 +460,7 @@ render:
 
 | Field | Default | Description |
 |-------|---------|-------------|
-| `enabled` | `true` (for all service types) | Include this service in `dwe render ai` output. When `true`, agent-oriented documentation is generated in the service hub. |
+| `enabled` | `true` for `type: app`; `false` otherwise | Include this service in `dwe render ai` output. When `true`, agent-oriented documentation is generated in the service hub. |
 | `template` | — | Optional custom template pack directory name. Must be a single directory key under `workspace/templates/ai/` (no path separators, no `..`, no absolute paths, no leading `.`). If omitted, rendering falls back to service-name-specific then default packs. Explicit packs are strict: a typo will fail rather than silently using a fallback. |
 
 #### Agent docs activation rules
@@ -472,7 +472,7 @@ Agent docs rendering requires **both** activation and policy conditions:
 
 A service is rendered only if both are satisfied. Disabling either suppresses rendering.
 
-**Default policy**: All services default to `render.ai.enabled: true` (opt-out). Set `render.ai.enabled: false` to suppress agent docs generation for a service.
+**Default policy**: `type: app` services default to `render.ai.enabled: true` (opt-out); non-app services default to `false` and must opt in (set `render.ai.enabled: true`). Set `render.ai.enabled: false` to suppress agent docs generation for an app service.
 
 #### Template pack resolution
 

@@ -1,4 +1,4 @@
-> Translated from: reference/config/commands/validation.md @ 87b27f62433e
+> Translated from: reference/config/commands/validation.md @ 3524810e4f54
 
 # Правила валидации и типичные подводные камни
 
@@ -16,12 +16,12 @@
 - `type: script` требует блок `script:` в простой форме (`path`) или фазовой форме (`run` + опциональные `plan` / `cleanup`).
 - `type: workflow` требует непустой `steps:` и запрещает поля, специфичные для типов (`cmd`, `argv`, `service`, `script`, `workdir` и т. д.).
 - `type: builtin` требует `cmd:` (имя builtin) и отвергает поля, специфичные для других типов (`argv`, `script:`, `steps:`, `service`, `compose_args`, `workdir` / `workdir_from`, `user`, `mode`, `runner:`).
-- У каждого шага workflow ровно одно из `command` / `confirm` / `parallel`; `with` / `continue_on_error` допустимы только на command-шагах (и на контейнере блока `parallel` — см. [Параллельные подшаги](types.md)).
+- У каждого шага workflow ровно одно из `command` / `confirm` / `parallel`; `with` / `continue_on_error` допустимы только на command-шагах (и на контейнере блока `parallel` — см. [Параллельные подшаги](types.md#параллельные-подшаги)).
 - Имена env-переменных должны быть уникальны по `params.*.env`, `context.*.env`, `files.*.env` и блоку `env:`.
 - File ID должны соответствовать `^[a-zA-Z_][a-zA-Z0-9_]*$`.
 - Файловые спецификации отвергают конфликтующие поля (например, `mkdir` вне `write`, `path` + `candidates`, `match` / `sort` без `glob`).
-- `workdir_from` допустим только для `service_exec` / `service_run`.
-- `compose_args` допустим только для `service_exec` / `service_run`.
+- `workdir_from` допустим только для `service_exec` / `service_run` / `daemon`.
+- `compose_args` допустим только для `service_exec` / `service_run` / `daemon`.
 - `mode` на `service_run` должен быть пустым или `run`.
 - `notify: true` отвергается на `type: daemon` (ошибка). `notify: true` на прямом подшаге внутри блока `parallel:` создаёт info-диагностику; runtime его подавляет.
 

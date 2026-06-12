@@ -20,7 +20,7 @@ when:
   cmd: "dir-empty services/main/src"
 ```
 
-Available predicates: `dir-exists`, `dir-missing`, `dir-empty`, `dir-not-empty`, `file-exists`, `file-missing`. These are distinct from the *engine builtins* (`service_configs_copy`, etc.) used in step bodies and `check:` actions; see [conditions.md](../conditions.md) for the full distinction. The predicate registry uses hardcoded `sh -c` for POSIX portability regardless of the project's configured shell.
+Available predicates: `dir-exists`, `dir-missing`, `dir-empty`, `dir-not-empty`, `file-exists`, `file-missing`, `generated-missing` (takes `<svc> <field>` not a path). These are distinct from the *engine builtins* (`service_configs_render`, etc.) used in step bodies and `check:` actions; see [conditions.md](../conditions.md) for the full distinction. The predicate registry uses hardcoded `sh -c` for POSIX portability regardless of the project's configured shell.
 
 **Shell commands** — execute a shell command; exit 0 = true, non-zero = false:
 
@@ -46,20 +46,19 @@ Template conditions do not support `check:` in the same step (no side effects at
 
 `check:` is a **post-action** evaluated after a step succeeds. It is a **typed action** — the same `type:` / `cmd:` / `with:` shape as step bodies, but its success/failure determines whether the step is reported as passed or failed.
 
-Use `check:` to assert that a step had its intended effect — e.g. that a migration produced a certain file, that a service became reachable, or that configs were copied successfully.
+Use `check:` to assert that a step had its intended effect — e.g. that a migration produced a certain file, that a service became reachable, or that configs were rendered successfully.
 
 **Example: verify configs were deployed**
 
 ```yaml
-- name: copy-configs
+- name: render-configs
   type: builtin
-  cmd: service_configs_copy
+  cmd: service_configs_render
   with:
     service: main
-    mode: replace
   check:
     type: builtin
-    cmd: service_configs_check
+    cmd: service_configs_render_check
     with:
       service: main
 ```

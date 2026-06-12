@@ -6,7 +6,7 @@ returns it to a clean state that requires a subsequent deploy.
 ## Project-wide reset
 
 ```
-dwe reset run [--yes]
+dwe reset run [--yes] [--skip-preflight] [--clear-generated]
 ```
 
 Executes `workspace/reset.yml`. The file is **optional** — when absent, DWE uses the built-in default reset pipeline and prints one info line to stderr: `Using built-in default reset pipeline (override with workspace/reset.yml).` The info line is suppressed in `--output json` mode.
@@ -21,11 +21,13 @@ removed, so every service appears as not-deployed in `dwe status`.
 | Option | Description |
 |--------|-------------|
 | `--yes` / `-y` | Skip confirmation prompts inside reset steps |
+| `--skip-preflight` | Bypass environment probes and project checks before running |
+| `--clear-generated` | Also clear the harvested generated-value store (`.dwe/generated.yml`) so secrets regenerate on the next deploy (preserved by default) |
 
 ## Per-service reset
 
 ```
-dwe reset run --service <name> [--yes] [--skip-preflight]
+dwe reset run --service <name> [--yes] [--skip-preflight] [--clear-generated]
 ```
 
 Resets a single service without touching the rest of the project:
@@ -63,6 +65,7 @@ from `services disable`, not from reset).
 | `--service <name>` | Reset only this service |
 | `--yes` / `-y` | Skip the confirmation prompt |
 | `--skip-preflight` | Bypass environment probes before running |
+| `--clear-generated` | Also clear this service's harvested generated values (`.dwe/generated.yml`); forces regeneration on next deploy |
 
 ### Per-service `reset.yml`
 
@@ -87,4 +90,4 @@ phases:
 |---------|------------------|
 | `dwe reset run --service <name>` | Removes `state.services.<name>`, writes `PendingDeploy` for `<name>` |
 | `dwe deploy run --service <name>` | Clears `PendingDeploy` for `<name>` on success |
-| `dwe reset run` (project-wide) | Removes the entire state file (`ClearPending` semantics) |
+| `dwe reset run` (project-wide) | Deletes the entire state file (`journal.Remove`) |

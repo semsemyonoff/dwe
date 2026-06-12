@@ -1,4 +1,4 @@
-> Translated from: reference/concepts/architecture.md @ 3c9309530864
+> Translated from: reference/concepts/architecture.md @ e0c6c3942a83
 
 # Архитектура
 
@@ -83,7 +83,7 @@ sequenceDiagram
   Dev->>CLI: dwe run
   CLI->>FS: читает workspace.yml + workspace/
   CLI->>FS: пишет .env (envfile.Regenerate)
-  CLI->>FS: захватывает .dwe/deploy.lock
+  CLI->>FS: захватывает .dwe/deploy/deploy.lock
   CLI->>Engine: docker compose -p <proj> -f base -f svc1 -f svc2 up -d --wait
   Engine-->>CLI: контейнеры готовы
   CLI->>Engine: docker compose ps --services --status running

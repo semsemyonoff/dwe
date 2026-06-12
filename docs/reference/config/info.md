@@ -149,7 +149,7 @@ Dynamically generates a list of service URLs from the project's configured servi
 | `include` | list | `[app, tool]` | Service types to include: any combination of `app`, `tool`, `infra`. |
 | `hide` | list | — | Service folder keys to exclude entirely. Unknown keys are silently ignored. |
 | `hide_paths` | map | — | Exclude individual sub-paths by service key and path name (e.g. `main: ["SPX profiler"]` hides the path named "SPX profiler" under the service "main"). |
-| `port_via` | string | auto-detected | Override which service to use as the front proxy for generating main URLs. When empty, auto-detection searches for a single enabled `type: infra` service declaring either `ports.http: 80` (http traffic) or `ports.https: 443` (https traffic). Explicitly named services are required to exist; missing services produce an error. Auto-detection returns no proxy when zero candidates or multiple candidates are found (in that case, only direct `localhost:<port>` URLs render). |
+| `port_via` | string | auto-detected | Override which service to use as the front proxy for generating main URLs. When empty, auto-detection searches for a single enabled `type: infra` service declaring either `ports.http: 80` (http traffic) or `ports.https: 443` (https traffic). Explicitly named missing services are flagged by `dwe validate`, not at render time. Auto-detection returns no proxy when zero candidates or multiple candidates are found (in that case, only direct `localhost:<port>` URLs render). |
 | `when` | string | — | Condition; item hidden if falsy. |
 
 **`port_via` auto-detection examples:**
@@ -171,7 +171,7 @@ With explicit `port_via:` override:
   port_via: api_gateway
 ```
 
-When `port_via` is explicitly set, that service must exist or an error is produced at render time. A named service is used for proxy URL construction regardless of its `type:`.
+When `port_via` is explicitly set but names a nonexistent service, `dwe info` silently renders no proxy (direct/host-only URLs); the missing service is flagged only by `dwe validate` (SeverityError). A named service is used for proxy URL construction regardless of its `type:`.
 
 When auto-detection finds zero or multiple infra services with the target port, **no proxy is selected** and services render using only their direct ports (or with just hosts if no port exists):
 ```yaml
@@ -194,7 +194,7 @@ Services without an `info` block are included in the `include` types but render 
 - only `ports[primary_port]` → `http://localhost:<port>`
 - neither → row silently omitted
 
-`<proxied URL>` uses the `port_via` service's ports for scheme/port selection, but the routed service's own `info.scheme` (when set) takes precedence and also pins which proxy listener (`http` vs `https`) is looked up — see [Reverse-proxy URLs in services/fields.md](services/fields.md#ports-field) for the full precedence chain. `<direct URL>` uses the service's own port. Ports `:80` and `:443` are omitted from output.
+`<proxied URL>` uses the `port_via` service's ports for scheme/port selection, but the routed service's own `info.scheme` (when set) takes precedence and also pins which proxy listener (`http` vs `https`) is looked up — see [Reverse-proxy URLs in services/fields.md](services/fields.md#ports-field) for the full precedence chain. `<direct URL>` uses the service's own port. Within `<proxied URL>`, ports `:80` (http) and `:443` (https) are omitted; the `<direct URL>` always shows its port.
 
 ### `auto-hosts`
 
@@ -215,7 +215,7 @@ Dynamically generates a list of all hostnames from services for `/etc/hosts` con
 | `hide` | list | — | Service folder keys to exclude entirely. Unknown keys are silently ignored. |
 | `when` | string | — | Condition; item hidden if falsy. |
 
-Renders every `hosts` entry from included services in a two-column table (`IP  Hostname`), preserving deploy order, deduplicating hostnames, and filtering out `localhost`.
+Renders every `hosts` entry from included services in a two-column table (`IP  Hostname`), preserving deploy order, deduplicating hostnames, and skipping empty values, the literal `localhost`, and any `*.localhost` host (these resolve to 127.0.0.1 automatically and need no `/etc/hosts` entry).
 
 ### `subgroup`
 
@@ -409,7 +409,7 @@ footer: true
 - **Bare `when:` values without template syntax** — `when: .State` is not valid; must be `when: "{{ .State }}"`.
 - **Missing quotes around template expressions** — YAML parses `{{ ... }}` as a flow mapping if unquoted. Always quote template strings.
 - **Service lookup syntax** — Go's text/template requires `index` for map access by string key: `(index .Services "main")` returns a `ServiceConfig`. From there, struct fields are PascalCase (`.Container`, `.Enabled`) and ports / hosts use the `Port` / `Host` accessor methods with the port/host name as argument: `(index .Services "main").Port "http"`. Parentheses around the index expression are required so the method dispatches on the returned `ServiceConfig`.
-- **Using config keys not exposed at the top level** — only fields surfaced by the resolved project config (see the table above) are available as direct template paths like `.Project.Name`. Custom keys added to `defaults.yml` live under `.Cfg.Raw` and need to be accessed via `index` or dot-paths against `Raw`.
+- **Using config keys not exposed at the top level** — only fields surfaced by the resolved project config (see the table above) are available as direct template paths like `.Project.Name`. Custom keys added to `defaults.yml` live under `.Raw` and need to be accessed via `index` or dot-paths against `Raw` (e.g. `index .Raw "myKey"`).
 - **`appURL` argument order** — the order is `host`, `port`, `useHTTPS`, then optional `path`. Swapping port and useHTTPS produces incorrect URLs silently. When linking a tool routed via the main reverse proxy, combine the tool's hostname with the main service's port: `appURL ((index .Services "adminer").Host "web") ((index .Services "main").Port "http") .Runtime.UseHTTPS`.
 - **`hide_on_empty` with decorative items** — By default, content items like `definition`, `info`, and `warning` count toward section visibility, but `separator` does not. Use the `decorative` flag to override: set `decorative: true` on a content item to exclude it from the visibility calculation, or set `decorative: false` on a separator to make it count as content. A section with `hide_on_empty: true` is fully hidden if no content item (after `when` filtering) survives.
 - **Footer rendering with `hide_on_empty`** — When `footer: true`, the footer is only rendered if at least one section produced output. If all sections are hidden via `hide_on_empty`, the footer is also suppressed.

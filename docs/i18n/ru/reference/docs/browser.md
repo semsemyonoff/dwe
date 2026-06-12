@@ -12,7 +12,7 @@ dwe docs
 
 ## Требования
 
-- TTY (терминал) — для неинтерактивного использования (пайпы, агенты) применяйте [`dwe docs show <topic>`](commands.md) или [`dwe docs list`](commands.md) вместо этого.
+- TTY (терминал) — для неинтерактивного использования (пайпы, агенты) применяйте [`dwe docs show <topic>`](commands.md#dwe-docs-show-topic) или [`dwe docs list`](commands.md#dwe-docs-list) вместо этого.
 
 ## Навигация
 

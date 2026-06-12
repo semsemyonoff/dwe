@@ -31,7 +31,7 @@ Overview of all configuration files in the DWE system.
 | `workspace/commands/` | yes | standalone | Declarative command definitions (per-file groups) |
 | `workspace/validate.yml` | yes | standalone | Project readiness checks (preflight + `dwe validate`) |
 | `workspace/snapshot.yml` | yes | standalone | Snapshot workflows: create / restore / remove (`dwe snapshot`) |
-| `workspace/i18n/*.yml` | no (ignored) | standalone | User command and UI string translations (optional; one file per language) |
+| `workspace/i18n/*.yml` | yes | standalone | User command and UI string translations (optional; one file per language) |
 
 ## Runtime artifacts
 

@@ -18,8 +18,8 @@ The loader enforces the rules below and reports the offending file + field on fa
 - Env variable names must be unique across `params.*.env`, `context.*.env`, `files.*.env`, and the `env:` block.
 - File IDs must match `^[a-zA-Z_][a-zA-Z0-9_]*$`.
 - File specs reject conflicting fields (e.g. `mkdir` outside `write`, `path` + `candidates`, `match` / `sort` without `glob`).
-- `workdir_from` is only valid for `service_exec` / `service_run`.
-- `compose_args` is only valid for `service_exec` / `service_run`.
+- `workdir_from` is only valid for `service_exec` / `service_run` / `daemon`.
+- `compose_args` is only valid for `service_exec` / `service_run` / `daemon`.
 - `mode` on `service_run` must be empty or `run`.
 - `notify: true` is rejected on `type: daemon` (error). `notify: true` on a direct sub-step inside a `parallel:` block produces an info diagnostic; the runtime suppresses it.
 

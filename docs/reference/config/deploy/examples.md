@@ -202,7 +202,8 @@ Validation runs at `dwe validate` and at plan resolution; either path catches mi
 
 ```
 [12-14/25] [parallel group: db-dumps (3 steps, max_concurrent=3, fail_fast=true)]
-  [12/25]  download-main      command services.main.db.dump-download [files_gate]
+  [12/25]  download-main      command services.main.db.dump-download
+                              [files_gate: readable (required)]
   [13/25]  download-stock     command services.stock.db.dump-download
   [14/25]  download-price     command services.price.db.dump-download
 ```

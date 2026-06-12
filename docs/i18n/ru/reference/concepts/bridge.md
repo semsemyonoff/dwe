@@ -1,4 +1,4 @@
-> Translated from: reference/concepts/bridge.md @ 3125ee8c75e9
+> Translated from: reference/concepts/bridge.md @ fb69348faecb
 
 # Хост-бридж
 
@@ -134,6 +134,8 @@ flowchart TD
 | `status`, `info`, `logs` | read-only диагностика |
 | `docs` (включая `llms-txt`) | read-only; полезно AI-агентам, работающим в devcontainer — `dwe docs` без аргументов печатает вывод `docs list` (нет TTY для браузера) |
 | `prompt` | сегмент промпта терминала контейнера |
+| `vars` (`get`/`list`/`inspect`; `set` ограничен `bridge.vars_writable`) | чтение песочницы vars; запись из контейнера запрещена по умолчанию согласно allowlist верхнего уровня [`bridge.vars_writable`](../config/vars.md#поведение-в-контейнере-и-bridgevars_writable) |
+| `render config` | перегенерация конфиг-файлов после `vars set` на стороне контейнера (`--harvest` остаётся только хостовым); прочие подкоманды render (`env`/`ide`/`ai`/`git`) — только хостовые |
 | `bridge status` | самодиагностика бриджа |
 | `version`, help | служебные команды |
 
@@ -142,7 +144,7 @@ flowchart TD
 | `stop`, `restart`, `reset` | суицидально: останавливают / пересоздают контейнер, из которого вызваны |
 | `deploy`, `run`, `services` | стек управляется с хоста |
 | `snapshot` | restore останавливает стек; create тяжёлая и берёт проектные блокировки |
-| `render`, `setup`, `init`, `shell` | мутируют файлы воркспейса или интерактивны |
+| `render` (кроме `render config`), `setup`, `init`, `shell` | мутируют файлы воркспейса или интерактивны — выделена только `render config` (см. выше) |
 | `bridge` (всё, кроме `status`) | `bridge stop` — суицид для самого бриджа |
 | `validate`, `completion` | хостовые задачи: валидация относится к хостовому воркспейсу, completion-скрипты устанавливаются на хосте (уже запечённый в образ completion-скрипт продолжит молча деградировать — скрытая completion-механика остаётся доступной) |
 

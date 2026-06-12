@@ -1,4 +1,4 @@
-> Translated from: reference/concepts/project-layout.md @ aac6d242427c
+> Translated from: reference/concepts/project-layout.md @ df92c463c4ab
 
 # Раскладка проекта
 
@@ -79,7 +79,7 @@ flowchart LR
 
 | Файл | Назначение | Читатель | Писатель | Отслеживается |
 |------|---------|--------|--------|---------|
-| `workspace.yml` | Идентификация проекта: `project.name`, `project.prefix`, опциональные переопределения бинарников | CLI на каждом вызове | Автор вручную | да |
+| `workspace.yml` | Идентификация проекта: `project.name`, `project.prefix` | CLI на каждом вызове | Автор вручную | да |
 | `.gitignore` | Исключает `.dwe/`, `/services/`, `snapshots/`, `backups/` и `workspace/local.yml` из контроля версий | git | Автор вручную | да |
 | `README.md` | Точка входа в документацию проекта (не README DWE CLI) | люди | Автор вручную | да |
 
@@ -99,7 +99,7 @@ project:
 
 | Путь | Назначение | Читатель | Писатель | Отслеживается |
 |------|---------|--------|--------|---------|
-| `workspace/defaults.yml` | Версионированные значения по умолчанию: `services.<name>.enabled`, `runtime`, `state`, `exports.env`, `compose`, `ide` | CLI (слой merge 2) | Автор вручную | да |
+| `workspace/defaults.yml` | Версионированные значения по умолчанию: `services.<name>.enabled`, `runtime`, `state`, `exports.env`, `compose`, `services.<name>.render.ide` | CLI (слой merge 2) | Автор вручную | да |
 | `workspace/local.yml` | Переопределения на разработчика поверх `defaults.yml`: порты, флаги enabled, креды, ответы мастера | CLI (слой merge 3) | Автор вручную + setup wizard + `dwe services enable/disable` | нет |
 | `workspace/services/<name>/` | Одна папка на сервис. Имя папки — это ID сервиса, поля `name:` нет. | Загрузчик сервисов CLI | Автор вручную | да (кроме оверрайдов `local.yml`) |
 | `workspace/commands/` | Декларативные пользовательские команды, доступные как `dwe <name>` | Реестр команд CLI | Автор вручную | да |
@@ -114,9 +114,7 @@ project:
 | `workspace/validate.yml` | Проверки готовности проекта (`shell` / `file_exists` / `tcp_reachable` / …) | `dwe validate` + preflight | Автор вручную | да |
 | `workspace/docker.yml` | Слой оркестрации compose: шаблон имени проекта, список файлов, топология, скрытые сервисы | Подсистема Docker | Автор вручную | да |
 | `workspace/docker.local.yml` | Переопределения compose на разработчика, глубоко смерженные поверх `docker.yml` | Подсистема Docker | Автор вручную | нет |
-| `workspace/styles.yml` | Палитра семантических токенов (info / success / warn / error / muted / heading / link) | UI-стилизация | Автор вручную | да |
-| `workspace/ui.yml` | Настройки поведения TUI (`default_expanded_depth`, `auto_collapse_empty`, `show_type_badges`) | TUI-рендереры | Автор вручную | да |
-| `workspace/notifications.yml` | Условия desktop-уведомлений по операциям | Подсистема notify | Автор вручную | да |
+| `workspace/styles.yml` | Палитра семантических токенов (accent / success / warning / danger / muted / border / text) | UI-стилизация | Автор вручную | да |
 
 ### Папка на сервис
 
@@ -217,10 +215,10 @@ services/                # gitignored
 | `.dwe/deploy/state.yml` | Идемпотентный журнал деплоя: `action_hash`, `status`, `started_at`, `duration` по каждому шагу | Исполнитель deploy + `dwe deploy state show` | Исполнитель deploy | нет |
 | `.dwe/deploy/deploy.lock` | Эксклюзивный `flock`, удерживаемый во время `dwe deploy run` | Подсистема блокировок | Подсистема блокировок | нет |
 | `.dwe/snapshots/snapshot.lock` | Эксклюзивный `flock`, удерживаемый во время изменений снапшотов | Подсистема блокировок | Подсистема блокировок | нет |
-| `.dwe/snapshots/current` | Указатель на активный снапшот, выставляется командой `snapshot restore` | Подсистема снапшотов | Подсистема снапшотов | нет |
+| `.dwe/snapshots/current` | Указатель на активный снапшот, выставляется командами `snapshot create` и `snapshot restore` (очищается при `snapshot remove`) | Подсистема снапшотов | Подсистема снапшотов | нет |
 | `.dwe/snapshots/.pre-restore-backup/` | Резервная копия `workspace/local.yml` + deploy state перед restore, для ручного восстановления | Оператор (вручную) | Подсистема снапшотов | нет |
-| `.dwe/logs/deploy.log` | Объединённый stdout/stderr последнего `dwe deploy run` (при `log: true`) | Оператор (вручную) + `dwe logs` | Исполнитель deploy | нет |
-| `.dwe/logs/run.log` · `stop.log` · `reset.log` | Объединённый stdout/stderr соответствующей фазы lifecycle (при `log: true`) | Оператор (вручную) + `dwe logs` | Исполнители lifecycle / reset | нет |
+| `.dwe/logs/deploy.log` | Объединённый stdout/stderr последнего `dwe deploy run` (пишется по умолчанию; отключается через `log: false`) | Оператор (вручную) | Исполнитель deploy | нет |
+| `.dwe/logs/run.log` · `stop.log` · `reset.log` | Объединённый stdout/stderr соответствующей фазы lifecycle (при `log: true`) | Оператор (вручную) | Исполнители lifecycle / reset | нет |
 | `.dwe/config` | Переопределение user-config на проект (язык, тема mermaid, условия уведомлений) | CLI на каждом вызове | Автор вручную | нет |
 
 ### Порядок блокировок

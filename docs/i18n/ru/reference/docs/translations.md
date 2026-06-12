@@ -1,4 +1,4 @@
-> Translated from: reference/docs/translations.md @ 3c546084c580
+> Translated from: reference/docs/translations.md @ 29d05642b6a2
 
 # Переводы и поведение языка
 
@@ -60,7 +60,7 @@ docs/
 Когда вы открываете перевод, DWE сравнивает этот хеш с встроенным манифестом (генерируемым на этапе сборки). Если хеши различаются, перевод помечается как **устаревший** и появляется предупреждение:
 
 ```
-⚠ This translation is outdated (last synced at <hash>, current is <hash>). Press `e` to view the English version.
+⚠ This translation is outdated (last synced at previous version, current is newer). Press `e` to view the English version.
 ```
 
 Переводчики могут обновить хеш в рамках своего pull request; DWE перегенерирует манифест при следующем `make build`.

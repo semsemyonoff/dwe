@@ -77,7 +77,7 @@ Folder names other than `workspace.yml` and `workspace/` are conventions, not re
 
 | File | Purpose | Reader | Writer | Tracked |
 |------|---------|--------|--------|---------|
-| `workspace.yml` | Project identity: `project.name`, `project.prefix`, optional binary overrides | CLI on every invocation | Author manually | yes |
+| `workspace.yml` | Project identity: `project.name`, `project.prefix` | CLI on every invocation | Author manually | yes |
 | `.gitignore` | Hides `.dwe/`, `/services/`, `snapshots/`, `backups/`, and `workspace/local.yml` from version control | git | Author manually | yes |
 | `README.md` | Project-specific entry point (not the DWE CLI README) | humans | Author manually | yes |
 
@@ -97,7 +97,7 @@ Everything declarative about a project — services, pipelines, commands, templa
 
 | Path | Purpose | Reader | Writer | Tracked |
 |------|---------|--------|--------|---------|
-| `workspace/defaults.yml` | Versioned project defaults: `services.<name>.enabled`, `runtime`, `state`, `exports.env`, `compose`, `ide` | CLI (merge layer 2) | Author manually | yes |
+| `workspace/defaults.yml` | Versioned project defaults: `services.<name>.enabled`, `runtime`, `state`, `exports.env`, `compose`, `services.<name>.render.ide` | CLI (merge layer 2) | Author manually | yes |
 | `workspace/local.yml` | Per-developer overrides on top of `defaults.yml`: port overrides, enabled flags, credentials, wizard answers | CLI (merge layer 3) | Author manually + setup wizard + `dwe services enable/disable` | no |
 | `workspace/services/<name>/` | One folder per service. Folder name is the service ID — there is no `name:` field. | CLI service loader | Author manually | yes (except `local.yml` overrides) |
 | `workspace/commands/` | Declarative user commands surfaced under `dwe <name>` | CLI command registry | Author manually | yes |
@@ -112,9 +112,7 @@ Everything declarative about a project — services, pipelines, commands, templa
 | `workspace/validate.yml` | Project-readiness checks (`shell` / `file_exists` / `tcp_reachable` / …) | `dwe validate` + preflight | Author manually | yes |
 | `workspace/docker.yml` | Compose orchestration layer: project-name template, file list, topology, hidden services | Docker subsystem | Author manually | yes |
 | `workspace/docker.local.yml` | Per-developer compose overrides deep-merged on top of `docker.yml` | Docker subsystem | Author manually | no |
-| `workspace/styles.yml` | Semantic-token palette (info / success / warn / error / muted / heading / link) | UI styling | Author manually | yes |
-| `workspace/ui.yml` | TUI behaviour pointers (`default_expanded_depth`, `auto_collapse_empty`, `show_type_badges`) | TUI renderers | Author manually | yes |
-| `workspace/notifications.yml` | Desktop-notification gates per operation | Notify subsystem | Author manually | yes |
+| `workspace/styles.yml` | Semantic-token palette (accent / success / warning / danger / muted / border / text) | UI styling | Author manually | yes |
 
 ### Per-service folder
 
@@ -215,10 +213,10 @@ Everything DWE writes during normal operation lands under `.dwe/`. The folder is
 | `.dwe/deploy/state.yml` | Idempotent deploy journal: per-step `action_hash`, `status`, `started_at`, `duration` | Deploy executor + `dwe deploy state show` | Deploy executor | no |
 | `.dwe/deploy/deploy.lock` | Exclusive `flock` held during `dwe deploy run` | Lock subsystem | Lock subsystem | no |
 | `.dwe/snapshots/snapshot.lock` | Exclusive `flock` held during snapshot mutations | Lock subsystem | Lock subsystem | no |
-| `.dwe/snapshots/current` | Pointer to the active snapshot, set by `snapshot restore` | Snapshot subsystem | Snapshot subsystem | no |
+| `.dwe/snapshots/current` | Pointer to the active snapshot, set by `snapshot create` and `snapshot restore` (cleared on `snapshot remove`) | Snapshot subsystem | Snapshot subsystem | no |
 | `.dwe/snapshots/.pre-restore-backup/` | Pre-restore copy of `workspace/local.yml` + deploy state, for manual recovery | Operator (manual) | Snapshot subsystem | no |
-| `.dwe/logs/deploy.log` | Combined stdout/stderr of the most recent `dwe deploy run` (when `log: true`) | Operator (manual) + `dwe logs` | Deploy executor | no |
-| `.dwe/logs/run.log` · `stop.log` · `reset.log` | Combined stdout/stderr of the matching lifecycle phase (when `log: true`) | Operator (manual) + `dwe logs` | Lifecycle / reset executors | no |
+| `.dwe/logs/deploy.log` | Combined stdout/stderr of the most recent `dwe deploy run` (written by default; suppress with `log: false`) | Operator (manual) | Deploy executor | no |
+| `.dwe/logs/run.log` · `stop.log` · `reset.log` | Combined stdout/stderr of the matching lifecycle phase (when `log: true`) | Operator (manual) | Lifecycle / reset executors | no |
 | `.dwe/config` | Per-project user-config override (language, mermaid theme, notification gates) | CLI on every invocation | Author manually | no |
 
 ### Lock ordering

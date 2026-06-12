@@ -19,8 +19,11 @@
 //	- message                       — output styled text
 //
 //	services/ (KindAction)
-//	- service_configs_copy          — copy service template configs into the hub
+//	- service_configs_copy          — copy service template configs into the hub (legacy; deprecation-warned)
 //	- service_configs_check         — verify service config files exist
+//	- service_configs_render        — render service config templates into the hub (modern render-based mechanism)
+//	- service_configs_render_check  — re-render gate paired as the render step's check: (forces re-run on template/store change)
+//	- service_generated_harvest     — harvest generated values (e.g. minted secrets) from the service into the generated store
 //	- service_dirs_ensure           — ensure service hub directories exist
 //
 //	containers/ (KindAction unless noted)

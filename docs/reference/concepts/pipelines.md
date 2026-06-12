@@ -42,7 +42,7 @@ A step is the leaf unit of work. Every step that actually executes declares a `t
 
 Three knobs adjust how a phase or step shows up:
 
-- **`untracked: true`** on a phase or step excludes it from the `[N/M]` counter and suppresses start/done lines. Failures still surface. Useful for `post-deploy` info dumps and for `_auto_reap_daemons` book-keeping the stop pipeline prepends automatically.
+- **`untracked: true`** on a phase or step excludes it from the `[N/M]` counter and suppresses start/done lines. Failures still surface. Useful for `post-deploy` info dumps.
 - **`continue_on_error: true`** turns a failure from "abort" to "report and move on". The next step runs as usual. Use this on optional pre/post hook phases; never on the core lifecycle steps that must succeed.
 - **`skip_confirm: true`** propagates `--yes` into a single step regardless of the pipeline-wide flag. ORed with the pipeline-level flag and (in parallel groups) with the group-level flag — monotonic, never un-set.
 
@@ -113,7 +113,7 @@ Three things to notice about the diagram:
 
 - The journal-skip decision belongs to `dwe deploy run` only. `dwe run` / `stop` / `restart` and `dwe reset run` execute every reachable step on every invocation — there is no "this already ran" optimization outside deploy.
 - `check:` is skipped when `continue_on_error: true` and the body failed. It is also re-evaluated when the journal would otherwise skip the step — that is what keeps `check:` honest as an idempotency assertion.
-- A step that was journal-skipped still consumes one slot in `[N/M]` and one row in the live reporter; it just settles immediately as `◎ Skipped (cached)`.
+- A step that was journal-skipped still consumes one slot in `[N/M]` and one row in the live reporter; it just settles immediately as `◎ Skipped: <step> (state: already deployed)`.
 
 ## Parallel step groups
 

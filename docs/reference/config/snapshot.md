@@ -69,7 +69,7 @@ dwe snapshot rollback                       # quick: restore the rollback_target
 
 ## File location
 
-`workspace/snapshot.yml` at the project root. The file is optional — read-only subcommands (`list`, `current`, `inspect`, `unpack`) work without it. Mutating subcommands (`create`, `restore`, `rollback`, `remove`, `pack`) error if it is missing or the relevant workflow block is absent.
+`workspace/snapshot.yml` at the project root. The file is optional — read-only subcommands (`list`, `current`, `inspect`, `unpack`) work without it. `pack` also works without it (it archives the on-disk snapshot directory, falling back to the default `./snapshots/<name>`). Mutating subcommands (`create`, `restore`, `rollback`, `remove`) error if it is missing or the relevant workflow block is absent.
 
 ## Top-level fields
 
@@ -346,7 +346,7 @@ Release is reverse order. The shared helper `lock.AcquireProjectLocks(baseDir)` 
 
 Lifecycle commands acquire the project locks **after** their preflight pass succeeds — preflight may invoke user `type: command` checks and must not run under operation locks. Snapshot mutating commands do not run preflight and acquire locks at the top of their `RunE`.
 
-When either lock is already held by another live process, the operation exits 75 (`EX_TEMPFAIL`) with a clear `"<operation> in progress: pid N"` message.
+When either lock is already held by another live process, the operation exits 2 with a clear `"<operation> in progress: pid N"` message.
 
 ## Exit codes
 
@@ -354,8 +354,8 @@ When either lock is already held by another live process, the operation exits 75
 |---|---|
 | 0 | Success |
 | 1 | Workflow failure, manifest corruption, archive rejection, missing required config block, `require_matching_config` block |
+| 2 | Lock held by another live process |
 | 64 | Usage error (bad name, missing argument, malformed YAML at the CLI surface) |
-| 75 | Lock held by another live process |
 | 130 | SIGINT during a long-running workflow |
 
 ## Validate domain

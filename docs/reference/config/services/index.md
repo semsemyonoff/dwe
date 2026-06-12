@@ -70,9 +70,11 @@ This separation ensures that build and deploy logic is explicit (defined only in
 | `extends`         |   ✓   |   —    |    —    |
 | `cli`             |   ✓   |   —    |    —    |
 | `render`          |   ✓   |   —    |    —    |
+| `generated`       |   ✓   |   —    |    —    |
 | `on_enable`       |   ✓   |   ✓    |    ✓    |
 | `on_disable`      |   ✓   |   ✓    |    ✓    |
 | `notes`           |   ✓   |   ✓    |    ✓    |
+| `bridge`          |   ✓   |   ✓    |    ✓    |
 
 A disallowed field is a hard load error (`ErrServiceFieldNotAllowed`). Validation aggregates per-file violations via `errors.Join` so a single parse pass surfaces every issue at once.
 
@@ -206,7 +208,7 @@ info:
 
 ## Related commands
 
-- `dwe shell [service]` — open shell in a service container (`type: app` only).
+- `dwe shell [service]` — open a shell in any enabled service container (the `cli:` defaults block is `type: app` only; tool/infra use built-in bash/auto defaults).
 - `dwe status` — composite read-only view: apps + tools + infra sections, each with custom `status:` columns.
 - `dwe status apps` / `dwe status tools` / `dwe status infra` — per-type tables.
 - `dwe services` — interactive multi-select toggle for every optional service across all types.

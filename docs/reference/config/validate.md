@@ -37,7 +37,7 @@ The goal is to surface user-actionable problems ("you're not logged into ghcr.io
 
 ## Validation domains
 
-The validate command runs three domains in addition to the existing YAML-shape validators:
+The validate command runs four domains in addition to the existing YAML-shape validators:
 
 | Domain | Source | Configurable? |
 |--------|--------|---------------|
@@ -82,7 +82,8 @@ The file is optional. When absent, only `env.*` and the existing YAML-shape vali
 
 | Field | Type | Required | Description |
 |-------|------|----------|-------------|
-| `checks` | list | yes | Check entries (see below). May be empty. |
+| `checks` | list | no | Check entries (see below). Optional; may be empty or omitted. |
+| `linters` | map | no | External linter adapters (see [External linters](#external-linters)). |
 
 Unknown top-level fields are rejected at load time (strict decoding).
 

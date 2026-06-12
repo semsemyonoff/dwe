@@ -68,7 +68,7 @@ flowchart LR
   end
 ```
 
-`docker up` is issued as a `type: dwe` step with `cmd: "docker up"` inside the `start` phase. Container health waiting uses a `type: builtin` step with `cmd: docker_wait_healthy`. They are not magical — the pipeline executor invokes them like any other step, so they pick up policy from `docker.yml`.
+`docker up` is issued as a single `type: dwe` step with `cmd: "docker up --wait"` inside the `start` phase; the `--wait` flag does the health waiting inline (no separate `docker_wait_healthy` step). It is not magical — the pipeline executor invokes it like any other step, so it picks up policy from `docker.yml`.
 
 ## Structure
 

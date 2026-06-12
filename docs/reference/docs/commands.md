@@ -12,7 +12,7 @@ dwe docs show <topic> [--lang <code>] [--raw] [--source all|dwe|project] [--anch
 ```
 
 **Arguments:**
-- `<topic>` — Topic path, optionally with an anchor: `config/lifecycle`, `config/services/fields`, `config/workspace#binary-overrides`, `config/services/fields.md#ports-field`. Fuzzy matching supported (case-insensitive substring); multi-page topics like `config/services` are ambiguous on their own — pass the specific sub-page.
+- `<topic>` — Topic path, optionally with an anchor: `config/lifecycle`, `config/services/fields`, `config/workspace#field-reference`, `config/services/fields.md#ports-field`. Fuzzy matching supported (case-insensitive substring); multi-page topics like `config/services` are ambiguous on their own — pass the specific sub-page.
 
 **Flags:**
 - `--lang <code>` — Render in a specific language (2-letter code; e.g., `ru`, `de`). Defaults to the system locale or `en`.
@@ -35,7 +35,7 @@ dwe docs show config/services/index --lang ru
 
 # Render raw markdown (agent-friendly); scope to a specific section via anchor
 dwe docs show config/services/fields --raw --lang en
-dwe docs show config/workspace#binary-overrides --raw --lang en
+dwe docs show config/workspace#field-reference --raw --lang en
 
 # Show only built-in docs (skip project ./docs/)
 dwe docs show config/services/fields --source dwe --lang en
@@ -59,9 +59,9 @@ dwe docs list [--lang <code>] [--source all|dwe|project] [--match <glob>]
 Tab-separated columns (agent-friendly):
 ```
 <source>	<path>	<language>
-dwe	config/workspace	en
-dwe	config/services/fields	en
-dwe	config/services/fields	ru
+dwe	reference/config/workspace	en
+dwe	reference/config/services/fields	en
+dwe	reference/config/services/fields	ru
 project	guides/setup	en
 ```
 
@@ -166,12 +166,12 @@ Mermaid-syntax diagrams (flowcharts, sequence diagrams, state machines, etc.) in
 
 **`mermaid: auto` (default)**
 - If `mmdc` is installed and accessible → render diagrams to PNG and cache them
-- If `mmdc` is missing → degrade to raw mermaid source blocks with a hint (`📊 [mmdc not installed — Y to copy]`)
+- If `mmdc` is missing → degrade to inline placeholders of the form `📊 Diagram N/M — rendering disabled` (with a `y`-to-copy-source hint), plus a one-time startup banner: **⚠ `mmdc` not installed.** Mermaid diagrams cannot render. Install with `npm i -g @mermaid-js/mermaid-cli`
 - No error; seamless fallback
 
 **`mermaid: mmdc` (strict)**
 - Require `mmdc` to be installed and accessible
-- If missing → show a placeholder (`📊 [mmdc required but not found]`) and log a warning at startup
+- If missing → falls back to the same `📊 Diagram N/M — rendering disabled` placeholders and the same **⚠ `mmdc` not installed** startup banner as `auto` (no distinct strict-mode placeholder)
 - Useful in CI/automated contexts where mermaid is a hard dependency
 
 **`mermaid: off` (disabled)**

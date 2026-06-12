@@ -1,4 +1,4 @@
-> Translated from: reference/config/state/schema.md @ b0747020d238
+> Translated from: reference/config/state/schema.md @ 31283338303e
 
 # Схема состояния
 
@@ -37,15 +37,15 @@
 
 | Поле | Тип | Описание |
 |-------|------|-------------|
-| `status` | enum | `ok`, `failed`, `skipped` |
+| `status` | enum | `ok`, `failed` |
 | `steps` | map | Состояние по каждому шагу, индексируется именем шага |
 
 ## Поля шага
 
 | Поле | Тип | Описание |
 |-------|------|-------------|
-| `status` | enum | `ok`, `failed`, `in_progress` |
-| `finished_at` | ISO 8601 timestamp | Когда этот шаг завершился (отсутствует, если in_progress) |
+| `status` | enum | `ok`, `failed`, `skipped` |
+| `finished_at` | ISO 8601 timestamp | Когда этот шаг завершился |
 | `action_hash` | sha256 hex | Отпечаток полей шага `type`, `cmd` и параметров `with:` |
 | `duration_ms` | integer | Длительность выполнения шага в миллисекундах |
 

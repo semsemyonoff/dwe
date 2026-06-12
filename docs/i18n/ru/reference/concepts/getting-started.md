@@ -1,4 +1,4 @@
-> Translated from: reference/concepts/getting-started.md @ 717063d52e74
+> Translated from: reference/concepts/getting-started.md @ 195586fc7293
 
 # Начало работы
 
@@ -51,28 +51,21 @@ services:
 
 ```yaml
 type: app
-description: Web application
 
 container: my-project-web
 
 compose:
-  files:
-    - compose/services/web.yml
+  - compose/services/web.yml
 
+dir: services/web
 dirs:
-  base: services/web
-  src: services/web/src
+  - logs
 
 ports:
-  http:
-    name: HTTP
-    container: 80
-    host: 8080
+  http: 80
 
 hosts:
-  primary:
-    name: Primary
-    value: my-project.localhost
+  web: my-project.localhost
 ```
 
 Перейдите в проект и подтвердите, что CLI его распознаёт:

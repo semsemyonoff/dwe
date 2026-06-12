@@ -1,4 +1,4 @@
-> Translated from: guides/add-a-service.md @ 3e4f4416644f
+> Translated from: guides/add-a-service.md @ 920858516cf2
 
 # Добавление сервиса
 
@@ -135,16 +135,18 @@ services:
 
 ```yaml
 # workspace/services/worker/deploy.yml
-steps:
-  - id: install-deps
-    type: shell
-    cmd: |
-      $DWE_BIN shell worker -c "npm install"
-  - id: run-migrations
-    type: shell
-    when: "${services.queue.enabled}"
-    cmd: |
-      $DWE_BIN shell worker -c "npm run migrate"
+phases:
+  - name: setup
+    steps:
+      - name: install-deps
+        type: shell
+        cmd: |
+          $DWE_BIN shell worker -c "npm install"
+      - name: run-migrations
+        type: shell
+        when: { type: template, expr: "{{ .Services.queue.Enabled }}" }
+        cmd: |
+          $DWE_BIN shell worker -c "npm run migrate"
 ```
 
 Эти шаги выполняются при `dwe deploy` для каждого включённого сервиса, у которого есть `deploy.yml`, в порядке, который вычисляет пайплайн деплоя. Шаг может быть пропущен через журнал, если соответствующий хеш конфига не изменился, — это происходит автоматически.
@@ -160,7 +162,7 @@ steps:
 ```yaml
 # workspace/services/worker/service.yml
 render:
-  config: { enabled: true, template: node }
+  config: { template: node }
   ide:    { enabled: true, template: node }
   ai:     { enabled: true, template: node }
   git:    { enabled: true, template: node }

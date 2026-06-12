@@ -1,4 +1,4 @@
-> Translated from: reference/config/lifecycle.md @ fddb5122ad4a
+> Translated from: reference/config/lifecycle.md @ 1db04b2f2749
 
 # lifecycle.yml
 
@@ -70,7 +70,7 @@ flowchart LR
   end
 ```
 
-`docker up` выполняется как шаг `type: dwe` с `cmd: "docker up"` внутри фазы `start`. Ожидание health контейнеров использует шаг `type: builtin` с `cmd: docker_wait_healthy`. В них нет магии — исполнитель пайплайна вызывает их как любой другой шаг, поэтому они подхватывают политику из `docker.yml`.
+`docker up` выполняется как единственный шаг `type: dwe` с `cmd: "docker up --wait"` внутри фазы `start`; флаг `--wait` выполняет ожидание health встроенно (без отдельного шага `docker_wait_healthy`). В нём нет магии — исполнитель пайплайна вызывает его как любой другой шаг, поэтому он подхватывает политику из `docker.yml`.
 
 ## Структура
 
