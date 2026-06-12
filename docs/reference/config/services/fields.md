@@ -621,7 +621,7 @@ A service's generation step is typically gated by the [`generated-missing <svc> 
 
 ## `bridge` block
 
-Opt a service into the [host bridge](../../bridge.md) — DWE mounts a small static `dwe` shim into the container so `dwe` commands (git hooks, project commands, read-only diagnostics) run from inside the container by forwarding to a host-side daemon. The bridge is off by default for every service type — opt in explicitly with `enabled: true`.
+Opt a service into the [host bridge](../../concepts/bridge.md) — DWE mounts a small static `dwe` shim into the container so `dwe` commands (git hooks, project commands, read-only diagnostics) run from inside the container by forwarding to a host-side daemon. The bridge is off by default for every service type — opt in explicitly with `enabled: true`.
 
 ```yaml
 # workspace/services/main/service.yml
@@ -639,4 +639,4 @@ bridge:
 | `shim_path` | string | no | `/usr/local/bin/dwe` | Absolute container path the shim is mounted at; override when the base image already ships a file there. |
 | `on_unreachable` | string | no | `fail` | `fail` — shim prints an error and exits 1 when the host daemon is unreachable (a hook blocks the commit); `warn` — print a warning and exit 0. |
 
-`bridge.enabled` is a tristate that inherits through service [`extends:`](extends.md) the same way `render.git.enabled` does: an explicit child value wins, an unset child inherits the parent, and the off default applies only when neither sets it. `shim_path` and `on_unreachable` inherit when the child leaves them empty. A bridge-enabled `type: app` service should declare the `dir` / `dir_internal` pair — the shim's working-directory translation maps over it, and `dwe validate` (the `bridge` domain) warns when it is missing. See [Host bridge](../../bridge.md) for transports, the in-container command policy, the generated compose overlay, and daemon lifecycle.
+`bridge.enabled` is a tristate that inherits through service [`extends:`](extends.md) the same way `render.git.enabled` does: an explicit child value wins, an unset child inherits the parent, and the off default applies only when neither sets it. `shim_path` and `on_unreachable` inherit when the child leaves them empty. A bridge-enabled `type: app` service should declare the `dir` / `dir_internal` pair — the shim's working-directory translation maps over it, and `dwe validate` (the `bridge` domain) warns when it is missing. See [Host bridge](../../concepts/bridge.md) for transports, the in-container command policy, the generated compose overlay, and daemon lifecycle.

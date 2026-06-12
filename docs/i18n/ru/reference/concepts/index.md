@@ -1,4 +1,4 @@
-> Translated from: reference/concepts/index.md @ 68c27b4f008e
+> Translated from: reference/concepts/index.md @ c20cc9a1a5e4
 
 # Концепции
 
@@ -15,6 +15,7 @@
 - [Интеграция с Git](git.md) — что DWE рендерит в Git: шаблоны shell-хуков, копируемые в `<svc.Dir>/src/.git/hooks/`, наследование хуков через корень пака, отображение `dwe status git` и конвенции `.gitignore`, которые удерживают `.dwe/` вне контроля версий.
 - [Пайплайны](pipelines.md) — модель выполнения phase → step → condition, общая для deploy, reset и lifecycle: как работают параллельные группы, как наследуются переопределения суб-шагов, доступные типы шагов и три вида условий (`when:`, `check:`, `files_gate:`).
 - [Состояние и блокировки](state-and-locks.md) — как `.dwe/deploy/state.yml` записывает хэши и решает, что пропустить; как `deploy.lock` и `snapshot.lock` берутся в алфавитном порядке и освобождаются в обратном; как DWE восстанавливается после падения посреди пайплайна; и как pending-состояние откладывает работу между `services enable` и следующим `deploy run`.
+- [Хост-бридж](bridge.md) — запуск `dwe` изнутри dev-контейнеров: статический shim-бинарник, подменяющий `dwe`, stateless-демон на хосте, которому он пересылает вызовы, транспорты unix-сокет / TCP, allowlist-политика команд, генерируемый compose-оверлей и подкоманды `dwe bridge`.
 
 ## Связанное
 

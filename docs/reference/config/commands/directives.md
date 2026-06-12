@@ -24,7 +24,7 @@ Directives common to **all** command types unless noted otherwise. Type-specific
 | `description` | string | — | Human-readable description shown in the DWE CLI (selectors, `commands list`, `commands inspect`) |
 | `private` | bool | `false` | Hides from `dwe commands list` and blocks direct `commands run`; still callable from workflows and pipelines |
 | `hide` | string | `""` | Condition expression. When truthy at runtime, the command is treated as if it does not exist: invisible in `dwe commands`, completion, and TUI; rejected on direct invocation; and workflow steps targeting it are auto-skipped with `SkipReason="hidden"`. Same syntax as workflow step `when:` — see [Hide condition](#hide-condition) below. |
-| `bridge` | block | absent | Opts the command in to the container surface of the [host bridge](../../bridge.md) — without it the command is host-only and invisible to the in-container `dwe` shim. See [Bridge visibility](#bridge-visibility) below. |
+| `bridge` | block | absent | Opts the command in to the container surface of the [host bridge](../../concepts/bridge.md) — without it the command is host-only and invisible to the in-container `dwe` shim. See [Bridge visibility](#bridge-visibility) below. |
 | `notify` | bool | `false` | Fire a desktop notification when the command finishes. See [Notifications](#notifications) below. |
 
 ## Hide condition
@@ -62,7 +62,7 @@ commands:
 
 ## Bridge visibility
 
-`bridge:` controls whether the command can be listed and invoked **from inside a container** through the [host bridge](../../bridge.md) shim. The default is opt-in: a command with no `bridge:` block anywhere is host-only — invisible in container listings/completion and rejected on direct invocation with `command_not_bridged`.
+`bridge:` controls whether the command can be listed and invoked **from inside a container** through the [host bridge](../../concepts/bridge.md) shim. The default is opt-in: a command with no `bridge:` block anywhere is host-only — invisible in container listings/completion and rejected on direct invocation with `command_not_bridged`.
 
 | Field | Type | Default | Description |
 |-------|------|---------|-------------|
@@ -99,7 +99,7 @@ Semantics worth knowing:
 - **Execution is never gated.** A bridged workflow happily runs non-bridged sub-commands — the gate covers the container *invocation surface*, not what the host may execute on a container's behalf.
 - **`extends:` children inherit the parent's rights.** Matching follows the calling service's [`extends:`](../services/extends.md) chain: with `admin` extending `main`, a command listing `services: [main]` is also visible from the `admin` container. The reverse never holds — listing `admin` does not admit `main`.
 - **No magic from `service:`.** A `service_exec` command targeting `main` is not auto-restricted to the `main` container; restriction is always explicit via `bridge.services`.
-- **The caller identity is advisory.** The shim reports its service via `DWE_BRIDGE_SERVICE` (overlay-injected); a container could claim another name. `bridge.services` is a UX boundary between containers of one project — the security boundary stays the bridge's [top-level command allowlist](../../bridge.md#container-command-policy).
+- **The caller identity is advisory.** The shim reports its service via `DWE_BRIDGE_SERVICE` (overlay-injected); a container could claim another name. `bridge.services` is a UX boundary between containers of one project — the security boundary stays the bridge's [top-level command allowlist](../../concepts/bridge.md#container-command-policy).
 - `dwe validate` warns when `bridge.services` names an unknown service or one whose `service.yml` has the bridge disabled (unless a bridge-enabled service extends it — the entry still works for those children).
 
 ## Confirmation

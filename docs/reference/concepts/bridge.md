@@ -21,15 +21,45 @@ The bridge is **off by default for every service type** — opt a service in wit
 
 ## How it works
 
-```text
-git commit (in container)
-  └─> .git/hooks/pre-commit
-       └─> exec dwe commands lint        ← the shim, not the real dwe
-            └─> unix socket → TCP fallback to the host daemon
-                 └─> daemon runs `dwe commands lint` on the host
-                      ├─> stdin / stdout / stderr streamed
-                      ├─> SIGINT / SIGTERM forwarded
-                      └─> real exit code returned
+The point of the bridge is simple: **inside a bridge-enabled container you can just run `dwe`** — typed at a shell, from a git hook, or from a project command — and it behaves like running it on the host. Two processes make that work: a tiny **shim** stands in for `dwe` inside the container, and a host **daemon** runs the real `dwe`. The container never executes DWE logic — it only forwards.
+
+```mermaid
+flowchart LR
+  subgraph container["dev container (bridge-enabled service)"]
+    direction TB
+    Caller["dwe &lt;command&gt;<br/>shell · git hook · project command"]
+    Shim["dwe shim<br/>~3 MB static binary"]
+    Caller --> Shim
+  end
+
+  subgraph host["host"]
+    direction TB
+    Daemon["bridge daemon<br/>stateless forwarder"]
+    RealDwe["real dwe<br/>forked per connection"]
+    Daemon --> RealDwe
+  end
+
+  Shim -->|"unix socket — native Linux"| Daemon
+  Shim -.->|"TCP + token — Docker Desktop / OrbStack / WSL2"| Daemon
+```
+
+Any single invocation streams end to end and returns the host-side exit code:
+
+```mermaid
+sequenceDiagram
+  participant H as caller in container
+  participant S as dwe shim
+  participant D as host daemon
+  participant R as real dwe (host)
+
+  H->>S: dwe …
+  Note over S: pick transport —<br/>unix socket, else TCP + token
+  S->>D: command + argv + cwd + env
+  Note over D: translate cwd to host path,<br/>strip/force env, apply command policy
+  D->>R: fork "dwe …"
+  R-->>D: stdout / stderr streamed
+  D-->>S: streamed output + exit code
+  S-->>H: same exit code
 ```
 
 - The **shim** is a ~3 MB static Linux binary (amd64 + arm64 builds are embedded in the host `dwe` and materialized into `.dwe/bridge/`). It carries no business logic: it picks a transport, sends the command, pumps stdio, and exits with the host-side exit code.
@@ -56,7 +86,7 @@ bridge:
 | `shim_path` | `/usr/local/bin/dwe` | absolute container path the shim is mounted at; override when the base image already ships a file there |
 | `on_unreachable` | `fail` | `fail` — shim prints an error and exits 1 when the host daemon is unreachable (a hook blocks the commit); `warn` — print a warning and exit 0 |
 
-`bridge.enabled` is a tristate and inherits through service [`extends:`](config/services/extends.md) the same way `render.git.enabled` does: an explicit value in the child wins, an unset child inherits the parent, and the off default applies only when neither sets it. `shim_path` and `on_unreachable` inherit when the child leaves them empty.
+`bridge.enabled` is a tristate and inherits through service [`extends:`](../config/services/extends.md) the same way `render.git.enabled` does: an explicit value in the child wins, an unset child inherits the parent, and the off default applies only when neither sets it. `shim_path` and `on_unreachable` inherit when the child leaves them empty.
 
 A bridge-enabled service should declare the `dir` / `dir_internal` pair — it is what the shim's working-directory translation maps over. Without it there is no working-directory translation, so every in-container invocation runs from the project root instead of the current directory (`dwe validate` warns about this).
 
@@ -77,6 +107,15 @@ Selection, per invocation:
 1. If `host.sock` exists in the mounted bridge dir, dial it with a 300 ms timeout. On Docker Desktop and similar runtimes the socket inode is visible but dead (file sharing does not forward `connect()` across the VM boundary), so this refuses instantly — by design.
 2. Fall back to TCP: read the `port` and `token` files from the bridge dir (retried briefly — a daemon restart can leave a short window) and connect to `host.docker.internal:<port>`, presenting the token.
 3. Both failed → the [unreachable policy](#troubleshooting) applies.
+
+```mermaid
+flowchart TD
+  Start["shim needs the daemon"] --> Sock{"host.sock present<br/>and dials in 300 ms?"}
+  Sock -->|yes| Unix["unix socket<br/>auth: peer uid (SO_PEERCRED)"]
+  Sock -->|"no / dead inode"| TCP{"port + token files<br/>readable?"}
+  TCP -->|yes| Conn["TCP to host.docker.internal:port<br/>auth: 256-bit token"]
+  TCP -->|no| Unreach["unreachable policy<br/>fail → exit 1 · warn → exit 0"]
+```
 
 The daemon always listens on the unix socket and on `127.0.0.1` with an ephemeral OS-assigned port (no port collisions, no LAN exposure — never `0.0.0.0`). On native Linux it additionally binds the docker bridge gateway IP (usually `172.17.0.1`) so containers can reach it; the generated overlay adds `extra_hosts: host.docker.internal:host-gateway` to every bridged service, which is required on Linux and harmless elsewhere. Exotic setups can override the listen addresses with the `DWE_BRIDGE_BIND` environment variable (a comma- or whitespace-separated address list) when starting the daemon. Wildcard addresses (`0.0.0.0`, `::`) are rejected from the override — binding all interfaces would break the no-LAN-exposure guarantee, so such an entry is ignored with a warning and the daemon falls back to the loopback default.
 
@@ -107,7 +146,7 @@ The container command surface is deliberately reduced — **allowlist, default-d
 
 ### Per-command opt-in
 
-Inside the allowlisted `dwe cmd` / `dwe commands` surface there is a second, per-command gate: a user command is reachable from a container **only when its definition opts in** via a `bridge:` block (on the command or its file's `group:` header) — see [command directives § Bridge visibility](config/commands/directives.md#bridge-visibility). Without it the command stays host-only: filtered from container listings and completion, and rejected on direct invocation with `command_not_bridged` plus a remediation hint.
+Inside the allowlisted `dwe cmd` / `dwe commands` surface there is a second, per-command gate: a user command is reachable from a container **only when its definition opts in** via a `bridge:` block (on the command or its file's `group:` header) — see [command directives § Bridge visibility](../config/commands/directives.md#bridge-visibility). Without it the command stays host-only: filtered from container listings and completion, and rejected on direct invocation with `command_not_bridged` plus a remediation hint.
 
 ```yaml
 commands:
@@ -119,7 +158,7 @@ commands:
       services: [main]     # …or only from these (workspace service keys)
 ```
 
-`bridge.services` matches against the calling container's identity, which the overlay injects as `DWE_BRIDGE_SERVICE=<service key>` and the shim forwards. The identity is container-reported and therefore **advisory** — a UX boundary that keeps, say, php commands out of an nginx container's listing, not a security boundary; the security boundary remains the top-level allowlist above plus the daemon's env hardening. Matching is `extends:`-aware: a service that [extends](config/services/extends.md) another inherits the parent's command rights, so `services: [main]` also admits containers of services extending `main` (never the reverse). Workflow execution is never gated: a bridged workflow runs its non-bridged sub-commands host-side as usual.
+`bridge.services` matches against the calling container's identity, which the overlay injects as `DWE_BRIDGE_SERVICE=<service key>` and the shim forwards. The identity is container-reported and therefore **advisory** — a UX boundary that keeps, say, php commands out of an nginx container's listing, not a security boundary; the security boundary remains the top-level allowlist above plus the daemon's env hardening. Matching is `extends:`-aware: a service that [extends](../config/services/extends.md) another inherits the parent's command rights, so `services: [main]` also admits containers of services extending `main` (never the reverse). Workflow execution is never gated: a bridged workflow runs its non-bridged sub-commands host-side as usual.
 
 Mechanics worth knowing:
 
@@ -155,7 +194,7 @@ services:
       - host.docker.internal:host-gateway
 ```
 
-- **Chain position**: the overlay sits after the project's own compose files and **before** the `workspace/local.yml` overlays — `local.yml` keeps the last word over anything the bridge sets (compose later-file-wins), so per-developer customization goes through [`local.yml`](config/workspace.md), never through editing the generated file.
+- **Chain position**: the overlay sits after the project's own compose files and **before** the `workspace/local.yml` overlays — `local.yml` keeps the last word over anything the bridge sets (compose later-file-wins), so per-developer customization goes through [`local.yml`](../config/workspace.md), never through editing the generated file.
 - **Self-healing**: the file always contains exactly the currently enabled and bridge-enabled services, so toggling a service off can never leave a stale fragment that breaks `compose up`. Moved project directories, changed image architectures, and edited `bridge:` settings are all picked up at the next start.
 - **Shim architecture** is chosen per service at each regeneration from the image's reported architecture (`docker inspect` against the container named `<compose project name>-<container>`, honoring `docker.yml`'s `project_name`); when the container does not exist yet (first deploy, after a reset) the host architecture is used silently (a `-v` decision line records it), and any other resolution failure falls back the same way with a warning — both self-heal on the next regeneration.
 - The TCP port and the token are deliberately **not** in the overlay — the shim reads them from the mounted `/dwe-bridge` files, so a daemon restart never requires regenerating the overlay or recreating containers.
@@ -215,7 +254,7 @@ Inside a bridged container the overlay sets:
 | `DWE_BRIDGE_DIR` | in-container mount point of the host's `.dwe/bridge` (`/dwe-bridge`) |
 | `DWE_HOST_WORKSPACE` / `DWE_CONTAINER_WORKSPACE` | the service's host hub dir (`<root>/<dir>`) and its in-container mount (`dir_internal`) — the prefix pair the shim rewrites working directories with |
 | `DWE_BRIDGE_PROJECT` | project name, used in shim diagnostics |
-| `DWE_BRIDGE_SERVICE` | the service's workspace key — the calling-container identity that per-command [`bridge.services`](config/commands/directives.md#bridge-visibility) lists match against. The one bridge variable that IS forwarded to the host (its consumer is the host-side `dwe`); container-reported, hence advisory |
+| `DWE_BRIDGE_SERVICE` | the service's workspace key — the calling-container identity that per-command [`bridge.services`](../config/commands/directives.md#bridge-visibility) lists match against. The one bridge variable that IS forwarded to the host (its consumer is the host-side `dwe`); container-reported, hence advisory |
 | `DWE_BRIDGE_UNREACHABLE` | only present with `on_unreachable: warn` |
 
 The shim strips these — except `DWE_BRIDGE_SERVICE` — (plus any `DWE_PROJECT_ROOT*`) from the environment it forwards, and the daemon re-filters the same set on arrival. The daemon also drops execution-hijacking variables before forking — the dynamic-loader families (`LD_*`, `DYLD_*`), shell-startup hooks (`BASH_ENV`, `ENV`, `SHELLOPTS`, `BASHOPTS`), `IFS`, and `PATH` — and force-sets `PATH` to the host daemon's own value, so a container can never redirect the `docker`/`git`/`sh` binaries the host-side `dwe` invokes by bare name. Host-identity variables are replaced the same way: the container's `HOME`, `USER`, `LOGNAME`, `TMPDIR`, `SSH_AUTH_SOCK`, and the `DOCKER_*` / `COMPOSE_*` / `XDG_*` families are dropped and the daemon's own values forwarded instead — a container `HOME` would otherwise break docker context resolution on the host (the CLI would fall back to `/var/run/docker.sock`, absent on Docker Desktop / OrbStack macs). It then force-sets two host-controlled variables for the forked `dwe`: `DWE_INVOKED_FROM=container` (activates the command policy — client-sent values are discarded, so it cannot be spoofed from the container) and `DWE_NONINTERACTIVE=1`. `--output json` payloads are identical in both contexts.
@@ -249,7 +288,7 @@ The command's argument vector is passed through untranslated — only the workin
 
 ## See also
 
-- [Services configuration](config/services/index.md) — `service.yml` fields, `extends:` inheritance
-- [Workspace & local overlays](config/workspace.md) — `workspace/local.yml`, compose file chain
-- [User commands](config/commands/index.md) — the `dwe commands` system that hooks call through the bridge
-- [Validate](config/validate.md) — project readiness checks; the bridge validation domain
+- [Services configuration](../config/services/index.md) — `service.yml` fields, `extends:` inheritance
+- [Workspace & local overlays](../config/workspace.md) — `workspace/local.yml`, compose file chain
+- [User commands](../config/commands/index.md) — the `dwe commands` system that hooks call through the bridge
+- [Validate](../config/validate.md) — project readiness checks; the bridge validation domain

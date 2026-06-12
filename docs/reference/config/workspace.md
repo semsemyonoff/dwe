@@ -99,7 +99,7 @@ Dot-paths are consumed by:
 The **root** of the merged 3-layer config is strict. After the three layers are merged, DWE checks the top-level keys against a fixed allowlist:
 
 ```text
-project · runtime · state · exports · compose · ui · docs · services · vars · update
+project · runtime · state · exports · compose · ui · docs · services · vars · update · bridge
 ```
 
 (`schema_version` is also included in the allowlist as reserved forward-compat metadata — a plain member, not a special-cased exception.) Any other top-level key — in *any* layer — is a hard load-time error:
@@ -134,6 +134,30 @@ vars:
 The resolver is unchanged; `vars.*` resolves through `DweConfig.Raw` by dot-path just like `services.*`. Migrating a project from the old open namespace is purely mechanical: wrap the former root keys under `vars:` and prefix every reference with `vars.`.
 
 The [`dwe vars`](vars.md) command enumerates, reads, edits, and traces every value under this block — see [`vars.md`](vars.md) for the subcommands, the author/local/effective layer model, comment-preserving `local.yml` writes, the static usage scan, and the `bridge.vars_writable` container-write allowlist.
+
+### `bridge.vars_writable` — container-write allowlist
+
+When the [host bridge](../concepts/bridge.md) is enabled, `dwe vars set` becomes reachable from inside a dev container. To stop a compromised or careless container from rewriting arbitrary project values on the host, the top-level `bridge.vars_writable` block is a **deny-by-default** allowlist of the `vars.*` paths a containerized `vars set` may mutate. From the host the command is unrestricted; this gate applies **only** when the call comes in over the bridge.
+
+```yaml
+# workspace/defaults.yml
+bridge:
+  vars_writable:
+    - vars.app.timeout       # exact path — only this leaf is writable
+    - vars.feature_flags.*   # dot-boundary wildcard — any leaf strictly beneath it
+```
+
+Matching is **dot-boundary**, never a naive prefix:
+
+- An exact pattern (`vars.db.host`) matches only that identical path.
+- A trailing-wildcard pattern (`vars.db.*`) matches a path *strictly beneath* the base — it allows `vars.db.host` but **denies** `vars.db` itself, and denies look-alikes like `vars.dbx.host` and `vars.database.host`.
+- An empty or absent list means **no var is container-writable** — the safe default. Malformed patterns (a bare `*`, an interior `*`) fail closed.
+
+`bridge.vars_writable` is value-merged across the three layers and read nil-safe, so it behaves like every other formalized top-level key.
+
+> **Recommendation: declare it in `workspace/defaults.yml`.** This is a project-wide, team-shared security policy — it should be tracked in git and identical for everyone, not a per-developer setting. Putting it in the gitignored `workspace/local.yml` would make each machine's container-write surface diverge silently and would not travel with the repo. Reserve `local.yml` for per-developer values (ports, credentials, enabled flags).
+
+This block governs only *what a container may write*; it is distinct from the per-service [`services.<name>.bridge`](services/fields.md#bridge-block) block, which governs *whether a service is bridged at all*. See [Host bridge → command policy](../concepts/bridge.md#command-policy-inside-containers) for the full container surface.
 
 ## workspace.yml
 
@@ -210,7 +234,7 @@ All three layers share the same strict key set, so any block *can* appear in any
 | Layer | Holds | Why |
 |-------|-------|-----|
 | `workspace.yml` | Compact formalized blocks: `project`, `ui`, `update` | Small, structural, rarely changes |
-| `defaults.yml` | The bulky blocks: `vars`, `exports`, `services` overlay, `runtime` | Versioned team defaults; the biggest content |
+| `defaults.yml` | The bulky blocks: `vars`, `exports`, `services` overlay, `runtime`, `bridge.vars_writable` | Versioned team defaults; the biggest content. `bridge.vars_writable` is a team-shared security policy — keep it here, not in `local.yml` (see [the allowlist note above](#bridgevars_writable--container-write-allowlist)) |
 | `local.yml` | Personal overrides: `state`, `vars.db.password`, service toggles, `compose.extra`, `update.mode` | Per-developer, gitignored |
 
 For example, a project author enables update policy in `workspace.yml` (`update: { mode: on }`) and a developer who wants to skip the probe locally overrides it in `local.yml` (`update: { mode: off }`).
