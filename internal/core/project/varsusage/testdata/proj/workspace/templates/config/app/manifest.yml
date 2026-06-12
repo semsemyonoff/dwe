@@ -1,0 +1,5 @@
+render:
+  - from: env.tmpl
+    to: src/.env
+  - from: config.yaml
+    to: src/config.yaml

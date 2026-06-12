@@ -1,0 +1,3 @@
+database:
+  host: ${vars.db.host}
+  name: ${vars.yaml.dbname}

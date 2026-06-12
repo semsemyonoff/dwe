@@ -35,6 +35,13 @@ var bridgeAllowedTopLevel = map[string]bool{
 	"prompt":   true, // container terminal prompt
 	"version":  true, // service commands
 	"help":     true,
+	// vars read subcommands (get/list/inspect) are always reachable; the
+	// no-arg TUI auto-degrades to `vars list` via the non-interactive
+	// dispatch. `vars set` is reachable too, but bridgeCommandAllowed is
+	// prefix-wide and cannot see the var argument, so container writes are
+	// deny-by-default and gated at runtime against bridge.vars_writable in
+	// `vars set` itself.
+	"vars": true,
 	// `validate` and `completion` are deliberately absent: validation targets
 	// the host workspace and completion scripts are installed on the host —
 	// neither belongs to the container surface.
@@ -64,9 +71,13 @@ func bridgeInvokedFromContainer() bool {
 
 // bridgeCommandAllowed reports whether the resolved cobra command path (e.g.
 // "dwe bridge status") is reachable from a container. Allowance is by
-// top-level subtree, plus the single nested exception `bridge status` — the
-// rest of the bridge subtree stays host-only (`bridge stop` is suicide for
-// the bridge itself).
+// top-level subtree, plus two nested exceptions:
+//   - `bridge status` — the rest of the bridge subtree stays host-only
+//     (`bridge stop` is suicide for the bridge itself).
+//   - `render config` — a container may regenerate its config files after a
+//     `vars set`; the other render subcommands (env/ide/ai/git) target host
+//     state and stay host-only. The mutating `render config --harvest` path is
+//     additionally rejected in render/config.go when invoked from a container.
 func bridgeCommandAllowed(path string) bool {
 	fields := strings.Fields(path)
 	if len(fields) < 2 {
@@ -75,7 +86,10 @@ func bridgeCommandAllowed(path string) bool {
 	if bridgeAllowedTopLevel[fields[1]] {
 		return true
 	}
-	return fields[1] == "bridge" && len(fields) >= 3 && fields[2] == "status"
+	if fields[1] == "bridge" && len(fields) >= 3 && fields[2] == "status" {
+		return true
+	}
+	return fields[1] == "render" && len(fields) >= 3 && fields[2] == "config"
 }
 
 // bridgePolicyGate enforces the container command policy on the resolved

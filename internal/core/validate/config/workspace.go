@@ -8,6 +8,7 @@ import (
 	"os"
 	"path/filepath"
 	"slices"
+	"strings"
 	"unicode"
 
 	"gopkg.in/yaml.v3"
@@ -83,9 +84,46 @@ func (v *workspaceValidator) Run(ctx validate.Context) []validate.Diagnostic {
 				Message:  fmt.Sprintf("docs.cache_size_mb: %d is invalid; must be non-negative", cfg.Docs.CacheSizeMB),
 			})
 		}
+
+		// Validate bridge.vars_writable entries are vars.* patterns. The
+		// container-write gate fails closed on a malformed entry (it matches
+		// nothing), so a stray pattern silently denies rather than load-fails —
+		// surface it as a diagnostic so the author notices a typo.
+		for _, pat := range config.BridgeVarsWritable(cfg) {
+			if !varsWritablePatternValid(pat) {
+				diags = append(diags, validate.Diagnostic{
+					Severity: validate.SeverityError,
+					Domain:   "config",
+					Target:   "config.workspace.bridge.vars_writable",
+					File:     relPath(ctx.ProjectRoot, configPath),
+					Message:  fmt.Sprintf("bridge.vars_writable: %q is invalid; must be a vars.* path (e.g. vars.db.host) or wildcard (vars.db.*)", pat),
+				})
+			}
+		}
 	}
 
 	return diags
+}
+
+// varsWritablePatternValid reports whether a bridge.vars_writable entry is a
+// well-formed, vars-namespaced pattern that config.VarsWritableAllows can match.
+// It mirrors the matcher's structural rules so a typo that would silently
+// fail-closed (e.g. an interior wildcard `vars.*.host`, or a non-vars path) is
+// surfaced as a diagnostic instead of quietly denying every container write.
+func varsWritablePatternValid(pat string) bool {
+	if base, ok := strings.CutSuffix(pat, ".*"); ok {
+		// Trailing wildcard: base must be non-empty, vars-namespaced, and carry
+		// no interior '*' (only the single trailing `.*` is supported).
+		if base == "" || strings.Contains(base, "*") {
+			return false
+		}
+		return base == "vars" || strings.HasPrefix(base, "vars.")
+	}
+	// Exact pattern: no '*' anywhere, vars-namespaced, not the bare prefix.
+	if strings.Contains(pat, "*") {
+		return false
+	}
+	return strings.HasPrefix(pat, "vars.") && pat != "vars."
 }
 
 type servicesValidator struct{}

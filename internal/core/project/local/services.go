@@ -46,30 +46,37 @@ func ValidateServiceToggle(cfg *config.DweConfig, name string) error {
 	return nil
 }
 
-// ApplyServiceTogglesToYAML validates and applies all service toggles to the
-// local config map in-memory. Either every change is applied or none are.
-func ApplyServiceTogglesToYAML(cfg *config.DweConfig, local map[string]any, toEnable, toDisable []string) error {
+// ServiceTogglesOverlay validates all service toggles and builds the minimal
+// local.yml overlay encoding them: {services: {<name>: {enabled: <bool>}}}.
+// Either every name validates and an overlay is returned, or the first
+// validation error is surfaced and no overlay is produced (all-or-nothing).
+//
+// The overlay is applied onto a LOADED document node via ApplyOverlayToNode so
+// the developer's comments/formatting and any other local.yml keys survive —
+// this replaces the legacy load-map → mutate-map → marshal-map write path,
+// which dropped comments. Returns a nil overlay only when there is nothing to
+// toggle (both slices empty); callers treat a nil/empty overlay as a no-op.
+func ServiceTogglesOverlay(cfg *config.DweConfig, toEnable, toDisable []string) (map[string]any, error) {
 	for _, name := range toEnable {
 		if err := ValidateServiceToggle(cfg, name); err != nil {
-			return err
+			return nil, err
 		}
 	}
 	for _, name := range toDisable {
 		if err := ValidateServiceToggle(cfg, name); err != nil {
-			return err
+			return nil, err
 		}
+	}
+	if len(toEnable) == 0 && len(toDisable) == 0 {
+		return nil, nil
 	}
 
-	svcMap, ok := local["services"].(map[string]any)
-	if !ok {
-		svcMap = make(map[string]any)
-		local["services"] = svcMap
-	}
+	services := make(map[string]any, len(toEnable)+len(toDisable))
 	for _, name := range toEnable {
-		SetLocalEntryEnabled(svcMap, name, true)
+		services[name] = map[string]any{"enabled": true}
 	}
 	for _, name := range toDisable {
-		SetLocalEntryEnabled(svcMap, name, false)
+		services[name] = map[string]any{"enabled": false}
 	}
-	return nil
+	return map[string]any{"services": services}, nil
 }

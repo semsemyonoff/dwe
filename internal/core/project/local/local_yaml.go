@@ -28,14 +28,31 @@ func LoadLocalYAML(localPath string) (map[string]any, error) {
 	return local, nil
 }
 
-// WriteLocalYAML marshals and writes the local config map atomically using write-temp + rename.
+// WriteLocalYAML writes the local config map atomically using write-temp + rename.
 // Ensures the parent directory exists with mode 0o755 and the file is written with mode 0o600.
+//
+// This is a thin compatibility wrapper over the comment-preserving node writer:
+// it materializes the map as an overlay onto a fresh empty document and routes
+// through ApplyOverlayToNode / WriteLocalYAMLNode, so there is a SINGLE on-disk
+// write path. No production code calls it anymore — all write callers (the
+// `services` toggle and the setup wizard) build an overlay and apply it onto a
+// LOADED node so comments/formatting survive. WriteLocalYAML is retained only
+// for tests and any caller that genuinely has nothing to preserve (a brand-new
+// file from a plain map); it still drops nothing because the source map has no
+// comments to begin with.
 func WriteLocalYAML(localPath string, local map[string]any) error {
-	data, err := yaml.Marshal(local)
-	if err != nil {
+	doc := emptyMappingDoc()
+	if err := ApplyOverlayToNode(doc, local); err != nil {
 		return fmt.Errorf("marshal local config: %w", err)
 	}
+	return WriteLocalYAMLNode(localPath, doc)
+}
 
+// writeFileAtomic writes data to localPath atomically via write-temp + rename.
+// Ensures the parent directory exists with mode 0o755 and the file ends up with
+// mode 0o600. Shared by WriteLocalYAML (map-based) and WriteLocalYAMLNode
+// (node-based).
+func writeFileAtomic(localPath string, data []byte) error {
 	// Ensure parent directory exists
 	dir := filepath.Dir(localPath)
 	if err := os.MkdirAll(dir, 0o755); err != nil {

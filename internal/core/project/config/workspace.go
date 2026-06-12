@@ -46,6 +46,7 @@ var allowedRootKeys = []string{
 	"services",
 	"vars",
 	"update",
+	"bridge",
 }
 
 // allowedRootKeySet is the membership index over allowedRootKeys.
@@ -112,6 +113,16 @@ type DweConfig struct {
 	// block with an empty mode (→ on). See UpdateConfig.EffectiveMode.
 	Update *UpdateConfig `yaml:"update"`
 
+	// Bridge is the project-wide container-write policy for `dwe vars set`. It
+	// is the deny-by-default allowlist of vars.* paths a containerized caller
+	// (bridge-forked dwe) may mutate; nil/empty means no container writes. It
+	// participates in the 3-layer merge (the list is last-layer-wins, so a
+	// developer may widen/narrow it in local.yml). Distinct in scope from the
+	// per-service services.<name>.bridge: block in service.yml (which gates
+	// per-command container reachability) — this top-level block is policy, not
+	// enablement. See BridgeConfig.
+	Bridge *BridgeConfig `yaml:"bridge"`
+
 	// Vars is the single legal home for arbitrary, free-form project values.
 	// The root of the merged config is strict (see allowedRootKeys), but the
 	// contents of vars: are unvalidated and may nest arbitrarily. References
@@ -152,6 +163,66 @@ func (c *UpdateConfig) EffectiveMode() string {
 		return "on"
 	}
 	return c.Mode
+}
+
+// BridgeConfig is the formalized top-level container-write policy block
+// (`bridge:`). VarsWritable is the deny-by-default allowlist of vars.* path
+// patterns that a containerized `dwe vars set` may mutate on the host. From the
+// host the command is unrestricted; this gate applies only when invoked from
+// inside a container (the bridge daemon force-sets the marker env). Each pattern
+// is either an exact path (`vars.db.host`) or a dot-boundary wildcard
+// (`vars.db.*`). An empty/absent list means no container writes.
+type BridgeConfig struct {
+	VarsWritable []string `yaml:"vars_writable"`
+}
+
+// BridgeVarsWritable returns the configured container-write allowlist, or nil
+// when no bridge: block (or no vars_writable: list) is present. Safe when cfg is
+// nil. An empty/nil result means no var is container-writable (the safe
+// default).
+func BridgeVarsWritable(cfg *DweConfig) []string {
+	if cfg == nil || cfg.Bridge == nil {
+		return nil
+	}
+	return cfg.Bridge.VarsWritable
+}
+
+// VarsWritableAllows reports whether target (a vars.* dot-path) is permitted by
+// the allowlist, using dot-boundary semantics — never a naive prefix match:
+//
+//   - an exact pattern (`vars.db.host`) matches only the identical path;
+//   - a trailing-wildcard pattern (`vars.db.*`) matches only a path strictly
+//     beneath the base, i.e. target begins with base + "." — so `vars.db.*`
+//     allows `vars.db.host` but DENIES `vars.db`, `vars.dbx.host`, and
+//     `vars.database.host`.
+//
+// Malformed patterns fail closed (match nothing): an empty pattern, a bare
+// `*`/`.*` (empty base), or a `*` anywhere other than a trailing `.*`.
+func VarsWritableAllows(patterns []string, target string) bool {
+	for _, p := range patterns {
+		if p == "" {
+			continue
+		}
+		if base, ok := strings.CutSuffix(p, ".*"); ok {
+			// Trailing-wildcard. Base must be non-empty and contain no stray
+			// '*' (which would be an interior wildcard — unsupported).
+			if base == "" || strings.Contains(base, "*") {
+				continue
+			}
+			if strings.HasPrefix(target, base+".") {
+				return true
+			}
+			continue
+		}
+		// Exact pattern. A '*' anywhere is malformed for an exact match.
+		if strings.Contains(p, "*") {
+			continue
+		}
+		if target == p {
+			return true
+		}
+	}
+	return false
 }
 
 // ProjectDeployConfig holds the project-wide deploy pipeline loaded from workspace/deploy.yml.
@@ -1439,36 +1510,27 @@ func LoadConfig(workspacePath string) (*DweConfig, error) {
 	baseDir := filepath.Dir(workspacePath)
 
 	// Read each layer separately so the cross-layer overlay validator can
-	// attribute errors to a specific source file.
+	// attribute errors to a specific source file. LoadLayers is the shared
+	// loader (also used by ResolveLayeredPath for `dwe vars inspect`), so the two
+	// cannot drift on file set / optional handling / error wording.
+	configLayers, err := LoadLayers(workspacePath)
+	if err != nil {
+		return nil, err
+	}
 	type rawLayer struct {
 		path string
 		data map[string]any
 	}
-	var layers []rawLayer
-
-	// Layer 1: workspace.yml (required)
-	base, err := loadRawYAML(workspacePath)
-	if err != nil {
-		return nil, fmt.Errorf("read %s: %w", workspacePath, err)
+	layers := make([]rawLayer, 0, len(configLayers))
+	for _, l := range configLayers {
+		layers = append(layers, rawLayer{path: l.Path, data: l.Data})
 	}
-	layers = append(layers, rawLayer{path: workspacePath, data: base})
-
-	// Layer 2: workspace/defaults.yml (optional)
-	defaultsPath := filepath.Join(baseDir, "workspace", "defaults.yml")
-	if defaults, err := loadRawYAML(defaultsPath); err == nil {
-		layers = append(layers, rawLayer{path: defaultsPath, data: defaults})
-	} else if !errors.Is(err, os.ErrNotExist) {
-		return nil, fmt.Errorf("read %s: %w", defaultsPath, err)
-	}
-
-	// Layer 3: workspace/local.yml (optional)
-	localPath := filepath.Join(baseDir, "workspace", "local.yml")
+	localPath := LocalLayerPath(workspacePath)
 	var localRaw map[string]any
-	if local, err := loadRawYAML(localPath); err == nil {
-		layers = append(layers, rawLayer{path: localPath, data: local})
-		localRaw = local
-	} else if !errors.Is(err, os.ErrNotExist) {
-		return nil, fmt.Errorf("read %s: %w", localPath, err)
+	for _, l := range configLayers {
+		if l.Path == localPath {
+			localRaw = l.Data
+		}
 	}
 
 	// Step 1: load per-service folders — the canonical service declarations.
@@ -1515,32 +1577,14 @@ func LoadConfig(workspacePath string) (*DweConfig, error) {
 	}
 
 	// Strict root + legacy-block rejection, iterated per layer so the error names
-	// the source file. deepMerge drops nil values, so a layer carrying ONLY a
-	// `binaries:`/`tools:` key never reaches the merged map — the per-layer pass
-	// is the only place that sees it (a layer with just those keys would
-	// otherwise load silently). This runs BEFORE __configPath /
-	// injectServicesIntoRaw add internal keys. The binaries:/tools: rejections
-	// come first so their migration messages win over the strict-root "unknown
-	// top-level key" message; keys are sorted for a deterministic error.
-	for _, layer := range layers {
-		if _, ok := layer.data["binaries"]; ok {
-			return nil, fmt.Errorf("%s: binaries: moved to ~/.config/dwe/config — use binary_docker=/path, binary_git=/path, etc. See docs/reference/config/workspace.md", layer.path)
-		}
-		if _, ok := layer.data["tools"]; ok {
-			return nil, fmt.Errorf("%s: tools: no longer supported — define tool entries as services with type: tool in workspace/services/. See docs/reference/config/services/index.md", layer.path)
-		}
-		keys := make([]string, 0, len(layer.data))
-		for k := range layer.data {
-			keys = append(keys, k)
-		}
-		sort.Strings(keys)
-		for _, key := range keys {
-			if _, ok := allowedRootKeySet[key]; ok {
-				continue
-			}
-			return nil, fmt.Errorf("%s: unknown top-level key %q — move custom values under \"vars:\" (e.g. vars.%s.*); allowed top-level keys: %s",
-				layer.path, key, key, strings.Join(allowedRootKeys, ", "))
-		}
+	// the source file. Shared with ResolveLayeredPath (dwe vars inspect) via
+	// validateLayerRoots so the two cannot drift. deepMerge drops nil values, so
+	// a layer carrying ONLY a `binaries:`/`tools:` key never reaches the merged
+	// map — the per-layer pass is the only place that sees it (a layer with just
+	// those keys would otherwise load silently). This runs BEFORE __configPath /
+	// injectServicesIntoRaw add internal keys.
+	if err := validateLayerRoots(configLayers); err != nil {
+		return nil, err
 	}
 
 	// Normalize a present-but-null update: block. Writing the update: key is
