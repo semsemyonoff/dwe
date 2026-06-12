@@ -3,6 +3,8 @@ package vars
 import (
 	"bytes"
 	"encoding/json"
+	"errors"
+	"io"
 	"os"
 	"path/filepath"
 	"testing"
@@ -203,7 +205,11 @@ func TestVarsInspect_JSONStdoutClean(t *testing.T) {
 	if e := dec.Decode(&first); e != nil {
 		t.Fatalf("decode: %v", e)
 	}
-	if dec.More() {
-		t.Error("stdout contains trailing content after the JSON object")
+	// Decode once more: a clean single-object stdout yields io.EOF. dec.More()
+	// only tracks the current array/object context, so it would not reliably
+	// catch a trailing top-level value.
+	var extra json.RawMessage
+	if e := dec.Decode(&extra); !errors.Is(e, io.EOF) {
+		t.Errorf("stdout contains trailing content after the JSON object: err=%v extra=%s", e, extra)
 	}
 }

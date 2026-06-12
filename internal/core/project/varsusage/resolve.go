@@ -10,6 +10,7 @@ import (
 	"math"
 	"sort"
 	"strconv"
+	"strings"
 
 	"github.com/semsemyonoff/dwe/internal/core/project/config"
 
@@ -53,11 +54,23 @@ func walkVarLeaves(prefix string, node any, out *[]string) {
 // resolves to at runtime — via config.ResolvePath over the merged Raw map. A
 // namespace path returns its subtree (map[string]any); a leaf returns the
 // scalar. The bool reports whether the path was found.
+//
+// Reads are confined to the vars.* sandbox: a path that is not "vars" itself or
+// strictly beneath "vars." returns (nil, false) without touching Raw, so an
+// unnormalized caller can never read non-vars config and break the sandbox
+// contract (callers also normalize via normalizeVarPath, this is defense in
+// depth).
 func ResolveVar(cfg *config.DweConfig, path string) (any, bool) {
-	if cfg == nil {
+	if cfg == nil || !isVarsPath(path) {
 		return nil, false
 	}
 	return config.ResolvePath(cfg.Raw, path)
+}
+
+// isVarsPath reports whether a dot-path lives in the vars.* sandbox: the bare
+// "vars" namespace or any path whose head segment is "vars".
+func isVarsPath(path string) bool {
+	return path == VarsPrefix || strings.HasPrefix(path, VarsPrefix+".")
 }
 
 // CoerceScalar parses a raw CLI value argument into the typed Go value that

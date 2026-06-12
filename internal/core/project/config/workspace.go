@@ -1577,32 +1577,14 @@ func LoadConfig(workspacePath string) (*DweConfig, error) {
 	}
 
 	// Strict root + legacy-block rejection, iterated per layer so the error names
-	// the source file. deepMerge drops nil values, so a layer carrying ONLY a
-	// `binaries:`/`tools:` key never reaches the merged map — the per-layer pass
-	// is the only place that sees it (a layer with just those keys would
-	// otherwise load silently). This runs BEFORE __configPath /
-	// injectServicesIntoRaw add internal keys. The binaries:/tools: rejections
-	// come first so their migration messages win over the strict-root "unknown
-	// top-level key" message; keys are sorted for a deterministic error.
-	for _, layer := range layers {
-		if _, ok := layer.data["binaries"]; ok {
-			return nil, fmt.Errorf("%s: binaries: moved to ~/.config/dwe/config — use binary_docker=/path, binary_git=/path, etc. See docs/reference/config/workspace.md", layer.path)
-		}
-		if _, ok := layer.data["tools"]; ok {
-			return nil, fmt.Errorf("%s: tools: no longer supported — define tool entries as services with type: tool in workspace/services/. See docs/reference/config/services/index.md", layer.path)
-		}
-		keys := make([]string, 0, len(layer.data))
-		for k := range layer.data {
-			keys = append(keys, k)
-		}
-		sort.Strings(keys)
-		for _, key := range keys {
-			if _, ok := allowedRootKeySet[key]; ok {
-				continue
-			}
-			return nil, fmt.Errorf("%s: unknown top-level key %q — move custom values under \"vars:\" (e.g. vars.%s.*); allowed top-level keys: %s",
-				layer.path, key, key, strings.Join(allowedRootKeys, ", "))
-		}
+	// the source file. Shared with ResolveLayeredPath (dwe vars inspect) via
+	// validateLayerRoots so the two cannot drift. deepMerge drops nil values, so
+	// a layer carrying ONLY a `binaries:`/`tools:` key never reaches the merged
+	// map — the per-layer pass is the only place that sees it (a layer with just
+	// those keys would otherwise load silently). This runs BEFORE __configPath /
+	// injectServicesIntoRaw add internal keys.
+	if err := validateLayerRoots(configLayers); err != nil {
+		return nil, err
 	}
 
 	// Normalize a present-but-null update: block. Writing the update: key is

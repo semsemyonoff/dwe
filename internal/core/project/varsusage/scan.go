@@ -249,11 +249,18 @@ func hitsForField(keyName string, val *yaml.Node, queryPath, rel string, lines [
 		}
 
 	case keyName == "when" && val.Kind == yaml.MappingNode:
-		// Typed condition: scan expr (Go template) for bare vars.x tokens.
+		// Typed condition: a bare vars.x token is a real reference only inside a
+		// Go-template {{ }} action (KindTemplate, evaluated against DweConfig).
+		// Outside one — in a cmd: string or a builtin predicate (file-exists,
+		// generated-missing, …) — vars.x is inert literal text the runtime never
+		// resolves. Mirror templateHits and scan only the {{ }} blocks so literal
+		// text is not misreported as a usage.
 		if expr := mappingScalar(val, "expr"); expr != nil {
-			for _, ref := range varDotPath.FindAllString(expr.Value, -1) {
-				if refMatches(ref, queryPath) {
-					hits = append(hits, Usage{File: rel, Line: expr.Line, Kind: "when", Text: lineText(lines, expr.Line)})
+			for _, block := range goTemplateBlock.FindAllString(expr.Value, -1) {
+				for _, ref := range varDotPath.FindAllString(block, -1) {
+					if refMatches(ref, queryPath) {
+						hits = append(hits, Usage{File: rel, Line: expr.Line, Kind: "when", Text: lineText(lines, expr.Line)})
+					}
 				}
 			}
 		}

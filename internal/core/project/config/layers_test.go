@@ -3,6 +3,7 @@ package config
 import (
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 )
 
@@ -73,6 +74,47 @@ func TestLoadLayers_missingWorkspace(t *testing.T) {
 	_, err := LoadLayers(filepath.Join(t.TempDir(), "nope.yml"))
 	if err == nil {
 		t.Fatal("want error for missing workspace.yml, got nil")
+	}
+}
+
+// TestResolveLayeredPath_rejectsLayerLoadConfigRejects pins the contract that
+// vars inspect (ResolveLayeredPath) cannot resolve a value out of a layer the
+// runtime loader (LoadConfig) would reject — unknown top-level key or legacy
+// binaries:/tools: — so the two cannot drift on strict-root / legacy validation.
+func TestResolveLayeredPath_rejectsLayerLoadConfigRejects(t *testing.T) {
+	tests := []struct {
+		name  string
+		ws    string
+		local string
+		want  string
+	}{
+		{
+			name: "unknown top-level key in workspace.yml",
+			ws:   "vars:\n  a: 1\nbogus: x\n",
+			want: "unknown top-level key",
+		},
+		{
+			name:  "legacy binaries: in local.yml",
+			ws:    "vars:\n  a: 1\n",
+			local: "binaries:\n  docker: /x\n",
+			want:  "binaries:",
+		},
+		{
+			name:  "legacy tools: in local.yml",
+			ws:    "vars:\n  a: 1\n",
+			local: "tools:\n  foo: {}\n",
+			want:  "tools:",
+		},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			ws := writeLayerFixture(t, tc.ws, "", tc.local)
+			if _, err := ResolveLayeredPath(ws, "vars.a"); err == nil {
+				t.Fatal("want error, got nil")
+			} else if !strings.Contains(err.Error(), tc.want) {
+				t.Fatalf("error = %q, want substring %q", err.Error(), tc.want)
+			}
+		})
 	}
 }
 

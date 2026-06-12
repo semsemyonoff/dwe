@@ -87,6 +87,27 @@ func TestLoadLocalYAMLNode_CommentOnly(t *testing.T) {
 	}
 }
 
+// A comment-only local.yml must keep its comments through the first write
+// (vars set / service toggle / setup) instead of dropping the whole block.
+func TestLoadLocalYAMLNode_CommentOnlyWriteThrough(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "local.yml")
+	writeFixture(t, path, "# local overrides\n# keep me\n")
+	applyAndWrite(t, path, map[string]any{
+		"vars": map[string]any{"db": map[string]any{"host": "remote"}},
+	})
+	out, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatalf("read: %v", err)
+	}
+	got := string(out)
+	for _, want := range []string{"# local overrides", "# keep me", "host: remote"} {
+		if !strings.Contains(got, want) {
+			t.Errorf("expected output to contain %q; got:\n%s", want, got)
+		}
+	}
+}
+
 func TestLoadLocalYAMLNode_MultiDocRejected(t *testing.T) {
 	dir := t.TempDir()
 	path := filepath.Join(dir, "local.yml")

@@ -43,9 +43,10 @@ Subcommands:
   get      print a single var's effective value (scalar or subtree)
   inspect  show per-layer values, origin file, and every static usage
 
-Without a subcommand the leaves are listed (an optional namespace narrows the
-output). The vars. prefix is optional on every path argument: "db.host" and
-"vars.db.host" are equivalent.`,
+Without a subcommand a real terminal opens the interactive browser; with a
+namespace arg, in JSON mode, or in any non-interactive context the leaves are
+listed instead (an optional namespace narrows the output). The vars. prefix is
+optional on every path argument: "db.host" and "vars.db.host" are equivalent.`,
 		Example: `  dwe vars
   dwe vars list
   dwe vars list db
@@ -89,7 +90,8 @@ func loadConfigForVars(flags *cmdctx.RootFlags) (*config.DweConfig, error) {
 }
 
 // leafCompletion returns a ValidArgsFunction that completes vars.* leaf paths.
-// It is the shared completion for the <var> arg of get / inspect / set. Errors
+// It is the shared completion for the leaf-only <var> arg of inspect / set
+// (get uses namespaceCompletion since it also accepts subtree targets). Errors
 // yield empty completions silently (completion never surfaces errors).
 func leafCompletion(flags *cmdctx.RootFlags) func(*cobra.Command, []string, string) ([]string, cobra.ShellCompDirective) {
 	return func(cmd *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {

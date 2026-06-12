@@ -109,6 +109,24 @@ func TestResolveVar(t *testing.T) {
 			t.Error("want not found for nil config")
 		}
 	})
+	// Confinement: a non-vars path must never read outside the vars.* sandbox,
+	// even if the value is present in Raw. Defense in depth against an
+	// unnormalized caller.
+	t.Run("non-vars path confined", func(t *testing.T) {
+		confined := &config.DweConfig{Raw: map[string]any{
+			"vars":    map[string]any{"a": 1},
+			"project": map[string]any{"name": "secret"},
+		}}
+		for _, p := range []string{"project.name", "project", "varsx.a", ""} {
+			if v, ok := ResolveVar(confined, p); ok {
+				t.Errorf("path %q resolved to %v, want confined miss", p, v)
+			}
+		}
+		// The bare "vars" namespace itself stays resolvable.
+		if _, ok := ResolveVar(confined, "vars"); !ok {
+			t.Error(`bare "vars" namespace should resolve`)
+		}
+	})
 }
 
 func TestCoerceScalar(t *testing.T) {

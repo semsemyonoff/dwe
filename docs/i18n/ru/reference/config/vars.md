@@ -1,4 +1,4 @@
-> Translated from: reference/config/vars.md @ 56ad26830e77
+> Translated from: reference/config/vars.md @ 28849e0c2623
 
 # `dwe vars` — работа с песочницей `vars:`
 
@@ -218,7 +218,7 @@ stderr.
 | Команда | Форма |
 |---------|-------|
 | `get` | `{"var": "...", "value": <any>}` |
-| `list` | `{"vars": [{"path": "...", "value": <any>, "layer": "local|default"}]}` |
+| `list` | `{"vars": [{"path": "...", "value": <any>, "layer": "local\|default"}]}` |
 | `inspect` | `{"var": "...", "layers": {"default": <any>, "default_set": <bool>, "local": ..., "local_set": ..., "current": ..., "current_set": ...}, "origin": "...", "usages": [{"file": "...", "line": N, "kind": "...", "text": "..."}]}` |
 | `set` (со значением) | `{"var": "...", "value": <any>}` |
 

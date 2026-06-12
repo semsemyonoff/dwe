@@ -27,9 +27,11 @@ The vars. prefix is optional: "db.host" and "vars.db.host" are equivalent.`,
 		Example: `  dwe vars get db.host
   dwe vars get db
   dwe vars get db.host --output json`,
-		Args:              cobra.ExactArgs(1),
-		SilenceUsage:      true,
-		ValidArgsFunction: leafCompletion(flags),
+		Args:         cobra.ExactArgs(1),
+		SilenceUsage: true,
+		// get reads subtrees as well as leaves, so completion offers interior
+		// namespaces too (inspect / set stay leaf-only via leafCompletion).
+		ValidArgsFunction: namespaceCompletion(flags),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			// The vars. prefix is optional — "db.host" resolves as "vars.db.host".
 			path := normalizeVarPath(args[0])

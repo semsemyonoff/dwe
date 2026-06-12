@@ -94,6 +94,15 @@ func buildVarsBrowserItems(cfg *config.DweConfig, flags *cmdctx.RootFlags) ([]cm
 	layers, _ := config.LoadLayers(flags.ConfigPath)
 	localPath := config.LocalLayerPath(flags.ConfigPath)
 
+	// inspectCache memoizes the width-independent resolve + usage scan per path
+	// for the lifetime of this browser session. The Inspect closure is invoked
+	// on every overlay open AND every resize (cmdbrowser applyLayout); without
+	// this each call would re-read the three config layers and re-walk the
+	// workspace usage scan — visible lag on larger workspaces. Only the final
+	// width-dependent VarInspectView wrap re-runs per width. A reload after an
+	// edit rebuilds items (and this cache), so stale values are not served.
+	inspectCache := make(map[string]*uirender.VarInspect)
+
 	items := make([]cmdbrowser.Item, 0, len(leaves))
 	for _, leaf := range leaves {
 		path := leaf // capture for the closures below
@@ -107,7 +116,7 @@ func buildVarsBrowserItems(cfg *config.DweConfig, flags *cmdctx.RootFlags) ([]cm
 			Description: inlineBrowserValue(value),
 			Type:        layerBadge(layers, localPath, path),
 			Inspect: func(width int) string {
-				return renderVarInspectFor(flags, path, width)
+				return renderVarInspectCached(flags, inspectCache, path, width)
 			},
 		})
 	}
@@ -124,17 +133,33 @@ func inlineBrowserValue(value any) string {
 	return strings.Join(strings.Fields(rendered), " ")
 }
 
-// renderVarInspectFor builds the inspect-view string for a single var at the
-// given width, reusing the same resolution + scan + renderer as `vars inspect`.
-// Resolution failures degrade to an empty string (the overlay shows a
-// placeholder).
-func renderVarInspectFor(flags *cmdctx.RootFlags, path string, width int) string {
-	layered, err := config.ResolveLayeredPath(flags.ConfigPath, path)
-	if err != nil {
+// renderVarInspectCached returns the inspect-view string for a single var at
+// the given width, resolving + scanning it at most once per session (memoized
+// in cache, keyed by path) and re-wrapping only the width-dependent
+// VarInspectView per call. A resolution failure caches a nil entry so a broken
+// layer set is not re-read on every resize; the overlay shows a placeholder.
+func renderVarInspectCached(flags *cmdctx.RootFlags, cache map[string]*uirender.VarInspect, path string, width int) string {
+	inspect, ok := cache[path]
+	if !ok {
+		inspect = resolveVarInspect(flags, path)
+		cache[path] = inspect // may be nil (resolution failed) — cache the miss too
+	}
+	if inspect == nil {
 		return ""
 	}
+	return uirender.VarInspectView(*inspect, width)
+}
+
+// resolveVarInspect performs the width-independent resolution + usage scan for
+// a single var, reusing the same resolution + scan as `vars inspect`. Returns
+// nil on a layer-resolution failure.
+func resolveVarInspect(flags *cmdctx.RootFlags, path string) *uirender.VarInspect {
+	layered, err := config.ResolveLayeredPath(flags.ConfigPath, path)
+	if err != nil {
+		return nil
+	}
 	scan, _ := varsusage.ScanUsages(flags.ProjectRoot(), path)
-	inspect := uirender.VarInspect{
+	return &uirender.VarInspect{
 		Path:      path,
 		Default:   layered.Default,
 		DefaultOK: layered.DefaultOK,
@@ -145,5 +170,4 @@ func renderVarInspectFor(flags *cmdctx.RootFlags, path string, width int) string
 		Origin:    originDisplay(flags, layered.Origin),
 		Usages:    scan.Usages,
 	}
-	return uirender.VarInspectView(inspect, width)
 }

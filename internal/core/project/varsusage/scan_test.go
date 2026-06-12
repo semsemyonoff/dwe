@@ -215,6 +215,44 @@ func TestScanUsages_SkipsVarsBlock(t *testing.T) {
 	}
 }
 
+// TestScanUsages_WhenExprInertText pins that a bare vars.x token in a typed
+// when.expr is reported ONLY when it sits inside a Go-template {{ }} action; a
+// cmd:/builtin expr where vars.x is inert literal text must NOT match.
+func TestScanUsages_WhenExprInertText(t *testing.T) {
+	dir := t.TempDir()
+	mustWrite := func(rel, content string) {
+		t.Helper()
+		full := filepath.Join(dir, rel)
+		if err := os.MkdirAll(filepath.Dir(full), 0o755); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(full, []byte(content), 0o600); err != nil {
+			t.Fatal(err)
+		}
+	}
+	// Two steps: one builtin/cmd expr with vars.flag as inert text (must NOT
+	// match), one real Go-template resolve (must match).
+	mustWrite("workspace/deploy.yml",
+		"steps:\n"+
+			"  - run: a\n"+
+			"    when:\n"+
+			"      expr: \"cmd: echo vars.flag is inert here\"\n"+
+			"  - run: b\n"+
+			"    when:\n"+
+			"      expr: '{{ resolve .Raw \"vars.flag\" }}'\n")
+
+	res, err := ScanUsages(dir, "vars.flag")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(res.Usages) != 1 {
+		t.Fatalf("want exactly 1 usage (the {{ }} expr), got %d: %v", len(res.Usages), locsOf(res))
+	}
+	if got := res.Usages[0].Text; got != `expr: '{{ resolve .Raw "vars.flag" }}'` {
+		t.Errorf("matched the wrong expr: %q", got)
+	}
+}
+
 func TestScanUsages_MissingWorkspace(t *testing.T) {
 	res, err := ScanUsages("testdata/does-not-exist", "vars.db.host")
 	if err != nil {

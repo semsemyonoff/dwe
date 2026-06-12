@@ -40,8 +40,12 @@ func LoadLocalYAMLNode(localPath string) (*yaml.Node, error) {
 	var doc yaml.Node
 	if err := dec.Decode(&doc); err != nil {
 		if errors.Is(err, io.EOF) {
-			// Empty or comment-only document — nothing to anchor comments to.
-			return emptyMappingDoc(), nil
+			// Empty or comment-only document. yaml.v3 hands us no node to anchor
+			// comments to here (it returns io.EOF with an empty doc), so a
+			// comment-only file would otherwise lose its whole comment block on
+			// the first write. Carry the raw leading comments onto the synthetic
+			// empty mapping so the round-trip preserves them.
+			return commentOnlyDoc(data), nil
 		}
 		return nil, fmt.Errorf("parse %s: %w", localPath, err)
 	}
@@ -89,6 +93,20 @@ func emptyMappingDoc() *yaml.Node {
 		Kind:    yaml.DocumentNode,
 		Content: []*yaml.Node{{Kind: yaml.MappingNode, Tag: "!!map"}},
 	}
+}
+
+// commentOnlyDoc builds an empty mapping document that carries the raw leading
+// comments of a comment-only local.yml as the root mapping's HeadComment, so the
+// first write round-trips them. yaml.v3 attaches no comments when the document
+// has no content node, so they are recovered verbatim from the file bytes. The
+// trailing newline is trimmed (yaml re-emits one); a whitespace-only file yields
+// a plain empty mapping (no comment to carry).
+func commentOnlyDoc(raw []byte) *yaml.Node {
+	doc := emptyMappingDoc()
+	if comment := strings.TrimRight(string(raw), "\n"); strings.TrimSpace(comment) != "" {
+		doc.Content[0].HeadComment = comment
+	}
+	return doc
 }
 
 // documentRoot returns the root mapping node of a document node, normalizing

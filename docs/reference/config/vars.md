@@ -207,7 +207,7 @@ stderr.
 | Command | Shape |
 |---------|-------|
 | `get` | `{"var": "...", "value": <any>}` |
-| `list` | `{"vars": [{"path": "...", "value": <any>, "layer": "local|default"}]}` |
+| `list` | `{"vars": [{"path": "...", "value": <any>, "layer": "local\|default"}]}` |
 | `inspect` | `{"var": "...", "layers": {"default": <any>, "default_set": <bool>, "local": ..., "local_set": ..., "current": ..., "current_set": ...}, "origin": "...", "usages": [{"file": "...", "line": N, "kind": "...", "text": "..."}]}` |
 | `set` (with value) | `{"var": "...", "value": <any>}` |
 

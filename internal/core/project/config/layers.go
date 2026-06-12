@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"sort"
+	"strings"
 )
 
 // Layer is one source file in the merged 3-layer project config
@@ -53,6 +55,40 @@ func LoadLayers(workspacePath string) ([]Layer, error) {
 	return layers, nil
 }
 
+// validateLayerRoots runs the strict-root + legacy-block rejection per layer,
+// naming the source file in each error. deepMerge drops nil values, so a layer
+// carrying ONLY a binaries:/tools: key never reaches the merged map — this
+// per-layer pass is the only place that sees it. It is shared by LoadConfig and
+// ResolveLayeredPath (dwe vars inspect) so value resolution cannot drift from
+// the runtime loader on which top-level keys a config layer may carry: vars
+// inspection must never resolve a value out of a layer LoadConfig would reject.
+// The binaries:/tools: rejections come first so their migration messages win
+// over the strict-root "unknown top-level key" message; keys are sorted for a
+// deterministic error.
+func validateLayerRoots(layers []Layer) error {
+	for _, layer := range layers {
+		if _, ok := layer.Data["binaries"]; ok {
+			return fmt.Errorf("%s: binaries: moved to ~/.config/dwe/config — use binary_docker=/path, binary_git=/path, etc. See docs/reference/config/workspace.md", layer.Path)
+		}
+		if _, ok := layer.Data["tools"]; ok {
+			return fmt.Errorf("%s: tools: no longer supported — define tool entries as services with type: tool in workspace/services/. See docs/reference/config/services/index.md", layer.Path)
+		}
+		keys := make([]string, 0, len(layer.Data))
+		for k := range layer.Data {
+			keys = append(keys, k)
+		}
+		sort.Strings(keys)
+		for _, key := range keys {
+			if _, ok := allowedRootKeySet[key]; ok {
+				continue
+			}
+			return fmt.Errorf("%s: unknown top-level key %q — move custom values under \"vars:\" (e.g. vars.%s.*); allowed top-level keys: %s",
+				layer.Path, key, key, strings.Join(allowedRootKeys, ", "))
+		}
+	}
+	return nil
+}
+
 // LocalLayerPath returns the conventional workspace/local.yml path for a given
 // workspace.yml path. Used to identify which Layer is the local override.
 func LocalLayerPath(workspacePath string) string {
@@ -88,6 +124,12 @@ type LayeredValue struct {
 func ResolveLayeredPath(workspacePath, path string) (LayeredValue, error) {
 	layers, err := LoadLayers(workspacePath)
 	if err != nil {
+		return LayeredValue{}, err
+	}
+	// Enforce the same per-layer strict-root / legacy-key validation LoadConfig
+	// applies, so vars inspect never resolves a value out of a layer the runtime
+	// loader would reject (unknown top-level key, legacy binaries:/tools:).
+	if err := validateLayerRoots(layers); err != nil {
 		return LayeredValue{}, err
 	}
 	return resolveLayeredPath(layers, LocalLayerPath(workspacePath), path), nil
