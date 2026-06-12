@@ -6,6 +6,8 @@ import (
 	"os/exec"
 	"strings"
 	"time"
+
+	"github.com/semsemyonoff/dwe/internal/shared/trace"
 )
 
 // Status holds the result of a git probe for a working directory.
@@ -33,6 +35,7 @@ type runner interface {
 type execRunner struct{}
 
 func (execRunner) Run(ctx context.Context, dir string, args ...string) (string, string, error) {
+	trace.Command(ctx, args[0], args[1:]...)
 	cmd := exec.CommandContext(ctx, args[0], args[1:]...) //nolint:gosec
 	cmd.Dir = dir
 	var outBuf, errBuf strings.Builder

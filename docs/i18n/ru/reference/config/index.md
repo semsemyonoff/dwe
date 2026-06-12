@@ -1,4 +1,4 @@
-> Translated from: reference/config/index.md @ ea9533e26547
+> Translated from: reference/config/index.md @ 9ef2195f42e7
 
 # Справочник конфигурации
 
@@ -33,7 +33,7 @@
 | `workspace/commands/` | да | отдельный | Декларативные определения команд (по группе на файл) |
 | `workspace/validate.yml` | да | отдельный | Проверки готовности проекта (preflight + `dwe validate`) |
 | `workspace/snapshot.yml` | да | отдельный | Snapshot-workflow'ы: create / restore / remove (`dwe snapshot`) |
-| `workspace/i18n/*.yml` | нет (ignored) | отдельный | Переводы пользовательских команд и UI-строк (опционально; один файл на язык) |
+| `workspace/i18n/*.yml` | да | отдельный | Переводы пользовательских команд и UI-строк (опционально; один файл на язык) |
 
 ## Runtime-артефакты
 
@@ -101,6 +101,7 @@ flowchart LR
 ## Страницы
 
 - [workspace / defaults / local](workspace.md) — трёхслойный смерженный конфиг: порядок слияния, приоритет, разрешение dot-путей, справочник полей
+- [vars](vars.md) — команда `dwe vars`: перечисление/чтение/редактирование/трассировка песочницы `vars:`, запись с сохранением комментариев, статическое сканирование использований, allowlist контейнерной записи `bridge.vars_writable`
 - [services/<name>/service.yml](services/index.md) — декларации сервисов, extends, dirs, cli-конфиг
 - [deploy.yml / reset.yml](deploy/index.md) — deploy- и reset-пайплайны, шаги, билтины, file-логирование, идемпотентный деплой
 - [state.yml](state/index.md) — отслеживание состояния деплоя, таблица skip-решений, хэширование, lock-файл, восстановление после падений

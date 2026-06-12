@@ -16,6 +16,8 @@ import (
 	"time"
 
 	"gopkg.in/yaml.v3"
+
+	"github.com/semsemyonoff/dwe/internal/shared/docker"
 )
 
 const (
@@ -33,16 +35,21 @@ const (
 	sgrReset = "\x1b[39m"
 
 	cacheTTL       = 2 * time.Minute
+	staleTrustCap  = 5 * cacheTTL
 	refreshTimeout = 150 * time.Millisecond
 )
 
 // dockerPsFunc shells out to `docker ps -q --filter label=com.docker.compose.project=<project>`.
-// Package-level for test injection.
+// env is the probe's process environment (nil inherits unchanged) — docker.yml
+// process_env overrides (DOCKER_HOST / DOCKER_CONTEXT / …) applied via
+// readDockerProcessEnv so the probe targets the same daemon as lifecycle
+// commands. Package-level for test injection.
 var dockerPsFunc = realDockerPs
 
-func realDockerPs(ctx context.Context, composeProject string) ([]byte, error) {
+func realDockerPs(ctx context.Context, composeProject string, env []string) ([]byte, error) {
 	cmd := exec.CommandContext(ctx, "docker", "ps", "-q",
 		"--filter", "label=com.docker.compose.project="+composeProject)
+	cmd.Env = env
 	return cmd.Output()
 }
 
@@ -368,9 +375,13 @@ func readCache(path string) (state stackKind, updatedAt time.Time, ok bool) {
 // fresh cache (<cacheTTL old) exists, returns its value. Otherwise it shells
 // out via refreshStack and applies the no-downgrade rule: the cache is
 // rewritten only when the refreshed state is stackRunning. On refresh failure
-// or a zero-result (stackStopped), the cache is left untouched and the stale
-// value (if any) is returned. composeProject is the Docker Compose project name
-// (may differ from project.name when a prefix or docker.yml project_name is set).
+// the cache is left untouched and the stale value (if any) is returned. On a
+// zero-result (stackStopped) the cache is also left untouched; the stale value
+// is returned only while it is younger than staleTrustCap — past the cap a
+// confirmed zero-probe renders as stopped, so a stack stopped outside dwe does
+// not show running indefinitely. composeProject is the Docker Compose project
+// name (may differ from project.name when a prefix or docker.yml project_name
+// is set).
 func readStack(root, composeProject string, now time.Time) stackKind {
 	path := filepath.Join(root, promptCacheRelPath)
 	cachedState, updatedAt, cacheOK := readCache(path)
@@ -383,7 +394,7 @@ func readStack(root, composeProject string, now time.Time) stackKind {
 
 	ctx, cancel := context.WithTimeout(context.Background(), refreshTimeout)
 	defer cancel()
-	fresh, refreshOK := refreshStack(ctx, composeProject)
+	fresh, refreshOK := refreshStack(ctx, composeProject, readDockerProcessEnv(root))
 	if !refreshOK {
 		if cacheOK {
 			return cachedState
@@ -394,20 +405,27 @@ func readStack(root, composeProject string, now time.Time) stackKind {
 		_ = writeCache(path, fresh, now)
 		return fresh
 	}
-	// Zero-result: never write stopped from prompt refresh. Return stale if any.
+	// Zero-result: never write stopped from prompt refresh — a zero result may
+	// just be a wrong-label filter, and the cache stays owned by authoritative
+	// writers. The stale value wins only within staleTrustCap; past the cap the
+	// confirmed zero-probe is rendered (not written) as stopped.
 	if cacheOK {
-		return cachedState
+		age := now.Sub(updatedAt)
+		if age >= 0 && age <= staleTrustCap {
+			return cachedState
+		}
+		return stackStopped
 	}
 	return stackNone
 }
 
-// refreshStack invokes dockerPsFunc with the given context. Returns
-// (stackRunning, true) when at least one container matches the compose project
-// label, (stackStopped, true) on zero matches, and (stackNone, false) on any
-// exec or context-timeout failure. Never returns stackPartial — prompt refresh
-// is binary.
-func refreshStack(ctx context.Context, composeProject string) (stackKind, bool) {
-	out, err := dockerPsFunc(ctx, composeProject)
+// refreshStack invokes dockerPsFunc with the given context and probe
+// environment. Returns (stackRunning, true) when at least one container
+// matches the compose project label, (stackStopped, true) on zero matches,
+// and (stackNone, false) on any exec or context-timeout failure. Never
+// returns stackPartial — prompt refresh is binary.
+func refreshStack(ctx context.Context, composeProject string, env []string) (stackKind, bool) {
+	out, err := dockerPsFunc(ctx, composeProject, env)
 	if err != nil {
 		return stackNone, false
 	}
@@ -688,4 +706,37 @@ func readDockerProjectNameLiteral(root string) string {
 		return name
 	}
 	return ""
+}
+
+// readDockerProcessEnv returns the environment for the prompt's docker probe:
+// the current process env with process_env overrides from workspace/docker.yml
+// and workspace/docker.local.yml applied (per-key, local wins — mirroring
+// config.LoadDockerConfig's deep-merge). Returns nil (inherit unchanged) when
+// no overrides are set. Lenient like every prompt reader: unreadable files,
+// bad YAML, and non-string values are silently skipped. Values are used
+// literally — the real loader does not template-resolve process_env either.
+// Called only on the refresh path (stale or missing cache), so fresh-cache
+// renders pay no extra file reads.
+func readDockerProcessEnv(root string) []string {
+	merged := map[string]string{}
+	// Base first, then local — later writes win per key, like deepMerge.
+	for _, rel := range []string{"workspace/docker.yml", "workspace/docker.local.yml"} {
+		data, err := os.ReadFile(filepath.Join(root, rel))
+		if err != nil {
+			continue
+		}
+		var m map[string]any
+		if err := yaml.Unmarshal(data, &m); err != nil {
+			continue
+		}
+		env, _ := m["process_env"].(map[string]any)
+		for k, v := range env {
+			s, ok := v.(string)
+			if !ok {
+				continue // nil or non-string value; the strict loader would error, prompt skips
+			}
+			merged[k] = s
+		}
+	}
+	return docker.MergeEnv(merged)
 }

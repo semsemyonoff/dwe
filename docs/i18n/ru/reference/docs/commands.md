@@ -1,4 +1,4 @@
-> Translated from: reference/docs/commands.md @ 4b6c920ee97c
+> Translated from: reference/docs/commands.md @ f8ddc7f29305
 
 # Неинтерактивные команды документации
 
@@ -14,7 +14,7 @@ dwe docs show <topic> [--lang <code>] [--raw] [--source all|dwe|project] [--anch
 ```
 
 **Аргументы:**
-- `<topic>` — путь темы, опционально с якорем: `config/lifecycle`, `config/services/fields`, `config/workspace#binary-overrides`, `config/services/fields.md#ports-field`. Поддерживается нечёткое сопоставление (нечувствительный к регистру поиск по подстроке); многостраничные темы вроде `config/services` неоднозначны сами по себе — указывайте конкретную подстраницу.
+- `<topic>` — путь темы, опционально с якорем: `config/lifecycle`, `config/services/fields`, `config/workspace#field-reference`, `config/services/fields.md#ports-field`. Поддерживается нечёткое сопоставление (нечувствительный к регистру поиск по подстроке); многостраничные темы вроде `config/services` неоднозначны сами по себе — указывайте конкретную подстраницу.
 
 **Флаги:**
 - `--lang <code>` — рендер на конкретном языке (2-буквенный код; например `ru`, `de`). По умолчанию — системная локаль или `en`.
@@ -37,7 +37,7 @@ dwe docs show config/services/index --lang ru
 
 # Рендер сырого markdown (удобно для агентов); скоуп на секцию через якорь
 dwe docs show config/services/fields --raw --lang en
-dwe docs show config/workspace#binary-overrides --raw --lang en
+dwe docs show config/workspace#field-reference --raw --lang en
 
 # Показать только встроенные доки (пропустить проектные ./docs/)
 dwe docs show config/services/fields --source dwe --lang en
@@ -61,9 +61,9 @@ dwe docs list [--lang <code>] [--source all|dwe|project] [--match <glob>]
 Колонки через табуляцию (удобно для агентов):
 ```
 <source>	<path>	<language>
-dwe	config/workspace	en
-dwe	config/services/fields	en
-dwe	config/services/fields	ru
+dwe	reference/config/workspace	en
+dwe	reference/config/services/fields	en
+dwe	reference/config/services/fields	ru
 project	guides/setup	en
 ```
 
@@ -168,19 +168,19 @@ dwe docs cache clear
 
 **`mermaid: auto` (по умолчанию)**
 - Если `mmdc` установлен и доступен → рендер диаграмм в PNG с кешированием
-- Если `mmdc` отсутствует → деградация до сырых mermaid-блоков с подсказкой (`📊 [mmdc not installed — Y to copy]`)
+- Если `mmdc` отсутствует → деградация до inline-плейсхолдеров вида `📊 Diagram N/M — rendering disabled` (с подсказкой скопировать исходник по `y`), плюс однократный стартовый баннер: **⚠ `mmdc` not installed.** Mermaid diagrams cannot render. Install with `npm i -g @mermaid-js/mermaid-cli`
 - Без ошибки; плавный fallback
 
 **`mermaid: mmdc` (строгий)**
 - Требует, чтобы `mmdc` был установлен и доступен
-- Если отсутствует → плейсхолдер (`📊 [mmdc required but not found]`) и предупреждение на старте
+- Если отсутствует → fallback на те же плейсхолдеры `📊 Diagram N/M — rendering disabled` и тот же стартовый баннер **⚠ `mmdc` not installed**, что и в `auto` (отдельного плейсхолдера для строгого режима нет)
 - Полезно в CI/автоматизации, где mermaid — жёсткая зависимость
 
 **`mermaid: off` (выключено)**
 - Никогда не рендерит диаграммы; всегда показывает сырые mermaid-блоки
 - Полезно для окружений с ограниченной полосой или ресурсами
 
-Настройка — через `docs.mermaid` в `workspace.yml`. См. [Справочник конфигурации](index.md) для схемы.
+Настройка — через `docs.mermaid` в `workspace.yml`. См. [Справочник конфигурации](index.md#справочник-конфигурации) для схемы.
 
 ### Установка `mmdc`
 

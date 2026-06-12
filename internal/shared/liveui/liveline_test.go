@@ -222,6 +222,52 @@ func TestLiveLine_ChannelSeparation(t *testing.T) {
 	require.NotContains(t, scr.String(), "\x1b")
 }
 
+// TestLiveLine_PrintlnDiagRoutesToDiagWriter asserts PrintlnDiag sends the line
+// text to the configured diagnostics writer (stderr in production), keeps it off
+// the screen (stdout), and still frames the footer via termOut. This backs the
+// "verbose/debug output goes to stderr only" contract while a pipeline owns the
+// screen.
+func TestLiveLine_PrintlnDiagRoutesToDiagWriter(t *testing.T) {
+	var term, scr, diag bytes.Buffer
+	l := newTestLiveLine(&term, &scr, true)
+	l.SetDiagWriter(&diag)
+	l.SetText("phase: running")
+	l.Start()
+	l.Println("data-line")       // screen
+	l.PrintlnDiag("$ docker ps") // diag only
+	l.Tick()
+	l.Stop()
+
+	require.Equal(t, "data-line\n", scr.String(), "diagnostic line must not reach the screen")
+	require.Equal(t, "$ docker ps\n", diag.String(), "diagnostic line must reach the diag writer")
+	require.NotContains(t, diag.String(), "\x1b", "diag writer must receive only the line text, no ANSI")
+
+	// termOut framed both lines but carries neither line's text.
+	stripped := stripANSIBytes(term.Bytes())
+	require.NotContains(t, stripped, "docker ps")
+	require.NotContains(t, stripped, "data-line")
+}
+
+// TestLiveLine_PrintlnDiagFallsBackToScreen asserts that without a configured
+// diag writer, PrintlnDiag behaves like Println (writes to the screen).
+func TestLiveLine_PrintlnDiagFallsBackToScreen(t *testing.T) {
+	var term, scr bytes.Buffer
+	l := NewLiveLine(&term, &scr, false) // disabled: straight-to-data-writer path
+	l.PrintlnDiag("$ docker ps")
+	require.Equal(t, "$ docker ps\n", scr.String())
+
+	// Active live mode with no diag writer: the line still falls back to the
+	// screen (data) writer and must not bleed into the term (footer) channel.
+	var term2, scr2 bytes.Buffer
+	l2 := newTestLiveLine(&term2, &scr2, true)
+	l2.SetText("phase: running")
+	l2.Start()
+	l2.PrintlnDiag("$ docker ps")
+	l2.Stop()
+	require.Equal(t, "$ docker ps\n", scr2.String())
+	require.NotContains(t, stripANSIBytes(term2.Bytes()), "docker ps")
+}
+
 func TestLiveLine_CursorInvariantSingle(t *testing.T) {
 	g := newTermGrid(8, 80)
 	l := newTestLiveLine(g, g, true)

@@ -1,4 +1,4 @@
-> Translated from: reference/concepts/project-layout.md @ 5b115b8f4dbd
+> Translated from: reference/concepts/project-layout.md @ df92c463c4ab
 
 # Раскладка проекта
 
@@ -20,7 +20,7 @@
 Проект DWE — это любая директория, корень которой содержит `workspace.yml`. CLI поднимается вверх от текущей рабочей директории, чтобы найти его. Вокруг этого якоря сосуществуют три семейства папок:
 
 - **Отслеживаемое дерево конфигурации** в `workspace/` и корневые конфигурационные файлы — закоммичены, версионируются, источник истины для структуры проекта.
-- **Отслеживаемые runtime-оверлеи** — файлы Docker Compose в `compose/`, шаблоны конфигов сервисов в `configs/` и контексты сборки образов (`images/<service>/Dockerfile`) для сервисов, собираемых из исходников. DWE не генерирует их; они лежат рядом с деревом конфигурации, и на них ссылаются из него.
+- **Отслеживаемые runtime-оверлеи** — файлы Docker Compose в `compose/` и контексты сборки образов (`images/<service>/Dockerfile`) для сервисов, собираемых из исходников. DWE не генерирует их; они лежат рядом с деревом конфигурации, и на них ссылаются из него. (Рантайм-конфиги сервисов — `.env`, `env.php`, … — больше не хранятся как закоммиченное дерево `configs/`; они *рендерятся* из [config-пака шаблонов](../render/config.md) прямо в hub-каталог каждого сервиса.)
 - **Runtime-данные**, которые производят DWE и контейнеры — `.dwe/` (служебные данные CLI), `snapshots/` (распакованное хранилище снапшотов) и `backups/` (дампы БД и прочее). Gitignored. Персистентные данные контейнеров живут в именованных томах Docker.
 
 ```mermaid
@@ -47,7 +47,6 @@ flowchart LR
 
   subgraph other["прочее (tracked)"]
     direction TB
-    ConfigsDir["configs/&lt;service&gt;/ — шаблоны конфигов"]
     ImagesDir["images/&lt;service&gt;/Dockerfile — сборки образов"]
   end
 
@@ -80,7 +79,7 @@ flowchart LR
 
 | Файл | Назначение | Читатель | Писатель | Отслеживается |
 |------|---------|--------|--------|---------|
-| `workspace.yml` | Идентификация проекта: `project.name`, `project.prefix`, опциональные переопределения бинарников | CLI на каждом вызове | Автор вручную | да |
+| `workspace.yml` | Идентификация проекта: `project.name`, `project.prefix` | CLI на каждом вызове | Автор вручную | да |
 | `.gitignore` | Исключает `.dwe/`, `/services/`, `snapshots/`, `backups/` и `workspace/local.yml` из контроля версий | git | Автор вручную | да |
 | `README.md` | Точка входа в документацию проекта (не README DWE CLI) | люди | Автор вручную | да |
 
@@ -100,11 +99,11 @@ project:
 
 | Путь | Назначение | Читатель | Писатель | Отслеживается |
 |------|---------|--------|--------|---------|
-| `workspace/defaults.yml` | Версионированные значения по умолчанию: `services.<name>.enabled`, `runtime`, `state`, `exports.env`, `compose`, `ide` | CLI (слой merge 2) | Автор вручную | да |
+| `workspace/defaults.yml` | Версионированные значения по умолчанию: `services.<name>.enabled`, `runtime`, `state`, `exports.env`, `compose`, `services.<name>.render.ide` | CLI (слой merge 2) | Автор вручную | да |
 | `workspace/local.yml` | Переопределения на разработчика поверх `defaults.yml`: порты, флаги enabled, креды, ответы мастера | CLI (слой merge 3) | Автор вручную + setup wizard + `dwe services enable/disable` | нет |
 | `workspace/services/<name>/` | Одна папка на сервис. Имя папки — это ID сервиса, поля `name:` нет. | Загрузчик сервисов CLI | Автор вручную | да (кроме оверрайдов `local.yml`) |
 | `workspace/commands/` | Декларативные пользовательские команды, доступные как `dwe <name>` | Реестр команд CLI | Автор вручную | да |
-| `workspace/templates/` | Template-паки для `dwe render` — по подкаталогу на вид: `ai/`, `git/`, `ide/`, в каждом `<pack>/manifest.yml` + файлы (`render env` пак не использует) | Render-пайплайн CLI | Автор вручную | да |
+| `workspace/templates/` | Template-паки для `dwe render` — по подкаталогу на вид: `config/`, `ai/`, `git/`, `ide/`, в каждом `<pack>/manifest.yml` + файлы (`render env` пак не использует). Паки `config/` рендерят рантайм-конфиги сервисов (`.env`, …) в hub сервиса и заменяют устаревшее закоммиченное дерево `configs/` | Render-пайплайн CLI | Автор вручную | да |
 | `workspace/i18n/` | Переопределения строк по локалям (`<lang>.yml`); сливаются со встроенными дефолтами | i18n-стор CLI | Автор вручную + переводчики | да |
 | `workspace/scripts/` | Shell-скрипты, на которые ссылаются декларативные команды и пайплайны | Шаги пайплайна + пользовательские команды | Автор вручную | да |
 | `workspace/deploy.yml` | Верхнеуровневый оркестратор пайплайна деплоя. Опционально — у DWE есть встроенный дефолт. | Исполнитель deploy | Автор вручную | да |
@@ -115,9 +114,7 @@ project:
 | `workspace/validate.yml` | Проверки готовности проекта (`shell` / `file_exists` / `tcp_reachable` / …) | `dwe validate` + preflight | Автор вручную | да |
 | `workspace/docker.yml` | Слой оркестрации compose: шаблон имени проекта, список файлов, топология, скрытые сервисы | Подсистема Docker | Автор вручную | да |
 | `workspace/docker.local.yml` | Переопределения compose на разработчика, глубоко смерженные поверх `docker.yml` | Подсистема Docker | Автор вручную | нет |
-| `workspace/styles.yml` | Палитра семантических токенов (info / success / warn / error / muted / heading / link) | UI-стилизация | Автор вручную | да |
-| `workspace/ui.yml` | Настройки поведения TUI (`default_expanded_depth`, `auto_collapse_empty`, `show_type_badges`) | TUI-рендереры | Автор вручную | да |
-| `workspace/notifications.yml` | Условия desktop-уведомлений по операциям | Подсистема notify | Автор вручную | да |
+| `workspace/styles.yml` | Палитра семантических токенов (accent / success / warning / danger / muted / border / text) | UI-стилизация | Автор вручную | да |
 
 ### Папка на сервис
 
@@ -152,7 +149,7 @@ Allowlist полей по типу (какие поля может объявл�
 | `compose/<service>/` | Оверлей конкретного сервиса `type: app` — папка на каждый app | Docker Compose через DWE | Автор вручную | да |
 | `compose/tools/` | Оверлеи для сервисов `type: tool` (админ-UI, одноразовые утилиты) | Docker Compose через DWE | Автор вручную | да |
 
-Типичный оверлей сервиса объявляет образ контейнера, монтирование из папки `configs/` проекта и любое окружение, экспортированное из `defaults.yml`:
+Типичный оверлей сервиса объявляет образ контейнера, монтирование из hub-каталога сервиса (куда попадают отрендеренные конфиги) и любое окружение, экспортированное из `defaults.yml`:
 
 ```yaml
 services:
@@ -161,7 +158,7 @@ services:
     container_name: ${PROJECT}-web
     volumes:
       - ./services/web/src:/var/www/html
-      - ./configs/web/nginx.conf:/etc/nginx/conf.d/default.conf
+      - ./services/web/nginx.conf:/etc/nginx/conf.d/default.conf  # отрендерено `dwe render config`
     ports:
       - "${WEB_HTTP_PORT}:80"
 ```
@@ -182,20 +179,17 @@ services:
 
 `images/` отслеживается: Dockerfile и контекст сборки — часть проекта. Имя папки — это имя сервиса, на которое ссылается `build.context` оверлея.
 
-## Шаблоны конфигов и дампы
+## Отрендеренные конфиги и дампы
 
-Две папки обычно соседствуют с деревом конфигурации.
+Рантайм-конфиги (`.env`, `env.php`, какой-нибудь `nginx.conf`, …) больше не хранятся как закоммиченное дерево `configs/<service>/`, копируемое в контейнеры. Они **рендерятся** из [config-пака шаблонов](../render/config.md) под `workspace/templates/config/<pack>/` прямо в hub-каталог каждого сервиса, откуда их монтирует compose-оверлей. Секреты, чеканенные сервисом (Laravel `APP_KEY`, …), харвестятся в gitignore'нутое хранилище `.dwe/generated.yml` и переигрываются при каждом рендере. Пак авторьте под `workspace/templates/config/`, а не в корневой папке `configs/`.
+
+Рядом с деревом конфигурации обычно остаётся одна папка:
 
 | Путь | Назначение | Читатель | Писатель | Отслеживается |
 |------|---------|--------|--------|---------|
-| `configs/<service>/…` | Шаблоны конфигов сервиса, копируемые в контейнеры через `service.yml.configs:` | Контейнеры (чтение) | Автор вручную | да |
 | `backups/…` | Дампы БД и прочее, создаваемые во время разработки | Оператор / команды проекта | Оператор / команды проекта | нет |
 
-`configs/` отслеживается, потому что шаблоны — часть проекта; `backups/` gitignored, потому что содержит сгенерированные дампы, которые различаются от машины к машине.
-
-Персистентные данные контейнеров (БД, загрузки, кэши) живут в именованных томах Docker.
-
-Точные имена папок — это конвенции: на `configs/` сервисы ссылаются относительным путём в compose-оверлее и в блоке `configs:` `service.yml`. Проект может использовать `etc/` вместо `configs/`. Раскладка выше — самая распространённая форма.
+`backups/` gitignored, потому что содержит сгенерированные дампы, которые различаются от машины к машине. Персистентные данные контейнеров (БД, загрузки, кэши) живут в именованных томах Docker.
 
 ## Исходники сервисов (`services/`)
 
@@ -221,10 +215,10 @@ services/                # gitignored
 | `.dwe/deploy/state.yml` | Идемпотентный журнал деплоя: `action_hash`, `status`, `started_at`, `duration` по каждому шагу | Исполнитель deploy + `dwe deploy state show` | Исполнитель deploy | нет |
 | `.dwe/deploy/deploy.lock` | Эксклюзивный `flock`, удерживаемый во время `dwe deploy run` | Подсистема блокировок | Подсистема блокировок | нет |
 | `.dwe/snapshots/snapshot.lock` | Эксклюзивный `flock`, удерживаемый во время изменений снапшотов | Подсистема блокировок | Подсистема блокировок | нет |
-| `.dwe/snapshots/current` | Указатель на активный снапшот, выставляется командой `snapshot restore` | Подсистема снапшотов | Подсистема снапшотов | нет |
+| `.dwe/snapshots/current` | Указатель на активный снапшот, выставляется командами `snapshot create` и `snapshot restore` (очищается при `snapshot remove`) | Подсистема снапшотов | Подсистема снапшотов | нет |
 | `.dwe/snapshots/.pre-restore-backup/` | Резервная копия `workspace/local.yml` + deploy state перед restore, для ручного восстановления | Оператор (вручную) | Подсистема снапшотов | нет |
-| `.dwe/logs/deploy.log` | Объединённый stdout/stderr последнего `dwe deploy run` (при `log: true`) | Оператор (вручную) + `dwe logs` | Исполнитель deploy | нет |
-| `.dwe/logs/run.log` · `stop.log` · `reset.log` | Объединённый stdout/stderr соответствующей фазы lifecycle (при `log: true`) | Оператор (вручную) + `dwe logs` | Исполнители lifecycle / reset | нет |
+| `.dwe/logs/deploy.log` | Объединённый stdout/stderr последнего `dwe deploy run` (пишется по умолчанию; отключается через `log: false`) | Оператор (вручную) | Исполнитель deploy | нет |
+| `.dwe/logs/run.log` · `stop.log` · `reset.log` | Объединённый stdout/stderr соответствующей фазы lifecycle (при `log: true`) | Оператор (вручную) | Исполнители lifecycle / reset | нет |
 | `.dwe/config` | Переопределение user-config на проект (язык, тема mermaid, условия уведомлений) | CLI на каждом вызове | Автор вручную | нет |
 
 ### Порядок блокировок
@@ -248,7 +242,7 @@ workspace/local.yml
 workspace/docker.local.yml
 ```
 
-Всё остальное — `workspace.yml`, остальная часть `workspace/`, весь `compose/`, весь `configs/` — отслеживается. Авторы редактируют отслеживаемое дерево; CLI пишет только внутрь gitignored-папок (с одним исключением: setup wizard и `dwe services enable/disable` дописывают в `workspace/local.yml`, который и сам gitignored).
+Всё остальное — `workspace.yml`, остальная часть `workspace/` (включая паки `workspace/templates/config/`), весь `compose/` — отслеживается. Авторы редактируют отслеживаемое дерево; CLI пишет только внутрь gitignored-папок (с одним исключением: setup wizard и `dwe services enable/disable` дописывают в `workspace/local.yml`, который и сам gitignored).
 
 ## Что читать дальше
 

@@ -1,4 +1,4 @@
-> Translated from: guides/add-a-service.md @ 2efb25e1a48a
+> Translated from: guides/add-a-service.md @ 920858516cf2
 
 # Добавление сервиса
 
@@ -135,16 +135,18 @@ services:
 
 ```yaml
 # workspace/services/worker/deploy.yml
-steps:
-  - id: install-deps
-    type: shell
-    cmd: |
-      $DWE_BIN shell worker -c "npm install"
-  - id: run-migrations
-    type: shell
-    when: "${services.queue.enabled}"
-    cmd: |
-      $DWE_BIN shell worker -c "npm run migrate"
+phases:
+  - name: setup
+    steps:
+      - name: install-deps
+        type: shell
+        cmd: |
+          $DWE_BIN shell worker -c "npm install"
+      - name: run-migrations
+        type: shell
+        when: { type: template, expr: "{{ .Services.queue.Enabled }}" }
+        cmd: |
+          $DWE_BIN shell worker -c "npm run migrate"
 ```
 
 Эти шаги выполняются при `dwe deploy` для каждого включённого сервиса, у которого есть `deploy.yml`, в порядке, который вычисляет пайплайн деплоя. Шаг может быть пропущен через журнал, если соответствующий хеш конфига не изменился, — это происходит автоматически.
@@ -153,23 +155,31 @@ steps:
 
 Справочник: [`../reference/config/deploy/index.md`](../reference/config/deploy/index.md).
 
-## Опционально: render-паки (IDE / AI / git)
+## Опционально: render-паки (config / IDE / AI / git)
 
-Для сервисов с `type: app` DWE может рендерить для каждого сервиса IDE-конфиг, AGENTS.md и фрагменты `.gitignore` из общих наборов шаблонов. Подключите это в `service.yml`:
+Для сервисов с `type: app` DWE может рендерить для каждого сервиса файлы из общих наборов шаблонов: рантайм-**конфиги** (`.env`, `env.php`, …), IDE-конфиг, AGENTS.md и фрагменты `.gitignore`. Подключите это в `service.yml`:
 
 ```yaml
 # workspace/services/worker/service.yml
 render:
-  ide: { enabled: true, template: node }
-  ai:  { enabled: true, template: node }
-  git: { enabled: true, template: node }
+  config: { template: node }
+  ide:    { enabled: true, template: node }
+  ai:     { enabled: true, template: node }
+  git:    { enabled: true, template: node }
 ```
 
-Значение `template:` — это имя набора в `workspace/templates/{ide,ai,git}/<pack>/`. Запустите `dwe render ide` (а также `dwe render ai`, `dwe render git`), чтобы посмотреть, что выдаст каждый из рендереров.
+Значение `template:` — это имя набора в `workspace/templates/{config,ide,ai,git}/<pack>/`. Запустите `dwe render config` (а также `dwe render ide`, `dwe render ai`, `dwe render git`), чтобы посмотреть, что выдаст каждый из рендереров.
+
+Пак **config** стоит особняком, и это важно отметить:
+
+- Он пишет прямо в смонтированный hub-каталог сервиса (его `dir`), режим replace — это файлы, которые контейнер реально читает в рантайме, а не метаданные для редактора/агента.
+- Его шаблоны используют сокращение `${...}` (например, `DB_HOST=${services.db.hosts.main}`) — ту же форму, что и правила экспорта, а не «сырой» субстрат `{{ }}`, который применяют паки ide/ai/git.
+- Он поддерживает **секреты generated-once** (Laravel `APP_KEY`, Magento `crypt.key`, …): значение чеканит *сам сервис*, DWE харвестит его в `.dwe/generated.yml` и переигрывает при каждом последующем рендере через `${generated.<name>}`. Это render-преемник устаревшего механизма `service_configs_copy`.
+- Рендер config также запускается автоматически как преамбула `dwe run` и как шаг деплоя; `dwe render config` нужен в основном для предпросмотра и для разового прохода `--harvest`.
 
 Если ничего из этого не нужно — целиком опустите блок `render:`.
 
-См. [`shared-ide-and-agent-config.md`](shared-ide-and-agent-config.md) — полный воркфлоу работы с наборами шаблонов и цепочка их разрешения.
+См. [`shared-ide-and-agent-config.md`](shared-ide-and-agent-config.md) — воркфлоу работы с наборами шаблонов IDE/AI/git, и [`../reference/render/config.md`](../reference/render/config.md) — про субстрат config-пака, хранилище сгенерированных значений и pipeline-билтины.
 
 ## Проверка
 

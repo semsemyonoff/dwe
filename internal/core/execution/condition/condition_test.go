@@ -3,6 +3,7 @@ package condition_test
 import (
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/semsemyonoff/dwe/internal/core/execution/condition"
@@ -301,6 +302,130 @@ func TestEvalBuiltin_absolutePath(t *testing.T) {
 	}
 	if !ok {
 		t.Error("dir-exists with absolute path: expected true")
+	}
+}
+
+// --- EvalBuiltin: generated-missing ---
+
+// writeGeneratedStore writes a .dwe/generated.yml under root with the given
+// service→field→value entries.
+func writeGeneratedStore(t *testing.T, root string, services map[string]map[string]string) {
+	t.Helper()
+	dir := filepath.Join(root, ".dwe")
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	var b strings.Builder
+	b.WriteString("services:\n")
+	for svc, fields := range services {
+		b.WriteString("  " + svc + ":\n")
+		for k, v := range fields {
+			b.WriteString("    " + k + ": " + v + "\n")
+		}
+	}
+	if err := os.WriteFile(filepath.Join(dir, "generated.yml"), []byte(b.String()), 0o644); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func TestEvalBuiltin_generatedMissing_present(t *testing.T) {
+	root := t.TempDir()
+	writeGeneratedStore(t, root, map[string]map[string]string{
+		"main": {"app_key": "base64:abc=="},
+	})
+
+	ok, err := condition.EvalBuiltin("generated-missing main app_key", root)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if ok {
+		t.Error("generated-missing: expected false when field present")
+	}
+}
+
+func TestEvalBuiltin_generatedMissing_absentField(t *testing.T) {
+	root := t.TempDir()
+	writeGeneratedStore(t, root, map[string]map[string]string{
+		"main": {"other": "x"},
+	})
+
+	ok, err := condition.EvalBuiltin("generated-missing main app_key", root)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if !ok {
+		t.Error("generated-missing: expected true when field absent")
+	}
+}
+
+func TestEvalBuiltin_generatedMissing_missingStore(t *testing.T) {
+	root := t.TempDir()
+
+	ok, err := condition.EvalBuiltin("generated-missing main app_key", root)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if !ok {
+		t.Error("generated-missing: expected true when store file missing")
+	}
+}
+
+func TestEvalBuiltin_generatedMissing_wrongArgCount(t *testing.T) {
+	root := t.TempDir()
+
+	// only one sub-arg
+	if _, err := condition.EvalBuiltin("generated-missing main", root); err == nil {
+		t.Error("expected error for single sub-arg")
+	}
+	// three sub-args
+	if _, err := condition.EvalBuiltin("generated-missing main app_key extra", root); err == nil {
+		t.Error("expected error for three sub-args")
+	}
+}
+
+func TestEvalBuiltin_generatedMissing_whitespaceSplit(t *testing.T) {
+	root := t.TempDir()
+	writeGeneratedStore(t, root, map[string]map[string]string{
+		"magento": {"crypt_key": "241f4fa60be8f69638343cacc5a1a192"},
+	})
+
+	// extra interior whitespace must still split into exactly two sub-args
+	ok, err := condition.EvalBuiltin("generated-missing   magento    crypt_key", root)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if ok {
+		t.Error("generated-missing: expected false (present) after whitespace split")
+	}
+}
+
+func TestParseGeneratedMissing(t *testing.T) {
+	svc, field, err := condition.ParseGeneratedMissing("  main   app_key  ")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if svc != "main" || field != "app_key" {
+		t.Errorf("got (%q, %q), want (main, app_key)", svc, field)
+	}
+
+	for _, args := range []string{"main", "main app_key extra", "", "   "} {
+		if _, _, err := condition.ParseGeneratedMissing(args); err == nil {
+			t.Errorf("ParseGeneratedMissing(%q): expected error", args)
+		}
+	}
+}
+
+func TestEvalBuiltin_generatedMissing_isRuntimeAndRoutes(t *testing.T) {
+	root := t.TempDir()
+	if !condition.IsRuntime("generated-missing main app_key") {
+		t.Error("generated-missing should be a runtime predicate")
+	}
+	ok, err := condition.EvalRuntime("generated-missing main app_key", root)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if !ok {
+		t.Error("EvalRuntime generated-missing: expected true for missing store")
 	}
 }
 

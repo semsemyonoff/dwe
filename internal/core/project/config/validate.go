@@ -26,11 +26,19 @@ func ValidateConfigPath(baseDir string) string {
 // reservedValidateStages is the set of stages bound to built-in preflight hooks.
 // Stages outside this set are accepted (open enum) but produce an info-level
 // load-time warning so users know they will not be invoked automatically.
+//
+// "post-setup" is a deploy-flow refinement rather than a standalone command
+// hook: it runs ONLY at the final preflight immediately before the deploy
+// pipeline (after the setup wizard has populated local.yml, or — when no
+// wizard runs — right before deploy), and is intentionally skipped at the
+// early pre-wizard gate. See internal/core/execution/preflight and
+// docs/reference/config/validate.md.
 var reservedValidateStages = map[string]struct{}{
-	"deploy":  {},
-	"run":     {},
-	"stop":    {},
-	"command": {},
+	"deploy":     {},
+	"run":        {},
+	"stop":       {},
+	"command":    {},
+	"post-setup": {},
 }
 
 // allowedCheckTypes is the set of legal "type:" values for a check entry.
@@ -123,7 +131,7 @@ type rawCheckEntry struct {
 // findClosestStage returns a known stage name if the input is within
 // Levenshtein distance 2, else empty string.
 func findClosestStage(input string) string {
-	knownStages := []string{"deploy", "run", "stop", "command"}
+	knownStages := []string{"deploy", "run", "stop", "command", "post-setup"}
 	const maxDistance = 2
 
 	var closest string
@@ -270,7 +278,7 @@ func LoadValidateConfig(path string) (*ValidateConfig, []diag.Diagnostic, error)
 			}
 
 			// Unknown stage: emit warning with suggestion if close to a known value.
-			hint := "Known stages: deploy, run, stop, command"
+			hint := "Known stages: deploy, run, stop, command, post-setup"
 
 			switch stage {
 			case "restart":

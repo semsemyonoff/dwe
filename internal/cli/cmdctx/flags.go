@@ -24,6 +24,8 @@ type RootFlags struct {
 	I18n       *i18n.Store
 	Output     string // "text" (default) | "json"
 	Pretty     bool   // indent JSON when Output=="json"
+	Verbose    bool   // -v: echo executed commands + key pipeline decisions
+	Debug      bool   // --debug: structured firehose (superset of Verbose)
 }
 
 // ProjectRoot returns the resolved project root. Falls back to the config

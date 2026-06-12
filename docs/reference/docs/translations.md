@@ -58,7 +58,7 @@ Each translated markdown file includes a header line that records the SHA256 has
 When you view a translation, DWE compares this hash against the embedded manifest (generated at build time). If they differ, the translation is marked **stale** and a warning banner appears:
 
 ```
-⚠ This translation is outdated (last synced at <hash>, current is <hash>). Press `e` to view the English version.
+⚠ This translation is outdated (last synced at previous version, current is newer). Press `e` to view the English version.
 ```
 
 Translators can update the hash as part of their pull request; DWE re-generates the manifest at the next `make build`.

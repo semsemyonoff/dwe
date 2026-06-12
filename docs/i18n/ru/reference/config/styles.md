@@ -1,4 +1,4 @@
-> Translated from: reference/config/styles.md @ c0b8b419cba8
+> Translated from: reference/config/styles.md @ a7cbbc99b86c
 
 # styles.yml
 
@@ -63,7 +63,7 @@ separator: "·"
 | Поле | Тип | Дефолт | Описание |
 |------|-----|--------|----------|
 | `header.lines` | list of strings | _(нет)_ | Текстовые строки, рендерящиеся как ASCII-арт под brand-строкой |
-| `header.font` | string | `doom` | Имя FIGlet-шрифта (doom, banner, big, block, slant, …) |
+| `header.font` | string | `standard` | Имя FIGlet-шрифта (doom, banner, big, block, slant, …) |
 | `header.tagline` | string | _(нет)_ | Одна строка-tagline, рендерящаяся в muted-цвете ниже brand-строки |
 
 ASCII-блок раскрашен токеном `accent`. Отдельного `header.color` нет — цвет
@@ -81,7 +81,7 @@ ASCII-блок раскрашен токеном `accent`. Отдельного 
 | `success` | Состояния OK / running / enabled; success-уведомления; индикатор `[--yes ON]` |
 | `warning` | Warning-диагностики; partial / degraded состояния |
 | `danger`  | Error-диагностики; failed-уведомления |
-| `muted`   | Вторичный текст — счётчики, разделители, dimmed строки списков, tree-глифы, неактивная пагинация, описания команд/флагов |
+| `muted`   | Вторичный текст — счётчики, разделители, dimmed строки списков, tree-глифы, неактивная пагинация, описания команд/флагов; а также иконка остановленного стека `○` в `dwe prompt` |
 | `border`  | Дефолтные (unfocused) бордюры панелей и таблиц |
 | `text`    | Дефолтный body-текст. Пустое значение означает «пусть терминал сам выбирает foreground-цвет» — рекомендуется почти во всех случаях |
 

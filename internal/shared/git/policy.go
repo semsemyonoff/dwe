@@ -7,10 +7,8 @@ type UpdateMode string
 
 // Update mode constants.
 const (
-	ModePrompt UpdateMode = "prompt"
-	ModeAuto   UpdateMode = "auto"
-	ModeCheck  UpdateMode = "check"
-	ModeOff    UpdateMode = "off"
+	ModeOn  UpdateMode = "on"
+	ModeOff UpdateMode = "off"
 )
 
 // Action is the decision made by Decide.
@@ -21,8 +19,6 @@ const (
 	ActionSkip Action = iota
 	// ActionWarn means the user should be warned but no pull performed.
 	ActionWarn
-	// ActionPullAuto means pull should be performed without prompting.
-	ActionPullAuto
 	// ActionPullPrompt means the user should be asked before pulling.
 	ActionPullPrompt
 )
@@ -57,17 +53,12 @@ func Decide(status Status, mode UpdateMode, isInteractive bool) (Action, string)
 	if status.Ahead > 0 {
 		return ActionWarn, "branch has diverged from upstream — skipping update"
 	}
-	// Behind and clean.
-	switch mode {
-	case ModeAuto:
-		return ActionPullAuto, ""
-	case ModePrompt:
+	// Behind and clean. mode=on: prompt on a TTY, warn in non-interactive.
+	if mode == ModeOn {
 		if isInteractive {
 			return ActionPullPrompt, fmt.Sprintf("branch is %d commit(s) behind upstream", status.Behind)
 		}
 		return ActionWarn, fmt.Sprintf("branch is %d commit(s) behind upstream — skipping update in non-interactive mode", status.Behind)
-	case ModeCheck:
-		return ActionWarn, fmt.Sprintf("branch is %d commit(s) behind upstream", status.Behind)
 	}
 	return ActionSkip, ""
 }

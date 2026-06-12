@@ -8,6 +8,7 @@ import (
 	"os"
 	"path/filepath"
 
+	"github.com/semsemyonoff/dwe/internal/core/bridge"
 	"github.com/semsemyonoff/dwe/internal/core/project/config"
 	"github.com/semsemyonoff/dwe/internal/shared/i18n"
 	"github.com/semsemyonoff/dwe/internal/shared/lock"
@@ -88,6 +89,14 @@ func RunStop(ctx StopContext) error {
 
 	if err := RunPhases(cfg, reg, workDir, stopCfg.Phases, "stop", "stop", ctx.Yes, stopCfg.LogEnabled(), ctx.Translator, ctx.Locale); err != nil {
 		return err
+	}
+
+	// Whole-stack stop also stops the host-bridge daemon (design D6); the
+	// per-service `dwe stop <name>` path never touches it. Best-effort: the
+	// daemon auto-stops once zero labeled containers remain, so a signaling
+	// failure must not fail the stop.
+	if _, err := BridgeStopDaemonFunc(bridge.DefaultBridgeDir(workDir)); err != nil {
+		render.Stdout().Warning(fmt.Sprintf("stopping bridge daemon: %v", err))
 	}
 
 	// Stopping the full stack moots any pending restart: the next `dwe run`

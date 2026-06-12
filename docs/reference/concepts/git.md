@@ -18,7 +18,7 @@ A DWE project has its *own* Git repository at the project root — the one that 
 
 DWE treats those two layers identically: it never assumes a particular VCS lives at the project root, and it never reaches into one service's repo to learn about another. Every Git operation either targets the project root (the update probe) or targets exactly one `<svc.Dir>/src/` (hook rendering, workspace probe). There is no global "fetch everything" surface.
 
-The CLI shells out to the host `git` binary. The binary path resolves through the standard accessor (`config.GitBin(cfg)`) so a project can pin a specific version via `binaries.git` in `workspace.yml` if needed. Empty means "look up `git` on `$PATH`".
+The CLI shells out to the host `git` binary. The binary path resolves through the standard accessor (`config.GitBin(cfg)`) so a user can pin a specific path via `binary_git=/path` in `~/.config/dwe/config` if needed. Empty means "look up `git` on `$PATH`".
 
 ## Hook rendering
 
@@ -81,13 +81,12 @@ The probe never fetches. Branch / OID / ahead-behind / dirty come from a single 
 
 ## Update probe (`dwe run`)
 
-The `run:` pipeline in `workspace/lifecycle.yml` may declare an `update:` block. When present, `dwe run` probes the project-root repository before executing any phase:
+The top-level [`update:` block](../config/workspace.md#the-update-block) in `workspace.yml` / `local.yml` controls the self-update probe. When `mode: on`, `dwe run` probes the project-root repository before executing any phase:
 
 ```yaml
-# workspace/lifecycle.yml
-run:
-  update:
-    mode: on   # on | off
+# workspace.yml (or workspace/local.yml)
+update:
+  mode: on   # on | off
 ```
 
 Two modes:
@@ -101,7 +100,7 @@ The probe runs on the project root, never on a service `src/`. It calls `git fet
 
 When the mode is `on` and the working tree is clean, behind > 0, ahead = 0, and the session is interactive, DWE prompts before running `git pull --ff-only` (2 min timeout). A successful pull reloads `DweConfig`, `LifecycleConfig`, and the command registry in-process before phases execute, so the rest of `dwe run` sees the post-update state.
 
-Runtime precedence: `--no-update` flag > `--update <mode>` flag > YAML `update.mode`. Field reference: [`config/lifecycle.md`](../config/lifecycle.md#runupdate).
+Runtime precedence: `--no-update` flag > `--update <mode>` flag > merged-config `update.mode`. Field reference: [`config/workspace.md` → the `update:` block](../config/workspace.md#the-update-block).
 
 ## `.gitignore` conventions
 
@@ -148,6 +147,6 @@ Combined with the no-network principle ([Architecture → No network on the norm
 
 - [`dwe render git`](../render/git.md) — full field reference for hook rendering: manifest schema, template variables, path-safety guards, output messages.
 - [`services.<name>.render.git`](../config/services/fields.md#rendergit-block) — per-service activation, template pinning, inheritance.
-- [`lifecycle.yml` → run.update](../config/lifecycle.md#runupdate) — update probe configuration.
+- [`workspace.yml` → the `update:` block](../config/workspace.md#the-update-block) — update probe configuration.
 - [Templates](../templates.md) — Go text template engine, helper registries, strict mode.
 - [Project layout](project-layout.md) — where `workspace/templates/git/`, `<svc.Dir>/src/`, and `.dwe/` live in the project tree.

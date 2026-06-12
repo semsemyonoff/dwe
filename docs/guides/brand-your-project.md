@@ -29,7 +29,7 @@ header:
 ```
 
 - `header.lines` is rendered as ASCII art via FIGlet. Two short lines usually look better than one long one — banner fonts wrap awkwardly at narrow widths.
-- `header.font` accepts standard FIGlet font names: `doom`, `banner`, `big`, `block`, `slant`, and similar. `doom` is the built-in default.
+- `header.font` accepts standard FIGlet font names: `doom`, `banner`, `big`, `block`, `slant`, and similar. `standard` is the built-in default.
 - `header.tagline` is a single muted line printed below the brand line. Skip it if you want a tighter header.
 
 The ASCII block is always colored with the `accent` token — there is no separate `header.color`. Change the accent and the header re-tints to match.
@@ -71,13 +71,13 @@ See [styles.yml reference — colors](../reference/config/styles.md#colors) and 
 
 ## Separator character
 
-The `separator:` key controls the character between label and value in definition rows (`Project · laravel`):
+The `separator:` key controls the character between label and value in definition rows (`Project — laravel`):
 
 ```yaml
 separator: "·"
 ```
 
-Common alternatives: `"·"` (middle dot, the default), `"—"` (em dash), `":"` (colon — terse but reads as a heading break). Pick once and forget it.
+Common alternatives: `"—"` (em dash, the default), `"·"` (middle dot), `":"` (colon — terse but reads as a heading break). Pick once and forget it.
 
 ## Curate the info dashboard
 
@@ -178,7 +178,7 @@ Three common gotchas:
 
 - Always quote template expressions. YAML otherwise parses `{{ ... }}` as a flow mapping.
 - Service field access uses Go's `text/template` syntax — `(index .Services "main").Host "web"`, with parentheses around `index`.
-- `.Project`, `.Services`, `.Runtime`, and `.State` are exposed at the top level. Custom keys you add to `defaults.yml` live under `.Cfg.Raw`.
+- `.Project`, `.Services`, `.Runtime`, and `.State` are exposed at the top level. Custom keys live under `.Raw` (access via `index .Raw "vars" "greeting"`); prefer the `vars:` block for free-form values.
 
 See [info.yml — template expressions](../reference/config/info.md#template-expressions) for the full template surface and the `appURL` helper signature.
 

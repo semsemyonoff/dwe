@@ -19,9 +19,27 @@ import (
 	"github.com/semsemyonoff/dwe/internal/core/workflow/deploy"
 	"github.com/semsemyonoff/dwe/internal/core/workflow/deploy/journal"
 	"github.com/semsemyonoff/dwe/internal/core/workflow/reset"
+	"github.com/semsemyonoff/dwe/internal/shared/generatedstore"
 
 	"github.com/spf13/cobra"
 )
+
+// seedGeneratedStore writes a generated-value store under baseDir/.dwe with the
+// given service → field → value contents, returning the store path.
+func seedGeneratedStore(t *testing.T, baseDir string, services map[string]map[string]string) string {
+	t.Helper()
+	path := filepath.Join(baseDir, generatedstore.DefaultRelPath)
+	store := generatedstore.New()
+	for svc, fields := range services {
+		for field, val := range fields {
+			store.SetIfAbsent(svc, field, val)
+		}
+	}
+	if err := generatedstore.Save(path, store); err != nil {
+		t.Fatalf("seed generated store: %v", err)
+	}
+	return path
+}
 
 // TestResetRunCmd_projectWideCleanup verifies that a project-wide reset
 // removes the entire deploy state file.
@@ -1163,5 +1181,407 @@ func TestResetServiceRun_PipelineFailureSkipsJournal(t *testing.T) {
 	}
 	if state.Pending != nil && state.Pending.Find(journal.PendingDeploy) != nil {
 		t.Error("PendingDeploy should NOT be added on pipeline failure")
+	}
+}
+
+// TestClearGeneratedStore_FullScope verifies the whole store is wiped when svc is empty.
+func TestClearGeneratedStore_FullScope(t *testing.T) {
+	dir := t.TempDir()
+	path := seedGeneratedStore(t, dir, map[string]map[string]string{
+		"main":    {"app_key": "base64:aaa"},
+		"magento": {"crypt_key": "deadbeef"},
+	})
+
+	if err := clearGeneratedStore(dir, ""); err != nil {
+		t.Fatalf("clearGeneratedStore: %v", err)
+	}
+	store, err := generatedstore.Load(path)
+	if err != nil {
+		t.Fatalf("load after clear: %v", err)
+	}
+	if !store.IsEmpty() {
+		t.Errorf("expected empty store after full clear, got %+v", store.Services)
+	}
+}
+
+// TestClearGeneratedStore_ServiceScope verifies only the named service is cleared.
+func TestClearGeneratedStore_ServiceScope(t *testing.T) {
+	dir := t.TempDir()
+	path := seedGeneratedStore(t, dir, map[string]map[string]string{
+		"main":    {"app_key": "base64:aaa"},
+		"magento": {"crypt_key": "deadbeef"},
+	})
+
+	if err := clearGeneratedStore(dir, "main"); err != nil {
+		t.Fatalf("clearGeneratedStore: %v", err)
+	}
+	store, err := generatedstore.Load(path)
+	if err != nil {
+		t.Fatalf("load after clear: %v", err)
+	}
+	if store.Has("main", "app_key") {
+		t.Error("main should have been cleared")
+	}
+	if !store.Has("magento", "crypt_key") {
+		t.Error("magento should have been preserved")
+	}
+}
+
+// TestClearGeneratedStore_MissingStore is a no-op (no file → no error).
+func TestClearGeneratedStore_MissingStore(t *testing.T) {
+	dir := t.TempDir()
+	if err := clearGeneratedStore(dir, ""); err != nil {
+		t.Fatalf("expected no error for missing store, got %v", err)
+	}
+	if err := clearGeneratedStore(dir, "main"); err != nil {
+		t.Fatalf("expected no error for missing store (scoped), got %v", err)
+	}
+}
+
+// TestResolveClearGenerated_FlagForcesTrue verifies the flag clears without prompting.
+func TestResolveClearGenerated_FlagForcesTrue(t *testing.T) {
+	dir := t.TempDir()
+	seedGeneratedStore(t, dir, map[string]map[string]string{"main": {"app_key": "x"}})
+
+	prevConfirm := resetConfirmFn
+	t.Cleanup(func() { resetConfirmFn = prevConfirm })
+	confirmCalled := false
+	resetConfirmFn = func(_, _, _ string) (bool, error) {
+		confirmCalled = true
+		return false, nil
+	}
+
+	got, err := resolveClearGenerated(strings.NewReader(""), dir, "", true, false)
+	if err != nil {
+		t.Fatalf("resolveClearGenerated: %v", err)
+	}
+	if !got {
+		t.Error("flag set should force clear=true")
+	}
+	if confirmCalled {
+		t.Error("flag set should not prompt")
+	}
+}
+
+// TestResolveClearGenerated_NonInteractiveNoFlag preserves the store without a prompt.
+func TestResolveClearGenerated_NonInteractiveNoFlag(t *testing.T) {
+	dir := t.TempDir()
+	seedGeneratedStore(t, dir, map[string]map[string]string{"main": {"app_key": "x"}})
+
+	prevInteractive := widgets.IsInteractiveFn
+	t.Cleanup(func() { widgets.IsInteractiveFn = prevInteractive })
+	widgets.IsInteractiveFn = func(_ io.Reader) bool { return false }
+
+	prevConfirm := resetConfirmFn
+	t.Cleanup(func() { resetConfirmFn = prevConfirm })
+	resetConfirmFn = func(_, _, _ string) (bool, error) {
+		t.Error("non-interactive should not prompt")
+		return false, nil
+	}
+
+	got, err := resolveClearGenerated(strings.NewReader(""), dir, "", false, false)
+	if err != nil {
+		t.Fatalf("resolveClearGenerated: %v", err)
+	}
+	if got {
+		t.Error("non-interactive without flag should preserve (clear=false)")
+	}
+}
+
+// TestResolveClearGenerated_SkipPromptNoFlag verifies --yes suppresses the prompt.
+func TestResolveClearGenerated_SkipPromptNoFlag(t *testing.T) {
+	dir := t.TempDir()
+	seedGeneratedStore(t, dir, map[string]map[string]string{"main": {"app_key": "x"}})
+
+	prevInteractive := widgets.IsInteractiveFn
+	t.Cleanup(func() { widgets.IsInteractiveFn = prevInteractive })
+	widgets.IsInteractiveFn = func(_ io.Reader) bool { return true }
+
+	prevConfirm := resetConfirmFn
+	t.Cleanup(func() { resetConfirmFn = prevConfirm })
+	resetConfirmFn = func(_, _, _ string) (bool, error) {
+		t.Error("--yes (skipPrompt) should not prompt")
+		return true, nil
+	}
+
+	got, err := resolveClearGenerated(strings.NewReader(""), dir, "", false, true)
+	if err != nil {
+		t.Fatalf("resolveClearGenerated: %v", err)
+	}
+	if got {
+		t.Error("--yes without flag should preserve (clear=false)")
+	}
+}
+
+// TestResolveClearGenerated_EmptyStoreNoPrompt verifies an empty store skips the prompt.
+func TestResolveClearGenerated_EmptyStoreNoPrompt(t *testing.T) {
+	dir := t.TempDir()
+	// No seeded store at all → empty.
+
+	prevInteractive := widgets.IsInteractiveFn
+	t.Cleanup(func() { widgets.IsInteractiveFn = prevInteractive })
+	widgets.IsInteractiveFn = func(_ io.Reader) bool { return true }
+
+	prevConfirm := resetConfirmFn
+	t.Cleanup(func() { resetConfirmFn = prevConfirm })
+	resetConfirmFn = func(_, _, _ string) (bool, error) {
+		t.Error("empty store should not prompt")
+		return true, nil
+	}
+
+	got, err := resolveClearGenerated(strings.NewReader(""), dir, "", false, false)
+	if err != nil {
+		t.Fatalf("resolveClearGenerated: %v", err)
+	}
+	if got {
+		t.Error("empty store should yield clear=false")
+	}
+}
+
+// TestResolveClearGenerated_InteractivePromptHonored verifies the prompt decision is honored.
+func TestResolveClearGenerated_InteractivePromptHonored(t *testing.T) {
+	tests := []struct {
+		name    string
+		confirm bool
+		want    bool
+	}{
+		{"accept", true, true},
+		{"decline", false, false},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			dir := t.TempDir()
+			seedGeneratedStore(t, dir, map[string]map[string]string{"main": {"app_key": "x", "other": "y"}})
+
+			prevInteractive := widgets.IsInteractiveFn
+			t.Cleanup(func() { widgets.IsInteractiveFn = prevInteractive })
+			widgets.IsInteractiveFn = func(_ io.Reader) bool { return true }
+
+			var capturedTitle string
+			prevConfirm := resetConfirmFn
+			t.Cleanup(func() { resetConfirmFn = prevConfirm })
+			resetConfirmFn = func(title, _, _ string) (bool, error) {
+				capturedTitle = title
+				return tc.confirm, nil
+			}
+
+			got, err := resolveClearGenerated(strings.NewReader(""), dir, "", false, false)
+			if err != nil {
+				t.Fatalf("resolveClearGenerated: %v", err)
+			}
+			if got != tc.want {
+				t.Errorf("clear = %v, want %v", got, tc.want)
+			}
+			if !strings.Contains(capturedTitle, "clear 2 generated value") {
+				t.Errorf("prompt title missing count; got %q", capturedTitle)
+			}
+		})
+	}
+}
+
+// TestResolveClearGenerated_CancelPreserves verifies Esc/Ctrl-C preserves the store.
+func TestResolveClearGenerated_CancelPreserves(t *testing.T) {
+	dir := t.TempDir()
+	seedGeneratedStore(t, dir, map[string]map[string]string{"main": {"app_key": "x"}})
+
+	prevInteractive := widgets.IsInteractiveFn
+	t.Cleanup(func() { widgets.IsInteractiveFn = prevInteractive })
+	widgets.IsInteractiveFn = func(_ io.Reader) bool { return true }
+
+	prevConfirm := resetConfirmFn
+	t.Cleanup(func() { resetConfirmFn = prevConfirm })
+	resetConfirmFn = func(_, _, _ string) (bool, error) { return false, widgets.ErrCancelled }
+
+	got, err := resolveClearGenerated(strings.NewReader(""), dir, "", false, false)
+	if err != nil {
+		t.Fatalf("cancel should not error, got %v", err)
+	}
+	if got {
+		t.Error("cancel should preserve (clear=false)")
+	}
+}
+
+// TestResolveClearGenerated_ServiceScopeCount verifies scoped counting only sees the service.
+func TestResolveClearGenerated_ServiceScopeCount(t *testing.T) {
+	dir := t.TempDir()
+	seedGeneratedStore(t, dir, map[string]map[string]string{
+		"main":    {"app_key": "x"},
+		"magento": {"crypt_key": "y", "extra": "z"},
+	})
+
+	prevInteractive := widgets.IsInteractiveFn
+	t.Cleanup(func() { widgets.IsInteractiveFn = prevInteractive })
+	widgets.IsInteractiveFn = func(_ io.Reader) bool { return true }
+
+	var capturedTitle string
+	prevConfirm := resetConfirmFn
+	t.Cleanup(func() { resetConfirmFn = prevConfirm })
+	resetConfirmFn = func(title, _, _ string) (bool, error) {
+		capturedTitle = title
+		return true, nil
+	}
+
+	got, err := resolveClearGenerated(strings.NewReader(""), dir, "main", false, false)
+	if err != nil {
+		t.Fatalf("resolveClearGenerated: %v", err)
+	}
+	if !got {
+		t.Error("expected clear=true")
+	}
+	if !strings.Contains(capturedTitle, "clear 1 generated value") {
+		t.Errorf("scoped prompt should count only the service; got %q", capturedTitle)
+	}
+}
+
+// TestResetServiceRun_ClearGeneratedFlag_ClearsScopedStore verifies the flag clears
+// the service's store only after the per-service reset (pipeline + journal) succeeds.
+func TestResetServiceRun_ClearGeneratedFlag_ClearsScopedStore(t *testing.T) {
+	cfgPath, dir := makeResetServiceTestDir(t, "postgres", true, false, true, false)
+	storePath := seedGeneratedStore(t, dir, map[string]map[string]string{
+		"postgres": {"app_key": "base64:aaa"},
+		"other":    {"crypt_key": "keepme"},
+	})
+
+	stubPreflightRun(t)
+
+	flags := &cmdctx.RootFlags{}
+	root := buildLifecycleTestRoot(flags)
+	if err := root.PersistentFlags().Set("config", cfgPath); err != nil {
+		t.Fatal(err)
+	}
+	root.SetArgs([]string{"reset", "run", "--service", "postgres", "--yes", "--clear-generated"})
+	if err := root.Execute(); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	store, err := generatedstore.Load(storePath)
+	if err != nil {
+		t.Fatalf("load store: %v", err)
+	}
+	if store.Has("postgres", "app_key") {
+		t.Error("postgres generated values should be cleared")
+	}
+	if !store.Has("other", "crypt_key") {
+		t.Error("unrelated service's generated values should be preserved")
+	}
+}
+
+// TestResetServiceRun_NoFlag_PreservesStore verifies the default preserves the store.
+func TestResetServiceRun_NoFlag_PreservesStore(t *testing.T) {
+	cfgPath, dir := makeResetServiceTestDir(t, "postgres", true, false, true, false)
+	storePath := seedGeneratedStore(t, dir, map[string]map[string]string{
+		"postgres": {"app_key": "base64:aaa"},
+	})
+
+	stubPreflightRun(t)
+
+	flags := &cmdctx.RootFlags{}
+	root := buildLifecycleTestRoot(flags)
+	if err := root.PersistentFlags().Set("config", cfgPath); err != nil {
+		t.Fatal(err)
+	}
+	root.SetArgs([]string{"reset", "run", "--service", "postgres", "--yes"})
+	if err := root.Execute(); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	store, err := generatedstore.Load(storePath)
+	if err != nil {
+		t.Fatalf("load store: %v", err)
+	}
+	if !store.Has("postgres", "app_key") {
+		t.Error("default (no flag) should preserve generated values")
+	}
+}
+
+// TestResetServiceRun_PipelineFailure_StoreNotCleared verifies a failed pipeline
+// (failing docker) leaves the generated store intact even with --clear-generated.
+func TestResetServiceRun_PipelineFailure_StoreNotCleared(t *testing.T) {
+	cfgPath, dir := makeResetServiceTestDir(t, "postgres", true, false, true, false)
+	storePath := seedGeneratedStore(t, dir, map[string]map[string]string{
+		"postgres": {"app_key": "base64:aaa"},
+	})
+
+	// Replace fake docker with a failing one so the pipeline errors.
+	logPath := filepath.Join(dir, ".dwe", "docker-args.log")
+	failingScript := "#!/bin/sh\nprintf '%s\\n' \"$*\" >> " + logPath + "\necho 'boom' >&2\nexit 1\n"
+	fakePath := filepath.Join(dir, ".dwe", "bin", "docker")
+	if err := os.WriteFile(fakePath, []byte(failingScript), 0o755); err != nil {
+		t.Fatalf("write failing docker: %v", err)
+	}
+
+	stubPreflightRun(t)
+
+	flags := &cmdctx.RootFlags{}
+	root := buildLifecycleTestRoot(flags)
+	if err := root.PersistentFlags().Set("config", cfgPath); err != nil {
+		t.Fatal(err)
+	}
+	root.SetArgs([]string{"reset", "run", "--service", "postgres", "--yes", "--clear-generated"})
+	if err := root.Execute(); err == nil {
+		t.Fatal("expected pipeline error from failing docker, got nil")
+	}
+
+	store, err := generatedstore.Load(storePath)
+	if err != nil {
+		t.Fatalf("load store: %v", err)
+	}
+	if !store.Has("postgres", "app_key") {
+		t.Error("pipeline failure must NOT clear the generated store")
+	}
+}
+
+// TestResetServiceRun_JournalFailure_StoreNotCleared verifies a journal-update
+// failure (state.yml is a directory) leaves the generated store intact.
+func TestResetServiceRun_JournalFailure_StoreNotCleared(t *testing.T) {
+	cfgPath, dir := makeResetServiceTestDir(t, "postgres", true, false, true, false)
+	storePath := seedGeneratedStore(t, dir, map[string]map[string]string{
+		"postgres": {"app_key": "base64:aaa"},
+	})
+
+	// Force the journal mutation to fail: make state.yml a directory so both the
+	// load and the atomic rename inside ReplaceServiceWithPending error out.
+	statePath := filepath.Join(dir, journal.DefaultRelPath)
+	if err := os.MkdirAll(statePath, 0o755); err != nil {
+		t.Fatalf("mkdir state path: %v", err)
+	}
+
+	stubPreflightRun(t)
+
+	flags := &cmdctx.RootFlags{}
+	root := buildLifecycleTestRoot(flags)
+	if err := root.PersistentFlags().Set("config", cfgPath); err != nil {
+		t.Fatal(err)
+	}
+	root.SetArgs([]string{"reset", "run", "--service", "postgres", "--yes", "--clear-generated"})
+	if err := root.Execute(); err == nil {
+		t.Fatal("expected journal-update error, got nil")
+	}
+
+	store, err := generatedstore.Load(storePath)
+	if err != nil {
+		t.Fatalf("load store: %v", err)
+	}
+	if !store.Has("postgres", "app_key") {
+		t.Error("journal-cleanup failure must NOT clear the generated store")
+	}
+}
+
+// TestResetRunFlags_ClearGeneratedExists verifies the --clear-generated flag exists.
+func TestResetRunFlags_ClearGeneratedExists(t *testing.T) {
+	flags := &cmdctx.RootFlags{ConfigPath: "workspace.yml"}
+	resetCmd := NewResetCmd(groupPipelines, flags)
+	var cmd *cobra.Command
+	for _, sub := range resetCmd.Commands() {
+		if sub.Name() == "run" {
+			cmd = sub
+			break
+		}
+	}
+	if cmd == nil {
+		t.Fatal("reset run subcommand missing")
+	}
+	if cmd.Flags().Lookup("clear-generated") == nil {
+		t.Error("missing --clear-generated flag on reset run")
 	}
 }

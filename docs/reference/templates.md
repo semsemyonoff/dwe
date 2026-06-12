@@ -1,6 +1,6 @@
 # Templates
 
-Go templates (with the [go-sprout](https://docs.atom.codes/sprout/) function library) are evaluated across multiple DWE surfaces: info dashboard items, declarative commands, pipeline `when:` conditions, the `message` builtin, and the IDE / AI render packs. This page is the single reference for the template engine, the available helpers, and the conventions shared by every site.
+Go templates (with the [go-sprout](https://docs.atom.codes/sprout/) function library) are evaluated across multiple DWE surfaces: info dashboard items, declarative commands, pipeline `when:` conditions, the `message` builtin, and the IDE / AI / git / config render packs. This page is the single reference for the template engine, the available helpers, and the conventions shared by every site. Note that the **config** render pack diverges from the other render kinds: it uses the `${...}` shorthand substrate (lenient — absent → `""`), not the strict `{{ ... }}` syntax of the ide/ai/git packs.
 
 ## Contents
 
@@ -29,6 +29,7 @@ Go templates (with the [go-sprout](https://docs.atom.codes/sprout/) function lib
 | `workspace/templates/git/<pack>/**/*.tmpl` | `{{ ... }}` | Render-pack context (`.Project`, `.Service`, `.ServiceCfg`, `.Runtime`, `.Services`, `.Cfg`) | Strict mode. See [render/git.md](render/git.md) |
 | `workspace/templates/ide/<pack>/**/*.tmpl` | `{{ ... }}` | Render-pack context (`.Project`, `.Service`, `.ServiceCfg`, `.Runtime`, `.Services`, `.Cfg`) | Strict mode. See [render/ide.md](render/ide.md) |
 | `workspace/templates/ai/<pack>/**/*.tmpl` | `{{ ... }}` | Render-pack context (`.Project`, `.Service`, `.ServiceCfg`, `.Runtime`, `.Services`, `.Cfg`) | Strict mode. See [render/ai.md](render/ai.md) |
+| `workspace/templates/config/<pack>/**` | `${...}` | Resolved project config (`.Raw`) + curated `${services.<name>...}` subset + `${generated.<name>}` | Lenient (absent → `""`). See [render/config.md](render/config.md) |
 | `params.*.default_from`, `context.*.from` | — | — | Plain dot-paths only (no template expressions). |
 
 ## Two syntaxes: shorthand and full templates
@@ -52,13 +53,14 @@ Rule of thumb: use `${...}` for plain lookups; reach for `{{ ... }}` whenever yo
 
 | Expression | Resolved as |
 |------------|-------------|
-| `${db.user}` | Dot-path into the merged DWE config (`Raw`) |
+| `${vars.db.user}` | Dot-path into the merged DWE config (`Raw`) |
 | `${param.<name>}` | Resolved param value |
 | `${context.<name>}` | Resolved context value |
 | `${files.<id>.path}` | Absolute path of a resolved file artefact |
 | `${host.uid}` / `${host.gid}` | Effective UID/GID (1000:1000 on macOS, real values on Linux) |
+| `${generated.<name>}` | Per-service value harvested into `.dwe/generated.yml` (config render packs only; absent → `""`). See [render/config.md](render/config.md) |
 
-Anything that doesn't match a known namespace (`${foo}`, `${a.b.c}`) is treated as a dot-path lookup against `Raw`. A literal `$$` passes through unchanged.
+Anything that doesn't match a known namespace (`${foo}`, `${a.b.c}`) is treated as a dot-path lookup against `Raw`. **Prefer `${vars.*}` for user-defined config values** stored under the `vars:` block in YAML — the strict root rejects free-form top-level keys, so `vars:` is their single home. A literal `$$` passes through unchanged.
 
 ### Quoting templates inside YAML
 
@@ -140,7 +142,7 @@ env:
   TAGS: "{{ range $i, $t := .Params.tags }}{{ if $i }},{{ end }}{{ $t }}{{ end }}"
 
 # with / default
-cmd: "mariadb -u${db.user}{{ with .Params.database }} -D{{ . }}{{ end }}"
+cmd: "mariadb -u${vars.db.user}{{ with .Params.database }} -D{{ . }}{{ end }}"
 env:
   REGION: '{{ or .Params.region "us-east-1" }}'
 ```
@@ -177,15 +179,15 @@ The following registries from [go-sprout](https://docs.atom.codes/sprout/registr
 | Registry | Examples | Description |
 |----------|----------|-------------|
 | `std` | `default`, `ternary`, `empty`, `coalesce` | Defaults, conditionals, emptiness checks |
-| `strings` | `hasSuffix`, `hasPrefix`, `lower`, `upper`, `trim`, `replace`, `split` | String manipulation |
+| `strings` | `hasSuffix`, `hasPrefix`, `toLower`, `toUpper`, `trim`, `replace`, `split` | String manipulation |
 | `numeric` | `add`, `sub`, `mul`, `div`, `max`, `min` | Numeric operations |
 | `slices` | `first`, `last`, `slice`, `join`, `reverse`, `uniq` | List/array operations |
 | `maps` | `keys`, `values`, `has`, `pick`, `omit` | Map/object operations |
-| `regexp` | `regexMatch`, `regexReplace`, `regexSplit` | Regular expression matching |
-| `conversion` | `toInt`, `toFloat`, `toString`, `toBool` | Type conversion |
-| `time` | `now`, `date`, `dateFormat`, `duration` | Date/time operations |
+| `regexp` | `regexMatch`, `regexReplaceAll`, `regexSplit` | Regular expression matching |
+| `conversion` | `toInt`, `toFloat64`, `toString`, `toBool` | Type conversion |
+| `time` | `now`, `date`, `dateInZone`, `duration` | Date/time operations |
 | `filesystem` | `pathBase`, `pathDir`, `pathExt`, `pathClean`, `osBase`, `osDir` | Path manipulation |
-| `semver` | `semverCompare`, `semverSort` | Semantic version operations |
+| `semver` | `semver`, `semverCompare` | Semantic version operations |
 
 **Hermetic by construction.** The helper set is built without any function that touches the environment, filesystem, network, or random/crypto sources. Sprout's `shuffle` (math/rand seeded from crypto) and `hello` (debug stub) are deliberately removed.
 
@@ -193,13 +195,14 @@ For full per-function documentation see the [sprout registries reference](https:
 
 ## Command-scope resolvers
 
-Three additional helpers are available **only** inside `workspace/commands/` templates. They accept raw maps and walk dot-paths, returning `""` for any missing key (no template error).
+Four additional helpers are available **only** inside `workspace/commands/` templates. They accept raw maps and walk dot-paths, returning `""` for any missing key (no template error).
 
 | Helper | Signature | Use |
 |--------|-----------|-----|
-| `resolve` | `resolve .Raw "db.host"` | Dot-path lookup in merged config. Equivalent to `${db.host}`. |
+| `resolve` | `resolve .Raw "vars.db.host"` | Dot-path lookup in merged config. Equivalent to `${vars.db.host}`. |
 | `resolveMap` | `resolveMap .Params "name"` | Key lookup in a flat `map[string]any`. Equivalent to `${param.name}` / `${context.name}`. |
 | `resolveFile` | `resolveFile .Files "id" "path"` | Subkey lookup in a resolved file artefact. Equivalent to `${files.id.path}`. |
+| `resolveGenerated` | `resolveGenerated .Generated "app_key"` | Per-service harvested value (config render pass). Equivalent to `${generated.app_key}`. |
 
 These exist so the `${...}` shorthand can be expanded to portable Go-template form, and so authors can reach raw config when the dotted `.Raw.<x>.<y>` style is awkward (keys with dots, numeric keys, etc.).
 
@@ -225,7 +228,7 @@ Other sites (info, commands, pipeline conditions, `message`) use lenient renderi
 | Conditional value | `{{ if eq .State "ready" }}Ready{{ else }}Not ready{{ end }}` |
 | Empty-guarded block | `{{ with .Params.database }} -D{{ . }}{{ end }}` |
 | Join list | `{{ join "," .Params.tags }}` |
-| Raw config lookup | `{{ resolve .Raw "db.host" }}` (commands only) |
+| Raw config lookup | `{{ resolve .Raw "vars.db.host" }}` (commands only) |
 | Build URL | `{{ appURL ((index .Services "main").Host "web") ((index .Services "main").Port "http") .Runtime.UseHTTPS }}` |
 
 ## Conventions and gotchas

@@ -10,6 +10,7 @@ import (
 	"strings"
 
 	"github.com/semsemyonoff/dwe/internal/cli/cmdctx"
+	"github.com/semsemyonoff/dwe/internal/core/bridge"
 	"github.com/semsemyonoff/dwe/internal/core/execution/condition"
 	pipeline "github.com/semsemyonoff/dwe/internal/core/execution/pipeline"
 	"github.com/semsemyonoff/dwe/internal/core/project/config"
@@ -20,6 +21,7 @@ import (
 	"github.com/semsemyonoff/dwe/internal/core/workflow/deploy"
 	"github.com/semsemyonoff/dwe/internal/core/workflow/deploy/journal"
 	"github.com/semsemyonoff/dwe/internal/core/workflow/reset"
+	"github.com/semsemyonoff/dwe/internal/shared/generatedstore"
 	"github.com/semsemyonoff/dwe/internal/shared/promptcache"
 	"github.com/semsemyonoff/dwe/internal/shared/render"
 	"github.com/semsemyonoff/dwe/internal/shared/tpl"
@@ -120,6 +122,7 @@ func newResetRunCmd(flags *cmdctx.RootFlags) *cobra.Command {
 	var yes bool
 	var serviceName string
 	var skipPreflight bool
+	var clearGenerated bool
 
 	cmd := &cobra.Command{
 		Use:   "run",
@@ -133,15 +136,22 @@ workspace/services/<name>/reset.yml (if present), then marks the service as
 requiring a subsequent deploy. Volumes are NOT auto-removed; use
 'docker_remove_project_volumes' in services/<name>/reset.yml to opt in.
 
+By default the generated-value store (.dwe/generated.yml) is preserved across a
+reset. Pass --clear-generated to also clear the harvested secrets (Laravel
+APP_KEY, Magento crypt.key, …) so they are regenerated on the next deploy;
+scoped to the service when --service is given, otherwise the whole store. The
+store is only cleared after the reset (pipeline + journal cleanup) fully
+succeeds.
+
 File logging is disabled by default for reset. Enable it with 'log: true' at
 the top of workspace/reset.yml; output will be written to .dwe/logs/reset.log.`,
 		Args:         cobra.NoArgs,
 		SilenceUsage: true,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			if serviceName != "" {
-				return resetServiceRunCmd(cmd, flags, serviceName, yes, skipPreflight)
+				return resetServiceRunCmd(cmd, flags, serviceName, yes, skipPreflight, clearGenerated)
 			}
-			return resetRunCmd(cmd, flags, yes, skipPreflight)
+			return resetRunCmd(cmd, flags, yes, skipPreflight, clearGenerated)
 		},
 		ValidArgsFunction: func(cmd *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
 			return nil, cobra.ShellCompDirectiveNoFileComp
@@ -150,11 +160,12 @@ the top of workspace/reset.yml; output will be written to .dwe/logs/reset.log.`,
 
 	cmd.Flags().BoolVarP(&yes, "yes", "y", false, "skip confirmation prompts")
 	cmd.Flags().StringVar(&serviceName, "service", "", "reset only this service")
+	cmd.Flags().BoolVar(&clearGenerated, "clear-generated", false, "also clear harvested generated values (.dwe/generated.yml); forces regeneration on next deploy")
 	cmdctx.AddSkipPreflight(cmd, &skipPreflight)
 	return cmd
 }
 
-func resetRunCmd(cmd *cobra.Command, flags *cmdctx.RootFlags, yes bool, skipPreflight bool) error {
+func resetRunCmd(cmd *cobra.Command, flags *cmdctx.RootFlags, yes bool, skipPreflight bool, clearGenerated bool) error {
 	ctx := cmd.Context()
 	workDir := flags.ProjectRoot()
 	statePath := filepath.Join(workDir, journal.DefaultRelPath)
@@ -181,6 +192,15 @@ func resetRunCmd(cmd *cobra.Command, flags *cmdctx.RootFlags, yes bool, skipPref
 
 	if regErr != nil {
 		return fmt.Errorf("loading command registry: %w", regErr)
+	}
+
+	// Decide whether to clear the generated-value store up front: the full reset
+	// has no command-level confirm to hook after (its confirmation is a pipeline
+	// step). Remember the decision and only act on it once the reset fully
+	// succeeds below. svc == "" → whole-store scope.
+	clearGen, err := resolveClearGenerated(cmd.InOrStdin(), workDir, "", clearGenerated, yes)
+	if err != nil {
+		return err
 	}
 
 	// Acquire deploy + snapshot project locks to prevent parallel resets
@@ -238,12 +258,29 @@ func resetRunCmd(cmd *cobra.Command, flags *cmdctx.RootFlags, yes bool, skipPref
 	// journal.Remove failure doesn't leave the prompt showing a stale "running" state.
 	_ = promptcache.Write(workDir, promptcache.StateStopped)
 
+	// Whole-stack reset also stops the host-bridge daemon (design D6); the
+	// per-service variant never touches it. Best-effort: the daemon
+	// auto-stops once zero labeled containers remain, so a signaling failure
+	// must not fail the reset.
+	if _, err := bridgeStopDaemonFn(bridge.DefaultBridgeDir(workDir)); err != nil {
+		w.Warning(fmt.Sprintf("stopping bridge daemon: %v", err))
+	}
+
 	// After reset succeeds, clean up the deploy state entirely.
 	// Reset steps are always project-scoped (service == ""), so the whole state file is cleared.
 	// Failure here is a hard error: leaving a stale deployed state would allow
 	// dwe run to pass its gate even though services have been torn down.
 	if err := journal.Remove(statePath); err != nil {
 		return fmt.Errorf("cleaning deploy state after reset: %w", err)
+	}
+
+	// Only clear the generated-value store now that BOTH the pipeline and the
+	// journal cleanup have succeeded: a deployed-journal + empty-store mismatch
+	// would let `dwe run`'s gate trust a service whose secrets are gone.
+	if clearGen {
+		if err := clearGeneratedStore(workDir, ""); err != nil {
+			return fmt.Errorf("clearing generated store after reset: %w", err)
+		}
 	}
 
 	if logEnabled {
@@ -257,7 +294,7 @@ func resetRunCmd(cmd *cobra.Command, flags *cmdctx.RootFlags, yes bool, skipPref
 // (outside the lock), then acquires the project lock and atomically stops
 // the container, executes the per-service reset.yml (if present), and
 // writes a PendingDeploy journal entry.
-func resetServiceRunCmd(cmd *cobra.Command, flags *cmdctx.RootFlags, name string, yes bool, skipPreflight bool) error {
+func resetServiceRunCmd(cmd *cobra.Command, flags *cmdctx.RootFlags, name string, yes bool, skipPreflight bool, clearGenerated bool) error {
 	ctx := cmd.Context()
 	workDir := flags.ProjectRoot()
 	statePath := filepath.Join(workDir, journal.DefaultRelPath)
@@ -334,6 +371,14 @@ func resetServiceRunCmd(cmd *cobra.Command, flags *cmdctx.RootFlags, name string
 		if !ok {
 			return nil
 		}
+	}
+
+	// Decide whether to clear this service's generated values up front (after the
+	// reset confirm so a cancelled reset never prompts). Acted on only once the
+	// per-service journal update succeeds below.
+	clearGen, err := resolveClearGenerated(cmd.InOrStdin(), baseDir, name, clearGenerated, yes)
+	if err != nil {
+		return err
 	}
 
 	// Run on_disable.before hooks outside the lock (only when service is enabled).
@@ -462,6 +507,14 @@ func resetServiceRunCmd(cmd *cobra.Command, flags *cmdctx.RootFlags, name string
 		return fmt.Errorf("updating journal for service %q: %w", name, err)
 	}
 
+	// Clear this service's generated values only after the journal update lands,
+	// so a failed reset never leaves a deployed journal pointing at a blanked store.
+	if clearGen {
+		if err := clearGeneratedStore(baseDir, name); err != nil {
+			return fmt.Errorf("clearing generated store for service %q: %w", name, err)
+		}
+	}
+
 	_, _ = fmt.Fprintf(cmd.OutOrStdout(), "Service %q reset. Deploy required: run 'dwe deploy run --service %s'\n", name, name)
 	return nil
 }
@@ -485,6 +538,79 @@ func buildResetServiceConfirmTitle(name, container, dir string, required, dirExi
 	}
 	fmt.Fprintf(&b, "\n  • require a subsequent: dwe deploy run --service %s", name)
 	return b.String()
+}
+
+// resolveClearGenerated decides whether the generated-value store should be
+// cleared after a successful reset. svc is "" for a full reset (whole-store
+// scope) or the service name for a scoped reset. The --clear-generated flag
+// forces clearing unconditionally. Otherwise, when prompts are not skipped
+// (--yes off) and the terminal is interactive and the relevant scope actually
+// holds values, the user is prompted via the resetConfirmFn seam; declining or
+// cancelling the prompt preserves the store. Non-interactive without the flag
+// preserves the store with no prompt.
+func resolveClearGenerated(in io.Reader, baseDir, svc string, clearFlag, skipPrompt bool) (bool, error) {
+	if clearFlag {
+		return true, nil
+	}
+	if skipPrompt || !widgets.IsInteractiveFn(in) {
+		return false, nil
+	}
+	store, err := generatedstore.Load(filepath.Join(baseDir, generatedstore.DefaultRelPath))
+	if err != nil {
+		return false, fmt.Errorf("loading generated store: %w", err)
+	}
+	n := countGeneratedValues(store, svc)
+	if n == 0 {
+		return false, nil
+	}
+	title := fmt.Sprintf("Also clear %d generated value(s)?\n\nThis forces regeneration on next deploy.", n)
+	ok, err := resetConfirmFn(title, "Clear", "Keep")
+	if err != nil {
+		if errors.Is(err, widgets.ErrCancelled) {
+			return false, nil
+		}
+		return false, fmt.Errorf("confirm clear generated: %w", err)
+	}
+	return ok, nil
+}
+
+// countGeneratedValues counts the harvested values in scope: a single service
+// when svc is non-empty, otherwise every value in the store.
+func countGeneratedValues(store *generatedstore.Store, svc string) int {
+	if store == nil {
+		return 0
+	}
+	if svc != "" {
+		return len(store.Service(svc))
+	}
+	n := 0
+	for _, fields := range store.Services {
+		n += len(fields)
+	}
+	return n
+}
+
+// clearGeneratedStore loads the generated-value store, clears the requested
+// scope (a single service when svc is non-empty, otherwise the whole store),
+// and atomically saves it. A missing/empty store is a no-op.
+func clearGeneratedStore(baseDir, svc string) error {
+	path := filepath.Join(baseDir, generatedstore.DefaultRelPath)
+	store, err := generatedstore.Load(path)
+	if err != nil {
+		return fmt.Errorf("loading generated store: %w", err)
+	}
+	if store.IsEmpty() {
+		return nil
+	}
+	if svc != "" {
+		store.ClearService(svc)
+	} else {
+		store.ClearAll()
+	}
+	if err := generatedstore.Save(path, store); err != nil {
+		return fmt.Errorf("saving generated store: %w", err)
+	}
+	return nil
 }
 
 // runResetHook looks up a command by ID in the registry and runs it

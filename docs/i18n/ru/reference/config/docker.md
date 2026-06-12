@@ -1,4 +1,4 @@
-> Translated from: reference/config/docker.md @ b9c5baed9b15
+> Translated from: reference/config/docker.md @ 96f57f4915f2
 
 # docker.yml / docker.local.yml
 
@@ -233,10 +233,6 @@ project_name: "personal-laravel"
 args:
   global: ["--ansi", "always"]
 
-# Отключить авто-генерацию .env (пре-генерируется в CI)
-env:
-  auto_generate: false
-
 # Подавить Docker-подсказки
 process_env:
   DOCKER_CLI_HINTS: "false"
@@ -247,11 +243,11 @@ process_env:
 - **Прямые `docker compose` в Makefile'ах или YAML** — всегда используйте `dwe docker`. Прямые вызовы обходят policy-args, имя проекта и авто-генерацию `.env`.
 - **Добавление compose-флагов в Make-рецептах** — флаги должны быть в секции args в `docker.yml`, а не в Make. Lifecycle-таргеты Make вызывают `dwe docker` без флагов.
 - **Частичное переопределение args** — `args.up` в `docker.local.yml` заменяет отслеживаемый список, а не дописывает к нему. Указывайте все нужные флаги.
-- **Глобальное отключение `auto_generate`** — если вы его отключили, нужно вручную регенерировать `.env` перед compose-командами, которые от него зависят.
+- **Расчёт на пре-генерацию `.env` в CI** — `.env` всегда регенерируется перед `{up, run, exec, restart, build}`, и это нельзя отключить (см. [Назначение](#назначение)). Любой пре-генерированный `.env` будет перезаписан; конфигурационного переключателя для этого нет.
 
 ## Связанные команды
 
-- `dwe docker up|down|stop|restart|logs|ps|exec|run|wait|pull|build` — команды lifecycle и управления образами
+- `dwe docker up|down|stop|restart|logs|ps|exec|run|pull|build` — команды lifecycle и управления образами (`up` принимает `--wait`, чтобы блокироваться до готовности сервисов)
 - `dwe compose files` — показать список активных compose-файлов
 - `dwe compose argv` — показать полный итоговый argv
 - `dwe render env` — вручную регенерировать `.env`

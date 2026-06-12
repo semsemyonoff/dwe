@@ -744,3 +744,137 @@ func TestWizardRunRequiredMultiselectEmpty(t *testing.T) {
 		t.Errorf("Run() error = %v, want error containing 'required'", err)
 	}
 }
+
+// TestWizardRunPreservesComments verifies the wizard's write path goes through
+// the comment-preserving node writer: a hand-authored local.yml keeps its
+// comments and unrelated keys after the wizard merges new answers.
+func TestWizardRunPreservesComments(t *testing.T) {
+	testDir := t.TempDir()
+	localPath := filepath.Join(testDir, "local.yml")
+
+	initial := `# developer notes
+app:
+  name: existing # keep this name
+# end
+`
+	if err := os.WriteFile(localPath, []byte(initial), 0o600); err != nil {
+		t.Fatalf("seed local.yml: %v", err)
+	}
+
+	deps := WizardDeps{
+		BaseDir:   testDir,
+		LocalPath: localPath,
+		Questions: []Question{
+			{ID: "app_ver", Type: TypeInput, Required: false, Writes: "app.version"},
+		},
+		PortConflicts: []env.PortConflict{},
+		AskQuestions: func(ctx context.Context, qs []Question) (map[string]any, error) {
+			return map[string]any{"app_ver": "1.0.0"}, nil
+		},
+		AskPortOverrides: func(ctx context.Context, conflicts []env.PortConflict) (map[PortKey]int, error) {
+			return map[PortKey]int{}, nil
+		},
+	}
+
+	if err := Run(context.Background(), deps); err != nil {
+		t.Fatalf("Run() error = %v", err)
+	}
+
+	raw, err := os.ReadFile(localPath)
+	if err != nil {
+		t.Fatalf("read local.yml: %v", err)
+	}
+	for _, want := range []string{"# developer notes", "# keep this name", "# end"} {
+		if !strings.Contains(string(raw), want) {
+			t.Errorf("expected comment %q to survive wizard; got:\n%s", want, string(raw))
+		}
+	}
+
+	content, _ := localpkg.LoadLocalYAML(localPath)
+	app, _ := content["app"].(map[string]any)
+	if app["name"] != "existing" {
+		t.Errorf("expected app.name preserved, got %v", app["name"])
+	}
+	if app["version"] != "1.0.0" {
+		t.Errorf("expected app.version = 1.0.0, got %v", app["version"])
+	}
+}
+
+// TestWizardRunLegacyPortLeafUpgrade verifies the legacy bare-int port leaf
+// (services.<svc>.ports.<port>: N) is upgraded to rich form {port: N} through
+// the node write path — the single permitted scalar→map collision exception.
+func TestWizardRunLegacyPortLeafUpgrade(t *testing.T) {
+	testDir := t.TempDir()
+	localPath := filepath.Join(testDir, "local.yml")
+
+	initial := "services:\n  web:\n    ports:\n      http: 3000\n"
+	if err := os.WriteFile(localPath, []byte(initial), 0o600); err != nil {
+		t.Fatalf("seed local.yml: %v", err)
+	}
+
+	deps := WizardDeps{
+		BaseDir:   testDir,
+		LocalPath: localPath,
+		Questions: []Question{},
+		PortConflicts: []env.PortConflict{
+			{Service: "web", PortName: "http", RequestedPort: 3000, OccupiedBy: "other"},
+		},
+		AskQuestions: func(ctx context.Context, qs []Question) (map[string]any, error) {
+			return map[string]any{}, nil
+		},
+		AskPortOverrides: func(ctx context.Context, conflicts []env.PortConflict) (map[PortKey]int, error) {
+			return map[PortKey]int{{Service: "web", PortName: "http"}: 3001}, nil
+		},
+	}
+
+	if err := Run(context.Background(), deps); err != nil {
+		t.Fatalf("Run() error = %v", err)
+	}
+
+	content, _ := localpkg.LoadLocalYAML(localPath)
+	http := content["services"].(map[string]any)["web"].(map[string]any)["ports"].(map[string]any)["http"]
+	rich, ok := http.(map[string]any)
+	if !ok {
+		t.Fatalf("expected rich-form port mapping, got %T %v", http, http)
+	}
+	if rich["port"] != 3001 {
+		t.Errorf("expected port=3001, got %v", rich["port"])
+	}
+}
+
+// TestWizardRunMapOverScalarRejected verifies a map-over-scalar collision
+// (outside the legacy port-leaf exception) is still rejected through the node
+// write path, so a wizard answer cannot silently wipe a developer scalar.
+func TestWizardRunMapOverScalarRejected(t *testing.T) {
+	testDir := t.TempDir()
+	localPath := filepath.Join(testDir, "local.yml")
+
+	// Existing scalar at app — an answer writing app.config (map) must be rejected.
+	initial := "app: scalarvalue\n"
+	if err := os.WriteFile(localPath, []byte(initial), 0o600); err != nil {
+		t.Fatalf("seed local.yml: %v", err)
+	}
+
+	deps := WizardDeps{
+		BaseDir:   testDir,
+		LocalPath: localPath,
+		Questions: []Question{
+			{ID: "cfg", Type: TypeInput, Required: false, Writes: "app.config"},
+		},
+		PortConflicts: []env.PortConflict{},
+		AskQuestions: func(ctx context.Context, qs []Question) (map[string]any, error) {
+			return map[string]any{"cfg": "x"}, nil
+		},
+		AskPortOverrides: func(ctx context.Context, conflicts []env.PortConflict) (map[PortKey]int, error) {
+			return map[PortKey]int{}, nil
+		},
+	}
+
+	err := Run(context.Background(), deps)
+	if err == nil {
+		t.Fatal("expected map-over-scalar collision to be rejected")
+	}
+	if !strings.Contains(err.Error(), "merge question overlay") {
+		t.Errorf("expected wrapped 'merge question overlay' error, got %v", err)
+	}
+}

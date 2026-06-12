@@ -121,8 +121,8 @@ db.dump-create:
   type: script
   description: Create a database dump file
   params:
-    database: { default_from: db.database, pattern: ^[a-zA-Z0-9_-]+$ }
-    dump_dir: { default_from: db.backup_dir, required: true }
+    database: { default_from: vars.db.database, pattern: ^[a-zA-Z0-9_-]+$ }
+    dump_dir: { default_from: vars.db.backup_dir, required: true }
   files:
     dump:
       access: write
@@ -133,7 +133,7 @@ db.dump-create:
       env: DUMP_FILE
   env:
     DB_NAME: "${param.database}"
-    MYSQL_PWD: "${db.password}"
+    MYSQL_PWD: "${vars.db.password}"
   script:
     path: workspace/scripts/db/dump-create.sh
     shell: bash
@@ -283,8 +283,8 @@ db.create:
   params:
     database: { required: true, pattern: ^[a-zA-Z0-9_-]+$ }
   env:
-    MYSQL_PWD: "${db.password}"
-  cmd: "mariadb -u${db.user} -e 'CREATE DATABASE IF NOT EXISTS `${param.database}`;'"
+    MYSQL_PWD: "${vars.db.password}"
+  cmd: "mariadb -u${vars.db.user} -e 'CREATE DATABASE IF NOT EXISTS `${param.database}`;'"
 ```
 
 ### compose_args
@@ -315,11 +315,11 @@ artisan-tinker:
   argv: [php, artisan, tinker]
 ```
 
-`mode` is fixed to `run` for this type — the field may be omitted (default) or set explicitly to `run`; any other value is rejected at load time.
+`mode` is not a valid field for `service_run` (it always uses `docker compose run --rm`) — writing `mode:` at all is rejected at load time; omit it.
 
 ### Runner override block
 
-Both `service_exec` and `service_run` accept a `runner:` block to override `service` / `user` / `workdir` / `workdir_from` / `mode` without duplicating the rest of the definition. Non-zero fields in `runner:` win over the top-level fields.
+Both `service_exec` and `service_run` accept a `runner:` block to override `service` / `user` / `workdir` / `workdir_from` (and, for `service_exec` only, `mode`) without duplicating the rest of the definition. `runner.mode` is rejected for `service_run`, which always uses `docker compose run`. Non-zero fields in `runner:` win over the top-level fields.
 
 ```yaml
 queue-worker:
@@ -370,7 +370,7 @@ Each step is either a **command** step, a **confirm** step, or a **parallel** st
 ```yaml
 - command: db.create
   with:
-    database: "${db.database}"
+    database: "${vars.db.database}"
 
 - command: services.main.db.dump-deploy
   with:
@@ -429,7 +429,7 @@ steps:
   - confirm: "This will drop the database. Continue?"
   - command: db.drop
     with:
-      database: "${db.database}"
+      database: "${vars.db.database}"
 ```
 
 Confirm steps are silently skipped under `--yes` or `DWE_NONINTERACTIVE=1`. Otherwise huh prompts on TTY, and a `[y/N]` stdin fallback handles piped inputs.
@@ -471,7 +471,7 @@ Group-level `when:` and `continue_on_error:` are valid on the step that carries 
 
 #### Composition
 
-- **Ad-hoc**: `dwe commands run <workflow-id>` runs the workflow's own live-block on the terminal. Ctrl-C propagates as SIGINT through `signal.NotifyContext`, which cancels the group and gives children up to 5 s to exit before SIGTERM is escalated.
+- **Ad-hoc**: `dwe commands <workflow-id>` (alias `dwe cmd <workflow-id>`) runs the workflow's own live-block on the terminal. Ctrl-C propagates as SIGINT through `signal.NotifyContext`, which cancels the group and gives children up to 5 s to exit before SIGTERM is escalated.
 - **Inside a sequential pipeline step**: when a pipeline's sequential `cmd:` resolves to a workflow with a `parallel:` block, the pipeline's footer is paused for the duration of the step body (existing `SuspendForExec` / `ResumeAfterExec` contract), and the workflow renders its own block rows in the gap. The pipeline-step counter advances by exactly one — sub-steps are NOT counted as pipeline steps.
 - **Inside a parallel pipeline group OR another parallel workflow**: rejected at runtime. Only one live-block can own the terminal at a time. The error is the `ErrWorkflowNestedParallel` sentinel.
 
@@ -631,7 +631,7 @@ Every daemon container carries three labels so `docker ps` is the single source 
 
 ### Virtual command behaviour
 
-- **`.start`** — issues `docker compose run -d --name <full> --no-deps --entrypoint "" [--rm] [--user …] [--workdir …] -e K1 -e K2 --label dwe.project=… --label dwe.daemon.id=… --label dwe.daemon.params=… <service> <argv…>`. Environment **values** are passed via the child process environment (`cmd.Env`), never the host argv, so secrets do not appear in `ps` or `/proc/<pid>/cmdline`. `--no-deps` keeps the running stack untouched; `--entrypoint ""` ensures the user's `argv:` is what actually runs. On `on_already_running: error` plus a docker name-conflict error, the builtin surfaces `ErrDaemonAlreadyRunning`; on `noop`, the same error is swallowed and `.start` succeeds.
+- **`.start`** — issues `docker compose run -d --no-deps --entrypoint "" [--rm] --name <full> [--user …] [--workdir …] -e K1 -e K2 --label dwe.project=… --label dwe.daemon.id=… --label dwe.daemon.params=… <service> <argv…>`. Environment **values** are passed via the child process environment (`cmd.Env`), never the host argv, so secrets do not appear in `ps` or `/proc/<pid>/cmdline`. `--no-deps` keeps the running stack untouched; `--entrypoint ""` ensures the user's `argv:` is what actually runs. On `on_already_running: error` plus a docker name-conflict error, the builtin surfaces `ErrDaemonAlreadyRunning`; on `noop`, the same error is swallowed and `.start` succeeds.
 - **`.logs`** — runs `docker logs -f --tail=100 <full>` foreground. Ctrl-C sends `SIGINT` to the `docker logs` process only (graceful detach via `cmd.Cancel`); the container is never signalled. If the container is not running, `.logs` errors with a hint pointing at `.start`.
 - **`.stop`** — runs `docker stop -t <stop_timeout-as-seconds> <full>`. Missing container is **not** an error (idempotent stop).
 - **`.restart`** — a virtual `type: workflow` of `<base>.stop` followed by `<base>.start`. Workflow steps explicitly forward each declared `param.<name>` via `with:`, so `dwe cmd queue.restart --set name=emails` restarts the `emails` daemon (not the default).
@@ -665,7 +665,7 @@ If `lifecycle.yml` is absent, `dwe stop` still runs (with only the `_auto_reap_d
 
 ### Invalid fields
 
-The source daemon command rejects fields that conflict with its declarative shape: `script:`, `steps:`, `cmd:` (the action is implicit), `mode`, `runner:` (each virtual command has its own runner). Use `params:` / `context:` / `env:` / `files:` / `messages:` / `argv` / `service` / `workdir` / `workdir_from` / `user` / `compose_args` as on any service runner. All of these flow into the virtual `.start` invocation.
+The source daemon command rejects fields that conflict with its declarative shape: `script:`, `steps:`, `cmd:` (the action is implicit), `mode`. Use `params:` / `context:` / `env:` / `files:` / `messages:` / `argv` / `service` / `workdir` / `workdir_from` / `user` / `compose_args` / `runner` as on any service runner. All of these flow into the virtual `.start` invocation.
 
 ### End-to-end flow
 

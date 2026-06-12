@@ -60,7 +60,7 @@ the optional tagline and ASCII art are layered on top when configured.
 | Field | Type | Default | Description |
 |-------|------|---------|-------------|
 | `header.lines` | list of strings | _(none)_ | Text lines rendered as ASCII art under the brand line |
-| `header.font` | string | `doom` | FIGlet font name (doom, banner, big, block, slant, …) |
+| `header.font` | string | `standard` | FIGlet font name (doom, banner, big, block, slant, …) |
 | `header.tagline` | string | _(none)_ | Single tagline line rendered in muted color below the brand line |
 
 The ASCII block is colored using the `accent` token. There is no separate

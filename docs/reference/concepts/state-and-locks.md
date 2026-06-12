@@ -53,7 +53,7 @@ The runner consults the journal in two layers. First it checks that the relevant
 Two consequences worth remembering:
 
 - A step with a `check:` action never skips on hash match alone. The check is treated as the proof that the step's intended effect is still there, so it always runs.
-- Changing `when:` or `files_gate:` does not show up in `action_hash`. Those are evaluated on every run regardless of the journal. The journal only short-circuits the body.
+- Changing `when:` does not show up in `action_hash` — it is re-evaluated on every run regardless of the journal, so it only short-circuits the body. Changing `files_gate:` **does** show up: `StepHash` folds the canonical `files_gate` representation into the recorded hash, so editing it re-runs the step the same way editing the body does.
 
 Full hashing details: [`config/state/hashing.md`](../config/state/hashing.md).
 
@@ -98,7 +98,7 @@ Every lifecycle and snapshot command acquires **both** locks via the single help
 Lock acquisition uses `flock(LOCK_EX | LOCK_NB)`:
 
 - If the lock is free, the caller takes it and writes its PID into the file.
-- If the lock is held by a live process, the call returns a `ProjectLockHeldError` with the holding PID and exit code 2. The CLI surfaces it as `deploy operation in progress: pid 12345`.
+- If the lock is held by a live process, the call returns a `ProjectLockHeldError` with the holding PID and exit code 2. The CLI surfaces it as `deploy operation in progress: pid 12345 (wait for it to finish or kill it and retry)`.
 - If the lock file exists but the PID is dead (`syscall.Kill(pid, 0)` returns `ESRCH`), the lock is treated as stale: the file is truncated and the lock is acquired. This is what makes `kill -9` recoverable on the next invocation.
 
 Read-only commands (`dwe status`, `dwe docs ...`, `dwe info`, `dwe validate`) take no project locks. The docs subsystem in particular is explicitly read-only and never runs preflight, so opening docs while a deploy is running is always safe.
@@ -109,10 +109,10 @@ Read-only commands (`dwe status`, `dwe docs ...`, `dwe info`, `dwe validate`) ta
 
 The combination of journal + lock + atomic writes is what makes a killed deploy resumable.
 
-1. Each step's status flips to `in_progress` and is written to `state.yml` **before** the body runs.
-2. On success the status flips to `ok`, with `finished_at`, `action_hash`, and `duration_ms`, and is written again.
-3. If the process is killed (`Ctrl+C`, `SIGTERM`, `kill -9`, panic, OOM), the file on disk still reflects the last write — the step that was running is recorded as `in_progress` or `failed`.
-4. On the next start, `RepairProjectStatus` walks the journal: any `in_progress` entries are promoted to `failed` (the process that owned them is gone), and aggregates are recomputed.
+1. Before any service step runs, the **service- and project-level** `last_run.status` flips to `in_progress` and is flushed to `state.yml`. Individual step records carry no `in_progress` status — a step's own `status` is written only after it finishes.
+2. On success the step's status is written as `ok`, with `finished_at`, `action_hash`, and `duration_ms`.
+3. If the process is killed (`Ctrl+C`, `SIGTERM`, `kill -9`, panic, OOM), the file on disk still reflects the last write — a step killed mid-body leaves **no step record at all** (it is simply absent, which resumes via the absent → run path); the in-flight `last_run.status` stays `in_progress`. A step is recorded as `failed` only when its body returns a graceful error.
+4. On the next deploy run (or `dwe deploy state repair`), `journal.Recompute` walks the journal: any stuck `last_run.status: in_progress` entry is promoted to `failed` (the process that owned it is gone), and the project/service aggregates are recomputed.
 5. The lock left behind is treated as stale on the next acquire (the PID is dead), so the next run proceeds without manual cleanup.
 6. The skip table treats `failed` / `partial` / `in_progress` as "run (resume)", so `dwe deploy run --resume` picks up at the first non-`ok` step. In a TTY the runner offers a choice (resume / re-run all / cancel); in non-interactive mode, `--resume` or `--force` is required.
 

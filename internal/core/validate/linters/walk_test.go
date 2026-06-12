@@ -214,6 +214,80 @@ func TestCollectFilesGitDirSkipped(t *testing.T) {
 	}
 }
 
+func TestCollectFilesVendorAndNodeModulesSkipped(t *testing.T) {
+	t.Parallel()
+	root := t.TempDir()
+	writeFile(t, filepath.Join(root, "services", "api", "src", "vendor", "lib", "Dockerfile"), "FROM scratch\n")
+	writeFile(t, filepath.Join(root, "frontend", "node_modules", "pkg", "Dockerfile"), "FROM scratch\n")
+	writeFile(t, filepath.Join(root, "images", "api", "Dockerfile"), "FROM scratch\n")
+
+	files, _, err := collectFiles(root, []string{"."}, nil, []string{"Dockerfile"}, true)
+	if err != nil {
+		t.Fatalf("collectFiles: %v", err)
+	}
+	got := relNames(t, root, files)
+	want := []string{"images/api/Dockerfile"}
+	if !slicesEqual(got, want) {
+		t.Errorf("files: want %v (vendor/node_modules skipped), got %v", want, got)
+	}
+}
+
+func TestCollectFilesRootServicesSkipped(t *testing.T) {
+	t.Parallel()
+	root := t.TempDir()
+	// Root services/ holds cloned service source — must be skipped.
+	writeFile(t, filepath.Join(root, "services", "main", "src", "docker", "Dockerfile"), "FROM scratch\n")
+	// workspace/services/<name>/ holds DWE-managed files — must be kept.
+	writeFile(t, filepath.Join(root, "workspace", "services", "main", "Dockerfile"), "FROM scratch\n")
+	// A nested services/ deeper in the tree is not the root one — kept.
+	writeFile(t, filepath.Join(root, "images", "services", "admin", "Dockerfile"), "FROM scratch\n")
+
+	files, _, err := collectFiles(root, []string{"."}, nil, []string{"Dockerfile"}, true)
+	if err != nil {
+		t.Fatalf("collectFiles: %v", err)
+	}
+	got := relNames(t, root, files)
+	want := []string{"images/services/admin/Dockerfile", "workspace/services/main/Dockerfile"}
+	if !slicesEqual(got, want) {
+		t.Errorf("files: want %v (root services/ skipped), got %v", want, got)
+	}
+}
+
+func TestCollectFilesExplicitRootServicesWalked(t *testing.T) {
+	t.Parallel()
+	root := t.TempDir()
+	writeFile(t, filepath.Join(root, "services", "main", "Dockerfile"), "FROM scratch\n")
+
+	// Naming services explicitly bypasses the root-skip (it becomes the walk target).
+	files, _, err := collectFiles(root, []string{"services"}, nil, []string{"Dockerfile"}, false)
+	if err != nil {
+		t.Fatalf("collectFiles: %v", err)
+	}
+	got := relNames(t, root, files)
+	want := []string{"services/main/Dockerfile"}
+	if !slicesEqual(got, want) {
+		t.Errorf("explicit services path should be walked, want %v, got %v", want, got)
+	}
+}
+
+func TestCollectFilesExplicitVendorPathWalked(t *testing.T) {
+	t.Parallel()
+	root := t.TempDir()
+	writeFile(t, filepath.Join(root, "vendor", "lib", "Dockerfile"), "FROM scratch\n")
+
+	// Naming vendor explicitly in paths: bypasses the descent guard, so a user
+	// who genuinely wants to lint it still can.
+	files, _, err := collectFiles(root, []string{"vendor"}, nil, []string{"Dockerfile"}, false)
+	if err != nil {
+		t.Fatalf("collectFiles: %v", err)
+	}
+	got := relNames(t, root, files)
+	want := []string{"vendor/lib/Dockerfile"}
+	if !slicesEqual(got, want) {
+		t.Errorf("explicit vendor path should be walked, want %v, got %v", want, got)
+	}
+}
+
 func TestCollectFilesExplicitGitPathSkipped(t *testing.T) {
 	t.Parallel()
 	root := t.TempDir()

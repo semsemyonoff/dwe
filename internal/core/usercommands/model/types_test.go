@@ -1,6 +1,7 @@
 package model
 
 import (
+	"slices"
 	"strings"
 	"testing"
 )
@@ -424,6 +425,142 @@ commands:
 	}
 	if cmd.Steps[2].With["fresh"] != "true" {
 		t.Errorf("Steps[2].With[fresh] = %q, want true", cmd.Steps[2].With["fresh"])
+	}
+}
+
+func TestParseCommandFile_BridgeBlocks(t *testing.T) {
+	yaml := `
+group:
+  title: CS
+  bridge:
+    enabled: true
+    services: [main]
+
+commands:
+  all:
+    type: shell
+    cmd: echo cs
+  fix:
+    type: shell
+    cmd: echo fix
+    bridge:
+      enabled: false
+  wide:
+    type: shell
+    cmd: echo wide
+    bridge:
+      services: [admin]
+`
+	cf := mustParse(t, yaml)
+	gb := cf.Group.Bridge
+	if gb == nil || gb.Enabled == nil || !*gb.Enabled {
+		t.Fatalf("group bridge block not parsed: %+v", gb)
+	}
+	if len(gb.Services) != 1 || gb.Services[0] != "main" {
+		t.Errorf("group bridge services = %v, want [main]", gb.Services)
+	}
+	if b := cf.Commands["all"].Bridge; b != nil {
+		t.Errorf("command without block must keep Bridge nil (inheritance is resolve-time), got %+v", b)
+	}
+	if b := cf.Commands["fix"].Bridge; b == nil || b.Enabled == nil || *b.Enabled {
+		t.Errorf("explicit enabled:false not parsed: %+v", b)
+	}
+	if b := cf.Commands["wide"].Bridge; b == nil || b.Enabled != nil || len(b.Services) != 1 {
+		t.Errorf("services-only block must keep Enabled nil: %+v", b)
+	}
+}
+
+func TestMergeBridge(t *testing.T) {
+	on, off := true, false
+	tests := []struct {
+		name          string
+		parent, child *BridgeDef
+		wantEnabled   *bool
+		wantServices  []string
+	}{
+		{"both nil", nil, nil, nil, nil},
+		{"child only", nil, &BridgeDef{Enabled: &on}, &on, nil},
+		{"parent only", &BridgeDef{Enabled: &on, Services: []string{"main"}}, nil, &on, []string{"main"}},
+		{"child false wins", &BridgeDef{Enabled: &on}, &BridgeDef{Enabled: &off}, &off, nil},
+		{"child inherits enabled, overrides services",
+			&BridgeDef{Enabled: &on, Services: []string{"main"}},
+			&BridgeDef{Services: []string{"admin"}}, &on, []string{"admin"}},
+		{"nil child services inherit",
+			&BridgeDef{Enabled: &on, Services: []string{"main"}},
+			&BridgeDef{Enabled: &on}, &on, []string{"main"}},
+		{"explicit empty child services widen to all",
+			&BridgeDef{Enabled: &on, Services: []string{"main"}},
+			&BridgeDef{Enabled: &on, Services: []string{}}, &on, []string{}},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := MergeBridge(tt.parent, tt.child)
+			var gotEnabled *bool
+			var gotServices []string
+			if got != nil {
+				gotEnabled, gotServices = got.Enabled, got.Services
+			}
+			if (gotEnabled == nil) != (tt.wantEnabled == nil) ||
+				(gotEnabled != nil && *gotEnabled != *tt.wantEnabled) {
+				t.Errorf("Enabled = %v, want %v", gotEnabled, tt.wantEnabled)
+			}
+			if !slices.Equal(gotServices, tt.wantServices) {
+				t.Errorf("Services = %v, want %v", gotServices, tt.wantServices)
+			}
+		})
+	}
+}
+
+func TestBridgeDef_AllowedFrom(t *testing.T) {
+	on, off := true, false
+	tests := []struct {
+		name    string
+		def     *BridgeDef
+		caller  string
+		allowed bool
+	}{
+		{"nil def", nil, "main", false},
+		{"enabled nil", &BridgeDef{}, "main", false},
+		{"disabled", &BridgeDef{Enabled: &off}, "main", false},
+		{"enabled all services", &BridgeDef{Enabled: &on}, "main", true},
+		{"enabled all, empty caller", &BridgeDef{Enabled: &on}, "", true},
+		{"service match", &BridgeDef{Enabled: &on, Services: []string{"main"}}, "main", true},
+		{"service mismatch", &BridgeDef{Enabled: &on, Services: []string{"main"}}, "admin", false},
+		{"restricted, empty caller", &BridgeDef{Enabled: &on, Services: []string{"main"}}, "", false},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := tt.def.AllowedFrom(tt.caller); got != tt.allowed {
+				t.Errorf("AllowedFrom(%q) = %v, want %v", tt.caller, got, tt.allowed)
+			}
+		})
+	}
+}
+
+func TestBridgeDef_AllowedFromChain(t *testing.T) {
+	on, off := true, false
+	scoped := &BridgeDef{Enabled: &on, Services: []string{"main"}}
+	tests := []struct {
+		name    string
+		def     *BridgeDef
+		chain   []string
+		allowed bool
+	}{
+		{"nil def", nil, []string{"main"}, false},
+		{"disabled ignores chain", &BridgeDef{Enabled: &off}, []string{"main"}, false},
+		{"caller itself matches", scoped, []string{"main"}, true},
+		{"ancestor matches", scoped, []string{"admin", "main"}, true},
+		{"grandparent matches", scoped, []string{"queue", "admin", "main"}, true},
+		{"no chain member matches", scoped, []string{"admin", "other"}, false},
+		{"child listed, parent calling", scoped, []string{"base"}, false},
+		{"empty services admits any chain", &BridgeDef{Enabled: &on}, []string{"x", "y"}, true},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := tt.def.AllowedFromChain(tt.chain); got != tt.allowed {
+				t.Errorf("AllowedFromChain(%v) = %v, want %v", tt.chain, got, tt.allowed)
+			}
+		})
 	}
 }
 

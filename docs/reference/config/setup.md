@@ -50,7 +50,7 @@ questions:
     description: Personal access token for private repos (optional)
     type: input
     required: false
-    writes: db.api_key
+    writes: vars.db.api_key
 
   - id: enable-postgres
     title: Enable PostgreSQL?
@@ -71,7 +71,7 @@ questions:
     title: Preferred language
     type: select
     required: true
-    writes: app.locale
+    writes: vars.app.locale
     options:
       - value: en
         label: English
@@ -83,7 +83,7 @@ questions:
   - id: enable-caching
     title: Use Redis caching?
     type: confirm
-    writes: app.cache.enable
+    writes: vars.app.cache.enable
 ```
 
 The file is optional. When absent, the wizard (if invoked) handles port conflicts only.
@@ -138,7 +138,7 @@ A free-text input field with optional validation.
   type: input
   title: Database password
   required: true
-  writes: db.password
+  writes: vars.db.password
 ```
 
 ### `select`
@@ -153,7 +153,7 @@ A single-choice dropdown. Developer picks one value.
   type: select
   title: Logging level
   required: true
-  writes: app.log_level
+  writes: vars.app.log_level
   options:
     - value: debug
       label: Debug (verbose)
@@ -174,7 +174,7 @@ A multi-choice list. Developer picks zero or more values.
 - id: plugins
   type: multiselect
   title: Plugins to enable
-  writes: app.plugins
+  writes: vars.app.plugins
   options:
     - value: auth
       label: Authentication
@@ -195,7 +195,7 @@ A yes/no toggle.
 - id: enable-debug
   type: confirm
   title: Enable debug mode?
-  writes: app.debug
+  writes: vars.app.debug
 ```
 
 Note: `required: true` on a confirm is a no-op and produces a validation warning. A confirm always yields a valid answer (either true or false).
@@ -242,7 +242,7 @@ Validates a non-empty filesystem path and writes a `string`.
 - id: workspace-dir
   type: input
   title: Workspace directory
-  writes: app.workspace
+  writes: vars.app.workspace
   validate:
     preset: path
 ```
@@ -255,7 +255,7 @@ Validates that the input is not blank (whitespace-only is rejected) and writes a
 - id: api-key
   type: input
   title: API key
-  writes: db.api_key
+  writes: vars.db.api_key
   validate:
     preset: non-empty
 ```
@@ -268,19 +268,19 @@ If neither `preset` nor `regex` is set, the input is accepted as-is (any non-emp
 - id: app-name
   type: input
   title: Application name
-  writes: app.name
+  writes: vars.app.name
   # No validation; any input is accepted
 ```
 
 ### Custom regex
 
-Validate the input against a regular expression pattern. The input must match the pattern in full.
+Validate the input against a regular expression pattern. The pattern is matched as an un-anchored Go regex (substring match); add ^ and $ anchors yourself to require a full match.
 
 ```yaml
 - id: email
   type: input
   title: Email address
-  writes: user.email
+  writes: vars.user.email
   validate:
     regex: "^[a-z0-9+._-]+@[a-z0-9.-]+$"
 ```
@@ -298,7 +298,6 @@ These top-level keys are reserved and cannot be written by the wizard:
 - `info.*` — immutable project metadata
 - `styles.*` — UI color configuration
 - `docker.*` — engine policy configuration
-- `binaries.*` — binary override configuration
 
 Attempting to write to any of these triggers a validation error.
 
@@ -327,17 +326,17 @@ Validation error messages cite the specific constraint that failed (e.g., "servi
 
 ### Non-service paths
 
-Anywhere else in `local.yml` (top-level custom keys, `db.*`, `app.*`, etc.), any dot-path is allowed and any question type is fine:
+Custom values belong under the [`vars:` sandbox](workspace.md#strict-root--the-vars-sandbox). The root of the merged config is strict — a top-level `db:` / `app:` / `custom:` key in `local.yml` is rejected at load time — so write custom answers under `vars.*`, where any nesting is allowed and any question type is fine:
 
 ```yaml
-- writes: db.name                    # ✓ allowed
-- writes: db.connection.host         # ✓ allowed
-- writes: db.connection.port         # ✓ allowed
-- writes: app.feature_flags          # ✓ allowed
-- writes: custom.setting             # ✓ allowed
+- writes: vars.db.name                    # ✓ allowed
+- writes: vars.db.connection.host         # ✓ allowed
+- writes: vars.db.connection.port         # ✓ allowed
+- writes: vars.app.feature_flags          # ✓ allowed
+- writes: vars.custom.setting             # ✓ allowed
 ```
 
-The wizard writes the typed answer value verbatim (string for `input` / `select` / `confirm`, slice for `multiselect`) and trusts the consuming config (templates, exports, etc.) to handle it appropriately.
+The wizard writes the typed answer value verbatim (string for `input` / `select`, bool for `confirm`, slice for `multiselect`) and trusts the consuming config (templates, exports, etc.) to handle it appropriately.
 
 ## Examples
 
@@ -358,7 +357,7 @@ questions:
     title: GitHub personal access token
     description: Used for private repo access. Leave blank to skip.
     required: false
-    writes: secrets.github_token
+    writes: vars.secrets.github_token
     validate:
       preset: non-empty
 
@@ -399,7 +398,7 @@ questions:
     title: Plugins to enable
     description: Select any combination (space to toggle, enter to confirm)
     required: false
-    writes: app.plugins
+    writes: vars.app.plugins
     options:
       - value: auth
         label: Authentication
@@ -419,7 +418,7 @@ questions:
     type: input
     title: Workspace root directory
     required: true
-    writes: workspace.root
+    writes: vars.workspace.root
     validate:
       preset: path
 
@@ -427,7 +426,7 @@ questions:
     type: select
     title: Cache backend
     required: true
-    writes: cache.backend
+    writes: vars.cache.backend
     options:
       - value: redis
         label: Redis
@@ -439,7 +438,7 @@ questions:
   - id: enable-profiling
     type: confirm
     title: Enable performance profiling?
-    writes: debug.profiling
+    writes: vars.debug.profiling
 ```
 
 ## Related commands

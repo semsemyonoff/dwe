@@ -20,6 +20,7 @@ import (
 	valchecks "github.com/semsemyonoff/dwe/internal/core/validate/checks"
 	valconfig "github.com/semsemyonoff/dwe/internal/core/validate/config"
 	valenv "github.com/semsemyonoff/dwe/internal/core/validate/env"
+	"github.com/semsemyonoff/dwe/internal/shared/trace"
 )
 
 // Error is returned when preflight surfaces any error-severity diagnostic.
@@ -67,6 +68,23 @@ func preflightActionLabel(stage string) string {
 	}
 }
 
+// stagesForPreflight maps a lifecycle stage to the set of validate.yml check
+// stages this final preflight runs. For "deploy" it returns {deploy,
+// post-setup} so post-setup checks (skipped at the early pre-wizard gate) run
+// here. Every other stage maps to itself; an empty stage maps to nil, which
+// AllForStages treats as "match every check" (preserving the prior
+// empty-stage behavior).
+func stagesForPreflight(stage string) []string {
+	switch stage {
+	case "":
+		return nil
+	case "deploy":
+		return []string{"deploy", "post-setup"}
+	default:
+		return []string{stage}
+	}
+}
+
 // RunFn is the signature of Run. Commands that want a swappable preflight
 // (e.g. for tests, or to override the implementation) accept a RunFn and
 // default to Run when nil.
@@ -80,16 +98,18 @@ type RunFn = func(ctx context.Context, cfg *config.DweConfig, cmdRegistry *userc
 // bypass (type: command checks invoke arbitrary user scripts that could
 // mutate state).
 //
-// cmdRegistry is nil-tolerant: checks.AllForStage produces unknown-command
+// cmdRegistry is nil-tolerant: checks.AllForStages produces unknown-command
 // diagnostics for any type: command entry when nil.
 func Run(ctx context.Context, cfg *config.DweConfig, cmdRegistry *usercommands.Registry, baseDir, stage string, skip bool, errOut io.Writer) error {
 	if errOut == nil {
 		errOut = io.Discard
 	}
 	if skip {
+		trace.Decision(ctx, "preflight skipped (--skip-preflight) for stage %q", stage)
 		_, _ = fmt.Fprintln(errOut, "preflight skipped (--skip-preflight)")
 		return nil
 	}
+	trace.Decision(ctx, "preflight running for stage %q", stage)
 
 	validateCfg, warnings, loadErr := config.LoadValidateConfig(config.ValidateConfigPath(baseDir))
 
@@ -120,7 +140,15 @@ func Run(ctx context.Context, cfg *config.DweConfig, cmdRegistry *usercommands.R
 	// Pass nil loadErr: config.validate (registered above) already emits the
 	// parse error diagnostic. Passing it here too would produce a duplicate
 	// row in the preflight table and double-count it in the summary.
-	for _, v := range valchecks.AllForStage(validateCfg, nil, baseDir, cmdRegistry, stage, cfg.Services, false) {
+	//
+	// The deploy flow has two preflight moments: an early pre-wizard gate
+	// (cli/deploy/menu.go, which queries only the "deploy" stage) and this
+	// final run immediately before the pipeline. For the deploy stage we also
+	// query "post-setup" so checks tagged stages: [post-setup] run here — they
+	// are skipped at the early gate (they don't carry "deploy") and execute
+	// only after the setup wizard has populated local.yml, or right before
+	// deploy when no wizard runs. See docs/reference/config/validate.md.
+	for _, v := range valchecks.AllForStages(validateCfg, nil, baseDir, cmdRegistry, stagesForPreflight(stage), cfg.Services, false) {
 		reg.Register(v)
 	}
 
@@ -138,6 +166,8 @@ func Run(ctx context.Context, cfg *config.DweConfig, cmdRegistry *usercommands.R
 	}
 	summary := validate.Aggregate(diags)
 	blocking := validate.ExitCode(summary, false) != 0
+	trace.Decision(ctx, "preflight result for stage %q: %d error(s), %d warning(s), %d info(s) — blocking=%t",
+		stage, summary.Errors, summary.Warnings, summary.Infos, blocking)
 	if len(filtered) > 0 {
 		header := preflightHeader(stage, blocking)
 		if blocking {

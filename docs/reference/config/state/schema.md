@@ -35,15 +35,15 @@ Field reference for `.dwe/deploy/state.yml`.
 
 | Field | Type | Description |
 |-------|------|-------------|
-| `status` | enum | `ok`, `failed`, `skipped` |
+| `status` | enum | `ok`, `failed` |
 | `steps` | map | Per-step state, keyed by step name |
 
 ## Step fields
 
 | Field | Type | Description |
 |-------|------|-------------|
-| `status` | enum | `ok`, `failed`, `in_progress` |
-| `finished_at` | ISO 8601 timestamp | When this step completed (absent if in_progress) |
+| `status` | enum | `ok`, `failed`, `skipped` |
+| `finished_at` | ISO 8601 timestamp | When this step completed |
 | `action_hash` | sha256 hex | Fingerprint of the step's `type`, `cmd`, and `with:` parameters |
 | `duration_ms` | integer | How long the step took to execute, in milliseconds |
 

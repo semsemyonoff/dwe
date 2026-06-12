@@ -66,7 +66,7 @@ The root's `PersistentPreRunE` does five things before any `RunE` runs:
 
 1. Validates `--output` (`text` or `json`) and rejects `--pretty` without JSON.
 2. Sets `NO_COLOR=1`, `SilenceErrors`, and `SilenceUsage` in JSON mode.
-3. Locates the project. `validate` and its descendants use `project.Locate` (no schema check) so schema errors surface as diagnostics; every other command uses `project.Resolve` (schema check). A small allowlist (`version`, `prompt`, `completion …`, `docs …`) is allowed to run without a project.
+3. Locates the project. `validate` and its descendants use `project.Locate` (no schema check) so schema errors surface as diagnostics; every other command uses `project.Resolve` (schema check). A small allowlist (`init`, `version`, `prompt`, `completion …`, `docs …`, plus the bare `dwe` root and `bridge daemon`) is allowed to run without a project.
 4. Loads `workspace/styles.yml` and applies the palette to `core/ui/styles`.
 5. Resolves the locale via `i18n.ResolveLocale` and loads the i18n store.
 
@@ -79,20 +79,22 @@ Cobra's hidden `__complete` path bypasses `PersistentPreRunE`. Every `ValidArgsF
 
 ## Embedded docs and translations
 
-Documentation is embedded in the binary. The build step `scripts/sync-embedded-docs.sh` mirrors `docs/{reference,internals,i18n}` into `internal/core/docs/embedded/`, and the package uses `//go:embed embedded` to make it part of the binary at compile time.
+Documentation is embedded in the binary. The build step `scripts/sync-embedded-docs.sh` mirrors `docs/{reference,guides,internals,i18n}` plus the repo-root `README.md` into `internal/core/docs/embedded/`, and the package uses `//go:embed embedded` to make it part of the binary at compile time.
 
 The runtime layout is straightforward:
 
 ```text
 embedded/
 ├── reference/   # user-facing schema and command reference
+├── guides/      # task-oriented recipes and integrations
 ├── internals/   # contributor-facing internal docs
-└── i18n/<lang>/ # mirrored translated trees
+├── i18n/<lang>/ # mirrored translated trees
+└── README.md    # repo-root README, exposed at relPath "README.md"
 ```
 
 Three properties matter:
 
-- `BuiltinFS` is `fs.Sub(embedFS, "embedded")`, so callers see `reference/`, `internals/`, and `i18n/` at the root.
+- `BuiltinFS` is `fs.Sub(embedFS, "embedded")`, so callers see `reference/`, `guides/`, `internals/`, `i18n/`, and `README.md` at the root.
 - Content hashes for every file are baked into `internal/core/docs/content_hashes_gen.go` by `scripts/gen-docs-content-hashes.sh` at build time. The hash is the per-file freshness anchor.
 - Each translated file starts with `> Translated from: <relPath> @ <hash>`. `internal/core/docs/lang.go` parses the header, compares the hash against `ContentHashFor(relPath)`, and surfaces a staleness warning when they diverge.
 

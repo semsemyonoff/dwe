@@ -1,4 +1,4 @@
-> Translated from: reference/render/index.md @ 7e99914baba8
+> Translated from: reference/render/index.md @ 99b43c7c23a8
 
 # Справочник Render
 
@@ -20,8 +20,9 @@
 | `dwe render ide` | IDE-файлы по каждому сервису внутри hub-каталога сервиса | пакеты шаблонов в `workspace/templates/ide/<pack>/`, управляемые `manifest.yml` |
 | `dwe render ai` | agent-доки на уровне hub (`AGENTS.md`, симлинк `CLAUDE.md`, …) | пакеты шаблонов в `workspace/templates/ai/<pack>/`, управляемые `manifest.yml` |
 | `dwe render git` | shell git-хуки на каждый сервис, в `<svc.Dir>/src/.git/hooks/<basename>` (режим `0755`) | пакеты шаблонов в `workspace/templates/git/<pack>/`, управляемые `manifest.yml` |
+| `dwe render config` | config-файлы по каждому сервису (`.env`, `env.php`, …) внутри hub-каталога сервиса, с воспроизведением собранных секретов | пакеты шаблонов в `workspace/templates/config/<pack>/`, управляемые `manifest.yml` |
 
-Все четыре подкоманды читают одну и ту же объединённую конфигурацию (`workspace.yml` → `workspace/defaults.yml` → `workspace/local.yml`, с объявлениями сервисов из `workspace/services/<name>/service.yml`). Различаются они тем, что итерируют и куда пишут.
+Все пять подкоманд читают одну и ту же объединённую конфигурацию (`workspace.yml` → `workspace/defaults.yml` → `workspace/local.yml`, с объявлениями сервисов из `workspace/services/<name>/service.yml`). Различаются они тем, что итерируют и куда пишут.
 
 ## Общий конвейер
 
@@ -62,7 +63,7 @@ flowchart LR
 | Итерирует сервисы | нет | да | да | да |
 | Читает шаблоны с диска | нет | да (через manifest) | да (через manifest) | да (через manifest) |
 | Пер-сервисное поле opt-in | — | `services.<name>.render.ide.enabled` | `services.<name>.render.ai.enabled` | `services.<name>.render.git.enabled` |
-| Политика opt-in по умолчанию | — | `true` для `type: app`; `false` иначе | `true` для всех типов | `true` для `type: app`; `false` иначе |
+| Политика opt-in по умолчанию | — | `true` для `type: app`; `false` иначе | `true` для `type: app`; `false` иначе | `true` для `type: app`; `false` иначе |
 | Политика коллизий при общем `dir` | — | выигрывает самый глубокий `extends` (per-variant override) | выигрывает самый поверхностный `extends` (каноническая идентичность hub) | выигрывает самый глубокий `extends` (per-variant хуки) |
 | Файл manifest | — | `manifest.yml` объявляет `render` (+ `symlinks`) | `manifest.yml` объявляет `render` + `symlinks` | `manifest.yml` объявляет только `render` |
 | Поддерживаются симлинки | нет | да (относительные, внутри hub) | да (относительные, внутри hub) | нет — `to` должен быть basename |
@@ -142,6 +143,7 @@ Override — это **подмена входа**, а не перенаправ�
 - [`render ide`](ide.md) — IDE-пакеты шаблонов: разрешение пакета, схема manifest, политика «глубочайший выигрывает», пер-сервисный рендер
 - [`render ai`](ai.md) — пакеты agent-доков: схема manifest, политика «поверхностнейший выигрывает», записи `render` + `symlinks`
 - [`render git`](git.md) — shell git-хуки: manifest-driven рендер в `<svc.Dir>/src/.git/hooks/`, «глубочайший выигрывает», режим `0755`
+- [`render config`](config.md) — config-файлы сервисов: подложка `${...}`, воспроизведение `${generated.<name>}`, секреты по принципу «собрать, а не выпустить», opt-in разрешение пакетов
 
 ## Связанные справочники
 

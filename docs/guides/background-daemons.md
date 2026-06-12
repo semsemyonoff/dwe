@@ -128,7 +128,7 @@ Every daemon container carries three standard labels so `docker ps` is the singl
 
 ## Auto-reap on `dwe stop`
 
-Whenever `dwe stop` runs, a synthetic `_auto_reap_daemons` phase is prepended to the stop pipeline. It enumerates every container labelled `dwe.project=<full>` with a non-empty `dwe.daemon.id` and stops them in parallel. **There is no opt-out** — daemons always shut down with the stack. The phase is visible in `dwe stop --plan` output.
+Whenever `dwe stop` runs, a synthetic `_auto_reap_daemons` phase is prepended to the stop pipeline. It enumerates every container labelled `dwe.project=<full>` with a non-empty `dwe.daemon.id` and stops them in parallel. **There is no opt-out** — daemons always shut down with the stack. The phase appears in the live stop-pipeline output when `dwe stop` runs (`dwe stop` has no plan/preview mode).
 
 `dwe restart` is a `dwe stop` followed by `dwe run`. The stop leg reaps every daemon as usual, but the run leg does **not** restart them — daemons are intentionally separate from the main lifecycle and not auto-started on `dwe run`. If you need them back after a restart, call `<id>.start` explicitly:
 
@@ -170,7 +170,7 @@ commands:
         default: default
         pattern: ^[a-zA-Z0-9_-]+$
     env:
-      QUEUE_TOKEN: ${secrets.queue_token}   # OK — values flow through env, not labels
+      QUEUE_TOKEN: ${vars.secrets.queue_token}   # OK — values flow through env, not labels
     argv:
       - php
       - artisan

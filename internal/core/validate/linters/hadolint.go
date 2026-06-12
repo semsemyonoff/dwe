@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
+	"strings"
 
 	"github.com/semsemyonoff/dwe/internal/core/validate"
 )
@@ -93,8 +94,24 @@ func (a *HadolintAdapter) ParseOutput(stdout, stderr []byte, exitCode int) ([]va
 			it.File,
 			it.Line,
 			fmt.Sprintf("%s (%s)", it.Message, it.Code),
-			"",
+			hadolintRuleURL(it.Code),
 		))
 	}
 	return out, nil
+}
+
+// hadolintRuleURL returns the documentation URL for a hadolint rule code, used
+// as the diagnostic hint. hadolint surfaces its own `DLxxxx` rules plus the
+// `SCxxxx` codes from shellcheck (it lints the script body of RUN
+// instructions); the latter are documented on the shellcheck wiki, not
+// hadolint's. An empty code yields no hint.
+func hadolintRuleURL(code string) string {
+	switch {
+	case code == "":
+		return ""
+	case strings.HasPrefix(code, "SC"):
+		return shellcheckWikiBase + code
+	default:
+		return hadolintWikiBase + code
+	}
 }

@@ -279,6 +279,154 @@ docs:
 	require.Equal(t, validate.SeverityOK, diags[0].Severity) // workspace
 }
 
+// TestWorkspaceValidator_UnknownRootKey asserts that a strict-root violation
+// (a custom key not under vars:) surfaces as a SeverityError diagnostic via the
+// LoadConfig-error path. The check itself lives in the loader (Task 1); the
+// validator only mirrors load errors as diagnostics-as-data.
+func TestWorkspaceValidator_UnknownRootKey(t *testing.T) {
+	root := t.TempDir()
+	require.NoError(t, os.MkdirAll(filepath.Join(root, "workspace", "services"), 0o755))
+
+	workspaceYML := `
+project:
+  name: test
+  prefix: test
+db:
+  host: localhost
+`
+	require.NoError(t, os.WriteFile(filepath.Join(root, "workspace.yml"), []byte(workspaceYML), 0o644))
+
+	ctx := validate.Context{
+		ProjectRoot: root,
+		ConfigPath:  filepath.Join(root, "workspace.yml"),
+	}
+
+	v := &workspaceValidator{}
+	diags := v.Run(ctx)
+
+	d := hasDiag(t, diags, validate.SeverityError, "unknown top-level key")
+	require.Equal(t, "config.workspace", d.Target)
+	require.Contains(t, d.Message, "vars:")
+}
+
+// TestWorkspaceValidator_BadUpdateMode asserts that an out-of-range update.mode
+// surfaces as a SeverityError diagnostic via the LoadConfig-error path. The
+// load-time value check lives in the loader (Task 3).
+func TestWorkspaceValidator_BadUpdateMode(t *testing.T) {
+	root := t.TempDir()
+	require.NoError(t, os.MkdirAll(filepath.Join(root, "workspace", "services"), 0o755))
+
+	workspaceYML := `
+project:
+  name: test
+  prefix: test
+update:
+  mode: yes-please
+`
+	require.NoError(t, os.WriteFile(filepath.Join(root, "workspace.yml"), []byte(workspaceYML), 0o644))
+
+	ctx := validate.Context{
+		ProjectRoot: root,
+		ConfigPath:  filepath.Join(root, "workspace.yml"),
+	}
+
+	v := &workspaceValidator{}
+	diags := v.Run(ctx)
+
+	d := hasDiag(t, diags, validate.SeverityError, "update.mode")
+	require.Equal(t, "config.workspace", d.Target)
+	require.Contains(t, d.Message, "on, off")
+}
+
+// TestWorkspaceValidator_GoodUpdateMode asserts a valid update block produces no
+// error diagnostic — the workspace check stays SeverityOK.
+func TestWorkspaceValidator_GoodUpdateMode(t *testing.T) {
+	root := t.TempDir()
+	require.NoError(t, os.MkdirAll(filepath.Join(root, "workspace", "services"), 0o755))
+
+	workspaceYML := `
+project:
+  name: test
+  prefix: test
+update:
+  mode: on
+`
+	require.NoError(t, os.WriteFile(filepath.Join(root, "workspace.yml"), []byte(workspaceYML), 0o644))
+
+	ctx := validate.Context{
+		ProjectRoot: root,
+		ConfigPath:  filepath.Join(root, "workspace.yml"),
+	}
+
+	v := &workspaceValidator{}
+	diags := v.Run(ctx)
+
+	require.True(t, len(diags) > 0, "expected at least 1 diagnostic (workspace)")
+	require.Equal(t, validate.SeverityOK, diags[0].Severity)
+	require.Equal(t, "config.workspace", diags[0].Target)
+}
+
+// TestVarsWritablePatternValid pins the structural grammar the validator uses to
+// flag bridge.vars_writable typos that would otherwise silently fail-closed.
+func TestVarsWritablePatternValid(t *testing.T) {
+	cases := []struct {
+		pat  string
+		want bool
+	}{
+		// Valid: exact vars path, trailing wildcard, the broad vars.* form.
+		{"vars.db.host", true},
+		{"vars.db.*", true},
+		{"vars.*", true},
+		{"vars.a.b.c", true},
+		// Invalid: non-vars namespace.
+		{"project.name", false},
+		{"db.host", false},
+		// Invalid: bare prefix.
+		{"vars.", false},
+		{"", false},
+		// Invalid: interior wildcard (would match nothing in the matcher).
+		{"vars.*.host", false},
+		{"vars.db.*.x", false},
+		{"vars.d*b.host", false},
+		// Invalid: exact pattern carrying a stray '*'.
+		{"vars.db*", false},
+	}
+	for _, tc := range cases {
+		if got := varsWritablePatternValid(tc.pat); got != tc.want {
+			t.Errorf("varsWritablePatternValid(%q) = %v, want %v", tc.pat, got, tc.want)
+		}
+	}
+}
+
+// TestWorkspaceValidator_BadVarsWritablePattern asserts an interior-wildcard typo
+// in bridge.vars_writable surfaces a diagnostic (it would otherwise silently deny
+// every container write).
+func TestWorkspaceValidator_BadVarsWritablePattern(t *testing.T) {
+	root := t.TempDir()
+	require.NoError(t, os.MkdirAll(filepath.Join(root, "workspace", "services"), 0o755))
+
+	workspaceYML := `
+project:
+  name: test
+  prefix: test
+bridge:
+  vars_writable:
+    - vars.*.host
+`
+	require.NoError(t, os.WriteFile(filepath.Join(root, "workspace.yml"), []byte(workspaceYML), 0o644))
+
+	ctx := validate.Context{
+		ProjectRoot: root,
+		ConfigPath:  filepath.Join(root, "workspace.yml"),
+	}
+
+	v := &workspaceValidator{}
+	diags := v.Run(ctx)
+
+	d := hasDiag(t, diags, validate.SeverityError, "vars_writable")
+	require.Equal(t, "config.workspace.bridge.vars_writable", d.Target)
+}
+
 // writeServicesDir sets up a project root with per-folder services under workspace/services/
 // for servicesValidator tests. The body is a YAML fragment shaped like `services: {name: {...}}`.
 // Returns the project root path.
@@ -407,6 +555,37 @@ services:
 	hasDiag(t, diags, validate.SeverityError, `field "dir" not allowed`)
 	// "extends" on a non-app emits the more specific cross-type error only.
 	hasDiag(t, diags, validate.SeverityError, "extends only permitted for type app")
+}
+
+func TestServicesValidator_BridgeFieldAllowedAllTypes(t *testing.T) {
+	body := `
+services:
+  api:
+    type: app
+    container: api
+    dir: ./services/api
+    bridge:
+      enabled: true
+      shim_path: /opt/bin/dwe
+      on_unreachable: warn
+  worker:
+    type: infra
+    container: worker
+    bridge:
+      enabled: true
+  adminer:
+    type: tool
+    container: adminer
+    bridge:
+      enabled: false
+`
+	root := writeServicesDir(t, body)
+	diags := (&servicesValidator{}).Run(validate.Context{ProjectRoot: root})
+	for _, d := range diags {
+		require.NotEqual(t, validate.SeverityError, d.Severity, "unexpected error: %s", d.Message)
+		require.NotEqual(t, validate.SeverityWarning, d.Severity, "unexpected warning: %s", d.Message)
+	}
+	hasDiag(t, diags, validate.SeverityOK, "")
 }
 
 func TestServicesValidator_InfraExtendsRejected(t *testing.T) {

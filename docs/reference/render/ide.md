@@ -130,7 +130,7 @@ Template-key validation rejects:
 - Leading dot (subsumes `..` and hidden-name keys).
 - Empty (treated as "unset", which is allowed and triggers the implicit chain).
 
-Service names used as the implicit pack key are validated less strictly (leading dots are allowed because service names are YAML map keys, not user-typed paths) but still must not contain path separators or be `..`.
+Service names used as the implicit pack key go through the same strict pack-name validator (`manifest.ValidatePackName`): a service name with a leading dot, leading hyphen, or path separator is silently skipped as a candidate and the walk continues.
 
 ## Manifest schema
 
@@ -159,7 +159,7 @@ Strict YAML decode (`yaml.Decoder.KnownFields(true)`) rejects misspelled keys li
 
 ## Per-file rendering
 
-For each entry the destination is built by joining the service hub directory with the entry's relative path (the pack-internal path with `.tmpl` stripped). The renderer:
+For each entry the destination is built by joining the service hub directory with the entry's explicit `to` path (the `from`/source path is independent and is not used to derive the destination). The renderer:
 
 1. Reads the template file from the pack.
 2. Parses it as a [Go text template](../templates.md) with strict mode enabled — any reference to a missing field aborts rendering instead of writing a `<no value>` placeholder.
@@ -269,7 +269,7 @@ Template `workspace/templates/ide/main-debug/.vscode/settings.json.tmpl`:
 
 1. Selection: both `main` and `main-debug` pass the activation gate. They share `dir: ./services/main`. `main-debug` has a deeper `extends` chain (depth 1 vs 0), so `main-debug` wins. `main` is reported as a collision skip and a warning is printed.
 2. Pack resolution for `main-debug`: `render.ide.template: main-debug` is explicit; `workspace/templates/ide/main-debug/` exists, so it is used.
-3. Pack walk yields three entries (sorted): `.devcontainer/devcontainer.json`, `.vscode/launch.json`, `.vscode/settings.json`.
+3. Manifest render entries (in declaration order) yield the three outputs: `.devcontainer/devcontainer.json`, `.vscode/launch.json`, `.vscode/settings.json`.
 4. Each is rendered with `.Service = "main"` (the chain root — what user-config maps are keyed on), `.Resolved = "main-debug"` (the rendering service), `.ServiceCfg.Container = "app-main-debug"`, etc.
 
 Result:

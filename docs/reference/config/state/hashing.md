@@ -64,7 +64,7 @@ A service's `config_hash` covers two things:
 sha256(canonical_json(services.<name>) + canonical_json(workspace/services/<name>/deploy.yml))
 ```
 
-- The service definition from `workspace/services/<name>/service.yml` (Enabled, Depends, Type, Dir, etc.)
+- The service definition from `workspace/services/<name>/service.yml` (Type, Dir, Container, Depends, Required, etc.)
 - The per-service deploy pipeline from `workspace/services/<name>/deploy.yml` (or empty if absent)
 
 When the service's `config_hash` changes (e.g., you edit `workspace/services/main/service.yml` or `workspace/services/main/deploy.yml`), **all steps in that service's phases are treated as absent**. They re-run on the next deploy regardless of their `action_hash`.

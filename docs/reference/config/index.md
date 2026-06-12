@@ -31,7 +31,7 @@ Overview of all configuration files in the DWE system.
 | `workspace/commands/` | yes | standalone | Declarative command definitions (per-file groups) |
 | `workspace/validate.yml` | yes | standalone | Project readiness checks (preflight + `dwe validate`) |
 | `workspace/snapshot.yml` | yes | standalone | Snapshot workflows: create / restore / remove (`dwe snapshot`) |
-| `workspace/i18n/*.yml` | no (ignored) | standalone | User command and UI string translations (optional; one file per language) |
+| `workspace/i18n/*.yml` | yes | standalone | User command and UI string translations (optional; one file per language) |
 
 ## Runtime artifacts
 
@@ -99,6 +99,7 @@ For more details on `docker.local.yml` semantics and examples, see [docker.yml](
 ## Pages
 
 - [workspace / defaults / local](workspace.md) — the 3-layer merged config: merge order, precedence, dot-path resolution, field reference
+- [vars](vars.md) — the `dwe vars` command: enumerate/read/edit/trace the `vars:` sandbox, comment-preserving writes, static usage scan, `bridge.vars_writable` container-write allowlist
 - [services/<name>/service.yml](services/index.md) — per-service declarations, extends, dirs, cli config
 - [deploy.yml / reset.yml](deploy/index.md) — deploy and reset pipelines, steps, builtins, file logging, idempotent deploy
 - [state.yml](state/index.md) — deploy state tracking, skip-decision table, hashing, lock file, recovery from crashes

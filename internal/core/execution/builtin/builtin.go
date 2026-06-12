@@ -19,8 +19,11 @@
 //	- message                       — output styled text
 //
 //	services/ (KindAction)
-//	- service_configs_copy          — copy service template configs into the hub
+//	- service_configs_copy          — copy service template configs into the hub (legacy; deprecation-warned)
 //	- service_configs_check         — verify service config files exist
+//	- service_configs_render        — render service config templates into the hub (modern render-based mechanism)
+//	- service_configs_render_check  — re-render gate paired as the render step's check: (forces re-run on template/store change)
+//	- service_generated_harvest     — harvest generated values (e.g. minted secrets) from the service into the generated store
 //	- service_dirs_ensure           — ensure service hub directories exist
 //
 //	containers/ (KindAction unless noted)
@@ -45,6 +48,7 @@
 //	root (KindPredicate)
 //	- shell                         — exit-code predicate via /bin/sh
 //	- tcp_reachable                 — TCP host:port reachability predicate
+//	- config_keys_present           — verify merged-config dot-paths resolve to non-empty values
 package builtin
 
 import (
@@ -92,8 +96,9 @@ var registry = buildRegistry()
 func buildRegistry() map[string]spec.Entry {
 	r := map[string]spec.Entry{
 		// KindPredicate: read-only checks for check: positions and validate.yml
-		"shell":         {Impl: Shell{}, Kind: spec.KindPredicate},
-		"tcp_reachable": {Impl: TCPReachable{}, Kind: spec.KindPredicate},
+		"shell":               {Impl: Shell{}, Kind: spec.KindPredicate},
+		"tcp_reachable":       {Impl: TCPReachable{}, Kind: spec.KindPredicate},
+		"config_keys_present": {Impl: ConfigKeysPresent{}, Kind: spec.KindPredicate},
 	}
 	for _, src := range []map[string]spec.Entry{
 		containers.Builtins(),

@@ -189,6 +189,87 @@ dir: ./not-allowed
 	}
 }
 
+// TestLoadServices_bridgeBlock verifies the bridge block decodes on every
+// service type and that omitting it leaves the tristate nil with type-based
+// accessor defaults.
+func TestLoadServices_bridgeBlock(t *testing.T) {
+	dir := t.TempDir()
+	writeServiceFolder(t, dir, "web", `
+type: app
+container: app-web
+dir: ./services/web
+bridge:
+  enabled: false
+  shim_path: /opt/dwe/bin/dwe
+  on_unreachable: warn
+`)
+	writeServiceFolder(t, dir, "worker", `
+type: infra
+container: worker
+bridge:
+  enabled: true
+`)
+	writeServiceFolder(t, dir, "adminer", `
+type: tool
+container: adminer
+`)
+	services, err := LoadServices(dir)
+	if err != nil {
+		t.Fatalf("LoadServices: %v", err)
+	}
+
+	web := services["web"]
+	if web.Bridge.Enabled == nil || *web.Bridge.Enabled != false {
+		t.Errorf("web Bridge.Enabled = %v, want explicit false", web.Bridge.Enabled)
+	}
+	if web.BridgeShimPath() != "/opt/dwe/bin/dwe" {
+		t.Errorf("web BridgeShimPath() = %q, want /opt/dwe/bin/dwe", web.BridgeShimPath())
+	}
+	if web.BridgeOnUnreachable() != BridgeOnUnreachableWarn {
+		t.Errorf("web BridgeOnUnreachable() = %q, want warn", web.BridgeOnUnreachable())
+	}
+
+	worker := services["worker"]
+	if !worker.BridgeEnabled() {
+		t.Error("worker (infra) with explicit enabled: true should report BridgeEnabled() true")
+	}
+
+	adminer := services["adminer"]
+	if adminer.Bridge.Enabled != nil {
+		t.Errorf("adminer Bridge.Enabled should be nil when omitted, got %v", *adminer.Bridge.Enabled)
+	}
+	if adminer.BridgeEnabled() {
+		t.Error("adminer (tool, omitted) should default BridgeEnabled() false")
+	}
+	if adminer.BridgeShimPath() != DefaultBridgeShimPath {
+		t.Errorf("adminer BridgeShimPath() = %q, want default %q", adminer.BridgeShimPath(), DefaultBridgeShimPath)
+	}
+	if adminer.BridgeOnUnreachable() != BridgeOnUnreachableFail {
+		t.Errorf("adminer BridgeOnUnreachable() = %q, want fail", adminer.BridgeOnUnreachable())
+	}
+}
+
+// TestLoadServices_bridgeUnknownSubField verifies the strict KnownFields decode
+// rejects unknown keys inside the bridge block.
+func TestLoadServices_bridgeUnknownSubField(t *testing.T) {
+	dir := t.TempDir()
+	writeServiceFolder(t, dir, "web", `
+type: app
+container: app-web
+dir: ./services/web
+bridge:
+  enabled: true
+  bogus: 1
+`)
+	_, err := LoadServices(dir)
+	if err == nil {
+		t.Fatal("expected error for unknown bridge sub-field, got nil")
+	}
+	if !strings.Contains(err.Error(), "bogus") {
+		t.Errorf("err = %v, want mention of unknown field %q", err, "bogus")
+	}
+}
+
 // TestLoadServices_infraWithExtends verifies infra+extends returns ErrServiceExtendsCrossType.
 func TestLoadServices_infraWithExtends(t *testing.T) {
 	dir := t.TempDir()
@@ -418,6 +499,106 @@ extends: base
 	}
 	if parent.Host("main") != "base.localhost" {
 		t.Errorf("parent.Hosts corrupted: %v", parent.Hosts)
+	}
+}
+
+// TestLoadServices_extendsInheritsRenderConfigAndGenerated verifies a child app
+// service inherits the parent's render.config pin and generated: declarations
+// (mirroring render.ide/ai/git inheritance). Without this, a child loses the
+// parent's config pack and its generated-key safety checks (run-render skip,
+// generated-missing predicate, validator cross-check) silently break.
+func TestLoadServices_extendsInheritsRenderConfigAndGenerated(t *testing.T) {
+	dir := t.TempDir()
+	writeServiceFolder(t, dir, "base", `
+type: app
+container: app-base
+dir: ./services/base
+render:
+  config:
+    template: laravel
+generated:
+  app_key:
+    file: src/.env
+    pattern: '^APP_KEY=(.*)$'
+`)
+	writeServiceFolder(t, dir, "child", `
+type: app
+container: app-child
+extends: base
+`)
+	services, err := LoadServices(dir)
+	if err != nil {
+		t.Fatalf("LoadServices: %v", err)
+	}
+	child := services["child"]
+
+	if child.Render.Config == nil || child.Render.Config.Template != "laravel" {
+		t.Fatalf("child.Render.Config = %+v, want inherited template laravel", child.Render.Config)
+	}
+	gen, ok := child.Generated["app_key"]
+	if !ok {
+		t.Fatalf("child.Generated missing inherited app_key: %v", child.Generated)
+	}
+	if gen.File != "src/.env" || gen.Pattern != "^APP_KEY=(.*)$" {
+		t.Errorf("child.Generated[app_key] = %+v, want inherited file/pattern", gen)
+	}
+
+	// Defensive copy: mutating the child must not corrupt the parent.
+	parent := services["base"]
+	child.Render.Config.Template = "MUTATED"
+	child.Generated["app_key"] = GeneratedField{File: "MUTATED", Pattern: "MUTATED"}
+	if parent.Render.Config.Template != "laravel" {
+		t.Errorf("parent.Render.Config corrupted: %+v", parent.Render.Config)
+	}
+	if parent.Generated["app_key"].File != "src/.env" {
+		t.Errorf("parent.Generated corrupted: %+v", parent.Generated["app_key"])
+	}
+
+	// A child that redeclares either field keeps its own value (no overwrite).
+	writeServiceFolder(t, dir, "child2", `
+type: app
+container: app-child2
+extends: base
+render:
+  config:
+    template: symfony
+generated:
+  own_key:
+    file: src/own.env
+    pattern: '^OWN=(.*)$'
+`)
+	services2, err := LoadServices(dir)
+	if err != nil {
+		t.Fatalf("LoadServices (child2): %v", err)
+	}
+	child2 := services2["child2"]
+	if child2.Render.Config == nil || child2.Render.Config.Template != "symfony" {
+		t.Errorf("child2.Render.Config = %+v, want own symfony", child2.Render.Config)
+	}
+	if _, ok := child2.Generated["own_key"]; !ok {
+		t.Errorf("child2.Generated lost its own declaration: %v", child2.Generated)
+	}
+	if _, ok := child2.Generated["app_key"]; ok {
+		t.Errorf("child2.Generated should not merge parent keys when it declares its own: %v", child2.Generated)
+	}
+
+	// An explicitly empty `generated: {}` is the child declaring its own (empty)
+	// map and must wholly replace the parent's — NOT inherit it. Conflating this
+	// with an omitted key (len()==0) would make a child that intentionally
+	// cleared its generated declarations silently harvest/replay parent fields.
+	writeServiceFolder(t, dir, "child3", `
+type: app
+container: app-child3
+extends: base
+generated: {}
+`)
+	services3, err := LoadServices(dir)
+	if err != nil {
+		t.Fatalf("LoadServices (child3): %v", err)
+	}
+	child3 := services3["child3"]
+	if len(child3.Generated) != 0 {
+		t.Errorf("child3.Generated = %v, want empty (explicit generated: {} wholly replaces parent)", child3.Generated)
 	}
 }
 
@@ -1419,5 +1600,38 @@ dir: ./services/child
 	}
 	if got := child.EffectiveScheme("http", false); got != "https" {
 		t.Errorf("child.EffectiveScheme(http, false) = %q, want https", got)
+	}
+}
+
+// TestSharesExtendsParentHub covers the config-render alias predicate: an
+// extends child that inherited its parent's hub dir is an alias (skip), while a
+// child with its own dir, a non-extends service, or a dangling parent is not.
+func TestSharesExtendsParentHub(t *testing.T) {
+	services := map[string]ServiceConfig{
+		"main":       {Type: ServiceTypeApp, Dir: "services/main"},
+		"main-debug": {Type: ServiceTypeApp, Dir: "services/main", Extends: "main"},    // inherited hub → alias
+		"variant":    {Type: ServiceTypeApp, Dir: "services/variant", Extends: "main"}, // own dir → not alias
+		"standalone": {Type: ServiceTypeApp, Dir: "services/standalone"},               // no extends → not alias
+		"orphan":     {Type: ServiceTypeApp, Dir: "services/orphan", Extends: "ghost"}, // dangling parent → not alias
+		"dirless":    {Type: ServiceTypeApp, Extends: "main"},                          // no own dir set → not alias (guarded)
+	}
+
+	tests := []struct {
+		name string
+		want bool
+	}{
+		{"main", false},
+		{"main-debug", true},
+		{"variant", false},
+		{"standalone", false},
+		{"orphan", false},
+		{"dirless", false},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := SharesExtendsParentHub(services[tc.name], services); got != tc.want {
+				t.Errorf("SharesExtendsParentHub(%q) = %v, want %v", tc.name, got, tc.want)
+			}
+		})
 	}
 }

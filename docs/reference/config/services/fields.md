@@ -1,6 +1,6 @@
 # Service field reference
 
-Every field allowed in `workspace/services/<name>/service.yml`, plus the nested blocks (`ports`, `hosts`, `icon`, `info`, `configs`, `dirs`, `cli`, `status`, `render`).
+Every field allowed in `workspace/services/<name>/service.yml`, plus the nested blocks (`ports`, `hosts`, `icon`, `info`, `configs`, `dirs`, `cli`, `status`, `render`, `generated`).
 
 ## Contents
 
@@ -14,6 +14,8 @@ Every field allowed in `workspace/services/<name>/service.yml`, plus the nested 
 - [`cli` block](#cli-block)
 - [`status` block](#status-block)
 - [`render` block](#render-block)
+- [`generated` block](#generated-block)
+- [`bridge` block](#bridge-block)
 
 **Host vs internal terminology:** Fields ending in `*_internal` or using the suffix convention (like `dir` for host, `dir_internal` for container) refer to paths: host side runs on your machine, internal side is the container mount point. Apply the same distinction to ports and hostnames: `ports.http` binds a container port to your host; `hosts.main` is the hostname the container resolves as.
 
@@ -38,10 +40,12 @@ Every field allowed in `workspace/services/<name>/service.yml`, plus the nested 
 | `dir_internal` | string | no | **app** | Container mount point for the hub. |
 | `work_dir_internal` | string | no | **app** | Default working directory for `exec`/`run` inside the container. |
 | `extends` | string | no | **app** | Inherit fields from another `type: app` entry. Cross-type extends is rejected. See [Inheritance](extends.md). |
-| `configs` | list | no | **app** | See [`configs` field](#configs-field). |
+| `configs` | list | no | **app** | **⚠️ Deprecated** — the copy mechanism; migrate to [`render.config`](#renderconfig-block). See [`configs` field](#configs-field). |
 | `dirs` | list | no | **app** | Extra hub-relative directories — see [`dirs` field](#dirs-field). |
 | `cli` | block | no | **app** | `dwe shell` defaults — see [`cli` block](#cli-block). |
-| `render` | block | no | **app** | Nested template-render policy — see [`render` block](#render-block). |
+| `render` | block | no | **app** | Nested template-render policy (`ide` / `ai` / `git` / `config`) — see [`render` block](#render-block). |
+| `generated` | block | no | **app** | Per-service service-minted values DWE harvests and replays — see [`generated` block](#generated-block). |
+| `bridge` | block | no | all (off by default — strictly opt-in) | Host-bridge opt-in — mount the `dwe` shim into this service's container so `dwe` works from inside it. See [`bridge` block](#bridge-block). |
 
 ## `ports` field
 
@@ -189,6 +193,14 @@ Services without an `info` block are still included in `auto-urls` dashboard blo
 
 ## `configs` field
 
+> **⚠️ Deprecated.** The `configs:` copy mechanism (and the `mountpoint` sub-field)
+> is superseded by [`render.config`](#renderconfig-block) + the
+> [`generated` block](#generated-block). It keeps working but `dwe validate` emits
+> a warning and a single runtime deprecation notice fires per copy step. New
+> projects should render configs from template packs; see
+> [render config](../../render/config.md) for the migration. The copy code is
+> removed in a separate phase-2 (major) effort.
+
 Lists config files that are copied into the service hub during deploy.
 
 ```yaml
@@ -201,7 +213,7 @@ configs:
 | Field | Description |
 |-------|-------------|
 | `file` (or shorthand string) | Source file name (relative to `configs/services/<service>/`) |
-| `mountpoint` | Path relative to the service `dir` (e.g. `src/.env`) where the file is touched after copying. Used by the `service_configs_copy` builtin to create a stub for Docker Desktop virtiofs nested file bind mounts. Optional. |
+| `mountpoint` | **⚠️ Deprecated.** Path relative to the service `dir` (e.g. `src/.env`) where the file is touched after copying. Used by the `service_configs_copy` builtin to create a stub for Docker Desktop virtiofs nested file bind mounts. Optional. |
 
 The source directory `configs/services/<service>/` is owned by the project and committed to git; the destination `services/<service>/configs/` is created during deploy and is gitignored.
 
@@ -303,7 +315,7 @@ The data root has only those three keys — there are no `.Project` / `.Runtime`
 
 ## `render` block
 
-Nested block controlling whether and how rendering generates files for this service from template packs. Contains three sub-blocks: `ide`, `ai`, and `git`, each with the same structure.
+Nested block controlling whether and how rendering generates files for this service from template packs. Contains four sub-blocks: `ide`, `ai`, `git` (each with the same `enabled` / `template` structure), and `config` (a single `template` pin — see [`render.config` block](#renderconfig-block)).
 
 ### `render.ide` block
 
@@ -448,7 +460,7 @@ render:
 
 | Field | Default | Description |
 |-------|---------|-------------|
-| `enabled` | `true` (for all service types) | Include this service in `dwe render ai` output. When `true`, agent-oriented documentation is generated in the service hub. |
+| `enabled` | `true` for `type: app`; `false` otherwise | Include this service in `dwe render ai` output. When `true`, agent-oriented documentation is generated in the service hub. |
 | `template` | — | Optional custom template pack directory name. Must be a single directory key under `workspace/templates/ai/` (no path separators, no `..`, no absolute paths, no leading `.`). If omitted, rendering falls back to service-name-specific then default packs. Explicit packs are strict: a typo will fail rather than silently using a fallback. |
 
 #### Agent docs activation rules
@@ -460,7 +472,7 @@ Agent docs rendering requires **both** activation and policy conditions:
 
 A service is rendered only if both are satisfied. Disabling either suppresses rendering.
 
-**Default policy**: All services default to `render.ai.enabled: true` (opt-out). Set `render.ai.enabled: false` to suppress agent docs generation for a service.
+**Default policy**: `type: app` services default to `render.ai.enabled: true` (opt-out); non-app services default to `false` and must opt in (set `render.ai.enabled: true`). Set `render.ai.enabled: false` to suppress agent docs generation for an app service.
 
 #### Template pack resolution
 
@@ -567,3 +579,64 @@ render:
 `extends` inheritance for `render.git.enabled` and `render.git.template` follows the same rules as `render.ide` and `render.ai`: child explicit values override the parent's; omitted values inherit. Collision resolution on shared `dir` uses **deepest-extends-wins** (same as `render.ide`).
 
 Hooks are written to `<svc.Dir>/src/.git/hooks/<basename>` with mode `0755`. Services whose `src/.git` is missing (no git checkout) or is a file (worktree/submodule pointer) are skipped with a warning. See [render git](../../render/git.md) for the full reference, manifest schema, and examples.
+
+### `render.config` block
+
+Controls config-file rendering for this service — the render-based successor to the deprecated [`configs:` copy](#configs-field) mechanism. Configs become pure render outputs from a template pack, written straight into the service hub tree (typically `src/...`, already dir-mounted), replaying any harvested [`generated`](#generated-block) values.
+
+```yaml
+render:
+  config:
+    template: laravel      # optional pack pin; else convention + .local
+```
+
+| Field | Default | Description |
+|-------|---------|-------------|
+| `template` | — | Optional custom template pack directory name under `workspace/templates/config/<template>/`. When set, resolution is **strict** (a typo fails rather than silently falling back). When omitted, resolution walks service-name → `extends` ancestors → `default`, plus the `<pack>.local/` sibling override. |
+
+Unlike `render.ide` / `ai` / `git`, `render.config` has **no `enabled` flag** — config rendering is gated solely by whether a pack resolves (opt-in: no pack → no render). Config templates use the `${...}` shorthand (e.g. `${services.main.ports.http}`, `${databases.main}`, `${generated.app_key}`), a deliberate divergence from the raw `{{ }}` substrate used by the other render kinds. See [render config](../../render/config.md) for the full reference, substrate, manifest schema, and the harvest/replay flow.
+
+## `generated` block
+
+Declares per-service **service-minted** values (Laravel `APP_KEY`, Magento `crypt.key`, …) that DWE harvests back from the service's own output file into a durable store (`.dwe/generated.yml`) and replays on every subsequent render via the `${generated.<name>}` namespace. The model is **harvest, not mint**: the *service* generates the value (e.g. `php artisan key:generate`); DWE only reads it back as a string.
+
+```yaml
+# workspace/services/main/service.yml
+type: app
+dir: ./services/main
+generated:
+  app_key:
+    file: src/.env             # output file, relative to the service hub (svc.Dir)
+    pattern: '^APP_KEY=(.*)$'   # regex; capture group 1 = value
+```
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `file` | string | yes | Output file the service writes the value into, relative to the service hub dir (`svc.Dir`). Must be a contained relative path (no `..`). |
+| `pattern` | string | yes | Regex applied per line; **capture group 1** is the harvested value. Must compile and declare **≥1 capture group**. |
+
+The map key (`app_key`) is the `${generated.<name>}` identifier. `dwe validate` rejects an invalid regex, a missing capture group, a path-escaping `file`, or a field name that is not a valid `${generated.<name>}` identifier.
+
+A service's generation step is typically gated by the [`generated-missing <svc> <field>`](../conditions.md#type-builtin--predicates) predicate so it runs only on the first deploy (when no value has been harvested yet), then harvested by the [`service_generated_harvest`](../deploy/builtins.md#service_generated_harvest) builtin. The value survives `run` / redeploy and is preserved by `reset` unless `--clear-generated` is passed. See [render config](../../render/config.md) for the full deploy flow, store schema, and bootstrapping an already-committed secret with `dwe render config <svc> --harvest`.
+
+## `bridge` block
+
+Opt a service into the [host bridge](../../concepts/bridge.md) — DWE mounts a small static `dwe` shim into the container so `dwe` commands (git hooks, project commands, read-only diagnostics) run from inside the container by forwarding to a host-side daemon. The bridge is off by default for every service type — opt in explicitly with `enabled: true`.
+
+```yaml
+# workspace/services/main/service.yml
+type: app
+dir: ./services/main
+bridge:
+  enabled: true                    # default: false — the bridge is strictly opt-in
+  # shim_path: /usr/local/bin/dwe  # mount-point override (base-image collision)
+  # on_unreachable: fail           # fail | warn — shim policy when the daemon is down
+```
+
+| Field | Type | Required | Default | Description |
+|-------|------|----------|---------|-------------|
+| `enabled` | bool (tristate) | no | `false` (every type) | Inject the shim binary and bridge mounts into this service's container. |
+| `shim_path` | string | no | `/usr/local/bin/dwe` | Absolute container path the shim is mounted at; override when the base image already ships a file there. |
+| `on_unreachable` | string | no | `fail` | `fail` — shim prints an error and exits 1 when the host daemon is unreachable (a hook blocks the commit); `warn` — print a warning and exit 0. |
+
+`bridge.enabled` is a tristate that inherits through service [`extends:`](extends.md) the same way `render.git.enabled` does: an explicit child value wins, an unset child inherits the parent, and the off default applies only when neither sets it. `shim_path` and `on_unreachable` inherit when the child leaves them empty. A bridge-enabled `type: app` service should declare the `dir` / `dir_internal` pair — the shim's working-directory translation maps over it, and `dwe validate` (the `bridge` domain) warns when it is missing. See [Host bridge](../../concepts/bridge.md) for transports, the in-container command policy, the generated compose overlay, and daemon lifecycle.

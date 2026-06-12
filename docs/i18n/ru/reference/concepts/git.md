@@ -1,4 +1,4 @@
-> Translated from: reference/concepts/git.md @ bd5e782e6911
+> Translated from: reference/concepts/git.md @ f292b5e11297
 
 # Интеграция с Git
 
@@ -20,7 +20,7 @@
 
 DWE обращается с этими двумя слоями одинаково: он никогда не предполагает, что в корне проекта обязательно конкретная VCS, и никогда не лезет в репозиторий одного сервиса, чтобы узнать о другом. Каждая Git-операция нацелена либо на корень проекта (проба обновления), либо ровно на один `<svc.Dir>/src/` (рендеринг хуков, проба рабочего пространства). Общей поверхности «забрать всё разом» нет.
 
-CLI вызывает хостовый бинарник `git` через shell. Путь к бинарнику разрешается через стандартный аксессор (`config.GitBin(cfg)`), так что проект при необходимости может закрепить конкретную версию через `binaries.git` в `workspace.yml`. Пустое значение означает «искать `git` в `$PATH`».
+CLI вызывает хостовый бинарник `git` через shell. Путь к бинарнику разрешается через стандартный аксессор (`config.GitBin(cfg)`), так что пользователь при необходимости может закрепить конкретный путь через `binary_git=/path` в `~/.config/dwe/config`. Пустое значение означает «искать `git` в `$PATH`».
 
 ## Рендеринг хуков
 
@@ -83,13 +83,12 @@ flowchart TD
 
 ## Проба обновления (`dwe run`)
 
-Пайплайн `run:` в `workspace/lifecycle.yml` может объявить блок `update:`. Если он присутствует, `dwe run` проверяет репозиторий корня проекта до выполнения любой фазы:
+Верхнеуровневый [блок `update:`](../config/workspace.md#блок-update) в `workspace.yml` / `local.yml` управляет пробой самообновления. Когда `mode: on`, `dwe run` проверяет репозиторий корня проекта до выполнения любой фазы:
 
 ```yaml
-# workspace/lifecycle.yml
-run:
-  update:
-    mode: on   # on | off
+# workspace.yml (или workspace/local.yml)
+update:
+  mode: on   # on | off
 ```
 
 Два режима:
@@ -103,7 +102,7 @@ run:
 
 Когда режим `on`, рабочее дерево чистое, behind > 0, ahead = 0 и сессия интерактивна, DWE запрашивает подтверждение перед запуском `git pull --ff-only` (таймаут 2 мин). Успешный pull перезагружает `DweConfig`, `LifecycleConfig` и реестр команд in-process до выполнения фаз, так что остаток `dwe run` видит состояние после обновления.
 
-Приоритет в runtime: флаг `--no-update` > флаг `--update <mode>` > YAML `update.mode`. Справочник по полю: [`config/lifecycle.md`](../config/lifecycle.md#runupdate).
+Приоритет в runtime: флаг `--no-update` > флаг `--update <mode>` > `update.mode` из смердженной конфигурации. Справочник по полю: [`config/workspace.md` → блок `update:`](../config/workspace.md#блок-update).
 
 ## Конвенции `.gitignore`
 
@@ -150,6 +149,6 @@ DWE не выполняет Git-операций, о которых пользо
 
 - [`dwe render git`](../render/git.md) — полный справочник по полям рендеринга хуков: схема манифеста, шаблонные переменные, защитные проверки path-safety, выходные сообщения.
 - [`services.<name>.render.git`](../config/services/fields.md#rendergit-block) — активация на сервис, закрепление шаблона, наследование.
-- [`lifecycle.yml` → run.update](../config/lifecycle.md#runupdate) — конфигурация пробы обновления.
+- [`workspace.yml` → блок `update:`](../config/workspace.md#блок-update) — конфигурация пробы обновления.
 - [Шаблоны](../templates.md) — Go text template движок, реестры хелперов, строгий режим.
 - [Раскладка проекта](project-layout.md) — где `workspace/templates/git/`, `<svc.Dir>/src/` и `.dwe/` располагаются в дереве проекта.

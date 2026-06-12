@@ -11,6 +11,7 @@ import (
 	"charm.land/fang/v2"
 	lipglossv2 "charm.land/lipgloss/v2"
 	"github.com/spf13/pflag"
+	"golang.org/x/term"
 
 	"github.com/semsemyonoff/dwe/internal/cli"
 	"github.com/semsemyonoff/dwe/internal/cli/cmdctx"
@@ -58,9 +59,22 @@ func main() {
 	// Load styles.yml early to customise the Fang help color scheme.
 	// Resolve relative to the --config flag so it works from any directory.
 	configPath, explicit := configPathFromArgs()
-	if cs := loadHelpColorScheme(configPath, explicit); cs != nil {
-		opts = append(opts, fang.WithColorSchemeFunc(cs))
-	}
+	projectScheme := loadHelpColorScheme(configPath, explicit)
+	opts = append(opts, fang.WithColorSchemeFunc(func(ld lipglossv2.LightDarkFunc) fang.ColorScheme {
+		// Fang resolves isDark=false whenever stdout is not a terminal, which
+		// renders the LIGHT palette into the pipe — over the host bridge (and
+		// in any forced-color pipe) the help text lands dark-on-dark /
+		// white-chip-on-black on the terminal at the far end. Both lipgloss
+		// v1 and v2 resolve DARK on pipes, so pin fang to the same default
+		// and keep every dwe surface on one palette.
+		if !term.IsTerminal(int(os.Stdout.Fd())) {
+			ld = lipglossv2.LightDark(true)
+		}
+		if projectScheme != nil {
+			return projectScheme(ld)
+		}
+		return fang.DefaultColorScheme(ld)
+	}))
 
 	// Apply branded emphasis to the root help body now that the styles palette
 	// has been resolved (either from workspace/styles.yml above or from the

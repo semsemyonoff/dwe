@@ -64,7 +64,7 @@ Use 'dwe docker up' for a bare Docker Compose start without hooks or the update 
 		},
 	}
 
-	cmd.Flags().BoolVar(&noUpdate, "no-update", false, "disable git update probe regardless of lifecycle.yml config")
+	cmd.Flags().BoolVar(&noUpdate, "no-update", false, "disable git update probe regardless of the update: block config")
 	cmd.Flags().StringVar(&updateMode, "update", "", "override update probe mode (on|off)")
 	cmd.Flags().BoolVarP(&yes, "yes", "y", false, "skip confirmation prompts inside hook steps")
 	cmdctx.AddSkipPreflight(cmd, &skipPreflight)

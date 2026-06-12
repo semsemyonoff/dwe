@@ -1,10 +1,10 @@
-> Translated from: reference/render/ide.md @ 43038f7761e6
+> Translated from: reference/render/ide.md @ b2c57cf3a935
 
 # dwe render ide
 
 Сгенерировать IDE-специфичные файлы конфигурации для каждого включённого сервиса из пакета шаблонов. Вывод идёт в hub-каталог сервиса (например, `services/main/.vscode/settings.json`).
 
-> **Manifest обязателен.** Каждый IDE-пакет обязан содержать `manifest.yml` в корне, перечисляющий каждый рендерящийся файл. Прежнее поведение с обходом каталога удалено; отсутствие manifest — жёсткая ошибка с миграционной подсказкой. Схема разделяется с `render ai` и `render git` — см. [Общая схема manifest](index.md). Пофайловые [локальные оверрайды](index.md) через соседний `<pack>.local/` shadow-tree применяются ко всем трём рендерерам одинаково.
+> **Manifest обязателен.** Каждый IDE-пакет обязан содержать `manifest.yml` в корне, перечисляющий каждый рендерящийся файл. Прежнее поведение с обходом каталога удалено; отсутствие manifest — жёсткая ошибка с миграционной подсказкой. Схема разделяется с `render ai` и `render git` — см. [Общая схема manifest](index.md#shared-manifest-schema). Пофайловые [локальные оверрайды](index.md#local-overrides) через соседний `<pack>.local/` shadow-tree применяются ко всем трём рендерерам одинаково.
 
 ## Содержание
 
@@ -132,11 +132,11 @@ flowchart TD
 - Точку в начале (включает `..` и hidden-ключи).
 - Пусто (трактуется как «не задано», что разрешено и запускает implicit-цепочку).
 
-Имена сервисов, используемые как implicit-ключ пакета, валидируются менее строго (точка в начале разрешена, потому что имена сервисов — ключи YAML-мапы, а не вводимые пользователем пути), но всё равно не должны содержать разделителей путей или быть `..`.
+Имена сервисов, используемые как implicit-ключ пакета, проходят через тот же строгий валидатор имён пакетов (`manifest.ValidatePackName`): имя сервиса с точкой в начале, дефисом в начале или разделителем пути молча пропускается как кандидат, и обход продолжается.
 
 ## Схема manifest
 
-Каждый IDE-пакет обязан содержать `manifest.yml` в корне по [общей схеме manifest](index.md):
+Каждый IDE-пакет обязан содержать `manifest.yml` в корне по [общей схеме manifest](index.md#shared-manifest-schema):
 
 ```yaml
 render:
@@ -161,7 +161,7 @@ render:
 
 ## Пофайловый рендер
 
-Для каждой записи назначение строится конкатенацией hub-каталога сервиса с относительным путём записи (path внутри пакета без `.tmpl`). Рендерер:
+Для каждой записи назначение строится конкатенацией hub-каталога сервиса с явным путём `to` записи (путь `from`/источник независим и не используется для вывода назначения). Рендерер:
 
 1. Читает файл шаблона из пакета.
 2. Парсит его как [Go text/template](../templates.md) в строгом режиме — любая ссылка на отсутствующее поле прерывает рендер вместо записи плейсхолдера `<no value>`.
@@ -185,7 +185,7 @@ render:
 | `.ServiceCfg` | эффективная конфигурация сервиса `.Resolved`, после разрешения `extends` | например, `.ServiceCfg.Container`, `.ServiceCfg.Dir`, `.ServiceCfg.DirInternal`, `.ServiceCfg.WorkDirInternal`, `.ServiceCfg.CLI.*` отражают overlay рендерящегося сервиса |
 | `.Runtime` | объединённый блок `runtime` | `.Runtime.UseHTTPS`, `.Runtime.SPX.Path`. Порты/хосты на сервис находятся в записи каждого сервиса — используйте `((index .Services "<name>").Port "<port-name>")` / `((index .Services "<name>").Host "<host-name>")`. |
 | `.Services` | `map[string]ServiceConfig`, ключёванная по имени сервиса | только индексный доступ (требование Go-шаблона): `(index .Services "main")`. Фильтруйте по типу через `.AppServices` / `.ToolServices` / `.InfraServices` (0-аргументные методы, возвращающие типизированные подмножества). |
-| `.Cfg` | объединённый `DweConfig` (продвинутое) | `.Cfg.Raw` — мапа после слияния и нормализации DWE (`services.*` подставляется из per-service `service.yml`) — см. [Шаблоны](../templates.md). Для обычных случаев предпочитайте выделенные поля выше. |
+| `.Cfg` | объединённый `DweConfig` (продвинутое) | `.Cfg.Raw` — мапа после слияния и нормализации DWE (`services.*` подставляется из per-service `service.yml`) — см. [Шаблоны](../templates.md#render-контекст-по-местам-использования). Для обычных случаев предпочитайте выделенные поля выше. |
 
 > **Совет.** IDE-выход ложится в `<svc.Dir>/<entry.To>` — обычно в отслеживаемые проектные файлы (`.vscode/settings.json`, `.devcontainer/devcontainer.json`, …). Избегайте использования developer-local или секретных ключей через `.Cfg.Raw` в IDE-шаблонах: любое значение, попавшее из `workspace/local.yml`, всплывёт в отрендеренном файле и даст разные диффы у разных разработчиков в отслеживаемых артефактах. Используйте `.Cfg.Raw` только для общих для всего проекта соглашений.
 
@@ -271,7 +271,7 @@ render:
 
 1. Выборка: и `main`, и `main-debug` проходят гейт активации. Они делят `dir: ./services/main`. У `main-debug` цепочка `extends` глубже (1 против 0), поэтому `main-debug` выигрывает. `main` сообщается как пропуск из-за коллизии, выводится предупреждение.
 2. Разрешение пакета для `main-debug`: `render.ide.template: main-debug` явный; `workspace/templates/ide/main-debug/` существует — он и используется.
-3. Обход пакета даёт три записи (отсортированы): `.devcontainer/devcontainer.json`, `.vscode/launch.json`, `.vscode/settings.json`.
+3. Записи `render` из manifest (в порядке объявления) дают три вывода: `.devcontainer/devcontainer.json`, `.vscode/launch.json`, `.vscode/settings.json`.
 4. Каждая рендерится с `.Service = "main"` (корень цепочки — по нему ключёваны user-config мапы), `.Resolved = "main-debug"` (рендерящийся сервис), `.ServiceCfg.Container = "app-main-debug"` и т. д.
 
 Результат:
@@ -311,6 +311,6 @@ services/main/
 
 ## Связанные справочники
 
-- [блок `services.<name>.render.ide`](../config/services/fields.md) — `enabled`, `template`, наследование через `extends`
+- [блок `services.<name>.render.ide`](../config/services/fields.md#renderide-block) — `enabled`, `template`, наследование через `extends`
 - [`render ai`](ai.md) — родственная команда с противоположной политикой коллизий
 - Запустите `dwe render ide --help`, чтобы увидеть актуальный CLI-интерфейс

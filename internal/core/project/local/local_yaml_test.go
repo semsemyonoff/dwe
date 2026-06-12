@@ -4,6 +4,7 @@ import (
 	"os"
 	"path/filepath"
 	"reflect"
+	"strings"
 	"testing"
 
 	"github.com/semsemyonoff/dwe/internal/core/project/config"
@@ -211,43 +212,39 @@ func TestWriteLocalYAML_Atomic_NoTempFilesOnSuccess(t *testing.T) {
 }
 
 // TestRoundTrip_ServiceTogglePreservesComposeExtra pins behavior: a local.yml
-// containing project-wide compose.extra and per-service compose.extra entries
-// must survive a ApplyServiceTogglesToYAML + WriteLocalYAML + LoadLocalYAML
-// round-trip. The LoadLocalYAML loader stores everything as map[string]any so
-// preservation is automatic; this test guards against a future refactor to
-// typed structs that would silently drop unknown keys.
+// containing project-wide compose.extra and per-service compose.extra entries —
+// plus developer comments — must survive a ServiceTogglesOverlay + node-writer
+// round-trip (the write path used by `dwe services enable/disable`). Comments
+// and unrelated keys are preserved by the comment-preserving node writer.
 func TestRoundTrip_ServiceTogglePreservesComposeExtra(t *testing.T) {
 	dir := t.TempDir()
 	path := filepath.Join(dir, "local.yml")
 
-	initial := map[string]any{
-		"compose": map[string]any{
-			"extra": []any{"compose.local.yml", "extra/two.yml"},
-		},
-		"services": map[string]any{
-			"web": map[string]any{
-				"enabled": true,
-				"ports":   map[string]any{"http": 3001},
-				"compose": map[string]any{
-					"extra": []any{"compose/web.local.yml"},
-				},
-			},
-			"api": map[string]any{
-				"enabled": true,
-				"hosts":   map[string]any{"api": "api.local"},
-				"compose": map[string]any{
-					"extra": []any{"compose/api.local.yml", "compose/api.extra.yml"},
-				},
-			},
-		},
-	}
-	if err := WriteLocalYAML(path, initial); err != nil {
+	// Hand-authored local.yml with comments and formatting the developer cares about.
+	initial := `# project-local overrides
+compose:
+  extra: # project-wide overlays
+    - compose.local.yml
+    - extra/two.yml
+services:
+  web:
+    enabled: true # web stays on
+    ports:
+      http: 3001
+    compose:
+      extra:
+        - compose/web.local.yml
+  api:
+    enabled: true
+    hosts:
+      api: api.local
+    compose:
+      extra:
+        - compose/api.local.yml
+        - compose/api.extra.yml
+`
+	if err := os.WriteFile(path, []byte(initial), 0o600); err != nil {
 		t.Fatalf("initial write: %v", err)
-	}
-
-	loaded, err := LoadLocalYAML(path)
-	if err != nil {
-		t.Fatalf("initial load: %v", err)
 	}
 
 	cfg := &config.DweConfig{
@@ -257,12 +254,30 @@ func TestRoundTrip_ServiceTogglePreservesComposeExtra(t *testing.T) {
 		},
 	}
 	// Flip api's enabled bit (the toggle-write path used by `dwe services disable`).
-	if err := ApplyServiceTogglesToYAML(cfg, loaded, nil, []string{"api"}); err != nil {
-		t.Fatalf("apply toggles: %v", err)
+	overlay, err := ServiceTogglesOverlay(cfg, nil, []string{"api"})
+	if err != nil {
+		t.Fatalf("build overlay: %v", err)
+	}
+	doc, err := LoadLocalYAMLNode(path)
+	if err != nil {
+		t.Fatalf("load node: %v", err)
+	}
+	if err := ApplyOverlayToNode(doc, overlay); err != nil {
+		t.Fatalf("apply overlay: %v", err)
+	}
+	if err := WriteLocalYAMLNode(path, doc); err != nil {
+		t.Fatalf("write after toggle: %v", err)
 	}
 
-	if err := WriteLocalYAML(path, loaded); err != nil {
-		t.Fatalf("write after toggle: %v", err)
+	// Comments and formatting survive the toggle write.
+	raw, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatalf("read raw: %v", err)
+	}
+	for _, want := range []string{"# project-local overrides", "# project-wide overlays", "# web stays on"} {
+		if !strings.Contains(string(raw), want) {
+			t.Errorf("expected comment %q to survive toggle; got:\n%s", want, string(raw))
+		}
 	}
 
 	reloaded, err := LoadLocalYAML(path)

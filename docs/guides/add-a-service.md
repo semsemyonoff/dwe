@@ -133,16 +133,18 @@ If your service needs setup at deploy time — install dependencies, run migrati
 
 ```yaml
 # workspace/services/worker/deploy.yml
-steps:
-  - id: install-deps
-    type: shell
-    cmd: |
-      $DWE_BIN shell worker -c "npm install"
-  - id: run-migrations
-    type: shell
-    when: "${services.queue.enabled}"
-    cmd: |
-      $DWE_BIN shell worker -c "npm run migrate"
+phases:
+  - name: setup
+    steps:
+      - name: install-deps
+        type: shell
+        cmd: |
+          $DWE_BIN shell worker -c "npm install"
+      - name: run-migrations
+        type: shell
+        when: { type: template, expr: "{{ .Services.queue.Enabled }}" }
+        cmd: |
+          $DWE_BIN shell worker -c "npm run migrate"
 ```
 
 These steps run on `dwe deploy` for every enabled service that has a `deploy.yml`, in the order the deploy pipeline computes. Steps may be skipped via the journal when the relevant config hash hasn't changed — that is automatic.
@@ -151,23 +153,31 @@ Per-service `deploy.yml` is valid for any service type (app / tool / infra), not
 
 Reference: [`../reference/config/deploy/index.md`](../reference/config/deploy/index.md).
 
-## Optional: render packs (IDE / AI / git)
+## Optional: render packs (config / IDE / AI / git)
 
-For `type: app` services, DWE can render per-service IDE config, AGENTS.md guidance, and `.gitignore` snippets from shared template packs. Opt in from `service.yml`:
+For `type: app` services, DWE can render per-service files from shared template packs: runtime **config files** (`.env`, `env.php`, …), IDE config, AGENTS.md guidance, and `.gitignore` snippets. Opt in from `service.yml`:
 
 ```yaml
 # workspace/services/worker/service.yml
 render:
-  ide: { enabled: true, template: node }
-  ai:  { enabled: true, template: node }
-  git: { enabled: true, template: node }
+  config: { template: node }
+  ide:    { enabled: true, template: node }
+  ai:     { enabled: true, template: node }
+  git:    { enabled: true, template: node }
 ```
 
-The `template:` value names a pack under `workspace/templates/{ide,ai,git}/<pack>/`. Run `dwe render ide` (and `dwe render ai`, `dwe render git`) to preview what each renderer will produce.
+The `template:` value names a pack under `workspace/templates/{config,ide,ai,git}/<pack>/`. Run `dwe render config` (and `dwe render ide`, `dwe render ai`, `dwe render git`) to preview what each renderer will produce.
+
+The **config** pack is the odd one out and worth calling out:
+
+- It writes straight into the service's mounted hub dir (its `dir`), mode replace — these are the files the container actually reads at runtime, not editor/agent metadata.
+- Its templates use the `${...}` shorthand (e.g. `DB_HOST=${services.db.hosts.main}`), the same form as export rules — not the raw `{{ }}` substrate the ide/ai/git packs use.
+- It supports **generated-once secrets** (Laravel `APP_KEY`, Magento `crypt.key`, …): the *service* mints the value, DWE harvests it into `.dwe/generated.yml` and replays it on every later render via `${generated.<name>}`. This is the render-based successor to the deprecated `service_configs_copy` mechanism.
+- Config render also runs automatically as a `dwe run` preamble and as a deploy step; `dwe render config` is mainly for previewing and for the one-off `--harvest` pass.
 
 If you don't need any of these, omit the `render:` block entirely.
 
-See [`shared-ide-and-agent-config.md`](shared-ide-and-agent-config.md) for the full template-pack workflow and pack resolution chain.
+See [`shared-ide-and-agent-config.md`](shared-ide-and-agent-config.md) for the IDE/AI/git template-pack workflow, and [`../reference/render/config.md`](../reference/render/config.md) for the config-pack substrate, the generated-value store, and the pipeline builtins.
 
 ## Verify
 

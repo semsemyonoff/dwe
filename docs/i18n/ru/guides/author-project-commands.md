@@ -1,4 +1,4 @@
-> Translated from: guides/author-project-commands.md @ e0530b338f1f
+> Translated from: guides/author-project-commands.md @ eff81d498546
 
 # Авторство проектных команд
 
@@ -104,8 +104,8 @@ commands:
         required: true
         pattern: ^[a-zA-Z0-9_-]+$
     env:
-      MYSQL_PWD: "${db.password}"
-    cmd: "mariadb -u${db.user} -e 'CREATE DATABASE IF NOT EXISTS `${param.database}`;'"
+      MYSQL_PWD: "${vars.db.password}"
+    cmd: "mariadb -u${vars.db.user} -e 'CREATE DATABASE IF NOT EXISTS `${param.database}`;'"
 ```
 
 Ключевые поля:
@@ -138,7 +138,7 @@ commands:
       - command: db.start
       - command: db.create
         with:
-          database: "${db.database}"
+          database: "${vars.db.database}"
       - command: composer-install
       - command: migrate
       - command: db.seed.run
@@ -185,12 +185,12 @@ commands:
         description: Database name to create
         required: true
         default: "app"              # литеральный фолбэк
-        default_from: db.database   # dot-путь в собранный конфиг (предпочтительнее)
+        default_from: vars.db.database   # dot-путь в собранный конфиг (предпочтительнее)
         env: DB_NAME                # экспонирует значение как $DB_NAME
         pattern: ^[a-zA-Z0-9_-]+$   # якорный regex (только string/path)
     env:
-      MYSQL_PWD: "${db.password}"
-    cmd: "mariadb -u${db.user} -e 'CREATE DATABASE `${param.database}`;'"
+      MYSQL_PWD: "${vars.db.password}"
+    cmd: "mariadb -u${vars.db.user} -e 'CREATE DATABASE `${param.database}`;'"
 ```
 
 Порядок разрешения, сверху вниз:
@@ -221,10 +221,10 @@ commands:
     params:
       database:
         required: true
-        default_from: db.database
+        default_from: vars.db.database
     env:
-      MYSQL_PWD: "${db.password}"
-    cmd: "mariadb -u${db.user} -e 'DROP DATABASE IF EXISTS `${param.database}`;'"
+      MYSQL_PWD: "${vars.db.password}"
+    cmd: "mariadb -u${vars.db.user} -e 'DROP DATABASE IF EXISTS `${param.database}`;'"
 ```
 
 `confirmation_text:` поддерживает `${...}`-шаблонизатор, чтобы можно было показать значения, над которыми пользователь сейчас собирается выполнить действие. Промт обходится в трёх случаях:

@@ -1,8 +1,8 @@
-> Translated from: reference/templates.md @ f0dcb6e4339e
+> Translated from: reference/templates.md @ af37f3b26145
 
 # Шаблоны
 
-Go-шаблоны (с библиотекой функций [go-sprout](https://docs.atom.codes/sprout/)) вычисляются в нескольких точках DWE: элементах info-дашборда, декларативных командах, условиях `when:` пайплайнов, билтине `message` и render-паках IDE / AI. Эта страница — единый справочник по движку шаблонов, доступным хелперам и соглашениям, общим для всех мест.
+Go-шаблоны (с библиотекой функций [go-sprout](https://docs.atom.codes/sprout/)) вычисляются в нескольких точках DWE: элементах info-дашборда, декларативных командах, условиях `when:` пайплайнов, билтине `message` и render-паках IDE / AI / git / config. Эта страница — единый справочник по движку шаблонов, доступным хелперам и соглашениям, общим для всех мест. Обратите внимание: **config**-render-пак отличается от остальных видов рендера — он использует подложку-сокращение `${...}` (lenient — отсутствующее → `""`), а не строгий синтаксис `{{ ... }}` пакетов ide/ai/git.
 
 ## Содержание
 
@@ -31,6 +31,7 @@ Go-шаблоны (с библиотекой функций [go-sprout](https://
 | `workspace/templates/git/<pack>/**/*.tmpl` | `{{ ... }}` | Контекст render-пака (`.Project`, `.Service`, `.ServiceCfg`, `.Runtime`, `.Services`, `.Cfg`) | Строгий режим. См. [render/git.md](render/git.md) |
 | `workspace/templates/ide/<pack>/**/*.tmpl` | `{{ ... }}` | Контекст render-пака (`.Project`, `.Service`, `.ServiceCfg`, `.Runtime`, `.Services`, `.Cfg`) | Строгий режим. См. [render/ide.md](render/ide.md) |
 | `workspace/templates/ai/<pack>/**/*.tmpl` | `{{ ... }}` | Контекст render-пака (`.Project`, `.Service`, `.ServiceCfg`, `.Runtime`, `.Services`, `.Cfg`) | Строгий режим. См. [render/ai.md](render/ai.md) |
+| `workspace/templates/config/<pack>/**` | `${...}` | Разрешённая конфигурация проекта (`.Raw`) + курируемый поднабор `${services.<name>...}` + `${generated.<name>}` | Lenient (отсутствующее → `""`). См. [render/config.md](render/config.md) |
 | `params.*.default_from`, `context.*.from` | — | — | Только plain dot-paths (без template-выражений). |
 
 ## Два синтаксиса: shorthand и полные шаблоны
@@ -54,13 +55,14 @@ path: "${param.dump_dir}/${param.database}{{ if .Params.dump_date }}_{{ now | da
 
 | Выражение | Резолвится как |
 |-----------|----------------|
-| `${db.user}` | Dot-path в смерженном dwe-конфиге (`Raw`) |
+| `${vars.db.user}` | Dot-path в смерженном dwe-конфиге (`Raw`) |
 | `${param.<name>}` | Разрешённое значение параметра |
 | `${context.<name>}` | Разрешённое значение контекста |
 | `${files.<id>.path}` | Абсолютный путь разрешённого файла-артефакта |
 | `${host.uid}` / `${host.gid}` | Эффективные UID/GID (1000:1000 на macOS, реальные значения на Linux) |
+| `${generated.<name>}` | Значение по сервису, собранное в `.dwe/generated.yml` (только config-render-паки; отсутствующее → `""`). См. [render/config.md](render/config.md) |
 
-Всё, что не совпадает с известным неймспейсом (`${foo}`, `${a.b.c}`), трактуется как dot-path lookup в `Raw`. Литерал `$$` пропускается без изменений.
+Всё, что не совпадает с известным неймспейсом (`${foo}`, `${a.b.c}`), трактуется как dot-path lookup в `Raw`. **Для пользовательских значений конфига предпочитайте `${vars.*}`** — они живут под блоком `vars:` в YAML; строгий корень отвергает свободные ключи верхнего уровня, поэтому `vars:` — их единственный дом. Литерал `$$` пропускается без изменений.
 
 ### Квотинг шаблонов внутри YAML
 
@@ -142,7 +144,7 @@ env:
   TAGS: "{{ range $i, $t := .Params.tags }}{{ if $i }},{{ end }}{{ $t }}{{ end }}"
 
 # with / default
-cmd: "mariadb -u${db.user}{{ with .Params.database }} -D{{ . }}{{ end }}"
+cmd: "mariadb -u${vars.db.user}{{ with .Params.database }} -D{{ . }}{{ end }}"
 env:
   REGION: '{{ or .Params.region "us-east-1" }}'
 ```
@@ -179,15 +181,15 @@ value: '{{ appURL ((index .Services "adminer").Host "web") ((index .Services "ma
 | Регистр | Примеры | Описание |
 |---------|---------|----------|
 | `std` | `default`, `ternary`, `empty`, `coalesce` | Дефолты, условия, проверки на пустоту |
-| `strings` | `hasSuffix`, `hasPrefix`, `lower`, `upper`, `trim`, `replace`, `split` | Манипуляции со строками |
+| `strings` | `hasSuffix`, `hasPrefix`, `toLower`, `toUpper`, `trim`, `replace`, `split` | Манипуляции со строками |
 | `numeric` | `add`, `sub`, `mul`, `div`, `max`, `min` | Числовые операции |
 | `slices` | `first`, `last`, `slice`, `join`, `reverse`, `uniq` | Операции над списками/массивами |
 | `maps` | `keys`, `values`, `has`, `pick`, `omit` | Операции над map'ами/объектами |
-| `regexp` | `regexMatch`, `regexReplace`, `regexSplit` | Сопоставление по регулярным выражениям |
-| `conversion` | `toInt`, `toFloat`, `toString`, `toBool` | Преобразование типов |
-| `time` | `now`, `date`, `dateFormat`, `duration` | Операции с датой/временем |
+| `regexp` | `regexMatch`, `regexReplaceAll`, `regexSplit` | Сопоставление по регулярным выражениям |
+| `conversion` | `toInt`, `toFloat64`, `toString`, `toBool` | Преобразование типов |
+| `time` | `now`, `date`, `dateInZone`, `duration` | Операции с датой/временем |
 | `filesystem` | `pathBase`, `pathDir`, `pathExt`, `pathClean`, `osBase`, `osDir` | Манипуляции с путями |
-| `semver` | `semverCompare`, `semverSort` | Операции над семантическими версиями |
+| `semver` | `semver`, `semverCompare` | Операции над семантическими версиями |
 
 **Герметичность по построению.** Набор хелперов собран без единой функции, которая обращалась бы к окружению, файловой системе, сети или random/crypto-источникам. Sprout-функции `shuffle` (math/rand, засеянный из crypto) и `hello` (debug-заглушка) намеренно удалены.
 
@@ -195,13 +197,14 @@ value: '{{ appURL ((index .Services "adminer").Host "web") ((index .Services "ma
 
 ## Резолверы scope команд
 
-Три дополнительных хелпера доступны **только** внутри шаблонов `workspace/commands/`. Они принимают сырые map'ы и проходят по dot-path'ам, возвращая `""` для отсутствующего ключа (без template-ошибки).
+Четыре дополнительных хелпера доступны **только** внутри шаблонов `workspace/commands/`. Они принимают сырые map'ы и проходят по dot-path'ам, возвращая `""` для отсутствующего ключа (без template-ошибки).
 
 | Хелпер | Сигнатура | Применение |
 |--------|-----------|------------|
-| `resolve` | `resolve .Raw "db.host"` | Dot-path lookup в смерженном конфиге. Эквивалентно `${db.host}`. |
+| `resolve` | `resolve .Raw "vars.db.host"` | Dot-path lookup в смерженном конфиге. Эквивалентно `${vars.db.host}`. |
 | `resolveMap` | `resolveMap .Params "name"` | Lookup ключа в плоской `map[string]any`. Эквивалентно `${param.name}` / `${context.name}`. |
 | `resolveFile` | `resolveFile .Files "id" "path"` | Lookup подключа в разрешённом файле-артефакте. Эквивалентно `${files.id.path}`. |
+| `resolveGenerated` | `resolveGenerated .Generated "app_key"` | Per-service значение, собранное (harvested) на проходе config-рендера. Эквивалентно `${generated.app_key}`. |
 
 Они существуют, чтобы shorthand `${...}` мог разворачиваться в переносимую Go-template форму и чтобы авторы могли дотянуться до сырого конфига, когда точечный стиль `.Raw.<x>.<y>` неудобен (ключи с точками, числовые ключи и т.д.).
 
@@ -228,7 +231,7 @@ value: '{{ appURL ((index .Services "adminer").Host "web") ((index .Services "ma
 | Условное значение | `{{ if eq .State "ready" }}Ready{{ else }}Not ready{{ end }}` |
 | Блок с защитой от пустоты | `{{ with .Params.database }} -D{{ . }}{{ end }}` |
 | Объединить список | `{{ join "," .Params.tags }}` |
-| Lookup сырого конфига | `{{ resolve .Raw "db.host" }}` (только команды) |
+| Lookup сырого конфига | `{{ resolve .Raw "vars.db.host" }}` (только команды) |
 | Сборка URL | `{{ appURL ((index .Services "main").Host "web") ((index .Services "main").Port "http") .Runtime.UseHTTPS }}` |
 
 ## Соглашения и подводные камни

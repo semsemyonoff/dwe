@@ -13,6 +13,7 @@ The pages are ordered for first-time reading: start at "Getting started", then w
 - [Git integration](git.md) — what DWE renders into Git: shell hook templates copied into `<svc.Dir>/src/.git/hooks/`, hook inheritance through the pack root, the `dwe status git` view, and the `.gitignore` conventions that keep `.dwe/` out of version control.
 - [Pipelines](pipelines.md) — the phase → step → condition execution model shared by deploy, reset, and lifecycle: how parallel groups work, how sub-step overrides flow, the available step types, and the three condition kinds (`when:`, `check:`, `files_gate:`).
 - [State and locks](state-and-locks.md) — how `.dwe/deploy/state.yml` records hashes and decides what to skip; how `deploy.lock` and `snapshot.lock` are acquired alphabetically and released in reverse; how DWE recovers from a crash mid-pipeline; and how pending state defers work between `services enable` and the next `deploy run`.
+- [Host bridge](bridge.md) — run `dwe` from inside dev containers: the static shim binary that stands in for `dwe`, the stateless host daemon it forwards to, the unix-socket / TCP transports, the allowlist command policy, the generated compose overlay, and the `dwe bridge` subcommands.
 
 ## Related
 

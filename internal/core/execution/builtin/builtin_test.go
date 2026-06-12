@@ -120,7 +120,7 @@ func TestRun_UnknownBuiltin(t *testing.T) {
 
 // TestKindCategorization verifies that every registered builtin
 // has the expected kind, and that kind/context gating works as intended.
-// This is the single source of truth for the 19-entry registry categorization.
+// This is the single source of truth for the 20-entry registry categorization.
 func TestKindCategorization(t *testing.T) {
 	type kindCase struct {
 		name        string
@@ -146,6 +146,7 @@ func TestKindCategorization(t *testing.T) {
 		{"executable_in_path", KindPredicate, false, true, false},
 		{"env_keys_present", KindPredicate, false, true, false},
 		{"tcp_reachable", KindPredicate, false, true, false},
+		{"config_keys_present", KindPredicate, false, true, false},
 		// KindInternal: only engine-synthetic contexts (CtxInternal)
 		{"docker_daemon_start", KindInternal, false, false, true},
 		{"docker_daemon_logs", KindInternal, false, false, true},
@@ -240,6 +241,7 @@ var allBuiltinNames = []string{
 	// root (cross-cutting predicates)
 	"shell",
 	"tcp_reachable",
+	"config_keys_present",
 	// containers/
 	"docker_daemon_start",
 	"docker_daemon_logs",
@@ -252,6 +254,9 @@ var allBuiltinNames = []string{
 	// services/
 	"service_configs_copy",
 	"service_configs_check",
+	"service_configs_render",
+	"service_configs_render_check",
+	"service_generated_harvest",
 	"service_dirs_ensure",
 	// fs/
 	"file_exists",
@@ -264,7 +269,7 @@ var allBuiltinNames = []string{
 	"message",
 }
 
-// TestRegistryHasAllNames asserts the registry contains exactly the 19 expected
+// TestRegistryHasAllNames asserts the registry contains exactly the expected
 // builtin names — guards against accidental drops or duplications when entries
 // move between subpackages.
 func TestRegistryHasAllNames(t *testing.T) {
@@ -288,8 +293,9 @@ func TestNoDuplicateRegistryNames(t *testing.T) {
 		entries map[string]spec.Entry
 	}{
 		{"root", map[string]spec.Entry{
-			"shell":         {Impl: Shell{}, Kind: spec.KindPredicate},
-			"tcp_reachable": {Impl: TCPReachable{}, Kind: spec.KindPredicate},
+			"shell":               {Impl: Shell{}, Kind: spec.KindPredicate},
+			"tcp_reachable":       {Impl: TCPReachable{}, Kind: spec.KindPredicate},
+			"config_keys_present": {Impl: ConfigKeysPresent{}, Kind: spec.KindPredicate},
 		}},
 		{"containers", containers.Builtins()},
 		{"services", services.Builtins()},

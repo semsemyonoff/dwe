@@ -2269,7 +2269,7 @@ func TestBatchServiceConfigHash(t *testing.T) {
 	}
 }
 
-// TestApplyServiceToggles_MandatoryRejected verifies that ApplyServiceTogglesToYAML
+// TestApplyServiceToggles_MandatoryRejected verifies that ServiceTogglesOverlay
 // rejects an attempt to disable a mandatory service.
 func TestApplyServiceToggles_MandatoryRejected(t *testing.T) {
 	configPath := writeTempServiceConfig(t, map[string]struct {
@@ -2286,14 +2286,7 @@ func TestApplyServiceToggles_MandatoryRejected(t *testing.T) {
 		t.Fatalf("load config: %v", err)
 	}
 
-	baseDir := filepath.Dir(configPath)
-	localPath := filepath.Join(baseDir, "workspace", "local.yml")
-	local, err := localpkg.LoadLocalYAML(localPath)
-	if err != nil {
-		t.Fatalf("load local.yml: %v", err)
-	}
-
-	if err := localpkg.ApplyServiceTogglesToYAML(cfg, local, []string{"second"}, []string{"main"}); err == nil {
+	if _, err := localpkg.ServiceTogglesOverlay(cfg, []string{"second"}, []string{"main"}); err == nil {
 		t.Fatal("expected error for mandatory toggle, got nil")
 	}
 }

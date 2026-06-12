@@ -300,3 +300,60 @@ func TestTouchFile_ExistingFileIsNoOp(t *testing.T) {
 		t.Errorf("touchFile should not modify existing file, got: %q", data)
 	}
 }
+
+// --- deprecation notice ---
+
+// setupCopyProject lays down a minimal project: configs/services/main/.env source
+// plus a service dir, and returns the project root.
+func setupCopyProject(t *testing.T) string {
+	t.Helper()
+	root := t.TempDir()
+	src := filepath.Join(root, "configs", "services", "main", ".env")
+	if err := os.MkdirAll(filepath.Dir(src), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(src, []byte("A=1\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	return root
+}
+
+func copyCtx(root string, buf *bytes.Buffer) spec.ExecContext {
+	return spec.ExecContext{
+		Config: &config.DweConfig{
+			Services: map[string]config.ServiceConfig{
+				"main": {Dir: "services/main", Configs: []config.ServiceConfigEntry{{File: ".env"}}},
+			},
+		},
+		ProjectRoot: root,
+		Output:      render.NewWriter(buf),
+	}
+}
+
+func TestServiceConfigsCopy_Run_EmitsExactlyOneDeprecationNotice(t *testing.T) {
+	root := setupCopyProject(t)
+	var buf bytes.Buffer
+	if err := (ConfigsCopy{}).Run(context.Background(), map[string]any{"service": "main"}, copyCtx(root, &buf)); err != nil {
+		t.Fatalf("Run: %v", err)
+	}
+	n := strings.Count(buf.String(), "service_configs_copy is deprecated")
+	if n != 1 {
+		t.Errorf("expected exactly one deprecation notice per copy step, got %d\noutput:\n%s", n, buf.String())
+	}
+}
+
+func TestServiceConfigsCheck_Run_DoesNotWarn(t *testing.T) {
+	root := setupCopyProject(t)
+	// First copy so the check passes.
+	var copyBuf bytes.Buffer
+	if err := (ConfigsCopy{}).Run(context.Background(), map[string]any{"service": "main"}, copyCtx(root, &copyBuf)); err != nil {
+		t.Fatalf("copy: %v", err)
+	}
+	var buf bytes.Buffer
+	if err := (ConfigsCheck{}).Run(context.Background(), map[string]any{"service": "main"}, copyCtx(root, &buf)); err != nil {
+		t.Fatalf("check: %v", err)
+	}
+	if strings.Contains(buf.String(), "deprecated") {
+		t.Errorf("ConfigsCheck.Run must not emit a deprecation notice (would double-warn per step), got:\n%s", buf.String())
+	}
+}

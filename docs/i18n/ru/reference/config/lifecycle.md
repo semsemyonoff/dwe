@@ -1,4 +1,4 @@
-> Translated from: reference/config/lifecycle.md @ e2ab2a5d5403
+> Translated from: reference/config/lifecycle.md @ 1db04b2f2749
 
 # lifecycle.yml
 
@@ -9,7 +9,7 @@
 - [Назначение](#назначение)
 - [Форма пайплайна](#форма-пайплайна)
 - [Структура](#структура)
-- [`run.update`](#runupdate)
+- [Проба самообновления](#проба-самообновления)
 - [`run.show_info` / `run.final_message`](#runshow_info--runfinal_message)
 - [`stop.final_message`](#stopfinal_message)
 - [`log` (логирование в файл)](#log-логирование-в-файл)
@@ -24,7 +24,7 @@
 
 `workspace/lifecycle.yml` декларирует два пайплайна:
 
-- **`run:`** — выполняется командой `dwe run` (и `dwe restart` после stop). Оборачивает стандартную последовательность `docker up` + `docker wait` опциональным update-пробом и pre/post hook-фазами.
+- **`run:`** — выполняется командой `dwe run` (и `dwe restart` после stop). Оборачивает стандартную последовательность `docker up` + `docker wait` опциональными pre/post hook-фазами. Проба самообновления настраивается отдельно в верхнеуровневом [блоке `update:`](workspace.md#блок-update), а не здесь.
 - **`stop:`** — выполняется командой `dwe stop` (и первой половиной `dwe restart`). Оборачивает `docker down` опциональными pre/post hook-фазами.
 
 Файл загружается отдельно и **не** участвует в трёхслойном мердже.
@@ -37,7 +37,6 @@
 
 | Поле | Значение |
 |-------|-------|
-| `update.mode` | `off` (без git-проба) |
 | `show_info` | `true` |
 | `final_message` | `Project is ready for work!` |
 | Фазы | Одна фаза `start`: один шаг `type: dwe` с `cmd: "docker up --wait"` |
@@ -71,14 +70,12 @@ flowchart LR
   end
 ```
 
-`docker up` выполняется как шаг `type: dwe` с `cmd: "docker up"` внутри фазы `start`. Ожидание health контейнеров использует шаг `type: builtin` с `cmd: docker_wait_healthy`. В них нет магии — исполнитель пайплайна вызывает их как любой другой шаг, поэтому они подхватывают политику из `docker.yml`.
+`docker up` выполняется как единственный шаг `type: dwe` с `cmd: "docker up --wait"` внутри фазы `start`; флаг `--wait` выполняет ожидание health встроенно (без отдельного шага `docker_wait_healthy`). В нём нет магии — исполнитель пайплайна вызывает его как любой другой шаг, поэтому он подхватывает политику из `docker.yml`.
 
 ## Структура
 
 ```yaml
 run:
-  update:
-    mode: on            # on | off
   show_info: true
   final_message: "Project is ready for work!"
   log: false            # tee status + child stdout/stderr to .dwe/logs/run.log
@@ -118,24 +115,13 @@ stop:
 
 `deploy_services: true` **не** разрешено в lifecycle-пайплайнах.
 
-## `run.update`
+## Проба самообновления
 
-Опциональный update-проб запускается до любой фазы. Он может фетчить из upstream-ремоута, детектить drift и (в зависимости от `mode`) пуллить `--ff-only`. Успешный pull триггерит in-process перезагрузку `DweConfig`, `LifecycleConfig` и реестра команд до выполнения фаз.
+Опциональная проба самообновления запускается до любой фазы. Она может фетчить из upstream-ремоута, детектить drift и (с согласия) пуллить `--ff-only`. Успешный pull триггерит in-process перезагрузку `DweConfig`, `LifecycleConfig` и реестра команд до выполнения фаз.
 
-| Поле | Тип | По умолчанию | Описание |
-|-------|------|---------|-------------|
-| `update.mode` | string | `on` (когда блок `update:` присутствует) | Одно из `on`, `off`. Само написание ключа `update:` — это opt-in. |
+Проба **больше не настраивается здесь.** Она управляется формализованным верхнеуровневым [блоком `update:`](workspace.md#блок-update) в `workspace.yml` / `local.yml` (`mode: on | off`), который участвует в трёхслойном мердже. Это было вынесено из `lifecycle.yml`, чтобы включение обновления было однострочником, который не обнуляет `run.phases`.
 
-Поведение mode:
-
-| Mode | Фетчит | Пуллит | Поведение, когда отстаёт |
-|------|---------|-------|------------------------|
-| `on` | да | с согласия | Спрашивает до pull; на non-TTY проверяет upstream-drift и предупреждает (check-семантика). |
-| `off` | нет | нет | Проб выключен (то же, что флаг `--no-update`). |
-
-Слоистый приоритет в runtime: флаг `--no-update` > флаг `--update <mode>` > `EffectiveMode()` из YAML.
-
-Когда проб находит грязное дерево, отсутствие upstream или сбой fetch, он предупреждает и продолжает — пайплайн run никогда не блокируется пробом.
+Приоритет в runtime при `dwe run`: флаг `--no-update` > флаг `--update <mode>` > `update.mode` из смердженной конфигурации. Полное описание поведения — в [справочнике блока `update:`](workspace.md#блок-update) и [интеграции с git → проба обновления](../concepts/git.md#проба-обновления-dwe-run).
 
 ## `run.show_info` / `run.final_message`
 
@@ -210,8 +196,6 @@ run:
 ```yaml
 # workspace/lifecycle.yml
 run:
-  update:
-    mode: on
   show_info: true
   final_message: "Project is ready for work!"
   phases:
@@ -241,8 +225,7 @@ stop:
 При загрузке файла проверяется:
 
 - Каждый шаг в `run.phases` и `stop.phases` имеет поле `type:` с одним из `shell`, `dwe`, `command`, `builtin`.
-- `update.mode`, если задан, — одно из `on`, `off`. Старые значения (`prompt`, `auto`, `check`) отвергаются с понятной ошибкой.
-- `update.enabled` не разрешён (удалён в пользу `mode: off` для отключения пробы).
+- Блок `run.update` отвергается — проба самообновления переехала в верхнеуровневый [блок `update:`](workspace.md#блок-update). Строгий декодер `lifecycle.yml` жёстко падает на неизвестном ключе `update` под `run:`.
 - `deploy_services: true` отвергается (валидно только в `deploy.yml`).
 - `final_message` и `log` нормализуются в значения по умолчанию при отсутствии.
 
@@ -253,7 +236,7 @@ Lifecycle-фазы используют тот же контейнер step-grou
 ## Частые ловушки
 
 - **Забыть `continue_on_error: true` на hook-шагах** — без него упавший pre-stop хук прерывает всю последовательность stop, и контейнеры не останавливаются.
-- **Использование `update: {}` с `enabled: true`** — поле `enabled` больше не поддерживается. Само наличие ключа `update:` — это opt-in; используйте `mode: off` для отключения пробы или полностью опустите ключ `update:`.
+- **Размещение `update:` под `run:`** — проба самообновления больше не живёт в `lifecycle.yml`. Блок `run.update` отвергается при загрузке; перенесите его в верхнеуровневый [блок `update:`](workspace.md#блок-update) в `workspace.yml` / `local.yml`.
 - **Добавление фаз `deploy_services`** — они только для деплоя. Lifecycle-пайплайны вызывают сервисы через ссылки `type: command`.
 - **Редактирование `lifecycle.yml` для использования прямых вызовов `docker compose`** — публичный API — это `type: dwe` с `cmd: "docker up"`. Прямые вызовы `docker compose` обходят политику из `docker.yml`.
 

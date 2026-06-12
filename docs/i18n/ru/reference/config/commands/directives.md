@@ -1,4 +1,4 @@
-> Translated from: reference/config/commands/directives.md @ f5234d164b00
+> Translated from: reference/config/commands/directives.md @ 1872d890ada8
 
 # Директивы команд
 
@@ -7,6 +7,7 @@
 ## Содержание
 
 - [Идентичность и видимость](#идентичность-и-видимость)
+- [Видимость через bridge](#видимость-через-bridge)
 - [Подтверждение](#подтверждение)
 - [Поток подтверждения](#поток-подтверждения)
 - [Сообщения](#сообщения)
@@ -25,6 +26,7 @@
 | `description` | string | — | Человекочитаемое описание, отображаемое в DWE CLI (селекторы, `commands list`, `commands inspect`) |
 | `private` | bool | `false` | Скрывает из `dwe commands list` и блокирует прямой `commands run`; всё ещё вызываема из сценариев и пайплайнов |
 | `hide` | string | `""` | Выражение-условие. Когда вычисляется в truthy на runtime — команда трактуется как несуществующая: не отображается в `dwe commands`, completion и TUI; отклоняется при прямом вызове; шаги workflow, ссылающиеся на неё, авто-скипаются с `SkipReason="hidden"`. Синтаксис тот же, что у workflow `when:` — см. [Условие hide](#условие-hide) ниже. |
+| `bridge` | block | отсутствует | Включает команду в контейнерную поверхность [host bridge](../../concepts/bridge.md) — без него команда host-only и невидима для in-container шима `dwe`. См. [Видимость через bridge](#видимость-через-bridge) ниже. |
 | `notify` | bool | `false` | Отправить десктопное уведомление по завершении команды. См. [Уведомления](#уведомления) ниже. |
 
 ## Условие hide
@@ -59,6 +61,48 @@ commands:
     hide: '{{ eq (index .services "db" "engine") "sqlite" }}'
     cmd: db reset --engine
 ```
+
+## Видимость через bridge
+
+`bridge:` управляет тем, можно ли видеть и вызывать команду **изнутри контейнера** через шим [host bridge](../../concepts/bridge.md). По умолчанию действует opt-in: команда без блока `bridge:` где-либо — host-only: не видна в контейнерных листингах/completion и отклоняется при прямом вызове с ошибкой `command_not_bridged`.
+
+| Поле | Тип | По умолчанию | Описание |
+|------|-----|--------------|----------|
+| `bridge.enabled` | bool | `false` | Включить команду в контейнерную поверхность. |
+| `bridge.services` | list | все | Ограничить видимость контейнерами перечисленных сервисов (имена папок `workspace/services/<name>`). Отсутствует — наследуется от группы (или «все сервисы», если не задано нигде); явный `services: []` сбрасывает унаследованное ограничение обратно на все сервисы. |
+
+Тот же блок допустим в заголовке `group:` файла — там он задаёт дефолт для всех команд файла. Наследование **пополевое**: незаданное поле команды наследует значение группы, заданное — переопределяет. Команда может выставить `enabled: false` под включающей группой или расширить/сузить `services` самостоятельно. Для `services` различие «отсутствует» / «пустой» значимо: пропущенное поле наследует список группы, а явный `services: []` — декларированный сброс на «все сервисы» (`dwe validate` помечает пустой список, чтобы намерение оставалось видимым).
+
+```yaml
+group:
+  title: Code style
+  bridge:
+    enabled: true          # все команды файла…
+    services: [main]       # …но только из контейнера main
+
+commands:
+  all:
+    type: service_exec
+    cmd: composer cs       # наследует: bridged, только main
+  fix-deps:
+    type: shell
+    cmd: brew install something
+    bridge:
+      enabled: false       # host-only исключение
+  report:
+    type: service_exec
+    cmd: composer cs:report
+    bridge:
+      services: [main, admin]   # расширено, enabled — от группы
+```
+
+Важная семантика:
+
+- **Исполнение не гейтится.** Bridged-сценарий спокойно выполняет не-bridged подкоманды — гейт закрывает контейнерную *поверхность вызова*, а не то, что хост может выполнить по поручению контейнера.
+- **Дети по `extends:` наследуют права родителя.** Матчинг идёт по цепочке [`extends:`](../services/extends.md) вызывающего сервиса: если `admin` расширяет `main`, команда со `services: [main]` видна и из контейнера `admin`. В обратную сторону не работает — запись `admin` не открывает доступ для `main`.
+- **Никакой магии от `service:`.** Команда `service_exec`, нацеленная на `main`, не привязывается к контейнеру `main` автоматически; ограничение всегда явное, через `bridge.services`.
+- **Идентичность вызывающего — advisory.** Шим сообщает свой сервис через `DWE_BRIDGE_SERVICE` (инжектится overlay-ем); контейнер может назваться чужим именем. `bridge.services` — UX-граница между контейнерами одного проекта; границей безопасности остаётся [верхнеуровневый allowlist команд](../../concepts/bridge.md#политика-команд-внутри-контейнеров) бриджа.
+- `dwe validate` предупреждает, когда `bridge.services` ссылается на неизвестный сервис или на сервис с выключенным в `service.yml` бриджем (кроме случая, когда его расширяет bridge-enabled сервис — для таких детей запись продолжает работать).
 
 ## Подтверждение
 
@@ -101,7 +145,7 @@ flowchart TD
 Операционные замечания:
 
 - `commands --yes` устанавливает `SkipConfirm` и `NonInteractive` в процессном `RunContext`, так что каждый вызов confirm (верхнеуровневая команда, builtin `confirm`, confirm-шаги сценария) пропускает запрос на всё время вызова.
-- Проброс env в подпроцесс **ограничен раннером скриптов**: `type: script` внедряет `DWE_NONINTERACTIVE=1` (вместе с `DWE_PARAMS_JSON`, `DWE_CONTEXT_JSON` и т. п.) в окружение скрипта. `type: shell` экспортирует меньший контракт — `DWE_BIN`, `COMPOSE_PROJECT_NAME`, `COMPOSE_FILE` (см. [Контракт env для shell](types.md)) — но **не** `DWE_NONINTERACTIVE`. `type: dwe`, `service_exec` и `service_run` не экспортируют ничего из этого — пропуск подтверждения внутри них обеспечивается `RunContext`, под которым они запущены, а не окружением.
+- Проброс env в подпроцесс **ограничен раннером скриптов**: `type: script` внедряет `DWE_NONINTERACTIVE=1` (вместе с `DWE_PARAMS_JSON`, `DWE_CONTEXT_JSON` и т. п.) в окружение скрипта. `type: shell` экспортирует меньший контракт — `DWE_BIN`, `COMPOSE_PROJECT_NAME`, `COMPOSE_FILE` (см. [Контракт env для shell](types.md#контракт-env-для-shell)) — но **не** `DWE_NONINTERACTIVE`. `type: dwe`, `service_exec` и `service_run` не экспортируют ничего из этого — пропуск подтверждения внутри них обеспечивается `RunContext`, под которым они запущены, а не окружением.
 - Внутри сценария дочерние команды наследуют `NonInteractive` и `SkipConfirm` от родительского `RunContext`.
 - Fallback для не-TTY — `render.Writer.Confirm`; при `CI=1` он автоматически подтверждает.
 
@@ -155,7 +199,7 @@ params:
     description: Database name to create
     required: true
     default: "laravel"          # literal fallback
-    default_from: db.database   # dot-path into merged config
+    default_from: vars.db.database   # dot-path into merged config
     env: DB_NAME                # injected as env var
     pattern: ^[a-zA-Z0-9_-]+$   # anchored regex (string/path only)
 ```
@@ -210,22 +254,22 @@ params:
     type: string
     widget: select
     description: Database to use
-    options: ${databases}
-    default_from: config.default_db
+    options: ${vars.databases}
+    default_from: vars.default_db
 
   # Multiple selections
   services:
     type: string
     widget: multiselect
     description: Services to enable
-    options: ${services_list}
+    options: ${vars.services_list}
     separator: ","
 ```
 
 | Поле | Тип | По умолчанию | Описание |
 |-------|------|---------|-------------|
 | `widget` | enum | выводится из `type` | Одно из `input`, `select`, `multiselect`, `confirm`. Выводится как `confirm` для `bool`; `select` если присутствует `options`; `input` для string/int/path без options |
-| `options` | список или ссылка | — | Статический список значений-опций, список объектов `{value, label}`, либо ссылка-точечный путь в конфиг (например, `${databases}`) |
+| `options` | список или ссылка | — | Статический список значений-опций, список объектов `{value, label}`, либо ссылка-точечный путь в конфиг (например, `${vars.databases}`) |
 | `separator` | string | `" "` | Разделитель для склейки результатов multiselect; используется только при `widget: multiselect` |
 
 Рендеринг виджета:
@@ -239,7 +283,7 @@ params:
 
 - **Статический список** (`options: [a, b, c]`) — список литеральный.
 - **Опции с метками** (`options: [{value: x, label: X}, ...]`) — value используется внутренне, label показывается пользователю.
-- **Ссылка на конфиг** (`options: ${databases}`) — форма разрешает точечный путь из вашего объединённого конфига (workspace.yml + defaults.yml + local.yml) во время выполнения. Разрешённое значение может быть скалярным списком (`[a, b, c]`) или картой (`{x: X, y: Y}` → опции с value=ключ, label=значение). Пустые или отсутствующие ссылки ловятся с понятной ошибкой при попытке открыть форму.
+- **Ссылка на конфиг** (`options: ${vars.databases}`) — форма разрешает точечный путь из вашего объединённого конфига (workspace.yml + defaults.yml + local.yml) во время выполнения. Разрешённое значение может быть скалярным списком (`[a, b, c]`) или картой (`{x: X, y: Y}` → опции с value=ключ, label=значение). Пустые или отсутствующие ссылки ловятся с понятной ошибкой при попытке открыть форму.
 
 Валидация:
 
@@ -272,7 +316,7 @@ context:
 
 ```yaml
 env:
-  MYSQL_PWD: "${db.password}"
+  MYSQL_PWD: "${vars.db.password}"
   TIMESTAMP: "{{ now | date \"2006-01-02_15-04-05\" }}"
   NON_INTERACTIVE: "{{ if .Params.no_prompt }}1{{ else }}0{{ end }}"
 ```
@@ -290,7 +334,7 @@ env:
 
 `files:` объявляет внешние файловые артефакты, которые команда читает или производит. CLI разрешает пути, опционально создаёт родительские директории, открывает их через `${files.<id>.path}` и как env-переменные, а также безопасно вычищает неудачные записи.
 
-Объявленная здесь файловая спецификация — **единственный источник истины** для условного деплоя: используйте `files_gate:` в `deploy.yml` / `lifecycle.yml` / `reset.yml`, чтобы пропускать или выполнять шаги в зависимости от существования этих самых файлов. Подробности см. в [files_gate: (предусловие для files)](../deploy/conditions.md) в справочнике по деплою.
+Объявленная здесь файловая спецификация — **единственный источник истины** для условного деплоя: используйте `files_gate:` в `deploy.yml` / `lifecycle.yml` / `reset.yml`, чтобы пропускать или выполнять шаги в зависимости от существования этих самых файлов. Подробности см. в [files_gate: (предусловие по файлам)](../deploy/conditions.md#files_gate-предусловие-по-файлам) в справочнике по деплою.
 
 ```yaml
 files:

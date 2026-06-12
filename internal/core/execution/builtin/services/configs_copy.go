@@ -43,6 +43,12 @@ func (ConfigsCopy) Run(_ context.Context, with map[string]any, ectx spec.ExecCon
 	serviceName := spec.GetStringParam(with, "service", "")
 	mode := spec.GetStringParam(with, "mode", "replace")
 
+	// Single deprecation notice per copy step. Emitted here (not from
+	// ConfigsCheck.Run, which runs as this step's check) to avoid double-warning.
+	if ectx.Output != nil {
+		ectx.Output.Warning("service_configs_copy is deprecated; migrate to render-based configs (service_configs_render + render.config / generated:). The copy mechanism keeps working until a future major release.")
+	}
+
 	svc, ok := ectx.Config.Services[serviceName]
 	if !ok {
 		return fmt.Errorf("service %q not found in config", serviceName)

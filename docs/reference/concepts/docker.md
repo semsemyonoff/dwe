@@ -30,7 +30,7 @@ Both surfaces resolve through the same underlying argv assembler and produce two
 
 ## Project name
 
-The compose project name is the `-p <name>` value passed to every `docker compose` invocation. It is also the prefix Docker Compose uses for its own resource naming conventions: containers (`<project>_<service>_<n>`), networks (`<project>_default`), and named volumes (`<project>_<vol>`).
+The compose project name is the `-p <name>` value passed to every `docker compose` invocation. It is also the prefix Docker Compose uses for its own resource naming conventions: containers (`<project>-<service>-<n>`), networks (`<project>_default`), and named volumes (`<project>_<vol>`).
 
 DWE resolves the name from `workspace/docker.yml`:
 
@@ -93,7 +93,7 @@ process_env:
 
 Docker Compose creates named volumes lazily: the first `docker compose up` that references a volume creates it. DWE adds two layers on top:
 
-- **Project scoping.** Volumes declared under `resources.volumes` in `workspace/docker.yml` get a `<project_name>_` prefix, matching Compose's own naming convention for `volumes:` declared inside `compose.yaml`. A volume keyed `build_artifacts` with `shared: false` becomes the actual Docker volume `myorg-shop_build_artifacts`.
+- **Project scoping.** Volumes declared under `resources.volumes` in `workspace/docker.yml` get a `<project_name>_` prefix, matching Compose's own naming convention for `volumes:` declared inside `compose.yaml`. A volume with `name: build_artifacts` and `shared: false` becomes the actual Docker volume `myorg-shop_build_artifacts` (the prefix applies to the `name:` field, not the map key).
 - **Shared mode.** `shared: true` opts out of the prefix. The volume is created with its literal name and survives `dwe reset` runs on this project — and is reused by any other DWE project that declares the same shared name. The canonical use case is a language-toolchain cache (composer, npm, go-build) shared across projects.
 
 `ensure_before: [up, deploy]` triggers idempotent creation on those entry points. The non-shared, project-scoped volumes are also what `docker_remove_project_volumes` sweeps during reset: the builtin lists every Docker volume whose name begins with `<project_name>_` and removes it. Shared volumes do not match the prefix and survive.

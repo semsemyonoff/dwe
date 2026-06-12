@@ -1,4 +1,4 @@
-> Translated from: reference/concepts/getting-started.md @ a3c68d8cbd91
+> Translated from: reference/concepts/getting-started.md @ 195586fc7293
 
 # Начало работы
 
@@ -51,28 +51,21 @@ services:
 
 ```yaml
 type: app
-description: Web application
 
 container: my-project-web
 
 compose:
-  files:
-    - compose/services/web.yml
+  - compose/services/web.yml
 
+dir: services/web
 dirs:
-  base: services/web
-  src: services/web/src
+  - logs
 
 ports:
-  http:
-    name: HTTP
-    container: 80
-    host: 8080
+  http: 80
 
 hosts:
-  primary:
-    name: Primary
-    value: my-project.localhost
+  web: my-project.localhost
 ```
 
 Перейдите в проект и подтвердите, что CLI его распознаёт:
@@ -139,7 +132,7 @@ dwe run --no-update
 dwe run --update on
 ```
 
-Правило приоритета: `--no-update` > `--update` > `lifecycle.yml.update.mode` — см. [`lifecycle.yml`](../config/lifecycle.md).
+Правило приоритета: `--no-update` > `--update` > верхнеуровневый `update.mode` после мерджа — см. [блок `update:`](../config/workspace.md#блок-update).
 
 Остановите стек через `dwe stop` (запускает `before-stop` хуки → `docker compose down` → `after-stop` хуки). Перезапустите через `dwe restart` (stop + run с флагом `--no-update`).
 

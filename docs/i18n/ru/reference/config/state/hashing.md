@@ -1,4 +1,4 @@
-> Translated from: reference/config/state/hashing.md @ e5639ee9d79e
+> Translated from: reference/config/state/hashing.md @ d8241bb48552
 
 # Хеширование и решения о пропуске
 
@@ -66,7 +66,7 @@ sha256(type + "\x00" + cmd + "\x00" + canonical_json(with))
 sha256(canonical_json(services.<name>) + canonical_json(workspace/services/<name>/deploy.yml))
 ```
 
-- Определение сервиса из `workspace/services/<name>/service.yml` (Enabled, Depends, Type, Dir и т. д.)
+- Определение сервиса из `workspace/services/<name>/service.yml` (Type, Dir, Container, Depends, Required и т. д.)
 - Пайплайн деплоя для конкретного сервиса из `workspace/services/<name>/deploy.yml` (или пусто, если отсутствует)
 
 Когда `config_hash` сервиса меняется (например, вы редактируете `workspace/services/main/service.yml` или `workspace/services/main/deploy.yml`), **все шаги во всех фазах этого сервиса считаются отсутствующими**. Они выполняются заново при следующем деплое независимо от их `action_hash`.

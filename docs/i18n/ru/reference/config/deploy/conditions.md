@@ -1,4 +1,4 @@
-> Translated from: reference/config/deploy/conditions.md @ e8efcd088e62
+> Translated from: reference/config/deploy/conditions.md @ 143f68c9bacd
 
 # Условия и проверки
 
@@ -22,7 +22,7 @@ when:
   cmd: "dir-empty services/main/src"
 ```
 
-Доступные предикаты: `dir-exists`, `dir-missing`, `dir-empty`, `dir-not-empty`, `file-exists`, `file-missing`. Они отличаются от *билтинов движка* (`service_configs_copy` и т. д.), используемых в телах шагов и действиях `check:`; полное различие см. в [conditions.md](../conditions.md). Реестр предикатов использует жёстко заданный `sh -c` для POSIX-переносимости независимо от настроенного в проекте shell.
+Доступные предикаты: `dir-exists`, `dir-missing`, `dir-empty`, `dir-not-empty`, `file-exists`, `file-missing`, `generated-missing` (принимает `<svc> <field>`, а не путь). Они отличаются от *билтинов движка* (`service_configs_render` и т. д.), используемых в телах шагов и действиях `check:`; полное различие см. в [conditions.md](../conditions.md). Реестр предикатов использует жёстко заданный `sh -c` для POSIX-переносимости независимо от настроенного в проекте shell.
 
 **Shell-команды** — выполняют shell-команду; код выхода 0 = true, ненулевой = false:
 
@@ -48,20 +48,19 @@ Template-условия не поддерживают `check:` в том же ш
 
 `check:` — **пост-действие**, вычисляемое после успеха шага. Это **типизированное действие** — та же форма `type:` / `cmd:` / `with:`, что и у тел шагов, но его успех/падение определяет, рапортуется ли шаг как успешный или упавший.
 
-Используйте `check:`, чтобы утверждать, что шаг произвёл задуманный эффект — например, что миграция произвела определённый файл, что сервис стал доступен или что конфиги успешно скопированы.
+Используйте `check:`, чтобы утверждать, что шаг произвёл задуманный эффект — например, что миграция произвела определённый файл, что сервис стал доступен или что конфиги успешно отрендерены.
 
 **Пример: проверить, что конфиги развёрнуты**
 
 ```yaml
-- name: copy-configs
+- name: render-configs
   type: builtin
-  cmd: service_configs_copy
+  cmd: service_configs_render
   with:
     service: main
-    mode: replace
   check:
     type: builtin
-    cmd: service_configs_check
+    cmd: service_configs_render_check
     with:
       service: main
 ```

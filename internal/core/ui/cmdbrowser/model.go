@@ -318,10 +318,14 @@ func (m *Model) updateRight(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 // actionForMode maps Mode → Action so Result carries the right intent for the
 // caller. Mode is normalised by Options.applyDefaults before reaching here.
 func actionForMode(mode Mode) Action {
-	if mode == ModeInspect {
+	switch mode {
+	case ModeInspect:
 		return ActionInspect
+	case ModeEdit:
+		return ActionEdit
+	default:
+		return ActionRun
 	}
-	return ActionRun
 }
 
 // refreshList rebuilds the list items from the currently focused tree group.
@@ -615,10 +619,16 @@ type helpEntry struct {
 //   - Home/End/PgUp/PgDn are omitted as conventional keys most users assume.
 //   - "tab switch" drops "panel" — context makes the target obvious.
 func (m *Model) helpEntries() []helpEntry {
+	// ModeEdit relabels Enter to "edit"; ModeRun/ModeInspect keep "select" so
+	// the command browser's footer is byte-identical to today.
+	enterDesc := "select"
+	if m.opts.Mode == ModeEdit {
+		enterDesc = "edit"
+	}
 	out := []helpEntry{
 		{"↑↓", "nav"},
 		{"←→", "tree"},
-		{"enter", "select"},
+		{"enter", enterDesc},
 		{"tab", "switch"},
 		{"/", "filter"},
 		{"i", "inspect"},
@@ -692,13 +702,23 @@ func (m *Model) breadcrumb() string {
 		path = strings.ReplaceAll(n.id, ".", " › ")
 	}
 	count := len(m.list.Items())
-	noun := "commands"
-	if count == 1 {
-		noun = "command"
-	}
 	header := paletteKey().Bold(true).Render(path)
-	tail := paletteDescription().Render(" · " + strconv.Itoa(count) + " " + noun)
+	tail := paletteDescription().Render(" · " + strconv.Itoa(count) + " " + m.itemNoun(count))
 	return header + tail
+}
+
+// itemNoun returns the singular/plural noun for the breadcrumb count. ModeEdit
+// (the vars browser) names rows "var"; every other mode keeps "command" so the
+// command browser's breadcrumb is unchanged.
+func (m *Model) itemNoun(count int) string {
+	singular := "command"
+	if m.opts.Mode == ModeEdit {
+		singular = "var"
+	}
+	if count == 1 {
+		return singular
+	}
+	return singular + "s"
 }
 
 // Width bucket helpers — keep the layout rules in one place. The fallback

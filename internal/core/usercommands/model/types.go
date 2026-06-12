@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"regexp"
+	"slices"
 	"strings"
 	"time"
 
@@ -61,6 +62,7 @@ func allowedFieldsFor(t CommandType) map[string]bool {
 		"description":       true,
 		"private":           true,
 		"hide":              true,
+		"bridge":            true,
 		"confirmation":      true,
 		"confirmation_text": true,
 		"notify":            true,
@@ -302,6 +304,84 @@ type GroupMeta struct {
 	// are auto-skipped. Same syntax as workflow step `when:` — supports
 	// Go-template `{{...}}` and builtin predicates via cmd:/builtin keys.
 	Hide string `yaml:"hide,omitempty"`
+	// Bridge sets the container-surface default for every command in this
+	// file (and, via tree cascade, deeper files that do not override it).
+	// Commands override field-wise — see BridgeDef.
+	Bridge *BridgeDef `yaml:"bridge,omitempty"`
+}
+
+// BridgeDef controls whether a command is listed and invocable from inside a
+// container via the host bridge (the `dwe` shim). Absent everywhere → NOT
+// available from containers (opt-in, deliberately matching the service-level
+// `bridge.enabled` default). Valid on a command and on the file's `group:`
+// header; an absent command field inherits the nearest ancestor group's value
+// (field-wise — an explicit `enabled: false` on a command wins over an
+// enabling group, and a command may narrow or widen `services` on its own).
+// Host-side execution is never affected: workflow steps keep running
+// non-bridged sub-commands, because the gate is the container invocation
+// surface, not executability.
+type BridgeDef struct {
+	// Enabled opts the command in to the container surface. Pointer so
+	// "absent" (inherit) is distinguishable from an explicit false.
+	Enabled *bool `yaml:"enabled"`
+	// Services restricts visibility to the containers of the named services
+	// (workspace/services/<name> keys). Empty/absent → visible from every
+	// bridge-enabled service. ADVISORY: the calling-service identity is
+	// container-reported (bridgeclient.EnvBridgeService) — this is a UX
+	// boundary between containers of one project, not a security boundary.
+	Services []string `yaml:"services"`
+}
+
+// MergeBridge returns the field-wise composition of child over parent:
+// a set child field wins, an absent one inherits. Either side may be nil.
+// Services is a tristate too: an omitted field (nil) inherits the parent
+// list, while an explicit `services: []` (non-nil empty — YAML distinguishes
+// them) overrides it to "all services", the same meaning the validator's
+// empty-list warning documents.
+func MergeBridge(parent, child *BridgeDef) *BridgeDef {
+	if child == nil {
+		return parent
+	}
+	if parent == nil {
+		return child
+	}
+	out := &BridgeDef{Enabled: parent.Enabled, Services: parent.Services}
+	if child.Enabled != nil {
+		out.Enabled = child.Enabled
+	}
+	if child.Services != nil {
+		out.Services = child.Services
+	}
+	return out
+}
+
+// AllowedFrom reports whether the (already merged) bridge definition admits
+// an invocation from the container of callingService. nil / not enabled →
+// false; an empty Services list admits every service, including an unknown
+// or empty caller identity (safe degradation for overlays predating
+// DWE_BRIDGE_SERVICE).
+func (b *BridgeDef) AllowedFrom(callingService string) bool {
+	return b.AllowedFromChain([]string{callingService})
+}
+
+// AllowedFromChain is AllowedFrom over the caller's identity chain: the
+// calling service itself followed by its service-level `extends:` ancestors.
+// A service that extends another inherits the parent's command rights, so
+// listing the parent in bridge.services admits every (transitive) child.
+// The reverse does not hold — listing a child never admits its parent.
+func (b *BridgeDef) AllowedFromChain(chain []string) bool {
+	if b == nil || b.Enabled == nil || !*b.Enabled {
+		return false
+	}
+	if len(b.Services) == 0 {
+		return true
+	}
+	for _, caller := range chain {
+		if slices.Contains(b.Services, caller) {
+			return true
+		}
+	}
+	return false
 }
 
 // ParamWidget identifies the form widget type for prompting a parameter.
@@ -663,6 +743,11 @@ type CommandDef struct {
 	// transitive invocations (workflow sub-steps, pipeline actions) are
 	// suppressed at runtime regardless of this field.
 	Notify bool `yaml:"notify,omitempty"`
+	// Bridge opts the command in to the container surface (listing and
+	// direct invocation through the host-bridge shim). Field-wise override
+	// of the file group's block; absent everywhere means host-only. See
+	// BridgeDef.
+	Bridge *BridgeDef `yaml:"bridge,omitempty"`
 
 	// Params declares named parameters accepted by the command.
 	Params map[string]ParamDef `yaml:"params"`
@@ -741,6 +826,14 @@ type CommandDef struct {
 	// any cascaded hide from owning groups. Zero value (false) is the safe
 	// default when ApplyVisibility has not been called.
 	Hidden bool `yaml:"-"`
+	// BridgeHidden is the resolved container-surface visibility, set by
+	// registry.ApplyVisibility: true only when this dwe runs on behalf of a
+	// container shim (DWE_INVOKED_FROM=container) AND the merged Bridge
+	// definition does not admit the calling service. Listings, completion,
+	// inspect, and direct invocation reject on it; the workflow runner and
+	// pipeline engine deliberately do NOT consult it (host-side execution of
+	// non-bridged sub-commands stays legal). Always false on the host.
+	BridgeHidden bool `yaml:"-"`
 }
 
 // Validate checks that the CommandDef is internally consistent.

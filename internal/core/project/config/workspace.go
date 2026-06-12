@@ -27,6 +27,37 @@ import (
 // compose.overlays key. No trailing period — callers append context.
 const legacyComposeOverlaysMsg = "compose.overlays is no longer supported; move overlay files to individual services (type: tool): services.<name>.compose instead. See docs/reference/config/workspace.md for migration details"
 
+// allowedRootKeys is the strict allowlist of permitted top-level keys in the
+// merged 3-layer project config (workspace.yml / workspace/defaults.yml /
+// workspace/local.yml). Any other key is a hard error at load time — arbitrary,
+// free-form values must live under the vars: sandbox. schema_version is reserved
+// forward-compat metadata: tolerated at the root but not interpreted. binaries
+// and tools are intentionally absent — they are rejected earlier in LoadConfig
+// with dedicated migration messages.
+var allowedRootKeys = []string{
+	"schema_version",
+	"project",
+	"runtime",
+	"state",
+	"exports",
+	"compose",
+	"ui",
+	"docs",
+	"services",
+	"vars",
+	"update",
+	"bridge",
+}
+
+// allowedRootKeySet is the membership index over allowedRootKeys.
+var allowedRootKeySet = func() map[string]struct{} {
+	m := make(map[string]struct{}, len(allowedRootKeys))
+	for _, k := range allowedRootKeys {
+		m[k] = struct{}{}
+	}
+	return m
+}()
+
 // binOverride returns the user-configured override for the named binary, or
 // def when cfg is nil, cfg.userConfig is nil, or no override is present.
 func binOverride(cfg *DweConfig, key, def string) string {
@@ -75,6 +106,29 @@ type DweConfig struct {
 	UI      UIConfig             `yaml:"ui"`
 	Docs    DocsConfig           `yaml:"docs"`
 
+	// Update is the formalized top-level self-update policy. It participates in
+	// the 3-layer merge (scalar mode last-layer-wins), so a project author sets
+	// the policy in workspace.yml and a developer overrides it in local.yml.
+	// A pointer so a missing block (nil → off) is distinguishable from a present
+	// block with an empty mode (→ on). See UpdateConfig.EffectiveMode.
+	Update *UpdateConfig `yaml:"update"`
+
+	// Bridge is the project-wide container-write policy for `dwe vars set`. It
+	// is the deny-by-default allowlist of vars.* paths a containerized caller
+	// (bridge-forked dwe) may mutate; nil/empty means no container writes. It
+	// participates in the 3-layer merge (the list is last-layer-wins, so a
+	// developer may widen/narrow it in local.yml). Distinct in scope from the
+	// per-service services.<name>.bridge: block in service.yml (which gates
+	// per-command container reachability) — this top-level block is policy, not
+	// enablement. See BridgeConfig.
+	Bridge *BridgeConfig `yaml:"bridge"`
+
+	// Vars is the single legal home for arbitrary, free-form project values.
+	// The root of the merged config is strict (see allowedRootKeys), but the
+	// contents of vars: are unvalidated and may nest arbitrarily. References
+	// resolve via Raw dot-paths (`${vars.db.password}`, `from: vars.db.user`).
+	Vars map[string]any `yaml:"vars"`
+
 	// Services holds the fully resolved service definitions loaded from
 	// workspace/services/<name>/service.yml with Enabled populated from the 3-layer config merge.
 	// Not unmarshalled from the merge — built by LoadConfig.
@@ -88,6 +142,87 @@ type DweConfig struct {
 	// and .dwe/config. Used by binary accessors to resolve engine binary overrides.
 	// Nil if load failed (graceful degradation).
 	userConfig *userpkg.Config `yaml:"-"`
+}
+
+// UpdateConfig is the formalized top-level self-update policy block. Mode must be
+// one of: on, off. A missing block (nil) means off; a present block with an empty
+// mode means on (writing the update: key is itself the opt-in).
+type UpdateConfig struct {
+	Mode string `yaml:"mode"`
+}
+
+// EffectiveMode returns the resolved update mode before any CLI flag is applied.
+// Precedence: missing block (nil) → off; block present with empty mode → on;
+// block present with mode set → that value (on or off). CLI flags
+// (--no-update, --update) override this at the run consumer.
+func (c *UpdateConfig) EffectiveMode() string {
+	if c == nil {
+		return "off"
+	}
+	if c.Mode == "" {
+		return "on"
+	}
+	return c.Mode
+}
+
+// BridgeConfig is the formalized top-level container-write policy block
+// (`bridge:`). VarsWritable is the deny-by-default allowlist of vars.* path
+// patterns that a containerized `dwe vars set` may mutate on the host. From the
+// host the command is unrestricted; this gate applies only when invoked from
+// inside a container (the bridge daemon force-sets the marker env). Each pattern
+// is either an exact path (`vars.db.host`) or a dot-boundary wildcard
+// (`vars.db.*`). An empty/absent list means no container writes.
+type BridgeConfig struct {
+	VarsWritable []string `yaml:"vars_writable"`
+}
+
+// BridgeVarsWritable returns the configured container-write allowlist, or nil
+// when no bridge: block (or no vars_writable: list) is present. Safe when cfg is
+// nil. An empty/nil result means no var is container-writable (the safe
+// default).
+func BridgeVarsWritable(cfg *DweConfig) []string {
+	if cfg == nil || cfg.Bridge == nil {
+		return nil
+	}
+	return cfg.Bridge.VarsWritable
+}
+
+// VarsWritableAllows reports whether target (a vars.* dot-path) is permitted by
+// the allowlist, using dot-boundary semantics — never a naive prefix match:
+//
+//   - an exact pattern (`vars.db.host`) matches only the identical path;
+//   - a trailing-wildcard pattern (`vars.db.*`) matches only a path strictly
+//     beneath the base, i.e. target begins with base + "." — so `vars.db.*`
+//     allows `vars.db.host` but DENIES `vars.db`, `vars.dbx.host`, and
+//     `vars.database.host`.
+//
+// Malformed patterns fail closed (match nothing): an empty pattern, a bare
+// `*`/`.*` (empty base), or a `*` anywhere other than a trailing `.*`.
+func VarsWritableAllows(patterns []string, target string) bool {
+	for _, p := range patterns {
+		if p == "" {
+			continue
+		}
+		if base, ok := strings.CutSuffix(p, ".*"); ok {
+			// Trailing-wildcard. Base must be non-empty and contain no stray
+			// '*' (which would be an interior wildcard — unsupported).
+			if base == "" || strings.Contains(base, "*") {
+				continue
+			}
+			if strings.HasPrefix(target, base+".") {
+				return true
+			}
+			continue
+		}
+		// Exact pattern. A '*' anywhere is malformed for an exact match.
+		if strings.Contains(p, "*") {
+			continue
+		}
+		if target == p {
+			return true
+		}
+	}
+	return false
 }
 
 // ProjectDeployConfig holds the project-wide deploy pipeline loaded from workspace/deploy.yml.
@@ -417,15 +552,22 @@ func filterServicesByType(svcs map[string]ServiceConfig, t ServiceType) map[stri
 	return out
 }
 
+// BridgeOverlayRelPath is the project-root-relative path of the generated
+// host-bridge compose overlay (design D8). Slash-separated and stored as
+// written in the -f chain like every other compose path; the file itself is
+// dwe-owned machine state written by internal/core/bridge.
+const BridgeOverlayRelPath = ".dwe/compose.bridge.yml"
+
 // ComposeFiles returns the ordered list of compose files for the project:
 // base file first, then enabled tool overlays (sorted by key), then enabled
 // service overlays (sorted by service name). Per-service local overlays from
 // workspace/local.yml (services.<name>.compose.extra) are emitted immediately
 // after each service's own compose files, inside the same enabled-gate.
-// Project-wide local overlays from workspace/local.yml (compose.extra) are
-// appended last so last-wins compose semantics let a single local file patch
-// anything. This is the canonical file list used by all compose-aware CLI
-// operations.
+// The generated host-bridge overlay (BridgeOverlayRelPath) follows the
+// service groups when it exists on disk. Project-wide local overlays from
+// workspace/local.yml (compose.extra) are appended last so last-wins compose
+// semantics let a single local file patch anything. This is the canonical
+// file list used by all compose-aware CLI operations.
 func (c *DweConfig) ComposeFiles() []string {
 	return c.composeFiles(false)
 }
@@ -475,11 +617,34 @@ func (c *DweConfig) composeFiles(all bool) []string {
 	emitGroup(func(t ServiceType) bool { return t == ServiceTypeInfra })
 	emitGroup(func(t ServiceType) bool { return t == ServiceTypeApp || t == "" })
 
+	// Generated host-bridge overlay: after the service overlays, BEFORE the
+	// project-wide local.yml overlays — local.yml stays the user
+	// customization channel and keeps the last word over anything the bridge
+	// overlay sets (design D8 chain position).
+	if c.bridgeOverlayExists() {
+		files = append(files, BridgeOverlayRelPath)
+	}
+
 	if len(c.Compose.Extra) > 0 {
 		files = append(files, c.Compose.Extra...)
 	}
 
 	return files
+}
+
+// bridgeOverlayExists reports whether the generated host-bridge overlay is
+// present for this config's project root. The check runs at call time — the
+// bridge prepare hook regenerates or deletes the file after LoadConfig and
+// before compose args are built, so a load-time snapshot would go stale
+// within the very command that mutates it. Configs built without LoadConfig
+// (no __configPath in Raw) never include the overlay.
+func (c *DweConfig) bridgeOverlayExists() bool {
+	cfgPath, ok := c.Raw["__configPath"].(string)
+	if !ok || cfgPath == "" {
+		return false
+	}
+	_, err := os.Stat(filepath.Join(filepath.Dir(cfgPath), filepath.FromSlash(BridgeOverlayRelPath)))
+	return err == nil
 }
 
 // ServiceConfigEntry represents one config file declared under a service's configs list.
@@ -544,11 +709,43 @@ type ServiceGitHooksConfig struct {
 	Template string `yaml:"template"`
 }
 
+// RenderConfigSection holds config-file rendering settings for a service. An
+// optional Template pins a specific template pack; otherwise the pack is
+// resolved by convention (service name → extends chain → default) plus an
+// optional `.local` sibling override.
+type RenderConfigSection struct {
+	Template string `yaml:"template"`
+}
+
 // ServiceRenderConfig holds all rendering-related configuration for a service.
 type ServiceRenderConfig struct {
-	IDE ServiceIDEConfig      `yaml:"ide"`
-	AI  ServiceAIConfig       `yaml:"ai"`
-	Git ServiceGitHooksConfig `yaml:"git"`
+	IDE    ServiceIDEConfig      `yaml:"ide"`
+	AI     ServiceAIConfig       `yaml:"ai"`
+	Git    ServiceGitHooksConfig `yaml:"git"`
+	Config *RenderConfigSection  `yaml:"config"`
+}
+
+// DefaultBridgeShimPath is the container path the host-bridge shim binary is
+// mounted at unless bridge.shim_path overrides it (base-image collision).
+const DefaultBridgeShimPath = "/usr/local/bin/dwe"
+
+// Bridge on_unreachable policy values: fail makes the shim exit 1 when the
+// host daemon is unreachable (a hook must block the commit), warn makes it
+// print a warning and exit 0.
+const (
+	BridgeOnUnreachableFail = "fail"
+	BridgeOnUnreachableWarn = "warn"
+)
+
+// ServiceBridgeConfig holds host-bridge settings for a service: whether the
+// shim binary and bridge mounts are injected into the container (enabled —
+// tristate, defaults on for type app), where the shim is mounted (shim_path),
+// and the shim's policy when the host daemon is unreachable (on_unreachable:
+// fail | warn).
+type ServiceBridgeConfig struct {
+	Enabled       *bool  `yaml:"enabled"`
+	ShimPath      string `yaml:"shim_path"`
+	OnUnreachable string `yaml:"on_unreachable"`
 }
 
 // StatusColumn declares one custom column rendered in the status table for a
@@ -793,7 +990,7 @@ func allowedFieldsFor(t ServiceType) map[string]bool {
 	common := []string{
 		"type", "container", "required", "compose",
 		"ports", "hosts", "icon", "info", "status",
-		"on_enable", "on_disable", "notes",
+		"on_enable", "on_disable", "notes", "bridge",
 	}
 	switch t {
 	case ServiceTypeApp:
@@ -804,7 +1001,7 @@ func allowedFieldsFor(t ServiceType) map[string]bool {
 		for _, k := range []string{
 			"depends_on",
 			"dir", "dir_internal", "work_dir_internal",
-			"configs", "dirs", "extends", "cli", "render",
+			"configs", "dirs", "extends", "cli", "render", "generated",
 		} {
 			out[k] = true
 		}
@@ -825,6 +1022,15 @@ func allowedFieldsFor(t ServiceType) map[string]bool {
 	default:
 		return map[string]bool{}
 	}
+}
+
+// GeneratedField declares one service-minted value that DWE harvests and
+// replays. File is the output file (relative to the service hub dir) the
+// service writes the value into; Pattern is a regex whose first capture group
+// extracts the value (e.g. `^APP_KEY=(.*)$`).
+type GeneratedField struct {
+	File    string `yaml:"file"`
+	Pattern string `yaml:"pattern"`
 }
 
 // ServiceConfig describes a single service entry in workspace/services/<name>/service.yml.
@@ -856,10 +1062,15 @@ type ServiceConfig struct {
 	LocalComposeExtra []string            `yaml:"-"`
 	CLI               ServiceCLIConfig    `yaml:"cli"`
 	Render            ServiceRenderConfig `yaml:"render"`
-	Status            []StatusColumn      `yaml:"status,omitempty"`
-	OnEnable          *ServiceToggleHooks `yaml:"on_enable,omitempty"`
-	OnDisable         *ServiceToggleHooks `yaml:"on_disable,omitempty"`
-	Notes             *ServiceNotes       `yaml:"notes,omitempty"`
+	Bridge            ServiceBridgeConfig `yaml:"bridge"`
+	// Generated declares per-service values that the service itself mints (e.g.
+	// Laravel APP_KEY) and DWE harvests back into a durable store
+	// (.dwe/generated.yml) to replay on subsequent renders. Keyed by field name.
+	Generated map[string]GeneratedField `yaml:"generated,omitempty"`
+	Status    []StatusColumn            `yaml:"status,omitempty"`
+	OnEnable  *ServiceToggleHooks       `yaml:"on_enable,omitempty"`
+	OnDisable *ServiceToggleHooks       `yaml:"on_disable,omitempty"`
+	Notes     *ServiceNotes             `yaml:"notes,omitempty"`
 }
 
 // IsApp reports whether this service has type "app".
@@ -923,7 +1134,9 @@ func (s ServiceConfig) IDERenderEnabledExplicit() (enabled bool, explicit bool) 
 
 // renderEnabledExplicit resolves a render toggle: if the explicit pointer is
 // non-nil it is authoritative; otherwise app services default on, others off.
-// Shared by the IDE/AI/Git per-kind RenderEnabledExplicit accessors.
+// Shared by the IDE/AI/Git per-kind RenderEnabledExplicit accessors. The
+// bridge toggle (BridgeEnabledExplicit) shares the tristate shape but NOT the
+// app default — the bridge is strictly opt-in.
 func (s ServiceConfig) renderEnabledExplicit(enabled *bool) (bool, bool) {
 	if enabled != nil {
 		return *enabled, true
@@ -966,6 +1179,45 @@ func (s ServiceConfig) GitRenderEnabledExplicit() (enabled bool, explicit bool) 
 func (s ServiceConfig) GitRenderEnabled() bool {
 	enabled, _ := s.GitRenderEnabledExplicit()
 	return enabled
+}
+
+// BridgeEnabledExplicit returns the host-bridge enabled state and whether it was explicitly set.
+// If Enabled is non-nil, returns its value and true.
+// If Enabled is nil, returns false for EVERY service type, and false (not
+// explicit) — unlike the render toggles there is no app default: the bridge
+// mounts a host-controlled binary into the container and opens a
+// container→host command channel, so it is strictly opt-in per service.
+func (s ServiceConfig) BridgeEnabledExplicit() (enabled bool, explicit bool) {
+	if s.Bridge.Enabled != nil {
+		return *s.Bridge.Enabled, true
+	}
+	return false, false
+}
+
+// BridgeEnabled returns whether this service should receive the host-bridge
+// shim mount and env block in the generated compose overlay.
+// It's a simple wrapper around BridgeEnabledExplicit that discards the explicit flag.
+func (s ServiceConfig) BridgeEnabled() bool {
+	enabled, _ := s.BridgeEnabledExplicit()
+	return enabled
+}
+
+// BridgeShimPath returns the container path the shim binary is mounted at:
+// bridge.shim_path when set, DefaultBridgeShimPath otherwise.
+func (s ServiceConfig) BridgeShimPath() string {
+	if s.Bridge.ShimPath != "" {
+		return s.Bridge.ShimPath
+	}
+	return DefaultBridgeShimPath
+}
+
+// BridgeOnUnreachable returns the shim's unreachable-daemon policy:
+// bridge.on_unreachable when set, BridgeOnUnreachableFail otherwise.
+func (s ServiceConfig) BridgeOnUnreachable() string {
+	if s.Bridge.OnUnreachable != "" {
+		return s.Bridge.OnUnreachable
+	}
+	return BridgeOnUnreachableFail
 }
 
 // DisplayIcon returns the resolved icon for this service.
@@ -1258,36 +1510,27 @@ func LoadConfig(workspacePath string) (*DweConfig, error) {
 	baseDir := filepath.Dir(workspacePath)
 
 	// Read each layer separately so the cross-layer overlay validator can
-	// attribute errors to a specific source file.
+	// attribute errors to a specific source file. LoadLayers is the shared
+	// loader (also used by ResolveLayeredPath for `dwe vars inspect`), so the two
+	// cannot drift on file set / optional handling / error wording.
+	configLayers, err := LoadLayers(workspacePath)
+	if err != nil {
+		return nil, err
+	}
 	type rawLayer struct {
 		path string
 		data map[string]any
 	}
-	var layers []rawLayer
-
-	// Layer 1: workspace.yml (required)
-	base, err := loadRawYAML(workspacePath)
-	if err != nil {
-		return nil, fmt.Errorf("read %s: %w", workspacePath, err)
+	layers := make([]rawLayer, 0, len(configLayers))
+	for _, l := range configLayers {
+		layers = append(layers, rawLayer{path: l.Path, data: l.Data})
 	}
-	layers = append(layers, rawLayer{path: workspacePath, data: base})
-
-	// Layer 2: workspace/defaults.yml (optional)
-	defaultsPath := filepath.Join(baseDir, "workspace", "defaults.yml")
-	if defaults, err := loadRawYAML(defaultsPath); err == nil {
-		layers = append(layers, rawLayer{path: defaultsPath, data: defaults})
-	} else if !errors.Is(err, os.ErrNotExist) {
-		return nil, fmt.Errorf("read %s: %w", defaultsPath, err)
-	}
-
-	// Layer 3: workspace/local.yml (optional)
-	localPath := filepath.Join(baseDir, "workspace", "local.yml")
+	localPath := LocalLayerPath(workspacePath)
 	var localRaw map[string]any
-	if local, err := loadRawYAML(localPath); err == nil {
-		layers = append(layers, rawLayer{path: localPath, data: local})
-		localRaw = local
-	} else if !errors.Is(err, os.ErrNotExist) {
-		return nil, fmt.Errorf("read %s: %w", localPath, err)
+	for _, l := range configLayers {
+		if l.Path == localPath {
+			localRaw = l.Data
+		}
 	}
 
 	// Step 1: load per-service folders — the canonical service declarations.
@@ -1333,14 +1576,56 @@ func LoadConfig(workspacePath string) (*DweConfig, error) {
 		return nil, fmt.Errorf("unmarshal merged config: %w", err)
 	}
 
-	// Reject binaries: blocks — they've moved to user-config
-	if _, ok := merged["binaries"]; ok {
-		return nil, fmt.Errorf("binaries: moved to ~/.config/dwe/config — use binary_docker=/path, binary_git=/path, etc. See docs/reference/config/workspace.md")
+	// Strict root + legacy-block rejection, iterated per layer so the error names
+	// the source file. Shared with ResolveLayeredPath (dwe vars inspect) via
+	// validateLayerRoots so the two cannot drift. deepMerge drops nil values, so
+	// a layer carrying ONLY a `binaries:`/`tools:` key never reaches the merged
+	// map — the per-layer pass is the only place that sees it (a layer with just
+	// those keys would otherwise load silently). This runs BEFORE __configPath /
+	// injectServicesIntoRaw add internal keys.
+	if err := validateLayerRoots(configLayers); err != nil {
+		return nil, err
 	}
 
-	// Reject tools: blocks — replaced by services with type:tool
-	if _, ok := merged["tools"]; ok {
-		return nil, fmt.Errorf("tools: no longer supported — define tool entries as services with type: tool in workspace/services/. See docs/reference/config/services/index.md")
+	// Normalize a present-but-null update: block. Writing the update: key is
+	// itself the opt-in (present-but-empty → on), but a bare `update:` parses to
+	// a nil value which deepMerge skips, so the struct round-trip would yield a
+	// nil Update (→ off) and silently drop the opt-in. Treat a present update:
+	// key in any layer as a present (empty) block when the merge left it nil.
+	// When some layer carries an explicit mode, deepMerge preserves it and
+	// cfg.Update is already non-nil, so this leaves layered modes untouched — a
+	// bare `update:` does NOT re-enable over a lower layer's explicit mode: off
+	// (see TestLoadConfig_update_explicitModeSurvivesNullOverride).
+	if cfg.Update == nil {
+		for _, layer := range layers {
+			if _, ok := layer.data["update"]; ok {
+				cfg.Update = &UpdateConfig{}
+				break
+			}
+		}
+	}
+
+	// Value-validate the formalized update: block. The strict-root allowlist only
+	// checks key names; without this a bad value (update: {mode: yes}) would load
+	// and then silently ActionSkip at run-time. Mirrors the old lifecycle loader's
+	// update.mode check; an empty mode is the present-but-default opt-in (→ on).
+	if cfg.Update != nil && cfg.Update.Mode != "" && !ValidUpdateMode(cfg.Update.Mode) {
+		// Attribute the bad value to the layer that actually supplied it — the
+		// highest-precedence layer setting a non-empty update.mode wins the
+		// merge — so the message names the right file (mirrors the per-layer
+		// strict-root / legacy-key errors above). Falls back to workspacePath.
+		modePath := workspacePath
+		for _, layer := range slices.Backward(layers) {
+			updMap, ok := layer.data["update"].(map[string]any)
+			if !ok {
+				continue
+			}
+			if mode, ok := updMap["mode"].(string); ok && mode != "" {
+				modePath = layer.path
+				break
+			}
+		}
+		return nil, fmt.Errorf("%s: update.mode %q is invalid; must be one of: on, off", modePath, cfg.Update.Mode)
 	}
 
 	// Load user-config for binary overrides. On error, log warning and continue
@@ -1444,6 +1729,21 @@ func LoadConfig(workspacePath string) (*DweConfig, error) {
 	if err := validateConfigKeys(&cfg); err != nil {
 		return nil, err
 	}
+
+	// Debug firehose: summarise the resolved config. Visible only when the
+	// trace slog handler is installed (dwe --debug / DWE_DEBUG); otherwise this
+	// is a no-op Debug record dropped by Go's default handler.
+	enabled := 0
+	for _, svc := range services {
+		if svc.Enabled {
+			enabled++
+		}
+	}
+	slog.Debug("config loaded",
+		"path", workspacePath,
+		"services", len(services),
+		"enabled", enabled,
+		"layers", len(layers))
 
 	return &cfg, nil
 }
@@ -2009,10 +2309,57 @@ func ResolveServiceExtends(services map[string]ServiceConfig) error {
 		if svc.Render.Git.Template == "" {
 			svc.Render.Git.Template = parent.Render.Git.Template
 		}
+		if svc.Render.Config == nil && parent.Render.Config != nil {
+			cfg := *parent.Render.Config
+			svc.Render.Config = &cfg
+		}
+		if svc.Bridge.Enabled == nil && parent.Bridge.Enabled != nil {
+			v := *parent.Bridge.Enabled
+			svc.Bridge.Enabled = &v
+		}
+		if svc.Bridge.ShimPath == "" {
+			svc.Bridge.ShimPath = parent.Bridge.ShimPath
+		}
+		if svc.Bridge.OnUnreachable == "" {
+			svc.Bridge.OnUnreachable = parent.Bridge.OnUnreachable
+		}
+		// Distinguish an omitted `generated:` (nil → inherit) from an explicitly
+		// empty `generated: {}` (non-nil → child wholly replaces with nothing).
+		// Using len()==0 would conflate the two and make a child that
+		// deliberately cleared the map silently inherit the parent's keys.
+		if svc.Generated == nil && len(parent.Generated) > 0 {
+			svc.Generated = maps.Clone(parent.Generated)
+		}
 		services[name] = svc
 	}
 
 	return nil
+}
+
+// SharesExtendsParentHub reports whether svc is an `extends` child that resolves
+// to the same hub dir as its parent — i.e. its config render targets the exact
+// pack + hub the parent already renders, producing byte-identical output. Such a
+// child is a config-render ALIAS: it has no own deploy.yml, so it never runs its
+// own generate/harvest and its ${generated.*} values are minted under the
+// PARENT's store key (e.g. a debug sidecar that extends the app and bind-mounts
+// the same source — see § Config render in docs/internals/packages.md).
+//
+// Whole-project config-render iterations (renderConfigsForRun, the no-arg
+// `dwe render config`) MUST skip the alias: the parent is the authoritative
+// render target, and rendering the alias again is at best redundant and at worst
+// destructive — because the alias's generated values are absent under its own
+// name, a lenient render would blank the shared secret, and the run-path guard
+// would emit a spurious "missing from store" skip warning. A child that declares
+// its OWN dir is a genuine, independent render target and is NOT an alias.
+func SharesExtendsParentHub(svc ServiceConfig, services map[string]ServiceConfig) bool {
+	if svc.Extends == "" || svc.Dir == "" {
+		return false
+	}
+	parent, ok := services[svc.Extends]
+	if !ok {
+		return false
+	}
+	return svc.Dir == parent.Dir
 }
 
 // topoSortServices returns service names in topological order (parents before
@@ -2455,37 +2802,20 @@ type LifecycleConfig struct {
 }
 
 // LifecycleRunConfig holds the run lifecycle pipeline configuration.
-// Update is a pointer so a missing block (nil) is distinguishable from a present
-// block with defaults — writing the update: key is itself the opt-in.
+// The self-update policy is no longer carried here — it moved to the formalized
+// top-level update: block (see UpdateConfig); enabling updates no longer touches
+// the run phases.
 type LifecycleRunConfig struct {
-	Update       *LifecycleUpdate `yaml:"update"`
-	ShowInfo     bool             `yaml:"show_info"`
-	FinalMessage string           `yaml:"final_message"`
-	Log          *bool            `yaml:"log"`
-	Phases       []DeployPhase    `yaml:"phases"`
+	ShowInfo     bool          `yaml:"show_info"`
+	FinalMessage string        `yaml:"final_message"`
+	Log          *bool         `yaml:"log"`
+	Phases       []DeployPhase `yaml:"phases"`
 }
 
 // LogEnabled reports whether file logging is enabled for the run pipeline.
 // Defaults to false when unset; loader normalizes nil to false.
 func (cfg *LifecycleRunConfig) LogEnabled() bool {
 	return cfg != nil && cfg.Log != nil && *cfg.Log
-}
-
-// EffectiveMode returns the resolved update mode before any CLI flag is applied.
-// Precedence: missing block → off; update block present with empty mode → on;
-// update block present with mode set → that value (on or off).
-// CLI flags (--no-update, --update) override this.
-func (cfg *LifecycleRunConfig) EffectiveMode() string {
-	if cfg == nil {
-		return "off"
-	}
-	if cfg.Update == nil {
-		return "off"
-	}
-	if cfg.Update.Mode == "" {
-		return "on"
-	}
-	return cfg.Update.Mode
 }
 
 // LifecycleStopConfig holds the stop lifecycle pipeline configuration.
@@ -2499,12 +2829,6 @@ type LifecycleStopConfig struct {
 // Defaults to false when unset; loader normalizes nil to false.
 func (cfg *LifecycleStopConfig) LogEnabled() bool {
 	return cfg != nil && cfg.Log != nil && *cfg.Log
-}
-
-// LifecycleUpdate configures the optional git update probe run at the start of dwe run.
-// Mode must be one of: on, off.
-type LifecycleUpdate struct {
-	Mode string `yaml:"mode"`
 }
 
 // LoadLifecycleConfig loads the lifecycle pipeline from workspace/lifecycle.yml.
@@ -2536,13 +2860,6 @@ func LoadLifecycleConfig(path string) (*LifecycleConfig, error) {
 		if cfg.Run.Log == nil {
 			f := false
 			cfg.Run.Log = &f
-		}
-		if cfg.Run.Update != nil {
-			if cfg.Run.Update.Mode != "" {
-				if !ValidUpdateMode(cfg.Run.Update.Mode) {
-					return nil, fmt.Errorf("lifecycle run: update.mode %q is invalid; must be one of: on, off", cfg.Run.Update.Mode)
-				}
-			}
 		}
 	}
 	if cfg.Stop != nil {

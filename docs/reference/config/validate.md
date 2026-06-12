@@ -16,6 +16,7 @@ Project readiness checks.
   - [`file_exists`](#file_exists)
   - [`executable_in_path`](#executable_in_path)
   - [`env_keys_present`](#env_keys_present)
+  - [`config_keys_present`](#config_keys_present)
   - [`tcp_reachable`](#tcp_reachable)
 - [`type: command` checks](#type-command-checks)
 - [Checks should be idempotent inspection](#checks-should-be-idempotent-inspection)
@@ -29,14 +30,14 @@ Project readiness checks.
 
 `workspace/validate.yml` declares project-level readiness checks. The CLI consumes these from two entry points:
 
-- `dwe validate` — runs every check (plus YAML-shape validators in the `config`, `templates`, and `commands` domains, plus environment probes in the `env` domain) and reports diagnostics.
+- `dwe validate` — runs every check (plus YAML-shape validators in the `config`, `templates`, `commands`, and `bridge` domains, plus environment probes in the `env` domain) and reports diagnostics.
 - Preflight hook on `dwe deploy run`, `dwe run`, `dwe stop`, and `dwe restart` — runs the subset of checks bound to the relevant stage before any side effect on Docker, git, or the filesystem.
 
 The goal is to surface user-actionable problems ("you're not logged into ghcr.io", "DATABASE_URL is empty in `.env`", "VPN is down") BEFORE deploy steps fail mid-way with cryptic errors.
 
 ## Validation domains
 
-The validate command runs three domains in addition to the existing YAML-shape validators:
+The validate command runs four domains in addition to the existing YAML-shape validators:
 
 | Domain | Source | Configurable? |
 |--------|--------|---------------|
@@ -81,7 +82,8 @@ The file is optional. When absent, only `env.*` and the existing YAML-shape vali
 
 | Field | Type | Required | Description |
 |-------|------|----------|-------------|
-| `checks` | list | yes | Check entries (see below). May be empty. |
+| `checks` | list | no | Check entries (see below). Optional; may be empty or omitted. |
+| `linters` | map | no | External linter adapters (see [External linters](#external-linters)). |
 
 Unknown top-level fields are rejected at load time (strict decoding).
 
@@ -111,7 +113,7 @@ Schema rules enforced at load time:
 
 ## Stages
 
-A check runs whenever its `stages` list contains a stage the caller asked for. The CLI defines four reserved stages with built-in hooks:
+A check runs whenever its `stages` list contains a stage the caller asked for. The CLI defines five reserved stages with built-in hooks:
 
 | Stage | Triggered by |
 |-------|--------------|
@@ -119,8 +121,22 @@ A check runs whenever its `stages` list contains a stage the caller asked for. T
 | `run` | `dwe run`, `dwe restart` (run leg), `dwe validate --stage run` |
 | `stop` | `dwe stop`, `dwe restart` (stop leg), `dwe validate --stage stop` |
 | `command` | `dwe validate --stage command` (reserved for future use; no automatic hook) |
+| `post-setup` | the deploy final preflight only — `dwe deploy run`, `dwe deploy` after the setup wizard, `dwe validate --stage post-setup` |
 
 `dwe validate` without `--stage` runs every check regardless of stage.
+
+### `deploy` vs `post-setup`: when in the deploy flow a check runs
+
+The deploy flow has **two** preflight moments:
+
+1. An early **pre-wizard gate** (only in the interactive `dwe deploy` menu, before the setup wizard is shown) — surfaces problems like a down Docker daemon before the user invests time filling out the wizard.
+2. The **final preflight**, run immediately before the deploy pipeline executes — both in `dwe deploy run` and after the wizard in interactive `dwe deploy`.
+
+`stages: [deploy]` checks run at **both** moments. That is wrong for a check that depends on a value the wizard writes into `local.yml`: at the early gate the value isn't set yet, so the check blocks before the user can reach the wizard.
+
+`stages: [post-setup]` checks run **only at the final preflight** — after the wizard has populated `local.yml`, or (when no wizard runs, e.g. `dwe deploy run`) immediately before the pipeline. This is the right stage for "a value must be set before deploy" guards: the interactive wizard fills it, and the non-interactive path still catches a missing value **before** any side effect instead of failing mid-pipeline. Pair it with [`config_keys_present`](#config_keys_present) to assert merged-config values, or with `env_keys_present` for rendered `.env` files.
+
+A `post-setup` check carries no `deploy` stage, so it is naturally skipped at the early gate. (`stages: [deploy, post-setup]` is accepted but redundant — it behaves exactly like `[deploy]`.) `post-setup` has no meaning outside the deploy flow; on `dwe run`/`dwe stop` it is never triggered.
 
 Unknown stages are accepted (open enum) but produce a **warning** at load time so users catch typos early:
 
@@ -145,7 +161,7 @@ Unknown service names produce an error diagnostic in the `config.validate` targe
 
 ## Available builtins
 
-All five builtins are usable both as `type: builtin` check entries and as deploy step bodies / `check:` action blocks.
+All six builtins are usable both as `type: builtin` check entries and as deploy step bodies / `check:` action blocks.
 
 ### `shell`
 
@@ -186,6 +202,20 @@ Verifies one or more keys exist with non-empty values in a `.env`-style file. Pa
 | `keys` | list of strings | yes | Keys that must be present AND non-empty. |
 
 Error message: `missing or empty keys: A, B, C`.
+
+### `config_keys_present`
+
+Verifies one or more dot-paths resolve to non-empty values in the **merged DWE configuration** — the `workspace.yml` / `defaults.yml` / `local.yml` layers after merging. This is the config-aware counterpart of `env_keys_present`: instead of reading an on-disk `.env`, it reads the in-memory merged config, so it sees `local.yml` overlays immediately and does not depend on whether a rendered `.env` has been materialised yet.
+
+Addressing is the same dot-path the setup wizard uses in its `writes:` field, so the path you assert is exactly the path the wizard wrote — e.g. `vars.db.api_key` or `vars.app.log_level`. Pair it with [`stages: [post-setup]`](#deploy-vs-post-setup-when-in-the-deploy-flow-a-check-runs) so it runs after the wizard populates `local.yml`.
+
+| Key | Type | Required | Description |
+|-----|------|----------|-------------|
+| `keys` | list of strings | yes | Dot-paths into the merged config; each must resolve to a non-empty value. |
+
+A path is "missing" when it does not resolve, when it resolves to `null`, or when it renders to the empty string. Non-string scalars (numbers, booleans) count as present. Error message: `missing or empty keys: vars.db.api_key, vars.app.log_level`.
+
+**Which paths are reachable.** Assert the same paths the wizard can write — see the [setup `writes:` scope](setup.md#write-scope-rules). Custom values live under the [`vars:` sandbox](workspace.md#strict-root--the-vars-sandbox) (`vars.db.*`, `vars.app.*`, …) — the merged config root is strict, so free-form keys must be nested under `vars:` to survive the merge and resolve here. Under `services.<name>`, `local.yml` accepts **only** `enabled`, `ports.<name>`, and `hosts.<name>` — both the wizard and the config loader reject anything else, so a per-service **secret** cannot live at `services.<name>.env.*` in `local.yml`. Keep service secrets in the service's rendered `.env` and assert them with `env_keys_present` instead; use `config_keys_present` for the top-level values the wizard writes.
 
 ### `tcp_reachable`
 
@@ -293,7 +323,25 @@ checks:
       keys: [JWT_SECRET]
 ```
 
-**5. Corporate VPN reachable (tcp_reachable):**
+**5. Wizard-supplied value required before deploy (post-setup + config_keys_present):**
+
+```yaml
+  - id: db-api-key-set
+    description: vars.db.api_key must be set before deploy
+    stages: [post-setup]             # final preflight only — after the setup wizard
+    severity: error
+    hint: |
+      Run `dwe deploy` and complete the wizard, or set
+      vars.db.api_key in workspace/local.yml.
+    type: builtin
+    cmd: config_keys_present
+    with:
+      keys: [vars.db.api_key]
+```
+
+The setup wizard writes `vars.db.api_key` into `local.yml` (a path under the [`vars:` sandbox](workspace.md#strict-root--the-vars-sandbox) — `services.<name>.env.*` is **not** a legal wizard/`local.yml` target, see the builtin's reachability note above); this check asserts the same dot-path is set. Because it is `post-setup`, it is skipped at the early pre-wizard gate (so the wizard is reachable) and runs at the final preflight — catching a missing value before deploy starts, including on `dwe deploy run` where no wizard runs.
+
+**6. Corporate VPN reachable (tcp_reachable):**
 
 ```yaml
   - id: corporate-vpn
@@ -309,7 +357,7 @@ checks:
       timeout: 2s
 ```
 
-**6. Project dependency script (type: command):**
+**7. Project dependency script (type: command):**
 
 ```yaml
   - id: project-deps
@@ -334,7 +382,7 @@ commands:
       command -v psql
 ```
 
-**7. Compose plugin v2 only (executable_in_path):**
+**8. Executable in PATH (executable_in_path):**
 
 ```yaml
   - id: jq-installed
@@ -349,10 +397,12 @@ commands:
 
 ## CLI flags
 
-- `dwe validate` — runs `config.*`, `templates.*`, `commands.*`, `env.*`, and all `checks.*`. Optional positional scope narrows the run (e.g. `dwe validate env`, `dwe validate checks ghcr-login`).
+- `dwe validate` — runs `config.*`, `templates.*`, `commands.*`, `bridge.*`, `env.*`, and all `checks.*`. Optional positional scope narrows the run (e.g. `dwe validate env`, `dwe validate checks ghcr-login`, `dwe validate bridge`).
+- `dwe validate bridge` — static checks on per-service `bridge:` blocks only: `on_unreachable` enum (`fail` / `warn`), `shim_path` absoluteness, and the bridged-service `dir` / `dir_internal` workspace mapping the shim translates over. Validate-only — the bridge domain does not participate in preflight.
 - `dwe validate --stage <name>` — local flag on the `validate` command. Filters `checks.*` by stage. `env.*` and other domains are unaffected (they have no stages).
 - `dwe validate --strict` — treat warnings as errors (exit 1).
 - `dwe validate --quiet` — hide ok / info rows.
+- `dwe validate --level <levels>` — show only the given severity levels (comma-separated: `ok`, `info`, `warning`, `error`; e.g. `--level error,warning`). This is display-only — it never changes the summary counts or the exit code. Applies to both the table and `--output json`.
 - `--skip-preflight` — local flag on `deploy run`, `run`, `stop`, and `restart`. When set, preflight prints `preflight skipped (--skip-preflight)` to stderr and runs NO validators. The flag is a true bypass: `type: command` checks invoke arbitrary user scripts, so the CLI does not run them under a flag the user named "skip".
 
 ## Diagnostic output

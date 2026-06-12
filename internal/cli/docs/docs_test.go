@@ -2,6 +2,7 @@ package docs
 
 import (
 	"bytes"
+	"strings"
 	"testing"
 
 	"github.com/semsemyonoff/dwe/internal/cli/cmdctx"
@@ -10,7 +11,11 @@ import (
 )
 
 func TestDocsRootNonTTY(t *testing.T) {
-	// Test that non-TTY returns an appropriate error
+	// Bare `dwe docs` without a TTY falls back to the `docs list` output
+	// instead of erroring. DWE_NONINTERACTIVE pins the non-interactive branch
+	// deterministically — the ambient stdout is usually a pipe under
+	// `go test`, but the test must not depend on how it was invoked.
+	t.Setenv("DWE_NONINTERACTIVE", "1")
 	cmd := NewCmd("", &cmdctx.RootFlags{
 		ConfigPath: "",
 		Root:       "",
@@ -18,17 +23,14 @@ func TestDocsRootNonTTY(t *testing.T) {
 		I18n:       nil,
 	})
 
-	// Simulate non-TTY by using a buffer as stdout
 	outBuf := &bytes.Buffer{}
 	cmd.SetOut(outBuf)
 
 	errBuf := &bytes.Buffer{}
 	cmd.SetErr(errBuf)
 
-	// Running without arguments in non-TTY should fail
-	err := cmd.Execute()
-	require.Error(t, err)
-	require.Contains(t, err.Error(), "requires a TTY")
+	require.NoError(t, cmd.Execute(), "bare docs without a TTY must fall back to list")
+	require.NotEmpty(t, outBuf.String(), "fallback must print the docs list")
 }
 
 func TestDocsRootWithArgs(t *testing.T) {
@@ -93,4 +95,30 @@ func TestDocsShowRegressionCheck(t *testing.T) {
 		}
 	}
 	require.True(t, found, "docs generate command not found")
+}
+
+// TestDocsBare_NonInteractiveFallsBackToList: bare `dwe docs` without a TTY
+// for the browser — here forced via DWE_NONINTERACTIVE=1, which the bridge
+// daemon sets for every container invocation — prints the `docs list` output
+// instead of erroring, mirroring bare `dwe commands`.
+func TestDocsBare_NonInteractiveFallsBackToList(t *testing.T) {
+	t.Setenv("DWE_NONINTERACTIVE", "1")
+
+	cmd := NewCmd("", &cmdctx.RootFlags{Locale: "en"})
+	var out strings.Builder
+	cmd.SetOut(&out)
+	cmd.SetErr(&out)
+	cmd.SetArgs([]string{})
+
+	require.NoError(t, cmd.Execute(), "bare docs must fall back to list, not error")
+
+	output := strings.TrimSpace(out.String())
+	require.NotEmpty(t, output, "fallback must print the docs list")
+	for line := range strings.SplitSeq(output, "\n") {
+		if line == "" {
+			continue
+		}
+		require.Len(t, strings.Split(line, "\t"), 3,
+			"fallback output must be the tab-separated list format: %q", line)
+	}
 }

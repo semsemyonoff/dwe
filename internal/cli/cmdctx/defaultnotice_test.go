@@ -6,6 +6,8 @@ import (
 	"testing"
 
 	"github.com/spf13/cobra"
+
+	"github.com/semsemyonoff/dwe/internal/shared/trace"
 )
 
 func TestEmitDefaultNotice(t *testing.T) {
@@ -82,4 +84,37 @@ func TestEmitDefaultNotice(t *testing.T) {
 			}
 		})
 	}
+}
+
+// TestEmitDefaultNotice_DebugFirehose asserts the lifecycle-meta decision is
+// mirrored to the Debug trace channel even in JSON mode (where the user-facing
+// line is suppressed), and is silent at lower trace levels.
+func TestEmitDefaultNotice_DebugFirehose(t *testing.T) {
+	t.Run("debug emits in json mode", func(t *testing.T) {
+		var traceBuf strings.Builder
+		trace.Configure(&traceBuf, trace.LevelDebug)
+		t.Cleanup(func() { trace.Configure(nil, trace.LevelOff) })
+
+		cmd := &cobra.Command{}
+		cmd.SetErr(&bytes.Buffer{})
+		EmitDefaultNotice(cmd, &RootFlags{Output: "json"}, "deploy", "deploy")
+
+		if !strings.Contains(traceBuf.String(), "lifecycle: using built-in default deploy pipeline") {
+			t.Errorf("debug trace missing lifecycle notice, got %q", traceBuf.String())
+		}
+	})
+
+	t.Run("silent below debug", func(t *testing.T) {
+		var traceBuf strings.Builder
+		trace.Configure(&traceBuf, trace.LevelVerbose)
+		t.Cleanup(func() { trace.Configure(nil, trace.LevelOff) })
+
+		cmd := &cobra.Command{}
+		cmd.SetErr(&bytes.Buffer{})
+		EmitDefaultNotice(cmd, &RootFlags{Output: "text"}, "deploy", "deploy")
+
+		if strings.Contains(traceBuf.String(), "lifecycle:") {
+			t.Errorf("lifecycle meta should not emit below Debug, got %q", traceBuf.String())
+		}
+	})
 }

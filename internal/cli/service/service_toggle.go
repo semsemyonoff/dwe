@@ -356,21 +356,29 @@ func mutateAndPlan(
 		_ = restoreFileState(envPath, capturedEnv)
 	}
 
-	// Step 1: Write local.yml.
+	// Step 1: Write local.yml via the comment-preserving node writer. Build the
+	// toggle overlay (validates names; no file is touched on a validation error),
+	// then apply it onto the LOADED document node so comments/formatting and any
+	// unrelated local.yml keys survive.
 	var toEnable, toDisable []string
 	if direction == DirectionEnable {
 		toEnable = []string{name}
 	} else {
 		toDisable = []string{name}
 	}
-	local, err := localpkg.LoadLocalYAML(localPath)
+	overlay, err := localpkg.ServiceTogglesOverlay(cfg, toEnable, toDisable)
 	if err != nil {
 		return TogglePlan{}, nil, nil, err
 	}
-	if err := localpkg.ApplyServiceTogglesToYAML(cfg, local, toEnable, toDisable); err != nil {
+	doc, err := localpkg.LoadLocalYAMLNode(localPath)
+	if err != nil {
 		return TogglePlan{}, nil, nil, err
 	}
-	if err := localpkg.WriteLocalYAML(localPath, local); err != nil {
+	if err := localpkg.ApplyOverlayToNode(doc, overlay); err != nil {
+		rollback()
+		return TogglePlan{}, nil, nil, err
+	}
+	if err := localpkg.WriteLocalYAMLNode(localPath, doc); err != nil {
 		rollback()
 		return TogglePlan{}, nil, nil, err
 	}
@@ -470,15 +478,23 @@ func mutateAndPlanBatch(
 		_ = restoreFileState(envPath, capturedEnv)
 	}
 
-	// Step 1: Write local.yml with all toggles applied in one pass.
-	local, err := localpkg.LoadLocalYAML(localPath)
+	// Step 1: Write local.yml with all toggles applied in one pass, via the
+	// comment-preserving node writer. The overlay validates every name before any
+	// file is touched, then applies onto the LOADED node so comments/formatting
+	// and unrelated keys survive.
+	overlay, err := localpkg.ServiceTogglesOverlay(cfg, toEnable, toDisable)
 	if err != nil {
 		return TogglePlan{}, nil, nil, err
 	}
-	if err := localpkg.ApplyServiceTogglesToYAML(cfg, local, toEnable, toDisable); err != nil {
+	doc, err := localpkg.LoadLocalYAMLNode(localPath)
+	if err != nil {
 		return TogglePlan{}, nil, nil, err
 	}
-	if err := localpkg.WriteLocalYAML(localPath, local); err != nil {
+	if err := localpkg.ApplyOverlayToNode(doc, overlay); err != nil {
+		rollback()
+		return TogglePlan{}, nil, nil, err
+	}
+	if err := localpkg.WriteLocalYAMLNode(localPath, doc); err != nil {
 		rollback()
 		return TogglePlan{}, nil, nil, err
 	}

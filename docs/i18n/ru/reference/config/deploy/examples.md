@@ -1,4 +1,4 @@
-> Translated from: reference/config/deploy/examples.md @ 506a024a4be4
+> Translated from: reference/config/deploy/examples.md @ d874b7ff49c6
 
 # Примеры и паттерны
 
@@ -182,7 +182,7 @@ phases:
 - **SIGINT**: `RunWithOptions` устанавливает `signal.NotifyContext(SIGINT, SIGTERM)` на родительский контекст один раз на запуск пайплайна. Пользовательский Ctrl-C отменяет контекст, что распространяется на дочерние процессы каждого активного под-шага. Никаких осиротевших процессов `docker compose` / `sleep` после чистого завершения.
 - **`fail_fast: true`**: первый упавший под-шаг (не считая тех, у кого `continue_on_error: true`) отменяет группу; оставшиеся под-шаги наблюдают `ctx.Done()`, и их дочерние процессы убиваются. Ошибка группы — первое падение, обёрнутое адресом своего под-шага.
 - **`fail_fast: false`**: все под-шаги дорабатывают до конца. Ошибки оборачиваются по каждому под-шагу (`parallel sub-step "phase/group/sub": <err>`) и комбинируются через `errors.Join`.
-- **Под-шаговые `when` / `files_gate` / пропуск по журналу**: каждый под-шаг по-прежнему проходит тот же пайплайн `step-when → (files_gate ↔ journal-skip) → ExecAction → check`. Взаимодействие `files_gate ↔ journal-skip` асимметрично: `state: missing` обходит journal-skip; `state: readable` и шаги без гейта сначала консультируются с journal-skip (см. [`files_gate:`](conditions.md)). Групповой `when` вычисляется **один раз**; per-sub-step `when` **также** вычисляется внутри goroutine.
+- **Под-шаговые `when` / `files_gate` / пропуск по журналу**: каждый под-шаг по-прежнему проходит тот же пайплайн `step-when → (files_gate ↔ journal-skip) → ExecAction → check`. Взаимодействие `files_gate ↔ journal-skip` асимметрично: `state: missing` обходит journal-skip; `state: readable` и шаги без гейта сначала консультируются с journal-skip (см. [`files_gate:`](conditions.md#files_gate-предусловие-по-файлам)). Групповой `when` вычисляется **один раз**; per-sub-step `when` **также** вычисляется внутри goroutine.
 - **Журнал**: каждый под-шаг журналируется независимо под `(phase, sub-step.Name)`. Сама группа не журналируется. `journal.StepHash(step)` вычисляется только по под-шагу, поэтому переупорядочивание или добавление под-шагов не инвалидирует соседей.
 
 ### Репортер и логирование
@@ -204,7 +204,8 @@ phases:
 
 ```
 [12-14/25] [parallel group: db-dumps (3 steps, max_concurrent=3, fail_fast=true)]
-  [12/25]  download-main      command services.main.db.dump-download [files_gate]
+  [12/25]  download-main      command services.main.db.dump-download
+                              [files_gate: readable (required)]
   [13/25]  download-stock     command services.stock.db.dump-download
   [14/25]  download-price     command services.price.db.dump-download
 ```
@@ -240,12 +241,12 @@ phases:
             files_gate:
               state: readable
               command: services.main.db.dump-deploy
-              with: { database: "${db.stock_database}" }
+              with: { database: "${vars.db.stock_database}" }
           deploy-price:
             files_gate:
               state: readable
               command: services.main.db.dump-deploy
-              with: { database: "${db.price_database}" }
+              with: { database: "${vars.db.price_database}" }
 ```
 
 Целевой воркфлоу остаётся непрозрачным и переиспользуемым:

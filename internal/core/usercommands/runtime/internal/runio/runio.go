@@ -13,11 +13,13 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/charmbracelet/x/term"
 	"github.com/creack/pty"
 
 	"github.com/semsemyonoff/dwe/internal/core/usercommands/model"
 	"github.com/semsemyonoff/dwe/internal/core/usercommands/resolve"
 	"github.com/semsemyonoff/dwe/internal/core/usercommands/runtime/spec"
+	"github.com/semsemyonoff/dwe/internal/shared/bridgeclient"
 	"github.com/semsemyonoff/dwe/internal/shared/tpl"
 )
 
@@ -40,18 +42,41 @@ func BindCancel(cmd *exec.Cmd) {
 	cmd.WaitDelay = ChildTermDelay
 }
 
-// ParallelColorForceEnv returns env entries that coerce common CLI tools to
-// keep ANSI colours when the child's stdout is a pipe rather than a TTY.
-// Inside a workflow parallel sub-step each child writes through a LineTee
-// (no PTY is allocated — concurrent sub-steps cannot share one), so without
+// ColorForced reports whether this dwe process was asked to force colored
+// output: CLICOLOR_FORCE is truthy and NO_COLOR is absent. The bridge shim
+// sets CLICOLOR_FORCE=1 when the container-side terminal is interactive; a
+// host user piping dwe can set it by hand. Children of a real terminal
+// inherit the tty and need no forcing.
+func ColorForced() bool {
+	if os.Getenv("NO_COLOR") != "" {
+		return false
+	}
+	v := os.Getenv("CLICOLOR_FORCE")
+	return v != "" && v != "0"
+}
+
+// stdoutIsTerminal is the production tty probe; injectable for tests.
+var stdoutIsTerminal = func() bool { return term.IsTerminal(os.Stdout.Fd()) }
+
+// colorForceActive reports whether child processes need explicit color
+// coercion: inside a workflow parallel sub-step (children write through a
+// LineTee, never a tty) or when this dwe itself runs color-forced on a pipe
+// (the host-bridge shape). On a real terminal children inherit the tty and
+// auto-detect correctly.
+func colorForceActive(rc spec.RunContext) bool {
+	return rc.UnderParallel || (ColorForced() && !stdoutIsTerminal())
+}
+
+// ColorForceEnv returns env entries that coerce common CLI tools to keep
+// ANSI colours when the child's stdout is a pipe rather than a TTY. Without
 // these vars tools like lipgloss, npm/yarn, jest, chalk-based tools, BSD
-// ls, brew, and others auto-disable colours and the captured failure /
-// always_show_output dump on stderr ends up plain text.
+// ls, brew, and others auto-disable colours — inside parallel sub-steps
+// (LineTee capture) and over the host bridge alike.
 //
-// Returns nil outside parallel so non-parallel runs keep the existing
-// auto-detection behaviour.
-func ParallelColorForceEnv(rc spec.RunContext) []string {
-	if !rc.UnderParallel {
+// Returns nil when no coercion is needed (real terminal, or NO_COLOR) so
+// those runs keep the existing auto-detection behaviour.
+func ColorForceEnv(rc spec.RunContext) []string {
+	if !colorForceActive(rc) {
 		return nil
 	}
 	if os.Getenv("NO_COLOR") != "" {
@@ -158,19 +183,112 @@ func ParallelChildIO(rc spec.RunContext, c *exec.Cmd, stdoutSink io.Writer) (use
 	return true, cleanup
 }
 
+// bridgedTTYActive reports whether a sequential child should get a full PTY:
+// this dwe runs color-forced on pipes (the host-bridge shape) while the
+// far-side client sits at a fully interactive terminal — the bridge shim
+// sets DWE_BRIDGE_STDIN_TTY=1 only when the container-side stdin is a real
+// terminal. The stdin condition is load-bearing: `docker compose exec`
+// refuses a TTY-enabled session over a non-terminal stdin, and a PTY wired
+// onto piped stdin data (`cat dump.sql | dwe cmd db.import`) would never
+// deliver EOF to the child.
+func bridgedTTYActive(rc spec.RunContext) bool {
+	return !rc.UnderParallel &&
+		ColorForced() &&
+		!stdoutIsTerminal() &&
+		os.Getenv(bridgeclient.EnvBridgeStdinTTY) == "1"
+}
+
+// bridgedTTYChildIO allocates a full PTY (stdin+stdout+stderr) for a
+// sequential bridged-interactive child, so isatty-keyed tools — phpcs,
+// PHPUnit/Symfony Console, ripgrep, … — and `docker compose exec` (which
+// only allocates a container TTY when ITS streams are terminals) behave
+// exactly like a host-interactive run. Master output pumps into the
+// context stdout; the context stdin pumps into the master so typed input
+// still reaches the child. stderr rides the PTY merged into stdout — the
+// same thing a real terminal session does.
+//
+// Returns (false, nil) when inactive or when pty.Open fails (caller falls
+// back to direct wiring — uncolored but functional).
+func bridgedTTYChildIO(rc spec.RunContext, c *exec.Cmd) (used bool, cleanup func()) {
+	if !bridgedTTYActive(rc) {
+		return false, nil
+	}
+	ptmx, tty, err := pty.Open()
+	if err != nil {
+		return false, nil
+	}
+	c.Stdin = tty
+	c.Stdout = tty
+	c.Stderr = tty
+
+	outDone := make(chan struct{})
+	go func() {
+		defer close(outDone)
+		_, _ = io.Copy(StdoutOf(rc), ptmx)
+	}()
+
+	stdin := StdinOrOS(rc)
+	stdinFile, _ := stdin.(*os.File)
+	stdinDone := make(chan struct{})
+	go func() {
+		defer close(stdinDone)
+		// stdin EOF must NOT close the master: the child may still be
+		// producing output, and closing its session would SIGHUP it.
+		_, _ = io.Copy(ptmx, stdin)
+	}()
+
+	var once sync.Once
+	cleanup = func() {
+		once.Do(func() {
+			// Close the slave first so the master drains to EOF (the child
+			// has exited and closed its copy by the time cleanup runs).
+			_ = tty.Close()
+			<-outDone
+			if stdinFile != nil && stdinFile.SetReadDeadline(time.Now()) == nil {
+				// Deadline-capable stdin: interrupt the parked Read, reap the
+				// pump (a pending Read would outlive this step and steal bytes
+				// meant for the next one), then clear the deadline for whoever
+				// reads stdin next.
+				_ = ptmx.Close()
+				<-stdinDone
+				_ = stdinFile.SetReadDeadline(time.Time{})
+				return
+			}
+			// Deadline-incapable stdin — and that IS the normal bridge shape:
+			// the daemon forks this dwe with fd 0 as a plain blocking pipe
+			// (exec.Cmd StdinPipe), which Go cannot poll, so SetReadDeadline
+			// fails and the parked Read cannot be interrupted. Waiting for the
+			// pump here would deadlock the whole session after every child
+			// exit (the v1 bridged-command hang). Close the master and abandon
+			// the goroutine instead: a late read fails its ptmx write and
+			// exits, and process exit reaps a still-parked one. Cost: a
+			// keystroke arriving in that window feeds the dying pump instead
+			// of the next step — accepted over hanging every bridged command.
+			// Non-file stdin (in-memory readers in tests) takes the same path.
+			_ = ptmx.Close()
+		})
+	}
+	return true, cleanup
+}
+
 // WireChildIO wires c's stdout/stderr/stdin for execution and returns the
 // cleanup func the caller must defer. When running as a parallel sub-step it
-// allocates a PTY via ParallelChildIO (and the returned cleanup tears it
-// down); otherwise it points c at the context's stdout/stderr/stdin defaults
-// and the cleanup is a no-op. Call as `defer runio.WireChildIO(rc, c)()` so
-// the wiring happens immediately and the teardown runs at function return.
+// allocates a PTY via ParallelChildIO; a sequential bridged-interactive run
+// gets a full PTY via bridgedTTYChildIO; otherwise it points c at the
+// context's stdout/stderr/stdin defaults and the cleanup is a no-op. Call as
+// `defer runio.WireChildIO(rc, c)()` so the wiring happens immediately and
+// the teardown runs at function return.
 func WireChildIO(rc spec.RunContext, c *exec.Cmd) func() {
 	used, cleanup := ParallelChildIO(rc, c, StdoutOf(rc))
-	if !used {
-		c.Stdout = StdoutOf(rc)
-		c.Stderr = StderrOf(rc)
-		c.Stdin = StdinOrOS(rc)
+	if used {
+		return cleanup
 	}
+	if used, bridgedCleanup := bridgedTTYChildIO(rc, c); used {
+		return bridgedCleanup
+	}
+	c.Stdout = StdoutOf(rc)
+	c.Stderr = StderrOf(rc)
+	c.Stdin = StdinOrOS(rc)
 	return cleanup
 }
 

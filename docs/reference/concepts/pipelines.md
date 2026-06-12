@@ -42,7 +42,7 @@ A step is the leaf unit of work. Every step that actually executes declares a `t
 
 Three knobs adjust how a phase or step shows up:
 
-- **`untracked: true`** on a phase or step excludes it from the `[N/M]` counter and suppresses start/done lines. Failures still surface. Useful for `post-deploy` info dumps and for `_auto_reap_daemons` book-keeping the stop pipeline prepends automatically.
+- **`untracked: true`** on a phase or step excludes it from the `[N/M]` counter and suppresses start/done lines. Failures still surface. Useful for `post-deploy` info dumps.
 - **`continue_on_error: true`** turns a failure from "abort" to "report and move on". The next step runs as usual. Use this on optional pre/post hook phases; never on the core lifecycle steps that must succeed.
 - **`skip_confirm: true`** propagates `--yes` into a single step regardless of the pipeline-wide flag. ORed with the pipeline-level flag and (in parallel groups) with the group-level flag — monotonic, never un-set.
 
@@ -113,7 +113,7 @@ Three things to notice about the diagram:
 
 - The journal-skip decision belongs to `dwe deploy run` only. `dwe run` / `stop` / `restart` and `dwe reset run` execute every reachable step on every invocation — there is no "this already ran" optimization outside deploy.
 - `check:` is skipped when `continue_on_error: true` and the body failed. It is also re-evaluated when the journal would otherwise skip the step — that is what keeps `check:` honest as an idempotency assertion.
-- A step that was journal-skipped still consumes one slot in `[N/M]` and one row in the live reporter; it just settles immediately as `◎ Skipped (cached)`.
+- A step that was journal-skipped still consumes one slot in `[N/M]` and one row in the live reporter; it just settles immediately as `◎ Skipped: <step> (state: already deployed)`.
 
 ## Parallel step groups
 
@@ -168,7 +168,7 @@ A `type: command` step that targets a workflow can attach per-sub-step gating to
       files_gate:
         state: readable
         command: services.main.db.dump-deploy
-        with: { database: "${db.stock_database}" }
+        with: { database: "${vars.db.stock_database}" }
 ```
 
 The workflow stays opaque and reusable; the gating decision belongs to the pipeline step that invoked it. Overrides only apply when the workflow is invoked via the originating step; the same workflow invoked ad-hoc (`dwe commands run …`) or as a sub-step of another workflow runs as written. In v1 only `files_gate` is overridable, and overrides cannot target a sub-step whose command is itself a workflow.
@@ -180,6 +180,6 @@ This is the canonical answer to "I want per-element gating in a workflow without
 - [`deploy.yml` / `reset.yml` reference](../config/deploy/index.md) — top-level fields, phase fields, step fields, idempotency and state journal interaction.
 - [Step execution types](../config/deploy/steps.md) — `shell`, `dwe`, `command`, `builtin`; `cmd: shell` builtin vs `type: shell` step.
 - [Conditions catalogue](../config/conditions.md) — every predicate and typed action available to `when:` / `check:` / `files_gate:`.
-- [`lifecycle.yml`](../config/lifecycle.md) — `run:` / `stop:` pipelines, `run.update` probe, hook phase conventions.
+- [`lifecycle.yml`](../config/lifecycle.md) — `run:` / `stop:` pipelines, self-update probe (top-level [`update:` block](../config/workspace.md#the-update-block)), hook phase conventions.
 - [Reset](../config/reset.md) — project-wide and per-service reset, the always-on baseline, pending-state lifecycle.
 - [State and locks](state-and-locks.md) — how the deploy journal records hashes and decides what to skip, and how `deploy.lock` / `snapshot.lock` serialise concurrent runs.
