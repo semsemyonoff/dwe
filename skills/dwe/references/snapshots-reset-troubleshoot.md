@@ -8,7 +8,7 @@ These rules from `recipes.md` apply here too: read commands run freely; mutating
 
 Run these in order — each is safe even when it reports errors. Start broad, then narrow:
 
-```
+```shell
 dwe validate --output json                       # config-level diagnostics
 dwe status --output json                          # whole-stack state
 dwe status deploy <svc> --output json             # scope to one service to cut noise
@@ -17,7 +17,7 @@ dwe logs <svc> --tail 0 --output json             # all logs for one service (de
 
 `dwe logs <svc>` defaults to `--tail 50`; use `--tail 0` for the full log or `-f`/`--follow` to stream. Then go deeper (still all read):
 
-```
+```shell
 dwe compose argv up        # exact docker-compose argv DWE would run for `up`
 dwe compose files          # the ordered overlay list assembled for this stack
 dwe docker ps              # live container state
@@ -26,7 +26,7 @@ dwe deploy state show --output json   # the deploy journal (.dwe/deploy/state.ym
 
 `-v` / `--debug` echoes go to **stderr only**, so you can capture them without corrupting stdout JSON:
 
-```
+```shell
 dwe run --debug 2>debug.log    # echoes/decisions land in debug.log; stdout stays clean
 ```
 
@@ -42,7 +42,7 @@ Guide: `dwe docs show guides/troubleshooting --lang en`.
 
 Snapshots use a dedicated scope and templating rules; read before authoring or running:
 
-```
+```shell
 dwe snapshot list --output json
 dwe snapshot current --output json
 dwe snapshot inspect <name|tar> --output json
@@ -59,7 +59,7 @@ Load-bearing rules when writing these pipelines:
 
 - `${snapshot.path}` (and any `${snapshot.*}`) resolves **only** inside snapshot workflow blocks — never elsewhere.
 - Snapshots call the project's **own** `db.dump` / `db.restore` commands (and any search/index dump). They do not invent backup logic.
-- `parallel:` sub-steps **do not inherit `--yes`** from the parent. So `restore:` must call `private: true` no-prompt wrapper commands (not interactive ones) — e.g. a `snapshot.db.restore` wrapper, not the interactive `db.restore`.
+- `parallel:` sub-steps **can't show an interactive prompt**. A command with a `confirmation:` block, run under `parallel:` in an interactive shell without `--yes`, is hard-rejected at preflight (*"rerun with --yes or set DWE_NONINTERACTIVE=1"*); `--yes` / a non-interactive stdin **do** propagate into sub-steps and silently bypass the prompt. Don't rely on either — have `restore:` call `private:` wrapper commands that carry no `confirmation:` block (e.g. a `snapshot.db.restore` wrapper, not the interactive `db.restore`), so it runs cleanly whether or not the user passes `--yes`.
 - Gate each dump/restore on `file-exists` / `dir-exists` so partial snapshots (created before an optional service existed) restore cleanly. Gate optional-service steps with `${services.<name>.enabled}`.
 
 Skeleton (based on a real multi-DB project's `snapshot.yml`):
@@ -113,7 +113,7 @@ Schema for every field: `dwe docs show config/snapshot --lang en`. The `private:
 
 Edit `snapshot.yml`, then hand the user whichever applies:
 
-```
+```shell
 dwe snapshot create <name> -d "WIP on …"   # capture current state
 dwe snapshot restore <name>                # restore a named snapshot
 dwe snapshot rollback                      # restore rollback_target
@@ -126,14 +126,14 @@ dwe snapshot unpack <tar> --as <name>      # import a shared tarball
 
 `dwe reset run` is destructive — never run it yourself. The reset pipeline is project-defined, so read it first, then preview:
 
-```
+```shell
 dwe docs show config/reset --lang en
 dwe reset plan --output json
 ```
 
 Before any reset, **always create a snapshot first** so the state is recoverable:
 
-```
+```shell
 dwe snapshot create <name> -d "pre-reset"   # user runs this BEFORE reset run
 dwe reset run                                # then this
 ```
@@ -141,11 +141,11 @@ dwe reset run                                # then this
 Two things that are easy to get wrong:
 
 - **Volume cleanup is opt-in.** Volumes are wiped only if the project's reset pipeline includes the `docker_remove_project_volumes` builtin. Do not assume volumes are gone — confirm against `dwe reset plan` / `config/reset`.
-- **`--clear-generated` also wipes `.dwe/generated.yml`.** Run `dwe reset run --clear-generated` only when secrets should be re-minted next deploy; they regenerate on the following `dwe deploy run`. See `render-and-vars.md` for the generated-secret lifecycle.
+- **`--clear-generated` also wipes `.dwe/generated.yml`.** Run `dwe reset run --clear-generated` only when secrets should be re-minted next deploy; they regenerate on the following `dwe deploy run` **only if the service's `deploy.yml` has a harvest step** (a `pattern:` regex that recaptures the value a generate `command:` mints) — a plain deploy with no harvest step won't re-mint. See `render-and-vars.md` for the generated-secret lifecycle.
 
 For a true clean install, hand the user the pair — never `deploy run --force` (that only ignores prior state; `when:` still applies):
 
-```
+```shell
 dwe reset run && dwe deploy run
 ```
 
