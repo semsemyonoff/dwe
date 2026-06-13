@@ -14,14 +14,14 @@ That is why `dwe init` ships these as **inert, fully-commented mirrors**: the de
 2. Copy **every** phase you still want (not just the one you're changing).
 3. Preview the resolved pipeline before handing off:
 
-```
+```shell
 dwe deploy plan --output json
 dwe reset plan --output json
 ```
 
 Schema first:
 
-```
+```shell
 dwe docs show concepts/pipelines --lang en
 dwe docs show config/deploy/index --lang en
 dwe docs show config/lifecycle --lang en
@@ -116,7 +116,7 @@ Two render-gate idioms:
 
 Pointers:
 
-```
+```shell
 dwe docs show config/deploy/steps --lang en
 dwe docs show config/deploy/builtins --lang en
 dwe docs show config/deploy/conditions --lang en
@@ -152,7 +152,7 @@ run:
 
 **Self-update policy is NOT here.** It lives in the formalized top-level `update: { mode: on|off }` block (in `workspace.yml` / `defaults.yml`) — the former `run.update` was removed. Schema:
 
-```
+```shell
 dwe docs show config/lifecycle --lang en
 ```
 
@@ -184,7 +184,7 @@ questions:
 
 Wizard-written values that a check depends on need `stages: [post-setup]` (next section). Schema:
 
-```
+```shell
 dwe docs show config/setup --lang en
 ```
 
@@ -217,7 +217,7 @@ checks:
 
 Run the checks (read, safe even on errors):
 
-```
+```shell
 dwe validate --output json
 dwe validate checks --output json
 dwe validate --stage post-setup --output json
@@ -225,7 +225,7 @@ dwe validate --stage post-setup --output json
 
 Schema + guide:
 
-```
+```shell
 dwe docs show config/validate --lang en
 dwe docs show guides/preflight-checks --lang en
 ```
@@ -264,13 +264,13 @@ separator: "—"
 
 Preview the rendered dashboard (read):
 
-```
+```shell
 dwe info --output json
 ```
 
 Schema + guide:
 
-```
+```shell
 dwe docs show config/info --lang en
 dwe docs show config/styles --lang en
 dwe docs show guides/brand-your-project --lang en
@@ -292,7 +292,7 @@ resources:
 
 Schema:
 
-```
+```shell
 dwe docs show config/docker --lang en
 ```
 

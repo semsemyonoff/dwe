@@ -93,7 +93,7 @@ Snapshots use a dedicated scope and templating rules — the workflow is non-obv
 
 Use docs search before guessing:
 
-```
+```shell
 dwe docs search <term> --lang en
 dwe docs list --lang en
 ```
@@ -119,13 +119,13 @@ Common owners:
 
 `dwe docs show` accepts an anchor for direct section jumps:
 
-```
+```shell
 dwe docs show config/workspace#binary-overrides --lang en
 ```
 
 Use `--anchors` to list every section slug in a topic before requesting a specific one:
 
-```
+```shell
 dwe docs show config/services/fields --anchors --lang en
 ```
 

@@ -11,7 +11,7 @@ Render packs live under `workspace/templates/<kind>/<pack>/`. Two different subs
 - **`config/<svc>/`** — writes **runtime files into the service hub** via the **`${...}` substrate**. `${...}` resolves the merged config: `${vars.x}`, `${generated.x}`, `${services.<svc>.hosts.web}`. This is the pack you wire when an app needs a rendered `.env` / `env.php` / `config.yaml`. Runs inside `dwe deploy run` (via the `service_configs_render` builtin) and on demand via `dwe render config`.
 - **`ide/`, `ai/`, `git/`** — write **hub dotfiles** (devcontainer, the generated `AGENTS.md`, git hooks) via **raw Go-template** with capital-letter context (`.Project.Name`, `.Service`, `.ServiceCfg.Container` — NOT the `${...}` shorthand). These are inert config — they do not see vars through `${...}`.
 
-```
+```shell
 dwe docs show render/index  --lang en   # overview of all packs
 dwe docs show render/config --lang en   # the ${...} substrate
 dwe docs show render/ide    --lang en
@@ -43,7 +43,7 @@ symlinks:
 
 **Escape for app-owned `${...}` literals.** When a template line must emit a literal `${APP_NAME}` for the app itself to expand (not for DWE to resolve), write it double-brace-quote-dollar then `{NAME}` so DWE leaves it alone:
 
-```
+```text
 MAIL_FROM_NAME="{{ "$" }}{APP_NAME}"   # renders to the literal ${APP_NAME}
 ```
 
@@ -78,7 +78,7 @@ The gate closes once the store holds the key, so the secret is never rotated; `r
 
 **Safety — `reset --clear-generated` + `dwe run` must not blank secrets.** When a declared key is absent from the store, DWE **skips** that service's render rather than writing an empty value — so a cleared store followed by a plain run never erases the live secret (it is reminted on the next `dwe deploy run`).
 
-```
+```shell
 dwe docs show config/services/fields#generated-block --lang en
 dwe docs show config/deploy/conditions --lang en      # the generated-missing predicate
 dwe docs show config/deploy/builtins   --lang en      # service_generated_harvest
@@ -111,7 +111,7 @@ vars:
 
 Read/inspect (all safe, lock-free — run freely):
 
-```
+```shell
 dwe vars list [namespace] --output json
 dwe vars get <var>        --output json
 dwe vars inspect <var>    --output json   # per-layer values + every static usage site
@@ -129,7 +129,7 @@ Schema: `dwe docs show config/vars --lang en`.
 - empty arg (`""`) → YAML null
 - `yes` / `no` / `on` / `off` → string
 
-```
+```shell
 # hand this to the user:
 dwe vars set vars.db.user appuser
 ```
@@ -152,7 +152,7 @@ exports:
 
 Rule fields: `name`, `from` (dot-path into the **merged** config), optional `format` (`bool`|`int`|`string`), `when` (dot-path — skip if falsy), `default`, `required`, `comment`. Inspect the resolved env (safe — prints to stdout when there is **no** `--out`):
 
-```
+```shell
 dwe render env
 ```
 
@@ -162,7 +162,7 @@ Schema: `dwe docs show render/env --lang en`.
 
 Renders normally run inside `dwe deploy run`. To iterate on one pack, hand the **user** the scoped render (all mutating):
 
-```
+```shell
 dwe render config [<svc>]      # the ${...} runtime files
 dwe render ide|ai|git [<svc>]  # hub dotfiles
 ```

@@ -19,7 +19,7 @@ A populated project also has a `workspace/` subdirectory next to `workspace.yml`
 
 Run once per session inside the project:
 
-```
+```shell
 dwe docs llms-txt --lang en
 ```
 

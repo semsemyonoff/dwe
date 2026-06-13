@@ -14,7 +14,7 @@ Every service is `type:` one of:
 
 Read the type overview and full field reference before writing:
 
-```
+```shell
 dwe docs show config/services/index --lang en
 dwe docs show config/services/fields --lang en
 dwe docs show config/services/examples --lang en
@@ -22,7 +22,7 @@ dwe docs show config/services/examples --lang en
 
 Scope the field reference with anchors instead of reading the whole body:
 
-```
+```shell
 dwe docs show config/services/fields --anchors --lang en
 ```
 
@@ -102,7 +102,7 @@ The `service.yml` `compose:` list names which overlay(s) the service activates (
 
 Schema + assembly order:
 
-```
+```shell
 dwe docs show config/docker --lang en
 dwe docs show concepts/docker --lang en
 ```
@@ -136,7 +136,7 @@ cli:
 
 Render collisions resolve deepest-extends-wins; a child sharing the parent's hub dir is a render alias (don't give it its own render). Schema:
 
-```
+```shell
 dwe docs show config/services/extends --lang en
 ```
 
@@ -161,7 +161,7 @@ on_disable:
 
 Safe, lock-free, runs even when reporting errors:
 
-```
+```shell
 dwe validate config services --output json
 dwe validate --output json
 ```

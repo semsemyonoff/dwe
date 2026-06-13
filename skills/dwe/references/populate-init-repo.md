@@ -6,7 +6,7 @@ Sibling references you will hand off to: `add-service-and-tools.md`, `authoring-
 
 ## Step 0 — Orient and read the schema entry points
 
-```
+```shell
 dwe docs llms-txt --lang en
 dwe docs show guides/start-a-new-project --lang en
 dwe docs show concepts/project-layout --lang en
@@ -31,7 +31,7 @@ Ask all eight in **one batch**, then wait for answers before authoring anything:
 
 If the repo has no `workspace.yml` yet, hand the user the init command. It is **mutating** — never run it yourself. Safe to re-run: gap-fills missing files; `--force` overwrites. For a multi-service project, init one starter service, then add the rest by hand (Step 3).
 
-```
+```shell
 dwe init --name <project> --prefix <prefix> --service <first-service> --default
 ```
 
@@ -41,7 +41,7 @@ After init, `workspace/{deploy,lifecycle,docker,info}.yml` are **inert fully-com
 
 For each source repo, create `workspace/services/<name>/service.yml`. The **folder name is the map key** — no `name:` field. Verify the schema before writing (use `--anchors` to scope):
 
-```
+```shell
 dwe docs show config/services/fields --lang en
 dwe docs show config/services/examples --lang en
 ```
@@ -72,7 +72,7 @@ Add the real container to a compose overlay (`compose/services/<name>.yml`) or t
 
 Source lives in the **gitignored** `services/<name>/src` — clone it via a deploy step gated so re-deploys never clobber. **Gate the step, never the phase** so `dwe deploy run` is re-runnable after a mid-pipeline failure. `when:` / `check:` blocks are themselves typed (need a `type:`). Verify:
 
-```
+```shell
 dwe docs show config/deploy/index --lang en
 dwe docs show config/deploy/steps --lang en
 dwe docs show config/deploy/conditions --lang en
@@ -126,7 +126,7 @@ Put the clone coordinates under `vars:` in `defaults.yml` (`vars.source.repo`, `
 
 One file per framework namespace; each command is `service_exec` wrapping the binary (`php artisan <verb>` / `bin/magento <verb>`). The clone/install step in Step 4 (`<name>.install`) is itself a command you author here. Verify:
 
-```
+```shell
 dwe docs show config/commands/types --lang en
 dwe docs show guides/author-project-commands --lang en
 dwe docs show guides/background-daemons --lang en    # only if a worker is needed
@@ -138,7 +138,7 @@ Example file `workspace/commands/services/<name>/artisan.yml` — see `authoring
 
 If the app needs a rendered runtime config (`.env`, `env.php`, `config.yaml`) or a minted secret that must survive re-render, wire a `config` pack and the harvest lifecycle. Verify:
 
-```
+```shell
 dwe docs show render/config --lang en
 dwe docs show render/env --lang en
 dwe docs show config/vars --lang en
@@ -152,7 +152,7 @@ Full detail: `render-and-vars.md`.
 
 ## Step 7 — Validate (read, safe even on errors)
 
-```
+```shell
 dwe validate --output json
 dwe validate config services --output json
 ```
@@ -163,7 +163,7 @@ Fix any reported issue (edit YAML), re-validate. `validate` never executes anyth
 
 Tell the user the exact command and what it does (clone source → render configs → install → bring the stack up):
 
-```
+```shell
 dwe deploy run
 ```
 

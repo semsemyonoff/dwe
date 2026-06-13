@@ -13,13 +13,13 @@ ID = folder path + filename + map-key, dot-joined: `workspace/commands/<path>/<f
 
 Run (mutating — **hand to the user**):
 
-```
+```shell
 dwe cmd <id> [--set key=value]      # alias of `dwe commands run`
 ```
 
 Inspect / list (read — run freely):
 
-```
+```shell
 dwe commands -i <id>                 # resolved shape: type, service, argv, params
 dwe commands list --all --output json
 ```
@@ -194,7 +194,7 @@ Set the namespace's `bridge:` + `service:` once on the group header; the per-com
 
 Verify the resolved shape before handing off:
 
-```
+```shell
 dwe commands -i <id> --output json
 dwe validate commands --output json
 ```
