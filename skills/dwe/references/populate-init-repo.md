@@ -46,7 +46,7 @@ dwe docs show config/services/fields --lang en
 dwe docs show config/services/examples --lang en
 ```
 
-App service shape (edit, don't run — based on the real Laravel `main/service.yml`):
+App service shape (edit, don't run):
 
 ```yaml
 type: app
@@ -79,7 +79,7 @@ dwe docs show config/deploy/conditions --lang en
 dwe docs show config/deploy/builtins --lang en
 ```
 
-Skeleton `workspace/services/<name>/deploy.yml` (based on the real Laravel `main/deploy.yml`):
+Skeleton `workspace/services/<name>/deploy.yml`:
 
 ```yaml
 phases:

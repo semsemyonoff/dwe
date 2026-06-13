@@ -53,7 +53,7 @@ Engine **builtins** (as a step `cmd:`): `service_dirs_ensure` · `service_config
 
 ### Canonical skeleton
 
-Based on the real `services/main/deploy.yml`. Each step is independently idempotent and gated by filesystem truth:
+Each step is independently idempotent and gated by filesystem truth:
 
 ```yaml
 phases:
@@ -129,7 +129,7 @@ See `populate-init-repo.md` for the clone-from-git flow and `render-and-vars.md`
 
 `run:` and `stop:` blocks wrap the runtime lifecycle (no deploy steps). `run:` supports `show_info: true`, `final_message:`, and `phases:` (e.g. a `start` phase = `docker up --wait`, plus post-up `tools-init` phases). Best-effort steps set `continue_on_error: true`; optional-service steps gate with `when:`.
 
-Minimal real shape (from `magento/workspace/lifecycle.yml`):
+Minimal shape:
 
 ```yaml
 run:
@@ -160,7 +160,7 @@ dwe docs show config/lifecycle --lang en
 
 `questions: [{id, type: input|select, title, description, required, writes: vars.x, validate: {preset|regex}, options:[...]}]`. The wizard runs on the first `dwe deploy` when `workspace/local.yml` is **absent/empty**; answers merge into `local.yml` (gitignored), then deploy proceeds.
 
-Most answers write `vars.*`; a service leaf may instead write `enabled`/`ports`/`hosts`. Real shape (from `magento/workspace/setup.yml`):
+Most answers write `vars.*`; a service leaf may instead write `enabled`/`ports`/`hosts`. Example shape:
 
 ```yaml
 questions:
@@ -169,14 +169,14 @@ questions:
     title: Store locale
     description: Locale code (xx_XX) — e.g. en_US.
     required: true
-    writes: vars.magento.locale.code
+    writes: vars.app.locale.code
     validate:
       regex: "^[a-z]{2}_[A-Z]{2}$"
   - id: ide-urn
     type: select
     title: IDE URN catalog
     required: true
-    writes: vars.magento.ide.urn
+    writes: vars.app.ide.urn
     options:
       - { value: vscode, label: "VS Code (default)" }   # first option = default
       - { value: phpstorm, label: PhpStorm }
@@ -196,7 +196,7 @@ Host probes (docker/git/shell/ports) are hardcoded; this file adds project-speci
 
 Builtin probes (set on `type: builtin`, `cmd:`): `tcp_reachable` · `executable_in_path` · `config_keys_present` · `shell`.
 
-Real shape (from `magento/workspace/validate.yml`):
+Example shape:
 
 ```yaml
 checks:
@@ -205,14 +205,14 @@ checks:
     stages: [post-setup]
     severity: error
     hint: |
-      Set vars.magento.marketplace.* in workspace/local.yml,
+      Set vars.app.marketplace.* in workspace/local.yml,
       or run `dwe deploy` and complete the setup wizard.
     type: builtin
     cmd: config_keys_present
     with:
       keys:
-        - vars.magento.marketplace.username
-        - vars.magento.marketplace.password
+        - vars.app.marketplace.username
+        - vars.app.marketplace.password
 ```
 
 Run the checks (read, safe even on errors):
@@ -232,7 +232,7 @@ dwe docs show guides/preflight-checks --lang en
 
 ## 6. `info.yml` dashboard + `styles.yml` branding
 
-`info.yml` — `sections:` with item types. `type: auto-urls` / `auto-hosts` expand at render time (use `port_via:`, `include`/`hide` to scope and pin scheme); `type: subgroup` groups items and can gate with `when:`; `type: definition` is templated via `.Raw.vars.x`. Real shape (from `tbm/workspace/info.yml`):
+`info.yml` — `sections:` with item types. `type: auto-urls` / `auto-hosts` expand at render time (use `port_via:`, `include`/`hide` to scope and pin scheme); `type: subgroup` groups items and can gate with `when:`; `type: definition` is templated via `.Raw.vars.x`. Example shape:
 
 ```yaml
 sections:
@@ -250,14 +250,14 @@ sections:
           - { type: definition, name: User, value: "{{ .Raw.vars.minio.user }}" }
 ```
 
-`styles.yml` — `header: { lines: [...], font: ogre }`, a `colors:` palette (semantic tokens: `accent`, `success`, `warning`, `danger`, `muted`, `border`, `text` — empty falls back to the built-in default), and a `separator:`. Real shape (from `magento/workspace/styles.yml`):
+`styles.yml` — `header: { lines: [...], font: ogre }`, a `colors:` palette (semantic tokens: `accent`, `success`, `warning`, `danger`, `muted`, `border`, `text` — empty falls back to the built-in default), and a `separator:`. Example shape:
 
 ```yaml
 header:
-  lines: ["Magento"]
+  lines: ["MyApp"]
   font: ogre
 colors:
-  accent: "#F46F25"
+  accent: "#3B82F6"
   text: ""           # empty — let the terminal pick the foreground
 separator: "—"
 ```
@@ -278,7 +278,7 @@ dwe docs show guides/brand-your-project --lang en
 
 ## 7. `docker.yml` — loaded separately (NOT in the 3-layer merge)
 
-Pins `project_name` (**must be lowercase** — mixed-case `container_name` breaks `dwe logs` / stack resolution), declares shared external cache volumes (`resources.volumes.<name>: { name, shared: true, ensure_before: [up, deploy] }`), and can set the compose base filename (`compose.base`). Overridable per-dev via gitignored `workspace/docker.local.yml`. Real shape (from `tbm/workspace/docker.yml`):
+Pins `project_name` (**must be lowercase** — mixed-case `container_name` breaks `dwe logs` / stack resolution), declares shared external cache volumes (`resources.volumes.<name>: { name, shared: true, ensure_before: [up, deploy] }`), and can set the compose base filename (`compose.base`). Overridable per-dev via gitignored `workspace/docker.local.yml`. Example shape:
 
 ```yaml
 project_name: "${project.prefix}_${project.name}"   # keep lowercase

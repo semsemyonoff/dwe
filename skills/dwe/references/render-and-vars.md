@@ -51,7 +51,7 @@ Schema: `dwe docs show render/config --lang en`, `dwe docs show templates --lang
 
 ## 3. Generated-secret lifecycle (harvest + replay)
 
-The engine is hermetic — it never mints secrets. The **service** generates them; DWE harvests the value once into a durable store (`.dwe/generated.yml`, write-if-absent) and replays it on every later render. Pattern (the real Laravel `APP_KEY` flow):
+The engine is hermetic — it never mints secrets. The **service** generates them; DWE harvests the value once into a durable store (`.dwe/generated.yml`, write-if-absent) and replays it on every later render. Pattern (a Laravel `APP_KEY` flow):
 
 1. **Declare** in `service.yml`: a `generated:` block with `{file, pattern}` — `pattern` is a regex whose capture group 1 is the harvested value.
    ```yaml
@@ -95,7 +95,7 @@ The merged config root is **strict** — a bare custom top-level key is a hard l
 # workspace/defaults.yml
 vars:
   db:
-    database: laravel
+    database: appdb
     user: root
     password: root
   source:

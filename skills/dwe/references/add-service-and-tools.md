@@ -34,7 +34,7 @@ One folder per service: `workspace/services/<name>/service.yml`. The **folder na
 
 Required: `type:` + `container:` (the compose service name). Common optional fields: `icon:` (shown in `dwe info`), `ports:` (named map), `hosts:` (named map), `compose:` (overlay files this service activates), and either `required: true` (always-on) or a toggle in `defaults.yml` (step 5).
 
-**tool** skeleton (base on the real laravel `mailpit`/`dbgate`):
+**tool** skeleton (e.g. a `mailpit` / `dbgate` GUI):
 
 ```yaml
 type: tool
@@ -48,7 +48,7 @@ hosts:
   web: mail.localhost
 ```
 
-**infra** skeleton (base on the real laravel `nginx` — `required`, owns the HTTP port, no overlay because it's in the compose base):
+**infra** skeleton (e.g. an `nginx` proxy — `required`, owns the HTTP port, no overlay because it's in the compose base):
 
 ```yaml
 type: infra
@@ -59,7 +59,7 @@ ports:
   http: 80
 ```
 
-**app** skeleton (base on the real laravel `main` — trimmed; full fields in step 3):
+**app** skeleton (trimmed; full fields in step 3):
 
 ```yaml
 type: app
@@ -70,7 +70,7 @@ dir: ./services/main
 dir_internal: /workspace
 work_dir_internal: /workspace/src
 hosts:
-  web: laravel.localhost
+  web: app.localhost
 ```
 
 Verify each field's meaning at `dwe docs show config/services/fields --lang en` (don't guess `ports`/`hosts` shape — see the `ports-field` / `hosts-field` anchors).
@@ -98,7 +98,7 @@ A service's real container does NOT live in `service.yml`. It lives in a compose
   - per-service variants → `compose/services/<svc>/<variant>.yml`
   - other per-service overlays → `compose/services/<name>.yml`
 
-The `service.yml` `compose:` list names which overlay(s) the service activates (the laravel `mailpit` activates `compose/tools/mailpit.yml`). Overlays typically consume generated `.env` vars and patch the proxy (e.g. add an nginx vhost).
+The `service.yml` `compose:` list names which overlay(s) the service activates (e.g. a `mailpit` tool activates `compose/tools/mailpit.yml`). Overlays typically consume generated `.env` vars and patch the proxy (e.g. add an nginx vhost).
 
 Schema + assembly order:
 
@@ -111,7 +111,7 @@ Editing the compose base/overlays applies via `dwe run` (not `deploy run`) — b
 
 ## 5. Optional vs required
 
-- **Optional service** — omit `required:` from `service.yml` and add a toggle to `workspace/defaults.yml` under `services.<name>.enabled` (the laravel `defaults.yml` toggles `dbgate`/`mailpit`/`main-debug` to `false`). Free-form values still go under `vars:` — see step 5 anchor in `render-and-vars.md`.
+- **Optional service** — omit `required:` from `service.yml` and add a toggle to `workspace/defaults.yml` under `services.<name>.enabled` (e.g. a `defaults.yml` toggles `dbgate`/`mailpit`/`main-debug` to `false`). Free-form values still go under `vars:` — see step 5 anchor in `render-and-vars.md`.
 - **Required service** — set `required: true` on the `service.yml`. Required services are NOT listed in the `defaults.yml` `services` overlay.
 
 Toggling an already-defined service later is a pure toggle → handoff `dwe services enable|disable <name> --apply` (step 9). Adding the definition itself → `dwe deploy run`.
@@ -120,7 +120,7 @@ Schema: `dwe docs show config/services/index --lang en`.
 
 ## 6. Variant via `extends:`
 
-A debug/storybook/variant service `extends: <parent>` to reuse the parent's image/source/render and add only deltas (an extra compose overlay, a `cli.env` tweak). Base on the real laravel `main-debug`:
+A debug/storybook/variant service `extends: <parent>` to reuse the parent's image/source/render and add only deltas (an extra compose overlay, a `cli.env` tweak). Example — a `main-debug` variant:
 
 ```yaml
 type: app
@@ -142,17 +142,17 @@ dwe docs show config/services/extends --lang en
 
 ## 7. Toggle automation (optional)
 
-To run hooks when a service is enabled/disabled, add `on_enable:` / `on_disable:` to its `service.yml`. Base on the real magento `varnish`:
+To run hooks when a service is enabled/disabled, add `on_enable:` / `on_disable:` to its `service.yml`. Example — a `varnish` cache service:
 
 ```yaml
 on_enable:
   requires: restart        # or deploy-or-restart
   after:
-    - services.magento.varnish.enable
+    - services.app.varnish.enable
 on_disable:
   requires: restart
   before:
-    - services.magento.varnish.disable
+    - services.app.varnish.disable
 ```
 
 `requires:` picks how the toggle applies; `before:`/`after:` list command IDs to run around the toggle write. Schema: `dwe docs show config/services/fields --lang en` (toggle-hooks section — list with `--anchors`).

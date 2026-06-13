@@ -45,7 +45,7 @@ Schema → `dwe docs show config/commands/index --lang en`.
 
 `type:` is one of `service_exec · service_run · shell · script · dwe · workflow · builtin · daemon`. One short example each below; full schema → `dwe docs show config/commands/types --lang en`.
 
-**`service_exec`** — exec into a *running* container (the everyday `php artisan` / `bin/magento` / `mariadb` wrapper). Needs `service:` + `mode:` + `workdir_from:` + `argv:`/`cmd:`. Based on `laravel/.../artisan.yml`:
+**`service_exec`** — exec into a *running* container (the everyday `php artisan` / `bin/magento` / `mariadb` wrapper). Needs `service:` + `mode:` + `workdir_from:` + `argv:`/`cmd:`. Example:
 
 ```yaml
 db-seed:
@@ -120,7 +120,7 @@ wait:
   with: { services: [db], timeout: 120s, interval: 2s }
 ```
 
-**`daemon`** — long-running worker; expands into FOUR virtual IDs `<group>.<key>.{start,logs,stop,restart}`, auto-reaped on `dwe stop`. Based on `laravel/.../services/main.yml`:
+**`daemon`** — long-running worker; expands into FOUR virtual IDs `<group>.<key>.{start,logs,stop,restart}`, auto-reaped on `dwe stop`. Example:
 
 ```yaml
 queue:                                            # → services.main.queue.{start,logs,stop,restart}
@@ -186,7 +186,7 @@ Keep interactive (`tinker`), secret-minting, and daemon commands **host-only** (
 One file per framework namespace; every command is a `service_exec` wrapping the binary verb.
 
 - `commands/services/main/migrate.yml` → `services.main.migrate.{run,status,rollback,…}` each `argv: [php, artisan, "migrate:…"]`
-- `commands/services/magento/indexer.yml` → `services.magento.indexer.{reindex,…}` each `argv: [bin/magento, "indexer:…"]`
+- `commands/services/shop/indexer.yml` → `services.shop.indexer.{reindex,…}` each `argv: [bin/magento, "indexer:…"]`
 
 Set the namespace's `bridge:` + `service:` once on the group header; the per-command entries inherit. Pattern guide → `dwe docs show guides/author-project-commands --lang en`.
 

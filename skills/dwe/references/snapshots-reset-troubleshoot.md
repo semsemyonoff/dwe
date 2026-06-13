@@ -62,7 +62,7 @@ Load-bearing rules when writing these pipelines:
 - A `confirmation:` command **can't be prompted interactively under `parallel:`** — so the outcome forks on `--yes`: **without** it (and without a non-interactive stdin / `DWE_NONINTERACTIVE=1`) the sub-step is hard-rejected at the parallel preflight (*"rerun with --yes or set DWE_NONINTERACTIVE=1"*); **with** it, `SkipConfirm` propagates into each sub-step and the prompt is skipped, so it runs. Either way, don't make `restore:` hinge on the caller passing `--yes` — call `private:` wrapper commands that carry **no** `confirmation:` block (e.g. a `snapshot.db.restore` wrapper, not the interactive `db.restore`), so restore runs cleanly regardless.
 - Gate each dump/restore on `file-exists` / `dir-exists` so partial snapshots (created before an optional service existed) restore cleanly. Gate optional-service steps with `${services.<name>.enabled}`.
 
-Skeleton (based on a real multi-DB project's `snapshot.yml`):
+Skeleton (multi-DB project):
 
 ```yaml
 dir: snapshots
