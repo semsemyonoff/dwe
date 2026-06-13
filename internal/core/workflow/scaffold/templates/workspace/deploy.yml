@@ -7,7 +7,7 @@
 #
 # Authoritative default: deploy.DefaultDeployConfig()
 #   (internal/core/workflow/deploy/defaults.go)
-# Schema and field reference: `dwe docs config deploy`
+# Schema and field reference: `dwe docs show config/deploy/index`
 #
 # log: true
 # phases:

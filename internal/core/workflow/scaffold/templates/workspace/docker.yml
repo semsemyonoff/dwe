@@ -7,7 +7,7 @@
 #
 # Per-developer overrides go in workspace/docker.local.yml (gitignored), which
 # is deep-merged on top of this file.
-# Schema and field reference: `dwe docs config docker`
+# Schema and field reference: `dwe docs show config/docker`
 #
 # project_name: "${project.prefix}-${project.name}"
 #

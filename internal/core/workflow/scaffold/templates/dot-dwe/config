@@ -8,7 +8,7 @@
 # after a space is a parse error). Booleans accept 1/true/yes and 0/false/no.
 # Unknown keys are warnings, not errors. Uncomment a line to activate it.
 #
-# Every key below is shown with its default. Run `dwe docs config userconfig`
+# Every key below is shown with its default. Run `dwe docs show config/userconfig`
 # for the authoritative reference.
 
 # --- Locale and TUI ---

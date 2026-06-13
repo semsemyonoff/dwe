@@ -1,7 +1,7 @@
 # workspace/defaults.yml — versioned project defaults (layer 2 of 3).
 #
 # Tracked by git. Everything here is overridable per-developer in
-# workspace/local.yml (gitignored). Run `dwe docs config workspace`.
+# workspace/local.yml (gitignored). Run `dwe docs show config/workspace`.
 
 # Compose base file (always included by the Docker control plane).
 compose:
@@ -28,7 +28,7 @@ services:
 # state: ""
 
 # Declarative .env export rules. Each rule maps a dot-path in the merged config
-# to an environment variable. See `dwe docs config workspace`.
+# to an environment variable. See `dwe docs show config/workspace`.
 # exports:
 #   env:
 #     - name: APP_PORT

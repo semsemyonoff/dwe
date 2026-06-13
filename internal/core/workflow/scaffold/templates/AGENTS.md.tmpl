@@ -8,12 +8,23 @@ development environment managed by the `dwe` CLI.
 Run this once to load a project-aware index of services, commands, and docs:
 
 ```
-dwe docs llms-txt
+dwe docs llms-txt --lang en
 ```
 
 It emits a compact llms.txt snapshot (project context, services, commands, and
 pointers into the built-in docs subsystem) designed to be loaded once and then
 navigated on demand.
+
+## Conventions for AI agents
+
+- **Docs in English.** Pass `--lang en` to every `dwe docs …` command (`llms-txt`,
+  `show`, `search`, `list`) — translated docs can lag behind the English source.
+- **Data as JSON.** For any command whose output you parse — `dwe status`,
+  `dwe validate`, `dwe info`, `dwe services`, `dwe vars …` — add `--output json`
+  (alias `-o json`); the default table output is formatted for humans. **Exception:**
+  never pass `-o json` to `dwe docs …` — those emit markdown, and for
+  `dwe docs llms-txt` / `dwe docs show` the `--output` flag is a *file path*, so
+  `-o json` would write a file literally named `json`.
 
 ## Useful commands
 
@@ -21,7 +32,7 @@ navigated on demand.
 - `dwe info` — environment summary (URLs, hosts, ports)
 - `dwe validate` — static project-config validation
 - `dwe deploy` — bring the stack up
-- `dwe docs <topic>` — built-in reference (config schemas, guides)
+- `dwe docs <topic> --lang en` — built-in reference (config schemas, guides)
 
 ## Config layout
 
