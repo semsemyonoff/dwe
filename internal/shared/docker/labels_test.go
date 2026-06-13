@@ -145,6 +145,44 @@ func TestServiceContainerName_EmptyIdentity(t *testing.T) {
 	}
 }
 
+// TestLookupServiceContainer_ThreadsEnvAndSearchesAllStates pins the two
+// contracts the logs/stop/reset callers depend on: the caller's processEnv is
+// passed through to the `docker ps` probe (so probe and action hit the same
+// daemon), and the search covers all container states (--all), not just running.
+func TestLookupServiceContainer_ThreadsEnvAndSearchesAllStates(t *testing.T) {
+	prev := psNamesRunner
+	t.Cleanup(func() { psNamesRunner = prev })
+	var gotEnv, gotArgs []string
+	psNamesRunner = func(_ string, processEnv []string, args []string) (string, error) {
+		gotEnv, gotArgs = processEnv, args
+		return "real-web", nil
+	}
+	env := []string{"DOCKER_HOST=tcp://remote:2375"}
+	name, err := LookupServiceContainer("docker", env, "dwe-shop", "web")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if name != "real-web" {
+		t.Errorf("name = %q, want real-web", name)
+	}
+	if !slices.Equal(gotEnv, env) {
+		t.Errorf("processEnv not threaded to probe: got %v, want %v", gotEnv, env)
+	}
+	if !slices.Contains(gotArgs, "--all") {
+		t.Errorf("expected --all (search every state) in args, got %v", gotArgs)
+	}
+}
+
+func TestLookupServiceContainer_EmptyWhenNoMatch(t *testing.T) {
+	prev := psNamesRunner
+	t.Cleanup(func() { psNamesRunner = prev })
+	psNamesRunner = func(_ string, _ []string, _ []string) (string, error) { return "", nil }
+	name, err := LookupServiceContainer("docker", nil, "proj", "svc")
+	if err != nil || name != "" {
+		t.Fatalf(`got (%q,%v), want ("",nil)`, name, err)
+	}
+}
+
 // guard against accidental arg-shape drift the stub tests above rely on.
 func TestServiceContainerPSArgs_StableShape(t *testing.T) {
 	got := serviceContainerPSArgs("p", "s", true, true)

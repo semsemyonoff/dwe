@@ -5,7 +5,9 @@ package services
 
 import (
 	"maps"
+	"path/filepath"
 	"slices"
+	"strings"
 
 	"github.com/semsemyonoff/dwe/internal/core/project/config"
 )
@@ -62,6 +64,63 @@ func SortedNames(services map[string]config.ServiceConfig) []string {
 		return 0
 	})
 	return names
+}
+
+// DetectByCwd returns the name of the service whose source directory (svc.Dir,
+// already extends-resolved, relative to root) contains cwd. When several
+// services match because their dirs nest, the deepest match wins. Returns ""
+// when no service owns cwd.
+//
+// A service whose dir resolves to the project root (e.g. `dir: .`) or escapes
+// it (`dir: ..`, an absolute path outside root) is skipped — it would otherwise
+// claim every cwd in (or above) the project. This mirrors the prompt's
+// standalone detectService, but reads the already-resolved typed config instead
+// of re-parsing service.yml stubs.
+func DetectByCwd(services map[string]config.ServiceConfig, root, cwd string) string {
+	if root == "" || cwd == "" {
+		return ""
+	}
+	// Canonicalize both via EvalSymlinks before comparing: the project root is
+	// already symlink-resolved (project.Locate), but cwd comes from os.Getwd()
+	// which on macOS often stays logical (/tmp, /var, symlinked HOME). Without
+	// this, the prefix check silently misses and cwd-detection no-ops. Best
+	// effort — fall back to the raw path when the target can't be resolved.
+	if r, err := filepath.EvalSymlinks(cwd); err == nil {
+		cwd = r
+	}
+	if r, err := filepath.EvalSymlinks(root); err == nil {
+		root = r
+	}
+	sep := string(filepath.Separator)
+	cwdClean := filepath.Clean(cwd)
+	rootClean := filepath.Clean(root)
+	rootPrefix := rootClean + sep
+
+	var bestName string
+	var bestLen int
+	for _, name := range SortedNames(services) {
+		dir := services[name].Dir
+		if dir == "" {
+			continue
+		}
+		var resolved string
+		if filepath.IsAbs(dir) {
+			resolved = filepath.Clean(dir)
+		} else {
+			resolved = filepath.Clean(filepath.Join(rootClean, dir))
+		}
+		if resolved == rootClean || !strings.HasPrefix(resolved, rootPrefix) {
+			continue
+		}
+		if cwdClean != resolved && !strings.HasPrefix(cwdClean, resolved+sep) {
+			continue
+		}
+		if len(resolved) > bestLen {
+			bestName = name
+			bestLen = len(resolved)
+		}
+	}
+	return bestName
 }
 
 func typeRank(t config.ServiceType) int {

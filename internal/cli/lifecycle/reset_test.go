@@ -364,7 +364,23 @@ func installFakeDocker(t *testing.T, baseDir string) {
 	}
 	logPath := filepath.Join(baseDir, ".dwe", "docker-args.log")
 	fakePath := filepath.Join(binDir, "docker")
-	script := "#!/bin/sh\nprintf '%s\\n' \"$*\" >> " + logPath + "\nexit 0\n"
+	// Logs every invocation and exits 0. For `ps` (the compose-label container
+	// lookup added by reset's stop+rm), it echoes "<project>-<service>" derived
+	// from the --filter labels so stop_remove resolves a real container name
+	// instead of treating the service as not-deployed.
+	script := "#!/bin/sh\n" +
+		"printf '%s\\n' \"$*\" >> " + logPath + "\n" +
+		"if [ \"$1\" = ps ]; then\n" +
+		"  proj=; svc=\n" +
+		"  for a in \"$@\"; do\n" +
+		"    case \"$a\" in\n" +
+		"      label=com.docker.compose.project=*) proj=${a#label=com.docker.compose.project=} ;;\n" +
+		"      label=com.docker.compose.service=*) svc=${a#label=com.docker.compose.service=} ;;\n" +
+		"    esac\n" +
+		"  done\n" +
+		"  [ -n \"$svc\" ] && echo \"${proj}-${svc}\"\n" +
+		"fi\n" +
+		"exit 0\n"
 	if err := os.WriteFile(fakePath, []byte(script), 0o755); err != nil {
 		t.Fatalf("write fake docker: %v", err)
 	}
@@ -372,6 +388,18 @@ func installFakeDocker(t *testing.T, baseDir string) {
 	if err := os.WriteFile(filepath.Join(baseDir, ".dwe", "config"), []byte(userCfg), 0o644); err != nil {
 		t.Fatalf("write user config: %v", err)
 	}
+}
+
+// findDockerCall returns the first logged invocation whose argv starts with
+// prefix (e.g. "stop ", "rm "), or "" when none match. Used so assertions are
+// robust to the leading `ps` label-lookup invocation and to call ordering.
+func findDockerCall(calls []string, prefix string) string {
+	for _, c := range calls {
+		if strings.HasPrefix(c, prefix) {
+			return c
+		}
+	}
+	return ""
 }
 
 // dockerInvocations returns the lines logged by the fake docker binary,
@@ -504,14 +532,13 @@ func TestResetServiceRun_NoResetYML(t *testing.T) {
 	}
 
 	calls := dockerInvocations(t, dir)
-	if len(calls) < 2 {
-		t.Fatalf("expected at least 2 docker invocations (stop, rm); got %v", calls)
+	stopCall := findDockerCall(calls, "stop ")
+	if stopCall == "" || !strings.Contains(stopCall, "dwe-test-app-postgres") {
+		t.Errorf("docker stop call wrong; got calls %v", calls)
 	}
-	if !strings.HasPrefix(calls[0], "stop ") || !strings.Contains(calls[0], "dwe-test-app-postgres") {
-		t.Errorf("docker stop call wrong; got %q", calls[0])
-	}
-	if !strings.HasPrefix(calls[1], "rm ") || !strings.Contains(calls[1], "dwe-test-app-postgres") {
-		t.Errorf("docker rm call wrong; got %q", calls[1])
+	rmCall := findDockerCall(calls, "rm ")
+	if rmCall == "" || !strings.Contains(rmCall, "dwe-test-app-postgres") {
+		t.Errorf("docker rm call wrong; got calls %v", calls)
 	}
 
 	state, err := journal.Load(statePath)
@@ -786,14 +813,11 @@ func TestResetServiceRun_TTYConfirmationAccept(t *testing.T) {
 		t.Fatalf("unexpected error on confirm: %v", err)
 	}
 	calls := dockerInvocations(t, dir)
-	if len(calls) < 2 {
-		t.Fatalf("expected at least 2 docker invocations (stop, rm); got %v", calls)
+	if findDockerCall(calls, "stop ") == "" {
+		t.Errorf("expected a docker stop invocation; got %v", calls)
 	}
-	if !strings.HasPrefix(calls[0], "stop ") {
-		t.Errorf("first docker call should be stop; got %q", calls[0])
-	}
-	if !strings.HasPrefix(calls[1], "rm ") {
-		t.Errorf("second docker call should be rm; got %q", calls[1])
+	if findDockerCall(calls, "rm ") == "" {
+		t.Errorf("expected a docker rm invocation; got %v", calls)
 	}
 }
 

@@ -131,18 +131,22 @@ Reference: [`../reference/config/commands/index.md`](../reference/config/command
 ## Viewing logs
 
 ```shell
-dwe logs <service>
+dwe logs              # whole stack (all enabled services)
+dwe logs <service>    # one service
 ```
 
-Streams Docker container logs for a single service. By default the last 50 lines print and the command exits. To follow:
+With no argument, `dwe logs` streams the whole stack — every enabled service, multiplexed and prefixed, like `docker compose logs`. With a service name it streams that one service's container. By default the last 50 lines print and the command exits. To follow:
 
 ```shell
+dwe logs --follow
 dwe logs main --follow
 dwe logs main --tail 100 --follow
 dwe logs main --since 5m
 ```
 
-`Ctrl-C` exits the log stream; the stack keeps running. The `--since` flag accepts a duration (`5m`, `1h`) or an RFC3339 timestamp. With `--output json`, output is NDJSON (one `{"ts","stream","msg"}` per line) for piping into log tooling.
+The target container is found by its compose project + service labels, so logs work regardless of any `container_name` override or compose's default `<project>-<service>-<index>` naming — you do not need to pin `container_name` in your compose file.
+
+`Ctrl-C` exits the log stream; the stack keeps running. The `--since` flag accepts a duration (`5m`, `1h`) or an RFC3339 timestamp. With `--output json`, output is NDJSON (one `{"ts","stream","msg"}` per line; whole-stack mode adds a `"service"` field) for piping into log tooling.
 
 `dwe logs` is read-only and lock-free, like `dwe status`.
 

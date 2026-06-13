@@ -24,7 +24,7 @@ Every field allowed in `workspace/services/<name>/service.yml`, plus the nested 
 | Field | Type | Required | Allowed for | Description |
 |-------|------|----------|-------------|-------------|
 | `type` | string | yes | app / tool / infra | Discriminator — selects the field allowlist for this entry. |
-| `container` | string | no (defaults to folder name) | all | Docker container name. Omit to use the service folder name as the container name. |
+| `container` | string | no (defaults to folder name) | all | Compose service name for this service (defaults to the folder name). Per-service commands (`logs`, `stop`, `restart`, `reset --service`) locate the running container by the compose project + service labels, so you do **not** need to pin `container_name` in your compose file to match — compose's default `<project>-<service>-<index>` naming works as-is. |
 | `required` | bool | no | all | When true, the service is always enabled; the overlay cannot disable it. |
 | `compose` | list | no | all | Additional compose overlay files activated when the service is enabled. |
 | `ports` | `map[string]int \| map[string]{port,scheme}` | no | all | Named container ports. Bare-int shorthand or rich `{port, scheme}` form. See [`ports` field](#ports-field). |

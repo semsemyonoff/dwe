@@ -72,6 +72,29 @@ func serviceContainerPSArgs(projectName, service string, runningOnly, excludeOne
 	return append(args, "--format", "{{.Names}}")
 }
 
+// LookupServiceContainer resolves the real Docker container name for a dwe
+// service (whose compose service name is `service`) in project `projectName`,
+// querying by the compose project + service labels. It is correct regardless of
+// any `container_name:` override and of compose's default
+// "<project>-<service>-<index>" naming — unlike guessing "<project>-<service>",
+// which only matches when the user pins container_name to exactly that string.
+//
+// It searches across ALL container states (running or exited) so logs/stop/reset
+// can act on a stopped container too. Returns "" when no container exists for
+// the service.
+//
+// processEnv is the environment for the `docker ps` probe; callers MUST pass the
+// same env they use for the follow-up `docker logs/stop/restart/rm` action so
+// the probe and the action target the same daemon (DOCKER_HOST/DOCKER_CONTEXT
+// from docker.yml process_env). Pass nil to use the inherited environment.
+//
+// This is the per-service-targeting counterpart to the label-based probes used
+// by status (ServiceRunning) and shell (serviceContainerState); centralising it
+// keeps logs/stop/restart/reset from drifting back to fragile name-guessing.
+func LookupServiceContainer(dockerBin string, processEnv []string, projectName, service string) (string, error) {
+	return ServiceContainerName(dockerBin, processEnv, projectName, service, false)
+}
+
 // ServiceContainerName returns the name of a container for compose service
 // `service` in project `projectName`, preferring a long-lived service container
 // over an ephemeral one-off `docker compose run` container. runningOnly limits

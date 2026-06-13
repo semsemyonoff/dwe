@@ -13,6 +13,17 @@ import (
 	"github.com/semsemyonoff/dwe/internal/shared/render"
 )
 
+// init stubs the container-name lookup seam so stop_remove tests resolve names
+// without spawning `docker ps`. The default reproduces the historical
+// "<project>-<service>" shape so existing name-assertion tests keep verifying
+// that the project name + service flow through correctly; tests exercising the
+// unresolved path override it to "".
+func init() {
+	lookupContainerFn = func(_ string, _ []string, projectName, service string) (string, error) {
+		return projectName + "-" + service, nil
+	}
+}
+
 func newDockerStopRemoveCtx(cfg *config.DweConfig) (spec.ExecContext, *bytes.Buffer) {
 	buf := &bytes.Buffer{}
 	return spec.ExecContext{
@@ -306,17 +317,37 @@ func TestDockerStopRemoveContainer_Run_NilConfig(t *testing.T) {
 	}
 }
 
-func TestDockerStopRemoveContainer_Run_InvalidContainerName(t *testing.T) {
+// TestDockerStopRemoveContainer_Run_UnresolvedServiceNoOp verifies that when no
+// container matches the service labels (never deployed / already removed), the
+// builtin is a silent idempotent no-op: it neither stops nor removes anything
+// and prints a "nothing to stop" note instead of erroring.
+func TestDockerStopRemoveContainer_Run_UnresolvedServiceNoOp(t *testing.T) {
+	prevLookup := lookupContainerFn
+	t.Cleanup(func() { lookupContainerFn = prevLookup })
+	lookupContainerFn = func(_ string, _ []string, _, _ string) (string, error) { return "", nil }
+
+	stopCalled, rmCalled := false, false
+	swapDockerSeams(t,
+		func(_ context.Context, _, _ string, _ int) error { stopCalled = true; return nil },
+		func(_ context.Context, _, _ string) error { rmCalled = true; return nil },
+	)
+
 	cfg := &config.DweConfig{}
 	cfg.Project.Name = "demo"
-	ectx, _ := newDockerStopRemoveCtx(cfg)
+	ectx, buf := newDockerStopRemoveCtx(cfg)
 	err := StopRemoveContainer{}.Run(
 		context.Background(),
-		map[string]any{"container_template": "bad/name"},
+		map[string]any{"container_template": "ghost"},
 		ectx,
 	)
-	if err == nil {
-		t.Fatal("expected error for invalid container name, got nil")
+	if err != nil {
+		t.Fatalf("expected no-op success, got: %v", err)
+	}
+	if stopCalled || rmCalled {
+		t.Errorf("stop/remove must not be called for an unresolved service; stop=%v rm=%v", stopCalled, rmCalled)
+	}
+	if !strings.Contains(buf.String(), `no container for service "ghost"`) {
+		t.Errorf("missing 'nothing to stop' note; got %q", buf.String())
 	}
 }
 

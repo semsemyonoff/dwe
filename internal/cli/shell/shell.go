@@ -3,11 +3,13 @@ package shell
 import (
 	"errors"
 	"fmt"
+	"os"
 	"slices"
 	"strings"
 
 	"github.com/semsemyonoff/dwe/internal/cli/cmdctx"
 	"github.com/semsemyonoff/dwe/internal/core/project/config"
+	"github.com/semsemyonoff/dwe/internal/core/project/services"
 	"github.com/semsemyonoff/dwe/internal/core/ui/widgets"
 	"github.com/semsemyonoff/dwe/internal/shared/docker"
 
@@ -42,14 +44,22 @@ func defaultSelectService(cfg *config.DweConfig, names []string) (string, error)
 
 // pickService resolves which service name to use for the shell command.
 //   - If serviceName is non-empty, it is returned directly.
-//   - If exactly one enabled service exists, it is auto-selected.
-//   - If multiple enabled services exist, the selector function is called.
-//   - If no enabled services exist, an error is returned.
+//   - Else, if cwd is inside a service's source directory, that service is used.
+//   - Else, if exactly one enabled service exists, it is auto-selected.
+//   - Else, if multiple enabled services exist, the selector function is called.
+//   - Else (no enabled services), an error is returned.
 //
-// "Enabled" means mandatory or explicitly enabled in the current config.
-func pickService(cfg *config.DweConfig, serviceName string, selector selectServiceFn) (string, error) {
+// "Enabled" means mandatory or explicitly enabled in the current config. The
+// cwd match deliberately ignores enabled state: navigating into a service's
+// folder is an explicit target, like passing its name.
+func pickService(cfg *config.DweConfig, serviceName, root, cwd string, selector selectServiceFn) (string, error) {
 	if serviceName != "" {
 		return serviceName, nil
+	}
+
+	// "I'm standing in this service's folder" — treat as an explicit target.
+	if detected := services.DetectByCwd(cfg.Services, root, cwd); detected != "" {
+		return detected, nil
 	}
 
 	// Collect enabled services in sorted order.
@@ -146,7 +156,8 @@ dwe's own connection banners are suppressed so the child's stdout is untouched.`
 					return "", fmt.Errorf("multiple services are enabled; pass a service name or run in an interactive terminal")
 				}
 			}
-			serviceName, err := pickService(cfg, argName, svcSelector)
+			cwd, _ := os.Getwd()
+			serviceName, err := pickService(cfg, argName, baseDir, cwd, svcSelector)
 			if err != nil {
 				if errors.Is(err, widgets.ErrCancelled) {
 					return nil

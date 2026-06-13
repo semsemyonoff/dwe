@@ -27,7 +27,7 @@ func TestPickService_explicitName_returnsDirect(t *testing.T) {
 		selectorCalled = true
 		return "", fmt.Errorf("should not call selector")
 	}
-	got, err := pickService(cfg, "main", sel)
+	got, err := pickService(cfg, "main", "", "", sel)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -48,7 +48,7 @@ func TestPickService_singleEnabled_autoSelect(t *testing.T) {
 		selectorCalled = true
 		return "", fmt.Errorf("should not call selector")
 	}
-	got, err := pickService(cfg, "", sel)
+	got, err := pickService(cfg, "", "", "", sel)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -67,7 +67,7 @@ func TestPickService_noEnabled_error(t *testing.T) {
 	sel := func(_ *config.DweConfig, _ []string) (string, error) {
 		return "main", nil
 	}
-	_, err := pickService(cfg, "", sel)
+	_, err := pickService(cfg, "", "", "", sel)
 	if err == nil {
 		t.Fatal("expected error for no enabled services, got nil")
 	}
@@ -83,7 +83,7 @@ func TestPickService_multipleEnabled_callsSelector(t *testing.T) {
 		selectorCalled = true
 		return names[0], nil
 	}
-	_, err := pickService(cfg, "", sel)
+	_, err := pickService(cfg, "", "", "", sel)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -102,9 +102,51 @@ func TestPickService_nonInteractiveSelector_multipleEnabled_returnsError(t *test
 	nonTTYSelector := func(_ *config.DweConfig, _ []string) (string, error) {
 		return "", fmt.Errorf("multiple services are enabled; pass a service name or run in an interactive terminal")
 	}
-	_, err := pickService(cfg, "", nonTTYSelector)
+	_, err := pickService(cfg, "", "", "", nonTTYSelector)
 	if err == nil {
 		t.Fatal("expected non-interactive error, got nil")
+	}
+}
+
+func TestPickService_cwdInsideServiceDir_selectsThatService(t *testing.T) {
+	// Two services; cwd is inside "api"'s dir. Even though "web" is also enabled
+	// (so auto-select would be ambiguous), the cwd match wins without a selector.
+	cfg := makeTestConfig(map[string]config.ServiceConfig{
+		"web": {Enabled: true},
+		"api": {Enabled: true, Dir: "services/api"},
+	})
+	selectorCalled := false
+	sel := func(_ *config.DweConfig, _ []string) (string, error) {
+		selectorCalled = true
+		return "", fmt.Errorf("should not call selector")
+	}
+	root := "/proj"
+	cwd := "/proj/services/api/src"
+	got, err := pickService(cfg, "", root, cwd, sel)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if got != "api" {
+		t.Errorf("want %q, got %q", "api", got)
+	}
+	if selectorCalled {
+		t.Error("selector must not be called when cwd resolves the service")
+	}
+}
+
+func TestPickService_cwdOutsideAnyServiceDir_fallsThrough(t *testing.T) {
+	// cwd is not under any service dir → falls through to single-enabled auto-select.
+	cfg := makeTestConfig(map[string]config.ServiceConfig{
+		"api": {Required: true, Dir: "services/api"},
+	})
+	got, err := pickService(cfg, "", "/proj", "/proj/elsewhere", func(_ *config.DweConfig, _ []string) (string, error) {
+		return "", fmt.Errorf("should not call selector")
+	})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if got != "api" {
+		t.Errorf("want %q (single-enabled fallback), got %q", "api", got)
 	}
 }
 
@@ -215,7 +257,7 @@ func TestPickService_nonInteractiveSelector_singleEnabled_autoSelectsWithoutSele
 		selectorCalled = true
 		return "", fmt.Errorf("not interactive")
 	}
-	got, err := pickService(cfg, "", nonTTYSelector)
+	got, err := pickService(cfg, "", "", "", nonTTYSelector)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}

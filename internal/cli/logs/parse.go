@@ -8,9 +8,13 @@ import (
 // logLineJSON is the NDJSON envelope emitted by `dwe logs --output json`.
 // One object per line; no array wrapper (streaming-friendly shape).
 type logLineJSON struct {
-	Ts     string `json:"ts"`     // RFC3339Nano timestamp
-	Stream string `json:"stream"` // "stdout" | "stderr"
-	Msg    string `json:"msg"`    // log line with trailing newline stripped
+	Ts string `json:"ts"` // RFC3339Nano timestamp
+	// Service is the dwe service name. Set only in whole-stack mode (`dwe logs`
+	// with no argument), where lines from multiple services interleave; omitted
+	// for single-service mode so that envelope shape stays unchanged.
+	Service string `json:"service,omitempty"`
+	Stream  string `json:"stream"` // "stdout" | "stderr"
+	Msg     string `json:"msg"`    // log line with trailing newline stripped
 }
 
 // parseLine converts one raw line from `docker logs --timestamps` output into a

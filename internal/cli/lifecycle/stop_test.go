@@ -252,6 +252,49 @@ func TestStopService_KnownDisabledService(t *testing.T) {
 	}
 }
 
+// TestStopService_NotDeployed_NoOp verifies that when label resolution finds no
+// container for the service, stop is a silent idempotent no-op (docker stop is
+// never invoked) rather than erroring.
+func TestStopService_NotDeployed_NoOp(t *testing.T) {
+	cfgPath := writeStopTestConfig(t, map[string]struct {
+		enabled   bool
+		container string
+	}{
+		"postgres": {enabled: true, container: "pg"},
+	})
+	cfg, err := config.LoadConfig(cfgPath)
+	if err != nil {
+		t.Fatalf("loading config: %v", err)
+	}
+	baseDir := filepath.Dir(cfgPath)
+
+	prevLookup := lookupContainerFn
+	t.Cleanup(func() { lookupContainerFn = prevLookup })
+	lookupContainerFn = func(_ string, _ []string, _, _ string) (string, error) { return "", nil }
+
+	called := false
+	prev := stopContainerFn
+	t.Cleanup(func() { stopContainerFn = prev })
+	stopContainerFn = func(_ context.Context, _, _ string, _ int) error {
+		called = true
+		return nil
+	}
+
+	deps := StopServiceDeps{
+		Cfg:           cfg,
+		CmdRegistry:   nil,
+		BaseDir:       baseDir,
+		ErrOut:        nil,
+		SkipPreflight: true,
+	}
+	if err := StopService(context.Background(), deps, "postgres"); err != nil {
+		t.Fatalf("expected no-op success, got: %v", err)
+	}
+	if called {
+		t.Error("stopContainerFn must NOT be called when no container exists")
+	}
+}
+
 // TestStopService_UsesComposeProjectNameFromDockerYAML locks in the same fix
 // as TestRestartService_UsesComposeProjectNameFromDockerYAML for the stop
 // path — when docker.yml overrides project_name with a non-dash separator,
