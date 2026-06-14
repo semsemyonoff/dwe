@@ -7,16 +7,17 @@ import (
 	"github.com/semsemyonoff/dwe/internal/core/execution/builtin/spec"
 
 	"github.com/semsemyonoff/dwe/internal/core/project/config"
-	"github.com/semsemyonoff/dwe/internal/shared/daemon"
 	"github.com/semsemyonoff/dwe/internal/shared/docker"
 )
 
-// stopContainerFn / removeContainerFn are test seams: production calls
-// docker.StopContainer / docker.RemoveContainer; tests inject stubs to capture
-// invocations without spawning real subprocesses.
+// stopContainerFn / removeContainerFn / lookupContainerFn are test seams:
+// production calls docker.StopContainer / docker.RemoveContainer /
+// docker.LookupServiceContainer; tests inject stubs to capture invocations
+// without spawning real subprocesses.
 var (
 	stopContainerFn   = docker.StopContainer
 	removeContainerFn = docker.RemoveContainer
+	lookupContainerFn = docker.LookupServiceContainer
 )
 
 // StopRemoveContainer implements docker_stop_remove_container.
@@ -55,20 +56,34 @@ func (StopRemoveContainer) Run(ctx context.Context, with map[string]any, ectx sp
 	}
 
 	// Prefer the compose project name from workspace/docker.yml (already
-	// resolved into ectx.DockerConfig) so the derived container name matches
-	// what docker compose used at create time. Fall back to FullName() when
-	// docker.yml is absent or its project_name is empty.
+	// resolved into ectx.DockerConfig) so the label query scopes to the right
+	// project. Fall back to FullName() when docker.yml is absent or its
+	// project_name is empty.
 	projectFull := ectx.Config.Project.FullName()
 	if ectx.DockerConfig != nil && ectx.DockerConfig.ProjectName != "" {
 		projectFull = ectx.DockerConfig.ProjectName
 	}
-	fullName, err := daemon.ResolveContainerName(projectFull, spec.GetStringParam(with, "container_template", ""))
+	dockerBin := config.DockerBin(ectx.Config)
+	// container_template carries the compose service name (svc.Container).
+	// Resolve the REAL container name via the compose project + service labels
+	// so reset removes the actual container even when container_name is unset
+	// (compose's default "<project>-<service>-<index>") or customised — guessing
+	// "<project>-<service>" would silently no-op and leave the container behind.
+	service := spec.GetStringParam(with, "container_template", "")
+	// nil processEnv: stop+rm (StopContainer / RemoveContainer) run with the
+	// inherited environment, so the label probe must too (same daemon).
+	fullName, err := lookupContainerFn(dockerBin, nil, projectFull, service)
 	if err != nil {
-		return err
+		return fmt.Errorf("resolving container for service %q: %w", service, err)
+	}
+	if fullName == "" {
+		// No container exists for this service (never deployed or already
+		// removed) — stop+remove is idempotent, nothing to do.
+		_, _ = fmt.Fprintf(ectx.Output.Writer(), "• no container for service %q (nothing to stop)\n", service)
+		return nil
 	}
 
 	secs := stopTimeoutSeconds(spec.GetStringParam(with, "stop_timeout", ""))
-	dockerBin := config.DockerBin(ectx.Config)
 
 	if err := stopContainerFn(ctx, dockerBin, fullName, secs); err != nil {
 		return fmt.Errorf("stop container %q: %w", fullName, err)

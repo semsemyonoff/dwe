@@ -13,7 +13,6 @@ import (
 	"github.com/semsemyonoff/dwe/internal/core/usercommands"
 	"github.com/semsemyonoff/dwe/internal/core/usercommands/registry"
 	lifecyclepkg "github.com/semsemyonoff/dwe/internal/core/workflow/lifecycle"
-	"github.com/semsemyonoff/dwe/internal/shared/daemon"
 	"github.com/semsemyonoff/dwe/internal/shared/docker"
 	"github.com/semsemyonoff/dwe/internal/shared/lock"
 	"github.com/semsemyonoff/dwe/internal/shared/promptcache"
@@ -28,6 +27,12 @@ var ErrUnknownService = errors.New("unknown service")
 // stopContainerFn is a seam for docker.StopContainer so tests can inject
 // fake docker behavior without a real Docker daemon.
 var stopContainerFn = docker.StopContainer
+
+// lookupContainerFn resolves a service's real container name from the compose
+// project + service labels (docker.LookupServiceContainer). It is a seam so
+// tests can resolve names without spawning docker. Returns "" when the service
+// has no container (never deployed or already removed).
+var lookupContainerFn = docker.LookupServiceContainer
 
 // StopServiceDeps carries all state needed by StopService and stopServiceLocked.
 type StopServiceDeps struct {
@@ -73,14 +78,21 @@ func stopServiceLocked(ctx context.Context, deps StopServiceDeps, name string) e
 	if err != nil {
 		return err
 	}
+	if containerName == "" {
+		// No container exists for this service (never deployed or already
+		// removed). Stop is idempotent — nothing to do.
+		return nil
+	}
 	dockerBin := config.DockerBin(deps.Cfg)
 	return stopContainerFn(ctx, dockerBin, containerName, docker.DefaultStopTimeoutSec)
 }
 
 // resolveServiceContainer validates that name is a known service and resolves
-// its docker container name from the compose project name. Shared by the
-// per-service stop and restart paths (both bypass compose and act on the
-// container directly).
+// its real docker container name by matching the compose project + service
+// labels (NOT by guessing "<project>-<container>", which only works when the
+// user pins container_name to that exact string). Shared by the per-service
+// stop and restart paths (both bypass compose and act on the container
+// directly). Returns "" when the service is known but has no container.
 func resolveServiceContainer(baseDir string, cfg *config.DweConfig, name string) (string, error) {
 	svc, ok := cfg.Services[name]
 	if !ok {
@@ -90,9 +102,12 @@ func resolveServiceContainer(baseDir string, cfg *config.DweConfig, name string)
 	if err != nil {
 		return "", fmt.Errorf("resolving compose project name: %w", err)
 	}
-	containerName, err := daemon.ResolveContainerName(projectFull, svc.Container)
+	// nil processEnv: the follow-up docker stop/restart (via StopContainer /
+	// RestartContainer) run with the inherited environment, so the probe must
+	// too — otherwise probe and action could target different daemons.
+	containerName, err := lookupContainerFn(config.DockerBin(cfg), nil, projectFull, svc.Container)
 	if err != nil {
-		return "", fmt.Errorf("resolving container name for service %q: %w", name, err)
+		return "", fmt.Errorf("resolving container for service %q: %w", name, err)
 	}
 	return containerName, nil
 }

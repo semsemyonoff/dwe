@@ -43,14 +43,24 @@ func RestartService(ctx context.Context, baseDir string, cfg *config.DweConfig, 
 	if out == nil {
 		out = io.Discard
 	}
+	noContainer := func() error {
+		return fmt.Errorf("service %q has no container — run `dwe deploy run` or `dwe run` first", name)
+	}
 	containerName, err := resolveServiceContainer(baseDir, cfg, name)
 	if err != nil {
 		return err
 	}
+	if containerName == "" {
+		// No container exists for this service — restart is not idempotent, so
+		// surface the deploy guidance.
+		return noContainer()
+	}
 	dockerBin := config.DockerBin(cfg)
 	if err := restartContainerFn(ctx, dockerBin, containerName, docker.DefaultStopTimeoutSec); err != nil {
+		// TOCTOU: the container existed at probe time but was removed before the
+		// restart landed; same guidance as the empty-resolution case above.
 		if errors.Is(err, docker.ErrNoSuchContainer) {
-			return fmt.Errorf("service %q has no container — run `dwe deploy run` or `dwe run` first", name)
+			return noContainer()
 		}
 		return err
 	}

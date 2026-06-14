@@ -26,6 +26,16 @@ func init() {
 	}
 	lifecyclepkg.BridgePrepareFunc = func(bridge.PrepareOptions) error { return nil }
 	lifecyclepkg.BridgeStopDaemonFunc = func(string) (bool, error) { return false, nil }
+
+	// Per-service stop/restart resolve the real container name via compose
+	// labels (docker.LookupServiceContainer), which would spawn `docker ps`.
+	// Stub the seam so tests never touch a real daemon. The default reproduces
+	// the historical "<project>-<service>" shape so existing name-assertion
+	// tests keep verifying that the project name + service flow through
+	// correctly; tests exercising the not-deployed path override it to "".
+	lookupContainerFn = func(_ string, _ []string, projectName, service string) (string, error) {
+		return projectName + "-" + service, nil
+	}
 }
 
 // stubRunPhases replaces RunPhasesFunc with a no-op for the duration of t.

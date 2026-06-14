@@ -21,6 +21,15 @@ import (
 )
 
 func TestMain(m *testing.M) {
+	// ResolveLogsTarget resolves the real container name via compose labels
+	// (docker.LookupServiceContainer), which would spawn `docker ps`. Stub the
+	// seam so single-service tests resolve names without a daemon. The default
+	// reproduces the historical "<project>-<service>" shape so existing
+	// name-assertion tests keep passing unchanged; tests that need the
+	// not-deployed path override it to "".
+	cmdlogs.LookupContainerFn = func(_ string, _ []string, projectName, service string) (string, error) {
+		return projectName + "-" + service, nil
+	}
 	goleak.VerifyTestMain(m)
 }
 
@@ -96,14 +105,37 @@ func makeFakeDocker(t *testing.T, dir, name, script string) string {
 	return p
 }
 
-// TestLogsCmd_NoArgs verifies that invoking logs without a service name
-// returns an error (cobra.ExactArgs(1) enforcement).
-func TestLogsCmd_NoArgs(t *testing.T) {
-	flags := &cmdctx.RootFlags{Output: "text"}
+// TestLogsCmd_NoArgs_WholeStack verifies that invoking logs without a service
+// name streams the whole stack via `docker compose logs` (text mode) instead of
+// erroring.
+func TestLogsCmd_NoArgs_WholeStack(t *testing.T) {
+	dir := t.TempDir()
+	// Fake docker logs every invocation's args (so we can assert the compose
+	// logs argv) and echoes a line + exits 0.
+	argsLog := filepath.Join(dir, "args.log")
+	script := fmt.Sprintf("#!/bin/sh\necho \"$@\" >> %s\necho 'whole stack logs'\nexit 0\n", argsLog)
+	fakeBin := makeFakeDocker(t, dir, "docker", script)
+	cfgPath := writeLogsTestConfigWithDockerBin(t, dir, map[string]string{"myapp": "myapp"}, fakeBin)
+	flags := &cmdctx.RootFlags{Output: "text", ConfigPath: cfgPath, Root: dir}
 	root := newTestRoot(flags)
-	_, _, err := execCmd(t, root, "logs")
-	if err == nil {
-		t.Error("expected error when no service argument provided, got nil")
+
+	stdout, _, err := execCmd(t, root, "logs", "--tail", "20")
+	if err != nil {
+		t.Fatalf("unexpected error for no-arg whole-stack logs: %v", err)
+	}
+	if !strings.Contains(stdout, "whole stack logs") {
+		t.Errorf("stdout missing whole-stack output; got %q", stdout)
+	}
+	// Whole-stack text must drive `docker compose logs` with flags forwarded.
+	got, err := os.ReadFile(argsLog)
+	if err != nil {
+		t.Fatalf("read args log: %v", err)
+	}
+	argsStr := string(got)
+	for _, want := range []string{"compose", "logs", "--tail", "20"} {
+		if !strings.Contains(argsStr, want) {
+			t.Errorf("whole-stack text argv missing %q; got: %q", want, argsStr)
+		}
 	}
 }
 
@@ -206,6 +238,77 @@ func TestResolveLogsTarget_KnownService(t *testing.T) {
 	want := cfg.Project.FullName() + "-myapp-container"
 	if containerName != want {
 		t.Errorf("container name = %q, want %q", containerName, want)
+	}
+}
+
+// TestResolveLogsTarget_NotDeployed verifies that a known service whose
+// container does not exist (label lookup returns "") yields a
+// container_not_found CodedError rather than a bogus name.
+func TestResolveLogsTarget_NotDeployed(t *testing.T) {
+	prev := cmdlogs.LookupContainerFn
+	t.Cleanup(func() { cmdlogs.LookupContainerFn = prev })
+	cmdlogs.LookupContainerFn = func(_ string, _ []string, _, _ string) (string, error) { return "", nil }
+
+	dir := t.TempDir()
+	cfgPath := writeLogsTestConfig(t, dir, map[string]string{"myapp": "myapp-container"})
+	flags := &cmdctx.RootFlags{ConfigPath: cfgPath}
+
+	_, _, err := cmdlogs.ResolveLogsTarget(flags, "myapp")
+	if err == nil {
+		t.Fatal("expected container_not_found error, got nil")
+	}
+	var coded *cmdctx.CodedError
+	if !errors.As(err, &coded) {
+		t.Fatalf("expected *cmdctx.CodedError, got %T: %v", err, err)
+	}
+	if coded.Code != "container_not_found" {
+		t.Errorf("error code = %q, want %q", coded.Code, "container_not_found")
+	}
+}
+
+// TestLogsCmd_NoArgs_WholeStack_JSON verifies that no-arg JSON mode multiplexes
+// per-service `docker logs` and tags each record with its service name.
+func TestLogsCmd_NoArgs_WholeStack_JSON(t *testing.T) {
+	dir := t.TempDir()
+	fakeBin := makeFakeDocker(t, dir, "docker",
+		"#!/bin/sh\necho '2026-05-29T07:30:00.000000000Z hello-line'\nexit 0\n")
+	cfgPath := writeLogsTestConfigWithDockerBin(t, dir, map[string]string{
+		"alpha": "alpha", "beta": "beta", "gamma": "gamma",
+	}, fakeBin)
+	// Enable alpha+beta; leave gamma disabled so it must be excluded from the
+	// whole-stack set (exercises collectLogTargets' enabled filter).
+	localYML := "services:\n  alpha:\n    enabled: true\n  beta:\n    enabled: true\n  gamma:\n    enabled: false\n"
+	if err := os.WriteFile(filepath.Join(dir, "workspace", "local.yml"), []byte(localYML), 0o644); err != nil {
+		t.Fatalf("write local.yml: %v", err)
+	}
+	flags := &cmdctx.RootFlags{Output: "json", ConfigPath: cfgPath, Root: dir}
+	root := newTestRoot(flags)
+
+	stdout, _, err := execCmd(t, root, "logs")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	records := decodeNDJSON(t, stdout)
+	if len(records) == 0 {
+		t.Fatal("expected NDJSON records for whole-stack logs, got none")
+	}
+	seen := map[string]bool{}
+	for _, r := range records {
+		seen[r.Service] = true
+		if r.Msg != "hello-line" {
+			t.Errorf("unexpected msg %q", r.Msg)
+		}
+		if r.Stream != "stdout" {
+			t.Errorf("unexpected stream %q", r.Stream)
+		}
+	}
+	for _, want := range []string{"alpha", "beta"} {
+		if !seen[want] {
+			t.Errorf("missing records for service %q; got services %v", want, seen)
+		}
+	}
+	if seen["gamma"] {
+		t.Errorf("disabled service gamma must be excluded from whole-stack logs; got services %v", seen)
 	}
 }
 
@@ -339,9 +442,10 @@ func TestLogsCmd_TextMode_ArgsToDocker(t *testing.T) {
 
 // logRec mirrors the NDJSON envelope emitted by `dwe logs --output json`.
 type logRec struct {
-	Ts     string `json:"ts"`
-	Stream string `json:"stream"`
-	Msg    string `json:"msg"`
+	Ts      string `json:"ts"`
+	Service string `json:"service"`
+	Stream  string `json:"stream"`
+	Msg     string `json:"msg"`
 }
 
 // decodeNDJSON decodes all NDJSON records from s into a slice of logRec.

@@ -255,6 +255,47 @@ func TestRestartService_NoSuchContainerProducesHint(t *testing.T) {
 	}
 }
 
+// TestRestartService_NotDeployed_Hint verifies that when label resolution finds
+// no container for the service (never deployed / already removed), restart
+// surfaces the deploy hint WITHOUT calling docker restart.
+func TestRestartService_NotDeployed_Hint(t *testing.T) {
+	cfgPath := writeStopTestConfig(t, map[string]struct {
+		enabled   bool
+		container string
+	}{
+		"postgres": {enabled: true, container: "pg"},
+	})
+	cfg, err := config.LoadConfig(cfgPath)
+	if err != nil {
+		t.Fatalf("loading config: %v", err)
+	}
+
+	prevLookup := lookupContainerFn
+	t.Cleanup(func() { lookupContainerFn = prevLookup })
+	lookupContainerFn = func(_ string, _ []string, _, _ string) (string, error) { return "", nil }
+
+	called := false
+	prev := restartContainerFn
+	t.Cleanup(func() { restartContainerFn = prev })
+	restartContainerFn = func(_ context.Context, _, _ string, _ int) error {
+		called = true
+		return nil
+	}
+
+	err = RestartService(context.Background(), filepath.Dir(cfgPath), cfg, "postgres", io.Discard)
+	if err == nil {
+		t.Fatal("expected error, got nil")
+	}
+	for _, want := range []string{`service "postgres"`, "dwe deploy run", "dwe run"} {
+		if !strings.Contains(err.Error(), want) {
+			t.Errorf("error %q missing %q", err.Error(), want)
+		}
+	}
+	if called {
+		t.Error("restartContainerFn must NOT be called when no container exists")
+	}
+}
+
 // TestRestartService_UsesComposeProjectNameFromDockerYAML locks in the fix for
 // a bug where `dwe restart <service>` derived the container name from
 // cfg.Project.FullName() (always "<prefix>-<name>") instead of the compose
