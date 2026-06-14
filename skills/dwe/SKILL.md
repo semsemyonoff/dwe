@@ -1,97 +1,119 @@
 ---
 name: dwe
-description: Use when the current working directory is inside a DWE project — a Docker-based developer environment manager. Detect a DWE project by walking up from cwd to find a directory that contains `workspace.yml`; that directory is the project root. A populated DWE project additionally has a `workspace/` subdirectory holding services and pipelines, but its absence does not disqualify the project (e.g. a freshly-initialized one). The skill applies anywhere beneath the root, including service folders like `workspace/services/<name>/` and their source subtrees. The skill is a thin navigator — it teaches the agent which `dwe` commands to use for inspection vs mutation and how to look up everything else via the built-in `dwe docs` subsystem. Activates on the word "dwe", on editing any file under `workspace/`, or when working inside a service directory.
+description: Use when the current working directory is inside a DWE project — a Docker-based developer environment manager. Detect a DWE project by walking up from cwd to find a directory that contains `workspace.yml`; that directory is the project root. A populated DWE project additionally has a `workspace/` subdirectory holding services and pipelines, but its absence does not disqualify the project (e.g. a freshly-initialized one). The skill applies anywhere beneath the root, including service folders like `workspace/services/<name>/` and their source subtrees. The skill is both a navigator — it teaches which `dwe` commands to use for inspection vs mutation and how to look up everything else via the built-in `dwe docs` subsystem — and an authoring guide for populating and extending a project (scaffolding from git repos, adding services and tools, authoring commands and daemons, wiring render packs and vars, and customizing deploy/lifecycle pipelines). Activates on the word "dwe", on editing any file under `workspace/`, or when working inside a service directory.
 ---
 
 # DWE — Dev Workspace Engine
 
-DWE is a CLI that orchestrates Docker-based local development environments. It augments a project's `docker-compose.yml` with configuration layering, lifecycle management, validation, and tooling — it does **not** replace compose. Edit `docker-compose.yml` freely; DWE runs on top of it.
+DWE is a CLI that orchestrates Docker-based local development environments. It augments a project's compose file with configuration layering, lifecycle management, validation, and declarative tooling — it does **not** replace compose. Edit the compose file freely; DWE runs on top of it.
 
-This skill is a **navigator**, not a reference. All schema details, field meanings, and deep behavior live in the built-in `dwe docs` subsystem and are versioned with the binary. Use this skill to know **which** command to run and **when**; use `dwe docs` to learn **what** anything means.
+This skill is a **navigator with an authoring layer**, not a reference. It teaches **which** command to run, **which** file to edit, and **in what order** — all schema details, field meanings, and deep behavior live in the built-in `dwe docs` subsystem and are versioned with the binary. Every authoring step ends with a `dwe docs show <topic>` pointer; use it to learn **what** anything means.
 
 ## Detecting a DWE project
 
-Walk up from your current working directory until you find a directory that contains `workspace.yml`. That directory is the project root. All `dwe` commands resolve the root themselves — you can invoke them from the root or any descendant.
+Walk up from your current working directory until you find a directory that contains `workspace.yml`. That directory is the project root. All `dwe` commands resolve the root themselves — invoke them from the root or any descendant.
 
-A populated project also has a `workspace/` subdirectory next to `workspace.yml` (it holds service definitions, pipelines, and i18n). Its presence is a strong signal, but a fresh project may have only `workspace.yml`.
-
-Common cwd locations where this skill applies:
-
-- `<root>/` — project root
-- `<root>/workspace/` — DWE configuration tree
-- `<root>/workspace/services/<name>/` — a single service folder
-- `<root>/workspace/services/<name>/src/` — service source code
-- any other subdirectory of `<root>`
+A populated project also has a `workspace/` subdirectory next to `workspace.yml` (service definitions, pipelines, commands, templates, i18n). Its presence is a strong signal. A project with **only** `workspace.yml` plus a set of commented scaffold files is a freshly-`dwe init`'d project — see `references/populate-init-repo.md` to fill it in.
 
 ## First step: orient yourself
 
 Run once per session inside the project:
 
-```
+```shell
 dwe docs llms-txt --lang en
 ```
 
 This emits a compact, project-aware index (services, commands, doc pointers) designed for AI agents. Read its output before doing anything else.
 
-## Always English for docs
+**If a root `AGENTS.md` exists, read it too.** A populated project renders its own `AGENTS.md` (the `ai` render pack) — that is the **project-specific** layer: the real service list, the real command IDs, project-local rules. This skill is the **generic** layer: universal DWE mechanics and the read/mutate discipline. They are designed to agree. On a *project fact* the `AGENTS.md` wins; on a *generic rule* the skill wins. Never edit the generated `AGENTS.md` to change behavior — edit its template (`workspace/templates/ai/<pack>/`) and hand off `dwe render ai`.
 
-DWE supports i18n. Pass `--lang en` to **every** `dwe docs ...` invocation. Translated docs may lag behind the English source, and reasoning is more reliable in English:
+## Project anatomy (the map)
 
-```
-dwe docs llms-txt --lang en
-dwe docs search <term> --lang en
-dwe docs show <topic> --lang en
-dwe docs list --lang en
-```
+What lives where (paths, not schemas — look up any schema with the slug noted):
 
-## JSON for parsing, default for humans
+- **3-layer config**, later wins, maps deep-merge: `workspace.yml` (identity only — `project`, `update`, `compose`) → `workspace/defaults.yml` (git-tracked: `services` toggles, `runtime`, the `vars` sandbox, `exports`, `bridge`) → `workspace/local.yml` (gitignored per-dev overrides; tool-written). The merged root is **strict** — free-form values live **only** under `vars:`; a bare custom root key is a hard load error.
+- **Services = folders**: `workspace/services/<name>/service.yml`; the folder name **is** the map key (no `name:` field). The real container lives in the compose base or an overlay.
+- **User commands**: `workspace/commands/**.yml`; path + filename + key = a dot-ID; run with `dwe cmd <id>`.
+- **Render packs**: `workspace/templates/{config,ide,ai,git}/`; `config` writes runtime files into the service hub, `ide`/`ai`/`git` write hub dotfiles (devcontainer, the generated `AGENTS.md`, git hooks).
+- **Pipelines (optional, full-replacement)**: per-service `deploy.yml` and project `workspace/{deploy,lifecycle,reset,snapshot,setup,validate,info,styles}.yml`. Absence = built-in default (reported `ⓘ`, not an error).
 
-When you need to parse output of a **data-emitting** command (e.g. `status`, `validate`, `docs list`, `docs search`, `services`), pass `--output json`. The default human-readable mode is for users, not agents.
+Schema for any of these → `dwe docs show concepts/project-layout --lang en` and the per-area slugs in the recipes below.
 
-**Exception — `dwe docs llms-txt`.** This command emits a markdown document, not structured data. Its `--output` flag is a **file path** (`--output PATH`), not a format selector. Passing `--output json` to it would write the markdown body to a file literally named `json` in the cwd. Just run `dwe docs llms-txt --lang en` and parse the markdown from stdout — never combine it with `--output json`.
+## Output conventions
 
-**Exception — `dwe docs show`.** Emits a single topic as markdown (rendered for TTY, raw markdown with `--raw` or in a pipe). The global `--output json` flag is ignored — there is no JSON shape; the document IS the payload. Use `--anchors` or `--toc` to scope without reading the full body.
+- **Always `--lang en` for docs.** Translated docs may lag the English source, and reasoning is more reliable in English: `dwe docs llms-txt|search|show|list … --lang en`.
+- **`--output json` for data you parse.** The default human mode is for users, not agents. Add `--pretty` if you like. Applies to `status`, `validate`, `services`, `vars get/list/inspect`, `deploy state show`, `snapshot list/inspect`, `info`, `logs`, `commands list`, `docs list/search`.
+- **Exception — `dwe docs llms-txt`.** Its `--output` is a **file path**, not a format selector. `--output json` would write the markdown body to a file literally named `json`. Just run it and parse the markdown from stdout.
+- **Exception — `dwe docs show`.** Emits markdown (rendered for TTY; raw with `--raw` or in a pipe). The global `--output json` is **ignored** — the document IS the payload. Use `#anchor`, `--anchors`, or `--toc` to scope without reading the full body.
 
 ## When to use what
 
-| Goal                          | Command                                                                  |
-| ----------------------------- | ------------------------------------------------------------------------ |
-| Inspect state                 | `dwe status --output json`                                               |
-| Read logs                     | `dwe logs <service>`                                                     |
-| Diagnose configuration        | `dwe validate --output json`                                             |
-| Search docs for a term        | `dwe docs search <term> --lang en`                                       |
-| Read one doc topic            | `dwe docs show <topic> --lang en`                                        |
-| Project overview (start here) | `dwe docs llms-txt --lang en`                                            |
-| Apply changes to a service (service.yml, configs, dirs, render, service deploy.yml) | edit yml, then ASK user to run `dwe deploy run` (see recipes for the `--service <name>` scoped variant — it has caveats) |
-| Apply changes to the deploy orchestrator (`workspace/deploy.yml`) | ASK user to run `dwe deploy run`                                         |
-| Apply changes to runtime lifecycle (`workspace/lifecycle.yml`) or container shape (`docker-compose.yml`) | ASK user to run `dwe run` (full runtime lifecycle)                       |
-| Toggle a service              | ASK user to run `dwe services enable\|disable <name> --apply`            |
-| Start fresh                   | ASK user to run `dwe reset run` (destructive)                            |
+| Goal | Command / reference |
+| --- | --- |
+| Project overview (start here) | `dwe docs llms-txt --lang en` |
+| Inspect state | `dwe status --output json` |
+| Read logs | `dwe logs <service> --output json` |
+| Diagnose configuration | `dwe validate --output json` |
+| Search docs / read one topic | `dwe docs search <term> --lang en` · `dwe docs show <topic> --lang en` |
+| Inspect vars (read) / set a var (handoff) | `dwe vars get\|list\|inspect <var> --output json` · ASK user → `dwe vars set <path> <value>` |
+| **Populate a fresh repo from git URL(s)** | `references/populate-init-repo.md` (ends in user-run `dwe deploy run`) |
+| **Add a service / tool / infra** | `references/add-service-and-tools.md` |
+| **Author a command or background daemon** | `references/authoring-commands.md` |
+| **Wire render packs / vars / `.env` / generated secrets** | `references/render-and-vars.md` |
+| **Author a pipeline** (deploy / lifecycle / reset / setup / validate / info / styles) | `references/pipelines-and-orchestration.md` |
+| **Snapshot / reset / troubleshoot** | `references/snapshots-reset-troubleshoot.md` |
+| Apply a change | see **Picking the apply command** below — edit yml, then ASK the user to run it |
+
+## Picking the apply command
+
+After editing yml, the apply command depends on **what** changed (never run it yourself — hand it to the user):
+
+- `service.yml` / a service's `deploy.yml` / `configs` / `dirs` / `render` / **added a service** → `dwe deploy run`
+- `workspace/deploy.yml` → `dwe deploy run`
+- `workspace/lifecycle.yml` or the compose base/overlays → `dwe run`
+- toggled a service → `dwe services enable|disable <name> --apply`
+- only icon / host / display strings → `dwe validate` (then `run`/`deploy run` if it affects runtime)
+- mixed / unsure → `dwe deploy run` (ends in `docker up --wait`, so it covers a restart)
+
+Never recommend `dwe deploy run --force` as a clean install — `--force` only ignores prior state (`when:` still applies). A true clean install is `dwe reset run && dwe deploy run`.
 
 ## Permission boundary — read freely, never mutate
 
-You MAY run READ commands without asking:
+You MAY run READ commands without asking (all lock-free, safe even when they report errors):
 
-- `status`, `logs`, `validate`
-- `docs show`, `docs search`, `docs list`, `docs llms-txt` — read-only doc access.
+- `status`, `logs`, `validate` (+ `validate config|checks|env`, `--stage`), `info`
+- `deploy plan`, `reset plan`, `deploy state show`
+- `snapshot list|current|inspect`
+- `compose argv|files`, `docker ps|logs|project-name`, `bridge status|logs`
+- `vars get|list|inspect`, `commands list` / `commands -i <id>`
+- `docs show|search|list|llms-txt` — read-only doc access.
 
-The remaining `docs` subcommands are **mutating** and require user approval like any other mutation: `docs generate` (rewrites the docs tree), `docs export` (writes to a target directory), `docs cache clear` (deletes cached diagrams).
+You MUST NOT invoke MUTATING commands yourself. Prepare the change, then ask the user to run the exact command:
 
-You MUST NOT invoke MUTATING commands yourself. Always prepare the change, then ask the user to run the exact command:
+- `dwe init` — scaffold a project (safe to re-run: gap-fills; `--force` overwrites).
+- `dwe deploy run` — run the deploy pipeline (the right command after editing a service's config/deploy steps or adding a service; ends with `docker up --wait`). The `--service <name>` form requires that service's own `deploy.yml` and **skips** the final stack up — see the recipes before recommending it.
+- `dwe run` / `stop` / `restart` — runtime lifecycle (no deploy steps); `dwe reset run` — destructive.
+- `dwe services enable|disable <name> --apply` — toggle a service.
+- `dwe vars set`, `dwe render env|config|ide|ai|git`, `dwe cmd <id>`, `dwe snapshot create|restore|rollback|remove|pack|unpack`, `dwe bridge start|stop`, `dwe docs generate|export|cache clear`.
 
-- `dwe deploy run` — runs the deploy pipeline (`workspace/deploy.yml`, including each service's `deploy.yml`): install / configure / migrate / render service setup, then `docker up --wait`. **This is the right command after editing a service's config or deploy steps, or after adding a new service.** A `--service <name>` scoped form exists but has caveats (requires service-level `deploy.yml`, skips final `docker up --wait`) — see the recipes file before recommending it.
-- `dwe run` — runtime lifecycle only (git probe → docker compose up → wait → hooks). Brings the stack up without re-running service deploy setup. Use for changes to `lifecycle.yml` or `docker-compose.yml`.
-- `dwe stop` / `dwe restart` — runtime siblings of `dwe run`.
-- `dwe reset run` — destructive.
-- `dwe services enable <name>` / `dwe services disable <name>` — toggle a service (use `--apply` to apply immediately, otherwise the change is pending — see the toggle recipe).
-
-Pattern: edit yml files yourself → show the diff → tell the user the exact command → wait for them to run it. Do not invoke the mutation yourself, and do not work around the boundary by calling `docker` / `docker compose` / project scripts directly.
+Pattern: **edit yml files yourself → show the diff → tell the user the exact command → wait for them to run it.** Do not invoke the mutation, and do not work around the boundary by calling `docker` / `docker compose` / project scripts directly.
 
 ## Anti-patterns
 
-- Do NOT bypass dwe lifecycle: use `dwe deploy run` / `dwe run` / `stop` / `restart` (whichever fits the change — see the table above). NEVER run `docker compose up/down` directly — DWE tracks state and holds file locks; bypassing breaks both.
-- Do NOT assume config shape. Before editing any yml file under `workspace/`, verify the schema with `dwe docs show config/<area> --lang en`.
+- Do NOT bypass the dwe lifecycle: use `dwe deploy run` / `dwe run` / `stop` / `restart` (whichever fits — see the table). NEVER run `docker compose up/down`, `dwe docker up`, or `dwe compose` write ops directly — DWE tracks state and holds file locks; bypassing breaks both.
+- Do NOT hand-edit generated artifacts: `.dwe/**`, `.env`, `workspace/local.yml`, or rendered hub files (incl. `AGENTS.md`). Edit the **source** (export rule / var / template / ai pack) and hand off the render/deploy.
+- Do NOT put a free-form key at the config root — the strict root hard-fails the load. It goes under `vars:`.
+- Do NOT assume config shape. Before editing any yml under `workspace/`, verify the schema with `dwe docs show config/<area> --lang en`.
+- Do NOT enumerate pending-op consumers from memory after `dwe services …` without `--apply` — run `dwe status` and follow its banner; that banner is authoritative.
 
-## Common recipes
+## Recipes
 
-For task-to-command mappings (add a service, diagnose a failing service, share a snapshot, reset cleanly, find which config owns a setting), read `references/recipes.md` in this skill on demand.
+Load a reference file on demand when the task matches:
+
+- `references/recipes.md` — daily/inspection recipes + the index: add-a-service (quick), service-fails-to-start, toggle a service, find which config owns a setting, look up a field.
+- `references/populate-init-repo.md` — user gives git repo URL(s) / "set up this project" / fresh `init`'d repo: interview → init → services → deploy clone steps → commands → render/vars → validate → deploy.
+- `references/add-service-and-tools.md` — add an app/tool/infra service, optional toggles, compose overlays, `extends`.
+- `references/authoring-commands.md` — author user commands & background daemons (the type zoo, params, templating, bridge opt-in).
+- `references/render-and-vars.md` — render packs (config vs ide/ai/git), generated-secret harvest, the `vars` sandbox, `exports.env`.
+- `references/pipelines-and-orchestration.md` — per-service & project `deploy.yml`, `lifecycle`, `setup` wizard, `validate` checks, `info`/`styles`.
+- `references/snapshots-reset-troubleshoot.md` — snapshot workflows, reset, and the read-only triage trio.

@@ -9,12 +9,25 @@ Rules that apply to every recipe:
 - Pick the apply command by what changed:
   - **Service config** (`workspace/services/<name>/service.yml`, that service's `deploy.yml`, `configs`, `dirs`, `render` blocks) → `dwe deploy run`. The deploy pipeline installs / configures / migrates the service and ends with `docker up --wait`. The scoped form `dwe deploy run --service <name>` exists, but it only works if the service has its own `deploy.yml` and it skips the final `docker up --wait` — recommend it only when the user explicitly wants to re-run a single service's provisioning steps.
   - **Deploy orchestrator** (`workspace/deploy.yml`) → `dwe deploy run`.
-  - **Runtime lifecycle** (`workspace/lifecycle.yml`) or **container shape** (`docker-compose.yml`) → `dwe run` (runtime lifecycle: git probe → docker up → wait → hooks, no deploy steps).
+  - **Runtime lifecycle** (`workspace/lifecycle.yml`) or **container shape** (the compose base — `compose.yaml` / `docker-compose.yml`, name set by `compose.base` — or an overlay) → `dwe run` (runtime lifecycle: git probe → docker up → wait → hooks, no deploy steps).
   - **Mixed changes** → run `dwe deploy run` (it ends with `docker up --wait`, so it covers a restart too).
 - Always pass `--lang en` to `dwe docs ...`.
 - Use `--output json` for **data-emitting** commands you need to parse (e.g. `status`, `validate`, `docs list`, `docs search`, `services`). **Do NOT** combine it with `dwe docs llms-txt` — that command's `--output` is a file path, so `--output json` would write the markdown body to a file literally named `json`. For `dwe docs show`, the global `--output json` flag is silently ignored — the command always emits markdown (use `--raw` for unrendered plain markdown when piping).
 
+## Reference-file index
+
+This file holds the quick daily/inspection recipes. For an authoring task, jump straight to the matching reference file:
+
+- **Populate a fresh / `init`'d repo from git URL(s)** → `populate-init-repo.md`
+- **Add an app / tool / infra service** → `add-service-and-tools.md`
+- **Author a user command or background daemon** → `authoring-commands.md`
+- **Render packs, the `vars` sandbox, generated secrets, `.env` exports** → `render-and-vars.md`
+- **Author a pipeline** (deploy / lifecycle / reset / setup / validate / info / styles) → `pipelines-and-orchestration.md`
+- **Snapshots, reset, and the read-only triage trio** → `snapshots-reset-troubleshoot.md`
+
 ## Add a new service
+
+Quick form (full version with app/tool/infra templates, compose overlays, and `extends` → `add-service-and-tools.md`):
 
 1. Look up the service schema before editing anything (the `services` topic is split into sub-pages):
    ```
@@ -23,7 +36,7 @@ Rules that apply to every recipe:
    dwe docs show config/services/examples --lang en   # worked examples
    ```
 2. Create `workspace/services/<name>/service.yml` with the required fields. The folder name **is** the service key — there is no separate `name:` field.
-3. If the service runs a container, add it to `docker-compose.yml` under the same name.
+3. If the service runs a container, add it to the compose base (`compose.yaml` / `docker-compose.yml`, whichever `compose.base` names) or a per-service overlay — see `add-service-and-tools.md`.
 4. Validate the config (safe — read-only):
    ```
    dwe validate --output json
@@ -35,6 +48,8 @@ Rules that apply to every recipe:
    Do NOT use `dwe deploy run --service <name>` for a brand-new service: that scoped form requires the service to already have its own `deploy.yml` (it errors with `ErrServiceNoDeployFile` otherwise) and does not run the project-orchestrator's final `docker up --wait`. Use `--service` only later, when the service has a `deploy.yml` and the user explicitly wants to re-run just that service's provisioning steps.
 
 ## Service fails to start
+
+For the full read-only triage trio (`validate` → `status` → `logs`), deeper diagnostics (`compose argv`, `docker ps`, `deploy state show`), and the symptom→command map, see **`snapshots-reset-troubleshoot.md`**. Quick path:
 
 1. Check current state:
    ```
@@ -54,7 +69,7 @@ Rules that apply to every recipe:
    ```
 5. Propose a fix, edit the relevant yml files, then ask the user to run the apply command that matches the change:
    - Edits to a service's own files (`service.yml`, that service's `deploy.yml`, `configs`, `dirs`, `render`) or to `workspace/deploy.yml` → `dwe deploy run`. (`--service <name>` exists for re-running a single service's provisioning, but it requires that service to have a `deploy.yml` and does not run the project's final `docker up --wait` — not what you want here.)
-   - Edits to `workspace/lifecycle.yml` or `docker-compose.yml` only → `dwe run`.
+   - Edits to `workspace/lifecycle.yml` or the compose base/overlays only → `dwe run`.
    - Not sure / mixed → `dwe deploy run` (it ends with `docker up --wait`, so it covers a restart too).
 
 ## Toggle a service on/off temporarily
@@ -68,33 +83,17 @@ Rules that apply to every recipe:
 
 ## Share or restore an environment snapshot
 
-Snapshots use a dedicated scope and templating rules — the workflow is non-obvious. Read the docs first:
-
-```
-dwe docs show config/snapshot --lang en
-```
-
-Then guide the user through the `dwe snapshot ...` command(s) they need to run.
+Snapshots use a dedicated scope and templating rules — the workflow is non-obvious. Read the inspection-first flow, the authoring schema, and the mutating handoffs in **`snapshots-reset-troubleshoot.md`**. In short: read first (`dwe docs show config/snapshot --lang en`, `dwe snapshot list|current|inspect --output json`), then hand the user the `dwe snapshot ...` command they need.
 
 ## Reset everything cleanly
 
-`dwe reset run` is destructive. **Do NOT run it yourself.**
-
-1. Read what reset will do for this specific project (the reset pipeline is project-defined):
-   ```
-   dwe docs show config/reset --lang en
-   ```
-2. Tell the user the exact command and confirm what will be deleted (containers, volumes, generated files):
-   ```
-   dwe reset run
-   ```
-3. Volume cleanup is opt-in via the project's reset pipeline — do not assume volumes are wiped unless the config says so.
+`dwe reset run` is destructive — **do NOT run it yourself.** The full flow (read `config/reset` + `dwe reset plan` first, always `dwe snapshot create` before resetting, volume cleanup is opt-in, `--clear-generated` wipes `.dwe/generated.yml`) lives in **`snapshots-reset-troubleshoot.md`**. Hand the user `dwe reset run` (then `dwe deploy run` for a true clean install — never `deploy run --force`).
 
 ## Find which config file owns a setting
 
 Use docs search before guessing:
 
-```
+```shell
 dwe docs search <term> --lang en
 dwe docs list --lang en
 ```
@@ -108,19 +107,25 @@ Common owners:
 - User-level overrides (enabled flags, ports, hosts, local prefs): `workspace/local.yml`
 - Deferred pending operations / status follow-up banner: `.dwe/deploy/state.yml` (the deploy state journal). Inspect with `dwe deploy state show`. Do NOT edit by hand and do NOT guess the consumer — clear it only by running the command that `dwe status`'s follow-up banner names (the set evolves; trust the banner, not a memorized list).
 - Display / styling / info blocks: `workspace/styles.yml`, `workspace/info.yml`
-- Container shape (image, ports, env, volumes): `docker-compose.yml` — edit directly.
+- Rendered runtime config (e.g. a service's `.env`, `env.php`): `workspace/templates/config/<svc>/` — see `render-and-vars.md`. The output file itself (`services/<svc>/src/.env`) is generated; never edit it.
+- IDE / AI-agent / git-hook dotfiles (devcontainer, the generated `AGENTS.md`, hooks): `workspace/templates/{ide,ai,git}/`.
+- User commands: `workspace/commands/**.yml` (path + filename + key = the dot-ID) — see `authoring-commands.md`.
+- Setup-wizard prompts: `workspace/setup.yml`; project preflight checks: `workspace/validate.yml` — see `pipelines-and-orchestration.md`.
+- Compose project name + shared volumes (loaded **separately**, not in the 3-layer merge): `workspace/docker.yml` (override locally in `workspace/docker.local.yml`).
+- All free-form / custom values (db creds, idekeys, clone coords): the `vars:` block in `workspace/defaults.yml` — inspect with `dwe vars list|get|inspect`; see `render-and-vars.md`.
+- Container shape (image, ports, env, volumes): the compose base/overlays — edit directly.
 
 ## Look up a specific config field
 
 `dwe docs show` accepts an anchor for direct section jumps:
 
-```
+```shell
 dwe docs show config/workspace#binary-overrides --lang en
 ```
 
 Use `--anchors` to list every section slug in a topic before requesting a specific one:
 
-```
+```shell
 dwe docs show config/services/fields --anchors --lang en
 ```
 
