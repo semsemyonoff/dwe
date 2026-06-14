@@ -8,7 +8,7 @@
 #
 # Authoritative defaults: lifecycle.DefaultRunConfig() / DefaultStopConfig()
 #   (internal/core/workflow/lifecycle/defaults.go)
-# Schema and field reference: `dwe docs config lifecycle`
+# Schema and field reference: `dwe docs show config/lifecycle`
 #
 # run:
 #   update:

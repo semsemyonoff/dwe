@@ -9,7 +9,7 @@
 # after a space is a parse error). Booleans accept 1/true/yes and 0/false/no.
 # Unknown keys are warnings, not errors. Uncomment a line to activate it.
 #
-# Every key below is shown with its default. Run `dwe docs config userconfig`
+# Every key below is shown with its default. Run `dwe docs show config/userconfig`
 # for the authoritative reference.
 
 # --- Locale and TUI ---
@@ -62,15 +62,26 @@ trim_trailing_whitespace = false
 --------
 === .gitignore ===
 # dwe — runtime data (managed by the CLI)
-.dwe/
+/.dwe/
+# dwe — generated env file (root only; rendered by dwe render env --out .env)
+/.env
 # dwe — per-developer overrides
 workspace/local.yml
 workspace/docker.local.yml
+workspace/templates/*/*.local/
 # dwe — service sources (root-anchored so workspace/services/ stays tracked)
 /services/
 # dwe — container data
 backups/
 snapshots/
+# editor / OS noise (not dwe-managed — trim to taste). Editor dirs are
+# root-anchored so they never shadow tracked workspace/templates/**/.vscode/.
+.DS_Store
+*~
+/.idea/
+/.vscode/
+/.zed/
+/.ralphex/
 
 --------
 === AGENTS.md ===
@@ -84,12 +95,23 @@ development environment managed by the `dwe` CLI.
 Run this once to load a project-aware index of services, commands, and docs:
 
 ```
-dwe docs llms-txt
+dwe docs llms-txt --lang en
 ```
 
 It emits a compact llms.txt snapshot (project context, services, commands, and
 pointers into the built-in docs subsystem) designed to be loaded once and then
 navigated on demand.
+
+## Conventions for AI agents
+
+- **Docs in English.** Pass `--lang en` to every `dwe docs …` command (`llms-txt`,
+  `show`, `search`, `list`) — translated docs can lag behind the English source.
+- **Data as JSON.** For any command whose output you parse — `dwe status`,
+  `dwe validate`, `dwe info`, `dwe services`, `dwe vars …` — add `--output json`
+  (alias `-o json`); the default table output is formatted for humans. **Exception:**
+  never pass `-o json` to `dwe docs …` — those emit markdown, and for
+  `dwe docs llms-txt` / `dwe docs show` the `--output` flag is a *file path*, so
+  `-o json` would write a file literally named `json`.
 
 ## Useful commands
 
@@ -97,7 +119,7 @@ navigated on demand.
 - `dwe info` — environment summary (URLs, hosts, ports)
 - `dwe validate` — static project-config validation
 - `dwe deploy` — bring the stack up
-- `dwe docs <topic>` — built-in reference (config schemas, guides)
+- `dwe docs <topic> --lang en` — built-in reference (config schemas, guides)
 
 ## Config layout
 
@@ -129,7 +151,7 @@ navigated on demand.
 #
 # This is the only required project file. workspace/defaults.yml (layer 2) and
 # workspace/local.yml (layer 3, gitignored) layer on top of it; keys absent here
-# fall through to those layers. Run `dwe docs config workspace` for the full
+# fall through to those layers. Run `dwe docs show config/workspace` for the full
 # merge model.
 
 project:
@@ -141,7 +163,7 @@ project:
 # workspace/defaults.yml — versioned project defaults (layer 2 of 3).
 #
 # Tracked by git. Everything here is overridable per-developer in
-# workspace/local.yml (gitignored). Run `dwe docs config workspace`.
+# workspace/local.yml (gitignored). Run `dwe docs show config/workspace`.
 
 # Compose base file (always included by the Docker control plane).
 compose:
@@ -162,7 +184,7 @@ services:
 # state: ""
 
 # Declarative .env export rules. Each rule maps a dot-path in the merged config
-# to an environment variable. See `dwe docs config workspace`.
+# to an environment variable. See `dwe docs show config/workspace`.
 # exports:
 #   env:
 #     - name: APP_PORT
@@ -180,7 +202,7 @@ services:
 #
 # Authoritative default: deploy.DefaultDeployConfig()
 #   (internal/core/workflow/deploy/defaults.go)
-# Schema and field reference: `dwe docs config deploy`
+# Schema and field reference: `dwe docs show config/deploy/index`
 #
 # log: true
 # phases:
@@ -221,7 +243,7 @@ services:
 #
 # Per-developer overrides go in workspace/docker.local.yml (gitignored), which
 # is deep-merged on top of this file.
-# Schema and field reference: `dwe docs config docker`
+# Schema and field reference: `dwe docs show config/docker`
 #
 # project_name: "${project.prefix}-${project.name}"
 #
@@ -246,7 +268,7 @@ services:
 # built-in dashboard entirely.
 #
 # Authoritative behavior: the built-in `dwe info` fallback dashboard.
-# Schema, item types, and template expressions: `dwe docs config info`
+# Schema, item types, and template expressions: `dwe docs show config/info`
 #
 # sections:
 #   - id: project
@@ -281,7 +303,7 @@ services:
 #
 # Authoritative defaults: lifecycle.DefaultRunConfig() / DefaultStopConfig()
 #   (internal/core/workflow/lifecycle/defaults.go)
-# Schema and field reference: `dwe docs config lifecycle`
+# Schema and field reference: `dwe docs show config/lifecycle`
 #
 # run:
 #   update:
@@ -314,7 +336,7 @@ services:
 #
 # type + container are active; every other field is an optional, commented
 # example. The folder name (app) is the service's map key — there is
-# no `name:` field. Run `dwe docs config services`.
+# no `name:` field. Run `dwe docs show config/services/index`.
 
 type: app
 container: "app"
@@ -337,7 +359,7 @@ container: "app"
 #
 # Omitting this file entirely produces the built-in defaults. Empty / missing
 # color tokens fall back to the built-in light or dark default for that token.
-# Run `dwe docs config styles`.
+# Run `dwe docs show config/styles`.
 
 header:
   lines:

@@ -6,7 +6,7 @@
 # built-in dashboard entirely.
 #
 # Authoritative behavior: the built-in `dwe info` fallback dashboard.
-# Schema, item types, and template expressions: `dwe docs config info`
+# Schema, item types, and template expressions: `dwe docs show config/info`
 #
 # sections:
 #   - id: project

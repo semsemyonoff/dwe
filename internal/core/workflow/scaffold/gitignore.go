@@ -23,15 +23,26 @@ const gitignoreMarker = "# dwe (managed by the CLI)"
 // (.dwe/deploy/deploy.lock, .dwe/snapshots/snapshot.lock) and any runtime
 // artifacts added under .dwe/ in the future.
 const dweGitignoreBlock = `# dwe — runtime data (managed by the CLI)
-.dwe/
+/.dwe/
+# dwe — generated env file (root only; rendered by dwe render env --out .env)
+/.env
 # dwe — per-developer overrides
 workspace/local.yml
 workspace/docker.local.yml
+workspace/templates/*/*.local/
 # dwe — service sources (root-anchored so workspace/services/ stays tracked)
 /services/
 # dwe — container data
 backups/
 snapshots/
+# editor / OS noise (not dwe-managed — trim to taste). Editor dirs are
+# root-anchored so they never shadow tracked workspace/templates/**/.vscode/.
+.DS_Store
+*~
+/.idea/
+/.vscode/
+/.zed/
+/.ralphex/
 `
 
 // dweGitignorePatterns returns the ignore-pattern lines from the canonical block,
