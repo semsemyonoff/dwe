@@ -26,6 +26,27 @@ import (
 // block validate forever.
 const portsProbeTimeout = 5 * time.Second
 
+// portReleaseRetries / portReleaseBackoff bound the retry loop that absorbs the
+// asynchronous host-port release performed by Docker Desktop / OrbStack on
+// macOS. When `docker compose down` removes a container, its published host
+// port (e.g. caddy's 127.0.0.1:80) is freed by the host port-forwarder a beat
+// LATER than the container disappears from `docker ps`. A `dwe restart`
+// (stop = `docker down`, then immediately run = preflight `ports_free`) races
+// that release: docker ps shows no owner, but net.Listen still sees EADDRINUSE,
+// so the just-downed container of our OWN stack is falsely reported as a port
+// conflict. Retrying the listen probe briefly lets the forwarder catch up — a
+// genuine foreign holder persists across all attempts and is still reported,
+// only ~portReleaseRetries*portReleaseBackoff later. On native Linux the port
+// frees synchronously so the first attempt already succeeds (no added latency).
+const (
+	portReleaseRetries = 6
+	portReleaseBackoff = 250 * time.Millisecond
+)
+
+// portReleaseSleep is the seam used by the EADDRINUSE retry loop so tests can
+// run it without real wall-clock delay.
+var portReleaseSleep = time.Sleep
+
 // composeProjectLabel is the standard label every container created via
 // `docker compose` carries. We use it to distinguish our containers (which
 // are expected to bind the declared ports) from foreign processes.
@@ -89,9 +110,16 @@ func CollectPortConflicts(ctx context.Context, cfg *config.DweConfig, baseDir st
 	defer cancel()
 	bindings, psErr := queryDockerPortBindings(probeCtx, bin)
 
+	// The post-`docker down` host-port release window is shared across the
+	// whole pass (a `dwe restart` downs the entire stack at once), so the retry
+	// budget is shared too: each busy port draws from the same counter rather
+	// than paying portReleaseRetries independently. This bounds total added
+	// latency to ~portReleaseRetries*portReleaseBackoff for the pass — without
+	// it, N genuinely-busy ports would sleep N×1.5s sequentially.
+	retriesLeft := portReleaseRetries
 	var conflicts []PortConflict
 	for _, dp := range declared {
-		owner := classifyPortForConflict(dp, bindings, ourProject, psErr != nil)
+		owner := classifyPortForConflict(dp, bindings, ourProject, psErr != nil, &retriesLeft)
 		if owner != "" {
 			conflicts = append(conflicts, PortConflict{
 				Service:       dp.Service,
@@ -203,7 +231,11 @@ type portOwner struct {
 
 // classifyPortForConflict is like classifyPortOwner but handles the docker ps
 // failure case by returning a sentinel in place of the owner name.
-func classifyPortForConflict(dp declaredPort, bindings map[int][]portOwner, ourProject string, dockerPSFailed bool) string {
+// retriesLeft is a shared, mutable EADDRINUSE-retry budget threaded across all
+// ports in one CollectPortConflicts pass (see the call site). It is decremented
+// as this function consumes retries so the whole pass — not each port — is
+// bounded to portReleaseRetries sleeps total.
+func classifyPortForConflict(dp declaredPort, bindings map[int][]portOwner, ourProject string, dockerPSFailed bool, retriesLeft *int) string {
 	owners := bindings[dp.HostPort]
 	if len(owners) > 0 {
 		for _, o := range owners {
@@ -219,8 +251,19 @@ func classifyPortForConflict(dp declaredPort, bindings map[int][]portOwner, ourP
 		}
 		return who
 	}
-	// Not held by Docker — probe directly.
-	if err := portListenFn(dp.HostPort); err != nil {
+	// Not held by Docker — probe directly. listenTCP only returns a non-nil
+	// error for EADDRINUSE (other errors are treated as "free"), so any error
+	// here means the port is busy. Retry briefly to absorb Docker Desktop's
+	// asynchronous host-port release after a `docker down` (see the
+	// portReleaseRetries doc): a genuine foreign holder survives every attempt;
+	// a port mid-release by our own just-downed container clears.
+	err := portListenFn(dp.HostPort)
+	for err != nil && *retriesLeft > 0 {
+		*retriesLeft--
+		portReleaseSleep(portReleaseBackoff)
+		err = portListenFn(dp.HostPort)
+	}
+	if err != nil {
 		if dockerPSFailed {
 			return "unknown (docker ps failed)"
 		}

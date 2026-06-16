@@ -9,6 +9,7 @@ import (
 	"reflect"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/semsemyonoff/dwe/internal/core/project/config"
 	"github.com/semsemyonoff/dwe/internal/core/validate"
@@ -154,7 +155,7 @@ func TestClassifyPort_OursReused(t *testing.T) {
 	bindings := map[int][]portOwner{
 		5432: {{Container: "ours-db-1", ComposeProject: "ours"}},
 	}
-	got := classifyPortForConflict(declaredPort{Service: "db", PortName: "sql", HostPort: 5432}, bindings, "ours", false)
+	got := classifyPortForConflict(declaredPort{Service: "db", PortName: "sql", HostPort: 5432}, bindings, "ours", false, freshBudget())
 	if got != "" {
 		t.Errorf("our own container should not be a conflict, got: %q", got)
 	}
@@ -164,7 +165,7 @@ func TestClassifyPort_ForeignCompose(t *testing.T) {
 	bindings := map[int][]portOwner{
 		5432: {{Container: "rival-db-1", ComposeProject: "rival-proj"}},
 	}
-	got := classifyPortForConflict(declaredPort{Service: "db", PortName: "sql", HostPort: 5432}, bindings, "ours", false)
+	got := classifyPortForConflict(declaredPort{Service: "db", PortName: "sql", HostPort: 5432}, bindings, "ours", false, freshBudget())
 	if !strings.Contains(got, "rival-db-1") || !strings.Contains(got, "rival-proj") {
 		t.Errorf("foreign container message missing details: %q", got)
 	}
@@ -174,7 +175,7 @@ func TestClassifyPort_ForeignNoLabel(t *testing.T) {
 	bindings := map[int][]portOwner{
 		5432: {{Container: "raw-container", ComposeProject: ""}},
 	}
-	got := classifyPortForConflict(declaredPort{Service: "db", PortName: "sql", HostPort: 5432}, bindings, "ours", false)
+	got := classifyPortForConflict(declaredPort{Service: "db", PortName: "sql", HostPort: 5432}, bindings, "ours", false, freshBudget())
 	if !strings.Contains(got, "raw-container") {
 		t.Errorf("expected container name in message: %q", got)
 	}
@@ -187,19 +188,115 @@ func TestClassifyPort_FreeViaListen(t *testing.T) {
 	orig := portListenFn
 	t.Cleanup(func() { portListenFn = orig })
 	portListenFn = func(port int) error { return nil } // pretend free
-	got := classifyPortForConflict(declaredPort{Service: "db", PortName: "sql", HostPort: 5432}, map[int][]portOwner{}, "ours", false)
+	got := classifyPortForConflict(declaredPort{Service: "db", PortName: "sql", HostPort: 5432}, map[int][]portOwner{}, "ours", false, freshBudget())
 	if got != "" {
 		t.Errorf("free port should produce no conflict, got %q", got)
 	}
 }
 
 func TestClassifyPort_BusyNonDocker(t *testing.T) {
+	stubNoSleep(t)
 	orig := portListenFn
 	t.Cleanup(func() { portListenFn = orig })
 	portListenFn = func(port int) error { return errors.New("listen tcp :5432: bind: address already in use") }
-	got := classifyPortForConflict(declaredPort{Service: "db", PortName: "sql", HostPort: 5432}, map[int][]portOwner{}, "ours", false)
+	got := classifyPortForConflict(declaredPort{Service: "db", PortName: "sql", HostPort: 5432}, map[int][]portOwner{}, "ours", false, freshBudget())
 	if !strings.Contains(got, "in use") {
 		t.Errorf("expected 'in use' in non-docker conflict, got %q", got)
+	}
+}
+
+// freshBudget returns a fresh, fully-stocked retry budget pointer for a direct
+// classifyPortForConflict call — mirroring how CollectPortConflicts seeds one
+// budget per pass. Single-port tests get the full portReleaseRetries each.
+func freshBudget() *int {
+	n := portReleaseRetries
+	return &n
+}
+
+// stubNoSleep replaces the EADDRINUSE retry backoff with a no-op so tests that
+// drive the retry loop do not incur real wall-clock delay.
+func stubNoSleep(t *testing.T) {
+	t.Helper()
+	orig := portReleaseSleep
+	t.Cleanup(func() { portReleaseSleep = orig })
+	portReleaseSleep = func(time.Duration) {}
+}
+
+// TestClassifyPort_TransientReleaseRetried reproduces the `dwe restart` race on
+// Docker Desktop: docker ps shows no owner (our caddy was just `docker down`ed)
+// but the host port forwarder has not yet released :80, so the first listen
+// probe fails with EADDRINUSE before clearing. The retry loop must absorb this
+// and report NO conflict.
+func TestClassifyPort_TransientReleaseRetried(t *testing.T) {
+	stubNoSleep(t)
+	orig := portListenFn
+	t.Cleanup(func() { portListenFn = orig })
+	var calls int
+	portListenFn = func(int) error {
+		calls++
+		if calls <= 2 { // busy for the first two probes, then released
+			return errors.New("listen tcp :80: bind: address already in use")
+		}
+		return nil
+	}
+	got := classifyPortForConflict(declaredPort{Service: "caddy", PortName: "http", HostPort: 80}, map[int][]portOwner{}, "ours", false, freshBudget())
+	if got != "" {
+		t.Errorf("transient port release should clear after retry, got conflict %q (calls=%d)", got, calls)
+	}
+	if calls != 3 {
+		t.Errorf("expected 3 listen probes (2 busy + 1 free), got %d", calls)
+	}
+}
+
+// TestClassifyPort_PersistentBusyExhaustsRetries verifies a genuine foreign
+// holder — busy on every probe — is still reported as a conflict after the
+// retry budget is exhausted, with the full attempt count.
+func TestClassifyPort_PersistentBusyExhaustsRetries(t *testing.T) {
+	stubNoSleep(t)
+	orig := portListenFn
+	t.Cleanup(func() { portListenFn = orig })
+	var calls int
+	portListenFn = func(int) error {
+		calls++
+		return errors.New("listen tcp :5432: bind: address already in use")
+	}
+	got := classifyPortForConflict(declaredPort{Service: "db", PortName: "sql", HostPort: 5432}, map[int][]portOwner{}, "ours", false, freshBudget())
+	if !strings.Contains(got, "in use") {
+		t.Errorf("persistent busy port must still be reported, got %q", got)
+	}
+	if want := portReleaseRetries + 1; calls != want {
+		t.Errorf("expected %d listen probes (1 initial + %d retries), got %d", want, portReleaseRetries, calls)
+	}
+}
+
+// TestClassifyPort_SharedBudgetBoundsPass verifies that a retry budget shared
+// across a pass is consumed once, not per-port: a first port that stays busy
+// drains the whole budget, leaving a second busy port with a single probe (no
+// retries). This is what bounds total added latency to portReleaseRetries
+// sleeps regardless of how many ports are simultaneously busy.
+func TestClassifyPort_SharedBudgetBoundsPass(t *testing.T) {
+	stubNoSleep(t)
+	orig := portListenFn
+	t.Cleanup(func() { portListenFn = orig })
+	probes := map[int]int{}
+	portListenFn = func(port int) error {
+		probes[port]++
+		return errors.New("listen tcp: bind: address already in use")
+	}
+	budget := portReleaseRetries
+	a := classifyPortForConflict(declaredPort{Service: "a", PortName: "p", HostPort: 1111}, map[int][]portOwner{}, "ours", false, &budget)
+	b := classifyPortForConflict(declaredPort{Service: "b", PortName: "p", HostPort: 2222}, map[int][]portOwner{}, "ours", false, &budget)
+	if a == "" || b == "" {
+		t.Fatalf("both persistently-busy ports must be reported (a=%q b=%q)", a, b)
+	}
+	if probes[1111] != portReleaseRetries+1 {
+		t.Errorf("first port should drain the budget: want %d probes, got %d", portReleaseRetries+1, probes[1111])
+	}
+	if probes[2222] != 1 {
+		t.Errorf("second port should get a single probe after budget exhausted, got %d", probes[2222])
+	}
+	if budget != 0 {
+		t.Errorf("shared budget should be fully consumed, got %d left", budget)
 	}
 }
 
@@ -429,6 +526,7 @@ func TestCollectPortConflicts_DockerMissingReturnsNil(t *testing.T) {
 }
 
 func TestCollectPortConflicts_DockerPSFailedFallback(t *testing.T) {
+	stubNoSleep(t)
 	dir := t.TempDir()
 	writeStubBinary(t, dir, "docker", 0, "")
 	withIsolatedPath(t, dir)
