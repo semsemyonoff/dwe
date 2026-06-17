@@ -13,7 +13,9 @@ import (
 	"path/filepath"
 	"slices"
 	"sort"
+	"strconv"
 	"strings"
+	"time"
 
 	"github.com/semsemyonoff/dwe/internal/core/execution/condition"
 	"github.com/semsemyonoff/dwe/internal/core/execution/filesgate"
@@ -47,6 +49,7 @@ var allowedRootKeys = []string{
 	"vars",
 	"update",
 	"bridge",
+	"stop",
 }
 
 // allowedRootKeySet is the membership index over allowedRootKeys.
@@ -123,6 +126,14 @@ type DweConfig struct {
 	// enablement. See BridgeConfig.
 	Bridge *BridgeConfig `yaml:"bridge"`
 
+	// Stop is the formalized top-level stop-behavior block. It currently carries
+	// only the post-`docker compose down` host-port release wait timeout. A
+	// pointer so an absent block (nil → built-in default) is distinguishable from
+	// a present block, and it participates in the 3-layer merge so a project
+	// author sets it in workspace.yml and a developer overrides in local.yml.
+	// See StopConfig and StopPortReleaseTimeout.
+	Stop *StopConfig `yaml:"stop"`
+
 	// Vars is the single legal home for arbitrary, free-form project values.
 	// The root of the merged config is strict (see allowedRootKeys), but the
 	// contents of vars: are unvalidated and may nest arbitrarily. References
@@ -163,6 +174,73 @@ func (c *UpdateConfig) EffectiveMode() string {
 		return "on"
 	}
 	return c.Mode
+}
+
+// DefaultStopPortReleaseTimeout is the built-in wait budget RunStop uses for the
+// stack's host ports to be released after `docker compose down` when the project
+// does not configure stop.port_release_timeout. Generous because Docker Desktop /
+// OrbStack can lag several seconds after a long-running container, and a project
+// may legitimately have slow-terminating services; a project may raise or lower
+// it (or set 0 to disable the wait) via the stop: block.
+const DefaultStopPortReleaseTimeout = 60 * time.Second
+
+// StopConfig is the formalized top-level stop-behavior block (`stop:`). It
+// currently carries only PortReleaseTimeout.
+type StopConfig struct {
+	// PortReleaseTimeout bounds how long `dwe stop` (and the stop leg of
+	// `dwe restart`) waits for the stack's published host ports to be released
+	// after `docker compose down`. Accepts a Go duration string ("60s", "2m",
+	// "1m30s") or a bare number of seconds ("90"). Empty/absent →
+	// DefaultStopPortReleaseTimeout; "0" disables the wait entirely.
+	PortReleaseTimeout string `yaml:"port_release_timeout"`
+}
+
+// StopPortReleaseTimeout returns the resolved post-stop port-release wait budget.
+// nil cfg / nil block / empty value → DefaultStopPortReleaseTimeout; a configured
+// value is parsed (already value-validated at load, so a parse error here falls
+// back to the default defensively). A configured "0" returns 0, which the caller
+// treats as "skip the wait".
+func StopPortReleaseTimeout(cfg *DweConfig) time.Duration {
+	if cfg == nil || cfg.Stop == nil {
+		return DefaultStopPortReleaseTimeout
+	}
+	s := strings.TrimSpace(cfg.Stop.PortReleaseTimeout)
+	if s == "" {
+		return DefaultStopPortReleaseTimeout
+	}
+	d, err := parseStopTimeout(s)
+	if err != nil {
+		return DefaultStopPortReleaseTimeout
+	}
+	return d
+}
+
+// parseStopTimeout parses a stop.port_release_timeout value: first as a Go
+// duration ("60s", "2m"), then as a bare integer number of seconds ("90"). It is
+// the single source of truth shared by the load-time validator and the accessor.
+// A negative result is rejected: only "0" is the documented disable sentinel, so
+// a negative (which WaitPortsReleased would silently treat as "skip the wait")
+// must fail loud rather than quietly defeat the race protection.
+func parseStopTimeout(s string) (time.Duration, error) {
+	s = strings.TrimSpace(s)
+	d, err := time.ParseDuration(s)
+	if err != nil {
+		secs, aerr := strconv.Atoi(s)
+		if aerr != nil {
+			return 0, fmt.Errorf("must be a Go duration like %q or %q, or a number of seconds", "60s", "2m")
+		}
+		d = time.Duration(secs) * time.Second
+		// secs*1e9 can overflow int64 and wrap to a small (even positive) value,
+		// slipping past the d < 0 check below — detect it by inverting the
+		// multiply. (The time.ParseDuration path reports its own overflow error.)
+		if d/time.Second != time.Duration(secs) {
+			return 0, fmt.Errorf("is out of range")
+		}
+	}
+	if d < 0 {
+		return 0, fmt.Errorf("must not be negative (use 0 to disable the wait)")
+	}
+	return d, nil
 }
 
 // BridgeConfig is the formalized top-level container-write policy block
@@ -1626,6 +1704,36 @@ func LoadConfig(workspacePath string) (*DweConfig, error) {
 			}
 		}
 		return nil, fmt.Errorf("%s: update.mode %q is invalid; must be one of: on, off", modePath, cfg.Update.Mode)
+	}
+
+	// Value-validate the formalized stop.port_release_timeout. The strict-root
+	// allowlist only checks key names; without this a typo (e.g. "1minute") or a
+	// negative would load and silently fall back to / disable the wait at stop
+	// time. yaml.v3 coerces a scalar YAML int/float/bool (e.g. unquoted 90) into
+	// the string field, so those reach here and are validated; only a map/sequence
+	// value fails the struct decode earlier. Layer attribution mirrors the
+	// update.mode check above.
+	if cfg.Stop != nil {
+		if raw := strings.TrimSpace(cfg.Stop.PortReleaseTimeout); raw != "" {
+			if _, err := parseStopTimeout(raw); err != nil {
+				toPath := workspacePath
+				for _, layer := range slices.Backward(layers) {
+					stopMap, ok := layer.data["stop"].(map[string]any)
+					if !ok {
+						continue
+					}
+					// Skip a nil (YAML null) override: deepMerge drops nils, so the
+					// bad merged value came from a LOWER layer — blaming this one
+					// would name the wrong file. fmt.Sprintf("%v", nil) is "<nil>"
+					// (non-empty), so an explicit v != nil check is required.
+					if v, ok := stopMap["port_release_timeout"]; ok && v != nil && fmt.Sprintf("%v", v) != "" {
+						toPath = layer.path
+						break
+					}
+				}
+				return nil, fmt.Errorf("%s: stop.port_release_timeout %q is invalid; %w", toPath, cfg.Stop.PortReleaseTimeout, err)
+			}
+		}
 	}
 
 	// Load user-config for binary overrides. On error, log warning and continue
