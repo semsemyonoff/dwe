@@ -8,6 +8,7 @@ import (
 	"reflect"
 	"strings"
 	"testing"
+	"time"
 
 	"gopkg.in/yaml.v3"
 
@@ -516,6 +517,81 @@ func TestUpdateConfig_EffectiveMode(t *testing.T) {
 				t.Errorf("EffectiveMode() = %q, want %q", got, tc.want)
 			}
 		})
+	}
+}
+
+func TestStopPortReleaseTimeout(t *testing.T) {
+	tests := []struct {
+		name string
+		cfg  *DweConfig
+		want time.Duration
+	}{
+		{name: "nil cfg → default", cfg: nil, want: DefaultStopPortReleaseTimeout},
+		{name: "nil block → default", cfg: &DweConfig{}, want: DefaultStopPortReleaseTimeout},
+		{name: "empty value → default", cfg: &DweConfig{Stop: &StopConfig{}}, want: DefaultStopPortReleaseTimeout},
+		{name: "duration string", cfg: &DweConfig{Stop: &StopConfig{PortReleaseTimeout: "2m"}}, want: 2 * time.Minute},
+		{name: "compound duration", cfg: &DweConfig{Stop: &StopConfig{PortReleaseTimeout: "1m30s"}}, want: 90 * time.Second},
+		{name: "bare seconds", cfg: &DweConfig{Stop: &StopConfig{PortReleaseTimeout: "90"}}, want: 90 * time.Second},
+		{name: "zero disables", cfg: &DweConfig{Stop: &StopConfig{PortReleaseTimeout: "0"}}, want: 0},
+		{name: "invalid falls back to default", cfg: &DweConfig{Stop: &StopConfig{PortReleaseTimeout: "1minute"}}, want: DefaultStopPortReleaseTimeout},
+		{name: "negative duration falls back to default", cfg: &DweConfig{Stop: &StopConfig{PortReleaseTimeout: "-5s"}}, want: DefaultStopPortReleaseTimeout},
+		{name: "negative seconds falls back to default", cfg: &DweConfig{Stop: &StopConfig{PortReleaseTimeout: "-5"}}, want: DefaultStopPortReleaseTimeout},
+		{name: "overflowing bare seconds falls back to default", cfg: &DweConfig{Stop: &StopConfig{PortReleaseTimeout: "18446744074"}}, want: DefaultStopPortReleaseTimeout},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := StopPortReleaseTimeout(tc.cfg); got != tc.want {
+				t.Errorf("StopPortReleaseTimeout() = %v, want %v", got, tc.want)
+			}
+		})
+	}
+}
+
+func TestLoadConfig_stopPortReleaseTimeout_valid(t *testing.T) {
+	ws := sampleWorkspaceYML + "\nstop:\n  port_release_timeout: 2m\n"
+	path := writeFullFixture(t, ws, "", "", "", noToolsYML)
+	cfg, err := LoadConfig(path)
+	if err != nil {
+		t.Fatalf("LoadConfig: %v", err)
+	}
+	if got := StopPortReleaseTimeout(cfg); got != 2*time.Minute {
+		t.Errorf("StopPortReleaseTimeout() = %v, want 2m", got)
+	}
+}
+
+func TestLoadConfig_stopPortReleaseTimeout_invalid(t *testing.T) {
+	for _, bad := range []string{"1minute", "-5s", "-30", "18446744074"} {
+		t.Run(bad, func(t *testing.T) {
+			ws := sampleWorkspaceYML + "\nstop:\n  port_release_timeout: \"" + bad + "\"\n"
+			path := writeFullFixture(t, ws, "", "", "", noToolsYML)
+			_, err := LoadConfig(path)
+			if err == nil {
+				t.Fatalf("expected load error for stop.port_release_timeout %q", bad)
+			}
+			if !strings.Contains(err.Error(), "stop.port_release_timeout") {
+				t.Errorf("error should name the offending key, got: %v", err)
+			}
+		})
+	}
+}
+
+func TestLoadConfig_stopPortReleaseTimeout_nilOverrideAttribution(t *testing.T) {
+	// defaults.yml sets a bad value; local.yml sets a null override. deepMerge
+	// drops the null, so the bad merged value comes from defaults.yml — the error
+	// must blame defaults.yml, NOT the local.yml null layer.
+	ws := sampleWorkspaceYML
+	defaults := "schema_version: \"1\"\nstop:\n  port_release_timeout: \"1minute\"\n"
+	local := "stop:\n  port_release_timeout: null\n"
+	path := writeFullFixture(t, ws, defaults, local, "", noToolsYML)
+	_, err := LoadConfig(path)
+	if err == nil {
+		t.Fatal("expected load error for invalid stop.port_release_timeout")
+	}
+	if !strings.Contains(err.Error(), "defaults.yml") {
+		t.Errorf("error should blame defaults.yml (origin of the bad value), got: %v", err)
+	}
+	if strings.Contains(err.Error(), "local.yml") {
+		t.Errorf("error must not blame local.yml (its null override is dropped by deepMerge), got: %v", err)
 	}
 }
 

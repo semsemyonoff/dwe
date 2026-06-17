@@ -47,6 +47,11 @@ const (
 // run it without real wall-clock delay.
 var portReleaseSleep = time.Sleep
 
+// portReleaseWaitPoll is the interval between net.Listen re-probes in
+// WaitPortsReleased. A var so tests can drive the loop through the shared
+// portReleaseSleep seam without incurring real delay.
+var portReleaseWaitPoll = 250 * time.Millisecond
+
 // composeProjectLabel is the standard label every container created via
 // `docker compose` carries. We use it to distinguish our containers (which
 // are expected to bind the declared ports) from foreign processes.
@@ -130,6 +135,140 @@ func CollectPortConflicts(ctx context.Context, cfg *config.DweConfig, baseDir st
 		}
 	}
 	return conflicts, nil
+}
+
+// PortWait identifies one host port still being waited on by WaitPortsReleased,
+// carrying the owning service + port name so a caller can render a descriptive
+// progress line (e.g. a live spinner: "waiting for host port 80 (caddy.http)").
+type PortWait struct {
+	Service  string
+	PortName string
+	HostPort int
+}
+
+// WaitPortsReleased blocks until every host port declared by an enabled service
+// is released, or until timeout elapses, and returns the sorted host ports that
+// were still busy at timeout (nil when all released).
+//
+// It absorbs the asynchronous host-port release that Docker Desktop / OrbStack
+// perform AFTER `docker compose down` returns: the container is already gone
+// from `docker ps`, yet its published host port (e.g. caddy's :80) lingers a
+// beat in the host port-forwarder — long enough for an immediately-following
+// `dwe run` (the run leg of a restart) preflight to falsely report a
+// self-conflict on our OWN just-freed port. Stop calls this after the down so
+// the next start sees a clean slate; the preflight retry loop remains the final
+// backstop for runs that did not go through dwe's stop.
+//
+// A live container holding a declared port is excluded: that is a real binding
+// (foreign, or ours if the down left it up) which a wait cannot free, so it
+// never makes stop hang. The set that IS waited on is "busy now AND owned by no
+// live container" — normally exactly a lingering forward of our own just-downed
+// container, but note a foreign NON-docker host process on a declared port also
+// matches and will be waited on for the full timeout (then warned about): we
+// cannot distinguish it from a lingering forward via net.Listen alone. On native
+// Linux ports free synchronously, so the seed probe already finds them free and
+// this returns nil with no wait.
+//
+// The wait honors ctx: if it is cancelled (deadline/parent cancel) the loop
+// stops at the next poll boundary and returns whatever is still busy.
+//
+// onWait (optional, nil-safe) is invoked with the currently-watched ports
+// whenever the set is non-empty: once after the seed probe and again after each
+// poll that releases at least one port. Callers drive a live progress display
+// from it; the timer/animation is the caller's concern (this function only
+// reports WHICH ports remain, not elapsed time).
+func WaitPortsReleased(ctx context.Context, cfg *config.DweConfig, timeout time.Duration, onWait func([]PortWait)) []int {
+	if cfg == nil || timeout <= 0 {
+		return nil
+	}
+	declared := collectDeclaredPorts(cfg)
+	if len(declared) == 0 {
+		return nil
+	}
+	parent := ctx
+	if parent == nil {
+		parent = context.Background()
+	}
+
+	// One docker ps snapshot: a port still owned by a live container is a real
+	// binding, not a lingering forward — exclude it so we never wait on
+	// something a wait cannot fix. Docker being unavailable is fine: bindings
+	// stays nil and every busy port is treated as a candidate forward.
+	var bindings map[int][]portOwner
+	if _, err := exec.LookPath(config.DockerBin(cfg)); err == nil {
+		probeCtx, cancel := context.WithTimeout(parent, portsProbeTimeout)
+		bindings, _ = queryDockerPortBindings(probeCtx, config.DockerBin(cfg))
+		cancel()
+	}
+
+	// Seed the watch set with declared ports busy now and unowned by a live
+	// container. listenTCP only errors on EADDRINUSE (see its doc), so a non-nil
+	// probe means genuinely busy.
+	watch := map[int]declaredPort{}
+	for _, dp := range declared {
+		if len(bindings[dp.HostPort]) > 0 {
+			continue
+		}
+		if portListenFn(dp.HostPort) == nil {
+			continue // already free
+		}
+		watch[dp.HostPort] = dp
+	}
+	if len(watch) == 0 {
+		return nil
+	}
+	notify := func() {
+		if onWait != nil {
+			onWait(portWaitList(watch))
+		}
+	}
+	notify() // seed: announce the initial set so the caller can start its display
+
+	// Poll until the set drains or the configured budget is spent. The budget is
+	// tracked as an intended-duration countdown (remaining -= step), NOT measured
+	// wall-clock: that keeps the portReleaseSleep test seam (a no-op) terminating
+	// in the same iteration count, while production honors the EXACT timeout —
+	// the final step is the sub-poll remainder rather than a truncated full poll,
+	// so e.g. a 300ms budget waits 250ms+50ms, not just 250ms. portReleaseSleep +
+	// portListenFn are seams so tests run instantly.
+	for remaining := timeout; remaining > 0 && len(watch) > 0; {
+		if parent.Err() != nil {
+			break // ctx cancelled — stop waiting and report whatever is still busy
+		}
+		step := min(remaining, portReleaseWaitPoll)
+		portReleaseSleep(step)
+		remaining -= step
+		changed := false
+		for p, dp := range watch {
+			if portListenFn(dp.HostPort) == nil {
+				delete(watch, p)
+				changed = true
+			}
+		}
+		if changed && len(watch) > 0 {
+			notify()
+		}
+	}
+	if len(watch) == 0 {
+		return nil
+	}
+	remaining := make([]int, 0, len(watch))
+	for p := range watch {
+		remaining = append(remaining, p)
+	}
+	sort.Ints(remaining)
+	return remaining
+}
+
+// portWaitList converts the internal watch set into a sorted (by host port)
+// slice of PortWait for the onWait callback.
+func portWaitList(watch map[int]declaredPort) []PortWait {
+	out := make([]PortWait, 0, len(watch))
+	for _, dp := range watch {
+		out = append(out, PortWait(dp))
+	}
+	sort.Slice(out, func(i, j int) bool { return out[i].HostPort < out[j].HostPort })
+	return out
 }
 
 type portsFreeValidator struct {

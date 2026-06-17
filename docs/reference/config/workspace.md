@@ -12,6 +12,7 @@ The three layers of the merged DWE config.
 - [workspace.yml](#workspaceyml)
   - [Field reference](#field-reference)
   - [The `update:` block](#the-update-block)
+  - [The `stop:` block](#the-stop-block)
 - [Recommended file-layout convention](#recommended-file-layout-convention)
 - [workspace/defaults.yml](#workspacedefaultsyml)
   - [`services` overlay](#services-overlay)
@@ -97,7 +98,7 @@ Dot-paths are consumed by:
 The **root** of the merged 3-layer config is strict. After the three layers are merged, DWE checks the top-level keys against a fixed allowlist:
 
 ```text
-project · runtime · state · exports · compose · ui · docs · services · vars · update · bridge
+project · runtime · state · exports · compose · ui · docs · services · vars · update · bridge · stop
 ```
 
 (`schema_version` is also included in the allowlist as reserved forward-compat metadata — a plain member, not a special-cased exception.) Any other top-level key — in *any* layer — is a hard load-time error:
@@ -204,6 +205,25 @@ Resolution semantics (`UpdateConfig.EffectiveMode()`): a missing block (`nil`) �
 Runtime precedence at `dwe run`: `--no-update` flag > `--update <mode>` flag > `update.mode` from the merged config.
 
 This block decouples *enabling update* from the lifecycle phases. (It previously lived under `run.update` in `lifecycle.yml`, where writing it blanked `run.phases`; see [`lifecycle.md`](lifecycle.md) and [git integration → update probe](../concepts/git.md#update-probe-dwe-run).)
+
+### The `stop:` block
+
+The optional top-level `stop:` block tunes whole-stack stop behaviour. It is a formalized block that participates in the 3-layer merge, so a project author can set a default in `workspace.yml` and a developer can override it in `local.yml`.
+
+```yaml
+stop:
+  port_release_timeout: 60s   # Go duration ("60s", "2m", "1m30s") or bare seconds ("90"); "0" disables
+```
+
+| Field | Type | Default | Description |
+|-------|------|---------|-------------|
+| `stop.port_release_timeout` | duration string | `60s` | How long `dwe stop` (and the stop leg of `dwe restart`) waits for the stack's published host ports to be released after `docker compose down`. `0` disables the wait. |
+
+**Why this exists.** On Docker Desktop / OrbStack (macOS) the host port-forwarder releases a published port (e.g. caddy's `:80`) a beat *after* the container disappears from `docker ps` — and the lag grows the longer the container ran. Without a wait, the run leg of a `dwe restart` races that release and the `ports_free` preflight check falsely reports a self-conflict on the project's own just-freed port. `dwe stop` therefore waits for the ports to actually free before returning, showing a live spinner + timer naming the port(s) still pending.
+
+Only a port that is busy **and** owned by no live container is waited on. This is usually a lingering forward of a just-downed container; a non-Docker host process holding the port is indistinguishable at this layer, so it is also waited on until the timeout (then warned about). A port still held by a live (foreign) container is never waited on, so a stop cannot hang on someone else's container. On native Linux, ports free synchronously, so the wait returns immediately. Exceeding the timeout only emits a warning and proceeds (the next start's preflight retry is the final backstop) — it never fails the stop.
+
+Raise it if the project has slow-terminating services; set `0` to opt out entirely. A malformed or negative value (e.g. `1minute`, `-5s`) is a hard error at config-load time — `0` is the only disable sentinel.
 
 ### `docs`
 

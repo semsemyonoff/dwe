@@ -300,6 +300,158 @@ func TestClassifyPort_SharedBudgetBoundsPass(t *testing.T) {
 	}
 }
 
+// TestWaitPortsReleased_AllFreeNoWait verifies the common path: every declared
+// port is already free, so the seed probe drains the watch set and no wait
+// happens (returns nil). docker is absent from PATH so no ps probe runs.
+func TestWaitPortsReleased_AllFreeNoWait(t *testing.T) {
+	stubNoSleep(t)
+	withIsolatedPath(t, t.TempDir()) // docker not found → no ps probe
+	orig := portListenFn
+	t.Cleanup(func() { portListenFn = orig })
+	portListenFn = func(int) error { return nil } // all free
+
+	cfg := &config.DweConfig{Services: map[string]config.ServiceConfig{
+		"web": {Enabled: true, Ports: map[string]config.ServicePortSpec{"http": {Port: 8080}}},
+	}}
+	if busy := WaitPortsReleased(context.Background(), cfg, time.Second, nil); busy != nil {
+		t.Errorf("all-free should return nil, got %v", busy)
+	}
+}
+
+// TestWaitPortsReleased_TransientReleased reproduces the post-`docker down`
+// race: caddy's :80 is busy on the seed probe and the next probe, then the
+// host forwarder releases it. The poll loop must drain the watch set and return
+// nil (no lingering conflict carried into the run leg).
+func TestWaitPortsReleased_TransientReleased(t *testing.T) {
+	stubNoSleep(t)
+	withIsolatedPath(t, t.TempDir())
+	orig := portListenFn
+	t.Cleanup(func() { portListenFn = orig })
+	var calls int
+	portListenFn = func(int) error {
+		calls++
+		if calls <= 2 { // busy for seed + first re-probe, then released
+			return errors.New("listen tcp :80: bind: address already in use")
+		}
+		return nil
+	}
+	cfg := &config.DweConfig{Services: map[string]config.ServiceConfig{
+		"caddy": {Enabled: true, Ports: map[string]config.ServicePortSpec{"http": {Port: 80}}},
+	}}
+	if busy := WaitPortsReleased(context.Background(), cfg, 2*time.Second, nil); busy != nil {
+		t.Errorf("transient release should drain to nil, got %v (calls=%d)", busy, calls)
+	}
+}
+
+// TestWaitPortsReleased_PersistentBusyTimesOut verifies a port that never frees
+// is returned at timeout so the caller can warn.
+func TestWaitPortsReleased_PersistentBusyTimesOut(t *testing.T) {
+	stubNoSleep(t)
+	withIsolatedPath(t, t.TempDir())
+	orig := portListenFn
+	t.Cleanup(func() { portListenFn = orig })
+	portListenFn = func(int) error {
+		return errors.New("listen tcp :80: bind: address already in use")
+	}
+	cfg := &config.DweConfig{Services: map[string]config.ServiceConfig{
+		"caddy": {Enabled: true, Ports: map[string]config.ServicePortSpec{"http": {Port: 80}}},
+	}}
+	busy := WaitPortsReleased(context.Background(), cfg, time.Second, nil)
+	if !reflect.DeepEqual(busy, []int{80}) {
+		t.Errorf("persistent busy port should be returned, got %v", busy)
+	}
+}
+
+// TestWaitPortsReleased_LiveContainerSkipped verifies that a busy port still
+// owned by a live container is NOT waited on — a wait cannot free a live
+// binding, so it is excluded and the call returns nil immediately (no hang on a
+// foreign service occupying the port).
+func TestWaitPortsReleased_LiveContainerSkipped(t *testing.T) {
+	stubNoSleep(t)
+	dir := t.TempDir()
+	writeStubBinary(t, dir, "docker", 0, "")
+	withIsolatedPath(t, dir)
+	origOut := dockerPSOutFn
+	origListen := portListenFn
+	t.Cleanup(func() {
+		dockerPSOutFn = origOut
+		portListenFn = origListen
+	})
+	dockerPSOutFn = func(_ context.Context, _ string) ([]byte, error) {
+		return []byte(`{"Names":"rival","Ports":"0.0.0.0:80->80/tcp","Labels":{"com.docker.compose.project":"rival"}}` + "\n"), nil
+	}
+	portListenFn = func(int) error {
+		return errors.New("listen tcp :80: bind: address already in use") // busy
+	}
+	cfg := &config.DweConfig{Services: map[string]config.ServiceConfig{
+		"caddy": {Enabled: true, Ports: map[string]config.ServicePortSpec{"http": {Port: 80}}},
+	}}
+	if busy := WaitPortsReleased(context.Background(), cfg, time.Second, nil); busy != nil {
+		t.Errorf("live-container-owned port must be skipped, got %v", busy)
+	}
+}
+
+// TestWaitPortsReleased_OnWaitReportsLabels verifies the progress callback is
+// invoked with the service/port labels for the seed set and again as ports
+// drain — the data a live spinner footer renders.
+func TestWaitPortsReleased_OnWaitReportsLabels(t *testing.T) {
+	stubNoSleep(t)
+	withIsolatedPath(t, t.TempDir())
+	orig := portListenFn
+	t.Cleanup(func() { portListenFn = orig })
+	var calls int
+	portListenFn = func(port int) error {
+		calls++
+		// caddy:80 frees after the seed + one re-probe; db:5432 frees later.
+		switch port {
+		case 80:
+			if calls >= 3 {
+				return nil
+			}
+		case 5432:
+			if calls >= 6 {
+				return nil
+			}
+		}
+		return errors.New("listen: bind: address already in use")
+	}
+	cfg := &config.DweConfig{Services: map[string]config.ServiceConfig{
+		"caddy": {Enabled: true, Ports: map[string]config.ServicePortSpec{"http": {Port: 80}}},
+		"db":    {Enabled: true, Ports: map[string]config.ServicePortSpec{"sql": {Port: 5432}}},
+	}}
+	var snapshots [][]PortWait
+	onWait := func(w []PortWait) { snapshots = append(snapshots, w) }
+	if busy := WaitPortsReleased(context.Background(), cfg, 5*time.Second, onWait); busy != nil {
+		t.Fatalf("all ports should drain, got busy=%v", busy)
+	}
+	if len(snapshots) == 0 {
+		t.Fatal("onWait must be called at least once (seed)")
+	}
+	// Seed snapshot carries both ports, sorted by host port (80 before 5432).
+	seed := snapshots[0]
+	if len(seed) != 2 || seed[0].HostPort != 80 || seed[0].Service != "caddy" || seed[1].HostPort != 5432 || seed[1].Service != "db" {
+		t.Fatalf("seed snapshot mismatch: %+v", seed)
+	}
+	// Final snapshot must show the set shrinking (db alone before it drains).
+	last := snapshots[len(snapshots)-1]
+	if len(last) != 1 || last[0].HostPort != 5432 {
+		t.Errorf("expected last reported snapshot to be [db:5432], got %+v", last)
+	}
+}
+
+// TestWaitPortsReleased_NoPortsOrNilCfg covers the trivial guards.
+func TestWaitPortsReleased_NoPortsOrNilCfg(t *testing.T) {
+	if busy := WaitPortsReleased(context.Background(), nil, time.Second, nil); busy != nil {
+		t.Errorf("nil cfg should return nil, got %v", busy)
+	}
+	cfg := &config.DweConfig{Services: map[string]config.ServiceConfig{
+		"web": {Enabled: false, Ports: map[string]config.ServicePortSpec{"http": {Port: 8080}}},
+	}}
+	if busy := WaitPortsReleased(context.Background(), cfg, time.Second, nil); busy != nil {
+		t.Errorf("no enabled declared ports should return nil, got %v", busy)
+	}
+}
+
 func TestPortsFreeValidator_StopStageSkips(t *testing.T) {
 	// Use a free port — even so, stop stage should produce zero diagnostics.
 	cfg := &config.DweConfig{
