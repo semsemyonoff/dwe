@@ -110,7 +110,7 @@ Key fields:
 
 - **`service:`** — compose service name to target.
 - **`mode:`** — what to do if the container is not running:
-  - `exec-or-fail` (default) — refuse with an actionable error suggesting `dwe run`.
+  - `exec-or-fail` (default) — refuse with an actionable error suggesting `dwe docker up <svc>`.
   - `exec-or-run` — fall back to a fresh `docker compose run --rm` container and warn about the ephemeral run.
   - `exec` — bare `docker compose exec`; docker emits its own error if the container is down.
   - `run` — always start a fresh container.

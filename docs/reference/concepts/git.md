@@ -139,9 +139,9 @@ DWE does not perform Git operations the user did not ask for:
 - It never runs `git checkout`, `git switch`, `git reset --hard`, `git stash`, or anything else that could lose work.
 - It only runs `git fetch` and `git pull --ff-only` from the update probe, and only when `update.mode: on` is configured (or `--update on` is passed) and the working tree is clean.
 - It never pushes. The only paths that could push are user-authored Git hooks that the user wrote into a template pack — the hooks are user code, run by Git, not by DWE.
-- The workspace probe is strictly read-only — `git status --porcelain=v2` with no flags that could mutate the index.
+- The workspace probe is strictly read-only — `git status -b --porcelain=v2` with no flags that could mutate the index.
 
-Combined with the no-network principle ([Architecture → No network on the normal path](architecture.md#no-network-on-the-normal-path)), this means a `dwe` invocation other than `dwe run` with `update.mode: on` performs no Git remote operations at all.
+Combined with the no-network principle ([Architecture → No network on the normal path](architecture.md#boundaries-dwe-does-not-cross)), this means a `dwe` invocation other than `dwe run` with `update.mode: on` performs no Git remote operations at all.
 
 ## Where to go next
 

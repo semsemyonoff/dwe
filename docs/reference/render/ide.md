@@ -2,7 +2,7 @@
 
 Generate IDE-specific config files for each enabled service from a template pack. Output goes into the service's hub directory (e.g. `services/main/.vscode/settings.json`).
 
-> **Manifest required.** Every IDE pack must contain a `manifest.yml` at its root listing each file to render. The previous directory-walk behavior has been removed; a missing manifest is a hard error with a migration hint. The schema is shared with `render ai` and `render git` — see [Shared manifest schema](index.md#shared-manifest-schema). Per-file [local overrides](index.md#local-overrides) via the sibling `<pack>.local/` shadow tree apply identically to all three renderers.
+> **Manifest required.** Every IDE pack must contain a `manifest.yml` at its root listing each file to render. A missing manifest is a hard error with a migration hint. The schema is shared with `render ai` and `render git` — see [Shared manifest schema](index.md#shared-manifest-schema). Per-file [local overrides](index.md#local-overrides) via the sibling `<pack>.local/` shadow tree apply identically to all three renderers.
 
 ## Contents
 
@@ -146,7 +146,7 @@ render:
 # symlinks: optional — same semantics as render ai
 ```
 
-A missing `manifest.yml` is a hard error: existing packs that used the directory-walk behavior must add a manifest listing each file. Files inside the pack that are not referenced by `render` are ignored (the renderer never walks the pack on its own).
+A missing `manifest.yml` is a hard error: every pack must include a manifest listing each file. Files inside the pack that are not referenced by `render` are ignored (the renderer never walks the pack on its own).
 
 Validation runs in two passes:
 
@@ -304,7 +304,7 @@ Errors are returned as command failures and name the offending service so the so
 - **Typos in `render.ide.template` are hard errors.** Explicit packs are strict; a missing `workspace/templates/ide/<name>/` does not silently fall through to `default/`. Either fix the name or remove `render.ide.template`.
 - **Templates referencing missing fields fail.** Strict-mode rendering means `{{.ServiceCfg.NoSuchField}}` aborts rendering. Guard optional fields with `{{if ...}}`.
 - **Symlinks at destinations are refused.** If `.devcontainer/` or `settings.json` is a symlink, the renderer will not overwrite it. Remove the symlink and re-run.
-- **Files not listed in `manifest.yml` are silently ignored.** The renderer no longer walks the pack — add an entry under `render:` to include a template.
+- **Files not listed in `manifest.yml` are silently ignored.** The renderer does not walk the pack — add an entry under `render:` to include a template.
 - **`dir: "."` is rejected.** A service whose hub is the project root would let templates scribble over `workspace.yml` and other root files. Give every IDE-rendered service a real subdirectory.
 
 ## Related references

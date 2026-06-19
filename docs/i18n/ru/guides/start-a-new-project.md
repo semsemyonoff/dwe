@@ -1,4 +1,4 @@
-> Translated from: guides/start-a-new-project.md @ b85e2f834152
+> Translated from: guides/start-a-new-project.md @ fd6dbe67a4a7
 
 # Создание нового проекта с `dwe init`
 
@@ -82,7 +82,7 @@ dwe init my-project --default
 ├─ AGENTS.md            краткий промпт о проекте для ИИ-агентов
 ├─ CLAUDE.md          → симлинк на AGENTS.md (копия там, где симлинки недоступны)
 ├─ .dwe/
-│  └─ config            закоммиченный, полностью закомментированный шаблон пользовательской конфигурации
+│  └─ config            игнорируемый git, полностью закомментированный персональный шаблон пользовательской конфигурации
 └─ workspace/
    ├─ defaults.yml      переключатель стартового сервиса + закомментированные примеры runtime/exports
    ├─ styles.yml        брендирование из формы + закомментированный остаток

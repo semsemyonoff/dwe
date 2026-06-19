@@ -117,7 +117,7 @@ Phases and steps use the same shape as [deploy.yml](deploy/index.md): `name`, `d
 
 The optional self-update probe runs before any phase. It can fetch from the upstream remote, detect drift, and (with consent) pull `--ff-only`. A successful pull triggers in-process reload of `DweConfig`, `LifecycleConfig`, and the command registry before phases execute.
 
-The probe is **no longer configured here.** It is driven by the formalized top-level [`update:` block](workspace.md#the-update-block) in `workspace.yml` / `local.yml` (`mode: on | off`), which participates in the 3-layer merge. This was lifted out of `lifecycle.yml` so that enabling update is a one-liner that does not blank `run.phases`.
+The probe is driven by the formalized top-level [`update:` block](workspace.md#the-update-block) in `workspace.yml` / `local.yml` (`mode: on | off`), which participates in the 3-layer merge. Enabling update is a one-liner that does not blank `run.phases`.
 
 Runtime precedence at `dwe run`: `--no-update` flag > `--update <mode>` flag > `update.mode` from the merged config. See the [`update:` block reference](workspace.md#the-update-block) and [git integration → update probe](../concepts/git.md#update-probe-dwe-run) for full behaviour.
 
@@ -223,7 +223,7 @@ stop:
 On load, the file is checked for:
 
 - Each step in `run.phases` and `stop.phases` has a `type:` field with one of `shell`, `dwe`, `command`, `builtin`.
-- A `run.update` block is rejected — the self-update probe moved to the top-level [`update:` block](workspace.md#the-update-block). The strict `lifecycle.yml` decoder hard-errors on the unknown `update` key under `run:`.
+- A `run.update` block is rejected — the self-update probe is configured in the top-level [`update:` block](workspace.md#the-update-block). The strict `lifecycle.yml` decoder hard-errors on the unknown `update` key under `run:`.
 - `deploy_services: true` is rejected (only valid in `deploy.yml`).
 - `final_message` and `log` are normalized to defaults when absent.
 
@@ -234,7 +234,7 @@ Lifecycle phases use the same `parallel:` step-group container as `deploy.yml`. 
 ## Common pitfalls
 
 - **Forgetting `continue_on_error: true` on hook steps** — without it, a failing pre-stop hook aborts the entire stop sequence and containers are never stopped.
-- **Putting `update:` under `run:`** — the self-update probe no longer lives in `lifecycle.yml`. A `run.update` block is rejected at load time; move it to the top-level [`update:` block](workspace.md#the-update-block) in `workspace.yml` / `local.yml`.
+- **Putting `update:` under `run:`** — the self-update probe is configured in the top-level [`update:` block](workspace.md#the-update-block) in `workspace.yml` / `local.yml`, not in `lifecycle.yml`. A `run.update` block is rejected at load time.
 - **Adding `deploy_services` phases** — they are deploy-only. Lifecycle pipelines call services via `type: command` references instead.
 - **Editing `lifecycle.yml` to use direct `docker compose` calls** — the public API is `type: dwe` with `cmd: "docker up"`. Direct `docker compose` calls bypass policy from `docker.yml`.
 

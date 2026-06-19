@@ -1,4 +1,4 @@
-> Translated from: reference/config/lifecycle.md @ 1db04b2f2749
+> Translated from: reference/config/lifecycle.md @ cfac239a39be
 
 # lifecycle.yml
 
@@ -119,7 +119,7 @@ stop:
 
 Опциональная проба самообновления запускается до любой фазы. Она может фетчить из upstream-ремоута, детектить drift и (с согласия) пуллить `--ff-only`. Успешный pull триггерит in-process перезагрузку `DweConfig`, `LifecycleConfig` и реестра команд до выполнения фаз.
 
-Проба **больше не настраивается здесь.** Она управляется формализованным верхнеуровневым [блоком `update:`](workspace.md#блок-update) в `workspace.yml` / `local.yml` (`mode: on | off`), который участвует в трёхслойном мердже. Это было вынесено из `lifecycle.yml`, чтобы включение обновления было однострочником, который не обнуляет `run.phases`.
+Проба управляется формализованным верхнеуровневым [блоком `update:`](workspace.md#блок-update) в `workspace.yml` / `local.yml` (`mode: on | off`), который участвует в трёхслойном мердже. Включение обновления — это однострочник, который не обнуляет `run.phases`.
 
 Приоритет в runtime при `dwe run`: флаг `--no-update` > флаг `--update <mode>` > `update.mode` из смердженной конфигурации. Полное описание поведения — в [справочнике блока `update:`](workspace.md#блок-update) и [интеграции с git → проба обновления](../concepts/git.md#проба-обновления-dwe-run).
 
@@ -225,7 +225,7 @@ stop:
 При загрузке файла проверяется:
 
 - Каждый шаг в `run.phases` и `stop.phases` имеет поле `type:` с одним из `shell`, `dwe`, `command`, `builtin`.
-- Блок `run.update` отвергается — проба самообновления переехала в верхнеуровневый [блок `update:`](workspace.md#блок-update). Строгий декодер `lifecycle.yml` жёстко падает на неизвестном ключе `update` под `run:`.
+- Блок `run.update` отвергается — проба самообновления настраивается в верхнеуровневом [блоке `update:`](workspace.md#блок-update). Строгий декодер `lifecycle.yml` жёстко падает на неизвестном ключе `update` под `run:`.
 - `deploy_services: true` отвергается (валидно только в `deploy.yml`).
 - `final_message` и `log` нормализуются в значения по умолчанию при отсутствии.
 
@@ -236,7 +236,7 @@ Lifecycle-фазы используют тот же контейнер step-grou
 ## Частые ловушки
 
 - **Забыть `continue_on_error: true` на hook-шагах** — без него упавший pre-stop хук прерывает всю последовательность stop, и контейнеры не останавливаются.
-- **Размещение `update:` под `run:`** — проба самообновления больше не живёт в `lifecycle.yml`. Блок `run.update` отвергается при загрузке; перенесите его в верхнеуровневый [блок `update:`](workspace.md#блок-update) в `workspace.yml` / `local.yml`.
+- **Размещение `update:` под `run:`** — проба самообновления настраивается в верхнеуровневом [блоке `update:`](workspace.md#блок-update) в `workspace.yml` / `local.yml`, а не в `lifecycle.yml`. Блок `run.update` отвергается при загрузке.
 - **Добавление фаз `deploy_services`** — они только для деплоя. Lifecycle-пайплайны вызывают сервисы через ссылки `type: command`.
 - **Редактирование `lifecycle.yml` для использования прямых вызовов `docker compose`** — публичный API — это `type: dwe` с `cmd: "docker up"`. Прямые вызовы `docker compose` обходят политику из `docker.yml`.
 

@@ -147,7 +147,7 @@ func (v *deployFilesGateValidator) Run(ctx validate.Context) []validate.Diagnost
 		svcDeploys, err := config.LoadServiceDeployConfigs(ctx.ProjectRoot, ctx.Cfg.Services)
 		if err == nil {
 			for svcName, svcDeploy := range svcDeploys {
-				svcDeployPath := filepath.Join(ctx.ProjectRoot, "workspace", "deploy", svcName+".yml")
+				svcDeployPath := filepath.Join(ctx.ProjectRoot, "workspace", "services", svcName, "deploy.yml")
 				diags = append(diags, validateFilesGatePhases(ctx.Cfg, reg, svcDeploy.Phases,
 					relPath(ctx.ProjectRoot, svcDeployPath), fmt.Sprintf("config.service-deploy[%s]", svcName))...)
 			}

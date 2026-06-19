@@ -124,13 +124,13 @@ vars:
     retries: 3
 ```
 
-`vars` is a normal merged key, so its contents are reachable by dot-path exactly like before — only the prefix changes:
+`vars` is a normal merged key, so its contents are reachable by dot-path under the `vars.` prefix:
 
 - Export rules: `from: vars.db.user`
 - `${...}` templates: `${vars.db.database}`
 - Custom commands / `config_keys_present` checks: `vars.db.api_key`
 
-The resolver is unchanged; `vars.*` resolves through `DweConfig.Raw` by dot-path just like `services.*`. Migrating a project from the old open namespace is purely mechanical: wrap the former root keys under `vars:` and prefix every reference with `vars.`.
+`vars.*` resolves through `DweConfig.Raw` by dot-path just like `services.*`.
 
 The [`dwe vars`](vars.md) command enumerates, reads, edits, and traces every value under this block — see [`vars.md`](vars.md) for the subcommands, the author/local/effective layer model, comment-preserving `local.yml` writes, the static usage scan, and the `bridge.vars_writable` container-write allowlist.
 
@@ -204,7 +204,7 @@ Resolution semantics (`UpdateConfig.EffectiveMode()`): a missing block (`nil`) �
 
 Runtime precedence at `dwe run`: `--no-update` flag > `--update <mode>` flag > `update.mode` from the merged config.
 
-This block decouples *enabling update* from the lifecycle phases. (It previously lived under `run.update` in `lifecycle.yml`, where writing it blanked `run.phases`; see [`lifecycle.md`](lifecycle.md) and [git integration → update probe](../concepts/git.md#update-probe-dwe-run).)
+This block decouples *enabling update* from the lifecycle phases. (See [`lifecycle.md`](lifecycle.md) and [git integration → update probe](../concepts/git.md#update-probe-dwe-run).)
 
 ### The `stop:` block
 

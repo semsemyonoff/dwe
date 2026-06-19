@@ -1,4 +1,4 @@
-> Translated from: reference/config/services/index.md @ 9b55856383cf
+> Translated from: reference/config/services/index.md @ 668a687bb5c9
 
 # Конфигурация сервиса (`workspace/services/<name>/service.yml`)
 
@@ -26,7 +26,7 @@
 
 | `type:` | Семантика | Жизненный цикл deploy | Цель `depends_on:` | Поля только для app |
 |---------|-----------|------------------|----------------------|-----------------|
-| `app`   | Сервис с исходным кодом в `dir:`; рендерит шаблоны IDE/AI/git; запускается через `dwe deploy`. | да (может существовать `workspace/services/<name>/deploy.yml`) | да | да (`dir`, `dir_internal`, `work_dir_internal`, `configs`, `dirs`, `extends`, `cli`, `render`) |
+| `app`   | Сервис с исходным кодом в `dir:`; рендерит шаблоны IDE/AI/git; запускается через `dwe deploy`. | да (может существовать `workspace/services/<name>/deploy.yml`) | да | да (`dir`, `dir_internal`, `work_dir_internal`, `configs`, `dirs`, `extends`, `cli`, `render`, `generated`) |
 | `tool`  | Эфемерный служебный контейнер (adminer, mailpit, redis-insight). Не может быть целью зависимости ни одного сервиса. | нет | **нет** | нет |
 | `infra` | Поддерживающий сервис (БД, кеш, очередь, поиск). Может быть целью зависимости для `app` / других `infra`. | нет | да | нет |
 

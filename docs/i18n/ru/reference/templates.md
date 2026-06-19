@@ -1,4 +1,4 @@
-> Translated from: reference/templates.md @ af37f3b26145
+> Translated from: reference/templates.md @ 6d4bb783baa9
 
 # Шаблоны
 
@@ -28,9 +28,9 @@ Go-шаблоны (с библиотекой функций [go-sprout](https://
 | `deploy.yml` / `lifecycle.yml` / `reset.yml` — `when: type: template, expr:` | `{{ ... }}` | Разрешённая конфигурация проекта | Вычисляется на этапе планирования. См. [deploy](config/deploy/index.md) |
 | Билтин `message` — `text:` | `{{ ... }}` | Разрешённая конфигурация проекта | См. [билтин message](config/deploy/builtins.md#message) |
 | `docker.yml` — `project_name` | Только `${...}` | Разрешённая конфигурация проекта (lookup'ы по `.Raw`) | Только dot-path lookups (без `{{ }}`-логики). См. [docker.md](config/docker.md) |
-| `workspace/templates/git/<pack>/**/*.tmpl` | `{{ ... }}` | Контекст render-пака (`.Project`, `.Service`, `.ServiceCfg`, `.Runtime`, `.Services`, `.Cfg`) | Строгий режим. См. [render/git.md](render/git.md) |
-| `workspace/templates/ide/<pack>/**/*.tmpl` | `{{ ... }}` | Контекст render-пака (`.Project`, `.Service`, `.ServiceCfg`, `.Runtime`, `.Services`, `.Cfg`) | Строгий режим. См. [render/ide.md](render/ide.md) |
-| `workspace/templates/ai/<pack>/**/*.tmpl` | `{{ ... }}` | Контекст render-пака (`.Project`, `.Service`, `.ServiceCfg`, `.Runtime`, `.Services`, `.Cfg`) | Строгий режим. См. [render/ai.md](render/ai.md) |
+| `workspace/templates/git/<pack>/**/*.tmpl` | `{{ ... }}` | Контекст render-пака (`.Project`, `.Service`, `.Resolved`, `.ServiceCfg`, `.Runtime`, `.Services`, `.Cfg`) | Строгий режим. См. [render/git.md](render/git.md) |
+| `workspace/templates/ide/<pack>/**/*.tmpl` | `{{ ... }}` | Контекст render-пака (`.Project`, `.Service`, `.Resolved`, `.ServiceCfg`, `.Runtime`, `.Services`, `.Cfg`) | Строгий режим. См. [render/ide.md](render/ide.md) |
+| `workspace/templates/ai/<pack>/**/*.tmpl` | `{{ ... }}` | Контекст render-пака (`.Project`, `.Service`, `.Resolved`, `.ServiceCfg`, `.Runtime`, `.Services`, `.Cfg`) | Строгий режим. См. [render/ai.md](render/ai.md) |
 | `workspace/templates/config/<pack>/**` | `${...}` | Разрешённая конфигурация проекта (`.Raw`) + курируемый поднабор `${services.<name>...}` + `${generated.<name>}` | Lenient (отсутствующее → `""`). См. [render/config.md](render/config.md) |
 | `params.*.default_from`, `context.*.from` | — | — | Только plain dot-paths (без template-выражений). |
 
@@ -103,7 +103,8 @@ cmd: |
 | Переменная | Источник |
 |------------|----------|
 | `.Project` | блок `project:` из `workspace.yml` |
-| `.Service` | имя сервиса (ключ карты в `services:`) |
+| `.Service` | каноническая идентичность конфига — корень цепочки `extends:` рендерящегося сервиса (равно `.Resolved`, когда цепочки extends нет) |
+| `.Resolved` | идентичность рендера — ключ карты сервиса, который фактически рендерится (победитель политики коллизий) |
 | `.ServiceCfg` | эффективная конфигурация сервиса после разрешения `extends` |
 | `.Runtime` | смерженный блок `runtime` (`.Runtime.UseHTTPS`, `.Runtime.SPX.Path`). Порты / хосты на сервис находятся в каждой записи сервиса (см. `.Services` ниже). |
 | `.Services` | сервисы по имени. Используйте `(index .Services "<name>")` для выборки; хелперы записи `.Port "<port-name>"` / `.Host "<host-name>"` / `.PortScheme "<port-name>"` (возвращает `""`, если переопределения нет) / `.EffectiveScheme "<port-name>" .Runtime.UseHTTPS` (возвращает `"http"` / `"https"` после прохода по цепочке per-port → сервис → runtime). Подмножества по типу — через `.AppServices` / `.ToolServices` / `.InfraServices`. |

@@ -21,7 +21,7 @@ Directives common to **all** command types unless noted otherwise. Type-specific
 | Field | Type | Default | Description |
 |-------|------|---------|-------------|
 | `type` | enum | required | One of `shell`, `dwe`, `script`, `service_exec`, `service_run`, `workflow`, `builtin`, `daemon` |
-| `description` | string | — | Human-readable description shown in the DWE CLI (selectors, `commands list`, `commands inspect`) |
+| `description` | string | — | Human-readable description shown in the DWE CLI (selectors, `commands list`, `commands -i`) |
 | `private` | bool | `false` | Hides from `dwe commands list` and blocks direct `commands run`; still callable from workflows and pipelines |
 | `hide` | string | `""` | Condition expression. When truthy at runtime, the command is treated as if it does not exist: invisible in `dwe commands`, completion, and TUI; rejected on direct invocation; and workflow steps targeting it are auto-skipped with `SkipReason="hidden"`. Same syntax as workflow step `when:` — see [Hide condition](#hide-condition) below. |
 | `bridge` | block | absent | Opts the command in to the container surface of the [host bridge](../../concepts/bridge.md) — without it the command is host-only and invisible to the in-container `dwe` shim. See [Bridge visibility](#bridge-visibility) below. |
@@ -34,7 +34,7 @@ Directives common to **all** command types unless noted otherwise. Type-specific
 - `private:` is a static developer intent — the command is always invisible to end users.
 - `hide:` is a per-invocation condition — the command appears when the condition is falsy and disappears when truthy. Typical use: tie commands to enabled services.
 
-The expression syntax matches workflow step `when:` — supports Go templates (`{{ ... }}`), `${...}` variable substitution, and builtin predicates (`cmd:`, `file:`). See [conditions](../conditions.md) for the full grammar.
+The expression syntax matches workflow step `when:` — supports Go templates (`{{ ... }}`), `${...}` variable substitution, the `cmd:` prefix for shell-command predicates, and hyphenated filesystem predicates like `file-exists` / `file-missing` / `dir-exists` (there is no `file:` prefix). See [conditions](../conditions.md) for the full grammar.
 
 Cascade rules:
 
@@ -99,7 +99,7 @@ Semantics worth knowing:
 - **Execution is never gated.** A bridged workflow happily runs non-bridged sub-commands — the gate covers the container *invocation surface*, not what the host may execute on a container's behalf.
 - **`extends:` children inherit the parent's rights.** Matching follows the calling service's [`extends:`](../services/extends.md) chain: with `admin` extending `main`, a command listing `services: [main]` is also visible from the `admin` container. The reverse never holds — listing `admin` does not admit `main`.
 - **No magic from `service:`.** A `service_exec` command targeting `main` is not auto-restricted to the `main` container; restriction is always explicit via `bridge.services`.
-- **The caller identity is advisory.** The shim reports its service via `DWE_BRIDGE_SERVICE` (overlay-injected); a container could claim another name. `bridge.services` is a UX boundary between containers of one project — the security boundary stays the bridge's [top-level command allowlist](../../concepts/bridge.md#container-command-policy).
+- **The caller identity is advisory.** The shim reports its service via `DWE_BRIDGE_SERVICE` (overlay-injected); a container could claim another name. `bridge.services` is a UX boundary between containers of one project — the security boundary stays the bridge's [top-level command allowlist](../../concepts/bridge.md#command-policy-inside-containers).
 - `dwe validate` warns when `bridge.services` names an unknown service or one whose `service.yml` has the bridge disabled (unless a bridge-enabled service extends it — the entry still works for those children).
 
 ## Confirmation
@@ -176,7 +176,7 @@ db.import:
   type: script
   notify: true            # fires once when `dwe commands db.import` finishes
   script:
-    inline: ...
+    path: workspace/scripts/db-import.sh
 ```
 
 Validation rules:
@@ -205,7 +205,7 @@ params:
 | Field | Type | Description |
 |-------|------|-------------|
 | `type` | enum | `string` (default), `bool`, `int`, `path` |
-| `description` | string | Human-readable description shown in the DWE CLI (param help in selectors and `commands inspect`) |
+| `description` | string | Human-readable description shown in the DWE CLI (param help in selectors and `commands -i`) |
 | `required` | bool | Error if not supplied and no default resolves |
 | `default_from` | string | Dot-path into the merged DWE config; preferred source for the default |
 | `default` | string | Literal fallback used when nothing else resolves |
@@ -319,14 +319,7 @@ env:
   NON_INTERACTIVE: "{{ if .Params.no_prompt }}1{{ else }}0{{ end }}"
 ```
 
-Resolution order when the same env name is declared in multiple places:
-
-1. `context.<key>.env`
-2. `params.<key>.env`
-3. `files.<id>.env`
-4. `env:` block (highest precedence)
-
-A duplicate name across any of these is rejected at load time — declare each env var exactly once.
+Each env var name must be declared exactly once across `context.<key>.env`, `params.<key>.env`, `files.<id>.env`, and the `env:` block — a duplicate name across any of these is rejected at load time (there is no override/precedence, collisions are errors).
 
 ## Files
 

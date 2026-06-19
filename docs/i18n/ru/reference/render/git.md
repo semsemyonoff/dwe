@@ -1,4 +1,4 @@
-> Translated from: reference/render/git.md @ f8537aeb98f0
+> Translated from: reference/render/git.md @ 23d430061993
 
 # dwe render git
 
@@ -60,7 +60,7 @@ flowchart TD
 | Уровень проекта | `services.<name>.enabled` (3-слойный merged + обязательный service override) | зависит от сервиса |
 | Политика git | `services.<name>.render.git.enabled` | `true` для `type: app`; `false` иначе |
 
-Политика по умолчанию зеркалит [`render ide`](ide.md) (а не `render ai`): хуки рендерятся по умолчанию только для `type: app`, потому что там разработчики обычно коммитят код. Прочим типам сервисов нужно явно включить `render.git.enabled: true`.
+Политика по умолчанию такая же, как у [`render ide`](ide.md) и `render ai`: хуки рендерятся по умолчанию только для `type: app`, потому что там разработчики обычно коммитят код. Прочим типам сервисов нужно явно включить `render.git.enabled: true`.
 
 Наследование через `extends` подчиняется тем же правилам, что у `render.ide` и `render.ai`: ребёнок без явного значения наследует у родителя `render.git.enabled` и `render.git.template`.
 
@@ -205,7 +205,7 @@ render:
 ```sh
 #!/usr/bin/env sh
 # pre-commit hook for {{.Resolved}} ({{.ServiceCfg.Container}})
-exec dwe run --service {{.Resolved}} lint
+exec dwe cmd lint
 ```
 
 `workspace/services/main/service.yml`:
@@ -266,7 +266,7 @@ services/main/src/.git/hooks/
 
 ## Связанные справочники
 
-- [блок `services.<name>.render.git`](../config/services/fields.md#rendergit-block) — `enabled`, `template`, наследование через `extends`
+- [блок `services.<name>.render.git`](../config/services/fields.md#блок-rendergit) — `enabled`, `template`, наследование через `extends`
 - [`render ide`](ide.md) — родственная команда с той же политикой «глубочайший выигрывает»
 - [`render ai`](ai.md) — родственная команда (поверхностнейший выигрывает), разделяющая схему manifest
 - [Обзор render](index.md) — общая схема manifest и механизм локальных оверрайдов

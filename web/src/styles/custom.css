@@ -1,0 +1,39 @@
+/* Header: logo + version badge, laid out inline. */
+.dwe-site-title {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  min-width: 0;
+}
+
+/* Keep the horizontal wordmark logo to a sensible header height. */
+.dwe-site-title .site-title img {
+  height: 1.6rem;
+  width: auto;
+}
+
+.dwe-version {
+  flex: none;
+  font-size: var(--sl-text-xs);
+  font-weight: 600;
+  line-height: 1.4;
+  white-space: nowrap;
+  text-decoration: none;
+  color: var(--sl-color-gray-2);
+  background: var(--sl-color-gray-6);
+  border: 1px solid var(--sl-color-gray-5);
+  border-radius: 999px;
+  padding: 0.1rem 0.55rem;
+}
+
+.dwe-version:hover {
+  color: var(--sl-color-white);
+  border-color: var(--sl-color-gray-4);
+}
+
+/* On narrow viewports the header is tight — drop the badge rather than wrap. */
+@media (max-width: 30rem) {
+  .dwe-version {
+    display: none;
+  }
+}

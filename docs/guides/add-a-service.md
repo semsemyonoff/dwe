@@ -172,7 +172,7 @@ The **config** pack is the odd one out and worth calling out:
 
 - It writes straight into the service's mounted hub dir (its `dir`), mode replace — these are the files the container actually reads at runtime, not editor/agent metadata.
 - Its templates use the `${...}` shorthand (e.g. `DB_HOST=${services.db.hosts.main}`), the same form as export rules — not the raw `{{ }}` substrate the ide/ai/git packs use.
-- It supports **generated-once secrets** (Laravel `APP_KEY`, Magento `crypt.key`, …): the *service* mints the value, DWE harvests it into `.dwe/generated.yml` and replays it on every later render via `${generated.<name>}`. This is the render-based successor to the deprecated `service_configs_copy` mechanism.
+- It supports **generated-once secrets** (Laravel `APP_KEY`, Magento `crypt.key`, …): the *service* mints the value, DWE harvests it into `.dwe/generated.yml` and replays it on every later render via `${generated.<name>}`.
 - Config render also runs automatically as a `dwe run` preamble and as a deploy step; `dwe render config` is mainly for previewing and for the one-off `--harvest` pass.
 
 If you don't need any of these, omit the `render:` block entirely.

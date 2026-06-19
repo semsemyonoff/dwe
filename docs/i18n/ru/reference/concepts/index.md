@@ -1,4 +1,4 @@
-> Translated from: reference/concepts/index.md @ c20cc9a1a5e4
+> Translated from: reference/concepts/index.md @ e92a3358a354
 
 # Концепции
 
@@ -21,4 +21,4 @@
 
 - [Справочник по конфигурации](../config/index.md) — справочник по полям для каждого конфигурационного файла.
 - [Render-паки](../render/index.md) — `dwe render env`, `render ide`, `render ai`, `render git`.
-- [Справочник CLI](../cli/index.md) — автогенерируемое дерево команд.
+- Запустите `dwe --help` (или любую подкоманду с `--help`) для актуального дерева команд.

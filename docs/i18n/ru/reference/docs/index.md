@@ -1,4 +1,4 @@
-> Translated from: reference/docs/index.md @ ed2cd4ebfc08
+> Translated from: reference/docs/index.md @ f186572d07c2
 
 # Подсистема документации
 
@@ -7,7 +7,7 @@ DWE включает встроенный браузер документаци�
 ## Страницы
 
 - [Интерактивный TUI-браузер](browser.md) — клавиши `dwe docs`, раскладка, поиск
-- [Неинтерактивные команды](commands.md) — `show`, `list`, `export`, `llms-txt`, `cache clear`, а также настройка mermaid и установка `mmdc`
+- [Неинтерактивные команды](commands.md) — `show`, `list`, `search`, `export`, `llms-txt`, `cache clear`, а также настройка mermaid и установка `mmdc`
 - [Переводы и поведение языка](translations.md) — разрешение локали, раскладка файлов, проверка устаревания по контент-хешу
 
 ## Быстрый старт
@@ -40,8 +40,11 @@ DWE автоматически обнаруживает и подключает 
 Когда `./docs/` существует, TUI-браузер показывает вторую верхнеуровневую ветку:
 ```
 DWE
-  reference/
-  internals/
+  concepts/
+  config/
+  render/
+  guides/
+  README
 Project
   guides/
   examples/
@@ -108,4 +111,4 @@ docs:
 
 - `dwe docs generate` — сгенерировать markdown-документацию из пользовательских команд
 - `dwe validate` — проверить документацию на ошибки и осиротевшие записи переводов
-- `dwe command list` — вывести пользовательские команды с переведёнными описаниями
+- `dwe commands list` — вывести пользовательские команды с переведёнными описаниями

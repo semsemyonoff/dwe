@@ -1,4 +1,4 @@
-> Translated from: reference/concepts/architecture.md @ e0c6c3942a83
+> Translated from: reference/concepts/architecture.md @ 0fa38ae667ca
 
 # Архитектура
 
@@ -121,7 +121,7 @@ sequenceDiagram
 Несколько жёстких линий, которые держат архитектуру предсказуемой:
 
 - **DWE не заменяет `docker` или `docker compose`.** Любая операция с контейнерами — это вызов через shell. Никакого встроенного compose-движка.
-- **DWE не устанавливает Docker.** Ожидается, что на хосте есть `docker` и `docker compose` в `$PATH`. DWE вызывает их через настраиваемые переопределения (`docker_bin`), но не разворачивает сам engine.
+- **DWE не устанавливает Docker.** Ожидается, что на хосте есть `docker` и `docker compose` в `$PATH`. DWE вызывает их через настраиваемые переопределения (`binary_docker` в ~/.config/dwe/config), но не разворачивает сам engine.
 - **DWE не работает как демон.** Никакого фонового процесса, сокета, tray-приложения. Каждая команда начинается заново, читает конфиг, делает свою работу, выходит. Единственное исключение — [хост-бридж](bridge.md): пока стек поднят, per-project демон-форвардер обслуживает вызовы `dwe` из dev-контейнеров и автоматически останавливается вместе с последним контейнером.
 - **DWE не делает сетевых вызовов на штатном пути.** Никаких обращений к внешним серверам, проверок обновлений, скачиваний шаблонов. Сетевой трафик возникает только из того, что пользователь сам положил в шаг пайплайна или пользовательскую команду (`curl` в шаге `type: shell`, `docker pull` из реестра, `git push` в хуке).
 - **DWE не управляет `/etc/hosts` или прокси.** Имена вроде `my-project.localhost` резолвятся через системный резолвер (`*.localhost` — это loopback по RFC) или через локальный DNS / reverse proxy, который запускает разработчик. DWE рендерит имена в конфиг и в info-панель; маршрутизация — вне его зоны ответственности.
@@ -135,4 +135,4 @@ sequenceDiagram
 - [Пайплайны](pipelines.md) — модель выполнения phase / step / condition, которую разделяют deploy, reset и lifecycle.
 - [Состояние и блокировки](state-and-locks.md) — что записывает `state.yml` и как `deploy.lock` / `snapshot.lock` сериализуют мутации.
 - [Интеграция с Git](git.md) — что DWE рендерит в `.git/hooks/` проекта и как собирается обзор workspace.
-- Для контрибьюторов: [`docs/internals/architecture.md`](../../internals/architecture.md) — внутреннее разделение `cli/` ↔ `core/` ↔ `shared/` внутри бинарника, и [`docs/internals/packages.md`](../../internals/packages.md) для ответственностей пакетов.
+- Для контрибьюторов: [`docs/internals/architecture.md`](../../../../internals/architecture.md) — внутреннее разделение `cli/` ↔ `core/` ↔ `shared/` внутри бинарника, и [`docs/internals/packages.md`](../../../../internals/packages.md) для ответственностей пакетов.

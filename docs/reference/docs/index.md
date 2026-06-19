@@ -5,7 +5,7 @@ DWE includes an integrated documentation browser and reference system. Access em
 ## Pages
 
 - [Interactive TUI browser](browser.md) — `dwe docs` keys, layout, search
-- [Non-interactive commands](commands.md) — `show`, `list`, `export`, `llms-txt`, `cache clear`, plus mermaid configuration and `mmdc` install
+- [Non-interactive commands](commands.md) — `show`, `list`, `search`, `export`, `llms-txt`, `cache clear`, plus mermaid configuration and `mmdc` install
 - [Translations and language behavior](translations.md) — locale resolution, file layout, content-hash staleness check
 
 ## Quick start
@@ -38,8 +38,11 @@ DWE automatically detects and includes documentation from your project's `./docs
 When `./docs/` exists, the TUI browser shows a second top-level branch:
 ```
 DWE
-  reference/
-  internals/
+  concepts/
+  config/
+  render/
+  guides/
+  README
 Project
   guides/
   examples/
@@ -106,4 +109,4 @@ Once the cache exceeds this limit, oldest diagrams are automatically deleted (LR
 
 - `dwe docs generate` — Generate markdown documentation from user commands
 - `dwe validate` — Check for documentation errors and orphan translation entries
-- `dwe command list` — List user commands with translated descriptions
+- `dwe commands list` — List user commands with translated descriptions

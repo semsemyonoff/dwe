@@ -33,7 +33,7 @@ func (v *parallelGroupsValidator) Run(ctx validate.Context) []validate.Diagnosti
 		svcDeploys, err := config.LoadServiceDeployConfigs(ctx.ProjectRoot, ctx.Cfg.Services)
 		if err == nil {
 			for svcName, svcDeploy := range svcDeploys {
-				svcPath := filepath.Join(ctx.ProjectRoot, "workspace", "deploy", svcName+".yml")
+				svcPath := filepath.Join(ctx.ProjectRoot, "workspace", "services", svcName, "deploy.yml")
 				target := fmt.Sprintf("config.service-deploy[%s]", svcName)
 				diags = append(diags, validateParallelPhases(reg, svcDeploy.Phases, target, relPath(ctx.ProjectRoot, svcPath))...)
 			}

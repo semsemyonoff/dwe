@@ -1,4 +1,4 @@
-> Translated from: reference/render/index.md @ 99b43c7c23a8
+> Translated from: reference/render/index.md @ 9c89862939c3
 
 # Справочник Render
 
@@ -38,11 +38,13 @@ flowchart LR
   M --> I[render ide]
   M --> A[render ai]
   M --> G[render git]
+  M --> C[render config]
 
   E --> EOUT[".env / stdout"]
   I --> IOUT["services/{name}/..."]
   A --> AOUT["services/{name}/AGENTS.md<br/>services/{name}/CLAUDE.md<br/>..."]
   G --> GOUT["services/{name}/src/.git/hooks/...<br/>(режим 0755)"]
+  C --> COUT["services/{name}/.env<br/>services/{name}/env.php<br/>..."]
 ```
 
 Каждая подкоманда:
@@ -50,25 +52,26 @@ flowchart LR
 1. Загружает объединённую конфигурацию. Отсутствующая или невалидная проектная конфигурация — жёсткая ошибка.
 2. Выбирает цели:
    - `env` — один артефакт, без выборки.
-   - `ide` / `ai` / `git` — итерирует сервисы, применяет политику выборки, опционально сужает до одного сервиса через аргумент `[service]`.
+   - `ide` / `ai` / `git` / `config` — итерирует сервисы, применяет политику выборки, опционально сужает до одного сервиса через аргумент `[service]`.
 3. Пишет выходные файлы. Куда они идут — зависит от подкоманды:
    - `render ide` и `render ai` пишут внутрь hub-каталога каждого сервиса, привязанного к корню проекта (каталог, содержащий `workspace.yml`), и применяют границы безопасности путей.
    - `render git` пишет в `<svc.Dir>/src/.git/hooks/` для каждого сервиса, у которого `src/.git` — реальный каталог; назначение никогда не отслеживается git.
+   - `render config` пишет runtime config-файлы по каждому сервису (`.env`, `env.php`, …) внутрь hub-каталога каждого сервиса из `workspace/templates/config/<pack>/`, воспроизводя собранные секреты; app-сервисы итерируются в порядке `DeployOrder`.
    - `render env` пишет в stdout по умолчанию или в аргумент `--out <path>` как задано. Путь `--out` трактуется относительно текущего рабочего каталога, не корня проекта — указывайте абсолютный путь, если нужно детерминированное расположение независимо от того, откуда запущена команда.
 
 ## Вход и выход одним взглядом
 
-| Аспект | `render env` | `render ide` | `render ai` | `render git` |
-|--------|--------------|--------------|-------------|--------------|
-| Итерирует сервисы | нет | да | да | да |
-| Читает шаблоны с диска | нет | да (через manifest) | да (через manifest) | да (через manifest) |
-| Пер-сервисное поле opt-in | — | `services.<name>.render.ide.enabled` | `services.<name>.render.ai.enabled` | `services.<name>.render.git.enabled` |
-| Политика opt-in по умолчанию | — | `true` для `type: app`; `false` иначе | `true` для `type: app`; `false` иначе | `true` для `type: app`; `false` иначе |
-| Политика коллизий при общем `dir` | — | выигрывает самый глубокий `extends` (per-variant override) | выигрывает самый поверхностный `extends` (каноническая идентичность hub) | выигрывает самый глубокий `extends` (per-variant хуки) |
-| Файл manifest | — | `manifest.yml` объявляет `render` (+ `symlinks`) | `manifest.yml` объявляет `render` + `symlinks` | `manifest.yml` объявляет только `render` |
-| Поддерживаются симлинки | нет | да (относительные, внутри hub) | да (относительные, внутри hub) | нет — `to` должен быть basename |
-| Режим вывода | n/a | как написано | как написано | явный `chmod 0755` на каждый прогон |
-| Защита путей | n/a | отказ от симлинков в пакете и назначении | отказ от симлинков в пакете и назначении | preflight hub-а + отказ от симлинков в `.git/hooks/` |
+| Аспект | `render env` | `render ide` | `render ai` | `render git` | `render config` |
+|--------|--------------|--------------|-------------|--------------|-----------------|
+| Итерирует сервисы | нет | да | да | да | да (app-сервисы, `DeployOrder`) |
+| Читает шаблоны с диска | нет | да (через manifest) | да (через manifest) | да (через manifest) | да (через manifest) |
+| Пер-сервисное поле opt-in | — | `services.<name>.render.ide.enabled` | `services.<name>.render.ai.enabled` | `services.<name>.render.git.enabled` | разрешимый config-пакет (только app) |
+| Политика opt-in по умолчанию | — | `true` для `type: app`; `false` иначе | `true` для `type: app`; `false` иначе | `true` для `type: app`; `false` иначе | только app-сервисы; нет пакета → молча no-op |
+| Политика коллизий при общем `dir` | — | выигрывает самый глубокий `extends` (per-variant override) | выигрывает самый поверхностный `extends` (каноническая идентичность hub) | выигрывает самый глубокий `extends` (per-variant хуки) | hub родителя `extends` рендерится один раз (alias пропускается) |
+| Файл manifest | — | `manifest.yml` объявляет `render` (+ `symlinks`) | `manifest.yml` объявляет `render` + `symlinks` | `manifest.yml` объявляет только `render` | `manifest.yml` объявляет только `render` |
+| Поддерживаются симлинки | нет | да (относительные, внутри hub) | да (относительные, внутри hub) | нет — `to` должен быть basename | нет — отвергаются |
+| Режим вывода | n/a | как написано | как написано | явный `chmod 0755` на каждый прогон | replace (перезапись) |
+| Защита путей | n/a | отказ от симлинков в пакете и назначении | отказ от симлинков в пакете и назначении | preflight hub-а + отказ от симлинков в `.git/hooks/` | отказ от симлинков в пакете и назначении |
 
 ## Общая схема manifest
 
@@ -119,7 +122,7 @@ Manifest загружается со строгим YAML-декодом (`yaml.D
 | `workspace/docker.yml` | `workspace/docker.local.yml` |
 | `workspace/templates/<kind>/<pack>/` | `workspace/templates/<kind>/<pack>.local/` |
 
-`.dwe/` (runtime-каталог) никогда не используется для пользовательских оверрайдов — он зарезервирован под управляемое DWE состояние (`state.yml`, `deploy.lock`, `logs/`).
+`.dwe/` (runtime-каталог) никогда не используется для пользовательских оверрайдов — он зарезервирован под управляемое DWE состояние (`deploy/state.yml`, `deploy/deploy.lock`, `logs/`).
 
 ### Вход vs выход
 

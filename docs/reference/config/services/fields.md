@@ -198,8 +198,7 @@ Services without an `info` block are still included in `auto-urls` dashboard blo
 > [`generated` block](#generated-block). It keeps working but `dwe validate` emits
 > a warning and a single runtime deprecation notice fires per copy step. New
 > projects should render configs from template packs; see
-> [render config](../../render/config.md) for the migration. The copy code is
-> removed in a separate phase-2 (major) effort.
+> [render config](../../render/config.md) for the migration.
 
 Lists config files that are copied into the service hub during deploy.
 

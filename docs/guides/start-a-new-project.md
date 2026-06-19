@@ -80,7 +80,7 @@ With `--output json` you get a structured report instead of prose:
 ├─ AGENTS.md            brief project prompt for AI agents
 ├─ CLAUDE.md          → symlink to AGENTS.md (a copy where symlinks are unavailable)
 ├─ .dwe/
-│  └─ config            committed, all-commented user-config template
+│  └─ config            gitignored, all-commented per-developer user-config template
 └─ workspace/
    ├─ defaults.yml      starter service toggle + commented runtime/exports examples
    ├─ styles.yml        branding from the form + commented rest

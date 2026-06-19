@@ -1,5 +1,5 @@
 === .dwe/config ===
-# .dwe/config — per-project DWE user overrides (committed, all-commented).
+# .dwe/config — per-project DWE user overrides (gitignored, all-commented).
 #
 # This file pins per-developer preferences for THIS project without touching the
 # global ~/.config/dwe/config. It is read by every `dwe` invocation run inside

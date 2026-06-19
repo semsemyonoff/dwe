@@ -1,0 +1,75 @@
+name: docs
+
+# Builds the Astro Starlight documentation site (web/) from the canonical docs/
+# tree and deploys it to GitHub Pages. Independent of release.yml — the site
+# tracks the latest docs on main, not the last released tag.
+#
+# One-time setup: repo Settings → Pages → Source = "GitHub Actions".
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'docs/**'
+      - 'web/**'
+      - '.github/workflows/docs.yml'
+  # PRs build (and run the link validator) but do not deploy — catches broken
+  # docs links before merge.
+  pull_request:
+    paths:
+      - 'docs/**'
+      - 'web/**'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+# Never cancel an in-flight deploy; serialize Pages publishes.
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: web
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          # Full history + tags so the sync's `git describe` resolves the version
+          # shown in the site header.
+          fetch-depth: 0
+          # Build only reads the repo + uploads an artifact; it never needs the
+          # checkout token, so don't leave it on disk.
+          persist-credentials: false
+      - uses: actions/setup-node@v6
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+      - run: npm ci
+      # `prebuild` runs scripts/sync-docs.mjs (docs/ → src/content/docs/) before
+      # Astro builds; starlight-links-validator fails the build on any broken
+      # internal link.
+      - run: npm run build
+      - uses: actions/upload-pages-artifact@v4
+        with:
+          path: web/dist
+
+  deploy:
+    needs: build
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    # Only the deploy job publishes to Pages; keep the write scope off every
+    # other job (the top-level grant is contents: read).
+    permissions:
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v4

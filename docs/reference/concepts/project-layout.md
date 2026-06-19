@@ -18,7 +18,7 @@ What a typical DWE project looks like on disk: the tracked config tree under `wo
 A DWE project is any directory whose root contains a `workspace.yml`. The CLI walks upward from the current working directory to find it. Around that anchor, three folder families coexist:
 
 - The **tracked config tree** under `workspace/` and the project-root config files — checked in, versioned, the source of truth for project shape.
-- The **tracked runtime overlays** — Docker Compose files under `compose/` and image build contexts (`images/<service>/Dockerfile`) for services built from source. DWE does not generate these; they live alongside the config tree and are referenced from it. (Per-service runtime config files — `.env`, `env.php`, … — are no longer kept as a checked-in `configs/` tree; they are *rendered* from a [config template pack](../render/config.md) into each service's hub dir.)
+- The **tracked runtime overlays** — Docker Compose files under `compose/` and image build contexts (`images/<service>/Dockerfile`) for services built from source. DWE does not generate these; they live alongside the config tree and are referenced from it. (Per-service runtime config files — `.env`, `env.php`, … — are *rendered* from a [config template pack](../render/config.md) into each service's hub dir.)
 - The **runtime data** that DWE and the containers produce — `.dwe/` (CLI bookkeeping), `snapshots/` (unpacked snapshot stash), and `backups/` (database and other dumps). Gitignored. Persistent container data lives in Docker-managed named volumes.
 
 ```mermaid
@@ -101,7 +101,7 @@ Everything declarative about a project — services, pipelines, commands, templa
 | `workspace/local.yml` | Per-developer overrides on top of `defaults.yml`: port overrides, enabled flags, credentials, wizard answers | CLI (merge layer 3) | Author manually + setup wizard + `dwe services enable/disable` | no |
 | `workspace/services/<name>/` | One folder per service. Folder name is the service ID — there is no `name:` field. | CLI service loader | Author manually | yes (except `local.yml` overrides) |
 | `workspace/commands/` | Declarative user commands surfaced under `dwe <name>` | CLI command registry | Author manually | yes |
-| `workspace/templates/` | Template packs consumed by `dwe render` — one subdir per kind: `config/`, `ai/`, `git/`, `ide/`, each holding `<pack>/manifest.yml` + files (`render env` uses no pack). The `config/` packs render per-service runtime config files (`.env`, …) into the service hub and replace the legacy checked-in `configs/` tree | CLI render pipeline | Author manually | yes |
+| `workspace/templates/` | Template packs consumed by `dwe render` — one subdir per kind: `config/`, `ai/`, `git/`, `ide/`, each holding `<pack>/manifest.yml` + files (`render env` uses no pack). The `config/` packs render per-service runtime config files (`.env`, …) into the service hub | CLI render pipeline | Author manually | yes |
 | `workspace/i18n/` | Per-locale string overrides (`<lang>.yml`); paired with embedded defaults | CLI i18n store | Author manually + translators | yes |
 | `workspace/scripts/` | Shell scripts referenced from declarative commands and pipelines | Pipeline steps + user commands | Author manually | yes |
 | `workspace/deploy.yml` | Top-level deploy orchestrator pipeline. Optional — DWE has a built-in default. | Deploy executor | Author manually | yes |
@@ -179,7 +179,7 @@ services:
 
 ## Rendered config files and dumps
 
-Runtime config files (`.env`, `env.php`, an `nginx.conf`, …) are no longer kept as a checked-in `configs/<service>/` tree copied into containers. They are **rendered** from a [config template pack](../render/config.md) under `workspace/templates/config/<pack>/` straight into each service's hub dir, where the compose overlay mounts them. Service-minted secrets (Laravel `APP_KEY`, …) are harvested into the gitignored `.dwe/generated.yml` store and replayed on every render. Author the pack under `workspace/templates/config/`, not a root `configs/` folder.
+Runtime config files (`.env`, `env.php`, an `nginx.conf`, …) are **rendered** from a [config template pack](../render/config.md) under `workspace/templates/config/<pack>/` straight into each service's hub dir, where the compose overlay mounts them. Service-minted secrets (Laravel `APP_KEY`, …) are harvested into the gitignored `.dwe/generated.yml` store and replayed on every render. Author the pack under `workspace/templates/config/`.
 
 One conventional folder still sits next to the config tree:
 

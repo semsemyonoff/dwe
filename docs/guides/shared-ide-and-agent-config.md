@@ -49,7 +49,7 @@ Outputs land in each enabled service's hub directory:
 | `ai` | `<svc.Dir>/<rel>` — e.g. `services/main/AGENTS.md` |
 | `git` | `<svc.Dir>/src/.git/hooks/<basename>` — chmod `0755` on every run |
 
-By default, only `type: app` services render (for all three kinds — except `ai`, which still defaults `true` only for apps). Other service types opt in with `services.<name>.render.<kind>.enabled: true`.
+By default, only `type: app` services render (for all three kinds). Other service types opt in with `services.<name>.render.<kind>.enabled: true`.
 
 ## The `manifest.yml` file
 

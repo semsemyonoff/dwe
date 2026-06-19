@@ -1,4 +1,4 @@
-> Translated from: reference/config/workspace.md @ ca0426c1f3e8
+> Translated from: reference/config/workspace.md @ 695578a24636
 
 # workspace.yml / defaults.yml / local.yml
 
@@ -125,13 +125,13 @@ vars:
     retries: 3
 ```
 
-`vars` — обычный смерженный ключ, поэтому его содержимое достижимо через dot-path ровно как раньше — меняется только префикс:
+`vars` — обычный смерженный ключ, поэтому его содержимое достижимо через dot-path под префиксом `vars.`:
 
 - Правила экспорта: `from: vars.db.user`
 - Шаблоны `${...}`: `${vars.db.database}`
 - Пользовательские команды / проверки `config_keys_present`: `vars.db.api_key`
 
-Резолвер не изменился; `vars.*` резолвится через `DweConfig.Raw` по dot-path так же, как `services.*`. Миграция проекта со старого открытого пространства имён чисто механическая: оберните прежние корневые ключи под `vars:` и добавьте каждой ссылке префикс `vars.`.
+`vars.*` резолвится через `DweConfig.Raw` по dot-path так же, как `services.*`.
 
 Команда [`dwe vars`](vars.md) перечисляет, читает, редактирует и трассирует каждое значение под этим блоком — см. [`vars.md`](vars.md) про подкоманды, модель слоёв author/local/effective, запись в `local.yml` с сохранением комментариев, статическое сканирование использований и allowlist контейнерной записи `bridge.vars_writable`.
 
@@ -205,7 +205,7 @@ update:
 
 Приоритет в runtime при `dwe run`: флаг `--no-update` > флаг `--update <mode>` > `update.mode` из смерженного конфига.
 
-Этот блок отделяет *включение обновления* от lifecycle-фаз. (Раньше он жил под `run.update` в `lifecycle.yml`, где его написание обнуляло `run.phases`; см. [`lifecycle.md`](lifecycle.md) и [интеграцию с git → проба обновления](../concepts/git.md#проба-обновления-dwe-run).)
+Этот блок отделяет *включение обновления* от lifecycle-фаз. (См. [`lifecycle.md`](lifecycle.md) и [интеграцию с git → проба обновления](../concepts/git.md#проба-обновления-dwe-run).)
 
 ### Блок `stop:`
 

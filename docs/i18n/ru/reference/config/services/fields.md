@@ -1,4 +1,4 @@
-> Translated from: reference/config/services/fields.md @ 52f7e7062e85
+> Translated from: reference/config/services/fields.md @ b0b90201cb63
 
 # Справочник полей сервиса
 
@@ -200,8 +200,7 @@ paths:
 > `generated`](#блок-generated). Он продолжает работать, но `dwe validate` выдаёт
 > предупреждение, и при каждом шаге копирования один раз срабатывает runtime-уведомление
 > об устаревании. Новым проектам следует рендерить конфиги из шаблонных паков; см.
-> [render config](../../render/config.md) для миграции. Код копирования удаляется
-> в отдельной фазе 2 (major).
+> [render config](../../render/config.md) для миграции.
 
 Перечисляет конфигурационные файлы, копируемые в hub сервиса при deploy.
 

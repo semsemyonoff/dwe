@@ -19,4 +19,4 @@ The pages are ordered for first-time reading: start at "Getting started", then w
 
 - [Configuration reference](../config/index.md) — field-level reference for every config file.
 - [Render packs](../render/index.md) — `dwe render env`, `render ide`, `render ai`, `render git`.
-- [CLI reference](../cli/index.md) — auto-generated command tree.
+- Run `dwe --help` (or any subcommand with `--help`) for the live command tree.

@@ -26,9 +26,9 @@ Go templates (with the [go-sprout](https://docs.atom.codes/sprout/) function lib
 | `deploy.yml` / `lifecycle.yml` / `reset.yml` — `when: type: template, expr:` | `{{ ... }}` | Resolved project config | Evaluated at plan time. See [deploy](config/deploy/index.md) |
 | `message` builtin — `text:` | `{{ ... }}` | Resolved project config | See [message builtin](config/deploy/builtins.md#message) |
 | `docker.yml` — `project_name` | `${...}` only | Resolved project config (`.Raw` lookups) | Dot-path lookups (no `{{ }}` logic). See [docker.md](config/docker.md) |
-| `workspace/templates/git/<pack>/**/*.tmpl` | `{{ ... }}` | Render-pack context (`.Project`, `.Service`, `.ServiceCfg`, `.Runtime`, `.Services`, `.Cfg`) | Strict mode. See [render/git.md](render/git.md) |
-| `workspace/templates/ide/<pack>/**/*.tmpl` | `{{ ... }}` | Render-pack context (`.Project`, `.Service`, `.ServiceCfg`, `.Runtime`, `.Services`, `.Cfg`) | Strict mode. See [render/ide.md](render/ide.md) |
-| `workspace/templates/ai/<pack>/**/*.tmpl` | `{{ ... }}` | Render-pack context (`.Project`, `.Service`, `.ServiceCfg`, `.Runtime`, `.Services`, `.Cfg`) | Strict mode. See [render/ai.md](render/ai.md) |
+| `workspace/templates/git/<pack>/**/*.tmpl` | `{{ ... }}` | Render-pack context (`.Project`, `.Service`, `.Resolved`, `.ServiceCfg`, `.Runtime`, `.Services`, `.Cfg`) | Strict mode. See [render/git.md](render/git.md) |
+| `workspace/templates/ide/<pack>/**/*.tmpl` | `{{ ... }}` | Render-pack context (`.Project`, `.Service`, `.Resolved`, `.ServiceCfg`, `.Runtime`, `.Services`, `.Cfg`) | Strict mode. See [render/ide.md](render/ide.md) |
+| `workspace/templates/ai/<pack>/**/*.tmpl` | `{{ ... }}` | Render-pack context (`.Project`, `.Service`, `.Resolved`, `.ServiceCfg`, `.Runtime`, `.Services`, `.Cfg`) | Strict mode. See [render/ai.md](render/ai.md) |
 | `workspace/templates/config/<pack>/**` | `${...}` | Resolved project config (`.Raw`) + curated `${services.<name>...}` subset + `${generated.<name>}` | Lenient (absent → `""`). See [render/config.md](render/config.md) |
 | `params.*.default_from`, `context.*.from` | — | — | Plain dot-paths only (no template expressions). |
 
@@ -101,7 +101,8 @@ The data exposed to a template depends on the site. Field access uses dot syntax
 | Variable | Source |
 |----------|--------|
 | `.Project` | `project:` block from `workspace.yml` |
-| `.Service` | service name (the map key in `services:`) |
+| `.Service` | canonical config identity — the root of the rendering service's `extends:` chain (equals `.Resolved` when there is no extends chain) |
+| `.Resolved` | rendering identity — the map key of the service actually being rendered (the collision-policy winner) |
 | `.ServiceCfg` | effective service config after `extends` resolution |
 | `.Runtime` | merged `runtime` block (`.Runtime.UseHTTPS`, `.Runtime.SPX.Path`). Per-service ports / hosts live on each service entry (see `.Services` below). |
 | `.Services` | services keyed by name. Use `(index .Services "<name>")` to fetch; per-entry helpers `.Port "<port-name>"` / `.Host "<host-name>"` / `.PortScheme "<port-name>"` (returns `""` if no override) / `.EffectiveScheme "<port-name>" .Runtime.UseHTTPS` (returns `"http"` / `"https"` resolved through the per-port → service → runtime precedence chain). Type-filtered subsets via `.AppServices` / `.ToolServices` / `.InfraServices`. |

@@ -1,0 +1,207 @@
+/* Interactive Mermaid view injected over each astro-mermaid diagram by
+   src/scripts/mermaid-zoom.js (and the standalone /mermaid page). Faithful to
+   podlapka's MermaidView layout; Starlight theme vars carry literal fallbacks so
+   it is also self-sufficient on the bare standalone page. */
+
+/* Once enhanced, the host <pre> is just a transparent block. The double-class
+   selector out-specifies the runtime <style> astro-mermaid appends to pre.mermaid
+   (flex-centering, min-height, padding, background). */
+pre.mermaid.mz-host {
+  display: block;
+  background: none;
+  border: 0;
+  padding: 0;
+  margin: 0;
+  min-height: 0;
+  overflow: visible;
+}
+
+.mz {
+  position: relative;
+  margin-block: 1.5rem;
+  border: 1px solid var(--sl-color-gray-5, #d0d0d8);
+  border-radius: 0.5rem;
+  background: var(--sl-color-bg, #fff);
+  overflow: hidden;
+  font-family: var(--sl-font, ui-sans-serif, system-ui, -apple-system, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif);
+}
+
+.mz-viewport {
+  position: relative;
+  height: 440px;
+  overflow: hidden;
+  cursor: grab;
+  touch-action: none; /* the script owns panning gestures */
+}
+.mz-viewport:active {
+  cursor: grabbing;
+}
+.mz-viewport:focus-visible {
+  outline: 2px solid var(--sl-color-accent, #4d7fff);
+  outline-offset: -2px;
+}
+
+.mz-inner {
+  transform-origin: 0 0;
+  width: max-content;
+  padding: 1rem;
+}
+.mz-inner svg {
+  max-width: none !important;
+  height: auto;
+  display: block;
+}
+
+/* Standalone full-window page. */
+.mz--fill {
+  margin: 0;
+  border: 0;
+  border-radius: 0;
+  height: 100vh;
+}
+.mz--fill .mz-viewport {
+  height: 100vh;
+}
+
+/* Expanded view: a centered modal popup (appended to <body>). */
+.mz-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 1000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 2rem;
+  background: rgba(0, 0, 0, 0.72);
+}
+.mz--modal {
+  display: flex;
+  margin: 0;
+  width: min(1100px, 95vw);
+  height: min(85vh, 820px);
+  box-shadow: 0 10px 40px rgba(0, 0, 0, 0.5);
+}
+.mz--modal .mz-viewport {
+  flex: 1;
+  height: 100%;
+}
+
+/* Top-right control cluster — a non-wrapping row of equal square buttons. */
+.mz-controls {
+  position: absolute;
+  top: 0.5rem;
+  right: 0.5rem;
+  z-index: 2;
+  display: flex;
+  flex-wrap: nowrap;
+  align-items: center;
+  gap: 0.25rem;
+}
+.mz-controls button,
+.mz-popout,
+.mz-export-trigger {
+  box-sizing: border-box;
+  flex: 0 0 auto;
+  width: 2rem;
+  height: 2rem;
+  margin: 0;
+  padding: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1rem;
+  line-height: 1;
+  text-decoration: none;
+  border: 1px solid var(--sl-color-gray-5, #d0d0d8);
+  border-radius: 0.25rem;
+  background: var(--sl-color-black, #1a1a22);
+  color: var(--sl-color-white, #fff);
+  cursor: pointer;
+}
+.mz-controls button:hover,
+.mz-popout:hover,
+.mz-export-trigger:hover {
+  background: var(--sl-color-gray-6, #33333d);
+}
+
+/* Bottom-right action cluster: export trigger (left) + "open in new tab" (↗). */
+.mz-actions {
+  position: absolute;
+  bottom: 0.5rem;
+  right: 0.5rem;
+  z-index: 3;
+  display: flex;
+  align-items: flex-end;
+  gap: 0.25rem;
+}
+.mz-export-wrap {
+  position: relative;
+  display: inline-flex;
+}
+
+/* Export-options popover, opening upward from the ⤓ trigger. */
+.mz-export-pop {
+  position: absolute;
+  right: 0;
+  bottom: calc(100% + 0.35rem);
+  z-index: 4;
+  width: max-content;
+  min-width: 12rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  padding: 0.6rem;
+  border: 1px solid var(--sl-color-gray-5, #d0d0d8);
+  border-radius: 0.4rem;
+  background: var(--sl-color-bg, #fff);
+  color: var(--sl-color-text, #1a1a22);
+  box-shadow: 0 6px 24px rgba(0, 0, 0, 0.28);
+}
+.mz-export-pop :is(div, span, button) {
+  margin: 0;
+}
+.mz-export-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+}
+.mz-export-key {
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: var(--sl-color-gray-2, #6b6b76);
+}
+.mz-seg {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.15rem;
+}
+.mz-seg button {
+  padding: 0.22rem 0.45rem;
+  font-size: 0.72rem;
+  font-weight: 600;
+  line-height: 1;
+  cursor: pointer;
+  border: 1px solid var(--sl-color-gray-5, #d0d0d8);
+  border-radius: 0.25rem;
+  background: transparent;
+  color: inherit;
+}
+.mz-seg button.on {
+  background: var(--sl-color-accent, #4d7fff);
+  border-color: var(--sl-color-accent, #4d7fff);
+  color: var(--sl-color-white, #fff);
+}
+.mz-export-go {
+  padding: 0.35rem 0.5rem;
+  font-size: 0.78rem;
+  font-weight: 600;
+  cursor: pointer;
+  border: 1px solid var(--sl-color-accent, #4d7fff);
+  border-radius: 0.25rem;
+  background: var(--sl-color-accent, #4d7fff);
+  color: var(--sl-color-white, #fff);
+}
+.mz-export-go:hover {
+  filter: brightness(1.08);
+}

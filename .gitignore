@@ -26,3 +26,16 @@
 # Release artifacts (GoReleaser output and generated completion scripts).
 /dist/
 /completions/
+
+# Docs site (web/): dependencies, Astro build output, and the content tree +
+# sidebar generated from docs/ by web/scripts/sync-docs.mjs on `npm run sync`
+# (which `predev`/`prebuild` run automatically). Same generated-tree pattern as
+# internal/core/docs/embedded/ above.
+/web/node_modules/
+/web/dist/
+/web/.astro/
+/web/public/
+/web/src/assets/
+/web/src/content/docs/
+/web/src/sidebar.generated.mjs
+/web/src/version.generated.mjs

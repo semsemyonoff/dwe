@@ -1,4 +1,4 @@
-> Translated from: reference/docs/commands.md @ f8ddc7f29305
+> Translated from: reference/docs/commands.md @ 5b9a43ac6896
 
 # Неинтерактивные команды документации
 
@@ -74,6 +74,36 @@ dwe	reference/config/workspace	en
 dwe	reference/config/services/fields	en
 dwe	reference/config/services/fields	ru
 project	guides/getting-started	en
+```
+
+## `dwe docs search <query>`
+
+Искать по всем темам документации нечувствительную к регистру буквальную подстроку и выводить секции, которые её содержат. Сделано для пайпов, скриптов, агентов и CI.
+
+**Использование:**
+```bash
+dwe docs search <query> [--source all|dwe|project] [--lang <code>] [--limit <n>] [--output text|json] [--pretty]
+```
+
+**Аргументы:**
+- `<query>` — буквальная подстрока для поиска (нечувствительно к регистру). Совпадения внутри огороженных блоков кода тоже считаются — именно там обычно встречаются имена схем.
+
+**Флаги:**
+- `--source <all|dwe|project>` — источник доков (по умолчанию `all`). `dwe` ищет только во встроенных доках; `project` — только в `./docs/`; `all` — в обоих.
+- `--lang <code>` — код языка (по умолчанию: активная локаль или `en`).
+- `--limit <n>` — максимум строк результата (по умолчанию `50`; `0` = без ограничения).
+- `--output <text|json>` — формат вывода (глобальный флаг; по умолчанию `text`).
+- `--pretty` — форматированный JSON-вывод (только с `--output json`).
+
+**Вывод:**
+- **`text` (по умолчанию):** через табуляцию, по одной строке на совпавшую секцию: `<source>\t<path>#<anchor>\t<count>`. Секции сортируются по числу совпадений (по убыванию), затем по пути. Вступительный текст под H1 (до первого H2) выводится с пустым якорем.
+- **`--output json`:** JSON-массив записей `{source, path, anchor, count}` (path и anchor разделены; anchor пустой для вступительного текста под H1 до первого H2/H3).
+
+**Примеры:**
+```bash
+dwe docs search depends_on
+dwe docs search 'RunContext.Render' --source dwe
+dwe docs search topo-sort --lang en --limit 5
 ```
 
 ## `dwe docs export <dir>`

@@ -1,4 +1,4 @@
-> Translated from: reference/concepts/git.md @ f292b5e11297
+> Translated from: reference/concepts/git.md @ a7a84a97ba51
 
 # Интеграция с Git
 
@@ -41,7 +41,7 @@ CLI вызывает хостовый бинарник `git` через shell. �
 5. **Разрешение пака.** `render.git.template` фиксирует пак; иначе цепочка пробует `workspace/templates/git/<service-name>/`, затем `workspace/templates/git/default/`.
 6. **Рендер по каждому файлу.** Каждая запись в `manifest.yml` пака читается, вычисляется как [строгий Go text template](../templates.md), пишется в `<svc.Dir>/src/.git/hooks/<basename>` и получает `chmod 0755` на каждом запуске.
 
-Полный справочник по полям и проработанные примеры — в [`dwe render git`](../render/git.md). Справочник блока активации (`services.<name>.render.git`) — в [`config/services/fields.md`](../config/services/fields.md#rendergit-block).
+Полный справочник по полям и проработанные примеры — в [`dwe render git`](../render/git.md). Справочник блока активации (`services.<name>.render.git`) — в [`config/services/fields.md`](../config/services/fields.md#блок-rendergit).
 
 ### Наследование шаблонов хуков
 
@@ -141,14 +141,14 @@ DWE не выполняет Git-операций, о которых пользо
 - Он никогда не запускает `git checkout`, `git switch`, `git reset --hard`, `git stash` или что-либо ещё, что могло бы потерять работу.
 - Он запускает только `git fetch` и `git pull --ff-only` из пробы обновления, и только когда настроен `update.mode: on` (или передан `--update on`) и рабочее дерево чистое.
 - Он никогда не делает push. Единственное место, где может произойти push, — это написанные пользователем Git-хуки, которые пользователь сам положил в template-пак; хуки — это пользовательский код, запускаемый Git, а не DWE.
-- Проба рабочего пространства строго read-only — `git status --porcelain=v2` без флагов, которые могли бы изменить индекс.
+- Проба рабочего пространства строго read-only — `git status -b --porcelain=v2` без флагов, которые могли бы изменить индекс.
 
-В сочетании с принципом отсутствия сети ([Архитектура → Без сети на штатном пути](architecture.md#без-сети-на-штатном-пути)) это означает, что любой вызов `dwe`, кроме `dwe run` с `update.mode: on`, не выполняет вообще никаких удалённых Git-операций.
+В сочетании с принципом отсутствия сети ([Архитектура → Без сети на штатном пути](architecture.md#границы-которые-dwe-не-пересекает)) это означает, что любой вызов `dwe`, кроме `dwe run` с `update.mode: on`, не выполняет вообще никаких удалённых Git-операций.
 
 ## Что читать дальше
 
 - [`dwe render git`](../render/git.md) — полный справочник по полям рендеринга хуков: схема манифеста, шаблонные переменные, защитные проверки path-safety, выходные сообщения.
-- [`services.<name>.render.git`](../config/services/fields.md#rendergit-block) — активация на сервис, закрепление шаблона, наследование.
+- [`services.<name>.render.git`](../config/services/fields.md#блок-rendergit) — активация на сервис, закрепление шаблона, наследование.
 - [`workspace.yml` → блок `update:`](../config/workspace.md#блок-update) — конфигурация пробы обновления.
 - [Шаблоны](../templates.md) — Go text template движок, реестры хелперов, строгий режим.
 - [Раскладка проекта](project-layout.md) — где `workspace/templates/git/`, `<svc.Dir>/src/` и `.dwe/` располагаются в дереве проекта.

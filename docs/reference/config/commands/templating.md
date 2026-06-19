@@ -67,7 +67,7 @@ path: "${param.dump_dir}/${param.database}{{ if .Params.dump_date }}_{{ now | da
 | `files.*.path`, `files.*.candidates[].path/glob/match` | yes |
 | `params.*.default_from`, `context.*.from` | no — plain dot-paths only |
 | Workflow `steps[].with[<key>]`, `steps[].when` | yes |
-| `description`, `group.title`, `group.description` | no — printed verbatim by `commands list` / `commands inspect` / completion |
+| `description`, `group.title`, `group.description` | no — printed verbatim by `commands list` / `commands -i` / completion |
 
 ## Command-template space (the full reference)
 

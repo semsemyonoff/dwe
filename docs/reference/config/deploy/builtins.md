@@ -106,7 +106,7 @@ Reads each of the service's declared `generated:` fields from its on-disk file, 
 
 ## `service_configs_copy`
 
-> **⚠️ Deprecated.** Superseded by [`service_configs_render`](#service_configs_render) + [`service_generated_harvest`](#service_generated_harvest). It keeps working but `dwe validate` emits a warning and a single runtime deprecation notice fires per copy step. See [render config](../../render/config.md) for the migration. Removed in a separate phase-2 (major) effort.
+> **⚠️ Deprecated.** Superseded by [`service_configs_render`](#service_configs_render) + [`service_generated_harvest`](#service_generated_harvest). It keeps working but `dwe validate` emits a warning and a single runtime deprecation notice fires per copy step. See [render config](../../render/config.md) for the replacement.
 
 Copies template config files from `configs/services/<service>/` into `services/<service>/configs/`. Creates the destination `configs/` directory if it does not exist — this is the canonical path for `configs/` creation (the `service_dirs_ensure` builtin does not create it).
 
