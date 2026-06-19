@@ -23,8 +23,6 @@ on:
 
 permissions:
   contents: read
-  pages: write
-  id-token: write
 
 # Never cancel an in-flight deploy; serialize Pages publishes.
 concurrency:
@@ -43,6 +41,9 @@ jobs:
           # Full history + tags so the sync's `git describe` resolves the version
           # shown in the site header.
           fetch-depth: 0
+          # Build only reads the repo + uploads an artifact; it never needs the
+          # checkout token, so don't leave it on disk.
+          persist-credentials: false
       - uses: actions/setup-node@v6
         with:
           node-version: '22'
@@ -61,6 +62,11 @@ jobs:
     needs: build
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
+    # Only the deploy job publishes to Pages; keep the write scope off every
+    # other job (the top-level grant is contents: read).
+    permissions:
+      pages: write
+      id-token: write
     environment:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}

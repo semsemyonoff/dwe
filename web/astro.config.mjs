@@ -13,7 +13,11 @@ import mermaidZoom from './src/integrations/mermaid-zoom.mjs';
 let sidebar = [];
 try {
   sidebar = (await import('./src/sidebar.generated.mjs')).default;
-} catch {
+} catch (err) {
+  // Only tolerate a genuinely-absent file (bare `astro build` without the sync).
+  // A syntax/runtime error inside a generated sidebar must fail loudly rather
+  // than silently degrade to an empty nav.
+  if (err?.code !== 'ERR_MODULE_NOT_FOUND') throw err;
   console.warn('[astro.config] src/sidebar.generated.mjs missing — run `npm run sync` first. Falling back to empty sidebar.');
 }
 
