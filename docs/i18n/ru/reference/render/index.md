@@ -1,4 +1,4 @@
-> Translated from: reference/render/index.md @ 99b43c7c23a8
+> Translated from: reference/render/index.md @ 9c89862939c3
 
 # Справочник Render
 

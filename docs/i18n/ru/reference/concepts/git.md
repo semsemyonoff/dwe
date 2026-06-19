@@ -1,4 +1,4 @@
-> Translated from: reference/concepts/git.md @ f292b5e11297
+> Translated from: reference/concepts/git.md @ a7a84a97ba51
 
 # Интеграция с Git
 

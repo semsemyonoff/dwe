@@ -1,4 +1,4 @@
-> Translated from: reference/config/deploy/builtins.md @ aaa1dccb5490
+> Translated from: reference/config/deploy/builtins.md @ a806ec68bb8c
 
 # Доступные билтины
 

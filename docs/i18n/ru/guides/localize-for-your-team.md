@@ -1,4 +1,4 @@
-> Translated from: guides/localize-for-your-team.md @ 4f05df74f37c
+> Translated from: guides/localize-for-your-team.md @ 7651e1c5c14c
 
 # Локализация под вашу команду
 

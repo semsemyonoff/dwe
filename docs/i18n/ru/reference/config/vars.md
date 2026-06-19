@@ -1,4 +1,4 @@
-> Translated from: reference/config/vars.md @ 28849e0c2623
+> Translated from: reference/config/vars.md @ 8de2869f9a1a
 
 # `dwe vars` — работа с песочницей `vars:`
 

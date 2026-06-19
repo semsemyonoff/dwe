@@ -1,4 +1,4 @@
-> Translated from: reference/config/styles.md @ a7cbbc99b86c
+> Translated from: reference/config/styles.md @ 4ce282def2da
 
 # styles.yml
 

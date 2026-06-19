@@ -1,4 +1,4 @@
-> Translated from: reference/docs/index.md @ ed2cd4ebfc08
+> Translated from: reference/docs/index.md @ f186572d07c2
 
 # Подсистема документации
 

@@ -1,4 +1,4 @@
-> Translated from: reference/config/commands/directives.md @ 1872d890ada8
+> Translated from: reference/config/commands/directives.md @ a6fc4ca2efc1
 
 # Директивы команд
 

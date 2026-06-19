@@ -1,4 +1,4 @@
-> Translated from: reference/config/commands/index.md @ 7f71f723faa7
+> Translated from: reference/config/commands/index.md @ a1a9e5921088
 
 # commands/
 

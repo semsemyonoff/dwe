@@ -1,4 +1,4 @@
-> Translated from: reference/config/commands/types.md @ a2bbc0e5307f
+> Translated from: reference/config/commands/types.md @ 4329d4e1e841
 
 # Типы команд
 

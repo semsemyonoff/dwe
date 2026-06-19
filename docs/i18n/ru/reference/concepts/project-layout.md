@@ -1,4 +1,4 @@
-> Translated from: reference/concepts/project-layout.md @ df92c463c4ab
+> Translated from: reference/concepts/project-layout.md @ 0feff3f706b7
 
 # Раскладка проекта
 

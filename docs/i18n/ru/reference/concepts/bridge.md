@@ -1,4 +1,4 @@
-> Translated from: reference/concepts/bridge.md @ fb69348faecb
+> Translated from: reference/concepts/bridge.md @ 36f1acca8922
 
 # Хост-бридж
 

@@ -1,4 +1,4 @@
-> Translated from: reference/templates.md @ af37f3b26145
+> Translated from: reference/templates.md @ 6d4bb783baa9
 
 # Шаблоны
 

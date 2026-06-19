@@ -1,4 +1,4 @@
-> Translated from: guides/starship.md @ a3973b41ec18
+> Translated from: guides/starship.md @ 585d118b6b71
 
 # Интеграция со Starship
 

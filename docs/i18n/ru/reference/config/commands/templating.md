@@ -1,4 +1,4 @@
-> Translated from: reference/config/commands/templating.md @ 83c036d6f6e2
+> Translated from: reference/config/commands/templating.md @ d2b3a06c062c
 
 # Шаблонизация в файлах команд
 

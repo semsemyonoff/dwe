@@ -1,4 +1,4 @@
-> Translated from: reference/config/state/management.md @ 73faa49bba3f
+> Translated from: reference/config/state/management.md @ ef6b31cffa5c
 
 # Управление состоянием
 

@@ -1,4 +1,4 @@
-> Translated from: guides/shared-ide-and-agent-config.md @ 0b09e49f2aeb
+> Translated from: guides/shared-ide-and-agent-config.md @ 19821f92b789
 
 # Общий конфиг IDE и AI-агентов
 

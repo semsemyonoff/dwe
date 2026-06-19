@@ -1,4 +1,4 @@
-> Translated from: reference/concepts/architecture.md @ e0c6c3942a83
+> Translated from: reference/concepts/architecture.md @ 0fa38ae667ca
 
 # Архитектура
 

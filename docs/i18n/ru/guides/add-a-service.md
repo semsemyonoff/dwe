@@ -1,4 +1,4 @@
-> Translated from: guides/add-a-service.md @ 920858516cf2
+> Translated from: guides/add-a-service.md @ c5ab3861731c
 
 # Добавление сервиса
 

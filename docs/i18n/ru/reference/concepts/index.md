@@ -1,4 +1,4 @@
-> Translated from: reference/concepts/index.md @ c20cc9a1a5e4
+> Translated from: reference/concepts/index.md @ e92a3358a354
 
 # Концепции
 

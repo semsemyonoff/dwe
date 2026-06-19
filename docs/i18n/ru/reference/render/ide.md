@@ -1,4 +1,4 @@
-> Translated from: reference/render/ide.md @ b2c57cf3a935
+> Translated from: reference/render/ide.md @ 8987c5ab04eb
 
 # dwe render ide
 

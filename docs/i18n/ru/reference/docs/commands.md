@@ -1,4 +1,4 @@
-> Translated from: reference/docs/commands.md @ f8ddc7f29305
+> Translated from: reference/docs/commands.md @ 5b9a43ac6896
 
 # Неинтерактивные команды документации
 

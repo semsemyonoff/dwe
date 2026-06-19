@@ -1,4 +1,4 @@
-> Translated from: reference/render/config.md @ ea900000fb55
+> Translated from: reference/render/config.md @ b8c6adda10c2
 
 # `render config`
 

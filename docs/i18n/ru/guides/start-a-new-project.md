@@ -1,4 +1,4 @@
-> Translated from: guides/start-a-new-project.md @ b85e2f834152
+> Translated from: guides/start-a-new-project.md @ fd6dbe67a4a7
 
 # Создание нового проекта с `dwe init`
 

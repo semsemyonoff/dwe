@@ -1,4 +1,4 @@
-> Translated from: reference/config/workspace.md @ ca0426c1f3e8
+> Translated from: reference/config/workspace.md @ 695578a24636
 
 # workspace.yml / defaults.yml / local.yml
 

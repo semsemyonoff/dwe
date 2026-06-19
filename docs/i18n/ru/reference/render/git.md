@@ -1,4 +1,4 @@
-> Translated from: reference/render/git.md @ f8537aeb98f0
+> Translated from: reference/render/git.md @ 23d430061993
 
 # dwe render git
 

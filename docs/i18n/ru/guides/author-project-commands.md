@@ -1,4 +1,4 @@
-> Translated from: guides/author-project-commands.md @ eff81d498546
+> Translated from: guides/author-project-commands.md @ 97608a86a125
 
 # Авторство проектных команд
 
