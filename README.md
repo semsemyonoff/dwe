@@ -203,6 +203,8 @@ Full write-up: [`docs/reference/concepts/project-layout.md`](docs/reference/conc
 
 ## Documentation
 
+📖 Browse the full documentation online at **[semsemyonoff.github.io/dwe](https://semsemyonoff.github.io/dwe/)**.
+
 Reference documentation lives under `docs/reference/` and is also embedded in the binary. Browse it offline with `dwe docs` (interactive TUI) or `dwe docs show <topic>` (plain text).
 
 - [Concepts](docs/reference/concepts/index.md) — high-level orientation: getting started, architecture, project layout, Docker integration, Git integration, pipelines, state and locks.
