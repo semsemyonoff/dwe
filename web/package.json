@@ -1,0 +1,23 @@
+{
+  "name": "dwe-docs",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Static documentation site for DWE (Dev Workspace Engine), generated from the repo's docs/ tree.",
+  "scripts": {
+    "sync": "node scripts/sync-docs.mjs",
+    "predev": "npm run sync",
+    "dev": "astro dev",
+    "prebuild": "npm run sync",
+    "build": "astro build",
+    "preview": "astro preview",
+    "test": "node --test scripts/*.test.mjs"
+  },
+  "dependencies": {
+    "@astrojs/starlight": "^0.40.0",
+    "astro": "^6.4.7",
+    "astro-mermaid": "^2.0.2",
+    "mermaid": "^11.15.0",
+    "starlight-links-validator": "^0.24.1"
+  }
+}

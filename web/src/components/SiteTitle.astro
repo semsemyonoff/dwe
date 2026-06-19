@@ -1,0 +1,25 @@
+---
+// Overrides Starlight's header title: renders the default (the DWE logo, from
+// the `logo` config + the home link) and appends the current version next to it,
+// so every page makes clear which version of DWE the docs describe. VERSION is
+// generated at sync time from `git describe` (see scripts/sync-docs.mjs).
+import Default from '@astrojs/starlight/components/SiteTitle.astro';
+import { VERSION } from '../version.generated.mjs';
+---
+
+<div class="dwe-site-title">
+  <Default />
+  {
+    VERSION && (
+      <a
+        class="dwe-version"
+        href="https://github.com/semsemyonoff/dwe/releases"
+        target="_blank"
+        rel="noopener noreferrer"
+        title={`DWE docs at ${VERSION}`}
+      >
+        {VERSION}
+      </a>
+    )
+  }
+</div>

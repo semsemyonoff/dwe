@@ -30,6 +30,10 @@ Update these when changing schemas, commands, service toggles, deploys, or hooks
 
 For AI agent orientation, `dwe docs llms-txt` emits a compact llms.txt index (project context, services, commands, and docs pointers) designed for AI agents to load once and navigate the project — run it inside a project for a project-aware snapshot, or outside one for a generic dwe reference.
 
+### Documentation site (`web/`)
+
+`web/` holds an Astro Starlight site published to GitHub Pages (`https://semsemyonoff.github.io/dwe/`) by `.github/workflows/docs.yml` on every push to `main` that touches `docs/**` or `web/**`. It is a **build-time mirror** of `docs/reference/` + `docs/guides/` (and the `docs/i18n/ru/` mirror); `docs/internals/` and `docs/plans/` are excluded. The canonical `docs/*.md` stay byte-identical — **edit `docs/` (and the root `README.md`), never the generated tree.** `web/scripts/sync-docs.mjs` transforms `docs/` → the gitignored `web/src/content/docs/` (title-from-H1, link rewriting to base-aware slugs / GitHub blobs for internals & non-docs repo files, i18n remap), derives the sidebar from each `index.md`'s ordered TOC, and builds the per-locale root landing pages from `README.md` / `docs/i18n/ru/README.md` (images they reference are copied into the gitignored `web/public/`). Preview with `cd web && npm run dev`; `npm test` covers the transform. Dangling `.md` links in `docs/` are degraded to plain text with a build warning (not a hard failure). No Go code is involved.
+
 ## Build, Test, and Development Commands
 
 - `make build` runs `go mod tidy`, syncs `docs/` into `internal/core/docs/embedded/` (via `scripts/sync-embedded-docs.sh`), regenerates `internal/core/docs/content_hashes_gen.go` (via `scripts/gen-docs-content-hashes.sh`), builds `./cmd/dwe`, and writes `bin/dwe`. Run `make build` (not `go build`) after editing docs under `docs/reference/`, `docs/guides/`, `docs/internals/`, or `docs/i18n/` — otherwise the embedded docs in the binary will be stale.
