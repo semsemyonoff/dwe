@@ -18,6 +18,7 @@ import {
   siteLink,
   slugFor,
   stripLanguageLine,
+  stripProvenanceLine,
   yamlQuote,
 } from './sync-docs.mjs';
 
@@ -55,6 +56,14 @@ test('stripLanguageLine removes EN and RU language lines', () => {
   assert.ok(!stripLanguageLine(en).includes('Languages'));
   assert.ok(!stripLanguageLine(ru).includes('Языки'));
   assert.ok(stripLanguageLine(en).includes('body'));
+});
+
+test('stripProvenanceLine removes the "Translated from:" note', () => {
+  const md = '> Translated from: reference/index.md @ fd1149875211\n\n# T\n\nbody\n';
+  const out = stripProvenanceLine(md);
+  assert.ok(!out.includes('Translated from'));
+  assert.ok(out.includes('# T'));
+  assert.ok(out.includes('body'));
 });
 
 test('outputRelFor remaps the ru i18n tree', () => {

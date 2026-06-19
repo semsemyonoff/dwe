@@ -99,6 +99,11 @@ export function stripLanguageLine(md) {
   return md.replace(/^\*(?:Languages|Языки):.*$\n?/gm, '');
 }
 
+/** Remove the "> Translated from: …" provenance note prepended to ru mirrors. */
+export function stripProvenanceLine(md) {
+  return md.replace(/^>\s*Translated from:.*$\n?/m, '');
+}
+
 /** docs-relative source path -> content-tree-relative output path. */
 export function outputRelFor(relFromDocs) {
   const p = relFromDocs.split(path.sep).join('/');
@@ -348,6 +353,7 @@ async function walkMarkdown(dirAbs) {
 }
 
 function transform(md, srcFileAbs, onMissing, preferLocale) {
+  md = stripProvenanceLine(md);
   const { title, body } = extractTitleAndBody(md, path.relative(DOCS_ROOT, srcFileAbs));
   let out = stripLanguageLine(body);
   out = rewriteLinks(out, { srcFileAbs, onMissing, preferLocale });
@@ -363,7 +369,7 @@ function transform(md, srcFileAbs, onMissing, preferLocale) {
  * `<img>` srcs (the logo) to base URLs while recording the files to copy.
  */
 function transformReadme(md, srcFileAbs, desc, preferLocale, onMissing, onCopy) {
-  md = md.replace(/^>\s*Translated from:.*$\n?/m, '');
+  md = stripProvenanceLine(md);
   // The centered hero wordmark stays in the homepage content (the small square
   // mark in the header is a different asset); rewriteImages ships + base-rewrites it.
   const { title, body } = extractTitleAndBody(md, path.relative(REPO_ROOT, srcFileAbs));
