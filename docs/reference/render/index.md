@@ -36,11 +36,13 @@ flowchart LR
   M --> I[render ide]
   M --> A[render ai]
   M --> G[render git]
+  M --> C[render config]
 
   E --> EOUT[".env / stdout"]
   I --> IOUT["services/{name}/..."]
   A --> AOUT["services/{name}/AGENTS.md<br/>services/{name}/CLAUDE.md<br/>..."]
   G --> GOUT["services/{name}/src/.git/hooks/...<br/>(mode 0755)"]
+  C --> COUT["services/{name}/.env<br/>services/{name}/env.php<br/>..."]
 ```
 
 Each subcommand:
@@ -48,25 +50,26 @@ Each subcommand:
 1. Loads the merged config. A missing or invalid project config is a hard error.
 2. Selects targets:
    - `env` — single artifact, no selection.
-   - `ide` / `ai` / `git` — iterates services, applies a selection policy, and optionally narrows to one service via the `[service]` argument.
+   - `ide` / `ai` / `git` / `config` — iterates services, applies a selection policy, and optionally narrows to one service via the `[service]` argument.
 3. Writes output files. Where they go depends on the subcommand:
    - `render ide` and `render ai` write inside each service's hub directory, anchored to the project root (the directory containing `workspace.yml`), and enforce path-safety boundaries.
    - `render git` writes inside `<svc.Dir>/src/.git/hooks/` for each service whose `src/.git` is a real directory; the destination is never tracked by git.
+   - `render config` writes per-service runtime config files (`.env`, `env.php`, …) inside each service's hub directory from `workspace/templates/config/<pack>/`, replaying harvested secrets; app services are iterated in `DeployOrder`.
    - `render env` writes to stdout by default, or to the `--out <path>` argument as given. The `--out` path is interpreted relative to the current working directory, not the project root — pass an absolute path if you want a deterministic location regardless of where the command is invoked from.
 
 ## Inputs and outputs at a glance
 
-| Aspect | `render env` | `render ide` | `render ai` | `render git` |
-|--------|--------------|--------------|-------------|--------------|
-| Iterates services | no | yes | yes | yes |
-| Reads templates from disk | no | yes (manifest-driven) | yes (manifest-driven) | yes (manifest-driven) |
-| Per-service opt-in field | — | `services.<name>.render.ide.enabled` | `services.<name>.render.ai.enabled` | `services.<name>.render.git.enabled` |
-| Default opt-in policy | — | `true` for `type: app`; `false` otherwise | `true` for `type: app`; `false` otherwise | `true` for `type: app`; `false` otherwise |
-| Collision policy when services share `dir` | — | deepest `extends` wins (per-variant overrides) | shallowest `extends` wins (canonical hub identity) | deepest `extends` wins (per-variant hooks) |
-| Manifest file | — | `manifest.yml` declares `render` (+ `symlinks`) | `manifest.yml` declares `render` + `symlinks` | `manifest.yml` declares `render` only |
-| Symlinks supported | no | yes (relative, hub-internal) | yes (relative, hub-internal) | no — `to` must be a basename |
-| Output mode | n/a | as written | as written | explicit `chmod 0755` on every run |
-| Path-safety guards | n/a | symlink rejection in pack and destination | symlink rejection in pack and destination | hub preflight + symlink rejection in `.git/hooks/` |
+| Aspect | `render env` | `render ide` | `render ai` | `render git` | `render config` |
+|--------|--------------|--------------|-------------|--------------|-----------------|
+| Iterates services | no | yes | yes | yes | yes (app services, `DeployOrder`) |
+| Reads templates from disk | no | yes (manifest-driven) | yes (manifest-driven) | yes (manifest-driven) | yes (manifest-driven) |
+| Per-service opt-in field | — | `services.<name>.render.ide.enabled` | `services.<name>.render.ai.enabled` | `services.<name>.render.git.enabled` | resolvable config pack (app-only) |
+| Default opt-in policy | — | `true` for `type: app`; `false` otherwise | `true` for `type: app`; `false` otherwise | `true` for `type: app`; `false` otherwise | app services only; no pack → silent no-op |
+| Collision policy when services share `dir` | — | deepest `extends` wins (per-variant overrides) | shallowest `extends` wins (canonical hub identity) | deepest `extends` wins (per-variant hooks) | `extends` parent hub rendered once (alias skipped) |
+| Manifest file | — | `manifest.yml` declares `render` (+ `symlinks`) | `manifest.yml` declares `render` + `symlinks` | `manifest.yml` declares `render` only | `manifest.yml` declares `render` only |
+| Symlinks supported | no | yes (relative, hub-internal) | yes (relative, hub-internal) | no — `to` must be a basename | no — rejected |
+| Output mode | n/a | as written | as written | explicit `chmod 0755` on every run | replace (overwrite) |
+| Path-safety guards | n/a | symlink rejection in pack and destination | symlink rejection in pack and destination | hub preflight + symlink rejection in `.git/hooks/` | symlink rejection in pack and destination |
 
 ## Shared manifest schema
 
@@ -117,7 +120,7 @@ This mirrors the existing user-local override convention in the project:
 | `workspace/docker.yml` | `workspace/docker.local.yml` |
 | `workspace/templates/<kind>/<pack>/` | `workspace/templates/<kind>/<pack>.local/` |
 
-`.dwe/` (the runtime directory) is never used for user-authored overrides — it is reserved for DWE-managed state (`state.yml`, `deploy.lock`, `logs/`).
+`.dwe/` (the runtime directory) is never used for user-authored overrides — it is reserved for DWE-managed state (`deploy/state.yml`, `deploy/deploy.lock`, `logs/`).
 
 ### Input vs output
 

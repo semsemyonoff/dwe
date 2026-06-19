@@ -113,7 +113,7 @@ Phases:
 1. **Resolve params** — for each declared parameter try, in order: caller-supplied value → `default_from` (dot-path into the merged config; empty result is treated as missing) → literal `default` → required-error. Then coerce to the declared type and validate `pattern`.
 2. **Resolve context** — read each `context.<key>.from` dot-path out of the merged config.
 3. **Compute file paths** — render `path` / `candidates` templates, normalise to absolute, discover files. Non-mutating.
-4. **Confirmation** — when `confirmation: true`, prompt the user; the prompt is bypassed only by `SkipConfirm` (set by `--yes` / `-y` and inherited by workflow children). Otherwise dispatch is by stdin: TTY → `huh.Confirm`, non-TTY → plain Y/n fallback that auto-answers "yes" when `CI=1`. Refusal aborts the command. See [Confirmation flow](directives.md#confirmation-flow) for the full decision tree.
+4. **Confirmation** — when `confirmation: true`, prompt the user; the prompt is bypassed only by `SkipConfirm` (set by `--yes` / `-y` and inherited by workflow children). Otherwise dispatch is by stdin: TTY → `huh.Confirm`, non-TTY → plain Y/n fallback that auto-answers "yes" when the `CI` environment variable is set (to any non-empty value). Refusal aborts the command. See [Confirmation flow](directives.md#confirmation-flow) for the full decision tree.
 5. **Prepare file effects** — `mkdir`, `overwrite` checks, register cleanup callbacks.
 6. **Run** — dispatch to the type-specific runner (host shell, DWE CLI, container exec/run, script, or workflow).
 7. **Success / error** — emit `messages.success` or `messages.error`. On error, registered cleanups fire in LIFO order before the error message.

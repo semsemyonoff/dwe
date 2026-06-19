@@ -72,7 +72,31 @@ Supported shells: bash, zsh, fish, powershell. See `dwe completion install --hel
 
 ### Optional: AI agent skill
 
-The repository ships an agent skill at [`skills/dwe/`](skills/dwe/SKILL.md) — a thin navigator that teaches Claude Code, Codex, Cursor, OpenCode, and other compatible agents how to detect a DWE project, which `dwe` commands to use for inspection vs mutation, and how to look up everything else through the built-in `dwe docs` subsystem. Install it with the [vercel-labs/skills](https://github.com/vercel-labs/skills) CLI:
+The repository ships an agent skill at [`skills/dwe/`](skills/dwe/SKILL.md) — a thin navigator that teaches Claude Code, Codex, Cursor, OpenCode, and other compatible agents how to detect a DWE project, which `dwe` commands to use for inspection vs mutation, and how to look up everything else through the built-in `dwe docs` subsystem.
+
+#### Claude Code — as a plugin
+
+This repository is also a Claude Code [plugin marketplace](https://code.claude.com/docs/en/discover-plugins). Add the marketplace and install the `dwe` plugin (which bundles the skill) from inside Claude Code:
+
+```text
+/plugin marketplace add semsemyonoff/dwe
+/plugin install dwe@dwe
+```
+
+`dwe@dwe` is `<plugin>@<marketplace>` — both are named `dwe`. Run `/plugin` (no arguments) for the interactive browser instead. Once installed, the skill activates automatically whenever you work in a directory containing `workspace.yml`. To enable it across a team or in CI, commit the marketplace and plugin to `.claude/settings.json`:
+
+```json
+{
+  "extraKnownMarketplaces": {
+    "dwe": { "source": { "source": "github", "repo": "semsemyonoff/dwe" } }
+  },
+  "enabledPlugins": { "dwe@dwe": true }
+}
+```
+
+#### Any agent — via the skills CLI
+
+The [vercel-labs/skills](https://github.com/vercel-labs/skills) CLI installs the same skill into Claude Code, Codex, Cursor, OpenCode, and others:
 
 ```sh
 # install into the current project (./<agent>/skills/)
@@ -127,7 +151,7 @@ dwe deploy plan   # resolved phase/step tree, no execution
 dwe validate      # readiness checks
 ```
 
-The deploy journal lives at `.dwe/deploy/state.yml`. Repeat runs skip steps whose `action_hash` and inputs are unchanged. Logs land under `.dwe/logs/` when `log: true` is set.
+The deploy journal lives at `.dwe/deploy/state.yml`. Repeat runs skip steps whose `action_hash` and inputs are unchanged. Deploy logs are written to `.dwe/logs/deploy.log` by default (suppress with `log: false`); lifecycle logs (`run`/`stop`/`reset`) are written only when `log: true` is set.
 
 ## Architecture
 
@@ -156,19 +180,18 @@ A typical project keeps its declarative tree under `workspace/`, Docker Compose 
 my-project/
 ├── workspace.yml              # project identity
 ├── workspace/                 # tracked config tree
-│   ├── defaults.yml           # versioned defaults
-│   ├── local.yml              # per-developer overrides (gitignored)
+│   ├── defaults.yml           # versioned defaults (optional)
+│   ├── local.yml              # per-developer overrides (gitignored, optional)
 │   ├── services/<name>/       # per-service folders (service.yml + optional pipelines)
-│   ├── commands/              # declarative user commands
-│   ├── templates/             # template packs for `dwe render`
-│   ├── deploy.yml             # top-level deploy orchestrator
-│   ├── lifecycle.yml          # run / stop / restart
-│   ├── reset.yml              # reset pipeline
-│   ├── info.yml               # info dashboard
-│   ├── validate.yml           # readiness checks
-│   └── docker.yml             # compose file list + topology
+│   ├── commands/              # declarative user commands (optional)
+│   ├── templates/             # template packs for `dwe render` (optional)
+│   ├── deploy.yml             # top-level deploy orchestrator (optional)
+│   ├── lifecycle.yml          # run / stop / restart (optional)
+│   ├── reset.yml              # reset pipeline (optional)
+│   ├── info.yml               # info dashboard (optional)
+│   ├── validate.yml           # readiness checks (optional)
+│   └── docker.yml             # compose file list + topology (optional)
 ├── compose/                   # tracked Docker Compose overlays (per service)
-├── configs/                   # tracked per-service config templates
 ├── images/                    # tracked image builds (<service>/Dockerfile)
 ├── services/                  # gitignored service sources (<hub>/src/)
 ├── snapshots/                 # gitignored snapshot stash

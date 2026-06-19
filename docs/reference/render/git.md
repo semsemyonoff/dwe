@@ -58,7 +58,7 @@ A service participates in git-hook rendering only when **both** flags are true:
 | Project-level | `services.<name>.enabled` (3-layer merged + required service override) | depends on service |
 | Git policy | `services.<name>.render.git.enabled` | `true` for `type: app`; `false` otherwise |
 
-The default policy mirrors [`render ide`](ide.md) (not `render ai`): only `type: app` services render hooks by default, because that is where developers typically commit code. Other service types must opt in explicitly with `render.git.enabled: true`.
+The default policy is the same as [`render ide`](ide.md) and `render ai`: only `type: app` services render hooks by default, because that is where developers typically commit code. Other service types must opt in explicitly with `render.git.enabled: true`.
 
 Inheritance through `extends` follows the same rules as `render.ide` and `render.ai`: a child without an explicit value inherits the parent's `render.git.enabled` and `render.git.template`.
 
@@ -203,7 +203,7 @@ Template `workspace/templates/git/default/pre-commit.tmpl`:
 ```sh
 #!/usr/bin/env sh
 # pre-commit hook for {{.Resolved}} ({{.ServiceCfg.Container}})
-exec dwe run --service {{.Resolved}} lint
+exec dwe cmd lint
 ```
 
 `workspace/services/main/service.yml`:

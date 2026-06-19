@@ -16,7 +16,7 @@ This guide walks through where translations live, what gets translated and what 
 
 ## Locale resolution
 
-DWE picks an active locale from four sources, highest precedence first:
+DWE picks an active locale from five sources, highest precedence first:
 
 1. **`--lang` flag** on any `dwe docs` subcommand (`show`, `list`, `search`, `export`, `generate`, `llms-txt`). Per-invocation, never stored.
 2. **`DWE_LANGUAGE` environment variable.** Overrides the userconfig `language` field for one shell or one command.

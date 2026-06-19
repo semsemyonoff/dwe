@@ -655,7 +655,7 @@ Every daemon container carries three labels so `docker ps` is the single source 
 
 Whenever `dwe stop` runs (whether `lifecycle.yml` exists or not), a synthetic `_auto_reap_daemons` phase is prepended to the stop pipeline. It enumerates every container labelled `dwe.project=<full>` with a non-empty `dwe.daemon.id` and stops them in parallel. There is no opt-out; the phase is visible in plan output. See [lifecycle.md](../lifecycle.md) for the stop pipeline shape.
 
-If `lifecycle.yml` is absent, `dwe stop` still runs (with only the `_auto_reap_daemons` phase plus the default `Project is stopped. Have a nice day!` message) — `lifecycle.yml` is no longer required for `stop`.
+If `lifecycle.yml` is absent, `dwe stop` still runs (with only the `_auto_reap_daemons` phase plus the default `Project is stopped. Have a nice day!` message).
 
 ### Security & privacy
 
@@ -693,7 +693,7 @@ dwe stop
 
 `workdir` accepts a templated path. Relative paths resolve against the project root for host runners (`type: shell`, `type: script`) and against the container filesystem for service runners.
 
-`workdir_from` is **only** valid for `service_exec` / `service_run` and reads a string out of the merged config:
+`workdir_from` is valid for `service_exec` / `service_run` / `daemon` and reads a string out of the merged config:
 
 ```yaml
 workdir_from: services.main.work_dir_internal

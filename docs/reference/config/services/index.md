@@ -24,7 +24,7 @@ Every entry under `services:` requires a `type:` key. Three values are supported
 
 | `type:` | Semantics | Deploy lifecycle | `depends_on:` target | App-only fields |
 |---------|-----------|------------------|----------------------|-----------------|
-| `app`   | Service with source code under `dir:`; renders IDE/AI/git templates; runs through `dwe deploy`. | yes (a `workspace/services/<name>/deploy.yml` may exist) | yes | yes (`dir`, `dir_internal`, `work_dir_internal`, `configs`, `dirs`, `extends`, `cli`, `render`) |
+| `app`   | Service with source code under `dir:`; renders IDE/AI/git templates; runs through `dwe deploy`. | yes (a `workspace/services/<name>/deploy.yml` may exist) | yes | yes (`dir`, `dir_internal`, `work_dir_internal`, `configs`, `dirs`, `extends`, `cli`, `render`, `generated`) |
 | `tool`  | Ephemeral utility container (adminer, mailpit, redis-insight). Cannot be a dependency target of any service. | no | **no** | no |
 | `infra` | Backing service (db, cache, queue, search). Can be a dependency target of `app` / other `infra`. | no | yes | no |
 

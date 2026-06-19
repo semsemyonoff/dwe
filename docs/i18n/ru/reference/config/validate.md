@@ -32,20 +32,21 @@
 
 `workspace/validate.yml` объявляет проверки готовности уровня проекта. CLI использует их из двух точек входа:
 
-- `dwe validate` — запускает каждую проверку (плюс YAML-shape валидаторы в доменах `config`, `templates`, `commands` и `bridge`, плюс environment-probe'ы в домене `env`) и выводит диагностику.
-- Хук preflight в `dwe deploy run`, `dwe run`, `dwe stop` и `dwe restart` — запускает подмножество проверок, связанных с соответствующей стадией, до любого побочного эффекта на Docker, git или файловую систему.
+- `dwe validate` — запускает каждую проверку (плюс YAML-shape валидаторы в доменах `config`, `templates`, `commands`, `translations` и `bridge`, плюс environment-probe'ы в домене `env`) и выводит диагностику.
+- Хук preflight в `dwe deploy run`, `dwe run`, `dwe stop`, `dwe restart` и `dwe reset run` — запускает подмножество проверок, связанных с соответствующей стадией, до любого побочного эффекта на Docker, git или файловую систему.
 
 Цель — заранее показать проблемы, которые пользователь может починить («вы не залогинены в ghcr.io», «DATABASE_URL пуст в `.env`», «VPN лёг») ДО того, как шаги деплоя упадут на середине с непонятными ошибками.
 
 ## Домены валидации
 
-Команда validate запускает четыре домена в дополнение к существующим YAML-shape валидаторам:
+Команда validate запускает пять доменов в дополнение к существующим YAML-shape валидаторам:
 
 | Домен | Источник | Настраивается? |
 |--------|--------|---------------|
 | `env.*` | Жёстко зафиксировано в CLI | Нет — семь фиксированных probe'ов |
 | `checks.*` | Записи `workspace/validate.yml` | Да — декларативно |
 | `linters.*` | Встроенные адаптеры (shellcheck, hadolint) + блок `linters:` в `workspace/validate.yml` | Да — декларативно |
+| `translations.*` | Файлы переводов `workspace/i18n/` | Нет — фиксированные валидаторы (ошибки парсинга, осиротевшие id команд/групп, неизвестные ключи `render.*`) |
 | `snapshot.*` | Директории снапшотов на диске + `workspace/snapshot.yml` | Нет — фиксированные валидаторы на каждое имя снапшота |
 
 Probe'ы `env.*` это: `env.docker_bin`, `env.docker_daemon`, `env.docker_compose`, `env.git_bin`, `env.shell_bin`, `env.project_perms`, `env.ports_free`. Они запускаются на каждом вызове `dwe validate` и на каждом preflight (независимо от стадии — у env нет понятия стадии), с одним исключением: `env.ports_free` пропускает себя на стадии `stop`, поскольку конфликты портов нерелевантны при сворачивании проекта.
@@ -123,7 +124,7 @@ checks:
 |-------|--------------|
 | `deploy` | `dwe deploy run`, `dwe validate --stage deploy` |
 | `run` | `dwe run`, `dwe restart` (нога run), `dwe validate --stage run` |
-| `stop` | `dwe stop`, `dwe restart` (нога stop), `dwe validate --stage stop` |
+| `stop` | `dwe stop`, `dwe restart` (нога stop), `dwe reset run`, `dwe validate --stage stop` |
 | `command` | `dwe validate --stage command` (зарезервировано на будущее; автоматического хука нет) |
 | `post-setup` | только финальный preflight деплоя — `dwe deploy run`, `dwe deploy` после setup-визарда, `dwe validate --stage post-setup` |
 
@@ -407,7 +408,7 @@ commands:
 - `dwe validate --strict` — трактовать предупреждения как ошибки (exit 1).
 - `dwe validate --quiet` — скрыть строки ok / info.
 - `dwe validate --level <levels>` — показать только указанные уровни серьёзности (через запятую: `ok`, `info`, `warning`, `error`; например `--level error,warning`). Только для отображения — не влияет ни на итоговые счётчики, ни на код выхода. Применяется и к таблице, и к `--output json`.
-- `--skip-preflight` — локальный флаг для `deploy run`, `run`, `stop` и `restart`. Если задан, preflight печатает `preflight skipped (--skip-preflight)` в stderr и НЕ запускает валидаторов. Флаг — это полноценный байпас: проверки `type: command` вызывают произвольные пользовательские скрипты, поэтому CLI не запускает их под флагом, который пользователь назвал «skip».
+- `--skip-preflight` — локальный флаг для `deploy run`, `run`, `stop`, `restart` и `reset run`. Если задан, preflight печатает `preflight skipped (--skip-preflight)` в stderr и НЕ запускает валидаторов. Флаг — это полноценный байпас: проверки `type: command` вызывают произвольные пользовательские скрипты, поэтому CLI не запускает их под флагом, который пользователь назвал «skip».
 
 ## Диагностический вывод
 

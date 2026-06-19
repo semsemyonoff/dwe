@@ -69,7 +69,7 @@ dwe snapshot rollback                       # quick: restore the rollback_target
 
 ## File location
 
-`workspace/snapshot.yml` at the project root. The file is optional — read-only subcommands (`list`, `current`, `inspect`, `unpack`) work without it. `pack` also works without it (it archives the on-disk snapshot directory, falling back to the default `./snapshots/<name>`). Mutating subcommands (`create`, `restore`, `rollback`, `remove`) error if it is missing or the relevant workflow block is absent.
+`workspace/snapshot.yml` at the project root. The file is optional — read-only subcommands (`list`, `current`, `inspect`) work without it; `unpack` (like `pack`) also works without the file but acquires the project locks and writes to disk. `pack` also works without it (it archives the on-disk snapshot directory, falling back to the default `./snapshots/<name>`). Mutating subcommands (`create`, `restore`, `rollback`, `remove`) error if it is missing or the relevant workflow block is absent.
 
 ## Top-level fields
 
@@ -292,7 +292,7 @@ last_restore:
     .unpack-<random>/             # transient unpack staging
 ```
 
-- `./snapshots/` is normally **not gitignored** so dev fixtures can ship through git when small; large artifacts should be added to `.gitignore` per project.
+- `./snapshots/` IS gitignored by default (the scaffolded `.gitignore` from `dwe init` includes `snapshots/`); a project that wants to commit small dev fixtures must override that ignore entry (e.g. `!snapshots/fixtures/`).
 - `.dwe/snapshots/` is gitignored.
 - `current` is a small text file naming the most recently created or restored snapshot. Cleared when the active snapshot is removed.
 

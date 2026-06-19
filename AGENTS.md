@@ -20,7 +20,7 @@ The executable entrypoint lives in `cmd/dwe`; most code is under `internal/`. Te
 
 Keep behavior and docs aligned. DWE user-facing documentation lives in `docs/reference/` (schemas) and `docs/guides/` (task-oriented recipes):
 
-- `docs/reference/config/` — project config files (`workspace.md`, `services.md`, `docker.md`, `info.md`, `styles.md`), pipelines (`deploy.md`, `lifecycle.md`, `reset.md`, `conditions.md`, `state.md`), user commands (`commands/`), user-level notifications and i18n (`notifications.md`, `i18n.md`), snapshot workflows (`snapshot.md`), project readiness checks (`validate.md`), setup wizard (`setup.md`), and command browser settings (`ui.md`).
+- `docs/reference/config/` — project config files (`workspace.md`, `services/`, `docker.md`, `info.md`, `styles.md`), pipelines (`deploy/`, `lifecycle.md`, `reset.md`, `conditions.md`, `state/`), user commands (`commands/`), user-level notifications and i18n (`notifications.md`, `i18n.md`), snapshot workflows (`snapshot.md`), project readiness checks (`validate.md`), setup wizard (`setup.md`), and command browser settings (`ui.md`).
 - `docs/reference/render/` — render subcommands (env / ide / ai / git) and template-pack mechanics (manifest schema, local overrides, collision policies).
 - `docs/guides/` — task-oriented recipes and integrations (e.g. Starship prompt). Each page solves a concrete user-facing problem that cuts across the reference. Translations live in `docs/i18n/<lang>/guides/`.
 
@@ -36,8 +36,8 @@ For AI agent orientation, `dwe docs llms-txt` emits a compact llms.txt index (pr
 
 ## Build, Test, and Development Commands
 
-- `make build` runs `go mod tidy`, syncs `docs/` into `internal/core/docs/embedded/` (via `scripts/sync-embedded-docs.sh`), regenerates `internal/core/docs/content_hashes_gen.go` (via `scripts/gen-docs-content-hashes.sh`), builds `./cmd/dwe`, and writes `bin/dwe`. Run `make build` (not `go build`) after editing docs under `docs/reference/`, `docs/guides/`, `docs/internals/`, or `docs/i18n/` — otherwise the embedded docs in the binary will be stale.
-- `make test` / `make test-v` / `make test-race` run the test suite. They depend on `embedded-docs`, so the sync runs before tests every time. **Always use `make test*` — `go test ./...` directly will see an empty `internal/core/docs/embedded/` tree on a fresh checkout (it is gitignored and generated) and the docs-subsystem tests will fail.**
+- `make build` runs `go mod tidy`, syncs `docs/` into `internal/core/docs/embedded/` (via `scripts/sync-embedded-docs.sh`), regenerates `internal/core/docs/content_hashes_gen.go` (via `scripts/gen-docs-content-hashes.sh`), cross-compiles the bridge shim into `internal/core/bridge/shimassets/bin/` via `scripts/build-shims.sh`, builds `./cmd/dwe`, and writes `bin/dwe`. Run `make build` (not `go build`) after editing docs under `docs/reference/`, `docs/guides/`, `docs/internals/`, or `docs/i18n/` — otherwise the embedded docs in the binary will be stale.
+- `make test` / `make test-v` / `make test-race` run the test suite. They depend on both `embedded-docs` and `shims`, so the sync runs before tests every time. **Always use `make test*` — `go test ./...` directly will see an empty `internal/core/docs/embedded/` tree on a fresh checkout (it is gitignored and generated) and the docs-subsystem tests will fail.**
 - `make lint` runs `golangci-lint` checks.
 - `make tidy` updates `go.mod` and `go.sum`.
 - `make clean` removes the built binary from `bin/`.

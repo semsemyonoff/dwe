@@ -657,7 +657,7 @@ commands:
 
 Всякий раз, когда запускается `dwe stop` (независимо от наличия `lifecycle.yml`), синтетическая фаза `_auto_reap_daemons` дописывается в начало stop-пайплайна. Она перечисляет каждый контейнер, помеченный `dwe.project=<full>` с непустым `dwe.daemon.id`, и останавливает их параллельно. Опций отказа нет; фаза видна в выводе плана. Форму stop-пайплайна см. в [lifecycle.md](../lifecycle.md).
 
-Если `lifecycle.yml` отсутствует, `dwe stop` всё равно работает (только с фазой `_auto_reap_daemons` плюс дефолтным сообщением `Project is stopped. Have a nice day!`) — `lifecycle.yml` больше не требуется для `stop`.
+Если `lifecycle.yml` отсутствует, `dwe stop` всё равно работает (только с фазой `_auto_reap_daemons` плюс дефолтным сообщением `Project is stopped. Have a nice day!`).
 
 ### Безопасность и приватность
 
@@ -695,7 +695,7 @@ dwe stop
 
 `workdir` принимает шаблонизированный путь. Относительные пути разрешаются относительно корня проекта для хостовых раннеров (`type: shell`, `type: script`) и относительно файловой системы контейнера для раннеров сервисов.
 
-`workdir_from` **допустим только** для `service_exec` / `service_run` и читает строку из объединённого конфига:
+`workdir_from` допустим для `service_exec` / `service_run` / `daemon` и читает строку из объединённого конфига:
 
 ```yaml
 workdir_from: services.main.work_dir_internal

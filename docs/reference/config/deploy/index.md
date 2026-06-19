@@ -53,13 +53,13 @@ flowchart TB
   end
 
   svc --> INL
-  INL -->|topo-sorted by depends_on| PLAN[Resolved plan]
+  INL -->|topo-sorted by after:| PLAN[Resolved plan]
   PLAN --> RUN[(PlainReporter — ✓ ✗ ◎ ·<br/>.dwe/logs/deploy.log)]
 
   R[workspace/reset.yml] --> RPLAN[Resolved plan] --> RUN2[(PlainReporter)]
 ```
 
-Any service type (app, tool, or infra) may have a `workspace/services/<name>/deploy.yml`. At plan time the orchestrator filters that set down to **enabled** services (required ones are always enabled) and inlines them in topological `depends_on` order. Services without a deploy file are silently skipped — not every service needs one.
+Any service type (app, tool, or infra) may have a `workspace/services/<name>/deploy.yml`. At plan time the orchestrator filters that set down to **enabled** services (required ones are always enabled) and inlines them in topological `after:` order. Services without a deploy file are silently skipped — not every service needs one.
 
 The `after:` field in `workspace/services/<name>/deploy.yml` declares deploy-time ordering between services (separate from runtime `depends_on:`). See [Top-level fields](#top-level-fields) for details.
 
@@ -171,7 +171,7 @@ Use `untracked: true` on the `post-deploy` phase to suppress system step message
 
 ## `deploy_services` marker
 
-In `deploy.yml`, a phase with `deploy_services: true` is a placeholder. The CLI replaces it with the inlined per-service pipelines at runtime, ordered by dependency (`depends_on` in each service's `workspace/services/<name>/service.yml`). Only enabled services are included.
+In `deploy.yml`, a phase with `deploy_services: true` is a placeholder. The CLI replaces it with the inlined per-service pipelines at runtime, ordered by dependency (the `after:` field in each service's `workspace/services/<name>/deploy.yml`). Only enabled services are included.
 
 ```yaml
 phases:

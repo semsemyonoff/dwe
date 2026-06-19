@@ -226,7 +226,7 @@ The daemon is managed automatically — every lifecycle command that asserts "th
 | `dwe deploy run` | cycle (stop → start) — guarantees the daemon is not from an older dwe build |
 | `dwe run` | ensure (start if not running) |
 | `dwe restart` (whole stack) | cycle |
-| `dwe services <name> --apply` | ensure |
+| `dwe services enable|disable <name> --apply` | ensure |
 | `dwe status` (top-level) | best-effort ensure |
 | `dwe bridge start` | ensure (manual) |
 | `dwe stop` / `dwe reset run` (whole stack) | stop |
@@ -234,7 +234,7 @@ The daemon is managed automatically — every lifecycle command that asserts "th
 
 The daemon also **auto-stops** when the stack is actually down: it watches docker events for the project's containers (with a 60 s poll fallback) and exits once zero remain, removing `host.sock` and `port` but keeping `token`. There is deliberately no idle timeout — a dead daemon cannot be revived from inside a container, so killing it under an active developer would brick their hooks.
 
-When a project has no bridge-enabled service, no daemon is ever started and no overlay is generated — projects without `bridge:` configuration behave exactly as before the bridge existed.
+When a project has no bridge-enabled service, no daemon is ever started and no overlay is generated.
 
 ## `dwe bridge` subcommands
 

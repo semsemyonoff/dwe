@@ -108,7 +108,7 @@
 
 ## `service_configs_copy`
 
-> **⚠️ Устарело.** Заменено на [`service_configs_render`](#service_configs_render) + [`service_generated_harvest`](#service_generated_harvest). Продолжает работать, но `dwe validate` выдаёт предупреждение, и при каждом шаге копирования срабатывает однократное runtime-уведомление об устаревании. См. [render config](../../render/config.md) для миграции. Будет удалено в отдельном phase-2 (мажорном) этапе.
+> **⚠️ Устарело.** Заменено на [`service_configs_render`](#service_configs_render) + [`service_generated_harvest`](#service_generated_harvest). Продолжает работать, но `dwe validate` выдаёт предупреждение, и при каждом шаге копирования срабатывает однократное runtime-уведомление об устаревании. См. [render config](../../render/config.md) для замены.
 
 Копирует шаблонные конфиг-файлы из `configs/services/<service>/` в `services/<service>/configs/`. Создаёт директорию назначения `configs/`, если её нет — это канонический путь создания `configs/` (билтин `service_dirs_ensure` её не создаёт).
 

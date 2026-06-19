@@ -69,7 +69,7 @@ path: "${param.dump_dir}/${param.database}{{ if .Params.dump_date }}_{{ now | da
 | `files.*.path`, `files.*.candidates[].path/glob/match` | да |
 | `params.*.default_from`, `context.*.from` | нет — только обычные точечные пути |
 | `steps[].with[<key>]`, `steps[].when` в workflow | да |
-| `description`, `group.title`, `group.description` | нет — печатается дословно `commands list` / `commands inspect` / completion |
+| `description`, `group.title`, `group.description` | нет — печатается дословно `commands list` / `commands -i` / completion |
 
 ## Template-пространство команды (полный справочник)
 

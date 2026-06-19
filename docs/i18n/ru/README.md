@@ -74,7 +74,31 @@ dwe completion install zsh        # или явно указать шелл
 
 ### Опционально: скил для AI-агентов
 
-Репозиторий поставляет агентский скил в [`skills/dwe/`](../../../skills/dwe/SKILL.md) — тонкий навигатор, который объясняет Claude Code, Codex, Cursor, OpenCode и другим совместимым агентам, как обнаружить DWE-проект, какие команды `dwe` использовать для инспекции, а какие — для изменений, и как находить остальное через встроенную подсистему `dwe docs`. Установка через CLI [vercel-labs/skills](https://github.com/vercel-labs/skills):
+Репозиторий поставляет агентский скил в [`skills/dwe/`](../../../skills/dwe/SKILL.md) — тонкий навигатор, который объясняет Claude Code, Codex, Cursor, OpenCode и другим совместимым агентам, как обнаружить DWE-проект, какие команды `dwe` использовать для инспекции, а какие — для изменений, и как находить остальное через встроенную подсистему `dwe docs`.
+
+#### Claude Code — как плагин
+
+Этот репозиторий также является [маркетплейсом плагинов](https://code.claude.com/docs/en/discover-plugins) Claude Code. Добавьте маркетплейс и установите плагин `dwe` (он включает скил) прямо из Claude Code:
+
+```text
+/plugin marketplace add semsemyonoff/dwe
+/plugin install dwe@dwe
+```
+
+`dwe@dwe` — это `<плагин>@<маркетплейс>`; оба называются `dwe`. Либо запустите `/plugin` без аргументов для интерактивного браузера. После установки скил активируется автоматически в любом каталоге, содержащем `workspace.yml`. Чтобы включить его для всей команды или в CI, закоммитьте маркетплейс и плагин в `.claude/settings.json`:
+
+```json
+{
+  "extraKnownMarketplaces": {
+    "dwe": { "source": { "source": "github", "repo": "semsemyonoff/dwe" } }
+  },
+  "enabledPlugins": { "dwe@dwe": true }
+}
+```
+
+#### Любой агент — через CLI skills
+
+CLI [vercel-labs/skills](https://github.com/vercel-labs/skills) ставит тот же скил в Claude Code, Codex, Cursor, OpenCode и другие:
 
 ```sh
 # установить в текущий проект (./<agent>/skills/)
@@ -129,7 +153,7 @@ dwe deploy plan   # разрешённое дерево фаз/шагов, бе�
 dwe validate      # проверки готовности
 ```
 
-Журнал деплоя хранится в `.dwe/deploy/state.yml`. Повторные запуски пропускают шаги, у которых `action_hash` и входы не изменились. Логи попадают в `.dwe/logs/`, если указан `log: true`.
+Журнал деплоя хранится в `.dwe/deploy/state.yml`. Повторные запуски пропускают шаги, у которых `action_hash` и входы не изменились. Логи деплоя по умолчанию пишутся в `.dwe/logs/deploy.log` (отключается через `log: false`); логи жизненного цикла (`run`/`stop`/`reset`) пишутся только при указании `log: true`.
 
 ## Архитектура
 
@@ -158,19 +182,18 @@ flowchart LR
 my-project/
 ├── workspace.yml              # идентичность проекта
 ├── workspace/                 # отслеживаемое дерево конфигурации
-│   ├── defaults.yml        # версионированные дефолты
-│   ├── local.yml           # оверрайды на разработчика (gitignored)
+│   ├── defaults.yml        # версионированные дефолты (опционально)
+│   ├── local.yml           # оверрайды на разработчика (gitignored, опционально)
 │   ├── services/<name>/    # папки сервисов (service.yml + опциональные пайплайны)
-│   ├── commands/           # декларативные пользовательские команды
-│   ├── templates/          # template-паки для `dwe render`
-│   ├── deploy.yml          # верхнеуровневый оркестратор деплоя
-│   ├── lifecycle.yml       # run / stop / restart
-│   ├── reset.yml           # пайплайн reset
-│   ├── info.yml            # информационная панель
-│   ├── validate.yml        # проверки готовности
-│   └── docker.yml          # список compose-файлов + топология
+│   ├── commands/           # декларативные пользовательские команды (опционально)
+│   ├── templates/          # template-паки для `dwe render` (опционально)
+│   ├── deploy.yml          # верхнеуровневый оркестратор деплоя (опционально)
+│   ├── lifecycle.yml       # run / stop / restart (опционально)
+│   ├── reset.yml           # пайплайн reset (опционально)
+│   ├── info.yml            # информационная панель (опционально)
+│   ├── validate.yml        # проверки готовности (опционально)
+│   └── docker.yml          # список compose-файлов + топология (опционально)
 ├── compose/                # отслеживаемые оверлеи Docker Compose (по сервисам)
-├── configs/                # отслеживаемые шаблоны конфигов сервисов
 ├── images/                 # отслеживаемые сборки образов (<service>/Dockerfile)
 ├── services/               # gitignored исходники сервисов (<hub>/src/)
 ├── snapshots/              # gitignored хранилище снапшотов

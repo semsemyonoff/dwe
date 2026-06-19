@@ -30,20 +30,21 @@ Project readiness checks.
 
 `workspace/validate.yml` declares project-level readiness checks. The CLI consumes these from two entry points:
 
-- `dwe validate` — runs every check (plus YAML-shape validators in the `config`, `templates`, `commands`, and `bridge` domains, plus environment probes in the `env` domain) and reports diagnostics.
-- Preflight hook on `dwe deploy run`, `dwe run`, `dwe stop`, and `dwe restart` — runs the subset of checks bound to the relevant stage before any side effect on Docker, git, or the filesystem.
+- `dwe validate` — runs every check (plus YAML-shape validators in the `config`, `templates`, `commands`, `translations`, and `bridge` domains, plus environment probes in the `env` domain) and reports diagnostics.
+- Preflight hook on `dwe deploy run`, `dwe run`, `dwe stop`, `dwe restart`, and `dwe reset run` — runs the subset of checks bound to the relevant stage before any side effect on Docker, git, or the filesystem.
 
 The goal is to surface user-actionable problems ("you're not logged into ghcr.io", "DATABASE_URL is empty in `.env`", "VPN is down") BEFORE deploy steps fail mid-way with cryptic errors.
 
 ## Validation domains
 
-The validate command runs four domains in addition to the existing YAML-shape validators:
+The validate command runs five domains in addition to the existing YAML-shape validators:
 
 | Domain | Source | Configurable? |
 |--------|--------|---------------|
 | `env.*` | Hardcoded in the CLI | No — seven fixed probes |
 | `checks.*` | `workspace/validate.yml` entries | Yes — declarative |
 | `linters.*` | Built-in adapters (shellcheck, hadolint) + `workspace/validate.yml` `linters:` block | Yes — declarative |
+| `translations.*` | `workspace/i18n/` translation files | No — fixed validators (parse errors, orphan command/group ids, unknown `render.*` keys) |
 | `snapshot.*` | On-disk snapshot directories + `workspace/snapshot.yml` | No — fixed validators per snapshot name |
 
 The `env.*` probes are: `env.docker_bin`, `env.docker_daemon`, `env.docker_compose`, `env.git_bin`, `env.shell_bin`, `env.project_perms`, `env.ports_free`. They run on every `dwe validate` invocation and on every preflight (regardless of stage — env has no stage concept), with one exception: `env.ports_free` self-skips on the `stop` stage since port conflicts are irrelevant when winding the project down.
@@ -121,7 +122,7 @@ A check runs whenever its `stages` list contains a stage the caller asked for. T
 |-------|--------------|
 | `deploy` | `dwe deploy run`, `dwe validate --stage deploy` |
 | `run` | `dwe run`, `dwe restart` (run leg), `dwe validate --stage run` |
-| `stop` | `dwe stop`, `dwe restart` (stop leg), `dwe validate --stage stop` |
+| `stop` | `dwe stop`, `dwe restart` (stop leg), `dwe reset run`, `dwe validate --stage stop` |
 | `command` | `dwe validate --stage command` (reserved for future use; no automatic hook) |
 | `post-setup` | the deploy final preflight only — `dwe deploy run`, `dwe deploy` after the setup wizard, `dwe validate --stage post-setup` |
 
@@ -405,7 +406,7 @@ commands:
 - `dwe validate --strict` — treat warnings as errors (exit 1).
 - `dwe validate --quiet` — hide ok / info rows.
 - `dwe validate --level <levels>` — show only the given severity levels (comma-separated: `ok`, `info`, `warning`, `error`; e.g. `--level error,warning`). This is display-only — it never changes the summary counts or the exit code. Applies to both the table and `--output json`.
-- `--skip-preflight` — local flag on `deploy run`, `run`, `stop`, and `restart`. When set, preflight prints `preflight skipped (--skip-preflight)` to stderr and runs NO validators. The flag is a true bypass: `type: command` checks invoke arbitrary user scripts, so the CLI does not run them under a flag the user named "skip".
+- `--skip-preflight` — local flag on `deploy run`, `run`, `stop`, `restart`, and `reset run`. When set, preflight prints `preflight skipped (--skip-preflight)` to stderr and runs NO validators. The flag is a true bypass: `type: command` checks invoke arbitrary user scripts, so the CLI does not run them under a flag the user named "skip".
 
 ## Diagnostic output
 

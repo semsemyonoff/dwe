@@ -150,7 +150,7 @@ $ dwe deploy run
 ### Пример: редактирование шага, перезапуск при следующем деплое
 
 ```yaml
-# workspace/deploy/main.yml
+# workspace/services/main/deploy.yml
 - name: install
   type: command
   cmd: app.install  # was "app.install"

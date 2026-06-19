@@ -51,7 +51,7 @@ workspace/templates/
 | `ai`  | `<svc.Dir>/<rel>` — например, `services/main/AGENTS.md` |
 | `git` | `<svc.Dir>/src/.git/hooks/<basename>` — chmod `0755` на каждом прогоне |
 
-По умолчанию рендерятся только сервисы `type: app` (для всех трёх видов — причём `ai` тоже включён по умолчанию только для них). Сервисы других типов подключаются явно через `services.<name>.render.<kind>.enabled: true`.
+По умолчанию рендерятся только сервисы `type: app` (для всех трёх видов). Сервисы других типов подключаются явно через `services.<name>.render.<kind>.enabled: true`.
 
 ## Файл `manifest.yml`
 

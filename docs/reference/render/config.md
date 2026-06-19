@@ -2,10 +2,8 @@
 
 `dwe render config [service]` renders service **config files** (e.g. `.env`,
 `env.php`) from a template pack into each service hub directory, replaying any
-service-minted secrets harvested into the durable generated-value store. It is
-the render-based successor to the legacy `service_configs_copy` mechanism: configs
-become pure render outputs derived from the merged config plus the store, rather
-than fully-baked files copied from `configs/services/<svc>/`.
+service-minted secrets harvested into the durable generated-value store. Configs
+are pure render outputs derived from the merged config plus the store.
 
 ## Contents
 
@@ -41,7 +39,7 @@ per-file bind mount / `mountpoint` machinery). The model has two halves:
 
 Config rendering is **opt-in**: a service with no resolvable config pack is a
 silent no-op. There is no `dwe init` scaffold wiring — you author the pack and the
-pipeline steps yourself, matching the user-authored copy mechanism it replaces.
+pipeline steps yourself.
 
 ## Template substrate: `${...}` shorthand
 
@@ -338,8 +336,6 @@ per copy step. To migrate:
    service-minted secrets.
 4. Bootstrap an already-committed secret into the store with
    `dwe render config <svc> --harvest`, then stop committing it.
-
-The copy code is removed in a separate phase-2 (major) effort.
 
 ## Related references
 

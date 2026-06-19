@@ -160,9 +160,9 @@ Comments, blank lines, and key ordering are preserved; only the edited value
 node changes. Coercion is honoured at the node level — overwriting a quoted
 string with `true`/`42` emits a **bare** scalar so it reloads typed.
 
-This same writer now backs **`dwe services enable/disable`** and the **setup
-wizard**, so comments in `local.yml` survive every DWE-driven edit, not just
-`vars set`. Map-over-scalar collisions are rejected (to avoid silently
+This writer backs **`dwe vars set`**, **`dwe services enable/disable`**, and
+the **setup wizard**, so comments in `local.yml` survive every DWE-driven edit.
+Map-over-scalar collisions are rejected (to avoid silently
 discarding developer data), with the one documented exception of the legacy
 bare-int port leaf being upgraded to a `{port: N}` map.
 
@@ -272,4 +272,4 @@ read-only render crosses the boundary.
 - `dwe vars inspect <var>` — per-layer values, origin, and usages
 - `dwe vars set <var> [value]` — write a `local.yml` override (comment-preserving)
 - `dwe render env` / `dwe render config` — regenerate `.env` / service configs from the merged config
-- `dwe services enable` / `disable` — service toggles (now also comment-preserving)
+- `dwe services enable` / `disable` — service toggles (comment-preserving)

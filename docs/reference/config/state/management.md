@@ -148,7 +148,7 @@ $ dwe deploy run
 ### Example: edit a step, re-run on next deploy
 
 ```yaml
-# workspace/deploy/main.yml
+# workspace/services/main/deploy.yml
 - name: install
   type: command
   cmd: app.install  # was "app.install"

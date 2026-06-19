@@ -74,6 +74,36 @@ dwe	reference/config/services/fields	ru
 project	guides/getting-started	en
 ```
 
+## `dwe docs search <query>`
+
+Search every documentation topic for a case-insensitive literal substring and emit the sections that contain it. Built for pipes, scripts, agents, and CI.
+
+**Usage:**
+```bash
+dwe docs search <query> [--source all|dwe|project] [--lang <code>] [--limit <n>] [--output text|json] [--pretty]
+```
+
+**Arguments:**
+- `<query>` — Literal substring to search for (case-insensitive). Matches inside fenced code blocks are counted too — that's where schema names usually appear.
+
+**Flags:**
+- `--source <all|dwe|project>` — Doc source (default `all`). `dwe` searches only built-in docs; `project` searches only `./docs/`; `all` searches both.
+- `--lang <code>` — Language code (default: active locale or `en`).
+- `--limit <n>` — Maximum result rows (default `50`; `0` = unlimited).
+- `--output <text|json>` — Output format (global flag; default `text`).
+- `--pretty` — Pretty-print JSON output (only with `--output json`).
+
+**Output:**
+- **`text` (default):** Tab-separated, one row per matching section: `<source>\t<path>#<anchor>\t<count>`. Sections are sorted by match count (descending), then by path. Lead text under the H1 (before the first H2) is reported with an empty anchor.
+- **`--output json`:** A JSON array of `{source, path, anchor, count}` records (path and anchor are split; anchor is empty for lead text under the H1 before the first H2/H3).
+
+**Examples:**
+```bash
+dwe docs search depends_on
+dwe docs search 'RunContext.Render' --source dwe
+dwe docs search topo-sort --lang en --limit 5
+```
+
 ## `dwe docs export <dir>`
 
 Export all documentation topics to a directory on disk (useful for offline reading, publishing, or CI pipelines).
