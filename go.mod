@@ -4,11 +4,11 @@ go 1.26
 
 require (
 	charm.land/bubbles/v2 v2.1.0
-	charm.land/bubbletea/v2 v2.0.5
+	charm.land/bubbletea/v2 v2.0.7
 	charm.land/fang/v2 v2.0.1
-	charm.land/glamour/v2 v2.0.0
+	charm.land/glamour/v2 v2.0.1
 	charm.land/huh/v2 v2.0.3
-	charm.land/lipgloss/v2 v2.0.3
+	charm.land/lipgloss/v2 v2.0.4
 	github.com/common-nighthawk/go-figure v0.0.0-20210622060536-734e95fb86be
 	github.com/creack/pty v1.1.24
 	github.com/fsnotify/fsnotify v1.10.1
@@ -18,8 +18,8 @@ require (
 	github.com/spf13/cobra v1.10.2
 	github.com/stretchr/testify v1.11.1
 	go.uber.org/goleak v1.3.0
-	golang.org/x/sync v0.20.0
-	golang.org/x/term v0.43.0
+	golang.org/x/sync v0.21.0
+	golang.org/x/term v0.44.0
 	gopkg.in/yaml.v3 v3.0.1
 )
 
@@ -32,7 +32,7 @@ require (
 	github.com/aymanbagabas/go-osc52/v2 v2.0.1 // indirect
 	github.com/aymerick/douceur v0.2.0 // indirect
 	github.com/catppuccin/go v0.2.0 // indirect
-	github.com/charmbracelet/ultraviolet v0.0.0-20260413211237-bd52878bcec2 // indirect
+	github.com/charmbracelet/ultraviolet v0.0.0-20260525132238-948f4557a654 // indirect
 	github.com/charmbracelet/x/cellbuf v0.0.15 // indirect
 	github.com/charmbracelet/x/exp/charmtone v0.0.0-20250603201427-c31516f43444 // indirect
 	github.com/charmbracelet/x/exp/ordered v0.1.0 // indirect
@@ -83,5 +83,5 @@ require (
 	github.com/rivo/uniseg v0.4.7
 	github.com/spf13/pflag v1.0.10
 	github.com/xo/terminfo v0.0.0-20220910002029-abceb7e1c41e // indirect
-	golang.org/x/sys v0.44.0
+	golang.org/x/sys v0.46.0
 )
