@@ -83,6 +83,16 @@ The framework skeleton. Lives under `core/ui/` (not `shared/`) because it depend
 `core/ui/styles` palette — it is sink-layer infrastructure for the CLI's interactive
 surfaces, consistent with the existing `core/ui` placement.
 
+**Layering rule.** `core/ui/` is a sink layer (per `docs/internals/packages.md` — only
+`internal/cli/**` is meant to import it). Migrating the docs browser onto this framework
+formalises a `core/docs → core/ui` dependency, which `docs/internals/packages.md` does not
+currently sanction. This milestone explicitly resolves that by **relocating the docs TUI
+to `internal/core/ui/docstui/`** (peer of `cmdbrowser`/`statustui`), keeping `core/docs`
+free of `core/ui` imports and leaving the `tui` package consumed only from `core/ui/*` +
+`cli/`. The internals doc is updated to record the rule. `Frame` itself depends only on
+the `styles.Color*()` string accessors and `charm.land/lipgloss/v2` — never on exported
+v1 `lipgloss.Style` values (the existing styling bridge stays load-bearing).
+
 - **`Frame`** — owns the screen layout (body region + bottom status line) and composites
   overlays on top of the body. The status line carries: brand + project (left), a
   plugin-supplied context string (middle), and a `? help` hint (right). Overlays are
@@ -139,54 +149,139 @@ Press `?` → help modal, centred over the BODY (status line stays visible):
 
 ### Content-plugin contract
 
-A plugin provides: the **body view**, a **context string** (middle of the status line),
-and its **set of actions** (with handlers). Command browser, docs browser, and status
-dashboard become three plugins. The framework owns everything else.
+A plugin is a **managed child model**, not just a view function. "Body view + context
+string + actions" is the visible surface, but the real interface must cover everything the
+three existing TUIs already do, or the framework will become shared chrome while each
+surface keeps private input/async/sizing/cleanup logic (defeating the unification). The
+`Plugin` interface — pinned by the end of stage 0 — covers:
 
-### Shared generic tree widget `internal/core/ui/tui/tree`
+- **Lifecycle** — `Init() tea.Cmd`, and a cleanup/cancel hook (docs has a file watcher and
+  prefetch; status has async tab loads — both need deterministic teardown on exit).
+- **Resize** — the plugin receives **inner** body dimensions (post-border), and declares
+  whether it has a narrow-terminal fallback layout; the framework owns the outer geometry.
+- **Message routing** — the framework forwards unmatched `tea.Msg` to the plugin so its own
+  async messages survive (`topicLoadedMsg`, `FileChangedMsg`, `ProgressMsg`, spinner ticks,
+  tab-load/reload messages). The framework must not swallow plugin messages.
+- **Result semantics** — a typed result on exit (cmdbrowser returns a selected
+  action/index; docs and status mostly return cancellation/error). The framework's run
+  loop returns the plugin's result unchanged.
+- **Panels & focus** — the plugin declares its panels (regions) so the focus manager and
+  mouse hit-testing have something concrete to target; the framework cannot own focus
+  meaningfully otherwise.
+- **Status segments** — the plugin supplies the middle status-line context (and may update
+  it reactively), not just a static string.
+- **Overlays** — the plugin can **request** framework overlays (inspect, filter, future),
+  not only render beneath them.
+- **Action handlers** — the plugin registers its actions into the keymap registry; the
+  framework dispatches key/mouse input to handlers.
+
+Command browser, docs browser, and status dashboard become three plugins; the framework
+owns layout, overlays, focus, mouse, and the run loop.
+
+### Generic tree widget `internal/core/ui/tui/tree`
 
 A generic expandable tree with filtering and visible-node rendering, parameterised over a
-pluggable node type. Absorbs both current custom tree implementations.
+pluggable node type. **Not extracted up front** — the cmdbrowser pilot builds its tree
+against the framework first, and the generic `tui/tree` is factored out during the docs
+migration, when a second real consumer is in hand. The docs tree carries metadata the
+command tree does not (heading levels, multiple roots, per-node localization, stale-
+translation state, file/folder folding); designing the generic node type without that
+second consumer risks overfitting to cmdbrowser or missing required fields.
 
-### Stack standardisation
+### Charm-stack standardisation — scope
 
-All TUIs on lipgloss v2; `statustui` migrates off v1 as part of its stage.
+The interactive TUI **chrome** (the `tui` framework + all three plugins) is wholly on
+lipgloss/bubbles/bubbletea v2. `statustui` migrates off lipgloss v1 as part of its stage.
+**This milestone does not commit to removing v1 from the entire dependency graph** —
+`internal/core/ui/render/` still builds status content with v1 lipgloss tables, and
+porting that is a larger, separable effort. Scope here is: no v1 in the interactive TUI
+packages; `render/`'s v1 usage is explicitly out of scope and called out as follow-up.
+
+### Panel geometry model
+
+Defined once in `Frame`, not per plugin — lipgloss v2's width/height-around-borders
+semantics already forced local fixes in cmdbrowser, so the framework owns the single
+source of truth:
+
+- **Outer frame size** = terminal width × (height − status line). **Inner content size** =
+  outer minus border/padding; plugins only ever see inner dimensions.
+- Border ownership is the framework's; plugins never draw the panel border.
+- The **overlay coordinate space** is the body region (overlays centre over inner body,
+  never over the status line). Centring math accounts for bordered panels.
+- Golden frame tests at width buckets **60 / 79 / 80 / 99 / 100** and both odd/even widths
+  lock the geometry against regressions.
+
+### Terminal & mouse policy
+
+- **alt-screen** — framework-hosted TUIs run in the alt-screen; the framework owns enter/exit.
+- **Mouse enable mode** — fixed explicitly (wheel + click reporting via the v2 mouse model;
+  full-motion `tea.WithMouseAllMotion` is **not** used). Mouse is opt-in per program so a
+  plugin can decline. Decided concretely in the mouse stage.
+- **Capability fallbacks (framework-owned, not per plugin)** — non-TTY errors before
+  launch; `TERM=dumb` and terminals without mouse degrade to keyboard-only; narrow/tiny
+  terminals fall back to the existing plain selector. Ownership lives in `Frame`, so every
+  plugin inherits identical behaviour.
+- **Wheel debounce** = per-frame **coalescing** of deltas, never blind dropping — a fast
+  trackpad burst sums into one scroll, a slow wheel still registers each tick. Tested both ways.
+
+### Form interop rule
+
+Forms (`huh/v2`) keep their own loop. Launching a form from **inside** an active
+alt-screen bubbletea program is materially different from `widgets.RunWithPromptHooks`
+wrapping a whole-program launch. This milestone's rule: **framework-hosted TUIs do not
+launch huh forms inline.** A surface that needs a form exits the TUI, runs the form via the
+unified `ask` path, and (if applicable) re-enters — no nested alt-screen pause/resume. If a
+future surface genuinely needs an inline form, that is a separate design, not assumed here.
 
 ## 5. Stages
 
 Each stage is independently plannable via `/planning:make`. Ordering reflects
-dependencies; stage 7 (forms) is independent and may run early or in parallel.
+dependencies. Stages 5a and 6 are independent and may run early or in parallel.
 
 | # | Stage | Depends on | Summary |
 |---|-------|-----------|---------|
-| 0 | Framework skeleton | — | `tui` package: `Frame` (body + bottom status line), overlay manager, `?`-modal help generated from the action registry, focus manager, action-keymap registry mechanism. Built standalone with a test harness. Highest-risk core — built in isolation. |
-| 1 | Keybinding design | 0 | Decide the full action taxonomy, default bindings, mouse semantics, help sections, and backwards-compatible aliases for muscle memory across all three TUIs and forms. Deliverable: a keymap reference doc + encoded default registry. Gate before any migration. |
-| 2 | Mouse layer in `Frame` | 0, 1 | Wheel (debounced), click hit-testing, overlay click routing — implemented once in `Frame` so every plugin inherits it. |
-| 3 | Generic tree widget | 0 | Extract the shared expandable-tree-with-filter into `tui/tree` with a pluggable node type. |
-| 4 | Pilot: command browser | 0–3 | Migrate `cmdbrowser` onto `Frame` + tree widget + action keymap + help modal + bottom status line + mouse. End-to-end validation of the framework and delivery of the redesign on the flagship surface. |
-| 5 | Docs browser | 4 | Migrate `docs/tui` onto `Frame` + shared tree + help modal + mouse + bottom status line. |
-| 6 | Status dashboard | 4 | Migrate `statustui` onto `Frame` (+ lipgloss v1 → v2), tabs as a body plugin, help modal, tab clicks. |
-| 7 | Forms unification | — (independent) | Single `RunHuhForm` helper; `ask.RunOptions` gains scalable keymap overrides; migrate the three raw `huh` sites (deploy menu, port overrides, service toggles) back into `ask`; remove `deploy/menu.go` duplication. |
+| 0 | Framework skeleton (spike) | — | `tui` package: `Frame` (body + bottom status line), overlay manager, `?`-modal help, focus manager, panel-geometry model, and a **provisional** action-keymap registry. Pins the `Plugin` interface (lifecycle / resize / message routing / result / panels / overlays / actions). Built standalone with a test harness. **Registry API is explicitly not locked** — it is shaped here but finalised in stage 1, so stage 0 is a spike, not a frozen contract. |
+| 1 | Keybinding & action design | 0 | Decide the full action taxonomy, default bindings, mouse semantics, help sections, and backwards-compatible aliases for muscle memory across all three TUIs and forms. **Locks the registry API** that stage 0 prototyped. Deliverable: a keymap reference doc + encoded default registry. Gate before any migration. |
+| 2 | Mouse layer in `Frame` | 0, 1 | Wheel (per-frame coalescing), click hit-testing, overlay click routing, mouse-enable mode + per-program opt-in — implemented once in `Frame` so every plugin inherits it. |
+| 3 | Pilot: command browser | 0–2 | Migrate `cmdbrowser` onto `Frame` + action keymap + help modal + bottom status line + mouse. Builds a **cmdbrowser-local tree** (not yet generic). End-to-end validation of the framework + redesign on the flagship surface. Preserves existing result/action semantics, vars-browser edit mode, and force-param-form behaviour. |
+| 4 | Docs browser + generic tree | 3 | Relocate the docs TUI to `internal/core/ui/docstui/` and migrate it onto `Frame` + help modal + mouse + bottom status line. **Extract the generic `tui/tree`** now that two consumers' needs are known (headings, multi-root, localization, stale-translation, folding); refactor cmdbrowser's tree onto it. Preserve docs watcher/prefetch behaviour. |
+| 5a | Status dashboard → lipgloss v2 | — | Migrate `statustui` off lipgloss v1 with **no** framework redesign and **no** layout change — pure dependency migration, isolated from async/reload behaviour. Scoped to interactive chrome (see § Charm-stack scope). |
+| 5b | Status dashboard → `Frame` | 3, 5a | Tabs as a body plugin, help modal, tab clicks, bottom status line. Preserve reload + scroll-offset (`YOffset`) preservation. |
+| 6 | Forms unification | — (independent) | Single `RunHuhForm` helper; `ask.RunOptions` gains scalable keymap overrides; migrate the three raw `huh` sites (deploy menu, port overrides, service toggles) back into `ask`; remove `deploy/menu.go` duplication. |
 
 ## 6. Cross-cutting concerns (every stage)
 
-- **Golden tests** for layouts and help-modal contents; deterministic frame rendering via
-  the existing test-hook patterns.
-- **i18n** of help/section strings (the `workspace/i18n` YAML namespace), consistent with
-  the display-string localisation contract.
-- **Non-TTY / narrow-terminal fallbacks** preserved (current behaviour: narrow terminals
-  fall back to a plain selector; non-TTY errors before launch).
-- **`docs/internals/packages.md`** updated with the new `tui` package contract and the
-  per-surface plugin notes.
+- **Test matrix** — golden frame tests at the width buckets above (odd/even); help-modal
+  contents; mouse routing into the correct hit-zone; async-message preservation (plugin
+  messages survive the framework's update loop); i18n help text; capability fallbacks
+  (non-TTY, no-mouse, narrow). Deterministic rendering via the existing test-hook patterns.
+- **Migration compatibility** — each migration preserves the surface's existing observable
+  behaviour: cmdbrowser result/action semantics + vars-browser edit mode + force-param-form;
+  docs watcher/prefetch; status reload + `YOffset` preservation. Regression-tested per stage.
+- **i18n** of help/section strings — a dedicated framework i18n key namespace in the
+  `workspace/i18n` YAML namespace, consistent with the display-string localisation contract.
+- **Non-TTY / narrow-terminal fallbacks** owned by `Frame`, not per plugin (current
+  behaviour preserved: narrow → plain selector; non-TTY → error before launch).
+- **JSON / plain output unaffected** — these surfaces are interactive-only; non-interactive
+  output paths are untouched.
+- **`docs/internals/packages.md`** updated with the new `tui` package contract, the
+  `core/ui` layering rule (incl. the `docstui` relocation), and per-surface plugin notes.
 
 ## 7. Open questions / risks
 
-- **Pilot choice** — `cmdbrowser` is assumed (most loaded surface, best-matched to the
-  reference interaction model). Revisit if docs/status proves a simpler first migration.
-- **`huh` overlay coexistence** — forms run their own loop; confirm pause/resume
-  interplay (`widgets.RunWithPromptHooks`) still holds when a form is launched from within
-  a framework-hosted TUI.
-- **Border vs. overlay geometry** — project-styled panel borders are retained; verify the
-  overlay centring math accounts for bordered panels.
-- **Render performance** — wheel debounce and overlay compositing should be benchmarked on
-  large trees / long docs to avoid flicker.
+- **`Plugin` interface completeness** — the contract is pinned in stage 0, but the first
+  real migration (stage 3) is the true test. Accept that stage 3 may feed one revision back
+  into the interface before it is frozen for stages 4–5b.
+- **Overlay/border geometry** — more than centring math: lipgloss v2 width/height-around-
+  borders semantics already needed local fixes in cmdbrowser. The outer-vs-inner model is
+  pinned once in `Frame` and locked by golden tests at 60/79/80/99/100 columns.
+- **`huh` form interop** — resolved by rule (framework-hosted TUIs do not launch inline
+  forms; § Form interop). Risk is only if a surface is later found to genuinely need an
+  inline form — treat as a separate design.
+- **Mouse wheel feel** — naive debounce drops intentional scrolls; mitigated by per-frame
+  coalescing, but needs real-device testing (trackpad burst vs slow wheel).
+- **statustui v2 migration size** — underestimated if "whole stack on v2" is read as
+  removing v1 everywhere. Bounded here to interactive chrome; `core/ui/render/`'s v1
+  lipgloss tables are explicit follow-up, not part of this milestone.
+- **Render performance** — wheel coalescing and overlay compositing benchmarked on large
+  trees / long docs to avoid flicker.
