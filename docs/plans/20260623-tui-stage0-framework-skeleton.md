@@ -407,20 +407,20 @@ Key design decisions:
 
 ### Task 9: Verify acceptance criteria
 
-- [ ] verify all Overview deliverables exist and are exercised by tests
-- [ ] verify the package builds: `go build ./internal/core/ui/tui/...`
-- [ ] verify **no v1** `github.com/charmbracelet/lipgloss` in the new package's **direct**
+- [x] verify all Overview deliverables exist and are exercised by tests
+- [x] verify the package builds: `go build ./internal/core/ui/tui/...`
+- [x] verify **no v1** `github.com/charmbracelet/lipgloss` in the new package's **direct**
   imports (NOT `-deps` — that is transitive and will legitimately show v1 via
   `core/ui/styles`, which imports v1 while exposing raw color accessors). Check direct
   imports only: `go list -f '{{join .Imports "\n"}}' ./internal/core/ui/tui/... | sort -u |
   grep -E 'github.com/charmbracelet/lipgloss$|internal/core/ui/cmdbrowser|internal/core/docs/tui|internal/core/ui/statustui'`
   returns nothing (a bare `rg '"github.com/charmbracelet/lipgloss"' internal/core/ui/tui` is
   an equivalent direct-source check)
-- [ ] verify `core/docs` is untouched (`git status` shows no changes there)
-- [ ] run focused suite: `go test ./internal/core/ui/tui/...`
-- [ ] run full suite: `make test`
-- [ ] run `make lint` — clean (gofmt/goimports/golangci-lint)
-- [ ] confirm golden buckets 60/79/80/99/100 + help-open + async-preservation all present
+- [x] verify `core/docs` is untouched (`git status` shows no changes there)
+- [x] run focused suite: `go test ./internal/core/ui/tui/...`
+- [x] run full suite: `make test`
+- [x] run `make lint` — clean (gofmt/goimports/golangci-lint)
+- [x] confirm golden buckets 60/79/80/99/100 + help-open + async-preservation all present
   and passing
 
 ### Task 10: [Final] Update documentation
