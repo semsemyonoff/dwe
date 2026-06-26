@@ -234,16 +234,16 @@ Key design decisions:
 - Create: `internal/core/ui/tui/focus_test.go`
 - Create: `internal/core/ui/tui/palette.go`
 
-- [ ] create `palette.go`: `focusedBorder()` / `unfocusedBorder()` returning v2
+- [x] create `palette.go`: `focusedBorder()` / `unfocusedBorder()` returning v2
   `lipgloss.Style` built from `styles.ColorBorder()` / `styles.ColorAccent()` accessors —
   the single styling bridge for panel borders (no v1 styles)
-- [ ] create `focus.go`: `focusManager` tracking the active `PanelID` across the plugin's
+- [x] create `focus.go`: `focusManager` tracking the active `PanelID` across the plugin's
   declared panels, with `Next()`, `Prev()`, `Set(PanelID)`, `Active() PanelID`, and
   `BorderFor(PanelID) lipgloss.Style`
-- [ ] handle the zero/one-panel cases (no-op cycling) and unknown PanelID
-- [ ] write tests: cycle Next/Prev wraps correctly, Set to known/unknown id, BorderFor
+- [x] handle the zero/one-panel cases (no-op cycling) and unknown PanelID
+- [x] write tests: cycle Next/Prev wraps correctly, Set to known/unknown id, BorderFor
   returns focused style only for the active panel
-- [ ] run tests — must pass before next task
+- [x] run tests — must pass before next task
 
 ### Task 5: Overlay manager + ANSI-aware centred compositing
 
