@@ -20,11 +20,12 @@ import (
 //	tui.help.section.<name>     → a section label (fallback: the English name)
 //	tui.help.action.<actionID>  → a binding description (fallback: Binding.Desc)
 //
-// Stage 0 ships English fallbacks only: callers pass i18n.TranslatorOrNop(nil)
-// (a NopTranslator that always returns the fallback), so NO ui.* YAML keys are
-// added yet and the ui: unknown-key validator
-// (internal/core/validate/config/ui.go) is not triggered. The migration stages
-// register this namespace before adding real translations.
+// No YAML translation keys are added yet: the framework uses code-level English
+// fallbacks (i18n.NopTranslator) and there is no live consumer of this namespace
+// until the migration stages. The migration stages register this namespace before
+// adding real translations. (Note: the ui: unknown-key validator at
+// internal/core/validate/config/ui.go only warns on ui.commands keys in
+// workspace.yml and is unrelated to this tui.help.* namespace.)
 const (
 	helpKeyTitle       = "tui.help.title"
 	helpKeySectionPfx  = "tui.help.section."
@@ -46,9 +47,12 @@ const (
 // [Composite] does clamp an oversized overlay to the body as a last-resort
 // safety net, but that truncates the box edge, so sizing here is what produces
 // good output at small-but-permitted sizes (tooNarrow only floors height at
-// minHeight). locale is required because
-// [i18n.Translator.T] takes it; Stage 0 callers may pass a fixed locale with a
-// NopTranslator.
+// minHeight). locale is required because [i18n.Translator.T] takes it; Stage 0
+// callers may pass a fixed locale with a NopTranslator.
+//
+// Only [Binding.Keys] are rendered in the modal; [Binding.Aliases] are
+// intentionally excluded — they dispatch (Match resolves them) but are hidden
+// from the help modal to avoid cluttering the display. Locked in Stage 1.
 func buildHelpOverlay(reg *Registry, tr i18n.Translator, locale string, width, height int) Overlay {
 	if tr == nil {
 		tr = i18n.NopTranslator{}

@@ -3,9 +3,12 @@ package tui
 import (
 	"bytes"
 	"errors"
+	"fmt"
 	"testing"
 
 	tea "charm.land/bubbletea/v2"
+
+	"github.com/semsemyonoff/dwe/internal/core/ui/widgets"
 )
 
 // ttyOpts returns RunOptions whose capability seams report a usable terminal of
@@ -145,6 +148,53 @@ func TestRun_ProgramError(t *testing.T) {
 	}
 	if !p.closeCalled {
 		t.Error("plugin.Close did not run on the error path")
+	}
+}
+
+// TestRun_InterruptIsCleanCancel asserts a user-initiated interrupt
+// (tea.ErrInterrupted) maps to the clean widgets.ErrCancelled sentinel, not a
+// fatal wrapped program error.
+func TestRun_InterruptIsCleanCancel(t *testing.T) {
+	stubRunProgram(t, tea.ErrInterrupted)
+	p := newStubPlugin()
+
+	_, err := Run(p, ttyOpts(100, 40))
+	if !errors.Is(err, widgets.ErrCancelled) {
+		t.Errorf("err = %v; want widgets.ErrCancelled", err)
+	}
+	if errors.Is(err, tea.ErrInterrupted) {
+		t.Error("interrupt leaked as a fatal program error")
+	}
+	if !p.closeCalled {
+		t.Error("plugin.Close did not run on the interrupt path")
+	}
+}
+
+// TestRun_KilledIsCleanCancel asserts a context kill (tea.ErrProgramKilled) maps
+// to the clean widgets.ErrCancelled sentinel.
+func TestRun_KilledIsCleanCancel(t *testing.T) {
+	stubRunProgram(t, tea.ErrProgramKilled)
+
+	_, err := Run(newStubPlugin(), ttyOpts(100, 40))
+	if !errors.Is(err, widgets.ErrCancelled) {
+		t.Errorf("err = %v; want widgets.ErrCancelled", err)
+	}
+}
+
+// TestRun_PanicSurfaces asserts a recovered panic (tea.ErrProgramPanic) is
+// surfaced as a fatal error, NOT swallowed as a clean cancel — even though v2
+// wraps it as `ErrProgramKilled: ErrProgramPanic`.
+func TestRun_PanicSurfaces(t *testing.T) {
+	// Mirror v2's wrapping so the ErrProgramKilled branch must not win.
+	panicErr := fmt.Errorf("%w: %w", tea.ErrProgramKilled, tea.ErrProgramPanic)
+	stubRunProgram(t, panicErr)
+
+	_, err := Run(newStubPlugin(), ttyOpts(100, 40))
+	if !errors.Is(err, tea.ErrProgramPanic) {
+		t.Errorf("err = %v; want wrapped ErrProgramPanic", err)
+	}
+	if errors.Is(err, widgets.ErrCancelled) {
+		t.Error("panic was swallowed as a clean cancel")
 	}
 }
 

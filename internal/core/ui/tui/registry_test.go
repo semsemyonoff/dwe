@@ -136,3 +136,90 @@ func TestRegistry_BuiltinDefaultsPresent(t *testing.T) {
 		}
 	}
 }
+
+func TestRegistry_EscAliasDispatchesToQuit(t *testing.T) {
+	t.Parallel()
+	r := NewRegistry()
+	// "esc" is a hidden alias for ActionQuit — must dispatch.
+	got, ok := r.Match("esc")
+	if !ok {
+		t.Fatal("Match(esc) = false; want true (esc is an alias for ActionQuit)")
+	}
+	if got != ActionQuit {
+		t.Errorf("Match(esc) = %q; want %q", got, ActionQuit)
+	}
+}
+
+func TestRegistry_AliasDispatchesAndNotInKeys(t *testing.T) {
+	t.Parallel()
+	r := NewRegistry()
+	// Register an action with an alias.
+	err := r.Register("plugin.open", Binding{
+		Keys:    []string{"o"},
+		Aliases: []string{"enter"},
+		Desc:    "Open",
+		Section: "Plugin",
+	})
+	if err != nil {
+		t.Fatalf("Register with alias: %v", err)
+	}
+
+	// Alias dispatches.
+	got, ok := r.Match("enter")
+	if !ok || got != "plugin.open" {
+		t.Errorf("Match(enter) = %q, %v; want plugin.open, true", got, ok)
+	}
+	// Canonical key also dispatches.
+	got, ok = r.Match("o")
+	if !ok || got != "plugin.open" {
+		t.Errorf("Match(o) = %q, %v; want plugin.open, true", got, ok)
+	}
+	// The Binding stored keeps canonical Keys (alias not moved to Keys).
+	b, _ := r.Binding("plugin.open")
+	if len(b.Keys) != 1 || b.Keys[0] != "o" {
+		t.Errorf("Binding.Keys = %v; want [o]", b.Keys)
+	}
+}
+
+func TestRegistry_AliasCollisionWithExistingKeyReturnsError(t *testing.T) {
+	t.Parallel()
+	r := NewRegistry()
+	// "?" is already bound to ActionHelp. Using it as an alias is rejected.
+	err := r.Register("plugin.thing", Binding{
+		Keys:    []string{"x"},
+		Aliases: []string{"?"},
+		Section: "S",
+	})
+	if err == nil {
+		t.Error("alias colliding with existing key: want error, got nil")
+	}
+	// No partial mutation: "plugin.thing" must not be registered.
+	if _, ok := r.Binding("plugin.thing"); ok {
+		t.Error("plugin.thing should not be registered after alias collision")
+	}
+	// "x" must not be in the dispatch map.
+	if got, ok := r.Match("x"); ok {
+		t.Errorf("Match(x) = %q after failed registration; want no match", got)
+	}
+}
+
+func TestRegistry_AliasCollisionWithOwnCanonicalKeyReturnsError(t *testing.T) {
+	t.Parallel()
+	r := NewRegistry()
+	// Alias duplicating the binding's own canonical key is rejected.
+	err := r.Register("plugin.thing", Binding{
+		Keys:    []string{"x"},
+		Aliases: []string{"x"},
+		Section: "S",
+	})
+	if err == nil {
+		t.Error("alias == canonical key: want error, got nil")
+	}
+	// No partial mutation.
+	if _, ok := r.Binding("plugin.thing"); ok {
+		t.Error("plugin.thing should not be registered after alias/key collision")
+	}
+	if got, ok := r.Match("x"); ok {
+		t.Errorf("Match(x) = %q after failed registration; want no match", got)
+	}
+}

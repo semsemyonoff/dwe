@@ -118,9 +118,10 @@ func (f *Frame) Init() tea.Cmd { return f.plugin.Init() }
 //   - Key messages route through the registry: built-ins (help/focus/quit) are
 //     framework-handled and never reach the plugin; a matched plugin action
 //     goes to plugin.HandleAction; an unmatched (or plugin-unhandled) key is
-//     forwarded raw to plugin.Update. When an overlay is open, ONLY the
-//     help-close / quit built-ins act — plugin action keys are SWALLOWED, not
-//     routed (no acting behind the modal).
+//     forwarded raw to plugin.Update. When an overlay is open, "esc" closes the
+//     overlay (taking precedence over its ActionQuit alias) and otherwise ONLY
+//     the help-close / quit built-ins act — plugin action keys are SWALLOWED,
+//     not routed (no acting behind the modal).
 //   - Every non-key message is always forwarded to plugin.Update (async
 //     preservation), including while the help overlay is open.
 //   - tea.MouseMsg is ignored this stage (Stage 2 seam).
@@ -154,9 +155,17 @@ func (f *Frame) handleKey(key tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 	keyStr := key.String()
 
 	if !f.overlay.Empty() {
-		// Modal open: only the help-close and quit built-ins act; everything
+		// Modal open: the frame's modal-input policy takes precedence over the
+		// registry. "esc" closes the overlay — it never reaches its ActionQuit
+		// alias while a modal is open (the Binding.Aliases precedence rule), so
+		// dismissing a modal must not quit the program. "?" toggles help closed
+		// and "q"/"ctrl+c" quit (the help-close / quit built-ins). Everything
 		// else (plugin actions, focus cycling, raw keys) is swallowed so the
 		// body never acts behind the modal.
+		if keyStr == "esc" {
+			f.overlay.Pop()
+			return f, nil
+		}
 		if a, ok := f.registry.Match(keyStr); ok {
 			switch a {
 			case ActionHelp, ActionQuit:
@@ -217,6 +226,43 @@ func isBuiltin(a Action) bool {
 		return true
 	default:
 		return false
+	}
+}
+
+// captureDecision classifies a message under the capturing-overlay input policy.
+// It is the return type of [routeWhileCapturing].
+type captureDecision int
+
+const (
+	// captureSwallowToPlugin routes the message to the plugin (registry bypassed).
+	captureSwallowToPlugin captureDecision = iota
+	// captureHardQuit exits the program immediately (ctrl+c hard-quit path).
+	captureHardQuit
+	// captureClose dismisses the capturing overlay (esc close-overlay path).
+	captureClose
+)
+
+// routeWhileCapturing classifies msg under the capturing-overlay input policy.
+// It is called when the top overlay has [Overlay.CapturesInput] true. While
+// such an overlay is Top(), raw input (including printable characters) routes
+// to the plugin (registry bypassed), and only ctrl+c (hard-quit) and esc
+// (close overlay) survive as framework actions. ? does NOT open help.
+//
+// This is the exact function frame.Update will call in Stage 3 (drop-in
+// integration, not a throwaway shape). The full frame.Update rewiring lands
+// with the Stage 3 filter consumer; this stage locks and tests the contract.
+func routeWhileCapturing(msg tea.Msg) captureDecision {
+	key, ok := msg.(tea.KeyPressMsg)
+	if !ok {
+		return captureSwallowToPlugin
+	}
+	switch key.String() {
+	case "ctrl+c":
+		return captureHardQuit
+	case "esc":
+		return captureClose
+	default:
+		return captureSwallowToPlugin
 	}
 }
 

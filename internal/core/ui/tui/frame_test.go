@@ -31,13 +31,17 @@ func newTestFrame(t *testing.T, w, h int, opts ...frameOption) (*Frame, *stubPlu
 }
 
 // key builds a KeyPressMsg whose String() matches the registry key form
-// ("?", "o", "tab", "q", ...).
+// ("?", "o", "tab", "q", "esc", "ctrl+c", ...).
 func key(s string) tea.KeyPressMsg {
 	switch s {
 	case "tab":
 		return tea.KeyPressMsg{Code: tea.KeyTab}
 	case "shift+tab":
 		return tea.KeyPressMsg{Code: tea.KeyTab, Mod: tea.ModShift}
+	case "esc":
+		return tea.KeyPressMsg{Code: tea.KeyEscape}
+	case "ctrl+c":
+		return tea.KeyPressMsg{Code: 'c', Mod: tea.ModCtrl}
 	default:
 		r := []rune(s)
 		return tea.KeyPressMsg{Code: r[0], Text: s}
@@ -265,18 +269,110 @@ func TestFrame_ModalInputSwallowed(t *testing.T) {
 	}
 }
 
+// TestFrame_EscClosesOverlayWithoutQuitting asserts the modal-input precedence
+// rule: while an overlay is open, "esc" closes the overlay rather than reaching
+// its ActionQuit alias and quitting the program.
+func TestFrame_EscClosesOverlayWithoutQuitting(t *testing.T) {
+	f, _ := newTestFrame(t, 80, frameGoldenHeight)
+	f.Update(key("?")) // open help
+	if f.overlay.Empty() {
+		t.Fatal("help overlay did not open")
+	}
+	_, cmd := f.Update(key("esc"))
+	if !f.overlay.Empty() {
+		t.Errorf("esc did not close the overlay while a modal was open")
+	}
+	if cmd != nil {
+		if _, isQuit := cmd().(tea.QuitMsg); isQuit {
+			t.Errorf("esc quit the program instead of closing the overlay")
+		}
+	}
+}
+
+// TestFrame_QuitDispatch asserts the program's primary exit path: in normal mode
+// (no overlay) the quit keys route through the registry to ActionQuit and the
+// framework returns tea.Quit. "esc" reaches ActionQuit only here (no modal open);
+// the modal-open case is the negative covered by TestFrame_EscClosesOverlayWithoutQuitting.
+func TestFrame_QuitDispatch(t *testing.T) {
+	for _, k := range []string{"q", "ctrl+c", "esc"} {
+		t.Run(k, func(t *testing.T) {
+			f, p := newTestFrame(t, 80, frameGoldenHeight)
+			_, cmd := f.Update(key(k))
+			if !isQuitCmd(cmd) {
+				t.Errorf("%q in normal mode did not return tea.Quit", k)
+			}
+			if p.handledAction != "" {
+				t.Errorf("quit key %q leaked to plugin.HandleAction: %q", k, p.handledAction)
+			}
+		})
+	}
+}
+
+// TestFrame_MouseMsgSwallowed asserts a mouse message is ignored this stage: it
+// never reaches the plugin and the frame returns no command (the inert Stage 2 seam).
+func TestFrame_MouseMsgSwallowed(t *testing.T) {
+	f, p := newTestFrame(t, 80, frameGoldenHeight)
+	before := len(p.gotMsgs)
+	_, cmd := f.Update(tea.MouseClickMsg{})
+	if cmd != nil {
+		t.Errorf("mouse message produced a command; want nil (ignored this stage)")
+	}
+	if len(p.gotMsgs) != before {
+		t.Errorf("mouse message leaked to plugin.Update; gotMsgs grew from %d to %d", before, len(p.gotMsgs))
+	}
+}
+
 // TestFrame_ResizePropagates asserts a WindowSizeMsg recomputes geometry and
-// hands the plugin the inner body region.
+// hands the plugin the inner body region, and that the message itself is also
+// forwarded to plugin.Update (it is a non-key message — async preservation).
 func TestFrame_ResizePropagates(t *testing.T) {
 	f, p := newTestFrame(t, 80, frameGoldenHeight)
 	want := f.geo.Inner
 	if p.lastResize != want {
 		t.Errorf("plugin.Resize got %+v; want inner body region %+v", p.lastResize, want)
 	}
+	if !receivedWindowSize(p, 80, frameGoldenHeight) {
+		t.Errorf("WindowSizeMsg was not forwarded to plugin.Update; got %v", p.gotMsgs)
+	}
 	// A second resize re-propagates.
 	f.Update(tea.WindowSizeMsg{Width: 100, Height: 30})
 	if p.lastResize != f.geo.Inner {
 		t.Errorf("second resize: plugin.Resize got %+v; want %+v", p.lastResize, f.geo.Inner)
+	}
+	if !receivedWindowSize(p, 100, 30) {
+		t.Errorf("second WindowSizeMsg was not forwarded to plugin.Update; got %v", p.gotMsgs)
+	}
+}
+
+// TestFrame_StatusLineNarrowClamp asserts that when the fixed left/right zones
+// already meet or exceed the available width, renderStatusLine clamps the line to
+// exactly width cells (the no-room-for-centre branch).
+func TestFrame_StatusLineNarrowClamp(t *testing.T) {
+	f, _ := newTestFrame(t, 80, frameGoldenHeight)
+	for _, w := range []int{10, 12, 15} {
+		got := lipgloss.Width(stripANSI(f.renderStatusLine(w)))
+		if got != w {
+			t.Errorf("narrow status width = %d; want clamped to %d", got, w)
+		}
+	}
+}
+
+// TestFrame_BrandSegment covers all four brand/project presence combinations of
+// the left status zone.
+func TestFrame_BrandSegment(t *testing.T) {
+	tests := []struct {
+		brand, project, want string
+	}{
+		{"dwe", "demo", "dwe · demo"},
+		{"dwe", "", "dwe"},
+		{"", "demo", "demo"},
+		{"", "", ""},
+	}
+	for _, tc := range tests {
+		f := &Frame{opts: frameOptions{brand: tc.brand, project: tc.project}}
+		if got := f.brandSegment(); got != tc.want {
+			t.Errorf("brandSegment(brand=%q, project=%q) = %q; want %q", tc.brand, tc.project, got, tc.want)
+		}
 	}
 }
 
@@ -336,6 +432,123 @@ func TestFrame_Init(t *testing.T) {
 	}
 }
 
+// TestRouteWhileCapturing asserts the pure capturing-overlay routing helper
+// classifies messages according to the Stage 1 contract: ctrl+c → hard-quit,
+// esc → close overlay, everything else (printables, ?, non-key messages) →
+// swallow-to-plugin (registry bypassed).
+func TestRouteWhileCapturing(t *testing.T) {
+	tests := []struct {
+		name string
+		msg  tea.Msg
+		want captureDecision
+	}{
+		{
+			name: "printable key swallowed to plugin",
+			msg:  key("a"),
+			want: captureSwallowToPlugin,
+		},
+		{
+			name: "help key (?) swallowed to plugin — does NOT open help while capturing",
+			msg:  key("?"),
+			want: captureSwallowToPlugin,
+		},
+		{
+			name: "quit key (q) swallowed to plugin — registry bypassed while capturing",
+			msg:  key("q"),
+			want: captureSwallowToPlugin,
+		},
+		{
+			name: "ctrl+c triggers hard-quit",
+			msg:  key("ctrl+c"),
+			want: captureHardQuit,
+		},
+		{
+			name: "esc triggers close-overlay",
+			msg:  key("esc"),
+			want: captureClose,
+		},
+		{
+			name: "non-key message (async) swallowed to plugin",
+			msg:  stubMsg{payload: "async"},
+			want: captureSwallowToPlugin,
+		},
+		{
+			name: "window resize (non-key) swallowed to plugin",
+			msg:  tea.WindowSizeMsg{Width: 80, Height: 24},
+			want: captureSwallowToPlugin,
+		},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			got := routeWhileCapturing(tc.msg)
+			if got != tc.want {
+				t.Errorf("routeWhileCapturing(%T) = %v; want %v", tc.msg, got, tc.want)
+			}
+		})
+	}
+}
+
+// TestOverlay_CapturesInputField verifies the CapturesInput field exists on the
+// Overlay type and propagates through the overlayStack so the Stage 3 consumer
+// can inspect it via Top().
+func TestOverlay_CapturesInputField(t *testing.T) {
+	// Non-capturing overlay (default): CapturesInput should be false.
+	plain := Overlay{Content: "plain", Width: 5, Height: 1}
+	if plain.CapturesInput {
+		t.Error("zero-value Overlay.CapturesInput should be false")
+	}
+
+	// Capturing overlay: field must be preserved through the stack round-trip.
+	capturing := Overlay{Content: "filter", Width: 6, Height: 1, CapturesInput: true}
+
+	var s overlayStack
+	s.Push(plain)
+	s.Push(capturing)
+
+	top, ok := s.Top()
+	if !ok {
+		t.Fatal("stack with two overlays: Top() reported false")
+	}
+	if !top.CapturesInput {
+		t.Error("top capturing overlay: CapturesInput should be true after push/top round-trip")
+	}
+
+	// After popping the capturing overlay, the non-capturing one is on top.
+	s.Pop()
+	below, ok := s.Top()
+	if !ok {
+		t.Fatal("stack with one overlay remaining: Top() reported false")
+	}
+	if below.CapturesInput {
+		t.Error("non-capturing overlay below: CapturesInput should be false")
+	}
+}
+
+// TestFrame_NonCapturingOverlayUnaffected asserts that a non-capturing overlay
+// (CapturesInput == false) continues to use the normal modal-swallow policy:
+// plugin action keys are swallowed (no acting behind the modal), while
+// framework built-ins (help, quit) still work. This verifies that adding the
+// CapturesInput field does not alter existing Stage 0 frame behaviour.
+func TestFrame_NonCapturingOverlayUnaffected(t *testing.T) {
+	f, p := newTestFrame(t, 80, frameGoldenHeight)
+
+	// Push a non-capturing overlay (the default value).
+	nonCapturing := Overlay{Content: "modal", Width: 5, Height: 1, CapturesInput: false}
+	f.overlay.Push(nonCapturing)
+
+	// Plugin action key while non-capturing overlay is open: must be swallowed.
+	f.Update(key("o"))
+	if p.handledAction != "" {
+		t.Errorf("plugin action acted behind non-capturing overlay: handled=%q", p.handledAction)
+	}
+
+	// Help key while non-capturing overlay is open: closes the overlay.
+	f.Update(key("?"))
+	if !f.overlay.Empty() {
+		t.Error("help key did not close the non-capturing overlay")
+	}
+}
+
 // --- test plugins for the construction-error cases ---
 
 type dupKeyPlugin struct{ *stubPlugin }
@@ -389,6 +602,26 @@ func receivedKey(p *stubPlugin, s string) bool {
 		}
 	}
 	return false
+}
+
+// receivedWindowSize reports whether the plugin's Update recorded a
+// WindowSizeMsg of the given dimensions.
+func receivedWindowSize(p *stubPlugin, w, h int) bool {
+	for _, m := range p.gotMsgs {
+		if ws, ok := m.(tea.WindowSizeMsg); ok && ws.Width == w && ws.Height == h {
+			return true
+		}
+	}
+	return false
+}
+
+// isQuitCmd reports whether cmd, when executed, yields a tea.QuitMsg.
+func isQuitCmd(cmd tea.Cmd) bool {
+	if cmd == nil {
+		return false
+	}
+	_, ok := cmd().(tea.QuitMsg)
+	return ok
 }
 
 // receivedMsg reports whether the plugin's Update recorded a stubMsg with the
