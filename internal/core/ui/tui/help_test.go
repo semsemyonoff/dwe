@@ -127,3 +127,64 @@ func TestBuildHelpOverlay_nilTranslator(t *testing.T) {
 		t.Fatal("nil translator should still render help content")
 	}
 }
+
+// TestBuildHelpOverlay_aliasesHiddenFromHelp locks the dispatch-vs-display
+// split: Binding.Aliases dispatch (Match resolves them) but are absent from the
+// rendered help modal, while Binding.Keys appear in the modal.
+//
+// Concretely: ActionQuit carries "esc" as a hidden alias. The help must show "q"
+// and "ctrl+c" (the canonical Keys) but must NOT show "esc". Meanwhile
+// Match("esc") must still resolve to ActionQuit.
+func TestBuildHelpOverlay_aliasesHiddenFromHelp(t *testing.T) {
+	reg := NewRegistry()
+
+	// Verify dispatch: esc must resolve to ActionQuit.
+	got, ok := reg.Match("esc")
+	if !ok {
+		t.Fatal("Match(\"esc\") returned false; expected ActionQuit")
+	}
+	if got != ActionQuit {
+		t.Fatalf("Match(\"esc\") = %q; want %q", got, ActionQuit)
+	}
+
+	// Verify display: build the help overlay and strip ANSI for comparison.
+	ov := buildHelpOverlay(reg, i18n.TranslatorOrNop(nil), "en", 80, 24)
+	content := stripANSI(ov.Content)
+
+	// Canonical keys must appear in the modal.
+	for _, k := range []string{"q", "ctrl+c"} {
+		if !strings.Contains(content, k) {
+			t.Errorf("help modal missing canonical key %q for ActionQuit", k)
+		}
+	}
+
+	// The alias must NOT appear in the modal as a standalone key token.
+	// We check that "esc" does not appear at all in the stripped content.
+	if strings.Contains(content, "esc") {
+		t.Errorf("help modal contains alias %q; aliases must be hidden from help", "esc")
+	}
+
+	// Also verify via a plugin-registered action with an alias.
+	const actionTest Action = "test.action"
+	if err := reg.Register(actionTest, Binding{
+		Keys:    []string{"x"},
+		Aliases: []string{"y"},
+		Desc:    "Test action",
+		Section: "Test",
+	}); err != nil {
+		t.Fatalf("Register: %v", err)
+	}
+	ov2 := buildHelpOverlay(reg, i18n.TranslatorOrNop(nil), "en", 80, 24)
+	content2 := stripANSI(ov2.Content)
+
+	if !strings.Contains(content2, "x") {
+		t.Error("help modal missing canonical key \"x\"")
+	}
+	if strings.Contains(content2, "y") {
+		t.Error("help modal contains alias \"y\"; aliases must be hidden from help")
+	}
+	// Alias "y" must still dispatch.
+	if a, ok := reg.Match("y"); !ok || a != actionTest {
+		t.Errorf("Match(\"y\") = %q, %v; want %q, true", a, ok, actionTest)
+	}
+}

@@ -224,21 +224,21 @@ re-litigate):
 - Modify: `internal/core/ui/tui/help.go` (doc only, if needed)
 - Verify: `internal/core/ui/tui/testdata/help_default.golden`
 
-- [ ] confirm `buildHelpOverlay` renders `Binding.Keys` only (no Aliases) — adjust
+- [x] confirm `buildHelpOverlay` renders `Binding.Keys` only (no Aliases) — adjust
   the doc comment in `help.go` to state Aliases are intentionally excluded from
   the modal; no behavioural change expected
-- [ ] correct the stale `help.go` i18n-namespace comment that attributes the
+- [x] correct the stale `help.go` i18n-namespace comment that attributes the
   no-YAML-keys decision to the `ui:` validator hard-erroring — reword to "code-level
   English fallbacks + no live consumer" (the `ui.go` validator only warns on
   `ui.commands` keys and is unrelated to the `tui.help.*` namespace)
-- [ ] write a test: a registry entry with an `Aliases` key renders help output that
+- [x] write a test: a registry entry with an `Aliases` key renders help output that
   contains the canonical `Keys` but NOT the alias string, while `Match(alias)`
   still resolves (locks the dispatch-vs-display split) — assert this concretely for
   the built-in `ActionQuit`: help shows `q` (and `ctrl+c`) but **not** `esc`, while
   `Match("esc")` resolves to `ActionQuit`
-- [ ] re-run the existing `help_default.golden` assertion; regenerate the golden
+- [x] re-run the existing `help_default.golden` assertion; regenerate the golden
   only if the built-in default set/labels changed in Task 3 (else leave byte-stable)
-- [ ] run `go test ./internal/core/ui/tui/...` — must pass before next task
+- [x] run `go test ./internal/core/ui/tui/...` — must pass before next task
 
 ### Task 3: Framework stdlib of shared actions + opt-in registration helper
 
