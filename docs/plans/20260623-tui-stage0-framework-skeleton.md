@@ -251,30 +251,30 @@ Key design decisions:
 - Create: `internal/core/ui/tui/overlay.go`
 - Create: `internal/core/ui/tui/overlay_test.go`
 
-- [ ] **discovery first**: evaluate lipgloss v2's built-in `NewLayer(content).X().Y().Z()`
+- [x] **discovery first**: evaluate lipgloss v2's built-in `NewLayer(content).X().Y().Z()`
   + `NewCompositor(layers...).Render()` + `Compositor.Hit(x,y) LayerHit` (`lipgloss/v2
   @v2.0.4/layer.go:206`) as the compositing/hit-test substrate — adopt it rather than
   hand-rolling ANSI cell math (the spec's own § 4/§ 7 width-semantics risk). Record the
   decision in `overlay.go`; only hand-roll if a concrete gap (e.g. dimming) forces it, and
   document why
-- [ ] create `overlay.go`: an `overlayStack` over the **Task 3 `Overlay` type** (do not
+- [x] create `overlay.go`: an `overlayStack` over the **Task 3 `Overlay` type** (do not
   redefine it) with `Push`/`Pop`/`Top`/`Empty` enforcing **mutual exclusivity** (one visible
   modal). Add methods to `Overlay` here if needed — never a second type definition
-- [ ] `Composite(base string, ov Overlay, body Region) string` — centre the overlay over the
+- [x] `Composite(base string, ov Overlay, body Region) string` — centre the overlay over the
   body region via the lipgloss `Compositor` (base layer + centred overlay layer)
-- [ ] **pin the dimming strategy**: dimming applies to the **entire body region only** (the
+- [x] **pin the dimming strategy**: dimming applies to the **entire body region only** (the
   body string is re-rendered through a muted style before the overlay layer is placed); the
   **status line is composed after/outside `Composite` and is never dimmed**. Document that
   `Composite` receives only the body string, not the full frame, so it structurally cannot
   touch the status row
-- [ ] encode the **clicks-outside-swallowed-not-dismissed** policy as a documented constant
+- [x] encode the **clicks-outside-swallowed-not-dismissed** policy as a documented constant
   + a single Stage-2 seam — do **not** build a bespoke zone classifier; Stage 2's mouse
   layer chooses the hit-test mechanism (expected: `Compositor.Hit`/`LayerHit.Bounds()`)
-- [ ] write tests: centring math at width buckets, ANSI-width safety (styled base preserved),
+- [x] write tests: centring math at width buckets, ANSI-width safety (styled base preserved),
   the body **is dimmed** beneath the overlay, the overlay does **not** change the body
   region's total dimensions, stack mutual-exclusion. (The "status line not dimmed" assertion
   lives in Task 7, where the status line and body are composed together.)
-- [ ] run tests — must pass before next task
+- [x] run tests — must pass before next task
 
 ### Task 6: `?`-modal help generated from the registry
 
