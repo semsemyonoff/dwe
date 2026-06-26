@@ -178,6 +178,33 @@ func TestComposite_StyledBasePreserved(t *testing.T) {
 	}
 }
 
+// TestComposite_ClampsOversizedOverlay guards the never-overflow invariant: an
+// overlay larger than the body region (e.g. a stale help modal built for a
+// previous, larger geometry, or an oversized plugin overlay) must be clamped so
+// the composited frame keeps the body's cell dimensions rather than growing past
+// the terminal bounds.
+func TestComposite_ClampsOversizedOverlay(t *testing.T) {
+	w, h := 40, 10
+	base := rectBase(w, h)
+
+	bigRows := make([]string, 17) // taller than the 10-row body
+	for i := range bigRows {
+		bigRows[i] = strings.Repeat("A", 60) // wider than the 40-col body
+	}
+	ov := Overlay{Content: strings.Join(bigRows, "\n"), Width: 60, Height: 17}
+
+	out := Composite(base, ov, Region{X: 0, Y: 0, Width: w, Height: h})
+
+	if got := lipgloss.Height(out); got != h {
+		t.Errorf("clamped composite height = %d; want %d", got, h)
+	}
+	for i, line := range strings.Split(out, "\n") {
+		if got := lipgloss.Width(line); got != w {
+			t.Errorf("clamped composite row %d width = %d; want %d", i, got, w)
+		}
+	}
+}
+
 // TestOverlayClickPolicy pins the Stage 0 outside-click policy default and keeps
 // the documented Stage-2 seam constant referenced.
 func TestOverlayClickPolicy(t *testing.T) {

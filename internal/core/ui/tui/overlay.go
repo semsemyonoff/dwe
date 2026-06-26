@@ -82,8 +82,9 @@ func (s *overlayStack) Empty() bool {
 // the body region (typically the inner content region — see Geometry.Overlay —
 // so the modal never overlaps the frame border). When the overlay is larger than
 // the body span on an axis the offset clamps to the body origin (no negative
-// position); Composite does not clip, so callers must keep overlays within the
-// body (the help builder is width-aware for this reason).
+// position); Composite clamps the overlay itself to the body as a safety net
+// (clampOverlay), but builders should still keep overlays within the body for
+// good output (the help builder is width-aware for this reason).
 func centerOffset(body Region, ov Overlay) (x, y int) {
 	x = body.X + max(0, (body.Width-ov.Width)/2)
 	y = body.Y + max(0, (body.Height-ov.Height)/2)
@@ -109,14 +110,48 @@ func dimStyle() lipgloss.Style {
 // it at full brightness. The compositor preserves the modal's and the body's
 // cell styling (ANSI-aware), so a styled base survives with correct widths.
 //
-// The returned string has the same cell dimensions as base provided ov fits
-// within body (centerOffset clamps the offset but does not clip).
+// Composite is the single geometry chokepoint, so it clamps ov to the body
+// region (clampOverlay) as a final safety net: an overlay larger than the body
+// — e.g. a framework help modal built for a previous, larger geometry that has
+// not yet been rebuilt after a shrink, or an oversized plugin-supplied overlay —
+// would otherwise grow the composited frame past the body (and thus the
+// terminal) bounds, since the underlying compositor expands its canvas to fit
+// the larger layer. Builders should still size their overlays correctly for
+// good-looking output (the help builder is width/height-aware); this clamp only
+// guarantees the never-overflow invariant when they do not. The returned string
+// therefore always has the same cell dimensions as base.
 func Composite(base string, ov Overlay, body Region) string {
 	dimmed := dimStyle().Render(base)
+	ov = clampOverlay(ov, body)
 	x, y := centerOffset(body, ov)
 
 	baseLayer := lipgloss.NewLayer(dimmed).ID(overlayBaseLayerID)
 	modalLayer := lipgloss.NewLayer(ov.Content).X(x).Y(y).Z(1).ID(overlayModalLayerID)
 
 	return lipgloss.NewCompositor(baseLayer, modalLayer).Render()
+}
+
+// clampOverlay truncates ov to fit within the body region on both axes so a
+// centred modal can never extend past the body bounds. It is a no-op when ov
+// already fits (the common case — builders size overlays to the body); only an
+// oversized overlay (a stale, pre-resize help modal or an oversized plugin
+// overlay) is trimmed, with MaxWidth/MaxHeight cutting the overflowing edge.
+// Width/Height are recomputed from the truncated content so centerOffset uses
+// the real post-clamp dimensions.
+func clampOverlay(ov Overlay, body Region) Overlay {
+	if ov.Width <= body.Width && ov.Height <= body.Height {
+		return ov
+	}
+	content := ov.Content
+	if body.Width > 0 {
+		content = lipgloss.NewStyle().MaxWidth(body.Width).Render(content)
+	}
+	if body.Height > 0 {
+		content = lipgloss.NewStyle().MaxHeight(body.Height).Render(content)
+	}
+	return Overlay{
+		Content: content,
+		Width:   lipgloss.Width(content),
+		Height:  lipgloss.Height(content),
+	}
 }

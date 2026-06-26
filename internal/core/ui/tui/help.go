@@ -41,10 +41,12 @@ const (
 // modal [Overlay], resolving the title, section labels, and descriptions through
 // tr with English fallbacks. width and height are the body region dimensions the
 // modal must fit within; the content is clamped on BOTH axes (MaxWidth /
-// MaxHeight) so the returned overlay never exceeds the body region. This matters
-// because [Composite] does not clip — an oversized overlay would otherwise grow
-// the composited frame past the terminal bounds at small-but-permitted sizes
-// (tooNarrow only floors height at minHeight). locale is required because
+// MaxHeight) so the returned overlay never exceeds the body region. This keeps
+// the modal looking right (a correctly-sized box rather than a trimmed one):
+// [Composite] does clamp an oversized overlay to the body as a last-resort
+// safety net, but that truncates the box edge, so sizing here is what produces
+// good output at small-but-permitted sizes (tooNarrow only floors height at
+// minHeight). locale is required because
 // [i18n.Translator.T] takes it; Stage 0 callers may pass a fixed locale with a
 // NopTranslator.
 func buildHelpOverlay(reg *Registry, tr i18n.Translator, locale string, width, height int) Overlay {
