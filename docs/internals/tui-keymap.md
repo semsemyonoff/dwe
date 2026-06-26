@@ -49,7 +49,7 @@ auto-registered by `NewRegistry`. Plugins call `RegisterStandard(reg, ...)` in t
 | `nav.top`       | `g`, `home`       | Navigation | Go to top        |
 | `nav.bottom`    | `G`, `end`        | Navigation | Go to bottom     |
 | `nav.page-up`   | `pgup`, `b`       | Navigation | Page up          |
-| `nav.page-down` | `pgdn`, `f`       | Navigation | Page down        |
+| `nav.page-down` | `pgdown`, `f`     | Navigation | Page down        |
 | `select`        | `enter`           | General    | Select           |
 | `reload`        | `ctrl+r`          | General    | Reload           |
 | `filter`        | `/`               | Filter     | Filter           |
@@ -60,7 +60,8 @@ respectively) to unify the cmdbrowser (`home`/`end`) and docs-browser (`g`/`G`)
 muscle memory without loss for either. See §4 for the cross-surface rationale.
 
 `nav.page-up` / `nav.page-down` carry `b`/`f` (docs-browser page bindings) and
-`pgup`/`pgdn` (cmdbrowser bindings) as dual binds for the same reason.
+`pgup`/`pgdown` (the canonical bubbletea key strings — `KeyPgDown.String()` is
+`"pgdown"`, not `"pgdn"`) as dual binds for the same reason.
 
 ### 1.3 Plugin-local actions (by surface)
 
@@ -194,9 +195,12 @@ After migration both will share `ActionTop` (`Keys: ["g", "home"]`) and `ActionB
 
 ### pgup/pgdn unified
 
-The docs-browser binds `pgup`/`b`/`pgdn`/`f`; the cmdbrowser binds `pgup`/`pgdown`.
-After migration both will share `ActionPageUp` (`Keys: ["pgup", "b"]`) and
-`ActionPageDown` (`Keys: ["pgdn", "f"]`) via dual bind.
+The docs-browser binds `pgup`/`b`/`pgdn`/`f` (note: its `pgdn` is a latent bug —
+physical PageDown emits `pgdown`, so only `f` pages down today); the cmdbrowser
+binds `pgup`/`pgdown`. After migration both will share `ActionPageUp`
+(`Keys: ["pgup", "b"]`) and `ActionPageDown` (`Keys: ["pgdown", "f"]`) via dual
+bind — using the canonical bubbletea key string `pgdown` so physical PageDown
+actually dispatches.
 
 ### `e`/`y` key overload — intentional
 

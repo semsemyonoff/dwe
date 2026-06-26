@@ -12,10 +12,11 @@
 // # Layering
 //
 // This package lives under internal/core/ui (a sink layer, see
-// docs/internals/packages.md). It depends on core/ui/styles and the charm.land
-// v2 stack only. It is importable ONLY from core/ui/* and cli/; nothing else
-// may import it. Stage 0 adds no importers — the package is exercised entirely
-// through its own tests.
+// docs/internals/packages.md). It depends on core/ui/styles, core/ui/widgets
+// (for the prompt-hook wrapper around the full-screen program), and the
+// charm.land v2 stack only. It is importable ONLY from core/ui/* and cli/;
+// nothing else may import it. Stage 0 adds no importers — the package is
+// exercised entirely through its own tests.
 //
 // # API Status
 //

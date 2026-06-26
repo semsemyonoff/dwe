@@ -9,6 +9,8 @@ import (
 	tea "charm.land/bubbletea/v2"
 
 	"github.com/charmbracelet/x/term"
+
+	"github.com/semsemyonoff/dwe/internal/core/ui/widgets"
 )
 
 // run.go is the framework's sole exported entry point this stage. Run owns the
@@ -96,6 +98,18 @@ func buildProgramOptions(opts RunOptions) []tea.ProgramOption {
 // the normal-quit AND error/interrupt paths. Close-error precedence: a Close
 // error surfaces ONLY when the program itself returned no error — a program
 // error always wins (it is the more useful diagnostic). Both are errcheck-safe.
+//
+// Exit-error mapping mirrors the other full-screen TUIs (statustui/cmdbrowser):
+// a user-initiated exit (q / ctrl+c / context kill, surfaced as
+// [tea.ErrInterrupted] or [tea.ErrProgramKilled]) is reported as the clean
+// [widgets.ErrCancelled] sentinel, NOT a fatal wrapped error. A recovered panic
+// ([tea.ErrProgramPanic]) is always surfaced — and checked FIRST, because v2
+// wraps it as `ErrProgramKilled: ErrProgramPanic`, so a naive ErrProgramKilled
+// check would otherwise swallow panics as clean exits.
+//
+// The program runs inside [widgets.RunWithPromptHooks] so a surrounding
+// [LiveLine] footer pauses before the alt-screen takes over and resumes on every
+// exit path (the documented contract for full-screen UI; see packages.md).
 func Run(p Plugin, opts RunOptions) (result any, err error) {
 	isTTY := opts.isTTY
 	if isTTY == nil {
@@ -140,7 +154,22 @@ func Run(p Plugin, opts RunOptions) (result any, err error) {
 	}()
 
 	prog := tea.NewProgram(frame, buildProgramOptions(opts)...)
-	if _, runErr := runProgram(frame, prog); runErr != nil {
+	runErr := widgets.RunWithPromptHooks(func() error {
+		_, e := runProgram(frame, prog)
+		return e
+	})
+	if runErr != nil {
+		// ErrProgramPanic FIRST: v2 wraps a recovered panic as
+		// `ErrProgramKilled: ErrProgramPanic`, so the kill check below must not
+		// run first or it would swallow panics as clean exits.
+		if errors.Is(runErr, tea.ErrProgramPanic) {
+			return nil, fmt.Errorf("tui: running program: %w", runErr)
+		}
+		// User-initiated exit (q / ctrl+c / context kill) — a clean cancel, not
+		// a fatal error.
+		if errors.Is(runErr, tea.ErrInterrupted) || errors.Is(runErr, tea.ErrProgramKilled) {
+			return nil, widgets.ErrCancelled
+		}
 		return nil, fmt.Errorf("tui: running program: %w", runErr)
 	}
 	return p.Result(), nil

@@ -62,7 +62,7 @@ var standardBindings = map[Action]Binding{
 	ActionTop:      {Keys: []string{"g", "home"}, Desc: "Go to top", Section: sectionNavigation},
 	ActionBottom:   {Keys: []string{"G", "end"}, Desc: "Go to bottom", Section: sectionNavigation},
 	ActionPageUp:   {Keys: []string{"pgup", "b"}, Desc: "Page up", Section: sectionNavigation},
-	ActionPageDown: {Keys: []string{"pgdn", "f"}, Desc: "Page down", Section: sectionNavigation},
+	ActionPageDown: {Keys: []string{"pgdown", "f"}, Desc: "Page down", Section: sectionNavigation},
 	ActionSelect:   {Keys: []string{"enter"}, Desc: "Select", Section: sectionGeneral},
 	ActionReload:   {Keys: []string{"ctrl+r"}, Desc: "Reload", Section: sectionGeneral},
 	ActionFilter:   {Keys: []string{"/"}, Desc: "Filter", Section: sectionFilter},

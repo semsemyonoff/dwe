@@ -2,7 +2,32 @@ package tui
 
 import (
 	"testing"
+
+	tea "charm.land/bubbletea/v2"
 )
+
+// TestRegisterStandard_PageKeysUseCanonicalBubbleteaStrings locks the page
+// bindings to the exact strings bubbletea emits. KeyPgUp.String() is "pgup" and
+// KeyPgDown.String() is "pgdown" — NOT "pgdn". The registry matches by exact
+// string, so a "pgdn" binding would never fire on a physical PageDown. The test
+// derives the expected strings from bubbletea itself so it stays correct if the
+// upstream vocabulary ever changes.
+func TestRegisterStandard_PageKeysUseCanonicalBubbleteaStrings(t *testing.T) {
+	t.Parallel()
+	r := NewRegistry()
+	if err := RegisterStandard(r, ActionPageUp, ActionPageDown); err != nil {
+		t.Fatalf("RegisterStandard: %v", err)
+	}
+
+	pgUp := tea.KeyPressMsg{Code: tea.KeyPgUp}.String()
+	if got, ok := r.Match(pgUp); !ok || got != ActionPageUp {
+		t.Errorf("Match(%q) = %q, %v; want %q, true", pgUp, got, ok, ActionPageUp)
+	}
+	pgDown := tea.KeyPressMsg{Code: tea.KeyPgDown}.String()
+	if got, ok := r.Match(pgDown); !ok || got != ActionPageDown {
+		t.Errorf("Match(%q) = %q, %v; want %q, true", pgDown, got, ok, ActionPageDown)
+	}
+}
 
 func TestRegisterStandard_TopBottomDualBind(t *testing.T) {
 	t.Parallel()
