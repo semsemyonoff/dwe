@@ -298,11 +298,11 @@ re-litigate):
 **Files:**
 - Create: `docs/internals/tui-keymap.md`
 
-- [ ] write the full action taxonomy: framework built-ins (Help/Quit/Focus), the
+- [x] write the full action taxonomy: framework built-ins (Help/Quit/Focus), the
   stdlib shared set (Nav/Select/Filter/Inspect/Reload/Top/Bottom/Page) with default
   keys + Aliases, and the plugin-local actions per surface (cmdbrowser, docs,
   status) — sourced from the code inventory, not invented
-- [ ] document help-section ordering **matching the actual `NewRegistry`
+- [x] document help-section ordering **matching the actual `NewRegistry`
   first-seen order — Navigation → General** (FocusNext/FocusPrev register before
   Help/Quit; confirmed by `help_default.golden` and spec § 4) → then plugin sections
   in registration order (Filter, Inspect, View, Tabs). Do NOT reorder the built-in
@@ -312,23 +312,23 @@ re-litigate):
   note that no YAML keys are added yet (rationale: code-level English fallbacks +
   no live consumer — NOT a validator hard-error; see Context); real keys land in the
   i18n translation store + its known-key list during the migration stages
-- [ ] document the mouse vocabulary + default mouse bindings (wheel→Nav,
+- [x] document the mouse vocabulary + default mouse bindings (wheel→Nav,
   double-click→Select) and the frame-owned (NOT registry) mouse behaviors
   (click-on-panel→focus, click-on-help-hint→Help, click-on-tab→switch,
   click-outside-modal→swallow)
-- [ ] record cross-surface decisions: `home`/`end`+`g`/`G` unified via dual-bind;
+- [x] record cross-surface decisions: `home`/`end`+`g`/`G` unified via dual-bind;
   existing `pgup`/`pgdn` bindings (docs `pgup`/`b`/`pgdn`/`f`, cmdbrowser
   `pgup`/`pgdown`) unified under `PageUp`/`PageDown`; `e`/`y` overload kept +
   documented as intentional; **`esc` locked as a hidden `ActionQuit` alias** with the
   precedence rule (overlay open → `esc` closes the overlay; normal mode → `esc`
   quits), matching cmdbrowser/docs today and the forms-guidance esc=cancel intent
-- [ ] record the **forms (Stage 6) guidance** section: desired quit (`q`/`esc`/
+- [x] record the **forms (Stage 6) guidance** section: desired quit (`q`/`esc`/
   `ctrl+c`) + select bindings for the `huh` sites, as a reference target — explicitly
   noting NO form code changes this stage
-- [ ] sketch the **future** rebinding config schema (e.g. a keymap block under
+- [x] sketch the **future** rebinding config schema (e.g. a keymap block under
   `workspace/ui.yml` keyed by `Action` id) and mark it not-implemented (Rebindable
   is metadata only until a real consumer)
-- [ ] no test (documentation); correctness verified by the doc-build + review
+- [x] no test (documentation); correctness verified by the doc-build + review
 
 ### Task 6: Update `packages.md` — `tui` API locked
 
