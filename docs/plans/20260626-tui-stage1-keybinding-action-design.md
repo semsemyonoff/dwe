@@ -185,19 +185,19 @@ re-litigate):
 - Modify: `internal/core/ui/tui/doc.go`
 - Modify: `internal/core/ui/tui/registry_test.go`
 
-- [ ] rewrite the `Binding.Aliases` doc comment: aliases **dispatch but are hidden
+- [x] rewrite the `Binding.Aliases` doc comment: aliases **dispatch but are hidden
   from help** (replacing the Stage 0 "shown in help, not dispatched" placeholder
   text); keep `Rebindable` as documented metadata; expand the `Mouse` doc to name
   the locked vocabulary (`wheel-up`/`wheel-down`/`click`/`double-click`, wired in
   Stage 2)
-- [ ] update the type-level + `Registry` doc comments from "provisional / not
+- [x] update the type-level + `Registry` doc comments from "provisional / not
   frozen / finalised in Stage 1" to "locked (Stage 1)"
-- [ ] **flip the package doc in `doc.go`**: the "# Spike — provisional API" section
+- [x] **flip the package doc in `doc.go`**: the "# Spike — provisional API" section
   still says "This is a Stage 0 spike … intentionally NOT frozen." Rewrite it to
   state the **registry/keymap/overlay-input surface is locked in Stage 1**, while
   the `Plugin` contract stays **PINNED, not frozen** through Stage 3 (spec § 7);
   keep the Stage 2 (mouse) / Stages 3–5b (migration) forward pointers
-- [ ] **lock `esc` as a hidden `ActionQuit` alias** in `NewRegistry`
+- [x] **lock `esc` as a hidden `ActionQuit` alias** in `NewRegistry`
   (`Aliases: []string{"esc"}` on the Quit binding) — cmdbrowser + docs both bind
   esc→quit today; this is the spec's "backwards-compatible alias for muscle memory."
   Because it is an Alias (not a `Keys` entry) it dispatches but stays out of help, so
@@ -206,16 +206,16 @@ re-litigate):
   modal-input policy consumes `esc` to **close the overlay**; `esc` only reaches
   `ActionQuit` in normal mode (no overlay) — consistent with the `CapturesInput`
   contract (Task 4)
-- [ ] in `Register`, validate `Keys` **and** `Aliases` in the **pre-commit** pass
+- [x] in `Register`, validate `Keys` **and** `Aliases` in the **pre-commit** pass
   (before any map write) so the "no partial mutation" guarantee holds; then commit
   both into the `keys` map. An alias colliding with any existing key/alias **or with
   the binding's own canonical `Keys`** is an error
-- [ ] write tests: an alias resolves via `Match`; an alias colliding with an
+- [x] write tests: an alias resolves via `Match`; an alias colliding with an
   existing key/alias returns an error; an alias colliding with the binding's **own**
   canonical key returns an error (no partial mutation — the canonical keys are not
   left committed); canonical `Keys` still match; **`Match("esc")` resolves to
   `ActionQuit`**; the duplicate-action and empty-keys guards still hold
-- [ ] run `go test ./internal/core/ui/tui/...` — must pass before next task
+- [x] run `go test ./internal/core/ui/tui/...` — must pass before next task
 
 ### Task 2: Help renderer — assert Aliases hidden, lock the golden
 

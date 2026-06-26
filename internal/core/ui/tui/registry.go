@@ -9,9 +9,9 @@ import "fmt"
 type Action string
 
 // The framework's built-in actions. Their default [Binding]s are registered by
-// [NewRegistry]. The IDs are stable; the default keys below are "defaults,
-// finalised in Stage 1" — the rebinding mechanism prototyped via
-// [Binding.Rebindable] will let projects override them later.
+// [NewRegistry]. The IDs are stable; the default keys are locked in Stage 1 —
+// the rebinding mechanism gated by [Binding.Rebindable] will let projects
+// override them later.
 const (
 	// ActionHelp toggles the ?-modal help overlay.
 	ActionHelp Action = "help"
@@ -24,17 +24,11 @@ const (
 )
 
 // Binding describes how an [Action] is triggered and how it presents in the help
-// modal.
-//
-// The first three fields (Keys, Desc, Section) are load-bearing in Stage 0.
-// Aliases, Rebindable, and Mouse are DOCUMENTED PLACEHOLDERS reserved for later
-// stages; they exist now so callers can be written against the final shape and
-// Stage 1/2 can lock the semantics without restructuring every registration
-// site. They are intentionally not consulted by Stage 0 dispatch or help
-// generation.
+// modal. The registry/keymap surface is locked in Stage 1; see [Package tui].
 type Binding struct {
 	// Keys are the physical key strings (bubbletea key syntax, e.g. "?", "tab",
-	// "ctrl+c") that trigger the action. At least one is required.
+	// "ctrl+c") that trigger the action. At least one is required. Keys are
+	// shown in the help modal and participate in [Registry.Match] dispatch.
 	Keys []string
 	// Desc is the English help description for the binding.
 	Desc string
@@ -42,15 +36,23 @@ type Binding struct {
 	// appear in first-registration order; see [Registry.Sections].
 	Section string
 
-	// Aliases is a Stage 1 placeholder: additional human-facing key names shown in
-	// help without participating in [Registry.Match] dispatch. Unused in Stage 0.
+	// Aliases are additional physical key strings that dispatch to the action
+	// (wired into [Registry.Match]) but are hidden from the help modal. They
+	// exist for muscle-memory compatibility — e.g. "esc" as a quit alias —
+	// without cluttering the help display. Locked in Stage 1.
+	//
+	// Precedence when an overlay is open: the frame's modal-input policy
+	// consumes "esc" to close the overlay before the registry is consulted;
+	// "esc" only reaches [ActionQuit] in normal mode (no overlay). See the
+	// [CapturesInput] contract for the capturing-overlay variant.
 	Aliases []string
-	// Rebindable is a Stage 1 placeholder: whether a project may override Keys via
-	// future rebinding config. Unused in Stage 0.
+	// Rebindable marks whether a project may override Keys via a future
+	// rebinding config. This is documented metadata only — no config loader is
+	// built yet (YAGNI; no consumer until Stage 3). Locked in Stage 1.
 	Rebindable bool
-	// Mouse is a Stage 2 seam: a placeholder spec for a mouse trigger bound to the
-	// same action. The mouse layer (Stage 2) defines its grammar; unused in
-	// Stage 0.
+	// Mouse is a Stage 2 seam: a placeholder spec for a mouse trigger bound to
+	// the same action. Locked vocabulary (wired in Stage 2): "wheel-up",
+	// "wheel-down", "click", "double-click". Unused by dispatch this stage.
 	Mouse string
 }
 
@@ -66,12 +68,12 @@ type Section struct {
 	Entries []Entry
 }
 
-// Registry maps actions to bindings and physical keys to actions. It is the
-// provisional action-keymap layer: minimal but shaped so Stage 1 can freeze the
-// API (aliases, rebinding, mouse bindings) without changing call sites.
+// Registry maps actions to bindings and physical keys to actions. The
+// registry/keymap/overlay-input surface is locked in Stage 1. Plugins extend
+// the registry through their Actions hook; framework built-ins are
+// pre-registered by [NewRegistry].
 //
-// The zero value is not usable; construct via [NewRegistry], which pre-registers
-// the framework built-ins.
+// The zero value is not usable; construct via [NewRegistry].
 type Registry struct {
 	order        []Action // action registration order
 	bindings     map[Action]Binding
@@ -83,17 +85,23 @@ type Registry struct {
 // NewRegistry returns a registry pre-populated with the framework's built-in
 // actions ([ActionHelp], [ActionQuit], [ActionFocusNext], [ActionFocusPrev]).
 // Plugins extend it through their Actions hook.
+//
+// [ActionQuit] carries "esc" as a hidden alias: it dispatches (Match("esc")
+// resolves to ActionQuit) but is absent from the help modal. The frame's
+// modal-input policy takes precedence — "esc" closes an open overlay before
+// the registry is consulted; it only reaches ActionQuit in normal mode (no
+// overlay). Locked in Stage 1.
 func NewRegistry() *Registry {
 	r := &Registry{
 		bindings: make(map[Action]Binding),
 		keys:     make(map[string]Action),
 		sections: make(map[string][]Action),
 	}
-	// Built-in defaults — finalised in Stage 1.
+	// Built-in defaults — locked in Stage 1.
 	mustRegister(r, ActionFocusNext, Binding{Keys: []string{"tab"}, Desc: "Focus next panel", Section: sectionNavigation})
 	mustRegister(r, ActionFocusPrev, Binding{Keys: []string{"shift+tab"}, Desc: "Focus previous panel", Section: sectionNavigation})
 	mustRegister(r, ActionHelp, Binding{Keys: []string{"?"}, Desc: "Toggle help", Section: sectionGeneral})
-	mustRegister(r, ActionQuit, Binding{Keys: []string{"q", "ctrl+c"}, Desc: "Quit", Section: sectionGeneral})
+	mustRegister(r, ActionQuit, Binding{Keys: []string{"q", "ctrl+c"}, Desc: "Quit", Section: sectionGeneral, Aliases: []string{"esc"}})
 	return r
 }
 
@@ -105,8 +113,13 @@ const (
 )
 
 // Register binds an action to a key binding. It is an error to register an
-// action twice or to register a key already claimed by another action — both
-// would make dispatch ambiguous. A binding with no keys is also rejected.
+// action twice, to register a key already claimed by another action, or to
+// supply an alias that collides with any existing key/alias or with the
+// binding's own canonical Keys — any of these would make dispatch ambiguous.
+// A binding with no keys is also rejected.
+//
+// The validation pass is fully pre-commit: if any check fails, no map entry
+// is written (no partial mutation).
 func (r *Registry) Register(a Action, b Binding) error {
 	if a == "" {
 		return fmt.Errorf("tui: cannot register empty action")
@@ -117,18 +130,38 @@ func (r *Registry) Register(a Action, b Binding) error {
 	if len(b.Keys) == 0 {
 		return fmt.Errorf("tui: action %q has no keys", a)
 	}
+
+	// Pre-commit: validate all canonical Keys.
 	for _, k := range b.Keys {
 		if owner, taken := r.keys[k]; taken {
 			return fmt.Errorf("tui: key %q already bound to action %q", k, owner)
 		}
 	}
 
-	// All checks passed — commit. (No partial mutation: keys are validated above
-	// before any map write.)
+	// Pre-commit: validate all Aliases — must not collide with existing
+	// keys/aliases and must not duplicate the binding's own canonical Keys.
+	canonicalKeys := make(map[string]struct{}, len(b.Keys))
+	for _, k := range b.Keys {
+		canonicalKeys[k] = struct{}{}
+	}
+	for _, alias := range b.Aliases {
+		if _, isCanonical := canonicalKeys[alias]; isCanonical {
+			return fmt.Errorf("tui: alias %q for action %q duplicates a canonical key", alias, a)
+		}
+		if owner, taken := r.keys[alias]; taken {
+			return fmt.Errorf("tui: alias %q for action %q already bound to action %q", alias, a, owner)
+		}
+	}
+
+	// All checks passed — commit. Keys and Aliases both go into the dispatch map
+	// so Match resolves them identically; only Keys are shown in help.
 	r.bindings[a] = b
 	r.order = append(r.order, a)
 	for _, k := range b.Keys {
 		r.keys[k] = a
+	}
+	for _, alias := range b.Aliases {
+		r.keys[alias] = a
 	}
 	if _, seen := r.sections[b.Section]; !seen {
 		r.sectionOrder = append(r.sectionOrder, b.Section)
@@ -138,7 +171,8 @@ func (r *Registry) Register(a Action, b Binding) error {
 }
 
 // Match resolves a physical key to its action. The bool reports whether any
-// binding claims the key. Aliases are NOT consulted in Stage 0 (placeholder).
+// binding claims the key. Both canonical Keys and Aliases are consulted —
+// locked in Stage 1.
 func (r *Registry) Match(key string) (Action, bool) {
 	a, ok := r.keys[key]
 	return a, ok
