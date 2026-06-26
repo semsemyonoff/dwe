@@ -8,18 +8,25 @@ import tea "charm.land/bubbletea/v2"
 // unique within a single plugin's panel set.
 type PanelID string
 
-// Panel declares one body panel: its identity, the title drawn in its border,
-// and its horizontal split weight. The framework lays panels out left→right by
-// weight (see [layoutPanels]) and computes each inner region.
+// Panel declares one body panel: its identity, its border title, and its
+// horizontal split weight. The framework lays panels out left→right by weight
+// (see [layoutPanels]) and computes each inner region.
 //
 // Weight must be a positive integer; [newFrame] (Task 7) validates the panel
 // set before launch (non-empty, all weights positive), so [layoutPanels] and
 // [Plugin.ViewPanel] never see a degenerate layout.
+//
+// ID and Weight are load-bearing in Stage 0. Title is a DOCUMENTED PLACEHOLDER
+// (like the registry's Aliases/Rebindable/Mouse): it exists now so callers can
+// be written against the final shape, but Stage 0 renders plain borders and
+// never draws it — lipgloss v2 has no border-title primitive, so the title
+// renderer lands with the real frame stage.
 type Panel struct {
 	// ID uniquely identifies this panel within the plugin.
 	ID PanelID
-	// Title is drawn in the panel's top border. English here; the migration
-	// stages route it through i18n.
+	// Title is the placeholder for the panel's top-border label. English here;
+	// the migration stages route it through i18n. Reserved for a later stage:
+	// Stage 0 does not render it (see the type doc).
 	Title string
 	// Weight is the relative horizontal share of the body width. A two-panel
 	// plugin with weights {1, 2} gives the second panel twice the first's width
