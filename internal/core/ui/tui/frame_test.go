@@ -31,13 +31,17 @@ func newTestFrame(t *testing.T, w, h int, opts ...frameOption) (*Frame, *stubPlu
 }
 
 // key builds a KeyPressMsg whose String() matches the registry key form
-// ("?", "o", "tab", "q", ...).
+// ("?", "o", "tab", "q", "esc", "ctrl+c", ...).
 func key(s string) tea.KeyPressMsg {
 	switch s {
 	case "tab":
 		return tea.KeyPressMsg{Code: tea.KeyTab}
 	case "shift+tab":
 		return tea.KeyPressMsg{Code: tea.KeyTab, Mod: tea.ModShift}
+	case "esc":
+		return tea.KeyPressMsg{Code: tea.KeyEscape}
+	case "ctrl+c":
+		return tea.KeyPressMsg{Code: 'c', Mod: tea.ModCtrl}
 	default:
 		r := []rune(s)
 		return tea.KeyPressMsg{Code: r[0], Text: s}
@@ -333,6 +337,123 @@ func TestFrame_Init(t *testing.T) {
 	f.Init()
 	if !p.initCalled {
 		t.Error("Frame.Init did not delegate to plugin.Init")
+	}
+}
+
+// TestRouteWhileCapturing asserts the pure capturing-overlay routing helper
+// classifies messages according to the Stage 1 contract: ctrl+c → hard-quit,
+// esc → close overlay, everything else (printables, ?, non-key messages) →
+// swallow-to-plugin (registry bypassed).
+func TestRouteWhileCapturing(t *testing.T) {
+	tests := []struct {
+		name string
+		msg  tea.Msg
+		want captureDecision
+	}{
+		{
+			name: "printable key swallowed to plugin",
+			msg:  key("a"),
+			want: captureSwallowToPlugin,
+		},
+		{
+			name: "help key (?) swallowed to plugin — does NOT open help while capturing",
+			msg:  key("?"),
+			want: captureSwallowToPlugin,
+		},
+		{
+			name: "quit key (q) swallowed to plugin — registry bypassed while capturing",
+			msg:  key("q"),
+			want: captureSwallowToPlugin,
+		},
+		{
+			name: "ctrl+c triggers hard-quit",
+			msg:  key("ctrl+c"),
+			want: captureHardQuit,
+		},
+		{
+			name: "esc triggers close-overlay",
+			msg:  key("esc"),
+			want: captureClose,
+		},
+		{
+			name: "non-key message (async) swallowed to plugin",
+			msg:  stubMsg{payload: "async"},
+			want: captureSwallowToPlugin,
+		},
+		{
+			name: "window resize (non-key) swallowed to plugin",
+			msg:  tea.WindowSizeMsg{Width: 80, Height: 24},
+			want: captureSwallowToPlugin,
+		},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			got := routeWhileCapturing(tc.msg)
+			if got != tc.want {
+				t.Errorf("routeWhileCapturing(%T) = %v; want %v", tc.msg, got, tc.want)
+			}
+		})
+	}
+}
+
+// TestOverlay_CapturesInputField verifies the CapturesInput field exists on the
+// Overlay type and propagates through the overlayStack so the Stage 3 consumer
+// can inspect it via Top().
+func TestOverlay_CapturesInputField(t *testing.T) {
+	// Non-capturing overlay (default): CapturesInput should be false.
+	plain := Overlay{Content: "plain", Width: 5, Height: 1}
+	if plain.CapturesInput {
+		t.Error("zero-value Overlay.CapturesInput should be false")
+	}
+
+	// Capturing overlay: field must be preserved through the stack round-trip.
+	capturing := Overlay{Content: "filter", Width: 6, Height: 1, CapturesInput: true}
+
+	var s overlayStack
+	s.Push(plain)
+	s.Push(capturing)
+
+	top, ok := s.Top()
+	if !ok {
+		t.Fatal("stack with two overlays: Top() reported false")
+	}
+	if !top.CapturesInput {
+		t.Error("top capturing overlay: CapturesInput should be true after push/top round-trip")
+	}
+
+	// After popping the capturing overlay, the non-capturing one is on top.
+	s.Pop()
+	below, ok := s.Top()
+	if !ok {
+		t.Fatal("stack with one overlay remaining: Top() reported false")
+	}
+	if below.CapturesInput {
+		t.Error("non-capturing overlay below: CapturesInput should be false")
+	}
+}
+
+// TestFrame_NonCapturingOverlayUnaffected asserts that a non-capturing overlay
+// (CapturesInput == false) continues to use the normal modal-swallow policy:
+// plugin action keys are swallowed (no acting behind the modal), while
+// framework built-ins (help, quit) still work. This verifies that adding the
+// CapturesInput field does not alter existing Stage 0 frame behaviour.
+func TestFrame_NonCapturingOverlayUnaffected(t *testing.T) {
+	f, p := newTestFrame(t, 80, frameGoldenHeight)
+
+	// Push a non-capturing overlay (the default value).
+	nonCapturing := Overlay{Content: "modal", Width: 5, Height: 1, CapturesInput: false}
+	f.overlay.Push(nonCapturing)
+
+	// Plugin action key while non-capturing overlay is open: must be swallowed.
+	f.Update(key("o"))
+	if p.handledAction != "" {
+		t.Errorf("plugin action acted behind non-capturing overlay: handled=%q", p.handledAction)
+	}
+
+	// Help key while non-capturing overlay is open: closes the overlay.
+	f.Update(key("?"))
+	if !f.overlay.Empty() {
+		t.Error("help key did not close the non-capturing overlay")
 	}
 }
 

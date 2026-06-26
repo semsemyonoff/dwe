@@ -277,21 +277,21 @@ re-litigate):
 - Modify: `internal/core/ui/tui/frame.go` (the routing-decision helper)
 - Modify: `internal/core/ui/tui/overlay_test.go` or `frame_test.go`
 
-- [ ] add `CapturesInput bool` to the `Overlay` type with a doc comment: a
+- [x] add `CapturesInput bool` to the `Overlay` type with a doc comment: a
   capturing overlay routes raw input (incl. printables) to the plugin, bypasses the
   registry, and leaves only `ctrl+c` (hard-quit) + `esc` (close) live; `?` does not
   open help while it is `Top()`
-- [ ] add a pure helper (e.g. `routeWhileCapturing(msg tea.Msg) captureDecision`)
+- [x] add a pure helper (e.g. `routeWhileCapturing(msg tea.Msg) captureDecision`)
   encoding that contract as a small enum (`captureSwallowToPlugin` /
   `captureHardQuit` / `captureClose`); do NOT rewire the full `frame.Update` loop —
   document that the integration lands with the Stage 3 filter consumer (depth
   boundary). **Design the signature + return enum to be the exact value
   `frame.Update` will call in Stage 3** (a drop-in, not a parallel helper) so the
   test locks the real contract rather than a throwaway shape
-- [ ] write tests: a printable key → routes to plugin; `ctrl+c` → hard-quit;
+- [x] write tests: a printable key → routes to plugin; `ctrl+c` → hard-quit;
   `esc` → close; `?` → swallowed-to-plugin (NOT help-open) while capturing; a
   non-capturing overlay is unaffected by the helper
-- [ ] run `go test ./internal/core/ui/tui/...` — must pass before next task
+- [x] run `go test ./internal/core/ui/tui/...` — must pass before next task
 
 ### Task 5: Keymap reference doc
 

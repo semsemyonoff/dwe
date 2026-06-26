@@ -48,6 +48,13 @@ type Overlay struct {
 	// Width / Height are the cell dimensions Content occupies. The overlay
 	// manager uses them to centre the overlay over the body region.
 	Width, Height int
+	// CapturesInput reports whether this overlay routes raw input (including
+	// printable characters) to the plugin, bypassing the registry. While a
+	// capturing overlay is Top(), only ctrl+c (hard-quit) and esc (close
+	// overlay) survive as framework actions; ? does not open help. Locked in
+	// Stage 1; the full frame.Update integration lands with the Stage 3 filter
+	// consumer. See [routeWhileCapturing].
+	CapturesInput bool
 }
 
 // Plugin is the contract every full-screen surface implements to run inside the

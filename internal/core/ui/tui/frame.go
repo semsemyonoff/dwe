@@ -220,6 +220,43 @@ func isBuiltin(a Action) bool {
 	}
 }
 
+// captureDecision classifies a message under the capturing-overlay input policy.
+// It is the return type of [routeWhileCapturing].
+type captureDecision int
+
+const (
+	// captureSwallowToPlugin routes the message to the plugin (registry bypassed).
+	captureSwallowToPlugin captureDecision = iota
+	// captureHardQuit exits the program immediately (ctrl+c hard-quit path).
+	captureHardQuit
+	// captureClose dismisses the capturing overlay (esc close-overlay path).
+	captureClose
+)
+
+// routeWhileCapturing classifies msg under the capturing-overlay input policy.
+// It is called when the top overlay has [Overlay.CapturesInput] true. While
+// such an overlay is Top(), raw input (including printable characters) routes
+// to the plugin (registry bypassed), and only ctrl+c (hard-quit) and esc
+// (close overlay) survive as framework actions. ? does NOT open help.
+//
+// This is the exact function frame.Update will call in Stage 3 (drop-in
+// integration, not a throwaway shape). The full frame.Update rewiring lands
+// with the Stage 3 filter consumer; this stage locks and tests the contract.
+func routeWhileCapturing(msg tea.Msg) captureDecision {
+	key, ok := msg.(tea.KeyPressMsg)
+	if !ok {
+		return captureSwallowToPlugin
+	}
+	switch key.String() {
+	case "ctrl+c":
+		return captureHardQuit
+	case "esc":
+		return captureClose
+	default:
+		return captureSwallowToPlugin
+	}
+}
+
 // View implements tea.Model. It lays the body panels out left→right by weight,
 // renders each through the plugin into its inner region, draws focus-aware
 // borders, composites the active overlay centred over the body, and appends the
