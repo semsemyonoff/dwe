@@ -312,16 +312,16 @@ Key design decisions:
 - Create: `internal/core/ui/tui/testdata/frame_100.golden`
 - Create: `internal/core/ui/tui/testdata/frame_help_open.golden`
 
-- [ ] create `frame.go`: `Frame` (the `tea.Model`) holding the plugin, registry, focus
+- [x] create `frame.go`: `Frame` (the `tea.Model`) holding the plugin, registry, focus
   manager, overlay stack, geometry, and brand/project strings; constructed via
   `newFrame(Plugin, ...opt) (*Frame, error)`. Options carry a **private** `frameOptions{mouse
   bool, brand, project string}` — defined **here**, not `RunOptions` (Task 8), so the package
   builds after this task in isolation; Task 8 maps `RunOptions` into `frameOptions`
-- [ ] `newFrame` validates construction **before** launch and returns an error on: a
+- [x] `newFrame` validates construction **before** launch and returns an error on: a
   duplicate action/key (`plugin.Actions(registry)` error) **and** invalid panel layout
   (`Panels()` empty or any non-positive `Weight`). Both fail at construction, never at `View`
-- [ ] `Init() tea.Cmd`: delegate to `plugin.Init()` (so plugin startup commands run)
-- [ ] `Update`: `tea.WindowSizeMsg` → recompute geometry + call `plugin.Resize(body)`;
+- [x] `Init() tea.Cmd`: delegate to `plugin.Init()` (so plugin startup commands run)
+- [x] `Update`: `tea.WindowSizeMsg` → recompute geometry + call `plugin.Resize(body)`;
   **modal input policy** — when an overlay is open, key msgs are handled by the framework
   (built-in help-close / quit) and plugin **action keys are swallowed**, NOT routed to
   `plugin.HandleAction` (no acting "behind" the modal); when no overlay is open, key msgs →
@@ -331,7 +331,7 @@ Key design decisions:
   drain `plugin.PendingOverlay()` after **both** a `HandleAction` call and a `plugin.Update`
   forward, so an action-triggered overlay appears immediately. **Batch** framework + plugin
   commands via `tea.Batch`
-- [ ] `View() tea.View`: `layoutPanels` (Task 1) splits the body into per-panel **outer**
+- [x] `View() tea.View`: `layoutPanels` (Task 1) splits the body into per-panel **outer**
   regions from `Panels()` weights (already validated in `newFrame`); derive each panel's
   **inner** region (subtract border/padding once) and pass it to `plugin.ViewPanel(id, inner)`
   — the single outer→inner subtraction avoids double-counting the border; set the focus
@@ -342,12 +342,12 @@ Key design decisions:
   line (brand+project left · plugin `StatusContext()` middle · `? help` right, width-aware
   truncation) **outside** `Composite` so it is never dimmed; return the whole thing wrapped
   in a `tea.View` whose envelope fields the **framework** owns
-- [ ] set `v.AltScreen = true` on the returned `tea.View` (alt-screen is a `tea.View` field
+- [x] set `v.AltScreen = true` on the returned `tea.View` (alt-screen is a `tea.View` field
   in `bubbletea/v2 v2.0.7`, **not** a program option — see `cmdbrowser/model.go:432`)
-- [ ] **mouse seam** in `View`: gate `v.MouseMode` on the private `frameOptions.mouse` flag
+- [x] **mouse seam** in `View`: gate `v.MouseMode` on the private `frameOptions.mouse` flag
   but hardcode `tea.MouseModeNone` this stage with a `// Stage 2` marker; on the message
   side, `tea.MouseMsg` is forwarded/ignored (also `// Stage 2`)
-- [ ] write `frame_test.go`: golden full-frame at 60/79/80/99/100 asserting every row ==
+- [x] write `frame_test.go`: golden full-frame at 60/79/80/99/100 asserting every row ==
   frame width via `lipgloss.Width` on `View().Content`; **rendered row count == terminal
   height** (no overflow) and the **status line is the final row**; status-line three-zone
   layout + middle truncation; help-open golden (overlay composited, status line still
@@ -360,8 +360,8 @@ Key design decisions:
   duplicate action/key returns an error and never launches); resize propagates the body
   region to the plugin; assert `Frame.View().AltScreen == true` and `MouseMode ==
   tea.MouseModeNone` (testable without a real terminal, as `cmdbrowser_test.go:168` does)
-- [ ] add the six `testdata/*.golden` files
-- [ ] run tests — must pass before next task
+- [x] add the six `testdata/*.golden` files
+- [x] run tests — must pass before next task
 
 ### Task 8: Launch helper + capability fallbacks (alt-screen, non-TTY, narrow)
 
