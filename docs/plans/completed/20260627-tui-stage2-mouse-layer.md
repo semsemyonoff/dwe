@@ -427,11 +427,11 @@ Key design decisions (settled in the Stage 2 brainstorm — encode, do not re-li
 
 ### Task 8: [Final] Finalize documentation + archive plan
 
-- [ ] confirm `docs/internals/tui-keymap.md` §6 + the `packages.md` `tui` section read coherently
+- [x] confirm `docs/internals/tui-keymap.md` §6 + the `packages.md` `tui` section read coherently
   together (no stale "Stage 2 seam" / "to be wired" language remaining in either)
-- [ ] update `CLAUDE.md`/`AGENTS.md` only if a new load-bearing pattern emerged (likely not — the
+- [x] update `CLAUDE.md`/`AGENTS.md` only if a new load-bearing pattern emerged (likely not — the
   mouse layer is internal framework detail, not a project-config contract)
-- [ ] move this plan to `docs/plans/completed/`
+- [x] move this plan to `docs/plans/completed/`
 
 ## Post-Completion
 
