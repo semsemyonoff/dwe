@@ -114,10 +114,11 @@ const (
 )
 
 // Register binds an action to a key binding. It is an error to register an
-// action twice, to register a key already claimed by another action, or to
+// action twice, to register a key already claimed by another action, to
 // supply an alias that collides with any existing key/alias or with the
-// binding's own canonical Keys — any of these would make dispatch ambiguous.
-// A binding with no keys is also rejected.
+// binding's own canonical Keys, or to claim a Mouse event already bound to
+// another action — any of these would make dispatch ambiguous. A binding with
+// no keys is also rejected.
 //
 // The validation pass is fully pre-commit: if any check fails, no map entry
 // is written (no partial mutation).
@@ -154,6 +155,16 @@ func (r *Registry) Register(a Action, b Binding) error {
 		}
 	}
 
+	// Pre-commit: validate the Mouse event does not collide with an existing
+	// binding. MatchMouse linear-scans registration order and returns the first
+	// match, so a silent double-claim would be order-dependent — reject it here
+	// to match the strict key/alias contract above.
+	if b.Mouse != "" {
+		if owner, taken := r.MatchMouse(b.Mouse); taken {
+			return fmt.Errorf("tui: mouse event %q for action %q already bound to action %q", b.Mouse, a, owner)
+		}
+	}
+
 	// All checks passed — commit. Keys and Aliases both go into the dispatch map
 	// so Match resolves them identically; only Keys are shown in help.
 	r.bindings[a] = b
@@ -185,6 +196,11 @@ func (r *Registry) Match(key string) (Action, bool) {
 // "click" is frame-owned and is intentionally never registered as a
 // mouse binding, so MatchMouse("click") always returns false.
 func (r *Registry) MatchMouse(event string) (Action, bool) {
+	if event == "" {
+		// An empty event is never a real mouse vocabulary entry; without this
+		// guard the scan would match the first binding with no Mouse field set.
+		return "", false
+	}
 	for _, a := range r.order {
 		if r.bindings[a].Mouse == event {
 			return a, true

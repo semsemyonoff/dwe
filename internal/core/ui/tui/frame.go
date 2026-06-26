@@ -347,10 +347,16 @@ func (f *Frame) handleMouse(msg tea.MouseMsg) (tea.Model, tea.Cmd) {
 		if !f.overlay.Empty() {
 			return f, nil
 		}
-		if m.Button == tea.MouseWheelUp {
+		switch m.Button {
+		case tea.MouseWheelUp:
 			f.wheelAccum--
-		} else {
+		case tea.MouseWheelDown:
 			f.wheelAccum++
+		default:
+			// Horizontal wheel (MouseWheelLeft/Right, emitted by trackpads in
+			// CellMotion mode) carries no Nav mapping in Stage 2; ignore it so
+			// it never arms a tick or pollutes the vertical accumulator.
+			return f, nil
 		}
 		if !f.wheelArmed {
 			f.wheelArmed = true

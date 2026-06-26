@@ -763,6 +763,10 @@ func newMouseFrame(t *testing.T, w, h int, opts ...frameOption) (*Frame, *mouseP
 func wheelDown() tea.Msg { return tea.MouseWheelMsg{Button: tea.MouseWheelDown} }
 func wheelUp() tea.Msg   { return tea.MouseWheelMsg{Button: tea.MouseWheelUp} }
 
+// wheelLeft / wheelRight build horizontal MouseWheelMsgs (trackpad tilt-scroll).
+func wheelLeft() tea.Msg  { return tea.MouseWheelMsg{Button: tea.MouseWheelLeft} }
+func wheelRight() tea.Msg { return tea.MouseWheelMsg{Button: tea.MouseWheelRight} }
+
 // flush injects the private tick message directly so tests need not wait 16ms.
 func flush() tea.Msg { return wheelFlushMsg{} }
 
@@ -858,7 +862,13 @@ func TestFrame_WheelCoalescing(t *testing.T) {
 		// First wheel event must return a non-nil cmd (the tick).
 		_, cmd1 := f.Update(wheelDown())
 		if cmd1 == nil {
-			t.Error("first WheelDown: cmd = nil; want non-nil (tick)")
+			t.Fatal("first WheelDown: cmd = nil; want non-nil (tick)")
+		}
+		// Execute the real tick and confirm it yields wheelFlushMsg — without
+		// this the coalescing tests (which inject flush() directly) would still
+		// pass even if the tick closure returned the wrong message type.
+		if _, ok := cmd1().(wheelFlushMsg); !ok {
+			t.Errorf("tick cmd produced %T; want wheelFlushMsg", cmd1())
 		}
 		// Second and third in-window wheel events must return nil (already armed).
 		_, cmd2 := f.Update(wheelDown())
@@ -880,6 +890,32 @@ func TestFrame_WheelCoalescing(t *testing.T) {
 		f.Update(flush())
 		if p.counts[ActionNavDown] != before {
 			t.Errorf("second flush (empty accum): NavDown grew from %d to %d", before, p.counts[ActionNavDown])
+		}
+	})
+
+	t.Run("horizontal_wheel_ignored", func(t *testing.T) {
+		f, p := newMouseFrame(t, 80, frameGoldenHeight)
+		// Horizontal wheel events must neither arm a tick nor touch the
+		// vertical accumulator — they carry no Nav mapping in Stage 2.
+		_, cmdL := f.Update(wheelLeft())
+		if cmdL != nil {
+			t.Error("WheelLeft returned a cmd; want nil (no tick armed)")
+		}
+		_, cmdR := f.Update(wheelRight())
+		if cmdR != nil {
+			t.Error("WheelRight returned a cmd; want nil (no tick armed)")
+		}
+		if f.wheelAccum != 0 {
+			t.Errorf("wheelAccum after horizontal wheel = %d; want 0", f.wheelAccum)
+		}
+		if f.wheelArmed {
+			t.Error("wheelArmed after horizontal wheel should be false")
+		}
+		// A subsequent flush must dispatch no Nav in either direction.
+		f.Update(flush())
+		if p.counts[ActionNavDown] != 0 || p.counts[ActionNavUp] != 0 {
+			t.Errorf("horizontal wheel produced Nav: down=%d up=%d; want 0/0",
+				p.counts[ActionNavDown], p.counts[ActionNavUp])
 		}
 	})
 

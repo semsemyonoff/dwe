@@ -141,9 +141,12 @@ via `Registry.MatchMouse(event string) (Action, bool)`. Locked vocabulary:
 - `"click"` — single click (frame-owned; intentionally NOT registered as a binding)
 - `"double-click"` — double click (bound to `select`)
 
-`Registry.MatchMouse` scans registered bindings for a `Binding.Mouse` match; first
-match wins. `"click"` is intentionally never registered — it is handled directly by
-the frame's click-routing logic (see §6).
+`Registry.MatchMouse` scans registered bindings for a `Binding.Mouse` match; an
+empty event never matches. `Register` rejects a second binding claiming an
+already-bound `Mouse` event (mirroring the key/alias collision guards), so at most
+one binding can own each event — the scan order is therefore unambiguous. `"click"`
+is intentionally never registered — it is handled directly by the frame's
+click-routing logic (see §6).
 
 ---
 
@@ -275,12 +278,15 @@ Default mouse bindings for stdlib actions, wired via `Binding.Mouse` +
 | `wheel-down`    | `nav.down`  |
 | `double-click`  | `select`    |
 
-**Wheel coalescing** — the first wheel event arms a 16ms tick; subsequent events
-within the window accumulate into a signed delta; the tick flush dispatches
-`abs(delta)` Nav steps and resets (sum-never-drop: a trackpad burst → one render
-of N steps; slow wheel → N single steps). An open overlay clears the accumulator
-on push; the flush handler is a no-op while any overlay is open — a tick armed
-before a modal cannot dispatch Nav behind it.
+**Wheel coalescing** — only vertical wheel events participate; horizontal wheel
+(`MouseWheelLeft`/`MouseWheelRight`, emitted by trackpads in CellMotion mode)
+carries no Nav mapping in Stage 2 and is ignored (it neither arms a tick nor
+touches the accumulator). The first vertical wheel event arms a 16ms tick;
+subsequent events within the window accumulate into a signed delta; the tick
+flush dispatches `abs(delta)` Nav steps and resets (sum-never-drop: a trackpad
+burst → one render of N steps; slow wheel → N single steps). An open overlay
+clears the accumulator on push; the flush handler is a no-op while any overlay is
+open — a tick armed before a modal cannot dispatch Nav behind it.
 
 **Double-click** — a second left-click in the same panel + same cell within a
 400ms window (`doubleClickWindow`), gated by `!lastClick.t.IsZero()` (the zero
