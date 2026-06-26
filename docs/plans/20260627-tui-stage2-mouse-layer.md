@@ -254,20 +254,20 @@ Key design decisions (settled in the Stage 2 brainstorm — encode, do not re-li
 - Modify: `internal/core/ui/tui/registry_test.go`
 - Modify: `internal/core/ui/tui/actions_test.go`
 
-- [ ] in `actions.go`, set `Mouse` on the stdlib `standardBindings`: `ActionNavUp` →
+- [x] in `actions.go`, set `Mouse` on the stdlib `standardBindings`: `ActionNavUp` →
   `"wheel-up"`, `ActionNavDown` → `"wheel-down"`, `ActionSelect` → `"double-click"`; leave the
   other stdlib actions' `Mouse` empty; update the table doc comment to note the mouse defaults
-- [ ] add `Registry.MatchMouse(event string) (Action, bool)` scanning registered bindings for
+- [x] add `Registry.MatchMouse(event string) (Action, bool)` scanning registered bindings for
   `Binding.Mouse == event`; doc-comment that the vocabulary is the locked set
   (`wheel-up`/`wheel-down`/`click`/`double-click`) and that `"click"` is intentionally
   frame-owned (never registered as a mouse binding)
-- [ ] update the `Binding.Mouse` doc in `registry.go` from "Unused by dispatch this stage" to
+- [x] update the `Binding.Mouse` doc in `registry.go` from "Unused by dispatch this stage" to
   "resolved via [Registry.MatchMouse]; wired in Stage 2"
-- [ ] write tests: after `RegisterStandard(reg, ActionNavUp, ActionNavDown, ActionSelect)`,
+- [x] write tests: after `RegisterStandard(reg, ActionNavUp, ActionNavDown, ActionSelect)`,
   `MatchMouse("wheel-up") == ActionNavUp`, `"wheel-down" == ActionNavDown`, `"double-click" ==
   ActionSelect`; `MatchMouse("click")` returns `false` (frame-owned); `MatchMouse("nonsense")`
   returns `false`; an empty registry returns `false`
-- [ ] run `go test ./internal/core/ui/tui/...` — must pass before next task
+- [x] run `go test ./internal/core/ui/tui/...` — must pass before next task
 
 ### Task 3: Hit-test — `classifyHit` + help-hint region
 

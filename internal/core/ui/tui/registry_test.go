@@ -203,6 +203,70 @@ func TestRegistry_AliasCollisionWithExistingKeyReturnsError(t *testing.T) {
 	}
 }
 
+func TestRegistry_MatchMouse_StdlibDefaults(t *testing.T) {
+	t.Parallel()
+	r := NewRegistry()
+	if err := RegisterStandard(r, ActionNavUp, ActionNavDown, ActionSelect); err != nil {
+		t.Fatalf("RegisterStandard: %v", err)
+	}
+
+	cases := []struct {
+		event string
+		want  Action
+	}{
+		{"wheel-up", ActionNavUp},
+		{"wheel-down", ActionNavDown},
+		{"double-click", ActionSelect},
+	}
+	for _, tc := range cases {
+		got, ok := r.MatchMouse(tc.event)
+		if !ok {
+			t.Errorf("MatchMouse(%q) = false; want true", tc.event)
+			continue
+		}
+		if got != tc.want {
+			t.Errorf("MatchMouse(%q) = %q; want %q", tc.event, got, tc.want)
+		}
+	}
+}
+
+func TestRegistry_MatchMouse_ClickReturnsFalse(t *testing.T) {
+	t.Parallel()
+	r := NewRegistry()
+	if err := RegisterStandard(r, ActionNavUp, ActionNavDown, ActionSelect); err != nil {
+		t.Fatalf("RegisterStandard: %v", err)
+	}
+	// "click" is frame-owned and must never be a registered mouse binding.
+	got, ok := r.MatchMouse("click")
+	if ok {
+		t.Errorf("MatchMouse(click) = %q, true; want false (frame-owned, not registered)", got)
+	}
+}
+
+func TestRegistry_MatchMouse_UnknownEventReturnsFalse(t *testing.T) {
+	t.Parallel()
+	r := NewRegistry()
+	if err := RegisterStandard(r, ActionNavUp, ActionNavDown, ActionSelect); err != nil {
+		t.Fatalf("RegisterStandard: %v", err)
+	}
+	got, ok := r.MatchMouse("nonsense")
+	if ok {
+		t.Errorf("MatchMouse(nonsense) = %q, true; want false", got)
+	}
+}
+
+func TestRegistry_MatchMouse_EmptyRegistryReturnsFalse(t *testing.T) {
+	t.Parallel()
+	// NewRegistry only registers built-ins; none have a Mouse field set.
+	r := NewRegistry()
+	for _, event := range []string{"wheel-up", "wheel-down", "double-click", "click"} {
+		got, ok := r.MatchMouse(event)
+		if ok {
+			t.Errorf("MatchMouse(%q) on empty registry = %q, true; want false", event, got)
+		}
+	}
+}
+
 func TestRegistry_AliasCollisionWithOwnCanonicalKeyReturnsError(t *testing.T) {
 	t.Parallel()
 	r := NewRegistry()

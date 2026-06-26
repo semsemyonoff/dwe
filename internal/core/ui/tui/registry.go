@@ -50,9 +50,10 @@ type Binding struct {
 	// rebinding config. This is documented metadata only — no config loader is
 	// built yet (YAGNI; no consumer until Stage 3). Locked in Stage 1.
 	Rebindable bool
-	// Mouse is a Stage 2 seam: a placeholder spec for a mouse trigger bound to
-	// the same action. Locked vocabulary (wired in Stage 2): "wheel-up",
-	// "wheel-down", "click", "double-click". Unused by dispatch this stage.
+	// Mouse is the mouse-event string that triggers this action, resolved via
+	// [Registry.MatchMouse]. Wired in Stage 2. Locked vocabulary: "wheel-up",
+	// "wheel-down", "double-click". "click" is intentionally frame-owned and is
+	// never registered as a mouse binding.
 	Mouse string
 }
 
@@ -176,6 +177,20 @@ func (r *Registry) Register(a Action, b Binding) error {
 func (r *Registry) Match(key string) (Action, bool) {
 	a, ok := r.keys[key]
 	return a, ok
+}
+
+// MatchMouse resolves a mouse-event string to its action. The bool reports
+// whether any registered binding claims that event via [Binding.Mouse].
+// The locked vocabulary is "wheel-up", "wheel-down", "double-click".
+// "click" is frame-owned and is intentionally never registered as a
+// mouse binding, so MatchMouse("click") always returns false.
+func (r *Registry) MatchMouse(event string) (Action, bool) {
+	for _, a := range r.order {
+		if r.bindings[a].Mouse == event {
+			return a, true
+		}
+	}
+	return "", false
 }
 
 // Binding returns the binding registered for an action. The bool reports
