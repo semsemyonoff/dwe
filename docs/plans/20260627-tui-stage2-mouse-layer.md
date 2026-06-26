@@ -276,21 +276,21 @@ Key design decisions (settled in the Stage 2 brainstorm — encode, do not re-li
 - Create: `internal/core/ui/tui/hittest_test.go`
 - Modify: `internal/core/ui/tui/frame.go`
 
-- [ ] create `hittest.go`: `hitZone` enum (`zoneNone`/`zonePanel`/`zoneHelpHint`/`zoneModal`/
+- [x] create `hittest.go`: `hitZone` enum (`zoneNone`/`zonePanel`/`zoneHelpHint`/`zoneModal`/
   `zoneOutsideModal`), `panelRect struct{ ID PanelID; Region Region }`, a `Region.contains(x, y
   int) bool` helper, and `classifyHit(geo Geometry, panels []panelRect, helpHint Region, ov
   *Overlay, x, y int) (hitZone, PanelID)` — pure, no rendering, modal bounds via
   `centerOffset(geo.Overlay, *ov)`. Document the Region-math-over-`Compositor.Hit` rationale
-- [ ] add `Frame.helpHintRegion() Region` recomputing the right-zone cell range from
+- [x] add `Frame.helpHintRegion() Region` recomputing the right-zone cell range from
   `helpHint()` width so the rendered hint and the hit zone share one source; add `Frame.panelRects()
   []panelRect` building the outer regions from `plugin.Panels()` weights via `layoutPanels`
-- [ ] write tests: table-driven over width buckets 60/79/80/99/100 (odd + even) — a point inside
+- [x] write tests: table-driven over width buckets 60/79/80/99/100 (odd + even) — a point inside
   each panel's outer region → `zonePanel` + correct `PanelID`; a point in the help-hint range
   (`y == geo.Status.Y`, `x ∈ [width-rw, width)`) → `zoneHelpHint`; a point elsewhere → `zoneNone`
-- [ ] write tests: with a non-nil overlay, a point inside the centred modal bounds → `zoneModal`;
+- [x] write tests: with a non-nil overlay, a point inside the centred modal bounds → `zoneModal`;
   a point outside (but in body) → `zoneOutsideModal`; assert panel/help-hint zones are NOT
   returned while an overlay is present (modal takes the whole classification)
-- [ ] run `go test ./internal/core/ui/tui/...` — must pass before next task
+- [x] run `go test ./internal/core/ui/tui/...` — must pass before next task
 
 ### Task 4: Wheel coalescing — accumulator + tick-flush
 

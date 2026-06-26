@@ -405,3 +405,35 @@ func (f *Frame) helpHint() string {
 	}
 	return key + " help"
 }
+
+// helpHintRegion returns the status-line cell range occupied by the rendered
+// help-key hint. The region and the rendered hint share the same width source
+// (muted.Render width measurement) so the hit zone and the visible text can
+// never drift apart.
+func (f *Frame) helpHintRegion() Region {
+	muted := lipgloss.NewStyle().Foreground(lipgloss.Color(styles.ColorMuted()))
+	rw := lipgloss.Width(muted.Render(f.helpHint()))
+	return Region{
+		X:      f.geo.Status.Width - rw,
+		Y:      f.geo.Status.Y,
+		Width:  rw,
+		Height: 1,
+	}
+}
+
+// panelRects returns the outer region of each body panel in plugin declaration
+// order. The regions are computed via layoutPanels from the panel weights —
+// the same call renderBody makes — so hit-test regions match what is rendered.
+func (f *Frame) panelRects() []panelRect {
+	panels := f.plugin.Panels()
+	weights := make([]int, len(panels))
+	for i, p := range panels {
+		weights[i] = p.Weight
+	}
+	outers := layoutPanels(f.geo.Outer, weights)
+	rects := make([]panelRect, len(panels))
+	for i, p := range panels {
+		rects[i] = panelRect{ID: p.ID, Region: outers[i]}
+	}
+	return rects
+}
