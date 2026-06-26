@@ -170,18 +170,18 @@ Key design decisions:
 - Create: `internal/core/ui/tui/registry.go`
 - Create: `internal/core/ui/tui/registry_test.go`
 
-- [ ] create `registry.go`: `Action` (string id type), `Binding{Keys []string, Desc,
+- [x] create `registry.go`: `Action` (string id type), `Binding{Keys []string, Desc,
   Section string}` plus **documented placeholder fields** `Aliases []string` and
   `Rebindable bool` (Stage 1) and a `Mouse` seam field (Stage 2) — all marked provisional
-- [ ] `Registry` with `Register(Action, Binding) error`, `Match(key string) (Action, bool)`,
+- [x] `Registry` with `Register(Action, Binding) error`, `Match(key string) (Action, bool)`,
   and `Sections() []Section` (ordered, for help generation)
-- [ ] guard against duplicate action / duplicate key registration (return error)
-- [ ] add the framework's built-in actions as constants (`ActionHelp`, `ActionQuit`,
+- [x] guard against duplicate action / duplicate key registration (return error)
+- [x] add the framework's built-in actions as constants (`ActionHelp`, `ActionQuit`,
   `ActionFocusNext`, `ActionFocusPrev`) with default bindings — marked "defaults, finalised
   in Stage 1"
-- [ ] write tests: register + match, duplicate detection (key + action), section ordering,
+- [x] write tests: register + match, duplicate detection (key + action), section ordering,
   built-in defaults present
-- [ ] run tests — must pass before next task
+- [x] run tests — must pass before next task
 
 ### Task 3: Plugin interface + test stub plugin (contract proof)
 
