@@ -64,10 +64,36 @@ func withProject(s string) frameOption { return func(o *frameOptions) { o.projec
 // count as Nav steps. Provisional — tune if burst/slow feel is off.
 const coalesceWindow = 16 * time.Millisecond
 
+// doubleClickWindow is the maximum interval between two left-clicks in the same
+// panel cell that triggers a double-click Select. Provisional — tune after
+// real-device testing in the Stage 3 pilot.
+const doubleClickWindow = 400 * time.Millisecond
+
 // wheelFlushMsg is the private tick message that fires after coalesceWindow to
 // dispatch the accumulated wheel delta as Nav steps. It must not fall through
 // to plugin.Update (it is framework-internal).
 type wheelFlushMsg struct{}
+
+// frameClock is an injectable time source for double-click detection. The
+// production implementation uses time.Now; tests inject a controlled fake.
+type frameClock interface {
+	now() time.Time
+}
+
+// realClock is the production frameClock, delegating to time.Now.
+type realClock struct{}
+
+func (realClock) now() time.Time { return time.Now() }
+
+// lastClickRecord stores the previous left-click for double-click detection.
+// The zero time.Time is the "no prior click" sentinel — it is never a valid
+// prior event, so the !IsZero gate ensures the first click never triggers a
+// double-click by itself.
+type lastClickRecord struct {
+	id   PanelID
+	x, y int
+	t    time.Time
+}
 
 // Frame is the framework's tea.Model. It is parameterised by a single [Plugin]
 // and ties together the registry, focus manager, overlay stack, and geometry.
@@ -82,6 +108,10 @@ type Frame struct {
 	// wheel accumulator — see handleMouse and the wheelFlushMsg case in Update.
 	wheelAccum int
 	wheelArmed bool
+
+	// clock and lastClick support double-click detection — see handleClick.
+	clock     frameClock
+	lastClick lastClickRecord
 
 	// tr / locale resolve help-modal display strings. Stage 0 uses a
 	// NopTranslator (English fallbacks) + a fixed locale; the migration stages
@@ -135,6 +165,7 @@ func newFrame(p Plugin, opts ...frameOption) (*Frame, error) {
 		opts:     fo,
 		tr:       i18n.NopTranslator{},
 		locale:   "en",
+		clock:    realClock{},
 	}, nil
 }
 
@@ -163,7 +194,10 @@ func (f *Frame) Init() tea.Cmd { return f.plugin.Init() }
 //     not routed (no acting behind the modal).
 //   - Every non-key message is always forwarded to plugin.Update (async
 //     preservation), including while the help overlay is open.
-//   - tea.MouseMsg is routed to handleMouse (wired in Task 4; currently a no-op placeholder).
+//   - tea.MouseMsg is routed to handleMouse: wheel events accumulate for
+//     burst coalescing; left-click events are classified via classifyHit and
+//     routed (help-hint → help, panel → focus + double-click, blank → swallow);
+//     release and motion events are silently ignored.
 //
 // After both a HandleAction call and a plugin.Update forward the framework
 // drains plugin.PendingOverlay so an action-triggered overlay appears
@@ -303,9 +337,10 @@ func (f *Frame) drainOverlay() {
 }
 
 // handleMouse dispatches a tea.MouseMsg. Wheel events are accumulated for
-// burst coalescing (see wheelFlushMsg case in Update); click routing lands in
-// Task 5. Release and motion messages are silently ignored — CellMotion can
-// emit motion while a button is held but we do not act on it.
+// burst coalescing (see wheelFlushMsg case in Update); left-click events are
+// classified via classifyHit and routed by zone; release and motion messages
+// are silently ignored — CellMotion can emit motion while a button is held
+// but we do not act on it.
 func (f *Frame) handleMouse(msg tea.MouseMsg) (tea.Model, tea.Cmd) {
 	switch m := msg.(type) {
 	case tea.MouseWheelMsg:
@@ -322,11 +357,79 @@ func (f *Frame) handleMouse(msg tea.MouseMsg) (tea.Model, tea.Cmd) {
 			return f, tea.Tick(coalesceWindow, func(time.Time) tea.Msg { return wheelFlushMsg{} })
 		}
 		return f, nil
+	case tea.MouseClickMsg:
+		return f.handleClick(m)
+	case tea.MouseReleaseMsg, tea.MouseMotionMsg:
+		// CellMotion can emit release and motion events while a button is
+		// held; neither triggers any frame or plugin action.
+		return f, nil
 	default:
-		// MouseClickMsg, MouseReleaseMsg, MouseMotionMsg — click routing
-		// lands in Task 5; release and motion are permanently ignored.
 		return f, nil
 	}
+}
+
+// handleClick processes a left-click by classifying the hit zone first:
+//   - overlay open → both zoneModal and zoneOutsideModal are swallowed;
+//     outside does NOT dismiss the overlay (locked Stage 2 policy)
+//   - zoneHelpHint → toggle the help overlay; clear lastClick
+//   - zonePanel → set focus; then double-click test (same panel + same cell +
+//     within doubleClickWindow + lastClick not zero-sentinel); record otherwise
+//   - zoneNone / status space → swallow; clear lastClick so two blank-space
+//     clicks can never synthesize a Select
+//
+// Non-left buttons are silently ignored.
+func (f *Frame) handleClick(m tea.MouseClickMsg) (tea.Model, tea.Cmd) {
+	if m.Button != tea.MouseLeft {
+		return f, nil
+	}
+	var ov *Overlay
+	if top, ok := f.overlay.Top(); ok {
+		ov = &top
+	}
+	zone, id := classifyHit(f.geo, f.panelRects(), f.helpHintRegion(), ov, m.X, m.Y)
+	switch zone {
+	case zoneModal, zoneOutsideModal:
+		return f, nil
+	case zoneHelpHint:
+		f.lastClick = lastClickRecord{}
+		return f.handleBuiltin(ActionHelp)
+	case zonePanel:
+		f.focus.Set(id)
+		if !f.lastClick.t.IsZero() &&
+			f.lastClick.id == id &&
+			f.lastClick.x == m.X &&
+			f.lastClick.y == m.Y &&
+			f.clock.now().Sub(f.lastClick.t) < doubleClickWindow {
+			// Double-click confirmed. Clear the full record so a third click
+			// in the same cell within the window does not re-trigger Select.
+			f.lastClick = lastClickRecord{}
+			if action, ok := f.registry.MatchMouse("double-click"); ok {
+				if cmd, handled := f.plugin.HandleAction(action); handled {
+					f.drainOverlay()
+					return f, cmd
+				}
+			}
+			return f, nil
+		}
+		f.lastClick = lastClickRecord{id: id, x: m.X, y: m.Y, t: f.clock.now()}
+		return f, nil
+	default: // zoneNone
+		f.lastClick = lastClickRecord{}
+		return f, nil
+	}
+}
+
+// panelLocal translates an absolute terminal click (x, y) to coordinates
+// local to the inner content region of the panel whose outer region is outer.
+// Local (0, 0) is the top-left cell of the inner region.
+//
+// The panel-facing click route — row-select and tab-switch forward to plugin —
+// lands with the Stage 3 cmdbrowser pilot (mirroring Stage 1's
+// routeWhileCapturing deferral). This helper locks the coordinate contract so
+// the Stage 3 consumer can rely on it without re-deriving the geometry.
+func panelLocal(outer Region, x, y int) (lx, ly int) {
+	inner := contentRegion(outer)
+	return x - inner.X, y - inner.Y
 }
 
 // isBuiltin reports whether a is a framework-owned action.

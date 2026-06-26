@@ -5,6 +5,7 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
 	tea "charm.land/bubbletea/v2"
 	"charm.land/lipgloss/v2"
@@ -346,17 +347,18 @@ func TestFrame_QuitDispatch(t *testing.T) {
 	}
 }
 
-// TestFrame_MouseMsgSwallowed asserts a mouse message is ignored this stage: it
-// never reaches the plugin and the frame returns no command (the inert Stage 2 seam).
+// TestFrame_MouseMsgSwallowed asserts that a non-left-button mouse click is
+// silently ignored: no command is returned and the plugin never sees it.
 func TestFrame_MouseMsgSwallowed(t *testing.T) {
 	f, p := newTestFrame(t, 80, frameGoldenHeight)
 	before := len(p.gotMsgs)
+	// Button=0 (MouseNone, not MouseLeft) — must be a no-op.
 	_, cmd := f.Update(tea.MouseClickMsg{})
 	if cmd != nil {
-		t.Errorf("mouse message produced a command; want nil (ignored this stage)")
+		t.Errorf("non-left-button click produced a command; want nil")
 	}
 	if len(p.gotMsgs) != before {
-		t.Errorf("mouse message leaked to plugin.Update; gotMsgs grew from %d to %d", before, len(p.gotMsgs))
+		t.Errorf("non-left-button click leaked to plugin.Update; gotMsgs grew from %d to %d", before, len(p.gotMsgs))
 	}
 }
 
@@ -679,12 +681,16 @@ func receivedMsg(p *stubPlugin, payload string) bool {
 // frame_help_open.golden and adding mouse defaults would change that golden,
 // breaking the byte-stable regression guard.
 
-const mousePanelMain PanelID = "mouse-main"
+const (
+	mousePanelMain PanelID = "mouse-main"
+	mousePanelAlt  PanelID = "mouse-alt"
+)
 
 // mousePlugin is a minimal Plugin for mouse routing tests. It registers the
 // stdlib Nav and Select actions (so MatchMouse resolves wheel-up/down and
 // double-click) and counts per-action invocations so tests can assert
-// "HandleAction(ActionNavDown) was called exactly N times."
+// "HandleAction(ActionNavDown) was called exactly N times." Two equal-weight
+// panels let click tests verify focus switching between panels.
 type mousePlugin struct {
 	counts map[Action]int
 }
@@ -699,7 +705,10 @@ func (p *mousePlugin) Resize(Region)                        {}
 func (p *mousePlugin) Update(tea.Msg) tea.Cmd               { return nil }
 func (p *mousePlugin) ViewPanel(_ PanelID, _ Region) string { return "[mouse]" }
 func (p *mousePlugin) Panels() []Panel {
-	return []Panel{{ID: mousePanelMain, Title: "Main", Weight: 1}}
+	return []Panel{
+		{ID: mousePanelMain, Title: "Main", Weight: 1},
+		{ID: mousePanelAlt, Title: "Alt", Weight: 1},
+	}
 }
 func (p *mousePlugin) StatusContext() string { return "" }
 func (p *mousePlugin) Actions(reg *Registry) error {
@@ -711,6 +720,24 @@ func (p *mousePlugin) HandleAction(a Action) (tea.Cmd, bool) {
 }
 func (p *mousePlugin) PendingOverlay() (Overlay, bool) { return Overlay{}, false }
 func (p *mousePlugin) Result() any                     { return nil }
+
+// fakeClock is an injectable frameClock for click-routing tests. Initialise t
+// to a non-zero time; advance moves it forward.
+type fakeClock struct{ t time.Time }
+
+func (c *fakeClock) now() time.Time          { return c.t }
+func (c *fakeClock) advance(d time.Duration) { c.t = c.t.Add(d) }
+
+// testClock returns a fakeClock at a known non-zero time so the zero-sentinel
+// check (!lastClick.t.IsZero()) is never accidentally bypassed.
+func testClock() *fakeClock {
+	return &fakeClock{t: time.Date(2025, 1, 1, 0, 0, 0, 0, time.UTC)}
+}
+
+// leftClick builds a MouseClickMsg with the left button at (x, y).
+func leftClick(x, y int) tea.MouseClickMsg {
+	return tea.MouseClickMsg{X: x, Y: y, Button: tea.MouseLeft}
+}
 
 // newMouseFrame builds a Frame over a mousePlugin with mouse=true + xterm-256color
 // so wheel routing is active. opts are appended last.
@@ -898,6 +925,230 @@ func TestFrame_WheelCoalescing(t *testing.T) {
 			t.Error("wheelArmed after modal flush should be false")
 		}
 	})
+}
+
+// TestFrame_ClickRouting exercises the full click-routing policy wired in Task 5.
+func TestFrame_ClickRouting(t *testing.T) {
+	// Coordinates derived from mouseFrameGeometry:
+	//   (5, 5)   → panel main (outer {0,0,40,23})
+	//   (50, 5)  → panel alt  (outer {40,0,40,23})
+	//   (75, 23) → help-hint  (x ∈ [74,80), y=23)
+	//   (3, 23)  → zoneNone   (y=23, x<74, not in any panel)
+
+	t.Run("click_on_panel_changes_focus", func(t *testing.T) {
+		f, _ := newMouseFrame(t, 80, frameGoldenHeight)
+		if f.focus.Active() != mousePanelMain {
+			t.Fatalf("initial focus = %q; want %q", f.focus.Active(), mousePanelMain)
+		}
+		f.Update(leftClick(50, 5)) // click in alt panel
+		if got := f.focus.Active(); got != mousePanelAlt {
+			t.Errorf("after click alt panel: focus = %q; want %q", got, mousePanelAlt)
+		}
+		f.Update(leftClick(5, 5)) // click in main panel
+		if got := f.focus.Active(); got != mousePanelMain {
+			t.Errorf("after click main panel: focus = %q; want %q", got, mousePanelMain)
+		}
+	})
+
+	t.Run("click_on_help_hint_opens_help", func(t *testing.T) {
+		f, _ := newMouseFrame(t, 80, frameGoldenHeight)
+		if !f.overlay.Empty() {
+			t.Fatal("overlay non-empty before click")
+		}
+		f.Update(leftClick(75, 23)) // click in help hint
+		if f.overlay.Empty() {
+			t.Error("help overlay did not open on help-hint click")
+		}
+	})
+
+	t.Run("double_click_same_panel_cell_triggers_select", func(t *testing.T) {
+		f, p := newMouseFrame(t, 80, frameGoldenHeight)
+		clk := testClock()
+		f.clock = clk
+		// Two left-clicks in the same panel + same cell within the window.
+		f.Update(leftClick(5, 5)) // first click — record
+		f.Update(leftClick(5, 5)) // second click — double-click
+		if got := p.counts[ActionSelect]; got != 1 {
+			t.Errorf("double-click: ActionSelect count = %d; want 1", got)
+		}
+	})
+
+	t.Run("triple_click_triggers_select_once", func(t *testing.T) {
+		f, p := newMouseFrame(t, 80, frameGoldenHeight)
+		clk := testClock()
+		f.clock = clk
+		f.Update(leftClick(5, 5)) // first
+		f.Update(leftClick(5, 5)) // second → Select (clears lastClick)
+		f.Update(leftClick(5, 5)) // third  → first of a new pair, not a Select
+		if got := p.counts[ActionSelect]; got != 1 {
+			t.Errorf("triple-click: ActionSelect count = %d; want 1", got)
+		}
+		// The third click should have recorded a new lastClick.
+		if f.lastClick.t.IsZero() {
+			t.Error("after triple-click, lastClick.t is zero; want the third click recorded")
+		}
+	})
+
+	t.Run("double_click_outside_window_no_select", func(t *testing.T) {
+		f, p := newMouseFrame(t, 80, frameGoldenHeight)
+		clk := testClock()
+		f.clock = clk
+		f.Update(leftClick(5, 5))                         // first click
+		clk.advance(doubleClickWindow + time.Millisecond) // advance past window
+		f.Update(leftClick(5, 5))                         // second click — too late
+		if got := p.counts[ActionSelect]; got != 0 {
+			t.Errorf("outside-window double-click: ActionSelect count = %d; want 0", got)
+		}
+	})
+
+	t.Run("double_click_blank_status_no_select", func(t *testing.T) {
+		// Two clicks on blank status space (zoneNone) must never produce Select.
+		f, p := newMouseFrame(t, 80, frameGoldenHeight)
+		clk := testClock()
+		f.clock = clk
+		f.Update(leftClick(3, 23)) // zoneNone — clears lastClick
+		f.Update(leftClick(3, 23)) // zoneNone — clears lastClick again
+		if got := p.counts[ActionSelect]; got != 0 {
+			t.Errorf("blank-space double-click: ActionSelect count = %d; want 0", got)
+		}
+	})
+
+	t.Run("double_click_help_hint_no_select", func(t *testing.T) {
+		// Two clicks on the help-hint zone: help is toggled (opened), second
+		// click is swallowed (overlay open). No Select must fire.
+		f, p := newMouseFrame(t, 80, frameGoldenHeight)
+		clk := testClock()
+		f.clock = clk
+		f.Update(leftClick(75, 23)) // opens help overlay; clears lastClick
+		f.Update(leftClick(75, 23)) // overlay open → swallowed
+		if got := p.counts[ActionSelect]; got != 0 {
+			t.Errorf("help-hint double-click: ActionSelect count = %d; want 0", got)
+		}
+	})
+
+	t.Run("zero_clock_first_click_not_double_click", func(t *testing.T) {
+		// A clock that returns time.Time{} (zero): lastClick.t starts zero, so
+		// the first click at (0,0) must NOT be treated as a double-click
+		// — the !IsZero sentinel gate prevents it.
+		f, p := newMouseFrame(t, 80, frameGoldenHeight)
+		f.clock = &fakeClock{t: time.Time{}} // zero-start clock
+		f.Update(leftClick(0, 0))            // (0,0) is in main panel
+		if got := p.counts[ActionSelect]; got != 0 {
+			t.Errorf("zero-clock first click: ActionSelect count = %d; want 0", got)
+		}
+	})
+
+	t.Run("different_panel_no_select", func(t *testing.T) {
+		// Click in main, then click in alt: different panel ID → no double-click.
+		f, p := newMouseFrame(t, 80, frameGoldenHeight)
+		clk := testClock()
+		f.clock = clk
+		f.Update(leftClick(5, 5))  // main panel
+		f.Update(leftClick(50, 5)) // alt panel — different id
+		if got := p.counts[ActionSelect]; got != 0 {
+			t.Errorf("different-panel: ActionSelect count = %d; want 0", got)
+		}
+	})
+
+	t.Run("non_left_button_ignored", func(t *testing.T) {
+		f, p := newMouseFrame(t, 80, frameGoldenHeight)
+		clk := testClock()
+		f.clock = clk
+		// Right-click in a panel — must not set focus or record a click.
+		before := f.focus.Active()
+		f.Update(tea.MouseClickMsg{X: 50, Y: 5, Button: tea.MouseRight})
+		if f.focus.Active() != before {
+			t.Errorf("right-click changed focus; want unchanged")
+		}
+		if p.counts[ActionSelect] != 0 {
+			t.Errorf("right-click: ActionSelect count = %d; want 0", p.counts[ActionSelect])
+		}
+		if !f.lastClick.t.IsZero() {
+			t.Error("right-click recorded a lastClick; want zero sentinel")
+		}
+	})
+
+	t.Run("click_with_overlay_does_not_pop_it", func(t *testing.T) {
+		f, _ := newMouseFrame(t, 80, frameGoldenHeight)
+		f.Update(key("?")) // open help overlay
+		if f.overlay.Empty() {
+			t.Fatal("overlay did not open")
+		}
+		f.Update(leftClick(5, 5)) // click anywhere while overlay is open
+		if f.overlay.Empty() {
+			t.Error("click while overlay open dismissed the overlay; want swallow (no dismiss)")
+		}
+	})
+
+	t.Run("release_message_ignored", func(t *testing.T) {
+		f, p := newMouseFrame(t, 80, frameGoldenHeight)
+		before := len(p.counts)
+		_, cmd := f.Update(tea.MouseReleaseMsg{})
+		if cmd != nil {
+			t.Error("MouseReleaseMsg produced a cmd; want nil")
+		}
+		if len(p.counts) != before {
+			t.Error("MouseReleaseMsg updated action counts; want no-op")
+		}
+	})
+
+	t.Run("motion_message_ignored", func(t *testing.T) {
+		f, p := newMouseFrame(t, 80, frameGoldenHeight)
+		before := len(p.counts)
+		_, cmd := f.Update(tea.MouseMotionMsg{})
+		if cmd != nil {
+			t.Error("MouseMotionMsg produced a cmd; want nil")
+		}
+		if len(p.counts) != before {
+			t.Error("MouseMotionMsg updated action counts; want no-op")
+		}
+	})
+}
+
+// TestFrame_PanelLocal verifies the panelLocal coordinate-translation contract
+// for bordered panels at several geometry buckets.
+func TestFrame_PanelLocal(t *testing.T) {
+	tests := []struct {
+		name   string
+		outer  Region
+		x, y   int
+		wantLX int
+		wantLY int
+	}{
+		{
+			name:  "main_panel_at_0_0",
+			outer: Region{X: 0, Y: 0, Width: 40, Height: 23},
+			// inner = {X:2, Y:1, W:36, H:21}; click at (5,5) → local (3,4)
+			x: 5, y: 5, wantLX: 3, wantLY: 4,
+		},
+		{
+			name:  "main_panel_top_left_inner",
+			outer: Region{X: 0, Y: 0, Width: 40, Height: 23},
+			// inner top-left: X=2, Y=1 → local (0,0)
+			x: 2, y: 1, wantLX: 0, wantLY: 0,
+		},
+		{
+			name:  "alt_panel_at_40_0",
+			outer: Region{X: 40, Y: 0, Width: 40, Height: 23},
+			// inner = {X:42, Y:1, W:36, H:21}; click at (50,5) → local (8,4)
+			x: 50, y: 5, wantLX: 8, wantLY: 4,
+		},
+		{
+			name:  "wide_panel_80_0",
+			outer: Region{X: 0, Y: 0, Width: 80, Height: 23},
+			// inner = {X:2, Y:1, W:76, H:21}; click at (10,10) → local (8,9)
+			x: 10, y: 10, wantLX: 8, wantLY: 9,
+		},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			lx, ly := panelLocal(tc.outer, tc.x, tc.y)
+			if lx != tc.wantLX || ly != tc.wantLY {
+				t.Errorf("panelLocal(%+v, %d, %d) = (%d,%d); want (%d,%d)",
+					tc.outer, tc.x, tc.y, lx, ly, tc.wantLX, tc.wantLY)
+			}
+		})
+	}
 }
 
 // assertGolden compares got against testdata/<name>, writing it when

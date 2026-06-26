@@ -343,11 +343,11 @@ Key design decisions (settled in the Stage 2 brainstorm — encode, do not re-li
 - Modify: `internal/core/ui/tui/frame.go`
 - Modify: `internal/core/ui/tui/frame_test.go`
 
-- [ ] add the `frameClock` interface (`now() time.Time`) + `realClock` (production, `time.Now`)
+- [x] add the `frameClock` interface (`now() time.Time`) + `realClock` (production, `time.Now`)
   + `Frame.clock` field defaulted in `newFrame`; add `lastClick struct{ id PanelID; x, y int; t
   time.Time }` to `Frame` (carrying the panel ID so a double-click must repeat in the SAME panel)
   and the `doubleClickWindow` constant (400ms, documented provisional)
-- [ ] extend `handleMouse` for `tea.MouseClickMsg` (left button only — ignore other buttons).
+- [x] extend `handleMouse` for `tea.MouseClickMsg` (left button only — ignore other buttons).
   **Classify FIRST via `classifyHit`** (Codex finding #2), then act by zone:
   - overlay open → `zoneModal`/`zoneOutsideModal` both swallow (outside does NOT dismiss — the
     locked Stage 1 policy), return `f, nil`; do NOT touch `lastClick`
@@ -362,28 +362,28 @@ Key design decisions (settled in the Stage 2 brainstorm — encode, do not re-li
     Select); otherwise record `lastClick = {id, x, y, clock.now()}`
   - `zoneNone` (blank/status space) → swallow; clear `lastClick` so two clicks on empty space can
     never synthesize a Select (Codex finding #2)
-- [ ] add the **deferred plugin-click-forward seam**: a documented pure helper (e.g.
+- [x] add the **deferred plugin-click-forward seam**: a documented pure helper (e.g.
   `panelLocal(outer Region, x, y int) (lx, ly int)` translating an absolute click to
   panel-inner-local coordinates) with a comment stating the row-select / tab-switch forward to
   `plugin` lands with the Stage 3 cmdbrowser pilot (mirroring Stage 1's `routeWhileCapturing`
   deferral); it is unit-tested but NOT yet wired into a plugin call
-- [ ] ignore `tea.MouseReleaseMsg` / `tea.MouseMotionMsg` in `handleMouse` (return `f, nil`),
+- [x] ignore `tea.MouseReleaseMsg` / `tea.MouseMotionMsg` in `handleMouse` (return `f, nil`),
   with a comment that CellMotion can still emit motion while a button is held and we do not act
   on it
-- [ ] write tests (against the `mousePlugin` from Task 4, with an injected fake `frameClock`):
+- [x] write tests (against the `mousePlugin` from Task 4, with an injected fake `frameClock`):
   click on the help-hint region opens help (overlay non-empty after); click on a panel calls
   `focus.Set` (active panel changes); two left-clicks in the same panel+cell within the window →
   `HandleAction(ActionSelect)` count == 1; **three** left-clicks in the same panel+cell within the
   window → Select count == 1 (full `lastClick` reset holds); two clicks in the same cell OUTSIDE
   the window (fake clock advanced past `doubleClickWindow`) → two single-clicks, no Select
-- [ ] write tests for the Codex findings: two clicks on **blank/`zoneNone`** space within the
+- [x] write tests for the Codex findings: two clicks on **blank/`zoneNone`** space within the
   window → NO Select (classify-first; `lastClick` cleared on `zoneNone`); two clicks on the
   **help-hint** within the window → help toggles, NO Select; **zero-start clock** + first click at
   cell **(0,0)** is NOT treated as a double-click (the `!IsZero` sentinel gate); a second click in
   a DIFFERENT panel/cell within the window → no Select; a non-left button click is ignored; a
   click with an overlay open does NOT pop the overlay (swallow); `panelLocal` translation is
   correct for a bordered panel at several buckets; a release/motion message is a no-op
-- [ ] run `go test ./internal/core/ui/tui/...` — must pass before next task
+- [x] run `go test ./internal/core/ui/tui/...` — must pass before next task
 
 ### Task 6: Update reference docs — keymap + packages.md
 
