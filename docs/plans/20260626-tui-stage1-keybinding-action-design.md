@@ -247,28 +247,28 @@ re-litigate):
 - Create: `internal/core/ui/tui/actions_test.go`
 - Modify: `internal/core/ui/tui/registry.go` (section constants if new sections)
 
-- [ ] create `actions.go`: exported stdlib `Action` constants (`ActionNavUp`,
+- [x] create `actions.go`: exported stdlib `Action` constants (`ActionNavUp`,
   `ActionNavDown`, `ActionNavLeft`, `ActionNavRight`, `ActionSelect`,
   `ActionFilter`, `ActionInspect`, `ActionReload`, `ActionTop`, `ActionBottom`,
   `ActionPageUp`, `ActionPageDown`) with a private `standardBindings` table of
   default `Binding`s (keys + section), marked "framework-supplied defaults, plugin-
   handled"; `Top`/`Bottom` carry both binds (`["g","home"]` / `["G","end"]`)
-- [ ] add `RegisterStandard(reg *Registry, actions ...Action) error` (registers
+- [x] add `RegisterStandard(reg *Registry, actions ...Action) error` (registers
   each action's default binding, surfacing the first duplicate-action/key error and
   stopping) and a `standardBinding(a Action) (Binding, bool)` lookup accessor for
   the fetch-then-customize path. **Keep the accessor unexported (`standardBinding`)
   unless the Stage 3 pilot actually needs the standalone lookup**, in which case
   promote it to `StandardBinding` — expose only `RegisterStandard` otherwise (the
   two are not redundant: one registers, one looks up)
-- [ ] document that stdlib actions are **opt-in** (NOT auto-registered by
+- [x] document that stdlib actions are **opt-in** (NOT auto-registered by
   `NewRegistry`, which keeps registering only the framework-handled built-ins) and
   **plugin-handled** (the plugin's `HandleAction` interprets them per its context)
-- [ ] write tests: `RegisterStandard` populates a registry with the dual-bind
+- [x] write tests: `RegisterStandard` populates a registry with the dual-bind
   `Top`/`Bottom` keys both matching; `standardBinding` returns false for an unknown
   action; `RegisterStandard` errors when a requested action collides with a built-in
   or with a previously-registered plugin binding; sections from stdlib appear in the
   expected order
-- [ ] run `go test ./internal/core/ui/tui/...` — must pass before next task
+- [x] run `go test ./internal/core/ui/tui/...` — must pass before next task
 
 ### Task 4: `CapturesInput` overlay field + routing-decision helper
 
