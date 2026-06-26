@@ -335,16 +335,16 @@ re-litigate):
 **Files:**
 - Modify: `docs/internals/packages.md`
 
-- [ ] update the `internal/core/ui/tui/` section: scope "locked in Stage 1" to the
+- [x] update the `internal/core/ui/tui/` section: scope "locked in Stage 1" to the
   **registry/keymap/overlay-input surface** (`Binding`/`Action`/`Registry`/stdlib/
   `CapturesInput`) — the `Plugin` interface explicitly **stays PINNED, not frozen**
   through Stage 3 (spec § 7 lets the pilot feed one revision back). Record the
   stdlib-actions concept (opt-in, plugin-handled), the redefined `Aliases` semantics
   (dispatch + hidden-from-help), the `CapturesInput` overlay contract, and the
   confirmed i18n namespace; link to `docs/internals/tui-keymap.md`
-- [ ] keep the `core/ui` layering rule + `docstui` relocation note intact (Stage 4
+- [x] keep the `core/ui` layering rule + `docstui` relocation note intact (Stage 4
   still owns the relocation)
-- [ ] no test (documentation)
+- [x] no test (documentation)
 
 ### Task 7: Verify acceptance criteria
 
