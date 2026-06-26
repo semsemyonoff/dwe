@@ -105,6 +105,31 @@ func TestFrame_HelpOpenGolden(t *testing.T) {
 	assertGolden(t, "frame_help_open.golden", plain)
 }
 
+// TestFrame_HelpOpenSmallTerminal asserts opening the help overlay at the
+// smallest terminals the launch gate permits (minHeight..) never grows the frame
+// past the terminal bounds. The help modal is taller than the body at these
+// sizes, so without the height clamp in buildHelpOverlay the composite overflows
+// (rows > h and rows narrower than w) — alt-screen corruption. Regression guard.
+func TestFrame_HelpOpenSmallTerminal(t *testing.T) {
+	for _, h := range []int{minHeight, 11, 12, 13} {
+		t.Run("height_"+itoa(h), func(t *testing.T) {
+			f, _ := newTestFrame(t, minWidth, h)
+			f.Update(key("?")) // open help
+
+			plain := stripANSI(f.View().Content)
+			rows := strings.Split(plain, "\n")
+			if len(rows) != h {
+				t.Errorf("help-open row count = %d; want terminal height %d", len(rows), h)
+			}
+			for i, row := range rows {
+				if got := lipgloss.Width(row); got != minWidth {
+					t.Errorf("help-open row %d width = %d; want frame width %d; row=%q", i, got, minWidth, row)
+				}
+			}
+		})
+	}
+}
+
 // TestFrame_View_Envelope asserts the framework owns the tea.View envelope:
 // AltScreen is on and the mouse seam renders MouseModeNone this stage.
 func TestFrame_View_Envelope(t *testing.T) {
@@ -188,8 +213,38 @@ func TestFrame_PluginActionDispatch(t *testing.T) {
 	if p.handledAction != "" {
 		t.Errorf("built-in key leaked to plugin.HandleAction: %q", p.handledAction)
 	}
-	if f.focus.Active() == before {
+	afterNext := f.focus.Active()
+	if afterNext == before {
 		t.Errorf("focus did not advance on built-in tab")
+	}
+
+	// shift+tab dispatches ActionFocusPrev — focus moves back (not forward).
+	f.Update(key("shift+tab"))
+	if p.handledAction != "" {
+		t.Errorf("built-in shift+tab leaked to plugin.HandleAction: %q", p.handledAction)
+	}
+	if f.focus.Active() == afterNext {
+		t.Errorf("focus did not retreat on built-in shift+tab")
+	}
+	if f.focus.Active() != before {
+		t.Errorf("shift+tab did not return focus to the original panel (FocusPrev mis-wired to Next?)")
+	}
+}
+
+// TestFrame_DeclinedActionFallsThrough asserts a key matching a registered plugin
+// action whose HandleAction declines it (returns handled=false) still forwards the
+// raw key to plugin.Update — the documented "decline → forward raw key" contract.
+func TestFrame_DeclinedActionFallsThrough(t *testing.T) {
+	p := newStubPlugin()
+	f, err := newFrame(declineActionPlugin{p}, withBrand("dwe"), withProject("demo"))
+	if err != nil {
+		t.Fatalf("newFrame: %v", err)
+	}
+	f.Update(tea.WindowSizeMsg{Width: 80, Height: frameGoldenHeight})
+
+	f.Update(key("d")) // registered action that HandleAction declines
+	if !receivedKey(p, "d") {
+		t.Errorf("declined action key did not fall through to plugin.Update; got %v", p.gotMsgs)
 	}
 }
 
@@ -288,6 +343,27 @@ type badWeightPlugin struct{ *stubPlugin }
 
 func (p badWeightPlugin) Panels() []Panel {
 	return []Panel{{ID: "only", Title: "Only", Weight: 0}}
+}
+
+// declineActionPlugin registers a key but declines the matched action, exercising
+// the Frame's "decline → forward raw key to plugin.Update" fall-through branch.
+type declineActionPlugin struct{ *stubPlugin }
+
+func (p declineActionPlugin) Actions(reg *Registry) error {
+	return reg.Register("stub.decline", Binding{Keys: []string{"d"}, Desc: "Declined", Section: "Stub"})
+}
+
+func (p declineActionPlugin) HandleAction(Action) (tea.Cmd, bool) { return nil, false }
+
+// receivedKey reports whether the plugin's Update recorded a KeyPressMsg whose
+// String() matches s.
+func receivedKey(p *stubPlugin, s string) bool {
+	for _, m := range p.gotMsgs {
+		if km, ok := m.(tea.KeyPressMsg); ok && km.String() == s {
+			return true
+		}
+	}
+	return false
 }
 
 // receivedMsg reports whether the plugin's Update recorded a stubMsg with the

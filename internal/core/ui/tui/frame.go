@@ -178,7 +178,7 @@ func (f *Frame) handleBuiltin(a Action) (tea.Model, tea.Cmd) {
 	switch a {
 	case ActionHelp:
 		if f.overlay.Empty() {
-			f.overlay.Push(buildHelpOverlay(f.registry, f.tr, f.locale, f.geo.Overlay.Width))
+			f.overlay.Push(buildHelpOverlay(f.registry, f.tr, f.locale, f.geo.Overlay.Width, f.geo.Overlay.Height))
 		} else {
 			f.overlay.Pop()
 		}

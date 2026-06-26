@@ -34,15 +34,20 @@ const (
 	helpColGap         = "  " // gap between the keys column and the description
 	helpRowIndent      = "  " // indent of a binding row under its section header
 	helpBorderPadCells = 4    // border (2) + horizontal padding (2) the box adds
+	helpBorderRows     = 2    // top + bottom border rows the box adds (vPadding is 0)
 )
 
 // buildHelpOverlay renders the registry's sections and bindings into a bordered
 // modal [Overlay], resolving the title, section labels, and descriptions through
-// tr with English fallbacks. width is the body region width the modal must fit
-// within; the content is clamped (MaxWidth) so the returned overlay never
-// exceeds it. locale is required because [i18n.Translator.T] takes it; Stage 0
-// callers may pass a fixed locale with a NopTranslator.
-func buildHelpOverlay(reg *Registry, tr i18n.Translator, locale string, width int) Overlay {
+// tr with English fallbacks. width and height are the body region dimensions the
+// modal must fit within; the content is clamped on BOTH axes (MaxWidth /
+// MaxHeight) so the returned overlay never exceeds the body region. This matters
+// because [Composite] does not clip — an oversized overlay would otherwise grow
+// the composited frame past the terminal bounds at small-but-permitted sizes
+// (tooNarrow only floors height at minHeight). locale is required because
+// [i18n.Translator.T] takes it; Stage 0 callers may pass a fixed locale with a
+// NopTranslator.
+func buildHelpOverlay(reg *Registry, tr i18n.Translator, locale string, width, height int) Overlay {
 	if tr == nil {
 		tr = i18n.NopTranslator{}
 	}
@@ -102,6 +107,14 @@ func buildHelpOverlay(reg *Registry, tr i18n.Translator, locale string, width in
 	if inner := width - helpBorderPadCells; inner > 0 {
 		box = box.MaxWidth(width)
 		content = lipgloss.NewStyle().MaxWidth(inner).Render(content)
+	}
+	// Height-aware: clamp the row count so the bordered box never exceeds the
+	// body region height. Without this, a help modal taller than a small (but
+	// permitted) terminal grows the composited frame past the screen, since
+	// Composite does not clip vertically.
+	if innerH := height - helpBorderRows; innerH > 0 {
+		box = box.MaxHeight(height)
+		content = lipgloss.NewStyle().MaxHeight(innerH).Render(content)
 	}
 
 	out := box.Render(content)

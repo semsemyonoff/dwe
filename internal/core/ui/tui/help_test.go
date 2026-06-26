@@ -25,7 +25,7 @@ func stripANSI(s string) string { return ansiSGR.ReplaceAllString(s, "") }
 // UPDATE_GOLDEN=1 go test ./internal/core/ui/tui/...
 func TestBuildHelpOverlay_golden(t *testing.T) {
 	reg := NewRegistry()
-	ov := buildHelpOverlay(reg, i18n.TranslatorOrNop(nil), "en", 80)
+	ov := buildHelpOverlay(reg, i18n.TranslatorOrNop(nil), "en", 80, 24)
 	got := stripANSI(ov.Content)
 
 	goldenPath := filepath.Join("testdata", "help_default.golden")
@@ -55,7 +55,7 @@ func TestBuildHelpOverlay_golden(t *testing.T) {
 func TestBuildHelpOverlay_fitsWidth(t *testing.T) {
 	reg := NewRegistry()
 	for _, width := range []int{60, 79, 80, 99, 100} {
-		ov := buildHelpOverlay(reg, i18n.TranslatorOrNop(nil), "en", width)
+		ov := buildHelpOverlay(reg, i18n.TranslatorOrNop(nil), "en", width, 24)
 
 		if ov.Width > width {
 			t.Errorf("width %d: overlay width = %d; want <= %d", width, ov.Width, width)
@@ -74,12 +74,32 @@ func TestBuildHelpOverlay_fitsWidth(t *testing.T) {
 	}
 }
 
+// TestBuildHelpOverlay_fitsHeight asserts the help body never exceeds the body
+// region height it is built for, down to the smallest permitted terminal. Without
+// the height clamp the modal overflows the frame because Composite does not clip
+// vertically (regression guard for the small-terminal corruption at h=10..13).
+func TestBuildHelpOverlay_fitsHeight(t *testing.T) {
+	reg := NewRegistry()
+	// Inner body heights at the smallest permitted terminals (h - statusLineRows
+	// - 2*(borderSize+vPadding)); the overlay must fit within each.
+	for _, height := range []int{4, 5, 6, 7, 10, 21} {
+		ov := buildHelpOverlay(reg, i18n.TranslatorOrNop(nil), "en", 80, height)
+
+		if ov.Height > height {
+			t.Errorf("height %d: overlay height = %d; want <= %d", height, ov.Height, height)
+		}
+		if got := lipgloss.Height(ov.Content); got != ov.Height {
+			t.Errorf("height %d: reported Height = %d; rendered = %d", height, ov.Height, got)
+		}
+	}
+}
+
 // TestBuildHelpOverlay_containsBindings asserts every built-in binding's keys and
 // description appear in the rendered modal, so the help is registry-driven rather
 // than hardcoded.
 func TestBuildHelpOverlay_containsBindings(t *testing.T) {
 	reg := NewRegistry()
-	ov := buildHelpOverlay(reg, i18n.TranslatorOrNop(nil), "en", 80)
+	ov := buildHelpOverlay(reg, i18n.TranslatorOrNop(nil), "en", 80, 24)
 
 	for _, sec := range reg.Sections() {
 		if !strings.Contains(ov.Content, sec.Name) {
@@ -102,7 +122,7 @@ func TestBuildHelpOverlay_containsBindings(t *testing.T) {
 // must not panic (it falls back to a NopTranslator).
 func TestBuildHelpOverlay_nilTranslator(t *testing.T) {
 	reg := NewRegistry()
-	ov := buildHelpOverlay(reg, nil, "en", 80)
+	ov := buildHelpOverlay(reg, nil, "en", 80, 24)
 	if ov.Content == "" {
 		t.Fatal("nil translator should still render help content")
 	}
