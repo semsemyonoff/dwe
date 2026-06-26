@@ -141,28 +141,28 @@ Key design decisions:
 - Create: `internal/core/ui/tui/geometry.go`
 - Create: `internal/core/ui/tui/geometry_test.go`
 
-- [ ] create `doc.go` with the package doc: purpose, layering rule (importable only from
+- [x] create `doc.go` with the package doc: purpose, layering rule (importable only from
   `core/ui/*` + `cli/`), and the "spike — provisional API" note
-- [ ] create `geometry.go`: `Region{X, Y, Width, Height}` and `Geometry` computing, from
+- [x] create `geometry.go`: `Region{X, Y, Width, Height}` and `Geometry` computing, from
   terminal `(w, h)`: outer frame region = `w × (h − statusLineRows)`, inner content region
   = outer minus border (1) + padding, and the overlay coordinate space (= inner body region,
   never the status line)
-- [ ] add `tooNarrow(w, h int) bool` / minimum-size threshold used by the fallback path
-- [ ] add a pure `layoutPanels(body Region, weights []int) []Region` splitting the body
+- [x] add `tooNarrow(w, h int) bool` / minimum-size threshold used by the fallback path
+- [x] add a pure `layoutPanels(body Region, weights []int) []Region` splitting the body
   horizontally by weight with a **deterministic remainder policy**: widths sum **exactly** to
   the body width (last panel absorbs the remainder, mirroring cmdbrowser's
   `right = total − left` math — never naive `w*weight/sum` per panel, which leaks a column at
   odd widths like 79/99). **Precondition**: weights are non-empty and all positive — the
   caller (`newFrame`, Task 7) validates this before launch, so `layoutPanels` itself has no
   error path (a documented programmer-error precondition, kept pure for `View`'s hot path)
-- [ ] document border ownership: plugins receive inner dims only; the frame draws the border
-- [ ] write tests: geometry at width buckets 60/79/80/99/100 (odd + even), asserting
+- [x] document border ownership: plugins receive inner dims only; the frame draws the border
+- [x] write tests: geometry at width buckets 60/79/80/99/100 (odd + even), asserting
   inner = outer − chrome, overlay region excludes the status line, and `tooNarrow`
   boundaries; `layoutPanels` — outer widths sum exactly to body width at every bucket
   (1-panel, 2-panel equal weights, 2-panel skewed weights), remainder lands deterministically
   on the last panel (the positive-non-empty-weights precondition is enforced by `newFrame`'s
   validation test in Task 7, not here)
-- [ ] run tests — must pass before next task
+- [x] run tests — must pass before next task
 
 ### Task 2: Provisional action-keymap registry
 
@@ -170,18 +170,18 @@ Key design decisions:
 - Create: `internal/core/ui/tui/registry.go`
 - Create: `internal/core/ui/tui/registry_test.go`
 
-- [ ] create `registry.go`: `Action` (string id type), `Binding{Keys []string, Desc,
+- [x] create `registry.go`: `Action` (string id type), `Binding{Keys []string, Desc,
   Section string}` plus **documented placeholder fields** `Aliases []string` and
   `Rebindable bool` (Stage 1) and a `Mouse` seam field (Stage 2) — all marked provisional
-- [ ] `Registry` with `Register(Action, Binding) error`, `Match(key string) (Action, bool)`,
+- [x] `Registry` with `Register(Action, Binding) error`, `Match(key string) (Action, bool)`,
   and `Sections() []Section` (ordered, for help generation)
-- [ ] guard against duplicate action / duplicate key registration (return error)
-- [ ] add the framework's built-in actions as constants (`ActionHelp`, `ActionQuit`,
+- [x] guard against duplicate action / duplicate key registration (return error)
+- [x] add the framework's built-in actions as constants (`ActionHelp`, `ActionQuit`,
   `ActionFocusNext`, `ActionFocusPrev`) with default bindings — marked "defaults, finalised
   in Stage 1"
-- [ ] write tests: register + match, duplicate detection (key + action), section ordering,
+- [x] write tests: register + match, duplicate detection (key + action), section ordering,
   built-in defaults present
-- [ ] run tests — must pass before next task
+- [x] run tests — must pass before next task
 
 ### Task 3: Plugin interface + test stub plugin (contract proof)
 
@@ -190,7 +190,7 @@ Key design decisions:
 - Create: `internal/core/ui/tui/stub_test.go`
 - Create: `internal/core/ui/tui/plugin_test.go`
 
-- [ ] create `plugin.go`: the `Plugin` interface covering
+- [x] create `plugin.go`: the `Plugin` interface covering
   - **lifecycle** — `Init() tea.Cmd`, `Close() error`
   - **resize** — `Resize(body Region)` (overall inner body region for plugins that cache)
   - **message routing** — `Update(tea.Msg) tea.Cmd`
@@ -210,22 +210,22 @@ Key design decisions:
     are framework-handled and never reach the plugin)
   - **overlay request** — `PendingOverlay() (Overlay, bool)`
   - **result** — `Result() any` (typed plugin result, returned unchanged by `Run`)
-- [ ] define the shared value types **here** (Go has no forward declarations): `PanelID`,
+- [x] define the shared value types **here** (Go has no forward declarations): `PanelID`,
   `Panel`, and `Overlay{Content string, Width, Height int}` — Task 5 adds the
   `overlayStack` + `Composite` **over this type**, it does not redefine it. (`Region` already
   exists from Task 1; `Action` from Task 2.) Document the contract as pinned-not-frozen.
-- [ ] document the View contract split: the plugin returns panel **strings**; only `Frame`
+- [x] document the View contract split: the plugin returns panel **strings**; only `Frame`
   (the `tea.Model`) returns `tea.View` and owns its envelope fields (`AltScreen`,
   `MouseMode`, `Cursor`) — Task 7. (In `bubbletea/v2 v2.0.7` `Model.View()` returns
   `tea.View`, not a string; see `cmdbrowser/model.go:390`, `statustui/tui.go:319`.)
-- [ ] create `stub_test.go`: a minimal `stubPlugin` implementing every method — declares two
+- [x] create `stub_test.go`: a minimal `stubPlugin` implementing every method — declares two
   weighted panels, registers a couple of actions with a `HandleAction` that records the
   invoked action, returns a fixed status context, records every `Update` msg it receives
   (for the async-preservation test), and exposes a typed result
-- [ ] write `plugin_test.go`: assert `stubPlugin` satisfies `Plugin`; assert lifecycle
+- [x] write `plugin_test.go`: assert `stubPlugin` satisfies `Plugin`; assert lifecycle
   ordering (`Init` → updates → `Close`); assert `Actions` populates a registry and a matched
   plugin action routes through `HandleAction`
-- [ ] run tests — must pass before next task
+- [x] run tests — must pass before next task
 
 ### Task 4: Focus manager
 
@@ -234,16 +234,16 @@ Key design decisions:
 - Create: `internal/core/ui/tui/focus_test.go`
 - Create: `internal/core/ui/tui/palette.go`
 
-- [ ] create `palette.go`: `focusedBorder()` / `unfocusedBorder()` returning v2
+- [x] create `palette.go`: `focusedBorder()` / `unfocusedBorder()` returning v2
   `lipgloss.Style` built from `styles.ColorBorder()` / `styles.ColorAccent()` accessors —
   the single styling bridge for panel borders (no v1 styles)
-- [ ] create `focus.go`: `focusManager` tracking the active `PanelID` across the plugin's
+- [x] create `focus.go`: `focusManager` tracking the active `PanelID` across the plugin's
   declared panels, with `Next()`, `Prev()`, `Set(PanelID)`, `Active() PanelID`, and
   `BorderFor(PanelID) lipgloss.Style`
-- [ ] handle the zero/one-panel cases (no-op cycling) and unknown PanelID
-- [ ] write tests: cycle Next/Prev wraps correctly, Set to known/unknown id, BorderFor
+- [x] handle the zero/one-panel cases (no-op cycling) and unknown PanelID
+- [x] write tests: cycle Next/Prev wraps correctly, Set to known/unknown id, BorderFor
   returns focused style only for the active panel
-- [ ] run tests — must pass before next task
+- [x] run tests — must pass before next task
 
 ### Task 5: Overlay manager + ANSI-aware centred compositing
 
@@ -251,30 +251,30 @@ Key design decisions:
 - Create: `internal/core/ui/tui/overlay.go`
 - Create: `internal/core/ui/tui/overlay_test.go`
 
-- [ ] **discovery first**: evaluate lipgloss v2's built-in `NewLayer(content).X().Y().Z()`
+- [x] **discovery first**: evaluate lipgloss v2's built-in `NewLayer(content).X().Y().Z()`
   + `NewCompositor(layers...).Render()` + `Compositor.Hit(x,y) LayerHit` (`lipgloss/v2
   @v2.0.4/layer.go:206`) as the compositing/hit-test substrate — adopt it rather than
   hand-rolling ANSI cell math (the spec's own § 4/§ 7 width-semantics risk). Record the
   decision in `overlay.go`; only hand-roll if a concrete gap (e.g. dimming) forces it, and
   document why
-- [ ] create `overlay.go`: an `overlayStack` over the **Task 3 `Overlay` type** (do not
+- [x] create `overlay.go`: an `overlayStack` over the **Task 3 `Overlay` type** (do not
   redefine it) with `Push`/`Pop`/`Top`/`Empty` enforcing **mutual exclusivity** (one visible
   modal). Add methods to `Overlay` here if needed — never a second type definition
-- [ ] `Composite(base string, ov Overlay, body Region) string` — centre the overlay over the
+- [x] `Composite(base string, ov Overlay, body Region) string` — centre the overlay over the
   body region via the lipgloss `Compositor` (base layer + centred overlay layer)
-- [ ] **pin the dimming strategy**: dimming applies to the **entire body region only** (the
+- [x] **pin the dimming strategy**: dimming applies to the **entire body region only** (the
   body string is re-rendered through a muted style before the overlay layer is placed); the
   **status line is composed after/outside `Composite` and is never dimmed**. Document that
   `Composite` receives only the body string, not the full frame, so it structurally cannot
   touch the status row
-- [ ] encode the **clicks-outside-swallowed-not-dismissed** policy as a documented constant
+- [x] encode the **clicks-outside-swallowed-not-dismissed** policy as a documented constant
   + a single Stage-2 seam — do **not** build a bespoke zone classifier; Stage 2's mouse
   layer chooses the hit-test mechanism (expected: `Compositor.Hit`/`LayerHit.Bounds()`)
-- [ ] write tests: centring math at width buckets, ANSI-width safety (styled base preserved),
+- [x] write tests: centring math at width buckets, ANSI-width safety (styled base preserved),
   the body **is dimmed** beneath the overlay, the overlay does **not** change the body
   region's total dimensions, stack mutual-exclusion. (The "status line not dimmed" assertion
   lives in Task 7, where the status line and body are composed together.)
-- [ ] run tests — must pass before next task
+- [x] run tests — must pass before next task
 
 ### Task 6: `?`-modal help generated from the registry
 
@@ -283,22 +283,22 @@ Key design decisions:
 - Create: `internal/core/ui/tui/help_test.go`
 - Create: `internal/core/ui/tui/testdata/help_default.golden`
 
-- [ ] create `help.go`: `buildHelpOverlay(reg *Registry, tr i18n.Translator, locale string,
+- [x] create `help.go`: `buildHelpOverlay(reg *Registry, tr i18n.Translator, locale string,
   width int) Overlay` rendering the registry's sections/bindings into the modal body
   (section label · keys · description rows, per the spec mockup), width-aware. `locale` is
   required because `Translator.T(locale, uiKey, fallback)` takes it
   (`internal/shared/i18n/store.go:65`); Stage 0 may pass `i18n.TranslatorOrNop(nil)` + a
   fixed locale and defer real wiring to the migration stages
-- [ ] resolve section/label strings through the `Translator` with English fallbacks; reserve
+- [x] resolve section/label strings through the `Translator` with English fallbacks; reserve
   and document the framework i18n key namespace (e.g. `tui.help.section.*`). **Defer the
   final namespace decision to Stage 1** (where keys are locked); for Stage 0, English
   fallbacks via `TranslatorOrNop` mean no YAML keys are added yet, so the `ui:` unknown-key
   validator (`internal/core/validate/config/ui.go:74`) is not triggered — note this so the
   migration stages register the namespace before adding real keys
-- [ ] write `help_test.go`: golden help-modal contents for the built-in registry; assert the
+- [x] write `help_test.go`: golden help-modal contents for the built-in registry; assert the
   help body fits within the body region width
-- [ ] add `testdata/help_default.golden`
-- [ ] run tests — must pass before next task
+- [x] add `testdata/help_default.golden`
+- [x] run tests — must pass before next task
 
 ### Task 7: `Frame` assembly — Update/View loop, status line, message routing
 
@@ -312,16 +312,16 @@ Key design decisions:
 - Create: `internal/core/ui/tui/testdata/frame_100.golden`
 - Create: `internal/core/ui/tui/testdata/frame_help_open.golden`
 
-- [ ] create `frame.go`: `Frame` (the `tea.Model`) holding the plugin, registry, focus
+- [x] create `frame.go`: `Frame` (the `tea.Model`) holding the plugin, registry, focus
   manager, overlay stack, geometry, and brand/project strings; constructed via
   `newFrame(Plugin, ...opt) (*Frame, error)`. Options carry a **private** `frameOptions{mouse
   bool, brand, project string}` — defined **here**, not `RunOptions` (Task 8), so the package
   builds after this task in isolation; Task 8 maps `RunOptions` into `frameOptions`
-- [ ] `newFrame` validates construction **before** launch and returns an error on: a
+- [x] `newFrame` validates construction **before** launch and returns an error on: a
   duplicate action/key (`plugin.Actions(registry)` error) **and** invalid panel layout
   (`Panels()` empty or any non-positive `Weight`). Both fail at construction, never at `View`
-- [ ] `Init() tea.Cmd`: delegate to `plugin.Init()` (so plugin startup commands run)
-- [ ] `Update`: `tea.WindowSizeMsg` → recompute geometry + call `plugin.Resize(body)`;
+- [x] `Init() tea.Cmd`: delegate to `plugin.Init()` (so plugin startup commands run)
+- [x] `Update`: `tea.WindowSizeMsg` → recompute geometry + call `plugin.Resize(body)`;
   **modal input policy** — when an overlay is open, key msgs are handled by the framework
   (built-in help-close / quit) and plugin **action keys are swallowed**, NOT routed to
   `plugin.HandleAction` (no acting "behind" the modal); when no overlay is open, key msgs →
@@ -331,7 +331,7 @@ Key design decisions:
   drain `plugin.PendingOverlay()` after **both** a `HandleAction` call and a `plugin.Update`
   forward, so an action-triggered overlay appears immediately. **Batch** framework + plugin
   commands via `tea.Batch`
-- [ ] `View() tea.View`: `layoutPanels` (Task 1) splits the body into per-panel **outer**
+- [x] `View() tea.View`: `layoutPanels` (Task 1) splits the body into per-panel **outer**
   regions from `Panels()` weights (already validated in `newFrame`); derive each panel's
   **inner** region (subtract border/padding once) and pass it to `plugin.ViewPanel(id, inner)`
   — the single outer→inner subtraction avoids double-counting the border; set the focus
@@ -342,12 +342,12 @@ Key design decisions:
   line (brand+project left · plugin `StatusContext()` middle · `? help` right, width-aware
   truncation) **outside** `Composite` so it is never dimmed; return the whole thing wrapped
   in a `tea.View` whose envelope fields the **framework** owns
-- [ ] set `v.AltScreen = true` on the returned `tea.View` (alt-screen is a `tea.View` field
+- [x] set `v.AltScreen = true` on the returned `tea.View` (alt-screen is a `tea.View` field
   in `bubbletea/v2 v2.0.7`, **not** a program option — see `cmdbrowser/model.go:432`)
-- [ ] **mouse seam** in `View`: gate `v.MouseMode` on the private `frameOptions.mouse` flag
+- [x] **mouse seam** in `View`: gate `v.MouseMode` on the private `frameOptions.mouse` flag
   but hardcode `tea.MouseModeNone` this stage with a `// Stage 2` marker; on the message
   side, `tea.MouseMsg` is forwarded/ignored (also `// Stage 2`)
-- [ ] write `frame_test.go`: golden full-frame at 60/79/80/99/100 asserting every row ==
+- [x] write `frame_test.go`: golden full-frame at 60/79/80/99/100 asserting every row ==
   frame width via `lipgloss.Width` on `View().Content`; **rendered row count == terminal
   height** (no overflow) and the **status line is the final row**; status-line three-zone
   layout + middle truncation; help-open golden (overlay composited, status line still
@@ -360,8 +360,8 @@ Key design decisions:
   duplicate action/key returns an error and never launches); resize propagates the body
   region to the plugin; assert `Frame.View().AltScreen == true` and `MouseMode ==
   tea.MouseModeNone` (testable without a real terminal, as `cmdbrowser_test.go:168` does)
-- [ ] add the six `testdata/*.golden` files
-- [ ] run tests — must pass before next task
+- [x] add the six `testdata/*.golden` files
+- [x] run tests — must pass before next task
 
 ### Task 8: Launch helper + capability fallbacks (alt-screen, non-TTY, narrow)
 
@@ -369,7 +369,7 @@ Key design decisions:
 - Create: `internal/core/ui/tui/run.go`
 - Create: `internal/core/ui/tui/run_test.go`
 
-- [ ] create `run.go`: `RunOptions{Brand, Project string, Mouse bool, /* test seams */
+- [x] create `run.go`: `RunOptions{Brand, Project string, Mouse bool, /* test seams */
   input, output, isTTY, size}` and `Run(p Plugin, opts RunOptions) (any, error)` — the
   result is `Plugin.Result()` returned **unchanged** (typed result preserved; no wrapper
   type, matching Task 3's `Result() any`). `Run` is the **sole exported entry point** this
@@ -380,47 +380,47 @@ Key design decisions:
   must fall through to the default stdin/stdout, NOT pass nil. Alt-screen and mouse are
   **not** program options in v2 — they are owned by `Frame.View` (Task 7), fed via
   `frameOptions` mapped from `RunOptions`
-- [ ] `Run` builds the frame via `newFrame(p, ...)` and **returns its error** before any
+- [x] `Run` builds the frame via `newFrame(p, ...)` and **returns its error** before any
   program start (duplicate action/key surfaces here, not at runtime)
-- [ ] **cleanup**: defer teardown so `plugin.Close()` runs on normal quit AND error/interrupt
+- [x] **cleanup**: defer teardown so `plugin.Close()` runs on normal quit AND error/interrupt
   paths. `Close() error` must be handled errcheck-safely (repo runs `errcheck`): use a named
   return that surfaces the `Close` error **only when the program returned no error**, else
   explicitly `_ = plugin.Close()`. Document the chosen policy. Return the program error
   wrapped, else `plugin.Result()`
-- [ ] non-TTY → return a typed error **before** launch (no program start, no plugin Init)
-- [ ] narrow/tiny terminal (`tooNarrow`) → return a `ErrTooNarrow`/fallback sentinel so a
+- [x] non-TTY → return a typed error **before** launch (no program start, no plugin Init)
+- [x] narrow/tiny terminal (`tooNarrow`) → return a `ErrTooNarrow`/fallback sentinel so a
   caller can drop to a plain selector (the fallback UI itself is a later stage)
-- [ ] thread `RunOptions.Mouse` into the `Frame` so its `View` mouse-seam reads it; the flag
+- [x] thread `RunOptions.Mouse` into the `Frame` so its `View` mouse-seam reads it; the flag
   stays inert (`MouseModeNone`) this stage — default false
-- [ ] inject TTY/size/input/output via options so the paths are testable without a real
+- [x] inject TTY/size/input/output via options so the paths are testable without a real
   terminal; route the actual program run through a tiny package-private seam (e.g.
   `runProgram func(*tea.Program) (tea.Model, error)`, default `(*tea.Program).Run`) so the
   zero-value-input, mouse-flag, and close-error-precedence tests are deterministic without
   spinning a real event loop
-- [ ] write tests: non-TTY path returns the typed error and never starts a program (and never
+- [x] write tests: non-TTY path returns the typed error and never starts a program (and never
   calls `plugin.Init`); narrow path returns the fallback sentinel; **zero-value `RunOptions`
   does not disable input** (no `WithInput(nil)` — keyboard still live); `Mouse` flag reaches
   the frame (via `frameOptions`) but renders `MouseModeNone`; `plugin.Close()` runs on the
   error path **and** close-error precedence holds (Close error surfaces only when the program
   returned no error) (the alt-screen/mouse-field assertions live in Task 7's `frame_test.go`)
-- [ ] run tests — must pass before next task
+- [x] run tests — must pass before next task
 
 ### Task 9: Verify acceptance criteria
 
-- [ ] verify all Overview deliverables exist and are exercised by tests
-- [ ] verify the package builds: `go build ./internal/core/ui/tui/...`
-- [ ] verify **no v1** `github.com/charmbracelet/lipgloss` in the new package's **direct**
+- [x] verify all Overview deliverables exist and are exercised by tests
+- [x] verify the package builds: `go build ./internal/core/ui/tui/...`
+- [x] verify **no v1** `github.com/charmbracelet/lipgloss` in the new package's **direct**
   imports (NOT `-deps` — that is transitive and will legitimately show v1 via
   `core/ui/styles`, which imports v1 while exposing raw color accessors). Check direct
   imports only: `go list -f '{{join .Imports "\n"}}' ./internal/core/ui/tui/... | sort -u |
   grep -E 'github.com/charmbracelet/lipgloss$|internal/core/ui/cmdbrowser|internal/core/docs/tui|internal/core/ui/statustui'`
   returns nothing (a bare `rg '"github.com/charmbracelet/lipgloss"' internal/core/ui/tui` is
   an equivalent direct-source check)
-- [ ] verify `core/docs` is untouched (`git status` shows no changes there)
-- [ ] run focused suite: `go test ./internal/core/ui/tui/...`
-- [ ] run full suite: `make test`
-- [ ] run `make lint` — clean (gofmt/goimports/golangci-lint)
-- [ ] confirm golden buckets 60/79/80/99/100 + help-open + async-preservation all present
+- [x] verify `core/docs` is untouched (`git status` shows no changes there)
+- [x] run focused suite: `go test ./internal/core/ui/tui/...`
+- [x] run full suite: `make test`
+- [x] run `make lint` — clean (gofmt/goimports/golangci-lint)
+- [x] confirm golden buckets 60/79/80/99/100 + help-open + async-preservation all present
   and passing
 
 ### Task 10: [Final] Update documentation
@@ -428,13 +428,13 @@ Key design decisions:
 **Files:**
 - Modify: `docs/internals/packages.md`
 
-- [ ] add a `internal/core/ui/tui/` section: the package contract (Frame, geometry model,
+- [x] add a `internal/core/ui/tui/` section: the package contract (Frame, geometry model,
   overlay manager, focus manager, provisional registry, `Plugin` interface), the
   outer-vs-inner geometry rule, and the "spike — API finalised in Stage 1" caveat
-- [ ] record the `core/ui` layering rule: `tui` importable only from `core/ui/*` + `cli/`;
+- [x] record the `core/ui` layering rule: `tui` importable only from `core/ui/*` + `cli/`;
   note the planned `docstui` relocation (Stage 4) that keeps `core/docs` free of `core/ui`
-- [ ] run `make build` so the embedded-docs copy of `packages.md` is regenerated
-- [ ] move this plan to `docs/plans/completed/`
+- [x] run `make build` so the embedded-docs copy of `packages.md` is regenerated
+- [x] move this plan to `docs/plans/completed/`
 
 ## Post-Completion
 *Items requiring manual intervention or external systems — no checkboxes, informational only*
