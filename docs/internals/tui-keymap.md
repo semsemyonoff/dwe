@@ -131,18 +131,19 @@ with any existing key/alias, or with the binding's own canonical `Keys`, is an e
 rebinding config. No config loader is built yet — this is documented metadata only.
 See §7 for the future schema sketch.
 
-### 2.3 Mouse (Stage 2 seam)
+### 2.3 Mouse (wired in Stage 2)
 
-`Binding.Mouse string` holds a placeholder for a mouse trigger bound to the same
-action. Locked vocabulary (to be wired in Stage 2):
+`Binding.Mouse string` holds a mouse trigger bound to the same action, resolved
+via `Registry.MatchMouse(event string) (Action, bool)`. Locked vocabulary:
 
-- `"wheel-up"` — scrolling up
-- `"wheel-down"` — scrolling down
-- `"click"` — single click
-- `"double-click"` — double click
+- `"wheel-up"` — scrolling up (bound to `nav.up`)
+- `"wheel-down"` — scrolling down (bound to `nav.down`)
+- `"click"` — single click (frame-owned; intentionally NOT registered as a binding)
+- `"double-click"` — double click (bound to `select`)
 
-The field is not consulted by dispatch this stage. See §6 for frame-owned mouse
-behaviors that are NOT in the registry.
+`Registry.MatchMouse` scans registered bindings for a `Binding.Mouse` match; first
+match wins. `"click"` is intentionally never registered — it is handled directly by
+the frame's click-routing logic (see §6).
 
 ---
 
@@ -258,15 +259,34 @@ Stage 3 filter consumer (the function signature is already the drop-in shape).
 
 Locked in Stage 1; wired in Stage 2.
 
-### 6.1 Registry-bound mouse actions (Stage 2)
+### 6.1 Registry-bound mouse actions (wired in Stage 2)
 
-Default mouse bindings for stdlib actions (to be wired in Stage 2):
+Mouse is enabled when `RunOptions.Mouse = true` (per-program opt-in) and
+`TERM != "dumb"` (the `mouseCapable()` gate). When enabled, the frame sets
+`tea.MouseModeCellMotion` — click + wheel reporting, no motion spam. The mode
+is a fixed framework choice; per-program code only sets the opt-in flag.
+
+Default mouse bindings for stdlib actions, wired via `Binding.Mouse` +
+`Registry.MatchMouse`:
 
 | Mouse event     | Action      |
 |-----------------|-------------|
 | `wheel-up`      | `nav.up`    |
 | `wheel-down`    | `nav.down`  |
 | `double-click`  | `select`    |
+
+**Wheel coalescing** — the first wheel event arms a 16ms tick; subsequent events
+within the window accumulate into a signed delta; the tick flush dispatches
+`abs(delta)` Nav steps and resets (sum-never-drop: a trackpad burst → one render
+of N steps; slow wheel → N single steps). An open overlay clears the accumulator
+on push; the flush handler is a no-op while any overlay is open — a tick armed
+before a modal cannot dispatch Nav behind it.
+
+**Double-click** — a second left-click in the same panel + same cell within a
+400ms window (`doubleClickWindow`), gated by `!lastClick.t.IsZero()` (the zero
+`time.Time` is never a valid prior click; cleared in full after the Select fires
+so triple-click → exactly one Select). Scoped to panel hits only; clicks on blank
+space or the help-hint zone clear the record.
 
 ### 6.2 Frame-owned mouse behaviors (NOT in the registry)
 
@@ -277,8 +297,16 @@ all surfaces:
 |---------------------------|-----------------------------------------|
 | Click on panel            | Move focus to clicked panel             |
 | Click on help hint (status bar) | Open help modal (`ActionHelp`)   |
-| Click on tab              | Switch to clicked tab                   |
 | Click outside modal       | Swallowed (does not close the modal)    |
+| Click with overlay open   | All clicks swallowed (no dismiss)       |
+
+**Plugin-facing click forward (row-select / tab-switch)** — the `panelLocal(outer
+Region, x, y int) (lx, ly int)` helper translates an absolute click to
+panel-inner-local coordinates, but the forward to `plugin.HandleAction` for
+row-select and tab-switch is **deferred to Stage 3** (the cmdbrowser pilot),
+matching Stage 1's `routeWhileCapturing` deferral. The `Plugin` interface is
+**PINNED, not frozen** through Stage 3 — unchanged this stage, the forward seam
+lands with the first real consumer.
 
 ---
 

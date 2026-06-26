@@ -391,20 +391,20 @@ Key design decisions (settled in the Stage 2 brainstorm — encode, do not re-li
 - Modify: `docs/internals/tui-keymap.md`
 - Modify: `docs/internals/packages.md`
 
-- [ ] in `tui-keymap.md` §2.3 + §6: change "Stage 2 seam" / "to be wired in Stage 2" wording to
+- [x] in `tui-keymap.md` §2.3 + §6: change "Stage 2 seam" / "to be wired in Stage 2" wording to
   "wired (Stage 2)"; keep the registry-bound table (`wheel-up`→`nav.up`, `wheel-down`→`nav.down`,
   `double-click`→`select`) and the frame-owned table (click-on-panel→focus,
   click-on-help-hint→Help, click-outside-modal→swallow); add the resolved details — CellMotion
   mode + `TERM=dumb` gate + per-program opt-in, per-frame wheel coalescing (sum-never-drop),
   double-click cell+window rule, and that the **plugin-facing click forward (row-select /
   tab-switch) is deferred to Stage 3** with the `panelLocal` seam noted
-- [ ] in `packages.md`, update the `internal/core/ui/tui/` section: record the mouse layer
+- [x] in `packages.md`, update the `internal/core/ui/tui/` section: record the mouse layer
   (`MatchMouse` + `Binding.Mouse` wiring, `classifyHit` Region-math hit-test, wheel
   accumulator/tick-flush, double-click via injected `frameClock`, CellMotion enable gate); state
   explicitly that the `Plugin` interface stays **PINNED, not frozen** (unchanged this stage) and
   that plugin-click forwarding is deferred to Stage 3; keep the `core/ui` layering rule +
   `docstui` relocation note intact; link to `docs/internals/tui-keymap.md`
-- [ ] no test (documentation); correctness verified by `make build` + review in Task 7
+- [x] no test (documentation); correctness verified by `make build` + review in Task 7
 
 ### Task 7: Verify acceptance criteria
 
