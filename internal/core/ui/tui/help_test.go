@@ -4,13 +4,25 @@ import (
 	"os"
 	"path/filepath"
 	"regexp"
+	"slices"
 	"strings"
 	"testing"
+	"unicode"
 
 	"github.com/semsemyonoff/dwe/internal/shared/i18n"
 
 	"charm.land/lipgloss/v2"
 )
+
+// helpHasToken reports whether tok appears as a standalone token in the rendered
+// help content, splitting on whitespace and the key-list separator (","). It
+// avoids the false positives a raw substring check would hit on descriptions
+// that merely contain tok (e.g. "Describe" contains "esc").
+func helpHasToken(content, tok string) bool {
+	return slices.Contains(strings.FieldsFunc(content, func(r rune) bool {
+		return unicode.IsSpace(r) || r == ','
+	}), tok)
+}
 
 // ansiSGR matches the SGR escape sequences lipgloss emits (colors, bold, faint).
 // The help golden strips these so it stays byte-stable regardless of the
@@ -158,10 +170,12 @@ func TestBuildHelpOverlay_aliasesHiddenFromHelp(t *testing.T) {
 		}
 	}
 
-	// The alias must NOT appear in the modal as a standalone key token.
-	// We check that "esc" does not appear at all in the stripped content.
-	if strings.Contains(content, "esc") {
-		t.Errorf("help modal contains alias %q; aliases must be hidden from help", "esc")
+	// The alias must NOT appear in the modal as a key token. Tokenize on
+	// whitespace and the key separator so a future description that merely
+	// contains the substring "esc" (e.g. "Describe", "Reset") cannot false-trip
+	// this — only a standalone "esc" token (i.e. a leaked key) fails.
+	if helpHasToken(content, "esc") {
+		t.Errorf("help modal contains alias %q as a token; aliases must be hidden from help", "esc")
 	}
 
 	// Also verify via a plugin-registered action with an alias.
@@ -177,10 +191,10 @@ func TestBuildHelpOverlay_aliasesHiddenFromHelp(t *testing.T) {
 	ov2 := buildHelpOverlay(reg, i18n.TranslatorOrNop(nil), "en", 80, 24)
 	content2 := stripANSI(ov2.Content)
 
-	if !strings.Contains(content2, "x") {
+	if !helpHasToken(content2, "x") {
 		t.Error("help modal missing canonical key \"x\"")
 	}
-	if strings.Contains(content2, "y") {
+	if helpHasToken(content2, "y") {
 		t.Error("help modal contains alias \"y\"; aliases must be hidden from help")
 	}
 	// Alias "y" must still dispatch.

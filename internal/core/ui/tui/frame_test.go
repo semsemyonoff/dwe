@@ -269,6 +269,26 @@ func TestFrame_ModalInputSwallowed(t *testing.T) {
 	}
 }
 
+// TestFrame_EscClosesOverlayWithoutQuitting asserts the modal-input precedence
+// rule: while an overlay is open, "esc" closes the overlay rather than reaching
+// its ActionQuit alias and quitting the program.
+func TestFrame_EscClosesOverlayWithoutQuitting(t *testing.T) {
+	f, _ := newTestFrame(t, 80, frameGoldenHeight)
+	f.Update(key("?")) // open help
+	if f.overlay.Empty() {
+		t.Fatal("help overlay did not open")
+	}
+	_, cmd := f.Update(key("esc"))
+	if !f.overlay.Empty() {
+		t.Errorf("esc did not close the overlay while a modal was open")
+	}
+	if cmd != nil {
+		if _, isQuit := cmd().(tea.QuitMsg); isQuit {
+			t.Errorf("esc quit the program instead of closing the overlay")
+		}
+	}
+}
+
 // TestFrame_ResizePropagates asserts a WindowSizeMsg recomputes geometry and
 // hands the plugin the inner body region.
 func TestFrame_ResizePropagates(t *testing.T) {

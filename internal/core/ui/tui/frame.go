@@ -118,9 +118,10 @@ func (f *Frame) Init() tea.Cmd { return f.plugin.Init() }
 //   - Key messages route through the registry: built-ins (help/focus/quit) are
 //     framework-handled and never reach the plugin; a matched plugin action
 //     goes to plugin.HandleAction; an unmatched (or plugin-unhandled) key is
-//     forwarded raw to plugin.Update. When an overlay is open, ONLY the
-//     help-close / quit built-ins act — plugin action keys are SWALLOWED, not
-//     routed (no acting behind the modal).
+//     forwarded raw to plugin.Update. When an overlay is open, "esc" closes the
+//     overlay (taking precedence over its ActionQuit alias) and otherwise ONLY
+//     the help-close / quit built-ins act — plugin action keys are SWALLOWED,
+//     not routed (no acting behind the modal).
 //   - Every non-key message is always forwarded to plugin.Update (async
 //     preservation), including while the help overlay is open.
 //   - tea.MouseMsg is ignored this stage (Stage 2 seam).
@@ -154,9 +155,17 @@ func (f *Frame) handleKey(key tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 	keyStr := key.String()
 
 	if !f.overlay.Empty() {
-		// Modal open: only the help-close and quit built-ins act; everything
+		// Modal open: the frame's modal-input policy takes precedence over the
+		// registry. "esc" closes the overlay — it never reaches its ActionQuit
+		// alias while a modal is open (the Binding.Aliases precedence rule), so
+		// dismissing a modal must not quit the program. "?" toggles help closed
+		// and "q"/"ctrl+c" quit (the help-close / quit built-ins). Everything
 		// else (plugin actions, focus cycling, raw keys) is swallowed so the
 		// body never acts behind the modal.
+		if keyStr == "esc" {
+			f.overlay.Pop()
+			return f, nil
+		}
 		if a, ok := f.registry.Match(keyStr); ok {
 			switch a {
 			case ActionHelp, ActionQuit:

@@ -211,9 +211,11 @@ Similarly `y` = skip confirm (cmdbrowser) vs `y` = copy diagram (docs-browser).
 
 `esc` is a hidden alias on `ActionQuit`. Precedence:
 
-1. When a **non-capturing** overlay is open: the frame swallows `esc` as
-   ActionHelp/ActionQuit (the only built-ins that act while a modal is open). In
-   practice `esc` dismisses the overlay because the help action toggles it off.
+1. When a **non-capturing** overlay is open: the frame's modal-input policy
+   consumes `esc` to **close the overlay** (pop the top layer) before the registry
+   is consulted, so `esc` never reaches its `ActionQuit` alias while a modal is
+   open. `?` toggles help closed and `q`/`ctrl+c` quit; all other keys are
+   swallowed (no acting behind the modal).
 2. When a **capturing** overlay is open (`CapturesInput: true`): `esc` routes to
    `captureClose` (close the overlay) — the registry is bypassed entirely. See §5.
 3. In **normal mode** (no overlay): `esc` reaches `ActionQuit` via the alias.
