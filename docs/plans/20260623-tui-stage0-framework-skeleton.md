@@ -141,28 +141,28 @@ Key design decisions:
 - Create: `internal/core/ui/tui/geometry.go`
 - Create: `internal/core/ui/tui/geometry_test.go`
 
-- [ ] create `doc.go` with the package doc: purpose, layering rule (importable only from
+- [x] create `doc.go` with the package doc: purpose, layering rule (importable only from
   `core/ui/*` + `cli/`), and the "spike — provisional API" note
-- [ ] create `geometry.go`: `Region{X, Y, Width, Height}` and `Geometry` computing, from
+- [x] create `geometry.go`: `Region{X, Y, Width, Height}` and `Geometry` computing, from
   terminal `(w, h)`: outer frame region = `w × (h − statusLineRows)`, inner content region
   = outer minus border (1) + padding, and the overlay coordinate space (= inner body region,
   never the status line)
-- [ ] add `tooNarrow(w, h int) bool` / minimum-size threshold used by the fallback path
-- [ ] add a pure `layoutPanels(body Region, weights []int) []Region` splitting the body
+- [x] add `tooNarrow(w, h int) bool` / minimum-size threshold used by the fallback path
+- [x] add a pure `layoutPanels(body Region, weights []int) []Region` splitting the body
   horizontally by weight with a **deterministic remainder policy**: widths sum **exactly** to
   the body width (last panel absorbs the remainder, mirroring cmdbrowser's
   `right = total − left` math — never naive `w*weight/sum` per panel, which leaks a column at
   odd widths like 79/99). **Precondition**: weights are non-empty and all positive — the
   caller (`newFrame`, Task 7) validates this before launch, so `layoutPanels` itself has no
   error path (a documented programmer-error precondition, kept pure for `View`'s hot path)
-- [ ] document border ownership: plugins receive inner dims only; the frame draws the border
-- [ ] write tests: geometry at width buckets 60/79/80/99/100 (odd + even), asserting
+- [x] document border ownership: plugins receive inner dims only; the frame draws the border
+- [x] write tests: geometry at width buckets 60/79/80/99/100 (odd + even), asserting
   inner = outer − chrome, overlay region excludes the status line, and `tooNarrow`
   boundaries; `layoutPanels` — outer widths sum exactly to body width at every bucket
   (1-panel, 2-panel equal weights, 2-panel skewed weights), remainder lands deterministically
   on the last panel (the positive-non-empty-weights precondition is enforced by `newFrame`'s
   validation test in Task 7, not here)
-- [ ] run tests — must pass before next task
+- [x] run tests — must pass before next task
 
 ### Task 2: Provisional action-keymap registry
 
