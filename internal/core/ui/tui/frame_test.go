@@ -289,18 +289,90 @@ func TestFrame_EscClosesOverlayWithoutQuitting(t *testing.T) {
 	}
 }
 
+// TestFrame_QuitDispatch asserts the program's primary exit path: in normal mode
+// (no overlay) the quit keys route through the registry to ActionQuit and the
+// framework returns tea.Quit. "esc" reaches ActionQuit only here (no modal open);
+// the modal-open case is the negative covered by TestFrame_EscClosesOverlayWithoutQuitting.
+func TestFrame_QuitDispatch(t *testing.T) {
+	for _, k := range []string{"q", "ctrl+c", "esc"} {
+		t.Run(k, func(t *testing.T) {
+			f, p := newTestFrame(t, 80, frameGoldenHeight)
+			_, cmd := f.Update(key(k))
+			if !isQuitCmd(cmd) {
+				t.Errorf("%q in normal mode did not return tea.Quit", k)
+			}
+			if p.handledAction != "" {
+				t.Errorf("quit key %q leaked to plugin.HandleAction: %q", k, p.handledAction)
+			}
+		})
+	}
+}
+
+// TestFrame_MouseMsgSwallowed asserts a mouse message is ignored this stage: it
+// never reaches the plugin and the frame returns no command (the inert Stage 2 seam).
+func TestFrame_MouseMsgSwallowed(t *testing.T) {
+	f, p := newTestFrame(t, 80, frameGoldenHeight)
+	before := len(p.gotMsgs)
+	_, cmd := f.Update(tea.MouseClickMsg{})
+	if cmd != nil {
+		t.Errorf("mouse message produced a command; want nil (ignored this stage)")
+	}
+	if len(p.gotMsgs) != before {
+		t.Errorf("mouse message leaked to plugin.Update; gotMsgs grew from %d to %d", before, len(p.gotMsgs))
+	}
+}
+
 // TestFrame_ResizePropagates asserts a WindowSizeMsg recomputes geometry and
-// hands the plugin the inner body region.
+// hands the plugin the inner body region, and that the message itself is also
+// forwarded to plugin.Update (it is a non-key message — async preservation).
 func TestFrame_ResizePropagates(t *testing.T) {
 	f, p := newTestFrame(t, 80, frameGoldenHeight)
 	want := f.geo.Inner
 	if p.lastResize != want {
 		t.Errorf("plugin.Resize got %+v; want inner body region %+v", p.lastResize, want)
 	}
+	if !receivedWindowSize(p, 80, frameGoldenHeight) {
+		t.Errorf("WindowSizeMsg was not forwarded to plugin.Update; got %v", p.gotMsgs)
+	}
 	// A second resize re-propagates.
 	f.Update(tea.WindowSizeMsg{Width: 100, Height: 30})
 	if p.lastResize != f.geo.Inner {
 		t.Errorf("second resize: plugin.Resize got %+v; want %+v", p.lastResize, f.geo.Inner)
+	}
+	if !receivedWindowSize(p, 100, 30) {
+		t.Errorf("second WindowSizeMsg was not forwarded to plugin.Update; got %v", p.gotMsgs)
+	}
+}
+
+// TestFrame_StatusLineNarrowClamp asserts that when the fixed left/right zones
+// already meet or exceed the available width, renderStatusLine clamps the line to
+// exactly width cells (the no-room-for-centre branch).
+func TestFrame_StatusLineNarrowClamp(t *testing.T) {
+	f, _ := newTestFrame(t, 80, frameGoldenHeight)
+	for _, w := range []int{10, 12, 15} {
+		got := lipgloss.Width(stripANSI(f.renderStatusLine(w)))
+		if got != w {
+			t.Errorf("narrow status width = %d; want clamped to %d", got, w)
+		}
+	}
+}
+
+// TestFrame_BrandSegment covers all four brand/project presence combinations of
+// the left status zone.
+func TestFrame_BrandSegment(t *testing.T) {
+	tests := []struct {
+		brand, project, want string
+	}{
+		{"dwe", "demo", "dwe · demo"},
+		{"dwe", "", "dwe"},
+		{"", "demo", "demo"},
+		{"", "", ""},
+	}
+	for _, tc := range tests {
+		f := &Frame{opts: frameOptions{brand: tc.brand, project: tc.project}}
+		if got := f.brandSegment(); got != tc.want {
+			t.Errorf("brandSegment(brand=%q, project=%q) = %q; want %q", tc.brand, tc.project, got, tc.want)
+		}
 	}
 }
 
@@ -530,6 +602,26 @@ func receivedKey(p *stubPlugin, s string) bool {
 		}
 	}
 	return false
+}
+
+// receivedWindowSize reports whether the plugin's Update recorded a
+// WindowSizeMsg of the given dimensions.
+func receivedWindowSize(p *stubPlugin, w, h int) bool {
+	for _, m := range p.gotMsgs {
+		if ws, ok := m.(tea.WindowSizeMsg); ok && ws.Width == w && ws.Height == h {
+			return true
+		}
+	}
+	return false
+}
+
+// isQuitCmd reports whether cmd, when executed, yields a tea.QuitMsg.
+func isQuitCmd(cmd tea.Cmd) bool {
+	if cmd == nil {
+		return false
+	}
+	_, ok := cmd().(tea.QuitMsg)
+	return ok
 }
 
 // receivedMsg reports whether the plugin's Update recorded a stubMsg with the
