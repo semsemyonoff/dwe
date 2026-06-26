@@ -160,9 +160,9 @@ Plugin sections appear in registration order after the built-ins, in the order t
 plugin's `Actions` hook calls `Register` / `RegisterStandard`. Expected plugin
 section order for the migrated surfaces (Stages 3–5b):
 
-3. Filter
-4. Inspect
-5. (surface-specific: View, Tabs, etc.)
+1. Filter
+2. Inspect
+3. (surface-specific: View, Tabs, etc.)
 
 The golden file at `internal/core/ui/tui/testdata/help_default.golden` locks the
 built-in order byte-stable.

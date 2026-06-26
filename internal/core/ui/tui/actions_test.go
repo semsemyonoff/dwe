@@ -97,12 +97,11 @@ func TestStandardBinding_KnownActionReturnsBinding(t *testing.T) {
 	}
 }
 
-func TestRegisterStandard_CollisionWithBuiltinReturnsError(t *testing.T) {
+func TestRegisterStandard_KeyCollisionReturnsError(t *testing.T) {
 	t.Parallel()
-	// ActionQuit uses "q" and "ctrl+c" as built-in keys. Register an action
-	// whose stdlib default key collides with a built-in.
-	//
-	// We induce the collision by first pre-occupying a key that the stdlib
+	// RegisterStandard must surface a key collision regardless of whether the
+	// occupied key belongs to a built-in or a previously-registered plugin
+	// binding. We induce the collision by first pre-occupying a key the stdlib
 	// uses, then asking RegisterStandard to register that action.
 	r := NewRegistry()
 

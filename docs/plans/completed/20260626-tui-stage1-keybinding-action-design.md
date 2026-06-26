@@ -374,6 +374,7 @@ re-litigate):
 - [x] move this plan to `docs/plans/completed/`
 
 ## Post-Completion
+
 *Items requiring manual intervention or external systems — no checkboxes, informational only*
 
 **Manual verification** (deferred / optional):
