@@ -428,13 +428,13 @@ Key design decisions:
 **Files:**
 - Modify: `docs/internals/packages.md`
 
-- [ ] add a `internal/core/ui/tui/` section: the package contract (Frame, geometry model,
+- [x] add a `internal/core/ui/tui/` section: the package contract (Frame, geometry model,
   overlay manager, focus manager, provisional registry, `Plugin` interface), the
   outer-vs-inner geometry rule, and the "spike — API finalised in Stage 1" caveat
-- [ ] record the `core/ui` layering rule: `tui` importable only from `core/ui/*` + `cli/`;
+- [x] record the `core/ui` layering rule: `tui` importable only from `core/ui/*` + `cli/`;
   note the planned `docstui` relocation (Stage 4) that keeps `core/docs` free of `core/ui`
-- [ ] run `make build` so the embedded-docs copy of `packages.md` is regenerated
-- [ ] move this plan to `docs/plans/completed/`
+- [x] run `make build` so the embedded-docs copy of `packages.md` is regenerated
+- [x] move this plan to `docs/plans/completed/`
 
 ## Post-Completion
 *Items requiring manual intervention or external systems — no checkboxes, informational only*
