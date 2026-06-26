@@ -283,22 +283,22 @@ Key design decisions:
 - Create: `internal/core/ui/tui/help_test.go`
 - Create: `internal/core/ui/tui/testdata/help_default.golden`
 
-- [ ] create `help.go`: `buildHelpOverlay(reg *Registry, tr i18n.Translator, locale string,
+- [x] create `help.go`: `buildHelpOverlay(reg *Registry, tr i18n.Translator, locale string,
   width int) Overlay` rendering the registry's sections/bindings into the modal body
   (section label · keys · description rows, per the spec mockup), width-aware. `locale` is
   required because `Translator.T(locale, uiKey, fallback)` takes it
   (`internal/shared/i18n/store.go:65`); Stage 0 may pass `i18n.TranslatorOrNop(nil)` + a
   fixed locale and defer real wiring to the migration stages
-- [ ] resolve section/label strings through the `Translator` with English fallbacks; reserve
+- [x] resolve section/label strings through the `Translator` with English fallbacks; reserve
   and document the framework i18n key namespace (e.g. `tui.help.section.*`). **Defer the
   final namespace decision to Stage 1** (where keys are locked); for Stage 0, English
   fallbacks via `TranslatorOrNop` mean no YAML keys are added yet, so the `ui:` unknown-key
   validator (`internal/core/validate/config/ui.go:74`) is not triggered — note this so the
   migration stages register the namespace before adding real keys
-- [ ] write `help_test.go`: golden help-modal contents for the built-in registry; assert the
+- [x] write `help_test.go`: golden help-modal contents for the built-in registry; assert the
   help body fits within the body region width
-- [ ] add `testdata/help_default.golden`
-- [ ] run tests — must pass before next task
+- [x] add `testdata/help_default.golden`
+- [x] run tests — must pass before next task
 
 ### Task 7: `Frame` assembly — Update/View loop, status line, message routing
 
