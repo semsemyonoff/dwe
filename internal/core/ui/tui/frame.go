@@ -63,8 +63,10 @@ type Frame struct {
 
 // newFrame constructs a [Frame], validating the plugin's contract BEFORE
 // launch so a misconfigured plugin fails at construction, never at View time.
-// It returns an error on an empty panel set, a non-positive panel weight, or a
-// duplicate action/key surfaced by the plugin's Actions hook.
+// It returns an error on an empty panel set, an empty or duplicate panel ID
+// (the [PanelID] uniqueness invariant the focus manager and renderer key on), a
+// non-positive panel weight, or a duplicate action/key surfaced by the plugin's
+// Actions hook.
 func newFrame(p Plugin, opts ...frameOption) (*Frame, error) {
 	var fo frameOptions
 	for _, o := range opts {
@@ -75,7 +77,15 @@ func newFrame(p Plugin, opts ...frameOption) (*Frame, error) {
 	if len(panels) == 0 {
 		return nil, fmt.Errorf("tui: plugin declares no panels")
 	}
+	seen := make(map[PanelID]struct{}, len(panels))
 	for _, pl := range panels {
+		if pl.ID == "" {
+			return nil, fmt.Errorf("tui: panel has empty ID")
+		}
+		if _, dup := seen[pl.ID]; dup {
+			return nil, fmt.Errorf("tui: duplicate panel ID %q", pl.ID)
+		}
+		seen[pl.ID] = struct{}{}
 		if pl.Weight <= 0 {
 			return nil, fmt.Errorf("tui: panel %q has non-positive weight %d", pl.ID, pl.Weight)
 		}

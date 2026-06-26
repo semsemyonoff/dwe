@@ -310,6 +310,16 @@ func TestNewFrame_ConstructionErrors(t *testing.T) {
 			t.Error("newFrame accepted a panel with a non-positive weight")
 		}
 	})
+	t.Run("empty_id", func(t *testing.T) {
+		if _, err := newFrame(emptyIDPlugin{newStubPlugin()}); err == nil {
+			t.Error("newFrame accepted a panel with an empty ID")
+		}
+	})
+	t.Run("duplicate_id", func(t *testing.T) {
+		if _, err := newFrame(dupIDPlugin{newStubPlugin()}); err == nil {
+			t.Error("newFrame accepted panels sharing a duplicate ID")
+		}
+	})
 	t.Run("valid", func(t *testing.T) {
 		if _, err := newFrame(newStubPlugin()); err != nil {
 			t.Errorf("newFrame rejected a valid plugin: %v", err)
@@ -343,6 +353,21 @@ type badWeightPlugin struct{ *stubPlugin }
 
 func (p badWeightPlugin) Panels() []Panel {
 	return []Panel{{ID: "only", Title: "Only", Weight: 0}}
+}
+
+type emptyIDPlugin struct{ *stubPlugin }
+
+func (p emptyIDPlugin) Panels() []Panel {
+	return []Panel{{ID: "", Title: "Blank", Weight: 1}}
+}
+
+type dupIDPlugin struct{ *stubPlugin }
+
+func (p dupIDPlugin) Panels() []Panel {
+	return []Panel{
+		{ID: "same", Title: "First", Weight: 1},
+		{ID: "same", Title: "Second", Weight: 1},
+	}
 }
 
 // declineActionPlugin registers a key but declines the matched action, exercising
