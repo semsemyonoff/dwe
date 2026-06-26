@@ -155,11 +155,17 @@ func (r *Registry) Register(a Action, b Binding) error {
 		}
 	}
 
-	// Pre-commit: validate the Mouse event does not collide with an existing
-	// binding. MatchMouse linear-scans registration order and returns the first
-	// match, so a silent double-claim would be order-dependent — reject it here
-	// to match the strict key/alias contract above.
+	// Pre-commit: validate the Mouse event is part of the locked vocabulary and
+	// does not collide with an existing binding. "click" is frame-owned and is
+	// never a registrable binding (see [MatchMouse]); anything outside the locked
+	// set would be dead state that silently breaks the documented contract.
+	// MatchMouse linear-scans registration order and returns the first match, so
+	// a silent double-claim would be order-dependent — reject it here to match
+	// the strict key/alias contract above.
 	if b.Mouse != "" {
+		if !validMouseEvent(b.Mouse) {
+			return fmt.Errorf("tui: mouse event %q for action %q is not in the locked vocabulary (%q, %q, %q)", b.Mouse, a, mouseWheelUp, mouseWheelDown, mouseDoubleClick)
+		}
 		if owner, taken := r.MatchMouse(b.Mouse); taken {
 			return fmt.Errorf("tui: mouse event %q for action %q already bound to action %q", b.Mouse, a, owner)
 		}
@@ -188,6 +194,26 @@ func (r *Registry) Register(a Action, b Binding) error {
 func (r *Registry) Match(key string) (Action, bool) {
 	a, ok := r.keys[key]
 	return a, ok
+}
+
+// The locked mouse-event vocabulary. These are the only values [Register]
+// accepts in [Binding.Mouse]; "click" is deliberately absent — it is
+// frame-owned and never a registrable binding (see [Registry.MatchMouse]).
+const (
+	mouseWheelUp     = "wheel-up"
+	mouseWheelDown   = "wheel-down"
+	mouseDoubleClick = "double-click"
+)
+
+// validMouseEvent reports whether event is part of the locked mouse vocabulary
+// accepted by [Register].
+func validMouseEvent(event string) bool {
+	switch event {
+	case mouseWheelUp, mouseWheelDown, mouseDoubleClick:
+		return true
+	default:
+		return false
+	}
 }
 
 // MatchMouse resolves a mouse-event string to its action. The bool reports

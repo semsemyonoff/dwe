@@ -305,6 +305,25 @@ func TestRegistry_MouseCollisionRejected(t *testing.T) {
 	}
 }
 
+func TestRegistry_MouseVocabularyRejected(t *testing.T) {
+	t.Parallel()
+	// "click" is frame-owned and never registrable; anything outside the locked
+	// vocabulary is dead state that would silently break the MatchMouse contract.
+	for _, event := range []string{"click", "nonsense", "wheel-left", "Wheel-Up"} {
+		r := NewRegistry()
+		err := r.Register("plugin.bad", Binding{Keys: []string{"a"}, Mouse: event})
+		if err == nil {
+			t.Errorf("Register with Mouse=%q: err = nil; want vocabulary error", event)
+		}
+		if _, ok := r.Binding("plugin.bad"); ok {
+			t.Errorf("Mouse=%q: binding committed despite the error", event)
+		}
+		if got, ok := r.MatchMouse(event); ok {
+			t.Errorf("Mouse=%q: MatchMouse = %q, true; want false (not registered)", event, got)
+		}
+	}
+}
+
 func TestRegistry_AliasCollisionWithOwnCanonicalKeyReturnsError(t *testing.T) {
 	t.Parallel()
 	r := NewRegistry()

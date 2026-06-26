@@ -271,6 +271,9 @@ func (f *Frame) handleKey(key tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 		// body never acts behind the modal.
 		if keyStr == "esc" {
 			f.overlay.Pop()
+			// Crossing the overlay boundary resets double-click tracking — see
+			// the ActionHelp branch in handleBuiltin.
+			f.lastClick = lastClickRecord{}
 			return f, nil
 		}
 		if a, ok := f.registry.Match(keyStr); ok {
@@ -303,6 +306,10 @@ func (f *Frame) handleKey(key tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 func (f *Frame) handleBuiltin(a Action) (tea.Model, tea.Cmd) {
 	switch a {
 	case ActionHelp:
+		// Either branch crosses an overlay boundary, so reset the double-click
+		// record: a panel click followed by a keyboard help open/close must not
+		// pair with a later click on the same cell into a phantom double-click.
+		f.lastClick = lastClickRecord{}
 		if f.overlay.Empty() {
 			// Clear any pending wheel accumulation before pushing the modal.
 			// tea.Tick is one-shot and uncancellable; resetting here ensures
@@ -327,11 +334,13 @@ func (f *Frame) handleBuiltin(a Action) (tea.Model, tea.Cmd) {
 // drainOverlay pushes a plugin-requested overlay onto the stack. Mutual
 // exclusivity is structural (View only ever composites Top), so Push is safe.
 // It also clears any pending wheel accumulation so a stale tick cannot
-// dispatch Nav behind a plugin-triggered modal.
+// dispatch Nav behind a plugin-triggered modal, and resets the double-click
+// record so a click before the modal can never pair with one after it.
 func (f *Frame) drainOverlay() {
 	if ov, ok := f.plugin.PendingOverlay(); ok {
 		f.wheelAccum = 0
 		f.wheelArmed = false
+		f.lastClick = lastClickRecord{}
 		f.overlay.Push(ov)
 	}
 }
@@ -375,8 +384,9 @@ func (f *Frame) handleMouse(msg tea.MouseMsg) (tea.Model, tea.Cmd) {
 }
 
 // handleClick processes a left-click by classifying the hit zone first:
-//   - overlay open → both zoneModal and zoneOutsideModal are swallowed;
-//     outside does NOT dismiss the overlay (locked Stage 2 policy)
+//   - overlay open → both zoneModal and zoneOutsideModal are swallowed and
+//     clear lastClick; outside does NOT dismiss the overlay (locked Stage 2
+//     policy)
 //   - zoneHelpHint → toggle the help overlay; clear lastClick
 //   - zonePanel → set focus; then double-click test (same panel + same cell +
 //     within doubleClickWindow + lastClick not zero-sentinel); record otherwise
@@ -395,6 +405,10 @@ func (f *Frame) handleClick(m tea.MouseClickMsg) (tea.Model, tea.Cmd) {
 	zone, id := classifyHit(f.geo, f.panelRects(), f.helpHintRegion(), ov, m.X, m.Y)
 	switch zone {
 	case zoneModal, zoneOutsideModal:
+		// Swallowed while a modal is open. Clear the double-click record so a
+		// click before the overlay opened can never pair with one after it
+		// closes into a phantom double-click.
+		f.lastClick = lastClickRecord{}
 		return f, nil
 	case zoneHelpHint:
 		f.lastClick = lastClickRecord{}

@@ -1062,6 +1062,54 @@ func TestFrame_ClickRouting(t *testing.T) {
 		}
 	})
 
+	t.Run("keyboard_help_open_close_resets_double_click", func(t *testing.T) {
+		// Panel click, then a keyboard help open+close, then a click on the same
+		// cell within the window must NOT synthesize a Select — the overlay
+		// boundary resets the double-click record.
+		f, p := newMouseFrame(t, 80, frameGoldenHeight)
+		clk := testClock()
+		f.clock = clk
+		f.Update(leftClick(5, 5)) // first click — record
+		f.Update(key("?"))        // open help (clears lastClick)
+		f.Update(key("?"))        // close help (clears lastClick)
+		f.Update(leftClick(5, 5)) // same cell, within window — must be a fresh first click
+		if got := p.counts[ActionSelect]; got != 0 {
+			t.Errorf("help open/close between clicks: ActionSelect count = %d; want 0", got)
+		}
+	})
+
+	t.Run("esc_close_overlay_resets_double_click", func(t *testing.T) {
+		// Same as above but the overlay is dismissed via esc, which pops through
+		// a different code path; it must reset the double-click record too.
+		f, p := newMouseFrame(t, 80, frameGoldenHeight)
+		clk := testClock()
+		f.clock = clk
+		f.Update(leftClick(5, 5)) // first click — record
+		f.Update(key("?"))        // open help (clears lastClick)
+		f.Update(key("esc"))      // close help via esc (clears lastClick)
+		f.Update(leftClick(5, 5)) // same cell, within window
+		if got := p.counts[ActionSelect]; got != 0 {
+			t.Errorf("esc-close between clicks: ActionSelect count = %d; want 0", got)
+		}
+	})
+
+	t.Run("swallowed_overlay_click_resets_double_click", func(t *testing.T) {
+		// Panel click, plugin overlay opens, a click is swallowed while it is up,
+		// overlay closes, then a click on the original cell. The swallowed click
+		// must have cleared the record so no phantom Select fires.
+		f, p := newMouseFrame(t, 80, frameGoldenHeight)
+		clk := testClock()
+		f.clock = clk
+		f.Update(leftClick(5, 5)) // first click — record
+		f.overlay.Push(Overlay{Content: "modal", Width: 5, Height: 1})
+		f.Update(leftClick(5, 5)) // swallowed while overlay open (clears lastClick)
+		f.overlay.Pop()
+		f.Update(leftClick(5, 5)) // fresh first click after the modal closed
+		if got := p.counts[ActionSelect]; got != 0 {
+			t.Errorf("swallowed overlay click between clicks: ActionSelect count = %d; want 0", got)
+		}
+	})
+
 	t.Run("zero_clock_first_click_not_double_click", func(t *testing.T) {
 		// A clock that returns time.Time{} (zero): lastClick.t starts zero, so
 		// the first click at (0,0) must NOT be treated as a double-click
