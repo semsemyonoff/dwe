@@ -1,0 +1,147 @@
+package tui
+
+import (
+	"errors"
+	"fmt"
+	"io"
+	"os"
+
+	tea "charm.land/bubbletea/v2"
+
+	"github.com/charmbracelet/x/term"
+)
+
+// run.go is the framework's sole exported entry point this stage. Run owns the
+// terminal-capability gate (non-TTY → error, too-small → fallback sentinel),
+// tea.NewProgram construction, plugin teardown, and result extraction.
+// Alt-screen and the (inert) mouse seam are NOT program options in bubbletea/v2
+// — they are owned by Frame.View (Task 7), fed via frameOptions mapped from
+// RunOptions here. The unexported newFrame stays internal; Stage 0 adds no
+// public constructor because it has no importers.
+
+// ErrNotTTY is returned by [Run] when stdout is not a terminal. It is reported
+// BEFORE any program start, so the plugin's Init never runs on this path — a
+// caller can detect it and fall back to a non-interactive surface.
+var ErrNotTTY = errors.New("tui: stdout is not a terminal")
+
+// ErrTooNarrow is the fallback sentinel returned by [Run] when the terminal is
+// below the minimum usable size (see [tooNarrow]). A caller can drop to a plain
+// selector instead of rendering a torn frame; the fallback UI itself is a later
+// stage.
+var ErrTooNarrow = errors.New("tui: terminal too small for the framework")
+
+// RunOptions configures a [Run] launch. Brand/Project feed the status line;
+// Mouse is the inert Stage 2 seam (default false → MouseModeNone). The trailing
+// fields are unexported test seams so the non-TTY, narrow, zero-value-input,
+// mouse-flag, and close-error paths are deterministic without a real terminal:
+//
+//   - input / output override the program's stdio. They are appended as
+//     tea.WithInput / tea.WithOutput ONLY when non-nil — a zero-value RunOptions
+//     must fall through to the default stdin/stdout, because in bubbletea/v2
+//     WithInput(nil) DISABLES input rather than defaulting it.
+//   - isTTY / size override the terminal-capability probes (default: the real
+//     term.IsTerminal / term.GetSize on os.Stdout).
+type RunOptions struct {
+	Brand   string
+	Project string
+	Mouse   bool
+
+	// test seams (unexported — production callers leave them zero).
+	input  io.Reader
+	output io.Writer
+	isTTY  func() bool
+	size   func() (int, int, error)
+}
+
+// runProgram is the package-private seam through which [Run] drives the event
+// loop. Production uses (*tea.Program).Run; tests reassign it to return a chosen
+// model/error without spinning a real event loop. The model argument is the
+// frame passed to NewProgram, exposed so tests can inspect its envelope.
+var runProgram = func(_ tea.Model, p *tea.Program) (tea.Model, error) { return p.Run() }
+
+// defaultIsTTY / defaultSize are the real terminal probes used when the matching
+// RunOptions seam is nil.
+func defaultIsTTY() bool { return term.IsTerminal(os.Stdout.Fd()) }
+
+func defaultSize() (int, int, error) { return term.GetSize(os.Stdout.Fd()) }
+
+// buildProgramOptions maps the stdio seams onto tea.ProgramOptions. It appends a
+// WithInput / WithOutput ONLY for a non-nil seam, so a zero-value RunOptions
+// yields no options and the program keeps its default stdin/stdout (passing
+// WithInput(nil) would instead disable input in bubbletea/v2).
+func buildProgramOptions(opts RunOptions) []tea.ProgramOption {
+	var po []tea.ProgramOption
+	if opts.input != nil {
+		po = append(po, tea.WithInput(opts.input))
+	}
+	if opts.output != nil {
+		po = append(po, tea.WithOutput(opts.output))
+	}
+	return po
+}
+
+// Run launches a [Plugin] inside the framework [Frame] and returns the plugin's
+// typed Result UNCHANGED (no wrapper type).
+//
+// Capability gate, in order, BEFORE any program start (so Init never runs on a
+// rejected path):
+//
+//   - non-TTY → [ErrNotTTY]
+//   - terminal-size read failure → wrapped error
+//   - terminal below the minimum size → [ErrTooNarrow]
+//   - plugin contract violation (duplicate action/key, empty/zero-weight panels)
+//     → newFrame's error
+//
+// Teardown: once the frame is built, plugin.Close() is deferred so it runs on
+// the normal-quit AND error/interrupt paths. Close-error precedence: a Close
+// error surfaces ONLY when the program itself returned no error — a program
+// error always wins (it is the more useful diagnostic). Both are errcheck-safe.
+func Run(p Plugin, opts RunOptions) (result any, err error) {
+	isTTY := opts.isTTY
+	if isTTY == nil {
+		isTTY = defaultIsTTY
+	}
+	if !isTTY() {
+		return nil, ErrNotTTY
+	}
+
+	size := opts.size
+	if size == nil {
+		size = defaultSize
+	}
+	w, h, sizeErr := size()
+	if sizeErr != nil {
+		return nil, fmt.Errorf("tui: reading terminal size: %w", sizeErr)
+	}
+	if tooNarrow(w, h) {
+		return nil, ErrTooNarrow
+	}
+
+	frame, err := newFrame(p,
+		withBrand(opts.Brand),
+		withProject(opts.Project),
+		withMouse(opts.Mouse),
+	)
+	if err != nil {
+		// Construction error (duplicate action/key, invalid panels) surfaces here,
+		// before the program starts and before the plugin acquires resources — so
+		// no Close is owed.
+		return nil, err
+	}
+
+	// From here the plugin owns resources; Close must run on every exit path. The
+	// named-return policy lets a Close error surface only when the program
+	// returned no error.
+	defer func() {
+		cerr := p.Close()
+		if err == nil && cerr != nil {
+			err = cerr
+		}
+	}()
+
+	prog := tea.NewProgram(frame, buildProgramOptions(opts)...)
+	if _, runErr := runProgram(frame, prog); runErr != nil {
+		return nil, fmt.Errorf("tui: running program: %w", runErr)
+	}
+	return p.Result(), nil
+}

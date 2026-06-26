@@ -369,7 +369,7 @@ Key design decisions:
 - Create: `internal/core/ui/tui/run.go`
 - Create: `internal/core/ui/tui/run_test.go`
 
-- [ ] create `run.go`: `RunOptions{Brand, Project string, Mouse bool, /* test seams */
+- [x] create `run.go`: `RunOptions{Brand, Project string, Mouse bool, /* test seams */
   input, output, isTTY, size}` and `Run(p Plugin, opts RunOptions) (any, error)` — the
   result is `Plugin.Result()` returned **unchanged** (typed result preserved; no wrapper
   type, matching Task 3's `Result() any`). `Run` is the **sole exported entry point** this
@@ -380,30 +380,30 @@ Key design decisions:
   must fall through to the default stdin/stdout, NOT pass nil. Alt-screen and mouse are
   **not** program options in v2 — they are owned by `Frame.View` (Task 7), fed via
   `frameOptions` mapped from `RunOptions`
-- [ ] `Run` builds the frame via `newFrame(p, ...)` and **returns its error** before any
+- [x] `Run` builds the frame via `newFrame(p, ...)` and **returns its error** before any
   program start (duplicate action/key surfaces here, not at runtime)
-- [ ] **cleanup**: defer teardown so `plugin.Close()` runs on normal quit AND error/interrupt
+- [x] **cleanup**: defer teardown so `plugin.Close()` runs on normal quit AND error/interrupt
   paths. `Close() error` must be handled errcheck-safely (repo runs `errcheck`): use a named
   return that surfaces the `Close` error **only when the program returned no error**, else
   explicitly `_ = plugin.Close()`. Document the chosen policy. Return the program error
   wrapped, else `plugin.Result()`
-- [ ] non-TTY → return a typed error **before** launch (no program start, no plugin Init)
-- [ ] narrow/tiny terminal (`tooNarrow`) → return a `ErrTooNarrow`/fallback sentinel so a
+- [x] non-TTY → return a typed error **before** launch (no program start, no plugin Init)
+- [x] narrow/tiny terminal (`tooNarrow`) → return a `ErrTooNarrow`/fallback sentinel so a
   caller can drop to a plain selector (the fallback UI itself is a later stage)
-- [ ] thread `RunOptions.Mouse` into the `Frame` so its `View` mouse-seam reads it; the flag
+- [x] thread `RunOptions.Mouse` into the `Frame` so its `View` mouse-seam reads it; the flag
   stays inert (`MouseModeNone`) this stage — default false
-- [ ] inject TTY/size/input/output via options so the paths are testable without a real
+- [x] inject TTY/size/input/output via options so the paths are testable without a real
   terminal; route the actual program run through a tiny package-private seam (e.g.
   `runProgram func(*tea.Program) (tea.Model, error)`, default `(*tea.Program).Run`) so the
   zero-value-input, mouse-flag, and close-error-precedence tests are deterministic without
   spinning a real event loop
-- [ ] write tests: non-TTY path returns the typed error and never starts a program (and never
+- [x] write tests: non-TTY path returns the typed error and never starts a program (and never
   calls `plugin.Init`); narrow path returns the fallback sentinel; **zero-value `RunOptions`
   does not disable input** (no `WithInput(nil)` — keyboard still live); `Mouse` flag reaches
   the frame (via `frameOptions`) but renders `MouseModeNone`; `plugin.Close()` runs on the
   error path **and** close-error precedence holds (Close error surfaces only when the program
   returned no error) (the alt-screen/mouse-field assertions live in Task 7's `frame_test.go`)
-- [ ] run tests — must pass before next task
+- [x] run tests — must pass before next task
 
 ### Task 9: Verify acceptance criteria
 
