@@ -205,6 +205,24 @@ func TestComposite_ClampsOversizedOverlay(t *testing.T) {
 	}
 }
 
+// TestComposite_ZeroAreaBody asserts a degenerate (zero-span) body short-circuits
+// to the dimmed base instead of letting clampOverlay leave a stale full-size modal
+// — the resize path the guard protects. The output must match the base dimensions.
+func TestComposite_ZeroAreaBody(t *testing.T) {
+	base := rectBase(40, 1)
+	ov := Overlay{Content: "AAAA\nAAAA\nAAAA", Width: 4, Height: 3}
+
+	for _, body := range []Region{
+		{X: 0, Y: 0, Width: 40, Height: 0},
+		{X: 0, Y: 0, Width: 0, Height: 1},
+	} {
+		out := Composite(base, ov, body)
+		if got := lipgloss.Height(out); got != lipgloss.Height(base) {
+			t.Errorf("body %+v: composite height = %d; want %d", body, got, lipgloss.Height(base))
+		}
+	}
+}
+
 // TestOverlayClickPolicy pins the Stage 0 outside-click policy default and keeps
 // the documented Stage-2 seam constant referenced.
 func TestOverlayClickPolicy(t *testing.T) {

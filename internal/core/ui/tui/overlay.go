@@ -122,6 +122,13 @@ func dimStyle() lipgloss.Style {
 // therefore always has the same cell dimensions as base.
 func Composite(base string, ov Overlay, body Region) string {
 	dimmed := dimStyle().Render(base)
+	// A post-launch resize can drive either body span to zero (clampOverlay only
+	// trims an axis whose body span is positive, so a zero-area body would leave a
+	// stale full-size modal and grow the output past base). Return the dimmed base
+	// untouched in that degenerate case, preserving the same-dimensions invariant.
+	if body.Width <= 0 || body.Height <= 0 {
+		return dimmed
+	}
 	ov = clampOverlay(ov, body)
 	x, y := centerOffset(body, ov)
 

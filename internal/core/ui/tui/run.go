@@ -135,7 +135,7 @@ func Run(p Plugin, opts RunOptions) (result any, err error) {
 	defer func() {
 		cerr := p.Close()
 		if err == nil && cerr != nil {
-			err = cerr
+			err = fmt.Errorf("tui: closing plugin: %w", cerr)
 		}
 	}()
 
