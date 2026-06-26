@@ -190,7 +190,7 @@ Key design decisions:
 - Create: `internal/core/ui/tui/stub_test.go`
 - Create: `internal/core/ui/tui/plugin_test.go`
 
-- [ ] create `plugin.go`: the `Plugin` interface covering
+- [x] create `plugin.go`: the `Plugin` interface covering
   - **lifecycle** — `Init() tea.Cmd`, `Close() error`
   - **resize** — `Resize(body Region)` (overall inner body region for plugins that cache)
   - **message routing** — `Update(tea.Msg) tea.Cmd`
@@ -210,22 +210,22 @@ Key design decisions:
     are framework-handled and never reach the plugin)
   - **overlay request** — `PendingOverlay() (Overlay, bool)`
   - **result** — `Result() any` (typed plugin result, returned unchanged by `Run`)
-- [ ] define the shared value types **here** (Go has no forward declarations): `PanelID`,
+- [x] define the shared value types **here** (Go has no forward declarations): `PanelID`,
   `Panel`, and `Overlay{Content string, Width, Height int}` — Task 5 adds the
   `overlayStack` + `Composite` **over this type**, it does not redefine it. (`Region` already
   exists from Task 1; `Action` from Task 2.) Document the contract as pinned-not-frozen.
-- [ ] document the View contract split: the plugin returns panel **strings**; only `Frame`
+- [x] document the View contract split: the plugin returns panel **strings**; only `Frame`
   (the `tea.Model`) returns `tea.View` and owns its envelope fields (`AltScreen`,
   `MouseMode`, `Cursor`) — Task 7. (In `bubbletea/v2 v2.0.7` `Model.View()` returns
   `tea.View`, not a string; see `cmdbrowser/model.go:390`, `statustui/tui.go:319`.)
-- [ ] create `stub_test.go`: a minimal `stubPlugin` implementing every method — declares two
+- [x] create `stub_test.go`: a minimal `stubPlugin` implementing every method — declares two
   weighted panels, registers a couple of actions with a `HandleAction` that records the
   invoked action, returns a fixed status context, records every `Update` msg it receives
   (for the async-preservation test), and exposes a typed result
-- [ ] write `plugin_test.go`: assert `stubPlugin` satisfies `Plugin`; assert lifecycle
+- [x] write `plugin_test.go`: assert `stubPlugin` satisfies `Plugin`; assert lifecycle
   ordering (`Init` → updates → `Close`); assert `Actions` populates a registry and a matched
   plugin action routes through `HandleAction`
-- [ ] run tests — must pass before next task
+- [x] run tests — must pass before next task
 
 ### Task 4: Focus manager
 
