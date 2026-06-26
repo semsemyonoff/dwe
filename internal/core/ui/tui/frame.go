@@ -2,6 +2,7 @@ package tui
 
 import (
 	"fmt"
+	"os"
 
 	"github.com/semsemyonoff/dwe/internal/core/ui/styles"
 	"github.com/semsemyonoff/dwe/internal/shared/i18n"
@@ -24,9 +25,14 @@ import (
 // defined here (not in RunOptions, Task 8) so the package builds in isolation
 // after this task; Task 8's Run maps its public RunOptions into this struct.
 type frameOptions struct {
-	// mouse gates the Stage 2 mouse seam. It is plumbed through to View but
-	// rendered as tea.MouseModeNone this stage regardless of its value.
+	// mouse enables CellMotion mouse reporting (click + wheel, no motion) when
+	// the terminal is capable. Set per-program via RunOptions.Mouse; the
+	// rendered mode is MouseModeCellMotion only when this is true AND
+	// mouseCapable() returns true.
 	mouse bool
+	// termEnv returns the $TERM value for the capability gate. Defaults to
+	// os.Getenv("TERM") in newFrame; injectable from tests via withTermEnv.
+	termEnv func() string
 	// brand / project are the left-zone status-line strings (brand · project).
 	brand   string
 	project string
@@ -35,8 +41,15 @@ type frameOptions struct {
 // frameOption mutates the private frameOptions during [newFrame] construction.
 type frameOption func(*frameOptions)
 
-// withMouse sets the (inert, Stage 2) mouse seam flag.
+// withMouse enables or disables mouse reporting for this frame. When true,
+// View emits MouseModeCellMotion (click + wheel) provided the terminal is
+// capable (not TERM=dumb).
 func withMouse(on bool) frameOption { return func(o *frameOptions) { o.mouse = on } }
+
+// withTermEnv overrides the $TERM probe used by [Frame.mouseCapable]. Pass a
+// function returning the desired TERM value; used only in in-package tests to
+// avoid dependency on the real environment.
+func withTermEnv(fn func() string) frameOption { return func(o *frameOptions) { o.termEnv = fn } }
 
 // withBrand sets the status-line brand string.
 func withBrand(s string) frameOption { return func(o *frameOptions) { o.brand = s } }
@@ -72,6 +85,9 @@ func newFrame(p Plugin, opts ...frameOption) (*Frame, error) {
 	for _, o := range opts {
 		o(&fo)
 	}
+	if fo.termEnv == nil {
+		fo.termEnv = func() string { return os.Getenv("TERM") }
+	}
 
 	panels := p.Panels()
 	if len(panels) == 0 {
@@ -106,6 +122,13 @@ func newFrame(p Plugin, opts ...frameOption) (*Frame, error) {
 	}, nil
 }
 
+// mouseCapable reports whether the current terminal supports mouse reporting.
+// We do NOT actively probe for mouse support: setting CellMotion on a terminal
+// that does not understand the enable escape is harmless — the escape is simply
+// ignored. The gate exists only to keep TERM=dumb (keyboard-only
+// environments) from emitting the escape at all.
+func (f *Frame) mouseCapable() bool { return f.opts.termEnv() != "dumb" }
+
 // Init implements tea.Model. It delegates to the plugin so plugin startup
 // commands run; the framework has no startup command of its own this stage.
 func (f *Frame) Init() tea.Cmd { return f.plugin.Init() }
@@ -124,7 +147,7 @@ func (f *Frame) Init() tea.Cmd { return f.plugin.Init() }
 //     not routed (no acting behind the modal).
 //   - Every non-key message is always forwarded to plugin.Update (async
 //     preservation), including while the help overlay is open.
-//   - tea.MouseMsg is ignored this stage (Stage 2 seam).
+//   - tea.MouseMsg is routed to handleMouse (wired in Task 4; currently a no-op placeholder).
 //
 // After both a HandleAction call and a plugin.Update forward the framework
 // drains plugin.PendingOverlay so an action-triggered overlay appears
@@ -140,8 +163,8 @@ func (f *Frame) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case tea.KeyPressMsg:
 		return f.handleKey(m)
 	case tea.MouseMsg:
-		// Stage 2: the mouse layer lands here. For now mouse messages are
-		// ignored so the (inert) seam never acts.
+		// Stage 2: mouse routing is wired in handleMouse (Task 4). Until that
+		// task lands, mouse messages are forwarded here but not acted on.
 		return f, nil
 	default:
 		cmd := f.plugin.Update(msg)
@@ -270,7 +293,7 @@ func routeWhileCapturing(msg tea.Msg) captureDecision {
 // renders each through the plugin into its inner region, draws focus-aware
 // borders, composites the active overlay centred over the body, and appends the
 // status line beneath. The returned tea.View carries the framework-owned
-// envelope (AltScreen on; the inert mouse seam).
+// envelope (AltScreen on; CellMotion mouse when enabled and capable).
 func (f *Frame) View() tea.View {
 	body := f.renderBody()
 	if ov, ok := f.overlay.Top(); ok {
@@ -288,10 +311,15 @@ func (f *Frame) View() tea.View {
 	// the framework owns it so callers never put the program in full-window
 	// mode themselves.
 	v.AltScreen = true
-	// Stage 2 mouse seam: the opts.mouse flag is plumbed but the rendered mode
-	// is hardcoded to None this stage. Stage 2 lights this up.
-	v.MouseMode = tea.MouseModeNone
-	_ = f.opts.mouse // read so the seam is wired; inert until Stage 2.
+	// CellMotion enables click + wheel reporting without motion spam. We use
+	// the fixed CellMotion mode (not AllMotion) per the spec. The gate only
+	// suppresses the enable escape on TERM=dumb; on any other terminal the
+	// escape is harmless even if the terminal does not understand it.
+	if f.opts.mouse && f.mouseCapable() {
+		v.MouseMode = tea.MouseModeCellMotion
+	} else {
+		v.MouseMode = tea.MouseModeNone
+	}
 	return v
 }
 

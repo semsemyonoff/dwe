@@ -212,8 +212,12 @@ func TestRun_CloseErrorPrecedence(t *testing.T) {
 }
 
 // TestRun_MouseFlagReachesFrame asserts RunOptions.Mouse threads into the frame
-// (via frameOptions) but the rendered envelope stays MouseModeNone this stage.
+// (via frameOptions) and View emits CellMotion when mouse=true on a capable
+// terminal. We pin TERM=xterm-256color so the capability gate passes on CI
+// regardless of the host environment; the TERM=dumb path is covered by the
+// frame-level TestFrame_MouseCapabilityGate.
 func TestRun_MouseFlagReachesFrame(t *testing.T) {
+	t.Setenv("TERM", "xterm-256color")
 	for _, mouse := range []bool{false, true} {
 		probe := stubRunProgram(t, nil)
 		_, err := Run(newStubPlugin(), RunOptions{
@@ -231,8 +235,12 @@ func TestRun_MouseFlagReachesFrame(t *testing.T) {
 		if f.opts.mouse != mouse {
 			t.Errorf("mouse=%v: frame.opts.mouse = %v; want %v", mouse, f.opts.mouse, mouse)
 		}
-		if got := f.View().MouseMode; got != tea.MouseModeNone {
-			t.Errorf("mouse=%v: MouseMode = %v; want MouseModeNone (inert Stage 2 seam)", mouse, got)
+		var wantMode tea.MouseMode
+		if mouse {
+			wantMode = tea.MouseModeCellMotion
+		}
+		if got := f.View().MouseMode; got != wantMode {
+			t.Errorf("mouse=%v: MouseMode = %v; want %v", mouse, got, wantMode)
 		}
 	}
 }

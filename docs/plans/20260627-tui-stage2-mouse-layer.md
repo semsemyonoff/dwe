@@ -216,21 +216,21 @@ Key design decisions (settled in the Stage 2 brainstorm — encode, do not re-li
 - Modify: `internal/core/ui/tui/frame_test.go`
 - Modify: `internal/core/ui/tui/run_test.go`
 
-- [ ] add a `termEnv func() string` field to `frameOptions` (default `func() string {
+- [x] add a `termEnv func() string` field to `frameOptions` (default `func() string {
   return os.Getenv("TERM") }`, set in `newFrame` when nil) plus a `withTermEnv(func() string)
   frameOption` so the capability probe is injectable from in-package tests
-- [ ] add `func (f *Frame) mouseCapable() bool { return f.opts.termEnv() != "dumb" }` with a doc
+- [x] add `func (f *Frame) mouseCapable() bool { return f.opts.termEnv() != "dumb" }` with a doc
   comment explaining we do NOT actively probe for a mouse (CellMotion is harmless on non-mouse
   terminals — the enable escape is ignored); the gate only keeps `TERM=dumb` keyboard-only
-- [ ] in `View`, replace the hardcoded `v.MouseMode = tea.MouseModeNone` + `_ = f.opts.mouse`
+- [x] in `View`, replace the hardcoded `v.MouseMode = tea.MouseModeNone` + `_ = f.opts.mouse`
   seam with: `tea.MouseModeCellMotion` when `f.opts.mouse && f.mouseCapable()`, else
   `tea.MouseModeNone`; drop the `// Stage 2` placeholder comment, document CellMotion (click +
   wheel, no motion) as the fixed mode
-- [ ] refresh the now-stale "inert / MouseModeNone this stage" doc comments lit up by this task
+- [x] refresh the now-stale "inert / MouseModeNone this stage" doc comments lit up by this task
   (English, per AGENTS.md): `frameOptions.mouse` (`frame.go:28`), `withMouse` (`frame.go:38`),
   `RunOptions.Mouse` (`run.go:36`), and the `run.go` package comment "the (inert) mouse seam"
   (lines 18-22) — they now describe an active CellMotion gate, not an inert seam
-- [ ] **update the two existing assertions that hardcode `MouseModeNone` for `mouse=true`** (they
+- [x] **update the two existing assertions that hardcode `MouseModeNone` for `mouse=true`** (they
   break the moment View lights up CellMotion): `TestFrame_View_Envelope`
   (`frame_test.go:139`, assert at `:146`) and `TestRun_MouseFlagReachesFrame`
   (`run_test.go:216`, assert at `:234`) — make each branch on the mouse flag (and, for the frame
@@ -240,11 +240,11 @@ Key design decisions (settled in the Stage 2 brainstorm — encode, do not re-li
   **`t.Setenv("TERM", "xterm-256color")`** (Codex finding #4) before asserting `CellMotion` —
   otherwise a CI shell running `go test` with `TERM=dumb` would fail the assertion on correct
   code; the `TERM=dumb` path is covered separately by the frame-level `withTermEnv` test
-- [ ] write tests: `opts.mouse=false` → `View().MouseMode == MouseModeNone`; `opts.mouse=true`
+- [x] write tests: `opts.mouse=false` → `View().MouseMode == MouseModeNone`; `opts.mouse=true`
   + `withTermEnv` returns non-dumb → `MouseModeCellMotion`; `opts.mouse=true` + `withTermEnv`
   returns `"dumb"` → `MouseModeNone`; default `termEnv` is wired (nil seam → real `os.Getenv`,
   no panic)
-- [ ] run `go test ./internal/core/ui/tui/...` — must pass before next task
+- [x] run `go test ./internal/core/ui/tui/...` — must pass before next task
 
 ### Task 2: `Registry.MatchMouse` + stdlib mouse-binding defaults
 

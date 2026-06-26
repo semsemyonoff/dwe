@@ -135,18 +135,56 @@ func TestFrame_HelpOpenSmallTerminal(t *testing.T) {
 }
 
 // TestFrame_View_Envelope asserts the framework owns the tea.View envelope:
-// AltScreen is on and the mouse seam renders MouseModeNone this stage.
+// AltScreen is always on; MouseMode is CellMotion when mouse=true + capable,
+// and None when mouse=false or TERM=dumb.
 func TestFrame_View_Envelope(t *testing.T) {
+	nonDumb := withTermEnv(func() string { return "xterm-256color" })
 	for _, mouse := range []bool{false, true} {
-		f, _ := newTestFrame(t, 80, frameGoldenHeight, withMouse(mouse))
+		f, _ := newTestFrame(t, 80, frameGoldenHeight, withMouse(mouse), nonDumb)
 		v := f.View()
 		if !v.AltScreen {
 			t.Errorf("mouse=%v: View must request AltScreen", mouse)
 		}
-		if v.MouseMode != tea.MouseModeNone {
-			t.Errorf("mouse=%v: MouseMode = %v; want MouseModeNone (Stage 2 seam inert)", mouse, v.MouseMode)
+		var wantMode tea.MouseMode
+		if mouse {
+			wantMode = tea.MouseModeCellMotion
+		}
+		if v.MouseMode != wantMode {
+			t.Errorf("mouse=%v: MouseMode = %v; want %v", mouse, v.MouseMode, wantMode)
 		}
 	}
+}
+
+// TestFrame_MouseCapabilityGate table-tests the capability gate: mouse=false
+// always yields None; mouse=true + non-dumb yields CellMotion; mouse=true +
+// TERM=dumb yields None; the default termEnv (real os.Getenv) does not panic.
+func TestFrame_MouseCapabilityGate(t *testing.T) {
+	t.Run("mouse_off_always_none", func(t *testing.T) {
+		f, _ := newTestFrame(t, 80, frameGoldenHeight,
+			withMouse(false), withTermEnv(func() string { return "xterm-256color" }))
+		if got := f.View().MouseMode; got != tea.MouseModeNone {
+			t.Errorf("mouse=false non-dumb: got %v; want MouseModeNone", got)
+		}
+	})
+	t.Run("mouse_on_non_dumb", func(t *testing.T) {
+		f, _ := newTestFrame(t, 80, frameGoldenHeight,
+			withMouse(true), withTermEnv(func() string { return "xterm-256color" }))
+		if got := f.View().MouseMode; got != tea.MouseModeCellMotion {
+			t.Errorf("mouse=true xterm-256color: got %v; want MouseModeCellMotion", got)
+		}
+	})
+	t.Run("mouse_on_dumb_term", func(t *testing.T) {
+		f, _ := newTestFrame(t, 80, frameGoldenHeight,
+			withMouse(true), withTermEnv(func() string { return "dumb" }))
+		if got := f.View().MouseMode; got != tea.MouseModeNone {
+			t.Errorf("mouse=true TERM=dumb: got %v; want MouseModeNone", got)
+		}
+	})
+	t.Run("default_termenv_no_panic", func(t *testing.T) {
+		// No withTermEnv — the default os.Getenv("TERM") path must not panic.
+		f, _ := newTestFrame(t, 80, frameGoldenHeight, withMouse(true))
+		_ = f.View()
+	})
 }
 
 // TestFrame_StatusLineZones asserts the three-zone status line: brand/project on
