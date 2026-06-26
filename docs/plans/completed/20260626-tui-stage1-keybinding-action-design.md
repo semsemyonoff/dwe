@@ -366,12 +366,12 @@ re-litigate):
 
 ### Task 8: [Final] Finalize documentation + archive plan
 
-- [ ] confirm `docs/internals/tui-keymap.md` + the `packages.md` `tui` section read
+- [x] confirm `docs/internals/tui-keymap.md` + the `packages.md` `tui` section read
   coherently together (no stale "provisional/spike" language remaining in either)
-- [ ] update `CLAUDE.md`/`AGENTS.md` only if a new load-bearing pattern emerged
+- [x] update `CLAUDE.md`/`AGENTS.md` only if a new load-bearing pattern emerged
   (likely not — the registry is internal framework detail, not a project-config
   contract)
-- [ ] move this plan to `docs/plans/completed/`
+- [x] move this plan to `docs/plans/completed/`
 
 ## Post-Completion
 *Items requiring manual intervention or external systems — no checkboxes, informational only*
