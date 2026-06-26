@@ -298,44 +298,44 @@ Key design decisions (settled in the Stage 2 brainstorm — encode, do not re-li
 - Modify: `internal/core/ui/tui/frame.go`
 - Modify: `internal/core/ui/tui/frame_test.go`
 
-- [ ] add a **dedicated** mouse test plugin in `frame_test.go` (e.g. `mousePlugin`) — do NOT
+- [x] add a **dedicated** mouse test plugin in `frame_test.go` (e.g. `mousePlugin`) — do NOT
   mutate the shared `stubPlugin`: its `Actions` feeds `frame_help_open.golden`, so adding
   Nav/Select to it would change that golden and break the byte-stable guarantee (Task 7). The new
   plugin's `Actions` calls `RegisterStandard(reg, ActionNavUp, ActionNavDown, ActionSelect)`
   (using the Task 2 `Mouse` defaults so `MatchMouse` resolves), declares one panel, and records a
   per-action invocation count (`map[Action]int`) in `HandleAction` so "called exactly N times" is
   assertable
-- [ ] add the wheel state to `Frame` (`wheelAccum int`, `wheelArmed bool`) and the
+- [x] add the wheel state to `Frame` (`wheelAccum int`, `wheelArmed bool`) and the
   `wheelFlushMsg struct{}` private message + the `coalesceWindow` constant (16ms, documented
   provisional)
-- [ ] add `Frame.handleMouse(msg tea.MouseMsg) (tea.Model, tea.Cmd)` and call it from the
+- [x] add `Frame.handleMouse(msg tea.MouseMsg) (tea.Model, tea.Cmd)` and call it from the
   `case tea.MouseMsg:` arm (replacing `return f, nil`). For `tea.MouseWheelMsg`: when an overlay
   is open, swallow (return `f, nil`, no accumulation); else `wheelAccum += +1` (`MouseWheelUp`)
   / `-1` (`MouseWheelDown`); if `!wheelArmed`, set `wheelArmed = true` and return
   `tea.Tick(coalesceWindow, func(time.Time) tea.Msg { return wheelFlushMsg{} })`; otherwise
   return `f, nil`
-- [ ] add an explicit `case wheelFlushMsg:` in `Frame.Update` (BEFORE the plugin-forward
+- [x] add an explicit `case wheelFlushMsg:` in `Frame.Update` (BEFORE the plugin-forward
   default): **no-op when an overlay is open** (`!f.overlay.Empty()` → reset `wheelAccum=0`,
   `wheelArmed=false`, return `f, nil` — never dispatch behind a modal); else dispatch
   `abs(wheelAccum)` Nav steps — `MatchMouse("wheel-up"/"wheel-down")` → `plugin.HandleAction(action)`
   in a loop, batching the returned commands via `tea.Batch` — then reset `wheelAccum = 0`,
   `wheelArmed = false`; drain `PendingOverlay` after dispatch
-- [ ] **clear pending wheel state on overlay push** (Codex finding #1): `tea.Tick` is one-shot and
+- [x] **clear pending wheel state on overlay push** (Codex finding #1): `tea.Tick` is one-shot and
   cannot be cancelled, so a wheel that armed a tick BEFORE a modal opened would otherwise flush
   Nav behind the modal. Reset `wheelAccum=0`, `wheelArmed=false` wherever an overlay becomes
   visible — `handleBuiltin(ActionHelp)` (open branch) and `drainOverlay` — so a stale tick finds
   an empty accumulator and the `wheelFlushMsg` guard above makes it a true no-op (no
   generation/token machinery needed)
-- [ ] write tests (against the dedicated `mousePlugin`): burst — N `MouseWheelMsg` (same
+- [x] write tests (against the dedicated `mousePlugin`): burst — N `MouseWheelMsg` (same
   direction) injected, then ONE `wheelFlushMsg` → plugin's `HandleAction(ActionNavDown)` count ==
   N, accumulator reset; slow — `wheel → flush → wheel → flush` yields one Nav per flush; mixed
   up/down deltas sum to the net count and direction; the first wheel returns a non-nil `tea.Cmd`
   (the tick) and subsequent in-window wheels return nil; a wheel event while the help overlay is
   open is swallowed (no accumulation, no tick)
-- [ ] write test (Codex finding #1): **wheel-then-open-modal-then-flush** — inject a
+- [x] write test (Codex finding #1): **wheel-then-open-modal-then-flush** — inject a
   `MouseWheelMsg` (arms the tick), open help (push overlay), then inject `wheelFlushMsg` → ZERO
   Nav dispatched to the plugin and the accumulator is clear (no acting behind the modal)
-- [ ] run `go test ./internal/core/ui/tui/...` — must pass before next task
+- [x] run `go test ./internal/core/ui/tui/...` — must pass before next task
 
 ### Task 5: Click routing + double-click + deferred panel-forward seam
 

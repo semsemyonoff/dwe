@@ -673,6 +673,233 @@ func receivedMsg(p *stubPlugin, payload string) bool {
 	return false
 }
 
+// --- mousePlugin: a dedicated test plugin for wheel/click tests (Task 4+) ---
+//
+// We do NOT add Nav/Select to stubPlugin because its Actions feeds the
+// frame_help_open.golden and adding mouse defaults would change that golden,
+// breaking the byte-stable regression guard.
+
+const mousePanelMain PanelID = "mouse-main"
+
+// mousePlugin is a minimal Plugin for mouse routing tests. It registers the
+// stdlib Nav and Select actions (so MatchMouse resolves wheel-up/down and
+// double-click) and counts per-action invocations so tests can assert
+// "HandleAction(ActionNavDown) was called exactly N times."
+type mousePlugin struct {
+	counts map[Action]int
+}
+
+func newMousePlugin() *mousePlugin {
+	return &mousePlugin{counts: make(map[Action]int)}
+}
+
+func (p *mousePlugin) Init() tea.Cmd                        { return nil }
+func (p *mousePlugin) Close() error                         { return nil }
+func (p *mousePlugin) Resize(Region)                        {}
+func (p *mousePlugin) Update(tea.Msg) tea.Cmd               { return nil }
+func (p *mousePlugin) ViewPanel(_ PanelID, _ Region) string { return "[mouse]" }
+func (p *mousePlugin) Panels() []Panel {
+	return []Panel{{ID: mousePanelMain, Title: "Main", Weight: 1}}
+}
+func (p *mousePlugin) StatusContext() string { return "" }
+func (p *mousePlugin) Actions(reg *Registry) error {
+	return RegisterStandard(reg, ActionNavUp, ActionNavDown, ActionSelect)
+}
+func (p *mousePlugin) HandleAction(a Action) (tea.Cmd, bool) {
+	p.counts[a]++
+	return nil, true
+}
+func (p *mousePlugin) PendingOverlay() (Overlay, bool) { return Overlay{}, false }
+func (p *mousePlugin) Result() any                     { return nil }
+
+// newMouseFrame builds a Frame over a mousePlugin with mouse=true + xterm-256color
+// so wheel routing is active. opts are appended last.
+func newMouseFrame(t *testing.T, w, h int, opts ...frameOption) (*Frame, *mousePlugin) {
+	t.Helper()
+	p := newMousePlugin()
+	all := make([]frameOption, 0, 4+len(opts))
+	all = append(all,
+		withBrand("dwe"), withProject("demo"),
+		withMouse(true),
+		withTermEnv(func() string { return "xterm-256color" }),
+	)
+	all = append(all, opts...)
+	f, err := newFrame(p, all...)
+	if err != nil {
+		t.Fatalf("newMouseFrame: %v", err)
+	}
+	f.Update(tea.WindowSizeMsg{Width: w, Height: h})
+	return f, p
+}
+
+// wheelDown / wheelUp build MouseWheelMsgs for test injection.
+func wheelDown() tea.Msg { return tea.MouseWheelMsg{Button: tea.MouseWheelDown} }
+func wheelUp() tea.Msg   { return tea.MouseWheelMsg{Button: tea.MouseWheelUp} }
+
+// flush injects the private tick message directly so tests need not wait 16ms.
+func flush() tea.Msg { return wheelFlushMsg{} }
+
+// TestFrame_WheelCoalescing exercises the wheel accumulator state machine.
+func TestFrame_WheelCoalescing(t *testing.T) {
+	t.Run("burst_N_down_yields_N_nav_down", func(t *testing.T) {
+		f, p := newMouseFrame(t, 80, frameGoldenHeight)
+		const N = 5
+		for range N {
+			f.Update(wheelDown())
+		}
+		f.Update(flush())
+		if got := p.counts[ActionNavDown]; got != N {
+			t.Errorf("burst %d WheelDown: HandleAction(NavDown) count = %d; want %d", N, got, N)
+		}
+		if p.counts[ActionNavUp] != 0 {
+			t.Errorf("burst down: unexpected NavUp count %d", p.counts[ActionNavUp])
+		}
+		// accumulator and armed flag must be reset after flush
+		if f.wheelAccum != 0 {
+			t.Errorf("wheelAccum after flush = %d; want 0", f.wheelAccum)
+		}
+		if f.wheelArmed {
+			t.Errorf("wheelArmed after flush should be false")
+		}
+	})
+
+	t.Run("burst_N_up_yields_N_nav_up", func(t *testing.T) {
+		f, p := newMouseFrame(t, 80, frameGoldenHeight)
+		const N = 3
+		for range N {
+			f.Update(wheelUp())
+		}
+		f.Update(flush())
+		if got := p.counts[ActionNavUp]; got != N {
+			t.Errorf("burst %d WheelUp: HandleAction(NavUp) count = %d; want %d", N, got, N)
+		}
+	})
+
+	t.Run("slow_one_per_flush", func(t *testing.T) {
+		f, p := newMouseFrame(t, 80, frameGoldenHeight)
+		f.Update(wheelDown())
+		f.Update(flush())
+		if p.counts[ActionNavDown] != 1 {
+			t.Errorf("first slow flush: NavDown count = %d; want 1", p.counts[ActionNavDown])
+		}
+		// Second tick: arm a new tick with a second wheel event.
+		f.Update(wheelDown())
+		f.Update(flush())
+		if p.counts[ActionNavDown] != 2 {
+			t.Errorf("second slow flush: NavDown count = %d; want 2", p.counts[ActionNavDown])
+		}
+	})
+
+	t.Run("mixed_up_down_nets_direction", func(t *testing.T) {
+		f, p := newMouseFrame(t, 80, frameGoldenHeight)
+		// 3 down + 2 up → net 1 down
+		for range 3 {
+			f.Update(wheelDown())
+		}
+		for range 2 {
+			f.Update(wheelUp())
+		}
+		f.Update(flush())
+		if p.counts[ActionNavDown] != 1 {
+			t.Errorf("net 1 down: NavDown count = %d; want 1", p.counts[ActionNavDown])
+		}
+		if p.counts[ActionNavUp] != 0 {
+			t.Errorf("net 1 down: unexpected NavUp count %d", p.counts[ActionNavUp])
+		}
+	})
+
+	t.Run("mixed_up_down_nets_up", func(t *testing.T) {
+		f, p := newMouseFrame(t, 80, frameGoldenHeight)
+		// 2 down + 4 up → net 2 up
+		for range 2 {
+			f.Update(wheelDown())
+		}
+		for range 4 {
+			f.Update(wheelUp())
+		}
+		f.Update(flush())
+		if p.counts[ActionNavUp] != 2 {
+			t.Errorf("net 2 up: NavUp count = %d; want 2", p.counts[ActionNavUp])
+		}
+		if p.counts[ActionNavDown] != 0 {
+			t.Errorf("net 2 up: unexpected NavDown count %d", p.counts[ActionNavDown])
+		}
+	})
+
+	t.Run("first_wheel_arms_tick_subsequent_nil", func(t *testing.T) {
+		f, _ := newMouseFrame(t, 80, frameGoldenHeight)
+		// First wheel event must return a non-nil cmd (the tick).
+		_, cmd1 := f.Update(wheelDown())
+		if cmd1 == nil {
+			t.Error("first WheelDown: cmd = nil; want non-nil (tick)")
+		}
+		// Second and third in-window wheel events must return nil (already armed).
+		_, cmd2 := f.Update(wheelDown())
+		if cmd2 != nil {
+			t.Error("second WheelDown: cmd should be nil (tick already armed)")
+		}
+		_, cmd3 := f.Update(wheelUp())
+		if cmd3 != nil {
+			t.Error("third wheel (up) while armed: cmd should be nil")
+		}
+	})
+
+	t.Run("stale_flush_after_flush_is_noop", func(t *testing.T) {
+		f, p := newMouseFrame(t, 80, frameGoldenHeight)
+		f.Update(wheelDown())
+		f.Update(flush())
+		before := p.counts[ActionNavDown]
+		// A second flush with no new wheel event must not dispatch anything.
+		f.Update(flush())
+		if p.counts[ActionNavDown] != before {
+			t.Errorf("second flush (empty accum): NavDown grew from %d to %d", before, p.counts[ActionNavDown])
+		}
+	})
+
+	t.Run("swallowed_while_overlay_open", func(t *testing.T) {
+		f, _ := newMouseFrame(t, 80, frameGoldenHeight)
+		// Open the help overlay via key (keyboard path; '?' registered by NewRegistry).
+		f.Update(key("?"))
+		if f.overlay.Empty() {
+			t.Fatal("help overlay did not open")
+		}
+		_, cmd := f.Update(wheelDown())
+		if cmd != nil {
+			t.Error("WheelDown while overlay open returned a cmd; want nil (swallowed)")
+		}
+		if f.wheelAccum != 0 {
+			t.Errorf("wheelAccum after swallowed wheel = %d; want 0", f.wheelAccum)
+		}
+		if f.wheelArmed {
+			t.Error("wheelArmed after swallowed wheel should be false")
+		}
+	})
+
+	t.Run("wheel_then_modal_then_flush_zero_nav", func(t *testing.T) {
+		// Codex finding #1: arm the tick with a wheel event, then open a modal;
+		// the delayed flush must not dispatch Nav behind the modal.
+		f, p := newMouseFrame(t, 80, frameGoldenHeight)
+		f.Update(wheelDown()) // arms the tick + accumulates
+		// Open help modal (clears accumulator on push).
+		f.Update(key("?"))
+		if f.overlay.Empty() {
+			t.Fatal("help overlay did not open")
+		}
+		// Inject the flush that would have arrived from the armed tick.
+		f.Update(flush())
+		if p.counts[ActionNavDown] != 0 {
+			t.Errorf("flush behind modal: NavDown count = %d; want 0", p.counts[ActionNavDown])
+		}
+		// Accumulator and armed flag must be clear after the no-op flush.
+		if f.wheelAccum != 0 {
+			t.Errorf("wheelAccum after modal flush = %d; want 0", f.wheelAccum)
+		}
+		if f.wheelArmed {
+			t.Error("wheelArmed after modal flush should be false")
+		}
+	})
+}
+
 // assertGolden compares got against testdata/<name>, writing it when
 // UPDATE_GOLDEN is set.
 func assertGolden(t *testing.T, name, got string) {

@@ -3,6 +3,7 @@ package tui
 import (
 	"fmt"
 	"os"
+	"time"
 
 	"github.com/semsemyonoff/dwe/internal/core/ui/styles"
 	"github.com/semsemyonoff/dwe/internal/shared/i18n"
@@ -57,6 +58,17 @@ func withBrand(s string) frameOption { return func(o *frameOptions) { o.brand = 
 // withProject sets the status-line project string.
 func withProject(s string) frameOption { return func(o *frameOptions) { o.project = s } }
 
+// coalesceWindow is the wheel-burst coalescing interval. The first wheel event
+// arms a one-shot tea.Tick; subsequent events within the window accumulate into
+// wheelAccum; the tick fires wheelFlushMsg and the frame dispatches the net
+// count as Nav steps. Provisional — tune if burst/slow feel is off.
+const coalesceWindow = 16 * time.Millisecond
+
+// wheelFlushMsg is the private tick message that fires after coalesceWindow to
+// dispatch the accumulated wheel delta as Nav steps. It must not fall through
+// to plugin.Update (it is framework-internal).
+type wheelFlushMsg struct{}
+
 // Frame is the framework's tea.Model. It is parameterised by a single [Plugin]
 // and ties together the registry, focus manager, overlay stack, and geometry.
 type Frame struct {
@@ -66,6 +78,10 @@ type Frame struct {
 	overlay  overlayStack
 	geo      Geometry
 	opts     frameOptions
+
+	// wheel accumulator — see handleMouse and the wheelFlushMsg case in Update.
+	wheelAccum int
+	wheelArmed bool
 
 	// tr / locale resolve help-modal display strings. Stage 0 uses a
 	// NopTranslator (English fallbacks) + a fixed locale; the migration stages
@@ -163,9 +179,43 @@ func (f *Frame) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case tea.KeyPressMsg:
 		return f.handleKey(m)
 	case tea.MouseMsg:
-		// Stage 2: mouse routing is wired in handleMouse (Task 4). Until that
-		// task lands, mouse messages are forwarded here but not acted on.
-		return f, nil
+		return f.handleMouse(m)
+	case wheelFlushMsg:
+		// Flush the wheel accumulator as Nav steps. No-op while an overlay is
+		// open — a tick armed before the modal opened must not dispatch Nav
+		// behind it (the accumulator was already cleared when the overlay
+		// opened, so this is a true no-op with no generation/token machinery).
+		if !f.overlay.Empty() {
+			f.wheelAccum = 0
+			f.wheelArmed = false
+			return f, nil
+		}
+		accum := f.wheelAccum
+		f.wheelAccum = 0
+		f.wheelArmed = false
+		if accum == 0 {
+			return f, nil
+		}
+		var event string
+		steps := accum
+		if accum < 0 {
+			event = "wheel-up"
+			steps = -accum
+		} else {
+			event = "wheel-down"
+		}
+		action, ok := f.registry.MatchMouse(event)
+		if !ok {
+			return f, nil
+		}
+		var cmds []tea.Cmd
+		for range steps {
+			if cmd, handled := f.plugin.HandleAction(action); handled {
+				cmds = append(cmds, cmd)
+			}
+		}
+		f.drainOverlay()
+		return f, tea.Batch(cmds...)
 	default:
 		cmd := f.plugin.Update(msg)
 		f.drainOverlay()
@@ -220,6 +270,12 @@ func (f *Frame) handleBuiltin(a Action) (tea.Model, tea.Cmd) {
 	switch a {
 	case ActionHelp:
 		if f.overlay.Empty() {
+			// Clear any pending wheel accumulation before pushing the modal.
+			// tea.Tick is one-shot and uncancellable; resetting here ensures
+			// the wheelFlushMsg guard (no-op while overlay open) sees an empty
+			// accumulator even if a tick fires after the modal opens.
+			f.wheelAccum = 0
+			f.wheelArmed = false
 			f.overlay.Push(buildHelpOverlay(f.registry, f.tr, f.locale, f.geo.Overlay.Width, f.geo.Overlay.Height))
 		} else {
 			f.overlay.Pop()
@@ -236,9 +292,40 @@ func (f *Frame) handleBuiltin(a Action) (tea.Model, tea.Cmd) {
 
 // drainOverlay pushes a plugin-requested overlay onto the stack. Mutual
 // exclusivity is structural (View only ever composites Top), so Push is safe.
+// It also clears any pending wheel accumulation so a stale tick cannot
+// dispatch Nav behind a plugin-triggered modal.
 func (f *Frame) drainOverlay() {
 	if ov, ok := f.plugin.PendingOverlay(); ok {
+		f.wheelAccum = 0
+		f.wheelArmed = false
 		f.overlay.Push(ov)
+	}
+}
+
+// handleMouse dispatches a tea.MouseMsg. Wheel events are accumulated for
+// burst coalescing (see wheelFlushMsg case in Update); click routing lands in
+// Task 5. Release and motion messages are silently ignored — CellMotion can
+// emit motion while a button is held but we do not act on it.
+func (f *Frame) handleMouse(msg tea.MouseMsg) (tea.Model, tea.Cmd) {
+	switch m := msg.(type) {
+	case tea.MouseWheelMsg:
+		if !f.overlay.Empty() {
+			return f, nil
+		}
+		if m.Button == tea.MouseWheelUp {
+			f.wheelAccum--
+		} else {
+			f.wheelAccum++
+		}
+		if !f.wheelArmed {
+			f.wheelArmed = true
+			return f, tea.Tick(coalesceWindow, func(time.Time) tea.Msg { return wheelFlushMsg{} })
+		}
+		return f, nil
+	default:
+		// MouseClickMsg, MouseReleaseMsg, MouseMotionMsg — click routing
+		// lands in Task 5; release and motion are permanently ignored.
+		return f, nil
 	}
 }
 
