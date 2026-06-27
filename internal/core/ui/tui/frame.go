@@ -255,10 +255,12 @@ func (f *Frame) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return f, cmd
 	case wheelFlushMsg:
 		// Flush the wheel accumulator as Nav steps. No-op while an overlay is
-		// open — a tick armed before the modal opened must not dispatch Nav
-		// behind it (the accumulator was already cleared when the overlay
-		// opened, so this is a true no-op with no generation/token machinery).
-		if !f.overlay.Empty() {
+		// open OR the plugin is capturing raw input — a tick armed before the
+		// modal opened (or before the inline filter took over) must not dispatch
+		// Nav behind it. The arming guard in handleMouse already blocks ticks
+		// started during capture; this also catches a tick armed just before the
+		// filter opened.
+		if !f.overlay.Empty() || f.plugin.CapturingInput() {
 			f.wheelAccum = 0
 			f.wheelArmed = false
 			return f, nil
@@ -360,7 +362,20 @@ func (f *Frame) handleKey(key tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 		if isBuiltin(a) {
 			return f.handleBuiltin(a)
 		}
+		capturingBefore := f.plugin.CapturingInput()
 		if cmd, handled := f.plugin.HandleAction(a); handled {
+			// If this action transitioned the plugin into raw-input capture
+			// (e.g. ActionFilter opening the inline filter), reset mouse state
+			// — exactly as crossing an overlay boundary does. A click or wheel
+			// tick armed before the filter opened must not pair with input
+			// after it closes: otherwise a click→/→esc→click on the same cell
+			// could satisfy the double-click test, or a wheel tick armed before
+			// / could flush Nav once the filter's CapturingInput guard lifts.
+			if !capturingBefore && f.plugin.CapturingInput() {
+				f.lastClick = lastClickRecord{}
+				f.wheelAccum = 0
+				f.wheelArmed = false
+			}
 			f.drainOverlay()
 			return f, cmd
 		}
@@ -441,7 +456,11 @@ func (f *Frame) drainOverlay() {
 func (f *Frame) handleMouse(msg tea.MouseMsg) (tea.Model, tea.Cmd) {
 	switch m := msg.(type) {
 	case tea.MouseWheelMsg:
-		if !f.overlay.Empty() {
+		// No-op while an overlay is open OR the plugin is capturing raw input
+		// (inline filter, no overlay) — the same total suppression the keyboard
+		// path applies in handleKey. A capturing plugin owns all input, so wheel
+		// nav must not arm a tick or dispatch behind it.
+		if !f.overlay.Empty() || f.plugin.CapturingInput() {
 			return f, nil
 		}
 		switch m.Button {
@@ -484,6 +503,16 @@ func (f *Frame) handleMouse(msg tea.MouseMsg) (tea.Model, tea.Cmd) {
 // Non-left buttons are silently ignored.
 func (f *Frame) handleClick(m tea.MouseClickMsg) (tea.Model, tea.Cmd) {
 	if m.Button != tea.MouseLeft {
+		return f, nil
+	}
+	// While the plugin captures raw input (inline filter, no overlay) the mouse
+	// is fully swallowed — the same total suppression the keyboard path applies
+	// in handleKey. This stops a double-click from dispatching ActionSelect
+	// (which could quit and run the focused command) behind an active filter,
+	// and keeps focus from drifting mid-query. Clear the double-click record so
+	// a click before the filter opened can never pair with one after it closes.
+	if f.plugin.CapturingInput() {
+		f.lastClick = lastClickRecord{}
 		return f, nil
 	}
 	var ov *Overlay

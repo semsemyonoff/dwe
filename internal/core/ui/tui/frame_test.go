@@ -945,6 +945,14 @@ type mousePlugin struct {
 	// msgs records every message forwarded through Update so click/focus
 	// delivery (PanelClickMsg / FocusChangedMsg) can be asserted.
 	msgs []tea.Msg
+	// capturing toggles CapturingInput() so mouse-during-capture tests can
+	// assert the frame suppresses wheel/click dispatch (inline-filter parity
+	// with the keyboard capture branch).
+	capturing bool
+	// captureOnFilter makes HandleAction(ActionFilter) flip capturing to true,
+	// modelling the inline filter opening on '/'. Lets a test exercise the
+	// frame's reset-on-entering-capture transition.
+	captureOnFilter bool
 }
 
 func newMousePlugin() *mousePlugin {
@@ -967,15 +975,18 @@ func (p *mousePlugin) Panels() []Panel {
 }
 func (p *mousePlugin) StatusContext() string { return "" }
 func (p *mousePlugin) Actions(reg *Registry) error {
-	return RegisterStandard(reg, ActionNavUp, ActionNavDown, ActionSelect)
+	return RegisterStandard(reg, ActionNavUp, ActionNavDown, ActionSelect, ActionFilter)
 }
 func (p *mousePlugin) HandleAction(a Action) (tea.Cmd, bool) {
 	p.counts[a]++
+	if a == ActionFilter && p.captureOnFilter {
+		p.capturing = true
+	}
 	return nil, true
 }
 func (p *mousePlugin) PendingOverlay() (Overlay, bool) { return Overlay{}, false }
 func (p *mousePlugin) Result() any                     { return nil }
-func (p *mousePlugin) CapturingInput() bool            { return false }
+func (p *mousePlugin) CapturingInput() bool            { return p.capturing }
 
 // panelClicks returns every PanelClickMsg forwarded to the plugin, in order.
 func (p *mousePlugin) panelClicks() []PanelClickMsg {
@@ -1239,6 +1250,59 @@ func TestFrame_WheelCoalescing(t *testing.T) {
 			t.Error("wheelArmed after modal flush should be false")
 		}
 	})
+
+	t.Run("swallowed_while_capturing", func(t *testing.T) {
+		// While the plugin captures raw input (inline filter, no overlay) wheel
+		// events must neither arm a tick nor dispatch Nav — parity with the
+		// keyboard capture branch, which forwards keys raw and never dispatches.
+		f, p := newMouseFrame(t, 80, frameGoldenHeight)
+		p.capturing = true
+		_, cmd := f.Update(wheelDown())
+		if cmd != nil {
+			t.Error("WheelDown while capturing returned a cmd; want nil (swallowed)")
+		}
+		if f.wheelAccum != 0 || f.wheelArmed {
+			t.Errorf("capturing wheel armed state: accum=%d armed=%v; want 0/false", f.wheelAccum, f.wheelArmed)
+		}
+	})
+
+	t.Run("armed_wheel_then_capture_then_flush_zero_nav", func(t *testing.T) {
+		// Arm the tick with a wheel event, then the plugin enters capture (inline
+		// filter); the delayed flush must not dispatch Nav behind the filter.
+		f, p := newMouseFrame(t, 80, frameGoldenHeight)
+		f.Update(wheelDown()) // arms the tick + accumulates
+		p.capturing = true    // filter takes over before the flush arrives
+		f.Update(flush())
+		if p.counts[ActionNavDown] != 0 {
+			t.Errorf("flush behind filter: NavDown count = %d; want 0", p.counts[ActionNavDown])
+		}
+		if f.wheelAccum != 0 || f.wheelArmed {
+			t.Errorf("capturing flush armed state: accum=%d armed=%v; want 0/false", f.wheelAccum, f.wheelArmed)
+		}
+	})
+
+	t.Run("armed_wheel_then_action_capture_then_flush_zero_nav", func(t *testing.T) {
+		// Same hazard as above, but capture is entered via the '/' ActionFilter
+		// (not by externally flipping the flag). The transition must reset the
+		// armed wheel so a tick armed before '/' cannot flush Nav once the filter
+		// closes and its CapturingInput guard lifts.
+		f, p := newMouseFrame(t, 80, frameGoldenHeight)
+		p.captureOnFilter = true
+		f.Update(wheelDown()) // arms the tick + accumulates
+		f.Update(key("/"))    // ActionFilter → plugin enters capture
+		if !p.capturing {
+			t.Fatal("plugin did not enter capture on '/'")
+		}
+		if f.wheelAccum != 0 || f.wheelArmed {
+			t.Errorf("armed wheel not reset on entering capture: accum=%d armed=%v; want 0/false", f.wheelAccum, f.wheelArmed)
+		}
+		// Filter closes, then the stale tick fires — it must dispatch no Nav.
+		p.capturing = false
+		f.Update(flush())
+		if p.counts[ActionNavDown] != 0 {
+			t.Errorf("stale flush after filter close: NavDown = %d; want 0", p.counts[ActionNavDown])
+		}
+	})
 }
 
 // TestFrame_ClickRouting exercises the full click-routing policy wired in Task 5.
@@ -1284,6 +1348,35 @@ func TestFrame_ClickRouting(t *testing.T) {
 		f.Update(leftClick(5, 5)) // second click — double-click
 		if got := p.counts[ActionSelect]; got != 1 {
 			t.Errorf("double-click: ActionSelect count = %d; want 1", got)
+		}
+	})
+
+	t.Run("entering_capture_via_action_resets_stale_click", func(t *testing.T) {
+		// Regression: a click, then '/' opening the inline filter, then a quick
+		// esc closing it, then a click on the SAME cell must NOT pair into a
+		// double-click. Entering capture via the action resets lastClick, exactly
+		// as crossing an overlay boundary does.
+		f, p := newMouseFrame(t, 80, frameGoldenHeight)
+		p.captureOnFilter = true
+		clk := testClock()
+		f.clock = clk
+		f.Update(leftClick(5, 5)) // first click records lastClick
+		if f.lastClick.t.IsZero() {
+			t.Fatal("first click did not record lastClick")
+		}
+		f.Update(key("/")) // ActionFilter → plugin enters capture
+		if !p.capturing {
+			t.Fatal("plugin did not enter capture on '/'")
+		}
+		if !f.lastClick.t.IsZero() {
+			t.Error("lastClick not reset on entering capture")
+		}
+		// Filter closes; a click on the same cell (still within the window, since
+		// the clock never advanced) must not synthesize a phantom double-click.
+		p.capturing = false
+		f.Update(leftClick(5, 5))
+		if got := p.counts[ActionSelect]; got != 0 {
+			t.Errorf("phantom double-click after filter close: ActionSelect = %d; want 0", got)
 		}
 	})
 
@@ -1439,6 +1532,39 @@ func TestFrame_ClickRouting(t *testing.T) {
 		f.Update(leftClick(5, 5)) // click anywhere while overlay is open
 		if f.overlay.Empty() {
 			t.Error("click while overlay open dismissed the overlay; want swallow (no dismiss)")
+		}
+	})
+
+	t.Run("double_click_swallowed_while_capturing", func(t *testing.T) {
+		// While the plugin captures raw input (inline filter, no overlay) a
+		// double-click must NOT dispatch ActionSelect — it would quit and run
+		// the focused command behind an active filter. Mirrors the keyboard
+		// capture branch, which forwards keys raw and never dispatches.
+		f, p := newMouseFrame(t, 80, frameGoldenHeight)
+		clk := testClock()
+		f.clock = clk
+		p.capturing = true
+		f.Update(leftClick(5, 5)) // first click — swallowed, lastClick stays zero
+		f.Update(leftClick(5, 5)) // second click — must NOT synthesize Select
+		if got := p.counts[ActionSelect]; got != 0 {
+			t.Errorf("capturing double-click: ActionSelect count = %d; want 0", got)
+		}
+		if !f.lastClick.t.IsZero() {
+			t.Error("capturing click recorded a lastClick; want zero sentinel")
+		}
+	})
+
+	t.Run("click_does_not_change_focus_while_capturing", func(t *testing.T) {
+		// A click on another panel must not drift focus mid-query.
+		f, p := newMouseFrame(t, 80, frameGoldenHeight)
+		p.capturing = true
+		before := f.focus.Active()
+		f.Update(leftClick(50, 5)) // alt panel click — swallowed
+		if got := f.focus.Active(); got != before {
+			t.Errorf("capturing click changed focus to %q; want unchanged %q", got, before)
+		}
+		if len(p.panelClicks()) != 0 {
+			t.Error("capturing click forwarded a PanelClickMsg; want none")
 		}
 	})
 
