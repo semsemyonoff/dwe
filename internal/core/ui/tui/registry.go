@@ -50,9 +50,10 @@ type Binding struct {
 	// rebinding config. This is documented metadata only — no config loader is
 	// built yet (YAGNI; no consumer until Stage 3). Locked in Stage 1.
 	Rebindable bool
-	// Mouse is a Stage 2 seam: a placeholder spec for a mouse trigger bound to
-	// the same action. Locked vocabulary (wired in Stage 2): "wheel-up",
-	// "wheel-down", "click", "double-click". Unused by dispatch this stage.
+	// Mouse is the mouse-event string that triggers this action, resolved via
+	// [Registry.MatchMouse]. Wired in Stage 2. Locked vocabulary: "wheel-up",
+	// "wheel-down", "double-click". "click" is intentionally frame-owned and is
+	// never registered as a mouse binding.
 	Mouse string
 }
 
@@ -113,10 +114,11 @@ const (
 )
 
 // Register binds an action to a key binding. It is an error to register an
-// action twice, to register a key already claimed by another action, or to
+// action twice, to register a key already claimed by another action, to
 // supply an alias that collides with any existing key/alias or with the
-// binding's own canonical Keys — any of these would make dispatch ambiguous.
-// A binding with no keys is also rejected.
+// binding's own canonical Keys, or to claim a Mouse event already bound to
+// another action — any of these would make dispatch ambiguous. A binding with
+// no keys is also rejected.
 //
 // The validation pass is fully pre-commit: if any check fails, no map entry
 // is written (no partial mutation).
@@ -153,6 +155,22 @@ func (r *Registry) Register(a Action, b Binding) error {
 		}
 	}
 
+	// Pre-commit: validate the Mouse event is part of the locked vocabulary and
+	// does not collide with an existing binding. "click" is frame-owned and is
+	// never a registrable binding (see [MatchMouse]); anything outside the locked
+	// set would be dead state that silently breaks the documented contract.
+	// MatchMouse linear-scans registration order and returns the first match, so
+	// a silent double-claim would be order-dependent — reject it here to match
+	// the strict key/alias contract above.
+	if b.Mouse != "" {
+		if !validMouseEvent(b.Mouse) {
+			return fmt.Errorf("tui: mouse event %q for action %q is not in the locked vocabulary (%q, %q, %q)", b.Mouse, a, mouseWheelUp, mouseWheelDown, mouseDoubleClick)
+		}
+		if owner, taken := r.MatchMouse(b.Mouse); taken {
+			return fmt.Errorf("tui: mouse event %q for action %q already bound to action %q", b.Mouse, a, owner)
+		}
+	}
+
 	// All checks passed — commit. Keys and Aliases both go into the dispatch map
 	// so Match resolves them identically; only Keys are shown in help.
 	r.bindings[a] = b
@@ -176,6 +194,45 @@ func (r *Registry) Register(a Action, b Binding) error {
 func (r *Registry) Match(key string) (Action, bool) {
 	a, ok := r.keys[key]
 	return a, ok
+}
+
+// The locked mouse-event vocabulary. These are the only values [Register]
+// accepts in [Binding.Mouse]; "click" is deliberately absent — it is
+// frame-owned and never a registrable binding (see [Registry.MatchMouse]).
+const (
+	mouseWheelUp     = "wheel-up"
+	mouseWheelDown   = "wheel-down"
+	mouseDoubleClick = "double-click"
+)
+
+// validMouseEvent reports whether event is part of the locked mouse vocabulary
+// accepted by [Register].
+func validMouseEvent(event string) bool {
+	switch event {
+	case mouseWheelUp, mouseWheelDown, mouseDoubleClick:
+		return true
+	default:
+		return false
+	}
+}
+
+// MatchMouse resolves a mouse-event string to its action. The bool reports
+// whether any registered binding claims that event via [Binding.Mouse].
+// The locked vocabulary is "wheel-up", "wheel-down", "double-click".
+// "click" is frame-owned and is intentionally never registered as a
+// mouse binding, so MatchMouse("click") always returns false.
+func (r *Registry) MatchMouse(event string) (Action, bool) {
+	if event == "" {
+		// An empty event is never a real mouse vocabulary entry; without this
+		// guard the scan would match the first binding with no Mouse field set.
+		return "", false
+	}
+	for _, a := range r.order {
+		if r.bindings[a].Mouse == event {
+			return a, true
+		}
+	}
+	return "", false
 }
 
 // Binding returns the binding registered for an action. The bool reports

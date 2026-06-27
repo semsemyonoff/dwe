@@ -161,6 +161,48 @@ func TestRegisterStandard_SectionsFromStdlibAppearInRegistry(t *testing.T) {
 	}
 }
 
+func TestStandardBindings_MouseDefaults(t *testing.T) {
+	t.Parallel()
+	// Verify the mouse defaults locked in Stage 2 are present in standardBindings.
+	cases := []struct {
+		action Action
+		mouse  string
+	}{
+		{ActionNavUp, "wheel-up"},
+		{ActionNavDown, "wheel-down"},
+		{ActionSelect, "double-click"},
+	}
+	for _, tc := range cases {
+		b, ok := standardBinding(tc.action)
+		if !ok {
+			t.Errorf("standardBinding(%q) = false; want present", tc.action)
+			continue
+		}
+		if b.Mouse != tc.mouse {
+			t.Errorf("standardBinding(%q).Mouse = %q; want %q", tc.action, b.Mouse, tc.mouse)
+		}
+	}
+}
+
+func TestStandardBindings_OtherActionsHaveNoMouseDefault(t *testing.T) {
+	t.Parallel()
+	// Actions without a mouse default must have an empty Mouse field.
+	noMouse := []Action{
+		ActionNavLeft, ActionNavRight, ActionTop, ActionBottom,
+		ActionPageUp, ActionPageDown, ActionReload, ActionFilter, ActionInspect,
+	}
+	for _, a := range noMouse {
+		b, ok := standardBinding(a)
+		if !ok {
+			t.Errorf("standardBinding(%q) = false; want present", a)
+			continue
+		}
+		if b.Mouse != "" {
+			t.Errorf("standardBinding(%q).Mouse = %q; want empty", a, b.Mouse)
+		}
+	}
+}
+
 func TestRegisterStandard_NavSectionAppearsAfterBuiltins(t *testing.T) {
 	t.Parallel()
 	r := NewRegistry()

@@ -16,10 +16,10 @@ import (
 // run.go is the framework's sole exported entry point this stage. Run owns the
 // terminal-capability gate (non-TTY → error, too-small → fallback sentinel),
 // tea.NewProgram construction, plugin teardown, and result extraction.
-// Alt-screen and the (inert) mouse seam are NOT program options in bubbletea/v2
-// — they are owned by Frame.View (Task 7), fed via frameOptions mapped from
-// RunOptions here. The unexported newFrame stays internal; Stage 0 adds no
-// public constructor because it has no importers.
+// Alt-screen and the mouse mode are NOT program options in bubbletea/v2 —
+// they are owned by Frame.View, fed via frameOptions mapped from RunOptions
+// here. The unexported newFrame stays internal; Stage 0 adds no public
+// constructor because it has no importers.
 
 // ErrNotTTY is returned by [Run] when stdout is not a terminal. It is reported
 // BEFORE any program start, so the plugin's Init never runs on this path — a
@@ -33,9 +33,10 @@ var ErrNotTTY = errors.New("tui: stdout is not a terminal")
 var ErrTooNarrow = errors.New("tui: terminal too small for the framework")
 
 // RunOptions configures a [Run] launch. Brand/Project feed the status line;
-// Mouse is the inert Stage 2 seam (default false → MouseModeNone). The trailing
-// fields are unexported test seams so the non-TTY, narrow, zero-value-input,
-// mouse-flag, and close-error paths are deterministic without a real terminal:
+// Mouse enables CellMotion mouse reporting (click + wheel) when true and the
+// terminal is capable (not TERM=dumb). The trailing fields are unexported test
+// seams so the non-TTY, narrow, zero-value-input, mouse-flag, and close-error
+// paths are deterministic without a real terminal:
 //
 //   - input / output override the program's stdio. They are appended as
 //     tea.WithInput / tea.WithOutput ONLY when non-nil — a zero-value RunOptions

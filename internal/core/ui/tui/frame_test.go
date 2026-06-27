@@ -5,6 +5,7 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
 	tea "charm.land/bubbletea/v2"
 	"charm.land/lipgloss/v2"
@@ -135,18 +136,56 @@ func TestFrame_HelpOpenSmallTerminal(t *testing.T) {
 }
 
 // TestFrame_View_Envelope asserts the framework owns the tea.View envelope:
-// AltScreen is on and the mouse seam renders MouseModeNone this stage.
+// AltScreen is always on; MouseMode is CellMotion when mouse=true + capable,
+// and None when mouse=false or TERM=dumb.
 func TestFrame_View_Envelope(t *testing.T) {
+	nonDumb := withTermEnv(func() string { return "xterm-256color" })
 	for _, mouse := range []bool{false, true} {
-		f, _ := newTestFrame(t, 80, frameGoldenHeight, withMouse(mouse))
+		f, _ := newTestFrame(t, 80, frameGoldenHeight, withMouse(mouse), nonDumb)
 		v := f.View()
 		if !v.AltScreen {
 			t.Errorf("mouse=%v: View must request AltScreen", mouse)
 		}
-		if v.MouseMode != tea.MouseModeNone {
-			t.Errorf("mouse=%v: MouseMode = %v; want MouseModeNone (Stage 2 seam inert)", mouse, v.MouseMode)
+		var wantMode tea.MouseMode
+		if mouse {
+			wantMode = tea.MouseModeCellMotion
+		}
+		if v.MouseMode != wantMode {
+			t.Errorf("mouse=%v: MouseMode = %v; want %v", mouse, v.MouseMode, wantMode)
 		}
 	}
+}
+
+// TestFrame_MouseCapabilityGate table-tests the capability gate: mouse=false
+// always yields None; mouse=true + non-dumb yields CellMotion; mouse=true +
+// TERM=dumb yields None; the default termEnv (real os.Getenv) does not panic.
+func TestFrame_MouseCapabilityGate(t *testing.T) {
+	t.Run("mouse_off_always_none", func(t *testing.T) {
+		f, _ := newTestFrame(t, 80, frameGoldenHeight,
+			withMouse(false), withTermEnv(func() string { return "xterm-256color" }))
+		if got := f.View().MouseMode; got != tea.MouseModeNone {
+			t.Errorf("mouse=false non-dumb: got %v; want MouseModeNone", got)
+		}
+	})
+	t.Run("mouse_on_non_dumb", func(t *testing.T) {
+		f, _ := newTestFrame(t, 80, frameGoldenHeight,
+			withMouse(true), withTermEnv(func() string { return "xterm-256color" }))
+		if got := f.View().MouseMode; got != tea.MouseModeCellMotion {
+			t.Errorf("mouse=true xterm-256color: got %v; want MouseModeCellMotion", got)
+		}
+	})
+	t.Run("mouse_on_dumb_term", func(t *testing.T) {
+		f, _ := newTestFrame(t, 80, frameGoldenHeight,
+			withMouse(true), withTermEnv(func() string { return "dumb" }))
+		if got := f.View().MouseMode; got != tea.MouseModeNone {
+			t.Errorf("mouse=true TERM=dumb: got %v; want MouseModeNone", got)
+		}
+	})
+	t.Run("default_termenv_no_panic", func(t *testing.T) {
+		// No withTermEnv — the default os.Getenv("TERM") path must not panic.
+		f, _ := newTestFrame(t, 80, frameGoldenHeight, withMouse(true))
+		_ = f.View()
+	})
 }
 
 // TestFrame_StatusLineZones asserts the three-zone status line: brand/project on
@@ -308,17 +347,18 @@ func TestFrame_QuitDispatch(t *testing.T) {
 	}
 }
 
-// TestFrame_MouseMsgSwallowed asserts a mouse message is ignored this stage: it
-// never reaches the plugin and the frame returns no command (the inert Stage 2 seam).
+// TestFrame_MouseMsgSwallowed asserts that a non-left-button mouse click is
+// silently ignored: no command is returned and the plugin never sees it.
 func TestFrame_MouseMsgSwallowed(t *testing.T) {
 	f, p := newTestFrame(t, 80, frameGoldenHeight)
 	before := len(p.gotMsgs)
+	// Button=0 (MouseNone, not MouseLeft) — must be a no-op.
 	_, cmd := f.Update(tea.MouseClickMsg{})
 	if cmd != nil {
-		t.Errorf("mouse message produced a command; want nil (ignored this stage)")
+		t.Errorf("non-left-button click produced a command; want nil")
 	}
 	if len(p.gotMsgs) != before {
-		t.Errorf("mouse message leaked to plugin.Update; gotMsgs grew from %d to %d", before, len(p.gotMsgs))
+		t.Errorf("non-left-button click leaked to plugin.Update; gotMsgs grew from %d to %d", before, len(p.gotMsgs))
 	}
 }
 
@@ -633,6 +673,566 @@ func receivedMsg(p *stubPlugin, payload string) bool {
 		}
 	}
 	return false
+}
+
+// --- mousePlugin: a dedicated test plugin for wheel/click tests (Task 4+) ---
+//
+// We do NOT add Nav/Select to stubPlugin because its Actions feeds the
+// frame_help_open.golden and adding mouse defaults would change that golden,
+// breaking the byte-stable regression guard.
+
+const (
+	mousePanelMain PanelID = "mouse-main"
+	mousePanelAlt  PanelID = "mouse-alt"
+)
+
+// mousePlugin is a minimal Plugin for mouse routing tests. It registers the
+// stdlib Nav and Select actions (so MatchMouse resolves wheel-up/down and
+// double-click) and counts per-action invocations so tests can assert
+// "HandleAction(ActionNavDown) was called exactly N times." Two equal-weight
+// panels let click tests verify focus switching between panels.
+type mousePlugin struct {
+	counts map[Action]int
+}
+
+func newMousePlugin() *mousePlugin {
+	return &mousePlugin{counts: make(map[Action]int)}
+}
+
+func (p *mousePlugin) Init() tea.Cmd                        { return nil }
+func (p *mousePlugin) Close() error                         { return nil }
+func (p *mousePlugin) Resize(Region)                        {}
+func (p *mousePlugin) Update(tea.Msg) tea.Cmd               { return nil }
+func (p *mousePlugin) ViewPanel(_ PanelID, _ Region) string { return "[mouse]" }
+func (p *mousePlugin) Panels() []Panel {
+	return []Panel{
+		{ID: mousePanelMain, Title: "Main", Weight: 1},
+		{ID: mousePanelAlt, Title: "Alt", Weight: 1},
+	}
+}
+func (p *mousePlugin) StatusContext() string { return "" }
+func (p *mousePlugin) Actions(reg *Registry) error {
+	return RegisterStandard(reg, ActionNavUp, ActionNavDown, ActionSelect)
+}
+func (p *mousePlugin) HandleAction(a Action) (tea.Cmd, bool) {
+	p.counts[a]++
+	return nil, true
+}
+func (p *mousePlugin) PendingOverlay() (Overlay, bool) { return Overlay{}, false }
+func (p *mousePlugin) Result() any                     { return nil }
+
+// fakeClock is an injectable frameClock for click-routing tests. Initialise t
+// to a non-zero time; advance moves it forward.
+type fakeClock struct{ t time.Time }
+
+func (c *fakeClock) now() time.Time          { return c.t }
+func (c *fakeClock) advance(d time.Duration) { c.t = c.t.Add(d) }
+
+// testClock returns a fakeClock at a known non-zero time so the zero-sentinel
+// check (!lastClick.t.IsZero()) is never accidentally bypassed.
+func testClock() *fakeClock {
+	return &fakeClock{t: time.Date(2025, 1, 1, 0, 0, 0, 0, time.UTC)}
+}
+
+// leftClick builds a MouseClickMsg with the left button at (x, y).
+func leftClick(x, y int) tea.MouseClickMsg {
+	return tea.MouseClickMsg{X: x, Y: y, Button: tea.MouseLeft}
+}
+
+// newMouseFrame builds a Frame over a mousePlugin with mouse=true + xterm-256color
+// so wheel routing is active. opts are appended last.
+func newMouseFrame(t *testing.T, w, h int, opts ...frameOption) (*Frame, *mousePlugin) {
+	t.Helper()
+	p := newMousePlugin()
+	all := make([]frameOption, 0, 4+len(opts))
+	all = append(all,
+		withBrand("dwe"), withProject("demo"),
+		withMouse(true),
+		withTermEnv(func() string { return "xterm-256color" }),
+	)
+	all = append(all, opts...)
+	f, err := newFrame(p, all...)
+	if err != nil {
+		t.Fatalf("newMouseFrame: %v", err)
+	}
+	f.Update(tea.WindowSizeMsg{Width: w, Height: h})
+	return f, p
+}
+
+// wheelDown / wheelUp build MouseWheelMsgs for test injection.
+func wheelDown() tea.Msg { return tea.MouseWheelMsg{Button: tea.MouseWheelDown} }
+func wheelUp() tea.Msg   { return tea.MouseWheelMsg{Button: tea.MouseWheelUp} }
+
+// wheelLeft / wheelRight build horizontal MouseWheelMsgs (trackpad tilt-scroll).
+func wheelLeft() tea.Msg  { return tea.MouseWheelMsg{Button: tea.MouseWheelLeft} }
+func wheelRight() tea.Msg { return tea.MouseWheelMsg{Button: tea.MouseWheelRight} }
+
+// flush injects the private tick message directly so tests need not wait 16ms.
+func flush() tea.Msg { return wheelFlushMsg{} }
+
+// TestFrame_WheelCoalescing exercises the wheel accumulator state machine.
+func TestFrame_WheelCoalescing(t *testing.T) {
+	t.Run("burst_N_down_yields_N_nav_down", func(t *testing.T) {
+		f, p := newMouseFrame(t, 80, frameGoldenHeight)
+		const N = 5
+		for range N {
+			f.Update(wheelDown())
+		}
+		f.Update(flush())
+		if got := p.counts[ActionNavDown]; got != N {
+			t.Errorf("burst %d WheelDown: HandleAction(NavDown) count = %d; want %d", N, got, N)
+		}
+		if p.counts[ActionNavUp] != 0 {
+			t.Errorf("burst down: unexpected NavUp count %d", p.counts[ActionNavUp])
+		}
+		// accumulator and armed flag must be reset after flush
+		if f.wheelAccum != 0 {
+			t.Errorf("wheelAccum after flush = %d; want 0", f.wheelAccum)
+		}
+		if f.wheelArmed {
+			t.Errorf("wheelArmed after flush should be false")
+		}
+	})
+
+	t.Run("burst_N_up_yields_N_nav_up", func(t *testing.T) {
+		f, p := newMouseFrame(t, 80, frameGoldenHeight)
+		const N = 3
+		for range N {
+			f.Update(wheelUp())
+		}
+		f.Update(flush())
+		if got := p.counts[ActionNavUp]; got != N {
+			t.Errorf("burst %d WheelUp: HandleAction(NavUp) count = %d; want %d", N, got, N)
+		}
+	})
+
+	t.Run("slow_one_per_flush", func(t *testing.T) {
+		f, p := newMouseFrame(t, 80, frameGoldenHeight)
+		f.Update(wheelDown())
+		f.Update(flush())
+		if p.counts[ActionNavDown] != 1 {
+			t.Errorf("first slow flush: NavDown count = %d; want 1", p.counts[ActionNavDown])
+		}
+		// Second tick: arm a new tick with a second wheel event.
+		f.Update(wheelDown())
+		f.Update(flush())
+		if p.counts[ActionNavDown] != 2 {
+			t.Errorf("second slow flush: NavDown count = %d; want 2", p.counts[ActionNavDown])
+		}
+	})
+
+	t.Run("mixed_up_down_nets_direction", func(t *testing.T) {
+		f, p := newMouseFrame(t, 80, frameGoldenHeight)
+		// 3 down + 2 up → net 1 down
+		for range 3 {
+			f.Update(wheelDown())
+		}
+		for range 2 {
+			f.Update(wheelUp())
+		}
+		f.Update(flush())
+		if p.counts[ActionNavDown] != 1 {
+			t.Errorf("net 1 down: NavDown count = %d; want 1", p.counts[ActionNavDown])
+		}
+		if p.counts[ActionNavUp] != 0 {
+			t.Errorf("net 1 down: unexpected NavUp count %d", p.counts[ActionNavUp])
+		}
+	})
+
+	t.Run("mixed_up_down_nets_up", func(t *testing.T) {
+		f, p := newMouseFrame(t, 80, frameGoldenHeight)
+		// 2 down + 4 up → net 2 up
+		for range 2 {
+			f.Update(wheelDown())
+		}
+		for range 4 {
+			f.Update(wheelUp())
+		}
+		f.Update(flush())
+		if p.counts[ActionNavUp] != 2 {
+			t.Errorf("net 2 up: NavUp count = %d; want 2", p.counts[ActionNavUp])
+		}
+		if p.counts[ActionNavDown] != 0 {
+			t.Errorf("net 2 up: unexpected NavDown count %d", p.counts[ActionNavDown])
+		}
+	})
+
+	t.Run("first_wheel_arms_tick_subsequent_nil", func(t *testing.T) {
+		f, _ := newMouseFrame(t, 80, frameGoldenHeight)
+		// First wheel event must return a non-nil cmd (the tick).
+		_, cmd1 := f.Update(wheelDown())
+		if cmd1 == nil {
+			t.Fatal("first WheelDown: cmd = nil; want non-nil (tick)")
+		}
+		// Execute the real tick and confirm it yields wheelFlushMsg — without
+		// this the coalescing tests (which inject flush() directly) would still
+		// pass even if the tick closure returned the wrong message type.
+		if _, ok := cmd1().(wheelFlushMsg); !ok {
+			t.Errorf("tick cmd produced %T; want wheelFlushMsg", cmd1())
+		}
+		// Second and third in-window wheel events must return nil (already armed).
+		_, cmd2 := f.Update(wheelDown())
+		if cmd2 != nil {
+			t.Error("second WheelDown: cmd should be nil (tick already armed)")
+		}
+		_, cmd3 := f.Update(wheelUp())
+		if cmd3 != nil {
+			t.Error("third wheel (up) while armed: cmd should be nil")
+		}
+	})
+
+	t.Run("stale_flush_after_flush_is_noop", func(t *testing.T) {
+		f, p := newMouseFrame(t, 80, frameGoldenHeight)
+		f.Update(wheelDown())
+		f.Update(flush())
+		before := p.counts[ActionNavDown]
+		// A second flush with no new wheel event must not dispatch anything.
+		f.Update(flush())
+		if p.counts[ActionNavDown] != before {
+			t.Errorf("second flush (empty accum): NavDown grew from %d to %d", before, p.counts[ActionNavDown])
+		}
+	})
+
+	t.Run("horizontal_wheel_ignored", func(t *testing.T) {
+		f, p := newMouseFrame(t, 80, frameGoldenHeight)
+		// Horizontal wheel events must neither arm a tick nor touch the
+		// vertical accumulator — they carry no Nav mapping in Stage 2.
+		_, cmdL := f.Update(wheelLeft())
+		if cmdL != nil {
+			t.Error("WheelLeft returned a cmd; want nil (no tick armed)")
+		}
+		_, cmdR := f.Update(wheelRight())
+		if cmdR != nil {
+			t.Error("WheelRight returned a cmd; want nil (no tick armed)")
+		}
+		if f.wheelAccum != 0 {
+			t.Errorf("wheelAccum after horizontal wheel = %d; want 0", f.wheelAccum)
+		}
+		if f.wheelArmed {
+			t.Error("wheelArmed after horizontal wheel should be false")
+		}
+		// A subsequent flush must dispatch no Nav in either direction.
+		f.Update(flush())
+		if p.counts[ActionNavDown] != 0 || p.counts[ActionNavUp] != 0 {
+			t.Errorf("horizontal wheel produced Nav: down=%d up=%d; want 0/0",
+				p.counts[ActionNavDown], p.counts[ActionNavUp])
+		}
+	})
+
+	t.Run("swallowed_while_overlay_open", func(t *testing.T) {
+		f, _ := newMouseFrame(t, 80, frameGoldenHeight)
+		// Open the help overlay via key (keyboard path; '?' registered by NewRegistry).
+		f.Update(key("?"))
+		if f.overlay.Empty() {
+			t.Fatal("help overlay did not open")
+		}
+		_, cmd := f.Update(wheelDown())
+		if cmd != nil {
+			t.Error("WheelDown while overlay open returned a cmd; want nil (swallowed)")
+		}
+		if f.wheelAccum != 0 {
+			t.Errorf("wheelAccum after swallowed wheel = %d; want 0", f.wheelAccum)
+		}
+		if f.wheelArmed {
+			t.Error("wheelArmed after swallowed wheel should be false")
+		}
+	})
+
+	t.Run("wheel_then_modal_then_flush_zero_nav", func(t *testing.T) {
+		// Codex finding #1: arm the tick with a wheel event, then open a modal;
+		// the delayed flush must not dispatch Nav behind the modal.
+		f, p := newMouseFrame(t, 80, frameGoldenHeight)
+		f.Update(wheelDown()) // arms the tick + accumulates
+		// Open help modal (clears accumulator on push).
+		f.Update(key("?"))
+		if f.overlay.Empty() {
+			t.Fatal("help overlay did not open")
+		}
+		// Inject the flush that would have arrived from the armed tick.
+		f.Update(flush())
+		if p.counts[ActionNavDown] != 0 {
+			t.Errorf("flush behind modal: NavDown count = %d; want 0", p.counts[ActionNavDown])
+		}
+		// Accumulator and armed flag must be clear after the no-op flush.
+		if f.wheelAccum != 0 {
+			t.Errorf("wheelAccum after modal flush = %d; want 0", f.wheelAccum)
+		}
+		if f.wheelArmed {
+			t.Error("wheelArmed after modal flush should be false")
+		}
+	})
+}
+
+// TestFrame_ClickRouting exercises the full click-routing policy wired in Task 5.
+func TestFrame_ClickRouting(t *testing.T) {
+	// Coordinates derived from mouseFrameGeometry:
+	//   (5, 5)   → panel main (outer {0,0,40,23})
+	//   (50, 5)  → panel alt  (outer {40,0,40,23})
+	//   (75, 23) → help-hint  (x ∈ [74,80), y=23)
+	//   (3, 23)  → zoneNone   (y=23, x<74, not in any panel)
+
+	t.Run("click_on_panel_changes_focus", func(t *testing.T) {
+		f, _ := newMouseFrame(t, 80, frameGoldenHeight)
+		if f.focus.Active() != mousePanelMain {
+			t.Fatalf("initial focus = %q; want %q", f.focus.Active(), mousePanelMain)
+		}
+		f.Update(leftClick(50, 5)) // click in alt panel
+		if got := f.focus.Active(); got != mousePanelAlt {
+			t.Errorf("after click alt panel: focus = %q; want %q", got, mousePanelAlt)
+		}
+		f.Update(leftClick(5, 5)) // click in main panel
+		if got := f.focus.Active(); got != mousePanelMain {
+			t.Errorf("after click main panel: focus = %q; want %q", got, mousePanelMain)
+		}
+	})
+
+	t.Run("click_on_help_hint_opens_help", func(t *testing.T) {
+		f, _ := newMouseFrame(t, 80, frameGoldenHeight)
+		if !f.overlay.Empty() {
+			t.Fatal("overlay non-empty before click")
+		}
+		f.Update(leftClick(75, 23)) // click in help hint
+		if f.overlay.Empty() {
+			t.Error("help overlay did not open on help-hint click")
+		}
+	})
+
+	t.Run("double_click_same_panel_cell_triggers_select", func(t *testing.T) {
+		f, p := newMouseFrame(t, 80, frameGoldenHeight)
+		clk := testClock()
+		f.clock = clk
+		// Two left-clicks in the same panel + same cell within the window.
+		f.Update(leftClick(5, 5)) // first click — record
+		f.Update(leftClick(5, 5)) // second click — double-click
+		if got := p.counts[ActionSelect]; got != 1 {
+			t.Errorf("double-click: ActionSelect count = %d; want 1", got)
+		}
+	})
+
+	t.Run("triple_click_triggers_select_once", func(t *testing.T) {
+		f, p := newMouseFrame(t, 80, frameGoldenHeight)
+		clk := testClock()
+		f.clock = clk
+		f.Update(leftClick(5, 5)) // first
+		f.Update(leftClick(5, 5)) // second → Select (clears lastClick)
+		f.Update(leftClick(5, 5)) // third  → first of a new pair, not a Select
+		if got := p.counts[ActionSelect]; got != 1 {
+			t.Errorf("triple-click: ActionSelect count = %d; want 1", got)
+		}
+		// The third click should have recorded a new lastClick.
+		if f.lastClick.t.IsZero() {
+			t.Error("after triple-click, lastClick.t is zero; want the third click recorded")
+		}
+	})
+
+	t.Run("double_click_outside_window_no_select", func(t *testing.T) {
+		f, p := newMouseFrame(t, 80, frameGoldenHeight)
+		clk := testClock()
+		f.clock = clk
+		f.Update(leftClick(5, 5))                         // first click
+		clk.advance(doubleClickWindow + time.Millisecond) // advance past window
+		f.Update(leftClick(5, 5))                         // second click — too late
+		if got := p.counts[ActionSelect]; got != 0 {
+			t.Errorf("outside-window double-click: ActionSelect count = %d; want 0", got)
+		}
+	})
+
+	t.Run("double_click_blank_status_no_select", func(t *testing.T) {
+		// Two clicks on blank status space (zoneNone) must never produce Select.
+		f, p := newMouseFrame(t, 80, frameGoldenHeight)
+		clk := testClock()
+		f.clock = clk
+		f.Update(leftClick(3, 23)) // zoneNone — clears lastClick
+		f.Update(leftClick(3, 23)) // zoneNone — clears lastClick again
+		if got := p.counts[ActionSelect]; got != 0 {
+			t.Errorf("blank-space double-click: ActionSelect count = %d; want 0", got)
+		}
+	})
+
+	t.Run("double_click_help_hint_no_select", func(t *testing.T) {
+		// Two clicks on the help-hint zone: help is toggled (opened), second
+		// click is swallowed (overlay open). No Select must fire.
+		f, p := newMouseFrame(t, 80, frameGoldenHeight)
+		clk := testClock()
+		f.clock = clk
+		f.Update(leftClick(75, 23)) // opens help overlay; clears lastClick
+		f.Update(leftClick(75, 23)) // overlay open → swallowed
+		if got := p.counts[ActionSelect]; got != 0 {
+			t.Errorf("help-hint double-click: ActionSelect count = %d; want 0", got)
+		}
+	})
+
+	t.Run("keyboard_help_open_close_resets_double_click", func(t *testing.T) {
+		// Panel click, then a keyboard help open+close, then a click on the same
+		// cell within the window must NOT synthesize a Select — the overlay
+		// boundary resets the double-click record.
+		f, p := newMouseFrame(t, 80, frameGoldenHeight)
+		clk := testClock()
+		f.clock = clk
+		f.Update(leftClick(5, 5)) // first click — record
+		f.Update(key("?"))        // open help (clears lastClick)
+		f.Update(key("?"))        // close help (clears lastClick)
+		f.Update(leftClick(5, 5)) // same cell, within window — must be a fresh first click
+		if got := p.counts[ActionSelect]; got != 0 {
+			t.Errorf("help open/close between clicks: ActionSelect count = %d; want 0", got)
+		}
+	})
+
+	t.Run("esc_close_overlay_resets_double_click", func(t *testing.T) {
+		// Same as above but the overlay is dismissed via esc, which pops through
+		// a different code path; it must reset the double-click record too.
+		f, p := newMouseFrame(t, 80, frameGoldenHeight)
+		clk := testClock()
+		f.clock = clk
+		f.Update(leftClick(5, 5)) // first click — record
+		f.Update(key("?"))        // open help (clears lastClick)
+		f.Update(key("esc"))      // close help via esc (clears lastClick)
+		f.Update(leftClick(5, 5)) // same cell, within window
+		if got := p.counts[ActionSelect]; got != 0 {
+			t.Errorf("esc-close between clicks: ActionSelect count = %d; want 0", got)
+		}
+	})
+
+	t.Run("swallowed_overlay_click_resets_double_click", func(t *testing.T) {
+		// Panel click, plugin overlay opens, a click is swallowed while it is up,
+		// overlay closes, then a click on the original cell. The swallowed click
+		// must have cleared the record so no phantom Select fires.
+		f, p := newMouseFrame(t, 80, frameGoldenHeight)
+		clk := testClock()
+		f.clock = clk
+		f.Update(leftClick(5, 5)) // first click — record
+		f.overlay.Push(Overlay{Content: "modal", Width: 5, Height: 1})
+		f.Update(leftClick(5, 5)) // swallowed while overlay open (clears lastClick)
+		f.overlay.Pop()
+		f.Update(leftClick(5, 5)) // fresh first click after the modal closed
+		if got := p.counts[ActionSelect]; got != 0 {
+			t.Errorf("swallowed overlay click between clicks: ActionSelect count = %d; want 0", got)
+		}
+	})
+
+	t.Run("zero_clock_first_click_not_double_click", func(t *testing.T) {
+		// A clock that returns time.Time{} (zero): lastClick.t starts zero, so
+		// the first click at (0,0) must NOT be treated as a double-click
+		// — the !IsZero sentinel gate prevents it.
+		f, p := newMouseFrame(t, 80, frameGoldenHeight)
+		f.clock = &fakeClock{t: time.Time{}} // zero-start clock
+		f.Update(leftClick(0, 0))            // (0,0) is in main panel
+		if got := p.counts[ActionSelect]; got != 0 {
+			t.Errorf("zero-clock first click: ActionSelect count = %d; want 0", got)
+		}
+	})
+
+	t.Run("different_panel_no_select", func(t *testing.T) {
+		// Click in main, then click in alt: different panel ID → no double-click.
+		f, p := newMouseFrame(t, 80, frameGoldenHeight)
+		clk := testClock()
+		f.clock = clk
+		f.Update(leftClick(5, 5))  // main panel
+		f.Update(leftClick(50, 5)) // alt panel — different id
+		if got := p.counts[ActionSelect]; got != 0 {
+			t.Errorf("different-panel: ActionSelect count = %d; want 0", got)
+		}
+	})
+
+	t.Run("non_left_button_ignored", func(t *testing.T) {
+		f, p := newMouseFrame(t, 80, frameGoldenHeight)
+		clk := testClock()
+		f.clock = clk
+		// Right-click in a panel — must not set focus or record a click.
+		before := f.focus.Active()
+		f.Update(tea.MouseClickMsg{X: 50, Y: 5, Button: tea.MouseRight})
+		if f.focus.Active() != before {
+			t.Errorf("right-click changed focus; want unchanged")
+		}
+		if p.counts[ActionSelect] != 0 {
+			t.Errorf("right-click: ActionSelect count = %d; want 0", p.counts[ActionSelect])
+		}
+		if !f.lastClick.t.IsZero() {
+			t.Error("right-click recorded a lastClick; want zero sentinel")
+		}
+	})
+
+	t.Run("click_with_overlay_does_not_pop_it", func(t *testing.T) {
+		f, _ := newMouseFrame(t, 80, frameGoldenHeight)
+		f.Update(key("?")) // open help overlay
+		if f.overlay.Empty() {
+			t.Fatal("overlay did not open")
+		}
+		f.Update(leftClick(5, 5)) // click anywhere while overlay is open
+		if f.overlay.Empty() {
+			t.Error("click while overlay open dismissed the overlay; want swallow (no dismiss)")
+		}
+	})
+
+	t.Run("release_message_ignored", func(t *testing.T) {
+		f, p := newMouseFrame(t, 80, frameGoldenHeight)
+		before := len(p.counts)
+		_, cmd := f.Update(tea.MouseReleaseMsg{})
+		if cmd != nil {
+			t.Error("MouseReleaseMsg produced a cmd; want nil")
+		}
+		if len(p.counts) != before {
+			t.Error("MouseReleaseMsg updated action counts; want no-op")
+		}
+	})
+
+	t.Run("motion_message_ignored", func(t *testing.T) {
+		f, p := newMouseFrame(t, 80, frameGoldenHeight)
+		before := len(p.counts)
+		_, cmd := f.Update(tea.MouseMotionMsg{})
+		if cmd != nil {
+			t.Error("MouseMotionMsg produced a cmd; want nil")
+		}
+		if len(p.counts) != before {
+			t.Error("MouseMotionMsg updated action counts; want no-op")
+		}
+	})
+}
+
+// TestFrame_PanelLocal verifies the panelLocal coordinate-translation contract
+// for bordered panels at several geometry buckets.
+func TestFrame_PanelLocal(t *testing.T) {
+	tests := []struct {
+		name   string
+		outer  Region
+		x, y   int
+		wantLX int
+		wantLY int
+	}{
+		{
+			name:  "main_panel_at_0_0",
+			outer: Region{X: 0, Y: 0, Width: 40, Height: 23},
+			// inner = {X:2, Y:1, W:36, H:21}; click at (5,5) → local (3,4)
+			x: 5, y: 5, wantLX: 3, wantLY: 4,
+		},
+		{
+			name:  "main_panel_top_left_inner",
+			outer: Region{X: 0, Y: 0, Width: 40, Height: 23},
+			// inner top-left: X=2, Y=1 → local (0,0)
+			x: 2, y: 1, wantLX: 0, wantLY: 0,
+		},
+		{
+			name:  "alt_panel_at_40_0",
+			outer: Region{X: 40, Y: 0, Width: 40, Height: 23},
+			// inner = {X:42, Y:1, W:36, H:21}; click at (50,5) → local (8,4)
+			x: 50, y: 5, wantLX: 8, wantLY: 4,
+		},
+		{
+			name:  "wide_panel_80_0",
+			outer: Region{X: 0, Y: 0, Width: 80, Height: 23},
+			// inner = {X:2, Y:1, W:76, H:21}; click at (10,10) → local (8,9)
+			x: 10, y: 10, wantLX: 8, wantLY: 9,
+		},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			lx, ly := panelLocal(tc.outer, tc.x, tc.y)
+			if lx != tc.wantLX || ly != tc.wantLY {
+				t.Errorf("panelLocal(%+v, %d, %d) = (%d,%d); want (%d,%d)",
+					tc.outer, tc.x, tc.y, lx, ly, tc.wantLX, tc.wantLY)
+			}
+		})
+	}
 }
 
 // assertGolden compares got against testdata/<name>, writing it when

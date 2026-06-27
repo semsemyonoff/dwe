@@ -2,6 +2,8 @@ package tui
 
 import (
 	"fmt"
+	"os"
+	"time"
 
 	"github.com/semsemyonoff/dwe/internal/core/ui/styles"
 	"github.com/semsemyonoff/dwe/internal/shared/i18n"
@@ -24,9 +26,14 @@ import (
 // defined here (not in RunOptions, Task 8) so the package builds in isolation
 // after this task; Task 8's Run maps its public RunOptions into this struct.
 type frameOptions struct {
-	// mouse gates the Stage 2 mouse seam. It is plumbed through to View but
-	// rendered as tea.MouseModeNone this stage regardless of its value.
+	// mouse enables CellMotion mouse reporting (click + wheel, no motion) when
+	// the terminal is capable. Set per-program via RunOptions.Mouse; the
+	// rendered mode is MouseModeCellMotion only when this is true AND
+	// mouseCapable() returns true.
 	mouse bool
+	// termEnv returns the $TERM value for the capability gate. Defaults to
+	// os.Getenv("TERM") in newFrame; injectable from tests via withTermEnv.
+	termEnv func() string
 	// brand / project are the left-zone status-line strings (brand · project).
 	brand   string
 	project string
@@ -35,14 +42,58 @@ type frameOptions struct {
 // frameOption mutates the private frameOptions during [newFrame] construction.
 type frameOption func(*frameOptions)
 
-// withMouse sets the (inert, Stage 2) mouse seam flag.
+// withMouse enables or disables mouse reporting for this frame. When true,
+// View emits MouseModeCellMotion (click + wheel) provided the terminal is
+// capable (not TERM=dumb).
 func withMouse(on bool) frameOption { return func(o *frameOptions) { o.mouse = on } }
+
+// withTermEnv overrides the $TERM probe used by [Frame.mouseCapable]. Pass a
+// function returning the desired TERM value; used only in in-package tests to
+// avoid dependency on the real environment.
+func withTermEnv(fn func() string) frameOption { return func(o *frameOptions) { o.termEnv = fn } }
 
 // withBrand sets the status-line brand string.
 func withBrand(s string) frameOption { return func(o *frameOptions) { o.brand = s } }
 
 // withProject sets the status-line project string.
 func withProject(s string) frameOption { return func(o *frameOptions) { o.project = s } }
+
+// coalesceWindow is the wheel-burst coalescing interval. The first wheel event
+// arms a one-shot tea.Tick; subsequent events within the window accumulate into
+// wheelAccum; the tick fires wheelFlushMsg and the frame dispatches the net
+// count as Nav steps. Provisional — tune if burst/slow feel is off.
+const coalesceWindow = 16 * time.Millisecond
+
+// doubleClickWindow is the maximum interval between two left-clicks in the same
+// panel cell that triggers a double-click Select. Provisional — tune after
+// real-device testing in the Stage 3 pilot.
+const doubleClickWindow = 400 * time.Millisecond
+
+// wheelFlushMsg is the private tick message that fires after coalesceWindow to
+// dispatch the accumulated wheel delta as Nav steps. It must not fall through
+// to plugin.Update (it is framework-internal).
+type wheelFlushMsg struct{}
+
+// frameClock is an injectable time source for double-click detection. The
+// production implementation uses time.Now; tests inject a controlled fake.
+type frameClock interface {
+	now() time.Time
+}
+
+// realClock is the production frameClock, delegating to time.Now.
+type realClock struct{}
+
+func (realClock) now() time.Time { return time.Now() }
+
+// lastClickRecord stores the previous left-click for double-click detection.
+// The zero time.Time is the "no prior click" sentinel — it is never a valid
+// prior event, so the !IsZero gate ensures the first click never triggers a
+// double-click by itself.
+type lastClickRecord struct {
+	id   PanelID
+	x, y int
+	t    time.Time
+}
 
 // Frame is the framework's tea.Model. It is parameterised by a single [Plugin]
 // and ties together the registry, focus manager, overlay stack, and geometry.
@@ -53,6 +104,14 @@ type Frame struct {
 	overlay  overlayStack
 	geo      Geometry
 	opts     frameOptions
+
+	// wheel accumulator — see handleMouse and the wheelFlushMsg case in Update.
+	wheelAccum int
+	wheelArmed bool
+
+	// clock and lastClick support double-click detection — see handleClick.
+	clock     frameClock
+	lastClick lastClickRecord
 
 	// tr / locale resolve help-modal display strings. Stage 0 uses a
 	// NopTranslator (English fallbacks) + a fixed locale; the migration stages
@@ -71,6 +130,9 @@ func newFrame(p Plugin, opts ...frameOption) (*Frame, error) {
 	var fo frameOptions
 	for _, o := range opts {
 		o(&fo)
+	}
+	if fo.termEnv == nil {
+		fo.termEnv = func() string { return os.Getenv("TERM") }
 	}
 
 	panels := p.Panels()
@@ -103,8 +165,16 @@ func newFrame(p Plugin, opts ...frameOption) (*Frame, error) {
 		opts:     fo,
 		tr:       i18n.NopTranslator{},
 		locale:   "en",
+		clock:    realClock{},
 	}, nil
 }
+
+// mouseCapable reports whether the current terminal supports mouse reporting.
+// We do NOT actively probe for mouse support: setting CellMotion on a terminal
+// that does not understand the enable escape is harmless — the escape is simply
+// ignored. The gate exists only to keep TERM=dumb (keyboard-only
+// environments) from emitting the escape at all.
+func (f *Frame) mouseCapable() bool { return f.opts.termEnv() != "dumb" }
 
 // Init implements tea.Model. It delegates to the plugin so plugin startup
 // commands run; the framework has no startup command of its own this stage.
@@ -124,7 +194,10 @@ func (f *Frame) Init() tea.Cmd { return f.plugin.Init() }
 //     not routed (no acting behind the modal).
 //   - Every non-key message is always forwarded to plugin.Update (async
 //     preservation), including while the help overlay is open.
-//   - tea.MouseMsg is ignored this stage (Stage 2 seam).
+//   - tea.MouseMsg is routed to handleMouse: wheel events accumulate for
+//     burst coalescing; left-click events are classified via classifyHit and
+//     routed (help-hint → help, panel → focus + double-click, blank → swallow);
+//     release and motion events are silently ignored.
 //
 // After both a HandleAction call and a plugin.Update forward the framework
 // drains plugin.PendingOverlay so an action-triggered overlay appears
@@ -140,9 +213,43 @@ func (f *Frame) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case tea.KeyPressMsg:
 		return f.handleKey(m)
 	case tea.MouseMsg:
-		// Stage 2: the mouse layer lands here. For now mouse messages are
-		// ignored so the (inert) seam never acts.
-		return f, nil
+		return f.handleMouse(m)
+	case wheelFlushMsg:
+		// Flush the wheel accumulator as Nav steps. No-op while an overlay is
+		// open — a tick armed before the modal opened must not dispatch Nav
+		// behind it (the accumulator was already cleared when the overlay
+		// opened, so this is a true no-op with no generation/token machinery).
+		if !f.overlay.Empty() {
+			f.wheelAccum = 0
+			f.wheelArmed = false
+			return f, nil
+		}
+		accum := f.wheelAccum
+		f.wheelAccum = 0
+		f.wheelArmed = false
+		if accum == 0 {
+			return f, nil
+		}
+		var event string
+		steps := accum
+		if accum < 0 {
+			event = "wheel-up"
+			steps = -accum
+		} else {
+			event = "wheel-down"
+		}
+		action, ok := f.registry.MatchMouse(event)
+		if !ok {
+			return f, nil
+		}
+		var cmds []tea.Cmd
+		for range steps {
+			if cmd, handled := f.plugin.HandleAction(action); handled {
+				cmds = append(cmds, cmd)
+			}
+		}
+		f.drainOverlay()
+		return f, tea.Batch(cmds...)
 	default:
 		cmd := f.plugin.Update(msg)
 		f.drainOverlay()
@@ -164,6 +271,9 @@ func (f *Frame) handleKey(key tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 		// body never acts behind the modal.
 		if keyStr == "esc" {
 			f.overlay.Pop()
+			// Crossing the overlay boundary resets double-click tracking — see
+			// the ActionHelp branch in handleBuiltin.
+			f.lastClick = lastClickRecord{}
 			return f, nil
 		}
 		if a, ok := f.registry.Match(keyStr); ok {
@@ -196,7 +306,17 @@ func (f *Frame) handleKey(key tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 func (f *Frame) handleBuiltin(a Action) (tea.Model, tea.Cmd) {
 	switch a {
 	case ActionHelp:
+		// Either branch crosses an overlay boundary, so reset the double-click
+		// record: a panel click followed by a keyboard help open/close must not
+		// pair with a later click on the same cell into a phantom double-click.
+		f.lastClick = lastClickRecord{}
 		if f.overlay.Empty() {
+			// Clear any pending wheel accumulation before pushing the modal.
+			// tea.Tick is one-shot and uncancellable; resetting here ensures
+			// the wheelFlushMsg guard (no-op while overlay open) sees an empty
+			// accumulator even if a tick fires after the modal opens.
+			f.wheelAccum = 0
+			f.wheelArmed = false
 			f.overlay.Push(buildHelpOverlay(f.registry, f.tr, f.locale, f.geo.Overlay.Width, f.geo.Overlay.Height))
 		} else {
 			f.overlay.Pop()
@@ -213,10 +333,123 @@ func (f *Frame) handleBuiltin(a Action) (tea.Model, tea.Cmd) {
 
 // drainOverlay pushes a plugin-requested overlay onto the stack. Mutual
 // exclusivity is structural (View only ever composites Top), so Push is safe.
+// It also clears any pending wheel accumulation so a stale tick cannot
+// dispatch Nav behind a plugin-triggered modal, and resets the double-click
+// record so a click before the modal can never pair with one after it.
 func (f *Frame) drainOverlay() {
 	if ov, ok := f.plugin.PendingOverlay(); ok {
+		f.wheelAccum = 0
+		f.wheelArmed = false
+		f.lastClick = lastClickRecord{}
 		f.overlay.Push(ov)
 	}
+}
+
+// handleMouse dispatches a tea.MouseMsg. Wheel events are accumulated for
+// burst coalescing (see wheelFlushMsg case in Update); left-click events are
+// classified via classifyHit and routed by zone; release and motion messages
+// are silently ignored — CellMotion can emit motion while a button is held
+// but we do not act on it.
+func (f *Frame) handleMouse(msg tea.MouseMsg) (tea.Model, tea.Cmd) {
+	switch m := msg.(type) {
+	case tea.MouseWheelMsg:
+		if !f.overlay.Empty() {
+			return f, nil
+		}
+		switch m.Button {
+		case tea.MouseWheelUp:
+			f.wheelAccum--
+		case tea.MouseWheelDown:
+			f.wheelAccum++
+		default:
+			// Horizontal wheel (MouseWheelLeft/Right, emitted by trackpads in
+			// CellMotion mode) carries no Nav mapping in Stage 2; ignore it so
+			// it never arms a tick or pollutes the vertical accumulator.
+			return f, nil
+		}
+		if !f.wheelArmed {
+			f.wheelArmed = true
+			return f, tea.Tick(coalesceWindow, func(time.Time) tea.Msg { return wheelFlushMsg{} })
+		}
+		return f, nil
+	case tea.MouseClickMsg:
+		return f.handleClick(m)
+	case tea.MouseReleaseMsg, tea.MouseMotionMsg:
+		// CellMotion can emit release and motion events while a button is
+		// held; neither triggers any frame or plugin action.
+		return f, nil
+	default:
+		return f, nil
+	}
+}
+
+// handleClick processes a left-click by classifying the hit zone first:
+//   - overlay open → both zoneModal and zoneOutsideModal are swallowed and
+//     clear lastClick; outside does NOT dismiss the overlay (locked Stage 2
+//     policy)
+//   - zoneHelpHint → toggle the help overlay; clear lastClick
+//   - zonePanel → set focus; then double-click test (same panel + same cell +
+//     within doubleClickWindow + lastClick not zero-sentinel); record otherwise
+//   - zoneNone / status space → swallow; clear lastClick so two blank-space
+//     clicks can never synthesize a Select
+//
+// Non-left buttons are silently ignored.
+func (f *Frame) handleClick(m tea.MouseClickMsg) (tea.Model, tea.Cmd) {
+	if m.Button != tea.MouseLeft {
+		return f, nil
+	}
+	var ov *Overlay
+	if top, ok := f.overlay.Top(); ok {
+		ov = &top
+	}
+	zone, id := classifyHit(f.geo, f.panelRects(), f.helpHintRegion(), ov, m.X, m.Y)
+	switch zone {
+	case zoneModal, zoneOutsideModal:
+		// Swallowed while a modal is open. Clear the double-click record so a
+		// click before the overlay opened can never pair with one after it
+		// closes into a phantom double-click.
+		f.lastClick = lastClickRecord{}
+		return f, nil
+	case zoneHelpHint:
+		f.lastClick = lastClickRecord{}
+		return f.handleBuiltin(ActionHelp)
+	case zonePanel:
+		f.focus.Set(id)
+		if !f.lastClick.t.IsZero() &&
+			f.lastClick.id == id &&
+			f.lastClick.x == m.X &&
+			f.lastClick.y == m.Y &&
+			f.clock.now().Sub(f.lastClick.t) < doubleClickWindow {
+			// Double-click confirmed. Clear the full record so a third click
+			// in the same cell within the window does not re-trigger Select.
+			f.lastClick = lastClickRecord{}
+			if action, ok := f.registry.MatchMouse("double-click"); ok {
+				if cmd, handled := f.plugin.HandleAction(action); handled {
+					f.drainOverlay()
+					return f, cmd
+				}
+			}
+			return f, nil
+		}
+		f.lastClick = lastClickRecord{id: id, x: m.X, y: m.Y, t: f.clock.now()}
+		return f, nil
+	default: // zoneNone
+		f.lastClick = lastClickRecord{}
+		return f, nil
+	}
+}
+
+// panelLocal translates an absolute terminal click (x, y) to coordinates
+// local to the inner content region of the panel whose outer region is outer.
+// Local (0, 0) is the top-left cell of the inner region.
+//
+// The panel-facing click route — row-select and tab-switch forward to plugin —
+// lands with the Stage 3 cmdbrowser pilot (mirroring Stage 1's
+// routeWhileCapturing deferral). This helper locks the coordinate contract so
+// the Stage 3 consumer can rely on it without re-deriving the geometry.
+func panelLocal(outer Region, x, y int) (lx, ly int) {
+	inner := contentRegion(outer)
+	return x - inner.X, y - inner.Y
 }
 
 // isBuiltin reports whether a is a framework-owned action.
@@ -270,7 +503,7 @@ func routeWhileCapturing(msg tea.Msg) captureDecision {
 // renders each through the plugin into its inner region, draws focus-aware
 // borders, composites the active overlay centred over the body, and appends the
 // status line beneath. The returned tea.View carries the framework-owned
-// envelope (AltScreen on; the inert mouse seam).
+// envelope (AltScreen on; CellMotion mouse when enabled and capable).
 func (f *Frame) View() tea.View {
 	body := f.renderBody()
 	if ov, ok := f.overlay.Top(); ok {
@@ -288,10 +521,15 @@ func (f *Frame) View() tea.View {
 	// the framework owns it so callers never put the program in full-window
 	// mode themselves.
 	v.AltScreen = true
-	// Stage 2 mouse seam: the opts.mouse flag is plumbed but the rendered mode
-	// is hardcoded to None this stage. Stage 2 lights this up.
-	v.MouseMode = tea.MouseModeNone
-	_ = f.opts.mouse // read so the seam is wired; inert until Stage 2.
+	// CellMotion enables click + wheel reporting without motion spam. We use
+	// the fixed CellMotion mode (not AllMotion) per the spec. The gate only
+	// suppresses the enable escape on TERM=dumb; on any other terminal the
+	// escape is harmless even if the terminal does not understand it.
+	if f.opts.mouse && f.mouseCapable() {
+		v.MouseMode = tea.MouseModeCellMotion
+	} else {
+		v.MouseMode = tea.MouseModeNone
+	}
 	return v
 }
 
@@ -376,4 +614,36 @@ func (f *Frame) helpHint() string {
 		key = b.Keys[0]
 	}
 	return key + " help"
+}
+
+// helpHintRegion returns the status-line cell range occupied by the rendered
+// help-key hint. The region and the rendered hint share the same width source
+// (muted.Render width measurement) so the hit zone and the visible text can
+// never drift apart.
+func (f *Frame) helpHintRegion() Region {
+	muted := lipgloss.NewStyle().Foreground(lipgloss.Color(styles.ColorMuted()))
+	rw := lipgloss.Width(muted.Render(f.helpHint()))
+	return Region{
+		X:      f.geo.Status.Width - rw,
+		Y:      f.geo.Status.Y,
+		Width:  rw,
+		Height: 1,
+	}
+}
+
+// panelRects returns the outer region of each body panel in plugin declaration
+// order. The regions are computed via layoutPanels from the panel weights —
+// the same call renderBody makes — so hit-test regions match what is rendered.
+func (f *Frame) panelRects() []panelRect {
+	panels := f.plugin.Panels()
+	weights := make([]int, len(panels))
+	for i, p := range panels {
+		weights[i] = p.Weight
+	}
+	outers := layoutPanels(f.geo.Outer, weights)
+	rects := make([]panelRect, len(panels))
+	for i, p := range panels {
+		rects[i] = panelRect{ID: p.ID, Region: outers[i]}
+	}
+	return rects
 }

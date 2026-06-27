@@ -203,6 +203,127 @@ func TestRegistry_AliasCollisionWithExistingKeyReturnsError(t *testing.T) {
 	}
 }
 
+func TestRegistry_MatchMouse_StdlibDefaults(t *testing.T) {
+	t.Parallel()
+	r := NewRegistry()
+	if err := RegisterStandard(r, ActionNavUp, ActionNavDown, ActionSelect); err != nil {
+		t.Fatalf("RegisterStandard: %v", err)
+	}
+
+	cases := []struct {
+		event string
+		want  Action
+	}{
+		{"wheel-up", ActionNavUp},
+		{"wheel-down", ActionNavDown},
+		{"double-click", ActionSelect},
+	}
+	for _, tc := range cases {
+		got, ok := r.MatchMouse(tc.event)
+		if !ok {
+			t.Errorf("MatchMouse(%q) = false; want true", tc.event)
+			continue
+		}
+		if got != tc.want {
+			t.Errorf("MatchMouse(%q) = %q; want %q", tc.event, got, tc.want)
+		}
+	}
+}
+
+func TestRegistry_MatchMouse_ClickReturnsFalse(t *testing.T) {
+	t.Parallel()
+	r := NewRegistry()
+	if err := RegisterStandard(r, ActionNavUp, ActionNavDown, ActionSelect); err != nil {
+		t.Fatalf("RegisterStandard: %v", err)
+	}
+	// "click" is frame-owned and must never be a registered mouse binding.
+	got, ok := r.MatchMouse("click")
+	if ok {
+		t.Errorf("MatchMouse(click) = %q, true; want false (frame-owned, not registered)", got)
+	}
+}
+
+func TestRegistry_MatchMouse_UnknownEventReturnsFalse(t *testing.T) {
+	t.Parallel()
+	r := NewRegistry()
+	if err := RegisterStandard(r, ActionNavUp, ActionNavDown, ActionSelect); err != nil {
+		t.Fatalf("RegisterStandard: %v", err)
+	}
+	got, ok := r.MatchMouse("nonsense")
+	if ok {
+		t.Errorf("MatchMouse(nonsense) = %q, true; want false", got)
+	}
+}
+
+func TestRegistry_MatchMouse_EmptyRegistryReturnsFalse(t *testing.T) {
+	t.Parallel()
+	// NewRegistry only registers built-ins; none have a Mouse field set.
+	r := NewRegistry()
+	for _, event := range []string{"wheel-up", "wheel-down", "double-click", "click"} {
+		got, ok := r.MatchMouse(event)
+		if ok {
+			t.Errorf("MatchMouse(%q) on empty registry = %q, true; want false", event, got)
+		}
+	}
+}
+
+func TestRegistry_MatchMouse_EmptyEventReturnsFalse(t *testing.T) {
+	t.Parallel()
+	// Built-ins carry no Mouse field; an empty event must not spuriously match
+	// the first such binding — it is never a real mouse vocabulary entry.
+	r := NewRegistry()
+	if got, ok := r.MatchMouse(""); ok {
+		t.Errorf("MatchMouse(\"\") = %q, true; want false", got)
+	}
+	// Still false even after binding real mouse events.
+	if err := RegisterStandard(r, ActionNavUp, ActionNavDown, ActionSelect); err != nil {
+		t.Fatalf("RegisterStandard: %v", err)
+	}
+	if got, ok := r.MatchMouse(""); ok {
+		t.Errorf("MatchMouse(\"\") after registration = %q, true; want false", got)
+	}
+}
+
+func TestRegistry_MouseCollisionRejected(t *testing.T) {
+	t.Parallel()
+	r := NewRegistry()
+	if err := r.Register("plugin.first", Binding{Keys: []string{"a"}, Mouse: "wheel-up"}); err != nil {
+		t.Fatalf("first register: %v", err)
+	}
+	// A second binding claiming the same mouse event must be rejected — without
+	// this guard MatchMouse would silently return whichever registered first.
+	err := r.Register("plugin.second", Binding{Keys: []string{"b"}, Mouse: "wheel-up"})
+	if err == nil {
+		t.Fatal("Register with colliding Mouse event: err = nil; want collision error")
+	}
+	// The colliding binding must not be committed.
+	if _, ok := r.Binding("plugin.second"); ok {
+		t.Error("colliding binding was committed despite the error")
+	}
+	if got, _ := r.MatchMouse("wheel-up"); got != "plugin.first" {
+		t.Errorf("MatchMouse(wheel-up) = %q; want plugin.first (collision left first owner intact)", got)
+	}
+}
+
+func TestRegistry_MouseVocabularyRejected(t *testing.T) {
+	t.Parallel()
+	// "click" is frame-owned and never registrable; anything outside the locked
+	// vocabulary is dead state that would silently break the MatchMouse contract.
+	for _, event := range []string{"click", "nonsense", "wheel-left", "Wheel-Up"} {
+		r := NewRegistry()
+		err := r.Register("plugin.bad", Binding{Keys: []string{"a"}, Mouse: event})
+		if err == nil {
+			t.Errorf("Register with Mouse=%q: err = nil; want vocabulary error", event)
+		}
+		if _, ok := r.Binding("plugin.bad"); ok {
+			t.Errorf("Mouse=%q: binding committed despite the error", event)
+		}
+		if got, ok := r.MatchMouse(event); ok {
+			t.Errorf("Mouse=%q: MatchMouse = %q, true; want false (not registered)", event, got)
+		}
+	}
+}
+
 func TestRegistry_AliasCollisionWithOwnCanonicalKeyReturnsError(t *testing.T) {
 	t.Parallel()
 	r := NewRegistry()
