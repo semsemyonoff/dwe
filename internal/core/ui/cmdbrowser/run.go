@@ -11,6 +11,7 @@ import (
 	tea "charm.land/bubbletea/v2"
 
 	"github.com/semsemyonoff/dwe/internal/core/ui/widgets"
+	"github.com/semsemyonoff/dwe/internal/shared/i18n"
 )
 
 // Action enumerates intents returned by the browser. ActionUnknown sits at
@@ -78,6 +79,25 @@ type Options struct {
 	ShowTypeBadges       bool
 	IncludePrivate       bool
 	Mode                 Mode
+
+	// Translator + Locale carry the i18n context into the framework so the
+	// help modal can localize its section/action labels. They are the only
+	// non-breaking way to thread i18n through the frozen Run signature. Both
+	// are nil-safe: a nil Translator resolves to i18n.NopTranslator and an
+	// empty Locale falls through to the framework default. Storage/hashing
+	// sites stay English per the localization contract; the breadcrumb noun
+	// stays hardcoded English (see browser.itemNoun).
+	Translator i18n.Translator
+	Locale     string
+}
+
+// translatorOrNop returns the configured Translator, falling back to a no-op
+// when none was supplied (DefaultOptions and test call sites pass none).
+func (o *Options) translatorOrNop() i18n.Translator {
+	if o.Translator == nil {
+		return i18n.NopTranslator{}
+	}
+	return o.Translator
 }
 
 // applyDefaults promotes the zero Mode to ModeRun. No other field is

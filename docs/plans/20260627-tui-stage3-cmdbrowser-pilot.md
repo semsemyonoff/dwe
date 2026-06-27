@@ -356,28 +356,28 @@ The browser is reshaped into a `tui.Plugin`:
 - Create: `internal/core/ui/cmdbrowser/plugin.go`
 - Create: `internal/core/ui/cmdbrowser/plugin_test.go`
 
-- [ ] add `Translator i18n.Translator` + `Locale string` to `cmdbrowser.Options`
+- [x] add `Translator i18n.Translator` + `Locale string` to `cmdbrowser.Options`
       (nil-safe: nil → `i18n.NopTranslator`/`TranslatorOrNop`); `DefaultOptions`
       leaves them zero.
-- [ ] define `type browser struct{...}` (fields per Technical Details) and a
+- [x] define `type browser struct{...}` (fields per Technical Details) and a
       `newBrowser(title, items, opts) *browser` constructor (reads translator/
       locale from `opts`) that builds the `treeModel`, `list.Model`, and delegate
       (lifted from `newModel`).
-- [ ] implement `Panels()` → `[]Panel{{ID:"tree",Weight:2},{ID:"list",Weight:7}}`
+- [x] implement `Panels()` → `[]Panel{{ID:"tree",Weight:2},{ID:"list",Weight:7}}`
       (verify weights vs current `leftWidth`/`rightWidth`), `Init()` (returns
       nil as today), `Close()` (nil — no async resources), `Result()` (returns
       `b.result`), and `CapturingInput()` (true iff `b.filter != nil`).
-- [ ] implement `Resize(body Region)` caching per-panel inner regions (replaces
+- [x] implement `Resize(body Region)` caching per-panel inner regions (replaces
       `applyLayout` geometry that `Frame` now owns).
-- [ ] implement `StatusContext()` returning breadcrumb of the focused tree group
+- [x] implement `StatusContext()` returning breadcrumb of the focused tree group
       + `[--yes ON]` when `skipConfirm`. The breadcrumb noun
       (`command`/`commands` vs `var`/`vars`) stays HARDCODED English via the
       relocated `itemNoun` (it is hardcoded today — model.go:713 — not
       translated; keep it so for this pilot).
-- [ ] add a compile-time `var _ tui.Plugin = (*browser)(nil)` assertion.
-- [ ] write tests: `Panels()` shape/weights; `Result()`/`CapturingInput()`
+- [x] add a compile-time `var _ tui.Plugin = (*browser)(nil)` assertion.
+- [x] write tests: `Panels()` shape/weights; `Result()`/`CapturingInput()`
       defaults; `StatusContext()` breadcrumb + skip-confirm indicator.
-- [ ] run tests — must pass before next task.
+- [x] run tests — must pass before next task.
 
 ### Task 4: Tree panel — render into inner region via ViewPanel
 
