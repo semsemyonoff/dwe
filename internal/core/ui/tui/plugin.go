@@ -57,6 +57,31 @@ type Overlay struct {
 	CapturesInput bool
 }
 
+// PanelClickMsg is forwarded to [Plugin.Update] when the user single-clicks
+// inside a panel's INNER content region (not its border). X / Y are panel-local
+// coordinates: (0, 0) is the top-left content cell of the named panel (see
+// [panelLocal]). The plugin uses it to move its cursor/selection to the clicked
+// row. It is emitted only on a single click — a confirmed double-click fires the
+// Select action instead and suppresses the message (the first click of the pair
+// already moved the cursor). Border clicks set focus but emit no PanelClickMsg
+// (they would yield negative/out-of-content coordinates).
+type PanelClickMsg struct {
+	// Panel is the clicked panel's ID.
+	Panel PanelID
+	// X / Y are panel-local content coordinates (0-based, inner region origin).
+	X, Y int
+}
+
+// FocusChangedMsg is forwarded to [Plugin.Update] whenever the focused panel
+// changes — via Tab/Shift+Tab (framework built-ins that never otherwise reach
+// the plugin) or a panel click. The plugin uses it to track which panel is
+// active so it can route navigation/scroll to the right widget. It is emitted
+// only when focus actually moves to a different panel.
+type FocusChangedMsg struct {
+	// Panel is the newly focused panel's ID.
+	Panel PanelID
+}
+
 // Plugin is the contract every full-screen surface implements to run inside the
 // [Frame]. The framework owns chrome (borders, status line, overlays, the
 // terminal envelope) and geometry; the plugin owns body content and behaviour.

@@ -892,16 +892,22 @@ const (
 // panels let click tests verify focus switching between panels.
 type mousePlugin struct {
 	counts map[Action]int
+	// msgs records every message forwarded through Update so click/focus
+	// delivery (PanelClickMsg / FocusChangedMsg) can be asserted.
+	msgs []tea.Msg
 }
 
 func newMousePlugin() *mousePlugin {
 	return &mousePlugin{counts: make(map[Action]int)}
 }
 
-func (p *mousePlugin) Init() tea.Cmd                        { return nil }
-func (p *mousePlugin) Close() error                         { return nil }
-func (p *mousePlugin) Resize(Region)                        {}
-func (p *mousePlugin) Update(tea.Msg) tea.Cmd               { return nil }
+func (p *mousePlugin) Init() tea.Cmd { return nil }
+func (p *mousePlugin) Close() error  { return nil }
+func (p *mousePlugin) Resize(Region) {}
+func (p *mousePlugin) Update(msg tea.Msg) tea.Cmd {
+	p.msgs = append(p.msgs, msg)
+	return nil
+}
 func (p *mousePlugin) ViewPanel(_ PanelID, _ Region) string { return "[mouse]" }
 func (p *mousePlugin) Panels() []Panel {
 	return []Panel{
@@ -920,6 +926,28 @@ func (p *mousePlugin) HandleAction(a Action) (tea.Cmd, bool) {
 func (p *mousePlugin) PendingOverlay() (Overlay, bool) { return Overlay{}, false }
 func (p *mousePlugin) Result() any                     { return nil }
 func (p *mousePlugin) CapturingInput() bool            { return false }
+
+// panelClicks returns every PanelClickMsg forwarded to the plugin, in order.
+func (p *mousePlugin) panelClicks() []PanelClickMsg {
+	var out []PanelClickMsg
+	for _, m := range p.msgs {
+		if pc, ok := m.(PanelClickMsg); ok {
+			out = append(out, pc)
+		}
+	}
+	return out
+}
+
+// focusChanges returns every FocusChangedMsg forwarded to the plugin, in order.
+func (p *mousePlugin) focusChanges() []FocusChangedMsg {
+	var out []FocusChangedMsg
+	for _, m := range p.msgs {
+		if fc, ok := m.(FocusChangedMsg); ok {
+			out = append(out, fc)
+		}
+	}
+	return out
+}
 
 // fakeClock is an injectable frameClock for click-routing tests. Initialise t
 // to a non-zero time; advance moves it forward.
@@ -1385,6 +1413,98 @@ func TestFrame_ClickRouting(t *testing.T) {
 		}
 		if len(p.counts) != before {
 			t.Error("MouseMotionMsg updated action counts; want no-op")
+		}
+	})
+}
+
+// TestFrame_PanelClickAndFocusDelivery covers the Task 2 seam: single-click
+// inside a panel's content forwards a PanelClickMsg with panel-local coords and
+// sets focus; a border click sets focus but emits NO PanelClickMsg; Tab emits a
+// FocusChangedMsg; and a double-click moves the cursor (first click) then
+// dispatches Select without a second PanelClickMsg.
+//
+// Geometry at 80x24 (weights {1,1}):
+//
+//	main outer {0,0,40,23},  content X∈[2,38),  Y∈[1,22)
+//	alt  outer {40,0,40,23}, content X∈[42,78), Y∈[1,22)
+func TestFrame_PanelClickAndFocusDelivery(t *testing.T) {
+	t.Run("content_click_forwards_panel_local_coords_and_focus", func(t *testing.T) {
+		f, p := newMouseFrame(t, 80, frameGoldenHeight)
+		f.Update(leftClick(50, 5)) // alt panel content
+		if got := f.focus.Active(); got != mousePanelAlt {
+			t.Fatalf("focus = %q; want %q", got, mousePanelAlt)
+		}
+		clicks := p.panelClicks()
+		if len(clicks) != 1 {
+			t.Fatalf("PanelClickMsg count = %d; want 1 (%+v)", len(clicks), p.msgs)
+		}
+		want := PanelClickMsg{Panel: mousePanelAlt, X: 50 - 42, Y: 5 - 1}
+		if clicks[0] != want {
+			t.Errorf("PanelClickMsg = %+v; want %+v", clicks[0], want)
+		}
+		// Focus moved main→alt, so exactly one FocusChangedMsg.
+		fc := p.focusChanges()
+		if len(fc) != 1 || fc[0].Panel != mousePanelAlt {
+			t.Errorf("FocusChangedMsg = %+v; want one {alt}", fc)
+		}
+	})
+
+	t.Run("border_click_sets_focus_but_no_panel_click", func(t *testing.T) {
+		f, p := newMouseFrame(t, 80, frameGoldenHeight)
+		// (40,5): inside alt OUTER (left border column) but outside its content
+		// (content X starts at 42).
+		f.Update(leftClick(40, 5))
+		if got := f.focus.Active(); got != mousePanelAlt {
+			t.Errorf("border click focus = %q; want %q", got, mousePanelAlt)
+		}
+		if clicks := p.panelClicks(); len(clicks) != 0 {
+			t.Errorf("border click emitted PanelClickMsg %+v; want none", clicks)
+		}
+	})
+
+	t.Run("click_same_panel_no_focus_change_still_forwards_click", func(t *testing.T) {
+		f, p := newMouseFrame(t, 80, frameGoldenHeight)
+		// Initial focus is main; clicking main content must NOT emit
+		// FocusChangedMsg but must still forward the PanelClickMsg.
+		f.Update(leftClick(5, 5))
+		if fc := p.focusChanges(); len(fc) != 0 {
+			t.Errorf("same-panel click emitted FocusChangedMsg %+v; want none", fc)
+		}
+		clicks := p.panelClicks()
+		want := PanelClickMsg{Panel: mousePanelMain, X: 5 - 2, Y: 5 - 1}
+		if len(clicks) != 1 || clicks[0] != want {
+			t.Errorf("PanelClickMsg = %+v; want one %+v", clicks, want)
+		}
+	})
+
+	t.Run("tab_emits_focus_changed", func(t *testing.T) {
+		f, p := newMouseFrame(t, 80, frameGoldenHeight)
+		f.Update(key("tab"))
+		if got := f.focus.Active(); got != mousePanelAlt {
+			t.Fatalf("after tab focus = %q; want %q", got, mousePanelAlt)
+		}
+		fc := p.focusChanges()
+		if len(fc) != 1 || fc[0].Panel != mousePanelAlt {
+			t.Errorf("FocusChangedMsg after tab = %+v; want one {alt}", fc)
+		}
+		// Shift+Tab back to main emits another.
+		f.Update(key("shift+tab"))
+		if fc := p.focusChanges(); len(fc) != 2 || fc[1].Panel != mousePanelMain {
+			t.Errorf("FocusChangedMsg after shift+tab = %+v; want second {main}", fc)
+		}
+	})
+
+	t.Run("double_click_moves_cursor_then_selects", func(t *testing.T) {
+		f, p := newMouseFrame(t, 80, frameGoldenHeight)
+		clk := testClock()
+		f.clock = clk
+		f.Update(leftClick(5, 5)) // first — moves cursor (PanelClickMsg)
+		f.Update(leftClick(5, 5)) // second — double-click → Select, no 2nd PanelClickMsg
+		if got := len(p.panelClicks()); got != 1 {
+			t.Errorf("PanelClickMsg count over a double-click = %d; want 1", got)
+		}
+		if got := p.counts[ActionSelect]; got != 1 {
+			t.Errorf("ActionSelect count = %d; want 1", got)
 		}
 	})
 }

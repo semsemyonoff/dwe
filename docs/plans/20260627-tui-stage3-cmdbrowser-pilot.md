@@ -322,7 +322,7 @@ The browser is reshaped into a `tui.Plugin`:
 - Modify: `internal/core/ui/tui/stub_test.go`
 - Modify: `internal/core/ui/tui/frame_test.go`
 
-- [ ] add exported `PanelClickMsg{Panel PanelID; X, Y int}`; in `handleClick`
+- [x] add exported `PanelClickMsg{Panel PanelID; X, Y int}`; in `handleClick`
       `zonePanel`, ALWAYS `focus.Set(id)`, but emit `PanelClickMsg` only when the
       click is inside `contentRegion(outer)` — `zonePanel` covers the panel's
       OUTER region incl. the border (`hittest.go:10`), and `panelLocal`
@@ -331,21 +331,24 @@ The browser is reshaped into a `tui.Plugin`:
       `panelRects()`/`layoutPanels` (`frame.go:637-649`; add a small helper if
       needed); compute local coords with `panelLocal`; forward through
       `plugin.Update` (then `drainOverlay`). When NOT a confirmed double-click.
-- [ ] add exported `FocusChangedMsg{Panel PanelID}` emitted to `plugin.Update` on
+- [x] add exported `FocusChangedMsg{Panel PanelID}` emitted to `plugin.Update` on
       EVERY focus change — Tab/Shift+Tab (`handleBuiltin` focus branches,
       `frame.go:326-329`) AND click `focus.Set`. Mandatory: the plugin cannot
       learn Tab-driven focus changes otherwise (built-ins never reach it).
-- [ ] ensure double-click still dispatches `MatchMouse("double-click")` →
+- [x] ensure double-click still dispatches `MatchMouse("double-click")` →
       `HandleAction` AFTER the single-click cursor move (first click of the pair
       moves the cursor, second is detected as double).
-- [ ] extend `stubPlugin` to record `PanelClickMsg`/`FocusChangedMsg` and add
-      `CapturingInput()` (from Task 1) if not already present.
-- [ ] write tests: content-area click forwards correct panel + local row to
+- [x] extend `stubPlugin` to record `PanelClickMsg`/`FocusChangedMsg` and add
+      `CapturingInput()` (from Task 1) if not already present. (Done via
+      `mousePlugin` — the dedicated click/focus test plugin; `stubPlugin` already
+      records all Update messages in `gotMsgs` and has `CapturingInput()`.)
+- [x] write tests: content-area click forwards correct panel + local row to
       plugin and sets focus; a BORDER click sets focus but emits NO
       `PanelClickMsg` (no negative coords); Tab emits `FocusChangedMsg`;
       double-click in a cell moves cursor then dispatches select; click on
-      help-hint toggles help; click in/out of modal swallowed.
-- [ ] run tests — must pass before next task.
+      help-hint toggles help; click in/out of modal swallowed. (Help-hint and
+      modal-swallow already covered by `TestFrame_ClickRouting`.)
+- [x] run tests — must pass before next task.
 
 ### Task 3: cmdbrowser plugin skeleton (`tui.Plugin` shell)
 

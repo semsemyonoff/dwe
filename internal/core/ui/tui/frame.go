@@ -376,11 +376,28 @@ func (f *Frame) handleBuiltin(a Action) (tea.Model, tea.Cmd) {
 	case ActionQuit:
 		return f, tea.Quit
 	case ActionFocusNext:
-		f.focus.Next()
+		return f.cycleFocus(f.focus.Next)
 	case ActionFocusPrev:
-		f.focus.Prev()
+		return f.cycleFocus(f.focus.Prev)
 	}
 	return f, nil
+}
+
+// cycleFocus applies a focus move (Next/Prev) and, when it lands on a DIFFERENT
+// panel, forwards a [FocusChangedMsg] to the plugin so it can retarget
+// navigation. Tab/Shift+Tab are framework built-ins handled entirely in
+// handleBuiltin and never reach the plugin otherwise, so this forward is the
+// only way the plugin learns of keyboard-driven focus changes.
+func (f *Frame) cycleFocus(move func()) (tea.Model, tea.Cmd) {
+	before := f.focus.Active()
+	move()
+	after := f.focus.Active()
+	if after == before {
+		return f, nil
+	}
+	cmd := f.plugin.Update(FocusChangedMsg{Panel: after})
+	f.drainOverlay()
+	return f, cmd
 }
 
 // drainOverlay pushes a plugin-requested overlay onto the stack. Mutual
@@ -466,7 +483,15 @@ func (f *Frame) handleClick(m tea.MouseClickMsg) (tea.Model, tea.Cmd) {
 		f.lastClick = lastClickRecord{}
 		return f.handleBuiltin(ActionHelp)
 	case zonePanel:
+		// Setting focus may move it to a different panel; forward a
+		// FocusChangedMsg in that case (a click on the already-focused panel
+		// emits nothing).
+		before := f.focus.Active()
 		f.focus.Set(id)
+		var cmds []tea.Cmd
+		if after := f.focus.Active(); after != before {
+			cmds = append(cmds, f.plugin.Update(FocusChangedMsg{Panel: after}))
+		}
 		if !f.lastClick.t.IsZero() &&
 			f.lastClick.id == id &&
 			f.lastClick.x == m.X &&
@@ -474,17 +499,30 @@ func (f *Frame) handleClick(m tea.MouseClickMsg) (tea.Model, tea.Cmd) {
 			f.clock.now().Sub(f.lastClick.t) < doubleClickWindow {
 			// Double-click confirmed. Clear the full record so a third click
 			// in the same cell within the window does not re-trigger Select.
+			// No PanelClickMsg is emitted — the first click of the pair already
+			// moved the cursor; this click selects.
 			f.lastClick = lastClickRecord{}
 			if action, ok := f.registry.MatchMouse("double-click"); ok {
 				if cmd, handled := f.plugin.HandleAction(action); handled {
-					f.drainOverlay()
-					return f, cmd
+					cmds = append(cmds, cmd)
 				}
 			}
-			return f, nil
+			f.drainOverlay()
+			return f, tea.Batch(cmds...)
 		}
 		f.lastClick = lastClickRecord{id: id, x: m.X, y: m.Y, t: f.clock.now()}
-		return f, nil
+		// Single click: forward a panel-local PanelClickMsg ONLY when the click
+		// lands inside the inner content region. zonePanel covers the panel's
+		// OUTER region (border included), so a border click would yield
+		// negative/out-of-content coords — focus is set but no message fires.
+		if outer, ok := f.panelOuter(id); ok {
+			if content := contentRegion(outer); content.contains(m.X, m.Y) {
+				lx, ly := panelLocal(outer, m.X, m.Y)
+				cmds = append(cmds, f.plugin.Update(PanelClickMsg{Panel: id, X: lx, Y: ly}))
+			}
+		}
+		f.drainOverlay()
+		return f, tea.Batch(cmds...)
 	default: // zoneNone
 		f.lastClick = lastClickRecord{}
 		return f, nil
@@ -698,4 +736,16 @@ func (f *Frame) panelRects() []panelRect {
 		rects[i] = panelRect{ID: p.ID, Region: outers[i]}
 	}
 	return rects
+}
+
+// panelOuter returns the outer region of the panel with the given ID, reusing
+// the same layoutPanels math as panelRects/renderBody so the looked-up region
+// matches what is rendered and hit-tested. The bool is false for an unknown ID.
+func (f *Frame) panelOuter(id PanelID) (Region, bool) {
+	for _, r := range f.panelRects() {
+		if r.ID == id {
+			return r.Region, true
+		}
+	}
+	return Region{}, false
 }
