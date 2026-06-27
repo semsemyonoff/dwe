@@ -54,11 +54,19 @@ type browser struct {
 
 	// filter is the inline capture sub-state (CapturingInput() is true while it
 	// is non-nil). inspect is the overlay sub-state (non-nil while the inspect
-	// viewport is open); it captures via Overlay.CapturesInput, so the two stay
-	// mutually exclusive. The overlay wiring (PendingOverlay + capture handling)
-	// lands in Task 8; Task 6 only opens it.
-	filter  *filterState
-	inspect *inspectState
+	// viewport is logically open); it captures via Overlay.CapturesInput routed
+	// by the Frame, so the two stay mutually exclusive — the filter takes raw
+	// input through the no-overlay capture branch, inspect through the modal-open
+	// branch (routeWhileCapturing). inspectPending gates PendingOverlay so the
+	// overlay is pushed onto the Frame stack EXACTLY once per open (a scroll-key
+	// drain must not re-push it). Esc is handled Frame-side (it pops the overlay
+	// without notifying the plugin); b.inspect therefore lingers as inert content
+	// until the next openInspect rebuilds it — harmless because every
+	// inspect-navigation key is a registered action the registry intercepts in
+	// normal mode, so a stale viewport is never fed live input.
+	filter         *filterState
+	inspect        *inspectState
+	inspectPending bool
 
 	skipConfirm bool
 
@@ -206,12 +214,23 @@ func (b *browser) itemNoun(count int) string {
 
 // Update implements tui.Plugin. While the inline filter is active
 // (CapturingInput() is true), the Frame forwards raw keys here so the browser
-// drives its own search line. Inspect-overlay and mouse handling land in
-// Tasks 8–9.
+// drives its own search line. While the inspect overlay is open the Frame routes
+// captured keys here too (via routeWhileCapturing — every key except ctrl+c and
+// esc), which drive the inspect viewport. Mouse handling lands in Task 9.
+//
+// Filter and inspect are mutually exclusive (you cannot open inspect while
+// filtering — `i` is typed into the query, not dispatched), so the filter branch
+// takes precedence and inspect only runs when no filter is active.
 func (b *browser) Update(msg tea.Msg) tea.Cmd {
-	if b.filter != nil {
-		if key, ok := msg.(tea.KeyPressMsg); ok {
+	key, isKey := msg.(tea.KeyPressMsg)
+	switch {
+	case b.filter != nil:
+		if isKey {
 			return b.updateFilter(key)
+		}
+	case b.inspect != nil:
+		if isKey {
+			return b.updateInspect(key)
 		}
 	}
 	return nil
@@ -424,21 +443,32 @@ func (b *browser) refreshFilterMatches() {
 	}
 }
 
+// inspectBoxHChrome / inspectBoxVChrome are the cells the rounded-border modal
+// box (inspectState.overlay) adds around the viewport: 2 border + 2 horizontal
+// padding wide, 2 border rows tall. inspectViewportSize subtracts them (plus a
+// one-row top/bottom margin) so the composited box never overflows the body
+// region and Composite's last-resort clamp never has to trim the border edge.
+const (
+	inspectBoxHChrome = 4
+	inspectBoxVChrome = 2
+)
+
 // inspectViewportSize returns the (width, height) for the inspect overlay's
 // viewport. Width is capped at inspectMaxWidth so the content lines up with the
-// section dividers render.SectionTitle draws (same min(width, 100) cap); the
-// overlay is centred over the body by the Frame. Defensive lower clamps protect
-// against degenerate sizes from transient resizes.
+// section dividers render.SectionTitle draws (same min(width, 100) cap), then the
+// border + padding chrome is reserved so the bordered box fits the body the Frame
+// centres it over. Defensive lower clamps protect against degenerate sizes from
+// transient resizes (and the zero-body case before the first Resize).
 func (b *browser) inspectViewportSize() (int, int) {
-	w := max(min(b.body.Width, inspectMaxWidth), 10)
-	h := max(b.body.Height-2, 3)
+	w := max(min(b.body.Width, inspectMaxWidth)-inspectBoxHChrome, 10)
+	h := max(b.body.Height-inspectBoxVChrome-2, 3)
 	return w, h
 }
 
-// openInspect builds the inspect viewport for the currently selected list item
-// and stashes it on b.inspect. The overlay presentation (PendingOverlay) and
-// scroll/select/esc capture handling land in Task 8; Task 6 only opens it. A
-// no-op when no selectable item is focused.
+// openInspect builds the inspect viewport for the currently selected list item,
+// stashes it on b.inspect, and marks it pending so PendingOverlay pushes the
+// CapturesInput overlay onto the Frame stack on the next drain. A no-op when no
+// selectable item is focused (e.g. an empty list or a header row).
 func (b *browser) openInspect() {
 	idx, ok := b.selectedOrigIdx()
 	if !ok {
@@ -446,8 +476,41 @@ func (b *browser) openInspect() {
 	}
 	w, h := b.inspectViewportSize()
 	b.inspect = newInspectState(w, h, b.items[idx].Inspect, idx)
+	b.inspectPending = true
 }
 
-// PendingOverlay implements tui.Plugin. The inspect overlay wiring lands in
-// Task 8; the skeleton requests no overlay.
-func (b *browser) PendingOverlay() (tui.Overlay, bool) { return tui.Overlay{}, false }
+// updateInspect drives the inspect overlay while it captures input (the Frame
+// forwards every key except ctrl+c and esc here). Enter commits the inspected
+// item as the result and quits; everything else is delegated to the viewport for
+// scrolling (arrows / page / half-page / home-end per the viewport keymap). Esc
+// never reaches here — the Frame's routeWhileCapturing handles it as a close
+// (pop) — so this method only ever opens or scrolls, never closes.
+func (b *browser) updateInspect(msg tea.KeyPressMsg) tea.Cmd {
+	if b.inspect == nil {
+		return nil
+	}
+	if msg.Code == tea.KeyEnter {
+		b.result = Result{
+			Idx:         b.inspect.inspectIdx,
+			Action:      actionForMode(b.opts.Mode),
+			SkipConfirm: b.skipConfirm,
+		}
+		return tea.Quit
+	}
+	var cmd tea.Cmd
+	b.inspect.vp, cmd = b.inspect.vp.Update(msg)
+	return cmd
+}
+
+// PendingOverlay implements tui.Plugin. It hands the inspect modal to the Frame
+// exactly once per open: inspectPending is set by openInspect and cleared here so
+// a follow-up drain (after a scroll-key Update) does not re-push a duplicate
+// overlay. The overlay is built fresh from the current viewport so its scroll
+// position is reflected on first paint.
+func (b *browser) PendingOverlay() (tui.Overlay, bool) {
+	if b.inspect == nil || !b.inspectPending {
+		return tui.Overlay{}, false
+	}
+	b.inspectPending = false
+	return b.inspect.overlay(), true
+}

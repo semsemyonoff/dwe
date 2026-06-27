@@ -504,24 +504,33 @@ The browser is reshaped into a `tui.Plugin`:
 - Modify: `internal/core/ui/cmdbrowser/plugin.go`
 - Modify: `internal/core/ui/cmdbrowser/model_modes_test.go`
 
-- [ ] reparent the inspect state machine onto `*browser` (the current
+- [x] reparent the inspect state machine onto `*browser` (the current
       `openInspect`/`updateInspect` are `*Model` methods referencing `m.focus`/
       `focusInspect`; rewrite as `*browser` methods — `Model` is deleted in
-      Task 11).
-- [ ] on `inspect` action, build the inspect viewport content via
+      Task 11). (`openInspect`/`updateInspect`/`inspectViewportSize` ported onto
+      `*browser` in plugin.go; the `*Model` methods stay until Task 11.)
+- [x] on `inspect` action, build the inspect viewport content via
       `Item.Inspect(width)` and stash it so `PendingOverlay()` returns
       `Overlay{Content, Width, Height, CapturesInput:true}` (centred over the
-      body, dimmed by `Frame`).
-- [ ] handle captured keys while the inspect overlay is open (routed via Task 1):
+      body, dimmed by `Frame`). (`inspectState.overlay()` wraps the viewport in a
+      rounded-border box; `PendingOverlay` hands it off once per open via
+      `inspectPending`.)
+- [x] handle captured keys while the inspect overlay is open (routed via Task 1):
       arrows/pgup/pgdn/home/end scroll the viewport; `enter` selects the item
       (set `Result{Idx, Action}` + `tea.Quit`); `esc` closes the overlay.
-- [ ] track overlay-open state so `CapturingInput()` does not double-trigger
+      (`updateInspect`: enter → Result+Quit, everything else → `vp.Update`; esc is
+      Frame-side via `routeWhileCapturing`.)
+- [x] track overlay-open state so `CapturingInput()` does not double-trigger
       (overlay capture is handled by the modal-open branch, inline filter by the
-      no-overlay branch — keep them mutually exclusive).
-- [ ] write tests: inspect requests a `CapturesInput` overlay; navigation
+      no-overlay branch — keep them mutually exclusive). (`CapturingInput()` keys
+      only on `b.filter`; inspect captures via `Overlay.CapturesInput`; `Update`
+      routes filter-first then inspect; `inspectPending` blocks double-push.)
+- [x] write tests: inspect requests a `CapturesInput` overlay; navigation
       scrolls the viewport; enter selects with the correct `Idx`/`Action`; esc
-      closes and restores focus.
-- [ ] run tests — must pass before next task.
+      closes and restores focus. (`inspect_test.go`: capturing-overlay request +
+      fit + no double-push; PgDown scroll; per-mode enter Idx/Action/SkipConfirm;
+      no-op without selection; active panel unchanged.)
+- [x] run tests — must pass before next task.
 
 ### Task 9: Mouse wiring in the plugin
 
