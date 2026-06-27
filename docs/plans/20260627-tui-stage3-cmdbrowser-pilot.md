@@ -474,23 +474,27 @@ The browser is reshaped into a `tui.Plugin`:
 - Modify: `internal/core/ui/cmdbrowser/plugin.go`
 - Modify: `internal/core/ui/cmdbrowser/filter_test.go`
 
-- [ ] reparent the filter state machine onto `*browser` (the current
+- [x] reparent the filter state machine onto `*browser` (the current
       `enterFilter`/`updateFilter` are `*Model` methods that reference `m.focus`/
       `focusFilter`; rewrite as `*browser` methods — do NOT edit them in place,
-      since `Model` is deleted in Task 11).
-- [ ] on `filter` action, enter capture mode: snapshot expanded/focus state,
+      since `Model` is deleted in Task 11). (`updateFilter`/`exitFilter`/
+      `commitFilter` + `nearestRestoredAncestor`/`reselectOrigIdx` added on
+      `*browser` in `plugin.go`; the `*Model` methods stay until Task 11.)
+- [x] on `filter` action, enter capture mode: snapshot expanded/focus state,
       set `b.filter` (so `CapturingInput()` is true), render the query line
-      inside the tree panel.
-- [ ] handle captured keys in `browser.Update`: printable chars extend the
+      inside the tree panel. (`renderTreeFiltered` draws the query prompt above
+      the filter-aware tree per Decision 3.)
+- [x] handle captured keys in `browser.Update`: printable chars extend the
       query; backspace deletes; live `applyAutoCollapse` + match counts; `esc`
       restores the snapshot and clears `b.filter`; `enter` commits (keep
       expansion, focus nearest visible ancestor) and clears `b.filter`.
-- [ ] ensure action-letters (`i`/`j`/`k`/`e`/`y`/`q`) are TYPED while capturing,
-      not dispatched (relies on Task 1 capture branch).
-- [ ] write tests: entering filter sets `CapturingInput()`; action-letters
+- [x] ensure action-letters (`i`/`j`/`k`/`e`/`y`/`q`) are TYPED while capturing,
+      not dispatched (relies on Task 1 capture branch — the printable branch in
+      `updateFilter` runs before any Code-based handling).
+- [x] write tests: entering filter sets `CapturingInput()`; action-letters
       extend the query; live filter narrows the tree with correct match counts;
       esc restores prior state; enter commits.
-- [ ] run tests — must pass before next task.
+- [x] run tests — must pass before next task.
 
 ### Task 8: Inspect overlay (CapturesInput)
 

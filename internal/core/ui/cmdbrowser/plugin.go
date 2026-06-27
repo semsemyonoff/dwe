@@ -204,9 +204,18 @@ func (b *browser) itemNoun(count int) string {
 	return singular + "s"
 }
 
-// Update implements tui.Plugin. Message handling (filter capture, inspect
-// scroll, mouse) lands in Tasks 7–9; the skeleton ignores messages.
-func (b *browser) Update(_ tea.Msg) tea.Cmd { return nil }
+// Update implements tui.Plugin. While the inline filter is active
+// (CapturingInput() is true), the Frame forwards raw keys here so the browser
+// drives its own search line. Inspect-overlay and mouse handling land in
+// Tasks 8–9.
+func (b *browser) Update(msg tea.Msg) tea.Cmd {
+	if b.filter != nil {
+		if key, ok := msg.(tea.KeyPressMsg); ok {
+			return b.updateFilter(key)
+		}
+	}
+	return nil
+}
 
 // ViewPanel implements tui.Plugin. It caches the per-panel inner region (for
 // mouse translation and re-renders) and renders the panel body into it. The
@@ -216,9 +225,12 @@ func (b *browser) ViewPanel(id tui.PanelID, inner tui.Region) string {
 	switch id {
 	case panelTree:
 		b.treeInner = inner
+		if b.filter != nil {
+			return b.renderTreeFiltered(inner)
+		}
 		// Keep the focused row on screen across resizes before clipping.
 		b.tree.ensureFocusVisible(inner.Height)
-		return b.tree.renderRegion(inner, b.active == panelTree, b.filter)
+		return b.tree.renderRegion(inner, b.active == panelTree, nil)
 	case panelList:
 		b.listInner = inner
 		return b.viewList(inner)
@@ -248,6 +260,148 @@ func (b *browser) viewList(inner tui.Region) string {
 func (b *browser) enterFilter() {
 	b.filter = newFilterState(b.tree.expanded, b.tree.focusedID)
 	b.refreshFilterMatches()
+}
+
+// updateFilter handles keypresses while the inline filter is active. The search
+// line behaves like a text input: every printable character — including letters
+// bound elsewhere as actions (i / y / e / q / j / k / h / l) — extends the query
+// rather than firing the action. Only non-printable keys (Enter, Backspace, Esc,
+// arrows, page nav) keep their semantics. Reparented from *Model.updateFilter;
+// the Frame's capture branch (Task 1) routes raw keys here while
+// CapturingInput() reports true.
+func (b *browser) updateFilter(msg tea.KeyPressMsg) tea.Cmd {
+	switch msg.Code {
+	case tea.KeyEnter:
+		b.commitFilter()
+		return nil
+	case tea.KeyBackspace:
+		if len(b.filter.query) > 0 {
+			runes := []rune(b.filter.query)
+			b.filter.query = string(runes[:len(runes)-1])
+			b.refreshFilterMatches()
+		}
+		return nil
+	}
+	// Printable text goes into the query BEFORE consulting any letter-keyed
+	// action (Inspect=i, SkipConfirm=y, ForceForm=e, Cancel=q, vi-nav j/k/h/l).
+	// The cursor is "on the search line"; typed characters extend the search
+	// string, not fire commands. Non-printable keys (esc, arrows, page nav) have
+	// empty or non-printable msg.Text and fall through.
+	if t := msg.Text; t != "" && isPrintable(t) {
+		b.filter.query += t
+		b.refreshFilterMatches()
+		return nil
+	}
+	// Esc restores the snapshot and exits filter. "q" is consumed above as text.
+	if msg.Code == tea.KeyEscape {
+		b.exitFilter()
+		return nil
+	}
+	// Forward arrow / page navigation to the list so the user can move through
+	// the ranked matches while still typing (j/k are printable, handled above).
+	switch msg.Code {
+	case tea.KeyUp, tea.KeyDown, tea.KeyPgUp, tea.KeyPgDown, tea.KeyHome, tea.KeyEnd:
+		var cmd tea.Cmd
+		b.list, cmd = b.list.Update(msg)
+		return cmd
+	}
+	return nil
+}
+
+// exitFilter (Esc) discards the filter session, restores the snapshotted
+// expanded set + focused id, and returns focus to the list. Per §8
+// cursor-restoration it keeps the tree cursor on the nearest ancestor of the
+// highlighted match when one exists. Reparented from *Model.exitFilter; the
+// single-panel populateList branch is dropped (Variant A has no single panel).
+func (b *browser) exitFilter() {
+	if b.filter == nil {
+		return
+	}
+	// Track the highlighted match so the list cursor can be re-positioned after
+	// refreshList rebuilds the items (SetItems preserves index, not identity).
+	targetOrigIdx := -1
+	if b.filter.query == "" {
+		// Empty query: entered and immediately Esc'd. Restore the exact pre-filter
+		// cursor rather than the (meaningless) first-row highlight.
+		b.tree.focusedID = b.filter.savedFocusID
+	} else if it, ok := b.list.SelectedItem().(listItem); ok && !it.header {
+		targetOrigIdx = it.origIdx
+		b.tree.focusedID = b.nearestRestoredAncestor(b.items[it.origIdx].ID)
+	}
+	b.filter.restoreExpansion(b.tree)
+	// Restored expansion may leave focusedID on a now-hidden node — walk up.
+	if b.tree.focusedID != "" && b.tree.indexOfFocused() < 0 {
+		b.tree.focusedID = b.tree.nearestVisibleAncestor(b.tree.focusedID)
+	}
+	b.filter = nil
+	b.active = panelList
+	b.refreshList()
+	b.reselectOrigIdx(targetOrigIdx)
+}
+
+// commitFilter (Enter) ends the capture session but KEEPS the filter-induced
+// expansion (the auto-collapsed view that surfaces the matches), unlike
+// exitFilter which restores the pre-filter expansion. Tree focus moves to the
+// nearest visible ancestor of the highlighted match so navigation resumes near
+// the result the user picked.
+func (b *browser) commitFilter() {
+	if b.filter == nil {
+		return
+	}
+	if it, ok := b.list.SelectedItem().(listItem); ok && !it.header {
+		b.tree.focusedID = b.nearestRestoredAncestor(b.items[it.origIdx].ID)
+	}
+	if b.tree.focusedID != "" && b.tree.indexOfFocused() < 0 {
+		b.tree.focusedID = b.tree.nearestVisibleAncestor(b.tree.focusedID)
+	}
+	b.filter = nil
+	b.active = panelList
+	b.refreshList()
+}
+
+// nearestRestoredAncestor returns the closest ancestor group of id that exists
+// in the tree's node set (the leaf's direct group, then its parent, …). The
+// empty string denotes the root node. Shared by exit/commit so the tree cursor
+// always lands on a real node.
+func (b *browser) nearestRestoredAncestor(id string) string {
+	g := groupOf(id)
+	for g != "" {
+		if _, exists := b.tree.nodesByID[g]; exists {
+			return g
+		}
+		g = groupOf(g)
+	}
+	return ""
+}
+
+// reselectOrigIdx re-positions the list cursor onto the row whose origIdx
+// matches target (a no-op when target < 0). SetItems preserves the previous
+// cursor index, not item identity, so the cursor must be re-found by origIdx.
+// The !header guard prevents a pseudo-header's zero origIdx from colliding with
+// items[0] when target == 0.
+func (b *browser) reselectOrigIdx(target int) {
+	if target < 0 {
+		return
+	}
+	for i, li := range b.list.Items() {
+		if it, ok := li.(listItem); ok && !it.header && it.origIdx == target {
+			b.list.Select(i)
+			return
+		}
+	}
+}
+
+// renderTreeFiltered renders the tree panel during a filter session: a query
+// prompt line on top (Decision 3 — the search line lives in the tree panel, not
+// a dimming overlay) followed by the filter-aware tree (M/N counts, zero-match
+// dimming) clipped to the remaining height.
+func (b *browser) renderTreeFiltered(inner tui.Region) string {
+	header := paletteKey().Bold(true).Render(b.filter.renderQueryLine())
+	treeRegion := inner
+	treeRegion.Height = max(inner.Height-1, 0)
+	b.tree.ensureFocusVisible(treeRegion.Height)
+	body := b.tree.renderRegion(treeRegion, b.active == panelTree, b.filter)
+	return header + "\n" + body
 }
 
 // refreshFilterMatches re-ranks the items against the current query and rebuilds
