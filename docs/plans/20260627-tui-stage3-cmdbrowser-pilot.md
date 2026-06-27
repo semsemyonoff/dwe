@@ -570,29 +570,36 @@ The browser is reshaped into a `tui.Plugin`:
 - Modify: `internal/cli/vars/browser.go`
 - Create/Modify: i18n test (e.g. `internal/core/ui/cmdbrowser/*_test.go`)
 
-- [ ] add real keys under the `ui:` block of
+- [x] add real keys under the `ui:` block of
       `internal/shared/i18n/translations/en.yml` (keys are `ui.*`, stored WITHOUT
       the `ui.` prefix per store.go) for `tui.help.title`,
       `tui.help.section.{navigation,panels,actions,general}`, and
       `tui.help.action.<id>` for every action the browser registers (incl.
       `cmd.skip-confirm`/`cmd.force-form`). English only — the built-in bundle
-      ships en; there is no built-in `ru.yml`.
-- [ ] extend `KnownUIKeys` in `internal/shared/i18n/known_keys.go` with the new
+      ships en; there is no built-in `ru.yml`. (`select` is deliberately NOT
+      keyed: its label is mode-dependent ("Select"/"Edit") and a single key would
+      flatten the vars-browser relabel — documented in en.yml + actions.go.)
+- [x] extend `KnownUIKeys` in `internal/shared/i18n/known_keys.go` with the new
       `tui.help.*` keys (it must stay in sync with `translations/en.yml`; the
       `unknown_ui_key` validator keys on it, else user `tui.help.*` overlays warn).
-- [ ] thread the translator + locale from the call sites into
+      (Kept en.yml ↔ KnownUIKeys exact-sync per `TestBuiltinCoverage`.)
+- [x] thread the translator + locale from the call sites into
       `cmdbrowser.Options{Translator, Locale}` (the CLI already resolves
       `rflags.I18n`/locale — reuse it); `cmdbrowser.Run` maps them onto
       `tui.RunOptions{Translator, Locale}`. Keep storage/hashing English per the
-      localisation contract.
-- [ ] the breadcrumb noun stays HARDCODED English (`itemNoun`) — it is not
+      localisation contract. (Call sites populated in `command/list.go` +
+      `vars/browser.go`; the `Run`→`tui.RunOptions` mapping lands with the rewrite
+      in Task 11.)
+- [x] the breadcrumb noun stays HARDCODED English (`itemNoun`) — it is not
       translated today; localizing it is out of scope for this pilot (no noun/
       status keys added to `en.yml`/`KnownUIKeys`). Only `tui.help.*` keys are
       added.
-- [ ] write tests: help modal shows localized section/action strings; the ru
+- [x] write tests: help modal shows localized section/action strings; the ru
       case INJECTS a `Store` with a ru bundle (not a repo file) and asserts
       localized strings; ModeRun help includes e/y, ModeEdit help omits them.
-- [ ] run `make build` (syncs/embeds) then tests — must pass before next task.
+      (`i18n_test.go`: en built-in bundle + ru project-overlay via temp
+      `workspace/i18n/ru.yml`.)
+- [x] run `make build` (syncs/embeds) then tests — must pass before next task.
 
 ### Task 11: cmdbrowser.Run rewiring + delete model.go
 

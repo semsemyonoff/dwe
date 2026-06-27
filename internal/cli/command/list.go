@@ -195,6 +195,8 @@ func makeBrowserSelector(cfg *config.DweConfig, reg *usercommands.Registry, mode
 			ShowTypeBadges:       config.UICommandsShowTypeBadges(cfg),
 			IncludePrivate:       includePrivate,
 			Mode:                 mode,
+			Translator:           translator,
+			Locale:               locale,
 		}
 		res, err := cmdbrowser.Run(title, items, opts)
 		if err != nil {
