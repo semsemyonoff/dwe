@@ -72,6 +72,36 @@ func TestBrowser_InspectRequestsCapturingOverlay(t *testing.T) {
 	}
 }
 
+// TestBrowser_InspectReopenAfterClosePushesOnce guards the documented lingering-
+// state contract: the Frame pops the inspect overlay on esc WITHOUT notifying the
+// plugin, so b.inspect stays non-nil as inert content. Re-opening (on another row)
+// must rebuild it and push EXACTLY one fresh overlay — no double-push, no stale idx.
+func TestBrowser_InspectReopenAfterClosePushesOnce(t *testing.T) {
+	b := newInspectBrowser(t, DefaultOptions())
+
+	b.openInspect()
+	if _, ok := b.PendingOverlay(); !ok {
+		t.Fatal("first open should push an overlay")
+	}
+	if _, ok := b.PendingOverlay(); ok {
+		t.Fatal("overlay must drain exactly once per open")
+	}
+	firstIdx := b.inspect.inspectIdx
+
+	// Esc pops the overlay Frame-side; b.inspect lingers. Re-open on a new row.
+	b.list.Select(1) // beta -> origIdx 1
+	b.openInspect()
+	if b.inspect.inspectIdx == firstIdx {
+		t.Errorf("re-open should rebuild inspect for the new row; idx still %d", firstIdx)
+	}
+	if _, ok := b.PendingOverlay(); !ok {
+		t.Fatal("re-open should push a fresh overlay")
+	}
+	if _, ok := b.PendingOverlay(); ok {
+		t.Error("re-open overlay must drain exactly once (no double-push)")
+	}
+}
+
 func TestBrowser_InspectScrollsViewport(t *testing.T) {
 	b := newInspectBrowser(t, DefaultOptions())
 	b.openInspect()
@@ -81,9 +111,7 @@ func TestBrowser_InspectScrollsViewport(t *testing.T) {
 		t.Fatalf("initial YOffset = %d, want 0", got)
 	}
 	// A page-down key (routed here while capturing) scrolls the viewport.
-	if cmd := b.updateInspect(tea.KeyPressMsg{Code: tea.KeyPgDown}); cmd != nil {
-		_ = cmd
-	}
+	b.updateInspect(tea.KeyPressMsg{Code: tea.KeyPgDown})
 	if got := b.inspect.vp.YOffset(); got <= 0 {
 		t.Errorf("YOffset after PgDown = %d, want > 0 (scrolled down)", got)
 	}

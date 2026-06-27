@@ -238,6 +238,66 @@ func TestBrowser_NavLeftRightNoopInList(t *testing.T) {
 	}
 }
 
+func TestBrowser_NavLeftRightTreeCollapsesExpands(t *testing.T) {
+	b := newBrowser("pick", pluginTestItems(), DefaultOptions())
+	b.treeInner = tui.Region{Width: 18, Height: 10}
+	b.active = panelTree
+	b.tree.focusedID = "services"
+	if !b.tree.expanded["services"] {
+		t.Fatalf("precondition: services expanded at default depth")
+	}
+	// nav.left collapses the focused expanded group (tree branch of navLeft).
+	if _, handled := b.HandleAction(tui.ActionNavLeft); !handled {
+		t.Fatalf("nav.left handled=false, want true")
+	}
+	if b.tree.expanded["services"] {
+		t.Errorf("nav.left on an expanded tree group should collapse it")
+	}
+	// nav.right re-expands the focused collapsed group (tree branch of navRight).
+	if _, _ = b.HandleAction(tui.ActionNavRight); !b.tree.expanded["services"] {
+		t.Errorf("nav.right on a collapsed tree group should expand it")
+	}
+}
+
+func TestBrowser_NavHomeEndPageRouteToActivePanel(t *testing.T) {
+	b := newBrowser("pick", pluginTestItems(), DefaultOptions())
+	b.treeInner = tui.Region{Width: 18, Height: 10}
+
+	// List panel: nav.top / nav.bottom move the cursor to the first / last row.
+	b.active = panelList
+	b.tree.focusedID = "db"
+	b.refreshList() // db.migrate (0), db.seed (1)
+	b.list.Select(1)
+	if _, _ = b.HandleAction(tui.ActionTop); b.list.Index() != 0 {
+		t.Errorf("nav.top on list should go to index 0, got %d", b.list.Index())
+	}
+	if _, _ = b.HandleAction(tui.ActionBottom); b.list.Index() != len(b.list.Items())-1 {
+		t.Errorf("nav.bottom on list should go to last index, got %d", b.list.Index())
+	}
+
+	// Tree panel: nav.bottom jumps focus to the last visible node, nav.top returns
+	// to the first.
+	b.active = panelTree
+	b.tree.moveHome()
+	firstID := b.tree.focusedID
+	if _, _ = b.HandleAction(tui.ActionBottom); b.tree.focusedID == firstID {
+		t.Errorf("nav.bottom on tree should move focus off the first node %q", firstID)
+	}
+	if _, _ = b.HandleAction(tui.ActionTop); b.tree.focusedID != firstID {
+		t.Errorf("nav.top on tree should return focus to %q, got %q", firstID, b.tree.focusedID)
+	}
+
+	// navPage on the tree advances focus by ~one viewport height (page math).
+	b.tree.moveHome()
+	pageStart := b.tree.focusedID
+	if _, handled := b.HandleAction(tui.ActionPageDown); !handled {
+		t.Fatalf("nav.page-down handled=false, want true")
+	}
+	if b.tree.focusedID == pageStart {
+		t.Errorf("nav.page-down on tree should advance focus off %q", pageStart)
+	}
+}
+
 func TestBrowser_FilterAndInspectEntryRouted(t *testing.T) {
 	b := newBrowser("pick", pluginTestItems(), DefaultOptions())
 	if _, handled := b.HandleAction(tui.ActionFilter); !handled {

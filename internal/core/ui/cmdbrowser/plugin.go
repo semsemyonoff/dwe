@@ -33,10 +33,10 @@ const listBadgesMinWidth = 74
 // [tui.Plugin]: the Frame owns chrome (borders, focus highlight, Tab cycling,
 // geometry, the status line) and the browser owns body content and behaviour.
 //
-// It replaces the hand-rolled *Model (model.go), which still backs the legacy
-// Run path until Task 11 deletes it. The plugin holds the cmdbrowser-local
-// tree (left) and a bubbles/v2 list (right); per-panel rendering happens in
-// ViewPanel against the inner regions the Frame computes.
+// It replaced the hand-rolled *Model (formerly model.go, now deleted); Run drives
+// the plugin directly (see run.go). The plugin holds the cmdbrowser-local tree
+// (left) and a bubbles/v2 list (right); per-panel rendering happens in ViewPanel
+// against the inner regions the Frame computes.
 type browser struct {
 	title string
 	items []Item
@@ -344,7 +344,7 @@ func (b *browser) updateFilter(msg tea.KeyPressMsg) tea.Cmd {
 	switch msg.Code {
 	case tea.KeyEnter:
 		b.commitFilter()
-		return nil
+		return requestFocus(panelList)
 	case tea.KeyBackspace:
 		if len(b.filter.query) > 0 {
 			runes := []rune(b.filter.query)
@@ -366,7 +366,7 @@ func (b *browser) updateFilter(msg tea.KeyPressMsg) tea.Cmd {
 	// Esc restores the snapshot and exits filter. "q" is consumed above as text.
 	if msg.Code == tea.KeyEscape {
 		b.exitFilter()
-		return nil
+		return requestFocus(panelList)
 	}
 	// Forward arrow / page navigation to the list so the user can move through
 	// the ranked matches while still typing (j/k are printable, handled above).
@@ -380,7 +380,8 @@ func (b *browser) updateFilter(msg tea.KeyPressMsg) tea.Cmd {
 }
 
 // exitFilter (Esc) discards the filter session, restores the snapshotted
-// expanded set + focused id, and returns focus to the list. Per §8
+// expanded set + focused id, and moves the active panel to the list (the caller
+// pairs this with a requestFocus(panelList) so the Frame border follows). Per §8
 // cursor-restoration it keeps the tree cursor on the nearest ancestor of the
 // highlighted match when one exists. Reparented from *Model.exitFilter; the
 // single-panel populateList branch is dropped (Variant A has no single panel).
@@ -428,6 +429,16 @@ func (b *browser) commitFilter() {
 	b.filter = nil
 	b.active = panelList
 	b.refreshList()
+}
+
+// requestFocus returns a command that asks the Frame to focus panel p. The
+// plugin tracks its own active panel (b.active) for nav routing, but the Frame
+// owns focus truth (the panel border, the Tab cycle). When a filter session ends
+// it moves b.active to the list itself AND requests the matching Frame focus, so
+// the bordered panel and the nav target never diverge (the Frame echoes a
+// FocusChangedMsg back, re-confirming b.active).
+func requestFocus(p tui.PanelID) tea.Cmd {
+	return func() tea.Msg { return tui.FocusRequestMsg{Panel: p} }
 }
 
 // nearestRestoredAncestor returns the closest ancestor group of id that exists

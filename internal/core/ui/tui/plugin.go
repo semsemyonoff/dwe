@@ -51,9 +51,8 @@ type Overlay struct {
 	// CapturesInput reports whether this overlay routes raw input (including
 	// printable characters) to the plugin, bypassing the registry. While a
 	// capturing overlay is Top(), only ctrl+c (hard-quit) and esc (close
-	// overlay) survive as framework actions; ? does not open help. Locked in
-	// Stage 1; the full frame.Update integration lands with the Stage 3 filter
-	// consumer. See [routeWhileCapturing].
+	// overlay) survive as framework actions; ? does not open help. The
+	// cmdbrowser inspect overlay is the consumer. See [routeWhileCapturing].
 	CapturesInput bool
 }
 
@@ -79,6 +78,20 @@ type PanelClickMsg struct {
 // only when focus actually moves to a different panel.
 type FocusChangedMsg struct {
 	// Panel is the newly focused panel's ID.
+	Panel PanelID
+}
+
+// FocusRequestMsg flows the OTHER way: a plugin returns it (as the message of a
+// tea.Cmd) to ask the [Frame] to move focus to a given panel. The framework owns
+// focus truth (the panel border, the Tab cycle), so a plugin that changes its own
+// active-panel state outside the Tab/click paths — e.g. an inline filter that
+// returns focus to a result panel on commit — must request the matching Frame
+// focus through this message or the border and the plugin's nav target diverge.
+// The Frame calls focusManager.Set and, when focus actually moves, echoes a
+// [FocusChangedMsg] back so the plugin's own active-panel tracking stays in sync.
+// An unknown panel ID is ignored.
+type FocusRequestMsg struct {
+	// Panel is the panel the plugin wants focused.
 	Panel PanelID
 }
 

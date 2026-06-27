@@ -239,6 +239,20 @@ func (f *Frame) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return f.handleKey(m)
 	case tea.MouseMsg:
 		return f.handleMouse(m)
+	case FocusRequestMsg:
+		// Plugin-initiated focus move (e.g. an inline filter returning focus to a
+		// result panel on commit). The Frame owns focus truth, so it applies the
+		// request here and echoes a FocusChangedMsg back when focus actually moved
+		// — keeping the panel border and the plugin's nav target in agreement. An
+		// unknown panel ID leaves focus unchanged (Set reports false).
+		before := f.focus.Active()
+		f.focus.Set(m.Panel)
+		if f.focus.Active() == before {
+			return f, nil
+		}
+		cmd := f.plugin.Update(FocusChangedMsg{Panel: f.focus.Active()})
+		f.drainOverlay()
+		return f, cmd
 	case wheelFlushMsg:
 		// Flush the wheel accumulator as Nav steps. No-op while an overlay is
 		// open — a tick armed before the modal opened must not dispatch Nav
@@ -536,12 +550,8 @@ func (f *Frame) handleClick(m tea.MouseClickMsg) (tea.Model, tea.Cmd) {
 
 // panelLocal translates an absolute terminal click (x, y) to coordinates
 // local to the inner content region of the panel whose outer region is outer.
-// Local (0, 0) is the top-left cell of the inner region.
-//
-// The panel-facing click route — row-select and tab-switch forward to plugin —
-// lands with the Stage 3 cmdbrowser pilot (mirroring Stage 1's
-// routeWhileCapturing deferral). This helper locks the coordinate contract so
-// the Stage 3 consumer can rely on it without re-deriving the geometry.
+// Local (0, 0) is the top-left cell of the inner region. handleClick uses it to
+// build the [PanelClickMsg] forwarded to the plugin on a single content click.
 func panelLocal(outer Region, x, y int) (lx, ly int) {
 	inner := contentRegion(outer)
 	return x - inner.X, y - inner.Y
@@ -571,14 +581,11 @@ const (
 )
 
 // routeWhileCapturing classifies msg under the capturing-overlay input policy.
-// It is called when the top overlay has [Overlay.CapturesInput] true. While
-// such an overlay is Top(), raw input (including printable characters) routes
-// to the plugin (registry bypassed), and only ctrl+c (hard-quit) and esc
-// (close overlay) survive as framework actions. ? does NOT open help.
-//
-// This is the exact function frame.Update will call in Stage 3 (drop-in
-// integration, not a throwaway shape). The full frame.Update rewiring lands
-// with the Stage 3 filter consumer; this stage locks and tests the contract.
+// It is called from [Frame.handleKey] when the top overlay has
+// [Overlay.CapturesInput] true. While such an overlay is Top(), raw input
+// (including printable characters) routes to the plugin (registry bypassed), and
+// only ctrl+c (hard-quit) and esc (close overlay) survive as framework actions.
+// ? does NOT open help.
 func routeWhileCapturing(msg tea.Msg) captureDecision {
 	key, ok := msg.(tea.KeyPressMsg)
 	if !ok {

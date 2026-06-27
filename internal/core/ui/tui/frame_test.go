@@ -292,6 +292,56 @@ func TestFrame_PluginActionDispatch(t *testing.T) {
 	}
 }
 
+// TestFrame_FocusRequestMovesFocusAndEchoes asserts a plugin-issued
+// FocusRequestMsg moves Frame focus and echoes a FocusChangedMsg back, while a
+// request for the already-focused panel (or an unknown ID) is a no-op.
+func TestFrame_FocusRequestMovesFocusAndEchoes(t *testing.T) {
+	focusEchoes := func(p *stubPlugin) []FocusChangedMsg {
+		var out []FocusChangedMsg
+		for _, m := range p.gotMsgs {
+			if fc, ok := m.(FocusChangedMsg); ok {
+				out = append(out, fc)
+			}
+		}
+		return out
+	}
+
+	f, p := newTestFrame(t, 80, frameGoldenHeight)
+	if f.focus.Active() != stubPanelLeft {
+		t.Fatalf("initial focus = %q, want %q", f.focus.Active(), stubPanelLeft)
+	}
+
+	// Request a different panel: focus moves and exactly one FocusChangedMsg is
+	// forwarded so the plugin's own active-panel tracking stays in sync.
+	f.Update(FocusRequestMsg{Panel: stubPanelRight})
+	if f.focus.Active() != stubPanelRight {
+		t.Errorf("focus did not move on FocusRequestMsg; got %q", f.focus.Active())
+	}
+	if echoes := focusEchoes(p); len(echoes) != 1 || echoes[0].Panel != stubPanelRight {
+		t.Errorf("FocusChangedMsg echoes = %+v, want one {right}", echoes)
+	}
+
+	// Requesting the already-focused panel must not re-echo.
+	p.gotMsgs = nil
+	f.Update(FocusRequestMsg{Panel: stubPanelRight})
+	if f.focus.Active() != stubPanelRight {
+		t.Errorf("focus changed on no-op request; got %q", f.focus.Active())
+	}
+	if echoes := focusEchoes(p); len(echoes) != 0 {
+		t.Errorf("no-op FocusRequestMsg echoed FocusChangedMsg = %+v, want none", echoes)
+	}
+
+	// An unknown panel ID leaves focus unchanged and echoes nothing.
+	p.gotMsgs = nil
+	f.Update(FocusRequestMsg{Panel: PanelID("nope")})
+	if f.focus.Active() != stubPanelRight {
+		t.Errorf("unknown FocusRequestMsg changed focus; got %q", f.focus.Active())
+	}
+	if echoes := focusEchoes(p); len(echoes) != 0 {
+		t.Errorf("unknown FocusRequestMsg echoed FocusChangedMsg = %+v, want none", echoes)
+	}
+}
+
 // TestFrame_DeclinedActionFallsThrough asserts a key matching a registered plugin
 // action whose HandleAction declines it (returns handled=false) still forwards the
 // raw key to plugin.Update — the documented "decline → forward raw key" contract.

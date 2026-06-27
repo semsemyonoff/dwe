@@ -12,6 +12,7 @@ import (
 
 	"github.com/semsemyonoff/dwe/internal/core/ui/tui"
 	"github.com/semsemyonoff/dwe/internal/core/ui/widgets"
+	"github.com/semsemyonoff/dwe/internal/shared/i18n"
 )
 
 func TestMain(m *testing.M) {
@@ -135,18 +136,21 @@ func TestRun_ShortDelegatesToSelector(t *testing.T) {
 
 func TestRun_TerminalSizeErrorDelegates(t *testing.T) {
 	called := 0
-	sentinel := errors.New("ioctl boom")
-	withSeams(t, true, 0, 0, sentinel, func(string, []widgets.SelectorItem) (int, error) {
+	sizeErr := errors.New("ioctl boom")
+	selectorErr := errors.New("selector boom")
+	// The selector returns its OWN error so the assertion that the size error is
+	// never surfaced actually runs: any error reaching the caller must be the
+	// selector's, never the size-read failure that triggered the fallback.
+	withSeams(t, true, 0, 0, sizeErr, func(string, []widgets.SelectorItem) (int, error) {
 		called++
-		return 0, nil
+		return 0, selectorErr
 	})
 	_, err := Run("pick", []Item{{ID: "a"}}, DefaultOptions())
-	if err != nil {
-		// Selector returned nil; size error must not be surfaced.
-		if errors.Is(err, sentinel) {
-			t.Errorf("size error must not be surfaced to caller")
-		}
-		t.Fatal(err)
+	if !errors.Is(err, selectorErr) {
+		t.Errorf("fallback must propagate the selector error, got %v", err)
+	}
+	if errors.Is(err, sizeErr) {
+		t.Errorf("size-read error must not be surfaced to the caller, got %v", err)
 	}
 	if called != 1 {
 		t.Errorf("size-error path must delegate to runSelectorFn; called=%d", called)
@@ -196,6 +200,28 @@ func TestRun_WideDrivesPluginAndReturnsResult(t *testing.T) {
 	}
 	if opts.Brand != "pick" || !opts.Mouse {
 		t.Errorf("RunOptions=%+v, want Brand=pick Mouse=true", opts)
+	}
+}
+
+// TestRun_WideThreadsTranslatorAndLocale verifies Run forwards the i18n context
+// (Translator + Locale) into tui.RunOptions so the help modal can localize —
+// the only non-breaking channel through the frozen Run signature.
+func TestRun_WideThreadsTranslatorAndLocale(t *testing.T) {
+	withSeams(t, true, 120, 30, nil, nil)
+	captured := stubRunTUI(t, Result{Idx: 0, Action: ActionRun}, nil)
+
+	tr := i18n.NopTranslator{}
+	opts := DefaultOptions()
+	opts.Translator = tr
+	opts.Locale = "ru"
+	if _, err := Run("pick", []Item{{ID: "a"}}, opts); err != nil {
+		t.Fatalf("Run err=%v", err)
+	}
+	if captured.Locale != "ru" {
+		t.Errorf("Locale not threaded into RunOptions; got %q, want ru", captured.Locale)
+	}
+	if captured.Translator == nil {
+		t.Error("Translator not threaded into RunOptions; got nil")
 	}
 }
 

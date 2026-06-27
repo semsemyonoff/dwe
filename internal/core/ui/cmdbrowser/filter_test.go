@@ -166,6 +166,46 @@ func TestBrowser_FilterEnterCommitsKeepingExpansion(t *testing.T) {
 	}
 }
 
+// TestBrowser_FilterExitRequestsListFocus verifies both filter exits (enter
+// commit and esc cancel) move the active panel to the list AND return a
+// FocusRequestMsg{list} so the Frame border tracks the nav target — guarding
+// against the focus/border desync that arises when only b.active is updated.
+func TestBrowser_FilterExitRequestsListFocus(t *testing.T) {
+	cases := []struct {
+		name string
+		key  string
+	}{
+		{"enter-commit", "enter"},
+		{"esc-cancel", "esc"},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			b := newBrowser("pick", filterTestItems(), DefaultOptions())
+			// Enter the filter while the tree is focused (the launch default), the
+			// exact condition under which a desync would otherwise occur.
+			b.active = panelTree
+			b.enterFilter()
+			typeFilter(b, "db")
+
+			cmd := b.Update(syntheticKey(tc.key))
+			if b.active != panelList {
+				t.Errorf("active panel = %q after %s, want list", b.active, tc.name)
+			}
+			if cmd == nil {
+				t.Fatalf("%s must return a focus-request command", tc.name)
+			}
+			msg := cmd()
+			fr, ok := msg.(tui.FocusRequestMsg)
+			if !ok {
+				t.Fatalf("%s cmd produced %T, want tui.FocusRequestMsg", tc.name, msg)
+			}
+			if fr.Panel != panelList {
+				t.Errorf("FocusRequestMsg.Panel = %q, want list", fr.Panel)
+			}
+		})
+	}
+}
+
 // TestBrowser_FilterEscFocusedIDVisibleAfterRestoration verifies that when the
 // pre-filter state had the focused node's parent collapsed (making the node
 // invisible after restoration), exitFilter walks up to the nearest visible
