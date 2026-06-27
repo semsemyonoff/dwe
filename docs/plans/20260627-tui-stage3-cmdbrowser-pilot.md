@@ -655,18 +655,24 @@ The browser is reshaped into a `tui.Plugin`:
 - Create: `internal/core/ui/cmdbrowser/testdata/*.golden`
 - Modify: existing cmdbrowser tests as needed
 
-- [ ] add golden full-frame renders of the `browser` plugin via the exported
+- [x] add golden full-frame renders of the `browser` plugin via the exported
       `tui.RenderFrame` harness (Task 1) at width buckets 80 / 99 / 100
       (odd/even) for `ModeRun` and `ModeEdit`; strip ANSI for stability;
-      regenerate with `UPDATE_GOLDEN=1`.
-- [ ] add help-modal golden/content tests per mode via `tui.BuildHelp` (ModeRun
-      shows e/y; ModeEdit does not).
-- [ ] add regression tests for `Result` semantics across all modes
+      regenerate with `UPDATE_GOLDEN=1`. (`plugin_golden_test.go`
+      `TestBrowser_FullFrameGolden` → `testdata/frame_{run,edit}_{80,99,100}.golden`.)
+- [x] add help-modal golden/content tests per mode via `tui.BuildHelp` (ModeRun
+      shows e/y; ModeEdit does not). (`TestBrowser_HelpModalGolden` →
+      `testdata/help_{run,edit}.golden`.)
+- [x] add regression tests for `Result` semantics across all modes
       (`Idx`/`Action`/`SkipConfirm`/`ForceParamForm`), `0≤Idx<len(items)`, and
-      `ActionUnknown` → `ErrCancelled`.
-- [ ] add a fallback-routing test asserting 60/79 + non-TTY do NOT enter the
-      frame.
-- [ ] run `make test` (full suite) — must pass before next task.
+      `ActionUnknown` → `ErrCancelled`. (`TestBrowser_ResultSemanticsRegression`
+      drives select/force-form/inspect-enter across modes;
+      `TestBrowser_ZeroResultIsUnknownAction` + the existing
+      `TestRun_WideActionUnknownIsCancelled` cover the cancel mapping.)
+- [x] add a fallback-routing test asserting 60/79 + non-TTY do NOT enter the
+      frame. (`TestBrowser_FallbackRoutingNeverEntersFrame` stubs `runTUI` to fail
+      if reached.)
+- [x] run `make test` (full suite) — must pass before next task.
 
 ### Task 13: Update internals documentation
 
