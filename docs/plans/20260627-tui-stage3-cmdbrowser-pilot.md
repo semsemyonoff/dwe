@@ -693,16 +693,24 @@ The browser is reshaped into a `tui.Plugin`:
 
 ### Task 14: Verify acceptance criteria
 
-- [ ] verify all Overview requirements: Frame + action keymap + `?`-modal help +
+- [x] verify all Overview requirements: Frame + action keymap + `?`-modal help +
       bottom status line + mouse on the command browser; cmdbrowser-local tree
-      retained (no generic extraction).
-- [ ] verify preserved behaviour: result/action semantics, `ModeEdit`
+      retained (no generic extraction). (`var _ tui.Plugin = (*browser)(nil)` at
+      plugin.go:87; actions.go registry; `BuildHelp` help_run/help_edit goldens;
+      `StatusContext`; `PanelClickMsg`/`FocusChangedMsg` mouse; no `tui/tree` pkg.)
+- [x] verify preserved behaviour: result/action semantics, `ModeEdit`
       vars-browser, force-param-form, filter live-narrow, inspect scroll.
-- [ ] verify Variant A: ≥80 two panels; <80/non-TTY fallback; no single-panel
-      TUI mode remains.
-- [ ] run full suite: `make test` (and `make test-race` if practical).
-- [ ] run `make lint`; confirm no v1 lipgloss added to `tui`; `core/ui` layering
-      intact.
+      (Covered by `TestBrowser_ResultSemanticsRegression`, `model_edit_test.go`,
+      `filter_test.go`, `inspect_test.go` — all pass.)
+- [x] verify Variant A: ≥80 two panels; <80/non-TTY fallback; no single-panel
+      TUI mode remains. (`minBrowserWidth=80`/`minBrowserHeight=15` in run.go;
+      no `single_panel*`/`panel_height*`/`border_width*` files remain.)
+- [x] run full suite: `make test` (and `make test-race` if practical). (Full
+      `make test` green; `go test -race ./internal/core/ui/tui/...
+      ./internal/core/ui/cmdbrowser/...` green.)
+- [x] run `make lint`; confirm no v1 lipgloss added to `tui`; `core/ui` layering
+      intact. (`golangci-lint`: 0 issues; no `charmbracelet/lipgloss` v1 import in
+      `tui`; `tui` does not import `cmdbrowser` — only doc comments reference it.)
 
 ### Task 15: [Final] Update documentation + archive plan
 
