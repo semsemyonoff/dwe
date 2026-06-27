@@ -19,6 +19,16 @@ const (
 	panelList tui.PanelID = "list"
 )
 
+// listBadgesMinWidth is the minimum inner LIST panel width (cells) at which the
+// list shows type badges and the param-count "[N]" indicator. Keyed on the
+// framework INNER width (outer − border − padding), NOT raw terminal width:
+// under the Frame the list takes weight 7 of {2,7}, so at terminal width 100 the
+// list inner width is 74 and at 99 it is 73. The legacy model showed badges only
+// at terminal width ≥ 100 (showBadges); 74 is the inner width at terminal 100,
+// so this reproduces that boundary against the inner width the Frame now
+// supplies — mirrors treeCountsMinWidth on the tree side.
+const listBadgesMinWidth = 74
+
 // browser is the cmdbrowser surface migrated onto the tui framework. It is a
 // [tui.Plugin]: the Frame owns chrome (borders, focus highlight, Tab cycling,
 // geometry, the status line) and the browser owns body content and behaviour.
@@ -108,6 +118,18 @@ func (b *browser) refreshList() {
 	b.list.SetItems(out)
 }
 
+// selectedOrigIdx returns the original items index of the currently selected
+// list row, mapping through listItem.origIdx so Result.Idx stays stable across
+// filtering and reordering inside the list. ok is false when no selectable row
+// is focused (an empty list or a header row).
+func (b *browser) selectedOrigIdx() (int, bool) {
+	it, ok := b.list.SelectedItem().(listItem)
+	if !ok || it.header {
+		return 0, false
+	}
+	return it.origIdx, true
+}
+
 // Init implements tui.Plugin. The browser has no startup command.
 func (b *browser) Init() tea.Cmd { return nil }
 
@@ -195,8 +217,22 @@ func (b *browser) ViewPanel(id tui.PanelID, inner tui.Region) string {
 		return b.tree.renderRegion(inner, b.active == panelTree, b.filter)
 	case panelList:
 		b.listInner = inner
+		return b.viewList(inner)
 	}
 	return ""
+}
+
+// viewList sizes the embedded bubbles list to the inner region and renders it.
+// Badge and param-count visibility are keyed on the inner width (see
+// listBadgesMinWidth), recomputed against the framework inner width rather than
+// raw terminal width. The breadcrumb is NOT drawn here — it lives in the Frame
+// status line via StatusContext (Decision 6), so the list fills the full inner
+// height, mirroring the tree panel which has no in-panel header.
+func (b *browser) viewList(inner tui.Region) string {
+	b.delegate.width = inner.Width
+	b.delegate.showBadges = b.opts.ShowTypeBadges && inner.Width >= listBadgesMinWidth
+	b.list.SetSize(inner.Width, inner.Height)
+	return b.list.View()
 }
 
 // Actions implements tui.Plugin. Per-mode action registration lands in Task 6.

@@ -4,6 +4,8 @@ import (
 	"strings"
 	"testing"
 
+	"charm.land/lipgloss/v2"
+
 	"github.com/semsemyonoff/dwe/internal/core/ui/tui"
 )
 
@@ -119,6 +121,91 @@ func TestBrowser_ResizeCachesBody(t *testing.T) {
 	b.Resize(body)
 	if b.body != body {
 		t.Errorf("Resize did not cache body: got %+v, want %+v", b.body, body)
+	}
+}
+
+func TestBrowser_ViewListFitsInnerRegion(t *testing.T) {
+	b := newBrowser("pick", pluginTestItems(), DefaultOptions())
+	b.tree.focusedID = "db"
+	b.refreshList()
+	inner := tui.Region{X: 0, Y: 0, Width: 74, Height: 12}
+	out := b.ViewPanel(panelList, inner)
+	lines := strings.Split(out, "\n")
+	if len(lines) > inner.Height {
+		t.Errorf("list rendered %d lines, exceeds inner height %d", len(lines), inner.Height)
+	}
+	for i, ln := range lines {
+		if w := lipgloss.Width(ln); w > inner.Width {
+			t.Errorf("list line %d width %d exceeds inner width %d: %q", i, w, inner.Width, stripANSI(ln))
+		}
+	}
+}
+
+func TestBrowser_ViewListBadgeVisibilityByWidth(t *testing.T) {
+	items := []Item{{ID: "db.migrate", Description: "apply schema", Type: "shell", ParamCount: 2}}
+	b := newBrowser("pick", items, DefaultOptions())
+	b.tree.focusedID = "db"
+	b.refreshList()
+
+	// At/above the inner badge threshold the type badge and param count show.
+	wide := stripANSI(b.ViewPanel(panelList, tui.Region{Width: listBadgesMinWidth, Height: 10}))
+	if !strings.Contains(wide, "[shell]") {
+		t.Errorf("at inner width %d badge should show; got %q", listBadgesMinWidth, wide)
+	}
+	if !strings.Contains(wide, "[2]") {
+		t.Errorf("at inner width %d param count should show; got %q", listBadgesMinWidth, wide)
+	}
+
+	// One cell below the threshold both are hidden — matches the legacy
+	// terminal-width≥100 boundary recomputed against the inner width.
+	narrow := stripANSI(b.ViewPanel(panelList, tui.Region{Width: listBadgesMinWidth - 1, Height: 10}))
+	if strings.Contains(narrow, "[shell]") {
+		t.Errorf("below inner width %d badge should hide; got %q", listBadgesMinWidth, narrow)
+	}
+	if strings.Contains(narrow, "[2]") {
+		t.Errorf("below inner width %d param count should hide; got %q", listBadgesMinWidth, narrow)
+	}
+}
+
+func TestBrowser_ViewListBadgesRespectShowTypeBadgesOption(t *testing.T) {
+	items := []Item{{ID: "db.migrate", Type: "shell"}}
+	opts := DefaultOptions()
+	opts.ShowTypeBadges = false
+	b := newBrowser("pick", items, opts)
+	b.tree.focusedID = "db"
+	b.refreshList()
+	out := stripANSI(b.ViewPanel(panelList, tui.Region{Width: 90, Height: 10}))
+	if strings.Contains(out, "[shell]") {
+		t.Errorf("ShowTypeBadges=false must suppress badge even at wide width; got %q", out)
+	}
+}
+
+func TestBrowser_SelectedOrigIdxRoundTrips(t *testing.T) {
+	items := []Item{
+		{ID: "db.migrate"},
+		{ID: "db.seed"},
+		{ID: "services.api.test"},
+	}
+	b := newBrowser("pick", items, DefaultOptions())
+	b.tree.focusedID = "db"
+	b.refreshList()
+	// The db group lists migrate (origIdx 0) and seed (origIdx 1). Selecting
+	// the second list row must resolve back to the original items index 1.
+	b.list.Select(1)
+	idx, ok := b.selectedOrigIdx()
+	if !ok {
+		t.Fatalf("selectedOrigIdx ok=false, want a selectable row")
+	}
+	if items[idx].ID != "db.seed" {
+		t.Errorf("selectedOrigIdx=%d (%q), want db.seed", idx, items[idx].ID)
+	}
+}
+
+func TestBrowser_SelectedOrigIdxEmptyList(t *testing.T) {
+	b := newBrowser("pick", pluginTestItems(), DefaultOptions())
+	b.list.SetItems(nil)
+	if _, ok := b.selectedOrigIdx(); ok {
+		t.Errorf("selectedOrigIdx ok=true on empty list, want false")
 	}
 }
 

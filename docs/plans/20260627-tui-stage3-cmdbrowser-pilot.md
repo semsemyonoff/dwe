@@ -411,17 +411,21 @@ The browser is reshaped into a `tui.Plugin`:
 - Modify: `internal/core/ui/cmdbrowser/plugin.go`
 - Modify: `internal/core/ui/cmdbrowser/list_delegate_test.go`
 
-- [ ] implement `browser.ViewPanel("list", inner)`: size the `list.Model` to the
+- [x] implement `browser.ViewPanel("list", inner)`: size the `list.Model` to the
       inner region, set delegate badge/param-count visibility by `inner.Width`
       (badges shown at the ≥100-equivalent width; recompute the threshold against
-      framework inner width — inner = outer − 4), render the list + breadcrumb
-      header.
-- [ ] keep `origIdx` mapping so the focused list item resolves to the original
+      framework inner width — inner = outer − 4). (`listBadgesMinWidth=74` — the
+      list inner width at terminal 100. The breadcrumb header is NOT drawn in the
+      list panel: it lives in the Frame status line via `StatusContext`
+      (Decision 6), so the list fills the full inner height like the tree panel.)
+- [x] keep `origIdx` mapping so the focused list item resolves to the original
       `items` index (preserves `Result.Idx` across filtering/reorder).
-- [ ] sync the list contents to the focused tree group (port `refreshList`).
-- [ ] write tests: list renders within inner region; badge/param visibility by
+      (`selectedOrigIdx()` helper added.)
+- [x] sync the list contents to the focused tree group (port `refreshList`).
+      (Ported in Task 3; called on construction and after tree mutations.)
+- [x] write tests: list renders within inner region; badge/param visibility by
       width; `origIdx` round-trips to the original index.
-- [ ] run tests — must pass before next task.
+- [x] run tests — must pass before next task.
 
 ### Task 6: Actions registry — per-mode registration + HandleAction
 
