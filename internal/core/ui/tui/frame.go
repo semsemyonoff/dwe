@@ -75,12 +75,17 @@ func withLocale(s string) frameOption { return func(o *frameOptions) { o.locale 
 // coalesceWindow is the wheel-burst coalescing interval. The first wheel event
 // arms a one-shot tea.Tick; subsequent events within the window accumulate into
 // wheelAccum; the tick fires wheelFlushMsg and the frame dispatches the net
-// count as Nav steps. Provisional — tune if burst/slow feel is off.
+// count as Nav steps. 16ms is ~one 60Hz frame — long enough to group a trackpad
+// burst into a single net Nav delta, short enough that a slow notch-wheel scroll
+// still feels one-step-per-detent. Chosen value for the Stage 3 pilot; final
+// on-device feel sign-off is a Post-Completion item.
 const coalesceWindow = 16 * time.Millisecond
 
 // doubleClickWindow is the maximum interval between two left-clicks in the same
-// panel cell that triggers a double-click Select. Provisional — tune after
-// real-device testing in the Stage 3 pilot.
+// panel cell that triggers a double-click Select. 400ms matches the common OS
+// double-click default and tested comfortably for tree-toggle / list-run.
+// Chosen value for the Stage 3 pilot; final on-device feel sign-off is a
+// Post-Completion item.
 const doubleClickWindow = 400 * time.Millisecond
 
 // wheelFlushMsg is the private tick message that fires after coalesceWindow to

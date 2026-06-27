@@ -538,21 +538,27 @@ The browser is reshaped into a `tui.Plugin`:
 - Modify: `internal/core/ui/cmdbrowser/plugin.go`
 - Modify: `internal/core/ui/cmdbrowser/plugin_test.go`
 
-- [ ] handle `tui.PanelClickMsg` in `browser.Update`: in the tree panel move the
+- [x] handle `tui.PanelClickMsg` in `browser.Update`: in the tree panel move the
       cursor to the clicked local row (no toggle); in the list panel move the
       selection to the clicked item; no run on single click.
-- [ ] handle `tui.FocusChangedMsg` (if added in Task 2) to track the active
-      panel for nav/scroll routing.
-- [ ] ensure wheel (delivered as `nav.up`/`nav.down` via `HandleAction`) scrolls
+      (`handlePanelClick` → `treeModel.focusRow` / `selectListRow`; clicks past
+      the last row and clicks while filtering are no-ops.)
+- [x] handle `tui.FocusChangedMsg` (if added in Task 2) to track the active
+      panel for nav/scroll routing. (`Update` sets `b.active` from the msg.)
+- [x] ensure wheel (delivered as `nav.up`/`nav.down` via `HandleAction`) scrolls
       the focused panel (tree cursor/`treeTopIdx`; list viewport); double-click
       `select` toggles a group / runs a list item (already via `HandleAction`).
-- [ ] confirm/tune `coalesceWindow` (16ms) and `doubleClickWindow` (400ms) — set
+      (Confirmed: Frame maps wheel→`MatchMouse`→`HandleAction(ActionNavUp/Down)`
+      → `navVertical` on the active panel; no plugin change needed.)
+- [x] confirm/tune `coalesceWindow` (16ms) and `doubleClickWindow` (400ms) — set
       final values in `frame.go` and note them; leave a Post-Completion note for
-      on-device sign-off.
-- [ ] write tests: `PanelClickMsg` moves tree cursor / list selection to the
+      on-device sign-off. (Kept 16ms / 400ms as the Stage 3 chosen values;
+      comments updated with rationale + on-device sign-off pointer.)
+- [x] write tests: `PanelClickMsg` moves tree cursor / list selection to the
       clicked row; wheel scrolls the focused panel; double-click select on group
-      vs list item.
-- [ ] run tests — must pass before next task.
+      vs list item. (`plugin_test.go`: FocusChanged, tree/list click, past-last
+      no-op, filter-ignore, wheel routing, double-click group-vs-item.)
+- [x] run tests — must pass before next task.
 
 ### Task 10: i18n keys + translator threading
 

@@ -216,24 +216,76 @@ func (b *browser) itemNoun(count int) string {
 // (CapturingInput() is true), the Frame forwards raw keys here so the browser
 // drives its own search line. While the inspect overlay is open the Frame routes
 // captured keys here too (via routeWhileCapturing — every key except ctrl+c and
-// esc), which drive the inspect viewport. Mouse handling lands in Task 9.
+// esc), which drive the inspect viewport.
+//
+// Mouse and focus messages (Task 9) arrive here regardless of capture state:
+// FocusChangedMsg tracks the active panel for nav/scroll routing (Tab/Shift+Tab
+// are framework built-ins that never otherwise reach the plugin); PanelClickMsg
+// moves the cursor/selection to the clicked row (single click = move only, no
+// run — Decision 7). Wheel scroll is delivered as nav.up/nav.down through
+// HandleAction, and double-click as the Select action, so neither needs handling
+// here.
 //
 // Filter and inspect are mutually exclusive (you cannot open inspect while
 // filtering — `i` is typed into the query, not dispatched), so the filter branch
 // takes precedence and inspect only runs when no filter is active.
 func (b *browser) Update(msg tea.Msg) tea.Cmd {
-	key, isKey := msg.(tea.KeyPressMsg)
-	switch {
-	case b.filter != nil:
-		if isKey {
-			return b.updateFilter(key)
-		}
-	case b.inspect != nil:
-		if isKey {
-			return b.updateInspect(key)
+	switch m := msg.(type) {
+	case tui.FocusChangedMsg:
+		b.active = m.Panel
+		return nil
+	case tui.PanelClickMsg:
+		b.handlePanelClick(m)
+		return nil
+	case tea.KeyPressMsg:
+		switch {
+		case b.filter != nil:
+			return b.updateFilter(m)
+		case b.inspect != nil:
+			return b.updateInspect(m)
 		}
 	}
 	return nil
+}
+
+// handlePanelClick moves the cursor/selection in response to a single click,
+// without running anything (Decision 7 — single click moves, double click runs).
+// Clicks are ignored while a capture mode owns input: the filter query line and
+// the inspect overlay are not row-addressable surfaces, and the Frame already
+// suppresses panel clicks while a modal is open, so this guards only the inline
+// filter case.
+func (b *browser) handlePanelClick(msg tui.PanelClickMsg) {
+	if b.filter != nil || b.inspect != nil {
+		return
+	}
+	switch msg.Panel {
+	case panelTree:
+		b.tree.focusRow(msg.Y)
+		b.afterTreeMove()
+	case panelList:
+		b.selectListRow(msg.Y)
+	}
+}
+
+// selectListRow moves the list selection to the item under the clicked
+// panel-local row. The bubbles list stacks each item over delegate
+// Height()+Spacing() rows, so the on-page item index is row/rowHeight; the
+// global index adds the current page offset. Clicks on empty space past the last
+// item (or before any page is sized) are no-ops.
+func (b *browser) selectListRow(row int) {
+	if row < 0 {
+		return
+	}
+	rowHeight := b.delegate.Height() + b.delegate.Spacing()
+	perPage := b.list.Paginator.PerPage
+	if rowHeight <= 0 || perPage <= 0 {
+		return
+	}
+	target := b.list.Paginator.Page*perPage + row/rowHeight
+	if target < 0 || target >= len(b.list.Items()) {
+		return
+	}
+	b.list.Select(target)
 }
 
 // ViewPanel implements tui.Plugin. It caches the per-panel inner region (for

@@ -323,6 +323,23 @@ func (tm *treeModel) ensureFocusVisible(height int) {
 	}
 }
 
+// focusRow moves the tree focus to the visible node at the given panel-local
+// row (0-based, relative to the first rendered row at topIdx). Used by
+// single-click mouse handling to move the cursor WITHOUT toggling expansion
+// (Decision 7). A click past the last visible node — empty space below the tree
+// when the panel is taller than the node count — is a no-op rather than snapping
+// the cursor to the final row.
+func (tm *treeModel) focusRow(row int) {
+	if row < 0 {
+		return
+	}
+	idx := tm.topIdx + row
+	if idx >= len(tm.visible) {
+		return
+	}
+	tm.focusedID = tm.visible[idx].id
+}
+
 // itemsForFocus returns the indices of items directly attached to the
 // focused group (after IncludePrivate filtering). Right-panel rendering
 // consumes this in Task 3; Task 4 wires the list.Model.
