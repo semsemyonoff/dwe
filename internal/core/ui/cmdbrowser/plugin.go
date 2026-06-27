@@ -250,12 +250,15 @@ func (b *browser) Update(msg tea.Msg) tea.Cmd {
 
 // handlePanelClick moves the cursor/selection in response to a single click,
 // without running anything (Decision 7 — single click moves, double click runs).
-// Clicks are ignored while a capture mode owns input: the filter query line and
-// the inspect overlay are not row-addressable surfaces, and the Frame already
-// suppresses panel clicks while a modal is open, so this guards only the inline
-// filter case.
+// The only guard is the inline filter: while it owns input the query line is not
+// a row-addressable surface, so clicks are dropped. The inspect overlay needs no
+// guard here — the Frame swallows panel clicks while a modal is open (a
+// PanelClickMsg is never emitted), so this is only ever reached with no overlay.
+// Keying off b.inspect would be a bug: that field lingers non-nil after the Frame
+// pops the overlay (the plugin is not notified — see the struct comment), which
+// would permanently swallow clicks once inspect has been opened and closed once.
 func (b *browser) handlePanelClick(msg tui.PanelClickMsg) {
-	if b.filter != nil || b.inspect != nil {
+	if b.filter != nil {
 		return
 	}
 	switch msg.Panel {

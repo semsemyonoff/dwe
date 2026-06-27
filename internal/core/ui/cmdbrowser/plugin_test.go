@@ -314,6 +314,32 @@ func TestBrowser_PanelClickIgnoredWhileFiltering(t *testing.T) {
 	}
 }
 
+func TestBrowser_PanelClickWorksAfterInspectClosed(t *testing.T) {
+	// Regression: the Frame pops the inspect overlay on esc without notifying the
+	// plugin, so b.inspect lingers non-nil. handlePanelClick must not key off it,
+	// otherwise every click is swallowed for the rest of the session once inspect
+	// has been opened and closed once.
+	b := newBrowser("pick", pluginTestItems(), DefaultOptions())
+	b.ViewPanel(panelTree, tui.Region{Width: 18, Height: 10})
+
+	// Open inspect (sets b.inspect + inspectPending), drain the pending overlay,
+	// then simulate the Frame-side esc close: the overlay is popped but b.inspect
+	// is deliberately left lingering (the plugin is never told).
+	b.openInspect()
+	if b.inspect == nil {
+		t.Fatalf("precondition: openInspect should set b.inspect")
+	}
+	if _, ok := b.PendingOverlay(); !ok {
+		t.Fatalf("precondition: inspect overlay should be pending")
+	}
+	// b.inspect is still non-nil here, mirroring the post-close session state.
+
+	b.Update(tui.PanelClickMsg{Panel: panelTree, X: 0, Y: 1})
+	if b.tree.focusedID != "services" {
+		t.Errorf("tree focusedID = %q after click following inspect close, want %q (click was swallowed by stale b.inspect)", b.tree.focusedID, "services")
+	}
+}
+
 func TestBrowser_WheelScrollsFocusedPanel(t *testing.T) {
 	b := newBrowser("pick", pluginTestItems(), DefaultOptions())
 	b.ViewPanel(panelTree, tui.Region{Width: 18, Height: 10})
