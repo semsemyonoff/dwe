@@ -495,6 +495,35 @@ func TestFrame_ActionTriggeredOverlay(t *testing.T) {
 	}
 }
 
+// TestFrame_CapturingOverlayRefreshesInPlace asserts a captured key that mutates
+// a capturing overlay's state (e.g. an inspect viewport scroll) refreshes the
+// visible top overlay in place: the freshly republished snapshot replaces the
+// old one, the on-screen content updates, and the stack does NOT grow one stale
+// layer per key.
+func TestFrame_CapturingOverlayRefreshesInPlace(t *testing.T) {
+	f, p := newTestFrame(t, 80, frameGoldenHeight)
+	p.pending = &Overlay{Content: "frame-0", Width: 7, Height: 1, CapturesInput: true}
+	f.drainOverlay() // push the capturing overlay
+	if got := len(f.overlay.layers); got != 1 {
+		t.Fatalf("overlay depth after open = %d, want 1", got)
+	}
+	if top, _ := f.overlay.Top(); top.Content != "frame-0" {
+		t.Fatalf("top content = %q, want frame-0", top.Content)
+	}
+
+	// A captured key republishes a fresh snapshot (a "scrolled" frame).
+	p.republishOnUpdate = &Overlay{Content: "frame-1", Width: 7, Height: 1, CapturesInput: true}
+	f.Update(key("down"))
+	f.Update(key("down")) // a second captured key must still not grow the stack
+
+	if got := len(f.overlay.layers); got != 1 {
+		t.Errorf("overlay depth after captured scroll keys = %d, want 1 (refresh must replace, not push)", got)
+	}
+	if top, _ := f.overlay.Top(); top.Content != "frame-1" {
+		t.Errorf("top content after scroll = %q, want frame-1 (overlay frozen — refresh did not paint)", top.Content)
+	}
+}
+
 // TestNewFrame_ConstructionErrors asserts newFrame validates the plugin contract
 // before launch: duplicate key, empty panel set, and non-positive weight all
 // fail at construction.

@@ -1,6 +1,7 @@
 package cmdbrowser
 
 import (
+	"strconv"
 	"strings"
 	"testing"
 
@@ -14,7 +15,16 @@ import (
 // expanding a group first. The first item carries a tall Inspect body so the
 // viewport actually has off-screen rows to scroll.
 func inspectTestItems() []Item {
-	tall := strings.Repeat("line of inspect detail\n", 60)
+	// Distinct per-line text (not a repeated identical line) so a scrolled
+	// viewport window renders visibly different content — otherwise a page-down
+	// would shift YOffset while the rendered text stayed byte-identical.
+	var sb strings.Builder
+	for i := range 60 {
+		sb.WriteString("line of inspect detail ")
+		sb.WriteString(strconv.Itoa(i))
+		sb.WriteByte('\n')
+	}
+	tall := sb.String()
 	return []Item{
 		{ID: "alpha", Description: "first", Type: "shell", Inspect: func(int) string { return tall }},
 		{ID: "beta", Description: "second", Type: "shell", Inspect: func(int) string { return "short body" }},
@@ -110,10 +120,19 @@ func TestBrowser_InspectScrollsViewport(t *testing.T) {
 	if got := b.inspect.vp.YOffset(); got != 0 {
 		t.Fatalf("initial YOffset = %d, want 0", got)
 	}
+	before := b.inspect.overlay().Content
 	// A page-down key (routed here while capturing) scrolls the viewport.
 	b.updateInspect(tea.KeyPressMsg{Code: tea.KeyPgDown})
 	if got := b.inspect.vp.YOffset(); got <= 0 {
 		t.Errorf("YOffset after PgDown = %d, want > 0 (scrolled down)", got)
+	}
+	// The scroll must republish the overlay so the Frame can refresh it in place;
+	// without this the on-screen modal stays frozen at the opening position.
+	if _, ok := b.PendingOverlay(); !ok {
+		t.Fatal("scroll should re-mark the overlay pending for a refresh")
+	}
+	if after := b.inspect.overlay().Content; after == before {
+		t.Error("overlay content unchanged after scroll; refresh would paint a stale frame")
 	}
 }
 

@@ -63,6 +63,19 @@ func (s *overlayStack) Pop() (Overlay, bool) {
 	return top, true
 }
 
+// ReplaceTop swaps the visible top modal with ov in place, leaving the stack
+// depth unchanged. It is used to refresh a capturing overlay's pre-rendered
+// snapshot after the plugin mutates its internal state (e.g. a viewport scroll),
+// so the refresh does not grow the stack one layer per key. When the stack is
+// empty it behaves as Push.
+func (s *overlayStack) ReplaceTop(ov Overlay) {
+	if len(s.layers) == 0 {
+		s.layers = append(s.layers, ov)
+		return
+	}
+	s.layers[len(s.layers)-1] = ov
+}
+
 // Top returns the visible modal without removing it. The bool is false when the
 // stack is empty (no modal visible).
 func (s *overlayStack) Top() (Overlay, bool) {

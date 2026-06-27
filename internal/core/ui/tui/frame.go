@@ -317,7 +317,12 @@ func (f *Frame) handleKey(key tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 				return f, nil
 			default: // captureSwallowToPlugin
 				cmd := f.plugin.Update(key)
-				f.drainOverlay()
+				// A captured key may mutate the plugin's overlay state (e.g.
+				// scrolling the inspect viewport). The overlay on the stack is a
+				// pre-rendered snapshot, so refresh it in place — replacing the
+				// top, NOT pushing — otherwise the scroll never paints and the
+				// stack would grow one stale layer per key.
+				f.refreshCapturingOverlay()
 				return f, cmd
 			}
 		}
@@ -445,6 +450,17 @@ func (f *Frame) drainOverlay() {
 		f.wheelArmed = false
 		f.lastClick = lastClickRecord{}
 		f.overlay.Push(ov)
+	}
+}
+
+// refreshCapturingOverlay re-pulls a republished overlay from the plugin after a
+// captured key and swaps it in for the visible top modal (ReplaceTop), keeping
+// the stack depth fixed. Unlike drainOverlay it must NOT push: a capturing
+// overlay refreshes itself in place (e.g. inspect viewport scroll), and pushing
+// would stack stale snapshots that esc would then have to pop one at a time.
+func (f *Frame) refreshCapturingOverlay() {
+	if ov, ok := f.plugin.PendingOverlay(); ok {
+		f.overlay.ReplaceTop(ov)
 	}
 }
 

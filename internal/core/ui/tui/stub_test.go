@@ -40,9 +40,13 @@ type stubPlugin struct {
 	handledAction Action
 
 	// pending overlay the plugin will surface on the next PendingOverlay drain.
-	pending   *Overlay
-	statusCtx string
-	result    stubResult
+	pending *Overlay
+	// republishOnUpdate, when set, is re-marked pending on every Update — modelling
+	// a capturing overlay (e.g. inspect viewport) that republishes a fresh snapshot
+	// after a scroll key so the Frame can refresh the top overlay in place.
+	republishOnUpdate *Overlay
+	statusCtx         string
+	result            stubResult
 
 	// capturing toggles CapturingInput() so the no-overlay capture branch can be
 	// exercised. Default false (normal registry dispatch).
@@ -82,6 +86,10 @@ func (p *stubPlugin) Resize(body Region) { p.lastResize = body }
 func (p *stubPlugin) Update(msg tea.Msg) tea.Cmd {
 	p.gotMsgs = append(p.gotMsgs, msg)
 	p.callOrder = append(p.callOrder, "update")
+	if p.republishOnUpdate != nil {
+		ov := *p.republishOnUpdate
+		p.pending = &ov
+	}
 	return nil
 }
 

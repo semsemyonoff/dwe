@@ -57,9 +57,11 @@ type browser struct {
 	// viewport is logically open); it captures via Overlay.CapturesInput routed
 	// by the Frame, so the two stay mutually exclusive — the filter takes raw
 	// input through the no-overlay capture branch, inspect through the modal-open
-	// branch (routeWhileCapturing). inspectPending gates PendingOverlay so the
-	// overlay is pushed onto the Frame stack EXACTLY once per open (a scroll-key
-	// drain must not re-push it). Esc is handled Frame-side (it pops the overlay
+	// branch (routeWhileCapturing). inspectPending gates PendingOverlay so each
+	// republish yields exactly one overlay value: openInspect sets it for the
+	// first paint and updateInspect re-sets it after a scroll, with the Frame
+	// pushing the first and replacing the top in place thereafter (the stack never
+	// grows). Esc is handled Frame-side (it pops the overlay
 	// without notifying the plugin); b.inspect therefore lingers as inert content
 	// until the next openInspect rebuilds it — harmless because every
 	// inspect-navigation key is a registered action the registry intercepts in
@@ -572,14 +574,21 @@ func (b *browser) updateInspect(msg tea.KeyPressMsg) tea.Cmd {
 	}
 	var cmd tea.Cmd
 	b.inspect.vp, cmd = b.inspect.vp.Update(msg)
+	// The viewport may have scrolled; re-mark pending so the Frame re-pulls a
+	// fresh overlay snapshot (replacing the top in place) and the new scroll
+	// position actually paints. Without this the overlay stays frozen at the
+	// position it had when first opened.
+	b.inspectPending = true
 	return cmd
 }
 
 // PendingOverlay implements tui.Plugin. It hands the inspect modal to the Frame
-// exactly once per open: inspectPending is set by openInspect and cleared here so
-// a follow-up drain (after a scroll-key Update) does not re-push a duplicate
-// overlay. The overlay is built fresh from the current viewport so its scroll
-// position is reflected on first paint.
+// when one is pending: inspectPending is set by openInspect (first paint) and by
+// updateInspect (after a scroll key) and cleared here, so each republish yields
+// exactly one overlay value. The Frame pushes the first one and replaces it in
+// place on subsequent scrolls (refreshCapturingOverlay), so the stack never
+// grows. The overlay is built fresh from the current viewport so the live scroll
+// position is always reflected.
 func (b *browser) PendingOverlay() (tui.Overlay, bool) {
 	if b.inspect == nil || !b.inspectPending {
 		return tui.Overlay{}, false
