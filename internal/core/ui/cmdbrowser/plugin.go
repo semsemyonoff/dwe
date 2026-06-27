@@ -182,13 +182,17 @@ func (b *browser) itemNoun(count int) string {
 // scroll, mouse) lands in Tasks 7–9; the skeleton ignores messages.
 func (b *browser) Update(_ tea.Msg) tea.Cmd { return nil }
 
-// ViewPanel implements tui.Plugin. Per-panel rendering lands in Tasks 4–5; the
-// skeleton caches the inner regions so mouse translation and re-renders can
-// reuse them, and renders nothing yet.
+// ViewPanel implements tui.Plugin. It caches the per-panel inner region (for
+// mouse translation and re-renders) and renders the panel body into it. The
+// Frame owns the border/padding, so the inner region is already chrome-free.
+// The list panel render lands in Task 5.
 func (b *browser) ViewPanel(id tui.PanelID, inner tui.Region) string {
 	switch id {
 	case panelTree:
 		b.treeInner = inner
+		// Keep the focused row on screen across resizes before clipping.
+		b.tree.ensureFocusVisible(inner.Height)
+		return b.tree.renderRegion(inner, b.active == panelTree, b.filter)
 	case panelList:
 		b.listInner = inner
 	}

@@ -387,19 +387,22 @@ The browser is reshaped into a `tui.Plugin`:
 - Modify: `internal/core/ui/cmdbrowser/plugin.go`
 - Modify: `internal/core/ui/cmdbrowser/tree_render_test.go`
 
-- [ ] change `treeModel` rendering to accept an inner `Region` (width/height)
+- [x] change `treeModel` rendering to accept an inner `Region` (width/height)
       instead of reading layout from a `Model`; keep clipping
       (`treeTopIdx`/viewport) logic but drive it off the passed height.
-- [ ] implement `browser.ViewPanel("tree", inner)` calling the tree renderer
+      (`renderRegion`/`clipToViewport`/`ensureFocusVisible` + `topIdx` ported off
+      `*Model`.)
+- [x] implement `browser.ViewPanel("tree", inner)` calling the tree renderer
       (normal vs with-counts based on `inner.Width`). NOTE the framework padding
       delta (inner = outer − 4, not − 2): recompute the counts threshold against
       framework inner width rather than raw terminal width (current behaviour
-      shows counts at ≥100 terminal cols).
-- [ ] move the filter-aware tree render path (`renderFilter`) behind the same
+      shows counts at ≥100 terminal cols). (`treeCountsMinWidth=18` — the inner
+      tree width at terminal 99–100.)
+- [x] move the filter-aware tree render path (`renderFilter`) behind the same
       entry so it is used when `b.filter != nil`.
-- [ ] write tests: tree renders within a given inner region (no overflow);
+- [x] write tests: tree renders within a given inner region (no overflow);
       counts shown/hidden by width; focused-node glyph correct.
-- [ ] run tests — must pass before next task.
+- [x] run tests — must pass before next task.
 
 ### Task 5: List panel — render into inner region via ViewPanel
 
