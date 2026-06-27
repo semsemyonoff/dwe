@@ -37,6 +37,10 @@ type frameOptions struct {
 	// brand / project are the left-zone status-line strings (brand · project).
 	brand   string
 	project string
+	// tr / locale resolve the help-modal display strings. Zero values mean "use
+	// the framework defaults" (NopTranslator + "en"), applied in newFrame.
+	tr     i18n.Translator
+	locale string
 }
 
 // frameOption mutates the private frameOptions during [newFrame] construction.
@@ -57,6 +61,16 @@ func withBrand(s string) frameOption { return func(o *frameOptions) { o.brand = 
 
 // withProject sets the status-line project string.
 func withProject(s string) frameOption { return func(o *frameOptions) { o.project = s } }
+
+// withTranslator sets the translator used to resolve help-modal display strings.
+// A nil translator is ignored (newFrame falls back to i18n.NopTranslator).
+func withTranslator(tr i18n.Translator) frameOption {
+	return func(o *frameOptions) { o.tr = tr }
+}
+
+// withLocale sets the locale passed to the translator for help-modal strings.
+// An empty locale is ignored (newFrame falls back to "en").
+func withLocale(s string) frameOption { return func(o *frameOptions) { o.locale = s } }
 
 // coalesceWindow is the wheel-burst coalescing interval. The first wheel event
 // arms a one-shot tea.Tick; subsequent events within the window accumulate into
@@ -134,6 +148,12 @@ func newFrame(p Plugin, opts ...frameOption) (*Frame, error) {
 	if fo.termEnv == nil {
 		fo.termEnv = func() string { return os.Getenv("TERM") }
 	}
+	if fo.tr == nil {
+		fo.tr = i18n.NopTranslator{}
+	}
+	if fo.locale == "" {
+		fo.locale = "en"
+	}
 
 	panels := p.Panels()
 	if len(panels) == 0 {
@@ -163,8 +183,8 @@ func newFrame(p Plugin, opts ...frameOption) (*Frame, error) {
 		registry: reg,
 		focus:    newFocusManager(panels),
 		opts:     fo,
-		tr:       i18n.NopTranslator{},
-		locale:   "en",
+		tr:       fo.tr,
+		locale:   fo.locale,
 		clock:    realClock{},
 	}, nil
 }
@@ -262,6 +282,25 @@ func (f *Frame) handleKey(key tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 	keyStr := key.String()
 
 	if !f.overlay.Empty() {
+		// A capturing overlay (Overlay.CapturesInput) routes raw input to the
+		// plugin: only ctrl+c (hard-quit) and esc (close overlay) survive as
+		// framework actions; ? does not open help. See routeWhileCapturing.
+		if top, ok := f.overlay.Top(); ok && top.CapturesInput {
+			switch routeWhileCapturing(key) {
+			case captureHardQuit:
+				return f, tea.Quit
+			case captureClose:
+				f.overlay.Pop()
+				// Crossing the overlay boundary resets double-click tracking.
+				f.lastClick = lastClickRecord{}
+				return f, nil
+			default: // captureSwallowToPlugin
+				cmd := f.plugin.Update(key)
+				f.drainOverlay()
+				return f, cmd
+			}
+		}
+
 		// Modal open: the frame's modal-input policy takes precedence over the
 		// registry. "esc" closes the overlay — it never reaches its ActionQuit
 		// alias while a modal is open (the Binding.Aliases precedence rule), so
@@ -283,6 +322,19 @@ func (f *Frame) handleKey(key tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 			}
 		}
 		return f, nil
+	}
+
+	// No overlay, but the plugin is taking raw input (e.g. an inline filter):
+	// suspend registry dispatch and forward every key to plugin.Update,
+	// reserving only ctrl+c as a hard-quit. esc/enter/printables reach the
+	// plugin so it drives its own capture state machine.
+	if f.plugin.CapturingInput() {
+		if keyStr == "ctrl+c" {
+			return f, tea.Quit
+		}
+		cmd := f.plugin.Update(key)
+		f.drainOverlay()
+		return f, cmd
 	}
 
 	if a, ok := f.registry.Match(keyStr); ok {

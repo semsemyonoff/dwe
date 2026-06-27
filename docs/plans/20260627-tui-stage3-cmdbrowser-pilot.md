@@ -279,39 +279,40 @@ The browser is reshaped into a `tui.Plugin`:
 - Modify: `internal/core/ui/tui/stub_test.go`
 - Modify: `internal/core/ui/tui/frame_test.go`
 
-- [ ] add exported cross-package harness in `testsupport.go` (normal `.go`,
+- [x] add exported cross-package harness in `testsupport.go` (normal `.go`,
       documented as for cross-package tests): `RenderFrame(p Plugin, opts
       RunOptions, w, h int) (string, error)` (builds a frame, applies a
       `WindowSizeMsg`, returns the composited `View` string) and
       `BuildHelp(p Plugin, tr i18n.Translator, locale string, w, h int)
       (Overlay, error)` (pass dims through to `buildHelpOverlay`). Use the
-      existing exported `RunOptions` (not a nonexistent `RunOption`). For
-      driving `cmdbrowser.Run` deterministically, add a `cmdbrowser`-local
-      `runTUI` package var wrapping `tui.Run` (swappable in tests) rather than
-      exporting `tui.Run`'s capability seams.
-- [ ] add `CapturingInput() bool` to the `Plugin` interface (doc: true while the
+      existing exported `RunOptions` (not a nonexistent `RunOption`). (The
+      `cmdbrowser`-local `runTUI` package var is created in Task 11 where
+      `cmdbrowser.Run` is rewired and a test consumes it — adding it now would be
+      an unused var flagged by lint, since `cmdbrowser` does not import `tui`
+      until the plugin lands.)
+- [x] add `CapturingInput() bool` to the `Plugin` interface (doc: true while the
       plugin takes raw input without an overlay; `Frame` suspends registry
       dispatch, reserving only ctrl+c).
-- [ ] in `Frame.handleKey`, add a capture branch BEFORE the registry match: if
+- [x] in `Frame.handleKey`, add a capture branch BEFORE the registry match: if
       `f.overlay.Empty()` and `f.plugin.CapturingInput()`, forward the key to
       `plugin.Update` (drain overlay after); only `ctrl+c` → `tea.Quit`.
-- [ ] in `Frame.handleKey` modal-open branch, when `Top().CapturesInput` is
+- [x] in `Frame.handleKey` modal-open branch, when `Top().CapturesInput` is
       true, route via `routeWhileCapturing` (swallow→`plugin.Update`,
       hardQuit→`tea.Quit`, close→`overlay.Pop()` + reset `lastClick`); keep the
       esc/?/q-only policy for non-capturing overlays.
-- [ ] add `withTranslator(i18n.Translator)` + `withLocale(string)` frameOptions
+- [x] add `withTranslator(i18n.Translator)` + `withLocale(string)` frameOptions
       and apply them in `newFrame`; add `Translator`/`Locale` to `RunOptions`
       and map them in `Run` (fall back to the existing `NopTranslator`/fixed
       locale when zero).
-- [ ] update EVERY concrete `Plugin` implementation to add `CapturingInput()`
+- [x] update EVERY concrete `Plugin` implementation to add `CapturingInput()`
       (configurable; default false) — not just `stubPlugin` but also
       `mousePlugin` and any other manual test plugins in `frame_test.go`
       (`frame.go`/`*_test.go` won't compile until all satisfy the new method).
-- [ ] write tests: capture branch forwards action-letter keys raw to the plugin
+- [x] write tests: capture branch forwards action-letter keys raw to the plugin
       (not dispatched) and reserves ctrl+c; `CapturesInput` overlay routes
       navigation keys (arrows/pgup/home) to the plugin and esc closes it;
       translator/locale flow into the help overlay.
-- [ ] run tests — must pass before next task.
+- [x] run tests — must pass before next task.
 
 ### Task 2: Frame revision — panel-local click + focus delivery to plugin
 

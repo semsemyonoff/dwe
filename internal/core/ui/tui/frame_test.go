@@ -9,6 +9,8 @@ import (
 
 	tea "charm.land/bubbletea/v2"
 	"charm.land/lipgloss/v2"
+
+	"github.com/semsemyonoff/dwe/internal/shared/i18n"
 )
 
 // frameGoldenHeight is the terminal height the full-frame goldens render at.
@@ -43,6 +45,22 @@ func key(s string) tea.KeyPressMsg {
 		return tea.KeyPressMsg{Code: tea.KeyEscape}
 	case "ctrl+c":
 		return tea.KeyPressMsg{Code: 'c', Mod: tea.ModCtrl}
+	case "up":
+		return tea.KeyPressMsg{Code: tea.KeyUp}
+	case "down":
+		return tea.KeyPressMsg{Code: tea.KeyDown}
+	case "left":
+		return tea.KeyPressMsg{Code: tea.KeyLeft}
+	case "right":
+		return tea.KeyPressMsg{Code: tea.KeyRight}
+	case "pgup":
+		return tea.KeyPressMsg{Code: tea.KeyPgUp}
+	case "pgdown":
+		return tea.KeyPressMsg{Code: tea.KeyPgDown}
+	case "home":
+		return tea.KeyPressMsg{Code: tea.KeyHome}
+	case "end":
+		return tea.KeyPressMsg{Code: tea.KeyEnd}
 	default:
 		r := []rune(s)
 		return tea.KeyPressMsg{Code: r[0], Text: s}
@@ -589,6 +607,187 @@ func TestFrame_NonCapturingOverlayUnaffected(t *testing.T) {
 	}
 }
 
+// TestFrame_CapturingInputForwardsRawKeys asserts the no-overlay capture branch:
+// while plugin.CapturingInput() is true, an action-letter key is forwarded raw to
+// plugin.Update (NOT dispatched through HandleAction), and ctrl+c is still
+// reserved as a hard-quit.
+func TestFrame_CapturingInputForwardsRawKeys(t *testing.T) {
+	f, p := newTestFrame(t, 80, frameGoldenHeight)
+	p.capturing = true
+
+	// "o" is a registered plugin action (stubActionOpen). While capturing it must
+	// reach plugin.Update raw and NOT route through HandleAction.
+	f.Update(key("o"))
+	if p.handledAction != "" {
+		t.Errorf("action key dispatched while capturing: handled=%q; want raw forward", p.handledAction)
+	}
+	if !receivedKey(p, "o") {
+		t.Errorf("captured key did not reach plugin.Update; got %v", p.gotMsgs)
+	}
+
+	// "?" must NOT open help while capturing — it is a raw key to the plugin.
+	f.Update(key("?"))
+	if !f.overlay.Empty() {
+		t.Error("help opened while capturing; want '?' forwarded raw to plugin")
+	}
+	if !receivedKey(p, "?") {
+		t.Errorf("captured '?' did not reach plugin.Update; got %v", p.gotMsgs)
+	}
+
+	// ctrl+c stays reserved as a hard-quit even while capturing.
+	_, cmd := f.Update(key("ctrl+c"))
+	if !isQuitCmd(cmd) {
+		t.Error("ctrl+c while capturing did not quit; it must stay reserved")
+	}
+}
+
+// TestFrame_CapturingInputDisabledRestoresDispatch asserts that toggling
+// CapturingInput back to false restores normal registry dispatch (the action
+// routes through HandleAction again).
+func TestFrame_CapturingInputDisabledRestoresDispatch(t *testing.T) {
+	f, p := newTestFrame(t, 80, frameGoldenHeight)
+	p.capturing = false
+	f.Update(key("o"))
+	if p.handledAction != stubActionOpen {
+		t.Errorf("not-capturing action key did not dispatch; handled=%q", p.handledAction)
+	}
+}
+
+// TestFrame_CapturingOverlayRoutesNavKeys asserts the modal-open capturing
+// branch: when the top overlay has CapturesInput=true, navigation keys
+// (arrows/pgup/home) route raw to plugin.Update, "?" does not open help, esc
+// closes the overlay, and ctrl+c quits.
+func TestFrame_CapturingOverlayRoutesNavKeys(t *testing.T) {
+	t.Run("nav_keys_reach_plugin", func(t *testing.T) {
+		f, p := newTestFrame(t, 80, frameGoldenHeight)
+		f.overlay.Push(Overlay{Content: "inspect", Width: 6, Height: 2, CapturesInput: true})
+		for _, k := range []string{"up", "down", "pgup", "home"} {
+			f.Update(key(k))
+			if !receivedKey(p, k) {
+				t.Errorf("capturing overlay did not forward %q to plugin; got %v", k, p.gotMsgs)
+			}
+		}
+	})
+
+	t.Run("question_mark_does_not_open_help", func(t *testing.T) {
+		f, p := newTestFrame(t, 80, frameGoldenHeight)
+		f.overlay.Push(Overlay{Content: "inspect", Width: 6, Height: 2, CapturesInput: true})
+		f.Update(key("?"))
+		// Still exactly one overlay (the capturing one); no help pushed.
+		if _, ok := f.overlay.Top(); !ok || !f.captureOverlayOpen() {
+			t.Error("'?' altered the capturing overlay stack; want raw forward")
+		}
+		if !receivedKey(p, "?") {
+			t.Errorf("'?' not forwarded to plugin while capturing overlay open; got %v", p.gotMsgs)
+		}
+	})
+
+	t.Run("esc_closes_overlay", func(t *testing.T) {
+		f, _ := newTestFrame(t, 80, frameGoldenHeight)
+		f.overlay.Push(Overlay{Content: "inspect", Width: 6, Height: 2, CapturesInput: true})
+		_, cmd := f.Update(key("esc"))
+		if !f.overlay.Empty() {
+			t.Error("esc did not close the capturing overlay")
+		}
+		if isQuitCmd(cmd) {
+			t.Error("esc quit the program instead of closing the capturing overlay")
+		}
+	})
+
+	t.Run("ctrl_c_hard_quits", func(t *testing.T) {
+		f, _ := newTestFrame(t, 80, frameGoldenHeight)
+		f.overlay.Push(Overlay{Content: "inspect", Width: 6, Height: 2, CapturesInput: true})
+		_, cmd := f.Update(key("ctrl+c"))
+		if !isQuitCmd(cmd) {
+			t.Error("ctrl+c did not quit while a capturing overlay was open")
+		}
+	})
+}
+
+// TestFrame_TranslatorLocaleFlowIntoHelp asserts the translator + locale wired in
+// via withTranslator/withLocale reach the help overlay: the modal title and a
+// section/action string are resolved through the translator at the supplied
+// locale.
+func TestFrame_TranslatorLocaleFlowIntoHelp(t *testing.T) {
+	tr := prefixTranslator{}
+	f, _ := newTestFrame(t, 80, frameGoldenHeight, withTranslator(tr), withLocale("ru"))
+	f.Update(key("?")) // open help
+	plain := stripANSI(f.View().Content)
+	// prefixTranslator returns "<locale>:<fallback>" from T, so the localized
+	// title is "ru:Help".
+	if !strings.Contains(plain, "ru:Help") {
+		t.Errorf("help title not resolved through translator/locale; modal:\n%s", plain)
+	}
+	// The stub registers a "Stub" section; its label resolves through T too.
+	if !strings.Contains(plain, "ru:Stub") {
+		t.Errorf("help section label not resolved through translator/locale; modal:\n%s", plain)
+	}
+}
+
+// TestRenderFrameHarness asserts the exported cross-package RenderFrame harness
+// produces a frame string (the same content a Frame.View would) and surfaces
+// construction errors.
+func TestRenderFrameHarness(t *testing.T) {
+	out, err := RenderFrame(newStubPlugin(), RunOptions{Brand: "dwe", Project: "demo"}, 80, frameGoldenHeight)
+	if err != nil {
+		t.Fatalf("RenderFrame: %v", err)
+	}
+	plain := stripANSI(out)
+	if !strings.Contains(plain, "? help") {
+		t.Errorf("RenderFrame output missing status line:\n%s", plain)
+	}
+	rows := strings.Split(plain, "\n")
+	if len(rows) != frameGoldenHeight {
+		t.Errorf("RenderFrame row count = %d; want %d", len(rows), frameGoldenHeight)
+	}
+
+	// A contract violation (no panels) surfaces as an error, no render.
+	if _, err := RenderFrame(noPanelPlugin{newStubPlugin()}, RunOptions{}, 80, 24); err == nil {
+		t.Error("RenderFrame accepted a plugin with no panels")
+	}
+}
+
+// TestBuildHelpHarness asserts the exported BuildHelp harness builds an overlay
+// resolving strings through the translator/locale, and surfaces Actions errors.
+func TestBuildHelpHarness(t *testing.T) {
+	ov, err := BuildHelp(newStubPlugin(), prefixTranslator{}, "ru", 80, 24)
+	if err != nil {
+		t.Fatalf("BuildHelp: %v", err)
+	}
+	plain := stripANSI(ov.Content)
+	if !strings.Contains(plain, "ru:Help") {
+		t.Errorf("BuildHelp overlay title not localized:\n%s", plain)
+	}
+	if ov.Width <= 0 || ov.Height <= 0 {
+		t.Errorf("BuildHelp overlay has degenerate dimensions: %dx%d", ov.Width, ov.Height)
+	}
+
+	// nil translator falls back to NopTranslator (English) without panicking.
+	if _, err := BuildHelp(newStubPlugin(), nil, "", 80, 24); err != nil {
+		t.Fatalf("BuildHelp with nil translator: %v", err)
+	}
+
+	// A duplicate-key plugin surfaces the Actions error.
+	if _, err := BuildHelp(dupKeyPlugin{newStubPlugin()}, nil, "en", 80, 24); err == nil {
+		t.Error("BuildHelp accepted a plugin registering a duplicate key")
+	}
+}
+
+// captureOverlayOpen reports whether the top overlay captures input — a small
+// test helper used by the capturing-overlay routing tests.
+func (f *Frame) captureOverlayOpen() bool {
+	top, ok := f.overlay.Top()
+	return ok && top.CapturesInput
+}
+
+// prefixTranslator is a fake i18n.Translator whose T returns "<locale>:<fallback>"
+// so tests can assert BOTH that the help overlay routes through the translator AND
+// that the supplied locale flows through. All other methods delegate to the
+// no-op behaviour (return the fallback).
+type prefixTranslator struct{ i18n.NopTranslator }
+
+func (prefixTranslator) T(locale, _, fallback string) string { return locale + ":" + fallback }
+
 // --- test plugins for the construction-error cases ---
 
 type dupKeyPlugin struct{ *stubPlugin }
@@ -720,6 +919,7 @@ func (p *mousePlugin) HandleAction(a Action) (tea.Cmd, bool) {
 }
 func (p *mousePlugin) PendingOverlay() (Overlay, bool) { return Overlay{}, false }
 func (p *mousePlugin) Result() any                     { return nil }
+func (p *mousePlugin) CapturingInput() bool            { return false }
 
 // fakeClock is an injectable frameClock for click-routing tests. Initialise t
 // to a non-zero time; advance moves it forward.

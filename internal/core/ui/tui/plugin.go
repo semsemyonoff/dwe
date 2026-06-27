@@ -124,4 +124,18 @@ type Plugin interface {
 	// Result returns the plugin's typed outcome, returned UNCHANGED by [Run]
 	// (no wrapper type). Callers type-assert it to the concrete surface's result.
 	Result() any
+
+	// CapturingInput reports whether the plugin is currently taking raw input
+	// WITHOUT an overlay (e.g. an inline filter query line). While it returns
+	// true and no overlay is open, [Frame] suspends registry dispatch and
+	// forwards every key straight to [Plugin.Update], reserving only ctrl+c as a
+	// hard-quit. esc/enter and printable characters all reach the plugin so it
+	// can drive its own capture state machine. Returning false restores the
+	// normal registry-dispatch policy. (Overlay-based capture is a separate
+	// mechanism — see [Overlay.CapturesInput] and [routeWhileCapturing].)
+	//
+	// This is a deliberate Stage 3 contract addition (the first migration
+	// revision the Plugin interface allows): the inline filter is the first real
+	// consumer. Stub/simple plugins return false.
+	CapturingInput() bool
 }

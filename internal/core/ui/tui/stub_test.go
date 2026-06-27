@@ -44,6 +44,10 @@ type stubPlugin struct {
 	statusCtx string
 	result    stubResult
 
+	// capturing toggles CapturingInput() so the no-overlay capture branch can be
+	// exercised. Default false (normal registry dispatch).
+	capturing bool
+
 	// lifecycle-order guard: records the order of Init/Update/Close calls so a
 	// test can assert Init precedes any Update and Close comes last.
 	callOrder []string
@@ -124,3 +128,5 @@ func (p *stubPlugin) PendingOverlay() (Overlay, bool) {
 }
 
 func (p *stubPlugin) Result() any { return p.result }
+
+func (p *stubPlugin) CapturingInput() bool { return p.capturing }
