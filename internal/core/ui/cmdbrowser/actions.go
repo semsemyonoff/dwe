@@ -82,6 +82,20 @@ func (b *browser) Actions(reg *tui.Registry) error {
 	return nil
 }
 
+// actionForMode maps Mode → Action so Result carries the right intent for the
+// caller. Mode is normalised by Options.applyDefaults before reaching here.
+// Relocated from the deleted model.go (Task 11).
+func actionForMode(mode Mode) Action {
+	switch mode {
+	case ModeInspect:
+		return ActionInspect
+	case ModeEdit:
+		return ActionEdit
+	default:
+		return ActionRun
+	}
+}
+
 // HandleAction implements tui.Plugin. The frame matches a key to an Action and
 // dispatches here; built-ins (help/quit/focus) never reach this method.
 // Navigation and select route to the active panel — tree and list are distinct

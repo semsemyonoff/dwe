@@ -495,6 +495,13 @@ func (b *browser) refreshFilterMatches() {
 	}
 }
 
+// inspectMaxWidth caps the inspect viewport on wide terminals so the content
+// lines up with the section divider rendered by render.SectionTitle (which uses
+// the same min(width, 100) cap). Without this, the inspect area would stretch to
+// the full body width and the section dividers would float in dead space at the
+// right edge. Relocated from the deleted model.go (Task 11).
+const inspectMaxWidth = 100
+
 // inspectBoxHChrome / inspectBoxVChrome are the cells the rounded-border modal
 // box (inspectState.overlay) adds around the viewport: 2 border + 2 horizontal
 // padding wide, 2 border rows tall. inspectViewportSize subtracts them (plus a

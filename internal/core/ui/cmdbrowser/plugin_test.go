@@ -91,6 +91,35 @@ func TestBrowser_StatusContextBreadcrumb(t *testing.T) {
 	}
 }
 
+// TestBrowser_BreadcrumbPathAndPlural verifies the breadcrumb renders the
+// focused group's dotted path with " › " separators and singularizes/pluralizes
+// the command noun by count. Ported from the deleted *Model
+// TestModel_BreadcrumbFormatting.
+func TestBrowser_BreadcrumbPathAndPlural(t *testing.T) {
+	items := []Item{
+		{ID: "db.migrate"},
+		{ID: "services.main.cs.list"},
+		{ID: "services.main.cs.update"},
+	}
+	b := newBrowser("pick", items, DefaultOptions())
+	b.tree.focusedID = "services.main.cs"
+	b.refreshList()
+	got := stripANSI(b.breadcrumb())
+	if !strings.Contains(got, "services › main › cs") {
+		t.Errorf("breadcrumb missing path; got %q", got)
+	}
+	if !strings.Contains(got, "· 2 commands") {
+		t.Errorf("breadcrumb missing plural count; got %q", got)
+	}
+
+	b.tree.focusedID = "db"
+	b.refreshList()
+	got = stripANSI(b.breadcrumb())
+	if !strings.Contains(got, "· 1 command") || strings.Contains(got, "· 1 commands") {
+		t.Errorf("breadcrumb should singularize; got %q", got)
+	}
+}
+
 func TestBrowser_StatusContextSkipConfirmIndicator(t *testing.T) {
 	b := newBrowser("pick", pluginTestItems(), DefaultOptions())
 	b.skipConfirm = true

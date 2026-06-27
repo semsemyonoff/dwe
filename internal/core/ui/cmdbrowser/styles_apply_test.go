@@ -163,23 +163,18 @@ func TestApplyViewportStyles_PopulatesPaletteFields(t *testing.T) {
 	}
 }
 
-func TestNewModel_AppliesListAndHelpStyles(t *testing.T) {
+// TestNewBrowser_AppliesListStyles verifies newBrowser threads the configured
+// palette into the embedded bubbles list. The help model moved to the Frame
+// (Task 11), so the help-footer styling assertion that the old *Model carried is
+// no longer the browser's concern.
+func TestNewBrowser_AppliesListStyles(t *testing.T) {
 	applyPaletteOverride(t)
 
 	items := []Item{{ID: "alpha", Description: "first", Type: "shell"}}
-	m := newModel("title", items, DefaultOptions(), 120, 30)
+	b := newBrowser("title", items, DefaultOptions())
 
-	if got, want := m.list.Styles.ActivePaginationDot.GetForeground(), lipgloss.Color("167"); got != want {
+	if got, want := b.list.Styles.ActivePaginationDot.GetForeground(), lipgloss.Color("167"); got != want {
 		t.Errorf("list.Styles.ActivePaginationDot: got %v, want %v", got, want)
-	}
-	if got, want := m.help.Styles.ShortKey.GetForeground(), lipgloss.Color("167"); got != want {
-		t.Errorf("help.Styles.ShortKey: got %v, want %v", got, want)
-	}
-
-	footer := m.renderHelpFooter(120)
-	wantKey := "\x1b[38;5;167m"
-	if !strings.Contains(footer, wantKey) {
-		t.Errorf("renderHelpFooter missing key color %q; got %q", wantKey, footer)
 	}
 }
 

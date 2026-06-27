@@ -612,13 +612,13 @@ The browser is reshaped into a `tui.Plugin`:
   the `*Model` methods in `model_modes.go` via `m.keys` — both go in this task)
 - Modify: `internal/core/ui/cmdbrowser/cmdbrowser_test.go`
 
-- [ ] BEFORE deleting `model.go`, relocate the package-level symbols it holds
+- [x] BEFORE deleting `model.go`, relocate the package-level symbols it holds
       that survive: `actionForMode` (model.go:320), `breadcrumb`/`itemNoun`
       (model.go:698/713), and the `focus` type + `focusLeft/Right/Filter/Inspect`
       consts (model.go:19-26) — move onto/near `*browser` (or a small shared
       file). (`listItem` lives in list_delegate.go and `groupOf` in tree.go —
       those already survive.)
-- [ ] rewrite `Run`: `applyDefaults`; empty-items guard; non-TTY → `runFallback`
+- [x] rewrite `Run`: `applyDefaults`; empty-items guard; non-TTY → `runFallback`
       (defensive `ErrCancelled` only if fallback unreachable); read size; if
       `err != nil || width < 80 || height < 15` → `runFallback`; else
       `out, err := runTUI(newBrowser(...), tui.RunOptions{Brand, Project,
@@ -627,26 +627,26 @@ The browser is reshaped into a `tui.Plugin`:
       tests). (Note: `tui.Run` re-reads size and re-gates on its own
       `minWidth/minHeight=40/10` — harmless double-gate; the cmdbrowser
       <80/height<15 check is the real fallback boundary.)
-- [ ] DROP the second `widgets.RunWithPromptHooks` wrapper (now owned by
+- [x] DROP the second `widgets.RunWithPromptHooks` wrapper (now owned by
       `tui.Run`); map `tui.Run`'s `widgets.ErrCancelled` straight through; keep
       the `ActionUnknown` → `ErrCancelled` guard via `res.Action`.
-- [ ] raise the fallback threshold constant to 80 (rename
+- [x] raise the fallback threshold constant to 80 (rename
       `minTwoPanelWidth`/introduce a clear constant); the single-panel (60–79)
       layout code paths vanish with `model.go`.
-- [ ] delete `model.go`, `keymap.go`, AND the now-dead `*Model` filter/inspect
+- [x] delete `model.go`, `keymap.go`, AND the now-dead `*Model` filter/inspect
       methods left in `model_modes.go` (reparented onto `*browser` in Tasks 7/8);
       update/remove tests tied to `Model` internals (`single_panel_test.go`,
       `panel_height_test.go`, `border_width_test.go`, `model_edit_test.go` — port
       still-relevant assertions to the plugin).
-- [ ] confirm callers `internal/cli/command/list.go` and
+- [x] confirm callers `internal/cli/command/list.go` and
       `internal/cli/vars/browser.go` compile unchanged against the same `Run`
       signature/`Result` type (only new `Options` fields are populated).
-- [ ] write tests: width<80 and non-TTY route to `runFallback`; ≥80 drives the
+- [x] write tests: width<80 and non-TTY route to `runFallback`; ≥80 drives the
       plugin via the `runTUI` seam (stub it to return a chosen `Result`/error)
       and `Run` returns the plugin's `Result` unchanged; `ActionUnknown`/cancel
       → `ErrCancelled`. (Full-frame rendering is covered by `tui.RenderFrame`
       goldens in Task 12.)
-- [ ] run tests — must pass before next task.
+- [x] run tests — must pass before next task.
 
 ### Task 12: Golden frames + regression suite
 
