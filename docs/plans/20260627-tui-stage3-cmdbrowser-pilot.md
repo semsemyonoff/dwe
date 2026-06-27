@@ -437,31 +437,34 @@ The browser is reshaped into a `tui.Plugin`:
   in `model_modes.go` still reference `keys keymap`/`defaultKeymap()`/`m.keys`;
   it is deleted with them in Task 11.)
 
-- [ ] implement `browser.Actions(reg)`: always register `nav.up/down/left/right`,
+- [x] implement `browser.Actions(reg)`: always register `nav.up/down/left/right`,
       `nav.top/bottom`, `nav.page-up/down`, `select` (enter), `filter` (`/`),
       `inspect` (`i`) via `RegisterStandard`/explicit bindings; in `ModeRun`
       ALSO register two new plugin actions `cmd.skip-confirm` (`y`) and
       `cmd.force-form` (`e`); register neither in `ModeEdit`/`ModeInspect`. Do
       NOT register Tab/?/q/esc (framework built-ins).
-- [ ] set each `Binding.Section` to one of `Navigation` / `Panels` / `Actions` /
+- [x] set each `Binding.Section` to one of `Navigation` / `Panels` / `Actions` /
       `General` so the help modal groups them.
-- [ ] implement `browser.HandleAction(a)`: nav/select/filter/inspect routed to
+- [x] implement `browser.HandleAction(a)`: nav/select/filter/inspect routed to
       the focused panel (tree vs list movement, expand/collapse on select for a
       group, run for a list item); `cmd.skip-confirm` toggles `skipConfirm`;
       `cmd.force-form` sets `ForceParamForm` + selects the current item. Define
       list-panel `nav.left`/`nav.right` (h/l): focus is now Tab-only (the old
       left-arrow "return to tree" in `updateRight`, model.go:281-284, is gone) —
       decide whether they are no-ops in the list or keep a left→tree affordance;
-      record the chosen UX here.
-- [ ] do NOT delete `keymap.go` yet — `model.go` AND `model_modes.go`'s `*Model`
+      record the chosen UX here. **Chosen UX:** list-panel `nav.left`/`nav.right`
+      are **no-ops** — panel switching is Tab/click-only (the framework owns
+      focus), so the legacy left-arrow "return to tree" affordance is dropped
+      (see `browser.navLeft`/`navRight` in `actions.go`).
+- [x] do NOT delete `keymap.go` yet — `model.go` AND `model_modes.go`'s `*Model`
       methods (all deleted in Task 11) still use
       `keys keymap`/`defaultKeymap()`/`m.keys`. The new registry actions live in
       `actions.go`; `keymap.go` is removed in Task 11 alongside them.
-- [ ] write tests: action set differs by mode (ModeRun has e/y, ModeEdit does
+- [x] write tests: action set differs by mode (ModeRun has e/y, ModeEdit does
       not); `HandleAction` select on a group toggles, on a list item runs;
       skip-confirm toggles and surfaces in `StatusContext`; force-form sets the
       flag + selects.
-- [ ] run tests — must pass before next task.
+- [x] run tests — must pass before next task.
 
 ### Task 7: Inline filter capture mode
 

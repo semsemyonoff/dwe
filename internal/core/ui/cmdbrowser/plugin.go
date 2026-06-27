@@ -53,8 +53,12 @@ type browser struct {
 	active tui.PanelID
 
 	// filter is the inline capture sub-state (CapturingInput() is true while it
-	// is non-nil). The inspect overlay sub-state lands in Task 8.
-	filter *filterState
+	// is non-nil). inspect is the overlay sub-state (non-nil while the inspect
+	// viewport is open); it captures via Overlay.CapturesInput, so the two stay
+	// mutually exclusive. The overlay wiring (PendingOverlay + capture handling)
+	// lands in Task 8; Task 6 only opens it.
+	filter  *filterState
+	inspect *inspectState
 
 	skipConfirm bool
 
@@ -235,11 +239,61 @@ func (b *browser) viewList(inner tui.Region) string {
 	return b.list.View()
 }
 
-// Actions implements tui.Plugin. Per-mode action registration lands in Task 6.
-func (b *browser) Actions(_ *tui.Registry) error { return nil }
+// Actions / HandleAction live in actions.go.
 
-// HandleAction implements tui.Plugin. Action dispatch lands in Task 6.
-func (b *browser) HandleAction(_ tui.Action) (tea.Cmd, bool) { return nil, false }
+// enterFilter opens the inline filter capture mode: it snapshots the tree's
+// expanded set and focused id, sets b.filter (so CapturingInput() reports true),
+// and seeds the match list. The capture key handling (typing / esc / enter) and
+// snapshot restore land in Task 7; Task 6 only opens the mode.
+func (b *browser) enterFilter() {
+	b.filter = newFilterState(b.tree.expanded, b.tree.focusedID)
+	b.refreshFilterMatches()
+}
 
-// PendingOverlay implements tui.Plugin. The inspect overlay lands in Task 8.
+// refreshFilterMatches re-ranks the items against the current query and rebuilds
+// the list with the flat result. When AutoCollapseEmpty is set the tree is
+// re-expanded to show only subtrees containing matches. Reparented from
+// *Model.refreshFilterMatches.
+func (b *browser) refreshFilterMatches() {
+	if b.filter == nil {
+		return
+	}
+	b.filter.recompute(b.items, b.opts.IncludePrivate)
+	out := make([]list.Item, 0, len(b.filter.matched))
+	for _, idx := range b.filter.matched {
+		it := b.items[idx]
+		out = append(out, listItem{origIdx: idx, id: it.ID, desc: it.Description, typ: it.Type, paramCount: it.ParamCount})
+	}
+	b.list.SetItems(out)
+	if b.opts.AutoCollapseEmpty {
+		b.filter.applyAutoCollapse(b.tree)
+	}
+}
+
+// inspectViewportSize returns the (width, height) for the inspect overlay's
+// viewport. Width is capped at inspectMaxWidth so the content lines up with the
+// section dividers render.SectionTitle draws (same min(width, 100) cap); the
+// overlay is centred over the body by the Frame. Defensive lower clamps protect
+// against degenerate sizes from transient resizes.
+func (b *browser) inspectViewportSize() (int, int) {
+	w := max(min(b.body.Width, inspectMaxWidth), 10)
+	h := max(b.body.Height-2, 3)
+	return w, h
+}
+
+// openInspect builds the inspect viewport for the currently selected list item
+// and stashes it on b.inspect. The overlay presentation (PendingOverlay) and
+// scroll/select/esc capture handling land in Task 8; Task 6 only opens it. A
+// no-op when no selectable item is focused.
+func (b *browser) openInspect() {
+	idx, ok := b.selectedOrigIdx()
+	if !ok {
+		return
+	}
+	w, h := b.inspectViewportSize()
+	b.inspect = newInspectState(w, h, b.items[idx].Inspect, idx)
+}
+
+// PendingOverlay implements tui.Plugin. The inspect overlay wiring lands in
+// Task 8; the skeleton requests no overlay.
 func (b *browser) PendingOverlay() (tui.Overlay, bool) { return tui.Overlay{}, false }
