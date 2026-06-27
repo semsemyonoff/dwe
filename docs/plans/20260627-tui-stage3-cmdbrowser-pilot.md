@@ -679,16 +679,16 @@ The browser is reshaped into a `tui.Plugin`:
 **Files:**
 - Modify: `docs/internals/packages.md`
 
-- [ ] record that `cmdbrowser` is now a `tui.Plugin` (per-surface plugin notes:
+- [x] record that `cmdbrowser` is now a `tui.Plugin` (per-surface plugin notes:
       two panels, inline filter capture, inspect overlay, mouse).
-- [ ] document the two Frame revisions: unified input-capture
+- [x] document the two Frame revisions: unified input-capture
       (`Plugin.CapturingInput` + the no-overlay capture branch) and
       `CapturesInput` overlays routing navigation via `routeWhileCapturing`;
       `PanelClickMsg`/`FocusChangedMsg`; translator/locale `RunOptions`.
-- [ ] mark the `tui.help.*` i18n namespace as now in use (keys added); note the
+- [x] mark the `tui.help.*` i18n namespace as now in use (keys added); note the
       Plugin interface revision (`CapturingInput`) as a deliberate contract
       change before freezing for Stages 4–5b.
-- [ ] run `make build` (re-embeds docs) then `make test` — must pass before next
+- [x] run `make build` (re-embeds docs) then `make test` — must pass before next
       task.
 
 ### Task 14: Verify acceptance criteria
