@@ -714,12 +714,22 @@ The browser is reshaped into a `tui.Plugin`:
 
 ### Task 15: [Final] Update documentation + archive plan
 
-- [ ] update `README.md` / user docs only if user-facing behaviour changed
+- [x] update `README.md` / user docs only if user-facing behaviour changed
       (help is now `?`-modal; status line replaces the title bar) — keep
       `docs/reference`/`docs/guides` aligned if they screenshot the browser.
-- [ ] update CLAUDE.md / `AGENTS.md` only if a new load-bearing pattern emerged
+      (`docs/reference/config/ui.md` + its `docs/i18n/ru/` mirror rewritten:
+      `?`-modal help, Tab-driven focus, bottom status line, Variant A fallback
+      ladder, new Mouse section. README only references the `dwe docs` browser —
+      no command-browser change needed; `commands/index.md` "two-panel browser"
+      line stays accurate.)
+- [x] update CLAUDE.md / `AGENTS.md` only if a new load-bearing pattern emerged
       (e.g. the `CapturingInput` contract) — prefer `packages.md` for detail.
-- [ ] move this plan to `docs/plans/completed/`.
+      (Added a `tui.Plugin` framework + cmdbrowser-pilot bullet to the Critical
+      Patterns list — frozen `Run`/`Plugin` contracts, `CapturingInput`, no
+      double-`RunWithPromptHooks`, inner=outer−4 padding delta, <80 fallback,
+      `PanelClickMsg`/`FocusChangedMsg`; fixed the stale "footer" phrasing in the
+      vars bullet. `CLAUDE.md` is the symlink, updated transitively.)
+- [x] move this plan to `docs/plans/completed/`.
 
 ## Post-Completion
 *Items requiring manual intervention or external systems — informational only.*
