@@ -50,12 +50,16 @@ out of scope — it is not an interactive program and has its own contract.
 - A single, generic tree widget shared by command and docs browsers.
 - Unified, scalable form keymap overrides; the three raw `huh` sites collapse back into
   the `ask` wrapper; deploy-menu duplication removed.
+- A per-surface choice of form host: exit-and-run (default) for command launches, or an
+  in-TUI child-model overlay for edit-and-stay surfaces (vars-browser edit).
 - The whole charm stack standardised on v2 (migrate `statustui` off lipgloss v1).
 
 ### Non-goals
 
-- Rewriting `huh` forms onto native bubbletea (forms stay keyboard-only; their loop is
-  not migrated into the framework).
+- Rewriting `huh` *fields* onto native bubbletea (forms stay keyboard-only; we do not
+  reimplement huh's field loop). Hosting an existing `huh.Form` as a child-model overlay
+  for edit-and-stay surfaces **is** in scope (see § Form interop rule) — that drives huh's
+  own `Update`/`View`, it does not rewrite it.
 - Touching the non-interactive `liveui` pipeline view.
 - Drag-to-resize, text selection, or other advanced mouse interactions beyond
   wheel-scroll and click in this milestone.
@@ -226,12 +230,35 @@ source of truth:
 
 ### Form interop rule
 
-Forms (`huh/v2`) keep their own loop. Launching a form from **inside** an active
-alt-screen bubbletea program is materially different from `widgets.RunWithPromptHooks`
-wrapping a whole-program launch. This milestone's rule: **framework-hosted TUIs do not
-launch huh forms inline.** A surface that needs a form exits the TUI, runs the form via the
-unified `ask` path, and (if applicable) re-enters — no nested alt-screen pause/resume. If a
-future surface genuinely needs an inline form, that is a separate design, not assumed here.
+Forms (`huh/v2`) keep their own field loop — this milestone does **not** rewrite huh
+fields onto native bubbletea. But `huh.Form` already *is* a `tea.Model` (`Init` / `Update` /
+`View`, plus `WithWidth` / `WithHeight` and a `State` field that reports completion/abort),
+so it can be **driven as a child model** without ever calling `form.Run()` /
+`RunWithContext`. That distinction is the crux: the hazard the earlier draft guarded against
+— launching a *nested alt-screen `tea.Program`* from inside an active one — only arises when
+you call `Run()`. Driving `Update` / `View` yourself sidesteps it entirely.
+
+Two host modes, chosen **per surface by the plugin**, not globally:
+
+1. **Exit-and-run (default).** A surface that collects parameters in order to *immediately
+   run a command* exits the TUI and runs the form via the unified `ask` path; the command's
+   non-interactive `liveui` pipeline then owns the screen. There is no re-enter — the TUI
+   was going away regardless. cmdbrowser's force-param-form stays on this path: closing the
+   TUI on run is intended behaviour, not a wart.
+
+2. **In-TUI overlay (edit-and-stay).** A surface that edits values and *returns to the TUI*
+   afterwards (vars-browser edit mode; future inline edits) hosts the form as a **capturing
+   overlay** with `huh.Form` as the embedded child model — the same overlay mechanism
+   `inspect` already uses (embedded `viewport.Model`, raw input → `plugin.Update` →
+   republished snapshot). The form never calls `Run()`; the framework forwards its `Init` and
+   async cmds, and the plugin watches `form.State` to dismiss the overlay and read the bound
+   values.
+
+The framework supplies the embeddable-form capability; each plugin declares which mode each
+of its form sites uses. The wiring questions this opens — esc / ctrl+c arbitration between
+the framework's overlay-close and huh's abort; avoiding double chrome when huh's own title /
+help / border render inside an already-bordered modal; splitting `ask` into build-form vs
+run so both modes share field construction — are settled in the forms stages (6 + 7).
 
 ## 5. Stages
 
@@ -247,7 +274,8 @@ dependencies. Stages 5a and 6 are independent and may run early or in parallel.
 | 4 | Docs browser + generic tree | 3 | Relocate the docs TUI to `internal/core/ui/docstui/` and migrate it onto `Frame` + help modal + mouse + bottom status line. **Extract the generic `tui/tree`** now that two consumers' needs are known (headings, multi-root, localization, stale-translation, folding); refactor cmdbrowser's tree onto it. Preserve docs watcher/prefetch behaviour. |
 | 5a | Status dashboard → lipgloss v2 | — | Migrate `statustui` off lipgloss v1 with **no** framework redesign and **no** layout change — pure dependency migration, isolated from async/reload behaviour. Scoped to interactive chrome (see § Charm-stack scope). |
 | 5b | Status dashboard → `Frame` | 3, 5a | Tabs as a body plugin, help modal, tab clicks, bottom status line. Preserve reload + scroll-offset (`YOffset`) preservation. |
-| 6 | Forms unification | — (independent) | Single `RunHuhForm` helper; `ask.RunOptions` gains scalable keymap overrides; migrate the three raw `huh` sites (deploy menu, port overrides, service toggles) back into `ask`; remove `deploy/menu.go` duplication. |
+| 6 | Forms unification | — (independent) | Single `RunHuhForm` helper; `ask.RunOptions` gains scalable keymap overrides; migrate the three raw `huh` sites (deploy menu, port overrides, service toggles) back into `ask`; remove `deploy/menu.go` duplication. **Split `ask` into build-form vs run** so the form (a `huh.Form`) can be constructed without being executed — the seam stage 7 needs. |
+| 7 | In-TUI form overlay (edit-and-stay) | 3, 6 | Add the embeddable-form capability to `tui`: host `huh.Form` as a child model inside a **capturing overlay** (reuse the `inspect` pattern). Framework forwards huh's `Init` + async cmds and arbitrates esc / ctrl+c (overlay-close vs huh abort); form is sized to **inner** modal dims via `WithWidth` / `WithHeight` with huh's own chrome reconciled against the panel border; plugin reads `form.State` to dismiss and harvest bound values. Per-surface choice declared by the plugin. Wire **vars-browser edit mode** onto the overlay; leave cmdbrowser force-param-form on the exit-and-run path. Golden frame tests for the form overlay at the width buckets. |
 
 ## 6. Cross-cutting concerns (every stage)
 
@@ -275,9 +303,14 @@ dependencies. Stages 5a and 6 are independent and may run early or in parallel.
 - **Overlay/border geometry** — more than centring math: lipgloss v2 width/height-around-
   borders semantics already needed local fixes in cmdbrowser. The outer-vs-inner model is
   pinned once in `Frame` and locked by golden tests at 60/79/80/99/100 columns.
-- **`huh` form interop** — resolved by rule (framework-hosted TUIs do not launch inline
-  forms; § Form interop). Risk is only if a surface is later found to genuinely need an
-  inline form — treat as a separate design.
+- **`huh` form interop** — two host modes per § Form interop rule: exit-and-run (default)
+  and an in-TUI child-model overlay for edit-and-stay surfaces. `huh.Form` is a `tea.Model`,
+  so the overlay path never launches a nested program (the original concern is sidestepped,
+  not waived). Residual risk lives in the overlay path and is worked in stage 7: esc /
+  ctrl+c arbitration (framework overlay-close vs huh abort), double chrome / sizing when
+  huh's own title + help + border render inside a bordered modal (locked by golden tests at
+  the width buckets), and splitting `ask` into build-vs-run without regressing the three
+  raw-`huh`-site migrations from stage 6.
 - **Mouse wheel feel** — naive debounce drops intentional scrolls; mitigated by per-frame
   coalescing, but needs real-device testing (trackpad burst vs slow wheel).
 - **statustui v2 migration size** — underestimated if "whole stack on v2" is read as
