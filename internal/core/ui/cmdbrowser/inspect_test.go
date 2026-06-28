@@ -136,6 +136,33 @@ func TestBrowser_InspectScrollsViewport(t *testing.T) {
 	}
 }
 
+// TestBrowser_InspectScrollbar asserts the inspect overlay overdraws a
+// proportional scrollbar (track + thumb glyphs) onto its right border when the
+// description overflows the viewport, and omits it entirely when everything fits.
+func TestBrowser_InspectScrollbar(t *testing.T) {
+	b := newInspectBrowser(t, DefaultOptions())
+
+	// alpha (idx 0) has a tall body that overflows → scrollbar present.
+	b.openInspect()
+	b.PendingOverlay()
+	content := b.inspect.overlay().Content
+	if !strings.Contains(content, scrollbarThumbGlyph) {
+		t.Errorf("overflowing inspect body missing scrollbar thumb %q:\n%s", scrollbarThumbGlyph, content)
+	}
+	if !strings.Contains(content, scrollbarTrackGlyph) {
+		t.Errorf("overflowing inspect body missing scrollbar track %q:\n%s", scrollbarTrackGlyph, content)
+	}
+
+	// beta (idx 1) has a short body that fits → no scrollbar glyphs.
+	b.list.Select(1)
+	b.openInspect()
+	b.PendingOverlay()
+	content = b.inspect.overlay().Content
+	if strings.Contains(content, scrollbarThumbGlyph) || strings.Contains(content, scrollbarTrackGlyph) {
+		t.Errorf("fitting inspect body should not draw a scrollbar:\n%s", content)
+	}
+}
+
 func TestBrowser_InspectEnterSelects(t *testing.T) {
 	cases := []struct {
 		name string
