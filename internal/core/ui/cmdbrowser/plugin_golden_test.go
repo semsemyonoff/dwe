@@ -85,7 +85,7 @@ func itoa(n int) string {
 // tui.RenderFrame harness. It asserts the frame fills the terminal exactly (no
 // overflow), the status line carries the help hint, and the byte-stable layout
 // matches the golden. Regenerate with
-// UPDATE_GOLDEN=1 go test ./internal/core/ui/cmdbrowser/...
+// make embedded-docs && UPDATE_GOLDEN=1 go test ./internal/core/ui/cmdbrowser/...
 func TestBrowser_FullFrameGolden(t *testing.T) {
 	modes := []struct {
 		name  string

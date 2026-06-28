@@ -314,7 +314,11 @@ func (f *Frame) handleKey(key tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 				f.overlay.Pop()
 				// Crossing the overlay boundary resets double-click tracking.
 				f.lastClick = lastClickRecord{}
-				return f, nil
+				// Notify the plugin its capturing overlay was dismissed so it can
+				// clear the state that produced it — otherwise a later raw key
+				// could resurrect the closed view. See [OverlayClosedMsg].
+				cmd := f.plugin.Update(OverlayClosedMsg{})
+				return f, cmd
 			default: // captureSwallowToPlugin
 				cmd := f.plugin.Update(key)
 				// A captured key may mutate the plugin's overlay state (e.g.

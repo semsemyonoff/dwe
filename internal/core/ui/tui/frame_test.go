@@ -524,6 +524,34 @@ func TestFrame_CapturingOverlayRefreshesInPlace(t *testing.T) {
 	}
 }
 
+// TestFrame_CapturingOverlayCloseNotifiesPlugin asserts that closing a
+// CapturesInput overlay with esc pops it AND forwards an OverlayClosedMsg to the
+// plugin, so the plugin can clear the state that produced the overlay.
+func TestFrame_CapturingOverlayCloseNotifiesPlugin(t *testing.T) {
+	f, p := newTestFrame(t, 80, frameGoldenHeight)
+	p.pending = &Overlay{Content: "modal", Width: 5, Height: 1, CapturesInput: true}
+	f.drainOverlay() // push the capturing overlay
+	if f.overlay.Empty() {
+		t.Fatal("capturing overlay was not pushed")
+	}
+	before := len(p.gotMsgs)
+
+	f.Update(key("esc")) // captureClose
+
+	if !f.overlay.Empty() {
+		t.Error("esc did not pop the capturing overlay")
+	}
+	var got bool
+	for _, m := range p.gotMsgs[before:] {
+		if _, ok := m.(OverlayClosedMsg); ok {
+			got = true
+		}
+	}
+	if !got {
+		t.Errorf("plugin was not sent OverlayClosedMsg on close; got %v", p.gotMsgs[before:])
+	}
+}
+
 // TestNewFrame_ConstructionErrors asserts newFrame validates the plugin contract
 // before launch: duplicate key, empty panel set, and non-positive weight all
 // fail at construction.

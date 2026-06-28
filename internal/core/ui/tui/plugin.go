@@ -95,6 +95,16 @@ type FocusRequestMsg struct {
 	Panel PanelID
 }
 
+// OverlayClosedMsg is forwarded to [Plugin.Update] when a CapturesInput overlay
+// the plugin pushed (via PendingOverlay) is dismissed by the framework — e.g.
+// esc closing an inspect modal. The plugin is otherwise never told its overlay
+// was popped (the Frame owns the overlay stack), so without this notification it
+// cannot clear the state that produced the overlay and a later raw key could
+// resurrect a closed view. Only CapturesInput overlays emit this — they are
+// always plugin-pushed; the framework-owned help modal is never capturing and
+// does not notify the plugin (built-ins never reach it).
+type OverlayClosedMsg struct{}
+
 // Plugin is the contract every full-screen surface implements to run inside the
 // [Frame]. The framework owns chrome (borders, status line, overlays, the
 // terminal envelope) and geometry; the plugin owns body content and behaviour.

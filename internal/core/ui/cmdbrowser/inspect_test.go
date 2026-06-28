@@ -163,6 +163,33 @@ func TestBrowser_InspectScrollbar(t *testing.T) {
 	}
 }
 
+// TestBrowser_InspectClosedByOverlayClosedMsg asserts the Frame's
+// OverlayClosedMsg clears the lingering inspect state so a later unmatched raw
+// key cannot re-mark it pending and resurrect the closed modal.
+func TestBrowser_InspectClosedByOverlayClosedMsg(t *testing.T) {
+	b := newInspectBrowser(t, DefaultOptions())
+	b.openInspect()
+	b.PendingOverlay() // Frame pushes the overlay
+	if b.inspect == nil {
+		t.Fatal("inspect should be open before close")
+	}
+
+	// Frame pops the capturing overlay on esc and forwards OverlayClosedMsg.
+	if cmd := b.Update(tui.OverlayClosedMsg{}); cmd != nil {
+		t.Errorf("OverlayClosedMsg should not return a command, got %v", cmd)
+	}
+	if b.inspect != nil || b.inspectPending {
+		t.Fatalf("inspect=%v pending=%v after close, want nil/false", b.inspect, b.inspectPending)
+	}
+
+	// A later unmatched raw key forwarded to Update in normal mode must NOT
+	// resurrect the closed overlay.
+	b.Update(tea.KeyPressMsg{Code: 'x'})
+	if _, ok := b.PendingOverlay(); ok {
+		t.Error("unmatched key after close re-marked the overlay pending; closed inspect resurrected")
+	}
+}
+
 func TestBrowser_InspectEnterSelects(t *testing.T) {
 	cases := []struct {
 		name string

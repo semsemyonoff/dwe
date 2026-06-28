@@ -42,7 +42,10 @@ func (tm *treeModel) renderRegion(inner tui.Region, focused bool, f *filterState
 // passed height instead of a *Model's layout.
 func (tm *treeModel) clipToViewport(full string, height int) string {
 	if height <= 0 {
-		return full
+		// The Frame owns the bordered geometry and passes its inner height; a
+		// zero/negative region (transient during small resizes) must render no
+		// rows rather than overflow the panel with the full tree.
+		return ""
 	}
 	lines := strings.Split(full, "\n")
 	if len(lines) <= height {

@@ -61,11 +61,10 @@ type browser struct {
 	// republish yields exactly one overlay value: openInspect sets it for the
 	// first paint and updateInspect re-sets it after a scroll, with the Frame
 	// pushing the first and replacing the top in place thereafter (the stack never
-	// grows). Esc is handled Frame-side (it pops the overlay
-	// without notifying the plugin); b.inspect therefore lingers as inert content
-	// until the next openInspect rebuilds it — harmless because every
-	// inspect-navigation key is a registered action the registry intercepts in
-	// normal mode, so a stale viewport is never fed live input.
+	// grows). Esc is handled Frame-side (it pops the overlay), which forwards a
+	// [tui.OverlayClosedMsg] back to Update — that clears b.inspect/inspectPending
+	// so a later unmatched raw key (forwarded raw to Update in normal mode) cannot
+	// re-mark it pending and resurrect the closed modal.
 	filter         *filterState
 	inspect        *inspectState
 	inspectPending bool
@@ -239,6 +238,13 @@ func (b *browser) Update(msg tea.Msg) tea.Cmd {
 	case tui.PanelClickMsg:
 		b.handlePanelClick(m)
 		return nil
+	case tui.OverlayClosedMsg:
+		// The Frame popped our inspect overlay (esc). Clear the lingering state
+		// so a later unmatched raw key cannot re-mark it pending and resurrect
+		// the closed modal. Filter is not an overlay, so it never lands here.
+		b.inspect = nil
+		b.inspectPending = false
+		return nil
 	case tea.KeyPressMsg:
 		switch {
 		case b.filter != nil:
@@ -255,10 +261,8 @@ func (b *browser) Update(msg tea.Msg) tea.Cmd {
 // The only guard is the inline filter: while it owns input the query line is not
 // a row-addressable surface, so clicks are dropped. The inspect overlay needs no
 // guard here — the Frame swallows panel clicks while a modal is open (a
-// PanelClickMsg is never emitted), so this is only ever reached with no overlay.
-// Keying off b.inspect would be a bug: that field lingers non-nil after the Frame
-// pops the overlay (the plugin is not notified — see the struct comment), which
-// would permanently swallow clicks once inspect has been opened and closed once.
+// PanelClickMsg is never emitted), so this is only ever reached with no overlay
+// (b.inspect is nil once closed — the Frame's OverlayClosedMsg clears it).
 func (b *browser) handlePanelClick(msg tui.PanelClickMsg) {
 	if b.filter != nil {
 		return
@@ -483,11 +487,23 @@ func (b *browser) reselectOrigIdx(target int) {
 // a dimming overlay) followed by the filter-aware tree (M/N counts, zero-match
 // dimming) clipped to the remaining height.
 func (b *browser) renderTreeFiltered(inner tui.Region) string {
+	// Respect the Frame-provided height budget: a 0-row region renders nothing
+	// and a 1-row region shows only the query line, so the header+body split
+	// never overflows the panel during small resizes.
+	if inner.Height <= 0 {
+		return ""
+	}
 	header := paletteKey().Bold(true).Render(b.filter.renderQueryLine())
+	if inner.Height == 1 {
+		return header
+	}
 	treeRegion := inner
 	treeRegion.Height = max(inner.Height-1, 0)
 	b.tree.ensureFocusVisible(treeRegion.Height)
 	body := b.tree.renderRegion(treeRegion, b.active == panelTree, b.filter)
+	if body == "" {
+		return header
+	}
 	return header + "\n" + body
 }
 

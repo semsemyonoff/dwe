@@ -28,6 +28,29 @@ func typeFilter(b *browser, s string) {
 	}
 }
 
+// TestBrowser_RenderTreeFilteredRespectsHeight asserts the filtered tree panel
+// honors the Frame-provided height budget: 0 rows render nothing, 1 row renders
+// only the query line, and larger regions never exceed the budget.
+func TestBrowser_RenderTreeFilteredRespectsHeight(t *testing.T) {
+	b := newBrowser("pick", filterTestItems(), DefaultOptions())
+	b.Resize(tui.Region{Width: 80, Height: 24})
+	b.enterFilter()
+
+	if got := b.renderTreeFiltered(tui.Region{Width: 30, Height: 0}); got != "" {
+		t.Errorf("height=0 rendered %q, want empty", got)
+	}
+	one := b.renderTreeFiltered(tui.Region{Width: 30, Height: 1})
+	if strings.Contains(one, "\n") {
+		t.Errorf("height=1 rendered %d lines, want 1:\n%s", strings.Count(one, "\n")+1, one)
+	}
+	for _, h := range []int{2, 5, 10} {
+		got := b.renderTreeFiltered(tui.Region{Width: 30, Height: h})
+		if lines := strings.Count(got, "\n") + 1; lines > h {
+			t.Errorf("height=%d rendered %d lines, exceeds budget:\n%s", h, lines, got)
+		}
+	}
+}
+
 // TestBrowser_EnterFilterSetsCapturing verifies the filter action turns on
 // CapturingInput so the Frame begins forwarding raw keys to the plugin.
 func TestBrowser_EnterFilterSetsCapturing(t *testing.T) {
