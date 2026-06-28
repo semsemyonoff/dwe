@@ -37,6 +37,10 @@ type frameOptions struct {
 	// brand / project are the left-zone status-line strings (brand · project).
 	brand   string
 	project string
+	// tr / locale resolve the help-modal display strings. Zero values mean "use
+	// the framework defaults" (NopTranslator + "en"), applied in newFrame.
+	tr     i18n.Translator
+	locale string
 }
 
 // frameOption mutates the private frameOptions during [newFrame] construction.
@@ -58,15 +62,30 @@ func withBrand(s string) frameOption { return func(o *frameOptions) { o.brand = 
 // withProject sets the status-line project string.
 func withProject(s string) frameOption { return func(o *frameOptions) { o.project = s } }
 
+// withTranslator sets the translator used to resolve help-modal display strings.
+// A nil translator is ignored (newFrame falls back to i18n.NopTranslator).
+func withTranslator(tr i18n.Translator) frameOption {
+	return func(o *frameOptions) { o.tr = tr }
+}
+
+// withLocale sets the locale passed to the translator for help-modal strings.
+// An empty locale is ignored (newFrame falls back to "en").
+func withLocale(s string) frameOption { return func(o *frameOptions) { o.locale = s } }
+
 // coalesceWindow is the wheel-burst coalescing interval. The first wheel event
 // arms a one-shot tea.Tick; subsequent events within the window accumulate into
 // wheelAccum; the tick fires wheelFlushMsg and the frame dispatches the net
-// count as Nav steps. Provisional — tune if burst/slow feel is off.
+// count as Nav steps. 16ms is ~one 60Hz frame — long enough to group a trackpad
+// burst into a single net Nav delta, short enough that a slow notch-wheel scroll
+// still feels one-step-per-detent. Chosen value for the Stage 3 pilot; final
+// on-device feel sign-off is a Post-Completion item.
 const coalesceWindow = 16 * time.Millisecond
 
 // doubleClickWindow is the maximum interval between two left-clicks in the same
-// panel cell that triggers a double-click Select. Provisional — tune after
-// real-device testing in the Stage 3 pilot.
+// panel cell that triggers a double-click Select. 400ms matches the common OS
+// double-click default and tested comfortably for tree-toggle / list-run.
+// Chosen value for the Stage 3 pilot; final on-device feel sign-off is a
+// Post-Completion item.
 const doubleClickWindow = 400 * time.Millisecond
 
 // wheelFlushMsg is the private tick message that fires after coalesceWindow to
@@ -134,6 +153,12 @@ func newFrame(p Plugin, opts ...frameOption) (*Frame, error) {
 	if fo.termEnv == nil {
 		fo.termEnv = func() string { return os.Getenv("TERM") }
 	}
+	if fo.tr == nil {
+		fo.tr = i18n.NopTranslator{}
+	}
+	if fo.locale == "" {
+		fo.locale = "en"
+	}
 
 	panels := p.Panels()
 	if len(panels) == 0 {
@@ -163,8 +188,8 @@ func newFrame(p Plugin, opts ...frameOption) (*Frame, error) {
 		registry: reg,
 		focus:    newFocusManager(panels),
 		opts:     fo,
-		tr:       i18n.NopTranslator{},
-		locale:   "en",
+		tr:       fo.tr,
+		locale:   fo.locale,
 		clock:    realClock{},
 	}, nil
 }
@@ -214,12 +239,28 @@ func (f *Frame) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return f.handleKey(m)
 	case tea.MouseMsg:
 		return f.handleMouse(m)
+	case FocusRequestMsg:
+		// Plugin-initiated focus move (e.g. an inline filter returning focus to a
+		// result panel on commit). The Frame owns focus truth, so it applies the
+		// request here and echoes a FocusChangedMsg back when focus actually moved
+		// — keeping the panel border and the plugin's nav target in agreement. An
+		// unknown panel ID leaves focus unchanged (Set reports false).
+		before := f.focus.Active()
+		f.focus.Set(m.Panel)
+		if f.focus.Active() == before {
+			return f, nil
+		}
+		cmd := f.plugin.Update(FocusChangedMsg{Panel: f.focus.Active()})
+		f.drainOverlay()
+		return f, cmd
 	case wheelFlushMsg:
 		// Flush the wheel accumulator as Nav steps. No-op while an overlay is
-		// open — a tick armed before the modal opened must not dispatch Nav
-		// behind it (the accumulator was already cleared when the overlay
-		// opened, so this is a true no-op with no generation/token machinery).
-		if !f.overlay.Empty() {
+		// open OR the plugin is capturing raw input — a tick armed before the
+		// modal opened (or before the inline filter took over) must not dispatch
+		// Nav behind it. The arming guard in handleMouse already blocks ticks
+		// started during capture; this also catches a tick armed just before the
+		// filter opened.
+		if !f.overlay.Empty() || f.plugin.CapturingInput() {
 			f.wheelAccum = 0
 			f.wheelArmed = false
 			return f, nil
@@ -262,6 +303,34 @@ func (f *Frame) handleKey(key tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 	keyStr := key.String()
 
 	if !f.overlay.Empty() {
+		// A capturing overlay (Overlay.CapturesInput) routes raw input to the
+		// plugin: only ctrl+c (hard-quit) and esc (close overlay) survive as
+		// framework actions; ? does not open help. See routeWhileCapturing.
+		if top, ok := f.overlay.Top(); ok && top.CapturesInput {
+			switch routeWhileCapturing(key) {
+			case captureHardQuit:
+				return f, tea.Quit
+			case captureClose:
+				f.overlay.Pop()
+				// Crossing the overlay boundary resets double-click tracking.
+				f.lastClick = lastClickRecord{}
+				// Notify the plugin its capturing overlay was dismissed so it can
+				// clear the state that produced it — otherwise a later raw key
+				// could resurrect the closed view. See [OverlayClosedMsg].
+				cmd := f.plugin.Update(OverlayClosedMsg{})
+				return f, cmd
+			default: // captureSwallowToPlugin
+				cmd := f.plugin.Update(key)
+				// A captured key may mutate the plugin's overlay state (e.g.
+				// scrolling the inspect viewport). The overlay on the stack is a
+				// pre-rendered snapshot, so refresh it in place — replacing the
+				// top, NOT pushing — otherwise the scroll never paints and the
+				// stack would grow one stale layer per key.
+				f.refreshCapturingOverlay()
+				return f, cmd
+			}
+		}
+
 		// Modal open: the frame's modal-input policy takes precedence over the
 		// registry. "esc" closes the overlay — it never reaches its ActionQuit
 		// alias while a modal is open (the Binding.Aliases precedence rule), so
@@ -285,11 +354,37 @@ func (f *Frame) handleKey(key tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 		return f, nil
 	}
 
+	// No overlay, but the plugin is taking raw input (e.g. an inline filter):
+	// suspend registry dispatch and forward every key to plugin.Update,
+	// reserving only ctrl+c as a hard-quit. esc/enter/printables reach the
+	// plugin so it drives its own capture state machine.
+	if f.plugin.CapturingInput() {
+		if keyStr == "ctrl+c" {
+			return f, tea.Quit
+		}
+		cmd := f.plugin.Update(key)
+		f.drainOverlay()
+		return f, cmd
+	}
+
 	if a, ok := f.registry.Match(keyStr); ok {
 		if isBuiltin(a) {
 			return f.handleBuiltin(a)
 		}
+		capturingBefore := f.plugin.CapturingInput()
 		if cmd, handled := f.plugin.HandleAction(a); handled {
+			// If this action transitioned the plugin into raw-input capture
+			// (e.g. ActionFilter opening the inline filter), reset mouse state
+			// — exactly as crossing an overlay boundary does. A click or wheel
+			// tick armed before the filter opened must not pair with input
+			// after it closes: otherwise a click→/→esc→click on the same cell
+			// could satisfy the double-click test, or a wheel tick armed before
+			// / could flush Nav once the filter's CapturingInput guard lifts.
+			if !capturingBefore && f.plugin.CapturingInput() {
+				f.lastClick = lastClickRecord{}
+				f.wheelAccum = 0
+				f.wheelArmed = false
+			}
 			f.drainOverlay()
 			return f, cmd
 		}
@@ -324,11 +419,28 @@ func (f *Frame) handleBuiltin(a Action) (tea.Model, tea.Cmd) {
 	case ActionQuit:
 		return f, tea.Quit
 	case ActionFocusNext:
-		f.focus.Next()
+		return f.cycleFocus(f.focus.Next)
 	case ActionFocusPrev:
-		f.focus.Prev()
+		return f.cycleFocus(f.focus.Prev)
 	}
 	return f, nil
+}
+
+// cycleFocus applies a focus move (Next/Prev) and, when it lands on a DIFFERENT
+// panel, forwards a [FocusChangedMsg] to the plugin so it can retarget
+// navigation. Tab/Shift+Tab are framework built-ins handled entirely in
+// handleBuiltin and never reach the plugin otherwise, so this forward is the
+// only way the plugin learns of keyboard-driven focus changes.
+func (f *Frame) cycleFocus(move func()) (tea.Model, tea.Cmd) {
+	before := f.focus.Active()
+	move()
+	after := f.focus.Active()
+	if after == before {
+		return f, nil
+	}
+	cmd := f.plugin.Update(FocusChangedMsg{Panel: after})
+	f.drainOverlay()
+	return f, cmd
 }
 
 // drainOverlay pushes a plugin-requested overlay onto the stack. Mutual
@@ -345,6 +457,17 @@ func (f *Frame) drainOverlay() {
 	}
 }
 
+// refreshCapturingOverlay re-pulls a republished overlay from the plugin after a
+// captured key and swaps it in for the visible top modal (ReplaceTop), keeping
+// the stack depth fixed. Unlike drainOverlay it must NOT push: a capturing
+// overlay refreshes itself in place (e.g. inspect viewport scroll), and pushing
+// would stack stale snapshots that esc would then have to pop one at a time.
+func (f *Frame) refreshCapturingOverlay() {
+	if ov, ok := f.plugin.PendingOverlay(); ok {
+		f.overlay.ReplaceTop(ov)
+	}
+}
+
 // handleMouse dispatches a tea.MouseMsg. Wheel events are accumulated for
 // burst coalescing (see wheelFlushMsg case in Update); left-click events are
 // classified via classifyHit and routed by zone; release and motion messages
@@ -353,7 +476,11 @@ func (f *Frame) drainOverlay() {
 func (f *Frame) handleMouse(msg tea.MouseMsg) (tea.Model, tea.Cmd) {
 	switch m := msg.(type) {
 	case tea.MouseWheelMsg:
-		if !f.overlay.Empty() {
+		// No-op while an overlay is open OR the plugin is capturing raw input
+		// (inline filter, no overlay) — the same total suppression the keyboard
+		// path applies in handleKey. A capturing plugin owns all input, so wheel
+		// nav must not arm a tick or dispatch behind it.
+		if !f.overlay.Empty() || f.plugin.CapturingInput() {
 			return f, nil
 		}
 		switch m.Button {
@@ -398,6 +525,16 @@ func (f *Frame) handleClick(m tea.MouseClickMsg) (tea.Model, tea.Cmd) {
 	if m.Button != tea.MouseLeft {
 		return f, nil
 	}
+	// While the plugin captures raw input (inline filter, no overlay) the mouse
+	// is fully swallowed — the same total suppression the keyboard path applies
+	// in handleKey. This stops a double-click from dispatching ActionSelect
+	// (which could quit and run the focused command) behind an active filter,
+	// and keeps focus from drifting mid-query. Clear the double-click record so
+	// a click before the filter opened can never pair with one after it closes.
+	if f.plugin.CapturingInput() {
+		f.lastClick = lastClickRecord{}
+		return f, nil
+	}
 	var ov *Overlay
 	if top, ok := f.overlay.Top(); ok {
 		ov = &top
@@ -414,7 +551,15 @@ func (f *Frame) handleClick(m tea.MouseClickMsg) (tea.Model, tea.Cmd) {
 		f.lastClick = lastClickRecord{}
 		return f.handleBuiltin(ActionHelp)
 	case zonePanel:
+		// Setting focus may move it to a different panel; forward a
+		// FocusChangedMsg in that case (a click on the already-focused panel
+		// emits nothing).
+		before := f.focus.Active()
 		f.focus.Set(id)
+		var cmds []tea.Cmd
+		if after := f.focus.Active(); after != before {
+			cmds = append(cmds, f.plugin.Update(FocusChangedMsg{Panel: after}))
+		}
 		if !f.lastClick.t.IsZero() &&
 			f.lastClick.id == id &&
 			f.lastClick.x == m.X &&
@@ -422,17 +567,30 @@ func (f *Frame) handleClick(m tea.MouseClickMsg) (tea.Model, tea.Cmd) {
 			f.clock.now().Sub(f.lastClick.t) < doubleClickWindow {
 			// Double-click confirmed. Clear the full record so a third click
 			// in the same cell within the window does not re-trigger Select.
+			// No PanelClickMsg is emitted — the first click of the pair already
+			// moved the cursor; this click selects.
 			f.lastClick = lastClickRecord{}
 			if action, ok := f.registry.MatchMouse("double-click"); ok {
 				if cmd, handled := f.plugin.HandleAction(action); handled {
-					f.drainOverlay()
-					return f, cmd
+					cmds = append(cmds, cmd)
 				}
 			}
-			return f, nil
+			f.drainOverlay()
+			return f, tea.Batch(cmds...)
 		}
 		f.lastClick = lastClickRecord{id: id, x: m.X, y: m.Y, t: f.clock.now()}
-		return f, nil
+		// Single click: forward a panel-local PanelClickMsg ONLY when the click
+		// lands inside the inner content region. zonePanel covers the panel's
+		// OUTER region (border included), so a border click would yield
+		// negative/out-of-content coords — focus is set but no message fires.
+		if outer, ok := f.panelOuter(id); ok {
+			if content := contentRegion(outer); content.contains(m.X, m.Y) {
+				lx, ly := panelLocal(outer, m.X, m.Y)
+				cmds = append(cmds, f.plugin.Update(PanelClickMsg{Panel: id, X: lx, Y: ly}))
+			}
+		}
+		f.drainOverlay()
+		return f, tea.Batch(cmds...)
 	default: // zoneNone
 		f.lastClick = lastClickRecord{}
 		return f, nil
@@ -441,12 +599,8 @@ func (f *Frame) handleClick(m tea.MouseClickMsg) (tea.Model, tea.Cmd) {
 
 // panelLocal translates an absolute terminal click (x, y) to coordinates
 // local to the inner content region of the panel whose outer region is outer.
-// Local (0, 0) is the top-left cell of the inner region.
-//
-// The panel-facing click route — row-select and tab-switch forward to plugin —
-// lands with the Stage 3 cmdbrowser pilot (mirroring Stage 1's
-// routeWhileCapturing deferral). This helper locks the coordinate contract so
-// the Stage 3 consumer can rely on it without re-deriving the geometry.
+// Local (0, 0) is the top-left cell of the inner region. handleClick uses it to
+// build the [PanelClickMsg] forwarded to the plugin on a single content click.
 func panelLocal(outer Region, x, y int) (lx, ly int) {
 	inner := contentRegion(outer)
 	return x - inner.X, y - inner.Y
@@ -476,14 +630,11 @@ const (
 )
 
 // routeWhileCapturing classifies msg under the capturing-overlay input policy.
-// It is called when the top overlay has [Overlay.CapturesInput] true. While
-// such an overlay is Top(), raw input (including printable characters) routes
-// to the plugin (registry bypassed), and only ctrl+c (hard-quit) and esc
-// (close overlay) survive as framework actions. ? does NOT open help.
-//
-// This is the exact function frame.Update will call in Stage 3 (drop-in
-// integration, not a throwaway shape). The full frame.Update rewiring lands
-// with the Stage 3 filter consumer; this stage locks and tests the contract.
+// It is called from [Frame.handleKey] when the top overlay has
+// [Overlay.CapturesInput] true. While such an overlay is Top(), raw input
+// (including printable characters) routes to the plugin (registry bypassed), and
+// only ctrl+c (hard-quit) and esc (close overlay) survive as framework actions.
+// ? does NOT open help.
 func routeWhileCapturing(msg tea.Msg) captureDecision {
 	key, ok := msg.(tea.KeyPressMsg)
 	if !ok {
@@ -646,4 +797,16 @@ func (f *Frame) panelRects() []panelRect {
 		rects[i] = panelRect{ID: p.ID, Region: outers[i]}
 	}
 	return rects
+}
+
+// panelOuter returns the outer region of the panel with the given ID, reusing
+// the same layoutPanels math as panelRects/renderBody so the looked-up region
+// matches what is rendered and hit-tested. The bool is false for an unknown ID.
+func (f *Frame) panelOuter(id PanelID) (Region, bool) {
+	for _, r := range f.panelRects() {
+		if r.ID == id {
+			return r.Region, true
+		}
+	}
+	return Region{}, false
 }

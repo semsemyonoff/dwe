@@ -9,6 +9,8 @@ import (
 
 	tea "charm.land/bubbletea/v2"
 	"charm.land/lipgloss/v2"
+
+	"github.com/semsemyonoff/dwe/internal/shared/i18n"
 )
 
 // frameGoldenHeight is the terminal height the full-frame goldens render at.
@@ -43,6 +45,22 @@ func key(s string) tea.KeyPressMsg {
 		return tea.KeyPressMsg{Code: tea.KeyEscape}
 	case "ctrl+c":
 		return tea.KeyPressMsg{Code: 'c', Mod: tea.ModCtrl}
+	case "up":
+		return tea.KeyPressMsg{Code: tea.KeyUp}
+	case "down":
+		return tea.KeyPressMsg{Code: tea.KeyDown}
+	case "left":
+		return tea.KeyPressMsg{Code: tea.KeyLeft}
+	case "right":
+		return tea.KeyPressMsg{Code: tea.KeyRight}
+	case "pgup":
+		return tea.KeyPressMsg{Code: tea.KeyPgUp}
+	case "pgdown":
+		return tea.KeyPressMsg{Code: tea.KeyPgDown}
+	case "home":
+		return tea.KeyPressMsg{Code: tea.KeyHome}
+	case "end":
+		return tea.KeyPressMsg{Code: tea.KeyEnd}
 	default:
 		r := []rune(s)
 		return tea.KeyPressMsg{Code: r[0], Text: s}
@@ -274,6 +292,56 @@ func TestFrame_PluginActionDispatch(t *testing.T) {
 	}
 }
 
+// TestFrame_FocusRequestMovesFocusAndEchoes asserts a plugin-issued
+// FocusRequestMsg moves Frame focus and echoes a FocusChangedMsg back, while a
+// request for the already-focused panel (or an unknown ID) is a no-op.
+func TestFrame_FocusRequestMovesFocusAndEchoes(t *testing.T) {
+	focusEchoes := func(p *stubPlugin) []FocusChangedMsg {
+		var out []FocusChangedMsg
+		for _, m := range p.gotMsgs {
+			if fc, ok := m.(FocusChangedMsg); ok {
+				out = append(out, fc)
+			}
+		}
+		return out
+	}
+
+	f, p := newTestFrame(t, 80, frameGoldenHeight)
+	if f.focus.Active() != stubPanelLeft {
+		t.Fatalf("initial focus = %q, want %q", f.focus.Active(), stubPanelLeft)
+	}
+
+	// Request a different panel: focus moves and exactly one FocusChangedMsg is
+	// forwarded so the plugin's own active-panel tracking stays in sync.
+	f.Update(FocusRequestMsg{Panel: stubPanelRight})
+	if f.focus.Active() != stubPanelRight {
+		t.Errorf("focus did not move on FocusRequestMsg; got %q", f.focus.Active())
+	}
+	if echoes := focusEchoes(p); len(echoes) != 1 || echoes[0].Panel != stubPanelRight {
+		t.Errorf("FocusChangedMsg echoes = %+v, want one {right}", echoes)
+	}
+
+	// Requesting the already-focused panel must not re-echo.
+	p.gotMsgs = nil
+	f.Update(FocusRequestMsg{Panel: stubPanelRight})
+	if f.focus.Active() != stubPanelRight {
+		t.Errorf("focus changed on no-op request; got %q", f.focus.Active())
+	}
+	if echoes := focusEchoes(p); len(echoes) != 0 {
+		t.Errorf("no-op FocusRequestMsg echoed FocusChangedMsg = %+v, want none", echoes)
+	}
+
+	// An unknown panel ID leaves focus unchanged and echoes nothing.
+	p.gotMsgs = nil
+	f.Update(FocusRequestMsg{Panel: PanelID("nope")})
+	if f.focus.Active() != stubPanelRight {
+		t.Errorf("unknown FocusRequestMsg changed focus; got %q", f.focus.Active())
+	}
+	if echoes := focusEchoes(p); len(echoes) != 0 {
+		t.Errorf("unknown FocusRequestMsg echoed FocusChangedMsg = %+v, want none", echoes)
+	}
+}
+
 // TestFrame_DeclinedActionFallsThrough asserts a key matching a registered plugin
 // action whose HandleAction declines it (returns handled=false) still forwards the
 // raw key to plugin.Update — the documented "decline → forward raw key" contract.
@@ -424,6 +492,63 @@ func TestFrame_ActionTriggeredOverlay(t *testing.T) {
 	f.Update(key("o")) // HandleAction → drain PendingOverlay
 	if f.overlay.Empty() {
 		t.Errorf("action-triggered overlay was not surfaced")
+	}
+}
+
+// TestFrame_CapturingOverlayRefreshesInPlace asserts a captured key that mutates
+// a capturing overlay's state (e.g. an inspect viewport scroll) refreshes the
+// visible top overlay in place: the freshly republished snapshot replaces the
+// old one, the on-screen content updates, and the stack does NOT grow one stale
+// layer per key.
+func TestFrame_CapturingOverlayRefreshesInPlace(t *testing.T) {
+	f, p := newTestFrame(t, 80, frameGoldenHeight)
+	p.pending = &Overlay{Content: "frame-0", Width: 7, Height: 1, CapturesInput: true}
+	f.drainOverlay() // push the capturing overlay
+	if got := len(f.overlay.layers); got != 1 {
+		t.Fatalf("overlay depth after open = %d, want 1", got)
+	}
+	if top, _ := f.overlay.Top(); top.Content != "frame-0" {
+		t.Fatalf("top content = %q, want frame-0", top.Content)
+	}
+
+	// A captured key republishes a fresh snapshot (a "scrolled" frame).
+	p.republishOnUpdate = &Overlay{Content: "frame-1", Width: 7, Height: 1, CapturesInput: true}
+	f.Update(key("down"))
+	f.Update(key("down")) // a second captured key must still not grow the stack
+
+	if got := len(f.overlay.layers); got != 1 {
+		t.Errorf("overlay depth after captured scroll keys = %d, want 1 (refresh must replace, not push)", got)
+	}
+	if top, _ := f.overlay.Top(); top.Content != "frame-1" {
+		t.Errorf("top content after scroll = %q, want frame-1 (overlay frozen — refresh did not paint)", top.Content)
+	}
+}
+
+// TestFrame_CapturingOverlayCloseNotifiesPlugin asserts that closing a
+// CapturesInput overlay with esc pops it AND forwards an OverlayClosedMsg to the
+// plugin, so the plugin can clear the state that produced the overlay.
+func TestFrame_CapturingOverlayCloseNotifiesPlugin(t *testing.T) {
+	f, p := newTestFrame(t, 80, frameGoldenHeight)
+	p.pending = &Overlay{Content: "modal", Width: 5, Height: 1, CapturesInput: true}
+	f.drainOverlay() // push the capturing overlay
+	if f.overlay.Empty() {
+		t.Fatal("capturing overlay was not pushed")
+	}
+	before := len(p.gotMsgs)
+
+	f.Update(key("esc")) // captureClose
+
+	if !f.overlay.Empty() {
+		t.Error("esc did not pop the capturing overlay")
+	}
+	var got bool
+	for _, m := range p.gotMsgs[before:] {
+		if _, ok := m.(OverlayClosedMsg); ok {
+			got = true
+		}
+	}
+	if !got {
+		t.Errorf("plugin was not sent OverlayClosedMsg on close; got %v", p.gotMsgs[before:])
 	}
 }
 
@@ -589,6 +714,187 @@ func TestFrame_NonCapturingOverlayUnaffected(t *testing.T) {
 	}
 }
 
+// TestFrame_CapturingInputForwardsRawKeys asserts the no-overlay capture branch:
+// while plugin.CapturingInput() is true, an action-letter key is forwarded raw to
+// plugin.Update (NOT dispatched through HandleAction), and ctrl+c is still
+// reserved as a hard-quit.
+func TestFrame_CapturingInputForwardsRawKeys(t *testing.T) {
+	f, p := newTestFrame(t, 80, frameGoldenHeight)
+	p.capturing = true
+
+	// "o" is a registered plugin action (stubActionOpen). While capturing it must
+	// reach plugin.Update raw and NOT route through HandleAction.
+	f.Update(key("o"))
+	if p.handledAction != "" {
+		t.Errorf("action key dispatched while capturing: handled=%q; want raw forward", p.handledAction)
+	}
+	if !receivedKey(p, "o") {
+		t.Errorf("captured key did not reach plugin.Update; got %v", p.gotMsgs)
+	}
+
+	// "?" must NOT open help while capturing — it is a raw key to the plugin.
+	f.Update(key("?"))
+	if !f.overlay.Empty() {
+		t.Error("help opened while capturing; want '?' forwarded raw to plugin")
+	}
+	if !receivedKey(p, "?") {
+		t.Errorf("captured '?' did not reach plugin.Update; got %v", p.gotMsgs)
+	}
+
+	// ctrl+c stays reserved as a hard-quit even while capturing.
+	_, cmd := f.Update(key("ctrl+c"))
+	if !isQuitCmd(cmd) {
+		t.Error("ctrl+c while capturing did not quit; it must stay reserved")
+	}
+}
+
+// TestFrame_CapturingInputDisabledRestoresDispatch asserts that toggling
+// CapturingInput back to false restores normal registry dispatch (the action
+// routes through HandleAction again).
+func TestFrame_CapturingInputDisabledRestoresDispatch(t *testing.T) {
+	f, p := newTestFrame(t, 80, frameGoldenHeight)
+	p.capturing = false
+	f.Update(key("o"))
+	if p.handledAction != stubActionOpen {
+		t.Errorf("not-capturing action key did not dispatch; handled=%q", p.handledAction)
+	}
+}
+
+// TestFrame_CapturingOverlayRoutesNavKeys asserts the modal-open capturing
+// branch: when the top overlay has CapturesInput=true, navigation keys
+// (arrows/pgup/home) route raw to plugin.Update, "?" does not open help, esc
+// closes the overlay, and ctrl+c quits.
+func TestFrame_CapturingOverlayRoutesNavKeys(t *testing.T) {
+	t.Run("nav_keys_reach_plugin", func(t *testing.T) {
+		f, p := newTestFrame(t, 80, frameGoldenHeight)
+		f.overlay.Push(Overlay{Content: "inspect", Width: 6, Height: 2, CapturesInput: true})
+		for _, k := range []string{"up", "down", "pgup", "home"} {
+			f.Update(key(k))
+			if !receivedKey(p, k) {
+				t.Errorf("capturing overlay did not forward %q to plugin; got %v", k, p.gotMsgs)
+			}
+		}
+	})
+
+	t.Run("question_mark_does_not_open_help", func(t *testing.T) {
+		f, p := newTestFrame(t, 80, frameGoldenHeight)
+		f.overlay.Push(Overlay{Content: "inspect", Width: 6, Height: 2, CapturesInput: true})
+		f.Update(key("?"))
+		// Still exactly one overlay (the capturing one); no help pushed.
+		if _, ok := f.overlay.Top(); !ok || !f.captureOverlayOpen() {
+			t.Error("'?' altered the capturing overlay stack; want raw forward")
+		}
+		if !receivedKey(p, "?") {
+			t.Errorf("'?' not forwarded to plugin while capturing overlay open; got %v", p.gotMsgs)
+		}
+	})
+
+	t.Run("esc_closes_overlay", func(t *testing.T) {
+		f, _ := newTestFrame(t, 80, frameGoldenHeight)
+		f.overlay.Push(Overlay{Content: "inspect", Width: 6, Height: 2, CapturesInput: true})
+		_, cmd := f.Update(key("esc"))
+		if !f.overlay.Empty() {
+			t.Error("esc did not close the capturing overlay")
+		}
+		if isQuitCmd(cmd) {
+			t.Error("esc quit the program instead of closing the capturing overlay")
+		}
+	})
+
+	t.Run("ctrl_c_hard_quits", func(t *testing.T) {
+		f, _ := newTestFrame(t, 80, frameGoldenHeight)
+		f.overlay.Push(Overlay{Content: "inspect", Width: 6, Height: 2, CapturesInput: true})
+		_, cmd := f.Update(key("ctrl+c"))
+		if !isQuitCmd(cmd) {
+			t.Error("ctrl+c did not quit while a capturing overlay was open")
+		}
+	})
+}
+
+// TestFrame_TranslatorLocaleFlowIntoHelp asserts the translator + locale wired in
+// via withTranslator/withLocale reach the help overlay: the modal title and a
+// section/action string are resolved through the translator at the supplied
+// locale.
+func TestFrame_TranslatorLocaleFlowIntoHelp(t *testing.T) {
+	tr := prefixTranslator{}
+	f, _ := newTestFrame(t, 80, frameGoldenHeight, withTranslator(tr), withLocale("ru"))
+	f.Update(key("?")) // open help
+	plain := stripANSI(f.View().Content)
+	// prefixTranslator returns "<locale>:<fallback>" from T, so the localized
+	// title is "ru:Help".
+	if !strings.Contains(plain, "ru:Help") {
+		t.Errorf("help title not resolved through translator/locale; modal:\n%s", plain)
+	}
+	// The stub registers a "Stub" section; its label resolves through T too.
+	if !strings.Contains(plain, "ru:Stub") {
+		t.Errorf("help section label not resolved through translator/locale; modal:\n%s", plain)
+	}
+}
+
+// TestRenderFrameHarness asserts the exported cross-package RenderFrame harness
+// produces a frame string (the same content a Frame.View would) and surfaces
+// construction errors.
+func TestRenderFrameHarness(t *testing.T) {
+	out, err := RenderFrame(newStubPlugin(), RunOptions{Brand: "dwe", Project: "demo"}, 80, frameGoldenHeight)
+	if err != nil {
+		t.Fatalf("RenderFrame: %v", err)
+	}
+	plain := stripANSI(out)
+	if !strings.Contains(plain, "? help") {
+		t.Errorf("RenderFrame output missing status line:\n%s", plain)
+	}
+	rows := strings.Split(plain, "\n")
+	if len(rows) != frameGoldenHeight {
+		t.Errorf("RenderFrame row count = %d; want %d", len(rows), frameGoldenHeight)
+	}
+
+	// A contract violation (no panels) surfaces as an error, no render.
+	if _, err := RenderFrame(noPanelPlugin{newStubPlugin()}, RunOptions{}, 80, 24); err == nil {
+		t.Error("RenderFrame accepted a plugin with no panels")
+	}
+}
+
+// TestBuildHelpHarness asserts the exported BuildHelp harness builds an overlay
+// resolving strings through the translator/locale, and surfaces Actions errors.
+func TestBuildHelpHarness(t *testing.T) {
+	ov, err := BuildHelp(newStubPlugin(), prefixTranslator{}, "ru", 80, 24)
+	if err != nil {
+		t.Fatalf("BuildHelp: %v", err)
+	}
+	plain := stripANSI(ov.Content)
+	if !strings.Contains(plain, "ru:Help") {
+		t.Errorf("BuildHelp overlay title not localized:\n%s", plain)
+	}
+	if ov.Width <= 0 || ov.Height <= 0 {
+		t.Errorf("BuildHelp overlay has degenerate dimensions: %dx%d", ov.Width, ov.Height)
+	}
+
+	// nil translator falls back to NopTranslator (English) without panicking.
+	if _, err := BuildHelp(newStubPlugin(), nil, "", 80, 24); err != nil {
+		t.Fatalf("BuildHelp with nil translator: %v", err)
+	}
+
+	// A duplicate-key plugin surfaces the Actions error.
+	if _, err := BuildHelp(dupKeyPlugin{newStubPlugin()}, nil, "en", 80, 24); err == nil {
+		t.Error("BuildHelp accepted a plugin registering a duplicate key")
+	}
+}
+
+// captureOverlayOpen reports whether the top overlay captures input — a small
+// test helper used by the capturing-overlay routing tests.
+func (f *Frame) captureOverlayOpen() bool {
+	top, ok := f.overlay.Top()
+	return ok && top.CapturesInput
+}
+
+// prefixTranslator is a fake i18n.Translator whose T returns "<locale>:<fallback>"
+// so tests can assert BOTH that the help overlay routes through the translator AND
+// that the supplied locale flows through. All other methods delegate to the
+// no-op behaviour (return the fallback).
+type prefixTranslator struct{ i18n.NopTranslator }
+
+func (prefixTranslator) T(locale, _, fallback string) string { return locale + ":" + fallback }
+
 // --- test plugins for the construction-error cases ---
 
 type dupKeyPlugin struct{ *stubPlugin }
@@ -693,16 +999,30 @@ const (
 // panels let click tests verify focus switching between panels.
 type mousePlugin struct {
 	counts map[Action]int
+	// msgs records every message forwarded through Update so click/focus
+	// delivery (PanelClickMsg / FocusChangedMsg) can be asserted.
+	msgs []tea.Msg
+	// capturing toggles CapturingInput() so mouse-during-capture tests can
+	// assert the frame suppresses wheel/click dispatch (inline-filter parity
+	// with the keyboard capture branch).
+	capturing bool
+	// captureOnFilter makes HandleAction(ActionFilter) flip capturing to true,
+	// modelling the inline filter opening on '/'. Lets a test exercise the
+	// frame's reset-on-entering-capture transition.
+	captureOnFilter bool
 }
 
 func newMousePlugin() *mousePlugin {
 	return &mousePlugin{counts: make(map[Action]int)}
 }
 
-func (p *mousePlugin) Init() tea.Cmd                        { return nil }
-func (p *mousePlugin) Close() error                         { return nil }
-func (p *mousePlugin) Resize(Region)                        {}
-func (p *mousePlugin) Update(tea.Msg) tea.Cmd               { return nil }
+func (p *mousePlugin) Init() tea.Cmd { return nil }
+func (p *mousePlugin) Close() error  { return nil }
+func (p *mousePlugin) Resize(Region) {}
+func (p *mousePlugin) Update(msg tea.Msg) tea.Cmd {
+	p.msgs = append(p.msgs, msg)
+	return nil
+}
 func (p *mousePlugin) ViewPanel(_ PanelID, _ Region) string { return "[mouse]" }
 func (p *mousePlugin) Panels() []Panel {
 	return []Panel{
@@ -712,14 +1032,40 @@ func (p *mousePlugin) Panels() []Panel {
 }
 func (p *mousePlugin) StatusContext() string { return "" }
 func (p *mousePlugin) Actions(reg *Registry) error {
-	return RegisterStandard(reg, ActionNavUp, ActionNavDown, ActionSelect)
+	return RegisterStandard(reg, ActionNavUp, ActionNavDown, ActionSelect, ActionFilter)
 }
 func (p *mousePlugin) HandleAction(a Action) (tea.Cmd, bool) {
 	p.counts[a]++
+	if a == ActionFilter && p.captureOnFilter {
+		p.capturing = true
+	}
 	return nil, true
 }
 func (p *mousePlugin) PendingOverlay() (Overlay, bool) { return Overlay{}, false }
 func (p *mousePlugin) Result() any                     { return nil }
+func (p *mousePlugin) CapturingInput() bool            { return p.capturing }
+
+// panelClicks returns every PanelClickMsg forwarded to the plugin, in order.
+func (p *mousePlugin) panelClicks() []PanelClickMsg {
+	var out []PanelClickMsg
+	for _, m := range p.msgs {
+		if pc, ok := m.(PanelClickMsg); ok {
+			out = append(out, pc)
+		}
+	}
+	return out
+}
+
+// focusChanges returns every FocusChangedMsg forwarded to the plugin, in order.
+func (p *mousePlugin) focusChanges() []FocusChangedMsg {
+	var out []FocusChangedMsg
+	for _, m := range p.msgs {
+		if fc, ok := m.(FocusChangedMsg); ok {
+			out = append(out, fc)
+		}
+	}
+	return out
+}
 
 // fakeClock is an injectable frameClock for click-routing tests. Initialise t
 // to a non-zero time; advance moves it forward.
@@ -961,6 +1307,59 @@ func TestFrame_WheelCoalescing(t *testing.T) {
 			t.Error("wheelArmed after modal flush should be false")
 		}
 	})
+
+	t.Run("swallowed_while_capturing", func(t *testing.T) {
+		// While the plugin captures raw input (inline filter, no overlay) wheel
+		// events must neither arm a tick nor dispatch Nav — parity with the
+		// keyboard capture branch, which forwards keys raw and never dispatches.
+		f, p := newMouseFrame(t, 80, frameGoldenHeight)
+		p.capturing = true
+		_, cmd := f.Update(wheelDown())
+		if cmd != nil {
+			t.Error("WheelDown while capturing returned a cmd; want nil (swallowed)")
+		}
+		if f.wheelAccum != 0 || f.wheelArmed {
+			t.Errorf("capturing wheel armed state: accum=%d armed=%v; want 0/false", f.wheelAccum, f.wheelArmed)
+		}
+	})
+
+	t.Run("armed_wheel_then_capture_then_flush_zero_nav", func(t *testing.T) {
+		// Arm the tick with a wheel event, then the plugin enters capture (inline
+		// filter); the delayed flush must not dispatch Nav behind the filter.
+		f, p := newMouseFrame(t, 80, frameGoldenHeight)
+		f.Update(wheelDown()) // arms the tick + accumulates
+		p.capturing = true    // filter takes over before the flush arrives
+		f.Update(flush())
+		if p.counts[ActionNavDown] != 0 {
+			t.Errorf("flush behind filter: NavDown count = %d; want 0", p.counts[ActionNavDown])
+		}
+		if f.wheelAccum != 0 || f.wheelArmed {
+			t.Errorf("capturing flush armed state: accum=%d armed=%v; want 0/false", f.wheelAccum, f.wheelArmed)
+		}
+	})
+
+	t.Run("armed_wheel_then_action_capture_then_flush_zero_nav", func(t *testing.T) {
+		// Same hazard as above, but capture is entered via the '/' ActionFilter
+		// (not by externally flipping the flag). The transition must reset the
+		// armed wheel so a tick armed before '/' cannot flush Nav once the filter
+		// closes and its CapturingInput guard lifts.
+		f, p := newMouseFrame(t, 80, frameGoldenHeight)
+		p.captureOnFilter = true
+		f.Update(wheelDown()) // arms the tick + accumulates
+		f.Update(key("/"))    // ActionFilter → plugin enters capture
+		if !p.capturing {
+			t.Fatal("plugin did not enter capture on '/'")
+		}
+		if f.wheelAccum != 0 || f.wheelArmed {
+			t.Errorf("armed wheel not reset on entering capture: accum=%d armed=%v; want 0/false", f.wheelAccum, f.wheelArmed)
+		}
+		// Filter closes, then the stale tick fires — it must dispatch no Nav.
+		p.capturing = false
+		f.Update(flush())
+		if p.counts[ActionNavDown] != 0 {
+			t.Errorf("stale flush after filter close: NavDown = %d; want 0", p.counts[ActionNavDown])
+		}
+	})
 }
 
 // TestFrame_ClickRouting exercises the full click-routing policy wired in Task 5.
@@ -1006,6 +1405,35 @@ func TestFrame_ClickRouting(t *testing.T) {
 		f.Update(leftClick(5, 5)) // second click — double-click
 		if got := p.counts[ActionSelect]; got != 1 {
 			t.Errorf("double-click: ActionSelect count = %d; want 1", got)
+		}
+	})
+
+	t.Run("entering_capture_via_action_resets_stale_click", func(t *testing.T) {
+		// Regression: a click, then '/' opening the inline filter, then a quick
+		// esc closing it, then a click on the SAME cell must NOT pair into a
+		// double-click. Entering capture via the action resets lastClick, exactly
+		// as crossing an overlay boundary does.
+		f, p := newMouseFrame(t, 80, frameGoldenHeight)
+		p.captureOnFilter = true
+		clk := testClock()
+		f.clock = clk
+		f.Update(leftClick(5, 5)) // first click records lastClick
+		if f.lastClick.t.IsZero() {
+			t.Fatal("first click did not record lastClick")
+		}
+		f.Update(key("/")) // ActionFilter → plugin enters capture
+		if !p.capturing {
+			t.Fatal("plugin did not enter capture on '/'")
+		}
+		if !f.lastClick.t.IsZero() {
+			t.Error("lastClick not reset on entering capture")
+		}
+		// Filter closes; a click on the same cell (still within the window, since
+		// the clock never advanced) must not synthesize a phantom double-click.
+		p.capturing = false
+		f.Update(leftClick(5, 5))
+		if got := p.counts[ActionSelect]; got != 0 {
+			t.Errorf("phantom double-click after filter close: ActionSelect = %d; want 0", got)
 		}
 	})
 
@@ -1164,6 +1592,39 @@ func TestFrame_ClickRouting(t *testing.T) {
 		}
 	})
 
+	t.Run("double_click_swallowed_while_capturing", func(t *testing.T) {
+		// While the plugin captures raw input (inline filter, no overlay) a
+		// double-click must NOT dispatch ActionSelect — it would quit and run
+		// the focused command behind an active filter. Mirrors the keyboard
+		// capture branch, which forwards keys raw and never dispatches.
+		f, p := newMouseFrame(t, 80, frameGoldenHeight)
+		clk := testClock()
+		f.clock = clk
+		p.capturing = true
+		f.Update(leftClick(5, 5)) // first click — swallowed, lastClick stays zero
+		f.Update(leftClick(5, 5)) // second click — must NOT synthesize Select
+		if got := p.counts[ActionSelect]; got != 0 {
+			t.Errorf("capturing double-click: ActionSelect count = %d; want 0", got)
+		}
+		if !f.lastClick.t.IsZero() {
+			t.Error("capturing click recorded a lastClick; want zero sentinel")
+		}
+	})
+
+	t.Run("click_does_not_change_focus_while_capturing", func(t *testing.T) {
+		// A click on another panel must not drift focus mid-query.
+		f, p := newMouseFrame(t, 80, frameGoldenHeight)
+		p.capturing = true
+		before := f.focus.Active()
+		f.Update(leftClick(50, 5)) // alt panel click — swallowed
+		if got := f.focus.Active(); got != before {
+			t.Errorf("capturing click changed focus to %q; want unchanged %q", got, before)
+		}
+		if len(p.panelClicks()) != 0 {
+			t.Error("capturing click forwarded a PanelClickMsg; want none")
+		}
+	})
+
 	t.Run("release_message_ignored", func(t *testing.T) {
 		f, p := newMouseFrame(t, 80, frameGoldenHeight)
 		before := len(p.counts)
@@ -1185,6 +1646,98 @@ func TestFrame_ClickRouting(t *testing.T) {
 		}
 		if len(p.counts) != before {
 			t.Error("MouseMotionMsg updated action counts; want no-op")
+		}
+	})
+}
+
+// TestFrame_PanelClickAndFocusDelivery covers the Task 2 seam: single-click
+// inside a panel's content forwards a PanelClickMsg with panel-local coords and
+// sets focus; a border click sets focus but emits NO PanelClickMsg; Tab emits a
+// FocusChangedMsg; and a double-click moves the cursor (first click) then
+// dispatches Select without a second PanelClickMsg.
+//
+// Geometry at 80x24 (weights {1,1}):
+//
+//	main outer {0,0,40,23},  content X∈[2,38),  Y∈[1,22)
+//	alt  outer {40,0,40,23}, content X∈[42,78), Y∈[1,22)
+func TestFrame_PanelClickAndFocusDelivery(t *testing.T) {
+	t.Run("content_click_forwards_panel_local_coords_and_focus", func(t *testing.T) {
+		f, p := newMouseFrame(t, 80, frameGoldenHeight)
+		f.Update(leftClick(50, 5)) // alt panel content
+		if got := f.focus.Active(); got != mousePanelAlt {
+			t.Fatalf("focus = %q; want %q", got, mousePanelAlt)
+		}
+		clicks := p.panelClicks()
+		if len(clicks) != 1 {
+			t.Fatalf("PanelClickMsg count = %d; want 1 (%+v)", len(clicks), p.msgs)
+		}
+		want := PanelClickMsg{Panel: mousePanelAlt, X: 50 - 42, Y: 5 - 1}
+		if clicks[0] != want {
+			t.Errorf("PanelClickMsg = %+v; want %+v", clicks[0], want)
+		}
+		// Focus moved main→alt, so exactly one FocusChangedMsg.
+		fc := p.focusChanges()
+		if len(fc) != 1 || fc[0].Panel != mousePanelAlt {
+			t.Errorf("FocusChangedMsg = %+v; want one {alt}", fc)
+		}
+	})
+
+	t.Run("border_click_sets_focus_but_no_panel_click", func(t *testing.T) {
+		f, p := newMouseFrame(t, 80, frameGoldenHeight)
+		// (40,5): inside alt OUTER (left border column) but outside its content
+		// (content X starts at 42).
+		f.Update(leftClick(40, 5))
+		if got := f.focus.Active(); got != mousePanelAlt {
+			t.Errorf("border click focus = %q; want %q", got, mousePanelAlt)
+		}
+		if clicks := p.panelClicks(); len(clicks) != 0 {
+			t.Errorf("border click emitted PanelClickMsg %+v; want none", clicks)
+		}
+	})
+
+	t.Run("click_same_panel_no_focus_change_still_forwards_click", func(t *testing.T) {
+		f, p := newMouseFrame(t, 80, frameGoldenHeight)
+		// Initial focus is main; clicking main content must NOT emit
+		// FocusChangedMsg but must still forward the PanelClickMsg.
+		f.Update(leftClick(5, 5))
+		if fc := p.focusChanges(); len(fc) != 0 {
+			t.Errorf("same-panel click emitted FocusChangedMsg %+v; want none", fc)
+		}
+		clicks := p.panelClicks()
+		want := PanelClickMsg{Panel: mousePanelMain, X: 5 - 2, Y: 5 - 1}
+		if len(clicks) != 1 || clicks[0] != want {
+			t.Errorf("PanelClickMsg = %+v; want one %+v", clicks, want)
+		}
+	})
+
+	t.Run("tab_emits_focus_changed", func(t *testing.T) {
+		f, p := newMouseFrame(t, 80, frameGoldenHeight)
+		f.Update(key("tab"))
+		if got := f.focus.Active(); got != mousePanelAlt {
+			t.Fatalf("after tab focus = %q; want %q", got, mousePanelAlt)
+		}
+		fc := p.focusChanges()
+		if len(fc) != 1 || fc[0].Panel != mousePanelAlt {
+			t.Errorf("FocusChangedMsg after tab = %+v; want one {alt}", fc)
+		}
+		// Shift+Tab back to main emits another.
+		f.Update(key("shift+tab"))
+		if fc := p.focusChanges(); len(fc) != 2 || fc[1].Panel != mousePanelMain {
+			t.Errorf("FocusChangedMsg after shift+tab = %+v; want second {main}", fc)
+		}
+	})
+
+	t.Run("double_click_moves_cursor_then_selects", func(t *testing.T) {
+		f, p := newMouseFrame(t, 80, frameGoldenHeight)
+		clk := testClock()
+		f.clock = clk
+		f.Update(leftClick(5, 5)) // first — moves cursor (PanelClickMsg)
+		f.Update(leftClick(5, 5)) // second — double-click → Select, no 2nd PanelClickMsg
+		if got := len(p.panelClicks()); got != 1 {
+			t.Errorf("PanelClickMsg count over a double-click = %d; want 1", got)
+		}
+		if got := p.counts[ActionSelect]; got != 1 {
+			t.Errorf("ActionSelect count = %d; want 1", got)
 		}
 	})
 }

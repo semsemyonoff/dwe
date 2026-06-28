@@ -356,8 +356,6 @@ func printInspectAt(w io.Writer, def *usercommands.CommandDef, cfg *config.DweCo
 	inspectContextSection(def2, sub, def)
 	inspectEnvSection(def2, sub, def)
 	inspectFilesSection(def2, sub, def)
-
-	_, _ = fmt.Fprintln(w, render.SectionTitle(""))
 }
 
 // inspectDef2 writes a name/value definition line at the given indent.

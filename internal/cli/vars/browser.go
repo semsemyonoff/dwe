@@ -11,6 +11,7 @@ import (
 	"github.com/semsemyonoff/dwe/internal/core/ui/cmdbrowser"
 	uirender "github.com/semsemyonoff/dwe/internal/core/ui/render"
 	"github.com/semsemyonoff/dwe/internal/core/ui/widgets"
+	"github.com/semsemyonoff/dwe/internal/shared/i18n"
 
 	"github.com/spf13/cobra"
 )
@@ -51,6 +52,8 @@ func runVarsBrowser(cmd *cobra.Command, flags *cmdctx.RootFlags) error {
 			AutoCollapseEmpty:    config.UICommandsAutoCollapseEmpty(cfg),
 			ShowTypeBadges:       config.UICommandsShowTypeBadges(cfg),
 			Mode:                 cmdbrowser.ModeEdit,
+			Translator:           i18n.TranslatorOrNop(flags.I18n),
+			Locale:               flags.Locale,
 		}
 		res, err := runBrowser(title, items, opts)
 		if err != nil {

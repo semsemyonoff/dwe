@@ -25,3 +25,31 @@ ui:
   docs.property.script: "Script"
   docs.workflow.parallel: "parallel"
   docs.workflow.sub_steps: "sub-steps"
+  # tui help modal (framework ?-modal, generated from the action registry).
+  # Section keys are the lowercased Section label; action keys are the Action ID
+  # (e.g. nav.up, cmd.skip-confirm). English values mirror the in-code Binding
+  # fallbacks so the en modal renders identically with or without a Store. The
+  # `select` action is intentionally NOT keyed: its label is mode-dependent
+  # ("Select" in run mode, "Edit" in the vars browser) and a single key would
+  # flatten that distinction (see internal/core/ui/cmdbrowser/actions.go).
+  tui.help.title: "Help"
+  tui.help.section.navigation: "Navigation"
+  tui.help.section.panels: "Panels"
+  tui.help.section.actions: "Actions"
+  tui.help.section.general: "General"
+  tui.help.action.focus.next: "Focus next panel"
+  tui.help.action.focus.prev: "Focus previous panel"
+  tui.help.action.help: "Toggle help"
+  tui.help.action.quit: "Quit"
+  tui.help.action.nav.up: "Move up"
+  tui.help.action.nav.down: "Move down"
+  tui.help.action.nav.left: "Move left"
+  tui.help.action.nav.right: "Move right"
+  tui.help.action.nav.top: "Go to top"
+  tui.help.action.nav.bottom: "Go to bottom"
+  tui.help.action.nav.page-up: "Page up"
+  tui.help.action.nav.page-down: "Page down"
+  tui.help.action.filter: "Filter"
+  tui.help.action.inspect: "Inspect"
+  tui.help.action.cmd.skip-confirm: "Skip confirmation"
+  tui.help.action.cmd.force-form: "Edit parameters"

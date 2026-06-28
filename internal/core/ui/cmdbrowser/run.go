@@ -5,13 +5,29 @@
 package cmdbrowser
 
 import (
-	"errors"
 	"fmt"
 
-	tea "charm.land/bubbletea/v2"
-
+	"github.com/semsemyonoff/dwe/internal/core/ui/tui"
 	"github.com/semsemyonoff/dwe/internal/core/ui/widgets"
+	"github.com/semsemyonoff/dwe/internal/shared/i18n"
 )
+
+// Minimum usable terminal size for the two-panel frame. Below either bound the
+// browser drops to the flat huh fallback (runFallback) — Variant A removed the
+// in-TUI single-panel (60–79) layout, so minBrowserWidth is the sole boundary
+// between the framework frame and the fallback. tui.Run re-gates on its own
+// (smaller) minimum internally, a harmless double-check; this is the real
+// fallback boundary.
+const (
+	minBrowserWidth  = 80
+	minBrowserHeight = 15
+)
+
+// runTUI is the package-local seam through which Run drives the framework. It
+// defaults to tui.Run and is swapped in tests so the ≥80 path can be exercised
+// without a real terminal. Keeping the seam local (rather than exporting tui.Run's
+// capability seams) limits the framework's production API surface.
+var runTUI = tui.Run
 
 // Action enumerates intents returned by the browser. ActionUnknown sits at
 // iota 0 so a zero-value Result is detectable as "not set".
@@ -78,6 +94,25 @@ type Options struct {
 	ShowTypeBadges       bool
 	IncludePrivate       bool
 	Mode                 Mode
+
+	// Translator + Locale carry the i18n context into the framework so the
+	// help modal can localize its section/action labels. They are the only
+	// non-breaking way to thread i18n through the frozen Run signature. Both
+	// are nil-safe: a nil Translator resolves to i18n.NopTranslator and an
+	// empty Locale falls through to the framework default. Storage/hashing
+	// sites stay English per the localization contract; the breadcrumb noun
+	// stays hardcoded English (see browser.itemNoun).
+	Translator i18n.Translator
+	Locale     string
+}
+
+// translatorOrNop returns the configured Translator, falling back to a no-op
+// when none was supplied (DefaultOptions and test call sites pass none).
+func (o *Options) translatorOrNop() i18n.Translator {
+	if o.Translator == nil {
+		return i18n.NopTranslator{}
+	}
+	return o.Translator
 }
 
 // applyDefaults promotes the zero Mode to ModeRun. No other field is
@@ -117,12 +152,20 @@ func DefaultOptions() Options {
 	}
 }
 
-// Run launches the interactive command browser. Returns widgets.ErrCancelled
-// when the user quits via q / Esc / Ctrl-C. On TTYs narrower than 60 cols
-// or shorter than 15 rows (and on terminal-size read failures), delegates
-// to widgets.RunSelector. Non-TTY callers are short-circuited at the call site
-// with an error before reaching this function; this code returns
-// widgets.ErrCancelled defensively if it is reached anyway.
+// Run launches the interactive command browser as a [tui.Plugin] on the
+// framework Frame. Returns widgets.ErrCancelled when the user quits via
+// q / Esc / Ctrl-C (or exits without a selection). On TTYs narrower than
+// minBrowserWidth cols or shorter than minBrowserHeight rows (and on
+// terminal-size read failures), delegates to the flat huh fallback
+// (runFallback). Non-TTY callers are short-circuited at the call site with an
+// error before reaching this function; this code returns widgets.ErrCancelled
+// defensively if it is reached anyway.
+//
+// tui.Run owns the alt-screen, mouse mode, and widgets.RunWithPromptHooks
+// wrap — the browser must NOT wrap a second time. tui.Run returns the plugin's
+// Result as `any` (UNCHANGED) on a clean quit, or widgets.ErrCancelled on an
+// interrupted/killed program; both are mapped straight through here, plus the
+// ActionUnknown → ErrCancelled guard for an exit-without-selection.
 func Run(title string, items []Item, opts Options) (Result, error) {
 	opts.applyDefaults()
 	if len(items) == 0 {
@@ -131,39 +174,32 @@ func Run(title string, items []Item, opts Options) (Result, error) {
 
 	if !isTerminalFn() {
 		// Defence-in-depth: production callers short-circuit non-TTY at the
-		// call site. RunSelector also requires a TTY so we cannot delegate.
+		// call site. runFallback also requires a TTY so we cannot delegate.
 		return Result{}, widgets.ErrCancelled
 	}
 
 	width, height, err := terminalSizeFn()
-	if err != nil || width < minTwoPanelWidth || height < 15 {
+	if err != nil || width < minBrowserWidth || height < minBrowserHeight {
 		return runFallback(title, items, opts.IncludePrivate)
 	}
 
-	m := newModel(title, items, opts, width, height)
-	prog := tea.NewProgram(m)
-
-	runErr := widgets.RunWithPromptHooks(func() error {
-		_, e := prog.Run()
-		return e
+	out, runErr := runTUI(newBrowser(title, items, opts), tui.RunOptions{
+		Brand:      title,
+		Mouse:      true,
+		Translator: opts.translatorOrNop(),
+		Locale:     opts.Locale,
 	})
 	if runErr != nil {
-		if errors.Is(runErr, tea.ErrProgramPanic) {
-			return Result{}, runErr
-		}
-		if errors.Is(runErr, tea.ErrInterrupted) || errors.Is(runErr, tea.ErrProgramKilled) {
-			return Result{}, widgets.ErrCancelled
-		}
+		// tui.Run already maps a user-initiated exit to widgets.ErrCancelled and
+		// wraps panics/real failures; pass them straight through.
 		return Result{}, runErr
 	}
-	if m.cancelled {
-		return Result{}, widgets.ErrCancelled
-	}
+	res, _ := out.(Result)
 	// ActionUnknown (zero value) means the program exited without the user
 	// making a selection — treat it as a cancellation rather than silently
-	// returning defs[0].
-	if m.result.Action == ActionUnknown {
+	// returning items[0].
+	if res.Action == ActionUnknown {
 		return Result{}, widgets.ErrCancelled
 	}
-	return m.result, nil
+	return res, nil
 }

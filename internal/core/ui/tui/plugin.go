@@ -51,11 +51,59 @@ type Overlay struct {
 	// CapturesInput reports whether this overlay routes raw input (including
 	// printable characters) to the plugin, bypassing the registry. While a
 	// capturing overlay is Top(), only ctrl+c (hard-quit) and esc (close
-	// overlay) survive as framework actions; ? does not open help. Locked in
-	// Stage 1; the full frame.Update integration lands with the Stage 3 filter
-	// consumer. See [routeWhileCapturing].
+	// overlay) survive as framework actions; ? does not open help. The
+	// cmdbrowser inspect overlay is the consumer. See [routeWhileCapturing].
 	CapturesInput bool
 }
+
+// PanelClickMsg is forwarded to [Plugin.Update] when the user single-clicks
+// inside a panel's INNER content region (not its border). X / Y are panel-local
+// coordinates: (0, 0) is the top-left content cell of the named panel (see
+// [panelLocal]). The plugin uses it to move its cursor/selection to the clicked
+// row. It is emitted only on a single click — a confirmed double-click fires the
+// Select action instead and suppresses the message (the first click of the pair
+// already moved the cursor). Border clicks set focus but emit no PanelClickMsg
+// (they would yield negative/out-of-content coordinates).
+type PanelClickMsg struct {
+	// Panel is the clicked panel's ID.
+	Panel PanelID
+	// X / Y are panel-local content coordinates (0-based, inner region origin).
+	X, Y int
+}
+
+// FocusChangedMsg is forwarded to [Plugin.Update] whenever the focused panel
+// changes — via Tab/Shift+Tab (framework built-ins that never otherwise reach
+// the plugin) or a panel click. The plugin uses it to track which panel is
+// active so it can route navigation/scroll to the right widget. It is emitted
+// only when focus actually moves to a different panel.
+type FocusChangedMsg struct {
+	// Panel is the newly focused panel's ID.
+	Panel PanelID
+}
+
+// FocusRequestMsg flows the OTHER way: a plugin returns it (as the message of a
+// tea.Cmd) to ask the [Frame] to move focus to a given panel. The framework owns
+// focus truth (the panel border, the Tab cycle), so a plugin that changes its own
+// active-panel state outside the Tab/click paths — e.g. an inline filter that
+// returns focus to a result panel on commit — must request the matching Frame
+// focus through this message or the border and the plugin's nav target diverge.
+// The Frame calls focusManager.Set and, when focus actually moves, echoes a
+// [FocusChangedMsg] back so the plugin's own active-panel tracking stays in sync.
+// An unknown panel ID is ignored.
+type FocusRequestMsg struct {
+	// Panel is the panel the plugin wants focused.
+	Panel PanelID
+}
+
+// OverlayClosedMsg is forwarded to [Plugin.Update] when a CapturesInput overlay
+// the plugin pushed (via PendingOverlay) is dismissed by the framework — e.g.
+// esc closing an inspect modal. The plugin is otherwise never told its overlay
+// was popped (the Frame owns the overlay stack), so without this notification it
+// cannot clear the state that produced the overlay and a later raw key could
+// resurrect a closed view. Only CapturesInput overlays emit this — they are
+// always plugin-pushed; the framework-owned help modal is never capturing and
+// does not notify the plugin (built-ins never reach it).
+type OverlayClosedMsg struct{}
 
 // Plugin is the contract every full-screen surface implements to run inside the
 // [Frame]. The framework owns chrome (borders, status line, overlays, the
@@ -124,4 +172,18 @@ type Plugin interface {
 	// Result returns the plugin's typed outcome, returned UNCHANGED by [Run]
 	// (no wrapper type). Callers type-assert it to the concrete surface's result.
 	Result() any
+
+	// CapturingInput reports whether the plugin is currently taking raw input
+	// WITHOUT an overlay (e.g. an inline filter query line). While it returns
+	// true and no overlay is open, [Frame] suspends registry dispatch and
+	// forwards every key straight to [Plugin.Update], reserving only ctrl+c as a
+	// hard-quit. esc/enter and printable characters all reach the plugin so it
+	// can drive its own capture state machine. Returning false restores the
+	// normal registry-dispatch policy. (Overlay-based capture is a separate
+	// mechanism — see [Overlay.CapturesInput] and [routeWhileCapturing].)
+	//
+	// This is a deliberate Stage 3 contract addition (the first migration
+	// revision the Plugin interface allows): the inline filter is the first real
+	// consumer. Stub/simple plugins return false.
+	CapturingInput() bool
 }

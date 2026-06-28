@@ -35,6 +35,13 @@ type treeModel struct {
 	expanded       map[string]bool
 	focusedID      string
 	visible        []*treeNode
+
+	// topIdx is the index into visible of the first row rendered in the tree
+	// panel. Without it an oversized tree (more group nodes than the panel can
+	// hold) would overflow the bordered frame. The Frame owns geometry now, so
+	// clipping is driven off the inner panel height passed to the renderer —
+	// see ensureFocusVisible / clipToViewport. Ported from *Model.treeTopIdx.
+	topIdx int
 }
 
 // newTreeModel builds the tree from items, applies the initial expansion
@@ -283,6 +290,54 @@ func (tm *treeModel) nearestVisibleAncestor(id string) string {
 		g = groupOf(g)
 	}
 	return ""
+}
+
+// ensureFocusVisible adjusts topIdx so the focused node stays within a
+// viewport of the given height (the inner tree-panel height the Frame supplies).
+// Called after every tree mutation (move / expand / collapse) and on each
+// render so a resize keeps the focused row on screen. Ported from
+// *Model.ensureTreeFocusVisible, driven off the passed height instead of
+// reading layout from a *Model.
+func (tm *treeModel) ensureFocusVisible(height int) {
+	n := len(tm.visible)
+	if n == 0 || height <= 0 {
+		tm.topIdx = 0
+		return
+	}
+	idx := tm.indexOfFocused()
+	if idx < 0 {
+		tm.topIdx = 0
+		return
+	}
+	if idx < tm.topIdx {
+		tm.topIdx = idx
+	} else if idx >= tm.topIdx+height {
+		tm.topIdx = idx - height + 1
+	}
+	maxTop := max(n-height, 0)
+	if tm.topIdx > maxTop {
+		tm.topIdx = maxTop
+	}
+	if tm.topIdx < 0 {
+		tm.topIdx = 0
+	}
+}
+
+// focusRow moves the tree focus to the visible node at the given panel-local
+// row (0-based, relative to the first rendered row at topIdx). Used by
+// single-click mouse handling to move the cursor WITHOUT toggling expansion
+// (Decision 7). A click past the last visible node — empty space below the tree
+// when the panel is taller than the node count — is a no-op rather than snapping
+// the cursor to the final row.
+func (tm *treeModel) focusRow(row int) {
+	if row < 0 {
+		return
+	}
+	idx := tm.topIdx + row
+	if idx >= len(tm.visible) {
+		return
+	}
+	tm.focusedID = tm.visible[idx].id
 }
 
 // itemsForFocus returns the indices of items directly attached to the

@@ -3,10 +3,60 @@ package cmdbrowser
 import (
 	"fmt"
 	"strings"
+
+	"github.com/semsemyonoff/dwe/internal/core/ui/tui"
 )
 
-// renderOpt renders the tree with control over count visibility — Task 4 hides
-// the (N) counts at 80–99 cols per §4.1.
+// treeCountsMinWidth is the minimum inner panel width (cells) at which the tree
+// renders the per-group "(N)" / "M/N" counts. Below it the suffix is dropped so
+// a deep row does not overflow the narrow tree panel.
+//
+// Keyed on the framework INNER width (outer − border − padding), NOT raw
+// terminal width: under the Frame the tree panel takes weight 2 of {2,7}, so at
+// terminal widths 99–100 the tree inner width is 18 and at 80 it is 13. The
+// deepest sample row ("        cs (2)" plus the focus-marker gutter) is exactly
+// 18 cells wide, so 18 is the width at which counts first fit cleanly. The
+// legacy model keyed counts on terminal width ≥ 100; this recomputes the
+// threshold against the inner width the Frame now supplies.
+const treeCountsMinWidth = 18
+
+// renderRegion is the framework entry point: it renders the tree into the inner
+// Region the Frame computed, choosing count visibility from inner.Width and
+// clipping to inner.Height. The filter-aware path is selected when f != nil so
+// callers route both plain and filtered renders through one entry.
+func (tm *treeModel) renderRegion(inner tui.Region, focused bool, f *filterState) string {
+	showCounts := inner.Width >= treeCountsMinWidth
+	var full string
+	if f != nil {
+		full = tm.renderFilter(focused, showCounts, f)
+	} else {
+		full = tm.renderOpt(focused, showCounts)
+	}
+	return tm.clipToViewport(full, inner.Height)
+}
+
+// clipToViewport slices the rendered tree to fit height rows starting at
+// topIdx. The tree renderer emits exactly one line per visible node (no
+// wrapping), so line indices align with tree.visible indices — strings.Split is
+// safe to use as a window. Ported from *Model.clipTreeToViewport, driven off the
+// passed height instead of a *Model's layout.
+func (tm *treeModel) clipToViewport(full string, height int) string {
+	if height <= 0 {
+		// The Frame owns the bordered geometry and passes its inner height; a
+		// zero/negative region (transient during small resizes) must render no
+		// rows rather than overflow the panel with the full tree.
+		return ""
+	}
+	lines := strings.Split(full, "\n")
+	if len(lines) <= height {
+		return full
+	}
+	top := min(max(tm.topIdx, 0), len(lines)-height)
+	return strings.Join(lines[top:top+height], "\n")
+}
+
+// renderOpt renders the tree with control over count visibility — hides
+// the (N) counts at narrow inner widths per §4.1.
 func (tm *treeModel) renderOpt(focused, showCounts bool) string {
 	return tm.renderTree(focused, showCounts, nil)
 }

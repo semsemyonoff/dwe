@@ -11,6 +11,7 @@ import (
 	"github.com/charmbracelet/x/term"
 
 	"github.com/semsemyonoff/dwe/internal/core/ui/widgets"
+	"github.com/semsemyonoff/dwe/internal/shared/i18n"
 )
 
 // run.go is the framework's sole exported entry point this stage. Run owns the
@@ -48,6 +49,13 @@ type RunOptions struct {
 	Brand   string
 	Project string
 	Mouse   bool
+
+	// Translator / Locale resolve the help-modal display strings. A nil
+	// Translator falls back to i18n.NopTranslator (English code-level
+	// fallbacks); an empty Locale falls back to "en". Production callers thread
+	// the resolved rflags.I18n / locale here.
+	Translator i18n.Translator
+	Locale     string
 
 	// test seams (unexported — production callers leave them zero).
 	input  io.Reader
@@ -136,6 +144,8 @@ func Run(p Plugin, opts RunOptions) (result any, err error) {
 		withBrand(opts.Brand),
 		withProject(opts.Project),
 		withMouse(opts.Mouse),
+		withTranslator(opts.Translator),
+		withLocale(opts.Locale),
 	)
 	if err != nil {
 		// Construction error (duplicate action/key, invalid panels) surfaces here,
