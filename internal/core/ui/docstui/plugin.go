@@ -382,8 +382,10 @@ func (b *browser) enterFilter() {
 func (b *browser) updateFilter(msg tea.KeyPressMsg) tea.Cmd {
 	switch msg.Code {
 	case tea.KeyEnter:
-		b.commitFilter()
-		return focusCmd(panelTree)
+		// Commit loads the picked topic; move focus to the viewport so the
+		// user can immediately read it (mirrors the legacy filter Enter path).
+		loadCmd := b.commitFilter()
+		return tea.Batch(loadCmd, focusCmd(panelViewport))
 	case tea.KeyBackspace:
 		if b.Filter != nil {
 			b.Filter.Backspace()
@@ -398,13 +400,15 @@ func (b *browser) updateFilter(msg tea.KeyPressMsg) tea.Cmd {
 	case tea.KeyUp:
 		if b.Tree != nil {
 			b.Tree.MoveUp()
-			b.Tree.ensureFocusVisible(b.treeInner.Height)
+			// Live-preview the match under the cursor (mirrors legacy filter
+			// nav); afterTreeMove keeps the row visible and loads its topic.
+			return b.afterTreeMove()
 		}
 		return nil
 	case tea.KeyDown:
 		if b.Tree != nil {
 			b.Tree.MoveDown()
-			b.Tree.ensureFocusVisible(b.treeInner.Height)
+			return b.afterTreeMove()
 		}
 		return nil
 	}
@@ -426,19 +430,29 @@ func (b *browser) updateFilter(msg tea.KeyPressMsg) tea.Cmd {
 
 // commitFilter ends the filter session keeping the current cursor selection.
 // It expands the cursor's ancestors so the item remains visible in the
-// unfiltered tree after the filter is cleared, then closes the filter.
-func (b *browser) commitFilter() {
+// unfiltered tree after the filter is cleared, closes the filter, re-pins the
+// cursor on the picked node (ApplyFilter may otherwise reset it), and returns
+// the Cmd that loads the picked topic into the viewport.
+func (b *browser) commitFilter() tea.Cmd {
 	if b.Filter == nil {
-		return
+		return nil
 	}
+	var picked *TreeNode
 	if b.Tree != nil {
-		expandAncestors(b.Tree.Cursor())
+		picked = b.Tree.Cursor()
+		expandAncestors(picked)
 	}
 	b.Filter.Close()
 	if b.Tree != nil {
 		b.Tree.ApplyFilter(b.Filter)
+		// ApplyFilter recomputes visibility and may move the cursor; re-pin it
+		// on the captured node before loading so the right topic is shown.
+		if picked != nil {
+			b.Tree.SetCursor(picked)
+		}
 	}
 	b.filterSavedCursor = nil
+	return b.selectCursor()
 }
 
 // exitFilter ends the filter session and restores the cursor to the position

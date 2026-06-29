@@ -750,6 +750,13 @@ func TestBrowser_FilterEnterCommitsAndExpandsAncestors(t *testing.T) {
 	if !slices.Contains(b.Tree.VisibleNodes(), child) {
 		t.Error("child not in visible set after commit — ancestors not expanded")
 	}
+
+	// Commit must also load the picked topic into the viewport (selectCursor),
+	// not just expand ancestors — otherwise the viewport keeps showing the
+	// previously loaded topic until the next arrow keypress.
+	if b.CurrentTopic != child {
+		t.Errorf("CurrentTopic after commit = %v, want picked child node", b.CurrentTopic)
+	}
 }
 
 func TestBrowser_FilterVisibleSetMatchesApplyFilter(t *testing.T) {
