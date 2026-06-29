@@ -110,11 +110,6 @@ func (b *browser) StatusContext() string {
 	return b.StatusBar.View()
 }
 
-// Actions implements tui.Plugin. Stub — action registry wires in Task 5.
-func (b *browser) Actions(_ *tui.Registry) error { return nil }
-
-// HandleAction implements tui.Plugin. Stub — dispatch wires in Task 5.
-func (b *browser) HandleAction(_ tui.Action) (tea.Cmd, bool) { return nil, false }
 
 // PendingOverlay implements tui.Plugin. No overlay for the docs browser yet.
 func (b *browser) PendingOverlay() (tui.Overlay, bool) { return tui.Overlay{}, false }

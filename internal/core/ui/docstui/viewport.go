@@ -49,6 +49,16 @@ func (w *ViewportWidget) ScrollEnd() {
 	w.v.GotoBottom()
 }
 
+// PageUp scrolls the viewport up by one full visible height.
+func (w *ViewportWidget) PageUp() {
+	w.v.PageUp()
+}
+
+// PageDown scrolls the viewport down by one full visible height.
+func (w *ViewportWidget) PageDown() {
+	w.v.PageDown()
+}
+
 func (w *ViewportWidget) View() string {
 	return w.v.View()
 }

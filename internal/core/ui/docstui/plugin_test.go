@@ -163,11 +163,19 @@ func TestBrowser_ActionsNoError(t *testing.T) {
 	}
 }
 
-func TestBrowser_HandleActionReturnsFalse(t *testing.T) {
+func TestBrowser_HandleActionKnownActionReturnsTrue(t *testing.T) {
 	b := newTestBrowser(t)
 	_, handled := b.HandleAction(tui.ActionNavUp)
+	if !handled {
+		t.Errorf("HandleAction(ActionNavUp) handled=false, want true")
+	}
+}
+
+func TestBrowser_HandleActionUnknownReturnsFalse(t *testing.T) {
+	b := newTestBrowser(t)
+	_, handled := b.HandleAction(tui.Action("no.such.action"))
 	if handled {
-		t.Errorf("HandleAction() stub handled=true, want false")
+		t.Errorf("HandleAction(unknown) handled=true, want false")
 	}
 }
 

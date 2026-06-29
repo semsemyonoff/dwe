@@ -352,33 +352,33 @@ and per-topic cancel exactly.
 - Create: `internal/core/ui/docstui/actions_test.go`
 - Remove later (Task 10): `internal/core/ui/docstui/keys.go` (old `key.Binding` keymap)
 
-- [ ] implement `Actions(reg *tui.Registry) error` — `RegisterStandard(reg, ActionNavUp,
+- [x] implement `Actions(reg *tui.Registry) error` — `RegisterStandard(reg, ActionNavUp,
       NavDown, PageUp, PageDown, Top, Bottom, Select, Filter, Reload)` (reload thus = `ctrl+r`),
       then register docs-custom actions: `diagram.prev`(`[`), `diagram.next`(`]`),
       `diagram.open`(`o`), `diagram.copy`(`y`) in a **Diagrams** section; `locale.cycle`(`L`),
       `locale.english`(`e`) in a **Locales** section; `tree.collapse`(`h`/`left`),
       `tree.expand`(`l`/`right`) — surface collision errors before launch
-- [ ] **INTENTIONAL behavior change** (document it as such, do NOT let it slip in silently):
+- [x] **INTENTIONAL behavior change** (document it as such, do NOT let it slip in silently):
       the old docs tree toggled expansion on BOTH `h` and `l` (`model.go:792-799` → both call
       `Tree.Toggle`). The migration adopts cmdbrowser's **directional** semantics for
       cross-surface unification — `h`/`←` collapse (or step to parent when already collapsed),
       `l`/`→` expand (or step into first child when already expanded). Record this in
       `tui-keymap.md` (Task 12) as a deliberate unification change
-- [ ] add an active-panel field to `browser` (default `panelTree`) so `HandleAction` can
+- [x] add an active-panel field to `browser` (default `panelTree`) so `HandleAction` can
       route nav by focus from this task on; the `tui.FocusChangedMsg` handler that *updates*
       it lands in Task 8 (Task 5 tests set the field directly)
-- [ ] implement `HandleAction(a tui.Action) (tea.Cmd, bool)` dispatching each action to the
+- [x] implement `HandleAction(a tui.Action) (tea.Cmd, bool)` dispatching each action to the
       existing behavior, honoring the active-panel field (nav routes to tree vs viewport);
       `enter` → expand/load + focus viewport (emit `tui.FocusRequestMsg{Panel:panelViewport}`
       as a `tea.Cmd`); return `false` for unhandled
-- [ ] confirm `tab`/`shift+tab`/`?`/`q`/`esc`/`ctrl+c` are NOT registered by the plugin (they
+- [x] confirm `tab`/`shift+tab`/`?`/`q`/`esc`/`ctrl+c` are NOT registered by the plugin (they
       are framework built-ins)
-- [ ] write tests: `Actions` registers without collision; `HandleAction` returns handled/cmd
+- [x] write tests: `Actions` registers without collision; `HandleAction` returns handled/cmd
       for each action; nav routing differs by focused panel; reload bound to `ctrl+r`;
       **directional `h`/`l` semantics** (`h` on expanded collapses, `h` on collapsed steps to
       parent; `l` on collapsed expands, `l` on expanded steps into first child) — locking the
       intentional change away from the old toggle-on-both
-- [ ] `make test` — must pass before Task 6
+- [x] `make test` — must pass before Task 6
 
 ### Task 6: Async lifecycle — Init batch, message routing, Close teardown ⚠️ RISKY
 

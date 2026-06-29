@@ -476,6 +476,50 @@ func (tw *TreeWidget) indexOfNode(node *TreeNode) int {
 	return -1
 }
 
+// Collapse implements ←/h directional semantics: if the cursor node is
+// expanded, collapse it; otherwise step the cursor up to its parent. Heading
+// rows are leaves (Expanded is always false) so they always fall through to
+// the "step to parent" branch. Nodes at the root level (no parent above root)
+// are no-ops. Matches cmdbrowser's onLeft semantics.
+func (tw *TreeWidget) Collapse() {
+	node := tw.cursor
+	if node == nil || node.Node == nil {
+		return
+	}
+	// Headings are always "collapsed" (no children, Expanded irrelevant).
+	// Non-heading expandable nodes: collapse if expanded, step to parent otherwise.
+	if node.Heading == nil && node.Expanded {
+		node.Expanded = false
+		tw.recomputeVisible()
+		return
+	}
+	if node.Parent != nil && node.Parent != tw.root {
+		tw.cursor = node.Parent
+	}
+}
+
+// Expand implements →/l directional semantics: if the cursor node is
+// collapsed and has children, expand it; if already expanded, step the
+// cursor into the first child. Heading rows (leaves) and nodes without
+// children are no-ops. Matches cmdbrowser's onRight semantics.
+func (tw *TreeWidget) Expand() {
+	node := tw.cursor
+	if node == nil || node.Node == nil || node.Heading != nil {
+		return
+	}
+	if len(node.Children) == 0 {
+		return
+	}
+	if !node.Expanded {
+		node.Expanded = true
+		tw.recomputeVisible()
+		return
+	}
+	if len(node.Children) > 0 {
+		tw.cursor = node.Children[0]
+	}
+}
+
 // Toggle flips the expanded state of the cursor when it sits on a directory
 // or on a file that has heading sub-rows. Heading rows themselves are leaves
 // and the call is a no-op there.
