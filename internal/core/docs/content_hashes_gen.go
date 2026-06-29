@@ -68,7 +68,7 @@ var ContentHashes = map[string]string{
 	"reference/config/validate.md":             "bc018d43e3ab",
 	"reference/config/vars.md":                 "8de2869f9a1a",
 	"reference/config/workspace.md":            "695578a24636",
-	"reference/docs/browser.md":                "4446f0ddf857",
+	"reference/docs/browser.md":                "ac2cf45dc1f0",
 	"reference/docs/commands.md":               "5b9a43ac6896",
 	"reference/docs/index.md":                  "f186572d07c2",
 	"reference/docs/translations.md":           "29d05642b6a2",

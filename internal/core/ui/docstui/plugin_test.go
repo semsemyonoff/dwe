@@ -899,6 +899,31 @@ func TestBrowser_PanelClickTreeMovesCursor(t *testing.T) {
 	}
 }
 
+func TestBrowser_PanelClickTreeLoadsTopic(t *testing.T) {
+	b := newMultiFileBrowser(t)
+	b.ViewPanel(panelTree, tui.Region{Width: 30, Height: 5})
+
+	visible := b.Tree.VisibleNodes()
+	if len(visible) < 2 {
+		t.Fatal("fixture must expose at least 2 visible tree rows")
+	}
+
+	// Clicking a tree row must follow the same path as keyboard nav
+	// (afterTreeMove → selectCursor): it repositions the cursor AND requests a
+	// topic load. Before the fix the click moved the highlight but dropped the
+	// async load Cmd, leaving the viewport on the previously loaded topic until
+	// the next key press. selectCursor syncs CurrentTopic synchronously, so a
+	// CurrentTopic that tracks the clicked row proves the load path ran.
+	cmd := b.Update(tui.PanelClickMsg{Panel: panelTree, X: 0, Y: 1})
+
+	if b.CurrentTopic != visible[1] {
+		t.Errorf("click did not sync CurrentTopic to the clicked row: got %v, want %v", b.CurrentTopic, visible[1])
+	}
+	if cmd == nil {
+		t.Error("click on an unloaded tree row returned nil Cmd; expected the async topic-load Cmd")
+	}
+}
+
 func TestBrowser_PanelClickTreePastLastRowIsNoop(t *testing.T) {
 	b := newMultiFileBrowser(t)
 	b.ViewPanel(panelTree, tui.Region{Width: 30, Height: 20})

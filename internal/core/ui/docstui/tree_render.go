@@ -11,9 +11,7 @@ import (
 )
 
 // nodeDepth computes the tree depth of node by walking the parent chain. A
-// child of the invisible root (whose Name is "root") is depth 0. Package-level
-// so both the legacy Model.renderTreeRows (view.go) and the new plugin
-// ViewPanel path share the same logic.
+// child of the invisible root (whose Name is "root") is depth 0.
 func nodeDepth(node *TreeNode) int {
 	depth := 0
 	current := node
@@ -58,9 +56,8 @@ func (tw *TreeWidget) clipToViewport(full string, height int) string {
 }
 
 // renderAllRows emits one styled line per visible node (no clipping). Labels
-// are truncated to fit innerWidth. Mirrors the logic in Model.renderTreeRows
-// (view.go) but operates on the TreeWidget's own state so ViewPanel can call
-// it without going through the old Model's geometry fields.
+// are truncated to fit innerWidth. Operates on the TreeWidget's own state so
+// ViewPanel can render without the old Model's geometry fields.
 func (tw *TreeWidget) renderAllRows(innerWidth int, panelFocused bool) string {
 	visible := tw.visible
 	if len(visible) == 0 {

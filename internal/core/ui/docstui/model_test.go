@@ -52,36 +52,8 @@ func (tr *testRenderer) Render(ctx context.Context, src string, theme mermaid.Th
 	return []byte("mermaid output"), nil
 }
 
-func TestFocusSwitching(t *testing.T) {
-	fsys := &testFS{
-		files: map[string]string{
-			"test.md": "test",
-		},
-	}
-
-	roots := []docs.DocRoot{
-		{
-			Name: "dwe",
-			FS:   fsys,
-		},
-	}
-
-	translator := i18n.NopTranslator{}
-	renderer := &testRenderer{}
-
-	m, err := NewModel(context.Background(), roots, "en", translator, renderer, 80, 24, "", "DWE · Documentation", "auto")
-	if err != nil {
-		t.Fatalf("NewModel failed: %v", err)
-	}
-
-	if m.FocusZone != FocusTree {
-		t.Error("Initial focus should be FocusTree")
-	}
-
-	// Simulate Tab key press (switching focus)
-	// Note: actual key handling would need to be tested separately with tea.KeyPressMsg
-	m.FocusZone = FocusViewport
-	if m.FocusZone != FocusViewport {
-		t.Error("Focus should change to FocusViewport")
-	}
-}
+// Focus switching is owned by the tui.Frame and delivered to the plugin via
+// tui.FocusChangedMsg; the live routing is covered by
+// TestBrowser_FocusChangedMsgUpdatesActive and
+// TestBrowser_FocusChangedMsgSwitchesNavRouting in plugin_test.go. The old
+// assignment-only Model.FocusZone tautology was removed.

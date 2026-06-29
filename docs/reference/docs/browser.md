@@ -17,10 +17,11 @@ dwe docs
 | Key | Action |
 |-----|--------|
 | `j` / `↓`, `k` / `↑` | Move down/up |
-| `h` / `←`, `l` / `→` | Collapse/expand folders in the tree |
+| `h` / `←` | Collapse the focused folder, or step to its parent when already collapsed |
+| `l` / `→` | Expand the focused folder, or step into its first child when already expanded |
 | `f` / `PgDn`, `b` / `PgUp` | Page down/up in the content pane |
 | `g`, `G` | Jump to start/end |
-| `Tab` | Switch focus between tree (left) and content (right) |
+| `Tab` / `Shift+Tab` | Cycle focus forward/backward between tree (left) and content (right) |
 | `Enter` | Open a topic |
 | `/` | Filter the tree by substring (case-insensitive match on dir names, file titles, and headings) |
 | `]`, `[` | Jump to next/previous mermaid diagram |
@@ -28,10 +29,20 @@ dwe docs
 | `y` | Copy mermaid source via clipboard (OSC 52) |
 | `L` | Cycle through available languages for the current topic |
 | `e` | Jump to English original (when viewing a translation) |
-| `r` | Reload the current topic (picks up live edits in project docs) |
+| `Ctrl+R` | Reload the current topic (picks up live edits in project docs) |
+| `?` | Toggle a modal listing the keys active in the current mode |
 | `q` / `Esc` / `Ctrl+C` | Quit |
 
-A footer panel renders the full keymap so the bindings are always one glance away.
+Press `?` to open a help modal generated from the bindings active in the current mode — the modal lists exactly the keys above without occupying a permanent footer.
+
+## Mouse
+
+The browser also responds to the mouse:
+
+- **Single-click** a tree row to move the cursor there and focus that pane.
+- **Double-click** a tree row to open it (same as `Enter`).
+- **Wheel** scrolls the focused pane.
+- **Click** the `? help` hint to open the help modal.
 
 ## Layout
 
