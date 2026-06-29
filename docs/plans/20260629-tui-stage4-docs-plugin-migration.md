@@ -526,27 +526,27 @@ and per-topic cancel exactly.
 - Create/Modify: `internal/core/ui/docstui/testdata/` golden frames
 - Modify: any adapted existing tests
 
-- [ ] add golden frame tests rendering the docs plugin via `tui.RenderFrame` /
+- [x] add golden frame tests rendering the docs plugin via `tui.RenderFrame` /
       `tui.BuildHelp` at width buckets **60/79/80/99/100** (odd+even), focused-tree and
       focused-viewport, filter-open, and help-modal-open — mirror
       `cmdbrowser/plugin_golden_test.go`
-- [ ] add regression tests for: mouse routing into tree vs viewport hit-zones;
+- [x] add regression tests for: mouse routing into tree vs viewport hit-zones;
       async-message preservation (FileChangedMsg + ProgressMsg survive the Frame update
       loop); help-modal contents incl. Diagrams/Locales sections; capability fallback
       (non-TTY → `ErrNotTTY`, `<40` → `ErrTooNarrow` mapped)
-- [ ] regenerate goldens deterministically: construct the plugin for golden frames with the
+- [x] regenerate goldens deterministically: construct the plugin for golden frames with the
       watcher + prefetch **disabled/nil (or a frozen prefetch generation)** so the rendered
       frame cannot depend on async worker-pool timing; **force a concrete resolved mermaid
       theme** (override the `auto`→`HasDarkBackground` probe seam — Decision #11) and pin the
       lipgloss colour profile (mirror `cmdbrowser_test.go`'s NoTTY pinning) so glamour
       markdown + width wrapping render identically across environments
-- [ ] **seed an already-loaded/rendered topic at the bucket width before snapshotting** —
+- [x] **seed an already-loaded/rendered topic at the bucket width before snapshotting** —
       `tui.RenderFrame` applies one `WindowSizeMsg` and **discards the returned `tea.Cmd`
       (`testsupport.go:44`), so the async first-load never completes before the snapshot**. Use
       a test helper that synchronously sets the rendered content+indices at the bucket width
       (or manually run the load Cmd and feed the resulting `topicLoadedMsg`), so goldens never
       depend on async first-load; commit `testdata/`
-- [ ] `make test` — must pass before Task 12
+- [x] `make test` — must pass before Task 12
 
 ### Task 12: Update internals documentation
 

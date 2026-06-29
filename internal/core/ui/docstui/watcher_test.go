@@ -7,10 +7,17 @@ import (
 	"testing"
 	"time"
 
+	"charm.land/lipgloss/v2/compat"
+	"github.com/charmbracelet/colorprofile"
 	"go.uber.org/goleak"
 )
 
 func TestMain(m *testing.M) {
+	// Pin the lipgloss/v2 colour profile to NoTTY so View() output is
+	// byte-identical across local + CI regardless of TERM / COLORTERM env.
+	// Without this, snapshot assertions and ANSI-escape checks would be
+	// non-deterministic.
+	compat.Profile = colorprofile.NoTTY
 	goleak.VerifyTestMain(m)
 }
 
