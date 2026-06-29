@@ -278,23 +278,23 @@ and per-topic cancel exactly.
 - Create: `internal/core/ui/docstui/plugin_test.go`
 - Modify: `internal/core/ui/docstui/model.go` (expose state the plugin reuses)
 
-- [ ] define a **separate** `type browser struct` implementing `tui.Plugin` that **reuses
+- [x] define a **separate** `type browser struct` implementing `tui.Plugin` that **reuses
       `Model`'s data fields** (embed or hold a `*Model` for its Tree/Viewport/Filter/
       DiagramState/heading-index/loaded-topic state). **Do NOT rename `Model`→`browser` and do
       NOT delete/alter the old `Model.Init`/`Update`/`View`/`quit`** — they stay untouched and
       compilable through the Task 6–9 coexistence window and are removed only in Task 10
       (mirrors how cmdbrowser kept a distinct `browser` and deleted `model.go` last)
-- [ ] implement `Panels()` → `[]tui.Panel{{ID:"tree",Title:"Contents",Weight:1},
+- [x] implement `Panels()` → `[]tui.Panel{{ID:"tree",Title:"Contents",Weight:1},
       {ID:"viewport",Title:"",Weight:5}}`; define `panelTree`/`panelViewport` `tui.PanelID`
       consts (mirror cmdbrowser)
-- [ ] implement trivial contract methods: `Resize(body tui.Region)` (cache inner body size),
+- [x] implement trivial contract methods: `Resize(body tui.Region)` (cache inner body size),
       `Result() any` (nil), `CapturingInput() bool` (false for now), `PendingOverlay()`
       (none for now), `StatusContext()` (stub), `Actions`/`HandleAction` (empty for now),
       `Init`/`Close`/`Update`/`ViewPanel` (minimal stubs that compile)
-- [ ] add a compile-time assertion `var _ tui.Plugin = (*browser)(nil)`
-- [ ] write tests: `Panels()` shape (ids/weights), `Result()` nil, `CapturingInput()` false,
+- [x] add a compile-time assertion `var _ tui.Plugin = (*browser)(nil)`
+- [x] write tests: `Panels()` shape (ids/weights), `Result()` nil, `CapturingInput()` false,
       plugin satisfies `tui.Plugin`
-- [ ] `make test` — must pass before Task 3
+- [x] `make test` — must pass before Task 3
 
 ### Task 3: Tree panel render + Frame-facing tree surface (mirror cmdbrowser)
 
