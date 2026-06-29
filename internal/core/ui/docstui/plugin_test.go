@@ -2,6 +2,7 @@ package docstui
 
 import (
 	"context"
+	"strings"
 	"testing"
 
 	"github.com/semsemyonoff/dwe/internal/core/docs"
@@ -189,4 +190,119 @@ func TestBrowser_SatisfiesPlugin(t *testing.T) {
 	// compile-time assert does not silently uncover this.
 	b := newTestBrowser(t)
 	var _ tui.Plugin = b
+}
+
+// --- Task 4: viewport panel render ---
+
+// tallContent returns a long string that exceeds any normal panel height so
+// the scrollbar logic activates. Each line is a fixed-width prose line.
+func tallContent(lines int) string {
+	var sb strings.Builder
+	for range lines {
+		sb.WriteString("Lorem ipsum dolor sit amet, consectetur adipiscing elit.\n")
+	}
+	return sb.String()
+}
+
+func TestBrowser_ViewPanelViewport_SizesViewport(t *testing.T) {
+	b := newTestBrowser(t)
+	b.Viewport.SetContent("Hello viewport\n")
+	inner := tui.Region{X: 0, Y: 0, Width: 60, Height: 10}
+	result := b.ViewPanel(panelViewport, inner)
+	if b.viewportInner != inner {
+		t.Errorf("viewportInner not cached: got %+v, want %+v", b.viewportInner, inner)
+	}
+	// Result should be non-empty (has at least one content line).
+	if result == "" {
+		t.Error("ViewPanel(viewport) returned empty string for non-empty content")
+	}
+	// Viewport display height should match the inner height.
+	if b.Viewport.VisibleHeight() != inner.Height {
+		t.Errorf("Viewport.VisibleHeight() = %d, want %d", b.Viewport.VisibleHeight(), inner.Height)
+	}
+}
+
+func TestBrowser_ViewPanelViewport_ScrollbarPresentForTallContent(t *testing.T) {
+	b := newTestBrowser(t)
+	b.Viewport.SetContent(tallContent(200))
+	inner := tui.Region{Width: 60, Height: 10}
+	result := b.ViewPanel(panelViewport, inner)
+	if b.Viewport.TotalLines() <= b.Viewport.VisibleHeight() {
+		t.Skip("content not tall enough to trigger scrollbar")
+	}
+	if !strings.Contains(result, scrollbarThumbGlyph) {
+		t.Error("expected scrollbar thumb in viewport panel for tall content")
+	}
+}
+
+func TestBrowser_ViewPanelViewport_ScrollbarAbsentForShortContent(t *testing.T) {
+	b := newTestBrowser(t)
+	b.Viewport.SetContent("One line.\n")
+	inner := tui.Region{Width: 60, Height: 10}
+	result := b.ViewPanel(panelViewport, inner)
+	if strings.Contains(result, scrollbarThumbGlyph) {
+		t.Error("did not expect scrollbar thumb when content fits in panel")
+	}
+}
+
+func TestBrowser_ViewPanelViewport_ResizePreservesYOffset(t *testing.T) {
+	b := newTestBrowser(t)
+	b.Viewport.SetContent(tallContent(200))
+	inner := tui.Region{Width: 60, Height: 10}
+	b.ViewPanel(panelViewport, inner)
+
+	// Scroll to a non-zero offset.
+	b.Viewport.ScrollToLine(30)
+	wantOffset := b.Viewport.YOffset()
+	wantLoadGen := b.loadGen
+
+	// Resize: call ViewPanel with a different inner width.
+	inner2 := tui.Region{Width: 80, Height: 10}
+	b.ViewPanel(panelViewport, inner2)
+
+	// YOffset must be preserved (resize only changes display window, not content).
+	if got := b.Viewport.YOffset(); got != wantOffset {
+		t.Errorf("resize changed YOffset: got %d, want %d", got, wantOffset)
+	}
+	// loadGen must not have changed (no topic reload triggered by resize).
+	if b.loadGen != wantLoadGen {
+		t.Errorf("resize triggered a content reload: loadGen changed from %d to %d", wantLoadGen, b.loadGen)
+	}
+}
+
+func TestBrowser_ViewPanelViewport_DiagramPlaceholderVisible(t *testing.T) {
+	b := newTestBrowser(t)
+	// Simulate content with an already-inlined diagram placeholder (as set by
+	// applyTopicLoaded → inlineDiagrams → SetContent).
+	placeholder := "<📊 Diagram 1/1 — rendering…>"
+	b.Viewport.SetContent("Before\n" + placeholder + "\nAfter\n")
+	inner := tui.Region{Width: 60, Height: 10}
+	result := b.ViewPanel(panelViewport, inner)
+	if !strings.Contains(result, "📊") {
+		t.Errorf("diagram placeholder not found in viewport panel output; got: %q", result)
+	}
+}
+
+func TestBrowser_ViewPanelViewport_HeadingLinesIntact(t *testing.T) {
+	b := newTestBrowser(t)
+	// Pre-set heading-line indices as applyTopicLoaded would.
+	b.currentHeadingLines = []int{5, 20, 40}
+	inner := tui.Region{Width: 60, Height: 10}
+	b.ViewPanel(panelViewport, inner)
+	// ViewPanel must not touch currentHeadingLines.
+	if len(b.currentHeadingLines) != 3 ||
+		b.currentHeadingLines[0] != 5 ||
+		b.currentHeadingLines[1] != 20 ||
+		b.currentHeadingLines[2] != 40 {
+		t.Errorf("ViewPanel mutated currentHeadingLines: %v", b.currentHeadingLines)
+	}
+}
+
+func TestBrowser_ViewPanelViewport_NilViewport(t *testing.T) {
+	b := newTestBrowser(t)
+	b.Viewport = nil
+	inner := tui.Region{Width: 60, Height: 10}
+	if got := b.ViewPanel(panelViewport, inner); got != "" {
+		t.Errorf("ViewPanel with nil Viewport = %q, want empty string", got)
+	}
 }

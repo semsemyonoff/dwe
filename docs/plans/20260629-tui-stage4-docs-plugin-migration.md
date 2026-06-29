@@ -325,24 +325,24 @@ and per-topic cancel exactly.
   ViewPanel)
 - Modify: `internal/core/ui/docstui/scroll_test.go`
 
-- [ ] implement `ViewPanel(panelViewport, inner)` — render the markdown viewport content
+- [x] implement `ViewPanel(panelViewport, inner)` — render the markdown viewport content
       into `inner`, including the existing scrollbar overdraw, diagram-inline placeholders,
       and heading-anchor-aware content; size the viewport to `inner` (no border)
-- [ ] size the viewport widget to the panel `inner` region **inside `ViewPanel(panelViewport,
+- [x] size the viewport widget to the panel `inner` region **inside `ViewPanel(panelViewport,
       inner)`** every render (`Viewport.SetDimensions(inner.Width, inner.Height)` — cmdbrowser
       pattern), dropping the old `viewportInnerWidth/Height` chrome math
-- [ ] **do NOT re-render markdown on resize** (Decision #10): a resize only resizes the
+- [x] **do NOT re-render markdown on resize** (Decision #10): a resize only resizes the
       viewport *window*; the hard-wrapped content stays at its render width and re-renders only
       on the next load event (topic switch / reload / FileChanged / locale) — exactly the old
       `WindowSizeMsg` handler (`model.go:630-637`). This preserves `YOffset` (no reload) and
       avoids a drag-resize render storm
-- [ ] preserve diagram active-index sync on scroll (`syncActiveDiagram`) and heading line
+- [x] preserve diagram active-index sync on scroll (`syncActiveDiagram`) and heading line
       index usage
-- [ ] write/adapt tests: viewport content renders at given inner dims; scrollbar present;
+- [x] write/adapt tests: viewport content renders at given inner dims; scrollbar present;
       diagram placeholder lines appear; heading-line index intact (adapt `scroll_test.go`);
       **a resize to a new width does NOT trigger a reload and preserves `YOffset`** (window
       resizes, content width unchanged until the next load)
-- [ ] `make test` — must pass before Task 5
+- [x] `make test` — must pass before Task 5
 
 ### Task 5: Action registry + `HandleAction` (keymap mapping)
 

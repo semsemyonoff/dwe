@@ -1,8 +1,12 @@
 package docstui
 
 import (
-	tea "charm.land/bubbletea/v2"
+	"strings"
 
+	tea "charm.land/bubbletea/v2"
+	"charm.land/lipgloss/v2"
+
+	"github.com/semsemyonoff/dwe/internal/core/ui/styles"
 	"github.com/semsemyonoff/dwe/internal/core/ui/tui"
 	"github.com/semsemyonoff/dwe/internal/shared/i18n"
 )
@@ -119,7 +123,7 @@ func (b *browser) PendingOverlay() (tui.Overlay, bool) { return tui.Overlay{}, f
 func (b *browser) Update(_ tea.Msg) tea.Cmd { return nil }
 
 // ViewPanel implements tui.Plugin. Caches the per-panel inner region and
-// renders the panel body. Tree render wired in Task 3; viewport render in Task 4.
+// renders the panel body. Tree render wired in Task 3; viewport render here.
 func (b *browser) ViewPanel(id tui.PanelID, inner tui.Region) string {
 	switch id {
 	case panelTree:
@@ -132,6 +136,78 @@ func (b *browser) ViewPanel(id tui.PanelID, inner tui.Region) string {
 		return b.Tree.renderRegion(inner, b.active == panelTree)
 	case panelViewport:
 		b.viewportInner = inner
+		if b.Model == nil || b.Viewport == nil {
+			return ""
+		}
+		// Size the display window to the panel inner region every render. This
+		// does NOT re-render the glamour content (content width is fixed at load
+		// time per Decision #10 — resize only resizes the window). Mirrors
+		// cmdbrowser's viewList sizing pattern.
+		b.Viewport.SetDimensions(inner.Width, inner.Height)
+		content := b.Viewport.View()
+		return b.applyInnerScrollbar(content, inner.Height)
+	}
+	return ""
+}
+
+// applyInnerScrollbar overdraws the rightmost character column of the inner
+// viewport panel string with a proportional scrollbar thumb/track. This mirrors
+// the old applyViewportScrollbar (view.go) but operates on border-free inner
+// content: the Frame owns the border, so the scrollbar column is carved out of
+// the inner width instead of overwriting a border rune. Returns content
+// unchanged when the whole document fits in the visible area.
+func (b *browser) applyInnerScrollbar(content string, h int) string {
+	if b.Viewport == nil {
+		return content
+	}
+	total := b.Viewport.TotalLines()
+	if h <= 0 || total <= h {
+		return content
+	}
+
+	thumbSize := max(h*h/total, 1)
+	thumbSize = min(thumbSize, h)
+	maxStart := h - thumbSize
+	thumbStart := 0
+	if denom := total - h; denom > 0 {
+		thumbStart = min(b.Viewport.YOffset()*maxStart/denom, maxStart)
+	}
+
+	thumb := lipgloss.NewStyle().Foreground(lipgloss.Color(styles.ColorAccent())).Bold(true).Render(scrollbarThumbGlyph)
+	track := lipgloss.NewStyle().Foreground(lipgloss.Color(styles.ColorMuted())).Render(scrollbarTrackGlyph)
+
+	w := b.viewportInner.Width
+	lines := strings.Split(content, "\n")
+	n := min(h, len(lines))
+	for i := range n {
+		glyph := track
+		if i >= thumbStart && i < thumbStart+thumbSize {
+			glyph = thumb
+		}
+		lw := lipgloss.Width(lines[i])
+		switch {
+		case lw < w-1:
+			lines[i] += strings.Repeat(" ", (w-1)-lw)
+		case lw >= w:
+			// Truncate to make room for the scrollbar glyph.
+			lines[i] = scrollbarClip(lines[i], w-1)
+		}
+		lines[i] += glyph
+	}
+	return strings.Join(lines, "\n")
+}
+
+// scrollbarClip truncates s to at most width display cells without appending
+// an ellipsis. Used by applyInnerScrollbar to make room for the scrollbar glyph.
+func scrollbarClip(s string, width int) string {
+	if lipgloss.Width(s) <= width {
+		return s
+	}
+	runes := []rune(s)
+	for i := len(runes) - 1; i >= 0; i-- {
+		if lipgloss.Width(string(runes[:i])) <= width {
+			return string(runes[:i])
+		}
 	}
 	return ""
 }
