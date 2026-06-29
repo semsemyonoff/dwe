@@ -952,3 +952,165 @@ func TestBrowser_PanelClickWhileFilteringIsNoop(t *testing.T) {
 		t.Errorf("PanelClickMsg while filter active moved cursor; want no-op")
 	}
 }
+
+// --- Task 9: StatusContext + i18n keys ---
+
+func TestBrowser_StatusContextEmptyWhenNilStatusBar(t *testing.T) {
+	b := newTestBrowser(t)
+	b.StatusBar = nil
+	if got := b.StatusContext(); got != "" {
+		t.Errorf("StatusContext() with nil StatusBar = %q, want empty string", got)
+	}
+}
+
+func TestBrowser_StatusContextEmptyWhenNilModel(t *testing.T) {
+	b := &browser{} // zero value: Model is nil
+	if got := b.StatusContext(); got != "" {
+		t.Errorf("StatusContext() with nil Model = %q, want empty string", got)
+	}
+}
+
+func TestBrowser_StatusContextPath(t *testing.T) {
+	b := newTestBrowser(t)
+	b.StatusBar.SetPath("reference/config/workspace.md")
+	got := b.StatusContext()
+	if !strings.Contains(got, "reference/config/workspace.md") {
+		t.Errorf("StatusContext() = %q, expected to contain path", got)
+	}
+}
+
+func TestBrowser_StatusContextProgress(t *testing.T) {
+	b := newTestBrowser(t)
+	b.StatusBar.SetPath("some/path.md")
+	b.StatusBar.SetProgress(3, 7)
+	got := b.StatusContext()
+	if !strings.Contains(got, "3/7") {
+		t.Errorf("StatusContext() = %q, expected to contain progress '3/7'", got)
+	}
+	if !strings.Contains(got, "📊") {
+		t.Errorf("StatusContext() = %q, expected to contain diagram icon", got)
+	}
+}
+
+func TestBrowser_StatusContextLang(t *testing.T) {
+	b := newTestBrowser(t)
+	b.StatusBar.SetLanguage("ru")
+	got := b.StatusContext()
+	if !strings.Contains(got, "[ru]") {
+		t.Errorf("StatusContext() = %q, expected to contain '[ru]'", got)
+	}
+}
+
+func TestBrowser_StatusContextFull(t *testing.T) {
+	b := newTestBrowser(t)
+	b.StatusBar.SetPath("guides/getting-started.md")
+	b.StatusBar.SetProgress(2, 5)
+	b.StatusBar.SetLanguage("en")
+	got := b.StatusContext()
+	for _, want := range []string{"guides/getting-started.md", "2/5", "📊", "[en]"} {
+		if !strings.Contains(got, want) {
+			t.Errorf("StatusContext() = %q, missing %q", got, want)
+		}
+	}
+}
+
+func TestBrowser_BuildHelp_ContainsDiagramsSection(t *testing.T) {
+	b := newTestBrowser(t)
+	store, err := i18n.Load("")
+	if err != nil {
+		t.Fatalf("i18n.Load: %v", err)
+	}
+	ov, err := tui.BuildHelp(b, store, "en", 100, 40)
+	if err != nil {
+		t.Fatalf("BuildHelp: %v", err)
+	}
+	plain := stripANSI(ov.Content)
+	if !strings.Contains(plain, "Diagrams") {
+		t.Errorf("BuildHelp output missing 'Diagrams' section:\n%s", plain)
+	}
+}
+
+func TestBrowser_BuildHelp_ContainsLocalesSection(t *testing.T) {
+	b := newTestBrowser(t)
+	store, err := i18n.Load("")
+	if err != nil {
+		t.Fatalf("i18n.Load: %v", err)
+	}
+	ov, err := tui.BuildHelp(b, store, "en", 100, 40)
+	if err != nil {
+		t.Fatalf("BuildHelp: %v", err)
+	}
+	plain := stripANSI(ov.Content)
+	if !strings.Contains(plain, "Locales") {
+		t.Errorf("BuildHelp output missing 'Locales' section:\n%s", plain)
+	}
+}
+
+func TestBrowser_BuildHelp_ContainsNavigationSection(t *testing.T) {
+	b := newTestBrowser(t)
+	store, err := i18n.Load("")
+	if err != nil {
+		t.Fatalf("i18n.Load: %v", err)
+	}
+	ov, err := tui.BuildHelp(b, store, "en", 100, 40)
+	if err != nil {
+		t.Fatalf("BuildHelp: %v", err)
+	}
+	plain := stripANSI(ov.Content)
+	if !strings.Contains(plain, "Navigation") {
+		t.Errorf("BuildHelp output missing 'Navigation' section:\n%s", plain)
+	}
+}
+
+func TestBrowser_BuildHelp_DiagramActionsPresent(t *testing.T) {
+	b := newTestBrowser(t)
+	store, err := i18n.Load("")
+	if err != nil {
+		t.Fatalf("i18n.Load: %v", err)
+	}
+	ov, err := tui.BuildHelp(b, store, "en", 100, 40)
+	if err != nil {
+		t.Fatalf("BuildHelp: %v", err)
+	}
+	plain := stripANSI(ov.Content)
+	for _, want := range []string{"Previous diagram", "Next diagram", "Open diagram", "Copy diagram source"} {
+		if !strings.Contains(plain, want) {
+			t.Errorf("BuildHelp output missing diagram action %q:\n%s", want, plain)
+		}
+	}
+}
+
+func TestBrowser_BuildHelp_LocaleActionsPresent(t *testing.T) {
+	b := newTestBrowser(t)
+	store, err := i18n.Load("")
+	if err != nil {
+		t.Fatalf("i18n.Load: %v", err)
+	}
+	ov, err := tui.BuildHelp(b, store, "en", 100, 40)
+	if err != nil {
+		t.Fatalf("BuildHelp: %v", err)
+	}
+	plain := stripANSI(ov.Content)
+	for _, want := range []string{"Cycle language", "Show English"} {
+		if !strings.Contains(plain, want) {
+			t.Errorf("BuildHelp output missing locale action %q:\n%s", want, plain)
+		}
+	}
+}
+
+func TestBrowser_BuildHelp_NopTranslatorFallsBackToEnglish(t *testing.T) {
+	b := newTestBrowser(t)
+	// NopTranslator always returns the fallback (English Binding.Desc values).
+	ov, err := tui.BuildHelp(b, i18n.NopTranslator{}, "en", 100, 40)
+	if err != nil {
+		t.Fatalf("BuildHelp with NopTranslator: %v", err)
+	}
+	plain := stripANSI(ov.Content)
+	// Section labels fall back to English names (the fallback arg to T).
+	if !strings.Contains(plain, "Diagrams") {
+		t.Errorf("BuildHelp/NopTranslator missing 'Diagrams' fallback:\n%s", plain)
+	}
+	if !strings.Contains(plain, "Locales") {
+		t.Errorf("BuildHelp/NopTranslator missing 'Locales' fallback:\n%s", plain)
+	}
+}

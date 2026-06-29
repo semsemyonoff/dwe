@@ -173,15 +173,14 @@ func (b *browser) CapturingInput() bool {
 func (b *browser) Result() any { return nil }
 
 // StatusContext implements tui.Plugin. Returns the middle-zone status string:
-// current path + 📊 N/M diagram progress + [lang]. Stub delegates to the
-// existing StatusBarWidget; full threading wires in Task 9.
+// current path + 📊 N/M diagram progress + [lang]. Called every render so the
+// content is reactive (StatusBar is updated by applyTopicLoaded and ProgressMsg).
 func (b *browser) StatusContext() string {
 	if b.Model == nil || b.StatusBar == nil {
 		return ""
 	}
 	return b.StatusBar.View()
 }
-
 
 // PendingOverlay implements tui.Plugin. No overlay for the docs browser yet.
 func (b *browser) PendingOverlay() (tui.Overlay, bool) { return tui.Overlay{}, false }

@@ -462,16 +462,16 @@ and per-topic cancel exactly.
   `KnownUIKeys` allowlist
 - Modify: `internal/core/ui/docstui/plugin_test.go` / i18n test
 
-- [ ] implement `StatusContext()` returning the middle-zone string: current path + 📊 N/M
+- [x] implement `StatusContext()` returning the middle-zone string: current path + 📊 N/M
       diagram progress + `[lang]` (port the old status-line content; drop brand/help — Frame
       owns those)
-- [ ] add `tui.help.*` i18n keys for the Diagrams/Locales section labels and docs action
+- [x] add `tui.help.*` i18n keys for the Diagrams/Locales section labels and docs action
       descriptions; add them to the `KnownUIKeys` allowlist; thread `Translator`/`Locale`
       from the constructor into the registry/help (mirror cmdbrowser i18n threading)
-- [ ] keep storage/hashing English; only display strings localize
-- [ ] write tests: `StatusContext()` content (path/progress/lang); i18n keys resolve (en
+- [x] keep storage/hashing English; only display strings localize
+- [x] write tests: `StatusContext()` content (path/progress/lang); i18n keys resolve (en
       fallback) and appear in `tui.BuildHelp` output for the docs sections
-- [ ] `make test` — must pass before Task 10
+- [x] `make test` — must pass before Task 10
 
 ### Task 10: `docstui.Run` + rewire caller + delete old chrome
 
