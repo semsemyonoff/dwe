@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"path/filepath"
+	"slices"
 	"strings"
 
 	tea "charm.land/bubbletea/v2"
@@ -54,7 +55,7 @@ type browser struct {
 	// derived from the context passed to newBrowser (and in Task 10, from
 	// docstui.Run). Close() calls cancel() to stop any future browser-scoped
 	// operations.
-	ctx    context.Context    //nolint:containedctx
+	ctx    context.Context //nolint:containedctx
 	cancel context.CancelFunc
 
 	// firstLoadDone guards the one-shot initial topic load that fires from
@@ -100,10 +101,10 @@ func newBrowser(ctx context.Context, m *Model) *browser {
 // subtracts 4 cells (2 × (borderSize:1 + hPadding:1)) per side.
 func viewportPanelInnerWidth(termW int) int {
 	const (
-		treeW   = 1
-		vpW     = 5
-		totalW  = treeW + vpW
-		chrome  = 4 // 2*(borderSize+hPadding) = 2*(1+1), see tui/geometry.go
+		treeW  = 1
+		vpW    = 5
+		totalW = treeW + vpW
+		chrome = 4 // 2*(borderSize+hPadding) = 2*(1+1), see tui/geometry.go
 	)
 	treeOuter := termW * treeW / totalW // proportional floor
 	vpOuter := termW - treeOuter        // remainder (last panel absorbs)
@@ -412,7 +413,7 @@ func (b *browser) updateFilter(msg tea.KeyPressMsg) tea.Cmd {
 	// as actions — while capturing, characters type into the search line).
 	if t := msg.Text; t != "" && isPrintable(t) {
 		if b.Filter != nil {
-			for _, r := range []rune(t) {
+			for _, r := range t {
 				b.Filter.Append(r)
 			}
 			if b.Tree != nil {
@@ -547,7 +548,7 @@ func scrollbarClip(s string, width int) string {
 		return s
 	}
 	runes := []rune(s)
-	for i := len(runes) - 1; i >= 0; i-- {
+	for i := range slices.Backward(runes) {
 		if lipgloss.Width(string(runes[:i])) <= width {
 			return string(runes[:i])
 		}

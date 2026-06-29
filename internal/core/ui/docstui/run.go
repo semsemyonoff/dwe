@@ -37,9 +37,7 @@ var mermaidThemeResolverFn = resolveMermaidTheme
 // runDocsTUI is the package-level seam through which Run drives the tui
 // framework. Tests swap it to exercise error-mapping paths without a real
 // terminal; production uses tui.Run.
-var runDocsTUI = func(p tui.Plugin, opts tui.RunOptions) (any, error) {
-	return tui.Run(p, opts)
-}
+var runDocsTUI = tui.Run
 
 // Run launches the docs browser as a tui.Plugin on the shared framework Frame.
 // It returns:

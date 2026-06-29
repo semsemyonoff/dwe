@@ -38,7 +38,7 @@ func (ds *DiagramState) Prev() {
 	ds.Current = (ds.Current - 1 + len(ds.Diagrams)) % len(ds.Diagrams)
 }
 
-// Current returns the current diagram, or nil if none.
+// CurrentDiagram returns the current diagram, or nil if none.
 func (ds *DiagramState) CurrentDiagram() *render.DiagramRef {
 	if ds.Current < 0 || ds.Current >= len(ds.Diagrams) {
 		return nil

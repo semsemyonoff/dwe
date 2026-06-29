@@ -566,15 +566,18 @@ and per-topic cancel exactly.
 
 ### Task 13: Verify acceptance criteria
 
-- [ ] docs browser behaves identically: live-reload (watcher), prefetch diagram progress,
+- [x] docs browser behaves identically: live-reload (watcher), prefetch diagram progress,
       filter, locale cycling, diagram open/copy, heading navigation, scroll — all preserved
-- [ ] redesigned chrome present: bottom status line, `?`-modal help, project-styled borders,
+      (manual test skipped — verified by unit/golden tests; production smoke-test is Post-Completion)
+- [x] redesigned chrome present: bottom status line, `?`-modal help, project-styled borders,
       mouse (wheel + click)
-- [ ] `cli/docs/docs.go` routes through `docstui.Run(ctx, opts)`; `core/docs` has no
+      (manual test skipped — verified by golden frame tests)
+- [x] `cli/docs/docs.go` routes through `docstui.Run(ctx, opts)`; `core/docs` has no
       `core/ui` import (`grep -rn "core/ui" internal/core/docs/` is empty)
-- [ ] run full suite: `make test` (and `make build` first for embedded docs)
-- [ ] run `make lint` — clean
-- [ ] verify golden tests cover all five width buckets and the help/filter/focus states
+- [x] run full suite: `make test` (and `make build` first for embedded docs)
+- [x] run `make lint` — clean (fixed: gofmt alignment, gocritic unlambda, modernize slices,
+      staticcheck SA6003, revive missing comments)
+- [x] verify golden tests cover all five width buckets and the help/filter/focus states
 
 ### Task 14: Finalize documentation + archive plan
 

@@ -15,6 +15,9 @@ import (
 	"github.com/semsemyonoff/dwe/internal/shared/i18n"
 )
 
+// Model holds the docs browser's internal state. It is embedded in browser to
+// share Tree/Viewport/Filter/DiagramState/heading-index/loaded-topic fields
+// between the legacy standalone path and the plugin path.
 type Model struct {
 	// TUI state
 	Tree       *TreeWidget
@@ -104,13 +107,16 @@ type Model struct {
 	ctx context.Context
 }
 
+// FocusZone identifies which panel of the standalone docs model has keyboard focus.
 type FocusZone int
 
+// Focus zone values: tree panel or viewport panel.
 const (
 	FocusTree FocusZone = iota
 	FocusViewport
 )
 
+// NewModel constructs the standalone docs browser model used by the docstui.Run path.
 func NewModel(ctx context.Context, roots []docs.DocRoot, locale string, translator i18n.Translator, renderer mermaid.Renderer, termWidth, termHeight int, projectRoot, title, mermaidTheme string) (*Model, error) {
 	treeWidget, err := NewTreeWidget(roots, locale)
 	if err != nil {
@@ -385,7 +391,6 @@ func (m *Model) applyLocaleChange() tea.Cmd {
 	return cmd
 }
 
-
 // selectCursor handles tree cursor movement: loads the file backing the
 // current row (or, for heading rows, the parent file) and scrolls the
 // viewport to the heading when applicable. Directory rows just update
@@ -507,4 +512,3 @@ func waitForProgress(ch <-chan ProgressMsg) tea.Cmd {
 		return msg
 	}
 }
-

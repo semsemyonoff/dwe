@@ -7,6 +7,8 @@ import (
 	"github.com/semsemyonoff/dwe/internal/core/docs"
 )
 
+// TreeNode is a node in the docs browser navigation tree. It represents a file,
+// directory, or heading row in the tree panel.
 type TreeNode struct {
 	Node     *docs.Node
 	Expanded bool
@@ -29,6 +31,8 @@ type TreeNode struct {
 	IndexNode *docs.Node
 }
 
+// TreeWidget manages the navigation tree for the docs browser, including
+// the visible set, cursor position, filter state, and scroll offset.
 type TreeWidget struct {
 	roots   []docs.DocRoot
 	locale  string // Locale used to pick per-file title/headings (with English fallback).
@@ -115,6 +119,7 @@ func projectDweForTUI(children []*docs.Node) []*docs.Node {
 	return out
 }
 
+// NewTreeWidget builds a navigation tree from the given doc roots and locale.
 func NewTreeWidget(roots []docs.DocRoot, locale string) (*TreeWidget, error) {
 	tw := &TreeWidget{roots: roots, locale: locale}
 	if err := tw.rebuild(); err != nil {
@@ -425,16 +430,19 @@ func nodeLabel(node *TreeNode) string {
 	return node.Node.Name
 }
 
+// Cursor returns the currently focused tree node.
 func (tw *TreeWidget) Cursor() *TreeNode {
 	return tw.cursor
 }
 
+// SetCursor moves the cursor to the given node.
 func (tw *TreeWidget) SetCursor(node *TreeNode) {
 	if node != nil {
 		tw.cursor = node
 	}
 }
 
+// MoveUp moves the cursor one row up in the visible tree.
 func (tw *TreeWidget) MoveUp() {
 	if tw.cursor == nil {
 		return
@@ -445,6 +453,7 @@ func (tw *TreeWidget) MoveUp() {
 	}
 }
 
+// MoveDown moves the cursor one row down in the visible tree.
 func (tw *TreeWidget) MoveDown() {
 	if tw.cursor == nil {
 		return
@@ -455,12 +464,14 @@ func (tw *TreeWidget) MoveDown() {
 	}
 }
 
+// MoveStart moves the cursor to the first visible row.
 func (tw *TreeWidget) MoveStart() {
 	if len(tw.visible) > 0 {
 		tw.cursor = tw.visible[0]
 	}
 }
 
+// MoveEnd moves the cursor to the last visible row.
 func (tw *TreeWidget) MoveEnd() {
 	if len(tw.visible) > 0 {
 		tw.cursor = tw.visible[len(tw.visible)-1]
@@ -537,10 +548,12 @@ func (tw *TreeWidget) Toggle() {
 	tw.recomputeVisible()
 }
 
+// VisibleNodes returns the slice of currently visible tree rows.
 func (tw *TreeWidget) VisibleNodes() []*TreeNode {
 	return tw.visible
 }
 
+// GetPath returns the file path for the given node, or empty string for nil/dir.
 func (tw *TreeWidget) GetPath(node *TreeNode) string {
 	if node == nil || node.Node == nil {
 		return ""
@@ -548,6 +561,7 @@ func (tw *TreeWidget) GetPath(node *TreeNode) string {
 	return node.Node.Path
 }
 
+// IsDir reports whether node represents a directory.
 func (tw *TreeWidget) IsDir(node *TreeNode) bool {
 	if node == nil || node.Node == nil {
 		return false
@@ -555,6 +569,7 @@ func (tw *TreeWidget) IsDir(node *TreeNode) bool {
 	return node.Node.IsDir
 }
 
+// GetName returns the display name of node.
 func (tw *TreeWidget) GetName(node *TreeNode) string {
 	if node == nil || node.Node == nil {
 		return ""

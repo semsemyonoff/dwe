@@ -54,6 +54,7 @@ type Prefetch struct {
 	topicCancel context.CancelFunc
 }
 
+// MaxPrefetchWorkers is the bounded concurrency cap for diagram prefetch goroutines.
 const MaxPrefetchWorkers = 2
 
 // NewPrefetch creates a new prefetch manager with a bounded worker pool.

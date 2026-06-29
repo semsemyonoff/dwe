@@ -60,9 +60,9 @@ func newGoldenBrowser(t *testing.T, termW, termH int) *browser {
 		roots,
 		"en",
 		i18n.NopTranslator{},
-		nil,    // nil renderer → no Lookuper → no prefetch
-		0, 0,   // Frame supplies geometry
-		"",     // no ProjectRoot → no watcher
+		nil,  // nil renderer → no Lookuper → no prefetch
+		0, 0, // Frame supplies geometry
+		"", // no ProjectRoot → no watcher
 		"dwe",
 		"auto", // overridden by seam above to "dark"
 	)

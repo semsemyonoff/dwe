@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"testing"
 
@@ -589,10 +590,10 @@ func TestBrowser_FocusChangedMsgUpdatesActive(t *testing.T) {
 func newMultiFileBrowser(t *testing.T) *browser {
 	t.Helper()
 	files := map[string]string{
-		"alpha.md":  "# Alpha\n",
-		"beta.md":   "# Beta\n",
-		"gamma.md":  "# Gamma\n",
-		"delta.md":  "# Delta\n",
+		"alpha.md": "# Alpha\n",
+		"beta.md":  "# Beta\n",
+		"gamma.md": "# Gamma\n",
+		"delta.md": "# Delta\n",
 	}
 	roots := []docs.DocRoot{{Name: "dwe", FS: &testFS{files: files}}}
 	return newTestBrowserWithRoots(t, roots)
@@ -746,14 +747,7 @@ func TestBrowser_FilterEnterCommitsAndExpandsAncestors(t *testing.T) {
 	}
 
 	// Child must be in the visible set (ancestors were expanded on commit).
-	found := false
-	for _, n := range b.Tree.VisibleNodes() {
-		if n == child {
-			found = true
-			break
-		}
-	}
-	if !found {
+	if !slices.Contains(b.Tree.VisibleNodes(), child) {
 		t.Error("child not in visible set after commit — ancestors not expanded")
 	}
 }

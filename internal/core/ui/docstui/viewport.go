@@ -4,6 +4,8 @@ import (
 	"charm.land/bubbles/v2/viewport"
 )
 
+// ViewportWidget wraps bubbles/viewport to display rendered markdown content
+// in the right panel of the docs browser.
 type ViewportWidget struct {
 	v       viewport.Model
 	content string
@@ -11,6 +13,7 @@ type ViewportWidget struct {
 	height  int
 }
 
+// NewViewportWidget returns a new ViewportWidget sized to the given dimensions.
 func NewViewportWidget(width, height int) *ViewportWidget {
 	v := viewport.New(viewport.WithWidth(width), viewport.WithHeight(height))
 	v.SetContent("")
@@ -21,11 +24,13 @@ func NewViewportWidget(width, height int) *ViewportWidget {
 	}
 }
 
+// SetContent replaces the viewport's rendered content.
 func (w *ViewportWidget) SetContent(content string) {
 	w.content = content
 	w.v.SetContent(content)
 }
 
+// SetDimensions resizes the viewport to the given width and height.
 func (w *ViewportWidget) SetDimensions(width, height int) {
 	w.width = width
 	w.height = height
@@ -33,18 +38,22 @@ func (w *ViewportWidget) SetDimensions(width, height int) {
 	w.v.SetHeight(height)
 }
 
+// ScrollUp scrolls the viewport up by one line.
 func (w *ViewportWidget) ScrollUp() {
 	w.v.ScrollUp(1)
 }
 
+// ScrollDown scrolls the viewport down by one line.
 func (w *ViewportWidget) ScrollDown() {
 	w.v.ScrollDown(1)
 }
 
+// ScrollStart jumps to the top of the content.
 func (w *ViewportWidget) ScrollStart() {
 	w.v.GotoTop()
 }
 
+// ScrollEnd jumps to the bottom of the content.
 func (w *ViewportWidget) ScrollEnd() {
 	w.v.GotoBottom()
 }
@@ -59,6 +68,7 @@ func (w *ViewportWidget) PageDown() {
 	w.v.PageDown()
 }
 
+// View renders the visible portion of the content as a string.
 func (w *ViewportWidget) View() string {
 	return w.v.View()
 }
