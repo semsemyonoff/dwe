@@ -44,44 +44,6 @@ func TestNewModel(t *testing.T) {
 		t.Error("Model.StatusBar should not be nil")
 	}
 
-	// Init returns nil: the construction-time initCmd was dropped (Decision #10);
-	// the first topic load fires from browser.Update(WindowSizeMsg). With no
-	// project root there is also no watcher, so both sources of Init cmds are
-	// absent.
-	if m.Init() != nil {
-		t.Error("Init should return nil when no watcher is set (no project root)")
-	}
-}
-
-func TestModelView(t *testing.T) {
-	fsys := &testFS{
-		files: map[string]string{
-			"test.md": "test",
-		},
-	}
-
-	roots := []docs.DocRoot{
-		{
-			Name: "dwe",
-			FS:   fsys,
-		},
-	}
-
-	translator := i18n.NopTranslator{}
-	renderer := &testRenderer{}
-
-	m, err := NewModel(context.Background(), roots, "en", translator, renderer, 80, 24, "", "DWE · Documentation", "auto")
-	if err != nil {
-		t.Fatalf("NewModel failed: %v", err)
-	}
-
-	view := m.View()
-	if view.Content == "" {
-		t.Error("View.Content should not be empty")
-	}
-	if !view.AltScreen {
-		t.Error("View must request AltScreen")
-	}
 }
 
 type testRenderer struct{}

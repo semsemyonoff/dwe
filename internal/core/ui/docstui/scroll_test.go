@@ -7,6 +7,7 @@ import (
 	"testing"
 
 	"github.com/semsemyonoff/dwe/internal/core/docs"
+	"github.com/semsemyonoff/dwe/internal/core/ui/tui"
 	"github.com/semsemyonoff/dwe/internal/shared/i18n"
 )
 
@@ -59,7 +60,7 @@ func loadFirstTopic(t *testing.T, m *Model) {
 	if msg.Err != nil {
 		t.Fatalf("topic load error: %v", msg.Err)
 	}
-	m.Update(msg)
+	_ = m.applyTopicLoaded(msg)
 }
 
 func TestScrollbarThumbRendersForLongDocument(t *testing.T) {
@@ -78,7 +79,11 @@ func TestScrollbarThumbRendersForLongDocument(t *testing.T) {
 	if total := m.Viewport.TotalLines(); total <= m.Viewport.VisibleHeight() {
 		t.Fatalf("test doc not tall enough to scroll: total=%d visible=%d", total, m.Viewport.VisibleHeight())
 	}
-	if !strings.Contains(m.View().Content, scrollbarThumbGlyph) {
+	br := newBrowser(context.Background(), m)
+	vpW := viewportPanelInnerWidth(120)
+	vpH := viewportInnerHeight(40)
+	content := br.ViewPanel(panelViewport, tui.Region{Width: vpW, Height: vpH})
+	if !strings.Contains(content, scrollbarThumbGlyph) {
 		t.Error("expected a scrollbar thumb in the rendered view for a scrollable document")
 	}
 }
@@ -91,24 +96,12 @@ func TestScrollbarAbsentForShortDocument(t *testing.T) {
 	}
 	loadFirstTopic(t, m)
 
-	if strings.Contains(m.View().Content, scrollbarThumbGlyph) {
+	b := newBrowser(context.Background(), m)
+	vpW := viewportPanelInnerWidth(120)
+	vpH := viewportInnerHeight(40)
+	content := b.ViewPanel(panelViewport, tui.Region{Width: vpW, Height: vpH})
+	if strings.Contains(content, scrollbarThumbGlyph) {
 		t.Error("did not expect a scrollbar thumb when the whole document fits")
-	}
-}
-
-func TestReplaceLastRuneTargetsRightmostBorder(t *testing.T) {
-	// A content row whose glamour output contains an inner table border plus
-	// the panel's own right border — only the rightmost must be overwritten.
-	line := "│ col-a │ col-b │"
-	got := replaceLastRune(line, scrollbarBorderRune, scrollbarThumbGlyph)
-	want := "│ col-a │ col-b " + scrollbarThumbGlyph
-	if got != want {
-		t.Errorf("replaceLastRune = %q, want %q", got, want)
-	}
-
-	// No track rune → returned unchanged.
-	if got := replaceLastRune("no border here", scrollbarBorderRune, scrollbarThumbGlyph); got != "no border here" {
-		t.Errorf("replaceLastRune on a borderless line = %q, want it unchanged", got)
 	}
 }
 

@@ -2,21 +2,17 @@
 package docs
 
 import (
-	"errors"
-	"fmt"
 	"os"
 
 	"github.com/semsemyonoff/dwe/internal/cli/cmdctx"
 	coredocs "github.com/semsemyonoff/dwe/internal/core/docs"
 	"github.com/semsemyonoff/dwe/internal/core/docs/mermaid"
-	"github.com/semsemyonoff/dwe/internal/core/ui/docstui"
 	"github.com/semsemyonoff/dwe/internal/core/project/config"
 	userpkg "github.com/semsemyonoff/dwe/internal/core/project/user"
+	"github.com/semsemyonoff/dwe/internal/core/ui/docstui"
 	"github.com/semsemyonoff/dwe/internal/core/ui/render"
-	"github.com/semsemyonoff/dwe/internal/core/ui/widgets"
 	"github.com/semsemyonoff/dwe/internal/shared/i18n"
 
-	tea "charm.land/bubbletea/v2"
 	"golang.org/x/term"
 
 	"github.com/spf13/cobra"
@@ -50,13 +46,7 @@ Generate reference documentation for the declarative command registry.`,
 				return runDocsList(cmd, flags, &docsListFlags{source: "all"})
 			}
 
-			// Get terminal dimensions
-			width, height, err := term.GetSize(int(os.Stdout.Fd()))
-			if err != nil {
-				return fmt.Errorf("failed to get terminal size: %w", err)
-			}
-
-			return runDocsTUI(cmd, flags, width, height)
+			return runDocsTUI(cmd, flags)
 		},
 	}
 	cmd.AddCommand(newDocsShowCmd(flags))
@@ -69,7 +59,7 @@ Generate reference documentation for the declarative command registry.`,
 	return cmd
 }
 
-func runDocsTUI(cmd *cobra.Command, flags *cmdctx.RootFlags, termWidth, termHeight int) error {
+func runDocsTUI(cmd *cobra.Command, flags *cmdctx.RootFlags) error {
 	// Load configuration for doc settings (mermaid config, etc.)
 	cfg, err := config.LoadConfig(flags.ConfigPath)
 	if err != nil {
@@ -90,8 +80,7 @@ func runDocsTUI(cmd *cobra.Command, flags *cmdctx.RootFlags, termWidth, termHeig
 	// (it is clamped to the YAML i18n store, a different namespace from markdown translations).
 	locale := i18n.ResolveLocale("", cfgLang, os.Getenv("LANG"))
 
-	// Build mermaid renderer chain based on config
-	var renderer mermaid.Renderer
+	// Build mermaid renderer chain based on config.
 	cacheDir, err := mermaid.CacheDir()
 	if err != nil {
 		cacheDir = ""
@@ -101,6 +90,7 @@ func runDocsTUI(cmd *cobra.Command, flags *cmdctx.RootFlags, termWidth, termHeig
 	mermaidMode := config.MermaidMode(cfg)
 	mmdcOnPath := mmdcAvailable(config.MmdcBin(cfg))
 
+	var renderer mermaid.Renderer
 	switch {
 	case mermaidMode == "off":
 		renderer = mermaid.Disabled{}
@@ -124,50 +114,35 @@ func runDocsTUI(cmd *cobra.Command, flags *cmdctx.RootFlags, termWidth, termHeig
 		renderer = mermaid.New(config.MmdcBin(cfg), cacheDir, cacheCapBytes, false)
 	}
 
-	// Get sources (dwe + project docs)
 	sources := coredocs.Sources(projectRoot)
-
-	// Create translator for TUI strings
 	translator := i18n.TranslatorOrNop(flags.I18n)
-
-	// Create the model. Title shape matches cmdbrowser: "DWE · <project> · Documentation".
 	ctx := cmd.Context()
+
 	projectName := ""
 	if cfg != nil {
 		projectName = cfg.Project.Name
 	}
 	title := render.BrandedSelectorTitle(projectName, "Documentation")
-	model, err := docstui.NewModel(ctx, sources, locale, translator, renderer, termWidth, termHeight, projectRoot, title, mermaidTheme)
-	if err != nil {
-		return fmt.Errorf("failed to create TUI model: %w", err)
-	}
 
 	// Banner: warn once at startup when mmdc is missing on $PATH (and the user
 	// hasn't explicitly disabled mermaid). Skipping the install entirely would
 	// leave users guessing why diagrams never render — the banner points them
 	// at the canonical install section in docs/reference/docs/commands.md.
+	var mmdcNotice string
 	if mermaidMode != "off" && !mmdcOnPath {
-		model.MmdcNotice = "> **⚠ `mmdc` not installed.** Mermaid diagrams cannot render. " +
+		mmdcNotice = "> **⚠ `mmdc` not installed.** Mermaid diagrams cannot render. " +
 			"Install with `npm i -g @mermaid-js/mermaid-cli` — see " +
 			"`docs/reference/docs/commands.md` § *Installing `mmdc`*.\n\n"
 	}
 
-	// Run via widgets.RunWithPromptHooks for proper signal handling
-	runErr := widgets.RunWithPromptHooks(func() error {
-		prog := tea.NewProgram(model, tea.WithContext(ctx))
-		_, e := prog.Run()
-		return e
+	return docstui.Run(ctx, docstui.Options{
+		Roots:        sources,
+		Renderer:     renderer,
+		ProjectRoot:  projectRoot,
+		MermaidTheme: mermaidTheme,
+		Title:        title,
+		Locale:       locale,
+		Translator:   translator,
+		MmdcNotice:   mmdcNotice,
 	})
-
-	if runErr != nil {
-		if errors.Is(runErr, tea.ErrProgramPanic) {
-			return runErr
-		}
-		if errors.Is(runErr, tea.ErrInterrupted) || errors.Is(runErr, tea.ErrProgramKilled) {
-			return widgets.ErrCancelled
-		}
-		return runErr
-	}
-
-	return nil
 }

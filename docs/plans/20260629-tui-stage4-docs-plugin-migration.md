@@ -483,41 +483,41 @@ and per-topic cancel exactly.
   keymap), `statusbar.go` (trim to what StatusContext needs)
 - Create: `internal/core/ui/docstui/run_test.go`
 
-- [ ] define the `Options` struct explicitly, enumerating EVERY input the old
+- [x] define the `Options` struct explicitly, enumerating EVERY input the old
       `NewModel(ctx, roots, locale, translator, renderer, termWidth, termHeight, projectRoot,
       title, mermaidTheme)` constructor took PLUS the side-channel `MmdcNotice` field the old
       caller set (`internal/cli/docs/docs.go:149-153`; prepended to every loaded topic —
       `model.go:53-58,271`): `Roots, Renderer, ProjectRoot, MermaidTheme, Title, Locale,
       Translator, MmdcNotice`. **Exclude** `termWidth/termHeight` — the Frame owns sizing.
       Do NOT drop `MmdcNotice` (the "mmdc not installed" banner is real user-facing behavior)
-- [ ] in `newBrowser`/the constructor, set `Theme = resolveMermaidTheme(opts.MermaidTheme)`
+- [x] in `newBrowser`/the constructor, set `Theme = resolveMermaidTheme(opts.MermaidTheme)`
       (NOT `opts.MermaidTheme` raw) — preserve the `auto`→`HasDarkBackground` probe and the
       `light`/`dark` hard overrides (`model.go:137`, `diagram_inline.go` `resolveMermaidTheme`/
       `diagramTheme`); add a test seam so the `auto` probe is overridable for deterministic
       tests (Decision #11)
-- [ ] implement `Run(ctx context.Context, opts Options) error` wrapping `tui.Run(newBrowser(
+- [x] implement `Run(ctx context.Context, opts Options) error` wrapping `tui.Run(newBrowser(
       ctx, opts), tui.RunOptions{Brand, Project, Mouse:true, Translator, Locale})`; map
       errors: cancel/kill → `widgets.ErrCancelled`, panic → wrapped, `ErrTooNarrow` → clean
       "terminal too small" error, `ErrNotTTY` → propagate (mirror `cmdbrowser/run.go` +
       `statustui` error mapping)
-- [ ] **intentional behavior note**: the old caller used `tea.NewProgram(model,
+- [x] **intentional behavior note**: the old caller used `tea.NewProgram(model,
       tea.WithContext(ctx))`; `tui.Run` does NOT thread ctx into the program. External
       parent-ctx cancellation no longer force-kills the program — confirm nothing depends on
       it (`ctrl+c`/`q` still terminate via bubbletea's own signal handling, and `Close`
       tears down watcher/prefetch on every exit path). Document this drop in the plan if any
       hidden dependency surfaces
-- [ ] rewire `internal/cli/docs/docs.go:157` to call `docstui.Run(ctx, opts)` instead of
+- [x] rewire `internal/cli/docs/docs.go:157` to call `docstui.Run(ctx, opts)` instead of
       building `tea.NewProgram`; remove the now-dead program construction + error handling
       there (it moves into `Run`)
-- [ ] delete the old chrome: `renderTwoPanel`/`View`/title-bar/help-footer/old status-line
+- [x] delete the old chrome: `renderTwoPanel`/`View`/title-bar/help-footer/old status-line
       rendering, the old `key.Binding` keymap (`keys.go`), and the old `Init`/`Update`/`quit`
       now superseded by the Plugin methods
-- [ ] confirm `tui.Run` takes no ctx — the ctx lives only in `docstui.Run`/the plugin
-- [ ] write tests: `Run` error mapping (non-TTY, too-narrow, cancel, panic) using the
+- [x] confirm `tui.Run` takes no ctx — the ctx lives only in `docstui.Run`/the plugin
+- [x] write tests: `Run` error mapping (non-TTY, too-narrow, cancel, panic) using the
       `tui`/`docstui` test seams; caller compiles and routes through `Run`; **assert the
       `MmdcNotice` banner still prepends to a loaded topic when set in `Options`**; assert
       `ctrl+c`/`q` terminate cleanly without relying on parent-ctx cancellation
-- [ ] `make build` (embedded docs) + `make test` — must pass before Task 11
+- [x] `make build` (embedded docs) + `make test` — must pass before Task 11
 
 ### Task 11: Golden frame tests + regression suite
 

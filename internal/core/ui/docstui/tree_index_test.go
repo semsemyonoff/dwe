@@ -160,7 +160,7 @@ func TestSelectingIndexDirRendersIndexContent(t *testing.T) {
 	if loaded.Err != nil {
 		t.Fatalf("topic load returned an error: %v", loaded.Err)
 	}
-	m.Update(loaded)
+	_ = m.applyTopicLoaded(loaded)
 
 	if m.currentlyLoadedPath != "config/index.md" {
 		t.Errorf("currentlyLoadedPath = %q, want config/index.md", m.currentlyLoadedPath)
