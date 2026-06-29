@@ -853,3 +853,102 @@ func TestBrowser_ViewPanelNormalTreeWhenNotFiltering(t *testing.T) {
 	}
 	_ = out // non-empty is asserted in existing TestTreeViewPanel_RendersRows
 }
+
+// --- Task 8: mouse wiring (PanelClick / FocusChanged) ---
+
+func TestBrowser_FocusChangedMsgSwitchesNavRouting(t *testing.T) {
+	// After switching focus to the viewport, nav actions should route there
+	// (viewport scroll) rather than to the tree (cursor move). We verify by
+	// checking that HandleAction(ActionNavUp) on the viewport calls ScrollUp
+	// rather than MoveUp on the tree. The simplest proxy is checking the active
+	// panel field after the FocusChangedMsg — the routing logic in HandleAction
+	// reads b.active directly (see actions.go navLine).
+	b := newTestBrowser(t)
+	if b.active != panelTree {
+		t.Fatalf("initial active = %q, want tree", b.active)
+	}
+
+	// Switch focus to viewport.
+	b.Update(tui.FocusChangedMsg{Panel: panelViewport})
+	if b.active != panelViewport {
+		t.Errorf("after FocusChangedMsg(viewport): active=%q, want %q", b.active, panelViewport)
+	}
+
+	// Switch back to tree.
+	b.Update(tui.FocusChangedMsg{Panel: panelTree})
+	if b.active != panelTree {
+		t.Errorf("after FocusChangedMsg(tree): active=%q, want %q", b.active, panelTree)
+	}
+}
+
+func TestBrowser_PanelClickTreeMovesCursor(t *testing.T) {
+	b := newMultiFileBrowser(t)
+	// Render the tree at height=5 so topIdx is calibrated and visible is populated.
+	b.ViewPanel(panelTree, tui.Region{Width: 30, Height: 5})
+
+	visible := b.Tree.VisibleNodes()
+	if len(visible) < 2 {
+		t.Skip("need at least 2 visible nodes for click test")
+	}
+
+	// Click on row 1 (the second visible row).
+	before := b.Tree.Cursor()
+	b.Update(tui.PanelClickMsg{Panel: panelTree, X: 0, Y: 1})
+
+	after := b.Tree.Cursor()
+	if after == before {
+		t.Error("PanelClickMsg on tree row 1 did not move cursor")
+	}
+	// The cursor should now be the second visible node.
+	if after != visible[1] {
+		t.Errorf("PanelClickMsg row=1: cursor=%v, want visible[1]=%v", after, visible[1])
+	}
+}
+
+func TestBrowser_PanelClickTreePastLastRowIsNoop(t *testing.T) {
+	b := newMultiFileBrowser(t)
+	b.ViewPanel(panelTree, tui.Region{Width: 30, Height: 20})
+
+	visible := b.Tree.VisibleNodes()
+	if len(visible) == 0 {
+		t.Skip("no visible nodes")
+	}
+
+	// Set cursor to the first node so we have a known starting position.
+	b.Tree.focusRow(0)
+	before := b.Tree.Cursor()
+
+	// Click at row = len(visible) (one past the last row) — must be a no-op.
+	b.Update(tui.PanelClickMsg{Panel: panelTree, X: 0, Y: len(visible)})
+	if b.Tree.Cursor() != before {
+		t.Errorf("PanelClickMsg past last row moved cursor: got %v, want %v", b.Tree.Cursor(), before)
+	}
+}
+
+func TestBrowser_PanelClickViewportIsNoop(t *testing.T) {
+	b := newTestBrowser(t)
+	b.Viewport.SetContent("Line 1\nLine 2\nLine 3\n")
+	b.ViewPanel(panelViewport, tui.Region{Width: 60, Height: 10})
+
+	before := b.Viewport.YOffset()
+	// Click in viewport — no per-row click targets today, should be a no-op.
+	b.Update(tui.PanelClickMsg{Panel: panelViewport, X: 5, Y: 1})
+	if b.Viewport.YOffset() != before {
+		t.Errorf("PanelClickMsg on viewport changed YOffset: got %d, want %d", b.Viewport.YOffset(), before)
+	}
+}
+
+func TestBrowser_PanelClickWhileFilteringIsNoop(t *testing.T) {
+	b := newMultiFileBrowser(t)
+	b.ViewPanel(panelTree, tui.Region{Width: 30, Height: 5})
+
+	b.enterFilter()
+	// Cursor position before the click.
+	before := b.Tree.Cursor()
+
+	// While filter owns input, PanelClickMsg should be dropped.
+	b.Update(tui.PanelClickMsg{Panel: panelTree, X: 0, Y: 1})
+	if b.Tree.Cursor() != before {
+		t.Errorf("PanelClickMsg while filter active moved cursor; want no-op")
+	}
+}

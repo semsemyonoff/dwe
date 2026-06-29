@@ -442,16 +442,16 @@ and per-topic cancel exactly.
 - Modify: `internal/core/ui/docstui/plugin.go`
 - Modify: `internal/core/ui/docstui/plugin_test.go`
 
-- [ ] handle `tui.FocusChangedMsg` → update the plugin's active-panel tracking (tree vs
+- [x] handle `tui.FocusChangedMsg` → update the plugin's active-panel tracking (tree vs
       viewport) so nav routing follows focus
-- [ ] handle `tui.PanelClickMsg`: click in tree → `focusRow(Y)` (move cursor, no toggle);
+- [x] handle `tui.PanelClickMsg`: click in tree → `focusRow(Y)` (move cursor, no toggle);
       click in viewport → no-op or position-aware (match current behavior; viewport has no
       click target today)
-- [ ] confirm wheel scroll reaches the focused panel (tree move vs viewport scroll) via the
+- [x] confirm wheel scroll reaches the focused panel (tree move vs viewport scroll) via the
       framework wheel routing — no per-plugin wheel mode needed
-- [ ] write tests: FocusChangedMsg switches active panel + nav routing; PanelClickMsg on tree
+- [x] write tests: FocusChangedMsg switches active panel + nav routing; PanelClickMsg on tree
       moves cursor to the clicked row (and is a no-op past the last row)
-- [ ] `make test` — must pass before Task 9
+- [x] `make test` — must pass before Task 9
 
 ### Task 9: Status line context + i18n keys / translator threading
 

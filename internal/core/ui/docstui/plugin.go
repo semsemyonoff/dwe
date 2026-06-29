@@ -228,6 +228,10 @@ func (b *browser) Update(msg tea.Msg) tea.Cmd {
 		b.active = msg.Panel
 		return nil
 
+	case tui.PanelClickMsg:
+		b.handlePanelClick(msg)
+		return nil
+
 	case topicLoadedMsg:
 		return b.applyTopicLoaded(msg)
 
@@ -517,6 +521,24 @@ func isPrintable(s string) bool {
 		}
 	}
 	return s != ""
+}
+
+// handlePanelClick moves the tree cursor in response to a single click.
+// While the inline filter is active the query line is not row-addressable so
+// clicks are dropped. The viewport has no per-row click targets today (viewport
+// follows the framework's default wheel routing), so viewport clicks are also
+// dropped. Mirrors cmdbrowser.handlePanelClick.
+func (b *browser) handlePanelClick(msg tui.PanelClickMsg) {
+	if b.CapturingInput() {
+		// Filter owns raw input; don't reposition the tree under it.
+		return
+	}
+	if msg.Panel == panelTree && b.Tree != nil {
+		b.Tree.focusRow(msg.Y)
+	}
+	// Viewport clicks are intentionally no-op: the viewport widget has no
+	// per-row click targets and wheel scroll arrives as ActionNavUp/Down via
+	// HandleAction (framework routing), so no per-plugin wheel handling needed.
 }
 
 // scrollbarClip truncates s to at most width display cells without appending
