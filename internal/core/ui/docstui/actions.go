@@ -121,7 +121,8 @@ func (b *browser) HandleAction(a tui.Action) (tea.Cmd, bool) {
 	case tui.ActionSelect:
 		return b.onEnter()
 	case tui.ActionFilter:
-		return nil, true // filter capture wires in Task 7
+		b.enterFilter()
+		return nil, true
 	case tui.ActionReload:
 		return b.onReload()
 	case actionDiagramPrev:

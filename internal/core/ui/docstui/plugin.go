@@ -2,6 +2,7 @@ package docstui
 
 import (
 	"context"
+	"fmt"
 	"path/filepath"
 	"strings"
 
@@ -60,6 +61,10 @@ type browser struct {
 	// Update(tea.WindowSizeMsg). It prevents a second load on subsequent
 	// resize events.
 	firstLoadDone bool
+
+	// filterSavedCursor is the cursor node saved when entering filter mode so
+	// exitFilter (Esc) can restore the pre-filter selection exactly.
+	filterSavedCursor *TreeNode
 }
 
 // Compile-time guarantee that *browser satisfies the tui.Plugin contract.
@@ -157,9 +162,11 @@ func (b *browser) Panels() []tui.Panel {
 func (b *browser) Resize(body tui.Region) { b.body = body }
 
 // CapturingInput implements tui.Plugin. The browser takes raw input without
-// an overlay only while the inline filter is active (Task 7). Returns false
-// for now; filter capture wires in Task 7.
-func (b *browser) CapturingInput() bool { return false }
+// an overlay while the inline filter is active. When true the Frame bypasses
+// the action registry and forwards raw keys to Update, reserving only ctrl+c.
+func (b *browser) CapturingInput() bool {
+	return b.Filter != nil && b.Filter.Active
+}
 
 // Result implements tui.Plugin. The docs browser is quit-only; docstui.Run
 // returns error only.
@@ -184,6 +191,16 @@ func (b *browser) PendingOverlay() (tui.Overlay, bool) { return tui.Overlay{}, f
 // Key messages the registry did not handle also arrive here (raw forward).
 func (b *browser) Update(msg tea.Msg) tea.Cmd {
 	switch msg := msg.(type) {
+	case tea.KeyPressMsg:
+		// While the inline filter is active, the Frame forwards raw keys here
+		// (CapturingInput() == true). Route them to updateFilter; the registry
+		// is bypassed so printable characters extend the query rather than
+		// firing bound actions.
+		if b.Filter != nil && b.Filter.Active {
+			return b.updateFilter(msg)
+		}
+		return nil
+
 	case tea.WindowSizeMsg:
 		b.TermWidth = msg.Width
 		b.TermHeight = msg.Height
@@ -264,6 +281,11 @@ func (b *browser) ViewPanel(id tui.PanelID, inner tui.Region) string {
 		if b.Model == nil || b.Tree == nil {
 			return ""
 		}
+		// While the inline filter is active render the query header + filtered
+		// tree; otherwise render the normal tree with the focus-visibility clip.
+		if b.Filter != nil && b.Filter.Active {
+			return b.renderTreeFiltered(inner)
+		}
 		// Keep the focused row on screen across resizes before clipping.
 		b.Tree.ensureFocusVisible(inner.Height)
 		return b.Tree.renderRegion(inner, b.active == panelTree)
@@ -328,6 +350,173 @@ func (b *browser) applyInnerScrollbar(content string, h int) string {
 		lines[i] += glyph
 	}
 	return strings.Join(lines, "\n")
+}
+
+// --- Inline filter capture (Task 7) ---
+
+// enterFilter opens the inline filter capture mode. It saves the current tree
+// cursor, opens the TreeFilter with an empty query, and applies it (which causes
+// the tree to recompute its visible set). After this call CapturingInput()
+// returns true and the Frame forwards raw keys to Update → updateFilter.
+func (b *browser) enterFilter() {
+	if b.Filter == nil {
+		b.Filter = NewTreeFilter()
+	}
+	b.filterSavedCursor = nil
+	if b.Tree != nil {
+		b.filterSavedCursor = b.Tree.Cursor()
+	}
+	b.Filter.Open()
+	if b.Tree != nil {
+		b.Tree.ApplyFilter(b.Filter)
+	}
+}
+
+// updateFilter handles raw keypresses while the inline filter is active.
+// Printable characters extend the query; Backspace removes the last rune;
+// Enter commits; Esc cancels and restores the pre-filter selection. Up/Down
+// arrows navigate the filtered tree without exiting the filter.
+func (b *browser) updateFilter(msg tea.KeyPressMsg) tea.Cmd {
+	switch msg.Code {
+	case tea.KeyEnter:
+		b.commitFilter()
+		return focusCmd(panelTree)
+	case tea.KeyBackspace:
+		if b.Filter != nil {
+			b.Filter.Backspace()
+			if b.Tree != nil {
+				b.Tree.ApplyFilter(b.Filter)
+			}
+		}
+		return nil
+	case tea.KeyEscape:
+		b.exitFilter()
+		return focusCmd(panelTree)
+	case tea.KeyUp:
+		if b.Tree != nil {
+			b.Tree.MoveUp()
+			b.Tree.ensureFocusVisible(b.treeInner.Height)
+		}
+		return nil
+	case tea.KeyDown:
+		if b.Tree != nil {
+			b.Tree.MoveDown()
+			b.Tree.ensureFocusVisible(b.treeInner.Height)
+		}
+		return nil
+	}
+	// Printable characters extend the query (including keys bound elsewhere
+	// as actions — while capturing, characters type into the search line).
+	if t := msg.Text; t != "" && isPrintable(t) {
+		if b.Filter != nil {
+			for _, r := range []rune(t) {
+				b.Filter.Append(r)
+			}
+			if b.Tree != nil {
+				b.Tree.ApplyFilter(b.Filter)
+			}
+		}
+		return nil
+	}
+	return nil
+}
+
+// commitFilter ends the filter session keeping the current cursor selection.
+// It expands the cursor's ancestors so the item remains visible in the
+// unfiltered tree after the filter is cleared, then closes the filter.
+func (b *browser) commitFilter() {
+	if b.Filter == nil {
+		return
+	}
+	if b.Tree != nil {
+		expandAncestors(b.Tree.Cursor())
+	}
+	b.Filter.Close()
+	if b.Tree != nil {
+		b.Tree.ApplyFilter(b.Filter)
+	}
+	b.filterSavedCursor = nil
+}
+
+// exitFilter ends the filter session and restores the cursor to the position
+// it held when filter mode was entered (the pre-filter selection).
+func (b *browser) exitFilter() {
+	if b.Filter == nil {
+		return
+	}
+	saved := b.filterSavedCursor
+	if b.Tree != nil && saved != nil {
+		// Set the cursor before ApplyFilter so ensureCursorVisible in
+		// recomputeVisible keeps it (the tree uses pointer identity).
+		b.Tree.SetCursor(saved)
+	}
+	b.Filter.Close()
+	if b.Tree != nil {
+		b.Tree.ApplyFilter(b.Filter)
+	}
+	b.filterSavedCursor = nil
+}
+
+// renderTreeFiltered renders the tree panel while the inline filter is active:
+// a query-prompt header on the first row followed by the filtered tree rows
+// clipped to the remaining height. The header shows the current query text
+// with a block cursor and a match count ("/ query█ (N matches)").
+func (b *browser) renderTreeFiltered(inner tui.Region) string {
+	if inner.Height <= 0 {
+		return ""
+	}
+	n := 0
+	if b.Tree != nil {
+		n = len(b.Tree.VisibleNodes())
+	}
+	query := ""
+	if b.Filter != nil {
+		query = b.Filter.Query
+	}
+	accent := lipgloss.NewStyle().Foreground(lipgloss.Color(styles.ColorAccent())).Bold(true)
+	muted := lipgloss.NewStyle().Foreground(lipgloss.Color(styles.ColorMuted()))
+	prompt := accent.Render("/")
+	cursor := accent.Render("█")
+	count := muted.Render(fmt.Sprintf("  %s", filterMatchLabel(n)))
+	header := prompt + query + cursor + count
+	if lipgloss.Width(header) > inner.Width {
+		header = truncateLabel(header, inner.Width)
+	}
+	if inner.Height == 1 {
+		return header
+	}
+	treeRegion := inner
+	treeRegion.Height = max(inner.Height-1, 0)
+	if b.Tree != nil {
+		b.Tree.ensureFocusVisible(treeRegion.Height)
+	}
+	body := ""
+	if b.Tree != nil {
+		body = b.Tree.renderRegion(treeRegion, b.active == panelTree)
+	}
+	if body == "" {
+		return header
+	}
+	return header + "\n" + body
+}
+
+// filterMatchLabel returns a human-readable count string for the filter header.
+func filterMatchLabel(n int) string {
+	if n == 1 {
+		return "1 match"
+	}
+	return fmt.Sprintf("%d matches", n)
+}
+
+// isPrintable reports whether s contains only visible, non-control characters.
+// Used to distinguish user-typed characters from function/control key sequences.
+func isPrintable(s string) bool {
+	for _, r := range s {
+		if r < 0x20 || r == 0x7f {
+			return false
+		}
+	}
+	return s != ""
 }
 
 // scrollbarClip truncates s to at most width display cells without appending

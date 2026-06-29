@@ -581,3 +581,275 @@ func TestBrowser_FocusChangedMsgUpdatesActive(t *testing.T) {
 		t.Errorf("FocusChangedMsg back to tree: got %q, want %q", b.active, panelTree)
 	}
 }
+
+// --- Task 7: inline filter capture ---
+
+// newMultiFileBrowser builds a browser backed by multiple file nodes so the
+// filter has a non-trivial visible set to narrow down.
+func newMultiFileBrowser(t *testing.T) *browser {
+	t.Helper()
+	files := map[string]string{
+		"alpha.md":  "# Alpha\n",
+		"beta.md":   "# Beta\n",
+		"gamma.md":  "# Gamma\n",
+		"delta.md":  "# Delta\n",
+	}
+	roots := []docs.DocRoot{{Name: "dwe", FS: &testFS{files: files}}}
+	return newTestBrowserWithRoots(t, roots)
+}
+
+func TestBrowser_CapturingInputFalseAtRest(t *testing.T) {
+	b := newTestBrowser(t)
+	if b.CapturingInput() {
+		t.Error("CapturingInput() = true at rest, want false")
+	}
+}
+
+func TestBrowser_EnterFilterSetsCapturing(t *testing.T) {
+	b := newTestBrowser(t)
+	b.enterFilter()
+	if !b.CapturingInput() {
+		t.Error("CapturingInput() = false after enterFilter, want true")
+	}
+}
+
+func TestBrowser_ExitFilterClearsCapturing(t *testing.T) {
+	b := newTestBrowser(t)
+	b.enterFilter()
+	b.exitFilter()
+	if b.CapturingInput() {
+		t.Error("CapturingInput() = true after exitFilter, want false")
+	}
+}
+
+func TestBrowser_CommitFilterClearsCapturing(t *testing.T) {
+	b := newTestBrowser(t)
+	b.enterFilter()
+	b.commitFilter()
+	if b.CapturingInput() {
+		t.Error("CapturingInput() = true after commitFilter, want false")
+	}
+}
+
+func TestBrowser_FilterEditNarrowsVisibleSet(t *testing.T) {
+	b := newMultiFileBrowser(t)
+	before := len(b.Tree.VisibleNodes())
+	if before == 0 {
+		t.Fatal("browser has no visible nodes before filter")
+	}
+
+	b.enterFilter()
+	// Type "al" — should match "alpha" only (and potentially "delta" which
+	// contains "al"). Check that the set shrank (not all items shown).
+	b.Update(tea.KeyPressMsg{Text: "al"})
+
+	after := len(b.Tree.VisibleNodes())
+	if after >= before {
+		t.Errorf("visible set after typing 'al': got %d, want < %d", after, before)
+	}
+}
+
+func TestBrowser_FilterBackspaceExpands(t *testing.T) {
+	b := newMultiFileBrowser(t)
+	b.enterFilter()
+
+	// Type a query that narrows to a small set.
+	b.Update(tea.KeyPressMsg{Text: "alpha"})
+	narrow := len(b.Tree.VisibleNodes())
+
+	// Backspace erases one rune — "alph" — should widen the visible set.
+	b.Update(tea.KeyPressMsg{Code: tea.KeyBackspace})
+	wider := len(b.Tree.VisibleNodes())
+
+	if wider < narrow {
+		t.Errorf("backspace shrunk visible set: was %d, got %d", narrow, wider)
+	}
+}
+
+func TestBrowser_FilterEscRestoresCursor(t *testing.T) {
+	b := newMultiFileBrowser(t)
+	originalCursor := b.Tree.Cursor()
+	if originalCursor == nil {
+		t.Fatal("no initial cursor")
+	}
+
+	b.enterFilter()
+	// Move to a different node inside filter mode.
+	b.Update(tea.KeyPressMsg{Code: tea.KeyDown})
+	// Now exit via Esc — cursor should return to originalCursor.
+	b.Update(tea.KeyPressMsg{Code: tea.KeyEscape})
+
+	if b.Tree.Cursor() != originalCursor {
+		t.Errorf("exitFilter did not restore cursor: got %v, want %v",
+			b.Tree.Cursor(), originalCursor)
+	}
+}
+
+func TestBrowser_FilterEscClearsFilter(t *testing.T) {
+	b := newMultiFileBrowser(t)
+	b.enterFilter()
+	b.Update(tea.KeyPressMsg{Text: "alpha"})
+	b.Update(tea.KeyPressMsg{Code: tea.KeyEscape})
+
+	if b.CapturingInput() {
+		t.Error("CapturingInput() still true after Esc, want false")
+	}
+	// After cancel, all nodes should be visible (filter cleared).
+	if b.Filter.Query != "" {
+		t.Errorf("filter query non-empty after Esc: %q", b.Filter.Query)
+	}
+}
+
+func TestBrowser_FilterEnterCommitsAndExpandsAncestors(t *testing.T) {
+	// Build a tree with a nested node to check ancestor expansion.
+	files := map[string]string{
+		"parent/index.md": "# Parent\n",
+		"parent/child.md": "# Child\n",
+	}
+	roots := []docs.DocRoot{{Name: "dwe", FS: &testFS{files: files}}}
+	b := newTestBrowserWithRoots(t, roots)
+
+	// Find a node inside a collapsed directory.
+	var child *TreeNode
+	for _, n := range b.Tree.visible {
+		if n.Node != nil && n.Node.IsDir {
+			// Expand so we can access children.
+			n.Expanded = true
+			b.Tree.recomputeVisible()
+			break
+		}
+	}
+	for _, n := range b.Tree.visible {
+		if n.Node != nil && !n.Node.IsDir && n.Parent != nil && n.Parent != b.Tree.root {
+			child = n
+			break
+		}
+	}
+	if child == nil {
+		t.Skip("no nested child node found in test tree")
+	}
+
+	// Now collapse the parent so the child is hidden.
+	if child.Parent != nil {
+		child.Parent.Expanded = false
+		b.Tree.recomputeVisible()
+	}
+
+	b.enterFilter()
+	// Set cursor to the child via direct placement (filters show all).
+	b.Tree.SetCursor(child)
+	// Commit — should expand ancestors so child is visible after filter cleared.
+	b.Update(tea.KeyPressMsg{Code: tea.KeyEnter})
+
+	if b.CapturingInput() {
+		t.Error("CapturingInput() still true after Enter commit, want false")
+	}
+
+	// Child must be in the visible set (ancestors were expanded on commit).
+	found := false
+	for _, n := range b.Tree.VisibleNodes() {
+		if n == child {
+			found = true
+			break
+		}
+	}
+	if !found {
+		t.Error("child not in visible set after commit — ancestors not expanded")
+	}
+}
+
+func TestBrowser_FilterVisibleSetMatchesApplyFilter(t *testing.T) {
+	b := newMultiFileBrowser(t)
+	b.enterFilter()
+
+	// Type "beta".
+	b.Update(tea.KeyPressMsg{Text: "beta"})
+
+	// Build what ApplyFilter would produce directly.
+	ref := NewTreeFilter()
+	ref.Open()
+	ref.Append('b')
+	ref.Append('e')
+	ref.Append('t')
+	ref.Append('a')
+	b.Tree.ApplyFilter(ref)
+	want := len(b.Tree.VisibleNodes())
+
+	// Re-apply the browser's own filter state and compare counts.
+	b.Tree.ApplyFilter(b.Filter)
+	got := len(b.Tree.VisibleNodes())
+
+	if got != want {
+		t.Errorf("filter visible count = %d, want %d (from ApplyFilter ref)", got, want)
+	}
+}
+
+func TestBrowser_ActionFilterCallsEnterFilter(t *testing.T) {
+	b := newTestBrowser(t)
+	_, handled := b.HandleAction(tui.ActionFilter)
+	if !handled {
+		t.Error("HandleAction(ActionFilter) returned handled=false, want true")
+	}
+	if !b.CapturingInput() {
+		t.Error("HandleAction(ActionFilter) did not enter filter mode (CapturingInput still false)")
+	}
+}
+
+func TestBrowser_RenderTreeFilteredShowsHeader(t *testing.T) {
+	b := newMultiFileBrowser(t)
+	b.enterFilter()
+	b.Filter.Append('a')
+	b.Filter.Append('l')
+	b.Tree.ApplyFilter(b.Filter)
+
+	inner := tui.Region{Width: 30, Height: 5}
+	out := b.renderTreeFiltered(inner)
+	if !strings.Contains(out, "/") {
+		t.Error("renderTreeFiltered output missing '/' prompt character")
+	}
+	if !strings.Contains(out, "match") {
+		t.Error("renderTreeFiltered output missing match count")
+	}
+}
+
+func TestBrowser_RenderTreeFilteredZeroHeight(t *testing.T) {
+	b := newTestBrowser(t)
+	b.enterFilter()
+	out := b.renderTreeFiltered(tui.Region{Width: 30, Height: 0})
+	if out != "" {
+		t.Errorf("renderTreeFiltered with height=0 returned %q, want empty", out)
+	}
+}
+
+func TestBrowser_RenderTreeFilteredOneRow(t *testing.T) {
+	b := newTestBrowser(t)
+	b.enterFilter()
+	// Height=1 should show header only (no tree body).
+	out := b.renderTreeFiltered(tui.Region{Width: 30, Height: 1})
+	if strings.Contains(out, "\n") {
+		t.Errorf("renderTreeFiltered with height=1 returned multi-line: %q", out)
+	}
+}
+
+func TestBrowser_ViewPanelShowsFilterHeaderWhenActive(t *testing.T) {
+	b := newMultiFileBrowser(t)
+	b.enterFilter()
+
+	inner := tui.Region{Width: 30, Height: 5}
+	out := b.ViewPanel(panelTree, inner)
+	if !strings.Contains(out, "/") {
+		t.Errorf("ViewPanel(tree) in filter mode missing '/' header; got: %q", out)
+	}
+}
+
+func TestBrowser_ViewPanelNormalTreeWhenNotFiltering(t *testing.T) {
+	b := newTestBrowser(t)
+	inner := tui.Region{Width: 30, Height: 5}
+	out := b.ViewPanel(panelTree, inner)
+	// Normal tree should NOT contain the filter prompt character as a prefix.
+	// (It's fine for node labels to contain '/' — just check filter is off.)
+	if b.CapturingInput() {
+		t.Error("CapturingInput() should be false when not filtering")
+	}
+	_ = out // non-empty is asserted in existing TestTreeViewPanel_RendersRows
+}

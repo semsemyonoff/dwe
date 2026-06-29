@@ -423,18 +423,18 @@ and per-topic cancel exactly.
 - Modify: `internal/core/ui/docstui/plugin.go`, `tree_filter.go`
 - Modify: `internal/core/ui/docstui/plugin_test.go` (or new `filter_test.go`)
 
-- [ ] make `/` (`ActionFilter`) enter filter mode; `CapturingInput()` returns true while
+- [x] make `/` (`ActionFilter`) enter filter mode; `CapturingInput()` returns true while
       filtering; in capture mode raw keys route to `Update` and edit the query
       (printable/backspace/enter/esc), mirroring `cmdbrowser/filter.go`
-- [ ] on each query edit call the existing `ApplyFilter` and re-render the tree (filter
+- [x] on each query edit call the existing `ApplyFilter` and re-render the tree (filter
       header row "/ query (N)" shown in the tree panel); `enter` commits (keep selection,
       expand ancestors), `esc` cancels and restores; return focus to tree via
       `FocusRequestMsg` where needed
-- [ ] ensure `CapturingInput()` returns false outside filter mode (restores registry
+- [x] ensure `CapturingInput()` returns false outside filter mode (restores registry
       dispatch)
-- [ ] write tests: entering/editing/committing/cancelling filter; `CapturingInput()`
+- [x] write tests: entering/editing/committing/cancelling filter; `CapturingInput()`
       transitions; filtered visible-set matches `ApplyFilter`; ancestor expansion on commit
-- [ ] `make test` — must pass before Task 8
+- [x] `make test` — must pass before Task 8
 
 ### Task 8: Mouse wiring (PanelClick / FocusChanged / wheel)
 
