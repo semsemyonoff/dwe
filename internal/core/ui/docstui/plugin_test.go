@@ -2,8 +2,13 @@ package docstui
 
 import (
 	"context"
+	"fmt"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
+
+	tea "charm.land/bubbletea/v2"
 
 	"github.com/semsemyonoff/dwe/internal/core/docs"
 	"github.com/semsemyonoff/dwe/internal/core/ui/tui"
@@ -32,7 +37,7 @@ func newTestBrowser(t *testing.T) *browser {
 	if err != nil {
 		t.Fatalf("NewModel: %v", err)
 	}
-	return newBrowser(m)
+	return newBrowser(context.Background(), m)
 }
 
 func TestBrowser_PanelsShapeAndWeights(t *testing.T) {
@@ -90,18 +95,83 @@ func TestBrowser_CapturingInputFalseByDefault(t *testing.T) {
 	}
 }
 
-func TestBrowser_InitReturnsNil(t *testing.T) {
+func TestBrowser_InitNilWatcher(t *testing.T) {
+	// With no project root the model has no watcher; Init() returns nil
+	// (watcher subscription is the only Init cmd source in the browser path).
 	b := newTestBrowser(t)
+	if b.Watcher != nil {
+		t.Skip("test browser unexpectedly has a watcher")
+	}
 	if cmd := b.Init(); cmd != nil {
-		t.Errorf("Init() = non-nil cmd, want nil stub")
+		t.Errorf("Init() with nil watcher = non-nil cmd, want nil")
 	}
 }
 
-func TestBrowser_CloseReturnsNil(t *testing.T) {
+func TestBrowser_InitSubscribesToWatcher(t *testing.T) {
+	tmpDir := t.TempDir()
+
+	watcher, err := NewWatcher(t.Context(), tmpDir)
+	if err != nil {
+		t.Fatalf("NewWatcher: %v", err)
+	}
+
+	fsys := &testFS{files: map[string]string{"index.md": "# Test\n"}}
+	roots := []docs.DocRoot{{Name: "test", FS: fsys}}
+	m, merr := NewModel(context.Background(), roots, "en", nil, nil, 80, 24, "", "Test", "auto")
+	if merr != nil {
+		_ = watcher.Close()
+		t.Fatalf("NewModel: %v", merr)
+	}
+	m.Watcher = watcher
+
+	b := newBrowser(context.Background(), m)
+	defer func() { _ = b.Close() }()
+
+	cmd := b.Init()
+	if cmd == nil {
+		t.Error("Init() with watcher = nil cmd, want non-nil subscription")
+	}
+}
+
+func TestBrowser_CloseNilWatcherAndPrefetch(t *testing.T) {
 	b := newTestBrowser(t)
 	if err := b.Close(); err != nil {
-		t.Errorf("Close() = %v, want nil stub", err)
+		t.Errorf("Close() = %v, want nil", err)
 	}
+}
+
+func TestBrowser_CloseIdempotent(t *testing.T) {
+	b := newTestBrowser(t)
+	if err := b.Close(); err != nil {
+		t.Fatalf("first Close() = %v", err)
+	}
+	if err := b.Close(); err != nil {
+		t.Errorf("second Close() = %v, want nil (idempotent)", err)
+	}
+}
+
+func TestBrowser_CloseClosesWatcher(t *testing.T) {
+	tmpDir := t.TempDir()
+
+	watcher, err := NewWatcher(t.Context(), tmpDir)
+	if err != nil {
+		t.Fatalf("NewWatcher: %v", err)
+	}
+
+	fsys := &testFS{files: map[string]string{"index.md": "# Test\n"}}
+	roots := []docs.DocRoot{{Name: "test", FS: fsys}}
+	m, merr := NewModel(context.Background(), roots, "en", nil, nil, 80, 24, "", "Test", "auto")
+	if merr != nil {
+		_ = watcher.Close()
+		t.Fatalf("NewModel: %v", merr)
+	}
+	m.Watcher = watcher
+
+	b := newBrowser(context.Background(), m)
+	if err := b.Close(); err != nil {
+		t.Errorf("Close() = %v, want nil", err)
+	}
+	// goleak (TestMain) verifies the watcher goroutine exited after Close.
 }
 
 func TestBrowser_NilTranslatorDefaultsToNop(t *testing.T) {
@@ -132,7 +202,7 @@ func TestBrowser_ExplicitTranslatorIsPreserved(t *testing.T) {
 	if err != nil {
 		t.Fatalf("NewModel: %v", err)
 	}
-	b := newBrowser(m)
+	b := newBrowser(context.Background(), m)
 	if b.tr == nil {
 		t.Fatalf("browser.tr is nil when explicit translator provided")
 	}
@@ -312,5 +382,202 @@ func TestBrowser_ViewPanelViewport_NilViewport(t *testing.T) {
 	inner := tui.Region{Width: 60, Height: 10}
 	if got := b.ViewPanel(panelViewport, inner); got != "" {
 		t.Errorf("ViewPanel with nil Viewport = %q, want empty string", got)
+	}
+}
+
+// --- Task 6: async lifecycle ---
+
+func TestBrowser_FirstLoadFiresOnFirstWindowSizeMsg(t *testing.T) {
+	b := newTestBrowser(t)
+	initialGen := b.loadGen
+
+	// Send the first non-zero WindowSizeMsg: should trigger the initial load.
+	b.Update(tea.WindowSizeMsg{Width: 80, Height: 24})
+	if b.CurrentTopic == nil {
+		t.Skip("test browser has no initial topic")
+	}
+	if b.loadGen <= initialGen {
+		t.Errorf("first WindowSizeMsg did not trigger loadTopic: loadGen=%d want >%d", b.loadGen, initialGen)
+	}
+}
+
+func TestBrowser_SecondWindowSizeMsgDoesNotReload(t *testing.T) {
+	b := newTestBrowser(t)
+
+	// First msg: fires initial load.
+	b.Update(tea.WindowSizeMsg{Width: 80, Height: 24})
+	genAfterFirst := b.loadGen
+
+	// Second msg with a different terminal size: must NOT fire another load.
+	b.Update(tea.WindowSizeMsg{Width: 100, Height: 30})
+	if b.loadGen != genAfterFirst {
+		t.Errorf("second WindowSizeMsg triggered reload: loadGen changed from %d to %d", genAfterFirst, b.loadGen)
+	}
+}
+
+func TestBrowser_ZeroWidthWindowSizeMsgDoesNotLoad(t *testing.T) {
+	b := newTestBrowser(t)
+	initialGen := b.loadGen
+
+	// Zero-width msg must be ignored (firstLoadDone stays false).
+	b.Update(tea.WindowSizeMsg{Width: 0, Height: 24})
+	if b.loadGen != initialGen {
+		t.Errorf("zero-width WindowSizeMsg triggered loadTopic")
+	}
+	if b.firstLoadDone {
+		t.Errorf("firstLoadDone set on zero-width msg; should still be false")
+	}
+}
+
+func TestBrowser_WindowSizeMsgUpdatesContentWidth(t *testing.T) {
+	b := newTestBrowser(t)
+	b.Update(tea.WindowSizeMsg{Width: 80, Height: 24})
+	want := viewportPanelInnerWidth(80)
+	if b.ContentWidth != want {
+		t.Errorf("ContentWidth after WindowSizeMsg: got %d, want %d", b.ContentWidth, want)
+	}
+}
+
+func TestBrowser_ViewportInnerWidthPinAtBuckets(t *testing.T) {
+	// Pin test: the plugin's computed viewport inner width must equal the
+	// inner.Width the Frame actually passes to ViewPanel(panelViewport, inner).
+	// The Frame uses layoutPanels(outer, weights)+contentRegion; we replicate
+	// that math here to detect any future drift.
+	buckets := []int{60, 79, 80, 99, 100}
+	for _, termW := range buckets {
+		t.Run(fmt.Sprintf("termW=%d", termW), func(t *testing.T) {
+			// Replicate layoutPanels({0,0,termW,H}, {1,5}) + contentRegion.
+			const (
+				treeWeight = 1
+				vpWeight   = 5
+				total      = treeWeight + vpWeight
+				chrome     = 4 // 2*(border:1+hPad:1)
+			)
+			treeOuter := termW * treeWeight / total
+			vpOuter := termW - treeOuter // last-panel remainder
+			wantInnerW := max(vpOuter-chrome, 0)
+
+			got := viewportPanelInnerWidth(termW)
+			if got != wantInnerW {
+				t.Errorf("termW=%d: viewportPanelInnerWidth=%d, want %d (layoutPanels replica)", termW, got, wantInnerW)
+			}
+
+			// Also confirm that after a WindowSizeMsg the plugin tracks the same width.
+			b := newTestBrowser(t)
+			b.Update(tea.WindowSizeMsg{Width: termW, Height: 24})
+			if b.ContentWidth != wantInnerW {
+				t.Errorf("termW=%d: ContentWidth=%d after WindowSizeMsg, want %d", termW, b.ContentWidth, wantInnerW)
+			}
+		})
+	}
+}
+
+func TestBrowser_FileChangedMsgMatchingPathTriggerReload(t *testing.T) {
+	tmpDir := t.TempDir()
+	docsDir := filepath.Join(tmpDir, "docs")
+	if err := os.MkdirAll(docsDir, 0o755); err != nil {
+		t.Fatalf("MkdirAll: %v", err)
+	}
+
+	fsys := &testFS{files: map[string]string{"test.md": "# Test\n"}}
+	roots := []docs.DocRoot{{Name: "test", FS: fsys}}
+	m, err := NewModel(context.Background(), roots, "en", nil, nil, 80, 24, tmpDir, "Test", "auto")
+	if err != nil {
+		t.Fatalf("NewModel: %v", err)
+	}
+	b := newBrowser(context.Background(), m)
+	// NewModel creates a watcher for tmpDir/docs (directory exists); Close tears it down.
+	defer func() { _ = b.Close() }()
+
+	if b.CurrentTopic == nil || b.CurrentTopic.Node == nil {
+		t.Skip("browser has no current topic with a node")
+	}
+
+	before := b.loadGen
+	// Construct the absolute path the watcher would report for the current topic.
+	absPath := filepath.Join(docsDir, b.CurrentTopic.Node.Path)
+	b.Update(FileChangedMsg{Path: absPath})
+
+	if b.loadGen <= before {
+		t.Errorf("FileChangedMsg with matching path did not trigger reload: loadGen=%d want >%d", b.loadGen, before)
+	}
+}
+
+func TestBrowser_FileChangedMsgNonMatchingPathNoReload(t *testing.T) {
+	tmpDir := t.TempDir()
+
+	fsys := &testFS{files: map[string]string{"test.md": "# Test\n"}}
+	roots := []docs.DocRoot{{Name: "test", FS: fsys}}
+	m, err := NewModel(context.Background(), roots, "en", nil, nil, 80, 24, tmpDir, "Test", "auto")
+	if err != nil {
+		t.Fatalf("NewModel: %v", err)
+	}
+	b := newBrowser(context.Background(), m)
+
+	before := b.loadGen
+	// Send a path that does NOT match the current topic.
+	b.Update(FileChangedMsg{Path: filepath.Join(tmpDir, "docs", "other.md")})
+	if b.loadGen != before {
+		t.Errorf("FileChangedMsg with non-matching path triggered reload: loadGen changed from %d to %d", before, b.loadGen)
+	}
+}
+
+func TestBrowser_ProgressMsgStaleGenerationDropped(t *testing.T) {
+	b := newTestBrowser(t)
+
+	// Set up a prefetch with generation > 0.
+	ch := make(chan ProgressMsg, 10)
+	b.prefetchChan = ch
+	b.Prefetch = NewPrefetch(t.Context(), nil, ch)
+	defer b.Prefetch.Close()
+
+	// Advance to generation 3.
+	b.Prefetch.BeginTopic()
+	b.Prefetch.BeginTopic()
+	b.Prefetch.BeginTopic()
+
+	// PrefetchProgress starts empty.
+	initialProgress := b.PrefetchProgress
+
+	// Send a stale ProgressMsg (generation 1 != current 3).
+	b.Update(ProgressMsg{Rendered: 5, Total: 10, Generation: 1})
+
+	// PrefetchProgress must remain unchanged (stale message dropped).
+	if b.PrefetchProgress.Rendered != initialProgress.Rendered {
+		t.Errorf("stale ProgressMsg updated PrefetchProgress.Rendered: got %d, want %d",
+			b.PrefetchProgress.Rendered, initialProgress.Rendered)
+	}
+}
+
+func TestBrowser_ProgressMsgCurrentGenerationApplied(t *testing.T) {
+	b := newTestBrowser(t)
+
+	ch := make(chan ProgressMsg, 10)
+	b.prefetchChan = ch
+	b.Prefetch = NewPrefetch(t.Context(), nil, ch)
+	defer b.Prefetch.Close()
+
+	currentGen := b.Prefetch.Generation()
+
+	// Send a current-generation ProgressMsg.
+	b.Update(ProgressMsg{Rendered: 2, Total: 5, Generation: currentGen})
+
+	if b.PrefetchProgress.Rendered != 2 {
+		t.Errorf("current-gen ProgressMsg not applied: Rendered=%d, want 2", b.PrefetchProgress.Rendered)
+	}
+}
+
+func TestBrowser_FocusChangedMsgUpdatesActive(t *testing.T) {
+	b := newTestBrowser(t)
+	if b.active != panelTree {
+		t.Fatalf("initial active panel = %q, want %q", b.active, panelTree)
+	}
+	b.Update(tui.FocusChangedMsg{Panel: panelViewport})
+	if b.active != panelViewport {
+		t.Errorf("FocusChangedMsg did not update active: got %q, want %q", b.active, panelViewport)
+	}
+	b.Update(tui.FocusChangedMsg{Panel: panelTree})
+	if b.active != panelTree {
+		t.Errorf("FocusChangedMsg back to tree: got %q, want %q", b.active, panelTree)
 	}
 }

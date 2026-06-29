@@ -139,11 +139,20 @@ func TestSelectingIndexDirRendersIndexContent(t *testing.T) {
 	if !m.Tree.IsDir(m.Tree.Cursor()) {
 		t.Fatalf("expected initial cursor on the config directory, got %q", nodeLabel(m.Tree.Cursor()))
 	}
-	if m.initCmd == nil {
-		t.Fatal("expected an initial async load cmd for the index directory")
+	if m.CurrentTopic == nil {
+		t.Fatal("expected initial CurrentTopic to be set")
 	}
 
-	msg := m.initCmd()
+	// Load the topic directly (initCmd removed — Decision #10; first load now
+	// deferred to browser.Update(WindowSizeMsg)).
+	cmd, err := m.loadTopic(m.CurrentTopic)
+	if err != nil {
+		t.Fatalf("loadTopic error: %v", err)
+	}
+	if cmd == nil {
+		t.Fatal("expected a load cmd from loadTopic for the index directory")
+	}
+	msg := cmd()
 	loaded, ok := msg.(topicLoadedMsg)
 	if !ok {
 		t.Fatalf("expected topicLoadedMsg, got %T", msg)

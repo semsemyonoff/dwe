@@ -38,15 +38,23 @@ func (f flatFS) ReadFile(name string) ([]byte, error) {
 }
 
 // loadFirstTopic resolves and applies the model's initial async topic load so
-// the viewport holds rendered content.
+// the viewport holds rendered content. The construction-time initCmd was
+// dropped (Decision #10); this helper calls loadTopic directly instead.
 func loadFirstTopic(t *testing.T, m *Model) {
 	t.Helper()
-	if m.initCmd == nil {
-		t.Fatal("expected an initial async load cmd")
+	if m.CurrentTopic == nil {
+		t.Fatal("model has no current topic")
 	}
-	msg, ok := m.initCmd().(topicLoadedMsg)
+	cmd, err := m.loadTopic(m.CurrentTopic)
+	if err != nil {
+		t.Fatalf("loadTopic: %v", err)
+	}
+	if cmd == nil {
+		return // directory node with no content; nothing to load
+	}
+	msg, ok := cmd().(topicLoadedMsg)
 	if !ok {
-		t.Fatalf("expected topicLoadedMsg, got %T", msg)
+		t.Fatalf("expected topicLoadedMsg from cmd, got %T", msg)
 	}
 	if msg.Err != nil {
 		t.Fatalf("topic load error: %v", msg.Err)

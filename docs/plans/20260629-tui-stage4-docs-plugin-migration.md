@@ -387,35 +387,35 @@ and per-topic cancel exactly.
 - Modify: `internal/core/ui/docstui/model.go` (move teardown out of old `quit`)
 - Modify: `internal/core/ui/docstui/watcher_test.go`, `prefetch_test.go`
 
-- [ ] give the plugin a plugin-owned `context.Context`+`cancel` (derived from the ctx passed
+- [x] give the plugin a plugin-owned `context.Context`+`cancel` (derived from the ctx passed
       into `docstui.Run` in Task 10; until then accept it via the constructor)
-- [ ] implement `Init() tea.Cmd` batching: watcher subscription (`waitForFileChange`) +
+- [x] implement `Init() tea.Cmd` batching: watcher subscription (`waitForFileChange`) +
       prefetch-progress subscription. **`Init` does NOT issue the initial topic load** (Frame
       geometry is still zero there — Decision #10)
-- [ ] fire the first `loadTopic` **from `Update(tea.WindowSizeMsg)`** (the only command-capable
+- [x] fire the first `loadTopic` **from `Update(tea.WindowSizeMsg)`** (the only command-capable
       hook; `Resize` is void), guarded by a `firstLoadDone` flag so it fires exactly once, at
       the **computed viewport-panel inner width** (from the cached body region + `{1,5}`
       weights — Decision #10); update tracked `ContentWidth` on every `WindowSizeMsg` for
       subsequent loads
-- [ ] add a width-replication pin test: the plugin's computed viewport inner width == the
+- [x] add a width-replication pin test: the plugin's computed viewport inner width == the
       `inner.Width` the Frame passes to `ViewPanel(panelViewport, inner)` at widths 60/79/80/
       99/100 (guards against drift from `layoutPanels`)
-- [ ] drop the old `m.initCmd`/construction-time `loadTopic` path (`model.go:189-191`) — the
+- [x] drop the old `m.initCmd`/construction-time `loadTopic` path (`model.go:189-191`) — the
       first render must use the framework-supplied width, never `viewportInnerWidth(0)`
-- [ ] implement `Update(msg tea.Msg) tea.Cmd` to handle `FileChangedMsg` (reload current
+- [x] implement `Update(msg tea.Msg) tea.Cmd` to handle `FileChangedMsg` (reload current
       topic if path matches) and `ProgressMsg` (drop stale generations, re-inline diagrams,
       re-subscribe) — these arrive via the framework forwarding unmatched messages; preserve
       generation filtering + per-topic cancel exactly
-- [ ] implement `Close() error` → `cancel()` + `Watcher.Close()` + `Prefetch.Close()` (move
+- [x] implement `Close() error` → `cancel()` + `Watcher.Close()` + `Prefetch.Close()` (move
       the body of the old `quit`); ensure idempotent/­nil-safe
-- [ ] write tests: FileChangedMsg triggers reload of matching path only; stale-generation
+- [x] write tests: FileChangedMsg triggers reload of matching path only; stale-generation
       ProgressMsg is dropped; `Close` cancels ctx and closes watcher+prefetch (no goroutine
       leak — reuse existing watcher/prefetch test seams); **the initial topic load fires
       exactly once from the first non-zero-width `Update(WindowSizeMsg)` and renders at the
       computed viewport inner width (assert content width / heading-index count matches that
       width, NOT a zero/construction width); a second `WindowSizeMsg` does NOT re-fire the
       load**
-- [ ] `make test` — must pass before Task 7
+- [x] `make test` — must pass before Task 7
 
 ### Task 7: Inline filter capture mode (`CapturingInput`)
 

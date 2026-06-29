@@ -44,11 +44,12 @@ func TestNewModel(t *testing.T) {
 		t.Error("Model.StatusBar should not be nil")
 	}
 
-	// Init returns a non-nil Cmd: the initial topic load runs in a goroutine
-	// (see loadTopic / topicLoadedMsg) so the bubbletea event loop stays
-	// responsive while the first file resolves and renders.
-	if m.Init() == nil {
-		t.Error("Init should return a Cmd for the initial async topic load")
+	// Init returns nil: the construction-time initCmd was dropped (Decision #10);
+	// the first topic load fires from browser.Update(WindowSizeMsg). With no
+	// project root there is also no watcher, so both sources of Init cmds are
+	// absent.
+	if m.Init() != nil {
+		t.Error("Init should return nil when no watcher is set (no project root)")
 	}
 }
 

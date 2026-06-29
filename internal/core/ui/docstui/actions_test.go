@@ -30,7 +30,7 @@ func newTestBrowserWithHeadings(t *testing.T) *browser {
 	if err != nil {
 		t.Fatalf("NewModel: %v", err)
 	}
-	return newBrowser(m)
+	return newBrowser(context.Background(), m)
 }
 
 // --- Actions registration ---

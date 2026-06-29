@@ -1,6 +1,8 @@
 package docstui
 
 import (
+	"context"
+	"path/filepath"
 	"strings"
 
 	tea "charm.land/bubbletea/v2"
@@ -46,6 +48,18 @@ type browser struct {
 
 	tr     i18n.Translator
 	locale string
+
+	// ctx / cancel are the browser-owned context and its cancellation function,
+	// derived from the context passed to newBrowser (and in Task 10, from
+	// docstui.Run). Close() calls cancel() to stop any future browser-scoped
+	// operations.
+	ctx    context.Context    //nolint:containedctx
+	cancel context.CancelFunc
+
+	// firstLoadDone guards the one-shot initial topic load that fires from
+	// Update(tea.WindowSizeMsg). It prevents a second load on subsequent
+	// resize events.
+	firstLoadDone bool
 }
 
 // Compile-time guarantee that *browser satisfies the tui.Plugin contract.
@@ -54,9 +68,11 @@ var _ tui.Plugin = (*browser)(nil)
 // newBrowser builds the plugin from the same inputs as the legacy NewModel
 // (passed through as a *Model). Sizes are deferred — the Frame supplies
 // geometry through Resize/ViewPanel, so the viewport starts at zero width and
-// is sized on the first render pass. Translator and locale are read from the
-// model (nil-safe).
-func newBrowser(m *Model) *browser {
+// is sized on the first render pass. The context is used to scope the
+// browser's own lifecycle; Close() cancels it. Translator and locale are read
+// from the model (nil-safe).
+func newBrowser(ctx context.Context, m *Model) *browser {
+	bctx, cancel := context.WithCancel(ctx)
 	tr := m.Translator
 	if tr == nil {
 		tr = i18n.NopTranslator{}
@@ -64,16 +80,65 @@ func newBrowser(m *Model) *browser {
 	return &browser{
 		Model:  m,
 		active: panelTree,
+		ctx:    bctx,
+		cancel: cancel,
 		tr:     tr,
 		locale: m.Locale,
 	}
 }
 
-// Init implements tui.Plugin. Stub — async lifecycle wires in Task 6.
-func (b *browser) Init() tea.Cmd { return nil }
+// viewportPanelInnerWidth computes the inner content width of the viewport
+// panel at the given terminal width, replicating the Frame's layout math
+// (layoutPanels + contentRegion, both unexported in tui/geometry.go). The
+// tree panel takes the proportional floor; the viewport takes the remainder
+// (last-panel rule so widths sum exactly to termW). contentRegion then
+// subtracts 4 cells (2 × (borderSize:1 + hPadding:1)) per side.
+func viewportPanelInnerWidth(termW int) int {
+	const (
+		treeW   = 1
+		vpW     = 5
+		totalW  = treeW + vpW
+		chrome  = 4 // 2*(borderSize+hPadding) = 2*(1+1), see tui/geometry.go
+	)
+	treeOuter := termW * treeW / totalW // proportional floor
+	vpOuter := termW - treeOuter        // remainder (last panel absorbs)
+	if vpOuter < chrome {
+		return 0
+	}
+	return vpOuter - chrome
+}
 
-// Close implements tui.Plugin. Stub — teardown wires in Task 6.
-func (b *browser) Close() error { return nil }
+// Init implements tui.Plugin. Subscribes to file-change events from the
+// watcher so live-reload works. The initial topic load is deliberately NOT
+// fired here — the Frame supplies geometry only later via WindowSizeMsg, so
+// loading here would use a zero content width (Decision #10).
+func (b *browser) Init() tea.Cmd {
+	if b.Watcher == nil {
+		return nil
+	}
+	return waitForFileChange(b.Watcher.Events())
+}
+
+// Close implements tui.Plugin. Tears down the watcher, the prefetch pool,
+// and the browser-owned context. Safe to call with nil watcher/prefetch.
+// Idempotent: the prefetch channel is set to nil after close so a second
+// Close() does not panic.
+func (b *browser) Close() error {
+	if b.cancel != nil {
+		b.cancel()
+	}
+	if b.Watcher != nil {
+		_ = b.Watcher.Close()
+	}
+	if b.Prefetch != nil {
+		b.Prefetch.Close()
+		if b.prefetchChan != nil {
+			close(b.prefetchChan)
+			b.prefetchChan = nil
+		}
+	}
+	return nil
+}
 
 // Panels implements tui.Plugin. Two static panels: tree (left, weight 1) and
 // viewport (right, weight 5). The {1,5} split is the starting ratio validated
@@ -114,8 +179,81 @@ func (b *browser) StatusContext() string {
 // PendingOverlay implements tui.Plugin. No overlay for the docs browser yet.
 func (b *browser) PendingOverlay() (tui.Overlay, bool) { return tui.Overlay{}, false }
 
-// Update implements tui.Plugin. Stub — message routing wires in Task 6.
-func (b *browser) Update(_ tea.Msg) tea.Cmd { return nil }
+// Update implements tui.Plugin. The Frame forwards all non-key messages here
+// (async preservation), including tea.WindowSizeMsg (forwarded after Resize).
+// Key messages the registry did not handle also arrive here (raw forward).
+func (b *browser) Update(msg tea.Msg) tea.Cmd {
+	switch msg := msg.(type) {
+	case tea.WindowSizeMsg:
+		b.TermWidth = msg.Width
+		b.TermHeight = msg.Height
+		// Recompute ContentWidth so the NEXT load event (topic switch / reload /
+		// FileChanged / locale change) uses the updated width. Resize only
+		// changes the display window; existing glamour content is not re-rendered
+		// until the next load (Decision #10, no load-storm / no YOffset reset).
+		if msg.Width > 0 {
+			b.ContentWidth = viewportPanelInnerWidth(msg.Width)
+		}
+		// Fire the first topic load exactly once, from the first non-zero-width
+		// WindowSizeMsg. firstLoadDone prevents a second trigger on resize.
+		// Resize(body) is void so this is the only Cmd-capable hook that has
+		// the framework-supplied width (Decision #10).
+		if !b.firstLoadDone && msg.Width > 0 {
+			b.firstLoadDone = true
+			if b.CurrentTopic != nil {
+				cmd, _ := b.loadTopic(b.CurrentTopic)
+				return cmd
+			}
+		}
+		return nil
+
+	case tui.FocusChangedMsg:
+		b.active = msg.Panel
+		return nil
+
+	case topicLoadedMsg:
+		return b.applyTopicLoaded(msg)
+
+	case FileChangedMsg:
+		// Reload the current topic if the changed file matches it. Mirrors
+		// Model.Update(FileChangedMsg) exactly (generation filtering, path
+		// comparison) so live-reload behavior is preserved.
+		var topicCmd tea.Cmd
+		if b.CurrentTopic != nil && b.CurrentTopic.Node != nil && b.ProjectRoot != "" {
+			projectDocsPath := filepath.Join(b.ProjectRoot, "docs")
+			absPath := filepath.Join(projectDocsPath, b.CurrentTopic.Node.Path)
+			if filepath.Clean(absPath) == filepath.Clean(msg.Path) {
+				topicCmd, _ = b.loadTopic(b.CurrentTopic)
+			}
+		}
+		// Re-subscribe so the next event is delivered.
+		if b.Watcher != nil {
+			return tea.Batch(topicCmd, waitForFileChange(b.Watcher.Events()))
+		}
+		return topicCmd
+
+	case ProgressMsg:
+		// Drop stale ticks from a previous topic: workers that finished after
+		// the user navigated away emit messages whose generation no longer
+		// matches the current topic.
+		if b.Prefetch != nil && msg.Generation != b.Prefetch.Generation() {
+			if b.prefetchChan != nil {
+				return waitForProgress(b.prefetchChan)
+			}
+			return nil
+		}
+		b.PrefetchProgress = msg
+		b.StatusBar.SetProgress(msg.Rendered, msg.Total)
+		if b.lastRenderedOutput != "" && len(b.lastRenderedDiagrams) > 0 {
+			b.Viewport.SetContent(b.inlineDiagrams(b.lastRenderedOutput, b.lastRenderedDiagrams))
+		}
+		if b.prefetchChan != nil {
+			return waitForProgress(b.prefetchChan)
+		}
+		return nil
+	}
+	return nil
+}
 
 // ViewPanel implements tui.Plugin. Caches the per-panel inner region and
 // renders the panel body. Tree render wired in Task 3; viewport render here.

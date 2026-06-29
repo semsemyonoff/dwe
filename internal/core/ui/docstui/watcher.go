@@ -21,6 +21,9 @@ type Watcher struct {
 	ctx     context.Context
 	cancel  context.CancelFunc
 	events  chan FileChangedMsg
+	// done is closed by eventPump when it exits. Close() waits on it so that
+	// callers are guaranteed both watcher goroutines have fully exited.
+	done chan struct{}
 }
 
 // NewWatcher creates a new Watcher for the given root directory.
@@ -48,6 +51,7 @@ func NewWatcher(ctx context.Context, root string) (*Watcher, error) {
 		ctx:     ctx,
 		cancel:  cancel,
 		events:  make(chan FileChangedMsg, 16),
+		done:    make(chan struct{}),
 	}
 
 	// Start the event pump goroutine
@@ -63,9 +67,14 @@ func (w *Watcher) Events() <-chan FileChangedMsg {
 }
 
 // eventPump reads from the watcher and forwards file-changed events.
-// This runs in its own goroutine and exits when w.ctx is cancelled.
-// Close() owns the watcher lifetime — do not close here.
+// It exits ONLY when the underlying fsnotify Events channel is closed, which
+// happens when the kqueue goroutine exits after w.watcher.Close(). This
+// ordering is load-bearing: Close() waits on w.done, so when it unblocks, both
+// the eventPump goroutine AND the kqueue goroutine have fully exited.
+// (Context cancellation is intentionally not an exit path here; call Close() to
+// stop the pump.)
 func (w *Watcher) eventPump() {
+	defer close(w.done)
 	defer close(w.events)
 	for {
 		select {
@@ -76,8 +85,6 @@ func (w *Watcher) eventPump() {
 			slog.Debug("watcher event", "op", event.Op, "name", event.Name)
 			select {
 			case w.events <- FileChangedMsg{Path: event.Name}:
-			case <-w.ctx.Done():
-				return
 			default:
 				// Drop the event if the consumer is behind; avoid blocking the pump.
 			}
@@ -87,18 +94,23 @@ func (w *Watcher) eventPump() {
 				return
 			}
 			slog.Debug("watcher error", "err", err)
-
-		case <-w.ctx.Done():
-			return
 		}
 	}
 }
 
-// Close stops the watcher and cleans up resources.
-// It is safe to call Close() multiple times.
+// Close stops the watcher and blocks until both internal goroutines have
+// exited. Closing the fsnotify watcher signals the kqueue goroutine to stop;
+// when the kqueue goroutine exits it closes w.watcher.Events; eventPump sees
+// the closed channel and returns, then closes w.done, which unblocks this
+// method. Because <-w.done only unblocks after eventPump exits AND eventPump
+// exits only after Events closes AND Events closes only after the kqueue
+// goroutine exits, this provides a hard guarantee that both goroutines have
+// fully stopped before Close() returns. Safe to call multiple times.
 func (w *Watcher) Close() error {
-	w.cancel()
-	return w.watcher.Close()
+	err := w.watcher.Close() // triggers: kqueue exit → Events close → eventPump exit → done close
+	<-w.done                 // blocks until both goroutines have fully exited
+	w.cancel()               // cleanup the context (idempotent)
+	return err
 }
 
 // walkAndWatch recursively walks a directory and adds it (and all subdirs) to the watcher.
