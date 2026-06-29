@@ -581,10 +581,10 @@ and per-topic cancel exactly.
 
 ### Task 14: Finalize documentation + archive plan
 
-- [ ] update `CLAUDE.md`/`AGENTS.md` Critical Patterns only if a new load-bearing contract
+- [x] update `CLAUDE.md`/`AGENTS.md` Critical Patterns only if a new load-bearing contract
       emerged (e.g. the `docstui` plugin + core/ui layering note) — keep it tight
-- [ ] confirm `docs/internals/packages.md` + `tui-keymap.md` reflect the final shape
-- [ ] move this plan to `docs/plans/completed/` (`mkdir -p docs/plans/completed` first)
+- [x] confirm `docs/internals/packages.md` + `tui-keymap.md` reflect the final shape
+- [x] move this plan to `docs/plans/completed/` (`mkdir -p docs/plans/completed` first)
 
 ## Post-Completion
 
