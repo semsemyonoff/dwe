@@ -9,7 +9,7 @@ import (
 	"github.com/semsemyonoff/dwe/internal/cli/cmdctx"
 	coredocs "github.com/semsemyonoff/dwe/internal/core/docs"
 	"github.com/semsemyonoff/dwe/internal/core/docs/mermaid"
-	"github.com/semsemyonoff/dwe/internal/core/docs/tui"
+	"github.com/semsemyonoff/dwe/internal/core/ui/docstui"
 	"github.com/semsemyonoff/dwe/internal/core/project/config"
 	userpkg "github.com/semsemyonoff/dwe/internal/core/project/user"
 	"github.com/semsemyonoff/dwe/internal/core/ui/render"
@@ -137,7 +137,7 @@ func runDocsTUI(cmd *cobra.Command, flags *cmdctx.RootFlags, termWidth, termHeig
 		projectName = cfg.Project.Name
 	}
 	title := render.BrandedSelectorTitle(projectName, "Documentation")
-	model, err := tui.NewModel(ctx, sources, locale, translator, renderer, termWidth, termHeight, projectRoot, title, mermaidTheme)
+	model, err := docstui.NewModel(ctx, sources, locale, translator, renderer, termWidth, termHeight, projectRoot, title, mermaidTheme)
 	if err != nil {
 		return fmt.Errorf("failed to create TUI model: %w", err)
 	}

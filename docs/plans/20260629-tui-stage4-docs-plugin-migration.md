@@ -255,20 +255,20 @@ and per-topic cancel exactly.
 - Modify: `internal/cli/docs/docs.go` (import path + package selector)
 - Modify: `docs/internals/packages.md`, `docs/internals/tui-keymap.md` (path references)
 
-- [ ] `git mv internal/core/docs/tui internal/core/ui/docstui` (preserve history); confirm
+- [x] `git mv internal/core/docs/tui internal/core/ui/docstui` (preserve history); confirm
       `internal/core/docs/tui/` no longer exists
-- [ ] rename the package declaration in every moved file: `package tui` → `package docstui`
+- [x] rename the package declaration in every moved file: `package tui` → `package docstui`
       (incl. `*_test.go`)
-- [ ] update `internal/cli/docs/docs.go` to import `internal/core/ui/docstui` and use the
+- [x] update `internal/cli/docs/docs.go` to import `internal/core/ui/docstui` and use the
       `docstui.` selector for `NewModel` and any other referenced symbols
-- [ ] grep the whole tree for stale `core/docs/tui` references
+- [x] grep the whole tree for stale `core/docs/tui` references
       (`grep -rn "core/docs/tui" internal/ docs/`) and fix code refs; update prose path
       mentions in `packages.md` / `tui-keymap.md`
-- [ ] confirm no NEW `core/docs → core/ui` import is introduced *yet* (the relocated package
+- [x] confirm no NEW `core/docs → core/ui` import is introduced *yet* (the relocated package
       is `core/ui/docstui`; `core/docs` itself must remain free of `core/ui` imports —
       `grep -rn "core/ui" internal/core/docs/`)
-- [ ] `make build` (regenerate embedded docs) — must succeed
-- [ ] `make test` — all moved tests pass unchanged (behavior identical); this task adds no
+- [x] `make build` (regenerate embedded docs) — must succeed
+- [x] `make test` — all moved tests pass unchanged (behavior identical); this task adds no
       new tests (pure relocation, existing tests are the regression net)
 
 ### Task 2: `docstui` plugin skeleton (`tui.Plugin` shell)

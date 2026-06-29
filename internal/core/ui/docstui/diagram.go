@@ -1,4 +1,4 @@
-package tui
+package docstui
 
 import (
 	"github.com/semsemyonoff/dwe/internal/core/docs/render"

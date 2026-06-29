@@ -1,4 +1,4 @@
-package tui
+package docstui
 
 import (
 	"charm.land/bubbles/v2/viewport"

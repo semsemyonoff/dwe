@@ -68,7 +68,7 @@ func (s *inspectState) overlay() tui.Overlay {
 // is the overdraw target; on the thumb rows it becomes a solid accent block
 // (`█`) and on the remaining rows a muted shaded track (`░`), so the right
 // column reads as a scrollbar with a clearly visible thumb. Mirrors the
-// docs-browser scrollbar (internal/core/docs/tui/view.go).
+// docs-browser scrollbar (internal/core/ui/docstui/view.go).
 const (
 	scrollbarBorderRune = "│"
 	scrollbarThumbGlyph = "█"

@@ -78,7 +78,7 @@ key inventories in the source files.
 | `space`   | Toggle              |
 | `backspace`| Delete (filter)    |
 
-**Docs browser** (`internal/core/docs/tui/`):
+**Docs browser** (`internal/core/ui/docstui/`):
 
 | Key | Current description    |
 |-----|------------------------|
