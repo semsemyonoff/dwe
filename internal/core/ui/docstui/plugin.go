@@ -119,11 +119,17 @@ func (b *browser) PendingOverlay() (tui.Overlay, bool) { return tui.Overlay{}, f
 func (b *browser) Update(_ tea.Msg) tea.Cmd { return nil }
 
 // ViewPanel implements tui.Plugin. Caches the per-panel inner region and
-// renders the panel body. Stub — tree/viewport render wires in Tasks 3/4.
+// renders the panel body. Tree render wired in Task 3; viewport render in Task 4.
 func (b *browser) ViewPanel(id tui.PanelID, inner tui.Region) string {
 	switch id {
 	case panelTree:
 		b.treeInner = inner
+		if b.Model == nil || b.Tree == nil {
+			return ""
+		}
+		// Keep the focused row on screen across resizes before clipping.
+		b.Tree.ensureFocusVisible(inner.Height)
+		return b.Tree.renderRegion(inner, b.active == panelTree)
 	case panelViewport:
 		b.viewportInner = inner
 	}

@@ -303,19 +303,19 @@ and per-topic cancel exactly.
 - Modify: `internal/core/ui/docstui/tree_widget.go` (add Frame surface)
 - Modify: `internal/core/ui/docstui/tree_widget_test.go`
 
-- [ ] add to `TreeWidget` the cmdbrowser-parallel Frame surface: `topIdx int` field,
+- [x] add to `TreeWidget` the cmdbrowser-parallel Frame surface: `topIdx int` field,
       `ensureFocusVisible(height int)`, `focusRow(row int)` — names/semantics mirroring
       `cmdbrowser/tree.go` exactly (clip visible rows to inner panel height; click→cursor
       without toggling expansion; no-op past last row) [future-proofing for Plan 2]
-- [ ] implement `ViewPanel(panelTree, inner)` — render the visible tree rows clipped to
+- [x] implement `ViewPanel(panelTree, inner)` — render the visible tree rows clipped to
       `inner.Height` via `topIdx`/`ensureFocusVisible`, cursor highlight on the focused row;
       reuse the existing row-label/indent rendering (no border — Frame owns it)
-- [ ] preserve the filter header row behavior decision for Task 7 (here render unfiltered
+- [x] preserve the filter header row behavior decision for Task 7 (here render unfiltered
       tree only)
-- [ ] write tests: `ensureFocusVisible` clamping (focus above/below window, short/tall
+- [x] write tests: `ensureFocusVisible` clamping (focus above/below window, short/tall
       panel), `focusRow` mapping incl. out-of-range no-op, tree `ViewPanel` golden-ish string
       at a fixed inner size
-- [ ] `make test` — must pass before Task 4
+- [x] `make test` — must pass before Task 4
 
 ### Task 4: Viewport panel render (content + scrollbar + diagrams + headings)
 

@@ -40,6 +40,57 @@ type TreeWidget struct {
 	// label matches the query (and their ancestors so the hierarchy renders).
 	// Set via ApplyFilter; nil/empty means "show everything per Expanded state".
 	filter *TreeFilter
+
+	// topIdx is the index into visible of the first row rendered in the tree
+	// panel. Without it an oversized tree (more visible nodes than the panel
+	// can hold) would overflow the bordered frame. Driven off the inner panel
+	// height passed to the renderer — see ensureFocusVisible. Mirrors
+	// cmdbrowser treeModel.topIdx.
+	topIdx int
+}
+
+// ensureFocusVisible adjusts topIdx so the cursor stays within a viewport of
+// the given height (the inner tree-panel height the Frame supplies). Called on
+// every render via ViewPanel so a resize keeps the focused row on screen.
+// Mirrors cmdbrowser treeModel.ensureFocusVisible exactly.
+func (tw *TreeWidget) ensureFocusVisible(height int) {
+	n := len(tw.visible)
+	if n == 0 || height <= 0 {
+		tw.topIdx = 0
+		return
+	}
+	idx := tw.indexOfNode(tw.cursor)
+	if idx < 0 {
+		tw.topIdx = 0
+		return
+	}
+	if idx < tw.topIdx {
+		tw.topIdx = idx
+	} else if idx >= tw.topIdx+height {
+		tw.topIdx = idx - height + 1
+	}
+	maxTop := max(n-height, 0)
+	if tw.topIdx > maxTop {
+		tw.topIdx = maxTop
+	}
+	if tw.topIdx < 0 {
+		tw.topIdx = 0
+	}
+}
+
+// focusRow moves the cursor to the visible node at the given panel-local row
+// (0-based, relative to the first rendered row at topIdx). A click past the
+// last visible node is a no-op rather than snapping the cursor to the final
+// row. Mirrors cmdbrowser treeModel.focusRow exactly.
+func (tw *TreeWidget) focusRow(row int) {
+	if row < 0 {
+		return
+	}
+	idx := tw.topIdx + row
+	if idx >= len(tw.visible) {
+		return
+	}
+	tw.cursor = tw.visible[idx]
 }
 
 // projectDweForTUI returns the user-facing projection of the canonical
