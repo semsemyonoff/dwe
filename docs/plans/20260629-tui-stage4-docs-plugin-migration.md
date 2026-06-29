@@ -554,15 +554,15 @@ and per-topic cancel exactly.
 - Modify: `docs/internals/packages.md`
 - Modify: `docs/internals/tui-keymap.md`
 
-- [ ] add the `docstui` package contract to `packages.md`: the `core/ui` layering rule (the
+- [x] add the `docstui` package contract to `packages.md`: the `core/ui` layering rule (the
       relocation keeps `core/docs` free of `core/ui` imports; `tui` consumed only from
       `core/ui/*` + `cli/`), the plugin's panels/focus/async notes, and the
       plugin-owned-context detail
-- [ ] update `tui-keymap.md` for the docs keymap mapping (reload→`ctrl+r`, Diagrams/Locales
+- [x] update `tui-keymap.md` for the docs keymap mapping (reload→`ctrl+r`, Diagrams/Locales
       sections, filter as inline capture, focus via `tab`, and the **intentional `h`/`l`
       toggle→directional** change for cross-surface unification)
-- [ ] `make build` to re-sync embedded docs; `make test` (docs-subsystem tests) — must pass
-- [ ] (no separate code tests — documentation task; the build/test run is the gate)
+- [x] `make build` to re-sync embedded docs; `make test` (docs-subsystem tests) — must pass
+- [x] (no separate code tests — documentation task; the build/test run is the gate)
 
 ### Task 13: Verify acceptance criteria
 

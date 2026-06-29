@@ -80,19 +80,47 @@ key inventories in the source files.
 
 **Docs browser** (`internal/core/ui/docstui/`):
 
-| Key | Current description    |
-|-----|------------------------|
-| `]` | Next diagram           |
-| `[` | Prev diagram           |
-| `o` | Open diagram           |
-| `y` | Copy diagram           |
-| `L` | Language cycle         |
-| `e` | Show English           |
-| `r` | Reload                 |
+As of TUI Stage 4 this is a `tui.Plugin`. Plugin-local actions registered via `Actions()`:
 
-Note: docs-browser uses `r` for reload while the stdlib uses `ctrl+r`. During the
-Stage 3–5b migrations the surface will align to the stdlib ID (`reload`) and bind
-both keys (the surface-specific `r` and the stdlib `ctrl+r`).
+**Diagrams** section:
+
+| Key | Description     |
+|-----|-----------------|
+| `]` | Next diagram    |
+| `[` | Prev diagram    |
+| `o` | Open diagram    |
+| `y` | Copy diagram    |
+
+**Locales** section:
+
+| Key | Description       |
+|-----|-------------------|
+| `L` | Language cycle    |
+| `e` | Show English      |
+
+**Tree navigation** (plugin-local — stdlib `nav.left`/`nav.right` are NOT registered;
+`tree.collapse`/`tree.expand` own these keys instead):
+
+| Key            | Description                                        |
+|----------------|----------------------------------------------------|
+| `h`, `←`       | Collapse (step to parent if already collapsed)     |
+| `l`, `→`       | Expand (step into first child if already expanded) |
+
+**Intentional keymap change (Stage 4)**: the pre-migration docs browser toggled
+expansion on BOTH `h` and `l` (each called `Tree.Toggle`). Stage 4 adopts directional
+semantics for cross-surface unification with the cmdbrowser: `h`/`←` collapse (or step
+to parent when already collapsed), `l`/`→` expand (or step into first child when already
+expanded). Locked in `actions_test.go`.
+
+**Reload**: `ctrl+r` only (stdlib `ActionReload`). The pre-migration `r` binding is
+dropped — no alias kept.
+
+**Filter** (`/`): inline-capture mode (`CapturingInput()` returns true while active).
+Raw keys edit the query; `enter` commits, `esc` cancels. Mirrors the cmdbrowser filter
+pattern — see §5.
+
+**Focus toggle** (`tab`): framework built-in `ActionFocusNext` cycles between the tree
+and viewport panels.
 
 **Status dashboard** (`internal/core/ui/statustui/`):
 
