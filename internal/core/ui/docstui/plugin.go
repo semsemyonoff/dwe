@@ -4,11 +4,12 @@ import (
 	"context"
 	"fmt"
 	"path/filepath"
-	"slices"
 	"strings"
+	"time"
 
 	tea "charm.land/bubbletea/v2"
 	"charm.land/lipgloss/v2"
+	"github.com/charmbracelet/x/ansi"
 
 	"github.com/semsemyonoff/dwe/internal/core/ui/styles"
 	"github.com/semsemyonoff/dwe/internal/core/ui/tui"
@@ -66,6 +67,59 @@ type browser struct {
 	// filterSavedCursor is the cursor node saved when entering filter mode so
 	// exitFilter (Esc) can restore the pre-filter selection exactly.
 	filterSavedCursor *TreeNode
+
+	// wheel coalesces tree-scroll topic loads. A mouse-wheel burst over the tree
+	// panel moves the cursor immediately per notch but defers the expensive topic
+	// load (glamour render) to a single debounced flush after the burst settles,
+	// mirroring the revdiff wheel pattern. Without it, each notch spawned a full
+	// async render that piled up and could not be interrupted.
+	wheel wheelState
+
+	// diagramRefreshPending / diagramRefreshTickInFlight debounce the viewport
+	// placeholder refresh driven by background diagram prefetch. Re-inlining the
+	// whole document on every ProgressMsg (one per rendered diagram) stormed the
+	// viewport with full SetContent calls that hitched an in-progress scroll —
+	// the "background touches the current render" cost on diagram-heavy docs. The
+	// refresh is now coalesced onto a trailing tick AND deferred past an active
+	// wheel burst, so background rendering updates the placeholders only once
+	// things settle.
+	diagramRefreshPending      bool
+	diagramRefreshTickInFlight bool
+}
+
+// diagramRefreshDelay is the debounce window for applying the background-diagram
+// placeholder refresh to the viewport (see diagramRefreshPending).
+const diagramRefreshDelay = 150 * time.Millisecond
+
+// diagramRefreshMsg fires diagramRefreshDelay after a prefetch ProgressMsg to
+// apply the coalesced placeholder refresh (deferred again if a scroll is still
+// in flight).
+type diagramRefreshMsg struct{}
+
+// wheelLoadDelay is the idle window after the last tree-scroll notch before the
+// debounced topic load fires. Short enough that a single notch still feels
+// instant, long enough to coalesce a wheel/trackpad burst into one load.
+const wheelLoadDelay = 60 * time.Millisecond
+
+// wheelState drives the debounced wheel side-effects (revdiff pattern): each
+// notch moves the cursor / scrolls the viewport immediately (both O(1)) and arms
+// a single deferred flush for the EXPENSIVE follow-up work — the tree topic load
+// (glamour render) and the viewport diagram re-sync (full-document SetContent).
+// Without this, a buffered wheel flood ran that expensive work once per notch,
+// stalling the bubbletea event loop so the backlog drained (and interrupts were
+// reached) only long after the user stopped scrolling.
+type wheelState struct {
+	gen          int  // bumped on every wheel notch; captured by each scheduled tick
+	loadPending  bool // a deferred tree topic load is owed (tree scroll)
+	syncPending  bool // a deferred viewport diagram re-sync is owed (viewport scroll)
+	tickInFlight bool // exactly one debounce tick is scheduled at a time
+}
+
+// wheelDebounceMsg fires wheelLoadDelay after a tree-scroll notch. gen pins the
+// burst generation captured when the tick was scheduled; a mismatch means more
+// notches arrived since, so the flush re-arms rather than loading mid-burst.
+type wheelDebounceMsg struct {
+	gen int
 }
 
 // Compile-time guarantee that *browser satisfies the tui.Plugin contract.
@@ -231,6 +285,9 @@ func (b *browser) Update(msg tea.Msg) tea.Cmd {
 	case tui.WheelMsg:
 		return b.handleWheel(msg)
 
+	case wheelDebounceMsg:
+		return b.handleWheelDebounce(msg)
+
 	case tui.PanelClickMsg:
 		return b.handlePanelClick(msg)
 
@@ -267,13 +324,49 @@ func (b *browser) Update(msg tea.Msg) tea.Cmd {
 		}
 		b.PrefetchProgress = msg
 		b.StatusBar.SetProgress(msg.Rendered, msg.Total)
-		if b.lastRenderedOutput != "" && len(b.lastRenderedDiagrams) > 0 {
-			b.Viewport.SetContent(b.inlineDiagrams(b.lastRenderedOutput, b.lastRenderedDiagrams))
-		}
+		// Coalesce the placeholder refresh instead of a full SetContent per
+		// completed diagram — see scheduleDiagramRefresh.
+		refreshCmd := b.scheduleDiagramRefresh()
 		if b.prefetchChan != nil {
-			return waitForProgress(b.prefetchChan)
+			return tea.Batch(refreshCmd, waitForProgress(b.prefetchChan))
 		}
+		return refreshCmd
+
+	case diagramRefreshMsg:
+		return b.applyDiagramRefresh()
+	}
+	return nil
+}
+
+// scheduleDiagramRefresh marks a viewport placeholder refresh pending and arms a
+// single trailing tick. Background diagram prefetch emits one ProgressMsg per
+// rendered diagram; without this each would re-inline the whole document via
+// SetContent, hitching any in-progress scroll. Only the first ProgressMsg of a
+// run schedules the tick; later ones ride it.
+func (b *browser) scheduleDiagramRefresh() tea.Cmd {
+	b.diagramRefreshPending = true
+	if b.diagramRefreshTickInFlight {
 		return nil
+	}
+	b.diagramRefreshTickInFlight = true
+	return tea.Tick(diagramRefreshDelay, func(time.Time) tea.Msg { return diagramRefreshMsg{} })
+}
+
+// applyDiagramRefresh runs when a diagramRefreshMsg fires. If a wheel burst is
+// still in flight it re-arms (deferring the refresh past the active scroll so
+// background rendering never touches the foreground render mid-scroll);
+// otherwise it re-inlines the document once to pick up newly rendered diagrams.
+func (b *browser) applyDiagramRefresh() tea.Cmd {
+	b.diagramRefreshTickInFlight = false
+	if !b.diagramRefreshPending {
+		return nil
+	}
+	if b.wheel.tickInFlight {
+		return b.scheduleDiagramRefresh() // a scroll is active; defer
+	}
+	b.diagramRefreshPending = false
+	if b.lastRenderedOutput != "" && len(b.lastRenderedDiagrams) > 0 {
+		b.Viewport.SetContent(b.inlineDiagrams(b.lastRenderedOutput, b.lastRenderedDiagrams))
 	}
 	return nil
 }
@@ -338,6 +431,9 @@ func (b *browser) applyInnerScrollbar(content string, h int) string {
 	track := lipgloss.NewStyle().Foreground(lipgloss.Color(styles.ColorMuted())).Render(scrollbarTrackGlyph)
 
 	w := b.viewportInner.Width
+	if w < 2 {
+		return content // too narrow to carve a scrollbar column
+	}
 	lines := strings.Split(content, "\n")
 	n := min(h, len(lines))
 	for i := range n {
@@ -346,12 +442,18 @@ func (b *browser) applyInnerScrollbar(content string, h int) string {
 			glyph = thumb
 		}
 		lw := lipgloss.Width(lines[i])
-		switch {
-		case lw < w-1:
+		if lw >= w {
+			// Truncate to make room for the scrollbar glyph. ansi.Truncate is
+			// O(n) and ANSI-aware; the previous hand-rolled clip was O(n²) (a
+			// string alloc + width scan per rune) and dominated CPU on long
+			// glamour lines — ~16ms per ViewPanel, the mouse-scroll "hang".
+			lines[i] = ansi.Truncate(lines[i], w-1, "")
+			lw = lipgloss.Width(lines[i]) // may land below w-1 if a wide rune straddled the cut
+		}
+		if lw < w-1 {
+			// Pad so every row is exactly w-1 cells before the 1-cell glyph,
+			// keeping the scrollbar column aligned even past a wide-rune cut.
 			lines[i] += strings.Repeat(" ", (w-1)-lw)
-		case lw >= w:
-			// Truncate to make room for the scrollbar glyph.
-			lines[i] = scrollbarClip(lines[i], w-1)
 		}
 		lines[i] += glyph
 	}
@@ -548,6 +650,9 @@ func isPrintable(s string) bool {
 // per-row click targets today; wheel scroll arrives via WheelMsg (pointer-routed
 // by the framework), so no per-click scroll handling is needed here.
 func (b *browser) handlePanelClick(msg tui.PanelClickMsg) tea.Cmd {
+	// A click interrupts an in-flight wheel-scroll burst: drop the deferred tree
+	// load so the click's own selection takes over immediately.
+	b.cancelWheelLoad()
 	if b.CapturingInput() {
 		// Filter owns raw input; don't reposition the tree under it.
 		return nil
@@ -556,9 +661,35 @@ func (b *browser) handlePanelClick(msg tui.PanelClickMsg) tea.Cmd {
 		b.Tree.eng.FocusRow(msg.Y)
 		return b.afterTreeMove()
 	}
-	// Viewport clicks are intentionally no-op: the viewport widget has no
-	// per-row click targets.
+	if msg.Panel == panelViewport && b.Viewport != nil {
+		b.scrollViewportToClick(msg.X, msg.Y)
+		return nil
+	}
 	return nil
+}
+
+// scrollViewportToClick handles a click on the viewport scrollbar column: it
+// jumps the viewport so the clicked track row maps proportionally to the
+// document (GUI scrollbar behaviour — click near the top scrolls near the top,
+// near the bottom scrolls near the bottom). Clicks off the scrollbar column, or
+// when the whole document fits (no scrollbar drawn), are ignored. The scrollbar
+// occupies the last inner column (see applyInnerScrollbar); PanelClickMsg coords
+// are panel-inner-local, so the column index is viewportInner.Width-1.
+func (b *browser) scrollViewportToClick(x, y int) {
+	w, h := b.viewportInner.Width, b.viewportInner.Height
+	if w <= 0 || h <= 0 || x < w-1 {
+		return // not the scrollbar column
+	}
+	total := b.Viewport.TotalLines()
+	if total <= h {
+		return // whole document fits; no scrollbar to click
+	}
+	maxOffset := total - h
+	target := min(max(y*maxOffset/max(h-1, 1), 0), maxOffset)
+	b.Viewport.ScrollToLine(target)
+	// Update the active-diagram highlight for the landed position (cheap; this is
+	// a single click, not a wheel flood, so it need not be deferred).
+	b.syncActiveDiagram()
 }
 
 // handleWheel handles a WheelMsg from the framework. The wheel is pointer-routed
@@ -574,34 +705,96 @@ func (b *browser) handleWheel(msg tui.WheelMsg) tea.Cmd {
 		if b.Viewport == nil {
 			return nil
 		}
+		// ScrollBy is O(1) (only the offset moves), so it stays immediate for a
+		// responsive scroll. syncActiveDiagram re-inlines the WHOLE document via
+		// SetContent on a diagram-boundary crossing — defer it so a fast scroll
+		// does it once at settle, not once per notch.
 		b.Viewport.ScrollBy(msg.Delta * wheelViewportStep)
-		b.syncActiveDiagram()
-		return nil
+		return b.scheduleDiagramSync()
 	case panelTree:
 		if b.Tree == nil {
 			return nil
 		}
-		if msg.Delta < 0 {
-			b.Tree.MoveUp()
-		} else {
-			b.Tree.MoveDown()
-		}
-		return b.afterTreeMove()
+		// Delta is the coalesced notch count (the framework batches a wheel flood);
+		// MoveBy clamps the whole jump in one step (no O(|Delta|) loop). Move the
+		// cursor + keep it on screen immediately, but defer the expensive topic
+		// load: a fast wheel burst coalesces into a single render at settle
+		// (revdiff pattern) instead of spawning one glamour render per notch.
+		b.Tree.MoveBy(msg.Delta)
+		b.Tree.eng.EnsureFocusVisible(b.treeInner.Height)
+		return b.scheduleTreeLoad()
 	}
 	return nil
 }
 
-// scrollbarClip truncates s to at most width display cells without appending
-// an ellipsis. Used by applyInnerScrollbar to make room for the scrollbar glyph.
-func scrollbarClip(s string, width int) string {
-	if lipgloss.Width(s) <= width {
-		return s
+// scheduleTreeLoad marks a deferred tree topic load pending and arms the wheel
+// tick. selectCursor (glamour render) then runs once at burst settle.
+func (b *browser) scheduleTreeLoad() tea.Cmd {
+	b.wheel.loadPending = true
+	return b.armWheelTick()
+}
+
+// scheduleDiagramSync marks a deferred viewport diagram re-sync pending and arms
+// the wheel tick. syncActiveDiagram (full-document SetContent on a boundary
+// crossing) then runs once at burst settle instead of once per notch.
+func (b *browser) scheduleDiagramSync() tea.Cmd {
+	b.wheel.syncPending = true
+	return b.armWheelTick()
+}
+
+// armWheelTick bumps the burst generation and ensures exactly one debounce tick
+// is in flight: only the first notch of a burst schedules a tick, later notches
+// ride it (coalescing). The tick fires wheelLoadDelay later and re-checks the
+// generation.
+func (b *browser) armWheelTick() tea.Cmd {
+	b.wheel.gen++
+	if b.wheel.tickInFlight {
+		return nil
 	}
-	runes := []rune(s)
-	for i := range slices.Backward(runes) {
-		if lipgloss.Width(string(runes[:i])) <= width {
-			return string(runes[:i])
-		}
+	b.wheel.tickInFlight = true
+	return wheelTick(b.wheel.gen)
+}
+
+// wheelTick returns the Cmd that posts a wheelDebounceMsg after wheelLoadDelay,
+// pinning the burst generation gen captured at scheduling time.
+func wheelTick(gen int) tea.Cmd {
+	return tea.Tick(wheelLoadDelay, func(time.Time) tea.Msg {
+		return wheelDebounceMsg{gen: gen}
+	})
+}
+
+// handleWheelDebounce runs when a debounce tick fires. If newer notches arrived
+// since this tick was scheduled (gen advanced), the burst is still in progress,
+// so it re-arms for the latest generation rather than flushing mid-burst.
+// Otherwise the burst has settled: flush the deferred work.
+func (b *browser) handleWheelDebounce(msg wheelDebounceMsg) tea.Cmd {
+	if msg.gen != b.wheel.gen {
+		return wheelTick(b.wheel.gen)
 	}
-	return ""
+	return b.flushWheel()
+}
+
+// flushWheel runs the deferred wheel side-effects at burst settle: the viewport
+// diagram re-sync and/or the tree topic load (whichever was armed). Clears the
+// debounce state. A load interrupted by a key/click (cancelWheelLoad) is already
+// cleared, so only the still-pending work runs.
+func (b *browser) flushWheel() tea.Cmd {
+	b.wheel.tickInFlight = false
+	if b.wheel.syncPending {
+		b.wheel.syncPending = false
+		b.syncActiveDiagram()
+	}
+	if b.wheel.loadPending {
+		b.wheel.loadPending = false
+		return b.selectCursor()
+	}
+	return nil
+}
+
+// cancelWheelLoad drops a pending debounced tree load so a key press or click
+// takes over immediately ("interrupt the scroll cycle"). It clears only the load
+// flag (not the diagram re-sync); an in-flight tick still fires but finds no load
+// pending and resets itself in flushWheel.
+func (b *browser) cancelWheelLoad() {
+	b.wheel.loadPending = false
 }

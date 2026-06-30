@@ -12,6 +12,8 @@
 │   pgdown, f  Page down                 │
 │   left, h    Collapse / up to parent   │
 │   right, l   Expand / into first child │
+│   ctrl+d     Half page down            │
+│   ctrl+u     Half page up              │
 │                                        │
 │ General                                │
 │   ?          Toggle help               │

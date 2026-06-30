@@ -233,6 +233,11 @@ func (e *Engine[N]) MoveUp() { e.moveBy(-1) }
 // MoveDown moves the cursor one visible row down.
 func (e *Engine[N]) MoveDown() { e.moveBy(1) }
 
+// MoveBy moves the cursor delta visible rows, clamped to the visible range in a
+// single step. Prefer this over looping MoveUp/MoveDown for a coalesced wheel
+// delta (the loop would be O(|delta|·visible) via repeated indexOf scans).
+func (e *Engine[N]) MoveBy(delta int) { e.moveBy(delta) }
+
 func (e *Engine[N]) moveBy(delta int) {
 	var zero N
 	if len(e.visible) == 0 {

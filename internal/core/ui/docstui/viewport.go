@@ -106,8 +106,10 @@ func (w *ViewportWidget) TotalLines() int {
 }
 
 // wheelViewportStep is the number of lines scrolled per mouse-wheel notch in
-// the viewport panel. Matches the bubbles/v2 viewport MouseWheelDelta default.
-const wheelViewportStep = 3
+// the viewport panel. Kept deliberately small (2) so a fast wheel/trackpad flick
+// covers less distance per notch — finer control, and the screen keeps pace with
+// the scroll instead of jumping a screenful at a time.
+const wheelViewportStep = 2
 
 // ScrollBy scrolls the viewport by n lines; negative moves up, positive down.
 // Clamped by the underlying viewport to the content boundaries.

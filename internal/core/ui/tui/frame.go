@@ -79,8 +79,30 @@ func withLocale(s string) frameOption { return func(o *frameOptions) { o.locale 
 // Post-Completion item.
 const doubleClickWindow = 400 * time.Millisecond
 
-// frameClock is an injectable time source for double-click detection. The
-// production implementation uses time.Now; tests inject a controlled fake.
+// wheelCoalesceInterval bounds how often a buffered mouse-wheel flood produces a
+// real Update+View. bubbletea v2 calls model.View() once per message (tea.go
+// eventLoop) and reads input FIFO from an unbuffered channel, so admitting every
+// raw wheel notch as its own message means a terminal/trackpad flood (macOS
+// momentum scroll emits notches for ~1-2s after the fingers lift) drains FIFO
+// before any later key/click is even seen — the "freeze after stopping" +
+// "can't interrupt". The fix is a bubbletea WithFilter (see wheelFilter): raw
+// vertical wheels over a panel are accumulated and dropped (return nil → NO
+// Update, NO View) and at most one coalesced WheelMsg is emitted per interval, so
+// the backlog drains at filter speed and an interrupting key/click is reached
+// immediately. One frame (≈16ms) keeps scrolling visually smooth.
+const wheelCoalesceInterval = time.Second / 60
+
+// wheelArmMsg is returned by the wheel filter on the first notch of an idle
+// burst; Update schedules a single wheelFlushMsg tick in response.
+type wheelArmMsg struct{}
+
+// wheelFlushMsg fires one wheelCoalesceInterval after a burst was armed; Update
+// drains the accumulated per-panel wheel delta into coalesced WheelMsgs.
+type wheelFlushMsg struct{}
+
+// frameClock is an injectable time source for double-click detection and the
+// wheel coalescer. The production implementation uses time.Now; tests
+// inject a controlled fake.
 type frameClock interface {
 	now() time.Time
 }
@@ -113,6 +135,13 @@ type Frame struct {
 	// clock and lastClick support double-click detection — see handleClick.
 	clock     frameClock
 	lastClick lastClickRecord
+
+	// Wheel-coalescer state (see wheelCoalesceInterval / wheelFilter). wheelAccum
+	// holds signed notch deltas per panel that the input filter has dropped from
+	// the bubbletea pipeline; wheelTickArmed gates a single trailing flush tick so
+	// a burst accumulates into one WheelMsg per panel.
+	wheelAccum     map[PanelID]int
+	wheelTickArmed bool
 
 	// tr / locale resolve help-modal display strings. Stage 0 uses a
 	// NopTranslator (English fallbacks) + a fixed locale; the migration stages
@@ -226,6 +255,10 @@ func (f *Frame) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return f.handleKey(m)
 	case tea.MouseMsg:
 		return f.handleMouse(m)
+	case wheelArmMsg:
+		return f, wheelFlushCmd()
+	case wheelFlushMsg:
+		return f, f.flushWheelAccum()
 	case FocusRequestMsg:
 		// Plugin-initiated focus move (e.g. an inline filter returning focus to a
 		// result panel on commit). The Frame owns focus truth, so it applies the
@@ -643,6 +676,114 @@ func (f *Frame) View() tea.View {
 		v.MouseMode = tea.MouseModeNone
 	}
 	return v
+}
+
+// wheelFilter is the bubbletea WithFilter installed by [Run]. It runs in the
+// event-loop goroutine BEFORE Update/View for every message, so it is the one
+// place that can stop a buffered mouse-wheel flood from each becoming its own
+// Update+View. It coalesces raw vertical wheels (a TRAILING debounce — see
+// filterWheel) so the backlog drains at filter speed and a later key/click is
+// reached immediately. The model is always the *Frame (Run builds it); a
+// non-Frame model passes through unchanged (defensive).
+func wheelFilter(m tea.Model, msg tea.Msg) tea.Msg {
+	f, ok := m.(*Frame)
+	if !ok {
+		return msg
+	}
+	return f.filterWheel(msg)
+}
+
+// filterWheel implements the wheel coalescer (see wheelFilter). Non-wheel input
+// (key / click) drops any pending wheel accumulation so an interrupt wins, then
+// passes through. A vertical wheel over a panel — with no overlay and no inline
+// filter capturing — accumulates its signed delta into the per-panel bucket and
+// is dropped (return nil → no Update/View); the FIRST notch of an idle bucket
+// returns a wheelArmMsg so Update schedules a single flush tick one interval out.
+// When that tick fires, flushWheelAccum drains the NET accumulated delta into one
+// WheelMsg per panel. A trailing (not leading) debounce is deliberate: it never
+// leaves a stale partial delta that a later opposite-direction notch could
+// combine with and scroll the wrong way. Every other message (wheels routed to an
+// overlay/inline-filter, horizontal wheels, or wheels outside a panel) passes
+// through to the normal Update path unchanged.
+func (f *Frame) filterWheel(msg tea.Msg) tea.Msg {
+	switch msg.(type) {
+	case tea.KeyPressMsg, tea.MouseClickMsg:
+		f.clearWheelAccum()
+		return msg
+	}
+	wm, ok := msg.(tea.MouseWheelMsg)
+	if !ok {
+		return msg
+	}
+	delta := wheelButtonDelta(wm.Button)
+	// Only coalesce panel scroll: an overlay/inline-filter wants the raw wheel
+	// (overlay viewport scroll) or swallows it, and horizontal wheels carry no
+	// vertical delta — let handleMouse deal with those.
+	if delta == 0 || !f.overlay.Empty() || f.plugin.CapturingInput() {
+		return msg
+	}
+	zone, id := classifyHit(f.geo, f.panelRects(), f.helpHintRegion(), nil, wm.X, wm.Y)
+	if zone != zonePanel {
+		return msg // not over a panel; handleMouse swallows it
+	}
+	if f.wheelAccum == nil {
+		f.wheelAccum = map[PanelID]int{}
+	}
+	f.wheelAccum[id] += delta
+	if f.wheelTickArmed {
+		return nil // a flush tick is already pending; just accumulate
+	}
+	f.wheelTickArmed = true
+	return wheelArmMsg{}
+}
+
+// clearWheelAccum drops any pending coalesced wheel deltas. Called when a
+// key/click arrives so an interrupt is not preceded by leftover scrolling. An
+// already-armed flush tick still fires but finds an empty accumulator.
+func (f *Frame) clearWheelAccum() {
+	for k := range f.wheelAccum {
+		f.wheelAccum[k] = 0
+	}
+}
+
+// flushWheelAccum drains the accumulated net wheel delta into one WheelMsg per
+// panel and disarms the tick (filterWheel re-arms on the next notch). Empty
+// buckets (e.g. drained by an interrupting key/click) are skipped.
+func (f *Frame) flushWheelAccum() tea.Cmd {
+	f.wheelTickArmed = false
+	var cmds []tea.Cmd
+	for id, d := range f.wheelAccum {
+		if d == 0 {
+			continue
+		}
+		f.wheelAccum[id] = 0
+		if cmd := f.plugin.Update(WheelMsg{Panel: id, Delta: d}); cmd != nil {
+			cmds = append(cmds, cmd)
+		}
+	}
+	f.drainOverlay()
+	if len(cmds) == 0 {
+		return nil
+	}
+	return tea.Batch(cmds...)
+}
+
+// wheelFlushCmd schedules the trailing wheel-flush one coalesce interval out.
+func wheelFlushCmd() tea.Cmd {
+	return tea.Tick(wheelCoalesceInterval, func(time.Time) tea.Msg { return wheelFlushMsg{} })
+}
+
+// wheelButtonDelta maps a vertical wheel button to a signed notch delta
+// (−1 up / +1 down); horizontal/other buttons return 0.
+func wheelButtonDelta(b tea.MouseButton) int {
+	switch b {
+	case tea.MouseWheelUp:
+		return -1
+	case tea.MouseWheelDown:
+		return 1
+	default:
+		return 0
+	}
 }
 
 // renderBody lays out and renders the bordered body panels into a single

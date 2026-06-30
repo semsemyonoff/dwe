@@ -74,7 +74,7 @@ require (
 require (
 	github.com/charmbracelet/colorprofile v0.4.3
 	github.com/charmbracelet/lipgloss v1.1.1-0.20250404203927-76690c660834
-	github.com/charmbracelet/x/ansi v0.11.7 // indirect
+	github.com/charmbracelet/x/ansi v0.11.7
 	github.com/charmbracelet/x/term v0.2.2
 	github.com/clipperhouse/uax29/v2 v2.7.0 // indirect
 	github.com/inconshreveable/mousetrap v1.1.0 // indirect

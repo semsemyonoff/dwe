@@ -1202,9 +1202,10 @@ func TestFrame_WheelRouting(t *testing.T) {
 		if wms[0].Delta != 1 {
 			t.Errorf("WheelMsg.Delta = %d; want +1 (down)", wms[0].Delta)
 		}
+		// A direct handleMouse dispatch forwards the WheelMsg and returns the
+		// plugin's own cmd (nil for the stub) — there is no framework tick.
 		if cmd != nil {
-			// plugin.Update returns nil; no tick should be returned.
-			t.Errorf("wheel cmd = non-nil; want nil (no coalescing tick)")
+			t.Errorf("wheel cmd = non-nil; want nil (plugin stub returns nil)")
 		}
 		if p.counts[ActionNavDown] != 0 || p.counts[ActionNavUp] != 0 {
 			t.Errorf("wheel dispatched HandleAction: down=%d up=%d; want 0/0",
@@ -1353,8 +1354,10 @@ func TestFrame_WheelOverlayRouting(t *testing.T) {
 			t.Fatal("capturing overlay was not pushed")
 		}
 		_, cmd := f.Update(wheelDown())
+		// The raw wheel is forwarded to the plugin (overlay viewport scroll); the
+		// returned cmd is the plugin's own (nil for the stub), no framework tick.
 		if cmd != nil {
-			t.Error("wheel while capturing overlay returned cmd; want nil")
+			t.Errorf("capturing-overlay wheel cmd = non-nil; want nil (plugin stub returns nil)")
 		}
 		// Must have forwarded the raw tea.MouseWheelMsg, not a WheelMsg.
 		if raws := p.rawWheelMsgs(); len(raws) != 1 {
@@ -1419,6 +1422,116 @@ func TestFrame_WheelOverlayRouting(t *testing.T) {
 			t.Errorf("inline filter forwarded %d WheelMsgs; want 0", len(wms))
 		}
 	})
+}
+
+// TestFrame_WheelFilterCoalesces verifies the bubbletea WithFilter wheel
+// coalescer (a TRAILING debounce): the first notch of an idle burst returns a
+// wheelArmMsg (and accumulates), subsequent notches return nil (accumulate +
+// drop → no Update/View), and the wheelFlushMsg tick drains the NET accumulated
+// delta into one WheelMsg. This keeps a buffered flood from each becoming an
+// Update+View while applying the full scroll exactly once.
+func TestFrame_WheelFilterCoalesces(t *testing.T) {
+	f, p := newMouseFrame(t, 80, frameGoldenHeight)
+
+	// First notch of an idle burst → arm the flush tick (no WheelMsg yet).
+	out := f.filterWheel(wheelDown())
+	if _, ok := out.(wheelArmMsg); !ok {
+		t.Fatalf("first wheel filtered to %T; want wheelArmMsg", out)
+	}
+	if !f.wheelTickArmed {
+		t.Error("first notch did not arm the flush tick")
+	}
+
+	// 9 more notches accumulate and are dropped (no per-notch Update/View).
+	for range 9 {
+		if got := f.filterWheel(wheelDown()); got != nil {
+			t.Errorf("in-burst wheel emitted %T; want nil (accumulate + drop)", got)
+		}
+	}
+	if got := f.wheelAccum[mousePanelMain]; got != 10 {
+		t.Errorf("accumulated delta = %d; want 10", got)
+	}
+
+	// The flush drains the net delta into a single WheelMsg and disarms.
+	f.flushWheelAccum()
+	wms := p.wheelMsgs()
+	if len(wms) != 1 || wms[0].Panel != mousePanelMain || wms[0].Delta != 10 {
+		t.Errorf("flush forwarded %+v; want one {main, +10}", wms)
+	}
+	if f.wheelTickArmed || f.wheelAccum[mousePanelMain] != 0 {
+		t.Errorf("flush did not reset state: armed=%v accum=%d", f.wheelTickArmed, f.wheelAccum[mousePanelMain])
+	}
+}
+
+// TestFrame_WheelFilterNetDirection is the regression guard for the leading-edge
+// bug codex found: a fast down-burst must not leave a stale partial delta that a
+// later up notch combines with and scrolls the wrong way. The trailing debounce
+// flushes the NET delta, so down×3 then up×1 in one burst nets +2 (down), and an
+// up-only burst nets −N (up) with no leftover.
+func TestFrame_WheelFilterNetDirection(t *testing.T) {
+	f, p := newMouseFrame(t, 80, frameGoldenHeight)
+
+	f.filterWheel(wheelDown())
+	f.filterWheel(wheelDown())
+	f.filterWheel(wheelDown())
+	f.filterWheel(wheelUp())
+	if got := f.wheelAccum[mousePanelMain]; got != 2 {
+		t.Fatalf("mixed burst net = %d; want +2", got)
+	}
+	f.flushWheelAccum()
+	if wms := p.wheelMsgs(); len(wms) != 1 || wms[0].Delta != 2 {
+		t.Fatalf("mixed flush = %+v; want one Delta=+2", wms)
+	}
+
+	// A fresh up-only burst nets −2 with no leftover from the previous burst.
+	f.filterWheel(wheelUp())
+	f.filterWheel(wheelUp())
+	f.flushWheelAccum()
+	wms := p.wheelMsgs()
+	if len(wms) != 2 || wms[1].Delta != -2 {
+		t.Fatalf("up burst = %+v; want second Delta=-2 (no stale down leftover)", wms)
+	}
+}
+
+// TestFrame_WheelFilterKeyDropsPending verifies an interrupting key/click drops
+// any pending wheel accumulation (so it wins) and passes through unchanged.
+func TestFrame_WheelFilterKeyDropsPending(t *testing.T) {
+	f, _ := newMouseFrame(t, 80, frameGoldenHeight)
+
+	f.filterWheel(wheelDown())
+	f.filterWheel(wheelDown())
+	if f.wheelAccum[mousePanelMain] == 0 {
+		t.Fatal("precondition: expected pending accumulation")
+	}
+
+	out := f.filterWheel(key("j"))
+	if _, ok := out.(tea.KeyPressMsg); !ok {
+		t.Errorf("key filtered to %T; want the key passed through", out)
+	}
+	if got := f.wheelAccum[mousePanelMain]; got != 0 {
+		t.Errorf("key did not drop pending wheel accumulation: %d", got)
+	}
+	// A stale flush after the interrupt forwards nothing.
+	f.flushWheelAccum()
+}
+
+// TestFrame_WheelFilterPassesThroughNonCoalescable verifies the filter only
+// coalesces vertical panel scroll; horizontal wheels, wheels outside a panel,
+// and wheels while an overlay is open flow through to the normal handleMouse path.
+func TestFrame_WheelFilterPassesThroughNonCoalescable(t *testing.T) {
+	f, _ := newMouseFrame(t, 80, frameGoldenHeight)
+	f.clock = testClock()
+
+	if out := f.filterWheel(wheelLeft()); out == nil {
+		t.Error("horizontal wheel dropped by the filter; want pass-through")
+	}
+	if out := f.filterWheel(tea.MouseWheelMsg{Button: tea.MouseWheelDown, X: 3, Y: 23}); out == nil {
+		t.Error("non-panel wheel coalesced; want pass-through")
+	}
+	f.overlay.Push(Overlay{Content: "m", Width: 3, Height: 1, CapturesInput: true})
+	if out := f.filterWheel(wheelDown()); out == nil {
+		t.Error("overlay wheel coalesced; want pass-through to handleMouse")
+	}
 }
 
 // TestFrame_ClickRouting exercises the full click-routing policy wired in Task 5.

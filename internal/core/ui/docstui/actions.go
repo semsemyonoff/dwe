@@ -18,6 +18,8 @@ const (
 	actionLocaleEnglish tui.Action = "locale.english"
 	actionTreeCollapse  tui.Action = "tree.collapse"
 	actionTreeExpand    tui.Action = "tree.expand"
+	actionHalfPageUp    tui.Action = "nav.halfpage.up"
+	actionHalfPageDown  tui.Action = "nav.halfpage.down"
 )
 
 // Help-modal section labels for the docs-custom action groups.
@@ -67,6 +69,23 @@ func (b *browser) Actions(reg *tui.Registry) error {
 		return err
 	}
 
+	// Half-page scroll (vim ctrl+d / ctrl+u) for reading the viewport without the
+	// mouse — keyboard scroll is the primary path; the wheel is a bonus.
+	if err := reg.Register(actionHalfPageDown, tui.Binding{
+		Keys:    []string{"ctrl+d"},
+		Desc:    "Half page down",
+		Section: "Navigation",
+	}); err != nil {
+		return err
+	}
+	if err := reg.Register(actionHalfPageUp, tui.Binding{
+		Keys:    []string{"ctrl+u"},
+		Desc:    "Half page up",
+		Section: "Navigation",
+	}); err != nil {
+		return err
+	}
+
 	// Diagram navigation and export.
 	for _, spec := range []struct {
 		a tui.Action
@@ -99,6 +118,10 @@ func (b *browser) Actions(reg *tui.Registry) error {
 // reload complete fully in Task 6; their tree mutations and topic loads are
 // already wired here.
 func (b *browser) HandleAction(a tui.Action) (tea.Cmd, bool) {
+	// A bound key interrupts an in-flight wheel-scroll burst: drop the deferred
+	// tree load so this action takes over immediately instead of racing a stale
+	// topic render queued by the wheel.
+	b.cancelWheelLoad()
 	switch a {
 	case tui.ActionNavUp:
 		return b.navVertical(-1), true
@@ -112,6 +135,10 @@ func (b *browser) HandleAction(a tui.Action) (tea.Cmd, bool) {
 		return b.navPage(-1), true
 	case tui.ActionPageDown:
 		return b.navPage(1), true
+	case actionHalfPageUp:
+		return b.navHalfPage(-1), true
+	case actionHalfPageDown:
+		return b.navHalfPage(1), true
 	case actionTreeCollapse:
 		b.navLeft()
 		return nil, true
@@ -252,6 +279,37 @@ func (b *browser) navPage(delta int) tea.Cmd {
 		return nil
 	}
 	h := max(b.treeInner.Height, 1)
+	for range h {
+		if delta < 0 {
+			b.Tree.MoveUp()
+		} else {
+			b.Tree.MoveDown()
+		}
+	}
+	return b.afterTreeMove()
+}
+
+// navHalfPage scrolls half a page up (delta < 0) or down (delta > 0) in the
+// active panel — the vim ctrl+u / ctrl+d reading motion. In the viewport it
+// scrolls by half the visible height; in the tree it jumps the cursor by half
+// the inner panel height.
+func (b *browser) navHalfPage(delta int) tea.Cmd {
+	if b.active == panelViewport {
+		if b.Viewport == nil {
+			return nil
+		}
+		step := max(b.Viewport.VisibleHeight()/2, 1)
+		if delta < 0 {
+			step = -step
+		}
+		b.Viewport.ScrollBy(step)
+		b.syncActiveDiagram()
+		return nil
+	}
+	if b.Tree == nil {
+		return nil
+	}
+	h := max(b.treeInner.Height/2, 1)
 	for range h {
 		if delta < 0 {
 			b.Tree.MoveUp()

@@ -105,6 +105,16 @@ As of TUI Stage 4 this is a `tui.Plugin`. Plugin-local actions registered via `A
 | `h`, `←`       | Collapse (step to parent if already collapsed)     |
 | `l`, `→`       | Expand (step into first child if already expanded) |
 
+**Half-page scroll** (plugin-local `nav.halfpage.up`/`nav.halfpage.down`, **Navigation**
+section): vim `ctrl+u`/`ctrl+d` scroll the focused pane by half its visible height
+(`navHalfPage` — viewport `ScrollBy(±VisibleHeight/2)`, tree jumps `treeInner.Height/2`
+rows). Added so keyboard reading is the primary scroll path and the mouse wheel is a bonus.
+
+| Key      | Description     |
+|----------|-----------------|
+| `ctrl+d` | Half page down  |
+| `ctrl+u` | Half page up    |
+
 **Intentional keymap change (Stage 4)**: the pre-migration docs browser toggled
 expansion on BOTH `h` and `l` (each called `Tree.Toggle`). Stage 4 adopts directional
 semantics for cross-surface unification with the cmdbrowser: `h`/`←` collapse (or step

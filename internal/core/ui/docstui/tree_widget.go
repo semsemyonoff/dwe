@@ -373,6 +373,10 @@ func (tw *TreeWidget) MoveUp() { tw.eng.MoveUp() }
 // MoveDown moves the cursor one row down in the visible tree.
 func (tw *TreeWidget) MoveDown() { tw.eng.MoveDown() }
 
+// MoveBy moves the cursor n rows (clamped once) — used for a coalesced wheel
+// delta so a large jump is not an O(|n|) loop of single-row moves.
+func (tw *TreeWidget) MoveBy(n int) { tw.eng.MoveBy(n) }
+
 // MoveStart moves the cursor to the first visible row.
 func (tw *TreeWidget) MoveStart() { tw.eng.MoveHome() }
 

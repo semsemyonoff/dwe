@@ -568,6 +568,60 @@ func TestBrowser_ProgressMsgCurrentGenerationApplied(t *testing.T) {
 	}
 }
 
+func TestBrowser_ProgressMsgDebouncesDiagramRefresh(t *testing.T) {
+	b := newTestBrowser(t)
+	ch := make(chan ProgressMsg, 10)
+	b.prefetchChan = ch
+	b.Prefetch = NewPrefetch(t.Context(), nil, ch)
+	defer b.Prefetch.Close()
+	gen := b.Prefetch.Generation()
+
+	// First ProgressMsg arms the debounce — it does NOT SetContent synchronously
+	// (the per-completion storm that hitched scrolling on diagram docs).
+	cmd := b.Update(ProgressMsg{Rendered: 1, Total: 3, Generation: gen})
+	if !b.diagramRefreshPending {
+		t.Error("ProgressMsg did not mark a diagram refresh pending")
+	}
+	if !b.diagramRefreshTickInFlight {
+		t.Error("first ProgressMsg did not arm the debounce tick")
+	}
+	if cmd == nil {
+		t.Error("ProgressMsg returned nil cmd; want the refresh tick batched with the next wait")
+	}
+
+	// A second ProgressMsg rides the in-flight tick (coalescing) — no panic, still pending.
+	b.Update(ProgressMsg{Rendered: 2, Total: 3, Generation: gen})
+	if !b.diagramRefreshPending {
+		t.Error("second ProgressMsg cleared the pending refresh")
+	}
+
+	// The tick applies once and clears the debounce when no scroll is in flight.
+	b.applyDiagramRefresh()
+	if b.diagramRefreshPending || b.diagramRefreshTickInFlight {
+		t.Error("diagram refresh did not clear after applying")
+	}
+}
+
+func TestBrowser_DiagramRefreshDefersDuringScroll(t *testing.T) {
+	b := newTestBrowser(t)
+	b.diagramRefreshPending = true
+	b.diagramRefreshTickInFlight = true
+	b.wheel.tickInFlight = true // a wheel burst is active
+
+	// While a scroll is in flight the refresh re-arms instead of touching the
+	// viewport (background diagrams must not hitch the foreground scroll).
+	cmd := b.applyDiagramRefresh()
+	if cmd == nil {
+		t.Error("diagram refresh during a scroll did not re-arm (defer)")
+	}
+	if !b.diagramRefreshPending {
+		t.Error("diagram refresh cleared the pending flag mid-scroll; want it deferred")
+	}
+	if !b.diagramRefreshTickInFlight {
+		t.Error("deferred diagram refresh did not keep a tick in flight")
+	}
+}
+
 func TestBrowser_FocusChangedMsgUpdatesActive(t *testing.T) {
 	b := newTestBrowser(t)
 	if b.active != panelTree {
@@ -1221,14 +1275,157 @@ func TestBrowser_WheelMsgTreeMovesUp(t *testing.T) {
 	}
 }
 
-func TestBrowser_WheelMsgTreeReturnsCmdForTopicLoad(t *testing.T) {
+func TestBrowser_WheelMsgTreeDefersTopicLoad(t *testing.T) {
 	b := newMultiFileBrowser(t)
 	b.ViewPanel(panelTree, tui.Region{Width: 30, Height: 10})
 
-	// WheelMsg on the tree must return the topic-load Cmd (same as keyboard nav).
+	// A tree notch arms the debounce: it returns a non-nil tick Cmd and marks a
+	// pending load, but does NOT load the topic synchronously (the load is
+	// deferred to the debounce flush).
 	cmd := b.Update(tui.WheelMsg{Panel: panelTree, Delta: 1})
 	if cmd == nil {
-		t.Error("WheelMsg{panelTree} returned nil Cmd; expected topic-load Cmd from afterTreeMove")
+		t.Fatal("first tree notch returned nil Cmd; expected a debounce tick Cmd")
+	}
+	if !b.wheel.loadPending {
+		t.Error("tree notch did not mark a pending load")
+	}
+	if !b.wheel.tickInFlight {
+		t.Error("tree notch did not schedule a debounce tick")
+	}
+}
+
+func TestBrowser_WheelMsgTreeCoalescesBurst(t *testing.T) {
+	b := newMultiFileBrowser(t)
+	b.ViewPanel(panelTree, tui.Region{Width: 30, Height: 10})
+
+	// First notch schedules the only tick of the burst.
+	if cmd := b.Update(tui.WheelMsg{Panel: panelTree, Delta: 1}); cmd == nil {
+		t.Fatal("first notch returned nil Cmd; expected a debounce tick")
+	}
+	gen1 := b.wheel.gen
+
+	// Subsequent notches ride the in-flight tick: no new tick Cmd, gen advances.
+	for i := range 3 {
+		if cmd := b.Update(tui.WheelMsg{Panel: panelTree, Delta: 1}); cmd != nil {
+			t.Errorf("notch %d returned a tick Cmd; burst must coalesce onto one tick", i+2)
+		}
+	}
+	if b.wheel.gen <= gen1 {
+		t.Errorf("generation did not advance across the burst: got %d, want > %d", b.wheel.gen, gen1)
+	}
+
+	// A stale tick (gen from before the burst settled) re-arms rather than loading.
+	if cmd := b.handleWheelDebounce(wheelDebounceMsg{gen: gen1}); cmd == nil {
+		t.Error("stale debounce tick returned nil; expected a re-armed tick")
+	}
+	if !b.wheel.loadPending {
+		t.Error("stale debounce tick cleared the pending load")
+	}
+
+	// The current-generation tick flushes the single pending load.
+	cmd := b.handleWheelDebounce(wheelDebounceMsg{gen: b.wheel.gen})
+	if cmd == nil {
+		t.Error("settled debounce tick returned nil; expected the topic-load Cmd")
+	}
+	if b.wheel.loadPending || b.wheel.tickInFlight {
+		t.Error("flush did not clear the debounce state")
+	}
+}
+
+func TestBrowser_WheelMsgTreeInterruptedByAction(t *testing.T) {
+	b := newMultiFileBrowser(t)
+	b.ViewPanel(panelTree, tui.Region{Width: 30, Height: 10})
+
+	b.Update(tui.WheelMsg{Panel: panelTree, Delta: 1})
+	if !b.wheel.loadPending {
+		t.Fatal("precondition: expected a pending load after a notch")
+	}
+
+	// A bound key (here ActionNavDown) interrupts the burst: the pending wheel
+	// load is dropped so the action's own load takes over.
+	b.HandleAction(tui.ActionNavDown)
+	if b.wheel.loadPending {
+		t.Error("HandleAction did not cancel the pending wheel load")
+	}
+
+	// When the stale tick finally fires it finds nothing pending and flushes to nil.
+	if cmd := b.handleWheelDebounce(wheelDebounceMsg{gen: b.wheel.gen}); cmd != nil {
+		t.Error("debounce flush after interrupt returned a Cmd; expected nil")
+	}
+	if b.wheel.tickInFlight {
+		t.Error("flush after interrupt did not reset tickInFlight")
+	}
+}
+
+func TestBrowser_WheelMsgTreeInterruptedByClick(t *testing.T) {
+	b := newMultiFileBrowser(t)
+	b.ViewPanel(panelTree, tui.Region{Width: 30, Height: 10})
+
+	b.Update(tui.WheelMsg{Panel: panelTree, Delta: 1})
+	if !b.wheel.loadPending {
+		t.Fatal("precondition: expected a pending load after a notch")
+	}
+
+	// A click interrupts the burst too.
+	b.Update(tui.PanelClickMsg{Panel: panelTree, Y: 0})
+	if b.wheel.loadPending {
+		t.Error("PanelClickMsg did not cancel the pending wheel load")
+	}
+}
+
+func TestBrowser_WheelViewportDefersDiagramSync(t *testing.T) {
+	b := newTestBrowser(t)
+	b.Viewport.SetContent(tallContent(200))
+	b.ViewPanel(panelViewport, tui.Region{Width: 80, Height: 10})
+	b.Viewport.ScrollToLine(50)
+	before := b.Viewport.YOffset()
+
+	cmd := b.Update(tui.WheelMsg{Panel: panelViewport, Delta: 1})
+
+	// ScrollBy stays immediate (O(1)); the diagram re-sync is deferred.
+	if got := b.Viewport.YOffset(); got != before+wheelViewportStep {
+		t.Errorf("viewport wheel YOffset = %d; want %d", got, before+wheelViewportStep)
+	}
+	if !b.wheel.syncPending {
+		t.Error("viewport wheel did not arm a deferred diagram sync")
+	}
+	if cmd == nil {
+		t.Error("viewport wheel returned nil cmd; want the debounce tick")
+	}
+}
+
+func TestBrowser_ScrollbarClickScrollsProportionally(t *testing.T) {
+	b := newTestBrowser(t)
+	b.Viewport.SetContent(tallContent(200))
+	b.ViewPanel(panelViewport, tui.Region{Width: 80, Height: 10})
+	// h=10 → maxOffset = total-h; scrollbar column = width-1 = 79.
+	maxOffset := b.Viewport.TotalLines() - 10
+
+	// Click the bottom of the scrollbar track → jump to the bottom.
+	b.handlePanelClick(tui.PanelClickMsg{Panel: panelViewport, X: 79, Y: 9})
+	if got := b.Viewport.YOffset(); got != maxOffset {
+		t.Errorf("scrollbar click at bottom: YOffset = %d, want %d", got, maxOffset)
+	}
+	// Click the top → jump to the top.
+	b.handlePanelClick(tui.PanelClickMsg{Panel: panelViewport, X: 79, Y: 0})
+	if got := b.Viewport.YOffset(); got != 0 {
+		t.Errorf("scrollbar click at top: YOffset = %d, want 0", got)
+	}
+	// A click off the scrollbar column is ignored (no jump).
+	b.Viewport.ScrollToLine(50)
+	b.handlePanelClick(tui.PanelClickMsg{Panel: panelViewport, X: 10, Y: 5})
+	if got := b.Viewport.YOffset(); got != 50 {
+		t.Errorf("non-scrollbar viewport click changed YOffset to %d; want 50 (unchanged)", got)
+	}
+}
+
+func TestBrowser_ScrollbarClickShortDocumentNoop(t *testing.T) {
+	b := newTestBrowser(t)
+	b.Viewport.SetContent(tallContent(3)) // fits in 10 rows → no scrollbar
+	b.ViewPanel(panelViewport, tui.Region{Width: 80, Height: 10})
+	b.handlePanelClick(tui.PanelClickMsg{Panel: panelViewport, X: 79, Y: 9})
+	if got := b.Viewport.YOffset(); got != 0 {
+		t.Errorf("scrollbar click on a short document scrolled to %d; want 0 (no scrollbar)", got)
 	}
 }
 
