@@ -462,27 +462,36 @@ default-expanded in the engine (see Task 3) since the engine's map starts empty.
 
 ### Task 5: Verify acceptance criteria
 
-- [ ] generic `tui/tree` engine exists; both `cmdbrowser.treeModel` and
+- [x] generic `tui/tree` engine exists; both `cmdbrowser.treeModel` and
       `docstui.TreeWidget` are thin wrappers delegating nav/scroll/expansion/collapse/expand
-      to it; no duplicated engine logic remains (grep for deleted method names)
-- [ ] both browsers behave identically — nav, collapse/expand (directional `h`/`l`),
+      to it; no duplicated engine logic remains (grep for deleted method names — clean: no
+      `ensureFocusVisible`/`clipToViewport`/`indexOfFocused`/`moveBy`/`rebuildVisible` defs
+      remain in cmdbrowser/docstui)
+- [x] both browsers behave identically — nav, collapse/expand (directional `h`/`l`),
       scroll/clip, filter (cmdbrowser dim+counts; docs reduce-set), headings/index-folding/
       multi-root, counts (manual smoke-test deferred to Post-Completion; verified here by
-      unit + golden tests)
-- [ ] **both browsers' golden frame tests are byte-for-byte unchanged** at buckets
-      60/79/80/99/100
-- [ ] cmdbrowser filter open→type→exit/commit lands the cursor on the identical row
-      (`RebuildVisible` does not re-park; `nearestVisibleAncestor` flow intact)
-- [ ] docs multi-root group nodes render expanded by default (seeding works)
-- [ ] docs expansion + cursor survive a locale `Rebuild` (intended bugfix test passes)
-- [ ] docs locale `Rebuild` on a vanished heading falls back to the parent file, not
-      first-visible; opening `/` with an empty query does not fully expand the tree
-- [ ] docs `Key` scheme is collision-free (group/node/heading kind-prefixed) and stable
-      across locale change
-- [ ] the engine has zero filter/query/count concepts (grep `tui/tree` for those terms —
-      none); rendering lives only in the consumers
-- [ ] run full suite: `make build` then `make test`
-- [ ] run `make lint` — clean
+      unit + golden tests — all pass)
+- [x] **both browsers' golden frame tests are byte-for-byte unchanged** at buckets
+      60/79/80/99/100 (`git diff 09caf5e4..HEAD -- '**/testdata/**golden*'` empty across the
+      Plan 2 refactor commits)
+- [x] cmdbrowser filter open→type→exit/commit lands the cursor on the identical row
+      (`RebuildVisible` does not re-park; `nearestVisibleAncestor` flow intact —
+      `TestBrowser_FilterRoundTripCursorStable` + `TestBrowser_FilterEnterCommitsKeepingExpansion`)
+- [x] docs multi-root group nodes render expanded by default (seeding works —
+      `TestMultiRootGroupsExpandedByDefault`)
+- [x] docs expansion + cursor survive a locale `Rebuild` (intended bugfix test passes —
+      `TestRebuildPreservesExpansionAndCursor`)
+- [x] docs locale `Rebuild` on a vanished heading falls back to the parent file, not
+      first-visible (`TestRebuildHeadingVanishFallsBackToParentFile`); opening `/` with an
+      empty query does not fully expand the tree (`TestEmptyQueryFilterRespectsExpansion`)
+- [x] docs `Key` scheme is collision-free (group/node/heading kind-prefixed) and stable
+      across locale change (engine `SetRoots` key re-resolution tests +
+      `TestSetRootsPreservesExpansionAndCursorByKey`)
+- [x] the engine has zero filter/query/count concepts (grep `tui/tree` for those terms —
+      only explanatory comments naming what it does NOT do); rendering lives only in the
+      consumers
+- [x] run full suite: `make build` then `make test` — pass (cmdbrowser/docstui/tui/tree all ok)
+- [x] run `make lint` — clean (0 issues)
 
 ### Task 6: Finalize documentation + archive plan
 
