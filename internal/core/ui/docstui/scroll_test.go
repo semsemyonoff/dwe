@@ -53,7 +53,6 @@ func TestBrowser_WheelMsgScrollsViewportByStep(t *testing.T) {
 	}
 }
 
-
 // flatFS is a single-directory in-memory docs root that serves file content
 // (testFS in tree_widget_test.go intentionally cannot, so it can't drive a
 // real topic load).

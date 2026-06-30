@@ -1060,8 +1060,8 @@ func (p *mousePlugin) PendingOverlay() (Overlay, bool) {
 	p.pending = nil
 	return ov, true
 }
-func (p *mousePlugin) Result() any                     { return nil }
-func (p *mousePlugin) CapturingInput() bool            { return p.capturing }
+func (p *mousePlugin) Result() any          { return nil }
+func (p *mousePlugin) CapturingInput() bool { return p.capturing }
 
 // panelClicks returns every PanelClickMsg forwarded to the plugin, in order.
 func (p *mousePlugin) panelClicks() []PanelClickMsg {

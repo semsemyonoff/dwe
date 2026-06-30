@@ -159,15 +159,19 @@ with any existing key/alias, or with the binding's own canonical `Keys`, is an e
 rebinding config. No config loader is built yet — this is documented metadata only.
 See §7 for the future schema sketch.
 
-### 2.3 Mouse (wired in Stage 2)
+### 2.3 Mouse (wired in Stage 2; pointer-routing added in Stage 4)
 
 `Binding.Mouse string` holds a mouse trigger bound to the same action, resolved
-via `Registry.MatchMouse(event string) (Action, bool)`. Locked vocabulary:
+via `Registry.MatchMouse(event string) (Action, bool)`. After the Stage 4 wheel
+overhaul `double-click` is the only registry-bound mouse event:
 
-- `"wheel-up"` — scrolling up (bound to `nav.up`)
-- `"wheel-down"` — scrolling down (bound to `nav.down`)
 - `"click"` — single click (frame-owned; intentionally NOT registered as a binding)
 - `"double-click"` — double click (bound to `select`)
+
+`"wheel-up"` and `"wheel-down"` are no longer valid `Binding.Mouse` values: wheel
+events are dispatched immediately as `WheelMsg{Panel, Delta}` to the plugin
+(pointer-routed by hit-zone, not focus-routed), bypassing `MatchMouse` entirely.
+See §6 for the wheel mechanics.
 
 `Registry.MatchMouse` scans registered bindings for a `Binding.Mouse` match; an
 empty event never matches. `Register` rejects a second binding claiming an
@@ -288,7 +292,7 @@ Stage 3 filter consumer (the function signature is already the drop-in shape).
 
 ## 6. Mouse vocabulary
 
-Locked in Stage 1; wired in Stage 2.
+Locked in Stage 1; wired in Stage 2; pointer-routing overhauled in Stage 4.
 
 ### 6.1 Registry-bound mouse actions (wired in Stage 2)
 
@@ -297,24 +301,34 @@ Mouse is enabled when `RunOptions.Mouse = true` (per-program opt-in) and
 `tea.MouseModeCellMotion` — click + wheel reporting, no motion spam. The mode
 is a fixed framework choice; per-program code only sets the opt-in flag.
 
-Default mouse bindings for stdlib actions, wired via `Binding.Mouse` +
-`Registry.MatchMouse`:
+After the Stage 4 wheel overhaul, `double-click` is the only registry-bound mouse
+action:
 
 | Mouse event     | Action      |
 |-----------------|-------------|
-| `wheel-up`      | `nav.up`    |
-| `wheel-down`    | `nav.down`  |
 | `double-click`  | `select`    |
 
-**Wheel coalescing** — only vertical wheel events participate; horizontal wheel
-(`MouseWheelLeft`/`MouseWheelRight`, emitted by trackpads in CellMotion mode)
-carries no Nav mapping in Stage 2 and is ignored (it neither arms a tick nor
-touches the accumulator). The first vertical wheel event arms a 16ms tick;
-subsequent events within the window accumulate into a signed delta; the tick
-flush dispatches `abs(delta)` Nav steps and resets (sum-never-drop: a trackpad
-burst → one render of N steps; slow wheel → N single steps). An open overlay
-clears the accumulator on push; the flush handler is a no-op while any overlay is
-open — a tick armed before a modal cannot dispatch Nav behind it.
+**Pointer-routed `WheelMsg` (Stage 4 overhaul)** — vertical wheel events are no
+longer dispatched through `MatchMouse`. `handleMouse` acts on each
+`tea.MouseWheelMsg` synchronously (no accumulator, no tick) and routes by the
+hit-zone under the pointer:
+
+- **Panel hit (`zonePanel`)**: a `WheelMsg{Panel: id, Delta: ±1}` is forwarded
+  to `plugin.Update` immediately. `Delta` is -1 for an upward notch and +1 for a
+  downward notch. The plugin decides the per-panel scroll amount (viewport panel:
+  multi-line step; tree/list panel: one cursor row per notch). **Focus is NOT
+  changed by a wheel event** — wheeling does not focus the panel under the pointer.
+- **Help-hint / blank space**: swallowed.
+- **Horizontal wheel** (`MouseWheelLeft`/`MouseWheelRight`, emitted by trackpads
+  in CellMotion mode): swallowed.
+- **Capturing overlay** (`CapturesInput: true`): the raw `tea.MouseWheelMsg` is
+  forwarded to `plugin.Update` and `refreshCapturingOverlay` swaps in the
+  re-rendered snapshot — mirroring the captured-key path so the inspect modal
+  scrolls with the wheel.
+- **Non-capturing overlay** (help) or active **inline filter**
+  (`plugin.CapturingInput()` returns true, no overlay): wheel is swallowed.
+
+`double-click` remains the only event routed through `Registry.MatchMouse`.
 
 **Double-click** — a second left-click in the same panel + same cell within a
 400ms window (`doubleClickWindow`), gated by `!lastClick.t.IsZero()` (the zero

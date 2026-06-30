@@ -374,18 +374,18 @@ The wheel path is rebuilt around three principles — **immediate**, **pointer-r
 - Modify: `docs/internals/packages.md`
 - Modify: `AGENTS.md` (`CLAUDE.md` is a symlink — do not edit it directly)
 
-- [ ] `tui-keymap.md` §2.3/§6: describe the new wheel mechanics — immediate dispatch (no
+- [x] `tui-keymap.md` §2.3/§6: describe the new wheel mechanics — immediate dispatch (no
   coalescing/tick), pointer-routed via `WheelMsg{Panel,Delta}` (not focus), per-panel
   scroll amount owned by the plugin, and wheel-in-capturing-overlay forwarding; note that
   `double-click` remains the only registry-bound mouse action
-- [ ] `packages.md` `internal/core/ui/tui/` section: record `WheelMsg` as a new exported
+- [x] `packages.md` `internal/core/ui/tui/` section: record `WheelMsg` as a new exported
   framework message (joining `PanelClickMsg`/`FocusChangedMsg`/`OverlayClosedMsg`), the
   removal of the wheel accumulator/tick, the hit-zone wheel routing, and the
   capturing-overlay wheel forward; keep the `core/ui` layering + `docstui` relocation notes
-- [ ] update the `tui.Plugin` bullet in `AGENTS.md`: add `WheelMsg{Panel,Delta}` to the
+- [x] update the `tui.Plugin` bullet in `AGENTS.md`: add `WheelMsg{Panel,Delta}` to the
   exported-framework-message list and state the wheel is pointer-routed and focus-neutral;
   reaffirm the `Plugin` interface is unchanged (new message only, frozen interface intact)
-- [ ] no code test (documentation); correctness verified by `make build` in Task 6
+- [x] no code test (documentation); correctness verified by `make build` in Task 6
 
 ### Task 6: Verify acceptance criteria
 
