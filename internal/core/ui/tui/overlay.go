@@ -24,20 +24,20 @@ import (
 
 // Overlay layer IDs. They tag the composited layers so the Stage 2 mouse layer
 // can distinguish a click on the modal from a click on the dimmed body via
-// Compositor.Hit (see overlayClicksOutsideSwallowed).
+// Compositor.Hit (see overlayClickOutsideDismisses).
 const (
 	overlayBaseLayerID  = "tui.overlay.base"
 	overlayModalLayerID = "tui.overlay.modal"
 )
 
-// overlayClicksOutsideSwallowed documents the Stage 0 click policy: a mouse
-// click that lands outside the visible modal is SWALLOWED (consumed, the body
-// does not act behind the modal) but does NOT dismiss the modal. Stage 0 only
-// records the policy; Stage 2's mouse layer enforces it, choosing the hit-test
-// mechanism (expected: Compositor.Hit / LayerHit.Bounds() over the two layer
-// IDs above). No bespoke zone classifier is built here — this constant plus the
-// layer IDs are the only seam.
-const overlayClicksOutsideSwallowed = true
+// overlayClickOutsideDismisses documents the click-outside-modal policy: a
+// mouse click that lands outside the visible modal DISMISSES it (the
+// click-away-to-close affordance, mirroring esc), while a click inside the modal
+// is swallowed so the body never acts behind it. The mouse layer enforces this
+// in Frame.handleClick (zoneOutsideModal → dismissTopOverlay); the body is still
+// never acted on behind the modal. This constant plus the layer IDs are the only
+// seam.
+const overlayClickOutsideDismisses = true
 
 // overlayStack is a LIFO stack of modal overlays. Mutual exclusivity (one
 // visible modal) is structural: the framework only ever composites Top(), so no

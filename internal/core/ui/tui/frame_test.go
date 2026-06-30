@@ -398,10 +398,10 @@ func TestFrame_EscClosesOverlayWithoutQuitting(t *testing.T) {
 
 // TestFrame_QuitDispatch asserts the program's primary exit path: in normal mode
 // (no overlay) the quit keys route through the registry to ActionQuit and the
-// framework returns tea.Quit. "esc" reaches ActionQuit only here (no modal open);
-// the modal-open case is the negative covered by TestFrame_EscClosesOverlayWithoutQuitting.
+// framework returns tea.Quit. "esc" is deliberately absent — it is never a quit
+// key (see TestFrame_EscNeverQuits).
 func TestFrame_QuitDispatch(t *testing.T) {
-	for _, k := range []string{"q", "ctrl+c", "esc"} {
+	for _, k := range []string{"q", "ctrl+c"} {
 		t.Run(k, func(t *testing.T) {
 			f, p := newTestFrame(t, 80, frameGoldenHeight)
 			_, cmd := f.Update(key(k))
@@ -412,6 +412,19 @@ func TestFrame_QuitDispatch(t *testing.T) {
 				t.Errorf("quit key %q leaked to plugin.HandleAction: %q", k, p.handledAction)
 			}
 		})
+	}
+}
+
+// TestFrame_EscNeverQuits asserts esc does not exit the TUI in normal mode (no
+// overlay): it must NOT return tea.Quit. esc only ever closes an open overlay.
+func TestFrame_EscNeverQuits(t *testing.T) {
+	f, _ := newTestFrame(t, 80, frameGoldenHeight)
+	if !f.overlay.Empty() {
+		t.Fatal("precondition: no overlay should be open")
+	}
+	_, cmd := f.Update(key("esc"))
+	if isQuitCmd(cmd) {
+		t.Error("esc in normal mode returned tea.Quit; esc must never exit the TUI")
 	}
 }
 
@@ -1074,6 +1087,18 @@ func (p *mousePlugin) panelClicks() []PanelClickMsg {
 	return out
 }
 
+// overlayClosedCount returns how many OverlayClosedMsg the plugin received,
+// used to assert a capturing overlay's dismissal notifies the plugin.
+func (p *mousePlugin) overlayClosedCount() int {
+	n := 0
+	for _, m := range p.msgs {
+		if _, ok := m.(OverlayClosedMsg); ok {
+			n++
+		}
+	}
+	return n
+}
+
 // focusChanges returns every FocusChangedMsg forwarded to the plugin, in order.
 func (p *mousePlugin) focusChanges() []FocusChangedMsg {
 	var out []FocusChangedMsg
@@ -1563,8 +1588,12 @@ func TestFrame_ClickRouting(t *testing.T) {
 		clk := testClock()
 		f.clock = clk
 		f.Update(leftClick(5, 5)) // first click — record
-		f.overlay.Push(Overlay{Content: "modal", Width: 5, Height: 1})
-		f.Update(leftClick(5, 5)) // swallowed while overlay open (clears lastClick)
+		ov := Overlay{Content: "modal", Width: 5, Height: 1}
+		f.overlay.Push(ov)
+		// Click the modal's centre cell so it is swallowed (an outside-click would
+		// dismiss it); the swallow must still clear the double-click record.
+		mx, my := centerOffset(f.geo.Overlay, ov)
+		f.Update(leftClick(mx+ov.Width/2, my)) // swallowed while overlay open (clears lastClick)
 		f.overlay.Pop()
 		f.Update(leftClick(5, 5)) // fresh first click after the modal closed
 		if got := p.counts[ActionSelect]; got != 0 {
@@ -1614,15 +1643,46 @@ func TestFrame_ClickRouting(t *testing.T) {
 		}
 	})
 
-	t.Run("click_with_overlay_does_not_pop_it", func(t *testing.T) {
+	t.Run("click_inside_overlay_does_not_dismiss", func(t *testing.T) {
+		f, _ := newMouseFrame(t, 80, frameGoldenHeight)
+		f.Update(key("?")) // open help overlay
+		top, ok := f.overlay.Top()
+		if !ok {
+			t.Fatal("overlay did not open")
+		}
+		// Click the modal's centre cell — inside the visible modal → swallowed.
+		mx, my := centerOffset(f.geo.Overlay, top)
+		f.Update(leftClick(mx+top.Width/2, my+top.Height/2))
+		if f.overlay.Empty() {
+			t.Error("click inside overlay dismissed it; want swallow")
+		}
+	})
+
+	t.Run("click_outside_overlay_dismisses_it", func(t *testing.T) {
 		f, _ := newMouseFrame(t, 80, frameGoldenHeight)
 		f.Update(key("?")) // open help overlay
 		if f.overlay.Empty() {
 			t.Fatal("overlay did not open")
 		}
-		f.Update(leftClick(5, 5)) // click anywhere while overlay is open
-		if f.overlay.Empty() {
-			t.Error("click while overlay open dismissed the overlay; want swallow (no dismiss)")
+		f.Update(leftClick(0, 0)) // top-left, outside the centred modal → dismiss
+		if !f.overlay.Empty() {
+			t.Error("click outside overlay did not dismiss it; want dismiss")
+		}
+	})
+
+	t.Run("click_outside_capturing_overlay_notifies_plugin", func(t *testing.T) {
+		// A capturing overlay dismissed by an outside-click must notify the plugin
+		// via OverlayClosedMsg (same as esc), so it can clear the state that
+		// produced the modal.
+		f, p := newMouseFrame(t, 80, frameGoldenHeight)
+		f.overlay.Push(Overlay{Content: "modal", Width: 5, Height: 1, CapturesInput: true})
+		before := p.overlayClosedCount()
+		f.Update(leftClick(0, 0)) // outside the centred modal → dismiss
+		if !f.overlay.Empty() {
+			t.Fatal("outside-click did not dismiss the capturing overlay")
+		}
+		if got := p.overlayClosedCount(); got != before+1 {
+			t.Errorf("OverlayClosedMsg count = %d; want %d", got, before+1)
 		}
 	})
 

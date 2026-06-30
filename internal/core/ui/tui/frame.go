@@ -196,9 +196,9 @@ func (f *Frame) Init() tea.Cmd { return f.plugin.Init() }
 //     framework-handled and never reach the plugin; a matched plugin action
 //     goes to plugin.HandleAction; an unmatched (or plugin-unhandled) key is
 //     forwarded raw to plugin.Update. When an overlay is open, "esc" closes the
-//     overlay (taking precedence over its ActionQuit alias) and otherwise ONLY
-//     the help-close / quit built-ins act — plugin action keys are SWALLOWED,
-//     not routed (no acting behind the modal).
+//     overlay and otherwise ONLY the help-close / quit built-ins act — plugin
+//     action keys are SWALLOWED, not routed (no acting behind the modal). "esc"
+//     is never a quit key, so it never exits the TUI (see NewRegistry).
 //   - Every non-key message is always forwarded to plugin.Update (async
 //     preservation), including while the help overlay is open.
 //   - tea.MouseMsg is routed to handleMouse: wheel events — when a capturing
@@ -207,8 +207,9 @@ func (f *Frame) Init() tea.Cmd { return f.plugin.Init() }
 //     inline filter the wheel is swallowed; otherwise the wheel is dispatched
 //     immediately as WheelMsg to the panel under the pointer (pointer-routed,
 //     not focus-routed); left-click events are classified via classifyHit and
-//     routed (help-hint → help, panel → focus + double-click, blank → swallow);
-//     release and motion events are silently ignored.
+//     routed (help-hint → help, panel → focus + double-click, blank → swallow,
+//     inside-modal → swallow, outside-modal → dismiss the overlay); release and
+//     motion events are silently ignored.
 //
 // After both a HandleAction call and a plugin.Update forward the framework
 // drains plugin.PendingOverlay so an action-triggered overlay appears
@@ -259,14 +260,9 @@ func (f *Frame) handleKey(key tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 			case captureHardQuit:
 				return f, tea.Quit
 			case captureClose:
-				f.overlay.Pop()
-				// Crossing the overlay boundary resets double-click tracking.
-				f.lastClick = lastClickRecord{}
-				// Notify the plugin its capturing overlay was dismissed so it can
-				// clear the state that produced it — otherwise a later raw key
-				// could resurrect the closed view. See [OverlayClosedMsg].
-				cmd := f.plugin.Update(OverlayClosedMsg{})
-				return f, cmd
+				// Pop, reset double-click tracking, and notify the plugin its
+				// capturing overlay was dismissed — see dismissTopOverlay.
+				return f, f.dismissTopOverlay()
 			default: // captureSwallowToPlugin
 				cmd := f.plugin.Update(key)
 				// A captured key may mutate the plugin's overlay state (e.g.
@@ -280,18 +276,14 @@ func (f *Frame) handleKey(key tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 		}
 
 		// Modal open: the frame's modal-input policy takes precedence over the
-		// registry. "esc" closes the overlay — it never reaches its ActionQuit
-		// alias while a modal is open (the Binding.Aliases precedence rule), so
-		// dismissing a modal must not quit the program. "?" toggles help closed
-		// and "q"/"ctrl+c" quit (the help-close / quit built-ins). Everything
-		// else (plugin actions, focus cycling, raw keys) is swallowed so the
-		// body never acts behind the modal.
+		// registry. "esc" closes the overlay (esc is never a quit key — see
+		// NewRegistry). "?" toggles help closed and "q"/"ctrl+c" quit (the
+		// help-close / quit built-ins). Everything else (plugin actions, focus
+		// cycling, raw keys) is swallowed so the body never acts behind the modal.
 		if keyStr == "esc" {
-			f.overlay.Pop()
-			// Crossing the overlay boundary resets double-click tracking — see
-			// the ActionHelp branch in handleBuiltin.
-			f.lastClick = lastClickRecord{}
-			return f, nil
+			// Pop and reset double-click tracking across the boundary — see
+			// dismissTopOverlay (a non-capturing modal returns a nil cmd).
+			return f, f.dismissTopOverlay()
 		}
 		if a, ok := f.registry.Match(keyStr); ok {
 			switch a {
@@ -381,6 +373,24 @@ func (f *Frame) cycleFocus(move func()) (tea.Model, tea.Cmd) {
 	return f, cmd
 }
 
+// dismissTopOverlay pops the visible top overlay and returns the resulting
+// plugin command. When the dismissed overlay was a capturing overlay
+// (Overlay.CapturesInput) it forwards an [OverlayClosedMsg] so the plugin can
+// clear the state that produced the modal — otherwise a later raw key could
+// resurrect the closed view. It resets the double-click record across the
+// overlay boundary. It is the single close path shared by esc (keyboard) and a
+// click outside the modal (mouse). The caller must have confirmed an overlay is
+// open; on an empty stack it is a harmless no-op returning nil.
+func (f *Frame) dismissTopOverlay() tea.Cmd {
+	top, ok := f.overlay.Top()
+	f.overlay.Pop()
+	f.lastClick = lastClickRecord{}
+	if ok && top.CapturesInput {
+		return f.plugin.Update(OverlayClosedMsg{})
+	}
+	return nil
+}
+
 // drainOverlay pushes a plugin-requested overlay onto the stack. Mutual
 // exclusivity is structural (View only ever composites Top), so Push is safe.
 // It also resets the double-click record so a click before the modal can
@@ -456,9 +466,9 @@ func (f *Frame) handleMouse(msg tea.MouseMsg) (tea.Model, tea.Cmd) {
 }
 
 // handleClick processes a left-click by classifying the hit zone first:
-//   - overlay open → both zoneModal and zoneOutsideModal are swallowed and
-//     clear lastClick; outside does NOT dismiss the overlay (locked Stage 2
-//     policy)
+//   - overlay open → zoneModal is swallowed (clears lastClick); zoneOutsideModal
+//     dismisses the overlay (the click-away-to-close affordance, mirroring esc
+//     via dismissTopOverlay)
 //   - zoneHelpHint → toggle the help overlay; clear lastClick
 //   - zonePanel → set focus; then double-click test (same panel + same cell +
 //     within doubleClickWindow + lastClick not zero-sentinel); record otherwise
@@ -486,12 +496,18 @@ func (f *Frame) handleClick(m tea.MouseClickMsg) (tea.Model, tea.Cmd) {
 	}
 	zone, id := classifyHit(f.geo, f.panelRects(), f.helpHintRegion(), ov, m.X, m.Y)
 	switch zone {
-	case zoneModal, zoneOutsideModal:
-		// Swallowed while a modal is open. Clear the double-click record so a
-		// click before the overlay opened can never pair with one after it
-		// closes into a phantom double-click.
+	case zoneModal:
+		// Click inside the visible modal is swallowed — the body never acts
+		// behind it. Clear the double-click record so a click before the overlay
+		// opened can never pair with one after it closes into a phantom
+		// double-click.
 		f.lastClick = lastClickRecord{}
 		return f, nil
+	case zoneOutsideModal:
+		// Click outside the visible modal dismisses it — the same close-away
+		// affordance as esc (dismissTopOverlay notifies a capturing plugin via
+		// OverlayClosedMsg and resets the double-click record across the boundary).
+		return f, f.dismissTopOverlay()
 	case zoneHelpHint:
 		f.lastClick = lastClickRecord{}
 		return f.handleBuiltin(ActionHelp)

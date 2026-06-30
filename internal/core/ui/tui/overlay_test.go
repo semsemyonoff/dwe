@@ -223,10 +223,10 @@ func TestComposite_ZeroAreaBody(t *testing.T) {
 	}
 }
 
-// TestOverlayClickPolicy pins the Stage 0 outside-click policy default and keeps
-// the documented Stage-2 seam constant referenced.
+// TestOverlayClickPolicy pins the click-outside-modal policy default and keeps
+// the documented seam constant referenced.
 func TestOverlayClickPolicy(t *testing.T) {
-	if !overlayClicksOutsideSwallowed {
-		t.Fatal("Stage 0 policy: clicks outside the modal are swallowed, not dismissed")
+	if !overlayClickOutsideDismisses {
+		t.Fatal("policy: a click outside the modal dismisses it")
 	}
 }

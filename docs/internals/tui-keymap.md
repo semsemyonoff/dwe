@@ -20,19 +20,18 @@ they never reach the plugin's `HandleAction`.
 | Action ID     | Keys            | Aliases | Section    | Description           |
 |---------------|-----------------|---------|------------|-----------------------|
 | `help`        | `?`             | —       | General    | Toggle help modal     |
-| `quit`        | `q`, `ctrl+c`   | `esc`   | General    | Quit                  |
+| `quit`        | `q`, `ctrl+c`   | —       | General    | Quit                  |
 | `focus.next`  | `tab`           | —       | Navigation | Focus next panel      |
 | `focus.prev`  | `shift+tab`     | —       | Navigation | Focus previous panel  |
 
 Section registration order: Navigation first (FocusNext, FocusPrev), then General
 (Help, Quit). This order drives the help modal layout — see §3.
 
-**`esc` alias on `quit`:** `esc` is a hidden alias for `ActionQuit`. It dispatches
-(Match resolves it) but is absent from the help modal, matching the existing
-cmdbrowser and docs-browser muscle memory without cluttering the help display.
-Precedence rule: when an overlay is open the frame's modal-input policy consumes
-`esc` to **close the overlay** before the registry is consulted; `esc` only reaches
-`ActionQuit` in normal mode (no overlay). See §5 for the capturing-overlay variant.
+**`esc` is never a quit key:** `esc` only ever **closes the visible overlay** (the
+frame's modal-input policy consumes it before the registry is consulted) and is a
+no-op in normal mode (no overlay) — it forwards to `plugin.Update`, which ignores
+it. `esc` must never exit the TUI; quitting is `q` / `ctrl+c` only. See §5 for the
+capturing-overlay variant.
 
 ### 1.2 Stdlib shared actions
 
@@ -148,7 +147,8 @@ help modal.
 
 `Binding.Aliases` — additional physical keys that dispatch via `Match` but are
 **hidden from the help modal**. Purpose: muscle-memory compatibility without
-cluttering the help display. Example: `esc` as a hidden quit alias.
+cluttering the help display (a second key for an action). Note: `esc` is **not** a
+quit alias — it only closes overlays and never exits the TUI.
 
 Both go through `Registry.Register`'s pre-commit duplicate guard: an alias colliding
 with any existing key/alias, or with the binding's own canonical `Keys`, is an error.
@@ -247,21 +247,20 @@ a shared key space.
 
 Similarly `y` = skip confirm (cmdbrowser) vs `y` = copy diagram (docs-browser).
 
-### `esc` precedence rule
+### `esc` rule — close overlay only, never quit
 
-`esc` is a hidden alias on `ActionQuit`. Precedence:
+`esc` is **not** a quit key. Behavior:
 
 1. When a **non-capturing** overlay is open: the frame's modal-input policy
    consumes `esc` to **close the overlay** (pop the top layer) before the registry
-   is consulted, so `esc` never reaches its `ActionQuit` alias while a modal is
-   open. `?` toggles help closed and `q`/`ctrl+c` quit; all other keys are
+   is consulted. `?` toggles help closed and `q`/`ctrl+c` quit; all other keys are
    swallowed (no acting behind the modal).
 2. When a **capturing** overlay is open (`CapturesInput: true`): `esc` routes to
    `captureClose` (close the overlay) — the registry is bypassed entirely. See §5.
-3. In **normal mode** (no overlay): `esc` reaches `ActionQuit` via the alias.
+3. In **normal mode** (no overlay): `esc` is a no-op — it forwards to `plugin.Update`
+   (which ignores it) and never exits the TUI.
 
-This matches the existing cmdbrowser and docs-browser behavior and the forms-guidance
-`esc`=cancel intent.
+`esc` must never close the TUI; this matches the forms-guidance `esc`=cancel intent.
 
 ---
 
@@ -345,8 +344,8 @@ all surfaces:
 |---------------------------|-----------------------------------------|
 | Click on panel            | Move focus to clicked panel             |
 | Click on help hint (status bar) | Open help modal (`ActionHelp`)   |
-| Click outside modal       | Swallowed (does not close the modal)    |
-| Click with overlay open   | All clicks swallowed (no dismiss)       |
+| Click inside modal        | Swallowed (body never acts behind it)   |
+| Click outside modal       | Dismiss the overlay (click-away-to-close, mirrors `esc`) |
 
 **Plugin-facing click forward (row-select / tab-switch)** — the `panelLocal(outer
 Region, x, y int) (lx, ly int)` helper translates an absolute click to

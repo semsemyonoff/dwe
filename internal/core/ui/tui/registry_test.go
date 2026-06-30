@@ -137,16 +137,13 @@ func TestRegistry_BuiltinDefaultsPresent(t *testing.T) {
 	}
 }
 
-func TestRegistry_EscAliasDispatchesToQuit(t *testing.T) {
+func TestRegistry_EscIsNotAQuitKey(t *testing.T) {
 	t.Parallel()
 	r := NewRegistry()
-	// "esc" is a hidden alias for ActionQuit — must dispatch.
-	got, ok := r.Match("esc")
-	if !ok {
-		t.Fatal("Match(esc) = false; want true (esc is an alias for ActionQuit)")
-	}
-	if got != ActionQuit {
-		t.Errorf("Match(esc) = %q; want %q", got, ActionQuit)
+	// "esc" must NOT resolve to any action — it only ever closes overlays (handled
+	// by the frame before the registry) and never exits the TUI.
+	if got, ok := r.Match("esc"); ok {
+		t.Errorf("Match(esc) = %q, true; want no match (esc is not a quit key)", got)
 	}
 }
 

@@ -38,13 +38,9 @@ type Binding struct {
 
 	// Aliases are additional physical key strings that dispatch to the action
 	// (wired into [Registry.Match]) but are hidden from the help modal. They
-	// exist for muscle-memory compatibility — e.g. "esc" as a quit alias —
-	// without cluttering the help display. Locked in Stage 1.
-	//
-	// Precedence when an overlay is open: the frame's modal-input policy
-	// consumes "esc" to close the overlay before the registry is consulted;
-	// "esc" only reaches [ActionQuit] in normal mode (no overlay). See the
-	// [CapturesInput] contract for the capturing-overlay variant.
+	// exist for muscle-memory compatibility — a second key for an action without
+	// cluttering the help display. Note: "esc" is intentionally NOT a quit alias
+	// — it only closes overlays and never exits the TUI (see [NewRegistry]).
 	Aliases []string
 	// Rebindable marks whether a project may override Keys via a future
 	// rebinding config. This is documented metadata only — no config loader is
@@ -88,11 +84,10 @@ type Registry struct {
 // actions ([ActionHelp], [ActionQuit], [ActionFocusNext], [ActionFocusPrev]).
 // Plugins extend it through their Actions hook.
 //
-// [ActionQuit] carries "esc" as a hidden alias: it dispatches (Match("esc")
-// resolves to ActionQuit) but is absent from the help modal. The frame's
-// modal-input policy takes precedence — "esc" closes an open overlay before
-// the registry is consulted; it only reaches ActionQuit in normal mode (no
-// overlay). Locked in Stage 1.
+// "esc" is deliberately NOT a quit key (nor a quit alias): it only ever closes
+// the visible overlay (handled by the frame's modal-input policy before the
+// registry is consulted) and is a no-op in normal mode — esc must never exit the
+// TUI. Quitting is "q" / "ctrl+c" only.
 func NewRegistry() *Registry {
 	r := &Registry{
 		bindings: make(map[Action]Binding),
@@ -103,7 +98,7 @@ func NewRegistry() *Registry {
 	mustRegister(r, ActionFocusNext, Binding{Keys: []string{"tab"}, Desc: "Focus next panel", Section: sectionNavigation})
 	mustRegister(r, ActionFocusPrev, Binding{Keys: []string{"shift+tab"}, Desc: "Focus previous panel", Section: sectionNavigation})
 	mustRegister(r, ActionHelp, Binding{Keys: []string{"?"}, Desc: "Toggle help", Section: sectionGeneral})
-	mustRegister(r, ActionQuit, Binding{Keys: []string{"q", "ctrl+c"}, Desc: "Quit", Section: sectionGeneral, Aliases: []string{"esc"}})
+	mustRegister(r, ActionQuit, Binding{Keys: []string{"q", "ctrl+c"}, Desc: "Quit", Section: sectionGeneral})
 	return r
 }
 

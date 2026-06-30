@@ -142,21 +142,15 @@ func TestBuildHelpOverlay_nilTranslator(t *testing.T) {
 
 // TestBuildHelpOverlay_aliasesHiddenFromHelp locks the dispatch-vs-display
 // split: Binding.Aliases dispatch (Match resolves them) but are absent from the
-// rendered help modal, while Binding.Keys appear in the modal.
-//
-// Concretely: ActionQuit carries "esc" as a hidden alias. The help must show "q"
-// and "ctrl+c" (the canonical Keys) but must NOT show "esc". Meanwhile
-// Match("esc") must still resolve to ActionQuit.
+// rendered help modal, while Binding.Keys appear in the modal. It also pins that
+// "esc" is NOT a quit key/alias — it must never resolve to an action (esc only
+// closes overlays, handled by the frame before the registry; see NewRegistry).
 func TestBuildHelpOverlay_aliasesHiddenFromHelp(t *testing.T) {
 	reg := NewRegistry()
 
-	// Verify dispatch: esc must resolve to ActionQuit.
-	got, ok := reg.Match("esc")
-	if !ok {
-		t.Fatal("Match(\"esc\") returned false; expected ActionQuit")
-	}
-	if got != ActionQuit {
-		t.Fatalf("Match(\"esc\") = %q; want %q", got, ActionQuit)
+	// "esc" must not be a registry action — it never quits the TUI.
+	if a, ok := reg.Match("esc"); ok {
+		t.Fatalf("Match(\"esc\") resolved to %q; esc must not be a registry action", a)
 	}
 
 	// Verify display: build the help overlay and strip ANSI for comparison.
@@ -170,15 +164,16 @@ func TestBuildHelpOverlay_aliasesHiddenFromHelp(t *testing.T) {
 		}
 	}
 
-	// The alias must NOT appear in the modal as a key token. Tokenize on
-	// whitespace and the key separator so a future description that merely
-	// contains the substring "esc" (e.g. "Describe", "Reset") cannot false-trip
-	// this — only a standalone "esc" token (i.e. a leaked key) fails.
+	// "esc" must NOT appear in the modal as a key token. Tokenize on whitespace
+	// and the key separator so a future description that merely contains the
+	// substring "esc" (e.g. "Describe", "Reset") cannot false-trip this — only a
+	// standalone "esc" token (i.e. a leaked key) fails.
 	if helpHasToken(content, "esc") {
-		t.Errorf("help modal contains alias %q as a token; aliases must be hidden from help", "esc")
+		t.Errorf("help modal contains %q as a token; esc is not a quit key", "esc")
 	}
 
-	// Also verify via a plugin-registered action with an alias.
+	// Verify the generic alias mechanism via a plugin-registered action: an alias
+	// dispatches through Match but stays hidden from the help modal.
 	const actionTest Action = "test.action"
 	if err := reg.Register(actionTest, Binding{
 		Keys:    []string{"x"},
