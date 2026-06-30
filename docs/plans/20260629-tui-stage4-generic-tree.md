@@ -445,18 +445,20 @@ default-expanded in the engine (see Task 3) since the engine's map starts empty.
 - Modify: `docs/internals/tui-keymap.md` (only if keymap prose references the trees)
 - Modify: `CLAUDE.md`/`AGENTS.md` (only if a load-bearing contract emerged)
 
-- [ ] add a `tui/tree` section to `packages.md`: engine contract (generics + 3-method
+- [x] add a `tui/tree` section to `packages.md`: engine contract (generics + 3-method
       adapter), the **"rendering NOT in the engine"** boundary (Decision 7), expansion
       **keyed by stable `Key`** (Decision 3/8), and the **keep-predicate-not-filter** hook
       (Decision 6); note both consumers are thin wrappers
-- [ ] update the docstui/cmdbrowser package notes in `packages.md` to reference the shared
+- [x] update the docstui/cmdbrowser package notes in `packages.md` to reference the shared
       engine instead of the "mirror cmdbrowser exactly" duplication; mention the docs
       expansion-across-locale bugfix
-- [ ] add a Critical Patterns line to `CLAUDE.md`/`AGENTS.md` **only if** "rendering-not-in-
+- [x] add a Critical Patterns line to `CLAUDE.md`/`AGENTS.md` **only if** "rendering-not-in-
       engine / expansion-by-Key" is judged load-bearing — keep it tight; edit `AGENTS.md`
-      (canonical), never the `CLAUDE.md` symlink
-- [ ] `make build` (re-sync embedded docs) + `make test` (docs-subsystem tests) — must pass
-- [ ] (no separate code tests — documentation task; the build/test run is the gate)
+      (canonical), never the `CLAUDE.md` symlink (extended the existing `tui.Plugin`
+      framework pattern with the engine contracts; `tui-keymap.md` unchanged — keymaps are
+      identical, this is a behavior-preserving refactor)
+- [x] `make build` (re-sync embedded docs) + `make test` (docs-subsystem tests) — must pass
+- [x] (no separate code tests — documentation task; the build/test run is the gate)
 
 ### Task 5: Verify acceptance criteria
 
