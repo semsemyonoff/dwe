@@ -201,7 +201,10 @@ func (f *Frame) Init() tea.Cmd { return f.plugin.Init() }
 //     not routed (no acting behind the modal).
 //   - Every non-key message is always forwarded to plugin.Update (async
 //     preservation), including while the help overlay is open.
-//   - tea.MouseMsg is routed to handleMouse: wheel events are dispatched
+//   - tea.MouseMsg is routed to handleMouse: wheel events — when a capturing
+//     overlay is open, the raw msg is forwarded to the plugin and the overlay
+//     snapshot is refreshed in-place; for a non-capturing overlay or an active
+//     inline filter the wheel is swallowed; otherwise the wheel is dispatched
 //     immediately as WheelMsg to the panel under the pointer (pointer-routed,
 //     not focus-routed); left-click events are classified via classifyHit and
 //     routed (help-hint → help, panel → focus + double-click, blank → swallow);
@@ -408,10 +411,18 @@ func (f *Frame) refreshCapturingOverlay() {
 func (f *Frame) handleMouse(msg tea.MouseMsg) (tea.Model, tea.Cmd) {
 	switch m := msg.(type) {
 	case tea.MouseWheelMsg:
-		// No-op while an overlay is open OR the plugin is capturing raw input
-		// (inline filter, no overlay). Overlay-aware forwarding (CapturesInput)
-		// is added in Task 2; for now all overlay states suppress the wheel.
-		if !f.overlay.Empty() || f.plugin.CapturingInput() {
+		// Overlay-aware routing: a CapturesInput top overlay receives the raw
+		// wheel message (so its embedded viewport can scroll); a non-capturing
+		// overlay (help) swallows it; the no-overlay inline-filter also swallows.
+		if top, ok := f.overlay.Top(); ok {
+			if top.CapturesInput {
+				cmd := f.plugin.Update(m)
+				f.refreshCapturingOverlay()
+				return f, cmd
+			}
+			return f, nil
+		}
+		if f.plugin.CapturingInput() {
 			return f, nil
 		}
 		// Translate button to a signed notch delta. Horizontal wheel carries no

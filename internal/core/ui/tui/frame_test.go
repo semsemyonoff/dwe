@@ -1010,6 +1010,13 @@ type mousePlugin struct {
 	// modelling the inline filter opening on '/'. Lets a test exercise the
 	// frame's reset-on-entering-capture transition.
 	captureOnFilter bool
+	// pending is the capturing overlay the plugin will surface on the next
+	// PendingOverlay drain — used by Task 2 overlay-wheel tests.
+	pending *Overlay
+	// republishOnUpdate, when set, is re-marked pending on every Update —
+	// modelling a capturing overlay that republishes a fresh snapshot after a
+	// scroll event so refreshCapturingOverlay swaps in the new content.
+	republishOnUpdate *Overlay
 }
 
 func newMousePlugin() *mousePlugin {
@@ -1021,6 +1028,10 @@ func (p *mousePlugin) Close() error  { return nil }
 func (p *mousePlugin) Resize(Region) {}
 func (p *mousePlugin) Update(msg tea.Msg) tea.Cmd {
 	p.msgs = append(p.msgs, msg)
+	if p.republishOnUpdate != nil {
+		ov := *p.republishOnUpdate
+		p.pending = &ov
+	}
 	return nil
 }
 func (p *mousePlugin) ViewPanel(_ PanelID, _ Region) string { return "[mouse]" }
@@ -1041,7 +1052,14 @@ func (p *mousePlugin) HandleAction(a Action) (tea.Cmd, bool) {
 	}
 	return nil, true
 }
-func (p *mousePlugin) PendingOverlay() (Overlay, bool) { return Overlay{}, false }
+func (p *mousePlugin) PendingOverlay() (Overlay, bool) {
+	if p.pending == nil {
+		return Overlay{}, false
+	}
+	ov := *p.pending
+	p.pending = nil
+	return ov, true
+}
 func (p *mousePlugin) Result() any                     { return nil }
 func (p *mousePlugin) CapturingInput() bool            { return p.capturing }
 
@@ -1073,6 +1091,19 @@ func (p *mousePlugin) wheelMsgs() []WheelMsg {
 	var out []WheelMsg
 	for _, m := range p.msgs {
 		if wm, ok := m.(WheelMsg); ok {
+			out = append(out, wm)
+		}
+	}
+	return out
+}
+
+// rawWheelMsgs returns every raw tea.MouseWheelMsg forwarded to the plugin
+// through Update, in order. Used by TestFrame_WheelOverlayRouting to assert
+// that the capturing-overlay path forwards the unmodified wheel event.
+func (p *mousePlugin) rawWheelMsgs() []tea.MouseWheelMsg {
+	var out []tea.MouseWheelMsg
+	for _, m := range p.msgs {
+		if wm, ok := m.(tea.MouseWheelMsg); ok {
 			out = append(out, wm)
 		}
 	}
@@ -1234,8 +1265,8 @@ func TestFrame_WheelRouting(t *testing.T) {
 	})
 
 	t.Run("wheel_swallowed_while_overlay_open", func(t *testing.T) {
-		// While any overlay is open, wheel events are swallowed (overlay-aware
-		// forwarding for CapturesInput overlays is added in Task 2).
+		// A non-capturing overlay (help) swallows wheel events; only a
+		// CapturesInput overlay forwards them (see TestFrame_WheelOverlayRouting).
 		f, p := newMouseFrame(t, 80, frameGoldenHeight)
 		f.Update(key("?")) // open non-capturing help overlay
 		if f.overlay.Empty() {
@@ -1279,6 +1310,88 @@ func TestFrame_WheelRouting(t *testing.T) {
 			if wm.Delta != 1 {
 				t.Errorf("WheelMsg[%d].Delta = %d; want +1", i, wm.Delta)
 			}
+		}
+	})
+}
+
+// TestFrame_WheelOverlayRouting exercises the overlay-aware wheel routing added
+// in Task 2: a CapturesInput overlay forwards the raw tea.MouseWheelMsg to the
+// plugin and refreshes the overlay snapshot in-place; a non-capturing overlay
+// swallows the wheel; an active inline filter (no overlay) also swallows.
+func TestFrame_WheelOverlayRouting(t *testing.T) {
+	t.Run("capturing_overlay_forwards_raw_wheel_to_plugin", func(t *testing.T) {
+		f, p := newMouseFrame(t, 80, frameGoldenHeight)
+		// Push a capturing overlay snapshot.
+		p.pending = &Overlay{Content: "frame-0", Width: 7, Height: 1, CapturesInput: true}
+		f.drainOverlay()
+		if f.overlay.Empty() {
+			t.Fatal("capturing overlay was not pushed")
+		}
+		_, cmd := f.Update(wheelDown())
+		if cmd != nil {
+			t.Error("wheel while capturing overlay returned cmd; want nil")
+		}
+		// Must have forwarded the raw tea.MouseWheelMsg, not a WheelMsg.
+		if raws := p.rawWheelMsgs(); len(raws) != 1 {
+			t.Fatalf("capturing overlay: forwarded %d raw MouseWheelMsgs; want 1", len(raws))
+		}
+		if wms := p.wheelMsgs(); len(wms) != 0 {
+			t.Errorf("capturing overlay: forwarded %d WheelMsgs; want 0 (raw path only)", len(wms))
+		}
+	})
+
+	t.Run("capturing_overlay_refreshes_snapshot_in_place", func(t *testing.T) {
+		f, p := newMouseFrame(t, 80, frameGoldenHeight)
+		p.pending = &Overlay{Content: "frame-0", Width: 7, Height: 1, CapturesInput: true}
+		f.drainOverlay()
+		if got := len(f.overlay.layers); got != 1 {
+			t.Fatalf("overlay depth after open = %d; want 1", got)
+		}
+		// Plugin republishes a refreshed snapshot on the next Update.
+		p.republishOnUpdate = &Overlay{Content: "frame-1", Width: 7, Height: 1, CapturesInput: true}
+		f.Update(wheelDown())
+		// Stack depth must stay at 1 (replace, not push).
+		if got := len(f.overlay.layers); got != 1 {
+			t.Errorf("overlay depth after wheel = %d; want 1 (refresh must replace, not push)", got)
+		}
+		if top, _ := f.overlay.Top(); top.Content != "frame-1" {
+			t.Errorf("top content = %q; want frame-1 (overlay not refreshed)", top.Content)
+		}
+	})
+
+	t.Run("non_capturing_overlay_swallows_wheel", func(t *testing.T) {
+		f, p := newMouseFrame(t, 80, frameGoldenHeight)
+		f.Update(key("?")) // open non-capturing help overlay
+		if f.overlay.Empty() {
+			t.Fatal("help overlay did not open")
+		}
+		_, cmd := f.Update(wheelDown())
+		if cmd != nil {
+			t.Error("wheel while non-capturing overlay returned cmd; want nil")
+		}
+		if raws := p.rawWheelMsgs(); len(raws) != 0 {
+			t.Errorf("non-capturing overlay forwarded %d raw wheel msgs; want 0", len(raws))
+		}
+		if wms := p.wheelMsgs(); len(wms) != 0 {
+			t.Errorf("non-capturing overlay forwarded %d WheelMsgs; want 0", len(wms))
+		}
+	})
+
+	t.Run("inline_filter_swallows_wheel", func(t *testing.T) {
+		f, p := newMouseFrame(t, 80, frameGoldenHeight)
+		p.capturing = true // no overlay, inline filter active
+		if !f.overlay.Empty() {
+			t.Fatal("overlay must be empty for this test")
+		}
+		_, cmd := f.Update(wheelDown())
+		if cmd != nil {
+			t.Error("wheel while inline filter active returned cmd; want nil")
+		}
+		if raws := p.rawWheelMsgs(); len(raws) != 0 {
+			t.Errorf("inline filter forwarded %d raw wheel msgs; want 0", len(raws))
+		}
+		if wms := p.wheelMsgs(); len(wms) != 0 {
+			t.Errorf("inline filter forwarded %d WheelMsgs; want 0", len(wms))
 		}
 	})
 }

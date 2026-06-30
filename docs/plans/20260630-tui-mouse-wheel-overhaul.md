@@ -297,17 +297,17 @@ The wheel path is rebuilt around three principles — **immediate**, **pointer-r
 - Modify: `internal/core/ui/tui/frame.go`
 - Modify: `internal/core/ui/tui/frame_test.go`
 
-- [ ] in `handleMouse`'s `tea.MouseWheelMsg` arm, add the overlay branch BEFORE hit-test:
+- [x] in `handleMouse`'s `tea.MouseWheelMsg` arm, add the overlay branch BEFORE hit-test:
   a `CapturesInput` top overlay → forward the raw `tea.MouseWheelMsg` to `plugin.Update`
   and call `refreshCapturingOverlay`; a non-capturing top overlay → swallow; an active
   inline filter (`plugin.CapturingInput()`, no overlay) → swallow
-- [ ] give the `mousePlugin` test helper a capturing-overlay mode (a `PendingOverlay` with
+- [x] give the `mousePlugin` test helper a capturing-overlay mode (a `PendingOverlay` with
   `CapturesInput: true`) and a recorder for raw `tea.MouseWheelMsg` forwards
-- [ ] write tests: with a capturing overlay open, a `tea.MouseWheelMsg` is forwarded to the
+- [x] write tests: with a capturing overlay open, a `tea.MouseWheelMsg` is forwarded to the
   plugin and `refreshCapturingOverlay` runs (top overlay replaced, stack depth unchanged);
   with a non-capturing overlay (help) the wheel is swallowed; with the inline filter active
   the wheel is swallowed
-- [ ] run `go test ./internal/core/ui/tui/...` — must pass before next task
+- [x] run `go test ./internal/core/ui/tui/...` — must pass before next task
 
 ### Task 3: cmdbrowser — pointer wheel for tree/list + inspect-overlay wheel scroll
 
