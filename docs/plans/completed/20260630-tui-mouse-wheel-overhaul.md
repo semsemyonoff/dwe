@@ -406,12 +406,12 @@ The wheel path is rebuilt around three principles — **immediate**, **pointer-r
 
 ### Task 7: [Final] Finalize documentation + archive plan
 
-- [ ] confirm `tui-keymap.md` §6, the `packages.md` `tui` section, and the `AGENTS.md`
+- [x] confirm `tui-keymap.md` §6, the `packages.md` `tui` section, and the `AGENTS.md`
   `tui.Plugin` bullet read coherently together (no stale "accumulator/tick" or
   "wheel→MatchMouse" wording remaining)
-- [ ] update `AGENTS.md` Critical Patterns only if a new load-bearing contract emerged
+- [x] update `AGENTS.md` Critical Patterns only if a new load-bearing contract emerged
   (likely just the `WheelMsg`/pointer-routing note added in Task 5)
-- [ ] move this plan to `docs/plans/completed/`
+- [x] move this plan to `docs/plans/completed/`
 
 ## Post-Completion
 
