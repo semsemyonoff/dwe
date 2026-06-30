@@ -311,38 +311,38 @@ default-expanded in the engine (see Task 3) since the engine's map starts empty.
 - Create: `internal/core/ui/tui/tree/tree.go`
 - Create: `internal/core/ui/tui/tree/tree_test.go`
 
-- [ ] create `Engine[N comparable]` + `Adapter[N]` (Decisions 1–2) with fields: adapter,
+- [x] create `Engine[N comparable]` + `Adapter[N]` (Decisions 1–2) with fields: adapter,
       `roots []N`, `expanded map[string]bool` (by Key), `cursor N`, `visible []N`,
       `topIdx int`, `parent map[N]N`, `byKey map[string]N`
-- [ ] implement `New`, `SetRoots` (build `parent` + `byKey` from `Children()` walk;
+- [x] implement `New`, `SetRoots` (build `parent` + `byKey` from `Children()` walk;
       re-resolve cursor by its prior `Key`; **if gone, set cursor to zero — do NOT auto-park**,
       the consumer decides the fallback) and `RebuildVisible(keep)` (expanded-walk when nil;
       ancestor-inclusion when set) — and a **separate** `ParkCursorIfHidden()` (NOT called by
       `RebuildVisible` or `SetRoots`) — Decisions 4–6, Technical Details "Cursor re-park policy"
-- [ ] implement nav (`MoveUp/MoveDown/MoveHome/MoveEnd`, `indexOf` helper), directional
+- [x] implement nav (`MoveUp/MoveDown/MoveHome/MoveEnd`, `indexOf` helper), directional
       `Collapse`/`Expand`/`Toggle`, and accessors `VisibleNodes`/`Cursor`/`SetCursor`/
       `SetCursorByKey(key) bool` (returns true if key resolved; `""`/unknown → zero-value
       cursor = root sentinel, returns false). Guard every nav/collapse/expand/`indexOf`/
       `EnsureFocusVisible` path against a **zero/nil cursor** (no panic; behaves as "no
       focus" → first-visible on move, matching cmdbrowser's `indexOfFocused()<0` path)
-- [ ] implement expansion accessors: node-based `IsExpanded`/`SetExpanded`, and the
+- [x] implement expansion accessors: node-based `IsExpanded`/`SetExpanded`, and the
       **bulk/key** accessors required by cmdbrowser's filter — `ExpandedSnapshot()`,
       `RestoreExpanded(snapshot)`, `SetExpandedByKey(key,b)` (Decision 9)
-- [ ] implement `EnsureFocusVisible(height)`, `FocusRow(row)` (click-past-last = no-op),
+- [x] implement `EnsureFocusVisible(height)`, `FocusRow(row)` (click-past-last = no-op),
       `Clip(full string, height int) string` — port verbatim from current cmdbrowser logic
-- [ ] write engine tests against a **fake node type**: nav + clamps; directional
+- [x] write engine tests against a **fake node type**: nav + clamps; directional
       collapse/expand (`h` on expanded collapses; `h` on collapsed → parent; `l` on
       collapsed expands; `l` on expanded → first child); `EnsureFocusVisible`/`FocusRow`/
       `Clip` window math incl. click-past-last no-op
-- [ ] write engine tests: `RebuildVisible(nil)` vs keep-predicate ancestor-inclusion;
+- [x] write engine tests: `RebuildVisible(nil)` vs keep-predicate ancestor-inclusion;
       **`RebuildVisible` does NOT move the cursor** even when the cursor falls out of the
       visible set; `ParkCursorIfHidden()` moves it only when called
-- [ ] write engine tests: **expansion + cursor survive `SetRoots` keyed by `Key`**; a
+- [x] write engine tests: **expansion + cursor survive `SetRoots` keyed by `Key`**; a
       `SetRoots` whose prior cursor key vanished leaves `Cursor()` zero (no auto-park);
       `SetCursorByKey` returns true on a known key, false + zero cursor on `""`/unknown;
       **nav/collapse/expand/`EnsureFocusVisible` are safe (no panic) with a zero/nil cursor**;
       `ExpandedSnapshot`/`RestoreExpanded`/`SetExpandedByKey` round-trip
-- [ ] `make test` — must pass before Task 2
+- [x] `make test` — must pass before Task 2
 
 ### Task 2: Refactor cmdbrowser tree onto the engine (Step B)
 
