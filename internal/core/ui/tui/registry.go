@@ -51,9 +51,10 @@ type Binding struct {
 	// built yet (YAGNI; no consumer until Stage 3). Locked in Stage 1.
 	Rebindable bool
 	// Mouse is the mouse-event string that triggers this action, resolved via
-	// [Registry.MatchMouse]. Wired in Stage 2. Locked vocabulary: "wheel-up",
-	// "wheel-down", "double-click". "click" is intentionally frame-owned and is
-	// never registered as a mouse binding.
+	// [Registry.MatchMouse]. Locked vocabulary: "double-click". "click" is
+	// intentionally frame-owned and is never registered as a mouse binding.
+	// Wheel events are dispatched as WheelMsg (pointer-routed via classifyHit),
+	// not through registry mouse bindings.
 	Mouse string
 }
 
@@ -164,7 +165,7 @@ func (r *Registry) Register(a Action, b Binding) error {
 	// the strict key/alias contract above.
 	if b.Mouse != "" {
 		if !validMouseEvent(b.Mouse) {
-			return fmt.Errorf("tui: mouse event %q for action %q is not in the locked vocabulary (%q, %q, %q)", b.Mouse, a, mouseWheelUp, mouseWheelDown, mouseDoubleClick)
+			return fmt.Errorf("tui: mouse event %q for action %q is not in the locked vocabulary (%q)", b.Mouse, a, mouseDoubleClick)
 		}
 		if owner, taken := r.MatchMouse(b.Mouse); taken {
 			return fmt.Errorf("tui: mouse event %q for action %q already bound to action %q", b.Mouse, a, owner)
@@ -196,31 +197,27 @@ func (r *Registry) Match(key string) (Action, bool) {
 	return a, ok
 }
 
-// The locked mouse-event vocabulary. These are the only values [Register]
-// accepts in [Binding.Mouse]; "click" is deliberately absent — it is
-// frame-owned and never a registrable binding (see [Registry.MatchMouse]).
+// The locked mouse-event vocabulary. The only value [Register] accepts in
+// [Binding.Mouse]; "click" is deliberately absent — it is frame-owned and
+// never a registrable binding (see [Registry.MatchMouse]). "wheel-up" and
+// "wheel-down" are no longer registrable: wheel events are dispatched as
+// WheelMsg directly by the frame, not through the registry.
 const (
-	mouseWheelUp     = "wheel-up"
-	mouseWheelDown   = "wheel-down"
 	mouseDoubleClick = "double-click"
 )
 
 // validMouseEvent reports whether event is part of the locked mouse vocabulary
 // accepted by [Register].
 func validMouseEvent(event string) bool {
-	switch event {
-	case mouseWheelUp, mouseWheelDown, mouseDoubleClick:
-		return true
-	default:
-		return false
-	}
+	return event == mouseDoubleClick
 }
 
 // MatchMouse resolves a mouse-event string to its action. The bool reports
 // whether any registered binding claims that event via [Binding.Mouse].
-// The locked vocabulary is "wheel-up", "wheel-down", "double-click".
-// "click" is frame-owned and is intentionally never registered as a
-// mouse binding, so MatchMouse("click") always returns false.
+// The locked vocabulary is "double-click". "click" is frame-owned and is
+// intentionally never registered as a mouse binding, so MatchMouse("click")
+// always returns false. Wheel events ("wheel-up", "wheel-down") are no longer
+// registrable and are dispatched as WheelMsg by the frame.
 func (r *Registry) MatchMouse(event string) (Action, bool) {
 	if event == "" {
 		// An empty event is never a real mouse vocabulary entry; without this

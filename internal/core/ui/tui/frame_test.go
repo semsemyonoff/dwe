@@ -993,10 +993,10 @@ const (
 )
 
 // mousePlugin is a minimal Plugin for mouse routing tests. It registers the
-// stdlib Nav and Select actions (so MatchMouse resolves wheel-up/down and
-// double-click) and counts per-action invocations so tests can assert
-// "HandleAction(ActionNavDown) was called exactly N times." Two equal-weight
-// panels let click tests verify focus switching between panels.
+// stdlib Nav and Select actions (so MatchMouse resolves double-click) and
+// counts per-action invocations. It also records every message forwarded through
+// Update so WheelMsg routing tests can assert delivery. Two equal-weight panels
+// let click and wheel tests verify routing across panels.
 type mousePlugin struct {
 	counts map[Action]int
 	// msgs records every message forwarded through Update so click/focus
@@ -1067,6 +1067,18 @@ func (p *mousePlugin) focusChanges() []FocusChangedMsg {
 	return out
 }
 
+// wheelMsgs returns every WheelMsg forwarded to the plugin through Update,
+// in order. Used by TestFrame_WheelRouting to assert pointer-routed delivery.
+func (p *mousePlugin) wheelMsgs() []WheelMsg {
+	var out []WheelMsg
+	for _, m := range p.msgs {
+		if wm, ok := m.(WheelMsg); ok {
+			out = append(out, wm)
+		}
+	}
+	return out
+}
+
 // fakeClock is an injectable frameClock for click-routing tests. Initialise t
 // to a non-zero time; advance moves it forward.
 type fakeClock struct{ t time.Time }
@@ -1105,259 +1117,168 @@ func newMouseFrame(t *testing.T, w, h int, opts ...frameOption) (*Frame, *mouseP
 	return f, p
 }
 
-// wheelDown / wheelUp build MouseWheelMsgs for test injection.
-func wheelDown() tea.Msg { return tea.MouseWheelMsg{Button: tea.MouseWheelDown} }
-func wheelUp() tea.Msg   { return tea.MouseWheelMsg{Button: tea.MouseWheelUp} }
+// wheelDown / wheelUp build MouseWheelMsgs positioned at (5,5), which lands
+// inside mousePanelMain's outer region at 80x24 geometry.
+func wheelDown() tea.Msg { return tea.MouseWheelMsg{Button: tea.MouseWheelDown, X: 5, Y: 5} }
+func wheelUp() tea.Msg   { return tea.MouseWheelMsg{Button: tea.MouseWheelUp, X: 5, Y: 5} }
 
 // wheelLeft / wheelRight build horizontal MouseWheelMsgs (trackpad tilt-scroll).
+// Horizontal wheel is swallowed before the hit-test so coordinates do not matter.
 func wheelLeft() tea.Msg  { return tea.MouseWheelMsg{Button: tea.MouseWheelLeft} }
 func wheelRight() tea.Msg { return tea.MouseWheelMsg{Button: tea.MouseWheelRight} }
 
-// flush injects the private tick message directly so tests need not wait 16ms.
-func flush() tea.Msg { return wheelFlushMsg{} }
-
-// TestFrame_WheelCoalescing exercises the wheel accumulator state machine.
-func TestFrame_WheelCoalescing(t *testing.T) {
-	t.Run("burst_N_down_yields_N_nav_down", func(t *testing.T) {
+// TestFrame_WheelRouting exercises the immediate pointer-routed wheel dispatch
+// introduced in Task 1 of the mouse-wheel overhaul. Each wheel notch now
+// forwards a WheelMsg{Panel, Delta} synchronously (no tick, no accumulator)
+// to the panel under the pointer, leaving focus unchanged.
+func TestFrame_WheelRouting(t *testing.T) {
+	t.Run("wheel_down_over_main_panel_forwards_wheel_msg", func(t *testing.T) {
+		// Geometry at 80x24: main outer {0,0,40,23}; (5,5) is inside.
 		f, p := newMouseFrame(t, 80, frameGoldenHeight)
-		const N = 5
-		for range N {
-			f.Update(wheelDown())
+		_, cmd := f.Update(wheelDown())
+		wms := p.wheelMsgs()
+		if len(wms) != 1 {
+			t.Fatalf("WheelDown over main panel: forwarded %d WheelMsgs; want 1", len(wms))
 		}
-		f.Update(flush())
-		if got := p.counts[ActionNavDown]; got != N {
-			t.Errorf("burst %d WheelDown: HandleAction(NavDown) count = %d; want %d", N, got, N)
+		if wms[0].Panel != mousePanelMain {
+			t.Errorf("WheelMsg.Panel = %q; want %q", wms[0].Panel, mousePanelMain)
 		}
-		if p.counts[ActionNavUp] != 0 {
-			t.Errorf("burst down: unexpected NavUp count %d", p.counts[ActionNavUp])
+		if wms[0].Delta != 1 {
+			t.Errorf("WheelMsg.Delta = %d; want +1 (down)", wms[0].Delta)
 		}
-		// accumulator and armed flag must be reset after flush
-		if f.wheelAccum != 0 {
-			t.Errorf("wheelAccum after flush = %d; want 0", f.wheelAccum)
+		if cmd != nil {
+			// plugin.Update returns nil; no tick should be returned.
+			t.Errorf("wheel cmd = non-nil; want nil (no coalescing tick)")
 		}
-		if f.wheelArmed {
-			t.Errorf("wheelArmed after flush should be false")
-		}
-	})
-
-	t.Run("burst_N_up_yields_N_nav_up", func(t *testing.T) {
-		f, p := newMouseFrame(t, 80, frameGoldenHeight)
-		const N = 3
-		for range N {
-			f.Update(wheelUp())
-		}
-		f.Update(flush())
-		if got := p.counts[ActionNavUp]; got != N {
-			t.Errorf("burst %d WheelUp: HandleAction(NavUp) count = %d; want %d", N, got, N)
-		}
-	})
-
-	t.Run("slow_one_per_flush", func(t *testing.T) {
-		f, p := newMouseFrame(t, 80, frameGoldenHeight)
-		f.Update(wheelDown())
-		f.Update(flush())
-		if p.counts[ActionNavDown] != 1 {
-			t.Errorf("first slow flush: NavDown count = %d; want 1", p.counts[ActionNavDown])
-		}
-		// Second tick: arm a new tick with a second wheel event.
-		f.Update(wheelDown())
-		f.Update(flush())
-		if p.counts[ActionNavDown] != 2 {
-			t.Errorf("second slow flush: NavDown count = %d; want 2", p.counts[ActionNavDown])
-		}
-	})
-
-	t.Run("mixed_up_down_nets_direction", func(t *testing.T) {
-		f, p := newMouseFrame(t, 80, frameGoldenHeight)
-		// 3 down + 2 up → net 1 down
-		for range 3 {
-			f.Update(wheelDown())
-		}
-		for range 2 {
-			f.Update(wheelUp())
-		}
-		f.Update(flush())
-		if p.counts[ActionNavDown] != 1 {
-			t.Errorf("net 1 down: NavDown count = %d; want 1", p.counts[ActionNavDown])
-		}
-		if p.counts[ActionNavUp] != 0 {
-			t.Errorf("net 1 down: unexpected NavUp count %d", p.counts[ActionNavUp])
-		}
-	})
-
-	t.Run("mixed_up_down_nets_up", func(t *testing.T) {
-		f, p := newMouseFrame(t, 80, frameGoldenHeight)
-		// 2 down + 4 up → net 2 up
-		for range 2 {
-			f.Update(wheelDown())
-		}
-		for range 4 {
-			f.Update(wheelUp())
-		}
-		f.Update(flush())
-		if p.counts[ActionNavUp] != 2 {
-			t.Errorf("net 2 up: NavUp count = %d; want 2", p.counts[ActionNavUp])
-		}
-		if p.counts[ActionNavDown] != 0 {
-			t.Errorf("net 2 up: unexpected NavDown count %d", p.counts[ActionNavDown])
-		}
-	})
-
-	t.Run("first_wheel_arms_tick_subsequent_nil", func(t *testing.T) {
-		f, _ := newMouseFrame(t, 80, frameGoldenHeight)
-		// First wheel event must return a non-nil cmd (the tick).
-		_, cmd1 := f.Update(wheelDown())
-		if cmd1 == nil {
-			t.Fatal("first WheelDown: cmd = nil; want non-nil (tick)")
-		}
-		// Execute the real tick and confirm it yields wheelFlushMsg — without
-		// this the coalescing tests (which inject flush() directly) would still
-		// pass even if the tick closure returned the wrong message type.
-		if _, ok := cmd1().(wheelFlushMsg); !ok {
-			t.Errorf("tick cmd produced %T; want wheelFlushMsg", cmd1())
-		}
-		// Second and third in-window wheel events must return nil (already armed).
-		_, cmd2 := f.Update(wheelDown())
-		if cmd2 != nil {
-			t.Error("second WheelDown: cmd should be nil (tick already armed)")
-		}
-		_, cmd3 := f.Update(wheelUp())
-		if cmd3 != nil {
-			t.Error("third wheel (up) while armed: cmd should be nil")
-		}
-	})
-
-	t.Run("stale_flush_after_flush_is_noop", func(t *testing.T) {
-		f, p := newMouseFrame(t, 80, frameGoldenHeight)
-		f.Update(wheelDown())
-		f.Update(flush())
-		before := p.counts[ActionNavDown]
-		// A second flush with no new wheel event must not dispatch anything.
-		f.Update(flush())
-		if p.counts[ActionNavDown] != before {
-			t.Errorf("second flush (empty accum): NavDown grew from %d to %d", before, p.counts[ActionNavDown])
-		}
-	})
-
-	t.Run("horizontal_wheel_ignored", func(t *testing.T) {
-		f, p := newMouseFrame(t, 80, frameGoldenHeight)
-		// Horizontal wheel events must neither arm a tick nor touch the
-		// vertical accumulator — they carry no Nav mapping in Stage 2.
-		_, cmdL := f.Update(wheelLeft())
-		if cmdL != nil {
-			t.Error("WheelLeft returned a cmd; want nil (no tick armed)")
-		}
-		_, cmdR := f.Update(wheelRight())
-		if cmdR != nil {
-			t.Error("WheelRight returned a cmd; want nil (no tick armed)")
-		}
-		if f.wheelAccum != 0 {
-			t.Errorf("wheelAccum after horizontal wheel = %d; want 0", f.wheelAccum)
-		}
-		if f.wheelArmed {
-			t.Error("wheelArmed after horizontal wheel should be false")
-		}
-		// A subsequent flush must dispatch no Nav in either direction.
-		f.Update(flush())
 		if p.counts[ActionNavDown] != 0 || p.counts[ActionNavUp] != 0 {
-			t.Errorf("horizontal wheel produced Nav: down=%d up=%d; want 0/0",
+			t.Errorf("wheel dispatched HandleAction: down=%d up=%d; want 0/0",
 				p.counts[ActionNavDown], p.counts[ActionNavUp])
 		}
 	})
 
-	t.Run("swallowed_while_overlay_open", func(t *testing.T) {
+	t.Run("wheel_up_over_main_panel_has_negative_delta", func(t *testing.T) {
+		f, p := newMouseFrame(t, 80, frameGoldenHeight)
+		f.Update(wheelUp())
+		wms := p.wheelMsgs()
+		if len(wms) != 1 {
+			t.Fatalf("WheelUp over main panel: forwarded %d WheelMsgs; want 1", len(wms))
+		}
+		if wms[0].Delta != -1 {
+			t.Errorf("WheelMsg.Delta = %d; want -1 (up)", wms[0].Delta)
+		}
+		if wms[0].Panel != mousePanelMain {
+			t.Errorf("WheelMsg.Panel = %q; want %q", wms[0].Panel, mousePanelMain)
+		}
+	})
+
+	t.Run("wheel_over_alt_panel_routes_to_alt", func(t *testing.T) {
+		// (50,5) is inside alt panel outer {40,0,40,23}.
+		f, p := newMouseFrame(t, 80, frameGoldenHeight)
+		f.Update(tea.MouseWheelMsg{Button: tea.MouseWheelDown, X: 50, Y: 5})
+		wms := p.wheelMsgs()
+		if len(wms) != 1 {
+			t.Fatalf("WheelDown over alt panel: forwarded %d WheelMsgs; want 1", len(wms))
+		}
+		if wms[0].Panel != mousePanelAlt {
+			t.Errorf("WheelMsg.Panel = %q; want %q", wms[0].Panel, mousePanelAlt)
+		}
+	})
+
+	t.Run("wheel_does_not_change_focus", func(t *testing.T) {
+		// Wheel over alt panel must NOT move focus to alt; clicking still focuses.
 		f, _ := newMouseFrame(t, 80, frameGoldenHeight)
-		// Open the help overlay via key (keyboard path; '?' registered by NewRegistry).
-		f.Update(key("?"))
+		before := f.focus.Active()
+		f.Update(tea.MouseWheelMsg{Button: tea.MouseWheelDown, X: 50, Y: 5})
+		if got := f.focus.Active(); got != before {
+			t.Errorf("wheel changed focus from %q to %q; want unchanged", before, got)
+		}
+	})
+
+	t.Run("wheel_over_help_hint_swallowed", func(t *testing.T) {
+		// At 80x24 the help-hint zone is at the right end of the status row (Y=23).
+		// (75,23) hits the help hint → zoneHelpHint → swallow.
+		f, p := newMouseFrame(t, 80, frameGoldenHeight)
+		_, cmd := f.Update(tea.MouseWheelMsg{Button: tea.MouseWheelDown, X: 75, Y: 23})
+		if cmd != nil {
+			t.Error("wheel over help-hint returned cmd; want nil (swallowed)")
+		}
+		if wms := p.wheelMsgs(); len(wms) != 0 {
+			t.Errorf("wheel over help-hint forwarded %d WheelMsgs; want 0", len(wms))
+		}
+	})
+
+	t.Run("wheel_over_blank_status_swallowed", func(t *testing.T) {
+		// (3,23) is on the status row but not in any panel or the help hint →
+		// zoneNone → swallow.
+		f, p := newMouseFrame(t, 80, frameGoldenHeight)
+		_, cmd := f.Update(tea.MouseWheelMsg{Button: tea.MouseWheelDown, X: 3, Y: 23})
+		if cmd != nil {
+			t.Error("wheel over blank status returned cmd; want nil (swallowed)")
+		}
+		if wms := p.wheelMsgs(); len(wms) != 0 {
+			t.Errorf("wheel over blank status forwarded %d WheelMsgs; want 0", len(wms))
+		}
+	})
+
+	t.Run("horizontal_wheel_ignored", func(t *testing.T) {
+		// Horizontal wheel (trackpad tilt) is swallowed before the hit-test.
+		f, p := newMouseFrame(t, 80, frameGoldenHeight)
+		_, cmdL := f.Update(wheelLeft())
+		_, cmdR := f.Update(wheelRight())
+		if cmdL != nil || cmdR != nil {
+			t.Error("horizontal wheel returned non-nil cmd; want nil")
+		}
+		if wms := p.wheelMsgs(); len(wms) != 0 {
+			t.Errorf("horizontal wheel forwarded %d WheelMsgs; want 0", len(wms))
+		}
+	})
+
+	t.Run("wheel_swallowed_while_overlay_open", func(t *testing.T) {
+		// While any overlay is open, wheel events are swallowed (overlay-aware
+		// forwarding for CapturesInput overlays is added in Task 2).
+		f, p := newMouseFrame(t, 80, frameGoldenHeight)
+		f.Update(key("?")) // open non-capturing help overlay
 		if f.overlay.Empty() {
 			t.Fatal("help overlay did not open")
 		}
 		_, cmd := f.Update(wheelDown())
 		if cmd != nil {
-			t.Error("WheelDown while overlay open returned a cmd; want nil (swallowed)")
+			t.Error("WheelDown while overlay open returned cmd; want nil (swallowed)")
 		}
-		if f.wheelAccum != 0 {
-			t.Errorf("wheelAccum after swallowed wheel = %d; want 0", f.wheelAccum)
-		}
-		if f.wheelArmed {
-			t.Error("wheelArmed after swallowed wheel should be false")
+		if wms := p.wheelMsgs(); len(wms) != 0 {
+			t.Errorf("WheelDown while overlay open forwarded WheelMsgs; want 0")
 		}
 	})
 
-	t.Run("wheel_then_modal_then_flush_zero_nav", func(t *testing.T) {
-		// Codex finding #1: arm the tick with a wheel event, then open a modal;
-		// the delayed flush must not dispatch Nav behind the modal.
-		f, p := newMouseFrame(t, 80, frameGoldenHeight)
-		f.Update(wheelDown()) // arms the tick + accumulates
-		// Open help modal (clears accumulator on push).
-		f.Update(key("?"))
-		if f.overlay.Empty() {
-			t.Fatal("help overlay did not open")
-		}
-		// Inject the flush that would have arrived from the armed tick.
-		f.Update(flush())
-		if p.counts[ActionNavDown] != 0 {
-			t.Errorf("flush behind modal: NavDown count = %d; want 0", p.counts[ActionNavDown])
-		}
-		// Accumulator and armed flag must be clear after the no-op flush.
-		if f.wheelAccum != 0 {
-			t.Errorf("wheelAccum after modal flush = %d; want 0", f.wheelAccum)
-		}
-		if f.wheelArmed {
-			t.Error("wheelArmed after modal flush should be false")
-		}
-	})
-
-	t.Run("swallowed_while_capturing", func(t *testing.T) {
+	t.Run("wheel_swallowed_while_capturing", func(t *testing.T) {
 		// While the plugin captures raw input (inline filter, no overlay) wheel
-		// events must neither arm a tick nor dispatch Nav — parity with the
-		// keyboard capture branch, which forwards keys raw and never dispatches.
+		// events are swallowed — parity with the keyboard capture policy.
 		f, p := newMouseFrame(t, 80, frameGoldenHeight)
 		p.capturing = true
 		_, cmd := f.Update(wheelDown())
 		if cmd != nil {
-			t.Error("WheelDown while capturing returned a cmd; want nil (swallowed)")
+			t.Error("WheelDown while capturing returned cmd; want nil (swallowed)")
 		}
-		if f.wheelAccum != 0 || f.wheelArmed {
-			t.Errorf("capturing wheel armed state: accum=%d armed=%v; want 0/false", f.wheelAccum, f.wheelArmed)
-		}
-	})
-
-	t.Run("armed_wheel_then_capture_then_flush_zero_nav", func(t *testing.T) {
-		// Arm the tick with a wheel event, then the plugin enters capture (inline
-		// filter); the delayed flush must not dispatch Nav behind the filter.
-		f, p := newMouseFrame(t, 80, frameGoldenHeight)
-		f.Update(wheelDown()) // arms the tick + accumulates
-		p.capturing = true    // filter takes over before the flush arrives
-		f.Update(flush())
-		if p.counts[ActionNavDown] != 0 {
-			t.Errorf("flush behind filter: NavDown count = %d; want 0", p.counts[ActionNavDown])
-		}
-		if f.wheelAccum != 0 || f.wheelArmed {
-			t.Errorf("capturing flush armed state: accum=%d armed=%v; want 0/false", f.wheelAccum, f.wheelArmed)
+		if wms := p.wheelMsgs(); len(wms) != 0 {
+			t.Errorf("WheelDown while capturing forwarded WheelMsgs; want 0")
 		}
 	})
 
-	t.Run("armed_wheel_then_action_capture_then_flush_zero_nav", func(t *testing.T) {
-		// Same hazard as above, but capture is entered via the '/' ActionFilter
-		// (not by externally flipping the flag). The transition must reset the
-		// armed wheel so a tick armed before '/' cannot flush Nav once the filter
-		// closes and its CapturingInput guard lifts.
+	t.Run("multiple_wheel_events_each_forward_one_msg", func(t *testing.T) {
+		// Each wheel notch produces exactly one WheelMsg immediately (no batching).
 		f, p := newMouseFrame(t, 80, frameGoldenHeight)
-		p.captureOnFilter = true
-		f.Update(wheelDown()) // arms the tick + accumulates
-		f.Update(key("/"))    // ActionFilter → plugin enters capture
-		if !p.capturing {
-			t.Fatal("plugin did not enter capture on '/'")
+		const N = 4
+		for range N {
+			f.Update(wheelDown())
 		}
-		if f.wheelAccum != 0 || f.wheelArmed {
-			t.Errorf("armed wheel not reset on entering capture: accum=%d armed=%v; want 0/false", f.wheelAccum, f.wheelArmed)
+		wms := p.wheelMsgs()
+		if len(wms) != N {
+			t.Errorf("after %d WheelDown events: got %d WheelMsgs; want %d", N, len(wms), N)
 		}
-		// Filter closes, then the stale tick fires — it must dispatch no Nav.
-		p.capturing = false
-		f.Update(flush())
-		if p.counts[ActionNavDown] != 0 {
-			t.Errorf("stale flush after filter close: NavDown = %d; want 0", p.counts[ActionNavDown])
+		for i, wm := range wms {
+			if wm.Delta != 1 {
+				t.Errorf("WheelMsg[%d].Delta = %d; want +1", i, wm.Delta)
+			}
 		}
 	})
 }

@@ -242,53 +242,53 @@ The wheel path is rebuilt around three principles — **immediate**, **pointer-r
 - Modify: `internal/core/ui/tui/registry_test.go`
 - Modify: `internal/core/ui/cmdbrowser/actions_test.go` (delete the removed-wheel-binding assertions in the same task)
 
-- [ ] add the exported `WheelMsg{Panel PanelID; Delta int}` type to `plugin.go` with a doc
+- [x] add the exported `WheelMsg{Panel PanelID; Delta int}` type to `plugin.go` with a doc
   comment (pointer-not-focus; Delta sign convention; plugin owns the scroll amount)
-- [ ] rewrite the `tea.MouseWheelMsg` arm of `handleMouse`: no-overlay + non-capturing
+- [x] rewrite the `tea.MouseWheelMsg` arm of `handleMouse`: no-overlay + non-capturing
   path classifies via `classifyHit` and forwards `WheelMsg{Panel,Delta}` immediately on a
   `zonePanel` hit; help-hint/blank/horizontal are swallowed; **focus is not changed**
-- [ ] delete the accumulator machinery: `wheelAccum`/`wheelArmed` fields, `wheelFlushMsg`
+- [x] delete the accumulator machinery: `wheelAccum`/`wheelArmed` fields, `wheelFlushMsg`
   type, `case wheelFlushMsg` in `Update`, `coalesceWindow` const, and the wheel-state
   resets in `drainOverlay` / `handleBuiltin(ActionHelp)` / `handleKey` filter transition
   (keep the `lastClick` double-click resets)
-- [ ] remove the `wheel-up`/`wheel-down` `Binding.Mouse` defaults from `standardBindings`
+- [x] remove the `wheel-up`/`wheel-down` `Binding.Mouse` defaults from `standardBindings`
   (keep `double-click`); update the table doc comment; leave `MatchMouse` in place for
   double-click
-- [ ] **narrow the registry mouse vocabulary to match the new dispatch contract** (the
+- [x] **narrow the registry mouse vocabulary to match the new dispatch contract** (the
   registry self-documents that any accepted-but-undispatched event is "dead state" —
   `registry.go:158-164`): drop `mouseWheelUp`/`mouseWheelDown` so `validMouseEvent`
   (`registry.go:208-213`) accepts only `double-click`, update the `Register` rejection
   message (`registry.go:167`) and the locked-vocabulary doc comments (`registry.go:158-167`,
   `:199-206`). After this, `wheel-up`/`wheel-down` are no longer registrable `Binding.Mouse`
   values — consistent with the frame no longer dispatching them
-- [ ] sweep stale wheel comments in `frame.go` so they describe immediate dispatch, not
+- [x] sweep stale wheel comments in `frame.go` so they describe immediate dispatch, not
   the deleted accumulator/tick: the `Update` doc ("wheel events accumulate for burst
   coalescing", ~`frame.go:223-225`), the `handleMouse` doc (~`:471-475`), and the
   `drainOverlay` doc ("clears any pending wheel accumulation", ~`:446-450`); also the
   `mousePlugin` comment in `frame_test.go` (~`:996`)
-- [ ] **delete the now-uncompilable wheel-coalescing tests in the same edit** (the package
+- [x] **delete the now-uncompilable wheel-coalescing tests in the same edit** (the package
   must build within this task): remove `TestFrame_WheelCoalescing` plus its `flush()`
   helper and the real-tick assertion (~`frame_test.go:1117/1213`) — all reference the
   deleted `wheelAccum`/`wheelArmed`/`wheelFlushMsg`
-- [ ] extend the `mousePlugin` test helper to record messages forwarded to `Update`
+- [x] extend the `mousePlugin` test helper to record messages forwarded to `Update`
   (e.g. capture `WheelMsg` values) alongside the existing `HandleAction` counts
-- [ ] write tests: wheel over a panel forwards exactly one `WheelMsg{Panel,Delta}`
+- [x] write tests: wheel over a panel forwards exactly one `WheelMsg{Panel,Delta}`
   immediately with the correct sign, returns no tick Cmd, and calls no `HandleAction`;
   wheel over help-hint and over blank space are swallowed; horizontal wheel is ignored; a
   wheel turn leaves `focus.Active()` unchanged
-- [ ] **rewrite/invert the registry tests for the narrowed vocabulary** (these break the
+- [x] **rewrite/invert the registry tests for the narrowed vocabulary** (these break the
   build/suite otherwise): in `actions_test.go` invert `TestStandardBindings_MouseDefaults`
   so NavUp/NavDown expect an empty `Mouse` (fold into the "no mouse default" case); in
   `registry_test.go` drop the two wheel cases from `TestRegistry_MatchMouse_StdlibDefaults`,
   switch `TestRegistry_MouseCollisionRejected` (`:287`) from `Mouse:"wheel-up"` to
   `"double-click"`, and move `wheel-up`/`wheel-down` into the **rejected** set of the
   invalid-vocabulary test (`:311-322`) so they now assert a vocabulary error
-- [ ] **also fix the cmdbrowser registry test in THIS task** (it asserts the removed wheel
+- [x] **also fix the cmdbrowser registry test in THIS task** (it asserts the removed wheel
   defaults and would otherwise fail the full suite between tasks — keep the per-task "all
   tests pass" gate honest): delete the `MatchMouse("wheel-up")==ActionNavUp` /
   `"wheel-down"==ActionNavDown` assertions in `internal/core/ui/cmdbrowser/actions_test.go`
   (~`:50-55`)
-- [ ] run the affected suites — `go test ./internal/core/ui/tui/... ./internal/core/ui/cmdbrowser/...`
+- [x] run the affected suites — `go test ./internal/core/ui/tui/... ./internal/core/ui/cmdbrowser/...`
   — must pass before next task
 
 ### Task 2: Overlay-aware wheel routing in `Frame`

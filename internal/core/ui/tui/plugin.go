@@ -105,6 +105,17 @@ type FocusRequestMsg struct {
 // does not notify the plugin (built-ins never reach it).
 type OverlayClosedMsg struct{}
 
+// WheelMsg is delivered to the plugin when the mouse wheel turns over one of
+// its panels. Panel is the panel under the pointer (NOT the focused panel);
+// Delta is -1 for an upward notch and +1 for a downward notch. The plugin
+// decides how far to scroll based on the panel type. A wheel turn never changes
+// focus; clicking still focuses. This is dispatched immediately (no coalescing
+// tick), one per wheel event, pointer-routed via classifyHit.
+type WheelMsg struct {
+	Panel PanelID
+	Delta int
+}
+
 // Plugin is the contract every full-screen surface implements to run inside the
 // [Frame]. The framework owns chrome (borders, status line, overlays, the
 // terminal envelope) and geometry; the plugin owns body content and behaviour.

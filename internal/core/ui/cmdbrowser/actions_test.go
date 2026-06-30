@@ -47,13 +47,8 @@ func TestBrowser_ActionsRegistered(t *testing.T) {
 		}
 	}
 
-	// Wheel bindings must reach nav up/down so Task 9 can scroll the focused panel.
-	if a, ok := reg.MatchMouse("wheel-up"); !ok || a != tui.ActionNavUp {
-		t.Errorf("MatchMouse(wheel-up) = (%q, %v); want nav.up", a, ok)
-	}
-	if a, ok := reg.MatchMouse("wheel-down"); !ok || a != tui.ActionNavDown {
-		t.Errorf("MatchMouse(wheel-down) = (%q, %v); want nav.down", a, ok)
-	}
+	// Wheel events are now dispatched as WheelMsg (pointer-routed), not via
+	// registry mouse bindings; double-click is still registry-bound.
 	if a, ok := reg.MatchMouse("double-click"); !ok || a != tui.ActionSelect {
 		t.Errorf("MatchMouse(double-click) = (%q, %v); want select", a, ok)
 	}

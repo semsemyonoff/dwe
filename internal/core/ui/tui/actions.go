@@ -52,12 +52,13 @@ const (
 
 // standardBindings is the default Binding table for each stdlib action. This is
 // the single source of truth for default keys, sections, descriptions, and
-// mouse defaults. Mouse defaults (wired in Stage 2): ActionNavUp → "wheel-up",
-// ActionNavDown → "wheel-down", ActionSelect → "double-click". Plugins may read
-// it via standardBinding for custom setups; most just call RegisterStandard.
+// mouse defaults. Mouse defaults: ActionSelect → "double-click". Wheel events
+// are dispatched as WheelMsg (pointer-routed); NavUp/NavDown have no mouse
+// binding. Plugins may read it via standardBinding for custom setups; most
+// just call RegisterStandard.
 var standardBindings = map[Action]Binding{
-	ActionNavUp:    {Keys: []string{"up", "k"}, Desc: "Move up", Section: sectionNavigation, Mouse: "wheel-up"},
-	ActionNavDown:  {Keys: []string{"down", "j"}, Desc: "Move down", Section: sectionNavigation, Mouse: "wheel-down"},
+	ActionNavUp:    {Keys: []string{"up", "k"}, Desc: "Move up", Section: sectionNavigation},
+	ActionNavDown:  {Keys: []string{"down", "j"}, Desc: "Move down", Section: sectionNavigation},
 	ActionNavLeft:  {Keys: []string{"left", "h"}, Desc: "Move left", Section: sectionNavigation},
 	ActionNavRight: {Keys: []string{"right", "l"}, Desc: "Move right", Section: sectionNavigation},
 	ActionTop:      {Keys: []string{"g", "home"}, Desc: "Go to top", Section: sectionNavigation},
