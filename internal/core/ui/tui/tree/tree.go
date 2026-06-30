@@ -307,12 +307,14 @@ func (e *Engine[N]) Expand() {
 }
 
 // Toggle flips the expansion of the cursor (no-op on leaves / heading rows).
+// Unlike Expand, it does NOT require the node to have children: an Expandable
+// node with zero children (e.g. docstui's index-only directories) still flips
+// its expansion flag so its glyph reflects the state, matching the pre-engine
+// behavior. The child-count guard lives only in Expand, where stepping into a
+// first child is meaningless without children.
 func (e *Engine[N]) Toggle() {
 	var zero N
 	if e.cursor == zero || !e.a.Expandable(e.cursor) {
-		return
-	}
-	if len(e.a.Children(e.cursor)) == 0 {
 		return
 	}
 	key := e.a.Key(e.cursor)

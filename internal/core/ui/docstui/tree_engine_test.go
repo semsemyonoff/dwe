@@ -228,11 +228,25 @@ func TestIndexOnlyDirStaysExpandableAndEnterable(t *testing.T) {
 		t.Errorf("contentNodeFor(solo) = %v, want solo/index.md", cn)
 	}
 
-	// Toggle / Expand / Collapse on the index-only dir must be panic-safe no-ops
-	// (zero children) and leave the cursor on the dir.
+	// Toggle on the index-only dir flips its expansion glyph (▶ ↔ ▼) exactly as
+	// the pre-engine TreeWidget did, even though it has no child rows to reveal.
+	// Expand (→/l) stays a no-op (nothing to step into); neither moves the cursor.
 	tw.SetCursor(solo)
+	if tw.IsExpanded(solo) {
+		t.Fatal("index-only dir should start collapsed")
+	}
 	tw.Toggle()
-	tw.Expand()
+	if !tw.IsExpanded(solo) {
+		t.Error("Toggle on index-only dir did not flip expansion (glyph would never become ▼)")
+	}
+	tw.Toggle()
+	if tw.IsExpanded(solo) {
+		t.Error("second Toggle on index-only dir did not collapse it")
+	}
+	tw.Expand() // no children → no-op
+	if tw.IsExpanded(solo) {
+		t.Error("Expand on childless index-only dir expanded it; expected no-op")
+	}
 	if tw.Cursor() != solo {
 		t.Errorf("cursor moved off index-only dir after Expand/Toggle: %v", tw.Cursor())
 	}
