@@ -269,7 +269,7 @@ func (b *browser) handlePanelClick(msg tui.PanelClickMsg) {
 	}
 	switch msg.Panel {
 	case panelTree:
-		b.tree.focusRow(msg.Y)
+		b.tree.eng.FocusRow(msg.Y)
 		b.afterTreeMove()
 	case panelList:
 		b.selectListRow(msg.Y)
@@ -309,7 +309,7 @@ func (b *browser) ViewPanel(id tui.PanelID, inner tui.Region) string {
 			return b.renderTreeFiltered(inner)
 		}
 		// Keep the focused row on screen across resizes before clipping.
-		b.tree.ensureFocusVisible(inner.Height)
+		b.tree.eng.EnsureFocusVisible(inner.Height)
 		return b.tree.renderRegion(inner, b.active == panelTree, nil)
 	case panelList:
 		b.listInner = inner
@@ -338,7 +338,7 @@ func (b *browser) viewList(inner tui.Region) string {
 // and seeds the match list. The capture key handling (typing / esc / enter) and
 // snapshot restore land in Task 7; Task 6 only opens the mode.
 func (b *browser) enterFilter() {
-	b.filter = newFilterState(b.tree.expanded, b.tree.focusedID)
+	b.filter = newFilterState(b.tree.eng.ExpandedSnapshot(), b.tree.focusedID())
 	b.refreshFilterMatches()
 }
 
@@ -404,15 +404,16 @@ func (b *browser) exitFilter() {
 	if b.filter.query == "" {
 		// Empty query: entered and immediately Esc'd. Restore the exact pre-filter
 		// cursor rather than the (meaningless) first-row highlight.
-		b.tree.focusedID = b.filter.savedFocusID
+		b.tree.eng.SetCursorByKey(b.filter.savedFocusID)
 	} else if it, ok := b.list.SelectedItem().(listItem); ok && !it.header {
 		targetOrigIdx = it.origIdx
-		b.tree.focusedID = b.nearestRestoredAncestor(b.items[it.origIdx].ID)
+		b.tree.eng.SetCursorByKey(b.nearestRestoredAncestor(b.items[it.origIdx].ID))
 	}
 	b.filter.restoreExpansion(b.tree)
-	// Restored expansion may leave focusedID on a now-hidden node — walk up.
-	if b.tree.focusedID != "" && b.tree.indexOfFocused() < 0 {
-		b.tree.focusedID = b.tree.nearestVisibleAncestor(b.tree.focusedID)
+	// Restored expansion may leave the cursor on a now-hidden node — walk up.
+	// RebuildVisible does not re-park, so this resolution stays explicit.
+	if b.tree.focusedID() != "" && !b.tree.focusVisible() {
+		b.tree.eng.SetCursorByKey(b.tree.nearestVisibleAncestor(b.tree.focusedID()))
 	}
 	b.filter = nil
 	b.active = panelList
@@ -430,10 +431,10 @@ func (b *browser) commitFilter() {
 		return
 	}
 	if it, ok := b.list.SelectedItem().(listItem); ok && !it.header {
-		b.tree.focusedID = b.nearestRestoredAncestor(b.items[it.origIdx].ID)
+		b.tree.eng.SetCursorByKey(b.nearestRestoredAncestor(b.items[it.origIdx].ID))
 	}
-	if b.tree.focusedID != "" && b.tree.indexOfFocused() < 0 {
-		b.tree.focusedID = b.tree.nearestVisibleAncestor(b.tree.focusedID)
+	if b.tree.focusedID() != "" && !b.tree.focusVisible() {
+		b.tree.eng.SetCursorByKey(b.tree.nearestVisibleAncestor(b.tree.focusedID()))
 	}
 	b.filter = nil
 	b.active = panelList
@@ -499,7 +500,7 @@ func (b *browser) renderTreeFiltered(inner tui.Region) string {
 	}
 	treeRegion := inner
 	treeRegion.Height = max(inner.Height-1, 0)
-	b.tree.ensureFocusVisible(treeRegion.Height)
+	b.tree.eng.EnsureFocusVisible(treeRegion.Height)
 	body := b.tree.renderRegion(treeRegion, b.active == panelTree, b.filter)
 	if body == "" {
 		return header

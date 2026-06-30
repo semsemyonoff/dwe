@@ -32,27 +32,9 @@ func (tm *treeModel) renderRegion(inner tui.Region, focused bool, f *filterState
 	} else {
 		full = tm.renderOpt(focused, showCounts)
 	}
-	return tm.clipToViewport(full, inner.Height)
-}
-
-// clipToViewport slices the rendered tree to fit height rows starting at
-// topIdx. The tree renderer emits exactly one line per visible node (no
-// wrapping), so line indices align with tree.visible indices — strings.Split is
-// safe to use as a window. Ported from *Model.clipTreeToViewport, driven off the
-// passed height instead of a *Model's layout.
-func (tm *treeModel) clipToViewport(full string, height int) string {
-	if height <= 0 {
-		// The Frame owns the bordered geometry and passes its inner height; a
-		// zero/negative region (transient during small resizes) must render no
-		// rows rather than overflow the panel with the full tree.
-		return ""
-	}
-	lines := strings.Split(full, "\n")
-	if len(lines) <= height {
-		return full
-	}
-	top := min(max(tm.topIdx, 0), len(lines)-height)
-	return strings.Join(lines[top:top+height], "\n")
+	// The engine owns the scroll window (topIdx); it clips the one-line-per-node
+	// render to the Frame-supplied inner height.
+	return tm.eng.Clip(full, inner.Height)
 }
 
 // renderOpt renders the tree with control over count visibility — hides
@@ -74,19 +56,21 @@ func (tm *treeModel) renderFilter(focused, showCounts bool, f *filterState) stri
 // the plain variant shows "(N)" counts and only styles the focused line. The
 // nil check is the single point of divergence between the two callers.
 func (tm *treeModel) renderTree(focused, showCounts bool, f *filterState) string {
-	if len(tm.visible) == 0 {
+	visible := tm.eng.VisibleNodes()
+	if len(visible) == 0 {
 		return paletteDescription().Render("(no groups)")
 	}
+	fid := tm.focusedID()
 	var b strings.Builder
-	for i, n := range tm.visible {
-		isFocused := focused && n.id == tm.focusedID
+	for i, n := range visible {
+		isFocused := focused && n.id == fid
 		marker := " "
 		if isFocused {
 			marker = "❯"
 		}
 		glyph := "  "
 		if len(n.children) > 0 {
-			if tm.expanded[n.id] {
+			if tm.eng.IsExpanded(n) {
 				glyph = "▾ "
 			} else {
 				glyph = "▸ "
@@ -114,7 +98,7 @@ func (tm *treeModel) renderTree(focused, showCounts bool, f *filterState) string
 			line = paletteFocusBorder().Bold(true).Render(line)
 		}
 		b.WriteString(line)
-		if i < len(tm.visible)-1 {
+		if i < len(visible)-1 {
 			b.WriteByte('\n')
 		}
 	}

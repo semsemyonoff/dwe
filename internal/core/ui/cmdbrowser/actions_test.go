@@ -95,8 +95,8 @@ func TestBrowser_HandleSelectTogglesGroup(t *testing.T) {
 	b := newBrowser("pick", pluginTestItems(), DefaultOptions())
 	b.active = panelTree
 	// "services" is expanded at the default depth; select must collapse it.
-	b.tree.focusedID = "services"
-	if !b.tree.expanded["services"] {
+	b.tree.eng.SetCursorByKey("services")
+	if !b.tree.eng.IsExpanded(b.tree.nodesByID["services"]) {
 		t.Fatalf("precondition: services should be expanded at default depth")
 	}
 	cmd, handled := b.HandleAction(tui.ActionSelect)
@@ -106,11 +106,11 @@ func TestBrowser_HandleSelectTogglesGroup(t *testing.T) {
 	if cmd != nil {
 		t.Errorf("select on a group should not quit (cmd != nil)")
 	}
-	if b.tree.expanded["services"] {
+	if b.tree.eng.IsExpanded(b.tree.nodesByID["services"]) {
 		t.Errorf("select on an expanded group should collapse it")
 	}
 	// A second select re-expands.
-	if _, _ = b.HandleAction(tui.ActionSelect); !b.tree.expanded["services"] {
+	if _, _ = b.HandleAction(tui.ActionSelect); !b.tree.eng.IsExpanded(b.tree.nodesByID["services"]) {
 		t.Errorf("second select should re-expand the group")
 	}
 }
@@ -118,7 +118,7 @@ func TestBrowser_HandleSelectTogglesGroup(t *testing.T) {
 func TestBrowser_HandleSelectRunsListItem(t *testing.T) {
 	b := newBrowser("pick", pluginTestItems(), DefaultOptions())
 	b.active = panelList
-	b.tree.focusedID = "db"
+	b.tree.eng.SetCursorByKey("db")
 	b.refreshList()
 	b.list.Select(1) // db.seed -> origIdx 1
 	cmd, handled := b.HandleAction(tui.ActionSelect)
@@ -155,7 +155,7 @@ func TestBrowser_HandleSkipConfirmToggles(t *testing.T) {
 func TestBrowser_HandleForceFormSetsFlagAndSelects(t *testing.T) {
 	b := newBrowser("pick", pluginTestItems(), DefaultOptions())
 	b.active = panelList
-	b.tree.focusedID = "db"
+	b.tree.eng.SetCursorByKey("db")
 	b.refreshList()
 	b.list.Select(0) // db.migrate -> origIdx 0
 	cmd, handled := b.HandleAction(actionForceForm)
@@ -176,7 +176,7 @@ func TestBrowser_HandleForceFormNoopOutsideRunOrTreePanel(t *testing.T) {
 	editOpts.Mode = ModeEdit
 	be := newBrowser("pick", pluginTestItems(), editOpts)
 	be.active = panelList
-	be.tree.focusedID = "db"
+	be.tree.eng.SetCursorByKey("db")
 	be.refreshList()
 	be.list.Select(0)
 	if cmd, _ := be.HandleAction(actionForceForm); cmd != nil {
@@ -204,24 +204,24 @@ func TestBrowser_NavRoutesToActivePanel(t *testing.T) {
 
 	// Tree focus: nav.down advances the focused tree node.
 	b.active = panelTree
-	before := b.tree.focusedID
+	before := b.tree.focusedID()
 	if _, handled := b.HandleAction(tui.ActionNavDown); !handled {
 		t.Fatalf("nav.down handled=false, want true")
 	}
-	if b.tree.focusedID == before {
+	if b.tree.focusedID() == before {
 		t.Errorf("nav.down on tree should move the focused node off %q", before)
 	}
 
 	// List focus: nav.down advances the list cursor instead of the tree.
 	b.active = panelList
-	b.tree.focusedID = "db"
+	b.tree.eng.SetCursorByKey("db")
 	b.refreshList()
 	b.list.Select(0)
-	treeBefore := b.tree.focusedID
+	treeBefore := b.tree.focusedID()
 	if _, _ = b.HandleAction(tui.ActionNavDown); b.list.Index() != 1 {
 		t.Errorf("nav.down on list should move cursor to 1, got %d", b.list.Index())
 	}
-	if b.tree.focusedID != treeBefore {
+	if b.tree.focusedID() != treeBefore {
 		t.Errorf("nav.down on list must not move the tree focus")
 	}
 }
@@ -229,11 +229,11 @@ func TestBrowser_NavRoutesToActivePanel(t *testing.T) {
 func TestBrowser_NavLeftRightNoopInList(t *testing.T) {
 	b := newBrowser("pick", pluginTestItems(), DefaultOptions())
 	b.active = panelList
-	b.tree.focusedID = "services"
-	expandedBefore := b.tree.expanded["services"]
+	b.tree.eng.SetCursorByKey("services")
+	expandedBefore := b.tree.eng.IsExpanded(b.tree.nodesByID["services"])
 	b.HandleAction(tui.ActionNavLeft)
 	b.HandleAction(tui.ActionNavRight)
-	if b.tree.expanded["services"] != expandedBefore {
+	if b.tree.eng.IsExpanded(b.tree.nodesByID["services"]) != expandedBefore {
 		t.Errorf("nav.left/right in the list panel must not mutate the tree")
 	}
 }
@@ -242,19 +242,19 @@ func TestBrowser_NavLeftRightTreeCollapsesExpands(t *testing.T) {
 	b := newBrowser("pick", pluginTestItems(), DefaultOptions())
 	b.treeInner = tui.Region{Width: 18, Height: 10}
 	b.active = panelTree
-	b.tree.focusedID = "services"
-	if !b.tree.expanded["services"] {
+	b.tree.eng.SetCursorByKey("services")
+	if !b.tree.eng.IsExpanded(b.tree.nodesByID["services"]) {
 		t.Fatalf("precondition: services expanded at default depth")
 	}
 	// nav.left collapses the focused expanded group (tree branch of navLeft).
 	if _, handled := b.HandleAction(tui.ActionNavLeft); !handled {
 		t.Fatalf("nav.left handled=false, want true")
 	}
-	if b.tree.expanded["services"] {
+	if b.tree.eng.IsExpanded(b.tree.nodesByID["services"]) {
 		t.Errorf("nav.left on an expanded tree group should collapse it")
 	}
 	// nav.right re-expands the focused collapsed group (tree branch of navRight).
-	if _, _ = b.HandleAction(tui.ActionNavRight); !b.tree.expanded["services"] {
+	if _, _ = b.HandleAction(tui.ActionNavRight); !b.tree.eng.IsExpanded(b.tree.nodesByID["services"]) {
 		t.Errorf("nav.right on a collapsed tree group should expand it")
 	}
 }
@@ -265,7 +265,7 @@ func TestBrowser_NavHomeEndPageRouteToActivePanel(t *testing.T) {
 
 	// List panel: nav.top / nav.bottom move the cursor to the first / last row.
 	b.active = panelList
-	b.tree.focusedID = "db"
+	b.tree.eng.SetCursorByKey("db")
 	b.refreshList() // db.migrate (0), db.seed (1)
 	b.list.Select(1)
 	if _, _ = b.HandleAction(tui.ActionTop); b.list.Index() != 0 {
@@ -278,22 +278,22 @@ func TestBrowser_NavHomeEndPageRouteToActivePanel(t *testing.T) {
 	// Tree panel: nav.bottom jumps focus to the last visible node, nav.top returns
 	// to the first.
 	b.active = panelTree
-	b.tree.moveHome()
-	firstID := b.tree.focusedID
-	if _, _ = b.HandleAction(tui.ActionBottom); b.tree.focusedID == firstID {
+	b.tree.eng.MoveHome()
+	firstID := b.tree.focusedID()
+	if _, _ = b.HandleAction(tui.ActionBottom); b.tree.focusedID() == firstID {
 		t.Errorf("nav.bottom on tree should move focus off the first node %q", firstID)
 	}
-	if _, _ = b.HandleAction(tui.ActionTop); b.tree.focusedID != firstID {
-		t.Errorf("nav.top on tree should return focus to %q, got %q", firstID, b.tree.focusedID)
+	if _, _ = b.HandleAction(tui.ActionTop); b.tree.focusedID() != firstID {
+		t.Errorf("nav.top on tree should return focus to %q, got %q", firstID, b.tree.focusedID())
 	}
 
 	// navPage on the tree advances focus by ~one viewport height (page math).
-	b.tree.moveHome()
-	pageStart := b.tree.focusedID
+	b.tree.eng.MoveHome()
+	pageStart := b.tree.focusedID()
 	if _, handled := b.HandleAction(tui.ActionPageDown); !handled {
 		t.Fatalf("nav.page-down handled=false, want true")
 	}
-	if b.tree.focusedID == pageStart {
+	if b.tree.focusedID() == pageStart {
 		t.Errorf("nav.page-down on tree should advance focus off %q", pageStart)
 	}
 }
@@ -309,7 +309,7 @@ func TestBrowser_FilterAndInspectEntryRouted(t *testing.T) {
 
 	b2 := newBrowser("pick", pluginTestItems(), DefaultOptions())
 	b2.active = panelList
-	b2.tree.focusedID = "db"
+	b2.tree.eng.SetCursorByKey("db")
 	b2.refreshList()
 	b2.list.Select(0)
 	if _, handled := b2.HandleAction(tui.ActionInspect); !handled {

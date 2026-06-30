@@ -352,35 +352,35 @@ default-expanded in the engine (see Task 3) since the engine's map starts empty.
 - Modify: `internal/core/ui/cmdbrowser/actions.go`, `filter.go`, `plugin.go` (call sites)
 - Modify: `internal/core/ui/cmdbrowser/tree_test.go`, `tree_render_test.go`
 
-- [ ] add a cmdbrowser `Adapter` (`Children` → `n.children`, `Key` → `n.id`, `Expandable`
+- [x] add a cmdbrowser `Adapter` (`Children` → `n.children`, `Key` → `n.id`, `Expandable`
       → `len(n.children) > 0`); give `treeModel` an `*tree.Engine[*treeNode]`; keep
       `treeNode` as payload (counts/leaves) and keep `build`/`ensureGroup`/
       `recomputeCounts`/`setIncludePrivate`/`itemsForFocus`/`nearestVisibleAncestor`
-- [ ] route construction (`newTreeModel`) through `engine.SetRoots(root.children)` +
-      `RebuildVisible(nil)`; **the constructor's initial-focus write (`tree.go:65`,
-      `focusedID = visible[0].id`) must go through the engine** (`SetCursorByKey(firstVisible.id)`
-      or engine-set initial cursor) — do not leave a parallel `focusedID` write;
-      DELETE engine-owned methods (`moveUp/moveDown/moveHome/moveEnd`, `onLeft`/`onRight`,
+- [x] route construction (`newTreeModel`) through `engine.SetRoots(root.children)` +
+      `RebuildVisible(nil)`; **the constructor's initial-focus write now goes through the
+      engine** (`SetCursorByKey(firstVisible.id)`) — no parallel `focusedID` write;
+      DELETED engine-owned methods (`moveUp/moveDown/moveHome/moveEnd`, `onLeft`/`onRight`,
       `toggleFocused`, `ensureFocusVisible`, `focusRow`, `rebuildVisible`,
-      `clipToViewport`, `indexOfFocused`) and forward callers to the engine
-- [ ] **cursor mapping** (golden-critical): `focusedNode()` → `e.Cursor()` (nil ⇒ root);
-      `focusedID` reads → `e.Cursor().id` or `""`; ALL `focusedID = …` writes →
+      `clipToViewport`, `indexOfFocused`, `moveBy`) and forwarded callers to the engine
+- [x] **cursor mapping** (golden-critical): `focusedNode()` → `e.Cursor()` (nil ⇒ root);
+      `focusedID()` reads → `e.Cursor().id` or `""`; ALL `focusedID = …` writes →
       `e.SetCursorByKey(id)` (incl. the `""`/root and `nearestVisibleAncestor`/
-      `nearestRestoredAncestor` cases); keep `nodesByID`/`root` for `breadcrumb()` "(root)"
-      and `itemsForFocus()` root-level behavior
-- [ ] **filter expansion via engine** (`filter.go`): `newFilterState(b.tree.expanded,…)` →
+      `nearestRestoredAncestor` cases, via new `focusVisible()` for the old `indexOfFocused()<0`
+      check); kept `nodesByID`/`root` for `breadcrumb()` "(root)" and `itemsForFocus()`
+- [x] **filter expansion via engine** (`filter.go`): `newFilterState(b.tree.expanded,…)` →
       `e.ExpandedSnapshot()`; `applyAutoCollapse` → iterate `nodesByID` calling
       `e.SetExpandedByKey(id, matchCount[id] > 0)` then `e.RebuildVisible(nil)`;
-      `restoreExpansion` → `e.RestoreExpanded(saved)` then `e.RebuildVisible(nil)`; verify
-      the `exitFilter`/`commitFilter` `if indexOfFocused() < 0 { … nearestVisibleAncestor }`
-      sequence still lands the cursor identically (relies on `RebuildVisible` not re-parking)
-- [ ] update `tree_render.go` to read `e.VisibleNodes()` and `e.IsExpanded(node)` (replace
-      `tm.visible` / `tm.expanded[id]`); keep the external dim/`M/N`-counts render exactly
-- [ ] adapt `tree_test.go`/`tree_render_test.go` to the engine-backed surface, preserving
-      existing behavioral assertions (nav, collapse/expand, counts, clip); add an assertion
-      that filter open→type→exit/commit leaves the cursor on the SAME row as before
-- [ ] verify `cmdbrowser/plugin_golden_test.go` goldens are **byte-for-byte unchanged**
-- [ ] `make test` — must pass before Task 3
+      `restoreExpansion` → `e.RestoreExpanded(saved)` then `e.RebuildVisible(nil)`; the
+      `exitFilter`/`commitFilter` `if !focusVisible() { … nearestVisibleAncestor }`
+      sequence lands the cursor identically (relies on `RebuildVisible` not re-parking)
+- [x] update `tree_render.go` to read `e.VisibleNodes()` and `e.IsExpanded(node)` (replace
+      `tm.visible` / `tm.expanded[id]`); kept the external dim/`M/N`-counts render exactly
+- [x] adapt `tree_test.go`/`tree_render_test.go` to the engine-backed surface, preserving
+      existing behavioral assertions (nav, collapse/expand, counts); clip/ensureFocusVisible
+      unit tests now live in the engine package; added `TestBrowser_FilterRoundTripCursorStable`
+      asserting filter open→type→exit leaves the cursor on the SAME row as before
+- [x] verify `cmdbrowser/plugin_golden_test.go` goldens are **byte-for-byte unchanged**
+- [x] `make test` — must pass before Task 3
 
 ### Task 3: Refactor docstui tree onto the engine (Step C) ⚠️ RISKY (locale/rebuild + filter)
 

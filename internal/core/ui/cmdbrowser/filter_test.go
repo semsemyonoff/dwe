@@ -115,7 +115,7 @@ func TestBrowser_FilterLiveNarrowsWithMatchCounts(t *testing.T) {
 	if b.filter.matchCount["services"] != 0 {
 		t.Errorf("services match count=%d, want 0", b.filter.matchCount["services"])
 	}
-	if b.tree.expanded["services"] {
+	if b.tree.eng.IsExpanded(b.tree.nodesByID["services"]) {
 		t.Error("zero-match 'services' subtree must auto-collapse")
 	}
 	// The query line renders inside the tree panel with the M/N counts.
@@ -134,8 +134,9 @@ func TestBrowser_FilterEscRestoresPriorState(t *testing.T) {
 	opts := DefaultOptions()
 	opts.AutoCollapseEmpty = true
 	b := newBrowser("pick", filterTestItems(), opts)
-	want := make(map[string]bool, len(b.tree.expanded))
-	maps.Copy(want, b.tree.expanded)
+	snapshot := b.tree.eng.ExpandedSnapshot()
+	want := make(map[string]bool, len(snapshot))
+	maps.Copy(want, snapshot)
 
 	b.enterFilter()
 	typeFilter(b, "db") // collapses 'services' under AutoCollapseEmpty
@@ -147,7 +148,7 @@ func TestBrowser_FilterEscRestoresPriorState(t *testing.T) {
 	if b.result != (Result{}) {
 		t.Errorf("esc must not produce a Result; got %+v", b.result)
 	}
-	got := b.tree.expanded
+	got := b.tree.eng.ExpandedSnapshot()
 	if len(got) != len(want) {
 		t.Fatalf("expanded set not restored; want %d entries, got %d", len(want), len(got))
 	}
@@ -168,7 +169,7 @@ func TestBrowser_FilterEnterCommitsKeepingExpansion(t *testing.T) {
 
 	b.enterFilter()
 	typeFilter(b, "db") // collapses 'services' under AutoCollapseEmpty
-	if b.tree.expanded["services"] {
+	if b.tree.eng.IsExpanded(b.tree.nodesByID["services"]) {
 		t.Fatal("test setup: services should be collapsed while filtering")
 	}
 	b.Update(syntheticKey("enter"))
@@ -180,12 +181,35 @@ func TestBrowser_FilterEnterCommitsKeepingExpansion(t *testing.T) {
 		t.Errorf("commit must not select an item; got %+v", b.result)
 	}
 	// Expansion is KEPT (services stays collapsed), not restored.
-	if b.tree.expanded["services"] {
+	if b.tree.eng.IsExpanded(b.tree.nodesByID["services"]) {
 		t.Error("commit must keep the filtered expansion (services stays collapsed)")
 	}
 	// Tree focus lands on the nearest ancestor of the highlighted match.
-	if b.tree.focusedID != "db" {
-		t.Errorf("focusedID=%q, want %q after commit", b.tree.focusedID, "db")
+	if b.tree.focusedID() != "db" {
+		t.Errorf("focusedID=%q, want %q after commit", b.tree.focusedID(), "db")
+	}
+}
+
+// TestBrowser_FilterRoundTripCursorStable verifies that opening the filter,
+// typing a query, and exiting via esc lands the tree cursor on the SAME row it
+// started on — the engine's RebuildVisible must not re-park the cursor and the
+// nearestVisibleAncestor restoration must resolve back to the original node.
+// This guards the golden-critical cursor-landing contract after the engine
+// extraction.
+func TestBrowser_FilterRoundTripCursorStable(t *testing.T) {
+	b := newBrowser("pick", filterTestItems(), DefaultOptions())
+	b.tree.eng.SetCursorByKey("services.api")
+	before := b.tree.focusedID()
+
+	b.enterFilter()
+	typeFilter(b, "lint") // matches services.api.lint
+	b.Update(syntheticKey("esc"))
+
+	if b.filter != nil {
+		t.Fatalf("esc must exit the filter session")
+	}
+	if got := b.tree.focusedID(); got != before {
+		t.Errorf("tree cursor = %q after filter round-trip, want unchanged %q", got, before)
 	}
 }
 
@@ -238,8 +262,8 @@ func TestBrowser_FilterEscFocusedIDVisibleAfterRestoration(t *testing.T) {
 	b := newBrowser("pick", filterTestItems(), DefaultOptions())
 
 	// Collapse "services" — its children (services.api) become invisible.
-	delete(b.tree.expanded, "services")
-	b.tree.rebuildVisible()
+	b.tree.eng.SetExpandedByKey("services", false)
+	b.tree.eng.RebuildVisible(nil)
 	if contains(visibleIDs(b.tree), "services.api") {
 		t.Fatalf("test setup: services.api should be hidden when services is collapsed")
 	}
@@ -262,7 +286,7 @@ func TestBrowser_FilterEscFocusedIDVisibleAfterRestoration(t *testing.T) {
 	if b.filter != nil {
 		t.Fatalf("filter not exited")
 	}
-	focused := b.tree.focusedID
+	focused := b.tree.focusedID()
 	if !contains(visibleIDs(b.tree), focused) && focused != "" {
 		t.Errorf("focusedID=%q is not visible after exitFilter; visible=%v", focused, visibleIDs(b.tree))
 	}

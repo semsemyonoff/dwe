@@ -28,7 +28,7 @@ func TestTreeRenderRegion_CountsByWidth(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
 			tm := newTreeModel(sampleItems(), false, 3)
-			tm.focusedID = "db"
+			tm.eng.SetCursorByKey("db")
 			out := stripANSI(tm.renderRegion(tui.Region{Width: tc.width, Height: 20}, true, nil))
 			hasCounts := strings.Contains(out, "(1)") || strings.Contains(out, "(4)")
 			if hasCounts != tc.wantCounts {
@@ -43,7 +43,7 @@ func TestTreeRenderRegion_CountsByWidth(t *testing.T) {
 func TestTreeRenderRegion_FocusedGlyph(t *testing.T) {
 	t.Parallel()
 	tm := newTreeModel(sampleItems(), false, 3)
-	tm.focusedID = "services"
+	tm.eng.SetCursorByKey("services")
 
 	focused := stripANSI(tm.renderRegion(tui.Region{Width: 30, Height: 20}, true, nil))
 	if !strings.Contains(focused, "❯") {
@@ -93,73 +93,18 @@ func TestTreeRenderRegion_NoOverflow(t *testing.T) {
 	}
 }
 
-// TestTreeClipToViewport_WindowsAtTopIdx asserts clipping windows the rendered
-// rows starting at topIdx and respects the height bound.
-func TestTreeClipToViewport_WindowsAtTopIdx(t *testing.T) {
-	t.Parallel()
-	tm := newTreeModel(sampleItems(), false, 3) // 6 visible rows
-	full := stripANSI(tm.renderOpt(true, true))
-	allRows := strings.Split(full, "\n")
-	if len(allRows) != 6 {
-		t.Fatalf("expected 6 rendered rows, got %d", len(allRows))
-	}
-
-	// height >= rows: no clipping.
-	if got := tm.clipToViewport(full, 10); got != full {
-		t.Errorf("height >= rows should return full output")
-	}
-
-	// Window of 3 starting at topIdx=2 → rows 2,3,4.
-	tm.topIdx = 2
-	got := strings.Split(tm.clipToViewport(full, 3), "\n")
-	want := allRows[2:5]
-	if strings.Join(got, "\n") != strings.Join(want, "\n") {
-		t.Errorf("clip window=%v, want %v", got, want)
-	}
-
-	// topIdx past the end clamps so the last height rows show.
-	tm.topIdx = 99
-	got = strings.Split(tm.clipToViewport(full, 3), "\n")
-	want = allRows[3:6]
-	if strings.Join(got, "\n") != strings.Join(want, "\n") {
-		t.Errorf("clamped clip=%v, want %v", got, want)
-	}
-}
-
-// TestTreeEnsureFocusVisible_Scrolls asserts the viewport scrolls to keep the
-// focused row on screen for a tree taller than the panel.
-func TestTreeEnsureFocusVisible_Scrolls(t *testing.T) {
-	t.Parallel()
-	tm := newTreeModel(sampleItems(), false, 3) // 6 visible rows
-
-	// Focus the last row with a 3-row viewport → topIdx scrolls so row 5 shows.
-	tm.focusedID = "services.main.web" // index 5
-	tm.ensureFocusVisible(3)
-	if tm.topIdx != 3 {
-		t.Errorf("topIdx=%d, want 3 (so rows 3..5 are visible)", tm.topIdx)
-	}
-
-	// Focus the first row → topIdx returns to 0.
-	tm.focusedID = "db" // index 0
-	tm.ensureFocusVisible(3)
-	if tm.topIdx != 0 {
-		t.Errorf("topIdx=%d, want 0", tm.topIdx)
-	}
-
-	// Empty viewport height resets topIdx.
-	tm.topIdx = 4
-	tm.ensureFocusVisible(0)
-	if tm.topIdx != 0 {
-		t.Errorf("topIdx=%d on zero height, want 0", tm.topIdx)
-	}
-}
+// The viewport scroll window (topIdx), clip, EnsureFocusVisible, and FocusRow
+// behaviors now live in the shared tui/tree engine and are covered by
+// internal/core/ui/tui/tree/tree_test.go (TestClip, TestEnsureFocusVisibleWindow,
+// TestFocusRowAndClickPastLastNoop). The cmdbrowser-level no-overflow guarantee
+// is exercised by TestTreeRenderRegion_NoOverflow above.
 
 // TestTreeRenderRegion_FilterPath asserts the filter-aware renderer is selected
 // when a filter session is passed, surfacing "M/N" counts.
 func TestTreeRenderRegion_FilterPath(t *testing.T) {
 	t.Parallel()
 	tm := newTreeModel(sampleItems(), false, 3)
-	f := newFilterState(tm.expanded, tm.focusedID)
+	f := newFilterState(tm.eng.ExpandedSnapshot(), tm.focusedID())
 	f.query = "migrate"
 	f.recompute(tm.items, false)
 

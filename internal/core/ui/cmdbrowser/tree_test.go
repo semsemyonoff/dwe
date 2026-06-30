@@ -100,8 +100,8 @@ func TestNewTreeModel_InitialExpansion(t *testing.T) {
 }
 
 func visibleIDs(tm *treeModel) []string {
-	out := make([]string, 0, len(tm.visible))
-	for _, n := range tm.visible {
+	out := make([]string, 0, len(tm.eng.VisibleNodes()))
+	for _, n := range tm.eng.VisibleNodes() {
 		out = append(out, n.id)
 	}
 	return out
@@ -119,47 +119,47 @@ func TestTreeNavigation(t *testing.T) {
 		{
 			name:    "down moves to next visible",
 			startID: "db",
-			op:      func(tm *treeModel) { tm.moveDown() },
+			op:      func(tm *treeModel) { tm.eng.MoveDown() },
 			wantID:  "services",
 		},
 		{
 			name:    "up at top stays",
 			startID: "db",
-			op:      func(tm *treeModel) { tm.moveUp() },
+			op:      func(tm *treeModel) { tm.eng.MoveUp() },
 			wantID:  "db",
 		},
 		{
 			name:    "end jumps to last",
 			startID: "db",
-			op:      func(tm *treeModel) { tm.moveEnd() },
+			op:      func(tm *treeModel) { tm.eng.MoveEnd() },
 			wantID:  "services.main.web",
 		},
 		{
 			name:    "home jumps to first",
 			startID: "services.main",
-			op:      func(tm *treeModel) { tm.moveHome() },
+			op:      func(tm *treeModel) { tm.eng.MoveHome() },
 			wantID:  "db",
 		},
 		{
 			name:    "right on collapsed expands",
 			startID: "db",
 			op: func(tm *treeModel) {
-				delete(tm.expanded, "db")
-				tm.rebuildVisible()
-				tm.onRight()
+				tm.eng.SetExpandedByKey("db", false)
+				tm.eng.RebuildVisible(nil)
+				tm.eng.Expand()
 			},
 			wantID: "db",
 		},
 		{
 			name:    "right on expanded steps in",
 			startID: "services",
-			op:      func(tm *treeModel) { tm.onRight() },
+			op:      func(tm *treeModel) { tm.eng.Expand() },
 			wantID:  "services.api",
 		},
 		{
 			name:    "left on expanded collapses",
 			startID: "services.main",
-			op:      func(tm *treeModel) { tm.onLeft() },
+			op:      func(tm *treeModel) { tm.eng.Collapse() },
 			wantID:  "services.main",
 		},
 		{
@@ -168,16 +168,16 @@ func TestTreeNavigation(t *testing.T) {
 			op: func(tm *treeModel) {
 				// services.api is "expanded" at depth 3 even though it has no
 				// children — collapsing it first lets onLeft ascend.
-				delete(tm.expanded, "services.api")
-				tm.rebuildVisible()
-				tm.onLeft()
+				tm.eng.SetExpandedByKey("services.api", false)
+				tm.eng.RebuildVisible(nil)
+				tm.eng.Collapse()
 			},
 			wantID: "services",
 		},
 		{
 			name:    "space toggles expansion",
 			startID: "services.main",
-			op:      func(tm *treeModel) { tm.toggleFocused() },
+			op:      func(tm *treeModel) { tm.eng.Toggle() },
 			wantID:  "services.main",
 		},
 	}
@@ -185,10 +185,10 @@ func TestTreeNavigation(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
 			tm := newTreeModel(sampleItems(), false, 3)
-			tm.focusedID = tc.startID
+			tm.eng.SetCursorByKey(tc.startID)
 			tc.op(tm)
-			if tm.focusedID != tc.wantID {
-				t.Errorf("focus=%q, want %q", tm.focusedID, tc.wantID)
+			if tm.focusedID() != tc.wantID {
+				t.Errorf("focus=%q, want %q", tm.focusedID(), tc.wantID)
 			}
 		})
 	}
@@ -197,9 +197,9 @@ func TestTreeNavigation(t *testing.T) {
 func TestTreeRight_ToggleCollapsesAfterRight(t *testing.T) {
 	t.Parallel()
 	tm := newTreeModel(sampleItems(), false, 3)
-	tm.focusedID = "services.main"
-	tm.onLeft() // collapse
-	if _, ok := tm.expanded["services.main"]; ok {
+	tm.eng.SetCursorByKey("services.main")
+	tm.eng.Collapse() // collapse
+	if tm.eng.IsExpanded(tm.nodesByID["services.main"]) {
 		t.Errorf("services.main should be collapsed after onLeft")
 	}
 	if !contains(visibleIDs(tm), "services.main") {
@@ -208,8 +208,8 @@ func TestTreeRight_ToggleCollapsesAfterRight(t *testing.T) {
 	if contains(visibleIDs(tm), "services.main.cs") {
 		t.Errorf("services.main.cs should be hidden when parent collapsed")
 	}
-	tm.onRight() // expand again
-	if !tm.expanded["services.main"] {
+	tm.eng.Expand() // expand again
+	if !tm.eng.IsExpanded(tm.nodesByID["services.main"]) {
 		t.Errorf("services.main should be expanded after onRight")
 	}
 }
@@ -235,7 +235,7 @@ func TestTreeIncludePrivate_RefreshesCounts(t *testing.T) {
 func TestTreeItemsForFocus_FiltersPrivate(t *testing.T) {
 	t.Parallel()
 	tm := newTreeModel(sampleItems(), false, 3)
-	tm.focusedID = "db"
+	tm.eng.SetCursorByKey("db")
 	got := tm.itemsForFocus()
 	if len(got) != 1 || tm.items[got[0]].ID != "db.migrate" {
 		t.Errorf("itemsForFocus=%v, want only db.migrate", got)
@@ -250,7 +250,7 @@ func TestTreeItemsForFocus_FiltersPrivate(t *testing.T) {
 func TestTreeRender_ShowsMarkerAndCount(t *testing.T) {
 	t.Parallel()
 	tm := newTreeModel(sampleItems(), false, 3)
-	tm.focusedID = "db"
+	tm.eng.SetCursorByKey("db")
 	out := tm.renderOpt(true, true)
 	if !strings.Contains(out, "db") || !strings.Contains(out, "(1)") {
 		t.Errorf("render missing db / count, got:\n%s", out)
@@ -313,13 +313,13 @@ func FuzzTreeCountInvariant(f *testing.F) {
 		}
 		// Collapse-idempotency: collapsing twice == once.
 		visibleBefore := visibleIDs(tm)
-		for id := range tm.expanded {
-			delete(tm.expanded, id)
-			delete(tm.expanded, id)
+		for id := range tm.nodesByID {
+			tm.eng.SetExpandedByKey(id, false)
+			tm.eng.SetExpandedByKey(id, false)
 		}
-		tm.rebuildVisible()
+		tm.eng.RebuildVisible(nil)
 		v1 := visibleIDs(tm)
-		tm.rebuildVisible()
+		tm.eng.RebuildVisible(nil)
 		v2 := visibleIDs(tm)
 		if strings.Join(v1, ",") != strings.Join(v2, ",") {
 			t.Fatalf("rebuildVisible not idempotent: %v vs %v", v1, v2)
@@ -333,7 +333,7 @@ func FuzzTreeCountInvariant(f *testing.F) {
 func TestTree_Snapshot(t *testing.T) {
 	t.Parallel()
 	tm := newTreeModel(sampleItems(), false, 3)
-	tm.focusedID = "db"
+	tm.eng.SetCursorByKey("db")
 	got := stripANSI(tm.renderOpt(true, true))
 	// db / api / cs / web have no sub-group children, so they render with a
 	// two-space gutter where the expand glyph would be. services and

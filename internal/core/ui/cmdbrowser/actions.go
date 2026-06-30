@@ -155,32 +155,32 @@ func (b *browser) navVertical(delta int) {
 		return
 	}
 	if delta < 0 {
-		b.tree.moveUp()
+		b.tree.eng.MoveUp()
 	} else {
-		b.tree.moveDown()
+		b.tree.eng.MoveDown()
 	}
 	b.afterTreeMove()
 }
 
 // navLeft handles ←/h. In the tree it collapses the focused node or steps to its
-// parent (treeModel.onLeft). In the list it is a no-op: focus is now Tab/click
+// parent (engine Collapse). In the list it is a no-op: focus is now Tab/click
 // only, so the legacy left-arrow "return to tree" affordance (model.go updateRight)
 // is intentionally gone — panel switching belongs to the frame.
 func (b *browser) navLeft() {
 	if b.active == panelList {
 		return
 	}
-	b.tree.onLeft()
+	b.tree.eng.Collapse()
 	b.afterTreeMove()
 }
 
 // navRight handles →/l. In the tree it expands the focused node or steps into
-// its first child (treeModel.onRight). In the list it is a no-op (see navLeft).
+// its first child (engine Expand). In the list it is a no-op (see navLeft).
 func (b *browser) navRight() {
 	if b.active == panelList {
 		return
 	}
-	b.tree.onRight()
+	b.tree.eng.Expand()
 	b.afterTreeMove()
 }
 
@@ -190,7 +190,7 @@ func (b *browser) navHome() {
 		b.list.GoToStart()
 		return
 	}
-	b.tree.moveHome()
+	b.tree.eng.MoveHome()
 	b.afterTreeMove()
 }
 
@@ -200,7 +200,7 @@ func (b *browser) navEnd() {
 		b.list.GoToEnd()
 		return
 	}
-	b.tree.moveEnd()
+	b.tree.eng.MoveEnd()
 	b.afterTreeMove()
 }
 
@@ -219,9 +219,9 @@ func (b *browser) navPage(delta int) {
 	h := max(b.treeInner.Height, 1)
 	for range h {
 		if delta < 0 {
-			b.tree.moveUp()
+			b.tree.eng.MoveUp()
 		} else {
-			b.tree.moveDown()
+			b.tree.eng.MoveDown()
 		}
 	}
 	b.afterTreeMove()
@@ -230,7 +230,7 @@ func (b *browser) navPage(delta int) {
 // afterTreeMove keeps the focused tree row on screen and re-syncs the list to
 // the (possibly new) focused group. Called after every tree mutation.
 func (b *browser) afterTreeMove() {
-	b.tree.ensureFocusVisible(b.treeInner.Height)
+	b.tree.eng.EnsureFocusVisible(b.treeInner.Height)
 	b.refreshList()
 }
 
@@ -241,7 +241,7 @@ func (b *browser) afterTreeMove() {
 // flag, then quits.
 func (b *browser) onSelect() (tea.Cmd, bool) {
 	if b.active == panelTree {
-		b.tree.toggleFocused()
+		b.tree.eng.Toggle()
 		b.afterTreeMove()
 		return nil, true
 	}
