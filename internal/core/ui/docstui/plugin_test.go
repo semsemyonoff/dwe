@@ -1140,3 +1140,128 @@ func TestBrowser_BuildHelp_NopTranslatorFallsBackToEnglish(t *testing.T) {
 		t.Errorf("BuildHelp/NopTranslator missing 'Locales' fallback:\n%s", plain)
 	}
 }
+
+// --- Task 4 wheel: WheelMsg routing ---
+
+func TestBrowser_WheelMsgViewportScrollsDown(t *testing.T) {
+	b := newTestBrowser(t)
+	// Load tall content so the offset can actually advance.
+	b.Viewport.SetContent(tallContent(200))
+	b.ViewPanel(panelViewport, tui.Region{Width: 60, Height: 10})
+	// Scroll to the middle so there is room above and below.
+	b.Viewport.ScrollToLine(50)
+	before := b.Viewport.YOffset()
+	beforeActive := b.active
+
+	b.Update(tui.WheelMsg{Panel: panelViewport, Delta: 1})
+
+	after := b.Viewport.YOffset()
+	if after != before+wheelViewportStep {
+		t.Errorf("WheelMsg down: YOffset got %d, want %d", after, before+wheelViewportStep)
+	}
+	// Focus must not change.
+	if b.active != beforeActive {
+		t.Errorf("WheelMsg changed active panel: got %q, want %q", b.active, beforeActive)
+	}
+}
+
+func TestBrowser_WheelMsgViewportScrollsUp(t *testing.T) {
+	b := newTestBrowser(t)
+	b.Viewport.SetContent(tallContent(200))
+	b.ViewPanel(panelViewport, tui.Region{Width: 60, Height: 10})
+	b.Viewport.ScrollToLine(50)
+	before := b.Viewport.YOffset()
+	beforeActive := b.active
+
+	b.Update(tui.WheelMsg{Panel: panelViewport, Delta: -1})
+
+	after := b.Viewport.YOffset()
+	if after != before-wheelViewportStep {
+		t.Errorf("WheelMsg up: YOffset got %d, want %d", after, before-wheelViewportStep)
+	}
+	if b.active != beforeActive {
+		t.Errorf("WheelMsg changed active panel: got %q, want %q", b.active, beforeActive)
+	}
+}
+
+func TestBrowser_WheelMsgTreeMovesDown(t *testing.T) {
+	b := newMultiFileBrowser(t)
+	b.ViewPanel(panelTree, tui.Region{Width: 30, Height: 10})
+	before := b.Tree.Cursor()
+	beforeActive := b.active
+
+	b.Update(tui.WheelMsg{Panel: panelTree, Delta: 1})
+
+	after := b.Tree.Cursor()
+	if after == before {
+		t.Error("WheelMsg{panelTree, +1} did not move the tree cursor")
+	}
+	if b.active != beforeActive {
+		t.Errorf("WheelMsg changed active panel: got %q, want %q", b.active, beforeActive)
+	}
+}
+
+func TestBrowser_WheelMsgTreeMovesUp(t *testing.T) {
+	b := newMultiFileBrowser(t)
+	b.ViewPanel(panelTree, tui.Region{Width: 30, Height: 10})
+	// Move down first so there is room to move up.
+	b.Tree.MoveDown()
+	b.Tree.MoveDown()
+	before := b.Tree.Cursor()
+	beforeActive := b.active
+
+	b.Update(tui.WheelMsg{Panel: panelTree, Delta: -1})
+
+	after := b.Tree.Cursor()
+	if after == before {
+		t.Error("WheelMsg{panelTree, -1} did not move the tree cursor")
+	}
+	if b.active != beforeActive {
+		t.Errorf("WheelMsg changed active panel: got %q, want %q", b.active, beforeActive)
+	}
+}
+
+func TestBrowser_WheelMsgTreeReturnsCmdForTopicLoad(t *testing.T) {
+	b := newMultiFileBrowser(t)
+	b.ViewPanel(panelTree, tui.Region{Width: 30, Height: 10})
+
+	// WheelMsg on the tree must return the topic-load Cmd (same as keyboard nav).
+	cmd := b.Update(tui.WheelMsg{Panel: panelTree, Delta: 1})
+	if cmd == nil {
+		t.Error("WheelMsg{panelTree} returned nil Cmd; expected topic-load Cmd from afterTreeMove")
+	}
+}
+
+func TestBrowser_WheelMsgWhileFilteringIsNoop(t *testing.T) {
+	b := newMultiFileBrowser(t)
+	b.ViewPanel(panelTree, tui.Region{Width: 30, Height: 10})
+	b.enterFilter()
+	beforeCursor := b.Tree.Cursor()
+
+	// Wheel while filter is active: must be a no-op (the Frame already swallows
+	// it, but handleWheel guards defensively too).
+	b.Update(tui.WheelMsg{Panel: panelTree, Delta: 1})
+
+	if b.Tree.Cursor() != beforeCursor {
+		t.Errorf("WheelMsg while filtering moved cursor: got %v, want %v", b.Tree.Cursor(), beforeCursor)
+	}
+}
+
+func TestBrowser_WheelMsgDoesNotChangeActivePanel(t *testing.T) {
+	b := newMultiFileBrowser(t)
+	b.ViewPanel(panelTree, tui.Region{Width: 30, Height: 10})
+	// Start with tree focused.
+	if b.active != panelTree {
+		t.Fatalf("initial active = %q, want tree", b.active)
+	}
+	// Wheel over viewport panel — must not switch focus.
+	b.Viewport.SetContent(tallContent(200))
+	b.ViewPanel(panelViewport, tui.Region{Width: 60, Height: 10})
+	b.Viewport.ScrollToLine(50)
+
+	b.Update(tui.WheelMsg{Panel: panelViewport, Delta: 1})
+
+	if b.active != panelTree {
+		t.Errorf("WheelMsg on viewport changed active panel: got %q, want tree", b.active)
+	}
+}

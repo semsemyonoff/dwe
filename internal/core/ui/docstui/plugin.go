@@ -228,6 +228,9 @@ func (b *browser) Update(msg tea.Msg) tea.Cmd {
 		b.active = msg.Panel
 		return nil
 
+	case tui.WheelMsg:
+		return b.handleWheel(msg)
+
 	case tui.PanelClickMsg:
 		return b.handlePanelClick(msg)
 
@@ -542,8 +545,8 @@ func isPrintable(s string) bool {
 // click would reposition the highlight but leave the viewport on the previously
 // loaded topic until the next key press). While the inline filter is active the
 // query line is not row-addressable so clicks are dropped. The viewport has no
-// per-row click targets today (it follows the framework's default wheel
-// routing), so viewport clicks are also dropped. Mirrors cmdbrowser.handlePanelClick.
+// per-row click targets today; wheel scroll arrives via WheelMsg (pointer-routed
+// by the framework), so no per-click scroll handling is needed here.
 func (b *browser) handlePanelClick(msg tui.PanelClickMsg) tea.Cmd {
 	if b.CapturingInput() {
 		// Filter owns raw input; don't reposition the tree under it.
@@ -554,8 +557,37 @@ func (b *browser) handlePanelClick(msg tui.PanelClickMsg) tea.Cmd {
 		return b.afterTreeMove()
 	}
 	// Viewport clicks are intentionally no-op: the viewport widget has no
-	// per-row click targets and wheel scroll arrives as ActionNavUp/Down via
-	// HandleAction (framework routing), so no per-plugin wheel handling needed.
+	// per-row click targets.
+	return nil
+}
+
+// handleWheel handles a WheelMsg from the framework. The wheel is pointer-routed
+// (Panel is the panel under the pointer, not the focused panel) and does not
+// change b.active. Belt-and-suspenders: the Frame already swallows wheel events
+// while CapturingInput() is true, but we guard here too for safety.
+func (b *browser) handleWheel(msg tui.WheelMsg) tea.Cmd {
+	if b.CapturingInput() {
+		return nil
+	}
+	switch msg.Panel {
+	case panelViewport:
+		if b.Viewport == nil {
+			return nil
+		}
+		b.Viewport.ScrollBy(msg.Delta * wheelViewportStep)
+		b.syncActiveDiagram()
+		return nil
+	case panelTree:
+		if b.Tree == nil {
+			return nil
+		}
+		if msg.Delta < 0 {
+			b.Tree.MoveUp()
+		} else {
+			b.Tree.MoveDown()
+		}
+		return b.afterTreeMove()
+	}
 	return nil
 }
 

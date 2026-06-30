@@ -11,6 +11,49 @@ import (
 	"github.com/semsemyonoff/dwe/internal/shared/i18n"
 )
 
+// TestBrowser_WheelMsgScrollsViewportByStep verifies that a WheelMsg on the
+// viewport panel scrolls the content by exactly wheelViewportStep lines and
+// that multiple notches accumulate correctly.
+func TestBrowser_WheelMsgScrollsViewportByStep(t *testing.T) {
+	var sb strings.Builder
+	sb.WriteString("# Long\n\n")
+	for range 200 {
+		sb.WriteString("Filler prose line.\n\n")
+	}
+	roots := []docs.DocRoot{{Name: "dwe", FS: flatFS{files: map[string]string{"long.md": sb.String()}}}}
+	m, err := NewModel(context.Background(), roots, "en", i18n.NopTranslator{}, &testRenderer{}, 120, 40, "", "DWE", "auto")
+	if err != nil {
+		t.Fatalf("NewModel: %v", err)
+	}
+	loadFirstTopic(t, m)
+	if total := m.Viewport.TotalLines(); total <= m.Viewport.VisibleHeight() {
+		t.Fatalf("test doc not tall enough to scroll: total=%d visible=%d", total, m.Viewport.VisibleHeight())
+	}
+
+	br := newBrowser(context.Background(), m)
+	vpW := viewportPanelInnerWidth(120)
+	vpH := viewportInnerHeight(40)
+	br.ViewPanel(panelViewport, tui.Region{Width: vpW, Height: vpH})
+
+	// Scroll to a mid-document position so there is room to go up and down.
+	m.Viewport.ScrollToLine(50)
+	startOffset := m.Viewport.YOffset()
+
+	// One downward notch: should advance by wheelViewportStep.
+	br.Update(tui.WheelMsg{Panel: panelViewport, Delta: 1})
+	if got, want := m.Viewport.YOffset(), startOffset+wheelViewportStep; got != want {
+		t.Errorf("one down notch: YOffset=%d, want %d", got, want)
+	}
+
+	// Two upward notches: should retreat by 2*wheelViewportStep.
+	br.Update(tui.WheelMsg{Panel: panelViewport, Delta: -1})
+	br.Update(tui.WheelMsg{Panel: panelViewport, Delta: -1})
+	if got, want := m.Viewport.YOffset(), startOffset-wheelViewportStep; got != want {
+		t.Errorf("two up notches: YOffset=%d, want %d", got, want)
+	}
+}
+
+
 // flatFS is a single-directory in-memory docs root that serves file content
 // (testFS in tree_widget_test.go intentionally cannot, so it can't drive a
 // real topic load).

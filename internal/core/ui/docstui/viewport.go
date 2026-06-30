@@ -104,3 +104,17 @@ func (w *ViewportWidget) VisibleHeight() int {
 func (w *ViewportWidget) TotalLines() int {
 	return w.v.TotalLineCount()
 }
+
+// wheelViewportStep is the number of lines scrolled per mouse-wheel notch in
+// the viewport panel. Matches the bubbles/v2 viewport MouseWheelDelta default.
+const wheelViewportStep = 3
+
+// ScrollBy scrolls the viewport by n lines; negative moves up, positive down.
+// Clamped by the underlying viewport to the content boundaries.
+func (w *ViewportWidget) ScrollBy(n int) {
+	if n < 0 {
+		w.v.ScrollUp(-n)
+	} else if n > 0 {
+		w.v.ScrollDown(n)
+	}
+}

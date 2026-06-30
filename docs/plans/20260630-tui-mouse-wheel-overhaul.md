@@ -350,22 +350,22 @@ The wheel path is rebuilt around three principles — **immediate**, **pointer-r
 - Modify: `internal/core/ui/docstui/plugin_test.go`
 - Modify: `internal/core/ui/docstui/scroll_test.go`
 
-- [ ] add `ViewportWidget.ScrollBy(n int)` (or equivalent) scrolling `n` lines in either
+- [x] add `ViewportWidget.ScrollBy(n int)` (or equivalent) scrolling `n` lines in either
   direction with clamping; add the `wheelViewportStep = 3` constant (documented)
-- [ ] add `case tui.WheelMsg:` to `browser.Update` → `return b.handleWheel(m)`; implement
+- [x] add `case tui.WheelMsg:` to `browser.Update` → `return b.handleWheel(m)`; implement
   `handleWheel`: drop while `CapturingInput()` (belt-and-suspenders — the Frame already
   swallows the wheel during capture); `panelViewport` → scroll `wheelViewportStep` lines +
   `syncActiveDiagram`; `panelTree` → one tree-cursor step + `afterTreeMove` (topic load);
   never mutate `b.active`
-- [ ] sweep the stale comment in `handlePanelClick` (~`plugin.go:556-559`, "wheel scroll
+- [x] sweep the stale comment in `handlePanelClick` (~`plugin.go:556-559`, "wheel scroll
   arrives as ActionNavUp/Down via HandleAction") to describe the `WheelMsg` path
-- [ ] audit docstui for any scrollable `CapturesInput` overlay; if present, handle the
+- [x] audit docstui for any scrollable `CapturesInput` overlay; if present, handle the
   forwarded raw `tea.MouseWheelMsg` in `Update` (help is non-capturing — no change)
-- [ ] write tests: `WheelMsg{panelViewport}` scrolls the viewport by `wheelViewportStep`
+- [x] write tests: `WheelMsg{panelViewport}` scrolls the viewport by `wheelViewportStep`
   lines (YOffset delta), `b.active` unchanged; `WheelMsg{panelTree}` moves the tree cursor
   and returns the topic-load Cmd, `b.active` unchanged; a `WheelMsg` while filtering is a
   no-op
-- [ ] run `go test ./internal/core/ui/docstui/...` — must pass before next task
+- [x] run `go test ./internal/core/ui/docstui/...` — must pass before next task
 
 ### Task 5: Update reference docs — keymap, packages.md, AGENTS.md
 
