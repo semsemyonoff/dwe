@@ -25,13 +25,14 @@ const sectionActions = "Actions"
 // Actions implements tui.Plugin. It registers the browser's key bindings on the
 // frame registry every render of the help modal is generated from these.
 //
-// Navigation (tree/list movement + wheel scroll) is always registered via the
-// stdlib defaults — their canonical keys and the wheel-up/down mouse bindings
-// are exactly what the browser wants. select / filter / inspect are registered
-// explicitly so they regroup under "Actions" (the stdlib defaults split them
-// across General/Filter/Inspect). The two ModeRun-only verbs — skip-confirm
-// (`y`) and force-form (`e`) — are registered ONLY in ModeRun, so they are
-// absent from the help modal and inert in ModeEdit/ModeInspect automatically.
+// Navigation (tree/list movement) is always registered via the stdlib defaults
+// — their canonical keys are exactly what the browser wants. Wheel scroll is
+// delivered as [tui.WheelMsg] (pointer-routed, not through the registry).
+// select / filter / inspect are registered explicitly so they regroup under
+// "Actions" (the stdlib defaults split them across General/Filter/Inspect).
+// The two ModeRun-only verbs — skip-confirm (`y`) and force-form (`e`) — are
+// registered ONLY in ModeRun, so they are absent from the help modal and inert
+// in ModeEdit/ModeInspect automatically.
 //
 // Tab/Shift+Tab (focus), ?/q/esc/ctrl+c are framework built-ins and are NOT
 // registered here.

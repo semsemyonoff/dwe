@@ -219,19 +219,31 @@ func (b *browser) itemNoun(count int) string {
 // captured keys here too (via routeWhileCapturing — every key except ctrl+c and
 // esc), which drive the inspect viewport.
 //
-// Mouse and focus messages (Task 9) arrive here regardless of capture state:
+// Mouse and focus messages arrive here regardless of capture state:
 // FocusChangedMsg tracks the active panel for nav/scroll routing (Tab/Shift+Tab
 // are framework built-ins that never otherwise reach the plugin); PanelClickMsg
 // moves the cursor/selection to the clicked row (single click = move only, no
-// run — Decision 7). Wheel scroll is delivered as nav.up/nav.down through
-// HandleAction, and double-click as the Select action, so neither needs handling
-// here.
+// run — Decision 7). Wheel scroll arrives as [tui.WheelMsg] (pointer-routed to
+// the panel under the cursor, not the focused panel); a raw [tea.MouseWheelMsg]
+// arrives only while the inspect overlay captures (the Frame forwards it here so
+// the viewport scrolls). Double-click arrives as the Select action.
 //
 // Filter and inspect are mutually exclusive (you cannot open inspect while
 // filtering — `i` is typed into the query, not dispatched), so the filter branch
 // takes precedence and inspect only runs when no filter is active.
 func (b *browser) Update(msg tea.Msg) tea.Cmd {
 	switch m := msg.(type) {
+	case tui.WheelMsg:
+		b.handleWheel(m)
+		return nil
+	case tea.MouseWheelMsg:
+		if b.inspect == nil {
+			return nil
+		}
+		var cmd tea.Cmd
+		b.inspect.vp, cmd = b.inspect.vp.Update(m)
+		b.inspectPending = true
+		return cmd
 	case tui.FocusChangedMsg:
 		b.active = m.Panel
 		return nil
@@ -254,6 +266,31 @@ func (b *browser) Update(msg tea.Msg) tea.Cmd {
 		}
 	}
 	return nil
+}
+
+// handleWheel routes a pointer wheel turn to the panel under the cursor.
+// It is a no-op while the inline filter is active (belt-and-suspenders — the
+// Frame already swallows the wheel during CapturingInput). It never mutates
+// b.active; wheel scrolling is focus-neutral.
+func (b *browser) handleWheel(msg tui.WheelMsg) {
+	if b.filter != nil {
+		return
+	}
+	switch msg.Panel {
+	case panelTree:
+		if msg.Delta < 0 {
+			b.tree.eng.MoveUp()
+		} else {
+			b.tree.eng.MoveDown()
+		}
+		b.afterTreeMove()
+	case panelList:
+		if msg.Delta < 0 {
+			b.list.CursorUp()
+		} else {
+			b.list.CursorDown()
+		}
+	}
 }
 
 // handlePanelClick moves the cursor/selection in response to a single click,

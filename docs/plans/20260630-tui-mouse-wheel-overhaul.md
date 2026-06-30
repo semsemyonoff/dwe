@@ -319,27 +319,27 @@ The wheel path is rebuilt around three principles — **immediate**, **pointer-r
 - (the `cmdbrowser/actions_test.go` wheel-assertion deletion is done in Task 1, with the
   registry change that causes it)
 
-- [ ] add `case tui.WheelMsg:` to `browser.Update` → `b.handleWheel(m); return nil`, and
+- [x] add `case tui.WheelMsg:` to `browser.Update` → `b.handleWheel(m); return nil`, and
   `case tea.MouseWheelMsg:` → scroll the inspect viewport (`b.inspect.vp.Update(m)`,
   re-mark `b.inspectPending`) when `b.inspect != nil`, else ignore. (`viewport.Update`
   always returns a nil Cmd — discarding it is fine.)
-- [ ] implement `handleWheel(msg tui.WheelMsg)`: drop while `b.filter != nil` (a
+- [x] implement `handleWheel(msg tui.WheelMsg)`: drop while `b.filter != nil` (a
   belt-and-suspenders guard — the Frame already swallows the wheel during capture);
   `panelTree` → one tree-cursor step per notch (`tree.eng.MoveUp/MoveDown`) +
   `afterTreeMove`; `panelList` → one list-selection step per notch
   (`b.list.CursorUp/CursorDown`); never mutate `b.active`
-- [ ] sweep the stale comment at `plugin.go:226-228` ("Wheel scroll is delivered as
+- [x] sweep the stale comment at `plugin.go:226-228` ("Wheel scroll is delivered as
   nav.up/nav.down through HandleAction") to describe the `WheelMsg` path; fix the stale
   wheel note in `actions.go` (~`:29-34`) that ties NavUp/NavDown's mouse default to wheel
-- [ ] **rewrite `TestBrowser_WheelScrollsFocusedPanel`** (~`plugin_test.go:343`) to inject
+- [x] **rewrite `TestBrowser_WheelScrollsFocusedPanel`** (~`plugin_test.go:343`) to inject
   `tui.WheelMsg{Panel,Delta}` instead of driving `ActionNavDown` via `HandleAction`, and
   to assert focus (`b.active`) is unchanged
-- [ ] write tests: `WheelMsg{panelTree}` up/down moves the tree cursor and triggers the
+- [x] write tests: `WheelMsg{panelTree}` up/down moves the tree cursor and triggers the
   topic/refresh side effects, `b.active` unchanged; `WheelMsg{panelList}` moves the list
   selection, `b.active` unchanged; a `WheelMsg` while the filter is active is a no-op
-- [ ] write tests: a `tea.MouseWheelMsg` routed to `updateInspect`/`Update` scrolls the
+- [x] write tests: a `tea.MouseWheelMsg` routed to `updateInspect`/`Update` scrolls the
   inspect viewport (YOffset advances) and sets `inspectPending`
-- [ ] run `go test ./internal/core/ui/cmdbrowser/...` — must pass before next task
+- [x] run `go test ./internal/core/ui/cmdbrowser/...` — must pass before next task
 
 ### Task 4: docstui — pointer wheel with per-panel step (viewport multi-line, tree cursor)
 

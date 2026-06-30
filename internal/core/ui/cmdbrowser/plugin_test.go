@@ -340,31 +340,116 @@ func TestBrowser_PanelClickWorksAfterInspectClosed(t *testing.T) {
 	}
 }
 
+// TestBrowser_WheelScrollsFocusedPanel is rewritten to inject tui.WheelMsg
+// (pointer-routed) instead of driving HandleAction, and now also asserts that
+// wheel scrolling never changes the focused panel (b.active).
 func TestBrowser_WheelScrollsFocusedPanel(t *testing.T) {
 	b := newBrowser("pick", pluginTestItems(), DefaultOptions())
 	b.ViewPanel(panelTree, tui.Region{Width: 18, Height: 10})
 
-	// Tree focused: a wheel-down (delivered as ActionNavDown via HandleAction)
-	// moves the tree cursor.
-	b.active = panelTree
-	if _, handled := b.HandleAction(tui.ActionNavDown); !handled {
-		t.Fatalf("ActionNavDown not handled")
+	// WheelMsg over the tree panel moves the tree cursor regardless of which
+	// panel is focused. b.active must remain unchanged.
+	b.active = panelList // deliberately different from the wheel target
+	if cmd := b.Update(tui.WheelMsg{Panel: panelTree, Delta: 1}); cmd != nil {
+		t.Errorf("WheelMsg returned non-nil cmd, want nil")
+	}
+	if b.active != panelList {
+		t.Errorf("active = %q after WheelMsg on tree, want %q (wheel must not change focus)", b.active, panelList)
 	}
 	if b.tree.focusedID() != "services" {
 		t.Errorf("tree cursor = %q after wheel-down, want %q", b.tree.focusedID(), "services")
 	}
 
-	// List focused: a wheel-down advances the list selection instead.
+	// WheelMsg over the list panel moves the list selection regardless of the
+	// active panel. b.active must remain unchanged.
 	b.tree.eng.SetCursorByKey("db")
 	b.refreshList()
-	b.active = panelList
+	b.active = panelTree // deliberately different from the wheel target
 	b.ViewPanel(panelList, tui.Region{Width: 74, Height: 12})
 	beforeIdx := b.list.Index()
-	if _, handled := b.HandleAction(tui.ActionNavDown); !handled {
-		t.Fatalf("ActionNavDown not handled on list")
+	if cmd := b.Update(tui.WheelMsg{Panel: panelList, Delta: 1}); cmd != nil {
+		t.Errorf("WheelMsg on list returned non-nil cmd, want nil")
+	}
+	if b.active != panelTree {
+		t.Errorf("active = %q after WheelMsg on list, want %q (wheel must not change focus)", b.active, panelTree)
 	}
 	if b.list.Index() != beforeIdx+1 {
 		t.Errorf("list index = %d after wheel-down, want %d", b.list.Index(), beforeIdx+1)
+	}
+}
+
+func TestBrowser_WheelTreeUpDown(t *testing.T) {
+	b := newBrowser("pick", pluginTestItems(), DefaultOptions())
+	b.ViewPanel(panelTree, tui.Region{Width: 18, Height: 10})
+	// Start at the first node ("db"), wheel down → "services", wheel up → back.
+	initial := b.tree.focusedID()
+
+	b.Update(tui.WheelMsg{Panel: panelTree, Delta: 1})
+	if b.tree.focusedID() == initial {
+		t.Errorf("wheel-down on tree: focusedID unchanged (%q)", initial)
+	}
+	after := b.tree.focusedID()
+
+	b.Update(tui.WheelMsg{Panel: panelTree, Delta: -1})
+	if b.tree.focusedID() != initial {
+		t.Errorf("wheel-up on tree: focusedID = %q, want %q", b.tree.focusedID(), initial)
+	}
+	_ = after
+}
+
+func TestBrowser_WheelTreeTriggersAfterTreeMove(t *testing.T) {
+	// afterTreeMove re-syncs the list to the newly focused group; verify the
+	// list items change after a wheel move on the tree panel.
+	items := []Item{
+		{ID: "db.migrate"},
+		{ID: "services.api.test"},
+	}
+	b := newBrowser("pick", items, DefaultOptions())
+	b.ViewPanel(panelTree, tui.Region{Width: 18, Height: 10})
+	b.tree.eng.SetCursorByKey("db")
+	b.refreshList()
+	dbCount := len(b.list.Items())
+
+	// Wheel down moves to "services" group; list should now reflect that group.
+	b.Update(tui.WheelMsg{Panel: panelTree, Delta: 1})
+	if len(b.list.Items()) == dbCount {
+		t.Errorf("list item count unchanged after wheel move on tree; afterTreeMove may not have run")
+	}
+}
+
+func TestBrowser_WheelListUpDown(t *testing.T) {
+	items := []Item{{ID: "db.migrate"}, {ID: "db.seed"}}
+	b := newBrowser("pick", items, DefaultOptions())
+	b.tree.eng.SetCursorByKey("db")
+	b.refreshList()
+	b.ViewPanel(panelList, tui.Region{Width: 74, Height: 12})
+
+	initial := b.list.Index()
+	b.Update(tui.WheelMsg{Panel: panelList, Delta: 1})
+	if b.list.Index() != initial+1 {
+		t.Errorf("list.Index = %d after wheel-down, want %d", b.list.Index(), initial+1)
+	}
+	b.Update(tui.WheelMsg{Panel: panelList, Delta: -1})
+	if b.list.Index() != initial {
+		t.Errorf("list.Index = %d after wheel-up, want %d", b.list.Index(), initial)
+	}
+}
+
+func TestBrowser_WheelWhileFilteringIsNoop(t *testing.T) {
+	b := newBrowser("pick", pluginTestItems(), DefaultOptions())
+	b.ViewPanel(panelTree, tui.Region{Width: 18, Height: 10})
+	initial := b.tree.focusedID()
+	initialListLen := len(b.list.Items())
+
+	b.filter = &filterState{} // activate filter (CapturingInput → true)
+	b.Update(tui.WheelMsg{Panel: panelTree, Delta: 1})
+	if b.tree.focusedID() != initial {
+		t.Errorf("wheel while filtering moved tree cursor; focusedID = %q, want %q", b.tree.focusedID(), initial)
+	}
+	b.Update(tui.WheelMsg{Panel: panelList, Delta: 1})
+	// The list should be unchanged (no cursor move, no item change).
+	if len(b.list.Items()) != initialListLen {
+		t.Errorf("wheel on list while filtering changed item count; want unchanged (%d)", initialListLen)
 	}
 }
 
