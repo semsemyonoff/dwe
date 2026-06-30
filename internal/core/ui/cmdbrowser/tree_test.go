@@ -311,8 +311,9 @@ func FuzzTreeCountInvariant(f *testing.F) {
 				t.Fatalf("node %q countPublic=%d, sum=%d", node.id, node.countPublic, sum)
 			}
 		}
-		// Collapse-idempotency: collapsing twice == once.
-		visibleBefore := visibleIDs(tm)
+		// Collapse-idempotency: collapsing twice == once. After collapsing every
+		// node only the top-level groups remain visible, and a second rebuild
+		// produces the identical set.
 		for id := range tm.nodesByID {
 			tm.eng.SetExpandedByKey(id, false)
 			tm.eng.SetExpandedByKey(id, false)
@@ -324,7 +325,9 @@ func FuzzTreeCountInvariant(f *testing.F) {
 		if strings.Join(v1, ",") != strings.Join(v2, ",") {
 			t.Fatalf("rebuildVisible not idempotent: %v vs %v", v1, v2)
 		}
-		_ = visibleBefore
+		if len(v1) != len(tm.root.children) {
+			t.Fatalf("fully collapsed visible = %v, want only %d top-level groups", v1, len(tm.root.children))
+		}
 	})
 }
 

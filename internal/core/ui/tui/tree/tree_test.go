@@ -282,7 +282,6 @@ func TestSetRootsPreservesExpansionAndCursorByKey(t *testing.T) {
 	if e.Cursor() != byKey2["a1"] {
 		t.Fatalf("cursor not re-resolved to new a1: %v", e.Cursor())
 	}
-	_ = roots2
 }
 
 func TestSetRootsVanishedCursorGoesZeroNoAutoPark(t *testing.T) {
@@ -379,6 +378,69 @@ func TestSetExpandedByKey(t *testing.T) {
 	e.SetExpandedByKey("a", false)
 	if e.IsExpanded(byKey["a"]) {
 		t.Fatal("SetExpandedByKey(a,false) failed")
+	}
+}
+
+// TestMoveOnEmptyVisibleIsSafe exercises moveBy's empty-visible guard: with no
+// roots there are no visible rows, so MoveUp/MoveDown must leave the cursor at
+// the zero value without panicking.
+func TestMoveOnEmptyVisibleIsSafe(t *testing.T) {
+	e := New(fakeAdapter{})
+	e.SetRoots(nil)
+	e.RebuildVisible(nil)
+	if len(e.VisibleNodes()) != 0 {
+		t.Fatalf("expected empty visible set, got %v", visibleKeys(e))
+	}
+	e.MoveUp()
+	if e.Cursor() != nil {
+		t.Fatalf("MoveUp on empty visible should leave cursor zero, got %v", e.Cursor())
+	}
+	e.MoveDown()
+	if e.Cursor() != nil {
+		t.Fatalf("MoveDown on empty visible should leave cursor zero, got %v", e.Cursor())
+	}
+}
+
+// TestRestoreExpandedNil exercises the nil-snapshot guard: restoring a nil
+// snapshot must re-init the map so a subsequent SetExpanded does not panic on a
+// nil map, and the resulting expansion set is empty.
+func TestRestoreExpandedNil(t *testing.T) {
+	e, byKey := newSampleEngine()
+	e.SetExpanded(byKey["a"], true)
+	e.RestoreExpanded(nil)
+	if e.IsExpanded(byKey["a"]) {
+		t.Fatal("restoring nil snapshot should clear expansion")
+	}
+	// Must not panic on a write after a nil restore.
+	e.SetExpanded(byKey["b"], true)
+	if !e.IsExpanded(byKey["b"]) {
+		t.Fatal("SetExpanded after nil restore should take effect")
+	}
+}
+
+// TestEnsureFocusVisibleCursorNotVisible exercises the idx<0 branch: when the
+// cursor is absent from the visible set (cmdbrowser tolerates an off-screen
+// cursor), EnsureFocusVisible resets topIdx to 0 rather than scrolling to a
+// stale row.
+func TestEnsureFocusVisibleCursorNotVisible(t *testing.T) {
+	e, byKey := newSampleEngine()
+	for _, k := range []string{"a", "a2", "b"} {
+		e.SetExpanded(byKey[k], true)
+	}
+	e.RebuildVisible(nil)
+	// Scroll down so topIdx is non-zero.
+	e.MoveEnd()
+	e.EnsureFocusVisible(3)
+	if e.topIdx == 0 {
+		t.Fatal("setup: expected topIdx > 0 after scrolling to end")
+	}
+	// Park the cursor on a node that is NOT in the visible set; RebuildVisible
+	// does not re-park (Decision 4), so the cursor stays off-screen.
+	e.SetCursor(byKey["a2x"])
+	e.RebuildVisible(func(n *fakeNode) bool { return n.key == "c" })
+	e.EnsureFocusVisible(3)
+	if e.topIdx != 0 {
+		t.Fatalf("EnsureFocusVisible with off-screen cursor should reset topIdx to 0, got %d", e.topIdx)
 	}
 }
 

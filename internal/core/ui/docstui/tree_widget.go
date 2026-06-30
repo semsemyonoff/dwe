@@ -383,6 +383,13 @@ func (tw *TreeWidget) MoveEnd() { tw.eng.MoveEnd() }
 // expanded, collapse it; otherwise step the cursor up to its parent. Heading
 // rows are leaves so they always fall through to the "step to parent" branch.
 // Nodes at the root level (no parent above root) are no-ops.
+//
+// Invariant: the engine's Collapse/Expand/Toggle internally call
+// RebuildVisible(nil), which ignores any active filter and rebuilds the full
+// expansion-respecting set. This is safe only because h/l/Enter are unreachable
+// while the filter captures input (CapturingInput routes raw keys to the
+// filter's own handler). If a future change lets these fire during an active
+// filter, recompute the reduced set afterward instead of relying on the engine.
 func (tw *TreeWidget) Collapse() { tw.eng.Collapse() }
 
 // Expand implements →/l directional semantics: if the cursor node is
