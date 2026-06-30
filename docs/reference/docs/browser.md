@@ -41,7 +41,7 @@ The browser also responds to the mouse:
 
 - **Single-click** a tree row to move the cursor there and focus that pane.
 - **Double-click** a tree row to open it (same as `Enter`).
-- **Wheel** scrolls the focused pane.
+- **Wheel** scrolls the pane under the pointer (the topic tree or the content viewport) without changing focus.
 - **Click** the `? help` hint to open the help modal.
 
 ## Layout

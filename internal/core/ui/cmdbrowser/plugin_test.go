@@ -388,13 +388,11 @@ func TestBrowser_WheelTreeUpDown(t *testing.T) {
 	if b.tree.focusedID() == initial {
 		t.Errorf("wheel-down on tree: focusedID unchanged (%q)", initial)
 	}
-	after := b.tree.focusedID()
 
 	b.Update(tui.WheelMsg{Panel: panelTree, Delta: -1})
 	if b.tree.focusedID() != initial {
 		t.Errorf("wheel-up on tree: focusedID = %q, want %q", b.tree.focusedID(), initial)
 	}
-	_ = after
 }
 
 func TestBrowser_WheelTreeTriggersAfterTreeMove(t *testing.T) {
