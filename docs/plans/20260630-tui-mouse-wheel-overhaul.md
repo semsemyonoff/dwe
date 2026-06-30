@@ -389,19 +389,19 @@ The wheel path is rebuilt around three principles — **immediate**, **pointer-r
 
 ### Task 6: Verify acceptance criteria
 
-- [ ] verify every Overview fix is implemented and exercised by tests: immediate dispatch
+- [x] verify every Overview fix is implemented and exercised by tests: immediate dispatch
   (no tick), overlay wheel scroll, pointer routing via `WheelMsg`, per-panel step,
   focus-neutral wheel
-- [ ] verify the packages build: `go build ./internal/core/ui/...`
-- [ ] verify existing goldens are byte-stable (rendering unchanged): `frame_*.golden`,
+- [x] verify the packages build: `go build ./internal/core/ui/...`
+- [x] verify existing goldens are byte-stable (rendering unchanged): `frame_*.golden`,
   `help_default.golden`, and the cmdbrowser/docstui goldens pass without regeneration
-- [ ] verify the `Plugin` interface is unchanged (no new method); no unintended new
+- [x] verify the `Plugin` interface is unchanged (no new method); no unintended new
   importers of `tui`
-- [ ] run focused suites: `go test ./internal/core/ui/tui/... ./internal/core/ui/cmdbrowser/...
+- [x] run focused suites: `go test ./internal/core/ui/tui/... ./internal/core/ui/cmdbrowser/...
   ./internal/core/ui/docstui/...`
-- [ ] run full suite: `make test`
-- [ ] run `make lint` — clean (gofmt/goimports/golangci-lint)
-- [ ] run `make build` so the embedded copy of the edited `docs/internals/*.md` regenerates
+- [x] run full suite: `make test`
+- [x] run `make lint` — clean (gofmt/goimports/golangci-lint)
+- [x] run `make build` so the embedded copy of the edited `docs/internals/*.md` regenerates
   (commit the regenerated `internal/core/docs/content_hashes_gen.go`)
 
 ### Task 7: [Final] Finalize documentation + archive plan
