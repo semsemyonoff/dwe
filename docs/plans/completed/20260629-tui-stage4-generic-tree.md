@@ -495,11 +495,16 @@ default-expanded in the engine (see Task 3) since the engine's map starts empty.
 
 ### Task 6: Finalize documentation + archive plan
 
-- [ ] confirm `docs/internals/packages.md` (+ `tui-keymap.md` if touched) reflect the final
-      shape
-- [ ] confirm Stage 4 is fully complete (Plan 1 archived + this Plan 2) and note Plan 2
-      done in any Stage-4 tracking
-- [ ] move this plan to `docs/plans/completed/` (`mkdir -p docs/plans/completed` first)
+- [x] confirm `docs/internals/packages.md` (+ `tui-keymap.md` if touched) reflect the final
+      shape — `packages.md` carries the full `tui/tree` engine section plus updated
+      cmdbrowser/docstui thin-wrapper notes (Task 4); `tui-keymap.md` intentionally untouched
+      (behavior-preserving refactor, identical keymaps)
+- [x] confirm Stage 4 is fully complete (Plan 1 archived + this Plan 2) and note Plan 2
+      done in any Stage-4 tracking — Plan 1 archived at
+      `docs/plans/completed/20260629-tui-stage4-docs-plugin-migration.md`; the milestone spec
+      is pre-planning (not a live tracker) and the plans are self-tracking, so archiving this
+      Plan 2 IS the Stage-4 completion record
+- [x] move this plan to `docs/plans/completed/` (`mkdir -p docs/plans/completed` first)
 
 ## Post-Completion
 
