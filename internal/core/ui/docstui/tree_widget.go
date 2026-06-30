@@ -1,20 +1,28 @@
 package docstui
 
 import (
-	"slices"
+	"strconv"
 	"strings"
 
 	"github.com/semsemyonoff/dwe/internal/core/docs"
+	"github.com/semsemyonoff/dwe/internal/core/ui/tui/tree"
 )
 
 // TreeNode is a node in the docs browser navigation tree. It represents a file,
-// directory, or heading row in the tree panel.
+// directory, or heading row in the tree panel. Expansion state is NOT stored
+// here — it lives in the shared tree.Engine, keyed by a stable Key (see
+// docsTreeAdapter.Key) so it survives a locale Rebuild.
 type TreeNode struct {
 	Node     *docs.Node
-	Expanded bool
 	Parent   *TreeNode
 	Children []*TreeNode
 	RootName string // which DocRoot this node came from
+
+	// IsGroup marks the synthetic per-root group header that appears only when
+	// more than one DocRoot is shown. The engine Key uses it to keep group keys
+	// (keyed by RootName) distinct from the file/dir node that shares the
+	// group's Path (== RootName).
+	IsGroup bool
 
 	// Heading is non-nil when this TreeNode represents a markdown heading
 	// inside the parent file (rather than a file or directory). The selection
@@ -31,70 +39,70 @@ type TreeNode struct {
 	IndexNode *docs.Node
 }
 
-// TreeWidget manages the navigation tree for the docs browser, including
-// the visible set, cursor position, filter state, and scroll offset.
+// docsTreeAdapter is the docstui binding for the generic tree engine. The
+// engine owns navigation, scroll, expansion, and the visible set; the adapter
+// only exposes the three properties the engine needs to walk the graph.
+type docsTreeAdapter struct{}
+
+// Children returns the ordered child nodes of n.
+func (docsTreeAdapter) Children(n *TreeNode) []*TreeNode { return n.Children }
+
+// Key returns a stable, collision-free id that survives a locale Rebuild. The
+// three node kinds are prefixed so a group node (Path == RootName) cannot
+// collide with the file/dir node that shares that path, and headings stay
+// unique by their sibling index (locale-stable, unlike heading text).
+func (docsTreeAdapter) Key(n *TreeNode) string { return nodeKey(n) }
+
+// Expandable reports whether n can hold expansion state. Heading rows are
+// always leaves. Directories are always expandable — empty / index-only dirs
+// must stay Enter/Toggle-able. Files are expandable only when they expose
+// heading sub-rows.
+func (docsTreeAdapter) Expandable(n *TreeNode) bool {
+	if n == nil || n.Node == nil {
+		return false
+	}
+	if n.Heading != nil {
+		return false
+	}
+	if n.Node.IsDir {
+		return true
+	}
+	return len(n.Children) > 0
+}
+
+// nodeKey computes the stable engine Key for n. A nil/empty value yields "",
+// which the engine treats as the root/none sentinel.
+func nodeKey(n *TreeNode) string {
+	if n == nil || n.Node == nil {
+		return ""
+	}
+	if n.IsGroup {
+		return "group\x00" + n.RootName
+	}
+	if n.Heading != nil {
+		return "heading\x00" + n.RootName + "\x00" + n.Node.Path + "\x00" + strconv.Itoa(headingIndex(n))
+	}
+	return "node\x00" + n.RootName + "\x00" + n.Node.Path
+}
+
+// TreeWidget manages the navigation tree for the docs browser. It is a thin
+// wrapper over the shared *tree.Engine, which owns the cursor, expansion,
+// visible-row list, and scroll geometry; the widget keeps the node graph
+// (tw.root) plus the per-root projection and the filter UX.
 type TreeWidget struct {
-	roots   []docs.DocRoot
-	locale  string // Locale used to pick per-file title/headings (with English fallback).
-	root    *TreeNode
-	cursor  *TreeNode
-	visible []*TreeNode
+	roots  []docs.DocRoot
+	locale string // Locale used to pick per-file title/headings (with English fallback).
+	root   *TreeNode
+
+	// eng is the generic behavioral engine. docstui keeps tw.root for the node
+	// graph and depth computation; everything behavioral (cursor, expansion,
+	// visible set, scroll) lives in the engine.
+	eng *tree.Engine[*TreeNode]
 
 	// filter, when non-nil and Active, restricts visible nodes to those whose
 	// label matches the query (and their ancestors so the hierarchy renders).
-	// Set via ApplyFilter; nil/empty means "show everything per Expanded state".
+	// Set via ApplyFilter; nil/empty means "show everything per expansion state".
 	filter *TreeFilter
-
-	// topIdx is the index into visible of the first row rendered in the tree
-	// panel. Without it an oversized tree (more visible nodes than the panel
-	// can hold) would overflow the bordered frame. Driven off the inner panel
-	// height passed to the renderer — see ensureFocusVisible. Mirrors
-	// cmdbrowser treeModel.topIdx.
-	topIdx int
-}
-
-// ensureFocusVisible adjusts topIdx so the cursor stays within a viewport of
-// the given height (the inner tree-panel height the Frame supplies). Called on
-// every render via ViewPanel so a resize keeps the focused row on screen.
-// Mirrors cmdbrowser treeModel.ensureFocusVisible exactly.
-func (tw *TreeWidget) ensureFocusVisible(height int) {
-	n := len(tw.visible)
-	if n == 0 || height <= 0 {
-		tw.topIdx = 0
-		return
-	}
-	idx := tw.indexOfNode(tw.cursor)
-	if idx < 0 {
-		tw.topIdx = 0
-		return
-	}
-	if idx < tw.topIdx {
-		tw.topIdx = idx
-	} else if idx >= tw.topIdx+height {
-		tw.topIdx = idx - height + 1
-	}
-	maxTop := max(n-height, 0)
-	if tw.topIdx > maxTop {
-		tw.topIdx = maxTop
-	}
-	if tw.topIdx < 0 {
-		tw.topIdx = 0
-	}
-}
-
-// focusRow moves the cursor to the visible node at the given panel-local row
-// (0-based, relative to the first rendered row at topIdx). A click past the
-// last visible node is a no-op rather than snapping the cursor to the final
-// row. Mirrors cmdbrowser treeModel.focusRow exactly.
-func (tw *TreeWidget) focusRow(row int) {
-	if row < 0 {
-		return
-	}
-	idx := tw.topIdx + row
-	if idx >= len(tw.visible) {
-		return
-	}
-	tw.cursor = tw.visible[idx]
 }
 
 // projectDweForTUI returns the user-facing projection of the canonical
@@ -121,90 +129,77 @@ func projectDweForTUI(children []*docs.Node) []*docs.Node {
 
 // NewTreeWidget builds a navigation tree from the given doc roots and locale.
 func NewTreeWidget(roots []docs.DocRoot, locale string) (*TreeWidget, error) {
-	tw := &TreeWidget{roots: roots, locale: locale}
-	if err := tw.rebuild(); err != nil {
+	tw := &TreeWidget{
+		roots:  roots,
+		locale: locale,
+		eng:    tree.New[*TreeNode](docsTreeAdapter{}),
+	}
+	if err := tw.buildGraph(); err != nil {
 		return nil, err
 	}
+	// The invisible root is a consumer detail; its children are the engine roots.
+	tw.eng.SetRoots(tw.root.Children)
+	// Seed group nodes expanded by default (multi-root only). This runs on the
+	// INITIAL build, after SetRoots but before the first RebuildVisible, so the
+	// initial visible set + first-topic load are correct. Because the engine
+	// keys expansion by stable Key, the user's later collapse/expand of a group
+	// then persists across locale Rebuild (which deliberately does NOT re-seed).
+	if len(tw.roots) > 1 {
+		for _, g := range tw.root.Children {
+			if g.IsGroup {
+				tw.eng.SetExpanded(g, true)
+			}
+		}
+	}
+	if len(tw.root.Children) > 0 {
+		tw.eng.SetCursor(tw.root.Children[0])
+	}
+	tw.recomputeVisible()
 	return tw, nil
 }
 
 // Rebuild discards the current tree and re-walks the roots with the given
 // locale, re-parsing per-file Title/Headings so the navigation reflects the
-// translated text. It tries to keep the user on the same row by matching
-// the previous cursor's RootName + Path (and, for heading rows, the heading
-// index in the parent file); when the rebuild changes the tree shape enough
-// that the previous cursor can't be located, it falls back to the first
-// visible row.
+// translated text. Expansion state is preserved automatically: the engine keys
+// it by stable Key, so SetRoots carries it across the rebuild (the docs
+// expansion-across-locale bugfix). The cursor uses a two-tier restore — first
+// the previous row's own Key, then (for a vanished heading) its parent file's
+// Key, and only then ParkCursorIfHidden falls back to the first visible row.
 func (tw *TreeWidget) Rebuild(locale string) error {
-	prev := tw.cursor
-	var prevPath, prevRoot string
-	var prevHeadingIdx = -1
-	var prevWasDir bool
+	prev := tw.eng.Cursor()
+	var prevKey, prevParentFileKey string
 	if prev != nil && prev.Node != nil {
-		prevPath = prev.Node.Path
-		prevRoot = prev.RootName
-		prevWasDir = prev.Node.IsDir
+		prevKey = nodeKey(prev)
 		if prev.Heading != nil && prev.Parent != nil {
-			for i, sib := range prev.Parent.Children {
-				if sib == prev {
-					prevHeadingIdx = i
-					break
-				}
-			}
+			prevParentFileKey = nodeKey(prev.Parent)
 		}
 	}
 
 	tw.locale = locale
-	tw.cursor = nil
-	if err := tw.rebuild(); err != nil {
+	if err := tw.buildGraph(); err != nil {
 		return err
 	}
+	tw.eng.SetRoots(tw.root.Children)
 
-	if prevPath == "" && !prevWasDir {
-		return nil
+	// Two-tier cursor restore (a vanished heading falls back to its parent
+	// file, NOT first-visible). recomputeVisible's ParkCursorIfHidden handles
+	// the final fallback when neither key resolves.
+	if !tw.eng.SetCursorByKey(prevKey) {
+		_ = tw.eng.SetCursorByKey(prevParentFileKey)
 	}
-	if match := tw.findByPath(tw.root, prevRoot, prevPath, prevWasDir); match != nil {
-		if prevHeadingIdx >= 0 && prevHeadingIdx < len(match.Children) {
-			tw.cursor = match.Children[prevHeadingIdx]
-			// Make sure the heading row is reachable in `visible`.
-			expandAncestors(tw.cursor)
-		} else {
-			tw.cursor = match
-			expandAncestors(tw.cursor)
-		}
-		tw.recomputeVisible()
+	if cur := tw.eng.Cursor(); cur != nil {
+		// Make sure the restored row is reachable in the visible set.
+		tw.expandAncestors(cur)
 	}
+	tw.recomputeVisible()
 	return nil
 }
 
-// findByPath walks the tree and returns the file-or-directory node matching
-// the (rootName, path, isDir) tuple. Heading children are skipped — callers
-// re-pick a heading by index off the returned file node.
-func (tw *TreeWidget) findByPath(node *TreeNode, rootName, path string, isDir bool) *TreeNode {
-	if node == nil {
-		return nil
-	}
-	if node.Node != nil && node.Heading == nil &&
-		node.RootName == rootName &&
-		node.Node.Path == path &&
-		node.Node.IsDir == isDir {
-		return node
-	}
-	for _, child := range node.Children {
-		if got := tw.findByPath(child, rootName, path, isDir); got != nil {
-			return got
-		}
-	}
-	return nil
-}
-
-func (tw *TreeWidget) rebuild() error {
+func (tw *TreeWidget) buildGraph() error {
 	tw.root = &TreeNode{
 		Node:     &docs.Node{Name: "root", IsDir: true},
-		Expanded: true,
 		Children: []*TreeNode{},
 	}
-	tw.visible = nil
 
 	useGroups := len(tw.roots) > 1
 
@@ -237,7 +232,7 @@ func (tw *TreeWidget) rebuild() error {
 			groupNode := &docs.Node{Name: groupName, IsDir: true, Path: root.Name}
 			groupTreeNode := &TreeNode{
 				Node:     groupNode,
-				Expanded: true,
+				IsGroup:  true,
 				Parent:   tw.root,
 				Children: []*TreeNode{},
 				RootName: root.Name,
@@ -252,18 +247,12 @@ func (tw *TreeWidget) rebuild() error {
 			}
 		}
 	}
-
-	if tw.cursor == nil && tw.root.Children != nil {
-		tw.cursor = tw.root.Children[0]
-	}
-	tw.recomputeVisible()
 	return nil
 }
 
 func (tw *TreeWidget) addNodeAsChild(node *docs.Node, parent *TreeNode, rootName string) {
 	treeNode := &TreeNode{
 		Node:     node,
-		Expanded: false,
 		Parent:   parent,
 		Children: []*TreeNode{},
 		RootName: rootName,
@@ -297,94 +286,20 @@ func (tw *TreeWidget) addNodeAsChild(node *docs.Node, parent *TreeNode, rootName
 	}
 }
 
+// recomputeVisible rebuilds the engine's visible set and re-parks the cursor.
+// When a non-empty filter query is active it passes a label-match keep
+// predicate (the engine's ancestor-inclusion gives the reduced set); otherwise
+// — including a freshly-opened filter with an empty query — it passes nil so
+// the tree respects the expansion state rather than fully expanding.
 func (tw *TreeWidget) recomputeVisible() {
-	tw.visible = nil
 	if tw.filter != nil && tw.filter.Active && tw.filter.Query != "" {
-		matched := tw.markFilterMatches(tw.root)
-		tw.emitFiltered(tw.root, matched)
-		tw.ensureCursorVisible()
-		return
+		tw.eng.RebuildVisible(func(n *TreeNode) bool {
+			return tw.filter.Matches(nodeLabel(n))
+		})
+	} else {
+		tw.eng.RebuildVisible(nil)
 	}
-	tw.walkVisible(tw.root)
-	tw.ensureCursorVisible()
-}
-
-func (tw *TreeWidget) walkVisible(node *TreeNode) {
-	if node != tw.root {
-		tw.visible = append(tw.visible, node)
-	}
-	if node.Expanded && node.Children != nil {
-		for _, child := range node.Children {
-			tw.walkVisible(child)
-		}
-	}
-}
-
-// markFilterMatches walks the tree and returns a set of nodes that should
-// be visible under the active filter: a node matches itself, OR has any
-// descendant that matches. This is the two-phase counterpart of the old
-// in-place algorithm — the old version only included a node when one of
-// its own ancestors was also added during the same pass, which silently
-// dropped parent files of matching headings (the user saw a lone H2 row
-// floating with no file context, or, worse, nothing at all when ancestor
-// labels did not match the query either).
-func (tw *TreeWidget) markFilterMatches(node *TreeNode) map[*TreeNode]bool {
-	matched := map[*TreeNode]bool{}
-	var walk func(*TreeNode) bool
-	walk = func(n *TreeNode) bool {
-		if n == nil {
-			return false
-		}
-		any := false
-		if n != tw.root && tw.filter.Matches(nodeLabel(n)) {
-			matched[n] = true
-			any = true
-		}
-		for _, c := range n.Children {
-			if walk(c) {
-				matched[n] = true
-				any = true
-			}
-		}
-		return any
-	}
-	walk(node)
-	return matched
-}
-
-// emitFiltered appends matched nodes to tw.visible in pre-order so the
-// rendered tree preserves the hierarchy. The root is never appended (the
-// walkVisible / renderTree contract treats root as a header, not a row).
-func (tw *TreeWidget) emitFiltered(node *TreeNode, matched map[*TreeNode]bool) {
-	if node == nil {
-		return
-	}
-	if node != tw.root {
-		if !matched[node] {
-			return
-		}
-		tw.visible = append(tw.visible, node)
-	}
-	for _, c := range node.Children {
-		tw.emitFiltered(c, matched)
-	}
-}
-
-// ensureCursorVisible reparks the cursor on the first visible node when the
-// current cursor disappears under the active filter.
-func (tw *TreeWidget) ensureCursorVisible() {
-	if tw.cursor == nil {
-		if len(tw.visible) > 0 {
-			tw.cursor = tw.visible[0]
-		}
-		return
-	}
-	if slices.Contains(tw.visible, tw.cursor) {
-		return
-	}
-	if len(tw.visible) > 0 {
-		tw.cursor = tw.visible[0]
-	}
+	tw.eng.ParkCursorIfHidden()
 }
 
 // ApplyFilter swaps in a new filter and recomputes visible. Pass nil to
@@ -395,15 +310,14 @@ func (tw *TreeWidget) ApplyFilter(f *TreeFilter) {
 	tw.recomputeVisible()
 }
 
-// expandAncestors walks the parent chain of n and marks every directory /
-// file-with-headings parent as Expanded so the node stays in the visible
-// set when the filter is dropped. No-op when n is nil or already at the
-// root. Used by the filter Enter path to preserve the user's selection
-// across filter close.
-func expandAncestors(n *TreeNode) {
+// expandAncestors walks the parent chain of n and marks every parent as
+// expanded in the engine so the node stays in the visible set when the filter
+// is dropped. No-op when n is nil. Used by the filter Enter path and the
+// locale Rebuild cursor restore to keep the selection reachable.
+func (tw *TreeWidget) expandAncestors(n *TreeNode) {
 	for cur := n; cur != nil; cur = cur.Parent {
 		if cur.Parent != nil {
-			cur.Parent.Expanded = true
+			tw.eng.SetExpanded(cur.Parent, true)
 		}
 	}
 }
@@ -432,125 +346,59 @@ func nodeLabel(node *TreeNode) string {
 
 // Cursor returns the currently focused tree node.
 func (tw *TreeWidget) Cursor() *TreeNode {
-	return tw.cursor
+	return tw.eng.Cursor()
 }
 
 // SetCursor moves the cursor to the given node.
 func (tw *TreeWidget) SetCursor(node *TreeNode) {
 	if node != nil {
-		tw.cursor = node
+		tw.eng.SetCursor(node)
 	}
+}
+
+// IsExpanded reports whether node is currently expanded in the engine.
+func (tw *TreeWidget) IsExpanded(node *TreeNode) bool {
+	return tw.eng.IsExpanded(node)
+}
+
+// SetExpanded sets node's expansion flag in the engine (no visible rebuild;
+// callers follow with recomputeVisible).
+func (tw *TreeWidget) SetExpanded(node *TreeNode, b bool) {
+	tw.eng.SetExpanded(node, b)
 }
 
 // MoveUp moves the cursor one row up in the visible tree.
-func (tw *TreeWidget) MoveUp() {
-	if tw.cursor == nil {
-		return
-	}
-	idx := tw.indexOfNode(tw.cursor)
-	if idx > 0 {
-		tw.cursor = tw.visible[idx-1]
-	}
-}
+func (tw *TreeWidget) MoveUp() { tw.eng.MoveUp() }
 
 // MoveDown moves the cursor one row down in the visible tree.
-func (tw *TreeWidget) MoveDown() {
-	if tw.cursor == nil {
-		return
-	}
-	idx := tw.indexOfNode(tw.cursor)
-	if idx < len(tw.visible)-1 {
-		tw.cursor = tw.visible[idx+1]
-	}
-}
+func (tw *TreeWidget) MoveDown() { tw.eng.MoveDown() }
 
 // MoveStart moves the cursor to the first visible row.
-func (tw *TreeWidget) MoveStart() {
-	if len(tw.visible) > 0 {
-		tw.cursor = tw.visible[0]
-	}
-}
+func (tw *TreeWidget) MoveStart() { tw.eng.MoveHome() }
 
 // MoveEnd moves the cursor to the last visible row.
-func (tw *TreeWidget) MoveEnd() {
-	if len(tw.visible) > 0 {
-		tw.cursor = tw.visible[len(tw.visible)-1]
-	}
-}
-
-func (tw *TreeWidget) indexOfNode(node *TreeNode) int {
-	for i, n := range tw.visible {
-		if n == node {
-			return i
-		}
-	}
-	return -1
-}
+func (tw *TreeWidget) MoveEnd() { tw.eng.MoveEnd() }
 
 // Collapse implements ←/h directional semantics: if the cursor node is
 // expanded, collapse it; otherwise step the cursor up to its parent. Heading
-// rows are leaves (Expanded is always false) so they always fall through to
-// the "step to parent" branch. Nodes at the root level (no parent above root)
-// are no-ops. Matches cmdbrowser's onLeft semantics.
-func (tw *TreeWidget) Collapse() {
-	node := tw.cursor
-	if node == nil || node.Node == nil {
-		return
-	}
-	// Headings are always "collapsed" (no children, Expanded irrelevant).
-	// Non-heading expandable nodes: collapse if expanded, step to parent otherwise.
-	if node.Heading == nil && node.Expanded {
-		node.Expanded = false
-		tw.recomputeVisible()
-		return
-	}
-	if node.Parent != nil && node.Parent != tw.root {
-		tw.cursor = node.Parent
-	}
-}
+// rows are leaves so they always fall through to the "step to parent" branch.
+// Nodes at the root level (no parent above root) are no-ops.
+func (tw *TreeWidget) Collapse() { tw.eng.Collapse() }
 
 // Expand implements →/l directional semantics: if the cursor node is
 // collapsed and has children, expand it; if already expanded, step the
 // cursor into the first child. Heading rows (leaves) and nodes without
-// children are no-ops. Matches cmdbrowser's onRight semantics.
-func (tw *TreeWidget) Expand() {
-	node := tw.cursor
-	if node == nil || node.Node == nil || node.Heading != nil {
-		return
-	}
-	if len(node.Children) == 0 {
-		return
-	}
-	if !node.Expanded {
-		node.Expanded = true
-		tw.recomputeVisible()
-		return
-	}
-	if len(node.Children) > 0 {
-		tw.cursor = node.Children[0]
-	}
-}
+// children are no-ops.
+func (tw *TreeWidget) Expand() { tw.eng.Expand() }
 
 // Toggle flips the expanded state of the cursor when it sits on a directory
 // or on a file that has heading sub-rows. Heading rows themselves are leaves
 // and the call is a no-op there.
-func (tw *TreeWidget) Toggle() {
-	if tw.cursor == nil || tw.cursor.Node == nil {
-		return
-	}
-	if !tw.cursor.Node.IsDir && len(tw.cursor.Children) == 0 {
-		return
-	}
-	if tw.cursor.Heading != nil {
-		return
-	}
-	tw.cursor.Expanded = !tw.cursor.Expanded
-	tw.recomputeVisible()
-}
+func (tw *TreeWidget) Toggle() { tw.eng.Toggle() }
 
 // VisibleNodes returns the slice of currently visible tree rows.
 func (tw *TreeWidget) VisibleNodes() []*TreeNode {
-	return tw.visible
+	return tw.eng.VisibleNodes()
 }
 
 // GetPath returns the file path for the given node, or empty string for nil/dir.

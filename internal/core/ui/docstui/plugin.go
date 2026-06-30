@@ -290,7 +290,7 @@ func (b *browser) ViewPanel(id tui.PanelID, inner tui.Region) string {
 			return b.renderTreeFiltered(inner)
 		}
 		// Keep the focused row on screen across resizes before clipping.
-		b.Tree.ensureFocusVisible(inner.Height)
+		b.Tree.eng.EnsureFocusVisible(inner.Height)
 		return b.Tree.renderRegion(inner, b.active == panelTree)
 	case panelViewport:
 		b.viewportInner = inner
@@ -440,7 +440,7 @@ func (b *browser) commitFilter() tea.Cmd {
 	var picked *TreeNode
 	if b.Tree != nil {
 		picked = b.Tree.Cursor()
-		expandAncestors(picked)
+		b.Tree.expandAncestors(picked)
 	}
 	b.Filter.Close()
 	if b.Tree != nil {
@@ -463,8 +463,8 @@ func (b *browser) exitFilter() {
 	}
 	saved := b.filterSavedCursor
 	if b.Tree != nil && saved != nil {
-		// Set the cursor before ApplyFilter so ensureCursorVisible in
-		// recomputeVisible keeps it (the tree uses pointer identity).
+		// Set the cursor before ApplyFilter so recomputeVisible's
+		// ParkCursorIfHidden keeps it (the engine uses pointer identity).
 		b.Tree.SetCursor(saved)
 	}
 	b.Filter.Close()
@@ -505,7 +505,7 @@ func (b *browser) renderTreeFiltered(inner tui.Region) string {
 	treeRegion := inner
 	treeRegion.Height = max(inner.Height-1, 0)
 	if b.Tree != nil {
-		b.Tree.ensureFocusVisible(treeRegion.Height)
+		b.Tree.eng.EnsureFocusVisible(treeRegion.Height)
 	}
 	body := ""
 	if b.Tree != nil {
@@ -550,7 +550,7 @@ func (b *browser) handlePanelClick(msg tui.PanelClickMsg) tea.Cmd {
 		return nil
 	}
 	if msg.Panel == panelTree && b.Tree != nil {
-		b.Tree.focusRow(msg.Y)
+		b.Tree.eng.FocusRow(msg.Y)
 		return b.afterTreeMove()
 	}
 	// Viewport clicks are intentionally no-op: the viewport widget has no

@@ -712,15 +712,15 @@ func TestBrowser_FilterEnterCommitsAndExpandsAncestors(t *testing.T) {
 
 	// Find a node inside a collapsed directory.
 	var child *TreeNode
-	for _, n := range b.Tree.visible {
+	for _, n := range b.Tree.VisibleNodes() {
 		if n.Node != nil && n.Node.IsDir {
 			// Expand so we can access children.
-			n.Expanded = true
+			b.Tree.SetExpanded(n, true)
 			b.Tree.recomputeVisible()
 			break
 		}
 	}
-	for _, n := range b.Tree.visible {
+	for _, n := range b.Tree.VisibleNodes() {
 		if n.Node != nil && !n.Node.IsDir && n.Parent != nil && n.Parent != b.Tree.root {
 			child = n
 			break
@@ -732,7 +732,7 @@ func TestBrowser_FilterEnterCommitsAndExpandsAncestors(t *testing.T) {
 
 	// Now collapse the parent so the child is hidden.
 	if child.Parent != nil {
-		child.Parent.Expanded = false
+		b.Tree.SetExpanded(child.Parent, false)
 		b.Tree.recomputeVisible()
 	}
 
@@ -941,7 +941,7 @@ func TestBrowser_PanelClickTreePastLastRowIsNoop(t *testing.T) {
 	}
 
 	// Set cursor to the first node so we have a known starting position.
-	b.Tree.focusRow(0)
+	b.Tree.eng.FocusRow(0)
 	before := b.Tree.Cursor()
 
 	// Click at row = len(visible) (one past the last row) — must be a no-op.

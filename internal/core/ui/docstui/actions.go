@@ -186,7 +186,7 @@ func (b *browser) navLeft() {
 		return
 	}
 	b.Tree.Collapse()
-	b.Tree.ensureFocusVisible(b.treeInner.Height)
+	b.Tree.eng.EnsureFocusVisible(b.treeInner.Height)
 }
 
 // navRight implements →/l in the tree: expand the focused node, or step the
@@ -197,7 +197,7 @@ func (b *browser) navRight() {
 		return
 	}
 	b.Tree.Expand()
-	b.Tree.ensureFocusVisible(b.treeInner.Height)
+	b.Tree.eng.EnsureFocusVisible(b.treeInner.Height)
 }
 
 // navHome jumps to the top of the active panel.
@@ -267,7 +267,7 @@ func (b *browser) navPage(delta int) tea.Cmd {
 // topicLoadedMsg handler in Task 6 applies the rendered content).
 func (b *browser) afterTreeMove() tea.Cmd {
 	if b.Tree != nil {
-		b.Tree.ensureFocusVisible(b.treeInner.Height)
+		b.Tree.eng.EnsureFocusVisible(b.treeInner.Height)
 	}
 	return b.selectCursor()
 }
@@ -281,7 +281,7 @@ func (b *browser) onEnter() (tea.Cmd, bool) {
 	}
 	node := b.Tree.Cursor()
 	if b.Tree.IsDir(node) || (node.Heading == nil && len(node.Children) > 0) {
-		if !node.Expanded {
+		if !b.Tree.IsExpanded(node) {
 			b.Tree.Toggle()
 		}
 		loadCmd := b.selectCursor()

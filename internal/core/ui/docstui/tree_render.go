@@ -35,31 +35,14 @@ func nodeDepth(node *TreeNode) int {
 // focused and muted when not, matching the Frame's border-colour signal.
 func (tw *TreeWidget) renderRegion(inner tui.Region, panelFocused bool) string {
 	full := tw.renderAllRows(inner.Width, panelFocused)
-	return tw.clipToViewport(full, inner.Height)
-}
-
-// clipToViewport slices the rendered tree to height rows starting at topIdx.
-// The tree renderer emits exactly one line per visible node (labels are
-// truncated, never wrapped), so line indices align with visible indices —
-// strings.Split is safe to use as a window. Mirrors cmdbrowser
-// treeModel.clipToViewport.
-func (tw *TreeWidget) clipToViewport(full string, height int) string {
-	if height <= 0 {
-		return ""
-	}
-	lines := strings.Split(full, "\n")
-	if len(lines) <= height {
-		return full
-	}
-	top := min(max(tw.topIdx, 0), len(lines)-height)
-	return strings.Join(lines[top:top+height], "\n")
+	return tw.eng.Clip(full, inner.Height)
 }
 
 // renderAllRows emits one styled line per visible node (no clipping). Labels
 // are truncated to fit innerWidth. Operates on the TreeWidget's own state so
 // ViewPanel can render without the old Model's geometry fields.
 func (tw *TreeWidget) renderAllRows(innerWidth int, panelFocused bool) string {
-	visible := tw.visible
+	visible := tw.eng.VisibleNodes()
 	if len(visible) == 0 {
 		return ""
 	}
@@ -67,13 +50,15 @@ func (tw *TreeWidget) renderAllRows(innerWidth int, panelFocused bool) string {
 	accent := lipgloss.NewStyle().Foreground(lipgloss.Color(styles.ColorAccent()))
 	muted := lipgloss.NewStyle().Foreground(lipgloss.Color(styles.ColorMuted()))
 
+	cur := tw.eng.Cursor()
+
 	var sb strings.Builder
 	for i, node := range visible {
 		depth := nodeDepth(node)
 		indent := strings.Repeat("  ", depth)
 
 		cursor := "  "
-		if node == tw.cursor {
+		if node == cur {
 			cursor = "> "
 		}
 
@@ -86,7 +71,7 @@ func (tw *TreeWidget) renderAllRows(innerWidth int, panelFocused bool) string {
 				glyph = "· "
 			}
 			label = node.Heading.Text
-		case node.Node.IsDir && node.Expanded:
+		case node.Node.IsDir && tw.eng.IsExpanded(node):
 			glyph = "▼ "
 			label = nodeLabel(node)
 		case node.Node.IsDir:
@@ -94,7 +79,7 @@ func (tw *TreeWidget) renderAllRows(innerWidth int, panelFocused bool) string {
 			label = nodeLabel(node)
 		default:
 			if len(node.Children) > 0 {
-				if node.Expanded {
+				if tw.eng.IsExpanded(node) {
 					glyph = "▾ "
 				} else {
 					glyph = "▸ "
@@ -123,7 +108,7 @@ func (tw *TreeWidget) renderAllRows(innerWidth int, panelFocused bool) string {
 		}
 
 		line := indent + styledCursor + styledGlyph + label
-		if node == tw.cursor && panelFocused {
+		if node == cur && panelFocused {
 			line = accent.Render(line)
 		}
 

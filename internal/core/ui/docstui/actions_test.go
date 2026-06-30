@@ -270,9 +270,9 @@ func TestTreeWidget_Collapse_CollapsesExpandedNode(t *testing.T) {
 	}
 
 	// Expand it first.
-	node.Expanded = true
+	b.Tree.SetExpanded(node, true)
 	b.Tree.recomputeVisible()
-	if !node.Expanded {
+	if !b.Tree.IsExpanded(node) {
 		t.Fatal("pre-condition: node should be expanded")
 	}
 
@@ -280,7 +280,7 @@ func TestTreeWidget_Collapse_CollapsesExpandedNode(t *testing.T) {
 	b.active = panelTree
 	b.HandleAction(actionTreeCollapse)
 
-	if node.Expanded {
+	if b.Tree.IsExpanded(node) {
 		t.Error("h (actionTreeCollapse) on expanded node: node is still expanded; expected collapsed")
 	}
 }
@@ -292,7 +292,7 @@ func TestTreeWidget_Collapse_StepsToParentWhenAlreadyCollapsed(t *testing.T) {
 	if node == nil || len(node.Children) == 0 {
 		t.Skip("no expandable node in test tree")
 	}
-	node.Expanded = true
+	b.Tree.SetExpanded(node, true)
 	b.Tree.recomputeVisible()
 
 	// Move cursor to the first heading child (which has no children and is "collapsed").
@@ -319,13 +319,13 @@ func TestTreeWidget_Expand_ExpandsCollapsedNode(t *testing.T) {
 		t.Skip("no expandable node in test tree")
 	}
 	// Ensure it's collapsed.
-	node.Expanded = false
+	b.Tree.SetExpanded(node, false)
 	b.Tree.recomputeVisible()
 
 	b.active = panelTree
 	b.HandleAction(actionTreeExpand)
 
-	if !node.Expanded {
+	if !b.Tree.IsExpanded(node) {
 		t.Error("l (actionTreeExpand) on collapsed node: node is still collapsed; expected expanded")
 	}
 }
@@ -337,7 +337,7 @@ func TestTreeWidget_Expand_StepsIntoFirstChildWhenExpanded(t *testing.T) {
 		t.Skip("no expandable node in test tree")
 	}
 	// Expand the node first.
-	node.Expanded = true
+	b.Tree.SetExpanded(node, true)
 	b.Tree.recomputeVisible()
 
 	b.active = panelTree
@@ -363,19 +363,19 @@ func TestHandleAction_DirectionalDoesNotToggle(t *testing.T) {
 	b.active = panelTree
 
 	// Start collapsed — h should NOT expand it (old Toggle would have).
-	node.Expanded = false
+	b.Tree.SetExpanded(node, false)
 	b.Tree.recomputeVisible()
 	b.HandleAction(actionTreeCollapse) // h on collapsed
-	if node.Expanded {
+	if b.Tree.IsExpanded(node) {
 		t.Error("h on collapsed node expanded it (old Toggle behavior); expected step-to-parent only")
 	}
 
 	// Start expanded — l should NOT collapse it (old Toggle would have).
-	node.Expanded = true
+	b.Tree.SetExpanded(node, true)
 	b.Tree.recomputeVisible()
 	b.Tree.SetCursor(node)
 	b.HandleAction(actionTreeExpand) // l on expanded
-	if !node.Expanded {
+	if !b.Tree.IsExpanded(node) {
 		t.Error("l on expanded node collapsed it (old Toggle behavior); expected step-into-child only")
 	}
 }
@@ -388,7 +388,7 @@ func TestTreeWidgetCollapse_HeadingRowStepsToParent(t *testing.T) {
 	if node == nil || len(node.Children) == 0 {
 		t.Skip("no expandable node")
 	}
-	node.Expanded = true
+	b.Tree.SetExpanded(node, true)
 	b.Tree.recomputeVisible()
 	child := node.Children[0] // heading child (leaf — no children, Expanded always false)
 	b.Tree.SetCursor(child)
@@ -416,7 +416,7 @@ func TestTreeWidgetExpand_NoOpOnNodeWithNoChildren(t *testing.T) {
 	if b.Tree.Cursor() != cursorBefore {
 		t.Error("Expand on leaf node moved cursor; expected no-op")
 	}
-	if node.Expanded {
+	if b.Tree.IsExpanded(node) {
 		t.Error("Expand on leaf node set Expanded=true; expected no change")
 	}
 }

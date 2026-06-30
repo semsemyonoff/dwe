@@ -357,7 +357,7 @@ func TestDocs_MouseRoutingViaFrame(t *testing.T) {
 			t.Skip("need at least 2 visible nodes")
 		}
 		// Ensure cursor starts at row 0.
-		b.Tree.focusRow(0)
+		b.Tree.eng.FocusRow(0)
 		before := b.Tree.Cursor()
 
 		_, err := tui.RenderFrameAfterSetup(b, goldenRunOpts, 80, goldenFrameHeight,

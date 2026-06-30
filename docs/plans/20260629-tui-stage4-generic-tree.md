@@ -391,26 +391,26 @@ default-expanded in the engine (see Task 3) since the engine's map starts empty.
 - Modify: `internal/core/ui/docstui/tree_widget_test.go`, `tree_index_test.go`,
   `tree_render_test.go`, `actions_test.go`, `plugin_test.go`
 
-- [ ] add a docstui `Adapter`: `Children` → `node.Children`; **`Key` → kind-prefixed**
+- [x] add a docstui `Adapter`: `Children` → `node.Children`; **`Key` → kind-prefixed**
       (`group\x00<root>` / `node\x00<root>\x00<path>` / `heading\x00<root>\x00<path>\x00<idx>`,
       idx = heading sibling position — Decision 2 / Codex #2); **`Expandable` → true for any
       non-heading directory PLUS files with heading rows** (Codex #4 — NOT "dir-with-children";
       empty/index-only dirs must stay Enter/Toggle-able as today, `actions.go:275` +
       `tree_widget.go:537`), false for heading rows. Give `TreeWidget` an
       `*tree.Engine[*TreeNode]`
-- [ ] **DELETE the `Expanded` field** on `TreeNode`; route every read/write to the engine:
+- [x] **DELETE the `Expanded` field** on `TreeNode`; route every read/write to the engine:
       `tree_widget.go:316` (walk) → engine visible walk; `:406` (`expandAncestors`) →
       `e.SetExpanded(parent,true)`; `:502-503`,`:524-525` (Collapse/Expand) → engine;
       `:547` (Toggle) → `e.Toggle`; `tree_render.go:89,97` + `actions.go:284` →
       `e.IsExpanded(node)`; **`tree_render.go:76,126`** (`node == tw.cursor`) → `e.Cursor()`
-- [ ] **seed default-expanded multi-root group nodes**: today `groupTreeNode` is created
+- [x] **seed default-expanded multi-root group nodes**: today `groupTreeNode` is created
       `Expanded: true` (`tree_widget.go:240`); with an empty engine map those groups would
       render collapsed. In `NewTreeWidget` (initial build only, NOT `Rebuild`) call
       `e.SetExpanded(groupNode, true)` for each group when `len(tw.roots) > 1`, so the map
       then persists user collapse/expand across locale `Rebuild`. **Ordering matters**: seed
       group expansion **after `SetRoots` but BEFORE the first `RebuildVisible(nil)`**, then
       `ParkCursorIfHidden()` — so the initial visible set + first-topic load are correct
-- [ ] rewrite `Rebuild(locale)` to rebuild the node graph then call `e.SetRoots(newRoots)`;
+- [x] rewrite `Rebuild(locale)` to rebuild the node graph then call `e.SetRoots(newRoots)`;
       DELETE the manual `findByPath` transfer but **preserve the two-tier cursor fallback**
       (Codex #1): after `SetRoots`, `e.SetCursorByKey(prevHeadingKey)` → on false
       `e.SetCursorByKey(prevParentFileKey)` → on false `e.ParkCursorIfHidden()` (a vanished
@@ -418,25 +418,25 @@ default-expanded in the engine (see Task 3) since the engine's map starts empty.
       graph-construction (`rebuild`/`addNodeAsChild`/projection/index-folding/headings); do
       **not** re-seed group expansion here (preserve user collapse — keys are stable so the
       engine map carries it across `SetRoots`)
-- [ ] replace `markFilterMatches`/`emitFiltered` with the keep-predicate path, **guarding the
+- [x] replace `markFilterMatches`/`emitFiltered` with the keep-predicate path, **guarding the
       empty-query branch** (Codex #3): call `e.RebuildVisible(nil)` when the filter is nil,
       inactive, OR active-with-empty-query (mirrors today's `filter.Active && Query != ""`
       gate at `tree_widget.go:300` — `Matches("")` returns true, so a naive keep would emit
       the whole tree); use `keep = func(n) bool { return tw.filter.Matches(nodeLabel(n)) }`
       ONLY for a non-empty active query. Follow every rebuild with `e.ParkCursorIfHidden()`.
       Keep `TreeFilter`, `/`-UX, `ApplyFilter`, ancestor-expand-on-commit
-- [ ] delegate `MoveUp/MoveDown/MoveStart/MoveEnd/Collapse/Expand/Toggle/Cursor/SetCursor/
+- [x] delegate `MoveUp/MoveDown/MoveStart/MoveEnd/Collapse/Expand/Toggle/Cursor/SetCursor/
       VisibleNodes` to the engine; DELETE the now-engine-owned local copies +
       `topIdx`/`ensureFocusVisible`/`focusRow`/`clipToViewport` (use engine)
-- [ ] adapt docs tree tests to `e.IsExpanded`; **add a test asserting expansion + cursor
+- [x] adapt docs tree tests to `e.IsExpanded`; **add a test asserting expansion + cursor
       survive a locale `Rebuild`** (the intended bugfix); **multi-root initial-render test:
       group nodes expanded by default**; **heading-vanish test: cursor on a heading that
       disappears after `Rebuild` falls back to the PARENT FILE, not first-visible** (Codex #1);
       **empty-query filter test: opening `/` with no query keeps the expansion-respecting
       tree, NOT a fully-expanded one** (Codex #3); **empty/index-only directory stays
       Enter/Toggle-able** (Codex #4); preserve heading/index-folding/multi-root coverage
-- [ ] verify `docstui/plugin_golden_test.go` goldens are **byte-for-byte unchanged**
-- [ ] `make test` — must pass before Task 4
+- [x] verify `docstui/plugin_golden_test.go` goldens are **byte-for-byte unchanged**
+- [x] `make test` — must pass before Task 4
 
 ### Task 4: Update internals documentation (Step D)
 
