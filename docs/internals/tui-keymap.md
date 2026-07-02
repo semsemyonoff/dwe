@@ -155,18 +155,48 @@ and viewport panels.
 
 **Status dashboard** (`internal/core/ui/statustui/`):
 
-| Key            | Current description |
-|----------------|---------------------|
-| `tab`, `right` | Next tab            |
-| `shift+tab`, `left` | Prev tab       |
-| `1`            | Services tab        |
-| `2`            | Deploy tab          |
-| `3`            | Topology tab        |
-| `4`            | Git tab             |
-| `5`            | Daemons tab         |
-| `r`            | Reload              |
+As of TUI Stage 5b this is a `tui.Plugin` (single panel: tab strip + shared
+viewport). Plugin-local actions registered via `Actions()`, **Tabs** section:
 
-Tab-jump keys (`1`–`5`) are plugin-local and have no stdlib equivalent.
+| Key            | Description |
+|----------------|-------------|
+| `left`, `h`    | Prev tab    |
+| `right`, `l`   | Next tab    |
+| `1`            | Services tab |
+| `2`            | Deploy tab  |
+| `3`            | Topology tab |
+| `4`            | Git tab     |
+| `5`            | Daemons tab |
+
+Tab-jump keys (`1`–`5`) and prev/next are plugin-local and have no stdlib
+equivalent. `tab.prev`/`tab.next` no-op (return `(nil, true)`) until the first
+load completes, mirroring the legacy guard against navigating before `m.tabs` is
+populated.
+
+**Reload**: `ctrl+r` only (stdlib `ActionReload`). The pre-migration `r` binding
+is dropped — no alias kept, mirroring the docs browser's `r`→`ctrl+r` change.
+
+**Intentional keymap change (Stage 5b)**: the pre-migration status dashboard bound
+`tab`/`shift+tab` to next/prev tab. Since `tab`/`shift+tab` are framework
+`focus.next`/`focus.prev` built-ins (§1.1), and this surface has only one panel,
+they are now harmless no-ops instead of switching tabs. Tab navigation moves
+entirely to `left`/`right` (+`h`/`l`) and `1`–`5`, matching the Tabs table above.
+
+**Accepted help-modal wart**: the Frame help modal still lists Navigation
+`focus.next`/`focus.prev` (`tab`/`shift+tab`) even though they are inert on this
+single-panel surface — the built-ins are always registered by `NewRegistry` and
+are not something a plugin can opt out of. Not a blocker; documented here per the
+Stage 5b plan.
+
+**Status line**: the Frame owns brand/project (left) and the `?` help hint
+(right); the plugin's `StatusContext()` supplies only the middle segment (health
+indicator + "loaded X ago" / loading / reloading state), replacing the old
+hand-rolled title bar + status bar chrome.
+
+**Narrow terminal fallback**: below the framework's minimum width, `tui.Run`
+returns `tui.ErrTooNarrow`; `statustui.Run` passes it up and `cli/status`
+renders the plain-text status (`renderDefaultStatus`) instead of a blocking
+"too small" screen — mirrors `--no-tui` output.
 
 ---
 

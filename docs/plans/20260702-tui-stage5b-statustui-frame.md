@@ -464,16 +464,16 @@ task so the package compiles at the end.
 - Modify: `docs/internals/tui-keymap.md`
 - Modify: `docs/internals/packages.md`
 
-- [ ] `tui-keymap.md` § 1.3 "Status dashboard": replace the old (`tab`/`shift+tab`/`1-5`/`r`)
+- [x] `tui-keymap.md` § 1.3 "Status dashboard": replace the old (`tab`/`shift+tab`/`1-5`/`r`)
       table with `left`/`h` prev, `right`/`l` next, `1`–`5` jump, `ctrl+r` reload; note
       `tab`/`shift+tab` are framework focus no-ops on the single-panel surface; document the
       intentional removal of `tab`=next-tab (mirror the docs `r`→`ctrl+r` note); note the
       accepted help-modal wart (focus.next/prev listed but inert)
-- [ ] `packages.md`: fold statustui into the existing `tui.Plugin` framework write-up —
+- [x] `packages.md`: fold statustui into the existing `tui.Plugin` framework write-up —
       statustui joins cmdbrowser/docstui as a Frame consumer; single-panel + tabs-as-body-
       content model; narrow→`renderDefaultStatus` fallback; reload/YOffset preserved
-- [ ] run `make build` so `internal/core/docs/embedded/` copies are regenerated (not stale)
-- [ ] run `go test ./internal/core/docs/...` (docs subsystem) — must pass
+- [x] run `make build` so `internal/core/docs/embedded/` copies are regenerated (not stale)
+- [x] run `go test ./internal/core/docs/...` (docs subsystem) — must pass
 
 ### Task 12: Verify acceptance criteria
 - [ ] all `Plugin` methods implemented; `var _ tui.Plugin` assertion compiles
