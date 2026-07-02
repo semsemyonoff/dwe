@@ -148,15 +148,16 @@ keeps the diff reviewable and the golden comparison meaningful.
 **Files:**
 - Modify (only if unavoidable): `internal/core/ui/statustui/tui_test.go`
 
-- [ ] run the suite: `make embedded-docs` once, then `go test ./internal/core/ui/statustui/...`
-- [ ] confirm every existing golden passes **byte-identical** (no re-baselining)
-- [ ] if a golden shifts: treat as a mapping bug — fix the v2 call so output matches; do NOT
+- [x] run the suite: `make embedded-docs` once, then `go test ./internal/core/ui/statustui/...`
+- [x] confirm every existing golden passes **byte-identical** (no re-baselining)
+- [x] if a golden shifts: treat as a mapping bug — fix the v2 call so output matches; do NOT
       accept the shift. Only if a v2 API difference is genuinely unavoidable, update the
       golden AND add a `⚠️`-prefixed note here explaining the exact difference and why it is
       forced (e.g. a documented v2 rendering change), so Stage 5b inherits the rationale
-- [ ] verify existing behavior tests (reload/YOffset/tab-switch, loading, too-small,
+      (no golden shifted — all pass byte-identical, no re-baselining needed)
+- [x] verify existing behavior tests (reload/YOffset/tab-switch, loading, too-small,
       spinner) still pass unchanged
-- [ ] run `make lint` — `golangci-lint` clean (no unused import, gofmt/goimports satisfied)
+- [x] run `make lint` — `golangci-lint` clean (no unused import, gofmt/goimports satisfied)
 
 ### Task 3: Verify acceptance criteria
 - [ ] verify the only change is the lipgloss import + its call sites in `tui.go`
