@@ -160,13 +160,16 @@ keeps the diff reviewable and the golden comparison meaningful.
 - [x] run `make lint` — `golangci-lint` clean (no unused import, gofmt/goimports satisfied)
 
 ### Task 3: Verify acceptance criteria
-- [ ] verify the only change is the lipgloss import + its call sites in `tui.go`
+- [x] verify the only change is the lipgloss import + its call sites in `tui.go`
       (`git diff --stat` shows `tui.go` and at most a golden note in `tui_test.go`)
-- [ ] verify no layout/keymap/async/reload behavior changed (goldens + behavior tests green)
-- [ ] verify `render/` (v1 lipgloss) was NOT touched: `git diff --name-only` excludes
-      `internal/core/ui/render/`
-- [ ] run full suite: `make test`
-- [ ] run `make lint`
+      (`git diff 3e007e50 950a97b1` shows only `tui.go` changed — the v2 API was
+      source-compatible so the import swap alone covered all 22 call sites; `tui_test.go`
+      untouched, no golden note needed)
+- [x] verify no layout/keymap/async/reload behavior changed (goldens + behavior tests green)
+- [x] verify `render/` (v1 lipgloss) was NOT touched: `git diff --name-only` excludes
+      `internal/core/ui/render/` (confirmed — render/ absent from the diff)
+- [x] run full suite: `make test` (ALL PASS)
+- [x] run `make lint` (golangci-lint: 0 issues)
 
 ### Task 4: [Final] Update documentation & wrap up
 - [ ] no user-facing doc changes (internal chrome only); confirm `docs/internals/packages.md`
