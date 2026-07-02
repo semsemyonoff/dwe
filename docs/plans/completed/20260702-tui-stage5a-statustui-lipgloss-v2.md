@@ -172,10 +172,12 @@ keeps the diff reviewable and the golden comparison meaningful.
 - [x] run `make lint` (golangci-lint: 0 issues)
 
 ### Task 4: [Final] Update documentation & wrap up
-- [ ] no user-facing doc changes (internal chrome only); confirm `docs/internals/packages.md`
+- [x] no user-facing doc changes (internal chrome only); confirm `docs/internals/packages.md`
       statustui note does not assert "lipgloss v1" anywhere — if it does, correct it to v2
-- [ ] CLAUDE.md: no new pattern to record (Stage 5b will carry the framework note)
-- [ ] move this plan to `docs/plans/completed/`
+      (confirmed — the statustui entry at packages.md:204 describes it as "bubbletea v2" and
+      makes no lipgloss-v1 assertion; nothing to correct)
+- [x] CLAUDE.md: no new pattern to record (Stage 5b will carry the framework note)
+- [x] move this plan to `docs/plans/completed/`
 
 ## Post-Completion
 
