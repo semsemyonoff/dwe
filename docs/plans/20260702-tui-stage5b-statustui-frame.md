@@ -339,21 +339,21 @@ even though they no-op on a single panel. Acceptable — not a blocker; noted in
 - Modify: `internal/core/ui/statustui/plugin.go`
 - Modify: `internal/core/ui/statustui/plugin_test.go`
 
-- [ ] implement `Update(msg)`: keep the reload/`YOffset` state machine **verbatim** — the
+- [x] implement `Update(msg)`: keep the reload/`YOffset` state machine **verbatim** — the
       `tabsLoadedMsg` handling (stale-gen drop, tabs assign, loadedAt/healthIndicator, YOffset
       restore when `reloadGen==gen && reloadActive==active`, else `GotoTop`) and `spinner.TickMsg`
-- [ ] the **plugin's** `WindowSizeMsg` handling must NOT copy the legacy sizing (old
+- [x] the **plugin's** `WindowSizeMsg` handling must NOT copy the legacy sizing (old
       `tui.go:141–149`), which called `viewportHeight()`→`lipgloss.Height(renderStatusBar())`
       and sized from raw `m.width-2` (ignores Frame border/panel chrome). Instead store the
       Frame-supplied width and let `ViewPanel`/`Resize` own viewport dimensions (docstui pattern:
       recompute width on `WindowSizeMsg`, apply `SetDimensions` in `ViewPanel`). The legacy
       `model.Update`'s own `WindowSizeMsg` block is left intact (live launch path until Task 7).
       "Verbatim" applies ONLY to the reload/`YOffset`/`setActiveTab` logic — never to sizing.
-- [ ] ensure unmatched messages still delegate to `viewport.Update` for scroll
-- [ ] port the existing `tui_test.go` reload/YOffset assertions to drive `Plugin.Update`
+- [x] ensure unmatched messages still delegate to `viewport.Update` for scroll
+- [x] port the existing `tui_test.go` reload/YOffset assertions to drive `Plugin.Update`
       directly (reload preserves YOffset on the same tab; switching tabs resets to top)
-- [ ] port loading→loaded transition + stale-generation-drop tests
-- [ ] run tests — must pass before next task
+- [x] port loading→loaded transition + stale-generation-drop tests
+- [x] run tests — must pass before next task
 
 ### Task 6: Mouse — tab clicks & wheel scroll
 

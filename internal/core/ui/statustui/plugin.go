@@ -6,6 +6,7 @@ import (
 	"strings"
 	"time"
 
+	"charm.land/bubbles/v2/spinner"
 	tea "charm.land/bubbletea/v2"
 	"charm.land/lipgloss/v2"
 
@@ -88,8 +89,59 @@ func (p *plugin) CapturingInput() bool { return false }
 // computed in ViewPanel, from the per-panel inner region it is given there.
 func (p *plugin) Resize(body tui.Region) { p.body = body }
 
-// Update implements tui.Plugin. Stubbed here; filled in Task 5.
-func (p *plugin) Update(msg tea.Msg) tea.Cmd { return nil }
+// Update implements tui.Plugin. tabsLoadedMsg handling (stale-gen drop, tabs
+// assign, loadedAt/healthIndicator, YOffset restore-on-matching-reload else
+// GotoTop) and spinner.TickMsg are preserved VERBATIM from the legacy
+// model.Update — see the plan's single most important invariant. Unmatched
+// messages (e.g. viewport nav keys the registry left unbound) delegate to
+// viewport.Update for scroll handling.
+func (p *plugin) Update(msg tea.Msg) tea.Cmd {
+	m := p.m
+
+	switch msg := msg.(type) {
+	case tea.WindowSizeMsg:
+		// The Frame already called Resize(body) with the new inner region
+		// before forwarding this message (see frame.go), and ViewPanel
+		// resizes the viewport from its per-panel inner region on every
+		// render. Unlike the legacy model.Update, this must NOT recompute
+		// viewport dimensions from raw terminal width/height (that ignored
+		// the Frame's border/panel chrome) — sizing is owned by
+		// Resize/ViewPanel, not here.
+		return nil
+
+	case tabsLoadedMsg:
+		// Drop stale messages from older reloads.
+		if msg.gen != m.loadGen {
+			return nil
+		}
+		m.tabs = msg.tabs
+		m.reloadAt = msg.loadedAt
+		m.healthIndicator = msg.healthIndicator
+		m.loading = false
+		m.reloading = false
+
+		// Restore YOffset if this is a reload that matches the active tab.
+		if m.reloadGen == msg.gen && m.reloadActive == m.active && len(m.tabs) > m.active {
+			m.viewport.SetContent(m.tabs[m.active].content)
+			m.viewport.SetYOffset(m.reloadYOffset)
+		} else if len(m.tabs) > m.active {
+			m.viewport.SetContent(m.tabs[m.active].content)
+			m.viewport.GotoTop()
+		}
+		m.reloadGen = 0
+		return nil
+
+	case spinner.TickMsg:
+		var cmd tea.Cmd
+		m.spinner, cmd = m.spinner.Update(msg)
+		return cmd
+	}
+
+	// Delegate unmatched messages to viewport for scroll handling.
+	var cmd tea.Cmd
+	m.viewport, cmd = m.viewport.Update(msg)
+	return cmd
+}
 
 // ViewPanel implements tui.Plugin. Renders the single-panel body: a centered
 // spinner while the initial load is in flight, otherwise the tab strip +
