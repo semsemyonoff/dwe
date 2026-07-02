@@ -128,18 +128,20 @@ keeps the diff reviewable and the golden comparison meaningful.
 **Files:**
 - Modify: `internal/core/ui/statustui/tui.go`
 
-- [ ] replace the import `github.com/charmbracelet/lipgloss` with `charm.land/lipgloss/v2`
+- [x] replace the import `github.com/charmbracelet/lipgloss` with `charm.land/lipgloss/v2`
       and run `goimports` to fix grouping/ordering
-- [ ] port `viewportHeight()`: `lipgloss.Height(...)` measurement to the v2 equivalent
-- [ ] port `renderTitleBar()`: `NewStyle().Width().Padding().Foreground(lipgloss.Color(styles.ColorAccent())).Bold().Render()`
-- [ ] port `renderTabStrip()`: active/inactive tab styles (`Foreground(lipgloss.Color(...))`, `Bold`)
-- [ ] port `renderStatusBar()`: `lipgloss.Width(...)` measurements, spacer `NewStyle().Width().Render("")`,
+- [x] port `viewportHeight()`: `lipgloss.Height(...)` measurement to the v2 equivalent
+      (source-compatible — `lipgloss.Height` is a v2 package func, unchanged)
+- [x] port `renderTitleBar()`: `NewStyle().Width().Padding().Foreground(lipgloss.Color(styles.ColorAccent())).Bold().Render()`
+      (source-compatible — `Color`/`Foreground`/`Bold`/`Padding`/`Width` unchanged in v2)
+- [x] port `renderTabStrip()`: active/inactive tab styles (`Foreground(lipgloss.Color(...))`, `Bold`)
+- [x] port `renderStatusBar()`: `lipgloss.Width(...)` measurements, spacer `NewStyle().Width().Render("")`,
       `lipgloss.JoinHorizontal(lipgloss.Top, ...)`, outer `NewStyle().Width().Padding().Render()`
-- [ ] port `View()`: divider style, too-small view (`Align`/`AlignVertical`/`Center`),
+- [x] port `View()`: divider style, too-small view (`Align`/`AlignVertical`/`Center`),
       loading view + `lipgloss.JoinVertical(lipgloss.Top, ...)`
-- [ ] confirm no other `statustui` file imports v1 lipgloss:
+- [x] confirm no other `statustui` file imports v1 lipgloss:
       `grep -rn "charmbracelet/lipgloss\"" internal/core/ui/statustui/` returns nothing
-- [ ] build the package: `go build ./internal/core/ui/statustui/...`
+- [x] build the package: `go build ./internal/core/ui/statustui/...`
 
 ### Task 2: Verify golden/behavior parity
 

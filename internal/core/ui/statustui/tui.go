@@ -11,7 +11,7 @@ import (
 	"charm.land/bubbles/v2/spinner"
 	"charm.land/bubbles/v2/viewport"
 	tea "charm.land/bubbletea/v2"
-	"github.com/charmbracelet/lipgloss"
+	"charm.land/lipgloss/v2"
 	"github.com/charmbracelet/x/term"
 
 	"github.com/semsemyonoff/dwe/internal/core/project/config"
