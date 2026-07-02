@@ -486,10 +486,13 @@ task so the package compiles at the end.
 - [x] run `make lint` — clean
 
 ### Task 13: [Final] Wrap up
-- [ ] update CLAUDE.md only if a genuinely new load-bearing pattern emerged (else leave the
+- [x] update CLAUDE.md only if a genuinely new load-bearing pattern emerged (else leave the
       `tui.Plugin` bullet to cover it — statustui is now listed as a Frame consumer)
-- [ ] confirm `docs/internals/*` embedded copies are current (`make build` ran in Task 11)
-- [ ] move both Stage 5 plans to `docs/plans/completed/` (5a already there if landed first)
+      (updated the `tui.Plugin` bullet: statustui now listed as completing all three Frame
+      consumers, and its narrow-terminal plain-text fallback recorded as a third fallback
+      variant alongside cmdbrowser's `runFallback` and docstui's `ErrTooNarrow` error mapping)
+- [x] confirm `docs/internals/*` embedded copies are current (`make build` ran in Task 11)
+- [x] move both Stage 5 plans to `docs/plans/completed/` (5a already there if landed first)
 
 ## Post-Completion
 
