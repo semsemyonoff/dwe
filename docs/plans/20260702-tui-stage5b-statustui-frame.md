@@ -428,20 +428,20 @@ task so the package compiles at the end.
 - Modify: `internal/shared/i18n/known_keys.go`
 - Modify (verify): `internal/shared/i18n/coverage_test.go`
 
-- [ ] add `tui.help.section.tabs` and **enumerate every action key** the registry derives
+- [x] add `tui.help.section.tabs` and **enumerate every action key** the registry derives
       (help key = `tui.help.action.<actionID>`, per `help.go:73,77`): `tui.help.action.tab.prev`,
       `tui.help.action.tab.next`, and the **five** jump keys `tui.help.action.tab.1` …
       `tui.help.action.tab.5` (match the exact action-ID *string values* from Task 4, not the
       Go constant names). Reuse the existing `tui.help.action.reload` (do NOT re-add it).
-- [ ] give each jump key a static English description (e.g. "Services", "Deploy", "Topology",
+- [x] give each jump key a static English description (e.g. "Services", "Deploy", "Topology",
       "Git", "Daemons") — the registry `Binding.Desc` is fixed, unlike the old per-tab keymap
-- [ ] add every new key to `KnownUIKeys` in `known_keys.go` — `coverage_test.go` enforces a
+- [x] add every new key to `KnownUIKeys` in `known_keys.go` — `coverage_test.go` enforces a
       **strict bidirectional** en.yml ⟺ `KnownUIKeys` match (missing OR extra key fails), so
       the two lists must be exactly in sync
-- [ ] confirm `internal/core/validate/i18n/unknown_ui_key.go` needs no change (allowlist is
+- [x] confirm `internal/core/validate/i18n/unknown_ui_key.go` needs no change (allowlist is
       `known_keys.go`); keep storage/hashing English
-- [ ] run `go test ./internal/shared/i18n/...` (coverage/known-key tests) — must pass
-- [ ] run tests — must pass before next task
+- [x] run `go test ./internal/shared/i18n/...` (coverage/known-key tests) — must pass
+- [x] run tests — must pass before next task
 
 ### Task 10: Golden frame + help + integration test sweep
 
