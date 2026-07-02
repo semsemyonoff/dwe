@@ -476,14 +476,14 @@ task so the package compiles at the end.
 - [x] run `go test ./internal/core/docs/...` (docs subsystem) — must pass
 
 ### Task 12: Verify acceptance criteria
-- [ ] all `Plugin` methods implemented; `var _ tui.Plugin` assertion compiles
-- [ ] reload + `YOffset` preserved (Task 5 tests green); tab semantics preserved
-- [ ] mouse: tab clicks + wheel work (Task 6 tests green)
-- [ ] narrow terminal → plain text fallback (Task 8 test green)
-- [ ] help modal shows Tabs + `ctrl+r`, no `r` (Task 4/10 goldens green)
-- [ ] no v1 lipgloss reintroduced; `render/` untouched; `liveui` untouched
-- [ ] run full suite: `make test`
-- [ ] run `make lint` — clean
+- [x] all `Plugin` methods implemented; `var _ tui.Plugin` assertion compiles
+- [x] reload + `YOffset` preserved (Task 5 tests green); tab semantics preserved
+- [x] mouse: tab clicks + wheel work (Task 6 tests green)
+- [x] narrow terminal → plain text fallback (Task 8 test green)
+- [x] help modal shows Tabs + `ctrl+r`, no `r` (Task 4/10 goldens green)
+- [x] no v1 lipgloss reintroduced; `render/` untouched; `liveui` untouched
+- [x] run full suite: `make test`
+- [x] run `make lint` — clean
 
 ### Task 13: [Final] Wrap up
 - [ ] update CLAUDE.md only if a genuinely new load-bearing pattern emerged (else leave the
