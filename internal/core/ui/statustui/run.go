@@ -2,55 +2,48 @@ package statustui
 
 import (
 	"context"
-	"errors"
-	"os"
 
-	tea "charm.land/bubbletea/v2"
-
-	"github.com/semsemyonoff/dwe/internal/core/ui/widgets"
+	"github.com/semsemyonoff/dwe/internal/core/ui/tui"
+	"github.com/semsemyonoff/dwe/internal/shared/i18n"
 )
 
-// Run launches the status TUI, returning an error if not a terminal or if
-// the program encounters a fatal error. A context is owned by Run and
-// canceled on return so in-flight data-fetch goroutines stop cleanly when
-// the user quits.
+// brand is the fixed left-zone status-line brand string; the Frame joins it
+// with the project name (via RunOptions.Project) as "brand · project".
+const brand = "dwe"
+
+// runStatusTUI is the package-level seam through which Run drives the tui
+// framework. Tests swap it to exercise error-mapping paths without a real
+// terminal; production uses tui.Run.
+var runStatusTUI = tui.Run
+
+// Run launches the status dashboard as a tui.Plugin on the shared framework
+// Frame. A context is owned by Run and canceled by the plugin's Close()
+// (invoked by tui.Run on every exit path) so in-flight buildTabs goroutines
+// stop cleanly when the user quits.
+//
+// It returns:
+//   - nil on a normal clean exit (user quit the dashboard).
+//   - [tui.ErrNotTTY] when stdout is not a terminal — unreachable in practice
+//     since the caller's shouldUseTUI already gates on TTY before calling Run.
+//   - [tui.ErrTooNarrow] when the terminal is below the framework minimum
+//     width; the caller falls back to a plain-text render.
+//   - a wrapped panic error on a recovered tea panic.
 func Run(ctx context.Context, d Deps) error {
-	if !isTerminalFn(os.Stdout.Fd()) {
-		return errors.New("statustui: not a terminal")
-	}
-
-	width, height, err := terminalSizeFn()
-	if err != nil {
-		return err
-	}
-
 	runCtx, cancel := context.WithCancel(ctx)
-	defer cancel() // Cancels in-flight buildTabs goroutines on return
+	m := newModel(d, runCtx, 0, 0) // Frame owns geometry; sized via Plugin.ViewPanel
+	p := newPlugin(m, cancel)      // Close() calls cancel
 
-	m := newModel(d, runCtx, width, height)
-	prog := tea.NewProgram(m, tea.WithContext(runCtx))
+	tr := d.Translator
+	if tr == nil {
+		tr = i18n.NopTranslator{}
+	}
 
-	runErr := widgets.RunWithPromptHooks(func() error {
-		_, e := prog.Run()
-		return e
+	_, err := runStatusTUI(p, tui.RunOptions{
+		Brand:      brand,
+		Project:    d.ProjectName,
+		Mouse:      true,
+		Translator: tr,
+		Locale:     d.Locale,
 	})
-
-	return mapRunError(runErr)
-}
-
-// mapRunError translates bubbletea's exit errors into cobra-friendly returns.
-// CRITICAL: check ErrProgramPanic before ErrProgramKilled because v2 wraps
-// recovered panics as `ErrProgramKilled: ErrProgramPanic`; a naive check of
-// ErrProgramKilled first would swallow panics as clean exits.
-func mapRunError(err error) error {
-	if err == nil {
-		return nil
-	}
-	if errors.Is(err, tea.ErrProgramPanic) {
-		return err
-	}
-	if errors.Is(err, tea.ErrInterrupted) || errors.Is(err, tea.ErrProgramKilled) {
-		return nil // User-initiated exit (q / ctrl+c), not an error
-	}
 	return err
 }

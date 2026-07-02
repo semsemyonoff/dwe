@@ -383,26 +383,26 @@ task so the package compiles at the end.
 - Delete: `internal/core/ui/statustui/keys.go`
 - Modify: `internal/core/ui/statustui/run_test.go`
 
-- [ ] add `Translator i18n.Translator` and `Locale string` fields to `statustui.Deps`
+- [x] add `Translator i18n.Translator` and `Locale string` fields to `statustui.Deps`
       (`tui.go`) — the source for `RunOptions` (they do not exist today)
-- [ ] add `var runStatusTUI = tui.Run` seam
-- [ ] rewrite `Run(ctx, deps)`: create `runCtx, cancel`; build the plugin (holds the model +
+- [x] add `var runStatusTUI = tui.Run` seam
+- [x] rewrite `Run(ctx, deps)`: create `runCtx, cancel`; build the plugin (holds the model +
       `cancel`, `Close`→cancel); resolve `tr := deps.Translator` (nil → `i18n.NopTranslator{}`);
       call `runStatusTUI(plugin, tui.RunOptions{Brand, Project: deps.ProjectName, Mouse: true, Translator: tr, Locale: deps.Locale})`
-- [ ] return `tui.ErrTooNarrow` up unchanged; pass through cancel/panic; nil on clean quit
+- [x] return `tui.ErrTooNarrow` up unchanged; pass through cancel/panic; nil on clean quit
       (replace the old `mapRunError`; `widgets.RunWithPromptHooks` is inside `tui.Run` — do NOT
       wrap again)
-- [ ] remove the now-dead `isTerminalFn` / `terminalSizeFn` seams from `run.go` (`tui.Run` owns
+- [x] remove the now-dead `isTerminalFn` / `terminalSizeFn` seams from `run.go` (`tui.Run` owns
       the TTY + size gates; these are no longer called). Update any test referencing them.
-- [ ] **now delete the legacy launch path** (nothing references it after the run.go flip):
+- [x] **now delete the legacy launch path** (nothing references it after the run.go flip):
       `model.View()`, the legacy `model.Update(tea.Msg)(tea.Model,tea.Cmd)`, `renderTitleBar()`,
       the status-bar chrome, the `var _ tea.Model = (*model)(nil)` assertion (`tui.go:80`), and
       `keys.go` (`keyMap`/`defaultKeyMap`). Keep the `model` struct fields + the helpers the
       plugin reuses (`setActiveTab`, `buildTabsCmd`, tab-strip render, `leftParts`)
-- [ ] `go build ./internal/core/ui/statustui/...` — must compile with no legacy references
-- [ ] write tests via the `runStatusTUI` seam: ErrTooNarrow passthrough; clean-quit→nil;
+- [x] `go build ./internal/core/ui/statustui/...` — must compile with no legacy references
+- [x] write tests via the `runStatusTUI` seam: ErrTooNarrow passthrough; clean-quit→nil;
       Close cancels the context on every exit path
-- [ ] run tests — must pass before next task
+- [x] run tests — must pass before next task
 
 ### Task 8: Caller fallback in cli/status (narrow → plain text)
 

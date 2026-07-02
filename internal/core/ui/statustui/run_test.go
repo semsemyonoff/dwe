@@ -3,89 +3,127 @@ package statustui
 import (
 	"context"
 	"errors"
-	"fmt"
 	"testing"
 	"time"
 
-	tea "charm.land/bubbletea/v2"
-	"github.com/stretchr/testify/require"
-
 	"github.com/semsemyonoff/dwe/internal/core/project/config"
 	"github.com/semsemyonoff/dwe/internal/core/ui/statusview"
+	"github.com/semsemyonoff/dwe/internal/core/ui/tui"
+	"github.com/semsemyonoff/dwe/internal/shared/i18n"
 )
 
-func TestMapRunError(t *testing.T) {
-	tests := []struct {
-		name      string
-		err       error
-		expectNil bool
-		expectErr error
-	}{
-		{
-			name:      "nil error",
-			err:       nil,
-			expectNil: true,
-		},
-		{
-			name:      "ErrInterrupted maps to nil",
-			err:       tea.ErrInterrupted,
-			expectNil: true,
-		},
-		{
-			name:      "ErrProgramKilled maps to nil",
-			err:       tea.ErrProgramKilled,
-			expectNil: true,
-		},
-		{
-			name:      "ErrProgramPanic returns non-nil",
-			err:       tea.ErrProgramPanic,
-			expectNil: false,
-		},
-		{
-			name:      "panic wrapped in ErrProgramKilled returns non-nil",
-			err:       fmt.Errorf("%w: %w", tea.ErrProgramKilled, tea.ErrProgramPanic),
-			expectNil: false,
-		},
-		{
-			name:      "arbitrary error is returned verbatim",
-			err:       errors.New("some error"),
-			expectNil: false,
-			expectErr: errors.New("some error"),
-		},
+func TestRun_ErrTooNarrow_PassesThroughUnchanged(t *testing.T) {
+	orig := runStatusTUI
+	t.Cleanup(func() { runStatusTUI = orig })
+	runStatusTUI = func(p tui.Plugin, opts tui.RunOptions) (any, error) {
+		return nil, tui.ErrTooNarrow
 	}
 
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			result := mapRunError(tt.err)
-			if tt.expectNil {
-				require.Nil(t, result)
-			} else {
-				require.NotNil(t, result)
-				if tt.expectErr != nil {
-					require.Equal(t, tt.expectErr.Error(), result.Error())
-				}
-			}
-		})
+	err := Run(context.Background(), Deps{ProjectName: "test"})
+	if !errors.Is(err, tui.ErrTooNarrow) {
+		t.Errorf("Run() error = %v, want tui.ErrTooNarrow passed through unchanged", err)
 	}
 }
 
-func TestRun_NotATerminal_ReturnsError(t *testing.T) {
-	origIsTerminalFn := isTerminalFn
-	defer func() { isTerminalFn = origIsTerminalFn }()
-
-	isTerminalFn = func(fd uintptr) bool {
-		return false
+func TestRun_ErrNotTTY_PassesThroughUnchanged(t *testing.T) {
+	orig := runStatusTUI
+	t.Cleanup(func() { runStatusTUI = orig })
+	runStatusTUI = func(p tui.Plugin, opts tui.RunOptions) (any, error) {
+		return nil, tui.ErrNotTTY
 	}
 
-	ctx := context.Background()
-	deps := Deps{
-		Cfg:         &config.DweConfig{},
-		ProjectName: "test",
+	err := Run(context.Background(), Deps{ProjectName: "test"})
+	if !errors.Is(err, tui.ErrNotTTY) {
+		t.Errorf("Run() error = %v, want tui.ErrNotTTY passed through unchanged", err)
+	}
+}
+
+func TestRun_CleanExit_ReturnsNil(t *testing.T) {
+	orig := runStatusTUI
+	t.Cleanup(func() { runStatusTUI = orig })
+	runStatusTUI = func(p tui.Plugin, opts tui.RunOptions) (any, error) {
+		return nil, nil
 	}
 
-	err := Run(ctx, deps)
-	require.Error(t, err)
-	require.Equal(t, "statustui: not a terminal", err.Error())
+	if err := Run(context.Background(), Deps{ProjectName: "test"}); err != nil {
+		t.Errorf("Run() = %v, want nil on clean exit", err)
+	}
+}
+
+func TestRun_ClosePluginCancelsRunContext(t *testing.T) {
+	orig := runStatusTUI
+	t.Cleanup(func() { runStatusTUI = orig })
+
+	var gotPlugin tui.Plugin
+	runStatusTUI = func(p tui.Plugin, opts tui.RunOptions) (any, error) {
+		gotPlugin = p
+		return nil, nil
+	}
+
+	if err := Run(context.Background(), Deps{ProjectName: "test"}); err != nil {
+		t.Fatalf("Run() = %v, want nil", err)
+	}
+
+	sp, ok := gotPlugin.(*plugin)
+	if !ok {
+		t.Fatalf("runStatusTUI plugin = %T, want *plugin", gotPlugin)
+	}
+	if err := sp.m.ctx.Err(); err != nil {
+		t.Fatalf("model ctx.Err() before Close() = %v, want nil", err)
+	}
+	if err := sp.Close(); err != nil {
+		t.Fatalf("Close() = %v, want nil", err)
+	}
+	if err := sp.m.ctx.Err(); !errors.Is(err, context.Canceled) {
+		t.Errorf("model ctx.Err() after Close() = %v, want context.Canceled", err)
+	}
+}
+
+func TestRun_ThreadsBrandProjectAndI18n(t *testing.T) {
+	orig := runStatusTUI
+	t.Cleanup(func() { runStatusTUI = orig })
+
+	var gotOpts tui.RunOptions
+	runStatusTUI = func(p tui.Plugin, opts tui.RunOptions) (any, error) {
+		gotOpts = opts
+		return nil, nil
+	}
+
+	tr := i18n.NopTranslator{}
+	_ = Run(context.Background(), Deps{ProjectName: "myproject", Translator: tr, Locale: "ru"})
+
+	if gotOpts.Brand != brand {
+		t.Errorf("RunOptions.Brand = %q, want %q", gotOpts.Brand, brand)
+	}
+	if gotOpts.Project != "myproject" {
+		t.Errorf("RunOptions.Project = %q, want %q", gotOpts.Project, "myproject")
+	}
+	if !gotOpts.Mouse {
+		t.Error("RunOptions.Mouse = false, want true")
+	}
+	if gotOpts.Locale != "ru" {
+		t.Errorf("RunOptions.Locale = %q, want %q", gotOpts.Locale, "ru")
+	}
+}
+
+func TestRun_NilTranslatorFallsBackToNop(t *testing.T) {
+	orig := runStatusTUI
+	t.Cleanup(func() { runStatusTUI = orig })
+
+	var gotOpts tui.RunOptions
+	runStatusTUI = func(p tui.Plugin, opts tui.RunOptions) (any, error) {
+		gotOpts = opts
+		return nil, nil
+	}
+
+	_ = Run(context.Background(), Deps{ProjectName: "test"})
+
+	if gotOpts.Translator == nil {
+		t.Fatal("RunOptions.Translator = nil, want i18n.NopTranslator fallback")
+	}
+	if _, ok := gotOpts.Translator.(i18n.NopTranslator); !ok {
+		t.Errorf("RunOptions.Translator = %T, want i18n.NopTranslator", gotOpts.Translator)
+	}
 }
 
 // TestRun_ReloadThenQuit_CancelsInflightContext tests that when the user
