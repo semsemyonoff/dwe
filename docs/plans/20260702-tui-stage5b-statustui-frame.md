@@ -448,13 +448,15 @@ task so the package compiles at the end.
 **Files:**
 - Modify: `internal/core/ui/statustui/plugin_test.go` (or a dedicated `plugin_golden_test.go`)
 
-- [ ] add/confirm golden frame tests at 60/79/80/99/100 (odd+even): normal view, loading
+- [x] add/confirm golden frame tests at 60/79/80/99/100 (odd+even): normal view, loading
       view, help modal (Tabs + `ctrl+r`, no `r`) — mirror `docstui/plugin_golden_test.go`
-- [ ] add an async-preservation test: `tabsLoadedMsg` delivered through the Frame Update
+- [x] add an async-preservation test: `tabsLoadedMsg` delivered through the Frame Update
       loop updates the plugin (drive via `tui.RenderFrame` + injected msg, or Frame test seam)
-- [ ] remove obsolete assertions in old `tui_test.go` that referenced the deleted title bar /
+- [x] remove obsolete assertions in old `tui_test.go` that referenced the deleted title bar /
       status bar / too-small full-screen view; keep behavior assertions ported in Task 5
-- [ ] run `go test ./internal/core/ui/statustui/...` — all green
+      (already clean — Task 7's cutover removed the legacy launch path and its tests in the
+      same compile-clean step; `tui_test.go` carries only surviving-helper assertions)
+- [x] run `go test ./internal/core/ui/statustui/...` — all green
 
 ### Task 11: Update internal docs
 

@@ -1,0 +1,21 @@
+╭───────────────────────────────────╮
+│ Help                              │
+│                                   │
+│ Navigation                        │
+│   tab        Focus next panel     │
+│   shift+tab  Focus previous panel │
+│                                   │
+│ General                           │
+│   ?          Toggle help          │
+│   q, ctrl+c  Quit                 │
+│   ctrl+r     Reload               │
+│                                   │
+│ Tabs                              │
+│   left, h    Previous tab         │
+│   right, l   Next tab             │
+│   1          Services             │
+│   2          Deploy               │
+│   3          Topology             │
+│   4          Git                  │
+│   5          Daemons              │
+╰───────────────────────────────────╯

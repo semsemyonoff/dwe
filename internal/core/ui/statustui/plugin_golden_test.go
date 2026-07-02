@@ -7,6 +7,7 @@ import (
 	"strconv"
 	"strings"
 	"testing"
+	"time"
 
 	"charm.land/lipgloss/v2"
 	"github.com/charmbracelet/x/ansi"
@@ -141,6 +142,73 @@ func TestStatus_LoadingFrameGolden(t *testing.T) {
 	}
 
 	assertGolden(t, "frame_loading_80.golden", plain)
+}
+
+// TestStatus_HelpModalGolden pins the registry-generated ?-modal help at
+// width 100×40 via the exported tui.BuildHelp harness, locking the Tabs
+// section (prev/next/jumps) and the ctrl+r reload binding — and confirming
+// the legacy "r" reload key never resurfaces in the rendered modal.
+func TestStatus_HelpModalGolden(t *testing.T) {
+	p := newGoldenPlugin(t, false)
+
+	ov, err := tui.BuildHelp(p, i18n.NopTranslator{}, "en", 100, 40)
+	if err != nil {
+		t.Fatalf("BuildHelp: %v", err)
+	}
+	plain := ansi.Strip(ov.Content)
+
+	for _, want := range []string{sectionTabs, "Previous tab", "Next tab", "Services", "Daemons"} {
+		if !strings.Contains(plain, want) {
+			t.Errorf("help modal missing %q:\n%s", want, plain)
+		}
+	}
+	for _, want := range []string{"ctrl+r", "Reload"} {
+		if !strings.Contains(plain, want) {
+			t.Errorf("help modal missing reload binding %q:\n%s", want, plain)
+		}
+	}
+	for line := range strings.SplitSeq(plain, "\n") {
+		trimmed := strings.TrimSpace(line)
+		if trimmed == "r" || strings.HasPrefix(trimmed, "r ") {
+			t.Errorf("help modal unexpectedly contains legacy %q binding: %q", "r", line)
+		}
+	}
+
+	assertGolden(t, "help.golden", plain)
+}
+
+// TestStatus_AsyncTabsLoadedMsgPreservationThroughFrame verifies that an
+// async tabsLoadedMsg (the message buildTabsCmd's goroutine delivers on
+// completion) survives the Frame's Update loop — i.e. the Frame forwards
+// unmatched message types to plugin.Update without swallowing or
+// transforming them, so the reload/loadGen state machine driven by
+// plugin.Update keeps working once the plugin is hosted inside the Frame.
+func TestStatus_AsyncTabsLoadedMsgPreservationThroughFrame(t *testing.T) {
+	p := newGoldenPlugin(t, true)
+	p.m.loadGen = 1
+
+	msg := tabsLoadedMsg{
+		gen:             1,
+		tabs:            goldenTabs(),
+		loadedAt:        time.Now(),
+		healthIndicator: "●",
+	}
+
+	content, err := tui.RenderFrameAfterSetup(p, goldenRunOpts, 80, goldenFrameHeight, msg)
+	if err != nil {
+		t.Fatalf("RenderFrameAfterSetup: %v", err)
+	}
+	plain := ansi.Strip(content)
+
+	if p.m.loading {
+		t.Errorf("loading after tabsLoadedMsg via Frame = true, want false")
+	}
+	if len(p.m.tabs) != len(goldenTabs()) {
+		t.Errorf("tabs after tabsLoadedMsg via Frame = %d, want %d", len(p.m.tabs), len(goldenTabs()))
+	}
+	if !strings.Contains(plain, "Services") {
+		t.Errorf("frame missing loaded tab content after tabsLoadedMsg via Frame:\n%s", plain)
+	}
 }
 
 // TestStatus_FrameWidthInvariant verifies that every row of the rendered
