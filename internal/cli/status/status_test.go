@@ -12,6 +12,7 @@ import (
 	"github.com/semsemyonoff/dwe/internal/cli/cmdctx"
 	"github.com/semsemyonoff/dwe/internal/core/ui/statustui"
 	"github.com/semsemyonoff/dwe/internal/core/ui/tui"
+	"github.com/semsemyonoff/dwe/internal/core/ui/widgets"
 	"github.com/semsemyonoff/dwe/internal/core/workflow/deploy/journal"
 	"github.com/semsemyonoff/dwe/internal/shared/i18n"
 
@@ -781,6 +782,29 @@ func TestStatusCmd_TUI_CleanQuit_NoPlainFallback(t *testing.T) {
 	out := buf.String()
 	if strings.Contains(out, "DWE:") || strings.Contains(out, "Apps") {
 		t.Errorf("clean TUI quit must not print plain-text fallback, got:\n%s", out)
+	}
+}
+
+// TestStatusCmd_TUI_Cancelled_ExitsClean verifies that a user-initiated cancel
+// (OS SIGINT/SIGTERM, surfaced by tui.Run as widgets.ErrCancelled) exits clean
+// with no error and without the plain-text fallback, matching the pre-Frame
+// mapRunError behavior.
+func TestStatusCmd_TUI_Cancelled_ExitsClean(t *testing.T) {
+	forceTUIPath(t)
+	runStatusTUIFn = func(ctx context.Context, d statustui.Deps) error { return widgets.ErrCancelled }
+
+	configPath := statusFixture(t)
+	root := buildStatusTestRoot()
+	var buf bytes.Buffer
+	root.SetOut(&buf)
+	root.SetErr(&buf)
+	root.SetArgs([]string{"--config", configPath, "status"})
+	if err := root.Execute(); err != nil {
+		t.Fatalf("expected clean exit on widgets.ErrCancelled, got: %v", err)
+	}
+	out := buf.String()
+	if strings.Contains(out, "DWE:") || strings.Contains(out, "Apps") {
+		t.Errorf("cancelled TUI must not print plain-text fallback, got:\n%s", out)
 	}
 }
 

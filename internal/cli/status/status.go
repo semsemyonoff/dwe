@@ -17,6 +17,7 @@ import (
 	"github.com/semsemyonoff/dwe/internal/core/ui/render"
 	"github.com/semsemyonoff/dwe/internal/core/ui/statustui"
 	"github.com/semsemyonoff/dwe/internal/core/ui/tui"
+	"github.com/semsemyonoff/dwe/internal/core/ui/widgets"
 	"github.com/semsemyonoff/dwe/internal/core/usercommands"
 	"github.com/semsemyonoff/dwe/internal/core/workflow/deploy"
 	"github.com/semsemyonoff/dwe/internal/core/workflow/deploy/journal"
@@ -265,6 +266,13 @@ in the default view.`,
 				if err := runStatusTUIFn(cmd.Context(), deps); err != nil {
 					if errors.Is(err, tui.ErrTooNarrow) {
 						return renderDefaultStatus(cmd, sc, noFlags)
+					}
+					// A user-initiated cancel (OS SIGINT/SIGTERM, surfaced by
+					// tui.Run as widgets.ErrCancelled) is a clean exit, matching
+					// the pre-Frame mapRunError behavior and the sibling
+					// cmdbrowser caller.
+					if errors.Is(err, widgets.ErrCancelled) {
+						return nil
 					}
 					return err
 				}
