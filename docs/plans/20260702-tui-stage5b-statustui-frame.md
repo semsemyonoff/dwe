@@ -410,16 +410,16 @@ task so the package compiles at the end.
 - Modify: `internal/cli/status/status.go`
 - Modify: `internal/cli/status/status_test.go`
 
-- [ ] populate the new `Deps` i18n fields where `deps` is built (≈status.go:249):
+- [x] populate the new `Deps` i18n fields where `deps` is built (≈status.go:249):
       `Translator: flags.I18n` (a `*i18n.Store`, which implements `i18n.Translator`),
       `Locale: flags.Locale` (`flags` is in scope in the RunE closure)
-- [ ] wrap the `runStatusTUIFn(cmd.Context(), deps)` call (≈status.go:261): on
+- [x] wrap the `runStatusTUIFn(cmd.Context(), deps)` call (≈status.go:261): on
       `errors.Is(err, tui.ErrTooNarrow)` return `renderDefaultStatus(cmd, sc, noFlags)`
-- [ ] leave `shouldUseTUI` (TTY / `--no-tui` / sections / `TERM=dumb`) unchanged
-- [ ] write a test: inject `tui.ErrTooNarrow` via `runStatusTUIFn` seam → assert plain-text
+- [x] leave `shouldUseTUI` (TTY / `--no-tui` / sections / `TERM=dumb`) unchanged
+- [x] write a test: inject `tui.ErrTooNarrow` via `runStatusTUIFn` seam → assert plain-text
       `renderDefaultStatus` output is produced (not an error)
-- [ ] write/confirm a test: non-error TUI return → no plain fallback; other errors propagate
-- [ ] run tests — must pass before next task
+- [x] write/confirm a test: non-error TUI return → no plain fallback; other errors propagate
+- [x] run tests — must pass before next task
 
 ### Task 9: i18n keys for the new status actions
 

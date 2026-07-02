@@ -3,6 +3,7 @@ package status
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"os"
@@ -15,6 +16,7 @@ import (
 	"github.com/semsemyonoff/dwe/internal/core/project/stack"
 	"github.com/semsemyonoff/dwe/internal/core/ui/render"
 	"github.com/semsemyonoff/dwe/internal/core/ui/statustui"
+	"github.com/semsemyonoff/dwe/internal/core/ui/tui"
 	"github.com/semsemyonoff/dwe/internal/core/usercommands"
 	"github.com/semsemyonoff/dwe/internal/core/workflow/deploy"
 	"github.com/semsemyonoff/dwe/internal/core/workflow/deploy/journal"
@@ -257,8 +259,16 @@ in the default view.`,
 					TopoStatus:  sc.TopoStatus,
 					IsRunning:   sc.IsRunning,
 					ProjectRoot: sc.ProjectRoot,
+					Translator:  flags.I18n,
+					Locale:      flags.Locale,
 				}
-				return runStatusTUIFn(cmd.Context(), deps)
+				if err := runStatusTUIFn(cmd.Context(), deps); err != nil {
+					if errors.Is(err, tui.ErrTooNarrow) {
+						return renderDefaultStatus(cmd, sc, noFlags)
+					}
+					return err
+				}
+				return nil
 			}
 			return renderDefaultStatus(cmd, sc, noFlags)
 		},
