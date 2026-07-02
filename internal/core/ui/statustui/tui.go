@@ -62,17 +62,15 @@ type model struct {
 	loadGen         uint64
 	reloadGen       uint64
 	reloading       bool
-	width           int
-	height          int
 	reloadAt        time.Time
 	healthIndicator string // cached; recomputed only on tab reload
 }
 
-// newModel creates a new status dashboard model. It initializes the
-// viewport and spinner; w/h size the viewport's initial state only — the
-// Frame resizes it on every render via Plugin.ViewPanel.
-func newModel(d Deps, ctx context.Context, w, h int) *model {
-	vp := viewport.New(viewport.WithWidth(w), viewport.WithHeight(h))
+// newModel creates a new status dashboard model. It initializes the viewport
+// and spinner; the Frame owns geometry and resizes the viewport on every
+// render via Plugin.ViewPanel.
+func newModel(d Deps, ctx context.Context) *model {
+	vp := viewport.New()
 	sp := spinner.New()
 	sp.Spinner = spinner.Dot
 
@@ -84,8 +82,6 @@ func newModel(d Deps, ctx context.Context, w, h int) *model {
 		viewport: vp,
 		spinner:  sp,
 		loading:  true,
-		width:    w,
-		height:   h,
 	}
 }
 

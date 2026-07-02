@@ -13,6 +13,7 @@ import (
 	"github.com/semsemyonoff/dwe/internal/core/ui/statustui"
 	"github.com/semsemyonoff/dwe/internal/core/ui/tui"
 	"github.com/semsemyonoff/dwe/internal/core/workflow/deploy/journal"
+	"github.com/semsemyonoff/dwe/internal/shared/i18n"
 
 	"github.com/spf13/cobra"
 )
@@ -735,7 +736,8 @@ func TestStatusCmd_TUI_ErrTooNarrow_FallsBackToPlainText(t *testing.T) {
 		return tui.ErrTooNarrow
 	}
 
-	flags := &cmdctx.RootFlags{Locale: "fr-TEST"}
+	store := &i18n.Store{}
+	flags := &cmdctx.RootFlags{Locale: "fr-TEST", I18n: store}
 	root := &cobra.Command{Use: "dwe", SilenceUsage: true}
 	root.PersistentFlags().StringVar(&flags.ConfigPath, "config", "", "")
 	root.AddGroup(&cobra.Group{ID: "environment", Title: "Environment Commands:"})
@@ -755,6 +757,9 @@ func TestStatusCmd_TUI_ErrTooNarrow_FallsBackToPlainText(t *testing.T) {
 	}
 	if gotDeps.Locale != "fr-TEST" {
 		t.Errorf("expected Deps.Locale threaded from RootFlags.Locale, got %q", gotDeps.Locale)
+	}
+	if gotDeps.Translator != store {
+		t.Errorf("expected Deps.Translator threaded from RootFlags.I18n, got %#v", gotDeps.Translator)
 	}
 }
 

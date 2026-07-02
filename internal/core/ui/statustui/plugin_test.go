@@ -18,7 +18,7 @@ import (
 func newTestPlugin(t *testing.T) (*plugin, context.Context) {
 	t.Helper()
 	ctx, cancel := context.WithCancel(context.Background())
-	m := newModel(Deps{}, ctx, 80, 24)
+	m := newModel(Deps{}, ctx)
 	return newPlugin(m, cancel), ctx
 }
 
@@ -79,7 +79,7 @@ func TestPlugin_CloseCancelsContext(t *testing.T) {
 }
 
 func TestPlugin_CloseNilCancelIsNoop(t *testing.T) {
-	p := newPlugin(newModel(Deps{}, context.Background(), 80, 24), nil)
+	p := newPlugin(newModel(Deps{}, context.Background()), nil)
 	if err := p.Close(); err != nil {
 		t.Errorf("Close() with nil cancel = %v, want nil", err)
 	}

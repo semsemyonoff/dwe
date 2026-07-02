@@ -30,8 +30,8 @@ var runStatusTUI = tui.Run
 //   - a wrapped panic error on a recovered tea panic.
 func Run(ctx context.Context, d Deps) error {
 	runCtx, cancel := context.WithCancel(ctx)
-	m := newModel(d, runCtx, 0, 0) // Frame owns geometry; sized via Plugin.ViewPanel
-	p := newPlugin(m, cancel)      // Close() calls cancel
+	m := newModel(d, runCtx)  // Frame owns geometry; sized via Plugin.ViewPanel
+	p := newPlugin(m, cancel) // Close() calls cancel
 
 	tr := d.Translator
 	if tr == nil {

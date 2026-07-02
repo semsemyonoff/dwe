@@ -14,21 +14,19 @@ func TestNewModel_Defaults(t *testing.T) {
 		ProjectName: "test-project",
 	}
 
-	m := newModel(deps, ctx, 100, 30)
+	m := newModel(deps, ctx)
 
 	require.NotNil(t, m)
 	require.Equal(t, deps.ProjectName, m.deps.ProjectName)
 	require.True(t, m.loading, "loading should be true initially")
 	require.Equal(t, 0, m.active, "active tab should be 0 initially")
 	require.Empty(t, m.tabs, "tabs should be empty initially")
-	require.Equal(t, 100, m.width)
-	require.Equal(t, 30, m.height)
 }
 
 func TestRenderTabStrip(t *testing.T) {
 	ctx := context.Background()
 	deps := Deps{ProjectName: "test"}
-	m := newModel(deps, ctx, 100, 30)
+	m := newModel(deps, ctx)
 	m.tabs = []tab{
 		{"Services", "content1"},
 		{"Deploy", "content2"},
@@ -69,7 +67,7 @@ func TestRenderTabStrip(t *testing.T) {
 func TestRenderTabStrip_EmptyTabs(t *testing.T) {
 	ctx := context.Background()
 	deps := Deps{ProjectName: "test"}
-	m := newModel(deps, ctx, 100, 30)
+	m := newModel(deps, ctx)
 
 	tabStrip := m.renderTabStrip()
 	require.Empty(t, strings.TrimSpace(tabStrip), "should return empty for no tabs")
@@ -79,7 +77,7 @@ func TestRenderTabStrip_EmptyTabs(t *testing.T) {
 func TestInit_BumpsLoadGen(t *testing.T) {
 	ctx := context.Background()
 	deps := Deps{ProjectName: "test"}
-	m := newModel(deps, ctx, 100, 30)
+	m := newModel(deps, ctx)
 
 	initialGen := m.loadGen
 	cmd := m.Init()
@@ -94,7 +92,7 @@ func TestInit_BumpsLoadGen(t *testing.T) {
 // the explicit Tab1–Tab5 blocks used to carry (e.g. Tab5 with only 3 tabs).
 func TestSetActiveTab_OutOfRangeNoop(t *testing.T) {
 	ctx := context.Background()
-	m := newModel(Deps{ProjectName: "test"}, ctx, 100, 30)
+	m := newModel(Deps{ProjectName: "test"}, ctx)
 	m.tabs = []tab{
 		{"Services", "content1"},
 		{"Deploy", "content2"},

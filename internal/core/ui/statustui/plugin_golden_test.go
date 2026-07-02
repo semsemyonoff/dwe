@@ -50,7 +50,7 @@ func newGoldenPlugin(t *testing.T, loading bool) *plugin {
 	ctx, cancel := context.WithCancel(context.Background())
 	t.Cleanup(cancel)
 
-	m := newModel(Deps{ProjectName: "demo"}, ctx, 0, 0)
+	m := newModel(Deps{ProjectName: "demo"}, ctx)
 	m.loading = loading
 	if !loading {
 		m.tabs = goldenTabs()

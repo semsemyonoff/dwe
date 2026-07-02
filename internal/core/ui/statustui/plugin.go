@@ -23,21 +23,12 @@ const panelMain tui.PanelID = "main"
 // [tui.Plugin]: the Frame owns chrome (border, status line, `?` help modal,
 // alt-screen, mouse); the plugin owns tab-strip + viewport body content.
 //
-// m holds the existing model state as a field, NOT embedded — embedding would
-// promote the legacy *model's tea.Model methods (View/Update) onto plugin,
-// which does not satisfy tui.Plugin and would defeat the point of keeping the
-// two launch surfaces independent during the Task 1-6 coexistence window (see
-// the plan's compile-clean coexistence rule). The legacy *model launch path
-// (View(), the legacy Update, keys.go, renderTitleBar/renderStatusBar) stays
-// intact and is the live `dwe status` launch path until the Task 7 cutover.
+// m holds the model state as a field (not embedded) so the model's helpers
+// (setActiveTab, renderTabStrip, buildTabsCmd) are reused without promoting
+// any tea.Model methods onto plugin.
 type plugin struct {
 	m      *model
 	cancel context.CancelFunc
-
-	// body is the overall inner body region cached on Resize. The plugin has
-	// a single panel, so this mirrors the region ViewPanel receives; it is
-	// kept for parity with the docstui pattern and future multi-signal use.
-	body tui.Region
 }
 
 // Compile-time assertion that plugin implements tui.Plugin.
@@ -82,12 +73,10 @@ func (p *plugin) PendingOverlay() (tui.Overlay, bool) { return tui.Overlay{}, fa
 // raw-input capture mode.
 func (p *plugin) CapturingInput() bool { return false }
 
-// Resize implements tui.Plugin. Caches the overall inner body region. The
-// legacy model's own sizing path (viewportHeight, which measures the
-// soon-to-be-deleted renderStatusBar) is left untouched — it is still the
-// live launch path until Task 7. The plugin's own viewport dimensions are
-// computed in ViewPanel, from the per-panel inner region it is given there.
-func (p *plugin) Resize(body tui.Region) { p.body = body }
+// Resize implements tui.Plugin. The plugin's viewport dimensions are computed
+// in ViewPanel from the per-panel inner region it is given there, so there is
+// nothing to cache here.
+func (p *plugin) Resize(tui.Region) {}
 
 // Update implements tui.Plugin. tabsLoadedMsg handling (stale-gen drop, tabs
 // assign, loadedAt/healthIndicator, YOffset restore-on-matching-reload else
@@ -100,13 +89,10 @@ func (p *plugin) Update(msg tea.Msg) tea.Cmd {
 
 	switch msg := msg.(type) {
 	case tea.WindowSizeMsg:
-		// The Frame already called Resize(body) with the new inner region
-		// before forwarding this message (see frame.go), and ViewPanel
-		// resizes the viewport from its per-panel inner region on every
-		// render. Unlike the legacy model.Update, this must NOT recompute
-		// viewport dimensions from raw terminal width/height (that ignored
-		// the Frame's border/panel chrome) — sizing is owned by
-		// Resize/ViewPanel, not here.
+		// ViewPanel resizes the viewport from its per-panel inner region on
+		// every render, so there is nothing to recompute here. Deliberately
+		// NOT sizing from raw terminal width/height — that would ignore the
+		// Frame's border/panel chrome. Sizing is owned by ViewPanel.
 		return nil
 
 	case tabsLoadedMsg:
