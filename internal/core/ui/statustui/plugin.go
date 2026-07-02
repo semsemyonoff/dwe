@@ -166,9 +166,3 @@ func (p *plugin) StatusContext() string {
 	}
 	return strings.Join(parts, "  ")
 }
-
-// Actions implements tui.Plugin. Stubbed here; filled in Task 4.
-func (p *plugin) Actions(reg *tui.Registry) error { return nil }
-
-// HandleAction implements tui.Plugin. Stubbed here; filled in Task 4.
-func (p *plugin) HandleAction(a tui.Action) (tea.Cmd, bool) { return nil, false }

@@ -315,23 +315,23 @@ even though they no-op on a single panel. Acceptable — not a blocker; noted in
 - Modify: `internal/core/ui/statustui/plugin.go`
 - Create: `internal/core/ui/statustui/actions_test.go`
 
-- [ ] define action IDs: `actionTabPrev`, `actionTabNext`, `actionTab1`..`actionTab5`; the
+- [x] define action IDs: `actionTabPrev`, `actionTabNext`, `actionTab1`..`actionTab5`; the
       `Tabs` section label constant
-- [ ] implement `Actions(reg)`: `RegisterStandard(reg, tui.ActionReload)` + register Tabs:
+- [x] implement `Actions(reg)`: `RegisterStandard(reg, tui.ActionReload)` + register Tabs:
       prev=`["left","h"]`, next=`["right","l"]`, jumps 1..5=`["1"]`..`["5"]`
-- [ ] implement `HandleAction(a)` on the plugin (operating on the held `m *model`): prev/next
+- [x] implement `HandleAction(a)` on the plugin (operating on the held `m *model`): prev/next
       wrap via `m.setActiveTab((active±1+n)%n)`; jumps via `m.setActiveTab(k)`; reload triggers
       the existing reload path (loadGen++/reloadGen/reloadActive/reloadYOffset/buildTabsCmd);
       return `(cmd, true)` when handled
-- [ ] confirm `setActiveTab` still resets `reloadGen` and calls `GotoTop` (verbatim)
-- [ ] **do NOT delete `keys.go` this task** — the legacy `model.Update` still references
+- [x] confirm `setActiveTab` still resets `reloadGen` and calls `GotoTop` (verbatim)
+- [x] **do NOT delete `keys.go` this task** — the legacy `model.Update` still references
       `m.keys`/`defaultKeyMap` and is the live launch path until Task 7. `keys.go` is deleted at
       the Task 7 cutover, together with the legacy `Update`
-- [ ] write table-driven tests: each action → expected active index / reload trigger;
+- [x] write table-driven tests: each action → expected active index / reload trigger;
       wrap-around at ends; jump out-of-range ignored
-- [ ] write a help-modal golden (`tui.BuildHelp`) asserting Tabs section present,
+- [x] write a help-modal golden (`tui.BuildHelp`) asserting Tabs section present,
       reload=`ctrl+r`, no `r` binding
-- [ ] run tests — must pass before next task
+- [x] run tests — must pass before next task
 
 ### Task 5: Preserve reload + YOffset through the Frame Update loop
 

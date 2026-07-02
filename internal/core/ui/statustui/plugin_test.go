@@ -102,16 +102,17 @@ func TestPlugin_StubMethodsZeroValues(t *testing.T) {
 	if got := p.Update(nil); got != nil {
 		t.Errorf("Update() = %v, want nil", got)
 	}
-	if err := p.Actions(nil); err != nil {
-		t.Errorf("Actions() = %v, want nil", err)
-	}
-	cmd, handled := p.HandleAction(tui.Action("unused"))
-	if cmd != nil || handled {
-		t.Errorf("HandleAction() = (%v, %v), want (nil, false)", cmd, handled)
-	}
 
 	// Resize is void; just confirm it does not panic.
 	p.Resize(tui.Region{Width: 80, Height: 24})
+}
+
+func TestPlugin_HandleAction_UnknownIsUnhandled(t *testing.T) {
+	p, _ := newTestPlugin(t)
+	cmd, handled := p.HandleAction(tui.Action("unused"))
+	if cmd != nil || handled {
+		t.Errorf("HandleAction(unused) = (%v, %v), want (nil, false)", cmd, handled)
+	}
 }
 
 func TestPlugin_ViewPanel_UnknownPanelIsEmpty(t *testing.T) {
