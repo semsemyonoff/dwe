@@ -92,6 +92,47 @@ done:
 	require.Equal(t, 5, renderer.calls, "expected all 5 diagrams rendered")
 }
 
+func TestPrefetchRecordsRenderError(t *testing.T) {
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	progress := make(chan ProgressMsg, 100)
+	renderer := &FakeRenderer{failAfter: 0} // every render fails
+
+	prefetch := NewPrefetch(ctx, renderer, progress)
+	defer prefetch.Close()
+
+	items := []WorkItem{
+		{Source: "a", Theme: mermaid.ThemeDark, Width: 100, Index: 0},
+		{Source: "b", Theme: mermaid.ThemeDark, Width: 100, Index: 1},
+	}
+	prefetch.Queue(items)
+
+	// Wait for both diagrams to be processed.
+	for {
+		select {
+		case msg := <-progress:
+			if msg.Rendered >= len(items) {
+				goto done
+			}
+		case <-time.After(5 * time.Second):
+			t.Fatal("timeout waiting for prefetch")
+		}
+	}
+done:
+
+	for _, idx := range []int{0, 1} {
+		errText, ok := prefetch.RenderError(idx)
+		require.True(t, ok, "expected a recorded render error for diagram %d", idx)
+		require.Equal(t, mermaid.ErrRenderingDisabled.Error(), errText)
+	}
+
+	// A new topic clears recorded errors.
+	prefetch.BeginTopic()
+	_, ok := prefetch.RenderError(0)
+	require.False(t, ok, "BeginTopic should clear recorded errors")
+}
+
 func TestPrefetchProgressReporting(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()

@@ -206,6 +206,71 @@ func TestFrame_MouseCapabilityGate(t *testing.T) {
 	})
 }
 
+// TestFrame_ReleaseMouseOverlay verifies a top overlay with ReleaseMouse forces
+// MouseModeNone even when mouse capture is otherwise enabled, and that popping it
+// reverts to CellMotion (so native selection is confined to the overlay's life).
+func TestFrame_ReleaseMouseOverlay(t *testing.T) {
+	f, _ := newTestFrame(t, 80, frameGoldenHeight,
+		withMouse(true), withTermEnv(func() string { return "xterm-256color" }))
+	if got := f.View().MouseMode; got != tea.MouseModeCellMotion {
+		t.Fatalf("precondition: MouseMode = %v; want CellMotion", got)
+	}
+
+	f.overlay.Push(Overlay{Content: "err", Width: 3, Height: 1, CapturesInput: true, ReleaseMouse: true})
+	if got := f.View().MouseMode; got != tea.MouseModeNone {
+		t.Errorf("with ReleaseMouse overlay: MouseMode = %v; want None", got)
+	}
+
+	// A capturing overlay that does NOT release the mouse keeps capture on.
+	f.overlay.ReplaceTop(Overlay{Content: "err", Width: 3, Height: 1, CapturesInput: true, ReleaseMouse: false})
+	if got := f.View().MouseMode; got != tea.MouseModeCellMotion {
+		t.Errorf("release off: MouseMode = %v; want CellMotion", got)
+	}
+
+	_, _ = f.overlay.Pop()
+	if got := f.View().MouseMode; got != tea.MouseModeCellMotion {
+		t.Errorf("after pop: MouseMode = %v; want CellMotion", got)
+	}
+}
+
+// TestFrame_FullScreenOverlay verifies a FullScreen overlay takes over the whole
+// terminal: the rendered content is exactly Term-sized and carries none of the
+// framework chrome (no status-line brand text bleeds through).
+func TestFrame_FullScreenOverlay(t *testing.T) {
+	const w, h = 80, frameGoldenHeight
+	f, _ := newTestFrame(t, w, h,
+		withMouse(true), withTermEnv(func() string { return "xterm-256color" }),
+		withBrand("DWE"), withProject("proj"))
+
+	// Baseline: normal frame shows the brand in the status line.
+	if !strings.Contains(stripANSI(f.View().Content), "DWE") {
+		t.Fatal("precondition: brand should appear in the normal frame")
+	}
+
+	f.overlay.Push(Overlay{
+		Content:       "ERRORTEXT",
+		Width:         9,
+		Height:        1,
+		CapturesInput: true,
+		ReleaseMouse:  true,
+		FullScreen:    true,
+	})
+	v := f.View()
+	plain := stripANSI(v.Content)
+	if strings.Contains(plain, "DWE") {
+		t.Error("FullScreen overlay must not render the frame chrome (brand leaked in)")
+	}
+	if !strings.Contains(plain, "ERRORTEXT") {
+		t.Error("FullScreen overlay content not rendered")
+	}
+	if got := lipgloss.Height(v.Content); got != h {
+		t.Errorf("FullScreen content height = %d; want full terminal %d", got, h)
+	}
+	if got := v.MouseMode; got != tea.MouseModeNone {
+		t.Errorf("FullScreen + ReleaseMouse: MouseMode = %v; want None", got)
+	}
+}
+
 // TestFrame_StatusLineZones asserts the three-zone status line: brand/project on
 // the left, plugin context in the middle, help hint on the right; and that an
 // over-long plugin context is truncated so the line stays exactly frame width.
@@ -1528,9 +1593,39 @@ func TestFrame_WheelFilterPassesThroughNonCoalescable(t *testing.T) {
 	if out := f.filterWheel(tea.MouseWheelMsg{Button: tea.MouseWheelDown, X: 3, Y: 23}); out == nil {
 		t.Error("non-panel wheel coalesced; want pass-through")
 	}
-	f.overlay.Push(Overlay{Content: "m", Width: 3, Height: 1, CapturesInput: true})
+	// A NON-capturing overlay (e.g. help) swallows wheels via handleMouse.
+	f.overlay.Push(Overlay{Content: "m", Width: 3, Height: 1, CapturesInput: false})
 	if out := f.filterWheel(wheelDown()); out == nil {
-		t.Error("overlay wheel coalesced; want pass-through to handleMouse")
+		t.Error("non-capturing overlay wheel coalesced; want pass-through to handleMouse")
+	}
+}
+
+// TestFrame_WheelFilterCoalescesCapturingOverlay verifies a CapturesInput
+// overlay's vertical wheel is coalesced under the OverlayWheelPanel sentinel —
+// the freeze fix so a trackpad momentum flood can't back up the input FIFO and
+// hang the modal. The flush drains the net delta into one WheelMsg the plugin
+// uses to scroll its embedded viewport.
+func TestFrame_WheelFilterCoalescesCapturingOverlay(t *testing.T) {
+	f, p := newMouseFrame(t, 80, frameGoldenHeight)
+	f.overlay.Push(Overlay{Content: "modal", Width: 5, Height: 3, CapturesInput: true})
+
+	out := f.filterWheel(wheelDown())
+	if _, ok := out.(wheelArmMsg); !ok {
+		t.Fatalf("first capturing-overlay wheel filtered to %T; want wheelArmMsg", out)
+	}
+	for range 4 {
+		if got := f.filterWheel(wheelDown()); got != nil {
+			t.Errorf("in-burst overlay wheel emitted %T; want nil (accumulate + drop)", got)
+		}
+	}
+	if got := f.wheelAccum[OverlayWheelPanel]; got != 5 {
+		t.Errorf("overlay accum = %d; want 5", got)
+	}
+
+	f.flushWheelAccum()
+	wms := p.wheelMsgs()
+	if len(wms) != 1 || wms[0].Panel != OverlayWheelPanel || wms[0].Delta != 5 {
+		t.Errorf("flush forwarded %+v; want one {OverlayWheelPanel, +5}", wms)
 	}
 }
 

@@ -228,14 +228,14 @@ func TestHandleAction_NavDown_RoutesToViewportWhenViewportActive(t *testing.T) {
 	b.Viewport.SetDimensions(60, 10)
 
 	b.active = panelViewport
-	b.Viewport.ScrollToLine(50)
-	yBefore := b.Viewport.YOffset()
+	b.setViewportCursor(50)
+	b.syncViewportToCursor()
+	cursorBefore := b.viewportCursor
 
 	b.HandleAction(tui.ActionNavDown)
-	yAfter := b.Viewport.YOffset()
 
-	if yAfter <= yBefore {
-		t.Errorf("NavDown with viewport active: YOffset not increased (before=%d, after=%d)", yBefore, yAfter)
+	if b.viewportCursor <= cursorBefore {
+		t.Errorf("NavDown with viewport active: cursor not advanced (before=%d, after=%d)", cursorBefore, b.viewportCursor)
 	}
 }
 
@@ -245,14 +245,14 @@ func TestHandleAction_NavUp_RoutesToViewportWhenViewportActive(t *testing.T) {
 	b.Viewport.SetDimensions(60, 10)
 
 	b.active = panelViewport
-	b.Viewport.ScrollToLine(50)
-	yBefore := b.Viewport.YOffset()
+	b.setViewportCursor(50)
+	b.syncViewportToCursor()
+	cursorBefore := b.viewportCursor
 
 	b.HandleAction(tui.ActionNavUp)
-	yAfter := b.Viewport.YOffset()
 
-	if yAfter >= yBefore {
-		t.Errorf("NavUp with viewport active: YOffset not decreased (before=%d, after=%d)", yBefore, yAfter)
+	if b.viewportCursor >= cursorBefore {
+		t.Errorf("NavUp with viewport active: cursor not retreated (before=%d, after=%d)", cursorBefore, b.viewportCursor)
 	}
 }
 

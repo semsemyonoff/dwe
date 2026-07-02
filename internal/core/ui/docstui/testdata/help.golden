@@ -29,6 +29,7 @@
 │   ]          Next diagram              │
 │   o          Open diagram              │
 │   y          Copy diagram source       │
+│   E          Show render error         │
 │                                        │
 │ Locales                                │
 │   L          Cycle language            │

@@ -10,6 +10,10 @@ type StatusBarWidget struct {
 	language string
 	rendered int
 	total    int
+
+	// flash is a transient confirmation message (e.g. "copied to clipboard")
+	// shown ahead of the normal status until a timer clears it. Empty = none.
+	flash string
 }
 
 // NewStatusBarWidget returns a new StatusBarWidget with default en language.
@@ -38,7 +42,19 @@ func (w *StatusBarWidget) SetProgress(rendered, total int) {
 	w.total = total
 }
 
-// View renders the status bar content: path + optional diagram progress + locale tag.
+// SetFlash sets a transient confirmation message shown ahead of the status.
+func (w *StatusBarWidget) SetFlash(msg string) {
+	w.flash = msg
+}
+
+// ClearFlash removes the transient confirmation message.
+func (w *StatusBarWidget) ClearFlash() {
+	w.flash = ""
+}
+
+// View renders the status bar content: optional transient flash + path +
+// optional diagram progress + locale tag. When a flash is active it leads so
+// it stays visible even if the frame truncates a long path.
 func (w *StatusBarWidget) View() string {
 	status := w.path
 	if w.rendered > 0 && w.total > 0 {
@@ -46,6 +62,12 @@ func (w *StatusBarWidget) View() string {
 	}
 	if w.language != "" {
 		status += fmt.Sprintf("  [%s]", w.language)
+	}
+	if w.flash != "" {
+		if status == "" {
+			return w.flash
+		}
+		return w.flash + "  ·  " + status
 	}
 	return status
 }

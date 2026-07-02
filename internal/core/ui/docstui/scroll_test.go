@@ -147,7 +147,7 @@ func TestScrollbarAbsentForShortDocument(t *testing.T) {
 	}
 }
 
-func TestActiveDiagramFollowsScroll(t *testing.T) {
+func TestActiveDiagramFollowsCursor(t *testing.T) {
 	var b strings.Builder
 	b.WriteString("# Diagrams\n\n```mermaid\ngraph TD; A-->B\n```\n\n")
 	for range 80 {
@@ -165,23 +165,25 @@ func TestActiveDiagramFollowsScroll(t *testing.T) {
 	if got := len(m.DiagramState.Diagrams); got != 2 {
 		t.Fatalf("expected 2 diagrams, got %d", got)
 	}
-	// At the top, the first diagram is in view and active.
+	if len(m.currentDiagramLines) != 2 || m.currentDiagramLines[0] < 0 || m.currentDiagramLines[1] < 0 {
+		t.Fatalf("expected two located diagram lines, got %v", m.currentDiagramLines)
+	}
+	// At the top, the cursor is above/on the first diagram and it is active.
 	if m.DiagramState.Current != 0 {
 		t.Errorf("at top, active diagram = %d, want 0", m.DiagramState.Current)
 	}
 
-	// Scroll to the bottom: the second diagram comes into view and takes over.
-	m.FocusZone = FocusViewport
-	m.Viewport.ScrollEnd()
+	// Move the cursor onto the second diagram's row: it takes over.
+	m.setViewportCursor(m.currentDiagramLines[1])
 	m.syncActiveDiagram()
 	if m.DiagramState.Current != 1 {
-		t.Errorf("after scrolling to bottom, active diagram = %d, want 1", m.DiagramState.Current)
+		t.Errorf("cursor on second diagram, active = %d, want 1", m.DiagramState.Current)
 	}
 
-	// Back to the top restores the first diagram.
-	m.Viewport.ScrollStart()
+	// Move the cursor back onto the first diagram's row: it restores.
+	m.setViewportCursor(m.currentDiagramLines[0])
 	m.syncActiveDiagram()
 	if m.DiagramState.Current != 0 {
-		t.Errorf("after scrolling back to top, active diagram = %d, want 0", m.DiagramState.Current)
+		t.Errorf("cursor on first diagram, active = %d, want 0", m.DiagramState.Current)
 	}
 }

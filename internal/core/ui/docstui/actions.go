@@ -1,8 +1,6 @@
 package docstui
 
 import (
-	"os"
-
 	tea "charm.land/bubbletea/v2"
 
 	"github.com/semsemyonoff/dwe/internal/core/ui/tui"
@@ -14,6 +12,7 @@ const (
 	actionDiagramNext   tui.Action = "diagram.next"
 	actionDiagramOpen   tui.Action = "diagram.open"
 	actionDiagramCopy   tui.Action = "diagram.copy"
+	actionDiagramError  tui.Action = "diagram.error"
 	actionLocaleCycle   tui.Action = "locale.cycle"
 	actionLocaleEnglish tui.Action = "locale.english"
 	actionTreeCollapse  tui.Action = "tree.collapse"
@@ -95,6 +94,7 @@ func (b *browser) Actions(reg *tui.Registry) error {
 		{actionDiagramNext, tui.Binding{Keys: []string{"]"}, Desc: "Next diagram", Section: sectionDiagrams}},
 		{actionDiagramOpen, tui.Binding{Keys: []string{"o"}, Desc: "Open diagram", Section: sectionDiagrams}},
 		{actionDiagramCopy, tui.Binding{Keys: []string{"y"}, Desc: "Copy diagram source", Section: sectionDiagrams}},
+		{actionDiagramError, tui.Binding{Keys: []string{"E"}, Desc: "Show render error", Section: sectionDiagrams}},
 	} {
 		if err := reg.Register(spec.a, spec.b); err != nil {
 			return err
@@ -153,23 +153,19 @@ func (b *browser) HandleAction(a tui.Action) (tea.Cmd, bool) {
 	case tui.ActionReload:
 		return b.onReload()
 	case actionDiagramPrev:
-		if b.DiagramState != nil {
-			b.DiagramState.Prev()
-			b.refreshDiagramView()
-		}
+		b.jumpToDiagram(-1)
 		return nil, true
 	case actionDiagramNext:
-		if b.DiagramState != nil {
-			b.DiagramState.Next()
-			b.refreshDiagramView()
-		}
+		b.jumpToDiagram(1)
 		return nil, true
 	case actionDiagramOpen:
 		_ = b.openCurrentDiagram()
 		return nil, true
-	case actionDiagramCopy:
-		b.doCopyDiagram()
+	case actionDiagramError:
+		b.openErrorOverlay()
 		return nil, true
+	case actionDiagramCopy:
+		return b.doCopyDiagram(), true
 	case actionLocaleCycle:
 		return b.onLocaleCycle()
 	case actionLocaleEnglish:
@@ -187,11 +183,8 @@ func (b *browser) navVertical(delta int) tea.Cmd {
 		if b.Viewport == nil {
 			return nil
 		}
-		if delta < 0 {
-			b.Viewport.ScrollUp()
-		} else {
-			b.Viewport.ScrollDown()
-		}
+		b.moveViewportCursor(delta)
+		b.syncViewportToCursor()
 		b.syncActiveDiagram()
 		return nil
 	}
@@ -231,6 +224,7 @@ func (b *browser) navRight() {
 func (b *browser) navHome() tea.Cmd {
 	if b.active == panelViewport {
 		if b.Viewport != nil {
+			b.setViewportCursor(0)
 			b.Viewport.ScrollStart()
 			b.syncActiveDiagram()
 		}
@@ -247,6 +241,7 @@ func (b *browser) navHome() tea.Cmd {
 func (b *browser) navEnd() tea.Cmd {
 	if b.active == panelViewport {
 		if b.Viewport != nil {
+			b.setViewportCursor(b.Viewport.TotalLines() - 1)
 			b.Viewport.ScrollEnd()
 			b.syncActiveDiagram()
 		}
@@ -267,11 +262,12 @@ func (b *browser) navPage(delta int) tea.Cmd {
 		if b.Viewport == nil {
 			return nil
 		}
+		step := max(b.Viewport.VisibleHeight(), 1)
 		if delta < 0 {
-			b.Viewport.PageUp()
-		} else {
-			b.Viewport.PageDown()
+			step = -step
 		}
+		b.moveViewportCursor(step)
+		b.syncViewportToCursor()
 		b.syncActiveDiagram()
 		return nil
 	}
@@ -302,7 +298,8 @@ func (b *browser) navHalfPage(delta int) tea.Cmd {
 		if delta < 0 {
 			step = -step
 		}
-		b.Viewport.ScrollBy(step)
+		b.moveViewportCursor(step)
+		b.syncViewportToCursor()
 		b.syncActiveDiagram()
 		return nil
 	}
@@ -334,6 +331,14 @@ func (b *browser) afterTreeMove() tea.Cmd {
 // the node and moves focus to the viewport so the user can read the content.
 // For leaf nodes it loads the topic and also moves focus to the viewport.
 func (b *browser) onEnter() (tea.Cmd, bool) {
+	// In the viewport, Enter follows the first internal link on the cursor row
+	// (external links are left to the terminal). Multi-link rows: first wins.
+	if b.active == panelViewport {
+		if href, ok := b.firstInternalLinkOnRow(b.viewportCursor); ok {
+			return b.followLink(href), true
+		}
+		return nil, true
+	}
 	if b.active != panelTree || b.Tree == nil || b.Tree.Cursor() == nil {
 		return nil, true
 	}
@@ -358,16 +363,25 @@ func (b *browser) onReload() (tea.Cmd, bool) {
 	return cmd, true
 }
 
-// doCopyDiagram copies the current diagram source to clipboard via OSC 52.
-func (b *browser) doCopyDiagram() {
+// doCopyDiagram copies the current diagram source to the system clipboard.
+// It returns a tea.SetClipboard command rather than writing OSC-52 straight to
+// os.Stdout: the bubbletea program owns the output stream, so a direct write
+// races the renderer and is frequently dropped/garbled (the "y does nothing"
+// symptom). Routing through the program emits the escape in sync with the frame.
+func (b *browser) doCopyDiagram() tea.Cmd {
 	if b.DiagramState == nil {
-		return
+		return nil
 	}
 	d := b.DiagramState.CurrentDiagram()
 	if d == nil {
-		return
+		return nil
 	}
-	_ = CopyViaOSC52(d.Source, os.Stdout)
+	// Confirm the copy in the status line — the clipboard write is otherwise
+	// invisible, so users could not tell `y` did anything.
+	return tea.Batch(
+		tea.SetClipboard(d.Source),
+		b.setStatusFlash("✓ Diagram source copied to clipboard"),
+	)
 }
 
 // onLocaleCycle advances to the next available locale for the current topic.

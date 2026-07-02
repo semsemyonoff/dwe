@@ -650,6 +650,11 @@ func routeWhileCapturing(msg tea.Msg) captureDecision {
 // status line beneath. The returned tea.View carries the framework-owned
 // envelope (AltScreen on; CellMotion mouse when enabled and capable).
 func (f *Frame) View() tea.View {
+	// A FullScreen top overlay takes over the entire terminal (no panels/border/
+	// status), so a released mouse can natively select ONLY its text.
+	if ov, ok := f.overlay.Top(); ok && ov.FullScreen {
+		return f.fullScreenOverlayView(ov)
+	}
 	body := f.renderBody()
 	if ov, ok := f.overlay.Top(); ok {
 		body = Composite(body, ov, f.geo.Overlay)
@@ -673,6 +678,37 @@ func (f *Frame) View() tea.View {
 	if f.opts.mouse && f.mouseCapable() {
 		v.MouseMode = tea.MouseModeCellMotion
 	} else {
+		v.MouseMode = tea.MouseModeNone
+	}
+	// A top overlay may ask to release the mouse (native text selection). This
+	// overrides the enabled mode above so the terminal — not the app — owns the
+	// mouse while such an overlay is visible; on close it reverts automatically.
+	if ov, ok := f.overlay.Top(); ok && ov.ReleaseMouse {
+		v.MouseMode = tea.MouseModeNone
+	}
+	return v
+}
+
+// fullScreenOverlayView renders a FullScreen overlay as the entire terminal, with
+// no body panels / borders / status line, so the only thing on screen (and thus
+// the only thing a released mouse can natively select) is the overlay's own text.
+// Content is padded/clamped to the full terminal as a safety net; the plugin is
+// expected to have already sized it to TermWidth × TermHeight.
+func (f *Frame) fullScreenOverlayView(ov Overlay) tea.View {
+	content := lipgloss.NewStyle().
+		Width(f.geo.Term.Width).
+		Height(f.geo.Term.Height).
+		MaxWidth(f.geo.Term.Width).
+		MaxHeight(f.geo.Term.Height).
+		Render(ov.Content)
+	v := tea.NewView(content)
+	v.AltScreen = true
+	switch {
+	case ov.ReleaseMouse:
+		v.MouseMode = tea.MouseModeNone
+	case f.opts.mouse && f.mouseCapable():
+		v.MouseMode = tea.MouseModeCellMotion
+	default:
 		v.MouseMode = tea.MouseModeNone
 	}
 	return v
@@ -716,16 +752,35 @@ func (f *Frame) filterWheel(msg tea.Msg) tea.Msg {
 		return msg
 	}
 	delta := wheelButtonDelta(wm.Button)
-	// Only coalesce panel scroll: an overlay/inline-filter wants the raw wheel
-	// (overlay viewport scroll) or swallows it, and horizontal wheels carry no
-	// vertical delta — let handleMouse deal with those.
-	if delta == 0 || !f.overlay.Empty() || f.plugin.CapturingInput() {
+	if delta == 0 {
+		return msg // horizontal wheel carries no vertical delta — handleMouse
+	}
+	// A CapturesInput overlay coalesces its OWN vertical wheel, keyed by the
+	// OverlayWheelPanel sentinel: the embedded viewport scrolls just like a body
+	// panel, so a momentum flood can't back up the input FIFO and freeze the
+	// modal (the same freeze the panel coalescer fixed). A non-capturing overlay
+	// (help) swallows the wheel via handleMouse.
+	if top, ok := f.overlay.Top(); ok {
+		if !top.CapturesInput {
+			return msg
+		}
+		return f.accumulateWheel(OverlayWheelPanel, delta)
+	}
+	// Inline filter (no overlay) swallows wheels — parity with the key policy.
+	if f.plugin.CapturingInput() {
 		return msg
 	}
 	zone, id := classifyHit(f.geo, f.panelRects(), f.helpHintRegion(), nil, wm.X, wm.Y)
 	if zone != zonePanel {
 		return msg // not over a panel; handleMouse swallows it
 	}
+	return f.accumulateWheel(id, delta)
+}
+
+// accumulateWheel adds a coalesced wheel notch to the bucket for id and arms the
+// trailing flush tick on the first notch of an idle burst. It returns nil to
+// drop the raw notch (no Update/View) or wheelArmMsg to schedule the one flush.
+func (f *Frame) accumulateWheel(id PanelID, delta int) tea.Msg {
 	if f.wheelAccum == nil {
 		f.wheelAccum = map[PanelID]int{}
 	}
@@ -761,7 +816,15 @@ func (f *Frame) flushWheelAccum() tea.Cmd {
 			cmds = append(cmds, cmd)
 		}
 	}
-	f.drainOverlay()
+	// A capturing overlay scrolled itself in place (republished via PendingOverlay)
+	// → ReplaceTop, never Push. A panel wheel may instead have opened a new plugin
+	// overlay → drainOverlay pushes it. The two bucket kinds are mutually exclusive
+	// (the filter routes to one or the other), so the top's kind selects the path.
+	if top, ok := f.overlay.Top(); ok && top.CapturesInput {
+		f.refreshCapturingOverlay()
+	} else {
+		f.drainOverlay()
+	}
 	if len(cmds) == 0 {
 		return nil
 	}

@@ -95,9 +95,22 @@ type Model struct {
 	// currentDiagramLines maps each diagram index to the rendered viewport
 	// line where its placeholder sits (in document order, ascending). Built
 	// per-load from the diagram markers in the rendered output and used by
-	// syncActiveDiagram to make the diagram in view the active one as the
-	// user scrolls.
+	// syncActiveDiagram to make the diagram under the cursor the active one.
 	currentDiagramLines []int
+
+	// viewportCursor is the rendered-row index of the reading cursor in the
+	// right viewport panel (revdiff-style line cursor). Because glamour has
+	// already wrapped content into final rows, this index IS the visible row
+	// directly — no logical→visual mapping is needed. It anchors the
+	// diagram-under-cursor selection (syncActiveDiagram) and link activation,
+	// and is reset/clamped on every topic load. The glyph is drawn by the
+	// browser only while the viewport is focused.
+	viewportCursor int
+
+	// currentLinks holds the OSC-8 hyperlink regions of the displayed document
+	// (post-inlineDiagrams), one entry per (rendered row × link). Built per-load
+	// and used for click / Enter link activation; cleared on error/blank loads.
+	currentLinks []linkRegion
 
 	// Per-session temp dir for "open diagram" exports. One dir per Model so
 	// concurrent `dwe docs` sessions don't race on the same temp filename.
@@ -219,6 +232,7 @@ func (m *Model) loadTopic(node *TreeNode) (tea.Cmd, error) {
 		m.CurrentSourceLang = "en"
 		m.lastRenderedOutput = ""
 		m.lastRenderedDiagrams = nil
+		m.currentLinks = nil
 		m.currentlyLoadedPath = ""
 		m.currentlyLoadedLocale = ""
 		m.StatusBar.SetPath("")
@@ -313,6 +327,7 @@ func (m *Model) applyTopicLoaded(msg topicLoadedMsg) tea.Cmd {
 	if msg.Err != nil {
 		m.Viewport.SetContent("Error: " + msg.Err.Error())
 		m.pendingHeadingIdx = -1
+		m.currentLinks = nil
 		return nil
 	}
 
@@ -321,7 +336,12 @@ func (m *Model) applyTopicLoaded(msg topicLoadedMsg) tea.Cmd {
 	m.lastRenderedDiagrams = msg.Diagrams
 	m.currentHeadingLines = msg.HeadingLines
 	m.currentDiagramLines = diagramLineIndices(msg.Output, len(msg.Diagrams))
-	m.Viewport.SetContent(m.inlineDiagrams(msg.Output, msg.Diagrams))
+	displayed := m.inlineDiagrams(msg.Output, msg.Diagrams)
+	m.Viewport.SetContent(displayed)
+	// Parse the displayed string (post-inline) so link columns line up with what
+	// the user clicks; the active/inactive diagram placeholders are equal-width so
+	// a later syncActiveDiagram re-inline never shifts these regions.
+	m.currentLinks = parseLinkRegions(displayed)
 	m.StatusBar.SetPath(msg.Path)
 	m.StatusBar.SetLanguage(msg.SourceLang)
 	m.currentlyLoadedPath = msg.Path
@@ -335,8 +355,12 @@ func (m *Model) applyTopicLoaded(msg topicLoadedMsg) tea.Cmd {
 		m.Viewport.ScrollToLine(0)
 	}
 
-	// Make the diagram in view the active one for the position we landed on
-	// (top of page, or the heading we scrolled to).
+	// Park the reading cursor at the top of the landed view (top of page, or the
+	// heading we scrolled to) so it is on-screen and anchors diagram selection.
+	m.viewportCursor = m.clampCursor(m.Viewport.YOffset())
+
+	// Make the diagram under the cursor the active one for the position we
+	// landed on.
 	m.syncActiveDiagram()
 
 	if len(msg.Diagrams) == 0 {

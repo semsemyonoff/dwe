@@ -85,6 +85,41 @@ type browser struct {
 	// things settle.
 	diagramRefreshPending      bool
 	diagramRefreshTickInFlight bool
+
+	// errOverlay is the diagram render-error modal (nil = closed). errOverlayPending
+	// gates PendingOverlay so the Frame pushes/refreshes it; cleared by
+	// OverlayClosedMsg when the Frame pops it (esc / click-outside). Mirrors the
+	// cmdbrowser inspect overlay lifecycle.
+	errOverlay        *errorState
+	errOverlayPending bool
+
+	// flashGen tags each status-line flash so a stale clear tick (from an earlier
+	// flash) never wipes a newer one — only the tick whose gen still matches the
+	// current flash clears it.
+	flashGen int
+}
+
+// statusFlashDuration is how long a transient status-line confirmation (e.g.
+// "copied to clipboard") stays visible before the clear tick removes it.
+const statusFlashDuration = 2 * time.Second
+
+// statusFlashClearMsg clears the status flash whose generation matches the
+// current one (see flashGen).
+type statusFlashClearMsg struct{ gen int }
+
+// setStatusFlash shows a transient confirmation in the status line and returns
+// the Cmd that clears it after statusFlashDuration. No-op (nil Cmd) when there
+// is no status bar.
+func (b *browser) setStatusFlash(text string) tea.Cmd {
+	if b.StatusBar == nil {
+		return nil
+	}
+	b.StatusBar.SetFlash(text)
+	b.flashGen++
+	gen := b.flashGen
+	return tea.Tick(statusFlashDuration, func(time.Time) tea.Msg {
+		return statusFlashClearMsg{gen: gen}
+	})
 }
 
 // diagramRefreshDelay is the debounce window for applying the background-diagram
@@ -112,6 +147,7 @@ type wheelState struct {
 	gen          int  // bumped on every wheel notch; captured by each scheduled tick
 	loadPending  bool // a deferred tree topic load is owed (tree scroll)
 	syncPending  bool // a deferred viewport diagram re-sync is owed (viewport scroll)
+	pinPending   bool // a deferred viewport cursor re-pin is owed (viewport scroll)
 	tickInFlight bool // exactly one debounce tick is scheduled at a time
 }
 
@@ -237,8 +273,129 @@ func (b *browser) StatusContext() string {
 	return b.StatusBar.View()
 }
 
-// PendingOverlay implements tui.Plugin. No overlay for the docs browser yet.
-func (b *browser) PendingOverlay() (tui.Overlay, bool) { return tui.Overlay{}, false }
+// PendingOverlay implements tui.Plugin. It hands the diagram render-error modal
+// to the Frame when one is pending: errOverlayPending is set by openErrorOverlay
+// (first paint) and updateErrorOverlay (after a scroll) and cleared here, so each
+// republish yields exactly one overlay value. The Frame pushes the first and
+// replaces it in place on subsequent scrolls, so the stack never grows.
+func (b *browser) PendingOverlay() (tui.Overlay, bool) {
+	if b.errOverlay == nil || !b.errOverlayPending {
+		return tui.Overlay{}, false
+	}
+	b.errOverlayPending = false
+	return b.errOverlay.overlay(), true
+}
+
+// errorOverlaySize returns the (width, height) for the error overlay's viewport.
+// Height reserves the border + padding chrome against the body. Width grows to
+// fit the widest content line (contentWidth) so a stack trace stays unwrapped
+// when the terminal allows, clamped to [errorBoxMinWidth, availableBodyWidth].
+func (b *browser) errorOverlaySize(contentWidth int) (int, int) {
+	availW := max(b.body.Width-errorBoxHChrome, 10)
+	w := min(max(contentWidth, errorBoxMinWidth), availW)
+	h := max(b.body.Height-errorBoxVChrome-2, 3)
+	return w, h
+}
+
+// applyErrorOverlayDims resizes the open error overlay's viewport for its current
+// mode: the full body (minus the hint row) in selection mode so the opaque block
+// covers everything behind it, or the content-fit box size otherwise. No-op when
+// closed.
+func (b *browser) applyErrorOverlayDims() {
+	if b.errOverlay == nil {
+		return
+	}
+	if b.errOverlay.selecting {
+		// Selection mode takes over the FULL terminal (FullScreen overlay), so size
+		// the block to the whole terminal minus the hint row — not the inner body —
+		// so no frame chrome remains on screen to be swept into a native selection.
+		b.errOverlay.resize(max(b.TermWidth, 10), max(b.TermHeight-1, 3))
+		return
+	}
+	content := formatErrorContent(b.errOverlay.num, b.errOverlay.total, b.errOverlay.errText)
+	w, h := b.errorOverlaySize(errorContentWidth(content))
+	b.errOverlay.resize(w, h)
+}
+
+// openErrorOverlay opens the render-error modal for the diagram under the cursor.
+// A no-op when there is no current diagram or no recorded render error (e.g.
+// rendering disabled, or the diagram rendered fine) — so `E` only surfaces a real
+// failure.
+func (b *browser) openErrorOverlay() {
+	if b.DiagramState == nil || b.Prefetch == nil {
+		return
+	}
+	if b.DiagramState.CurrentDiagram() == nil {
+		return
+	}
+	errText, ok := b.Prefetch.RenderError(b.DiagramState.Current)
+	if !ok {
+		return
+	}
+	num := b.DiagramState.Current + 1
+	total := len(b.DiagramState.Diagrams)
+	w, h := b.errorOverlaySize(errorContentWidth(formatErrorContent(num, total, errText)))
+	b.errOverlay = newErrorState(w, h, num, total, errText)
+	b.errOverlayPending = true
+}
+
+// errorWheelStep is how many lines one coalesced wheel notch scrolls the error
+// overlay's viewport — matches the viewport's own MouseWheelDelta default so a
+// notch feels the same as before coalescing.
+const errorWheelStep = 3
+
+// scrollErrorOverlay scrolls the open error overlay by delta wheel notches
+// (delta<0 up, delta>0 down) and republishes the snapshot. No-op when closed.
+func (b *browser) scrollErrorOverlay(delta int) {
+	if b.errOverlay == nil || delta == 0 {
+		return
+	}
+	if delta < 0 {
+		b.errOverlay.vp.ScrollUp(-delta * errorWheelStep)
+	} else {
+		b.errOverlay.vp.ScrollDown(delta * errorWheelStep)
+	}
+	b.errOverlayPending = true
+}
+
+// updateErrorOverlay drives the error overlay while it captures input (the Frame
+// forwards every key except ctrl+c / esc here). `c` copies the whole error to the
+// clipboard; `s` toggles selection mode (releases the mouse for native
+// drag-select); every other key delegates to the viewport for scrolling. esc
+// never reaches here (the Frame handles it as a close).
+func (b *browser) updateErrorOverlay(msg tea.KeyPressMsg) tea.Cmd {
+	if b.errOverlay == nil {
+		return nil
+	}
+	switch msg.Text {
+	case "c":
+		return b.copyErrorToClipboard()
+	case "s":
+		// Flip mouse capture for native selection, resize the overlay for the new
+		// mode (full body when selecting so nothing behind it is selectable), and
+		// republish so the Frame re-reads ReleaseMouse and the footer hint updates.
+		b.errOverlay.selecting = !b.errOverlay.selecting
+		b.applyErrorOverlayDims()
+		b.errOverlayPending = true
+		return nil
+	}
+	var cmd tea.Cmd
+	b.errOverlay.vp, cmd = b.errOverlay.vp.Update(msg)
+	b.errOverlayPending = true
+	return cmd
+}
+
+// copyErrorToClipboard copies the full render error to the system clipboard and
+// flashes a confirmation. No-op when the overlay is closed or the error is blank.
+func (b *browser) copyErrorToClipboard() tea.Cmd {
+	if b.errOverlay == nil || strings.TrimSpace(b.errOverlay.errText) == "" {
+		return nil
+	}
+	return tea.Batch(
+		tea.SetClipboard(b.errOverlay.errText),
+		b.setStatusFlash("✓ Error copied to clipboard"),
+	)
+}
 
 // Update implements tui.Plugin. The Frame forwards all non-key messages here
 // (async preservation), including tea.WindowSizeMsg (forwarded after Resize).
@@ -246,6 +403,12 @@ func (b *browser) PendingOverlay() (tui.Overlay, bool) { return tui.Overlay{}, f
 func (b *browser) Update(msg tea.Msg) tea.Cmd {
 	switch msg := msg.(type) {
 	case tea.KeyPressMsg:
+		// While the error overlay captures input, the Frame forwards raw keys here
+		// (except ctrl+c / esc, which it handles as quit / close). Route them to the
+		// overlay viewport so it scrolls.
+		if b.errOverlay != nil {
+			return b.updateErrorOverlay(msg)
+		}
 		// While the inline filter is active, the Frame forwards raw keys here
 		// (CapturingInput() == true). Route them to updateFilter; the registry
 		// is bypassed so printable characters extend the query rather than
@@ -253,6 +416,24 @@ func (b *browser) Update(msg tea.Msg) tea.Cmd {
 		if b.Filter != nil && b.Filter.Active {
 			return b.updateFilter(msg)
 		}
+		return nil
+
+	case tea.MouseWheelMsg:
+		// Raw wheel events reach Update only while a CapturesInput overlay is open
+		// (the Frame forwards them so the overlay's viewport scrolls).
+		if b.errOverlay == nil {
+			return nil
+		}
+		var cmd tea.Cmd
+		b.errOverlay.vp, cmd = b.errOverlay.vp.Update(msg)
+		b.errOverlayPending = true
+		return cmd
+
+	case tui.OverlayClosedMsg:
+		// The Frame popped our error overlay (esc / click-outside). Clear the
+		// lingering state so a later raw key cannot resurrect the closed modal.
+		b.errOverlay = nil
+		b.errOverlayPending = false
 		return nil
 
 	case tea.WindowSizeMsg:
@@ -264,6 +445,14 @@ func (b *browser) Update(msg tea.Msg) tea.Cmd {
 		// until the next load (Decision #10, no load-storm / no YOffset reset).
 		if msg.Width > 0 {
 			b.ContentWidth = viewportPanelInnerWidth(msg.Width)
+		}
+		// Re-size an open render-error overlay to the new geometry and re-publish it,
+		// so a resize (especially in full-screen selection mode, whose block is sized
+		// to the terminal) doesn't leave a stale snapshot that fullScreenOverlayView
+		// then truncates. Resize(body) already ran before this, so b.body is current.
+		if b.errOverlay != nil {
+			b.applyErrorOverlayDims()
+			b.errOverlayPending = true
 		}
 		// Fire the first topic load exactly once, from the first non-zero-width
 		// WindowSizeMsg. firstLoadDone prevents a second trigger on resize.
@@ -283,6 +472,13 @@ func (b *browser) Update(msg tea.Msg) tea.Cmd {
 		return nil
 
 	case tui.WheelMsg:
+		// Coalesced wheel for the open error overlay (sentinel panel) scrolls the
+		// modal's embedded viewport by the net notch count; everything else is a
+		// body-panel wheel.
+		if msg.Panel == tui.OverlayWheelPanel {
+			b.scrollErrorOverlay(msg.Delta)
+			return nil
+		}
 		return b.handleWheel(msg)
 
 	case wheelDebounceMsg:
@@ -334,6 +530,13 @@ func (b *browser) Update(msg tea.Msg) tea.Cmd {
 
 	case diagramRefreshMsg:
 		return b.applyDiagramRefresh()
+
+	case statusFlashClearMsg:
+		// Clear only if no newer flash superseded this one.
+		if b.StatusBar != nil && msg.gen == b.flashGen {
+			b.StatusBar.ClearFlash()
+		}
+		return nil
 	}
 	return nil
 }
@@ -399,9 +602,33 @@ func (b *browser) ViewPanel(id tui.PanelID, inner tui.Region) string {
 		// cmdbrowser's viewList sizing pattern.
 		b.Viewport.SetDimensions(inner.Width, inner.Height)
 		content := b.Viewport.View()
+		content = b.applyCursorGlyph(content, inner.Height)
 		return b.applyInnerScrollbar(content, inner.Height)
 	}
 	return ""
+}
+
+// applyCursorGlyph overdraws the cursor marker on the cursor row of the windowed
+// viewport content. It runs only while the viewport panel is focused (the cursor
+// is a reading aid, not shown when the tree drives navigation) and only when the
+// cursor row is inside the visible window — during a wheel burst the cursor can
+// scroll off-screen, in which case no glyph is drawn (it re-pins at settle). The
+// overwrite is width-neutral (replaces glamour's margin space) so it does not
+// disturb the right scrollbar column carved by applyInnerScrollbar.
+func (b *browser) applyCursorGlyph(content string, h int) string {
+	if b.active != panelViewport || b.Viewport == nil || h <= 0 {
+		return content
+	}
+	row := b.viewportCursor - b.Viewport.YOffset()
+	if row < 0 || row >= h {
+		return content
+	}
+	lines := strings.Split(content, "\n")
+	if row >= len(lines) {
+		return content
+	}
+	lines[row] = overwriteFirstCell(lines[row], cursorGlyphStyled())
+	return strings.Join(lines, "\n")
 }
 
 // applyInnerScrollbar overdraws the rightmost character column of the inner
@@ -662,7 +889,27 @@ func (b *browser) handlePanelClick(msg tui.PanelClickMsg) tea.Cmd {
 		return b.afterTreeMove()
 	}
 	if msg.Panel == panelViewport && b.Viewport != nil {
-		b.scrollViewportToClick(msg.X, msg.Y)
+		// A click on an internal link navigates; external links are left to the
+		// terminal's own OSC-8 handling. Checked before the scrollbar/cursor so a
+		// link in the last column still wins.
+		absLine := b.Viewport.YOffset() + msg.Y
+		if href, ok := b.linkAt(absLine, msg.X); ok {
+			if isExternalHref(href) {
+				return nil
+			}
+			return b.followLink(href)
+		}
+		w, h := b.viewportInner.Width, b.viewportInner.Height
+		// Scrollbar column (last cell, only when a scrollbar is drawn): keep the
+		// proportional jump behavior.
+		if w > 0 && h > 0 && msg.X >= w-1 && b.Viewport.TotalLines() > h {
+			b.scrollViewportToClick(msg.X, msg.Y)
+			return nil
+		}
+		// Otherwise move the reading cursor to the clicked row (the click is on a
+		// visible row, so no scroll is needed) and re-pick the active diagram.
+		b.setViewportCursor(b.Viewport.YOffset() + msg.Y)
+		b.syncActiveDiagram()
 		return nil
 	}
 	return nil
@@ -687,6 +934,11 @@ func (b *browser) scrollViewportToClick(x, y int) {
 	maxOffset := total - h
 	target := min(max(y*maxOffset/max(h-1, 1), 0), maxOffset)
 	b.Viewport.ScrollToLine(target)
+	// Re-pin the reading cursor into the new window (like the wheel path's
+	// flushWheel → pinCursorToWindow). Without this the cursor stays at its
+	// pre-click row, off-screen, and the next j/k nav would immediately scroll the
+	// viewport back to it — discarding the scrollbar jump.
+	b.pinCursorToWindow()
 	// Update the active-diagram highlight for the landed position (cheap; this is
 	// a single click, not a wheel flood, so it need not be deferred).
 	b.syncActiveDiagram()
@@ -706,10 +958,12 @@ func (b *browser) handleWheel(msg tui.WheelMsg) tea.Cmd {
 			return nil
 		}
 		// ScrollBy is O(1) (only the offset moves), so it stays immediate for a
-		// responsive scroll. syncActiveDiagram re-inlines the WHOLE document via
-		// SetContent on a diagram-boundary crossing — defer it so a fast scroll
-		// does it once at settle, not once per notch.
+		// responsive scroll. The cursor re-pin and the diagram re-sync (both of
+		// which re-inline the WHOLE document via SetContent on a boundary
+		// crossing) are deferred so a fast scroll does them once at settle, not
+		// once per notch.
 		b.Viewport.ScrollBy(msg.Delta * wheelViewportStep)
+		b.wheel.pinPending = true
 		return b.scheduleDiagramSync()
 	case panelTree:
 		if b.Tree == nil {
@@ -780,6 +1034,10 @@ func (b *browser) handleWheelDebounce(msg wheelDebounceMsg) tea.Cmd {
 // cleared, so only the still-pending work runs.
 func (b *browser) flushWheel() tea.Cmd {
 	b.wheel.tickInFlight = false
+	if b.wheel.pinPending {
+		b.wheel.pinPending = false
+		b.pinCursorToWindow()
+	}
 	if b.wheel.syncPending {
 		b.wheel.syncPending = false
 		b.syncActiveDiagram()

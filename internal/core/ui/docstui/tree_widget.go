@@ -322,6 +322,52 @@ func (tw *TreeWidget) expandAncestors(n *TreeNode) {
 	}
 }
 
+// findByContentPath locates the tree node whose displayed content is the file
+// at topicPath (a root-relative path WITHOUT the .md extension, matching the
+// topic-path form). It prefers a node from preferRoot, falling back to any root.
+// Heading rows and group headers are skipped; a directory matches when its
+// folded index.md is the target. Returns nil when nothing matches. Used for
+// internal link navigation — the node graph is small, so a walk per click is
+// cheap and avoids a separate index that would go stale on a locale Rebuild.
+func (tw *TreeWidget) findByContentPath(preferRoot, topicPath string) *TreeNode {
+	if n := tw.findNode(func(t *TreeNode) bool {
+		return t.RootName == preferRoot && contentPathEq(t, topicPath)
+	}); n != nil {
+		return n
+	}
+	return tw.findNode(func(t *TreeNode) bool { return contentPathEq(t, topicPath) })
+}
+
+// findNode returns the first node in document order for which pred is true.
+func (tw *TreeWidget) findNode(pred func(*TreeNode) bool) *TreeNode {
+	var walk func(n *TreeNode) *TreeNode
+	walk = func(n *TreeNode) *TreeNode {
+		if n == nil {
+			return nil
+		}
+		if pred(n) {
+			return n
+		}
+		for _, c := range n.Children {
+			if r := walk(c); r != nil {
+				return r
+			}
+		}
+		return nil
+	}
+	return walk(tw.root)
+}
+
+// contentPathEq reports whether t is a file/dir row whose backing markdown is
+// topicPath (compared without the .md extension).
+func contentPathEq(t *TreeNode, topicPath string) bool {
+	if t == nil || t.IsGroup || t.Heading != nil {
+		return false
+	}
+	cn := contentNodeFor(t)
+	return cn != nil && strings.TrimSuffix(cn.Path, ".md") == topicPath
+}
+
 // nodeLabel returns the user-visible label for a tree node — used by filter
 // matching so users find rows by what they read, not by raw filenames.
 func nodeLabel(node *TreeNode) string {

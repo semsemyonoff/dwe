@@ -115,7 +115,15 @@ func (m *Model) diagramPlaceholder(index, total int, current bool, src string, t
 	case cached:
 		text = fmt.Sprintf("<%s — `o` open · `y` source · `[` prev · `]` next>", prefix)
 	case m.prefetchFinished():
-		text = fmt.Sprintf("<%s — render failed · `y` source>", prefix)
+		// Advertise `E` only on the ACTIVE diagram that has a captured mmdc error:
+		// `E` opens the error log for DiagramState.Current (like `o`/`y`), so showing
+		// the hint on a non-current failed diagram would be a silent no-op. As the
+		// cursor/scroll makes the failed diagram current, the hint appears and works.
+		if current && m.hasRenderError(index) {
+			text = fmt.Sprintf("<%s — render failed · `E` error log · `y` source>", prefix)
+		} else {
+			text = fmt.Sprintf("<%s — render failed · `y` source>", prefix)
+		}
 	default:
 		text = fmt.Sprintf("<%s — rendering…>", prefix)
 	}
@@ -140,6 +148,16 @@ func diagramInactiveStyle() lipgloss.Style {
 	return lipgloss.NewStyle().Foreground(lipgloss.Color(styles.ColorMuted()))
 }
 
+// hasRenderError reports whether the prefetch pool captured an mmdc failure for
+// the diagram at index in the current topic — the gate for advertising `E`.
+func (m *Model) hasRenderError(index int) bool {
+	if m.Prefetch == nil {
+		return false
+	}
+	_, ok := m.Prefetch.RenderError(index)
+	return ok
+}
+
 // prefetchFinished reports whether the worker pool has reported a tick for
 // every queued diagram. Used by diagramPlaceholder to distinguish "still
 // rendering" (transient) from "failed" (terminal — mmdc errored, cache
@@ -148,31 +166,29 @@ func (m *Model) prefetchFinished() bool {
 	return m.PrefetchProgress.Total > 0 && m.PrefetchProgress.Rendered >= m.PrefetchProgress.Total
 }
 
-// refreshDiagramView re-runs inline substitution (so the "current"
-// highlight moves to the new selection) and scrolls the viewport so the
-// active diagram is on screen. The line position is recovered by locating
-// the unique "▸ 📊 Diagram N/M" marker in the rendered output — that's
-// more reliable than DiagramRef.LineInRendered, which is the pre-glamour
-// markdown line and doesn't account for word-wrap.
-func (m *Model) refreshDiagramView() {
-	if m.lastRenderedOutput == "" || len(m.lastRenderedDiagrams) == 0 {
+// jumpToDiagram advances the active diagram by one in direction dir (−1 prev,
+// +1 next, wrapping), moves the reading cursor onto that diagram's placeholder
+// row, scrolls it into view, and re-inlines so the highlight follows. This is
+// the `[`/`]` motion: unlike syncActiveDiagram (cursor drives selection) it
+// drives the cursor from the selection. The target row comes straight from
+// currentDiagramLines (built per-load from the post-glamour markers), which
+// already accounts for word-wrap.
+func (m *Model) jumpToDiagram(dir int) {
+	ds := m.DiagramState
+	if ds == nil || len(ds.Diagrams) == 0 {
 		return
 	}
-	content := m.inlineDiagrams(m.lastRenderedOutput, m.lastRenderedDiagrams)
-	m.Viewport.SetContent(content)
-	if m.DiagramState == nil {
-		return
+	if dir < 0 {
+		ds.Prev()
+	} else {
+		ds.Next()
 	}
-	diag := m.DiagramState.CurrentDiagram()
-	if diag == nil {
-		return
+	if idx := ds.Current; idx >= 0 && idx < len(m.currentDiagramLines) && m.currentDiagramLines[idx] >= 0 {
+		m.setViewportCursor(m.currentDiagramLines[idx])
+		m.Viewport.ScrollToLine(m.viewportCursor)
 	}
-	needle := fmt.Sprintf("▸ 📊 Diagram %d/%d", diag.Index+1, len(m.lastRenderedDiagrams))
-	for i, line := range strings.Split(content, "\n") {
-		if strings.Contains(stripANSI(line), needle) {
-			m.Viewport.ScrollToLine(i)
-			return
-		}
+	if m.lastRenderedOutput != "" && len(m.lastRenderedDiagrams) > 0 {
+		m.Viewport.SetContent(m.inlineDiagrams(m.lastRenderedOutput, m.lastRenderedDiagrams))
 	}
 }
 
@@ -201,51 +217,71 @@ func diagramLineIndices(output string, n int) []int {
 	return res
 }
 
-// activeDiagramForOffset returns the index of the diagram that should be
-// active for the current scroll position: the topmost diagram visible in the
-// viewport, or — when none is visible — the last one scrolled past (so it
-// stays selected until the next appears), falling back to the first diagram
-// when the view sits above them all. Returns -1 when there are no diagrams.
-func (m *Model) activeDiagramForOffset() int {
+// activeDiagramForCursor returns the index of the diagram that should be active
+// for the current cursor position. It prefers the last diagram at or above the
+// cursor (the one the reader is on or just below) — but ONLY while that diagram
+// is still on screen. After a mouse-wheel scroll the cursor is pinned to the
+// window's top edge (pinCursorToWindow), so the at-or-above diagram can be one
+// that scrolled off ABOVE the window; in that case the topmost diagram actually
+// visible in the window wins instead, so `o`/`y`/`E` act on what the user sees
+// rather than an off-screen diagram. Falls back to the at-or-above diagram, then
+// the first valid one. Returns -1 when there are no diagrams. Lines are in
+// ascending document order.
+func (m *Model) activeDiagramForCursor() int {
 	lines := m.currentDiagramLines
 	if len(lines) == 0 {
 		return -1
 	}
-	top := m.Viewport.YOffset()
-	bottom := top + m.Viewport.VisibleHeight()
 
-	firstVisible, lastAbove := -1, -1
+	// Candidate: the last diagram at or above the cursor (the one being read).
+	atOrAbove := -1
 	for i, ln := range lines {
-		if ln < 0 {
-			continue
-		}
-		if firstVisible < 0 && ln >= top && ln < bottom {
-			firstVisible = i
-		}
-		if ln < top {
-			lastAbove = i
+		if ln >= 0 && ln <= m.viewportCursor {
+			atOrAbove = i
 		}
 	}
-	switch {
-	case firstVisible >= 0:
-		return firstVisible
-	case lastAbove >= 0:
-		return lastAbove
-	default:
-		return 0
+
+	// If it is still on screen, it wins.
+	top, h := 0, 0
+	if m.Viewport != nil {
+		top = m.Viewport.YOffset()
+		h = m.Viewport.VisibleHeight()
 	}
+	if atOrAbove >= 0 && lines[atOrAbove] >= top {
+		return atOrAbove
+	}
+
+	// The at-or-above diagram scrolled off above the window (or the cursor sits
+	// above every diagram): prefer the topmost diagram visible in the window.
+	if h > 0 {
+		for i, ln := range lines {
+			if ln >= top && ln < top+h {
+				return i
+			}
+		}
+	}
+
+	if atOrAbove >= 0 {
+		return atOrAbove
+	}
+	for i, ln := range lines {
+		if ln >= 0 {
+			return i
+		}
+	}
+	return -1
 }
 
-// syncActiveDiagram recomputes the active diagram from the scroll position and,
+// syncActiveDiagram recomputes the active diagram from the cursor position and,
 // if it changed, re-inlines the rendered output so the highlight moves to the
-// diagram now in view. It deliberately does NOT scroll — the user is driving
-// the viewport — which is what separates it from refreshDiagramView (the
-// `[`/`]` manual switch, which jumps the viewport to the chosen diagram).
+// diagram under the cursor. It deliberately does NOT scroll — the cursor drives
+// the selection — which is what separates it from the `[`/`]` jump (which moves
+// the cursor to the chosen diagram and scrolls it into view).
 func (m *Model) syncActiveDiagram() {
 	if m.DiagramState == nil || len(m.DiagramState.Diagrams) == 0 {
 		return
 	}
-	idx := m.activeDiagramForOffset()
+	idx := m.activeDiagramForCursor()
 	if idx < 0 || idx == m.DiagramState.Current {
 		return
 	}

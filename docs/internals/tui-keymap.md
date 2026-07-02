@@ -83,12 +83,20 @@ As of TUI Stage 4 this is a `tui.Plugin`. Plugin-local actions registered via `A
 
 **Diagrams** section:
 
-| Key | Description     |
-|-----|-----------------|
-| `]` | Next diagram    |
-| `[` | Prev diagram    |
-| `o` | Open diagram    |
-| `y` | Copy diagram    |
+| Key | Description                                         |
+|-----|-----------------------------------------------------|
+| `]` | Next diagram (moves the cursor to its row)          |
+| `[` | Prev diagram (moves the cursor to its row)          |
+| `o` | Open diagram (system viewer)                        |
+| `y` | Copy diagram source                                 |
+| `E` | Show render error (full mmdc log, in an overlay)    |
+
+The active diagram is the one **under the viewport cursor** (`syncActiveDiagram` →
+`activeDiagramForCursor`), not a topmost-visible heuristic. `[`/`]` move the cursor
+onto the prev/next diagram's row (`jumpToDiagram`) and the others act on that
+selection. `E` opens a `CapturesInput` overlay (mirrors the cmdbrowser inspect
+overlay) showing the captured `mmdc` error for the current diagram; it is a no-op
+when the diagram rendered fine or rendering is disabled (`Prefetch.RenderError`).
 
 **Locales** section:
 
@@ -114,6 +122,20 @@ rows). Added so keyboard reading is the primary scroll path and the mouse wheel 
 |----------|-----------------|
 | `ctrl+d` | Half page down  |
 | `ctrl+u` | Half page up    |
+
+**Viewport line cursor**: when the viewport is focused, `j`/`k`/`↑`/`↓`/page/half-page
+move a reading **cursor** (a left-margin `▎` glyph), not the raw scroll offset; the
+viewport scrolls only enough to keep the cursor on screen (`syncViewportToCursor`,
+revdiff-style). A click positions the cursor on the clicked row; the mouse wheel scrolls
+freely and re-pins the cursor into view at burst settle (`flushWheel` → `pinCursorToWindow`).
+The glyph is drawn only while the viewport is focused (`applyCursorGlyph`), overwriting
+glamour's margin space so it is width-neutral.
+
+**Internal links** (`enter` on the cursor row, or a click): glamour emits OSC-8 hyperlinks;
+relative `.md` links (optionally `#anchor`) navigate to the target topic (`followLink` →
+tree `SetCursor`/`selectCursor`, anchor → H2/H3 heading scroll). External links
+(`http(s)`/`mailto`/`tel`) are left to the terminal's own OSC-8 handling. Pure same-page
+anchors (`[x](#frag)`) emit no OSC-8 and are not navigable. See `links.go`.
 
 **Intentional keymap change (Stage 4)**: the pre-migration docs browser toggled
 expansion on BOTH `h` and `l` (each called `Tree.Toggle`). Stage 4 adopts directional

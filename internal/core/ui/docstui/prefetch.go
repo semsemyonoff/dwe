@@ -43,6 +43,13 @@ type Prefetch struct {
 	rendered   int
 	total      int
 
+	// errs records the last render error per diagram index for the current
+	// topic (keyed by WorkItem.Index), so the UI can show the full mmdc failure
+	// (e.g. "Could not find Chrome …") on demand instead of a flat "render
+	// failed". Reset on every Queue/BeginTopic; written only for the current
+	// generation. Guarded by mu.
+	errs map[int]string
+
 	// topicCtx scopes renderer.Render calls to the current topic. On every
 	// BeginTopic / Queue call we cancel the previous topicCtx and create a
 	// new one so any in-flight mmdc invocations for the old topic are
@@ -127,6 +134,14 @@ func (p *Prefetch) renderOne(ctx context.Context, work WorkItem) {
 		_, err := p.renderer.Render(topicCtx, work.Source, work.Theme, work.Width)
 		if err != nil && !errors.Is(err, context.Canceled) {
 			slog.Debug("prefetch: diagram render failed", "index", work.Index, "error", err)
+			p.mu.Lock()
+			if work.generation == p.generation {
+				if p.errs == nil {
+					p.errs = make(map[int]string)
+				}
+				p.errs[work.Index] = err.Error()
+			}
+			p.mu.Unlock()
 		}
 	}
 
@@ -176,6 +191,7 @@ func (p *Prefetch) Queue(items []WorkItem) {
 	gen := p.generation
 	p.rendered = 0
 	p.total = len(items)
+	p.errs = nil
 	p.mu.Unlock()
 
 	// Stamp each item with the current generation before enqueuing.
@@ -230,5 +246,16 @@ func (p *Prefetch) BeginTopic() int {
 	p.generation++
 	p.rendered = 0
 	p.total = 0
+	p.errs = nil
 	return p.generation
+}
+
+// RenderError returns the recorded render error for the diagram at index in the
+// current topic, if one was captured. Used by the docs browser to show the full
+// mmdc failure in an overlay.
+func (p *Prefetch) RenderError(index int) (string, bool) {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	s, ok := p.errs[index]
+	return s, ok
 }
