@@ -445,6 +445,208 @@ func TestPlugin_Update_WindowSizeMsgDoesNotSizeViewport(t *testing.T) {
 	}
 }
 
+// --- Task 6: mouse — tab clicks & wheel scroll ---
+
+func TestPlugin_PanelClick_TabStripSelectsCorrectTab(t *testing.T) {
+	p, _ := newTestPlugin(t)
+	p.m.loading = false
+	p.m.tabs = []tab{
+		{"Services", "services content"},
+		{"Deploy", "deploy content"},
+		{"Topology", "topology content"},
+	}
+	p.m.active = 0
+	p.m.viewport.SetContent(p.m.tabs[0].content)
+
+	// Zones are measured once while active==0, matching the strip actually
+	// on screen before each click below (active is reset to 0 before every
+	// click so the rendered positions stay consistent with the zones).
+	zones := p.m.tabHitZones()
+	if len(zones) != 3 {
+		t.Fatalf("tabHitZones() len = %d, want 3", len(zones))
+	}
+
+	for i, z := range zones {
+		p.m.active = 0
+		mid := (z.start + z.end - 1) / 2
+		cmd := p.handlePanelClick(tui.PanelClickMsg{Panel: panelMain, X: mid, Y: 0})
+		if cmd != nil {
+			t.Errorf("tab %d click: cmd = %v, want nil", i, cmd)
+		}
+		if p.m.active != i {
+			t.Errorf("tab %d click at X=%d: active = %d, want %d", i, mid, p.m.active, i)
+		}
+	}
+}
+
+func TestPlugin_PanelClick_PastLastTabIsNoop(t *testing.T) {
+	p, _ := newTestPlugin(t)
+	p.m.loading = false
+	p.m.tabs = []tab{{"Services", "c1"}, {"Deploy", "c2"}}
+	p.m.active = 0
+	p.m.viewport.SetContent(p.m.tabs[0].content)
+
+	zones := p.m.tabHitZones()
+	last := zones[len(zones)-1]
+	p.handlePanelClick(tui.PanelClickMsg{Panel: panelMain, X: last.end + 5, Y: 0})
+	if p.m.active != 0 {
+		t.Errorf("click past last tab: active = %d, want unchanged 0", p.m.active)
+	}
+}
+
+func TestPlugin_PanelClick_LeadingPadIsNoop(t *testing.T) {
+	p, _ := newTestPlugin(t)
+	p.m.loading = false
+	p.m.tabs = []tab{{"Services", "c1"}, {"Deploy", "c2"}}
+	p.m.active = 1
+	p.m.viewport.SetContent(p.m.tabs[1].content)
+
+	p.handlePanelClick(tui.PanelClickMsg{Panel: panelMain, X: 0, Y: 0})
+	if p.m.active != 1 {
+		t.Errorf("click on leading pad: active = %d, want unchanged 1", p.m.active)
+	}
+}
+
+func TestPlugin_PanelClick_GapIsNoop(t *testing.T) {
+	p, _ := newTestPlugin(t)
+	p.m.loading = false
+	p.m.tabs = []tab{{"Services", "c1"}, {"Deploy", "c2"}}
+	p.m.active = 0
+	p.m.viewport.SetContent(p.m.tabs[0].content)
+
+	zones := p.m.tabHitZones()
+	gapX := zones[0].end // first column of the gap after tab 0
+	p.handlePanelClick(tui.PanelClickMsg{Panel: panelMain, X: gapX, Y: 0})
+	if p.m.active != 0 {
+		t.Errorf("click in gap: active = %d, want unchanged 0", p.m.active)
+	}
+}
+
+func TestPlugin_PanelClick_ViewportRowIsNoop(t *testing.T) {
+	p, _ := newTestPlugin(t)
+	p.m.loading = false
+	p.m.tabs = []tab{{"Services", "c1"}, {"Deploy", "c2"}}
+	p.m.active = 0
+	p.m.viewport.SetContent(p.m.tabs[0].content)
+
+	p.handlePanelClick(tui.PanelClickMsg{Panel: panelMain, X: 5, Y: 1})
+	if p.m.active != 0 {
+		t.Errorf("click on viewport row: active = %d, want unchanged 0", p.m.active)
+	}
+}
+
+func TestPlugin_PanelClick_WrongPanelIsNoop(t *testing.T) {
+	p, _ := newTestPlugin(t)
+	p.m.tabs = []tab{{"Services", "c1"}, {"Deploy", "c2"}}
+	p.m.active = 0
+
+	p.handlePanelClick(tui.PanelClickMsg{Panel: tui.PanelID("other"), X: 5, Y: 0})
+	if p.m.active != 0 {
+		t.Errorf("click on wrong panel: active = %d, want unchanged 0", p.m.active)
+	}
+}
+
+func TestPlugin_Wheel_ScrollsViewportByDeltaTimesStep(t *testing.T) {
+	tests := []struct {
+		name  string
+		delta int
+	}{
+		{"down one notch", 1},
+		{"down two notches", 2},
+		{"up one notch", -1},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			p, _ := newTestPlugin(t)
+			longContent := strings.Repeat("line\n", 100)
+			p.m.tabs = []tab{{"Services", longContent}}
+			p.m.loading = false
+			p.m.viewport.SetContent(longContent)
+			p.m.viewport.SetHeight(10)
+			p.m.viewport.SetYOffset(20)
+			before := p.m.viewport.YOffset()
+
+			cmd := p.handleWheel(tui.WheelMsg{Panel: panelMain, Delta: tc.delta})
+			if cmd != nil {
+				t.Errorf("handleWheel cmd = %v, want nil", cmd)
+			}
+			want := before + tc.delta*wheelViewportStep
+			if got := p.m.viewport.YOffset(); got != want {
+				t.Errorf("YOffset after wheel delta=%d = %d, want %d", tc.delta, got, want)
+			}
+		})
+	}
+}
+
+func TestPlugin_Wheel_WrongPanelIsNoop(t *testing.T) {
+	p, _ := newTestPlugin(t)
+	longContent := strings.Repeat("line\n", 100)
+	p.m.tabs = []tab{{"Services", longContent}}
+	p.m.loading = false
+	p.m.viewport.SetContent(longContent)
+	p.m.viewport.SetHeight(10)
+	p.m.viewport.SetYOffset(20)
+
+	p.handleWheel(tui.WheelMsg{Panel: tui.PanelID("other"), Delta: 1})
+	if got := p.m.viewport.YOffset(); got != 20 {
+		t.Errorf("YOffset after wrong-panel wheel = %d, want unchanged 20", got)
+	}
+}
+
+func TestPlugin_Wheel_NeverChangesActivePanel(t *testing.T) {
+	p, _ := newTestPlugin(t)
+	longContent := strings.Repeat("line\n", 100)
+	p.m.tabs = []tab{{"Services", longContent}}
+	p.m.active = 0
+	p.m.loading = false
+	p.m.viewport.SetContent(longContent)
+	p.m.viewport.SetHeight(10)
+
+	p.handleWheel(tui.WheelMsg{Panel: panelMain, Delta: 1})
+	if p.m.active != 0 {
+		t.Errorf("active after wheel = %d, want unchanged 0", p.m.active)
+	}
+}
+
+func TestPlugin_Update_RoutesPanelClickMsgToTabStrip(t *testing.T) {
+	p, _ := newTestPlugin(t)
+	p.m.loading = false
+	p.m.tabs = []tab{{"Services", "c1"}, {"Deploy", "c2"}}
+	p.m.active = 0
+	p.m.viewport.SetContent(p.m.tabs[0].content)
+
+	zones := p.m.tabHitZones()
+	mid := (zones[1].start + zones[1].end - 1) / 2
+	if cmd := p.Update(tui.PanelClickMsg{Panel: panelMain, X: mid, Y: 0}); cmd != nil {
+		t.Errorf("Update(PanelClickMsg) cmd = %v, want nil", cmd)
+	}
+	if p.m.active != 1 {
+		t.Errorf("Update(PanelClickMsg) active = %d, want 1", p.m.active)
+	}
+}
+
+func TestPlugin_Update_RoutesWheelMsgToViewport(t *testing.T) {
+	p, _ := newTestPlugin(t)
+	longContent := strings.Repeat("line\n", 100)
+	p.m.tabs = []tab{{"Services", longContent}}
+	p.m.loading = false
+	p.m.viewport.SetContent(longContent)
+	p.m.viewport.SetHeight(10)
+	p.m.viewport.SetYOffset(0)
+
+	p.Update(tui.WheelMsg{Panel: panelMain, Delta: 1})
+	if got := p.m.viewport.YOffset(); got != wheelViewportStep {
+		t.Errorf("Update(WheelMsg) YOffset = %d, want %d", got, wheelViewportStep)
+	}
+}
+
+func TestPlugin_Update_FocusChangedMsgIsNoop(t *testing.T) {
+	p, _ := newTestPlugin(t)
+	if cmd := p.Update(tui.FocusChangedMsg{Panel: panelMain}); cmd != nil {
+		t.Errorf("Update(FocusChangedMsg) cmd = %v, want nil", cmd)
+	}
+}
+
 func TestPlugin_Update_UnmatchedKeyDelegatesToViewportScroll(t *testing.T) {
 	p, _ := newTestPlugin(t)
 	longContent := strings.Repeat("line\n", 100)

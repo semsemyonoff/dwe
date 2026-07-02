@@ -135,6 +135,17 @@ func (p *plugin) Update(msg tea.Msg) tea.Cmd {
 		var cmd tea.Cmd
 		m.spinner, cmd = m.spinner.Update(msg)
 		return cmd
+
+	case tui.PanelClickMsg:
+		return p.handlePanelClick(msg)
+
+	case tui.WheelMsg:
+		return p.handleWheel(msg)
+
+	case tui.FocusChangedMsg:
+		// Single-panel surface: focus never actually moves elsewhere. No-op,
+		// kept explicit for parity with the other Frame plugins.
+		return nil
 	}
 
 	// Delegate unmatched messages to viewport for scroll handling.

@@ -361,15 +361,15 @@ even though they no-op on a single panel. Acceptable — not a blocker; noted in
 - Modify: `internal/core/ui/statustui/plugin.go` (or new `mouse.go`)
 - Modify: `internal/core/ui/statustui/plugin_test.go`
 
-- [ ] handle `tui.PanelClickMsg`: `Y==0` → map `X` to tab index by measuring rendered
+- [x] handle `tui.PanelClickMsg`: `Y==0` → map `X` to tab index by measuring rendered
       tab-label segment widths (reuse the tab-strip render so hit-zones match); `setActiveTab`
-- [ ] ignore clicks past the last tab / on leading pad; `Y>0` clicks are no-ops
-- [ ] handle `tui.WheelMsg{Panel: panelMain, Delta}` → `viewport.ScrollBy(Delta*step)`;
+- [x] ignore clicks past the last tab / on leading pad; `Y>0` clicks are no-ops
+- [x] handle `tui.WheelMsg{Panel: panelMain, Delta}` → `viewport.ScrollBy(Delta*step)`;
       wheel never changes focus
-- [ ] handle `tui.FocusChangedMsg` if needed (single panel → effectively inert; keep minimal)
-- [ ] write table-driven tests: click X across each tab boundary → correct index; click past
+- [x] handle `tui.FocusChangedMsg` if needed (single panel → effectively inert; keep minimal)
+- [x] write table-driven tests: click X across each tab boundary → correct index; click past
       end → no change; wheel Delta → expected YOffset delta
-- [ ] run tests — must pass before next task
+- [x] run tests — must pass before next task
 
 ### Task 7: Cutover — rewrite run.go to launch the plugin + delete the legacy launch path
 
