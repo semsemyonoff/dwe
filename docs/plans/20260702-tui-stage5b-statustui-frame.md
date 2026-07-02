@@ -256,21 +256,21 @@ even though they no-op on a single panel. Acceptable — not a blocker; noted in
 - Create: `internal/core/ui/statustui/plugin.go`
 - Create: `internal/core/ui/statustui/plugin_test.go`
 
-- [ ] define the plugin type holding the model state as a **field** (`m *model`, NOT embedded
+- [x] define the plugin type holding the model state as a **field** (`m *model`, NOT embedded
       — see the coexistence rule; embedding would promote the legacy `tea.Model` methods).
       The legacy `*model` (View/legacy Update/keys.go) stays intact and launchable this whole task.
-- [ ] implement trivial methods: `Panels()` (one panel, weight 1), `Result()`→nil,
+- [x] implement trivial methods: `Panels()` (one panel, weight 1), `Result()`→nil,
       `PendingOverlay()`→`{},false`, `CapturingInput()`→false
-- [ ] implement `Close()` to call the stored `cancel` (context teardown)
-- [ ] implement `Init()` preserving the current `loadGen++ / Batch(spinner.Tick, buildTabsCmd)`
-- [ ] **stub the remaining Plugin methods with zero-value bodies so the assertion compiles
+- [x] implement `Close()` to call the stored `cancel` (context teardown)
+- [x] implement `Init()` preserving the current `loadGen++ / Batch(spinner.Tick, buildTabsCmd)`
+- [x] **stub the remaining Plugin methods with zero-value bodies so the assertion compiles
       NOW**: `Resize`, `Update`→`nil`, `ViewPanel`→`""`, `StatusContext`→`""`,
       `Actions`→`nil`, `HandleAction`→`(nil,false)`. Tasks 2–6 fill in the real bodies.
       (The old `*model` methods `Update(tea.Msg)(tea.Model,tea.Cmd)` / `View() tea.View` do
       NOT satisfy `tui.Plugin`, so embedding alone will not compile — explicit stubs are required.)
-- [ ] add compile-time assertion `var _ tui.Plugin = (*plugin)(nil)`
-- [ ] write tests: Panels shape, Result/PendingOverlay/CapturingInput values, Close cancels ctx
-- [ ] run tests — must pass before next task
+- [x] add compile-time assertion `var _ tui.Plugin = (*plugin)(nil)`
+- [x] write tests: Panels shape, Result/PendingOverlay/CapturingInput values, Close cancels ctx
+- [x] run tests — must pass before next task
 
 ### Task 2: Body rendering — ViewPanel (tab strip + viewport + loading)
 

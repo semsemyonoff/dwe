@@ -1,0 +1,118 @@
+package statustui
+
+import (
+	"context"
+	"testing"
+
+	"github.com/semsemyonoff/dwe/internal/core/ui/tui"
+)
+
+// newTestPlugin builds a minimal plugin for unit tests: a model over an empty
+// Deps plus a cancelable context, mirroring newTestBrowser in docstui.
+func newTestPlugin(t *testing.T) (*plugin, context.Context) {
+	t.Helper()
+	ctx, cancel := context.WithCancel(context.Background())
+	m := newModel(Deps{}, ctx, 80, 24)
+	return newPlugin(m, cancel), ctx
+}
+
+func TestPlugin_SatisfiesPluginInterface(t *testing.T) {
+	var _ tui.Plugin = (*plugin)(nil)
+}
+
+func TestPlugin_PanelsShapeAndWeight(t *testing.T) {
+	p, _ := newTestPlugin(t)
+	panels := p.Panels()
+	if len(panels) != 1 {
+		t.Fatalf("Panels() len=%d, want 1", len(panels))
+	}
+	if panels[0].ID != panelMain {
+		t.Errorf("panels[0].ID = %q, want %q", panels[0].ID, panelMain)
+	}
+	if panels[0].Weight != 1 {
+		t.Errorf("panels[0].Weight = %d, want 1", panels[0].Weight)
+	}
+}
+
+func TestPlugin_ResultIsNil(t *testing.T) {
+	p, _ := newTestPlugin(t)
+	if got := p.Result(); got != nil {
+		t.Errorf("Result() = %v, want nil", got)
+	}
+}
+
+func TestPlugin_PendingOverlayNone(t *testing.T) {
+	p, _ := newTestPlugin(t)
+	overlay, ok := p.PendingOverlay()
+	if ok {
+		t.Errorf("PendingOverlay() ok = true, want false")
+	}
+	if overlay != (tui.Overlay{}) {
+		t.Errorf("PendingOverlay() overlay = %+v, want zero value", overlay)
+	}
+}
+
+func TestPlugin_CapturingInputFalse(t *testing.T) {
+	p, _ := newTestPlugin(t)
+	if p.CapturingInput() {
+		t.Errorf("CapturingInput() = true, want false")
+	}
+}
+
+func TestPlugin_CloseCancelsContext(t *testing.T) {
+	p, ctx := newTestPlugin(t)
+	if err := ctx.Err(); err != nil {
+		t.Fatalf("ctx.Err() before Close() = %v, want nil", err)
+	}
+	if err := p.Close(); err != nil {
+		t.Fatalf("Close() = %v, want nil", err)
+	}
+	if err := ctx.Err(); err != context.Canceled {
+		t.Errorf("ctx.Err() after Close() = %v, want context.Canceled", err)
+	}
+}
+
+func TestPlugin_CloseNilCancelIsNoop(t *testing.T) {
+	p := newPlugin(newModel(Deps{}, context.Background(), 80, 24), nil)
+	if err := p.Close(); err != nil {
+		t.Errorf("Close() with nil cancel = %v, want nil", err)
+	}
+}
+
+func TestPlugin_InitReturnsCmd(t *testing.T) {
+	p, _ := newTestPlugin(t)
+	if p.m.loadGen != 0 {
+		t.Fatalf("loadGen before Init() = %d, want 0", p.m.loadGen)
+	}
+	cmd := p.Init()
+	if cmd == nil {
+		t.Fatalf("Init() cmd = nil, want non-nil")
+	}
+	if p.m.loadGen != 1 {
+		t.Errorf("loadGen after Init() = %d, want 1", p.m.loadGen)
+	}
+}
+
+func TestPlugin_StubMethodsZeroValues(t *testing.T) {
+	p, _ := newTestPlugin(t)
+
+	if got := p.Update(nil); got != nil {
+		t.Errorf("Update() = %v, want nil", got)
+	}
+	if got := p.ViewPanel(panelMain, tui.Region{}); got != "" {
+		t.Errorf("ViewPanel() = %q, want empty", got)
+	}
+	if got := p.StatusContext(); got != "" {
+		t.Errorf("StatusContext() = %q, want empty", got)
+	}
+	if err := p.Actions(nil); err != nil {
+		t.Errorf("Actions() = %v, want nil", err)
+	}
+	cmd, handled := p.HandleAction(tui.Action("unused"))
+	if cmd != nil || handled {
+		t.Errorf("HandleAction() = (%v, %v), want (nil, false)", cmd, handled)
+	}
+
+	// Resize is void; just confirm it does not panic.
+	p.Resize(tui.Region{Width: 80, Height: 24})
+}
