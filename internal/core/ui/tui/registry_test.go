@@ -137,16 +137,13 @@ func TestRegistry_BuiltinDefaultsPresent(t *testing.T) {
 	}
 }
 
-func TestRegistry_EscAliasDispatchesToQuit(t *testing.T) {
+func TestRegistry_EscIsNotAQuitKey(t *testing.T) {
 	t.Parallel()
 	r := NewRegistry()
-	// "esc" is a hidden alias for ActionQuit — must dispatch.
-	got, ok := r.Match("esc")
-	if !ok {
-		t.Fatal("Match(esc) = false; want true (esc is an alias for ActionQuit)")
-	}
-	if got != ActionQuit {
-		t.Errorf("Match(esc) = %q; want %q", got, ActionQuit)
+	// "esc" must NOT resolve to any action — it only ever closes overlays (handled
+	// by the frame before the registry) and never exits the TUI.
+	if got, ok := r.Match("esc"); ok {
+		t.Errorf("Match(esc) = %q, true; want no match (esc is not a quit key)", got)
 	}
 }
 
@@ -210,23 +207,22 @@ func TestRegistry_MatchMouse_StdlibDefaults(t *testing.T) {
 		t.Fatalf("RegisterStandard: %v", err)
 	}
 
-	cases := []struct {
-		event string
-		want  Action
-	}{
-		{"wheel-up", ActionNavUp},
-		{"wheel-down", ActionNavDown},
-		{"double-click", ActionSelect},
+	// Only ActionSelect has a mouse binding ("double-click"). Wheel events are
+	// dispatched as WheelMsg; NavUp/NavDown have no mouse binding.
+	got, ok := r.MatchMouse("double-click")
+	if !ok {
+		t.Fatalf("MatchMouse(double-click) = false; want true")
 	}
-	for _, tc := range cases {
-		got, ok := r.MatchMouse(tc.event)
-		if !ok {
-			t.Errorf("MatchMouse(%q) = false; want true", tc.event)
-			continue
-		}
-		if got != tc.want {
-			t.Errorf("MatchMouse(%q) = %q; want %q", tc.event, got, tc.want)
-		}
+	if got != ActionSelect {
+		t.Errorf("MatchMouse(double-click) = %q; want %q", got, ActionSelect)
+	}
+
+	// wheel-up and wheel-down are no longer registered mouse events.
+	if a, ok := r.MatchMouse("wheel-up"); ok {
+		t.Errorf("MatchMouse(wheel-up) = (%q, true); want false (no longer registered)", a)
+	}
+	if a, ok := r.MatchMouse("wheel-down"); ok {
+		t.Errorf("MatchMouse(wheel-down) = (%q, true); want false (no longer registered)", a)
 	}
 }
 
@@ -287,12 +283,12 @@ func TestRegistry_MatchMouse_EmptyEventReturnsFalse(t *testing.T) {
 func TestRegistry_MouseCollisionRejected(t *testing.T) {
 	t.Parallel()
 	r := NewRegistry()
-	if err := r.Register("plugin.first", Binding{Keys: []string{"a"}, Mouse: "wheel-up"}); err != nil {
+	if err := r.Register("plugin.first", Binding{Keys: []string{"a"}, Mouse: "double-click"}); err != nil {
 		t.Fatalf("first register: %v", err)
 	}
 	// A second binding claiming the same mouse event must be rejected — without
 	// this guard MatchMouse would silently return whichever registered first.
-	err := r.Register("plugin.second", Binding{Keys: []string{"b"}, Mouse: "wheel-up"})
+	err := r.Register("plugin.second", Binding{Keys: []string{"b"}, Mouse: "double-click"})
 	if err == nil {
 		t.Fatal("Register with colliding Mouse event: err = nil; want collision error")
 	}
@@ -300,8 +296,8 @@ func TestRegistry_MouseCollisionRejected(t *testing.T) {
 	if _, ok := r.Binding("plugin.second"); ok {
 		t.Error("colliding binding was committed despite the error")
 	}
-	if got, _ := r.MatchMouse("wheel-up"); got != "plugin.first" {
-		t.Errorf("MatchMouse(wheel-up) = %q; want plugin.first (collision left first owner intact)", got)
+	if got, _ := r.MatchMouse("double-click"); got != "plugin.first" {
+		t.Errorf("MatchMouse(double-click) = %q; want plugin.first (collision left first owner intact)", got)
 	}
 }
 
@@ -309,7 +305,9 @@ func TestRegistry_MouseVocabularyRejected(t *testing.T) {
 	t.Parallel()
 	// "click" is frame-owned and never registrable; anything outside the locked
 	// vocabulary is dead state that would silently break the MatchMouse contract.
-	for _, event := range []string{"click", "nonsense", "wheel-left", "Wheel-Up"} {
+	// "wheel-up" and "wheel-down" are now also rejected: wheel events are
+	// dispatched as WheelMsg by the frame, not through registry mouse bindings.
+	for _, event := range []string{"click", "nonsense", "wheel-left", "Wheel-Up", "wheel-up", "wheel-down"} {
 		r := NewRegistry()
 		err := r.Register("plugin.bad", Binding{Keys: []string{"a"}, Mouse: event})
 		if err == nil {

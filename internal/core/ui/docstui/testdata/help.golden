@@ -1,0 +1,37 @@
+╭────────────────────────────────────────╮
+│ Help                                   │
+│                                        │
+│ Navigation                             │
+│   tab        Focus next panel          │
+│   shift+tab  Focus previous panel      │
+│   up, k      Move up                   │
+│   down, j    Move down                 │
+│   g, home    Go to top                 │
+│   G, end     Go to bottom              │
+│   pgup, b    Page up                   │
+│   pgdown, f  Page down                 │
+│   left, h    Collapse / up to parent   │
+│   right, l   Expand / into first child │
+│   ctrl+d     Half page down            │
+│   ctrl+u     Half page up              │
+│                                        │
+│ General                                │
+│   ?          Toggle help               │
+│   q, ctrl+c  Quit                      │
+│   enter      Select                    │
+│   ctrl+r     Reload                    │
+│                                        │
+│ Filter                                 │
+│   /          Filter                    │
+│                                        │
+│ Diagrams                               │
+│   [          Previous diagram          │
+│   ]          Next diagram              │
+│   o          Open diagram              │
+│   y          Copy diagram source       │
+│   E          Show render error         │
+│                                        │
+│ Locales                                │
+│   L          Cycle language            │
+│   e          Show English              │
+╰────────────────────────────────────────╯

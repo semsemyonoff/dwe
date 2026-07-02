@@ -245,19 +245,20 @@ func TestRun_MouseFlagReachesFrame(t *testing.T) {
 	}
 }
 
-// TestBuildProgramOptions asserts the zero-value RunOptions yields no program
-// options (so input is never disabled via WithInput(nil)), and each non-nil
-// stdio seam adds exactly one option.
+// TestBuildProgramOptions asserts the always-present wheel-coalescer filter is
+// the only base option (so input is never disabled via WithInput(nil)), and each
+// non-nil stdio seam adds exactly one more option.
 func TestBuildProgramOptions(t *testing.T) {
-	if got := buildProgramOptions(RunOptions{}); len(got) != 0 {
-		t.Errorf("zero-value options len = %d; want 0 (no WithInput(nil))", len(got))
+	// Base: just the WithFilter wheel coalescer.
+	if got := buildProgramOptions(RunOptions{}); len(got) != 1 {
+		t.Errorf("zero-value options len = %d; want 1 (WithFilter only, no WithInput(nil))", len(got))
 	}
 	withIn := buildProgramOptions(RunOptions{input: &bytes.Buffer{}})
-	if len(withIn) != 1 {
-		t.Errorf("input-only options len = %d; want 1", len(withIn))
+	if len(withIn) != 2 {
+		t.Errorf("input-only options len = %d; want 2 (filter + input)", len(withIn))
 	}
 	both := buildProgramOptions(RunOptions{input: &bytes.Buffer{}, output: &bytes.Buffer{}})
-	if len(both) != 2 {
-		t.Errorf("input+output options len = %d; want 2", len(both))
+	if len(both) != 3 {
+		t.Errorf("input+output options len = %d; want 3 (filter + input + output)", len(both))
 	}
 }

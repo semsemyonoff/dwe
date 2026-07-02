@@ -163,31 +163,23 @@ func TestRegisterStandard_SectionsFromStdlibAppearInRegistry(t *testing.T) {
 
 func TestStandardBindings_MouseDefaults(t *testing.T) {
 	t.Parallel()
-	// Verify the mouse defaults locked in Stage 2 are present in standardBindings.
-	cases := []struct {
-		action Action
-		mouse  string
-	}{
-		{ActionNavUp, "wheel-up"},
-		{ActionNavDown, "wheel-down"},
-		{ActionSelect, "double-click"},
+	// Only ActionSelect carries a mouse default ("double-click"). Wheel events are
+	// dispatched as WheelMsg (pointer-routed); NavUp/NavDown have no mouse binding.
+	b, ok := standardBinding(ActionSelect)
+	if !ok {
+		t.Fatal("standardBinding(ActionSelect) = false; want present")
 	}
-	for _, tc := range cases {
-		b, ok := standardBinding(tc.action)
-		if !ok {
-			t.Errorf("standardBinding(%q) = false; want present", tc.action)
-			continue
-		}
-		if b.Mouse != tc.mouse {
-			t.Errorf("standardBinding(%q).Mouse = %q; want %q", tc.action, b.Mouse, tc.mouse)
-		}
+	if b.Mouse != "double-click" {
+		t.Errorf("standardBinding(ActionSelect).Mouse = %q; want %q", b.Mouse, "double-click")
 	}
 }
 
 func TestStandardBindings_OtherActionsHaveNoMouseDefault(t *testing.T) {
 	t.Parallel()
-	// Actions without a mouse default must have an empty Mouse field.
+	// Actions without a mouse default must have an empty Mouse field. NavUp/NavDown
+	// no longer have mouse defaults — wheel events are dispatched as WheelMsg.
 	noMouse := []Action{
+		ActionNavUp, ActionNavDown,
 		ActionNavLeft, ActionNavRight, ActionTop, ActionBottom,
 		ActionPageUp, ActionPageDown, ActionReload, ActionFilter, ActionInspect,
 	}

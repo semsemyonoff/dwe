@@ -72,15 +72,6 @@ func withTranslator(tr i18n.Translator) frameOption {
 // An empty locale is ignored (newFrame falls back to "en").
 func withLocale(s string) frameOption { return func(o *frameOptions) { o.locale = s } }
 
-// coalesceWindow is the wheel-burst coalescing interval. The first wheel event
-// arms a one-shot tea.Tick; subsequent events within the window accumulate into
-// wheelAccum; the tick fires wheelFlushMsg and the frame dispatches the net
-// count as Nav steps. 16ms is ~one 60Hz frame — long enough to group a trackpad
-// burst into a single net Nav delta, short enough that a slow notch-wheel scroll
-// still feels one-step-per-detent. Chosen value for the Stage 3 pilot; final
-// on-device feel sign-off is a Post-Completion item.
-const coalesceWindow = 16 * time.Millisecond
-
 // doubleClickWindow is the maximum interval between two left-clicks in the same
 // panel cell that triggers a double-click Select. 400ms matches the common OS
 // double-click default and tested comfortably for tree-toggle / list-run.
@@ -88,13 +79,30 @@ const coalesceWindow = 16 * time.Millisecond
 // Post-Completion item.
 const doubleClickWindow = 400 * time.Millisecond
 
-// wheelFlushMsg is the private tick message that fires after coalesceWindow to
-// dispatch the accumulated wheel delta as Nav steps. It must not fall through
-// to plugin.Update (it is framework-internal).
+// wheelCoalesceInterval bounds how often a buffered mouse-wheel flood produces a
+// real Update+View. bubbletea v2 calls model.View() once per message (tea.go
+// eventLoop) and reads input FIFO from an unbuffered channel, so admitting every
+// raw wheel notch as its own message means a terminal/trackpad flood (macOS
+// momentum scroll emits notches for ~1-2s after the fingers lift) drains FIFO
+// before any later key/click is even seen — the "freeze after stopping" +
+// "can't interrupt". The fix is a bubbletea WithFilter (see wheelFilter): raw
+// vertical wheels over a panel are accumulated and dropped (return nil → NO
+// Update, NO View) and at most one coalesced WheelMsg is emitted per interval, so
+// the backlog drains at filter speed and an interrupting key/click is reached
+// immediately. One frame (≈16ms) keeps scrolling visually smooth.
+const wheelCoalesceInterval = time.Second / 60
+
+// wheelArmMsg is returned by the wheel filter on the first notch of an idle
+// burst; Update schedules a single wheelFlushMsg tick in response.
+type wheelArmMsg struct{}
+
+// wheelFlushMsg fires one wheelCoalesceInterval after a burst was armed; Update
+// drains the accumulated per-panel wheel delta into coalesced WheelMsgs.
 type wheelFlushMsg struct{}
 
-// frameClock is an injectable time source for double-click detection. The
-// production implementation uses time.Now; tests inject a controlled fake.
+// frameClock is an injectable time source for double-click detection and the
+// wheel coalescer. The production implementation uses time.Now; tests
+// inject a controlled fake.
 type frameClock interface {
 	now() time.Time
 }
@@ -124,13 +132,16 @@ type Frame struct {
 	geo      Geometry
 	opts     frameOptions
 
-	// wheel accumulator — see handleMouse and the wheelFlushMsg case in Update.
-	wheelAccum int
-	wheelArmed bool
-
 	// clock and lastClick support double-click detection — see handleClick.
 	clock     frameClock
 	lastClick lastClickRecord
+
+	// Wheel-coalescer state (see wheelCoalesceInterval / wheelFilter). wheelAccum
+	// holds signed notch deltas per panel that the input filter has dropped from
+	// the bubbletea pipeline; wheelTickArmed gates a single trailing flush tick so
+	// a burst accumulates into one WheelMsg per panel.
+	wheelAccum     map[PanelID]int
+	wheelTickArmed bool
 
 	// tr / locale resolve help-modal display strings. Stage 0 uses a
 	// NopTranslator (English fallbacks) + a fixed locale; the migration stages
@@ -214,15 +225,20 @@ func (f *Frame) Init() tea.Cmd { return f.plugin.Init() }
 //     framework-handled and never reach the plugin; a matched plugin action
 //     goes to plugin.HandleAction; an unmatched (or plugin-unhandled) key is
 //     forwarded raw to plugin.Update. When an overlay is open, "esc" closes the
-//     overlay (taking precedence over its ActionQuit alias) and otherwise ONLY
-//     the help-close / quit built-ins act — plugin action keys are SWALLOWED,
-//     not routed (no acting behind the modal).
+//     overlay and otherwise ONLY the help-close / quit built-ins act — plugin
+//     action keys are SWALLOWED, not routed (no acting behind the modal). "esc"
+//     is never a quit key, so it never exits the TUI (see NewRegistry).
 //   - Every non-key message is always forwarded to plugin.Update (async
 //     preservation), including while the help overlay is open.
-//   - tea.MouseMsg is routed to handleMouse: wheel events accumulate for
-//     burst coalescing; left-click events are classified via classifyHit and
-//     routed (help-hint → help, panel → focus + double-click, blank → swallow);
-//     release and motion events are silently ignored.
+//   - tea.MouseMsg is routed to handleMouse: wheel events — when a capturing
+//     overlay is open, the raw msg is forwarded to the plugin and the overlay
+//     snapshot is refreshed in-place; for a non-capturing overlay or an active
+//     inline filter the wheel is swallowed; otherwise the wheel is dispatched
+//     immediately as WheelMsg to the panel under the pointer (pointer-routed,
+//     not focus-routed); left-click events are classified via classifyHit and
+//     routed (help-hint → help, panel → focus + double-click, blank → swallow,
+//     inside-modal → swallow, outside-modal → dismiss the overlay); release and
+//     motion events are silently ignored.
 //
 // After both a HandleAction call and a plugin.Update forward the framework
 // drains plugin.PendingOverlay so an action-triggered overlay appears
@@ -239,6 +255,10 @@ func (f *Frame) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return f.handleKey(m)
 	case tea.MouseMsg:
 		return f.handleMouse(m)
+	case wheelArmMsg:
+		return f, wheelFlushCmd()
+	case wheelFlushMsg:
+		return f, f.flushWheelAccum()
 	case FocusRequestMsg:
 		// Plugin-initiated focus move (e.g. an inline filter returning focus to a
 		// result panel on commit). The Frame owns focus truth, so it applies the
@@ -253,44 +273,6 @@ func (f *Frame) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		cmd := f.plugin.Update(FocusChangedMsg{Panel: f.focus.Active()})
 		f.drainOverlay()
 		return f, cmd
-	case wheelFlushMsg:
-		// Flush the wheel accumulator as Nav steps. No-op while an overlay is
-		// open OR the plugin is capturing raw input — a tick armed before the
-		// modal opened (or before the inline filter took over) must not dispatch
-		// Nav behind it. The arming guard in handleMouse already blocks ticks
-		// started during capture; this also catches a tick armed just before the
-		// filter opened.
-		if !f.overlay.Empty() || f.plugin.CapturingInput() {
-			f.wheelAccum = 0
-			f.wheelArmed = false
-			return f, nil
-		}
-		accum := f.wheelAccum
-		f.wheelAccum = 0
-		f.wheelArmed = false
-		if accum == 0 {
-			return f, nil
-		}
-		var event string
-		steps := accum
-		if accum < 0 {
-			event = "wheel-up"
-			steps = -accum
-		} else {
-			event = "wheel-down"
-		}
-		action, ok := f.registry.MatchMouse(event)
-		if !ok {
-			return f, nil
-		}
-		var cmds []tea.Cmd
-		for range steps {
-			if cmd, handled := f.plugin.HandleAction(action); handled {
-				cmds = append(cmds, cmd)
-			}
-		}
-		f.drainOverlay()
-		return f, tea.Batch(cmds...)
 	default:
 		cmd := f.plugin.Update(msg)
 		f.drainOverlay()
@@ -311,14 +293,9 @@ func (f *Frame) handleKey(key tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 			case captureHardQuit:
 				return f, tea.Quit
 			case captureClose:
-				f.overlay.Pop()
-				// Crossing the overlay boundary resets double-click tracking.
-				f.lastClick = lastClickRecord{}
-				// Notify the plugin its capturing overlay was dismissed so it can
-				// clear the state that produced it — otherwise a later raw key
-				// could resurrect the closed view. See [OverlayClosedMsg].
-				cmd := f.plugin.Update(OverlayClosedMsg{})
-				return f, cmd
+				// Pop, reset double-click tracking, and notify the plugin its
+				// capturing overlay was dismissed — see dismissTopOverlay.
+				return f, f.dismissTopOverlay()
 			default: // captureSwallowToPlugin
 				cmd := f.plugin.Update(key)
 				// A captured key may mutate the plugin's overlay state (e.g.
@@ -332,18 +309,14 @@ func (f *Frame) handleKey(key tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 		}
 
 		// Modal open: the frame's modal-input policy takes precedence over the
-		// registry. "esc" closes the overlay — it never reaches its ActionQuit
-		// alias while a modal is open (the Binding.Aliases precedence rule), so
-		// dismissing a modal must not quit the program. "?" toggles help closed
-		// and "q"/"ctrl+c" quit (the help-close / quit built-ins). Everything
-		// else (plugin actions, focus cycling, raw keys) is swallowed so the
-		// body never acts behind the modal.
+		// registry. "esc" closes the overlay (esc is never a quit key — see
+		// NewRegistry). "?" toggles help closed and "q"/"ctrl+c" quit (the
+		// help-close / quit built-ins). Everything else (plugin actions, focus
+		// cycling, raw keys) is swallowed so the body never acts behind the modal.
 		if keyStr == "esc" {
-			f.overlay.Pop()
-			// Crossing the overlay boundary resets double-click tracking — see
-			// the ActionHelp branch in handleBuiltin.
-			f.lastClick = lastClickRecord{}
-			return f, nil
+			// Pop and reset double-click tracking across the boundary — see
+			// dismissTopOverlay (a non-capturing modal returns a nil cmd).
+			return f, f.dismissTopOverlay()
 		}
 		if a, ok := f.registry.Match(keyStr); ok {
 			switch a {
@@ -374,16 +347,12 @@ func (f *Frame) handleKey(key tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 		capturingBefore := f.plugin.CapturingInput()
 		if cmd, handled := f.plugin.HandleAction(a); handled {
 			// If this action transitioned the plugin into raw-input capture
-			// (e.g. ActionFilter opening the inline filter), reset mouse state
-			// — exactly as crossing an overlay boundary does. A click or wheel
-			// tick armed before the filter opened must not pair with input
-			// after it closes: otherwise a click→/→esc→click on the same cell
-			// could satisfy the double-click test, or a wheel tick armed before
-			// / could flush Nav once the filter's CapturingInput guard lifts.
+			// (e.g. ActionFilter opening the inline filter), reset the
+			// double-click record — exactly as crossing an overlay boundary does.
+			// A click before the filter opened must not pair with one after it
+			// closes into a phantom double-click.
 			if !capturingBefore && f.plugin.CapturingInput() {
 				f.lastClick = lastClickRecord{}
-				f.wheelAccum = 0
-				f.wheelArmed = false
 			}
 			f.drainOverlay()
 			return f, cmd
@@ -406,12 +375,6 @@ func (f *Frame) handleBuiltin(a Action) (tea.Model, tea.Cmd) {
 		// pair with a later click on the same cell into a phantom double-click.
 		f.lastClick = lastClickRecord{}
 		if f.overlay.Empty() {
-			// Clear any pending wheel accumulation before pushing the modal.
-			// tea.Tick is one-shot and uncancellable; resetting here ensures
-			// the wheelFlushMsg guard (no-op while overlay open) sees an empty
-			// accumulator even if a tick fires after the modal opens.
-			f.wheelAccum = 0
-			f.wheelArmed = false
 			f.overlay.Push(buildHelpOverlay(f.registry, f.tr, f.locale, f.geo.Overlay.Width, f.geo.Overlay.Height))
 		} else {
 			f.overlay.Pop()
@@ -443,15 +406,30 @@ func (f *Frame) cycleFocus(move func()) (tea.Model, tea.Cmd) {
 	return f, cmd
 }
 
+// dismissTopOverlay pops the visible top overlay and returns the resulting
+// plugin command. When the dismissed overlay was a capturing overlay
+// (Overlay.CapturesInput) it forwards an [OverlayClosedMsg] so the plugin can
+// clear the state that produced the modal — otherwise a later raw key could
+// resurrect the closed view. It resets the double-click record across the
+// overlay boundary. It is the single close path shared by esc (keyboard) and a
+// click outside the modal (mouse). The caller must have confirmed an overlay is
+// open; on an empty stack it is a harmless no-op returning nil.
+func (f *Frame) dismissTopOverlay() tea.Cmd {
+	top, ok := f.overlay.Top()
+	f.overlay.Pop()
+	f.lastClick = lastClickRecord{}
+	if ok && top.CapturesInput {
+		return f.plugin.Update(OverlayClosedMsg{})
+	}
+	return nil
+}
+
 // drainOverlay pushes a plugin-requested overlay onto the stack. Mutual
 // exclusivity is structural (View only ever composites Top), so Push is safe.
-// It also clears any pending wheel accumulation so a stale tick cannot
-// dispatch Nav behind a plugin-triggered modal, and resets the double-click
-// record so a click before the modal can never pair with one after it.
+// It also resets the double-click record so a click before the modal can
+// never pair with one after it.
 func (f *Frame) drainOverlay() {
 	if ov, ok := f.plugin.PendingOverlay(); ok {
-		f.wheelAccum = 0
-		f.wheelArmed = false
 		f.lastClick = lastClickRecord{}
 		f.overlay.Push(ov)
 	}
@@ -468,37 +446,47 @@ func (f *Frame) refreshCapturingOverlay() {
 	}
 }
 
-// handleMouse dispatches a tea.MouseMsg. Wheel events are accumulated for
-// burst coalescing (see wheelFlushMsg case in Update); left-click events are
-// classified via classifyHit and routed by zone; release and motion messages
-// are silently ignored — CellMotion can emit motion while a button is held
-// but we do not act on it.
+// handleMouse dispatches a tea.MouseMsg. Wheel events are dispatched
+// immediately as WheelMsg to the panel under the pointer (pointer-routed, not
+// focus-routed); left-click events are classified via classifyHit and routed
+// by zone; release and motion messages are silently ignored — CellMotion can
+// emit motion while a button is held but we do not act on it.
 func (f *Frame) handleMouse(msg tea.MouseMsg) (tea.Model, tea.Cmd) {
 	switch m := msg.(type) {
 	case tea.MouseWheelMsg:
-		// No-op while an overlay is open OR the plugin is capturing raw input
-		// (inline filter, no overlay) — the same total suppression the keyboard
-		// path applies in handleKey. A capturing plugin owns all input, so wheel
-		// nav must not arm a tick or dispatch behind it.
-		if !f.overlay.Empty() || f.plugin.CapturingInput() {
+		// Overlay-aware routing: a CapturesInput top overlay receives the raw
+		// wheel message (so its embedded viewport can scroll); a non-capturing
+		// overlay (help) swallows it; the no-overlay inline-filter also swallows.
+		if top, ok := f.overlay.Top(); ok {
+			if top.CapturesInput {
+				cmd := f.plugin.Update(m)
+				f.refreshCapturingOverlay()
+				return f, cmd
+			}
 			return f, nil
 		}
+		if f.plugin.CapturingInput() {
+			return f, nil
+		}
+		// Translate button to a signed notch delta. Horizontal wheel carries no
+		// panel mapping; ignore it before the hit-test.
+		var delta int
 		switch m.Button {
 		case tea.MouseWheelUp:
-			f.wheelAccum--
+			delta = -1
 		case tea.MouseWheelDown:
-			f.wheelAccum++
+			delta = 1
 		default:
-			// Horizontal wheel (MouseWheelLeft/Right, emitted by trackpads in
-			// CellMotion mode) carries no Nav mapping in Stage 2; ignore it so
-			// it never arms a tick or pollutes the vertical accumulator.
 			return f, nil
 		}
-		if !f.wheelArmed {
-			f.wheelArmed = true
-			return f, tea.Tick(coalesceWindow, func(time.Time) tea.Msg { return wheelFlushMsg{} })
+		// Route to the panel under the pointer, not the focused panel.
+		zone, id := classifyHit(f.geo, f.panelRects(), f.helpHintRegion(), nil, m.X, m.Y)
+		if zone != zonePanel {
+			return f, nil
 		}
-		return f, nil
+		cmd := f.plugin.Update(WheelMsg{Panel: id, Delta: delta})
+		f.drainOverlay()
+		return f, cmd
 	case tea.MouseClickMsg:
 		return f.handleClick(m)
 	case tea.MouseReleaseMsg, tea.MouseMotionMsg:
@@ -511,9 +499,9 @@ func (f *Frame) handleMouse(msg tea.MouseMsg) (tea.Model, tea.Cmd) {
 }
 
 // handleClick processes a left-click by classifying the hit zone first:
-//   - overlay open → both zoneModal and zoneOutsideModal are swallowed and
-//     clear lastClick; outside does NOT dismiss the overlay (locked Stage 2
-//     policy)
+//   - overlay open → zoneModal is swallowed (clears lastClick); zoneOutsideModal
+//     dismisses the overlay (the click-away-to-close affordance, mirroring esc
+//     via dismissTopOverlay)
 //   - zoneHelpHint → toggle the help overlay; clear lastClick
 //   - zonePanel → set focus; then double-click test (same panel + same cell +
 //     within doubleClickWindow + lastClick not zero-sentinel); record otherwise
@@ -541,12 +529,18 @@ func (f *Frame) handleClick(m tea.MouseClickMsg) (tea.Model, tea.Cmd) {
 	}
 	zone, id := classifyHit(f.geo, f.panelRects(), f.helpHintRegion(), ov, m.X, m.Y)
 	switch zone {
-	case zoneModal, zoneOutsideModal:
-		// Swallowed while a modal is open. Clear the double-click record so a
-		// click before the overlay opened can never pair with one after it
-		// closes into a phantom double-click.
+	case zoneModal:
+		// Click inside the visible modal is swallowed — the body never acts
+		// behind it. Clear the double-click record so a click before the overlay
+		// opened can never pair with one after it closes into a phantom
+		// double-click.
 		f.lastClick = lastClickRecord{}
 		return f, nil
+	case zoneOutsideModal:
+		// Click outside the visible modal dismisses it — the same close-away
+		// affordance as esc (dismissTopOverlay notifies a capturing plugin via
+		// OverlayClosedMsg and resets the double-click record across the boundary).
+		return f, f.dismissTopOverlay()
 	case zoneHelpHint:
 		f.lastClick = lastClickRecord{}
 		return f.handleBuiltin(ActionHelp)
@@ -656,6 +650,11 @@ func routeWhileCapturing(msg tea.Msg) captureDecision {
 // status line beneath. The returned tea.View carries the framework-owned
 // envelope (AltScreen on; CellMotion mouse when enabled and capable).
 func (f *Frame) View() tea.View {
+	// A FullScreen top overlay takes over the entire terminal (no panels/border/
+	// status), so a released mouse can natively select ONLY its text.
+	if ov, ok := f.overlay.Top(); ok && ov.FullScreen {
+		return f.fullScreenOverlayView(ov)
+	}
 	body := f.renderBody()
 	if ov, ok := f.overlay.Top(); ok {
 		body = Composite(body, ov, f.geo.Overlay)
@@ -681,7 +680,173 @@ func (f *Frame) View() tea.View {
 	} else {
 		v.MouseMode = tea.MouseModeNone
 	}
+	// A top overlay may ask to release the mouse (native text selection). This
+	// overrides the enabled mode above so the terminal — not the app — owns the
+	// mouse while such an overlay is visible; on close it reverts automatically.
+	if ov, ok := f.overlay.Top(); ok && ov.ReleaseMouse {
+		v.MouseMode = tea.MouseModeNone
+	}
 	return v
+}
+
+// fullScreenOverlayView renders a FullScreen overlay as the entire terminal, with
+// no body panels / borders / status line, so the only thing on screen (and thus
+// the only thing a released mouse can natively select) is the overlay's own text.
+// Content is padded/clamped to the full terminal as a safety net; the plugin is
+// expected to have already sized it to TermWidth × TermHeight.
+func (f *Frame) fullScreenOverlayView(ov Overlay) tea.View {
+	content := lipgloss.NewStyle().
+		Width(f.geo.Term.Width).
+		Height(f.geo.Term.Height).
+		MaxWidth(f.geo.Term.Width).
+		MaxHeight(f.geo.Term.Height).
+		Render(ov.Content)
+	v := tea.NewView(content)
+	v.AltScreen = true
+	switch {
+	case ov.ReleaseMouse:
+		v.MouseMode = tea.MouseModeNone
+	case f.opts.mouse && f.mouseCapable():
+		v.MouseMode = tea.MouseModeCellMotion
+	default:
+		v.MouseMode = tea.MouseModeNone
+	}
+	return v
+}
+
+// wheelFilter is the bubbletea WithFilter installed by [Run]. It runs in the
+// event-loop goroutine BEFORE Update/View for every message, so it is the one
+// place that can stop a buffered mouse-wheel flood from each becoming its own
+// Update+View. It coalesces raw vertical wheels (a TRAILING debounce — see
+// filterWheel) so the backlog drains at filter speed and a later key/click is
+// reached immediately. The model is always the *Frame (Run builds it); a
+// non-Frame model passes through unchanged (defensive).
+func wheelFilter(m tea.Model, msg tea.Msg) tea.Msg {
+	f, ok := m.(*Frame)
+	if !ok {
+		return msg
+	}
+	return f.filterWheel(msg)
+}
+
+// filterWheel implements the wheel coalescer (see wheelFilter). Non-wheel input
+// (key / click) drops any pending wheel accumulation so an interrupt wins, then
+// passes through. A vertical wheel over a panel — with no overlay and no inline
+// filter capturing — accumulates its signed delta into the per-panel bucket and
+// is dropped (return nil → no Update/View); the FIRST notch of an idle bucket
+// returns a wheelArmMsg so Update schedules a single flush tick one interval out.
+// When that tick fires, flushWheelAccum drains the NET accumulated delta into one
+// WheelMsg per panel. A trailing (not leading) debounce is deliberate: it never
+// leaves a stale partial delta that a later opposite-direction notch could
+// combine with and scroll the wrong way. Every other message (wheels routed to an
+// overlay/inline-filter, horizontal wheels, or wheels outside a panel) passes
+// through to the normal Update path unchanged.
+func (f *Frame) filterWheel(msg tea.Msg) tea.Msg {
+	switch msg.(type) {
+	case tea.KeyPressMsg, tea.MouseClickMsg:
+		f.clearWheelAccum()
+		return msg
+	}
+	wm, ok := msg.(tea.MouseWheelMsg)
+	if !ok {
+		return msg
+	}
+	delta := wheelButtonDelta(wm.Button)
+	if delta == 0 {
+		return msg // horizontal wheel carries no vertical delta — handleMouse
+	}
+	// A CapturesInput overlay coalesces its OWN vertical wheel, keyed by the
+	// OverlayWheelPanel sentinel: the embedded viewport scrolls just like a body
+	// panel, so a momentum flood can't back up the input FIFO and freeze the
+	// modal (the same freeze the panel coalescer fixed). A non-capturing overlay
+	// (help) swallows the wheel via handleMouse.
+	if top, ok := f.overlay.Top(); ok {
+		if !top.CapturesInput {
+			return msg
+		}
+		return f.accumulateWheel(OverlayWheelPanel, delta)
+	}
+	// Inline filter (no overlay) swallows wheels — parity with the key policy.
+	if f.plugin.CapturingInput() {
+		return msg
+	}
+	zone, id := classifyHit(f.geo, f.panelRects(), f.helpHintRegion(), nil, wm.X, wm.Y)
+	if zone != zonePanel {
+		return msg // not over a panel; handleMouse swallows it
+	}
+	return f.accumulateWheel(id, delta)
+}
+
+// accumulateWheel adds a coalesced wheel notch to the bucket for id and arms the
+// trailing flush tick on the first notch of an idle burst. It returns nil to
+// drop the raw notch (no Update/View) or wheelArmMsg to schedule the one flush.
+func (f *Frame) accumulateWheel(id PanelID, delta int) tea.Msg {
+	if f.wheelAccum == nil {
+		f.wheelAccum = map[PanelID]int{}
+	}
+	f.wheelAccum[id] += delta
+	if f.wheelTickArmed {
+		return nil // a flush tick is already pending; just accumulate
+	}
+	f.wheelTickArmed = true
+	return wheelArmMsg{}
+}
+
+// clearWheelAccum drops any pending coalesced wheel deltas. Called when a
+// key/click arrives so an interrupt is not preceded by leftover scrolling. An
+// already-armed flush tick still fires but finds an empty accumulator.
+func (f *Frame) clearWheelAccum() {
+	for k := range f.wheelAccum {
+		f.wheelAccum[k] = 0
+	}
+}
+
+// flushWheelAccum drains the accumulated net wheel delta into one WheelMsg per
+// panel and disarms the tick (filterWheel re-arms on the next notch). Empty
+// buckets (e.g. drained by an interrupting key/click) are skipped.
+func (f *Frame) flushWheelAccum() tea.Cmd {
+	f.wheelTickArmed = false
+	var cmds []tea.Cmd
+	for id, d := range f.wheelAccum {
+		if d == 0 {
+			continue
+		}
+		f.wheelAccum[id] = 0
+		if cmd := f.plugin.Update(WheelMsg{Panel: id, Delta: d}); cmd != nil {
+			cmds = append(cmds, cmd)
+		}
+	}
+	// A capturing overlay scrolled itself in place (republished via PendingOverlay)
+	// → ReplaceTop, never Push. A panel wheel may instead have opened a new plugin
+	// overlay → drainOverlay pushes it. The two bucket kinds are mutually exclusive
+	// (the filter routes to one or the other), so the top's kind selects the path.
+	if top, ok := f.overlay.Top(); ok && top.CapturesInput {
+		f.refreshCapturingOverlay()
+	} else {
+		f.drainOverlay()
+	}
+	if len(cmds) == 0 {
+		return nil
+	}
+	return tea.Batch(cmds...)
+}
+
+// wheelFlushCmd schedules the trailing wheel-flush one coalesce interval out.
+func wheelFlushCmd() tea.Cmd {
+	return tea.Tick(wheelCoalesceInterval, func(time.Time) tea.Msg { return wheelFlushMsg{} })
+}
+
+// wheelButtonDelta maps a vertical wheel button to a signed notch delta
+// (−1 up / +1 down); horizontal/other buttons return 0.
+func wheelButtonDelta(b tea.MouseButton) int {
+	switch b {
+	case tea.MouseWheelUp:
+		return -1
+	case tea.MouseWheelDown:
+		return 1
+	default:
+		return 0
+	}
 }
 
 // renderBody lays out and renders the bordered body panels into a single

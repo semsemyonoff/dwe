@@ -36,7 +36,7 @@ func TestBrowser_ModeEditSelectReturnsActionEdit(t *testing.T) {
 	opts.Mode = ModeEdit
 	b := newBrowser("edit", items, opts)
 	b.active = panelList
-	b.tree.focusedID = "vars.db"
+	b.tree.eng.SetCursorByKey("vars.db")
 	b.refreshList()
 	b.list.Select(1) // vars.db.port
 

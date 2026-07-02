@@ -91,27 +91,22 @@ func (f *filterState) recompute(items []Item, includePrivate bool) {
 // and collapse those that don't. Used only when opts.AutoCollapseEmpty is true.
 // Subtrees with M > 0 are forced expanded so the user sees the matches.
 func (f *filterState) applyAutoCollapse(tm *treeModel) {
+	// Expansion is engine-owned; route the auto-collapse through the by-key
+	// accessor while keeping the consumer-side node-id iteration here.
 	for id := range tm.nodesByID {
 		if id == "" {
 			continue
 		}
-		if f.matchCount[id] > 0 {
-			tm.expanded[id] = true
-		} else {
-			delete(tm.expanded, id)
-		}
+		tm.eng.SetExpandedByKey(id, f.matchCount[id] > 0)
 	}
-	tm.rebuildVisible()
+	tm.eng.RebuildVisible(nil)
 }
 
 // restoreExpansion puts the original expanded set back on the tree (called on
 // filter exit). The focused ID is restored separately by Model.exitFilter.
 func (f *filterState) restoreExpansion(tm *treeModel) {
-	for k := range tm.expanded {
-		delete(tm.expanded, k)
-	}
-	maps.Copy(tm.expanded, f.savedExpand)
-	tm.rebuildVisible()
+	tm.eng.RestoreExpanded(f.savedExpand)
+	tm.eng.RebuildVisible(nil)
 }
 
 // hasMatch reports whether the given tree node id has any matches in its

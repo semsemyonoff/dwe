@@ -189,7 +189,7 @@ func TestBrowser_ResultSemanticsRegression(t *testing.T) {
 		{
 			name: "run_select", mode: ModeRun, skipConfirm: true,
 			drive: func(b *browser) tea.Cmd {
-				b.tree.focusedID = "db"
+				b.tree.eng.SetCursorByKey("db")
 				b.refreshList()
 				b.active = panelList
 				b.list.Select(1) // db.seed
@@ -201,7 +201,7 @@ func TestBrowser_ResultSemanticsRegression(t *testing.T) {
 		{
 			name: "run_force_form", mode: ModeRun,
 			drive: func(b *browser) tea.Cmd {
-				b.tree.focusedID = "db"
+				b.tree.eng.SetCursorByKey("db")
 				b.refreshList()
 				b.active = panelList
 				b.list.Select(0) // db.migrate
@@ -213,7 +213,7 @@ func TestBrowser_ResultSemanticsRegression(t *testing.T) {
 		{
 			name: "edit_select", mode: ModeEdit,
 			drive: func(b *browser) tea.Cmd {
-				b.tree.focusedID = "db"
+				b.tree.eng.SetCursorByKey("db")
 				b.refreshList()
 				b.active = panelList
 				b.list.Select(0)
@@ -225,7 +225,7 @@ func TestBrowser_ResultSemanticsRegression(t *testing.T) {
 		{
 			name: "inspect_enter", mode: ModeInspect,
 			drive: func(b *browser) tea.Cmd {
-				b.tree.focusedID = "db"
+				b.tree.eng.SetCursorByKey("db")
 				b.refreshList()
 				b.active = panelList
 				b.list.Select(1) // db.seed

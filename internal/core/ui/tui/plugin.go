@@ -54,6 +54,27 @@ type Overlay struct {
 	// overlay) survive as framework actions; ? does not open help. The
 	// cmdbrowser inspect overlay is the consumer. See [routeWhileCapturing].
 	CapturesInput bool
+	// ReleaseMouse asks the Frame to stop capturing the mouse (render
+	// MouseModeNone) while this overlay is Top(), handing the mouse back to the
+	// terminal so the user can natively drag-select and copy the overlay text.
+	// The tradeoff is deliberate: with the mouse released the framework receives
+	// no click/wheel events, so click-outside-to-close and wheel scroll stop
+	// working for as long as it is set (keyboard scroll + esc still close it).
+	// A plugin toggles this by republishing the overlay (ReplaceTop) with the
+	// flag flipped. It composes with CapturesInput: keyboard still routes to the
+	// plugin; only mouse reporting changes. The docstui error overlay's
+	// "selection mode" is the consumer.
+	ReleaseMouse bool
+	// FullScreen asks the Frame to render this overlay as the ENTIRE terminal —
+	// bypassing the body panels, their borders, and the status line — instead of
+	// compositing it centred over the (inner) body region. Combined with
+	// ReleaseMouse it is what makes native selection usable: with no frame chrome
+	// left on screen, a released-mouse drag-select can only grab the overlay's own
+	// text (the frame's border columns / status line would otherwise bleed into
+	// the selection). The overlay MUST size its Content to the full terminal
+	// (TermWidth × TermHeight); the Frame pads/clamps it to Term as a safety net.
+	// docstui's error overlay sets it in selection mode.
+	FullScreen bool
 }
 
 // PanelClickMsg is forwarded to [Plugin.Update] when the user single-clicks
@@ -104,6 +125,26 @@ type FocusRequestMsg struct {
 // always plugin-pushed; the framework-owned help modal is never capturing and
 // does not notify the plugin (built-ins never reach it).
 type OverlayClosedMsg struct{}
+
+// WheelMsg is delivered to the plugin when the mouse wheel turns over one of
+// its panels. Panel is the panel under the pointer (NOT the focused panel);
+// Delta is -1 for an upward notch and +1 for a downward notch. The plugin
+// decides how far to scroll based on the panel type. A wheel turn never changes
+// focus; clicking still focuses. This is dispatched immediately (no coalescing
+// tick), one per wheel event, pointer-routed via classifyHit.
+type WheelMsg struct {
+	Panel PanelID
+	Delta int
+}
+
+// OverlayWheelPanel is the synthetic Panel value the wheel coalescer assigns to
+// vertical wheels aimed at a CapturesInput overlay's embedded viewport (rather
+// than a body panel). A plugin that opens such an overlay scrolls it by Delta
+// notches when it receives WheelMsg{Panel: OverlayWheelPanel}. Coalescing the
+// overlay's own wheel — like the panels' — is what stops a trackpad momentum
+// flood from backing up the input FIFO and freezing the modal. The NUL prefix
+// keeps it from colliding with any real plugin panel id.
+const OverlayWheelPanel PanelID = "\x00overlay-wheel"
 
 // Plugin is the contract every full-screen surface implements to run inside the
 // [Frame]. The framework owns chrome (borders, status line, overlays, the

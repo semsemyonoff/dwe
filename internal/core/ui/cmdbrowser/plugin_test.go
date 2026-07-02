@@ -102,7 +102,7 @@ func TestBrowser_BreadcrumbPathAndPlural(t *testing.T) {
 		{ID: "services.main.cs.update"},
 	}
 	b := newBrowser("pick", items, DefaultOptions())
-	b.tree.focusedID = "services.main.cs"
+	b.tree.eng.SetCursorByKey("services.main.cs")
 	b.refreshList()
 	got := stripANSI(b.breadcrumb())
 	if !strings.Contains(got, "services › main › cs") {
@@ -112,7 +112,7 @@ func TestBrowser_BreadcrumbPathAndPlural(t *testing.T) {
 		t.Errorf("breadcrumb missing plural count; got %q", got)
 	}
 
-	b.tree.focusedID = "db"
+	b.tree.eng.SetCursorByKey("db")
 	b.refreshList()
 	got = stripANSI(b.breadcrumb())
 	if !strings.Contains(got, "· 1 command") || strings.Contains(got, "· 1 commands") {
@@ -155,7 +155,7 @@ func TestBrowser_ResizeCachesBody(t *testing.T) {
 
 func TestBrowser_ViewListFitsInnerRegion(t *testing.T) {
 	b := newBrowser("pick", pluginTestItems(), DefaultOptions())
-	b.tree.focusedID = "db"
+	b.tree.eng.SetCursorByKey("db")
 	b.refreshList()
 	inner := tui.Region{X: 0, Y: 0, Width: 74, Height: 12}
 	out := b.ViewPanel(panelList, inner)
@@ -173,7 +173,7 @@ func TestBrowser_ViewListFitsInnerRegion(t *testing.T) {
 func TestBrowser_ViewListBadgeVisibilityByWidth(t *testing.T) {
 	items := []Item{{ID: "db.migrate", Description: "apply schema", Type: "shell", ParamCount: 2}}
 	b := newBrowser("pick", items, DefaultOptions())
-	b.tree.focusedID = "db"
+	b.tree.eng.SetCursorByKey("db")
 	b.refreshList()
 
 	// At/above the inner badge threshold the type badge and param count show.
@@ -201,7 +201,7 @@ func TestBrowser_ViewListBadgesRespectShowTypeBadgesOption(t *testing.T) {
 	opts := DefaultOptions()
 	opts.ShowTypeBadges = false
 	b := newBrowser("pick", items, opts)
-	b.tree.focusedID = "db"
+	b.tree.eng.SetCursorByKey("db")
 	b.refreshList()
 	out := stripANSI(b.ViewPanel(panelList, tui.Region{Width: 90, Height: 10}))
 	if strings.Contains(out, "[shell]") {
@@ -216,7 +216,7 @@ func TestBrowser_SelectedOrigIdxRoundTrips(t *testing.T) {
 		{ID: "services.api.test"},
 	}
 	b := newBrowser("pick", items, DefaultOptions())
-	b.tree.focusedID = "db"
+	b.tree.eng.SetCursorByKey("db")
 	b.refreshList()
 	// The db group lists migrate (origIdx 0) and seed (origIdx 1). Selecting
 	// the second list row must resolve back to the original items index 1.
@@ -261,14 +261,14 @@ func TestBrowser_PanelClickMovesTreeCursorNoToggle(t *testing.T) {
 	// Visible rows (depth-1 expansion): [db, services, services.api]. The
 	// "services" group is expanded at launch; a single click must move the
 	// cursor onto it WITHOUT toggling its expansion (Decision 7).
-	if !b.tree.expanded["services"] {
+	if !b.tree.eng.IsExpanded(b.tree.nodesByID["services"]) {
 		t.Fatalf("precondition: services should be expanded at launch")
 	}
 	b.Update(tui.PanelClickMsg{Panel: panelTree, X: 0, Y: 1})
-	if b.tree.focusedID != "services" {
-		t.Errorf("tree focusedID = %q after click row 1, want %q", b.tree.focusedID, "services")
+	if b.tree.focusedID() != "services" {
+		t.Errorf("tree focusedID = %q after click row 1, want %q", b.tree.focusedID(), "services")
 	}
-	if !b.tree.expanded["services"] {
+	if !b.tree.eng.IsExpanded(b.tree.nodesByID["services"]) {
 		t.Errorf("single click toggled expansion; services should stay expanded")
 	}
 }
@@ -276,18 +276,18 @@ func TestBrowser_PanelClickMovesTreeCursorNoToggle(t *testing.T) {
 func TestBrowser_PanelClickPastLastTreeRowIsNoOp(t *testing.T) {
 	b := newBrowser("pick", pluginTestItems(), DefaultOptions())
 	b.ViewPanel(panelTree, tui.Region{Width: 18, Height: 10})
-	before := b.tree.focusedID
+	before := b.tree.focusedID()
 	// Three visible rows; clicking empty space below them must not move the cursor.
 	b.Update(tui.PanelClickMsg{Panel: panelTree, X: 0, Y: 9})
-	if b.tree.focusedID != before {
-		t.Errorf("focusedID = %q after click past last row, want unchanged %q", b.tree.focusedID, before)
+	if b.tree.focusedID() != before {
+		t.Errorf("focusedID = %q after click past last row, want unchanged %q", b.tree.focusedID(), before)
 	}
 }
 
 func TestBrowser_PanelClickMovesListSelection(t *testing.T) {
 	items := []Item{{ID: "db.migrate"}, {ID: "db.seed"}}
 	b := newBrowser("pick", items, DefaultOptions())
-	b.tree.focusedID = "db"
+	b.tree.eng.SetCursorByKey("db")
 	b.refreshList()
 	b.active = panelList
 	b.ViewPanel(panelList, tui.Region{Width: 74, Height: 12})
@@ -306,11 +306,11 @@ func TestBrowser_PanelClickMovesListSelection(t *testing.T) {
 func TestBrowser_PanelClickIgnoredWhileFiltering(t *testing.T) {
 	b := newBrowser("pick", pluginTestItems(), DefaultOptions())
 	b.ViewPanel(panelTree, tui.Region{Width: 18, Height: 10})
-	before := b.tree.focusedID
+	before := b.tree.focusedID()
 	b.filter = &filterState{}
 	b.Update(tui.PanelClickMsg{Panel: panelTree, X: 0, Y: 1})
-	if b.tree.focusedID != before {
-		t.Errorf("focusedID = %q after click while filtering, want unchanged %q", b.tree.focusedID, before)
+	if b.tree.focusedID() != before {
+		t.Errorf("focusedID = %q after click while filtering, want unchanged %q", b.tree.focusedID(), before)
 	}
 }
 
@@ -335,36 +335,119 @@ func TestBrowser_PanelClickWorksAfterInspectClosed(t *testing.T) {
 	// b.inspect is still non-nil here, mirroring the post-close session state.
 
 	b.Update(tui.PanelClickMsg{Panel: panelTree, X: 0, Y: 1})
-	if b.tree.focusedID != "services" {
-		t.Errorf("tree focusedID = %q after click following inspect close, want %q (click was swallowed by stale b.inspect)", b.tree.focusedID, "services")
+	if b.tree.focusedID() != "services" {
+		t.Errorf("tree focusedID = %q after click following inspect close, want %q (click was swallowed by stale b.inspect)", b.tree.focusedID(), "services")
 	}
 }
 
+// TestBrowser_WheelScrollsFocusedPanel is rewritten to inject tui.WheelMsg
+// (pointer-routed) instead of driving HandleAction, and now also asserts that
+// wheel scrolling never changes the focused panel (b.active).
 func TestBrowser_WheelScrollsFocusedPanel(t *testing.T) {
 	b := newBrowser("pick", pluginTestItems(), DefaultOptions())
 	b.ViewPanel(panelTree, tui.Region{Width: 18, Height: 10})
 
-	// Tree focused: a wheel-down (delivered as ActionNavDown via HandleAction)
-	// moves the tree cursor.
-	b.active = panelTree
-	if _, handled := b.HandleAction(tui.ActionNavDown); !handled {
-		t.Fatalf("ActionNavDown not handled")
+	// WheelMsg over the tree panel moves the tree cursor regardless of which
+	// panel is focused. b.active must remain unchanged.
+	b.active = panelList // deliberately different from the wheel target
+	if cmd := b.Update(tui.WheelMsg{Panel: panelTree, Delta: 1}); cmd != nil {
+		t.Errorf("WheelMsg returned non-nil cmd, want nil")
 	}
-	if b.tree.focusedID != "services" {
-		t.Errorf("tree cursor = %q after wheel-down, want %q", b.tree.focusedID, "services")
+	if b.active != panelList {
+		t.Errorf("active = %q after WheelMsg on tree, want %q (wheel must not change focus)", b.active, panelList)
+	}
+	if b.tree.focusedID() != "services" {
+		t.Errorf("tree cursor = %q after wheel-down, want %q", b.tree.focusedID(), "services")
 	}
 
-	// List focused: a wheel-down advances the list selection instead.
-	b.tree.focusedID = "db"
+	// WheelMsg over the list panel moves the list selection regardless of the
+	// active panel. b.active must remain unchanged.
+	b.tree.eng.SetCursorByKey("db")
 	b.refreshList()
-	b.active = panelList
+	b.active = panelTree // deliberately different from the wheel target
 	b.ViewPanel(panelList, tui.Region{Width: 74, Height: 12})
 	beforeIdx := b.list.Index()
-	if _, handled := b.HandleAction(tui.ActionNavDown); !handled {
-		t.Fatalf("ActionNavDown not handled on list")
+	if cmd := b.Update(tui.WheelMsg{Panel: panelList, Delta: 1}); cmd != nil {
+		t.Errorf("WheelMsg on list returned non-nil cmd, want nil")
+	}
+	if b.active != panelTree {
+		t.Errorf("active = %q after WheelMsg on list, want %q (wheel must not change focus)", b.active, panelTree)
 	}
 	if b.list.Index() != beforeIdx+1 {
 		t.Errorf("list index = %d after wheel-down, want %d", b.list.Index(), beforeIdx+1)
+	}
+}
+
+func TestBrowser_WheelTreeUpDown(t *testing.T) {
+	b := newBrowser("pick", pluginTestItems(), DefaultOptions())
+	b.ViewPanel(panelTree, tui.Region{Width: 18, Height: 10})
+	// Start at the first node ("db"), wheel down → "services", wheel up → back.
+	initial := b.tree.focusedID()
+
+	b.Update(tui.WheelMsg{Panel: panelTree, Delta: 1})
+	if b.tree.focusedID() == initial {
+		t.Errorf("wheel-down on tree: focusedID unchanged (%q)", initial)
+	}
+
+	b.Update(tui.WheelMsg{Panel: panelTree, Delta: -1})
+	if b.tree.focusedID() != initial {
+		t.Errorf("wheel-up on tree: focusedID = %q, want %q", b.tree.focusedID(), initial)
+	}
+}
+
+func TestBrowser_WheelTreeTriggersAfterTreeMove(t *testing.T) {
+	// afterTreeMove re-syncs the list to the newly focused group; verify the
+	// list items change after a wheel move on the tree panel.
+	items := []Item{
+		{ID: "db.migrate"},
+		{ID: "services.api.test"},
+	}
+	b := newBrowser("pick", items, DefaultOptions())
+	b.ViewPanel(panelTree, tui.Region{Width: 18, Height: 10})
+	b.tree.eng.SetCursorByKey("db")
+	b.refreshList()
+	dbCount := len(b.list.Items())
+
+	// Wheel down moves to "services" group; list should now reflect that group.
+	b.Update(tui.WheelMsg{Panel: panelTree, Delta: 1})
+	if len(b.list.Items()) == dbCount {
+		t.Errorf("list item count unchanged after wheel move on tree; afterTreeMove may not have run")
+	}
+}
+
+func TestBrowser_WheelListUpDown(t *testing.T) {
+	items := []Item{{ID: "db.migrate"}, {ID: "db.seed"}}
+	b := newBrowser("pick", items, DefaultOptions())
+	b.tree.eng.SetCursorByKey("db")
+	b.refreshList()
+	b.ViewPanel(panelList, tui.Region{Width: 74, Height: 12})
+
+	initial := b.list.Index()
+	b.Update(tui.WheelMsg{Panel: panelList, Delta: 1})
+	if b.list.Index() != initial+1 {
+		t.Errorf("list.Index = %d after wheel-down, want %d", b.list.Index(), initial+1)
+	}
+	b.Update(tui.WheelMsg{Panel: panelList, Delta: -1})
+	if b.list.Index() != initial {
+		t.Errorf("list.Index = %d after wheel-up, want %d", b.list.Index(), initial)
+	}
+}
+
+func TestBrowser_WheelWhileFilteringIsNoop(t *testing.T) {
+	b := newBrowser("pick", pluginTestItems(), DefaultOptions())
+	b.ViewPanel(panelTree, tui.Region{Width: 18, Height: 10})
+	initial := b.tree.focusedID()
+	initialListLen := len(b.list.Items())
+
+	b.filter = &filterState{} // activate filter (CapturingInput → true)
+	b.Update(tui.WheelMsg{Panel: panelTree, Delta: 1})
+	if b.tree.focusedID() != initial {
+		t.Errorf("wheel while filtering moved tree cursor; focusedID = %q, want %q", b.tree.focusedID(), initial)
+	}
+	b.Update(tui.WheelMsg{Panel: panelList, Delta: 1})
+	// The list should be unchanged (no cursor move, no item change).
+	if len(b.list.Items()) != initialListLen {
+		t.Errorf("wheel on list while filtering changed item count; want unchanged (%d)", initialListLen)
 	}
 }
 
@@ -376,8 +459,8 @@ func TestBrowser_DoubleClickSelectGroupVsListItem(t *testing.T) {
 	// Double-click on a tree group (delivered as ActionSelect) toggles expansion
 	// and does NOT quit.
 	b.active = panelTree
-	b.tree.focusedID = "services"
-	wasExpanded := b.tree.expanded["services"]
+	b.tree.eng.SetCursorByKey("services")
+	wasExpanded := b.tree.eng.IsExpanded(b.tree.nodesByID["services"])
 	cmd, handled := b.HandleAction(tui.ActionSelect)
 	if !handled {
 		t.Fatalf("ActionSelect on group not handled")
@@ -385,12 +468,12 @@ func TestBrowser_DoubleClickSelectGroupVsListItem(t *testing.T) {
 	if cmd != nil {
 		t.Errorf("ActionSelect on group returned a cmd, want nil (no quit)")
 	}
-	if b.tree.expanded["services"] == wasExpanded {
+	if b.tree.eng.IsExpanded(b.tree.nodesByID["services"]) == wasExpanded {
 		t.Errorf("ActionSelect on group did not toggle expansion")
 	}
 
 	// Double-click on a list item commits a Result and quits.
-	b.tree.focusedID = "services.api"
+	b.tree.eng.SetCursorByKey("services.api")
 	b.refreshList()
 	b.active = panelList
 	cmd, handled = b.HandleAction(tui.ActionSelect)

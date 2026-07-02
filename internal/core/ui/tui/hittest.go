@@ -13,8 +13,8 @@ const (
 	zoneHelpHint
 	// zoneModal is inside the visible centred overlay.
 	zoneModal
-	// zoneOutsideModal is outside the visible overlay — swallow; the locked
-	// Stage 2 policy is click-outside-modal does NOT dismiss.
+	// zoneOutsideModal is outside the visible overlay — a click here dismisses
+	// the overlay (the click-away-to-close affordance; see handleClick).
 	zoneOutsideModal
 )
 

@@ -45,6 +45,30 @@ func RenderFrame(p Plugin, opts RunOptions, w, h int) (string, error) {
 	return frame.View().Content, nil
 }
 
+// RenderFrameAfterSetup is like RenderFrame but applies additional messages
+// after the initial WindowSizeMsg before snapshotting. Use this to drive the
+// Frame into a non-default state (e.g. inject a tab key to switch panel focus
+// or inject an async message to verify the Frame forwards it to the plugin)
+// before golden tests. The messages are applied in order; each Update's returned
+// Cmd is discarded (same as RenderFrame's treatment of the WindowSizeMsg Cmd).
+func RenderFrameAfterSetup(p Plugin, opts RunOptions, w, h int, setup ...tea.Msg) (string, error) {
+	frame, err := newFrame(p,
+		withBrand(opts.Brand),
+		withProject(opts.Project),
+		withMouse(opts.Mouse),
+		withTranslator(opts.Translator),
+		withLocale(opts.Locale),
+	)
+	if err != nil {
+		return "", fmt.Errorf("tui: building frame: %w", err)
+	}
+	frame.Update(tea.WindowSizeMsg{Width: w, Height: h})
+	for _, msg := range setup {
+		frame.Update(msg)
+	}
+	return frame.View().Content, nil
+}
+
 // BuildHelp builds the registry-generated help overlay for p at the given size,
 // resolving the title/section/action strings through tr (nil → NopTranslator)
 // for locale. w and h are the body-region dimensions the modal must fit within

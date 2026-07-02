@@ -81,7 +81,10 @@ func defaultSize() (int, int, error) { return term.GetSize(os.Stdout.Fd()) }
 // yields no options and the program keeps its default stdin/stdout (passing
 // WithInput(nil) would instead disable input in bubbletea/v2).
 func buildProgramOptions(opts RunOptions) []tea.ProgramOption {
-	var po []tea.ProgramOption
+	// wheelFilter coalesces buffered mouse-wheel floods before Update/View so a
+	// momentum/trackpad flood cannot stall the event loop ahead of later keys or
+	// clicks (the "freeze after stopping" + "can't interrupt"). See frame.go.
+	po := []tea.ProgramOption{tea.WithFilter(wheelFilter)}
 	if opts.input != nil {
 		po = append(po, tea.WithInput(opts.input))
 	}

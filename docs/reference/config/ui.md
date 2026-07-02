@@ -96,7 +96,7 @@ The frame enables mouse support:
 
 - **Single click** in a panel moves the cursor to the clicked row and sets focus to that panel; it never toggles a group or runs a command.
 - **Double click** acts as `Enter` on the clicked row — it toggles a tree group or confirms a list item.
-- **Wheel** scrolls the focused panel.
+- **Wheel** scrolls the panel under the pointer (the tree, the command list, or an open inspect overlay) without changing focus — it works regardless of which panel is focused.
 - Clicking the `? help` hint in the status line toggles the modal help; clicks inside an open modal are swallowed.
 
 ## Related

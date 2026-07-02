@@ -1,8 +1,11 @@
 package cmdbrowser
 
 import (
+	"slices"
 	"sort"
 	"strings"
+
+	"github.com/semsemyonoff/dwe/internal/core/ui/tui/tree"
 )
 
 // treeNode is one entry in the command-group hierarchy. Nodes carry both
@@ -24,24 +27,29 @@ type treeNode struct {
 	countPublic int // total non-private leaves in subtree
 }
 
-// treeModel owns the group hierarchy, the expanded/focused state, and the
-// cached visible-row list. It is internal to cmdbrowser; the Model wires
-// keypresses into its methods.
+// cmdTreeAdapter is the cmdbrowser binding for the generic tree engine. The
+// engine owns navigation, scroll, expansion, and the visible set; the adapter
+// only exposes the three properties the engine needs to walk the graph.
+type cmdTreeAdapter struct{}
+
+func (cmdTreeAdapter) Children(n *treeNode) []*treeNode { return n.children }
+func (cmdTreeAdapter) Key(n *treeNode) string           { return n.id }
+func (cmdTreeAdapter) Expandable(n *treeNode) bool      { return len(n.children) > 0 }
+
+// treeModel owns the group hierarchy and the cached counts; it is a thin
+// wrapper over the shared *tree.Engine, which owns the expanded/focused state,
+// the visible-row list, and scroll geometry. It is internal to cmdbrowser; the
+// Model wires keypresses into the engine via the browser plugin.
 type treeModel struct {
 	items          []Item
 	includePrivate bool
 	root           *treeNode
 	nodesByID      map[string]*treeNode
-	expanded       map[string]bool
-	focusedID      string
-	visible        []*treeNode
 
-	// topIdx is the index into visible of the first row rendered in the tree
-	// panel. Without it an oversized tree (more group nodes than the panel can
-	// hold) would overflow the bordered frame. The Frame owns geometry now, so
-	// clipping is driven off the inner panel height passed to the renderer —
-	// see ensureFocusVisible / clipToViewport. Ported from *Model.treeTopIdx.
-	topIdx int
+	// eng is the generic behavioral engine. cmdbrowser keeps nodesByID/root for
+	// payload lookup and the breadcrumb's "(root)" mapping; everything behavioral
+	// (cursor, expansion, visible set, scroll) lives in the engine.
+	eng *tree.Engine[*treeNode]
 }
 
 // newTreeModel builds the tree from items, applies the initial expansion
@@ -55,16 +63,18 @@ func newTreeModel(items []Item, includePrivate bool, defaultDepth int) *treeMode
 		items:          items,
 		includePrivate: includePrivate,
 		root:           &treeNode{depth: -1},
-		expanded:       map[string]bool{},
 		nodesByID:      map[string]*treeNode{},
+		eng:            tree.New[*treeNode](cmdTreeAdapter{}),
 	}
 	tm.nodesByID[""] = tm.root
 	tm.build()
 	tm.recomputeCounts()
 	tm.initExpansion(defaultDepth)
-	tm.rebuildVisible()
-	if len(tm.visible) > 0 {
-		tm.focusedID = tm.visible[0].id
+	// The invisible root is a consumer detail; its children are the engine roots.
+	tm.eng.SetRoots(tm.root.children)
+	tm.eng.RebuildVisible(nil)
+	if vis := tm.eng.VisibleNodes(); len(vis) > 0 {
+		tm.eng.SetCursorByKey(vis[0].id)
 	}
 	return tm
 }
@@ -140,7 +150,8 @@ func (tm *treeModel) recomputeCounts() {
 
 // initExpansion expands every node whose depth < defaultDepth. A depth of 0
 // leaves everything collapsed; the first level of groups is always visible
-// regardless (it is rooted under the implicit root).
+// regardless (it is rooted under the implicit root). Expansion is written to
+// the engine by stable Key (the node id).
 func (tm *treeModel) initExpansion(defaultDepth int) {
 	if defaultDepth <= 0 {
 		return
@@ -150,7 +161,7 @@ func (tm *treeModel) initExpansion(defaultDepth int) {
 			continue
 		}
 		if n.depth < defaultDepth {
-			tm.expanded[id] = true
+			tm.eng.SetExpandedByKey(id, true)
 		}
 	}
 }
@@ -163,114 +174,35 @@ func (tm *treeModel) setIncludePrivate(b bool) {
 	tm.recomputeCounts()
 }
 
-func (tm *treeModel) rebuildVisible() {
-	tm.visible = tm.visible[:0]
-	var walk func(n *treeNode)
-	walk = func(n *treeNode) {
-		for _, c := range n.children {
-			tm.visible = append(tm.visible, c)
-			if tm.expanded[c.id] {
-				walk(c)
-			}
-		}
-	}
-	walk(tm.root)
-}
-
+// focusedNode returns the engine's focused node, mapping the zero/nil cursor
+// (the engine's root/none sentinel) back to the invisible root so callers that
+// expect a *treeNode never see nil.
 func (tm *treeModel) focusedNode() *treeNode {
-	if n, ok := tm.nodesByID[tm.focusedID]; ok {
+	if n := tm.eng.Cursor(); n != nil {
 		return n
 	}
 	return tm.root
 }
 
-func (tm *treeModel) indexOfFocused() int {
-	for i, n := range tm.visible {
-		if n.id == tm.focusedID {
-			return i
-		}
+// focusedID returns the dot-path id of the focused node, or "" for the
+// root/none sentinel (the engine's nil cursor). It mirrors the legacy
+// focusedID field for the breadcrumb, filter, and renderer.
+func (tm *treeModel) focusedID() string {
+	if n := tm.eng.Cursor(); n != nil {
+		return n.id
 	}
-	return -1
+	return ""
 }
 
-func (tm *treeModel) moveUp()   { tm.moveBy(-1) }
-func (tm *treeModel) moveDown() { tm.moveBy(1) }
-
-func (tm *treeModel) moveBy(delta int) {
-	if len(tm.visible) == 0 {
-		tm.focusedID = ""
-		return
+// focusVisible reports whether the focused node currently appears in the
+// engine's visible set. Mirrors the legacy indexOfFocused() >= 0 check used by
+// the filter exit/commit cursor-restoration logic.
+func (tm *treeModel) focusVisible() bool {
+	cur := tm.eng.Cursor()
+	if cur == nil {
+		return false
 	}
-	i := tm.indexOfFocused()
-	if i < 0 {
-		tm.focusedID = tm.visible[0].id
-		return
-	}
-	ni := i + delta
-	if ni < 0 {
-		ni = 0
-	} else if ni >= len(tm.visible) {
-		ni = len(tm.visible) - 1
-	}
-	tm.focusedID = tm.visible[ni].id
-}
-
-func (tm *treeModel) moveHome() {
-	if len(tm.visible) > 0 {
-		tm.focusedID = tm.visible[0].id
-	}
-}
-
-func (tm *treeModel) moveEnd() {
-	if len(tm.visible) > 0 {
-		tm.focusedID = tm.visible[len(tm.visible)-1].id
-	}
-}
-
-// onRight implements the →/l semantics from spec §5.2: collapsed node with
-// children → expand; already-expanded node → step into the first child.
-func (tm *treeModel) onRight() {
-	n := tm.focusedNode()
-	if n == nil || n == tm.root || len(n.children) == 0 {
-		return
-	}
-	if !tm.expanded[n.id] {
-		tm.expanded[n.id] = true
-		tm.rebuildVisible()
-		return
-	}
-	tm.moveDown()
-}
-
-// onLeft implements ←/h semantics: if expanded → collapse; else move focus
-// up to the parent group (root is invisible, so top-level nodes stay put).
-func (tm *treeModel) onLeft() {
-	n := tm.focusedNode()
-	if n == nil || n == tm.root {
-		return
-	}
-	if tm.expanded[n.id] {
-		delete(tm.expanded, n.id)
-		tm.rebuildVisible()
-		return
-	}
-	if n.parent != nil && n.parent != tm.root {
-		tm.focusedID = n.parent.id
-	}
-}
-
-// toggleFocused toggles expansion of the focused node. No-op on leaves.
-func (tm *treeModel) toggleFocused() {
-	n := tm.focusedNode()
-	if n == nil || n == tm.root || len(n.children) == 0 {
-		return
-	}
-	if tm.expanded[n.id] {
-		delete(tm.expanded, n.id)
-	} else {
-		tm.expanded[n.id] = true
-	}
-	tm.rebuildVisible()
+	return slices.Contains(tm.eng.VisibleNodes(), cur)
 }
 
 // nearestVisibleAncestor returns the id of the nearest ancestor of id (walking
@@ -278,8 +210,9 @@ func (tm *treeModel) toggleFocused() {
 // when no non-root visible ancestor exists, meaning the right panel should show
 // root-level commands.
 func (tm *treeModel) nearestVisibleAncestor(id string) string {
-	visible := make(map[string]bool, len(tm.visible))
-	for _, n := range tm.visible {
+	vis := tm.eng.VisibleNodes()
+	visible := make(map[string]bool, len(vis))
+	for _, n := range vis {
 		visible[n.id] = true
 	}
 	g := id
@@ -292,57 +225,8 @@ func (tm *treeModel) nearestVisibleAncestor(id string) string {
 	return ""
 }
 
-// ensureFocusVisible adjusts topIdx so the focused node stays within a
-// viewport of the given height (the inner tree-panel height the Frame supplies).
-// Called after every tree mutation (move / expand / collapse) and on each
-// render so a resize keeps the focused row on screen. Ported from
-// *Model.ensureTreeFocusVisible, driven off the passed height instead of
-// reading layout from a *Model.
-func (tm *treeModel) ensureFocusVisible(height int) {
-	n := len(tm.visible)
-	if n == 0 || height <= 0 {
-		tm.topIdx = 0
-		return
-	}
-	idx := tm.indexOfFocused()
-	if idx < 0 {
-		tm.topIdx = 0
-		return
-	}
-	if idx < tm.topIdx {
-		tm.topIdx = idx
-	} else if idx >= tm.topIdx+height {
-		tm.topIdx = idx - height + 1
-	}
-	maxTop := max(n-height, 0)
-	if tm.topIdx > maxTop {
-		tm.topIdx = maxTop
-	}
-	if tm.topIdx < 0 {
-		tm.topIdx = 0
-	}
-}
-
-// focusRow moves the tree focus to the visible node at the given panel-local
-// row (0-based, relative to the first rendered row at topIdx). Used by
-// single-click mouse handling to move the cursor WITHOUT toggling expansion
-// (Decision 7). A click past the last visible node — empty space below the tree
-// when the panel is taller than the node count — is a no-op rather than snapping
-// the cursor to the final row.
-func (tm *treeModel) focusRow(row int) {
-	if row < 0 {
-		return
-	}
-	idx := tm.topIdx + row
-	if idx >= len(tm.visible) {
-		return
-	}
-	tm.focusedID = tm.visible[idx].id
-}
-
 // itemsForFocus returns the indices of items directly attached to the
-// focused group (after IncludePrivate filtering). Right-panel rendering
-// consumes this in Task 3; Task 4 wires the list.Model.
+// focused group (after IncludePrivate filtering).
 func (tm *treeModel) itemsForFocus() []int {
 	n := tm.focusedNode()
 	if n == nil {

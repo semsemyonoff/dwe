@@ -219,19 +219,38 @@ func (b *browser) itemNoun(count int) string {
 // captured keys here too (via routeWhileCapturing — every key except ctrl+c and
 // esc), which drive the inspect viewport.
 //
-// Mouse and focus messages (Task 9) arrive here regardless of capture state:
+// Mouse and focus messages arrive here regardless of capture state:
 // FocusChangedMsg tracks the active panel for nav/scroll routing (Tab/Shift+Tab
 // are framework built-ins that never otherwise reach the plugin); PanelClickMsg
 // moves the cursor/selection to the clicked row (single click = move only, no
-// run — Decision 7). Wheel scroll is delivered as nav.up/nav.down through
-// HandleAction, and double-click as the Select action, so neither needs handling
-// here.
+// run — Decision 7). Wheel scroll arrives as [tui.WheelMsg] (pointer-routed to
+// the panel under the cursor, not the focused panel); a raw [tea.MouseWheelMsg]
+// arrives only while the inspect overlay captures (the Frame forwards it here so
+// the viewport scrolls). Double-click arrives as the Select action.
 //
 // Filter and inspect are mutually exclusive (you cannot open inspect while
 // filtering — `i` is typed into the query, not dispatched), so the filter branch
 // takes precedence and inspect only runs when no filter is active.
 func (b *browser) Update(msg tea.Msg) tea.Cmd {
 	switch m := msg.(type) {
+	case tui.WheelMsg:
+		// Coalesced wheel for the open inspect overlay (sentinel panel) scrolls the
+		// modal's embedded viewport by the net notch count; everything else is a
+		// body-panel wheel.
+		if m.Panel == tui.OverlayWheelPanel {
+			b.scrollInspect(m.Delta)
+			return nil
+		}
+		b.handleWheel(m)
+		return nil
+	case tea.MouseWheelMsg:
+		if b.inspect == nil {
+			return nil
+		}
+		var cmd tea.Cmd
+		b.inspect.vp, cmd = b.inspect.vp.Update(m)
+		b.inspectPending = true
+		return cmd
 	case tui.FocusChangedMsg:
 		b.active = m.Panel
 		return nil
@@ -256,6 +275,31 @@ func (b *browser) Update(msg tea.Msg) tea.Cmd {
 	return nil
 }
 
+// handleWheel routes a pointer wheel turn to the panel under the cursor.
+// It is a no-op while the inline filter is active (belt-and-suspenders — the
+// Frame already swallows the wheel during CapturingInput). It never mutates
+// b.active; wheel scrolling is focus-neutral.
+func (b *browser) handleWheel(msg tui.WheelMsg) {
+	if b.filter != nil {
+		return
+	}
+	switch msg.Panel {
+	case panelTree:
+		if msg.Delta < 0 {
+			b.tree.eng.MoveUp()
+		} else {
+			b.tree.eng.MoveDown()
+		}
+		b.afterTreeMove()
+	case panelList:
+		if msg.Delta < 0 {
+			b.list.CursorUp()
+		} else {
+			b.list.CursorDown()
+		}
+	}
+}
+
 // handlePanelClick moves the cursor/selection in response to a single click,
 // without running anything (Decision 7 — single click moves, double click runs).
 // The only guard is the inline filter: while it owns input the query line is not
@@ -269,7 +313,7 @@ func (b *browser) handlePanelClick(msg tui.PanelClickMsg) {
 	}
 	switch msg.Panel {
 	case panelTree:
-		b.tree.focusRow(msg.Y)
+		b.tree.eng.FocusRow(msg.Y)
 		b.afterTreeMove()
 	case panelList:
 		b.selectListRow(msg.Y)
@@ -309,7 +353,7 @@ func (b *browser) ViewPanel(id tui.PanelID, inner tui.Region) string {
 			return b.renderTreeFiltered(inner)
 		}
 		// Keep the focused row on screen across resizes before clipping.
-		b.tree.ensureFocusVisible(inner.Height)
+		b.tree.eng.EnsureFocusVisible(inner.Height)
 		return b.tree.renderRegion(inner, b.active == panelTree, nil)
 	case panelList:
 		b.listInner = inner
@@ -338,7 +382,7 @@ func (b *browser) viewList(inner tui.Region) string {
 // and seeds the match list. The capture key handling (typing / esc / enter) and
 // snapshot restore land in Task 7; Task 6 only opens the mode.
 func (b *browser) enterFilter() {
-	b.filter = newFilterState(b.tree.expanded, b.tree.focusedID)
+	b.filter = newFilterState(b.tree.eng.ExpandedSnapshot(), b.tree.focusedID())
 	b.refreshFilterMatches()
 }
 
@@ -404,15 +448,16 @@ func (b *browser) exitFilter() {
 	if b.filter.query == "" {
 		// Empty query: entered and immediately Esc'd. Restore the exact pre-filter
 		// cursor rather than the (meaningless) first-row highlight.
-		b.tree.focusedID = b.filter.savedFocusID
+		b.tree.eng.SetCursorByKey(b.filter.savedFocusID)
 	} else if it, ok := b.list.SelectedItem().(listItem); ok && !it.header {
 		targetOrigIdx = it.origIdx
-		b.tree.focusedID = b.nearestRestoredAncestor(b.items[it.origIdx].ID)
+		b.tree.eng.SetCursorByKey(b.nearestRestoredAncestor(b.items[it.origIdx].ID))
 	}
 	b.filter.restoreExpansion(b.tree)
-	// Restored expansion may leave focusedID on a now-hidden node — walk up.
-	if b.tree.focusedID != "" && b.tree.indexOfFocused() < 0 {
-		b.tree.focusedID = b.tree.nearestVisibleAncestor(b.tree.focusedID)
+	// Restored expansion may leave the cursor on a now-hidden node — walk up.
+	// RebuildVisible does not re-park, so this resolution stays explicit.
+	if b.tree.focusedID() != "" && !b.tree.focusVisible() {
+		b.tree.eng.SetCursorByKey(b.tree.nearestVisibleAncestor(b.tree.focusedID()))
 	}
 	b.filter = nil
 	b.active = panelList
@@ -430,10 +475,10 @@ func (b *browser) commitFilter() {
 		return
 	}
 	if it, ok := b.list.SelectedItem().(listItem); ok && !it.header {
-		b.tree.focusedID = b.nearestRestoredAncestor(b.items[it.origIdx].ID)
+		b.tree.eng.SetCursorByKey(b.nearestRestoredAncestor(b.items[it.origIdx].ID))
 	}
-	if b.tree.focusedID != "" && b.tree.indexOfFocused() < 0 {
-		b.tree.focusedID = b.tree.nearestVisibleAncestor(b.tree.focusedID)
+	if b.tree.focusedID() != "" && !b.tree.focusVisible() {
+		b.tree.eng.SetCursorByKey(b.tree.nearestVisibleAncestor(b.tree.focusedID()))
 	}
 	b.filter = nil
 	b.active = panelList
@@ -499,7 +544,7 @@ func (b *browser) renderTreeFiltered(inner tui.Region) string {
 	}
 	treeRegion := inner
 	treeRegion.Height = max(inner.Height-1, 0)
-	b.tree.ensureFocusVisible(treeRegion.Height)
+	b.tree.eng.EnsureFocusVisible(treeRegion.Height)
 	body := b.tree.renderRegion(treeRegion, b.active == panelTree, b.filter)
 	if body == "" {
 		return header
@@ -576,6 +621,17 @@ func (b *browser) openInspect() {
 // scrolling (arrows / page / half-page / home-end per the viewport keymap). Esc
 // never reaches here — the Frame's routeWhileCapturing handles it as a close
 // (pop) — so this method only ever opens or scrolls, never closes.
+// scrollInspect scrolls the open inspect overlay by delta wheel notches
+// (delta<0 up, delta>0 down) and re-marks it pending so the Frame republishes
+// the scrolled snapshot. No-op when the overlay is closed.
+func (b *browser) scrollInspect(delta int) {
+	if b.inspect == nil || delta == 0 {
+		return
+	}
+	tui.ScrollOverlayViewport(&b.inspect.vp, delta)
+	b.inspectPending = true
+}
+
 func (b *browser) updateInspect(msg tea.KeyPressMsg) tea.Cmd {
 	if b.inspect == nil {
 		return nil

@@ -206,6 +206,71 @@ func TestFrame_MouseCapabilityGate(t *testing.T) {
 	})
 }
 
+// TestFrame_ReleaseMouseOverlay verifies a top overlay with ReleaseMouse forces
+// MouseModeNone even when mouse capture is otherwise enabled, and that popping it
+// reverts to CellMotion (so native selection is confined to the overlay's life).
+func TestFrame_ReleaseMouseOverlay(t *testing.T) {
+	f, _ := newTestFrame(t, 80, frameGoldenHeight,
+		withMouse(true), withTermEnv(func() string { return "xterm-256color" }))
+	if got := f.View().MouseMode; got != tea.MouseModeCellMotion {
+		t.Fatalf("precondition: MouseMode = %v; want CellMotion", got)
+	}
+
+	f.overlay.Push(Overlay{Content: "err", Width: 3, Height: 1, CapturesInput: true, ReleaseMouse: true})
+	if got := f.View().MouseMode; got != tea.MouseModeNone {
+		t.Errorf("with ReleaseMouse overlay: MouseMode = %v; want None", got)
+	}
+
+	// A capturing overlay that does NOT release the mouse keeps capture on.
+	f.overlay.ReplaceTop(Overlay{Content: "err", Width: 3, Height: 1, CapturesInput: true, ReleaseMouse: false})
+	if got := f.View().MouseMode; got != tea.MouseModeCellMotion {
+		t.Errorf("release off: MouseMode = %v; want CellMotion", got)
+	}
+
+	_, _ = f.overlay.Pop()
+	if got := f.View().MouseMode; got != tea.MouseModeCellMotion {
+		t.Errorf("after pop: MouseMode = %v; want CellMotion", got)
+	}
+}
+
+// TestFrame_FullScreenOverlay verifies a FullScreen overlay takes over the whole
+// terminal: the rendered content is exactly Term-sized and carries none of the
+// framework chrome (no status-line brand text bleeds through).
+func TestFrame_FullScreenOverlay(t *testing.T) {
+	const w, h = 80, frameGoldenHeight
+	f, _ := newTestFrame(t, w, h,
+		withMouse(true), withTermEnv(func() string { return "xterm-256color" }),
+		withBrand("DWE"), withProject("proj"))
+
+	// Baseline: normal frame shows the brand in the status line.
+	if !strings.Contains(stripANSI(f.View().Content), "DWE") {
+		t.Fatal("precondition: brand should appear in the normal frame")
+	}
+
+	f.overlay.Push(Overlay{
+		Content:       "ERRORTEXT",
+		Width:         9,
+		Height:        1,
+		CapturesInput: true,
+		ReleaseMouse:  true,
+		FullScreen:    true,
+	})
+	v := f.View()
+	plain := stripANSI(v.Content)
+	if strings.Contains(plain, "DWE") {
+		t.Error("FullScreen overlay must not render the frame chrome (brand leaked in)")
+	}
+	if !strings.Contains(plain, "ERRORTEXT") {
+		t.Error("FullScreen overlay content not rendered")
+	}
+	if got := lipgloss.Height(v.Content); got != h {
+		t.Errorf("FullScreen content height = %d; want full terminal %d", got, h)
+	}
+	if got := v.MouseMode; got != tea.MouseModeNone {
+		t.Errorf("FullScreen + ReleaseMouse: MouseMode = %v; want None", got)
+	}
+}
+
 // TestFrame_StatusLineZones asserts the three-zone status line: brand/project on
 // the left, plugin context in the middle, help hint on the right; and that an
 // over-long plugin context is truncated so the line stays exactly frame width.
@@ -398,10 +463,10 @@ func TestFrame_EscClosesOverlayWithoutQuitting(t *testing.T) {
 
 // TestFrame_QuitDispatch asserts the program's primary exit path: in normal mode
 // (no overlay) the quit keys route through the registry to ActionQuit and the
-// framework returns tea.Quit. "esc" reaches ActionQuit only here (no modal open);
-// the modal-open case is the negative covered by TestFrame_EscClosesOverlayWithoutQuitting.
+// framework returns tea.Quit. "esc" is deliberately absent — it is never a quit
+// key (see TestFrame_EscNeverQuits).
 func TestFrame_QuitDispatch(t *testing.T) {
-	for _, k := range []string{"q", "ctrl+c", "esc"} {
+	for _, k := range []string{"q", "ctrl+c"} {
 		t.Run(k, func(t *testing.T) {
 			f, p := newTestFrame(t, 80, frameGoldenHeight)
 			_, cmd := f.Update(key(k))
@@ -412,6 +477,19 @@ func TestFrame_QuitDispatch(t *testing.T) {
 				t.Errorf("quit key %q leaked to plugin.HandleAction: %q", k, p.handledAction)
 			}
 		})
+	}
+}
+
+// TestFrame_EscNeverQuits asserts esc does not exit the TUI in normal mode (no
+// overlay): it must NOT return tea.Quit. esc only ever closes an open overlay.
+func TestFrame_EscNeverQuits(t *testing.T) {
+	f, _ := newTestFrame(t, 80, frameGoldenHeight)
+	if !f.overlay.Empty() {
+		t.Fatal("precondition: no overlay should be open")
+	}
+	_, cmd := f.Update(key("esc"))
+	if isQuitCmd(cmd) {
+		t.Error("esc in normal mode returned tea.Quit; esc must never exit the TUI")
 	}
 }
 
@@ -993,10 +1071,10 @@ const (
 )
 
 // mousePlugin is a minimal Plugin for mouse routing tests. It registers the
-// stdlib Nav and Select actions (so MatchMouse resolves wheel-up/down and
-// double-click) and counts per-action invocations so tests can assert
-// "HandleAction(ActionNavDown) was called exactly N times." Two equal-weight
-// panels let click tests verify focus switching between panels.
+// stdlib Nav and Select actions (so MatchMouse resolves double-click) and
+// counts per-action invocations. It also records every message forwarded through
+// Update so WheelMsg routing tests can assert delivery. Two equal-weight panels
+// let click and wheel tests verify routing across panels.
 type mousePlugin struct {
 	counts map[Action]int
 	// msgs records every message forwarded through Update so click/focus
@@ -1010,6 +1088,13 @@ type mousePlugin struct {
 	// modelling the inline filter opening on '/'. Lets a test exercise the
 	// frame's reset-on-entering-capture transition.
 	captureOnFilter bool
+	// pending is the capturing overlay the plugin will surface on the next
+	// PendingOverlay drain — used by Task 2 overlay-wheel tests.
+	pending *Overlay
+	// republishOnUpdate, when set, is re-marked pending on every Update —
+	// modelling a capturing overlay that republishes a fresh snapshot after a
+	// scroll event so refreshCapturingOverlay swaps in the new content.
+	republishOnUpdate *Overlay
 }
 
 func newMousePlugin() *mousePlugin {
@@ -1021,6 +1106,10 @@ func (p *mousePlugin) Close() error  { return nil }
 func (p *mousePlugin) Resize(Region) {}
 func (p *mousePlugin) Update(msg tea.Msg) tea.Cmd {
 	p.msgs = append(p.msgs, msg)
+	if p.republishOnUpdate != nil {
+		ov := *p.republishOnUpdate
+		p.pending = &ov
+	}
 	return nil
 }
 func (p *mousePlugin) ViewPanel(_ PanelID, _ Region) string { return "[mouse]" }
@@ -1041,9 +1130,16 @@ func (p *mousePlugin) HandleAction(a Action) (tea.Cmd, bool) {
 	}
 	return nil, true
 }
-func (p *mousePlugin) PendingOverlay() (Overlay, bool) { return Overlay{}, false }
-func (p *mousePlugin) Result() any                     { return nil }
-func (p *mousePlugin) CapturingInput() bool            { return p.capturing }
+func (p *mousePlugin) PendingOverlay() (Overlay, bool) {
+	if p.pending == nil {
+		return Overlay{}, false
+	}
+	ov := *p.pending
+	p.pending = nil
+	return ov, true
+}
+func (p *mousePlugin) Result() any          { return nil }
+func (p *mousePlugin) CapturingInput() bool { return p.capturing }
 
 // panelClicks returns every PanelClickMsg forwarded to the plugin, in order.
 func (p *mousePlugin) panelClicks() []PanelClickMsg {
@@ -1056,12 +1152,49 @@ func (p *mousePlugin) panelClicks() []PanelClickMsg {
 	return out
 }
 
+// overlayClosedCount returns how many OverlayClosedMsg the plugin received,
+// used to assert a capturing overlay's dismissal notifies the plugin.
+func (p *mousePlugin) overlayClosedCount() int {
+	n := 0
+	for _, m := range p.msgs {
+		if _, ok := m.(OverlayClosedMsg); ok {
+			n++
+		}
+	}
+	return n
+}
+
 // focusChanges returns every FocusChangedMsg forwarded to the plugin, in order.
 func (p *mousePlugin) focusChanges() []FocusChangedMsg {
 	var out []FocusChangedMsg
 	for _, m := range p.msgs {
 		if fc, ok := m.(FocusChangedMsg); ok {
 			out = append(out, fc)
+		}
+	}
+	return out
+}
+
+// wheelMsgs returns every WheelMsg forwarded to the plugin through Update,
+// in order. Used by TestFrame_WheelRouting to assert pointer-routed delivery.
+func (p *mousePlugin) wheelMsgs() []WheelMsg {
+	var out []WheelMsg
+	for _, m := range p.msgs {
+		if wm, ok := m.(WheelMsg); ok {
+			out = append(out, wm)
+		}
+	}
+	return out
+}
+
+// rawWheelMsgs returns every raw tea.MouseWheelMsg forwarded to the plugin
+// through Update, in order. Used by TestFrame_WheelOverlayRouting to assert
+// that the capturing-overlay path forwards the unmodified wheel event.
+func (p *mousePlugin) rawWheelMsgs() []tea.MouseWheelMsg {
+	var out []tea.MouseWheelMsg
+	for _, m := range p.msgs {
+		if wm, ok := m.(tea.MouseWheelMsg); ok {
+			out = append(out, wm)
 		}
 	}
 	return out
@@ -1105,261 +1238,395 @@ func newMouseFrame(t *testing.T, w, h int, opts ...frameOption) (*Frame, *mouseP
 	return f, p
 }
 
-// wheelDown / wheelUp build MouseWheelMsgs for test injection.
-func wheelDown() tea.Msg { return tea.MouseWheelMsg{Button: tea.MouseWheelDown} }
-func wheelUp() tea.Msg   { return tea.MouseWheelMsg{Button: tea.MouseWheelUp} }
+// wheelDown / wheelUp build MouseWheelMsgs positioned at (5,5), which lands
+// inside mousePanelMain's outer region at 80x24 geometry.
+func wheelDown() tea.Msg { return tea.MouseWheelMsg{Button: tea.MouseWheelDown, X: 5, Y: 5} }
+func wheelUp() tea.Msg   { return tea.MouseWheelMsg{Button: tea.MouseWheelUp, X: 5, Y: 5} }
 
 // wheelLeft / wheelRight build horizontal MouseWheelMsgs (trackpad tilt-scroll).
+// Horizontal wheel is swallowed before the hit-test so coordinates do not matter.
 func wheelLeft() tea.Msg  { return tea.MouseWheelMsg{Button: tea.MouseWheelLeft} }
 func wheelRight() tea.Msg { return tea.MouseWheelMsg{Button: tea.MouseWheelRight} }
 
-// flush injects the private tick message directly so tests need not wait 16ms.
-func flush() tea.Msg { return wheelFlushMsg{} }
-
-// TestFrame_WheelCoalescing exercises the wheel accumulator state machine.
-func TestFrame_WheelCoalescing(t *testing.T) {
-	t.Run("burst_N_down_yields_N_nav_down", func(t *testing.T) {
+// TestFrame_WheelRouting exercises the immediate pointer-routed wheel dispatch
+// introduced in Task 1 of the mouse-wheel overhaul. Each wheel notch now
+// forwards a WheelMsg{Panel, Delta} synchronously (no tick, no accumulator)
+// to the panel under the pointer, leaving focus unchanged.
+func TestFrame_WheelRouting(t *testing.T) {
+	t.Run("wheel_down_over_main_panel_forwards_wheel_msg", func(t *testing.T) {
+		// Geometry at 80x24: main outer {0,0,40,23}; (5,5) is inside.
 		f, p := newMouseFrame(t, 80, frameGoldenHeight)
-		const N = 5
-		for range N {
-			f.Update(wheelDown())
+		_, cmd := f.Update(wheelDown())
+		wms := p.wheelMsgs()
+		if len(wms) != 1 {
+			t.Fatalf("WheelDown over main panel: forwarded %d WheelMsgs; want 1", len(wms))
 		}
-		f.Update(flush())
-		if got := p.counts[ActionNavDown]; got != N {
-			t.Errorf("burst %d WheelDown: HandleAction(NavDown) count = %d; want %d", N, got, N)
+		if wms[0].Panel != mousePanelMain {
+			t.Errorf("WheelMsg.Panel = %q; want %q", wms[0].Panel, mousePanelMain)
 		}
-		if p.counts[ActionNavUp] != 0 {
-			t.Errorf("burst down: unexpected NavUp count %d", p.counts[ActionNavUp])
+		if wms[0].Delta != 1 {
+			t.Errorf("WheelMsg.Delta = %d; want +1 (down)", wms[0].Delta)
 		}
-		// accumulator and armed flag must be reset after flush
-		if f.wheelAccum != 0 {
-			t.Errorf("wheelAccum after flush = %d; want 0", f.wheelAccum)
+		// A direct handleMouse dispatch forwards the WheelMsg and returns the
+		// plugin's own cmd (nil for the stub) — there is no framework tick.
+		if cmd != nil {
+			t.Errorf("wheel cmd = non-nil; want nil (plugin stub returns nil)")
 		}
-		if f.wheelArmed {
-			t.Errorf("wheelArmed after flush should be false")
-		}
-	})
-
-	t.Run("burst_N_up_yields_N_nav_up", func(t *testing.T) {
-		f, p := newMouseFrame(t, 80, frameGoldenHeight)
-		const N = 3
-		for range N {
-			f.Update(wheelUp())
-		}
-		f.Update(flush())
-		if got := p.counts[ActionNavUp]; got != N {
-			t.Errorf("burst %d WheelUp: HandleAction(NavUp) count = %d; want %d", N, got, N)
-		}
-	})
-
-	t.Run("slow_one_per_flush", func(t *testing.T) {
-		f, p := newMouseFrame(t, 80, frameGoldenHeight)
-		f.Update(wheelDown())
-		f.Update(flush())
-		if p.counts[ActionNavDown] != 1 {
-			t.Errorf("first slow flush: NavDown count = %d; want 1", p.counts[ActionNavDown])
-		}
-		// Second tick: arm a new tick with a second wheel event.
-		f.Update(wheelDown())
-		f.Update(flush())
-		if p.counts[ActionNavDown] != 2 {
-			t.Errorf("second slow flush: NavDown count = %d; want 2", p.counts[ActionNavDown])
-		}
-	})
-
-	t.Run("mixed_up_down_nets_direction", func(t *testing.T) {
-		f, p := newMouseFrame(t, 80, frameGoldenHeight)
-		// 3 down + 2 up → net 1 down
-		for range 3 {
-			f.Update(wheelDown())
-		}
-		for range 2 {
-			f.Update(wheelUp())
-		}
-		f.Update(flush())
-		if p.counts[ActionNavDown] != 1 {
-			t.Errorf("net 1 down: NavDown count = %d; want 1", p.counts[ActionNavDown])
-		}
-		if p.counts[ActionNavUp] != 0 {
-			t.Errorf("net 1 down: unexpected NavUp count %d", p.counts[ActionNavUp])
-		}
-	})
-
-	t.Run("mixed_up_down_nets_up", func(t *testing.T) {
-		f, p := newMouseFrame(t, 80, frameGoldenHeight)
-		// 2 down + 4 up → net 2 up
-		for range 2 {
-			f.Update(wheelDown())
-		}
-		for range 4 {
-			f.Update(wheelUp())
-		}
-		f.Update(flush())
-		if p.counts[ActionNavUp] != 2 {
-			t.Errorf("net 2 up: NavUp count = %d; want 2", p.counts[ActionNavUp])
-		}
-		if p.counts[ActionNavDown] != 0 {
-			t.Errorf("net 2 up: unexpected NavDown count %d", p.counts[ActionNavDown])
-		}
-	})
-
-	t.Run("first_wheel_arms_tick_subsequent_nil", func(t *testing.T) {
-		f, _ := newMouseFrame(t, 80, frameGoldenHeight)
-		// First wheel event must return a non-nil cmd (the tick).
-		_, cmd1 := f.Update(wheelDown())
-		if cmd1 == nil {
-			t.Fatal("first WheelDown: cmd = nil; want non-nil (tick)")
-		}
-		// Execute the real tick and confirm it yields wheelFlushMsg — without
-		// this the coalescing tests (which inject flush() directly) would still
-		// pass even if the tick closure returned the wrong message type.
-		if _, ok := cmd1().(wheelFlushMsg); !ok {
-			t.Errorf("tick cmd produced %T; want wheelFlushMsg", cmd1())
-		}
-		// Second and third in-window wheel events must return nil (already armed).
-		_, cmd2 := f.Update(wheelDown())
-		if cmd2 != nil {
-			t.Error("second WheelDown: cmd should be nil (tick already armed)")
-		}
-		_, cmd3 := f.Update(wheelUp())
-		if cmd3 != nil {
-			t.Error("third wheel (up) while armed: cmd should be nil")
-		}
-	})
-
-	t.Run("stale_flush_after_flush_is_noop", func(t *testing.T) {
-		f, p := newMouseFrame(t, 80, frameGoldenHeight)
-		f.Update(wheelDown())
-		f.Update(flush())
-		before := p.counts[ActionNavDown]
-		// A second flush with no new wheel event must not dispatch anything.
-		f.Update(flush())
-		if p.counts[ActionNavDown] != before {
-			t.Errorf("second flush (empty accum): NavDown grew from %d to %d", before, p.counts[ActionNavDown])
-		}
-	})
-
-	t.Run("horizontal_wheel_ignored", func(t *testing.T) {
-		f, p := newMouseFrame(t, 80, frameGoldenHeight)
-		// Horizontal wheel events must neither arm a tick nor touch the
-		// vertical accumulator — they carry no Nav mapping in Stage 2.
-		_, cmdL := f.Update(wheelLeft())
-		if cmdL != nil {
-			t.Error("WheelLeft returned a cmd; want nil (no tick armed)")
-		}
-		_, cmdR := f.Update(wheelRight())
-		if cmdR != nil {
-			t.Error("WheelRight returned a cmd; want nil (no tick armed)")
-		}
-		if f.wheelAccum != 0 {
-			t.Errorf("wheelAccum after horizontal wheel = %d; want 0", f.wheelAccum)
-		}
-		if f.wheelArmed {
-			t.Error("wheelArmed after horizontal wheel should be false")
-		}
-		// A subsequent flush must dispatch no Nav in either direction.
-		f.Update(flush())
 		if p.counts[ActionNavDown] != 0 || p.counts[ActionNavUp] != 0 {
-			t.Errorf("horizontal wheel produced Nav: down=%d up=%d; want 0/0",
+			t.Errorf("wheel dispatched HandleAction: down=%d up=%d; want 0/0",
 				p.counts[ActionNavDown], p.counts[ActionNavUp])
 		}
 	})
 
-	t.Run("swallowed_while_overlay_open", func(t *testing.T) {
+	t.Run("wheel_up_over_main_panel_has_negative_delta", func(t *testing.T) {
+		f, p := newMouseFrame(t, 80, frameGoldenHeight)
+		f.Update(wheelUp())
+		wms := p.wheelMsgs()
+		if len(wms) != 1 {
+			t.Fatalf("WheelUp over main panel: forwarded %d WheelMsgs; want 1", len(wms))
+		}
+		if wms[0].Delta != -1 {
+			t.Errorf("WheelMsg.Delta = %d; want -1 (up)", wms[0].Delta)
+		}
+		if wms[0].Panel != mousePanelMain {
+			t.Errorf("WheelMsg.Panel = %q; want %q", wms[0].Panel, mousePanelMain)
+		}
+	})
+
+	t.Run("wheel_over_alt_panel_routes_to_alt", func(t *testing.T) {
+		// (50,5) is inside alt panel outer {40,0,40,23}.
+		f, p := newMouseFrame(t, 80, frameGoldenHeight)
+		f.Update(tea.MouseWheelMsg{Button: tea.MouseWheelDown, X: 50, Y: 5})
+		wms := p.wheelMsgs()
+		if len(wms) != 1 {
+			t.Fatalf("WheelDown over alt panel: forwarded %d WheelMsgs; want 1", len(wms))
+		}
+		if wms[0].Panel != mousePanelAlt {
+			t.Errorf("WheelMsg.Panel = %q; want %q", wms[0].Panel, mousePanelAlt)
+		}
+	})
+
+	t.Run("wheel_does_not_change_focus", func(t *testing.T) {
+		// Wheel over alt panel must NOT move focus to alt; clicking still focuses.
 		f, _ := newMouseFrame(t, 80, frameGoldenHeight)
-		// Open the help overlay via key (keyboard path; '?' registered by NewRegistry).
-		f.Update(key("?"))
+		before := f.focus.Active()
+		f.Update(tea.MouseWheelMsg{Button: tea.MouseWheelDown, X: 50, Y: 5})
+		if got := f.focus.Active(); got != before {
+			t.Errorf("wheel changed focus from %q to %q; want unchanged", before, got)
+		}
+	})
+
+	t.Run("wheel_over_help_hint_swallowed", func(t *testing.T) {
+		// At 80x24 the help-hint zone is at the right end of the status row (Y=23).
+		// (75,23) hits the help hint → zoneHelpHint → swallow.
+		f, p := newMouseFrame(t, 80, frameGoldenHeight)
+		_, cmd := f.Update(tea.MouseWheelMsg{Button: tea.MouseWheelDown, X: 75, Y: 23})
+		if cmd != nil {
+			t.Error("wheel over help-hint returned cmd; want nil (swallowed)")
+		}
+		if wms := p.wheelMsgs(); len(wms) != 0 {
+			t.Errorf("wheel over help-hint forwarded %d WheelMsgs; want 0", len(wms))
+		}
+	})
+
+	t.Run("wheel_over_blank_status_swallowed", func(t *testing.T) {
+		// (3,23) is on the status row but not in any panel or the help hint →
+		// zoneNone → swallow.
+		f, p := newMouseFrame(t, 80, frameGoldenHeight)
+		_, cmd := f.Update(tea.MouseWheelMsg{Button: tea.MouseWheelDown, X: 3, Y: 23})
+		if cmd != nil {
+			t.Error("wheel over blank status returned cmd; want nil (swallowed)")
+		}
+		if wms := p.wheelMsgs(); len(wms) != 0 {
+			t.Errorf("wheel over blank status forwarded %d WheelMsgs; want 0", len(wms))
+		}
+	})
+
+	t.Run("horizontal_wheel_ignored", func(t *testing.T) {
+		// Horizontal wheel (trackpad tilt) is swallowed before the hit-test.
+		f, p := newMouseFrame(t, 80, frameGoldenHeight)
+		_, cmdL := f.Update(wheelLeft())
+		_, cmdR := f.Update(wheelRight())
+		if cmdL != nil || cmdR != nil {
+			t.Error("horizontal wheel returned non-nil cmd; want nil")
+		}
+		if wms := p.wheelMsgs(); len(wms) != 0 {
+			t.Errorf("horizontal wheel forwarded %d WheelMsgs; want 0", len(wms))
+		}
+	})
+
+	t.Run("wheel_swallowed_while_overlay_open", func(t *testing.T) {
+		// A non-capturing overlay (help) swallows wheel events; only a
+		// CapturesInput overlay forwards them (see TestFrame_WheelOverlayRouting).
+		f, p := newMouseFrame(t, 80, frameGoldenHeight)
+		f.Update(key("?")) // open non-capturing help overlay
 		if f.overlay.Empty() {
 			t.Fatal("help overlay did not open")
 		}
 		_, cmd := f.Update(wheelDown())
 		if cmd != nil {
-			t.Error("WheelDown while overlay open returned a cmd; want nil (swallowed)")
+			t.Error("WheelDown while overlay open returned cmd; want nil (swallowed)")
 		}
-		if f.wheelAccum != 0 {
-			t.Errorf("wheelAccum after swallowed wheel = %d; want 0", f.wheelAccum)
-		}
-		if f.wheelArmed {
-			t.Error("wheelArmed after swallowed wheel should be false")
+		if wms := p.wheelMsgs(); len(wms) != 0 {
+			t.Errorf("WheelDown while overlay open forwarded WheelMsgs; want 0")
 		}
 	})
 
-	t.Run("wheel_then_modal_then_flush_zero_nav", func(t *testing.T) {
-		// Codex finding #1: arm the tick with a wheel event, then open a modal;
-		// the delayed flush must not dispatch Nav behind the modal.
-		f, p := newMouseFrame(t, 80, frameGoldenHeight)
-		f.Update(wheelDown()) // arms the tick + accumulates
-		// Open help modal (clears accumulator on push).
-		f.Update(key("?"))
-		if f.overlay.Empty() {
-			t.Fatal("help overlay did not open")
-		}
-		// Inject the flush that would have arrived from the armed tick.
-		f.Update(flush())
-		if p.counts[ActionNavDown] != 0 {
-			t.Errorf("flush behind modal: NavDown count = %d; want 0", p.counts[ActionNavDown])
-		}
-		// Accumulator and armed flag must be clear after the no-op flush.
-		if f.wheelAccum != 0 {
-			t.Errorf("wheelAccum after modal flush = %d; want 0", f.wheelAccum)
-		}
-		if f.wheelArmed {
-			t.Error("wheelArmed after modal flush should be false")
-		}
-	})
-
-	t.Run("swallowed_while_capturing", func(t *testing.T) {
+	t.Run("wheel_swallowed_while_capturing", func(t *testing.T) {
 		// While the plugin captures raw input (inline filter, no overlay) wheel
-		// events must neither arm a tick nor dispatch Nav — parity with the
-		// keyboard capture branch, which forwards keys raw and never dispatches.
+		// events are swallowed — parity with the keyboard capture policy.
 		f, p := newMouseFrame(t, 80, frameGoldenHeight)
 		p.capturing = true
 		_, cmd := f.Update(wheelDown())
 		if cmd != nil {
-			t.Error("WheelDown while capturing returned a cmd; want nil (swallowed)")
+			t.Error("WheelDown while capturing returned cmd; want nil (swallowed)")
 		}
-		if f.wheelAccum != 0 || f.wheelArmed {
-			t.Errorf("capturing wheel armed state: accum=%d armed=%v; want 0/false", f.wheelAccum, f.wheelArmed)
-		}
-	})
-
-	t.Run("armed_wheel_then_capture_then_flush_zero_nav", func(t *testing.T) {
-		// Arm the tick with a wheel event, then the plugin enters capture (inline
-		// filter); the delayed flush must not dispatch Nav behind the filter.
-		f, p := newMouseFrame(t, 80, frameGoldenHeight)
-		f.Update(wheelDown()) // arms the tick + accumulates
-		p.capturing = true    // filter takes over before the flush arrives
-		f.Update(flush())
-		if p.counts[ActionNavDown] != 0 {
-			t.Errorf("flush behind filter: NavDown count = %d; want 0", p.counts[ActionNavDown])
-		}
-		if f.wheelAccum != 0 || f.wheelArmed {
-			t.Errorf("capturing flush armed state: accum=%d armed=%v; want 0/false", f.wheelAccum, f.wheelArmed)
+		if wms := p.wheelMsgs(); len(wms) != 0 {
+			t.Errorf("WheelDown while capturing forwarded WheelMsgs; want 0")
 		}
 	})
 
-	t.Run("armed_wheel_then_action_capture_then_flush_zero_nav", func(t *testing.T) {
-		// Same hazard as above, but capture is entered via the '/' ActionFilter
-		// (not by externally flipping the flag). The transition must reset the
-		// armed wheel so a tick armed before '/' cannot flush Nav once the filter
-		// closes and its CapturingInput guard lifts.
+	t.Run("multiple_wheel_events_each_forward_one_msg", func(t *testing.T) {
+		// Each wheel notch produces exactly one WheelMsg immediately (no batching).
 		f, p := newMouseFrame(t, 80, frameGoldenHeight)
-		p.captureOnFilter = true
-		f.Update(wheelDown()) // arms the tick + accumulates
-		f.Update(key("/"))    // ActionFilter → plugin enters capture
-		if !p.capturing {
-			t.Fatal("plugin did not enter capture on '/'")
+		const N = 4
+		for range N {
+			f.Update(wheelDown())
 		}
-		if f.wheelAccum != 0 || f.wheelArmed {
-			t.Errorf("armed wheel not reset on entering capture: accum=%d armed=%v; want 0/false", f.wheelAccum, f.wheelArmed)
+		wms := p.wheelMsgs()
+		if len(wms) != N {
+			t.Errorf("after %d WheelDown events: got %d WheelMsgs; want %d", N, len(wms), N)
 		}
-		// Filter closes, then the stale tick fires — it must dispatch no Nav.
-		p.capturing = false
-		f.Update(flush())
-		if p.counts[ActionNavDown] != 0 {
-			t.Errorf("stale flush after filter close: NavDown = %d; want 0", p.counts[ActionNavDown])
+		for i, wm := range wms {
+			if wm.Delta != 1 {
+				t.Errorf("WheelMsg[%d].Delta = %d; want +1", i, wm.Delta)
+			}
 		}
 	})
+}
+
+// TestFrame_WheelOverlayRouting exercises the overlay-aware wheel routing added
+// in Task 2: a CapturesInput overlay forwards the raw tea.MouseWheelMsg to the
+// plugin and refreshes the overlay snapshot in-place; a non-capturing overlay
+// swallows the wheel; an active inline filter (no overlay) also swallows.
+func TestFrame_WheelOverlayRouting(t *testing.T) {
+	t.Run("capturing_overlay_forwards_raw_wheel_to_plugin", func(t *testing.T) {
+		f, p := newMouseFrame(t, 80, frameGoldenHeight)
+		// Push a capturing overlay snapshot.
+		p.pending = &Overlay{Content: "frame-0", Width: 7, Height: 1, CapturesInput: true}
+		f.drainOverlay()
+		if f.overlay.Empty() {
+			t.Fatal("capturing overlay was not pushed")
+		}
+		_, cmd := f.Update(wheelDown())
+		// The raw wheel is forwarded to the plugin (overlay viewport scroll); the
+		// returned cmd is the plugin's own (nil for the stub), no framework tick.
+		if cmd != nil {
+			t.Errorf("capturing-overlay wheel cmd = non-nil; want nil (plugin stub returns nil)")
+		}
+		// Must have forwarded the raw tea.MouseWheelMsg, not a WheelMsg.
+		if raws := p.rawWheelMsgs(); len(raws) != 1 {
+			t.Fatalf("capturing overlay: forwarded %d raw MouseWheelMsgs; want 1", len(raws))
+		}
+		if wms := p.wheelMsgs(); len(wms) != 0 {
+			t.Errorf("capturing overlay: forwarded %d WheelMsgs; want 0 (raw path only)", len(wms))
+		}
+	})
+
+	t.Run("capturing_overlay_refreshes_snapshot_in_place", func(t *testing.T) {
+		f, p := newMouseFrame(t, 80, frameGoldenHeight)
+		p.pending = &Overlay{Content: "frame-0", Width: 7, Height: 1, CapturesInput: true}
+		f.drainOverlay()
+		if got := len(f.overlay.layers); got != 1 {
+			t.Fatalf("overlay depth after open = %d; want 1", got)
+		}
+		// Plugin republishes a refreshed snapshot on the next Update.
+		p.republishOnUpdate = &Overlay{Content: "frame-1", Width: 7, Height: 1, CapturesInput: true}
+		f.Update(wheelDown())
+		// Stack depth must stay at 1 (replace, not push).
+		if got := len(f.overlay.layers); got != 1 {
+			t.Errorf("overlay depth after wheel = %d; want 1 (refresh must replace, not push)", got)
+		}
+		if top, _ := f.overlay.Top(); top.Content != "frame-1" {
+			t.Errorf("top content = %q; want frame-1 (overlay not refreshed)", top.Content)
+		}
+	})
+
+	t.Run("non_capturing_overlay_swallows_wheel", func(t *testing.T) {
+		f, p := newMouseFrame(t, 80, frameGoldenHeight)
+		f.Update(key("?")) // open non-capturing help overlay
+		if f.overlay.Empty() {
+			t.Fatal("help overlay did not open")
+		}
+		_, cmd := f.Update(wheelDown())
+		if cmd != nil {
+			t.Error("wheel while non-capturing overlay returned cmd; want nil")
+		}
+		if raws := p.rawWheelMsgs(); len(raws) != 0 {
+			t.Errorf("non-capturing overlay forwarded %d raw wheel msgs; want 0", len(raws))
+		}
+		if wms := p.wheelMsgs(); len(wms) != 0 {
+			t.Errorf("non-capturing overlay forwarded %d WheelMsgs; want 0", len(wms))
+		}
+	})
+
+	t.Run("inline_filter_swallows_wheel", func(t *testing.T) {
+		f, p := newMouseFrame(t, 80, frameGoldenHeight)
+		p.capturing = true // no overlay, inline filter active
+		if !f.overlay.Empty() {
+			t.Fatal("overlay must be empty for this test")
+		}
+		_, cmd := f.Update(wheelDown())
+		if cmd != nil {
+			t.Error("wheel while inline filter active returned cmd; want nil")
+		}
+		if raws := p.rawWheelMsgs(); len(raws) != 0 {
+			t.Errorf("inline filter forwarded %d raw wheel msgs; want 0", len(raws))
+		}
+		if wms := p.wheelMsgs(); len(wms) != 0 {
+			t.Errorf("inline filter forwarded %d WheelMsgs; want 0", len(wms))
+		}
+	})
+}
+
+// TestFrame_WheelFilterCoalesces verifies the bubbletea WithFilter wheel
+// coalescer (a TRAILING debounce): the first notch of an idle burst returns a
+// wheelArmMsg (and accumulates), subsequent notches return nil (accumulate +
+// drop → no Update/View), and the wheelFlushMsg tick drains the NET accumulated
+// delta into one WheelMsg. This keeps a buffered flood from each becoming an
+// Update+View while applying the full scroll exactly once.
+func TestFrame_WheelFilterCoalesces(t *testing.T) {
+	f, p := newMouseFrame(t, 80, frameGoldenHeight)
+
+	// First notch of an idle burst → arm the flush tick (no WheelMsg yet).
+	out := f.filterWheel(wheelDown())
+	if _, ok := out.(wheelArmMsg); !ok {
+		t.Fatalf("first wheel filtered to %T; want wheelArmMsg", out)
+	}
+	if !f.wheelTickArmed {
+		t.Error("first notch did not arm the flush tick")
+	}
+
+	// 9 more notches accumulate and are dropped (no per-notch Update/View).
+	for range 9 {
+		if got := f.filterWheel(wheelDown()); got != nil {
+			t.Errorf("in-burst wheel emitted %T; want nil (accumulate + drop)", got)
+		}
+	}
+	if got := f.wheelAccum[mousePanelMain]; got != 10 {
+		t.Errorf("accumulated delta = %d; want 10", got)
+	}
+
+	// The flush drains the net delta into a single WheelMsg and disarms.
+	f.flushWheelAccum()
+	wms := p.wheelMsgs()
+	if len(wms) != 1 || wms[0].Panel != mousePanelMain || wms[0].Delta != 10 {
+		t.Errorf("flush forwarded %+v; want one {main, +10}", wms)
+	}
+	if f.wheelTickArmed || f.wheelAccum[mousePanelMain] != 0 {
+		t.Errorf("flush did not reset state: armed=%v accum=%d", f.wheelTickArmed, f.wheelAccum[mousePanelMain])
+	}
+}
+
+// TestFrame_WheelFilterNetDirection is the regression guard for the leading-edge
+// bug codex found: a fast down-burst must not leave a stale partial delta that a
+// later up notch combines with and scrolls the wrong way. The trailing debounce
+// flushes the NET delta, so down×3 then up×1 in one burst nets +2 (down), and an
+// up-only burst nets −N (up) with no leftover.
+func TestFrame_WheelFilterNetDirection(t *testing.T) {
+	f, p := newMouseFrame(t, 80, frameGoldenHeight)
+
+	f.filterWheel(wheelDown())
+	f.filterWheel(wheelDown())
+	f.filterWheel(wheelDown())
+	f.filterWheel(wheelUp())
+	if got := f.wheelAccum[mousePanelMain]; got != 2 {
+		t.Fatalf("mixed burst net = %d; want +2", got)
+	}
+	f.flushWheelAccum()
+	if wms := p.wheelMsgs(); len(wms) != 1 || wms[0].Delta != 2 {
+		t.Fatalf("mixed flush = %+v; want one Delta=+2", wms)
+	}
+
+	// A fresh up-only burst nets −2 with no leftover from the previous burst.
+	f.filterWheel(wheelUp())
+	f.filterWheel(wheelUp())
+	f.flushWheelAccum()
+	wms := p.wheelMsgs()
+	if len(wms) != 2 || wms[1].Delta != -2 {
+		t.Fatalf("up burst = %+v; want second Delta=-2 (no stale down leftover)", wms)
+	}
+}
+
+// TestFrame_WheelFilterKeyDropsPending verifies an interrupting key/click drops
+// any pending wheel accumulation (so it wins) and passes through unchanged.
+func TestFrame_WheelFilterKeyDropsPending(t *testing.T) {
+	f, _ := newMouseFrame(t, 80, frameGoldenHeight)
+
+	f.filterWheel(wheelDown())
+	f.filterWheel(wheelDown())
+	if f.wheelAccum[mousePanelMain] == 0 {
+		t.Fatal("precondition: expected pending accumulation")
+	}
+
+	out := f.filterWheel(key("j"))
+	if _, ok := out.(tea.KeyPressMsg); !ok {
+		t.Errorf("key filtered to %T; want the key passed through", out)
+	}
+	if got := f.wheelAccum[mousePanelMain]; got != 0 {
+		t.Errorf("key did not drop pending wheel accumulation: %d", got)
+	}
+	// A stale flush after the interrupt forwards nothing.
+	f.flushWheelAccum()
+}
+
+// TestFrame_WheelFilterPassesThroughNonCoalescable verifies the filter only
+// coalesces vertical panel scroll; horizontal wheels, wheels outside a panel,
+// and wheels while an overlay is open flow through to the normal handleMouse path.
+func TestFrame_WheelFilterPassesThroughNonCoalescable(t *testing.T) {
+	f, _ := newMouseFrame(t, 80, frameGoldenHeight)
+	f.clock = testClock()
+
+	if out := f.filterWheel(wheelLeft()); out == nil {
+		t.Error("horizontal wheel dropped by the filter; want pass-through")
+	}
+	if out := f.filterWheel(tea.MouseWheelMsg{Button: tea.MouseWheelDown, X: 3, Y: 23}); out == nil {
+		t.Error("non-panel wheel coalesced; want pass-through")
+	}
+	// A NON-capturing overlay (e.g. help) swallows wheels via handleMouse.
+	f.overlay.Push(Overlay{Content: "m", Width: 3, Height: 1, CapturesInput: false})
+	if out := f.filterWheel(wheelDown()); out == nil {
+		t.Error("non-capturing overlay wheel coalesced; want pass-through to handleMouse")
+	}
+}
+
+// TestFrame_WheelFilterCoalescesCapturingOverlay verifies a CapturesInput
+// overlay's vertical wheel is coalesced under the OverlayWheelPanel sentinel —
+// the freeze fix so a trackpad momentum flood can't back up the input FIFO and
+// hang the modal. The flush drains the net delta into one WheelMsg the plugin
+// uses to scroll its embedded viewport.
+func TestFrame_WheelFilterCoalescesCapturingOverlay(t *testing.T) {
+	f, p := newMouseFrame(t, 80, frameGoldenHeight)
+	f.overlay.Push(Overlay{Content: "modal", Width: 5, Height: 3, CapturesInput: true})
+
+	out := f.filterWheel(wheelDown())
+	if _, ok := out.(wheelArmMsg); !ok {
+		t.Fatalf("first capturing-overlay wheel filtered to %T; want wheelArmMsg", out)
+	}
+	for range 4 {
+		if got := f.filterWheel(wheelDown()); got != nil {
+			t.Errorf("in-burst overlay wheel emitted %T; want nil (accumulate + drop)", got)
+		}
+	}
+	if got := f.wheelAccum[OverlayWheelPanel]; got != 5 {
+		t.Errorf("overlay accum = %d; want 5", got)
+	}
+
+	f.flushWheelAccum()
+	wms := p.wheelMsgs()
+	if len(wms) != 1 || wms[0].Panel != OverlayWheelPanel || wms[0].Delta != 5 {
+		t.Errorf("flush forwarded %+v; want one {OverlayWheelPanel, +5}", wms)
+	}
 }
 
 // TestFrame_ClickRouting exercises the full click-routing policy wired in Task 5.
@@ -1529,8 +1796,12 @@ func TestFrame_ClickRouting(t *testing.T) {
 		clk := testClock()
 		f.clock = clk
 		f.Update(leftClick(5, 5)) // first click — record
-		f.overlay.Push(Overlay{Content: "modal", Width: 5, Height: 1})
-		f.Update(leftClick(5, 5)) // swallowed while overlay open (clears lastClick)
+		ov := Overlay{Content: "modal", Width: 5, Height: 1}
+		f.overlay.Push(ov)
+		// Click the modal's centre cell so it is swallowed (an outside-click would
+		// dismiss it); the swallow must still clear the double-click record.
+		mx, my := centerOffset(f.geo.Overlay, ov)
+		f.Update(leftClick(mx+ov.Width/2, my)) // swallowed while overlay open (clears lastClick)
 		f.overlay.Pop()
 		f.Update(leftClick(5, 5)) // fresh first click after the modal closed
 		if got := p.counts[ActionSelect]; got != 0 {
@@ -1580,15 +1851,46 @@ func TestFrame_ClickRouting(t *testing.T) {
 		}
 	})
 
-	t.Run("click_with_overlay_does_not_pop_it", func(t *testing.T) {
+	t.Run("click_inside_overlay_does_not_dismiss", func(t *testing.T) {
+		f, _ := newMouseFrame(t, 80, frameGoldenHeight)
+		f.Update(key("?")) // open help overlay
+		top, ok := f.overlay.Top()
+		if !ok {
+			t.Fatal("overlay did not open")
+		}
+		// Click the modal's centre cell — inside the visible modal → swallowed.
+		mx, my := centerOffset(f.geo.Overlay, top)
+		f.Update(leftClick(mx+top.Width/2, my+top.Height/2))
+		if f.overlay.Empty() {
+			t.Error("click inside overlay dismissed it; want swallow")
+		}
+	})
+
+	t.Run("click_outside_overlay_dismisses_it", func(t *testing.T) {
 		f, _ := newMouseFrame(t, 80, frameGoldenHeight)
 		f.Update(key("?")) // open help overlay
 		if f.overlay.Empty() {
 			t.Fatal("overlay did not open")
 		}
-		f.Update(leftClick(5, 5)) // click anywhere while overlay is open
-		if f.overlay.Empty() {
-			t.Error("click while overlay open dismissed the overlay; want swallow (no dismiss)")
+		f.Update(leftClick(0, 0)) // top-left, outside the centred modal → dismiss
+		if !f.overlay.Empty() {
+			t.Error("click outside overlay did not dismiss it; want dismiss")
+		}
+	})
+
+	t.Run("click_outside_capturing_overlay_notifies_plugin", func(t *testing.T) {
+		// A capturing overlay dismissed by an outside-click must notify the plugin
+		// via OverlayClosedMsg (same as esc), so it can clear the state that
+		// produced the modal.
+		f, p := newMouseFrame(t, 80, frameGoldenHeight)
+		f.overlay.Push(Overlay{Content: "modal", Width: 5, Height: 1, CapturesInput: true})
+		before := p.overlayClosedCount()
+		f.Update(leftClick(0, 0)) // outside the centred modal → dismiss
+		if !f.overlay.Empty() {
+			t.Fatal("outside-click did not dismiss the capturing overlay")
+		}
+		if got := p.overlayClosedCount(); got != before+1 {
+			t.Errorf("OverlayClosedMsg count = %d; want %d", got, before+1)
 		}
 	})
 

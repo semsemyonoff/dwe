@@ -20,19 +20,18 @@ they never reach the plugin's `HandleAction`.
 | Action ID     | Keys            | Aliases | Section    | Description           |
 |---------------|-----------------|---------|------------|-----------------------|
 | `help`        | `?`             | —       | General    | Toggle help modal     |
-| `quit`        | `q`, `ctrl+c`   | `esc`   | General    | Quit                  |
+| `quit`        | `q`, `ctrl+c`   | —       | General    | Quit                  |
 | `focus.next`  | `tab`           | —       | Navigation | Focus next panel      |
 | `focus.prev`  | `shift+tab`     | —       | Navigation | Focus previous panel  |
 
 Section registration order: Navigation first (FocusNext, FocusPrev), then General
 (Help, Quit). This order drives the help modal layout — see §3.
 
-**`esc` alias on `quit`:** `esc` is a hidden alias for `ActionQuit`. It dispatches
-(Match resolves it) but is absent from the help modal, matching the existing
-cmdbrowser and docs-browser muscle memory without cluttering the help display.
-Precedence rule: when an overlay is open the frame's modal-input policy consumes
-`esc` to **close the overlay** before the registry is consulted; `esc` only reaches
-`ActionQuit` in normal mode (no overlay). See §5 for the capturing-overlay variant.
+**`esc` is never a quit key:** `esc` only ever **closes the visible overlay** (the
+frame's modal-input policy consumes it before the registry is consulted) and is a
+no-op in normal mode (no overlay) — it forwards to `plugin.Update`, which ignores
+it. `esc` must never exit the TUI; quitting is `q` / `ctrl+c` only. See §5 for the
+capturing-overlay variant.
 
 ### 1.2 Stdlib shared actions
 
@@ -78,21 +77,81 @@ key inventories in the source files.
 | `space`   | Toggle              |
 | `backspace`| Delete (filter)    |
 
-**Docs browser** (`internal/core/docs/tui/`):
+**Docs browser** (`internal/core/ui/docstui/`):
 
-| Key | Current description    |
-|-----|------------------------|
-| `]` | Next diagram           |
-| `[` | Prev diagram           |
-| `o` | Open diagram           |
-| `y` | Copy diagram           |
-| `L` | Language cycle         |
-| `e` | Show English           |
-| `r` | Reload                 |
+As of TUI Stage 4 this is a `tui.Plugin`. Plugin-local actions registered via `Actions()`:
 
-Note: docs-browser uses `r` for reload while the stdlib uses `ctrl+r`. During the
-Stage 3–5b migrations the surface will align to the stdlib ID (`reload`) and bind
-both keys (the surface-specific `r` and the stdlib `ctrl+r`).
+**Diagrams** section:
+
+| Key | Description                                         |
+|-----|-----------------------------------------------------|
+| `]` | Next diagram (moves the cursor to its row)          |
+| `[` | Prev diagram (moves the cursor to its row)          |
+| `o` | Open diagram (system viewer)                        |
+| `y` | Copy diagram source                                 |
+| `E` | Show render error (full mmdc log, in an overlay)    |
+
+The active diagram is the one **under the viewport cursor** (`syncActiveDiagram` →
+`activeDiagramForCursor`), not a topmost-visible heuristic. `[`/`]` move the cursor
+onto the prev/next diagram's row (`jumpToDiagram`) and the others act on that
+selection. `E` opens a `CapturesInput` overlay (mirrors the cmdbrowser inspect
+overlay) showing the captured `mmdc` error for the current diagram; it is a no-op
+when the diagram rendered fine or rendering is disabled (`Prefetch.RenderError`).
+
+**Locales** section:
+
+| Key | Description       |
+|-----|-------------------|
+| `L` | Language cycle    |
+| `e` | Show English      |
+
+**Tree navigation** (plugin-local — stdlib `nav.left`/`nav.right` are NOT registered;
+`tree.collapse`/`tree.expand` own these keys instead):
+
+| Key            | Description                                        |
+|----------------|----------------------------------------------------|
+| `h`, `←`       | Collapse (step to parent if already collapsed)     |
+| `l`, `→`       | Expand (step into first child if already expanded) |
+
+**Half-page scroll** (plugin-local `nav.halfpage.up`/`nav.halfpage.down`, **Navigation**
+section): vim `ctrl+u`/`ctrl+d` scroll the focused pane by half its visible height
+(`navHalfPage` — viewport `ScrollBy(±VisibleHeight/2)`, tree jumps `treeInner.Height/2`
+rows). Added so keyboard reading is the primary scroll path and the mouse wheel is a bonus.
+
+| Key      | Description     |
+|----------|-----------------|
+| `ctrl+d` | Half page down  |
+| `ctrl+u` | Half page up    |
+
+**Viewport line cursor**: when the viewport is focused, `j`/`k`/`↑`/`↓`/page/half-page
+move a reading **cursor** (a left-margin `▎` glyph), not the raw scroll offset; the
+viewport scrolls only enough to keep the cursor on screen (`syncViewportToCursor`,
+revdiff-style). A click positions the cursor on the clicked row; the mouse wheel scrolls
+freely and re-pins the cursor into view at burst settle (`flushWheel` → `pinCursorToWindow`).
+The glyph is drawn only while the viewport is focused (`applyCursorGlyph`), overwriting
+glamour's margin space so it is width-neutral.
+
+**Internal links** (`enter` on the cursor row, or a click): glamour emits OSC-8 hyperlinks;
+relative `.md` links (optionally `#anchor`) navigate to the target topic (`followLink` →
+tree `SetCursor`/`selectCursor`, anchor → H2/H3 heading scroll). External links
+(`http(s)`/`mailto`/`tel`) are left to the terminal's own OSC-8 handling. Pure same-page
+anchors (`[x](#frag)`) emit no OSC-8 and are not navigable. See `links.go`.
+
+**Intentional keymap change (Stage 4)**: the pre-migration docs browser toggled
+expansion on BOTH `h` and `l` (each called `Tree.Toggle`). Stage 4 adopts directional
+semantics for cross-surface unification with the cmdbrowser: `h`/`←` collapse (or step
+to parent when already collapsed), `l`/`→` expand (or step into first child when already
+expanded). Locked in `actions_test.go`.
+
+**Reload**: `ctrl+r` only (stdlib `ActionReload`). The pre-migration `r` binding is
+dropped — no alias kept.
+
+**Filter** (`/`): inline-capture mode (`CapturingInput()` returns true while active).
+Raw keys edit the query; `enter` commits, `esc` cancels. Mirrors the cmdbrowser filter
+pattern — see §5.
+
+**Focus toggle** (`tab`): framework built-in `ActionFocusNext` cycles between the tree
+and viewport panels.
 
 **Status dashboard** (`internal/core/ui/statustui/`):
 
@@ -120,7 +179,8 @@ help modal.
 
 `Binding.Aliases` — additional physical keys that dispatch via `Match` but are
 **hidden from the help modal**. Purpose: muscle-memory compatibility without
-cluttering the help display. Example: `esc` as a hidden quit alias.
+cluttering the help display (a second key for an action). Note: `esc` is **not** a
+quit alias — it only closes overlays and never exits the TUI.
 
 Both go through `Registry.Register`'s pre-commit duplicate guard: an alias colliding
 with any existing key/alias, or with the binding's own canonical `Keys`, is an error.
@@ -131,15 +191,19 @@ with any existing key/alias, or with the binding's own canonical `Keys`, is an e
 rebinding config. No config loader is built yet — this is documented metadata only.
 See §7 for the future schema sketch.
 
-### 2.3 Mouse (wired in Stage 2)
+### 2.3 Mouse (wired in Stage 2; pointer-routing added in Stage 4)
 
 `Binding.Mouse string` holds a mouse trigger bound to the same action, resolved
-via `Registry.MatchMouse(event string) (Action, bool)`. Locked vocabulary:
+via `Registry.MatchMouse(event string) (Action, bool)`. After the Stage 4 wheel
+overhaul `double-click` is the only registry-bound mouse event:
 
-- `"wheel-up"` — scrolling up (bound to `nav.up`)
-- `"wheel-down"` — scrolling down (bound to `nav.down`)
 - `"click"` — single click (frame-owned; intentionally NOT registered as a binding)
 - `"double-click"` — double click (bound to `select`)
+
+`"wheel-up"` and `"wheel-down"` are no longer valid `Binding.Mouse` values: wheel
+events are dispatched immediately as `WheelMsg{Panel, Delta}` to the plugin
+(pointer-routed by hit-zone, not focus-routed), bypassing `MatchMouse` entirely.
+See §6 for the wheel mechanics.
 
 `Registry.MatchMouse` scans registered bindings for a `Binding.Mouse` match; an
 empty event never matches. `Register` rejects a second binding claiming an
@@ -215,21 +279,20 @@ a shared key space.
 
 Similarly `y` = skip confirm (cmdbrowser) vs `y` = copy diagram (docs-browser).
 
-### `esc` precedence rule
+### `esc` rule — close overlay only, never quit
 
-`esc` is a hidden alias on `ActionQuit`. Precedence:
+`esc` is **not** a quit key. Behavior:
 
 1. When a **non-capturing** overlay is open: the frame's modal-input policy
    consumes `esc` to **close the overlay** (pop the top layer) before the registry
-   is consulted, so `esc` never reaches its `ActionQuit` alias while a modal is
-   open. `?` toggles help closed and `q`/`ctrl+c` quit; all other keys are
+   is consulted. `?` toggles help closed and `q`/`ctrl+c` quit; all other keys are
    swallowed (no acting behind the modal).
 2. When a **capturing** overlay is open (`CapturesInput: true`): `esc` routes to
    `captureClose` (close the overlay) — the registry is bypassed entirely. See §5.
-3. In **normal mode** (no overlay): `esc` reaches `ActionQuit` via the alias.
+3. In **normal mode** (no overlay): `esc` is a no-op — it forwards to `plugin.Update`
+   (which ignores it) and never exits the TUI.
 
-This matches the existing cmdbrowser and docs-browser behavior and the forms-guidance
-`esc`=cancel intent.
+`esc` must never close the TUI; this matches the forms-guidance `esc`=cancel intent.
 
 ---
 
@@ -260,7 +323,7 @@ Stage 3 filter consumer (the function signature is already the drop-in shape).
 
 ## 6. Mouse vocabulary
 
-Locked in Stage 1; wired in Stage 2.
+Locked in Stage 1; wired in Stage 2; pointer-routing overhauled in Stage 4.
 
 ### 6.1 Registry-bound mouse actions (wired in Stage 2)
 
@@ -269,24 +332,34 @@ Mouse is enabled when `RunOptions.Mouse = true` (per-program opt-in) and
 `tea.MouseModeCellMotion` — click + wheel reporting, no motion spam. The mode
 is a fixed framework choice; per-program code only sets the opt-in flag.
 
-Default mouse bindings for stdlib actions, wired via `Binding.Mouse` +
-`Registry.MatchMouse`:
+After the Stage 4 wheel overhaul, `double-click` is the only registry-bound mouse
+action:
 
 | Mouse event     | Action      |
 |-----------------|-------------|
-| `wheel-up`      | `nav.up`    |
-| `wheel-down`    | `nav.down`  |
 | `double-click`  | `select`    |
 
-**Wheel coalescing** — only vertical wheel events participate; horizontal wheel
-(`MouseWheelLeft`/`MouseWheelRight`, emitted by trackpads in CellMotion mode)
-carries no Nav mapping in Stage 2 and is ignored (it neither arms a tick nor
-touches the accumulator). The first vertical wheel event arms a 16ms tick;
-subsequent events within the window accumulate into a signed delta; the tick
-flush dispatches `abs(delta)` Nav steps and resets (sum-never-drop: a trackpad
-burst → one render of N steps; slow wheel → N single steps). An open overlay
-clears the accumulator on push; the flush handler is a no-op while any overlay is
-open — a tick armed before a modal cannot dispatch Nav behind it.
+**Pointer-routed `WheelMsg` (Stage 4 overhaul)** — vertical wheel events are no
+longer dispatched through `MatchMouse`. `handleMouse` acts on each
+`tea.MouseWheelMsg` synchronously (no accumulator, no tick) and routes by the
+hit-zone under the pointer:
+
+- **Panel hit (`zonePanel`)**: a `WheelMsg{Panel: id, Delta: ±1}` is forwarded
+  to `plugin.Update` immediately. `Delta` is -1 for an upward notch and +1 for a
+  downward notch. The plugin decides the per-panel scroll amount (viewport panel:
+  multi-line step; tree/list panel: one cursor row per notch). **Focus is NOT
+  changed by a wheel event** — wheeling does not focus the panel under the pointer.
+- **Help-hint / blank space**: swallowed.
+- **Horizontal wheel** (`MouseWheelLeft`/`MouseWheelRight`, emitted by trackpads
+  in CellMotion mode): swallowed.
+- **Capturing overlay** (`CapturesInput: true`): the raw `tea.MouseWheelMsg` is
+  forwarded to `plugin.Update` and `refreshCapturingOverlay` swaps in the
+  re-rendered snapshot — mirroring the captured-key path so the inspect modal
+  scrolls with the wheel.
+- **Non-capturing overlay** (help) or active **inline filter**
+  (`plugin.CapturingInput()` returns true, no overlay): wheel is swallowed.
+
+`double-click` remains the only event routed through `Registry.MatchMouse`.
 
 **Double-click** — a second left-click in the same panel + same cell within a
 400ms window (`doubleClickWindow`), gated by `!lastClick.t.IsZero()` (the zero
@@ -303,8 +376,8 @@ all surfaces:
 |---------------------------|-----------------------------------------|
 | Click on panel            | Move focus to clicked panel             |
 | Click on help hint (status bar) | Open help modal (`ActionHelp`)   |
-| Click outside modal       | Swallowed (does not close the modal)    |
-| Click with overlay open   | All clicks swallowed (no dismiss)       |
+| Click inside modal        | Swallowed (body never acts behind it)   |
+| Click outside modal       | Dismiss the overlay (click-away-to-close, mirrors `esc`) |
 
 **Plugin-facing click forward (row-select / tab-switch)** — the `panelLocal(outer
 Region, x, y int) (lx, ly int)` helper translates an absolute click to

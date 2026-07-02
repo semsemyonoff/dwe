@@ -146,11 +146,11 @@ func TestBrowser_InspectScrollbar(t *testing.T) {
 	b.openInspect()
 	b.PendingOverlay()
 	content := b.inspect.overlay().Content
-	if !strings.Contains(content, scrollbarThumbGlyph) {
-		t.Errorf("overflowing inspect body missing scrollbar thumb %q:\n%s", scrollbarThumbGlyph, content)
+	if !strings.Contains(content, tui.OverlayScrollbarThumbGlyph) {
+		t.Errorf("overflowing inspect body missing scrollbar thumb %q:\n%s", tui.OverlayScrollbarThumbGlyph, content)
 	}
-	if !strings.Contains(content, scrollbarTrackGlyph) {
-		t.Errorf("overflowing inspect body missing scrollbar track %q:\n%s", scrollbarTrackGlyph, content)
+	if !strings.Contains(content, tui.OverlayScrollbarTrackGlyph) {
+		t.Errorf("overflowing inspect body missing scrollbar track %q:\n%s", tui.OverlayScrollbarTrackGlyph, content)
 	}
 
 	// beta (idx 1) has a short body that fits → no scrollbar glyphs.
@@ -158,7 +158,7 @@ func TestBrowser_InspectScrollbar(t *testing.T) {
 	b.openInspect()
 	b.PendingOverlay()
 	content = b.inspect.overlay().Content
-	if strings.Contains(content, scrollbarThumbGlyph) || strings.Contains(content, scrollbarTrackGlyph) {
+	if strings.Contains(content, tui.OverlayScrollbarThumbGlyph) || strings.Contains(content, tui.OverlayScrollbarTrackGlyph) {
 		t.Errorf("fitting inspect body should not draw a scrollbar:\n%s", content)
 	}
 }
@@ -256,5 +256,57 @@ func TestBrowser_InspectActivePanelUnchanged(t *testing.T) {
 	b.updateInspect(tea.KeyPressMsg{Code: tea.KeyPgDown})
 	if b.active != panelList {
 		t.Errorf("active panel = %q after inspect, want %q", b.active, panelList)
+	}
+}
+
+// TestBrowser_InspectMouseWheelScrollsViewport asserts that a raw
+// tea.MouseWheelMsg forwarded to Update (by the Frame when a capturing overlay
+// is open) scrolls the inspect viewport and re-marks it pending for a
+// refreshCapturingOverlay refresh.
+func TestBrowser_InspectMouseWheelScrollsViewport(t *testing.T) {
+	b := newInspectBrowser(t, DefaultOptions())
+	b.openInspect()
+	b.PendingOverlay() // simulate the Frame pushing the first overlay
+
+	if got := b.inspect.vp.YOffset(); got != 0 {
+		t.Fatalf("initial YOffset = %d, want 0", got)
+	}
+
+	// A wheel-down MouseWheelMsg forwarded by the Frame (capturing overlay path)
+	// must scroll the inspect viewport.
+	b.Update(tea.MouseWheelMsg{Button: tea.MouseWheelDown})
+	if got := b.inspect.vp.YOffset(); got <= 0 {
+		t.Errorf("YOffset after MouseWheelDown = %d, want > 0", got)
+	}
+	// The scroll must re-mark the overlay pending so the Frame can refresh it.
+	if !b.inspectPending {
+		t.Error("inspectPending should be set after mouse wheel scroll")
+	}
+	if _, ok := b.PendingOverlay(); !ok {
+		t.Error("PendingOverlay() = false after wheel scroll; Frame cannot refresh the overlay")
+	}
+
+	// A wheel-up scrolls back.
+	before := b.inspect.vp.YOffset()
+	b.Update(tea.MouseWheelMsg{Button: tea.MouseWheelUp})
+	if got := b.inspect.vp.YOffset(); got >= before {
+		t.Errorf("YOffset after MouseWheelUp = %d, want < %d", got, before)
+	}
+	if _, ok := b.PendingOverlay(); !ok {
+		t.Error("PendingOverlay() = false after wheel-up scroll")
+	}
+}
+
+// TestBrowser_MouseWheelWithoutInspectIsNoop asserts that a raw
+// tea.MouseWheelMsg is silently ignored when no inspect overlay is open
+// (the Frame only forwards it on the capturing-overlay path, but defensive).
+func TestBrowser_MouseWheelWithoutInspectIsNoop(t *testing.T) {
+	b := newInspectBrowser(t, DefaultOptions())
+	// b.inspect is nil at this point.
+	if cmd := b.Update(tea.MouseWheelMsg{Button: tea.MouseWheelDown}); cmd != nil {
+		t.Errorf("MouseWheelMsg without inspect returned cmd, want nil")
+	}
+	if _, ok := b.PendingOverlay(); ok {
+		t.Error("MouseWheelMsg without inspect pushed an overlay")
 	}
 }

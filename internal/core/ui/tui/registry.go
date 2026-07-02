@@ -38,22 +38,19 @@ type Binding struct {
 
 	// Aliases are additional physical key strings that dispatch to the action
 	// (wired into [Registry.Match]) but are hidden from the help modal. They
-	// exist for muscle-memory compatibility — e.g. "esc" as a quit alias —
-	// without cluttering the help display. Locked in Stage 1.
-	//
-	// Precedence when an overlay is open: the frame's modal-input policy
-	// consumes "esc" to close the overlay before the registry is consulted;
-	// "esc" only reaches [ActionQuit] in normal mode (no overlay). See the
-	// [CapturesInput] contract for the capturing-overlay variant.
+	// exist for muscle-memory compatibility — a second key for an action without
+	// cluttering the help display. Note: "esc" is intentionally NOT a quit alias
+	// — it only closes overlays and never exits the TUI (see [NewRegistry]).
 	Aliases []string
 	// Rebindable marks whether a project may override Keys via a future
 	// rebinding config. This is documented metadata only — no config loader is
 	// built yet (YAGNI; no consumer until Stage 3). Locked in Stage 1.
 	Rebindable bool
 	// Mouse is the mouse-event string that triggers this action, resolved via
-	// [Registry.MatchMouse]. Wired in Stage 2. Locked vocabulary: "wheel-up",
-	// "wheel-down", "double-click". "click" is intentionally frame-owned and is
-	// never registered as a mouse binding.
+	// [Registry.MatchMouse]. Locked vocabulary: "double-click". "click" is
+	// intentionally frame-owned and is never registered as a mouse binding.
+	// Wheel events are dispatched as WheelMsg (pointer-routed via classifyHit),
+	// not through registry mouse bindings.
 	Mouse string
 }
 
@@ -87,11 +84,10 @@ type Registry struct {
 // actions ([ActionHelp], [ActionQuit], [ActionFocusNext], [ActionFocusPrev]).
 // Plugins extend it through their Actions hook.
 //
-// [ActionQuit] carries "esc" as a hidden alias: it dispatches (Match("esc")
-// resolves to ActionQuit) but is absent from the help modal. The frame's
-// modal-input policy takes precedence — "esc" closes an open overlay before
-// the registry is consulted; it only reaches ActionQuit in normal mode (no
-// overlay). Locked in Stage 1.
+// "esc" is deliberately NOT a quit key (nor a quit alias): it only ever closes
+// the visible overlay (handled by the frame's modal-input policy before the
+// registry is consulted) and is a no-op in normal mode — esc must never exit the
+// TUI. Quitting is "q" / "ctrl+c" only.
 func NewRegistry() *Registry {
 	r := &Registry{
 		bindings: make(map[Action]Binding),
@@ -102,7 +98,7 @@ func NewRegistry() *Registry {
 	mustRegister(r, ActionFocusNext, Binding{Keys: []string{"tab"}, Desc: "Focus next panel", Section: sectionNavigation})
 	mustRegister(r, ActionFocusPrev, Binding{Keys: []string{"shift+tab"}, Desc: "Focus previous panel", Section: sectionNavigation})
 	mustRegister(r, ActionHelp, Binding{Keys: []string{"?"}, Desc: "Toggle help", Section: sectionGeneral})
-	mustRegister(r, ActionQuit, Binding{Keys: []string{"q", "ctrl+c"}, Desc: "Quit", Section: sectionGeneral, Aliases: []string{"esc"}})
+	mustRegister(r, ActionQuit, Binding{Keys: []string{"q", "ctrl+c"}, Desc: "Quit", Section: sectionGeneral})
 	return r
 }
 
@@ -164,7 +160,7 @@ func (r *Registry) Register(a Action, b Binding) error {
 	// the strict key/alias contract above.
 	if b.Mouse != "" {
 		if !validMouseEvent(b.Mouse) {
-			return fmt.Errorf("tui: mouse event %q for action %q is not in the locked vocabulary (%q, %q, %q)", b.Mouse, a, mouseWheelUp, mouseWheelDown, mouseDoubleClick)
+			return fmt.Errorf("tui: mouse event %q for action %q is not in the locked vocabulary (%q)", b.Mouse, a, mouseDoubleClick)
 		}
 		if owner, taken := r.MatchMouse(b.Mouse); taken {
 			return fmt.Errorf("tui: mouse event %q for action %q already bound to action %q", b.Mouse, a, owner)
@@ -196,31 +192,27 @@ func (r *Registry) Match(key string) (Action, bool) {
 	return a, ok
 }
 
-// The locked mouse-event vocabulary. These are the only values [Register]
-// accepts in [Binding.Mouse]; "click" is deliberately absent — it is
-// frame-owned and never a registrable binding (see [Registry.MatchMouse]).
+// The locked mouse-event vocabulary. The only value [Register] accepts in
+// [Binding.Mouse]; "click" is deliberately absent — it is frame-owned and
+// never a registrable binding (see [Registry.MatchMouse]). "wheel-up" and
+// "wheel-down" are no longer registrable: wheel events are dispatched as
+// WheelMsg directly by the frame, not through the registry.
 const (
-	mouseWheelUp     = "wheel-up"
-	mouseWheelDown   = "wheel-down"
 	mouseDoubleClick = "double-click"
 )
 
 // validMouseEvent reports whether event is part of the locked mouse vocabulary
 // accepted by [Register].
 func validMouseEvent(event string) bool {
-	switch event {
-	case mouseWheelUp, mouseWheelDown, mouseDoubleClick:
-		return true
-	default:
-		return false
-	}
+	return event == mouseDoubleClick
 }
 
 // MatchMouse resolves a mouse-event string to its action. The bool reports
 // whether any registered binding claims that event via [Binding.Mouse].
-// The locked vocabulary is "wheel-up", "wheel-down", "double-click".
-// "click" is frame-owned and is intentionally never registered as a
-// mouse binding, so MatchMouse("click") always returns false.
+// The locked vocabulary is "double-click". "click" is frame-owned and is
+// intentionally never registered as a mouse binding, so MatchMouse("click")
+// always returns false. Wheel events ("wheel-up", "wheel-down") are no longer
+// registrable and are dispatched as WheelMsg by the frame.
 func (r *Registry) MatchMouse(event string) (Action, bool) {
 	if event == "" {
 		// An empty event is never a real mouse vocabulary entry; without this
