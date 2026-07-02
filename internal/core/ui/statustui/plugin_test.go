@@ -4,7 +4,9 @@ import (
 	"context"
 	"strings"
 	"testing"
+	"time"
 
+	"github.com/semsemyonoff/dwe/internal/core/project/config"
 	"github.com/semsemyonoff/dwe/internal/core/ui/tui"
 )
 
@@ -100,9 +102,6 @@ func TestPlugin_StubMethodsZeroValues(t *testing.T) {
 	if got := p.Update(nil); got != nil {
 		t.Errorf("Update() = %v, want nil", got)
 	}
-	if got := p.StatusContext(); got != "" {
-		t.Errorf("StatusContext() = %q, want empty", got)
-	}
 	if err := p.Actions(nil); err != nil {
 		t.Errorf("Actions() = %v, want nil", err)
 	}
@@ -166,5 +165,82 @@ func TestPlugin_ViewPanel_SizesViewportToInnerMinusChrome(t *testing.T) {
 	}
 	if got := p.m.viewport.Height(); got != 10-panelChromeRows {
 		t.Errorf("viewport height = %d, want %d", got, 10-panelChromeRows)
+	}
+}
+
+func TestPlugin_StatusContext_Loading(t *testing.T) {
+	p, _ := newTestPlugin(t)
+	p.m.loading = true
+
+	got := p.StatusContext()
+	if !strings.Contains(got, "loading…") {
+		t.Errorf("StatusContext() = %q, want to contain %q", got, "loading…")
+	}
+}
+
+func TestPlugin_StatusContext_Reloading(t *testing.T) {
+	p, _ := newTestPlugin(t)
+	p.m.loading = false
+	p.m.reloading = true
+
+	got := p.StatusContext()
+	if !strings.Contains(got, "reloading…") {
+		t.Errorf("StatusContext() = %q, want to contain %q", got, "reloading…")
+	}
+}
+
+func TestPlugin_StatusContext_LoadedWithTimestamp(t *testing.T) {
+	p, _ := newTestPlugin(t)
+	p.m.loading = false
+	p.m.reloading = false
+	p.m.deps.Cfg = &config.DweConfig{}
+	p.m.tabs = []tab{{"Services", "content"}}
+	p.m.healthIndicator = "● healthy"
+	p.m.reloadAt = time.Now().Add(-5 * time.Second)
+
+	got := p.StatusContext()
+	if !strings.Contains(got, "● healthy") {
+		t.Errorf("StatusContext() = %q, want to contain health indicator", got)
+	}
+	if !strings.Contains(got, "loaded") || !strings.Contains(got, "ago") {
+		t.Errorf("StatusContext() = %q, want to contain %q", got, "loaded ... ago")
+	}
+}
+
+func TestPlugin_StatusContext_EmptyWhenNilCfgOrNoTabs(t *testing.T) {
+	p, _ := newTestPlugin(t)
+	p.m.loading = false
+	p.m.reloading = false
+	p.m.deps.Cfg = nil
+	p.m.tabs = []tab{{"Services", "content"}}
+	p.m.healthIndicator = "● healthy"
+	p.m.reloadAt = time.Now()
+
+	if got := p.StatusContext(); got != "" {
+		t.Errorf("StatusContext() with nil Cfg = %q, want empty", got)
+	}
+
+	p.m.deps.Cfg = &config.DweConfig{}
+	p.m.tabs = nil
+	if got := p.StatusContext(); got != "" {
+		t.Errorf("StatusContext() with no tabs = %q, want empty", got)
+	}
+}
+
+func TestPlugin_StatusContext_LoadedWithoutTimestamp(t *testing.T) {
+	p, _ := newTestPlugin(t)
+	p.m.loading = false
+	p.m.reloading = false
+	p.m.deps.Cfg = &config.DweConfig{}
+	p.m.tabs = []tab{{"Services", "content"}}
+	p.m.healthIndicator = "● healthy"
+	p.m.reloadAt = time.Time{}
+
+	got := p.StatusContext()
+	if !strings.Contains(got, "● healthy") {
+		t.Errorf("StatusContext() = %q, want to contain health indicator", got)
+	}
+	if strings.Contains(got, "loaded") {
+		t.Errorf("StatusContext() = %q, want no 'loaded' text when reloadAt is zero", got)
 	}
 }

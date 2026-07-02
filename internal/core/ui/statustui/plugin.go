@@ -2,7 +2,9 @@ package statustui
 
 import (
 	"context"
+	"fmt"
 	"strings"
+	"time"
 
 	tea "charm.land/bubbletea/v2"
 	"charm.land/lipgloss/v2"
@@ -142,8 +144,28 @@ func (p *plugin) renderBody(inner tui.Region) string {
 	return lipgloss.JoinVertical(lipgloss.Top, tabStrip, dividerLine, m.viewport.View())
 }
 
-// StatusContext implements tui.Plugin. Stubbed here; filled in Task 3.
-func (p *plugin) StatusContext() string { return "" }
+// StatusContext implements tui.Plugin. Returns the middle-zone status
+// string: health indicator + "loaded X ago", or a loading/reloading state.
+// This is the old renderStatusBar leftParts, minus the help text (the right
+// side of the old status bar), which the Frame now supplies itself. Called
+// every render so the content is reactive to the model's current state.
+func (p *plugin) StatusContext() string {
+	m := p.m
+	var parts []string
+	switch {
+	case m.loading:
+		parts = append(parts, "·", "loading…")
+	case m.reloading:
+		parts = append(parts, "·", "reloading…")
+	case len(m.tabs) > 0 && m.deps.Cfg != nil:
+		parts = append(parts, m.healthIndicator)
+		if !m.reloadAt.IsZero() {
+			elapsed := time.Since(m.reloadAt)
+			parts = append(parts, fmt.Sprintf("loaded %v ago", elapsed.Round(time.Second)))
+		}
+	}
+	return strings.Join(parts, "  ")
+}
 
 // Actions implements tui.Plugin. Stubbed here; filled in Task 4.
 func (p *plugin) Actions(reg *tui.Registry) error { return nil }

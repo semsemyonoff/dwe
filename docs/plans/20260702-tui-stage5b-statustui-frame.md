@@ -302,11 +302,11 @@ even though they no-op on a single panel. Acceptable — not a blocker; noted in
 - Modify: `internal/core/ui/statustui/plugin.go`
 - Modify: `internal/core/ui/statustui/plugin_test.go`
 
-- [ ] implement `StatusContext()` returning the old `renderStatusBar` leftParts: health
+- [x] implement `StatusContext()` returning the old `renderStatusBar` leftParts: health
       indicator + "loaded X ago", plus "loading…"/"reloading…" states
-- [ ] ensure it is reactive (recomputed each render from current state, like docstui)
-- [ ] write tests: loading state, reloading state, loaded-with-timestamp, empty/nil-cfg
-- [ ] run tests — must pass before next task
+- [x] ensure it is reactive (recomputed each render from current state, like docstui)
+- [x] write tests: loading state, reloading state, loaded-with-timestamp, empty/nil-cfg
+- [x] run tests — must pass before next task
 
 ### Task 4: Actions & HandleAction (Tabs section + reload)
 
