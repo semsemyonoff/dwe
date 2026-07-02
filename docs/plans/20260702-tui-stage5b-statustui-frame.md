@@ -279,22 +279,22 @@ even though they no-op on a single panel. Acceptable — not a blocker; noted in
 - Modify: `internal/core/ui/statustui/plugin.go`
 - Modify: `internal/core/ui/statustui/plugin_test.go`
 
-- [ ] implement `Resize(body tui.Region)` on the plugin: cache inner body (the legacy model's
+- [x] implement `Resize(body tui.Region)` on the plugin: cache inner body (the legacy model's
       own sizing path is left untouched — it is still the live launch path until Task 7).
       Do NOT call the legacy `viewportHeight` (it measures `renderStatusBar`, which the Frame
       replaces); compute the plugin's viewport size from `inner` minus tab-strip + divider rows,
       applying dimensions in `ViewPanel` via `viewport.SetDimensions(inner.Width, innerBodyHeight)`
       (docstui pattern: width recomputed on `WindowSizeMsg`, dims applied in `ViewPanel`)
-- [ ] implement `ViewPanel(id, inner)` on the plugin: size the viewport to the inner body, then
+- [x] implement `ViewPanel(id, inner)` on the plugin: size the viewport to the inner body, then
       render tab strip (top row) + divider + `viewport.View()`; centered spinner while
       `loading`/`reloading` (no separate full-screen view). Reuse the model's existing tab-strip
       render helper (do NOT delete it — the legacy `View()` still calls it until Task 7)
-- [ ] **do NOT delete any legacy code this task** — `View()`, `renderTitleBar()`, the status-bar
+- [x] **do NOT delete any legacy code this task** — `View()`, `renderTitleBar()`, the status-bar
       chrome, `keys.go`, and the `var _ tea.Model` assertion all stay (they keep the legacy launch
       path compiling); their removal is the Task 7 cutover
-- [ ] write golden tests via `tui.RenderFrame` at buckets 60/79/80/99/100 (odd+even):
+- [x] write golden tests via `tui.RenderFrame` at buckets 60/79/80/99/100 (odd+even):
       normal view + loading view (drives the plugin through the Frame, not the legacy model)
-- [ ] run tests — must pass before next task
+- [x] run tests — must pass before next task
 
 ### Task 3: StatusContext (middle status-line segment)
 

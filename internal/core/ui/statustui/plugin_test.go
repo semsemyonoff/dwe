@@ -2,6 +2,7 @@ package statustui
 
 import (
 	"context"
+	"strings"
 	"testing"
 
 	"github.com/semsemyonoff/dwe/internal/core/ui/tui"
@@ -99,9 +100,6 @@ func TestPlugin_StubMethodsZeroValues(t *testing.T) {
 	if got := p.Update(nil); got != nil {
 		t.Errorf("Update() = %v, want nil", got)
 	}
-	if got := p.ViewPanel(panelMain, tui.Region{}); got != "" {
-		t.Errorf("ViewPanel() = %q, want empty", got)
-	}
 	if got := p.StatusContext(); got != "" {
 		t.Errorf("StatusContext() = %q, want empty", got)
 	}
@@ -115,4 +113,58 @@ func TestPlugin_StubMethodsZeroValues(t *testing.T) {
 
 	// Resize is void; just confirm it does not panic.
 	p.Resize(tui.Region{Width: 80, Height: 24})
+}
+
+func TestPlugin_ViewPanel_UnknownPanelIsEmpty(t *testing.T) {
+	p, _ := newTestPlugin(t)
+	if got := p.ViewPanel(tui.PanelID("other"), tui.Region{Width: 80, Height: 24}); got != "" {
+		t.Errorf("ViewPanel(unknown) = %q, want empty", got)
+	}
+}
+
+func TestPlugin_ViewPanel_LoadingShowsSpinnerNoTabStrip(t *testing.T) {
+	p, _ := newTestPlugin(t)
+	p.m.loading = true
+
+	got := p.ViewPanel(panelMain, tui.Region{Width: 80, Height: 24})
+	if got == "" {
+		t.Fatalf("ViewPanel(loading) = empty, want spinner content")
+	}
+	if strings.Contains(got, "Services") {
+		t.Errorf("ViewPanel(loading) = %q, must not contain the tab strip", got)
+	}
+}
+
+func TestPlugin_ViewPanel_NormalShowsTabStripAndViewport(t *testing.T) {
+	p, _ := newTestPlugin(t)
+	p.m.loading = false
+	p.m.tabs = []tab{
+		{"Services", "service content"},
+		{"Deploy", "deploy content"},
+	}
+	p.m.viewport.SetContent(p.m.tabs[0].content)
+
+	got := p.ViewPanel(panelMain, tui.Region{Width: 80, Height: 24})
+	if !strings.Contains(got, "Services") || !strings.Contains(got, "Deploy") {
+		t.Errorf("ViewPanel(normal) = %q, want both tab titles in the strip", got)
+	}
+	if !strings.Contains(got, "service content") {
+		t.Errorf("ViewPanel(normal) = %q, want active tab content in the viewport", got)
+	}
+}
+
+func TestPlugin_ViewPanel_SizesViewportToInnerMinusChrome(t *testing.T) {
+	p, _ := newTestPlugin(t)
+	p.m.loading = false
+	p.m.tabs = []tab{{"Services", "content"}}
+	p.m.viewport.SetContent(p.m.tabs[0].content)
+
+	p.ViewPanel(panelMain, tui.Region{Width: 40, Height: 10})
+
+	if got := p.m.viewport.Width(); got != 40 {
+		t.Errorf("viewport width = %d, want 40", got)
+	}
+	if got := p.m.viewport.Height(); got != 10-panelChromeRows {
+		t.Errorf("viewport height = %d, want %d", got, 10-panelChromeRows)
+	}
 }

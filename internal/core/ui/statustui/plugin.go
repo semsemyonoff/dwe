@@ -2,9 +2,12 @@ package statustui
 
 import (
 	"context"
+	"strings"
 
 	tea "charm.land/bubbletea/v2"
+	"charm.land/lipgloss/v2"
 
+	"github.com/semsemyonoff/dwe/internal/core/ui/styles"
 	"github.com/semsemyonoff/dwe/internal/core/ui/tui"
 )
 
@@ -27,6 +30,11 @@ const panelMain tui.PanelID = "main"
 type plugin struct {
 	m      *model
 	cancel context.CancelFunc
+
+	// body is the overall inner body region cached on Resize. The plugin has
+	// a single panel, so this mirrors the region ViewPanel receives; it is
+	// kept for parity with the docstui pattern and future multi-signal use.
+	body tui.Region
 }
 
 // Compile-time assertion that plugin implements tui.Plugin.
@@ -71,14 +79,68 @@ func (p *plugin) PendingOverlay() (tui.Overlay, bool) { return tui.Overlay{}, fa
 // raw-input capture mode.
 func (p *plugin) CapturingInput() bool { return false }
 
-// Resize implements tui.Plugin. Stubbed here; filled in Task 2.
-func (p *plugin) Resize(body tui.Region) {}
+// Resize implements tui.Plugin. Caches the overall inner body region. The
+// legacy model's own sizing path (viewportHeight, which measures the
+// soon-to-be-deleted renderStatusBar) is left untouched — it is still the
+// live launch path until Task 7. The plugin's own viewport dimensions are
+// computed in ViewPanel, from the per-panel inner region it is given there.
+func (p *plugin) Resize(body tui.Region) { p.body = body }
 
 // Update implements tui.Plugin. Stubbed here; filled in Task 5.
 func (p *plugin) Update(msg tea.Msg) tea.Cmd { return nil }
 
-// ViewPanel implements tui.Plugin. Stubbed here; filled in Task 2.
-func (p *plugin) ViewPanel(id tui.PanelID, inner tui.Region) string { return "" }
+// ViewPanel implements tui.Plugin. Renders the single-panel body: a centered
+// spinner while the initial load is in flight, otherwise the tab strip +
+// divider + viewport content. Reuses the model's existing renderTabStrip
+// helper so hit-zones in Task 6 match exactly what is drawn here.
+func (p *plugin) ViewPanel(id tui.PanelID, inner tui.Region) string {
+	if id != panelMain {
+		return ""
+	}
+	if p.m.loading {
+		return p.renderLoading(inner)
+	}
+	return p.renderBody(inner)
+}
+
+// renderLoading centers the spinner inside the panel's inner region while the
+// initial tab load is in flight. Unlike the legacy full-screen loading view,
+// this is body content only — the Frame still draws its chrome around it.
+func (p *plugin) renderLoading(inner tui.Region) string {
+	return lipgloss.NewStyle().
+		Width(max(inner.Width, 0)).
+		Height(max(inner.Height, 0)).
+		Align(lipgloss.Center).
+		AlignVertical(lipgloss.Center).
+		Render(p.m.spinner.View())
+}
+
+// panelChromeRows is the number of body rows the tab strip + divider occupy
+// above the viewport.
+const panelChromeRows = 2
+
+// renderBody sizes the viewport to the panel's inner region (minus the
+// tab-strip and divider rows) and renders tab strip + divider + viewport
+// content. Reloading state does not change body rendering — only
+// StatusContext (Task 3) reflects it.
+func (p *plugin) renderBody(inner tui.Region) string {
+	m := p.m
+	w := max(inner.Width, 0)
+
+	m.viewport.SetWidth(w)
+	m.viewport.SetHeight(max(inner.Height-panelChromeRows, 0))
+
+	tabStrip := m.renderTabStrip()
+	if tabStrip == "" {
+		return m.viewport.View()
+	}
+
+	dividerLine := lipgloss.NewStyle().
+		Foreground(lipgloss.Color(styles.ColorMuted())).
+		Render(strings.Repeat("─", w))
+
+	return lipgloss.JoinVertical(lipgloss.Top, tabStrip, dividerLine, m.viewport.View())
+}
 
 // StatusContext implements tui.Plugin. Stubbed here; filled in Task 3.
 func (p *plugin) StatusContext() string { return "" }
