@@ -621,11 +621,6 @@ func (b *browser) openInspect() {
 // scrolling (arrows / page / half-page / home-end per the viewport keymap). Esc
 // never reaches here — the Frame's routeWhileCapturing handles it as a close
 // (pop) — so this method only ever opens or scrolls, never closes.
-// inspectWheelStep is how many lines one coalesced wheel notch scrolls the
-// inspect overlay's viewport — matches the viewport's MouseWheelDelta default so
-// a notch feels the same as before the wheel was coalesced.
-const inspectWheelStep = 3
-
 // scrollInspect scrolls the open inspect overlay by delta wheel notches
 // (delta<0 up, delta>0 down) and re-marks it pending so the Frame republishes
 // the scrolled snapshot. No-op when the overlay is closed.
@@ -633,11 +628,7 @@ func (b *browser) scrollInspect(delta int) {
 	if b.inspect == nil || delta == 0 {
 		return
 	}
-	if delta < 0 {
-		b.inspect.vp.ScrollUp(-delta * inspectWheelStep)
-	} else {
-		b.inspect.vp.ScrollDown(delta * inspectWheelStep)
-	}
+	tui.ScrollOverlayViewport(&b.inspect.vp, delta)
 	b.inspectPending = true
 }
 

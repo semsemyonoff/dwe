@@ -339,22 +339,13 @@ func (b *browser) openErrorOverlay() {
 	b.errOverlayPending = true
 }
 
-// errorWheelStep is how many lines one coalesced wheel notch scrolls the error
-// overlay's viewport — matches the viewport's own MouseWheelDelta default so a
-// notch feels the same as before coalescing.
-const errorWheelStep = 3
-
 // scrollErrorOverlay scrolls the open error overlay by delta wheel notches
 // (delta<0 up, delta>0 down) and republishes the snapshot. No-op when closed.
 func (b *browser) scrollErrorOverlay(delta int) {
 	if b.errOverlay == nil || delta == 0 {
 		return
 	}
-	if delta < 0 {
-		b.errOverlay.vp.ScrollUp(-delta * errorWheelStep)
-	} else {
-		b.errOverlay.vp.ScrollDown(delta * errorWheelStep)
-	}
+	tui.ScrollOverlayViewport(&b.errOverlay.vp, delta)
 	b.errOverlayPending = true
 }
 

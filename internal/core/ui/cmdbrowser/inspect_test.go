@@ -146,11 +146,11 @@ func TestBrowser_InspectScrollbar(t *testing.T) {
 	b.openInspect()
 	b.PendingOverlay()
 	content := b.inspect.overlay().Content
-	if !strings.Contains(content, scrollbarThumbGlyph) {
-		t.Errorf("overflowing inspect body missing scrollbar thumb %q:\n%s", scrollbarThumbGlyph, content)
+	if !strings.Contains(content, tui.OverlayScrollbarThumbGlyph) {
+		t.Errorf("overflowing inspect body missing scrollbar thumb %q:\n%s", tui.OverlayScrollbarThumbGlyph, content)
 	}
-	if !strings.Contains(content, scrollbarTrackGlyph) {
-		t.Errorf("overflowing inspect body missing scrollbar track %q:\n%s", scrollbarTrackGlyph, content)
+	if !strings.Contains(content, tui.OverlayScrollbarTrackGlyph) {
+		t.Errorf("overflowing inspect body missing scrollbar track %q:\n%s", tui.OverlayScrollbarTrackGlyph, content)
 	}
 
 	// beta (idx 1) has a short body that fits → no scrollbar glyphs.
@@ -158,7 +158,7 @@ func TestBrowser_InspectScrollbar(t *testing.T) {
 	b.openInspect()
 	b.PendingOverlay()
 	content = b.inspect.overlay().Content
-	if strings.Contains(content, scrollbarThumbGlyph) || strings.Contains(content, scrollbarTrackGlyph) {
+	if strings.Contains(content, tui.OverlayScrollbarThumbGlyph) || strings.Contains(content, tui.OverlayScrollbarTrackGlyph) {
 		t.Errorf("fitting inspect body should not draw a scrollbar:\n%s", content)
 	}
 }

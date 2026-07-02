@@ -113,7 +113,7 @@ func (s *errorState) overlay() tui.Overlay {
 		BorderForeground(lipgloss.Color(styles.ColorBorder())).
 		Padding(0, 1).
 		Render(s.vp.View())
-	box = s.applyScrollbar(box)
+	box = tui.OverlayScrollbar(box, s.vp.YOffset(), s.vp.TotalLineCount())
 	content := lipgloss.JoinVertical(lipgloss.Left, box, s.hintLine())
 	return tui.Overlay{
 		Content:       content,
@@ -157,53 +157,4 @@ func (s *errorState) hintLine() string {
 		return accent.Render(" select mode — drag to select · ") + muted.Render("s exit · c copy all · esc close")
 	}
 	return muted.Render(" c copy all · s select · esc close")
-}
-
-// scrollbarBorderRune is the box's rounded right border, overdrawn with the
-// scrollbar thumb/track (thumb/track glyphs are shared with the inner viewport
-// scrollbar — see view.go).
-const scrollbarBorderRune = "│"
-
-// applyScrollbar overdraws a proportional scrollbar onto the right border of the
-// rendered box, mirroring cmdbrowser's inspect overlay. Returns the box unchanged
-// when the whole error fits.
-func (s *errorState) applyScrollbar(box string) string {
-	lines := strings.Split(box, "\n")
-	if len(lines) < 3 {
-		return box
-	}
-	vh := len(lines) - 2 // rows between the top/bottom border rows
-	total := s.vp.TotalLineCount()
-	if vh <= 0 || total <= vh {
-		return box
-	}
-
-	thumbSize := min(max(vh*vh/total, 1), vh)
-	maxStart := vh - thumbSize
-	thumbStart := 0
-	if denom := total - vh; denom > 0 {
-		thumbStart = min(s.vp.YOffset()*maxStart/denom, maxStart)
-	}
-
-	thumb := lipgloss.NewStyle().Foreground(lipgloss.Color(styles.ColorAccent())).Bold(true).Render(scrollbarThumbGlyph)
-	track := lipgloss.NewStyle().Foreground(lipgloss.Color(styles.ColorMuted())).Render(scrollbarTrackGlyph)
-	for i := range vh {
-		glyph := track
-		if i >= thumbStart && i < thumbStart+thumbSize {
-			glyph = thumb
-		}
-		lines[1+i] = replaceLastRune(lines[1+i], scrollbarBorderRune, glyph)
-	}
-	return strings.Join(lines, "\n")
-}
-
-// replaceLastRune swaps the last occurrence of old in line for repl, leaving any
-// surrounding ANSI styling intact (used to overwrite the box's right border rune
-// with the scrollbar thumb).
-func replaceLastRune(line, old, repl string) string {
-	idx := strings.LastIndex(line, old)
-	if idx < 0 {
-		return line
-	}
-	return line[:idx] + repl + line[idx+len(old):]
 }
