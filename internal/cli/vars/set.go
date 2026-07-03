@@ -20,7 +20,6 @@ import (
 	"github.com/semsemyonoff/dwe/internal/shared/bridgeclient"
 	"github.com/semsemyonoff/dwe/internal/shared/render"
 
-	huh "charm.land/huh/v2"
 	"github.com/spf13/cobra"
 )
 
@@ -241,7 +240,7 @@ func promptForVarValue(cmd *cobra.Command, flags *cmdctx.RootFlags, path string)
 	res, ferr := runAsk(context.Background(), "dwe vars › set "+disp, fields,
 		ask.RunOptions{Input: cmd.InOrStdin(), Output: cmd.OutOrStdout()})
 	if ferr != nil {
-		if errors.Is(ferr, huh.ErrUserAborted) {
+		if errors.Is(ferr, widgets.ErrCancelled) {
 			return "", false, nil
 		}
 		return "", false, ferr

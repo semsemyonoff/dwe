@@ -327,27 +327,27 @@ Quit/help-slot mechanics inside `ask` (moved verbatim from the raw sites, once):
 - Modify: `internal/cli/scaffold/scaffold_test.go` (~line 467)
 - Modify: `internal/cli/command/runbyid_test.go` (~line 373)
 
-- [ ] introduce `ask.Form` (`huh *huh.Form` + `bindings`), `Build(title, fields, opts)
+- [x] introduce `ask.Form` (`huh *huh.Form` + `bindings`), `Build(title, fields, opts)
       (*Form, error)`, `(*Form).Run(ctx) (Result, error)` via `widgets.RunHuhForm`,
       `(*Form).Huh()`, `(*Form).Result()`; rewrite `ask.Run` as `Build` + `Form.Run`;
       drop `ask.Run`'s own `RunWithPromptHooks` wrap (ask.go:166) — `RunHuhForm` wraps
       hooks itself (hooks-fire-once invariant, design decision 7)
-- [ ] change `ask.Run`/`Form.Run` cancel contract to `widgets.ErrCancelled`; update the
+- [x] change `ask.Run`/`Form.Run` cancel contract to `widgets.ErrCancelled`; update the
       docstring (currently promises `huh.ErrUserAborted`)
-- [ ] grep for every `ask.Run` caller checking `huh.ErrUserAborted` and switch to
+- [x] grep for every `ask.Run` caller checking `huh.ErrUserAborted` and switch to
       `errors.Is(err, widgets.ErrCancelled)` (known: setup/huh.go, scaffold.go,
       runbyid.go, vars/set.go — re-verify with grep); drop now-unused `huh` imports
-- [ ] update test seam stubs that return `huh.ErrUserAborted` through `ask.Run`-shaped
+- [x] update test seam stubs that return `huh.ErrUserAborted` through `ask.Run`-shaped
       seams to return `widgets.ErrCancelled` instead (known: vars/browser_test.go:192,
       scaffold/scaffold_test.go:467, runbyid_test.go:373 — re-verify with grep over
       `*_test.go`), otherwise the flipped cancel checks take the wrong branch
-- [ ] write tests: `Build` constructs without running; `Result()` harvest after a
+- [x] write tests: `Build` constructs without running; `Result()` harvest after a
       simulated completion (drive bindings directly); `Run` ≡ `Build`+`Run` equivalence
       on the existing `ask_test.go` cases; cancel returns `ErrCancelled`; rename/retarget
       the stale `TestRunUserAbortedError` (ask_test.go:347) to the new contract
-- [ ] write tests for error cases (`FieldUnknown` still rejected at `Build`; empty
+- [x] write tests for error cases (`FieldUnknown` still rejected at `Build`; empty
       fields short-circuit preserved)
-- [ ] run `make test` — must pass before task 4
+- [x] run `make test` — must pass before task 4
 
 ### Task 4: Migrate `deploy/menu.go` (both selects) onto `ask`
 

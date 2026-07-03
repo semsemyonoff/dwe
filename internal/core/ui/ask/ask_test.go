@@ -9,7 +9,10 @@ import (
 	"testing"
 	"time"
 
+	"github.com/semsemyonoff/dwe/internal/core/ui/widgets"
+
 	"charm.land/bubbles/v2/key"
+	tea "charm.land/bubbletea/v2"
 	huh "charm.land/huh/v2"
 )
 
@@ -344,13 +347,12 @@ func TestConfirmFieldDefaultParsing(t *testing.T) {
 	}
 }
 
-// TestRunReturnsUserAbortedOnCancel verifies that huh.ErrUserAborted is a non-nil sentinel
-// and that Result.Has correctly distinguishes present from absent keys.
-func TestRunUserAbortedError(t *testing.T) {
-	if huh.ErrUserAborted == nil {
-		t.Fatal("huh.ErrUserAborted must be a non-nil sentinel error")
-	}
-	// Verify Has accessor: present key vs absent key.
+// TestResultHasDistinguishesPresentFromAbsent verifies Result.Has
+// distinguishes present from absent keys (split out of the former
+// TestRunUserAbortedError, which pinned the huh.ErrUserAborted sentinel — the
+// cancel contract moved to widgets.ErrCancelled; see
+// TestFormRunCancelReturnsErrCancelled below).
+func TestResultHasDistinguishesPresentFromAbsent(t *testing.T) {
 	r := NewResultForTest(map[string]any{"present": "value"})
 	if !r.Has("present") {
 		t.Error("Has(present) should return true")
@@ -358,6 +360,173 @@ func TestRunUserAbortedError(t *testing.T) {
 	if r.Has("absent") {
 		t.Error("Has(absent) should return false")
 	}
+}
+
+// TestFormRunCancelReturnsErrCancelled verifies that (*Form).Run — and by
+// extension the top-level Run (Build+Form.Run) — returns widgets.ErrCancelled
+// on user abort, not the raw huh.ErrUserAborted sentinel. Mirrors
+// widgets.TestRunHuhForm_AbortTranslatesToErrCancelled: queue a ctrl+c
+// keypress on the built huh.Form, then cancel the context so
+// RunWithContext exits immediately with ErrUserAborted.
+func TestFormRunCancelReturnsErrCancelled(t *testing.T) {
+	fields := []Field{{Key: "test", Kind: FieldInput, Title: "Test"}}
+	form, err := Build("Title", fields, RunOptions{Output: io.Discard})
+	if err != nil {
+		t.Fatalf("Build returned error: %v", err)
+	}
+
+	form.Huh().Update(tea.KeyPressMsg(tea.Key{Mod: tea.ModCtrl, Code: 'c'}))
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+
+	_, err = form.Run(ctx)
+	if !errors.Is(err, widgets.ErrCancelled) {
+		t.Fatalf("Form.Run() error = %v, want widgets.ErrCancelled", err)
+	}
+	if errors.Is(err, huh.ErrUserAborted) {
+		t.Error("Form.Run must not leak the raw huh.ErrUserAborted sentinel")
+	}
+}
+
+// TestBuildDoesNotRun verifies Build constructs a runnable Form without
+// blocking or executing it (no I/O is driven until Form.Run is called).
+func TestBuildDoesNotRun(t *testing.T) {
+	fields := []Field{{Key: "test", Kind: FieldInput, Title: "Test"}}
+	form, err := Build("Title", fields, RunOptions{Output: io.Discard})
+	if err != nil {
+		t.Fatalf("Build returned error: %v", err)
+	}
+	if form == nil {
+		t.Fatal("Build returned nil Form")
+	}
+	if form.Huh() == nil {
+		t.Error("Form.Huh() should expose the underlying huh.Form")
+	}
+	if len(form.bindings) != 1 {
+		t.Errorf("Form should carry 1 binding, got %d", len(form.bindings))
+	}
+}
+
+// TestBuildRejectsFieldUnknown verifies Build (not just the top-level Run)
+// rejects a Field with the zero-value FieldUnknown kind.
+func TestBuildRejectsFieldUnknown(t *testing.T) {
+	fields := []Field{{Key: "test", Kind: FieldUnknown, Title: "Test"}}
+	form, err := Build("Title", fields, RunOptions{})
+	if err == nil {
+		t.Fatal("Build with FieldUnknown should return error")
+	}
+	if form != nil {
+		t.Error("Build should return a nil Form on error")
+	}
+	if !strings.Contains(err.Error(), "FieldUnknown") {
+		t.Errorf("error message should mention FieldUnknown, got: %v", err)
+	}
+}
+
+// TestBuildEmptyFieldsShortCircuit verifies the empty-fields short circuit
+// survives the Build/Run split: Build succeeds, and Form.Run returns an empty
+// Result immediately without touching the (nil) underlying huh.Form.
+func TestBuildEmptyFieldsShortCircuit(t *testing.T) {
+	form, err := Build("Title", []Field{}, RunOptions{})
+	if err != nil {
+		t.Fatalf("Build returned error: %v", err)
+	}
+	if form.Huh() != nil {
+		t.Error("Build with no fields should not construct an underlying huh.Form")
+	}
+
+	result, err := form.Run(context.Background())
+	if err != nil {
+		t.Fatalf("Form.Run returned error: %v", err)
+	}
+	if !result.IsEmpty() {
+		t.Errorf("empty fields should produce empty result, got %v", result)
+	}
+}
+
+// TestFormResultHarvestsBoundValues verifies (*Form).Result reads the current
+// bound values off the form's fields, driving the bindings directly to
+// simulate huh having updated them (rather than running a real form).
+func TestFormResultHarvestsBoundValues(t *testing.T) {
+	fields := []Field{
+		{Key: "name", Kind: FieldInput},
+		{Key: "tags", Kind: FieldMultiselect, Options: []Option{{Value: "a", Label: "A"}, {Value: "b", Label: "B"}}},
+		{Key: "agree", Kind: FieldConfirm},
+	}
+	form, err := Build("Title", fields, RunOptions{Output: io.Discard})
+	if err != nil {
+		t.Fatalf("Build returned error: %v", err)
+	}
+
+	for _, b := range form.bindings {
+		switch v := b.ptr.(type) {
+		case *string:
+			*v = "alice"
+		case *[]string:
+			*v = []string{"a", "b"}
+		case *bool:
+			*v = true
+		}
+	}
+
+	result := form.Result()
+	if got := result.String("name"); got != "alice" {
+		t.Errorf("Result.String(name) = %q, want %q", got, "alice")
+	}
+	if got := result.Strings("tags"); !slicesEqual(got, []string{"a", "b"}) {
+		t.Errorf("Result.Strings(tags) = %v, want [a b]", got)
+	}
+	if got := result.Bool("agree"); !got {
+		t.Error("Result.Bool(agree) = false, want true")
+	}
+}
+
+// TestRunIsBuildPlusFormRun verifies the top-level Run is behaviourally
+// equivalent to Build followed by (*Form).Run, on the same cases already
+// covered by TestRunRejectsFieldUnknown / TestRunEmptyFields: a FieldUnknown
+// field errors identically, and an empty field list short-circuits
+// identically.
+func TestRunIsBuildPlusFormRun(t *testing.T) {
+	t.Run("FieldUnknown", func(t *testing.T) {
+		fields := []Field{{Key: "test", Kind: FieldUnknown, Title: "Test"}}
+
+		_, runErr := Run(context.Background(), "Title", fields, RunOptions{})
+
+		form, buildErr := Build("Title", fields, RunOptions{})
+		var formRunErr error
+		if buildErr == nil {
+			_, formRunErr = form.Run(context.Background())
+		} else {
+			formRunErr = buildErr
+		}
+
+		if runErr == nil || formRunErr == nil {
+			t.Fatalf("expected both paths to error: Run=%v, Build+Form.Run=%v", runErr, formRunErr)
+		}
+		if runErr.Error() != formRunErr.Error() {
+			t.Errorf("Run error = %q, Build+Form.Run error = %q", runErr.Error(), formRunErr.Error())
+		}
+	})
+
+	t.Run("EmptyFields", func(t *testing.T) {
+		runResult, runErr := Run(context.Background(), "Title", []Field{}, RunOptions{})
+		if runErr != nil {
+			t.Fatalf("Run returned error: %v", runErr)
+		}
+
+		form, buildErr := Build("Title", []Field{}, RunOptions{})
+		if buildErr != nil {
+			t.Fatalf("Build returned error: %v", buildErr)
+		}
+		formResult, formRunErr := form.Run(context.Background())
+		if formRunErr != nil {
+			t.Fatalf("Form.Run returned error: %v", formRunErr)
+		}
+
+		if !reflect.DeepEqual(runResult, formResult) {
+			t.Errorf("Run result = %v, Build+Form.Run result = %v", runResult, formResult)
+		}
+	})
 }
 
 // Helper function to compare slices.

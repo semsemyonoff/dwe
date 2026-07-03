@@ -83,7 +83,7 @@ func NewHuhAsker(out io.Writer) (
 		// Run the ask form. styles.Theme() and SetHuhHooks are handled by ask.Run.
 		result, err := ask.Run(ctx, "Setup", fields, ask.RunOptions{Output: out})
 		if err != nil {
-			if errors.Is(err, huh.ErrUserAborted) {
+			if errors.Is(err, widgets.ErrCancelled) {
 				return nil, ErrWizardCanceled
 			}
 			return nil, fmt.Errorf("wizard: %w", err)

@@ -131,12 +131,19 @@ type RunOptions struct {
 	ShowHelp   *bool     // nil = leave huh default (shown); non-nil = WithShowHelp(*v)
 }
 
-// Run displays a form with the given fields and blocks until the user
-// submits or cancels. Uses huh.Form.RunWithContext so context cancellation
-// (Ctrl-C, parent timeout) aborts the form cleanly. Returns huh.ErrUserAborted
-// if the user cancels; the caller is responsible for mapping that to a
-// user-facing error like widgets.ErrCancelled.
-func Run(ctx context.Context, title string, fields []Field, opts RunOptions) (Result, error) {
+// Form is a form built by Build: runnable via Run, or introspectable via
+// Huh()/Result() so Stage 7 can embed it as a capturing-overlay child model
+// (driving Update/View directly instead of calling Run).
+type Form struct {
+	huh      *huh.Form
+	bindings []fieldBinding
+	empty    bool // true when built from zero fields; Run short-circuits without invoking huh
+}
+
+// Build constructs a Form from fields and opts without running it. Mirrors
+// the validation and construction Run used to do inline; Run is now
+// Build + (*Form).Run.
+func Build(title string, fields []Field, opts RunOptions) (*Form, error) {
 	if opts.Input == nil {
 		opts.Input = os.Stdin
 	}
@@ -147,13 +154,13 @@ func Run(ctx context.Context, title string, fields []Field, opts RunOptions) (Re
 	// Validate that no field has FieldUnknown.
 	for _, f := range fields {
 		if f.Kind == FieldUnknown {
-			return Result{}, fmt.Errorf("field %q: kind is FieldUnknown (zero value)", f.Key)
+			return nil, fmt.Errorf("field %q: kind is FieldUnknown (zero value)", f.Key)
 		}
 	}
 
 	// Handle empty field list early.
 	if len(fields) == 0 {
-		return Result{values: make(map[string]any)}, nil
+		return &Form{empty: true}, nil
 	}
 
 	// Build huh fields and collect bindings.
@@ -165,13 +172,12 @@ func Run(ctx context.Context, title string, fields []Field, opts RunOptions) (Re
 	for _, f := range fields {
 		huhField, binding, err := buildHuhField(f, hasQuit)
 		if err != nil {
-			return Result{}, err
+			return nil, err
 		}
 		huhFields = append(huhFields, huhField)
 		bindings = append(bindings, binding)
 	}
 
-	// Build and run the form, wrapped in the canonical prompt hooks.
 	form := huh.NewForm(
 		huh.NewGroup(huhFields...).Title(title),
 	).
@@ -184,19 +190,34 @@ func Run(ctx context.Context, title string, fields []Field, opts RunOptions) (Re
 		form = form.WithShowHelp(*opts.ShowHelp)
 	}
 
-	err := widgets.RunWithPromptHooks(func() error {
-		return form.RunWithContext(ctx)
-	})
-	if err != nil {
-		if errors.Is(err, huh.ErrUserAborted) {
-			return Result{}, huh.ErrUserAborted
-		}
+	return &Form{huh: form, bindings: bindings}, nil
+}
+
+// Run executes the form via widgets.RunHuhForm (prompt hooks + context-aware
+// run + abort translation) and harvests the result. Returns
+// widgets.ErrCancelled if the user cancels.
+func (f *Form) Run(ctx context.Context) (Result, error) {
+	if f.empty {
+		return Result{values: make(map[string]any)}, nil
+	}
+	if err := widgets.RunHuhForm(ctx, f.huh); err != nil {
 		return Result{}, err
 	}
+	return f.Result(), nil
+}
 
-	// Extract final values from bindings (huh updated them in-place).
+// Huh exposes the underlying huh.Form. Stage 7 embeds this as a
+// capturing-overlay child model instead of calling Run.
+func (f *Form) Huh() *huh.Form {
+	return f.huh
+}
+
+// Result harvests the current bound values from the form's fields. Call
+// after the form completes, whether via Run or externally when the form is
+// driven as a child model.
+func (f *Form) Result() Result {
 	result := make(map[string]any)
-	for _, binding := range bindings {
+	for _, binding := range f.bindings {
 		switch v := binding.ptr.(type) {
 		case *string:
 			result[binding.key] = *v
@@ -206,8 +227,19 @@ func Run(ctx context.Context, title string, fields []Field, opts RunOptions) (Re
 			result[binding.key] = *v
 		}
 	}
+	return Result{values: result}
+}
 
-	return Result{values: result}, nil
+// Run displays a form with the given fields and blocks until the user
+// submits or cancels. Uses huh.Form.RunWithContext so context cancellation
+// (Ctrl-C, parent timeout) aborts the form cleanly. Returns
+// widgets.ErrCancelled if the user cancels. Run is Build + (*Form).Run.
+func Run(ctx context.Context, title string, fields []Field, opts RunOptions) (Result, error) {
+	form, err := Build(title, fields, opts)
+	if err != nil {
+		return Result{}, err
+	}
+	return form.Run(ctx)
 }
 
 // fieldBinding holds metadata about a bound huh field and the pointer
