@@ -116,6 +116,37 @@ type CommitOutcome struct {
 	Flash string
 }
 
+// RunFormSpec turns ModeRun's Enter / force-form (`e`) into an in-TUI param-form
+// overlay (harvest-and-quit) instead of the exit-then-form flow. It is the
+// ModeRun sibling of [EditSpec], but the terminal action differs fundamentally:
+// EditSpec is write-and-stay (Commit persists local.yml, the browser stays open,
+// the row refreshes); RunFormSpec is harvest-and-quit (collect the param values,
+// close the overlay, quit the browser — the command executes AFTER alt-screen
+// teardown because it streams docker/pipeline output to the plain terminal). The
+// overlay-driving plumbing (pending/token handling, FormOverlay forwarding,
+// status flash) is shared with the edit machine; only the terminal step differs.
+//
+// It is opt-in per Options: nil (the default, and every ModeRun caller that does
+// not supply one) preserves today's exit-then-form behaviour byte-for-byte (see
+// Options.RunForm). Both closures are supplied by the caller (cli/command): the
+// plugin stays decoupled from how the CLI builds the form and maps ask.Result →
+// a param map.
+type RunFormSpec struct {
+	// BuildForm builds the param form for items[idx]. force is true when the user
+	// pressed the force-form key (`e`); false for plain Enter — the CLI uses it to
+	// auto-skip the form when all required params are already satisfied. A nil form
+	// with a nil error means "no form needed" → the browser quits immediately with
+	// Result{Action: ActionRun} and NO Values (byte-identical to today's
+	// exit-and-run for commands with no params / already-satisfied required). A
+	// non-nil error aborts with an error flash and opens no overlay.
+	BuildForm func(idx int, force bool) (*ask.Form, error)
+	// Harvest converts a submitted form into the param values carried out in
+	// Result.Values. Kept separate from BuildForm so the plugin stays decoupled
+	// from how the CLI maps ask.Result → a param map (widget / multiselect
+	// specifics).
+	Harvest func(idx int, res ask.Result) map[string]string
+}
+
 // Options carries already-resolved configuration. Defaulting happens in the
 // config accessors (config.UICommands*); auto-defaulting int/bool fields
 // here would silently overwrite legitimate opt-outs. Callers without a
@@ -132,6 +163,14 @@ type Options struct {
 	// legacy exit-and-return behaviour, so ModeRun / ModeInspect and any ModeEdit
 	// caller that does not supply an EditSpec are untouched.
 	Edit *EditSpec
+
+	// RunForm enables the in-TUI param-form overlay in ModeRun: Enter / force-form
+	// (`e`) open a form overlay over the browser, harvest the params on submit, and
+	// quit with Result.Values populated (the command still executes after the TUI
+	// exits). nil (the default) keeps the exit-then-form flow, so ModeInspect /
+	// ModeEdit and any ModeRun caller that does not supply a RunFormSpec are
+	// untouched.
+	RunForm *RunFormSpec
 
 	// Translator + Locale carry the i18n context into the framework so the
 	// help modal can localize its section/action labels. They are the only
@@ -174,6 +213,12 @@ type Result struct {
 	Action         Action
 	SkipConfirm    bool
 	ForceParamForm bool
+	// Values carries the params harvested from the in-TUI RunForm overlay out to
+	// the orchestrator (which uses them directly instead of building its own
+	// form). nil means "no in-TUI harvest" — every non-browser path, and the
+	// no-form-needed browser path (BuildForm returned nil), leave it nil so
+	// today's behaviour is preserved exactly.
+	Values map[string]string
 }
 
 // DefaultOptions returns the spec defaults for callers that don't have a

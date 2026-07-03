@@ -448,10 +448,10 @@ from `res.Values`. `command.go` passes it into `runOpts.PrefilledParams`.
 - Modify: `internal/core/ui/cmdbrowser/plugin.go`
 - Modify: `internal/core/ui/cmdbrowser/plugin_golden_test.go`
 
-- [ ] add `RunFormSpec` + `Options.RunForm` + `Result.Values` to `run.go`
+- [x] add `RunFormSpec` + `Options.RunForm` + `Result.Values` to `run.go`
       (doc-comment the harvest-and-quit vs edit-and-stay distinction; verify no
       new import cycle — `ask` already imported)
-- [ ] create `runform.go` mirroring `edit.go`: `runFormState`, `openRunForm(idx,
+- [x] create `runform.go` mirroring `edit.go`: `runFormState`, `openRunForm(idx,
       force)`, `updateRunForm(msg)`, `finishRunForm()`; reuse `setStatusFlash`,
       `flashError`, `requestCloseOverlay`, and the pending/`CloseToken` handling.
       `openRunForm` treats `form == nil` OR `form.Huh() == nil` (empty form) as
@@ -461,16 +461,16 @@ from `res.Values`. `command.go` passes it into `runOpts.PrefilledParams`.
       <bounded>, Hint, CloseToken})` where `openRunForm` derives `MaxHeight` from
       `b.body.Height` (the body region the overlay composites over), NOT a constant
       — the vars `openEdit` passes 0 (content-driven) and stays unchanged
-- [ ] wire `actions.go`: `onSelect` (ModeRun, list) and `onForceForm` route
+- [x] wire `actions.go`: `onSelect` (ModeRun, list) and `onForceForm` route
       through `openRunForm(idx, force)` when `RunForm != nil`; `RunForm == nil`
       keeps `b.result` + `tea.Quit` byte-identical
-- [ ] wire the THIRD врезка (codex finding): `plugin.go:688-715` `updateInspect`
+- [x] wire the THIRD врезка (codex finding): `plugin.go:688-715` `updateInspect`
       Enter — add a `ModeRun && RunForm != nil` branch mirroring the existing
       ModeEdit one (`openRunForm(b.inspect.inspectIdx, false)`; retire the inspect
       state only when a form actually opened OR immediate-run was chosen; a
       BuildForm error keeps inspect valid — its flash surfaces normally).
       `RunForm == nil` keeps the `b.result` + `tea.Quit` fall-through unchanged
-- [ ] wire `plugin.go` `Update`: while `runForm != nil`, route messages to
+- [x] wire `plugin.go` `Update`: while `runForm != nil`, route messages to
       `updateRunForm` (peel the flash-clear tick first, like the edit path).
       **`runForm` must take `Update`-routing AND `PendingOverlay` priority over
       `inspect`** — mirror the `b.edit != nil` check that precedes the inspect
@@ -479,12 +479,12 @@ from `res.Values`. `command.go` passes it into `runOpts.PrefilledParams`.
       mode-gated), so the inspect overlay is reachable in ModeRun and must not
       cross-route with an open run-form (an `OverlayClosedMsg`/wheel/mouse msg
       could otherwise hit the inspect-clearing path)
-- [ ] write tests (mirror `edit_test.go`): overlay opens on Enter/`e` with
+- [x] write tests (mirror `edit_test.go`): overlay opens on Enter/`e` with
       `CapturesInput`; force flag threaded (Enter=false, `e`=true); no double-push
       across republish; `OverlayClosedMsg` clears state and a later raw key cannot
       resurrect it; `StateCompleted` → `Result.Values` harvested, `CloseOverlayMsg`
       returned, `tea.Quit` issued (pump huh cmds until completion — async)
-- [ ] write tests for edge cases: `BuildForm` returns `(nil, nil)` → immediate
+- [x] write tests for edge cases: `BuildForm` returns `(nil, nil)` → immediate
       quit with `Result.Values == nil` and `ForceParamForm` set per key; **empty
       form** (`BuildForm` returns a non-nil `*ask.Form` whose `Huh()` is nil) →
       same no-form quit-and-run, NOT a trapped overlay; `BuildForm` error → error
@@ -494,10 +494,10 @@ from `res.Values`. `command.go` passes it into `runOpts.PrefilledParams`.
       and vice-versa); **Enter inside the inspect overlay in ModeRun opens the
       run-form overlay** (does NOT `tea.Quit`), and a BuildForm error keeps inspect
       open
-- [ ] write golden tests: full-frame with the param-form overlay OPEN at
+- [x] write golden tests: full-frame with the param-form overlay OPEN at
       80/99/100 × 24 (single-field AND multi-field to exercise the height bound);
       confirm existing `RunForm == nil` ModeRun goldens are byte-identical
-- [ ] run `make test` — must pass before Task 3
+- [x] run `make test` — must pass before Task 3
 
 ### Task 3: `cli/command` — `prepareParams` extraction + `runCommandByID` short-circuit
 

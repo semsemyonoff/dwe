@@ -9,6 +9,14 @@ import (
 	"github.com/semsemyonoff/dwe/internal/core/ui/tui"
 )
 
+// isZeroResult reports whether r is the zero Result. Result carries a map
+// (Values) since the in-TUI param-form work, so it is no longer comparable with
+// == — this field-wise check replaces the old `r == Result{}` comparisons.
+func isZeroResult(r Result) bool {
+	return r.Action == ActionUnknown && r.Idx == 0 && !r.SkipConfirm &&
+		!r.ForceParamForm && r.Values == nil
+}
+
 func pluginTestItems() []Item {
 	return []Item{
 		{ID: "db.migrate", Description: "apply schema", Type: "shell"},
@@ -45,7 +53,7 @@ func TestBrowser_DefaultsResultAndCapturing(t *testing.T) {
 	if !ok {
 		t.Fatalf("Result() type = %T, want cmdbrowser.Result", b.Result())
 	}
-	if (res != Result{}) {
+	if !isZeroResult(res) {
 		t.Errorf("Result() = %+v, want zero Result", res)
 	}
 	// Entering a filter session flips CapturingInput() on.

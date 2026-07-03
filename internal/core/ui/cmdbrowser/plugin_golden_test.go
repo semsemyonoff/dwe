@@ -200,6 +200,96 @@ func TestBrowser_EditFormOverlayGolden(t *testing.T) {
 	}
 }
 
+// goldenRunFormItems are flat (no dotted IDs) so the root focus lists them
+// directly, giving a selectable row to open the param form over without expanding
+// a group first.
+func goldenRunFormItems() []Item {
+	return []Item{
+		{ID: "migrate", Description: "apply migrations", Type: "shell", ParamCount: 1},
+		{ID: "deploy", Description: "deploy the app", Type: "compose", ParamCount: 3},
+	}
+}
+
+// TestBrowser_RunFormOverlayGolden pins the full frame with the param-form overlay
+// OPEN at the width buckets 80 / 99 / 100 × 24, for both a single-field form (row
+// 0) and a multi-field form (row 1 — exercises the FormOverlay.MaxHeight bound).
+// The overlay is driven open through the real Frame (Tab focuses the list, arrow
+// keys move to the row, Enter opens the form via onSelect → openRunForm). No blink
+// ticks are delivered (RenderFrameAfterSetup discards Init cmds), so the render is
+// byte-deterministic. Regenerate with
+// make embedded-docs && UPDATE_GOLDEN=1 go test ./internal/core/ui/cmdbrowser/...
+func TestBrowser_RunFormOverlayGolden(t *testing.T) {
+	items := goldenRunFormItems()
+	// singleField builds a one-input form for row 0, a three-input form for row 1.
+	buildForm := func(idx int, _ bool) (*ask.Form, error) {
+		show := false
+		fields := []ask.Field{{
+			Key:         "name",
+			Kind:        ask.FieldInput,
+			Title:       "name",
+			Description: "the target name",
+		}}
+		if idx == 1 {
+			fields = append(fields,
+				ask.Field{Key: "tag", Kind: ask.FieldInput, Title: "tag", Description: "image tag"},
+				ask.Field{Key: "replicas", Kind: ask.FieldInput, Title: "replicas", Description: "replica count"},
+			)
+		}
+		return ask.Build("dwe commands › "+items[idx].ID, fields, ask.RunOptions{ShowHelp: &show})
+	}
+	harvest := func(idx int, res ask.Result) map[string]string {
+		return map[string]string{"name": res.String("name")}
+	}
+
+	forms := []struct {
+		name string
+		row  int // extra Down presses after Tab to reach the target row
+	}{
+		{"single", 0},
+		{"multi", 1},
+	}
+	for _, f := range forms {
+		for _, w := range []int{80, 99, 100} {
+			t.Run(f.name+"_width_"+itoa(w), func(t *testing.T) {
+				opts := DefaultOptions()
+				opts.Mode = ModeRun
+				opts.RunForm = &RunFormSpec{BuildForm: buildForm, Harvest: harvest}
+				b := newBrowser("dwe", items, opts)
+
+				setup := []tea.Msg{tea.KeyPressMsg{Code: tea.KeyTab}}
+				for range f.row {
+					setup = append(setup, tea.KeyPressMsg{Code: tea.KeyDown})
+				}
+				setup = append(setup, tea.KeyPressMsg{Code: tea.KeyEnter})
+
+				content, err := tui.RenderFrameAfterSetup(b, tui.RunOptions{
+					Brand:   "dwe",
+					Project: "demo",
+					Mouse:   true,
+				}, w, goldenFrameHeight, setup...)
+				if err != nil {
+					t.Fatalf("RenderFrameAfterSetup: %v", err)
+				}
+				plain := stripANSI(content)
+
+				rows := strings.Split(plain, "\n")
+				if len(rows) != goldenFrameHeight {
+					t.Errorf("row count = %d, want terminal height %d", len(rows), goldenFrameHeight)
+				}
+				for i, row := range rows {
+					if got := lipgloss.Width(row); got != w {
+						t.Errorf("row %d width = %d, want frame width %d: %q", i, got, w, row)
+					}
+				}
+				if !strings.Contains(plain, "esc cancel") {
+					t.Errorf("form overlay hint row missing from frame:\n%s", plain)
+				}
+				assertGolden(t, "frame_runform_"+f.name+"_"+itoa(w)+".golden", plain)
+			})
+		}
+	}
+}
+
 // TestBrowser_HelpModalGolden pins the registry-generated ?-modal help per mode
 // via the exported tui.BuildHelp harness, and locks the per-mode action
 // visibility: ModeRun lists the skip-confirm (`y`) and force-form (`e`) verbs;

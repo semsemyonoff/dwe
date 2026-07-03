@@ -77,7 +77,19 @@ type browser struct {
 	// yields exactly one overlay value. OverlayClosedMsg (esc) clears both.
 	edit        *editState
 	editPending bool
-	// editTokenSeq mints a unique non-zero CloseToken per opened edit form so a
+
+	// runForm is the ModeRun param-form overlay sub-state (non-nil while a command
+	// param form is open); like edit it captures via Overlay.CapturesInput, and it
+	// is mutually exclusive with inspect (they cannot both be open). runForm takes
+	// Update-routing AND PendingOverlay priority over inspect — ActionInspect is
+	// registered unconditionally, so the inspect overlay is reachable in ModeRun and
+	// must not cross-route with an open run-form. runFormPending gates PendingOverlay
+	// so each republish yields exactly one overlay value. OverlayClosedMsg (esc)
+	// clears it (cancel — the browser stays, no command runs). runForm and edit are
+	// never both set (distinct modes) but share editTokenSeq for close tokens.
+	runForm        *runFormState
+	runFormPending bool
+	// editTokenSeq mints a unique non-zero CloseToken per opened edit / run form so a
 	// stale CloseOverlayMsg (delivered after the form was already dismissed and
 	// another overlay opened) is ignored by the Frame instead of popping the wrong
 	// modal. Pre-incremented, so the first token is 1 (never the zero default).
@@ -189,6 +201,13 @@ func (b *browser) Resize(body tui.Region) {
 		b.edit.fo.Resize(body)
 		b.editPending = true
 	}
+	// An open param-form overlay is sized to the body too; re-apply width + the
+	// height clamp and re-mark it pending so the Frame republishes the resized
+	// snapshot.
+	if b.runForm != nil {
+		b.runForm.fo.Resize(body)
+		b.runFormPending = true
+	}
 }
 
 // CapturingInput implements tui.Plugin. The browser takes raw input without an
@@ -277,6 +296,13 @@ func (b *browser) Update(msg tea.Msg) tea.Cmd {
 	// async ticks alike) — route them to the form state machine.
 	if b.edit != nil {
 		return b.updateEdit(msg)
+	}
+	// While a ModeRun param-form overlay is open it likewise owns every message —
+	// route to the run-form state machine BEFORE the inspect branch below, so an
+	// OverlayClosedMsg / wheel / mouse msg cannot reach the inspect-clearing path
+	// (inspect is reachable in ModeRun since ActionInspect is unconditional).
+	if b.runForm != nil {
+		return b.updateRunForm(msg)
 	}
 	switch m := msg.(type) {
 	case tui.WheelMsg:
@@ -707,6 +733,21 @@ func (b *browser) updateInspect(msg tea.KeyPressMsg) tea.Cmd {
 			}
 			return cmd
 		}
+		// ModeRun with a RunFormSpec opens the param-form overlay in place instead
+		// of committing a Result and quitting to the exit-then-form path. Retire the
+		// inspect state only when a form actually opened (b.runForm set) OR
+		// immediate-run was chosen (b.result set — the no-form-needed path quits);
+		// a BuildForm error leaves both untouched and keeps the inspect overlay
+		// valid (the error surfaces as a status flash).
+		if b.opts.Mode == ModeRun && b.opts.RunForm != nil {
+			idx := b.inspect.inspectIdx
+			cmd := b.openRunForm(idx, false)
+			if b.runForm != nil || b.result.Action != ActionUnknown {
+				b.inspect = nil
+				b.inspectPending = false
+			}
+			return cmd
+		}
 		b.result = Result{
 			Idx:         b.inspect.inspectIdx,
 			Action:      actionForMode(b.opts.Mode),
@@ -732,14 +773,21 @@ func (b *browser) updateInspect(msg tea.KeyPressMsg) tea.Cmd {
 // grows. The overlay is built fresh from the current viewport so the live scroll
 // position is always reflected.
 func (b *browser) PendingOverlay() (tui.Overlay, bool) {
-	// Edit and inspect are mutually exclusive; the edit overlay takes precedence
-	// while an edit is in progress. Each drains exactly once per republish.
+	// Edit / run-form / inspect are mutually exclusive; the form overlays take
+	// precedence while one is in progress. Each drains exactly once per republish.
 	if b.edit != nil {
 		if !b.editPending {
 			return tui.Overlay{}, false
 		}
 		b.editPending = false
 		return b.edit.fo.Overlay(), true
+	}
+	if b.runForm != nil {
+		if !b.runFormPending {
+			return tui.Overlay{}, false
+		}
+		b.runFormPending = false
+		return b.runForm.fo.Overlay(), true
 	}
 	if b.inspect == nil || !b.inspectPending {
 		return tui.Overlay{}, false

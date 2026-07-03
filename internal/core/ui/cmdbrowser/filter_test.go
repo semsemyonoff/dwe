@@ -145,7 +145,7 @@ func TestBrowser_FilterEscRestoresPriorState(t *testing.T) {
 	if b.filter != nil || b.CapturingInput() {
 		t.Fatal("esc must clear the filter session")
 	}
-	if b.result != (Result{}) {
+	if !isZeroResult(b.result) {
 		t.Errorf("esc must not produce a Result; got %+v", b.result)
 	}
 	got := b.tree.eng.ExpandedSnapshot()
@@ -177,7 +177,7 @@ func TestBrowser_FilterEnterCommitsKeepingExpansion(t *testing.T) {
 	if b.filter != nil || b.CapturingInput() {
 		t.Fatal("enter must clear the filter session")
 	}
-	if b.result != (Result{}) {
+	if !isZeroResult(b.result) {
 		t.Errorf("commit must not select an item; got %+v", b.result)
 	}
 	// Expansion is KEPT (services stays collapsed), not restored.

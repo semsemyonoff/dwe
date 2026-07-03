@@ -256,6 +256,12 @@ func (b *browser) onSelect() (tea.Cmd, bool) {
 	if b.opts.Mode == ModeEdit && b.opts.Edit != nil {
 		return b.openEdit(idx), true
 	}
+	// ModeRun with a RunFormSpec opens the in-TUI param-form overlay (or
+	// quit-and-runs immediately when no form is needed) instead of exiting to the
+	// legacy exit-then-form flow. RunForm == nil keeps the commit-and-quit exactly.
+	if b.opts.Mode == ModeRun && b.opts.RunForm != nil {
+		return b.openRunForm(idx, false), true
+	}
 	b.result = Result{Idx: idx, Action: actionForMode(b.opts.Mode), SkipConfirm: b.skipConfirm}
 	return tea.Quit, true
 }
@@ -271,6 +277,12 @@ func (b *browser) onForceForm() (tea.Cmd, bool) {
 	idx, ok := b.selectedOrigIdx()
 	if !ok {
 		return nil, true
+	}
+	// With a RunFormSpec, force-form opens the param-form overlay (force=true → the
+	// CLI always shows the form even when all defaults are satisfied). RunForm ==
+	// nil keeps the legacy commit-and-quit with ForceParamForm set.
+	if b.opts.RunForm != nil {
+		return b.openRunForm(idx, true), true
 	}
 	b.result = Result{
 		Idx:            idx,
