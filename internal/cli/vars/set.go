@@ -84,27 +84,12 @@ bridge.vars_writable allowlist; from the host, set is unrestricted.`,
 // (committed) or reopen (aborted) after an edit.
 func runVarsSet(cmd *cobra.Command, flags *cmdctx.RootFlags, path, rawValue string, haveValue bool) (committed bool, err error) {
 	// Path confinement: vars.* only. This is also the container trust boundary —
-	// a non-vars path could otherwise mutate formalized config.
+	// a non-vars path could otherwise mutate formalized config. The
+	// container-write allowlist gate lives at the shared write chokepoint
+	// (writeVarOverrideCore) so every entry point — this CLI path and the in-TUI
+	// edit overlay alike — is covered structurally, not per-caller.
 	if err := validateVarsSetPath(path); err != nil {
 		return false, err
-	}
-
-	// Load the current config: needed for the container-write allowlist and for
-	// the form's inspect-style per-layer info.
-	cfg, err := loadConfigForVars(flags)
-	if err != nil {
-		return false, err
-	}
-
-	// Container-write gate: from inside a container the target var must match a
-	// bridge.vars_writable pattern. From the host, set is unrestricted. The
-	// top-level command allowlist (bridgepolicy) is prefix-wide and cannot see
-	// the var arg, so this runtime check is the real read/write boundary.
-	if bridgeclient.InContainer() && !config.VarsWritableAllows(config.BridgeVarsWritable(cfg), path) {
-		return false, cmdctx.Err("vars_not_container_writable",
-			fmt.Sprintf("var %q is not writable from inside a container", path)).
-			WithDetail("var", path).
-			WithHint("add it to bridge.vars_writable, or run `dwe vars set` on the host")
 	}
 
 	// Resolve the value: positional arg, interactive form, or value-required.
@@ -221,6 +206,25 @@ func writeVarOverrideSilent(flags *cmdctx.RootFlags, path string, value any) (*c
 // this is not a lifecycle/stack mutation. On any post-write failure the captured
 // bytes are restored. Callers MUST already hold the project locks.
 func writeVarOverrideCore(flags *cmdctx.RootFlags, path string, value any) (*config.DweConfig, error) {
+	// Container-write gate: from inside a container the target var must match a
+	// bridge.vars_writable pattern (host writes are unrestricted). Enforced here,
+	// at the single write chokepoint, so both the CLI `set` path and the in-TUI
+	// edit overlay are covered regardless of entry point. The top-level command
+	// allowlist (bridgepolicy) is prefix-wide and cannot see the var arg, so this
+	// runtime check is the real read/write boundary.
+	if bridgeclient.InContainer() {
+		cfg, err := loadConfigForVars(flags)
+		if err != nil {
+			return nil, err
+		}
+		if !config.VarsWritableAllows(config.BridgeVarsWritable(cfg), path) {
+			return nil, cmdctx.Err("vars_not_container_writable",
+				fmt.Sprintf("var %q is not writable from inside a container", path)).
+				WithDetail("var", path).
+				WithHint("add it to bridge.vars_writable, or run `dwe vars set` on the host")
+		}
+	}
+
 	localPath := filepath.Join(flags.ProjectRoot(), "workspace", "local.yml")
 
 	captured, err := captureLocalState(localPath)
