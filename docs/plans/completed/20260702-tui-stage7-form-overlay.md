@@ -569,11 +569,18 @@ cli/vars closures (captured: `cmd`, `flags`, `items`/`leaves`, `inspectCache`):
 
 ### Task 7: [Final] Documentation and plan close-out
 
-- [ ] confirm no other user-facing docs describe the old exit-and-reopen edit
+- [x] confirm no other user-facing docs describe the old exit-and-reopen edit
       flow (grep `docs/` for the vars browser)
-- [ ] update `AGENTS.md` Critical Patterns only if implementation surfaced a
+      (verified: only `vars.md` describes the flow, and it documents the new
+      in-TUI overlay edit-and-stay; its "re-open"/"exit-after-commit loop"
+      mentions correctly describe the <80-col narrow fallback, not the primary
+      path; `i18n.md` browser mentions are the localized help-modal references)
+- [x] update `AGENTS.md` Critical Patterns only if implementation surfaced a
       new trap beyond Task 5's entries
-- [ ] move this plan to `docs/plans/completed/`
+      (no new trap surfaced — Task 5 already extended the `tui.Plugin` and
+      preflight+locks bullets with FormOverlay embedding, `CloseOverlayMsg`,
+      capturing-aware `drainOverlay`, and `AcquireProjectLocksSilent`; no change)
+- [x] move this plan to `docs/plans/completed/`
 
 ## Post-Completion
 
