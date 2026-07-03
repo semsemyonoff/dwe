@@ -355,25 +355,25 @@ Quit/help-slot mechanics inside `ask` (moved verbatim from the raw sites, once):
 - Modify: `internal/cli/deploy/menu.go`
 - Modify: `internal/cli/deploy/menu_test.go` (or nearest existing test file)
 
-- [ ] rewrite `selectMenuItemInteractive` as an `ask.Run` call: one `FieldSelect` with
+- [x] rewrite `selectMenuItemInteractive` as an `ask.Run` call: one `FieldSelect` with
       styled option labels (existing label assembly stays; no `Filterable` — huh
       Select has none, and the Filter-slot hijack itself makes `/` inert, as today),
       `Quit{Keys: q/esc/ctrl+c, Help: "exit"}`, `SubmitHelp: "select"`, `Height:
       max(len+5, 12)`, `Field.Default` = first option (current preselect); map
       `ErrCancelled → (menuExit, nil)` (preserves current esc semantics)
-- [ ] rewrite `selectDeployServiceInteractive` likewise (`Quit.Help: "back"`) with the
+- [x] rewrite `selectDeployServiceInteractive` likewise (`Quit.Help: "back"`) with the
       locked-item rejection moved to `Field.Validate` and **`Field.Default` = first
       non-locked service name** (codex finding: today's picker preselects the first
       non-locked row so initial Enter never hits a locked item — without an explicit
       Default, huh falls back to option 0 and a locked-first list regresses);
       `ErrCancelled` passes through to the caller (back-to-menu semantics preserved)
-- [ ] delete `deployMenuKeyMap` and the now-dead raw-form plumbing; keep the domain
+- [x] delete `deployMenuKeyMap` and the now-dead raw-form plumbing; keep the domain
       formatting helpers (`formatDeployServiceLabel`, `formatServiceMeta`,
       `deployInfoRowsFrom`) untouched
-- [ ] write/update tests for the pure parts (item defs → field/options mapping, locked
+- [x] write/update tests for the pure parts (item defs → field/options mapping, locked
       validate rejection message, cancel mapping, **default selection with items[0]
       locked → items[1] preselected**) — table-driven where natural
-- [ ] run `make test` — must pass before task 5
+- [x] run `make test` — must pass before task 5
 
 ### Task 5: Migrate setup wizard port overrides + service toggles onto `ask`
 
