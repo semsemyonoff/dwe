@@ -408,7 +408,7 @@ cli/vars closures (captured: `cmd`, `flags`, `items`/`leaves`, `inspectCache`):
 - Create: `internal/core/ui/tui/formoverlay.go`
 - Create: `internal/core/ui/tui/formoverlay_test.go`
 
-- [ ] implement `FormOverlay` per Technical Details: `WithWidth` sizing
+- [x] implement `FormOverlay` per Technical Details: `WithWidth` sizing
       (min of inner width − margins and `MaxWidth`), `Init`/`Update` forwarding
       with the `huh.Model` → `*huh.Form` re-assert (returning huh's cmds —
       completion arrives on a follow-up Update, see Context), **swallowing
@@ -417,13 +417,13 @@ cli/vars closures (captured: `cmd`, `flags`, `items`/`leaves`, `inspectCache`):
       `Overlay()` rendering the rounded-border + `Padding(0,1)` box with the
       hint row, measured via `lipgloss.Width/Height`,
       `Overlay{CapturesInput: true}`
-- [ ] document the embedding contract in the type comment: SubmitCmd/CancelCmd
+- [x] document the embedding contract in the type comment: SubmitCmd/CancelCmd
       are nil when embedded (poll `State`), the host must size explicitly
       (huh's `RequestWindowSize` is harmless but the Frame never forwards
       `WindowSizeMsg` into overlays), virtual cursor renders inline, and the
       height caveat — content must fit the body; `clampOverlay` truncation is
       lossy for taller forms (design decision 1)
-- [ ] write tests: driving a single-input huh form (built raw in-test — `tui`
+- [x] write tests: driving a single-input huh form (built raw in-test — `tui`
       must not import `ask`) with typed keys mutates the bound value;
       **async completion** (codex finding): the Enter `Update` itself leaves
       `State == StateNormal` and returns a cmd — a test pump executes returned
@@ -432,9 +432,9 @@ cli/vars closures (captured: `cmd`, `flags`, `items`/`leaves`, `inspectCache`):
       clamps at `MaxWidth` and at narrow bodies; a forwarded
       `tea.WindowSizeMsg` does NOT change the rendered form dims; hint row
       rendered when set, absent when `""`; `Resize` changes the rendered width
-- [ ] write tests for error/edge cases: `Update` after completion is a no-op;
+- [x] write tests for error/edge cases: `Update` after completion is a no-op;
       nil-form guard (constructor rejects or documents)
-- [ ] run `make test` — must pass before task 3
+- [x] run `make test` — must pass before task 3
 
 ### Task 3: cmdbrowser `EditSpec` + edit state machine + status flash
 
