@@ -1,7 +1,11 @@
 package widgets
 
 import (
+	"context"
+	"errors"
 	"sync"
+
+	huh "charm.land/huh/v2"
 )
 
 // huhHooksMu guards huhBeforeHook and huhAfterHook. The two hooks are written
@@ -73,4 +77,19 @@ func RunWithPromptHooks(fn func() error) error {
 		defer after()
 	}
 	return fn()
+}
+
+// RunHuhForm is the canonical executor for every huh form in dwe: it wraps the
+// prompt hooks (RunWithPromptHooks), runs form.RunWithContext(ctx), and
+// translates huh.ErrUserAborted to ErrCancelled. All widgets primitives and
+// internal/core/ui/ask route through it so the hook/translate plumbing lives
+// in exactly one place.
+func RunHuhForm(ctx context.Context, form *huh.Form) error {
+	err := RunWithPromptHooks(func() error {
+		return form.RunWithContext(ctx)
+	})
+	if errors.Is(err, huh.ErrUserAborted) {
+		return ErrCancelled
+	}
+	return err
 }

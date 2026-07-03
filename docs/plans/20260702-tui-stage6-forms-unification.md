@@ -271,21 +271,21 @@ Quit/help-slot mechanics inside `ask` (moved verbatim from the raw sites, once):
 - Modify: `internal/core/ui/widgets/huh_test.go`
 - Modify: `internal/core/ui/widgets/confirm_test.go` / `selector_test.go` / `multiselect_test.go` (as needed)
 
-- [ ] add `RunHuhForm(ctx context.Context, form *huh.Form) error` to `widgets/huh.go`:
+- [x] add `RunHuhForm(ctx context.Context, form *huh.Form) error` to `widgets/huh.go`:
       `RunWithPromptHooks` wrap + `form.RunWithContext(ctx)` + `huh.ErrUserAborted →
       ErrCancelled` translation
-- [ ] route `defaultRunConfirmForm`, `defaultRunConfirmRunForm`, `defaultRunSelectForm`,
+- [x] route `defaultRunConfirmForm`, `defaultRunConfirmRunForm`, `defaultRunSelectForm`,
       `defaultRunMultiSelectForm` through `RunHuhForm(context.Background(), form)`;
       remove the per-wrapper hook-snapshot blocks in `RunConfirm` / `ConfirmRun` /
       `RunSelector` / `RunMultiSelect` (hooks must fire exactly once — see design
       decision 7); keep a defensive `ErrUserAborted → ErrCancelled` mapping in the
       wrappers for seam-swapped tests
-- [ ] verify public signatures and `run*FormFn` seams unchanged (`git diff` review)
-- [ ] write tests for `RunHuhForm`: hook pairing (before/after exactly once, after fires
+- [x] verify public signatures and `run*FormFn` seams unchanged (`git diff` review)
+- [x] write tests for `RunHuhForm`: hook pairing (before/after exactly once, after fires
       on error), abort translation, non-abort error pass-through
-- [ ] update/verify existing primitive tests still pass (hook-firing expectations may
+- [x] update/verify existing primitive tests still pass (hook-firing expectations may
       move from wrapper to seam-default level)
-- [ ] run `make test` — must pass before task 2
+- [x] run `make test` — must pass before task 2
 
 ### Task 2: `ask` declarative overrides — `QuitSpec`, `SubmitHelp`, `ShowHelp`, `Field.Height`/`Filterable`
 
