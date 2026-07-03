@@ -381,29 +381,32 @@ Quit/help-slot mechanics inside `ask` (moved verbatim from the raw sites, once):
 - Modify: `internal/core/workflow/setup/huh.go`
 - Modify: `internal/core/workflow/setup/huh_test.go` (or nearest existing test file)
 
-- [ ] rewrite `askPortOverrides`: one `ask.Field{Kind: FieldInput}` per conflict (key =
+- [x] rewrite `askPortOverrides`: one `ask.Field{Kind: FieldInput}` per conflict (key =
       `service/portName`, default = requested port, `Validate: buildPortValidator()`),
       `Quit{Keys: esc/ctrl+c, Help: "cancel"}`; harvest via `Result.String` into the
       existing `coercePortOverrides`; delete the manual `SuggestionsFunc` hack and the
       NOTE comment explaining non-migratability
-- [ ] rewrite `askServiceToggles`: `FieldMultiselect` with `Defaults` = initially-enabled
+- [x] rewrite `askServiceToggles`: `FieldMultiselect` with `Defaults` = initially-enabled
       names, `Filterable: false`, `Quit{esc/ctrl+c, "cancel"}`; keep the "Always on:"
       pre-print and mandatory-merge logic at the call site; delete the raw form + NOTE
       comment. Note: the "esc cancel" help hint will NOT render for this non-filterable
       multiselect (design decision 3 visibility rules) — this matches current behaviour,
       where the existing Filter hijack is already ineffective; esc itself still cancels
       via form-level Quit
-- [ ] review `setup/help_runtime_test.go` (raw `huh.NewForm` locking the
+- [x] review `setup/help_runtime_test.go` (raw `huh.NewForm` locking the
       AcceptSuggestion help-slot behaviour): fold it into `ask`'s slot tests from
       task 2 or keep it as a huh-behaviour canary — either way it is test-only and
-      exempt from the no-raw-forms acceptance grep
-- [ ] map `ErrCancelled → ErrWizardCanceled` in both (and in `askQuestions`, already
+      exempt from the no-raw-forms acceptance grep. Decision: kept as a canary — it
+      drives `form.Update` through several cycles to exercise huh's runtime
+      `updateSuggestionsMsg` refresh path, which the construction-only `ask` slot tests
+      from task 2 do not cover.
+- [x] map `ErrCancelled → ErrWizardCanceled` in both (and in `askQuestions`, already
       updated in task 3); drop now-unused `huh` and `charm.land/bubbles/v2/key` imports
       from `setup/huh.go`
-- [ ] write/update tests for the pure mapping parts (conflicts → fields, toggles →
+- [x] write/update tests for the pure mapping parts (conflicts → fields, toggles →
       field/defaults, mandatory merge, cancel mapping); coercion helpers' existing tests
       must keep passing unchanged
-- [ ] run `make test` — must pass before task 6
+- [x] run `make test` — must pass before task 6
 
 ### Task 6: Internals docs — record contracts and close the Stage 1 open question
 
