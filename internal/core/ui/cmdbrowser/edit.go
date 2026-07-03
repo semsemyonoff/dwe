@@ -1,6 +1,7 @@
 package cmdbrowser
 
 import (
+	"strings"
 	"time"
 
 	tea "charm.land/bubbletea/v2"
@@ -43,8 +44,15 @@ type editState struct {
 // while set and returns the Cmd that clears it after statusFlashDuration. Each
 // flash bumps flashGen so its clear tick can be matched (and stale ticks
 // ignored). An empty text still schedules a clear so a leftover flash is wiped.
+//
+// Whitespace (including newlines) is collapsed to single spaces: the status line
+// is a fixed 1-row region (Frame.renderStatusLine clamps width, not height), so
+// a multi-line commit/build error — e.g. a yaml.v3 "unmarshal errors:\n  line N:
+// …" or a strict-root rejection with its vars: hint line — would otherwise push
+// the frame layout out of alignment. varEditFlash already collapses success
+// text; doing it here covers every flash (build/commit errors included).
 func (b *browser) setStatusFlash(text string) tea.Cmd {
-	b.flash = text
+	b.flash = strings.Join(strings.Fields(text), " ")
 	b.flashGen++
 	gen := b.flashGen
 	return tea.Tick(statusFlashDuration, func(time.Time) tea.Msg {

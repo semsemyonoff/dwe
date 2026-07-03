@@ -3,6 +3,7 @@ package cmdbrowser
 import (
 	"errors"
 	"reflect"
+	"strings"
 	"sync"
 	"testing"
 	"time"
@@ -13,9 +14,9 @@ import (
 	"github.com/semsemyonoff/dwe/internal/core/ui/tui"
 )
 
-// editTestItems are root-level (no dot → no group) so the tree's root focus
-// shows them directly in the list, giving a selectable row to edit without
-// expanding a group first.
+// editTestItems both sit under a single "db" group (groupOf splits on the last
+// dot), so the list panel shows the two db.* leaves as selectable rows — giving
+// a row to edit without any manual expand step. (index 0 = db.host, 1 = db.port.)
 func editTestItems() []Item {
 	return []Item{
 		{ID: "db.host", Description: "old-host", Type: "string"},
@@ -250,6 +251,13 @@ func TestBrowser_EditCommitSuccess(t *testing.T) {
 	if rec.idx != 1 {
 		t.Errorf("Commit idx = %d, want 1 (db.port)", rec.idx)
 	}
+	// The typed keys actually reached Commit: the harvested value must differ
+	// from the default "5432" and contain the typed "9999". Asserting against a
+	// non-default literal (not just back against rec.value) proves the keystrokes
+	// were not silently dropped — a self-comparison would pass even then.
+	if rec.value == "5432" || !strings.Contains(rec.value, "9999") {
+		t.Fatalf("Commit value = %q, want it to reflect typed \"9999\" over default \"5432\"", rec.value)
+	}
 	// The edit state is cleared and no overlay lingers pending.
 	if b.edit != nil || b.editPending {
 		t.Errorf("edit state not cleared after commit: edit=%v pending=%v", b.edit, b.editPending)
@@ -258,8 +266,13 @@ func TestBrowser_EditCommitSuccess(t *testing.T) {
 	if got := b.items[1].Description; got != rec.value {
 		t.Errorf("items[1].Description = %q, want committed value %q", got, rec.value)
 	}
-	// The list reflects the new value.
-	if li, ok := b.list.SelectedItem().(listItem); ok && li.desc != rec.value {
+	// The list reflects the new value — asserted unconditionally (a failed type
+	// assertion is itself a failure, not a silently skipped check).
+	li, ok := b.list.SelectedItem().(listItem)
+	if !ok {
+		t.Fatalf("SelectedItem() = %T, want listItem", b.list.SelectedItem())
+	}
+	if li.desc != rec.value {
 		t.Errorf("list row desc = %q, want %q", li.desc, rec.value)
 	}
 	// The status flash carries the success confirmation.
