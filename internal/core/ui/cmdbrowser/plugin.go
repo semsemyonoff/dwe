@@ -77,6 +77,11 @@ type browser struct {
 	// yields exactly one overlay value. OverlayClosedMsg (esc) clears both.
 	edit        *editState
 	editPending bool
+	// editTokenSeq mints a unique non-zero CloseToken per opened edit form so a
+	// stale CloseOverlayMsg (delivered after the form was already dismissed and
+	// another overlay opened) is ignored by the Frame instead of popping the wrong
+	// modal. Pre-incremented, so the first token is 1 (never the zero default).
+	editTokenSeq int
 
 	// flash is a transient status-line confirmation (commit ✓ / ✗ or a BuildForm
 	// error) that takes over StatusContext() while set. flashGen tags each flash

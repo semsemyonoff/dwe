@@ -683,6 +683,40 @@ func TestFrame_CloseOverlayMsgEmptyStackNoop(t *testing.T) {
 	}
 }
 
+// TestFrame_CloseOverlayMsgStaleTokenIgnored asserts a CloseOverlayMsg whose
+// Token no longer matches the current top overlay is ignored (not popped). This
+// models the stale-close race: the plugin returns a deferred CloseOverlayMsg for
+// a tagged overlay, but the user dismisses that overlay and a DIFFERENT one
+// reaches the top before the deferred cmd is processed — the stale request must
+// not pop the newer modal.
+func TestFrame_CloseOverlayMsgStaleTokenIgnored(t *testing.T) {
+	f, p := newTestFrame(t, 80, frameGoldenHeight)
+
+	// A tagged form overlay (token 7) is up, then dismissed, then a newer
+	// (untagged) overlay is pushed — the state a delayed CloseOverlayMsg{7} sees.
+	p.pending = &Overlay{Content: "newer", Width: 5, Height: 1, CapturesInput: true}
+	f.drainOverlay()
+	if f.overlay.Empty() {
+		t.Fatal("newer overlay was not pushed")
+	}
+
+	f.Update(CloseOverlayMsg{Token: 7})
+
+	if f.overlay.Empty() {
+		t.Error("stale CloseOverlayMsg (token mismatch) must NOT pop the newer overlay")
+	}
+
+	// A matching-token request still pops it.
+	if top, ok := f.overlay.Top(); ok {
+		top.CloseToken = 7
+		f.overlay.ReplaceTop(top)
+	}
+	f.Update(CloseOverlayMsg{Token: 7})
+	if !f.overlay.Empty() {
+		t.Error("matching CloseOverlayMsg token should pop the top overlay")
+	}
+}
+
 // TestFrame_CapturingOverlayCloseNotifiesPlugin asserts that closing a
 // CapturesInput overlay with esc pops it AND forwards an OverlayClosedMsg to the
 // plugin, so the plugin can clear the state that produced the overlay.

@@ -369,8 +369,13 @@ settled and needs no new routing:
 - **`ctrl+c` = hard-quit the whole TUI** (`captureHardQuit`), unchanged. huh binds
   `ctrl+c` to form-quit, but under the Frame that keystroke never reaches the form.
 - **`enter` (submit) closes the overlay from the plugin side** via
-  `tui.CloseOverlayMsg{}` — a plugin-initiated pop that does **not** emit
-  `OverlayClosedMsg` (the plugin already knows it is closing).
+  `tui.CloseOverlayMsg{Token}` — a plugin-initiated pop that does **not** emit
+  `OverlayClosedMsg` (the plugin already knows it is closing). The message
+  carries the `Overlay.CloseToken` of the overlay it targets; because it travels
+  as a deferred `tea.Cmd` it could land after the form was already dismissed and
+  another overlay opened, so the Frame pops **only** when the current top's
+  `CloseToken` still matches (a stale request is ignored, never popping the wrong
+  modal).
 - **huh's own help line is suppressed** (`ask.RunOptions.ShowHelp:false`): its
   hints advertise `ctrl+c` as form-quit, which is now TUI-quit. The `FormOverlay`
   footer hint row (`enter save · esc cancel`, hardcoded English) is the single

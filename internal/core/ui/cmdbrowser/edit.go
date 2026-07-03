@@ -35,9 +35,10 @@ type statusFlashClearMsg struct{ gen int }
 // row replacement target the right row, and form is kept so Result() can harvest
 // the bound values on completion.
 type editState struct {
-	fo   *tui.FormOverlay
-	form *ask.Form
-	idx  int // index into browser.items
+	fo    *tui.FormOverlay
+	form  *ask.Form
+	idx   int // index into browser.items
+	token int // CloseToken tagging this overlay, echoed in its CloseOverlayMsg
 }
 
 // setStatusFlash shows a transient confirmation that takes over StatusContext()
@@ -78,8 +79,13 @@ func (b *browser) openEdit(idx int) tea.Cmd {
 	if form == nil {
 		return b.setStatusFlash(flashError("edit form is unavailable"))
 	}
-	fo := tui.NewFormOverlay(form.Huh(), b.body, tui.FormOverlayOptions{Hint: editFormHint})
-	b.edit = &editState{fo: fo, form: form, idx: idx}
+	b.editTokenSeq++
+	token := b.editTokenSeq
+	fo := tui.NewFormOverlay(form.Huh(), b.body, tui.FormOverlayOptions{
+		Hint:       editFormHint,
+		CloseToken: token,
+	})
+	b.edit = &editState{fo: fo, form: form, idx: idx, token: token}
 	b.editPending = true
 	return fo.Init()
 }
@@ -107,9 +113,10 @@ func (b *browser) updateEdit(msg tea.Msg) tea.Cmd {
 	case huh.StateAborted:
 		// Unreachable in practice (ctrl+c never reaches the form — the Frame
 		// reserves it), but handled defensively as a cancel.
+		token := b.edit.token
 		b.edit = nil
 		b.editPending = false
-		return requestCloseOverlay()
+		return requestCloseOverlay(token)
 	}
 	return cmd
 }
@@ -122,6 +129,7 @@ func (b *browser) updateEdit(msg tea.Msg) tea.Cmd {
 // while b.edit is already nil, so it lands on the normal Update path.
 func (b *browser) commitEdit() tea.Cmd {
 	idx := b.edit.idx
+	token := b.edit.token
 	res := b.edit.form.Result()
 	b.edit = nil
 	b.editPending = false
@@ -137,12 +145,15 @@ func (b *browser) commitEdit() tea.Cmd {
 		}
 		flashCmd = b.setStatusFlash(outcome.Flash)
 	}
-	return tea.Batch(requestCloseOverlay(), flashCmd)
+	return tea.Batch(requestCloseOverlay(token), flashCmd)
 }
 
 // requestCloseOverlay returns a command that asks the Frame to pop the top
 // overlay WITHOUT an OverlayClosedMsg echo (the plugin already cleared its edit
-// state — a plugin-initiated close). Mirrors requestFocus.
-func requestCloseOverlay() tea.Cmd {
-	return func() tea.Msg { return tui.CloseOverlayMsg{} }
+// state — a plugin-initiated close). Mirrors requestFocus. token targets the
+// specific edit overlay (its Overlay.CloseToken): the Frame ignores the request
+// if a different overlay reached the top before this deferred cmd was processed,
+// so a stale close never pops the wrong modal.
+func requestCloseOverlay(token int) tea.Cmd {
+	return func() tea.Msg { return tui.CloseOverlayMsg{Token: token} }
 }

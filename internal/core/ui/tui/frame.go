@@ -280,9 +280,15 @@ func (f *Frame) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		// Plugin-initiated close (e.g. a form overlay that committed on Enter).
 		// Pop the top overlay and reset the double-click record across the
 		// boundary, but do NOT emit OverlayClosedMsg — the plugin already knows it
-		// is closing this overlay. An empty stack is a harmless no-op.
-		f.overlay.Pop()
-		f.lastClick = lastClickRecord{}
+		// is closing this overlay. The request carries the CloseToken it targets:
+		// a stale close (the user dismissed the overlay and opened another before
+		// this deferred cmd landed) no longer matches the new top, so it is
+		// ignored rather than popping the wrong modal. An empty stack (Top false)
+		// and a token mismatch are both harmless no-ops.
+		if top, ok := f.overlay.Top(); ok && top.CloseToken == m.Token {
+			f.overlay.Pop()
+			f.lastClick = lastClickRecord{}
+		}
 		return f, nil
 	default:
 		cmd := f.plugin.Update(msg)

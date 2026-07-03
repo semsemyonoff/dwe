@@ -75,6 +75,16 @@ type Overlay struct {
 	// (TermWidth × TermHeight); the Frame pads/clamps it to Term as a safety net.
 	// docstui's error overlay sets it in selection mode.
 	FullScreen bool
+	// CloseToken is an optional plugin-assigned identity for a plugin-initiated
+	// close (see [CloseOverlayMsg]). The plugin stamps the same non-zero token on
+	// every republished snapshot of one logical overlay and echoes it in the
+	// CloseOverlayMsg it later returns; the Frame pops only when the current top
+	// overlay's CloseToken matches, so a delayed (stale) close request that lands
+	// after the overlay was already dismissed and a NEW overlay opened cannot pop
+	// the wrong modal. The zero value means "no targeted close" (help/inspect and
+	// every framework overlay leave it 0); a CloseOverlayMsg{Token: 0} still
+	// matches such a 0-token top, preserving the untargeted behaviour.
+	CloseToken int
 }
 
 // PanelClickMsg is forwarded to [Plugin.Update] when the user single-clicks
@@ -134,7 +144,21 @@ type OverlayClosedMsg struct{}
 // plugin-initiated: the plugin already knows it is closing the overlay (e.g. a
 // form overlay that committed on Enter), so the Frame pops WITHOUT emitting
 // OverlayClosedMsg. On an empty stack it is a harmless no-op.
-type CloseOverlayMsg struct{}
+//
+// Token guards against a STALE close. Because the message travels as a tea.Cmd
+// it can be delivered a frame or more after it was created; in that window the
+// user could dismiss the overlay (esc / click-outside) and open a different one
+// (help, inspect). A bare pop-the-top would then pop the newer overlay. The
+// plugin therefore stamps the overlay it means to close with a unique non-zero
+// [Overlay.CloseToken] and sets the same value here; the Frame pops only when
+// the current top overlay carries that token (a zero token matches a zero-token
+// top, keeping the untargeted no-op semantics for callers that do not tag).
+type CloseOverlayMsg struct {
+	// Token is the [Overlay.CloseToken] this request targets. The Frame pops the
+	// top overlay only when its CloseToken equals Token; otherwise the request is
+	// ignored as stale. Zero targets a zero-token top (backward-compatible).
+	Token int
+}
 
 // WheelMsg is delivered to the plugin when the mouse wheel turns over one of
 // its panels. Panel is the panel under the pointer (NOT the focused panel);

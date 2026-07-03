@@ -33,6 +33,12 @@ type FormOverlayOptions struct {
 	// Hint is the footer hint row rendered below the form inside the box (e.g.
 	// "enter save · esc cancel"). "" omits the hint row entirely.
 	Hint string
+	// CloseToken is stamped onto every [Overlay] this wrapper produces (including
+	// the ReplaceTop-refreshed snapshots from blink ticks / resizes), so the
+	// plugin can target a [CloseOverlayMsg] at this specific overlay and the Frame
+	// ignores a stale close after the overlay was dismissed. 0 leaves the overlay
+	// untargeted.
+	CloseToken int
 }
 
 // FormOverlay hosts a [huh.Form] as a capturing-overlay child model inside the
@@ -170,5 +176,6 @@ func (fo *FormOverlay) Overlay() Overlay {
 		Width:         lipgloss.Width(box),
 		Height:        lipgloss.Height(box),
 		CapturesInput: true,
+		CloseToken:    fo.opts.CloseToken,
 	}
 }
