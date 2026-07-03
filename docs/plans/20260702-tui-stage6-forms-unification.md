@@ -426,15 +426,15 @@ Quit/help-slot mechanics inside `ask` (moved verbatim from the raw sites, once):
 
 ### Task 7: Verify acceptance criteria
 
-- [ ] spec § Stage 6 deliverables all present: single `RunHuhForm`; scalable keymap
+- [x] spec § Stage 6 deliverables all present: single `RunHuhForm`; scalable keymap
       overrides in `ask.RunOptions`; three raw sites migrated (grep: no `huh.NewForm`
       in **production** code outside `internal/core/ui/ask` + `internal/core/ui/widgets`
       — exclude `*_test.go`; `setup/help_runtime_test.go` is exempt per task 5);
       `deploy/menu.go` duplication removed; `ask` split into build vs run
-- [ ] behaviour preservation spot-checks per Migration compatibility (esc semantics,
+- [x] behaviour preservation spot-checks per Migration compatibility (esc semantics,
       locked hints, port validation, Always-on line)
-- [ ] hooks-fire-once invariant verified by test
-- [ ] run full suite: `make build && make test && make lint`
+- [x] hooks-fire-once invariant verified by test
+- [x] run full suite: `make build && make test && make lint`
 
 ### Task 8: [Final] Documentation and plan close-out
 
