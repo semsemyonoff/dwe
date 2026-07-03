@@ -228,10 +228,20 @@ func (fo *FormOverlay) State() huh.FormState {
 	return fo.form.State
 }
 
-// Resize re-applies the form width AND the height clamp (from the stored natural
-// height) for a new body region. The host calls it on terminal resize (and
-// re-marks its pending overlay so the Frame re-renders).
+// Resize re-applies the form width AND the height clamp for a new body region.
+// The host calls it on terminal resize (and re-marks its pending overlay so the
+// Frame re-renders). When height-capping is active (MaxHeight > 0) the budget
+// tracks the body region the overlay composites over — the sole positive-MaxHeight
+// consumer (the cmdbrowser run form) sets MaxHeight to the body height, so a
+// terminal resize MUST refresh it or applyHeight would keep clamping against the
+// stale construction-time budget: a shrink would then overflow the smaller body
+// (lossily truncated by clampOverlay, hiding the hint / submit row) and a grow
+// would never un-clamp. MaxHeight == 0 (content-driven, the vars edit path) is
+// left untouched.
 func (fo *FormOverlay) Resize(body Region) {
+	if fo.opts.MaxHeight > 0 {
+		fo.opts.MaxHeight = body.Height
+	}
 	fo.applySize(body)
 }
 

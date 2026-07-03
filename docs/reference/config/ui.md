@@ -81,7 +81,7 @@ On the two-panel frame path (TTY ≥ 80 cols), selecting a command that takes pa
 
 `Enter` auto-skips the form when every required parameter already has a value (from `--set` or a declared default) — the command runs immediately with no overlay. Use `e` (edit-parameters) to force the form open even when the required values are already satisfied. A command with no parameters always runs immediately on `Enter`.
 
-The command still *executes* after the TUI exits (it streams docker / pipeline output to the plain terminal); only parameter entry moves into the overlay. A `confirmation:` prompt, if declared, still shows its yes/no in the plain terminal after the TUI exits, immediately before the run. On the narrow (< 80-col) fallback the browser keeps the flat exit-then-form flow. Direct `dwe commands <id>`, `--set`, piped / non-interactive, and `--output json` invocations are unaffected.
+The command still *executes* after the TUI exits (it streams docker / pipeline output to the plain terminal); only parameter entry moves into the overlay. A `confirmation:` prompt, if declared, still shows its yes/no in the plain terminal after the TUI exits, immediately before the run. On the narrow (< 80-col) fallback the browser keeps the flat exit-then-form flow. Direct `dwe commands <id>` (with or without `--set`), piped / non-interactive, and `--output json` invocations are unaffected. (A bare `dwe commands --set …` with no id still opens the browser on a TTY — the `--set` values just prefill the overlay.)
 
 The `e` (edit-parameters) and `y` (skip-confirm) bindings are only registered in run mode (the default when `--inspect` / `-i` is not set); in inspect and the vars-browser edit mode they are absent from both the keymap and the `?` help.
 

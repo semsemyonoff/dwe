@@ -345,15 +345,15 @@ func TestFormOverlayMaxHeightResizeShrinkThenGrow(t *testing.T) {
 	// body must UN-clamp back to its full content height when Resize grows the
 	// budget past the natural height (clamp recomputed from the stored natural
 	// height, not a re-measure of the already-capped view).
-	small := Region{Width: 100, Height: 24}
+	small := Region{Width: 100, Height: 12}
 	fo := NewFormOverlay(buildTallTestForm(8), small, FormOverlayOptions{MaxHeight: 12})
 	capped := fo.Overlay().Height
 	if capped > 12 {
 		t.Fatalf("precondition: capped height = %d, want ≤ 12", capped)
 	}
 
-	// Grow the cap well past the natural height.
-	fo.opts.MaxHeight = 200
+	// Grow the body well past the natural height. Resize must re-derive the height
+	// budget from the new body (no manual opts mutation — the production path).
 	fo.Resize(Region{Width: 100, Height: 240})
 	grown := fo.Overlay().Height
 	if grown <= capped {
@@ -364,6 +364,25 @@ func TestFormOverlayMaxHeightResizeShrinkThenGrow(t *testing.T) {
 	reference := NewFormOverlay(buildTallTestForm(8), Region{Width: 100, Height: 240}, FormOverlayOptions{}).Overlay().Height
 	if grown != reference {
 		t.Fatalf("un-clamped height = %d, want full content height %d", grown, reference)
+	}
+}
+
+func TestFormOverlayMaxHeightResizeShrinkReclamps(t *testing.T) {
+	// A tall form opened in a large body renders uncapped; a Resize that shrinks
+	// the body below the natural height MUST re-clamp so the box fits the smaller
+	// body (else clampOverlay would lossily truncate the hint / submit row). The
+	// budget tracks the body height with no manual opts mutation (production path).
+	large := Region{Width: 100, Height: 240}
+	fo := NewFormOverlay(buildTallTestForm(8), large, FormOverlayOptions{MaxHeight: 240})
+	uncapped := fo.Overlay().Height
+
+	fo.Resize(Region{Width: 100, Height: 12})
+	shrunk := fo.Overlay().Height
+	if shrunk >= uncapped {
+		t.Fatalf("after shrink-Resize height = %d, want < uncapped height %d (re-clamp failed)", shrunk, uncapped)
+	}
+	if shrunk > 12 {
+		t.Fatalf("after shrink-Resize height = %d, want ≤ new body height 12", shrunk)
 	}
 }
 
