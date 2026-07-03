@@ -382,25 +382,25 @@ cli/vars closures (captured: `cmd`, `flags`, `items`/`leaves`, `inspectCache`):
 - Modify: `internal/core/ui/tui/plugin.go`
 - Modify: `internal/core/ui/tui/frame_test.go` (or nearest existing Frame test file)
 
-- [ ] verify Stage 6 landed as planned: `ask.Build`, `(*ask.Form).Huh()`,
+- [x] verify Stage 6 landed as planned: `ask.Build`, `(*ask.Form).Huh()`,
       `(*ask.Form).Result()`, `RunOptions.ShowHelp *bool`,
       `widgets.RunHuhForm`, `widgets.ErrCancelled` cancel contract — if any
       diverged, STOP and update this plan first
-- [ ] make `drainOverlay` capturing-aware: top overlay `CapturesInput` →
+- [x] make `drainOverlay` capturing-aware: top overlay `CapturesInput` →
       `ReplaceTop`, else `Push` (covers the default, `WindowSizeMsg`, and
       `FocusRequestMsg` branches uniformly); keep `refreshCapturingOverlay`
       delegating to the same logic
-- [ ] add `CloseOverlayMsg{}` to `plugin.go` (doc comment: plugin-initiated
+- [x] add `CloseOverlayMsg{}` to `plugin.go` (doc comment: plugin-initiated
       close, no `OverlayClosedMsg` echo) and a `Frame.Update` case: pop top
       overlay if present, reset the double-click record, no plugin
       notification
-- [ ] write tests: non-key msg with a capturing overlay open + pending
+- [x] write tests: non-key msg with a capturing overlay open + pending
       republish → stack depth stays 1 and top content is the fresh snapshot;
       same msg with a NON-capturing overlay top → Push behaviour unchanged;
       `CloseOverlayMsg` pops without `OverlayClosedMsg` reaching the plugin;
       esc still emits `OverlayClosedMsg`; `CloseOverlayMsg` on an empty stack
       is a no-op
-- [ ] run `make test` — must pass before task 2
+- [x] run `make test` — must pass before task 2
 
 ### Task 2: `tui.FormOverlay` component
 

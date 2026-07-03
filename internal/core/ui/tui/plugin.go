@@ -126,6 +126,16 @@ type FocusRequestMsg struct {
 // does not notify the plugin (built-ins never reach it).
 type OverlayClosedMsg struct{}
 
+// CloseOverlayMsg flows plugin→framework (the mirror of [FocusRequestMsg]): a
+// plugin returns it as the message of a tea.Cmd to ask the [Frame] to pop its
+// own top overlay. Unlike esc / click-outside — which route through
+// dismissTopOverlay and echo an [OverlayClosedMsg] back so the plugin can clear
+// the state that produced the modal — a CloseOverlayMsg close is
+// plugin-initiated: the plugin already knows it is closing the overlay (e.g. a
+// form overlay that committed on Enter), so the Frame pops WITHOUT emitting
+// OverlayClosedMsg. On an empty stack it is a harmless no-op.
+type CloseOverlayMsg struct{}
+
 // WheelMsg is delivered to the plugin when the mouse wheel turns over one of
 // its panels. Panel is the panel under the pointer (NOT the focused panel);
 // Delta is -1 for an upward notch and +1 for a downward notch. The plugin

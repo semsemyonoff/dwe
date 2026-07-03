@@ -276,6 +276,14 @@ func (f *Frame) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		cmd := f.plugin.Update(FocusChangedMsg{Panel: f.focus.Active()})
 		f.drainOverlay()
 		return f, cmd
+	case CloseOverlayMsg:
+		// Plugin-initiated close (e.g. a form overlay that committed on Enter).
+		// Pop the top overlay and reset the double-click record across the
+		// boundary, but do NOT emit OverlayClosedMsg — the plugin already knows it
+		// is closing this overlay. An empty stack is a harmless no-op.
+		f.overlay.Pop()
+		f.lastClick = lastClickRecord{}
+		return f, nil
 	default:
 		cmd := f.plugin.Update(msg)
 		f.drainOverlay()
@@ -427,22 +435,39 @@ func (f *Frame) dismissTopOverlay() tea.Cmd {
 	return nil
 }
 
-// drainOverlay pushes a plugin-requested overlay onto the stack. Mutual
+// drainOverlay applies a plugin-requested overlay to the stack. It is
+// capturing-aware: when the visible top overlay is CapturesInput, the pending
+// overlay REPLACES it in place (ReplaceTop) so an async republish — a huh
+// cursor-blink tick, a resize while a form overlay is open — refreshes the
+// snapshot without stacking a duplicate layer that esc would then pop one at a
+// time. Otherwise (no overlay, or a non-capturing top) it pushes: mutual
 // exclusivity is structural (View only ever composites Top), so Push is safe.
-// It also resets the double-click record so a click before the modal can
+// Either way it resets the double-click record so a click before the modal can
 // never pair with one after it.
+//
+// The fix lives in the function body, not the call sites: drainOverlay has many
+// callers in frame.go, but the only ones reachable while a capturing overlay is
+// Top() are the async branches (default, WindowSizeMsg, FocusRequestMsg); the
+// rest run only with no overlay open, so the capturing check is a no-op for them
+// and the fold is behaviour-preserving.
 func (f *Frame) drainOverlay() {
 	if ov, ok := f.plugin.PendingOverlay(); ok {
 		f.lastClick = lastClickRecord{}
+		if top, ok := f.overlay.Top(); ok && top.CapturesInput {
+			f.overlay.ReplaceTop(ov)
+			return
+		}
 		f.overlay.Push(ov)
 	}
 }
 
 // refreshCapturingOverlay re-pulls a republished overlay from the plugin after a
 // captured key and swaps it in for the visible top modal (ReplaceTop), keeping
-// the stack depth fixed. Unlike drainOverlay it must NOT push: a capturing
-// overlay refreshes itself in place (e.g. inspect viewport scroll), and pushing
-// would stack stale snapshots that esc would then have to pop one at a time.
+// the stack depth fixed. It shares drainOverlay's capturing-aware logic: while a
+// capturing overlay is Top() the two behave identically (both ReplaceTop). It
+// stays a distinct entry point for the explicit key/wheel paths that must NOT
+// reset the double-click record and whose intent is specifically an in-place
+// refresh of the capturing overlay (e.g. inspect viewport scroll).
 func (f *Frame) refreshCapturingOverlay() {
 	if ov, ok := f.plugin.PendingOverlay(); ok {
 		f.overlay.ReplaceTop(ov)
