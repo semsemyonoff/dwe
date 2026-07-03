@@ -89,7 +89,6 @@ type statusContext struct {
 	State       *journal.ProjectState
 	Tracked     []string
 	SvcDeploys  map[string]*config.ServiceDeployConfig
-	ProjectName string
 	DockerCfg   *config.DockerConfig
 	Topo        map[string][]string
 	TopoStatus  map[string]render.NodeStatus
@@ -138,7 +137,6 @@ func loadStatusContext(flags *cmdctx.RootFlags, errW io.Writer) (*statusContext,
 		State:       state,
 		Tracked:     tracked,
 		SvcDeploys:  svcDeploys,
-		ProjectName: projectName,
 		DockerCfg:   dockerCfg,
 		Topo:        topo,
 		TopoStatus:  topoStatus,
@@ -254,7 +252,6 @@ in the default view.`,
 					State:       sc.State,
 					Tracked:     sc.Tracked,
 					SvcDeploys:  sc.SvcDeploys,
-					ProjectName: sc.ProjectName,
 					DockerCfg:   sc.DockerCfg,
 					Topo:        sc.Topo,
 					TopoStatus:  sc.TopoStatus,

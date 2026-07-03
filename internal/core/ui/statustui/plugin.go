@@ -101,6 +101,7 @@ func (p *plugin) Update(msg tea.Msg) tea.Cmd {
 			return nil
 		}
 		m.tabs = msg.tabs
+		m.sectionAnchors = msg.anchors
 		m.reloadAt = msg.loadedAt
 		m.healthIndicator = msg.healthIndicator
 		m.loading = false

@@ -12,23 +12,31 @@ import (
 
 // --- Actions registration ---
 
+// statusReg builds a registry the way the Frame does for this single-panel
+// plugin: the focus built-ins are stripped (freeing tab / shift+tab) before the
+// plugin's Actions hook runs. Mirrors newFrame / BuildHelp.
+func statusReg(t *testing.T, p *plugin) *tui.Registry {
+	t.Helper()
+	reg := tui.NewRegistry()
+	reg.DisableFocusNav()
+	if err := p.Actions(reg); err != nil {
+		t.Fatalf("Actions() = %v", err)
+	}
+	return reg
+}
+
 func TestActions_RegistersWithoutCollision(t *testing.T) {
 	p, _ := newTestPlugin(t)
-	reg := tui.NewRegistry()
-	if err := p.Actions(reg); err != nil {
-		t.Errorf("Actions() returned error: %v", err)
-	}
+	statusReg(t, p) // fatals on any registration error
 }
 
 func TestActions_RegistersAllExpectedActions(t *testing.T) {
 	p, _ := newTestPlugin(t)
-	reg := tui.NewRegistry()
-	if err := p.Actions(reg); err != nil {
-		t.Fatalf("Actions() = %v", err)
-	}
+	reg := statusReg(t, p)
 
 	want := []tui.Action{
 		tui.ActionReload,
+		actionSectionNext, actionSectionPrev,
 		actionTabPrev, actionTabNext,
 		actionTab1, actionTab2, actionTab3, actionTab4, actionTab5,
 	}
@@ -43,10 +51,7 @@ func TestActions_NoLegacyRBinding(t *testing.T) {
 	// The legacy "r" reload key is replaced by stdlib ctrl+r. Registering "r"
 	// here would silently resurrect the dropped binding.
 	p, _ := newTestPlugin(t)
-	reg := tui.NewRegistry()
-	if err := p.Actions(reg); err != nil {
-		t.Fatalf("Actions() = %v", err)
-	}
+	reg := statusReg(t, p)
 	if a, ok := reg.Match("r"); ok {
 		t.Errorf("key %q unexpectedly matched action %q", "r", a)
 	}
@@ -55,24 +60,31 @@ func TestActions_NoLegacyRBinding(t *testing.T) {
 	}
 }
 
-func TestActions_BuiltinsNotRegistered(t *testing.T) {
-	// tab/shift+tab/?/q/ctrl+c/esc are framework built-ins; the plugin must
-	// not claim a second action for any of them.
+func TestActions_TabRebindAndBuiltins(t *testing.T) {
+	// On this single-panel surface the Frame strips the focus built-ins, so the
+	// plugin rebinds tab / shift+tab to switch tabs and ] / [ to jump between
+	// sub-tables; ?/q/ctrl+c remain framework built-ins and esc stays
+	// overlay-close only.
 	p, _ := newTestPlugin(t)
-	reg := tui.NewRegistry()
-	if err := p.Actions(reg); err != nil {
-		t.Fatalf("Actions() = %v", err)
-	}
-	for _, k := range []string{"tab", "shift+tab", "?", "q", "ctrl+c", "esc"} {
+	reg := statusReg(t, p)
+	for _, k := range []string{"tab", "shift+tab", "]", "[", "?", "q", "ctrl+c", "esc"} {
 		a, ok := reg.Match(k)
 		switch k {
 		case "tab":
-			if a != tui.ActionFocusNext {
-				t.Errorf("key %q = %q, want built-in %q", k, a, tui.ActionFocusNext)
+			if a != actionTabNext {
+				t.Errorf("key %q = %q, want %q", k, a, actionTabNext)
 			}
 		case "shift+tab":
-			if a != tui.ActionFocusPrev {
-				t.Errorf("key %q = %q, want built-in %q", k, a, tui.ActionFocusPrev)
+			if a != actionTabPrev {
+				t.Errorf("key %q = %q, want %q", k, a, actionTabPrev)
+			}
+		case "]":
+			if a != actionSectionNext {
+				t.Errorf("key %q = %q, want %q", k, a, actionSectionNext)
+			}
+		case "[":
+			if a != actionSectionPrev {
+				t.Errorf("key %q = %q, want %q", k, a, actionSectionPrev)
 			}
 		case "?":
 			if a != tui.ActionHelp {
@@ -249,12 +261,72 @@ func TestHelpModal_TabsSectionAndReloadBinding(t *testing.T) {
 	}
 	plain := ansi.Strip(ov.Content)
 
-	for _, want := range []string{sectionTabs, "ctrl+r", "Previous tab", "Next tab"} {
+	for _, want := range []string{sectionTabs, "ctrl+r", "Previous tab", "Next tab", "Next table", "Previous table"} {
 		if !strings.Contains(plain, want) {
 			t.Errorf("help modal missing %q:\n%s", want, plain)
 		}
 	}
 	if !strings.Contains(plain, "Reload") {
 		t.Errorf("help modal missing reload description:\n%s", plain)
+	}
+	// The dead focus built-in must be gone on this single-panel surface.
+	if strings.Contains(plain, "Focus next panel") {
+		t.Errorf("help modal still shows the stripped focus built-in:\n%s", plain)
+	}
+}
+
+func TestHandleAction_SectionJump(t *testing.T) {
+	// Anchors at lines 0/5/10 (e.g. Apps/Tools/Infra); jumps land on the next or
+	// previous anchor and clamp at the ends (no wrap).
+	p := newActionTestPlugin(t)
+	p.m.active = 0
+	p.m.sectionAnchors = [][]int{{0, 5, 10}}
+	// Size the viewport with content taller than its height so offsets 5/10 are
+	// reachable (SetYOffset clamps to the max scroll offset).
+	p.m.viewport.SetHeight(3)
+	p.m.viewport.SetWidth(40)
+	p.m.viewport.SetContent(strings.Repeat("line\n", 15))
+
+	tests := []struct {
+		name       string
+		start      int
+		action     tui.Action
+		wantOffset int
+	}{
+		{"next from top", 0, actionSectionNext, 5},
+		{"next from middle", 5, actionSectionNext, 10},
+		{"next at last clamps", 10, actionSectionNext, 10},
+		{"prev from last", 10, actionSectionPrev, 5},
+		{"prev at top clamps", 0, actionSectionPrev, 0},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			p.m.viewport.SetYOffset(tt.start)
+			cmd, handled := p.HandleAction(tt.action)
+			if !handled || cmd != nil {
+				t.Fatalf("HandleAction(%q) = (%v, %v), want (nil, true)", tt.action, cmd, handled)
+			}
+			if got := p.m.viewport.YOffset(); got != tt.wantOffset {
+				t.Errorf("YOffset = %d, want %d", got, tt.wantOffset)
+			}
+		})
+	}
+}
+
+func TestHandleAction_SectionJump_NoopWithoutAnchors(t *testing.T) {
+	// A tab with fewer than two anchors has nothing to jump between.
+	p := newActionTestPlugin(t)
+	p.m.active = 0
+	p.m.sectionAnchors = [][]int{nil}
+	p.m.viewport.SetYOffset(0)
+
+	for _, a := range []tui.Action{actionSectionNext, actionSectionPrev} {
+		_, handled := p.HandleAction(a)
+		if !handled {
+			t.Errorf("HandleAction(%q) handled = false, want true", a)
+		}
+		if got := p.m.viewport.YOffset(); got != 0 {
+			t.Errorf("YOffset = %d, want unchanged 0", got)
+		}
 	}
 }

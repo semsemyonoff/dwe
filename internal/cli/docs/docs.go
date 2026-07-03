@@ -118,11 +118,7 @@ func runDocsTUI(cmd *cobra.Command, flags *cmdctx.RootFlags) error {
 	translator := i18n.TranslatorOrNop(flags.I18n)
 	ctx := cmd.Context()
 
-	projectName := ""
-	if cfg != nil {
-		projectName = cfg.Project.Name
-	}
-	title := render.BrandedSelectorTitle(projectName, "Documentation")
+	title := render.BrandedTitleForConfig(cfg, "Documentation")
 
 	// Banner: warn once at startup when mmdc is missing on $PATH (and the user
 	// hasn't explicitly disabled mermaid). Skipping the install entirely would

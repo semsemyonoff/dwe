@@ -3,13 +3,17 @@ package statustui
 import (
 	"context"
 
+	"github.com/semsemyonoff/dwe/internal/core/ui/render"
 	"github.com/semsemyonoff/dwe/internal/core/ui/tui"
 	"github.com/semsemyonoff/dwe/internal/shared/i18n"
 )
 
-// brand is the fixed left-zone status-line brand string; the Frame joins it
-// with the project name (via RunOptions.Project) as "brand · project".
-const brand = "dwe"
+// statusTitleBase is the base label of the status-line brand string. The full
+// left-zone brand is composed via render.BrandedTitleForConfig (the shared TUI
+// title helper) so the dashboard advertises itself identically to the docs
+// browser and command browser ("{▪} DWE · <project> · Status"), passed whole as
+// RunOptions.Brand.
+const statusTitleBase = "Status"
 
 // runStatusTUI is the package-level seam through which Run drives the tui
 // framework. Tests swap it to exercise error-mapping paths without a real
@@ -39,8 +43,7 @@ func Run(ctx context.Context, d Deps) error {
 	}
 
 	_, err := runStatusTUI(p, tui.RunOptions{
-		Brand:      brand,
-		Project:    d.ProjectName,
+		Brand:      render.BrandedTitleForConfig(d.Cfg, statusTitleBase),
 		Mouse:      true,
 		Translator: tr,
 		Locale:     d.Locale,

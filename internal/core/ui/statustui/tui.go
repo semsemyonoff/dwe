@@ -2,6 +2,7 @@ package statustui
 
 import (
 	"context"
+	"slices"
 	"strings"
 	"time"
 
@@ -25,7 +26,6 @@ type Deps struct {
 	State       *journal.ProjectState
 	Tracked     []string
 	SvcDeploys  map[string]*config.ServiceDeployConfig
-	ProjectName string
 	DockerCfg   *config.DockerConfig
 	Topo        map[string][]string
 	TopoStatus  map[string]render.NodeStatus
@@ -53,6 +53,7 @@ type model struct {
 	deps            Deps
 	ctx             context.Context
 	tabs            []tab
+	sectionAnchors  [][]int // per-tab 0-based line offsets of stacked sub-tables
 	active          int
 	viewport        viewport.Model
 	spinner         spinner.Model
@@ -102,6 +103,42 @@ func (m *model) setActiveTab(idx int) {
 	m.reloadGen = 0
 	m.viewport.SetContent(m.tabs[m.active].content)
 	m.viewport.GotoTop()
+}
+
+// jumpSection scrolls the viewport to the next (dir > 0) or previous (dir < 0)
+// sub-table anchor of the active tab, so ] / [ hop between the stacked tables
+// (Apps / Tools / Infra on Services) instead of line-scrolling. A tab with
+// fewer than two anchors, or a jump past the first/last table, is a no-op
+// (jumps clamp at the ends, matching how ↑/↓ clamp — no wrap-around).
+func (m *model) jumpSection(dir int) {
+	if m.active < 0 || m.active >= len(m.sectionAnchors) {
+		return
+	}
+	anchors := m.sectionAnchors[m.active]
+	if len(anchors) < 2 {
+		return
+	}
+	cur := m.viewport.YOffset()
+	target := -1
+	if dir > 0 {
+		for _, a := range anchors {
+			if a > cur {
+				target = a
+				break
+			}
+		}
+	} else {
+		for _, a := range slices.Backward(anchors) {
+			if a < cur {
+				target = a
+				break
+			}
+		}
+	}
+	if target < 0 {
+		return
+	}
+	m.viewport.SetYOffset(target)
 }
 
 // renderTabStrip renders the tab navigation with active tab highlighted.

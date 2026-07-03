@@ -189,7 +189,10 @@ func newFrame(p Plugin, opts ...frameOption) (*Frame, error) {
 		}
 	}
 
-	reg := NewRegistry()
+	// A single-panel surface can never move focus, so the focus-cycle built-ins
+	// are stripped (before the plugin's Actions hook) — freeing tab / shift+tab
+	// for the plugin and keeping the help modal free of the dead rows.
+	reg := newRegistryForPanels(len(panels))
 	if err := p.Actions(reg); err != nil {
 		return nil, fmt.Errorf("tui: registering plugin actions: %w", err)
 	}

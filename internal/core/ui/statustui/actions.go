@@ -10,22 +10,29 @@ import (
 // dot-separated so the derived help key (tui.help.action.<id>) reads
 // naturally; see the i18n coverage keys added alongside this file.
 const (
-	actionTabPrev tui.Action = "tab.prev"
-	actionTabNext tui.Action = "tab.next"
-	actionTab1    tui.Action = "tab.1"
-	actionTab2    tui.Action = "tab.2"
-	actionTab3    tui.Action = "tab.3"
-	actionTab4    tui.Action = "tab.4"
-	actionTab5    tui.Action = "tab.5"
+	actionSectionPrev tui.Action = "section.prev"
+	actionSectionNext tui.Action = "section.next"
+	actionTabPrev     tui.Action = "tab.prev"
+	actionTabNext     tui.Action = "tab.next"
+	actionTab1        tui.Action = "tab.1"
+	actionTab2        tui.Action = "tab.2"
+	actionTab3        tui.Action = "tab.3"
+	actionTab4        tui.Action = "tab.4"
+	actionTab5        tui.Action = "tab.5"
 )
 
-// sectionTabs is the help-modal section label for the tab-switch actions.
-const sectionTabs = "Tabs"
+// Help-modal section labels. sectionNav groups the within-tab table jumps
+// (tab / shift+tab); sectionTabs groups the tab-switch actions (←/→, 1–5).
+const (
+	sectionNav  = "Navigation"
+	sectionTabs = "Tabs"
+)
 
-// Actions implements tui.Plugin. It registers reload (stdlib) and the plugin's
-// own Tabs section. tab/shift+tab are framework focus built-ins — harmless
-// no-ops on this single-panel surface — and are NOT registered here. Reload
-// moves to ctrl+r (stdlib ActionReload), replacing the legacy "r" binding.
+// Actions implements tui.Plugin. It registers reload (stdlib), the tab switch on
+// tab / shift+tab (freed because the Frame strips its focus built-ins on this
+// single-panel surface — see tui.Registry.DisableFocusNav), the within-tab
+// table-jump on ] / [, and the plugin's own Tabs section. Reload moves to ctrl+r
+// (stdlib ActionReload), replacing the legacy "r" binding.
 func (p *plugin) Actions(reg *tui.Registry) error {
 	if err := tui.RegisterStandard(reg, tui.ActionReload); err != nil {
 		return err
@@ -35,8 +42,10 @@ func (p *plugin) Actions(reg *tui.Registry) error {
 		a tui.Action
 		b tui.Binding
 	}{
-		{actionTabPrev, tui.Binding{Keys: []string{"left", "h"}, Desc: "Previous tab", Section: sectionTabs}},
-		{actionTabNext, tui.Binding{Keys: []string{"right", "l"}, Desc: "Next tab", Section: sectionTabs}},
+		{actionSectionNext, tui.Binding{Keys: []string{"]"}, Desc: "Next table", Section: sectionNav}},
+		{actionSectionPrev, tui.Binding{Keys: []string{"["}, Desc: "Previous table", Section: sectionNav}},
+		{actionTabPrev, tui.Binding{Keys: []string{"shift+tab", "left", "h"}, Desc: "Previous tab", Section: sectionTabs}},
+		{actionTabNext, tui.Binding{Keys: []string{"tab", "right", "l"}, Desc: "Next tab", Section: sectionTabs}},
 		{actionTab1, tui.Binding{Keys: []string{"1"}, Desc: "Services", Section: sectionTabs}},
 		{actionTab2, tui.Binding{Keys: []string{"2"}, Desc: "Deploy", Section: sectionTabs}},
 		{actionTab3, tui.Binding{Keys: []string{"3"}, Desc: "Topology", Section: sectionTabs}},
@@ -58,6 +67,12 @@ func (p *plugin) Actions(reg *tui.Registry) error {
 func (p *plugin) HandleAction(a tui.Action) (tea.Cmd, bool) {
 	m := p.m
 	switch a {
+	case actionSectionNext:
+		m.jumpSection(+1)
+		return nil, true
+	case actionSectionPrev:
+		m.jumpSection(-1)
+		return nil, true
 	case actionTabPrev:
 		if len(m.tabs) == 0 {
 			return nil, true

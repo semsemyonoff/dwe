@@ -102,12 +102,11 @@ func TestBuildTabs_AllRunning(t *testing.T) {
 	alwaysRunning := func(_ string) bool { return true }
 
 	deps := Deps{
-		Cfg:         cfg,
-		IsRunning:   alwaysRunning,
-		ProjectName: "test",
+		Cfg:       cfg,
+		IsRunning: alwaysRunning,
 	}
 
-	tabs, _ := buildTabs(context.Background(), deps)
+	tabs, _, _ := buildTabs(context.Background(), deps)
 
 	require.Equal(t, 5, len(tabs), "expected 5 tabs")
 	require.Equal(t, "Services", tabs[0].title)
@@ -131,12 +130,11 @@ func TestBuildTabs_AllStopped(t *testing.T) {
 	neverRunning := func(_ string) bool { return false }
 
 	deps := Deps{
-		Cfg:         cfg,
-		IsRunning:   neverRunning,
-		ProjectName: "test",
+		Cfg:       cfg,
+		IsRunning: neverRunning,
 	}
 
-	tabs, _ := buildTabs(context.Background(), deps)
+	tabs, _, _ := buildTabs(context.Background(), deps)
 
 	require.Equal(t, 5, len(tabs))
 	// Content should still show the app, just not running
@@ -156,12 +154,11 @@ func TestBuildTabs_Partial(t *testing.T) {
 	}
 
 	deps := Deps{
-		Cfg:         cfg,
-		IsRunning:   partialRunning,
-		ProjectName: "test",
+		Cfg:       cfg,
+		IsRunning: partialRunning,
 	}
 
-	tabs, _ := buildTabs(context.Background(), deps)
+	tabs, _, _ := buildTabs(context.Background(), deps)
 
 	require.Equal(t, 5, len(tabs))
 	require.Contains(t, tabs[0].content, "main")
@@ -175,12 +172,11 @@ func TestBuildTabs_EmptyService(t *testing.T) {
 	)
 
 	deps := Deps{
-		Cfg:         cfg,
-		IsRunning:   func(_ string) bool { return false },
-		ProjectName: "test",
+		Cfg:       cfg,
+		IsRunning: func(_ string) bool { return false },
 	}
 
-	tabs, _ := buildTabs(context.Background(), deps)
+	tabs, _, _ := buildTabs(context.Background(), deps)
 
 	require.Equal(t, 5, len(tabs))
 	// Services tab should show placeholder when no services configured
@@ -196,13 +192,12 @@ func TestBuildTabs_WithNilState(t *testing.T) {
 	)
 
 	deps := Deps{
-		Cfg:         cfg,
-		IsRunning:   func(_ string) bool { return false },
-		ProjectName: "test",
-		State:       nil, // No deploy state
+		Cfg:       cfg,
+		IsRunning: func(_ string) bool { return false },
+		State:     nil, // No deploy state
 	}
 
-	tabs, _ := buildTabs(context.Background(), deps)
+	tabs, _, _ := buildTabs(context.Background(), deps)
 
 	// Deploy tab should show placeholder when no state
 	require.Equal(t, "no deploy status", tabs[1].content)
@@ -225,12 +220,11 @@ func TestBuildTabs_PrependsWarningOnRenderError(t *testing.T) {
 	)
 
 	deps := Deps{
-		Cfg:         cfg,
-		IsRunning:   func(_ string) bool { return false },
-		ProjectName: "test",
+		Cfg:       cfg,
+		IsRunning: func(_ string) bool { return false },
 	}
 
-	tabs, _ := buildTabs(context.Background(), deps)
+	tabs, _, _ := buildTabs(context.Background(), deps)
 
 	// Services tab should have a warning prefix because RenderApps will return an error
 	require.Contains(t, tabs[0].content, "⚠", "expected warning symbol in services tab when render error occurs")

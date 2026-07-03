@@ -6,18 +6,18 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/require"
+
+	"github.com/semsemyonoff/dwe/internal/core/project/config"
 )
 
 func TestNewModel_Defaults(t *testing.T) {
 	ctx := context.Background()
-	deps := Deps{
-		ProjectName: "test-project",
-	}
+	deps := Deps{Cfg: &config.DweConfig{}}
 
 	m := newModel(deps, ctx)
 
 	require.NotNil(t, m)
-	require.Equal(t, deps.ProjectName, m.deps.ProjectName)
+	require.Same(t, deps.Cfg, m.deps.Cfg)
 	require.True(t, m.loading, "loading should be true initially")
 	require.Equal(t, 0, m.active, "active tab should be 0 initially")
 	require.Empty(t, m.tabs, "tabs should be empty initially")
@@ -25,7 +25,7 @@ func TestNewModel_Defaults(t *testing.T) {
 
 func TestRenderTabStrip(t *testing.T) {
 	ctx := context.Background()
-	deps := Deps{ProjectName: "test"}
+	deps := Deps{}
 	m := newModel(deps, ctx)
 	m.tabs = []tab{
 		{"Services", "content1"},
@@ -66,7 +66,7 @@ func TestRenderTabStrip(t *testing.T) {
 
 func TestRenderTabStrip_EmptyTabs(t *testing.T) {
 	ctx := context.Background()
-	deps := Deps{ProjectName: "test"}
+	deps := Deps{}
 	m := newModel(deps, ctx)
 
 	tabStrip := m.renderTabStrip()
@@ -76,7 +76,7 @@ func TestRenderTabStrip_EmptyTabs(t *testing.T) {
 // Test Init method
 func TestInit_BumpsLoadGen(t *testing.T) {
 	ctx := context.Background()
-	deps := Deps{ProjectName: "test"}
+	deps := Deps{}
 	m := newModel(deps, ctx)
 
 	initialGen := m.loadGen
@@ -92,7 +92,7 @@ func TestInit_BumpsLoadGen(t *testing.T) {
 // the explicit Tab1–Tab5 blocks used to carry (e.g. Tab5 with only 3 tabs).
 func TestSetActiveTab_OutOfRangeNoop(t *testing.T) {
 	ctx := context.Background()
-	m := newModel(Deps{ProjectName: "test"}, ctx)
+	m := newModel(Deps{}, ctx)
 	m.tabs = []tab{
 		{"Services", "content1"},
 		{"Deploy", "content2"},

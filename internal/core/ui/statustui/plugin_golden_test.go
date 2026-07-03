@@ -12,6 +12,8 @@ import (
 	"charm.land/lipgloss/v2"
 	"github.com/charmbracelet/x/ansi"
 
+	"github.com/semsemyonoff/dwe/internal/core/project/config"
+	"github.com/semsemyonoff/dwe/internal/core/ui/render"
 	"github.com/semsemyonoff/dwe/internal/core/ui/tui"
 	"github.com/semsemyonoff/dwe/internal/shared/i18n"
 )
@@ -21,10 +23,11 @@ import (
 // width and content, not vertical geometry.
 const goldenFrameHeight = 24
 
-// goldenRunOpts are the tui.RunOptions shared across golden frame tests.
+// goldenRunOpts are the tui.RunOptions shared across golden frame tests. Brand
+// is composed exactly as statustui.Run does (render.BrandedSelectorTitle) so the
+// goldens exercise the real status-line branding, with an empty Project.
 var goldenRunOpts = tui.RunOptions{
-	Brand:      "dwe",
-	Project:    "demo",
+	Brand:      render.BrandedSelectorTitle("demo", statusTitleBase),
 	Mouse:      true,
 	Translator: i18n.NopTranslator{},
 	Locale:     "en",
@@ -50,7 +53,7 @@ func newGoldenPlugin(t *testing.T, loading bool) *plugin {
 	ctx, cancel := context.WithCancel(context.Background())
 	t.Cleanup(cancel)
 
-	m := newModel(Deps{ProjectName: "demo"}, ctx)
+	m := newModel(Deps{Cfg: &config.DweConfig{Project: config.ProjectConfig{Name: "demo"}}}, ctx)
 	m.loading = loading
 	if !loading {
 		m.tabs = goldenTabs()

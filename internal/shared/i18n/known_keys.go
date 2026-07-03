@@ -67,6 +67,8 @@ var KnownUIKeys = []string{
 	"tui.help.action.tree.collapse",
 	"tui.help.action.tree.expand",
 	// Status dashboard custom section and actions (registered by statustui plugin).
+	"tui.help.action.section.next",
+	"tui.help.action.section.prev",
 	"tui.help.section.tabs",
 	"tui.help.action.tab.prev",
 	"tui.help.action.tab.next",

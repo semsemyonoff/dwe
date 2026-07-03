@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/semsemyonoff/dwe/internal/core/project/config"
+	"github.com/semsemyonoff/dwe/internal/core/ui/render"
 	"github.com/semsemyonoff/dwe/internal/core/ui/statusview"
 	"github.com/semsemyonoff/dwe/internal/core/ui/tui"
 	"github.com/semsemyonoff/dwe/internal/shared/i18n"
@@ -19,7 +20,7 @@ func TestRun_ErrTooNarrow_PassesThroughUnchanged(t *testing.T) {
 		return nil, tui.ErrTooNarrow
 	}
 
-	err := Run(context.Background(), Deps{ProjectName: "test"})
+	err := Run(context.Background(), Deps{})
 	if !errors.Is(err, tui.ErrTooNarrow) {
 		t.Errorf("Run() error = %v, want tui.ErrTooNarrow passed through unchanged", err)
 	}
@@ -32,7 +33,7 @@ func TestRun_ErrNotTTY_PassesThroughUnchanged(t *testing.T) {
 		return nil, tui.ErrNotTTY
 	}
 
-	err := Run(context.Background(), Deps{ProjectName: "test"})
+	err := Run(context.Background(), Deps{})
 	if !errors.Is(err, tui.ErrNotTTY) {
 		t.Errorf("Run() error = %v, want tui.ErrNotTTY passed through unchanged", err)
 	}
@@ -45,7 +46,7 @@ func TestRun_CleanExit_ReturnsNil(t *testing.T) {
 		return nil, nil
 	}
 
-	if err := Run(context.Background(), Deps{ProjectName: "test"}); err != nil {
+	if err := Run(context.Background(), Deps{}); err != nil {
 		t.Errorf("Run() = %v, want nil on clean exit", err)
 	}
 }
@@ -60,7 +61,7 @@ func TestRun_ClosePluginCancelsRunContext(t *testing.T) {
 		return nil, nil
 	}
 
-	if err := Run(context.Background(), Deps{ProjectName: "test"}); err != nil {
+	if err := Run(context.Background(), Deps{}); err != nil {
 		t.Fatalf("Run() = %v, want nil", err)
 	}
 
@@ -90,13 +91,19 @@ func TestRun_ThreadsBrandProjectAndI18n(t *testing.T) {
 	}
 
 	tr := i18n.NopTranslator{}
-	_ = Run(context.Background(), Deps{ProjectName: "myproject", Translator: tr, Locale: "ru"})
+	cfg := &config.DweConfig{Project: config.ProjectConfig{Name: "myproject"}}
+	_ = Run(context.Background(), Deps{Cfg: cfg, Translator: tr, Locale: "ru"})
 
-	if gotOpts.Brand != brand {
-		t.Errorf("RunOptions.Brand = %q, want %q", gotOpts.Brand, brand)
+	// The status dashboard advertises itself like the other TUIs: a single Brand
+	// string "{▪} DWE · <project> · Status" (via the shared BrandedTitleForConfig
+	// helper, sourced from cfg — the bare project name, not the compose name) and
+	// an empty Project field.
+	wantBrand := render.BrandedTitleForConfig(cfg, statusTitleBase)
+	if gotOpts.Brand != wantBrand {
+		t.Errorf("RunOptions.Brand = %q, want %q", gotOpts.Brand, wantBrand)
 	}
-	if gotOpts.Project != "myproject" {
-		t.Errorf("RunOptions.Project = %q, want %q", gotOpts.Project, "myproject")
+	if gotOpts.Project != "" {
+		t.Errorf("RunOptions.Project = %q, want empty", gotOpts.Project)
 	}
 	if !gotOpts.Mouse {
 		t.Error("RunOptions.Mouse = false, want true")
@@ -116,7 +123,7 @@ func TestRun_NilTranslatorFallsBackToNop(t *testing.T) {
 		return nil, nil
 	}
 
-	_ = Run(context.Background(), Deps{ProjectName: "test"})
+	_ = Run(context.Background(), Deps{})
 
 	if gotOpts.Translator == nil {
 		t.Fatal("RunOptions.Translator = nil, want i18n.NopTranslator fallback")
@@ -167,8 +174,7 @@ func TestRun_ReloadThenQuit_CancelsInflightContext(t *testing.T) {
 	defer cancel()
 
 	deps := Deps{
-		Cfg:         &config.DweConfig{},
-		ProjectName: "test",
+		Cfg: &config.DweConfig{},
 	}
 
 	// Run buildTabsCmd in a goroutine so it can execute concurrently
