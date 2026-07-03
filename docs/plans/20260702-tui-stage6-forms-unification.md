@@ -415,14 +415,14 @@ Quit/help-slot mechanics inside `ask` (moved verbatim from the raw sites, once):
 - Modify: `docs/internals/packages.md`
 - Modify: `AGENTS.md` (only if a Critical Pattern entry is warranted)
 
-- [ ] update `tui-keymap.md` § 7: forms stay on huh's own key routing (registry wiring
+- [x] update `tui-keymap.md` § 7: forms stay on huh's own key routing (registry wiring
       evaluated and declined); quit bindings unified to `q`/`esc`/`ctrl+c` where
       appropriate via `ask.QuitSpec`; note the per-field-kind help-slot mechanism
-- [ ] update `packages.md` § ask / § widgets: `RunHuhForm` as the single executor,
+- [x] update `packages.md` § ask / § widgets: `RunHuhForm` as the single executor,
       hooks-fire-once invariant, `ErrCancelled` canonical cancel contract (incl. the
       `ask.Run` contract change), declarative `QuitSpec` overrides + slot-hijack
       ownership, `Build`/`Run` split as the Stage 7 seam
-- [ ] run `make build` (embedded docs re-sync) + `make test` — must pass before task 7
+- [x] run `make build` (embedded docs re-sync) + `make test` — must pass before task 7
 
 ### Task 7: Verify acceptance criteria
 
