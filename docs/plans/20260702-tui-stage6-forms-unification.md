@@ -293,26 +293,26 @@ Quit/help-slot mechanics inside `ask` (moved verbatim from the raw sites, once):
 - Modify: `internal/core/ui/ask/ask.go`
 - Modify: `internal/core/ui/ask/ask_test.go`
 
-- [ ] add `QuitSpec` and extend `RunOptions` with `Quit *QuitSpec`, `SubmitHelp string`,
+- [x] add `QuitSpec` and extend `RunOptions` with `Quit *QuitSpec`, `SubmitHelp string`,
       `ShowHelp *bool` (nil = leave huh default — do not change behaviour for existing
       callers)
-- [ ] add `Field.Height int` (select/multiselect) and `Field.Filterable *bool`
+- [x] add `Field.Height int` (select/multiselect) and `Field.Filterable *bool`
       (multiselect only — huh/v2 `Select` has no `Filterable` method; reject or ignore
       it on other kinds, pick one and test it); apply in `buildHuhField`
-- [ ] implement keymap assembly in `ask`: `km.Quit` from `QuitSpec`; help-slot hijack
+- [x] implement keymap assembly in `ask`: `km.Quit` from `QuitSpec`; help-slot hijack
       per field kind (select/multiselect → Filter slot; input → AcceptSuggestion slot +
       fake single-blank `SuggestionsFunc`); `SubmitHelp` relabel; document the hijack
       trick with a comment stating the constraint (huh hides form-level Quit from field
       help)
-- [ ] write tests: keymap/slot inspection per field kind (select-only form,
+- [x] write tests: keymap/slot inspection per field kind (select-only form,
       multiselect-only form, input-only form, mixed form), `SubmitHelp` relabel,
       `ShowHelp` tri-state, `Height`/`Filterable` application; for a
       `Filterable: false` multiselect assert the Filter binding ends up disabled (the
       hint-visibility limitation from design decision 3), and assert form-level Quit
       still carries the QuitSpec binding
-- [ ] write tests for error cases (e.g. `QuitSpec` with empty `Keys` — decide and pin
+- [x] write tests for error cases (e.g. `QuitSpec` with empty `Keys` — decide and pin
       behaviour: treat as nil)
-- [ ] run `make test` — must pass before task 3
+- [x] run `make test` — must pass before task 3
 
 ### Task 3: Build-vs-run split + `ErrCancelled` contract for `ask`
 

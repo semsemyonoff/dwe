@@ -4,10 +4,12 @@ import (
 	"context"
 	"errors"
 	"io"
+	"reflect"
 	"strings"
 	"testing"
 	"time"
 
+	"charm.land/bubbles/v2/key"
 	huh "charm.land/huh/v2"
 )
 
@@ -86,7 +88,7 @@ func TestRunWithInputField(t *testing.T) {
 		Title:    "Enter your name",
 		Required: false,
 	}
-	_, binding, err := buildHuhField(f)
+	_, binding, err := buildHuhField(f, false)
 	if err != nil {
 		t.Fatalf("buildHuhField returned error: %v", err)
 	}
@@ -109,7 +111,7 @@ func TestBuildHuhFieldInput(t *testing.T) {
 		Default:     "default_value",
 	}
 
-	huhField, binding, err := buildHuhField(f)
+	huhField, binding, err := buildHuhField(f, false)
 	if err != nil {
 		t.Fatalf("buildHuhField returned error: %v", err)
 	}
@@ -135,7 +137,7 @@ func TestBuildHuhFieldSelect(t *testing.T) {
 		Default: "pg",
 	}
 
-	huhField, binding, err := buildHuhField(f)
+	huhField, binding, err := buildHuhField(f, false)
 	if err != nil {
 		t.Fatalf("buildHuhField returned error: %v", err)
 	}
@@ -162,7 +164,7 @@ func TestBuildHuhFieldMultiselect(t *testing.T) {
 		},
 	}
 
-	huhField, binding, err := buildHuhField(f)
+	huhField, binding, err := buildHuhField(f, false)
 	if err != nil {
 		t.Fatalf("buildHuhField returned error: %v", err)
 	}
@@ -184,7 +186,7 @@ func TestBuildHuhFieldConfirm(t *testing.T) {
 		Default:     "false",
 	}
 
-	huhField, binding, err := buildHuhField(f)
+	huhField, binding, err := buildHuhField(f, false)
 	if err != nil {
 		t.Fatalf("buildHuhField returned error: %v", err)
 	}
@@ -204,7 +206,7 @@ func TestBuildHuhFieldInvalidKind(t *testing.T) {
 		Title: "Test",
 	}
 
-	_, _, err := buildHuhField(f)
+	_, _, err := buildHuhField(f, false)
 	if err == nil {
 		t.Error("buildHuhField with invalid kind should return error")
 	}
@@ -250,7 +252,7 @@ func TestInputFieldWithValidation(t *testing.T) {
 		},
 	}
 
-	huhField, _, err := buildHuhField(f)
+	huhField, _, err := buildHuhField(f, false)
 	if err != nil {
 		t.Fatalf("buildHuhField returned error: %v", err)
 	}
@@ -277,7 +279,7 @@ func TestMultiselectFieldWithValidation(t *testing.T) {
 		},
 	}
 
-	huhField, _, err := buildHuhField(f)
+	huhField, _, err := buildHuhField(f, false)
 	if err != nil {
 		t.Fatalf("buildHuhField returned error: %v", err)
 	}
@@ -332,7 +334,7 @@ func TestConfirmFieldDefaultParsing(t *testing.T) {
 			Default: tt.defaultStr,
 		}
 
-		huhField, _, err := buildHuhField(f)
+		huhField, _, err := buildHuhField(f, false)
 		if err != nil {
 			t.Fatalf("buildHuhField(%q) returned error: %v", tt.defaultStr, err)
 		}
@@ -394,7 +396,7 @@ func TestMultiselectDefaultsNilHandling(t *testing.T) {
 		},
 	}
 
-	huhField, _, err := buildHuhField(f)
+	huhField, _, err := buildHuhField(f, false)
 	if err != nil {
 		t.Fatalf("buildHuhField returned error: %v", err)
 	}
@@ -412,11 +414,345 @@ func TestSelectFieldWithoutOptions(t *testing.T) {
 		Options: []Option{},
 	}
 
-	huhField, _, err := buildHuhField(f)
+	huhField, _, err := buildHuhField(f, false)
 	if err != nil {
 		t.Fatalf("buildHuhField returned error: %v", err)
 	}
 	if huhField == nil {
 		t.Error("huhField should not be nil")
+	}
+}
+
+// bindingKeysEqual compares a key.Binding's Keys() to want.
+func bindingKeysEqual(b key.Binding, want []string) bool {
+	return slicesEqual(b.Keys(), want)
+}
+
+// TestBuildKeyMapDefaults verifies that with no Quit/SubmitHelp override,
+// buildKeyMap returns a keymap equivalent to huh's own default (no
+// customization applied) for every slot the hijack touches.
+func TestBuildKeyMapDefaults(t *testing.T) {
+	fields := []Field{
+		{Key: "s", Kind: FieldSelect},
+		{Key: "m", Kind: FieldMultiselect},
+		{Key: "i", Kind: FieldInput},
+	}
+	km := buildKeyMap(RunOptions{}, fields)
+	def := huh.NewDefaultKeyMap()
+
+	if !bindingKeysEqual(km.Quit, def.Quit.Keys()) {
+		t.Errorf("Quit.Keys() = %v, want default %v", km.Quit.Keys(), def.Quit.Keys())
+	}
+	if !bindingKeysEqual(km.Select.Filter, def.Select.Filter.Keys()) {
+		t.Errorf("Select.Filter changed without QuitSpec: %v", km.Select.Filter.Keys())
+	}
+	if !bindingKeysEqual(km.MultiSelect.Filter, def.MultiSelect.Filter.Keys()) {
+		t.Errorf("MultiSelect.Filter changed without QuitSpec: %v", km.MultiSelect.Filter.Keys())
+	}
+	if !bindingKeysEqual(km.Input.AcceptSuggestion, def.Input.AcceptSuggestion.Keys()) {
+		t.Errorf("Input.AcceptSuggestion changed without QuitSpec: %v", km.Input.AcceptSuggestion.Keys())
+	}
+	if km.Select.Submit.Help().Desc != def.Select.Submit.Help().Desc {
+		t.Errorf("Select.Submit help changed without SubmitHelp: %q", km.Select.Submit.Help().Desc)
+	}
+}
+
+// TestBuildKeyMapQuitSelectOnly verifies the Filter-slot hijack fires only
+// for a select-only form, leaving multiselect/input slots untouched.
+func TestBuildKeyMapQuitSelectOnly(t *testing.T) {
+	fields := []Field{{Key: "s", Kind: FieldSelect}}
+	quit := &QuitSpec{Keys: []string{"q", "esc"}, Help: "exit"}
+	km := buildKeyMap(RunOptions{Quit: quit}, fields)
+	def := huh.NewDefaultKeyMap()
+
+	if !bindingKeysEqual(km.Quit, quit.Keys) {
+		t.Errorf("Quit.Keys() = %v, want %v", km.Quit.Keys(), quit.Keys)
+	}
+	if got := km.Quit.Help().Desc; got != "exit" {
+		t.Errorf("Quit.Help().Desc = %q, want %q", got, "exit")
+	}
+	if !bindingKeysEqual(km.Select.Filter, quit.Keys) {
+		t.Errorf("Select.Filter.Keys() = %v, want %v", km.Select.Filter.Keys(), quit.Keys)
+	}
+	if got := km.Select.Filter.Help().Desc; got != "exit" {
+		t.Errorf("Select.Filter.Help().Desc = %q, want %q", got, "exit")
+	}
+	if !bindingKeysEqual(km.MultiSelect.Filter, def.MultiSelect.Filter.Keys()) {
+		t.Errorf("MultiSelect.Filter should stay default, got %v", km.MultiSelect.Filter.Keys())
+	}
+	if !bindingKeysEqual(km.Input.AcceptSuggestion, def.Input.AcceptSuggestion.Keys()) {
+		t.Errorf("Input.AcceptSuggestion should stay default, got %v", km.Input.AcceptSuggestion.Keys())
+	}
+}
+
+// TestBuildKeyMapQuitMultiselectOnly verifies the hijack targets
+// MultiSelect.Filter for a multiselect-only form.
+func TestBuildKeyMapQuitMultiselectOnly(t *testing.T) {
+	fields := []Field{{Key: "m", Kind: FieldMultiselect}}
+	quit := &QuitSpec{Keys: []string{"esc", "ctrl+c"}, Help: "cancel"}
+	km := buildKeyMap(RunOptions{Quit: quit}, fields)
+	def := huh.NewDefaultKeyMap()
+
+	if !bindingKeysEqual(km.MultiSelect.Filter, quit.Keys) {
+		t.Errorf("MultiSelect.Filter.Keys() = %v, want %v", km.MultiSelect.Filter.Keys(), quit.Keys)
+	}
+	if got := km.MultiSelect.Filter.Help().Desc; got != "cancel" {
+		t.Errorf("MultiSelect.Filter.Help().Desc = %q, want %q", got, "cancel")
+	}
+	if !bindingKeysEqual(km.Select.Filter, def.Select.Filter.Keys()) {
+		t.Errorf("Select.Filter should stay default, got %v", km.Select.Filter.Keys())
+	}
+}
+
+// TestBuildKeyMapQuitInputOnly verifies the hijack targets
+// Input.AcceptSuggestion for an input-only form.
+func TestBuildKeyMapQuitInputOnly(t *testing.T) {
+	fields := []Field{{Key: "i", Kind: FieldInput}}
+	quit := &QuitSpec{Keys: []string{"esc", "ctrl+c"}, Help: "cancel"}
+	km := buildKeyMap(RunOptions{Quit: quit}, fields)
+	def := huh.NewDefaultKeyMap()
+
+	if !bindingKeysEqual(km.Input.AcceptSuggestion, quit.Keys) {
+		t.Errorf("Input.AcceptSuggestion.Keys() = %v, want %v", km.Input.AcceptSuggestion.Keys(), quit.Keys)
+	}
+	if got := km.Input.AcceptSuggestion.Help().Desc; got != "cancel" {
+		t.Errorf("Input.AcceptSuggestion.Help().Desc = %q, want %q", got, "cancel")
+	}
+	if !bindingKeysEqual(km.Select.Filter, def.Select.Filter.Keys()) {
+		t.Errorf("Select.Filter should stay default, got %v", km.Select.Filter.Keys())
+	}
+}
+
+// TestBuildKeyMapQuitMixedFields verifies every present kind's slot is
+// hijacked when a form mixes select, multiselect, and input fields.
+func TestBuildKeyMapQuitMixedFields(t *testing.T) {
+	fields := []Field{
+		{Key: "s", Kind: FieldSelect},
+		{Key: "m", Kind: FieldMultiselect},
+		{Key: "i", Kind: FieldInput},
+	}
+	quit := &QuitSpec{Keys: []string{"q", "esc", "ctrl+c"}, Help: "exit"}
+	km := buildKeyMap(RunOptions{Quit: quit}, fields)
+
+	for name, b := range map[string]key.Binding{
+		"Select.Filter":          km.Select.Filter,
+		"MultiSelect.Filter":     km.MultiSelect.Filter,
+		"Input.AcceptSuggestion": km.Input.AcceptSuggestion,
+	} {
+		if !bindingKeysEqual(b, quit.Keys) {
+			t.Errorf("%s.Keys() = %v, want %v", name, b.Keys(), quit.Keys)
+		}
+		if got := b.Help().Desc; got != "exit" {
+			t.Errorf("%s.Help().Desc = %q, want %q", name, got, "exit")
+		}
+	}
+}
+
+// TestBuildKeyMapEmptyQuitKeysTreatedAsNil pins the decided behaviour: a
+// QuitSpec with an empty Keys slice is a no-op, identical to Quit == nil.
+func TestBuildKeyMapEmptyQuitKeysTreatedAsNil(t *testing.T) {
+	fields := []Field{{Key: "s", Kind: FieldSelect}}
+	km := buildKeyMap(RunOptions{Quit: &QuitSpec{Help: "exit"}}, fields)
+	def := huh.NewDefaultKeyMap()
+
+	if !bindingKeysEqual(km.Quit, def.Quit.Keys()) {
+		t.Errorf("Quit.Keys() = %v, want default %v (empty Keys should be a no-op)", km.Quit.Keys(), def.Quit.Keys())
+	}
+	if !bindingKeysEqual(km.Select.Filter, def.Select.Filter.Keys()) {
+		t.Errorf("Select.Filter changed despite empty QuitSpec.Keys: %v", km.Select.Filter.Keys())
+	}
+}
+
+// TestBuildKeyMapSubmitHelpRelabel verifies the cosmetic submit-help relabel
+// applies to every present kind's Submit/Next slot.
+func TestBuildKeyMapSubmitHelpRelabel(t *testing.T) {
+	fields := []Field{
+		{Key: "s", Kind: FieldSelect},
+		{Key: "m", Kind: FieldMultiselect},
+		{Key: "i", Kind: FieldInput},
+	}
+	km := buildKeyMap(RunOptions{SubmitHelp: "select"}, fields)
+
+	if got := km.Select.Submit.Help().Desc; got != "select" {
+		t.Errorf("Select.Submit.Help().Desc = %q, want %q", got, "select")
+	}
+	if got := km.MultiSelect.Submit.Help().Desc; got != "select" {
+		t.Errorf("MultiSelect.Submit.Help().Desc = %q, want %q", got, "select")
+	}
+	if got := km.Input.Next.Help().Desc; got != "select" {
+		t.Errorf("Input.Next.Help().Desc = %q, want %q", got, "select")
+	}
+}
+
+// TestBuildHuhFieldFilterableRejectedForNonMultiselect verifies Filterable
+// is rejected on every field kind except FieldMultiselect.
+func TestBuildHuhFieldFilterableRejectedForNonMultiselect(t *testing.T) {
+	yes := true
+	kinds := []FieldKind{FieldInput, FieldSelect, FieldConfirm}
+	for _, k := range kinds {
+		f := Field{Key: "f", Kind: k, Filterable: &yes}
+		_, _, err := buildHuhField(f, false)
+		if err == nil {
+			t.Errorf("kind %v: Filterable should be rejected, got no error", k)
+		}
+	}
+}
+
+// TestBuildHuhFieldMultiselectFilterableTogglesSlotVisibility verifies the
+// design-decision-3 visibility caveat: a Filterable:false multiselect omits
+// the Filter/SetFilter/ClearFilter bindings from KeyBinds() entirely (huh's
+// own behaviour, not something ask implements), while Filterable:true (or
+// nil default) keeps them.
+func TestBuildHuhFieldMultiselectFilterableTogglesSlotVisibility(t *testing.T) {
+	base := Field{
+		Key:     "m",
+		Kind:    FieldMultiselect,
+		Options: []Option{{Value: "a", Label: "A"}},
+	}
+
+	no := false
+	yes := true
+
+	for _, tt := range []struct {
+		name       string
+		filterable *bool
+	}{
+		{"nil (default true)", nil},
+		{"explicit true", &yes},
+	} {
+		f := base
+		f.Filterable = tt.filterable
+		huhField, _, err := buildHuhField(f, false)
+		if err != nil {
+			t.Fatalf("%s: buildHuhField returned error: %v", tt.name, err)
+		}
+		huhField = huhField.WithKeyMap(huh.NewDefaultKeyMap())
+		if !containsFilterBinding(huhField.KeyBinds()) {
+			t.Errorf("%s: KeyBinds() should include the Filter binding", tt.name)
+		}
+	}
+
+	f := base
+	f.Filterable = &no
+	huhField, _, err := buildHuhField(f, false)
+	if err != nil {
+		t.Fatalf("filterable=false: buildHuhField returned error: %v", err)
+	}
+	huhField = huhField.WithKeyMap(huh.NewDefaultKeyMap())
+	if containsFilterBinding(huhField.KeyBinds()) {
+		t.Error("filterable=false: KeyBinds() should NOT include the Filter binding")
+	}
+}
+
+// containsFilterBinding reports whether binds contains huh's default
+// select/multiselect Filter binding ("/" key).
+func containsFilterBinding(binds []key.Binding) bool {
+	for _, b := range binds {
+		if slicesEqual(b.Keys(), []string{"/"}) {
+			return true
+		}
+	}
+	return false
+}
+
+// TestBuildHuhFieldInputSuggestionsGatedByHasQuit verifies the fake
+// SuggestionsFunc (and thus the AcceptSuggestion slot) is only installed
+// when the form has a QuitSpec in effect.
+func TestBuildHuhFieldInputSuggestionsGatedByHasQuit(t *testing.T) {
+	f := Field{Key: "i", Kind: FieldInput}
+
+	withoutQuit, _, err := buildHuhField(f, false)
+	if err != nil {
+		t.Fatalf("buildHuhField(hasQuit=false) returned error: %v", err)
+	}
+	withoutQuit = withoutQuit.WithKeyMap(huh.NewDefaultKeyMap())
+	if got := len(withoutQuit.KeyBinds()); got != 3 {
+		t.Errorf("hasQuit=false: KeyBinds() len = %d, want 3 (no AcceptSuggestion)", got)
+	}
+
+	withQuit, _, err := buildHuhField(f, true)
+	if err != nil {
+		t.Fatalf("buildHuhField(hasQuit=true) returned error: %v", err)
+	}
+	withQuit = withQuit.WithKeyMap(huh.NewDefaultKeyMap())
+	if got := len(withQuit.KeyBinds()); got != 4 {
+		t.Errorf("hasQuit=true: KeyBinds() len = %d, want 4 (AcceptSuggestion present)", got)
+	}
+}
+
+// unexportedIntField reads an unexported int field via reflection. huh's
+// Select/MultiSelect Height has no public getter, so this is the only way
+// to verify the value was actually applied to the constructed field.
+func unexportedIntField(t *testing.T, v any, field string) int {
+	t.Helper()
+	rv := reflect.ValueOf(v)
+	if rv.Kind() == reflect.Pointer {
+		rv = rv.Elem()
+	}
+	fv := rv.FieldByName(field)
+	if !fv.IsValid() {
+		t.Fatalf("field %q not found on %T", field, v)
+	}
+	return int(fv.Int())
+}
+
+// TestBuildHuhFieldSelectHeightApplied verifies Field.Height reaches the
+// underlying huh.Select field.
+func TestBuildHuhFieldSelectHeightApplied(t *testing.T) {
+	f := Field{Key: "s", Kind: FieldSelect, Height: 20, Options: []Option{{Value: "a", Label: "A"}}}
+	huhField, _, err := buildHuhField(f, false)
+	if err != nil {
+		t.Fatalf("buildHuhField returned error: %v", err)
+	}
+	if got := unexportedIntField(t, huhField, "height"); got != 20 {
+		t.Errorf("select height = %d, want 20", got)
+	}
+}
+
+// TestBuildHuhFieldSelectHeightUnsetLeavesDefault verifies Height: 0 (unset)
+// does not force a height onto the field.
+func TestBuildHuhFieldSelectHeightUnsetLeavesDefault(t *testing.T) {
+	f := Field{Key: "s", Kind: FieldSelect, Options: []Option{{Value: "a", Label: "A"}}}
+	huhField, _, err := buildHuhField(f, false)
+	if err != nil {
+		t.Fatalf("buildHuhField returned error: %v", err)
+	}
+	if got := unexportedIntField(t, huhField, "height"); got != 0 {
+		t.Errorf("select height = %d, want 0 (unset)", got)
+	}
+}
+
+// TestBuildHuhFieldMultiselectHeightApplied verifies Field.Height reaches
+// the underlying huh.MultiSelect field.
+func TestBuildHuhFieldMultiselectHeightApplied(t *testing.T) {
+	f := Field{Key: "m", Kind: FieldMultiselect, Height: 15, Options: []Option{{Value: "a", Label: "A"}}}
+	huhField, _, err := buildHuhField(f, false)
+	if err != nil {
+		t.Fatalf("buildHuhField returned error: %v", err)
+	}
+	if got := unexportedIntField(t, huhField, "height"); got != 15 {
+		t.Errorf("multiselect height = %d, want 15", got)
+	}
+}
+
+// TestRunShowHelpTriState smoke-tests all three ShowHelp states through Run
+// (nil/true/false) don't panic; internal huh group.showHelp is unexported so
+// this only exercises the code path, mirroring TestRunOptionsDefaults.
+func TestRunShowHelpTriState(t *testing.T) {
+	trueVal := true
+	falseVal := false
+
+	for name, showHelp := range map[string]*bool{
+		"nil":   nil,
+		"true":  &trueVal,
+		"false": &falseVal,
+	} {
+		t.Run(name, func(t *testing.T) {
+			ctx, cancel := context.WithTimeout(context.Background(), 1*time.Millisecond)
+			defer cancel()
+
+			fields := []Field{{Key: "test", Kind: FieldInput, Title: "Test"}}
+			_, _ = Run(ctx, "Title", fields, RunOptions{ShowHelp: showHelp})
+		})
 	}
 }
