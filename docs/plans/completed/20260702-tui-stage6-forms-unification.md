@@ -438,10 +438,15 @@ Quit/help-slot mechanics inside `ask` (moved verbatim from the raw sites, once):
 
 ### Task 8: [Final] Documentation and plan close-out
 
-- [ ] confirm no user-facing `docs/reference/` pages describe form keybindings that
-      changed (quit keys are preserved, so expected: none)
-- [ ] update `AGENTS.md` Critical Patterns only if implementation surfaced a new trap
-- [ ] move this plan to `docs/plans/completed/`
+- [x] confirm no user-facing `docs/reference/` pages describe form keybindings that
+      changed (quit keys are preserved, so expected: none) — verified: the only
+      keybinding mentions in `docs/reference/` are `ui.md` (cmdbrowser run-mode
+      bindings), `browser.md` (docstui quit table), and `i18n.md` (`tui.help.action.quit`
+      key), none of which describe huh form quit keys
+- [x] update `AGENTS.md` Critical Patterns only if implementation surfaced a new trap —
+      the Forms unification entry was already added in a prior task's commit
+      (912bb443); no new trap surfaced in this task
+- [x] move this plan to `docs/plans/completed/`
 
 ## Post-Completion
 
