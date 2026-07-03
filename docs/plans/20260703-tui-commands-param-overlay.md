@@ -576,24 +576,24 @@ from `res.Values`. `command.go` passes it into `runOpts.PrefilledParams`.
 - Modify: `docs/internals/tui-keymap.md`
 - Modify: `AGENTS.md`
 
-- [ ] `packages.md`: § tui — `FormOverlay.MaxHeight` (huh group-viewport scroll,
+- [x] `packages.md`: § tui — `FormOverlay.MaxHeight` (huh group-viewport scroll,
       supersedes the single-field height caveat for opted-in consumers); §
       cmdbrowser — `RunFormSpec`/`Result.Values`, the run-form state machine
       (harvest-and-quit vs EditSpec's write-and-stay), `RunForm == nil` fallback;
       § cli/command — the in-TUI param-form flow, `prepareParams` extraction, and
       `runOpts.PrefilledParams` short-circuit; note confirm stays post-exit
-- [ ] `ui.md`: describe that the `dwe commands` browser now collects params in an
+- [x] `ui.md`: describe that the `dwe commands` browser now collects params in an
       in-TUI overlay (≥80-col frame path); state the two behaviour facts — params
       are entered over the browser, the command still executes after the TUI exits,
       and the narrow (<80-col) fallback keeps the flat exit-then-form flow
-- [ ] `tui-keymap.md`: extend the form-overlay arbitration note to cover the
+- [x] `tui-keymap.md`: extend the form-overlay arbitration note to cover the
       command param form (esc = cancel selection/back to browser, no run; enter =
       submit → run; ctrl+c = TUI hard-quit) — same arbitration as vars edit
-- [ ] `AGENTS.md`: extend the `tui.Plugin` Critical Pattern bullet with the
+- [x] `AGENTS.md`: extend the `tui.Plugin` Critical Pattern bullet with the
       `FormOverlay.MaxHeight` scroll option and the `RunFormSpec` harvest-and-quit
       variant (distinct from `EditSpec`); note `Result.Values` + `PrefilledParams`
       as the harvest channel
-- [ ] run `make build` (embedded-docs re-sync) + `make test` — must pass before
+- [x] run `make build` (embedded-docs re-sync) + `make test` — must pass before
       Task 6
 
 ### Task 6: Verify acceptance criteria

@@ -381,6 +381,22 @@ settled and needs no new routing:
   footer hint row (`enter save · esc cancel`, hardcoded English) is the single
   authoritative key hint.
 
+The **`dwe commands` param form** (the commands-param follow-up) reuses this exact
+arbitration — it is the same `tui.FormOverlay`, just a different consumer
+(`cmdbrowser`'s run-form machine instead of the vars edit machine):
+
+- **`esc` = cancel the parameter entry** → back to the browser, no command runs,
+  browser cursor / expansion / filter state intact (`OverlayClosedMsg` clears the
+  run-form state).
+- **`enter` (submit) = harvest the params, close the overlay, and quit the browser**
+  via the same `tui.CloseOverlayMsg{Token}` pop; the command then runs *after*
+  alt-screen teardown (it streams docker / pipeline output to the plain terminal).
+- **`ctrl+c` = hard-quit the whole TUI**, unchanged.
+- The footer hint row reads **`enter run · esc cancel`** (vs vars edit's `enter save
+  · esc cancel`); huh's own help line is suppressed identically. A `confirmation:`
+  prompt is **not** pulled into the overlay — it still shows its yes/no in the plain
+  terminal after the TUI exits, immediately before the run.
+
 ---
 
 ## 6. Mouse vocabulary
