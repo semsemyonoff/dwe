@@ -7,6 +7,7 @@ package cmdbrowser
 import (
 	"fmt"
 
+	"github.com/semsemyonoff/dwe/internal/core/ui/ask"
 	"github.com/semsemyonoff/dwe/internal/core/ui/tui"
 	"github.com/semsemyonoff/dwe/internal/core/ui/widgets"
 	"github.com/semsemyonoff/dwe/internal/shared/i18n"
@@ -84,6 +85,37 @@ type Item struct {
 	Inspect func(width int) string
 }
 
+// EditSpec turns ModeEdit's Enter/double-click into an in-TUI form overlay
+// (edit-and-stay) instead of the exit-and-return commit. The plugin builds the
+// form via BuildForm, hosts it as a capturing [tui.FormOverlay], and on submit
+// calls Commit synchronously to persist the edit and produce the replacement
+// row + status flash. It is opt-in per Options: nil preserves today's
+// exit-and-return ModeEdit behaviour byte-for-byte (see Options.Edit).
+//
+// Both closures are supplied by the caller (cli/vars): the plugin stays
+// decoupled from what an "edit" writes. BuildForm returns an *ask.Form (built
+// but not run — the plugin drives its huh model directly); Commit receives the
+// harvested ask.Result. The idx is the index into the items slice passed to Run.
+type EditSpec struct {
+	// BuildForm builds the edit form for items[idx]. A non-nil error aborts the
+	// edit with an error flash and opens no overlay.
+	BuildForm func(idx int) (*ask.Form, error)
+	// Commit persists the submitted form for items[idx] and returns the
+	// replacement row + confirmation flash. A non-nil error closes the overlay
+	// and shows an error flash instead of replacing the row.
+	Commit func(idx int, res ask.Result) (CommitOutcome, error)
+}
+
+// CommitOutcome is the result of an EditSpec.Commit: the replacement row for the
+// edited index (fresh value + Type badge + Inspect closure) and the status-line
+// flash confirming the write (e.g. `✓ db.host = "db.internal"`). A var edit
+// never adds or removes leaves, so only the one row is replaced — the tree shape
+// and cursor stay put.
+type CommitOutcome struct {
+	Item  Item
+	Flash string
+}
+
 // Options carries already-resolved configuration. Defaulting happens in the
 // config accessors (config.UICommands*); auto-defaulting int/bool fields
 // here would silently overwrite legitimate opt-outs. Callers without a
@@ -94,6 +126,12 @@ type Options struct {
 	ShowTypeBadges       bool
 	IncludePrivate       bool
 	Mode                 Mode
+
+	// Edit enables in-TUI edit-and-stay in ModeEdit: Enter opens a form overlay
+	// instead of committing a Result and quitting. nil (the default) keeps the
+	// legacy exit-and-return behaviour, so ModeRun / ModeInspect and any ModeEdit
+	// caller that does not supply an EditSpec are untouched.
+	Edit *EditSpec
 
 	// Translator + Locale carry the i18n context into the framework so the
 	// help modal can localize its section/action labels. They are the only

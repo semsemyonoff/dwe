@@ -446,32 +446,32 @@ cli/vars closures (captured: `cmd`, `flags`, `items`/`leaves`, `inspectCache`):
 - Create: `internal/core/ui/cmdbrowser/edit_test.go`
 - Modify: `internal/core/ui/cmdbrowser/plugin_golden_test.go`
 
-- [ ] add `EditSpec` / `CommitOutcome` / `Options.Edit` (verify the
+- [x] add `EditSpec` / `CommitOutcome` / `Options.Edit` (verify the
       `cmdbrowser → ask` import is cycle-free); `onSelect` in ModeEdit with
       `Edit != nil` opens the overlay (build → `FormOverlay` → pending +
       `Init` cmd); `Edit == nil` keeps today's commit-and-quit exactly
-- [ ] implement the edit state machine per Technical Details (forward all
+- [x] implement the edit state machine per Technical Details (forward all
       msgs to `fo.Update` while editing, re-mark pending, poll `State` after
       EVERY forwarded msg — completion lands on the follow-up async msg, not
       the Enter key msg (see Context) — commit / abort / `OverlayClosedMsg`
       handling, `items[idx]` in-place replacement including the derived list
       row and inspect closure)
-- [ ] add the status flash (docstui pattern: `statusFlashDuration = 2s`,
+- [x] add the status flash (docstui pattern: `statusFlashDuration = 2s`,
       generation-gated `statusFlashClearMsg`); flash text takes over
       `StatusContext()` while set; success `✓ …` / error `✗ …` single-line,
       truncated to the status segment width
-- [ ] write tests (mirror `inspect_test.go`): overlay opens on Enter with
+- [x] write tests (mirror `inspect_test.go`): overlay opens on Enter with
       `CapturesInput`; no double-push across republish; `OverlayClosedMsg`
       clears edit state and a later raw key cannot resurrect the form;
       commit success replaces the item, sets the flash, and returns a
       `CloseOverlayMsg` cmd (test pumps the huh cmds after Enter until the
       commit fires — async completion); commit error → error flash + close;
       stale-gen flash clear is ignored; `BuildForm` error → flash, no overlay
-- [ ] write golden tests: full-frame with the form overlay OPEN at
+- [x] write golden tests: full-frame with the form overlay OPEN at
       80/99/100 × 24 via `RenderFrameAfterSetup` (stub `EditSpec` with a
       deterministic form; no blink ticks delivered); confirm existing
       no-edit goldens are byte-identical
-- [ ] run `make test` — must pass before task 4
+- [x] run `make test` — must pass before task 4
 
 ### Task 4: cli/vars wiring — shared field builder, silent write core, EditSpec closures
 

@@ -69,6 +69,21 @@ type browser struct {
 	inspect        *inspectState
 	inspectPending bool
 
+	// edit is the form-overlay sub-state (non-nil while a ModeEdit edit form is
+	// open); it captures via Overlay.CapturesInput just like inspect, so the two
+	// stay mutually exclusive (ModeEdit opens edit on Enter, inspect on `i` — but
+	// while either overlay captures, the other cannot be opened). editPending
+	// gates PendingOverlay so each republish (blink tick, resize, typed key)
+	// yields exactly one overlay value. OverlayClosedMsg (esc) clears both.
+	edit        *editState
+	editPending bool
+
+	// flash is a transient status-line confirmation (commit ✓ / ✗ or a BuildForm
+	// error) that takes over StatusContext() while set. flashGen tags each flash
+	// so a stale clear tick from an earlier flash never wipes a newer one.
+	flash    string
+	flashGen int
+
 	skipConfirm bool
 
 	result Result
@@ -161,7 +176,15 @@ func (b *browser) Panels() []tui.Panel {
 // Resize implements tui.Plugin. The Frame owns geometry; the browser caches
 // the overall inner body region. Per-panel inner regions arrive separately
 // through ViewPanel.
-func (b *browser) Resize(body tui.Region) { b.body = body }
+func (b *browser) Resize(body tui.Region) {
+	b.body = body
+	// An open edit form is sized to the body; re-apply its width and re-mark it
+	// pending so the Frame republishes the resized snapshot.
+	if b.edit != nil {
+		b.edit.fo.Resize(body)
+		b.editPending = true
+	}
+}
 
 // CapturingInput implements tui.Plugin. The browser takes raw input without an
 // overlay only while the inline filter is active. The inspect overlay captures
@@ -176,6 +199,11 @@ func (b *browser) Result() any { return b.result }
 // focused group's breadcrumb and a `[--yes ON]` indicator when skip-confirm is
 // on. It is called every render so the indicator is reactive.
 func (b *browser) StatusContext() string {
+	// A transient commit/error flash takes over the whole status segment while
+	// set (docstui pattern); the breadcrumb resumes once the clear tick fires.
+	if b.flash != "" {
+		return b.flash
+	}
 	out := b.breadcrumb()
 	if b.skipConfirm && b.opts.Mode == ModeRun {
 		out += "  " + paletteSuccess().Bold(true).Render("[--yes ON]")
@@ -232,6 +260,19 @@ func (b *browser) itemNoun(count int) string {
 // filtering — `i` is typed into the query, not dispatched), so the filter branch
 // takes precedence and inspect only runs when no filter is active.
 func (b *browser) Update(msg tea.Msg) tea.Cmd {
+	// Flash-clear ticks are handled regardless of edit state (the tick may fire
+	// after a new edit opened) and must never be forwarded to an open form.
+	if m, ok := msg.(statusFlashClearMsg); ok {
+		if m.gen == b.flashGen {
+			b.flash = ""
+		}
+		return nil
+	}
+	// While an edit form overlay is open it owns every message (typed keys and
+	// async ticks alike) — route them to the form state machine.
+	if b.edit != nil {
+		return b.updateEdit(msg)
+	}
 	switch m := msg.(type) {
 	case tui.WheelMsg:
 		// Coalesced wheel for the open inspect overlay (sentinel panel) scrolls the
@@ -662,6 +703,15 @@ func (b *browser) updateInspect(msg tea.KeyPressMsg) tea.Cmd {
 // grows. The overlay is built fresh from the current viewport so the live scroll
 // position is always reflected.
 func (b *browser) PendingOverlay() (tui.Overlay, bool) {
+	// Edit and inspect are mutually exclusive; the edit overlay takes precedence
+	// while an edit is in progress. Each drains exactly once per republish.
+	if b.edit != nil {
+		if !b.editPending {
+			return tui.Overlay{}, false
+		}
+		b.editPending = false
+		return b.edit.fo.Overlay(), true
+	}
 	if b.inspect == nil || !b.inspectPending {
 		return tui.Overlay{}, false
 	}

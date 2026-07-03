@@ -10,6 +10,7 @@ import (
 	tea "charm.land/bubbletea/v2"
 	"charm.land/lipgloss/v2"
 
+	"github.com/semsemyonoff/dwe/internal/core/ui/ask"
 	"github.com/semsemyonoff/dwe/internal/core/ui/tui"
 	"github.com/semsemyonoff/dwe/internal/core/ui/widgets"
 	"github.com/semsemyonoff/dwe/internal/shared/i18n"
@@ -127,6 +128,75 @@ func TestBrowser_FullFrameGolden(t *testing.T) {
 				assertGolden(t, "frame_"+mc.name+"_"+itoa(w)+".golden", plain)
 			})
 		}
+	}
+}
+
+// goldenEditFormItems are flat (no dotted IDs) so the root focus lists them
+// directly, giving a selectable row to open the edit form over without expanding
+// a group first.
+func goldenEditFormItems() []Item {
+	return []Item{
+		{ID: "host", Description: "database host", Type: "string"},
+		{ID: "port", Description: "database port", Type: "int"},
+	}
+}
+
+// TestBrowser_EditFormOverlayGolden pins the full frame with the edit form
+// overlay OPEN at the width buckets 80 / 99 / 100 × 24. The overlay is driven
+// open through the real Frame (Tab focuses the list, Enter opens the form via
+// onSelect → openEdit). No blink ticks are delivered (RenderFrameAfterSetup
+// discards Init cmds), so the virtual cursor stays in its initial state and the
+// render is byte-deterministic. Regenerate with
+// make embedded-docs && UPDATE_GOLDEN=1 go test ./internal/core/ui/cmdbrowser/...
+func TestBrowser_EditFormOverlayGolden(t *testing.T) {
+	items := goldenEditFormItems()
+	for _, w := range []int{80, 99, 100} {
+		t.Run("width_"+itoa(w), func(t *testing.T) {
+			opts := DefaultOptions()
+			opts.Mode = ModeEdit
+			opts.Edit = &EditSpec{
+				BuildForm: func(idx int) (*ask.Form, error) {
+					show := false
+					return ask.Build("edit "+items[idx].ID, []ask.Field{{
+						Key:         "value",
+						Kind:        ask.FieldInput,
+						Title:       items[idx].ID,
+						Description: "current: " + items[idx].Description,
+						Default:     items[idx].Description,
+					}}, ask.RunOptions{ShowHelp: &show})
+				},
+				Commit: func(idx int, res ask.Result) (CommitOutcome, error) {
+					return CommitOutcome{Item: items[idx]}, nil
+				},
+			}
+			b := newBrowser("dwe", items, opts)
+			content, err := tui.RenderFrameAfterSetup(b, tui.RunOptions{
+				Brand:   "dwe",
+				Project: "demo",
+				Mouse:   true,
+			}, w, goldenFrameHeight,
+				tea.KeyPressMsg{Code: tea.KeyTab},
+				tea.KeyPressMsg{Code: tea.KeyEnter},
+			)
+			if err != nil {
+				t.Fatalf("RenderFrameAfterSetup: %v", err)
+			}
+			plain := stripANSI(content)
+
+			rows := strings.Split(plain, "\n")
+			if len(rows) != goldenFrameHeight {
+				t.Errorf("row count = %d, want terminal height %d", len(rows), goldenFrameHeight)
+			}
+			for i, row := range rows {
+				if got := lipgloss.Width(row); got != w {
+					t.Errorf("row %d width = %d, want frame width %d: %q", i, got, w, row)
+				}
+			}
+			if !strings.Contains(plain, "esc cancel") {
+				t.Errorf("form overlay hint row missing from frame:\n%s", plain)
+			}
+			assertGolden(t, "frame_editform_"+itoa(w)+".golden", plain)
+		})
 	}
 }
 

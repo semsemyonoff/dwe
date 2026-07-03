@@ -250,6 +250,12 @@ func (b *browser) onSelect() (tea.Cmd, bool) {
 	if !ok {
 		return nil, true
 	}
+	// ModeEdit with an EditSpec opens the in-TUI form overlay (edit-and-stay)
+	// instead of committing a Result and quitting. Edit == nil (and every other
+	// mode) keeps the exit-and-return commit exactly as before.
+	if b.opts.Mode == ModeEdit && b.opts.Edit != nil {
+		return b.openEdit(idx), true
+	}
 	b.result = Result{Idx: idx, Action: actionForMode(b.opts.Mode), SkipConfirm: b.skipConfirm}
 	return tea.Quit, true
 }
