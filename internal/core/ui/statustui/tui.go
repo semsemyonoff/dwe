@@ -2,33 +2,21 @@ package statustui
 
 import (
 	"context"
-	"fmt"
+	"slices"
 	"strings"
 	"time"
 
-	"charm.land/bubbles/v2/help"
-	"charm.land/bubbles/v2/key"
 	"charm.land/bubbles/v2/spinner"
 	"charm.land/bubbles/v2/viewport"
 	tea "charm.land/bubbletea/v2"
-	"github.com/charmbracelet/lipgloss"
-	"github.com/charmbracelet/x/term"
+	"charm.land/lipgloss/v2"
 
 	"github.com/semsemyonoff/dwe/internal/core/project/config"
 	"github.com/semsemyonoff/dwe/internal/core/project/stack"
 	"github.com/semsemyonoff/dwe/internal/core/ui/render"
 	"github.com/semsemyonoff/dwe/internal/core/ui/styles"
 	"github.com/semsemyonoff/dwe/internal/core/workflow/deploy/journal"
-)
-
-// Test seams for TTY detection and terminal size queries.
-// Tests override these via t.Cleanup to avoid actual terminal calls.
-var (
-	isTerminalFn = term.IsTerminal
-
-	terminalSizeFn = func() (w, h int, err error) {
-		return term.GetSize(1) // stdout is typically fd 1
-	}
+	"github.com/semsemyonoff/dwe/internal/shared/i18n"
 )
 
 // Deps carries the dependencies needed by the statustui model. It mirrors
@@ -38,12 +26,17 @@ type Deps struct {
 	State       *journal.ProjectState
 	Tracked     []string
 	SvcDeploys  map[string]*config.ServiceDeployConfig
-	ProjectName string
 	DockerCfg   *config.DockerConfig
 	Topo        map[string][]string
 	TopoStatus  map[string]render.NodeStatus
 	IsRunning   stack.ContainerCheckFn
 	ProjectRoot string
+
+	// Translator / Locale resolve the Frame's help-modal display strings. A
+	// nil Translator falls back to i18n.NopTranslator; an empty Locale falls
+	// back to "en" (both handled by tui.Run).
+	Translator i18n.Translator
+	Locale     string
 }
 
 // tab represents one rendered section of the status view.
@@ -52,17 +45,17 @@ type tab struct {
 	content string
 }
 
-// model is the bubbletea program backing the status TUI. It manages five
-// tabs (Services, Deploy, Topology, Git, Daemons) with a shared viewport,
-// title bar, tab strip, and status bar.
+// model holds the status dashboard's state: five tabs (Services, Deploy,
+// Topology, Git, Daemons) with a shared viewport, spinner, and reload
+// generations. It is rendered by the plugin (plugin.go) as body content
+// inside the shared tui.Frame; it no longer implements tea.Model itself.
 type model struct {
 	deps            Deps
 	ctx             context.Context
 	tabs            []tab
+	sectionAnchors  [][]int // per-tab 0-based line offsets of stacked sub-tables
 	active          int
 	viewport        viewport.Model
-	help            help.Model
-	keys            keyMap
 	spinner         spinner.Model
 	loading         bool
 	reloadActive    int
@@ -70,34 +63,15 @@ type model struct {
 	loadGen         uint64
 	reloadGen       uint64
 	reloading       bool
-	width           int
-	height          int
 	reloadAt        time.Time
 	healthIndicator string // cached; recomputed only on tab reload
 }
 
-// Compile-time assertion that model implements tea.Model.
-var _ tea.Model = (*model)(nil)
-
-// viewportHeight returns the viewport height for the current terminal size and
-// help state. The layout is: titleBar(1) + tabStrip(1) + divider(1) + viewport
-// + statusBar. statusBar grows when help is expanded (ShowAll=true).
-func (m *model) viewportHeight() int {
-	// 3 fixed chrome rows above the viewport.
-	fixed := 3
-	// Measure the actual rendered status bar height so that any overflow
-	// (leftSide + helpText > available width) is accounted for correctly.
-	statusRows := lipgloss.Height(m.renderStatusBar())
-	return max(0, m.height-fixed-statusRows)
-}
-
-// newModel creates a new status TUI model. It initializes the viewport,
-// help, spinner, and other UI components.
-func newModel(d Deps, ctx context.Context, w, h int) *model {
-	// Initial viewport height: h - 3 chrome rows - 1 compact help row = h-4.
-	vp := viewport.New(viewport.WithWidth(w-2), viewport.WithHeight(h-4))
-	hm := help.New()
-	hm.SetWidth(w)
+// newModel creates a new status dashboard model. It initializes the viewport
+// and spinner; the Frame owns geometry and resizes the viewport on every
+// render via Plugin.ViewPanel.
+func newModel(d Deps, ctx context.Context) *model {
+	vp := viewport.New()
 	sp := spinner.New()
 	sp.Spinner = spinner.Dot
 
@@ -107,12 +81,8 @@ func newModel(d Deps, ctx context.Context, w, h int) *model {
 		tabs:     []tab{},
 		active:   0,
 		viewport: vp,
-		help:     hm,
-		keys:     defaultKeyMap(),
 		spinner:  sp,
 		loading:  true,
-		width:    w,
-		height:   h,
 	}
 }
 
@@ -135,120 +105,62 @@ func (m *model) setActiveTab(idx int) {
 	m.viewport.GotoTop()
 }
 
-// Update processes messages and returns the updated model and a command.
-func (m *model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
-	switch msg := msg.(type) {
-	case tea.WindowSizeMsg:
-		m.width = msg.Width
-		m.height = msg.Height
-		m.viewport.SetWidth(m.width - 2)
-		m.viewport.SetHeight(m.viewportHeight())
-		if len(m.tabs) > m.active {
-			m.viewport.SetContent(m.tabs[m.active].content)
-		}
-		return m, nil
-
-	case tabsLoadedMsg:
-		// Drop stale messages from older reloads
-		if msg.gen != m.loadGen {
-			return m, nil
-		}
-		m.tabs = msg.tabs
-		m.reloadAt = msg.loadedAt
-		m.healthIndicator = msg.healthIndicator
-		m.loading = false
-		m.reloading = false
-
-		// Restore YOffset if this is a reload that matches the active tab
-		if m.reloadGen == msg.gen && m.reloadActive == m.active && len(m.tabs) > m.active {
-			m.viewport.SetContent(m.tabs[m.active].content)
-			m.viewport.SetYOffset(m.reloadYOffset)
-		} else if len(m.tabs) > m.active {
-			m.viewport.SetContent(m.tabs[m.active].content)
-			m.viewport.GotoTop()
-		}
-		m.reloadGen = 0
-		return m, nil
-
-	case tea.KeyPressMsg:
-		// Always allow quit, even while loading.
-		if key.Matches(msg, m.keys.Quit) {
-			return m, tea.Quit
-		}
-		// Guard against tab navigation before tabs are loaded.
-		if len(m.tabs) == 0 {
-			return m, nil
-		}
-		// Handle tab navigation
-		switch {
-		case key.Matches(msg, m.keys.NextTab):
-			m.setActiveTab((m.active + 1) % len(m.tabs))
-			return m, nil
-
-		case key.Matches(msg, m.keys.PrevTab):
-			m.setActiveTab((m.active - 1 + len(m.tabs)) % len(m.tabs))
-			return m, nil
-
-		case key.Matches(msg, m.keys.Tab1):
-			m.setActiveTab(0)
-			return m, nil
-
-		case key.Matches(msg, m.keys.Tab2):
-			m.setActiveTab(1)
-			return m, nil
-
-		case key.Matches(msg, m.keys.Tab3):
-			m.setActiveTab(2)
-			return m, nil
-
-		case key.Matches(msg, m.keys.Tab4):
-			m.setActiveTab(3)
-			return m, nil
-
-		case key.Matches(msg, m.keys.Tab5):
-			m.setActiveTab(4)
-			return m, nil
-
-		case key.Matches(msg, m.keys.Reload):
-			m.loadGen++
-			m.reloadActive = m.active
-			m.reloadYOffset = m.viewport.YOffset()
-			m.reloadGen = m.loadGen
-			m.reloading = true
-			return m, buildTabsCmd(m.ctx, m.deps, m.loadGen)
-
-		case key.Matches(msg, m.keys.Help):
-			m.help.ShowAll = !m.help.ShowAll
-			m.viewport.SetHeight(m.viewportHeight())
-			return m, nil
-		}
-
-	case spinner.TickMsg:
-		var cmd tea.Cmd
-		m.spinner, cmd = m.spinner.Update(msg)
-		return m, cmd
+// jumpSection scrolls the viewport to the next (dir > 0) or previous (dir < 0)
+// sub-table anchor of the active tab, so ] / [ hop between the stacked tables
+// (Apps / Tools / Infra on Services) instead of line-scrolling. A tab with
+// fewer than two anchors, or a jump past the first/last table, is a no-op
+// (jumps clamp at the ends, matching how ↑/↓ clamp — no wrap-around).
+func (m *model) jumpSection(dir int) {
+	if m.active < 0 || m.active >= len(m.sectionAnchors) {
+		return
 	}
-
-	// Delegate unmatched messages to viewport for scroll handling
-	var cmd tea.Cmd
-	m.viewport, cmd = m.viewport.Update(msg)
-	return m, cmd
+	anchors := m.sectionAnchors[m.active]
+	if len(anchors) < 2 {
+		return
+	}
+	cur := m.viewport.YOffset()
+	target := -1
+	if dir > 0 {
+		for _, a := range anchors {
+			if a > cur {
+				target = a
+				break
+			}
+		}
+	} else {
+		for _, a := range slices.Backward(anchors) {
+			if a < cur {
+				target = a
+				break
+			}
+		}
+	}
+	if target < 0 {
+		return
+	}
+	m.viewport.SetYOffset(target)
 }
 
-// renderTitleBar renders the branded title bar — `{▪} dwe · <project> · Status`
-// in accent+bold, wrapped in lipgloss with padding.
-func (m *model) renderTitleBar() string {
-	text := render.LogoMarkPlain() + " dwe · " + m.deps.ProjectName + " · Status"
-	return lipgloss.NewStyle().
-		Width(m.width).
-		Padding(0, 1).
-		Foreground(lipgloss.Color(styles.ColorAccent())).
-		Bold(true).
-		Render(text)
+// Tab-strip layout, shared by renderTabStrip (drawing) and mouse.go's
+// tabHitZones (click mapping) so the two can never drift on spacing. The active
+// tab is bracketed by tabActiveLeft/Right; tabActiveDecoWidth derives their
+// combined column width from the glyphs themselves.
+const (
+	tabStripLeadPad = 1   // leading blank column before the first tab
+	tabStripGap     = 3   // blank columns between adjacent tabs
+	tabActiveLeft   = "▌" // decoration bracketing the active tab
+	tabActiveRight  = "▐"
+)
+
+// tabActiveDecoWidth is the combined display width of the active-tab decoration.
+func tabActiveDecoWidth() int {
+	return lipgloss.Width(tabActiveLeft) + lipgloss.Width(tabActiveRight)
 }
 
 // renderTabStrip renders the tab navigation with active tab highlighted.
-// Active tab is wrapped in ▌ ▐ with accent styling; inactive tabs are dimmed.
+// Active tab is bracketed by tabActiveLeft/Right with accent styling; inactive
+// tabs are dimmed. Layout constants are shared with mouse.go's tabHitZones, so
+// click hit-zones match what is drawn here.
 func (m *model) renderTabStrip() string {
 	if len(m.tabs) == 0 {
 		return ""
@@ -261,7 +173,7 @@ func (m *model) renderTabStrip() string {
 			parts = append(parts, lipgloss.NewStyle().
 				Foreground(lipgloss.Color(styles.ColorAccent())).
 				Bold(true).
-				Render("▌"+t.title+"▐"))
+				Render(tabActiveLeft+t.title+tabActiveRight))
 		} else {
 			// Inactive tab, dimmed
 			parts = append(parts, lipgloss.NewStyle().
@@ -270,104 +182,6 @@ func (m *model) renderTabStrip() string {
 		}
 	}
 
-	strip := strings.Join(parts, "   ")
-	// Pad the strip and add a left padding
-	return " " + strip
-}
-
-// renderStatusBar renders the bottom status bar with health indicator on the left
-// and help text on the right.
-func (m *model) renderStatusBar() string {
-	// Build left side: health indicator + loaded timestamp
-	var leftParts []string
-	switch {
-	case m.loading:
-		leftParts = append(leftParts, "·", "loading…")
-	case m.reloading:
-		leftParts = append(leftParts, "·", "reloading…")
-	case len(m.tabs) > 0 && m.deps.Cfg != nil:
-		leftParts = append(leftParts, m.healthIndicator)
-		if !m.reloadAt.IsZero() {
-			elapsed := time.Since(m.reloadAt)
-			leftParts = append(leftParts, fmt.Sprintf("loaded %v ago", elapsed.Round(time.Second)))
-		}
-	}
-
-	leftSide := strings.Join(leftParts, "  ")
-
-	// Build right side: help text, constrained to the remaining available
-	// width so leftSide + rightSide never exceeds the content area.
-	availHelp := max(0, m.width-2-lipgloss.Width(leftSide))
-	helpModel := m.help
-	helpModel.SetWidth(availHelp)
-	rightSide := helpModel.View(m.keys)
-
-	// Padding(0,1) adds 1 col each side = 2 total; subtract from available content width.
-	spacerW := max(0, m.width-2-lipgloss.Width(leftSide)-lipgloss.Width(rightSide))
-	status := lipgloss.JoinHorizontal(lipgloss.Top,
-		leftSide,
-		lipgloss.NewStyle().Width(spacerW).Render(""),
-		rightSide)
-
-	return lipgloss.NewStyle().
-		Width(m.width).
-		Padding(0, 1).
-		Render(status)
-}
-
-// View renders the current state as a tea.View with alt-screen enabled.
-func (m *model) View() tea.View {
-	// Terminal too small check
-	if m.width < 60 || m.height < 16 {
-		msg := "terminal too small (need 60×16)"
-		centered := lipgloss.NewStyle().
-			Width(m.width).
-			Height(m.height).
-			Align(lipgloss.Center).
-			AlignVertical(lipgloss.Center).
-			Render(msg)
-		v := tea.NewView(centered)
-		v.AltScreen = true
-		return v
-	}
-
-	// Show loading state
-	if m.loading {
-		spinnerView := m.spinner.View()
-		// Loading view only has a title bar (1 row); spinner fills the rest.
-		centered := lipgloss.NewStyle().
-			Width(m.width).
-			Height(m.height - 1).
-			Align(lipgloss.Center).
-			AlignVertical(lipgloss.Center).
-			Render(spinnerView)
-		titleBar := m.renderTitleBar()
-		content := lipgloss.JoinVertical(lipgloss.Top, titleBar, centered)
-		v := tea.NewView(content)
-		v.AltScreen = true
-		return v
-	}
-
-	// Normal view: title / tabs / divider / viewport / status bar
-	titleBar := m.renderTitleBar()
-	tabStrip := m.renderTabStrip()
-
-	// Render divider line — a full-width horizontal separator.
-	dividerLine := lipgloss.NewStyle().
-		Foreground(lipgloss.Color(styles.ColorMuted())).
-		Render(strings.Repeat("─", m.width-2))
-
-	statusBar := m.renderStatusBar()
-	viewportContent := m.viewport.View()
-
-	content := lipgloss.JoinVertical(lipgloss.Top,
-		titleBar,
-		tabStrip,
-		dividerLine,
-		viewportContent,
-		statusBar)
-
-	v := tea.NewView(content)
-	v.AltScreen = true
-	return v
+	strip := strings.Join(parts, strings.Repeat(" ", tabStripGap))
+	return strings.Repeat(" ", tabStripLeadPad) + strip
 }

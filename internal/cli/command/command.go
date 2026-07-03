@@ -160,7 +160,7 @@ Without an id, an interactive selector lists public commands. With a group prefi
 					return "", errCommandsListed
 				}
 			}
-			id, err := resolveCommandID(reg, args, false, cfg.Project.Name, selector)
+			id, err := resolveCommandID(reg, args, false, cfg, selector)
 			if err != nil {
 				if errors.Is(err, widgets.ErrCancelled) || errors.Is(err, errCommandsListed) {
 					return nil

@@ -66,3 +66,16 @@ ui:
   tui.help.action.locale.english: "Show English"
   tui.help.action.tree.collapse: "Collapse / up to parent"
   tui.help.action.tree.expand: "Expand / into first child"
+  # Status dashboard custom section and actions (registered by statustui plugin).
+  # section.next/prev jump the viewport between a tab's stacked sub-tables
+  # (tab / shift+tab), reusing the shared Navigation section label.
+  tui.help.action.section.next: "Next table"
+  tui.help.action.section.prev: "Previous table"
+  tui.help.section.tabs: "Tabs"
+  tui.help.action.tab.prev: "Previous tab"
+  tui.help.action.tab.next: "Next tab"
+  tui.help.action.tab.1: "Services"
+  tui.help.action.tab.2: "Deploy"
+  tui.help.action.tab.3: "Topology"
+  tui.help.action.tab.4: "Git"
+  tui.help.action.tab.5: "Daemons"

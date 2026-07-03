@@ -5,6 +5,7 @@ import (
 	"io"
 	"strings"
 
+	"github.com/semsemyonoff/dwe/internal/core/project/config"
 	"github.com/semsemyonoff/dwe/internal/core/ui/styles"
 )
 
@@ -28,6 +29,21 @@ func SelectorTitle(projectName, base string) string {
 // uniformly without conflicting escape codes.
 func BrandedSelectorTitle(projectName, base string) string {
 	return LogoMarkPlain() + " " + SelectorTitle(projectName, base)
+}
+
+// BrandedTitleForConfig composes the branded full-screen-TUI title for a loaded
+// config: `{▪} DWE · <project> · <base>`, using the **bare project name**
+// (`cfg.Project.Name`, nil-safe) as the middot segment. It is the single source
+// the status / docs / commands TUIs share for their status-line brand, so they
+// cannot drift — in particular it takes the *config*, not a pre-resolved name
+// string, so the compose project name (e.g. `dwe_tbm`) can never leak into a
+// title where the display name (`tbm`) belongs.
+func BrandedTitleForConfig(cfg *config.DweConfig, base string) string {
+	name := ""
+	if cfg != nil {
+		name = cfg.Project.Name
+	}
+	return BrandedSelectorTitle(name, base)
 }
 
 // PrintSelectorHeader writes a styled subheader line containing the branded

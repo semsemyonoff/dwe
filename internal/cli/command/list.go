@@ -223,10 +223,10 @@ func makeBrowserSelector(cfg *config.DweConfig, reg *usercommands.Registry, mode
 //     filtered to that group.
 //   - One arg that is neither: returns an error.
 //
-// projectName, when non-empty, is prepended to the selector title as
-// "<project> · Select command [...]" so the TUI header makes clear which
-// dwe project is active.
-func resolveCommandID(reg *usercommands.Registry, args []string, includePrivate bool, projectName string, selector selectCommandFn) (string, error) {
+// cfg feeds the selector title through the shared render.BrandedTitleForConfig
+// helper ("{▪} DWE · <project> · Commands [...]") so the TUI header advertises
+// the active dwe project identically to the status and docs TUIs.
+func resolveCommandID(reg *usercommands.Registry, args []string, includePrivate bool, cfg *config.DweConfig, selector selectCommandFn) (string, error) {
 	if len(args) == 1 {
 		arg := args[0]
 		// Exact command ID — use directly without selector.
@@ -243,7 +243,7 @@ func resolveCommandID(reg *usercommands.Registry, args []string, includePrivate 
 		if len(defs) == 0 {
 			return "", fmt.Errorf("command %q not found", arg)
 		}
-		return selector(defs, uirender.BrandedSelectorTitle(projectName, "Commands ("+arg+")"))
+		return selector(defs, uirender.BrandedTitleForConfig(cfg, "Commands ("+arg+")"))
 	}
 	// No arg — show full list.
 	var defs []*usercommands.CommandDef
@@ -255,7 +255,7 @@ func resolveCommandID(reg *usercommands.Registry, args []string, includePrivate 
 	if len(defs) == 0 {
 		return "", fmt.Errorf("no commands available")
 	}
-	return selector(defs, uirender.BrandedSelectorTitle(projectName, "Commands"))
+	return selector(defs, uirender.BrandedTitleForConfig(cfg, "Commands"))
 }
 
 // parseSetFlags parses --set key=value flags into a map.

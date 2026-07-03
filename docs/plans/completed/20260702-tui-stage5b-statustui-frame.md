@@ -256,21 +256,21 @@ even though they no-op on a single panel. Acceptable — not a blocker; noted in
 - Create: `internal/core/ui/statustui/plugin.go`
 - Create: `internal/core/ui/statustui/plugin_test.go`
 
-- [ ] define the plugin type holding the model state as a **field** (`m *model`, NOT embedded
+- [x] define the plugin type holding the model state as a **field** (`m *model`, NOT embedded
       — see the coexistence rule; embedding would promote the legacy `tea.Model` methods).
       The legacy `*model` (View/legacy Update/keys.go) stays intact and launchable this whole task.
-- [ ] implement trivial methods: `Panels()` (one panel, weight 1), `Result()`→nil,
+- [x] implement trivial methods: `Panels()` (one panel, weight 1), `Result()`→nil,
       `PendingOverlay()`→`{},false`, `CapturingInput()`→false
-- [ ] implement `Close()` to call the stored `cancel` (context teardown)
-- [ ] implement `Init()` preserving the current `loadGen++ / Batch(spinner.Tick, buildTabsCmd)`
-- [ ] **stub the remaining Plugin methods with zero-value bodies so the assertion compiles
+- [x] implement `Close()` to call the stored `cancel` (context teardown)
+- [x] implement `Init()` preserving the current `loadGen++ / Batch(spinner.Tick, buildTabsCmd)`
+- [x] **stub the remaining Plugin methods with zero-value bodies so the assertion compiles
       NOW**: `Resize`, `Update`→`nil`, `ViewPanel`→`""`, `StatusContext`→`""`,
       `Actions`→`nil`, `HandleAction`→`(nil,false)`. Tasks 2–6 fill in the real bodies.
       (The old `*model` methods `Update(tea.Msg)(tea.Model,tea.Cmd)` / `View() tea.View` do
       NOT satisfy `tui.Plugin`, so embedding alone will not compile — explicit stubs are required.)
-- [ ] add compile-time assertion `var _ tui.Plugin = (*plugin)(nil)`
-- [ ] write tests: Panels shape, Result/PendingOverlay/CapturingInput values, Close cancels ctx
-- [ ] run tests — must pass before next task
+- [x] add compile-time assertion `var _ tui.Plugin = (*plugin)(nil)`
+- [x] write tests: Panels shape, Result/PendingOverlay/CapturingInput values, Close cancels ctx
+- [x] run tests — must pass before next task
 
 ### Task 2: Body rendering — ViewPanel (tab strip + viewport + loading)
 
@@ -279,22 +279,22 @@ even though they no-op on a single panel. Acceptable — not a blocker; noted in
 - Modify: `internal/core/ui/statustui/plugin.go`
 - Modify: `internal/core/ui/statustui/plugin_test.go`
 
-- [ ] implement `Resize(body tui.Region)` on the plugin: cache inner body (the legacy model's
+- [x] implement `Resize(body tui.Region)` on the plugin: cache inner body (the legacy model's
       own sizing path is left untouched — it is still the live launch path until Task 7).
       Do NOT call the legacy `viewportHeight` (it measures `renderStatusBar`, which the Frame
       replaces); compute the plugin's viewport size from `inner` minus tab-strip + divider rows,
       applying dimensions in `ViewPanel` via `viewport.SetDimensions(inner.Width, innerBodyHeight)`
       (docstui pattern: width recomputed on `WindowSizeMsg`, dims applied in `ViewPanel`)
-- [ ] implement `ViewPanel(id, inner)` on the plugin: size the viewport to the inner body, then
+- [x] implement `ViewPanel(id, inner)` on the plugin: size the viewport to the inner body, then
       render tab strip (top row) + divider + `viewport.View()`; centered spinner while
       `loading`/`reloading` (no separate full-screen view). Reuse the model's existing tab-strip
       render helper (do NOT delete it — the legacy `View()` still calls it until Task 7)
-- [ ] **do NOT delete any legacy code this task** — `View()`, `renderTitleBar()`, the status-bar
+- [x] **do NOT delete any legacy code this task** — `View()`, `renderTitleBar()`, the status-bar
       chrome, `keys.go`, and the `var _ tea.Model` assertion all stay (they keep the legacy launch
       path compiling); their removal is the Task 7 cutover
-- [ ] write golden tests via `tui.RenderFrame` at buckets 60/79/80/99/100 (odd+even):
+- [x] write golden tests via `tui.RenderFrame` at buckets 60/79/80/99/100 (odd+even):
       normal view + loading view (drives the plugin through the Frame, not the legacy model)
-- [ ] run tests — must pass before next task
+- [x] run tests — must pass before next task
 
 ### Task 3: StatusContext (middle status-line segment)
 
@@ -302,11 +302,11 @@ even though they no-op on a single panel. Acceptable — not a blocker; noted in
 - Modify: `internal/core/ui/statustui/plugin.go`
 - Modify: `internal/core/ui/statustui/plugin_test.go`
 
-- [ ] implement `StatusContext()` returning the old `renderStatusBar` leftParts: health
+- [x] implement `StatusContext()` returning the old `renderStatusBar` leftParts: health
       indicator + "loaded X ago", plus "loading…"/"reloading…" states
-- [ ] ensure it is reactive (recomputed each render from current state, like docstui)
-- [ ] write tests: loading state, reloading state, loaded-with-timestamp, empty/nil-cfg
-- [ ] run tests — must pass before next task
+- [x] ensure it is reactive (recomputed each render from current state, like docstui)
+- [x] write tests: loading state, reloading state, loaded-with-timestamp, empty/nil-cfg
+- [x] run tests — must pass before next task
 
 ### Task 4: Actions & HandleAction (Tabs section + reload)
 
@@ -315,23 +315,23 @@ even though they no-op on a single panel. Acceptable — not a blocker; noted in
 - Modify: `internal/core/ui/statustui/plugin.go`
 - Create: `internal/core/ui/statustui/actions_test.go`
 
-- [ ] define action IDs: `actionTabPrev`, `actionTabNext`, `actionTab1`..`actionTab5`; the
+- [x] define action IDs: `actionTabPrev`, `actionTabNext`, `actionTab1`..`actionTab5`; the
       `Tabs` section label constant
-- [ ] implement `Actions(reg)`: `RegisterStandard(reg, tui.ActionReload)` + register Tabs:
+- [x] implement `Actions(reg)`: `RegisterStandard(reg, tui.ActionReload)` + register Tabs:
       prev=`["left","h"]`, next=`["right","l"]`, jumps 1..5=`["1"]`..`["5"]`
-- [ ] implement `HandleAction(a)` on the plugin (operating on the held `m *model`): prev/next
+- [x] implement `HandleAction(a)` on the plugin (operating on the held `m *model`): prev/next
       wrap via `m.setActiveTab((active±1+n)%n)`; jumps via `m.setActiveTab(k)`; reload triggers
       the existing reload path (loadGen++/reloadGen/reloadActive/reloadYOffset/buildTabsCmd);
       return `(cmd, true)` when handled
-- [ ] confirm `setActiveTab` still resets `reloadGen` and calls `GotoTop` (verbatim)
-- [ ] **do NOT delete `keys.go` this task** — the legacy `model.Update` still references
+- [x] confirm `setActiveTab` still resets `reloadGen` and calls `GotoTop` (verbatim)
+- [x] **do NOT delete `keys.go` this task** — the legacy `model.Update` still references
       `m.keys`/`defaultKeyMap` and is the live launch path until Task 7. `keys.go` is deleted at
       the Task 7 cutover, together with the legacy `Update`
-- [ ] write table-driven tests: each action → expected active index / reload trigger;
+- [x] write table-driven tests: each action → expected active index / reload trigger;
       wrap-around at ends; jump out-of-range ignored
-- [ ] write a help-modal golden (`tui.BuildHelp`) asserting Tabs section present,
+- [x] write a help-modal golden (`tui.BuildHelp`) asserting Tabs section present,
       reload=`ctrl+r`, no `r` binding
-- [ ] run tests — must pass before next task
+- [x] run tests — must pass before next task
 
 ### Task 5: Preserve reload + YOffset through the Frame Update loop
 
@@ -339,21 +339,21 @@ even though they no-op on a single panel. Acceptable — not a blocker; noted in
 - Modify: `internal/core/ui/statustui/plugin.go`
 - Modify: `internal/core/ui/statustui/plugin_test.go`
 
-- [ ] implement `Update(msg)`: keep the reload/`YOffset` state machine **verbatim** — the
+- [x] implement `Update(msg)`: keep the reload/`YOffset` state machine **verbatim** — the
       `tabsLoadedMsg` handling (stale-gen drop, tabs assign, loadedAt/healthIndicator, YOffset
       restore when `reloadGen==gen && reloadActive==active`, else `GotoTop`) and `spinner.TickMsg`
-- [ ] the **plugin's** `WindowSizeMsg` handling must NOT copy the legacy sizing (old
+- [x] the **plugin's** `WindowSizeMsg` handling must NOT copy the legacy sizing (old
       `tui.go:141–149`), which called `viewportHeight()`→`lipgloss.Height(renderStatusBar())`
       and sized from raw `m.width-2` (ignores Frame border/panel chrome). Instead store the
       Frame-supplied width and let `ViewPanel`/`Resize` own viewport dimensions (docstui pattern:
       recompute width on `WindowSizeMsg`, apply `SetDimensions` in `ViewPanel`). The legacy
       `model.Update`'s own `WindowSizeMsg` block is left intact (live launch path until Task 7).
       "Verbatim" applies ONLY to the reload/`YOffset`/`setActiveTab` logic — never to sizing.
-- [ ] ensure unmatched messages still delegate to `viewport.Update` for scroll
-- [ ] port the existing `tui_test.go` reload/YOffset assertions to drive `Plugin.Update`
+- [x] ensure unmatched messages still delegate to `viewport.Update` for scroll
+- [x] port the existing `tui_test.go` reload/YOffset assertions to drive `Plugin.Update`
       directly (reload preserves YOffset on the same tab; switching tabs resets to top)
-- [ ] port loading→loaded transition + stale-generation-drop tests
-- [ ] run tests — must pass before next task
+- [x] port loading→loaded transition + stale-generation-drop tests
+- [x] run tests — must pass before next task
 
 ### Task 6: Mouse — tab clicks & wheel scroll
 
@@ -361,15 +361,15 @@ even though they no-op on a single panel. Acceptable — not a blocker; noted in
 - Modify: `internal/core/ui/statustui/plugin.go` (or new `mouse.go`)
 - Modify: `internal/core/ui/statustui/plugin_test.go`
 
-- [ ] handle `tui.PanelClickMsg`: `Y==0` → map `X` to tab index by measuring rendered
+- [x] handle `tui.PanelClickMsg`: `Y==0` → map `X` to tab index by measuring rendered
       tab-label segment widths (reuse the tab-strip render so hit-zones match); `setActiveTab`
-- [ ] ignore clicks past the last tab / on leading pad; `Y>0` clicks are no-ops
-- [ ] handle `tui.WheelMsg{Panel: panelMain, Delta}` → `viewport.ScrollBy(Delta*step)`;
+- [x] ignore clicks past the last tab / on leading pad; `Y>0` clicks are no-ops
+- [x] handle `tui.WheelMsg{Panel: panelMain, Delta}` → `viewport.ScrollBy(Delta*step)`;
       wheel never changes focus
-- [ ] handle `tui.FocusChangedMsg` if needed (single panel → effectively inert; keep minimal)
-- [ ] write table-driven tests: click X across each tab boundary → correct index; click past
+- [x] handle `tui.FocusChangedMsg` if needed (single panel → effectively inert; keep minimal)
+- [x] write table-driven tests: click X across each tab boundary → correct index; click past
       end → no change; wheel Delta → expected YOffset delta
-- [ ] run tests — must pass before next task
+- [x] run tests — must pass before next task
 
 ### Task 7: Cutover — rewrite run.go to launch the plugin + delete the legacy launch path
 
@@ -383,26 +383,26 @@ task so the package compiles at the end.
 - Delete: `internal/core/ui/statustui/keys.go`
 - Modify: `internal/core/ui/statustui/run_test.go`
 
-- [ ] add `Translator i18n.Translator` and `Locale string` fields to `statustui.Deps`
+- [x] add `Translator i18n.Translator` and `Locale string` fields to `statustui.Deps`
       (`tui.go`) — the source for `RunOptions` (they do not exist today)
-- [ ] add `var runStatusTUI = tui.Run` seam
-- [ ] rewrite `Run(ctx, deps)`: create `runCtx, cancel`; build the plugin (holds the model +
+- [x] add `var runStatusTUI = tui.Run` seam
+- [x] rewrite `Run(ctx, deps)`: create `runCtx, cancel`; build the plugin (holds the model +
       `cancel`, `Close`→cancel); resolve `tr := deps.Translator` (nil → `i18n.NopTranslator{}`);
       call `runStatusTUI(plugin, tui.RunOptions{Brand, Project: deps.ProjectName, Mouse: true, Translator: tr, Locale: deps.Locale})`
-- [ ] return `tui.ErrTooNarrow` up unchanged; pass through cancel/panic; nil on clean quit
+- [x] return `tui.ErrTooNarrow` up unchanged; pass through cancel/panic; nil on clean quit
       (replace the old `mapRunError`; `widgets.RunWithPromptHooks` is inside `tui.Run` — do NOT
       wrap again)
-- [ ] remove the now-dead `isTerminalFn` / `terminalSizeFn` seams from `run.go` (`tui.Run` owns
+- [x] remove the now-dead `isTerminalFn` / `terminalSizeFn` seams from `run.go` (`tui.Run` owns
       the TTY + size gates; these are no longer called). Update any test referencing them.
-- [ ] **now delete the legacy launch path** (nothing references it after the run.go flip):
+- [x] **now delete the legacy launch path** (nothing references it after the run.go flip):
       `model.View()`, the legacy `model.Update(tea.Msg)(tea.Model,tea.Cmd)`, `renderTitleBar()`,
       the status-bar chrome, the `var _ tea.Model = (*model)(nil)` assertion (`tui.go:80`), and
       `keys.go` (`keyMap`/`defaultKeyMap`). Keep the `model` struct fields + the helpers the
       plugin reuses (`setActiveTab`, `buildTabsCmd`, tab-strip render, `leftParts`)
-- [ ] `go build ./internal/core/ui/statustui/...` — must compile with no legacy references
-- [ ] write tests via the `runStatusTUI` seam: ErrTooNarrow passthrough; clean-quit→nil;
+- [x] `go build ./internal/core/ui/statustui/...` — must compile with no legacy references
+- [x] write tests via the `runStatusTUI` seam: ErrTooNarrow passthrough; clean-quit→nil;
       Close cancels the context on every exit path
-- [ ] run tests — must pass before next task
+- [x] run tests — must pass before next task
 
 ### Task 8: Caller fallback in cli/status (narrow → plain text)
 
@@ -410,16 +410,16 @@ task so the package compiles at the end.
 - Modify: `internal/cli/status/status.go`
 - Modify: `internal/cli/status/status_test.go`
 
-- [ ] populate the new `Deps` i18n fields where `deps` is built (≈status.go:249):
+- [x] populate the new `Deps` i18n fields where `deps` is built (≈status.go:249):
       `Translator: flags.I18n` (a `*i18n.Store`, which implements `i18n.Translator`),
       `Locale: flags.Locale` (`flags` is in scope in the RunE closure)
-- [ ] wrap the `runStatusTUIFn(cmd.Context(), deps)` call (≈status.go:261): on
+- [x] wrap the `runStatusTUIFn(cmd.Context(), deps)` call (≈status.go:261): on
       `errors.Is(err, tui.ErrTooNarrow)` return `renderDefaultStatus(cmd, sc, noFlags)`
-- [ ] leave `shouldUseTUI` (TTY / `--no-tui` / sections / `TERM=dumb`) unchanged
-- [ ] write a test: inject `tui.ErrTooNarrow` via `runStatusTUIFn` seam → assert plain-text
+- [x] leave `shouldUseTUI` (TTY / `--no-tui` / sections / `TERM=dumb`) unchanged
+- [x] write a test: inject `tui.ErrTooNarrow` via `runStatusTUIFn` seam → assert plain-text
       `renderDefaultStatus` output is produced (not an error)
-- [ ] write/confirm a test: non-error TUI return → no plain fallback; other errors propagate
-- [ ] run tests — must pass before next task
+- [x] write/confirm a test: non-error TUI return → no plain fallback; other errors propagate
+- [x] run tests — must pass before next task
 
 ### Task 9: i18n keys for the new status actions
 
@@ -428,33 +428,35 @@ task so the package compiles at the end.
 - Modify: `internal/shared/i18n/known_keys.go`
 - Modify (verify): `internal/shared/i18n/coverage_test.go`
 
-- [ ] add `tui.help.section.tabs` and **enumerate every action key** the registry derives
+- [x] add `tui.help.section.tabs` and **enumerate every action key** the registry derives
       (help key = `tui.help.action.<actionID>`, per `help.go:73,77`): `tui.help.action.tab.prev`,
       `tui.help.action.tab.next`, and the **five** jump keys `tui.help.action.tab.1` …
       `tui.help.action.tab.5` (match the exact action-ID *string values* from Task 4, not the
       Go constant names). Reuse the existing `tui.help.action.reload` (do NOT re-add it).
-- [ ] give each jump key a static English description (e.g. "Services", "Deploy", "Topology",
+- [x] give each jump key a static English description (e.g. "Services", "Deploy", "Topology",
       "Git", "Daemons") — the registry `Binding.Desc` is fixed, unlike the old per-tab keymap
-- [ ] add every new key to `KnownUIKeys` in `known_keys.go` — `coverage_test.go` enforces a
+- [x] add every new key to `KnownUIKeys` in `known_keys.go` — `coverage_test.go` enforces a
       **strict bidirectional** en.yml ⟺ `KnownUIKeys` match (missing OR extra key fails), so
       the two lists must be exactly in sync
-- [ ] confirm `internal/core/validate/i18n/unknown_ui_key.go` needs no change (allowlist is
+- [x] confirm `internal/core/validate/i18n/unknown_ui_key.go` needs no change (allowlist is
       `known_keys.go`); keep storage/hashing English
-- [ ] run `go test ./internal/shared/i18n/...` (coverage/known-key tests) — must pass
-- [ ] run tests — must pass before next task
+- [x] run `go test ./internal/shared/i18n/...` (coverage/known-key tests) — must pass
+- [x] run tests — must pass before next task
 
 ### Task 10: Golden frame + help + integration test sweep
 
 **Files:**
 - Modify: `internal/core/ui/statustui/plugin_test.go` (or a dedicated `plugin_golden_test.go`)
 
-- [ ] add/confirm golden frame tests at 60/79/80/99/100 (odd+even): normal view, loading
+- [x] add/confirm golden frame tests at 60/79/80/99/100 (odd+even): normal view, loading
       view, help modal (Tabs + `ctrl+r`, no `r`) — mirror `docstui/plugin_golden_test.go`
-- [ ] add an async-preservation test: `tabsLoadedMsg` delivered through the Frame Update
+- [x] add an async-preservation test: `tabsLoadedMsg` delivered through the Frame Update
       loop updates the plugin (drive via `tui.RenderFrame` + injected msg, or Frame test seam)
-- [ ] remove obsolete assertions in old `tui_test.go` that referenced the deleted title bar /
+- [x] remove obsolete assertions in old `tui_test.go` that referenced the deleted title bar /
       status bar / too-small full-screen view; keep behavior assertions ported in Task 5
-- [ ] run `go test ./internal/core/ui/statustui/...` — all green
+      (already clean — Task 7's cutover removed the legacy launch path and its tests in the
+      same compile-clean step; `tui_test.go` carries only surviving-helper assertions)
+- [x] run `go test ./internal/core/ui/statustui/...` — all green
 
 ### Task 11: Update internal docs
 
@@ -462,32 +464,35 @@ task so the package compiles at the end.
 - Modify: `docs/internals/tui-keymap.md`
 - Modify: `docs/internals/packages.md`
 
-- [ ] `tui-keymap.md` § 1.3 "Status dashboard": replace the old (`tab`/`shift+tab`/`1-5`/`r`)
+- [x] `tui-keymap.md` § 1.3 "Status dashboard": replace the old (`tab`/`shift+tab`/`1-5`/`r`)
       table with `left`/`h` prev, `right`/`l` next, `1`–`5` jump, `ctrl+r` reload; note
       `tab`/`shift+tab` are framework focus no-ops on the single-panel surface; document the
       intentional removal of `tab`=next-tab (mirror the docs `r`→`ctrl+r` note); note the
       accepted help-modal wart (focus.next/prev listed but inert)
-- [ ] `packages.md`: fold statustui into the existing `tui.Plugin` framework write-up —
+- [x] `packages.md`: fold statustui into the existing `tui.Plugin` framework write-up —
       statustui joins cmdbrowser/docstui as a Frame consumer; single-panel + tabs-as-body-
       content model; narrow→`renderDefaultStatus` fallback; reload/YOffset preserved
-- [ ] run `make build` so `internal/core/docs/embedded/` copies are regenerated (not stale)
-- [ ] run `go test ./internal/core/docs/...` (docs subsystem) — must pass
+- [x] run `make build` so `internal/core/docs/embedded/` copies are regenerated (not stale)
+- [x] run `go test ./internal/core/docs/...` (docs subsystem) — must pass
 
 ### Task 12: Verify acceptance criteria
-- [ ] all `Plugin` methods implemented; `var _ tui.Plugin` assertion compiles
-- [ ] reload + `YOffset` preserved (Task 5 tests green); tab semantics preserved
-- [ ] mouse: tab clicks + wheel work (Task 6 tests green)
-- [ ] narrow terminal → plain text fallback (Task 8 test green)
-- [ ] help modal shows Tabs + `ctrl+r`, no `r` (Task 4/10 goldens green)
-- [ ] no v1 lipgloss reintroduced; `render/` untouched; `liveui` untouched
-- [ ] run full suite: `make test`
-- [ ] run `make lint` — clean
+- [x] all `Plugin` methods implemented; `var _ tui.Plugin` assertion compiles
+- [x] reload + `YOffset` preserved (Task 5 tests green); tab semantics preserved
+- [x] mouse: tab clicks + wheel work (Task 6 tests green)
+- [x] narrow terminal → plain text fallback (Task 8 test green)
+- [x] help modal shows Tabs + `ctrl+r`, no `r` (Task 4/10 goldens green)
+- [x] no v1 lipgloss reintroduced; `render/` untouched; `liveui` untouched
+- [x] run full suite: `make test`
+- [x] run `make lint` — clean
 
 ### Task 13: [Final] Wrap up
-- [ ] update CLAUDE.md only if a genuinely new load-bearing pattern emerged (else leave the
+- [x] update CLAUDE.md only if a genuinely new load-bearing pattern emerged (else leave the
       `tui.Plugin` bullet to cover it — statustui is now listed as a Frame consumer)
-- [ ] confirm `docs/internals/*` embedded copies are current (`make build` ran in Task 11)
-- [ ] move both Stage 5 plans to `docs/plans/completed/` (5a already there if landed first)
+      (updated the `tui.Plugin` bullet: statustui now listed as completing all three Frame
+      consumers, and its narrow-terminal plain-text fallback recorded as a third fallback
+      variant alongside cmdbrowser's `runFallback` and docstui's `ErrTooNarrow` error mapping)
+- [x] confirm `docs/internals/*` embedded copies are current (`make build` ran in Task 11)
+- [x] move both Stage 5 plans to `docs/plans/completed/` (5a already there if landed first)
 
 ## Post-Completion
 

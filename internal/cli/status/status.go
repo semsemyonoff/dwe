@@ -3,6 +3,7 @@ package status
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"os"
@@ -15,6 +16,8 @@ import (
 	"github.com/semsemyonoff/dwe/internal/core/project/stack"
 	"github.com/semsemyonoff/dwe/internal/core/ui/render"
 	"github.com/semsemyonoff/dwe/internal/core/ui/statustui"
+	"github.com/semsemyonoff/dwe/internal/core/ui/tui"
+	"github.com/semsemyonoff/dwe/internal/core/ui/widgets"
 	"github.com/semsemyonoff/dwe/internal/core/usercommands"
 	"github.com/semsemyonoff/dwe/internal/core/workflow/deploy"
 	"github.com/semsemyonoff/dwe/internal/core/workflow/deploy/journal"
@@ -86,7 +89,6 @@ type statusContext struct {
 	State       *journal.ProjectState
 	Tracked     []string
 	SvcDeploys  map[string]*config.ServiceDeployConfig
-	ProjectName string
 	DockerCfg   *config.DockerConfig
 	Topo        map[string][]string
 	TopoStatus  map[string]render.NodeStatus
@@ -135,7 +137,6 @@ func loadStatusContext(flags *cmdctx.RootFlags, errW io.Writer) (*statusContext,
 		State:       state,
 		Tracked:     tracked,
 		SvcDeploys:  svcDeploys,
-		ProjectName: projectName,
 		DockerCfg:   dockerCfg,
 		Topo:        topo,
 		TopoStatus:  topoStatus,
@@ -251,14 +252,28 @@ in the default view.`,
 					State:       sc.State,
 					Tracked:     sc.Tracked,
 					SvcDeploys:  sc.SvcDeploys,
-					ProjectName: sc.ProjectName,
 					DockerCfg:   sc.DockerCfg,
 					Topo:        sc.Topo,
 					TopoStatus:  sc.TopoStatus,
 					IsRunning:   sc.IsRunning,
 					ProjectRoot: sc.ProjectRoot,
+					Translator:  flags.I18n,
+					Locale:      flags.Locale,
 				}
-				return runStatusTUIFn(cmd.Context(), deps)
+				if err := runStatusTUIFn(cmd.Context(), deps); err != nil {
+					if errors.Is(err, tui.ErrTooNarrow) {
+						return renderDefaultStatus(cmd, sc, noFlags)
+					}
+					// A user-initiated cancel (OS SIGINT/SIGTERM, surfaced by
+					// tui.Run as widgets.ErrCancelled) is a clean exit, matching
+					// the pre-Frame mapRunError behavior and the sibling
+					// cmdbrowser caller.
+					if errors.Is(err, widgets.ErrCancelled) {
+						return nil
+					}
+					return err
+				}
+				return nil
 			}
 			return renderDefaultStatus(cmd, sc, noFlags)
 		},

@@ -155,18 +155,55 @@ and viewport panels.
 
 **Status dashboard** (`internal/core/ui/statustui/`):
 
-| Key            | Current description |
-|----------------|---------------------|
-| `tab`, `right` | Next tab            |
-| `shift+tab`, `left` | Prev tab       |
-| `1`            | Services tab        |
-| `2`            | Deploy tab          |
-| `3`            | Topology tab        |
-| `4`            | Git tab             |
-| `5`            | Daemons tab         |
-| `r`            | Reload              |
+As of TUI Stage 5b this is a `tui.Plugin` (single panel: tab strip + shared
+viewport). Plugin-local actions registered via `Actions()`, **Tabs** section:
 
-Tab-jump keys (`1`–`5`) are plugin-local and have no stdlib equivalent.
+| Key                   | Description |
+|-----------------------|-------------|
+| `tab`, `right`, `l`   | Next tab    |
+| `shift+tab`, `left`, `h` | Prev tab |
+| `1`                   | Services tab |
+| `2`                   | Deploy tab  |
+| `3`                   | Topology tab |
+| `4`                   | Git tab     |
+| `5`                   | Daemons tab |
+
+…and a **Navigation** section for jumping between a tab's stacked sub-tables
+(Services stacks Apps/Tools/Infra):
+
+| Key   | Description    |
+|-------|----------------|
+| `]`   | Next table     |
+| `[`   | Previous table |
+
+Tab-jump keys (`1`–`5`) and prev/next are plugin-local and have no stdlib
+equivalent. `tab.prev`/`tab.next` no-op (return `(nil, true)`) until the first
+load completes, mirroring the legacy guard against navigating before `m.tabs` is
+populated. `section.next`/`section.prev` are a no-op on a tab with `<2` anchors.
+
+**Reload**: `ctrl+r` only (stdlib `ActionReload`). The pre-migration `r` binding
+is dropped — no alias kept, mirroring the docs browser's `r`→`ctrl+r` change.
+
+**Keymap (`tab`/`shift+tab` freed on a single-panel surface)**: the framework
+`focus.next`/`focus.prev` built-ins (§1.1) are meaningless when a plugin declares
+a single panel, so `newFrame`/`BuildHelp` call `Registry.DisableFocusNav()`
+(via `newRegistryForPanels`) **before** the plugin's `Actions` hook — this strips
+the built-ins (also removing them from the `?`-modal) and frees `tab`/`shift+tab`.
+statustui rebinds them to next/prev tab, and puts the within-tab table jump on
+`]`/`[`. So the help modal shows a real Tabs + Navigation keymap, not the dead
+focus rows.
+
+**Status line**: the Frame owns the branded left zone and the `?` help hint
+(right); the plugin's `StatusContext()` supplies only the middle segment (health
+indicator + "loaded X ago" / loading / reloading state), replacing the old
+hand-rolled title bar + status bar chrome. The brand is composed via
+`render.BrandedTitleForConfig(d.Cfg, "Status")` (the shared TUI-title helper);
+`RunOptions.Project` is left empty.
+
+**Narrow terminal fallback**: below the framework's minimum width, `tui.Run`
+returns `tui.ErrTooNarrow`; `statustui.Run` passes it up and `cli/status`
+renders the plain-text status (`renderDefaultStatus`) instead of a blocking
+"too small" screen — mirrors `--no-tui` output.
 
 ---
 

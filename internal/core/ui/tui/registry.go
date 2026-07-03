@@ -184,6 +184,77 @@ func (r *Registry) Register(a Action, b Binding) error {
 	return nil
 }
 
+// newRegistryForPanels builds the framework registry for a plugin declaring
+// panelCount panels: on a single-panel surface it strips the focus-cycle
+// built-ins (see [Registry.DisableFocusNav]) so tab / shift+tab are free and not
+// advertised. Shared by [newFrame] and [BuildHelp] so the live keymap and the
+// help modal cannot diverge on the panel-count threshold.
+func newRegistryForPanels(panelCount int) *Registry {
+	r := NewRegistry()
+	if panelCount <= 1 {
+		r.DisableFocusNav()
+	}
+	return r
+}
+
+// DisableFocusNav removes the framework focus-cycle built-ins ([ActionFocusNext]
+// and [ActionFocusPrev], bound to tab / shift+tab). It exists for single-panel
+// surfaces, where panel focus can never move: the built-ins would be dead keys
+// advertised in the help modal's Navigation section. Removing them frees tab /
+// shift+tab so the plugin can rebind them to something meaningful (e.g. jumping
+// between stacked sub-sections) and drops the misleading rows from help.
+//
+// It MUST be called before the plugin's Actions hook — otherwise the plugin's
+// attempt to claim tab / shift+tab collides with the still-registered built-ins.
+// [newFrame] and [BuildHelp] call it automatically when the plugin declares a
+// single panel; direct-registry tests must mirror that.
+func (r *Registry) DisableFocusNav() {
+	r.unregister(ActionFocusNext)
+	r.unregister(ActionFocusPrev)
+}
+
+// unregister removes an action and all of its dispatch state (registration
+// order, key/alias bindings, and its section membership). A section that becomes
+// empty is dropped from the section order too, so help never renders an empty
+// header. Unknown actions are a no-op.
+func (r *Registry) unregister(a Action) {
+	b, ok := r.bindings[a]
+	if !ok {
+		return
+	}
+	delete(r.bindings, a)
+	for i, x := range r.order {
+		if x == a {
+			r.order = append(r.order[:i], r.order[i+1:]...)
+			break
+		}
+	}
+	for _, k := range b.Keys {
+		delete(r.keys, k)
+	}
+	for _, alias := range b.Aliases {
+		delete(r.keys, alias)
+	}
+	acts := r.sections[b.Section]
+	for i, x := range acts {
+		if x == a {
+			acts = append(acts[:i], acts[i+1:]...)
+			break
+		}
+	}
+	if len(acts) == 0 {
+		delete(r.sections, b.Section)
+		for i, s := range r.sectionOrder {
+			if s == b.Section {
+				r.sectionOrder = append(r.sectionOrder[:i], r.sectionOrder[i+1:]...)
+				break
+			}
+		}
+	} else {
+		r.sections[b.Section] = acts
+	}
+}
+
 // Match resolves a physical key to its action. The bool reports whether any
 // binding claims the key. Both canonical Keys and Aliases are consulted —
 // locked in Stage 1.

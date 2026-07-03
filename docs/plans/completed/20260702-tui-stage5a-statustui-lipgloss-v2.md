@@ -128,48 +128,58 @@ keeps the diff reviewable and the golden comparison meaningful.
 **Files:**
 - Modify: `internal/core/ui/statustui/tui.go`
 
-- [ ] replace the import `github.com/charmbracelet/lipgloss` with `charm.land/lipgloss/v2`
+- [x] replace the import `github.com/charmbracelet/lipgloss` with `charm.land/lipgloss/v2`
       and run `goimports` to fix grouping/ordering
-- [ ] port `viewportHeight()`: `lipgloss.Height(...)` measurement to the v2 equivalent
-- [ ] port `renderTitleBar()`: `NewStyle().Width().Padding().Foreground(lipgloss.Color(styles.ColorAccent())).Bold().Render()`
-- [ ] port `renderTabStrip()`: active/inactive tab styles (`Foreground(lipgloss.Color(...))`, `Bold`)
-- [ ] port `renderStatusBar()`: `lipgloss.Width(...)` measurements, spacer `NewStyle().Width().Render("")`,
+- [x] port `viewportHeight()`: `lipgloss.Height(...)` measurement to the v2 equivalent
+      (source-compatible — `lipgloss.Height` is a v2 package func, unchanged)
+- [x] port `renderTitleBar()`: `NewStyle().Width().Padding().Foreground(lipgloss.Color(styles.ColorAccent())).Bold().Render()`
+      (source-compatible — `Color`/`Foreground`/`Bold`/`Padding`/`Width` unchanged in v2)
+- [x] port `renderTabStrip()`: active/inactive tab styles (`Foreground(lipgloss.Color(...))`, `Bold`)
+- [x] port `renderStatusBar()`: `lipgloss.Width(...)` measurements, spacer `NewStyle().Width().Render("")`,
       `lipgloss.JoinHorizontal(lipgloss.Top, ...)`, outer `NewStyle().Width().Padding().Render()`
-- [ ] port `View()`: divider style, too-small view (`Align`/`AlignVertical`/`Center`),
+- [x] port `View()`: divider style, too-small view (`Align`/`AlignVertical`/`Center`),
       loading view + `lipgloss.JoinVertical(lipgloss.Top, ...)`
-- [ ] confirm no other `statustui` file imports v1 lipgloss:
+- [x] confirm no other `statustui` file imports v1 lipgloss:
       `grep -rn "charmbracelet/lipgloss\"" internal/core/ui/statustui/` returns nothing
-- [ ] build the package: `go build ./internal/core/ui/statustui/...`
+- [x] build the package: `go build ./internal/core/ui/statustui/...`
 
 ### Task 2: Verify golden/behavior parity
 
 **Files:**
 - Modify (only if unavoidable): `internal/core/ui/statustui/tui_test.go`
 
-- [ ] run the suite: `make embedded-docs` once, then `go test ./internal/core/ui/statustui/...`
-- [ ] confirm every existing golden passes **byte-identical** (no re-baselining)
-- [ ] if a golden shifts: treat as a mapping bug — fix the v2 call so output matches; do NOT
+- [x] run the suite: `make embedded-docs` once, then `go test ./internal/core/ui/statustui/...`
+- [x] confirm every existing golden passes **byte-identical** (no re-baselining)
+- [x] if a golden shifts: treat as a mapping bug — fix the v2 call so output matches; do NOT
       accept the shift. Only if a v2 API difference is genuinely unavoidable, update the
       golden AND add a `⚠️`-prefixed note here explaining the exact difference and why it is
       forced (e.g. a documented v2 rendering change), so Stage 5b inherits the rationale
-- [ ] verify existing behavior tests (reload/YOffset/tab-switch, loading, too-small,
+      (no golden shifted — all pass byte-identical, no re-baselining needed)
+- [x] verify existing behavior tests (reload/YOffset/tab-switch, loading, too-small,
       spinner) still pass unchanged
-- [ ] run `make lint` — `golangci-lint` clean (no unused import, gofmt/goimports satisfied)
+- [x] run `make lint` — `golangci-lint` clean (no unused import, gofmt/goimports satisfied)
 
 ### Task 3: Verify acceptance criteria
-- [ ] verify the only change is the lipgloss import + its call sites in `tui.go`
+
+- [x] verify the only change is the lipgloss import + its call sites in `tui.go`
       (`git diff --stat` shows `tui.go` and at most a golden note in `tui_test.go`)
-- [ ] verify no layout/keymap/async/reload behavior changed (goldens + behavior tests green)
-- [ ] verify `render/` (v1 lipgloss) was NOT touched: `git diff --name-only` excludes
-      `internal/core/ui/render/`
-- [ ] run full suite: `make test`
-- [ ] run `make lint`
+      (`git diff 3e007e50 950a97b1` shows only `tui.go` changed — the v2 API was
+      source-compatible so the import swap alone covered all 22 call sites; `tui_test.go`
+      untouched, no golden note needed)
+- [x] verify no layout/keymap/async/reload behavior changed (goldens + behavior tests green)
+- [x] verify `render/` (v1 lipgloss) was NOT touched: `git diff --name-only` excludes
+      `internal/core/ui/render/` (confirmed — render/ absent from the diff)
+- [x] run full suite: `make test` (ALL PASS)
+- [x] run `make lint` (golangci-lint: 0 issues)
 
 ### Task 4: [Final] Update documentation & wrap up
-- [ ] no user-facing doc changes (internal chrome only); confirm `docs/internals/packages.md`
+
+- [x] no user-facing doc changes (internal chrome only); confirm `docs/internals/packages.md`
       statustui note does not assert "lipgloss v1" anywhere — if it does, correct it to v2
-- [ ] CLAUDE.md: no new pattern to record (Stage 5b will carry the framework note)
-- [ ] move this plan to `docs/plans/completed/`
+      (confirmed — the statustui entry at packages.md:204 describes it as "bubbletea v2" and
+      makes no lipgloss-v1 assertion; nothing to correct)
+- [x] CLAUDE.md: no new pattern to record (Stage 5b will carry the framework note)
+- [x] move this plan to `docs/plans/completed/`
 
 ## Post-Completion
 

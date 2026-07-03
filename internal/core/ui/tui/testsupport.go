@@ -85,7 +85,9 @@ func BuildHelp(p Plugin, tr i18n.Translator, locale string, w, h int) (Overlay, 
 	if locale == "" {
 		locale = "en"
 	}
-	reg := NewRegistry()
+	// Mirror newFrame's registry shape (single-panel plugins have their focus
+	// built-ins stripped) so the help overlay matches the live keymap.
+	reg := newRegistryForPanels(len(p.Panels()))
 	if err := p.Actions(reg); err != nil {
 		return Overlay{}, fmt.Errorf("tui: registering plugin actions: %w", err)
 	}

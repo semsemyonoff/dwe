@@ -3,6 +3,7 @@ package status
 import (
 	"bytes"
 	"context"
+	"errors"
 	"os"
 	"path/filepath"
 	"strings"
@@ -10,7 +11,10 @@ import (
 
 	"github.com/semsemyonoff/dwe/internal/cli/cmdctx"
 	"github.com/semsemyonoff/dwe/internal/core/ui/statustui"
+	"github.com/semsemyonoff/dwe/internal/core/ui/tui"
+	"github.com/semsemyonoff/dwe/internal/core/ui/widgets"
 	"github.com/semsemyonoff/dwe/internal/core/workflow/deploy/journal"
+	"github.com/semsemyonoff/dwe/internal/shared/i18n"
 
 	"github.com/spf13/cobra"
 )
@@ -700,6 +704,127 @@ func TestShouldUseTUI_Matrix(t *testing.T) {
 					tt.noTUI, tt.noFlags, result, tt.expect)
 			}
 		})
+	}
+}
+
+// forceTUIPath stubs isTerminalFn/TERM so shouldUseTUI takes the TUI branch,
+// and restores both plus runStatusTUIFn on cleanup.
+func forceTUIPath(t *testing.T) {
+	t.Helper()
+	oldIsTerminalFn := isTerminalFn
+	oldRunStatusTUIFn := runStatusTUIFn
+	oldEnvTERM := os.Getenv("TERM")
+	t.Cleanup(func() {
+		isTerminalFn = oldIsTerminalFn
+		runStatusTUIFn = oldRunStatusTUIFn
+		_ = os.Setenv("TERM", oldEnvTERM)
+	})
+	isTerminalFn = func(fd uintptr) bool { return true }
+	if err := os.Setenv("TERM", "xterm-256color"); err != nil {
+		t.Fatalf("failed to set TERM: %v", err)
+	}
+}
+
+// TestStatusCmd_TUI_ErrTooNarrow_FallsBackToPlainText verifies that when the
+// TUI launcher returns tui.ErrTooNarrow, the top-level `status` command falls
+// back to renderDefaultStatus instead of propagating the error, and that the
+// i18n Deps fields are threaded from RootFlags.
+func TestStatusCmd_TUI_ErrTooNarrow_FallsBackToPlainText(t *testing.T) {
+	forceTUIPath(t)
+	var gotDeps statustui.Deps
+	runStatusTUIFn = func(ctx context.Context, d statustui.Deps) error {
+		gotDeps = d
+		return tui.ErrTooNarrow
+	}
+
+	store := &i18n.Store{}
+	flags := &cmdctx.RootFlags{Locale: "fr-TEST", I18n: store}
+	root := &cobra.Command{Use: "dwe", SilenceUsage: true}
+	root.PersistentFlags().StringVar(&flags.ConfigPath, "config", "", "")
+	root.AddGroup(&cobra.Group{ID: "environment", Title: "Environment Commands:"})
+	root.AddCommand(NewCmd("environment", flags))
+
+	configPath := statusFixture(t)
+	var buf bytes.Buffer
+	root.SetOut(&buf)
+	root.SetErr(&buf)
+	root.SetArgs([]string{"--config", configPath, "status"})
+	if err := root.Execute(); err != nil {
+		t.Fatalf("execute: %v", err)
+	}
+	out := buf.String()
+	if !strings.Contains(out, "DWE:") || !strings.Contains(out, "Apps") {
+		t.Errorf("expected plain-text fallback output on ErrTooNarrow, got:\n%s", out)
+	}
+	if gotDeps.Locale != "fr-TEST" {
+		t.Errorf("expected Deps.Locale threaded from RootFlags.Locale, got %q", gotDeps.Locale)
+	}
+	if gotDeps.Translator != store {
+		t.Errorf("expected Deps.Translator threaded from RootFlags.I18n, got %#v", gotDeps.Translator)
+	}
+}
+
+// TestStatusCmd_TUI_CleanQuit_NoPlainFallback verifies that a nil error from
+// the TUI launcher does not trigger the plain-text fallback.
+func TestStatusCmd_TUI_CleanQuit_NoPlainFallback(t *testing.T) {
+	forceTUIPath(t)
+	runStatusTUIFn = func(ctx context.Context, d statustui.Deps) error { return nil }
+
+	configPath := statusFixture(t)
+	root := buildStatusTestRoot()
+	var buf bytes.Buffer
+	root.SetOut(&buf)
+	root.SetErr(&buf)
+	root.SetArgs([]string{"--config", configPath, "status"})
+	if err := root.Execute(); err != nil {
+		t.Fatalf("execute: %v", err)
+	}
+	out := buf.String()
+	if strings.Contains(out, "DWE:") || strings.Contains(out, "Apps") {
+		t.Errorf("clean TUI quit must not print plain-text fallback, got:\n%s", out)
+	}
+}
+
+// TestStatusCmd_TUI_Cancelled_ExitsClean verifies that a user-initiated cancel
+// (OS SIGINT/SIGTERM, surfaced by tui.Run as widgets.ErrCancelled) exits clean
+// with no error and without the plain-text fallback, matching the pre-Frame
+// mapRunError behavior.
+func TestStatusCmd_TUI_Cancelled_ExitsClean(t *testing.T) {
+	forceTUIPath(t)
+	runStatusTUIFn = func(ctx context.Context, d statustui.Deps) error { return widgets.ErrCancelled }
+
+	configPath := statusFixture(t)
+	root := buildStatusTestRoot()
+	var buf bytes.Buffer
+	root.SetOut(&buf)
+	root.SetErr(&buf)
+	root.SetArgs([]string{"--config", configPath, "status"})
+	if err := root.Execute(); err != nil {
+		t.Fatalf("expected clean exit on widgets.ErrCancelled, got: %v", err)
+	}
+	out := buf.String()
+	if strings.Contains(out, "DWE:") || strings.Contains(out, "Apps") {
+		t.Errorf("cancelled TUI must not print plain-text fallback, got:\n%s", out)
+	}
+}
+
+// TestStatusCmd_TUI_OtherError_Propagates verifies that a non-ErrTooNarrow
+// error from the TUI launcher is returned unchanged, not swallowed into a
+// plain-text fallback.
+func TestStatusCmd_TUI_OtherError_Propagates(t *testing.T) {
+	forceTUIPath(t)
+	sentinel := errors.New("boom")
+	runStatusTUIFn = func(ctx context.Context, d statustui.Deps) error { return sentinel }
+
+	configPath := statusFixture(t)
+	root := buildStatusTestRoot()
+	var buf bytes.Buffer
+	root.SetOut(&buf)
+	root.SetErr(&buf)
+	root.SetArgs([]string{"--config", configPath, "status"})
+	err := root.Execute()
+	if !errors.Is(err, sentinel) {
+		t.Fatalf("expected sentinel error to propagate, got: %v", err)
 	}
 }
 
