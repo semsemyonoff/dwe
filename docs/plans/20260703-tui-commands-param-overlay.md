@@ -533,37 +533,40 @@ from `res.Values`. `command.go` passes it into `runOpts.PrefilledParams`.
 - Modify: `internal/cli/command/command.go`
 - Modify: `internal/cli/command/list_test.go` (or nearest existing selector test)
 
-- [ ] extend `makeBrowserSelector`'s signature with the raw `setFlags []string`
+- [x] extend `makeBrowserSelector`'s signature with the raw `setFlags []string`
       input (NOT a pre-parsed map — codex finding); parse it LAZILY inside
       `BuildForm`/`Harvest` via `parseSetFlags` so the browser param form honours
       `dwe commands --set x=y`. **Do not add an eager `parseSetFlags` before the
       selector is built** — it would break the non-interactive `writeCommandsList`
       fallback (`command.go:147-162` returns before `runCommandByID`)
-- [ ] in `makeBrowserSelector`: build a `cmdbrowser.RunFormSpec` for `ModeRun`
-      with `BuildForm(idx, force)` (lazy `parseSetFlags(setFlags)` →
-      `prepareParams(cfg, defs[idx], provided)` → `showForm` predicate →
-      `buildAskFields` → return `(nil,nil)` if zero fields, else `ask.Build(...,
-      ShowHelp:false)`) and `Harvest(idx, res)` (recompute prefilled +
-      `mergeAnswers`); set `opts.RunForm` only in `ModeRun` (nil in inspect/edit)
-- [ ] add a `prefilledOut *map[string]string` out-param to `makeBrowserSelector`
+- [x] in `makeBrowserSelector`: build a `cmdbrowser.RunFormSpec` for `ModeRun`
+      (via the new `makeRunFormSpec` helper) with `BuildForm(idx, force)` (lazy
+      `parseSetFlags(setFlags)` → `prepareParams(cfg, defs[idx], provided)` →
+      `showForm` predicate → `buildAskFields` → return `(nil,nil)` if zero fields,
+      else `ask.Build(..., ShowHelp:false)`) and `Harvest(idx, res)` (recompute
+      prefilled + `mergeAnswers`); set `opts.RunForm` only in `ModeRun` (nil in
+      inspect/edit)
+- [x] add a `prefilledOut *map[string]string` out-param to `makeBrowserSelector`
       (mirror `skipConfirmOut`/`forceFormOut`), set from `res.Values`; leave
       `ModeInspect`/other callers passing nil
-- [ ] in `command.go`: pass `&prefilledFromTUI` into `makeBrowserSelector` and
-      thread it into `runCommandByID(... runOpts{PrefilledParams: prefilledFromTUI,
-      ...})`; `ForceParamForm` still flows so the confirm/force semantics hold
-- [ ] write tests: the `BuildForm` closure yields fields carrying description +
-      `ShowHelp:false`; a nil form when required already satisfied and not forced;
-      `--set x=y` provided → the closure's prefilled honours it (form pre-filled /
-      no form when it satisfies required); `Harvest` maps `ask.Result` → the
-      expected param map (incl. multiselect separator); selector copies
-      `res.Values` into the out-param; index-range guard preserved
-- [ ] write tests for edge cases: selector with `ModeInspect` never sets `RunForm`
-      / `prefilledOut`; non-TTY selector fallback (`writeCommandsList`) path
-      untouched — a malformed `dwe commands --set bad` in a pipe still prints the
-      list and does NOT error (lazy parse never runs); `res.Values == nil` leaves
-      `PrefilledParams` nil; `BuildForm` with zero resulting fields returns
-      `(nil,nil)` (empty-options command) so the browser quits-and-runs
-- [ ] run `make build && make test` — must pass before Task 5
+- [x] in `command.go`: pass `setFlags` + `&prefilledFromTUI` into
+      `makeBrowserSelector` and thread it into `runCommandByID(... runOpts{
+      PrefilledParams: prefilledFromTUI, ...})`; `ForceParamForm` still flows so
+      the confirm/force semantics hold
+- [x] write tests: the `BuildForm` closure builds a form (`ShowHelp:false`) when
+      required is missing/forced; a nil form when required already satisfied and
+      not forced; `--set x=y` provided → the closure's prefilled honours it (no
+      form when it satisfies required); `Harvest` maps `ask.Result` → the
+      expected param map (incl. multiselect separator); index-range guard
+      preserved
+- [x] write tests for edge cases: `makeRunFormSpec` with `ModeInspect`/`ModeEdit`
+      returns nil (no `RunForm`); non-TTY selector fallback (`writeCommandsList`)
+      path untouched — a malformed `dwe commands --set bad` in a pipe still prints
+      the list and does NOT error (lazy parse never runs); malformed `--set` on
+      the interactive path surfaces as a `BuildForm` error; `BuildForm` with zero
+      resulting fields returns `(nil,nil)` (empty-options command) so the browser
+      quits-and-runs
+- [x] run `make build && make test` — must pass before Task 5
 
 ### Task 5: Docs — internals, references, AGENTS.md
 
