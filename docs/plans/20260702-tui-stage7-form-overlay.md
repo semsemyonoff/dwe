@@ -520,7 +520,7 @@ cli/vars closures (captured: `cmd`, `flags`, `items`/`leaves`, `inspectCache`):
 - Modify: `docs/reference/config/vars.md`
 - Modify: `AGENTS.md`
 
-- [ ] `packages.md`: § tui — `FormOverlay` embedding contract (poll `State`,
+- [x] `packages.md`: § tui — `FormOverlay` embedding contract (poll `State`,
       explicit sizing, virtual cursor), `CloseOverlayMsg` semantics (no
       `OverlayClosedMsg` echo), the capturing-aware `drainOverlay` invariant;
       § cmdbrowser — `EditSpec`/`CommitOutcome`, edit state machine, status
@@ -528,21 +528,22 @@ cli/vars closures (captured: `cmd`, `flags`, `items`/`leaves`, `inspectCache`):
       § cmdctx — `AcquireProjectLocksSilent` as the sanctioned no-print
       variant for live-alt-screen call sites (same error contract as
       `AcquireProjectLocksOrReport`)
-- [ ] `tui-keymap.md`: form-overlay arbitration note (esc = cancel edit,
+- [x] `tui-keymap.md`: form-overlay arbitration note (esc = cancel edit,
       ctrl+c = TUI hard-quit; huh help suppressed, hint row authoritative)
-- [ ] `vars.md` § TUI browser: describe the in-TUI overlay edit (form over the
+- [x] `vars.md` § TUI browser: describe the in-TUI overlay edit (form over the
       browser, flash confirmation, row refresh in place, esc cancel) and state
       BOTH observable behaviour changes explicitly (plan-review finding):
       (a) confirmations are a transient status flash, NOT stdout — after
       quitting the browser the terminal shows no record of the edits;
       (b) edit-and-stay applies only to the ≥80-col frame path — narrow
       terminals keep the flat fallback with the exit-after-commit loop
-- [ ] `AGENTS.md`: extend the `tui.Plugin` Critical Pattern bullet with the new
+      (ru mirror `docs/i18n/ru/reference/config/vars.md` translated + hash bumped)
+- [x] `AGENTS.md`: extend the `tui.Plugin` Critical Pattern bullet with the new
       invariants (FormOverlay embedding facts incl. async completion +
       WindowSizeMsg swallow, `CloseOverlayMsg`, capturing-aware
       `drainOverlay`); extend the preflight+locks bullet with
       `AcquireProjectLocksSilent` as the alt-screen exception
-- [ ] run `make build` (embedded docs re-sync) + `make test` — must pass
+- [x] run `make build` (embedded docs re-sync) + `make test` — must pass
       before task 6
 
 ### Task 6: Verify acceptance criteria

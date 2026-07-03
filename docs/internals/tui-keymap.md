@@ -356,6 +356,26 @@ This is modelled by `routeWhileCapturing(msg tea.Msg) captureDecision` in
 The full `frame.Update` rewiring that calls `routeWhileCapturing` lands with the
 Stage 3 filter consumer (the function signature is already the drop-in shape).
 
+### 5.1 Form-overlay arbitration (Stage 7)
+
+`tui.FormOverlay` (an embedded `huh.Form` — the vars-browser edit surface) is a
+`CapturesInput` overlay, so it inherits the policy above. The key arbitration is
+settled and needs no new routing:
+
+- **`esc` = cancel the edit.** The framework's `captureClose` path pops the
+  overlay and emits `OverlayClosedMsg`, which the plugin handles by discarding the
+  form and its edit state. The huh form's own in-field `esc` navigation never fires
+  — the framework reserves `esc` before it reaches the form.
+- **`ctrl+c` = hard-quit the whole TUI** (`captureHardQuit`), unchanged. huh binds
+  `ctrl+c` to form-quit, but under the Frame that keystroke never reaches the form.
+- **`enter` (submit) closes the overlay from the plugin side** via
+  `tui.CloseOverlayMsg{}` — a plugin-initiated pop that does **not** emit
+  `OverlayClosedMsg` (the plugin already knows it is closing).
+- **huh's own help line is suppressed** (`ask.RunOptions.ShowHelp:false`): its
+  hints advertise `ctrl+c` as form-quit, which is now TUI-quit. The `FormOverlay`
+  footer hint row (`enter save · esc cancel`, hardcoded English) is the single
+  authoritative key hint.
+
 ---
 
 ## 6. Mouse vocabulary
