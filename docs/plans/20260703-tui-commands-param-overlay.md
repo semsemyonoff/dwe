@@ -598,17 +598,24 @@ from `res.Values`. `command.go` passes it into `runOpts.PrefilledParams`.
 
 ### Task 6: Verify acceptance criteria
 
-- [ ] param form for a command WITH params opens as a `CapturesInput` overlay over
+- [x] param form for a command WITH params opens as a `CapturesInput` overlay over
       the ModeRun browser (goldens present at 80/99/100); submit harvests
       `Values`, closes overlay, quits, command runs; esc cancels back into the
       browser with no run; ctrl+c hard-quits
-- [ ] command with NO params / satisfied-required + Enter (no `e`) still
+      (TestBrowser_RunFormOpensCapturingOverlay, RunFormCompleteHarvestsAndQuits,
+      RunFormClosedByOverlayClosedMsg + frame_runform_single_{80,99,100} goldens)
+- [x] command with NO params / satisfied-required + Enter (no `e`) still
       exit-and-runs immediately with no overlay (byte-identical)
-- [ ] multi-field form scrolls inside the overlay (huh viewport) at 24 rows
-- [ ] behaviour preservation: `RunForm == nil` / ModeEdit / ModeInspect goldens
+      (TestBrowser_RunFormNoFormQuitsImmediately, RunCommandByID_NoParamsTTY_FormSkipped)
+- [x] multi-field form scrolls inside the overlay (huh viewport) at 24 rows
+      (frame_runform_multi_{80,99,100} goldens + TestFormOverlayMaxHeightCapsTallForm)
+- [x] behaviour preservation: `RunForm == nil` / ModeEdit / ModeInspect goldens
       byte-identical; standalone `dwe commands <id>`, `--set`, non-interactive,
       JSON paths untouched; confirm still fires post-exit
-- [ ] run full suite: `make build && make test && make lint`
+      (TestBrowser_RunFormNilSpecKeepsExitAndRun,
+      RunCommandByID_PrefilledParams_ConfirmStillFires,
+      TestCommandsBare_nonTTY_malformedSet_stillPrintsList)
+- [x] run full suite: `make build && make test && make lint` (all green)
 
 ### Task 7: [Final] Documentation and plan close-out
 
