@@ -11,22 +11,22 @@ import (
 // label occupies in the tab strip.
 type tabHitZone struct{ start, end int }
 
-// tabHitZones mirrors renderTabStrip's layout exactly (leading 1-col pad, the
-// ▌ ▐ decorations on the active tab, 3-space gaps between tabs) so click
-// hit-zones match what is drawn.
+// tabHitZones mirrors renderTabStrip's layout via the shared tabStrip* layout
+// constants (leading pad, active-tab decoration width, inter-tab gap) so click
+// hit-zones match what is drawn without re-deriving magic numbers.
 func (m *model) tabHitZones() []tabHitZone {
 	if len(m.tabs) == 0 {
 		return nil
 	}
 	zones := make([]tabHitZone, len(m.tabs))
-	col := 1 // leading " " pad
+	col := tabStripLeadPad
 	for i, t := range m.tabs {
 		w := lipgloss.Width(t.title)
 		if i == m.active {
-			w += 2 // ▌ ▐
+			w += tabActiveDecoWidth()
 		}
 		zones[i] = tabHitZone{start: col, end: col + w}
-		col += w + 3 // 3-space gap between tabs
+		col += w + tabStripGap
 	}
 	return zones
 }

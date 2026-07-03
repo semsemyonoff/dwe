@@ -141,10 +141,26 @@ func (m *model) jumpSection(dir int) {
 	m.viewport.SetYOffset(target)
 }
 
+// Tab-strip layout, shared by renderTabStrip (drawing) and mouse.go's
+// tabHitZones (click mapping) so the two can never drift on spacing. The active
+// tab is bracketed by tabActiveLeft/Right; tabActiveDecoWidth derives their
+// combined column width from the glyphs themselves.
+const (
+	tabStripLeadPad = 1   // leading blank column before the first tab
+	tabStripGap     = 3   // blank columns between adjacent tabs
+	tabActiveLeft   = "▌" // decoration bracketing the active tab
+	tabActiveRight  = "▐"
+)
+
+// tabActiveDecoWidth is the combined display width of the active-tab decoration.
+func tabActiveDecoWidth() int {
+	return lipgloss.Width(tabActiveLeft) + lipgloss.Width(tabActiveRight)
+}
+
 // renderTabStrip renders the tab navigation with active tab highlighted.
-// Active tab is wrapped in ▌ ▐ with accent styling; inactive tabs are dimmed.
-// Shared verbatim with mouse.go's tabHitZones, so click hit-zones match what
-// is drawn here.
+// Active tab is bracketed by tabActiveLeft/Right with accent styling; inactive
+// tabs are dimmed. Layout constants are shared with mouse.go's tabHitZones, so
+// click hit-zones match what is drawn here.
 func (m *model) renderTabStrip() string {
 	if len(m.tabs) == 0 {
 		return ""
@@ -157,7 +173,7 @@ func (m *model) renderTabStrip() string {
 			parts = append(parts, lipgloss.NewStyle().
 				Foreground(lipgloss.Color(styles.ColorAccent())).
 				Bold(true).
-				Render("▌"+t.title+"▐"))
+				Render(tabActiveLeft+t.title+tabActiveRight))
 		} else {
 			// Inactive tab, dimmed
 			parts = append(parts, lipgloss.NewStyle().
@@ -166,7 +182,6 @@ func (m *model) renderTabStrip() string {
 		}
 	}
 
-	strip := strings.Join(parts, "   ")
-	// Pad the strip and add a left padding
-	return " " + strip
+	strip := strings.Join(parts, strings.Repeat(" ", tabStripGap))
+	return strings.Repeat(" ", tabStripLeadPad) + strip
 }

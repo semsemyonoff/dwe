@@ -178,14 +178,16 @@ const panelChromeRows = 2
 func (p *plugin) renderBody(inner tui.Region) string {
 	m := p.m
 	w := max(inner.Width, 0)
-
 	m.viewport.SetWidth(w)
-	m.viewport.SetHeight(max(inner.Height-panelChromeRows, 0))
 
 	tabStrip := m.renderTabStrip()
 	if tabStrip == "" {
+		// No tab strip (no tabs loaded yet): the viewport owns the full height.
+		m.viewport.SetHeight(max(inner.Height, 0))
 		return m.viewport.View()
 	}
+	// Tab strip + divider take panelChromeRows above the viewport.
+	m.viewport.SetHeight(max(inner.Height-panelChromeRows, 0))
 
 	dividerLine := lipgloss.NewStyle().
 		Foreground(lipgloss.Color(styles.ColorMuted())).
