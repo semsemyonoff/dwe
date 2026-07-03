@@ -60,6 +60,12 @@ type Model struct {
 	Prefetch         *Prefetch
 	PrefetchProgress ProgressMsg
 	prefetchChan     chan ProgressMsg
+	// progressReaderLive guards against spawning a second waitForProgress reader
+	// on every diagram-topic load: the reader chain is self-sustaining (the
+	// ProgressMsg handler always respawns one reader on the shared channel), so
+	// only the first load starts it — later loads would otherwise leak one parked
+	// goroutine per visit (reclaimed only at Close).
+	progressReaderLive bool
 
 	// Tracks the last topic loaded into the viewport so heading navigation
 	// can skip a redundant re-render when the cursor jumps between headings
@@ -237,6 +243,12 @@ func (m *Model) loadTopic(node *TreeNode) (tea.Cmd, error) {
 		m.currentlyLoadedLocale = ""
 		m.StatusBar.SetPath("")
 		m.pendingHeadingIdx = -1
+		// The viewport is now blank, so drop any diagram/heading state carried
+		// from the previous topic — otherwise `y`/`[`/`]` would copy or cycle the
+		// stale diagram of a file we are no longer showing.
+		m.DiagramState = NewDiagramState(nil)
+		m.currentDiagramLines = nil
+		m.currentHeadingLines = nil
 		return nil, nil
 	}
 
@@ -391,6 +403,13 @@ func (m *Model) applyTopicLoaded(msg topicLoadedMsg) tea.Cmd {
 		}
 	}
 	m.Prefetch.Queue(items)
+	// The reader chain is respawned by the ProgressMsg handler, so start it at
+	// most once — the already-live reader picks up this topic's messages on the
+	// shared channel. Spawning again here would leak a parked goroutine per load.
+	if m.progressReaderLive {
+		return nil
+	}
+	m.progressReaderLive = true
 	return waitForProgress(m.prefetchChan)
 }
 

@@ -4,6 +4,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/semsemyonoff/dwe/internal/core/docs"
 	"github.com/semsemyonoff/dwe/internal/core/docs/mermaid"
 	"github.com/semsemyonoff/dwe/internal/core/docs/render"
 )
@@ -81,6 +82,39 @@ func TestDoCopyDiagramNoDiagramNoFlash(t *testing.T) {
 	}
 	if strings.Contains(b.StatusBar.View(), "copied to clipboard") {
 		t.Errorf("expected no copy flash without a diagram, got %q", b.StatusBar.View())
+	}
+}
+
+// TestLoadTopicPlainDirClearsDiagramState guards that landing on a plain
+// directory (blank viewport, no content node) drops the previous topic's diagram
+// state — otherwise `y`/`[`/`]` would copy or cycle a stale diagram that is no
+// longer on screen.
+func TestLoadTopicPlainDirClearsDiagramState(t *testing.T) {
+	b := newTestBrowser(t)
+	// Simulate a previously loaded diagram-bearing topic.
+	b.DiagramState = NewDiagramState([]render.DiagramRef{{Source: "graph TD; A-->B", Index: 0}})
+	b.currentDiagramLines = []int{3}
+	b.currentHeadingLines = []int{1}
+	if b.DiagramState.CurrentDiagram() == nil {
+		t.Fatal("precondition: expected a current diagram before loading the directory")
+	}
+
+	// A plain directory node has no index.md, so contentNodeFor returns nil.
+	dir := &TreeNode{Node: &docs.Node{Name: "guides", IsDir: true, Path: "guides"}}
+	if _, err := b.loadTopic(dir); err != nil {
+		t.Fatalf("loadTopic(plain dir): %v", err)
+	}
+
+	if b.DiagramState == nil || b.DiagramState.CurrentDiagram() != nil {
+		t.Errorf("plain-dir load did not clear DiagramState: %+v", b.DiagramState)
+	}
+	if b.currentDiagramLines != nil || b.currentHeadingLines != nil {
+		t.Errorf("plain-dir load left stale line maps: diagrams=%v headings=%v",
+			b.currentDiagramLines, b.currentHeadingLines)
+	}
+	// A `y` press now must be a silent no-op (no stale copy, no flash).
+	if cmd := b.doCopyDiagram(); cmd != nil {
+		t.Errorf("doCopyDiagram after plain-dir load returned a Cmd; want nil (no stale diagram)")
 	}
 }
 

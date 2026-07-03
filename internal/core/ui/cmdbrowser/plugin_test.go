@@ -433,6 +433,44 @@ func TestBrowser_WheelListUpDown(t *testing.T) {
 	}
 }
 
+func TestBrowser_WheelMagnitudeMovesMultipleRows(t *testing.T) {
+	// WheelMsg.Delta is a coalesced notch count — the list must advance |Delta|
+	// rows per flush, not a single row (regression: sign-only movement).
+	items := []Item{
+		{ID: "db.a"}, {ID: "db.b"}, {ID: "db.c"}, {ID: "db.d"}, {ID: "db.e"},
+	}
+	b := newBrowser("pick", items, DefaultOptions())
+	b.tree.eng.SetCursorByKey("db")
+	b.refreshList()
+	b.ViewPanel(panelList, tui.Region{Width: 74, Height: 12})
+
+	initial := b.list.Index()
+	b.Update(tui.WheelMsg{Panel: panelList, Delta: 3})
+	if b.list.Index() != initial+3 {
+		t.Errorf("list.Index = %d after wheel Delta=3, want %d", b.list.Index(), initial+3)
+	}
+	b.Update(tui.WheelMsg{Panel: panelList, Delta: -2})
+	if b.list.Index() != initial+1 {
+		t.Errorf("list.Index = %d after wheel Delta=-2, want %d", b.list.Index(), initial+1)
+	}
+}
+
+func TestBrowser_WheelTreeMagnitudeMovesMultipleRows(t *testing.T) {
+	// The tree must apply the coalesced Delta magnitude via MoveBy, not one row.
+	items := []Item{
+		{ID: "a.x"}, {ID: "b.x"}, {ID: "c.x"}, {ID: "d.x"},
+	}
+	b := newBrowser("pick", items, DefaultOptions())
+	b.ViewPanel(panelTree, tui.Region{Width: 18, Height: 10})
+	b.tree.eng.SetCursorByKey("a")
+	b.refreshList()
+
+	b.Update(tui.WheelMsg{Panel: panelTree, Delta: 2})
+	if got := b.tree.focusedID(); got != "c" {
+		t.Errorf("tree cursor = %q after wheel Delta=2, want %q", got, "c")
+	}
+}
+
 func TestBrowser_WheelWhileFilteringIsNoop(t *testing.T) {
 	b := newBrowser("pick", pluginTestItems(), DefaultOptions())
 	b.ViewPanel(panelTree, tui.Region{Width: 18, Height: 10})

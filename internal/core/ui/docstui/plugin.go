@@ -719,7 +719,12 @@ func (b *browser) updateFilter(msg tea.KeyPressMsg) tea.Cmd {
 		return nil
 	case tea.KeyEscape:
 		b.exitFilter()
-		return focusCmd(panelTree)
+		// Filter nav live-previews the topic under the cursor (afterTreeMove →
+		// selectCursor sets CurrentTopic + viewport). exitFilter restores the
+		// pre-filter cursor but not the topic, so reload it here — otherwise the
+		// viewport and CurrentTopic stay stuck on the last previewed topic and a
+		// later CurrentTopic-based action (locale switch) operates on the wrong one.
+		return tea.Batch(b.selectCursor(), focusCmd(panelTree))
 	case tea.KeyUp:
 		if b.Tree != nil {
 			b.Tree.MoveUp()

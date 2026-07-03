@@ -329,19 +329,26 @@ func (b *browser) handleWheel(msg tui.WheelMsg) {
 	if b.filter != nil {
 		return
 	}
+	// Delta is the coalesced notch count (the framework batches a wheel flood
+	// into one message per panel), so apply its magnitude — not a single row per
+	// flush — matching docstui/statustui and the "tree moves abs(Delta) rows"
+	// contract.
+	if msg.Delta == 0 {
+		return
+	}
 	switch msg.Panel {
 	case panelTree:
-		if msg.Delta < 0 {
-			b.tree.eng.MoveUp()
-		} else {
-			b.tree.eng.MoveDown()
-		}
+		b.tree.eng.MoveBy(msg.Delta)
 		b.afterTreeMove()
 	case panelList:
-		if msg.Delta < 0 {
-			b.list.CursorUp()
+		if step := msg.Delta; step < 0 {
+			for range -step {
+				b.list.CursorUp()
+			}
 		} else {
-			b.list.CursorDown()
+			for range step {
+				b.list.CursorDown()
+			}
 		}
 	}
 }
