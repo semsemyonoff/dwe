@@ -251,8 +251,10 @@ func TestRunWithPromptHooks_SurvivesMidClear(t *testing.T) {
 // blockingForm returns a form that blocks reading from a never-closing input,
 // so a short context timeout deterministically produces a non-abort error from
 // form.RunWithContext.
-func blockingForm() *huh.Form {
-	r, _ := io.Pipe() // never written to, never closed: read blocks forever
+func blockingForm(t *testing.T) *huh.Form {
+	t.Helper()
+	r, _ := io.Pipe() // never written to: read blocks until the reader is closed
+	t.Cleanup(func() { _ = r.Close() })
 	return huh.NewForm(huh.NewGroup(huh.NewInput().Title("Foo"))).
 		WithInput(r).
 		WithOutput(io.Discard)
@@ -269,7 +271,7 @@ func TestRunHuhForm_HooksFireExactlyOnce(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Millisecond)
 	defer cancel()
 
-	if err := RunHuhForm(ctx, blockingForm()); err == nil {
+	if err := RunHuhForm(ctx, blockingForm(t)); err == nil {
 		t.Fatal("expected a context-related error from a form that never submits")
 	}
 	if before.Load() != 1 {
@@ -288,7 +290,7 @@ func TestRunHuhForm_HooksFireOnError(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Millisecond)
 	defer cancel()
 
-	if err := RunHuhForm(ctx, blockingForm()); err == nil {
+	if err := RunHuhForm(ctx, blockingForm(t)); err == nil {
 		t.Fatal("expected a context-related error")
 	}
 	if !afterCalled {
@@ -302,7 +304,7 @@ func TestRunHuhForm_NonAbortErrorPassesThrough(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Millisecond)
 	defer cancel()
 
-	err := RunHuhForm(ctx, blockingForm())
+	err := RunHuhForm(ctx, blockingForm(t))
 	if err == nil {
 		t.Fatal("expected a context-related error")
 	}
@@ -341,7 +343,7 @@ func TestRunHuhForm_NoHooksInstalled(t *testing.T) {
 	defer cancel()
 
 	// Must not panic when no hooks are installed.
-	if err := RunHuhForm(ctx, blockingForm()); err == nil {
+	if err := RunHuhForm(ctx, blockingForm(t)); err == nil {
 		t.Fatal("expected a context-related error")
 	}
 }
