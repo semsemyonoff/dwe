@@ -483,34 +483,34 @@ cli/vars closures (captured: `cmd`, `flags`, `items`/`leaves`, `inspectCache`):
 - Modify: `internal/cli/vars/browser_test.go`
 - Modify: `internal/cli/vars/set_test.go` (or nearest existing test file)
 
-- [ ] extract `buildVarSetFields(flags, path)` (title/description/`Validate`
+- [x] extract `buildVarSetFields(flags, path)` (title/description/`Validate`
       with the CoerceScalar probe) from `promptForVarValue`; standalone
       `vars set` keeps `ask.Run` via the `runAsk` seam (now with inline
       validation — note the improvement in the func comment)
-- [ ] add `cmdctx.AcquireProjectLocksSilent(baseDir)` next to
+- [x] add `cmdctx.AcquireProjectLocksSilent(baseDir)` next to
       `AcquireProjectLocksOrReport`: identical error contract
       (`*lock.ProjectLockHeldError` returned unchanged, other errors wrapped
       as `acquiring project locks: %w`) but writes nothing — the sanctioned
       alt-screen variant (codex finding); unit-test both error paths
-- [ ] split `writeVarOverride` into the shared core (capture → apply overlay →
+- [x] split `writeVarOverride` into the shared core (capture → apply overlay →
       atomic write → reload → restore-on-failure) and two lock wrappers:
       CLI path keeps `cmdctx.AcquireProjectLocksOrReport` (printing), TUI
       path uses `cmdctx.AcquireProjectLocksSilent` and RETURNS the lock-held
       error (never prints — the alt-screen is live)
-- [ ] implement the `EditSpec` closures in `browser.go` per Technical Details
+- [x] implement the `EditSpec` closures in `browser.go` per Technical Details
       (coerce → silent write → reload → `delete(inspectCache, path)` →
       rebuild the one `Item` with fresh value/badge/inspect →
       `CommitOutcome{Item, Flash}`); wire `Edit` into the browser `Options`;
       keep the `runVarsBrowser` loop shape (frame path exits via
       `ErrCancelled` → nil; fallback path still loops through `runVarsSet`)
-- [ ] write tests: `Commit` closure updates value + badge and invalidates the
+- [x] write tests: `Commit` closure updates value + badge and invalidates the
       inspect cache; lock-held → error returned (flash path), local.yml
       untouched; write-failure rollback preserved through the refactor;
       `BuildForm` fields carry description + validator; fallback loop
       behaviour preserved via the `runBrowser` seam (no `t.Parallel()`)
-- [ ] write tests for error cases: invalid scalar rejected by the field
+- [x] write tests for error cases: invalid scalar rejected by the field
       validator; `Commit` with an out-of-range idx guarded
-- [ ] run `make test` — must pass before task 5
+- [x] run `make test` — must pass before task 5
 
 ### Task 5: Docs — internals contracts, keymap note, vars reference
 

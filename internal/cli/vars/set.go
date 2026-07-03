@@ -180,15 +180,12 @@ func buildVarOverride(path string, value any) map[string]any {
 	return root
 }
 
-// writeVarOverride performs the locked write: acquire project locks (symmetry
-// with the services toggle, which shares this writer/file), capture pre-state
-// for rollback, apply the overlay onto the loaded local.yml node (preserving
-// comments), write atomically, and reload config. No preflight — this is not a
-// lifecycle/stack mutation. On any post-write failure the captured bytes are
-// restored.
+// writeVarOverride performs the locked write for the CLI path: it acquires
+// project locks via the PRINTING wrapper (lock-held diagnostics go to stderr so
+// JSON-mode stdout stays clean) and delegates to writeVarOverrideCore. Symmetry
+// with the services toggle, which shares this writer/file.
 func writeVarOverride(cmd *cobra.Command, flags *cmdctx.RootFlags, path string, value any) (*config.DweConfig, error) {
 	baseDir := flags.ProjectRoot()
-	localPath := filepath.Join(baseDir, "workspace", "local.yml")
 
 	// Lock-held diagnostics go to stderr so JSON-mode stdout stays clean.
 	w := render.NewWriter(cmd.ErrOrStderr())
@@ -197,6 +194,34 @@ func writeVarOverride(cmd *cobra.Command, flags *cmdctx.RootFlags, path string, 
 		return nil, err
 	}
 	defer release()
+
+	return writeVarOverrideCore(flags, path, value)
+}
+
+// writeVarOverrideSilent performs the same locked write as writeVarOverride but
+// via the SILENT lock wrapper: nothing is printed, and a held-lock error is
+// returned unchanged for the caller to surface itself. It is the in-TUI edit
+// path — the alt-screen is live, so stderr diagnostics would corrupt the frame;
+// the caller renders the returned error as a status flash instead.
+func writeVarOverrideSilent(flags *cmdctx.RootFlags, path string, value any) (*config.DweConfig, error) {
+	baseDir := flags.ProjectRoot()
+
+	release, err := cmdctx.AcquireProjectLocksSilent(baseDir)
+	if err != nil {
+		return nil, err
+	}
+	defer release()
+
+	return writeVarOverrideCore(flags, path, value)
+}
+
+// writeVarOverrideCore is the shared, lock-agnostic write body: capture
+// pre-state for rollback, apply the overlay onto the loaded local.yml node
+// (preserving comments), write atomically, and reload config. No preflight —
+// this is not a lifecycle/stack mutation. On any post-write failure the captured
+// bytes are restored. Callers MUST already hold the project locks.
+func writeVarOverrideCore(flags *cmdctx.RootFlags, path string, value any) (*config.DweConfig, error) {
+	localPath := filepath.Join(flags.ProjectRoot(), "workspace", "local.yml")
 
 	captured, err := captureLocalState(localPath)
 	if err != nil {
@@ -224,20 +249,35 @@ func writeVarOverride(cmd *cobra.Command, flags *cmdctx.RootFlags, path string, 
 	return newCfg, nil
 }
 
+// buildVarSetFields builds the single-input field slice for a var `set` form,
+// shared by the standalone `dwe vars set <path>` no-value prompt (via runAsk)
+// and the in-TUI vars-browser edit overlay (via ask.Build). The field carries
+// the inspect-style per-layer description and an inline CoerceScalar validator
+// so an invalid scalar (a map / sequence, or anything CoerceScalar rejects) is
+// caught IN-FORM rather than only after submit — an improvement over the old
+// post-submit-only coercion. The caller's post-submit CoerceScalar remains the
+// authoritative parse.
+func buildVarSetFields(flags *cmdctx.RootFlags, path string) []ask.Field {
+	disp := uirender.DisplayVarPath(path)
+	return []ask.Field{{
+		Key:         "value",
+		Title:       "New value for " + disp,
+		Description: varSetFormDescription(flags, path),
+		Kind:        ask.FieldInput,
+		Validate: func(s string) error {
+			_, err := varsusage.CoerceScalar(s)
+			return err
+		},
+	}}
+}
+
 // promptForVarValue opens the single-input huh form for a no-value set,
 // carrying inspect-style per-layer info as the field description. It returns the
 // submitted value; ok is false when the user aborts (widgets.ErrCancelled) — the
 // caller treats that as a clean no-op.
 func promptForVarValue(cmd *cobra.Command, flags *cmdctx.RootFlags, path string) (value string, ok bool, err error) {
-	desc := varSetFormDescription(flags, path)
 	disp := uirender.DisplayVarPath(path)
-	fields := []ask.Field{{
-		Key:         "value",
-		Title:       "New value for " + disp,
-		Description: desc,
-		Kind:        ask.FieldInput,
-	}}
-	res, ferr := runAsk(context.Background(), "dwe vars › set "+disp, fields,
+	res, ferr := runAsk(context.Background(), "dwe vars › set "+disp, buildVarSetFields(flags, path),
 		ask.RunOptions{Input: cmd.InOrStdin(), Output: cmd.OutOrStdout()})
 	if ferr != nil {
 		if errors.Is(ferr, widgets.ErrCancelled) {
