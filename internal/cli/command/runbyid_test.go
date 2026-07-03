@@ -676,6 +676,220 @@ func TestRunCommandByID_NoDoublePrompt(t *testing.T) {
 // is set, the orchestrator must not call confirmRun and must leave
 // rctx.SkipConfirm=false so RunCommand's internal ConfirmCommand uses its
 // non-TTY Y/n branch.
+// --- prepareParams extraction --------------------------------------------
+
+// TestPrepareParams_MatchesInlineBehaviour asserts the extracted prepareParams
+// returns the same prefilled + resolvedOpts (and the same membership errors)
+// that runCommandByID's inline code produced before the refactor.
+func TestPrepareParams_MatchesInlineBehaviour(t *testing.T) {
+	cfg := &config.DweConfig{Raw: map[string]any{
+		"vars": map[string]any{"envs": []any{"dev", "prod"}},
+	}}
+
+	tests := []struct {
+		name         string
+		def          *usercommands.CommandDef
+		provided     map[string]string
+		wantPrefill  map[string]string
+		wantOptKeys  []string // params expected in resolvedOpts
+		wantErrMatch string
+	}{
+		{
+			name: "plain string default",
+			def: &usercommands.CommandDef{
+				ID: "db.up", Params: map[string]model.ParamDef{
+					"env": {Type: model.ParamTypeString, Default: "dev"},
+				},
+			},
+			provided:    map[string]string{},
+			wantPrefill: map[string]string{"env": "dev"},
+		},
+		{
+			name: "provided overrides default",
+			def: &usercommands.CommandDef{
+				ID: "db.up", Params: map[string]model.ParamDef{
+					"env": {Type: model.ParamTypeString, Default: "dev"},
+				},
+			},
+			provided:    map[string]string{"env": "prod"},
+			wantPrefill: map[string]string{"env": "prod"},
+		},
+		{
+			name: "select membership ok",
+			def: &usercommands.CommandDef{
+				ID: "db.up", Params: map[string]model.ParamDef{
+					"env": {
+						Type:    model.ParamTypeString,
+						Widget:  model.WidgetSelect,
+						Default: "prod",
+						Options: &model.ParamOptions{From: "vars.envs"},
+					},
+				},
+			},
+			provided:    map[string]string{},
+			wantPrefill: map[string]string{"env": "prod"},
+			wantOptKeys: []string{"env"},
+		},
+		{
+			name: "select --set not in options errors",
+			def: &usercommands.CommandDef{
+				ID: "db.up", Params: map[string]model.ParamDef{
+					"env": {
+						Type:    model.ParamTypeString,
+						Widget:  model.WidgetSelect,
+						Options: &model.ParamOptions{From: "vars.envs"},
+					},
+				},
+			},
+			provided:     map[string]string{"env": "staging"},
+			wantErrMatch: "not in options",
+		},
+		{
+			name: "select default not in options errors",
+			def: &usercommands.CommandDef{
+				ID: "db.up", Params: map[string]model.ParamDef{
+					"env": {
+						Type:    model.ParamTypeString,
+						Widget:  model.WidgetSelect,
+						Default: "staging",
+						Options: &model.ParamOptions{From: "vars.envs"},
+					},
+				},
+			},
+			provided:     map[string]string{},
+			wantErrMatch: "default value",
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			prefilled, resolvedOpts, err := prepareParams(cfg, tc.def, tc.provided)
+			if tc.wantErrMatch != "" {
+				if err == nil || !strings.Contains(err.Error(), tc.wantErrMatch) {
+					t.Fatalf("expected error containing %q; got %v", tc.wantErrMatch, err)
+				}
+				return
+			}
+			if err != nil {
+				t.Fatalf("unexpected error: %v", err)
+			}
+			for k, want := range tc.wantPrefill {
+				if prefilled[k] != want {
+					t.Errorf("prefilled[%q] = %q, want %q", k, prefilled[k], want)
+				}
+			}
+			for _, k := range tc.wantOptKeys {
+				if _, ok := resolvedOpts[k]; !ok {
+					t.Errorf("resolvedOpts missing key %q", k)
+				}
+			}
+		})
+	}
+}
+
+// --- PrefilledParams short-circuit ---------------------------------------
+
+// TestRunCommandByID_PrefilledParams_SkipsForm verifies that when the in-TUI
+// overlay has already harvested the params, runCommandByID skips the huh form
+// and builds the run context straight from PrefilledParams.
+func TestRunCommandByID_PrefilledParams_SkipsForm(t *testing.T) {
+	s := stubOrchestratorSeams(t)
+	widgets.IsInteractiveFn = func(io.Reader) bool { return true }
+	s.installForm()
+	s.installRunner()
+	def := &usercommands.CommandDef{
+		ID: "db.up", LocalName: "up", Group: "db", Type: usercommands.CommandTypeShell, Cmd: "echo",
+		Params: map[string]model.ParamDef{
+			"env": {Type: model.ParamTypeString, Required: true},
+		},
+	}
+	reg := newTestRegistry(def)
+	err := runCommandByID(context.Background(), strings.NewReader(""), io.Discard, io.Discard,
+		newCfg(), reg, t.TempDir(), "db.up",
+		runOpts{PrefilledParams: map[string]string{"env": "prod"}})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if s.formCalls != 0 {
+		t.Errorf("form must be skipped when PrefilledParams is set; got %d calls", s.formCalls)
+	}
+	if s.runCalls != 1 {
+		t.Errorf("runner should run once; got %d", s.runCalls)
+	}
+	if got, _ := s.runRC.Params["env"].(string); got != "prod" {
+		t.Errorf("runner should receive harvested env=prod; got %v", s.runRC.Params["env"])
+	}
+}
+
+// TestRunCommandByID_PrefilledParams_ConfirmStillFires verifies the confirm
+// block runs post-form even on the PrefilledParams path (confirm stays
+// post-exit; the overlay only collects params).
+func TestRunCommandByID_PrefilledParams_ConfirmStillFires(t *testing.T) {
+	s := stubOrchestratorSeams(t)
+	widgets.IsInteractiveFn = func(io.Reader) bool { return true }
+	s.confirmOK = true
+	s.installForm()
+	s.installConfirm()
+	s.installRunner()
+	def := &usercommands.CommandDef{
+		ID: "db.reset", LocalName: "reset", Group: "db",
+		Type: usercommands.CommandTypeShell, Cmd: "echo",
+		Confirmation: true,
+		Params: map[string]model.ParamDef{
+			"task": {Type: model.ParamTypeString},
+		},
+	}
+	reg := newTestRegistry(def)
+	err := runCommandByID(context.Background(), strings.NewReader(""), io.Discard, io.Discard,
+		newCfg(), reg, t.TempDir(), "db.reset",
+		runOpts{PrefilledParams: map[string]string{"task": "cleanup"}})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if s.formCalls != 0 {
+		t.Errorf("form must be skipped on PrefilledParams path; got %d", s.formCalls)
+	}
+	if s.confirmCalls != 1 {
+		t.Errorf("confirm should still fire post-exit; got %d", s.confirmCalls)
+	}
+	if got := s.confirmVals["task"]; got != "cleanup" {
+		t.Errorf("confirm summary should use harvested task=cleanup; got %q", got)
+	}
+	if s.runCalls != 1 {
+		t.Errorf("runner should run once after confirm; got %d", s.runCalls)
+	}
+}
+
+// TestRunCommandByID_PrefilledParams_MissingRequiredSafetyNet asserts that a
+// harvested map that omits a required param is still rejected — by resolve at
+// BuildRunContext time (the final safety net), not silently run.
+func TestRunCommandByID_PrefilledParams_MissingRequiredSafetyNet(t *testing.T) {
+	s := stubOrchestratorSeams(t)
+	widgets.IsInteractiveFn = func(io.Reader) bool { return true }
+	s.installForm()
+	s.installRunner()
+	def := &usercommands.CommandDef{
+		ID: "db.up", LocalName: "up", Group: "db", Type: usercommands.CommandTypeShell, Cmd: "echo",
+		Params: map[string]model.ParamDef{
+			"env": {Type: model.ParamTypeString, Required: true},
+		},
+	}
+	reg := newTestRegistry(def)
+	// Harvested map omits the required "env" (empty overlay result).
+	err := runCommandByID(context.Background(), strings.NewReader(""), io.Discard, io.Discard,
+		newCfg(), reg, t.TempDir(), "db.up",
+		runOpts{PrefilledParams: map[string]string{}})
+	if err == nil {
+		t.Fatal("expected missing-required error from resolve safety net")
+	}
+	if s.formCalls != 0 {
+		t.Errorf("form must not open on PrefilledParams path; got %d", s.formCalls)
+	}
+	if s.runCalls != 0 {
+		t.Errorf("runner must not run; got %d", s.runCalls)
+	}
+}
+
 func TestRunCommandByID_NonTTYWithoutYes_FallbackPreserved(t *testing.T) {
 	s := stubOrchestratorSeams(t)
 	widgets.IsInteractiveFn = func(io.Reader) bool { return false }

@@ -46,6 +46,11 @@ type runOpts struct {
 	Silent         bool            // suppress end-of-command desktop notification
 	Translator     i18n.Translator // for localized string lookups; nil-safe via TranslatorOrNop
 	Locale         string          // active locale code (e.g. "ru", "en")
+	// PrefilledParams carries param values harvested by the in-TUI param-form
+	// overlay (cmdbrowser Result.Values). When non-nil, runCommandByID skips its
+	// own huh form entirely and uses these values directly. nil = build/prompt
+	// the form here as usual (every non-browser path leaves it nil).
+	PrefilledParams map[string]string
 }
 
 // NewCmd builds the `dwe commands` command tree.

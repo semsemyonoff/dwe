@@ -505,26 +505,26 @@ from `res.Values`. `command.go` passes it into `runOpts.PrefilledParams`.
 - Modify: `internal/cli/command/runbyid.go`
 - Modify: `internal/cli/command/runbyid_test.go`
 
-- [ ] extract `prepareParams(cfg, def, provided) (prefilled, resolvedOpts, err)`
+- [x] extract `prepareParams(cfg, def, provided) (prefilled, resolvedOpts, err)`
       from `runCommandByID:89-143` (ParamDefaults + resolve.Options + membership
       validation; `provided` from `parseSetFlags` at `:81` is its INPUT); call it
       from `runCommandByID` unchanged in behaviour
-- [ ] add `runOpts.PrefilledParams map[string]string`; `prepareParams` still runs
+- [x] add `runOpts.PrefilledParams map[string]string`; `prepareParams` still runs
       UNCONDITIONALLY (idempotent membership validation) — only `buildAskFields`/
       `runAsk` are skipped: when `PrefilledParams != nil`, force `showForm = false`
       and set `values = PrefilledParams` (`BuildRunContext`'s `resolve.Params`
       remains the final safety net); keep the non-interactive missing-required
       guard reachable for the `PrefilledParams == nil` path only
-- [ ] confirm the confirm block, `rctx` build, and execute path are unchanged for
+- [x] confirm the confirm block, `rctx` build, and execute path are unchanged for
       both branches (params already validated by resolve at build time)
-- [ ] write tests: `prepareParams` returns identical prefilled/resolvedOpts to the
+- [x] write tests: `prepareParams` returns identical prefilled/resolvedOpts to the
       pre-refactor inline path (table incl. select/multiselect membership errors);
       `runCommandByID` with `PrefilledParams` set skips the form and builds `rctx`
       from them; confirm still fires when `def.Confirmation`
-- [ ] write tests for edge cases: `PrefilledParams` nil → existing behaviour
+- [x] write tests for edge cases: `PrefilledParams` nil → existing behaviour
       (form shown / non-interactive guard) unchanged; missing-required surfaced at
       resolve time when a harvested map omits one (safety net)
-- [ ] run `make test` — must pass before Task 4
+- [x] run `make test` — must pass before Task 4
 
 ### Task 4: `cli/command` — browser closures + selector/`Values` plumbing
 
