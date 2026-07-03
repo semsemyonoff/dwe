@@ -921,7 +921,14 @@ func TestRunShowHelpTriState(t *testing.T) {
 			defer cancel()
 
 			fields := []Field{{Key: "test", Kind: FieldInput, Title: "Test"}}
-			_, _ = Run(ctx, "Title", fields, RunOptions{ShowHelp: showHelp})
+			// Route stdio to buffers so the smoke test never touches the real
+			// terminal (huh's group.showHelp is unexported, so the effect stays
+			// unobservable — this only asserts no panic across the tri-state).
+			_, _ = Run(ctx, "Title", fields, RunOptions{
+				Input:    strings.NewReader(""),
+				Output:   io.Discard,
+				ShowHelp: showHelp,
+			})
 		})
 	}
 }

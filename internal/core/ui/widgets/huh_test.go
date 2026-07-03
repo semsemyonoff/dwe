@@ -51,6 +51,87 @@ func TestRunConfirm_SeamSwapBypassesHooks(t *testing.T) {
 	}
 }
 
+// TestConfirmRun_SeamSwapBypassesHooks mirrors TestRunConfirm_SeamSwapBypassesHooks
+// for the ConfirmRun wrapper: hooks live in the seam default (via RunHuhForm), not
+// in the wrapper, so a seam-swapped test must not observe them fire. A non-empty
+// values map is required so ConfirmRun hits runConfirmRunFormFn rather than falling
+// back to RunConfirm.
+func TestConfirmRun_SeamSwapBypassesHooks(t *testing.T) {
+	resetHooks(t)
+
+	orig := runConfirmRunFormFn
+	t.Cleanup(func() { runConfirmRunFormFn = orig })
+
+	var order []string
+	SetHuhHooks(
+		func() { order = append(order, "before") },
+		func() { order = append(order, "after") },
+	)
+
+	runConfirmRunFormFn = func(title, summary string) (bool, error) {
+		order = append(order, "form")
+		return true, nil
+	}
+	if _, err := ConfirmRun("?", map[string]string{"k": "v"}); err != nil {
+		t.Fatal(err)
+	}
+	if len(order) != 1 || order[0] != "form" {
+		t.Errorf("expected only the seam to run (hooks live in RunHuhForm now), got %v", order)
+	}
+}
+
+// TestRunSelector_SeamSwapBypassesHooks guards the same wrapper-fires-no-hooks
+// contract for RunSelector.
+func TestRunSelector_SeamSwapBypassesHooks(t *testing.T) {
+	resetHooks(t)
+
+	orig := runSelectFormFn
+	t.Cleanup(func() { runSelectFormFn = orig })
+
+	var order []string
+	SetHuhHooks(
+		func() { order = append(order, "before") },
+		func() { order = append(order, "after") },
+	)
+
+	runSelectFormFn = func(title string, opts []huh.Option[int]) (int, error) {
+		order = append(order, "form")
+		return 0, nil
+	}
+	if _, err := RunSelector("?", []SelectorItem{{Label: "a"}}); err != nil {
+		t.Fatal(err)
+	}
+	if len(order) != 1 || order[0] != "form" {
+		t.Errorf("expected only the seam to run (hooks live in RunHuhForm now), got %v", order)
+	}
+}
+
+// TestRunMultiSelect_SeamSwapBypassesHooks guards the same wrapper-fires-no-hooks
+// contract for RunMultiSelect (needs a toggleable item so the form is not skipped).
+func TestRunMultiSelect_SeamSwapBypassesHooks(t *testing.T) {
+	resetHooks(t)
+
+	orig := runMultiSelectFormFn
+	t.Cleanup(func() { runMultiSelectFormFn = orig })
+
+	var order []string
+	SetHuhHooks(
+		func() { order = append(order, "before") },
+		func() { order = append(order, "after") },
+	)
+
+	runMultiSelectFormFn = func(title string, opts []huh.Option[string]) ([]string, error) {
+		order = append(order, "form")
+		return nil, nil
+	}
+	if _, err := RunMultiSelect("?", []MultiSelectItem{{Key: "a", Label: "A"}}); err != nil {
+		t.Fatal(err)
+	}
+	if len(order) != 1 || order[0] != "form" {
+		t.Errorf("expected only the seam to run (hooks live in RunHuhForm now), got %v", order)
+	}
+}
+
 func TestSnapshotHuhHooks_NilSafe(t *testing.T) {
 	resetHooks(t)
 

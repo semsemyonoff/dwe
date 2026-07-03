@@ -454,10 +454,11 @@ Quit/help-slot mechanics inside `ask` (moved verbatim from the raw sites, once):
 precedent):
 
 - `dwe deploy` (no args, TTY): top menu — esc/q exits cleanly, help line shows
-  `q/esc exit` + `enter select`; service picker — esc returns to menu, locked service
-  shows the lock hint on enter.
-- `dwe setup` wizard in a project with port conflicts: port form shows `esc cancel` in
-  the help line, still-occupied port rejected inline; service-toggle form shows
+  `q/esc/ctrl+c exit` + `enter select` (the hint joins all QuitSpec keys, per the
+  `WithHelp(joinedKeys, Help)` design in Technical Details); service picker — esc
+  returns to menu, locked service shows the lock hint on enter.
+- `dwe setup` wizard in a project with port conflicts: port form shows `esc/ctrl+c cancel`
+  in the help line, still-occupied port rejected inline; service-toggle form shows
   "Always on:" line, `/` does NOT enter filtering, esc cancels the wizard.
 - A `dwe run <cmd>` with params (cmdbrowser force-param-form path): cancel returns to
   shell without running.
