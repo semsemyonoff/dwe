@@ -10,9 +10,9 @@ import (
 
 // huhHooksMu guards huhBeforeHook and huhAfterHook. The two hooks are written
 // together under Lock so callers always observe a consistent pair via
-// snapshotHuhHooks. Callers (RunConfirm / RunSelector / RunMultiSelect) snapshot
-// the pair once at entry and use the snapshotted after-hook in a defer so that
-// SetHuhHooks / ClearHuhHooks calls during a prompt cannot break pairing.
+// snapshotHuhHooks. RunWithPromptHooks (reached by every prompt through
+// RunHuhForm) snapshots the pair once and defers the snapshotted after-hook so
+// that SetHuhHooks / ClearHuhHooks calls during a prompt cannot break pairing.
 var (
 	huhHooksMu    sync.RWMutex
 	huhBeforeHook func()

@@ -226,7 +226,7 @@ func writeVarOverride(cmd *cobra.Command, flags *cmdctx.RootFlags, path string, 
 
 // promptForVarValue opens the single-input huh form for a no-value set,
 // carrying inspect-style per-layer info as the field description. It returns the
-// submitted value; ok is false when the user aborts (ErrUserAborted) — the
+// submitted value; ok is false when the user aborts (widgets.ErrCancelled) — the
 // caller treats that as a clean no-op.
 func promptForVarValue(cmd *cobra.Command, flags *cmdctx.RootFlags, path string) (value string, ok bool, err error) {
 	desc := varSetFormDescription(flags, path)

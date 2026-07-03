@@ -154,7 +154,7 @@ func TestVarsBrowser_ClosesAfterEdit(t *testing.T) {
 }
 
 // TestVarsBrowser_ReopensAfterAbortedEdit asserts that aborting the edit form
-// (ErrUserAborted, committed=false) reopens the browser rather than closing it.
+// (widgets.ErrCancelled, committed=false) reopens the browser rather than closing it.
 func TestVarsBrowser_ReopensAfterAbortedEdit(t *testing.T) {
 	cfgPath, root := writeVarsFixture(t)
 	flags := &cmdctx.RootFlags{ConfigPath: cfgPath, Root: root}
