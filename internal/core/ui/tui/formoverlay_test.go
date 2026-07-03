@@ -28,6 +28,21 @@ func buildTestForm(value *string) *huh.Form {
 	)
 }
 
+// buildTallTestForm builds a single-group huh form with n inputs so form.View()
+// is tall enough to exercise the MaxHeight cap. ShowHelp is disabled to mirror
+// the real consumer (ask.Build(..., ShowHelp:false)) and keep the group footer
+// empty, so the rendered height math is deterministic.
+func buildTallTestForm(n int) *huh.Form {
+	fields := make([]huh.Field, n)
+	for i := range fields {
+		fields[i] = huh.NewInput().
+			Key("k").
+			Title("Field").
+			Description("A description long enough to fill the group width for deterministic sizing.")
+	}
+	return huh.NewForm(huh.NewGroup(fields...)).WithShowHelp(false)
+}
+
 // cmdSliceType is tea.Cmd's reflect type, used to flatten Batch/Sequence
 // messages (both are []tea.Cmd underlying) without importing the unexported
 // sequenceMsg type.
@@ -262,5 +277,107 @@ func TestFormOverlayIsCapturing(t *testing.T) {
 	fo := NewFormOverlay(buildTestForm(&val), Region{Width: 100, Height: 24}, FormOverlayOptions{})
 	if !fo.Overlay().CapturesInput {
 		t.Fatalf("Overlay().CapturesInput = false, want true")
+	}
+}
+
+func TestFormOverlayMaxHeightCapsTallForm(t *testing.T) {
+	body := Region{Width: 100, Height: 24}
+
+	uncapped := NewFormOverlay(buildTallTestForm(8), body, FormOverlayOptions{})
+	tallHeight := uncapped.Overlay().Height
+
+	const cap = 12
+	capped := NewFormOverlay(buildTallTestForm(8), body, FormOverlayOptions{MaxHeight: cap})
+	gotHeight := capped.Overlay().Height
+
+	if tallHeight <= cap {
+		t.Fatalf("precondition: uncapped tall form height = %d, want > cap %d (form not tall enough)", tallHeight, cap)
+	}
+	if gotHeight > cap {
+		t.Fatalf("capped box height = %d, want ≤ MaxHeight %d", gotHeight, cap)
+	}
+	if gotHeight >= tallHeight {
+		t.Fatalf("capped box height = %d, want < uncapped height %d (cap not engaged)", gotHeight, tallHeight)
+	}
+}
+
+func TestFormOverlayMaxHeightWithHintFitsBudget(t *testing.T) {
+	body := Region{Width: 100, Height: 24}
+	const cap = 12
+	fo := NewFormOverlay(buildTallTestForm(8), body, FormOverlayOptions{MaxHeight: cap, Hint: "enter save · esc cancel"})
+	if got := fo.Overlay().Height; got > cap {
+		t.Fatalf("capped box (with hint) height = %d, want ≤ MaxHeight %d (hint must fit in budget)", got, cap)
+	}
+	if !strings.Contains(fo.Overlay().Content, "esc cancel") {
+		t.Fatalf("hint row was shaved from the capped box")
+	}
+}
+
+func TestFormOverlayMaxHeightDoesNotPadShortForm(t *testing.T) {
+	body := Region{Width: 100, Height: 24}
+	var val string
+	// A short (single-field) form with a large MaxHeight cap must render at its
+	// content height, NOT padded up to the cap. Compare against the content-driven
+	// (MaxHeight == 0) render.
+	contentDriven := NewFormOverlay(buildTestForm(&val), body, FormOverlayOptions{})
+	capped := NewFormOverlay(buildTestForm(&val), body, FormOverlayOptions{MaxHeight: 24})
+
+	if cd, cp := contentDriven.Overlay().Height, capped.Overlay().Height; cd != cp {
+		t.Fatalf("short form with MaxHeight=24 height = %d, want content-driven height %d (no padding to cap)", cp, cd)
+	}
+	if h := capped.Overlay().Height; h >= 24 {
+		t.Fatalf("short capped form height = %d, want well below cap 24 (no padding)", h)
+	}
+}
+
+func TestFormOverlayMaxHeightZeroByteIdentical(t *testing.T) {
+	body := Region{Width: 100, Height: 24}
+	var a, b string
+	base := NewFormOverlay(buildTestForm(&a), body, FormOverlayOptions{Hint: "h"})
+	zero := NewFormOverlay(buildTestForm(&b), body, FormOverlayOptions{Hint: "h", MaxHeight: 0})
+	if base.Overlay().Content != zero.Overlay().Content {
+		t.Fatalf("MaxHeight == 0 render differs from the no-MaxHeight render")
+	}
+}
+
+func TestFormOverlayMaxHeightResizeShrinkThenGrow(t *testing.T) {
+	// Regression for the one-way WithHeight trap: a tall form capped in a small
+	// body must UN-clamp back to its full content height when Resize grows the
+	// budget past the natural height (clamp recomputed from the stored natural
+	// height, not a re-measure of the already-capped view).
+	small := Region{Width: 100, Height: 24}
+	fo := NewFormOverlay(buildTallTestForm(8), small, FormOverlayOptions{MaxHeight: 12})
+	capped := fo.Overlay().Height
+	if capped > 12 {
+		t.Fatalf("precondition: capped height = %d, want ≤ 12", capped)
+	}
+
+	// Grow the cap well past the natural height.
+	fo.opts.MaxHeight = 200
+	fo.Resize(Region{Width: 100, Height: 240})
+	grown := fo.Overlay().Height
+	if grown <= capped {
+		t.Fatalf("after grow-Resize height = %d, want > capped height %d (un-clamp failed)", grown, capped)
+	}
+
+	// The un-clamped height must match a freshly built uncapped overlay's height.
+	reference := NewFormOverlay(buildTallTestForm(8), Region{Width: 100, Height: 240}, FormOverlayOptions{}).Overlay().Height
+	if grown != reference {
+		t.Fatalf("un-clamped height = %d, want full content height %d", grown, reference)
+	}
+}
+
+func TestFormOverlayMaxHeightNilFormGuard(t *testing.T) {
+	fo := NewFormOverlay(nil, Region{Width: 100, Height: 24}, FormOverlayOptions{MaxHeight: 12, Hint: "x"})
+	if fo.State() != huh.StateNormal {
+		t.Fatalf("nil-form State = %v, want StateNormal", fo.State())
+	}
+	// Must not panic on Overlay/Resize with MaxHeight set and a nil form.
+	if !fo.Overlay().CapturesInput {
+		t.Fatalf("nil-form Overlay CapturesInput = false, want true")
+	}
+	fo.Resize(Region{Width: 80, Height: 40})
+	if !fo.Overlay().CapturesInput {
+		t.Fatalf("nil-form Overlay after Resize CapturesInput = false, want true")
 	}
 }

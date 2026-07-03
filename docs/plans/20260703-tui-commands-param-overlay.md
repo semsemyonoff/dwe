@@ -395,46 +395,48 @@ from `res.Values`. `command.go` passes it into `runOpts.PrefilledParams`.
 - Modify: `internal/core/ui/tui/formoverlay.go`
 - Modify: `internal/core/ui/tui/formoverlay_test.go`
 
-- [ ] add `MaxHeight int` to `FormOverlayOptions` as a **content CAP, not a fixed
+- [x] add `MaxHeight int` to `FormOverlayOptions` as a **content CAP, not a fixed
       height** (codex finding: huh's `Group.WithHeight` sets an EXACT viewport
       height and the bubbles viewport PADS short content to fill it — a naive
       `form.WithHeight(body.Height)` would balloon a one-field form into a tall
       blank modal). Doc: 0 = content-driven (today); >0 = clamp only when the form
       is taller than the cap
-- [ ] **capture the uncapped natural height ONCE** (codex-2 finding: huh
+- [x] **capture the uncapped natural height ONCE** (codex-2 finding: huh
       `WithHeight(≤0)` is a no-op, NOT a reset — `form.go:317-318` — so height is
       one-way; and `lipgloss.Height(form.View())` AFTER a cap measures the
       already-clamped viewport, not the true content). In `NewFormOverlay`, after
       `WithWidth` and BEFORE any `WithHeight`, when `MaxHeight > 0` measure and
       store `fo.naturalHeight = lipgloss.Height(form.View())` (`Form.View` works
       pre-`Init`, `form.go:653`)
-- [ ] rename/extend `applyWidth` → `applySize(body Region)`: keep width logic; for
+- [x] rename/extend `applyWidth` → `applySize(body Region)`: keep width logic; for
       height, when `MaxHeight > 0` compute `budget := MaxHeight − formOverlayVChrome`
       (`formOverlayVChrome = 2 (border) + hintRows`, `hintRows = 1` when
       `opts.Hint != ""` — the hint is JoinVertical'd INSIDE the box, so it must be
-      in the budget or `clampOverlay` shaves the hint) and ALWAYS call
-      `form.WithHeight(max(1, min(fo.naturalHeight, budget)))` from the STORED
-      natural height (never a re-measure of the capped view). `budget ≥ natural` →
-      `WithHeight(natural)` = exact content fit (no padding, no scroll); `budget <
-      natural` → `WithHeight(budget)` = huh scrolls to the focused field. This is
-      direction-safe: a later larger `Resize` recomputes from `naturalHeight` and
-      un-clamps correctly. `MaxHeight == 0` → NEVER call `WithHeight` (content-
-      driven, byte-identical to the vars path)
-- [ ] `Resize` calls `applySize` (re-applies width AND the stored-natural clamp)
-- [ ] update the type doc: `MaxHeight` is a content CAP; the wrapper stores the
+      in the budget or `clampOverlay` shaves the hint). ⚠️ **DEVIATION from the
+      "ALWAYS call WithHeight" wording:** empirically `form.WithHeight(natural)`
+      pads a fitting form by one row (huh's group footer `"" + footer` handling),
+      so `WithHeight` is called ONLY when clamping is actually needed (`budget <
+      natural` → `WithHeight(budget)`, scrolls) or to restore after a prior clamp
+      (`budget ≥ natural` AND previously clamped → `WithHeight(natural)`,
+      un-clamp). When it fits and was never clamped, `WithHeight` is left untouched
+      → byte-identical to the `MaxHeight == 0` path. A `clamped bool` field gates
+      the un-clamp; still direction-safe on shrink-then-grow `Resize`. `MaxHeight
+      == 0` → NEVER call `WithHeight` (content-driven, byte-identical to vars)
+- [x] `Resize` calls `applySize` (re-applies width AND the stored-natural clamp)
+- [x] update the type doc: `MaxHeight` is a content CAP; the wrapper stores the
       natural height at construction and clamps from it; short forms render exact
       (no padding), tall forms scroll (huh viewport); content-driven (0) unchanged
-- [ ] write tests: a form taller than the cap → box height ≤ `MaxHeight` and it
+- [x] write tests: a form taller than the cap → box height ≤ `MaxHeight` and it
       scrolls (huh viewport, focused field visible); a SHORT form with `MaxHeight`
       set is NOT padded (rendered `lipgloss.Height` == content height, not the
       cap); with a hint the total box height ≤ body (no `clampOverlay` shave);
       **shrink-then-grow `Resize`** (tall form in a small body → capped/scrolling →
       Resize to a large body → un-clamped to content height, codex-2 stale-cap
       regression test)
-- [ ] write tests for edge cases: `MaxHeight == 0` byte-identical to current
+- [x] write tests for edge cases: `MaxHeight == 0` byte-identical to current
       single-field render; `MaxHeight` ≥ content renders exact content (no pad);
       nil-form guard still holds with `MaxHeight` set
-- [ ] run `make test` — must pass before Task 2
+- [x] run `make test` — must pass before Task 2
 
 ### Task 2: `cmdbrowser` `RunFormSpec` + run-form state machine + `Result.Values`
 

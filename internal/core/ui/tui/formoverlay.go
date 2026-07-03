@@ -26,10 +26,29 @@ const formOverlayHChrome = 4
 // narrow in practice; this is a safety net only.
 const formOverlayMinWidth = 10
 
+// formOverlayVBorder is the vertical cell cost of the overlay box's rounded
+// border (one row top, one bottom). Padding(0,1) adds no vertical rows. Used to
+// convert a MaxHeight content CAP into the huh form-height budget.
+const formOverlayVBorder = 2
+
 // FormOverlayOptions configures a [FormOverlay].
 type FormOverlayOptions struct {
 	// MaxWidth caps the inner form width. 0 uses formOverlayMaxWidth.
 	MaxWidth int
+	// MaxHeight is an OPTIONAL content CAP on the overlay box height (0 =
+	// content-driven, byte-identical to the vars edit path). It is a cap, NOT a
+	// fixed height: huh's Group.WithHeight sets an EXACT viewport height and the
+	// bubbles viewport PADS short content to fill it, so a naive
+	// form.WithHeight(body.Height) would balloon a one-field form into a tall
+	// blank modal. This wrapper instead captures the uncapped natural height ONCE
+	// at construction and clamps from it — a form shorter than the cap renders at
+	// its exact content height (no padding), a taller form is clamped to the
+	// budget and scrolls inside huh's group viewport (auto-scrolling to the focused
+	// field). Because huh's WithHeight is one-way (WithHeight(≤0) is a no-op, not a
+	// reset), the clamp is always recomputed from the stored natural height and the
+	// capped view is NEVER re-measured — so a shrink-then-grow Resize un-clamps
+	// correctly.
+	MaxHeight int
 	// Hint is the footer hint row rendered below the form inside the box (e.g.
 	// "enter save · esc cancel"). "" omits the hint row entirely.
 	Hint string
@@ -62,21 +81,40 @@ type FormOverlayOptions struct {
 //     Update auto-sizes group width/height from a tea.WindowSizeMsg while its own
 //     width is 0. [FormOverlay.Update] therefore SWALLOWS tea.WindowSizeMsg — the
 //     wrapper sizes the form exclusively via WithWidth at construction and in
-//     [FormOverlay.Resize]; height stays content-driven.
+//     [FormOverlay.Resize]; height stays content-driven unless a MaxHeight cap is
+//     set (then it is clamped from the stored natural height — see the type doc).
 //   - bubbles/v2 textinput uses a virtual cursor rendered inline in View(); no
 //     tea.View.Cursor plumbing is needed. Cursor-blink arrives as async (non-key)
 //     messages, which is why the Frame's capturing-aware drainOverlay (ReplaceTop,
 //     not Push) is load-bearing for this overlay.
 //
-// Height caveat (design decision 1): the form height is content-driven and NOT
-// clamped by this wrapper. If a form is taller than the body region, Composite's
-// clampOverlay truncates it (MaxHeight) with no scroll — the submit control could
-// be clipped. This is acceptable for the single-field vars form; a future taller
-// consumer must add WithHeight/scroll support deliberately.
+// Height handling: by default (FormOverlayOptions.MaxHeight == 0) the form height
+// is content-driven and NOT clamped by this wrapper — if a form is taller than
+// the body region, Composite's clampOverlay truncates it with no scroll. This is
+// the vars-edit single-field behaviour. A consumer with a taller (multi-field)
+// form sets MaxHeight to bound the box: the wrapper stores the uncapped natural
+// height at construction and, whenever the box would exceed the cap, applies
+// form.WithHeight so huh scrolls the form inside its own group viewport (focused
+// field stays visible) instead of the box overflowing. See FormOverlayOptions.
 type FormOverlay struct {
-	form  *huh.Form
-	width int
-	opts  FormOverlayOptions
+	form *huh.Form
+	// naturalHeight is the uncapped rendered height of the form (via
+	// lipgloss.Height(form.View())) measured ONCE at construction, after WithWidth
+	// and BEFORE any WithHeight, when opts.MaxHeight > 0. Every height clamp is
+	// derived from this stored value because huh's WithHeight is one-way: measuring
+	// the view after a cap would read the already-clamped viewport, not the true
+	// content, and a later larger Resize could then never un-clamp.
+	naturalHeight int
+	// clamped records whether a WithHeight cap is currently applied. It gates the
+	// un-clamp on Resize: WithHeight is only called when the form must shrink to
+	// fit the budget (budget < natural) or to restore the natural height after a
+	// prior clamp. When the form already fits (budget ≥ natural) and was never
+	// clamped, WithHeight is NOT called — so a short form renders content-driven
+	// and byte-identical to the MaxHeight == 0 path (calling WithHeight(natural)
+	// would pad it by a row via huh's group footer handling).
+	clamped bool
+	width   int
+	opts    FormOverlayOptions
 }
 
 // NewFormOverlay wraps form as a capturing overlay sized to body. form must be
@@ -87,7 +125,20 @@ type FormOverlay struct {
 func NewFormOverlay(form *huh.Form, body Region, opts FormOverlayOptions) *FormOverlay {
 	fo := &FormOverlay{form: form, opts: opts}
 	fo.applyWidth(body)
+	// Capture the uncapped natural height ONCE, at the applied width, before any
+	// WithHeight cap clamps the view. Form.View works pre-Init.
+	if opts.MaxHeight > 0 && form != nil {
+		fo.naturalHeight = lipgloss.Height(form.View())
+	}
+	fo.applyHeight()
 	return fo
+}
+
+// applySize re-applies both the inner form width (from body) and the height clamp
+// (from the stored natural height). Used on Resize.
+func (fo *FormOverlay) applySize(body Region) {
+	fo.applyWidth(body)
+	fo.applyHeight()
 }
 
 // applyWidth computes the inner form width from body and applies it to the form.
@@ -101,6 +152,39 @@ func (fo *FormOverlay) applyWidth(body Region) {
 	fo.width = w
 	if fo.form != nil {
 		fo.form.WithWidth(w)
+	}
+}
+
+// applyHeight clamps the form height to the MaxHeight content cap. It is a no-op
+// when MaxHeight == 0 (content-driven, byte-identical to the vars edit path) so
+// huh's WithHeight is never touched. Otherwise WithHeight is derived from the
+// STORED natural height (never a re-measure of the already-capped view):
+//
+//   - budget < natural → WithHeight(budget): huh scrolls to the focused field.
+//   - budget ≥ natural AND previously clamped → WithHeight(natural): un-clamp
+//     after a shrink-then-grow Resize (huh's WithHeight is one-way, so the restore
+//     must be explicit).
+//   - budget ≥ natural AND never clamped → leave the form untouched: it renders
+//     content-driven, byte-identical to the MaxHeight == 0 path. Calling
+//     WithHeight(natural) here would pad the box by a row.
+func (fo *FormOverlay) applyHeight() {
+	if fo.opts.MaxHeight <= 0 || fo.form == nil {
+		return
+	}
+	vChrome := formOverlayVBorder
+	if fo.opts.Hint != "" {
+		// The hint is JoinVertical'd INSIDE the box, so it must be in the budget or
+		// clampOverlay would shave the hint row.
+		vChrome++
+	}
+	budget := fo.opts.MaxHeight - vChrome
+	switch {
+	case budget < fo.naturalHeight:
+		fo.form.WithHeight(max(1, budget))
+		fo.clamped = true
+	case fo.clamped:
+		fo.form.WithHeight(fo.naturalHeight)
+		fo.clamped = false
 	}
 }
 
@@ -144,10 +228,11 @@ func (fo *FormOverlay) State() huh.FormState {
 	return fo.form.State
 }
 
-// Resize re-applies the form width for a new body region. The host calls it on
-// terminal resize (and re-marks its pending overlay so the Frame re-renders).
+// Resize re-applies the form width AND the height clamp (from the stored natural
+// height) for a new body region. The host calls it on terminal resize (and
+// re-marks its pending overlay so the Frame re-renders).
 func (fo *FormOverlay) Resize(body Region) {
-	fo.applyWidth(body)
+	fo.applySize(body)
 }
 
 // Overlay renders the embedded form in a rounded-border box (Padding(0,1),
