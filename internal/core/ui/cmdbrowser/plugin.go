@@ -678,6 +678,23 @@ func (b *browser) updateInspect(msg tea.KeyPressMsg) tea.Cmd {
 		return nil
 	}
 	if msg.Code == tea.KeyEnter {
+		// ModeEdit is edit-and-stay: Enter on an inspected row transitions the
+		// capturing overlay in place from inspect to the edit form (matching
+		// Enter on the row itself), instead of committing a Result and quitting
+		// to the legacy exit-and-return path. The Frame's refreshCapturingOverlay
+		// ReplaceTops the inspect snapshot with the edit overlay published via
+		// PendingOverlay. Only retire the inspect state once openEdit actually
+		// opened the form — a BuildForm error leaves b.edit nil and keeps the
+		// inspect overlay valid (the error surfaces as a status flash).
+		if b.opts.Mode == ModeEdit && b.opts.Edit != nil {
+			idx := b.inspect.inspectIdx
+			cmd := b.openEdit(idx)
+			if b.edit != nil {
+				b.inspect = nil
+				b.inspectPending = false
+			}
+			return cmd
+		}
 		b.result = Result{
 			Idx:         b.inspect.inspectIdx,
 			Action:      actionForMode(b.opts.Mode),

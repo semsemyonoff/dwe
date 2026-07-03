@@ -203,6 +203,84 @@ func TestBrowser_EditOpensCapturingOverlay(t *testing.T) {
 	}
 }
 
+// TestBrowser_InspectEnterOpensEditOverlay pins the edit-and-stay contract for
+// the inspect→Enter route in ModeEdit: pressing Enter while the inspect overlay
+// is open must transition the capturing overlay in place to the edit form
+// (matching Enter on the row itself), NOT commit a Result and quit to the legacy
+// exit-and-return path. Without this the frame path could exit with a non-cancel
+// Result and drive the legacy printing edit — contradicting the browser.go
+// "frame path exits via ErrCancelled" invariant.
+func TestBrowser_InspectEnterOpensEditOverlay(t *testing.T) {
+	var rec commitRecord
+	b := newEditBrowser(t, &rec, nil, nil)
+	b.list.Select(1) // db.port (origIdx 1)
+
+	b.openInspect()
+	if b.inspect == nil {
+		t.Fatal("openInspect did not open the inspect overlay")
+	}
+
+	// Enter through the capturing route (Frame → plugin.Update(key)).
+	p := newPumper(t)
+	p.pump(b, b.Update(tea.KeyPressMsg{Code: tea.KeyEnter}))
+
+	if b.inspect != nil || b.inspectPending {
+		t.Errorf("inspect state not retired after edit opened: inspect=%v pending=%v", b.inspect, b.inspectPending)
+	}
+	if b.edit == nil {
+		t.Fatal("inspect+Enter did not open the edit overlay")
+	}
+	if b.edit.idx != 1 {
+		t.Errorf("edit idx = %d, want 1 (db.port, the inspected row)", b.edit.idx)
+	}
+	// The overlay handed to the Frame is the capturing edit form (ReplaceTop in
+	// place — the stack never grows past one).
+	ov, ok := b.PendingOverlay()
+	if !ok {
+		t.Fatal("PendingOverlay() = false after inspect→edit, want true")
+	}
+	if !ov.CapturesInput {
+		t.Error("edit overlay CapturesInput = false, want true")
+	}
+	// No Result was committed and no quit was requested — the browser stays in-TUI.
+	if b.result.Action != ActionUnknown {
+		t.Errorf("inspect+Enter set Result.Action = %v, want ActionUnknown (no exit-and-return)", b.result.Action)
+	}
+	if rec.calls != 0 {
+		t.Errorf("Commit called %d times before submit, want 0", rec.calls)
+	}
+}
+
+// TestBrowser_InspectEnterBuildErrorKeepsInspect pins that when the edit form
+// fails to build, the inspect overlay is left intact (still valid and capturing)
+// rather than being retired into a dangling snapshot — the error surfaces as a
+// status flash while the user stays on the inspect view.
+func TestBrowser_InspectEnterBuildErrorKeepsInspect(t *testing.T) {
+	var rec commitRecord
+	b := newEditBrowser(t, &rec, errors.New("boom"), nil)
+	b.list.Select(0)
+
+	b.openInspect()
+	if b.inspect == nil {
+		t.Fatal("openInspect did not open the inspect overlay")
+	}
+
+	b.Update(tea.KeyPressMsg{Code: tea.KeyEnter})
+
+	if b.edit != nil {
+		t.Errorf("edit opened despite BuildForm error: edit=%v", b.edit)
+	}
+	if b.inspect == nil {
+		t.Fatal("inspect overlay retired on BuildForm error; want it kept")
+	}
+	if b.flash == "" {
+		t.Error("BuildForm error set no status flash")
+	}
+	if b.result.Action != ActionUnknown {
+		t.Errorf("BuildForm error set Result.Action = %v, want ActionUnknown", b.result.Action)
+	}
+}
+
 func TestBrowser_EditClosedByOverlayClosedMsg(t *testing.T) {
 	var rec commitRecord
 	b := newEditBrowser(t, &rec, nil, nil)
