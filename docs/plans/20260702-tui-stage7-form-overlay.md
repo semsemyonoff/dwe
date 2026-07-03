@@ -548,16 +548,24 @@ cli/vars closures (captured: `cmd`, `flags`, `items`/`leaves`, `inspectCache`):
 
 ### Task 6: Verify acceptance criteria
 
-- [ ] spec § Stages row 7 deliverables all present: embeddable-form capability
+- [x] spec § Stages row 7 deliverables all present: embeddable-form capability
       in `tui`; esc/ctrl+c arbitration settled; form sized to inner modal dims
       with huh chrome reconciled (no double border, help suppressed); plugin
       reads `form.State` to dismiss and harvest; vars-browser edit mode on the
       overlay; cmdbrowser force-param-form still exit-and-run; golden frame
       tests at the width buckets
-- [ ] behaviour preservation spot-checks: `Edit == nil` goldens byte-identical;
+      (verified: `tui/formoverlay.go` + `FormOverlay.State()`; `ShowHelp:false`
+      at every BuildForm site; `tui.CloseOverlayMsg` + capturing-aware
+      `drainOverlay`; `EditSpec`/`ActionEdit`; `ForceParamForm` path unchanged;
+      goldens `frame_editform_{80,99,100}.golden`)
+- [x] behaviour preservation spot-checks: `Edit == nil` goldens byte-identical;
       ModeRun/ForceParamForm untouched; standalone `vars set` form unchanged;
       fallback loop intact; JSON / non-interactive paths untouched
-- [ ] run full suite: `make build && make test && make lint`
+      (all covered by the passing suite: `TestBrowser_ModeGolden` no-edit path,
+      `actions_test.go` ForceParamForm assertions, `runAsk`/`runBrowser` seam
+      tests, vars set JSON tests)
+- [x] run full suite: `make build && make test && make lint`
+      (build ok; all packages `ok`, no FAIL/panic; `golangci-lint` 0 issues)
 
 ### Task 7: [Final] Documentation and plan close-out
 
