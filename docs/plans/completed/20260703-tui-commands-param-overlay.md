@@ -619,11 +619,15 @@ from `res.Values`. `command.go` passes it into `runOpts.PrefilledParams`.
 
 ### Task 7: [Final] Documentation and plan close-out
 
-- [ ] grep `docs/` to confirm no other user-facing doc describes the old
-      exit-then-form command flow as the only path
-- [ ] update `AGENTS.md` Critical Patterns only if implementation surfaced a new
-      trap beyond Task 5's entries
-- [ ] move this plan to `docs/plans/completed/`
+- [x] grep `docs/` to confirm no other user-facing doc describes the old
+      exit-then-form command flow as the only path (ui.md + tui-keymap.md +
+      packages.md + ru mirror already document the overlay flow; the only other
+      `params`/`form` doc hits are daemon `params:` declarations, unrelated to the
+      UI flow)
+- [x] update `AGENTS.md` Critical Patterns only if implementation surfaced a new
+      trap beyond Task 5's entries (no new trap — Task 5's `FormOverlay.MaxHeight`
+      + `RunFormSpec` entries are complete and accurate; no change needed)
+- [x] move this plan to `docs/plans/completed/`
 
 ## Post-Completion
 
