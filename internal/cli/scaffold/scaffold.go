@@ -26,7 +26,6 @@ import (
 	"github.com/semsemyonoff/dwe/internal/core/ui/widgets"
 	core "github.com/semsemyonoff/dwe/internal/core/workflow/scaffold"
 
-	huh "charm.land/huh/v2"
 	"github.com/spf13/cobra"
 )
 
@@ -317,7 +316,7 @@ func runInit(cmd *cobra.Command, flags *cmdctx.RootFlags, args []string, f initF
 	if isInteractive {
 		collected, ferr := runFormFn(cmd.Context(), in, cmd.InOrStdin(), cmd.OutOrStdout())
 		if ferr != nil {
-			if errors.Is(ferr, huh.ErrUserAborted) {
+			if errors.Is(ferr, widgets.ErrCancelled) {
 				// Aborted before any write — clean exit, nothing on disk.
 				return nil
 			}

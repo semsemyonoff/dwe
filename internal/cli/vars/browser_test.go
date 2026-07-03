@@ -10,8 +10,6 @@ import (
 	"github.com/semsemyonoff/dwe/internal/core/ui/ask"
 	"github.com/semsemyonoff/dwe/internal/core/ui/cmdbrowser"
 	"github.com/semsemyonoff/dwe/internal/core/ui/widgets"
-
-	huh "charm.land/huh/v2"
 )
 
 // TestBuildVarsBrowserItems asserts vars leaves map onto cmdbrowser.Items with
@@ -156,7 +154,7 @@ func TestVarsBrowser_ClosesAfterEdit(t *testing.T) {
 }
 
 // TestVarsBrowser_ReopensAfterAbortedEdit asserts that aborting the edit form
-// (ErrUserAborted, committed=false) reopens the browser rather than closing it.
+// (widgets.ErrCancelled, committed=false) reopens the browser rather than closing it.
 func TestVarsBrowser_ReopensAfterAbortedEdit(t *testing.T) {
 	cfgPath, root := writeVarsFixture(t)
 	flags := &cmdctx.RootFlags{ConfigPath: cfgPath, Root: root}
@@ -189,7 +187,7 @@ func TestVarsBrowser_ReopensAfterAbortedEdit(t *testing.T) {
 		return cmdbrowser.Result{}, widgets.ErrCancelled
 	}
 	runAsk = func(_ context.Context, _ string, _ []ask.Field, _ ask.RunOptions) (ask.Result, error) {
-		return ask.Result{}, huh.ErrUserAborted // abort the form → no write
+		return ask.Result{}, widgets.ErrCancelled // abort the form → no write
 	}
 
 	if _, _, err := runVarsCmd(t, flags); err != nil {

@@ -1,11 +1,15 @@
 package widgets
 
 import (
+	"context"
 	"errors"
+	"io"
 	"sync"
 	"sync/atomic"
 	"testing"
+	"time"
 
+	tea "charm.land/bubbletea/v2"
 	huh "charm.land/huh/v2"
 )
 
@@ -17,7 +21,13 @@ func resetHooks(t *testing.T) {
 	t.Cleanup(ClearHuhHooks)
 }
 
-func TestSetHuhHooks_FiresAroundConfirm(t *testing.T) {
+// TestRunConfirm_SeamSwapBypassesHooks documents the post-RunHuhForm
+// boundary: prompt hooks now live inside the seam-default implementation
+// (defaultRunConfirmForm -> RunHuhForm), not in the RunConfirm wrapper, so a
+// seam-swapped test (as used throughout confirm_test.go) never triggers
+// them. The hook-pairing contract itself is covered by the TestRunHuhForm_*
+// tests below, which exercise the real production path.
+func TestRunConfirm_SeamSwapBypassesHooks(t *testing.T) {
 	resetHooks(t)
 
 	origConfirm := runConfirmFormFn
@@ -36,51 +46,89 @@ func TestSetHuhHooks_FiresAroundConfirm(t *testing.T) {
 	if _, err := RunConfirm("?", "Y", "N"); err != nil {
 		t.Fatal(err)
 	}
-	if len(order) != 3 || order[0] != "before" || order[1] != "form" || order[2] != "after" {
-		t.Errorf("expected before/form/after, got %v", order)
+	if len(order) != 1 || order[0] != "form" {
+		t.Errorf("expected only the seam to run (hooks live in RunHuhForm now), got %v", order)
 	}
 }
 
-func TestSetHuhHooks_AfterFiresOnError(t *testing.T) {
+// TestConfirmRun_SeamSwapBypassesHooks mirrors TestRunConfirm_SeamSwapBypassesHooks
+// for the ConfirmRun wrapper: hooks live in the seam default (via RunHuhForm), not
+// in the wrapper, so a seam-swapped test must not observe them fire. A non-empty
+// values map is required so ConfirmRun hits runConfirmRunFormFn rather than falling
+// back to RunConfirm.
+func TestConfirmRun_SeamSwapBypassesHooks(t *testing.T) {
 	resetHooks(t)
 
-	orig := runConfirmFormFn
-	t.Cleanup(func() { runConfirmFormFn = orig })
+	orig := runConfirmRunFormFn
+	t.Cleanup(func() { runConfirmRunFormFn = orig })
 
-	var afterCalled bool
-	SetHuhHooks(nil, func() { afterCalled = true })
+	var order []string
+	SetHuhHooks(
+		func() { order = append(order, "before") },
+		func() { order = append(order, "after") },
+	)
 
-	sentinel := errors.New("form failed")
-	runConfirmFormFn = func(title, affirmative, negative string) (bool, error) {
-		return false, sentinel
+	runConfirmRunFormFn = func(title, summary string) (bool, error) {
+		order = append(order, "form")
+		return true, nil
 	}
-	_, err := RunConfirm("?", "Y", "N")
-	if !errors.Is(err, sentinel) {
-		t.Fatalf("expected sentinel error, got %v", err)
+	if _, err := ConfirmRun("?", map[string]string{"k": "v"}); err != nil {
+		t.Fatal(err)
 	}
-	if !afterCalled {
-		t.Error("after hook must fire even when the form returns an error")
+	if len(order) != 1 || order[0] != "form" {
+		t.Errorf("expected only the seam to run (hooks live in RunHuhForm now), got %v", order)
 	}
 }
 
-func TestSetHuhHooks_AfterFiresOnCancel(t *testing.T) {
+// TestRunSelector_SeamSwapBypassesHooks guards the same wrapper-fires-no-hooks
+// contract for RunSelector.
+func TestRunSelector_SeamSwapBypassesHooks(t *testing.T) {
 	resetHooks(t)
 
-	orig := runConfirmFormFn
-	t.Cleanup(func() { runConfirmFormFn = orig })
+	orig := runSelectFormFn
+	t.Cleanup(func() { runSelectFormFn = orig })
 
-	var afterCalled bool
-	SetHuhHooks(nil, func() { afterCalled = true })
+	var order []string
+	SetHuhHooks(
+		func() { order = append(order, "before") },
+		func() { order = append(order, "after") },
+	)
 
-	runConfirmFormFn = func(title, affirmative, negative string) (bool, error) {
-		return false, huh.ErrUserAborted
+	runSelectFormFn = func(title string, opts []huh.Option[int]) (int, error) {
+		order = append(order, "form")
+		return 0, nil
 	}
-	_, err := RunConfirm("?", "Y", "N")
-	if !errors.Is(err, ErrCancelled) {
-		t.Fatalf("expected ErrCancelled, got %v", err)
+	if _, err := RunSelector("?", []SelectorItem{{Label: "a"}}); err != nil {
+		t.Fatal(err)
 	}
-	if !afterCalled {
-		t.Error("after hook must fire on user-cancel path")
+	if len(order) != 1 || order[0] != "form" {
+		t.Errorf("expected only the seam to run (hooks live in RunHuhForm now), got %v", order)
+	}
+}
+
+// TestRunMultiSelect_SeamSwapBypassesHooks guards the same wrapper-fires-no-hooks
+// contract for RunMultiSelect (needs a toggleable item so the form is not skipped).
+func TestRunMultiSelect_SeamSwapBypassesHooks(t *testing.T) {
+	resetHooks(t)
+
+	orig := runMultiSelectFormFn
+	t.Cleanup(func() { runMultiSelectFormFn = orig })
+
+	var order []string
+	SetHuhHooks(
+		func() { order = append(order, "before") },
+		func() { order = append(order, "after") },
+	)
+
+	runMultiSelectFormFn = func(title string, opts []huh.Option[string]) ([]string, error) {
+		order = append(order, "form")
+		return nil, nil
+	}
+	if _, err := RunMultiSelect("?", []MultiSelectItem{{Key: "a", Label: "A"}}); err != nil {
+		t.Fatal(err)
+	}
+	if len(order) != 1 || order[0] != "form" {
+		t.Errorf("expected only the seam to run (hooks live in RunHuhForm now), got %v", order)
 	}
 }
 
@@ -96,32 +144,6 @@ func TestSnapshotHuhHooks_NilSafe(t *testing.T) {
 	// No hooks installed — must not panic.
 	if _, err := RunConfirm("?", "Y", "N"); err != nil {
 		t.Fatal(err)
-	}
-}
-
-func TestSnapshotHuhHooks_SurvivesMidPromptClear(t *testing.T) {
-	resetHooks(t)
-
-	orig := runConfirmFormFn
-	t.Cleanup(func() { runConfirmFormFn = orig })
-
-	var afterCalled bool
-	SetHuhHooks(
-		func() {},
-		func() { afterCalled = true },
-	)
-
-	// Simulate a mid-prompt ClearHuhHooks. The snapshot taken at RunConfirm
-	// entry guarantees the after hook still fires.
-	runConfirmFormFn = func(title, affirmative, negative string) (bool, error) {
-		ClearHuhHooks()
-		return true, nil
-	}
-	if _, err := RunConfirm("?", "Y", "N"); err != nil {
-		t.Fatal(err)
-	}
-	if !afterCalled {
-		t.Error("after hook must fire even when hooks were cleared mid-prompt")
 	}
 }
 
@@ -221,5 +243,107 @@ func TestRunWithPromptHooks_SurvivesMidClear(t *testing.T) {
 	}
 	if !afterCalled {
 		t.Error("after hook must fire even when cleared mid-fn (snapshot semantics)")
+	}
+}
+
+// --- RunHuhForm tests ---
+
+// blockingForm returns a form that blocks reading from a never-closing input,
+// so a short context timeout deterministically produces a non-abort error from
+// form.RunWithContext.
+func blockingForm(t *testing.T) *huh.Form {
+	t.Helper()
+	r, _ := io.Pipe() // never written to: read blocks until the reader is closed
+	t.Cleanup(func() { _ = r.Close() })
+	return huh.NewForm(huh.NewGroup(huh.NewInput().Title("Foo"))).
+		WithInput(r).
+		WithOutput(io.Discard)
+}
+
+func TestRunHuhForm_HooksFireExactlyOnce(t *testing.T) {
+	resetHooks(t)
+	var before, after atomic.Int64
+	SetHuhHooks(
+		func() { before.Add(1) },
+		func() { after.Add(1) },
+	)
+
+	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Millisecond)
+	defer cancel()
+
+	if err := RunHuhForm(ctx, blockingForm(t)); err == nil {
+		t.Fatal("expected a context-related error from a form that never submits")
+	}
+	if before.Load() != 1 {
+		t.Errorf("before hook fired %d times, want 1", before.Load())
+	}
+	if after.Load() != 1 {
+		t.Errorf("after hook fired %d times, want 1", after.Load())
+	}
+}
+
+func TestRunHuhForm_HooksFireOnError(t *testing.T) {
+	resetHooks(t)
+	var afterCalled bool
+	SetHuhHooks(nil, func() { afterCalled = true })
+
+	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Millisecond)
+	defer cancel()
+
+	if err := RunHuhForm(ctx, blockingForm(t)); err == nil {
+		t.Fatal("expected a context-related error")
+	}
+	if !afterCalled {
+		t.Error("after hook must fire even when the form returns an error")
+	}
+}
+
+func TestRunHuhForm_NonAbortErrorPassesThrough(t *testing.T) {
+	resetHooks(t)
+
+	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Millisecond)
+	defer cancel()
+
+	err := RunHuhForm(ctx, blockingForm(t))
+	if err == nil {
+		t.Fatal("expected a context-related error")
+	}
+	if errors.Is(err, ErrCancelled) {
+		t.Errorf("a context timeout must not be translated to ErrCancelled, got %v", err)
+	}
+}
+
+func TestRunHuhForm_AbortTranslatesToErrCancelled(t *testing.T) {
+	resetHooks(t)
+
+	form := huh.NewForm(huh.NewGroup(huh.NewInput().Title("Foo"))).
+		WithInput(nil).
+		WithOutput(io.Discard).
+		WithAccessible(false)
+
+	// Mirrors huh's own TestAbort: queue a ctrl+c keypress, then cancel the
+	// context so RunWithContext exits immediately with ErrUserAborted.
+	form.Update(tea.KeyPressMsg(tea.Key{Mod: tea.ModCtrl, Code: 'c'}))
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+
+	err := RunHuhForm(ctx, form)
+	if !errors.Is(err, ErrCancelled) {
+		t.Fatalf("expected ErrCancelled, got %v", err)
+	}
+	if errors.Is(err, huh.ErrUserAborted) {
+		t.Error("RunHuhForm must not leak the raw huh.ErrUserAborted sentinel")
+	}
+}
+
+func TestRunHuhForm_NoHooksInstalled(t *testing.T) {
+	resetHooks(t)
+
+	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Millisecond)
+	defer cancel()
+
+	// Must not panic when no hooks are installed.
+	if err := RunHuhForm(ctx, blockingForm(t)); err == nil {
+		t.Fatal("expected a context-related error")
 	}
 }

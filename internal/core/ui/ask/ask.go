@@ -6,10 +6,12 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"strings"
 
 	"github.com/semsemyonoff/dwe/internal/core/ui/styles"
 	"github.com/semsemyonoff/dwe/internal/core/ui/widgets"
 
+	"charm.land/bubbles/v2/key"
 	huh "charm.land/huh/v2"
 )
 
@@ -46,6 +48,8 @@ type Field struct {
 	Defaults    []string           // pre-selected values (multiselect only)
 	Options     []Option           // choices for select/multiselect
 	Validate    func(string) error // optional per-field validation; for multiselect, called per-item
+	Height      int                // select/multiselect viewport height; 0 = unset (huh default)
+	Filterable  *bool              // FieldMultiselect only (huh/v2 Select has no Filterable); nil = huh default
 }
 
 // Result is the form output. Values are typed: string for input/select,
@@ -110,18 +114,36 @@ func (r Result) IsEmpty() bool {
 	return len(r.values) == 0
 }
 
-// RunOptions controls how Run executes.
-type RunOptions struct {
-	Input  io.Reader // defaults to os.Stdin if zero
-	Output io.Writer // defaults to os.Stdout if zero
+// QuitSpec declaratively overrides the form's quit keybinding. Every form
+// site that needs a custom quit binding (esc cancel / q exit / back, etc.)
+// configures one instead of hand-rolling a raw huh.NewForm + keymap.
+type QuitSpec struct {
+	Keys []string // e.g. []string{"q", "esc", "ctrl+c"}
+	Help string   // help-line verb: "cancel" / "back" / "exit"
 }
 
-// Run displays a form with the given fields and blocks until the user
-// submits or cancels. Uses huh.Form.RunWithContext so context cancellation
-// (Ctrl-C, parent timeout) aborts the form cleanly. Returns huh.ErrUserAborted
-// if the user cancels; the caller is responsible for mapping that to a
-// user-facing error like widgets.ErrCancelled.
-func Run(ctx context.Context, title string, fields []Field, opts RunOptions) (Result, error) {
+// RunOptions controls how Run executes.
+type RunOptions struct {
+	Input      io.Reader // defaults to os.Stdin if zero
+	Output     io.Writer // defaults to os.Stdout if zero
+	Quit       *QuitSpec // nil = huh defaults (no keymap customization); empty Keys treated as nil
+	SubmitHelp string    // cosmetic: relabel the submit help verb ("select"); "" = huh default
+	ShowHelp   *bool     // nil = leave huh default (shown); non-nil = WithShowHelp(*v)
+}
+
+// Form is a form built by Build: runnable via Run, or introspectable via
+// Huh()/Result() so Stage 7 can embed it as a capturing-overlay child model
+// (driving Update/View directly instead of calling Run).
+type Form struct {
+	huh      *huh.Form
+	bindings []fieldBinding
+	empty    bool // true when built from zero fields; Run short-circuits without invoking huh
+}
+
+// Build constructs a Form from fields and opts without running it. Mirrors
+// the validation and construction Run used to do inline; Run is now
+// Build + (*Form).Run.
+func Build(title string, fields []Field, opts RunOptions) (*Form, error) {
 	if opts.Input == nil {
 		opts.Input = os.Stdin
 	}
@@ -132,13 +154,13 @@ func Run(ctx context.Context, title string, fields []Field, opts RunOptions) (Re
 	// Validate that no field has FieldUnknown.
 	for _, f := range fields {
 		if f.Kind == FieldUnknown {
-			return Result{}, fmt.Errorf("field %q: kind is FieldUnknown (zero value)", f.Key)
+			return nil, fmt.Errorf("field %q: kind is FieldUnknown (zero value)", f.Key)
 		}
 	}
 
 	// Handle empty field list early.
 	if len(fields) == 0 {
-		return Result{values: make(map[string]any)}, nil
+		return &Form{empty: true}, nil
 	}
 
 	// Build huh fields and collect bindings.
@@ -146,36 +168,56 @@ func Run(ctx context.Context, title string, fields []Field, opts RunOptions) (Re
 	huhFields := make([]huh.Field, 0, len(fields))
 	bindings := make([]fieldBinding, 0, len(fields))
 
+	hasQuit := opts.Quit != nil && len(opts.Quit.Keys) > 0
 	for _, f := range fields {
-		huhField, binding, err := buildHuhField(f)
+		huhField, binding, err := buildHuhField(f, hasQuit)
 		if err != nil {
-			return Result{}, err
+			return nil, err
 		}
 		huhFields = append(huhFields, huhField)
 		bindings = append(bindings, binding)
 	}
 
-	// Build and run the form, wrapped in the canonical prompt hooks.
 	form := huh.NewForm(
 		huh.NewGroup(huhFields...).Title(title),
 	).
 		WithTheme(styles.Theme()).
 		WithInput(opts.Input).
-		WithOutput(opts.Output)
+		WithOutput(opts.Output).
+		WithKeyMap(buildKeyMap(opts, fields))
 
-	err := widgets.RunWithPromptHooks(func() error {
-		return form.RunWithContext(ctx)
-	})
-	if err != nil {
-		if errors.Is(err, huh.ErrUserAborted) {
-			return Result{}, huh.ErrUserAborted
-		}
-		return Result{}, err
+	if opts.ShowHelp != nil {
+		form = form.WithShowHelp(*opts.ShowHelp)
 	}
 
-	// Extract final values from bindings (huh updated them in-place).
+	return &Form{huh: form, bindings: bindings}, nil
+}
+
+// Run executes the form via widgets.RunHuhForm (prompt hooks + context-aware
+// run + abort translation) and harvests the result. Returns
+// widgets.ErrCancelled if the user cancels.
+func (f *Form) Run(ctx context.Context) (Result, error) {
+	if f.empty {
+		return Result{values: make(map[string]any)}, nil
+	}
+	if err := widgets.RunHuhForm(ctx, f.huh); err != nil {
+		return Result{}, err
+	}
+	return f.Result(), nil
+}
+
+// Huh exposes the underlying huh.Form. Stage 7 embeds this as a
+// capturing-overlay child model instead of calling Run.
+func (f *Form) Huh() *huh.Form {
+	return f.huh
+}
+
+// Result harvests the current bound values from the form's fields. Call
+// after the form completes, whether via Run or externally when the form is
+// driven as a child model.
+func (f *Form) Result() Result {
 	result := make(map[string]any)
-	for _, binding := range bindings {
+	for _, binding := range f.bindings {
 		switch v := binding.ptr.(type) {
 		case *string:
 			result[binding.key] = *v
@@ -185,8 +227,19 @@ func Run(ctx context.Context, title string, fields []Field, opts RunOptions) (Re
 			result[binding.key] = *v
 		}
 	}
+	return Result{values: result}
+}
 
-	return Result{values: result}, nil
+// Run displays a form with the given fields and blocks until the user
+// submits or cancels. Uses huh.Form.RunWithContext so context cancellation
+// (Ctrl-C, parent timeout) aborts the form cleanly. Returns
+// widgets.ErrCancelled if the user cancels. Run is Build + (*Form).Run.
+func Run(ctx context.Context, title string, fields []Field, opts RunOptions) (Result, error) {
+	form, err := Build(title, fields, opts)
+	if err != nil {
+		return Result{}, err
+	}
+	return form.Run(ctx)
 }
 
 // fieldBinding holds metadata about a bound huh field and the pointer
@@ -196,9 +249,87 @@ type fieldBinding struct {
 	ptr any // *string, *[]string, or *bool
 }
 
+// presentKinds records which field kinds appear in a form, driving which
+// keymap slots buildKeyMap touches (a form-wide keymap only makes sense to
+// hijack for the kinds actually present).
+type presentKinds struct {
+	input, selectKind, multiselect bool
+}
+
+func detectKinds(fields []Field) presentKinds {
+	var p presentKinds
+	for _, f := range fields {
+		switch f.Kind {
+		case FieldInput:
+			p.input = true
+		case FieldSelect:
+			p.selectKind = true
+		case FieldMultiselect:
+			p.multiselect = true
+		}
+	}
+	return p
+}
+
+// buildKeyMap assembles the form-wide huh.KeyMap from RunOptions: a
+// declarative Quit override and a cosmetic SubmitHelp relabel. Both are
+// no-ops on huh's own default keymap when unset, so this always returns a
+// safe keymap to pass to huh.Form.WithKeyMap (huh.NewForm already applies
+// huh.NewDefaultKeyMap() internally, so re-applying an equivalent default
+// here changes nothing for callers that set neither option).
+//
+// huh hides the form-level Quit binding from field help, so the quit hint
+// is surfaced by hijacking another binding's help slot per field kind
+// present: select/multiselect → their Filter slot (always visible for
+// select; visible for multiselect only when Filterable isn't false — see
+// Field.Filterable), input → AcceptSuggestion (paired with a fake
+// SuggestionsFunc in buildHuhField so huh exposes that binding at all). The
+// hijacked binding's own key press is caught by the form-level Quit handler
+// first, so it never actually fires — only its help label renders.
+func buildKeyMap(opts RunOptions, fields []Field) *huh.KeyMap {
+	km := huh.NewDefaultKeyMap()
+	kinds := detectKinds(fields)
+
+	if opts.SubmitHelp != "" {
+		if kinds.selectKind {
+			km.Select.Submit = key.NewBinding(key.WithKeys("enter"), key.WithHelp("enter", opts.SubmitHelp))
+		}
+		if kinds.multiselect {
+			km.MultiSelect.Submit = key.NewBinding(key.WithKeys("enter"), key.WithHelp("enter", opts.SubmitHelp))
+		}
+		if kinds.input {
+			km.Input.Next = key.NewBinding(key.WithKeys("enter", "tab"), key.WithHelp("enter", opts.SubmitHelp))
+		}
+	}
+
+	if opts.Quit != nil && len(opts.Quit.Keys) > 0 {
+		joined := strings.Join(opts.Quit.Keys, "/")
+		binding := key.NewBinding(key.WithKeys(opts.Quit.Keys...), key.WithHelp(joined, opts.Quit.Help))
+		km.Quit = binding
+		if kinds.selectKind {
+			km.Select.Filter = binding
+		}
+		if kinds.multiselect {
+			km.MultiSelect.Filter = binding
+		}
+		if kinds.input {
+			km.Input.AcceptSuggestion = binding
+		}
+	}
+
+	return km
+}
+
 // buildHuhField constructs a single huh.Field for the given Field,
-// returning the field and binding info.
-func buildHuhField(f Field) (huh.Field, fieldBinding, error) {
+// returning the field and binding info. hasQuit indicates the form has a
+// QuitSpec in effect: input fields need a fake SuggestionsFunc so huh
+// exposes the AcceptSuggestion binding that carries the quit hint (see
+// buildKeyMap).
+func buildHuhField(f Field, hasQuit bool) (huh.Field, fieldBinding, error) {
+	if f.Filterable != nil && f.Kind != FieldMultiselect {
+		return nil, fieldBinding{}, fmt.Errorf("field %q: Filterable is only valid for FieldMultiselect", f.Key)
+	}
+
 	switch f.Kind {
 	case FieldInput:
 		val := f.Default
@@ -207,6 +338,14 @@ func buildHuhField(f Field) (huh.Field, fieldBinding, error) {
 			Title(f.Title).
 			Description(f.Description).
 			Value(&val)
+
+		if hasQuit {
+			// Enable suggestions so huh.Input.KeyBinds() exposes the
+			// AcceptSuggestion binding, which buildKeyMap hijacks to show
+			// the quit hint in the help line. No real suggestions are
+			// presented (the func returns a single blank entry).
+			field = field.SuggestionsFunc(func() []string { return []string{" "} }, nil)
+		}
 
 		if f.Required {
 			field = field.Validate(func(s string) error {
@@ -237,6 +376,10 @@ func buildHuhField(f Field) (huh.Field, fieldBinding, error) {
 			Description(f.Description).
 			Options(opts...).
 			Value(&val)
+
+		if f.Height > 0 {
+			field = field.Height(f.Height)
+		}
 
 		if f.Required {
 			field = field.Validate(func(s string) error {
@@ -270,6 +413,13 @@ func buildHuhField(f Field) (huh.Field, fieldBinding, error) {
 			Description(f.Description).
 			Options(opts...).
 			Value(&val)
+
+		if f.Height > 0 {
+			field = field.Height(f.Height)
+		}
+		if f.Filterable != nil {
+			field = field.Filterable(*f.Filterable)
+		}
 
 		if f.Required || f.Validate != nil {
 			// Wrap the validate func to check per-item for multiselect

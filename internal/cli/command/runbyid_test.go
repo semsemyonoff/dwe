@@ -13,8 +13,6 @@ import (
 	"github.com/semsemyonoff/dwe/internal/core/ui/widgets"
 	"github.com/semsemyonoff/dwe/internal/core/usercommands"
 	"github.com/semsemyonoff/dwe/internal/core/usercommands/model"
-
-	huh "charm.land/huh/v2"
 )
 
 // stubOrchestratorSeams replaces the four package-level seams in runbyid.go
@@ -370,7 +368,7 @@ func TestRunCommandByID_MissingRequiredWithYes_Error(t *testing.T) {
 func TestRunCommandByID_FormCancel_ExitZero(t *testing.T) {
 	s := stubOrchestratorSeams(t)
 	widgets.IsInteractiveFn = func(io.Reader) bool { return true }
-	s.formErr = huh.ErrUserAborted
+	s.formErr = widgets.ErrCancelled
 	s.installForm()
 	s.installRunner()
 	def := &usercommands.CommandDef{

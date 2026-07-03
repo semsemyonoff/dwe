@@ -426,20 +426,38 @@ lands with the first real consumer.
 
 ---
 
-## 7. Forms guidance (Stage 6 reference target)
+## 7. Forms guidance (implemented in Stage 6)
 
 The `huh` forms used in `dwe deploy` (interactive menu), `setup` wizard, and `ask`
-fields use `charm.land/huh/v2` defaults. No form code changes in Stage 1. This
-section records the desired bindings as a reference for Stage 6 (forms unification):
+fields use `charm.land/huh/v2` defaults. No form code changes in Stage 1; Stage 6
+(forms unification) implemented the bindings this section originally recorded as a
+target:
 
 | Desired behavior    | Desired key      | Notes                         |
 |---------------------|------------------|-------------------------------|
-| Quit / cancel form  | `q`, `esc`, `ctrl+c` | Align with registry quit |
+| Quit / cancel form  | `q`, `esc`, `ctrl+c` | Align with registry quit; declared per-site via `ask.QuitSpec{Keys, Help}` |
 | Confirm / select    | `enter`          | Aligns with `ActionSelect`    |
 
-Currently huh forms handle their own key routing outside the action registry. Stage 6
-will evaluate whether to wire form navigation through the registry or keep huh's
-built-in bindings.
+**Registry wiring evaluated and declined.** Forms stay on huh's own key routing,
+outside the `tui` action registry: huh forms are a `charm.land/huh/v2` construct that
+runs standalone (via `ask.Run`/`(*ask.Form).Run` → `widgets.RunHuhForm`), not a
+`tui.Plugin` driven by `Frame.Update`, so there is no registry dispatch point to wire
+through today. Stage 7's in-TUI form overlay embeds a built `huh.Form` as a
+capturing-overlay child model (`ask.Build` + `(*Form).Huh()` + `(*Form).Result()`) and
+drives its `Update`/`View` directly — it still does not route form-internal navigation
+through the registry, only the overlay's open/close arbitration.
+
+Only the **quit** binding and its help-line presentation are unified across sites, via
+`ask.RunOptions.Quit *QuitSpec{Keys, Help}`: it sets the form-level Quit binding and
+hijacks a per-field-kind help slot so the hint renders in huh's field help line (huh
+hides the form-level Quit binding from field help otherwise) — `Filter` for
+select/multiselect, `AcceptSuggestion` (plus a fake single-blank `SuggestionsFunc`) for
+input. A non-filterable multiselect (`Filterable: false`) has no visible slot for the
+hint (huh disables and hides Filter binds entirely when not filterable) — quit still
+works via the form-level binding, the help hint is simply absent. See
+`internal/core/ui/ask` (§ `internal/core/ui/ask/` in `packages.md`) for the full
+mechanism and the three migrated call sites (deploy menu's two selects, setup
+wizard's port-override and service-toggle prompts).
 
 ---
 

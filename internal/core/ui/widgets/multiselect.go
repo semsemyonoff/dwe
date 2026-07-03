@@ -1,6 +1,7 @@
 package widgets
 
 import (
+	"context"
 	"errors"
 
 	"charm.land/bubbles/v2/key"
@@ -51,12 +52,12 @@ func defaultRunMultiSelectForm(title string, opts []huh.Option[string]) ([]strin
 	quitNarrow := key.NewBinding(key.WithKeys("ctrl+c"), key.WithHelp("ctrl+c", "quit"))
 	filterAwareQuit := newFilterAwareQuit(func(b key.Binding) { keymap.Quit = b }, quitFull, quitNarrow)
 
-	err := huh.NewForm(huh.NewGroup(field)).
+	form := huh.NewForm(huh.NewGroup(field)).
 		WithTheme(styles.Theme()).
 		WithKeyMap(keymap).
 		WithShowHelp(true).
-		WithProgramOptions(tea.WithFilter(filterAwareQuit)).
-		Run()
+		WithProgramOptions(tea.WithFilter(filterAwareQuit))
+	err := RunHuhForm(context.Background(), form)
 	return keys, err
 }
 
@@ -118,16 +119,11 @@ func RunMultiSelect(title string, items []MultiSelectItem) (MultiSelectResult, e
 		return MultiSelectResult{Kept: nil, Locked: lk}, nil
 	}
 
-	before, after := snapshotHuhHooks()
-	if before != nil {
-		before()
-	}
-	if after != nil {
-		defer after()
-	}
 	opts := buildMultiSelectOptions(toggleable)
 	kept, err := runMultiSelectFormFn(title, opts)
 	if err != nil {
+		// Defensive translation: seam-swapped tests may return raw
+		// huh.ErrUserAborted without going through RunHuhForm.
 		if errors.Is(err, huh.ErrUserAborted) {
 			return MultiSelectResult{}, ErrCancelled
 		}

@@ -1,6 +1,7 @@
 package widgets
 
 import (
+	"context"
 	"errors"
 	"fmt"
 
@@ -43,12 +44,12 @@ func defaultRunSelectForm(title string, opts []huh.Option[int]) (int, error) {
 	quitNarrow := key.NewBinding(key.WithKeys("ctrl+c"), key.WithHelp("ctrl+c", "quit"))
 	filterAwareQuit := newFilterAwareQuit(func(b key.Binding) { keymap.Quit = b }, quitFull, quitNarrow)
 
-	err := huh.NewForm(huh.NewGroup(field)).
+	form := huh.NewForm(huh.NewGroup(field)).
 		WithTheme(styles.Theme()).
 		WithKeyMap(keymap).
 		WithShowHelp(true).
-		WithProgramOptions(tea.WithFilter(filterAwareQuit)).
-		Run()
+		WithProgramOptions(tea.WithFilter(filterAwareQuit))
+	err := RunHuhForm(context.Background(), form)
 	return idx, err
 }
 
@@ -87,16 +88,11 @@ func RunSelector(title string, items []SelectorItem) (int, error) {
 	if len(items) == 0 {
 		return -1, fmt.Errorf("selector: no items to display")
 	}
-	before, after := snapshotHuhHooks()
-	if before != nil {
-		before()
-	}
-	if after != nil {
-		defer after()
-	}
 	opts := buildSelectorOptions(items)
 	idx, err := runSelectFormFn(title, opts)
 	if err != nil {
+		// Defensive translation: seam-swapped tests may return raw
+		// huh.ErrUserAborted without going through RunHuhForm.
 		if errors.Is(err, huh.ErrUserAborted) {
 			return -1, ErrCancelled
 		}

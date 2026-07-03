@@ -20,8 +20,6 @@ import (
 	"github.com/semsemyonoff/dwe/internal/core/usercommands/resolve"
 	"github.com/semsemyonoff/dwe/internal/shared/i18n"
 	"github.com/semsemyonoff/dwe/internal/shared/tpl"
-
-	huh "charm.land/huh/v2"
 )
 
 // runCommandByID is the single execution path for both `dwe commands <id>`
@@ -160,7 +158,7 @@ func runCommandByID(
 		}
 		res, ferr := runAsk(ctx, "dwe commands › "+def.ID, fields, ask.RunOptions{Input: stdin, Output: stdout})
 		if ferr != nil {
-			if errors.Is(ferr, huh.ErrUserAborted) {
+			if errors.Is(ferr, widgets.ErrCancelled) {
 				return nil
 			}
 			return ferr

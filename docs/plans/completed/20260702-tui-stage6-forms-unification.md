@@ -271,21 +271,21 @@ Quit/help-slot mechanics inside `ask` (moved verbatim from the raw sites, once):
 - Modify: `internal/core/ui/widgets/huh_test.go`
 - Modify: `internal/core/ui/widgets/confirm_test.go` / `selector_test.go` / `multiselect_test.go` (as needed)
 
-- [ ] add `RunHuhForm(ctx context.Context, form *huh.Form) error` to `widgets/huh.go`:
+- [x] add `RunHuhForm(ctx context.Context, form *huh.Form) error` to `widgets/huh.go`:
       `RunWithPromptHooks` wrap + `form.RunWithContext(ctx)` + `huh.ErrUserAborted →
       ErrCancelled` translation
-- [ ] route `defaultRunConfirmForm`, `defaultRunConfirmRunForm`, `defaultRunSelectForm`,
+- [x] route `defaultRunConfirmForm`, `defaultRunConfirmRunForm`, `defaultRunSelectForm`,
       `defaultRunMultiSelectForm` through `RunHuhForm(context.Background(), form)`;
       remove the per-wrapper hook-snapshot blocks in `RunConfirm` / `ConfirmRun` /
       `RunSelector` / `RunMultiSelect` (hooks must fire exactly once — see design
       decision 7); keep a defensive `ErrUserAborted → ErrCancelled` mapping in the
       wrappers for seam-swapped tests
-- [ ] verify public signatures and `run*FormFn` seams unchanged (`git diff` review)
-- [ ] write tests for `RunHuhForm`: hook pairing (before/after exactly once, after fires
+- [x] verify public signatures and `run*FormFn` seams unchanged (`git diff` review)
+- [x] write tests for `RunHuhForm`: hook pairing (before/after exactly once, after fires
       on error), abort translation, non-abort error pass-through
-- [ ] update/verify existing primitive tests still pass (hook-firing expectations may
+- [x] update/verify existing primitive tests still pass (hook-firing expectations may
       move from wrapper to seam-default level)
-- [ ] run `make test` — must pass before task 2
+- [x] run `make test` — must pass before task 2
 
 ### Task 2: `ask` declarative overrides — `QuitSpec`, `SubmitHelp`, `ShowHelp`, `Field.Height`/`Filterable`
 
@@ -293,26 +293,26 @@ Quit/help-slot mechanics inside `ask` (moved verbatim from the raw sites, once):
 - Modify: `internal/core/ui/ask/ask.go`
 - Modify: `internal/core/ui/ask/ask_test.go`
 
-- [ ] add `QuitSpec` and extend `RunOptions` with `Quit *QuitSpec`, `SubmitHelp string`,
+- [x] add `QuitSpec` and extend `RunOptions` with `Quit *QuitSpec`, `SubmitHelp string`,
       `ShowHelp *bool` (nil = leave huh default — do not change behaviour for existing
       callers)
-- [ ] add `Field.Height int` (select/multiselect) and `Field.Filterable *bool`
+- [x] add `Field.Height int` (select/multiselect) and `Field.Filterable *bool`
       (multiselect only — huh/v2 `Select` has no `Filterable` method; reject or ignore
       it on other kinds, pick one and test it); apply in `buildHuhField`
-- [ ] implement keymap assembly in `ask`: `km.Quit` from `QuitSpec`; help-slot hijack
+- [x] implement keymap assembly in `ask`: `km.Quit` from `QuitSpec`; help-slot hijack
       per field kind (select/multiselect → Filter slot; input → AcceptSuggestion slot +
       fake single-blank `SuggestionsFunc`); `SubmitHelp` relabel; document the hijack
       trick with a comment stating the constraint (huh hides form-level Quit from field
       help)
-- [ ] write tests: keymap/slot inspection per field kind (select-only form,
+- [x] write tests: keymap/slot inspection per field kind (select-only form,
       multiselect-only form, input-only form, mixed form), `SubmitHelp` relabel,
       `ShowHelp` tri-state, `Height`/`Filterable` application; for a
       `Filterable: false` multiselect assert the Filter binding ends up disabled (the
       hint-visibility limitation from design decision 3), and assert form-level Quit
       still carries the QuitSpec binding
-- [ ] write tests for error cases (e.g. `QuitSpec` with empty `Keys` — decide and pin
+- [x] write tests for error cases (e.g. `QuitSpec` with empty `Keys` — decide and pin
       behaviour: treat as nil)
-- [ ] run `make test` — must pass before task 3
+- [x] run `make test` — must pass before task 3
 
 ### Task 3: Build-vs-run split + `ErrCancelled` contract for `ask`
 
@@ -327,27 +327,27 @@ Quit/help-slot mechanics inside `ask` (moved verbatim from the raw sites, once):
 - Modify: `internal/cli/scaffold/scaffold_test.go` (~line 467)
 - Modify: `internal/cli/command/runbyid_test.go` (~line 373)
 
-- [ ] introduce `ask.Form` (`huh *huh.Form` + `bindings`), `Build(title, fields, opts)
+- [x] introduce `ask.Form` (`huh *huh.Form` + `bindings`), `Build(title, fields, opts)
       (*Form, error)`, `(*Form).Run(ctx) (Result, error)` via `widgets.RunHuhForm`,
       `(*Form).Huh()`, `(*Form).Result()`; rewrite `ask.Run` as `Build` + `Form.Run`;
       drop `ask.Run`'s own `RunWithPromptHooks` wrap (ask.go:166) — `RunHuhForm` wraps
       hooks itself (hooks-fire-once invariant, design decision 7)
-- [ ] change `ask.Run`/`Form.Run` cancel contract to `widgets.ErrCancelled`; update the
+- [x] change `ask.Run`/`Form.Run` cancel contract to `widgets.ErrCancelled`; update the
       docstring (currently promises `huh.ErrUserAborted`)
-- [ ] grep for every `ask.Run` caller checking `huh.ErrUserAborted` and switch to
+- [x] grep for every `ask.Run` caller checking `huh.ErrUserAborted` and switch to
       `errors.Is(err, widgets.ErrCancelled)` (known: setup/huh.go, scaffold.go,
       runbyid.go, vars/set.go — re-verify with grep); drop now-unused `huh` imports
-- [ ] update test seam stubs that return `huh.ErrUserAborted` through `ask.Run`-shaped
+- [x] update test seam stubs that return `huh.ErrUserAborted` through `ask.Run`-shaped
       seams to return `widgets.ErrCancelled` instead (known: vars/browser_test.go:192,
       scaffold/scaffold_test.go:467, runbyid_test.go:373 — re-verify with grep over
       `*_test.go`), otherwise the flipped cancel checks take the wrong branch
-- [ ] write tests: `Build` constructs without running; `Result()` harvest after a
+- [x] write tests: `Build` constructs without running; `Result()` harvest after a
       simulated completion (drive bindings directly); `Run` ≡ `Build`+`Run` equivalence
       on the existing `ask_test.go` cases; cancel returns `ErrCancelled`; rename/retarget
       the stale `TestRunUserAbortedError` (ask_test.go:347) to the new contract
-- [ ] write tests for error cases (`FieldUnknown` still rejected at `Build`; empty
+- [x] write tests for error cases (`FieldUnknown` still rejected at `Build`; empty
       fields short-circuit preserved)
-- [ ] run `make test` — must pass before task 4
+- [x] run `make test` — must pass before task 4
 
 ### Task 4: Migrate `deploy/menu.go` (both selects) onto `ask`
 
@@ -355,25 +355,25 @@ Quit/help-slot mechanics inside `ask` (moved verbatim from the raw sites, once):
 - Modify: `internal/cli/deploy/menu.go`
 - Modify: `internal/cli/deploy/menu_test.go` (or nearest existing test file)
 
-- [ ] rewrite `selectMenuItemInteractive` as an `ask.Run` call: one `FieldSelect` with
+- [x] rewrite `selectMenuItemInteractive` as an `ask.Run` call: one `FieldSelect` with
       styled option labels (existing label assembly stays; no `Filterable` — huh
       Select has none, and the Filter-slot hijack itself makes `/` inert, as today),
       `Quit{Keys: q/esc/ctrl+c, Help: "exit"}`, `SubmitHelp: "select"`, `Height:
       max(len+5, 12)`, `Field.Default` = first option (current preselect); map
       `ErrCancelled → (menuExit, nil)` (preserves current esc semantics)
-- [ ] rewrite `selectDeployServiceInteractive` likewise (`Quit.Help: "back"`) with the
+- [x] rewrite `selectDeployServiceInteractive` likewise (`Quit.Help: "back"`) with the
       locked-item rejection moved to `Field.Validate` and **`Field.Default` = first
       non-locked service name** (codex finding: today's picker preselects the first
       non-locked row so initial Enter never hits a locked item — without an explicit
       Default, huh falls back to option 0 and a locked-first list regresses);
       `ErrCancelled` passes through to the caller (back-to-menu semantics preserved)
-- [ ] delete `deployMenuKeyMap` and the now-dead raw-form plumbing; keep the domain
+- [x] delete `deployMenuKeyMap` and the now-dead raw-form plumbing; keep the domain
       formatting helpers (`formatDeployServiceLabel`, `formatServiceMeta`,
       `deployInfoRowsFrom`) untouched
-- [ ] write/update tests for the pure parts (item defs → field/options mapping, locked
+- [x] write/update tests for the pure parts (item defs → field/options mapping, locked
       validate rejection message, cancel mapping, **default selection with items[0]
       locked → items[1] preselected**) — table-driven where natural
-- [ ] run `make test` — must pass before task 5
+- [x] run `make test` — must pass before task 5
 
 ### Task 5: Migrate setup wizard port overrides + service toggles onto `ask`
 
@@ -381,29 +381,32 @@ Quit/help-slot mechanics inside `ask` (moved verbatim from the raw sites, once):
 - Modify: `internal/core/workflow/setup/huh.go`
 - Modify: `internal/core/workflow/setup/huh_test.go` (or nearest existing test file)
 
-- [ ] rewrite `askPortOverrides`: one `ask.Field{Kind: FieldInput}` per conflict (key =
+- [x] rewrite `askPortOverrides`: one `ask.Field{Kind: FieldInput}` per conflict (key =
       `service/portName`, default = requested port, `Validate: buildPortValidator()`),
       `Quit{Keys: esc/ctrl+c, Help: "cancel"}`; harvest via `Result.String` into the
       existing `coercePortOverrides`; delete the manual `SuggestionsFunc` hack and the
       NOTE comment explaining non-migratability
-- [ ] rewrite `askServiceToggles`: `FieldMultiselect` with `Defaults` = initially-enabled
+- [x] rewrite `askServiceToggles`: `FieldMultiselect` with `Defaults` = initially-enabled
       names, `Filterable: false`, `Quit{esc/ctrl+c, "cancel"}`; keep the "Always on:"
       pre-print and mandatory-merge logic at the call site; delete the raw form + NOTE
       comment. Note: the "esc cancel" help hint will NOT render for this non-filterable
       multiselect (design decision 3 visibility rules) — this matches current behaviour,
       where the existing Filter hijack is already ineffective; esc itself still cancels
       via form-level Quit
-- [ ] review `setup/help_runtime_test.go` (raw `huh.NewForm` locking the
+- [x] review `setup/help_runtime_test.go` (raw `huh.NewForm` locking the
       AcceptSuggestion help-slot behaviour): fold it into `ask`'s slot tests from
       task 2 or keep it as a huh-behaviour canary — either way it is test-only and
-      exempt from the no-raw-forms acceptance grep
-- [ ] map `ErrCancelled → ErrWizardCanceled` in both (and in `askQuestions`, already
+      exempt from the no-raw-forms acceptance grep. Decision: kept as a canary — it
+      drives `form.Update` through several cycles to exercise huh's runtime
+      `updateSuggestionsMsg` refresh path, which the construction-only `ask` slot tests
+      from task 2 do not cover.
+- [x] map `ErrCancelled → ErrWizardCanceled` in both (and in `askQuestions`, already
       updated in task 3); drop now-unused `huh` and `charm.land/bubbles/v2/key` imports
       from `setup/huh.go`
-- [ ] write/update tests for the pure mapping parts (conflicts → fields, toggles →
+- [x] write/update tests for the pure mapping parts (conflicts → fields, toggles →
       field/defaults, mandatory merge, cancel mapping); coercion helpers' existing tests
       must keep passing unchanged
-- [ ] run `make test` — must pass before task 6
+- [x] run `make test` — must pass before task 6
 
 ### Task 6: Internals docs — record contracts and close the Stage 1 open question
 
@@ -412,33 +415,38 @@ Quit/help-slot mechanics inside `ask` (moved verbatim from the raw sites, once):
 - Modify: `docs/internals/packages.md`
 - Modify: `AGENTS.md` (only if a Critical Pattern entry is warranted)
 
-- [ ] update `tui-keymap.md` § 7: forms stay on huh's own key routing (registry wiring
+- [x] update `tui-keymap.md` § 7: forms stay on huh's own key routing (registry wiring
       evaluated and declined); quit bindings unified to `q`/`esc`/`ctrl+c` where
       appropriate via `ask.QuitSpec`; note the per-field-kind help-slot mechanism
-- [ ] update `packages.md` § ask / § widgets: `RunHuhForm` as the single executor,
+- [x] update `packages.md` § ask / § widgets: `RunHuhForm` as the single executor,
       hooks-fire-once invariant, `ErrCancelled` canonical cancel contract (incl. the
       `ask.Run` contract change), declarative `QuitSpec` overrides + slot-hijack
       ownership, `Build`/`Run` split as the Stage 7 seam
-- [ ] run `make build` (embedded docs re-sync) + `make test` — must pass before task 7
+- [x] run `make build` (embedded docs re-sync) + `make test` — must pass before task 7
 
 ### Task 7: Verify acceptance criteria
 
-- [ ] spec § Stage 6 deliverables all present: single `RunHuhForm`; scalable keymap
+- [x] spec § Stage 6 deliverables all present: single `RunHuhForm`; scalable keymap
       overrides in `ask.RunOptions`; three raw sites migrated (grep: no `huh.NewForm`
       in **production** code outside `internal/core/ui/ask` + `internal/core/ui/widgets`
       — exclude `*_test.go`; `setup/help_runtime_test.go` is exempt per task 5);
       `deploy/menu.go` duplication removed; `ask` split into build vs run
-- [ ] behaviour preservation spot-checks per Migration compatibility (esc semantics,
+- [x] behaviour preservation spot-checks per Migration compatibility (esc semantics,
       locked hints, port validation, Always-on line)
-- [ ] hooks-fire-once invariant verified by test
-- [ ] run full suite: `make build && make test && make lint`
+- [x] hooks-fire-once invariant verified by test
+- [x] run full suite: `make build && make test && make lint`
 
 ### Task 8: [Final] Documentation and plan close-out
 
-- [ ] confirm no user-facing `docs/reference/` pages describe form keybindings that
-      changed (quit keys are preserved, so expected: none)
-- [ ] update `AGENTS.md` Critical Patterns only if implementation surfaced a new trap
-- [ ] move this plan to `docs/plans/completed/`
+- [x] confirm no user-facing `docs/reference/` pages describe form keybindings that
+      changed (quit keys are preserved, so expected: none) — verified: the only
+      keybinding mentions in `docs/reference/` are `ui.md` (cmdbrowser run-mode
+      bindings), `browser.md` (docstui quit table), and `i18n.md` (`tui.help.action.quit`
+      key), none of which describe huh form quit keys
+- [x] update `AGENTS.md` Critical Patterns only if implementation surfaced a new trap —
+      the Forms unification entry was already added in a prior task's commit
+      (912bb443); no new trap surfaced in this task
+- [x] move this plan to `docs/plans/completed/`
 
 ## Post-Completion
 
@@ -446,10 +454,11 @@ Quit/help-slot mechanics inside `ask` (moved verbatim from the raw sites, once):
 precedent):
 
 - `dwe deploy` (no args, TTY): top menu — esc/q exits cleanly, help line shows
-  `q/esc exit` + `enter select`; service picker — esc returns to menu, locked service
-  shows the lock hint on enter.
-- `dwe setup` wizard in a project with port conflicts: port form shows `esc cancel` in
-  the help line, still-occupied port rejected inline; service-toggle form shows
+  `q/esc/ctrl+c exit` + `enter select` (the hint joins all QuitSpec keys, per the
+  `WithHelp(joinedKeys, Help)` design in Technical Details); service picker — esc
+  returns to menu, locked service shows the lock hint on enter.
+- `dwe setup` wizard in a project with port conflicts: port form shows `esc/ctrl+c cancel`
+  in the help line, still-occupied port rejected inline; service-toggle form shows
   "Always on:" line, `/` does NOT enter filtering, esc cancels the wizard.
 - A `dwe run <cmd>` with params (cmdbrowser force-param-form path): cancel returns to
   shell without running.

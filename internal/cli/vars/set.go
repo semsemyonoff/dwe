@@ -20,7 +20,6 @@ import (
 	"github.com/semsemyonoff/dwe/internal/shared/bridgeclient"
 	"github.com/semsemyonoff/dwe/internal/shared/render"
 
-	huh "charm.land/huh/v2"
 	"github.com/spf13/cobra"
 )
 
@@ -227,7 +226,7 @@ func writeVarOverride(cmd *cobra.Command, flags *cmdctx.RootFlags, path string, 
 
 // promptForVarValue opens the single-input huh form for a no-value set,
 // carrying inspect-style per-layer info as the field description. It returns the
-// submitted value; ok is false when the user aborts (ErrUserAborted) — the
+// submitted value; ok is false when the user aborts (widgets.ErrCancelled) — the
 // caller treats that as a clean no-op.
 func promptForVarValue(cmd *cobra.Command, flags *cmdctx.RootFlags, path string) (value string, ok bool, err error) {
 	desc := varSetFormDescription(flags, path)
@@ -241,7 +240,7 @@ func promptForVarValue(cmd *cobra.Command, flags *cmdctx.RootFlags, path string)
 	res, ferr := runAsk(context.Background(), "dwe vars › set "+disp, fields,
 		ask.RunOptions{Input: cmd.InOrStdin(), Output: cmd.OutOrStdout()})
 	if ferr != nil {
-		if errors.Is(ferr, huh.ErrUserAborted) {
+		if errors.Is(ferr, widgets.ErrCancelled) {
 			return "", false, nil
 		}
 		return "", false, ferr
