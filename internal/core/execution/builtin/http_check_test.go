@@ -2,6 +2,7 @@ package builtin
 
 import (
 	"context"
+	"errors"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -172,6 +173,37 @@ func TestHTTPCheckRun_RetriesExhausted(t *testing.T) {
 	}
 	if !strings.Contains(err.Error(), "after 3 attempts") {
 		t.Fatalf("want attempt-count message, got %v", err)
+	}
+}
+
+func TestHTTPCheckRun_CanceledDuringRetryWait(t *testing.T) {
+	t.Parallel()
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	var calls atomic.Int32
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		// Fail every attempt, and cancel the parent context on the first one so
+		// Run is sleeping in the inter-attempt select when cancellation lands.
+		if calls.Add(1) == 1 {
+			cancel()
+		}
+		w.WriteHeader(http.StatusServiceUnavailable)
+	}))
+	defer srv.Close()
+
+	b := HTTPCheck{}
+	// A long interval guarantees the return is driven by cancellation, not by the
+	// timer elapsing.
+	err := b.Run(ctx, map[string]any{
+		"url":      srv.URL,
+		"retries":  5,
+		"interval": "30s",
+	}, spec.ExecContext{})
+	if !errors.Is(err, context.Canceled) {
+		t.Fatalf("want context.Canceled, got %v", err)
+	}
+	if got := calls.Load(); got != 1 {
+		t.Fatalf("want exactly 1 attempt before cancellation, got %d", got)
 	}
 }
 

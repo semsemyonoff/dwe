@@ -123,7 +123,7 @@ See [Available builtins](builtins.md) for the full registry and parameter refere
 
 ### Predicate builtins as step bodies (assertion semantics)
 
-Most builtins are actions (they do something). Some are **predicates** — they answer a yes/no question about the world (`file_exists`, `tcp_reachable`, `http_check`, `containers_running`, `env_keys_present`, `config_keys_present`, and the `shell` builtin). A predicate may be used as a step body, where it behaves as an **assertion**:
+Most builtins are actions (they do something). Some are **predicates** — they answer a yes/no question about the world (`file_exists`, `executable_in_path`, `tcp_reachable`, `http_check`, `containers_running`, `env_keys_present`, `config_keys_present`, and the `shell` builtin). A predicate may be used as a step body, where it behaves as an **assertion**:
 
 - The check passes → the step succeeds.
 - The check fails → the step **fails** with the predicate's own message, halting the pipeline.

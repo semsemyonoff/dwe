@@ -88,9 +88,6 @@ func (HTTPCheck) Run(ctx context.Context, with map[string]any, _ spec.ExecContex
 	if err != nil {
 		return err
 	}
-	if retries < 0 {
-		retries = 0
-	}
 	interval, err := spec.GetDurationParam(with, "interval", httpDefaultInterval)
 	if err != nil {
 		return err
@@ -101,7 +98,10 @@ func (HTTPCheck) Run(ctx context.Context, with map[string]any, _ spec.ExecContex
 	}
 
 	client := &http.Client{}
-	attempts := retries + 1
+	// retries is validated >= 0 at plan time; guard here so an out-of-band or
+	// overflowing value can never yield a zero-attempt loop (which would return
+	// a nil-wrapped error having performed no request).
+	attempts := max(retries+1, 1)
 	var lastErr error
 	for attempt := range attempts {
 		lastErr = httpAttempt(ctx, client, rawURL, wantStatus, contains, timeout)

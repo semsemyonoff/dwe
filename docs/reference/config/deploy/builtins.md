@@ -4,7 +4,7 @@ Builtins are engine-internal Go functions invoked from a step via `type: builtin
 
 ## Predicate builtins as step bodies (assertion semantics)
 
-A **predicate** builtin — one that answers a yes/no question about the world (`file_exists`, `tcp_reachable`, `http_check`, `containers_running`, `env_keys_present`, `config_keys_present`, and the `shell` builtin) — may be used directly as a step body, not only inside a `check:`/`when:` block. Used as a body, a predicate is an **assertion**:
+A **predicate** builtin — one that answers a yes/no question about the world (`file_exists`, `executable_in_path`, `tcp_reachable`, `http_check`, `containers_running`, `env_keys_present`, `config_keys_present`, and the `shell` builtin) — may be used directly as a step body, not only inside a `check:`/`when:` block. Used as a body, a predicate is an **assertion**:
 
 - A **true** result (the check passes) makes the step succeed.
 - A **false** result (the check fails) **fails the step** with the predicate's own message, halting the pipeline like any other step failure. No new error type is introduced — the predicate's explanation becomes the step error.
