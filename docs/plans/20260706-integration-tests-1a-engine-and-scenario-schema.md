@@ -173,27 +173,36 @@ Three independent seams, in dependency order:
 - Modify: `internal/core/execution/builtin/builtin.go`
 - Modify: `internal/core/execution/builtin/builtin_test.go`
 
-- [ ] relax `kindAllowed` so `KindPredicate` is permitted in the step-body context
+- [x] relax `kindAllowed` so `KindPredicate` is permitted in the step-body context
       (keep `KindInternal` engine-only; `check:`/validate contexts unchanged)
-- [ ] add an exported kind classifier — `KindOf(name) (Kind, bool)` or
-      `IsPredicate(name) bool` (mirror the existing `IsInteractive` accessor) — Task 3's
+- [x] add an exported kind classifier — `KindOf(name) (Kind, bool)` chosen (mirrors
+      the existing `IsInteractive` accessor) — Task 3's
       `StepForcesRun` needs it; `Get(cmd, CtxPredicate)` cannot distinguish predicates
-- [ ] update the `kindAllowed` doc comment (predicate-as-body = assertion semantics)
+- [x] update the `kindAllowed` doc comment (predicate-as-body = assertion semantics)
       AND the `KindPredicate` branch of `kindMismatchHint` (~line 156–166) — its "not
-      as a step body action" text becomes wrong; check no golden asserts the old text
-- [ ] update existing assertions that must intentionally flip:
-      `builtin_test.go`'s `userYAMLOK` matrix predicate rows (false → true, ~line
-      128–149) and the "predicate builtin rejected from step body" subtest (~line 200)
-      — inverted/removed as the intended capability change, not a regression
-- [ ] write tests: each context × kind matrix (predicate now allowed as body;
+      as a step body action" text becomes wrong; verified no golden asserts the old
+      text (repo-wide grep); also refreshed the stale `CtxUserYAML`/`KindPredicate`
+      doc comments in `builtin/spec/spec.go`
+- [x] update existing assertions that must intentionally flip:
+      `builtin_test.go`'s `userYAMLOK` matrix predicate rows (false → true) and the
+      "predicate builtin rejected from step body" subtest (inverted to
+      allowed-as-body + a new rejected-from-CtxInternal subtest)
+      — inverted as the intended capability change, not a regression
+      ➕ two `pipeline/executor_test.go` tests also pinned the old rule and flipped
+      here (not Task 2): `TestExecAction_PredicateBuiltin_RejectedInBody` →
+      `…_AllowedInBody`, `TestResolvePhaseSteps_BodyWithPredicateBuiltin` now
+      expects success
+- [x] write tests: each context × kind matrix (predicate now allowed as body;
       internal still rejected; action unchanged) + the new kind classifier
-- [ ] cover the shared-context side effect: `CtxUserYAML` also validates user-command
+      (`TestKindOf`)
+- [x] cover the shared-context side effect: `CtxUserYAML` also validates user-command
       `type: builtin` definitions, so predicate builtins become legal as user
-      commands — add a test pinning this as intentional (do NOT split the context)
-- [ ] run `go test ./internal/core/execution/...` and
+      commands — `TestPredicateAsUserCommand_Intentional` pins this (do NOT split
+      the context)
+- [x] run `go test ./internal/core/execution/...` and
       `go test ./internal/core/validate/...` (checks domain is `CtxPredicate`-only,
-      pre-verified unaffected — the run is the regression net) — must pass before
-      task 2
+      pre-verified unaffected — the run is the regression net) — pass; also ran
+      `go test ./internal/core/usercommands/...` (shared-context consumer) — pass
 
 ### Task 2: Assertion semantics through the executor
 

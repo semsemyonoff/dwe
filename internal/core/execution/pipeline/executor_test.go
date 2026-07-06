@@ -2399,9 +2399,11 @@ func TestFormatRequireSpec(t *testing.T) {
 
 // --- BuiltinKind / CallerContext enforcement ---
 
-// TestExecAction_PredicateBuiltin_RejectedInBody verifies that a KindPredicate builtin
-// (containers_running) is rejected when called from a user-authored step body.
-func TestExecAction_PredicateBuiltin_RejectedInBody(t *testing.T) {
+// TestExecAction_PredicateBuiltin_AllowedInBody verifies that the kind gate does not
+// block a KindPredicate builtin (containers_running) in a user-authored step body —
+// a predicate body is an assertion. The builtin may still fail because docker is not
+// available in the test env, but NOT with a "predicate" kind error.
+func TestExecAction_PredicateBuiltin_AllowedInBody(t *testing.T) {
 	a := config.Action{Type: "builtin", Cmd: "containers_running", With: map[string]any{"services": []any{"app"}}}
 	actx := ActionContext{
 		WorkDir:   t.TempDir(),
@@ -2409,11 +2411,8 @@ func TestExecAction_PredicateBuiltin_RejectedInBody(t *testing.T) {
 		CallerCtx: builtin.CtxUserYAML, // body position
 	}
 	err := ExecAction(context.Background(), a, actx)
-	if err == nil {
-		t.Fatal("expected error for predicate builtin in body position")
-	}
-	if !strings.Contains(err.Error(), "predicate") {
-		t.Errorf("error should mention 'predicate', got: %v", err)
+	if err != nil && strings.Contains(err.Error(), "predicate") {
+		t.Errorf("predicate builtin must not be kind-rejected in body position, got: %v", err)
 	}
 }
 
@@ -2516,7 +2515,8 @@ func TestResolvePhaseSteps_CheckWithPredicateBuiltin(t *testing.T) {
 }
 
 // TestResolvePhaseSteps_BodyWithPredicateBuiltin verifies that a step body using
-// a KindPredicate builtin (containers_running) is rejected at plan time.
+// a KindPredicate builtin (containers_running) is accepted at plan time — a
+// predicate body is an assertion (false fails the step).
 func TestResolvePhaseSteps_BodyWithPredicateBuiltin(t *testing.T) {
 	phase := config.DeployPhase{
 		Name: "deploy",
@@ -2529,12 +2529,12 @@ func TestResolvePhaseSteps_BodyWithPredicateBuiltin(t *testing.T) {
 			},
 		},
 	}
-	_, err := ResolvePhaseSteps(&config.DweConfig{Raw: map[string]any{}}, nil, phase, "")
-	if err == nil {
-		t.Fatal("expected error for predicate builtin in step body")
+	steps, err := ResolvePhaseSteps(&config.DweConfig{Raw: map[string]any{}}, nil, phase, "")
+	if err != nil {
+		t.Fatalf("ResolvePhaseSteps: unexpected error for predicate in step body: %v", err)
 	}
-	if !strings.Contains(err.Error(), "predicate") {
-		t.Errorf("error should mention 'predicate', got: %v", err)
+	if len(steps) != 1 {
+		t.Errorf("expected 1 resolved step, got %d", len(steps))
 	}
 }
 
