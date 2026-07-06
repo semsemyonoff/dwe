@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"errors"
+	"fmt"
 	"strings"
 	"testing"
 
@@ -217,6 +218,119 @@ func TestDockerRemoveVolumes_Run_ListError(t *testing.T) {
 	ectx := spec.ExecContext{Config: cfg, Output: render.NewWriter(&bytes.Buffer{})}
 
 	err := (RemoveProjectVolumes{}).Run(context.Background(), nil, ectx)
+	if err == nil {
+		t.Fatal("expected error from list failure, got nil")
+	}
+	if !errors.Is(err, listErr) {
+		t.Errorf("error chain does not wrap listErr: %v", err)
+	}
+}
+
+// --- RemoveVolumesByProjectPrefix (extracted, reusable core) ---
+
+// TestRemoveVolumesByProjectPrefix_FiltersByPrefix verifies only volumes
+// carrying the "<projectName>_" prefix are removed — an unprefixed shared
+// volume and a differently-prefixed volume both survive.
+func TestRemoveVolumesByProjectPrefix_FiltersByPrefix(t *testing.T) {
+	var removedCalls []string
+	swapVolumeSeams(t,
+		func(context.Context, string) ([]string, error) {
+			return []string{"demo_pgdata", "demo_redis", "shared", "other_pgdata"}, nil
+		},
+		func(_ context.Context, _ string, vol string) error {
+			removedCalls = append(removedCalls, vol)
+			return nil
+		},
+	)
+
+	removed, failed, err := RemoveVolumesByProjectPrefix(context.Background(), "docker", "demo", nil)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if len(failed) != 0 {
+		t.Errorf("failed = %v, want none", failed)
+	}
+	want := []string{"demo_pgdata", "demo_redis"}
+	if !equalStrings(removed, want) {
+		t.Errorf("removed = %v, want %v", removed, want)
+	}
+	if !equalStrings(removedCalls, want) {
+		t.Errorf("removeVolumeFn calls = %v, want %v (shared/other-project volumes must survive)", removedCalls, want)
+	}
+}
+
+// TestRemoveVolumesByProjectPrefix_PerVolumeFailureLogged verifies a single
+// removal failure is reported via logf and recorded in failed, while the rest
+// of the batch still gets removed.
+func TestRemoveVolumesByProjectPrefix_PerVolumeFailureLogged(t *testing.T) {
+	rmErr := errors.New("volume is in use")
+	swapVolumeSeams(t,
+		func(context.Context, string) ([]string, error) {
+			return []string{"demo_a", "demo_b", "demo_c"}, nil
+		},
+		func(_ context.Context, _ string, vol string) error {
+			if vol == "demo_b" {
+				return rmErr
+			}
+			return nil
+		},
+	)
+
+	var logged []string
+	removed, failed, err := RemoveVolumesByProjectPrefix(context.Background(), "docker", "demo",
+		func(format string, args ...any) { logged = append(logged, fmt.Sprintf(format, args...)) })
+	if err != nil {
+		t.Fatalf("per-volume rm failure must be best-effort (nil), got: %v", err)
+	}
+	if want := []string{"demo_a", "demo_c"}; !equalStrings(removed, want) {
+		t.Errorf("removed = %v, want %v", removed, want)
+	}
+	if want := []string{"demo_b"}; !equalStrings(failed, want) {
+		t.Errorf("failed = %v, want %v", failed, want)
+	}
+	if len(logged) != 1 || !strings.Contains(logged[0], `"demo_b"`) {
+		t.Errorf("logged = %v, want exactly one message naming demo_b", logged)
+	}
+}
+
+// TestRemoveVolumesByProjectPrefix_NoMatches verifies the no-op path: no
+// listed volume carries the prefix, so nothing is removed and no logf call
+// is made.
+func TestRemoveVolumesByProjectPrefix_NoMatches(t *testing.T) {
+	removeCalled := false
+	swapVolumeSeams(t,
+		func(context.Context, string) ([]string, error) {
+			return []string{"unrelated_a", "unrelated_b"}, nil
+		},
+		func(context.Context, string, string) error {
+			removeCalled = true
+			return nil
+		},
+	)
+
+	removed, failed, err := RemoveVolumesByProjectPrefix(context.Background(), "docker", "demo",
+		func(string, ...any) { t.Error("logf must not be called when nothing fails") })
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if len(removed) != 0 || len(failed) != 0 {
+		t.Errorf("removed = %v, failed = %v, want both empty", removed, failed)
+	}
+	if removeCalled {
+		t.Error("removeVolumeFn was invoked despite no matching volumes")
+	}
+}
+
+// TestRemoveVolumesByProjectPrefix_ListErrorWraps verifies a listing failure
+// is fatal and wraps the underlying error for errors.Is.
+func TestRemoveVolumesByProjectPrefix_ListErrorWraps(t *testing.T) {
+	listErr := errors.New("docker volume ls: cannot connect to daemon")
+	swapVolumeSeams(t,
+		func(context.Context, string) ([]string, error) { return nil, listErr },
+		nil,
+	)
+
+	_, _, err := RemoveVolumesByProjectPrefix(context.Background(), "docker", "demo", nil)
 	if err == nil {
 		t.Fatal("expected error from list failure, got nil")
 	}

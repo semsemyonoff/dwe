@@ -451,17 +451,17 @@ Key design decisions (all from the spec):
 - Modify: `internal/core/execution/builtin/containers/volumes_test.go` (or the
   package's existing test file)
 
-- [ ] extract the list/filter/remove core of `RemoveProjectVolumes.Run` into an
+- [x] extract the list/filter/remove core of `RemoveProjectVolumes.Run` into an
       exported function, e.g. `RemoveVolumesByProjectPrefix(ctx context.Context,
       dockerBin, projectName string, logf func(format string, args ...any)) error`
       — prefix `projectName + "_"`, per-volume best-effort removal, keep the
       existing `listVolumesFn`/`removeVolumeFn` seams working
-- [ ] rewire the builtin's `Run` through the extracted function — behaviour and
+- [x] rewire the builtin's `Run` through the extracted function — behaviour and
       log output byte-identical (existing builtin tests are the regression net)
-- [ ] write tests for the exported function directly: prefix filtering (shared
+- [x] write tests for the exported function directly: prefix filtering (shared
       unprefixed volume survives), single-volume rm failure logged + others still
       removed, empty list no-op
-- [ ] run `go test ./internal/core/execution/builtin/...` — must pass before task 6
+- [x] run `go test ./internal/core/execution/builtin/...` — must pass before task 6
 
 ### Task 6: Teardown
 
