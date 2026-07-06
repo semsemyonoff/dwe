@@ -244,27 +244,37 @@ Three independent seams, in dependency order:
   decider `hasCheck` site ~768)
 - Modify: `internal/cli/deploy/` tests
 
-- [ ] implement `StepForcesRun(step)` in the pipeline package (using Task 1's kind
+- [x] implement `StepForcesRun(step)` in the pipeline package (using Task 1's kind
       classifier): true for `check:` steps and predicate-body builtin steps; recurse
       one level into parallel substeps (deeper nesting is schema-rejected).
       Predicate-body detection must be
       `step.Type == "builtin" && KindOf(step.Cmd) == KindPredicate` — never classify
       by `cmd` alone (a `type: shell` step whose command text is `shell` must not
-      force execution)
-- [ ] extract deploy's inline early-gate scan (~572–598) into a small function so the
+      force execution) — landed as `pipeline.StepForcesRun(rs ResolvedStep)` in
+      `forcesrun.go` (takes the resolved step, so both deploy sites pass their
+      existing values; parallel recursion via `rs.Parallel.Steps`)
+- [x] extract deploy's inline early-gate scan (~572–598) into a small function so the
       predicate case gets a focused unit test (the scan is currently inline in the
       large `runDeploy`), then wire `StepForcesRun` into it alongside the existing
-      `check:`/`files_gate` scan (keep `files_gate` handling as-is)
-- [ ] wire it into the per-step skip decider (replace the bare
+      `check:`/`files_gate` scan (keep `files_gate` handling as-is) — extracted as
+      `hasAlwaysRunSteps(steps)` in `deploy.go` (`StepForcesRun` covers check: +
+      predicate bodies; files_gate scan incl. parallel substeps kept alongside)
+- [x] wire it into the per-step skip decider (replace the bare
       `rs.Step.Check != nil` with the helper so `journal.Decide`'s force-run lever
       covers predicate bodies)
-- [ ] write helper tests: check-step, predicate-body step, action-body step, parallel
-      substep containing a predicate
-- [ ] write early-gate unit test (extracted function): pipeline whose only
+      ➕ the decider closure was also extracted from `runDeploy` into
+      `makeSkipDecider(opts, state, projectHash, serviceHashes)` (logic unchanged)
+      so the "journaled predicate re-runs" test exercises the real decider, not a
+      simulation
+- [x] write helper tests: check-step, predicate-body step, action-body step, parallel
+      substep containing a predicate (`forcesrun_test.go`; also: shell step whose
+      cmd text is a builtin name, unknown builtin, parallel check-substep)
+- [x] write early-gate unit test (extracted function): pipeline whose only
       change-forcing step is a predicate body is NOT early-gated; plus a decider test:
       journaled predicate step re-runs on second deploy
-- [ ] run `go test ./internal/core/execution/... ./internal/cli/deploy/...` — must
-      pass before task 4
+      (`internal/cli/deploy/forcesrun_test.go`)
+- [x] run `go test ./internal/core/execution/... ./internal/cli/deploy/...` — must
+      pass before task 4 — pass; `golangci-lint` on both packages clean
 
 ### Task 4: `http_check` builtin
 
