@@ -111,7 +111,16 @@ func (m *Model) diagramPlaceholder(index, total int, current bool, src string, t
 	var text string
 	switch {
 	case lookuper == nil:
-		text = fmt.Sprintf("<%s — rendering disabled · `y` source>", prefix)
+		// Rendering is disabled (mode=off or mmdc missing). When mmdc is the cause,
+		// MmdcMissingNotice carries the install guidance — advertise `E` on EVERY
+		// disabled diagram (not just the active one, unlike "render failed"): the
+		// notice is the same install hint for all of them, and `E` opens it for the
+		// diagram under the cursor. mode=off leaves the notice empty, so no `E` hint.
+		if m.MmdcMissingNotice != "" {
+			text = fmt.Sprintf("<%s — rendering disabled · `E` details · `y` source>", prefix)
+		} else {
+			text = fmt.Sprintf("<%s — rendering disabled · `y` source>", prefix)
+		}
 	case cached:
 		text = fmt.Sprintf("<%s — `o` open · `y` source · `[` prev · `]` next>", prefix)
 	case m.prefetchFinished():

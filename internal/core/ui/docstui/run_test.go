@@ -66,9 +66,9 @@ func TestRunReturnsNilOnCleanExit(t *testing.T) {
 }
 
 func TestRunMmdcNoticeSetOnModel(t *testing.T) {
-	const notice = "> **⚠ mmdc not installed.**\n\n"
+	const notice = "mmdc is not installed, so Mermaid diagrams cannot render."
 	opts := makeTestOpts()
-	opts.MmdcNotice = notice
+	opts.MmdcMissingNotice = notice
 
 	var gotNotice string
 	orig := runDocsTUI
@@ -78,13 +78,13 @@ func TestRunMmdcNoticeSetOnModel(t *testing.T) {
 		if !ok {
 			return nil, nil
 		}
-		gotNotice = b.MmdcNotice
+		gotNotice = b.MmdcMissingNotice
 		return nil, nil
 	}
 
 	_ = Run(context.Background(), opts)
 	if gotNotice != notice {
-		t.Errorf("MmdcNotice = %q, want %q", gotNotice, notice)
+		t.Errorf("MmdcMissingNotice = %q, want %q", gotNotice, notice)
 	}
 }
 

@@ -23,7 +23,7 @@ func tallError(n int) string {
 
 func TestScrollErrorOverlayMovesViewport(t *testing.T) {
 	b := newTestBrowser(t)
-	b.errOverlay = newErrorState(40, 5, 1, 1, tallError(60))
+	b.errOverlay = newErrorState(40, 5, 1, 1, "render failed", tallError(60))
 
 	if got := b.errOverlay.vp.YOffset(); got != 0 {
 		t.Fatalf("initial YOffset = %d, want 0", got)
@@ -52,7 +52,7 @@ func TestScrollErrorOverlayMovesViewport(t *testing.T) {
 // (sentinel panel) scrolls the modal rather than a body panel.
 func TestWheelMsgRoutesToOpenErrorOverlay(t *testing.T) {
 	b := newTestBrowser(t)
-	b.errOverlay = newErrorState(40, 5, 1, 1, tallError(60))
+	b.errOverlay = newErrorState(40, 5, 1, 1, "render failed", tallError(60))
 
 	b.Update(tui.WheelMsg{Panel: tui.OverlayWheelPanel, Delta: 3})
 	if got := b.errOverlay.vp.YOffset(); got <= 0 {
@@ -64,7 +64,7 @@ func TestWheelMsgRoutesToOpenErrorOverlay(t *testing.T) {
 // confirmation, and is a no-op when the overlay is closed.
 func TestCopyErrorToClipboard(t *testing.T) {
 	b := newTestBrowser(t)
-	b.errOverlay = newErrorState(40, 5, 1, 1, "mmdc render failed: Could not find Chrome")
+	b.errOverlay = newErrorState(40, 5, 1, 1, "render failed", "mmdc render failed: Could not find Chrome")
 
 	cmd := b.updateErrorOverlay(tea.KeyPressMsg{Text: "c"})
 	if cmd == nil {
@@ -87,7 +87,7 @@ func TestToggleSelectionMode(t *testing.T) {
 	b := newTestBrowser(t)
 	b.body = tui.Region{Width: 76, Height: 22}
 	b.TermWidth, b.TermHeight = 80, 24
-	b.errOverlay = newErrorState(40, 5, 1, 1, "boom")
+	b.errOverlay = newErrorState(40, 5, 1, 1, "render failed", "boom")
 
 	if b.errOverlay.overlay().ReleaseMouse {
 		t.Fatal("selection mode should start off (ReleaseMouse false)")
@@ -137,7 +137,7 @@ func TestWindowResizeReSizesOpenErrorOverlay(t *testing.T) {
 	b := newTestBrowser(t)
 	b.body = tui.Region{Width: 96, Height: 30}
 	b.TermWidth, b.TermHeight = 100, 32
-	b.errOverlay = newErrorState(40, 5, 1, 1, "boom")
+	b.errOverlay = newErrorState(40, 5, 1, 1, "render failed", "boom")
 	b.errOverlay.selecting = true
 	b.applyErrorOverlayDims() // size to the initial 100x32 terminal
 	if got := b.errOverlay.overlay().Width; got != 100 {

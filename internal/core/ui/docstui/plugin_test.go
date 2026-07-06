@@ -1090,13 +1090,33 @@ func TestBrowser_StatusContextPath(t *testing.T) {
 func TestBrowser_StatusContextProgress(t *testing.T) {
 	b := newTestBrowser(t)
 	b.StatusBar.SetPath("some/path.md")
-	b.StatusBar.SetProgress(3, 7)
+	// 7 diagrams in the topic; the pool has rendered 3 → the "⏳ 3/7" prefetch
+	// suffix shows alongside the "📊 1/7" focused indicator.
+	b.DiagramState = NewDiagramState(makeDiagrams(7))
+	b.StatusBar.SetProgress(3)
 	got := b.StatusContext()
 	if !strings.Contains(got, "3/7") {
-		t.Errorf("StatusContext() = %q, expected to contain progress '3/7'", got)
+		t.Errorf("StatusContext() = %q, expected to contain prefetch progress '3/7'", got)
 	}
 	if !strings.Contains(got, "📊") {
 		t.Errorf("StatusContext() = %q, expected to contain diagram icon", got)
+	}
+}
+
+func TestBrowser_StatusContextFocusedDiagramWhenDisabled(t *testing.T) {
+	b := newTestBrowser(t)
+	b.StatusBar.SetPath("some/path.md")
+	// Rendering disabled → no prefetch, rendered stays 0. The focused-diagram
+	// indicator must still show so the user knows which source `y` copies.
+	b.DiagramState = NewDiagramState(makeDiagrams(4))
+	b.DiagramState.Current = 2
+	got := b.StatusContext()
+	if !strings.Contains(got, "📊 3/4") {
+		t.Errorf("StatusContext() = %q, expected focused indicator '📊 3/4'", got)
+	}
+	// With nothing rendered there is no "⏳" prefetch suffix.
+	if strings.Contains(got, "⏳") {
+		t.Errorf("StatusContext() = %q, unexpected prefetch suffix with nothing rendered", got)
 	}
 }
 
@@ -1112,7 +1132,8 @@ func TestBrowser_StatusContextLang(t *testing.T) {
 func TestBrowser_StatusContextFull(t *testing.T) {
 	b := newTestBrowser(t)
 	b.StatusBar.SetPath("guides/getting-started.md")
-	b.StatusBar.SetProgress(2, 5)
+	b.DiagramState = NewDiagramState(makeDiagrams(5))
+	b.StatusBar.SetProgress(2)
 	b.StatusBar.SetLanguage("en")
 	got := b.StatusContext()
 	for _, want := range []string{"guides/getting-started.md", "2/5", "📊", "[en]"} {

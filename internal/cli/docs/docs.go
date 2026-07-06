@@ -104,8 +104,9 @@ func runDocsTUI(cmd *cobra.Command, flags *cmdctx.RootFlags) error {
 		// first heavy-diagram document. Substituting Disabled here
 		// short-circuits the queue entirely (see applyTopicLoaded) and
 		// keeps the "rendering disabled" placeholder consistent with
-		// what users see today; the MmdcNotice banner below tells them
-		// how to install mmdc.
+		// what users see today; the mmdcMissingNotice below feeds the
+		// diagram error overlay (`E`) so users learn how to install mmdc
+		// on demand.
 		renderer = mermaid.Disabled{}
 	case mermaidMode == "mmdc":
 		// Strict mode: mmdc is required
@@ -120,25 +121,28 @@ func runDocsTUI(cmd *cobra.Command, flags *cmdctx.RootFlags) error {
 
 	title := render.BrandedTitleForConfig(cfg, "Documentation")
 
-	// Banner: warn once at startup when mmdc is missing on $PATH (and the user
-	// hasn't explicitly disabled mermaid). Skipping the install entirely would
-	// leave users guessing why diagrams never render — the banner points them
-	// at the canonical install section in docs/reference/docs/commands.md.
-	var mmdcNotice string
+	// Diagram-error overlay notice: when mmdc is missing on $PATH (and the user
+	// hasn't explicitly disabled mermaid), diagram placeholders render as
+	// "rendering disabled" and advertise `E`. Pressing `E` surfaces this text in
+	// the render-error overlay so users learn how to install mmdc on demand,
+	// instead of a global banner nagging on every topic. Points at the canonical
+	// install section in docs/reference/docs/commands.md.
+	var mmdcMissingNotice string
 	if mermaidMode != "off" && !mmdcOnPath {
-		mmdcNotice = "> **⚠ `mmdc` not installed.** Mermaid diagrams cannot render. " +
-			"Install with `npm i -g @mermaid-js/mermaid-cli` — see " +
-			"`docs/reference/docs/commands.md` § *Installing `mmdc`*.\n\n"
+		mmdcMissingNotice = "mmdc is not installed, so Mermaid diagrams cannot render.\n\n" +
+			"Install it with:\n\n" +
+			"    npm i -g @mermaid-js/mermaid-cli\n\n" +
+			"See docs/reference/docs/commands.md § Installing mmdc for details."
 	}
 
 	return docstui.Run(ctx, docstui.Options{
-		Roots:        sources,
-		Renderer:     renderer,
-		ProjectRoot:  projectRoot,
-		MermaidTheme: mermaidTheme,
-		Title:        title,
-		Locale:       locale,
-		Translator:   translator,
-		MmdcNotice:   mmdcNotice,
+		Roots:             sources,
+		Renderer:          renderer,
+		ProjectRoot:       projectRoot,
+		MermaidTheme:      mermaidTheme,
+		Title:             title,
+		Locale:            locale,
+		Translator:        translator,
+		MmdcMissingNotice: mmdcMissingNotice,
 	})
 }

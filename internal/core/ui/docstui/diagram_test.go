@@ -7,7 +7,17 @@ import (
 	"github.com/semsemyonoff/dwe/internal/core/docs"
 	"github.com/semsemyonoff/dwe/internal/core/docs/mermaid"
 	"github.com/semsemyonoff/dwe/internal/core/docs/render"
+	"github.com/semsemyonoff/dwe/internal/core/ui/tui"
 )
+
+// makeDiagrams returns n placeholder DiagramRefs for status/state tests.
+func makeDiagrams(n int) []render.DiagramRef {
+	diags := make([]render.DiagramRef, n)
+	for i := range diags {
+		diags[i] = render.DiagramRef{Source: "graph TD; A-->B", Index: i}
+	}
+	return diags
+}
 
 // missLookuper is a cache-capable renderer whose Lookup always misses, so the
 // placeholder takes the "render failed" path once prefetch has finished.
@@ -40,6 +50,73 @@ func TestDiagramPlaceholderAdvertisesErrorHint(t *testing.T) {
 	}
 	if !strings.Contains(out, "`E`") {
 		t.Errorf("expected the E error-log hint on a failed diagram with a recorded error: %q", out)
+	}
+}
+
+// TestDisabledDiagramAdvertisesDetailsHint guards that a "rendering disabled"
+// diagram advertises `E` exactly when the mmdc-missing notice is set (auto/mmdc
+// mode with mmdc absent), and stays plain when mermaid was explicitly turned off
+// (no notice).
+func TestDisabledDiagramAdvertisesDetailsHint(t *testing.T) {
+	b := newTestBrowser(t)
+	m := b.Model
+
+	// No notice (mode=off) → plain "rendering disabled", no `E`.
+	m.MmdcMissingNotice = ""
+	out := m.diagramPlaceholder(0, 1, true, "graph TD; A-->B", mermaid.ThemeDark, 1200, nil)
+	if !strings.Contains(out, "rendering disabled") {
+		t.Fatalf("expected a rendering-disabled placeholder, got %q", out)
+	}
+	if strings.Contains(out, "`E`") {
+		t.Errorf("did not expect an E hint without an install notice: %q", out)
+	}
+
+	// Notice present (mmdc missing) → the `E` details hint is advertised on every
+	// disabled diagram, active or not (the install guidance is the same for all).
+	m.MmdcMissingNotice = "mmdc is not installed"
+	for _, active := range []bool{true, false} {
+		out = m.diagramPlaceholder(0, 1, active, "graph TD; A-->B", mermaid.ThemeDark, 1200, nil)
+		if !strings.Contains(out, "`E`") {
+			t.Errorf("expected the E details hint on a disabled diagram (active=%v) with an install notice: %q", active, out)
+		}
+	}
+}
+
+// TestOpenErrorOverlayShowsMmdcNotice guards that pressing `E` on a disabled
+// diagram opens the render-error overlay carrying the install guidance, even
+// though no prefetch error was recorded (prefetch is skipped when disabled).
+func TestOpenErrorOverlayShowsMmdcNotice(t *testing.T) {
+	b := newTestBrowser(t)
+	b.body = tui.Region{Width: 76, Height: 22}
+	b.DiagramState = NewDiagramState([]render.DiagramRef{{Source: "graph TD; A-->B", Index: 0}})
+	b.Prefetch = nil // disabled renderer → no prefetch pool
+	b.MmdcMissingNotice = "mmdc is not installed, so Mermaid diagrams cannot render."
+
+	b.openErrorOverlay()
+	if b.errOverlay == nil {
+		t.Fatal("openErrorOverlay did not open the overlay for a disabled diagram")
+	}
+	if b.errOverlay.status != "rendering disabled" {
+		t.Errorf("overlay status = %q; want %q", b.errOverlay.status, "rendering disabled")
+	}
+	if !strings.Contains(b.errOverlay.errText, "mmdc is not installed") {
+		t.Errorf("overlay did not carry the install notice: %q", b.errOverlay.errText)
+	}
+}
+
+// TestOpenErrorOverlayNoopWhenNothingToShow guards that `E` stays a no-op when
+// rendering succeeded (no prefetch error) and there is no install notice — e.g.
+// mermaid was explicitly disabled.
+func TestOpenErrorOverlayNoopWhenNothingToShow(t *testing.T) {
+	b := newTestBrowser(t)
+	b.body = tui.Region{Width: 76, Height: 22}
+	b.DiagramState = NewDiagramState([]render.DiagramRef{{Source: "graph TD; A-->B", Index: 0}})
+	b.Prefetch = &Prefetch{}
+	b.MmdcMissingNotice = ""
+
+	b.openErrorOverlay()
+	if b.errOverlay != nil {
+		t.Error("openErrorOverlay opened an overlay with nothing to show")
 	}
 }
 

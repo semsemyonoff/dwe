@@ -264,13 +264,31 @@ func (b *browser) CapturingInput() bool {
 func (b *browser) Result() any { return nil }
 
 // StatusContext implements tui.Plugin. Returns the middle-zone status string:
-// current path + 📊 N/M diagram progress + [lang]. Called every render so the
-// content is reactive (StatusBar is updated by applyTopicLoaded and ProgressMsg).
+// current path + 📊 focused-diagram indicator (+ ⏳ prefetch progress) + [lang].
+// Called every render so the content is reactive: the path/prefetch counters are
+// pushed by applyTopicLoaded and ProgressMsg, while the focused-diagram indicator
+// is refreshed here from DiagramState so it tracks the cursor no matter which
+// action moved it.
 func (b *browser) StatusContext() string {
 	if b.Model == nil || b.StatusBar == nil {
 		return ""
 	}
+	b.refreshDiagramStatus()
 	return b.StatusBar.View()
+}
+
+// refreshDiagramStatus syncs the status bar's focused-diagram indicator with the
+// current DiagramState. focused is 1-based (0 when no diagram is selected or the
+// topic has none).
+func (b *browser) refreshDiagramStatus() {
+	focused, total := 0, 0
+	if b.DiagramState != nil {
+		total = len(b.DiagramState.Diagrams)
+		if total > 0 && b.DiagramState.Current >= 0 {
+			focused = b.DiagramState.Current + 1
+		}
+	}
+	b.StatusBar.SetDiagram(focused, total)
 }
 
 // PendingOverlay implements tui.Plugin. It hands the diagram render-error modal
@@ -312,30 +330,44 @@ func (b *browser) applyErrorOverlayDims() {
 		b.errOverlay.resize(max(b.TermWidth, 10), max(b.TermHeight-1, 3))
 		return
 	}
-	content := formatErrorContent(b.errOverlay.num, b.errOverlay.total, b.errOverlay.errText)
+	content := formatErrorContent(b.errOverlay.num, b.errOverlay.total, b.errOverlay.status, b.errOverlay.errText)
 	w, h := b.errorOverlaySize(errorContentWidth(content))
 	b.errOverlay.resize(w, h)
 }
 
+// currentDiagramError returns the status verb and body text to show in the error
+// overlay for the diagram under the cursor. It surfaces either the captured mmdc
+// failure ("render failed") recorded by the prefetch pool, or — when rendering is
+// disabled because mmdc is missing — the install guidance ("rendering disabled").
+// The bool is false when there is nothing to show, so `E` stays a no-op (diagram
+// rendered fine, or mermaid was explicitly turned off).
+func (b *browser) currentDiagramError() (status, text string, ok bool) {
+	if b.Prefetch != nil {
+		if errText, has := b.Prefetch.RenderError(b.DiagramState.Current); has {
+			return "render failed", errText, true
+		}
+	}
+	if b.MmdcMissingNotice != "" {
+		return "rendering disabled", b.MmdcMissingNotice, true
+	}
+	return "", "", false
+}
+
 // openErrorOverlay opens the render-error modal for the diagram under the cursor.
-// A no-op when there is no current diagram or no recorded render error (e.g.
-// rendering disabled, or the diagram rendered fine) — so `E` only surfaces a real
-// failure.
+// A no-op when there is no current diagram or nothing to show (the diagram
+// rendered fine, or mermaid was explicitly disabled) — see currentDiagramError.
 func (b *browser) openErrorOverlay() {
-	if b.DiagramState == nil || b.Prefetch == nil {
+	if b.DiagramState == nil || b.DiagramState.CurrentDiagram() == nil {
 		return
 	}
-	if b.DiagramState.CurrentDiagram() == nil {
-		return
-	}
-	errText, ok := b.Prefetch.RenderError(b.DiagramState.Current)
+	status, errText, ok := b.currentDiagramError()
 	if !ok {
 		return
 	}
 	num := b.DiagramState.Current + 1
 	total := len(b.DiagramState.Diagrams)
-	w, h := b.errorOverlaySize(errorContentWidth(formatErrorContent(num, total, errText)))
-	b.errOverlay = newErrorState(w, h, num, total, errText)
+	w, h := b.errorOverlaySize(errorContentWidth(formatErrorContent(num, total, status, errText)))
+	b.errOverlay = newErrorState(w, h, num, total, status, errText)
 	b.errOverlayPending = true
 }
 
@@ -510,7 +542,7 @@ func (b *browser) Update(msg tea.Msg) tea.Cmd {
 			return nil
 		}
 		b.PrefetchProgress = msg
-		b.StatusBar.SetProgress(msg.Rendered, msg.Total)
+		b.StatusBar.SetProgress(msg.Rendered)
 		// Coalesce the placeholder refresh instead of a full SetContent per
 		// completed diagram — see scheduleDiagramRefresh.
 		refreshCmd := b.scheduleDiagramRefresh()

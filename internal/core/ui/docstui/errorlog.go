@@ -22,6 +22,9 @@ type errorState struct {
 	// errText is the raw render error (without the "Diagram N/M" header) so the
 	// copy-all key can put exactly the error on the clipboard.
 	errText string
+	// status is the header verb after "Diagram N/M — " ("render failed" for a
+	// captured mmdc failure, "rendering disabled" for the mmdc-missing notice).
+	status string
 	// num / total identify the diagram (for the "Diagram N/M" header) and are kept
 	// so the box dimensions can be recomputed when leaving selection mode.
 	num, total int
@@ -53,11 +56,14 @@ const (
 // formatErrorContent renders the modal body for a diagram render failure. Kept
 // separate from newErrorState so the sizing pass can measure the exact text the
 // viewport will show (including the empty-error fallback).
-func formatErrorContent(num, total int, errText string) string {
+func formatErrorContent(num, total int, status, errText string) string {
 	if strings.TrimSpace(errText) == "" {
 		errText = "(no error detail available)"
 	}
-	return fmt.Sprintf("Diagram %d/%d — render failed\n\n%s", num, total, errText)
+	if strings.TrimSpace(status) == "" {
+		status = "render failed"
+	}
+	return fmt.Sprintf("Diagram %d/%d — %s\n\n%s", num, total, status, errText)
 }
 
 // errorContentWidth returns the display width of the widest line in content —
@@ -75,7 +81,7 @@ func errorContentWidth(content string) int {
 // newErrorState builds the error overlay's viewport at (width, height) showing
 // the render error for diagram num/total. An empty error falls back to a
 // placeholder so the box is never blank.
-func newErrorState(width, height, num, total int, errText string) *errorState {
+func newErrorState(width, height, num, total int, status, errText string) *errorState {
 	w := max(width, 10)
 	h := max(height, 3)
 	vp := viewport.New(viewport.WithWidth(w), viewport.WithHeight(h))
@@ -84,8 +90,8 @@ func newErrorState(width, height, num, total int, errText string) *errorState {
 	// sized to the content where the terminal allows, so wrapping only kicks in
 	// when a line genuinely exceeds the available width.
 	vp.SoftWrap = true
-	vp.SetContent(formatErrorContent(num, total, errText))
-	return &errorState{vp: vp, errText: errText, num: num, total: total, w: w, h: h}
+	vp.SetContent(formatErrorContent(num, total, status, errText))
+	return &errorState{vp: vp, errText: errText, status: status, num: num, total: total, w: w, h: h}
 }
 
 // resize updates the viewport content dimensions (and records them so the

@@ -13,8 +13,8 @@ import (
 
 // Options carries all configuration for the docs browser. It collects the
 // inputs that the old NewModel constructor took (excluding termWidth/termHeight
-// — the Frame owns sizing now) plus the MmdcNotice side-channel that the old
-// caller set directly on the Model.
+// — the Frame owns sizing now) plus the MmdcMissingNotice side-channel that the
+// old caller set directly on the Model.
 type Options struct {
 	Roots        []docs.DocRoot
 	Renderer     mermaid.Renderer
@@ -23,9 +23,10 @@ type Options struct {
 	Title        string
 	Locale       string
 	Translator   i18n.Translator
-	// MmdcNotice is a one-line markdown blockquote prepended to every loaded
-	// topic when mmdc is missing on $PATH. Empty means no banner.
-	MmdcNotice string
+	// MmdcMissingNotice is the install guidance shown in the diagram render-error
+	// overlay (opened with `E`) when mmdc is missing on $PATH. Empty means the
+	// renderer is either working or explicitly disabled, so `E` shows nothing.
+	MmdcMissingNotice string
 }
 
 // mermaidThemeResolverFn is the package-level seam for the mermaid-theme
@@ -107,6 +108,6 @@ func newModelFromOpts(ctx context.Context, opts Options) (*Model, error) {
 	if err != nil {
 		return nil, err
 	}
-	model.MmdcNotice = opts.MmdcNotice
+	model.MmdcMissingNotice = opts.MmdcMissingNotice
 	return model, nil
 }

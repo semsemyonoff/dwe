@@ -49,12 +49,14 @@ type Model struct {
 	Watcher           *Watcher // File change watcher (project docs only)
 	ProjectRoot       string   // Path to the project root
 
-	// MmdcNotice is a one-line markdown blockquote prepended to every loaded
-	// topic when mmdc is missing on $PATH and the mermaid renderer is not
-	// explicitly disabled. Empty means no banner. Populated by runDocsTUI
-	// before any topic is loaded, so users see install guidance on the very
-	// first frame instead of discovering it via a broken diagram render.
-	MmdcNotice string
+	// MmdcMissingNotice is the install guidance surfaced in the diagram
+	// render-error overlay (opened with `E`) when mmdc is missing on $PATH and
+	// the mermaid renderer is not explicitly disabled. Empty means `E` has
+	// nothing to show. Populated by runDocsTUI before any topic is loaded. Kept
+	// off the rendered content deliberately — the old global banner nagged on
+	// every topic; the on-demand overlay surfaces the same guidance only when a
+	// user actually reaches for a disabled diagram.
+	MmdcMissingNotice string
 
 	// Background rendering
 	Prefetch         *Prefetch
@@ -225,7 +227,7 @@ func (m *Model) loadTopic(node *TreeNode) (tea.Cmd, error) {
 		m.Prefetch.BeginTopic()
 	}
 	m.PrefetchProgress = ProgressMsg{}
-	m.StatusBar.SetProgress(0, 0)
+	m.StatusBar.SetProgress(0)
 	m.loadGen++
 
 	// Resolve the markdown that backs this row: the file node itself, the
@@ -275,7 +277,6 @@ func (m *Model) loadTopic(node *TreeNode) (tea.Cmd, error) {
 	locale := m.Locale
 	theme := m.Theme
 	width := m.ContentWidth
-	mmdcNotice := m.MmdcNotice
 
 	return func() tea.Msg {
 		content, sourceLang, stale, err := docs.ResolveContent(sourceRoot, path, locale)
@@ -293,9 +294,6 @@ func (m *Model) loadTopic(node *TreeNode) (tea.Cmd, error) {
 			contentToRender = append([]byte(banner), content...)
 		default:
 			contentToRender = content
-		}
-		if mmdcNotice != "" {
-			contentToRender = append([]byte(mmdcNotice), contentToRender...)
 		}
 
 		placeholderFunc := func(index int) render.MermaidPlaceholder {
