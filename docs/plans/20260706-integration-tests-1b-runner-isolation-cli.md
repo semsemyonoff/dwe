@@ -499,7 +499,7 @@ Key design decisions (all from the spec):
 - Create: `internal/core/workflow/envtest/runner.go`
 - Create: `internal/core/workflow/envtest/runner_test.go`
 
-- [ ] implement `Runner` with seams (`execDwe` subprocess func, teardown deps,
+- [x] implement `Runner` with seams (`execDwe` subprocess func, teardown deps,
       port allocator, clock-free where possible) and
       `RunScenario(ctx, RunRequest) (*ScenarioResult, error)` implementing spec §6:
       acquire flock (`lock.Acquire(LockPath(...))`; `*lock.HeldError` → typed
@@ -516,14 +516,14 @@ Key design decisions (all from the spec):
       subprocess `dwe deploy run --silent` (cwd=copy, `DWE_NONINTERACTIVE=1`,
       stdout/stderr → run log) → steps in-process → deferred teardown (fresh ctx)
       unless `--keep`
-- [ ] implement the auto-port conflict retry: deploy failed + scenario has auto
+- [x] implement the auto-port conflict retry: deploy failed + scenario has auto
       vars → re-allocate, rewrite local.yml, retry deploy exactly once (no
       output-marker matching — see Technical Details; a TOCTOU loss can surface
       as either the preflight `ports_free` text or a compose bind error)
-- [ ] prep failure AFTER `CopyTree` but BEFORE `WriteManifest` → best-effort
+- [x] prep failure AFTER `CopyTree` but BEFORE `WriteManifest` → best-effort
       `os.RemoveAll(copy)` on the way out (no manifest exists yet, so stage-2
       `clean` could not find the leftover otherwise)
-- [ ] implement steps execution: fresh `config.LoadConfig` on the copy,
+- [x] implement steps execution: fresh `config.LoadConfig` on the copy,
       `usercommands.LoadRegistryFromConfigPath`, `RenderSteps`, synthetic
       `config.DeployPhase{Name: "tests"}`, `ResolvePhaseSteps(copyCfg, reg, phase, "")`,
       `pipeline.RunWithOptions{Config: copyCfg, DockerConfig: copyDockerCfg,
@@ -541,10 +541,10 @@ Key design decisions (all from the spec):
       the CLI must inject a silent screen/`io.Discard` variant that preserves
       the file log — otherwise live output leaks into JSON stdout (contract
       violation)
-- [ ] implement `ScenarioResult{Name, Status(passed/failed/error), FailedStep,
+- [x] implement `ScenarioResult{Name, Status(passed/failed/error), FailedStep,
       Duration, ReportDir}` and `--keep` handling (skip teardown, keep manifest,
       return project name + copy path + cleanup hint for the CLI to print)
-- [ ] write tests (all seams stubbed, no real docker/dwe): happy path incl.
+- [x] write tests (all seams stubbed, no real docker/dwe): happy path incl.
       teardown-called-once; prep failure before manifest → no teardown of Docker
       resources; validate failure → status error, teardown still removes copy;
       deploy failure → status failed + teardown; port-conflict retry (once, not
@@ -553,7 +553,30 @@ Key design decisions (all from the spec):
       same scenario while flock held → fail fast with held-lock error; run after
       a `--keep` run (manifest present, flock free) → fail fast with the cleanup
       hint, kept copy untouched
-- [ ] run `go test ./internal/core/workflow/envtest/...` — must pass before task 8
+- [x] run `go test ./internal/core/workflow/envtest/...` — must pass before task 8
+
+  ⚠️ Implementation notes (deviations/clarifications from the plan text above):
+  - `ApplyVisibility` confirmed needed: `executeStepBody`'s Hidden-target skip
+    (`executor.go:753-761`) reads `CommandDef.Hidden`, which is zero-value
+    false until `ApplyVisibility` runs — so the runner calls it exactly like
+    deploy does, before `ResolvePhaseSteps`.
+  - `RunScenario` returns a bare `(nil, error)` only for failures where NO copy
+    exists yet to report against (flock held, scenario/timeout parse failure,
+    kept-run guard, original config load). From `CopyTree` through the end of
+    the run, every failure is instead captured in `*ScenarioResult` with a nil
+    error (`StatusError` for copy/config/manifest/validate failures per spec's
+    own status definition, `StatusFailed` for deploy/step/timeout failures) —
+    this lets a multi-scenario CLI run keep going and still report a full
+    per-scenario result set, while `KeptRunError`/`*lock.HeldError` abort just
+    that one scenario attempt with nothing to tear down.
+  - The steps-phase `ReporterFactory` reporter/log is also reused as the
+    `dwe validate` / `dwe deploy run` subprocess stdout/stderr destination
+    (one run log for the whole scenario) — a simplification of the plan's
+    "pass-through to the reporter's diag line" phrasing, which is CLI-level
+    live-terminal polish out of scope for this task's correctness contract.
+  - Timeout expiry forces `ScenarioResult.Status = StatusFailed` regardless of
+    which phase (validate/deploy/steps) was in flight when the deadline hit,
+    matching the plan's Result-model text ("timeout expiry → failed").
 
 ### Task 8: CLI `dwe test` (run/list), registration, container policy, i18n
 
