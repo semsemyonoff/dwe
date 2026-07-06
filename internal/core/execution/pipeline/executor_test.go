@@ -2538,6 +2538,82 @@ func TestResolvePhaseSteps_BodyWithPredicateBuiltin(t *testing.T) {
 	}
 }
 
+// TestRunPipeline_PredicateBody_FileExists_True runs the full path for a
+// predicate-body assertion step — plan-time resolve (builtin.Validate via
+// ResolvePhaseSteps) plus execution — and verifies the step succeeds when the
+// asserted file exists.
+func TestRunPipeline_PredicateBody_FileExists_True(t *testing.T) {
+	workDir := t.TempDir()
+	if err := os.WriteFile(filepath.Join(workDir, "ready.txt"), []byte("ok"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	cfg := &config.DweConfig{Raw: map[string]any{}}
+	phase := config.DeployPhase{
+		Name: "verify",
+		Steps: []config.DeployStep{
+			{Name: "assert-ready", Type: "builtin", Cmd: "file_exists", With: map[string]any{"path": "ready.txt"}},
+		},
+	}
+	steps, err := ResolvePhaseSteps(cfg, nil, phase, "")
+	if err != nil {
+		t.Fatalf("ResolvePhaseSteps: %v", err)
+	}
+
+	rep := &mockReporter{}
+	if err := Run(steps, rep, "test", cfg, nil, workDir, nil, false, nil); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	wantKinds := []string{"StartPipeline", "EnterPhase", "StartStep", "FinishStep", "FinishPipeline"}
+	if fmt.Sprint(rep.kindSeq()) != fmt.Sprint(wantKinds) {
+		t.Errorf("event kinds: got %v, want %v", rep.kindSeq(), wantKinds)
+	}
+	if !rep.events[len(rep.events)-1].success {
+		t.Error("FinishPipeline should be called with success=true")
+	}
+}
+
+// TestRunPipeline_PredicateBody_FileExists_False verifies assertion semantics:
+// a predicate-body step whose predicate is false fails the step with the
+// predicate's own message (no new error type), aborts the pipeline (ErrSilent),
+// and subsequent steps never start.
+func TestRunPipeline_PredicateBody_FileExists_False(t *testing.T) {
+	cfg := &config.DweConfig{Raw: map[string]any{}}
+	phase := config.DeployPhase{Name: "verify"}
+	steps := buildResolvedSteps(phase, []config.DeployStep{
+		{Name: "assert-ready", Type: "builtin", Cmd: "file_exists", With: map[string]any{"path": "missing.txt"}},
+		noopStep("after"),
+	})
+
+	rep := &mockReporter{}
+	err := Run(steps, rep, "test", cfg, nil, t.TempDir(), nil, false, nil)
+	if !errors.Is(err, ErrSilent) {
+		t.Fatalf("want ErrSilent, got %v", err)
+	}
+
+	var failed *reporterEvent
+	for i, e := range rep.events {
+		if e.kind == "FailStep" {
+			failed = &rep.events[i]
+		}
+		if e.kind == "StartStep" && e.stepAddr == "verify/after" {
+			t.Error("subsequent step must not start after a failed assertion")
+		}
+	}
+	if failed == nil {
+		t.Fatal("expected a FailStep event")
+	}
+	if failed.stepAddr != "verify/assert-ready" {
+		t.Errorf("FailStep addr = %q, want %q", failed.stepAddr, "verify/assert-ready")
+	}
+	if failed.err == nil || !strings.Contains(failed.err.Error(), "file not found: missing.txt") {
+		t.Errorf("FailStep error should carry the predicate's message, got: %v", failed.err)
+	}
+	if rep.events[len(rep.events)-1].kind != "FinishPipeline" || rep.events[len(rep.events)-1].success {
+		t.Error("FinishPipeline should be called with success=false")
+	}
+}
+
 func TestFormatFilesGate(t *testing.T) {
 	tests := []struct {
 		name string

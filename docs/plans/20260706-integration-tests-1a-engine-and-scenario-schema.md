@@ -213,16 +213,26 @@ Three independent seams, in dependency order:
   there too)
 - Create/Modify: executor/resolve tests in `internal/core/execution/pipeline/`
 
-- [ ] verify a `type: builtin` step with a predicate cmd resolves (plan-time
+- [x] verify a `type: builtin` step with a predicate cmd resolves (plan-time
       `builtin.Validate` path) and executes; open any remaining body-kind gates found
-- [ ] ensure predicate `false` surfaces as a normal step failure with the predicate's
-      message (no new error type), and `true` as step success
-- [ ] write pipeline test: `file_exists` body, file present → step ok
-- [ ] write pipeline test: `file_exists` body, file absent → step failed, message
+      — no remaining gates: both `resolveLeafStep` (plan-time) and
+      `executeStepBody`/`execBuiltinAction` (runtime) route through the shared
+      `kindAllowed` via `CtxUserYAML`, relaxed in Task 1; **no executor/resolve code
+      changes needed** (predicates already return error on false)
+- [x] ensure predicate `false` surfaces as a normal step failure with the predicate's
+      message (no new error type), and `true` as step success — verified: builtin
+      `Run` error flows into `FailStep(addr, …, stepErr)` + `ErrSilent` unchanged
+- [x] write pipeline test: `file_exists` body, file present → step ok
+      (`TestRunPipeline_PredicateBody_FileExists_True` — resolves via
+      `ResolvePhaseSteps` then runs, covering the full path)
+- [x] write pipeline test: `file_exists` body, file absent → step failed, message
       contains the predicate's explanation; subsequent steps skipped
-- [ ] write resolve test: predicate body passes plan-time validation; `KindInternal`
-      body still rejected
-- [ ] run `go test ./internal/core/execution/...` — must pass before task 3
+      (`TestRunPipeline_PredicateBody_FileExists_False`)
+- [x] write resolve test: predicate body passes plan-time validation; `KindInternal`
+      body still rejected — already covered by Task 1's flipped tests
+      (`TestResolvePhaseSteps_BodyWithPredicateBuiltin`,
+      `TestResolvePhaseSteps_UserPhaseRejectsInternalBuiltin`); no duplicates added
+- [x] run `go test ./internal/core/execution/...` — must pass before task 3 — pass
 
 ### Task 3: Shared always-run helper wired into both deploy skip sites
 
