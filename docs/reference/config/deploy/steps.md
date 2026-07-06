@@ -120,3 +120,22 @@ Executes an engine-internal Go function. Builtins run in-process and have access
 ```
 
 See [Available builtins](builtins.md) for the full registry and parameter reference.
+
+### Predicate builtins as step bodies (assertion semantics)
+
+Most builtins are actions (they do something). Some are **predicates** — they answer a yes/no question about the world (`file_exists`, `tcp_reachable`, `http_check`, `containers_running`, `env_keys_present`, `config_keys_present`, and the `shell` builtin). A predicate may be used as a step body, where it behaves as an **assertion**:
+
+- The check passes → the step succeeds.
+- The check fails → the step **fails** with the predicate's own message, halting the pipeline.
+
+```yaml
+- name: assert-seed-present
+  type: builtin
+  cmd: file_exists
+  with:
+    path: .dwe/seed.sql
+```
+
+Assertion steps are **always re-run** — deploy's "already up-to-date" gate and the per-step action-hash skip never skip a predicate-body step (the same treatment `check:` steps receive), because an assertion has no meaningful cached result. A `when:` guard still applies: a predicate-body step whose `when:` is false is skipped without asserting.
+
+See the [predicate-as-body preamble](builtins.md#predicate-builtins-as-step-bodies-assertion-semantics) in the builtins reference for the full list and rationale.

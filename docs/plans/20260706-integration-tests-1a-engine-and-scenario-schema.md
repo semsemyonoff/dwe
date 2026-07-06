@@ -311,16 +311,18 @@ Three independent seams, in dependency order:
 - Modify: `docs/reference/config/validate.md` (checks list mentions "all six builtins")
 - Modify (if the ru mirror covers these pages): `docs/i18n/ru/reference/...`
 
-- [ ] document predicate-as-body assertion semantics (false fails the step; always
+- [x] document predicate-as-body assertion semantics (false fails the step; always
       re-run, never skipped by deploy's state gates; `when:` still applies) in
       `steps.md` and the builtins page preamble
-- [ ] document `http_check` (params table + example) in `builtins.md`
-- [ ] update `docs/reference/config/validate.md`: add `http_check` to the checks
-      builtin list (fix the "all six builtins" count)
-- [ ] mirror the same edits in the ru docs tree if these pages exist there
-- [ ] run `make build` (re-embeds docs, regenerates content hashes) and
+- [x] document `http_check` (params table + example) in `builtins.md`
+- [x] update `docs/reference/config/validate.md`: add `http_check` to the checks
+      builtin list (fix the "all six builtins" count → "all seven builtins")
+- [x] mirror the same edits in the ru docs tree (builtins.md / steps.md / validate.md);
+      refreshed each ru file's `Translated from` provenance hash to satisfy
+      `TestRussianTranslationsAreFresh`
+- [x] run `make build` (re-embeds docs, regenerates content hashes) and
       `make test` docs-subsystem packages (`go test ./internal/core/docs/...`) —
-      must pass before task 6
+      pass
 
 ### Task 6: `envtest` package — scenario types + strict loader
 

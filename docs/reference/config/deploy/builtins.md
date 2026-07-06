@@ -2,6 +2,31 @@
 
 Builtins are engine-internal Go functions invoked from a step via `type: builtin`. They run in-process with access to the merged config and the same registry used by `type: builtin` declarative commands.
 
+## Predicate builtins as step bodies (assertion semantics)
+
+A **predicate** builtin — one that answers a yes/no question about the world (`file_exists`, `tcp_reachable`, `http_check`, `containers_running`, `env_keys_present`, `config_keys_present`, and the `shell` builtin) — may be used directly as a step body, not only inside a `check:`/`when:` block. Used as a body, a predicate is an **assertion**:
+
+- A **true** result (the check passes) makes the step succeed.
+- A **false** result (the check fails) **fails the step** with the predicate's own message, halting the pipeline like any other step failure. No new error type is introduced — the predicate's explanation becomes the step error.
+
+Predicate-body steps are **always re-run**: deploy's "already up-to-date" gate and per-step action-hash skip never skip a step whose body is a predicate (the same always-run treatment `check:` steps get). An assertion has no meaningful cached result, so it re-evaluates on every deploy.
+
+A `when:` guard still applies as normal — a predicate-body step with a `when:` that evaluates false is skipped without asserting (a conditional assertion stays conditional).
+
+```yaml
+- name: assert-app-reachable
+  type: builtin
+  cmd: http_check
+  with:
+    url: http://localhost:8080/health
+    status: 200
+    contains: '"ok"'
+    retries: 10
+    interval: 2s
+```
+
+This capability is purely permissive: predicates that previously were legal only inside `check:`/`when:` are now also legal as bodies, in every pipeline (`deploy.yml`, `reset.yml`, `lifecycle.yml`, and test scenarios) and as `type: builtin` user commands. Existing configs are unaffected.
+
 ## Contents
 
 - [Catalogue](#catalogue)
@@ -16,6 +41,7 @@ Builtins are engine-internal Go functions invoked from a step via `type: builtin
 - [`docker_remove_project_volumes`](#docker_remove_project_volumes)
 - [`docker_wait_healthy`](#docker_wait_healthy)
 - [`containers_running`](#containers_running)
+- [`http_check`](#http_check)
 - [`remove_paths`](#remove_paths)
 - [Internal engine builtins (not callable from user YAML)](#internal-engine-builtins-not-callable-from-user-yaml)
 - [Naming convention](#naming-convention)
@@ -35,6 +61,7 @@ Builtins are engine-internal Go functions invoked from a step via `type: builtin
 | `docker_remove_project_volumes` | Remove all volumes whose name is prefixed with the compose project name |
 | `docker_wait_healthy` | Wait for Docker containers to reach healthy state |
 | `containers_running` | Fast "is running" check (no polling, no timeout, no healthcheck required) |
+| `http_check` | Assert an HTTP endpoint returns an expected status (and optional body substring), with retries |
 | `remove_paths` | Delete project-relative paths from the filesystem |
 
 ## `service_dirs_ensure`
@@ -253,6 +280,43 @@ Fast "is running" check for compose services. Unlike `docker_wait_healthy` it do
 - The pipeline runs immediately after `docker up` and you just want to confirm the stack came up, without paying a polling round-trip.
 
 If services are missing, the builtin fails with `services not running: <comma-separated list>`.
+
+## `http_check`
+
+Predicate builtin (`KindPredicate`) that performs an HTTP `GET` and asserts the response. It reports success when the endpoint returns the expected status code and — when `contains:` is set — a body that includes the given substring. On failure it retries up to `retries` times, waiting `interval` between attempts; each individual attempt is bounded by `timeout`.
+
+| Parameter | Type | Default | Description |
+|-----------|------|---------|-------------|
+| `url` | string | required | Target URL. Must parse as an absolute `http`/`https` URL with a host. |
+| `status` | int | `200` | Expected HTTP status code. |
+| `contains` | string | — | Optional substring that must appear in the response body. When empty, the body is not read. |
+| `retries` | int | `0` | Additional attempts after the first on mismatch/error. Total attempts = `retries + 1`. Must be `>= 0`. |
+| `interval` | string duration | `1s` | Wait between attempts. Must be `>= 0`. Cancellable via context. |
+| `timeout` | string duration | `5s` | Per-attempt timeout (not total). Must be `> 0`. |
+
+Used as a step body it is an [assertion](#predicate-builtins-as-step-bodies-assertion-semantics): a passing check succeeds the step, a failing check fails the pipeline with a message like `http_check http://localhost:8080/health: expected status 200, got 503 (after 11 attempts)`. It can equally be used inside a `check:`/`when:` block or as a `validate.yml` check entry.
+
+**Example: wait for a health endpoint after `up`**
+
+```yaml
+- name: wait-app-http
+  type: builtin
+  cmd: http_check
+  with:
+    url: http://localhost:8080/health
+    status: 200
+    contains: '"status":"ok"'
+    retries: 30
+    interval: 2s
+    timeout: 3s
+```
+
+**Behavior:**
+
+- Attempts run in sequence: attempt → on mismatch/error wait `interval` → next attempt, up to `retries + 1` total attempts.
+- A non-`status` response, a body missing the `contains` substring, a connection refusal, or a per-attempt timeout all count as a failed attempt.
+- `interval` waits and per-attempt requests honour context cancellation, so an interrupted pipeline stops promptly.
+- Invalid params (missing/malformed `url`, negative `retries`/`interval`, non-positive `timeout`) are rejected at plan time by `Validate`, before the pipeline runs.
 
 ## `remove_paths`
 
