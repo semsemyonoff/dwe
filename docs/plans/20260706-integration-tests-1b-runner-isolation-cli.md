@@ -368,7 +368,7 @@ Key design decisions (all from the spec):
 - Create: `internal/core/workflow/envtest/copy.go`
 - Create: `internal/core/workflow/envtest/copy_test.go`
 
-- [ ] implement `CopyTree(srcRoot, dstRoot, gitBin string, warn func(string)) error`:
+- [x] implement `CopyTree(srcRoot, dstRoot, gitBin string, warn func(string)) error`:
       `os.RemoveAll(dstRoot)` FIRST (the copy path is fixed per-scenario; a
       prior failed prep must never shadow/stale the fresh copy — kept/live runs
       are protected upstream by the runner's kept-run manifest guard, Task 7);
@@ -377,16 +377,16 @@ Key design decisions (all from the spec):
       from the worktree (uncommitted deletions — worktree wins); always exclude
       top-level `.dwe/`, `.env`, `.git/`; recreate directories/permissions;
       symlinks copied as symlinks
-- [ ] implement the non-git fallback: `git ls-files` failure (not a repo / git
+- [x] implement the non-git fallback: `git ls-files` failure (not a repo / git
       error) → full `filepath.WalkDir` copy with the same exclusions + one warning
       via `warn` (gitignored artifacts included, spec §5)
-- [ ] write tests against real `git init` repos in `t.TempDir()`: tracked +
+- [x] write tests against real `git init` repos in `t.TempDir()`: tracked +
       untracked copied; `.gitignore`d file NOT copied; `.dwe/`/`.env`/`.git/`
       excluded; tracked-but-deleted file skipped; symlink recreated; nested dirs +
       permissions; copy over a pre-existing destination leaves NO stale files
-- [ ] write tests for the fallback: non-git dir copied fully minus exclusions,
+- [x] write tests for the fallback: non-git dir copied fully minus exclusions,
       warning emitted; unreadable source → error
-- [ ] run `go test ./internal/core/workflow/envtest/...` — must pass before task 3
+- [x] run `go test ./internal/core/workflow/envtest/...` — must pass before task 3
 
 ### Task 3: Generated `local.yml` (seed + scenario env + identity) and auto ports
 
