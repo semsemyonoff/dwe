@@ -469,7 +469,7 @@ Key design decisions (all from the spec):
 - Create: `internal/core/workflow/envtest/teardown.go`
 - Create: `internal/core/workflow/envtest/teardown_test.go`
 
-- [ ] implement `Teardown(ctx, m *Manifest, deps TeardownDeps, warn func(string)) error`
+- [x] implement `Teardown(ctx, m *Manifest, deps TeardownDeps, warn func(string)) error`
       driven ONLY by the manifest + copy contents, with every external action
       behind a `TeardownDeps` seam (compose down, list/remove containers, remove
       volumes, stop bridge daemon, remove dir, delete manifest); order: compose
@@ -481,17 +481,17 @@ Key design decisions (all from the spec):
       `docker.RemoveContainer` → `RemoveVolumesByProjectPrefix` →
       `bridge.StopDaemon(m.bridge_dir)` → `os.RemoveAll(copy)` → `DeleteManifest`;
       each step best-effort (log + continue), errors joined into the return
-- [ ] handle the copy-already-gone / config-unloadable degradation: when the copy's
+- [x] handle the copy-already-gone / config-unloadable degradation: when the copy's
       compose file set cannot be built, skip compose down with a warning and still
       run container reap + volume removal + the rest (manifest-driven resilience,
       spec §6)
-- [ ] default `TeardownDeps` wires the real implementations; document that teardown
+- [x] default `TeardownDeps` wires the real implementations; document that teardown
       callers must pass a FRESH context (never the expired scenario deadline)
-- [ ] write tests with a recording fake deps: full order; failure in step k → later
+- [x] write tests with a recording fake deps: full order; failure in step k → later
       steps still run + error joined; copy-missing degradation; `-v` never present
       in compose args and `ps` args include `-a` + the exact label filter (assert
       on recorded args); compose down killed when the teardown ctx expires
-- [ ] run `go test ./internal/core/workflow/envtest/...` — must pass before task 7
+- [x] run `go test ./internal/core/workflow/envtest/...` — must pass before task 7
 
 ### Task 7: Runner orchestration
 
