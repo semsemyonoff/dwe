@@ -404,14 +404,18 @@ Three independent seams, in dependency order:
 - Modify: `docs/internals/packages.md`
 - Modify: `AGENTS.md` (only if a critical-pattern entry is warranted)
 
-- [ ] update `docs/internals/packages.md`: builtin-kinds contract (predicate-as-body +
+- [x] update `docs/internals/packages.md`: builtin-kinds contract (predicate-as-body +
       always-run helper and its two deploy call sites), new `envtest` package section
       (scenario schema, loader strictness divergence, render-before-resolve contract)
-- [ ] add/adjust an AGENTS.md critical-pattern bullet only if the always-run helper
+      — added `StepForcesRun` to the pipeline entry, the `kindAllowed` relaxation +
+      `KindOf` + `http_check` to the builtin entry, and a full `envtest` package section
+- [x] add/adjust an AGENTS.md critical-pattern bullet only if the always-run helper
       contract is load-bearing enough to trap future contributors (judge at
-      implementation time; default: packages.md only)
-- [ ] run `make build` (embeds updated internals docs)
-- [ ] move this plan to `docs/plans/completed/`
+      implementation time; default: packages.md only) — added a concise
+      "Predicate-as-body assertions + always-run" bullet (the `Type == "builtin"`
+      gating trap + the two deploy call sites span three packages, warranting it)
+- [x] run `make build` (embeds updated internals docs) — pass; docs-subsystem tests green
+- [x] move this plan to `docs/plans/completed/`
 
 ## Post-Completion
 
