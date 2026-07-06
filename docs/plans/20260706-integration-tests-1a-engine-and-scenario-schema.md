@@ -384,13 +384,19 @@ Three independent seams, in dependency order:
 
 ### Task 8: Verify acceptance criteria
 
-- [ ] verify against spec §4: predicate bodies legal everywhere, assertion semantics,
+- [x] verify against spec §4: predicate bodies legal everywhere, assertion semantics,
       always-run at both deploy gates, `http_check` shape, scenario schema matches the
-      spec example (minus 1b-owned behaviour)
-- [ ] verify backward compatibility: no existing golden/test changed except ones
-      explicitly extended for the new capability
-- [ ] run full suite: `make test`
-- [ ] run `make lint`
+      spec example (minus 1b-owned behaviour) — confirmed present: `kindAllowed`
+      relaxation + `KindOf` classifier; `pipeline.StepForcesRun` wired into both deploy
+      gates (`hasAlwaysRunSteps` early gate + `makeSkipDecider`); `http_check`
+      `KindPredicate` builtin with url/status/contains/retries/interval/timeout;
+      `envtest.LoadScenario`/`ListScenarios`/`RenderSteps` + `AutoPortSentinel` +
+      `config.ValidateDeploySteps`
+- [x] verify backward compatibility: no existing golden/test changed except ones
+      explicitly extended for the new capability — `make test` passes with the full
+      suite green (existing goldens byte-identical; the relaxation is purely permissive)
+- [x] run full suite: `make test` — pass
+- [x] run `make lint` — 0 issues
 
 ### Task 9: [Final] Internals documentation + plan close-out
 
