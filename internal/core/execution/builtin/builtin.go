@@ -48,6 +48,7 @@
 //	root (KindPredicate)
 //	- shell                         — exit-code predicate via /bin/sh
 //	- tcp_reachable                 — TCP host:port reachability predicate
+//	- http_check                    — HTTP GET status/body reachability predicate (with retries)
 //	- config_keys_present           — verify merged-config dot-paths resolve to non-empty values
 package builtin
 
@@ -98,6 +99,7 @@ func buildRegistry() map[string]spec.Entry {
 		// KindPredicate: read-only checks for check: positions and validate.yml
 		"shell":               {Impl: Shell{}, Kind: spec.KindPredicate},
 		"tcp_reachable":       {Impl: TCPReachable{}, Kind: spec.KindPredicate},
+		"http_check":          {Impl: HTTPCheck{}, Kind: spec.KindPredicate},
 		"config_keys_present": {Impl: ConfigKeysPresent{}, Kind: spec.KindPredicate},
 	}
 	for _, src := range []map[string]spec.Entry{

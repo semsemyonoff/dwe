@@ -300,6 +300,7 @@ var allBuiltinNames = []string{
 	// root (cross-cutting predicates)
 	"shell",
 	"tcp_reachable",
+	"http_check",
 	"config_keys_present",
 	// containers/
 	"docker_daemon_start",
@@ -354,6 +355,7 @@ func TestNoDuplicateRegistryNames(t *testing.T) {
 		{"root", map[string]spec.Entry{
 			"shell":               {Impl: Shell{}, Kind: spec.KindPredicate},
 			"tcp_reachable":       {Impl: TCPReachable{}, Kind: spec.KindPredicate},
+			"http_check":          {Impl: HTTPCheck{}, Kind: spec.KindPredicate},
 			"config_keys_present": {Impl: ConfigKeysPresent{}, Kind: spec.KindPredicate},
 		}},
 		{"containers", containers.Builtins()},

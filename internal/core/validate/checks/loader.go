@@ -49,6 +49,7 @@ var allowedBuiltinCmds = map[string]struct{}{
 	"executable_in_path":  {},
 	"env_keys_present":    {},
 	"tcp_reachable":       {},
+	"http_check":          {},
 	"config_keys_present": {},
 }
 
@@ -115,7 +116,7 @@ func buildValidator(entry config.CheckEntry, baseDir string, cmdRegistry *regist
 		}
 		if _, ok := allowedBuiltinCmds[entry.Cmd]; !ok {
 			return cached(entry, fmt.Sprintf(
-				"checks may only use builtins: shell, file_exists, executable_in_path, env_keys_present, tcp_reachable, config_keys_present (got: %s)", entry.Cmd))
+				"checks may only use builtins: shell, file_exists, executable_in_path, env_keys_present, tcp_reachable, http_check, config_keys_present (got: %s)", entry.Cmd))
 		}
 		if err := builtin.Validate(entry.Cmd, entry.With, builtin.CtxPredicate); err != nil {
 			return cached(entry, err.Error())

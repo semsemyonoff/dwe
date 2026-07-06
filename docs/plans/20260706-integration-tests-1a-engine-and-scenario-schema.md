@@ -284,21 +284,24 @@ Three independent seams, in dependency order:
 - Modify: `internal/core/execution/builtin/builtin.go` (registry entry)
 - Modify: `internal/core/validate/checks/loader.go` (checks allowlist)
 
-- [ ] implement `http_check` as `KindPredicate` (model: `tcp_reachable.go`): params
+- [x] implement `http_check` as `KindPredicate` (model: `tcp_reachable.go`): params
       `url` (required, must parse as http/https), `status` (default 200), `contains`
       (optional), `retries` (default 0), `interval` (default 1s), `timeout`
-      (per-attempt, default 5s)
-- [ ] implement `Validate` for plan-time param checking (types, url shape, positive
+      (per-attempt, default 5s) — landed in `builtin/http_check.go`
+- [x] implement `Validate` for plan-time param checking (types, url shape, positive
       durations) and the retry loop in `Run` (attempts = retries+1, wait `interval`
-      between)
-- [ ] register in `buildRegistry`
-- [ ] add `http_check` to the hardcoded `workspace/validate.yml` checks allowlist
-      (`internal/core/validate/checks/loader.go:~41`) + allowlist test
-- [ ] write tests against `httptest.Server`: 200 ok; wrong status → false with
-      message; `contains` match/mismatch; retries: fail-then-succeed; per-attempt
-      timeout on a hanging handler; invalid params rejected by `Validate`
-- [ ] run `go test ./internal/core/execution/builtin/... ./internal/core/validate/...`
-      — must pass before task 5
+      between) — `interval` waits are ctx-cancellable; per-attempt `timeout` via
+      `context.WithTimeout`; added `getOptionalIntParam` (default-on-absent int helper)
+- [x] register in `buildRegistry` (also listed in the package doc comment)
+- [x] add `http_check` to the hardcoded `workspace/validate.yml` checks allowlist
+      (`internal/core/validate/checks/loader.go:~41`) + updated the allowlist error
+      message string; existing checks tests are the regression net
+- [x] write tests against `httptest.Server`: 200 ok; wrong status → false with
+      message; custom status; `contains` match/mismatch; retries: fail-then-succeed +
+      exhausted; per-attempt timeout on a hanging handler; connection-refused; invalid
+      params rejected by `Validate`; also bumped `allBuiltinNames`/registry-count test
+- [x] run `go test ./internal/core/execution/builtin/... ./internal/core/validate/...`
+      — pass
 
 ### Task 5: Builtin reference docs
 
