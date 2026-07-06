@@ -345,22 +345,22 @@ Key design decisions (all from the spec):
 - Create: `internal/core/workflow/envtest/manifest.go`
 - Create: `internal/core/workflow/envtest/manifest_test.go`
 
-- [ ] implement run-identity helpers in `run.go`: `NewRunID()` (6 hex chars,
+- [x] implement run-identity helpers in `run.go`: `NewRunID()` (6 hex chars,
       crypto/rand), `ComposeProjectName(cfg, scenario, runID)` (`<base>-t-<scenario>-<runID>`,
       base = prefix-or-name, normalised to `[a-z0-9_-]` lowercase), and path
       helpers `RunDir/LockPath/ManifestPath/ReportsDir(baseDir, ...)` under
       `.dwe/tests/{runs,locks,manifests,reports}`
-- [ ] implement `ScrubComposeEnv()` in `run.go`: unset every `COMPOSE_*` env var,
+- [x] implement `ScrubComposeEnv()` in `run.go`: unset every `COMPOSE_*` env var,
       leave `DOCKER_*` untouched; document the call-once-at-startup contract
-- [ ] implement `Manifest` struct (scenario, run_id, compose_project, copy_path,
+- [x] implement `Manifest` struct (scenario, run_id, compose_project, copy_path,
       bridge_dir, report_dir, created_at) + `WriteManifest` (atomic, mkdir -p) /
       `LoadManifest` / `DeleteManifest` in `manifest.go` — fields chosen to cover
       stage-2 `dwe test clean` (spec §7 row 2)
-- [ ] write tests: run-ID shape/uniqueness, project-name normalisation (prefix set /
+- [x] write tests: run-ID shape/uniqueness, project-name normalisation (prefix set /
       unset, charset), path layout, scrub (COMPOSE_* gone, DOCKER_* kept)
-- [ ] write tests: manifest round-trip, load of missing/corrupt file, delete
+- [x] write tests: manifest round-trip, load of missing/corrupt file, delete
       idempotence
-- [ ] run `go test ./internal/core/workflow/envtest/...` — must pass before task 2
+- [x] run `go test ./internal/core/workflow/envtest/...` — must pass before task 2
 
 ### Task 2: Git-aware tree copy
 
