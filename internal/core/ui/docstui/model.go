@@ -213,6 +213,26 @@ type topicLoadedMsg struct {
 	Err          error
 }
 
+// translationBanner returns the markdown blockquote to prepend to a topic when
+// its translation is missing (fell back to English) or outdated, or "" when no
+// banner applies. Banners are specific to dwe's own docs (rootName == "dwe"):
+// only those ship the i18n tree and the content-hash staleness manifest, so a
+// non-en locale falling back to English in a *project's* docs is expected and
+// must not be flagged. locale is the requested locale, sourceLang the locale
+// actually resolved, and stale the content-hash staleness verdict.
+func translationBanner(rootName, locale, sourceLang string, stale bool) string {
+	if rootName != "dwe" {
+		return ""
+	}
+	switch {
+	case sourceLang != locale:
+		return "> **ℹ Translation not available for `" + locale + "`. Showing English version.**\n\n"
+	case stale:
+		return "> **⚠ This translation is outdated (last synced at previous version, current is newer). Press `e` to view the English version.**\n\n"
+	}
+	return ""
+}
+
 // loadTopic kicks off a background load for the given tree node. The fast
 // prep (progress reset, available-locales scan, source-root lookup) runs
 // synchronously; the slow ResolveContent + glamour Render runs in a
@@ -277,6 +297,7 @@ func (m *Model) loadTopic(node *TreeNode) (tea.Cmd, error) {
 	locale := m.Locale
 	theme := m.Theme
 	width := m.ContentWidth
+	rootName := sourceRoot.Name
 
 	return func() tea.Msg {
 		content, sourceLang, stale, err := docs.ResolveContent(sourceRoot, path, locale)
@@ -284,16 +305,9 @@ func (m *Model) loadTopic(node *TreeNode) (tea.Cmd, error) {
 			return topicLoadedMsg{Generation: gen, Path: path, Locale: locale, Err: err}
 		}
 
-		var contentToRender []byte
-		switch {
-		case sourceLang != locale:
-			banner := "> **ℹ Translation not available for `" + locale + "`. Showing English version.**\n\n"
+		contentToRender := content
+		if banner := translationBanner(rootName, locale, sourceLang, stale); banner != "" {
 			contentToRender = append([]byte(banner), content...)
-		case stale:
-			banner := "> **⚠ This translation is outdated (last synced at previous version, current is newer). Press `e` to view the English version.**\n\n"
-			contentToRender = append([]byte(banner), content...)
-		default:
-			contentToRender = content
 		}
 
 		placeholderFunc := func(index int) render.MermaidPlaceholder {
