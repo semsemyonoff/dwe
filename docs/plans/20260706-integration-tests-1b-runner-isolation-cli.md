@@ -425,23 +425,23 @@ Key design decisions (all from the spec):
 - Create: `internal/core/workflow/envtest/dockeridentity.go`
 - Create: `internal/core/workflow/envtest/dockeridentity_test.go`
 
-- [ ] implement `WriteDockerIdentity(copyRoot, projectName string) error`: if
+- [x] implement `WriteDockerIdentity(copyRoot, projectName string) error`: if
       `workspace/docker.yml` exists in the copy → write
       `workspace/docker.local.yml` with only `project_name:` (overwrite any copied
       one); else → write `workspace/docker.yml` with `project_name:` + explicit
       `[]` for every `args:` key (semantics-neutral per spec §5 — a no-`args:`
       file would gain the up/logs/run/down defaults a docker.yml-less project
       never had) AND remove any stray copied `workspace/docker.local.yml`
-- [ ] write tests: both branches produce a file whose
+- [x] write tests: both branches produce a file whose
       `config.ResolveComposeProjectName(copyRoot, cfg)` = projectName (base file
       present with its own `project_name:` template → local overrides it)
-- [ ] write the semantics-equivalence test: `config.LoadDockerConfig` over the
+- [x] write the semantics-equivalence test: `config.LoadDockerConfig` over the
       generated `docker.yml` yields `DockerArgs` identical to
       `LoadDockerConfigOrEmpty`'s missing-file zero-value (all args empty, no
       defaults), pinning the neutrality invariant
-- [ ] write test: stray-`docker.local.yml` removal in the generated-`docker.yml`
+- [x] write test: stray-`docker.local.yml` removal in the generated-`docker.yml`
       branch
-- [ ] run `go test ./internal/core/workflow/envtest/... ./internal/core/project/config/...`
+- [x] run `go test ./internal/core/workflow/envtest/... ./internal/core/project/config/...`
       — must pass before task 5
 
 ### Task 5: Reusable project-volume removal (extract from builtin)
