@@ -99,6 +99,67 @@ func TestRenderSteps_StepWithoutWith(t *testing.T) {
 	}
 }
 
+func TestRenderSteps_CheckCmdAndWith(t *testing.T) {
+	steps := []config.DeployStep{
+		{
+			Type: "shell",
+			Cmd:  "true",
+			Check: &config.Action{
+				Type: "builtin",
+				Cmd:  "http_check",
+				With: map[string]any{
+					"url":    "${vars.http_url}",
+					"status": 200,
+				},
+			},
+		},
+	}
+	if err := RenderSteps(steps, testConfig()); err != nil {
+		t.Fatalf("RenderSteps: %v", err)
+	}
+	chk := steps[0].Check
+	if chk == nil {
+		t.Fatal("Check is nil")
+	}
+	if got := chk.With["url"]; got != "http://localhost:8080/health" {
+		t.Errorf("check.with.url = %v", got)
+	}
+	// Non-string check params keep their YAML type.
+	if got := chk.With["status"]; got != 200 {
+		t.Errorf("check.with.status = %v (%T), want int 200", got, got)
+	}
+}
+
+func TestRenderSteps_ParallelSubstepCheck(t *testing.T) {
+	steps := []config.DeployStep{
+		{
+			Parallel: &config.ParallelGroup{
+				Steps: []config.DeployStep{
+					{
+						Type: "shell",
+						Cmd:  "true",
+						Check: &config.Action{
+							Type: "builtin",
+							Cmd:  "http_check",
+							With: map[string]any{"url": "${vars.http_url}"},
+						},
+					},
+				},
+			},
+		},
+	}
+	if err := RenderSteps(steps, testConfig()); err != nil {
+		t.Fatalf("RenderSteps: %v", err)
+	}
+	chk := steps[0].Parallel.Steps[0].Check
+	if chk == nil {
+		t.Fatal("substep Check is nil")
+	}
+	if got := chk.With["url"]; got != "http://localhost:8080/health" {
+		t.Errorf("substep check.with.url = %v", got)
+	}
+}
+
 func TestRenderSteps_ParallelSubsteps(t *testing.T) {
 	steps := []config.DeployStep{
 		{

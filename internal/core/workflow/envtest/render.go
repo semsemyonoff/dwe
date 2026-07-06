@@ -44,8 +44,8 @@ func renderContext(cfg *config.DweConfig) *tpl.RenderContext {
 	return ctx
 }
 
-// renderStep renders a single step's cmd: and with: in place, then recurses one
-// level into parallel substeps (deeper nesting is schema-rejected).
+// renderStep renders a single step's cmd:, with:, and check: in place, then
+// recurses one level into parallel substeps (deeper nesting is schema-rejected).
 func renderStep(step *config.DeployStep, ctx *tpl.RenderContext) error {
 	if step.Cmd != "" {
 		rendered, err := tpl.RenderCommand(step.Cmd, ctx)
@@ -61,12 +61,39 @@ func renderStep(step *config.DeployStep, ctx *tpl.RenderContext) error {
 		}
 		step.With[key] = rendered
 	}
+	if step.Check != nil {
+		if err := renderAction(step.Check, ctx); err != nil {
+			return err
+		}
+	}
 	if step.Parallel != nil {
 		for i := range step.Parallel.Steps {
 			if err := renderStep(&step.Parallel.Steps[i], ctx); err != nil {
 				return err
 			}
 		}
+	}
+	return nil
+}
+
+// renderAction renders an action's cmd: and with: in place. A step's check:
+// clause reuses the deploy-step action shape (same type/cmd/with), so it must go
+// through the identical ${...} substrate — otherwise plan-time builtin.Validate
+// and runtime ExecAction would see unresolved ${...} in check params.
+func renderAction(action *config.Action, ctx *tpl.RenderContext) error {
+	if action.Cmd != "" {
+		rendered, err := tpl.RenderCommand(action.Cmd, ctx)
+		if err != nil {
+			return fmt.Errorf("render check cmd %q: %w", action.Cmd, err)
+		}
+		action.Cmd = rendered
+	}
+	for key, val := range action.With {
+		rendered, err := renderValue(val, ctx)
+		if err != nil {
+			return fmt.Errorf("render check with.%s: %w", key, err)
+		}
+		action.With[key] = rendered
 	}
 	return nil
 }
