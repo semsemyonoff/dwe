@@ -739,16 +739,16 @@ Key design decisions (all from the spec):
 - Modify: `docs/internals/packages.md`
 - Modify: `AGENTS.md`
 
-- [ ] update `docs/internals/packages.md`: extend the `envtest` section (runner,
+- [x] update `docs/internals/packages.md`: extend the `envtest` section (runner,
       copy, identity generation, manifest, teardown deps/order, subprocess seams +
       test-recursion hazard) and add the `internal/cli/test/` section (env scrub
       placement, exit-code mapping, no-original-locks contract, container policy)
-- [ ] extend the AGENTS.md stage-1a critical-pattern bullet with the 1b contracts
+- [x] extend the AGENTS.md stage-1a critical-pattern bullet with the 1b contracts
       worth trapping: no-original-locks + per-scenario flock, manifest-before-Docker,
       teardown never `-v`, exact-identity cleanup (never name-pattern), env scrub
       once, subprocess seam hazard
-- [ ] run `make build` (embeds updated internals docs); docs-subsystem tests green
-- [ ] move this plan to `docs/plans/completed/`
+- [x] run `make build` (embeds updated internals docs); docs-subsystem tests green
+- [x] move this plan to `docs/plans/completed/`
 
 ## Post-Completion
 
