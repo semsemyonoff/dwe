@@ -396,10 +396,10 @@ Key design decisions (all from the spec):
 - Create: `internal/core/workflow/envtest/ports.go`
 - Create: `internal/core/workflow/envtest/ports_test.go`
 
-- [ ] implement `AllocatePorts(n int) ([]int, error)` in `ports.go`: open n
+- [x] implement `AllocatePorts(n int) ([]int, error)` in `ports.go`: open n
       `net.Listen("tcp", ":0")` listeners, harvest ports, close only after the full
       batch (intra-batch uniqueness); TOCTOU accepted per spec §9
-- [ ] implement `BuildLocalOverlay(seed map[string]any, scn *Scenario,
+- [x] implement `BuildLocalOverlay(seed map[string]any, scn *Scenario,
       projectName string, ports map[string]int, warn func(string)) (map[string]any, error)`
       in `localyaml.go`: strip `compose.extra` + `services.<name>.compose.extra`
       from the seed (warning each); overlay scenario `env.vars` as dot-paths under
@@ -407,17 +407,17 @@ Key design decisions (all from the spec):
       `env.services.enable/disable` → `services.<name>.enabled`; then
       `project: {prefix: projectName}` + `update: {mode: "off"}` (explicit value —
       empty mode means ON, `EffectiveMode` contract)
-- [ ] implement `WriteGeneratedLocalYAML(copyRoot string, overlay map[string]any)`
+- [x] implement `WriteGeneratedLocalYAML(copyRoot string, overlay map[string]any)`
       via `local.WriteLocalYAML` into the copy's `workspace/local.yml`; seed reader
       uses `local.LoadLocalYAML(config.LocalLayerPath(origWorkspacePath))`
       (absent → empty map)
-- [ ] write tests: seed preserved; both compose.extra shapes stripped + warned;
+- [x] write tests: seed preserved; both compose.extra shapes stripped + warned;
       dot-path var expansion incl. nesting collision with seeded scalar (map wins /
       clear error — pick and pin); `auto` replaced by allocated port; enable +
       disable toggles; identity + update block exact YAML; precedence (scenario
       var overrides seeded var)
-- [ ] write tests: `AllocatePorts` returns n distinct free ports; n=0
-- [ ] run `go test ./internal/core/workflow/envtest/...` — must pass before task 4
+- [x] write tests: `AllocatePorts` returns n distinct free ports; n=0
+- [x] run `go test ./internal/core/workflow/envtest/...` — must pass before task 4
 
 ### Task 4: Docker identity file generation
 
