@@ -38,13 +38,27 @@ var excludedTopLevel = map[string]struct{}{
 //
 // dstRoot is removed first: the copy path is fixed per-scenario, and a stale
 // prior copy must never shadow files the fresh copy no longer has.
-func CopyTree(srcRoot, dstRoot, gitBin string, warn func(string)) error {
+//
+// CopyTree is all-or-nothing: if any error occurs after dstRoot is (re)created,
+// the partial copy is best-effort removed before returning, so a failed copy
+// never leaves an orphaned tree behind. This matters because the caller has no
+// manifest yet at this point — a partial copy would otherwise be invisible to
+// manifest-driven Teardown and stage-2 `dwe test clean`.
+func CopyTree(srcRoot, dstRoot, gitBin string, warn func(string)) (err error) {
 	if warn == nil {
 		warn = func(string) {}
 	}
 	if err := os.RemoveAll(dstRoot); err != nil {
 		return fmt.Errorf("envtest: removing stale copy destination: %w", err)
 	}
+
+	defer func() {
+		if err != nil {
+			if rmErr := os.RemoveAll(dstRoot); rmErr != nil {
+				warn(fmt.Sprintf("removing partial copy after failure: %v", rmErr))
+			}
+		}
+	}()
 
 	files, gitErr := gitLsFiles(gitBin, srcRoot)
 	if gitErr != nil {
