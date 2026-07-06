@@ -380,10 +380,16 @@ function transformReadme(md, srcFileAbs, desc, preferLocale, onMissing, onCopy) 
   return `---\ntitle: ${yamlQuote(title)}\ndescription: ${yamlQuote(desc)}\n---\n\n${out}`;
 }
 
-/** Current version label, mirroring the Makefile's VERSION derivation. */
+/**
+ * Version label shown in the site header. Unlike the Makefile's binary VERSION
+ * (`git describe --tags --always --dirty`, which carries a `-N-gsha` dev suffix),
+ * the docs site wants the CLEAN nearest release tag: `--abbrev=0` strips the
+ * commit-count/sha suffix so a build from any post-tag commit on main still shows
+ * e.g. `v0.3.0` rather than `v0.3.0-4-gdeadbee`. No tag reachable → 'dev'.
+ */
 export function gitVersion(cwd = REPO_ROOT, run = execFileSync) {
   try {
-    return run('git', ['describe', '--tags', '--always', '--dirty'], { cwd, encoding: 'utf8' }).trim() || 'dev';
+    return run('git', ['describe', '--tags', '--abbrev=0'], { cwd, encoding: 'utf8' }).trim() || 'dev';
   } catch {
     return 'dev';
   }
