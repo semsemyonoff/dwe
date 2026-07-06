@@ -667,7 +667,7 @@ Key design decisions (all from the spec):
 - Create: `docs/i18n/ru/guides/integration-tests.md`
 - Modify: ru index mirrors as applicable
 
-- [ ] write `docs/reference/config/tests.md`: scenario schema (fields, name rule,
+- [x] write `docs/reference/config/tests.md`: scenario schema (fields, name rule,
       strict decode, empty-file error), `env.vars`/`auto` + the vars-routed-ports
       prerequisite (spec §4, documented prominently), `env.services`, `timeout`,
       steps = deploy-step schema + loader-side `${...}` rendering, `dwe test
@@ -676,14 +676,14 @@ Key design decisions (all from the spec):
       `--keep`), documented limitations from spec §9 (`.git/` excluded, named
       compose resources, host side effects, non-atomic copy, `~/.config/dwe`
       shared)
-- [ ] write the task-oriented guide (`docs/guides/integration-tests.md`): writing a
+- [x] write the task-oriented guide (`docs/guides/integration-tests.md`): writing a
       deploy test for an arbitrary stack — moving ports onto vars, first scenario,
       private test commands via `type: command`, debugging with `--keep`
-- [ ] add both pages to the ordered TOCs (`reference/config/index.md`,
+- [x] add both pages to the ordered TOCs (`reference/config/index.md`,
       `guides/index.md`)
-- [ ] mirror all edits in `docs/i18n/ru/...` and refresh each ru file's
+- [x] mirror all edits in `docs/i18n/ru/...` and refresh each ru file's
       `Translated from` provenance hash (`TestRussianTranslationsAreFresh`)
-- [ ] run `make build` (re-embeds docs, regenerates content hashes) and
+- [x] run `make build` (re-embeds docs, regenerates content hashes) and
       `go test ./internal/core/docs/...` — must pass before task 10
 
 ### Task 10: Verify acceptance criteria
