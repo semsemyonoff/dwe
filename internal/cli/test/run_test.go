@@ -172,6 +172,27 @@ func TestRunTestRun_ExplicitScenarioNames(t *testing.T) {
 	}
 }
 
+func TestRunTestRun_DuplicateArgs_RunOnce(t *testing.T) {
+	baseDir := t.TempDir()
+	writeScenarioFile(t, baseDir, "a", "description: x\n")
+	writeScenarioFile(t, baseDir, "b", "description: x\n")
+
+	f := &fakeRunner{}
+	withFakeRunner(t, f)
+
+	flags := &cmdctx.RootFlags{Root: baseDir}
+	cmd, _, _ := newRunTestCmd()
+
+	// A repeated name must collapse to a single run (first-mention order),
+	// not run twice — the second run would spuriously trip the --keep guard.
+	if err := runTestRun(cmd, flags, []string{"b", "a", "b"}, false, 0); err != nil {
+		t.Fatalf("runTestRun: %v", err)
+	}
+	if len(f.calls) != 2 || f.calls[0].Scenario != "b" || f.calls[1].Scenario != "a" {
+		t.Fatalf("expected scenarios [b a] to run once each, got %+v", f.calls)
+	}
+}
+
 func TestRunTestRun_NoScenarios_ExitZero(t *testing.T) {
 	baseDir := t.TempDir()
 	f := &fakeRunner{}

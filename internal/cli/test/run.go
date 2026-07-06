@@ -204,7 +204,10 @@ func runTestRun(cmd *cobra.Command, flags *cmdctx.RootFlags, args []string, keep
 // resolveScenarioNames returns the scenario names to run: every scenario
 // (sorted) when args is empty, else exactly the requested names — validated
 // against the discovered set up front so an unknown name fails before any
-// scenario runs (a prep error, exit 2).
+// scenario runs (a prep error, exit 2). Duplicate args are collapsed to a
+// single run (order of first mention preserved): a repeated name would
+// otherwise run redundantly and, under --keep, error on the second run
+// because the first left a kept manifest behind.
 func resolveScenarioNames(baseDir string, args []string) ([]string, error) {
 	all, err := envtest.ListScenarios(baseDir)
 	if err != nil {
@@ -217,14 +220,21 @@ func resolveScenarioNames(baseDir string, args []string) ([]string, error) {
 	for _, n := range all {
 		known[n] = true
 	}
+	seen := make(map[string]bool, len(args))
+	names := make([]string, 0, len(args))
 	for _, n := range args {
 		if !known[n] {
 			return nil, cmdctx.Err("unknown_scenario", fmt.Sprintf("unknown scenario %q", n)).
 				WithHint("run `dwe test list` to see available scenarios").
 				WithDetail("scenario", n)
 		}
+		if seen[n] {
+			continue
+		}
+		seen[n] = true
+		names = append(names, n)
 	}
-	return args, nil
+	return names, nil
 }
 
 // jsonReporterFactory builds the steps-pipeline reporter with a silenced

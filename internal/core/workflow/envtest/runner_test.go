@@ -538,6 +538,57 @@ func TestRunScenario_KeptRunGuard(t *testing.T) {
 	}
 }
 
+// TestExistingManifestPaths_PrefixDisambiguation locks in the load-bearing
+// behaviour of manifestRunIDSuffix: a scenario's kept-run guard must match ONLY
+// that scenario's own manifests, never another scenario whose name shares its
+// prefix (e.g. "foo" must not claim "foo-bar"'s manifest, and vice versa), and
+// must ignore files that carry the prefix but not a valid <6-hex>.yml run-id
+// suffix.
+func TestExistingManifestPaths_PrefixDisambiguation(t *testing.T) {
+	dir := t.TempDir()
+	manifests := ManifestsDir(dir)
+	if err := os.MkdirAll(manifests, 0o755); err != nil {
+		t.Fatalf("creating manifests dir: %v", err)
+	}
+	write := func(name string) {
+		if err := os.WriteFile(filepath.Join(manifests, name), []byte("scenario: x\n"), 0o644); err != nil {
+			t.Fatalf("writing %s: %v", name, err)
+		}
+	}
+	// foo's own runs.
+	write("foo-abcdef.yml")
+	write("foo-123abc.yml")
+	// A different scenario that merely shares the "foo-" prefix.
+	write("foo-bar-abcdef.yml")
+	// Prefix-carrying files with an invalid run-id suffix — must be ignored.
+	write("foo-notanid.yml")
+	write("foo-abcde.yml")   // 5 hex, too short
+	write("foo-ABCDEF.yml")  // uppercase, not [0-9a-f]
+	write("foo-abcdef.yaml") // wrong extension
+
+	got, err := existingManifestPaths(dir, "foo")
+	if err != nil {
+		t.Fatalf("existingManifestPaths(foo): %v", err)
+	}
+	want := []string{
+		filepath.Join(manifests, "foo-123abc.yml"),
+		filepath.Join(manifests, "foo-abcdef.yml"),
+	}
+	if !slices.Equal(got, want) {
+		t.Fatalf("existingManifestPaths(foo)\n got: %v\nwant: %v", got, want)
+	}
+
+	// The prefix-sharing scenario resolves to only its own manifest.
+	gotBar, err := existingManifestPaths(dir, "foo-bar")
+	if err != nil {
+		t.Fatalf("existingManifestPaths(foo-bar): %v", err)
+	}
+	wantBar := []string{filepath.Join(manifests, "foo-bar-abcdef.yml")}
+	if !slices.Equal(gotBar, wantBar) {
+		t.Fatalf("existingManifestPaths(foo-bar)\n got: %v\nwant: %v", gotBar, wantBar)
+	}
+}
+
 func containsStep(order []string, step string) bool {
 	return slices.Contains(order, step)
 }
