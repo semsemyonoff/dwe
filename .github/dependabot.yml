@@ -1,11 +1,17 @@
 version: 2
+
+# Policy (main, post-TUI-milestone):
+#   * Serious fixes → Dependabot SECURITY updates. These run independently of
+#     the blocks below (they honor repo "Dependabot security updates", always
+#     target the default branch, and ignore schedule/limit), so real advisories
+#     still open a PR promptly.
+#   * Routine bumps → one grouped, MONTHLY digest PR per ecosystem. Low noise:
+#     we don't want a PR for every version, just to stay roughly current.
 updates:
   - package-ecosystem: "gomod"
     directory: "/"
-    # Temporary target; switch to main after the TUI milestone ships.
-    target-branch: "tui"
     schedule:
-      interval: "weekly"
+      interval: "monthly"
       day: "sunday"
     open-pull-requests-limit: 5
     labels:
@@ -15,17 +21,15 @@ updates:
       prefix: "build(deps)"
       prefix-development: "build(deps-dev)"
     groups:
-      go-minor-patch:
-        update-types:
-          - "minor"
-          - "patch"
+      # Everything (major/minor/patch) collapses into a single monthly PR.
+      go-deps:
+        patterns:
+          - "*"
 
   - package-ecosystem: "github-actions"
     directory: "/"
-    # Temporary target; switch to main after the TUI milestone ships.
-    target-branch: "tui"
     schedule:
-      interval: "weekly"
+      interval: "monthly"
       day: "sunday"
     labels:
       - "dependencies"
