@@ -206,6 +206,7 @@ type topicLoadedMsg struct {
 	Path         string
 	Locale       string
 	SourceLang   string
+	RootName     string // "dwe" or "project" — gates the localization chrome
 	Stale        bool
 	Output       string
 	Diagrams     []render.DiagramRef
@@ -330,6 +331,7 @@ func (m *Model) loadTopic(node *TreeNode) (tea.Cmd, error) {
 			Path:         path,
 			Locale:       locale,
 			SourceLang:   sourceLang,
+			RootName:     rootName,
 			Stale:        stale,
 			Output:       clean,
 			Diagrams:     result.Diagrams,
@@ -367,7 +369,13 @@ func (m *Model) applyTopicLoaded(msg topicLoadedMsg) tea.Cmd {
 	// a later syncActiveDiagram re-inline never shifts these regions.
 	m.currentLinks = parseLinkRegions(displayed)
 	m.StatusBar.SetPath(msg.Path)
-	m.StatusBar.SetLanguage(msg.SourceLang)
+	// The [lang] tag is dwe-docs chrome (they carry the i18n tree). Project docs
+	// have no localization model, so drop it there rather than always tagging [en].
+	if msg.RootName == "dwe" {
+		m.StatusBar.SetLanguage(msg.SourceLang)
+	} else {
+		m.StatusBar.SetLanguage("")
+	}
 	m.currentlyLoadedPath = msg.Path
 	m.currentlyLoadedLocale = msg.Locale
 	m.DiagramState = NewDiagramState(msg.Diagrams)

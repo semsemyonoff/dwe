@@ -1120,6 +1120,35 @@ func TestBrowser_StatusContextFocusedDiagramWhenDisabled(t *testing.T) {
 	}
 }
 
+func TestBrowser_LangTagOnlyForDweDocs(t *testing.T) {
+	b := newTestBrowser(t)
+
+	// Project doc: no [lang] chrome even though English was resolved for a ru
+	// request — project docs have no localization model.
+	b.applyTopicLoaded(topicLoadedMsg{
+		Generation: b.loadGen,
+		Path:       "guide.md",
+		Locale:     "ru",
+		SourceLang: "en",
+		RootName:   "project",
+	})
+	if got := b.StatusContext(); strings.Contains(got, "[en]") {
+		t.Errorf("project doc StatusContext = %q, expected no [lang] tag", got)
+	}
+
+	// dwe doc: the [lang] tag is shown.
+	b.applyTopicLoaded(topicLoadedMsg{
+		Generation: b.loadGen,
+		Path:       "reference/index.md",
+		Locale:     "en",
+		SourceLang: "en",
+		RootName:   "dwe",
+	})
+	if got := b.StatusContext(); !strings.Contains(got, "[en]") {
+		t.Errorf("dwe doc StatusContext = %q, expected the [en] tag", got)
+	}
+}
+
 func TestBrowser_StatusContextLang(t *testing.T) {
 	b := newTestBrowser(t)
 	b.StatusBar.SetLanguage("ru")
