@@ -368,15 +368,19 @@ Three independent seams, in dependency order:
 - Create: `internal/core/workflow/envtest/render.go`
 - Create: `internal/core/workflow/envtest/render_test.go`
 
-- [ ] implement `RenderSteps(steps, cfg)` — renders `cmd:` and every string leaf under
+- [x] implement `RenderSteps(steps, cfg)` — renders `cmd:` and every string leaf under
       `with:` through the `${...}` substrate (`internal/shared/tpl`) against
       `cfg.Raw`; non-string YAML types (ints, bools, nested maps/lists) preserved
-      untouched; absent path → empty string (substrate's lenient semantics)
-- [ ] order contract in doc comment: rendering runs BEFORE `ResolvePhaseSteps` so
+      untouched; absent path → empty string (substrate's lenient semantics) —
+      landed in `render.go`; also recurses one level into parallel substeps (same
+      cmd/with rendering) and nil-config-safe
+- [x] order contract in doc comment: rendering runs BEFORE `ResolvePhaseSteps` so
       plan-time `builtin.Validate` sees rendered params (spec §4)
-- [ ] write tests: `${vars.x}` in `cmd:`; string leaf in nested `with:` map; int/bool
+- [x] write tests: `${vars.x}` in `cmd:`; string leaf in nested `with:` map; int/bool
       `with:` values untouched; absent var → empty string; step without `with:`
-- [ ] run `go test ./internal/core/workflow/envtest/...` — must pass before task 8
+      — plus string leaves in `with:` lists, parallel substeps, and nil config
+- [x] run `go test ./internal/core/workflow/envtest/...` — must pass before task 8 —
+      pass; `golangci-lint` clean
 
 ### Task 8: Verify acceptance criteria
 
