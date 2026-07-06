@@ -75,6 +75,14 @@ While the **inline filter** is active (`/`), typed characters refine the fuzzy q
 
 While the **inspect overlay** is open (`i`), it captures input: `↑/↓`, `k/j`, `PgUp/PgDn`, `Home`/`End` scroll the centred viewport, `Enter` confirms (returns the same `Result` as `Enter` from the list), and `Esc` closes the overlay.
 
+### Parameter form (in-TUI overlay)
+
+On the two-panel frame path (TTY ≥ 80 cols), selecting a command that takes parameters opens the **param form as an overlay over the browser** — the browser dims beneath it and the status line stays visible — instead of tearing the TUI down first. You fill the parameters in place; multi-field forms scroll inside the overlay (the focused field stays visible). On submit the overlay closes, the browser exits, and the command runs in the plain terminal (banner + streamed output) with the values you entered. `Esc` cancels the form and returns you to the browser with no command run and the cursor / expansion / filter state intact; `Ctrl+C` quits the whole TUI.
+
+`Enter` auto-skips the form when every required parameter already has a value (from `--set` or a declared default) — the command runs immediately with no overlay. Use `e` (edit-parameters) to force the form open even when the required values are already satisfied. A command with no parameters always runs immediately on `Enter`.
+
+The command still *executes* after the TUI exits (it streams docker / pipeline output to the plain terminal); only parameter entry moves into the overlay. A `confirmation:` prompt, if declared, still shows its yes/no in the plain terminal after the TUI exits, immediately before the run. On the narrow (< 80-col) fallback the browser keeps the flat exit-then-form flow. Direct `dwe commands <id>` (with or without `--set`), piped / non-interactive, and `--output json` invocations are unaffected. (A bare `dwe commands --set …` with no id still opens the browser on a TTY — the `--set` values just prefill the overlay.)
+
 The `e` (edit-parameters) and `y` (skip-confirm) bindings are only registered in run mode (the default when `--inspect` / `-i` is not set); in inspect and the vars-browser edit mode they are absent from both the keymap and the `?` help.
 
 ## Fallback ladder

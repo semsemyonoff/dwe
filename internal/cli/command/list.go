@@ -9,6 +9,7 @@ import (
 
 	"github.com/semsemyonoff/dwe/internal/cli/cmdctx"
 	"github.com/semsemyonoff/dwe/internal/core/project/config"
+	"github.com/semsemyonoff/dwe/internal/core/ui/ask"
 	"github.com/semsemyonoff/dwe/internal/core/ui/cmdbrowser"
 	uirender "github.com/semsemyonoff/dwe/internal/core/ui/render"
 	"github.com/semsemyonoff/dwe/internal/core/ui/styles"
@@ -165,13 +166,25 @@ type selectCommandFn func(defs []*usercommands.CommandDef, title string) (string
 
 // makeBrowserSelector returns a selectCommandFn that drives the cmdbrowser
 // TUI. The returned closure captures cfg (for resolving ui.commands.*
-// defaults via the nil-safe accessors), mode, the includePrivate flag, and
-// (run-site only) pointers to bools that receive Result.SkipConfirm and
-// Result.ForceParamForm.
+// defaults via the nil-safe accessors), mode, the includePrivate flag, the
+// raw --set flags (parsed lazily inside the param-form closures — see below),
+// and (run-site only) pointers to bools that receive Result.SkipConfirm and
+// Result.ForceParamForm plus a prefilledOut pointer that receives the params
+// harvested by the in-TUI param-form overlay (Result.Values).
 //
-// For ModeInspect the skipConfirmOut / forceFormOut pointers are unused
-// (their key bindings are disabled in inspect mode); pass nil.
-func makeBrowserSelector(cfg *config.DweConfig, reg *usercommands.Registry, mode cmdbrowser.Mode, includePrivate bool, skipConfirmOut, forceFormOut *bool, translator i18n.Translator, locale, baseDir string) selectCommandFn {
+// In ModeRun the selector wires an in-TUI param-form overlay via
+// cmdbrowser.RunFormSpec: BuildForm builds the huh param form for the selected
+// command (or returns a nil form when no form is needed → quit-and-run), and
+// Harvest maps the submitted ask.Result back into a param map. setFlags is
+// parsed LAZILY inside BuildForm/Harvest (never eagerly): the non-interactive
+// branch in NewCmd swaps this selector for writeCommandsList before it runs, so
+// a malformed `dwe commands --set bad` in a pipe must still print the list
+// rather than erroring — parsing eagerly here would break that fallback.
+//
+// For ModeInspect / ModeEdit the RunForm spec, skipConfirmOut, forceFormOut,
+// and prefilledOut are unused (their key bindings are disabled outside ModeRun);
+// pass nil.
+func makeBrowserSelector(cfg *config.DweConfig, reg *usercommands.Registry, mode cmdbrowser.Mode, includePrivate bool, setFlags []string, skipConfirmOut, forceFormOut *bool, prefilledOut *map[string]string, translator i18n.Translator, locale, baseDir string) selectCommandFn {
 	return func(defs []*usercommands.CommandDef, title string) (string, error) {
 		items := make([]cmdbrowser.Item, len(defs))
 		for i, d := range defs {
@@ -195,6 +208,7 @@ func makeBrowserSelector(cfg *config.DweConfig, reg *usercommands.Registry, mode
 			ShowTypeBadges:       config.UICommandsShowTypeBadges(cfg),
 			IncludePrivate:       includePrivate,
 			Mode:                 mode,
+			RunForm:              makeRunFormSpec(cfg, mode, defs, setFlags, translator, locale),
 			Translator:           translator,
 			Locale:               locale,
 		}
@@ -208,10 +222,79 @@ func makeBrowserSelector(cfg *config.DweConfig, reg *usercommands.Registry, mode
 		if forceFormOut != nil && res.ForceParamForm {
 			*forceFormOut = true
 		}
+		if prefilledOut != nil && res.Values != nil {
+			*prefilledOut = res.Values
+		}
 		if res.Idx < 0 || res.Idx >= len(defs) {
 			return "", fmt.Errorf("cmdbrowser: result index %d out of range [0, %d)", res.Idx, len(defs))
 		}
 		return defs[res.Idx].ID, nil
+	}
+}
+
+// makeRunFormSpec builds the cmdbrowser.RunFormSpec that drives the in-TUI
+// param-form overlay, or nil outside ModeRun (inspect/edit have no param form).
+// The closures capture cfg, defs, and the raw setFlags; --set is parsed lazily
+// inside each closure (parseSetFlags) so the non-interactive writeCommandsList
+// fallback — which never reaches this spec — stays intact even for a malformed
+// `--set`.
+//
+// BuildForm mirrors runCommandByID's form decision: resolve prefilled params +
+// membership (prepareParams), compute the same showForm predicate, and return a
+// nil form (quit-and-run) when no form is needed or when buildAskFields yields
+// zero fields (empty-options command). huh's own help line is suppressed
+// (ShowHelp:false) so the FormOverlay hint row is authoritative. Harvest maps
+// the submitted ask.Result back into the param map via mergeAnswers.
+func makeRunFormSpec(cfg *config.DweConfig, mode cmdbrowser.Mode, defs []*usercommands.CommandDef, setFlags []string, translator i18n.Translator, locale string) *cmdbrowser.RunFormSpec {
+	if mode != cmdbrowser.ModeRun {
+		return nil
+	}
+	showHelp := false
+	return &cmdbrowser.RunFormSpec{
+		BuildForm: func(idx int, force bool) (*ask.Form, error) {
+			if idx < 0 || idx >= len(defs) {
+				return nil, fmt.Errorf("cmdbrowser: build-form index %d out of range [0, %d)", idx, len(defs))
+			}
+			def := defs[idx]
+			provided, err := parseSetFlags(setFlags)
+			if err != nil {
+				return nil, err
+			}
+			prefilled, resolvedOpts, err := prepareParams(cfg, def, provided)
+			if err != nil {
+				return nil, err
+			}
+			// Same predicate as runbyid.go: skip the form when there are no
+			// params, or when Enter (not force) already has every required value.
+			showForm := len(def.Params) > 0 && (force || !allRequiredSatisfied(def.Params, prefilled))
+			if !showForm {
+				return nil, nil
+			}
+			fields, err := buildAskFields(def, prefilled, provided, translator, locale, resolvedOpts)
+			if err != nil {
+				return nil, err
+			}
+			if len(fields) == 0 {
+				// Every field skipped by the empty-options rule → no form needed.
+				return nil, nil
+			}
+			return ask.Build("dwe commands › "+def.ID, fields, ask.RunOptions{ShowHelp: &showHelp})
+		},
+		Harvest: func(idx int, res ask.Result) map[string]string {
+			if idx < 0 || idx >= len(defs) {
+				return nil
+			}
+			def := defs[idx]
+			provided, err := parseSetFlags(setFlags)
+			if err != nil {
+				return nil
+			}
+			prefilled, _, err := prepareParams(cfg, def, provided)
+			if err != nil {
+				return nil
+			}
+			return mergeAnswers(res, def.Params, prefilled)
+		},
 	}
 }
 

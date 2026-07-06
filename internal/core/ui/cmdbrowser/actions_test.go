@@ -177,7 +177,7 @@ func TestBrowser_HandleForceFormNoopOutsideRunOrTreePanel(t *testing.T) {
 	if cmd, _ := be.HandleAction(actionForceForm); cmd != nil {
 		t.Errorf("force-form in ModeEdit must be a no-op")
 	}
-	if (be.result != Result{}) {
+	if !isZeroResult(be.result) {
 		t.Errorf("force-form in ModeEdit must not set a result: %+v", be.result)
 	}
 
@@ -188,7 +188,7 @@ func TestBrowser_HandleForceFormNoopOutsideRunOrTreePanel(t *testing.T) {
 	if cmd, _ := b.HandleAction(actionForceForm); cmd != nil {
 		t.Errorf("force-form with tree focus must be a no-op")
 	}
-	if (b.result != Result{}) {
+	if !isZeroResult(b.result) {
 		t.Errorf("force-form with tree focus must not set a result: %+v", b.result)
 	}
 }

@@ -740,6 +740,34 @@ func TestBrowser_FilterEscRestoresCursor(t *testing.T) {
 	}
 }
 
+// TestBrowser_FilterEscRestoresCurrentTopic guards that cancelling the filter
+// restores CurrentTopic (and the viewport) to the pre-filter selection, not the
+// last previewed topic — otherwise a later CurrentTopic-based action (locale
+// switch) would operate on the wrong topic.
+func TestBrowser_FilterEscRestoresCurrentTopic(t *testing.T) {
+	b := newMultiFileBrowser(t)
+	originalCursor := b.Tree.Cursor()
+	if originalCursor == nil {
+		t.Fatal("no initial cursor")
+	}
+	// Establish the pre-filter loaded topic.
+	b.CurrentTopic = originalCursor
+
+	b.enterFilter()
+	// Preview a different node inside filter mode (afterTreeMove sets CurrentTopic).
+	b.Update(tea.KeyPressMsg{Code: tea.KeyDown})
+	if b.CurrentTopic == originalCursor {
+		t.Fatal("precondition: filter nav did not move CurrentTopic off the original")
+	}
+	// Cancel — CurrentTopic must snap back to the restored cursor.
+	b.Update(tea.KeyPressMsg{Code: tea.KeyEscape})
+
+	if b.CurrentTopic != originalCursor {
+		t.Errorf("exitFilter left CurrentTopic on the previewed topic: got %v, want %v",
+			b.CurrentTopic, originalCursor)
+	}
+}
+
 func TestBrowser_FilterEscClearsFilter(t *testing.T) {
 	b := newMultiFileBrowser(t)
 	b.enterFilter()

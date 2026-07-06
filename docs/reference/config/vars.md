@@ -146,7 +146,28 @@ the write.
 
 Running `dwe vars` with no subcommand opens an interactive browser (the same
 widget as `dwe commands`): a namespace tree of all vars, an inspect overlay, and
-an **edit** action that opens the `set` form, writes, and refreshes in place.
+an **edit** action (Enter on a leaf).
+
+**Edit-and-stay (≥ 80-column terminals).** Enter opens the `set` form **as an
+overlay over the browser** — the tree stays visible (dimmed) beneath it. Type the
+new value (invalid input — a map, a sequence, an uncoercible scalar — is rejected
+inline), press Enter to save, and the overlay closes: the edited row refreshes in
+place (new value + layer badge), the inspect overlay reflects the new value, and
+the status line flashes a `✓ <path> = <value>` confirmation for ~2 seconds. `esc`
+cancels back to the browser with its state (cursor, expansion, filter) intact;
+`ctrl+c` quits the whole browser. If the project locks are held (e.g. a paused
+`dwe deploy run`), the save fails and the status line flashes the lock-held error
+— the browser stays open and `local.yml` is untouched.
+
+Two observable behaviours differ from the standalone `dwe vars set`:
+
+- **Confirmations are a transient status flash, not stdout.** After quitting the
+  browser the terminal shows **no** record of the edits — nothing is printed on
+  exit. (Use `dwe vars get <path>` or re-open the browser to confirm a value.)
+- **Edit-and-stay applies only to the ≥ 80-column overlay path.** On a narrower
+  terminal the browser uses a flat fallback selector that **exits** to run the
+  `set` form and then re-opens — the old exit-after-commit loop, one edit at a
+  time.
 
 In a **non-interactive** context — no TTY, `DWE_NONINTERACTIVE=1`, or running
 inside a container — the bare command falls back to `dwe vars list`. A namespace

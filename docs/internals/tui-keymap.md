@@ -356,6 +356,47 @@ This is modelled by `routeWhileCapturing(msg tea.Msg) captureDecision` in
 The full `frame.Update` rewiring that calls `routeWhileCapturing` lands with the
 Stage 3 filter consumer (the function signature is already the drop-in shape).
 
+### 5.1 Form-overlay arbitration (Stage 7)
+
+`tui.FormOverlay` (an embedded `huh.Form` — the vars-browser edit surface) is a
+`CapturesInput` overlay, so it inherits the policy above. The key arbitration is
+settled and needs no new routing:
+
+- **`esc` = cancel the edit.** The framework's `captureClose` path pops the
+  overlay and emits `OverlayClosedMsg`, which the plugin handles by discarding the
+  form and its edit state. The huh form's own in-field `esc` navigation never fires
+  — the framework reserves `esc` before it reaches the form.
+- **`ctrl+c` = hard-quit the whole TUI** (`captureHardQuit`), unchanged. huh binds
+  `ctrl+c` to form-quit, but under the Frame that keystroke never reaches the form.
+- **`enter` (submit) closes the overlay from the plugin side** via
+  `tui.CloseOverlayMsg{Token}` — a plugin-initiated pop that does **not** emit
+  `OverlayClosedMsg` (the plugin already knows it is closing). The message
+  carries the `Overlay.CloseToken` of the overlay it targets; because it travels
+  as a deferred `tea.Cmd` it could land after the form was already dismissed and
+  another overlay opened, so the Frame pops **only** when the current top's
+  `CloseToken` still matches (a stale request is ignored, never popping the wrong
+  modal).
+- **huh's own help line is suppressed** (`ask.RunOptions.ShowHelp:false`): its
+  hints advertise `ctrl+c` as form-quit, which is now TUI-quit. The `FormOverlay`
+  footer hint row (`enter save · esc cancel`, hardcoded English) is the single
+  authoritative key hint.
+
+The **`dwe commands` param form** (the commands-param follow-up) reuses this exact
+arbitration — it is the same `tui.FormOverlay`, just a different consumer
+(`cmdbrowser`'s run-form machine instead of the vars edit machine):
+
+- **`esc` = cancel the parameter entry** → back to the browser, no command runs,
+  browser cursor / expansion / filter state intact (`OverlayClosedMsg` clears the
+  run-form state).
+- **`enter` (submit) = harvest the params, close the overlay, and quit the browser**
+  via the same `tui.CloseOverlayMsg{Token}` pop; the command then runs *after*
+  alt-screen teardown (it streams docker / pipeline output to the plain terminal).
+- **`ctrl+c` = hard-quit the whole TUI**, unchanged.
+- The footer hint row reads **`enter run · esc cancel`** (vs vars edit's `enter save
+  · esc cancel`); huh's own help line is suppressed identically. A `confirmation:`
+  prompt is **not** pulled into the overlay — it still shows its yes/no in the plain
+  terminal after the TUI exits, immediately before the run.
+
 ---
 
 ## 6. Mouse vocabulary

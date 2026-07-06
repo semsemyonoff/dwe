@@ -602,6 +602,121 @@ func TestFrame_CapturingOverlayRefreshesInPlace(t *testing.T) {
 	}
 }
 
+// TestFrame_CapturingOverlayAsyncRefreshNoDoublePush asserts the capturing-aware
+// drainOverlay fix: while a CapturesInput overlay is Top(), an ASYNC (non-key)
+// message that re-marks the plugin's pending overlay refreshes it in place
+// (ReplaceTop) rather than stacking a duplicate snapshot. This is the path huh
+// cursor-blink ticks and resizes take through Frame.Update's default branch.
+func TestFrame_CapturingOverlayAsyncRefreshNoDoublePush(t *testing.T) {
+	f, p := newTestFrame(t, 80, frameGoldenHeight)
+	p.pending = &Overlay{Content: "frame-0", Width: 7, Height: 1, CapturesInput: true}
+	f.drainOverlay() // push the capturing overlay
+	if got := len(f.overlay.layers); got != 1 {
+		t.Fatalf("overlay depth after open = %d, want 1", got)
+	}
+
+	// A blink tick (a non-key async message) re-marks a fresh snapshot on Update.
+	p.republishOnUpdate = &Overlay{Content: "frame-1", Width: 7, Height: 1, CapturesInput: true}
+	f.Update(stubMsg{payload: "blink"})
+	f.Update(stubMsg{payload: "blink"}) // a second tick must still not grow the stack
+
+	if got := len(f.overlay.layers); got != 1 {
+		t.Errorf("overlay depth after async ticks = %d, want 1 (drainOverlay must ReplaceTop under a capturing top)", got)
+	}
+	if top, _ := f.overlay.Top(); top.Content != "frame-1" {
+		t.Errorf("top content after async tick = %q, want frame-1 (refresh did not paint)", top.Content)
+	}
+}
+
+// TestFrame_NonCapturingOverlayAsyncPush asserts the fix is scoped to capturing
+// tops only: with a NON-capturing overlay on top, an async message that re-marks
+// a pending overlay still Pushes (the pre-fix behaviour), growing the stack.
+func TestFrame_NonCapturingOverlayAsyncPush(t *testing.T) {
+	f, p := newTestFrame(t, 80, frameGoldenHeight)
+	f.overlay.Push(Overlay{Content: "base", Width: 4, Height: 1, CapturesInput: false})
+	if got := len(f.overlay.layers); got != 1 {
+		t.Fatalf("overlay depth after seed = %d, want 1", got)
+	}
+
+	p.republishOnUpdate = &Overlay{Content: "next", Width: 4, Height: 1, CapturesInput: false}
+	f.Update(stubMsg{payload: "async"})
+
+	if got := len(f.overlay.layers); got != 2 {
+		t.Errorf("overlay depth after async push = %d, want 2 (non-capturing top must Push, not ReplaceTop)", got)
+	}
+}
+
+// TestFrame_CloseOverlayMsgPopsWithoutNotifying asserts a plugin-initiated
+// CloseOverlayMsg pops the top overlay WITHOUT echoing OverlayClosedMsg back to
+// the plugin (the plugin already knows it is closing the overlay).
+func TestFrame_CloseOverlayMsgPopsWithoutNotifying(t *testing.T) {
+	f, p := newTestFrame(t, 80, frameGoldenHeight)
+	p.pending = &Overlay{Content: "modal", Width: 5, Height: 1, CapturesInput: true}
+	f.drainOverlay() // push the capturing overlay
+	if f.overlay.Empty() {
+		t.Fatal("capturing overlay was not pushed")
+	}
+	before := len(p.gotMsgs)
+
+	f.Update(CloseOverlayMsg{})
+
+	if !f.overlay.Empty() {
+		t.Error("CloseOverlayMsg did not pop the top overlay")
+	}
+	for _, m := range p.gotMsgs[before:] {
+		if _, ok := m.(OverlayClosedMsg); ok {
+			t.Errorf("CloseOverlayMsg must not echo OverlayClosedMsg; got %v", p.gotMsgs[before:])
+		}
+	}
+}
+
+// TestFrame_CloseOverlayMsgEmptyStackNoop asserts CloseOverlayMsg on an empty
+// stack is a harmless no-op (no panic, stack stays empty).
+func TestFrame_CloseOverlayMsgEmptyStackNoop(t *testing.T) {
+	f, _ := newTestFrame(t, 80, frameGoldenHeight)
+	if !f.overlay.Empty() {
+		t.Fatal("fresh frame should have an empty overlay stack")
+	}
+	f.Update(CloseOverlayMsg{})
+	if !f.overlay.Empty() {
+		t.Error("CloseOverlayMsg on an empty stack should leave it empty")
+	}
+}
+
+// TestFrame_CloseOverlayMsgStaleTokenIgnored asserts a CloseOverlayMsg whose
+// Token no longer matches the current top overlay is ignored (not popped). This
+// models the stale-close race: the plugin returns a deferred CloseOverlayMsg for
+// a tagged overlay, but the user dismisses that overlay and a DIFFERENT one
+// reaches the top before the deferred cmd is processed — the stale request must
+// not pop the newer modal.
+func TestFrame_CloseOverlayMsgStaleTokenIgnored(t *testing.T) {
+	f, p := newTestFrame(t, 80, frameGoldenHeight)
+
+	// A tagged form overlay (token 7) is up, then dismissed, then a newer
+	// (untagged) overlay is pushed — the state a delayed CloseOverlayMsg{7} sees.
+	p.pending = &Overlay{Content: "newer", Width: 5, Height: 1, CapturesInput: true}
+	f.drainOverlay()
+	if f.overlay.Empty() {
+		t.Fatal("newer overlay was not pushed")
+	}
+
+	f.Update(CloseOverlayMsg{Token: 7})
+
+	if f.overlay.Empty() {
+		t.Error("stale CloseOverlayMsg (token mismatch) must NOT pop the newer overlay")
+	}
+
+	// A matching-token request still pops it.
+	if top, ok := f.overlay.Top(); ok {
+		top.CloseToken = 7
+		f.overlay.ReplaceTop(top)
+	}
+	f.Update(CloseOverlayMsg{Token: 7})
+	if !f.overlay.Empty() {
+		t.Error("matching CloseOverlayMsg token should pop the top overlay")
+	}
+}
+
 // TestFrame_CapturingOverlayCloseNotifiesPlugin asserts that closing a
 // CapturesInput overlay with esc pops it AND forwards an OverlayClosedMsg to the
 // plugin, so the plugin can clear the state that produced the overlay.

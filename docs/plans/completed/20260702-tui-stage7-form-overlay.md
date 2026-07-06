@@ -382,25 +382,25 @@ cli/vars closures (captured: `cmd`, `flags`, `items`/`leaves`, `inspectCache`):
 - Modify: `internal/core/ui/tui/plugin.go`
 - Modify: `internal/core/ui/tui/frame_test.go` (or nearest existing Frame test file)
 
-- [ ] verify Stage 6 landed as planned: `ask.Build`, `(*ask.Form).Huh()`,
+- [x] verify Stage 6 landed as planned: `ask.Build`, `(*ask.Form).Huh()`,
       `(*ask.Form).Result()`, `RunOptions.ShowHelp *bool`,
       `widgets.RunHuhForm`, `widgets.ErrCancelled` cancel contract — if any
       diverged, STOP and update this plan first
-- [ ] make `drainOverlay` capturing-aware: top overlay `CapturesInput` →
+- [x] make `drainOverlay` capturing-aware: top overlay `CapturesInput` →
       `ReplaceTop`, else `Push` (covers the default, `WindowSizeMsg`, and
       `FocusRequestMsg` branches uniformly); keep `refreshCapturingOverlay`
       delegating to the same logic
-- [ ] add `CloseOverlayMsg{}` to `plugin.go` (doc comment: plugin-initiated
+- [x] add `CloseOverlayMsg{}` to `plugin.go` (doc comment: plugin-initiated
       close, no `OverlayClosedMsg` echo) and a `Frame.Update` case: pop top
       overlay if present, reset the double-click record, no plugin
       notification
-- [ ] write tests: non-key msg with a capturing overlay open + pending
+- [x] write tests: non-key msg with a capturing overlay open + pending
       republish → stack depth stays 1 and top content is the fresh snapshot;
       same msg with a NON-capturing overlay top → Push behaviour unchanged;
       `CloseOverlayMsg` pops without `OverlayClosedMsg` reaching the plugin;
       esc still emits `OverlayClosedMsg`; `CloseOverlayMsg` on an empty stack
       is a no-op
-- [ ] run `make test` — must pass before task 2
+- [x] run `make test` — must pass before task 2
 
 ### Task 2: `tui.FormOverlay` component
 
@@ -408,7 +408,7 @@ cli/vars closures (captured: `cmd`, `flags`, `items`/`leaves`, `inspectCache`):
 - Create: `internal/core/ui/tui/formoverlay.go`
 - Create: `internal/core/ui/tui/formoverlay_test.go`
 
-- [ ] implement `FormOverlay` per Technical Details: `WithWidth` sizing
+- [x] implement `FormOverlay` per Technical Details: `WithWidth` sizing
       (min of inner width − margins and `MaxWidth`), `Init`/`Update` forwarding
       with the `huh.Model` → `*huh.Form` re-assert (returning huh's cmds —
       completion arrives on a follow-up Update, see Context), **swallowing
@@ -417,13 +417,13 @@ cli/vars closures (captured: `cmd`, `flags`, `items`/`leaves`, `inspectCache`):
       `Overlay()` rendering the rounded-border + `Padding(0,1)` box with the
       hint row, measured via `lipgloss.Width/Height`,
       `Overlay{CapturesInput: true}`
-- [ ] document the embedding contract in the type comment: SubmitCmd/CancelCmd
+- [x] document the embedding contract in the type comment: SubmitCmd/CancelCmd
       are nil when embedded (poll `State`), the host must size explicitly
       (huh's `RequestWindowSize` is harmless but the Frame never forwards
       `WindowSizeMsg` into overlays), virtual cursor renders inline, and the
       height caveat — content must fit the body; `clampOverlay` truncation is
       lossy for taller forms (design decision 1)
-- [ ] write tests: driving a single-input huh form (built raw in-test — `tui`
+- [x] write tests: driving a single-input huh form (built raw in-test — `tui`
       must not import `ask`) with typed keys mutates the bound value;
       **async completion** (codex finding): the Enter `Update` itself leaves
       `State == StateNormal` and returns a cmd — a test pump executes returned
@@ -432,9 +432,9 @@ cli/vars closures (captured: `cmd`, `flags`, `items`/`leaves`, `inspectCache`):
       clamps at `MaxWidth` and at narrow bodies; a forwarded
       `tea.WindowSizeMsg` does NOT change the rendered form dims; hint row
       rendered when set, absent when `""`; `Resize` changes the rendered width
-- [ ] write tests for error/edge cases: `Update` after completion is a no-op;
+- [x] write tests for error/edge cases: `Update` after completion is a no-op;
       nil-form guard (constructor rejects or documents)
-- [ ] run `make test` — must pass before task 3
+- [x] run `make test` — must pass before task 3
 
 ### Task 3: cmdbrowser `EditSpec` + edit state machine + status flash
 
@@ -446,32 +446,32 @@ cli/vars closures (captured: `cmd`, `flags`, `items`/`leaves`, `inspectCache`):
 - Create: `internal/core/ui/cmdbrowser/edit_test.go`
 - Modify: `internal/core/ui/cmdbrowser/plugin_golden_test.go`
 
-- [ ] add `EditSpec` / `CommitOutcome` / `Options.Edit` (verify the
+- [x] add `EditSpec` / `CommitOutcome` / `Options.Edit` (verify the
       `cmdbrowser → ask` import is cycle-free); `onSelect` in ModeEdit with
       `Edit != nil` opens the overlay (build → `FormOverlay` → pending +
       `Init` cmd); `Edit == nil` keeps today's commit-and-quit exactly
-- [ ] implement the edit state machine per Technical Details (forward all
+- [x] implement the edit state machine per Technical Details (forward all
       msgs to `fo.Update` while editing, re-mark pending, poll `State` after
       EVERY forwarded msg — completion lands on the follow-up async msg, not
       the Enter key msg (see Context) — commit / abort / `OverlayClosedMsg`
       handling, `items[idx]` in-place replacement including the derived list
       row and inspect closure)
-- [ ] add the status flash (docstui pattern: `statusFlashDuration = 2s`,
+- [x] add the status flash (docstui pattern: `statusFlashDuration = 2s`,
       generation-gated `statusFlashClearMsg`); flash text takes over
       `StatusContext()` while set; success `✓ …` / error `✗ …` single-line,
       truncated to the status segment width
-- [ ] write tests (mirror `inspect_test.go`): overlay opens on Enter with
+- [x] write tests (mirror `inspect_test.go`): overlay opens on Enter with
       `CapturesInput`; no double-push across republish; `OverlayClosedMsg`
       clears edit state and a later raw key cannot resurrect the form;
       commit success replaces the item, sets the flash, and returns a
       `CloseOverlayMsg` cmd (test pumps the huh cmds after Enter until the
       commit fires — async completion); commit error → error flash + close;
       stale-gen flash clear is ignored; `BuildForm` error → flash, no overlay
-- [ ] write golden tests: full-frame with the form overlay OPEN at
+- [x] write golden tests: full-frame with the form overlay OPEN at
       80/99/100 × 24 via `RenderFrameAfterSetup` (stub `EditSpec` with a
       deterministic form; no blink ticks delivered); confirm existing
       no-edit goldens are byte-identical
-- [ ] run `make test` — must pass before task 4
+- [x] run `make test` — must pass before task 4
 
 ### Task 4: cli/vars wiring — shared field builder, silent write core, EditSpec closures
 
@@ -483,34 +483,34 @@ cli/vars closures (captured: `cmd`, `flags`, `items`/`leaves`, `inspectCache`):
 - Modify: `internal/cli/vars/browser_test.go`
 - Modify: `internal/cli/vars/set_test.go` (or nearest existing test file)
 
-- [ ] extract `buildVarSetFields(flags, path)` (title/description/`Validate`
+- [x] extract `buildVarSetFields(flags, path)` (title/description/`Validate`
       with the CoerceScalar probe) from `promptForVarValue`; standalone
       `vars set` keeps `ask.Run` via the `runAsk` seam (now with inline
       validation — note the improvement in the func comment)
-- [ ] add `cmdctx.AcquireProjectLocksSilent(baseDir)` next to
+- [x] add `cmdctx.AcquireProjectLocksSilent(baseDir)` next to
       `AcquireProjectLocksOrReport`: identical error contract
       (`*lock.ProjectLockHeldError` returned unchanged, other errors wrapped
       as `acquiring project locks: %w`) but writes nothing — the sanctioned
       alt-screen variant (codex finding); unit-test both error paths
-- [ ] split `writeVarOverride` into the shared core (capture → apply overlay →
+- [x] split `writeVarOverride` into the shared core (capture → apply overlay →
       atomic write → reload → restore-on-failure) and two lock wrappers:
       CLI path keeps `cmdctx.AcquireProjectLocksOrReport` (printing), TUI
       path uses `cmdctx.AcquireProjectLocksSilent` and RETURNS the lock-held
       error (never prints — the alt-screen is live)
-- [ ] implement the `EditSpec` closures in `browser.go` per Technical Details
+- [x] implement the `EditSpec` closures in `browser.go` per Technical Details
       (coerce → silent write → reload → `delete(inspectCache, path)` →
       rebuild the one `Item` with fresh value/badge/inspect →
       `CommitOutcome{Item, Flash}`); wire `Edit` into the browser `Options`;
       keep the `runVarsBrowser` loop shape (frame path exits via
       `ErrCancelled` → nil; fallback path still loops through `runVarsSet`)
-- [ ] write tests: `Commit` closure updates value + badge and invalidates the
+- [x] write tests: `Commit` closure updates value + badge and invalidates the
       inspect cache; lock-held → error returned (flash path), local.yml
       untouched; write-failure rollback preserved through the refactor;
       `BuildForm` fields carry description + validator; fallback loop
       behaviour preserved via the `runBrowser` seam (no `t.Parallel()`)
-- [ ] write tests for error cases: invalid scalar rejected by the field
+- [x] write tests for error cases: invalid scalar rejected by the field
       validator; `Commit` with an out-of-range idx guarded
-- [ ] run `make test` — must pass before task 5
+- [x] run `make test` — must pass before task 5
 
 ### Task 5: Docs — internals contracts, keymap note, vars reference
 
@@ -520,7 +520,7 @@ cli/vars closures (captured: `cmd`, `flags`, `items`/`leaves`, `inspectCache`):
 - Modify: `docs/reference/config/vars.md`
 - Modify: `AGENTS.md`
 
-- [ ] `packages.md`: § tui — `FormOverlay` embedding contract (poll `State`,
+- [x] `packages.md`: § tui — `FormOverlay` embedding contract (poll `State`,
       explicit sizing, virtual cursor), `CloseOverlayMsg` semantics (no
       `OverlayClosedMsg` echo), the capturing-aware `drainOverlay` invariant;
       § cmdbrowser — `EditSpec`/`CommitOutcome`, edit state machine, status
@@ -528,43 +528,59 @@ cli/vars closures (captured: `cmd`, `flags`, `items`/`leaves`, `inspectCache`):
       § cmdctx — `AcquireProjectLocksSilent` as the sanctioned no-print
       variant for live-alt-screen call sites (same error contract as
       `AcquireProjectLocksOrReport`)
-- [ ] `tui-keymap.md`: form-overlay arbitration note (esc = cancel edit,
+- [x] `tui-keymap.md`: form-overlay arbitration note (esc = cancel edit,
       ctrl+c = TUI hard-quit; huh help suppressed, hint row authoritative)
-- [ ] `vars.md` § TUI browser: describe the in-TUI overlay edit (form over the
+- [x] `vars.md` § TUI browser: describe the in-TUI overlay edit (form over the
       browser, flash confirmation, row refresh in place, esc cancel) and state
       BOTH observable behaviour changes explicitly (plan-review finding):
       (a) confirmations are a transient status flash, NOT stdout — after
       quitting the browser the terminal shows no record of the edits;
       (b) edit-and-stay applies only to the ≥80-col frame path — narrow
       terminals keep the flat fallback with the exit-after-commit loop
-- [ ] `AGENTS.md`: extend the `tui.Plugin` Critical Pattern bullet with the new
+      (ru mirror `docs/i18n/ru/reference/config/vars.md` translated + hash bumped)
+- [x] `AGENTS.md`: extend the `tui.Plugin` Critical Pattern bullet with the new
       invariants (FormOverlay embedding facts incl. async completion +
       WindowSizeMsg swallow, `CloseOverlayMsg`, capturing-aware
       `drainOverlay`); extend the preflight+locks bullet with
       `AcquireProjectLocksSilent` as the alt-screen exception
-- [ ] run `make build` (embedded docs re-sync) + `make test` — must pass
+- [x] run `make build` (embedded docs re-sync) + `make test` — must pass
       before task 6
 
 ### Task 6: Verify acceptance criteria
 
-- [ ] spec § Stages row 7 deliverables all present: embeddable-form capability
+- [x] spec § Stages row 7 deliverables all present: embeddable-form capability
       in `tui`; esc/ctrl+c arbitration settled; form sized to inner modal dims
       with huh chrome reconciled (no double border, help suppressed); plugin
       reads `form.State` to dismiss and harvest; vars-browser edit mode on the
       overlay; cmdbrowser force-param-form still exit-and-run; golden frame
       tests at the width buckets
-- [ ] behaviour preservation spot-checks: `Edit == nil` goldens byte-identical;
+      (verified: `tui/formoverlay.go` + `FormOverlay.State()`; `ShowHelp:false`
+      at every BuildForm site; `tui.CloseOverlayMsg` + capturing-aware
+      `drainOverlay`; `EditSpec`/`ActionEdit`; `ForceParamForm` path unchanged;
+      goldens `frame_editform_{80,99,100}.golden`)
+- [x] behaviour preservation spot-checks: `Edit == nil` goldens byte-identical;
       ModeRun/ForceParamForm untouched; standalone `vars set` form unchanged;
       fallback loop intact; JSON / non-interactive paths untouched
-- [ ] run full suite: `make build && make test && make lint`
+      (all covered by the passing suite: `TestBrowser_ModeGolden` no-edit path,
+      `actions_test.go` ForceParamForm assertions, `runAsk`/`runBrowser` seam
+      tests, vars set JSON tests)
+- [x] run full suite: `make build && make test && make lint`
+      (build ok; all packages `ok`, no FAIL/panic; `golangci-lint` 0 issues)
 
 ### Task 7: [Final] Documentation and plan close-out
 
-- [ ] confirm no other user-facing docs describe the old exit-and-reopen edit
+- [x] confirm no other user-facing docs describe the old exit-and-reopen edit
       flow (grep `docs/` for the vars browser)
-- [ ] update `AGENTS.md` Critical Patterns only if implementation surfaced a
+      (verified: only `vars.md` describes the flow, and it documents the new
+      in-TUI overlay edit-and-stay; its "re-open"/"exit-after-commit loop"
+      mentions correctly describe the <80-col narrow fallback, not the primary
+      path; `i18n.md` browser mentions are the localized help-modal references)
+- [x] update `AGENTS.md` Critical Patterns only if implementation surfaced a
       new trap beyond Task 5's entries
-- [ ] move this plan to `docs/plans/completed/`
+      (no new trap surfaced — Task 5 already extended the `tui.Plugin` and
+      preflight+locks bullets with FormOverlay embedding, `CloseOverlayMsg`,
+      capturing-aware `drainOverlay`, and `AcquireProjectLocksSilent`; no change)
+- [x] move this plan to `docs/plans/completed/`
 
 ## Post-Completion
 

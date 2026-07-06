@@ -46,6 +46,11 @@ type runOpts struct {
 	Silent         bool            // suppress end-of-command desktop notification
 	Translator     i18n.Translator // for localized string lookups; nil-safe via TranslatorOrNop
 	Locale         string          // active locale code (e.g. "ru", "en")
+	// PrefilledParams carries param values harvested by the in-TUI param-form
+	// overlay (cmdbrowser Result.Values). When non-nil, runCommandByID skips its
+	// own huh form entirely and uses these values directly. nil = build/prompt
+	// the form here as usual (every non-browser path leaves it nil).
+	PrefilledParams map[string]string
 }
 
 // NewCmd builds the `dwe commands` command tree.
@@ -142,8 +147,9 @@ Without an id, an interactive selector lists public commands. With a group prefi
 			var (
 				skipConfirmFromTUI bool
 				forceFormFromTUI   bool
+				prefilledFromTUI   map[string]string
 			)
-			selector := makeBrowserSelector(cfg, reg, cmdbrowser.ModeRun, false, &skipConfirmFromTUI, &forceFormFromTUI, i18n.TranslatorOrNop(flags.I18n), flags.Locale, flags.ProjectRoot())
+			selector := makeBrowserSelector(cfg, reg, cmdbrowser.ModeRun, false, setFlags, &skipConfirmFromTUI, &forceFormFromTUI, &prefilledFromTUI, i18n.TranslatorOrNop(flags.I18n), flags.Locale, flags.ProjectRoot())
 			if !widgets.IsInteractiveFn(cmd.InOrStdin()) || nonInteractiveEnv() {
 				// No TTY for the browser (CI pipe) or forced non-interactive
 				// (DWE_NONINTERACTIVE=1 — the bridge daemon sets it for every
@@ -172,12 +178,13 @@ Without an id, an interactive selector lists public commands. With a group prefi
 				cmd.InOrStdin(), cmd.OutOrStdout(), cmd.ErrOrStderr(),
 				cfg, reg, flags.ProjectRoot(), id,
 				runOpts{
-					Yes:            skipConfirm || skipConfirmFromTUI,
-					ForceParamForm: forceFormFromTUI,
-					SetValues:      setFlags,
-					Silent:         silent,
-					Translator:     i18n.TranslatorOrNop(flags.I18n),
-					Locale:         flags.Locale,
+					Yes:             skipConfirm || skipConfirmFromTUI,
+					ForceParamForm:  forceFormFromTUI,
+					SetValues:       setFlags,
+					Silent:          silent,
+					Translator:      i18n.TranslatorOrNop(flags.I18n),
+					Locale:          flags.Locale,
+					PrefilledParams: prefilledFromTUI,
 				},
 			)
 		},
