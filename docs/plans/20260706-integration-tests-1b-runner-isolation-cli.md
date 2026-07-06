@@ -688,21 +688,50 @@ Key design decisions (all from the spec):
 
 ### Task 10: Verify acceptance criteria
 
-- [ ] verify against spec §3: UX surface (`run [scenario...] --keep --timeout`,
+- [x] verify against spec §3: UX surface (`run [scenario...] --keep --timeout`,
       `list`, exit codes 0/1/2, no original-project locks, per-scenario flock,
-      live reporter + summary, JSON contract, env scrub once at startup)
-- [ ] verify against spec §5/§6: copy selection rules, generated local.yml
+      live reporter + summary, JSON contract, env scrub once at startup) —
+      confirmed MATCHES SPEC by direct code inspection: `run`/`list` commands
+      (`internal/cli/test/run.go:32-65`, `list.go:14-28`), exit-code mapping
+      (`run.go:185-201`, `unknown_scenario` → 2 via `cmdctx.ExitCodeFor`), no
+      `lock.AcquireProjectLocks` call anywhere in `internal/cli/test/` or
+      `internal/core/workflow/envtest/` (grep confirmed empty), only
+      `lock.Acquire(LockPath(...))` (`runner.go:227`), summary line format
+      matches spec's example verbatim (`run.go:249-272`), JSON via
+      `cmdctx.WriteData` with `io.Discard` screen writer
+      (`run.go:179,230-243`), `envtest.ScrubComposeEnv()` as the first
+      statement in `runTestRun` (`run.go:121`) before any flock/goroutine/
+      subprocess.
+- [x] verify against spec §5/§6: copy selection rules, generated local.yml
       precedence + strips, docker identity both branches, manifest-before-Docker,
       teardown order + no `-v` + shared volumes survive + bridge daemon stop +
-      `--keep`, timeout kills + teardown still runs, port retry once
-- [ ] verify the manifest carries everything stage-2 `clean` needs (compose
-      project, copy path, bridge dir, report path)
-- [ ] manual smoke on the tbm live test project: one trivial scenario (deploy +
-      `http_check`), run `dwe test run`, verify full teardown (no containers,
-      volumes, copy, manifest left; shared caches intact), then `--keep` + manual
-      cleanup
-- [ ] run full suite: `make test` — must pass
-- [ ] run `make lint` — must be clean
+      `--keep`, timeout kills + teardown still runs, port retry once —
+      confirmed MATCHES SPEC: git-aware copy with exclusions/worktree-absent
+      skip/fallback (`copy.go`), local.yml precedence seed→env→identity
+      (`localyaml.go:44-66`), docker identity both branches
+      (`dockeridentity.go:35-66`), manifest written before subprocess spawn
+      (`runner.go:316` before `370`/`375`), teardown order + no `-v`
+      (`teardown.go:80-133`), `--keep` short-circuit (`runner.go:333-336`),
+      timeout via `context.WithTimeout` + teardown under a fresh
+      `context.Background()` (`runner.go:329,337`), and the retry-cardinality
+      test (`runner_test.go:239-338`) pinning exactly one retry. Note: the
+      retry trigger is deliberately "any deploy failure while the scenario has
+      `auto` vars" rather than string-matching a port-conflict message — this
+      is the documented, deliberate design already recorded in this plan's
+      Technical Details ("Port-conflict retry") and Task 7, not a deviation
+      introduced here.
+- [x] verify the manifest carries everything stage-2 `clean` needs (compose
+      project, copy path, bridge dir, report path) — confirmed: `Manifest`
+      struct (`manifest.go:17-34`) has all seven fields (scenario, run_id,
+      compose_project, copy_path, bridge_dir, report_dir, created_at);
+      `report_dir` is populated but intentionally unused/reserved until
+      stage 2 (documented at `runner.go:65-67`).
+- [x] manual test (skipped - not automatable in this autonomous loop; running
+      real Docker deploys against the user's live tbm work project requires
+      interactive confirmation and is out of scope for unattended execution)
+- [x] run full suite: `make test` — passed, all packages `ok` (verified
+      2026-07-07)
+- [x] run `make lint` — clean, `0 issues` (verified 2026-07-07)
 
 ### Task 11: [Final] Internals documentation + plan close-out
 
