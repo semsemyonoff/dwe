@@ -1,0 +1,21 @@
+description: "Deploy with redis disabled"
+
+env:
+  services:
+    disable: [redis]
+    enable: [postgres]
+  vars:
+    app.http_port: auto
+    db.port: auto
+    db.password: "test-pw"
+
+timeout: 15m
+
+steps:
+  - name: "app answers"
+    type: builtin
+    cmd: http_check
+    with: { url: "http://localhost:8080/up", status: 200, contains: "OK" }
+  - name: "create dump"
+    type: command
+    cmd: db:dump

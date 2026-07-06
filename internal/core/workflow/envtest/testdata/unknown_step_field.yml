@@ -1,0 +1,5 @@
+steps:
+  - name: "s"
+    type: shell
+    cmd: "echo hi"
+    bogus: true

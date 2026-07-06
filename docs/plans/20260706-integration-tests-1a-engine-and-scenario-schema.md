@@ -332,32 +332,35 @@ Three independent seams, in dependency order:
 - Create: `internal/core/workflow/envtest/testdata/` fixtures
 - Modify: `internal/core/project/config/workspace.go` (export step-shape validation)
 
-- [ ] export a thin config helper `config.ValidateDeploySteps(steps []DeployStep,
+- [x] export a thin config helper `config.ValidateDeploySteps(steps []DeployStep,
       context string) error` wrapping the existing unexported `validateStepShape` /
       `validatePhaseSteps` (~`workspace.go:3117/3157`) — full step-shape validation
       (required `type`/`cmd`, legal action types, `when:`/`check:`) is otherwise
       unreachable outside `project/config`; + tests in `project/config`
-- [ ] define `Scenario` (Description, Env{Services{Enable,Disable []string},
+      (`validate_deploy_steps_test.go`; loops `validateStepShape` over a flat slice)
+- [x] define `Scenario` (Description, Env{Services{Enable,Disable []string},
       Vars map[string]any}, Timeout, Steps []config.DeployStep); `auto` var values
       stay raw strings — only the `AutoPortSentinel = "auto"` constant ships here
-      (allocation is 1b; add nothing else speculative for 1b)
-- [ ] implement `LoadScenario(path)` — strict decode (`KnownFields(true)`); empty /
+      (allocation is 1b; add nothing else speculative for 1b) — `Timeout` kept a raw
+      string (parsed by 1b), matching the string-timeout convention
+- [x] implement `LoadScenario(path)` — strict decode (`KnownFields(true)`); empty /
       all-comment file is an error ("scenario file is empty"), deliberate divergence
       from pipeline `Ensure*` defaults (spec §8 carve-out); after decode, call
-      `config.ValidateDeploySteps`
-- [ ] scenario loader accepts the **full** existing `config.DeployStep` field set
+      `config.ValidateDeploySteps` — io.EOF is NOT tolerated (unlike pipeline loaders)
+- [x] scenario loader accepts the **full** existing `config.DeployStep` field set
       (`files_gate`, `parallel`, `continue_on_error`, …) — no test-only step
       allowlist; it rejects only malformed schema/shape. Registry-dependent
       validation (command existence, `sub_step_overrides`) stays with
       `ResolvePhaseSteps`/the 1b runner
-- [ ] implement `ListScenarios(baseDir)` over `workspace/tests/*.yml`; scenario name
+- [x] implement `ListScenarios(baseDir)` over `workspace/tests/*.yml`; scenario name
       = basename without `.yml`, must already match `^[a-z0-9][a-z0-9_-]*$` — reject
-      otherwise with a clear error; no case-folding or sanitising
-- [ ] write table tests: valid fixture; unknown top-level field; unknown step field;
+      otherwise with a clear error; no case-folding or sanitising (absent dir →
+      empty list, no error; `.yaml` accepted too)
+- [x] write table tests: valid fixture; unknown top-level field; unknown step field;
       missing `type`; missing `cmd`; unknown `type`; invalid `when`; invalid
       filename; empty file; `auto` var kept raw; enable/disable lists
-- [ ] run `go test ./internal/core/workflow/envtest/... ./internal/core/project/config/...`
-      — must pass before task 7
+- [x] run `go test ./internal/core/workflow/envtest/... ./internal/core/project/config/...`
+      — must pass before task 7 — pass; `golangci-lint` on both packages clean
 
 ### Task 7: Loader-side `${...}` rendering of step `cmd:`/`with:`
 

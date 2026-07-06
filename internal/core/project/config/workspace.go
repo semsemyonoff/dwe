@@ -3200,6 +3200,22 @@ func validateStepShape(step *DeployStep, phaseName string) error {
 	return nil
 }
 
+// ValidateDeploySteps runs the full step-shape validation (required type/cmd,
+// legal action types, when:/check: shape, parallel recursion) over a flat slice
+// of steps outside a phase context. It exists so callers that reuse DeployStep
+// without a surrounding DeployPhase — currently the envtest scenario loader —
+// can enforce the same shape rules as the pipeline loaders. context names the
+// enclosing construct in error messages (e.g. the scenario name), taking the
+// slot phaseName occupies for pipeline steps.
+func ValidateDeploySteps(steps []DeployStep, context string) error {
+	for si := range steps {
+		if err := validateStepShape(&steps[si], context); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
 // validateDependsOnTypes returns an error if any service's depends_on list
 // names a service whose type is tool. Unknown depends_on targets are tolerated
 // here — TopoSortServices already validates them at plan time.

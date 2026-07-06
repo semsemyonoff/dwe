@@ -1,0 +1,4 @@
+env:
+  vars:
+    app.http_port: auto
+    db.port: 5432
