@@ -186,6 +186,15 @@ func SectionTitle(text string) string {
 	return renderSectionTitle(text)
 }
 
+// SectionTitleAt is [SectionTitle] with an explicit bar width. width <= 0 falls
+// back to the terminal width (capped at 100, same as SectionTitle). Pass the
+// viewport's content width when rendering into a fixed sub-region (e.g. an
+// inspect overlay narrower than the terminal) so the title bar matches the
+// content width instead of overflowing past it (which forces horizontal scroll).
+func SectionTitleAt(text string, width int) string {
+	return renderSectionTitleAt(text, width)
+}
+
 // Subheader renders a bold yellow in-section subheader.
 // Used for grouping sections within a larger block (e.g. Steps, Params).
 func Subheader(text string) string {
@@ -210,7 +219,18 @@ func DefinitionAt(name, value string, indent int, icon string, maxWidth int) str
 
 // renderSectionTitle is the internal implementation of SectionTitle.
 func renderSectionTitle(text string) string {
-	width := min(styles.TermWidth(), 100)
+	return renderSectionTitleAt(text, 0)
+}
+
+// renderSectionTitleAt is the internal implementation of SectionTitleAt. A
+// width <= 0 falls back to the terminal width (capped at 100); a positive width
+// is the explicit bar width (capped at 100 so the bar still lines up with
+// fixed-width content like DefinitionAt, which uses the same cap).
+func renderSectionTitleAt(text string, width int) string {
+	if width <= 0 {
+		width = styles.TermWidth()
+	}
+	width = min(width, 100)
 
 	if text == "" {
 		return styles.MutedStyle().Render(strings.Repeat("─", width))

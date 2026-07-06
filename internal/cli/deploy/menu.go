@@ -15,6 +15,7 @@ import (
 	"github.com/semsemyonoff/dwe/internal/core/project/config"
 	localpkg "github.com/semsemyonoff/dwe/internal/core/project/local"
 	"github.com/semsemyonoff/dwe/internal/core/project/services"
+	"github.com/semsemyonoff/dwe/internal/core/ui/ask"
 	"github.com/semsemyonoff/dwe/internal/core/ui/render"
 	"github.com/semsemyonoff/dwe/internal/core/ui/styles"
 	"github.com/semsemyonoff/dwe/internal/core/ui/widgets"
@@ -28,8 +29,6 @@ import (
 	"github.com/semsemyonoff/dwe/internal/core/workflow/deploy/journal"
 	"github.com/semsemyonoff/dwe/internal/core/workflow/setup"
 
-	"charm.land/bubbles/v2/key"
-	huh "charm.land/huh/v2"
 	"github.com/spf13/cobra"
 )
 
@@ -403,26 +402,63 @@ func deployInfoRowsFrom(items []deployServiceItem) []render.DeployInfoRow {
 // Per-option descriptions are concatenated into the option label (so the help
 // line stays available for navigation hints). Esc and Ctrl-C both abort with
 // widgets.ErrCancelled.
-func selectMenuItemInteractive(_ context.Context, cmd *cobra.Command, _ *journal.PendingApply, showWizard bool) (menuChoice, error) {
-	type itemDef struct {
-		key         menuChoice
-		label       string
-		description string
+func selectMenuItemInteractive(ctx context.Context, cmd *cobra.Command, _ *journal.PendingApply, showWizard bool) (menuChoice, error) {
+	field := buildMenuField(showWizard)
+
+	result, err := ask.Run(ctx, "Deploy", []ask.Field{field}, ask.RunOptions{
+		Output:     cmd.OutOrStdout(),
+		Quit:       &ask.QuitSpec{Keys: []string{"q", "esc", "ctrl+c"}, Help: "exit"},
+		SubmitHelp: "select",
+	})
+	if err != nil {
+		return mapMenuSelectionErr(err)
 	}
 
-	var defs []itemDef
-	// Wizard goes first when shown — on a fresh project it's almost always the
-	// next step (answer setup questions / fix port conflicts before deploying).
+	return menuChoice(result.String("choice")), nil
+}
+
+// mapMenuSelectionErr translates a menu-selection error: widgets.ErrCancelled
+// maps to (menuExit, nil), preserving today's "esc/q exits the top menu
+// cleanly" semantics; any other error is wrapped for the caller.
+func mapMenuSelectionErr(err error) (menuChoice, error) {
+	if errors.Is(err, widgets.ErrCancelled) {
+		return menuExit, nil
+	}
+	return "", fmt.Errorf("menu selection: %w", err)
+}
+
+// menuItemDef describes one top-level menu option before it is turned into
+// an ask.Option label.
+type menuItemDef struct {
+	key         menuChoice
+	label       string
+	description string
+}
+
+// menuItemDefs returns the top-level menu items in display order. Wizard
+// goes first when shown — on a fresh project it's almost always the next
+// step (answer setup questions / fix port conflicts before deploying).
+func menuItemDefs(showWizard bool) []menuItemDef {
+	var defs []menuItemDef
 	if showWizard {
-		defs = append(defs, itemDef{menuWizard, "Wizard", "answer setup questions / pick port overrides, then deploy"})
+		defs = append(defs, menuItemDef{menuWizard, "Wizard", "answer setup questions / pick port overrides, then deploy"})
 	}
 	defs = append(defs,
-		itemDef{menuRun, "Run (all)", "deploy every enabled service in dependency order"},
-		itemDef{menuRunService, "Run service…", "deploy one service with a deploy.yml"},
-		itemDef{menuPlan, "Plan (all)", "preview the deploy plan without running anything"},
-		itemDef{menuPlanService, "Plan service…", "preview the deploy plan for one service"},
-		itemDef{menuExit, "Exit", "leave the deploy menu"},
+		menuItemDef{menuRun, "Run (all)", "deploy every enabled service in dependency order"},
+		menuItemDef{menuRunService, "Run service…", "deploy one service with a deploy.yml"},
+		menuItemDef{menuPlan, "Plan (all)", "preview the deploy plan without running anything"},
+		menuItemDef{menuPlanService, "Plan service…", "preview the deploy plan for one service"},
+		menuItemDef{menuExit, "Exit", "leave the deploy menu"},
 	)
+	return defs
+}
+
+// buildMenuField assembles the ask.Field for the top-level menu select:
+// per-option descriptions are concatenated into the option label (so the
+// help line stays available for navigation hints), and the first item is
+// preselected.
+func buildMenuField(showWizard bool) ask.Field {
+	defs := menuItemDefs(showWizard)
 
 	// Right-pad the action label so descriptions line up across options.
 	labelWidth := 0
@@ -432,74 +468,67 @@ func selectMenuItemInteractive(_ context.Context, cmd *cobra.Command, _ *journal
 		}
 	}
 
-	options := make([]huh.Option[string], 0, len(defs))
+	options := make([]ask.Option, 0, len(defs))
 	for _, d := range defs {
 		label := render.PadRight(d.label, labelWidth)
 		// Action label in accent, description muted (FG-only so huh's bold
 		// wrapper on the selected row still wins).
-		key := styles.StyleServiceOptionName("app", label) + "  " + styles.StyleOptionMuted(d.description)
-		options = append(options, huh.NewOption(key, string(d.key)))
+		optLabel := styles.StyleServiceOptionName("app", label) + "  " + styles.StyleOptionMuted(d.description)
+		options = append(options, ask.Option{Value: string(d.key), Label: optLabel})
 	}
 
-	var choice string
+	var def string
 	if len(options) > 0 {
-		choice = options[0].Value
+		def = options[0].Value
 	}
 
-	field := huh.NewSelect[string]().
-		Title("Deploy").
-		Options(options...).
-		Value(&choice).
-		Height(max(len(options)+5, 12))
-
-	form := huh.NewForm(huh.NewGroup(field)).
-		WithTheme(styles.Theme()).
-		WithKeyMap(deployMenuKeyMap("exit")).
-		WithShowHelp(true).
-		WithOutput(cmd.OutOrStdout())
-
-	if err := widgets.RunWithPromptHooks(func() error { return form.Run() }); err != nil {
-		if errors.Is(err, huh.ErrUserAborted) {
-			return menuExit, nil
-		}
-		return "", fmt.Errorf("menu selection: %w", err)
+	return ask.Field{
+		Key:     "choice",
+		Kind:    ask.FieldSelect,
+		Options: options,
+		Default: def,
+		Height:  max(len(options)+5, 12),
 	}
-
-	return menuChoice(choice), nil
-}
-
-// deployMenuKeyMap builds the keymap used by both the top-level menu and the
-// service picker. It customizes huh's built-in help so the rendered hint line
-// includes ESC.
-//
-// huh hides the form-level Quit binding from field help, and for a single-
-// group form it auto-disables Select.Prev/Next via WithPosition. So we hijack
-// the Filter binding's display slot: filter functionality is not useful in a
-// fixed N-item menu, and Filter stays enabled when not filtering — making it
-// the one always-visible slot we can repurpose for the ESC hint. The Quit
-// handler runs first at the form level, so binding ESC to Filter never
-// triggers filter-mode entry; only Filter's help label is consumed.
-//
-// quitHelp is the verb shown after "esc" in the help line ("exit" / "back").
-func deployMenuKeyMap(quitHelp string) *huh.KeyMap {
-	km := huh.NewDefaultKeyMap()
-	km.Quit = key.NewBinding(key.WithKeys("ctrl+c", "esc", "q"), key.WithHelp("q/esc", quitHelp))
-	km.Select.Filter = key.NewBinding(key.WithKeys("esc"), key.WithHelp("q/esc", quitHelp))
-	// Make submit help read "enter select" instead of "enter submit" — purely
-	// cosmetic.
-	km.Select.Submit = key.NewBinding(key.WithKeys("enter"), key.WithHelp("enter", "select"))
-	return km
 }
 
 // selectDeployServiceInteractive prompts the user to pick a service from a
 // pre-sorted, pre-decorated list. When applyGate is true, locked items are
 // shown but selection is rejected via the form's Validate hook. Esc returns
 // widgets.ErrCancelled so the caller can navigate back to the parent menu.
-func selectDeployServiceInteractive(_ context.Context, cmd *cobra.Command, title string, items []deployServiceItem, applyGate bool) (string, error) {
+func selectDeployServiceInteractive(ctx context.Context, cmd *cobra.Command, title string, items []deployServiceItem, applyGate bool) (string, error) {
 	if len(items) == 0 {
 		return "", errors.New("no services to choose from")
 	}
 
+	field := buildServiceField(items, applyGate)
+
+	result, err := ask.Run(ctx, title, []ask.Field{field}, ask.RunOptions{
+		Output:     cmd.OutOrStdout(),
+		Quit:       &ask.QuitSpec{Keys: []string{"q", "esc", "ctrl+c"}, Help: "back"},
+		SubmitHelp: "select",
+	})
+	if err != nil {
+		return mapServiceSelectionErr(err)
+	}
+
+	return result.String("service"), nil
+}
+
+// mapServiceSelectionErr translates a service-selection error:
+// widgets.ErrCancelled passes through unchanged so the caller can navigate
+// back to the parent menu; any other error is wrapped.
+func mapServiceSelectionErr(err error) (string, error) {
+	if errors.Is(err, widgets.ErrCancelled) {
+		return "", widgets.ErrCancelled
+	}
+	return "", fmt.Errorf("service selection: %w", err)
+}
+
+// buildServiceField assembles the ask.Field for the service picker from a
+// pre-sorted, pre-decorated item list. When applyGate is true, locked items
+// are shown but selection is rejected via Validate; the first non-locked
+// item is preselected so an initial Enter never hits a locked row.
+func buildServiceField(items []deployServiceItem, applyGate bool) ask.Field {
 	// Pre-compute column widths so all rows align (status · type · name · meta).
 	nameW := 0
 	for _, it := range items {
@@ -508,26 +537,28 @@ func selectDeployServiceInteractive(_ context.Context, cmd *cobra.Command, title
 		}
 	}
 
-	options := make([]huh.Option[string], 0, len(items))
+	options := make([]ask.Option, 0, len(items))
 	for _, it := range items {
-		options = append(options, huh.NewOption(formatDeployServiceLabel(it, nameW), it.Name))
+		options = append(options, ask.Option{Value: it.Name, Label: formatDeployServiceLabel(it, nameW)})
 	}
 
 	// First selectable (non-locked) choice as default, falling back to the
 	// first item so the form opens on a sensible row.
-	choice := items[0].Name
+	def := items[0].Name
 	for _, it := range items {
 		if !it.Locked {
-			choice = it.Name
+			def = it.Name
 			break
 		}
 	}
 
-	field := huh.NewSelect[string]().
-		Title(title).
-		Options(options...).
-		Value(&choice).
-		Height(max(len(options)+5, 12))
+	field := ask.Field{
+		Key:     "service",
+		Kind:    ask.FieldSelect,
+		Options: options,
+		Default: def,
+		Height:  max(len(options)+5, 12),
+	}
 
 	if applyGate {
 		locked := make(map[string]string, len(items))
@@ -536,28 +567,15 @@ func selectDeployServiceInteractive(_ context.Context, cmd *cobra.Command, title
 				locked[it.Name] = it.LockedHint
 			}
 		}
-		field = field.Validate(func(v string) error {
+		field.Validate = func(v string) error {
 			if hint, ok := locked[v]; ok {
 				return fmt.Errorf("locked: %s", hint)
 			}
 			return nil
-		})
-	}
-
-	form := huh.NewForm(huh.NewGroup(field)).
-		WithTheme(styles.Theme()).
-		WithKeyMap(deployMenuKeyMap("back")).
-		WithShowHelp(true).
-		WithOutput(cmd.OutOrStdout())
-
-	if err := widgets.RunWithPromptHooks(func() error { return form.Run() }); err != nil {
-		if errors.Is(err, huh.ErrUserAborted) {
-			return "", widgets.ErrCancelled
 		}
-		return "", fmt.Errorf("service selection: %w", err)
 	}
 
-	return choice, nil
+	return field
 }
 
 // formatDeployServiceLabel renders one row in the service picker, mirroring

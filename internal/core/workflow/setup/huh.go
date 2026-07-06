@@ -13,14 +13,12 @@ import (
 	"github.com/semsemyonoff/dwe/internal/core/ui/styles"
 	"github.com/semsemyonoff/dwe/internal/core/ui/widgets"
 	"github.com/semsemyonoff/dwe/internal/core/validate/env"
-
-	"charm.land/bubbles/v2/key"
-	huh "charm.land/huh/v2"
 )
 
-// Form rendering tested manually; see plan Post-Completion.
-// The pure coercion helpers (coerceInputAnswers, coercePortOverrides) are
-// unit-tested; "no huh tests" means we don't drive form.Run() from go test.
+// Form rendering tested manually; see plan Post-Completion. The pure
+// coercion helpers (coerceInputAnswers, coercePortOverrides) are
+// unit-tested; form construction routes through ask.Run/ask.Build, tested
+// in internal/core/ui/ask.
 
 // NewHuhAsker returns two callback functions for asking questions and port overrides.
 // The returned functions are wired to the provided io.Writer for output.
@@ -83,10 +81,7 @@ func NewHuhAsker(out io.Writer) (
 		// Run the ask form. styles.Theme() and SetHuhHooks are handled by ask.Run.
 		result, err := ask.Run(ctx, "Setup", fields, ask.RunOptions{Output: out})
 		if err != nil {
-			if errors.Is(err, huh.ErrUserAborted) {
-				return nil, ErrWizardCanceled
-			}
-			return nil, fmt.Errorf("wizard: %w", err)
+			return nil, mapWizardCancel(err)
 		}
 
 		// Collect raw input values for coercion.
@@ -130,76 +125,15 @@ func NewHuhAsker(out io.Writer) (
 			return nil, nil
 		}
 
-		// NOTE: This prompt remains a direct huh.NewForm call (not migrated to ask.Run)
-		// because it uses custom keymaps to hijack the AcceptSuggestion binding for
-		// showing "esc cancel" in the help line. The ask.Field API does not support
-		// per-field keymaps; all keymap customization goes through widgets.SetHuhHooks which
-		// applies globally. Port-override needs per-prompt keymap overrides that can't
-		// be expressed via ask.Field, so it stays as a raw huh form.
-
-		// Build one input field per conflict for port override.
-		var huhFields []huh.Field
-		portBindings := make(map[string]*string) // PortKey.Service/PortKey.PortName → *string
-
-		for _, conflict := range conflicts {
-			val := strconv.Itoa(conflict.RequestedPort)
-			ptr := &val
-			key := fmt.Sprintf("%s/%s", conflict.Service, conflict.PortName)
-			portBindings[key] = ptr
-
-			title := fmt.Sprintf("Port for %s.%s (currently used by %s)",
-				conflict.Service, conflict.PortName, conflict.OccupiedBy)
-
-			field := huh.NewInput().
-				Title(title).
-				Value(ptr).
-				Validate(buildPortValidator()).
-				// Enable ShowSuggestions so huh.Input.KeyBinds() exposes the
-				// AcceptSuggestion binding, which we hijack below to show
-				// "esc cancel" in the help line. The func returns nil so no
-				// actual suggestions are presented to the user.
-				SuggestionsFunc(func() []string { return []string{" "} }, nil)
-
-			huhFields = append(huhFields, field)
-		}
-
-		keymap := huh.NewDefaultKeyMap()
-		keymap.Quit = key.NewBinding(key.WithKeys("ctrl+c", "esc"), key.WithHelp("esc", "cancel"))
-		// Hijack AcceptSuggestion's help slot to surface ESC in the bottom
-		// help line. The actual key press is caught by the form-level Quit
-		// handler before the field sees it.
-		keymap.Input.AcceptSuggestion = key.NewBinding(key.WithKeys("esc"), key.WithHelp("esc", "cancel"))
-
-		form := huh.NewForm(
-			huh.NewGroup(huhFields...).
-				Title("Port Overrides"),
-		).
-			WithTheme(styles.Theme()).
-			WithKeyMap(keymap).
-			WithShowHelp(true).
-			WithOutput(out)
-
-		err := widgets.RunWithPromptHooks(func() error {
-			return form.Run()
+		result, err := ask.Run(ctx, "Port Overrides", buildPortOverrideFields(conflicts), ask.RunOptions{
+			Output: out,
+			Quit:   portOverridesQuit,
 		})
-
 		if err != nil {
-			if errors.Is(err, huh.ErrUserAborted) {
-				return nil, ErrWizardCanceled
-			}
-			return nil, fmt.Errorf("wizard: %w", err)
+			return nil, mapWizardCancel(err)
 		}
 
-		// Coerce port strings to ints.
-		portRaws := make(map[string]string)
-		for _, conflict := range conflicts {
-			key := fmt.Sprintf("%s/%s", conflict.Service, conflict.PortName)
-			if ptr, ok := portBindings[key]; ok {
-				portRaws[key] = *ptr
-			}
-		}
-
-		coercedPorts, err := coercePortOverrides(conflicts, portRaws)
+		coercedPorts, err := coercePortOverrides(conflicts, portOverrideRaws(conflicts, result))
 		if err != nil {
 			return nil, err
 		}
@@ -212,88 +146,145 @@ func NewHuhAsker(out io.Writer) (
 			return map[string]bool{}, nil
 		}
 
-		// NOTE: This prompt remains a direct huh.NewForm call (not migrated to ask.Run)
-		// because it uses custom keymaps (hijacking the Filter binding for "esc cancel")
-		// and also sets Filterable(false) to prevent user filtering. The ask.Field API
-		// does not support these per-field customizations. Additionally, it pre-prints
-		// the "Always on:" mandatory services line before the form opens, which is a
-		// prompt-specific affordance not expressible via ask.Field.
-
-		// Build a huh multi-select. Mandatory rows are shown but locked: huh
-		// has no native "disabled option" concept, so we leave them out of
-		// the form and surface them above the prompt as an "Always on" line.
-		// The returned map includes BOTH the user's optional picks AND every
-		// mandatory service, so the caller can write a complete picture.
-		var optionLines []huh.Option[string]
-		var initial []string
-		var mandatoryLabels []string
-		nameToToggle := make(map[string]ServiceToggle, len(toggles))
-		for _, t := range toggles {
-			nameToToggle[t.Name] = t
-			if t.Mandatory {
-				mandatoryLabels = append(mandatoryLabels, formatServiceToggleRow(t))
-				continue
-			}
-			optionLines = append(optionLines, huh.NewOption(formatServiceToggleRow(t), t.Name))
-			if t.Enabled {
-				initial = append(initial, t.Name)
-			}
-		}
-
-		if len(optionLines) == 0 {
+		field, mandatoryLabels := buildServiceTogglesField(toggles)
+		if field == nil {
 			// All mandatory — nothing to select. Still report mandatory as kept.
-			result := make(map[string]bool, len(toggles))
-			for _, t := range toggles {
-				if t.Mandatory {
-					result[t.Name] = true
-				}
-			}
-			return result, nil
+			return mandatoryToggles(toggles), nil
 		}
 
 		if len(mandatoryLabels) > 0 {
 			_, _ = fmt.Fprintln(out, styles.StyleSubheader("Always on: ")+styles.StyleMuted(strings.Join(mandatoryLabels, ", ")))
 		}
 
-		picked := initial
-		field := huh.NewMultiSelect[string]().
-			Title("Services").
-			Options(applyMultiSelectInitial(optionLines, initial)...).
-			Value(&picked).
-			Filterable(false)
-
-		keymap := huh.NewDefaultKeyMap()
-		keymap.Quit = key.NewBinding(key.WithKeys("ctrl+c", "esc"), key.WithHelp("esc", "cancel"))
-		keymap.MultiSelect.Filter = key.NewBinding(key.WithKeys("esc"), key.WithHelp("esc", "cancel"))
-
-		form := huh.NewForm(huh.NewGroup(field).Title("Services")).
-			WithTheme(styles.Theme()).
-			WithKeyMap(keymap).
-			WithShowHelp(true).
-			WithOutput(out)
-
-		err := widgets.RunWithPromptHooks(func() error { return form.Run() })
+		result, err := ask.Run(ctx, "Services", []ask.Field{*field}, ask.RunOptions{
+			Output: out,
+			Quit:   serviceTogglesQuit,
+		})
 		if err != nil {
-			if errors.Is(err, huh.ErrUserAborted) {
-				return nil, ErrWizardCanceled
-			}
-			return nil, fmt.Errorf("wizard: %w", err)
+			return nil, mapWizardCancel(err)
 		}
 
-		result := make(map[string]bool, len(toggles))
-		for _, name := range picked {
-			result[name] = true
-		}
-		// Mandatory services are always kept.
-		for _, t := range toggles {
-			if t.Mandatory {
-				result[t.Name] = true
-			}
-		}
-		return result, nil
+		return mergeMandatoryToggles(result.Strings(serviceTogglesKey), toggles), nil
 	}
 
 	return askQuestions, askPortOverrides, askServiceToggles
+}
+
+// mapWizardCancel translates the ask cancel error into the wizard's own
+// sentinel; any other error is wrapped.
+func mapWizardCancel(err error) error {
+	if errors.Is(err, widgets.ErrCancelled) {
+		return ErrWizardCanceled
+	}
+	return fmt.Errorf("wizard: %w", err)
+}
+
+// portOverridesQuit is the declarative quit binding shared by the port
+// override and service-toggle prompts (esc/ctrl+c cancel the wizard step).
+var portOverridesQuit = &ask.QuitSpec{Keys: []string{"esc", "ctrl+c"}, Help: "cancel"}
+
+// portOverrideKey is the ask.Field/Result key for one conflict: joins the
+// service name and port name so keys stay unique across conflicts.
+func portOverrideKey(conflict env.PortConflict) string {
+	return fmt.Sprintf("%s/%s", conflict.Service, conflict.PortName)
+}
+
+// buildPortOverrideFields builds one ask.Field{Kind: FieldInput} per
+// conflict, defaulted to the originally requested port and validated inline
+// via buildPortValidator.
+func buildPortOverrideFields(conflicts []env.PortConflict) []ask.Field {
+	fields := make([]ask.Field, 0, len(conflicts))
+	for _, conflict := range conflicts {
+		fields = append(fields, ask.Field{
+			Key:      portOverrideKey(conflict),
+			Title:    fmt.Sprintf("Port for %s.%s (currently used by %s)", conflict.Service, conflict.PortName, conflict.OccupiedBy),
+			Kind:     ask.FieldInput,
+			Default:  strconv.Itoa(conflict.RequestedPort),
+			Validate: buildPortValidator(),
+		})
+	}
+	return fields
+}
+
+// portOverrideRaws harvests each conflict's raw string answer from a
+// completed ask.Result, keyed for coercePortOverrides.
+func portOverrideRaws(conflicts []env.PortConflict, result ask.Result) map[string]string {
+	raws := make(map[string]string, len(conflicts))
+	for _, conflict := range conflicts {
+		raws[portOverrideKey(conflict)] = result.String(portOverrideKey(conflict))
+	}
+	return raws
+}
+
+// serviceTogglesKey is the ask.Field/Result key for the service-toggles
+// multi-select.
+const serviceTogglesKey = "services"
+
+// serviceTogglesQuit is the declarative quit binding for the service-toggles
+// prompt. The "esc cancel" hint does not render (Filterable: false hides the
+// hijacked slot — see design decision 3 in the stage-6 plan); esc still
+// cancels via the form-level Quit binding.
+var serviceTogglesQuit = &ask.QuitSpec{Keys: []string{"esc", "ctrl+c"}, Help: "cancel"}
+
+// buildServiceTogglesField splits toggles into the mandatory (always-on,
+// shown above the prompt) and optional (selectable) sets, returning the
+// ask.Field for the optional set and the mandatory rows' display labels. Nil
+// field means every toggle is mandatory — nothing to select.
+func buildServiceTogglesField(toggles []ServiceToggle) (field *ask.Field, mandatoryLabels []string) {
+	var options []ask.Option
+	var initial []string
+	for _, t := range toggles {
+		if t.Mandatory {
+			mandatoryLabels = append(mandatoryLabels, formatServiceToggleRow(t))
+			continue
+		}
+		options = append(options, ask.Option{Value: t.Name, Label: formatServiceToggleRow(t)})
+		if t.Enabled {
+			initial = append(initial, t.Name)
+		}
+	}
+
+	if len(options) == 0 {
+		return nil, mandatoryLabels
+	}
+
+	notFilterable := false
+	return &ask.Field{
+		Key:        serviceTogglesKey,
+		Title:      "Services",
+		Kind:       ask.FieldMultiselect,
+		Options:    options,
+		Defaults:   initial,
+		Filterable: &notFilterable,
+	}, mandatoryLabels
+}
+
+// mandatoryToggles returns a map with every mandatory toggle set to true and
+// every optional toggle omitted — used when there is nothing left to select.
+func mandatoryToggles(toggles []ServiceToggle) map[string]bool {
+	result := make(map[string]bool, len(toggles))
+	for _, t := range toggles {
+		if t.Mandatory {
+			result[t.Name] = true
+		}
+	}
+	return result
+}
+
+// mergeMandatoryToggles combines the user's picked (optional) service names
+// with every mandatory service, which is always kept regardless of the
+// picker's outcome.
+func mergeMandatoryToggles(picked []string, toggles []ServiceToggle) map[string]bool {
+	result := make(map[string]bool, len(toggles))
+	for _, name := range picked {
+		result[name] = true
+	}
+	for _, t := range toggles {
+		if t.Mandatory {
+			result[t.Name] = true
+		}
+	}
+	return result
 }
 
 // formatServiceToggleRow renders a single line for the wizard's service
@@ -311,24 +302,6 @@ func formatServiceToggleRow(t ServiceToggle) string {
 	return styles.IconPrefix(t.Icon) + styles.StyleServiceOptionName(t.Type, t.Name) + "  " +
 		styles.StyleServiceOptionType(t.Type, "["+typeText+"]") + " " +
 		styles.StyleServiceOptionContainer(container)
-}
-
-// applyMultiSelectInitial marks the given option values as pre-selected so the
-// huh.MultiSelect form opens with them already checked.
-func applyMultiSelectInitial(opts []huh.Option[string], initial []string) []huh.Option[string] {
-	if len(initial) == 0 {
-		return opts
-	}
-	set := make(map[string]bool, len(initial))
-	for _, k := range initial {
-		set[k] = true
-	}
-	for i, o := range opts {
-		if set[o.Value] {
-			opts[i] = o.Selected(true)
-		}
-	}
-	return opts
 }
 
 // buildInputValidator returns a validator function for input fields that applies the question's validation.

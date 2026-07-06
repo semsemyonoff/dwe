@@ -10,7 +10,9 @@ import (
 	"github.com/charmbracelet/colorprofile"
 	"go.uber.org/goleak"
 
+	"github.com/semsemyonoff/dwe/internal/core/ui/tui"
 	"github.com/semsemyonoff/dwe/internal/core/ui/widgets"
+	"github.com/semsemyonoff/dwe/internal/shared/i18n"
 )
 
 func TestMain(m *testing.M) {
@@ -134,18 +136,21 @@ func TestRun_ShortDelegatesToSelector(t *testing.T) {
 
 func TestRun_TerminalSizeErrorDelegates(t *testing.T) {
 	called := 0
-	sentinel := errors.New("ioctl boom")
-	withSeams(t, true, 0, 0, sentinel, func(string, []widgets.SelectorItem) (int, error) {
+	sizeErr := errors.New("ioctl boom")
+	selectorErr := errors.New("selector boom")
+	// The selector returns its OWN error so the assertion that the size error is
+	// never surfaced actually runs: any error reaching the caller must be the
+	// selector's, never the size-read failure that triggered the fallback.
+	withSeams(t, true, 0, 0, sizeErr, func(string, []widgets.SelectorItem) (int, error) {
 		called++
-		return 0, nil
+		return 0, selectorErr
 	})
 	_, err := Run("pick", []Item{{ID: "a"}}, DefaultOptions())
-	if err != nil {
-		// Selector returned nil; size error must not be surfaced.
-		if errors.Is(err, sentinel) {
-			t.Errorf("size error must not be surfaced to caller")
-		}
-		t.Fatal(err)
+	if !errors.Is(err, selectorErr) {
+		t.Errorf("fallback must propagate the selector error, got %v", err)
+	}
+	if errors.Is(err, sizeErr) {
+		t.Errorf("size-read error must not be surfaced to the caller, got %v", err)
 	}
 	if called != 1 {
 		t.Errorf("size-error path must delegate to runSelectorFn; called=%d", called)
@@ -162,121 +167,108 @@ func TestRun_FallbackPropagatesSelectorError(t *testing.T) {
 	}
 }
 
-func TestModel_ViewRendersTwoPanels(t *testing.T) {
-	m := newModel("pick", []Item{{ID: "db.migrate"}, {ID: "db.seed"}}, DefaultOptions(), 120, 26)
-	v := m.View()
-	if !v.AltScreen {
-		t.Error("View must request AltScreen")
+// stubRunTUI swaps the package-local runTUI seam to return a chosen result/error
+// without spinning a real terminal, restoring it via t.Cleanup. The recorded
+// plugin lets the test confirm Run wired a *browser (not a fallback) through.
+func stubRunTUI(t *testing.T, out any, err error) *tui.RunOptions {
+	t.Helper()
+	orig := runTUI
+	var captured tui.RunOptions
+	t.Cleanup(func() { runTUI = orig })
+	runTUI = func(_ tui.Plugin, opts tui.RunOptions) (any, error) {
+		captured = opts
+		return out, err
 	}
-	if !strings.Contains(v.Content, "pick") {
-		t.Errorf("view does not contain title; got:\n%s", v.Content)
+	return &captured
+}
+
+// TestRun_WideDrivesPluginAndReturnsResult verifies the ≥80 path constructs the
+// plugin and threads tui.Run's Result back unchanged.
+func TestRun_WideDrivesPluginAndReturnsResult(t *testing.T) {
+	withSeams(t, true, 120, 30, nil, func(string, []widgets.SelectorItem) (int, error) {
+		t.Fatal("wide path must not call the fallback selector")
+		return 0, nil
+	})
+	opts := stubRunTUI(t, Result{Idx: 2, Action: ActionRun, SkipConfirm: true}, nil)
+
+	res, err := Run("pick", []Item{{ID: "a"}, {ID: "b"}, {ID: "c"}}, DefaultOptions())
+	if err != nil {
+		t.Fatalf("Run returned err=%v", err)
 	}
-	if !strings.Contains(v.Content, "db") {
-		t.Errorf("view missing tree node 'db'; got:\n%s", v.Content)
+	if res.Idx != 2 || res.Action != ActionRun || !res.SkipConfirm {
+		t.Errorf("Result not threaded through unchanged: %+v", res)
 	}
-	if !strings.Contains(v.Content, "commands") {
-		t.Errorf("view missing breadcrumb 'commands' label; got:\n%s", v.Content)
+	if opts.Brand != "pick" || !opts.Mouse {
+		t.Errorf("RunOptions=%+v, want Brand=pick Mouse=true", opts)
 	}
 }
 
-func TestModel_CancelKeysSetCancelledAndQuit(t *testing.T) {
-	cases := []struct {
-		name string
-		key  string
-	}{
-		{"esc", "esc"},
-		{"q", "q"},
-		{"ctrl+c", "ctrl+c"},
+// TestRun_WideThreadsTranslatorAndLocale verifies Run forwards the i18n context
+// (Translator + Locale) into tui.RunOptions so the help modal can localize —
+// the only non-breaking channel through the frozen Run signature.
+func TestRun_WideThreadsTranslatorAndLocale(t *testing.T) {
+	withSeams(t, true, 120, 30, nil, nil)
+	captured := stubRunTUI(t, Result{Idx: 0, Action: ActionRun}, nil)
+
+	tr := i18n.NopTranslator{}
+	opts := DefaultOptions()
+	opts.Translator = tr
+	opts.Locale = "ru"
+	if _, err := Run("pick", []Item{{ID: "a"}}, opts); err != nil {
+		t.Fatalf("Run err=%v", err)
 	}
-	for _, tc := range cases {
-		t.Run(tc.name, func(t *testing.T) {
-			t.Parallel()
-			m := newModel("t", []Item{{ID: "a"}}, DefaultOptions(), 120, 26)
-			msg := tea.KeyPressMsg{Code: 0, Text: tc.key}
-			// Use a synthetic KeyPressMsg by stringifying directly.
-			_, cmd := m.Update(syntheticKey(tc.key))
-			if !m.cancelled {
-				t.Errorf("cancelled flag not set after %q (msg=%v)", tc.key, msg)
-			}
-			if cmd == nil {
-				t.Errorf("expected tea.Quit cmd, got nil")
-			}
-		})
+	if captured.Locale != "ru" {
+		t.Errorf("Locale not threaded into RunOptions; got %q, want ru", captured.Locale)
+	}
+	if captured.Translator == nil {
+		t.Error("Translator not threaded into RunOptions; got nil")
 	}
 }
 
-func TestModel_TabSwitchesFocus(t *testing.T) {
-	m := newModel("t", []Item{{ID: "a"}}, DefaultOptions(), 120, 26)
-	if m.focus != focusLeft {
-		t.Fatalf("initial focus=%v, want focusLeft", m.focus)
-	}
-	m.Update(syntheticKey("tab"))
-	if m.focus != focusRight {
-		t.Errorf("after tab focus=%v, want focusRight", m.focus)
-	}
-	m.Update(syntheticKey("tab"))
-	if m.focus != focusLeft {
-		t.Errorf("after tab x2 focus=%v, want focusLeft", m.focus)
+// TestRun_WideMapsCancelledThrough verifies tui.Run's widgets.ErrCancelled
+// passes straight back (no second RunWithPromptHooks wrap, no remap).
+func TestRun_WideMapsCancelledThrough(t *testing.T) {
+	withSeams(t, true, 120, 30, nil, nil)
+	stubRunTUI(t, nil, widgets.ErrCancelled)
+	_, err := Run("pick", []Item{{ID: "a"}}, DefaultOptions())
+	if !errors.Is(err, widgets.ErrCancelled) {
+		t.Errorf("want ErrCancelled mapped through, got %v", err)
 	}
 }
 
-func TestModel_WindowSizeUpdates(t *testing.T) {
-	m := newModel("t", []Item{{ID: "a"}}, DefaultOptions(), 120, 26)
-	m.Update(tea.WindowSizeMsg{Width: 100, Height: 30})
-	if m.width != 100 || m.height != 30 {
-		t.Errorf("width/height not updated: %d/%d", m.width, m.height)
+// TestRun_WideActionUnknownIsCancelled verifies an exit without a selection
+// (zero-value Action) is reported as a clean cancellation, not items[0].
+func TestRun_WideActionUnknownIsCancelled(t *testing.T) {
+	withSeams(t, true, 120, 30, nil, nil)
+	stubRunTUI(t, Result{}, nil) // Action == ActionUnknown
+	_, err := Run("pick", []Item{{ID: "a"}}, DefaultOptions())
+	if !errors.Is(err, widgets.ErrCancelled) {
+		t.Errorf("ActionUnknown must map to ErrCancelled, got %v", err)
 	}
 }
 
-// Snapshot-ish: assert the empty two-panel view at 120x26 has a stable
-// shape (single render, with title and both panel placeholders). We do not
-// pin a byte-identical golden file here — the lipgloss border characters
-// are stable but small label changes would force constant churn in Task 3.
-func TestModel_EmptyLayoutSnapshot(t *testing.T) {
-	m := newModel("Select command", []Item{{ID: "db.migrate"}}, DefaultOptions(), 120, 26)
-	// Drive the model with a window-size msg as bubbletea would.
-	m.Update(tea.WindowSizeMsg{Width: 120, Height: 26})
-	out := m.View().Content
-	for _, want := range []string{"Select command", "command", "tab"} {
-		if !strings.Contains(out, want) {
-			t.Errorf("snapshot missing %q\n---\n%s", want, out)
-		}
+// TestRun_NarrowBelow80DelegatesToSelector verifies the raised threshold: a
+// 60–79 width (the old in-TUI single-panel bucket, dropped under Variant A) now
+// routes to the flat fallback and never drives the plugin.
+func TestRun_NarrowBelow80DelegatesToSelector(t *testing.T) {
+	called := 0
+	withSeams(t, true, 70, 30, nil, func(string, []widgets.SelectorItem) (int, error) {
+		called++
+		return 0, nil
+	})
+	// Fail loudly if the plugin path is taken instead of the fallback.
+	t.Cleanup(func() {})
+	orig := runTUI
+	t.Cleanup(func() { runTUI = orig })
+	runTUI = func(_ tui.Plugin, _ tui.RunOptions) (any, error) {
+		t.Fatal("width 70 must route to the fallback, not the framework")
+		return nil, nil
 	}
-}
-
-// TestModel_HelpFooterVisibleWithinTerminalHeight guards the regression where
-// title + bordered panel (h-3+2) + footer summed to h+1 lines, pushing the
-// help footer off-screen at the declared terminal height. The footer must
-// appear in View().Content (contains a binding label like "enter") AND the
-// total content height must not exceed the declared terminal height.
-func TestModel_HelpFooterVisibleWithinTerminalHeight(t *testing.T) {
-	cases := []struct {
-		name string
-		w, h int
-	}{
-		{"two_panel_full", 120, 26},
-		{"two_panel_reduced", 90, 26},
-		{"two_panel_min", 70, 26},
-		{"single_panel_60", 60, 20},
+	if _, err := Run("pick", []Item{{ID: "a"}}, DefaultOptions()); err != nil {
+		t.Fatalf("Run err=%v", err)
 	}
-	for _, tc := range cases {
-		t.Run(tc.name, func(t *testing.T) {
-			t.Parallel()
-			m := newModel("pick", []Item{{ID: "db.migrate"}, {ID: "db.seed"}}, DefaultOptions(), tc.w, tc.h)
-			out := m.View().Content
-			// "enter" is in the full-help footer's Enter binding label across all
-			// focus modes (see defaultKeymap.Enter WithHelp("enter", "select")).
-			if !strings.Contains(out, "enter") {
-				t.Errorf("footer binding label 'enter' not in View().Content at %dx%d:\n%s", tc.w, tc.h, out)
-			}
-			// Trailing newline (if any) would inflate the count by one, so trim it.
-			content := strings.TrimRight(out, "\n")
-			lines := strings.Count(content, "\n") + 1
-			if lines > tc.h {
-				t.Errorf("View().Content has %d lines, exceeds terminal height %d (footer will be clipped):\n%s",
-					lines, tc.h, out)
-			}
-		})
+	if called != 1 {
+		t.Errorf("width 70 must delegate to the fallback selector; called=%d", called)
 	}
 }
 

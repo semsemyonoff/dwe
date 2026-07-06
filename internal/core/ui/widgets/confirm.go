@@ -7,6 +7,7 @@
 package widgets
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"sort"
@@ -27,22 +28,18 @@ func defaultRunConfirmForm(title, affirmative, negative string) (bool, error) {
 		Affirmative(affirmative).
 		Negative(negative).
 		Value(&result)
-	err := huh.NewForm(huh.NewGroup(field)).WithTheme(styles.Theme()).WithShowHelp(false).Run()
+	form := huh.NewForm(huh.NewGroup(field)).WithTheme(styles.Theme()).WithShowHelp(false)
+	err := RunHuhForm(context.Background(), form)
 	return result, err
 }
 
 // RunConfirm displays an interactive yes/no confirmation form and returns the
 // user's choice. ErrCancelled is returned when the user presses Esc or Ctrl-C.
 func RunConfirm(title, affirmative, negative string) (bool, error) {
-	before, after := snapshotHuhHooks()
-	if before != nil {
-		before()
-	}
-	if after != nil {
-		defer after()
-	}
 	result, err := runConfirmFormFn(title, affirmative, negative)
 	if err != nil {
+		// Defensive translation: seam-swapped tests may return raw
+		// huh.ErrUserAborted without going through RunHuhForm.
 		if errors.Is(err, huh.ErrUserAborted) {
 			return false, ErrCancelled
 		}
@@ -65,7 +62,8 @@ func defaultRunConfirmRunForm(title, summary string) (bool, error) {
 		Affirmative("Yes").
 		Negative("No").
 		Value(&result)
-	err := huh.NewForm(huh.NewGroup(field)).WithTheme(styles.Theme()).WithShowHelp(false).Run()
+	form := huh.NewForm(huh.NewGroup(field)).WithTheme(styles.Theme()).WithShowHelp(false)
+	err := RunHuhForm(context.Background(), form)
 	return result, err
 }
 
@@ -85,15 +83,10 @@ func ConfirmRun(title string, values map[string]string) (bool, error) {
 	}
 	summary := renderParamSummary(values)
 
-	before, after := snapshotHuhHooks()
-	if before != nil {
-		before()
-	}
-	if after != nil {
-		defer after()
-	}
 	result, err := runConfirmRunFormFn(title, summary)
 	if err != nil {
+		// Defensive translation: seam-swapped tests may return raw
+		// huh.ErrUserAborted without going through RunHuhForm.
 		if errors.Is(err, huh.ErrUserAborted) {
 			return false, ErrCancelled
 		}

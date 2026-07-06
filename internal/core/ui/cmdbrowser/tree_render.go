@@ -3,10 +3,42 @@ package cmdbrowser
 import (
 	"fmt"
 	"strings"
+
+	"github.com/semsemyonoff/dwe/internal/core/ui/tui"
 )
 
-// renderOpt renders the tree with control over count visibility — Task 4 hides
-// the (N) counts at 80–99 cols per §4.1.
+// treeCountsMinWidth is the minimum inner panel width (cells) at which the tree
+// renders the per-group "(N)" / "M/N" counts. Below it the suffix is dropped so
+// a deep row does not overflow the narrow tree panel.
+//
+// Keyed on the framework INNER width (outer − border − padding), NOT raw
+// terminal width: under the Frame the tree panel takes weight 2 of {2,7}, so at
+// terminal widths 99–100 the tree inner width is 18 and at 80 it is 13. The
+// deepest sample row ("        cs (2)" plus the focus-marker gutter) is exactly
+// 18 cells wide, so 18 is the width at which counts first fit cleanly. The
+// legacy model keyed counts on terminal width ≥ 100; this recomputes the
+// threshold against the inner width the Frame now supplies.
+const treeCountsMinWidth = 18
+
+// renderRegion is the framework entry point: it renders the tree into the inner
+// Region the Frame computed, choosing count visibility from inner.Width and
+// clipping to inner.Height. The filter-aware path is selected when f != nil so
+// callers route both plain and filtered renders through one entry.
+func (tm *treeModel) renderRegion(inner tui.Region, focused bool, f *filterState) string {
+	showCounts := inner.Width >= treeCountsMinWidth
+	var full string
+	if f != nil {
+		full = tm.renderFilter(focused, showCounts, f)
+	} else {
+		full = tm.renderOpt(focused, showCounts)
+	}
+	// The engine owns the scroll window (topIdx); it clips the one-line-per-node
+	// render to the Frame-supplied inner height.
+	return tm.eng.Clip(full, inner.Height)
+}
+
+// renderOpt renders the tree with control over count visibility — hides
+// the (N) counts at narrow inner widths per §4.1.
 func (tm *treeModel) renderOpt(focused, showCounts bool) string {
 	return tm.renderTree(focused, showCounts, nil)
 }
@@ -24,19 +56,21 @@ func (tm *treeModel) renderFilter(focused, showCounts bool, f *filterState) stri
 // the plain variant shows "(N)" counts and only styles the focused line. The
 // nil check is the single point of divergence between the two callers.
 func (tm *treeModel) renderTree(focused, showCounts bool, f *filterState) string {
-	if len(tm.visible) == 0 {
+	visible := tm.eng.VisibleNodes()
+	if len(visible) == 0 {
 		return paletteDescription().Render("(no groups)")
 	}
+	fid := tm.focusedID()
 	var b strings.Builder
-	for i, n := range tm.visible {
-		isFocused := focused && n.id == tm.focusedID
+	for i, n := range visible {
+		isFocused := focused && n.id == fid
 		marker := " "
 		if isFocused {
 			marker = "❯"
 		}
 		glyph := "  "
 		if len(n.children) > 0 {
-			if tm.expanded[n.id] {
+			if tm.eng.IsExpanded(n) {
 				glyph = "▾ "
 			} else {
 				glyph = "▸ "
@@ -64,7 +98,7 @@ func (tm *treeModel) renderTree(focused, showCounts bool, f *filterState) string
 			line = paletteFocusBorder().Bold(true).Render(line)
 		}
 		b.WriteString(line)
-		if i < len(tm.visible)-1 {
+		if i < len(visible)-1 {
 			b.WriteByte('\n')
 		}
 	}

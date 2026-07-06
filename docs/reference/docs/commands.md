@@ -214,8 +214,23 @@ Configure with `docs.mermaid` in `workspace.yml`. See [Configuration reference](
 
 `mmdc` (mermaid-cli) drives a headless Chromium via puppeteer. Two install paths:
 
-- **npm (recommended)** — `npm i -g @mermaid-js/mermaid-cli`. Puppeteer manages its own Chromium download under `~/.cache/puppeteer/` and stays in sync with the installed mermaid-cli version. Upgrading is `npm update -g @mermaid-js/mermaid-cli`.
-- **Homebrew** — `brew install mermaid-cli`. Works, but the formula pins a specific puppeteer version that expects an exact Chromium build; if your `~/.cache/puppeteer/` doesn't already contain that build the first render fails with `Could not find Chrome (ver. …)`. Fix by either running `npx puppeteer browsers install chrome@<version-from-error>` once, or switching to the npm install above which avoids the version-pinning problem entirely.
+- **npm (recommended)** — `npm i -g @mermaid-js/mermaid-cli`. Puppeteer downloads its own Chromium under `~/.cache/puppeteer/` at install time. Upgrading is `npm update -g @mermaid-js/mermaid-cli`.
+- **Homebrew** — `brew install mermaid-cli`. The formula pins a specific puppeteer version that expects an exact Chromium build.
+
+Either way, the bundled puppeteer expects a **specific** Chromium build. If `~/.cache/puppeteer/` doesn't contain it — a cleared cache, a `--ignore-scripts` install, or a mermaid-cli upgrade that bumped the expected version without re-fetching the browser — every render fails with `Could not find Chrome (ver. …)` even though `mmdc` itself is on `$PATH`. The browser cache can go missing regardless of which install path you used.
+
+The obvious fix backfires in two ways, and the error's own advice (`npx puppeteer browsers install chrome-headless-shell`) walks into both:
+
+- **Wrong product** — mermaid-cli launches with `headless: 'shell'`, so it needs the **`chrome-headless-shell`** build, *not* full `chrome`. The error message says "Chrome" even while it is resolving `chrome-headless-shell`, so installing `chrome@<ver>` leaves the render failing with the identical error.
+- **Wrong version** — a bare `npx puppeteer browsers install …` runs the *latest* standalone puppeteer, which pins a **newer** Chromium build than the (often older) puppeteer-core bundled inside your mermaid-cli. mermaid-cli only ever looks for the exact build it pins, so the newer download sits unused and the render still fails.
+
+Fix it (install-method-agnostic) by installing the exact product **and** the version the error names — always pin `@<version-from-error>`:
+
+```sh
+npx @puppeteer/browsers install chrome-headless-shell@<version-from-error>
+```
+
+In `dwe docs`, when a diagram shows `📊 Diagram N/M — render failed`, put the cursor on it and press `E` to open the full mmdc error (it names the missing Chrome version to pass above). Pinning the version sidesteps the standalone-puppeteer drift; naming `chrome-headless-shell` matches what `headless: 'shell'` actually launches.
 
 Verify the install with a one-off render outside DWE:
 

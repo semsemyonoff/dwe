@@ -198,7 +198,7 @@ func VarInspectView(in VarInspect, width int) string {
 	}
 
 	var sb strings.Builder
-	sb.WriteString(renderSectionTitle(DisplayVarPath(in.Path)))
+	sb.WriteString(renderSectionTitleAt(DisplayVarPath(in.Path), width))
 	sb.WriteByte('\n')
 
 	sb.WriteString(layerLine("Default", in.Default, in.DefaultOK))

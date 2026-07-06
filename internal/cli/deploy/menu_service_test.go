@@ -3,6 +3,7 @@ package deploy
 import (
 	"bytes"
 	"context"
+	"errors"
 	"io"
 	"os"
 	"path/filepath"
@@ -97,6 +98,114 @@ func TestFormatServiceMeta(t *testing.T) {
 	assert.Contains(t, meta, "optional")
 	assert.Contains(t, meta, "not deployed")
 	assert.Contains(t, meta, "deploy mandatory services first")
+}
+
+func TestBuildMenuField(t *testing.T) {
+	t.Run("without wizard", func(t *testing.T) {
+		field := buildMenuField(false)
+		require.Len(t, field.Options, 5)
+		assert.Equal(t, string(menuRun), field.Options[0].Value)
+		assert.Equal(t, string(menuRun), field.Default, "first option should be preselected")
+		for _, opt := range field.Options {
+			assert.NotEqual(t, string(menuWizard), opt.Value, "wizard option must be absent when showWizard is false")
+		}
+	})
+
+	t.Run("with wizard", func(t *testing.T) {
+		field := buildMenuField(true)
+		require.Len(t, field.Options, 6)
+		assert.Equal(t, string(menuWizard), field.Options[0].Value, "wizard goes first when shown")
+		assert.Equal(t, string(menuWizard), field.Default, "first option should be preselected")
+	})
+
+	t.Run("option labels carry the description", func(t *testing.T) {
+		field := buildMenuField(false)
+		var exitLabel string
+		for _, opt := range field.Options {
+			if opt.Value == string(menuExit) {
+				exitLabel = opt.Label
+			}
+		}
+		assert.Contains(t, exitLabel, "leave the deploy menu")
+	})
+}
+
+func TestBuildServiceField(t *testing.T) {
+	t.Run("options mirror items in order", func(t *testing.T) {
+		items := []deployServiceItem{
+			{Name: "db", Type: "infra"},
+			{Name: "worker", Type: "app"},
+		}
+		field := buildServiceField(items, false)
+		require.Len(t, field.Options, 2)
+		assert.Equal(t, "db", field.Options[0].Value)
+		assert.Equal(t, "worker", field.Options[1].Value)
+		assert.Nil(t, field.Validate, "no validate hook when applyGate is false")
+	})
+
+	t.Run("default selection skips a locked first item", func(t *testing.T) {
+		items := []deployServiceItem{
+			{Name: "db", Type: "infra", Locked: true, LockedHint: "deploy required services first"},
+			{Name: "worker", Type: "app"},
+		}
+		field := buildServiceField(items, true)
+		assert.Equal(t, "worker", field.Default, "first non-locked item should be preselected")
+	})
+
+	t.Run("default falls back to first item when all are locked", func(t *testing.T) {
+		items := []deployServiceItem{
+			{Name: "db", Type: "infra", Locked: true, LockedHint: "deploy required services first"},
+		}
+		field := buildServiceField(items, true)
+		assert.Equal(t, "db", field.Default)
+	})
+
+	t.Run("locked validate hook rejects locked items", func(t *testing.T) {
+		items := []deployServiceItem{
+			{Name: "db", Type: "infra", Locked: true, LockedHint: "deploy required services first"},
+			{Name: "worker", Type: "app"},
+		}
+		field := buildServiceField(items, true)
+		require.NotNil(t, field.Validate)
+
+		err := field.Validate("db")
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "deploy required services first")
+
+		assert.NoError(t, field.Validate("worker"))
+	})
+}
+
+func TestMapMenuSelectionErr(t *testing.T) {
+	t.Run("cancelled maps to menuExit with no error", func(t *testing.T) {
+		choice, err := mapMenuSelectionErr(widgets.ErrCancelled)
+		require.NoError(t, err)
+		assert.Equal(t, menuExit, choice)
+	})
+
+	t.Run("other errors are wrapped", func(t *testing.T) {
+		choice, err := mapMenuSelectionErr(errors.New("boom"))
+		require.Error(t, err)
+		assert.Equal(t, menuChoice(""), choice)
+		assert.Contains(t, err.Error(), "menu selection")
+		assert.Contains(t, err.Error(), "boom")
+	})
+}
+
+func TestMapServiceSelectionErr(t *testing.T) {
+	t.Run("cancelled passes through unchanged", func(t *testing.T) {
+		name, err := mapServiceSelectionErr(widgets.ErrCancelled)
+		assert.Empty(t, name)
+		assert.ErrorIs(t, err, widgets.ErrCancelled)
+	})
+
+	t.Run("other errors are wrapped", func(t *testing.T) {
+		name, err := mapServiceSelectionErr(errors.New("boom"))
+		require.Error(t, err)
+		assert.Empty(t, name)
+		assert.Contains(t, err.Error(), "service selection")
+		assert.Contains(t, err.Error(), "boom")
+	})
 }
 
 func TestDeployInfoRowsFrom(t *testing.T) {

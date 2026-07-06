@@ -1,4 +1,4 @@
-> Translated from: reference/docs/commands.md @ 5b9a43ac6896
+> Translated from: reference/docs/commands.md @ 21d9eda76548
 
 # Неинтерактивные команды документации
 
@@ -216,8 +216,23 @@ dwe docs cache clear
 
 `mmdc` (mermaid-cli) запускает headless Chromium через puppeteer. Два способа установки:
 
-- **npm (рекомендуется)** — `npm i -g @mermaid-js/mermaid-cli`. Puppeteer сам управляет загрузкой Chromium в `~/.cache/puppeteer/` и держит её в синхронизации с установленной версией mermaid-cli. Обновление — `npm update -g @mermaid-js/mermaid-cli`.
-- **Homebrew** — `brew install mermaid-cli`. Работает, но формула пиннит конкретную версию puppeteer, ожидающую точную сборку Chromium; если в `~/.cache/puppeteer/` нужной сборки ещё нет, первый рендер падает с `Could not find Chrome (ver. …)`. Лечение: либо один раз выполнить `npx puppeteer browsers install chrome@<version-from-error>`, либо переключиться на npm-установку выше, у которой такой проблемы пиннинга нет.
+- **npm (рекомендуется)** — `npm i -g @mermaid-js/mermaid-cli`. Puppeteer при установке скачивает собственный Chromium в `~/.cache/puppeteer/`. Обновление — `npm update -g @mermaid-js/mermaid-cli`.
+- **Homebrew** — `brew install mermaid-cli`. Формула пиннит конкретную версию puppeteer, ожидающую точную сборку Chromium.
+
+В любом случае встроенный puppeteer ждёт **конкретную** сборку Chromium. Если её нет в `~/.cache/puppeteer/` — очищенный кеш, установка с `--ignore-scripts` или апгрейд mermaid-cli, поднявший ожидаемую версию без перекачки браузера — каждый рендер падает с `Could not find Chrome (ver. …)`, даже если сам `mmdc` есть в `$PATH`. Кеш браузера может пропасть независимо от способа установки.
+
+Очевидное лечение даёт осечку сразу по двум причинам, и совет из самой ошибки (`npx puppeteer browsers install chrome-headless-shell`) попадает в обе:
+
+- **Не тот продукт** — mermaid-cli запускается с `headless: 'shell'`, поэтому ему нужна сборка **`chrome-headless-shell`**, а *не* полный `chrome`. В тексте ошибки написано «Chrome», хотя резолвится именно `chrome-headless-shell`, так что установка `chrome@<ver>` оставит рендер падающим с той же ошибкой.
+- **Не та версия** — голый `npx puppeteer browsers install …` запускает *свежий* standalone-puppeteer, который пинит **более новую** сборку Chromium, чем (обычно более старый) puppeteer-core внутри вашего mermaid-cli. mermaid-cli ищет строго ту сборку, что пинит сам, поэтому новая закачка лежит без дела, а рендер всё равно падает.
+
+Лечение (не зависит от способа установки) — поставить ровно тот продукт **и** версию, что названы в ошибке; всегда пиньте `@<version-from-error>`:
+
+```sh
+npx @puppeteer/browsers install chrome-headless-shell@<version-from-error>
+```
+
+В `dwe docs`, когда у диаграммы показано `📊 Diagram N/M — render failed`, поставьте на неё курсор и нажмите `E` — откроется полный текст ошибки mmdc (в нём указана недостающая версия Chrome для команды выше). Пиннинг версии обходит дрейф standalone-puppeteer; продукт `chrome-headless-shell` соответствует тому, что реально запускает `headless: 'shell'`.
 
 Проверьте установку одноразовым рендером вне DWE:
 

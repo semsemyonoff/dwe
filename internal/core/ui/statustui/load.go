@@ -19,6 +19,7 @@ import (
 type tabsLoadedMsg struct {
 	gen             uint64
 	tabs            []tab
+	anchors         [][]int // per-tab sub-table line offsets (aligned with tabs)
 	loadedAt        time.Time
 	healthIndicator string
 }
@@ -44,6 +45,35 @@ func joinNonEmpty(parts ...string) string {
 		return ""
 	}
 	return strings.Join(nonEmpty, "\n")
+}
+
+// sectionPart is one piece fed to joinSectionsWithAnchors: its text plus whether
+// its start is a jump anchor (a stacked sub-table heading) rather than incidental
+// content like a warning prefix.
+type sectionPart struct {
+	text   string
+	anchor bool
+}
+
+// joinSectionsWithAnchors joins non-empty parts with a single newline (like
+// joinNonEmpty) and returns the joined string plus the 0-based starting line
+// offset of every part flagged as an anchor. Anchors let ] / [ jump the viewport
+// between stacked sub-tables. Empty/whitespace-only parts are dropped and never
+// produce an anchor.
+func joinSectionsWithAnchors(parts []sectionPart) (content string, anchors []int) {
+	var kept []string
+	line := 0
+	for _, p := range parts {
+		if strings.TrimSpace(p.text) == "" {
+			continue
+		}
+		if p.anchor {
+			anchors = append(anchors, line)
+		}
+		kept = append(kept, p.text)
+		line += strings.Count(p.text, "\n") + 1
+	}
+	return strings.Join(kept, "\n"), anchors
 }
 
 // warningPrefix returns a styled warning line "⚠ N expression(s) failed"
@@ -90,10 +120,11 @@ func renderGitTab(ctx context.Context, d Deps) string {
 }
 
 // buildTabs executes all five Render* functions serially and returns the
-// composed tabs and a cached health indicator string. Each renderer returns
-// (body, errs) — body strings are joined with joinNonEmpty, errs trigger a
-// warning prefix.
-func buildTabs(ctx context.Context, d Deps) ([]tab, string) {
+// composed tabs, a per-tab list of sub-table line anchors (aligned with the
+// tabs slice; nil for tabs without jumpable sub-tables), and a cached health
+// indicator string. Each renderer returns (body, errs) — body strings are
+// joined with joinNonEmpty, errs trigger a warning prefix.
+func buildTabs(ctx context.Context, d Deps) ([]tab, [][]int, string) {
 	in := stack.StatusInput{
 		Cfg:        d.Cfg,
 		IsRunning:  d.IsRunning,
@@ -104,14 +135,21 @@ func buildTabs(ctx context.Context, d Deps) ([]tab, string) {
 		Tracked:    d.Tracked,
 	}
 
-	// Services (Apps + Tools + Infra combined)
+	// Services (Apps + Tools + Infra combined). Each sub-table starts an anchor so
+	// ] / [ hop between them; the warning prefix is not an anchor.
 	appsBody, appsErrs := stack.RenderApps(in)
 	toolsBody, toolsErrs := stack.RenderTools(in)
 	infraBody, infraErrs := stack.RenderInfra(in)
 	serviceWarnings := warningPrefix(len(appsErrs) + len(toolsErrs) + len(infraErrs))
-	services := joinNonEmpty(serviceWarnings, appsBody, toolsBody, infraBody)
+	services, serviceAnchors := joinSectionsWithAnchors([]sectionPart{
+		{serviceWarnings, false},
+		{appsBody, true},
+		{toolsBody, true},
+		{infraBody, true},
+	})
 	if services == "" {
 		services = "no services configured"
+		serviceAnchors = nil
 	}
 
 	// Deploy Status
@@ -151,7 +189,12 @@ func buildTabs(ctx context.Context, d Deps) ([]tab, string) {
 		{"Git", git},
 		{"Daemons", daemons},
 	}
-	return tabs, stack.HealthIndicator(in)
+	// Anchors align with tabs by index and are sized off len(tabs) so the two can
+	// never drift. Only Services (index 0) stacks multiple sub-tables today; the
+	// rest stay nil → jumpSection no-ops there.
+	anchors := make([][]int, len(tabs))
+	anchors[0] = serviceAnchors
+	return tabs, anchors, stack.HealthIndicator(in)
 }
 
 // buildTabsCmd returns a bubbletea command that calls buildTabs and emits
@@ -159,9 +202,10 @@ func buildTabs(ctx context.Context, d Deps) ([]tab, string) {
 // and returned in the message for stale-message filtering.
 func buildTabsCmd(ctx context.Context, d Deps, gen uint64) tea.Cmd {
 	return func() tea.Msg {
-		tabs, health := buildTabs(ctx, d)
+		tabs, anchors, health := buildTabs(ctx, d)
 		return tabsLoadedMsg{
 			gen:             gen,
+			anchors:         anchors,
 			tabs:            tabs,
 			loadedAt:        time.Now(),
 			healthIndicator: health,

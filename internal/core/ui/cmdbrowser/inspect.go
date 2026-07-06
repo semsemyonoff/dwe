@@ -2,6 +2,10 @@ package cmdbrowser
 
 import (
 	"charm.land/bubbles/v2/viewport"
+	"charm.land/lipgloss/v2"
+
+	"github.com/semsemyonoff/dwe/internal/core/ui/styles"
+	"github.com/semsemyonoff/dwe/internal/core/ui/tui"
 )
 
 // inspectState owns the viewport overlay shown while the user is inspecting a
@@ -33,4 +37,27 @@ func newInspectState(width, height int, render func(width int) string, idx int) 
 	}
 	vp.SetContent(content)
 	return &inspectState{vp: vp, inspectIdx: idx}
+}
+
+// overlay renders the inspect viewport as a centred modal [tui.Overlay]: the
+// viewport content wrapped in a rounded-border box (mirroring the framework
+// help modal) and flagged CapturesInput so the Frame routes navigation/enter/esc
+// while it is the top overlay (see routeWhileCapturing). The Frame dims the body
+// beneath and centres this box over it. Width/Height are measured from the
+// rendered box so centring uses the real post-border dimensions; the viewport is
+// pre-sized (browser.inspectViewportSize) to leave room for the border + padding
+// so the box never overflows the body region.
+func (s *inspectState) overlay() tui.Overlay {
+	box := lipgloss.NewStyle().
+		Border(lipgloss.RoundedBorder()).
+		BorderForeground(lipgloss.Color(styles.ColorBorder())).
+		Padding(0, 1).
+		Render(s.vp.View())
+	box = tui.OverlayScrollbar(box, s.vp.YOffset(), s.vp.TotalLineCount())
+	return tui.Overlay{
+		Content:       box,
+		Width:         lipgloss.Width(box),
+		Height:        lipgloss.Height(box),
+		CapturesInput: true,
+	}
 }

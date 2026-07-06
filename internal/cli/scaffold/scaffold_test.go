@@ -14,8 +14,6 @@ import (
 
 	"github.com/semsemyonoff/dwe/internal/cli/cmdctx"
 	"github.com/semsemyonoff/dwe/internal/core/ui/widgets"
-
-	huh "charm.land/huh/v2"
 )
 
 // runCmd executes the init command with the given args, capturing stdout.
@@ -450,8 +448,8 @@ func TestValidators(t *testing.T) {
 }
 
 // TestFormAbortWritesNothing verifies that a mid-form Ctrl-C
-// (huh.ErrUserAborted) returned by the form leaves the disk untouched and exits
-// cleanly.
+// (widgets.ErrCancelled) returned by the form leaves the disk untouched and
+// exits cleanly.
 func TestFormAbortWritesNothing(t *testing.T) {
 	dir := t.TempDir()
 
@@ -464,7 +462,7 @@ func TestFormAbortWritesNothing(t *testing.T) {
 	})
 	widgets.IsInteractiveFn = func(io.Reader) bool { return true }
 	runFormFn = func(context.Context, formInput, io.Reader, io.Writer) (formInput, error) {
-		return formInput{}, huh.ErrUserAborted
+		return formInput{}, widgets.ErrCancelled
 	}
 
 	flags := &cmdctx.RootFlags{Output: "text"}

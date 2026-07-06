@@ -89,6 +89,61 @@ func TestAcquireProjectLocksOrReport_HeldError(t *testing.T) {
 	}
 }
 
+func TestAcquireProjectLocksSilent_Success(t *testing.T) {
+	dir := t.TempDir()
+
+	release, err := AcquireProjectLocksSilent(dir)
+	if err != nil {
+		t.Fatalf("expected success, got err: %v", err)
+	}
+	if release == nil {
+		t.Fatal("expected non-nil release func")
+	}
+	release()
+}
+
+func TestAcquireProjectLocksSilent_HeldError(t *testing.T) {
+	dir := t.TempDir()
+
+	// Hold the deploy lock before calling AcquireProjectLocksSilent.
+	deployLockPath := lock.DeployLockPath(dir)
+	cleanup := acquireRawLock(t, deployLockPath)
+	defer cleanup()
+
+	release, err := AcquireProjectLocksSilent(dir)
+	if err == nil {
+		release()
+		t.Fatal("expected error, got nil")
+	}
+
+	// Error must be *lock.ProjectLockHeldError (exit code 2 preserved), returned
+	// unchanged — the silent variant prints nothing but keeps the typed error.
+	var phe *lock.ProjectLockHeldError
+	if !errors.As(err, &phe) {
+		t.Fatalf("err = %T(%v), want *lock.ProjectLockHeldError", err, err)
+	}
+	if phe.ExitCode() != 2 {
+		t.Errorf("ExitCode = %d, want 2", phe.ExitCode())
+	}
+}
+
+func TestAcquireProjectLocksSilent_GenericErrorWrapped(t *testing.T) {
+	// Null byte in the path forces a non-ProjectLockHeldError OS error.
+	dir := "/\x00invalid"
+
+	_, err := AcquireProjectLocksSilent(dir)
+	if err == nil {
+		t.Fatal("expected error, got nil")
+	}
+	var phe *lock.ProjectLockHeldError
+	if errors.As(err, &phe) {
+		t.Fatalf("expected generic-wrapped error, got *lock.ProjectLockHeldError: %v", err)
+	}
+	if !strings.HasPrefix(err.Error(), "acquiring project locks: ") {
+		t.Errorf("err = %q, want prefix %q", err.Error(), "acquiring project locks: ")
+	}
+}
+
 func TestAcquireProjectLocksOrReport_GenericErrorWrapped(t *testing.T) {
 	// Pass a path that cannot exist on any OS (null byte in name) to force an
 	// OS-level error that is NOT a *lock.ProjectLockHeldError.

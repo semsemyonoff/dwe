@@ -20,7 +20,6 @@ import (
 	"github.com/semsemyonoff/dwe/internal/shared/bridgeclient"
 	"github.com/semsemyonoff/dwe/internal/shared/render"
 
-	huh "charm.land/huh/v2"
 	"github.com/spf13/cobra"
 )
 
@@ -85,27 +84,12 @@ bridge.vars_writable allowlist; from the host, set is unrestricted.`,
 // (committed) or reopen (aborted) after an edit.
 func runVarsSet(cmd *cobra.Command, flags *cmdctx.RootFlags, path, rawValue string, haveValue bool) (committed bool, err error) {
 	// Path confinement: vars.* only. This is also the container trust boundary —
-	// a non-vars path could otherwise mutate formalized config.
+	// a non-vars path could otherwise mutate formalized config. The
+	// container-write allowlist gate lives at the shared write chokepoint
+	// (writeVarOverrideCore) so every entry point — this CLI path and the in-TUI
+	// edit overlay alike — is covered structurally, not per-caller.
 	if err := validateVarsSetPath(path); err != nil {
 		return false, err
-	}
-
-	// Load the current config: needed for the container-write allowlist and for
-	// the form's inspect-style per-layer info.
-	cfg, err := loadConfigForVars(flags)
-	if err != nil {
-		return false, err
-	}
-
-	// Container-write gate: from inside a container the target var must match a
-	// bridge.vars_writable pattern. From the host, set is unrestricted. The
-	// top-level command allowlist (bridgepolicy) is prefix-wide and cannot see
-	// the var arg, so this runtime check is the real read/write boundary.
-	if bridgeclient.InContainer() && !config.VarsWritableAllows(config.BridgeVarsWritable(cfg), path) {
-		return false, cmdctx.Err("vars_not_container_writable",
-			fmt.Sprintf("var %q is not writable from inside a container", path)).
-			WithDetail("var", path).
-			WithHint("add it to bridge.vars_writable, or run `dwe vars set` on the host")
 	}
 
 	// Resolve the value: positional arg, interactive form, or value-required.
@@ -181,15 +165,12 @@ func buildVarOverride(path string, value any) map[string]any {
 	return root
 }
 
-// writeVarOverride performs the locked write: acquire project locks (symmetry
-// with the services toggle, which shares this writer/file), capture pre-state
-// for rollback, apply the overlay onto the loaded local.yml node (preserving
-// comments), write atomically, and reload config. No preflight — this is not a
-// lifecycle/stack mutation. On any post-write failure the captured bytes are
-// restored.
+// writeVarOverride performs the locked write for the CLI path: it acquires
+// project locks via the PRINTING wrapper (lock-held diagnostics go to stderr so
+// JSON-mode stdout stays clean) and delegates to writeVarOverrideCore. Symmetry
+// with the services toggle, which shares this writer/file.
 func writeVarOverride(cmd *cobra.Command, flags *cmdctx.RootFlags, path string, value any) (*config.DweConfig, error) {
 	baseDir := flags.ProjectRoot()
-	localPath := filepath.Join(baseDir, "workspace", "local.yml")
 
 	// Lock-held diagnostics go to stderr so JSON-mode stdout stays clean.
 	w := render.NewWriter(cmd.ErrOrStderr())
@@ -198,6 +179,53 @@ func writeVarOverride(cmd *cobra.Command, flags *cmdctx.RootFlags, path string, 
 		return nil, err
 	}
 	defer release()
+
+	return writeVarOverrideCore(flags, path, value)
+}
+
+// writeVarOverrideSilent performs the same locked write as writeVarOverride but
+// via the SILENT lock wrapper: nothing is printed, and a held-lock error is
+// returned unchanged for the caller to surface itself. It is the in-TUI edit
+// path — the alt-screen is live, so stderr diagnostics would corrupt the frame;
+// the caller renders the returned error as a status flash instead.
+func writeVarOverrideSilent(flags *cmdctx.RootFlags, path string, value any) (*config.DweConfig, error) {
+	baseDir := flags.ProjectRoot()
+
+	release, err := cmdctx.AcquireProjectLocksSilent(baseDir)
+	if err != nil {
+		return nil, err
+	}
+	defer release()
+
+	return writeVarOverrideCore(flags, path, value)
+}
+
+// writeVarOverrideCore is the shared, lock-agnostic write body: capture
+// pre-state for rollback, apply the overlay onto the loaded local.yml node
+// (preserving comments), write atomically, and reload config. No preflight —
+// this is not a lifecycle/stack mutation. On any post-write failure the captured
+// bytes are restored. Callers MUST already hold the project locks.
+func writeVarOverrideCore(flags *cmdctx.RootFlags, path string, value any) (*config.DweConfig, error) {
+	// Container-write gate: from inside a container the target var must match a
+	// bridge.vars_writable pattern (host writes are unrestricted). Enforced here,
+	// at the single write chokepoint, so both the CLI `set` path and the in-TUI
+	// edit overlay are covered regardless of entry point. The top-level command
+	// allowlist (bridgepolicy) is prefix-wide and cannot see the var arg, so this
+	// runtime check is the real read/write boundary.
+	if bridgeclient.InContainer() {
+		cfg, err := loadConfigForVars(flags)
+		if err != nil {
+			return nil, err
+		}
+		if !config.VarsWritableAllows(config.BridgeVarsWritable(cfg), path) {
+			return nil, cmdctx.Err("vars_not_container_writable",
+				fmt.Sprintf("var %q is not writable from inside a container", path)).
+				WithDetail("var", path).
+				WithHint("add it to bridge.vars_writable, or run `dwe vars set` on the host")
+		}
+	}
+
+	localPath := filepath.Join(flags.ProjectRoot(), "workspace", "local.yml")
 
 	captured, err := captureLocalState(localPath)
 	if err != nil {
@@ -225,23 +253,38 @@ func writeVarOverride(cmd *cobra.Command, flags *cmdctx.RootFlags, path string, 
 	return newCfg, nil
 }
 
-// promptForVarValue opens the single-input huh form for a no-value set,
-// carrying inspect-style per-layer info as the field description. It returns the
-// submitted value; ok is false when the user aborts (ErrUserAborted) — the
-// caller treats that as a clean no-op.
-func promptForVarValue(cmd *cobra.Command, flags *cmdctx.RootFlags, path string) (value string, ok bool, err error) {
-	desc := varSetFormDescription(flags, path)
+// buildVarSetFields builds the single-input field slice for a var `set` form,
+// shared by the standalone `dwe vars set <path>` no-value prompt (via runAsk)
+// and the in-TUI vars-browser edit overlay (via ask.Build). The field carries
+// the inspect-style per-layer description and an inline CoerceScalar validator
+// so an invalid scalar (a map / sequence, or anything CoerceScalar rejects) is
+// caught IN-FORM rather than only after submit — an improvement over the old
+// post-submit-only coercion. The caller's post-submit CoerceScalar remains the
+// authoritative parse.
+func buildVarSetFields(flags *cmdctx.RootFlags, path string) []ask.Field {
 	disp := uirender.DisplayVarPath(path)
-	fields := []ask.Field{{
+	return []ask.Field{{
 		Key:         "value",
 		Title:       "New value for " + disp,
-		Description: desc,
+		Description: varSetFormDescription(flags, path),
 		Kind:        ask.FieldInput,
+		Validate: func(s string) error {
+			_, err := varsusage.CoerceScalar(s)
+			return err
+		},
 	}}
-	res, ferr := runAsk(context.Background(), "dwe vars › set "+disp, fields,
+}
+
+// promptForVarValue opens the single-input huh form for a no-value set,
+// carrying inspect-style per-layer info as the field description. It returns the
+// submitted value; ok is false when the user aborts (widgets.ErrCancelled) — the
+// caller treats that as a clean no-op.
+func promptForVarValue(cmd *cobra.Command, flags *cmdctx.RootFlags, path string) (value string, ok bool, err error) {
+	disp := uirender.DisplayVarPath(path)
+	res, ferr := runAsk(context.Background(), "dwe vars › set "+disp, buildVarSetFields(flags, path),
 		ask.RunOptions{Input: cmd.InOrStdin(), Output: cmd.OutOrStdout()})
 	if ferr != nil {
-		if errors.Is(ferr, huh.ErrUserAborted) {
+		if errors.Is(ferr, widgets.ErrCancelled) {
 			return "", false, nil
 		}
 		return "", false, ferr

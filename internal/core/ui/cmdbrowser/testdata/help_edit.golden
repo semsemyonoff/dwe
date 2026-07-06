@@ -1,0 +1,24 @@
+╭───────────────────────────────────╮
+│ Help                              │
+│                                   │
+│ Navigation                        │
+│   tab        Focus next panel     │
+│   shift+tab  Focus previous panel │
+│   up, k      Move up              │
+│   down, j    Move down            │
+│   left, h    Move left            │
+│   right, l   Move right           │
+│   g, home    Go to top            │
+│   G, end     Go to bottom         │
+│   pgup, b    Page up              │
+│   pgdown, f  Page down            │
+│                                   │
+│ General                           │
+│   ?          Toggle help          │
+│   q, ctrl+c  Quit                 │
+│                                   │
+│ Actions                           │
+│   enter      Edit                 │
+│   /          Filter               │
+│   i          Inspect              │
+╰───────────────────────────────────╯

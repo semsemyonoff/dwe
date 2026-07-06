@@ -2,16 +2,20 @@ package vars
 
 import (
 	"context"
+	"errors"
+	"fmt"
 	"io"
+	"os"
+	"path/filepath"
 	"strings"
+	"syscall"
 	"testing"
 
 	"github.com/semsemyonoff/dwe/internal/cli/cmdctx"
 	"github.com/semsemyonoff/dwe/internal/core/ui/ask"
 	"github.com/semsemyonoff/dwe/internal/core/ui/cmdbrowser"
 	"github.com/semsemyonoff/dwe/internal/core/ui/widgets"
-
-	huh "charm.land/huh/v2"
+	"github.com/semsemyonoff/dwe/internal/shared/lock"
 )
 
 // TestBuildVarsBrowserItems asserts vars leaves map onto cmdbrowser.Items with
@@ -26,7 +30,7 @@ func TestBuildVarsBrowserItems(t *testing.T) {
 	if err != nil {
 		t.Fatalf("load config: %v", err)
 	}
-	items, leaves := buildVarsBrowserItems(cfg, flags)
+	items, leaves, _ := buildVarsBrowserItems(cfg, flags)
 
 	if len(items) != len(leaves) {
 		t.Fatalf("items (%d) and leaves (%d) must be parallel", len(items), len(leaves))
@@ -66,6 +70,221 @@ func TestBuildVarsBrowserItems(t *testing.T) {
 	// vars.app.name comes only from workspace.yml → "default" badge.
 	if name := byID["app.name"]; name.Type != "default" {
 		t.Errorf("app.name badge: want default, got %q", name.Type)
+	}
+}
+
+// leafIdx returns the index of a leaf path within the parallel leaves slice.
+func leafIdx(t *testing.T, leaves []string, path string) int {
+	t.Helper()
+	for i, l := range leaves {
+		if l == path {
+			return i
+		}
+	}
+	t.Fatalf("leaf %q not found in %v", path, leaves)
+	return -1
+}
+
+// holdProjectLock takes a raw exclusive flock on the deploy lock file (with the
+// current PID written) so AcquireProjectLocks sees the project as held. Returns
+// a cleanup func. Mirrors cmdctx/locks_test.go's acquireRawLock.
+func holdProjectLock(t *testing.T, baseDir string) func() {
+	t.Helper()
+	path := lock.DeployLockPath(baseDir)
+	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+		t.Fatalf("mkdir lock dir: %v", err)
+	}
+	f, err := os.OpenFile(path, os.O_CREATE|os.O_RDWR, 0o644)
+	if err != nil {
+		t.Fatalf("open lock file: %v", err)
+	}
+	if err := syscall.Flock(int(f.Fd()), syscall.LOCK_EX|syscall.LOCK_NB); err != nil {
+		_ = f.Close()
+		t.Fatalf("flock: %v", err)
+	}
+	_, _ = fmt.Fprintf(f, "%d\n", os.Getpid())
+	return func() {
+		_ = syscall.Flock(int(f.Fd()), syscall.LOCK_UN)
+		_ = f.Close()
+	}
+}
+
+// TestVarsEditSpec_CommitUpdatesRowAndBadge exercises the EditSpec.Commit closure
+// end-to-end: coercing the submitted value, writing it through the silent lock
+// path, refreshing the row (value + layer badge), invalidating the inspect cache,
+// and returning a ✓ flash.
+func TestVarsEditSpec_CommitUpdatesRowAndBadge(t *testing.T) {
+	cfgPath, root := writeVarsFixture(t)
+	flags := &cmdctx.RootFlags{ConfigPath: cfgPath, Root: root}
+
+	cfg, err := loadConfigForVars(flags)
+	if err != nil {
+		t.Fatalf("load config: %v", err)
+	}
+	items, leaves, inspectCache := buildVarsBrowserItems(cfg, flags)
+
+	// vars.app.name comes only from workspace.yml → badge "default" initially.
+	idx := leafIdx(t, leaves, "vars.app.name")
+	if items[idx].Type != "default" {
+		t.Fatalf("pre-edit app.name badge: want default, got %q", items[idx].Type)
+	}
+	// Pre-populate the inspect cache for this path so we can assert invalidation.
+	_ = items[idx].Inspect(80)
+	if _, ok := inspectCache["vars.app.name"]; !ok {
+		t.Fatal("inspect cache should be populated after Inspect()")
+	}
+
+	spec := newVarsEditSpec(flags, leaves, inspectCache)
+	res := ask.NewResultForTest(map[string]any{"value": "renamed"})
+	outcome, err := spec.Commit(idx, res)
+	if err != nil {
+		t.Fatalf("Commit: %v", err)
+	}
+
+	if outcome.Item.Description != "renamed" {
+		t.Errorf("refreshed description: want renamed, got %q", outcome.Item.Description)
+	}
+	// The write lands in local.yml → badge flips default → local.
+	if outcome.Item.Type != "local" {
+		t.Errorf("refreshed badge: want local, got %q", outcome.Item.Type)
+	}
+	if !strings.Contains(outcome.Flash, "app.name = renamed") {
+		t.Errorf("flash %q should contain the path=value confirmation", outcome.Flash)
+	}
+	if _, ok := inspectCache["vars.app.name"]; ok {
+		t.Error("Commit must invalidate the edited leaf's inspect cache entry")
+	}
+	// The write is persisted.
+	if got, ok := reloadVar(t, cfgPath, "vars.app.name"); !ok || got != "renamed" {
+		t.Errorf("edit not written: got %v (ok=%v)", got, ok)
+	}
+}
+
+// TestVarsEditSpec_CommitLockHeld asserts a held project lock surfaces as a
+// returned error (the flash path) and leaves local.yml untouched.
+func TestVarsEditSpec_CommitLockHeld(t *testing.T) {
+	cfgPath, root := writeVarsFixture(t)
+	flags := &cmdctx.RootFlags{ConfigPath: cfgPath, Root: root}
+
+	before := localYAML(t, root)
+
+	cfg, err := loadConfigForVars(flags)
+	if err != nil {
+		t.Fatalf("load config: %v", err)
+	}
+	_, leaves, inspectCache := buildVarsBrowserItems(cfg, flags)
+	spec := newVarsEditSpec(flags, leaves, inspectCache)
+	idx := leafIdx(t, leaves, "vars.db.host")
+
+	cleanup := holdProjectLock(t, root)
+	defer cleanup()
+
+	res := ask.NewResultForTest(map[string]any{"value": "db.internal"})
+	_, err = spec.Commit(idx, res)
+	if err == nil {
+		t.Fatal("expected lock-held error, got nil")
+	}
+	var phe *lock.ProjectLockHeldError
+	if !errors.As(err, &phe) {
+		t.Fatalf("err = %T(%v), want *lock.ProjectLockHeldError", err, err)
+	}
+	// local.yml must be untouched — the write never ran.
+	if after := localYAML(t, root); after != before {
+		t.Errorf("local.yml changed under a held lock\nbefore:\n%s\nafter:\n%s", before, after)
+	}
+}
+
+// TestVarsEditSpec_CommitInvalidScalar asserts a value CoerceScalar rejects (a
+// map) is returned as an error without writing.
+func TestVarsEditSpec_CommitInvalidScalar(t *testing.T) {
+	cfgPath, root := writeVarsFixture(t)
+	flags := &cmdctx.RootFlags{ConfigPath: cfgPath, Root: root}
+
+	before := localYAML(t, root)
+	cfg, err := loadConfigForVars(flags)
+	if err != nil {
+		t.Fatalf("load config: %v", err)
+	}
+	_, leaves, inspectCache := buildVarsBrowserItems(cfg, flags)
+	spec := newVarsEditSpec(flags, leaves, inspectCache)
+	idx := leafIdx(t, leaves, "vars.db.host")
+
+	res := ask.NewResultForTest(map[string]any{"value": "{a: b}"})
+	if _, err := spec.Commit(idx, res); err == nil {
+		t.Fatal("expected coercion error for a map value")
+	}
+	if after := localYAML(t, root); after != before {
+		t.Errorf("local.yml changed on an invalid scalar\nbefore:\n%s\nafter:\n%s", before, after)
+	}
+}
+
+// TestVarsEditSpec_IndexGuards asserts both closures reject an out-of-range idx.
+func TestVarsEditSpec_IndexGuards(t *testing.T) {
+	cfgPath, root := writeVarsFixture(t)
+	flags := &cmdctx.RootFlags{ConfigPath: cfgPath, Root: root}
+
+	cfg, err := loadConfigForVars(flags)
+	if err != nil {
+		t.Fatalf("load config: %v", err)
+	}
+	_, leaves, inspectCache := buildVarsBrowserItems(cfg, flags)
+	spec := newVarsEditSpec(flags, leaves, inspectCache)
+
+	for _, idx := range []int{-1, len(leaves)} {
+		if _, err := spec.BuildForm(idx); err == nil {
+			t.Errorf("BuildForm(%d): expected out-of-range error", idx)
+		}
+		res := ask.NewResultForTest(map[string]any{"value": "x"})
+		if _, err := spec.Commit(idx, res); err == nil {
+			t.Errorf("Commit(%d): expected out-of-range error", idx)
+		}
+	}
+}
+
+// TestVarsEditSpec_BuildFormFields asserts BuildForm produces a runnable form
+// and that the shared field builder carries the inspect description and the
+// inline CoerceScalar validator.
+func TestVarsEditSpec_BuildFormFields(t *testing.T) {
+	cfgPath, root := writeVarsFixture(t)
+	flags := &cmdctx.RootFlags{ConfigPath: cfgPath, Root: root}
+
+	cfg, err := loadConfigForVars(flags)
+	if err != nil {
+		t.Fatalf("load config: %v", err)
+	}
+	_, leaves, inspectCache := buildVarsBrowserItems(cfg, flags)
+	spec := newVarsEditSpec(flags, leaves, inspectCache)
+	idx := leafIdx(t, leaves, "vars.db.host")
+
+	form, err := spec.BuildForm(idx)
+	if err != nil {
+		t.Fatalf("BuildForm: %v", err)
+	}
+	if form == nil || form.Huh() == nil {
+		t.Fatal("BuildForm returned a nil form / huh model")
+	}
+
+	// The shared field builder carries the per-layer description and an inline
+	// validator that rejects a map but accepts a plain scalar.
+	fields := buildVarSetFields(flags, "vars.db.host")
+	if len(fields) != 1 {
+		t.Fatalf("want 1 field, got %d", len(fields))
+	}
+	f := fields[0]
+	if f.Kind != ask.FieldInput {
+		t.Errorf("field kind: want FieldInput, got %v", f.Kind)
+	}
+	if !strings.Contains(f.Description, "current:") {
+		t.Errorf("field description should carry per-layer info, got %q", f.Description)
+	}
+	if f.Validate == nil {
+		t.Fatal("field must carry an inline validator")
+	}
+	if err := f.Validate("{a: b}"); err == nil {
+		t.Error("validator should reject a map value")
+	}
+	if err := f.Validate("plain"); err != nil {
+		t.Errorf("validator should accept a plain scalar, got %v", err)
 	}
 }
 
@@ -156,7 +375,7 @@ func TestVarsBrowser_ClosesAfterEdit(t *testing.T) {
 }
 
 // TestVarsBrowser_ReopensAfterAbortedEdit asserts that aborting the edit form
-// (ErrUserAborted, committed=false) reopens the browser rather than closing it.
+// (widgets.ErrCancelled, committed=false) reopens the browser rather than closing it.
 func TestVarsBrowser_ReopensAfterAbortedEdit(t *testing.T) {
 	cfgPath, root := writeVarsFixture(t)
 	flags := &cmdctx.RootFlags{ConfigPath: cfgPath, Root: root}
@@ -189,7 +408,7 @@ func TestVarsBrowser_ReopensAfterAbortedEdit(t *testing.T) {
 		return cmdbrowser.Result{}, widgets.ErrCancelled
 	}
 	runAsk = func(_ context.Context, _ string, _ []ask.Field, _ ask.RunOptions) (ask.Result, error) {
-		return ask.Result{}, huh.ErrUserAborted // abort the form → no write
+		return ask.Result{}, widgets.ErrCancelled // abort the form → no write
 	}
 
 	if _, _, err := runVarsCmd(t, flags); err != nil {

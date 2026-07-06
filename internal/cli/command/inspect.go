@@ -237,7 +237,7 @@ func printInspectAt(w io.Writer, def *usercommands.CommandDef, cfg *config.DweCo
 		_, _ = fmt.Fprintln(w, render.Subheader("  "+title))
 	}
 
-	_, _ = fmt.Fprintln(w, render.SectionTitle(def.ID))
+	_, _ = fmt.Fprintln(w, render.SectionTitleAt(def.ID, maxWidth))
 	def2("type", string(def.Type), 2)
 	if def.DerivedFromDaemon != "" {
 		def2("derived from", "daemon "+def.DerivedFromDaemon, 2)
@@ -356,8 +356,6 @@ func printInspectAt(w io.Writer, def *usercommands.CommandDef, cfg *config.DweCo
 	inspectContextSection(def2, sub, def)
 	inspectEnvSection(def2, sub, def)
 	inspectFilesSection(def2, sub, def)
-
-	_, _ = fmt.Fprintln(w, render.SectionTitle(""))
 }
 
 // inspectDef2 writes a name/value definition line at the given indent.

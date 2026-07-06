@@ -20,8 +20,6 @@ import (
 	"github.com/semsemyonoff/dwe/internal/core/usercommands/resolve"
 	"github.com/semsemyonoff/dwe/internal/shared/i18n"
 	"github.com/semsemyonoff/dwe/internal/shared/tpl"
-
-	huh "charm.land/huh/v2"
 )
 
 // runCommandByID is the single execution path for both `dwe commands <id>`
@@ -88,85 +86,46 @@ func runCommandByID(
 	skipPrompts := opts.Yes || nonInteractiveEnv()
 	canPromptHuh := widgets.IsInteractiveFn(stdin) && !skipPrompts
 
-	prefilled := resolve.ParamDefaults(def.Params, provided, cfg)
-
-	// Resolve options for all select/multiselect params and validate membership
-	// (--set must be in options if non-empty; defaults must be in non-empty options).
-	resolvedOpts := make(map[string][]model.OptionItem)
-	for name, p := range def.Params {
-		if p.Options != nil && (p.EffectiveWidget() == model.WidgetSelect || p.EffectiveWidget() == model.WidgetMultiselect) {
-			items, rerr := resolve.Options(p.Options, cfg.Raw)
-			if rerr != nil {
-				return fmt.Errorf("resolving options for param %q: %w", name, rerr)
-			}
-			resolvedOpts[name] = items
-
-			// Membership-check rule:
-			// - --set name=value: if options non-empty AND value ∉ options → error.
-			//   Empty options + --set → bypass, trust user.
-			// - default_from/default: if options non-empty AND value ∉ options → error.
-			//   Empty options + default/default_from → error (config bug).
-			if len(items) > 0 {
-				value := prefilled[name]
-				if value != "" {
-					// For multiselect, validate each selected item individually.
-					candidates := []string{value}
-					if p.EffectiveWidget() == model.WidgetMultiselect {
-						sep := p.Separator
-						if sep == "" {
-							sep = " "
-						}
-						candidates = strings.Split(value, sep)
-					}
-					optionSet := make(map[string]bool, len(items))
-					for _, opt := range items {
-						optionSet[opt.Value] = true
-					}
-					for _, candidate := range candidates {
-						if !optionSet[candidate] {
-							if provided[name] != "" {
-								// --set value not in options.
-								return fmt.Errorf("param %q: value %q not in options (valid: %s)", name, candidate, joinOptionValues(items))
-							}
-							// default_from or default not in options.
-							return fmt.Errorf("param %q: default value %q not in options", name, candidate)
-						}
-					}
-				}
-			} else if prefilled[name] != "" && provided[name] == "" {
-				// Empty options but a default/default_from exists → error.
-				if p.DefaultFrom != "" {
-					return fmt.Errorf("options for param %q resolved empty, but has default_from %q", name, p.DefaultFrom)
-				} else if p.Default != "" {
-					return fmt.Errorf("options for param %q resolved empty, but has default %q", name, p.Default)
-				}
-			}
-		}
+	// Resolve param defaults + validate select/multiselect membership. This runs
+	// UNCONDITIONALLY even when PrefilledParams is supplied by the in-TUI overlay:
+	// the membership validation is idempotent and cheap, and it is the same
+	// safety net the browser closure already ran at BuildForm time.
+	prefilled, resolvedOpts, err := prepareParams(cfg, def, provided)
+	if err != nil {
+		return err
 	}
 
 	// Skip the form when every required param already has a value (from --set
 	// or a declared Default / DefaultFrom) — pressing Enter on a form full of
 	// pre-filled values is just friction. The TUI exposes the EditParams key
 	// for the "I want to tweak the defaults" case, which sets ForceParamForm.
-	showForm := canPromptHuh && len(def.Params) > 0 &&
+	//
+	// PrefilledParams (harvested by the in-TUI param overlay) short-circuits the
+	// form entirely: the overlay already collected every value, so buildAskFields
+	// / runAsk are skipped and the harvested map flows straight through. Standalone
+	// `dwe commands <id>`, --set, non-interactive, and JSON paths never set it.
+	showForm := opts.PrefilledParams == nil && canPromptHuh && len(def.Params) > 0 &&
 		(opts.ForceParamForm || !allRequiredSatisfied(def.Params, prefilled))
 
-	// Build the form values: either via huh form (canPromptHuh) or from prefilled.
+	// Build the form values: harvested-from-TUI, via huh form, or from prefilled.
 	values := prefilled
-	if showForm {
+	switch {
+	case opts.PrefilledParams != nil:
+		values = opts.PrefilledParams
+	case showForm:
 		fields, ferr := buildAskFields(def, prefilled, provided, opts.Translator, opts.Locale, resolvedOpts)
 		if ferr != nil {
 			return ferr
 		}
 		res, ferr := runAsk(ctx, "dwe commands › "+def.ID, fields, ask.RunOptions{Input: stdin, Output: stdout})
 		if ferr != nil {
-			if errors.Is(ferr, huh.ErrUserAborted) {
+			if errors.Is(ferr, widgets.ErrCancelled) {
 				return nil
 			}
 			return ferr
 		}
 		values = mergeAnswers(res, def.Params, prefilled)
-	} else if !canPromptHuh {
+	case !canPromptHuh:
 		// Non-interactive (pipe or skip-prompts): pre-flight missing-required check
 		// so the user sees a clear error instead of the runtime "param required" surfaced
 		// later by resolve.Params.
@@ -236,6 +195,74 @@ func runCommandByID(
 		return fmt.Errorf("running command %q: %w", id, err)
 	}
 	return nil
+}
+
+// prepareParams resolves a command's param defaults and validates every
+// select/multiselect param's membership. `provided` is the parsed `--set`
+// map (from parseSetFlags). It returns the prefilled value map (provided ∪
+// DefaultFrom ∪ Default) and the resolved options per select/multiselect param.
+//
+// Extracted from runCommandByID so the in-TUI param-form overlay closure
+// (makeBrowserSelector's BuildForm/Harvest) can reuse the exact same
+// prefilled + membership validation without duplicating the rules.
+func prepareParams(cfg *config.DweConfig, def *usercommands.CommandDef, provided map[string]string) (map[string]string, map[string][]model.OptionItem, error) {
+	prefilled := resolve.ParamDefaults(def.Params, provided, cfg)
+
+	// Resolve options for all select/multiselect params and validate membership
+	// (--set must be in options if non-empty; defaults must be in non-empty options).
+	resolvedOpts := make(map[string][]model.OptionItem)
+	for name, p := range def.Params {
+		if p.Options != nil && (p.EffectiveWidget() == model.WidgetSelect || p.EffectiveWidget() == model.WidgetMultiselect) {
+			items, rerr := resolve.Options(p.Options, cfg.Raw)
+			if rerr != nil {
+				return nil, nil, fmt.Errorf("resolving options for param %q: %w", name, rerr)
+			}
+			resolvedOpts[name] = items
+
+			// Membership-check rule:
+			// - --set name=value: if options non-empty AND value ∉ options → error.
+			//   Empty options + --set → bypass, trust user.
+			// - default_from/default: if options non-empty AND value ∉ options → error.
+			//   Empty options + default/default_from → error (config bug).
+			if len(items) > 0 {
+				value := prefilled[name]
+				if value != "" {
+					// For multiselect, validate each selected item individually.
+					candidates := []string{value}
+					if p.EffectiveWidget() == model.WidgetMultiselect {
+						sep := p.Separator
+						if sep == "" {
+							sep = " "
+						}
+						candidates = strings.Split(value, sep)
+					}
+					optionSet := make(map[string]bool, len(items))
+					for _, opt := range items {
+						optionSet[opt.Value] = true
+					}
+					for _, candidate := range candidates {
+						if !optionSet[candidate] {
+							if provided[name] != "" {
+								// --set value not in options.
+								return nil, nil, fmt.Errorf("param %q: value %q not in options (valid: %s)", name, candidate, joinOptionValues(items))
+							}
+							// default_from or default not in options.
+							return nil, nil, fmt.Errorf("param %q: default value %q not in options", name, candidate)
+						}
+					}
+				}
+			} else if prefilled[name] != "" && provided[name] == "" {
+				// Empty options but a default/default_from exists → error.
+				if p.DefaultFrom != "" {
+					return nil, nil, fmt.Errorf("options for param %q resolved empty, but has default_from %q", name, p.DefaultFrom)
+				} else if p.Default != "" {
+					return nil, nil, fmt.Errorf("options for param %q resolved empty, but has default %q", name, p.Default)
+				}
+			}
+		}
+	}
+
+	return prefilled, resolvedOpts, nil
 }
 
 // printRunHeader writes a one-line banner identifying the command about to

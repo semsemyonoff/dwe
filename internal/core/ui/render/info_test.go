@@ -238,6 +238,28 @@ func TestRenderSectionTitle_Empty(t *testing.T) {
 	}
 }
 
+// TestSectionTitleAt_BarMatchesWidth guards the inspect-overlay pathway: the
+// title bar must be drawn at the requested sub-region width, not the terminal
+// width. Without this the bar overflowed past the narrower viewport content and
+// forced an unwanted horizontal scroll in the command/var inspect overlays.
+func TestSectionTitleAt_BarMatchesWidth(t *testing.T) {
+	resetStyles()
+	out := SectionTitleAt("My Section", 40)
+	if w := utf8.RuneCountInString(stripANSI(out)); w != 40 {
+		t.Errorf("bar width = %d, want 40: %q", w, stripANSI(out))
+	}
+	// Empty-title separator must honor the width too.
+	sep := SectionTitleAt("", 40)
+	if w := utf8.RuneCountInString(stripANSI(sep)); w != 40 {
+		t.Errorf("separator width = %d, want 40", w)
+	}
+	// Width is capped at 100 so the bar lines up with fixed-width content.
+	capped := SectionTitleAt("x", 200)
+	if w := utf8.RuneCountInString(stripANSI(capped)); w != 100 {
+		t.Errorf("capped width = %d, want 100", w)
+	}
+}
+
 func TestRenderSubheader_ReturnsNonEmpty(t *testing.T) {
 	resetStyles()
 	out := Subheader("sub")
