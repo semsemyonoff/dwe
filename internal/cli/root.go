@@ -29,6 +29,7 @@ import (
 	cmdShell "github.com/semsemyonoff/dwe/internal/cli/shell"
 	cmdSnapshot "github.com/semsemyonoff/dwe/internal/cli/snapshot"
 	cmdStatus "github.com/semsemyonoff/dwe/internal/cli/status"
+	cmdTest "github.com/semsemyonoff/dwe/internal/cli/test"
 	cmdValidate "github.com/semsemyonoff/dwe/internal/cli/validate"
 	cmdVars "github.com/semsemyonoff/dwe/internal/cli/vars"
 	cmdVersion "github.com/semsemyonoff/dwe/internal/cli/version"
@@ -102,6 +103,7 @@ func NewRootCmdWithFlags() (*cobra.Command, *cmdctx.RootFlags) {
 	root.AddCommand(cmdDeploy.NewCmd(groupPipelines, flags))
 	root.AddCommand(cmdLifecycle.NewResetCmd(groupPipelines, flags))
 	root.AddCommand(cmdSnapshot.NewCmd(groupPipelines, flags))
+	root.AddCommand(cmdTest.NewCmd(groupPipelines, flags))
 
 	// Advanced group: low-level and diagnostic commands.
 	root.AddCommand(cmdCommand.NewCmd(groupAdvanced, flags))

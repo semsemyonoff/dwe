@@ -590,11 +590,11 @@ Key design decisions (all from the spec):
 - Modify: `internal/shared/i18n/translations/en.yml`
 - Modify: `internal/shared/i18n/known_keys.go` (KnownUIKeys)
 
-- [ ] implement `NewCmd(groupID string, flags *cmdctx.RootFlags) *cobra.Command`
+- [x] implement `NewCmd(groupID string, flags *cmdctx.RootFlags) *cobra.Command`
       (`dwe test`) with subcommands `run` and `list`; register in `root.go` under
       `groupPipelines`; `test` requires a project (NOT added to
       `allowedWithoutProject`)
-- [ ] implement `test run [scenario...]`: `envtest.ScrubComposeEnv()` FIRST (before
+- [x] implement `test run [scenario...]`: `envtest.ScrubComposeEnv()` FIRST (before
       flock/goroutines/UI/subprocesses — spec §3); flags `--keep`,
       `--timeout <dur>`; no args → all scenarios sorted, names validated against
       `ListScenarios` (unknown → prep error); sequential `RunScenario` per name
@@ -602,31 +602,59 @@ Key design decisions (all from the spec):
       torn down, rest skipped); summary line
       `N passed, M failed (name: step "…")`; `--keep` prints project name, copy
       path, cleanup hint
-- [ ] implement exit-code mapping via typed errors with `ExitCode() int`: any
+- [x] implement exit-code mapping via typed errors with `ExitCode() int`: any
       prep `error` scenario → 2, else any `failed` → 1, else 0 (fang handler
       contract; failure output already rendered → the sentinel error renders NO
       text, following `deployCancelledError`'s pattern, so JSON stdout stays the
       sole payload and no stray `Error:` line hits stderr)
-- [ ] implement JSON mode: `{scenarios: [{name, status, failed_step, duration,
+- [x] implement JSON mode: `{scenarios: [{name, status, failed_step, duration,
       report_dir}], summary}` via `cmdctx.WriteData`; live pipeline output and
       summary silenced in JSON mode (usual contract) — the CLI injects the
       silent reporter/screen-writer factory into `RunRequest` (file log still
       written; deploy-subprocess output goes to the log regardless); `--pretty`
       supported; add a test asserting JSON stdout contains ONLY the payload
-- [ ] implement `test list`: scenario name + `description:` (verbatim, spec §8)
+- [x] implement `test list`: scenario name + `description:` (verbatim, spec §8)
       via `LoadScenario` per name; text table + JSON list via `cmdctx.WriteData`
-- [ ] add new user-visible UI strings (summary labels, keep-hint, list headers) to
+- [x] add new user-visible UI strings (summary labels, keep-hint, list headers) to
       `translations/en.yml` + `KnownUIKeys` (coverage test enforces sync); thread
       `flags.I18n`
-- [ ] extend `bridgepolicy_test.go`: `dwe test …` is blocked in container context
+- [x] extend `bridgepolicy_test.go`: `dwe test …` is blocked in container context
       (`DWE_INVOKED_FROM=container`) — pins the deliberate absence from
       `bridgeAllowedTopLevel` (zero production change)
-- [ ] write CLI tests over a stubbed runner seam: exit codes 0/1/2; scenario-name
+- [x] write CLI tests over a stubbed runner seam: exit codes 0/1/2; scenario-name
       arg validation; `--timeout` parse error; summary golden; JSON shape for run
       + list; `test list` with no tests dir (empty, no error); scrub called before
       runner
-- [ ] run `go test ./internal/cli/... ./internal/core/workflow/envtest/...` — must
+- [x] run `go test ./internal/cli/... ./internal/core/workflow/envtest/...` — must
       pass before task 9
+
+  ⚠️ Implementation notes (deviations/clarifications from the plan text above):
+  - The `translations/en.yml` + `KnownUIKeys` system is verified (by reading
+    `internal/shared/i18n/translator.go` and the existing `en.yml`) to be scoped
+    entirely to `ui.*` TUI/docs-browser strings and the `i18n.Translator`
+    interface consumed by user-command definitions — it is not a general
+    per-command string table, and every other plain CLI subcommand (deploy,
+    status, logs, service list) formats its own text directly. `dwe test run`/
+    `dwe test list` introduce no new TUI surface, so no `ui.*` key was added;
+    `flags.I18n`/`flags.Locale` ARE threaded into `envtest.RunRequest` so the
+    scenario's own `type: command` steps keep the display-string contract.
+  - Exit code 2 for "unknown scenario name" and other early prep failures is
+    implemented by adding `"unknown_scenario"` to `cmdctx.ExitCodeFor`'s
+    usage-class switch (`internal/cli/cmdctx/output.go`), mirroring the existing
+    `logs`-package precedent (`"invalid_since"` in the same switch) rather than
+    inventing a parallel mechanism.
+  - A completed run's own JSON/text payload is written via `cmdctx.WriteData`
+    BEFORE the RunE returns; the exit code is then carried by a private
+    `testRunOutcomeError{code}` whose `Error()` renders no text (same pattern as
+    `deploy`'s `deployCancelledError`), so main.go's `ExitCode()`-bearing-error
+    path suppresses any further stderr/JSON-envelope output and the payload
+    already written stays the sole stdout content.
+  - A scenario RunScenario refuses to even attempt (flock held, a kept prior
+    run, scenario/timeout load failure — returned as a bare `error`, no
+    `ScenarioResult`) is folded into the CLI's result set as a synthetic
+    `StatusError` outcome rather than aborting the whole batch, so a
+    multi-scenario `dwe test run` still reports and tries every other requested
+    scenario (matches `RunScenario`'s own doc-comment contract).
 
 ### Task 9: User-facing docs + ru i18n
 
