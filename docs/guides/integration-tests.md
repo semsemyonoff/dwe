@@ -2,11 +2,13 @@
 
 `dwe test` runs your project's deploy pipeline — and whatever assertions or commands you add — inside a fresh, throwaway copy of the project. Nothing you do here touches the environment you're working in. This guide is the **authoring workflow**; the field-by-field schema lives in [`../reference/config/tests.md`](../reference/config/tests.md).
 
-## The one prerequisite: route ports through vars
+## Ports are isolated automatically
 
-Before writing a scenario, check how your services expose host ports. `dwe test` needs to give each isolated copy its own ports so it can run *alongside* your working environment, and it can only rewrite ports that are already routed through `vars:` — e.g. a service's `ports:` reading `${vars.app.http_port}`, or a compose file interpolating the same var. A literal hardcoded host port (`8080:8080` with no var in sight) can't be reassigned, and the copy's own preflight check will refuse to start with a port-conflict error.
+`dwe test` gives each isolated copy its own host ports, so a scenario runs *alongside* your working environment — and any other project holding those ports. Every host port your enabled services declare under `services.<name>.ports` is remapped to a freshly allocated free port in the copy, automatically — you route nothing through vars and write no port config in the scenario. Both the `ports_free` preflight and — for projects that source their compose bindings from `services.<name>.ports` (directly, or via an `exports.env` entry `from: services.<name>.ports.<x>`) — the actual container bind read the port from that same place, so the remap moves them together.
 
-If your project doesn't do this yet, move the port(s) you care about into `vars:` first — see [vars](../reference/config/vars.md) for the mechanics. This is a one-time change per port, not per scenario.
+A scenario step that needs a remapped port references it the normal way: `${services.<name>.ports.<x>}`.
+
+The one case this does *not* cover is a host port hardcoded straight in a raw compose file (`8080:8080`) that your dwe service config never models — it bypasses both the remap and the `ports_free` preflight. Either declare it under `services.<name>.ports` so `dwe test` can see and reassign it, or route the compose interpolation through a var and set that var per scenario with `env.vars: { …: auto }` (the runner allocates a free port and writes it into the copy's `vars:`; the step then reads `${vars.<path>}`).
 
 ## Your first scenario
 
@@ -15,16 +17,12 @@ Create `workspace/tests/smoke.yml`:
 ```yaml
 description: "Clean deploy comes up healthy"
 
-env:
-  vars:
-    app.http_port: auto
-
 steps:
   - name: "app answers"
     type: builtin
     cmd: http_check
     with:
-      url: "http://localhost:${vars.app.http_port}/health"
+      url: "http://localhost:${services.app.ports.http}/health"
       status: 200
 ```
 
@@ -34,7 +32,7 @@ Run it:
 dwe test run smoke
 ```
 
-This copies your project into an isolated tree, generates a fresh `local.yml` with an allocated port, runs `dwe validate` then a real `dwe deploy run` inside the copy, checks the endpoint, and tears the whole thing down. A scenario with no `steps:` at all is already a useful test — "deploy with these parameters succeeds."
+This copies your project into an isolated tree, generates a fresh `local.yml` with freshly allocated free host ports, runs `dwe validate` then a real `dwe deploy run` inside the copy, checks the endpoint, and tears the whole thing down. A scenario with no `steps:` at all is already a useful test — "deploy with these parameters succeeds."
 
 ## Testing a variant of your stack
 
@@ -46,15 +44,13 @@ description: "Deploy with redis disabled — cache falls back to in-memory"
 env:
   services:
     disable: [redis]
-  vars:
-    app.http_port: auto
 
 steps:
   - name: "app still answers without redis"
     type: builtin
     cmd: http_check
     with:
-      url: "http://localhost:${vars.app.http_port}/health"
+      url: "http://localhost:${services.app.ports.http}/health"
       status: 200
 ```
 

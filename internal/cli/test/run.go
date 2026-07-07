@@ -239,14 +239,16 @@ func resolveScenarioNames(baseDir string, args []string) ([]string, error) {
 
 // jsonReporterFactory builds the steps-pipeline reporter with a silenced
 // screen (io.Discard) so live output never reaches JSON stdout, while still
-// writing the scenario's run log to disk.
-func jsonReporterFactory(workDir, name string) (pipeline.Reporter, io.Writer, func(), error) {
+// writing the scenario's run log to disk. subprocOut is the log file only (no
+// terminal tee) so the validate/deploy subprocess output never leaks into the
+// JSON payload either.
+func jsonReporterFactory(workDir, name string) (pipeline.Reporter, io.Writer, io.Writer, func(), error) {
 	_, logFile, _, _, cleanup, err := pipeline.OpenPipelineLog(workDir, name, true)
 	if err != nil {
-		return nil, nil, nil, err
+		return nil, nil, nil, nil, err
 	}
 	rep := pipeline.NewPlainReporter(sharedrender.NewWriter(io.Discard), logFile, io.Discard)
-	return rep, logFile, func() {
+	return rep, logFile, logFile, func() {
 		rep.Close()
 		cleanup()
 	}, nil

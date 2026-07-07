@@ -100,7 +100,7 @@ Each key is a dot-path relative to `vars.` (`app.http_port` → `vars: { app: { 
 
 `auto` is the one magic value: before deploy, the runner allocates a free host port and writes the concrete number in its place. Scenario steps see the allocated value through `${vars.app.http_port}` (loader-side rendering, below).
 
-**Prerequisite — ports must be vars-routed.** `auto` can only rewrite ports that the project routes through vars (`${...}` in compose files or dwe `ports:` fed from vars). A project with a literal hardcoded host port cannot be tested alongside its running working environment: the copy's `ports_free` preflight check fails fast, with a hint to move the port onto a var. This is worth calling out prominently because it's the one prerequisite every project needs before its deploy can be scenario-tested at all.
+`auto` is **not** required just to isolate a service's host port: every host port an enabled service declares under `services.<name>.ports` is remapped to a free port automatically (see **Automatic host-port isolation** below). `env.vars: { …: auto }` is for the residual case — a compose file that interpolates a host port from a var the service config does not declare — where you want the runner to allocate and inject that value; the step then reads it via `${vars.<path>}`.
 
 ### `timeout`
 
@@ -164,7 +164,7 @@ The developer's own `workspace/local.yml` is gitignored and therefore **not copi
 2. this scenario's `env.vars` / `env.services`;
 3. identity: `project: { prefix: <compose project name> }` and `update: { mode: "off" }` (no self-update prompts inside a disposable test run).
 
-**Ports.** `auto` vars are allocated as a batch (all listeners opened before any is closed, guaranteeing intra-batch uniqueness) and written as concrete numbers. The copy's own `ports_free` preflight check still runs and catches allocation races; on a port-conflict deploy failure with `auto` vars present, the runner re-allocates and retries the deploy **exactly once** before failing the scenario.
+**Automatic host-port isolation.** Every host port declared under `services.<name>.ports` by a service that will be enabled in the copy is remapped to a freshly allocated free port, written into the generated `local.yml` as a `services.<name>.ports.<x>` override (the original port's scheme is preserved). Because `ports_free` preflight reads that same field — and a project that sources its compose host bindings from `services.<name>.ports` (directly, or via an `exports.env` entry `from: services.<name>.ports.<x>`) binds from it too — the preflight and the actual bind move together, so a scenario runs alongside the working environment with no port config. Any `env.vars: { …: auto }` ports are allocated in the same batch. All ports come from one allocation pass (all listeners opened before any is closed, guaranteeing intra-batch uniqueness); the copy's `ports_free` preflight still catches host-level races, and on a deploy failure with any allocated port present the runner re-allocates every port and retries the deploy **exactly once** before failing the scenario.
 
 **`shared: true` volumes** resolve to their verbatim names and are reused as-is — the deliberate package-cache exception (composer, npm, …). A `shared` volume holding real (non-cache) data is therefore visible to every test run too.
 
@@ -245,7 +245,7 @@ dwe test list --output json
 
 - **`.git/` is excluded from the copy.** A deploy or scenario step that shells out to `git` against the project root will fail or behave differently inside the copy.
 - **Named compose resources bypass isolation.** `container_name:`, explicitly named networks/volumes, and `external: true` in raw compose files ignore the compose project-name scoping and can collide with — or attach to — the working environment. This is why teardown never uses `compose down -v`.
-- **Host ports outside the vars system aren't covered.** `ports_free` only sees ports declared via `services.<name>.ports`; a literal host port in a raw compose file bypasses both `auto` allocation and the preflight check.
+- **Host ports not modelled in `services.<name>.ports` aren't isolated.** The automatic remap and the `ports_free` preflight only see ports declared via `services.<name>.ports`; a host port hardcoded straight in a raw compose file (`8080:8080`) bypasses both. Declare it under `services.<name>.ports`, or route the compose interpolation through a var set with `env.vars: { …: auto }`.
 - **Host side effects of a project's own deploy/scenario steps aren't sandboxed.** A `shell` step touching absolute paths, `~`, or bind mounts outside the project affects the real host, same as it would from a real deploy. `dwe test` isolates dwe-managed state (files, containers, volumes, networks, ports) — not arbitrary side effects a step chooses to have.
 - **The copy is not atomic.** Nothing locks the original project while `git ls-files` and the copy run; editing files during a test run can produce a mixed snapshot.
 - **`~/.config/dwe` and the Docker daemon's image/build caches are shared**, by design (see [Isolation model](#isolation-model)).

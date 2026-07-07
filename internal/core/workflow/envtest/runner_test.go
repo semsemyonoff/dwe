@@ -1,6 +1,7 @@
 package envtest
 
 import (
+	"bytes"
 	"context"
 	"errors"
 	"io"
@@ -13,6 +14,7 @@ import (
 
 	"github.com/semsemyonoff/dwe/internal/core/execution/pipeline"
 	"github.com/semsemyonoff/dwe/internal/core/project/config"
+	"github.com/semsemyonoff/dwe/internal/core/project/local"
 	"github.com/semsemyonoff/dwe/internal/shared/lock"
 )
 
@@ -38,8 +40,8 @@ func (noopReporter) ResumeAfterExec()                                     {}
 
 // noopReporterFactory is a RunRequest.ReporterFactory that skips the real
 // OpenPipelineLog/PlainReporter machinery entirely.
-func noopReporterFactory(string, string) (pipeline.Reporter, io.Writer, func(), error) {
-	return noopReporter{}, io.Discard, func() {}, nil
+func noopReporterFactory(string, string) (pipeline.Reporter, io.Writer, io.Writer, func(), error) {
+	return noopReporter{}, io.Discard, io.Discard, func() {}, nil
 }
 
 // writeRunnerFixtureProject creates a minimal project at t.TempDir() with a
@@ -126,6 +128,175 @@ func TestRunScenario_HappyPath(t *testing.T) {
 	wantTeardown := []string{"compose_down", "reap_containers", "remove_volumes", "stop_bridge", "remove_copy", "delete_manifest"}
 	if strings.Join(teardownOrder, "|") != strings.Join(wantTeardown, "|") {
 		t.Fatalf("teardownOrder = %v, want %v", teardownOrder, wantTeardown)
+	}
+}
+
+// TestRunScenario_SubprocessOutputStreamsToSubprocOut pins that the runner
+// routes the validate/deploy subprocess stdout/stderr to the factory's
+// subprocOut writer (the console+log tee), not the run-log-only writer — the
+// fix for the "console is silent during the deploy, everything appears at the
+// end" problem.
+func TestRunScenario_SubprocessOutputStreamsToSubprocOut(t *testing.T) {
+	dir := writeRunnerFixtureProject(t, "smoke", noStepsScenario)
+
+	var subprocBuf bytes.Buffer
+	capturingFactory := func(string, string) (pipeline.Reporter, io.Writer, io.Writer, func(), error) {
+		// logWriter = io.Discard, subprocOut = the recording buffer: proves the
+		// subprocess output goes to subprocOut specifically, not logWriter.
+		return noopReporter{}, io.Discard, &subprocBuf, func() {}, nil
+	}
+
+	// The stub writes a per-invocation marker to its stdout writer, mimicking a
+	// deploy that streams progress.
+	exec := func(_ context.Context, _ string, _ []string, stdout, _ io.Writer, args ...string) error {
+		_, _ = io.WriteString(stdout, "["+strings.Join(args, " ")+"] streaming\n")
+		return nil
+	}
+
+	r := &Runner{
+		execDwe:       exec,
+		allocatePorts: AllocatePorts,
+		newTeardownDeps: func(string, io.Writer) TeardownDeps {
+			return recordingTeardownDeps(new([]string), nil)
+		},
+		clock: time.Now,
+	}
+
+	result, err := r.RunScenario(context.Background(), RunRequest{
+		BaseDir:         dir,
+		Scenario:        "smoke",
+		ReporterFactory: capturingFactory,
+	})
+	if err != nil {
+		t.Fatalf("RunScenario: %v", err)
+	}
+	if result.Status != StatusPassed {
+		t.Fatalf("status = %q, want passed", result.Status)
+	}
+	got := subprocBuf.String()
+	if !strings.Contains(got, "[validate] streaming") {
+		t.Fatalf("subprocOut missing validate output; got:\n%s", got)
+	}
+	if !strings.Contains(got, "[deploy run --silent] streaming") {
+		t.Fatalf("subprocOut missing deploy output; got:\n%s", got)
+	}
+}
+
+// TestDefaultReporterFactory_SubprocOutMirrorsToLog verifies the production
+// factory's subprocOut also mirrors into the run log (it is a MultiWriter over
+// the terminal writer + the log file), so streaming to the console never costs
+// the on-disk record. In a test process stdout is not a TTY, so the terminal
+// leg is io.Discard and only the log leg is observable.
+func TestDefaultReporterFactory_SubprocOutMirrorsToLog(t *testing.T) {
+	dir := t.TempDir()
+	_, logWriter, subprocOut, cleanup, err := defaultReporterFactory(dir, "test")
+	if err != nil {
+		t.Fatalf("defaultReporterFactory: %v", err)
+	}
+	if logWriter == nil || subprocOut == nil {
+		t.Fatalf("factory returned nil writers: log=%v subproc=%v", logWriter, subprocOut)
+	}
+	const marker = "deploy-progress-line\n"
+	if _, err := io.WriteString(subprocOut, marker); err != nil {
+		t.Fatalf("writing to subprocOut: %v", err)
+	}
+	cleanup() // closes the log file
+
+	logPath := filepath.Join(dir, ".dwe", "logs", "test.log")
+	data, err := os.ReadFile(logPath)
+	if err != nil {
+		t.Fatalf("reading run log %s: %v", logPath, err)
+	}
+	if !strings.Contains(string(data), "deploy-progress-line") {
+		t.Fatalf("run log did not capture subprocOut write; got:\n%s", data)
+	}
+}
+
+// TestRunScenario_RemapsEnabledServiceHostPorts pins the host-port auto-remap:
+// every enabled service's declared host port is rewritten to a freshly
+// allocated free port in the copy's generated local.yml (services.<name>.ports),
+// so ports_free preflight and the compose bind land off the working
+// environment's ports with no scenario port config.
+func TestRunScenario_RemapsEnabledServiceHostPorts(t *testing.T) {
+	dir := t.TempDir()
+	writeFixtureFile(t, dir, "workspace.yml", "project:\n  name: runnertest\n  prefix: dwe\n")
+	writeFixtureFile(t, dir, "workspace/services/db/service.yml",
+		"type: infra\ncontainer: db\nrequired: true\nports:\n  mysql: 13306\n")
+	writeFixtureFile(t, dir, "workspace/tests/smoke.yml", noStepsScenario)
+
+	var order []string
+	var execCalls []string
+	r := &Runner{
+		execDwe: stubExecDwe(nil, &execCalls),
+		allocatePorts: func(n int) ([]int, error) {
+			out := make([]int, n)
+			for i := range out {
+				out[i] = 20000 + i
+			}
+			return out, nil
+		},
+		newTeardownDeps: func(string, io.Writer) TeardownDeps {
+			return recordingTeardownDeps(&order, nil)
+		},
+		clock: time.Now,
+	}
+
+	result, err := r.RunScenario(context.Background(), RunRequest{
+		BaseDir:         dir,
+		Scenario:        "smoke",
+		ReporterFactory: noopReporterFactory,
+	})
+	if err != nil {
+		t.Fatalf("RunScenario: %v", err)
+	}
+	if result.Status != StatusPassed {
+		t.Fatalf("status = %q, want passed", result.Status)
+	}
+
+	// recordingTeardownDeps.RemoveCopy is a no-op, so the copy's generated
+	// local.yml survives for inspection.
+	localPath := config.LocalLayerPath(filepath.Join(RunDir(dir, "smoke"), "workspace.yml"))
+	m, err := local.LoadLocalYAML(localPath)
+	if err != nil {
+		t.Fatalf("loading generated local.yml: %v", err)
+	}
+	got := digToInt(t, m, "services", "db", "ports", "mysql")
+	if got != 20000 {
+		t.Fatalf("services.db.ports.mysql = %d, want 20000 (remapped off the original 13306)", got)
+	}
+}
+
+// writeFixtureFile writes content to dir/rel, creating parent directories.
+func writeFixtureFile(t *testing.T, dir, rel, content string) {
+	t.Helper()
+	path := filepath.Join(dir, filepath.FromSlash(rel))
+	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+		t.Fatalf("mkdir for %s: %v", rel, err)
+	}
+	if err := os.WriteFile(path, []byte(content), 0o644); err != nil {
+		t.Fatalf("writing %s: %v", rel, err)
+	}
+}
+
+// digToInt walks nested map[string]any by keys and returns the leaf as an int.
+func digToInt(t *testing.T, m map[string]any, keys ...string) int {
+	t.Helper()
+	var cur any = m
+	for _, k := range keys {
+		mm, ok := cur.(map[string]any)
+		if !ok {
+			t.Fatalf("digToInt: %q is not a map (path %v)", k, keys)
+		}
+		cur = mm[k]
+	}
+	switch v := cur.(type) {
+	case int:
+		return v
+	case int64:
+		return int(v)
+	default:
+		t.Fatalf("digToInt: leaf %v is %T, not an int", cur, cur)
+		return 0
 	}
 }
 

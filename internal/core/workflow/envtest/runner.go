@@ -75,29 +75,42 @@ type ScenarioResult struct {
 
 // ReporterFactory builds the pipeline reporter and its writers for a
 // scenario run. workDir is the disposable copy root; name is a short label
-// used for the on-disk log file. The returned io.Writer is where the
-// `dwe validate` / `dwe deploy run` subprocess output (and the in-process
-// steps pipeline's LogWriter) is written — a single run log for the whole
-// scenario. cleanup releases every resource the factory opened (including
-// the reporter itself) and must be called exactly once.
+// used for the on-disk log file.
+//
+//   - logWriter is the run log: the in-process steps pipeline's LogWriter and
+//     the teardown log — a single file for the whole scenario.
+//   - subprocOut is where the `dwe validate` / `dwe deploy run` subprocess
+//     output goes. In interactive mode it tees the subprocess to the terminal
+//     (live progress) AND the run log; in JSON mode it is the log only, so the
+//     deploy's chatter never leaks into JSON stdout.
+//
+// cleanup releases every resource the factory opened (including the reporter
+// itself) and must be called exactly once.
 //
 // The CLI (stage-1b Task 8) injects a silent variant in JSON output mode
-// (screen writer = io.Discard) so live pipeline output never leaks into
-// JSON stdout, while the file log keeps recording. A nil RunRequest.ReporterFactory
-// uses defaultReporterFactory.
-type ReporterFactory func(workDir, name string) (rep pipeline.Reporter, logWriter io.Writer, cleanup func(), err error)
+// (screen writer = io.Discard, subprocOut = log only) so live pipeline output
+// never leaks into JSON stdout, while the file log keeps recording. A nil
+// RunRequest.ReporterFactory uses defaultReporterFactory.
+type ReporterFactory func(workDir, name string) (rep pipeline.Reporter, logWriter, subprocOut io.Writer, cleanup func(), err error)
 
 // defaultReporterFactory is the production ReporterFactory: the same
 // OpenPipelineLog + NewPlainReporter pairing deploy/reset use, always with
 // logging enabled (a scenario run always gets a run log under the copy's
 // own .dwe/logs/).
-func defaultReporterFactory(workDir, name string) (pipeline.Reporter, io.Writer, func(), error) {
+func defaultReporterFactory(workDir, name string) (pipeline.Reporter, io.Writer, io.Writer, func(), error) {
 	screen, logFile, termOut, _, cleanup, err := pipeline.OpenPipelineLog(workDir, name, true)
 	if err != nil {
-		return nil, nil, nil, err
+		return nil, nil, nil, nil, err
 	}
 	rep := pipeline.NewPlainReporter(screen, logFile, termOut)
-	return rep, logFile, func() {
+	// subprocOut streams the validate/deploy subprocess output live to the
+	// terminal (termOut = os.Stdout on a TTY, io.Discard when piped) while
+	// mirroring it into the run log — so a long deploy shows progress instead of
+	// a silent console until it finishes. termOut is idle during validate/deploy
+	// (the reporter's own live frame only starts with the in-process steps
+	// phase, after the deploy subprocess has returned), so nothing interleaves.
+	subprocOut := io.MultiWriter(termOut, logFile)
+	return rep, logFile, subprocOut, func() {
 		rep.Close()
 		cleanup()
 	}, nil
@@ -281,24 +294,8 @@ func (r *Runner) RunScenario(ctx context.Context, req RunRequest) (*ScenarioResu
 		return prepFail("loading seed local.yml", err)
 	}
 
-	autoPaths := autoPortVarPaths(scn)
-	ports := make(map[string]int, len(autoPaths))
-	if len(autoPaths) > 0 {
-		allocated, err := r.allocatePorts(len(autoPaths))
-		if err != nil {
-			return prepFail("allocating ports", err)
-		}
-		for i, path := range autoPaths {
-			ports[path] = allocated[i]
-		}
-	}
-
-	overlay, err := BuildLocalOverlay(seedLocal, scn, composeProject, ports, warn)
-	if err != nil {
-		return prepFail("building local.yml overlay", err)
-	}
-	if err := WriteGeneratedLocalYAML(copyRoot, overlay); err != nil {
-		return prepFail("writing generated local.yml", err)
+	if err := r.writeCopyLocalYAML(origCfg, seedLocal, scn, composeProject, copyRoot, warn); err != nil {
+		return prepFail("generating local.yml", err)
 	}
 	if err := WriteDockerIdentity(copyRoot, composeProject); err != nil {
 		return prepFail("writing docker identity", err)
@@ -357,7 +354,7 @@ func (r *Runner) RunScenario(ctx context.Context, req RunRequest) (*ScenarioResu
 	if reporterFactory == nil {
 		reporterFactory = defaultReporterFactory
 	}
-	rep, lw, cleanup, err := reporterFactory(copyRoot, "test")
+	rep, lw, subprocOut, cleanup, err := reporterFactory(copyRoot, "test")
 	if err != nil {
 		warn(fmt.Sprintf("opening pipeline log: %v", err))
 		return finish(StatusError, "")
@@ -367,15 +364,18 @@ func (r *Runner) RunScenario(ctx context.Context, req RunRequest) (*ScenarioResu
 
 	extraEnv := []string{"DWE_NONINTERACTIVE=1"}
 
-	if err := r.execDwe(scenarioCtx, copyRoot, extraEnv, logWriter, logWriter, "validate"); err != nil {
+	// validate + deploy run as subprocesses; their output goes to subprocOut
+	// (terminal + run log interactively, run log only in JSON mode) so a long
+	// deploy streams progress live instead of a silent console until it ends.
+	if err := r.execDwe(scenarioCtx, copyRoot, extraEnv, subprocOut, subprocOut, "validate"); err != nil {
 		warn(fmt.Sprintf("dwe validate failed: %v", err))
 		return finish(StatusError, "")
 	}
 
-	deployErr := r.execDwe(scenarioCtx, copyRoot, extraEnv, logWriter, logWriter, "deploy", "run", "--silent")
-	if deployErr != nil && len(autoPaths) > 0 {
+	deployErr := r.execDwe(scenarioCtx, copyRoot, extraEnv, subprocOut, subprocOut, "deploy", "run", "--silent")
+	if deployErr != nil && hasAllocatedPorts(origCfg, scn) {
 		warn(fmt.Sprintf("deploy failed, retrying once with freshly allocated ports: %v", deployErr))
-		deployErr = r.retryDeployWithFreshPorts(scenarioCtx, copyRoot, extraEnv, logWriter, seedLocal, scn, composeProject, autoPaths, ports, warn)
+		deployErr = r.retryDeployWithFreshPorts(scenarioCtx, copyRoot, extraEnv, subprocOut, origCfg, seedLocal, scn, composeProject, warn)
 	}
 	if deployErr != nil {
 		warn(fmt.Sprintf("dwe deploy run failed: %v", deployErr))
@@ -391,31 +391,63 @@ func (r *Runner) RunScenario(ctx context.Context, req RunRequest) (*ScenarioResu
 	return finish(StatusPassed, "")
 }
 
-// retryDeployWithFreshPorts re-allocates every `auto` port, rewrites the
-// copy's local.yml, and retries `dwe deploy run --silent` exactly once. Any
-// failure while preparing the retry (port allocation, overlay rebuild,
-// write) is reported via warn and counts as the one permitted retry being
-// exhausted — the original deployErr stands and no second attempt is made.
-func (r *Runner) retryDeployWithFreshPorts(
-	ctx context.Context, copyRoot string, extraEnv []string, logWriter io.Writer,
-	seedLocal map[string]any, scn *Scenario, composeProject string, autoPaths []string,
-	ports map[string]int, warn func(string),
+// hasAllocatedPorts reports whether the copy's local.yml carried any
+// runner-allocated port — a remapped host port for an enabled service, or an
+// env.vars: auto port. It gates the one deploy retry: only a run that allocated
+// ports can lose a TOCTOU race worth re-allocating for.
+func hasAllocatedPorts(cfg *config.DweConfig, scn *Scenario) bool {
+	return len(enabledHostPortKeys(cfg, scn)) > 0 || len(autoPortVarPaths(scn)) > 0
+}
+
+// writeCopyLocalYAML allocates a fresh free host port for every enabled
+// service's declared host port (spec §5 isolation — a test copy never needs the
+// original host ports) plus any env.vars: auto port, then builds and writes the
+// copy's generated local.yml. All ports come from a SINGLE AllocatePorts batch
+// so a host port and a var port can never collide with each other. Re-invoked
+// by the one deploy retry so a TOCTOU loss on any allocated port gets an
+// entirely fresh set (spec §9).
+func (r *Runner) writeCopyLocalYAML(
+	origCfg *config.DweConfig, seedLocal map[string]any, scn *Scenario,
+	composeProject, copyRoot string, warn func(string),
 ) error {
-	reallocated, err := r.allocatePorts(len(autoPaths))
+	keys := enabledHostPortKeys(origCfg, scn)
+	autoPaths := autoPortVarPaths(scn)
+
+	var hostPorts []HostPortOverride
+	varPorts := make(map[string]int, len(autoPaths))
+	if total := len(keys) + len(autoPaths); total > 0 {
+		allocated, err := r.allocatePorts(total)
+		if err != nil {
+			return fmt.Errorf("allocating ports: %w", err)
+		}
+		hostPorts = buildHostPortOverrides(origCfg, keys, allocated[:len(keys)])
+		for i, path := range autoPaths {
+			varPorts[path] = allocated[len(keys)+i]
+		}
+	}
+
+	overlay, err := BuildLocalOverlay(seedLocal, scn, composeProject, varPorts, warn)
 	if err != nil {
-		return fmt.Errorf("retry: reallocating ports: %w", err)
+		return err
 	}
-	for i, path := range autoPaths {
-		ports[path] = reallocated[i]
+	ApplyHostPortOverrides(overlay, hostPorts)
+	return WriteGeneratedLocalYAML(copyRoot, overlay)
+}
+
+// retryDeployWithFreshPorts re-generates the copy's local.yml with a fresh set
+// of allocated ports (host + vars) and retries `dwe deploy run --silent`
+// exactly once. Any failure while preparing the retry is reported to the caller
+// and counts as the one permitted retry being exhausted — the original
+// deployErr stands and no second attempt is made.
+func (r *Runner) retryDeployWithFreshPorts(
+	ctx context.Context, copyRoot string, extraEnv []string, subprocOut io.Writer,
+	origCfg *config.DweConfig, seedLocal map[string]any, scn *Scenario, composeProject string,
+	warn func(string),
+) error {
+	if err := r.writeCopyLocalYAML(origCfg, seedLocal, scn, composeProject, copyRoot, warn); err != nil {
+		return fmt.Errorf("retry: %w", err)
 	}
-	overlay, err := BuildLocalOverlay(seedLocal, scn, composeProject, ports, warn)
-	if err != nil {
-		return fmt.Errorf("retry: rebuilding local.yml overlay: %w", err)
-	}
-	if err := WriteGeneratedLocalYAML(copyRoot, overlay); err != nil {
-		return fmt.Errorf("retry: rewriting local.yml: %w", err)
-	}
-	return r.execDwe(ctx, copyRoot, extraEnv, logWriter, logWriter, "deploy", "run", "--silent")
+	return r.execDwe(ctx, copyRoot, extraEnv, subprocOut, subprocOut, "deploy", "run", "--silent")
 }
 
 // runSteps loads the copy's own (post-deploy) config and command registry,
