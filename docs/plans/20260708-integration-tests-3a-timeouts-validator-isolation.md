@@ -404,24 +404,24 @@ its two consumers (validator Task 4, runner Task 5):
 - Modify: `internal/core/execution/pipeline/executor.go` (`executeStepBody`)
 - Modify: `internal/core/execution/pipeline/executor_test.go`
 
-- [ ] in `executeStepBody`, when `rs.Timeout > 0`, wrap the body `ExecAction` call in
+- [x] in `executeStepBody`, when `rs.Timeout > 0`, wrap the body `ExecAction` call in
       `context.WithTimeout(ctx, rs.Timeout)` (defer cancel); leave the `check:` action on
       the shared `ctx`
-- [ ] discriminate timeout from outer cancellation: on a non-nil body error with
+- [x] discriminate timeout from outer cancellation: on a non-nil body error with
       `ctx.Err() == nil && errors.Is(stepCtx.Err(), context.DeadlineExceeded)`, return
       `step %q timed out after %s`; else propagate unchanged
-- [ ] confirm parallel substeps honor their own `Timeout` (no extra code — flows through
+- [x] confirm parallel substeps honor their own `Timeout` (no extra code — flows through
       `runParallelSubStep` → `executeStepBody`)
-- [ ] document the contract-scope limitation in a code comment: the timeout bounds
+- [x] document the contract-scope limitation in a code comment: the timeout bounds
       ctx-honoring bodies; an interactive/ctx-ignoring body (e.g. `confirm` on stdin) is not
       force-interrupted (out of scope for 3a)
-- [ ] write tests: a `shell` step that sleeps past a short `timeout` → fails with the timeout
+- [x] write tests: a `shell` step that sleeps past a short `timeout` → fails with the timeout
       message and the subprocess is terminated; **a ctx-aware `builtin` (not just shell/sleep)
       that respects `ctx` → also times out with the message** (proves the builtin path, per
       codex); `timeout: 0`/absent → runs to completion unchanged; a parallel group where one
       substep times out → only that substep fails, its sibling completes; an outer-ctx cancel
       is NOT reported as a timeout
-- [ ] run `go test ./internal/core/execution/pipeline/...` — must pass before task 3
+- [x] run `go test ./internal/core/execution/pipeline/...` — must pass before task 3
 
 ### Task 3: Compose isolation scanner (`config.ScanComposeIsolation`)
 
