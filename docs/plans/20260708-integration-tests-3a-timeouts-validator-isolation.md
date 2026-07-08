@@ -430,29 +430,29 @@ its two consumers (validator Task 4, runner Task 5):
 - Create: `internal/core/project/config/compose_scan_test.go`
 - Create: `internal/core/project/config/testdata/compose_scan/*.yml` (fixtures)
 
-- [ ] define `IsolationKind` constants, `IsolationFinding{Kind, Resource, HostPort,
+- [x] define `IsolationKind` constants, `IsolationFinding{Kind, Resource, HostPort,
       Blocking, Message, File}`, and
       `ScanComposeIsolation(cfg *DweConfig, projectRoot string) []IsolationFinding`
-- [ ] implement the narrow compose parser (`os.ReadFile` + `yaml.Unmarshal` per
+- [x] implement the narrow compose parser (`os.ReadFile` + `yaml.Unmarshal` per
       `cfg.ComposeFiles()`; unreadable/malformed file → skipped silently) capturing
       `services.<name>.{container_name, ports}` and top-level `volumes`/`networks`
       `{external, name}`
-- [ ] implement the port helper: strip a `/tcp`|`/udp` suffix, extract the host published
+- [x] implement the port helper: strip a `/tcp`|`/udp` suffix, extract the host published
       token from short + long compose port syntax; emit `KindRawHostPort` (`Blocking: true`)
       for a token matching `^\d+(-\d+)?$` (single literal OR literal range — range stores the
       low end in `HostPort`, full range in `Message`); ignore `${...}`/env-interpolated and
       container-port-only entries; IPv6 bracketed hosts (`[::1]:8080:80`) explicitly out of
       scope (NOT flagged)
-- [ ] implement `container_name` (all occurrences, `Blocking: true`),
+- [x] implement `container_name` (all occurrences, `Blocking: true`),
       `external:`/named volume+network rules (`Blocking: false`)
-- [ ] write tests against `testdata/` fixtures: literal host port → finding; **host range
+- [x] write tests against `testdata/` fixtures: literal host port → finding; **host range
       `"8080-8090:80-90"` → finding (low end 8080, range in message)**; `"${PORT}:80"` →
       none; `"80"` (no host) → none; `"127.0.0.1:8080:80"` → host `8080`; **`"8080:80/tcp"`
       → finding (suffix stripped)**; **`"[::1]:8080:80"` → none (IPv6 out of scope)**;
       long-form `published: "8080"` → finding; `container_name` → finding; `external: true`
       vol/net → non-blocking finding; explicit `name:` vol/net → non-blocking finding; a
       clean project → empty
-- [ ] run `go test ./internal/core/project/config/...` — must pass before task 4
+- [x] run `go test ./internal/core/project/config/...` — must pass before task 4
 
 ### Task 4: `workspace/tests/` validator domain + `dwe validate tests`
 

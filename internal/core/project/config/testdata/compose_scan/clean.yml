@@ -1,0 +1,9 @@
+services:
+  app:
+    image: busybox
+    ports:
+      - "80"
+volumes:
+  data: {}
+networks:
+  default: {}

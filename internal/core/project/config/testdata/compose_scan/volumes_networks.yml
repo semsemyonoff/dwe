@@ -1,0 +1,11 @@
+services: {}
+volumes:
+  ext:
+    external: true
+  named:
+    name: my-vol
+networks:
+  extnet:
+    external: true
+  namednet:
+    name: my-net
