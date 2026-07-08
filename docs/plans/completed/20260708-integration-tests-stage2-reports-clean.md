@@ -441,16 +441,16 @@ a thin CLI layer:
 - Modify: `docs/internals/packages.md`
 - Modify: `AGENTS.md`
 
-- [ ] extend the `envtest` section of `packages.md` (report collection: fresh-ctx,
+- [x] extend the `envtest` section of `packages.md` (report collection: fresh-ctx,
       failure-only, before-teardown, overwrite, `ReportDeps`/`captureCmdFn` seams,
       compose→identity degradation; `Clean`: `ListManifests`, per-scenario flock-guard,
       `Teardown` reuse, report-only orphan scan via `<base>-t-` prefix minus `known`) and
       the `internal/cli/test/` section (`clean` command, scrub-first, `cleanFn` seam)
-- [ ] extend the AGENTS.md integration-tests bullet with the stage-2 contracts worth
+- [x] extend the AGENTS.md integration-tests bullet with the stage-2 contracts worth
       trapping: reports failure-only + before-teardown + fresh-ctx; `clean` manifest-driven
       + flock-guard-live + orphan-scan-report-only (never destroy by name pattern)
-- [ ] run `make build` (embeds updated internals docs); docs-subsystem tests green
-- [ ] move this plan to `docs/plans/completed/`
+- [x] run `make build` (embeds updated internals docs); docs-subsystem tests green
+- [x] move this plan to `docs/plans/completed/`
 
 ## Post-Completion
 
