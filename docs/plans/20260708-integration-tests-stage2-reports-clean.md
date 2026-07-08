@@ -423,17 +423,17 @@ a thin CLI layer:
 
 ### Task 6: Verify acceptance criteria
 
-- [ ] verify spec §6 step 5 + §7 row 2: reports collected on failure before teardown into
+- [x] verify spec §6 step 5 + §7 row 2: reports collected on failure before teardown into
       `.dwe/tests/reports/<scenario>/` (pipeline log + `compose ps --all` + container log
       tails — `--all` so a crashed service is included); `report_dir` now populated in `run`
       JSON/text; `dwe test clean` is manifest-driven, reuses `Teardown`, flock-guards live
       runs, orphan scan is report-only (never destroys by name pattern), a failed teardown is
       reported as `Failed` (never `Swept`) and drives exit 1, `--dry-run` + name filter +
       `--output json` all work
-- [ ] verify backward compatibility: `Teardown` behaviour unchanged, no existing golden
+- [x] verify backward compatibility: `Teardown` behaviour unchanged, no existing golden
       altered except the `--keep` hint text
-- [ ] run full suite: `make test`
-- [ ] run `make lint`
+- [x] run full suite: `make test`
+- [x] run `make lint`
 
 ### Task 7: [Final] Internals documentation + plan close-out
 
