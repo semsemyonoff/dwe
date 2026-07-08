@@ -463,26 +463,26 @@ its two consumers (validator Task 4, runner Task 5):
 - Modify: `internal/cli/validate/validate.go` (register `tests.All()` + `dwe validate tests`)
 - Modify: `internal/cli/validate/validate_test.go` (scope wiring)
 
-- [ ] create the `tests` domain: `All()` → `scenariosValidator{}` (`Domain()=="tests"`,
+- [x] create the `tests` domain: `All()` → `scenariosValidator{}` (`Domain()=="tests"`,
       `ID()=="scenarios"`); guard `ctx.Cfg != nil`; resolve the `workspace/tests/` dir and
       iterate `*.yml`
-- [ ] per file: load via `envtest.LoadScenario` (error → `SeverityError`; this also covers a
+- [x] per file: load via `envtest.LoadScenario` (error → `SeverityError`; this also covers a
       bad scenario name via `ValidateScenarioName`); validate `timeout:` parse and
       `env.services` enable/disable ∈ `ctx.Cfg.Services`
-- [ ] per file: render all steps (context = `ctx.Cfg.Raw` overlaid with scenario `env.vars`,
+- [x] per file: render all steps (context = `ctx.Cfg.Raw` overlaid with scenario `env.vars`,
       `auto`-valued vars → a valid placeholder host port), wrap in ONE
       `config.DeployPhase{Name: "tests"}`, and call `pipeline.ResolvePhaseSteps` **once**
       (matches runtime `runSteps`; catches duplicate step names + phase invariants + builtin
       `with:` + `when:`) → resolve error as `SeverityError`. Do NOT validate steps
       individually and do NOT use a `${...}`-downgrade heuristic (both per codex)
-- [ ] resolve the registry via `reg, ok := ctx.CommandRegistry.(*registry.Registry)`
+- [x] resolve the registry via `reg, ok := ctx.CommandRegistry.(*registry.Registry)`
       (re-implement — `registryFrom` is unexported in `valconfig`); nil/absent → skip command
       checks; unknown `type: command` ref → `SeverityError`
-- [ ] emit `config.ScanComposeIsolation(ctx.Cfg, ctx.ProjectRoot)` findings as
+- [x] emit `config.ScanComposeIsolation(ctx.Cfg, ctx.ProjectRoot)` findings as
       `SeverityWarning` (once, when the tests dir is present)
-- [ ] register `tests.All()` in `buildRegistry`; add the `dwe validate tests` subcommand
+- [x] register `tests.All()` in `buildRegistry`; add the `dwe validate tests` subcommand
       (scope `["tests"]`); confirm it is NOT in `preflight.Run`
-- [ ] write tests: valid scenario → OK; bad name; unparseable timeout; unknown enable/disable
+- [x] write tests: valid scenario → OK; bad name; unparseable timeout; unknown enable/disable
       service; unknown command ref; concrete (non-templated) invalid builtin `with:` → error;
       **`auto`-var in a strict-int param (`port: "${vars.db.port}"`, `db.port: auto`) → OK
       (placeholder port, no false error)**; **a concrete bad param (`status: nope`) coexisting
@@ -491,7 +491,7 @@ its two consumers (validator Task 4, runner Task 5):
       pin); broken `when:` → error; malformed/empty scenario file → error; **nil `ctx.Cfg` →
       no diagnostics / no panic**; a project with an isolation hazard → warning;
       `dwe validate tests` scope runs only this domain
-- [ ] run `go test ./internal/core/validate/tests/... ./internal/cli/validate/...` — must pass
+- [x] run `go test ./internal/core/validate/tests/... ./internal/cli/validate/...` — must pass
       before task 5
 
 ### Task 5: Runner isolation gate + `--skip-isolation-check`
