@@ -291,6 +291,9 @@ func TestRunTestRun_KeepPrintsCleanupHint(t *testing.T) {
 	if !strings.Contains(out.String(), "proj-t-smoke-abc123") || !strings.Contains(out.String(), "/tmp/copy") {
 		t.Errorf("expected keep hint with project/copy path, got %q", out.String())
 	}
+	if !strings.Contains(out.String(), "dwe test clean smoke") {
+		t.Errorf("expected keep hint to point at `dwe test clean smoke`, got %q", out.String())
+	}
 }
 
 func TestRunTestRun_TimeoutFlagThreaded(t *testing.T) {
@@ -308,6 +311,51 @@ func TestRunTestRun_TimeoutFlagThreaded(t *testing.T) {
 	}
 	if f.calls[0].Timeout != 15*time.Minute {
 		t.Errorf("Timeout = %v, want 15m", f.calls[0].Timeout)
+	}
+}
+
+func TestRunTestRun_FailedScenarioWithReportDir_RendersReportLine(t *testing.T) {
+	baseDir := t.TempDir()
+	writeScenarioFile(t, baseDir, "smoke", "description: x\n")
+
+	f := &fakeRunner{
+		results: map[string]*envtest.ScenarioResult{
+			"smoke": {
+				Name: "smoke", Status: envtest.StatusFailed, FailedStep: "app answers",
+				ReportDir: "/tmp/.dwe/tests/reports/smoke",
+			},
+		},
+	}
+	withFakeRunner(t, f)
+
+	flags := &cmdctx.RootFlags{Root: baseDir}
+	cmd, out, _ := newRunTestCmd()
+
+	_ = runTestRun(cmd, flags, nil, false, 0)
+	if !strings.Contains(out.String(), "report: /tmp/.dwe/tests/reports/smoke") {
+		t.Errorf("expected report line for failed scenario, got %q", out.String())
+	}
+}
+
+func TestRunTestRun_PassingScenario_NoReportLine(t *testing.T) {
+	baseDir := t.TempDir()
+	writeScenarioFile(t, baseDir, "smoke", "description: x\n")
+
+	f := &fakeRunner{
+		results: map[string]*envtest.ScenarioResult{
+			"smoke": {Name: "smoke", Status: envtest.StatusPassed, ReportDir: ""},
+		},
+	}
+	withFakeRunner(t, f)
+
+	flags := &cmdctx.RootFlags{Root: baseDir}
+	cmd, out, _ := newRunTestCmd()
+
+	if err := runTestRun(cmd, flags, nil, false, 0); err != nil {
+		t.Fatalf("runTestRun: %v", err)
+	}
+	if strings.Contains(out.String(), "report:") {
+		t.Errorf("expected no report line for a passing scenario, got %q", out.String())
 	}
 }
 

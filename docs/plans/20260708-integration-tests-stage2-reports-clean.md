@@ -379,26 +379,26 @@ a thin CLI layer:
 - Modify: `internal/cli/test/run.go` (`--keep` hint → `dwe test clean`)
 - Modify: `internal/cli/bridgepolicy_test.go` (assert `test clean` container-blocked)
 
-- [ ] implement `newTestCleanCmd(flags)` → `dwe test clean [scenario...]` with `--dry-run`;
+- [x] implement `newTestCleanCmd(flags)` → `dwe test clean [scenario...]` with `--dry-run`;
       `envtest.ScrubComposeEnv()` FIRST; `cleanFn = envtest.Clean` seam var; build
       `CleanRequest`; render via `cmdctx.WriteData` (JSON `{dry_run, swept, skipped, failed,
       orphans}`; text summary, dry-run wording); **exit 1 when the result has any `Failed`
       entry** (write payload first, then return a no-text sentinel error like
       `testRunOutcomeError`); register under `dwe test` in `test.go`
-- [ ] update `renderScenarioLine` `--keep` hint to point at `dwe test clean <scenario>`
-- [ ] render a `report: <dir>` line in `renderScenarioLine` when `o.ReportDir != ""` (a
+- [x] update `renderScenarioLine` `--keep` hint to point at `dwe test clean <scenario>`
+- [x] render a `report: <dir>` line in `renderScenarioLine` when `o.ReportDir != ""` (a
       failed scenario), so the report path is discoverable in the default text path — the
       `run` JSON already carries `report_dir` via `omitempty`; without this the Overview's
       "JSON **and** text" claim is unmet
-- [ ] extend `bridgepolicy_test.go` to assert the `dwe test clean` subcommand stays blocked
+- [x] extend `bridgepolicy_test.go` to assert the `dwe test clean` subcommand stays blocked
       in container context (top-level `test` policy already covers it — pin it explicitly)
-- [ ] write tests over the stubbed `cleanFn`: `ScrubComposeEnv` called before `cleanFn`;
+- [x] write tests over the stubbed `cleanFn`: `ScrubComposeEnv` called before `cleanFn`;
       `--dry-run` and scenario args threaded into `CleanRequest`; JSON shape (incl. `failed`);
       text summary golden (swept/skipped/failed/orphans + dry-run); a `CleanResult` with a
       `Failed` entry → **exit 1** (payload still emitted); a hard `cleanFn` error → non-zero
       exit; plus a `run`-side test that a failed scenario with `ReportDir` set renders the
       `report:` line (and a passing one does not)
-- [ ] run `go test ./internal/cli/... ./internal/core/workflow/envtest/...` — must pass
+- [x] run `go test ./internal/cli/... ./internal/core/workflow/envtest/...` — must pass
       before task 5
 
 ### Task 5: User-facing docs + ru i18n

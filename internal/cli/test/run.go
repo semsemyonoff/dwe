@@ -312,7 +312,10 @@ func renderScenarioLine(o scenarioOutcome, keep bool) string {
 	}
 	fmt.Fprintf(&b, " [%s]", o.Duration.Round(time.Millisecond))
 	if keep && o.ComposeProject != "" {
-		fmt.Fprintf(&b, "\n  kept: compose project %s, copy at %s — clean up manually when done", o.ComposeProject, o.CopyPath)
+		fmt.Fprintf(&b, "\n  kept: compose project %s, copy at %s — run `dwe test clean %s` to remove", o.ComposeProject, o.CopyPath, o.Name)
+	}
+	if o.ReportDir != "" {
+		fmt.Fprintf(&b, "\n  report: %s", o.ReportDir)
 	}
 	return b.String()
 }
