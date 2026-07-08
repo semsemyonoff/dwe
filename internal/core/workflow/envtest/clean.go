@@ -8,9 +8,11 @@ import (
 	"path/filepath"
 	"strings"
 
+	"github.com/semsemyonoff/dwe/internal/core/bridge"
 	"github.com/semsemyonoff/dwe/internal/core/project/config"
 	"github.com/semsemyonoff/dwe/internal/shared/docker"
 	"github.com/semsemyonoff/dwe/internal/shared/lock"
+	"github.com/semsemyonoff/dwe/internal/shared/pathsafe"
 )
 
 // CleanRequest configures a Clean sweep.
@@ -150,6 +152,18 @@ func Clean(ctx context.Context, req CleanRequest) (*CleanResult, error) {
 		}
 	}
 
+	// Load the project's root config once, best-effort — needed ONLY by the
+	// advisory orphan scan (base prefix + docker bin). Sweeping never consults
+	// it: each manifest is validated and torn down from the manifest + its copy
+	// alone (validateManifestIdentity), so a broken/mid-edit or renamed root
+	// config must not block a recovery sweep. A load failure just skips the
+	// orphan scan.
+	origCfg, cfgErr := config.LoadConfigOrWrap(filepath.Join(req.BaseDir, "workspace.yml"))
+	if cfgErr != nil {
+		warn(fmt.Sprintf("clean: loading project config: %v", cfgErr))
+		origCfg = nil
+	}
+
 	result := &CleanResult{DryRun: req.DryRun}
 	for _, c := range all {
 		if scenarioFilter != nil && !scenarioFilter[c.m.Scenario] {
@@ -158,9 +172,151 @@ func Clean(ctx context.Context, req CleanRequest) (*CleanResult, error) {
 		sweepManifest(req, c.path, c.m, warn, result)
 	}
 
-	scanOrphans(ctx, req.BaseDir, known, warn, result)
+	scanOrphans(ctx, origCfg, known, warn, result)
 
 	return result, nil
+}
+
+// validateManifestIdentity guards Clean's destructive path against a tampered
+// or corrupted manifest. `dwe test clean` is manifest-driven and ultimately
+// runs os.RemoveAll(m.CopyPath) (teardown.go) plus a bridge-daemon stop against
+// m.BridgeDir — both attacker-influenceable if the manifest is trusted blindly.
+// The manifests live in the project's .dwe/tests/manifests/, which DWE mounts
+// into containers, so a lower-trust container can plant a manifest with an
+// arbitrary copy_path/bridge_dir; even though `dwe test clean` is itself
+// container-blocked, a host developer running it would then delete a
+// container-chosen path. It also guards against a corrupted/partial manifest.
+//
+// Every path a sweep touches is deterministically derived by the runner from
+// (baseDir, scenario) — CopyPath == RunDir, BridgeDir == DefaultBridgeDir(copy),
+// and the on-disk filename == "<scenario>-<runID>.yml". This re-derives those
+// invariants and rejects any manifest that does not match, so only the
+// canonical run directory under .dwe/tests/runs/ can ever be destroyed.
+//
+// compose_project is pinned to the copy's OWN stamped docker identity (the
+// value the runner wrote into the copy at run time) rather than to the current
+// root config — a manifest kept/failed before a `project.name`/`project.prefix`
+// change is still recoverable, since the copy carries the identity teardown
+// actually uses. See validateComposeProject.
+func validateManifestIdentity(baseDir, manifestPath string, m *Manifest) error {
+	if m.Scenario == "" {
+		return fmt.Errorf("empty scenario")
+	}
+	if m.RunID == "" {
+		return fmt.Errorf("empty run id")
+	}
+	// Tie the sweep target to the name on disk, so one scenario's manifest
+	// cannot declare another scenario's identity.
+	wantName := m.Scenario + "-" + m.RunID + ".yml"
+	if got := filepath.Base(manifestPath); got != wantName {
+		return fmt.Errorf("filename %q does not match declared identity %q", got, wantName)
+	}
+	// CopyPath is the sole path os.RemoveAll touches: require the canonical run
+	// dir, and defensively confirm it stays contained under .dwe/tests/runs/
+	// (a scenario carrying "../" would otherwise escape).
+	expectedCopy := RunDir(baseDir, m.Scenario)
+	if !samePath(m.CopyPath, expectedCopy) {
+		return fmt.Errorf("copy_path %q is not the expected run dir %q", m.CopyPath, expectedCopy)
+	}
+	runsRoot := filepath.Join(testsRootDir(baseDir), "runs")
+	if !isWithin(runsRoot, expectedCopy) {
+		return fmt.Errorf("copy_path %q escapes %q", expectedCopy, runsRoot)
+	}
+	// isWithin is purely lexical, so it cannot see a symlinked path component:
+	// a container that can plant a symlink at .dwe/tests/runs (or any ancestor)
+	// pointing outside the project would make os.RemoveAll(copy_path) resolve
+	// through it and delete host state outside the test root, even though the
+	// literal string is the canonical run dir. Prove no existing component
+	// between the project root and the deletion target is a symlink before any
+	// teardown runs (a not-yet-created run dir stops the walk early and is a
+	// safe no-op for RemoveAll).
+	if err := pathsafe.CheckNoSymlinks(baseDir, expectedCopy, "copy_path"); err != nil {
+		return err
+	}
+	if want := bridge.DefaultBridgeDir(m.CopyPath); !samePath(m.BridgeDir, want) {
+		return fmt.Errorf("bridge_dir %q is not %q", m.BridgeDir, want)
+	}
+	// compose_project drives destructive Docker teardown (container reap by
+	// label, volume removal by prefix). It is just as attacker-influenceable as
+	// the paths above, so it must be pinned too — a canonical copy_path/bridge_dir
+	// otherwise lets a crafted manifest aim teardown at another compose project.
+	if err := validateComposeProject(m); err != nil {
+		return err
+	}
+	return nil
+}
+
+// validateComposeProject pins m.ComposeProject to the runner-derived identity.
+//
+// It NEVER re-derives that identity from the CURRENT root config: a run kept
+// (--keep) or left behind by a failure before the developer renamed the project
+// (`project.name`/`project.prefix` changed) still records — and its copy is
+// still stamped with — the exact compose project the run created. Matching the
+// current config's derived name would then reject a legitimate manifest and
+// strand its copy + Docker resources, contradicting `dwe test clean`'s
+// manifest+copy recovery contract. Instead:
+//
+//   - The value must ALWAYS carry the normalised "-t-<scenario>-<runID>" test
+//     infix the runner unconditionally produces (regardless of base) — a floor
+//     that the real dev environment ("<base>") never satisfies, so teardown can
+//     never be aimed at it even if the copy's own identity were tampered.
+//   - When the disposable copy still loads, pin exactly to the identity it was
+//     stamped with at run time (config-drift-proof; the same value the copy's
+//     own `docker compose down` resolves), so a crafted manifest cannot point
+//     teardown at a different in-range project. A gone/unloadable copy degrades
+//     to the infix floor alone (nothing left to cross-check against).
+func validateComposeProject(m *Manifest) error {
+	suffix := normalizeComposeName("-t-" + m.Scenario + "-" + m.RunID)
+	if !strings.HasSuffix(m.ComposeProject, suffix) {
+		return fmt.Errorf("compose_project %q lacks the expected test suffix %q", m.ComposeProject, suffix)
+	}
+	if want, ok := copyComposeIdentity(m.CopyPath); ok && m.ComposeProject != want {
+		return fmt.Errorf("compose_project %q is not the copy's stamped identity %q", m.ComposeProject, want)
+	}
+	return nil
+}
+
+// copyComposeIdentity returns the compose project name the disposable copy was
+// stamped with at run time (WriteDockerIdentity → the copy's docker.yml /
+// docker.local.yml project_name), resolved exactly as the copy's own `docker
+// compose` invocations resolve it (config.ComposeProjectName). ok is false when
+// the copy is gone or its config no longer loads — a degraded manifest whose
+// copy was already removed — in which case the caller falls back to the infix
+// shape check alone. This value reflects the project identity when the run was
+// created, so it survives a later project rename.
+func copyComposeIdentity(copyPath string) (string, bool) {
+	cfg, dockerCfg, err := loadCopyConfig(copyPath)
+	if err != nil {
+		return "", false
+	}
+	name := config.ComposeProjectName(dockerCfg, cfg)
+	if name == "" {
+		return "", false
+	}
+	return name, true
+}
+
+// samePath reports whether a and b denote the same filesystem path, tolerating
+// clean/abs differences between the base dir recorded at run time and the one
+// passed to Clean (both are normally absolute, so this only matters at the
+// margins — it must never reject a legitimate manifest).
+func samePath(a, b string) bool {
+	if filepath.Clean(a) == filepath.Clean(b) {
+		return true
+	}
+	aa, err1 := filepath.Abs(a)
+	bb, err2 := filepath.Abs(b)
+	return err1 == nil && err2 == nil && aa == bb
+}
+
+// isWithin reports whether p is root itself or nested under it (no "../"
+// escape), comparing lexically after Clean.
+func isWithin(root, p string) bool {
+	rel, err := filepath.Rel(root, p)
+	if err != nil {
+		return false
+	}
+	return rel == "." || (rel != ".." && !strings.HasPrefix(rel, ".."+string(filepath.Separator)))
 }
 
 // sweepManifest classifies and (unless DryRun) tears down a single manifest,
@@ -168,6 +324,15 @@ func Clean(ctx context.Context, req CleanRequest) (*CleanResult, error) {
 // before returning.
 func sweepManifest(req CleanRequest, path string, m *Manifest, warn func(string), result *CleanResult) {
 	entry := CleanEntry{Scenario: m.Scenario, ComposeProject: m.ComposeProject, CopyPath: m.CopyPath}
+
+	// Never run a destructive teardown against a manifest whose declared paths
+	// don't match what the runner would deterministically produce (tampered or
+	// corrupted). Report it and move on — never os.RemoveAll a claimed path.
+	if err := validateManifestIdentity(req.BaseDir, path, m); err != nil {
+		warn(fmt.Sprintf("clean: %s: refusing untrusted manifest %s: %v", m.Scenario, path, err))
+		result.Skipped = append(result.Skipped, SkippedEntry{CleanEntry: entry, Reason: "invalid manifest"})
+		return
+	}
 
 	lk, err := lock.Acquire(LockPath(req.BaseDir, m.Scenario))
 	if err != nil {
@@ -201,10 +366,10 @@ func sweepManifest(req CleanRequest, path string, m *Manifest, warn func(string)
 // best-effort and never turns Clean itself into a failure — a broken root
 // config or an unreachable Docker daemon only means the advisory scan is
 // skipped, not that the sweep above is undone.
-func scanOrphans(ctx context.Context, baseDir string, known map[string]bool, warn func(string), result *CleanResult) {
-	origCfg, err := config.LoadConfigOrWrap(filepath.Join(baseDir, "workspace.yml"))
-	if err != nil {
-		warn(fmt.Sprintf("clean: loading project config, skipping orphan scan: %v", err))
+func scanOrphans(ctx context.Context, origCfg *config.DweConfig, known map[string]bool, warn func(string), result *CleanResult) {
+	if origCfg == nil {
+		// Root config failed to load (already warned in Clean); the advisory
+		// orphan scan needs it for the docker bin + prefix, so skip it.
 		return
 	}
 
