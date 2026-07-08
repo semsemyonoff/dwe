@@ -341,15 +341,15 @@ a thin CLI layer:
 - Modify: `internal/core/workflow/envtest/run.go` (extract shared `projectBaseName(cfg)`
   used by `ComposeProjectName`; add `ListManifests(baseDir)`)
 
-- [ ] extract `projectBaseName(cfg) string` (prefix-or-name) + the shared normalisation
+- [x] extract `projectBaseName(cfg) string` (prefix-or-name) + the shared normalisation
       out of `ComposeProjectName` so the orphan prefix cannot drift from the real
       compose-name derivation; add `ListManifests(baseDir string) ([]string, error)`
       (all `<scenario>-<runid>.yml`, sorted; absent dir → nil,nil)
-- [ ] define `CleanRequest`, `CleanResult`, `CleanEntry`, `SkippedEntry`, `FailedEntry`,
+- [x] define `CleanRequest`, `CleanResult`, `CleanEntry`, `SkippedEntry`, `FailedEntry`,
       `OrphanEntry` and the package seams `cleanTeardownFn` (default → `Teardown(ctx, m,
       NewTeardownDeps(manifestPath, nil), warn)`) and `listComposeProjectsFn`
       (default → `docker ps -a --format '{{.Label "com.docker.compose.project"}}'`, deduped)
-- [ ] implement `Clean(ctx, CleanRequest) (*CleanResult, error)`: enumerate manifests
+- [x] implement `Clean(ctx, CleanRequest) (*CleanResult, error)`: enumerate manifests
       (**unreadable** dir → hard error; absent → empty); build `known` from the **full**
       manifest set; filter by `Scenarios`; per manifest flock-guard via `errors.As` for
       `*lock.HeldError` → skipped-live, any other lock error → skipped + warn; dry-run →
@@ -359,7 +359,7 @@ a thin CLI layer:
       the orphan scan (still sweep); report-only, best-effort orphan scan (prefix
       `normalize(projectBaseName(origCfg)+"-t-")` minus `known`; a `listComposeProjectsFn`
       error → warn + empty orphans, never abort); assemble `CleanResult`
-- [ ] write tests (temp dirs, recording `cleanTeardownFn`, scripted `listComposeProjectsFn`,
+- [x] write tests (temp dirs, recording `cleanTeardownFn`, scripted `listComposeProjectsFn`,
       real `lock.Acquire`): two free manifests → both swept in order; a manifest whose
       scenario flock is held → skipped-live, teardown NOT called; `--dry-run` → would-sweep,
       teardown NOT called, flock released afterward; name filter → only matching processed,
@@ -368,7 +368,7 @@ a thin CLI layer:
       **origCfg-load failure → manifests still swept, orphans empty (NO hard error)**;
       `listComposeProjectsFn` error → orphans empty, sweep result intact;
       **`cleanTeardownFn` returning an error → entry in `Failed` (NOT `Swept`), warn emitted**
-- [ ] run `go test ./internal/core/workflow/envtest/...` — must pass before task 4
+- [x] run `go test ./internal/core/workflow/envtest/...` — must pass before task 4
 
 ### Task 4: CLI `dwe test clean` (command, JSON, registration, `--keep` hint, policy pin)
 
