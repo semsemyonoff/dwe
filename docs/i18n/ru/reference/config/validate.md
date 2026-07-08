@@ -1,4 +1,4 @@
-> Translated from: reference/config/validate.md @ bc018d43e3ab
+> Translated from: reference/config/validate.md @ e1e4acbc2ce5
 
 # validate.yml
 
@@ -20,6 +20,7 @@
   - [`env_keys_present`](#env_keys_present)
   - [`config_keys_present`](#config_keys_present)
   - [`tcp_reachable`](#tcp_reachable)
+  - [`http_check`](#http_check)
 - [Проверки `type: command`](#проверки-type-command)
 - [Проверки должны быть идемпотентной инспекцией](#проверки-должны-быть-идемпотентной-инспекцией)
 - [Разобранные примеры](#разобранные-примеры)
@@ -166,7 +167,7 @@ checks:
 
 ## Доступные билтины
 
-Все шесть билтинов применимы и как записи `type: builtin` проверок, и как тела шагов деплоя / блоки экшенов `check:`.
+Все семь билтинов применимы и как записи `type: builtin` проверок, и как тела шагов деплоя / блоки экшенов `check:`.
 
 ### `shell`
 
@@ -231,6 +232,21 @@ checks:
 | `host` | string | да | — | Имя хоста или IP. |
 | `port` | int | да | — | Порт в диапазоне 1–65535. |
 | `timeout` | duration | нет | `3s` | Таймаут dial'а. |
+
+### `http_check`
+
+Выполняет HTTP `GET` и утверждает статус ответа (и, когда задано, подстроку тела), повторяя при сбое.
+
+| Ключ | Тип | Обязательное | По умолчанию | Описание |
+|-----|------|----------|---------|-------------|
+| `url` | string | да | — | Абсолютный `http`/`https` URL с хостом. |
+| `status` | int | нет | `200` | Ожидаемый код статуса. |
+| `contains` | string | нет | — | Подстрока, которая должна присутствовать в теле ответа. |
+| `retries` | int | нет | `0` | Дополнительные попытки после первой (всего попыток = `retries + 1`). |
+| `interval` | duration | нет | `1s` | Ожидание между попытками. |
+| `timeout` | duration | нет | `5s` | Таймаут на попытку. |
+
+Сообщение об ошибке при сбое: `http_check <url>: expected status 200, got 503` (с добавлением `(after N attempts)`, когда настроены ретраи). Полное описание поведения см. в [справочнике билтинов](deploy/builtins.md#http_check).
 
 ## Проверки `type: command`
 

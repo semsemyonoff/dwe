@@ -84,6 +84,9 @@ func TestBridgeCommandAllowed_table(t *testing.T) {
 		{"dwe services enable", false},
 		{"dwe snapshot", false},
 		{"dwe snapshot list", false},
+		{"dwe test", false},
+		{"dwe test run", false},
+		{"dwe test list", false},
 		{"dwe render", false},
 		{"dwe init", false},
 		{"dwe shell", false},
@@ -261,7 +264,7 @@ func TestApplyBridgeContainerVisibility_realTree(t *testing.T) {
 	t.Setenv(bridgecore.EnvInvokedFrom, bridgecore.InvokedFromContainer)
 	root := NewRootCmd()
 
-	hidden := []string{"stop", "restart", "reset", "run", "deploy", "services", "snapshot", "init", "shell", "docker", "compose", "validate", "completion"}
+	hidden := []string{"stop", "restart", "reset", "run", "deploy", "services", "snapshot", "test", "init", "shell", "docker", "compose", "validate", "completion"}
 	for _, name := range hidden {
 		if cmd := findTopLevel(t, root, name); !cmd.Hidden {
 			t.Errorf("blocked command %q must be hidden in container context", name)

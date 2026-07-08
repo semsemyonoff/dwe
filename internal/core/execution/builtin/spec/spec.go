@@ -56,7 +56,8 @@ const (
 	// KindAction builtins are user-callable step actions (confirm, message, service_configs_copy, etc.).
 	// They run in the body of a deploy/lifecycle step authored in YAML.
 	KindAction Kind = iota
-	// KindPredicate builtins are read-only checks used in check: positions and validate.yml cmd: entries.
+	// KindPredicate builtins are read-only checks used in check: positions, validate.yml cmd: entries,
+	// and step bodies (where they act as assertions: false fails the step).
 	// They MUST NOT have side effects (no volume removal, no container starts).
 	KindPredicate
 	// KindInternal builtins are engine-only; they cannot be invoked from user-authored YAML.
@@ -70,7 +71,8 @@ type CallerContext int
 
 const (
 	// CtxUserYAML is used when a builtin is invoked from user-authored YAML (deploy.yml step body,
-	// commands.yml type: builtin). Only KindAction builtins are allowed here.
+	// commands.yml type: builtin). KindAction and KindPredicate builtins are allowed here;
+	// a predicate in this context is an assertion (false fails the step).
 	CtxUserYAML CallerContext = iota
 	// CtxPredicate is used when a builtin is invoked from a check: position in a pipeline step
 	// or from a validate.yml cmd: entry. KindAction and KindPredicate builtins are both allowed here.

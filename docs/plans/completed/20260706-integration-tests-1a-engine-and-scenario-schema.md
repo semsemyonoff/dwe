@@ -173,27 +173,36 @@ Three independent seams, in dependency order:
 - Modify: `internal/core/execution/builtin/builtin.go`
 - Modify: `internal/core/execution/builtin/builtin_test.go`
 
-- [ ] relax `kindAllowed` so `KindPredicate` is permitted in the step-body context
+- [x] relax `kindAllowed` so `KindPredicate` is permitted in the step-body context
       (keep `KindInternal` engine-only; `check:`/validate contexts unchanged)
-- [ ] add an exported kind classifier — `KindOf(name) (Kind, bool)` or
-      `IsPredicate(name) bool` (mirror the existing `IsInteractive` accessor) — Task 3's
+- [x] add an exported kind classifier — `KindOf(name) (Kind, bool)` chosen (mirrors
+      the existing `IsInteractive` accessor) — Task 3's
       `StepForcesRun` needs it; `Get(cmd, CtxPredicate)` cannot distinguish predicates
-- [ ] update the `kindAllowed` doc comment (predicate-as-body = assertion semantics)
+- [x] update the `kindAllowed` doc comment (predicate-as-body = assertion semantics)
       AND the `KindPredicate` branch of `kindMismatchHint` (~line 156–166) — its "not
-      as a step body action" text becomes wrong; check no golden asserts the old text
-- [ ] update existing assertions that must intentionally flip:
-      `builtin_test.go`'s `userYAMLOK` matrix predicate rows (false → true, ~line
-      128–149) and the "predicate builtin rejected from step body" subtest (~line 200)
-      — inverted/removed as the intended capability change, not a regression
-- [ ] write tests: each context × kind matrix (predicate now allowed as body;
+      as a step body action" text becomes wrong; verified no golden asserts the old
+      text (repo-wide grep); also refreshed the stale `CtxUserYAML`/`KindPredicate`
+      doc comments in `builtin/spec/spec.go`
+- [x] update existing assertions that must intentionally flip:
+      `builtin_test.go`'s `userYAMLOK` matrix predicate rows (false → true) and the
+      "predicate builtin rejected from step body" subtest (inverted to
+      allowed-as-body + a new rejected-from-CtxInternal subtest)
+      — inverted as the intended capability change, not a regression
+      ➕ two `pipeline/executor_test.go` tests also pinned the old rule and flipped
+      here (not Task 2): `TestExecAction_PredicateBuiltin_RejectedInBody` →
+      `…_AllowedInBody`, `TestResolvePhaseSteps_BodyWithPredicateBuiltin` now
+      expects success
+- [x] write tests: each context × kind matrix (predicate now allowed as body;
       internal still rejected; action unchanged) + the new kind classifier
-- [ ] cover the shared-context side effect: `CtxUserYAML` also validates user-command
+      (`TestKindOf`)
+- [x] cover the shared-context side effect: `CtxUserYAML` also validates user-command
       `type: builtin` definitions, so predicate builtins become legal as user
-      commands — add a test pinning this as intentional (do NOT split the context)
-- [ ] run `go test ./internal/core/execution/...` and
+      commands — `TestPredicateAsUserCommand_Intentional` pins this (do NOT split
+      the context)
+- [x] run `go test ./internal/core/execution/...` and
       `go test ./internal/core/validate/...` (checks domain is `CtxPredicate`-only,
-      pre-verified unaffected — the run is the regression net) — must pass before
-      task 2
+      pre-verified unaffected — the run is the regression net) — pass; also ran
+      `go test ./internal/core/usercommands/...` (shared-context consumer) — pass
 
 ### Task 2: Assertion semantics through the executor
 
@@ -204,16 +213,26 @@ Three independent seams, in dependency order:
   there too)
 - Create/Modify: executor/resolve tests in `internal/core/execution/pipeline/`
 
-- [ ] verify a `type: builtin` step with a predicate cmd resolves (plan-time
+- [x] verify a `type: builtin` step with a predicate cmd resolves (plan-time
       `builtin.Validate` path) and executes; open any remaining body-kind gates found
-- [ ] ensure predicate `false` surfaces as a normal step failure with the predicate's
-      message (no new error type), and `true` as step success
-- [ ] write pipeline test: `file_exists` body, file present → step ok
-- [ ] write pipeline test: `file_exists` body, file absent → step failed, message
+      — no remaining gates: both `resolveLeafStep` (plan-time) and
+      `executeStepBody`/`execBuiltinAction` (runtime) route through the shared
+      `kindAllowed` via `CtxUserYAML`, relaxed in Task 1; **no executor/resolve code
+      changes needed** (predicates already return error on false)
+- [x] ensure predicate `false` surfaces as a normal step failure with the predicate's
+      message (no new error type), and `true` as step success — verified: builtin
+      `Run` error flows into `FailStep(addr, …, stepErr)` + `ErrSilent` unchanged
+- [x] write pipeline test: `file_exists` body, file present → step ok
+      (`TestRunPipeline_PredicateBody_FileExists_True` — resolves via
+      `ResolvePhaseSteps` then runs, covering the full path)
+- [x] write pipeline test: `file_exists` body, file absent → step failed, message
       contains the predicate's explanation; subsequent steps skipped
-- [ ] write resolve test: predicate body passes plan-time validation; `KindInternal`
-      body still rejected
-- [ ] run `go test ./internal/core/execution/...` — must pass before task 3
+      (`TestRunPipeline_PredicateBody_FileExists_False`)
+- [x] write resolve test: predicate body passes plan-time validation; `KindInternal`
+      body still rejected — already covered by Task 1's flipped tests
+      (`TestResolvePhaseSteps_BodyWithPredicateBuiltin`,
+      `TestResolvePhaseSteps_UserPhaseRejectsInternalBuiltin`); no duplicates added
+- [x] run `go test ./internal/core/execution/...` — must pass before task 3 — pass
 
 ### Task 3: Shared always-run helper wired into both deploy skip sites
 
@@ -225,27 +244,37 @@ Three independent seams, in dependency order:
   decider `hasCheck` site ~768)
 - Modify: `internal/cli/deploy/` tests
 
-- [ ] implement `StepForcesRun(step)` in the pipeline package (using Task 1's kind
+- [x] implement `StepForcesRun(step)` in the pipeline package (using Task 1's kind
       classifier): true for `check:` steps and predicate-body builtin steps; recurse
       one level into parallel substeps (deeper nesting is schema-rejected).
       Predicate-body detection must be
       `step.Type == "builtin" && KindOf(step.Cmd) == KindPredicate` — never classify
       by `cmd` alone (a `type: shell` step whose command text is `shell` must not
-      force execution)
-- [ ] extract deploy's inline early-gate scan (~572–598) into a small function so the
+      force execution) — landed as `pipeline.StepForcesRun(rs ResolvedStep)` in
+      `forcesrun.go` (takes the resolved step, so both deploy sites pass their
+      existing values; parallel recursion via `rs.Parallel.Steps`)
+- [x] extract deploy's inline early-gate scan (~572–598) into a small function so the
       predicate case gets a focused unit test (the scan is currently inline in the
       large `runDeploy`), then wire `StepForcesRun` into it alongside the existing
-      `check:`/`files_gate` scan (keep `files_gate` handling as-is)
-- [ ] wire it into the per-step skip decider (replace the bare
+      `check:`/`files_gate` scan (keep `files_gate` handling as-is) — extracted as
+      `hasAlwaysRunSteps(steps)` in `deploy.go` (`StepForcesRun` covers check: +
+      predicate bodies; files_gate scan incl. parallel substeps kept alongside)
+- [x] wire it into the per-step skip decider (replace the bare
       `rs.Step.Check != nil` with the helper so `journal.Decide`'s force-run lever
       covers predicate bodies)
-- [ ] write helper tests: check-step, predicate-body step, action-body step, parallel
-      substep containing a predicate
-- [ ] write early-gate unit test (extracted function): pipeline whose only
+      ➕ the decider closure was also extracted from `runDeploy` into
+      `makeSkipDecider(opts, state, projectHash, serviceHashes)` (logic unchanged)
+      so the "journaled predicate re-runs" test exercises the real decider, not a
+      simulation
+- [x] write helper tests: check-step, predicate-body step, action-body step, parallel
+      substep containing a predicate (`forcesrun_test.go`; also: shell step whose
+      cmd text is a builtin name, unknown builtin, parallel check-substep)
+- [x] write early-gate unit test (extracted function): pipeline whose only
       change-forcing step is a predicate body is NOT early-gated; plus a decider test:
       journaled predicate step re-runs on second deploy
-- [ ] run `go test ./internal/core/execution/... ./internal/cli/deploy/...` — must
-      pass before task 4
+      (`internal/cli/deploy/forcesrun_test.go`)
+- [x] run `go test ./internal/core/execution/... ./internal/cli/deploy/...` — must
+      pass before task 4 — pass; `golangci-lint` on both packages clean
 
 ### Task 4: `http_check` builtin
 
@@ -255,21 +284,24 @@ Three independent seams, in dependency order:
 - Modify: `internal/core/execution/builtin/builtin.go` (registry entry)
 - Modify: `internal/core/validate/checks/loader.go` (checks allowlist)
 
-- [ ] implement `http_check` as `KindPredicate` (model: `tcp_reachable.go`): params
+- [x] implement `http_check` as `KindPredicate` (model: `tcp_reachable.go`): params
       `url` (required, must parse as http/https), `status` (default 200), `contains`
       (optional), `retries` (default 0), `interval` (default 1s), `timeout`
-      (per-attempt, default 5s)
-- [ ] implement `Validate` for plan-time param checking (types, url shape, positive
+      (per-attempt, default 5s) — landed in `builtin/http_check.go`
+- [x] implement `Validate` for plan-time param checking (types, url shape, positive
       durations) and the retry loop in `Run` (attempts = retries+1, wait `interval`
-      between)
-- [ ] register in `buildRegistry`
-- [ ] add `http_check` to the hardcoded `workspace/validate.yml` checks allowlist
-      (`internal/core/validate/checks/loader.go:~41`) + allowlist test
-- [ ] write tests against `httptest.Server`: 200 ok; wrong status → false with
-      message; `contains` match/mismatch; retries: fail-then-succeed; per-attempt
-      timeout on a hanging handler; invalid params rejected by `Validate`
-- [ ] run `go test ./internal/core/execution/builtin/... ./internal/core/validate/...`
-      — must pass before task 5
+      between) — `interval` waits are ctx-cancellable; per-attempt `timeout` via
+      `context.WithTimeout`; added `getOptionalIntParam` (default-on-absent int helper)
+- [x] register in `buildRegistry` (also listed in the package doc comment)
+- [x] add `http_check` to the hardcoded `workspace/validate.yml` checks allowlist
+      (`internal/core/validate/checks/loader.go:~41`) + updated the allowlist error
+      message string; existing checks tests are the regression net
+- [x] write tests against `httptest.Server`: 200 ok; wrong status → false with
+      message; custom status; `contains` match/mismatch; retries: fail-then-succeed +
+      exhausted; per-attempt timeout on a hanging handler; connection-refused; invalid
+      params rejected by `Validate`; also bumped `allBuiltinNames`/registry-count test
+- [x] run `go test ./internal/core/execution/builtin/... ./internal/core/validate/...`
+      — pass
 
 ### Task 5: Builtin reference docs
 
@@ -279,16 +311,18 @@ Three independent seams, in dependency order:
 - Modify: `docs/reference/config/validate.md` (checks list mentions "all six builtins")
 - Modify (if the ru mirror covers these pages): `docs/i18n/ru/reference/...`
 
-- [ ] document predicate-as-body assertion semantics (false fails the step; always
+- [x] document predicate-as-body assertion semantics (false fails the step; always
       re-run, never skipped by deploy's state gates; `when:` still applies) in
       `steps.md` and the builtins page preamble
-- [ ] document `http_check` (params table + example) in `builtins.md`
-- [ ] update `docs/reference/config/validate.md`: add `http_check` to the checks
-      builtin list (fix the "all six builtins" count)
-- [ ] mirror the same edits in the ru docs tree if these pages exist there
-- [ ] run `make build` (re-embeds docs, regenerates content hashes) and
+- [x] document `http_check` (params table + example) in `builtins.md`
+- [x] update `docs/reference/config/validate.md`: add `http_check` to the checks
+      builtin list (fix the "all six builtins" count → "all seven builtins")
+- [x] mirror the same edits in the ru docs tree (builtins.md / steps.md / validate.md);
+      refreshed each ru file's `Translated from` provenance hash to satisfy
+      `TestRussianTranslationsAreFresh`
+- [x] run `make build` (re-embeds docs, regenerates content hashes) and
       `make test` docs-subsystem packages (`go test ./internal/core/docs/...`) —
-      must pass before task 6
+      pass
 
 ### Task 6: `envtest` package — scenario types + strict loader
 
@@ -298,32 +332,35 @@ Three independent seams, in dependency order:
 - Create: `internal/core/workflow/envtest/testdata/` fixtures
 - Modify: `internal/core/project/config/workspace.go` (export step-shape validation)
 
-- [ ] export a thin config helper `config.ValidateDeploySteps(steps []DeployStep,
+- [x] export a thin config helper `config.ValidateDeploySteps(steps []DeployStep,
       context string) error` wrapping the existing unexported `validateStepShape` /
       `validatePhaseSteps` (~`workspace.go:3117/3157`) — full step-shape validation
       (required `type`/`cmd`, legal action types, `when:`/`check:`) is otherwise
       unreachable outside `project/config`; + tests in `project/config`
-- [ ] define `Scenario` (Description, Env{Services{Enable,Disable []string},
+      (`validate_deploy_steps_test.go`; loops `validateStepShape` over a flat slice)
+- [x] define `Scenario` (Description, Env{Services{Enable,Disable []string},
       Vars map[string]any}, Timeout, Steps []config.DeployStep); `auto` var values
       stay raw strings — only the `AutoPortSentinel = "auto"` constant ships here
-      (allocation is 1b; add nothing else speculative for 1b)
-- [ ] implement `LoadScenario(path)` — strict decode (`KnownFields(true)`); empty /
+      (allocation is 1b; add nothing else speculative for 1b) — `Timeout` kept a raw
+      string (parsed by 1b), matching the string-timeout convention
+- [x] implement `LoadScenario(path)` — strict decode (`KnownFields(true)`); empty /
       all-comment file is an error ("scenario file is empty"), deliberate divergence
       from pipeline `Ensure*` defaults (spec §8 carve-out); after decode, call
-      `config.ValidateDeploySteps`
-- [ ] scenario loader accepts the **full** existing `config.DeployStep` field set
+      `config.ValidateDeploySteps` — io.EOF is NOT tolerated (unlike pipeline loaders)
+- [x] scenario loader accepts the **full** existing `config.DeployStep` field set
       (`files_gate`, `parallel`, `continue_on_error`, …) — no test-only step
       allowlist; it rejects only malformed schema/shape. Registry-dependent
       validation (command existence, `sub_step_overrides`) stays with
       `ResolvePhaseSteps`/the 1b runner
-- [ ] implement `ListScenarios(baseDir)` over `workspace/tests/*.yml`; scenario name
+- [x] implement `ListScenarios(baseDir)` over `workspace/tests/*.yml`; scenario name
       = basename without `.yml`, must already match `^[a-z0-9][a-z0-9_-]*$` — reject
-      otherwise with a clear error; no case-folding or sanitising
-- [ ] write table tests: valid fixture; unknown top-level field; unknown step field;
+      otherwise with a clear error; no case-folding or sanitising (absent dir →
+      empty list, no error; `.yaml` accepted too)
+- [x] write table tests: valid fixture; unknown top-level field; unknown step field;
       missing `type`; missing `cmd`; unknown `type`; invalid `when`; invalid
       filename; empty file; `auto` var kept raw; enable/disable lists
-- [ ] run `go test ./internal/core/workflow/envtest/... ./internal/core/project/config/...`
-      — must pass before task 7
+- [x] run `go test ./internal/core/workflow/envtest/... ./internal/core/project/config/...`
+      — must pass before task 7 — pass; `golangci-lint` on both packages clean
 
 ### Task 7: Loader-side `${...}` rendering of step `cmd:`/`with:`
 
@@ -331,25 +368,35 @@ Three independent seams, in dependency order:
 - Create: `internal/core/workflow/envtest/render.go`
 - Create: `internal/core/workflow/envtest/render_test.go`
 
-- [ ] implement `RenderSteps(steps, cfg)` — renders `cmd:` and every string leaf under
+- [x] implement `RenderSteps(steps, cfg)` — renders `cmd:` and every string leaf under
       `with:` through the `${...}` substrate (`internal/shared/tpl`) against
       `cfg.Raw`; non-string YAML types (ints, bools, nested maps/lists) preserved
-      untouched; absent path → empty string (substrate's lenient semantics)
-- [ ] order contract in doc comment: rendering runs BEFORE `ResolvePhaseSteps` so
+      untouched; absent path → empty string (substrate's lenient semantics) —
+      landed in `render.go`; also recurses one level into parallel substeps (same
+      cmd/with rendering) and nil-config-safe
+- [x] order contract in doc comment: rendering runs BEFORE `ResolvePhaseSteps` so
       plan-time `builtin.Validate` sees rendered params (spec §4)
-- [ ] write tests: `${vars.x}` in `cmd:`; string leaf in nested `with:` map; int/bool
+- [x] write tests: `${vars.x}` in `cmd:`; string leaf in nested `with:` map; int/bool
       `with:` values untouched; absent var → empty string; step without `with:`
-- [ ] run `go test ./internal/core/workflow/envtest/...` — must pass before task 8
+      — plus string leaves in `with:` lists, parallel substeps, and nil config
+- [x] run `go test ./internal/core/workflow/envtest/...` — must pass before task 8 —
+      pass; `golangci-lint` clean
 
 ### Task 8: Verify acceptance criteria
 
-- [ ] verify against spec §4: predicate bodies legal everywhere, assertion semantics,
+- [x] verify against spec §4: predicate bodies legal everywhere, assertion semantics,
       always-run at both deploy gates, `http_check` shape, scenario schema matches the
-      spec example (minus 1b-owned behaviour)
-- [ ] verify backward compatibility: no existing golden/test changed except ones
-      explicitly extended for the new capability
-- [ ] run full suite: `make test`
-- [ ] run `make lint`
+      spec example (minus 1b-owned behaviour) — confirmed present: `kindAllowed`
+      relaxation + `KindOf` classifier; `pipeline.StepForcesRun` wired into both deploy
+      gates (`hasAlwaysRunSteps` early gate + `makeSkipDecider`); `http_check`
+      `KindPredicate` builtin with url/status/contains/retries/interval/timeout;
+      `envtest.LoadScenario`/`ListScenarios`/`RenderSteps` + `AutoPortSentinel` +
+      `config.ValidateDeploySteps`
+- [x] verify backward compatibility: no existing golden/test changed except ones
+      explicitly extended for the new capability — `make test` passes with the full
+      suite green (existing goldens byte-identical; the relaxation is purely permissive)
+- [x] run full suite: `make test` — pass
+- [x] run `make lint` — 0 issues
 
 ### Task 9: [Final] Internals documentation + plan close-out
 
@@ -357,14 +404,18 @@ Three independent seams, in dependency order:
 - Modify: `docs/internals/packages.md`
 - Modify: `AGENTS.md` (only if a critical-pattern entry is warranted)
 
-- [ ] update `docs/internals/packages.md`: builtin-kinds contract (predicate-as-body +
+- [x] update `docs/internals/packages.md`: builtin-kinds contract (predicate-as-body +
       always-run helper and its two deploy call sites), new `envtest` package section
       (scenario schema, loader strictness divergence, render-before-resolve contract)
-- [ ] add/adjust an AGENTS.md critical-pattern bullet only if the always-run helper
+      — added `StepForcesRun` to the pipeline entry, the `kindAllowed` relaxation +
+      `KindOf` + `http_check` to the builtin entry, and a full `envtest` package section
+- [x] add/adjust an AGENTS.md critical-pattern bullet only if the always-run helper
       contract is load-bearing enough to trap future contributors (judge at
-      implementation time; default: packages.md only)
-- [ ] run `make build` (embeds updated internals docs)
-- [ ] move this plan to `docs/plans/completed/`
+      implementation time; default: packages.md only) — added a concise
+      "Predicate-as-body assertions + always-run" bullet (the `Type == "builtin"`
+      gating trap + the two deploy call sites span three packages, warranting it)
+- [x] run `make build` (embeds updated internals docs) — pass; docs-subsystem tests green
+- [x] move this plan to `docs/plans/completed/`
 
 ## Post-Completion
 

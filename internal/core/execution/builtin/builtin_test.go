@@ -139,14 +139,15 @@ func TestKindCategorization(t *testing.T) {
 		{"docker_remove_project_volumes", KindAction, true, true, false},
 		{"docker_wait_healthy", KindAction, true, true, false},
 		{"remove_paths", KindAction, true, true, false},
-		// KindPredicate: only in check: (CtxPredicate) — NEVER in step body
-		{"containers_running", KindPredicate, false, true, false},
-		{"shell", KindPredicate, false, true, false},
-		{"file_exists", KindPredicate, false, true, false},
-		{"executable_in_path", KindPredicate, false, true, false},
-		{"env_keys_present", KindPredicate, false, true, false},
-		{"tcp_reachable", KindPredicate, false, true, false},
-		{"config_keys_present", KindPredicate, false, true, false},
+		// KindPredicate: check: (CtxPredicate) AND step body (CtxUserYAML) —
+		// a predicate body is an assertion (false fails the step)
+		{"containers_running", KindPredicate, true, true, false},
+		{"shell", KindPredicate, true, true, false},
+		{"file_exists", KindPredicate, true, true, false},
+		{"executable_in_path", KindPredicate, true, true, false},
+		{"env_keys_present", KindPredicate, true, true, false},
+		{"tcp_reachable", KindPredicate, true, true, false},
+		{"config_keys_present", KindPredicate, true, true, false},
 		// KindInternal: only engine-synthetic contexts (CtxInternal)
 		{"docker_daemon_start", KindInternal, false, false, true},
 		{"docker_daemon_logs", KindInternal, false, false, true},
@@ -197,14 +198,25 @@ func TestGetKindMismatch(t *testing.T) {
 		}
 	})
 
-	t.Run("predicate builtin rejected from step body", func(t *testing.T) {
+	t.Run("predicate builtin allowed as step body (assertion)", func(t *testing.T) {
 		b, ok := Get("containers_running", CtxUserYAML)
-		if ok || b != nil {
-			t.Error("containers_running must not be callable from CtxUserYAML (body position)")
+		if !ok || b == nil {
+			t.Error("containers_running must be callable from CtxUserYAML (predicate body = assertion)")
 		}
-		err := Validate("containers_running", nil, CtxUserYAML)
+		with := map[string]any{"services": []any{"app"}}
+		if err := Validate("containers_running", with, CtxUserYAML); err != nil {
+			t.Errorf("unexpected error for predicate builtin in body context: %v", err)
+		}
+	})
+
+	t.Run("predicate builtin rejected from internal context", func(t *testing.T) {
+		b, ok := Get("containers_running", CtxInternal)
+		if ok || b != nil {
+			t.Error("containers_running must not be callable from CtxInternal")
+		}
+		err := Validate("containers_running", nil, CtxInternal)
 		if err == nil {
-			t.Fatal("expected error for predicate builtin in body context")
+			t.Fatal("expected error for predicate builtin in internal context")
 		}
 		if !strings.Contains(err.Error(), "predicate") {
 			t.Errorf("error should mention predicate, got: %v", err)
@@ -233,6 +245,53 @@ func TestGetKindMismatch(t *testing.T) {
 	})
 }
 
+// --- KindOf classifier ---
+
+func TestKindOf(t *testing.T) {
+	cases := []struct {
+		name   string
+		want   Kind
+		wantOK bool
+	}{
+		{"file_exists", KindPredicate, true},
+		{"tcp_reachable", KindPredicate, true},
+		{"shell", KindPredicate, true},
+		{"message", KindAction, true},
+		{"service_dirs_ensure", KindAction, true},
+		{"daemons_reap", KindInternal, true},
+		{"unknown_builtin_xyz", 0, false},
+		{"", 0, false},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			got, ok := KindOf(tc.name)
+			if ok != tc.wantOK {
+				t.Fatalf("KindOf(%q) ok = %v, want %v", tc.name, ok, tc.wantOK)
+			}
+			if ok && got != tc.want {
+				t.Errorf("KindOf(%q) = %v, want %v", tc.name, got, tc.want)
+			}
+		})
+	}
+}
+
+// TestPredicateAsUserCommand_Intentional pins the shared-context side effect of
+// the predicate-as-body relaxation: CtxUserYAML also validates user-command
+// type: builtin definitions (usercommands runtime), so predicate builtins are
+// legal as user commands. This is intentional — commands and pipelines share
+// the builtin registry; do NOT split the context to undo it.
+func TestPredicateAsUserCommand_Intentional(t *testing.T) {
+	for _, name := range []string{"file_exists", "tcp_reachable", "env_keys_present"} {
+		if _, ok := Get(name, CtxUserYAML); !ok {
+			t.Errorf("predicate %q must be reachable through CtxUserYAML (user-command type: builtin)", name)
+		}
+	}
+	// KindInternal stays engine-only through the same context.
+	if _, ok := Get("daemons_reap", CtxUserYAML); ok {
+		t.Error("daemons_reap must remain unreachable from CtxUserYAML")
+	}
+}
+
 // --- Registry composition ---
 
 // allBuiltinNames enumerates every builtin name expected in the registry after
@@ -241,6 +300,7 @@ var allBuiltinNames = []string{
 	// root (cross-cutting predicates)
 	"shell",
 	"tcp_reachable",
+	"http_check",
 	"config_keys_present",
 	// containers/
 	"docker_daemon_start",
@@ -295,6 +355,7 @@ func TestNoDuplicateRegistryNames(t *testing.T) {
 		{"root", map[string]spec.Entry{
 			"shell":               {Impl: Shell{}, Kind: spec.KindPredicate},
 			"tcp_reachable":       {Impl: TCPReachable{}, Kind: spec.KindPredicate},
+			"http_check":          {Impl: HTTPCheck{}, Kind: spec.KindPredicate},
 			"config_keys_present": {Impl: ConfigKeysPresent{}, Kind: spec.KindPredicate},
 		}},
 		{"containers", containers.Builtins()},

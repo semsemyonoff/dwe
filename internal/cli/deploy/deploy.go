@@ -570,32 +570,11 @@ func RunHelper(ctx context.Context, cmd *cobra.Command, flags *cmdctx.RootFlags,
 	scopeStatus, scopeAllHashMatch, scopeLastRunStatus := computeScopeState(opts, state, projectHash, serviceHashes)
 
 	if !opts.Force && scopeStatus == journal.StatusDeployed {
-		// Check if all hashes match and there are no check: or files_gate: steps.
-		// Steps with files_gate must always re-evaluate the gate (journal-skip bypass),
-		// so an early return here would violate that policy.
-		hasCheckSteps := false
-		hasFilesGateSteps := false
-		for _, rs := range steps {
-			if rs.Step.Check != nil {
-				hasCheckSteps = true
-			}
-			if rs.FilesGate != nil {
-				hasFilesGateSteps = true
-			}
-			if rs.Parallel != nil {
-				for _, sub := range rs.Parallel.Steps {
-					if sub.Step.Check != nil {
-						hasCheckSteps = true
-					}
-					if sub.FilesGate != nil {
-						hasFilesGateSteps = true
-					}
-				}
-			}
-			if hasCheckSteps && hasFilesGateSteps {
-				break
-			}
-		}
+		// Check if all hashes match and no step forces execution (check: /
+		// predicate-body assertion / files_gate). Steps with files_gate must
+		// always re-evaluate the gate (journal-skip bypass), so an early
+		// return here would violate that policy.
+		hasForcedSteps := hasAlwaysRunSteps(steps)
 
 		// For a project-wide deploy, also verify every tracked service is present
 		// and deployed with a matching hash. A prior --service run stamps
@@ -615,7 +594,7 @@ func RunHelper(ctx context.Context, cmd *cobra.Command, flags *cmdctx.RootFlags,
 		}
 
 		lastRunFailed := scopeLastRunStatus == journal.StatusFailed
-		if allTrackedDeployed && !hasCheckSteps && !hasFilesGateSteps && scopeAllHashMatch && !lastRunFailed {
+		if allTrackedDeployed && !hasForcedSteps && scopeAllHashMatch && !lastRunFailed {
 			// In-scope state matches and is clean — skip the pipeline.
 			isNoop = true
 			w.Info("already up-to-date, use `dwe reset && dwe deploy` to redeploy")
@@ -726,48 +705,7 @@ func RunHelper(ctx context.Context, cmd *cobra.Command, flags *cmdctx.RootFlags,
 		}
 	}
 
-	// Build the skip decider closure
-	skipDecider := func(addr string, rs pipeline.ResolvedStep, actionHash string) journal.Decision {
-		if opts.Force {
-			return journal.Run
-		}
-
-		// Determine scope and check config hash
-		var prevStep *journal.StepState
-
-		if rs.Service == "" {
-			// Project-scope step
-			if state.Project.ConfigHash != projectHash {
-				// Project config changed; treat as absent
-				return journal.Run
-			}
-			if state.Project.Phases != nil {
-				if phase, ok := state.Project.Phases[rs.Phase.Name]; ok {
-					if step, ok := phase.Steps[rs.Step.Name]; ok {
-						prevStep = step
-					}
-				}
-			}
-		} else if state.Services != nil {
-			// Service-scope step
-			if svcState, ok := state.Services[rs.Service]; ok {
-				if svcState.ConfigHash != serviceHashes[rs.Service] {
-					// Service config changed; treat as absent
-					return journal.Run
-				}
-				if svcState.Phases != nil {
-					if phase, ok := svcState.Phases[rs.Phase.Name]; ok {
-						if step, ok := phase.Steps[rs.Step.Name]; ok {
-							prevStep = step
-						}
-					}
-				}
-			}
-		}
-
-		hasCheck := rs.Step.Check != nil
-		return journal.Decide(prevStep, actionHash, hasCheck)
-	}
+	skipDecider := makeSkipDecider(opts, state, projectHash, serviceHashes)
 
 	// Construct the FileRecorder. Only stamp project hash for full deploys;
 	// a --service/--services run includes the implicit env step (project-scoped)
@@ -822,6 +760,75 @@ func RunHelper(ctx context.Context, cmd *cobra.Command, flags *cmdctx.RootFlags,
 		w.Info("Deploy log saved to: " + logPath)
 	}
 	return nil
+}
+
+// makeSkipDecider builds the deploy skip decider: it looks up the step's
+// previous journal state within its scope (project or service, invalidated on
+// config-hash change) and delegates to journal.Decide. pipeline.StepForcesRun
+// feeds Decide's force-run lever so check: steps and predicate-body
+// assertions re-run even when the journaled hash matches.
+func makeSkipDecider(opts Opts, state *journal.ProjectState, projectHash string, serviceHashes map[string]string) pipeline.SkipDecider {
+	return func(addr string, rs pipeline.ResolvedStep, actionHash string) journal.Decision {
+		if opts.Force {
+			return journal.Run
+		}
+
+		// Determine scope and check config hash
+		var prevStep *journal.StepState
+
+		if rs.Service == "" {
+			// Project-scope step
+			if state.Project.ConfigHash != projectHash {
+				// Project config changed; treat as absent
+				return journal.Run
+			}
+			if state.Project.Phases != nil {
+				if phase, ok := state.Project.Phases[rs.Phase.Name]; ok {
+					if step, ok := phase.Steps[rs.Step.Name]; ok {
+						prevStep = step
+					}
+				}
+			}
+		} else if state.Services != nil {
+			// Service-scope step
+			if svcState, ok := state.Services[rs.Service]; ok {
+				if svcState.ConfigHash != serviceHashes[rs.Service] {
+					// Service config changed; treat as absent
+					return journal.Run
+				}
+				if svcState.Phases != nil {
+					if phase, ok := svcState.Phases[rs.Phase.Name]; ok {
+						if step, ok := phase.Steps[rs.Step.Name]; ok {
+							prevStep = step
+						}
+					}
+				}
+			}
+		}
+
+		return journal.Decide(prevStep, actionHash, pipeline.StepForcesRun(rs))
+	}
+}
+
+// hasAlwaysRunSteps reports whether any resolved step defeats the
+// already-up-to-date early gate: check: steps and predicate-body assertions
+// (via pipeline.StepForcesRun, which recurses one level into parallel
+// substeps) plus files_gate steps, whose gate must re-evaluate on every
+// deploy regardless of journal state.
+func hasAlwaysRunSteps(steps []pipeline.ResolvedStep) bool {
+	for _, rs := range steps {
+		if pipeline.StepForcesRun(rs) || rs.FilesGate != nil {
+			return true
+		}
+		if rs.Parallel != nil {
+			for _, sub := range rs.Parallel.Steps {
+				if sub.FilesGate != nil {
+					return true
+				}
+			}
+		}
+	}
+	return false
 }
 
 // computeScopeState derives the deploy-gate state for the run's scope. For a
