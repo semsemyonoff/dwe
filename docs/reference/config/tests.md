@@ -193,7 +193,7 @@ Runs by default after every scenario (pass/fail/timeout/Ctrl+C), driven only by 
 
 ## Failure reports
 
-When a scenario does **not** pass (deploy failure, step failure, or timeout) and `--keep` was not used, the runner collects a failure report into `.dwe/tests/reports/<scenario>/` **before** teardown destroys the environment — so the debugging material survives. The directory is cleared and rewritten on every non-passing run (the latest failure is what you debug); a passing scenario or a `--keep` run never touches it.
+When a scenario does **not** pass (deploy failure, step failure, or timeout) and `--keep` was not used, the runner **attempts to collect** a failure report into `.dwe/tests/reports/<scenario>/` **before** teardown destroys the environment — so the debugging material survives. The directory is cleared and rewritten on every non-passing run (the latest failure is what you debug); a passing scenario or a `--keep` run never touches it.
 
 | File | Source |
 |------|--------|
@@ -203,7 +203,7 @@ When a scenario does **not** pass (deploy failure, step failure, or timeout) and
 
 Collection is best-effort throughout and runs under its own fresh timeout (never the scenario's own, possibly-expired, deadline): a missing pipeline log, a docker command that partially fails, or the collector itself timing out is warned and never changes the scenario's pass/fail outcome. If the copy's docker config can't be loaded (the same condition that can break deploy itself), collection falls back to `docker ps -a` / `docker logs`, filtered by the run's exact `com.docker.compose.project` label, so a report is still produced even when compose is unusable.
 
-The report path is surfaced in `dwe test run`'s text output (a `report: <dir>` line under a non-passing scenario) and in its JSON output as `report_dir` (empty for a passing scenario or a `--keep` run).
+The report path is surfaced in `dwe test run`'s text output (a `report: <dir>` line under a non-passing scenario) and in its JSON output as `report_dir` (empty for a passing scenario, a `--keep` run, or when the report directory could not be created).
 
 ## `dwe test run`
 
@@ -291,7 +291,7 @@ dwe test list --output json
 }
 ```
 
-`status` is one of `passed`, `failed`, `error` (`error` = the scenario could not be prepared — copy/config/manifest/validate failure; distinct from a deploy or step failure, which is `failed`). `failed_step` and `report_dir` are omitted when empty (a passing scenario has neither). `report_dir` is the [failure report](#failure-reports) directory for a non-passing scenario; omitted for a passing scenario or a `--keep` run. As with every other read-only/report surface, live pipeline output and the summary line are silenced in JSON mode — the file log under `.dwe/logs/` still records everything.
+`status` is one of `passed`, `failed`, `error` (`error` = the scenario could not be prepared — copy/config/manifest/validate failure; distinct from a deploy or step failure, which is `failed`). `failed_step` and `report_dir` are omitted when empty (a passing scenario has neither). `report_dir` is the [failure report](#failure-reports) directory for a non-passing scenario; omitted for a passing scenario, a `--keep` run, or when collection could not create the report directory. As with every other read-only/report surface, live pipeline output and the summary line are silenced in JSON mode — the file log under `.dwe/logs/` still records everything.
 
 ## Documented limitations
 

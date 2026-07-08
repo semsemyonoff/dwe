@@ -7,6 +7,7 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/semsemyonoff/dwe/internal/core/bridge"
 	"github.com/semsemyonoff/dwe/internal/shared/lock"
@@ -521,6 +522,54 @@ func TestClean_CopyIdentityMismatch_Skipped(t *testing.T) {
 	}
 	if len(result.Skipped) != 1 || result.Skipped[0].Reason != "invalid manifest" {
 		t.Fatalf("expected copy-identity mismatch skipped as invalid, got %+v", result.Skipped)
+	}
+}
+
+func TestClean_UnmatchedScenarioFilter_Warns(t *testing.T) {
+	dir := writeRunnerFixtureProject(t, "x", "")
+	writeCleanManifest(t, dir, "alpha", "aaaaaa", "dwe-t-alpha-aaaaaa")
+
+	var warned []string
+	stubCleanSeams(t, fatalTeardown(t), noOrphans)
+
+	result, err := Clean(context.Background(), CleanRequest{
+		BaseDir:   dir,
+		Scenarios: []string{"typo"}, // no manifest for this name
+		Warn:      func(msg string) { warned = append(warned, msg) },
+	})
+	if err != nil {
+		t.Fatalf("Clean: %v", err)
+	}
+	if len(result.Swept) != 0 || len(result.Skipped) != 0 || len(result.Failed) != 0 {
+		t.Fatalf("a typo'd scenario name must sweep nothing, got %+v", result)
+	}
+	joined := strings.Join(warned, " | ")
+	if !strings.Contains(joined, "typo") || !strings.Contains(joined, "no manifest") {
+		t.Fatalf("expected a warning naming the unmatched scenario, got %v", warned)
+	}
+}
+
+func TestListComposeProjectsReal_BoundedTimeout(t *testing.T) {
+	// A fake docker bin that ignores its args and hangs — models a wedged daemon.
+	// Without the bounded context in listComposeProjectsReal this would block the
+	// whole clean invocation; with it, the call must return promptly with an error.
+	script := filepath.Join(t.TempDir(), "hang.sh")
+	if err := os.WriteFile(script, []byte("#!/bin/sh\nsleep 10\n"), 0o755); err != nil {
+		t.Fatalf("writing fake docker bin: %v", err)
+	}
+
+	orig := orphanScanTimeout
+	orphanScanTimeout = 50 * time.Millisecond
+	t.Cleanup(func() { orphanScanTimeout = orig })
+
+	start := time.Now()
+	_, err := listComposeProjectsReal(context.Background(), script)
+	elapsed := time.Since(start)
+	if err == nil {
+		t.Fatal("expected a timeout error from the hung docker bin")
+	}
+	if elapsed > 2*time.Second {
+		t.Fatalf("listComposeProjectsReal did not honor orphanScanTimeout: took %v", elapsed)
 	}
 }
 

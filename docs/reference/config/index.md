@@ -134,4 +134,4 @@ For more details on `docker.local.yml` semantics and examples, see [docker.yml](
 - `dwe status infra` — show infra services table (read-only)
 - `dwe test run` — run isolated integration-test scenarios against a disposable copy of the project
 - `dwe test list` — list available integration-test scenarios
-- `dwe test clean` — remove orphaned or kept integration-test environments (manifest-driven; `--dry-run`, `[scenario...]`)
+- `dwe test clean` — sweep kept/leftover integration-test environments and report (never auto-remove) orphaned compose projects (manifest-driven; `--dry-run`, `[scenario...]`)

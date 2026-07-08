@@ -54,7 +54,10 @@ func CollectReport(ctx context.Context, m *Manifest, deps ReportDeps, warn func(
 	if err := os.RemoveAll(m.ReportDir); err != nil {
 		return "", fmt.Errorf("envtest: clearing report directory: %w", err)
 	}
-	if err := os.MkdirAll(m.ReportDir, 0o755); err != nil {
+	// 0o700: the report bundles container log tails, which can carry secrets a
+	// service printed at startup (connection strings, tokens). Keep the whole
+	// directory owner-only rather than the default world-readable 0o755.
+	if err := os.MkdirAll(m.ReportDir, 0o700); err != nil {
 		return "", fmt.Errorf("envtest: creating report directory: %w", err)
 	}
 
@@ -67,8 +70,9 @@ func CollectReport(ctx context.Context, m *Manifest, deps ReportDeps, warn func(
 		out, err := deps.PS(ctx, m)
 		if err != nil {
 			warn(fmt.Sprintf("report: capturing compose ps: %v", err))
+			out = annotateCaptureFailure(out, err)
 		}
-		if err := os.WriteFile(filepath.Join(m.ReportDir, "compose-ps.txt"), []byte(out), 0o644); err != nil {
+		if err := os.WriteFile(filepath.Join(m.ReportDir, "compose-ps.txt"), []byte(out), 0o600); err != nil {
 			warn(fmt.Sprintf("report: writing compose-ps.txt: %v", err))
 		}
 	}
@@ -77,13 +81,26 @@ func CollectReport(ctx context.Context, m *Manifest, deps ReportDeps, warn func(
 		out, err := deps.Logs(ctx, m)
 		if err != nil {
 			warn(fmt.Sprintf("report: capturing container logs: %v", err))
+			out = annotateCaptureFailure(out, err)
 		}
-		if err := os.WriteFile(filepath.Join(m.ReportDir, "container-logs.txt"), []byte(out), 0o644); err != nil {
+		if err := os.WriteFile(filepath.Join(m.ReportDir, "container-logs.txt"), []byte(out), 0o600); err != nil {
 			warn(fmt.Sprintf("report: writing container-logs.txt: %v", err))
 		}
 	}
 
 	return m.ReportDir, nil
+}
+
+// annotateCaptureFailure prepends a visible marker to a capture whose command
+// errored. The run's warn output is not attached to the report directory, so a
+// report opened later (e.g. from CI artifacts) would otherwise show a silently
+// blank/partial artifact with no hint that collection itself failed.
+func annotateCaptureFailure(out string, err error) string {
+	note := fmt.Sprintf("# dwe: capture failed: %v\n", err)
+	if out == "" {
+		return note
+	}
+	return note + out
 }
 
 // copyFile copies src to dst, preserving src's file mode. A missing (or
@@ -112,22 +129,28 @@ func copyFile(src, dst string) error {
 	return out.Close()
 }
 
-// reportPSReal captures `docker compose ps --all` for the copy at m.CopyPath
-// via BuildInternalArgs (never BuildArgs — a user args.ps policy override
-// must not change a machine-readable capture), degrading to the
-// identity-label `docker ps -a` fallback when the copy's own config can no
-// longer be loaded (the same trigger Teardown's composeDownReal uses). --all
-// is required: `compose ps` defaults to running-only, which would drop
-// exactly the crashed service a failure report exists to surface.
-func reportPSReal(ctx context.Context, m *Manifest) (string, error) {
+// reportComposeCapture runs a `docker compose <subcommand> [extraArgs...]`
+// capture for the copy at m.CopyPath via BuildInternalArgs (never BuildArgs — a
+// user args.<cmd> policy override must not reshape a machine-readable capture,
+// e.g. a project-configured `-f` on logs would make report collection follow
+// forever). It degrades to fallback(ctx, m) when the copy's own config can no
+// longer be loaded (the same trigger Teardown's composeDownReal uses).
+func reportComposeCapture(ctx context.Context, m *Manifest, fallback func(context.Context, *Manifest) (string, error), subcommand string, extraArgs ...string) (string, error) {
 	cfg, dockerCfg, err := loadCopyConfig(m.CopyPath)
 	if err != nil {
-		return reportPSIdentityFallback(ctx, m)
+		return fallback(ctx, m)
 	}
 	compose := docker.NewCompose(cfg, dockerCfg, m.CopyPath)
-	args := compose.BuildInternalArgs("ps", "--all")
+	args := compose.BuildInternalArgs(subcommand, extraArgs...)
 	out, err := captureCmdFn(ctx, compose.BinName(), args, compose.BuildEnv(), m.CopyPath)
 	return string(out), err
+}
+
+// reportPSReal captures `docker compose ps --all` for the copy. --all is
+// required: `compose ps` defaults to running-only, which would drop exactly
+// the crashed service a failure report exists to surface.
+func reportPSReal(ctx context.Context, m *Manifest) (string, error) {
+	return reportComposeCapture(ctx, m, reportPSIdentityFallback, "ps", "--all")
 }
 
 // reportPSIdentityFallback runs `docker ps -a --filter
@@ -141,19 +164,10 @@ func reportPSIdentityFallback(ctx context.Context, m *Manifest) (string, error) 
 }
 
 // reportLogsReal captures `docker compose logs --no-color --tail 200` for the
-// copy at m.CopyPath via BuildInternalArgs (bypassing any user args.logs
-// policy override — e.g. a project-configured `-f` would otherwise make
-// report collection follow logs forever), degrading to per-container capture
-// when the copy's own config can no longer be loaded.
+// copy, degrading to per-container capture when the copy's own config can no
+// longer be loaded.
 func reportLogsReal(ctx context.Context, m *Manifest) (string, error) {
-	cfg, dockerCfg, err := loadCopyConfig(m.CopyPath)
-	if err != nil {
-		return reportLogsIdentityFallback(ctx, m)
-	}
-	compose := docker.NewCompose(cfg, dockerCfg, m.CopyPath)
-	args := compose.BuildInternalArgs("logs", "--no-color", "--tail", strconv.Itoa(reportLogTailLines))
-	out, err := captureCmdFn(ctx, compose.BinName(), args, compose.BuildEnv(), m.CopyPath)
-	return string(out), err
+	return reportComposeCapture(ctx, m, reportLogsIdentityFallback, "logs", "--no-color", "--tail", strconv.Itoa(reportLogTailLines))
 }
 
 // reportLogsIdentityFallback lists containers by the manifest's exact compose

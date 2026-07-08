@@ -130,20 +130,23 @@ func TestCollectReport_PartialPSAndLogsErrorsStillWriteFilesAndWarn(t *testing.T
 		t.Fatalf("CollectReport: %v", err)
 	}
 
+	// On a capture error the partial output is retained AND a visible
+	// "capture failed" marker is prepended, so a report read from CI artifacts
+	// (detached from the run's warn output) still shows the failure.
 	ps, err := os.ReadFile(filepath.Join(m.ReportDir, "compose-ps.txt"))
 	if err != nil {
 		t.Fatalf("reading compose-ps.txt: %v", err)
 	}
-	if string(ps) != "partial ps" {
-		t.Errorf("compose-ps.txt = %q, want the partial output despite the error", ps)
+	if !strings.Contains(string(ps), "partial ps") || !strings.Contains(string(ps), "capture failed: ps boom") {
+		t.Errorf("compose-ps.txt = %q, want the partial output plus a capture-failed marker", ps)
 	}
 
 	logs, err := os.ReadFile(filepath.Join(m.ReportDir, "container-logs.txt"))
 	if err != nil {
 		t.Fatalf("reading container-logs.txt: %v", err)
 	}
-	if string(logs) != "partial logs" {
-		t.Errorf("container-logs.txt = %q, want the partial output despite the error", logs)
+	if !strings.Contains(string(logs), "partial logs") || !strings.Contains(string(logs), "capture failed: logs boom") {
+		t.Errorf("container-logs.txt = %q, want the partial output plus a capture-failed marker", logs)
 	}
 
 	joined := strings.Join(warnings, " | ")
@@ -152,6 +155,33 @@ func TestCollectReport_PartialPSAndLogsErrorsStillWriteFilesAndWarn(t *testing.T
 	}
 	if !strings.Contains(joined, "logs boom") {
 		t.Errorf("warnings = %v, want one mentioning the Logs error", warnings)
+	}
+}
+
+func TestCollectReport_OwnerOnlyPermissions(t *testing.T) {
+	m := reportTestManifest(t)
+	deps := stubReportDeps("ps out", "logs out", nil, nil)
+	if _, err := CollectReport(context.Background(), m, deps, nil); err != nil {
+		t.Fatalf("CollectReport: %v", err)
+	}
+
+	// The report can carry secrets a service printed to its logs, so the
+	// directory is owner-only (0o700) and the captured artifacts are 0o600.
+	dirInfo, err := os.Stat(m.ReportDir)
+	if err != nil {
+		t.Fatalf("stat report dir: %v", err)
+	}
+	if perm := dirInfo.Mode().Perm(); perm != 0o700 {
+		t.Errorf("report dir perm = %o, want 700", perm)
+	}
+	for _, name := range []string{"compose-ps.txt", "container-logs.txt"} {
+		info, err := os.Stat(filepath.Join(m.ReportDir, name))
+		if err != nil {
+			t.Fatalf("stat %s: %v", name, err)
+		}
+		if perm := info.Mode().Perm(); perm != 0o600 {
+			t.Errorf("%s perm = %o, want 600", name, perm)
+		}
 	}
 }
 

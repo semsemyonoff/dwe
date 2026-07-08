@@ -107,7 +107,7 @@ commands:
 
 ## Debugging a failing scenario
 
-Every failing scenario (deploy failure, step failure, or timeout) leaves a failure report at `.dwe/tests/reports/<scenario>/` — collected automatically, before teardown runs, so it survives the environment being torn down:
+When a scenario fails (deploy failure, step failure, or timeout), the runner **attempts** to collect a failure report into `.dwe/tests/reports/<scenario>/` — automatically, before teardown runs, so it survives the environment being torn down. Collection is best-effort: if it can't create the report directory the path is left empty, and individual artifacts may be partial or blank when a capture fails — but the run always reports the failure regardless.
 
 ```shell
 dwe test run smoke   # fails

@@ -7,6 +7,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"strings"
+	"time"
 
 	"github.com/semsemyonoff/dwe/internal/core/bridge"
 	"github.com/semsemyonoff/dwe/internal/core/project/config"
@@ -80,10 +81,21 @@ var cleanTeardownFn = func(ctx context.Context, manifestPath string, m *Manifest
 	return Teardown(ctx, m, NewTeardownDeps(manifestPath, nil), warn)
 }
 
+// orphanScanTimeout bounds the report-only orphan scan's `docker ps` probe. A
+// wedged/unresponsive Docker daemon can make `docker ps` hang indefinitely, and
+// scanOrphans runs synchronously after the sweep, so without a deadline it would
+// stall the whole `dwe test clean` invocation — defeating the best-effort intent.
+// 5s matches the bound the env validators use for their docker probes. A var so
+// tests can shrink it.
+var orphanScanTimeout = 5 * time.Second
+
 // listComposeProjectsReal lists every distinct, non-empty compose-project
 // label value docker currently knows about (running or stopped containers),
 // for the report-only orphan scan.
 func listComposeProjectsReal(ctx context.Context, dockerBin string) ([]string, error) {
+	ctx, cancel := context.WithTimeout(ctx, orphanScanTimeout)
+	defer cancel()
+
 	out, err := exec.CommandContext(ctx, dockerBin, "ps", "-a", "--format", //nolint:gosec
 		`{{.Label "`+docker.ComposeProjectLabel+`"}}`).Output()
 	if err != nil {
@@ -149,6 +161,20 @@ func Clean(ctx context.Context, req CleanRequest) (*CleanResult, error) {
 		scenarioFilter = make(map[string]bool, len(req.Scenarios))
 		for _, s := range req.Scenarios {
 			scenarioFilter[s] = true
+		}
+		// Warn on requested names that match no manifest. Clean sweeps by
+		// on-disk manifest, not scenario definition, so an unmatched name is not
+		// necessarily wrong (the scenario file may have been deleted after a kept
+		// run) — hence a diagnostic, not an error — but it surfaces the common
+		// typo case that would otherwise silently report "0 swept" and exit 0.
+		present := make(map[string]bool, len(all))
+		for _, c := range all {
+			present[c.m.Scenario] = true
+		}
+		for _, s := range req.Scenarios {
+			if !present[s] {
+				warn(fmt.Sprintf("clean: no manifest for scenario %q — nothing to sweep (already clean, or a typo?)", s))
+			}
 		}
 	}
 
