@@ -6,6 +6,7 @@ import (
 	"runtime"
 	"sort"
 	"strings"
+	"time"
 
 	"github.com/semsemyonoff/dwe/internal/core/execution/builtin"
 	"github.com/semsemyonoff/dwe/internal/core/execution/condition"
@@ -155,6 +156,10 @@ func resolveLeafStep(cfg *config.DweConfig, reg *registry.Registry, phase config
 			return ResolvedStep{}, false, err
 		}
 	}
+	timeout, err := parseStepTimeout(step.Timeout, stepPrefix(phase, service, step.Name))
+	if err != nil {
+		return ResolvedStep{}, false, err
+	}
 	return ResolvedStep{
 		Phase:       phase,
 		Step:        step,
@@ -162,7 +167,26 @@ func resolveLeafStep(cfg *config.DweConfig, reg *registry.Registry, phase config
 		RuntimeWhen: stepRuntimeWhen,
 		PhaseWhen:   phaseRuntimeWhen,
 		FilesGate:   step.FilesGate,
+		Timeout:     timeout,
 	}, true, nil
+}
+
+// parseStepTimeout parses a DeployStep's raw Timeout string into a duration.
+// Empty is unbounded (0, no error). A negative duration is a resolve error
+// naming the step (a negative timeout is meaningless). A zero duration
+// ("0", "0s", ...) is also unbounded.
+func parseStepTimeout(raw, prefix string) (time.Duration, error) {
+	if raw == "" {
+		return 0, nil
+	}
+	d, err := time.ParseDuration(raw)
+	if err != nil {
+		return 0, fmt.Errorf("step %s: parsing timeout %q: %w", prefix, raw, err)
+	}
+	if d < 0 {
+		return 0, fmt.Errorf("step %s: timeout %q must not be negative", prefix, raw)
+	}
+	return d, nil
 }
 
 // resolveParallelStep recursively resolves a parallel-group DeployStep. Returns

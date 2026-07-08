@@ -385,17 +385,17 @@ its two consumers (validator Task 4, runner Task 5):
 - Modify: `internal/core/project/config/workspace_test.go` (or the DeployStep decode test)
 - Modify: `internal/core/execution/pipeline/resolve_test.go`
 
-- [ ] add `Timeout string \`yaml:"timeout,omitempty"\`` to `config.DeployStep`; add
+- [x] add `Timeout string \`yaml:"timeout,omitempty"\`` to `config.DeployStep`; add
       `"timeout"` to `deployStepKnownFields`
-- [ ] add `Timeout time.Duration` to `pipeline.ResolvedStep`
-- [ ] in `resolveLeafStep` and `resolveParallelStep`, parse `step.Timeout` via
+- [x] add `Timeout time.Duration` to `pipeline.ResolvedStep`
+- [x] in `resolveLeafStep` and `resolveParallelStep`, parse `step.Timeout` via
       `time.ParseDuration` when non-empty (`< 0` → wrapped resolve error naming the step;
       `0` → unbounded; `> 0` → store); populate on leaf steps and parallel substeps
-- [ ] write config tests: strict decode accepts `timeout:` and rejects an unknown sibling
+- [x] write config tests: strict decode accepts `timeout:` and rejects an unknown sibling
       key still; a step with `timeout: 90s` round-trips
-- [ ] write resolve tests: `"90s"` → `90s`; `"0"` → `0`; absent → `0`; `"abc"` → error;
+- [x] write resolve tests: `"90s"` → `90s`; `"0"` → `0`; absent → `0`; `"abc"` → error;
       `"-1s"` → error; a parallel substep carries its own resolved `Timeout`
-- [ ] run `go test ./internal/core/project/config/... ./internal/core/execution/pipeline/...`
+- [x] run `go test ./internal/core/project/config/... ./internal/core/execution/pipeline/...`
       — must pass before task 2
 
 ### Task 2: Per-step timeout — enforce in the executor
