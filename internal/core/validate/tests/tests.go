@@ -153,7 +153,14 @@ func (v *scenariosValidator) validateFile(ctx validate.Context, path string, reg
 		}
 	}
 
-	if err := envtest.RenderSteps(scn.Steps, renderConfigFor(ctx.Cfg, scn.Env.Vars)); err != nil {
+	// Overlay the scenario's env.vars onto the merged config so both the render
+	// and resolve passes see the same config the runtime does (runner.go builds
+	// one copyCfg carrying env.vars and uses it for both). ResolvePhaseSteps
+	// re-evaluates template `when:` conditions against this cfg, so a scenario
+	// step whose `when:` references a scenario-only var must resolve against the
+	// overlaid config, not the bare project config.
+	renderCfg := renderConfigFor(ctx.Cfg, scn.Env.Vars)
+	if err := envtest.RenderSteps(scn.Steps, renderCfg); err != nil {
 		diags = append(diags, validate.Diagnostic{
 			Severity: validate.SeverityError,
 			Domain:   "tests",
@@ -165,7 +172,7 @@ func (v *scenariosValidator) validateFile(ctx validate.Context, path string, reg
 	}
 
 	phase := config.DeployPhase{Name: "tests", Steps: scn.Steps}
-	if _, err := pipeline.ResolvePhaseSteps(ctx.Cfg, reg, phase, ""); err != nil {
+	if _, err := pipeline.ResolvePhaseSteps(renderCfg, reg, phase, ""); err != nil {
 		diags = append(diags, validate.Diagnostic{
 			Severity: validate.SeverityError,
 			Domain:   "tests",
