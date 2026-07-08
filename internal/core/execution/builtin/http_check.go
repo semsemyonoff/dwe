@@ -18,6 +18,11 @@ const (
 	httpDefaultRetries  = 0
 	httpDefaultInterval = 1 * time.Second
 	httpDefaultTimeout  = 5 * time.Second
+
+	// httpBodyReadCap bounds how much of a response body the `contains` check
+	// reads into memory, so a misbehaving/hostile endpoint returning a huge
+	// body cannot exhaust memory during a substring check.
+	httpBodyReadCap = 8 << 20 // 8 MiB
 )
 
 // HTTPCheck is the `http_check` predicate builtin. It reports success when an
@@ -142,7 +147,7 @@ func httpAttempt(ctx context.Context, client *http.Client, rawURL string, wantSt
 		return fmt.Errorf("expected status %d, got %d", wantStatus, resp.StatusCode)
 	}
 	if contains != "" {
-		body, readErr := io.ReadAll(resp.Body)
+		body, readErr := io.ReadAll(io.LimitReader(resp.Body, httpBodyReadCap))
 		if readErr != nil {
 			return fmt.Errorf("reading body: %w", readErr)
 		}

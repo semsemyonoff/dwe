@@ -32,3 +32,8 @@ services:
     ports:
       - target: 80
         published: "8080"
+  longformbare:
+    image: busybox
+    ports:
+      - target: 80
+        published: 8080

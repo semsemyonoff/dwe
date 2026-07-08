@@ -250,6 +250,14 @@ func (r *Runner) RunScenario(ctx context.Context, req RunRequest) (*ScenarioResu
 	if req.Scenario == "" {
 		return nil, fmt.Errorf("envtest: RunRequest.Scenario is required")
 	}
+	// Reject a name that could escape the test root before any path is built
+	// from it: every path below (LockPath / RunDir / ManifestPath / the copy
+	// root fed to os.RemoveAll) is derived from req.Scenario. LoadScenario only
+	// validates the file's basename, so a traversal name like "../../foo" would
+	// otherwise slip through here even though the production caller pre-validates.
+	if err := ValidateScenarioName(req.Scenario); err != nil {
+		return nil, fmt.Errorf("envtest: %w", err)
+	}
 	warn := req.Warn
 	if warn == nil {
 		warn = func(string) {}

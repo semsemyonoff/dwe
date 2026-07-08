@@ -1,4 +1,4 @@
-> Translated from: reference/config/validate.md @ e1e4acbc2ce5
+> Translated from: reference/config/validate.md @ 711e1ff48be6
 
 # validate.yml
 
@@ -40,7 +40,7 @@
 
 ## Домены валидации
 
-Команда validate запускает пять доменов в дополнение к существующим YAML-shape валидаторам:
+Команда validate запускает шесть доменов в дополнение к существующим YAML-shape валидаторам:
 
 | Домен | Источник | Настраивается? |
 |--------|--------|---------------|
@@ -49,6 +49,9 @@
 | `linters.*` | Встроенные адаптеры (shellcheck, hadolint) + блок `linters:` в `workspace/validate.yml` | Да — декларативно |
 | `translations.*` | Файлы переводов `workspace/i18n/` | Нет — фиксированные валидаторы (ошибки парсинга, осиротевшие id команд/групп, неизвестные ключи `render.*`) |
 | `snapshot.*` | Директории снапшотов на диске + `workspace/snapshot.yml` | Нет — фиксированные валидаторы на каждое имя снапшота |
+| `tests.*` | Файлы сценариев `workspace/tests/*.yml` | Нет — фиксированные валидаторы сценариев (рендерят и резолвят шаги каждого сценария, флагают неизвестные сервисы / ссылки на команды / дублирующиеся имена шагов и показывают риски compose-изоляции как предупреждения) |
+
+Домен `tests.*` работает только в validate (как и `snapshot.*`) — он никогда не запускается в preflight и молчит, если `workspace/tests/` отсутствует. Полный набор проверок сценариев (`dwe validate tests`) см. в [`tests.md`](tests.md#dwe-validate-tests).
 
 Probe'ы `env.*` это: `env.docker_bin`, `env.docker_daemon`, `env.docker_compose`, `env.git_bin`, `env.shell_bin`, `env.project_perms`, `env.ports_free`. Они запускаются на каждом вызове `dwe validate` и на каждом preflight (независимо от стадии — у env нет понятия стадии), с одним исключением: `env.ports_free` пропускает себя на стадии `stop`, поскольку конфликты портов нерелевантны при сворачивании проекта.
 

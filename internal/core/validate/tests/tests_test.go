@@ -180,6 +180,29 @@ steps:
 	}
 }
 
+func TestScenariosValidator_UnknownCommandRefInParallelSubstep(t *testing.T) {
+	root := writeScenario(t, t.TempDir(), "badparallel.yml", `
+steps:
+  - name: fan-out
+    parallel:
+      steps:
+        - name: run-it
+          type: command
+          cmd: does.not.exist
+        - name: also
+          type: shell
+          cmd: echo hi
+`)
+	reg := registry.NewEmptyRegistry()
+	diags := errorDiags(runForWithRegistry(root, baseCfg(), reg))
+	if len(diags) != 1 {
+		t.Fatalf("unknown command in parallel substep: want 1 error diagnostic, got %+v", diags)
+	}
+	if !strings.Contains(diags[0].Message, "unknown command") {
+		t.Errorf("message = %q, want to mention unknown command", diags[0].Message)
+	}
+}
+
 func TestScenariosValidator_KnownCommandRef(t *testing.T) {
 	root := writeScenario(t, t.TempDir(), "goodcmd.yml", `
 steps:
@@ -288,6 +311,25 @@ steps:
 	}
 	if !strings.Contains(diags[0].Message, "resolving steps") {
 		t.Errorf("message = %q, want to mention resolving steps", diags[0].Message)
+	}
+}
+
+func TestScenariosValidator_RenderErrorAbortsRemainingChecks(t *testing.T) {
+	// A ${snapshot.*} reference is scope-rejected at RENDER time (scenarios have
+	// no snapshot scope), which is a distinct diagnostic ("rendering steps") from
+	// the resolve-time path — and it must early-return, so no later check runs.
+	root := writeScenario(t, t.TempDir(), "renderfail.yml", `
+steps:
+  - name: bad-render
+    type: shell
+    cmd: echo ${snapshot.foo}
+`)
+	diags := errorDiags(runFor(root, baseCfg()))
+	if len(diags) != 1 {
+		t.Fatalf("render error: want exactly 1 error diagnostic (abort after render), got %+v", diags)
+	}
+	if !strings.Contains(diags[0].Message, "rendering steps") {
+		t.Errorf("message = %q, want to mention rendering steps", diags[0].Message)
 	}
 }
 

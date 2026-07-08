@@ -1,4 +1,4 @@
-> Translated from: README.md @ df3374f47e43
+> Translated from: README.md @ a0c2b70df743
 
 # DWE — Dev Workspace Engine
 
@@ -192,6 +192,7 @@ my-project/
 │   ├── reset.yml           # пайплайн reset (опционально)
 │   ├── info.yml            # информационная панель (опционально)
 │   ├── validate.yml        # проверки готовности (опционально)
+│   ├── tests/              # сценарии интеграционных тестов для `dwe test` (опционально)
 │   └── docker.yml          # список compose-файлов + топология (опционально)
 ├── compose/                # отслеживаемые оверлеи Docker Compose (по сервисам)
 ├── images/                 # отслеживаемые сборки образов (<service>/Dockerfile)

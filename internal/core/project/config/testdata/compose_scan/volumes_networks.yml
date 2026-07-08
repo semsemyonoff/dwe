@@ -2,6 +2,9 @@ services: {}
 volumes:
   ext:
     external: true
+  extmap:
+    external:
+      name: shared
   named:
     name: my-vol
 networks:

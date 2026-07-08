@@ -6,7 +6,7 @@ package docs
 // Generated from docs/reference, docs/guides, and docs/internals at build time.
 // See docs/reference/docs/index.md for details on the hash-based staleness check.
 var ContentHashes = map[string]string{
-	"README.md":                                "df3374f47e43",
+	"README.md":                                "a0c2b70df743",
 	"guides/add-a-service.md":                  "c5ab3861731c",
 	"guides/author-project-commands.md":        "97608a86a125",
 	"guides/background-daemons.md":             "b2dcd1937aba",
@@ -33,7 +33,7 @@ var ContentHashes = map[string]string{
 	"reference/concepts/git.md":                "a7a84a97ba51",
 	"reference/concepts/index.md":              "e92a3358a354",
 	"reference/concepts/pipelines.md":          "b4123213519e",
-	"reference/concepts/project-layout.md":     "0feff3f706b7",
+	"reference/concepts/project-layout.md":     "03ed9b37f7b7",
 	"reference/concepts/state-and-locks.md":    "4ede6d512f0e",
 	"reference/config/commands/directives.md":  "a6fc4ca2efc1",
 	"reference/config/commands/index.md":       "a1a9e5921088",
@@ -67,7 +67,7 @@ var ContentHashes = map[string]string{
 	"reference/config/tests.md":                "aa6d9d629177",
 	"reference/config/ui.md":                   "79b53f2365a5",
 	"reference/config/userconfig.md":           "8ca47488a9bd",
-	"reference/config/validate.md":             "e1e4acbc2ce5",
+	"reference/config/validate.md":             "711e1ff48be6",
 	"reference/config/vars.md":                 "d467e681fbe2",
 	"reference/config/workspace.md":            "695578a24636",
 	"reference/docs/browser.md":                "430240cc94a6",

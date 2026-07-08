@@ -190,6 +190,7 @@ my-project/
 │   ├── reset.yml              # reset pipeline (optional)
 │   ├── info.yml               # info dashboard (optional)
 │   ├── validate.yml           # readiness checks (optional)
+│   ├── tests/                 # integration-test scenarios for `dwe test` (optional)
 │   └── docker.yml             # compose file list + topology (optional)
 ├── compose/                   # tracked Docker Compose overlays (per service)
 ├── images/                    # tracked image builds (<service>/Dockerfile)

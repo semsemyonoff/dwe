@@ -110,6 +110,7 @@ Everything declarative about a project — services, pipelines, commands, templa
 | `workspace/info.yml` | Info dashboard items (header, URLs, hosts, commands, custom sections) | `dwe info` renderer | Author manually | yes |
 | `workspace/setup.yml` | Setup wizard questions (input / confirm / select / multiselect) | Setup workflow | Author manually | yes |
 | `workspace/validate.yml` | Project-readiness checks (`shell` / `file_exists` / `tcp_reachable` / …) | `dwe validate` + preflight | Author manually | yes |
+| `workspace/tests/` | Integration-test scenarios (`<name>.yml`) run against a disposable project copy | `dwe test` / `dwe validate tests` | Author manually | yes |
 | `workspace/docker.yml` | Compose orchestration layer: project-name template, file list, topology, hidden services | Docker subsystem | Author manually | yes |
 | `workspace/docker.local.yml` | Per-developer compose overrides deep-merged on top of `docker.yml` | Docker subsystem | Author manually | no |
 | `workspace/styles.yml` | Semantic-token palette (accent / success / warning / danger / muted / border / text) | UI styling | Author manually | yes |

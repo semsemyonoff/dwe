@@ -46,6 +46,7 @@ func TestScanComposeIsolation_Ports(t *testing.T) {
 		{service: "proto", wantFinding: true, wantHostPort: 8080},
 		{service: "ipv6", wantFinding: false},
 		{service: "longform", wantFinding: true, wantHostPort: 8080},
+		{service: "longformbare", wantFinding: true, wantHostPort: 8080},
 	}
 
 	for _, tc := range tests {
@@ -82,6 +83,11 @@ func TestScanComposeIsolation_VolumesAndNetworks(t *testing.T) {
 	extVol, ok := findByResource(findings, KindExternalVolume, "ext")
 	require.True(t, ok)
 	require.False(t, extVol.Blocking)
+
+	// external declared as a mapping (`external: { name: shared }`) is truthy too.
+	extMapVol, ok := findByResource(findings, KindExternalVolume, "extmap")
+	require.True(t, ok)
+	require.False(t, extMapVol.Blocking)
 
 	namedVol, ok := findByResource(findings, KindNamedVolume, "named")
 	require.True(t, ok)
