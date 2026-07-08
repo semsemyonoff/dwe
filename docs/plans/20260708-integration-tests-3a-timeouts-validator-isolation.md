@@ -552,16 +552,16 @@ its two consumers (validator Task 4, runner Task 5):
 
 ### Task 7: Verify acceptance criteria
 
-- [ ] verify spec §7 stage 3 (the three 3a features): per-step `timeout:` is general +
+- [x] verify spec §7 stage 3 (the three 3a features): per-step `timeout:` is general +
       opt-in + kills subprocess on expiry, absent leaves existing pipelines byte-identical;
       `dwe validate tests` validates scenario files + surfaces isolation warnings; the
       isolation scanner flags `container_name` / literal host ports (FAIL) and
       external/named vol+net (WARN), `--skip-isolation-check` downgrades, the runner gate
       blocks a hazardous run with teardown still running
-- [ ] verify backward compatibility: no existing golden altered; `timeout:`-absent pipelines
+- [x] verify backward compatibility: no existing golden altered; `timeout:`-absent pipelines
       unchanged; validator/scanner purely additive
-- [ ] run full suite: `make test`
-- [ ] run `make lint`
+- [x] run full suite: `make test`
+- [x] run `make lint`
 
 ### Task 8: [Final] Internals documentation + plan close-out
 
