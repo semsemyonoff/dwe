@@ -276,14 +276,14 @@ a thin CLI layer:
 - Create: `internal/core/workflow/envtest/report.go`
 - Create: `internal/core/workflow/envtest/report_test.go`
 
-- [ ] define `ReportDeps{PS, Logs func(context.Context, *Manifest) (string, error)}` and
+- [x] define `ReportDeps{PS, Logs func(context.Context, *Manifest) (string, error)}` and
       `NewReportDeps() ReportDeps` (wires `reportPSReal`/`reportLogsReal`)
-- [ ] implement `CollectReport(ctx, m *Manifest, deps ReportDeps, warn func(string))
+- [x] implement `CollectReport(ctx, m *Manifest, deps ReportDeps, warn func(string))
       (reportDir string, err error)`: `os.RemoveAll(m.ReportDir)` + `os.MkdirAll`; copy
       `filepath.Join(m.CopyPath, ".dwe/logs/test.log")` → `pipeline.log` (missing source =
       warn+skip); write `compose-ps.txt` from `deps.PS`; write `container-logs.txt` from
       `deps.Logs`; every step best-effort (warn, continue); return `m.ReportDir`
-- [ ] implement `reportPSReal`/`reportLogsReal` with compose→identity-label graceful
+- [x] implement `reportPSReal`/`reportLogsReal` with compose→identity-label graceful
       degradation keyed on `loadCopyConfig(m.CopyPath)`; use `Compose.BuildInternalArgs`
       (**NOT `BuildArgs`**) for the compose `ps`/`logs` captures — **`ps` with `--all`** (the
       running-only default would drop a crashed service) — so no user `args.logs` follow flag
@@ -292,12 +292,12 @@ a thin CLI layer:
       (default `exec.CommandContext(...).Output()`); reuse `listContainersFn` for the
       identity fallback; const `reportLogTailLines = 200`; `==== <id> ====` headers in the
       fallback logs
-- [ ] add a small `copyFile(src, dst string) error` fs helper (perms preserved)
-- [ ] write tests (stubbed `ReportDeps`): report dir created + a pre-existing dir cleared
+- [x] add a small `copyFile(src, dst string) error` fs helper (perms preserved)
+- [x] write tests (stubbed `ReportDeps`): report dir created + a pre-existing dir cleared
       (overwrite); all three artifacts written; missing `test.log` → skipped, others still
       written; `PS`/`Logs` returning `(partial, err)` → file still written + warn, other
       artifacts proceed
-- [ ] write tests for `reportPSReal`/`reportLogsReal` via `captureCmdFn`/`listContainersFn`
+- [x] write tests for `reportPSReal`/`reportLogsReal` via `captureCmdFn`/`listContainersFn`
       stubs against throwaway copy dirs: valid copy config → **exact** `BuildInternalArgs`
       shape asserted (`compose … ps --all`; `compose … logs --no-color --tail 200`) with NO
       global/policy args (assert `--all` present on `ps`); a copy whose `docker.yml` sets
@@ -305,7 +305,7 @@ a thin CLI layer:
       (regression pin for the follow-hang bug);
       missing/broken copy config → identity-label fallback args asserted
       (`ps -a --filter label=…`; per-id `logs --tail 200` with `==== <id> ====` headers)
-- [ ] run `go test ./internal/core/workflow/envtest/...` — must pass before task 2
+- [x] run `go test ./internal/core/workflow/envtest/...` — must pass before task 2
 
 ### Task 2: Wire `collectReport` into the runner + populate `ReportDir`
 
