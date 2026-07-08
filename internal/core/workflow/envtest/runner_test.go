@@ -893,6 +893,12 @@ func TestRunScenario_CollectsReportOnFailure(t *testing.T) {
 				},
 				collectReport: func(ctx context.Context, m *Manifest, warn func(string)) (string, error) {
 					reportCalls++
+					// The report context must be fresh (never the scenario
+					// context, which is already cancelled on a timeout failure) —
+					// otherwise every timeout report would capture nothing.
+					if err := ctx.Err(); err != nil {
+						t.Errorf("collectReport received a cancelled context: %v", err)
+					}
 					return wantDir, nil
 				},
 				clock: time.Now,

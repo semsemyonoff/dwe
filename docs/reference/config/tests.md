@@ -284,13 +284,14 @@ dwe test list --output json
 ```json
 {
   "scenarios": [
-    {"name": "redis-off", "status": "passed", "failed_step": "", "duration_seconds": 4.213, "report_dir": ""}
+    {"name": "redis-off", "status": "passed", "duration_seconds": 4.213},
+    {"name": "cache-on", "status": "failed", "failed_step": "http_check", "duration_seconds": 2.101, "report_dir": ".dwe/tests/reports/cache-on"}
   ],
-  "summary": "1 passed, 0 failed"
+  "summary": "1 passed, 1 failed"
 }
 ```
 
-`status` is one of `passed`, `failed`, `error` (`error` = the scenario could not be prepared — copy/config/manifest/validate failure; distinct from a deploy or step failure, which is `failed`). `report_dir` is the [failure report](#failure-reports) directory for a non-passing scenario; empty for a passing scenario or a `--keep` run. As with every other read-only/report surface, live pipeline output and the summary line are silenced in JSON mode — the file log under `.dwe/logs/` still records everything.
+`status` is one of `passed`, `failed`, `error` (`error` = the scenario could not be prepared — copy/config/manifest/validate failure; distinct from a deploy or step failure, which is `failed`). `failed_step` and `report_dir` are omitted when empty (a passing scenario has neither). `report_dir` is the [failure report](#failure-reports) directory for a non-passing scenario; omitted for a passing scenario or a `--keep` run. As with every other read-only/report surface, live pipeline output and the summary line are silenced in JSON mode — the file log under `.dwe/logs/` still records everything.
 
 ## Documented limitations
 

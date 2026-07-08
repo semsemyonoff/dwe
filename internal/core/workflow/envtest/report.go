@@ -187,12 +187,16 @@ func reportLogsIdentityFallback(ctx context.Context, m *Manifest) (string, error
 	return sb.String(), nil
 }
 
-// captureCmdReal is the real subprocess capture behind captureCmdFn.
+// captureCmdReal is the real subprocess capture behind captureCmdFn. It
+// captures combined stdout+stderr: `docker logs` replicates a non-TTY
+// container's stderr to its own stderr, so an stdout-only capture would drop
+// exactly the crash/panic output a failure report exists to surface; combined
+// output also folds a failing command's diagnostic into the artifact.
 func captureCmdReal(ctx context.Context, bin string, args, env []string, dir string) ([]byte, error) {
 	cmd := exec.CommandContext(ctx, bin, args...) //nolint:gosec
 	cmd.Dir = dir
 	cmd.Env = env
-	return cmd.Output()
+	return cmd.CombinedOutput()
 }
 
 // captureCmdFn is a test seam over captureCmdReal: production runs the real

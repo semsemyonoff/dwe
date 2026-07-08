@@ -1,4 +1,4 @@
-> Translated from: reference/config/tests.md @ 4b409f3bd41a
+> Translated from: reference/config/tests.md @ a466028304d4
 
 # workspace/tests/
 
@@ -286,13 +286,14 @@ dwe test list --output json
 ```json
 {
   "scenarios": [
-    {"name": "redis-off", "status": "passed", "failed_step": "", "duration_seconds": 4.213, "report_dir": ""}
+    {"name": "redis-off", "status": "passed", "duration_seconds": 4.213},
+    {"name": "cache-on", "status": "failed", "failed_step": "http_check", "duration_seconds": 2.101, "report_dir": ".dwe/tests/reports/cache-on"}
   ],
-  "summary": "1 passed, 0 failed"
+  "summary": "1 passed, 1 failed"
 }
 ```
 
-`status` — одно из `passed`, `failed`, `error` (`error` = сценарий не удалось подготовить — сбой копии/конфига/манифеста/validate; отличается от сбоя деплоя или шага, который отражается как `failed`). `report_dir` — директория [отчёта об ошибке](#отчёты-об-ошибках) для непройденного сценария; пусто для успешного сценария или запуска с `--keep`. Как и в любой другой read-only/отчётной поверхности, живой вывод пайплайна и строка сводки в JSON-режиме молчат — файловый лог под `.dwe/logs/` всё равно фиксирует всё.
+`status` — одно из `passed`, `failed`, `error` (`error` = сценарий не удалось подготовить — сбой копии/конфига/манифеста/validate; отличается от сбоя деплоя или шага, который отражается как `failed`). `failed_step` и `report_dir` опускаются, когда пусты (у успешного сценария нет ни того, ни другого). `report_dir` — директория [отчёта об ошибке](#отчёты-об-ошибках) для непройденного сценария; опускается для успешного сценария или запуска с `--keep`. Как и в любой другой read-only/отчётной поверхности, живой вывод пайплайна и строка сводки в JSON-режиме молчат — файловый лог под `.dwe/logs/` всё равно фиксирует всё.
 
 ## Документированные ограничения
 

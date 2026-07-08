@@ -1,4 +1,4 @@
-> Translated from: reference/config/index.md @ d39b1d31dd50
+> Translated from: reference/config/index.md @ 4f169daf519a
 
 # Справочник конфигурации
 
@@ -46,7 +46,7 @@
 - `.dwe/snapshots/snapshot.lock` — snapshot lock-файл (только Unix; сериализует изменения снапшотов и совместно захватывается lifecycle-командами деплоя)
 - `.dwe/snapshots/current` — указатель текущего снапшота (последний созданный или восстановленный)
 - `.dwe/snapshots/.pre-restore-backup/` — резервная копия `workspace/local.yml` + `.dwe/deploy/state.yml`, снимаемая перед каждым restore; используется для ручного восстановления при сбое restore
-- `.dwe/tests/runs/<scenario>/`, `.dwe/tests/locks/<scenario>.lock`, `.dwe/tests/manifests/<scenario>-<run-id>.yml` — копии сценариев `dwe test`, per-scenario flock'и и durable-манифесты запусков
+- `.dwe/tests/runs/<scenario>/`, `.dwe/tests/locks/<scenario>.lock`, `.dwe/tests/manifests/<scenario>-<run-id>.yml`, `.dwe/tests/reports/<scenario>/` — копии сценариев `dwe test`, per-scenario flock'и, durable-манифесты запусков и артефакты отчётов об ошибках (собираются только при сбое)
 
 Добавьте `.dwe/` в `.gitignore` проекта, если ещё не добавлено.
 
@@ -115,7 +115,7 @@ flowchart LR
 - [commands/](commands/index.md) — декларативные команды: типы, параметры, контекст, файлы, workflow'ы, шаблоны
 - [validate.yml](validate.md) — проверки готовности проекта: env-пробы, декларативные проверки, билтины, стадии, preflight
 - [snapshot.yml](snapshot.md) — snapshot-workflow'ы: блоки create/restore/remove, варианты, неймспейс `${snapshot.*}`, manifest, взаимодействие с lock, безопасность архивов
-- [tests/](tests.md) — сценарии интеграционных тестов: схема, `auto`-порты, модель изоляции, teardown, `dwe test run/list`, коды выхода
+- [tests/](tests.md) — сценарии интеграционных тестов: схема, `auto`-порты, модель изоляции, teardown, `dwe test run/list/clean`, отчёты об ошибках, коды выхода
 - [Локализация (i18n)](i18n.md) — переводы пользовательских команд и UI-строк: разрешение локали, формат файла, справочник ключей, валидация
 - [Пользовательский конфиг](userconfig.md) — пользовательские настройки: расположение файла, синтаксис, переопределения бинарей, язык, тема mermaid
 - [Уведомления](notifications.md) — desktop-уведомления на уровне пользователя: расположение конфиг-файлов, ключи, матрица условий, env-переопределения
@@ -136,3 +136,4 @@ flowchart LR
 - `dwe status infra` — показывает таблицу infra-сервисов (read-only)
 - `dwe test run` — запускает изолированные сценарии интеграционных тестов на одноразовой копии проекта
 - `dwe test list` — список доступных сценариев интеграционных тестов
+- `dwe test clean` — удаляет осиротевшие или сохранённые окружения интеграционных тестов (на основе манифестов; `--dry-run`, `[scenario...]`)
