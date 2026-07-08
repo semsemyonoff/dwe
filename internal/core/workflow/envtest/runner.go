@@ -148,6 +148,11 @@ type RunRequest struct {
 	// copy fallback, teardown step failures, retry attempts); nil discards
 	// them.
 	Warn func(string)
+	// SkipIsolationCheck downgrades every compose-isolation finding
+	// (container_name:, literal host ports, …) to a warning instead of
+	// blocking the scenario — the escape hatch for a project with an
+	// intentional (or false-positive) hazard.
+	SkipIsolationCheck bool
 }
 
 // execDweFunc is the injectable subprocess-spawn seam for `dwe validate` /
@@ -395,6 +400,10 @@ func (r *Runner) RunScenario(ctx context.Context, req RunRequest) (*ScenarioResu
 	logWriter = lw
 	defer cleanup()
 
+	if scanComposeIsolationGate(copyRoot, req.SkipIsolationCheck, warn) {
+		return finish(StatusFailed, "")
+	}
+
 	extraEnv := []string{"DWE_NONINTERACTIVE=1"}
 
 	// validate + deploy run as subprocesses; their output goes to subprocOut
@@ -434,6 +443,45 @@ func (r *Runner) RunScenario(ctx context.Context, req RunRequest) (*ScenarioResu
 	}
 
 	return finish(StatusPassed, "")
+}
+
+// scanComposeIsolationGate best-effort loads the copy's own config and scans
+// its raw compose files for constructs that bypass Docker-Compose
+// project-name scoping (config.ScanComposeIsolation). Every finding is
+// printed as a warning; it reports true (block the scenario) only when at
+// least one finding is Blocking and skipIsolationCheck is false. If the copy
+// config fails to load, the scan is skipped entirely — the subsequent `dwe
+// validate` subprocess surfaces the real config error.
+func scanComposeIsolationGate(copyRoot string, skipIsolationCheck bool, warn func(string)) bool {
+	copyCfg, err := config.LoadConfigOrWrap(filepath.Join(copyRoot, "workspace.yml"))
+	if err != nil {
+		return false
+	}
+
+	findings := config.ScanComposeIsolation(copyCfg, copyRoot)
+	if len(findings) == 0 {
+		return false
+	}
+
+	var blocking []config.IsolationFinding
+	for _, f := range findings {
+		warn(fmt.Sprintf("compose isolation: %s", f.Message))
+		if f.Blocking {
+			blocking = append(blocking, f)
+		}
+	}
+	if len(blocking) == 0 || skipIsolationCheck {
+		return false
+	}
+
+	msgs := make([]string, len(blocking))
+	for i, f := range blocking {
+		msgs[i] = f.Message
+	}
+	warn(fmt.Sprintf(
+		"blocking compose isolation hazard(s), refusing to run: %s — pass --skip-isolation-check to downgrade to a warning",
+		strings.Join(msgs, "; ")))
+	return true
 }
 
 // hasAllocatedPorts reports whether the copy's local.yml carried any

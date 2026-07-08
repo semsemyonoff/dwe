@@ -503,21 +503,21 @@ its two consumers (validator Task 4, runner Task 5):
 - Modify: `internal/core/workflow/envtest/runner_test.go`
 - Modify: `internal/cli/test/run_test.go`
 
-- [ ] add `SkipIsolationCheck bool` to `RunRequest`; add `--skip-isolation-check` to
+- [x] add `SkipIsolationCheck bool` to `RunRequest`; add `--skip-isolation-check` to
       `dwe test run` and plumb into the request
-- [ ] in the runner prepare phase, insertion window **`runner.go:396-403`** (after `finish`,
+- [x] in the runner prepare phase, insertion window **`runner.go:396-403`** (after `finish`,
       reporter, and `logWriter` are set up; before the `dwe validate` subprocess):
       best-effort load the copy config, run `config.ScanComposeIsolation`, print all findings
       as warnings
-- [ ] gate: any `Blocking` finding && `!req.SkipIsolationCheck` → fail the scenario via
+- [x] gate: any `Blocking` finding && `!req.SkipIsolationCheck` → fail the scenario via
       `finish()` (teardown runs, no deploy subprocess spawned), message lists the blocking
       findings + `--skip-isolation-check` hint; `SkipIsolationCheck` → warnings only, proceed
-- [ ] write tests (recording seams): a copy compose with `container_name` → scenario blocked,
+- [x] write tests (recording seams): a copy compose with `container_name` → scenario blocked,
       teardown invoked, deploy subprocess NOT called; same with `--skip-isolation-check` →
       deploy subprocess called; warn-only finding (external volume) → proceeds; copy-config
       load failure → scan skipped, flow proceeds to validate
-- [ ] write CLI test: `--skip-isolation-check` threads into `RunRequest.SkipIsolationCheck`
-- [ ] run `go test ./internal/cli/test/... ./internal/core/workflow/envtest/...` — must pass
+- [x] write CLI test: `--skip-isolation-check` threads into `RunRequest.SkipIsolationCheck`
+- [x] run `go test ./internal/cli/test/... ./internal/core/workflow/envtest/...` — must pass
       before task 6
 
 ### Task 6: User-facing docs + ru i18n

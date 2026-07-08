@@ -67,7 +67,7 @@ func TestRunTestRun_AllPassed_ExitZero(t *testing.T) {
 	flags := &cmdctx.RootFlags{Root: baseDir}
 	cmd, out, _ := newRunTestCmd()
 
-	err := runTestRun(cmd, flags, nil, false, 0)
+	err := runTestRun(cmd, flags, nil, false, 0, false)
 	if err != nil {
 		t.Fatalf("expected nil (exit 0), got %v", err)
 	}
@@ -93,7 +93,7 @@ func TestRunTestRun_FailedScenario_ExitOne(t *testing.T) {
 	flags := &cmdctx.RootFlags{Root: baseDir}
 	cmd, out, _ := newRunTestCmd()
 
-	err := runTestRun(cmd, flags, nil, false, 0)
+	err := runTestRun(cmd, flags, nil, false, 0, false)
 	var oe *testRunOutcomeError
 	if !errors.As(err, &oe) || oe.ExitCode() != 1 {
 		t.Fatalf("expected exit-code-1 error, got %v", err)
@@ -120,7 +120,7 @@ func TestRunTestRun_PrepError_ExitTwo(t *testing.T) {
 	flags := &cmdctx.RootFlags{Root: baseDir}
 	cmd, _, _ := newRunTestCmd()
 
-	err := runTestRun(cmd, flags, nil, false, 0)
+	err := runTestRun(cmd, flags, nil, false, 0, false)
 	var oe *testRunOutcomeError
 	if !errors.As(err, &oe) || oe.ExitCode() != 2 {
 		t.Fatalf("expected exit-code-2 error, got %v", err)
@@ -137,7 +137,7 @@ func TestRunTestRun_UnknownScenario_PrepErrorBeforeAnyRun(t *testing.T) {
 	flags := &cmdctx.RootFlags{Root: baseDir}
 	cmd, _, _ := newRunTestCmd()
 
-	err := runTestRun(cmd, flags, []string{"does-not-exist"}, false, 0)
+	err := runTestRun(cmd, flags, []string{"does-not-exist"}, false, 0, false)
 	if err == nil {
 		t.Fatal("expected an error for an unknown scenario name")
 	}
@@ -164,7 +164,7 @@ func TestRunTestRun_ExplicitScenarioNames(t *testing.T) {
 	flags := &cmdctx.RootFlags{Root: baseDir}
 	cmd, _, _ := newRunTestCmd()
 
-	if err := runTestRun(cmd, flags, []string{"b"}, false, 0); err != nil {
+	if err := runTestRun(cmd, flags, []string{"b"}, false, 0, false); err != nil {
 		t.Fatalf("runTestRun: %v", err)
 	}
 	if len(f.calls) != 1 || f.calls[0].Scenario != "b" {
@@ -185,7 +185,7 @@ func TestRunTestRun_DuplicateArgs_RunOnce(t *testing.T) {
 
 	// A repeated name must collapse to a single run (first-mention order),
 	// not run twice — the second run would spuriously trip the --keep guard.
-	if err := runTestRun(cmd, flags, []string{"b", "a", "b"}, false, 0); err != nil {
+	if err := runTestRun(cmd, flags, []string{"b", "a", "b"}, false, 0, false); err != nil {
 		t.Fatalf("runTestRun: %v", err)
 	}
 	if len(f.calls) != 2 || f.calls[0].Scenario != "b" || f.calls[1].Scenario != "a" {
@@ -201,7 +201,7 @@ func TestRunTestRun_NoScenarios_ExitZero(t *testing.T) {
 	flags := &cmdctx.RootFlags{Root: baseDir}
 	cmd, out, _ := newRunTestCmd()
 
-	if err := runTestRun(cmd, flags, nil, false, 0); err != nil {
+	if err := runTestRun(cmd, flags, nil, false, 0, false); err != nil {
 		t.Fatalf("expected nil error, got %v", err)
 	}
 	if !strings.Contains(out.String(), "no scenarios to run") {
@@ -223,7 +223,7 @@ func TestRunTestRun_JSONShape(t *testing.T) {
 	flags := &cmdctx.RootFlags{Root: baseDir, Output: "json"}
 	cmd, out, _ := newRunTestCmd()
 
-	err := runTestRun(cmd, flags, nil, false, 0)
+	err := runTestRun(cmd, flags, nil, false, 0, false)
 	if err != nil {
 		t.Fatalf("expected nil (exit 0), got %v", err)
 	}
@@ -260,7 +260,7 @@ func TestRunTestRun_ScrubsComposeEnvBeforeRunnerCalls(t *testing.T) {
 	flags := &cmdctx.RootFlags{Root: baseDir}
 	cmd, _, _ := newRunTestCmd()
 
-	if err := runTestRun(cmd, flags, nil, false, 0); err != nil {
+	if err := runTestRun(cmd, flags, nil, false, 0, false); err != nil {
 		t.Fatalf("runTestRun: %v", err)
 	}
 	if len(f.composeEnvAtCall) != 1 || f.composeEnvAtCall[0] != "" {
@@ -282,7 +282,7 @@ func TestRunTestRun_KeepPrintsCleanupHint(t *testing.T) {
 	flags := &cmdctx.RootFlags{Root: baseDir}
 	cmd, out, _ := newRunTestCmd()
 
-	if err := runTestRun(cmd, flags, nil, true, 0); err != nil {
+	if err := runTestRun(cmd, flags, nil, true, 0, false); err != nil {
 		t.Fatalf("runTestRun: %v", err)
 	}
 	if !f.calls[0].Keep {
@@ -306,11 +306,29 @@ func TestRunTestRun_TimeoutFlagThreaded(t *testing.T) {
 	flags := &cmdctx.RootFlags{Root: baseDir}
 	cmd, _, _ := newRunTestCmd()
 
-	if err := runTestRun(cmd, flags, nil, false, 15*time.Minute); err != nil {
+	if err := runTestRun(cmd, flags, nil, false, 15*time.Minute, false); err != nil {
 		t.Fatalf("runTestRun: %v", err)
 	}
 	if f.calls[0].Timeout != 15*time.Minute {
 		t.Errorf("Timeout = %v, want 15m", f.calls[0].Timeout)
+	}
+}
+
+func TestRunTestRun_SkipIsolationCheckFlagThreaded(t *testing.T) {
+	baseDir := t.TempDir()
+	writeScenarioFile(t, baseDir, "smoke", "description: x\n")
+
+	f := &fakeRunner{}
+	withFakeRunner(t, f)
+
+	flags := &cmdctx.RootFlags{Root: baseDir}
+	cmd, _, _ := newRunTestCmd()
+
+	if err := runTestRun(cmd, flags, nil, false, 0, true); err != nil {
+		t.Fatalf("runTestRun: %v", err)
+	}
+	if !f.calls[0].SkipIsolationCheck {
+		t.Error("expected RunRequest.SkipIsolationCheck to be true")
 	}
 }
 
@@ -331,7 +349,7 @@ func TestRunTestRun_FailedScenarioWithReportDir_RendersReportLine(t *testing.T) 
 	flags := &cmdctx.RootFlags{Root: baseDir}
 	cmd, out, _ := newRunTestCmd()
 
-	_ = runTestRun(cmd, flags, nil, false, 0)
+	_ = runTestRun(cmd, flags, nil, false, 0, false)
 	if !strings.Contains(out.String(), "report: /tmp/.dwe/tests/reports/smoke") {
 		t.Errorf("expected report line for failed scenario, got %q", out.String())
 	}
@@ -351,7 +369,7 @@ func TestRunTestRun_PassingScenario_NoReportLine(t *testing.T) {
 	flags := &cmdctx.RootFlags{Root: baseDir}
 	cmd, out, _ := newRunTestCmd()
 
-	if err := runTestRun(cmd, flags, nil, false, 0); err != nil {
+	if err := runTestRun(cmd, flags, nil, false, 0, false); err != nil {
 		t.Fatalf("runTestRun: %v", err)
 	}
 	if strings.Contains(out.String(), "report:") {

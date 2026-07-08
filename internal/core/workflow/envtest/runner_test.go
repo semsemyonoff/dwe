@@ -770,6 +770,174 @@ func TestRunScenario_KeptRunGuard(t *testing.T) {
 // prefix (e.g. "foo" must not claim "foo-bar"'s manifest, and vice versa), and
 // must ignore files that carry the prefix but not a valid <6-hex>.yml run-id
 // suffix.
+// TestRunScenario_IsolationGate_BlocksOnContainerName pins that a blocking
+// isolation finding (container_name:) fails the scenario BEFORE the `dwe
+// validate` subprocess is even spawned, warns with the finding's message, and
+// still runs teardown (removing the copy).
+func TestRunScenario_IsolationGate_BlocksOnContainerName(t *testing.T) {
+	dir := t.TempDir()
+	writeFixtureFile(t, dir, "workspace.yml", "project:\n  name: runnertest\n  prefix: dwe\ncompose:\n  base: docker-compose.yml\n")
+	writeFixtureFile(t, dir, "docker-compose.yml", "services:\n  app:\n    container_name: fixed-name\n")
+	writeFixtureFile(t, dir, "workspace/tests/smoke.yml", noStepsScenario)
+
+	var teardownOrder []string
+	var execCalls []string
+	var warnings []string
+	r := &Runner{
+		execDwe:       stubExecDwe(nil, &execCalls),
+		allocatePorts: AllocatePorts,
+		newTeardownDeps: func(string, io.Writer) TeardownDeps {
+			return recordingTeardownDeps(&teardownOrder, nil)
+		},
+		clock: time.Now,
+	}
+
+	result, err := r.RunScenario(context.Background(), RunRequest{
+		BaseDir:         dir,
+		Scenario:        "smoke",
+		ReporterFactory: noopReporterFactory,
+		Warn:            func(msg string) { warnings = append(warnings, msg) },
+	})
+	if err != nil {
+		t.Fatalf("RunScenario: %v", err)
+	}
+	if result.Status != StatusFailed {
+		t.Fatalf("status = %q, want failed", result.Status)
+	}
+	if len(execCalls) != 0 {
+		t.Fatalf("execCalls = %v, want none (isolation gate must block before validate)", execCalls)
+	}
+	if !containsStep(teardownOrder, "remove_copy") {
+		t.Fatalf("expected teardown to still run: %v", teardownOrder)
+	}
+	found := false
+	for _, w := range warnings {
+		if strings.Contains(w, "fixed-name") {
+			found = true
+		}
+	}
+	if !found {
+		t.Fatalf("expected a warning mentioning the isolation hazard, got %v", warnings)
+	}
+}
+
+// TestRunScenario_IsolationGate_SkipDowngradesToWarning pins that
+// --skip-isolation-check (RunRequest.SkipIsolationCheck) downgrades a
+// blocking finding to a warning and lets the scenario proceed to the deploy
+// subprocess normally.
+func TestRunScenario_IsolationGate_SkipDowngradesToWarning(t *testing.T) {
+	dir := t.TempDir()
+	writeFixtureFile(t, dir, "workspace.yml", "project:\n  name: runnertest\n  prefix: dwe\ncompose:\n  base: docker-compose.yml\n")
+	writeFixtureFile(t, dir, "docker-compose.yml", "services:\n  app:\n    container_name: fixed-name\n")
+	writeFixtureFile(t, dir, "workspace/tests/smoke.yml", noStepsScenario)
+
+	var teardownOrder []string
+	var execCalls []string
+	var warnings []string
+	r := &Runner{
+		execDwe:       stubExecDwe(nil, &execCalls),
+		allocatePorts: AllocatePorts,
+		newTeardownDeps: func(string, io.Writer) TeardownDeps {
+			return recordingTeardownDeps(&teardownOrder, nil)
+		},
+		clock: time.Now,
+	}
+
+	result, err := r.RunScenario(context.Background(), RunRequest{
+		BaseDir:            dir,
+		Scenario:           "smoke",
+		ReporterFactory:    noopReporterFactory,
+		SkipIsolationCheck: true,
+		Warn:               func(msg string) { warnings = append(warnings, msg) },
+	})
+	if err != nil {
+		t.Fatalf("RunScenario: %v", err)
+	}
+	if result.Status != StatusPassed {
+		t.Fatalf("status = %q, want passed", result.Status)
+	}
+	wantCalls := []string{"validate", "deploy run --silent"}
+	if strings.Join(execCalls, "|") != strings.Join(wantCalls, "|") {
+		t.Fatalf("execCalls = %v, want %v (--skip-isolation-check must still deploy)", execCalls, wantCalls)
+	}
+	found := false
+	for _, w := range warnings {
+		if strings.Contains(w, "fixed-name") {
+			found = true
+		}
+	}
+	if !found {
+		t.Fatalf("expected a warning mentioning the isolation hazard even when skipped, got %v", warnings)
+	}
+}
+
+// TestRunScenario_IsolationGate_WarnOnlyFindingProceeds pins that a
+// non-blocking finding (an external volume) never fails the scenario — it is
+// surfaced as a warning only.
+func TestRunScenario_IsolationGate_WarnOnlyFindingProceeds(t *testing.T) {
+	dir := t.TempDir()
+	writeFixtureFile(t, dir, "workspace.yml", "project:\n  name: runnertest\n  prefix: dwe\ncompose:\n  base: docker-compose.yml\n")
+	writeFixtureFile(t, dir, "docker-compose.yml", "volumes:\n  data:\n    external: true\n")
+	writeFixtureFile(t, dir, "workspace/tests/smoke.yml", noStepsScenario)
+
+	var execCalls []string
+	var warnings []string
+	r := &Runner{
+		execDwe:       stubExecDwe(nil, &execCalls),
+		allocatePorts: AllocatePorts,
+		newTeardownDeps: func(string, io.Writer) TeardownDeps {
+			return recordingTeardownDeps(new([]string), nil)
+		},
+		clock: time.Now,
+	}
+
+	result, err := r.RunScenario(context.Background(), RunRequest{
+		BaseDir:         dir,
+		Scenario:        "smoke",
+		ReporterFactory: noopReporterFactory,
+		Warn:            func(msg string) { warnings = append(warnings, msg) },
+	})
+	if err != nil {
+		t.Fatalf("RunScenario: %v", err)
+	}
+	if result.Status != StatusPassed {
+		t.Fatalf("status = %q, want passed", result.Status)
+	}
+	wantCalls := []string{"validate", "deploy run --silent"}
+	if strings.Join(execCalls, "|") != strings.Join(wantCalls, "|") {
+		t.Fatalf("execCalls = %v, want %v", execCalls, wantCalls)
+	}
+	found := false
+	for _, w := range warnings {
+		if strings.Contains(w, "external") {
+			found = true
+		}
+	}
+	if !found {
+		t.Fatalf("expected a warning mentioning the external volume, got %v", warnings)
+	}
+}
+
+// TestScanComposeIsolationGate_CopyConfigLoadFailure_ScanSkipped pins that a
+// copy whose own workspace.yml fails to load simply skips the isolation scan
+// (never blocks) — exercised directly against scanComposeIsolationGate since
+// RunScenario loads the ORIGINAL project's config up front and would never
+// reach the copy in this state via the full flow.
+func TestScanComposeIsolationGate_CopyConfigLoadFailure_ScanSkipped(t *testing.T) {
+	dir := t.TempDir()
+	// binaries: is a rejected legacy top-level key — LoadConfigOrWrap fails.
+	writeFixtureFile(t, dir, "workspace.yml", "project:\n  name: runnertest\n  prefix: dwe\nbinaries:\n  docker: /bin/docker\n")
+
+	var warnings []string
+	blocked := scanComposeIsolationGate(dir, false, func(msg string) { warnings = append(warnings, msg) })
+	if blocked {
+		t.Fatal("expected the gate not to block when the copy config fails to load")
+	}
+	if len(warnings) != 0 {
+		t.Fatalf("expected no warnings when the scan is skipped, got %v", warnings)
+	}
+}
+
 func TestExistingManifestPaths_PrefixDisambiguation(t *testing.T) {
 	dir := t.TempDir()
 	manifests := ManifestsDir(dir)

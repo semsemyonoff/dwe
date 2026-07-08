@@ -32,6 +32,7 @@ var newRunner = func() scenarioRunner { return envtest.NewRunner() }
 func newTestRunCmd(flags *cmdctx.RootFlags) *cobra.Command {
 	var keep bool
 	var timeout time.Duration
+	var skipIsolationCheck bool
 
 	cmd := &cobra.Command{
 		Use:   "run [scenario...]",
@@ -44,16 +45,24 @@ name order. Passing scenario names runs exactly those (an unknown name fails
 before anything runs). Ctrl+C cancels the scenario currently running, tears it
 down, and skips the rest.
 
+Before deploying, the copy's raw compose files are scanned for constructs
+that bypass Docker-Compose project-name scoping (container_name:, literal
+host ports, external/named volumes & networks). A blocking hazard
+(container_name:, a literal host port) fails the scenario before anything is
+deployed; pass --skip-isolation-check to downgrade every finding to a warning
+and proceed anyway.
+
 Exit codes: 0 = every scenario passed, 1 = at least one scenario failed,
 2 = a scenario (or the run itself) could not be prepared.`,
 		Example: `  dwe test run
   dwe test run redis-off db-migration
   dwe test run --keep smoke
-  dwe test run --timeout 15m`,
+  dwe test run --timeout 15m
+  dwe test run --skip-isolation-check smoke`,
 		Args:         cobra.ArbitraryArgs,
 		SilenceUsage: true,
 		RunE: func(cmd *cobra.Command, args []string) error {
-			return runTestRun(cmd, flags, args, keep, timeout)
+			return runTestRun(cmd, flags, args, keep, timeout, skipIsolationCheck)
 		},
 	}
 
@@ -61,6 +70,8 @@ Exit codes: 0 = every scenario passed, 1 = at least one scenario failed,
 		"skip teardown; leave the copy, manifest, and Docker/bridge state running for debugging")
 	cmd.Flags().DurationVar(&timeout, "timeout", 0,
 		"override every scenario's own timeout (e.g. 15m); 0 = use the scenario's timeout: field or the 30m default")
+	cmd.Flags().BoolVar(&skipIsolationCheck, "skip-isolation-check", false,
+		"downgrade compose isolation findings (container_name:, literal host ports, …) to warnings instead of blocking the scenario")
 	return cmd
 }
 
@@ -116,7 +127,7 @@ type testRunOutcomeError struct{ code int }
 func (e *testRunOutcomeError) Error() string { return "" }
 func (e *testRunOutcomeError) ExitCode() int { return e.code }
 
-func runTestRun(cmd *cobra.Command, flags *cmdctx.RootFlags, args []string, keep bool, timeout time.Duration) error {
+func runTestRun(cmd *cobra.Command, flags *cmdctx.RootFlags, args []string, keep bool, timeout time.Duration, skipIsolationCheck bool) error {
 	// Must run before the flock, any goroutine, UI, or subprocess (spec §3).
 	envtest.ScrubComposeEnv()
 
@@ -150,14 +161,15 @@ func runTestRun(cmd *cobra.Command, flags *cmdctx.RootFlags, args []string, keep
 			break
 		}
 		req := envtest.RunRequest{
-			BaseDir:         baseDir,
-			Scenario:        name,
-			Keep:            keep,
-			Timeout:         timeout,
-			Translator:      flags.I18n,
-			Locale:          flags.Locale,
-			ReporterFactory: reporterFactory,
-			Warn:            warn,
+			BaseDir:            baseDir,
+			Scenario:           name,
+			Keep:               keep,
+			Timeout:            timeout,
+			Translator:         flags.I18n,
+			Locale:             flags.Locale,
+			ReporterFactory:    reporterFactory,
+			Warn:               warn,
+			SkipIsolationCheck: skipIsolationCheck,
 		}
 		res, err := runner.RunScenario(ctx, req)
 		if err != nil {
