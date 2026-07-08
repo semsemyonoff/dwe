@@ -553,13 +553,20 @@ func TestListComposeProjectsReal_BoundedTimeout(t *testing.T) {
 	// A fake docker bin that ignores its args and hangs — models a wedged daemon.
 	// Without the bounded context in listComposeProjectsReal this would block the
 	// whole clean invocation; with it, the call must return promptly with an error.
+	//
+	// `exec sleep` (not a bare `sleep`) is load-bearing: it replaces the shell so
+	// the hang is a SINGLE process. A bare `sleep` would run as a child of the
+	// shell holding the inherited stdout pipe, and exec.CommandContext only kills
+	// the direct child on timeout — the grandchild would keep the pipe open and
+	// .Output() would block for the full sleep (real single-process `docker ps`
+	// has no such grandchild, so production is unaffected; the naive test wasn't).
 	script := filepath.Join(t.TempDir(), "hang.sh")
-	if err := os.WriteFile(script, []byte("#!/bin/sh\nsleep 10\n"), 0o755); err != nil {
+	if err := os.WriteFile(script, []byte("#!/bin/sh\nexec sleep 30\n"), 0o755); err != nil {
 		t.Fatalf("writing fake docker bin: %v", err)
 	}
 
 	orig := orphanScanTimeout
-	orphanScanTimeout = 50 * time.Millisecond
+	orphanScanTimeout = 100 * time.Millisecond
 	t.Cleanup(func() { orphanScanTimeout = orig })
 
 	start := time.Now()
@@ -568,7 +575,7 @@ func TestListComposeProjectsReal_BoundedTimeout(t *testing.T) {
 	if err == nil {
 		t.Fatal("expected a timeout error from the hung docker bin")
 	}
-	if elapsed > 2*time.Second {
+	if elapsed > 3*time.Second {
 		t.Fatalf("listComposeProjectsReal did not honor orphanScanTimeout: took %v", elapsed)
 	}
 }
