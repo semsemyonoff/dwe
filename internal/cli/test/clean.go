@@ -154,7 +154,7 @@ func renderTestCleanText(data testCleanJSON) string {
 		lines = append(lines, fmt.Sprintf("orphan: %s (%s)", o.ComposeProject, o.Note))
 	}
 
-	summary := fmt.Sprintf("%d %s, %d skipped (live), %d failed, %d orphan(s)",
+	summary := fmt.Sprintf("%d %s, %d skipped, %d failed, %d orphan(s)",
 		len(data.Swept), sweptVerb, len(data.Skipped), len(data.Failed), len(data.Orphans))
 	if len(lines) == 0 {
 		return summary

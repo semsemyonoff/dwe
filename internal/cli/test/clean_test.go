@@ -146,7 +146,7 @@ func TestRunTestClean_TextSummary_Swept(t *testing.T) {
 	if !strings.Contains(text, "smoke: swept (proj-t-smoke-abc)") {
 		t.Errorf("expected swept line, got %q", text)
 	}
-	if !strings.Contains(text, "1 swept, 0 skipped (live), 0 failed, 0 orphan(s)") {
+	if !strings.Contains(text, "1 swept, 0 skipped, 0 failed, 0 orphan(s)") {
 		t.Errorf("expected summary line, got %q", text)
 	}
 }
