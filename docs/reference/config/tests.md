@@ -16,8 +16,10 @@ Declarative integration-test scenarios (`dwe test`).
 - [Isolation model](#isolation-model)
 - [`.dwe/tests/` layout](#dwetests-layout)
 - [Teardown](#teardown)
+- [Failure reports](#failure-reports)
 - [`dwe test run`](#dwe-test-run)
 - [`dwe test list`](#dwe-test-list)
+- [`dwe test clean`](#dwe-test-clean)
 - [Exit codes](#exit-codes)
 - [JSON output](#json-output)
 - [Documented limitations](#documented-limitations)
@@ -179,7 +181,7 @@ All paths below are relative to the **original** project root (never the copy):
 | `.dwe/tests/runs/<scenario>/` | The disposable copy for a scenario's current/last run |
 | `.dwe/tests/locks/<scenario>.lock` | Per-scenario flock (never the project-wide `deploy.lock`/`snapshot.lock`) |
 | `.dwe/tests/manifests/<scenario>-<run-id>.yml` | Durable run manifest — written **before** any Docker interaction |
-| `.dwe/tests/reports/<scenario>/` | Reserved for stage-2 failure artifacts (not populated yet) |
+| `.dwe/tests/reports/<scenario>/` | Failure artifacts from the scenario's most recent non-passing, non-`--keep` run (see [Failure reports](#failure-reports)) |
 
 The manifest (`scenario`, `run_id`, `compose_project`, `copy_path`, `bridge_dir`, `report_dir`, `created_at`) is the sole input to teardown: a run that dies mid-way (crash, `--keep`, a killed process) is still fully describable from its manifest and copy contents alone, without touching the working environment or guessing at names.
 
@@ -187,7 +189,21 @@ The manifest (`scenario`, `run_id`, `compose_project`, `copy_path`, `bridge_dir`
 
 Runs by default after every scenario (pass/fail/timeout/Ctrl+C), driven only by the manifest, in order: `docker compose down --remove-orphans` (**never `-v`** — a shared cache volume referenced as a plain named volume in a raw compose file must never be deleted) → reap any remaining containers labelled with the manifest's exact `com.docker.compose.project` value → remove the test project's own volumes (prefix-filtered by compose project name; `shared:` volumes survive, same semantics as `dwe reset`) → stop any bridge daemon the deploy started in the copy → remove the copy directory → delete the manifest → release the flock. Each step is best-effort — a failure is logged and later steps still run.
 
-`--keep` skips every step above, leaves the manifest and copy in place, and prints the compose project name, the copy path, and a cleanup hint. A subsequent `dwe test run` of the **same** scenario name fails fast (a kept run's manifest still exists) rather than silently deleting the kept environment out from under you — clean it up manually, or wait for stage-2 `dwe test clean`.
+`--keep` skips every step above, leaves the manifest and copy in place, and prints the compose project name, the copy path, and a cleanup hint. A subsequent `dwe test run` of the **same** scenario name fails fast (a kept run's manifest still exists) rather than silently deleting the kept environment out from under you — clean it up manually, or run [`dwe test clean`](#dwe-test-clean).
+
+## Failure reports
+
+When a scenario does **not** pass (deploy failure, step failure, or timeout) and `--keep` was not used, the runner **attempts to collect** a failure report into `.dwe/tests/reports/<scenario>/` **before** teardown destroys the environment — so the debugging material survives. The directory is cleared and rewritten on every non-passing run (the latest failure is what you debug); a passing scenario or a `--keep` run never touches it.
+
+| File | Source |
+|------|--------|
+| `pipeline.log` | copy of the scenario's pipeline log (`.dwe/logs/test.log` inside the disposable copy) |
+| `compose-ps.txt` | `docker compose ps --all` against the copy (`--all`, so a service that crashed or exited during deploy still shows up — the running-only default would drop exactly the service a failure report exists to surface) |
+| `container-logs.txt` | `docker compose logs --no-color --tail 200` for the copy's containers, combined into one file |
+
+Collection is best-effort throughout and runs under its own fresh timeout (never the scenario's own, possibly-expired, deadline): a missing pipeline log, a docker command that partially fails, or the collector itself timing out is warned and never changes the scenario's pass/fail outcome. If the copy's docker config can't be loaded (the same condition that can break deploy itself), collection falls back to `docker ps -a` / `docker logs`, filtered by the run's exact `com.docker.compose.project` label, so a report is still produced even when compose is unusable.
+
+The report path is surfaced in `dwe test run`'s text output (a `report: <dir>` line under a non-passing scenario) and in its JSON output as `report_dir` (empty for a passing scenario, a `--keep` run, or when the report directory could not be created).
 
 ## `dwe test run`
 
@@ -215,15 +231,50 @@ dwe test list
 
 Lists every scenario under `workspace/tests/*.yml` with its `description:`, verbatim. An absent `workspace/tests/` directory lists nothing and is not an error.
 
+## `dwe test clean`
+
+```
+dwe test clean [scenario...]
+    --dry-run                 # report what would be swept without tearing anything down
+```
+
+Removes test environments left behind by `dwe test run --keep` or an interrupted/crashed run. `clean` is strictly **manifest-driven**: it enumerates `.dwe/tests/manifests/*.yml` and reuses the exact same `Teardown` a normal scenario run performs at the end of `dwe test run` — nothing is ever destroyed by guessing a compose project name from a pattern.
+
+With no arguments, every manifested scenario is swept. Passing scenario names restricts the sweep to those. A scenario whose flock (`.dwe/tests/locks/<scenario>.lock`) is currently held by a live `dwe test run` is **skipped**, never torn down — `clean` never contests a run in progress. `--dry-run` reports what would be swept without tearing anything down (each scenario's flock is still acquired-and-released to correctly classify a live run as skipped rather than sweepable).
+
+If a manifest's teardown does not complete cleanly (e.g. a container or volume removal step failed partway through), that entry is reported as **failed**, never as swept — `Teardown` is best-effort and may have removed some resources (even the manifest itself) before hitting the failure, so counting it as swept would hide a real leftover from the next run.
+
+A best-effort, report-only scan additionally lists Docker compose projects matching this project's test-name prefix (`<base>-t-`, the same base `dwe test run` uses) that have **no manifest at all** — these are reported as orphans and are **never** destroyed automatically; remove them by hand once you've confirmed they're safe to drop. If the project's own root config can't be loaded, the orphan scan is skipped (warned) but every manifested environment is still swept — a broken or mid-edit config must not block a recovery sweep.
+
+### JSON output
+
+```
+dwe test clean --output json
+```
+
+```json
+{
+  "dry_run": false,
+  "swept": [{"scenario": "smoke", "compose_project": "myapp-t-smoke-a1b2c3", "copy_path": ".dwe/tests/runs/smoke"}],
+  "skipped": [{"scenario": "redis-off", "compose_project": "myapp-t-redis-off-9f1e2d", "copy_path": ".dwe/tests/runs/redis-off", "reason": "live"}],
+  "failed": [],
+  "orphans": [{"compose_project": "myapp-t-old-9f8e7d", "note": "no manifest — remove manually"}]
+}
+```
+
+As with `run`/`list`, live output (per-entry warnings) is silenced on stderr in JSON mode.
+
 ## Exit codes
 
 | Code | Meaning |
 |------|---------|
-| `0` | Every scenario passed |
-| `1` | At least one scenario failed (deploy failure, step failure, or timeout) |
-| `2` | A scenario — or the run itself — could not even be prepared (unknown scenario name, scenario load/parse error, flock held by a concurrent run, a kept prior run's manifest still present) |
+| `0` | Every scenario passed (`run`); sweep completed, including nothing to sweep (`clean` — skipped-live entries and orphans do not affect this) |
+| `1` | At least one scenario failed — deploy failure, step failure, or timeout (`run`); at least one manifest's teardown did not complete cleanly (`clean`) |
+| `2` | A scenario — or the run itself — could not even be prepared: unknown scenario name, scenario load/parse error, flock held by a concurrent run, a kept prior run's manifest still present (`run`) |
 
-## JSON output
+`clean` maps a hard error (e.g. an unreadable manifests directory) to a non-zero exit through the standard CLI error envelope, separately from the `0`/`1` sweep-outcome codes above.
+
+## JSON output (`run` / `list`)
 
 ```
 dwe test run --output json
@@ -233,13 +284,14 @@ dwe test list --output json
 ```json
 {
   "scenarios": [
-    {"name": "redis-off", "status": "passed", "failed_step": "", "duration_ms": 4213, "report_dir": ""}
+    {"name": "redis-off", "status": "passed", "duration_seconds": 4.213},
+    {"name": "cache-on", "status": "failed", "failed_step": "http_check", "duration_seconds": 2.101, "report_dir": ".dwe/tests/reports/cache-on"}
   ],
-  "summary": "1 passed, 0 failed"
+  "summary": "1 passed, 1 failed"
 }
 ```
 
-`status` is one of `passed`, `failed`, `error` (`error` = the scenario could not be prepared — copy/config/manifest/validate failure; distinct from a deploy or step failure, which is `failed`). `report_dir` is reserved for stage-2 failure artifacts and stays empty in stage 1. As with every other read-only/report surface, live pipeline output and the summary line are silenced in JSON mode — the file log under `.dwe/logs/` still records everything.
+`status` is one of `passed`, `failed`, `error` (`error` = the scenario could not be prepared — copy/config/manifest/validate failure; distinct from a deploy or step failure, which is `failed`). `failed_step` and `report_dir` are omitted when empty (a passing scenario has neither). `report_dir` is the [failure report](#failure-reports) directory for a non-passing scenario; omitted for a passing scenario, a `--keep` run, or when collection could not create the report directory. As with every other read-only/report surface, live pipeline output and the summary line are silenced in JSON mode — the file log under `.dwe/logs/` still records everything.
 
 ## Documented limitations
 

@@ -818,3 +818,273 @@ func TestExistingManifestPaths_PrefixDisambiguation(t *testing.T) {
 func containsStep(order []string, step string) bool {
 	return slices.Contains(order, step)
 }
+
+// recordingCollectReport returns a Runner.collectReport stub that appends
+// "collect_report" to order (pass the SAME slice pointer given to
+// recordingTeardownDeps to assert collection happens before teardown) and
+// returns the given dir/err.
+func recordingCollectReport(order *[]string, dir string, err error) func(context.Context, *Manifest, func(string)) (string, error) {
+	return func(context.Context, *Manifest, func(string)) (string, error) {
+		*order = append(*order, "collect_report")
+		return dir, err
+	}
+}
+
+const stepFailScenario = `steps:
+  - name: "boom"
+    type: shell
+    cmd: "exit 1"
+`
+
+// TestRunScenario_CollectsReportOnFailure pins that every non-passed outcome
+// (validate error, deploy failure, step failure, a timeout override) triggers
+// exactly one collectReport call and sets ScenarioResult.ReportDir from it.
+func TestRunScenario_CollectsReportOnFailure(t *testing.T) {
+	tests := []struct {
+		name        string
+		scenario    string
+		scenarioDef string
+		execResults map[string]error
+		timeout     time.Duration
+		wantStatus  ScenarioStatus
+	}{
+		{
+			name:        "validate error",
+			scenario:    "smoke",
+			scenarioDef: noStepsScenario,
+			execResults: map[string]error{"validate": errors.New("validate: boom")},
+			wantStatus:  StatusError,
+		},
+		{
+			name:        "deploy failure",
+			scenario:    "smoke",
+			scenarioDef: noStepsScenario,
+			execResults: map[string]error{"deploy run --silent": errors.New("deploy: boom")},
+			wantStatus:  StatusFailed,
+		},
+		{
+			name:        "step failure",
+			scenario:    "stepfail",
+			scenarioDef: stepFailScenario,
+			wantStatus:  StatusFailed,
+		},
+		{
+			name:        "timeout",
+			scenario:    "slow",
+			scenarioDef: "steps:\n  - name: \"slow\"\n    type: shell\n    cmd: \"sleep 5\"\n",
+			timeout:     50 * time.Millisecond,
+			wantStatus:  StatusFailed,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			dir := writeRunnerFixtureProject(t, tt.scenario, tt.scenarioDef)
+
+			var teardownOrder []string
+			var execCalls []string
+			var reportCalls int
+			wantDir := filepath.Join(dir, "report-for-"+tt.scenario)
+			r := &Runner{
+				execDwe:       stubExecDwe(tt.execResults, &execCalls),
+				allocatePorts: AllocatePorts,
+				newTeardownDeps: func(string, io.Writer) TeardownDeps {
+					return recordingTeardownDeps(&teardownOrder, nil)
+				},
+				collectReport: func(ctx context.Context, m *Manifest, warn func(string)) (string, error) {
+					reportCalls++
+					// The report context must be fresh (never the scenario
+					// context, which is already cancelled on a timeout failure) —
+					// otherwise every timeout report would capture nothing.
+					if err := ctx.Err(); err != nil {
+						t.Errorf("collectReport received a cancelled context: %v", err)
+					}
+					return wantDir, nil
+				},
+				clock: time.Now,
+			}
+
+			result, err := r.RunScenario(context.Background(), RunRequest{
+				BaseDir:         dir,
+				Scenario:        tt.scenario,
+				Timeout:         tt.timeout,
+				ReporterFactory: noopReporterFactory,
+			})
+			if err != nil {
+				t.Fatalf("RunScenario: %v", err)
+			}
+			if result.Status != tt.wantStatus {
+				t.Fatalf("status = %q, want %q", result.Status, tt.wantStatus)
+			}
+			if reportCalls != 1 {
+				t.Fatalf("collectReport called %d times, want 1", reportCalls)
+			}
+			if result.ReportDir != wantDir {
+				t.Fatalf("ReportDir = %q, want %q", result.ReportDir, wantDir)
+			}
+		})
+	}
+}
+
+// TestRunScenario_PassingScenario_NoReport pins that a passed scenario never
+// collects a report — collectReport must not even be called.
+func TestRunScenario_PassingScenario_NoReport(t *testing.T) {
+	dir := writeRunnerFixtureProject(t, "smoke", noStepsScenario)
+
+	var execCalls []string
+	r := &Runner{
+		execDwe:       stubExecDwe(nil, &execCalls),
+		allocatePorts: AllocatePorts,
+		newTeardownDeps: func(string, io.Writer) TeardownDeps {
+			return recordingTeardownDeps(new([]string), nil)
+		},
+		collectReport: func(context.Context, *Manifest, func(string)) (string, error) {
+			t.Fatal("collectReport must not be called for a passing scenario")
+			return "", nil
+		},
+		clock: time.Now,
+	}
+
+	result, err := r.RunScenario(context.Background(), RunRequest{
+		BaseDir:         dir,
+		Scenario:        "smoke",
+		ReporterFactory: noopReporterFactory,
+	})
+	if err != nil {
+		t.Fatalf("RunScenario: %v", err)
+	}
+	if result.Status != StatusPassed {
+		t.Fatalf("status = %q, want passed", result.Status)
+	}
+	if result.ReportDir != "" {
+		t.Fatalf("ReportDir = %q, want empty", result.ReportDir)
+	}
+}
+
+// TestRunScenario_KeepFailingScenario_NoReport pins that --keep skips report
+// collection even when the scenario fails — the live environment is its own
+// debugging artifact, and collectReport must not run before the (skipped)
+// teardown either.
+func TestRunScenario_KeepFailingScenario_NoReport(t *testing.T) {
+	dir := writeRunnerFixtureProject(t, "stepfail", stepFailScenario)
+
+	var execCalls []string
+	r := &Runner{
+		execDwe:         stubExecDwe(nil, &execCalls),
+		allocatePorts:   AllocatePorts,
+		newTeardownDeps: fatalTeardownDeps(t),
+		collectReport: func(context.Context, *Manifest, func(string)) (string, error) {
+			t.Fatal("collectReport must not be called under --keep")
+			return "", nil
+		},
+		clock: time.Now,
+	}
+
+	result, err := r.RunScenario(context.Background(), RunRequest{
+		BaseDir:         dir,
+		Scenario:        "stepfail",
+		Keep:            true,
+		ReporterFactory: noopReporterFactory,
+	})
+	if err != nil {
+		t.Fatalf("RunScenario: %v", err)
+	}
+	if result.Status != StatusFailed {
+		t.Fatalf("status = %q, want failed", result.Status)
+	}
+	if result.ReportDir != "" {
+		t.Fatalf("ReportDir = %q, want empty", result.ReportDir)
+	}
+}
+
+// TestRunScenario_CollectReportError_ScenarioOutcomeUnchanged pins that a
+// failing report collection is best-effort: it warns but never changes the
+// scenario's status/failed-step, leaves ReportDir empty, and teardown still
+// runs.
+func TestRunScenario_CollectReportError_ScenarioOutcomeUnchanged(t *testing.T) {
+	dir := writeRunnerFixtureProject(t, "stepfail", stepFailScenario)
+
+	var teardownOrder []string
+	var execCalls []string
+	var warnings []string
+	collectErr := errors.New("report: boom")
+	r := &Runner{
+		execDwe:       stubExecDwe(nil, &execCalls),
+		allocatePorts: AllocatePorts,
+		newTeardownDeps: func(string, io.Writer) TeardownDeps {
+			return recordingTeardownDeps(&teardownOrder, nil)
+		},
+		collectReport: func(context.Context, *Manifest, func(string)) (string, error) {
+			return "", collectErr
+		},
+		clock: time.Now,
+	}
+
+	result, err := r.RunScenario(context.Background(), RunRequest{
+		BaseDir:         dir,
+		Scenario:        "stepfail",
+		ReporterFactory: noopReporterFactory,
+		Warn:            func(msg string) { warnings = append(warnings, msg) },
+	})
+	if err != nil {
+		t.Fatalf("RunScenario: %v", err)
+	}
+	if result.Status != StatusFailed {
+		t.Fatalf("status = %q, want failed", result.Status)
+	}
+	if result.FailedStep != "tests/boom" {
+		t.Fatalf("FailedStep = %q, want tests/boom", result.FailedStep)
+	}
+	if result.ReportDir != "" {
+		t.Fatalf("ReportDir = %q, want empty on collection failure", result.ReportDir)
+	}
+	if !containsStep(teardownOrder, "remove_copy") {
+		t.Fatalf("expected teardown to still run: %v", teardownOrder)
+	}
+	found := false
+	for _, w := range warnings {
+		if strings.Contains(w, collectErr.Error()) {
+			found = true
+		}
+	}
+	if !found {
+		t.Fatalf("expected a warning mentioning %q, got %v", collectErr, warnings)
+	}
+}
+
+// TestRunScenario_ReportCollectedBeforeTeardown pins the ordering contract:
+// collectReport must run BEFORE teardown (containers still alive, copy's log
+// still present).
+func TestRunScenario_ReportCollectedBeforeTeardown(t *testing.T) {
+	dir := writeRunnerFixtureProject(t, "stepfail", stepFailScenario)
+
+	var order []string
+	var execCalls []string
+	r := &Runner{
+		execDwe:       stubExecDwe(nil, &execCalls),
+		allocatePorts: AllocatePorts,
+		newTeardownDeps: func(string, io.Writer) TeardownDeps {
+			return recordingTeardownDeps(&order, nil)
+		},
+		collectReport: recordingCollectReport(&order, "/some/report/dir", nil),
+		clock:         time.Now,
+	}
+
+	result, err := r.RunScenario(context.Background(), RunRequest{
+		BaseDir:         dir,
+		Scenario:        "stepfail",
+		ReporterFactory: noopReporterFactory,
+	})
+	if err != nil {
+		t.Fatalf("RunScenario: %v", err)
+	}
+	if result.Status != StatusFailed {
+		t.Fatalf("status = %q, want failed", result.Status)
+	}
+	if len(order) == 0 || order[0] != "collect_report" {
+		t.Fatalf("order = %v, want collect_report first", order)
+	}
+	if !containsStep(order, "compose_down") {
+		t.Fatalf("expected teardown steps to follow: %v", order)
+	}
+}

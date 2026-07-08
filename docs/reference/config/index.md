@@ -44,7 +44,7 @@ The `.dwe/` directory contains DWE-managed artifacts and is **gitignored**:
 - `.dwe/snapshots/snapshot.lock` — snapshot lock file (Unix-only; serialises snapshot mutating commands and is co-acquired by deploy lifecycle commands)
 - `.dwe/snapshots/current` — current snapshot pointer (last created or restored snapshot)
 - `.dwe/snapshots/.pre-restore-backup/` — backup of `workspace/local.yml` + `.dwe/deploy/state.yml` taken before each restore; manual recovery target on restore failure
-- `.dwe/tests/runs/<scenario>/`, `.dwe/tests/locks/<scenario>.lock`, `.dwe/tests/manifests/<scenario>-<run-id>.yml` — `dwe test` scenario copies, per-scenario flocks, and durable run manifests
+- `.dwe/tests/runs/<scenario>/`, `.dwe/tests/locks/<scenario>.lock`, `.dwe/tests/manifests/<scenario>-<run-id>.yml`, `.dwe/tests/reports/<scenario>/` — `dwe test` scenario copies, per-scenario flocks, durable run manifests, and failure-report artifacts (collected only on failure)
 
 Add `.dwe/` to your project's `.gitignore` if not already present.
 
@@ -113,7 +113,7 @@ For more details on `docker.local.yml` semantics and examples, see [docker.yml](
 - [commands/](commands/index.md) — declarative commands: types, params, context, files, workflows, templates
 - [validate.yml](validate.md) — project readiness checks: env probes, declarative checks, builtins, stages, preflight
 - [snapshot.yml](snapshot.md) — snapshot workflows: create/restore/remove blocks, variants, `${snapshot.*}` namespace, manifest, lock interaction, archive safety
-- [tests/](tests.md) — integration-test scenarios: schema, `auto` ports, isolation model, teardown, `dwe test run/list`, exit codes
+- [tests/](tests.md) — integration-test scenarios: schema, `auto` ports, isolation model, teardown, `dwe test run/list/clean`, failure reports, exit codes
 - [Localization (i18n)](i18n.md) — user command and UI string translations: locale resolution, file format, key reference, validation
 - [User config](userconfig.md) — user-level preferences: file location, syntax, binary overrides, language, mermaid theme
 - [Notifications](notifications.md) — user-level desktop notifications: config file locations, keys, gate matrix, environment overrides
@@ -134,3 +134,4 @@ For more details on `docker.local.yml` semantics and examples, see [docker.yml](
 - `dwe status infra` — show infra services table (read-only)
 - `dwe test run` — run isolated integration-test scenarios against a disposable copy of the project
 - `dwe test list` — list available integration-test scenarios
+- `dwe test clean` — sweep kept/leftover integration-test environments and report (never auto-remove) orphaned compose projects (manifest-driven; `--dry-run`, `[scenario...]`)

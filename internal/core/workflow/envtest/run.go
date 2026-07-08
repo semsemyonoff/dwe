@@ -7,6 +7,7 @@ import (
 	"os"
 	"path/filepath"
 	"regexp"
+	"sort"
 	"strings"
 
 	"github.com/semsemyonoff/dwe/internal/core/project/config"
@@ -30,20 +31,30 @@ func NewRunID() (string, error) {
 // project-name charset ([a-z0-9_-]); each match is collapsed to a single "-".
 var composeNameDisallowed = regexp.MustCompile(`[^a-z0-9_-]+`)
 
-// ComposeProjectName derives the compose project name for a scenario run:
-// "<base>-t-<scenario>-<runID>", where base is cfg.Project.Prefix when set,
-// else cfg.Project.Name. The result is lowercased and normalised to the
-// compose project-name charset ([a-z0-9_-]) — scenario names and run IDs are
-// already valid fragments, but the base (arbitrary project name/prefix) is not.
-func ComposeProjectName(cfg *config.DweConfig, scenario, runID string) string {
-	base := cfg.Project.Name
+// projectBaseName returns the base fragment used to derive a scenario run's
+// compose project name: cfg.Project.Prefix when set, else cfg.Project.Name.
+// Shared by ComposeProjectName and Clean's orphan-scan prefix so the two can
+// never drift apart.
+func projectBaseName(cfg *config.DweConfig) string {
 	if cfg.Project.Prefix != "" {
-		base = cfg.Project.Prefix
+		return cfg.Project.Prefix
 	}
-	name := base + "-t-" + scenario + "-" + runID
-	name = strings.ToLower(name)
-	name = composeNameDisallowed.ReplaceAllString(name, "-")
-	return name
+	return cfg.Project.Name
+}
+
+// normalizeComposeName lowercases s and collapses every run of characters
+// outside the compose project-name charset ([a-z0-9_-]) into a single "-".
+func normalizeComposeName(s string) string {
+	s = strings.ToLower(s)
+	return composeNameDisallowed.ReplaceAllString(s, "-")
+}
+
+// ComposeProjectName derives the compose project name for a scenario run:
+// "<base>-t-<scenario>-<runID>", where base is projectBaseName(cfg). Scenario
+// names and run IDs are already valid fragments, but the base (arbitrary
+// project name/prefix) is not, so the whole result is normalised.
+func ComposeProjectName(cfg *config.DweConfig, scenario, runID string) string {
+	return normalizeComposeName(projectBaseName(cfg) + "-t-" + scenario + "-" + runID)
 }
 
 // testsRootDir returns the .dwe/tests root for a project.
@@ -73,6 +84,36 @@ func ManifestPath(baseDir, scenario, runID string) string {
 // existing manifests for a scenario, e.g. the kept-run guard).
 func ManifestsDir(baseDir string) string {
 	return filepath.Join(testsRootDir(baseDir), "manifests")
+}
+
+// manifestFileName matches "<scenario>-<6-hex-char-run-id>.yml" — any
+// scenario, generalising manifestRunIDSuffix (which is anchored to one known
+// scenario prefix) for a directory-wide listing.
+var manifestFileName = regexp.MustCompile(`^.+-[0-9a-f]{6}\.yml$`)
+
+// ListManifests returns every manifest file under baseDir's manifests
+// directory, across all scenarios, sorted. An absent manifests directory
+// yields (nil, nil) — nothing to sweep. Used by Clean to enumerate the full
+// candidate set before any scenario filtering is applied.
+func ListManifests(baseDir string) ([]string, error) {
+	dir := ManifestsDir(baseDir)
+	entries, err := os.ReadDir(dir)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return nil, nil
+		}
+		return nil, fmt.Errorf("envtest: reading manifests directory: %w", err)
+	}
+
+	var matches []string
+	for _, e := range entries {
+		if e.IsDir() || !manifestFileName.MatchString(e.Name()) {
+			continue
+		}
+		matches = append(matches, filepath.Join(dir, e.Name()))
+	}
+	sort.Strings(matches)
+	return matches, nil
 }
 
 // ReportsDir returns the reserved (stage 2) failure-report directory for a

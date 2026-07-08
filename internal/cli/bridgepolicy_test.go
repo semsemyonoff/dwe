@@ -87,6 +87,7 @@ func TestBridgeCommandAllowed_table(t *testing.T) {
 		{"dwe test", false},
 		{"dwe test run", false},
 		{"dwe test list", false},
+		{"dwe test clean", false},
 		{"dwe render", false},
 		{"dwe init", false},
 		{"dwe shell", false},

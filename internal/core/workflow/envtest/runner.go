@@ -30,6 +30,13 @@ const defaultScenarioTimeout = 30 * time.Minute
 // probe during teardown must still give up eventually.
 const teardownTimeout = 5 * time.Minute
 
+// reportTimeout bounds report collection's own context, which is always
+// fresh (never the scenario's expired deadline — a timeout failure has a
+// cancelled scenarioCtx) — a hung compose/docker capture must still give up
+// eventually, and collection always runs before teardown so it must not
+// starve it.
+const reportTimeout = 2 * time.Minute
+
 // manifestRunIDSuffix matches "<6-hex-char-run-id>.yml" — the exact suffix a
 // manifest filename has after its scenario-name prefix is stripped. Used by
 // the kept-run guard to find existing manifests for a scenario without
@@ -62,8 +69,10 @@ type ScenarioResult struct {
 	FailedStep string
 	// Duration is the wall-clock time RunScenario spent on this scenario.
 	Duration time.Duration
-	// ReportDir is reserved for stage-2 failure-artifact reports; always
-	// empty in stage 1.
+	// ReportDir is the failure-artifact report directory
+	// (.dwe/tests/reports/<scenario>/), set when the scenario did not pass
+	// and --keep was not requested; empty otherwise (including a passed
+	// scenario, a --keep run, or a report-collection failure).
 	ReportDir string
 	// ComposeProject is the exact compose project name used for this run —
 	// meaningful chiefly with Keep, so the caller can report it.
@@ -175,7 +184,13 @@ type Runner struct {
 	execDwe         execDweFunc
 	allocatePorts   func(n int) ([]int, error)
 	newTeardownDeps func(manifestPath string, log io.Writer) TeardownDeps
-	clock           func() time.Time
+	// collectReport is the stage-2 failure-report seam. It is nil-checked at
+	// the call site — runner_test.go has no shared constructor and builds
+	// &Runner{...} literals directly, several of which reach finish() on a
+	// non-passed status; production NewRunner always sets it, so a nil seam
+	// only occurs in tests that don't care about report collection.
+	collectReport func(ctx context.Context, m *Manifest, warn func(string)) (string, error)
+	clock         func() time.Time
 }
 
 // NewRunner builds a Runner wired to the real implementations.
@@ -184,7 +199,10 @@ func NewRunner() *Runner {
 		execDwe:         execDweProcess,
 		allocatePorts:   AllocatePorts,
 		newTeardownDeps: NewTeardownDeps,
-		clock:           time.Now,
+		collectReport: func(ctx context.Context, m *Manifest, warn func(string)) (string, error) {
+			return CollectReport(ctx, m, NewReportDeps(), warn)
+		},
+		clock: time.Now,
 	}
 }
 
@@ -345,6 +363,21 @@ func (r *Runner) RunScenario(ctx context.Context, req RunRequest) (*ScenarioResu
 		}
 		result.Status = status
 		result.FailedStep = failedStep
+		// Collect the failure report BEFORE teardown: containers must still be
+		// alive for compose ps/logs, and the pipeline log must still be present
+		// (RemoveCopy hasn't run yet). Skipped for a passed scenario and under
+		// --keep (the live environment is its own "report"). Always a fresh
+		// context — scenarioCtx may already be cancelled (timeout).
+		if r.collectReport != nil && !req.Keep && status != StatusPassed {
+			rctx, rcancel := context.WithTimeout(context.Background(), reportTimeout)
+			dir, err := r.collectReport(rctx, manifest, warn)
+			rcancel()
+			if err != nil {
+				warn(fmt.Sprintf("collecting failure report: %v", err))
+			} else {
+				result.ReportDir = dir
+			}
+		}
 		teardown()
 		result.Duration = r.clock().Sub(start)
 		return result, nil

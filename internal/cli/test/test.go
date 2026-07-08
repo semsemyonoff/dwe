@@ -35,5 +35,6 @@ resource it created are torn down afterwards unless --keep is passed.`,
 	}
 	cmd.AddCommand(newTestRunCmd(flags))
 	cmd.AddCommand(newTestListCmd(flags))
+	cmd.AddCommand(newTestCleanCmd(flags))
 	return cmd
 }
