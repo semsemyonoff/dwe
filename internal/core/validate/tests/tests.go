@@ -153,13 +153,15 @@ func (v *scenariosValidator) validateFile(ctx validate.Context, path string, reg
 		}
 	}
 
-	// Overlay the scenario's env.vars onto the merged config so both the render
-	// and resolve passes see the same config the runtime does (runner.go builds
-	// one copyCfg carrying env.vars and uses it for both). ResolvePhaseSteps
-	// re-evaluates template `when:` conditions against this cfg, so a scenario
-	// step whose `when:` references a scenario-only var must resolve against the
+	// Overlay the scenario's env.vars AND env.services toggles onto the merged
+	// config so both the render and resolve passes see the same config the
+	// runtime does (runner.go loads one copyCfg carrying env.vars and the
+	// enable/disable toggles — via the generated local.yml — and uses it for
+	// both). ResolvePhaseSteps re-evaluates template `when:` conditions against
+	// this cfg, so a scenario step whose `when:` references a scenario-only var
+	// or a service's scenario-toggled enabled state must resolve against the
 	// overlaid config, not the bare project config.
-	renderCfg := renderConfigFor(ctx.Cfg, scn.Env.Vars)
+	renderCfg := renderConfigFor(ctx.Cfg, scn.Env)
 	if err := envtest.RenderSteps(scn.Steps, renderCfg); err != nil {
 		diags = append(diags, validate.Diagnostic{
 			Severity: validate.SeverityError,
@@ -223,18 +225,24 @@ func validateCommandRefs(steps []config.DeployStep, target, relFile string, reg 
 // stage-1b's runner substitutes with a real allocated port, just resolved
 // early since validate never allocates ports or deploys anything.
 //
-// The returned config is a shallow copy of cfg with only Raw replaced by a
-// freshly built map (cfg.Raw and its "vars" entry are never mutated), safe to
-// discard after the render pass.
-func renderConfigFor(cfg *config.DweConfig, vars map[string]any) *config.DweConfig {
-	overlayVars := make(map[string]any, len(vars))
-	paths := make([]string, 0, len(vars))
-	for path := range vars {
+// It ALSO overlays the scenario's env.services enable/disable toggles onto the
+// throwaway config's service-enabled state (see applyServiceToggles), so a
+// step's template `when:` (e.g. `{{ (index .Services "x").Enabled }}` or
+// `${services.x.enabled}`) resolves against the scenario's state, exactly as
+// runtime does after loading the copy's generated local.yml.
+//
+// The returned config is a shallow copy of cfg with Raw and Services replaced
+// by freshly built maps (cfg.Raw, its "vars"/"services" entries, and
+// cfg.Services are never mutated), safe to discard after the render pass.
+func renderConfigFor(cfg *config.DweConfig, env envtest.ScenarioEnv) *config.DweConfig {
+	overlayVars := make(map[string]any, len(env.Vars))
+	paths := make([]string, 0, len(env.Vars))
+	for path := range env.Vars {
 		paths = append(paths, path)
 	}
 	sort.Strings(paths)
 	for _, path := range paths {
-		value := vars[path]
+		value := env.Vars[path]
 		if s, ok := value.(string); ok && s == envtest.AutoPortSentinel {
 			value = autoPortPlaceholder
 		}
@@ -248,7 +256,66 @@ func renderConfigFor(cfg *config.DweConfig, vars map[string]any) *config.DweConf
 
 	cfgCopy := *cfg
 	cfgCopy.Raw = raw
+	applyServiceToggles(&cfgCopy, env.Services)
 	return &cfgCopy
+}
+
+// applyServiceToggles overlays the scenario's env.services enable/disable
+// toggles onto cfg's service-enabled state, mutating only the throwaway config
+// (cfg.Services and cfg.Raw["services"] are replaced with clones — the caller's
+// maps are never touched). Both the typed cfg.Services[name].Enabled and the
+// curated cfg.Raw["services"][name]["enabled"] mirror are updated so the two
+// template access paths (`.Services[x].Enabled` and `${services.x.enabled}`)
+// stay in agreement.
+//
+// Enable is applied before disable so disable wins on a service listed in both,
+// matching the runtime overlay order (scenarioEnvOverlay). A disabled service
+// keeps Enabled == Required, mirroring the loader's Enabled = required ||
+// services.<name>.enabled computation, so a required service a scenario
+// "disables" stays enabled here too. Unknown service names are skipped (they
+// are already reported as their own SeverityError).
+func applyServiceToggles(cfg *config.DweConfig, svcs envtest.ScenarioServices) {
+	if len(svcs.Enable) == 0 && len(svcs.Disable) == 0 {
+		return
+	}
+
+	services := make(map[string]config.ServiceConfig, len(cfg.Services))
+	maps.Copy(services, cfg.Services)
+
+	overrides := make(map[string]bool)
+	for _, name := range svcs.Enable {
+		if svc, ok := services[name]; ok {
+			svc.Enabled = true
+			services[name] = svc
+			overrides[name] = true
+		}
+	}
+	for _, name := range svcs.Disable {
+		if svc, ok := services[name]; ok {
+			svc.Enabled = svc.Required
+			services[name] = svc
+			overrides[name] = svc.Enabled
+		}
+	}
+	cfg.Services = services
+
+	if len(overrides) == 0 {
+		return
+	}
+
+	rawServices := make(map[string]any)
+	if existing, ok := cfg.Raw["services"].(map[string]any); ok {
+		maps.Copy(rawServices, existing)
+	}
+	for name, enabled := range overrides {
+		entry := map[string]any{}
+		if existing, ok := rawServices[name].(map[string]any); ok {
+			maps.Copy(entry, existing)
+		}
+		entry["enabled"] = enabled
+		rawServices[name] = entry
+	}
+	cfg.Raw["services"] = rawServices
 }
 
 // setDotPath inserts value at the dot-path in m, creating intermediate maps as

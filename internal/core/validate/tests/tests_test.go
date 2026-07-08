@@ -163,6 +163,61 @@ steps:
 	}
 }
 
+func TestScenariosValidator_ServiceEnableReachesWhen(t *testing.T) {
+	// A step gated on web being enabled, with an unresolvable builtin body.
+	// baseCfg's web is disabled by default; the scenario force-enables it, so
+	// the when: must fire and the bad builtin surface as a resolve error —
+	// proving env.services.enable reaches the throwaway config's when: eval
+	// (runtime resolves against the copy's toggled local.yml, so validate must
+	// too, else this genuine error is missed).
+	root := writeScenario(t, t.TempDir(), "toggle-on.yml", `
+env:
+  services:
+    enable: [web]
+steps:
+  - name: gated
+    type: builtin
+    cmd: definitely_not_a_builtin
+    when:
+      type: template
+      expr: '{{ (index .Services "web").Enabled }}'
+`)
+	diags := errorDiags(runFor(root, baseCfg()))
+	if len(diags) != 1 {
+		t.Fatalf("enabled-gated bad step: want 1 resolve error, got %+v", diags)
+	}
+	if !strings.Contains(diags[0].Message, "resolving steps") {
+		t.Errorf("message = %q, want to mention resolving steps", diags[0].Message)
+	}
+}
+
+func TestScenariosValidator_ServiceDisableReachesWhen(t *testing.T) {
+	// Mirror of the enable case: a step gated on web being enabled with a bad
+	// builtin body, but web is enabled in the project and the scenario disables
+	// it. The when: must evaluate false and filter the step out, so no resolve
+	// error surfaces — proving env.services.disable reaches the when: eval and
+	// validate does not false-positive on a step the runtime would skip.
+	cfg := &config.DweConfig{
+		Raw:      map[string]any{},
+		Services: map[string]config.ServiceConfig{"web": {Enabled: true}},
+	}
+	root := writeScenario(t, t.TempDir(), "toggle-off.yml", `
+env:
+  services:
+    disable: [web]
+steps:
+  - name: gated
+    type: builtin
+    cmd: definitely_not_a_builtin
+    when:
+      type: template
+      expr: '{{ (index .Services "web").Enabled }}'
+`)
+	if diags := errorDiags(runFor(root, cfg)); len(diags) != 0 {
+		t.Fatalf("disabled-gated step should be filtered (no error), got %+v", diags)
+	}
+}
+
 func TestScenariosValidator_UnknownCommandRef(t *testing.T) {
 	root := writeScenario(t, t.TempDir(), "badcmd.yml", `
 steps:
