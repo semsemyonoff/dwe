@@ -124,7 +124,7 @@ Any `KindPredicate` builtin (`file_exists`, `tcp_reachable`, `containers_running
     url: "http://localhost:${vars.app.http_port}/up"
     status: 200
     contains: "OK"          # optional body substring
-    retries: 10             # optional; default per builtin
+    retries: 10             # optional; defaults to 0
     interval: 1s
     timeout: 2s
 ```

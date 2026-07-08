@@ -138,7 +138,8 @@ func buildErrorEnvelope(err error) errorEnvelope {
 func ExitCodeFor(err error) int {
 	if ce, ok := errors.AsType[*CodedError](err); ok {
 		switch ce.Code {
-		case "invalid_output", "usage_error", "invalid_tail", "invalid_since", "unknown_scenario":
+		case "invalid_output", "usage_error", "invalid_tail", "invalid_since",
+			"unknown_scenario", "scenario_list_failed", "scenario_load_failed":
 			return 2
 		}
 	}

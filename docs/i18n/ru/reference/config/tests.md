@@ -1,4 +1,4 @@
-> Translated from: reference/config/tests.md @ 1b44fe98a48b
+> Translated from: reference/config/tests.md @ 7b08bf03fb39
 
 # workspace/tests/
 
@@ -126,7 +126,7 @@ env:
     url: "http://localhost:${vars.app.http_port}/up"
     status: 200
     contains: "OK"          # опциональная подстрока в теле
-    retries: 10             # опционально; по умолчанию зависит от билтина
+    retries: 10             # опционально; по умолчанию 0
     interval: 1s
     timeout: 2s
 ```

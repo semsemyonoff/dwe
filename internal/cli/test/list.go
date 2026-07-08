@@ -42,14 +42,14 @@ func runTestList(cmd *cobra.Command, flags *cmdctx.RootFlags) error {
 	baseDir := flags.ProjectRoot()
 	names, err := envtest.ListScenarios(baseDir)
 	if err != nil {
-		return fmt.Errorf("listing scenarios: %w", err)
+		return cmdctx.ErrWrap("scenario_list_failed", err)
 	}
 
 	entries := make([]testListEntryJSON, 0, len(names))
 	for _, name := range names {
 		scn, err := envtest.LoadScenario(filepath.Join(envtest.TestsDir(baseDir), name+".yml"))
 		if err != nil {
-			return fmt.Errorf("loading scenario %q: %w", name, err)
+			return cmdctx.ErrWrap("scenario_load_failed", err).WithDetail("scenario", name)
 		}
 		entries = append(entries, testListEntryJSON{Name: name, Description: scn.Description})
 	}

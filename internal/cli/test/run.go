@@ -94,11 +94,11 @@ func scenarioOutcomeFromResult(res *envtest.ScenarioResult) scenarioOutcome {
 
 // testScenarioJSON is one scenario row of `dwe test run --output json`.
 type testScenarioJSON struct {
-	Name       string `json:"name"`
-	Status     string `json:"status"`
-	FailedStep string `json:"failed_step,omitempty"`
-	DurationMs int64  `json:"duration_ms"`
-	ReportDir  string `json:"report_dir,omitempty"`
+	Name            string  `json:"name"`
+	Status          string  `json:"status"`
+	FailedStep      string  `json:"failed_step,omitempty"`
+	DurationSeconds float64 `json:"duration_seconds"`
+	ReportDir       string  `json:"report_dir,omitempty"`
 }
 
 // testRunJSON is the JSON payload for `dwe test run --output json`.
@@ -131,6 +131,10 @@ func runTestRun(cmd *cobra.Command, flags *cmdctx.RootFlags, args []string, keep
 
 	runner := newRunner()
 	warn := func(msg string) {
+		// Stderr in JSON mode is reserved for the error envelope.
+		if flags.Output == "json" {
+			return
+		}
 		_, _ = fmt.Fprintln(cmd.ErrOrStderr(), "warning: "+msg)
 	}
 	var reporterFactory envtest.ReporterFactory
@@ -167,11 +171,11 @@ func runTestRun(cmd *cobra.Command, flags *cmdctx.RootFlags, args []string, keep
 	payload := testRunJSON{Scenarios: make([]testScenarioJSON, 0, len(outcomes))}
 	for _, o := range outcomes {
 		payload.Scenarios = append(payload.Scenarios, testScenarioJSON{
-			Name:       o.Name,
-			Status:     string(o.Status),
-			FailedStep: o.FailedStep,
-			DurationMs: o.Duration.Milliseconds(),
-			ReportDir:  o.ReportDir,
+			Name:            o.Name,
+			Status:          string(o.Status),
+			FailedStep:      o.FailedStep,
+			DurationSeconds: o.Duration.Seconds(),
+			ReportDir:       o.ReportDir,
 		})
 	}
 	payload.Summary = buildSummary(outcomes)
@@ -211,7 +215,7 @@ func runTestRun(cmd *cobra.Command, flags *cmdctx.RootFlags, args []string, keep
 func resolveScenarioNames(baseDir string, args []string) ([]string, error) {
 	all, err := envtest.ListScenarios(baseDir)
 	if err != nil {
-		return nil, fmt.Errorf("listing scenarios: %w", err)
+		return nil, cmdctx.ErrWrap("scenario_list_failed", err)
 	}
 	if len(args) == 0 {
 		return all, nil

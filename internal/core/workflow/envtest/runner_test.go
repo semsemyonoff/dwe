@@ -514,6 +514,61 @@ func TestRunScenario_PortConflictRetry_StillFails(t *testing.T) {
 	}
 }
 
+// A deploy failure that is NOT a port-bind conflict must fail the scenario
+// immediately — no retry — even though the copy allocated host/auto ports.
+// Retrying a genuine failure (an app crash, a bad env var) just doubles the
+// wall-clock cost before failing anyway.
+func TestRunScenario_NonPortConflictFailure_NoRetry(t *testing.T) {
+	dir := writeRunnerFixtureProject(t, "ports", "env:\n  vars:\n    app.port: auto\n")
+
+	var execCalls []string
+	execDwe := func(_ context.Context, _ string, _ []string, _, _ io.Writer, args ...string) error {
+		key := strings.Join(args, " ")
+		execCalls = append(execCalls, key)
+		if key == "deploy run --silent" {
+			// A crash with no port-conflict signal in output or error.
+			return errors.New("exit status 1: application boot failed")
+		}
+		return nil
+	}
+
+	var allocCalls int
+	allocatePorts := func(n int) ([]int, error) {
+		allocCalls++
+		return make([]int, n), nil
+	}
+
+	var teardownOrder []string
+	r := &Runner{
+		execDwe:       execDwe,
+		allocatePorts: allocatePorts,
+		newTeardownDeps: func(string, io.Writer) TeardownDeps {
+			return recordingTeardownDeps(&teardownOrder, nil)
+		},
+		clock: time.Now,
+	}
+
+	result, err := r.RunScenario(context.Background(), RunRequest{
+		BaseDir:         dir,
+		Scenario:        "ports",
+		ReporterFactory: noopReporterFactory,
+	})
+	if err != nil {
+		t.Fatalf("RunScenario: %v", err)
+	}
+	if result.Status != StatusFailed {
+		t.Fatalf("status = %q, want failed", result.Status)
+	}
+	if allocCalls != 1 {
+		t.Fatalf("allocatePorts called %d times, want exactly 1 (no retry on a non-port failure)", allocCalls)
+	}
+	// validate + exactly one deploy attempt — no second attempt.
+	wantExec := []string{"validate", "deploy run --silent"}
+	if strings.Join(execCalls, "|") != strings.Join(wantExec, "|") {
+		t.Fatalf("execCalls = %v, want %v (no retry)", execCalls, wantExec)
+	}
+}
+
 func TestRunScenario_StepFailure(t *testing.T) {
 	scenarioYAML := `steps:
   - name: "boom"

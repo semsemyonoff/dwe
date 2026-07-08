@@ -294,7 +294,7 @@ Predicate builtin (`KindPredicate`) that performs an HTTP `GET` and asserts the 
 | `interval` | string duration | `1s` | Wait between attempts. Must be `>= 0`. Cancellable via context. |
 | `timeout` | string duration | `5s` | Per-attempt timeout (not total). Must be `> 0`. |
 
-Used as a step body it is an [assertion](#predicate-builtins-as-step-bodies-assertion-semantics): a passing check succeeds the step, a failing check fails the pipeline with a message like `http_check http://localhost:8080/health: expected status 200, got 503 (after 11 attempts)`. It can equally be used inside a `check:`/`when:` block or as a `validate.yml` check entry.
+Used as a step body it is an [assertion](#predicate-builtins-as-step-bodies-assertion-semantics): a passing check succeeds the step, a failing check fails the pipeline with a message like `http_check http://localhost:8080/health: expected status 200, got 503 (after 31 attempts)`. It can equally be used inside a `check:`/`when:` block or as a `validate.yml` check entry.
 
 **Example: wait for a health endpoint after `up`**
 

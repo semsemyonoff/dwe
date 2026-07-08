@@ -235,8 +235,8 @@ func TestRunTestRun_JSONShape(t *testing.T) {
 	if len(got.Scenarios) != 1 || got.Scenarios[0].Name != "smoke" || got.Scenarios[0].Status != "passed" {
 		t.Fatalf("unexpected scenarios: %+v", got.Scenarios)
 	}
-	if got.Scenarios[0].DurationMs != 1500 {
-		t.Errorf("DurationMs = %d, want 1500", got.Scenarios[0].DurationMs)
+	if got.Scenarios[0].DurationSeconds != 1.5 {
+		t.Errorf("DurationSeconds = %v, want 1.5", got.Scenarios[0].DurationSeconds)
 	}
 	if got.Summary == "" {
 		t.Error("expected a non-empty summary")

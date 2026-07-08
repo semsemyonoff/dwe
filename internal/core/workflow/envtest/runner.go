@@ -372,9 +372,21 @@ func (r *Runner) RunScenario(ctx context.Context, req RunRequest) (*ScenarioResu
 		return finish(StatusError, "")
 	}
 
-	deployErr := r.execDwe(scenarioCtx, copyRoot, extraEnv, subprocOut, subprocOut, "deploy", "run", "--silent")
-	if deployErr != nil && hasAllocatedPorts(origCfg, scn) {
-		warn(fmt.Sprintf("deploy failed, retrying once with freshly allocated ports: %v", deployErr))
+	// Capture the deploy output tail so the one retry fires ONLY on a real
+	// port-bind conflict — a TOCTOU loss on a port we allocated. A blind retry
+	// on ANY deploy failure (an app crash, a bad env var, an unrelated compose
+	// error) would just double the wall-clock cost of every genuine failure
+	// before reporting it anyway; hasAllocatedPorts is true for nearly every
+	// project, so it cannot be the sole gate.
+	deployTail := &tailRecorder{limit: deployTailLimit}
+	deployOut := io.MultiWriter(subprocOut, deployTail)
+	deployErr := r.execDwe(scenarioCtx, copyRoot, extraEnv, deployOut, deployOut, "deploy", "run", "--silent")
+	// The conflict signal usually surfaces in the streamed deploy output (the
+	// subprocess exit error itself is just "exit status N"); scan both so the
+	// gate holds whether the message lands in the output or the returned error.
+	if deployErr != nil && hasAllocatedPorts(origCfg, scn) &&
+		isPortBindConflict(deployTail.String()+"\n"+deployErr.Error()) {
+		warn(fmt.Sprintf("deploy failed on a port conflict, retrying once with freshly allocated ports: %v", deployErr))
 		deployErr = r.retryDeployWithFreshPorts(scenarioCtx, copyRoot, extraEnv, subprocOut, origCfg, seedLocal, scn, composeProject, warn)
 	}
 	if deployErr != nil {
@@ -393,10 +405,59 @@ func (r *Runner) RunScenario(ctx context.Context, req RunRequest) (*ScenarioResu
 
 // hasAllocatedPorts reports whether the copy's local.yml carried any
 // runner-allocated port — a remapped host port for an enabled service, or an
-// env.vars: auto port. It gates the one deploy retry: only a run that allocated
-// ports can lose a TOCTOU race worth re-allocating for.
+// env.vars: auto port. It is the FIRST of two gates on the one deploy retry
+// (the second being isPortBindConflict): only a run that allocated ports can
+// lose a TOCTOU race worth re-allocating for, but on its own it is true for
+// nearly every project and so must never gate the retry alone.
 func hasAllocatedPorts(cfg *config.DweConfig, scn *Scenario) bool {
 	return len(enabledHostPortKeys(cfg, scn)) > 0 || len(autoPortVarPaths(scn)) > 0
+}
+
+// deployTailLimit bounds how much of the deploy subprocess output the retry
+// gate retains. A port-bind conflict surfaces at bind time (after pull/build),
+// i.e. near the end, so a tail is enough — and it caps memory for a long deploy.
+const deployTailLimit = 64 << 10 // 64 KiB
+
+// tailRecorder is an io.Writer that retains only the last `limit` bytes written
+// to it. It never errors (an observation sink must not break the deploy stream).
+type tailRecorder struct {
+	limit int
+	buf   []byte
+}
+
+func (t *tailRecorder) Write(p []byte) (int, error) {
+	t.buf = append(t.buf, p...)
+	if len(t.buf) > t.limit {
+		t.buf = t.buf[len(t.buf)-t.limit:]
+	}
+	return len(p), nil
+}
+
+func (t *tailRecorder) String() string { return string(t.buf) }
+
+// portBindConflictSignals are substrings (matched case-insensitively) that mark
+// a deploy failure as an actual host-port conflict: dwe's own ports_free
+// preflight ("port N (svc.port) is in use"), a raw bind failure, the Docker
+// daemon's "port is already allocated", and Docker Desktop's "ports are not
+// available".
+var portBindConflictSignals = []string{
+	"is in use",
+	"address already in use",
+	"port is already allocated",
+	"ports are not available",
+}
+
+// isPortBindConflict reports whether the deploy output looks like a host-port
+// bind conflict — the only failure the one retry (with freshly allocated ports)
+// can plausibly clear.
+func isPortBindConflict(output string) bool {
+	lower := strings.ToLower(output)
+	for _, sig := range portBindConflictSignals {
+		if strings.Contains(lower, sig) {
+			return true
+		}
+	}
+	return false
 }
 
 // writeCopyLocalYAML allocates a fresh free host port for every enabled
@@ -460,9 +521,9 @@ func (r *Runner) runSteps(
 ) (failedStep string, err error) {
 	copyWorkspacePath := filepath.Join(copyRoot, "workspace.yml")
 
-	copyCfg, err := config.LoadConfig(copyWorkspacePath)
+	copyCfg, err := config.LoadConfigOrWrap(copyWorkspacePath)
 	if err != nil {
-		return "", fmt.Errorf("loading copy config: %w", err)
+		return "", err
 	}
 	copyDockerCfg, err := config.LoadDockerConfigOrEmpty(copyRoot, copyCfg)
 	if err != nil {
