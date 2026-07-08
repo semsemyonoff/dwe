@@ -313,25 +313,25 @@ a thin CLI layer:
 - Modify: `internal/core/workflow/envtest/runner.go`
 - Modify: `internal/core/workflow/envtest/runner_test.go`
 
-- [ ] add `collectReport func(ctx context.Context, m *Manifest, warn func(string))
+- [x] add `collectReport func(ctx context.Context, m *Manifest, warn func(string))
       (string, error)` to `Runner`; default in `NewRunner` calls `CollectReport(ctx, m,
       NewReportDeps(), warn)`; add `reportTimeout` const
-- [ ] in `finish`, after the status is finalised and before `teardown()`, collect the
+- [x] in `finish`, after the status is finalised and before `teardown()`, collect the
       report when `r.collectReport != nil && !req.Keep && status != StatusPassed`, under a
       **fresh** `context.WithTimeout(context.Background(), reportTimeout)`; on success set
       `result.ReportDir`; on error `warn` only (best-effort — never change the outcome)
-- [ ] the `r.collectReport != nil` guard is required because `runner_test.go` has NO shared
+- [x] the `r.collectReport != nil` guard is required because `runner_test.go` has NO shared
       constructor — it builds `&Runner{...}` inline literals, ~6 of which reach `finish` on a
       non-passed status and would panic on a nil seam; production `NewRunner` always sets it.
       Tests that assert collection set a recording stub on their own literal; the rest leave
       it nil (guard skips)
-- [ ] write tests (stubbed seams): deploy-fail / step-fail / validate-error / timeout →
+- [x] write tests (stubbed seams): deploy-fail / step-fail / validate-error / timeout →
       `collectReport` called once and `result.ReportDir` set; passing scenario →
       `collectReport` NOT called and `ReportDir` empty; `--keep` failing scenario →
       `collectReport` NOT called; `collectReport` returning an error → scenario status/
       result unchanged, `ReportDir` empty, warn emitted; report collected **before**
       teardown (assert ordering via the recording stubs)
-- [ ] run `go test ./internal/core/workflow/envtest/...` — must pass before task 3
+- [x] run `go test ./internal/core/workflow/envtest/...` — must pass before task 3
 
 ### Task 3: `envtest.Clean` core (list, flock-guard, teardown reuse, dry-run, orphan scan)
 
