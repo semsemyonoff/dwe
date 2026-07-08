@@ -569,7 +569,7 @@ its two consumers (validator Task 4, runner Task 5):
 - Modify: `docs/internals/packages.md`
 - Modify: `AGENTS.md`
 
-- [ ] extend `packages.md`: the general per-step `timeout` contract (schema →
+- [x] extend `packages.md`: the general per-step `timeout` contract (schema →
       `ResolvedStep.Timeout` → `executeStepBody` `WithTimeout`, opt-in, body-only,
       timeout-vs-cancel discrimination, bounds **ctx-honoring** bodies only — interactive
       prompts are not force-interrupted); the tests validator's whole-phase `ResolvePhaseSteps`
@@ -579,13 +579,13 @@ its two consumers (validator Task 4, runner Task 5):
       `internal/core/validate/tests/` domain (validate-only, reuses LoadScenario +
       ResolvePhaseSteps + Get, isolation warnings); the runner isolation gate +
       `--skip-isolation-check`
-- [ ] extend the AGENTS.md integration-tests bullet with the stage-3a contracts worth
+- [x] extend the AGENTS.md integration-tests bullet with the stage-3a contracts worth
       trapping: `timeout:` is general/opt-in/no-default/body-only; isolation scanner is a
       config leaf with intrinsic `Blocking` and caller-owned severity (FAIL container_name +
       literal host ports, WARN external/named); `tests` validator domain is validate-only,
       never preflight
-- [ ] run `make build` (embeds updated internals docs); docs-subsystem tests green
-- [ ] move this plan to `docs/plans/completed/`
+- [x] run `make build` (embeds updated internals docs); docs-subsystem tests green
+- [x] move this plan to `docs/plans/completed/`
 
 ## Post-Completion
 
