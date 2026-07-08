@@ -105,15 +105,38 @@ commands:
 
 (`hide` commands are skipped by pipelines entirely, so they don't work here — use `private` for test-only commands you still want runnable from a scenario.)
 
-## Debugging a failing scenario with `--keep`
+## Debugging a failing scenario
 
-When a scenario fails and the live output isn't enough, rerun with `--keep`:
+Every failing scenario (deploy failure, step failure, or timeout) leaves a failure report at `.dwe/tests/reports/<scenario>/` — collected automatically, before teardown runs, so it survives the environment being torn down:
+
+```shell
+dwe test run smoke   # fails
+
+ls .dwe/tests/reports/smoke/
+# pipeline.log        — the scenario's deploy/steps pipeline log
+# compose-ps.txt       — docker compose ps --all inside the copy
+# container-logs.txt   — combined container logs (last 200 lines each)
+```
+
+This is the report you'd attach to a CI failure, or read locally without touching Docker at all. It's overwritten on each non-passing run, so it always reflects the latest failure.
+
+When the report isn't enough and you need to inspect the live environment itself, rerun with `--keep`:
 
 ```shell
 dwe test run --keep smoke
 ```
 
-Teardown is skipped; `dwe test run` prints the compose project name and the copy's path so you can `cd` in, inspect containers with `docker compose -p <project> ps`, or open a shell inside a service. The manifest stays on disk too, so a second `dwe test run smoke` refuses to start until you clean up manually — this is deliberate, so a kept debugging environment can never be silently deleted out from under you.
+Teardown is skipped (and no failure report is collected, since the environment itself is kept); `dwe test run` prints the compose project name and the copy's path so you can `cd` in, inspect containers with `docker compose -p <project> ps`, or open a shell inside a service. The manifest stays on disk too, so a second `dwe test run smoke` refuses to start until you clean up.
+
+Clean up a kept run — or anything orphaned by a crashed run — with `dwe test clean`:
+
+```shell
+dwe test clean --dry-run    # see what would be removed, without touching anything
+dwe test clean smoke        # tear down just this scenario's kept/orphaned environment
+dwe test clean               # sweep every manifested environment
+```
+
+`clean` is manifest-driven and never guesses at a compose project name: it only ever tears down environments it has a manifest for, skips any scenario whose flock is currently held by a live run, and separately (report-only) lists Docker compose projects that look like `dwe test` output but have no manifest — those it flags for you to remove by hand rather than destroying automatically.
 
 ## Running the whole suite
 

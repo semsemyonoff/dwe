@@ -409,16 +409,16 @@ a thin CLI layer:
 - Modify: `docs/i18n/ru/reference/config/tests.md`
 - Modify: `docs/i18n/ru/guides/integration-tests.md`
 
-- [ ] add a "Failure reports" section to `tests.md` (collected only on failure, before
+- [x] add a "Failure reports" section to `tests.md` (collected only on failure, before
       teardown; `.dwe/tests/reports/<scenario>/` layout — `pipeline.log`, `compose-ps.txt`,
       `container-logs.txt`; per-scenario overwrite; skipped under `--keep`) and a
       "`dwe test clean`" section (manifest-driven, `[scenario...]` filter, `--dry-run`,
       report-only orphan scan, flock-guarded live runs, `--output json`)
-- [ ] extend the guide's debugging section: `--keep` for live inspection then
+- [x] extend the guide's debugging section: `--keep` for live inspection then
       `dwe test clean`, reading a failure report from CI artifacts
-- [ ] mirror both edits in the ru tree and refresh each file's `Translated from`
+- [x] mirror both edits in the ru tree and refresh each file's `Translated from`
       provenance hash (`TestRussianTranslationsAreFresh`)
-- [ ] run `make build` (re-embeds docs, regenerates content hashes) and
+- [x] run `make build` (re-embeds docs, regenerates content hashes) and
       `go test ./internal/core/docs/...` — must pass before task 6
 
 ### Task 6: Verify acceptance criteria
