@@ -533,21 +533,21 @@ its two consumers (validator Task 4, runner Task 5):
 - Modify: the ru mirror of the canonical step-schema page
 - Modify: `docs/i18n/ru/guides/integration-tests.md`
 
-- [ ] document the general `timeout:` step field once in the canonical step-schema page
+- [x] document the general `timeout:` step field once in the canonical step-schema page
       (opt-in, no default; `0`/absent = unbounded; per-step; body-only; enforced via ctx
       cancellation so it bounds ctx-honoring bodies — shell/dwe subprocesses, ctx-aware
       builtins, command steps — while a body blocked on interactive input is not
       force-interrupted); cross-link from reset/lifecycle if they list step fields
-- [ ] add a `dwe validate tests` section to `tests.md` (what it checks: name, timeout,
+- [x] add a `dwe validate tests` section to `tests.md` (what it checks: name, timeout,
       services, step schema, builtin `with:`, `when:`, command refs; isolation findings as
       warnings) and a "compose isolation" section (the flagged constructs, tiered fail/warn,
       `--skip-isolation-check`, the auto-port prerequisite cross-link)
-- [ ] extend the guide: setting a step `timeout:`; running `dwe validate tests` in CI;
+- [x] extend the guide: setting a step `timeout:`; running `dwe validate tests` in CI;
       resolving an isolation FAIL (move host ports onto vars / drop `container_name:` /
       `--skip-isolation-check` escape hatch)
-- [ ] mirror all edits in the ru tree and refresh each file's `Translated from` provenance
+- [x] mirror all edits in the ru tree and refresh each file's `Translated from` provenance
       hash (`TestRussianTranslationsAreFresh`)
-- [ ] run `make build` (re-embeds docs, regenerates content hashes) and
+- [x] run `make build` (re-embeds docs, regenerates content hashes) and
       `go test ./internal/core/docs/...` — must pass before task 7
 
 ### Task 7: Verify acceptance criteria

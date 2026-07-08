@@ -20,6 +20,8 @@ Declarative integration-test scenarios (`dwe test`).
 - [`dwe test run`](#dwe-test-run)
 - [`dwe test list`](#dwe-test-list)
 - [`dwe test clean`](#dwe-test-clean)
+- [`dwe validate tests`](#dwe-validate-tests)
+- [Compose isolation scanner](#compose-isolation-scanner)
 - [Exit codes](#exit-codes)
 - [JSON output](#json-output)
 - [Documented limitations](#documented-limitations)
@@ -111,6 +113,8 @@ Wall-clock budget for the whole scenario (deploy + all steps), e.g. `15m`. Parse
 ### `steps`
 
 Ordinary pipeline steps, in the same schema `deploy.yml` uses — `type: shell` / `command` / `dwe` / `builtin`, with `when:` — resolved and executed by the same engine. There is no `service:`/`dir:` field on steps (deploy doesn't have one either); a step that needs to run against a service goes through `type: command` and lets the user command own that detail. A scenario with no `steps:` is valid and already useful: "deploy with these parameters succeeds and containers come up healthy."
+
+A step may also set its own `timeout:` (e.g. `timeout: 5s` on an `http_check` step) — the same general, opt-in engine field documented in [Step fields](deploy/index.md#step-fields); absent or `0` leaves the step unbounded.
 
 `type: command` steps dispatch through the project's regular command registry, **including `private` commands** — so a project can define test-only commands (e.g. `db:dump` above) and keep them out of the everyday command listing while still exercising them from a scenario. `hide` commands are different: pipelines skip them per the existing contract, so a test-only command should be `private`, not `hide`.
 
@@ -211,6 +215,7 @@ The report path is surfaced in `dwe test run`'s text output (a `report: <dir>` l
 dwe test run [scenario...]
     --keep                    # skip teardown; print project name, copy path, cleanup hint
     --timeout <duration>      # override every scenario's own timeout (e.g. 15m)
+    --skip-isolation-check    # downgrade blocking isolation findings to warnings
 ```
 
 No arguments runs every scenario under `workspace/tests/*.yml`, in sorted name order. Named arguments run exactly those scenarios (an unknown name fails before anything runs, exit code 2). Scenarios run sequentially. Ctrl+C (SIGINT/SIGTERM) cancels the scenario currently running, tears it down, and skips the rest — already-completed scenarios are still reported.
@@ -264,6 +269,41 @@ dwe test clean --output json
 
 As with `run`/`list`, live output (per-entry warnings) is silenced on stderr in JSON mode.
 
+## `dwe validate tests`
+
+```
+dwe validate tests
+```
+
+A `dwe validate` domain (`Domain() == "tests"`) that statically checks every `workspace/tests/*.yml` scenario file without touching Docker — validate-only, **never** wired into preflight. Run it in CI before `dwe test run` to catch scenario authoring mistakes without spinning up a disposable copy.
+
+Per file, in order:
+
+- **load** — `LoadScenario` (strict `KnownFields(true)`, empty file rejected); this also covers **name normalisation** (`ValidateScenarioName` against the file basename), so a bad filename surfaces here.
+- **`timeout:`** — `time.ParseDuration` on the scenario's own `timeout:` field; a parse failure is an error.
+- **`env.services`** — every `enable`/`disable` entry must name a service that exists in the project's merged config; an unknown name is an error.
+- **`steps`** — all steps are rendered and resolved **as one whole phase**, exactly like a real run (`pipeline.ResolvePhaseSteps` over a single synthetic phase) — this catches step schema errors, invalid builtin `with:` params, broken `when:` conditions, and duplicate top-level step names (a per-step check would miss the last one, since uniqueness is a whole-phase invariant). Rendering substitutes any `env.vars` entry whose value is the literal `auto` with a valid placeholder host port, so `${vars.db.port}` renders to a valid int and a `tcp_reachable`/`http_check` step validates normally — a genuinely bad param (e.g. `status: nope`) still errors even next to a templated `url:`. A var populated only **post-deploy** (a `${generated.*}` secret, or a var the deploy itself creates) is absent at validate time and may produce a spurious diagnostic; give it a project-level default to avoid this — the validator sees pre-deploy config, the real run sees post-deploy config.
+- **`type: command` steps** — each command ID is looked up in the project's command registry; an unknown ID is an error.
+- **compose isolation** — see [Compose isolation scanner](#compose-isolation-scanner) below; findings are emitted once per project as warnings (never errors — the tiered fail/warn policy applies only to `dwe test run`, not to static validation).
+
+## Compose isolation scanner
+
+`dwe test`'s isolation model (above) partitions containers, networks, and non-shared volumes by compose project name — but a handful of raw-compose constructs bypass that scoping entirely and can collide with, or attach to, the working environment. The scanner (`config.ScanComposeIsolation`) parses the project's active compose files (`cfg.ComposeFiles()`) for these constructs and flags them:
+
+| Construct | Kind | Severity |
+|-----------|------|----------|
+| `container_name:` (any occurrence) | `container_name` | **Blocking** — a literal container name collides directly with the working environment |
+| A literal host port (single, e.g. `"8080:80"`, or range, e.g. `"8080-8090:80-90"`) not modelled via `services.<name>.ports` | `raw_host_port` | **Blocking** — bypasses both the automatic port remap and `ports_free` |
+| `external: true` volume/network | `external_volume` / `external_network` | Warning — a shared-resource hazard, not a hard collision |
+| An explicit `name:` on a volume/network | `named_volume` / `named_network` | Warning — same hazard class as `external:` |
+
+`${...}`-interpolated or env-var host-port tokens and container-port-only entries (random host port) are not flagged — only a literal port number or range. IPv6-bracketed hosts (`[::1]:8080:80`) are out of scope and are not flagged (rare in dev compose). A `container_name:` finding is always emitted regardless of which compose service it's on — mapping a compose service back to a dwe service key isn't reliable, so false positives are cleared with `--skip-isolation-check` rather than suppressed at the source.
+
+The scanner itself has no opinion on severity beyond the intrinsic `Blocking` flag — each caller decides what to do with a finding:
+
+- **`dwe test run`** — runs the scan against the disposable copy right before the `dwe validate` subprocess. Every finding is printed as a warning. A **blocking** finding fails the scenario immediately (teardown still runs; no deploy subprocess is spawned) unless `--skip-isolation-check` is passed, in which case every finding — blocking or not — is a warning only and the run proceeds. See the [ports prerequisite](../guides/integration-tests.md#ports-are-isolated-automatically) for how to avoid a `raw_host_port` finding in the first place: model the port under `services.<name>.ports`.
+- **`dwe validate tests`** — emits every finding as a warning, regardless of `Blocking`; static validation never fails a build over an isolation hazard, it only surfaces it early.
+
 ## Exit codes
 
 | Code | Meaning |
@@ -296,8 +336,8 @@ dwe test list --output json
 ## Documented limitations
 
 - **`.git/` is excluded from the copy.** A deploy or scenario step that shells out to `git` against the project root will fail or behave differently inside the copy.
-- **Named compose resources bypass isolation.** `container_name:`, explicitly named networks/volumes, and `external: true` in raw compose files ignore the compose project-name scoping and can collide with — or attach to — the working environment. This is why teardown never uses `compose down -v`.
-- **Host ports not modelled in `services.<name>.ports` aren't isolated.** The automatic remap and the `ports_free` preflight only see ports declared via `services.<name>.ports`; a host port hardcoded straight in a raw compose file (`8080:8080`) bypasses both. Declare it under `services.<name>.ports`, or route the compose interpolation through a var set with `env.vars: { …: auto }`.
+- **Named compose resources bypass isolation.** `container_name:`, explicitly named networks/volumes, and `external: true` in raw compose files ignore the compose project-name scoping and can collide with — or attach to — the working environment. This is why teardown never uses `compose down -v`. The [compose isolation scanner](#compose-isolation-scanner) detects these constructs and, for `container_name:` and literal host ports, fails the scenario before deploy (downgradeable with `--skip-isolation-check`) — it does not make them safe, it surfaces them before they cause a collision.
+- **Host ports not modelled in `services.<name>.ports` aren't isolated.** The automatic remap and the `ports_free` preflight only see ports declared via `services.<name>.ports`; a host port hardcoded straight in a raw compose file (`8080:8080`) bypasses both. Declare it under `services.<name>.ports`, or route the compose interpolation through a var set with `env.vars: { …: auto }`. The isolation scanner flags this as a **blocking** `raw_host_port` finding.
 - **Host side effects of a project's own deploy/scenario steps aren't sandboxed.** A `shell` step touching absolute paths, `~`, or bind mounts outside the project affects the real host, same as it would from a real deploy. `dwe test` isolates dwe-managed state (files, containers, volumes, networks, ports) — not arbitrary side effects a step chooses to have.
 - **The copy is not atomic.** Nothing locks the original project while `git ls-files` and the copy run; editing files during a test run can produce a mixed snapshot.
 - **`~/.config/dwe` and the Docker daemon's image/build caches are shared**, by design (see [Isolation model](#isolation-model)).
@@ -306,6 +346,7 @@ dwe test list --output json
 
 - `dwe deploy run` — the real command run inside each scenario's copy
 - `dwe validate` — the fail-fast check run before deploy inside each copy
+- `dwe validate tests` — static scenario validation without Docker (see [above](#dwe-validate-tests))
 - `dwe reset run` — shares the volume-removal semantics teardown reuses
 - [deploy.yml / reset.yml](deploy/index.md) — the step schema `steps:` reuses (types, `with:`, `when:`)
 - [Builtins](deploy/builtins.md) — `http_check` and predicate-as-assertion step bodies
