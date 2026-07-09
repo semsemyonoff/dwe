@@ -7,6 +7,7 @@ import (
 	"os"
 	"os/signal"
 	"strings"
+	"sync"
 	"syscall"
 	"time"
 
@@ -16,6 +17,7 @@ import (
 	sharedrender "github.com/semsemyonoff/dwe/internal/shared/render"
 
 	"github.com/spf13/cobra"
+	"golang.org/x/sync/errgroup"
 )
 
 // scenarioRunner is the seam `dwe test run` drives; envtest.NewRunner()
@@ -33,6 +35,7 @@ func newTestRunCmd(flags *cmdctx.RootFlags) *cobra.Command {
 	var keep bool
 	var timeout time.Duration
 	var skipIsolationCheck bool
+	var parallel int
 
 	cmd := &cobra.Command{
 		Use:   "run [scenario...]",
@@ -62,7 +65,7 @@ Exit codes: 0 = every scenario passed, 1 = at least one scenario failed,
 		Args:         cobra.ArbitraryArgs,
 		SilenceUsage: true,
 		RunE: func(cmd *cobra.Command, args []string) error {
-			return runTestRun(cmd, flags, args, keep, timeout, skipIsolationCheck)
+			return runTest(cmd, flags, args, keep, timeout, skipIsolationCheck, parallel)
 		},
 	}
 
@@ -72,6 +75,8 @@ Exit codes: 0 = every scenario passed, 1 = at least one scenario failed,
 		"override every scenario's own timeout (e.g. 15m); 0 = use the scenario's timeout: field or the 30m default")
 	cmd.Flags().BoolVar(&skipIsolationCheck, "skip-isolation-check", false,
 		"downgrade compose isolation findings (container_name:, literal host ports, …) to warnings instead of blocking the scenario")
+	cmd.Flags().IntVar(&parallel, "parallel", 1,
+		"run up to N scenarios concurrently (default 1); effective parallelism is min(N, scenario count). At >1 a compact aggregated status view replaces the per-scenario streaming output")
 	return cmd
 }
 
@@ -152,7 +157,7 @@ func runTestRun(cmd *cobra.Command, flags *cmdctx.RootFlags, args []string, keep
 	if flags.Output == "json" {
 		// Live pipeline output must never leak into JSON stdout; the file log
 		// still records everything.
-		reporterFactory = jsonReporterFactory
+		reporterFactory = silentReporterFactory
 	}
 
 	outcomes := make([]scenarioOutcome, 0, len(names))
@@ -180,6 +185,121 @@ func runTestRun(cmd *cobra.Command, flags *cmdctx.RootFlags, args []string, keep
 		outcomes = append(outcomes, scenarioOutcomeFromResult(res))
 	}
 
+	return finishTestRun(cmd, flags, keep, outcomes)
+}
+
+// runTest is the `dwe test run` entry point (RunE target). It validates
+// --parallel, then dispatches: effective parallelism min(N, scenario count) of
+// 1 or less runs the existing sequential/streaming path (runTestRun,
+// byte-identical); anything higher fans the scenarios out concurrently.
+func runTest(cmd *cobra.Command, flags *cmdctx.RootFlags, args []string, keep bool, timeout time.Duration, skipIsolationCheck bool, parallel int) error {
+	if parallel < 1 {
+		return cmdctx.Err("invalid_parallel",
+			fmt.Sprintf("--parallel must be at least 1, got %d", parallel)).
+			WithHint("pass --parallel with a value of 1 or more").
+			WithDetail("parallel", parallel)
+	}
+
+	// Must run before the flock, any goroutine, UI, or subprocess (spec §3).
+	// runTestRun scrubs again on the sequential path; the unset is idempotent.
+	envtest.ScrubComposeEnv()
+
+	baseDir := flags.ProjectRoot()
+	names, err := resolveScenarioNames(baseDir, args)
+	if err != nil {
+		return err
+	}
+
+	effective := min(parallel, len(names))
+	if effective <= 1 {
+		// Flag absent, --parallel 1, or fewer scenarios than requested workers:
+		// the existing sequential/streaming path runs untouched.
+		return runTestRun(cmd, flags, args, keep, timeout, skipIsolationCheck)
+	}
+
+	return runTestParallel(cmd, flags, baseDir, names, effective, keep, timeout, skipIsolationCheck)
+}
+
+// runTestParallel fans the resolved scenarios out over an errgroup capped at
+// `effective` workers. Each scenario writes its outcome into a fixed slot by
+// original index, so text/JSON output is deterministic regardless of
+// completion order. Goroutines ALWAYS return nil: a RunScenario error becomes a
+// per-scenario StatusError outcome, never a group cancellation of siblings.
+// Ctrl+C cancels in-flight scenarios via the shared ctx (their teardown still
+// runs on a fresh context inside the runner); scenarios that never started
+// leave a nil slot and are compacted out.
+//
+// This is the interim (no-display) wiring: deploy/pipeline output is silenced
+// via silentReporterFactory and per-scenario warnings are prefixed and
+// mutex-serialized to stderr. Task 5 routes warnings through the aggregated
+// live display instead.
+func runTestParallel(cmd *cobra.Command, flags *cmdctx.RootFlags, baseDir string, names []string, effective int, keep bool, timeout time.Duration, skipIsolationCheck bool) error {
+	ctx, stop := signal.NotifyContext(cmd.Context(), os.Interrupt, syscall.SIGTERM)
+	defer stop()
+
+	runner := newRunner()
+
+	// Concurrent bare Fprintln to the shared stderr would race; serialize.
+	var warnMu sync.Mutex
+	makeWarn := func(name string) func(string) {
+		return func(msg string) {
+			if flags.Output == "json" {
+				return
+			}
+			warnMu.Lock()
+			defer warnMu.Unlock()
+			_, _ = fmt.Fprintln(cmd.ErrOrStderr(), "["+name+"] warning: "+msg)
+		}
+	}
+
+	slots := make([]*scenarioOutcome, len(names))
+	var g errgroup.Group
+	g.SetLimit(effective)
+	for i, name := range names {
+		g.Go(func() error {
+			if ctx.Err() != nil {
+				return nil
+			}
+			warn := makeWarn(name)
+			req := envtest.RunRequest{
+				BaseDir:            baseDir,
+				Scenario:           name,
+				Keep:               keep,
+				Timeout:            timeout,
+				Translator:         flags.I18n,
+				Locale:             flags.Locale,
+				ReporterFactory:    silentReporterFactory,
+				Warn:               warn,
+				SkipIsolationCheck: skipIsolationCheck,
+			}
+			res, err := runner.RunScenario(ctx, req)
+			if err != nil {
+				warn(fmt.Sprintf("scenario %q could not be prepared: %v", name, err))
+				o := scenarioOutcome{Name: name, Status: envtest.StatusError, Message: err.Error()}
+				slots[i] = &o
+				return nil
+			}
+			o := scenarioOutcomeFromResult(res)
+			slots[i] = &o
+			return nil
+		})
+	}
+	_ = g.Wait()
+
+	outcomes := make([]scenarioOutcome, 0, len(slots))
+	for _, s := range slots {
+		if s != nil {
+			outcomes = append(outcomes, *s)
+		}
+	}
+	return finishTestRun(cmd, flags, keep, outcomes)
+}
+
+// finishTestRun renders the collected outcomes (text or JSON) and returns the
+// exit-code-bearing error: exit 2 if any scenario errored (could not be
+// prepared), exit 1 if any failed, else nil. Shared by the sequential and
+// parallel paths.
+func finishTestRun(cmd *cobra.Command, flags *cmdctx.RootFlags, keep bool, outcomes []scenarioOutcome) error {
 	payload := testRunJSON{Scenarios: make([]testScenarioJSON, 0, len(outcomes))}
 	for _, o := range outcomes {
 		payload.Scenarios = append(payload.Scenarios, testScenarioJSON{
@@ -253,12 +373,14 @@ func resolveScenarioNames(baseDir string, args []string) ([]string, error) {
 	return names, nil
 }
 
-// jsonReporterFactory builds the steps-pipeline reporter with a silenced
-// screen (io.Discard) so live output never reaches JSON stdout, while still
+// silentReporterFactory builds the steps-pipeline reporter with a silenced
+// screen (io.Discard) so live output never reaches stdout, while still
 // writing the scenario's run log to disk. subprocOut is the log file only (no
 // terminal tee) so the validate/deploy subprocess output never leaks into the
-// JSON payload either.
-func jsonReporterFactory(workDir, name string) (pipeline.Reporter, io.Writer, io.Writer, func(), error) {
+// payload either. Used by BOTH JSON mode (where any stdout leak would corrupt
+// the JSON payload) AND the parallel text path (where per-scenario streaming
+// output would tangle with the aggregated status view).
+func silentReporterFactory(workDir, name string) (pipeline.Reporter, io.Writer, io.Writer, func(), error) {
 	_, logFile, _, _, cleanup, err := pipeline.OpenPipelineLog(workDir, name, true)
 	if err != nil {
 		return nil, nil, nil, nil, err

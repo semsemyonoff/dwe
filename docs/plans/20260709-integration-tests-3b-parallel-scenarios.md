@@ -287,19 +287,19 @@ nine liveline invariants untouched.
 - Modify: `internal/cli/test/run.go`
 - Modify: `internal/cli/test/run_test.go`
 
-- [ ] add `--parallel N` int flag (default 1) with help text; `N < 1` → typed
+- [x] add `--parallel N` int flag (default 1) with help text; `N < 1` → typed
       `cmdctx.Err("invalid_parallel", …)` before anything runs (exit 2)
-- [ ] rename `jsonReporterFactory` → `silentReporterFactory` (comment: used by JSON mode
+- [x] rename `jsonReporterFactory` → `silentReporterFactory` (comment: used by JSON mode
       AND the parallel text path); update references
-- [ ] compute `effective = min(parallel, len(names))`; `effective <= 1` → existing
+- [x] compute `effective = min(parallel, len(names))`; `effective <= 1` → existing
       sequential loop, byte-identical (guard every new behavior behind `effective > 1`)
-- [ ] BEFORE restructuring `runTestRun`: add exact full-match stdout/stderr tests
+- [x] BEFORE restructuring `runTestRun`: add exact full-match stdout/stderr tests
       (`require.Equal` on complete output, not substrings — the existing run tests only
       substring-match and would not catch an extra line/newline/reporter change) for the
       `effective <= 1` paths: default all-passed, failed scenario, prep-error, `--keep`
       + report-dir lines, no-scenarios, and JSON; these must pass unchanged after the
       restructure
-- [ ] parallel path: `errgroup.Group` + `SetLimit(effective)`; goroutine per scenario in
+- [x] parallel path: `errgroup.Group` + `SetLimit(effective)`; goroutine per scenario in
       original order writing `slots[i]`; goroutines always return nil (per-scenario errors
       become StatusError outcomes exactly as the sequential path does); first statement in
       each goroutine: `if ctx.Err() != nil { return nil }`; compact nil slots after Wait;
@@ -307,23 +307,23 @@ nine liveline invariants untouched.
       `[<name>] ` (interim sink: mutex-serialized writes to stderr — concurrent bare
       `Fprintln` to the shared writer would be a data race until task 5 routes warnings
       through the mutex-guarded `PrintlnDiag`)
-- [ ] JSON mode at N>1: unchanged silent factory, suppressed warnings, ordered payload
+- [x] JSON mode at N>1: unchanged silent factory, suppressed warnings, ordered payload
       (no display — enforced by construction in task 5)
-- [ ] make `fakeRunner`'s call recording concurrency-safe (mutex around
+- [x] make `fakeRunner`'s call recording concurrency-safe (mutex around
       `calls`/`composeEnvAtCall` appends) — parallel tests drive it from multiple
       goroutines and task 7 runs `make test-race`
-- [ ] write test: outcomes order matches original name order when fake runners complete
+- [x] write test: outcomes order matches original name order when fake runners complete
       in reverse order (fake with per-scenario release channels)
-- [ ] write test: peak concurrency ≤ N (fake counts in-flight with atomic; assert ≤ limit
+- [x] write test: peak concurrency ≤ N (fake counts in-flight with atomic; assert ≤ limit
       and > 1 to prove parallelism happened)
-- [ ] write test: cancelled ctx before dispatch → unstarted scenarios absent from
+- [x] write test: cancelled ctx before dispatch → unstarted scenarios absent from
       outcomes; in-flight fake honoring ctx returns and its outcome IS present
-- [ ] write test: `--parallel 0` / negative → exit 2; `--parallel 8` with one scenario
+- [x] write test: `--parallel 0` / negative → exit 2; `--parallel 8` with one scenario
       takes the sequential path — exact-match output equals the no-flag run, and the
       fake asserts `RunRequest.ReporterFactory` is nil (no silent factory) and no
       display/Progress was installed
-- [ ] write test: JSON shape at N>1 — ordered scenarios array, clean stdout
-- [ ] run `go test ./internal/cli/test/...` — must pass before task 5
+- [x] write test: JSON shape at N>1 — ordered scenarios array, clean stdout
+- [x] run `go test ./internal/cli/test/...` — must pass before task 5
 
 ### Task 5: CLI — aggregated live display + wiring
 
