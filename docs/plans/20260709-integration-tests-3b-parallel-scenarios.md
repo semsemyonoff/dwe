@@ -373,23 +373,23 @@ nine liveline invariants untouched.
 - Modify: `docs/i18n/ru/guides/integration-tests.md`
 - Modify: `docs/internals/packages.md`
 
-- [ ] reference page (+ ru mirror): `--parallel N` flag — semantics (default 1, effective
+- [x] reference page (+ ru mirror): `--parallel N` flag — semantics (default 1, effective
       = min(N, scenario count), aggregated compact view at N>1, full streaming at N=1),
       isolation recap (ports auto-remapped per scenario, per-scenario flock), exit codes
       unchanged
-- [ ] reference page (+ ru mirror): shared package-cache contention note — parallel
+- [x] reference page (+ ru mirror): shared package-cache contention note — parallel
       scenarios reusing one `shared: true` cache volume (composer/npm) may contend
       (slowdowns, package-manager lock files); recommend not parallelizing scenarios with
       heavy cold-cache installs; Docker daemon load at N deploys is the user's call
-- [ ] guide (+ ru mirror): short "running scenarios in parallel" section with an example
-- [ ] `docs/internals/packages.md`: §§ envtest (ProgressFn contract + firing points, port
+- [x] guide (+ ru mirror): short "running scenarios in parallel" section with an example
+- [x] `docs/internals/packages.md`: §§ envtest (ProgressFn contract + firing points, port
       lease set, never-released rationale), cli/test (orchestration in CLI,
       goroutines-never-return-error rule, aggregation only at effective N>1,
       silentReporterFactory dual use, warn routing), liveui (SetBlockRowPending +
       explicit-pending-flag render state)
-- [ ] `docs/internals/packages.md`: update the EXISTING `jsonReporterFactory` mention in
+- [x] `docs/internals/packages.md`: update the EXISTING `jsonReporterFactory` mention in
       the `internal/cli/test/` section to `silentReporterFactory`
-- [ ] run `make build` (embedded docs sync) — docs tests in `make test` must pass
+- [x] run `make build` (embedded docs sync) — docs tests in `make test` must pass
 
 ### Task 7: Verify acceptance criteria
 

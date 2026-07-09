@@ -194,9 +194,34 @@ dwe test run smoke db-dump                  # just these two, by name
 dwe test list                               # scenario names + descriptions
 dwe test run --timeout 5m                   # override every scenario's own timeout: field
 dwe test run --skip-isolation-check smoke   # downgrade blocking isolation findings to warnings
+dwe test run --parallel 3                   # run up to 3 scenarios concurrently
 ```
 
 Exit codes make this CI-friendly out of the box: `0` all passed, `1` at least one failed, `2` a scenario couldn't even be prepared (bad name, held lock, scenario file error). `--output json` gives a machine-readable report of the same result.
+
+## Running scenarios in parallel
+
+Each scenario already runs fully isolated — its own copy, its own compose project, its own auto-remapped host ports — so nothing stops several from running at once. `--parallel N` runs up to N scenarios concurrently:
+
+```shell
+dwe test run --parallel 3                   # up to 3 at a time, across the whole suite
+dwe test run --parallel 2 smoke redis-off   # these two, side by side
+```
+
+Effective parallelism is `min(N, scenario count)`, so `--parallel 8` over three scenarios runs three workers. At more than one worker the per-scenario streaming output is replaced by a compact live view — one row per scenario with a spinner, coarse phase, and elapsed time, finalizing to `✓ <name> passed` or `✗ <name> failed — step "…"`:
+
+```
+  ✓ smoke      passed
+  ⠹ redis-off  deploying…    [4s]
+  ⠹ cache-on   running steps…[6s]
+running 2/3 scenarios…
+```
+
+Each scenario's full deploy/pipeline log still goes to its own copy (`.dwe/tests/runs/<scenario>/.dwe/logs/test.log`), and a failing scenario's report is collected exactly as in a sequential run. Piped/CI runs (no TTY) print flat `scenario <name>: started` / `scenario <name>: passed` lines instead of the live block; `--output json` is unchanged by `--parallel`.
+
+`--parallel 1` (the default) keeps today's behavior byte-for-byte: full streaming pipeline output, one scenario at a time.
+
+**Watch shared caches.** Scenarios that all hammer the same `shared: true` package cache (composer, npm) can contend when run together — cold-cache installs serialize on the package manager's own lock file. Parallelize scenarios with warm or disjoint caches freely; keep heavy cold-cache installs sequential, and size N to what your Docker daemon can comfortably run at once.
 
 ## Cross-links
 

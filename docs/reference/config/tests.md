@@ -18,6 +18,7 @@ Declarative integration-test scenarios (`dwe test`).
 - [Teardown](#teardown)
 - [Failure reports](#failure-reports)
 - [`dwe test run`](#dwe-test-run)
+  - [`--parallel N`](#--parallel-n)
 - [`dwe test list`](#dwe-test-list)
 - [`dwe test clean`](#dwe-test-clean)
 - [`dwe validate tests`](#dwe-validate-tests)
@@ -216,9 +217,10 @@ dwe test run [scenario...]
     --keep                    # skip teardown; print project name, copy path, cleanup hint
     --timeout <duration>      # override every scenario's own timeout (e.g. 15m)
     --skip-isolation-check    # downgrade blocking isolation findings to warnings
+    --parallel N              # run up to N scenarios concurrently (default 1)
 ```
 
-No arguments runs every scenario under `workspace/tests/*.yml`, in sorted name order. Named arguments run exactly those scenarios (an unknown name fails before anything runs, exit code 2). Scenarios run sequentially. Ctrl+C (SIGINT/SIGTERM) cancels the scenario currently running, tears it down, and skips the rest — already-completed scenarios are still reported.
+No arguments runs every scenario under `workspace/tests/*.yml`, in sorted name order. Named arguments run exactly those scenarios (an unknown name fails before anything runs, exit code 2). By default scenarios run sequentially. Ctrl+C (SIGINT/SIGTERM) cancels the scenario(s) currently running, tears them down, and skips the rest — already-completed scenarios are still reported.
 
 Output is the standard live pipeline reporter per scenario (the same look as `dwe deploy run`), followed by a summary line, e.g.:
 
@@ -227,6 +229,21 @@ Output is the standard live pipeline reporter per scenario (the same look as `dw
 ```
 
 `dwe test` requires a project — unlike read-only docs commands, it is not usable outside one.
+
+### `--parallel N`
+
+`--parallel N` (default `1`) runs up to N scenarios concurrently. **Effective parallelism is `min(N, scenario count)`** — `--parallel 8` with two scenarios runs two workers; `--parallel 8` with one scenario runs one. Ordering of the output (text summary and JSON `scenarios` array) is always the original name order, independent of completion order.
+
+- **`--parallel 1` (the default) is byte-identical to today.** When effective parallelism is `1` — the flag is absent, set to `1`, or there are fewer scenarios than requested workers — the sequential streaming path runs unchanged: the standard live pipeline reporter per scenario, exactly as `dwe deploy run` looks.
+- **At effective parallelism > 1 the streaming output is replaced by a compact aggregated view.** One sticky row per scenario shows a spinner, the scenario name, a coarse phase (`preparing…`, `validating…`, `deploying…`, `deploy retry…`, `running steps…`, `collecting report…`, `tearing down…`), and an elapsed stopwatch; on completion the row finalizes to `✓ <name> passed` or `✗ <name> failed — step "…"`. A footer tracks `running k/n scenarios…`. The per-scenario deploy/pipeline output is **not** streamed to the terminal — it goes to that copy's own run log only (`.dwe/tests/runs/<scenario>/.dwe/logs/test.log`), and a failing scenario's [failure report](#failure-reports) is collected as usual. Warnings are prefixed `[<scenario>] warning: …` and printed to stderr without disturbing the block.
+- **Piped / non-TTY runs** (CI) degrade to flat `scenario <name>: started` / `scenario <name>: <status>` lines per scenario instead of the live block — the summary and exit code are unchanged.
+- **JSON mode** (`--output json`) is unaffected by `--parallel`: the payload shape is identical and, as with every read-only surface, live output and warnings are silenced regardless of parallelism.
+
+Exit codes are unchanged (see [Exit codes](#exit-codes)): any scenario that could not be prepared → `2`, else any failed scenario → `1`, else `0`.
+
+**Isolation holds unchanged under parallelism.** Each scenario already runs in its own copy dir, under its own per-scenario flock, with its own per-run-id compose project and manifest, and with every host port auto-remapped to a freshly allocated free port (see [Isolation model](#isolation-model)). Port allocation is additionally process-wide race-safe: a lease set guarantees two concurrent scenarios in the same `dwe test run` never receive the same host port (cross-process races between separate invocations stay covered by each copy's `ports_free` preflight plus the one deploy retry).
+
+**Shared package-cache contention.** Scenarios that reuse the same `shared: true` cache volume (a composer or npm cache, say) can contend when run in parallel — package managers take lock files, and simultaneous cold-cache installs against one volume can slow each other down or trip a manager's own locking. Prefer not to parallelize scenarios that each perform a heavy cold-cache install against a shared cache; scenarios with warm caches or disjoint caches parallelize cleanly. The Docker daemon load of N simultaneous deploys (image pulls, builds, container starts) is your call — pick N to match the host.
 
 ## `dwe test list`
 
