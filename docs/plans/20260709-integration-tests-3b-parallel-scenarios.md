@@ -238,23 +238,23 @@ nine liveline invariants untouched.
 - Modify: `internal/core/workflow/envtest/ports.go`
 - Modify: `internal/core/workflow/envtest/ports_test.go`
 
-- [ ] add package-level `leaseMu sync.Mutex` + `leasedPorts map[int]struct{}`; in
+- [x] add package-level `leaseMu sync.Mutex` + `leasedPorts map[int]struct{}`; in
       `AllocatePorts`, skip a harvested port already in the set (close that listener,
       listen again) and register every returned port; keep the whole-batch
       listeners-open-until-done behavior for intra-batch uniqueness
-- [ ] add the bounded attempt count with the exhaustion error; document the
+- [x] add the bounded attempt count with the exhaustion error; document the
       never-released process-lifetime lease rationale in the func comment
-- [ ] add an unexported `resetLeases()` test helper (clears the global map under the
+- [x] add an unexported `resetLeases()` test helper (clears the global map under the
       mutex) so tests can isolate lease-set state via `t.Cleanup(resetLeases)` — the
       global must not leak between sibling tests in the package (mirrors the envtest
       seam philosophy: `execDwe`, `allocatePorts`, `clock`)
-- [ ] write test: two sequential `AllocatePorts` batches are disjoint
-- [ ] write test: concurrent `AllocatePorts` calls from multiple goroutines return
+- [x] write test: two sequential `AllocatePorts` batches are disjoint
+- [x] write test: concurrent `AllocatePorts` calls from multiple goroutines return
       pairwise-disjoint ports (run under `-race`)
-- [ ] write test: exhaustion error path — deterministically, by pre-leasing the ports a
+- [x] write test: exhaustion error path — deterministically, by pre-leasing the ports a
       stub listener sequence would return (or by pre-filling the lease map) +
       `t.Cleanup(resetLeases)`
-- [ ] run `go test -race ./internal/core/workflow/envtest/...` — must pass before task 3
+- [x] run `go test -race ./internal/core/workflow/envtest/...` — must pass before task 3
 
 ### Task 3: `liveui` — additive `SetBlockRowPending` + pending render state
 
