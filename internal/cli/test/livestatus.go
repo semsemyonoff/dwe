@@ -192,11 +192,16 @@ func (s *runLiveStatus) Close() {
 }
 
 // finalStatusLabel maps a completed outcome to its block-row kind + label.
-// Anything other than passed renders as a failed (✗) row; a known failing step
-// is quoted into the label.
+// Anything other than passed renders as a ✗ row; a known failing step is quoted
+// into the label. A prep/validate StatusError renders as "error" (not "failed")
+// so the block view agrees with the flat/overflow lines and the final text
+// report, all of which surface the raw status.
 func finalStatusLabel(o scenarioOutcome) (liveui.BlockRowKind, string) {
-	if o.Status == envtest.StatusPassed {
+	switch o.Status {
+	case envtest.StatusPassed:
 		return liveui.BlockRowDone, o.Name + "  passed"
+	case envtest.StatusError:
+		return liveui.BlockRowFailed, o.Name + "  error"
 	}
 	if o.FailedStep != "" {
 		return liveui.BlockRowFailed, fmt.Sprintf("%s  failed — step %q", o.Name, o.FailedStep)

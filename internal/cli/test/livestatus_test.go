@@ -7,6 +7,7 @@ import (
 	"testing"
 
 	"github.com/semsemyonoff/dwe/internal/core/workflow/envtest"
+	"github.com/semsemyonoff/dwe/internal/shared/liveui"
 )
 
 var ansiTestRe = regexp.MustCompile("\x1b\\[[0-9;?]*[a-zA-Z]")
@@ -105,6 +106,32 @@ func TestRunLiveStatus_Finalization(t *testing.T) {
 	}
 	if !strings.Contains(text, `fail-me  failed — step "app answers"`) {
 		t.Errorf("expected failed-step label, got:\n%s", text)
+	}
+}
+
+func TestRunLiveStatus_ErrorStatusLabel(t *testing.T) {
+	// A prep StatusError (e.g. flock held / kept prior run) must render as
+	// "error" in the block row, matching the flat/overflow line and the final
+	// text report — never collapse to "failed".
+	d, out, _ := newTestDisplay(t, []string{"prep-fail"}, 24)
+	defer d.Close()
+
+	d.Started(0)
+	out.Reset()
+	d.Finished(0, scenarioOutcome{Name: "prep-fail", Status: envtest.StatusError, Message: "flock held"})
+
+	text := stripANSI(out.String())
+	if !strings.Contains(text, "prep-fail  error") {
+		t.Errorf("expected error label in the block row, got:\n%s", text)
+	}
+	if strings.Contains(text, "prep-fail  failed") {
+		t.Errorf("StatusError must not render as failed, got:\n%s", text)
+	}
+
+	// The overflow/flat path (isRow false) already surfaces the raw status; keep
+	// the two in agreement.
+	if kind, label := finalStatusLabel(scenarioOutcome{Name: "x", Status: envtest.StatusError}); kind != liveui.BlockRowFailed || label != "x  error" {
+		t.Errorf("finalStatusLabel(error) = %v, %q; want BlockRowFailed, \"x  error\"", kind, label)
 	}
 }
 

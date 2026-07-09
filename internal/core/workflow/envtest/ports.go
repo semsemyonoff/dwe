@@ -49,7 +49,10 @@ func AllocatePorts(n int) ([]int, error) {
 	attempts := 0
 	for len(ports) < n {
 		if attempts >= maxAttempts {
-			return nil, fmt.Errorf("envtest: allocating free port: exhausted %d attempts (%d ports leased)", maxAttempts, len(leasedPorts))
+			leaseMu.Lock()
+			leased := len(leasedPorts)
+			leaseMu.Unlock()
+			return nil, fmt.Errorf("envtest: allocating free port: exhausted %d attempts (%d ports leased)", maxAttempts, leased)
 		}
 		attempts++
 		l, err := net.Listen("tcp", ":0")

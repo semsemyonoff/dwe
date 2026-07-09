@@ -860,6 +860,52 @@ func TestRunTest_Parallel_NonTTYFlatLines(t *testing.T) {
 	}
 }
 
+// TestRunTest_Parallel_PrepError_ExitTwo drives a parallel text run where one
+// scenario's RunScenario returns a prep error. The errgroup goroutine must turn
+// it into a StatusError outcome (not cancel its sibling), the run must exit 2,
+// and the forced-TTY aggregated display must render the errored row as "error"
+// (never "failed"), agreeing with the final text report.
+func TestRunTest_Parallel_PrepError_ExitTwo(t *testing.T) {
+	baseDir := t.TempDir()
+	for _, n := range []string{"a", "b"} {
+		writeScenarioFile(t, baseDir, n, "description: x\n")
+	}
+	withForcedTTYDisplay(t, 24)
+
+	f := &fakeRunner{
+		results: map[string]*envtest.ScenarioResult{
+			"a": {Name: "a", Status: envtest.StatusPassed},
+		},
+		errs: map[string]error{"b": errors.New("flock held by process 123")},
+	}
+	withFakeRunner(t, f)
+	flags := &cmdctx.RootFlags{Root: baseDir}
+	cmd, out, _ := newRunTestCmd()
+
+	err := runTest(cmd, flags, nil, false, 0, false, 2)
+	var oe *testRunOutcomeError
+	if !errors.As(err, &oe) || oe.ExitCode() != 2 {
+		t.Fatalf("expected exit-code-2 error, got %v", err)
+	}
+	// The sibling still ran to completion (no group cancellation).
+	if len(f.recordedCalls()) != 2 {
+		t.Errorf("expected both scenarios attempted, got %d calls", len(f.recordedCalls()))
+	}
+	text := stripANSI(out.String())
+	if !strings.Contains(text, "b  error") {
+		t.Errorf("expected the errored row to render as error, got:\n%s", text)
+	}
+	if strings.Contains(text, "b  failed") {
+		t.Errorf("StatusError must not render as failed in the block view, got:\n%s", text)
+	}
+	if !strings.Contains(text, "a  passed") {
+		t.Errorf("expected the sibling to finish passed, got:\n%s", text)
+	}
+	if !strings.Contains(text, "1 passed, 1 failed") {
+		t.Errorf("expected the final text report, got:\n%s", text)
+	}
+}
+
 // waitFor polls cond up to ~2s, failing the test on timeout.
 func waitFor(t *testing.T, cond func() bool) {
 	t.Helper()
