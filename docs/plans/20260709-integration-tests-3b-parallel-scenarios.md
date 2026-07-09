@@ -216,21 +216,21 @@ nine liveline invariants untouched.
 - Modify: `internal/core/workflow/envtest/runner.go`
 - Modify: `internal/core/workflow/envtest/runner_test.go`
 
-- [ ] add `ProgressPhase` string type + the seven constants (`PhasePreparing`,
+- [x] add `ProgressPhase` string type + the seven constants (`PhasePreparing`,
       `PhaseValidating`, `PhaseDeploying`, `PhaseDeployRetry`, `PhaseRunningSteps`,
       `PhaseCollectingReport`, `PhaseTearingDown`)
-- [ ] add `Progress func(phase ProgressPhase)` to `RunRequest` (doc comment: coarse,
+- [x] add `Progress func(phase ProgressPhase)` to `RunRequest` (doc comment: coarse,
       UI-free, nil = no-op); nil-guard it at the top of `RunScenario` exactly like `warn`
-- [ ] fire the phases at the points in the Solution Overview table — `PhaseCollectingReport`
+- [x] fire the phases at the points in the Solution Overview table — `PhaseCollectingReport`
       only inside the `collectReport != nil && !req.Keep && status != StatusPassed` branch,
       `PhaseTearingDown` only when teardown actually runs (not under Keep)
-- [ ] write test: passed scenario fires exactly `preparing, validating, deploying,
+- [x] write test: passed scenario fires exactly `preparing, validating, deploying,
       running_steps, tearing_down` in order (stubbed seams, no report/retry)
-- [ ] write test: failed deploy fires `…deploying, collecting_report, tearing_down`;
+- [x] write test: failed deploy fires `…deploying, collecting_report, tearing_down`;
       port-conflict retry path additionally fires `deploy_retry` between them
-- [ ] write test: `--keep` run fires no `tearing_down`/`collecting_report`; nil Progress
+- [x] write test: `--keep` run fires no `tearing_down`/`collecting_report`; nil Progress
       does not panic anywhere
-- [ ] run `go test ./internal/core/workflow/envtest/...` — must pass before task 2
+- [x] run `go test ./internal/core/workflow/envtest/...` — must pass before task 2
 
 ### Task 2: `envtest` — process-wide port lease set
 

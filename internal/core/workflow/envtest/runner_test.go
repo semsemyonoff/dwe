@@ -987,6 +987,202 @@ func containsStep(order []string, step string) bool {
 	return slices.Contains(order, step)
 }
 
+// recordProgress returns a RunRequest.Progress callback appending each phase
+// (as a plain string) to phases, so tests can assert firing order.
+func recordProgress(phases *[]string) func(ProgressPhase) {
+	return func(p ProgressPhase) { *phases = append(*phases, string(p)) }
+}
+
+// TestRunScenario_ProgressPhases_PassedRun pins the exact phase-firing order
+// for a passing scenario with no report and no retry.
+func TestRunScenario_ProgressPhases_PassedRun(t *testing.T) {
+	dir := writeRunnerFixtureProject(t, "smoke", noStepsScenario)
+
+	var execCalls []string
+	var phases []string
+	r := &Runner{
+		execDwe:       stubExecDwe(nil, &execCalls),
+		allocatePorts: AllocatePorts,
+		newTeardownDeps: func(string, io.Writer) TeardownDeps {
+			return recordingTeardownDeps(new([]string), nil)
+		},
+		clock: time.Now,
+	}
+
+	result, err := r.RunScenario(context.Background(), RunRequest{
+		BaseDir:         dir,
+		Scenario:        "smoke",
+		ReporterFactory: noopReporterFactory,
+		Progress:        recordProgress(&phases),
+	})
+	if err != nil {
+		t.Fatalf("RunScenario: %v", err)
+	}
+	if result.Status != StatusPassed {
+		t.Fatalf("status = %q, want passed", result.Status)
+	}
+	want := []string{
+		string(PhasePreparing), string(PhaseValidating), string(PhaseDeploying),
+		string(PhaseRunningSteps), string(PhaseTearingDown),
+	}
+	if strings.Join(phases, "|") != strings.Join(want, "|") {
+		t.Fatalf("phases = %v, want %v", phases, want)
+	}
+}
+
+// TestRunScenario_ProgressPhases_FailedDeploy pins that a failed deploy (no
+// auto ports, so no retry) fires collecting_report before tearing_down and
+// never running_steps.
+func TestRunScenario_ProgressPhases_FailedDeploy(t *testing.T) {
+	dir := writeRunnerFixtureProject(t, "smoke", noStepsScenario)
+
+	var execCalls []string
+	var phases []string
+	r := &Runner{
+		execDwe:       stubExecDwe(map[string]error{"deploy run --silent": errors.New("deploy: boom")}, &execCalls),
+		allocatePorts: AllocatePorts,
+		newTeardownDeps: func(string, io.Writer) TeardownDeps {
+			return recordingTeardownDeps(new([]string), nil)
+		},
+		collectReport: func(context.Context, *Manifest, func(string)) (string, error) {
+			return "/some/report", nil
+		},
+		clock: time.Now,
+	}
+
+	result, err := r.RunScenario(context.Background(), RunRequest{
+		BaseDir:         dir,
+		Scenario:        "smoke",
+		ReporterFactory: noopReporterFactory,
+		Progress:        recordProgress(&phases),
+	})
+	if err != nil {
+		t.Fatalf("RunScenario: %v", err)
+	}
+	if result.Status != StatusFailed {
+		t.Fatalf("status = %q, want failed", result.Status)
+	}
+	want := []string{
+		string(PhasePreparing), string(PhaseValidating), string(PhaseDeploying),
+		string(PhaseCollectingReport), string(PhaseTearingDown),
+	}
+	if strings.Join(phases, "|") != strings.Join(want, "|") {
+		t.Fatalf("phases = %v, want %v", phases, want)
+	}
+}
+
+// TestRunScenario_ProgressPhases_DeployRetry pins that the one port-conflict
+// retry fires deploy_retry between deploying and (on a still-failing retry)
+// collecting_report.
+func TestRunScenario_ProgressPhases_DeployRetry(t *testing.T) {
+	dir := writeRunnerFixtureProject(t, "ports", "env:\n  vars:\n    app.port: auto\n")
+
+	execDwe := func(_ context.Context, _ string, _ []string, _, _ io.Writer, args ...string) error {
+		if strings.Join(args, " ") == "deploy run --silent" {
+			return errors.New("port is already allocated")
+		}
+		return nil
+	}
+
+	var phases []string
+	r := &Runner{
+		execDwe:       execDwe,
+		allocatePorts: func(n int) ([]int, error) { return make([]int, n), nil },
+		newTeardownDeps: func(string, io.Writer) TeardownDeps {
+			return recordingTeardownDeps(new([]string), nil)
+		},
+		collectReport: func(context.Context, *Manifest, func(string)) (string, error) {
+			return "/some/report", nil
+		},
+		clock: time.Now,
+	}
+
+	result, err := r.RunScenario(context.Background(), RunRequest{
+		BaseDir:         dir,
+		Scenario:        "ports",
+		ReporterFactory: noopReporterFactory,
+		Progress:        recordProgress(&phases),
+	})
+	if err != nil {
+		t.Fatalf("RunScenario: %v", err)
+	}
+	if result.Status != StatusFailed {
+		t.Fatalf("status = %q, want failed", result.Status)
+	}
+	want := []string{
+		string(PhasePreparing), string(PhaseValidating), string(PhaseDeploying),
+		string(PhaseDeployRetry), string(PhaseCollectingReport), string(PhaseTearingDown),
+	}
+	if strings.Join(phases, "|") != strings.Join(want, "|") {
+		t.Fatalf("phases = %v, want %v", phases, want)
+	}
+}
+
+// TestRunScenario_ProgressPhases_Keep pins that a --keep run fires neither
+// tearing_down nor collecting_report, and that a nil Progress callback never
+// panics.
+func TestRunScenario_ProgressPhases_Keep(t *testing.T) {
+	dir := writeRunnerFixtureProject(t, "stepfail", stepFailScenario)
+
+	var execCalls []string
+	var phases []string
+	r := &Runner{
+		execDwe:         stubExecDwe(nil, &execCalls),
+		allocatePorts:   AllocatePorts,
+		newTeardownDeps: fatalTeardownDeps(t),
+		collectReport: func(context.Context, *Manifest, func(string)) (string, error) {
+			t.Fatal("collectReport must not be called under --keep")
+			return "", nil
+		},
+		clock: time.Now,
+	}
+
+	result, err := r.RunScenario(context.Background(), RunRequest{
+		BaseDir:         dir,
+		Scenario:        "stepfail",
+		Keep:            true,
+		ReporterFactory: noopReporterFactory,
+		Progress:        recordProgress(&phases),
+	})
+	if err != nil {
+		t.Fatalf("RunScenario: %v", err)
+	}
+	if result.Status != StatusFailed {
+		t.Fatalf("status = %q, want failed", result.Status)
+	}
+	if slices.Contains(phases, string(PhaseTearingDown)) {
+		t.Fatalf("--keep run must not fire tearing_down: %v", phases)
+	}
+	if slices.Contains(phases, string(PhaseCollectingReport)) {
+		t.Fatalf("--keep run must not fire collecting_report: %v", phases)
+	}
+	want := []string{
+		string(PhasePreparing), string(PhaseValidating), string(PhaseDeploying),
+		string(PhaseRunningSteps),
+	}
+	if strings.Join(phases, "|") != strings.Join(want, "|") {
+		t.Fatalf("phases = %v, want %v", phases, want)
+	}
+
+	// A nil Progress callback must not panic anywhere along the full flow.
+	dir2 := writeRunnerFixtureProject(t, "smoke", noStepsScenario)
+	r2 := &Runner{
+		execDwe:       stubExecDwe(nil, new([]string)),
+		allocatePorts: AllocatePorts,
+		newTeardownDeps: func(string, io.Writer) TeardownDeps {
+			return recordingTeardownDeps(new([]string), nil)
+		},
+		clock: time.Now,
+	}
+	if _, err := r2.RunScenario(context.Background(), RunRequest{
+		BaseDir:         dir2,
+		Scenario:        "smoke",
+		ReporterFactory: noopReporterFactory,
+	}); err != nil {
+		t.Fatalf("RunScenario with nil Progress: %v", err)
+	}
+}
+
 // recordingCollectReport returns a Runner.collectReport stub that appends
 // "collect_report" to order (pass the SAME slice pointer given to
 // recordingTeardownDeps to assert collection happens before teardown) and

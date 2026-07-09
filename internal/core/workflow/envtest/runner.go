@@ -44,6 +44,33 @@ const reportTimeout = 2 * time.Minute
 // "foo" must not match "foo-bar-<runid>.yml").
 var manifestRunIDSuffix = regexp.MustCompile(`^[0-9a-f]{6}\.yml$`)
 
+// ProgressPhase is a coarse, UI-free progress signal fired by RunScenario at
+// the natural start of each major phase. It exists so the CLI can drive an
+// aggregated per-scenario status display without envtest importing any UI
+// package (layering preserved). The CLI maps each phase to a display label.
+type ProgressPhase string
+
+const (
+	// PhasePreparing fires after the kept-run guard + config load, immediately
+	// before the project tree is copied.
+	PhasePreparing ProgressPhase = "preparing"
+	// PhaseValidating fires before the `dwe validate` subprocess.
+	PhaseValidating ProgressPhase = "validating"
+	// PhaseDeploying fires before the `dwe deploy run --silent` subprocess.
+	PhaseDeploying ProgressPhase = "deploying"
+	// PhaseDeployRetry fires before the one deploy retry with freshly
+	// allocated ports (only on the retry path).
+	PhaseDeployRetry ProgressPhase = "deploy_retry"
+	// PhaseRunningSteps fires before the scenario's in-process steps run.
+	PhaseRunningSteps ProgressPhase = "running_steps"
+	// PhaseCollectingReport fires inside finish() only when failure-report
+	// collection actually runs (not passed, not --keep).
+	PhaseCollectingReport ProgressPhase = "collecting_report"
+	// PhaseTearingDown fires inside teardown() only when teardown actually
+	// runs (never under --keep).
+	PhaseTearingDown ProgressPhase = "tearing_down"
+)
+
 // ScenarioStatus is the outcome of a single scenario run.
 type ScenarioStatus string
 
@@ -148,6 +175,11 @@ type RunRequest struct {
 	// copy fallback, teardown step failures, retry attempts); nil discards
 	// them.
 	Warn func(string)
+	// Progress receives coarse, UI-free phase transitions as each phase
+	// starts (see ProgressPhase). It lets the CLI drive an aggregated
+	// per-scenario status display without envtest importing any UI package;
+	// nil is a no-op (mirroring Warn).
+	Progress func(phase ProgressPhase)
 	// SkipIsolationCheck downgrades every compose-isolation finding
 	// (container_name:, literal host ports, …) to a warning instead of
 	// blocking the scenario — the escape hatch for a project with an
@@ -262,6 +294,10 @@ func (r *Runner) RunScenario(ctx context.Context, req RunRequest) (*ScenarioResu
 	if warn == nil {
 		warn = func(string) {}
 	}
+	progress := req.Progress
+	if progress == nil {
+		progress = func(ProgressPhase) {}
+	}
 
 	start := r.clock()
 	fail := func(stage string, err error) (*ScenarioResult, error) {
@@ -306,6 +342,7 @@ func (r *Runner) RunScenario(ctx context.Context, req RunRequest) (*ScenarioResu
 	copyRoot := RunDir(req.BaseDir, req.Scenario)
 	manifestPath := ManifestPath(req.BaseDir, req.Scenario, runID)
 
+	progress(PhasePreparing)
 	if err := CopyTree(req.BaseDir, copyRoot, config.GitBin(origCfg), warn); err != nil {
 		return fail("copying project tree", err)
 	}
@@ -362,6 +399,7 @@ func (r *Runner) RunScenario(ctx context.Context, req RunRequest) (*ScenarioResu
 		if req.Keep {
 			return
 		}
+		progress(PhaseTearingDown)
 		tctx, tcancel := context.WithTimeout(context.Background(), teardownTimeout)
 		defer tcancel()
 		deps := r.newTeardownDeps(manifestPath, logWriter)
@@ -382,6 +420,7 @@ func (r *Runner) RunScenario(ctx context.Context, req RunRequest) (*ScenarioResu
 		// --keep (the live environment is its own "report"). Always a fresh
 		// context — scenarioCtx may already be cancelled (timeout).
 		if r.collectReport != nil && !req.Keep && status != StatusPassed {
+			progress(PhaseCollectingReport)
 			rctx, rcancel := context.WithTimeout(context.Background(), reportTimeout)
 			dir, err := r.collectReport(rctx, manifest, warn)
 			rcancel()
@@ -417,6 +456,7 @@ func (r *Runner) RunScenario(ctx context.Context, req RunRequest) (*ScenarioResu
 	// validate + deploy run as subprocesses; their output goes to subprocOut
 	// (terminal + run log interactively, run log only in JSON mode) so a long
 	// deploy streams progress live instead of a silent console until it ends.
+	progress(PhaseValidating)
 	if err := r.execDwe(scenarioCtx, copyRoot, extraEnv, subprocOut, subprocOut, "validate"); err != nil {
 		warn(fmt.Sprintf("dwe validate failed: %v", err))
 		return finish(StatusError, "")
@@ -428,6 +468,7 @@ func (r *Runner) RunScenario(ctx context.Context, req RunRequest) (*ScenarioResu
 	// error) would just double the wall-clock cost of every genuine failure
 	// before reporting it anyway; hasAllocatedPorts is true for nearly every
 	// project, so it cannot be the sole gate.
+	progress(PhaseDeploying)
 	deployTail := &tailRecorder{limit: deployTailLimit}
 	deployOut := io.MultiWriter(subprocOut, deployTail)
 	deployErr := r.execDwe(scenarioCtx, copyRoot, extraEnv, deployOut, deployOut, "deploy", "run", "--silent")
@@ -437,6 +478,7 @@ func (r *Runner) RunScenario(ctx context.Context, req RunRequest) (*ScenarioResu
 	if deployErr != nil && hasAllocatedPorts(origCfg, scn) &&
 		isPortBindConflict(deployTail.String()+"\n"+deployErr.Error()) {
 		warn(fmt.Sprintf("deploy failed on a port conflict, retrying once with freshly allocated ports: %v", deployErr))
+		progress(PhaseDeployRetry)
 		deployErr = r.retryDeployWithFreshPorts(scenarioCtx, copyRoot, extraEnv, subprocOut, origCfg, seedLocal, scn, composeProject, warn)
 	}
 	if deployErr != nil {
@@ -444,6 +486,7 @@ func (r *Runner) RunScenario(ctx context.Context, req RunRequest) (*ScenarioResu
 		return finish(StatusFailed, "")
 	}
 
+	progress(PhaseRunningSteps)
 	failedStep, err := r.runSteps(scenarioCtx, copyRoot, scn, req, rep, logWriter)
 	if err != nil {
 		warn(fmt.Sprintf("scenario steps failed: %v", err))
