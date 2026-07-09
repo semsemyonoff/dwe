@@ -48,6 +48,14 @@ const (
 // row is either running (icon == "" — the spinner glyph + live elapsed are
 // composed at render time) or finalized (icon is the frozen glyph and
 // elapsed holds the wall-clock duration captured at finalisation).
+//
+// The pending flag is a third, explicit state used for queued rows that have
+// a label but must NOT accrue elapsed time until a worker starts them: it is
+// set ONLY by [LiveLine.SetBlockRowPending] and cleared by
+// SetBlockRowRunning / SetBlockRowFinal. Render keys on this flag alone —
+// never inferred from startTime.IsZero() — so existing consumers whose rows
+// are never-started (e.g. the workflow parallel runner queue) render
+// byte-identically to before this field existed.
 type blockRow struct {
 	label     string
 	icon      string
@@ -55,6 +63,7 @@ type blockRow struct {
 	startTime time.Time
 	elapsed   time.Duration
 	finalized bool
+	pending   bool
 }
 
 // LiveLine owns the bottom-of-cursor footer rendered during pipeline execution.
@@ -387,9 +396,36 @@ func (l *LiveLine) SetBlockRowRunning(idx int, label string) {
 	}
 	slot.label = label
 	slot.finalized = false
+	slot.pending = false
 	slot.icon = ""
 	slot.iconColor = ""
 	slot.elapsed = 0
+	if l.started && !l.stopped && !l.paused {
+		l.redrawLocked()
+	}
+}
+
+// SetBlockRowPending marks row idx as pending (queued) with the given label,
+// WITHOUT starting the per-row stopwatch: a queued scenario must not accrue
+// elapsed time while it waits for a worker. The row renders as a gray
+// [IconRunning] dot + label with no elapsed bracket. The stopwatch begins
+// only on the later [LiveLine.SetBlockRowRunning] call. Out-of-range idx and
+// disabled mode are silently ignored (mirrors SetBlockRowRunning).
+func (l *LiveLine) SetBlockRowPending(idx int, label string) {
+	if !l.enabled.Load() {
+		return
+	}
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	if l.blockRows == 0 || idx < 0 || idx >= l.blockRows {
+		return
+	}
+	slot := &l.blockSlots[idx]
+	slot.label = label
+	slot.pending = true
+	slot.finalized = false
+	slot.icon = ""
+	slot.iconColor = ""
 	if l.started && !l.stopped && !l.paused {
 		l.redrawLocked()
 	}
@@ -421,6 +457,7 @@ func (l *LiveLine) SetBlockRowFinal(idx int, kind BlockRowKind, label string) {
 	slot.label = label
 	slot.icon, slot.iconColor = finalGlyph(kind)
 	slot.finalized = true
+	slot.pending = false
 	if l.started && !l.stopped && !l.paused {
 		l.redrawLocked()
 	}
@@ -478,9 +515,22 @@ func (l *LiveLine) termWidth() int {
 // renderBlockRowLocked formats block row idx as
 // "  <icon> [<elapsed>] <label>", truncating to terminal width. Running
 // rows use the spinner frame coloured blue; finalised rows use the
-// stored icon + colour. Caller holds l.mu.
+// stored icon + colour. A pending (queued) row renders as
+// "  <gray dot> <label>" — a gray [IconRunning] glyph and NO elapsed
+// bracket. The pending branch is keyed on the explicit flag ONLY (never
+// inferred from startTime), so a never-started non-pending row still renders
+// exactly as a running row. Caller holds l.mu.
 func (l *LiveLine) renderBlockRowLocked(idx int) string {
 	slot := l.blockSlots[idx]
+	w := l.termWidth()
+	if slot.pending {
+		iconText := render.Gray + IconRunning + render.Reset
+		content := fmt.Sprintf("  %s %s", iconText, slot.label)
+		if lipgloss.Width(content) > w {
+			content = truncateToWidth(content, w)
+		}
+		return content
+	}
 	var iconText string
 	if slot.finalized {
 		iconText = slot.iconColor + slot.icon + render.Reset
@@ -495,7 +545,6 @@ func (l *LiveLine) renderBlockRowLocked(idx int) string {
 	}
 	elapsedText := render.Gray + "[" + FormatElapsed(elapsed) + "]" + render.Reset
 	content := fmt.Sprintf("  %s %s %s", iconText, elapsedText, slot.label)
-	w := l.termWidth()
 	if lipgloss.Width(content) > w {
 		content = truncateToWidth(content, w)
 	}

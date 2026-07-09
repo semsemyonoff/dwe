@@ -262,24 +262,24 @@ nine liveline invariants untouched.
 - Modify: `internal/shared/liveui/liveline.go`
 - Modify: `internal/shared/liveui/liveline_test.go`
 
-- [ ] add `pending bool` to `blockRow`; add `SetBlockRowPending(idx int, label string)`:
+- [x] add `pending bool` to `blockRow`; add `SetBlockRowPending(idx int, label string)`:
       sets the row label + `pending = true`, leaves `startTime` zero and `finalized`
       false; out-of-range/disabled → no-op (mirror `SetBlockRowRunning` guards); redraw
       when live
-- [ ] clear `pending` in `SetBlockRowRunning` and `SetBlockRowFinal`; in
+- [x] clear `pending` in `SetBlockRowRunning` and `SetBlockRowFinal`; in
       `renderBlockRowLocked`, render a `pending` row with a gray `IconRunning` dot
       instead of the blue spinner and without the elapsed bracket — render is keyed on
       the explicit flag ONLY (never inferred from `startTime.IsZero()`), so existing
       consumers' never-started rows (workflow parallel runner queue) stay byte-identical
-- [ ] confirm `SetBlockRowRunning` after `SetBlockRowPending` starts the stopwatch then
+- [x] confirm `SetBlockRowRunning` after `SetBlockRowPending` starts the stopwatch then
       (first-call `startTime.IsZero()` branch — should already hold, add a test)
-- [ ] write test: a never-started row WITHOUT `SetBlockRowPending` still renders exactly
+- [x] write test: a never-started row WITHOUT `SetBlockRowPending` still renders exactly
       as today (blue spinner + `[0s]`) — pins the workflow-parallel-runner queued-row
       rendering the flag exists to protect
-- [ ] write test: pending row renders dot + label, no elapsed; transitions
+- [x] write test: pending row renders dot + label, no elapsed; transitions
       pending → running → final render correctly (drive via SetTestHooks + Tick)
-- [ ] write test: out-of-range idx and disabled-mode no-ops
-- [ ] run `go test ./internal/shared/liveui/...` — must pass before task 4
+- [x] write test: out-of-range idx and disabled-mode no-ops
+- [x] run `go test ./internal/shared/liveui/...` — must pass before task 4
 
 ### Task 4: CLI — `--parallel` flag + errgroup orchestration (no display yet)
 
