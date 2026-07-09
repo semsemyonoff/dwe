@@ -333,36 +333,36 @@ nine liveline invariants untouched.
 - Modify: `internal/cli/test/run.go`
 - Modify: `internal/cli/test/run_test.go`
 
-- [ ] implement `runLiveStatus` type: constructor takes scenario names + seams
+- [x] implement `runLiveStatus` type: constructor takes scenario names + seams
       (`isTTY bool`, `termSize func() (int, int)`, output/diag writers); builds the
       LiveLine, `Start` + `StartBlock(visibleRows)` with
       `visibleRows = max(1, min(len(names), termHeight−3))`; seeds every visible row via
       `SetBlockRowPending(i, name)`
-- [ ] methods: `Started(i)` (row → running with `name  preparing…`; overflow → framed
+- [x] methods: `Started(i)` (row → running with `name  preparing…`; overflow → framed
       `Println("scenario <name>: started")`), `Phase(i, envtest.ProgressPhase)` (label
       update via the phase→label map), `Finished(i, outcome)` (SetBlockRowFinal
       Done/Failed + `name  passed` / `name  failed — step "X"`; overflow → framed final
       line; update footer `running k/n scenarios…` under the display's own mutex),
       `Warn(i, msg)` (`PrintlnDiag("[<name>] warning: " + msg)`), `Close()`
       (`EndBlock` + `Stop`)
-- [ ] wire into the parallel text path of `runTestRun`: display created only when
+- [x] wire into the parallel text path of `runTestRun`: display created only when
       `flags.Output != "json"`; `RunRequest.Progress` closure maps to `display.Phase`;
       per-scenario warn routes to `display.Warn`; `Close()` before `cmdctx.WriteData`
       renders the final report
-- [ ] non-TTY degradation: `Started`/`Finished` branch EXPLICITLY on disabled mode and
+- [x] non-TTY degradation: `Started`/`Finished` branch EXPLICITLY on disabled mode and
       emit the flat `Println` lines for EVERY scenario, not only overflow rows — the
       block-row methods are silent no-ops when LiveLine is disabled, so without the
       branch a piped/CI run shows nothing until the final report
-- [ ] write golden tests via `SetTestHooks(noTicker, widthFn)` + injected `termSize`:
+- [x] write golden tests via `SetTestHooks(noTicker, widthFn)` + injected `termSize`:
       initial pending rows, phase-transition relabel, ✓/✗ finalization, footer counter,
       height clamp with overflow scenarios (final lines framed via Println)
-- [ ] write test: non-TTY with ALL scenarios within `visibleRows` — start and final flat
+- [x] write test: non-TTY with ALL scenarios within `visibleRows` — start and final flat
       lines are emitted for every scenario (pins the explicit disabled-mode branch;
       would fail if `Started`/`Finished` relied on the no-op block methods)
-- [ ] write test: `Warn` bytes land on the diag writer (stderr seam), not stdout
-- [ ] write test (run_test.go): end-to-end parallel run with fake runner firing Progress
+- [x] write test: `Warn` bytes land on the diag writer (stderr seam), not stdout
+- [x] write test (run_test.go): end-to-end parallel run with fake runner firing Progress
       phases → display receives them (seam-injected display or capture via writers)
-- [ ] run `go test ./internal/cli/test/...` — must pass before task 6
+- [x] run `go test ./internal/cli/test/...` — must pass before task 6
 
 ### Task 6: Documentation
 

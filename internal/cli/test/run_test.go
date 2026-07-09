@@ -39,6 +39,10 @@ type fakeRunner struct {
 	release  map[string]chan struct{}
 	inFlight atomic.Int32
 	peak     atomic.Int32
+
+	// firePhases, when non-empty, is fired through req.Progress (in order) on
+	// every scenario before it returns — exercises the aggregated display wiring.
+	firePhases []envtest.ProgressPhase
 }
 
 func (f *fakeRunner) RunScenario(ctx context.Context, req envtest.RunRequest) (*envtest.ScenarioResult, error) {
@@ -55,6 +59,12 @@ func (f *fakeRunner) RunScenario(ctx context.Context, req envtest.RunRequest) (*
 	f.calls = append(f.calls, req)
 	f.composeEnvAtCall = append(f.composeEnvAtCall, os.Getenv("COMPOSE_PROJECT_NAME"))
 	f.mu.Unlock()
+
+	if req.Progress != nil {
+		for _, p := range f.firePhases {
+			req.Progress(p)
+		}
+	}
 
 	if f.release != nil {
 		if ch, ok := f.release[req.Scenario]; ok {
@@ -776,6 +786,76 @@ func TestRunTest_Parallel_JSONShape(t *testing.T) {
 	for _, c := range f.recordedCalls() {
 		if c.ReporterFactory == nil {
 			t.Errorf("parallel path must set a silent ReporterFactory for %q", c.Scenario)
+		}
+	}
+}
+
+// withForcedTTYDisplay overrides liveDisplayEnv so the parallel path builds a
+// TTY-mode aggregated display (fixed height) even though the test's stdout is a
+// buffer — lets the end-to-end test observe Progress-driven row labels.
+func withForcedTTYDisplay(t *testing.T, height int) {
+	t.Helper()
+	orig := liveDisplayEnv
+	liveDisplayEnv = func() (bool, func() (int, int)) {
+		return true, func() (int, int) { return 80, height }
+	}
+	t.Cleanup(func() { liveDisplayEnv = orig })
+}
+
+// TestRunTest_Parallel_DisplayReceivesProgress drives a parallel text run with
+// a fake runner that fires Progress phases; the forced-TTY aggregated display
+// must relabel rows with the coarse phase text.
+func TestRunTest_Parallel_DisplayReceivesProgress(t *testing.T) {
+	baseDir := t.TempDir()
+	for _, n := range []string{"a", "b"} {
+		writeScenarioFile(t, baseDir, n, "description: x\n")
+	}
+	withForcedTTYDisplay(t, 24)
+
+	f := &fakeRunner{firePhases: []envtest.ProgressPhase{envtest.PhaseValidating, envtest.PhaseDeploying}}
+	withFakeRunner(t, f)
+	flags := &cmdctx.RootFlags{Root: baseDir}
+	cmd, out, _ := newRunTestCmd()
+
+	if err := runTest(cmd, flags, nil, false, 0, false, 2); err != nil {
+		t.Fatalf("runTest: %v", err)
+	}
+	text := stripANSI(out.String())
+	// Phase labels reached the display and relabeled the rows.
+	if !strings.Contains(text, "validating…") || !strings.Contains(text, "deploying…") {
+		t.Errorf("expected phase labels in the aggregated display, got:\n%s", text)
+	}
+	// Rows finalize with the passed label + summary still renders below.
+	if !strings.Contains(text, "a  passed") || !strings.Contains(text, "b  passed") {
+		t.Errorf("expected finalized row labels, got:\n%s", text)
+	}
+	if !strings.Contains(text, "2 passed, 0 failed") {
+		t.Errorf("expected the final text report below the block, got:\n%s", text)
+	}
+}
+
+// TestRunTest_Parallel_NonTTYFlatLines drives a parallel text run in disabled
+// (buffer / non-TTY) mode: every scenario must emit its flat start/status lines
+// so piped/CI runs are not silent until the final report.
+func TestRunTest_Parallel_NonTTYFlatLines(t *testing.T) {
+	baseDir := t.TempDir()
+	for _, n := range []string{"a", "b"} {
+		writeScenarioFile(t, baseDir, n, "description: x\n")
+	}
+	// Default liveDisplayEnv: the test's stdout buffer is non-TTY → disabled.
+
+	f := &fakeRunner{}
+	withFakeRunner(t, f)
+	flags := &cmdctx.RootFlags{Root: baseDir}
+	cmd, out, _ := newRunTestCmd()
+
+	if err := runTest(cmd, flags, nil, false, 0, false, 2); err != nil {
+		t.Fatalf("runTest: %v", err)
+	}
+	got := out.String()
+	for _, want := range []string{"scenario a: started", "scenario b: started", "scenario a: passed", "scenario b: passed"} {
+		if !strings.Contains(got, want) {
+			t.Errorf("non-TTY parallel run missing flat line %q, got:\n%s", want, got)
 		}
 	}
 }

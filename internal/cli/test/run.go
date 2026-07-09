@@ -7,7 +7,6 @@ import (
 	"os"
 	"os/signal"
 	"strings"
-	"sync"
 	"syscall"
 	"time"
 
@@ -16,6 +15,7 @@ import (
 	"github.com/semsemyonoff/dwe/internal/core/workflow/envtest"
 	sharedrender "github.com/semsemyonoff/dwe/internal/shared/render"
 
+	"github.com/charmbracelet/x/term"
 	"github.com/spf13/cobra"
 	"golang.org/x/sync/errgroup"
 )
@@ -220,6 +220,28 @@ func runTest(cmd *cobra.Command, flags *cmdctx.RootFlags, args []string, keep bo
 	return runTestParallel(cmd, flags, baseDir, names, effective, keep, timeout, skipIsolationCheck)
 }
 
+// liveDisplayEnv resolves the TTY status + terminal size for the aggregated
+// live display. A package var so tests inject fixed values (force-TTY frames,
+// deterministic height clamp) without a real terminal.
+var liveDisplayEnv = func() (isTTY bool, termSize func() (int, int)) {
+	isTTY = term.IsTerminal(os.Stdout.Fd())
+	termSize = func() (int, int) {
+		w, h, err := term.GetSize(os.Stdout.Fd())
+		if err != nil || w <= 0 || h <= 0 {
+			return liveLineDefaultWidth, liveLineDefaultHeight
+		}
+		return w, h
+	}
+	return isTTY, termSize
+}
+
+// liveLineDefaultWidth / liveLineDefaultHeight back the termSize fallback when
+// the terminal cannot be queried (mirrors liveui's own 80-col default).
+const (
+	liveLineDefaultWidth  = 80
+	liveLineDefaultHeight = 24
+)
+
 // runTestParallel fans the resolved scenarios out over an errgroup capped at
 // `effective` workers. Each scenario writes its outcome into a fixed slot by
 // original index, so text/JSON output is deterministic regardless of
@@ -229,26 +251,33 @@ func runTest(cmd *cobra.Command, flags *cmdctx.RootFlags, args []string, keep bo
 // runs on a fresh context inside the runner); scenarios that never started
 // leave a nil slot and are compacted out.
 //
-// This is the interim (no-display) wiring: deploy/pipeline output is silenced
-// via silentReporterFactory and per-scenario warnings are prefixed and
-// mutex-serialized to stderr. Task 5 routes warnings through the aggregated
-// live display instead.
+// deploy/pipeline output is silenced via silentReporterFactory. In text mode an
+// aggregated live display (one block row per scenario, coarse phase + elapsed)
+// replaces the streaming output; each scenario's Progress events drive its row
+// and per-scenario warnings frame above the block. JSON mode installs no
+// display and keeps warnings suppressed.
 func runTestParallel(cmd *cobra.Command, flags *cmdctx.RootFlags, baseDir string, names []string, effective int, keep bool, timeout time.Duration, skipIsolationCheck bool) error {
 	ctx, stop := signal.NotifyContext(cmd.Context(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
 
 	runner := newRunner()
 
-	// Concurrent bare Fprintln to the shared stderr would race; serialize.
-	var warnMu sync.Mutex
-	makeWarn := func(name string) func(string) {
+	// Aggregated live display in text mode only; JSON stdout must stay clean.
+	var display *runLiveStatus
+	if flags.Output != "json" {
+		isTTY, termSize := liveDisplayEnv()
+		display = newRunLiveStatus(names, isTTY, termSize, cmd.OutOrStdout(), cmd.ErrOrStderr())
+		display.start()
+	}
+
+	makeWarn := func(i int) func(string) {
 		return func(msg string) {
-			if flags.Output == "json" {
+			if display == nil {
+				// JSON mode: warnings stay suppressed (stderr reserved for the
+				// error envelope).
 				return
 			}
-			warnMu.Lock()
-			defer warnMu.Unlock()
-			_, _ = fmt.Fprintln(cmd.ErrOrStderr(), "["+name+"] warning: "+msg)
+			display.Warn(i, msg)
 		}
 	}
 
@@ -260,7 +289,10 @@ func runTestParallel(cmd *cobra.Command, flags *cmdctx.RootFlags, baseDir string
 			if ctx.Err() != nil {
 				return nil
 			}
-			warn := makeWarn(name)
+			if display != nil {
+				display.Started(i)
+			}
+			warn := makeWarn(i)
 			req := envtest.RunRequest{
 				BaseDir:            baseDir,
 				Scenario:           name,
@@ -272,19 +304,29 @@ func runTestParallel(cmd *cobra.Command, flags *cmdctx.RootFlags, baseDir string
 				Warn:               warn,
 				SkipIsolationCheck: skipIsolationCheck,
 			}
+			if display != nil {
+				req.Progress = func(p envtest.ProgressPhase) { display.Phase(i, p) }
+			}
 			res, err := runner.RunScenario(ctx, req)
+			var o scenarioOutcome
 			if err != nil {
 				warn(fmt.Sprintf("scenario %q could not be prepared: %v", name, err))
-				o := scenarioOutcome{Name: name, Status: envtest.StatusError, Message: err.Error()}
-				slots[i] = &o
-				return nil
+				o = scenarioOutcome{Name: name, Status: envtest.StatusError, Message: err.Error()}
+			} else {
+				o = scenarioOutcomeFromResult(res)
 			}
-			o := scenarioOutcomeFromResult(res)
 			slots[i] = &o
+			if display != nil {
+				display.Finished(i, o)
+			}
 			return nil
 		})
 	}
 	_ = g.Wait()
+
+	if display != nil {
+		display.Close()
+	}
 
 	outcomes := make([]scenarioOutcome, 0, len(slots))
 	for _, s := range slots {
