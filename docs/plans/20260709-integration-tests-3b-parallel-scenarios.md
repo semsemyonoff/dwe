@@ -393,17 +393,18 @@ nine liveline invariants untouched.
 
 ### Task 7: Verify acceptance criteria
 
-- [ ] verify spec §7 stage 3 remaining features: parallel execution with disjoint ports;
+- [x] verify spec §7 stage 3 remaining features: parallel execution with disjoint ports;
       aggregated per-scenario status rows; N=1 unchanged
-- [ ] verify every brainstorm-settled decision listed in this plan's Overview (four
+- [x] verify every brainstorm-settled decision listed in this plan's Overview (four
       bullets) and Solution Overview is implemented as recorded
-- [ ] verify N=1 byte-identity: the exact full-match output tests added in task 4 pass
+- [x] verify N=1 byte-identity: the exact full-match output tests added in task 4 pass
       unchanged, and no pre-existing `internal/cli/test` test was modified other than
       additively
-- [ ] run `make test` — full suite green
-- [ ] run `make test-race` — the new concurrency paths (errgroup fan-out, lease set,
-      display mutex) are race-clean
-- [ ] run `make lint` — clean
+- [x] run `make test` — full suite green
+- [x] run `make test-race` — the new concurrency paths (errgroup fan-out, lease set,
+      display mutex) are race-clean (also ran `go test -race` on envtest/cli-test/liveui
+      directly — the make target's default package set excludes them)
+- [x] run `make lint` — clean
 
 ### Task 8: Close out
 
