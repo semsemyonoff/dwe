@@ -408,14 +408,14 @@ nine liveline invariants untouched.
 
 ### Task 8: Close out
 
-- [ ] update `AGENTS.md` critical-patterns stage bullet (integration-tests) with the
+- [x] update `AGENTS.md` critical-patterns stage bullet (integration-tests) with the
       stage-3b contracts: Progress seam is UI-free and nil-guarded; port lease set is
       process-lifetime by design; parallel goroutines must never return errors into the
       errgroup (sibling cancellation hazard); aggregated display only at effective N>1 —
       N=1 stays byte-identical; `silentReporterFactory` serves both JSON and parallel
       text modes
-- [ ] `make build` if AGENTS.md/docs changed in this task
-- [ ] move this plan to `docs/plans/completed/`
+- [x] `make build` if AGENTS.md/docs changed in this task
+- [x] move this plan to `docs/plans/completed/`
 
 ## Post-Completion
 
