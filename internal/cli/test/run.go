@@ -161,6 +161,12 @@ func runTestRun(cmd *cobra.Command, flags *cmdctx.RootFlags, args []string, keep
 		// still records everything.
 		reporterFactory = silentReporterFactory
 	}
+	// In interactive text mode the validate/deploy subprocess output is streamed
+	// to the terminal (defaultReporterFactory), so force color in the subprocess
+	// — its stdout is a pipe and would otherwise render plain. JSON mode streams
+	// nothing to the terminal, and the parallel path (below) uses its own silent
+	// factory, so neither forces color.
+	forceColor := flags.Output != "json" && writerIsTTY(cmd.OutOrStdout())
 
 	outcomes := make([]scenarioOutcome, 0, len(names))
 	for _, name := range names {
@@ -177,6 +183,7 @@ func runTestRun(cmd *cobra.Command, flags *cmdctx.RootFlags, args []string, keep
 			ReporterFactory:    reporterFactory,
 			Warn:               warn,
 			SkipIsolationCheck: skipIsolationCheck,
+			ForceColor:         forceColor,
 		}
 		res, err := runner.RunScenario(ctx, req)
 		if err != nil {

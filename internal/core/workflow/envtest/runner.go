@@ -145,7 +145,11 @@ func defaultReporterFactory(workDir, name string) (pipeline.Reporter, io.Writer,
 	// a silent console until it finishes. termOut is idle during validate/deploy
 	// (the reporter's own live frame only starts with the in-process steps
 	// phase, after the deploy subprocess has returned), so nothing interleaves.
-	subprocOut := io.MultiWriter(termOut, logFile)
+	// termOut gets the raw (possibly colored) subprocess stream so a live deploy
+	// keeps its color on the user's terminal; the log side is ANSI-stripped so
+	// the run log — and, on failure, the report's pipeline.log — stays plain
+	// even when the subprocess is spawned with ForceColor (CLICOLOR_FORCE=1).
+	subprocOut := io.MultiWriter(termOut, stripANSI(logFile))
 	return rep, logFile, subprocOut, func() {
 		rep.Close()
 		cleanup()
@@ -185,6 +189,14 @@ type RunRequest struct {
 	// blocking the scenario — the escape hatch for a project with an
 	// intentional (or false-positive) hazard.
 	SkipIsolationCheck bool
+	// ForceColor spawns the `dwe validate` / `dwe deploy run` subprocesses with
+	// CLICOLOR_FORCE=1 so their output stays colored even though their stdout is
+	// a pipe (the runner streams it to the terminal). The CLI sets this only in
+	// interactive, sequential text mode on a real TTY — never in JSON or
+	// parallel mode, where the subprocess output is not streamed to a terminal.
+	// The run log stays plain regardless (the log side of the tee is
+	// ANSI-stripped in defaultReporterFactory).
+	ForceColor bool
 }
 
 // execDweFunc is the injectable subprocess-spawn seam for `dwe validate` /
@@ -452,6 +464,13 @@ func (r *Runner) RunScenario(ctx context.Context, req RunRequest) (*ScenarioResu
 	}
 
 	extraEnv := []string{"DWE_NONINTERACTIVE=1"}
+	if req.ForceColor {
+		// The subprocess stdout is a pipe (subprocOut), so lipgloss would
+		// downgrade to no-color; force it on so the streamed validate/deploy
+		// output keeps the palette on the user's terminal. TERM/COLORTERM are
+		// inherited, so the profile matches the parent's own rendering.
+		extraEnv = append(extraEnv, "CLICOLOR_FORCE=1")
+	}
 
 	// validate + deploy run as subprocesses; their output goes to subprocOut
 	// (terminal + run log interactively, run log only in JSON mode) so a long

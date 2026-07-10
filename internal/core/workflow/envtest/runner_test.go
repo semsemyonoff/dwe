@@ -131,6 +131,85 @@ func TestRunScenario_HappyPath(t *testing.T) {
 	}
 }
 
+// TestRunScenario_ForceColorEnv verifies that RunRequest.ForceColor controls
+// whether the validate/deploy subprocesses are spawned with CLICOLOR_FORCE=1
+// (so their piped stdout still renders in color when streamed to the terminal).
+func TestRunScenario_ForceColorEnv(t *testing.T) {
+	for _, tc := range []struct {
+		name       string
+		forceColor bool
+		wantForce  bool
+	}{
+		{"force", true, true},
+		{"no-force", false, false},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			dir := writeRunnerFixtureProject(t, "smoke", noStepsScenario)
+			var gotEnv [][]string
+			exec := func(_ context.Context, _ string, extraEnv []string, _, _ io.Writer, _ ...string) error {
+				gotEnv = append(gotEnv, extraEnv)
+				return nil
+			}
+			r := &Runner{
+				execDwe:       exec,
+				allocatePorts: AllocatePorts,
+				newTeardownDeps: func(string, io.Writer) TeardownDeps {
+					return recordingTeardownDeps(new([]string), nil)
+				},
+				clock: time.Now,
+			}
+			res, err := r.RunScenario(context.Background(), RunRequest{
+				BaseDir:         dir,
+				Scenario:        "smoke",
+				ReporterFactory: noopReporterFactory,
+				ForceColor:      tc.forceColor,
+			})
+			if err != nil {
+				t.Fatalf("RunScenario: %v", err)
+			}
+			if res.Status != StatusPassed {
+				t.Fatalf("status = %q, want passed", res.Status)
+			}
+			if len(gotEnv) == 0 {
+				t.Fatal("execDwe was never called")
+			}
+			for i, env := range gotEnv {
+				has := slices.Contains(env, "CLICOLOR_FORCE=1")
+				if has != tc.wantForce {
+					t.Fatalf("call %d env = %v, CLICOLOR_FORCE present=%v want=%v", i, env, has, tc.wantForce)
+				}
+				// DWE_NONINTERACTIVE is always set regardless.
+				if !slices.Contains(env, "DWE_NONINTERACTIVE=1") {
+					t.Fatalf("call %d env = %v, missing DWE_NONINTERACTIVE=1", i, env)
+				}
+			}
+		})
+	}
+}
+
+// TestDefaultReporterFactory_LogSideStripsANSI verifies the production factory
+// keeps the run log plain even when the subprocess streams colored output —
+// the terminal leg keeps color, the log leg is ANSI-stripped.
+func TestDefaultReporterFactory_LogSideStripsANSI(t *testing.T) {
+	dir := t.TempDir()
+	_, _, subprocOut, cleanup, err := defaultReporterFactory(dir, "test")
+	if err != nil {
+		t.Fatalf("defaultReporterFactory: %v", err)
+	}
+	if _, err := io.WriteString(subprocOut, "\x1b[38;2;239;68;68mred\x1b[0m line\n"); err != nil {
+		t.Fatalf("writing to subprocOut: %v", err)
+	}
+	cleanup()
+
+	data, err := os.ReadFile(filepath.Join(dir, ".dwe", "logs", "test.log"))
+	if err != nil {
+		t.Fatalf("reading run log: %v", err)
+	}
+	if got, want := string(data), "red line\n"; got != want {
+		t.Fatalf("run log = %q, want %q (ANSI must be stripped)", got, want)
+	}
+}
+
 // TestRunScenario_SubprocessOutputStreamsToSubprocOut pins that the runner
 // routes the validate/deploy subprocess stdout/stderr to the factory's
 // subprocOut writer (the console+log tee), not the run-log-only writer — the
