@@ -198,7 +198,7 @@ func TestSetPrinterSaveRestore(t *testing.T) {
 	}
 }
 
-func TestRestoreIdempotent(t *testing.T) {
+func TestRestoreOutOfOrderRemovesOnlyOwnEntry(t *testing.T) {
 	reset(t)
 	Configure(nil, LevelVerbose)
 
@@ -207,18 +207,22 @@ func TestRestoreIdempotent(t *testing.T) {
 	b := &capturePrinter{}
 	restoreB := SetPrinter(b)
 
-	// Calling restoreA out of order pops a and everything above it (b too).
+	// Restoring a out of order removes only a's entry; b stays active so its
+	// still-open pipeline keeps receiving diagnostics.
 	restoreA()
-	// Calling restoreB now is a no-op (idempotent / already gone).
-	restoreB()
-	restoreB()
+	Decision(context.Background(), "to-b")
+	// restoreA is idempotent — a second call finds no matching entry.
+	restoreA()
 
-	Decision(context.Background(), "after")
-	if got := a.snapshot(); len(got) != 0 {
-		t.Fatalf("a should be popped, got %v", got)
+	restoreB()
+	// Both gone → falls through (no fallback writer set → no-op, no panic).
+	Decision(context.Background(), "to-nowhere")
+
+	if got := b.snapshot(); len(got) != 1 || got[0] != "to-b" {
+		t.Fatalf("b = %v, want [to-b]", got)
 	}
-	if got := b.snapshot(); len(got) != 0 {
-		t.Fatalf("b should be popped, got %v", got)
+	if got := a.snapshot(); len(got) != 0 {
+		t.Fatalf("a should have received nothing after its restore, got %v", got)
 	}
 }
 
@@ -301,4 +305,57 @@ func TestConcurrentEmitWithCtxPrinter(t *testing.T) {
 	if got := len(global.snapshot()); got != perG {
 		t.Fatalf("global got %d lines, want %d", got, perG)
 	}
+}
+
+// TestConcurrentSetPrinterNoFallthrough models parallel test scenarios: each
+// registers its own global printer, emits, then restores in an arbitrary order.
+// A sibling's restore must never drop another sibling's still-active printer, so
+// no line may leak to the fallback writer while any printer is registered.
+func TestConcurrentSetPrinterNoFallthrough(t *testing.T) {
+	reset(t)
+	var leaked bytes.Buffer
+	Configure(&safeWriter{w: &leaked}, LevelVerbose)
+
+	const goroutines = 16
+	const perG = 50
+	var wg sync.WaitGroup
+	captured := make([]*capturePrinter, goroutines)
+	for i := range goroutines {
+		captured[i] = &capturePrinter{}
+		p := captured[i]
+		wg.Go(func() {
+			restore := SetPrinter(p)
+			for range perG {
+				Decision(context.Background(), "tick")
+			}
+			restore()
+		})
+	}
+	wg.Wait()
+
+	// Every emitted line must have landed on some registered printer, never the
+	// fallback: an out-of-order restore that truncated the stack would leak here.
+	if got := leaked.Len(); got != 0 {
+		t.Fatalf("fallback writer received %d bytes; a sibling printer was dropped", got)
+	}
+	total := 0
+	for _, p := range captured {
+		total += len(p.snapshot())
+	}
+	if total != goroutines*perG {
+		t.Fatalf("captured %d lines total, want %d", total, goroutines*perG)
+	}
+}
+
+// safeWriter serializes concurrent writes to the wrapped buffer so the
+// fallback-leak assertion above is race-free.
+type safeWriter struct {
+	mu sync.Mutex
+	w  *bytes.Buffer
+}
+
+func (s *safeWriter) Write(p []byte) (int, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.w.Write(p)
 }
