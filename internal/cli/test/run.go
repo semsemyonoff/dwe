@@ -325,6 +325,15 @@ func runTestParallel(cmd *cobra.Command, flags *cmdctx.RootFlags, baseDir string
 	_ = g.Wait()
 
 	if display != nil {
+		// A nil slot is a scenario that was queued but never admitted to a
+		// worker before Ctrl+C (it returned early on ctx.Err() without ever
+		// calling Started/Finished). Finalize its pre-seeded pending row as
+		// skipped so cancellation never leaves a queued row looking pending.
+		for i, s := range slots {
+			if s == nil {
+				display.FinalizeCancelled(i)
+			}
+		}
 		display.Close()
 	}
 

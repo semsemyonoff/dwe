@@ -207,6 +207,53 @@ func TestRunLiveStatus_NonTTYFlatLinesEveryScenario(t *testing.T) {
 	}
 }
 
+func TestRunLiveStatus_FinalizeCancelledSkipsPendingRow(t *testing.T) {
+	// A scenario queued but never started (Ctrl+C before its worker slot) must
+	// not linger as a pending row: FinalizeCancelled freezes it to ◎ skipped.
+	d, out, _ := newTestDisplay(t, []string{"started-me", "never-started"}, 24)
+	defer d.Close()
+
+	d.Started(0)
+	d.Finished(0, scenarioOutcome{Name: "started-me", Status: envtest.StatusPassed})
+	out.Reset()
+	d.FinalizeCancelled(1)
+
+	text := stripANSI(out.String())
+	row := lastLineContaining(text, "never-started")
+	if !strings.Contains(row, "◎") {
+		t.Errorf("expected skipped glyph on the cancelled row, got %q", row)
+	}
+	if !strings.Contains(row, "never-started  skipped — cancelled") {
+		t.Errorf("expected skipped-cancelled label, got %q", row)
+	}
+	// The cancelled row must no longer render the pending dot.
+	if strings.Contains(row, "·") {
+		t.Errorf("cancelled row must not stay pending, got %q", row)
+	}
+}
+
+func TestRunLiveStatus_FinalizeCancelledNoOpForOverflowAndDisabled(t *testing.T) {
+	// Overflow scenarios never got a pending row → FinalizeCancelled is a no-op.
+	names := []string{"a", "b", "c", "d", "e"}
+	d, out, _ := newTestDisplay(t, names, 6) // visibleRows = 3, d/e overflow
+	defer d.Close()
+	out.Reset()
+	d.FinalizeCancelled(4) // overflow index
+	if text := stripANSI(out.String()); strings.Contains(text, "skipped") {
+		t.Errorf("overflow scenario must not emit a skipped row, got:\n%s", text)
+	}
+
+	// Disabled mode: no block rows at all → no-op, no panic.
+	var dout, ddiag bytes.Buffer
+	dd := newRunLiveStatus([]string{"x"}, false, func() (int, int) { return 80, 24 }, &dout, &ddiag)
+	dd.start()
+	defer dd.Close()
+	dd.FinalizeCancelled(0)
+	if dout.String() != "" {
+		t.Errorf("disabled mode FinalizeCancelled must emit nothing, got:\n%s", dout.String())
+	}
+}
+
 func TestRunLiveStatus_WarnRoutesToDiag(t *testing.T) {
 	d, out, diag := newTestDisplay(t, []string{"alpha"}, 24)
 	defer d.Close()

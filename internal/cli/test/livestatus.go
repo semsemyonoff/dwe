@@ -169,6 +169,23 @@ func (s *runLiveStatus) Finished(i int, o scenarioOutcome) {
 	s.live.Println(fmt.Sprintf("scenario %s: %s", o.Name, o.Status))
 }
 
+// FinalizeCancelled finalizes scenario i's pre-seeded pending row as skipped
+// (◎ "skipped — cancelled"). It exists for scenarios that were queued but never
+// admitted to a worker slot before Ctrl+C: those goroutines return early without
+// ever calling Started/Finished, so without this their row would linger as
+// "pending" in scrollback after Close() — looking still-queued despite the
+// documented "skips the rest" cancellation. No-op for overflow/disabled
+// scenarios (they never got a pending row) and outside enabled mode. The running
+// counter is untouched (a never-started scenario never incremented it).
+func (s *runLiveStatus) FinalizeCancelled(i int) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if !s.isRow(i) {
+		return
+	}
+	s.live.SetBlockRowFinal(i, liveui.BlockRowSkipped, s.names[i]+"  skipped — cancelled")
+}
+
 // Warn routes a per-scenario warning to the diagnostics writer (stderr in
 // production) framed above the block so the sticky view stays intact.
 func (s *runLiveStatus) Warn(i int, msg string) {
