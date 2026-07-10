@@ -195,7 +195,9 @@ func (s *runLiveStatus) Warn(i int, msg string) {
 	if i >= 0 && i < len(s.names) {
 		name = s.names[i]
 	}
-	s.live.PrintlnDiag(fmt.Sprintf("[%s] warning: %s", name, msg))
+	// Color only in enabled (TTY) mode — matches the block view's own gating and
+	// keeps piped/CI diag output ANSI-free.
+	s.live.PrintlnDiag(styledWarning(name, msg, s.enabled))
 }
 
 // Close returns the LiveLine to single-line mode (leaving the finalized glyph

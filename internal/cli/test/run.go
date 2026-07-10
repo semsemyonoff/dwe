@@ -12,6 +12,7 @@ import (
 
 	"github.com/semsemyonoff/dwe/internal/cli/cmdctx"
 	"github.com/semsemyonoff/dwe/internal/core/execution/pipeline"
+	"github.com/semsemyonoff/dwe/internal/core/ui/styles"
 	"github.com/semsemyonoff/dwe/internal/core/workflow/envtest"
 	sharedrender "github.com/semsemyonoff/dwe/internal/shared/render"
 
@@ -146,12 +147,13 @@ func runTestRun(cmd *cobra.Command, flags *cmdctx.RootFlags, args []string, keep
 	defer stop()
 
 	runner := newRunner()
+	warnColor := writerIsTTY(cmd.ErrOrStderr())
 	warn := func(msg string) {
 		// Stderr in JSON mode is reserved for the error envelope.
 		if flags.Output == "json" {
 			return
 		}
-		_, _ = fmt.Fprintln(cmd.ErrOrStderr(), "warning: "+msg)
+		_, _ = fmt.Fprintln(cmd.ErrOrStderr(), styledWarning("", msg, warnColor))
 	}
 	var reporterFactory envtest.ReporterFactory
 	if flags.Output == "json" {
@@ -361,10 +363,13 @@ func finishTestRun(cmd *cobra.Command, flags *cmdctx.RootFlags, keep bool, outco
 			ReportDir:       o.ReportDir,
 		})
 	}
-	payload.Summary = buildSummary(outcomes)
+	// The JSON payload's summary must stay plain (no ANSI); the text render
+	// picks its own color from the output writer.
+	payload.Summary = buildSummary(outcomes, false)
+	color := writerIsTTY(cmd.OutOrStdout())
 
 	if err := cmdctx.WriteData(flags, cmd, payload, func(testRunJSON) string {
-		return renderTestRunText(outcomes, keep)
+		return renderTestRunText(outcomes, keep, color)
 	}); err != nil {
 		return err
 	}
@@ -447,7 +452,7 @@ func silentReporterFactory(workDir, name string) (pipeline.Reporter, io.Writer, 
 // and StatusError count toward "failed" for this human-readable tally; the
 // parenthetical lists every non-passed scenario with its most specific
 // available detail (failing step, prep-error message, or bare status).
-func buildSummary(outcomes []scenarioOutcome) string {
+func buildSummary(outcomes []scenarioOutcome, color bool) string {
 	passed, failed := 0, 0
 	var details []string
 	for _, o := range outcomes {
@@ -465,9 +470,23 @@ func buildSummary(outcomes []scenarioOutcome) string {
 			details = append(details, fmt.Sprintf("%s: %s", o.Name, o.Status))
 		}
 	}
-	summary := fmt.Sprintf("%d passed, %d failed", passed, failed)
+	passedStr := fmt.Sprintf("%d passed", passed)
+	failedStr := fmt.Sprintf("%d failed", failed)
+	if color {
+		if passed > 0 {
+			passedStr = styles.SuccessStyle().Render(passedStr)
+		} else {
+			passedStr = styles.MutedStyle().Render(passedStr)
+		}
+		if failed > 0 {
+			failedStr = styles.DangerStyle().Render(failedStr)
+		} else {
+			failedStr = styles.MutedStyle().Render(failedStr)
+		}
+	}
+	summary := passedStr + ", " + failedStr
 	if len(details) > 0 {
-		summary += " (" + strings.Join(details, "; ") + ")"
+		summary += " (" + cMuted(strings.Join(details, "; "), color) + ")"
 	}
 	return summary
 }
@@ -475,32 +494,49 @@ func buildSummary(outcomes []scenarioOutcome) string {
 // renderTestRunText renders the per-scenario lines followed by a blank line
 // and the summary. An empty outcome set (no scenarios to run) renders a
 // single explanatory line instead of an empty body.
-func renderTestRunText(outcomes []scenarioOutcome, keep bool) string {
+func renderTestRunText(outcomes []scenarioOutcome, keep, color bool) string {
 	if len(outcomes) == 0 {
 		return "no scenarios to run"
 	}
 	lines := make([]string, 0, len(outcomes)+2)
 	for _, o := range outcomes {
-		lines = append(lines, renderScenarioLine(o, keep))
+		lines = append(lines, renderScenarioLine(o, keep, color))
 	}
-	lines = append(lines, "", buildSummary(outcomes))
+	lines = append(lines, "", buildSummary(outcomes, color))
 	return strings.Join(lines, "\n")
 }
 
-func renderScenarioLine(o scenarioOutcome, keep bool) string {
+// renderScenarioLine renders one outcome line. With color off it is byte-identical
+// to the historical `name: status[ — step "X" | (msg)] [dur]` form (plus any
+// kept/report follow-on lines); with color on it gains a leading ✓/✗/• glyph, an
+// accent name, a severity-colored status word, and muted secondary text.
+func renderScenarioLine(o scenarioOutcome, keep, color bool) string {
+	sev := scenarioSeverity(o.Status)
 	var b strings.Builder
-	fmt.Fprintf(&b, "%s: %s", o.Name, o.Status)
-	if o.FailedStep != "" {
-		fmt.Fprintf(&b, " — step %q", o.FailedStep)
-	} else if o.Message != "" {
-		fmt.Fprintf(&b, " (%s)", o.Message)
+	if g := statusGlyph(sev, color); g != "" {
+		b.WriteString(g)
+		b.WriteByte(' ')
 	}
-	fmt.Fprintf(&b, " [%s]", o.Duration.Round(time.Millisecond))
+	b.WriteString(cName(o.Name, color))
+	b.WriteString(": ")
+	b.WriteString(statusWord(string(o.Status), sev, color))
+	if o.FailedStep != "" {
+		b.WriteString(" — step ")
+		b.WriteString(cMuted(fmt.Sprintf("%q", o.FailedStep), color))
+	} else if o.Message != "" {
+		b.WriteString(" (")
+		b.WriteString(cMuted(o.Message, color))
+		b.WriteString(")")
+	}
+	b.WriteByte(' ')
+	b.WriteString(cMuted(fmt.Sprintf("[%s]", o.Duration.Round(time.Millisecond)), color))
 	if keep && o.ComposeProject != "" {
-		fmt.Fprintf(&b, "\n  kept: compose project %s, copy at %s — run `dwe test clean %s` to remove", o.ComposeProject, o.CopyPath, o.Name)
+		b.WriteString("\n  ")
+		b.WriteString(cMuted(fmt.Sprintf("kept: compose project %s, copy at %s — run `dwe test clean %s` to remove", o.ComposeProject, o.CopyPath, o.Name), color))
 	}
 	if o.ReportDir != "" {
-		fmt.Fprintf(&b, "\n  report: %s", o.ReportDir)
+		b.WriteString("\n  ")
+		b.WriteString(cMuted(fmt.Sprintf("report: %s", o.ReportDir), color))
 	}
 	return b.String()
 }

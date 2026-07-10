@@ -54,22 +54,29 @@ func runTestList(cmd *cobra.Command, flags *cmdctx.RootFlags) error {
 		entries = append(entries, testListEntryJSON{Name: name, Description: scn.Description})
 	}
 
-	return cmdctx.WriteData(flags, cmd, testListJSON{Scenarios: entries}, renderTestListText)
+	color := writerIsTTY(cmd.OutOrStdout())
+	return cmdctx.WriteData(flags, cmd, testListJSON{Scenarios: entries}, func(data testListJSON) string {
+		return renderTestListText(data, color)
+	})
 }
 
 // renderTestListText renders a two-column name/description listing. An empty
-// scenario set renders nothing (no stray output for an absent tests dir).
-func renderTestListText(data testListJSON) string {
+// scenario set renders nothing (no stray output for an absent tests dir). With
+// color off it is byte-identical to the historical `%-24s %s` form; with color
+// on the name carries the accent token and the description the muted token.
+// Padding is applied to the RAW name before styling so the column alignment is
+// not thrown off by ANSI escapes.
+func renderTestListText(data testListJSON, color bool) string {
 	if len(data.Scenarios) == 0 {
 		return ""
 	}
 	lines := make([]string, 0, len(data.Scenarios))
 	for _, e := range data.Scenarios {
 		if e.Description == "" {
-			lines = append(lines, e.Name)
+			lines = append(lines, cName(e.Name, color))
 			continue
 		}
-		lines = append(lines, fmt.Sprintf("%-24s %s", e.Name, e.Description))
+		lines = append(lines, cName(fmt.Sprintf("%-24s", e.Name), color)+" "+cMuted(e.Description, color))
 	}
 	return strings.Join(lines, "\n")
 }
