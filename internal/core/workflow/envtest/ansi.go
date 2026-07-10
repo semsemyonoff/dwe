@@ -3,6 +3,7 @@ package envtest
 import (
 	"bytes"
 	"io"
+	"sync"
 
 	"github.com/charmbracelet/x/ansi"
 )
@@ -27,10 +28,13 @@ const maxPendingESC = 256
 
 type ansiStripper struct {
 	w   io.Writer
-	buf []byte // an incomplete trailing escape sequence carried to the next write
+	mu  sync.Mutex // guards buf: a single stripper may back both a subprocess's stdout and stderr
+	buf []byte     // an incomplete trailing escape sequence carried to the next write
 }
 
 func (a *ansiStripper) Write(p []byte) (int, error) {
+	a.mu.Lock()
+	defer a.mu.Unlock()
 	n := len(p)
 	data := p
 	if len(a.buf) > 0 {

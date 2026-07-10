@@ -119,13 +119,20 @@ func (v *scenariosValidator) validateFile(ctx validate.Context, path string, reg
 	var diags []validate.Diagnostic
 
 	if scn.Timeout != "" {
-		if _, err := time.ParseDuration(scn.Timeout); err != nil {
+		// Mirror resolveScenarioTimeout's runtime contract: a scenario timeout
+		// must parse AND be strictly positive (a non-positive explicit value
+		// would fail the run at resolve time, so surface it here instead).
+		if d, err := time.ParseDuration(scn.Timeout); err != nil || d <= 0 {
+			msg := fmt.Sprintf("invalid timeout %q: %v", scn.Timeout, err)
+			if err == nil {
+				msg = fmt.Sprintf("invalid timeout %q: must be positive", scn.Timeout)
+			}
 			diags = append(diags, validate.Diagnostic{
 				Severity: validate.SeverityError,
 				Domain:   "tests",
 				Target:   target,
 				File:     relFile,
-				Message:  fmt.Sprintf("invalid timeout %q: %v", scn.Timeout, err),
+				Message:  msg,
 			})
 		}
 	}

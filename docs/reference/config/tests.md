@@ -288,7 +288,7 @@ As with `run`/`list`, live output (per-entry warnings) is silenced on stderr in 
 
 ## `dwe validate tests`
 
-```
+```text
 dwe validate tests
 ```
 
@@ -296,7 +296,7 @@ A `dwe validate` domain (`Domain() == "tests"`) that statically checks every `wo
 
 Per file, in order:
 
-- **load** — `LoadScenario` (strict `KnownFields(true)`, empty file rejected); this also covers **name normalisation** (`ValidateScenarioName` against the file basename), so a bad filename surfaces here.
+- **load** — `LoadScenario` (strict `KnownFields(true)`, empty file rejected); this also covers **name validation** (`ValidateScenarioName` rejects — does not rewrite — a bad file basename), so an invalid filename surfaces here.
 - **`timeout:`** — `time.ParseDuration` on the scenario's own `timeout:` field; a parse failure is an error.
 - **`env.services`** — every `enable`/`disable` entry must name a service that exists in the project's merged config; an unknown name is an error.
 - **`steps`** — all steps are rendered and resolved **as one whole phase**, exactly like a real run (`pipeline.ResolvePhaseSteps` over a single synthetic phase) — this catches step schema errors, invalid builtin `with:` params, broken `when:` conditions, and duplicate top-level step names (a per-step check would miss the last one, since uniqueness is a whole-phase invariant). Rendering substitutes any `env.vars` entry whose value is the literal `auto` with a valid placeholder host port, so `${vars.db.port}` renders to a valid int and a `tcp_reachable`/`http_check` step validates normally — a genuinely bad param (e.g. `status: nope`) still errors even next to a templated `url:`. A var populated only **post-deploy** (a `${generated.*}` secret, or a var the deploy itself creates) is absent at validate time and may produce a spurious diagnostic; give it a project-level default to avoid this — the validator sees pre-deploy config, the real run sees post-deploy config.

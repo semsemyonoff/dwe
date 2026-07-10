@@ -141,6 +141,30 @@ steps:
 	}
 }
 
+// TestScenariosValidator_NonPositiveTimeout pins parity with the runtime's
+// resolveScenarioTimeout: a parseable but non-positive scenario timeout (which
+// would fail the run at resolve time) is caught statically here too.
+func TestScenariosValidator_NonPositiveTimeout(t *testing.T) {
+	for _, raw := range []string{"-5m", "0"} {
+		t.Run(raw, func(t *testing.T) {
+			root := writeScenario(t, t.TempDir(), "badtimeout.yml", `
+timeout: `+raw+`
+steps:
+  - name: ping
+    type: shell
+    cmd: echo hi
+`)
+			diags := errorDiags(runFor(root, baseCfg()))
+			if len(diags) != 1 {
+				t.Fatalf("timeout %q: want 1 error diagnostic, got %+v", raw, diags)
+			}
+			if !strings.Contains(diags[0].Message, "must be positive") {
+				t.Errorf("message = %q, want to mention must be positive", diags[0].Message)
+			}
+		})
+	}
+}
+
 func TestScenariosValidator_UnknownServiceReference(t *testing.T) {
 	root := writeScenario(t, t.TempDir(), "badsvc.yml", `
 env:
