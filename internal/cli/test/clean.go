@@ -75,11 +75,12 @@ func runTestClean(cmd *cobra.Command, flags *cmdctx.RootFlags, args []string, dr
 	// Must run before Clean, which tears down via `compose down` (spec §3).
 	envtest.ScrubComposeEnv()
 
+	warnColor := writerIsTTY(cmd.ErrOrStderr())
 	warn := func(msg string) {
 		if flags.Output == "json" {
 			return
 		}
-		_, _ = fmt.Fprintln(cmd.ErrOrStderr(), "warning: "+msg)
+		_, _ = fmt.Fprintln(cmd.ErrOrStderr(), styledWarning("", msg, warnColor))
 	}
 
 	req := envtest.CleanRequest{
@@ -94,7 +95,10 @@ func runTestClean(cmd *cobra.Command, flags *cmdctx.RootFlags, args []string, dr
 	}
 
 	payload := testCleanJSONFromResult(result)
-	if err := cmdctx.WriteData(flags, cmd, payload, renderTestCleanText); err != nil {
+	color := writerIsTTY(cmd.OutOrStdout())
+	if err := cmdctx.WriteData(flags, cmd, payload, func(data testCleanJSON) string {
+		return renderTestCleanText(data, color)
+	}); err != nil {
 		return err
 	}
 
@@ -134,7 +138,11 @@ func testCleanJSONFromResult(result *envtest.CleanResult) testCleanJSON {
 }
 
 // renderTestCleanText renders the per-entry lines followed by a summary line.
-func renderTestCleanText(data testCleanJSON) string {
+// With color off it is byte-identical to the historical plain form; with color
+// on each entry gains a leading ✓/✗/• glyph, an accent scenario name, a
+// severity-colored verb (success for swept, danger for failed, warning for
+// skipped/orphan), and muted secondary text.
+func renderTestCleanText(data testCleanJSON, color bool) string {
 	sweptVerb := "swept"
 	if data.DryRun {
 		sweptVerb = "would sweep"
@@ -142,16 +150,21 @@ func renderTestCleanText(data testCleanJSON) string {
 
 	var lines []string
 	for _, e := range data.Swept {
-		lines = append(lines, fmt.Sprintf("%s: %s (%s)", e.Scenario, sweptVerb, e.ComposeProject))
+		lines = append(lines, cleanEntryLine(sevSuccess, e.Scenario, sweptVerb, e.ComposeProject, color))
 	}
 	for _, e := range data.Skipped {
-		lines = append(lines, fmt.Sprintf("%s: skipped (%s)", e.Scenario, e.Reason))
+		lines = append(lines, cleanEntryLine(sevWarning, e.Scenario, "skipped", e.Reason, color))
 	}
 	for _, e := range data.Failed {
-		lines = append(lines, fmt.Sprintf("%s: failed (%s)", e.Scenario, e.Error))
+		lines = append(lines, cleanEntryLine(sevDanger, e.Scenario, "failed", e.Error, color))
 	}
 	for _, o := range data.Orphans {
-		lines = append(lines, fmt.Sprintf("orphan: %s (%s)", o.ComposeProject, o.Note))
+		// Orphans have no scenario name; the "orphan" tag carries the warning glyph.
+		line := statusWord("orphan", sevWarning, color) + ": " + cMuted(o.ComposeProject, color) + " (" + cMuted(o.Note, color) + ")"
+		if g := statusGlyph(sevWarning, color); g != "" {
+			line = g + " " + line
+		}
+		lines = append(lines, line)
 	}
 
 	summary := fmt.Sprintf("%d %s, %d skipped, %d failed, %d orphan(s)",
@@ -161,4 +174,15 @@ func renderTestCleanText(data testCleanJSON) string {
 	}
 	lines = append(lines, "", summary)
 	return strings.Join(lines, "\n")
+}
+
+// cleanEntryLine formats one `<name>: <verb> (<detail>)` clean entry, byte-identical
+// to the historical form when color is off, with a leading glyph + palette colors
+// when on.
+func cleanEntryLine(sev severity, scenario, verb, detail string, color bool) string {
+	line := cName(scenario, color) + ": " + statusWord(verb, sev, color) + " (" + cMuted(detail, color) + ")"
+	if g := statusGlyph(sev, color); g != "" {
+		line = g + " " + line
+	}
+	return line
 }

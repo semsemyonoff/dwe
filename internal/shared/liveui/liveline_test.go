@@ -455,6 +455,119 @@ func TestLiveLine_SetBlockRowPaintsContent(t *testing.T) {
 	l.Stop()
 }
 
+func TestLiveLine_NeverStartedRowRendersAsRunning(t *testing.T) {
+	// A block row that never received SetBlockRowPending nor SetBlockRowRunning
+	// (the workflow-parallel-runner queued-row case) must render exactly as a
+	// running row: blue spinner + "[0s]" bracket. This pins the byte-identity
+	// the explicit pending flag exists to protect — render must NEVER infer
+	// pending from startTime.IsZero().
+	var term, scr bytes.Buffer
+	l := newTestLiveLine(&term, &scr, true)
+	l.SetText("group")
+	l.Start()
+	l.StartBlock(2)
+	term.Reset()
+	// Drive a redraw without touching either row's state.
+	l.Tick()
+
+	raw := term.String()
+	require.Contains(t, raw, "[0s]", "never-started row shows the [0s] elapsed bracket")
+	require.Contains(t, raw, "\033[38;5;45m", "never-started row uses the blue spinner colour")
+	require.NotContains(t, raw, "\033[0;90m·", "never-started row must NOT render the gray pending dot")
+
+	l.Stop()
+}
+
+func TestLiveLine_SetBlockRowPendingRendersDotNoElapsed(t *testing.T) {
+	g := newTermGrid(10, 80)
+	l := newTestLiveLine(g, g, true)
+	l.SetText("group")
+	l.Start()
+	l.StartBlock(2)
+	l.SetBlockRowPending(0, "scenario-a")
+	l.SetBlockRowRunning(1, "scenario-b running")
+
+	// Pending row: dot glyph + label, NO elapsed bracket.
+	require.Contains(t, g.line(0), IconRunning)
+	require.Contains(t, g.line(0), "scenario-a")
+	require.NotContains(t, g.line(0), "[", "pending row omits the elapsed bracket")
+	// Running row still carries an elapsed bracket.
+	require.Contains(t, g.line(1), "scenario-b running")
+	require.Contains(t, g.line(1), "[")
+
+	l.Stop()
+}
+
+func TestLiveLine_SetBlockRowPendingUsesGrayDot(t *testing.T) {
+	var term, scr bytes.Buffer
+	l := newTestLiveLine(&term, &scr, true)
+	l.SetText("group")
+	l.Start()
+	l.StartBlock(1)
+	term.Reset()
+	l.SetBlockRowPending(0, "queued")
+
+	raw := term.String()
+	// The pending row is "  <gray>·<reset> queued" — the dot is immediately
+	// followed by the label with NO elapsed bracket in between (the footer's
+	// own [0s] is unrelated and lives on a separate row).
+	require.Contains(t, raw, "  \033[0;90m"+IconRunning+"\033[0m queued\n",
+		"pending row = gray dot + label, no elapsed bracket")
+
+	l.Stop()
+}
+
+func TestLiveLine_PendingToRunningToFinal(t *testing.T) {
+	g := newTermGrid(10, 80)
+	l := newTestLiveLine(g, g, true)
+	l.SetText("group")
+	l.Start()
+	l.StartBlock(1)
+
+	// Pending: dot, no bracket.
+	l.SetBlockRowPending(0, "s")
+	require.Contains(t, g.line(0), IconRunning)
+	require.NotContains(t, g.line(0), "[")
+
+	// Running: SetBlockRowRunning clears pending, starts the stopwatch, and the
+	// elapsed bracket appears.
+	l.SetBlockRowRunning(0, "s running")
+	require.Contains(t, g.line(0), "s running")
+	require.Contains(t, g.line(0), "[0s]")
+	require.False(t, l.blockSlots[0].pending, "SetBlockRowRunning clears pending")
+	require.False(t, l.blockSlots[0].startTime.IsZero(), "stopwatch started on first running call")
+
+	// Final: frozen glyph + label.
+	l.SetBlockRowFinal(0, BlockRowDone, "s passed")
+	require.Contains(t, g.line(0), IconDone)
+	require.Contains(t, g.line(0), "s passed")
+	require.False(t, l.blockSlots[0].pending, "SetBlockRowFinal clears pending")
+
+	l.Stop()
+}
+
+func TestLiveLine_SetBlockRowPendingOutOfRangeAndDisabled(t *testing.T) {
+	g := newTermGrid(10, 80)
+	l := newTestLiveLine(g, g, true)
+	l.SetText("group")
+	l.Start()
+	l.StartBlock(2)
+	// Out-of-range idx: silent no-op, no panic, rows unchanged (still blank).
+	l.SetBlockRowPending(-1, "ignored")
+	l.SetBlockRowPending(99, "ignored")
+	require.NotContains(t, g.line(0), "ignored")
+	require.NotContains(t, g.line(1), "ignored")
+	l.Stop()
+
+	// Disabled mode: every block method is a no-op; must not panic.
+	var term, scr bytes.Buffer
+	d := NewLiveLine(&term, &scr, false)
+	d.StartBlock(2)
+	d.SetBlockRowPending(0, "ignored")
+	require.Empty(t, term.String())
+	require.Empty(t, scr.String())
+}
+
 func TestLiveLine_PrintlnInBlockMode(t *testing.T) {
 	g := newTermGrid(10, 80)
 	l := newTestLiveLine(g, g, true)

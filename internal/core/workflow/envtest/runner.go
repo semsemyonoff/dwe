@@ -44,6 +44,33 @@ const reportTimeout = 2 * time.Minute
 // "foo" must not match "foo-bar-<runid>.yml").
 var manifestRunIDSuffix = regexp.MustCompile(`^[0-9a-f]{6}\.yml$`)
 
+// ProgressPhase is a coarse, UI-free progress signal fired by RunScenario at
+// the natural start of each major phase. It exists so the CLI can drive an
+// aggregated per-scenario status display without envtest importing any UI
+// package (layering preserved). The CLI maps each phase to a display label.
+type ProgressPhase string
+
+const (
+	// PhasePreparing fires after the kept-run guard + config load, immediately
+	// before the project tree is copied.
+	PhasePreparing ProgressPhase = "preparing"
+	// PhaseValidating fires before the `dwe validate` subprocess.
+	PhaseValidating ProgressPhase = "validating"
+	// PhaseDeploying fires before the `dwe deploy run --silent` subprocess.
+	PhaseDeploying ProgressPhase = "deploying"
+	// PhaseDeployRetry fires before the one deploy retry with freshly
+	// allocated ports (only on the retry path).
+	PhaseDeployRetry ProgressPhase = "deploy_retry"
+	// PhaseRunningSteps fires before the scenario's in-process steps run.
+	PhaseRunningSteps ProgressPhase = "running_steps"
+	// PhaseCollectingReport fires inside finish() only when failure-report
+	// collection actually runs (not passed, not --keep).
+	PhaseCollectingReport ProgressPhase = "collecting_report"
+	// PhaseTearingDown fires inside teardown() only when teardown actually
+	// runs (never under --keep).
+	PhaseTearingDown ProgressPhase = "tearing_down"
+)
+
 // ScenarioStatus is the outcome of a single scenario run.
 type ScenarioStatus string
 
@@ -118,7 +145,11 @@ func defaultReporterFactory(workDir, name string) (pipeline.Reporter, io.Writer,
 	// a silent console until it finishes. termOut is idle during validate/deploy
 	// (the reporter's own live frame only starts with the in-process steps
 	// phase, after the deploy subprocess has returned), so nothing interleaves.
-	subprocOut := io.MultiWriter(termOut, logFile)
+	// termOut gets the raw (possibly colored) subprocess stream so a live deploy
+	// keeps its color on the user's terminal; the log side is ANSI-stripped so
+	// the run log — and, on failure, the report's pipeline.log — stays plain
+	// even when the subprocess is spawned with ForceColor (CLICOLOR_FORCE=1).
+	subprocOut := io.MultiWriter(termOut, stripANSI(logFile))
 	return rep, logFile, subprocOut, func() {
 		rep.Close()
 		cleanup()
@@ -148,6 +179,24 @@ type RunRequest struct {
 	// copy fallback, teardown step failures, retry attempts); nil discards
 	// them.
 	Warn func(string)
+	// Progress receives coarse, UI-free phase transitions as each phase
+	// starts (see ProgressPhase). It lets the CLI drive an aggregated
+	// per-scenario status display without envtest importing any UI package;
+	// nil is a no-op (mirroring Warn).
+	Progress func(phase ProgressPhase)
+	// SkipIsolationCheck downgrades every compose-isolation finding
+	// (container_name:, literal host ports, …) to a warning instead of
+	// blocking the scenario — the escape hatch for a project with an
+	// intentional (or false-positive) hazard.
+	SkipIsolationCheck bool
+	// ForceColor spawns the `dwe validate` / `dwe deploy run` subprocesses with
+	// CLICOLOR_FORCE=1 so their output stays colored even though their stdout is
+	// a pipe (the runner streams it to the terminal). The CLI sets this only in
+	// interactive, sequential text mode on a real TTY — never in JSON or
+	// parallel mode, where the subprocess output is not streamed to a terminal.
+	// The run log stays plain regardless (the log side of the tee is
+	// ANSI-stripped in defaultReporterFactory).
+	ForceColor bool
 }
 
 // execDweFunc is the injectable subprocess-spawn seam for `dwe validate` /
@@ -245,9 +294,21 @@ func (r *Runner) RunScenario(ctx context.Context, req RunRequest) (*ScenarioResu
 	if req.Scenario == "" {
 		return nil, fmt.Errorf("envtest: RunRequest.Scenario is required")
 	}
+	// Reject a name that could escape the test root before any path is built
+	// from it: every path below (LockPath / RunDir / ManifestPath / the copy
+	// root fed to os.RemoveAll) is derived from req.Scenario. LoadScenario only
+	// validates the file's basename, so a traversal name like "../../foo" would
+	// otherwise slip through here even though the production caller pre-validates.
+	if err := ValidateScenarioName(req.Scenario); err != nil {
+		return nil, fmt.Errorf("envtest: %w", err)
+	}
 	warn := req.Warn
 	if warn == nil {
 		warn = func(string) {}
+	}
+	progress := req.Progress
+	if progress == nil {
+		progress = func(ProgressPhase) {}
 	}
 
 	start := r.clock()
@@ -293,6 +354,7 @@ func (r *Runner) RunScenario(ctx context.Context, req RunRequest) (*ScenarioResu
 	copyRoot := RunDir(req.BaseDir, req.Scenario)
 	manifestPath := ManifestPath(req.BaseDir, req.Scenario, runID)
 
+	progress(PhasePreparing)
 	if err := CopyTree(req.BaseDir, copyRoot, config.GitBin(origCfg), warn); err != nil {
 		return fail("copying project tree", err)
 	}
@@ -349,6 +411,7 @@ func (r *Runner) RunScenario(ctx context.Context, req RunRequest) (*ScenarioResu
 		if req.Keep {
 			return
 		}
+		progress(PhaseTearingDown)
 		tctx, tcancel := context.WithTimeout(context.Background(), teardownTimeout)
 		defer tcancel()
 		deps := r.newTeardownDeps(manifestPath, logWriter)
@@ -369,6 +432,7 @@ func (r *Runner) RunScenario(ctx context.Context, req RunRequest) (*ScenarioResu
 		// --keep (the live environment is its own "report"). Always a fresh
 		// context — scenarioCtx may already be cancelled (timeout).
 		if r.collectReport != nil && !req.Keep && status != StatusPassed {
+			progress(PhaseCollectingReport)
 			rctx, rcancel := context.WithTimeout(context.Background(), reportTimeout)
 			dir, err := r.collectReport(rctx, manifest, warn)
 			rcancel()
@@ -395,11 +459,23 @@ func (r *Runner) RunScenario(ctx context.Context, req RunRequest) (*ScenarioResu
 	logWriter = lw
 	defer cleanup()
 
+	if scanComposeIsolationGate(copyRoot, req.SkipIsolationCheck, warn) {
+		return finish(StatusFailed, "")
+	}
+
 	extraEnv := []string{"DWE_NONINTERACTIVE=1"}
+	if req.ForceColor {
+		// The subprocess stdout is a pipe (subprocOut), so lipgloss would
+		// downgrade to no-color; force it on so the streamed validate/deploy
+		// output keeps the palette on the user's terminal. TERM/COLORTERM are
+		// inherited, so the profile matches the parent's own rendering.
+		extraEnv = append(extraEnv, "CLICOLOR_FORCE=1")
+	}
 
 	// validate + deploy run as subprocesses; their output goes to subprocOut
 	// (terminal + run log interactively, run log only in JSON mode) so a long
 	// deploy streams progress live instead of a silent console until it ends.
+	progress(PhaseValidating)
 	if err := r.execDwe(scenarioCtx, copyRoot, extraEnv, subprocOut, subprocOut, "validate"); err != nil {
 		warn(fmt.Sprintf("dwe validate failed: %v", err))
 		return finish(StatusError, "")
@@ -411,6 +487,7 @@ func (r *Runner) RunScenario(ctx context.Context, req RunRequest) (*ScenarioResu
 	// error) would just double the wall-clock cost of every genuine failure
 	// before reporting it anyway; hasAllocatedPorts is true for nearly every
 	// project, so it cannot be the sole gate.
+	progress(PhaseDeploying)
 	deployTail := &tailRecorder{limit: deployTailLimit}
 	deployOut := io.MultiWriter(subprocOut, deployTail)
 	deployErr := r.execDwe(scenarioCtx, copyRoot, extraEnv, deployOut, deployOut, "deploy", "run", "--silent")
@@ -420,6 +497,7 @@ func (r *Runner) RunScenario(ctx context.Context, req RunRequest) (*ScenarioResu
 	if deployErr != nil && hasAllocatedPorts(origCfg, scn) &&
 		isPortBindConflict(deployTail.String()+"\n"+deployErr.Error()) {
 		warn(fmt.Sprintf("deploy failed on a port conflict, retrying once with freshly allocated ports: %v", deployErr))
+		progress(PhaseDeployRetry)
 		deployErr = r.retryDeployWithFreshPorts(scenarioCtx, copyRoot, extraEnv, subprocOut, origCfg, seedLocal, scn, composeProject, warn)
 	}
 	if deployErr != nil {
@@ -427,6 +505,7 @@ func (r *Runner) RunScenario(ctx context.Context, req RunRequest) (*ScenarioResu
 		return finish(StatusFailed, "")
 	}
 
+	progress(PhaseRunningSteps)
 	failedStep, err := r.runSteps(scenarioCtx, copyRoot, scn, req, rep, logWriter)
 	if err != nil {
 		warn(fmt.Sprintf("scenario steps failed: %v", err))
@@ -434,6 +513,45 @@ func (r *Runner) RunScenario(ctx context.Context, req RunRequest) (*ScenarioResu
 	}
 
 	return finish(StatusPassed, "")
+}
+
+// scanComposeIsolationGate best-effort loads the copy's own config and scans
+// its raw compose files for constructs that bypass Docker-Compose
+// project-name scoping (config.ScanComposeIsolation). Every finding is
+// printed as a warning; it reports true (block the scenario) only when at
+// least one finding is Blocking and skipIsolationCheck is false. If the copy
+// config fails to load, the scan is skipped entirely — the subsequent `dwe
+// validate` subprocess surfaces the real config error.
+func scanComposeIsolationGate(copyRoot string, skipIsolationCheck bool, warn func(string)) bool {
+	copyCfg, err := config.LoadConfigOrWrap(filepath.Join(copyRoot, "workspace.yml"))
+	if err != nil {
+		return false
+	}
+
+	findings := config.ScanComposeIsolation(copyCfg, copyRoot)
+	if len(findings) == 0 {
+		return false
+	}
+
+	var blocking []config.IsolationFinding
+	for _, f := range findings {
+		warn(fmt.Sprintf("compose isolation: %s", f.Message))
+		if f.Blocking {
+			blocking = append(blocking, f)
+		}
+	}
+	if len(blocking) == 0 || skipIsolationCheck {
+		return false
+	}
+
+	msgs := make([]string, len(blocking))
+	for i, f := range blocking {
+		msgs[i] = f.Message
+	}
+	warn(fmt.Sprintf(
+		"blocking compose isolation hazard(s), refusing to run: %s — pass --skip-isolation-check to downgrade to a warning",
+		strings.Join(msgs, "; ")))
+	return true
 }
 
 // hasAllocatedPorts reports whether the copy's local.yml carried any

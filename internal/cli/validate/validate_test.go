@@ -1066,3 +1066,60 @@ func TestValidateBridgeTextHeader(t *testing.T) {
 	require.Contains(t, out, "host-bridge service settings")
 	require.Contains(t, out, `"sometimes"`)
 }
+
+// writeTestsFixture writes a minimal project with a workspace/tests/*.yml
+// scenario carrying an unparseable timeout — one tests-domain error.
+func writeTestsFixture(t *testing.T) (workspacePath string) {
+	t.Helper()
+	tmpDir := t.TempDir()
+	workspacePath = filepath.Join(tmpDir, "workspace.yml")
+	require.NoError(t, os.WriteFile(workspacePath, []byte("project:\n  name: test\n"), 0o644))
+	testsDir := filepath.Join(tmpDir, "workspace", "tests")
+	require.NoError(t, os.MkdirAll(testsDir, 0o755))
+	require.NoError(t, os.WriteFile(filepath.Join(testsDir, "smoke.yml"), []byte(
+		"timeout: not-a-duration\nsteps:\n  - name: ping\n    type: shell\n    cmd: echo hi\n",
+	), 0o644))
+	return workspacePath
+}
+
+func TestValidateTestsSubcommand(t *testing.T) {
+	cmd := NewCmd("", &cmdctx.RootFlags{})
+	testsCmd, _, _ := cmd.Find([]string{"tests"})
+	require.NotNil(t, testsCmd)
+	require.Equal(t, "tests", testsCmd.Name())
+	require.NotNil(t, testsCmd.Args)
+	require.True(t, testsCmd.SilenceUsage)
+}
+
+// TestValidateTestsRunsTestsDomainOnly: `dwe validate tests` scopes execution
+// to the tests domain and surfaces only its diagnostics.
+func TestValidateTestsRunsTestsDomainOnly(t *testing.T) {
+	workspacePath := writeTestsFixture(t)
+
+	stdout, _ := runValidateJSONCmd(t, workspacePath, "tests")
+
+	var got validateJSON
+	require.NoError(t, json.Unmarshal([]byte(stdout), &got))
+	require.Equal(t, 1, got.Summary.Error)
+	require.Len(t, got.Diagnostics, 1)
+	require.True(t, strings.HasPrefix(got.Diagnostics[0].Scope, "tests/"),
+		"scoped run must emit only tests-domain rows, got scope %q", got.Diagnostics[0].Scope)
+}
+
+// TestValidateFullRunIncludesTestsDomain: the tests domain is registered in
+// buildRegistry, so an unscoped `dwe validate` surfaces its diagnostics too.
+func TestValidateFullRunIncludesTestsDomain(t *testing.T) {
+	workspacePath := writeTestsFixture(t)
+
+	stdout, _ := runValidateJSONCmd(t, workspacePath)
+
+	var got validateJSON
+	require.NoError(t, json.Unmarshal([]byte(stdout), &got))
+	var testsScopes []string
+	for _, d := range got.Diagnostics {
+		if strings.HasPrefix(d.Scope, "tests/") {
+			testsScopes = append(testsScopes, d.Scope)
+		}
+	}
+	require.Len(t, testsScopes, 1, "full run must include the tests domain rows")
+}

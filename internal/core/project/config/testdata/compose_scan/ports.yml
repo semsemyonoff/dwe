@@ -1,0 +1,39 @@
+services:
+  literal:
+    image: busybox
+    ports:
+      - "8080:80"
+  range:
+    image: busybox
+    ports:
+      - "8080-8090:80-90"
+  envvar:
+    image: busybox
+    ports:
+      - "${PORT}:80"
+  containeronly:
+    image: busybox
+    ports:
+      - "80"
+  withip:
+    image: busybox
+    ports:
+      - "127.0.0.1:8080:80"
+  proto:
+    image: busybox
+    ports:
+      - "8080:80/tcp"
+  ipv6:
+    image: busybox
+    ports:
+      - "[::1]:8080:80"
+  longform:
+    image: busybox
+    ports:
+      - target: 80
+        published: "8080"
+  longformbare:
+    image: busybox
+    ports:
+      - target: 80
+        published: 8080

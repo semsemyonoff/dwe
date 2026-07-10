@@ -1,4 +1,4 @@
-> Translated from: reference/concepts/project-layout.md @ 0feff3f706b7
+> Translated from: reference/concepts/project-layout.md @ 03ed9b37f7b7
 
 # Раскладка проекта
 
@@ -112,6 +112,7 @@ project:
 | `workspace/info.yml` | Элементы информационной панели (заголовок, URL, хосты, команды, пользовательские секции) | Рендерер `dwe info` | Автор вручную | да |
 | `workspace/setup.yml` | Вопросы мастера настройки (input / confirm / select / multiselect) | Workflow setup | Автор вручную | да |
 | `workspace/validate.yml` | Проверки готовности проекта (`shell` / `file_exists` / `tcp_reachable` / …) | `dwe validate` + preflight | Автор вручную | да |
+| `workspace/tests/` | Сценарии интеграционных тестов (`<name>.yml`), запускаемые на одноразовой копии проекта | `dwe test` / `dwe validate tests` | Автор вручную | да |
 | `workspace/docker.yml` | Слой оркестрации compose: шаблон имени проекта, список файлов, топология, скрытые сервисы | Подсистема Docker | Автор вручную | да |
 | `workspace/docker.local.yml` | Переопределения compose на разработчика, глубоко смерженные поверх `docker.yml` | Подсистема Docker | Автор вручную | нет |
 | `workspace/styles.yml` | Палитра семантических токенов (accent / success / warning / danger / muted / border / text) | UI-стилизация | Автор вручную | да |

@@ -5,6 +5,7 @@ import (
 	"runtime"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/semsemyonoff/dwe/internal/core/execution/condition"
 	"github.com/semsemyonoff/dwe/internal/core/execution/filesgate"
@@ -647,4 +648,101 @@ func TestResolveStepWhen(t *testing.T) {
 			t.Fatalf("unexpected error message: %v", err)
 		}
 	})
+}
+
+func TestParseStepTimeout(t *testing.T) {
+	tests := []struct {
+		name    string
+		raw     string
+		want    time.Duration
+		wantErr bool
+	}{
+		{name: "absent", raw: "", want: 0},
+		{name: "explicit zero", raw: "0", want: 0},
+		{name: "positive", raw: "90s", want: 90 * time.Second},
+		{name: "invalid", raw: "abc", wantErr: true},
+		{name: "negative", raw: "-1s", wantErr: true},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got, err := parseStepTimeout(tt.raw, "init/s")
+			if tt.wantErr {
+				if err == nil {
+					t.Fatalf("expected error for %q", tt.raw)
+				}
+				return
+			}
+			if err != nil {
+				t.Fatalf("unexpected error: %v", err)
+			}
+			if got != tt.want {
+				t.Fatalf("parseStepTimeout(%q) = %v, want %v", tt.raw, got, tt.want)
+			}
+		})
+	}
+}
+
+func TestResolvePhaseSteps_timeoutPopulatesResolvedStep(t *testing.T) {
+	cfg := &config.DweConfig{}
+	phase := config.DeployPhase{
+		Name: "init",
+		Steps: []config.DeployStep{
+			{Name: "a", Type: "shell", Cmd: "echo a", Timeout: "90s"},
+			{Name: "b", Type: "shell", Cmd: "echo b"},
+		},
+	}
+	resolved, err := ResolvePhaseSteps(cfg, nil, phase, "")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if len(resolved) != 2 {
+		t.Fatalf("expected 2 resolved steps, got %d", len(resolved))
+	}
+	if resolved[0].Timeout != 90*time.Second {
+		t.Errorf("resolved[0].Timeout = %v, want 90s", resolved[0].Timeout)
+	}
+	if resolved[1].Timeout != 0 {
+		t.Errorf("resolved[1].Timeout = %v, want 0 (absent)", resolved[1].Timeout)
+	}
+}
+
+func TestResolvePhaseSteps_invalidTimeoutIsResolveError(t *testing.T) {
+	cfg := &config.DweConfig{}
+	phase := config.DeployPhase{
+		Name: "init",
+		Steps: []config.DeployStep{
+			{Name: "a", Type: "shell", Cmd: "echo a", Timeout: "not-a-duration"},
+		},
+	}
+	_, err := ResolvePhaseSteps(cfg, nil, phase, "")
+	if err == nil {
+		t.Fatal("expected error for invalid timeout")
+	}
+	if !strings.Contains(err.Error(), "init/a") {
+		t.Fatalf("error should name the step: %v", err)
+	}
+}
+
+func TestResolvePhaseSteps_parallelSubStepCarriesOwnTimeout(t *testing.T) {
+	cfg := &config.DweConfig{}
+	phase := config.DeployPhase{
+		Name: "init",
+		Steps: []config.DeployStep{
+			newParallelStep("group", 0, nil,
+				config.DeployStep{Name: "a", Type: "shell", Cmd: "echo a", Timeout: "5s"},
+				config.DeployStep{Name: "b", Type: "shell", Cmd: "echo b"},
+			),
+		},
+	}
+	resolved, err := ResolvePhaseSteps(cfg, nil, phase, "")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	rp := resolved[0].Parallel
+	if rp.Steps[0].Timeout != 5*time.Second {
+		t.Errorf("substep a Timeout = %v, want 5s", rp.Steps[0].Timeout)
+	}
+	if rp.Steps[1].Timeout != 0 {
+		t.Errorf("substep b Timeout = %v, want 0 (absent)", rp.Steps[1].Timeout)
+	}
 }

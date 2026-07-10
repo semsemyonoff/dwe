@@ -1,0 +1,4 @@
+services:
+  app:
+    image: busybox
+    container_name: fixed-name

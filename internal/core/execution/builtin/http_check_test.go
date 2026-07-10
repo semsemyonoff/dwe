@@ -31,6 +31,7 @@ func TestHTTPCheckValidate(t *testing.T) {
 		{"bad status type", map[string]any{"url": "http://x", "status": "abc"}, "invalid integer"},
 		{"negative retries", map[string]any{"url": "http://x", "retries": -1}, "must be >= 0"},
 		{"bad retries type", map[string]any{"url": "http://x", "retries": "abc"}, "invalid integer"},
+		{"negative interval", map[string]any{"url": "http://x", "interval": "-1s"}, "param 'interval': must be >= 0"},
 		{"bad interval", map[string]any{"url": "http://x", "interval": "nope"}, "invalid duration"},
 		{"bad timeout", map[string]any{"url": "http://x", "timeout": "nope"}, "invalid duration"},
 		{"zero timeout", map[string]any{"url": "http://x", "timeout": "0s"}, "must be > 0"},

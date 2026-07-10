@@ -863,9 +863,32 @@ func executeStepBody(ctx context.Context, opts RunOptions, rs ResolvedStep, addr
 		SubStepOverrides: rs.Step.SubStepOverrides,
 		CallerCtx:        bodyCallerCtx,
 	}
+	// Per-step timeout: opt-in, bounds the body only (not the check: action
+	// below, which is a fast skip-predicate rather than the work itself). The
+	// timeout is enforced via context cancellation, so it only bounds bodies
+	// that honor ctx — shell/dwe subprocesses (SIGTERM via bindCancelTerm,
+	// then force-kill), ctx-aware builtins, and command steps whose work
+	// honors ctx. A body blocked on interactive input (e.g. a confirm builtin
+	// waiting on stdin) ignores ctx and is NOT force-interrupted by its
+	// timeout — the deadline fires but the goroutine stays blocked until
+	// input arrives. Out of scope for 3a; see plan docs/plans for rationale.
+	bodyCtx := ctx
+	var cancel context.CancelFunc
+	if rs.Timeout > 0 {
+		bodyCtx, cancel = context.WithTimeout(ctx, rs.Timeout)
+	}
 	startTime := time.Now()
-	stepErr := ExecAction(ctx, rs.Step.Action(), bodyActx)
+	stepErr := ExecAction(bodyCtx, rs.Step.Action(), bodyActx)
 	durationMs := time.Since(startTime).Milliseconds()
+	if cancel != nil {
+		// Discriminate a step timeout from an outer cancellation (e.g.
+		// Ctrl+C): only relabel the error when the outer ctx is still alive
+		// and the step's own deadline is what fired.
+		if stepErr != nil && ctx.Err() == nil && errors.Is(bodyCtx.Err(), context.DeadlineExceeded) {
+			stepErr = fmt.Errorf("step %q timed out after %s", rs.Step.Name, rs.Timeout)
+		}
+		cancel()
+	}
 	if flushTee != nil {
 		flushTee()
 	}

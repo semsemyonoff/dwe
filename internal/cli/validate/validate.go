@@ -25,6 +25,7 @@ import (
 	valsetup "github.com/semsemyonoff/dwe/internal/core/validate/setup"
 	valsnap "github.com/semsemyonoff/dwe/internal/core/validate/snapshot"
 	valtmpl "github.com/semsemyonoff/dwe/internal/core/validate/templates"
+	valtests "github.com/semsemyonoff/dwe/internal/core/validate/tests"
 	"github.com/semsemyonoff/dwe/internal/core/workflow/setup"
 	"github.com/semsemyonoff/dwe/internal/shared/i18n"
 
@@ -222,7 +223,7 @@ Exit code:
   1 - one or more errors, or warnings with --strict
 
 Scope targets:
-  dwe validate                                   - all (config + templates + commands + env + checks + linters + translations + snapshot + bridge)
+  dwe validate                                   - all (config + templates + commands + env + checks + linters + translations + snapshot + bridge + tests)
   dwe validate config                            - all config validators
   dwe validate config <workspace|services|...>   - specific config validator
   dwe validate templates                         - all template validators (ide, ai, git)
@@ -234,6 +235,7 @@ Scope targets:
   dwe validate translations                      - translation files in workspace/i18n/
   dwe validate snapshot [<name>]                 - snapshot config + on-disk integrity
   dwe validate bridge                            - host-bridge service settings (bridge: blocks)
+  dwe validate tests                             - workspace/tests/ integration-test scenarios
 `,
 		Args:         cobra.NoArgs,
 		SilenceUsage: true,
@@ -369,6 +371,12 @@ Scope targets:
 		"Validate host-bridge service settings",
 		`Check per-service bridge: blocks in workspace/services/<name>/service.yml — the on_unreachable policy, shim_path, and the workspace mapping bridged services need for working-directory translation.`,
 		"bridge"))
+
+	// Integration-test scenarios (tests domain).
+	cmd.AddCommand(newValidateLeafCmd(flags, &strict, &quiet, &stage, "tests",
+		"Validate workspace/tests/ scenario files",
+		`Check workspace/tests/*.yml scenario files for schema errors, timeout parse errors, unknown service/command references, step resolution failures, and compose isolation warnings.`,
+		"tests"))
 
 	return cmd
 }
@@ -619,7 +627,7 @@ func validateHeader(scope []string, stage string) string {
 // validateScopeLabel produces a human label for the scope being validated.
 func validateScopeLabel(scope []string) string {
 	if len(scope) == 0 {
-		return "your project (config, templates, commands, environment, project checks, linters, translations, snapshots, and host-bridge settings)"
+		return "your project (config, templates, commands, environment, project checks, linters, translations, snapshots, host-bridge settings, and integration-test scenarios)"
 	}
 	switch scope[0] {
 	case "config":
@@ -657,6 +665,8 @@ func validateScopeLabel(scope []string) string {
 		return "your snapshot configuration and on-disk snapshots"
 	case "bridge":
 		return "your host-bridge service settings (bridge: blocks in service.yml)"
+	case "tests":
+		return "your integration-test scenarios (workspace/tests/)"
 	}
 	return strings.Join(scope, " ")
 }
@@ -736,6 +746,9 @@ func buildRegistry(cfg *config.DweConfig, validateCfg *config.ValidateConfig, va
 		lintersLoadErr = nil
 	}
 	for _, v := range vallinters.All(validateCfg, lintersLoadErr, baseDir, userCfg) {
+		reg.Register(v)
+	}
+	for _, v := range valtests.All() {
 		reg.Register(v)
 	}
 	return reg

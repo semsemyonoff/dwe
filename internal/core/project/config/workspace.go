@@ -437,6 +437,11 @@ type DeployStep struct {
 	// Only valid when Type == "command" and the target command is a workflow.
 	// Plan-time validation lives in internal/core/execution/pipeline.ResolvePhaseSteps.
 	SubStepOverrides map[string]SubStepOverride `yaml:"sub_step_overrides,omitempty"`
+	// Timeout bounds this step's body execution (raw duration string, e.g.
+	// "90s"; parsed at resolve time — see pipeline.ResolvedStep.Timeout).
+	// Purely opt-in: absent or "0" leaves the step unbounded exactly as today.
+	// Leaf-only: meaningless on a parallel group (its substeps carry their own).
+	Timeout string `yaml:"timeout,omitempty"`
 }
 
 // SubStepOverride is the pipeline-side overlay for a single workflow sub-step.
@@ -476,12 +481,13 @@ var deployStepKnownFields = map[string]bool{
 	"untracked":          true,
 	"parallel":           true,
 	"sub_step_overrides": true,
+	"timeout":            true,
 }
 
 // deployStepLeafOnlyFields are keys that may appear only on a leaf step
 // (Parallel == nil). Their presence alongside parallel: is a hard error.
 var deployStepLeafOnlyFields = []string{
-	"type", "cmd", "with", "check", "files_gate", "continue_on_error", "sub_step_overrides",
+	"type", "cmd", "with", "check", "files_gate", "continue_on_error", "sub_step_overrides", "timeout",
 }
 
 // checkKnownFields enforces that value is a YAML mapping whose keys all appear

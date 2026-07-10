@@ -131,6 +131,85 @@ func TestRunScenario_HappyPath(t *testing.T) {
 	}
 }
 
+// TestRunScenario_ForceColorEnv verifies that RunRequest.ForceColor controls
+// whether the validate/deploy subprocesses are spawned with CLICOLOR_FORCE=1
+// (so their piped stdout still renders in color when streamed to the terminal).
+func TestRunScenario_ForceColorEnv(t *testing.T) {
+	for _, tc := range []struct {
+		name       string
+		forceColor bool
+		wantForce  bool
+	}{
+		{"force", true, true},
+		{"no-force", false, false},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			dir := writeRunnerFixtureProject(t, "smoke", noStepsScenario)
+			var gotEnv [][]string
+			exec := func(_ context.Context, _ string, extraEnv []string, _, _ io.Writer, _ ...string) error {
+				gotEnv = append(gotEnv, extraEnv)
+				return nil
+			}
+			r := &Runner{
+				execDwe:       exec,
+				allocatePorts: AllocatePorts,
+				newTeardownDeps: func(string, io.Writer) TeardownDeps {
+					return recordingTeardownDeps(new([]string), nil)
+				},
+				clock: time.Now,
+			}
+			res, err := r.RunScenario(context.Background(), RunRequest{
+				BaseDir:         dir,
+				Scenario:        "smoke",
+				ReporterFactory: noopReporterFactory,
+				ForceColor:      tc.forceColor,
+			})
+			if err != nil {
+				t.Fatalf("RunScenario: %v", err)
+			}
+			if res.Status != StatusPassed {
+				t.Fatalf("status = %q, want passed", res.Status)
+			}
+			if len(gotEnv) == 0 {
+				t.Fatal("execDwe was never called")
+			}
+			for i, env := range gotEnv {
+				has := slices.Contains(env, "CLICOLOR_FORCE=1")
+				if has != tc.wantForce {
+					t.Fatalf("call %d env = %v, CLICOLOR_FORCE present=%v want=%v", i, env, has, tc.wantForce)
+				}
+				// DWE_NONINTERACTIVE is always set regardless.
+				if !slices.Contains(env, "DWE_NONINTERACTIVE=1") {
+					t.Fatalf("call %d env = %v, missing DWE_NONINTERACTIVE=1", i, env)
+				}
+			}
+		})
+	}
+}
+
+// TestDefaultReporterFactory_LogSideStripsANSI verifies the production factory
+// keeps the run log plain even when the subprocess streams colored output —
+// the terminal leg keeps color, the log leg is ANSI-stripped.
+func TestDefaultReporterFactory_LogSideStripsANSI(t *testing.T) {
+	dir := t.TempDir()
+	_, _, subprocOut, cleanup, err := defaultReporterFactory(dir, "test")
+	if err != nil {
+		t.Fatalf("defaultReporterFactory: %v", err)
+	}
+	if _, err := io.WriteString(subprocOut, "\x1b[38;2;239;68;68mred\x1b[0m line\n"); err != nil {
+		t.Fatalf("writing to subprocOut: %v", err)
+	}
+	cleanup()
+
+	data, err := os.ReadFile(filepath.Join(dir, ".dwe", "logs", "test.log"))
+	if err != nil {
+		t.Fatalf("reading run log: %v", err)
+	}
+	if got, want := string(data), "red line\n"; got != want {
+		t.Fatalf("run log = %q, want %q (ANSI must be stripped)", got, want)
+	}
+}
+
 // TestRunScenario_SubprocessOutputStreamsToSubprocOut pins that the runner
 // routes the validate/deploy subprocess stdout/stderr to the factory's
 // subprocOut writer (the console+log tee), not the run-log-only writer — the
@@ -770,6 +849,174 @@ func TestRunScenario_KeptRunGuard(t *testing.T) {
 // prefix (e.g. "foo" must not claim "foo-bar"'s manifest, and vice versa), and
 // must ignore files that carry the prefix but not a valid <6-hex>.yml run-id
 // suffix.
+// TestRunScenario_IsolationGate_BlocksOnContainerName pins that a blocking
+// isolation finding (container_name:) fails the scenario BEFORE the `dwe
+// validate` subprocess is even spawned, warns with the finding's message, and
+// still runs teardown (removing the copy).
+func TestRunScenario_IsolationGate_BlocksOnContainerName(t *testing.T) {
+	dir := t.TempDir()
+	writeFixtureFile(t, dir, "workspace.yml", "project:\n  name: runnertest\n  prefix: dwe\ncompose:\n  base: docker-compose.yml\n")
+	writeFixtureFile(t, dir, "docker-compose.yml", "services:\n  app:\n    container_name: fixed-name\n")
+	writeFixtureFile(t, dir, "workspace/tests/smoke.yml", noStepsScenario)
+
+	var teardownOrder []string
+	var execCalls []string
+	var warnings []string
+	r := &Runner{
+		execDwe:       stubExecDwe(nil, &execCalls),
+		allocatePorts: AllocatePorts,
+		newTeardownDeps: func(string, io.Writer) TeardownDeps {
+			return recordingTeardownDeps(&teardownOrder, nil)
+		},
+		clock: time.Now,
+	}
+
+	result, err := r.RunScenario(context.Background(), RunRequest{
+		BaseDir:         dir,
+		Scenario:        "smoke",
+		ReporterFactory: noopReporterFactory,
+		Warn:            func(msg string) { warnings = append(warnings, msg) },
+	})
+	if err != nil {
+		t.Fatalf("RunScenario: %v", err)
+	}
+	if result.Status != StatusFailed {
+		t.Fatalf("status = %q, want failed", result.Status)
+	}
+	if len(execCalls) != 0 {
+		t.Fatalf("execCalls = %v, want none (isolation gate must block before validate)", execCalls)
+	}
+	if !containsStep(teardownOrder, "remove_copy") {
+		t.Fatalf("expected teardown to still run: %v", teardownOrder)
+	}
+	found := false
+	for _, w := range warnings {
+		if strings.Contains(w, "fixed-name") {
+			found = true
+		}
+	}
+	if !found {
+		t.Fatalf("expected a warning mentioning the isolation hazard, got %v", warnings)
+	}
+}
+
+// TestRunScenario_IsolationGate_SkipDowngradesToWarning pins that
+// --skip-isolation-check (RunRequest.SkipIsolationCheck) downgrades a
+// blocking finding to a warning and lets the scenario proceed to the deploy
+// subprocess normally.
+func TestRunScenario_IsolationGate_SkipDowngradesToWarning(t *testing.T) {
+	dir := t.TempDir()
+	writeFixtureFile(t, dir, "workspace.yml", "project:\n  name: runnertest\n  prefix: dwe\ncompose:\n  base: docker-compose.yml\n")
+	writeFixtureFile(t, dir, "docker-compose.yml", "services:\n  app:\n    container_name: fixed-name\n")
+	writeFixtureFile(t, dir, "workspace/tests/smoke.yml", noStepsScenario)
+
+	var teardownOrder []string
+	var execCalls []string
+	var warnings []string
+	r := &Runner{
+		execDwe:       stubExecDwe(nil, &execCalls),
+		allocatePorts: AllocatePorts,
+		newTeardownDeps: func(string, io.Writer) TeardownDeps {
+			return recordingTeardownDeps(&teardownOrder, nil)
+		},
+		clock: time.Now,
+	}
+
+	result, err := r.RunScenario(context.Background(), RunRequest{
+		BaseDir:            dir,
+		Scenario:           "smoke",
+		ReporterFactory:    noopReporterFactory,
+		SkipIsolationCheck: true,
+		Warn:               func(msg string) { warnings = append(warnings, msg) },
+	})
+	if err != nil {
+		t.Fatalf("RunScenario: %v", err)
+	}
+	if result.Status != StatusPassed {
+		t.Fatalf("status = %q, want passed", result.Status)
+	}
+	wantCalls := []string{"validate", "deploy run --silent"}
+	if strings.Join(execCalls, "|") != strings.Join(wantCalls, "|") {
+		t.Fatalf("execCalls = %v, want %v (--skip-isolation-check must still deploy)", execCalls, wantCalls)
+	}
+	found := false
+	for _, w := range warnings {
+		if strings.Contains(w, "fixed-name") {
+			found = true
+		}
+	}
+	if !found {
+		t.Fatalf("expected a warning mentioning the isolation hazard even when skipped, got %v", warnings)
+	}
+}
+
+// TestRunScenario_IsolationGate_WarnOnlyFindingProceeds pins that a
+// non-blocking finding (an external volume) never fails the scenario — it is
+// surfaced as a warning only.
+func TestRunScenario_IsolationGate_WarnOnlyFindingProceeds(t *testing.T) {
+	dir := t.TempDir()
+	writeFixtureFile(t, dir, "workspace.yml", "project:\n  name: runnertest\n  prefix: dwe\ncompose:\n  base: docker-compose.yml\n")
+	writeFixtureFile(t, dir, "docker-compose.yml", "volumes:\n  data:\n    external: true\n")
+	writeFixtureFile(t, dir, "workspace/tests/smoke.yml", noStepsScenario)
+
+	var execCalls []string
+	var warnings []string
+	r := &Runner{
+		execDwe:       stubExecDwe(nil, &execCalls),
+		allocatePorts: AllocatePorts,
+		newTeardownDeps: func(string, io.Writer) TeardownDeps {
+			return recordingTeardownDeps(new([]string), nil)
+		},
+		clock: time.Now,
+	}
+
+	result, err := r.RunScenario(context.Background(), RunRequest{
+		BaseDir:         dir,
+		Scenario:        "smoke",
+		ReporterFactory: noopReporterFactory,
+		Warn:            func(msg string) { warnings = append(warnings, msg) },
+	})
+	if err != nil {
+		t.Fatalf("RunScenario: %v", err)
+	}
+	if result.Status != StatusPassed {
+		t.Fatalf("status = %q, want passed", result.Status)
+	}
+	wantCalls := []string{"validate", "deploy run --silent"}
+	if strings.Join(execCalls, "|") != strings.Join(wantCalls, "|") {
+		t.Fatalf("execCalls = %v, want %v", execCalls, wantCalls)
+	}
+	found := false
+	for _, w := range warnings {
+		if strings.Contains(w, "external") {
+			found = true
+		}
+	}
+	if !found {
+		t.Fatalf("expected a warning mentioning the external volume, got %v", warnings)
+	}
+}
+
+// TestScanComposeIsolationGate_CopyConfigLoadFailure_ScanSkipped pins that a
+// copy whose own workspace.yml fails to load simply skips the isolation scan
+// (never blocks) — exercised directly against scanComposeIsolationGate since
+// RunScenario loads the ORIGINAL project's config up front and would never
+// reach the copy in this state via the full flow.
+func TestScanComposeIsolationGate_CopyConfigLoadFailure_ScanSkipped(t *testing.T) {
+	dir := t.TempDir()
+	// binaries: is a rejected legacy top-level key — LoadConfigOrWrap fails.
+	writeFixtureFile(t, dir, "workspace.yml", "project:\n  name: runnertest\n  prefix: dwe\nbinaries:\n  docker: /bin/docker\n")
+
+	var warnings []string
+	blocked := scanComposeIsolationGate(dir, false, func(msg string) { warnings = append(warnings, msg) })
+	if blocked {
+		t.Fatal("expected the gate not to block when the copy config fails to load")
+	}
+	if len(warnings) != 0 {
+		t.Fatalf("expected no warnings when the scan is skipped, got %v", warnings)
+	}
+}
+
 func TestExistingManifestPaths_PrefixDisambiguation(t *testing.T) {
 	dir := t.TempDir()
 	manifests := ManifestsDir(dir)
@@ -817,6 +1064,202 @@ func TestExistingManifestPaths_PrefixDisambiguation(t *testing.T) {
 
 func containsStep(order []string, step string) bool {
 	return slices.Contains(order, step)
+}
+
+// recordProgress returns a RunRequest.Progress callback appending each phase
+// (as a plain string) to phases, so tests can assert firing order.
+func recordProgress(phases *[]string) func(ProgressPhase) {
+	return func(p ProgressPhase) { *phases = append(*phases, string(p)) }
+}
+
+// TestRunScenario_ProgressPhases_PassedRun pins the exact phase-firing order
+// for a passing scenario with no report and no retry.
+func TestRunScenario_ProgressPhases_PassedRun(t *testing.T) {
+	dir := writeRunnerFixtureProject(t, "smoke", noStepsScenario)
+
+	var execCalls []string
+	var phases []string
+	r := &Runner{
+		execDwe:       stubExecDwe(nil, &execCalls),
+		allocatePorts: AllocatePorts,
+		newTeardownDeps: func(string, io.Writer) TeardownDeps {
+			return recordingTeardownDeps(new([]string), nil)
+		},
+		clock: time.Now,
+	}
+
+	result, err := r.RunScenario(context.Background(), RunRequest{
+		BaseDir:         dir,
+		Scenario:        "smoke",
+		ReporterFactory: noopReporterFactory,
+		Progress:        recordProgress(&phases),
+	})
+	if err != nil {
+		t.Fatalf("RunScenario: %v", err)
+	}
+	if result.Status != StatusPassed {
+		t.Fatalf("status = %q, want passed", result.Status)
+	}
+	want := []string{
+		string(PhasePreparing), string(PhaseValidating), string(PhaseDeploying),
+		string(PhaseRunningSteps), string(PhaseTearingDown),
+	}
+	if strings.Join(phases, "|") != strings.Join(want, "|") {
+		t.Fatalf("phases = %v, want %v", phases, want)
+	}
+}
+
+// TestRunScenario_ProgressPhases_FailedDeploy pins that a failed deploy (no
+// auto ports, so no retry) fires collecting_report before tearing_down and
+// never running_steps.
+func TestRunScenario_ProgressPhases_FailedDeploy(t *testing.T) {
+	dir := writeRunnerFixtureProject(t, "smoke", noStepsScenario)
+
+	var execCalls []string
+	var phases []string
+	r := &Runner{
+		execDwe:       stubExecDwe(map[string]error{"deploy run --silent": errors.New("deploy: boom")}, &execCalls),
+		allocatePorts: AllocatePorts,
+		newTeardownDeps: func(string, io.Writer) TeardownDeps {
+			return recordingTeardownDeps(new([]string), nil)
+		},
+		collectReport: func(context.Context, *Manifest, func(string)) (string, error) {
+			return "/some/report", nil
+		},
+		clock: time.Now,
+	}
+
+	result, err := r.RunScenario(context.Background(), RunRequest{
+		BaseDir:         dir,
+		Scenario:        "smoke",
+		ReporterFactory: noopReporterFactory,
+		Progress:        recordProgress(&phases),
+	})
+	if err != nil {
+		t.Fatalf("RunScenario: %v", err)
+	}
+	if result.Status != StatusFailed {
+		t.Fatalf("status = %q, want failed", result.Status)
+	}
+	want := []string{
+		string(PhasePreparing), string(PhaseValidating), string(PhaseDeploying),
+		string(PhaseCollectingReport), string(PhaseTearingDown),
+	}
+	if strings.Join(phases, "|") != strings.Join(want, "|") {
+		t.Fatalf("phases = %v, want %v", phases, want)
+	}
+}
+
+// TestRunScenario_ProgressPhases_DeployRetry pins that the one port-conflict
+// retry fires deploy_retry between deploying and (on a still-failing retry)
+// collecting_report.
+func TestRunScenario_ProgressPhases_DeployRetry(t *testing.T) {
+	dir := writeRunnerFixtureProject(t, "ports", "env:\n  vars:\n    app.port: auto\n")
+
+	execDwe := func(_ context.Context, _ string, _ []string, _, _ io.Writer, args ...string) error {
+		if strings.Join(args, " ") == "deploy run --silent" {
+			return errors.New("port is already allocated")
+		}
+		return nil
+	}
+
+	var phases []string
+	r := &Runner{
+		execDwe:       execDwe,
+		allocatePorts: func(n int) ([]int, error) { return make([]int, n), nil },
+		newTeardownDeps: func(string, io.Writer) TeardownDeps {
+			return recordingTeardownDeps(new([]string), nil)
+		},
+		collectReport: func(context.Context, *Manifest, func(string)) (string, error) {
+			return "/some/report", nil
+		},
+		clock: time.Now,
+	}
+
+	result, err := r.RunScenario(context.Background(), RunRequest{
+		BaseDir:         dir,
+		Scenario:        "ports",
+		ReporterFactory: noopReporterFactory,
+		Progress:        recordProgress(&phases),
+	})
+	if err != nil {
+		t.Fatalf("RunScenario: %v", err)
+	}
+	if result.Status != StatusFailed {
+		t.Fatalf("status = %q, want failed", result.Status)
+	}
+	want := []string{
+		string(PhasePreparing), string(PhaseValidating), string(PhaseDeploying),
+		string(PhaseDeployRetry), string(PhaseCollectingReport), string(PhaseTearingDown),
+	}
+	if strings.Join(phases, "|") != strings.Join(want, "|") {
+		t.Fatalf("phases = %v, want %v", phases, want)
+	}
+}
+
+// TestRunScenario_ProgressPhases_Keep pins that a --keep run fires neither
+// tearing_down nor collecting_report, and that a nil Progress callback never
+// panics.
+func TestRunScenario_ProgressPhases_Keep(t *testing.T) {
+	dir := writeRunnerFixtureProject(t, "stepfail", stepFailScenario)
+
+	var execCalls []string
+	var phases []string
+	r := &Runner{
+		execDwe:         stubExecDwe(nil, &execCalls),
+		allocatePorts:   AllocatePorts,
+		newTeardownDeps: fatalTeardownDeps(t),
+		collectReport: func(context.Context, *Manifest, func(string)) (string, error) {
+			t.Fatal("collectReport must not be called under --keep")
+			return "", nil
+		},
+		clock: time.Now,
+	}
+
+	result, err := r.RunScenario(context.Background(), RunRequest{
+		BaseDir:         dir,
+		Scenario:        "stepfail",
+		Keep:            true,
+		ReporterFactory: noopReporterFactory,
+		Progress:        recordProgress(&phases),
+	})
+	if err != nil {
+		t.Fatalf("RunScenario: %v", err)
+	}
+	if result.Status != StatusFailed {
+		t.Fatalf("status = %q, want failed", result.Status)
+	}
+	if slices.Contains(phases, string(PhaseTearingDown)) {
+		t.Fatalf("--keep run must not fire tearing_down: %v", phases)
+	}
+	if slices.Contains(phases, string(PhaseCollectingReport)) {
+		t.Fatalf("--keep run must not fire collecting_report: %v", phases)
+	}
+	want := []string{
+		string(PhasePreparing), string(PhaseValidating), string(PhaseDeploying),
+		string(PhaseRunningSteps),
+	}
+	if strings.Join(phases, "|") != strings.Join(want, "|") {
+		t.Fatalf("phases = %v, want %v", phases, want)
+	}
+
+	// A nil Progress callback must not panic anywhere along the full flow.
+	dir2 := writeRunnerFixtureProject(t, "smoke", noStepsScenario)
+	r2 := &Runner{
+		execDwe:       stubExecDwe(nil, new([]string)),
+		allocatePorts: AllocatePorts,
+		newTeardownDeps: func(string, io.Writer) TeardownDeps {
+			return recordingTeardownDeps(new([]string), nil)
+		},
+		clock: time.Now,
+	}
+	if _, err := r2.RunScenario(context.Background(), RunRequest{
+		BaseDir:         dir2,
+		Scenario:        "smoke",
+		ReporterFactory: noopReporterFactory,
+	}); err != nil {
+		t.Fatalf("RunScenario with nil Progress: %v", err)
+	}
 }
 
 // recordingCollectReport returns a Runner.collectReport stub that appends
