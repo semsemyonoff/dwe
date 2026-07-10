@@ -109,7 +109,7 @@ Each key is a dot-path relative to `vars.` (`app.http_port` → `vars: { app: { 
 
 ### `timeout`
 
-Wall-clock budget for the whole scenario (deploy + all steps), e.g. `15m`. Parsed with `time.ParseDuration`. Precedence: `dwe test run --timeout` flag (overrides every scenario) > this field > a 30-minute default. On expiry, the in-flight subprocess or step is killed, the scenario is marked failed, and teardown still runs (under its own fresh deadline, not the expired one).
+Wall-clock budget for the whole scenario (deploy + all steps), e.g. `15m`. Parsed with `time.ParseDuration` and must be strictly positive. Precedence: `dwe test run --timeout` flag (overrides every scenario) > this field > a 30-minute default. On expiry, the in-flight subprocess or step is killed, the scenario is marked failed, and teardown still runs (under its own fresh deadline, not the expired one).
 
 ### `steps`
 
@@ -297,7 +297,7 @@ A `dwe validate` domain (`Domain() == "tests"`) that statically checks every `wo
 Per file, in order:
 
 - **load** — `LoadScenario` (strict `KnownFields(true)`, empty file rejected); this also covers **name validation** (`ValidateScenarioName` rejects — does not rewrite — a bad file basename), so an invalid filename surfaces here.
-- **`timeout:`** — `time.ParseDuration` on the scenario's own `timeout:` field; a parse failure is an error.
+- **`timeout:`** — the scenario's own `timeout:` field must parse via `time.ParseDuration` and be strictly positive (mirrors `resolveScenarioTimeout`'s runtime contract); a parse failure or non-positive duration is an error.
 - **`env.services`** — every `enable`/`disable` entry must name a service that exists in the project's merged config; an unknown name is an error.
 - **`steps`** — all steps are rendered and resolved **as one whole phase**, exactly like a real run (`pipeline.ResolvePhaseSteps` over a single synthetic phase) — this catches step schema errors, invalid builtin `with:` params, broken `when:` conditions, and duplicate top-level step names (a per-step check would miss the last one, since uniqueness is a whole-phase invariant). Rendering substitutes any `env.vars` entry whose value is the literal `auto` with a valid placeholder host port, so `${vars.db.port}` renders to a valid int and a `tcp_reachable`/`http_check` step validates normally — a genuinely bad param (e.g. `status: nope`) still errors even next to a templated `url:`. A var populated only **post-deploy** (a `${generated.*}` secret, or a var the deploy itself creates) is absent at validate time and may produce a spurious diagnostic; give it a project-level default to avoid this — the validator sees pre-deploy config, the real run sees post-deploy config.
 - **`type: command` steps** — each command ID is looked up in the project's command registry; an unknown ID is an error.
