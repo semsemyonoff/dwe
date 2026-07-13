@@ -329,10 +329,14 @@ CLI integration (`internal/cli/docker/docker.go`):
 
 ### Task 8: [Final] Update documentation and close out
 
-- [ ] update `AGENTS.md` Critical Patterns ONLY if a genuinely load-bearing trap emerged
+- [x] update `AGENTS.md` Critical Patterns ONLY if a genuinely load-bearing trap emerged
       during implementation that future agents must know (otherwise skip — packages.md
-      from task 6 is the right home)
-- [ ] move this plan to `docs/plans/completed/`
+      from task 6 is the right home) — skipped: `docs/internals/packages.md` §
+      `internal/shared/docker/` and § `internal/cli/docker/` already fully document
+      `DeriveBuildBases`/`ImageExists`/`PullImage`, the advisory degrade-to-warning
+      contract, the `BuildInternalArgs`-only rule, and the `resolveBuildInvocation`
+      `prepull` param; nothing load-bearing emerged beyond what's captured there
+- [x] move this plan to `docs/plans/completed/`
 
 ## Post-Completion
 
