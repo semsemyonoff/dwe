@@ -229,3 +229,48 @@ func TestDeriveBuildBases_UsesBuildInternalArgsNotGlobal(t *testing.T) {
 		t.Fatalf("recorded args unexpectedly contain policy/global args: %q", got)
 	}
 }
+
+func TestImageExists_TrueOnZeroExit(t *testing.T) {
+	stub := writeStub(t, "exit 0")
+	c := &Compose{Bin: stub}
+	if !c.ImageExists("golang:1.22") {
+		t.Fatal("ImageExists = false, want true")
+	}
+}
+
+func TestImageExists_FalseOnNonZeroExit(t *testing.T) {
+	stub := writeStub(t, "exit 1")
+	c := &Compose{Bin: stub}
+	if c.ImageExists("golang:1.22") {
+		t.Fatal("ImageExists = true, want false")
+	}
+}
+
+func TestPullImage_InvokesPullWithRef(t *testing.T) {
+	tmp := t.TempDir()
+	recorder := filepath.Join(tmp, "recorder.txt")
+	stub := writeStub(t, fmt.Sprintf(`echo "$@" > %q`, recorder))
+
+	c := &Compose{Bin: stub}
+	if err := c.PullImage("golang:1.22"); err != nil {
+		t.Fatalf("PullImage: %v", err)
+	}
+
+	recorded, err := os.ReadFile(recorder)
+	if err != nil {
+		t.Fatal(err)
+	}
+	got := strings.TrimSpace(string(recorded))
+	want := "pull golang:1.22"
+	if got != want {
+		t.Fatalf("recorded args = %q, want %q", got, want)
+	}
+}
+
+func TestPullImage_PropagatesNonZeroExitAsError(t *testing.T) {
+	stub := writeStub(t, "echo boom 1>&2\nexit 1")
+	c := &Compose{Bin: stub}
+	if err := c.PullImage("golang:1.22"); err == nil {
+		t.Fatal("expected error from failing pull")
+	}
+}

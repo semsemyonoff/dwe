@@ -256,18 +256,18 @@ CLI integration (`internal/cli/docker/docker.go`):
 - Modify: `internal/shared/docker/prepull.go`
 - Modify: `internal/shared/docker/prepull_test.go`
 
-- [ ] implement `func (c *Compose) ImageExists(ref string) bool` — raw
+- [x] implement `func (c *Compose) ImageExists(ref string) bool` — raw
       `exec.Command(bin, "image", "inspect", ref)` (pattern: `volumes.go` +
       `//nolint:gosec`), `c.BuildEnv()` env, `c.BaseDir` dir, exit ≠ 0 → false.
       NOTE: setting env+dir is a DELIBERATE deviation from `volumeExists` (which sets
       neither) — required so `DOCKER_HOST`/context overrides from `process_env` apply;
       do not "simplify" it back
-- [ ] implement `func (c *Compose) PullImage(ref string) error` — `exec.Command(bin, "pull", ref)`,
+- [x] implement `func (c *Compose) PullImage(ref string) error` — `exec.Command(bin, "pull", ref)`,
       stdout/stderr connected to `os.Stdout`/`os.Stderr` (streaming), env/dir as above,
       `trace.Command` echo before running (mirror `Compose.Exec`)
-- [ ] write tests with `writeStub`: ImageExists true/false by stub exit code; PullImage
+- [x] write tests with `writeStub`: ImageExists true/false by stub exit code; PullImage
       invokes `pull <ref>` (record args via stub) and propagates non-zero exit as error
-- [ ] run `go test ./internal/shared/docker/...` — must pass before task 5
+- [x] run `go test ./internal/shared/docker/...` — must pass before task 5
 
 ### Task 5: CLI wiring — build + up hooks, `--force` interplay
 
