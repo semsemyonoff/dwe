@@ -1,4 +1,4 @@
-> Translated from: guides/integration-tests.md @ fa390dc2ea09
+> Translated from: guides/integration-tests.md @ 46790324c45e
 
 # Написание интеграционных тестов
 
@@ -72,7 +72,7 @@ steps:
   - name: "app answers"
     type: builtin
     cmd: http_check
-    with: { url: "http://localhost:${vars.app.http_port}/health", status: 200, contains: "ok" }
+    with: { url: "http://localhost:${services.app.ports.http}/health", status: 200, contains: "ok" }
 ```
 
 `${...}` в `with:`/`cmd:` шага резолвится по конфигу копии до выполнения шага, а пути вида `file_exists` резолвятся относительно корня копии — проверки всегда смотрят на одноразовое окружение, а не на ваше рабочее дерево.
@@ -172,7 +172,7 @@ dwe validate tests
 `dwe test run` сканирует compose-файлы копии на конструкции, которые обходят разграничение compose по имени проекта — `container_name:` и буквальные (нешаблонизированные) host-порты **блокирующие**; volume'ы и сети с `external:`/явным `name:` — только предупреждения. Блокирующая находка проваливает сценарий ещё до начала деплоя (teardown всё равно выполняется), с сообщением, называющим проблемную конструкцию:
 
 ```
-isolation check failed: container_name "myapp-db" in docker-compose.yml (run with --skip-isolation-check to downgrade to a warning)
+blocking compose isolation hazard(s), refusing to run: service db sets container_name: myapp-db — bypasses compose project-name scoping and collides with any other project/run using the same fixed name — pass --skip-isolation-check to downgrade to a warning
 ```
 
 Исправляйте у источника, когда это возможно:

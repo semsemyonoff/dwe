@@ -70,7 +70,7 @@ steps:
   - name: "app answers"
     type: builtin
     cmd: http_check
-    with: { url: "http://localhost:${vars.app.http_port}/health", status: 200, contains: "ok" }
+    with: { url: "http://localhost:${services.app.ports.http}/health", status: 200, contains: "ok" }
 ```
 
 `${...}` in a step's `with:`/`cmd:` resolves against the copy's config before the step runs, and `file_exists`-style paths resolve relative to the copy root — assertions always look at the disposable environment, never your working tree.
@@ -170,7 +170,7 @@ It also surfaces [compose isolation](#resolving-an-isolation-failure) hazards as
 `dwe test run` scans the copy's compose files for constructs that bypass compose's project-name scoping — `container_name:` and literal (non-templated) host ports are **blocking**; `external:`/explicitly-`name:`d volumes and networks are warnings only. A blocking finding fails the scenario before deploy even starts (teardown still runs), with a message naming the offending construct:
 
 ```
-isolation check failed: container_name "myapp-db" in docker-compose.yml (run with --skip-isolation-check to downgrade to a warning)
+blocking compose isolation hazard(s), refusing to run: service db sets container_name: myapp-db — bypasses compose project-name scoping and collides with any other project/run using the same fixed name — pass --skip-isolation-check to downgrade to a warning
 ```
 
 Fix it at the source when you can:

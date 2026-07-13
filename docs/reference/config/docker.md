@@ -240,7 +240,7 @@ build:
 
 **Advisory, never a hard failure:** every step of prepull (deriving refs from `compose config` + the service Dockerfiles, checking whether a base exists locally, pulling) is best-effort, and the normal `compose build`/`compose up` always runs afterwards — enabling `prepull_bases` can never make a build *worse* than leaving it off. What surfaces on stderr is narrow:
 
-- **Derivation failure** (bad `compose config`, unparseable Dockerfile) → one `warning:` naming the failure; prepull is skipped and the build proceeds.
+- **Derivation failure** (the `compose config` call fails, or its JSON output cannot be parsed) → one `warning:` naming the failure; prepull is skipped and the build proceeds. An individual unreadable or unparseable *service Dockerfile* is not a derivation failure: that one service is skipped silently (visible only under `--debug`), and the other services' bases are still prepulled.
 - **A base-existence probe that fails** (missing binary, daemon unreachable, an `inspect` predating `--platform`) is treated as "missing" and **silently** triggers a pull — no warning; a needless-but-harmless pull is the only cost.
 - **A successful pull** is silent.
 - **A pull that fails** → a `warning:`. If the base was confirmed missing it says the build will likely fail (the failure is now foreseeable); if it was a `--force` re-pull of an already-present base, it is a softer notice and the cached base is used.

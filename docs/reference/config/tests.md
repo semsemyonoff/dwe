@@ -24,7 +24,7 @@ Declarative integration-test scenarios (`dwe test`).
 - [`dwe validate tests`](#dwe-validate-tests)
 - [Compose isolation scanner](#compose-isolation-scanner)
 - [Exit codes](#exit-codes)
-- [JSON output](#json-output)
+- [JSON output](#json-output-run--list)
 - [Documented limitations](#documented-limitations)
 - [Related commands](#related-commands)
 
@@ -171,7 +171,7 @@ The developer's own `workspace/local.yml` is gitignored and therefore **not copi
 2. this scenario's `env.vars` / `env.services`;
 3. identity: `project: { prefix: <compose project name> }` and `update: { mode: "off" }` (no self-update prompts inside a disposable test run).
 
-**Automatic host-port isolation.** Every host port declared under `services.<name>.ports` by a service that will be enabled in the copy is remapped to a freshly allocated free port, written into the generated `local.yml` as a `services.<name>.ports.<x>` override (the original port's scheme is preserved). Because `ports_free` preflight reads that same field — and a project that sources its compose host bindings from `services.<name>.ports` (directly, or via an `exports.env` entry `from: services.<name>.ports.<x>`) binds from it too — the preflight and the actual bind move together, so a scenario runs alongside the working environment with no port config. Any `env.vars: { …: auto }` ports are allocated in the same batch. All ports come from one allocation pass (all listeners opened before any is closed, guaranteeing intra-batch uniqueness); the copy's `ports_free` preflight still catches host-level races, and on a deploy failure with any allocated port present the runner re-allocates every port and retries the deploy **exactly once** before failing the scenario.
+**Automatic host-port isolation.** Every host port declared under `services.<name>.ports` by a service that will be enabled in the copy is remapped to a freshly allocated free port, written into the generated `local.yml` as a `services.<name>.ports.<x>` override (the original port's scheme is preserved). Because `ports_free` preflight reads that same field — and a project that sources its compose host bindings from `services.<name>.ports` (directly, or via an `exports.env` entry `from: services.<name>.ports.<x>`) binds from it too — the preflight and the actual bind move together, so a scenario runs alongside the working environment with no port config. Any `env.vars: { …: auto }` ports are allocated in the same batch. All ports come from one allocation pass (all listeners opened before any is closed, guaranteeing intra-batch uniqueness); the copy's `ports_free` preflight still catches host-level races, and on a deploy failure that looks like a host-port bind conflict (with any allocated port present) the runner re-allocates every port and retries the deploy **exactly once** before failing the scenario.
 
 **`shared: true` volumes** resolve to their verbatim names and are reused as-is — the deliberate package-cache exception (composer, npm, …). A `shared` volume holding real (non-cache) data is therefore visible to every test run too.
 
@@ -192,7 +192,7 @@ The manifest (`scenario`, `run_id`, `compose_project`, `copy_path`, `bridge_dir`
 
 ## Teardown
 
-Runs by default after every scenario (pass/fail/timeout/Ctrl+C), driven only by the manifest, in order: `docker compose down --remove-orphans` (**never `-v`** — a shared cache volume referenced as a plain named volume in a raw compose file must never be deleted) → reap any remaining containers labelled with the manifest's exact `com.docker.compose.project` value → remove the test project's own volumes (prefix-filtered by compose project name; `shared:` volumes survive, same semantics as `dwe reset`) → stop any bridge daemon the deploy started in the copy → remove the copy directory → delete the manifest → release the flock. Each step is best-effort — a failure is logged and later steps still run.
+Runs by default after every scenario (pass/fail/timeout/Ctrl+C), driven only by the manifest, in order: `docker compose down` (**never `-v`** — a shared cache volume referenced as a plain named volume in a raw compose file must never be deleted) → reap any remaining containers labelled with the manifest's exact `com.docker.compose.project` value → remove the test project's own volumes (prefix-filtered by compose project name; `shared:` volumes survive, same semantics as `dwe reset`) → stop any bridge daemon the deploy started in the copy → remove the copy directory → delete the manifest → release the flock. Each step is best-effort — a failure is logged and later steps still run.
 
 `--keep` skips every step above, leaves the manifest and copy in place, and prints the compose project name, the copy path, and a cleanup hint. A subsequent `dwe test run` of the **same** scenario name fails fast (a kept run's manifest still exists) rather than silently deleting the kept environment out from under you — clean it up manually, or run [`dwe test clean`](#dwe-test-clean).
 
@@ -225,7 +225,7 @@ No arguments runs every scenario under `workspace/tests/*.yml`, in sorted name o
 Output is the standard live pipeline reporter per scenario (the same look as `dwe deploy run`), followed by a summary line, e.g.:
 
 ```
-2 passed, 1 failed (redis-off: step "app answers")
+2 passed, 1 failed (redis-off: step "tests/app answers")
 ```
 
 `dwe test` requires a project — unlike read-only docs commands, it is not usable outside one.
@@ -318,7 +318,7 @@ Per file, in order:
 
 The scanner itself has no opinion on severity beyond the intrinsic `Blocking` flag — each caller decides what to do with a finding:
 
-- **`dwe test run`** — runs the scan against the disposable copy right before the `dwe validate` subprocess. Every finding is printed as a warning. A **blocking** finding fails the scenario immediately (teardown still runs; no deploy subprocess is spawned) unless `--skip-isolation-check` is passed, in which case every finding — blocking or not — is a warning only and the run proceeds. See the [ports prerequisite](../guides/integration-tests.md#ports-are-isolated-automatically) for how to avoid a `raw_host_port` finding in the first place: model the port under `services.<name>.ports`.
+- **`dwe test run`** — runs the scan against the disposable copy right before the `dwe validate` subprocess. Every finding is printed as a warning. A **blocking** finding fails the scenario immediately (teardown still runs; no deploy subprocess is spawned) unless `--skip-isolation-check` is passed, in which case every finding — blocking or not — is a warning only and the run proceeds. See the [ports prerequisite](../../guides/integration-tests.md#ports-are-isolated-automatically) for how to avoid a `raw_host_port` finding in the first place: model the port under `services.<name>.ports`.
 - **`dwe validate tests`** — emits every finding as a warning, regardless of `Blocking`; static validation never fails a build over an isolation hazard, it only surfaces it early.
 
 ## Exit codes
@@ -342,7 +342,7 @@ dwe test list --output json
 {
   "scenarios": [
     {"name": "redis-off", "status": "passed", "duration_seconds": 4.213},
-    {"name": "cache-on", "status": "failed", "failed_step": "http_check", "duration_seconds": 2.101, "report_dir": ".dwe/tests/reports/cache-on"}
+    {"name": "cache-on", "status": "failed", "failed_step": "tests/http_check", "duration_seconds": 2.101, "report_dir": ".dwe/tests/reports/cache-on"}
   ],
   "summary": "1 passed, 1 failed"
 }
