@@ -209,7 +209,7 @@ CLI integration (`internal/cli/docker/docker.go`):
 - Create: `internal/shared/docker/dockerfilerefs.go`
 - Create: `internal/shared/docker/dockerfilerefs_test.go`
 
-- [ ] implement `externalBaseRefs(dockerfile []byte, buildArgs map[string]string) []string`
+- [x] implement `externalBaseRefs(dockerfile []byte, buildArgs map[string]string) []string`
       (exact name/signature at implementer's discretion, but pure — no I/O): handles
       continuations, comments, case-insensitive instructions, `# escape=` directive,
       pre-FROM `ARG` defaults overridden by buildArgs, `FROM [--platform=...] <ref> [AS stage]`,
@@ -217,13 +217,13 @@ CLI integration (`internal/cli/docker/docker.go`):
       unresolvable-var refs skipped with a `trace` warning. Documented limitation (in
       the func comment, not handled): a `FROM x` line inside a `RUN <<EOF` heredoc body
       would be misparsed — extremely rare and advisory-safe
-- [ ] write table-driven tests: simple FROM; multi-stage with `AS` + stage reuse; `scratch`;
+- [x] write table-driven tests: simple FROM; multi-stage with `AS` + stage reuse; `scratch`;
       ARG default used in FROM; buildArgs override beating ARG default; `${VAR:-def}` fallback;
       `--platform` flag on FROM; line continuation inside FROM/ARG; comments interleaved
-- [ ] write error/edge tests: unresolvable `${UNSET}` ref skipped; `$BUILDPLATFORM`-style
+- [x] write error/edge tests: unresolvable `${UNSET}` ref skipped; `$BUILDPLATFORM`-style
       builtin skipped; empty file → no refs; `# escape=\`` directive honored;
       lowercase `from`/`arg` recognized
-- [ ] run `go test ./internal/shared/docker/... -run Dockerfile` — must pass before task 3
+- [x] run `go test ./internal/shared/docker/... -run Dockerfile` — must pass before task 3
 
 ### Task 3: `DeriveBuildBases` — compose config → external refs
 
