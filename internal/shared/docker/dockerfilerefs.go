@@ -16,6 +16,10 @@ var (
 	// precede "# escape=" and must not stop the escape-directive scan.
 	parserDirectiveRe = regexp.MustCompile(`(?i)^#\s*[a-z][a-z0-9]*\s*=\s*\S+\s*$`)
 	varRefRe          = regexp.MustCompile(`\$\{([A-Za-z_][A-Za-z0-9_]*)(:-([^}]*))?\}|\$([A-Za-z_][A-Za-z0-9_]*)`)
+	// soleVarRe matches a string that is EXACTLY a single "$VAR" / "${VAR}"
+	// reference with nothing else around it — used to recognize a FROM
+	// "--platform=$TARGETPLATFORM"/"$BUILDPLATFORM" buildkit builtin.
+	soleVarRe = regexp.MustCompile(`^\$\{([A-Za-z_][A-Za-z0-9_]*)\}$|^\$([A-Za-z_][A-Za-z0-9_]*)$`)
 )
 
 // argDecl is an ARG instruction seen before the first FROM: its optional
@@ -36,10 +40,28 @@ type argDecl struct {
 // is skipped with a trace diagnostic rather than failing the whole parse:
 // this function is advisory and must never error out a build.
 //
+// targetPlatform is the platform Compose already resolved for this service's
+// build (from `services.<name>.platform` or `build.platforms`, or "" for the
+// daemon default). It is the effective platform of any base whose FROM pins no
+// "--platform" of its own, and of a "--platform=$TARGETPLATFORM" builtin — in
+// both cases buildkit fetches the base for the build's target platform, so
+// prepull must probe/pull that same variant. "--platform=$BUILDPLATFORM" (the
+// native build host) instead maps to "" (daemon default), matching how a
+// cross-compilation base is fetched.
+//
+// Each returned BaseRef carries the effective "--platform" for that FROM: a
+// statically resolvable value (literal, or an ARG-substituted value), the
+// targetPlatform (bare FROM or "$TARGETPLATFORM"), or "" when the FROM pins a
+// $BUILDPLATFORM/unresolvable platform and no service target platform applies.
+// Carrying the platform is load-bearing: on a host whose default platform
+// differs from the pinned one, prepulling (and existence-probing) the default
+// variant would leave buildkit to fetch the pinned variant from the LAN
+// registry — the exact fetch this feature exists to avoid.
+//
 // Known limitation: a "FROM ..." line inside a RUN <<EOF heredoc body is not
 // distinguished from a real stage and would be misparsed. This is rare and
 // safe here — the derived ref set is only used to prepull images.
-func externalBaseRefs(dockerfile []byte, buildArgs map[string]string) []string {
+func externalBaseRefs(dockerfile []byte, buildArgs map[string]string, targetPlatform string) []BaseRef {
 	escape := detectEscapeChar(dockerfile)
 	logical := splitLogicalLines(string(dockerfile), escape)
 
@@ -47,7 +69,7 @@ func externalBaseRefs(dockerfile []byte, buildArgs map[string]string) []string {
 	firstFromSeen := false
 	stages := map[string]struct{}{}
 	seen := map[string]struct{}{}
-	var refs []string
+	var refs []BaseRef
 
 	for _, line := range logical {
 		line = strings.TrimSpace(line)
@@ -67,7 +89,7 @@ func externalBaseRefs(dockerfile []byte, buildArgs map[string]string) []string {
 			declared[name] = argDecl{hasValue: hasDef, value: def}
 		case "FROM":
 			firstFromSeen = true
-			ref, stage, ok := parseFromLine(rest)
+			ref, platform, stage, ok := parseFromLine(rest)
 			if !ok {
 				continue
 			}
@@ -79,6 +101,7 @@ func externalBaseRefs(dockerfile []byte, buildArgs map[string]string) []string {
 				}
 				continue
 			}
+			resolvedPlatform := resolvePlatform(platform, declared, buildArgs, targetPlatform)
 			// Buildkit normalizes build-stage names case-insensitively, so
 			// "FROM alpine AS Build" then "FROM build" reuses the stage. Key
 			// the stage set by lowercase name to match, avoiding a spurious
@@ -91,14 +114,20 @@ func externalBaseRefs(dockerfile []byte, buildArgs map[string]string) []string {
 			if isStageRef || strings.EqualFold(resolved, "scratch") {
 				continue
 			}
-			if _, dup := seen[resolved]; !dup {
-				seen[resolved] = struct{}{}
-				refs = append(refs, resolved)
+			key := resolved + "\x00" + resolvedPlatform
+			if _, dup := seen[key]; !dup {
+				seen[key] = struct{}{}
+				refs = append(refs, BaseRef{Ref: resolved, Platform: resolvedPlatform})
 			}
 		}
 	}
 
-	sort.Strings(refs)
+	sort.Slice(refs, func(i, j int) bool {
+		if refs[i].Ref != refs[j].Ref {
+			return refs[i].Ref < refs[j].Ref
+		}
+		return refs[i].Platform < refs[j].Platform
+	})
 	return refs
 }
 
@@ -192,20 +221,66 @@ func unquote(s string) string {
 
 // parseFromLine parses the remainder of a "FROM" instruction: an optional
 // leading run of "--flag" tokens (e.g. "--platform=..."), the base ref, and
-// an optional trailing "AS <stage>".
-func parseFromLine(rest string) (ref, stage string, ok bool) {
+// an optional trailing "AS <stage>". The "--platform=<value>" flag's raw
+// value (which may still carry a build variable) is returned separately;
+// other flags are ignored. Only the "=" form is recognized — buildkit's FROM
+// flag parser does not accept a space-separated "--platform <value>".
+func parseFromLine(rest string) (ref, platform, stage string, ok bool) {
 	fields := strings.Fields(rest)
 	for len(fields) > 0 && strings.HasPrefix(fields[0], "--") {
+		if v, found := strings.CutPrefix(fields[0], "--platform="); found {
+			platform = v
+		}
 		fields = fields[1:]
 	}
 	if len(fields) == 0 {
-		return "", "", false
+		return "", "", "", false
 	}
 	ref = fields[0]
 	if len(fields) >= 3 && strings.EqualFold(fields[len(fields)-2], "AS") {
 		stage = fields[len(fields)-1]
 	}
-	return ref, stage, true
+	return ref, platform, stage, true
+}
+
+// resolvePlatform computes the effective platform for a FROM instruction:
+//   - no "--platform" (raw == "") → the service's target platform (buildkit
+//     builds a bare FROM for the build's target platform).
+//   - "--platform=$TARGETPLATFORM" (a buildkit builtin) → the target platform.
+//   - "--platform=$BUILDPLATFORM" (the native build host) → "" (daemon default).
+//   - a literal or ARG-resolvable value → that value verbatim.
+//   - any other unresolvable variable → "" (prepull at the default platform).
+func resolvePlatform(raw string, declared map[string]argDecl, buildArgs map[string]string, targetPlatform string) string {
+	raw = strings.TrimSpace(raw)
+	if raw == "" {
+		return targetPlatform
+	}
+	if name, ok := soleVarName(raw); ok {
+		switch name {
+		case "TARGETPLATFORM":
+			return targetPlatform
+		case "BUILDPLATFORM":
+			return ""
+		}
+	}
+	resolved, ok := resolveRef(raw, declared, buildArgs)
+	if !ok {
+		return ""
+	}
+	return resolved
+}
+
+// soleVarName returns the variable name when s is EXACTLY a single "$VAR" or
+// "${VAR}" reference (nothing else around it), else ok is false.
+func soleVarName(s string) (name string, ok bool) {
+	m := soleVarRe.FindStringSubmatch(s)
+	if m == nil {
+		return "", false
+	}
+	if m[1] != "" {
+		return m[1], true
+	}
+	return m[2], true
 }
 
 // resolveRef substitutes "${VAR}", "${VAR:-default}", and "$VAR" references

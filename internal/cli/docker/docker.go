@@ -338,16 +338,21 @@ func prepullBases(errOut io.Writer, compose *dockerpkg.Compose, services []strin
 	}
 
 	for _, ref := range refs {
-		exists := compose.ImageExists(ref)
+		label := ref.Ref
+		if ref.Platform != "" {
+			label = fmt.Sprintf("%s (%s)", ref.Ref, ref.Platform)
+		}
+
+		exists := compose.ImageExists(ref.Ref, ref.Platform)
 		if exists && !force {
 			continue
 		}
 
-		if err := compose.PullImage(ref); err != nil {
+		if err := compose.PullImage(ref.Ref, ref.Platform); err != nil {
 			if !exists {
-				_, _ = fmt.Fprintf(errOut, "warning: pulling base image %q failed, build will likely fail: %v\n", ref, err)
+				_, _ = fmt.Fprintf(errOut, "warning: pulling base image %q failed, build will likely fail: %v\n", label, err)
 			} else {
-				_, _ = fmt.Fprintf(errOut, "warning: re-pulling base image %q failed: %v\n", ref, err)
+				_, _ = fmt.Fprintf(errOut, "warning: re-pulling base image %q failed: %v\n", label, err)
 			}
 		}
 	}
