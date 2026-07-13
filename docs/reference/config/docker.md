@@ -13,6 +13,7 @@ Compose execution policy for the DWE project.
   - [`process_env`](#process_env)
   - [`topology`](#topology)
   - [`resources`](#resources)
+  - [`build`](#build)
 - [docker.local.yml](#dockerlocalyml)
 - [Common pitfalls](#common-pitfalls)
 - [Related commands](#related-commands)
@@ -69,6 +70,9 @@ resources:
       name: dwe_composer_cache
       shared: true
       ensure_before: [up, deploy]
+
+build:
+  prepull_bases: false
 ```
 
 ## Field reference
@@ -214,6 +218,27 @@ resources:
 ```
 
 `docker_remove_project_volumes` (the reset builtin) removes every volume whose name starts with `<project_name>_`, so non-shared volumes are reset with the project while shared ones survive.
+
+### `build`
+
+```yaml
+build:
+  prepull_bases: false
+```
+
+| Field | Description |
+|-------|-------------|
+| `prepull_bases` | When `true`, `dwe docker build` and `dwe docker up` derive the external `FROM` base images used by the services about to build and `docker pull` any that are **missing** from the local image store before handing off to `compose build`/`compose up`. Default `false`. |
+
+**Why:** Docker Desktop's buildkit fetcher cannot always reach LAN/private registries (`failed to fetch oauth token … no route to host`), even though a plain daemon-side `docker pull` reaches them fine. The docker-driver buildkit shares the daemon's image store, so once a `FROM` base is present locally, buildkit resolves it without touching the network. `prepull_bases` works around the fetcher by pre-populating the store via `docker pull` for exactly the bases a build needs.
+
+**Coverage:** both `dwe docker build [services...]` and `dwe docker up` are covered — `up` builds any images missing from the store too, and the default deploy/lifecycle pipeline runs `dwe docker up --wait`, so first deploy on a clean machine benefits without extra configuration. `build` narrows derivation to the named services (or all, with no args); `up` always derives against every service in the active compose config, since `up` builds dependencies transitively.
+
+**Missing-only by default:** an already-present base is never re-pulled — this only fixes the "base absent locally" failure mode without changing "stale cached base" semantics.
+
+**`--force` interplay:** with the flag off, `dwe docker build --force` behaves exactly as before — compose gets `--no-cache --pull`. With the flag on, `--force` instead pulls every derived base unconditionally via the daemon and compose receives only `--no-cache` (no `--pull`) — buildkit's own `--pull` hits the same LAN-registry fetch failure, so re-pulling daemon-side is the only reliable "refresh base images" path once the flag is enabled.
+
+**Advisory, never a hard failure:** every step of prepull (deriving refs from `compose config` + the service Dockerfiles, checking whether a base exists locally, pulling) is best-effort. Any internal error is downgraded to a warning on stderr and the normal `compose build`/`compose up` still runs — enabling `prepull_bases` can never make a build *worse* than leaving it off. The one loud case is a base confirmed missing that then fails to pull: the warning names the ref and states the build will likely fail, since that failure is now foreseeable.
 
 ## docker.local.yml
 

@@ -308,15 +308,15 @@ CLI integration (`internal/cli/docker/docker.go`):
 - Modify: `docs/i18n/ru/reference/config/docker.md`
 - Modify: `docs/internals/packages.md`
 
-- [ ] add `build:` section to `docs/reference/config/docker.md`: `prepull_bases` schema,
+- [x] add `build:` section to `docs/reference/config/docker.md`: `prepull_bases` schema,
       missing-only semantics, `--force` behavior under the flag, advisory guarantee,
       covers both `dwe docker build` and `dwe docker up` (hence deploy), rationale
       (Docker Desktop buildkit fetcher vs LAN registry)
-- [ ] mirror the same section in `docs/i18n/ru/reference/config/docker.md` (in Russian)
-- [ ] add a short note to `docs/internals/packages.md` § `internal/shared/docker/`
+- [x] mirror the same section in `docs/i18n/ru/reference/config/docker.md` (in Russian)
+- [x] add a short note to `docs/internals/packages.md` § `internal/shared/docker/`
       (DeriveBuildBases/ImageExists/PullImage + the advisory + BuildInternalArgs
       contracts) and to the § CLI section covering the prepull hook placement
-- [ ] run `make build` (embedded docs regeneration) — must succeed before task 7
+- [x] run `make build` (embedded docs regeneration) — must succeed before task 7
 
 ### Task 7: Verify acceptance criteria
 
