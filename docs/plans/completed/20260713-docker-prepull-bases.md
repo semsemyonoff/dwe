@@ -100,11 +100,13 @@ Dockerfiles); fixing at the Docker Desktop level (per-developer, not a tool fix)
 ## Solution Overview
 
 Flow (flag on): `dwe docker build [svc...]` / `dwe docker up` →
-`compose config --format json` → collect `build.{context,dockerfile,dockerfile_inline,args}`
+`compose config --format json` → collect `{platform, build.{context,dockerfile,dockerfile_inline,args,platforms}}`
 per service → parse Dockerfiles for external `FROM` refs (ARG-substituted, stages and
-`scratch` excluded) → dedupe → for each ref missing locally (`docker image inspect`)
-run `docker pull <ref>` streaming to the terminal → proceed to the normal
-`compose build`/`compose up`.
+`scratch` excluded), each paired with its resolved platform → dedupe → for each
+`(ref, platform)` missing locally (`docker image inspect [--platform p] <ref>`)
+run `docker pull [--platform p] <ref>` streaming to the terminal → proceed to the normal
+`compose build`/`compose up`. (As implemented these refs are `[]BaseRef{Ref, Platform}`,
+not bare strings — platform rides along to every inspect/pull.)
 
 Key decisions:
 - **Missing-only pull by default** — precisely fixes the broken case without changing
@@ -137,14 +139,17 @@ Build DockerBuildConfig `yaml:"build"`
 
 Derivation (`internal/shared/docker/prepull.go` + `dockerfilerefs.go`):
 
-- `func (c *Compose) DeriveBuildBases(services []string) ([]string, error)` — empty
-  `services` = all. Runs `c.output(c.BuildInternalArgs("config", "--format", "json"))`
+- `func (c *Compose) DeriveBuildBases(services []string) ([]BaseRef, error)` — empty
+  `services` = all. (As implemented the return type is `[]BaseRef{Ref, Platform}`, not
+  `[]string`: each base carries any platform pinned by `FROM --platform=` or the
+  service's resolved build target platform, so inspect/pull target the same variant
+  buildkit will build.) Runs `c.output(c.BuildInternalArgs("config", "--format", "json"))`
   on the **same Compose instance** the command will `Exec` with (so `--all` /
-  `ComposeFilesAll` is handled for free). JSON shape: `services.<name>.build.
-  {context, dockerfile, dockerfile_inline, args}`; `context` is absolute after
+  `ComposeFilesAll` is handled for free). JSON shape: `services.<name>.{platform, build.
+  {context, dockerfile, dockerfile_inline, args, platforms}}`; `context` is absolute after
   `compose config`; `dockerfile` is relative to context, default `Dockerfile`;
   `dockerfile_inline` is parsed from the string directly; services without `build:`
-  are skipped. Returns sorted unique external refs.
+  are skipped. Returns sorted unique external `(ref, platform)` pairs.
 - Parser (`dockerfilerefs.go`), hand-rolled, handles: line continuations `\`,
   comments, case-insensitive instructions, the `# escape=` directive (one check at
   file start); `ARG NAME=default` before the first `FROM` collected as defaults with
@@ -156,11 +161,13 @@ Derivation (`internal/shared/docker/prepull.go` + `dockerfilerefs.go`):
 
 Pull mechanics (`internal/shared/docker/prepull.go`, patterned after `volumes.go`):
 
-- `ImageExists(ref)` — `exec.Command(bin, "image", "inspect", ref)` with `c.BuildEnv()`
-  / `c.BaseDir`; exit ≠ 0 → missing (best-effort: treat probe failure as missing).
-- `PullImage(ref)` — `exec.Command(bin, "pull", ref)` with stdout/stderr **streamed to
-  the terminal** (base pulls can take minutes; silence looks like a hang), env/dir as
-  above, echo via `trace.Command` like `Compose.Exec` does.
+- `ImageExists(ref, platform)` — `exec.Command(bin, "image", "inspect", [--platform p,]
+  ref)` with `c.BuildEnv()` / `c.BaseDir`; exit ≠ 0 → missing (best-effort: treat probe
+  failure as missing). (As implemented it takes a `platform` argument — empty = daemon
+  default — so it probes the exact variant that will be pulled/built.)
+- `PullImage(ref, platform)` — `exec.Command(bin, "pull", [--platform p,] ref)` with
+  stdout/stderr **streamed to the terminal** (base pulls can take minutes; silence looks
+  like a hang), env/dir as above, echo via `trace.Command` like `Compose.Exec` does.
 
 CLI integration (`internal/cli/docker/docker.go`):
 
@@ -209,8 +216,9 @@ CLI integration (`internal/cli/docker/docker.go`):
 - Create: `internal/shared/docker/dockerfilerefs.go`
 - Create: `internal/shared/docker/dockerfilerefs_test.go`
 
-- [x] implement `externalBaseRefs(dockerfile []byte, buildArgs map[string]string) []string`
-      (exact name/signature at implementer's discretion, but pure — no I/O): handles
+- [x] implement `externalBaseRefs(dockerfile []byte, buildArgs map[string]string, targetPlatform string) []BaseRef`
+      (final signature — returns `[]BaseRef{Ref, Platform}` and threads the service's
+      resolved target platform in; pure — no I/O): handles
       continuations, comments, case-insensitive instructions, `# escape=` directive,
       pre-FROM `ARG` defaults overridden by buildArgs, `FROM [--platform=...] <ref> [AS stage]`,
       stage-name refs and `scratch` excluded, `${VAR}`/`${VAR:-def}`/`$VAR` substitution,
@@ -231,7 +239,8 @@ CLI integration (`internal/cli/docker/docker.go`):
 - Create: `internal/shared/docker/prepull.go`
 - Create: `internal/shared/docker/prepull_test.go`
 
-- [x] implement `func (c *Compose) DeriveBuildBases(services []string) ([]string, error)`
+- [x] implement `func (c *Compose) DeriveBuildBases(services []string) ([]BaseRef, error)`
+      (final return type is `[]BaseRef`, carrying per-base platform)
       per Technical Details: `c.output(c.BuildInternalArgs("config", "--format", "json"))`,
       narrow JSON struct for `services.<name>.build`, `dockerfile` resolved relative to
       absolute `context` (default `Dockerfile`) — but when `dockerfile` is already
@@ -256,13 +265,13 @@ CLI integration (`internal/cli/docker/docker.go`):
 - Modify: `internal/shared/docker/prepull.go`
 - Modify: `internal/shared/docker/prepull_test.go`
 
-- [x] implement `func (c *Compose) ImageExists(ref string) bool` — raw
-      `exec.Command(bin, "image", "inspect", ref)` (pattern: `volumes.go` +
+- [x] implement `func (c *Compose) ImageExists(ref, platform string) bool` — raw
+      `exec.Command(bin, "image", "inspect", [--platform p,] ref)` (pattern: `volumes.go` +
       `//nolint:gosec`), `c.BuildEnv()` env, `c.BaseDir` dir, exit ≠ 0 → false.
       NOTE: setting env+dir is a DELIBERATE deviation from `volumeExists` (which sets
       neither) — required so `DOCKER_HOST`/context overrides from `process_env` apply;
       do not "simplify" it back
-- [x] implement `func (c *Compose) PullImage(ref string) error` — `exec.Command(bin, "pull", ref)`,
+- [x] implement `func (c *Compose) PullImage(ref, platform string) error` — `exec.Command(bin, "pull", [--platform p,] ref)`,
       stdout/stderr connected to `os.Stdout`/`os.Stderr` (streaming), env/dir as above,
       `trace.Command` echo before running (mirror `Compose.Exec`)
 - [x] write tests with `writeStub`: ImageExists true/false by stub exit code; PullImage

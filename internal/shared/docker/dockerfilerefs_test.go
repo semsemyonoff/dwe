@@ -71,6 +71,17 @@ COPY --from=build /out /out
 			want:       bases("golang:1.23"),
 		},
 		{
+			name:       "${VAR:-def} fallback when buildArgs override is empty",
+			dockerfile: "ARG BASE_IMAGE\nFROM ${BASE_IMAGE:-golang:1.22}\n",
+			buildArgs:  map[string]string{"BASE_IMAGE": ""},
+			want:       bases("golang:1.22"),
+		},
+		{
+			name:       "${VAR:-def} fallback when ARG default is empty",
+			dockerfile: "ARG BASE_IMAGE=\nFROM ${BASE_IMAGE:-golang:1.22}\n",
+			want:       bases("golang:1.22"),
+		},
+		{
 			name:       "--platform flag on FROM is captured",
 			dockerfile: "FROM --platform=linux/amd64 golang:1.22 AS build\n",
 			want:       []BaseRef{{Ref: "golang:1.22", Platform: "linux/amd64"}},

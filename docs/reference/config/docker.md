@@ -238,7 +238,12 @@ build:
 
 **`--force` interplay:** with the flag off, `dwe docker build --force` behaves exactly as before — compose gets `--no-cache --pull`. With the flag on, `--force` instead pulls every derived base unconditionally via the daemon and compose receives only `--no-cache` (no `--pull`) — buildkit's own `--pull` hits the same LAN-registry fetch failure, so re-pulling daemon-side is the only reliable "refresh base images" path once the flag is enabled.
 
-**Advisory, never a hard failure:** every step of prepull (deriving refs from `compose config` + the service Dockerfiles, checking whether a base exists locally, pulling) is best-effort. Any internal error is downgraded to a warning on stderr and the normal `compose build`/`compose up` still runs — enabling `prepull_bases` can never make a build *worse* than leaving it off. The one loud case is a base confirmed missing that then fails to pull: the warning names the ref and states the build will likely fail, since that failure is now foreseeable.
+**Advisory, never a hard failure:** every step of prepull (deriving refs from `compose config` + the service Dockerfiles, checking whether a base exists locally, pulling) is best-effort, and the normal `compose build`/`compose up` always runs afterwards — enabling `prepull_bases` can never make a build *worse* than leaving it off. What surfaces on stderr is narrow:
+
+- **Derivation failure** (bad `compose config`, unparseable Dockerfile) → one `warning:` naming the failure; prepull is skipped and the build proceeds.
+- **A base-existence probe that fails** (missing binary, daemon unreachable, an `inspect` predating `--platform`) is treated as "missing" and **silently** triggers a pull — no warning; a needless-but-harmless pull is the only cost.
+- **A successful pull** is silent.
+- **A pull that fails** → a `warning:`. If the base was confirmed missing it says the build will likely fail (the failure is now foreseeable); if it was a `--force` re-pull of an already-present base, it is a softer notice and the cached base is used.
 
 ## docker.local.yml
 

@@ -1,6 +1,7 @@
 package config
 
 import (
+	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
@@ -749,24 +750,32 @@ func TestLoadDockerConfig_BuildAbsentDefaultsFalse(t *testing.T) {
 
 // TestLoadDockerConfig_BuildPrepullBasesLocalOverride verifies that
 // docker.local.yml overriding build.prepull_bases wins over the base layer
-// (deepMerge semantics).
+// (deepMerge semantics) in both directions — a developer can both enable and
+// disable the opt-in locally.
 func TestLoadDockerConfig_BuildPrepullBasesLocalOverride(t *testing.T) {
-	baseYML := `
-build:
-  prepull_bases: false
-`
-	localYML := `
-build:
-  prepull_bases: true
-`
-	baseDir := writeDockerFixture(t, baseYML, localYML)
-	cfg := &DweConfig{Raw: map[string]any{}}
-
-	dcfg, err := LoadDockerConfig(baseDir, cfg)
-	if err != nil {
-		t.Fatalf("LoadDockerConfig: %v", err)
+	tests := []struct {
+		name  string
+		base  bool
+		local bool
+		want  bool
+	}{
+		{name: "local enables over disabled base", base: false, local: true, want: true},
+		{name: "local disables over enabled base", base: true, local: false, want: false},
 	}
-	if !dcfg.Build.PrepullBases {
-		t.Errorf("Build.PrepullBases = false, want true (local override should win)")
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			baseYML := fmt.Sprintf("build:\n  prepull_bases: %t\n", tt.base)
+			localYML := fmt.Sprintf("build:\n  prepull_bases: %t\n", tt.local)
+			baseDir := writeDockerFixture(t, baseYML, localYML)
+			cfg := &DweConfig{Raw: map[string]any{}}
+
+			dcfg, err := LoadDockerConfig(baseDir, cfg)
+			if err != nil {
+				t.Fatalf("LoadDockerConfig: %v", err)
+			}
+			if dcfg.Build.PrepullBases != tt.want {
+				t.Errorf("Build.PrepullBases = %t, want %t (local override should win)", dcfg.Build.PrepullBases, tt.want)
+			}
+		})
 	}
 }

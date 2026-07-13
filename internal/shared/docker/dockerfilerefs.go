@@ -310,10 +310,18 @@ func resolveRef(ref string, declared map[string]argDecl, buildArgs map[string]st
 
 			val, resolvedVar := resolveVar(name, declared, buildArgs)
 			switch {
-			case resolvedVar:
+			case resolvedVar && val != "":
 				buf.WriteString(val)
 			case hasDefault:
+				// "${VAR:-default}" applies default when VAR is unset OR
+				// resolves empty — matching bash/buildkit ":-" semantics, so a
+				// declared-but-empty ARG (or an empty --build-arg override) does
+				// not blank out the FROM ref.
 				buf.WriteString(def)
+			case resolvedVar:
+				// Resolved to empty with no default (e.g. "${VAR}", VAR empty) —
+				// expands to empty, matching buildkit.
+				buf.WriteString(val)
 			default:
 				return "", false
 			}
