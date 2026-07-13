@@ -195,13 +195,13 @@ CLI integration (`internal/cli/docker/docker.go`):
 - Modify: `internal/core/project/config/docker.go`
 - Modify: `internal/core/project/config/docker_test.go`
 
-- [ ] add `DockerBuildConfig` struct (`PrepullBases bool \`yaml:"prepull_bases"\``) and
+- [x] add `DockerBuildConfig` struct (`PrepullBases bool \`yaml:"prepull_bases"\``) and
       `Build DockerBuildConfig \`yaml:"build"\`` field on `DockerConfig`, with doc
       comments per Technical Details
-- [ ] write test: `build.prepull_bases: true` in docker.yml loads as `Build.PrepullBases == true`
-- [ ] write test: absent `build:` block → zero value `false`
-- [ ] write test: docker.local.yml overriding `build.prepull_bases` wins over base (deepMerge)
-- [ ] run `go test ./internal/core/project/config/...` — must pass before task 2
+- [x] write test: `build.prepull_bases: true` in docker.yml loads as `Build.PrepullBases == true`
+- [x] write test: absent `build:` block → zero value `false`
+- [x] write test: docker.local.yml overriding `build.prepull_bases` wins over base (deepMerge)
+- [x] run `go test ./internal/core/project/config/...` — must pass before task 2
 
 ### Task 2: Dockerfile FROM/ARG parser
 

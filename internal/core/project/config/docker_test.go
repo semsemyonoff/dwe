@@ -705,3 +705,68 @@ func TestLoadDockerConfigOrEmpty_MalformedYAML(t *testing.T) {
 		t.Errorf("error %q does not contain %q", err.Error(), "loading docker config:")
 	}
 }
+
+// TestLoadDockerConfig_BuildPrepullBases verifies that build.prepull_bases: true
+// in docker.yml loads as Build.PrepullBases == true.
+func TestLoadDockerConfig_BuildPrepullBases(t *testing.T) {
+	yml := `
+build:
+  prepull_bases: true
+`
+	baseDir := writeDockerFixture(t, yml, "")
+	cfg := &DweConfig{Raw: map[string]any{}}
+
+	dcfg, err := LoadDockerConfig(baseDir, cfg)
+	if err != nil {
+		t.Fatalf("LoadDockerConfig: %v", err)
+	}
+	if !dcfg.Build.PrepullBases {
+		t.Errorf("Build.PrepullBases = false, want true")
+	}
+}
+
+// TestLoadDockerConfig_BuildAbsentDefaultsFalse verifies that an absent build:
+// block defaults Build.PrepullBases to the zero value (false).
+func TestLoadDockerConfig_BuildAbsentDefaultsFalse(t *testing.T) {
+	baseDir := writeDockerFixture(t, sampleDockerYML, "")
+	cfg := &DweConfig{
+		Raw: map[string]any{
+			"project": map[string]any{
+				"name":   "laravel",
+				"prefix": "dwe",
+			},
+		},
+	}
+
+	dcfg, err := LoadDockerConfig(baseDir, cfg)
+	if err != nil {
+		t.Fatalf("LoadDockerConfig: %v", err)
+	}
+	if dcfg.Build.PrepullBases {
+		t.Errorf("Build.PrepullBases = true, want false (absent build: block)")
+	}
+}
+
+// TestLoadDockerConfig_BuildPrepullBasesLocalOverride verifies that
+// docker.local.yml overriding build.prepull_bases wins over the base layer
+// (deepMerge semantics).
+func TestLoadDockerConfig_BuildPrepullBasesLocalOverride(t *testing.T) {
+	baseYML := `
+build:
+  prepull_bases: false
+`
+	localYML := `
+build:
+  prepull_bases: true
+`
+	baseDir := writeDockerFixture(t, baseYML, localYML)
+	cfg := &DweConfig{Raw: map[string]any{}}
+
+	dcfg, err := LoadDockerConfig(baseDir, cfg)
+	if err != nil {
+		t.Fatalf("LoadDockerConfig: %v", err)
+	}
+	if !dcfg.Build.PrepullBases {
+		t.Errorf("Build.PrepullBases = false, want true (local override should win)")
+	}
+}
