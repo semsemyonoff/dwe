@@ -1,8 +1,14 @@
 package docker
 
 import (
+	"bytes"
+	"fmt"
+	"os"
+	"path/filepath"
 	"reflect"
+	"runtime"
 	"slices"
+	"strings"
 	"testing"
 
 	"github.com/semsemyonoff/dwe/internal/cli/cmdctx"
@@ -313,6 +319,7 @@ func TestResolveBuildInvocation(t *testing.T) {
 		name     string
 		all      bool
 		force    bool
+		prepull  bool
 		services []string
 		check    func(*dockerpkg.Compose) bool
 		wantArg  []string
@@ -377,11 +384,44 @@ func TestResolveBuildInvocation(t *testing.T) {
 			},
 			wantArg: []string{"--no-cache", "--pull", "svc1", "svc2"},
 		},
+		{
+			name:     "force+prepull yields --no-cache only",
+			all:      false,
+			force:    true,
+			prepull:  true,
+			services: []string{"svc"},
+			check: func(c *dockerpkg.Compose) bool {
+				return reflect.DeepEqual(c.Files, cfg.ComposeFiles())
+			},
+			wantArg: []string{"--no-cache", "svc"},
+		},
+		{
+			name:     "force without prepull yields --no-cache --pull",
+			all:      false,
+			force:    true,
+			prepull:  false,
+			services: []string{"svc"},
+			check: func(c *dockerpkg.Compose) bool {
+				return reflect.DeepEqual(c.Files, cfg.ComposeFiles())
+			},
+			wantArg: []string{"--no-cache", "--pull", "svc"},
+		},
+		{
+			name:     "prepull without force yields services only",
+			all:      false,
+			force:    false,
+			prepull:  true,
+			services: []string{"svc"},
+			check: func(c *dockerpkg.Compose) bool {
+				return reflect.DeepEqual(c.Files, cfg.ComposeFiles())
+			},
+			wantArg: []string{"svc"},
+		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			compose, extraArgs := resolveBuildInvocation(cfg, dockerCfg, "", tt.all, tt.force, tt.services)
+			compose, extraArgs := resolveBuildInvocation(cfg, dockerCfg, "", tt.all, tt.force, tt.prepull, tt.services)
 			if !tt.check(compose) {
 				t.Errorf("resolveBuildInvocation file set mismatch")
 			}
@@ -595,7 +635,7 @@ func TestLegacyImageCommandMapping(t *testing.T) {
 			if tt.legacyTarget == "image_pull" || tt.legacyTarget == "image_pull_all" {
 				compose, extraArgs = resolvePullInvocation(cfg, dockerCfg, "", tt.allFlag, tt.services)
 			} else {
-				compose, extraArgs = resolveBuildInvocation(cfg, dockerCfg, "", tt.allFlag, tt.forceFlag, tt.services)
+				compose, extraArgs = resolveBuildInvocation(cfg, dockerCfg, "", tt.allFlag, tt.forceFlag, false, tt.services)
 			}
 
 			if !tt.expectedCompose(compose) {
@@ -645,8 +685,8 @@ func TestAllFlagDoesNotMutateLocalConfig(t *testing.T) {
 	}
 
 	// Same assertions for build.
-	buildWithAll, _ := resolveBuildInvocation(cfg, dockerCfg, "", true, false, nil)
-	buildWithoutAll, _ := resolveBuildInvocation(cfg, dockerCfg, "", false, false, nil)
+	buildWithAll, _ := resolveBuildInvocation(cfg, dockerCfg, "", true, false, false, nil)
+	buildWithoutAll, _ := resolveBuildInvocation(cfg, dockerCfg, "", false, false, false, nil)
 
 	if !reflect.DeepEqual(buildWithAll.Files, cfg.ComposeFilesAll()) {
 		t.Errorf("resolveBuildInvocation(--all) files = %v, want %v", buildWithAll.Files, cfg.ComposeFilesAll())
@@ -668,5 +708,170 @@ func assertArgs(t *testing.T, label string, got, expected []string) {
 		if got[i] != expected[i] {
 			t.Errorf("%s: arg[%d] = %q, want %q", label, i, got[i], expected[i])
 		}
+	}
+}
+
+// writeDockerStub writes a fake docker binary that dispatches on the first
+// argument ("compose", "image", "pull") so a single stub can serve the
+// derive -> inspect -> pull sequence prepullBases drives.
+func writeDockerStub(t *testing.T, body string) string {
+	t.Helper()
+	if runtime.GOOS == "windows" {
+		t.Skip("shell stub is sh-based")
+	}
+	dir := t.TempDir()
+	path := filepath.Join(dir, "docker-stub")
+	if err := os.WriteFile(path, []byte("#!/bin/sh\n"+body+"\n"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	return path
+}
+
+// composeConfigCase is a one-service compose config JSON with an inline
+// Dockerfile FROM golang:1.22 — used by prepullBases tests that don't care
+// about parser edge cases, only about the derive -> inspect -> pull wiring.
+const composeConfigOneRef = `{"services":{"api":{"build":{"context":"/unused","dockerfile_inline":"FROM golang:1.22\n"}}}}`
+
+func TestPrepullBases_MissingRefPulled(t *testing.T) {
+	tmp := t.TempDir()
+	recorder := filepath.Join(tmp, "pulls.txt")
+	stub := writeDockerStub(t, fmt.Sprintf(`case "$1" in
+  compose) cat <<'EOF'
+%s
+EOF
+  ;;
+  image) exit 1 ;;
+  pull) echo "$2" >> %q ;;
+esac
+`, composeConfigOneRef, recorder))
+
+	c := &dockerpkg.Compose{Bin: stub}
+	var errOut bytes.Buffer
+	prepullBases(&errOut, c, nil, false)
+
+	if errOut.Len() != 0 {
+		t.Fatalf("unexpected warnings: %q", errOut.String())
+	}
+	got, err := os.ReadFile(recorder)
+	if err != nil {
+		t.Fatalf("expected pull to run: %v", err)
+	}
+	if strings.TrimSpace(string(got)) != "golang:1.22" {
+		t.Fatalf("pulled ref = %q, want %q", strings.TrimSpace(string(got)), "golang:1.22")
+	}
+}
+
+func TestPrepullBases_PresentRefSkipped(t *testing.T) {
+	tmp := t.TempDir()
+	recorder := filepath.Join(tmp, "pulls.txt")
+	stub := writeDockerStub(t, fmt.Sprintf(`case "$1" in
+  compose) cat <<'EOF'
+%s
+EOF
+  ;;
+  image) exit 0 ;;
+  pull) echo "$2" >> %q ;;
+esac
+`, composeConfigOneRef, recorder))
+
+	c := &dockerpkg.Compose{Bin: stub}
+	var errOut bytes.Buffer
+	prepullBases(&errOut, c, nil, false)
+
+	if errOut.Len() != 0 {
+		t.Fatalf("unexpected warnings: %q", errOut.String())
+	}
+	if _, err := os.Stat(recorder); err == nil {
+		t.Fatal("expected pull to be skipped for a present image, but it ran")
+	}
+}
+
+func TestPrepullBases_ForcePullsPresentRef(t *testing.T) {
+	tmp := t.TempDir()
+	recorder := filepath.Join(tmp, "pulls.txt")
+	stub := writeDockerStub(t, fmt.Sprintf(`case "$1" in
+  compose) cat <<'EOF'
+%s
+EOF
+  ;;
+  image) exit 0 ;;
+  pull) echo "$2" >> %q ;;
+esac
+`, composeConfigOneRef, recorder))
+
+	c := &dockerpkg.Compose{Bin: stub}
+	var errOut bytes.Buffer
+	prepullBases(&errOut, c, nil, true)
+
+	if errOut.Len() != 0 {
+		t.Fatalf("unexpected warnings: %q", errOut.String())
+	}
+	got, err := os.ReadFile(recorder)
+	if err != nil {
+		t.Fatalf("expected --force to pull an already-present image: %v", err)
+	}
+	if strings.TrimSpace(string(got)) != "golang:1.22" {
+		t.Fatalf("pulled ref = %q, want %q", strings.TrimSpace(string(got)), "golang:1.22")
+	}
+}
+
+func TestPrepullBases_DerivationFailureWarnsAndReturns(t *testing.T) {
+	stub := writeDockerStub(t, `echo boom 1>&2
+exit 1
+`)
+
+	c := &dockerpkg.Compose{Bin: stub}
+	var errOut bytes.Buffer
+	prepullBases(&errOut, c, nil, false)
+
+	if !strings.Contains(errOut.String(), "warning:") {
+		t.Fatalf("expected a warning on derivation failure, got %q", errOut.String())
+	}
+}
+
+func TestPrepullBases_MissingBasePullFailureWarningWording(t *testing.T) {
+	stub := writeDockerStub(t, fmt.Sprintf(`case "$1" in
+  compose) cat <<'EOF'
+%s
+EOF
+  ;;
+  image) exit 1 ;;
+  pull) echo boom 1>&2; exit 1 ;;
+esac
+`, composeConfigOneRef))
+
+	c := &dockerpkg.Compose{Bin: stub}
+	var errOut bytes.Buffer
+	prepullBases(&errOut, c, nil, false)
+
+	if !strings.Contains(errOut.String(), "golang:1.22") || !strings.Contains(errOut.String(), "build will likely fail") {
+		t.Fatalf("warning wording mismatch: %q", errOut.String())
+	}
+}
+
+// TestPrepullBases_ForceRepullFailureWarningWording covers the second warning
+// branch: an already-present base whose forced re-pull fails must warn with the
+// "re-pulling" wording (not "build will likely fail", since the base is present
+// and the build would still succeed).
+func TestPrepullBases_ForceRepullFailureWarningWording(t *testing.T) {
+	stub := writeDockerStub(t, fmt.Sprintf(`case "$1" in
+  compose) cat <<'EOF'
+%s
+EOF
+  ;;
+  image) exit 0 ;;
+  pull) echo boom 1>&2; exit 1 ;;
+esac
+`, composeConfigOneRef))
+
+	c := &dockerpkg.Compose{Bin: stub}
+	var errOut bytes.Buffer
+	prepullBases(&errOut, c, nil, true)
+
+	if !strings.Contains(errOut.String(), "golang:1.22") || !strings.Contains(errOut.String(), "re-pulling base image") {
+		t.Fatalf("warning wording mismatch: %q", errOut.String())
+	}
+	if strings.Contains(errOut.String(), "build will likely fail") {
+		t.Fatalf("present-base re-pull failure should not warn about build failure: %q", errOut.String())
 	}
 }

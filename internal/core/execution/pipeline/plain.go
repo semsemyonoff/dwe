@@ -211,10 +211,11 @@ func (r *PlainReporter) StartPipeline(name string, _ int) {
 	r.live.Start()
 	// Install this reporter as the global trace printer so pipeline-scoped
 	// diagnostics route through the live-view's safe screen path instead of
-	// raw stderr. Restored in FinishPipeline. SetPrinter's save/restore stack
-	// handles nested dwe pipelines (sequential, no concurrent mutation). Gated
-	// on Enabled so a normal (diagnostics-off) run never touches the global
-	// stack — zero overhead and no cross-call coupling.
+	// raw stderr. Restored in FinishPipeline. SetPrinter removes each entry by
+	// identity, so it handles both nested dwe pipelines (sequential LIFO) and
+	// concurrent siblings (parallel test scenarios finishing out of order).
+	// Gated on Enabled so a normal (diagnostics-off) run never touches the
+	// global stack — zero overhead and no cross-call coupling.
 	if trace.Enabled(trace.LevelVerbose) {
 		r.restoreTrace = trace.SetPrinter(livePrinter{live: r.live})
 	}

@@ -27,6 +27,16 @@ type DockerConfig struct {
 	Resources DockerResourcesConfig `yaml:"resources"`
 	// Topology controls topology display and health calculation.
 	Topology DockerTopologyConfig `yaml:"topology"`
+	// Build holds image-build policy for compose build/up paths.
+	Build DockerBuildConfig `yaml:"build"`
+}
+
+// DockerBuildConfig holds image-build policy for compose build/up paths.
+type DockerBuildConfig struct {
+	// PrepullBases pulls external FROM base images via the daemon before
+	// buildkit builds, working around builders that cannot reach LAN
+	// registries. Missing-only by default; see dwe docker build --force.
+	PrepullBases bool `yaml:"prepull_bases"`
 }
 
 // DockerTopologyConfig controls which compose services appear in the

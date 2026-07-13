@@ -18,6 +18,7 @@ Project readiness checks.
   - [`env_keys_present`](#env_keys_present)
   - [`config_keys_present`](#config_keys_present)
   - [`tcp_reachable`](#tcp_reachable)
+  - [`http_check`](#http_check)
 - [`type: command` checks](#type-command-checks)
 - [Checks should be idempotent inspection](#checks-should-be-idempotent-inspection)
 - [Worked examples](#worked-examples)
@@ -37,7 +38,7 @@ The goal is to surface user-actionable problems ("you're not logged into ghcr.io
 
 ## Validation domains
 
-The validate command runs five domains in addition to the existing YAML-shape validators:
+The validate command runs six domains in addition to the existing YAML-shape validators:
 
 | Domain | Source | Configurable? |
 |--------|--------|---------------|
@@ -46,6 +47,9 @@ The validate command runs five domains in addition to the existing YAML-shape va
 | `linters.*` | Built-in adapters (shellcheck, hadolint) + `workspace/validate.yml` `linters:` block | Yes — declarative |
 | `translations.*` | `workspace/i18n/` translation files | No — fixed validators (parse errors, orphan command/group ids, unknown `render.*` keys) |
 | `snapshot.*` | On-disk snapshot directories + `workspace/snapshot.yml` | No — fixed validators per snapshot name |
+| `tests.*` | `workspace/tests/*.yml` scenario files | No — fixed scenario validators (renders + resolves each scenario's steps, flags unknown services / command refs / duplicate step names, and surfaces compose-isolation hazards as warnings) |
+
+The `tests.*` domain is validate-only (like `snapshot.*`) — it never runs in preflight, and it stays silent when `workspace/tests/` is absent. See [`tests.md`](tests.md#dwe-validate-tests) for the full scenario-validation surface (`dwe validate tests`).
 
 The `env.*` probes are: `env.docker_bin`, `env.docker_daemon`, `env.docker_compose`, `env.git_bin`, `env.shell_bin`, `env.project_perms`, `env.ports_free`. They run on every `dwe validate` invocation and on every preflight (regardless of stage — env has no stage concept), with one exception: `env.ports_free` self-skips on the `stop` stage since port conflicts are irrelevant when winding the project down.
 
@@ -164,7 +168,7 @@ Unknown service names produce an error diagnostic in the `config.validate` targe
 
 ## Available builtins
 
-All six builtins are usable both as `type: builtin` check entries and as deploy step bodies / `check:` action blocks.
+All seven builtins are usable both as `type: builtin` check entries and as deploy step bodies / `check:` action blocks.
 
 ### `shell`
 
@@ -229,6 +233,21 @@ Attempts a TCP dial to `host:port`.
 | `host` | string | yes | — | Hostname or IP. |
 | `port` | int | yes | — | Port in range 1–65535. |
 | `timeout` | duration | no | `3s` | Dial timeout. |
+
+### `http_check`
+
+Performs an HTTP `GET` and asserts the response status (and, when set, a body substring), retrying on failure.
+
+| Key | Type | Required | Default | Description |
+|-----|------|----------|---------|-------------|
+| `url` | string | yes | — | Absolute `http`/`https` URL with a host. |
+| `status` | int | no | `200` | Expected status code. |
+| `contains` | string | no | — | Substring that must appear in the response body. |
+| `retries` | int | no | `0` | Additional attempts after the first (total attempts = `retries + 1`). |
+| `interval` | duration | no | `1s` | Wait between attempts. |
+| `timeout` | duration | no | `5s` | Per-attempt timeout. |
+
+Error message on failure: `http_check <url>: expected status 200, got 503` (with `(after N attempts)` appended when retries are configured). See the [builtins reference](deploy/builtins.md#http_check) for the full behavior notes.
 
 ## `type: command` checks
 

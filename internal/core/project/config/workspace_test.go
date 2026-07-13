@@ -5288,6 +5288,15 @@ cmd: echo hi
 `,
 		},
 		{
+			name: "leaf step with timeout parses",
+			yaml: `
+name: hello
+type: shell
+cmd: echo hi
+timeout: 90s
+`,
+		},
+		{
 			name: "pure parallel parses",
 			yaml: `
 name: group
@@ -5371,6 +5380,18 @@ parallel:
 `,
 			wantErr:   true,
 			errSubstr: "continue_on_error",
+		},
+		{
+			name: "parallel + timeout rejected",
+			yaml: `
+name: g
+timeout: 90s
+parallel:
+  steps:
+    - {name: a, type: shell, cmd: echo a}
+`,
+			wantErr:   true,
+			errSubstr: "timeout",
 		},
 		{
 			name: "parallel + when accepted",
@@ -5470,6 +5491,39 @@ parallel:
 			}
 			if err != nil {
 				t.Fatalf("unexpected error: %v", err)
+			}
+		})
+	}
+}
+
+// TestDeployStep_TimeoutRoundTrip verifies the raw timeout string decodes
+// unchanged and defaults to empty when absent.
+func TestDeployStep_TimeoutRoundTrip(t *testing.T) {
+	tests := []struct {
+		name string
+		yaml string
+		want string
+	}{
+		{name: "absent", yaml: `
+name: hello
+type: shell
+cmd: echo hi
+`, want: ""},
+		{name: "present", yaml: `
+name: hello
+type: shell
+cmd: echo hi
+timeout: 90s
+`, want: "90s"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			var step DeployStep
+			if err := yamlUnmarshalForTest(tt.yaml, &step); err != nil {
+				t.Fatalf("unexpected error: %v", err)
+			}
+			if step.Timeout != tt.want {
+				t.Fatalf("step.Timeout = %q, want %q", step.Timeout, tt.want)
 			}
 		})
 	}

@@ -1,4 +1,4 @@
-> Translated from: reference/concepts/project-layout.md @ 0feff3f706b7
+> Translated from: reference/concepts/project-layout.md @ 277ae2d15b7b
 
 # Раскладка проекта
 
@@ -10,7 +10,9 @@
 - [Корневые файлы](#корневые-файлы)
 - [Дерево конфигурации `workspace/`](#дерево-конфигурации-workspace)
 - [Оверлеи `compose/`](#оверлеи-compose)
-- [Runtime-данные сервисов](#runtime-данные-сервисов)
+- [Образы сервисов (`images/`)](#образы-сервисов-images)
+- [Отрендеренные конфиги и дампы](#отрендеренные-конфиги-и-дампы)
+- [Исходники сервисов (`services/`)](#исходники-сервисов-services)
 - [Управляемый runtime каталог `.dwe/`](#управляемый-runtime-каталог-dwe)
 - [Сводка по отслеживанию в git](#сводка-по-отслеживанию-в-git)
 - [Что читать дальше](#что-читать-дальше)
@@ -112,6 +114,7 @@ project:
 | `workspace/info.yml` | Элементы информационной панели (заголовок, URL, хосты, команды, пользовательские секции) | Рендерер `dwe info` | Автор вручную | да |
 | `workspace/setup.yml` | Вопросы мастера настройки (input / confirm / select / multiselect) | Workflow setup | Автор вручную | да |
 | `workspace/validate.yml` | Проверки готовности проекта (`shell` / `file_exists` / `tcp_reachable` / …) | `dwe validate` + preflight | Автор вручную | да |
+| `workspace/tests/` | Сценарии интеграционных тестов (`<name>.yml`), запускаемые на одноразовой копии проекта | `dwe test` / `dwe validate tests` | Автор вручную | да |
 | `workspace/docker.yml` | Слой оркестрации compose: шаблон имени проекта, список файлов, топология, скрытые сервисы | Подсистема Docker | Автор вручную | да |
 | `workspace/docker.local.yml` | Переопределения compose на разработчика, глубоко смерженные поверх `docker.yml` | Подсистема Docker | Автор вручную | нет |
 | `workspace/styles.yml` | Палитра семантических токенов (accent / success / warning / danger / muted / border / text) | UI-стилизация | Автор вручную | да |

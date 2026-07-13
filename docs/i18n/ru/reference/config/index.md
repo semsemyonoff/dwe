@@ -1,4 +1,4 @@
-> Translated from: reference/config/index.md @ 9ef2195f42e7
+> Translated from: reference/config/index.md @ 8c99c0ff9230
 
 # Справочник конфигурации
 
@@ -33,6 +33,7 @@
 | `workspace/commands/` | да | отдельный | Декларативные определения команд (по группе на файл) |
 | `workspace/validate.yml` | да | отдельный | Проверки готовности проекта (preflight + `dwe validate`) |
 | `workspace/snapshot.yml` | да | отдельный | Snapshot-workflow'ы: create / restore / remove (`dwe snapshot`) |
+| `workspace/tests/<scenario>.yml` | да | отдельный | Сценарии интеграционных тестов: изолированный деплой + шаги-проверки (`dwe test`) |
 | `workspace/i18n/*.yml` | да | отдельный | Переводы пользовательских команд и UI-строк (опционально; один файл на язык) |
 
 ## Runtime-артефакты
@@ -45,6 +46,7 @@
 - `.dwe/snapshots/snapshot.lock` — snapshot lock-файл (только Unix; сериализует изменения снапшотов и совместно захватывается lifecycle-командами деплоя)
 - `.dwe/snapshots/current` — указатель текущего снапшота (последний созданный или восстановленный)
 - `.dwe/snapshots/.pre-restore-backup/` — резервная копия `workspace/local.yml` + `.dwe/deploy/state.yml`, снимаемая перед каждым restore; используется для ручного восстановления при сбое restore
+- `.dwe/tests/runs/<scenario>/`, `.dwe/tests/locks/<scenario>.lock`, `.dwe/tests/manifests/<scenario>-<run-id>.yml`, `.dwe/tests/reports/<scenario>/` — копии сценариев `dwe test`, per-scenario flock'и, durable-манифесты запусков и артефакты отчётов об ошибках (собираются только при сбое)
 
 Добавьте `.dwe/` в `.gitignore` проекта, если ещё не добавлено.
 
@@ -113,6 +115,7 @@ flowchart LR
 - [commands/](commands/index.md) — декларативные команды: типы, параметры, контекст, файлы, workflow'ы, шаблоны
 - [validate.yml](validate.md) — проверки готовности проекта: env-пробы, декларативные проверки, билтины, стадии, preflight
 - [snapshot.yml](snapshot.md) — snapshot-workflow'ы: блоки create/restore/remove, варианты, неймспейс `${snapshot.*}`, manifest, взаимодействие с lock, безопасность архивов
+- [tests/](tests.md) — сценарии интеграционных тестов: схема, `auto`-порты, модель изоляции, teardown, `dwe test run/list/clean`, отчёты об ошибках, коды выхода
 - [Локализация (i18n)](i18n.md) — переводы пользовательских команд и UI-строк: разрешение локали, формат файла, справочник ключей, валидация
 - [Пользовательский конфиг](userconfig.md) — пользовательские настройки: расположение файла, синтаксис, переопределения бинарей, язык, тема mermaid
 - [Уведомления](notifications.md) — desktop-уведомления на уровне пользователя: расположение конфиг-файлов, ключи, матрица условий, env-переопределения
@@ -131,3 +134,6 @@ flowchart LR
 - `dwe status apps` — показывает app-сервисы с health и deploy-статусом
 - `dwe status tools` — показывает таблицу tool-сервисов (read-only)
 - `dwe status infra` — показывает таблицу infra-сервисов (read-only)
+- `dwe test run` — запускает изолированные сценарии интеграционных тестов на одноразовой копии проекта
+- `dwe test list` — список доступных сценариев интеграционных тестов
+- `dwe test clean` — убирает сохранённые/оставшиеся окружения интеграционных тестов и сообщает (никогда не удаляет автоматически) об осиротевших compose-проектах (на основе манифестов; `--dry-run`, `[scenario...]`)

@@ -8,7 +8,9 @@ What a typical DWE project looks like on disk: the tracked config tree under `wo
 - [Root files](#root-files)
 - [The `workspace/` config tree](#the-workspace-config-tree)
 - [The `compose/` overlays](#the-compose-overlays)
-- [Per-service runtime data](#per-service-runtime-data)
+- [Service images (`images/`)](#service-images-images)
+- [Rendered config files and dumps](#rendered-config-files-and-dumps)
+- [Service sources (`services/`)](#service-sources-services)
 - [Runtime-managed `.dwe/`](#runtime-managed-dwe)
 - [Tracked-by-git summary](#tracked-by-git-summary)
 - [Where to go next](#where-to-go-next)
@@ -110,6 +112,7 @@ Everything declarative about a project — services, pipelines, commands, templa
 | `workspace/info.yml` | Info dashboard items (header, URLs, hosts, commands, custom sections) | `dwe info` renderer | Author manually | yes |
 | `workspace/setup.yml` | Setup wizard questions (input / confirm / select / multiselect) | Setup workflow | Author manually | yes |
 | `workspace/validate.yml` | Project-readiness checks (`shell` / `file_exists` / `tcp_reachable` / …) | `dwe validate` + preflight | Author manually | yes |
+| `workspace/tests/` | Integration-test scenarios (`<name>.yml`) run against a disposable project copy | `dwe test` / `dwe validate tests` | Author manually | yes |
 | `workspace/docker.yml` | Compose orchestration layer: project-name template, file list, topology, hidden services | Docker subsystem | Author manually | yes |
 | `workspace/docker.local.yml` | Per-developer compose overrides deep-merged on top of `docker.yml` | Docker subsystem | Author manually | no |
 | `workspace/styles.yml` | Semantic-token palette (accent / success / warning / danger / muted / border / text) | UI styling | Author manually | yes |

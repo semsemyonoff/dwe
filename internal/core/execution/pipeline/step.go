@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"sort"
 	"strings"
+	"time"
 
 	"github.com/semsemyonoff/dwe/internal/core/execution/builtin"
 	"github.com/semsemyonoff/dwe/internal/core/execution/condition"
@@ -21,6 +22,8 @@ import (
 // PhaseWhen carries the phase-level runtime when condition; evaluated once per phase.
 // FilesGate is non-nil when the step carries a files_gate directive; evaluated before
 // the step executes and independently of RuntimeWhen.
+// Timeout is non-zero when the step declares a positive `timeout:`; zero means
+// unbounded (absent, "0", or a leaf step whose duration parsed to zero).
 type ResolvedStep struct {
 	Phase       config.DeployPhase
 	Step        config.DeployStep
@@ -29,6 +32,7 @@ type ResolvedStep struct {
 	PhaseWhen   *condition.Condition // phase-level runtime when condition; nil otherwise
 	FilesGate   *filesgate.FilesGate // step-level files gate; nil otherwise
 	Parallel    *ResolvedParallel    // non-nil when the step is a parallel group
+	Timeout     time.Duration        // step-body timeout; 0 = unbounded
 }
 
 // ResolvedParallel is the resolved form of a config.ParallelGroup.

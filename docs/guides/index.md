@@ -28,6 +28,7 @@ For developers who write DWE config — author services, commands, daemons, snap
 - [Localize for your team](localize-for-your-team.md) — translate user commands and command-browser strings into RU / DE / FR / …
 - [Brand your project](brand-your-project.md) — customize the ASCII header, palette, and `dwe info` dashboard.
 - [Write snapshot workflows](write-snapshot-workflows.md) — author `workspace/snapshot.yml`: decide what gets captured, restored, and cleaned up.
+- [Writing integration tests](integration-tests.md) — author `workspace/tests/*.yml` scenarios: isolated deploy tests, assertions, testing project commands, debugging with `--keep`.
 
 ### Integrations
 

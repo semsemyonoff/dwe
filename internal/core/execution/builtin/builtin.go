@@ -48,6 +48,7 @@
 //	root (KindPredicate)
 //	- shell                         — exit-code predicate via /bin/sh
 //	- tcp_reachable                 — TCP host:port reachability predicate
+//	- http_check                    — HTTP GET status/body reachability predicate (with retries)
 //	- config_keys_present           — verify merged-config dot-paths resolve to non-empty values
 package builtin
 
@@ -98,6 +99,7 @@ func buildRegistry() map[string]spec.Entry {
 		// KindPredicate: read-only checks for check: positions and validate.yml
 		"shell":               {Impl: Shell{}, Kind: spec.KindPredicate},
 		"tcp_reachable":       {Impl: TCPReachable{}, Kind: spec.KindPredicate},
+		"http_check":          {Impl: HTTPCheck{}, Kind: spec.KindPredicate},
 		"config_keys_present": {Impl: ConfigKeysPresent{}, Kind: spec.KindPredicate},
 	}
 	for _, src := range []map[string]spec.Entry{
@@ -136,15 +138,16 @@ func Get(name string, ctx CallerContext) (Builtin, bool) {
 // Rules:
 //   - KindAction: allowed in CtxUserYAML (step body) and CtxPredicate (check: position).
 //     Actions may be read-only (e.g. service_configs_check) and are safe in check: position.
-//   - KindPredicate: only in CtxPredicate. These builtins have boolean exit-code semantics
-//     and MUST NOT appear in step bodies — they don't produce side-effect output.
+//   - KindPredicate: allowed in CtxPredicate (check: position, validate.yml) and in
+//     CtxUserYAML (step body). A predicate used as a step body is an assertion:
+//     false fails the step with the predicate's message. Because CtxUserYAML is
+//     shared with user-command type: builtin definitions, predicates are legal as
+//     user commands too — intentional (commands and pipelines share the registry).
 //   - KindInternal: only in CtxInternal (engine-synthetic phases or daemon-generated commands).
 func kindAllowed(k spec.Kind, ctx spec.CallerContext) bool {
 	switch k {
-	case spec.KindAction:
+	case spec.KindAction, spec.KindPredicate:
 		return ctx == spec.CtxUserYAML || ctx == spec.CtxPredicate
-	case spec.KindPredicate:
-		return ctx == spec.CtxPredicate
 	case spec.KindInternal:
 		return ctx == spec.CtxInternal
 	}
@@ -158,7 +161,7 @@ func kindMismatchHint(name string, k spec.Kind, _ spec.CallerContext) string {
 	case spec.KindInternal:
 		return fmt.Sprintf("builtin %q is engine-internal and cannot be called from user-authored YAML; it is invoked automatically by the engine", name)
 	case spec.KindPredicate:
-		return fmt.Sprintf("builtin %q is a predicate and can only be used in check: positions or validate.yml cmd: entries, not as a step body action", name)
+		return fmt.Sprintf("builtin %q is a predicate and can only be used in user-authored YAML (step bodies as assertions, check: positions, validate.yml cmd: entries), not from this context", name)
 	case spec.KindAction:
 		return fmt.Sprintf("builtin %q is an action and cannot be called from this context", name)
 	}
@@ -179,6 +182,18 @@ var interactiveBuiltins = map[string]bool{
 // a parallel group. Future interactive builtins register here.
 func IsInteractive(name string) bool {
 	return interactiveBuiltins[name]
+}
+
+// KindOf returns the kind of the named builtin, or (0, false) when the name is
+// unknown. Unlike Get, it performs no caller-context gating — callers such as
+// the pipeline's always-run helper use it to classify a step body
+// (KindPredicate body = assertion, forces execution past deploy's skip gates).
+func KindOf(name string) (Kind, bool) {
+	entry, ok := registry[name]
+	if !ok {
+		return 0, false
+	}
+	return entry.Kind, true
 }
 
 // Validate checks that name is a known builtin compatible with ctx and that with params are valid.

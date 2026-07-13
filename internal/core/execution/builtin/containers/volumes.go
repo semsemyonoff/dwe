@@ -62,13 +62,47 @@ func (RemoveProjectVolumes) Run(ctx context.Context, with map[string]any, ectx s
 
 	dockerBin := config.DockerBin(ectx.Config)
 
-	// List all volumes (fatal on failure — see the method doc).
-	all, err := listVolumesFn(ctx, dockerBin)
+	removed, failed, err := RemoveVolumesByProjectPrefix(ctx, dockerBin, projectName, func(format string, args ...any) {
+		ectx.Output.Error(fmt.Sprintf(format, args...))
+	})
 	if err != nil {
-		return fmt.Errorf("listing docker volumes: %w", err)
+		return err
 	}
 
 	prefix := projectName + "_"
+	total := len(removed) + len(failed)
+	if total == 0 {
+		ectx.Output.Info(fmt.Sprintf("no volumes found with prefix %q", prefix))
+		return nil
+	}
+
+	ectx.Output.Info(fmt.Sprintf("removing %d volume(s) with prefix %q", total, prefix))
+
+	if len(removed) > 0 {
+		ectx.Output.Success(fmt.Sprintf("removed %d volume(s)", len(removed)))
+	}
+	if len(failed) > 0 {
+		ectx.Output.Info(fmt.Sprintf("%d volume(s) left in place: %s", len(failed), strings.Join(failed, ", ")))
+	}
+	return nil
+}
+
+// RemoveVolumesByProjectPrefix removes every docker volume whose name carries
+// the prefix "<projectName>_" (volumes without the prefix, e.g. `shared:`
+// volumes, survive). Listing failure is fatal (returned as err, so a caller
+// like reset or test teardown can abort rather than proceed blind); a
+// per-volume removal failure is best-effort — it is reported via logf (nil is
+// a valid no-op) and recorded in failed, but never aborts the batch. removed
+// and failed are returned so callers can build their own summary/accounting
+// on top (e.g. the builtin's Info/Success lines, or a teardown log line).
+func RemoveVolumesByProjectPrefix(ctx context.Context, dockerBin, projectName string, logf func(format string, args ...any)) (removed, failed []string, err error) {
+	prefix := projectName + "_"
+
+	all, err := listVolumesFn(ctx, dockerBin)
+	if err != nil {
+		return nil, nil, fmt.Errorf("listing docker volumes: %w", err)
+	}
+
 	var toRemove []string
 	for _, vol := range all {
 		if strings.HasPrefix(vol, prefix) {
@@ -76,35 +110,20 @@ func (RemoveProjectVolumes) Run(ctx context.Context, with map[string]any, ectx s
 		}
 	}
 
-	if len(toRemove) == 0 {
-		ectx.Output.Info(fmt.Sprintf("no volumes found with prefix %q", prefix))
-		return nil
-	}
-
-	ectx.Output.Info(fmt.Sprintf("removing %d volume(s) with prefix %q", len(toRemove), prefix))
-
-	// Per-volume best-effort: a single stuck volume must not abort the reset.
-	var removed int
-	var failed []string
 	for _, vol := range toRemove {
 		if err := ctx.Err(); err != nil {
-			return err
+			return removed, failed, err
 		}
 		if rmErr := removeVolumeFn(ctx, dockerBin, vol); rmErr != nil {
 			failed = append(failed, vol)
-			ectx.Output.Error(fmt.Sprintf("could not remove volume %q: %v", vol, rmErr))
+			if logf != nil {
+				logf("could not remove volume %q: %v", vol, rmErr)
+			}
 			continue
 		}
-		removed++
+		removed = append(removed, vol)
 	}
-
-	if removed > 0 {
-		ectx.Output.Success(fmt.Sprintf("removed %d volume(s)", removed))
-	}
-	if len(failed) > 0 {
-		ectx.Output.Info(fmt.Sprintf("%d volume(s) left in place: %s", len(failed), strings.Join(failed, ", ")))
-	}
-	return nil
+	return removed, failed, nil
 }
 
 // listDockerVolumes returns every docker volume name (`docker volume ls -q`),

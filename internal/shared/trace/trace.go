@@ -11,7 +11,10 @@
 //  1. a context-carried printer (WithLinePrinter) — set by the executor's
 //     parallel path so concurrent sub-steps attribute correctly; overrides all;
 //  2. the global active printer (SetPrinter) — set by the pipeline reporter to
-//     a printer wrapping the live-view's safe screen path; the safe baseline;
+//     a printer wrapping the live-view's safe screen path; the safe baseline.
+//     Entries are removed by identity, so concurrent pipelines (parallel test
+//     scenarios) that register and restore out of order never drop each
+//     other's still-active printer;
 //  3. the configured fallback writer (Configure) — used outside any pipeline.
 //
 // When the level is LevelOff every emit returns immediately after one atomic
@@ -47,12 +50,21 @@ type LinePrinter interface {
 	PrintLine(s string)
 }
 
+// printerEntry pairs a registered global printer with a unique id so its
+// restore can remove exactly its own entry, even when concurrent callers
+// restore out of order.
+type printerEntry struct {
+	id int64
+	p  LinePrinter
+}
+
 var (
 	level atomic.Int32
 
-	mu       sync.Mutex
-	fallback io.Writer
-	printers []LinePrinter // save/restore stack; top is the active global printer
+	mu         sync.Mutex
+	fallback   io.Writer
+	printers   []printerEntry // active global printers; last entry is the active one
+	printerSeq int64          // monotonic id source for printerEntry
 )
 
 type ctxKey struct{}
@@ -110,7 +122,7 @@ func emit(ctx context.Context, line string) {
 	}
 	mu.Lock()
 	if n := len(printers); n > 0 {
-		p := printers[n-1]
+		p := printers[n-1].p
 		mu.Unlock()
 		p.PrintLine(line)
 		return
@@ -122,14 +134,21 @@ func emit(ctx context.Context, line string) {
 	}
 }
 
-// SetPrinter pushes p as the global active printer and returns a restore
-// function that pops it (and anything pushed above it). Restore is idempotent.
-// Only sequential callers (nested pipelines) mutate the stack; parallel
-// sub-steps attribute via WithLinePrinter and never touch it.
+// SetPrinter registers p as the active global printer and returns a restore
+// function that removes exactly p's own entry. Restore is idempotent. Restores
+// may run out of order relative to registration: this happens both for nested
+// sequential pipelines (LIFO) and — since parallel test scenarios each run
+// their own in-process pipeline — for concurrent siblings whose pipelines
+// finish in an arbitrary order. Removing only the caller's entry (rather than
+// truncating everything above it) keeps a still-active sibling's printer
+// installed, so its diagnostics never fall through to the fallback writer.
+// Parallel sub-steps within one pipeline attribute via WithLinePrinter and
+// never touch this stack.
 func SetPrinter(p LinePrinter) (restore func()) {
 	mu.Lock()
-	printers = append(printers, p)
-	idx := len(printers) - 1
+	printerSeq++
+	id := printerSeq
+	printers = append(printers, printerEntry{id: id, p: p})
 	mu.Unlock()
 
 	var once sync.Once
@@ -137,8 +156,11 @@ func SetPrinter(p LinePrinter) (restore func()) {
 		once.Do(func() {
 			mu.Lock()
 			defer mu.Unlock()
-			if idx < len(printers) {
-				printers = printers[:idx]
+			for i := range printers {
+				if printers[i].id == id {
+					printers = append(printers[:i], printers[i+1:]...)
+					return
+				}
 			}
 		})
 	}
