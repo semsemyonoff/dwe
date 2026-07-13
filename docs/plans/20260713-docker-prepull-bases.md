@@ -275,13 +275,13 @@ CLI integration (`internal/cli/docker/docker.go`):
 - Modify: `internal/cli/docker/docker.go`
 - Modify: `internal/cli/docker/docker_test.go`
 
-- [ ] add `prepull bool` parameter to `resolveBuildInvocation`; `force && prepull` →
+- [x] add `prepull bool` parameter to `resolveBuildInvocation`; `force && prepull` →
       only `--no-cache`; all other combinations byte-identical to today
-- [ ] update ALL existing `resolveBuildInvocation` call sites for the new parameter —
+- [x] update ALL existing `resolveBuildInvocation` call sites for the new parameter —
       besides the production site (`docker.go`), `docker_test.go` calls it at lines
       ~384, ~598, ~648, ~649; adapt those calls (pass `false`), do NOT delete or
       rewrite the tests themselves
-- [ ] implement `prepullBases(errOut io.Writer, compose *dockerpkg.Compose, services []string, force bool)`:
+- [x] implement `prepullBases(errOut io.Writer, compose *dockerpkg.Compose, services []string, force bool)`:
       derive (error → warning, return); for each ref — `force` → always pull,
       else pull only when `!ImageExists(ref)`; pull failure of a missing base → loud
       warning naming the ref ("build will likely fail"); pull failure otherwise →
@@ -291,15 +291,15 @@ CLI integration (`internal/cli/docker/docker.go`):
       convention; keeps the helper testable). stderr is safe in the deploy-subprocess
       context — `dwe docker up` runs as a child process, not inside the parent's live
       frame
-- [ ] wire build `RunE` and up `RunE` behind `p.dockerCfg.Build.PrepullBases` per
+- [x] wire build `RunE` and up `RunE` behind `p.dockerCfg.Build.PrepullBases` per
       Technical Details (order: resolve invocation → prepull → Exec); flag off → zero
       extra execs
-- [ ] extend `resolveBuildInvocation` table tests: (force,prepull) matrix — (t,t) →
+- [x] extend `resolveBuildInvocation` table tests: (force,prepull) matrix — (t,t) →
       `--no-cache` only; (t,f) → `--no-cache --pull`; (f,*) → services only
-- [ ] write tests for `prepullBases` with `writeStub`: missing ref pulled; present ref
+- [x] write tests for `prepullBases` with `writeStub`: missing ref pulled; present ref
       skipped; force pulls present ref; derivation failure → warning text on stderr and
       no panic/no error; verify warning wording for the missing-base-pull-failed case
-- [ ] run `go test ./internal/cli/docker/...` — must pass before task 6
+- [x] run `go test ./internal/cli/docker/...` — must pass before task 6
 
 ### Task 6: Documentation
 
