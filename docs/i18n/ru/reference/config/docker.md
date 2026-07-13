@@ -1,4 +1,4 @@
-> Translated from: reference/config/docker.md @ 96f57f4915f2
+> Translated from: reference/config/docker.md @ 331e7d89eadb
 
 # docker.yml / docker.local.yml
 

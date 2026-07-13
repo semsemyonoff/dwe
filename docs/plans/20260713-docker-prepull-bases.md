@@ -320,12 +320,12 @@ CLI integration (`internal/cli/docker/docker.go`):
 
 ### Task 7: Verify acceptance criteria
 
-- [ ] verify all Overview requirements: flag default-off byte-identical paths; missing-only
+- [x] verify all Overview requirements: flag default-off byte-identical paths; missing-only
       pull; force interplay; advisory degradation; build+up coverage
-- [ ] verify edge cases from the trap list (grep new code: no `BuildArgs` for config JSON,
+- [x] verify edge cases from the trap list (grep new code: no `BuildArgs` for config JSON,
       no printing from `internal/shared/docker`)
-- [ ] run full test suite: `make test`
-- [ ] run `make lint`
+- [x] run full test suite: `make test`
+- [x] run `make lint`
 
 ### Task 8: [Final] Update documentation and close out
 
