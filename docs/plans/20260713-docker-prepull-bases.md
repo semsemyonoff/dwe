@@ -231,7 +231,7 @@ CLI integration (`internal/cli/docker/docker.go`):
 - Create: `internal/shared/docker/prepull.go`
 - Create: `internal/shared/docker/prepull_test.go`
 
-- [ ] implement `func (c *Compose) DeriveBuildBases(services []string) ([]string, error)`
+- [x] implement `func (c *Compose) DeriveBuildBases(services []string) ([]string, error)`
       per Technical Details: `c.output(c.BuildInternalArgs("config", "--format", "json"))`,
       narrow JSON struct for `services.<name>.build`, `dockerfile` resolved relative to
       absolute `context` (default `Dockerfile`) — but when `dockerfile` is already
@@ -241,14 +241,14 @@ CLI integration (`internal/cli/docker/docker.go`):
       null-valued args entirely — defensive null handling is fine but the normal case
       is a plain string map; a dropped arg correctly falls back to the Dockerfile's
       pre-FROM `ARG` default), service filter (empty = all), dedupe + sort
-- [ ] write tests with `writeStub` (canned `compose config` JSON on stdout) + real temp
+- [x] write tests with `writeStub` (canned `compose config` JSON on stdout) + real temp
       Dockerfiles: multi-service dedupe; service filter honored; service without `build:`
       skipped; `dockerfile_inline`; `build.args` override reaching the parser
-- [ ] write error tests: stub exiting non-zero → error returned (caller degrades it to a
+- [x] write error tests: stub exiting non-zero → error returned (caller degrades it to a
       warning); unreadable Dockerfile → error or per-service skip (pick one, document in
       the func comment); assert the stub received `compose config` WITHOUT global args
       (BuildInternalArgs contract)
-- [ ] run `go test ./internal/shared/docker/...` — must pass before task 4
+- [x] run `go test ./internal/shared/docker/...` — must pass before task 4
 
 ### Task 4: `ImageExists` / `PullImage` mechanics
 
