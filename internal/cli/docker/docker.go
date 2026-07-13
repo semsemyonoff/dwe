@@ -2,6 +2,7 @@ package docker
 
 import (
 	"fmt"
+	"io"
 	"slices"
 
 	"github.com/semsemyonoff/dwe/internal/cli/cmdctx"
@@ -99,6 +100,12 @@ func newDockerUpCmd(flags *cmdctx.RootFlags) *cobra.Command {
 			p, err := newDockerPipeline(flags, "up")
 			if err != nil {
 				return err
+			}
+			if p.dockerCfg.Build.PrepullBases {
+				// Pass nil (not args): `docker compose up <svc>` also builds
+				// <svc>'s depends_on services, whose base images must be
+				// prepulled too — narrowing to args would skip them.
+				prepullBases(cmd.ErrOrStderr(), p.compose, nil, false)
 			}
 			extra := args
 			if wait {
@@ -284,9 +291,13 @@ func newDockerPullCmd(flags *cmdctx.RootFlags) *cobra.Command {
 
 // resolveBuildInvocation returns the Compose instance and extra args for a build command.
 // When all is true, uses ComposeFilesAll(); otherwise uses ComposeFiles().
-// When force is true, prepends --no-cache --pull to the extra args.
-// The returned extra args include the force flags (if applicable) and service names.
-func resolveBuildInvocation(cfg *config.DweConfig, dockerCfg *config.DockerConfig, baseDir string, all, force bool, services []string) (*dockerpkg.Compose, []string) {
+// When force is true, prepends --no-cache --pull to the extra args — unless
+// prepull is also true, in which case the daemon-side prepull step already
+// re-pulls the derived bases and compose gets only --no-cache (buildkit
+// --pull is broken for LAN registries, the same root cause prepull works
+// around). The returned extra args include the force flags (if applicable)
+// and service names.
+func resolveBuildInvocation(cfg *config.DweConfig, dockerCfg *config.DockerConfig, baseDir string, all, force, prepull bool, services []string) (*dockerpkg.Compose, []string) {
 	var compose *dockerpkg.Compose
 	if all {
 		compose = dockerpkg.NewComposeAll(cfg, dockerCfg, baseDir)
@@ -296,10 +307,55 @@ func resolveBuildInvocation(cfg *config.DweConfig, dockerCfg *config.DockerConfi
 
 	extraArgs := make([]string, 0, len(services)+2)
 	if force {
-		extraArgs = append(extraArgs, "--no-cache", "--pull")
+		if prepull {
+			extraArgs = append(extraArgs, "--no-cache")
+		} else {
+			extraArgs = append(extraArgs, "--no-cache", "--pull")
+		}
 	}
 	extraArgs = append(extraArgs, services...)
 	return compose, extraArgs
+}
+
+// prepullBases best-effort pulls the external FROM base images derived from
+// the given services (empty = all) via the daemon, so buildkit resolves
+// every FROM locally. This is the whole point of build.prepull_bases:
+// buildkit's own fetcher cannot reach LAN registries on some builders, while
+// `docker pull` does.
+//
+// The entire step is advisory (constraint #3): any internal error (deriving
+// bases, probing image existence) degrades to a warning on errOut and
+// execution always proceeds to the compose command that follows. When force
+// is true every derived base is pulled unconditionally; otherwise only bases
+// missing from the local image store are pulled. A pull failure for a
+// missing base is called out loudly, since the following compose
+// build/up is likely to fail for the same reason.
+func prepullBases(errOut io.Writer, compose *dockerpkg.Compose, services []string, force bool) {
+	refs, err := compose.DeriveBuildBases(services)
+	if err != nil {
+		_, _ = fmt.Fprintf(errOut, "warning: deriving build base images: %v\n", err)
+		return
+	}
+
+	for _, ref := range refs {
+		label := ref.Ref
+		if ref.Platform != "" {
+			label = fmt.Sprintf("%s (%s)", ref.Ref, ref.Platform)
+		}
+
+		exists := compose.ImageExists(ref.Ref, ref.Platform)
+		if exists && !force {
+			continue
+		}
+
+		if err := compose.PullImage(ref.Ref, ref.Platform); err != nil {
+			if !exists {
+				_, _ = fmt.Fprintf(errOut, "warning: pulling base image %q failed, build will likely fail: %v\n", label, err)
+			} else {
+				_, _ = fmt.Fprintf(errOut, "warning: re-pulling base image %q failed: %v\n", label, err)
+			}
+		}
+	}
 }
 
 func newDockerBuildCmd(flags *cmdctx.RootFlags) *cobra.Command {
@@ -315,14 +371,18 @@ func newDockerBuildCmd(flags *cmdctx.RootFlags) *cobra.Command {
 				return err
 			}
 
-			compose, extraArgs := resolveBuildInvocation(p.cfg, p.dockerCfg, p.baseDir, all, force, args)
+			prepull := p.dockerCfg.Build.PrepullBases
+			compose, extraArgs := resolveBuildInvocation(p.cfg, p.dockerCfg, p.baseDir, all, force, prepull, args)
+			if prepull {
+				prepullBases(cmd.ErrOrStderr(), compose, args, force)
+			}
 			return compose.Exec("build", extraArgs...)
 		},
 		SilenceUsage: true,
 	}
 
 	cmd.Flags().BoolVar(&all, "all", false, "build images from all configured overlays, not just enabled ones")
-	cmd.Flags().BoolVar(&force, "force", false, "rebuild without cache and re-pull base images (--no-cache --pull)")
+	cmd.Flags().BoolVar(&force, "force", false, "rebuild without cache and re-pull base images (--no-cache --pull; with build.prepull_bases set, bases are re-pulled by the daemon and compose gets --no-cache only)")
 	return cmd
 }
 
