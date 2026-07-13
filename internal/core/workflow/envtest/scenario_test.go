@@ -194,3 +194,30 @@ func TestListScenarios_InvalidFilename(t *testing.T) {
 		t.Errorf("error = %q", err.Error())
 	}
 }
+
+func TestScenarioPath_ResolvesYmlAndYaml(t *testing.T) {
+	base := t.TempDir()
+	dir := TestsDir(base)
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	// A .yaml scenario: ListScenarios strips the extension to "alpha", so a
+	// name+".yml" reconstruction (the old bug) would fail to open it. ScenarioPath
+	// must resolve it back to the real .yaml file.
+	if err := os.WriteFile(filepath.Join(dir, "alpha.yaml"), []byte("description: a\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(dir, "beta.yml"), []byte("description: b\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	if got, err := ScenarioPath(base, "alpha"); err != nil || got != filepath.Join(dir, "alpha.yaml") {
+		t.Fatalf("ScenarioPath(alpha) = %q, %v; want %q", got, err, filepath.Join(dir, "alpha.yaml"))
+	}
+	if got, err := ScenarioPath(base, "beta"); err != nil || got != filepath.Join(dir, "beta.yml") {
+		t.Fatalf("ScenarioPath(beta) = %q, %v; want %q", got, err, filepath.Join(dir, "beta.yml"))
+	}
+	if _, err := ScenarioPath(base, "missing"); err == nil {
+		t.Fatal("ScenarioPath(missing) = nil error, want a not-found error")
+	}
+}

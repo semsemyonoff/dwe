@@ -172,7 +172,12 @@ func composeDownReal(ctx context.Context, m *Manifest, log io.Writer) (skipped b
 	}
 
 	compose := docker.NewCompose(cfg, dockerCfg, m.CopyPath)
-	args := compose.BuildArgs("down")
+	// BuildInternalArgs (not BuildArgs) so the copy's docker.yml args.down
+	// policy is bypassed entirely: a project that sets args.down: ["-v"] must
+	// NOT be able to turn teardown into `compose down -v` and delete shared
+	// named volumes before the prefix-scoped volume cleanup runs. Teardown is
+	// always exactly `compose down --remove-orphans`, never -v.
+	args := compose.BuildInternalArgs("down", "--remove-orphans")
 	if err := runComposeDownFn(ctx, compose.BinName(), args, compose.BuildEnv(), m.CopyPath, log); err != nil {
 		return false, fmt.Errorf("docker compose down: %w", err)
 	}

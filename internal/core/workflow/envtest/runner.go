@@ -322,7 +322,10 @@ func (r *Runner) RunScenario(ctx context.Context, req RunRequest) (*ScenarioResu
 	}
 	defer func() { _ = lk.Release() }()
 
-	scenarioPath := filepath.Join(TestsDir(req.BaseDir), req.Scenario+".yml")
+	scenarioPath, err := ScenarioPath(req.BaseDir, req.Scenario)
+	if err != nil {
+		return fail("loading scenario", err)
+	}
 	scn, err := LoadScenario(scenarioPath)
 	if err != nil {
 		return fail("loading scenario", err)

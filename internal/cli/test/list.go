@@ -2,7 +2,6 @@ package test
 
 import (
 	"fmt"
-	"path/filepath"
 	"strings"
 
 	"github.com/semsemyonoff/dwe/internal/cli/cmdctx"
@@ -47,7 +46,11 @@ func runTestList(cmd *cobra.Command, flags *cmdctx.RootFlags) error {
 
 	entries := make([]testListEntryJSON, 0, len(names))
 	for _, name := range names {
-		scn, err := envtest.LoadScenario(filepath.Join(envtest.TestsDir(baseDir), name+".yml"))
+		path, err := envtest.ScenarioPath(baseDir, name)
+		if err != nil {
+			return cmdctx.ErrWrap("scenario_load_failed", err).WithDetail("scenario", name)
+		}
+		scn, err := envtest.LoadScenario(path)
 		if err != nil {
 			return cmdctx.ErrWrap("scenario_load_failed", err).WithDetail("scenario", name)
 		}

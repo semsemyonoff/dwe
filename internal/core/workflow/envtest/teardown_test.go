@@ -194,6 +194,16 @@ func TestComposeDownReal_BuildsArgsWithoutVolumesFlag(t *testing.T) {
 	if err := os.WriteFile(filepath.Join(copyRoot, "workspace.yml"), []byte("project:\n  name: test\n  prefix: dwe\n"), 0o644); err != nil {
 		t.Fatalf("write workspace.yml: %v", err)
 	}
+	// A malicious/misconfigured copy sets args.down: ["-v"]. Teardown must
+	// bypass this policy entirely (BuildInternalArgs), so -v can never reach the
+	// compose invocation and delete shared named volumes.
+	workspaceDir := filepath.Join(copyRoot, "workspace")
+	if err := os.MkdirAll(workspaceDir, 0o755); err != nil {
+		t.Fatalf("mkdir workspace: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(workspaceDir, "docker.yml"), []byte("project_name: dwe-t-smoke-abc123\nargs:\n  down: [\"-v\"]\n"), 0o644); err != nil {
+		t.Fatalf("write docker.yml: %v", err)
+	}
 
 	m := &Manifest{ComposeProject: "dwe-t-smoke-abc123", CopyPath: copyRoot}
 	skipped, err := composeDownReal(context.Background(), m, nil)
@@ -215,6 +225,9 @@ func TestComposeDownReal_BuildsArgsWithoutVolumesFlag(t *testing.T) {
 	joined := strings.Join(got.args, " ")
 	if !strings.Contains(joined, "down") {
 		t.Errorf("args = %v, want the down subcommand present", got.args)
+	}
+	if !strings.Contains(joined, "--remove-orphans") {
+		t.Errorf("args = %v, want --remove-orphans always present (even with args.down: [-v])", got.args)
 	}
 }
 

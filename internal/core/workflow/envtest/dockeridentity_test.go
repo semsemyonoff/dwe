@@ -3,6 +3,8 @@ package envtest
 import (
 	"os"
 	"path/filepath"
+	"reflect"
+	"strings"
 	"testing"
 
 	"gopkg.in/yaml.v3"
@@ -166,5 +168,39 @@ func TestWriteDockerIdentity_WithoutDockerYAML_NoStrayLocalFile(t *testing.T) {
 		if !ok || len(list) != 0 {
 			t.Errorf("generated docker.yml args[%q] = %v, want explicit []", key, v)
 		}
+	}
+}
+
+// TestDockerArgsKeys_CoversAllDockerArgsFields guards the hand-maintained
+// dockerArgsKeys list against silent drift from config.DockerArgs. If a field is
+// added to DockerArgs without a matching entry here, the generated docker.yml's
+// args: block would omit that key, so LoadDockerConfig's per-key default (not the
+// empty-value neutral one) would silently apply in every disposable test copy —
+// a compile-time-invisible regression. Keep the two exactly in sync.
+func TestDockerArgsKeys_CoversAllDockerArgsFields(t *testing.T) {
+	var want []string
+	for _, f := range reflect.VisibleFields(reflect.TypeFor[config.DockerArgs]()) {
+		tag := f.Tag.Get("yaml")
+		if comma := strings.IndexByte(tag, ','); comma >= 0 {
+			tag = tag[:comma]
+		}
+		if tag == "" || tag == "-" {
+			continue
+		}
+		want = append(want, tag)
+	}
+
+	have := make(map[string]bool, len(dockerArgsKeys))
+	for _, k := range dockerArgsKeys {
+		have[k] = true
+	}
+	for _, w := range want {
+		if !have[w] {
+			t.Errorf("dockerArgsKeys is missing config.DockerArgs YAML key %q — add it so the generated docker.yml keeps that key semantics-neutral", w)
+		}
+	}
+	if len(dockerArgsKeys) != len(want) {
+		t.Errorf("dockerArgsKeys has %d keys, config.DockerArgs has %d YAML fields; keep them in sync (dockerArgsKeys=%v, DockerArgs=%v)",
+			len(dockerArgsKeys), len(want), dockerArgsKeys, want)
 	}
 }

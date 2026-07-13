@@ -56,9 +56,10 @@ const (
 	// KindAction builtins are user-callable step actions (confirm, message, service_configs_copy, etc.).
 	// They run in the body of a deploy/lifecycle step authored in YAML.
 	KindAction Kind = iota
-	// KindPredicate builtins are read-only checks used in check: positions, validate.yml cmd: entries,
+	// KindPredicate builtins are boolean checks used in check: positions, validate.yml cmd: entries,
 	// and step bodies (where they act as assertions: false fails the step).
-	// They MUST NOT have side effects (no volume removal, no container starts).
+	// Aside from the general-purpose `shell` predicate (which runs an arbitrary sh -c and may mutate),
+	// they MUST NOT have side effects (no volume removal, no container starts).
 	KindPredicate
 	// KindInternal builtins are engine-only; they cannot be invoked from user-authored YAML.
 	// They are injected by the engine itself (e.g. daemons_reap in the synthetic _auto_reap_daemons phase,

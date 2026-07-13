@@ -1,4 +1,4 @@
-> Translated from: guides/integration-tests.md @ 46790324c45e
+> Translated from: guides/integration-tests.md @ 522356053b09
 
 # Написание интеграционных тестов
 
@@ -212,10 +212,10 @@ dwe test run --parallel 2 smoke redis-off   # эти два, бок о бок
 
 Эффективный параллелизм — `min(N, число сценариев)`, поэтому `--parallel 8` на трёх сценариях запускает три воркера. При более чем одном воркере потоковый вывод каждого сценария заменяется компактным живым видом — одна строка на сценарий со спиннером, грубой фазой и временем, финализирующаяся в `✓ <name> passed` либо `✗ <name> failed — step "…"`:
 
-```
-  ✓ smoke      passed
-  ⠹ redis-off  deploying…    [4s]
-  ⠹ cache-on   running steps…[6s]
+```text
+  ✓ [12s] smoke      passed
+  ⠹ [4s]  redis-off  deploying…
+  ⠹ [6s]  cache-on   running steps…
 running 2/3 scenarios…
 ```
 

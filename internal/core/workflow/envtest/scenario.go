@@ -100,6 +100,23 @@ func ScenarioNameFromPath(path string) string {
 	return strings.TrimSuffix(strings.TrimSuffix(base, ".yaml"), ".yml")
 }
 
+// ScenarioPath resolves a scenario name (basename without extension, as returned
+// by ListScenarios) to its on-disk file under workspace/tests/, honoring BOTH
+// .yml and .yaml — the same extensions ListScenarios discovers. Callers must use
+// this instead of reconstructing name+".yml", which would fail to open a .yaml
+// scenario. .yml wins when — pathologically — both are present. Returns an error
+// if neither exists.
+func ScenarioPath(baseDir, name string) (string, error) {
+	dir := TestsDir(baseDir)
+	for _, ext := range []string{".yml", ".yaml"} {
+		p := filepath.Join(dir, name+ext)
+		if _, err := os.Stat(p); err == nil {
+			return p, nil
+		}
+	}
+	return "", fmt.Errorf("scenario %q: no %s.yml or %s.yaml under %s", name, name, name, dir)
+}
+
 // ValidateScenarioName rejects a name that does not already match the
 // compose-project-name-fragment rule. Names are never case-folded or sanitised.
 func ValidateScenarioName(name string) error {

@@ -210,10 +210,10 @@ dwe test run --parallel 2 smoke redis-off   # these two, side by side
 
 Effective parallelism is `min(N, scenario count)`, so `--parallel 8` over three scenarios runs three workers. At more than one worker the per-scenario streaming output is replaced by a compact live view — one row per scenario with a spinner, coarse phase, and elapsed time, finalizing to `✓ <name> passed` or `✗ <name> failed — step "…"`:
 
-```
-  ✓ smoke      passed
-  ⠹ redis-off  deploying…    [4s]
-  ⠹ cache-on   running steps…[6s]
+```text
+  ✓ [12s] smoke      passed
+  ⠹ [4s]  redis-off  deploying…
+  ⠹ [6s]  cache-on   running steps…
 running 2/3 scenarios…
 ```
 
