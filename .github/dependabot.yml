@@ -42,9 +42,17 @@ updates:
           - "*"
 
   # Docs site (web/, Astro Starlight) is a build-time mirror of docs/ — its npm
-  # deps are documentation-only and non-critical. We deliberately do NOT track
-  # them: `ignore: "*"` suppresses both version-update AND security-update PRs
-  # for the whole /web stack (ignore conditions apply to security updates too).
+  # deps are documentation-only (static output to GitHub Pages; nothing here is
+  # shipped in the dwe binary). We deliberately keep them quiet on two fronts:
+  #   * update PRs — `ignore: "*"` below suppresses Dependabot update PRs
+  #     (routine version bumps AND security-fix PRs) for the whole /web stack.
+  #   * alerts — `ignore` does NOT silence Dependabot ALERTS; those scan the
+  #     dependency graph regardless of this file. Instead, every web/ dep lives
+  #     under `devDependencies` (web/package.json), so the graph scopes them and
+  #     their transitives (esbuild, vite, …) as *development*, and GitHub
+  #     auto-dismisses low/medium-severity dev-only advisories by default. A
+  #     genuinely serious, production-reachable advisory still surfaces as an
+  #     alert to triage by hand.
   - package-ecosystem: "npm"
     directory: "/web"
     schedule:
