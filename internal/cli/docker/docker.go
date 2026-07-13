@@ -102,7 +102,10 @@ func newDockerUpCmd(flags *cmdctx.RootFlags) *cobra.Command {
 				return err
 			}
 			if p.dockerCfg.Build.PrepullBases {
-				prepullBases(cmd.ErrOrStderr(), p.compose, args, false)
+				// Pass nil (not args): `docker compose up <svc>` also builds
+				// <svc>'s depends_on services, whose base images must be
+				// prepulled too — narrowing to args would skip them.
+				prepullBases(cmd.ErrOrStderr(), p.compose, nil, false)
 			}
 			extra := args
 			if wait {
