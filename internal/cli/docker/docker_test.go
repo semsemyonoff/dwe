@@ -848,3 +848,30 @@ esac
 		t.Fatalf("warning wording mismatch: %q", errOut.String())
 	}
 }
+
+// TestPrepullBases_ForceRepullFailureWarningWording covers the second warning
+// branch: an already-present base whose forced re-pull fails must warn with the
+// "re-pulling" wording (not "build will likely fail", since the base is present
+// and the build would still succeed).
+func TestPrepullBases_ForceRepullFailureWarningWording(t *testing.T) {
+	stub := writeDockerStub(t, fmt.Sprintf(`case "$1" in
+  compose) cat <<'EOF'
+%s
+EOF
+  ;;
+  image) exit 0 ;;
+  pull) echo boom 1>&2; exit 1 ;;
+esac
+`, composeConfigOneRef))
+
+	c := &dockerpkg.Compose{Bin: stub}
+	var errOut bytes.Buffer
+	prepullBases(&errOut, c, nil, true)
+
+	if !strings.Contains(errOut.String(), "golang:1.22") || !strings.Contains(errOut.String(), "re-pulling base image") {
+		t.Fatalf("warning wording mismatch: %q", errOut.String())
+	}
+	if strings.Contains(errOut.String(), "build will likely fail") {
+		t.Fatalf("present-base re-pull failure should not warn about build failure: %q", errOut.String())
+	}
+}

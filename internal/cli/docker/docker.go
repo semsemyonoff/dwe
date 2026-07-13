@@ -102,7 +102,7 @@ func newDockerUpCmd(flags *cmdctx.RootFlags) *cobra.Command {
 				return err
 			}
 			if p.dockerCfg.Build.PrepullBases {
-				prepullBases(cmd.ErrOrStderr(), p.compose, nil, false)
+				prepullBases(cmd.ErrOrStderr(), p.compose, args, false)
 			}
 			extra := args
 			if wait {
@@ -374,7 +374,7 @@ func newDockerBuildCmd(flags *cmdctx.RootFlags) *cobra.Command {
 	}
 
 	cmd.Flags().BoolVar(&all, "all", false, "build images from all configured overlays, not just enabled ones")
-	cmd.Flags().BoolVar(&force, "force", false, "rebuild without cache and re-pull base images (--no-cache --pull)")
+	cmd.Flags().BoolVar(&force, "force", false, "rebuild without cache and re-pull base images (--no-cache --pull; with build.prepull_bases set, bases are re-pulled by the daemon and compose gets --no-cache only)")
 	return cmd
 }
 

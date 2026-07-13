@@ -274,3 +274,56 @@ func TestPullImage_PropagatesNonZeroExitAsError(t *testing.T) {
 		t.Fatal("expected error from failing pull")
 	}
 }
+
+// TestImageExists_PropagatesEnvAndDir guards the documented "deliberate
+// deviation": ImageExists must set cmd.Env = BuildEnv() and cmd.Dir = BaseDir
+// so DOCKER_HOST/context overrides from ProcessEnv reach the daemon probe.
+func TestImageExists_PropagatesEnvAndDir(t *testing.T) {
+	tmp := t.TempDir()
+	recorder := filepath.Join(tmp, "recorder.txt")
+	stub := writeStub(t, fmt.Sprintf("echo \"$DOCKER_HOST|$(pwd)\" > %q\nexit 0", recorder))
+
+	c := &Compose{Bin: stub, BaseDir: tmp, ProcessEnv: map[string]string{"DOCKER_HOST": "tcp://probe:2375"}}
+	if !c.ImageExists("golang:1.22") {
+		t.Fatal("ImageExists = false, want true")
+	}
+
+	got := readRecordedEnvDir(t, recorder)
+	wantDir, _ := filepath.EvalSymlinks(tmp)
+	if got := got; !strings.HasPrefix(got, "tcp://probe:2375|") {
+		t.Fatalf("DOCKER_HOST not propagated: %q", got)
+	}
+	if !strings.HasSuffix(got, "|"+wantDir) {
+		t.Fatalf("BaseDir not propagated as cwd: %q, want suffix %q", got, wantDir)
+	}
+}
+
+// TestPullImage_PropagatesEnvAndDir mirrors the ImageExists guard for PullImage.
+func TestPullImage_PropagatesEnvAndDir(t *testing.T) {
+	tmp := t.TempDir()
+	recorder := filepath.Join(tmp, "recorder.txt")
+	stub := writeStub(t, fmt.Sprintf("echo \"$DOCKER_HOST|$(pwd)\" > %q", recorder))
+
+	c := &Compose{Bin: stub, BaseDir: tmp, ProcessEnv: map[string]string{"DOCKER_HOST": "tcp://probe:2375"}}
+	if err := c.PullImage("golang:1.22"); err != nil {
+		t.Fatalf("PullImage: %v", err)
+	}
+
+	got := readRecordedEnvDir(t, recorder)
+	wantDir, _ := filepath.EvalSymlinks(tmp)
+	if !strings.HasPrefix(got, "tcp://probe:2375|") {
+		t.Fatalf("DOCKER_HOST not propagated: %q", got)
+	}
+	if !strings.HasSuffix(got, "|"+wantDir) {
+		t.Fatalf("BaseDir not propagated as cwd: %q, want suffix %q", got, wantDir)
+	}
+}
+
+func readRecordedEnvDir(t *testing.T, path string) string {
+	t.Helper()
+	recorded, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatalf("reading recorder: %v", err)
+	}
+	return strings.TrimSpace(string(recorded))
+}

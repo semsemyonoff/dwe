@@ -11,6 +11,10 @@ import (
 
 var (
 	escapeDirectiveRe = regexp.MustCompile(`(?i)^#\s*escape\s*=\s*(\S)\s*$`)
+	// parserDirectiveRe matches any Dockerfile parser directive line
+	// ("# key=value", e.g. "# syntax=docker/dockerfile:1"). Such directives may
+	// precede "# escape=" and must not stop the escape-directive scan.
+	parserDirectiveRe = regexp.MustCompile(`(?i)^#\s*[a-z][a-z0-9]*\s*=\s*\S+\s*$`)
 	varRefRe          = regexp.MustCompile(`\$\{([A-Za-z_][A-Za-z0-9_]*)(:-([^}]*))?\}|\$([A-Za-z_][A-Za-z0-9_]*)`)
 )
 
@@ -71,13 +75,18 @@ func externalBaseRefs(dockerfile []byte, buildArgs map[string]string) []string {
 			if !isResolved {
 				trace.Debugf(context.Background(), "dockerfile: skipping FROM %q: unresolved build variable", ref)
 				if stage != "" {
-					stages[stage] = struct{}{}
+					stages[strings.ToLower(stage)] = struct{}{}
 				}
 				continue
 			}
-			_, isStageRef := stages[resolved]
+			// Buildkit normalizes build-stage names case-insensitively, so
+			// "FROM alpine AS Build" then "FROM build" reuses the stage. Key
+			// the stage set by lowercase name to match, avoiding a spurious
+			// external-ref classification (and pull) for a case-mismatched
+			// stage reference.
+			_, isStageRef := stages[strings.ToLower(resolved)]
 			if stage != "" {
-				stages[stage] = struct{}{}
+				stages[strings.ToLower(stage)] = struct{}{}
 			}
 			if isStageRef || strings.EqualFold(resolved, "scratch") {
 				continue
@@ -104,13 +113,19 @@ func detectEscapeChar(dockerfile []byte) byte {
 		if line == "" {
 			continue
 		}
-		m := escapeDirectiveRe.FindStringSubmatch(line)
-		if m == nil {
-			break
+		if m := escapeDirectiveRe.FindStringSubmatch(line); m != nil {
+			if len(m[1]) == 1 {
+				escape = m[1][0]
+			}
+			continue
 		}
-		if len(m[1]) == 1 {
-			escape = m[1][0]
+		// A non-escape parser directive (e.g. "# syntax=...") is allowed to
+		// precede "# escape=" per the spec — keep scanning. Only a genuine
+		// non-directive line (regular comment or instruction) stops the scan.
+		if parserDirectiveRe.MatchString(line) {
+			continue
 		}
+		break
 	}
 	return escape
 }
@@ -198,39 +213,48 @@ func parseFromLine(rest string) (ref, stage string, ok bool) {
 // if any referenced variable cannot be resolved.
 func resolveRef(ref string, declared map[string]argDecl, buildArgs map[string]string) (resolved string, ok bool) {
 	matches := varRefRe.FindAllStringSubmatchIndex(ref, -1)
-	if matches == nil {
-		return ref, true
-	}
-	var buf strings.Builder
-	last := 0
-	for _, m := range matches {
-		buf.WriteString(ref[last:m[0]])
-		last = m[1]
+	out := ref
+	if matches != nil {
+		var buf strings.Builder
+		last := 0
+		for _, m := range matches {
+			buf.WriteString(ref[last:m[0]])
+			last = m[1]
 
-		var name, def string
-		hasDefault := false
-		if m[2] >= 0 {
-			name = ref[m[2]:m[3]]
-			if m[6] >= 0 {
-				hasDefault = true
-				def = ref[m[6]:m[7]]
+			var name, def string
+			hasDefault := false
+			if m[2] >= 0 {
+				name = ref[m[2]:m[3]]
+				if m[6] >= 0 {
+					hasDefault = true
+					def = ref[m[6]:m[7]]
+				}
+			} else {
+				name = ref[m[8]:m[9]]
 			}
-		} else {
-			name = ref[m[8]:m[9]]
-		}
 
-		val, resolvedVar := resolveVar(name, declared, buildArgs)
-		switch {
-		case resolvedVar:
-			buf.WriteString(val)
-		case hasDefault:
-			buf.WriteString(def)
-		default:
-			return "", false
+			val, resolvedVar := resolveVar(name, declared, buildArgs)
+			switch {
+			case resolvedVar:
+				buf.WriteString(val)
+			case hasDefault:
+				buf.WriteString(def)
+			default:
+				return "", false
+			}
 		}
+		buf.WriteString(ref[last:])
+		out = buf.String()
 	}
-	buf.WriteString(ref[last:])
-	return buf.String(), true
+	// Unsupported expansion forms (e.g. "${VAR:+alt}", "${VAR:?err}") are not
+	// matched by varRefRe and survive substitution verbatim. A ref still
+	// carrying an unexpanded "${" cannot be reliably prepulled — treat it as
+	// unresolved (skip it) rather than emitting a misleading
+	// "build will likely fail" warning for a ref the real build resolves fine.
+	if strings.Contains(out, "${") {
+		return "", false
+	}
+	return out, true
 }
 
 // resolveVar looks up a build variable's value: buildArgs overrides the ARG

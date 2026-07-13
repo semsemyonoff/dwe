@@ -145,6 +145,21 @@ func TestExternalBaseRefs_EdgeCases(t *testing.T) {
 			dockerfile: "FROM golang:1.22 AS build\nARG BASE_IMAGE=alpine:3.19\nFROM ${BASE_IMAGE}\n",
 			want:       []string{"golang:1.22"},
 		},
+		{
+			name:       "stage reference matched case-insensitively",
+			dockerfile: "FROM golang:1.22 AS Build\nFROM build\nRUN true\n",
+			want:       []string{"golang:1.22"},
+		},
+		{
+			name:       "unsupported ${VAR:+alt} expansion form skipped",
+			dockerfile: "ARG FLAG\nFROM ${FLAG:+alpine:3.19}\nFROM golang:1.22\n",
+			want:       []string{"golang:1.22"},
+		},
+		{
+			name:       "escape directive after syntax directive honored",
+			dockerfile: "# syntax=docker/dockerfile:1\n# escape=`\nARG BASE_IMAGE=golang:1.`\n22\nFROM ${BASE_IMAGE}\n",
+			want:       []string{"golang:1.22"},
+		},
 	}
 
 	for _, tt := range tests {
