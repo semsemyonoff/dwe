@@ -39,7 +39,7 @@ A step is `type:` one of:
 - `command` — a declarative command ID in `cmd:` (e.g. `app.install`, `services.main.migrate.run`).
 - `builtin` — an engine action in `cmd:`, payload in `with:` (e.g. `service_dirs_ensure`, `service_configs_render`).
 
-Optional per-step keys: `name`, `description`, `when:`, `check:`, `continue_on_error: true`, `untracked: true`.
+Optional per-step keys: `name`, `description`, `when:`, `check:`, `continue_on_error: true`, `untracked: true`, `timeout:` (a general, opt-in duration string, e.g. `30s`/`2m`, bounding just the step body — absent/`0` = unbounded; only interrupts ctx-honoring bodies: `shell`/`dwe` subprocesses and ctx-aware builtins). `dwe docs show config/deploy/index#step-fields --lang en`.
 
 **Gate the STEP, never the phase.** There is no phase-level `when:`. A coarse phase guard strands a partial install and forces a destructive `dwe reset run` to recover; per-step gates keep `dwe deploy run` re-runnable after a mid-pipeline failure (only unfinished steps execute).
 
@@ -49,7 +49,11 @@ Optional per-step keys: `name`, `description`, `when:`, `check:`, `continue_on_e
 - `type: shell` + `cmd: "<sh test>"`.
 - `type: template` + `expr: '{{ ne .Raw.vars.x "" }}'`.
 
-Engine **builtins** (as a step `cmd:`): `service_dirs_ensure` · `service_configs_render` · `service_configs_render_check` · `service_generated_harvest` · `containers_running` · `docker_wait_healthy` · `docker_remove_project_volumes` · `docker_stop_remove_container` · `daemons_reap` · `message`.
+Engine **builtins** (as a step `cmd:`): `service_dirs_ensure` · `service_configs_render` · `service_configs_render_check` · `service_generated_harvest` · `containers_running` · `docker_wait_healthy` · `docker_remove_project_volumes` · `docker_stop_remove_container` · `daemons_reap` · `message` · `http_check` (assert an HTTP endpoint returns an expected status / body substring, with retries — complements a `tcp_reachable` check for web stacks).
+
+**Predicate builtins as step bodies = assertions.** A predicate builtin (`file_exists`, `executable_in_path`, `tcp_reachable`, `http_check`, `containers_running`, `env_keys_present`, `config_keys_present`, and the `shell` predicate) may be used directly as a step **body**, not only inside `check:`/`when:`. As a body it is an **assertion**: `false` fails the step with the predicate's own message, `true` succeeds — and such a step **always re-runs** (exempt from deploy's up-to-date/action-hash skip, same as a `check:` step). General across deploy/reset/lifecycle. `dwe docs show config/deploy/builtins#predicate-builtins-as-step-bodies-assertion-semantics --lang en`.
+
+This same step schema powers isolated integration-test scenarios (`workspace/tests/*.yml`) — see `integration-tests.md` and `dwe docs show config/tests --lang en`.
 
 ### Canonical skeleton
 
@@ -312,4 +316,4 @@ After editing, hand the user the exact apply command and wait:
 
 Mixed / unsure → `dwe deploy run` (ends in `docker up --wait`, so it covers a restart). Never recommend `dwe deploy run --force` as a clean install — `--force` only ignores prior state (`when:` still applies); a true clean install is `dwe reset run && dwe deploy run`.
 
-Cross-links: `populate-init-repo.md` (full setup-from-git flow), `render-and-vars.md` (config render packs, generated secrets, the `vars` sandbox), `snapshots-reset-troubleshoot.md` (reset pipeline, snapshots, triage).
+Cross-links: `populate-init-repo.md` (full setup-from-git flow), `render-and-vars.md` (config render packs, generated secrets, the `vars` sandbox), `snapshots-reset-troubleshoot.md` (reset pipeline, snapshots, triage), `integration-tests.md` (the same step schema, `http_check`, and predicate-as-assertion, applied in isolated `workspace/tests/*.yml` scenarios).

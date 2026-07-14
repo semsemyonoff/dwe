@@ -162,7 +162,7 @@ Pick by who resolves the value (full rules → `dwe docs show config/commands/te
 
 ## 6. Directives
 
-- `private: true` — pipeline/workflow-only; not runnable via `dwe cmd`.
+- `private: true` — pipeline/workflow-only; not runnable via `dwe cmd`. This is exactly how you author a **test-only** command (seed fixtures, dump to a fixed filename) that an integration-test scenario calls via a `type: command` step while keeping it off the everyday listing — use `private`, not `hide` (pipelines skip `hide` commands). See `integration-tests.md`.
 - `confirmation: true` + `confirmation_text: "…"` — interactive prompt before running.
 - `env:` — environment for the process; **secrets go ONLY here** (e.g. `MYSQL_PWD: "${vars.db.password}"`), never in params.
 - `messages: { success, error }` — user-facing result lines.
@@ -204,4 +204,4 @@ Then apply by **role**:
 - **Pipeline-referenced** commands (used in a `deploy.yml`/`lifecycle.yml` step as `type: command`) apply when the **user** runs the matching pipeline: `dwe deploy run` (deploy steps) or `dwe run` (lifecycle hooks).
 - **Standalone** commands are run by the **user** via `dwe cmd <id> [--set k=v]` — a mutation; never run it yourself. Edit the yml → show the diff → tell the user the exact command → wait.
 
-Cross-links: pipeline wiring (`type: command` steps, `deploy_services`) → `pipelines-and-orchestration.md`. Vars sandbox, `default_from: vars.x`, and `${generated.x}` in command env → `render-and-vars.md`.
+Cross-links: pipeline wiring (`type: command` steps, `deploy_services`) → `pipelines-and-orchestration.md`. Vars sandbox, `default_from: vars.x`, and `${generated.x}` in command env → `render-and-vars.md`. Calling a `private` command from an integration-test scenario → `integration-tests.md`.
