@@ -102,6 +102,13 @@ steps:
 
 **Never hand-wire host ports in a scenario.** Every host port an enabled service declares under `services.<name>.ports` is automatically remapped to a freshly allocated free port in the copy; `ports_free` preflight and the actual bind read that same field, so they move together. A step references the remapped port the normal way: `${services.<name>.ports.<x>}`.
 
+**The auto-remap covers ONLY `services.<name>.ports` — nothing else.** A host port that reaches compose through any *other* channel is not remapped, and only one such channel is safe:
+
+- **A bare literal** (`8080:8080`) in raw compose → **blocked** by the isolation scanner (see below). Not a silent problem — the run refuses to start.
+- **A var-interpolated compose port** (`ports: ["${DB_PORT}:5432"]` sourced from `vars.*` or any free-form field, NOT modeled under `services.<name>.ports`) → **silently not remapped**, because `${...}` ports are never scanner-flagged and the remap only touches the modeled field. It binds the original host port in every copy, so parallel scenarios — and a `--keep` copy left running — **collide on it**. This is the real trap; it looks like a flaky "port already allocated" that only appears under `--parallel` or alongside a kept run. The fix is to declare that var as `env.vars: { DB_PORT: auto }` in the scenario — the runner then allocates a fresh port for it from the same batch as the modeled ports. (`services.<name>.ports` can't take a `${var}` — it's a strict int rejected at config load — so a var-routed compose port is exactly the case `env.vars: auto` exists for.)
+
+The rule of thumb: model every host port under `services.<name>.ports` so isolation is automatic; if a port must reach compose through a var instead, it MUST be an `env.vars: auto` entry per scenario or it will collide.
+
 Two isolation gotchas that **block** a run (the compose isolation scanner fails the scenario before deploy):
 
 - **`container_name:` in raw compose** — collides directly with the working env. Drop it; compose already names containers from project + service.
