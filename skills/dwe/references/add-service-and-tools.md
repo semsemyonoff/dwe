@@ -75,7 +75,7 @@ hosts:
 
 Verify each field's meaning at `dwe docs show config/services/fields --lang en` (don't guess `ports`/`hosts` shape — see the `ports-field` / `hosts-field` anchors).
 
-**Model host ports under `services.<name>.ports`, not through a free-form var.** Only the modeled field is read by `ports_free` preflight and by `dwe test`'s automatic host-port isolation; a port routed to compose via `vars.*`/`${ENV}` instead binds the original host port in every test copy and silently collides across parallel/kept scenarios (see `integration-tests.md` § 6). Keep ports in `services.<name>.ports` and reference them as `${services.<name>.ports.<x>}`.
+**Model host ports under `services.<name>.ports`, not through a free-form var.** Only the modeled field is read by `ports_free` preflight and by `dwe test`'s automatic host-port isolation; a port routed to compose via `vars.*`/`${ENV}` instead binds the original host port in every test copy and silently collides across parallel/kept scenarios — **unless** each such port is declared per-scenario as `env.vars: auto`, the supported exception that gets it a freshly allocated port (see `integration-tests.md` § 6). Prefer keeping ports in `services.<name>.ports` and referencing them as `${services.<name>.ports.<x>}`; reach for `env.vars: auto` only when a port genuinely must reach compose through a var.
 
 ## 3. app-only extras
 
