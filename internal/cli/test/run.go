@@ -184,6 +184,8 @@ func runTestRun(cmd *cobra.Command, flags *cmdctx.RootFlags, args []string, keep
 			Warn:               warn,
 			SkipIsolationCheck: skipIsolationCheck,
 			ForceColor:         forceColor,
+			Verbose:            flags.Verbose,
+			Debug:              flags.Debug,
 		}
 		res, err := runner.RunScenario(ctx, req)
 		if err != nil {
@@ -312,6 +314,8 @@ func runTestParallel(cmd *cobra.Command, flags *cmdctx.RootFlags, baseDir string
 				ReporterFactory:    silentReporterFactory,
 				Warn:               warn,
 				SkipIsolationCheck: skipIsolationCheck,
+				Verbose:            flags.Verbose,
+				Debug:              flags.Debug,
 			}
 			if display != nil {
 				req.Progress = func(p envtest.ProgressPhase) { display.Phase(i, p) }

@@ -197,6 +197,18 @@ type RunRequest struct {
 	// The run log stays plain regardless (the log side of the tee is
 	// ANSI-stripped in defaultReporterFactory).
 	ForceColor bool
+	// Verbose / Debug propagate the parent `dwe test run` diagnostic flags to
+	// the `dwe validate` / `dwe deploy run` subprocesses so `-v` / `--debug`
+	// actually surface what happens INSIDE the disposable copy (the deploy the
+	// scenario is really testing). Without this the subprocess runs at
+	// LevelOff — the parent's flag never reaches it and `--verbose` has no env
+	// equivalent to inherit — so `dwe test run --debug` shows nothing useful.
+	// Debug wins over Verbose (matching the root levelFrom precedence). Both
+	// false = no propagation and the subprocess arg list is byte-identical to a
+	// normal run (the subprocess still inherits a truthy DWE_DEBUG from the
+	// environment, as it always has).
+	Verbose bool
+	Debug   bool
 }
 
 // execDweFunc is the injectable subprocess-spawn seam for `dwe validate` /
@@ -310,6 +322,7 @@ func (r *Runner) RunScenario(ctx context.Context, req RunRequest) (*ScenarioResu
 	if progress == nil {
 		progress = func(ProgressPhase) {}
 	}
+	diagArgs := diagnosticArgs(req.Verbose, req.Debug)
 
 	start := r.clock()
 	fail := func(stage string, err error) (*ScenarioResult, error) {
@@ -479,7 +492,7 @@ func (r *Runner) RunScenario(ctx context.Context, req RunRequest) (*ScenarioResu
 	// (terminal + run log interactively, run log only in JSON mode) so a long
 	// deploy streams progress live instead of a silent console until it ends.
 	progress(PhaseValidating)
-	if err := r.execDwe(scenarioCtx, copyRoot, extraEnv, subprocOut, subprocOut, "validate"); err != nil {
+	if err := r.execDwe(scenarioCtx, copyRoot, extraEnv, subprocOut, subprocOut, dweArgs(diagArgs, "validate")...); err != nil {
 		warn(fmt.Sprintf("dwe validate failed: %v", err))
 		return finish(StatusError, "")
 	}
@@ -493,7 +506,7 @@ func (r *Runner) RunScenario(ctx context.Context, req RunRequest) (*ScenarioResu
 	progress(PhaseDeploying)
 	deployTail := &tailRecorder{limit: deployTailLimit}
 	deployOut := io.MultiWriter(subprocOut, deployTail)
-	deployErr := r.execDwe(scenarioCtx, copyRoot, extraEnv, deployOut, deployOut, "deploy", "run", "--silent")
+	deployErr := r.execDwe(scenarioCtx, copyRoot, extraEnv, deployOut, deployOut, dweArgs(diagArgs, "deploy", "run", "--silent")...)
 	// The conflict signal usually surfaces in the streamed deploy output (the
 	// subprocess exit error itself is just "exit status N"); scan both so the
 	// gate holds whether the message lands in the output or the returned error.
@@ -501,7 +514,7 @@ func (r *Runner) RunScenario(ctx context.Context, req RunRequest) (*ScenarioResu
 		isPortBindConflict(deployTail.String()+"\n"+deployErr.Error()) {
 		warn(fmt.Sprintf("deploy failed on a port conflict, retrying once with freshly allocated ports: %v", deployErr))
 		progress(PhaseDeployRetry)
-		deployErr = r.retryDeployWithFreshPorts(scenarioCtx, copyRoot, extraEnv, subprocOut, origCfg, seedLocal, scn, composeProject, warn)
+		deployErr = r.retryDeployWithFreshPorts(scenarioCtx, copyRoot, extraEnv, diagArgs, subprocOut, origCfg, seedLocal, scn, composeProject, warn)
 	}
 	if deployErr != nil {
 		warn(fmt.Sprintf("dwe deploy run failed: %v", deployErr))
@@ -655,14 +668,38 @@ func (r *Runner) writeCopyLocalYAML(
 // and counts as the one permitted retry being exhausted — the original
 // deployErr stands and no second attempt is made.
 func (r *Runner) retryDeployWithFreshPorts(
-	ctx context.Context, copyRoot string, extraEnv []string, subprocOut io.Writer,
+	ctx context.Context, copyRoot string, extraEnv, diagArgs []string, subprocOut io.Writer,
 	origCfg *config.DweConfig, seedLocal map[string]any, scn *Scenario, composeProject string,
 	warn func(string),
 ) error {
 	if err := r.writeCopyLocalYAML(origCfg, seedLocal, scn, composeProject, copyRoot, warn); err != nil {
 		return fmt.Errorf("retry: %w", err)
 	}
-	return r.execDwe(ctx, copyRoot, extraEnv, subprocOut, subprocOut, "deploy", "run", "--silent")
+	return r.execDwe(ctx, copyRoot, extraEnv, subprocOut, subprocOut, dweArgs(diagArgs, "deploy", "run", "--silent")...)
+}
+
+// diagnosticArgs maps the parent `dwe test run` --verbose/--debug flags to the
+// leading args propagated to each validate/deploy subprocess so the diagnostic
+// level flows into the copy. --debug wins (it is a superset of --verbose),
+// matching the root levelFrom precedence. Returns nil when neither is set, so a
+// normal run's subprocess arg list stays byte-identical.
+func diagnosticArgs(verbose, debug bool) []string {
+	switch {
+	case debug:
+		return []string{"--debug"}
+	case verbose:
+		return []string{"--verbose"}
+	default:
+		return nil
+	}
+}
+
+// dweArgs prefixes the propagated diagnostic flags (if any) before a
+// subprocess's own subcommand args, never mutating diag's backing array.
+// Diagnostic flags are DWE root persistent flags, so they are position-
+// independent, but leading is the clearest and safest placement.
+func dweArgs(diag []string, rest ...string) []string {
+	return append(append([]string{}, diag...), rest...)
 }
 
 // runSteps loads the copy's own (post-deploy) config and command registry,

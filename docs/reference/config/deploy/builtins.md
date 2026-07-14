@@ -254,7 +254,9 @@ Waits for Docker containers to reach a healthy state. Polls the active Docker Co
 
 ## `containers_running`
 
-Fast "is running" check for compose services. Unlike `docker_wait_healthy` it does not poll, does not honour a timeout, and does not require services to declare a healthcheck — a single `docker compose ps --status=running --services` call returns the set of currently-running services, and the builtin diffs that against the requested list.
+Fast "is running" check for compose services. Unlike `docker_wait_healthy` it does not poll for readiness, does not honour a timeout, and does not require services to declare a healthcheck — a `docker compose ps --status=running --services` call returns the set of currently-running services, and the builtin compares that set with the requested list.
+
+A *transient* probe failure — the `docker compose ps` call itself erroring (**any** non-nil failure to run, e.g. a non-zero exit right at the `docker up --wait` boundary when the compose CLI / daemon is momentarily busy even though every container is already up) — is retried a bounded number of times with a short backoff before the step fails; a cancelled context is the sole exception and short-circuits the remaining retries immediately. This is not readiness polling: a probe that succeeds but reports a service as not-running fails on the first attempt. When every retry fails, the underlying `docker compose ps` stderr is surfaced in the error, so the failure is diagnosable.
 
 | Parameter | Type | Default | Description |
 |-----------|------|---------|-------------|

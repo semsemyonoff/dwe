@@ -187,6 +187,54 @@ func TestRunScenario_ForceColorEnv(t *testing.T) {
 	}
 }
 
+// TestRunScenario_DiagnosticFlagPropagation verifies that the parent's
+// --verbose/--debug flags are propagated as leading args to the validate and
+// deploy subprocesses (so `dwe test run --debug` surfaces what happens inside
+// the copy), with --debug winning over --verbose and neither leaving the arg
+// list byte-identical to a normal run.
+func TestRunScenario_DiagnosticFlagPropagation(t *testing.T) {
+	for _, tc := range []struct {
+		name    string
+		verbose bool
+		debug   bool
+		want    []string
+	}{
+		{"none", false, false, []string{"validate", "deploy run --silent"}},
+		{"verbose", true, false, []string{"--verbose validate", "--verbose deploy run --silent"}},
+		{"debug", false, true, []string{"--debug validate", "--debug deploy run --silent"}},
+		{"debug-wins", true, true, []string{"--debug validate", "--debug deploy run --silent"}},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			dir := writeRunnerFixtureProject(t, "smoke", noStepsScenario)
+			var execCalls []string
+			r := &Runner{
+				execDwe:       stubExecDwe(nil, &execCalls),
+				allocatePorts: AllocatePorts,
+				newTeardownDeps: func(string, io.Writer) TeardownDeps {
+					return recordingTeardownDeps(new([]string), nil)
+				},
+				clock: time.Now,
+			}
+			res, err := r.RunScenario(context.Background(), RunRequest{
+				BaseDir:         dir,
+				Scenario:        "smoke",
+				ReporterFactory: noopReporterFactory,
+				Verbose:         tc.verbose,
+				Debug:           tc.debug,
+			})
+			if err != nil {
+				t.Fatalf("RunScenario: %v", err)
+			}
+			if res.Status != StatusPassed {
+				t.Fatalf("status = %q, want passed", res.Status)
+			}
+			if strings.Join(execCalls, "|") != strings.Join(tc.want, "|") {
+				t.Fatalf("execCalls = %v, want %v", execCalls, tc.want)
+			}
+		})
+	}
+}
+
 // TestDefaultReporterFactory_LogSideStripsANSI verifies the production factory
 // keeps the run log plain even when the subprocess streams colored output —
 // the terminal leg keeps color, the log leg is ANSI-stripped.

@@ -230,6 +230,8 @@ Output is the standard live pipeline reporter per scenario (the same look as `dw
 
 `dwe test` requires a project — unlike read-only docs commands, it is not usable outside one.
 
+The global `--verbose` / `--debug` flags propagate into the copy's own `dwe validate` and `dwe deploy run` subprocesses, so the diagnostic level applies to the deploy the scenario actually exercises — not just the runner's own bookkeeping. In the default sequential text mode the subprocess trace streams to stderr live; under `--parallel` or `--output json` (where the subprocess output is not streamed) it is captured in that copy's run log (`.dwe/tests/runs/<scenario>/.dwe/logs/test.log`). `--debug` wins over `--verbose` (it is a superset), matching every other command.
+
 ### `--parallel N`
 
 `--parallel N` (default `1`) runs up to N scenarios concurrently. **Effective parallelism is `min(N, scenario count)`** — `--parallel 8` with two scenarios runs two workers; `--parallel 8` with one scenario runs one. Ordering of the output (text summary and JSON `scenarios` array) is always the original name order, independent of completion order.

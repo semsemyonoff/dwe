@@ -96,9 +96,18 @@ steps:
 
 `${...}` in a step's `with:`/`cmd:` resolves against the **copy's** config before steps run, and `file_exists`-style paths resolve relative to the copy root — assertions always inspect the disposable env, never the working tree. Builtin + assertion mechanics → `dwe docs show config/deploy/builtins --lang en`. The `timeout:` field → `dwe docs show config/deploy/index#step-fields --lang en`.
 
+**`with.services` (for `containers_running`) are raw compose service names — NOT `workspace/services/<name>/` keys.** The two often coincide but can differ (a `magento` service folder may define its compose service as `app-magento`). `dwe validate tests` does **not** cross-check these against the real compose, so a wrong name surfaces only at run time as `services not running: <name>`. Confirm the authoritative list yourself with `dwe compose raw -- config --services` (or read the files from `dwe compose files`) — those are exactly the names `containers_running` matches against.
+
 ## 6. Ports & isolation — don't hand-wire, don't collide
 
 **Never hand-wire host ports in a scenario.** Every host port an enabled service declares under `services.<name>.ports` is automatically remapped to a freshly allocated free port in the copy; `ports_free` preflight and the actual bind read that same field, so they move together. A step references the remapped port the normal way: `${services.<name>.ports.<x>}`.
+
+**The auto-remap covers ONLY `services.<name>.ports` — nothing else.** A host port that reaches compose through any *other* channel is not remapped, and only one such channel is safe:
+
+- **A bare literal** (`8080:8080`) in raw compose → **blocked** by the isolation scanner (see below). Not a silent problem — the run refuses to start.
+- **A var-interpolated compose port** (`ports: ["${DB_PORT}:5432"]` sourced from `vars.*` or any free-form field, NOT modeled under `services.<name>.ports`) → **silently not remapped**, because `${...}` ports are never scanner-flagged and the remap only touches the modeled field. It binds the original host port in every copy, so parallel scenarios — and a `--keep` copy left running — **collide on it**. This is the real trap; it looks like a flaky "port already allocated" that only appears under `--parallel` or alongside a kept run. The fix is to declare that var as `env.vars: { DB_PORT: auto }` in the scenario — the runner then allocates a fresh port for it from the same batch as the modeled ports. (`services.<name>.ports` can't take a `${var}` — it's a strict int rejected at config load — so a var-routed compose port is exactly the case `env.vars: auto` exists for.)
+
+The rule of thumb: model every host port under `services.<name>.ports` so isolation is automatic; if a port must reach compose through a var instead, it MUST be an `env.vars: auto` entry per scenario or it will collide.
 
 Two isolation gotchas that **block** a run (the compose isolation scanner fails the scenario before deploy):
 
@@ -106,6 +115,8 @@ Two isolation gotchas that **block** a run (the compose isolation scanner fails 
 - **A literal host port** (`8080:8080`) in raw compose — bypasses both the remap and `ports_free`, and the scanner flags **any** literal host-port token regardless of your service config. Merely adding a `services.<name>.ports` entry while `8080:8080` stays literal in compose does NOT clear the finding or move the bind. Fix it by **replacing the literal with an interpolated token** (`${APP_PORT}`) sourced from a modeled port — a `services.<name>.ports.<x>` value surfaced via an `exports.env` rule (`from: services.<name>.ports.<x>`) — or by routing the compose interpolation through a var and setting `env.vars: { …: auto }` per scenario. (`${...}`-interpolated ports are never flagged.)
 
 `external:` / explicitly-`name:`d volumes/networks are warnings only. `--skip-isolation-check` downgrades blocking findings — a last resort for false positives, not a fix. Scanner detail → `dwe docs show config/tests#compose-isolation-scanner --lang en`.
+
+**The remap changes the Host/URL the app sees.** An assertion hits the app on a freshly-allocated non-default port, so anything with **host-dependent logic** — multisite/domain routing, admin routing, CORS, signed/absolute URLs — can behave differently through a random port than prod-style access on the canonical one. Before writing an `http_check` against anything beyond a trivial health path, confirm the app actually tolerates a non-standard port in `Host` — not merely that nginx routes it. This is *not* a dwe bug; it's an inherent consequence of port isolation.
 
 ## 7. Test-only commands via `type: command`
 
@@ -130,7 +141,7 @@ Author the `private` command in `workspace/commands/**.yml` → see `authoring-c
 dwe validate tests --output json
 ```
 
-It also surfaces compose-isolation hazards as warnings. Caveat: a var populated only post-deploy (a `${generated.*}` secret) is absent at validate time and may draw a spurious diagnostic — give it a project-level default.
+It also surfaces compose-isolation hazards — but **all** of them report as `"severity":"warning"` here, including the ones that will actually **block** `dwe test run` (`container_name:`, literal host ports). Don't judge a finding's blocking power by the severity field in `validate tests`; cross-reference the blocking/warning split in § 6 (or `dwe docs show config/tests#compose-isolation-scanner --lang en`). Caveat: a var populated only post-deploy (a `${generated.*}` secret) is absent at validate time and may draw a spurious diagnostic — give it a project-level default.
 
 ## 9. The debugging loop + handoff
 
@@ -140,7 +151,13 @@ When a scenario fails (deploy / step / timeout), the runner collects a **failure
 - `compose-ps.txt` — `docker compose ps --all` in the copy
 - `container-logs.txt` — combined container logs (last 200 lines each)
 
-When the report isn't enough, hand the user `dwe test run --keep <scenario>` to skip teardown and inspect the live copy (it prints the compose project name + copy path; a kept run blocks a re-run until cleaned). Clean up kept or crashed/interrupted runs with `dwe test clean` (`--dry-run` first, read-safe; the real sweep is a handoff — manifest-driven, never guesses at names; compose projects with no manifest are only reported, remove those by hand).
+When the report isn't enough, hand the user `dwe test run --keep <scenario>` to skip teardown and inspect the live copy (it prints the compose project name + copy path; a kept run blocks a re-run until cleaned). **For a brand-new, unproven scenario, suggest `--keep` on the very first run** — if it fails, the copy is already there to debug, instead of paying a second full deploy cycle (often 8–10 min) just to obtain one.
+
+**`dwe test run -v` / `--debug` propagates into the copy's `dwe validate` + `dwe deploy run`.** The diagnostic level flows through to the subprocesses the scenario actually exercises, so the deploy firehose (command echoes with `-v`; probes/timings/compose env with `--debug`) goes to stderr live in the default sequential text mode, and to the copy's run log (`.dwe/tests/runs/<scenario>/.dwe/logs/test.log`) in `--parallel`/`--output json` mode. Reach for this before `--keep` when the question is *why did the deploy inside the copy do X* rather than *what state did it leave behind* — no need to hand-re-run `dwe deploy run` inside the copy to see the trace.
+
+**Trap — the copy is itself a valid dwe project.** It carries its own `workspace.yml`, so any *project-level* command (`dwe test clean`, `dwe status`, `dwe deploy run`, `dwe vars …`) run while your shell is *inside* `.dwe/tests/runs/<scenario>/` resolves **that copy** as a separate project root — with its own empty `.dwe/tests/manifests/` — and returns **silent empty results, not an error** (e.g. `dwe test clean` from inside the copy sweeps nothing and looks like a bug). `cd` back to the real project root before any project-level command; from within the copy only *read* its plain files (`.dwe/logs/`, `docker compose ps`).
+
+Clean up kept or crashed/interrupted runs with `dwe test clean` (`--dry-run` first, read-safe; the real sweep is a handoff — manifest-driven, never guesses at names; compose projects with no manifest are only reported, remove those by hand).
 
 Handoff table (edit yml → show diff → give the exact command → wait; run only when the user asks):
 
