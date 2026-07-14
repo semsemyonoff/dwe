@@ -36,15 +36,17 @@ What lives where (paths, not schemas — look up any schema with the slug noted)
 - **User commands**: `workspace/commands/**.yml`; path + filename + key = a dot-ID; run with `dwe cmd <id>`.
 - **Render packs**: `workspace/templates/{config,ide,ai,git}/`; `config` writes runtime files into the service hub, `ide`/`ai`/`git` write hub dotfiles (devcontainer, the generated `AGENTS.md`, git hooks).
 - **Pipelines (optional, full-replacement)**: per-service `deploy.yml` and project `workspace/{deploy,lifecycle,reset,snapshot,setup,validate,info,styles}.yml`. Absence = built-in default (reported `ⓘ`, not an error).
+- **Integration-test scenarios**: `workspace/tests/<scenario>.yml` (one file = one scenario; the name is the file basename; reuses the deploy step schema) → `dwe docs show config/tests --lang en`. See `references/integration-tests.md`.
 
 Schema for any of these → `dwe docs show concepts/project-layout --lang en` and the per-area slugs in the recipes below.
 
 ## Output conventions
 
 - **Always `--lang en` for docs.** Translated docs may lag the English source, and reasoning is more reliable in English: `dwe docs llms-txt|search|show|list … --lang en`.
-- **`--output json` for data you parse.** The default human mode is for users, not agents. Add `--pretty` if you like. Applies to `status`, `validate`, `services`, `vars get/list/inspect`, `deploy state show`, `snapshot list/inspect`, `info`, `logs`, `commands list`, `docs list/search`.
+- **`--output json` for data you parse.** The default human mode is for users, not agents. Add `--pretty` if you like. Applies to `status`, `validate` (incl. `validate tests`), `services`, `vars get/list/inspect`, `deploy state show`, `snapshot list/inspect`, `info`, `logs`, `commands list`, `docs list/search`, `test list/run/clean`.
 - **Exception — `dwe docs llms-txt`.** Its `--output` is a **file path**, not a format selector. `--output json` would write the markdown body to a file literally named `json`. Just run it and parse the markdown from stdout.
 - **Exception — `dwe docs show`.** Emits markdown (rendered for TTY; raw with `--raw` or in a pipe). The global `--output json` is **ignored** — the document IS the payload. Use `#anchor`, `--anchors`, or `--toc` to scope without reading the full body.
+- **Bare `dwe commands` / `dwe docs` / `dwe status` open a full-screen TUI on an interactive terminal**, but auto-fall back to plain output when not attached to one — bare `dwe commands`→`commands list`, `dwe docs`→`docs list`, `dwe status`→plain text — so they never hang a piped agent (a pipe is non-interactive). `commands`/`docs` additionally honor `DWE_NONINTERACTIVE=1` (the bridge sets it in containers); `status` does **not** — it drops the TUI only on a non-TTY stdout, `--no-tui`, `TERM=dumb`, or `--output json`. Always call the explicit read subcommands (`commands list`, `docs list|show|search`, `status --output json`) rather than the bare TUI form.
 
 ## When to use what
 
@@ -61,6 +63,7 @@ Schema for any of these → `dwe docs show concepts/project-layout --lang en` an
 | **Author a command or background daemon** | `references/authoring-commands.md` |
 | **Wire render packs / vars / `.env` / generated secrets** | `references/render-and-vars.md` |
 | **Author a pipeline** (deploy / lifecycle / reset / setup / validate / info / styles) | `references/pipelines-and-orchestration.md` |
+| **Verify a clean deploy in isolation / author an integration test** | `references/integration-tests.md` |
 | **Snapshot / reset / troubleshoot** | `references/snapshots-reset-troubleshoot.md` |
 | Apply a change | see **Picking the apply command** below — edit yml, then ASK the user to run it |
 
@@ -74,19 +77,21 @@ After editing yml, the apply command depends on **what** changed (never run it y
 - toggled a service → `dwe services enable|disable <name> --apply`
 - only icon / host / display strings → `dwe validate` (then `run`/`deploy run` if it affects runtime)
 - mixed / unsure → `dwe deploy run` (ends in `docker up --wait`, so it covers a restart)
+- authored/edited a `workspace/tests/<scenario>.yml` → verify read-only with `dwe validate tests`, then hand off `dwe test run <scenario>` (a slow clean deploy in a throwaway copy — does not touch the live stack). Propose this only for **substantial** changes (new service, reworked deploy pipeline), and let the user run it — never on your own initiative. See `references/integration-tests.md`.
 
 Never recommend `dwe deploy run --force` as a clean install — `--force` only ignores prior state (`when:` still applies). A true clean install is `dwe reset run && dwe deploy run`.
 
 ## Permission boundary — read freely, never mutate
 
-You MAY run READ commands without asking (all lock-free, safe even when they report errors):
+You MAY run READ commands without asking (all read-only — they don't mutate or tear down project state; safe even when they report errors):
 
-- `status`, `logs`, `validate` (+ `validate config|checks|env`, `--stage`), `info`
+- `status`, `logs`, `validate` (+ `validate config|checks|env|tests`, `--stage`), `info`
 - `deploy plan`, `reset plan`, `deploy state show`
 - `snapshot list|current|inspect`
 - `compose argv|files`, `docker ps|logs|project-name`, `bridge status|logs`
 - `vars get|list|inspect`, `commands list` / `commands -i <id>`
 - `docs show|search|list|llms-txt` — read-only doc access.
+- `test list` — list integration-test scenarios (lock-free, no Docker). `test clean --dry-run` is also safe to run without asking (it previews a sweep and destroys nothing), but is NOT strictly lock-free/Docker-free: it does a read-only `docker ps` orphan probe and briefly acquires-then-releases each scenario's flock. (`validate tests` sits in the `validate` family above; the destructive `test run` / `test clean` forms are below.)
 
 You MUST NOT invoke MUTATING commands yourself. Prepare the change, then ask the user to run the exact command:
 
@@ -95,6 +100,7 @@ You MUST NOT invoke MUTATING commands yourself. Prepare the change, then ask the
 - `dwe run` / `stop` / `restart` — runtime lifecycle (no deploy steps); `dwe reset run` — destructive.
 - `dwe services enable|disable <name> --apply` — toggle a service.
 - `dwe vars set`, `dwe render env|config|ide|ai|git`, `dwe cmd <id>`, `dwe snapshot create|restore|rollback|remove|pack|unpack`, `dwe bridge start|stop`, `dwe docs generate|export|cache clear`.
+- `dwe test run [scenario...]` / `dwe test clean` (without `--dry-run`) — integration-test runner and sweeper. Isolated/disposable (they operate on throwaway project copies under `.dwe/tests/`), so they never touch the live stack — but a run is a **full, slow Docker deploy**. Only *propose* it for substantial changes, and run it strictly on the user's explicit request. See `references/integration-tests.md`.
 
 Pattern: **edit yml files yourself → show the diff → tell the user the exact command → wait for them to run it.** Do not invoke the mutation, and do not work around the boundary by calling `docker` / `docker compose` / project scripts directly.
 
@@ -116,4 +122,5 @@ Load a reference file on demand when the task matches:
 - `references/authoring-commands.md` — author user commands & background daemons (the type zoo, params, templating, bridge opt-in).
 - `references/render-and-vars.md` — render packs (config vs ide/ai/git), generated-secret harvest, the `vars` sandbox, `exports.env`.
 - `references/pipelines-and-orchestration.md` — per-service & project `deploy.yml`, `lifecycle`, `setup` wizard, `validate` checks, `info`/`styles`.
+- `references/integration-tests.md` — author `workspace/tests/<scenario>.yml` and verify an isolated clean deploy with `dwe test run` (you write the scenarios; the user runs them). Also the general engine additions: `http_check` predicate, predicate-as-assertion, per-step `timeout:`.
 - `references/snapshots-reset-troubleshoot.md` — snapshot workflows, reset, and the read-only triage trio.

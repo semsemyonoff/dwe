@@ -4,8 +4,8 @@ Task-to-command mappings for common DWE workflows. Load this file when the user'
 
 Rules that apply to every recipe:
 
-- Read commands — run freely without asking: `status`, `logs`, `validate`, and `docs show` / `docs search` / `docs list` / `docs llms-txt`.
-- Mutating commands — **never run yourself**; prepare the change, then show the user the exact command and wait for them to run it: `deploy run`, `run`, `stop`, `restart`, `reset run`, `services enable/disable`, AND the writing `docs` subcommands: `docs generate` (rewrites `docs/reference/`), `docs export` (writes to a target dir), `docs cache clear` (deletes cached diagrams).
+- Read commands — run freely without asking: `status`, `logs`, `validate` (incl. `validate tests`), `test list`, `test clean --dry-run`, and `docs show` / `docs search` / `docs list` / `docs llms-txt`.
+- Mutating commands — **never run yourself**; prepare the change, then show the user the exact command and wait for them to run it: `deploy run`, `run`, `stop`, `restart`, `reset run`, `services enable/disable`, `test run` / `test clean` (isolated/disposable copies, but a `test run` is a full slow Docker deploy — propose only for substantial changes, run only on explicit ask), AND the writing `docs` subcommands: `docs generate` (rewrites `docs/reference/`), `docs export` (writes to a target dir), `docs cache clear` (deletes cached diagrams).
 - Pick the apply command by what changed:
   - **Service config** (`workspace/services/<name>/service.yml`, that service's `deploy.yml`, `configs`, `dirs`, `render` blocks) → `dwe deploy run`. The deploy pipeline installs / configures / migrates the service and ends with `docker up --wait`. The scoped form `dwe deploy run --service <name>` exists, but it only works if the service has its own `deploy.yml` and it skips the final `docker up --wait` — recommend it only when the user explicitly wants to re-run a single service's provisioning steps.
   - **Deploy orchestrator** (`workspace/deploy.yml`) → `dwe deploy run`.
@@ -23,6 +23,7 @@ This file holds the quick daily/inspection recipes. For an authoring task, jump 
 - **Author a user command or background daemon** → `authoring-commands.md`
 - **Render packs, the `vars` sandbox, generated secrets, `.env` exports** → `render-and-vars.md`
 - **Author a pipeline** (deploy / lifecycle / reset / setup / validate / info / styles) → `pipelines-and-orchestration.md`
+- **Author / run an integration test** (`workspace/tests/*.yml`, `dwe test run|list|clean`, `dwe validate tests`) → `integration-tests.md`
 - **Snapshots, reset, and the read-only triage trio** → `snapshots-reset-troubleshoot.md`
 
 ## Add a new service

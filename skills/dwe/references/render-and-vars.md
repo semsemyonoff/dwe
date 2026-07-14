@@ -150,7 +150,7 @@ exports:
     - { name: DBGATE_PORT, from: services.dbgate.ports.http, format: int, when: services.dbgate.enabled }
 ```
 
-Rule fields: `name`, `from` (dot-path into the **merged** config), optional `format` (`bool`|`int`|`string`), `when` (dot-path — skip if falsy), `default`, `required`, `comment`. Inspect the resolved env (safe — prints to stdout when there is **no** `--out`):
+Rule fields: `name`, `from` (dot-path into the **merged** config), optional `format` (`bool`|`int`|`string`), `when` (dot-path — skip if falsy), `default`, `required`, `comment`. A host port sourced `from: services.<name>.ports.<x>` is also what `dwe test` auto-remaps to a free port for every **enabled** service in the test copy, so a scenario runs alongside the live env — model host ports under `services.<name>.ports` and integration tests isolate them for free (`integration-tests.md`). Inspect the resolved env (safe — prints to stdout when there is **no** `--out`):
 
 ```shell
 dwe render env
