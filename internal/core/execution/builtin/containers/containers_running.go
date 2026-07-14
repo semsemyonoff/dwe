@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"slices"
 	"strings"
+	"time"
 
 	"github.com/semsemyonoff/dwe/internal/core/execution/builtin/spec"
 
@@ -12,12 +13,31 @@ import (
 	"github.com/semsemyonoff/dwe/internal/shared/docker"
 )
 
+// probeRetries is the number of extra attempts Run makes after a transient
+// compose-probe failure. containers_running is designed to run as an assertion
+// immediately after `docker up --wait`, and at that exact boundary a
+// `docker compose ps` probe can transiently fail (exit 1, empty stderr) even
+// though every container is already up and healthy per the daemon — the
+// compose CLI / daemon is momentarily busy right as `up --wait` returns.
+//
+// This does NOT poll for readiness: a probe that succeeds but reports a service
+// as not-running still fails on the first attempt (that is a real assertion
+// failure, not a transient one). Only a probe that could not run at all is
+// retried, so the "does not poll" contract holds.
+const probeRetries = 2
+
+// probeRetryBackoff is the pause between transient-probe retries. A var so
+// tests can shrink it.
+var probeRetryBackoff = 300 * time.Millisecond
+
 // ContainersRunning is a fast "is running" check for compose services.
-// Unlike docker_wait_healthy it does not poll, does not honour a timeout, and
-// does not require services to have a healthcheck — it asks compose once for
-// the set of currently-running services and returns immediately. Intended as
-// a `check:` partner for `docker up` steps and as a precondition for
-// service-touching pipeline steps.
+// Unlike docker_wait_healthy it does not poll for readiness, does not honour a
+// timeout, and does not require services to have a healthcheck — it asks compose
+// for the set of currently-running services and returns as soon as it gets an
+// answer. A transient probe failure (the compose CLI erroring right at the
+// `up --wait` boundary) is retried a bounded number of times; a service simply
+// not running is not. Intended as a `check:` partner for `docker up` steps and
+// as a precondition for service-touching pipeline steps.
 //
 // Name mirrors the registered builtin name `containers_running`.
 //
@@ -73,7 +93,7 @@ func (ContainersRunning) Run(ctx context.Context, with map[string]any, ectx spec
 	}
 	compose := docker.NewCompose(ectx.Config, dockerCfg, ectx.ProjectRoot)
 
-	running, err := compose.RunningServices(ctx, services)
+	running, err := runningServicesWithRetry(ctx, compose, services)
 	if err != nil {
 		return fmt.Errorf("containers_running: %w", err)
 	}
@@ -92,4 +112,27 @@ func (ContainersRunning) Run(ctx context.Context, with map[string]any, ectx spec
 		return fmt.Errorf("services not running: %s", strings.Join(missing, ", "))
 	}
 	return nil
+}
+
+// runningServicesWithRetry probes the running services, retrying only a
+// transient command failure (the probe itself erroring) — never a successful
+// probe. It is ctx-aware: a cancelled context short-circuits the backoff and
+// returns immediately instead of retrying.
+func runningServicesWithRetry(ctx context.Context, compose *docker.Compose, services []string) ([]string, error) {
+	var lastErr error
+	for attempt := 0; attempt <= probeRetries; attempt++ {
+		if attempt > 0 {
+			select {
+			case <-ctx.Done():
+				return nil, ctx.Err()
+			case <-time.After(probeRetryBackoff):
+			}
+		}
+		running, err := compose.RunningServices(ctx, services)
+		if err == nil {
+			return running, nil
+		}
+		lastErr = err
+	}
+	return nil, lastErr
 }

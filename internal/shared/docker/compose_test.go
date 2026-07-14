@@ -724,6 +724,22 @@ func TestProbe_EchoesOnlyAtDebug(t *testing.T) {
 	})
 }
 
+func TestRunningServices_SurfacesStderrOnFailure(t *testing.T) {
+	// A compose ps probe that exits non-zero with a stderr message: the wrapped
+	// error must include that message, not just "exit status 1", so a failure is
+	// diagnosable without a live repro.
+	stub := writeStub(t, `echo "no configuration file provided: not found" >&2; exit 1`)
+	c := &Compose{Bin: stub}
+
+	_, err := c.RunningServices(context.Background(), []string{"app"})
+	if err == nil {
+		t.Fatal("expected an error from a failing probe")
+	}
+	if !strings.Contains(err.Error(), "no configuration file provided: not found") {
+		t.Fatalf("error must surface subprocess stderr, got %q", err.Error())
+	}
+}
+
 func TestExec_DebugEmitsTimingEnvAndCwd(t *testing.T) {
 	stub := writeStub(t, "exit 0")
 	baseDir := t.TempDir()

@@ -334,6 +334,13 @@ func (c *Compose) RunningServices(ctx context.Context, services []string) ([]str
 	}
 	out, err := cmd.Output()
 	if err != nil {
+		// cmd.Stderr is nil, so an *exec.ExitError carries the captured stderr.
+		// Surface it: without this the caller only ever sees "exit status 1"
+		// with no clue why compose refused the probe (mirrors health.go/labels.go).
+		if ee, ok := errors.AsType[*exec.ExitError](err); ok && len(ee.Stderr) > 0 {
+			return nil, fmt.Errorf("%s compose ps --services: %w: %s",
+				c.BinName(), err, strings.TrimSpace(string(ee.Stderr)))
+		}
 		return nil, fmt.Errorf("%s compose ps --services: %w", c.BinName(), err)
 	}
 
