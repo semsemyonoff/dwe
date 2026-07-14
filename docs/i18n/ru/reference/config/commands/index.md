@@ -1,4 +1,4 @@
-> Translated from: reference/config/commands/index.md @ a1a9e5921088
+> Translated from: reference/config/commands/index.md @ 1effd1e726b4
 
 # commands/
 
@@ -278,6 +278,8 @@ db.start:
 ```
 
 `db.start` нельзя вызвать напрямую через `dwe commands db.start`, но `bootstrap` может ссылаться на неё из своих `steps:`. Композиция выше — каноничный шаблон: тонкий `type: dwe` для запуска, `type: builtin` для ожидания и `type: workflow`, связывающий их вместе.
+
+> **Кастомные имена сетей + частичный `up`/`run`.** Если ваш compose-файл задаёт сети явное `networks.<x>.name:`, учитывайте квирк docker-compose: labels сети выигрывает та команда, которая **первой** её материализует. Частичный `docker up db` или шаг `type: service_run` (запускающий `docker compose run --rm --no-deps …`), выполненный **до** полного подъёма стека, может создать именованную сеть с labels, которые последующий `up --wait` затем отвергнет (`network <x> … has incorrect label com.docker.compose.network`). Это поведение самого compose, а не баг DWE — DWE не объявляет собственных сетей и передаёт один и тот же project/`-f` во все вызовы. Решение — порядок: поднимите весь стек (`docker up --wait`, встроенная финальная фаза деплоя) до любого частичного `up <svc>` или `run --rm`, который трогает кастомно-именованную сеть, либо уберите явное `name:` и дайте compose заскоупить сеть на проект.
 
 ## Связанные команды
 

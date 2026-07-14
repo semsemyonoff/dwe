@@ -277,6 +277,8 @@ db.start:
 
 `db.start` cannot be invoked directly via `dwe commands db.start`, but `bootstrap` can reference it from its `steps:`. The composition above is the canonical pattern: a thin `type: dwe` for the start, a `type: builtin` for the wait, and a `type: workflow` that strings them together.
 
+> **Custom network names + partial `up`/`run`.** If your compose file gives a network an explicit `networks.<x>.name:`, be aware of a docker-compose quirk: the first command to *materialize* that network wins its labels. A partial `docker up db` or a `type: service_run` step (which runs `docker compose run --rm --no-deps …`) executed **before** the full stack comes up can create the named network with labels a later `up --wait` then rejects (`network <x> … has incorrect label com.docker.compose.network`). This is upstream compose behavior, not a DWE bug — DWE declares no networks of its own and passes the same project/`-f` set to every invocation. The fix is ordering: bring the whole stack up (`docker up --wait`, the built-in final deploy phase) before any partial `up <svc>` or `run --rm` that touches the custom-named network, or drop the explicit `name:` and let compose scope the network to the project.
+
 ## Related commands
 
 - `dwe commands list` — list all public commands grouped by file
