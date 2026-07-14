@@ -2,7 +2,7 @@
 
 Load this file when the task is "verify a clean deploy still works", "add an integration test / scenario", "test with redis off", "assert the app answers after deploy", or "make a throwaway test environment". **Your job here is to AUTHOR scenario yml** under `workspace/tests/`; the **user** runs the mutating `dwe test run`.
 
-`dwe test` runs `dwe validate` + a **real** `dwe deploy run` inside a fresh, fully isolated, disposable copy of the project (`.dwe/tests/runs/<scenario>/`), runs your assertions, then tears it all down. Host ports are auto-isolated, so a scenario runs *alongside* the live env without touching it. `dwe test` **requires a project** (unlike the read-only docs commands).
+`dwe test` runs `dwe validate` + a **real** `dwe deploy run` inside a fresh, isolated, disposable copy of the project (`.dwe/tests/runs/<scenario>/`), runs your assertions, then tears it all down. Host ports are auto-isolated, so a scenario can run *alongside* the live env — though isolation has limits (§ 2). `dwe test` **requires a project** (unlike the read-only docs commands).
 
 ## 1. When to reach for it — and the cost
 
