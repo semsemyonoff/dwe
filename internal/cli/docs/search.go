@@ -8,6 +8,7 @@ import (
 	"github.com/semsemyonoff/dwe/internal/cli/cmdctx"
 	coredocs "github.com/semsemyonoff/dwe/internal/core/docs"
 	"github.com/semsemyonoff/dwe/internal/shared/i18n"
+	"github.com/semsemyonoff/dwe/internal/shared/render"
 
 	"github.com/spf13/cobra"
 )
@@ -92,7 +93,33 @@ func runDocsSearch(cmd *cobra.Command, rflags *cmdctx.RootFlags, df *docsSearchF
 		})
 	}
 
+	emitNoSearchMatches(cmd, rflags, df, query, locale, len(results))
+
 	return cmdctx.WriteData(rflags, cmd, results, renderDocsSearchText)
+}
+
+// emitNoSearchMatches writes a single info line to stderr when a search found
+// nothing. Without it a zero-result search is indistinguishable from a command
+// that silently did nothing: text mode deliberately writes no stdout for an
+// empty result set (see cmdctx.WriteData), and the exit code stays 0 because
+// "no matches" is an outcome, not an error.
+//
+// The line names the two filters that most often cause a false empty result —
+// --source (a non-"all" value hides whole doc trees) and the resolved locale
+// (translations lag the English source, so a term may exist only in `--lang en`).
+//
+// No-op in JSON mode: there the empty array on stdout is already an unambiguous
+// answer, and the notice would be noise for a parsing consumer.
+func emitNoSearchMatches(cmd *cobra.Command, rflags *cmdctx.RootFlags, df *docsSearchFlags, query, locale string, found int) {
+	if found > 0 || rflags.Output == "json" {
+		return
+	}
+	render.NewWriter(cmd.ErrOrStderr()).Info(fmt.Sprintf(
+		"No documentation matches %q (searched --source=%s in locale %s). "+
+			"Search is a literal case-insensitive substring match — try a shorter term, "+
+			"another --source, or --lang en.",
+		query, df.source, locale,
+	))
 }
 
 // renderDocsSearchText renders the default TSV (one row per result):

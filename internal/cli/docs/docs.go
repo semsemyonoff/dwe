@@ -2,7 +2,9 @@
 package docs
 
 import (
+	"fmt"
 	"os"
+	"strings"
 
 	"github.com/semsemyonoff/dwe/internal/cli/cmdctx"
 	coredocs "github.com/semsemyonoff/dwe/internal/core/docs"
@@ -26,15 +28,20 @@ type docsFlags struct {
 
 // NewCmd builds the `dwe docs` command tree.
 func NewCmd(groupID string, flags *cmdctx.RootFlags) *cobra.Command {
+	df := &docsFlags{}
+
 	cmd := &cobra.Command{
 		Use:   "docs",
 		Short: "Browse and manage documentation",
 		Long: `Browse and manage dwe documentation.
 
 View documentation interactively with a TUI browser or display specific topics.
-Generate reference documentation for the declarative command registry.`,
+Generate reference documentation for the declarative command registry.
+
+Reading a topic takes the 'show' subcommand: 'dwe docs show <topic>'. Bare
+'dwe docs' opens the browser (or lists topics when stdout is not a terminal).`,
 		GroupID:      groupID,
-		Args:         cobra.NoArgs,
+		Args:         docsNoTopicArgs,
 		SilenceUsage: true,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			// No TTY for the docs browser (pipe / CI) or forced
@@ -43,12 +50,19 @@ Generate reference documentation for the declarative command registry.`,
 			// output instead of erroring, mirroring bare `dwe commands`.
 			if !term.IsTerminal(int(os.Stdout.Fd())) || cmdctx.NonInteractiveEnv() {
 				// source "all" mirrors the list subcommand's flag default.
-				return runDocsList(cmd, flags, &docsListFlags{source: "all"})
+				return runDocsList(cmd, flags, &docsListFlags{source: "all", lang: df.lang})
 			}
 
-			return runDocsTUI(cmd, flags)
+			return runDocsTUI(cmd, flags, df.lang)
 		},
 	}
+
+	// --lang on the parent serves bare `dwe docs [--lang xx]` and, just as
+	// importantly, keeps flag parsing from preempting docsNoTopicArgs: without
+	// it `dwe docs <topic> --lang en` dies with "Unknown flag: --lang", which
+	// points at the flag when the real problem is the missing `show`. Local, not
+	// persistent — every subcommand already declares its own --lang.
+	cmd.Flags().StringVar(&df.lang, "lang", "", "Language code (default: from userconfig / $LANG / en)")
 	cmd.AddCommand(newDocsShowCmd(flags))
 	cmd.AddCommand(newDocsListCmd(flags))
 	cmd.AddCommand(newDocsSearchCmd(flags))
@@ -59,7 +73,37 @@ Generate reference documentation for the declarative command registry.`,
 	return cmd
 }
 
-func runDocsTUI(cmd *cobra.Command, flags *cmdctx.RootFlags) error {
+// docsNoTopicArgs rejects positional args on bare `dwe docs`, but does it in the
+// user's terms rather than cobra's.
+//
+// `dwe docs <topic>` is the single most common wrong guess: reading a topic needs
+// the `show` subcommand, and cobra's stock "unknown command" text never says so.
+// The wrong form also travels — dwe's own scaffolded AGENTS.md advertised
+// `dwe docs <topic> --lang en` for months, so agents typed exactly this.
+//
+// The message names both recoveries, because the offending token is ambiguous:
+// it is usually a topic path (→ `docs show`), but it can equally be a typo of a
+// real subcommand (→ the subcommand list).
+func docsNoTopicArgs(cmd *cobra.Command, args []string) error {
+	if len(args) == 0 {
+		return nil
+	}
+	names := make([]string, 0, len(cmd.Commands()))
+	for _, sub := range cmd.Commands() {
+		if !sub.Hidden {
+			names = append(names, sub.Name())
+		}
+	}
+	return fmt.Errorf(
+		"unknown docs subcommand %q\n\nTo read a topic:  dwe docs show %s\nTo find one:      dwe docs list\nSubcommands:      %s",
+		args[0], args[0], strings.Join(names, ", "),
+	)
+}
+
+// runDocsTUI opens the full-screen docs browser. flagLang is the parent's
+// --lang value ("" when unset) and takes precedence over the userconfig /
+// $LANG fallbacks, mirroring how every docs subcommand resolves its locale.
+func runDocsTUI(cmd *cobra.Command, flags *cmdctx.RootFlags, flagLang string) error {
 	// Load configuration for doc settings (mermaid config, etc.)
 	cfg, err := config.LoadConfig(flags.ConfigPath)
 	if err != nil {
@@ -76,9 +120,10 @@ func runDocsTUI(cmd *cobra.Command, flags *cmdctx.RootFlags) error {
 		mermaidTheme = ucfg.MermaidTheme
 	}
 
-	// Resolve locale directly from config and environment — do NOT use flags.Locale
-	// (it is clamped to the YAML i18n store, a different namespace from markdown translations).
-	locale := i18n.ResolveLocale("", cfgLang, os.Getenv("LANG"))
+	// Resolve locale directly from the flag, config and environment — do NOT use
+	// flags.Locale (it is clamped to the YAML i18n store, a different namespace
+	// from markdown translations).
+	locale := i18n.ResolveLocale(flagLang, cfgLang, os.Getenv("LANG"))
 
 	// Build mermaid renderer chain based on config.
 	cacheDir, err := mermaid.CacheDir()
