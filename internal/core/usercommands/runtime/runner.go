@@ -160,20 +160,7 @@ func RunCommand(ctx context.Context, rc RunContext) (err error) {
 	if TestSnapshotRC != nil {
 		TestSnapshotRC(rc)
 	}
-	if rc.Render == nil {
-		rc.Render = &tpl.RenderContext{}
-	}
-
-	if rc.Render.Raw == nil && rc.Config != nil {
-		rc.Render.Raw = rc.Config.Raw
-	}
-
-	if rc.Render.Params == nil {
-		rc.Render.Params = make(map[string]any)
-	}
-	if rc.Render.Context == nil {
-		rc.Render.Context = make(map[string]any)
-	}
+	normalizeRenderContext(&rc)
 
 	// Conditional notifier install — only when this is the top-level user
 	// invocation of a command opted into notifications. Workflow sub-steps
@@ -243,6 +230,39 @@ func RunCommand(ctx context.Context, rc RunContext) (err error) {
 		return err
 	}
 	return nil
+}
+
+// normalizeRenderContext fills in the render-context defaults every dispatcher
+// depends on, at the single point every dispatcher passes through.
+//
+// Doing this per-call-site is what review caught: several dispatchers build
+// their RenderContext inline rather than via BuildRunContext (the workflow
+// sub-step path builds a fresh one; pipeline actions, reset hooks and validate
+// checks go through the constructor), so a per-site rule invites exactly one of
+// them to be forgotten — and for ${args} the symptom is silent. A command
+// declaring `argv: [go, test, "${args}"]` with args.default ["./..."] renders
+// as `go test` on the path that missed it, testing the current directory
+// instead of the module: a different command, not a visible failure.
+//
+// Recomputing the args default over an already-resolved value is idempotent —
+// the CLI's Resolve(userArgs) is non-nil whenever the caller supplied anything,
+// and Resolve(nil) yields that same default otherwise.
+func normalizeRenderContext(rc *RunContext) {
+	if rc.Render == nil {
+		rc.Render = &tpl.RenderContext{}
+	}
+	if rc.Render.Raw == nil && rc.Config != nil {
+		rc.Render.Raw = rc.Config.Raw
+	}
+	if rc.Render.Params == nil {
+		rc.Render.Params = make(map[string]any)
+	}
+	if rc.Render.Context == nil {
+		rc.Render.Context = make(map[string]any)
+	}
+	if rc.Render.Args == nil && rc.Cmd != nil {
+		rc.Render.Args = rc.Cmd.Args.Resolve(nil)
+	}
 }
 
 func emitCommandMessage(ctx RunContext, message string, success bool) error {
