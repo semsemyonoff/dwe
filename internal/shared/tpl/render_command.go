@@ -285,30 +285,23 @@ func commandFuncMap() template.FuncMap {
 	return fm
 }
 
-// renderArgs joins pass-through arguments for interpolation into a `cmd:`
-// string. That string is executed as `sh -c "<rendered>"`, so every argument is
-// single-quoted: a user argument is untrusted input as far as the shell is
-// concerned, and a bare join would let a filename containing a space, a `;` or
-// a `$(…)` change the command's structure.
+// renderArgs joins pass-through arguments for the ${args} references that do
+// NOT drive process execution — a `messages.success` line, an `env:` value, a
+// `workdir`. Those land in a display string or a single exec argument, with no
+// shell to re-parse them, so a plain space-joined form is both correct and safe.
 //
-// Empty args render as the empty string, so `cmd: "npm test ${args}"` degrades
-// to exactly `npm test ` when nothing was passed.
+// The execution paths never reach this function. A `cmd:` template has its
+// ${args} slot rewritten to "$@" before rendering, with the arguments passed as
+// positional parameters (runio.RenderShellCommand); an `argv:` element equal to
+// ${args} is spliced element-wise (runio.RenderArgvWithArgs). That split is the
+// security boundary: shell-quoting the arguments and interpolating them into the
+// program text — what this function used to do — is safe only in an unquoted
+// argument position, and a command author writing `"${args}"` (the natural shell
+// habit) reopened command substitution.
+//
+// Empty args render as the empty string.
 func renderArgs(args []string) string {
-	if len(args) == 0 {
-		return ""
-	}
-	quoted := make([]string, len(args))
-	for i, a := range args {
-		quoted[i] = shellSingleQuote(a)
-	}
-	return strings.Join(quoted, " ")
-}
-
-// shellSingleQuote wraps s in single quotes, escaping any embedded single quote
-// with the standard POSIX '\” dance. The result is safe to paste into a
-// `sh -c` string in argument position.
-func shellSingleQuote(s string) string {
-	return "'" + strings.ReplaceAll(s, "'", `'\''`) + "'"
+	return strings.Join(args, " ")
 }
 
 // resolveRaw resolves a dot-path in a raw config map.

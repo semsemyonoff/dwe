@@ -312,9 +312,15 @@ have a `cmd:`/`argv:` to substitute into. A `script`, `workflow`, `builtin` or
 
 ### Placement
 
-In a `cmd:` string the arguments are **shell-quoted and joined**, because the
-string is executed as `sh -c`. A filename containing a space stays one argument,
-and a `;` or `$(…)` in an argument stays literal text:
+In a `cmd:` string the `${args}` slot becomes **`"$@"`**, and the arguments are
+handed to the shell as positional parameters. They never appear in the shell
+program itself, so nothing in an argument can change the command's structure: a
+filename containing a space stays one argument, and `;`, backticks or `$(…)`
+stay literal text.
+
+Write the slot **unquoted** — `${args}`, not `"${args}"`. It already expands to
+a correctly-quoted `"$@"`; wrapping it in quotes of your own produces `""$@""`,
+which still executes nothing but splits arguments on whitespace.
 
 ```yaml
 test:
@@ -335,8 +341,9 @@ test:
   argv: [go, test, -count=1, -race, "${args}"]
 ```
 
-An element that merely *contains* `${args}` (`--filter=${args}`) is rendered as
-an ordinary template expression, where the shell-quoting join applies.
+An element that merely *embeds* the token (`--filter=${args}`) is **rejected at
+load time**: nothing re-splits an argv element, so it could only ever produce a
+single mangled argument.
 
 ### The `args:` block
 

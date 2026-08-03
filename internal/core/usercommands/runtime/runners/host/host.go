@@ -30,11 +30,13 @@ func (r *Runner) BuildCommand(ctx context.Context, rc spec.RunContext) (*exec.Cm
 
 	var argv []string
 	if cmd.Cmd != "" {
-		rendered, err := tpl.RenderCommand(cmd.Cmd, rc.Render)
+		script, positional, err := runio.RenderShellCommand(cmd.Cmd, rc.Render)
 		if err != nil {
-			return nil, fmt.Errorf("render cmd: %w", err)
+			return nil, err
 		}
-		argv = []string{config.ShellBin(rc.Config), "-c", rendered}
+		// positional is nil unless the template has a ${args} slot; the shell
+		// then binds them to "$@" without them ever entering the program text.
+		argv = append([]string{config.ShellBin(rc.Config), "-c", script}, positional...)
 	} else {
 		rendered, err := runio.RenderArgvWithArgs(cmd.Argv, rc.Render)
 		if err != nil {

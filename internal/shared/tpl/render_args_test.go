@@ -6,26 +6,28 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-// TestRenderArgsQuoting is a security test, not a formatting one. ${args} in a
-// `cmd:` string is interpolated into text handed to `sh -c`, and its content
-// comes from whoever typed the command line. Anything short of full quoting
-// lets an argument change the command's structure.
-func TestRenderArgsQuoting(t *testing.T) {
+// TestRenderArgs covers the NON-execution ${args} references — a messages line,
+// an env value, a workdir. Those land in a display string or a single exec
+// argument with no shell to re-parse them, so a plain space-joined form is
+// correct.
+//
+// This function deliberately does NOT quote. It used to, in order to be pasted
+// into a `sh -c` program, and that was the wrong layer: quoting is safe only in
+// an unquoted argument position, and nothing constrained where a command author
+// wrote ${args}. `cmd: 'printf "%s\n" "${args}"'` with `$(id)` executed the
+// substitution. Execution now passes the arguments as positional parameters
+// instead (see runio.RenderShellCommand / RenderArgvWithArgs), which is why
+// quoting here would be wrong rather than merely redundant.
+func TestRenderArgs(t *testing.T) {
 	cases := []struct {
 		name string
 		args []string
 		want string
 	}{
 		{"empty renders to nothing", nil, ""},
-		{"plain args", []string{"a", "b"}, `'a' 'b'`},
-		{"space stays one argument", []string{"src/a b.ts"}, `'src/a b.ts'`},
-		{"semicolon cannot chain a command", []string{"x; rm -rf /"}, `'x; rm -rf /'`},
-		{"command substitution stays literal", []string{"$(whoami)"}, `'$(whoami)'`},
-		{"backtick substitution stays literal", []string{"`id`"}, "'`id`'"},
-		{"variable stays literal", []string{"$HOME"}, `'$HOME'`},
-		{"redirect cannot escape", []string{"> /etc/passwd"}, `'> /etc/passwd'`},
-		{"embedded single quote is escaped", []string{"it's"}, `'it'\''s'`},
-		{"quote-escape cannot break out", []string{`'; rm -rf /; '`}, `''\''; rm -rf /; '\'''`},
+		{"plain args", []string{"a", "b"}, "a b"},
+		{"metacharacters are not escaped — no shell will see this", []string{"x; y", "$(id)"}, "x; y $(id)"},
+		{"single value passes through verbatim", []string{"src/a b.ts"}, "src/a b.ts"},
 	}
 
 	for _, tc := range cases {
@@ -37,16 +39,16 @@ func TestRenderArgsQuoting(t *testing.T) {
 
 // TestRenderCommandArgs covers ${args} through the real compile+render path.
 func TestRenderCommandArgs(t *testing.T) {
-	t.Run("substitutes into a cmd string", func(t *testing.T) {
-		got, err := RenderCommand("npm test ${args}", &RenderContext{Args: []string{"--run", "x.test.ts"}})
+	t.Run("substitutes into a non-execution field", func(t *testing.T) {
+		got, err := RenderCommand("ran with ${args}", &RenderContext{Args: []string{"--run", "x.test.ts"}})
 		require.NoError(t, err)
-		require.Equal(t, `npm test '--run' 'x.test.ts'`, got)
+		require.Equal(t, "ran with --run x.test.ts", got)
 	})
 
-	t.Run("empty args leave the command otherwise intact", func(t *testing.T) {
-		got, err := RenderCommand("npm test ${args}", &RenderContext{})
+	t.Run("empty args leave the text otherwise intact", func(t *testing.T) {
+		got, err := RenderCommand("ran with ${args}", &RenderContext{})
 		require.NoError(t, err)
-		require.Equal(t, "npm test ", got)
+		require.Equal(t, "ran with ", got)
 	})
 
 	// ${args} is a whole-namespace reference; a sub-key has nothing to index

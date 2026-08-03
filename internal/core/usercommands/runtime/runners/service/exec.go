@@ -207,11 +207,13 @@ func buildRenderedComposeArgs(ctx spec.RunContext) ([]string, error) {
 func buildServiceArgv(ctx spec.RunContext) ([]string, error) {
 	cmd := ctx.Cmd
 	if cmd.Cmd != "" {
-		rendered, err := tpl.RenderCommand(cmd.Cmd, ctx.Render)
+		script, positional, err := runio.RenderShellCommand(cmd.Cmd, ctx.Render)
 		if err != nil {
-			return nil, fmt.Errorf("render cmd: %w", err)
+			return nil, err
 		}
-		return []string{config.ShellBin(ctx.Config), "-c", rendered}, nil
+		// positional is nil unless the template has a ${args} slot; the shell
+		// then binds them to "$@" without them ever entering the program text.
+		return append([]string{config.ShellBin(ctx.Config), "-c", script}, positional...), nil
 	}
 	return runio.RenderArgvWithArgs(cmd.Argv, ctx.Render)
 }

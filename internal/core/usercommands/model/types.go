@@ -931,6 +931,21 @@ func (c *CommandDef) Validate() error {
 			c.ID, ArgsToken, ArgsToken)
 	}
 
+	// In argv, ${args} is only meaningful as a whole element: the arguments are
+	// already separate entries and get spliced in as N entries. An element that
+	// merely embeds the token has no correct rendering — nothing re-splits an
+	// argv entry, so `--filter=${args}` could only ever produce one mangled
+	// argument. Reject it rather than define a broken form.
+	for i, a := range c.Argv {
+		if strings.Contains(a, ArgsToken) && a != ArgsToken {
+			return fmt.Errorf(
+				"command %q: argv[%d] = %q embeds %s — in argv it must be a whole element "+
+					"(`argv: [..., %q]`), since the arguments are spliced in as separate entries "+
+					"and nothing re-splits an embedded one",
+				c.ID, i, a, ArgsToken, ArgsToken)
+		}
+	}
+
 	switch c.Type {
 	case CommandTypeShell, CommandTypeDwe:
 		if err := c.validateCommandType(); err != nil {
