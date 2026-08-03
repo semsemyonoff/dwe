@@ -71,6 +71,18 @@ func TestCommandIDArgs(t *testing.T) {
 		require.NoError(t, commandIDArgs(cmd, args))
 	})
 
+	// The suggestion must carry BOTH the stray near-side words and anything the
+	// caller already put after a real `--`. Building it from args[1:near] alone
+	// silently dropped the latter, so a user who copied the corrected line lost
+	// the very arguments that were already in the right place.
+	t.Run("suggestion keeps arguments already past the dash", func(t *testing.T) {
+		cmd, args := argsAtDash(t, []string{"site.test", "extra", "--", "--flag"})
+		err := commandIDArgs(cmd, args)
+		require.Error(t, err)
+		require.Contains(t, err.Error(), "dwe cmd site.test -- extra --flag",
+			"the corrected command must not drop the caller's existing pass-through args")
+	})
+
 	// A bare flag would be eaten by cobra's parser, so the realistic
 	// two-positional case is an id plus a stray word (a filename, a package).
 	t.Run("two ids without a dash still fail, but say how to pass args", func(t *testing.T) {

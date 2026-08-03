@@ -133,3 +133,34 @@ func TestArgsBlockWithoutReferenceIsRejected(t *testing.T) {
 		require.NoError(t, def.Validate())
 	})
 }
+
+// TestArgvArgsMustBeWholeElement: in argv the token is only meaningful as a
+// whole element — the arguments are spliced in as separate entries and nothing
+// re-splits an embedded one, so `--filter=${args}` could only ever produce one
+// mangled argument. Rejecting it beats defining a broken rendering.
+func TestArgvArgsMustBeWholeElement(t *testing.T) {
+	t.Run("embedded token is rejected", func(t *testing.T) {
+		def := &CommandDef{
+			ID: "x.y", Type: CommandTypeShell,
+			Argv: []string{"tool", "--filter=${args}"},
+		}
+		err := def.Validate()
+		require.Error(t, err)
+		require.Contains(t, err.Error(), "argv[1]")
+		require.Contains(t, err.Error(), "whole element")
+	})
+
+	t.Run("exact element is accepted", func(t *testing.T) {
+		def := &CommandDef{
+			ID: "x.y", Type: CommandTypeShell,
+			Argv: []string{"tool", "${args}"},
+		}
+		require.NoError(t, def.Validate())
+	})
+
+	// cmd: is a shell string, so an embedded token is the normal form there.
+	t.Run("embedding in cmd stays legal", func(t *testing.T) {
+		def := &CommandDef{ID: "x.y", Type: CommandTypeShell, Cmd: "npm test ${args}"}
+		require.NoError(t, def.Validate())
+	})
+}

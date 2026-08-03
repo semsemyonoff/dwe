@@ -25,12 +25,17 @@ func commandIDArgs(cmd *cobra.Command, args []string) error {
 		near = d
 	}
 	if near > 1 {
-		return fmt.Errorf(
+		// The suggestion keeps everything after the id, including anything the
+		// caller already put past a real `--`: args[1:] is args[1:near] followed
+		// by args[near:], so copying the suggested line never silently drops the
+		// arguments that were already in the right place. With no dash present
+		// near == len(args) and this is exactly args[1:near].
+		return cmdctx.Err("usage_error", fmt.Sprintf(
 			"expected one command id, got %d arguments (%s)\n\n"+
 				"To pass arguments through to the command, put them after `--`:\n"+
 				"  dwe cmd %s -- %s",
-			near, strings.Join(args[:near], " "), args[0], strings.Join(args[1:near], " "),
-		)
+			near, strings.Join(args[:near], " "), args[0], strings.Join(args[1:], " "),
+		))
 	}
 	return nil
 }

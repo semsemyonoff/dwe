@@ -42,11 +42,18 @@ type RenderContext struct {
 	// (`dwe cmd site.test -- --run x.test.ts`), already merged with the
 	// command's args.default / args.prefix policy. Referenced as ${args}.
 	//
-	// Rendering into a `cmd:` string joins them shell-quoted, since that string
-	// is handed to `sh -c`. In an `argv:` vector an element that is *exactly*
-	// `${args}` is spliced element-wise by the runner instead — the arguments
-	// are already separate argv entries there and must not be re-quoted. Empty
-	// Args renders as the empty string (and splices to nothing).
+	// The EXECUTION paths never read this field through the template engine.
+	// A `cmd:` template has its ${args} slot rewritten to "$@" and the arguments
+	// handed to `sh -c` as positional parameters; an `argv:` element equal to
+	// ${args} is spliced element-wise. Both render with Args cleared, so a raw
+	// `{{ .Args }}` cannot interpolate caller bytes into a command — see
+	// runio.RenderShellCommand / RenderArgvWithArgs.
+	//
+	// What renderArgs (the ${args} resolver) serves is the remaining, non-executing
+	// references — a `messages.*` line, an `env:` value, a `workdir` — where the
+	// value lands in display text or a single exec argument with no shell to
+	// re-parse it, and a plain space-joined form is correct. Empty Args renders
+	// as the empty string.
 	Args []string
 	// SnapshotScope governs which ${snapshot.*} keys are allowed at compile
 	// time. Zero value (SnapshotScopeNone) makes any ${snapshot.*} reference

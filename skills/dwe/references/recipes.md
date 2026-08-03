@@ -36,18 +36,18 @@ command over an ad-hoc one — it carries the right service, workdir, user and e
 so it behaves the same for you, the user, and CI.
 
 1. Find the ID (one call, greppable — `<group>.<cmd>  [type]  — description`):
-   ```
+   ```shell
    dwe commands list
    dwe commands list | grep -E '<service>\.(test|lint|check)'
    ```
 2. Read it before running anything unfamiliar. This also tells you whether it
    takes `--set key=value` params or `${args}` pass-through — do **not** open the
    YAML to find out:
-   ```
+   ```shell
    dwe cmd -i <id>
    ```
 3. Run it:
-   ```
+   ```shell
    dwe cmd site.test                          # whole suite
    dwe cmd site.test -- --run src/x.test.ts   # narrowed, if it declares ${args}
    dwe cmd backend.migrate --set action=up    # params go through --set
@@ -61,7 +61,7 @@ than working around it, because the next agent hits the same wall.
 
 For anything the project does not declare:
 
-```
+```shell
 dwe shell <service> -c '<command>'
 dwe shell site -c 'npx vitest run src/x.test.ts'
 dwe shell backend -c 'make generate' --tty     # --tty for long-running output

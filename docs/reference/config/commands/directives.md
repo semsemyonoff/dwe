@@ -320,14 +320,18 @@ stay literal text.
 
 Write the slot **unquoted** — `${args}`, not `"${args}"`. It already expands to
 a correctly-quoted `"$@"`; wrapping it in quotes of your own produces `""$@""`,
-which still executes nothing but splits arguments on whitespace.
+which executes nothing but does lose the protection quoting normally gives:
+arguments split on whitespace, and one containing `*` or `?` is subject to
+pathname expansion. `-- '*.txt'` reaches the command as the matching filenames
+rather than as the literal pattern.
 
-Two placements silently lose the arguments, because `"$@"` is scoped:
+Two placements silently lose the arguments, because `"$@"` is scoped to the
+shell's current positional parameters:
 
-- **inside a shell function body** — there `$@` is the *function's* arguments,
-  so the slot renders empty. Forward them explicitly (`f() { … ${args}; }; f "$@"`
-  does not help either, since the outer `"$@"` is what the slot became). Keep
-  the slot in the top-level scope.
+- **inside a shell function body** — there `$@` is the *function's* arguments, so
+  a slot written inside the body renders empty. Either keep the slot in the
+  top-level scope, or forward explicitly: write `"$@"` yourself at the call site
+  and place the slot outside the function (`f() { … "$@"; }; f ${args}`).
 - **after `set --`** — that statement replaces the positional parameters, so a
   slot placed later in the script gets the script's own values instead. Put the
   slot before any `set --`.

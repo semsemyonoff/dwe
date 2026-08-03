@@ -107,17 +107,18 @@ navigated on demand.
 - **Docs in English.** Pass `--lang en` to every `dwe docs …` command (`llms-txt`,
   `show`, `search`, `list`) — translated docs can lag behind the English source.
 - **Data as JSON.** For any command whose output you parse — `dwe status`,
-  `dwe validate`, `dwe info`, `dwe services`, `dwe vars …` — add `--output json`
-  (alias `-o json`); the default table output is formatted for humans. **Exception:**
-  never pass `-o json` to `dwe docs …` — those emit markdown, and for
-  `dwe docs llms-txt` / `dwe docs show` the `--output` flag is a *file path*, so
-  `-o json` would write a file literally named `json`.
+  `dwe validate`, `dwe info`, `dwe services list`, `dwe commands list`,
+  `dwe docs list`, `dwe docs search`, `dwe vars …` — add `--output json`
+  (alias `-o json`); the default table output is formatted for humans.
+  **Exception:** never pass `-o json` to `dwe docs llms-txt` or `dwe docs show`.
+  Those emit markdown, and there `--output` is a *file path*, so `-o json` would
+  write a file literally named `json`.
 
 ## Useful commands
 
 Day-to-day work goes through the first two — they cover most of what an agent needs:
 
-- `dwe commands` — list this project's declared dev commands (tests, linters,
+- `dwe commands list` — list this project's declared dev commands (tests, linters,
   migrations, …); `dwe cmd <id>` runs one, `dwe cmd -i <id>` shows its definition
   (type, service, workdir, the underlying command, its params)
 - `dwe shell <service> -c '<cmd>'` — run a one-off command inside a service
@@ -136,7 +137,8 @@ Lifecycle and reference:
 - `dwe deploy run` — run the deploy pipeline (first-time provisioning, image
   builds, migrations); `dwe run` starts an already-provisioned stack
 - `dwe docs show <topic> --lang en` — built-in reference (config schemas, guides);
-  `dwe docs list` enumerates topics, `dwe docs search <substring>` searches them
+  `dwe docs list --lang en` enumerates topics, `dwe docs search <substring> --lang en`
+  searches them
 
 ## Config layout
 

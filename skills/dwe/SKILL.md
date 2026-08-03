@@ -91,9 +91,10 @@ more useful than running it a third time.
 
 - Prefer `dwe cmd <id>` when one exists. Check the registry before assuming it
   does not — `dwe commands list | grep <service>` is one call.
-- Long-running command? Add `--tty`. Without it the child's stdout is a pipe, so
-  it block-buffers and prints nothing until it exits, which reads as a hang. The
-  cost is that a PTY turns `\n` into `\r\n`, so leave it off when parsing output.
+- Long-running command? Add `--tty` — **a `dwe shell` flag; `dwe cmd` does not
+  take it.** Without it the child's stdout is a pipe, so it block-buffers and
+  prints nothing until it exits, which reads as a hang. The cost is that a PTY
+  turns `\n` into `\r\n`, so leave it off when parsing output.
 - Do **not** reach for `docker exec` / `docker compose exec` instead. `dwe shell`
   resolves the container from the service name and applies the service's `cli:`
   block; guessing container names with `docker ps | grep` is the tell that you
@@ -135,9 +136,12 @@ whatever they carry, so a blanket rule on the verb gets it backwards. Verifying 
 change with `dwe cmd site.test` is not a mutation; `dwe shell db -c 'psql -c
 "DROP …"'` is, and no verb-level rule catches that.
 
-- **Run without asking** when the task only reads or verifies: test suites,
-  linters, type-checks, formatters in check mode, status/inspection commands
-  inside a container.
+- **Run without asking** when the task only reads or verifies **in place**: the
+  project's own test suites, linters, type-checks, formatters in check mode,
+  status/inspection commands inside a container.
+  This is about `dwe cmd` / `dwe shell` tasks. It does **not** extend to
+  `dwe test run`, which despite the name is a full, slow Docker deploy of a
+  throwaway project copy — that stays in the ask-first list below.
 - **Ask first** when it changes project or data state: migrations, seeds, resets,
   dependency installs, anything writing outside a build cache — and anything you
   are unsure about.

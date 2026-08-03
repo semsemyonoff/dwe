@@ -94,10 +94,12 @@ func docsNoTopicArgs(cmd *cobra.Command, args []string) error {
 			names = append(names, sub.Name())
 		}
 	}
-	return fmt.Errorf(
-		"unknown docs subcommand %q\n\nTo read a topic:  dwe docs show %s\nTo find one:      dwe docs list\nSubcommands:      %s",
+	// Typed so the error carries an exit code and serializes into the
+	// {"error":{…}} envelope under --output json, like every other CLI error.
+	return cmdctx.Err("usage_error", fmt.Sprintf(
+		"unknown docs subcommand %q\n\nTo read a topic:  dwe docs show %s --lang en\nTo find one:      dwe docs list\nSubcommands:      %s",
 		args[0], args[0], strings.Join(names, ", "),
-	)
+	))
 }
 
 // runDocsTUI opens the full-screen docs browser. flagLang is the parent's
