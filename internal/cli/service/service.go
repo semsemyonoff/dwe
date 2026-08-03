@@ -52,6 +52,7 @@ set, the command renders a read-only listing of every service and its status
 instead of opening the toggle. For a richer view including topology, deploy
 state, and daemons, run 'dwe status'.`,
 		Example: `  dwe services
+  dwe services list
   dwe services --print-plan
   dwe services enable adminer
   dwe services disable second`,
@@ -66,6 +67,7 @@ state, and daemons, run 'dwe status'.`,
 		},
 	}
 	addToggleFlags(cmd, &apply, &printPlan, &skipHooks)
+	cmd.AddCommand(newServiceListCmd(flags))
 	cmd.AddCommand(newServiceEnableCmd(flags))
 	cmd.AddCommand(newServiceDisableCmd(flags))
 	return cmd
@@ -325,6 +327,38 @@ func pickToggleCandidates(cfg *config.DweConfig, names []string, statusLabel, ti
 		return "", fmt.Errorf("selector returned invalid index %d for %d candidates", idx, len(names))
 	}
 	return names[idx], nil
+}
+
+// newServiceListCmd exposes the read-only listing that bare `dwe services`
+// already falls back to on a non-TTY stdin or under `--output json`.
+//
+// It exists because the top-level help has always advertised it — the `dwe
+// services` line reads "Toggle optional services (interactive) or list / enable
+// / disable" — while `list` was the one verb of the three with no subcommand, so
+// following the help produced `Unknown command "list" for "dwe services"`. It is
+// also the honest way to ask for the listing from a TTY, where bare `dwe
+// services` opens the interactive toggle instead.
+func newServiceListCmd(flags *cmdctx.RootFlags) *cobra.Command {
+	return &cobra.Command{
+		Use:   "list",
+		Short: "List services and their status (read-only)",
+		Long: `List every configured service — apps, tools and infra, including required
+infra — with its enabled/running status.
+
+This is the same read-only view bare 'dwe services' renders when stdin is not a
+TTY or when --output json is set; asking for it by name works from a terminal
+too, where bare 'dwe services' would open the interactive toggle instead.
+
+Read-only: it never writes workspace/local.yml and never runs lifecycle hooks.
+For a richer view including topology, deploy state and daemons, run 'dwe status'.`,
+		Example: `  dwe services list
+  dwe services list --output json`,
+		Args:         cobra.NoArgs,
+		SilenceUsage: true,
+		RunE: func(cmd *cobra.Command, _ []string) error {
+			return runServicesList(cmd, flags)
+		},
+	}
 }
 
 func newServiceEnableCmd(flags *cmdctx.RootFlags) *cobra.Command {
