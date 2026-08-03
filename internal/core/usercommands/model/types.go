@@ -143,6 +143,10 @@ func allowedFieldsFor(t CommandType) map[string]bool {
 		common["workdir"] = true
 	case CommandTypeDwe:
 		common["cmd"] = true
+		// A dwe command has a cmd: to substitute into, so ${args} works there
+		// like anywhere else; without this the block would be the one place a
+		// ${args} reference could not be given a default or a prefix.
+		common["args"] = true
 		// workdir is explicitly rejected for dwe, NOT in allowed set
 	case CommandTypeScript:
 		common["script"] = true
@@ -914,6 +918,17 @@ func (c *CommandDef) Validate() error {
 
 	if c.Type != CommandTypeDaemon && c.Daemon != nil {
 		return fmt.Errorf("command %q: %w (got type=%s)", c.ID, ErrDaemonLeakedOnNonDaemon, c.Type)
+	}
+
+	// An args: block only takes effect through a ${args} reference, so one
+	// without a reference is inert. Reject it at load: the author plainly meant
+	// the command to take arguments, and a silently-ignored policy would surface
+	// much later as "why did my prefix/default not apply".
+	if c.Args != nil && !c.ReferencesArgs() {
+		return fmt.Errorf(
+			"command %q: declares an `args:` block but neither `cmd:` nor `argv:` references %s — "+
+				"the block would have no effect; add %s where the arguments belong, or drop the block",
+			c.ID, ArgsToken, ArgsToken)
 	}
 
 	switch c.Type {

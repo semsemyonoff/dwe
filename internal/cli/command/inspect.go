@@ -38,8 +38,19 @@ type commandInspectJSON struct {
 	With             map[string]any    `json:"with,omitempty"`
 	DaemonSpec       *daemonSpecJSON   `json:"daemon_spec,omitempty"`
 	Params           []paramEntryJSON  `json:"params,omitempty"`
+	Args             *argsJSON         `json:"args,omitempty"`
 	Env              map[string]string `json:"env,omitempty"`
 	Messages         *messagesJSON     `json:"messages,omitempty"`
+}
+
+// argsJSON mirrors the text inspect's "Args (pass-through after `--`)" section.
+// Present whenever cmd/argv references ${args} — an agent parsing inspect must
+// be able to answer "does this take arguments" without re-reading the YAML,
+// which is the whole reason the text section exists.
+type argsJSON struct {
+	Accepts bool     `json:"accepts"`
+	Prefix  []string `json:"prefix,omitempty"`
+	Default []string `json:"default,omitempty"`
 }
 
 type scriptDefJSON struct {
@@ -106,6 +117,14 @@ func buildCommandInspectJSON(def *usercommands.CommandDef, translator i18n.Trans
 		data.Messages = &messagesJSON{
 			Success: def.Messages.Success,
 			Error:   def.Messages.Error,
+		}
+	}
+
+	if def.ReferencesArgs() {
+		data.Args = &argsJSON{Accepts: true}
+		if def.Args != nil {
+			data.Args.Prefix = def.Args.Prefix
+			data.Args.Default = def.Args.Default
 		}
 	}
 
@@ -422,8 +441,6 @@ func inspectWorkflowSteps(def2 inspectDef2, sub inspectSub, def *usercommands.Co
 	}
 }
 
-// inspectDaemonSection renders the Daemon (and resolved Container) section for a
-// synthetic daemon-derived command.
 // inspectArgsSection reports whether the command takes pass-through arguments
 // after `--`, and how they are placed.
 //
@@ -448,6 +465,8 @@ func inspectArgsSection(def2 inspectDef2, sub inspectSub, def *usercommands.Comm
 	}
 }
 
+// inspectDaemonSection renders the Daemon (and resolved Container) section for a
+// synthetic daemon-derived command.
 func inspectDaemonSection(def2 inspectDef2, sub inspectSub, def *usercommands.CommandDef, cfg *config.DweConfig, baseDir string) {
 	if def.DerivedFromDaemon == "" || def.SourceDaemon == nil {
 		return

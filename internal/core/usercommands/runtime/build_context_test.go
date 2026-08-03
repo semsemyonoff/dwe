@@ -419,3 +419,56 @@ func TestBuildRunContext_RenderContextPopulated(t *testing.T) {
 		}
 	}
 }
+
+// TestBuildRunContext_ArgsDefault pins that args.default reaches the render
+// context from the CONSTRUCTOR, not from the `dwe cmd` call site.
+//
+// A command is also invoked from workflow steps, pipeline actions and validate
+// checks — six construction sites, none of which go through the CLI. Applying
+// the default only at the CLI would make `argv: [go, test, -race, "${args}"]`
+// with default ["./..."] render as `go test -race` on every other path: a
+// silently different, wrong command line rather than a visible failure.
+func TestBuildRunContext_ArgsDefault(t *testing.T) {
+	cfg := &config.DweConfig{Raw: map[string]any{}}
+
+	newDef := func(args *model.ArgsSpec) *model.CommandDef {
+		return &model.CommandDef{
+			ID:   "test.cmd",
+			Type: model.CommandTypeShell,
+			Argv: []string{"go", "test", "${args}"},
+			Args: args,
+		}
+	}
+
+	t.Run("default lands in the render context", func(t *testing.T) {
+		rc, err := BuildRunContext(cfg, nil, newDef(&model.ArgsSpec{Default: []string{"./..."}}), nil, t.TempDir())
+		if err != nil {
+			t.Fatalf("BuildRunContext: %v", err)
+		}
+		if got := rc.Render.Args; len(got) != 1 || got[0] != "./..." {
+			t.Errorf("Render.Args = %v, want [./...]", got)
+		}
+	})
+
+	t.Run("no args block leaves it empty", func(t *testing.T) {
+		rc, err := BuildRunContext(cfg, nil, newDef(nil), nil, t.TempDir())
+		if err != nil {
+			t.Fatalf("BuildRunContext: %v", err)
+		}
+		if len(rc.Render.Args) != 0 {
+			t.Errorf("Render.Args = %v, want empty", rc.Render.Args)
+		}
+	})
+
+	// prefix is a separator for caller arguments; a construction with no caller
+	// arguments must not emit it.
+	t.Run("prefix alone contributes nothing", func(t *testing.T) {
+		rc, err := BuildRunContext(cfg, nil, newDef(&model.ArgsSpec{Prefix: []string{"--"}}), nil, t.TempDir())
+		if err != nil {
+			t.Fatalf("BuildRunContext: %v", err)
+		}
+		if len(rc.Render.Args) != 0 {
+			t.Errorf("Render.Args = %v, want empty", rc.Render.Args)
+		}
+	})
+}

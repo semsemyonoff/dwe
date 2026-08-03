@@ -86,12 +86,21 @@ func buildRunContext(
 	}
 
 	// Create the render context.
+	//
+	// Args carries the command's own args.default. Doing it here rather than at
+	// the CLI call site is load-bearing: a command is also invoked from workflow
+	// steps, pipeline actions and validate checks, none of which go through
+	// `dwe cmd`. Without this, `argv: [go, test, -race, "${args}"]` with
+	// args.default ["./..."] would render as `go test -race` on those paths —
+	// a silently different, wrong command line. The CLI overwrites Args with the
+	// caller's actual pass-through arguments after construction.
 	rctx := &tpl.RenderContext{
 		Raw:           cfg.Raw,
 		Params:        params,
 		Context:       ctx,
 		Host:          tpl.CurrentHostInfo(),
 		Snapshot:      snapshot,
+		Args:          def.Args.Resolve(nil),
 		SnapshotScope: scope,
 	}
 

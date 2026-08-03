@@ -306,8 +306,9 @@ default placement to guess at — `npm test <files>` needs a `--` that npm would
 otherwise eat, `go test -race ./... <pkg>` would name two package sets, and a
 multi-line shell script would get the arguments stapled onto its last line.
 
-Valid for `shell`, `service_exec` and `service_run` — the types that have a
-`cmd:`/`argv:` to substitute into.
+Valid for `shell`, `dwe`, `service_exec` and `service_run` — the types that
+have a `cmd:`/`argv:` to substitute into. A `script`, `workflow`, `builtin` or
+`daemon` command has neither, so it cannot take pass-through arguments.
 
 ### Placement
 

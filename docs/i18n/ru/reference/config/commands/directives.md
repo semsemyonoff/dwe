@@ -1,4 +1,4 @@
-> Translated from: reference/config/commands/directives.md @ 91ba177ad27b
+> Translated from: reference/config/commands/directives.md @ ddd728d09bf1
 
 # Директивы команд
 
@@ -309,8 +309,9 @@ dwe cmd site.test -- --run src/map/engine.test.ts
 ./... <пакет>` назвал бы два набора пакетов; а многострочному shell-скрипту
 аргументы прилепились бы к последней строке.
 
-Допустимо для `shell`, `service_exec` и `service_run` — типов, у которых есть
-`cmd:`/`argv:` для подстановки.
+Допустимо для `shell`, `dwe`, `service_exec` и `service_run` — типов, у которых
+есть `cmd:`/`argv:` для подстановки. У `script`, `workflow`, `builtin` и `daemon`
+их нет, поэтому сквозные аргументы они принять не могут.
 
 ### Место подстановки
 

@@ -60,9 +60,9 @@ func nearArgs(cmd *cobra.Command, args []string) []string {
 // command, the reason, nor a way forward.
 //
 // Extra arguments are opt-in per command precisely because there is no safe
-// default placement (see runio.ReferencesArgs), so the error's job is to point
-// at the one-line config change that grants them, and at `dwe shell` for the
-// case where editing the command is not what the caller wanted.
+// default placement (see model.CommandDef.ReferencesArgs), so the error's job is
+// to point at the one-line config change that grants them, and at `dwe shell`
+// for the case where editing the command is not what the caller wanted.
 func checkPassThroughArgs(def *model.CommandDef, opts runOpts) error {
 	if len(opts.PassThroughArgs) == 0 {
 		return nil
@@ -79,11 +79,23 @@ func checkPassThroughArgs(def *model.CommandDef, opts runOpts) error {
 		b.WriteString("\n\nIt declares an `args:` block, but neither `cmd:` nor `argv:` " +
 			"references ${args}, so there is nowhere to substitute them.")
 	}
-	b.WriteString("\n\nTo let it take arguments, reference ${args} in its definition:")
-	if len(def.Argv) > 0 {
+	// Only suggest a slot the command's type actually accepts — allowedFieldsFor
+	// gates cmd/argv per type, and telling the author of a `script` or
+	// `workflow` command to add `cmd:` would hand them a definition the strict
+	// decoder rejects outright.
+	switch {
+	case len(def.Argv) > 0:
+		b.WriteString("\n\nTo let it take arguments, reference ${args} in its definition:")
 		b.WriteString("\n  argv: [..., \"${args}\"]      # spliced as separate arguments")
-	} else {
+	case def.Cmd != "":
+		b.WriteString("\n\nTo let it take arguments, reference ${args} in its definition:")
 		b.WriteString("\n  cmd: \"" + firstWords(def.Cmd) + " ${args}\"")
+	default:
+		// No cmd/argv to substitute into — a script, workflow or daemon command.
+		// Pass-through has nowhere to land regardless of what the author writes.
+		fmt.Fprintf(&b, "\n\nA %s command has no `cmd:`/`argv:` to substitute ${args} into, "+
+			"so it cannot take pass-through arguments. Use its params instead, "+
+			"or call the underlying command directly.", def.Type)
 	}
 	fmt.Fprintf(&b, "\n\nSee its current definition with:  dwe cmd -i %s", def.ID)
 	if svc := def.EffectiveService(); svc != "" {
@@ -106,9 +118,11 @@ func firstWords(cmd string) string {
 	if i := strings.IndexAny(cmd, "\n|;&"); i >= 0 {
 		cmd = strings.TrimSpace(cmd[:i])
 	}
-	const maxLen = 40
-	if len(cmd) > maxLen {
-		return cmd[:maxLen] + "…"
+	// Truncate by runes, not bytes — a byte slice through a multi-byte
+	// character would emit a replacement char into the suggestion.
+	const maxRunes = 40
+	if r := []rune(cmd); len(r) > maxRunes {
+		return string(r[:maxRunes]) + "…"
 	}
 	return cmd
 }

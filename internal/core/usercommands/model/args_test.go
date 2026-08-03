@@ -82,6 +82,7 @@ func TestArgsFieldAllowed(t *testing.T) {
 		{CommandTypeShell, true},
 		{CommandTypeServiceExec, true},
 		{CommandTypeServiceRun, true},
+		{CommandTypeDwe, true},
 		{CommandTypeWorkflow, false},
 		{CommandTypeScript, false},
 		{CommandTypeBuiltin, false},
@@ -90,4 +91,45 @@ func TestArgsFieldAllowed(t *testing.T) {
 			require.Equal(t, tc.want, allowedFieldsFor(tc.typ)["args"])
 		})
 	}
+}
+
+// TestArgsBlockWithoutReferenceIsRejected: an args: block only takes effect
+// through a ${args} reference, so one without a reference is inert. Catching it
+// at load beats letting the author discover much later that their prefix or
+// default never applied.
+func TestArgsBlockWithoutReferenceIsRejected(t *testing.T) {
+	t.Run("rejected when nothing references ${args}", func(t *testing.T) {
+		def := &CommandDef{
+			ID: "x.y", Type: CommandTypeShell,
+			Cmd:  "npm test",
+			Args: &ArgsSpec{Prefix: []string{"--"}},
+		}
+		err := def.Validate()
+		require.Error(t, err)
+		require.Contains(t, err.Error(), "${args}")
+		require.Contains(t, err.Error(), "no effect")
+	})
+
+	t.Run("accepted when cmd references it", func(t *testing.T) {
+		def := &CommandDef{
+			ID: "x.y", Type: CommandTypeShell,
+			Cmd:  "npm test ${args}",
+			Args: &ArgsSpec{Prefix: []string{"--"}},
+		}
+		require.NoError(t, def.Validate())
+	})
+
+	t.Run("accepted when argv references it", func(t *testing.T) {
+		def := &CommandDef{
+			ID: "x.y", Type: CommandTypeShell,
+			Argv: []string{"go", "test", "${args}"},
+			Args: &ArgsSpec{Default: []string{"./..."}},
+		}
+		require.NoError(t, def.Validate())
+	})
+
+	t.Run("no args block is always fine", func(t *testing.T) {
+		def := &CommandDef{ID: "x.y", Type: CommandTypeShell, Cmd: "npm test"}
+		require.NoError(t, def.Validate())
+	})
 }
