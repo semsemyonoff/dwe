@@ -213,15 +213,7 @@ func buildServiceArgv(ctx spec.RunContext) ([]string, error) {
 		}
 		return []string{config.ShellBin(ctx.Config), "-c", rendered}, nil
 	}
-	rendered := make([]string, len(cmd.Argv))
-	for i, arg := range cmd.Argv {
-		r, err := tpl.RenderCommand(arg, ctx.Render)
-		if err != nil {
-			return nil, fmt.Errorf("render argv[%d]: %w", i, err)
-		}
-		rendered[i] = r
-	}
-	return rendered, nil
+	return runio.RenderArgvWithArgs(cmd.Argv, ctx.Render)
 }
 
 // buildDockerComposeCmd assembles the full docker compose exec/run command.

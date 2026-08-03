@@ -53,6 +53,68 @@ const (
 	DaemonControlRestart = "restart"
 )
 
+// ArgsSpec configures ${args} — the pass-through arguments supplied after `--`
+// on the command line (`dwe cmd site.test -- --run x.test.ts`).
+//
+// Both fields are optional; the zero spec means "substitute exactly what the
+// caller passed, nothing when they passed nothing". Declaring the block without
+// a ${args} reference in cmd/argv is a load error, so the policy can never be
+// silently inert.
+type ArgsSpec struct {
+	// Default is substituted when the caller supplied no arguments. It exists
+	// for commands whose argument slot is not optional — `argv: [go, test,
+	// -race, "${args}"]` must fall back to ["./..."] or it would test the
+	// current directory instead of the module.
+	Default []string `yaml:"default"`
+	// Prefix is inserted immediately before the caller's arguments, and ONLY
+	// when there are some (it is not emitted for Default). It carries the
+	// separator a wrapper needs to forward flags to the tool underneath:
+	// `cmd: "npm test ${args}"` with prefix ["--"] turns `-- --run x` into
+	// `npm test -- --run x`, where a bare join would let npm eat the flag.
+	Prefix []string `yaml:"prefix"`
+}
+
+// ArgsToken is the exact element a command author writes in `cmd:` or an
+// `argv:` vector to receive the caller's pass-through arguments.
+const ArgsToken = "${args}"
+
+// ReferencesArgs reports whether the command opts into pass-through arguments.
+//
+// This is what makes extra arguments per-command opt-in rather than a global
+// behaviour: a command with no ${args} reference has no defined place to put
+// them, and appending blindly would be a guess — `npm test <files>` needs a `--`
+// that npm would otherwise eat, `go test -race ./... <pkg>` would name two
+// package sets, and a multi-line shell script would get them stapled onto its
+// last line. Better to reject and say where to declare the slot.
+func (c *CommandDef) ReferencesArgs() bool {
+	if c == nil {
+		return false
+	}
+	if strings.Contains(c.Cmd, ArgsToken) {
+		return true
+	}
+	return slices.ContainsFunc(c.Argv, func(a string) bool {
+		return strings.Contains(a, ArgsToken)
+	})
+}
+
+// Resolve applies the spec to the caller's arguments, returning the value
+// ${args} renders to. A nil spec passes the arguments through unchanged.
+func (a *ArgsSpec) Resolve(userArgs []string) []string {
+	if len(userArgs) == 0 {
+		if a == nil {
+			return nil
+		}
+		return a.Default
+	}
+	if a == nil || len(a.Prefix) == 0 {
+		return userArgs
+	}
+	out := make([]string, 0, len(a.Prefix)+len(userArgs))
+	out = append(out, a.Prefix...)
+	return append(out, userArgs...)
+}
+
 // allowedFieldsFor returns the set of top-level field names allowed for a given CommandType.
 // All types share a common set of fields; per-type allowlists extend that common set.
 // The allowlist is derived from what the validate*Type functions explicitly reject.
@@ -77,6 +139,7 @@ func allowedFieldsFor(t CommandType) map[string]bool {
 	case CommandTypeShell:
 		common["cmd"] = true
 		common["argv"] = true
+		common["args"] = true
 		common["workdir"] = true
 	case CommandTypeDwe:
 		common["cmd"] = true
@@ -96,6 +159,7 @@ func allowedFieldsFor(t CommandType) map[string]bool {
 		common["runner"] = true
 		common["cmd"] = true
 		common["argv"] = true
+		common["args"] = true
 	case CommandTypeServiceRun:
 		common["service"] = true
 		common["user"] = true
@@ -105,6 +169,7 @@ func allowedFieldsFor(t CommandType) map[string]bool {
 		common["runner"] = true
 		common["cmd"] = true
 		common["argv"] = true
+		common["args"] = true
 	case CommandTypeWorkflow:
 		common["steps"] = true
 		// workdir is rejected for workflow
@@ -768,6 +833,10 @@ type CommandDef struct {
 	// Argv is the raw argument vector (no shell quoting).
 	// Mutually exclusive with Cmd.
 	Argv []string `yaml:"argv"`
+	// Args configures the pass-through arguments a caller may supply after
+	// `--`. It only takes effect for a command whose cmd/argv references
+	// ${args}; a command without that reference rejects extra arguments.
+	Args *ArgsSpec `yaml:"args"`
 
 	// --- type=service_exec / service_run fields ---
 	// Service is the Docker Compose service name.

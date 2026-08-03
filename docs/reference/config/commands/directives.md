@@ -12,6 +12,7 @@ Directives common to **all** command types unless noted otherwise. Type-specific
 - [Notifications](#notifications)
 - [Params](#params)
 - [Param widgets](#param-widgets)
+- [Pass-through arguments](#pass-through-arguments)
 - [Context](#context)
 - [Env](#env)
 - [Files](#files)
@@ -289,6 +290,92 @@ Validation:
 - For `select` or `multiselect`, the `options` field must be present and non-empty (either static or resolvable from config).
 - A `default_from` or `default` value must exist in the resolved options list, or the command will error when you try to run it.
 - `--set key=value` with an invalid choice (not in options) will error unless `options` resolved empty — in that case, you can bypass validation to supply an explicit override.
+
+## Pass-through arguments
+
+Everything a caller writes after `--` is offered to the command as `${args}`:
+
+```sh
+dwe cmd site.test -- --run src/map/engine.test.ts
+```
+
+This is **opt-in per command**. A command reaches the arguments only by naming
+`${args}` in its `cmd:` or `argv:`; one that does not is rejected with an error
+naming the command and the one-line change that grants them. There is no safe
+default placement to guess at — `npm test <files>` needs a `--` that npm would
+otherwise eat, `go test -race ./... <pkg>` would name two package sets, and a
+multi-line shell script would get the arguments stapled onto its last line.
+
+Valid for `shell`, `service_exec` and `service_run` — the types that have a
+`cmd:`/`argv:` to substitute into.
+
+### Placement
+
+In a `cmd:` string the arguments are **shell-quoted and joined**, because the
+string is executed as `sh -c`. A filename containing a space stays one argument,
+and a `;` or `$(…)` in an argument stays literal text:
+
+```yaml
+test:
+  type: service_exec
+  service: site
+  cmd: "npm test ${args}"
+```
+
+In an `argv:` vector an element that is **exactly** `${args}` is spliced
+element-wise — the arguments are already separate entries there and must not be
+re-quoted. An empty set splices to nothing, so the element vanishes rather than
+leaving an empty-string argument behind:
+
+```yaml
+test:
+  type: service_exec
+  service: backend
+  argv: [go, test, -count=1, -race, "${args}"]
+```
+
+An element that merely *contains* `${args}` (`--filter=${args}`) is rendered as
+an ordinary template expression, where the shell-quoting join applies.
+
+### The `args:` block
+
+Optional, and only meaningful alongside a `${args}` reference — declaring it
+without one is reported as inert.
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `default` | list | Substituted when the caller passed **no** arguments |
+| `prefix` | list | Inserted immediately before the caller's arguments, and **only** when there are some |
+
+The asymmetry is deliberate. `default` exists for a command whose argument slot
+is not optional — `argv: [go, test, -race, "${args}"]` must fall back to
+`./...` or it would test the current directory instead of the module. `prefix`
+carries the separator a wrapper needs to forward flags to the tool underneath,
+and is not emitted for `default` (a bare call should not produce `npm test --`).
+
+```yaml
+# site: npm eats a bare --run, so the caller's flags need their own --
+test:
+  cmd: "npm test ${args}"
+  args:
+    prefix: ["--"]
+
+# backend: the package list is required, so an empty call needs a fallback
+test:
+  argv: [go, test, -count=1, -race, "${args}"]
+  args:
+    default: ["./..."]
+```
+
+```sh
+dwe cmd site.test -- --run x.test.ts   # → npm test -- --run x.test.ts
+dwe cmd site.test                      # → npm test
+dwe cmd backend.test -- ./internal/api # → go test -count=1 -race ./internal/api
+dwe cmd backend.test                   # → go test -count=1 -race ./...
+```
+
+`dwe cmd -i <id>` reports whether a command accepts pass-through arguments and
+which prefix/default apply.
 
 ## Context
 

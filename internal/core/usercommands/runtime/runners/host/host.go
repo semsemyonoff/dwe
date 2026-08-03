@@ -36,13 +36,9 @@ func (r *Runner) BuildCommand(ctx context.Context, rc spec.RunContext) (*exec.Cm
 		}
 		argv = []string{config.ShellBin(rc.Config), "-c", rendered}
 	} else {
-		rendered := make([]string, len(cmd.Argv))
-		for i, arg := range cmd.Argv {
-			r, err := tpl.RenderCommand(arg, rc.Render)
-			if err != nil {
-				return nil, fmt.Errorf("render argv[%d]: %w", i, err)
-			}
-			rendered[i] = r
+		rendered, err := runio.RenderArgvWithArgs(cmd.Argv, rc.Render)
+		if err != nil {
+			return nil, err
 		}
 		argv = rendered
 	}

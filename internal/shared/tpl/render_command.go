@@ -38,6 +38,16 @@ type RenderContext struct {
 	// from the generated-value store (.dwe/generated.yml). Absent keys
 	// resolve to "" — consistent with all other ${...} resolvers.
 	Generated map[string]string
+	// Args holds the pass-through arguments a user supplied after `--`
+	// (`dwe cmd site.test -- --run x.test.ts`), already merged with the
+	// command's args.default / args.prefix policy. Referenced as ${args}.
+	//
+	// Rendering into a `cmd:` string joins them shell-quoted, since that string
+	// is handed to `sh -c`. In an `argv:` vector an element that is *exactly*
+	// `${args}` is spliced element-wise by the runner instead — the arguments
+	// are already separate argv entries there and must not be re-quoted. Empty
+	// Args renders as the empty string (and splices to nothing).
+	Args []string
 	// SnapshotScope governs which ${snapshot.*} keys are allowed at compile
 	// time. Zero value (SnapshotScopeNone) makes any ${snapshot.*} reference
 	// a compile error.
@@ -172,6 +182,14 @@ func CompileVarSyntax(input string) string {
 			if hasTail {
 				return fmt.Sprintf(`{{ resolveGenerated .Generated %q }}`, tail)
 			}
+		case "args":
+			// ${args} is a whole-namespace reference with no sub-key — there is
+			// nothing to index into. Anything with a tail (${args.0}) falls
+			// through to the generic .Raw resolve, which yields "" as every
+			// unknown ${...} does.
+			if !hasTail {
+				return "{{ renderArgs .Args }}"
+			}
 		}
 
 		// Default: resolve against .Raw config map
@@ -263,7 +281,34 @@ func commandFuncMap() template.FuncMap {
 	fm["resolveMap"] = resolveMap
 	fm["resolveFile"] = resolveFile
 	fm["resolveGenerated"] = resolveGenerated
+	fm["renderArgs"] = renderArgs
 	return fm
+}
+
+// renderArgs joins pass-through arguments for interpolation into a `cmd:`
+// string. That string is executed as `sh -c "<rendered>"`, so every argument is
+// single-quoted: a user argument is untrusted input as far as the shell is
+// concerned, and a bare join would let a filename containing a space, a `;` or
+// a `$(…)` change the command's structure.
+//
+// Empty args render as the empty string, so `cmd: "npm test ${args}"` degrades
+// to exactly `npm test ` when nothing was passed.
+func renderArgs(args []string) string {
+	if len(args) == 0 {
+		return ""
+	}
+	quoted := make([]string, len(args))
+	for i, a := range args {
+		quoted[i] = shellSingleQuote(a)
+	}
+	return strings.Join(quoted, " ")
+}
+
+// shellSingleQuote wraps s in single quotes, escaping any embedded single quote
+// with the standard POSIX '\” dance. The result is safe to paste into a
+// `sh -c` string in argument position.
+func shellSingleQuote(s string) string {
+	return "'" + strings.ReplaceAll(s, "'", `'\''`) + "'"
 }
 
 // resolveRaw resolves a dot-path in a raw config map.

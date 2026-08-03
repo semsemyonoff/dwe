@@ -51,6 +51,11 @@ type runOpts struct {
 	// own huh form entirely and uses these values directly. nil = build/prompt
 	// the form here as usual (every non-browser path leaves it nil).
 	PrefilledParams map[string]string
+	// PassThroughArgs carries everything the caller wrote after `--`
+	// (`dwe cmd site.test -- --run x.test.ts`). It reaches the command only
+	// through ${args}; a command that does not reference it rejects a non-empty
+	// slice — see checkPassThroughArgs.
+	PassThroughArgs []string
 }
 
 // NewCmd builds the `dwe commands` command tree.
@@ -81,7 +86,13 @@ Without an id, an interactive selector lists public commands. With a group prefi
   dwe commands db.up --set env=local
   dwe commands -i db.up
   dwe cmd db.up --yes`,
-		Args:         cobra.MaximumNArgs(1),
+		// One positional id, plus anything after `--` for a command that
+		// declares ${args}. Everything past the dash is the caller's, so the
+		// count is only checked on the near side; the far side is validated
+		// per-command by checkPassThroughArgs, which can name the command and
+		// the fix. cobra's stock MaximumNArgs(1) reported "Accepts at most 1
+		// arg(s), received 3" here and left the caller nowhere to go.
+		Args:         commandIDArgs,
 		SilenceUsage: true,
 		ValidArgsFunction: func(cmd *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
 			// Cobra parses flags before invoking ValidArgsFunction, so --inspect
@@ -91,6 +102,14 @@ Without an id, an interactive selector lists public commands. With a group prefi
 			return registryIDCompletion(flags, inspect)(cmd, args, toComplete)
 		},
 		RunE: func(cmd *cobra.Command, args []string) error {
+			// Split at `--` immediately: everything past the dash belongs to the
+			// target command, and every id/group/selector decision below counts
+			// positional args. Leaving them merged would make `dwe cmd site.test
+			// -- --run x` look like a three-argument invocation and fall through
+			// to the interactive selector instead of running site.test.
+			through := passThroughArgs(cmd, args)
+			args = nearArgs(cmd, args)
+
 			reg, err := usercommands.LoadRegistryFromConfigPath(flags.ConfigPath)
 			if err != nil {
 				return cmdctx.ErrWrap("command_registry_invalid", err)
@@ -185,6 +204,7 @@ Without an id, an interactive selector lists public commands. With a group prefi
 					Translator:      i18n.TranslatorOrNop(flags.I18n),
 					Locale:          flags.Locale,
 					PrefilledParams: prefilledFromTUI,
+					PassThroughArgs: through,
 				},
 			)
 		},

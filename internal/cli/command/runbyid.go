@@ -48,6 +48,10 @@ func runCommandByID(
 		return err
 	}
 
+	if err := checkPassThroughArgs(def, opts); err != nil {
+		return err
+	}
+
 	// Normalize Translator to never be nil; tests or edge cases might not set it.
 	if opts.Translator == nil {
 		opts.Translator = i18n.NopTranslator{}
@@ -159,6 +163,9 @@ func runCommandByID(
 	rctx.SkipNotify = opts.Silent
 	rctx.Translator = opts.Translator
 	rctx.Locale = opts.Locale
+	if rctx.Render != nil {
+		rctx.Render.Args = def.Args.Resolve(opts.PassThroughArgs)
+	}
 
 	if def.Confirmation && canPromptHuh {
 		title := opts.Translator.CommandConfirmationText(opts.Locale, def.ID, def.EffectiveConfirmationText())

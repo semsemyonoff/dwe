@@ -351,6 +351,7 @@ func printInspectAt(w io.Writer, def *usercommands.CommandDef, cfg *config.DweCo
 		inspectWorkflowSteps(def2, sub, def, reg, translator, locale)
 	}
 
+	inspectArgsSection(def2, sub, def)
 	inspectDaemonSection(def2, sub, def, cfg, baseDir)
 	inspectParamsSection(def2, sub, def, translator, locale)
 	inspectContextSection(def2, sub, def)
@@ -423,6 +424,30 @@ func inspectWorkflowSteps(def2 inspectDef2, sub inspectSub, def *usercommands.Co
 
 // inspectDaemonSection renders the Daemon (and resolved Container) section for a
 // synthetic daemon-derived command.
+// inspectArgsSection reports whether the command takes pass-through arguments
+// after `--`, and how they are placed.
+//
+// It renders whenever cmd/argv references ${args} — including with no args:
+// block at all — because "does this accept arguments" is the question a caller
+// has when `dwe cmd <id> -- …` was just rejected, and the answer must not depend
+// on whether the author happened to declare a policy.
+func inspectArgsSection(def2 inspectDef2, sub inspectSub, def *usercommands.CommandDef) {
+	if !def.ReferencesArgs() {
+		return
+	}
+	sub("Args (pass-through after `--`)")
+	def2("accepts", "yes — dwe cmd "+def.ID+" -- <args>", 4)
+	if def.Args == nil {
+		return
+	}
+	if len(def.Args.Prefix) > 0 {
+		def2("prefix", strings.Join(def.Args.Prefix, " ")+"  (inserted before your args)", 4)
+	}
+	if len(def.Args.Default) > 0 {
+		def2("default", strings.Join(def.Args.Default, " ")+"  (used when you pass none)", 4)
+	}
+}
+
 func inspectDaemonSection(def2 inspectDef2, sub inspectSub, def *usercommands.CommandDef, cfg *config.DweConfig, baseDir string) {
 	if def.DerivedFromDaemon == "" || def.SourceDaemon == nil {
 		return
