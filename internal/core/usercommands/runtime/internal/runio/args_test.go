@@ -131,3 +131,47 @@ func TestRenderArgvWithArgs(t *testing.T) {
 		require.Equal(t, []string{"echo", "x"}, got)
 	})
 }
+
+// TestRenderShellCommand_ArgsHiddenFromTemplates closes the second-round review
+// finding: rewriting the ${args} token is not enough if the render context still
+// exposes the arguments to the raw Go-template form. `{{ index .Args 0 }}` would
+// interpolate a caller-controlled string straight into the shell program, which
+// is precisely what the "$@" transport exists to prevent.
+func TestRenderShellCommand_ArgsHiddenFromTemplates(t *testing.T) {
+	payload := "$(touch /tmp/dwe-should-not-exist)"
+	rc := &tpl.RenderContext{Args: []string{payload}}
+
+	// Hiding the field makes the reference fail loudly rather than silently
+	// render empty — a definition that tried to smuggle arguments in this way
+	// breaks at render time instead of shipping a subtly different command.
+	t.Run("cmd template cannot reach .Args", func(t *testing.T) {
+		script, _, err := RenderShellCommand(`: ${args}; echo {{ index .Args 0 }}`, rc)
+		require.Error(t, err, "a .Args reference must not silently succeed")
+		require.NotContains(t, script, payload)
+	})
+
+	t.Run("argv element cannot reach .Args either", func(t *testing.T) {
+		_, err := RenderArgvWithArgs([]string{"echo", `{{ index .Args 0 }}`, "${args}"}, rc)
+		require.Error(t, err)
+	})
+
+	// A bare `{{ .Args }}` has no index to run out of, so it renders — but of an
+	// empty slice, which is the point: no caller bytes reach the program text.
+	t.Run("bare .Args renders empty, not the payload", func(t *testing.T) {
+		script, positional, err := RenderShellCommand(`echo ${args} {{ .Args }}`, rc)
+		require.NoError(t, err)
+		require.NotContains(t, script, payload,
+			"the raw template form must not interpolate caller arguments")
+		require.Equal(t, []string{shellArgv0, payload}, positional,
+			"the arguments still travel as positional parameters")
+	})
+
+	// The sanitized copy must not disturb anything else the template reads.
+	t.Run("other context fields still render", func(t *testing.T) {
+		script, _, err := RenderShellCommand(`echo ${args} ${param.who}`,
+			&tpl.RenderContext{Args: []string{"x"}, Params: map[string]any{"who": "world"}})
+		require.NoError(t, err)
+		require.Contains(t, script, "world")
+		require.Contains(t, script, `"$@"`)
+	})
+}

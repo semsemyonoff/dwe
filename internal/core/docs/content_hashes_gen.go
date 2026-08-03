@@ -35,7 +35,7 @@ var ContentHashes = map[string]string{
 	"reference/concepts/pipelines.md":          "b4123213519e",
 	"reference/concepts/project-layout.md":     "277ae2d15b7b",
 	"reference/concepts/state-and-locks.md":    "4ede6d512f0e",
-	"reference/config/commands/directives.md":  "8a59b5115473",
+	"reference/config/commands/directives.md":  "e4273b23670a",
 	"reference/config/commands/index.md":       "1effd1e726b4",
 	"reference/config/commands/templating.md":  "525ef3a2d7d9",
 	"reference/config/commands/types.md":       "4329d4e1e841",

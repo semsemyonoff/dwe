@@ -41,7 +41,12 @@ func RenderShellCommand(cmdTemplate string, rc *tpl.RenderContext) (script strin
 		src = strings.ReplaceAll(src, model.ArgsToken, argsShellExpansion)
 	}
 
-	script, err = tpl.RenderCommand(src, rc)
+	// Render with Args hidden. The ${args} slot was already rewritten above and
+	// needs nothing from the context; leaving the field visible would let the
+	// raw Go-template form reach it — `{{ index .Args 0 }}` — and interpolate a
+	// caller-controlled string straight into the program text, which is the
+	// exact hole the "$@" transport exists to close.
+	script, err = tpl.RenderCommand(src, withoutArgs(rc))
 	if err != nil {
 		return "", nil, fmt.Errorf("render cmd: %w", err)
 	}
@@ -69,13 +74,20 @@ func RenderShellCommand(cmdTemplate string, rc *tpl.RenderContext) (script strin
 // different (and failing) command from `go test -race`.
 func RenderArgvWithArgs(argv []string, rc *tpl.RenderContext) ([]string, error) {
 	args := renderArgsOf(rc)
+	// Same reasoning as RenderShellCommand: the splice below is the only
+	// sanctioned way arguments enter an argv, so the per-element render must not
+	// be able to reach them through `{{ .Args }}`. No shell re-parses an argv
+	// entry, so this is an argument-boundary concern rather than an injection
+	// one, but the single sanctioned path is worth keeping single.
+	sanitized := withoutArgs(rc)
+
 	out := make([]string, 0, len(argv)+len(args))
 	for i, arg := range argv {
 		if arg == model.ArgsToken {
 			out = append(out, args...)
 			continue
 		}
-		rendered, err := tpl.RenderCommand(arg, rc)
+		rendered, err := tpl.RenderCommand(arg, sanitized)
 		if err != nil {
 			return nil, fmt.Errorf("render argv[%d]: %w", i, err)
 		}
@@ -90,4 +102,16 @@ func renderArgsOf(rc *tpl.RenderContext) []string {
 		return nil
 	}
 	return rc.Args
+}
+
+// withoutArgs returns a shallow copy of rc with Args cleared, so a template
+// rendered with it cannot interpolate caller-supplied arguments into the result.
+// The copy is shallow on purpose: every other field is read-only during render.
+func withoutArgs(rc *tpl.RenderContext) *tpl.RenderContext {
+	if rc == nil {
+		return nil
+	}
+	sanitized := *rc
+	sanitized.Args = nil
+	return &sanitized
 }

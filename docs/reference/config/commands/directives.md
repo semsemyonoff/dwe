@@ -322,6 +322,20 @@ Write the slot **unquoted** — `${args}`, not `"${args}"`. It already expands t
 a correctly-quoted `"$@"`; wrapping it in quotes of your own produces `""$@""`,
 which still executes nothing but splits arguments on whitespace.
 
+Two placements silently lose the arguments, because `"$@"` is scoped:
+
+- **inside a shell function body** — there `$@` is the *function's* arguments,
+  so the slot renders empty. Forward them explicitly (`f() { … ${args}; }; f "$@"`
+  does not help either, since the outer `"$@"` is what the slot became). Keep
+  the slot in the top-level scope.
+- **after `set --`** — that statement replaces the positional parameters, so a
+  slot placed later in the script gets the script's own values instead. Put the
+  slot before any `set --`.
+
+Neither can execute anything — the failure mode is a missing argument, not an
+injected one — but neither is reported, so a multi-line `cmd:` that uses either
+construct should place the slot deliberately.
+
 ```yaml
 test:
   type: service_exec
