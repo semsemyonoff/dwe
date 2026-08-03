@@ -7,6 +7,8 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"unicode"
+	"unicode/utf8"
 
 	"charm.land/fang/v2"
 	lipglossv2 "charm.land/lipgloss/v2"
@@ -22,6 +24,35 @@ import (
 	"github.com/semsemyonoff/dwe/internal/shared/prompt"
 	"github.com/semsemyonoff/dwe/internal/shared/version"
 )
+
+// sentenceCaseFirstRune replaces fang's built-in error-text transform, which
+// title-cases the whole first word (`cases.Title`). That mangles the identifiers
+// dwe error messages routinely start with: `--tty and --no-tty are mutually
+// exclusive` rendered as `--Tty …`, `-c/--command cannot be empty` as
+// `-C/--Command …`, and any message opening with a lowercase name (`dwe`,
+// `workspace.yml`) as `Dwe` / `Workspace.Yml`.
+//
+// Go error strings are lowercase by convention, so capitalising the sentence is
+// still the right display choice — it is the *whole-word* title-casing that is
+// wrong. This uppercases only the first rune, and only when that rune is a
+// letter, so a message opening with a flag, path, quote or digit is left exactly
+// as written.
+func sentenceCaseFirstRune(s string) string {
+	for i, r := range s {
+		if unicode.IsSpace(r) {
+			continue
+		}
+		if !unicode.IsLetter(r) {
+			return s
+		}
+		up := unicode.ToUpper(r)
+		if up == r {
+			return s
+		}
+		return s[:i] + string(up) + s[i+utf8.RuneLen(r):]
+	}
+	return s
+}
 
 func main() {
 	if isPromptInvocation(os.Args) {
@@ -47,6 +78,7 @@ func main() {
 			cmdctx.WriteError(flags, root, err)
 			return
 		}
+		fangStyles.ErrorText = fangStyles.ErrorText.Transform(sentenceCaseFirstRune)
 		fang.DefaultErrorHandler(w, fangStyles, err)
 	}
 
