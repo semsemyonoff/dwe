@@ -90,6 +90,8 @@ func NewCmd(groupID string, flags *cmdctx.RootFlags) *cobra.Command {
 	var flagWorkDir string
 	var flagEnvVars []string
 	var flagCommand string
+	var flagTTY bool
+	var flagNoTTY bool
 
 	cmd := &cobra.Command{
 		Use:   "shell [service]",
@@ -108,15 +110,24 @@ When no service argument is given, the command auto-selects if only one enabled
 service exists, or shows an interactive selector when multiple services are enabled.
 
 With -c "<command>", the command is evaluated by the container's resolved shell
-(e.g. 'bash -c "<command>"') and dwe exits with the command's exit code. TTY is
-allocated only when both stdin and stdout are terminals, so piping works cleanly.
-dwe's own connection banners are suppressed so the child's stdout is untouched.`,
+(e.g. 'bash -c "<command>"') and dwe exits with the command's exit code.
+dwe's own connection banners are suppressed so the child's stdout is untouched.
+
+PTY allocation: an interactive shell gets one when both stdin and stdout are
+terminals; -c never gets one by default, so piping stays byte-clean. The cost of
+that default is buffering — a child whose stdout is a pipe switches to block
+buffering, so a long-running command prints nothing until it exits. Pass --tty
+to force a PTY and get incremental output back, at the price of \n becoming
+\r\n. --no-tty forces the opposite. --tty cannot be honoured when the shell has
+to start a new container (--mode run) while stdin is not a terminal: compose
+refuses to allocate a PTY there, and the command says so.`,
 		Example: `  dwe shell
   dwe shell main
   dwe shell main --root
   dwe shell main --mode run --shell sh
   dwe shell main --user deploy --workdir /app
   dwe shell main -c "composer install"
+  dwe shell main -c "npm run build" --tty
   dwe shell main -c "php artisan migrate" --mode run`,
 		Args:              cobra.MaximumNArgs(1),
 		SilenceUsage:      true,
@@ -133,6 +144,10 @@ dwe's own connection banners are suppressed so the child's stdout is untouched.`
 			// Validate -c/--command: explicit empty/whitespace-only string is a usage error.
 			if cmd.Flags().Changed("command") && strings.TrimSpace(flagCommand) == "" {
 				return fmt.Errorf("-c/--command cannot be empty or whitespace-only")
+			}
+			// Validate mutual exclusion: --tty and --no-tty contradict each other.
+			if flagTTY && flagNoTTY {
+				return fmt.Errorf("--tty and --no-tty are mutually exclusive")
 			}
 
 			cfg, err := config.LoadConfigOrWrap(flags.ConfigPath)
@@ -173,6 +188,7 @@ dwe's own connection banners are suppressed so the child's stdout is untouched.`
 				workDir: flagWorkDir,
 				envVars: flagEnvVars,
 				command: flagCommand,
+				tty:     resolveTTYMode(flagTTY, flagNoTTY),
 			}
 			processEnv := compose.BuildEnv()
 			dockerBin := compose.BinName()
@@ -187,8 +203,23 @@ dwe's own connection banners are suppressed so the child's stdout is untouched.`
 	cmd.Flags().StringVar(&flagWorkDir, "workdir", "", "working directory inside the container")
 	cmd.Flags().StringArrayVar(&flagEnvVars, "env", nil, "set an environment variable (KEY=VALUE); overrides service cli.env config")
 	cmd.Flags().StringVarP(&flagCommand, "command", "c", "", "run a single command via `<shell> -c \"…\"` and exit (non-interactive)")
+	cmd.Flags().BoolVarP(&flagTTY, "tty", "t", false, "force a pseudo-TTY (keeps long-running output unbuffered when stdout is a pipe)")
+	cmd.Flags().BoolVar(&flagNoTTY, "no-tty", false, "never allocate a pseudo-TTY, even on an interactive terminal")
 	cmd.GroupID = groupID
 	return cmd
+}
+
+// resolveTTYMode maps the two boolean flags onto the tri-state ttyMode. The
+// mutually-exclusive case is rejected in RunE before this is reached.
+func resolveTTYMode(force, off bool) ttyMode {
+	switch {
+	case force:
+		return ttyOn
+	case off:
+		return ttyOff
+	default:
+		return ttyAuto
+	}
 }
 
 // shellCLIFlags holds the flag values passed to the shell command.
@@ -200,4 +231,5 @@ type shellCLIFlags struct {
 	workDir string
 	envVars []string // KEY=VALUE pairs from --env flags; override service cli.env config
 	command string   // non-empty triggers one-shot mode (`<shell> -c "<command>"`)
+	tty     ttyMode  // --tty / --no-tty; zero value keeps the auto-detect default
 }

@@ -69,11 +69,94 @@ func TestDockerExecTTYFlags(t *testing.T) {
 		name := fmt.Sprintf("stdin=%v_stdout=%v", tc.stdin, tc.stdout)
 		t.Run(name, func(t *testing.T) {
 			withTTYDetector(t, tc.stdin, tc.stdout)
-			got := dockerExecTTYFlags()
+			got := dockerExecTTYFlags(ttyAuto)
 			if !reflect.DeepEqual(got, tc.want) {
 				t.Errorf("dockerExecTTYFlags: got %v, want %v", got, tc.want)
 			}
 		})
+	}
+}
+
+// TestDockerExecTTYFlagsForced covers --tty / --no-tty. The load-bearing case is
+// forcing a TTY with a non-terminal stdin: `docker exec -i -t` hard-fails there
+// ("cannot attach stdin to a TTY-enabled container because stdin is not a
+// terminal", verified against Docker 29.6), so the vector must drop -i and keep
+// -t. Getting this wrong ships a flag that always errors under an agent — which
+// is the only place it is useful.
+func TestDockerExecTTYFlagsForced(t *testing.T) {
+	cases := []struct {
+		name          string
+		mode          ttyMode
+		stdin, stdout bool
+		want          []string
+	}{
+		{"force with pipes drops -i to keep the PTY", ttyOn, false, false, []string{"-t"}},
+		{"force with piped stdout only", ttyOn, false, true, []string{"-t"}},
+		{"force with a real terminal keeps -i", ttyOn, true, true, []string{"-i", "-t"}},
+		{"force with terminal stdin but piped stdout keeps -i", ttyOn, true, false, []string{"-i", "-t"}},
+		{"off on a real terminal suppresses the PTY", ttyOff, true, true, []string{"-i"}},
+		{"off with pipes matches the auto default", ttyOff, false, false, []string{"-i"}},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			withTTYDetector(t, tc.stdin, tc.stdout)
+			got := dockerExecTTYFlags(tc.mode)
+			if !reflect.DeepEqual(got, tc.want) {
+				t.Errorf("dockerExecTTYFlags(%v): got %v, want %v", tc.mode, got, tc.want)
+			}
+		})
+	}
+}
+
+// TestOneShotTTYMode: the `-c` path has never allocated a PTY regardless of host
+// stdio, so auto collapses to off there. An explicit flag still wins — that is
+// the whole point of the flag.
+func TestOneShotTTYMode(t *testing.T) {
+	for _, tc := range []struct {
+		in, want ttyMode
+	}{
+		{ttyAuto, ttyOff},
+		{ttyOn, ttyOn},
+		{ttyOff, ttyOff},
+	} {
+		if got := oneShotTTYMode(tc.in); got != tc.want {
+			t.Errorf("oneShotTTYMode(%v): got %v, want %v", tc.in, got, tc.want)
+		}
+	}
+}
+
+// TestComposeTTYUnavailable pins the honest-limitation signal: compose cannot
+// allocate a PTY while stdin is not a terminal (every flag spelling was probed
+// against Docker 29.6 — `--no-tty=false` errors outright, the permissive ones
+// hand the child a pipe anyway), so a forced TTY on that path must be reported
+// rather than silently dropped.
+func TestComposeTTYUnavailable(t *testing.T) {
+	withTTYDetector(t, false, false)
+	if !composeTTYUnavailable(ttyOn) {
+		t.Error("forced TTY with a piped stdin must be reported as unavailable on the compose path")
+	}
+	if composeTTYUnavailable(ttyAuto) || composeTTYUnavailable(ttyOff) {
+		t.Error("only an explicit --tty can be unavailable; auto/off must stay quiet")
+	}
+
+	withTTYDetector(t, true, true)
+	if composeTTYUnavailable(ttyOn) {
+		t.Error("with a terminal stdin compose can allocate a PTY; nothing to warn about")
+	}
+}
+
+func TestResolveTTYMode(t *testing.T) {
+	for _, tc := range []struct {
+		force, off bool
+		want       ttyMode
+	}{
+		{false, false, ttyAuto},
+		{true, false, ttyOn},
+		{false, true, ttyOff},
+	} {
+		if got := resolveTTYMode(tc.force, tc.off); got != tc.want {
+			t.Errorf("resolveTTYMode(%v,%v): got %v, want %v", tc.force, tc.off, got, tc.want)
+		}
 	}
 }
 
@@ -91,7 +174,7 @@ func TestComposeRunTTYFlags(t *testing.T) {
 		name := fmt.Sprintf("stdin=%v_stdout=%v", tc.stdin, tc.stdout)
 		t.Run(name, func(t *testing.T) {
 			withTTYDetector(t, tc.stdin, tc.stdout)
-			got := composeRunTTYFlags()
+			got := composeRunTTYFlags(ttyAuto)
 			if !reflect.DeepEqual(got, tc.want) {
 				t.Errorf("composeRunTTYFlags: got %v, want %v", got, tc.want)
 			}
@@ -222,7 +305,7 @@ func TestDockerExecOneShot_argv_and_silence(t *testing.T) {
 	calls := withFakeRunInteractive(t, nil)
 
 	env := map[string]string{"FOO": "1", "BAR": "2"}
-	if err := dockerExecOneShot("dwe-main", "bash", "deploy", "/app", env, "echo hi", []string{"DOCKER_HOST=tcp://x"}, "/usr/bin/docker"); err != nil {
+	if err := dockerExecOneShot("dwe-main", "bash", "deploy", "/app", env, "echo hi", []string{"DOCKER_HOST=tcp://x"}, "/usr/bin/docker", ttyAuto); err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
 
@@ -260,7 +343,7 @@ func TestDockerExecOneShot_neverAllocatesPTY(t *testing.T) {
 	// (-t omitted) so stdout stays clean for piping.
 	withTTYDetector(t, true, true)
 	calls := withFakeRunInteractive(t, nil)
-	if err := dockerExecOneShot("c", "bash", "", "", nil, "x", nil, "docker"); err != nil {
+	if err := dockerExecOneShot("c", "bash", "", "", nil, "x", nil, "docker", ttyAuto); err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
 	c := (*calls)[0]
@@ -284,7 +367,7 @@ func TestDockerExecOneShot_neverAllocatesPTY(t *testing.T) {
 func TestDockerExecOneShot_wrapsExitError(t *testing.T) {
 	withTTYDetector(t, false, false)
 	withFakeRunInteractive(t, mustExitError(t, 7))
-	err := dockerExecOneShot("c", "bash", "", "", nil, "exit 7", nil, "docker")
+	err := dockerExecOneShot("c", "bash", "", "", nil, "exit 7", nil, "docker", ttyAuto)
 	var ec interface{ ExitCode() int }
 	if !errors.As(err, &ec) {
 		t.Fatalf("expected ExitCode-bearing error, got %T: %v", err, err)
@@ -318,7 +401,7 @@ func TestComposeRunOneShot_argv_and_silence(t *testing.T) {
 	}
 
 	env := map[string]string{"AAA": "1"}
-	if err := composeRunOneShot(cmp, "main", "sh", "1000", "/srv", env, "ls -la"); err != nil {
+	if err := composeRunOneShot(cmp, "main", "sh", "1000", "/srv", env, "ls -la", ttyAuto); err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
 
@@ -356,7 +439,7 @@ func TestComposeRunOneShot_wrapsExitError(t *testing.T) {
 	withTTYDetector(t, false, false)
 	withFakeRunInteractive(t, mustExitError(t, 13))
 	cmp := &docker.Compose{ProjectName: "p"}
-	err := composeRunOneShot(cmp, "main", "bash", "", "", nil, "exit 13")
+	err := composeRunOneShot(cmp, "main", "bash", "", "", nil, "exit 13", ttyAuto)
 	var ec interface{ ExitCode() int }
 	if !errors.As(err, &ec) {
 		t.Fatalf("expected ExitCode-bearing error, got %T: %v", err, err)
@@ -372,7 +455,7 @@ func TestComposeRunOneShot_neverAllocatesPTY(t *testing.T) {
 	withTTYDetector(t, true, true)
 	calls := withFakeRunInteractive(t, nil)
 	cmp := &docker.Compose{ProjectName: "p"}
-	if err := composeRunOneShot(cmp, "main", "sh", "", "", nil, "echo hi"); err != nil {
+	if err := composeRunOneShot(cmp, "main", "sh", "", "", nil, "echo hi", ttyAuto); err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
 	if len(*calls) != 1 {
