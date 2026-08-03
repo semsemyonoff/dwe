@@ -33,7 +33,7 @@ What lives where (paths, not schemas — look up any schema with the slug noted)
 
 - **3-layer config**, later wins, maps deep-merge: `workspace.yml` (identity only — `project`, `update`, `compose`) → `workspace/defaults.yml` (git-tracked: `services` toggles, `runtime`, the `vars` sandbox, `exports`, `bridge`) → `workspace/local.yml` (gitignored per-dev overrides; tool-written). The merged root is **strict** — free-form values live **only** under `vars:`; a bare custom root key is a hard load error.
 - **Services = folders**: `workspace/services/<name>/service.yml`; the folder name **is** the map key (no `name:` field). The real container lives in the compose base or an overlay.
-- **User commands**: `workspace/commands/**.yml`; path + filename + key = a dot-ID; run with `dwe cmd <id>`.
+- **User commands**: `workspace/commands/**.yml`; path + filename + key = a dot-ID; run with `dwe cmd <id>`. Params go through `--set key=value`; a command that declares `${args}` also takes pass-through arguments after `--` (`dwe cmd site.test -- --run x.test.ts`). `dwe cmd -i <id>` reports which of the two a command accepts — read that instead of opening its YAML.
 - **Render packs**: `workspace/templates/{config,ide,ai,git}/`; `config` writes runtime files into the service hub, `ide`/`ai`/`git` write hub dotfiles (devcontainer, the generated `AGENTS.md`, git hooks).
 - **Pipelines (optional, full-replacement)**: per-service `deploy.yml` and project `workspace/{deploy,lifecycle,reset,snapshot,setup,validate,info,styles}.yml`. Absence = built-in default (reported `ⓘ`, not an error).
 - **Integration-test scenarios**: `workspace/tests/<scenario>.yml` (one file = one scenario; the name is the file basename; reuses the deploy step schema) → `dwe docs show config/tests --lang en`. See `references/integration-tests.md`.
@@ -43,7 +43,9 @@ Schema for any of these → `dwe docs show concepts/project-layout --lang en` an
 ## Output conventions
 
 - **Always `--lang en` for docs.** Translated docs may lag the English source, and reasoning is more reliable in English: `dwe docs llms-txt|search|show|list … --lang en`.
-- **`--output json` for data you parse.** The default human mode is for users, not agents. Add `--pretty` if you like. Applies to `status`, `validate` (incl. `validate tests`), `services`, `vars get/list/inspect`, `deploy state show`, `snapshot list/inspect`, `info`, `logs`, `commands list`, `docs list/search`, `test list/run/clean`.
+- **`--output json` for data you parse.** The default human mode is for users, not agents. Add `--pretty` if you like. Applies to `status`, `validate` (incl. `validate tests`), `services list`, `vars get/list/inspect`, `snapshot list/inspect`, `info`, `logs`, `commands list`, `docs list/search`, `test list/run/clean`.
+- **Exception — `dwe deploy state show`** always emits YAML; it does not read `--output` at all. Parse it as YAML, or read the state through `dwe status --output json`.
+- **The JSON envelopes are not guessable — read the keys before indexing.** `status` is `{project, apps, tools, infra, deploy, topology, git}` — there is **no** top-level `services` key despite "service" being the vocabulary everywhere else; `info` is `{title, sections[]}`; `validate` is `{summary, diagnostics[]}`. Indexing a wrong key returns empty with exit 0, which is indistinguishable from "no results".
 - **Exception — `dwe docs llms-txt`.** Its `--output` is a **file path**, not a format selector. `--output json` would write the markdown body to a file literally named `json`. Just run it and parse the markdown from stdout.
 - **Exception — `dwe docs show`.** Emits markdown (rendered for TTY; raw with `--raw` or in a pipe). The global `--output json` is **ignored** — the document IS the payload. Use `#anchor`, `--anchors`, or `--toc` to scope without reading the full body.
 - **Bare `dwe commands` / `dwe docs` / `dwe status` open a full-screen TUI on an interactive terminal**, but auto-fall back to plain output when not attached to one — bare `dwe commands`→`commands list`, `dwe docs`→`docs list`, `dwe status`→plain text — so they never hang a piped agent (a pipe is non-interactive). `commands`/`docs` additionally honor `DWE_NONINTERACTIVE=1` (the bridge sets it in containers); `status` does **not** — it drops the TUI only on a non-TTY stdout, `--no-tui`, `TERM=dumb`, or `--output json`. Always call the explicit read subcommands (`commands list`, `docs list|show|search`, `status --output json`) rather than the bare TUI form.
@@ -53,6 +55,8 @@ Schema for any of these → `dwe docs show concepts/project-layout --lang en` an
 | Goal | Command / reference |
 | --- | --- |
 | Project overview (start here) | `dwe docs llms-txt --lang en` |
+| **Run a project task** (tests, lint, migrate, …) | `dwe commands list` to find the ID → `dwe cmd <id>` · `dwe cmd -i <id>` first if unsure what it does |
+| **Run a one-off command in a service container** | `dwe shell <service> -c '<cmd>'` — see **Running things** below |
 | Inspect state | `dwe status --output json` |
 | Read logs | `dwe logs <service> --output json` |
 | Diagnose configuration | `dwe validate --output json` |
@@ -66,6 +70,34 @@ Schema for any of these → `dwe docs show concepts/project-layout --lang en` an
 | **Verify a clean deploy in isolation / author an integration test** | `references/integration-tests.md` |
 | **Snapshot / reset / troubleshoot** | `references/snapshots-reset-troubleshoot.md` |
 | Apply a change | see **Picking the apply command** below — edit yml, then ASK the user to run it |
+
+## Running things (the two commands you will reach for most)
+
+Most work in an existing project is not authoring — it is running the project's
+own tasks. Two commands cover it, and they are not interchangeable.
+
+**`dwe cmd <id>` — a task the project already declares.** Prefer it. It carries the
+right service, workdir, user, env and compose flags, so it works identically for
+you and for CI, and it keeps working when those details change. Find IDs with
+`dwe commands list`; read one with `dwe cmd -i <id>` before running something
+unfamiliar — that also tells you whether it takes `--set key=value` params or
+`${args}` pass-through after `--`.
+
+**`dwe shell <service> -c '<cmd>'` — anything not declared.** This is the escape
+hatch, and it is legitimate: not every one-off belongs in `workspace/commands/`.
+But treat repetition as a signal — if you run the same gate through `dwe shell`
+more than a couple of times, it wants to be a declared command, and saying so is
+more useful than running it a third time.
+
+- Prefer `dwe cmd <id>` when one exists. Check the registry before assuming it
+  does not — `dwe commands list | grep <service>` is one call.
+- Long-running command? Add `--tty`. Without it the child's stdout is a pipe, so
+  it block-buffers and prints nothing until it exits, which reads as a hang. The
+  cost is that a PTY turns `\n` into `\r\n`, so leave it off when parsing output.
+- Do **not** reach for `docker exec` / `docker compose exec` instead. `dwe shell`
+  resolves the container from the service name and applies the service's `cli:`
+  block; guessing container names with `docker ps | grep` is the tell that you
+  wanted `dwe status` or `dwe shell`.
 
 ## Picking the apply command
 
@@ -89,20 +121,42 @@ You MAY run READ commands without asking (all read-only — they don't mutate or
 - `deploy plan`, `reset plan`, `deploy state show`
 - `snapshot list|current|inspect`
 - `compose argv|files`, `docker ps|logs|project-name`, `bridge status|logs`
-- `vars get|list|inspect`, `commands list` / `commands -i <id>`
+- `vars get|list|inspect`, `commands list` / `commands -i <id>`, `services list`
 - `docs show|search|list|llms-txt` — read-only doc access.
 - `test list` — list integration-test scenarios (lock-free, no Docker). `test clean --dry-run` is also safe to run without asking (it previews a sweep and destroys nothing), but is NOT strictly lock-free/Docker-free: it does a read-only `docker ps` orphan probe and briefly acquires-then-releases each scenario's flock. (`validate tests` sits in the `validate` family above; the destructive `test run` / `test clean` forms are below.)
 
-You MUST NOT invoke MUTATING commands yourself. Prepare the change, then ask the user to run the exact command:
+`compose argv` takes the compose subcommand it should print the argv for
+(`dwe compose argv ps`); bare, it errors.
+
+### Running project tasks — judge the task, not the verb
+
+`dwe cmd <id>` and `dwe shell <service> -c '…'` are **transports**: their risk is
+whatever they carry, so a blanket rule on the verb gets it backwards. Verifying a
+change with `dwe cmd site.test` is not a mutation; `dwe shell db -c 'psql -c
+"DROP …"'` is, and no verb-level rule catches that.
+
+- **Run without asking** when the task only reads or verifies: test suites,
+  linters, type-checks, formatters in check mode, status/inspection commands
+  inside a container.
+- **Ask first** when it changes project or data state: migrations, seeds, resets,
+  dependency installs, anything writing outside a build cache — and anything you
+  are unsure about.
+- **The registry already marks the dangerous ones.** `dwe cmd -i <id>` shows a
+  command's `confirmation:` flag and the underlying command; a declared
+  `confirmation:` means ask. When `-i` leaves you unsure, ask.
+- Being asked to "run the tests" is permission to run the tests.
+
+You MUST NOT invoke these MUTATING commands yourself. Prepare the change, then ask the user to run the exact command:
 
 - `dwe init` — scaffold a project (safe to re-run: gap-fills; `--force` overwrites).
 - `dwe deploy run` — run the deploy pipeline (the right command after editing a service's config/deploy steps or adding a service; ends with `docker up --wait`). The `--service <name>` form requires that service's own `deploy.yml` and **skips** the final stack up — see the recipes before recommending it.
 - `dwe run` / `stop` / `restart` — runtime lifecycle (no deploy steps); `dwe reset run` — destructive.
 - `dwe services enable|disable <name> --apply` — toggle a service.
-- `dwe vars set`, `dwe render env|config|ide|ai|git`, `dwe cmd <id>`, `dwe snapshot create|restore|rollback|remove|pack|unpack`, `dwe bridge start|stop`, `dwe docs generate|export|cache clear`.
+- `dwe vars set`, `dwe render env|config|ide|ai|git`, `dwe snapshot create|restore|rollback|remove|pack|unpack`, `dwe bridge start|stop`, `dwe docs generate|export|cache clear`.
+- `dwe cmd <id>` / `dwe shell <service> -c '…'` **when the task they carry mutates** — see the judgement rule above. A verifying task through either one is not on this list.
 - `dwe test run [scenario...]` / `dwe test clean` (without `--dry-run`) — integration-test runner and sweeper. Isolated/disposable (they operate on throwaway project copies under `.dwe/tests/`), so they never touch the live stack — but a run is a **full, slow Docker deploy**. Only *propose* it for substantial changes, and run it strictly on the user's explicit request. See `references/integration-tests.md`.
 
-Pattern: **edit yml files yourself → show the diff → tell the user the exact command → wait for them to run it.** Do not invoke the mutation, and do not work around the boundary by calling `docker` / `docker compose` / project scripts directly.
+Pattern: **edit yml files yourself → show the diff → tell the user the exact command → wait for them to run it.** Do not invoke the mutation, and do not work around the boundary by calling `docker` / `docker compose` / project scripts directly — including through `dwe shell`, which is a transport and not an exemption.
 
 ## Anti-patterns
 
