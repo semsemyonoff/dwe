@@ -154,7 +154,8 @@ Leaving any of them is the contradiction failure mode this branch has already hi
    namespace entirely** — do not cross them.
 14. **Skill and `AGENTS.md.tmpl` must not contradict each other** — the branch already had
     one instance of `SKILL.md` and `recipes.md` stating opposite rules about what may run
-    without asking. The `dwe test run` policy change touches **six** sites; see Overview.
+    without asking. The `dwe test run` policy change touches **thirteen** sites across three
+    files — the canonical list is in the Overview and is the only one to work from.
 
 ## Development Approach
 
@@ -537,9 +538,11 @@ golden.)*
 ### Task 7: Align the skill
 
 **Files:**
-- Modify: `skills/dwe/SKILL.md` (four policy sites: `:113`, `:142-144`, `:161`, `:183`)
-- Modify: `skills/dwe/references/integration-tests.md` (§1, §2 table, §3 — the strictest
-  statement of the old rule; **this file was missing from the first draft**)
+- Modify: `skills/dwe/SKILL.md` (five policy sites: `:113`, `:127`, `:142-144`, `:161`,
+  `:183`)
+- Modify: `skills/dwe/references/integration-tests.md` (`:3`, `:26`, §1, §2 table, `:138`
+  (§8), `:154` (§9), `:162`, `:164` — the strictest statement of the old rule; **this file
+  was missing from the first draft**. **§3 is NOT a policy site** — do not edit it)
 - Modify: `skills/dwe/references/recipes.md` (`:8`)
 - Modify: `skills/dwe/references/populate-init-repo.md`
 - Modify: `skills/dwe/references/pipelines-and-orchestration.md`

@@ -131,10 +131,20 @@ that is stated deliberately rather than discovered mid-implementation.
    documentation) and, via `bridge.vars_writable`, selected `${vars.*}` — so a command that
    used to be argv-only and container-side would gain host shell execution with
    container-influenced text. Therefore: **a command declaring both `bridge.enabled: true`
-   and `argv_append_from` is a load-time error.** This is a one-line rule that removes the
-   whole vector instead of trying to sanitize it; the cost is that such a command cannot be
+   and `argv_append_from` is a load-time error.** The cost is that such a command cannot be
    invoked from a container. Also document the host-side execution so authors see the
    boundary even in the allowed (host-only) case, and add a bridge regression test.
+
+   **Honest scope of this rule — it does not close the class.** Equivalent host-shell paths
+   are already reachable from a container today, independently of this plan:
+   `tpl.EvalCommandCondition` (`render_command.go:402-427`) renders the expression and then,
+   for a `cmd:` condition, calls `condition.EvalCmd`, i.e. `sh -c` **on the host**. That
+   evaluator backs `hide:` on commands and `when:` on workflow steps, so a bridged command
+   can already route rendered `${vars.*}` / `${param.*}` into host shell program text via
+   `hide: "cmd: …"` or a workflow step `when: "cmd: …"` — no `argv_append_from` involved.
+   The rule here is kept because it is cheap and prevents *widening* the surface, **not**
+   because it makes bridged commands safe. Auditing and hardening the existing surfaces is
+   tracked separately in `docs/plans/20260804-bridge-host-shell-audit.md`.
 4. **Empty append must not silently change the command's meaning.** `ruff check` with an
    empty file list lints the whole tree — the opposite of the intent. Define and test the
    empty-list behaviour explicitly (skip the step, not "run with no args").
@@ -314,13 +324,18 @@ it complicates the first implementation.
       recommendation): it is the fourth type accepting `argv` (`types.go:190`) and
       `registry/expand_daemon.go:71` packs that `argv` into the synthetic commands, so
       "skip on empty list" would mean "silently fail to start the daemon"
-- [ ] **reject `argv_append_from` together with `bridge.enabled: true`** at load time
-      (constraint 3b), with a message naming the trust boundary. Remember the `bridge:`
-      block may also be inherited from the command file's `group:` header and through a
-      service-level `extends:` chain — resolve the effective value, not just the literal
-      one on the command
-- [ ] write tests for the bridge rejection: direct `bridge.enabled: true` on the command,
-      and the inherited-from-group case
+- [ ] **reject `argv_append_from` together with an EFFECTIVE `bridge.enabled: true`**
+      (constraint 3b) — but **not in `CommandDef.Validate`**, which cannot see it.
+      `CommandFile.Validate` runs before registry assembly; group `bridge:` metadata is
+      merged into `GroupNode.Meta` later in `registry.addCommandFile`, and service-chain
+      reachability is resolved only in `applyBridgeVisibility(cfg)`. So the literal
+      command-level block is all a model-level check would see, and the group-inheritance
+      test below could never pass. Add a registry/config-aware pass instead (e.g.
+      `ValidateBridgeArgvAppendFrom(cfg)`) invoked from `LoadRegistryFromConfigPath` and
+      from the commands validator
+- [ ] write tests for the bridge rejection at all three levels: literal on the command,
+      inherited from the file's `group:` header, and reachable through a service-level
+      `extends:` chain
 - [ ] surface the field in `dwe cmd -i`: the typed JSON struct (`inspect.go:29`, filled at
       :134/:144) and the human output (:301-302 / :332-333). An executable field invisible
       to inspect is worse than usual here — inspect is the documented way for an agent to

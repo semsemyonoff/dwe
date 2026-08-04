@@ -134,11 +134,13 @@ but nine test files still assert the old behaviour and must be migrated in Task 
 4c. **Render into a copy.** `With` and `Check` are reference types shared with the loaded
    config; in-place rendering makes `ProjectConfigHash` depend on deploy scope and makes a
    second resolve double-render. Deep-copy before rendering.
-4d. **Only render strings containing a `${…}` with a KNOWN head** — a bare
-   `VarPattern` match is not enough, because a shell-style `${CONTAINER}` would pull the
-   string into the renderer and the untouched `{{ }}` beside it would then be executed
-   against `RenderContext`. Mixed known-head + raw `{{ }}` in one field is unsupported and
-   documented as such.
+4d. **Only render strings containing a `${…}` with a KNOWN head — and only on the
+   PIPELINE path.** A bare `VarPattern` match is not enough, because a shell-style
+   `${CONTAINER}` would pull the string into the renderer and the untouched `{{ }}` beside
+   it would then be executed against `RenderContext`. But the gate must live in the
+   pipeline resolve helper, **never** inside `RenderCommand`: user commands document and
+   rely on mixing `${…}` with raw `{{ }}` in one field (six examples across the reference
+   docs), and changing `RenderCommand` would break them.
 4e. **Rendered values now reach output surfaces.** After resolve-time rendering,
    `StepCommand` prints substituted values — so `dwe deploy plan`, `--format shell`, the
    Task 12 JSON payload, the pipeline log and `trace.Command` under `-v` will all show the
@@ -281,12 +283,24 @@ on the untouched `{{.State.Status}}`. Gate instead on **"contains at least one `
 head is in `KnownVarHeads`"**, so a command using only shell-style `${VAR}` plus Go-template
 text is never rendered at all.
 
-**Mixed known-head + raw `{{ }}` in one field is unsupported, by decision.** Once a string
-legitimately needs `${vars.x}`, any raw `{{ … }}` beside it will be executed against
-`RenderContext` and fail. Document that as a limitation with a clear error, rather than
-building a `${…}`-only renderer in `tpl` — that would be a new primitive with its own
-divergence risk, for a case no workspace exercises. (Checked: no `deploy.yml` in the five
-workspaces uses `{{ }}` at all today.)
+**The gate is PIPELINE-RESOLVE-ONLY. It must not change `RenderCommand` semantics.**
+This is the single most dangerous way to implement this task wrong. User **commands**
+legitimately mix both syntaxes in one field, and it is documented:
+`docs/reference/templates.md:146` shows
+`cmd: "mariadb -u${vars.db.user}{{ with .Params.database }} -D{{ . }}{{ end }}"`, and
+`path: "${param.dump_dir}/${param.database}{{ if .Params.dump_date }}_{{ now | date … }}{{ end }}.sql.gz"`
+appears in `templates.md:45`, `config/commands/templating.md:56`,
+`config/commands/index.md:183`, `directives.md:447` and `types.md:129`. Commands reach
+`tpl.RenderCommand` through their own path (`BuildRunContext`), which must keep rendering
+unconditionally. Implement the gate in the pipeline resolve helper — **not** inside
+`RenderCommand`, and not as a global rule.
+
+Within pipeline steps, mixed known-head + raw `{{ }}` in one field stays unsupported by
+decision: once a step string needs `${vars.x}`, a raw `{{ … }}` beside it is executed
+against `RenderContext` and fails. Document it as a pipeline limitation with a clear error
+rather than building a `${…}`-only renderer in `tpl` — that would be a new primitive with
+its own divergence risk, for a case no workspace exercises. (Checked: no `deploy.yml` in
+the five workspaces uses `{{ }}` at all.)
 
 **Hashing `vars` is required for the plan to achieve anything.** Resolve-time rendering
 makes `StepHash` sensitive to `vars`, but execution never gets that far: `deploy.go:557`
@@ -384,6 +398,7 @@ the port is display-only, that `local.yml` overrides will not move the binding, 
 - Modify: `internal/core/execution/pipeline/resolve.go`
 - Modify: `internal/core/execution/pipeline/resolve_test.go`
 - Modify: `internal/core/execution/pipeline/executor_test.go`
+- Modify: `internal/cli/lifecycle/reset.go` (+ tests — the `reset step` bypass)
 - Modify: `internal/core/workflow/envtest/render_test.go`
 
 - [ ] render `cmd`, the string leaves of `with`, `check` **and `when.Cmd`** at the very top
@@ -421,6 +436,16 @@ the port is display-only, that `local.yml` overrides will not move the binding, 
       unchanged (this is the case a bare `VarPattern` gate would break)
 - [ ] write tests for the three `when` scopes separately: phase-level, parallel-group
       parent, and leaf step
+- [ ] write regression tests proving **user commands are untouched**: the documented mixed
+      forms (`cmd` with `${vars.x}` + `{{ with .Params.x }}`, a `files.path` with
+      `${param.x}` + `{{ if … }}`, workflow `with`/`when`) still render exactly as today.
+      The gate lives on the pipeline path only (constraint 4d)
+- [ ] extract the render/copy step as a **shared helper** and call it from `dwe reset step`
+      too: `internal/cli/lifecycle/reset.go` takes a raw step from `FindStep`, evaluates
+      `step.When` itself, prints `pipeline.StepCommand(step)`, then runs `step.Action()` and
+      `*step.Check` — all bypassing `ResolvePhaseSteps`. Without this, `${vars.*}` behaves
+      differently under `reset step` than under `reset run`. Test `cmd`, `when.cmd` and
+      `check.with` on that path
 - [ ] write a test: resolving the same config twice is idempotent (guards against
       double-render and against in-place mutation)
 - [ ] write a test in `envtest` pinning that scenario `cmd:` keeps `${HOME}` literal
