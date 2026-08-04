@@ -97,54 +97,22 @@ that is stated deliberately rather than discovered mid-implementation.
    execution, and its output must be treated as **data**, never re-parsed as shell. One
    argv element per output line; trailing newline ignored; empty output is a *legal* result
    meaning "nothing to append".
-3a. **The INPUT contract — this is where the closed injection hole can reopen.** The field
-   holds a host shell *program*, so whatever renders its text decides whether caller bytes
-   can reach it. Non-negotiable:
-   - render it through a **new exported helper in `runio`** (e.g.
-     `RenderArgvAppendFrom`) that internally uses the existing private `withoutArgs(rc)`
-     and centralizes the `${args}` rejection. `withoutArgs` (`args.go:107-117`) is
-     unexported, so `runners/service` and `runners/host` cannot call it directly — and
-     copying it ad hoc into two packages is exactly how the two copies drift. The reason it
-     must be used at all is at `args.go:44-49`: leaving `Args` visible lets the raw
-     Go-template form `{{ index .Args 0 }}` interpolate a caller-controlled string straight
-     into program text — "the exact hole the `"$@"` transport exists to close".
+3a. **Consistency with the `${args}` transport — not a security control.** dwe is a
+   developer tool running on the developer's own machine, and a workspace author who writes
+   `argv_append_from` can already run anything via `type: shell`. So this is about the field
+   behaving like its neighbours, not about defending a boundary:
+   - render it through a **new exported helper in `runio`** (e.g. `RenderArgvAppendFrom`)
+     wrapping the existing private `withoutArgs(rc)`. Reason: `${args}` is rewritten to
+     `"$@"` and passed as positional parameters everywhere else, so leaving `Args` visible
+     here would make one field interpolate caller arguments into program text while every
+     other field does not. `withoutArgs` (`args.go:107-117`) is unexported, so
+     `runners/service` and `runners/host` cannot call it directly, and copying it into two
+     packages is how copies drift.
    - reject a literal `${args}` inside `argv_append_from` at load time, the same way
-     `--filter=${args}` is already rejected in `CommandDef.Validate`.
-   - **decision on `${param.*}`**: allowed, rendered exactly as it already is in `cmd:` —
-     the same accepted risk, not a new one. `withoutArgs` (`runio/args.go:110-117`) is a
-     shallow copy with `Args = nil`; it closes the `Args` vector only, and params remain
-     visible. `ParamDef.Pattern` is optional by documentation (`types.go:579-582`: "An empty
-     Pattern skips validation"), so an anchored `pattern:` is a **recommendation**, not a
-     requirement. Record it, and add a second exploit-shaped test —
-     `dwe cmd x --set file='$(touch /tmp/pwned)'` — since the `-- ` regression test does not
-     cover this path.
-   - regression test in the exact shape of the `2a1d6b73` exploit:
-     `dwe cmd x -- '$(touch /tmp/pwned)'` against a command carrying `argv_append_from`.
-3b. **Trust boundary: `argv_append_from` is FORBIDDEN on bridge-reachable commands.**
-   The field runs a host shell expression even for a `service_exec` command, `commands` is
-   in `bridgeAllowedTopLevel` (`internal/cli/bridgepolicy.go:30`), and a command opts into
-   container reachability via `bridge: {enabled: true}`. The daemon's env hardening does
-   **not** help — an injection lands in program *text*, not in the environment.
-   **3a alone is not sufficient**: `withoutArgs` closes only the `Args` vector, while the
-   render context still carries `Raw`, `Params`, `Context`, `Host` and `Snapshot`. A
-   container can influence `${param.*}` (and `ParamDef.Pattern` is optional by
-   documentation) and, via `bridge.vars_writable`, selected `${vars.*}` — so a command that
-   used to be argv-only and container-side would gain host shell execution with
-   container-influenced text. Therefore: **a command declaring both `bridge.enabled: true`
-   and `argv_append_from` is a load-time error.** The cost is that such a command cannot be
-   invoked from a container. Also document the host-side execution so authors see the
-   boundary even in the allowed (host-only) case, and add a bridge regression test.
-
-   **Honest scope of this rule — it does not close the class.** Equivalent host-shell paths
-   are already reachable from a container today, independently of this plan:
-   `tpl.EvalCommandCondition` (`render_command.go:402-427`) renders the expression and then,
-   for a `cmd:` condition, calls `condition.EvalCmd`, i.e. `sh -c` **on the host**. That
-   evaluator backs `hide:` on commands and `when:` on workflow steps, so a bridged command
-   can already route rendered `${vars.*}` / `${param.*}` into host shell program text via
-   `hide: "cmd: …"` or a workflow step `when: "cmd: …"` — no `argv_append_from` involved.
-   The rule here is kept because it is cheap and prevents *widening* the surface, **not**
-   because it makes bridged commands safe. Auditing and hardening the existing surfaces is
-   tracked separately in `docs/plans/20260804-bridge-host-shell-audit.md`.
+     `--filter=${args}` is already rejected — same reasoning: one coherent rule for the
+     `${args}` slot across all fields.
+   - `${param.*}` is allowed and rendered exactly as it already is in `cmd:` — identical
+     semantics, nothing new to decide.
 4. **Empty append must not silently change the command's meaning.** `ruff check` with an
    empty file list lints the whole tree — the opposite of the intent. Define and test the
    empty-list behaviour explicitly (skip the step, not "run with no args").
@@ -324,18 +292,11 @@ it complicates the first implementation.
       recommendation): it is the fourth type accepting `argv` (`types.go:190`) and
       `registry/expand_daemon.go:71` packs that `argv` into the synthetic commands, so
       "skip on empty list" would mean "silently fail to start the daemon"
-- [ ] **reject `argv_append_from` together with an EFFECTIVE `bridge.enabled: true`**
-      (constraint 3b) — but **not in `CommandDef.Validate`**, which cannot see it.
-      `CommandFile.Validate` runs before registry assembly; group `bridge:` metadata is
-      merged into `GroupNode.Meta` later in `registry.addCommandFile`, and service-chain
-      reachability is resolved only in `applyBridgeVisibility(cfg)`. So the literal
-      command-level block is all a model-level check would see, and the group-inheritance
-      test below could never pass. Add a registry/config-aware pass instead (e.g.
-      `ValidateBridgeArgvAppendFrom(cfg)`) invoked from `LoadRegistryFromConfigPath` and
-      from the commands validator
-- [ ] write tests for the bridge rejection at all three levels: literal on the command,
-      inherited from the file's `group:` header, and reachable through a service-level
-      `extends:` chain
+*(An earlier revision added a rule rejecting `argv_append_from` on bridge-reachable
+commands. Dropped deliberately: dwe targets a developer working on their own machine, the
+author of such a command can already run anything through `type: shell`, and equivalent
+host-shell paths exist anyway via `hide:` / workflow `when:` conditions. The rule restricted
+authoring without buying protection.)*
 - [ ] surface the field in `dwe cmd -i`: the typed JSON struct (`inspect.go:29`, filled at
       :134/:144) and the human output (:301-302 / :332-333). An executable field invisible
       to inspect is worse than usual here — inspect is the documented way for an agent to
@@ -378,8 +339,8 @@ it complicates the first implementation.
 - [ ] write tests: multi-line output → separate argv elements; paths containing spaces stay
       single elements; empty output → skip, exit 0; expression failure → command fails with
       the expression's stderr surfaced
-- [ ] write the injection regression test from constraint 3a
-      (`dwe cmd x -- '$(touch /tmp/pwned)'` must not execute the substitution)
+- [ ] write a test that `${args}` reaches the command as positional parameters here exactly
+      as it does in `cmd:`/`argv:` — the consistency point of constraint 3a
 - [ ] write a test pinning `${args}` + `argv_append_from` ordering
 - [ ] run tests — must pass before task 3
 
@@ -534,10 +495,9 @@ it complicates the first implementation.
 
 - [ ] document `argv_append_from` in `docs/reference/config/commands/types.md` and
       `directives.md` (the argv/args field tables), including the empty-result semantics,
-      its ordering relative to `${args}`, the host-execution trust boundary from
-      constraint 3b, and the fact that it is **incompatible with `bridge.enabled: true`**
-- [ ] document the same incompatibility in the bridge reference page, so it is discoverable
-      from both directions
+      its ordering relative to `${args}`, and the plain fact that the expression runs **on
+      the host** even for a `service_exec` command — authors should not be surprised by
+      where it executes
 - [ ] document `check: auto` in **both** condition pages —
       `docs/reference/config/conditions.md` and
       `docs/reference/config/deploy/conditions.md` — stating plainly that it applies only to

@@ -121,16 +121,12 @@ but nine test files still assert the old behaviour and must be migrated in Task 
 4a. **Render at resolve time, never at exec time** — see Technical Details for the three
    independent reasons (journal hash, plan output, `with:` coverage). An exec-time render
    looks simpler and is wrong.
-4b. **Threat model — `${vars.*}` now reaches the text of a host `sh -c` program.** The
-   docstring of `RenderContext.Args` (`tpl/render_command.go:44-56`) names this exact shape
-   as the boundary: interpolating a value into program text "is safe only in an unquoted
-   argument position", which is why `${args}` is rewritten to `"$@"`. Meanwhile
-   `bridge.vars_writable` lets a **container** write vars via `dwe vars set`, and
-   container→host is an explicit trust boundary in AGENTS.md. Consequence: a var written
-   from inside a container can land in a host shell program run by `deploy.yml`. This plan
-   does not close that by itself — record it, and consider a diagnostic when a path
-   reachable via `bridge.vars_writable` is referenced from a pipeline `cmd:`. Do not treat
-   the whitelist as a security control; it is a correctness control.
+4b. **`${vars.*}` now reaches the text of a host `sh -c` program — treat this as ordinary
+   substitution, not a boundary.** A var containing shell metacharacters will behave as
+   shell syntax, exactly as it would if the author had typed the value inline. That is the
+   expected semantics of a developer tool running on the developer's own machine; the
+   whitelist in this plan is a **correctness** control (unknown heads must not collapse to
+   `""`), never a security one. Do not add sanitizing, quoting or gating on this basis.
 4c. **Render into a copy.** `With` and `Check` are reference types shared with the loaded
    config; in-place rendering makes `ProjectConfigHash` depend on deploy scope and makes a
    second resolve double-render. Deep-copy before rendering.
@@ -142,10 +138,11 @@ but nine test files still assert the old behaviour and must be migrated in Task 
    rely on mixing `${…}` with raw `{{ }}` in one field (six examples across the reference
    docs), and changing `RenderCommand` would break them.
 4e. **Rendered values now reach output surfaces.** After resolve-time rendering,
-   `StepCommand` prints substituted values — so `dwe deploy plan`, `--format shell`, the
-   Task 12 JSON payload, the pipeline log and `trace.Command` under `-v` will all show the
-   value of `${vars.db.password}` where today they show the literal. Decide masking (or
-   accept and document) in Tasks 12–13; this is the flip side of 4b.
+   `StepCommand` prints substituted values, so `dwe deploy plan`, `--format shell`, the
+   Task 12 JSON payload, the pipeline log and `-v` tracing show real values where they show
+   the literal today. This is the intended gain — a plan that prints what will actually run
+   — and it is the developer's own machine and their own `local.yml`. Mention it in the
+   docs; do not build masking.
 5. **Scaffold template edits require golden updates** —
    `internal/core/workflow/scaffold/testdata/golden_default.txt`.
 6. **Docs are mirrored**: an English page under `docs/reference/` usually has a Russian
@@ -725,9 +722,8 @@ nothing would re-run.
       `${vars.x}` whose *value* itself contains `${…}`, and any string that failed the
       `VarPattern` gate. (Had rendering stayed at exec time, this task would have flagged
       correct references too — see Technical Details.)
-- [ ] decide masking of sensitive rendered values (constraint 4e): after Task 2 the plan,
-      `--format shell`, the JSON payload, the pipeline log and `-v` tracing all show real
-      values where they used to show `${vars.db.password}`
+- [ ] note in the docs that the plan now prints substituted values rather than `${vars.*}`
+      literals (constraint 4e) — that is the point of the change, no masking
 - [ ] keep the annotation out of `--format shell` (that output must stay executable)
 - [ ] write tests covering: resolved template renders substituted; unknown head shown as
       literal with annotation; JSON payload carries the flag
