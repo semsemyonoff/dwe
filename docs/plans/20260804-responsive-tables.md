@@ -423,25 +423,29 @@ func stderrBudget() int { return styles.TermWidthOrZero(os.Stderr) } // Diagnost
 - Create: `internal/core/ui/render/golden_test.go`
 - Modify: `internal/core/ui/render/test_helpers_test.go`
 
-- [ ] add a golden helper (`-update` flag to regenerate, byte comparison otherwise) in
-      `golden_test.go`, pinning styles via the existing `resetStyles()` (`test_helpers_test.go:11`)
-- [ ] pin **both** the lipgloss color profile **and** the light/dark background mode before calling
+- [x] add a golden helper (`UPDATE_GOLDEN=1` env var to regenerate, byte comparison otherwise) in
+      `golden_test.go`, pinning styles via the existing `resetStyles()` (`test_helpers_test.go:11`) —
+      matches the `UPDATE_GOLDEN` convention already established by `statustui`/`docstui`/`cmdbrowser`
+      golden tests rather than introducing a competing `-update` flag
+- [x] pin **both** the lipgloss color profile **and** the light/dark background mode before calling
       `resetStyles()`, snapshotting and restoring each via `t.Cleanup`. This is not optional:
       `resetStyles` calls `styles.ApplyStyles(nil)`, which resolves palette defaults through
       background detection, and `zebraBackground` (`diagnostics_table.go:28`) is a
       `lipgloss.AdaptiveColor`. Without pinning, the same golden holds different ANSI values on a
-      light versus dark terminal and the baseline becomes machine-dependent
-- [ ] document that golden tests must not call `t.Parallel()` — they mutate package-level style state
-- [ ] capture goldens for `Table`, `DaemonTable`, `DeployStatus`, `GitWorkspace` with representative
+      light versus dark terminal and the baseline becomes machine-dependent — implemented as
+      `pinGoldenPalette(t)` in `test_helpers_test.go`
+- [x] document that golden tests must not call `t.Parallel()` — they mutate package-level style state
+- [x] capture goldens for `Table`, `DaemonTable`, `DeployStatus`, `GitWorkspace` with representative
       rows including empty cells and `—` placeholders
-- [ ] capture goldens for `ServicesTable` covering both `withDirCol` values, a custom extra column, and
+- [x] capture goldens for `ServicesTable` covering both `withDirCol` values, a custom extra column, and
       all three states (mandatory / enabled / disabled) with running and stopped rows
-- [ ] capture goldens for `DiagnosticsTable` (with DOMAIN) and `DiagnosticsByDomain` (multi-domain),
+- [x] capture goldens for `DiagnosticsTable` (with DOMAIN) and `DiagnosticsByDomain` (multi-domain),
       including a long hadolint-style URL hint and a deep path that triggers `wrapPath`
-- [ ] verify goldens are stable across two consecutive runs and contain the expected ANSI sequences
-- [ ] run `go test -cover ./internal/core/ui/render/` and record the baseline coverage percentage
-      here — Task 14 compares against it: **baseline coverage = ___%**
-- [ ] run `go test ./internal/core/ui/render/` — must pass before task 2
+- [x] verify goldens are stable across two consecutive runs and contain the expected ANSI sequences
+      (`TestGolden_StableAcrossRuns`, plus two consecutive `go test` invocations)
+- [x] run `go test -cover ./internal/core/ui/render/` and record the baseline coverage percentage
+      here — Task 14 compares against it: **baseline coverage = 92.3%**
+- [x] run `go test ./internal/core/ui/render/` — must pass before task 2
 
 ### Task 2: Extract the wrapping engine into a shared file
 
