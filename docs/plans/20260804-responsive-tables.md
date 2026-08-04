@@ -471,26 +471,26 @@ func stderrBudget() int { return styles.TermWidthOrZero(os.Stderr) } // Diagnost
 - Create: `internal/core/ui/render/table_fit.go`
 - Create: `internal/core/ui/render/table_fit_test.go`
 
-- [ ] define `columnRole` (`roleField` / `roleTitle` / `roleBody` / `roleGlyph`) and `columnSpec`
-- [ ] implement `naturalWidths(headers, rows, cols) []int` — `Max` clamps cell content only, then take
+- [x] define `columnRole` (`roleField` / `roleTitle` / `roleBody` / `roleGlyph`) and `columnSpec`
+- [x] implement `naturalWidths(headers, rows, cols) []int` — `Max` clamps cell content only, then take
       `max(headerWidth, clampedCellMax)`
-- [ ] implement `columnFloors(headers, rows, cols) []int` as
+- [x] implement `columnFloors(headers, rows, cols) []int` as
       `max(headerWidth, longestUnbreakableToken)` per column
-- [ ] implement `fitRows(headers, rows, budget, padding, cols) ([][]string, bool)` — chrome accounting,
+- [x] implement `fitRows(headers, rows, budget, padding, cols) ([][]string, bool)` — chrome accounting,
       proportional deficit distribution across `Flex` columns, `ok=false` when floors do not fit, and a
       single wrap pass at the final width
-- [ ] write tests for `naturalWidths` (uncapped, `Max`-clamped, header wider than `Max`, header wider
+- [x] write tests for `naturalWidths` (uncapped, `Max`-clamped, header wider than `Max`, header wider
       than every cell)
-- [ ] write tests for `columnFloors` (long URL pins the floor, header pins the floor)
-- [ ] write table-driven tests for `fitRows`: **budget 0 still applies `Max` caps and still wraps**
+- [x] write tests for `columnFloors` (long URL pins the floor, header pins the floor)
+- [x] write table-driven tests for `fitRows`: **budget 0 still applies `Max` caps and still wraps**
       (a 60-char cell in a `Max: 44` column comes back wrapped, not untouched); budget above natural
       sum unchanged; budget forcing shrink narrows only `Flex` columns; budget below floors returns
       `ok=false`; wrapped cells never exceed their assigned width; a URL is never split
-- [ ] write tests for degenerate input: zero rows, zero columns, and a ragged row shorter than
+- [x] write tests for degenerate input: zero rows, zero columns, and a ragged row shorter than
       `headers` (reachable — `Table()` takes caller-supplied data from `cli/snapshot/snapshot.go:176`)
-- [ ] write a test pinning the plain-text invariant: a cell containing an ANSI escape is documented as
+- [x] write a test pinning the plain-text invariant: a cell containing an ANSI escape is documented as
       unsupported input, asserting the wrappers are only ever fed unstyled strings
-- [ ] run `go test ./internal/core/ui/render/` — must pass before task 4
+- [x] run `go test ./internal/core/ui/render/` — must pass before task 4
 
 ### Task 4: Add `tableView` with table-mode rendering
 
