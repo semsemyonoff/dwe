@@ -540,19 +540,19 @@ func stderrBudget() int { return styles.TermWidthOrZero(os.Stderr) } // Diagnost
 - Modify: `internal/core/ui/render/table.go`
 - Modify: `internal/core/ui/render/gitworkspace.go`
 
-- [ ] convert `Table` (`table.go:59`) — column 0 `roleTitle`, the rest `roleField`; all
+- [x] convert `Table` (`table.go:59`) — column 0 `roleTitle`, the rest `roleField`; all
       `{Flex: true, Wrap: wrapText}` since caller-supplied content is arbitrary prose
-- [ ] convert `DaemonTable` (`table.go:251`) — `ID` as `roleTitle`; `PARAMS` as
+- [x] convert `DaemonTable` (`table.go:251`) — `ID` as `roleTitle`; `PARAMS` as
       `{Flex: true, Wrap: wrapText}` (the widest, most compressible column); preserve the empty-input
       early return
-- [ ] convert `DeployStatus` (`table.go:317`) — `SERVICE` as `roleTitle`; `LAST FAILED` as
+- [x] convert `DeployStatus` (`table.go:317`) — `SERVICE` as `roleTitle`; `LAST FAILED` as
       `{Flex: true, Wrap: wrapText}`; hashes and status stay fixed; move the per-column status/delta
       styling into `tableView.Style`
-- [ ] convert `GitWorkspace` (`gitworkspace.go:19`) — `SERVICE` as `roleTitle`; `DIR` as
+- [x] convert `GitWorkspace` (`gitworkspace.go:19`) — `SERVICE` as `roleTitle`; `DIR` as
       `{Flex: true, Wrap: wrapPath}`; `BRANCH` as `{Flex: true, Wrap: wrapText}`; move the DIRTY-column
       styling into `tableView.Style`
-- [ ] pass `Center: nil` implicitly (do not set the field) for all four
-- [ ] run `go test ./internal/core/ui/render/` — **all Task 1 goldens must match byte-for-byte with no
+- [x] pass `Center: nil` implicitly (do not set the field) for all four
+- [x] run `go test ./internal/core/ui/render/` — **all Task 1 goldens must match byte-for-byte with no
       regeneration**; must pass before task 7
 
 ### Task 7: Migrate `ServicesTable` to `tableView`
@@ -560,22 +560,22 @@ func stderrBudget() int { return styles.TermWidthOrZero(os.Stderr) } // Diagnost
 **Files:**
 - Modify: `internal/core/ui/render/table.go`
 
-- [ ] convert `ServicesTable` (`table.go:143`), preserving the `withDirCol` branch and the `extraCols`
+- [x] convert `ServicesTable` (`table.go:143`), preserving the `withDirCol` branch and the `extraCols`
       append
-- [ ] move the `rowCellStyle` base/state/run dispatch into `tableView.Style`, keeping the
+- [x] move the `rowCellStyle` base/state/run dispatch into `tableView.Style`, keeping the
       `stateCol`/`runCol` index arithmetic correct for both column layouts
-- [ ] declare `NAME` as `roleTitle` and every other column (including extras) as `roleField`
-- [ ] declare `DIR` as `{Flex: true, Wrap: wrapPath}` and `CONTAINER` / `HOSTS` / `PORTS` as
+- [x] declare `NAME` as `roleTitle` and every other column (including extras) as `roleField`
+- [x] declare `DIR` as `{Flex: true, Wrap: wrapPath}` and `CONTAINER` / `HOSTS` / `PORTS` as
       `{Flex: true, Wrap: wrapText}` — the `name=value` cells built by `table.go:114` / `:129` wrap
       cleanly on the comma-space boundaries
-- [ ] declare **custom extra columns** as `{Flex: true, Wrap: wrapText, Role: roleField}` too. Their
+- [x] declare **custom extra columns** as `{Flex: true, Wrap: wrapText, Role: roleField}` too. Their
       values come from `ServiceTableRow.Extras` and are arbitrary templated strings; a nil `Wrap` would
       leave them unwrappable, so a long extra would blow past the budget in record mode and break the
       no-overflow guarantee. This is not an edge case — a 7-column services table plus one extra falls
       into record mode at any realistic narrow width
-- [ ] write a test covering record mode for both the `withDirCol` and non-`withDirCol` layouts,
+- [x] write a test covering record mode for both the `withDirCol` and non-`withDirCol` layouts,
       including a custom extra column with a long non-URL token and one with a long URL
-- [ ] run `go test ./internal/core/ui/render/` — **Task 1 goldens must match byte-for-byte**; must pass
+- [x] run `go test ./internal/core/ui/render/` — **Task 1 goldens must match byte-for-byte**; must pass
       before task 8
 
 ### Task 8: Migrate the diagnostics table to `tableView`

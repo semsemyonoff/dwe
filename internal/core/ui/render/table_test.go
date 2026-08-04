@@ -262,6 +262,76 @@ func TestRenderServicesTable_ExtraCols_MissingKey(t *testing.T) {
 	}
 }
 
+func TestRenderServicesTable_RecordMode_WithDirCol(t *testing.T) {
+	resetStyles()
+	longURL := "https://example.com/some/very/long/path/that/should/not/be/split/because/urls/stay/whole"
+	longTag := "a very long custom tag value that should wrap across several lines when narrow"
+	rows := []ServiceTableRow{
+		{
+			Name: "main", Dir: "very/long/nested/service/directory/path/that/wont/fit/narrow", Container: "app-main",
+			Mandatory: true, Running: true,
+			Extras: map[string]string{"TAG": longTag, "ENDPOINT": longURL},
+		},
+	}
+	v := servicesTableView(rows, []string{"TAG", "ENDPOINT"}, true)
+	const budget = 60
+	if v.Fits(budget) {
+		t.Fatalf("test setup: expected columns not to fit at budget %d, forcing record mode", budget)
+	}
+	got := stripANSI(v.Render(budget))
+
+	if !strings.Contains(got, "main") {
+		t.Errorf("record mode: expected NAME (record title) in output:\n%s", got)
+	}
+	for _, label := range []string{"dir", "container", "hosts", "ports", "state", "running", "tag", "endpoint"} {
+		if !strings.Contains(got, label) {
+			t.Errorf("record mode: expected field label %q in output:\n%s", label, got)
+		}
+	}
+	if !strings.Contains(got, longURL) {
+		t.Errorf("record mode: expected long URL to stay intact on one unbroken line:\n%s", got)
+	}
+	if strings.Contains(got, longTag) {
+		t.Errorf("record mode: expected long non-URL TAG value to wrap across lines, found it unwrapped:\n%s", got)
+	}
+}
+
+func TestRenderServicesTable_RecordMode_NoDirCol(t *testing.T) {
+	resetStyles()
+	longURL := "https://example.com/some/very/long/path/that/should/not/be/split/because/urls/stay/whole"
+	longTag := "a very long custom tag value that should wrap across several lines when narrow"
+	rows := []ServiceTableRow{
+		{
+			Name: "worker", Container: "app-worker", Enabled: true, Running: false,
+			Extras: map[string]string{"TAG": longTag, "ENDPOINT": longURL},
+		},
+	}
+	v := servicesTableView(rows, []string{"TAG", "ENDPOINT"}, false)
+	const budget = 60
+	if v.Fits(budget) {
+		t.Fatalf("test setup: expected columns not to fit at budget %d, forcing record mode", budget)
+	}
+	got := stripANSI(v.Render(budget))
+
+	if strings.Contains(got, "dir") {
+		t.Errorf("record mode: withDirCol=false should NOT include a dir field:\n%s", got)
+	}
+	if !strings.Contains(got, "worker") {
+		t.Errorf("record mode: expected NAME (record title) in output:\n%s", got)
+	}
+	for _, label := range []string{"container", "hosts", "ports", "state", "running", "tag", "endpoint"} {
+		if !strings.Contains(got, label) {
+			t.Errorf("record mode: expected field label %q in output:\n%s", label, got)
+		}
+	}
+	if !strings.Contains(got, longURL) {
+		t.Errorf("record mode: expected long URL to stay intact on one unbroken line:\n%s", got)
+	}
+	if strings.Contains(got, longTag) {
+		t.Errorf("record mode: expected long non-URL TAG value to wrap across lines, found it unwrapped:\n%s", got)
+	}
+}
+
 func TestRenderDeployStatus_Basic(t *testing.T) {
 	resetStyles()
 	rows := []DeployStatusRow{

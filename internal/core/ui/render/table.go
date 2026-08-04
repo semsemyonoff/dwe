@@ -55,17 +55,20 @@ func SortedKVPairs[V any](m map[string]V, format func(V) string) string {
 // package-level table styles (configurable via ApplyStyles).
 //
 // headers contains the column names; rows contains the data rows, each a slice
-// of strings with the same length as headers.
+// of strings with the same length as headers. Column 0 is the record-mode
+// title; every column may shrink and wrap under width pressure, since
+// caller-supplied content is arbitrary prose.
 func Table(headers []string, rows [][]string) string {
-	t := baseTable(headers...).
-		StyleFunc(func(row, _ int) lipgloss.Style {
-			if row == table.HeaderRow {
-				return headerRowStyle()
-			}
-			return lipgloss.NewStyle()
-		})
-
-	return renderRows(t, rows)
+	cols := make([]columnSpec, len(headers))
+	for i := range cols {
+		role := roleField
+		if i == 0 {
+			role = roleTitle
+		}
+		cols[i] = columnSpec{Flex: true, Wrap: wrapText, Role: role}
+	}
+	v := tableView{Headers: headers, Rows: rows, Cols: cols}
+	return v.Render(0)
 }
 
 // ServiceTableRow holds data for one row in the services Lipgloss table.
@@ -141,6 +144,13 @@ func formatPortsCell(ports map[string]int) string {
 // dwe treats per-developer port and host overrides as a core feature, so
 // these are always-visible built-in columns rather than opt-in extras.
 func ServicesTable(rows []ServiceTableRow, extraCols []string, withDirCol bool) string {
+	return servicesTableView(rows, extraCols, withDirCol).Render(0)
+}
+
+// servicesTableView builds the tableView backing ServicesTable, split out so
+// tests can exercise record mode at a narrow budget without duplicating the
+// column-spec construction.
+func servicesTableView(rows []ServiceTableRow, extraCols []string, withDirCol bool) tableView {
 	stringRows := make([][]string, len(rows))
 	cellStyles := make([]rowCellStyle, len(rows))
 
@@ -199,19 +209,41 @@ func ServicesTable(rows []ServiceTableRow, extraCols []string, withDirCol bool) 
 	}
 
 	var headers []string
+	var cols []columnSpec
 	var stateCol, runCol int
 	if withDirCol {
 		headers = append([]string{"NAME", "DIR", "CONTAINER", "HOSTS", "PORTS", "STATE", "RUNNING"}, extraCols...)
+		cols = []columnSpec{
+			{Role: roleTitle}, // NAME
+			{Flex: true, Wrap: wrapPath, Role: roleField}, // DIR
+			{Flex: true, Wrap: wrapText, Role: roleField}, // CONTAINER
+			{Flex: true, Wrap: wrapText, Role: roleField}, // HOSTS
+			{Flex: true, Wrap: wrapText, Role: roleField}, // PORTS
+			{Role: roleField}, // STATE
+			{Role: roleField}, // RUNNING
+		}
 		stateCol, runCol = 5, 6
 	} else {
 		headers = append([]string{"NAME", "CONTAINER", "HOSTS", "PORTS", "STATE", "RUNNING"}, extraCols...)
+		cols = []columnSpec{
+			{Role: roleTitle}, // NAME
+			{Flex: true, Wrap: wrapText, Role: roleField}, // CONTAINER
+			{Flex: true, Wrap: wrapText, Role: roleField}, // HOSTS
+			{Flex: true, Wrap: wrapText, Role: roleField}, // PORTS
+			{Role: roleField}, // STATE
+			{Role: roleField}, // RUNNING
+		}
 		stateCol, runCol = 4, 5
 	}
-	t := baseTable(headers...).
-		StyleFunc(func(row, col int) lipgloss.Style {
-			if row == table.HeaderRow {
-				return headerRowStyle()
-			}
+	for range extraCols {
+		cols = append(cols, columnSpec{Flex: true, Wrap: wrapText, Role: roleField})
+	}
+
+	v := tableView{
+		Headers: headers,
+		Rows:    stringRows,
+		Cols:    cols,
+		Style: func(row, col int) lipgloss.Style {
 			if row < 0 || row >= len(cellStyles) {
 				return lipgloss.NewStyle()
 			}
@@ -224,9 +256,9 @@ func ServicesTable(rows []ServiceTableRow, extraCols []string, withDirCol bool) 
 			default:
 				return cs.base
 			}
-		})
-
-	return renderRows(t, stringRows)
+		},
+	}
+	return v
 }
 
 // extraCell returns the value for col in extras, or "—" if missing.
@@ -252,6 +284,7 @@ func DaemonTable(rows []DaemonTableRow) string {
 	if len(rows) == 0 {
 		return ""
 	}
+	headers := []string{"ID", "PARAMS", "CONTAINER", "UPTIME"}
 	stringRows := make([][]string, len(rows))
 	for i, r := range rows {
 		params := r.Params
@@ -260,14 +293,14 @@ func DaemonTable(rows []DaemonTableRow) string {
 		}
 		stringRows[i] = []string{r.ID, params, r.Container, r.Uptime}
 	}
-	t := baseTable("ID", "PARAMS", "CONTAINER", "UPTIME").
-		StyleFunc(func(row, _ int) lipgloss.Style {
-			if row == table.HeaderRow {
-				return headerRowStyle()
-			}
-			return lipgloss.NewStyle()
-		})
-	return renderRows(t, stringRows)
+	cols := []columnSpec{
+		{Role: roleTitle},
+		{Flex: true, Wrap: wrapText}, // PARAMS: widest, most compressible column
+		{},
+		{},
+	}
+	v := tableView{Headers: headers, Rows: stringRows, Cols: cols}
+	return v.Render(0)
 }
 
 // DeployStatusRow holds data for one row in the deploy status table.
@@ -315,6 +348,7 @@ func statusStyleForStatus(status string) lipgloss.Style {
 // DeployStatus renders a styled Lipgloss table of deploy status per service.
 // Columns: SERVICE, STATUS, CONFIG, PREV HASH, CURR HASH, LAST FAILED.
 func DeployStatus(rows []DeployStatusRow) string {
+	headers := []string{"SERVICE", "STATUS", "CONFIG", "PREV HASH", "CURR HASH", "LAST FAILED"}
 	stringRows := make([][]string, len(rows))
 	statusStyles := make([]string, len(rows))
 	deltaStyles := make([]string, len(rows))
@@ -340,11 +374,19 @@ func DeployStatus(rows []DeployStatusRow) string {
 		deltaStyles[i] = r.ConfigDelta
 	}
 
-	t := baseTable("SERVICE", "STATUS", "CONFIG", "PREV HASH", "CURR HASH", "LAST FAILED").
-		StyleFunc(func(row, col int) lipgloss.Style {
-			if row == table.HeaderRow {
-				return headerRowStyle()
-			}
+	cols := []columnSpec{
+		{Role: roleTitle},
+		{},                           // STATUS: fixed
+		{},                           // CONFIG: fixed
+		{},                           // PREV HASH: fixed
+		{},                           // CURR HASH: fixed
+		{Flex: true, Wrap: wrapText}, // LAST FAILED
+	}
+	v := tableView{
+		Headers: headers,
+		Rows:    stringRows,
+		Cols:    cols,
+		Style: func(row, col int) lipgloss.Style {
 			if row < 0 || row >= len(statusStyles) {
 				return lipgloss.NewStyle()
 			}
@@ -356,7 +398,7 @@ func DeployStatus(rows []DeployStatusRow) string {
 			default:
 				return lipgloss.NewStyle()
 			}
-		})
-
-	return renderRows(t, stringRows)
+		},
+	}
+	return v.Render(0)
 }

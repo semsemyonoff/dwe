@@ -2,7 +2,6 @@ package render
 
 import (
 	"github.com/charmbracelet/lipgloss"
-	"github.com/charmbracelet/lipgloss/table"
 
 	"github.com/semsemyonoff/dwe/internal/core/ui/statusview"
 	"github.com/semsemyonoff/dwe/internal/core/ui/styles"
@@ -17,6 +16,7 @@ import (
 // "—". Rows with Err != nil render the same way; the caller is expected to
 // emit a single aggregate warning to stderr counting Err != nil rows.
 func GitWorkspace(rows []statusview.GitWorkspaceRow) string {
+	headers := []string{"SERVICE", "DIR", "BRANCH", "SHA", "DIRTY", "AHEAD/BEHIND"}
 	stringRows := make([][]string, len(rows))
 	dirtyStyles := make([]bool, len(rows))
 
@@ -41,11 +41,19 @@ func GitWorkspace(rows []statusview.GitWorkspaceRow) string {
 		dirtyStyles[i] = r.Dirty
 	}
 
-	t := baseTable("SERVICE", "DIR", "BRANCH", "SHA", "DIRTY", "AHEAD/BEHIND").
-		StyleFunc(func(row, col int) lipgloss.Style {
-			if row == table.HeaderRow {
-				return headerRowStyle()
-			}
+	cols := []columnSpec{
+		{Role: roleTitle},
+		{Flex: true, Wrap: wrapPath},
+		{Flex: true, Wrap: wrapText},
+		{},
+		{},
+		{},
+	}
+	v := tableView{
+		Headers: headers,
+		Rows:    stringRows,
+		Cols:    cols,
+		Style: func(row, col int) lipgloss.Style {
 			if row < 0 || row >= len(dirtyStyles) {
 				return lipgloss.NewStyle()
 			}
@@ -56,7 +64,7 @@ func GitWorkspace(rows []statusview.GitWorkspaceRow) string {
 				return styles.SuccessStyle()
 			}
 			return lipgloss.NewStyle()
-		})
-
-	return renderRows(t, stringRows)
+		},
+	}
+	return v.Render(0)
 }
