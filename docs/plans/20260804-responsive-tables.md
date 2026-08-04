@@ -454,16 +454,16 @@ func stderrBudget() int { return styles.TermWidthOrZero(os.Stderr) } // Diagnost
 - Create: `internal/core/ui/render/table_wrap_test.go`
 - Modify: `internal/core/ui/render/diagnostics_table.go`
 
-- [ ] move `wrapText`, `wrapLine`, `wrapPath`, `isURLToken`, `splitDisplayWidth` from
+- [x] move `wrapText`, `wrapLine`, `wrapPath`, `isURLToken`, `splitDisplayWidth` from
       `diagnostics_table.go` into `table_wrap.go` unchanged (pure relocation, no behavior change)
-- [ ] implement `longestUnbreakableToken(s string, wrap func(string, int) string) int` by probing
+- [x] implement `longestUnbreakableToken(s string, wrap func(string, int) string) int` by probing
       `wrap(s, 1)` and returning the widest resulting line; nil wrap returns `lipgloss.Width(s)`
-- [ ] keep `wrapDiagnosticText` in `diagnostics_table.go` as a thin call into `wrapText`
-- [ ] write tests for `longestUnbreakableToken`: prose with a long URL, prose without, path input via
+- [x] keep `wrapDiagnosticText` in `diagnostics_table.go` as a thin call into `wrapText`
+- [x] write tests for `longestUnbreakableToken`: prose with a long URL, prose without, path input via
       `wrapPath`, nil wrap, empty string, and input already containing `\n`
-- [ ] verify the relocated helpers' existing tests in `diagnostics_table_test.go` pass unchanged and
+- [x] verify the relocated helpers' existing tests in `diagnostics_table_test.go` pass unchanged and
       the Task 1 goldens still match
-- [ ] run `go test ./internal/core/ui/render/` — must pass before task 3
+- [x] run `go test ./internal/core/ui/render/` — must pass before task 3
 
 ### Task 3: Add `columnSpec` and the width-fitting algorithm
 
