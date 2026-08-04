@@ -1,0 +1,637 @@
+# Plan A — Close the feedback loop (`dwe validate` catches what actually breaks)
+
+## Overview
+
+Analysis of two real agent-driven workspace setup sessions (alto 2026-07-07, cueBreaker
+2026-07-09) plus five existing workspaces produced one dominant finding: **the agent
+learned the schema fine, but the tool never told it when the project was broken.**
+
+- 3 of 3 defects that actually broke the project (`Bad substitution` in deploy, invalid
+  compose project name, empty `dwe info`) passed **20 green `dwe validate` runs** and
+  reached the user only as a runtime failure pasted back into the session.
+- Meanwhile every run emitted 9–10 warnings, of which **0 were ever fixed** — 6 of them
+  were `template pack not found` on a freshly scaffolded project. Signal drowned in noise,
+  so the agent read validate output through `grep` and committed "validate clean" on a
+  broken project three times.
+
+This plan makes the static checks catch the real defect classes, removes the noise that
+made them invisible, and fixes six localized bugs that actively mislead (a scaffold that
+lies about its own semantics, a hint that recommends an invalid value, a hint naming a
+file that does not exist).
+
+Out of scope (later plans): Plan B — primitives (`service_exec` dynamic argv, `when:`/
+`check:` duplication, `source_clone` builtin). Plan C — discoverability (`llms-txt` as the
+real entry point, `docs search` tokenization, class-1 scaffold content, skill rules, cost
+profile for `dwe test`). **Task 1–2 here (whitelist rendering) is a prerequisite for
+Plan B's `source_clone`**, which is why it leads this plan.
+
+## Context (from discovery)
+
+- `internal/shared/tpl/render_command.go` — `varPattern` (line 109) is
+  `\$\{([a-zA-Z_][a-zA-Z0-9_.]*)\}`; `CompileVarSyntax` (line 145) routes by head
+  namespace (`files`, `host`, `param`, `context`, `snapshot`, `generated`, `args`) and
+  **falls through to `{{ resolve .Raw %q }}` for everything else** (line 203). Unknown
+  heads therefore render to `""`. `VarPattern` is already exported (line 115).
+- `internal/core/execution/pipeline/executor.go:214` — `execShellAction` passes `a.Cmd`
+  to `sh -c` **verbatim**, no template pass. This is the `Bad substitution` source.
+- `internal/core/execution/pipeline/executor.go:282` (`execCommandAction`) →
+  `usercommands.BuildRunContext` → `runtime/build_context.go:69` renders string `with:`
+  values through `tpl.RenderCommand`. **This asymmetry is the whole bug**: `with:` renders,
+  `cmd:` does not.
+- `internal/core/workflow/envtest/render.go:51` — scenario `cmd:` **already** renders via
+  `tpl.RenderCommand` with no unknown-head protection: an existing latent hole where
+  `${HOME}` in a scenario silently collapses.
+- `internal/core/execution/pipeline/step.go:107` — `StepCommand` `case "shell"` returns
+  `strings.TrimSpace(step.Cmd)`; this is what `dwe deploy plan` prints, which is why the
+  plan showed `git clone --branch ${vars.source.backend.branch}` as "what will run".
+- `internal/core/execution/pipeline/resolve.go:290` — `resolveStepWhen` evaluates only
+  `condition.TypeTemplate` via `tpl.EvalCondition`; a `when: {type: shell, cmd: …}` is a
+  runtime condition whose `cmd` never sees the template engine.
+- `internal/core/project/config/docker.go` — **two** resolution entry points:
+  `ResolveComposeProjectName` (line 245, disk-reading) and `ComposeProjectName` (line 275,
+  in-memory), both ending at `cfg.Project.FullName()` with no case normalization.
+  `ComposeProjectNameCandidates` (line 298) derives a legacy second candidate from
+  `FullName()` and drops it when equal to the primary.
+- `internal/core/validate/config/` — validators are plain structs implementing
+  `validate.Validator` (`ID()`, `Domain()`, `Run(ctx) []validate.Diagnostic`) registered in
+  `all.go:8` `All()`. `compose_name.go` already parses the `ComposeFiles()` chain with a
+  narrow yaml struct — reusable for the `container_name` check.
+- `internal/core/project/config/info.go:251` — `LoadInfoConfig` returns
+  `DefaultInfoConfig()` **only** on `os.ErrNotExist`; a present all-comment file yields an
+  empty `InfoConfig`. No fallback at the call site either (`internal/cli/info/info.go:66`).
+- `internal/core/validate/config/workspace.go:754` — the info validator emits
+  `SeverityOK` when the file exists and parses, and `info: "no info.yml"` when absent —
+  exactly inverted from reality.
+- `internal/core/project/config/workspace.go:1215/1224` —
+  `IDERenderEnabledExplicit() (enabled, explicit bool)`; `renderEnabledExplicit` defaults
+  app→on, others→off. **The `explicit` bit already exists and is exactly what the noise
+  fix needs.**
+- `internal/core/validate/templates/{ai,git,ide}.go:128/135/128` — hints say
+  `set services.%s.render.X.enabled: false in services.yml`; **no `services.yml` exists in
+  DWE** (it is `workspace/services/<name>/service.yml`, or the `services:` block in
+  `defaults.yml`).
+- `internal/core/workflow/scaffold/templates/workspace/lifecycle.yml:14` — commented
+  `run.update.mode`, removed from `LifecycleRunConfig`
+  (`internal/core/project/config/workspace.go:2922`) when the policy moved to top-level
+  `update:`. The loader is strict (`KnownFields(true)`) and the file invites
+  "uncomment a section to override".
+- `internal/cli/deploy/deploy.go` — `plan` is declared inline (no `plan.go`), has its own
+  `--format table|shell`, `Args: cobra.NoArgs`, and never calls `cmdctx.WriteData`, so the
+  global `--output json` is silently ignored.
+- `internal/cli/validate/validate.go:266` — `newValidateConfigSubCmd(..., "services", ...)`
+  is a **leaf running one validator**; `dwe validate config services` prints `ok:1`,
+  indistinguishable from a full run (`dwe validate config` → `ok:10`).
+
+**Field evidence for the whitelist decision — zero risk in workspaces, a stale contract in
+this repository.** Across all five workspaces every `${UID}`/`${GID}` occurrence sits in a
+YAML **comment**; there is not a single shell-style `${VAR}` in any executable field
+(authors use the dwe form `${host.uid}`), and the one real config pack
+(`beetDeck/…/config/backend/config.yaml.tmpl`) contains no `${…}` at all. **But inside this
+repository the whitelist breaks a documented contract**: `docs/reference/render/config.md`
+(lines 58–59, 69) states "**Top-level config** uses the bare dot-path
+(`${databases.main}`)" with a working `DB_HOST=${databases.main.host}` example — mirrored
+in `docs/i18n/ru/reference/render/config.md:60-61,71`,
+`docs/reference/config/services/fields.md:596` (+RU:598), `docs/internals/packages.md:273`
+(§ tpl, which literally describes the unconditional fallthrough), and the
+`internal/cli/render/config.go:52` help text. That form has in fact been dead since the
+strict root landed (`databases` is not in `allowedRootKeys`), so the docs already lie —
+but nine test files still assert the old behaviour and must be migrated in Task 1:
+`execution/templates/config/config_test.go:64`,
+`execution/builtin/services/render_builtins_test.go:92`,
+`workflow/lifecycle/run_test.go:675,836`, `usercommands/runtime/build_context_test.go:262`,
+`execution/pipeline/executor_test.go:1345`, `usercommands/model/types_test.go:2639`,
+`usercommands/loader/loader_test.go:453,779`,
+`usercommands/runtime/files_resolve_test.go:1002`,
+`shared/tpl/render_command_test.go:28`.
+
+## Critical constraints for the executor (traps — read before every task)
+
+1. **`make build` / `make test`, never bare `go build` / `go test ./...`.** The embedded
+   docs tree (`internal/core/docs/embedded/`) is gitignored and generated; a bare `go test`
+   sees an empty tree and the docs tests fail. For focused work: `make embedded-docs` once,
+   then `go test ./internal/...` directly.
+2. **`internal/cli/` is the single writer to stdout/stderr.** `internal/core/validate/`
+   returns diagnostics; renderers return strings. Never print from core.
+3. **`validate` is the documented exception to JSON-mode error handling** — it emits
+   diagnostics-as-data (`{summary, diagnostics[]}`) even at severity=error, rather than the
+   `{"error":{…}}` envelope. Do not "fix" this while touching validate.
+4. **Unknown head → leave the `${…}` literal in place**, never render to `""`. This is the
+   entire safety argument of Task 1; a regression here silently corrupts shell commands
+   instead of loudly failing them.
+4a. **Render at resolve time, never at exec time** — see Technical Details for the three
+   independent reasons (journal hash, plan output, `with:` coverage). An exec-time render
+   looks simpler and is wrong.
+4b. **Threat model — `${vars.*}` now reaches the text of a host `sh -c` program.** The
+   docstring of `RenderContext.Args` (`tpl/render_command.go:44-56`) names this exact shape
+   as the boundary: interpolating a value into program text "is safe only in an unquoted
+   argument position", which is why `${args}` is rewritten to `"$@"`. Meanwhile
+   `bridge.vars_writable` lets a **container** write vars via `dwe vars set`, and
+   container→host is an explicit trust boundary in AGENTS.md. Consequence: a var written
+   from inside a container can land in a host shell program run by `deploy.yml`. This plan
+   does not close that by itself — record it, and consider a diagnostic when a path
+   reachable via `bridge.vars_writable` is referenced from a pipeline `cmd:`. Do not treat
+   the whitelist as a security control; it is a correctness control.
+5. **Scaffold template edits require golden updates** —
+   `internal/core/workflow/scaffold/testdata/golden_default.txt`.
+6. **Docs are mirrored**: an English page under `docs/reference/` usually has a Russian
+   twin under `docs/i18n/ru/reference/`. Update both, then `make build` to resync the
+   embedded copy and regenerate `internal/core/docs/content_hashes_gen.go`.
+7. **Loader strictness is deliberate and asymmetric**: deploy/reset/lifecycle/command-file
+   loaders use `KnownFields(true)`; info/styles/docker/localconfig use lenient
+   `yaml.Unmarshal`. Task 9 must fix `info.yml` **without** switching it to a strict
+   decoder.
+8. **The four strict pipeline loaders already tolerate `io.EOF`** from an all-comment file
+   so the built-in default applies — Task 9 is the same class of fix for `info.yml`, but
+   `yaml.Unmarshal` (not a Decoder) returns no `io.EOF`; detect "no sections decoded"
+   instead.
+9. **Do not weaken any existing real diagnostic while removing noise** (Tasks 7–8). The
+   rule is *implicit default + absent artifact → silent*; *explicit opt-in + absent
+   artifact → warning*. Never silence the explicit case.
+
+## Development Approach
+
+- **testing approach**: **TDD for validators** (new/changed diagnostics: write the
+  `testdata` fixture carrying the defect and the expected diagnostic first, then the
+  validator), **regular for everything else** (rendering core, loaders, CLI output).
+- complete each task fully before moving to the next
+- make small, focused changes
+- **CRITICAL: every task MUST include new/updated tests** for code changes in that task
+- **CRITICAL: all tests must pass before starting next task** — no exceptions
+- **CRITICAL: update this plan file when scope changes during implementation**
+- run tests after each change
+- maintain backward compatibility
+
+## Testing Strategy
+
+- **unit tests**: required for every task (see Development Approach above)
+- **e2e tests**: this project has no UI e2e suite. The closest analogue is
+  `dwe test` (integration scenarios) — not exercised by this plan, but Task 15 must confirm
+  `make test` stays green including the `envtest` package touched in Task 2.
+- table-driven tests are the project norm for parsing/validation; follow it.
+- validator tests go through the existing per-domain harness (see
+  `runComposeNameValidator` in `internal/core/validate/config/compose_name_test.go` for the
+  established shape).
+
+## Progress Tracking
+
+- mark completed items with `[x]` immediately when done
+- add newly discovered tasks with ➕ prefix
+- document issues/blockers with ⚠️ prefix
+- update plan if implementation deviates from original scope
+- keep plan in sync with actual work done
+
+## Solution Overview
+
+Three mechanisms, applied in order:
+
+1. **Make templates work where authors already expect them to** (Tasks 1–3). `${…}` with a
+   *known* head renders in pipeline `cmd:` and shell-`when:` exactly as it already does in
+   command `with:`; an *unknown* head stays literal instead of collapsing to `""`. The
+   whitelist is the union of the config root keys (`allowedRootKeys`, which is what
+   `resolve .Raw` can actually reach) and the special namespaces `CompileVarSyntax` already
+   routes. A validator then catches the residual failure mode — a *known* head that
+   resolves to nothing, i.e. a typo.
+2. **Make the identity of the compose project correct by construction** (Tasks 4–6).
+   Normalize the project name at both resolution points, fix the hint that recommended the
+   invalid spelling, and add checks for the two remaining ways to get it wrong
+   (`container_name` casing, declared-but-unexported ports).
+3. **Restore the signal-to-noise ratio** (Tasks 7–8) with one rule — *diagnostics report
+   "something is wrong", not "something is unused"* — implemented on the existing
+   `explicit` tristate rather than new config.
+
+Tasks 9–11 fix the localized bugs, Tasks 12–14 make the two commands an agent leans on
+machine-readable and honest.
+
+## Technical Details
+
+**Whitelist composition** (Task 1). Known heads =
+`allowedRootKeys` (`internal/core/project/config/workspace.go` — `project`, `runtime`,
+`exports`, `compose`, `services`, `vars`, `update`, `bridge`, `state`, `schema_version`, …)
+∪ `{files, host, param, context, snapshot, generated, args}` (the cases
+`CompileVarSyntax` already switches on). Layering: `tpl` is a leaf under `internal/shared/`
+and **must not import `internal/core/project/config`** — the key list is therefore passed
+in or duplicated as an exported slice in `tpl` with a compile-time cross-check test in the
+`config` package asserting the two stay in sync.
+
+**Rendering happens at RESOLVE time, on the whole step** (Task 2). This is load-bearing and
+was the single largest correction from plan review — an exec-time render in
+`execShellAction` would have been wrong three ways:
+
+1. **It breaks the journal contract.** `executor.go:551,731` compute
+   `journal.StepHash(rs.Step)` over the **unrendered** `cmd:`, and `ProjectConfigHash`
+   (`journal/hash.go:141`) hashes services + deploy configs — the `vars:` block is **not**
+   in it. Changing `vars.source.branch` would leave the step hash unchanged, so the step
+   would be skipped as up-to-date while the actual command differs. That is silent
+   corruption of exactly the scenario this plan exists to fix.
+2. **It leaves `dwe deploy plan` lying.** `StepCommand` (`step.go:107`) reads
+   `config.DeployStep`, not the executed action, so a resolvable `${vars.x}` would still
+   print raw — the motivating symptom from the Overview would survive, and Task 13 would
+   flag correct references as suspicious.
+3. **It does not cover `with:`** — and Plan B's `source_clone` takes
+   `with: {repo, dir, branch}`. Four real workspaces already pass `${vars.*}` through
+   `with:` (`beetDeck/…/frontend/deploy.yml:27-29`, `cueBreaker/…/{frontend,backend}/deploy.yml`).
+
+So: render in `resolveLeafStep` / `ResolvePhaseSteps`, covering `cmd`, the string leaves of
+`with`, and `check` — mirroring `envtest/render.go:renderStep`, whose docstring already
+pins the ordering ("RenderSteps MUST run BEFORE ResolvePhaseSteps"). One code path, no
+asymmetry between `workspace/tests/*.yml` and `deploy.yml`, and Plan B's dependency holds
+as stated. Runtime shell `when:` is evaluated in three places (`executor.go:509` phase,
+`:735` step, `:972` parallel sub-step) — resolve-time rendering covers all three uniformly.
+
+**One-time consequence to state up front**: every step containing `${…}` changes its hash
+once on upgrade, so the first deploy after this lands re-runs those steps instead of
+skipping them. That is correct and self-limiting; it must be in the release notes.
+
+**Empty-resolution diagnostic** (Task 3). Scan with `tpl.VarPattern`, but resolve **only**
+heads from `allowedRootKeys`. The special namespaces (`param`, `context`, `files`, `host`,
+`snapshot`, `generated`, `args`) do **not** live in `Raw` at all — resolving them there
+would warn on every `${param.*}` (99+ occurrences of `${param.database}` in this
+repository's fixtures alone, hundreds across the workspaces) and on every
+`${generated.*}`, which resolves to `""` by contract on the first deploy. A validator built
+to kill noise must not become its largest source — that would contradict Tasks 7–8.
+Reuse `internal/core/project/varsusage/scan.go` rather than re-deriving which fields render:
+it is already field-aware, already uses `tpl.VarPattern`, and AGENTS.md names it as the
+single scanner. Widen its head filter from `vars` to the whitelist instead of writing a
+second list that will drift.
+
+**Ports/exports pairing** (Task 6). For every `services.<n>.ports.<key>`, look for an
+`ExportRule` whose `From` is `services.<n>.ports.<key>`. Missing → warning explaining that
+the port is display-only, that `local.yml` overrides will not move the binding, and that
+`dwe test` host-port isolation will silently not apply.
+
+## What Goes Where
+
+- **Implementation Steps** (`[ ]`): all code, tests, scaffold templates, goldens and docs
+  inside this repository.
+- **Post-Completion** (no checkboxes): verification against the real workspaces, which live
+  outside this repo.
+
+## Implementation Steps
+
+### Task 1: Whitelist unknown head namespaces in `CompileVarSyntax`
+
+**Files:**
+- Modify: `internal/shared/tpl/render_command.go`
+- Modify: `internal/shared/tpl/render_command_test.go`
+- Modify: `internal/core/project/config/workspace_test.go` (sync cross-check)
+- Modify (migrate stale assertions): `internal/core/execution/templates/config/config_test.go`,
+  `internal/core/execution/builtin/services/render_builtins_test.go`,
+  `internal/core/workflow/lifecycle/run_test.go`,
+  `internal/core/usercommands/runtime/build_context_test.go`,
+  `internal/core/execution/pipeline/executor_test.go`,
+  `internal/core/usercommands/model/types_test.go`,
+  `internal/core/usercommands/loader/loader_test.go`,
+  `internal/core/usercommands/runtime/files_resolve_test.go`
+- Modify (documented contract that dies with this change): `docs/reference/render/config.md`,
+  `docs/i18n/ru/reference/render/config.md`,
+  `docs/reference/config/services/fields.md`,
+  `docs/i18n/ru/reference/config/services/fields.md`,
+  `docs/internals/packages.md` (§ `internal/shared/tpl/`),
+  `internal/cli/render/config.go` (help text)
+
+- [ ] add an exported `KnownVarHeads` slice in `tpl` covering the config root keys
+      (`allowedRootKeys`: `schema_version, project, runtime, state, exports, compose, ui,
+      docs, services, vars, update, bridge, stop`) plus the special namespaces already
+      switched on in `CompileVarSyntax` (`files, host, param, context, snapshot, generated,
+      args`)
+- [ ] change the default branch: emit `{{ resolve .Raw %q }}` only when the head is known;
+      otherwise return the original `${…}` match unchanged
+- [ ] decide and pin the injected key `__configPath` (`workspace.go:1762`) — `varPattern`
+      admits a leading `_`, so `${__configPath}` must go literal deliberately, not by
+      oversight
+- [ ] migrate the eight test files above off the bare top-level dot-path form
+      (`${databases.main}` → `${vars.databases.main}`) — that form has been dead since the
+      strict root landed and the assertions encode the pre-strict contract
+- [ ] update the docs and help text that still promise the bare form, stating plainly that
+      free-form values live under `vars:`
+- [ ] write tests: `${vars.x}` / `${services.app.ports.http}` / `${project.name}` still
+      compile to `resolve`; `${HOME}` / `${PATH}` / `${UNKNOWN_THING}` survive literally
+- [ ] write tests for the boundary cases: `${host.uid}`, `${args}`, `${files.a.path}`, a
+      dotted unknown head (`${FOO.bar}`) staying literal, and the known-head/unknown-subkey
+      pair `${host.bogus}` / `${args.0}` (today both resolve to `""` — decide and pin)
+- [ ] add a cross-check test in `internal/core/project/config` asserting `allowedRootKeys`
+      ⊆ `tpl.KnownVarHeads`, so a future root key cannot silently stop rendering.
+      Note: `tpl` already imports `internal/core/execution/condition`
+      (`render_command.go:10`), so "tpl is a leaf" is a convention, not an enforced
+      invariant — the duplicated list plus cross-check is still the right call, since
+      `internal/core/project/config` does not import `tpl` and `workspace_test.go` is
+      `package config` and can see the unexported list
+- [ ] run tests — must pass before task 2
+
+### Task 2: Render the whole step at resolve time
+
+**Files:**
+- Modify: `internal/core/execution/pipeline/resolve.go`
+- Modify: `internal/core/execution/pipeline/resolve_test.go`
+- Modify: `internal/core/execution/pipeline/executor_test.go`
+- Modify: `internal/core/workflow/envtest/render_test.go`
+
+- [ ] render each resolved step's `cmd`, the string leaves of `with`, and `check` in
+      `resolveLeafStep` / `ResolvePhaseSteps`, mirroring `envtest/render.go:renderStep`
+      (constraint 4a — **not** in `execShellAction`)
+- [ ] confirm the three runtime shell `when:` evaluation points (`executor.go:509`,
+      `:735`, `:972`) all consume the resolved step, so gates can reference `${vars.*}`
+      uniformly (today all five workspaces write literal paths there and one documents the
+      limitation in a comment)
+- [ ] write tests: a step with `cmd: "git clone ${vars.source.repo} ${vars.source.dir}"`
+      resolves with substituted values, and a `type: command` step's
+      `with: {repo: "${vars.source.repo}"}` does too (this is Plan B's dependency)
+- [ ] write tests: a step with `cmd: 'echo ${HOME}'` reaches `sh` with `${HOME}` intact
+      (regression guard for the whole whitelist argument)
+- [ ] write a journal test: changing a `vars:` value referenced by a step **changes** its
+      `StepHash`, so the step re-runs instead of being skipped as up-to-date (the defect
+      that made exec-time rendering wrong)
+- [ ] write a test in `envtest` pinning that scenario `cmd:` keeps `${HOME}` literal
+      (closes the pre-existing latent hole)
+- [ ] run tests — must pass before task 3
+
+### Task 3: Validator — `${…}` with a known head that resolves to nothing
+
+**Files:**
+- Create: `internal/core/validate/config/template_refs.go`
+- Create: `internal/core/validate/config/template_refs_test.go`
+- Create: `internal/core/validate/config/testdata/template_ref_typo/…`
+- Modify: `internal/core/project/varsusage/scan.go` (widen the head filter)
+- Modify: `internal/core/validate/config/all.go`
+
+- [ ] (TDD) write the fixture: a service `deploy.yml` referencing `${vars.opechatka}` plus
+      a valid `${vars.source.repo}`, and the test asserting exactly one warning naming the
+      file, step and field
+- [ ] implement the validator on top of `varsusage.Scan` (already field-aware, already uses
+      `tpl.VarPattern`, named in AGENTS.md as the single scanner) by widening its head
+      filter from `vars` to the whitelist — do **not** re-derive which fields render, or the
+      two lists will drift
+- [ ] resolve **only** heads from `allowedRootKeys`; exclude `param`, `context`, `files`,
+      `host`, `snapshot`, `args` entirely (they do not live in `Raw`) and `generated`
+      explicitly (lenient-by-contract: absent → `""` on the first deploy). Without this the
+      validator fires on every `${param.*}` — 99+ in this repo's fixtures alone — and
+      becomes the noise Tasks 7–8 are removing
+- [ ] register it in `All()`
+- [ ] write tests for the negative cases: unknown head (`${HOME}`), `${param.x}`,
+      `${generated.key}` and a resolvable reference all produce **no** diagnostic
+- [ ] run tests — must pass before task 4
+
+### Task 4: Normalize the compose project name
+
+**Files:**
+- Modify: `internal/core/project/config/docker.go`
+- Modify: `internal/core/project/config/docker_test.go`
+
+- [ ] normalize to lowercase in both `ResolveComposeProjectName` and `ComposeProjectName`
+      (single shared helper — the two must never diverge)
+- [ ] **keep** the legacy candidate in `ComposeProjectNameCandidates` when it differs only
+      by case, and collapse only on exact equality. This is the opposite of the first draft
+      and is the whole point of the second candidate: Docker **does** allow uppercase in
+      container names, and the compose-bypass paths (daemon builtins,
+      `StopContainer`/`RemoveContainer`, label filters) build `<project>-<name>` directly —
+      so a project that ran as `dwe-cueBreaker` has real containers under that name.
+      Dropping the candidate would orphan them and leave `stop`/`reap`/`status` unable to
+      find them
+- [ ] write tests: `project.name: cueBreaker` yields `dwe-cuebreaker`; an explicit
+      `docker.yml project_name` is passed through unchanged when already lowercase
+- [ ] write tests for the candidates helper: case-only difference keeps **two** candidates
+      (canonical first), exact match keeps one
+- [ ] run tests — must pass before task 5
+
+### Task 5: Fix the compose-name hint and add a `container_name` casing check
+
+**Files:**
+- Modify: `internal/core/validate/config/compose_name.go`
+- Modify: `internal/core/validate/config/compose_name_test.go`
+- Create: `internal/core/validate/config/container_name.go`
+- Create: `internal/core/validate/config/container_name_test.go`
+- Modify: `internal/core/validate/config/all.go`
+
+- [ ] (TDD) write the test pinning that the hint's **first** suggestion is a valid compose
+      project name (today it recommends the CamelCase form docker rejects — an agent
+      followed it and got a failed `reset run`)
+- [ ] reorder the hint so the `docker.yml project_name` route leads, and never suggest a
+      value that would be rejected
+- [ ] (TDD) write the fixture + test for a `container_name:` that **diverges from the
+      derived `<project>-<service>`** — note the defect is divergence, not casing: a
+      lowercase `container_name: myapp` breaks `dwe stop <name>`, `dwe restart <name>` and
+      the daemon builtins exactly the same way, since those resolve the derived name
+- [ ] surface the finding through the existing `config.ScanComposeIsolation`
+      (`compose_scan.go:78,108`), which **already** parses the `ComposeFiles()` chain and
+      emits `KindContainerName` with `Blocking: true` — it is simply not wired into the
+      `config` validate domain today (only `dwe validate tests` and the envtest runner
+      consume it). Map `Blocking` to severity there rather than adding a third compose
+      parser
+- [ ] write tests for the silent cases: derived-matching names, interpolated `${…}` names
+- [ ] run tests — must pass before task 6
+
+### Task 6: Validator — declared port without a matching `exports.env` rule
+
+**Files:**
+- Create: `internal/core/validate/config/ports_exports.go`
+- Create: `internal/core/validate/config/ports_exports_test.go`
+- Create: `internal/core/validate/config/testdata/ports_unexported/…`
+- Modify: `internal/core/validate/config/all.go`
+
+- [ ] (TDD) write the fixture reproducing the live beetDeck defect: `ports.http` declared
+      on a service, no `ExportRule` with `from: services.<n>.ports.http`
+- [ ] write the test asserting a warning whose message states the port is display-only,
+      that a `local.yml` override will not move the binding, and that `dwe test` host-port
+      isolation will silently not apply
+- [ ] implement the validator over `cfg.Services` × `cfg.Exports.Env`, iterating services
+      through `config.DeployOrder(...)` (never `range cfg.Services` — map order is random
+      and would make the test flaky)
+- [ ] register in `All()`; write the negative test (correctly paired port → silent)
+- [ ] decide the overlap with `ScanComposeIsolation`: a port declared only for `dwe info` /
+      `ports_free` with a literal compose binding is a legal (if undesirable) pattern that
+      the isolation scanner already flags as `KindRawHostPort`. Either suppress one of the
+      two or state why both firing is correct — per Tasks 7–8 the bar is "something is
+      wrong", not "something is unused"
+- [ ] run tests — must pass before task 7
+
+### Task 7: Silence render-pack diagnostics on implicit defaults; fix the `services.yml` hint
+
+**Files:**
+- Modify: `internal/core/validate/templates/ai.go`
+- Modify: `internal/core/validate/templates/ide.go`
+- Modify: `internal/core/validate/templates/git.go`
+- Modify: `internal/core/validate/templates/*_test.go`
+
+- [ ] (TDD) write tests: a `type: app` service with **no** `render.*` key and no pack →
+      **no** diagnostic; the same service with explicit `render.ai.enabled: true` and no
+      pack → warning preserved
+- [ ] thread `explicit` from `AIRenderEnabledExplicit` / `IDERenderEnabledExplicit` /
+      `GitRenderEnabledExplicit` into the three validators and gate the "pack not found"
+      diagnostic on it
+- [ ] fix the hint text in all three: `services.yml` → `workspace/services/<name>/service.yml`
+- [ ] write a test pinning the hint names a path that exists in DWE
+- [ ] run tests — must pass before task 8
+
+### Task 8: Apply the same rule to the remaining always-on noise
+
+**Files:**
+- Modify: `internal/core/validate/config/workspace.go`
+- Modify: `internal/core/validate/templates/git.go`
+- Modify: corresponding `*_test.go`
+
+- [ ] (TDD) write tests for each: absent `reset.yml` on a project that never declared one →
+      silent; `render.git` enabled implicitly with no `src/.git` before the first deploy →
+      silent (today it advises creating a repo or disabling render, contradicting the
+      intended clone-on-deploy order)
+- [ ] apply the implicit/explicit gate to both
+- [ ] audit the remaining default-on diagnostics for the same pattern and record in this
+      plan (➕) any found beyond these two
+- [ ] write tests confirming the explicit-opt-in variants still warn
+- [ ] run tests — must pass before task 9
+
+### Task 9: An all-comment `info.yml` must fall back to the built-in dashboard
+
+**Files:**
+- Modify: `internal/core/project/config/info.go`
+- Modify: `internal/core/project/config/info_test.go`
+- Modify: `internal/core/workflow/scaffold/templates/workspace/info.yml` (only if wording
+  still misstates behavior after the fix)
+
+- [ ] define the fallback criterion precisely: **"the document decoded no top-level keys
+      at all"**, detected by a pre-pass into `map[string]any` — *not* "Sections is empty".
+      `InfoConfig` is `{Sections []InfoSection; Footer bool}` (`info.go:13-17`), so
+      "no sections" conflates three different states and would silently override a
+      deliberate `sections: []` or a file carrying only `footer: true`
+- [ ] treat that state as absent and return `DefaultInfoConfig()`, mirroring the `io.EOF`
+      tolerance of the four strict pipeline loaders — **without** switching this loader to
+      a strict decoder
+- [ ] write tests for all four states: fully commented → default; empty file → default;
+      deliberate `sections: []` → empty dashboard (default **not** restored); one real
+      section → that section only
+- [ ] verify the scaffold header claim ("shipped fully commented so that default stays
+      active") is now true, and adjust wording if the implemented semantics differ
+- [ ] run tests — must pass before task 10
+
+### Task 10: Invert the `info` validator verdict
+
+**Files:**
+- Modify: `internal/core/validate/config/workspace.go`
+- Modify: `internal/core/validate/config/workspace_test.go`
+
+- [ ] (TDD) write tests for the same four states Task 9 pinned: all-comment (default
+      active) reports the inert state honestly rather than `SeverityOK`; deliberate
+      `sections: []` reports its own state; an authored dashboard reports OK; an absent
+      file stays informational
+- [ ] implement the inverted verdict
+- [ ] ensure the wording distinguishes "inert scaffold, built-in dashboard active",
+      "deliberately empty dashboard" and "authored dashboard"
+- [ ] run tests — must pass before task 11
+
+### Task 11: Drop the removed `run.update` from the lifecycle scaffold
+
+**Files:**
+- Modify: `internal/core/workflow/scaffold/templates/workspace/lifecycle.yml`
+- Modify: `internal/core/workflow/scaffold/testdata/golden_default.txt`
+
+- [ ] remove the commented `update:` block from the `run:` example (the field no longer
+      exists on `LifecycleRunConfig`; uncommenting the block as the file invites produces a
+      strict-decode hard error)
+- [ ] point the comment at the top-level `update:` block instead, so the migration is
+      discoverable from where the old field used to be
+- [ ] regenerate the scaffold golden
+- [ ] write a **table-driven** test covering every inert scaffold (`lifecycle.yml`,
+      `deploy.yml`, `info.yml`, `reset.yml`, `defaults.yml`): uncommenting each file
+      wholesale must load cleanly. Tasks 9 and 11 fix the same class of defect — "an inert
+      mirror that lies about itself" — and one table closes it for good
+- [ ] run tests — must pass before task 12
+
+### Task 12: `dwe deploy plan --output json`
+
+**Files:**
+- Modify: `internal/cli/deploy/deploy.go`
+- Modify: `internal/cli/deploy/plan_test.go`
+
+- [ ] define the typed plan payload (phases → steps → type, cmd, gates) and emit it through
+      `cmdctx.WriteData[T]` when `--output json` is set, leaving `--format table|shell`
+      untouched otherwise
+- [ ] ensure no ANSI escapes leak into the JSON path (the captured session shows
+      `\x1b[38;5;45m…` in piped plan output)
+- [ ] write tests for the JSON shape (stable key set, deterministic ordering)
+- [ ] write a test asserting the human `--format` paths are byte-identical to today
+- [ ] run tests — must pass before task 13
+
+### Task 13: Mark unresolved templates in the plan output
+
+**Files:**
+- Modify: `internal/core/execution/pipeline/step.go`
+- Modify: `internal/cli/deploy/deploy.go`
+- Modify: corresponding `*_test.go`
+
+- [ ] with resolve-time rendering (Task 2) the plan already prints substituted values, so a
+      `${…}` surviving into `StepCommand` output is **necessarily** an unknown head —
+      annotate those in both the human and JSON plan output so the plan stops presenting
+      them as "what will run". (Had rendering stayed at exec time, this task would have
+      flagged correct references too — see Technical Details.)
+- [ ] keep the annotation out of `--format shell` (that output must stay executable)
+- [ ] write tests covering: resolved template renders substituted; unknown head shown as
+      literal with annotation; JSON payload carries the flag
+- [ ] run tests — must pass before task 14
+
+### Task 14: Report scope when `validate` is narrowed
+
+**Files:**
+- Modify: `internal/cli/validate/validate.go`
+- Modify: `internal/cli/validate/validate_test.go`
+
+- [ ] include the active scope (domain + validator id, or "all") in both the human summary
+      line and the JSON summary, so `dwe validate config services` (one check) is no longer
+      indistinguishable from `dwe validate config` (ten)
+- [ ] keep the diagnostics-as-data contract intact (constraint 3)
+- [ ] write tests: full run, domain run, leaf run — each reports its own scope
+- [ ] write a test asserting the JSON summary gained the field without breaking existing keys
+- [ ] run tests — must pass before task 15
+
+### Task 15: Verify acceptance criteria
+
+- [ ] verify all requirements from Overview are implemented
+- [ ] reproduce the three original defects as fixtures and confirm each is now caught
+      statically: `${vars.*}` in a shell step (now renders), CamelCase project name (now
+      normalized + flagged), all-comment `info.yml` (now falls back)
+- [ ] confirm a freshly scaffolded single-service project produces **zero** warnings from
+      `dwe validate` (the 6 `template pack not found` and the `no reset.yml` noise are gone)
+- [ ] run full test suite: `make test`
+- [ ] run `make lint`
+- [ ] verify test coverage meets project standard
+
+### Task 16: [Final] Update documentation
+
+- [ ] document the whitelist rendering rule and the resolve-time evaluation point in
+      `docs/reference/` (where templates are evaluated) — the current page's omission is
+      what three workspaces documented by hand in YAML comments
+- [ ] document the new validators (`ports`/`exports` pairing, `container_name` divergence,
+      empty template refs) in `docs/reference/config/validate.md`
+- [ ] confirm the contract migration from Task 1 landed everywhere:
+      `docs/reference/render/config.md`, `docs/reference/config/services/fields.md`
+      (§ `render.config`), `docs/internals/packages.md` (§ `internal/shared/tpl/` — it
+      describes the old unconditional fallthrough verbatim), and the
+      `internal/cli/render/config.go` help text
+- [ ] note the one-time hash change in the release notes (steps containing `${…}` re-run
+      once after upgrade)
+- [ ] update the Russian mirrors under `docs/i18n/ru/`
+- [ ] run `make build` to resync embedded docs and content hashes
+- [ ] update `AGENTS.md` Critical Patterns — **not conditional**: a rule that changes the
+      meaning of every `${...}` in the product is load-bearing by definition
+- [ ] move this plan to `docs/plans/completed/`
+
+## Post-Completion
+
+*Items requiring manual intervention or external systems — no checkboxes, informational only*
+
+**Verification against real workspaces** (outside this repo):
+- run `dwe validate` in `beetDeck` — the ports/exports validator should flag
+  `services.{backend,frontend,dbgate}.ports.http` as declared-but-unexported. Precisely:
+  beetDeck has **no** port export rules at all, and `BEETDECK_HTTP_PORT` /
+  `BEETDECK_VITE_PORT` appear only inside `compose.yaml`
+  (`"${BEETDECK_HTTP_PORT:-5001}:5000"`), so the binding survives on the fallback default
+  alone. Consider the mirror check too — a `${NAME:-default}` in compose with no export
+  rule producing `NAME` — which additionally catches a typo in an export name
+- run `dwe validate` in all five workspaces (`podlapka`, `AlbFetcharr`, `beetDeck`, `alto`,
+  `cueBreaker`) and confirm the warning count drops sharply without losing any real signal
+- confirm `dwe deploy plan` in `cueBreaker` now shows substituted clone coordinates
+- spot-check that normalizing the project name does not orphan containers in workspaces
+  that already pinned a lowercase `project_name` (expected: no change, since the pinned
+  value is passed through)
+
+**Follow-on plans**:
+- Plan B (primitives) depends on Tasks 1–2 landing first
+- Plan C (scaffold class-1 content) depends on Plan B's final primitive set
