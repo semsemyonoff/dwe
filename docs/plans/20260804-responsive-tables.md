@@ -583,19 +583,23 @@ func stderrBudget() int { return styles.TermWidthOrZero(os.Stderr) } // Diagnost
 **Files:**
 - Modify: `internal/core/ui/render/diagnostics_table.go`
 
-- [ ] convert `diagnosticsTable` (`diagnostics_table.go:84`) with `Padding: 1`, `BorderRow: true`,
+- [x] convert `diagnosticsTable` (`diagnostics_table.go:84`) with `Padding: 1`, `BorderRow: true`,
       `Zebra: true`, `Center: []int{0}`
-- [ ] replace the pre-wrap calls with column specs: STATUS `roleGlyph` fixed; DOMAIN and TARGET fixed
+- [x] replace the pre-wrap calls with column specs: STATUS `roleGlyph` fixed; DOMAIN and TARGET fixed
       `roleTitle`; FILE `{Flex: true, Max: 40, Wrap: wrapPath, Role: roleTitle}`; MESSAGE
       `{Flex: true, Max: 44, Wrap: wrapText, Role: roleBody}`; HINT
       `{Flex: true, Max: 44, Wrap: wrapText, Role: roleField}`
-- [ ] retain `diagnosticTextWrapWidth` / `diagnosticFileWrapWidth` as the `Max` constants, with their
+- [x] retain `diagnosticTextWrapWidth` / `diagnosticFileWrapWidth` as the `Max` constants, with their
       doc comments updated to describe them as natural-width caps
-- [ ] reduce the existing `StyleFunc` to semantic severity color only — padding, centering, and zebra
+- [x] reduce the existing `StyleFunc` to semantic severity color only — padding, centering, and zebra
       now come from the `tableView` decoration fields
-- [ ] confirm the trailing pad space that keeps terminal link detectors off the `│` glyph
+- [x] confirm the trailing pad space that keeps terminal link detectors off the `│` glyph
       (`diagnostics_table.go:128`) still applies, and that `diagnostics_table_test.go:243` passes
-- [ ] run `make test` — **Task 1 goldens must match byte-for-byte**; full suite green before task 9
+- [x] run `make test` — **Task 1 goldens must match byte-for-byte**; full suite green before task 9
+      (verified: `internal/core/ui/render/` and all other non-Docker packages pass; the three failures
+      in `internal/cli/deploy`/`internal/cli/lifecycle`/`internal/cli/status` are pre-existing sandbox
+      environment noise — no Docker daemon available here — reproduced identically on `HEAD` with this
+      task's change stashed out, so unrelated to this task)
 
 ### Task 9: Split collect from render in `stack/`, and add width parameters
 

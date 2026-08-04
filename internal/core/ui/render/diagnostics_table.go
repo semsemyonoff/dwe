@@ -6,19 +6,22 @@ import (
 	"strings"
 
 	"github.com/charmbracelet/lipgloss"
-	"github.com/charmbracelet/lipgloss/table"
 
 	"github.com/semsemyonoff/dwe/internal/core/ui/styles"
 	"github.com/semsemyonoff/dwe/internal/core/validate"
 )
 
-// Keep MESSAGE/HINT narrow enough that the six-column diagnostics table stays
-// readable on a wide-but-normal terminal instead of expanding indefinitely.
+// diagnosticTextWrapWidth is the Max natural-width cap for the MESSAGE and
+// HINT columns: keeps the six-column diagnostics table readable on a
+// wide-but-normal terminal instead of expanding indefinitely. A column whose
+// content stays under the cap takes its own (smaller) natural width; only
+// content wider than the cap is clamped and wrapped down to it.
 const diagnosticTextWrapWidth = 44
 
-// diagnosticFileWrapWidth bounds the FILE column. Paths have no spaces, so a
-// long relative path (e.g. services/api/src/vendor/.../Dockerfile) would widen
-// the whole table; wrapPath breaks them on "/" boundaries instead.
+// diagnosticFileWrapWidth is the Max natural-width cap for the FILE column.
+// Paths have no spaces, so a long relative path (e.g.
+// services/api/src/vendor/.../Dockerfile) would otherwise widen the whole
+// table; wrapPath breaks them on "/" boundaries instead.
 const diagnosticFileWrapWidth = 40
 
 // zebraBackground tints every other data row to improve scanability. Subtle
@@ -81,37 +84,33 @@ func DiagnosticsByDomain(rows []DiagnosticRow) string {
 // DOMAIN column. STATUS is always column 0 (its centering/glyph styling keys
 // off that), so dropping DOMAIN shifts only the prose columns.
 func diagnosticsTable(rows []DiagnosticRow, showDomain bool) string {
+	return diagnosticsTableView(rows, showDomain).Render(0)
+}
+
+// diagnosticsTableView builds the tableView backing diagnosticsTable. Split
+// out so a future caller (DiagnosticsByDomain) can inspect Fits/Render per
+// domain without duplicating the column-spec construction.
+func diagnosticsTableView(rows []DiagnosticRow, showDomain bool) tableView {
 	stringRows := make([][]string, len(rows))
-	cellStyles := make([]map[int]lipgloss.Style, len(rows))
+	severities := make([]validate.Severity, len(rows))
 
 	for i, r := range rows {
-		statusGlyph := severityGlyph(r.Severity)
-		statusStyle := severityStyle(r.Severity)
-
-		// File may be empty; use "—" as placeholder. Wrap on "/" so a long
-		// relative path does not widen the whole table.
+		// File may be empty; use "—" as placeholder. Wrapping on "/" so a
+		// long relative path does not widen the whole table happens via the
+		// FILE column's Wrap spec below.
 		fileStr := r.File
 		if fileStr == "" {
 			fileStr = "—"
-		} else {
-			fileStr = wrapPath(fileStr, diagnosticFileWrapWidth)
 		}
 
-		// Message and Hint are the only unbounded prose columns. Wrap them
-		// before table rendering so one long diagnostic does not widen the
-		// whole table past a normal terminal.
 		cells := make([]string, 0, 6)
-		cells = append(cells, statusGlyph)
+		cells = append(cells, severityGlyph(r.Severity))
 		if showDomain {
 			cells = append(cells, r.Domain)
 		}
-		cells = append(cells, r.Target, fileStr, wrapDiagnosticText(r.Message), wrapDiagnosticText(r.Hint))
+		cells = append(cells, r.Target, fileStr, r.Message, r.Hint)
 		stringRows[i] = cells
-
-		// Per-column styles: only the status column is styled; others inherit base.
-		cellStyles[i] = map[int]lipgloss.Style{
-			0: statusStyle, // STATUS column gets the glyph style
-		}
+		severities[i] = r.Severity
 	}
 
 	headers := make([]string, 0, 6)
@@ -121,38 +120,41 @@ func diagnosticsTable(rows []DiagnosticRow, showDomain bool) string {
 	}
 	headers = append(headers, "TARGET", "FILE", "MESSAGE", "HINT")
 
-	t := baseTable(headers...).
-		BorderRow(true).
-		StyleFunc(func(row, col int) lipgloss.Style {
-			// One column of horizontal padding on every cell so content never
-			// abuts the vertical border. This is load-bearing for URL hints:
-			// when a link exactly fills its column, a terminal's link detector
-			// would otherwise grab the adjoining "│" (encoding it as %E2%94%82)
-			// and produce a dead link. The trailing pad space gives it a clean
-			// boundary to stop at.
-			if row == table.HeaderRow {
-				h := headerRowStyle().Padding(0, 1)
-				if col == 0 {
-					h = h.AlignHorizontal(lipgloss.Center)
-				}
-				return h
-			}
-			style := lipgloss.NewStyle().Padding(0, 1)
-			if row >= 0 && row < len(cellStyles) {
-				if s, ok := cellStyles[row][col]; ok {
-					style = s.Padding(0, 1)
-				}
-			}
-			if col == 0 {
-				style = style.AlignHorizontal(lipgloss.Center)
-			}
-			if row >= 0 && row%2 == 1 {
-				style = style.Background(zebraBackground)
-			}
-			return style
-		})
+	cols := make([]columnSpec, 0, 6)
+	cols = append(cols, columnSpec{Role: roleGlyph}) // STATUS
+	if showDomain {
+		cols = append(cols, columnSpec{Role: roleTitle}) // DOMAIN
+	}
+	cols = append(cols,
+		columnSpec{Role: roleTitle}, // TARGET
+		columnSpec{Flex: true, Max: diagnosticFileWrapWidth, Wrap: wrapPath, Role: roleTitle}, // FILE
+		columnSpec{Flex: true, Max: diagnosticTextWrapWidth, Wrap: wrapText, Role: roleBody},  // MESSAGE
+		columnSpec{Flex: true, Max: diagnosticTextWrapWidth, Wrap: wrapText, Role: roleField}, // HINT
+	)
 
-	return renderRows(t, stringRows)
+	return tableView{
+		Headers:   headers,
+		Rows:      stringRows,
+		Cols:      cols,
+		Padding:   1,
+		BorderRow: true,
+		Zebra:     true,
+		// One column of horizontal padding on every cell (Padding: 1 above)
+		// keeps content off the vertical border. This is load-bearing for
+		// URL hints: when a link exactly fills its column, a terminal's link
+		// detector would otherwise grab the adjoining "│" (encoding it as
+		// %E2%94%82) and produce a dead link. The trailing pad space gives it
+		// a clean boundary to stop at.
+		Center: []int{0}, // STATUS
+		Style: func(row, col int) lipgloss.Style {
+			// Only the STATUS column carries semantic color; every other
+			// column inherits the base (zero) style.
+			if col != 0 || row < 0 || row >= len(severities) {
+				return lipgloss.NewStyle()
+			}
+			return severityStyle(severities[row])
+		},
+	}
 }
 
 // domainDisplayOrder is the canonical ordering for per-domain tables, mirroring
