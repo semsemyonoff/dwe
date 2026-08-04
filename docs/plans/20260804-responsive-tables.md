@@ -498,19 +498,19 @@ func stderrBudget() int { return styles.TermWidthOrZero(os.Stderr) } // Diagnost
 - Create: `internal/core/ui/render/table_view.go`
 - Create: `internal/core/ui/render/table_view_test.go`
 
-- [ ] define `tableView` with `Headers`, `Rows`, `Cols`, `Style`, `Padding`, `BorderRow`, `Zebra`, and
+- [x] define `tableView` with `Headers`, `Rows`, `Cols`, `Style`, `Padding`, `BorderRow`, `Zebra`, and
       `Center []int` (slice so the zero value centers nothing)
-- [ ] implement `renderTable(rows [][]string) string` — build via `baseTable`, compose the effective
+- [x] implement `renderTable(rows [][]string) string` — build via `baseTable`, compose the effective
       `StyleFunc` from `v.Style` plus `Padding`/`Zebra`/`Center`, apply `BorderRow`
-- [ ] implement `Fits(budget int) bool` delegating to `fitRows`, so callers can force a shared mode
-- [ ] implement `Render(budget int) string` routing to `renderTable`, with the record branch stubbed
+- [x] implement `Fits(budget int) bool` delegating to `fitRows`, so callers can force a shared mode
+- [x] implement `Render(budget int) string` routing to `renderTable`, with the record branch stubbed
       until task 5
-- [ ] write tests asserting the composed `StyleFunc` applies padding, zebra on odd rows, and centering
+- [x] write tests asserting the composed `StyleFunc` applies padding, zebra on odd rows, and centering
       only on the indices listed in `Center` (and nothing when `Center` is nil)
-- [ ] write a test asserting `lipgloss.NewStyle().Padding(0,0)` renders identically to
+- [x] write a test asserting `lipgloss.NewStyle().Padding(0,0)` renders identically to
       `lipgloss.NewStyle()` through `table.Table`, so no `if v.Padding > 0` guard is needed
-- [ ] write tests asserting `Render(0)` reproduces a `baseTable`-built equivalent byte-for-byte
-- [ ] run `go test ./internal/core/ui/render/` — must pass before task 5
+- [x] write tests asserting `Render(0)` reproduces a `baseTable`-built equivalent byte-for-byte
+- [x] run `go test ./internal/core/ui/render/` — must pass before task 5
 
 ### Task 5: Add record-layout rendering
 
@@ -519,20 +519,20 @@ func stderrBudget() int { return styles.TermWidthOrZero(os.Stderr) } // Diagnost
 - Create: `internal/core/ui/render/table_record_test.go`
 - Modify: `internal/core/ui/render/table_view.go`
 
-- [ ] implement `renderRecords(budget int) string` and wire it into `Render` as the `ok == false` branch
-- [ ] compose the header line: `roleGlyph` cells as bare prefixes, then `roleTitle` cells joined with
+- [x] implement `renderRecords(budget int) string` and wire it into `Render` as the `ok == false` branch
+- [x] compose the header line: `roleGlyph` cells as bare prefixes, then `roleTitle` cells joined with
       ` · `, skipping empty and `—` cells; wrap the header line at `budget` with continuation indent
-- [ ] render `roleBody` columns as indented unlabeled lines and `roleField` columns as aligned
+- [x] render `roleBody` columns as indented unlabeled lines and `roleField` columns as aligned
       `label  value` lines with lowercased headers styled via `styles.MutedStyle()`
-- [ ] wrap values at `budget − indent − labelWidth` using each column's `Wrap`; separate records with a
+- [x] wrap values at `budget − indent − labelWidth` using each column's `Wrap`; separate records with a
       blank line; apply `v.Style(row, col)` with no table decoration
-- [ ] write tests for the record shape (glyph prefix, title join, body line, field alignment,
+- [x] write tests for the record shape (glyph prefix, title join, body line, field alignment,
       blank-line separation)
-- [ ] write tests for edge cases: all-title row, empty/`—` cells skipped, very small budget still
+- [x] write tests for edge cases: all-title row, empty/`—` cells skipped, very small budget still
       renders, a URL longer than the budget stays on one unbroken line, ragged row
-- [ ] write a test asserting semantic color survives (a `DangerStyle` cell is still styled in record
+- [x] write a test asserting semantic color survives (a `DangerStyle` cell is still styled in record
       mode, with no padding or background composed on)
-- [ ] run `go test ./internal/core/ui/render/` — must pass before task 6
+- [x] run `go test ./internal/core/ui/render/` — must pass before task 6
 
 ### Task 6: Migrate `Table`, `DaemonTable`, `DeployStatus`, and `GitWorkspace` to `tableView`
 
