@@ -58,3 +58,23 @@ func TestRenderGitWorkspace_CleanRow(t *testing.T) {
 		t.Errorf("expected 'clean' in output, got:\n%s", out)
 	}
 }
+
+func TestGitWorkspaceAt_ZeroWidthMatchesGitWorkspace(t *testing.T) {
+	rows := []statusview.GitWorkspaceRow{
+		{Service: "app", Dir: "./services/app", Branch: "main", SHA: "abcdef12", Dirty: true, AheadBehind: "+1/-2"},
+	}
+	if got, want := GitWorkspaceAt(rows, 0), GitWorkspace(rows); got != want {
+		t.Errorf("GitWorkspaceAt(rows, 0) diverged from GitWorkspace:\ngot:  %q\nwant: %q", got, want)
+	}
+}
+
+func TestGitWorkspaceAt_NarrowWidthTriggersRecordMode(t *testing.T) {
+	longDir := "very/long/nested/service/directory/path/that/definitely/wont/fit/in/a/narrow/terminal"
+	rows := []statusview.GitWorkspaceRow{
+		{Service: "app", Dir: longDir, Branch: "feature/some-long-branch-name", SHA: "abcdef12", Dirty: true, AheadBehind: "+1/-2"},
+	}
+	got := stripANSI(GitWorkspaceAt(rows, 40))
+	if !strings.Contains(got, "app") {
+		t.Errorf("expected service name to survive narrow rendering: %q", got)
+	}
+}

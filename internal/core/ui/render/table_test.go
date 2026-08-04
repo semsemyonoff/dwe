@@ -50,6 +50,27 @@ func TestRenderDaemonTable_RendersRows(t *testing.T) {
 	}
 }
 
+func TestRenderDaemonTableAt_ZeroWidthMatchesDaemonTable(t *testing.T) {
+	resetStyles()
+	rows := []DaemonTableRow{
+		{ID: "services.main.queue", Params: "name=default", Container: "proj-php_queue_default", Uptime: "5m0s"},
+	}
+	if got, want := DaemonTableAt(rows, 0), DaemonTable(rows); got != want {
+		t.Errorf("DaemonTableAt(rows, 0) diverged from DaemonTable:\ngot:  %q\nwant: %q", got, want)
+	}
+}
+
+func TestRenderDaemonTableAt_NarrowWidthTriggersRecordMode(t *testing.T) {
+	resetStyles()
+	rows := []DaemonTableRow{
+		{ID: "services.main.queue", Params: "name=default,extra=an unusually long parameter value", Container: "proj-php_queue_default", Uptime: "5m0s"},
+	}
+	got := stripANSI(DaemonTableAt(rows, 20))
+	if !strings.Contains(got, "services.main.queue") {
+		t.Errorf("expected daemon ID to survive narrow rendering: %q", got)
+	}
+}
+
 func TestRenderDaemonTable_EmptyNameFallback(t *testing.T) {
 	resetStyles()
 	out := DaemonTable([]DaemonTableRow{
@@ -204,6 +225,32 @@ func TestRenderServicesTable_WithDirCol(t *testing.T) {
 	}
 	if !strings.Contains(out, "—") {
 		t.Errorf("empty Dir should render as em-dash:\n%s", out)
+	}
+}
+
+func TestRenderServicesTableAt_ZeroWidthMatchesServicesTable(t *testing.T) {
+	resetStyles()
+	rows := []ServiceTableRow{
+		{Name: "main", Dir: "./services/main", Container: "app-main", Mandatory: true, Running: true},
+	}
+	if got, want := ServicesTableAt(rows, nil, true, 0), ServicesTable(rows, nil, true); got != want {
+		t.Errorf("ServicesTableAt(rows, nil, true, 0) diverged from ServicesTable:\ngot:  %q\nwant: %q", got, want)
+	}
+}
+
+func TestRenderServicesTableAt_NarrowWidthTriggersRecordMode(t *testing.T) {
+	resetStyles()
+	longURL := "https://example.com/some/very/long/path/that/should/not/be/split/because/urls/stay/whole"
+	rows := []ServiceTableRow{
+		{
+			Name: "main", Dir: "very/long/nested/service/directory/path/that/wont/fit/narrow", Container: "app-main",
+			Mandatory: true, Running: true,
+			Extras: map[string]string{"ENDPOINT": longURL},
+		},
+	}
+	got := stripANSI(ServicesTableAt(rows, []string{"ENDPOINT"}, true, 60))
+	if !strings.Contains(got, longURL) {
+		t.Errorf("expected long URL to stay intact in record mode:\n%s", got)
 	}
 }
 
@@ -365,6 +412,31 @@ func TestRenderDeployStatus_Basic(t *testing.T) {
 		if !strings.Contains(out, want) {
 			t.Errorf("output missing %q\nfull output:\n%s", want, out)
 		}
+	}
+}
+
+func TestRenderDeployStatusAt_ZeroWidthMatchesDeployStatus(t *testing.T) {
+	resetStyles()
+	rows := []DeployStatusRow{
+		{Service: "main", Status: "deployed", ConfigDelta: "ok", PrevHashShort: "abc12345", CurrHashShort: "abc12345"},
+	}
+	if got, want := DeployStatusAt(rows, 0), DeployStatus(rows); got != want {
+		t.Errorf("DeployStatusAt(rows, 0) diverged from DeployStatus:\ngot:  %q\nwant: %q", got, want)
+	}
+}
+
+func TestRenderDeployStatusAt_NarrowWidthTriggersWrap(t *testing.T) {
+	resetStyles()
+	rows := []DeployStatusRow{
+		{
+			Service: "main", Status: "failed", ConfigDelta: "changed",
+			PrevHashShort: "abc12345", CurrHashShort: "def12345",
+			LastFailedPhase: "setup", LastFailedStep: "a very long step name that should wrap under pressure",
+		},
+	}
+	got := stripANSI(DeployStatusAt(rows, 40))
+	if !strings.Contains(got, "main") {
+		t.Errorf("expected service name to survive narrow rendering: %q", got)
 	}
 }
 

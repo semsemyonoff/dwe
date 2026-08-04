@@ -144,7 +144,14 @@ func formatPortsCell(ports map[string]int) string {
 // dwe treats per-developer port and host overrides as a core feature, so
 // these are always-visible built-in columns rather than opt-in extras.
 func ServicesTable(rows []ServiceTableRow, extraCols []string, withDirCol bool) string {
-	return servicesTableView(rows, extraCols, withDirCol).Render(0)
+	return ServicesTableAt(rows, extraCols, withDirCol, 0)
+}
+
+// ServicesTableAt is ServicesTable at an explicit width budget (0 =
+// unbounded). Callers that already know their own render width — the status
+// TUI panel — use this instead of the sink-probing ServicesTable.
+func ServicesTableAt(rows []ServiceTableRow, extraCols []string, withDirCol bool, width int) string {
+	return servicesTableView(rows, extraCols, withDirCol).Render(width)
 }
 
 // servicesTableView builds the tableView backing ServicesTable, split out so
@@ -281,6 +288,13 @@ type DaemonTableRow struct {
 // DaemonTable renders a styled Lipgloss table of running daemons.
 // Columns: ID, PARAMS, CONTAINER, UPTIME. Empty input returns an empty string.
 func DaemonTable(rows []DaemonTableRow) string {
+	return DaemonTableAt(rows, 0)
+}
+
+// DaemonTableAt is DaemonTable at an explicit width budget (0 = unbounded).
+// Callers that already know their own render width — the status TUI panel —
+// use this instead of the sink-probing DaemonTable.
+func DaemonTableAt(rows []DaemonTableRow, width int) string {
 	if len(rows) == 0 {
 		return ""
 	}
@@ -300,7 +314,7 @@ func DaemonTable(rows []DaemonTableRow) string {
 		{},
 	}
 	v := tableView{Headers: headers, Rows: stringRows, Cols: cols}
-	return v.Render(0)
+	return v.Render(width)
 }
 
 // DeployStatusRow holds data for one row in the deploy status table.
@@ -348,6 +362,13 @@ func statusStyleForStatus(status string) lipgloss.Style {
 // DeployStatus renders a styled Lipgloss table of deploy status per service.
 // Columns: SERVICE, STATUS, CONFIG, PREV HASH, CURR HASH, LAST FAILED.
 func DeployStatus(rows []DeployStatusRow) string {
+	return DeployStatusAt(rows, 0)
+}
+
+// DeployStatusAt is DeployStatus at an explicit width budget (0 =
+// unbounded). Callers that already know their own render width — the status
+// TUI panel — use this instead of the sink-probing DeployStatus.
+func DeployStatusAt(rows []DeployStatusRow, width int) string {
 	headers := []string{"SERVICE", "STATUS", "CONFIG", "PREV HASH", "CURR HASH", "LAST FAILED"}
 	stringRows := make([][]string, len(rows))
 	statusStyles := make([]string, len(rows))
@@ -400,5 +421,5 @@ func DeployStatus(rows []DeployStatusRow) string {
 			}
 		},
 	}
-	return v.Render(0)
+	return v.Render(width)
 }

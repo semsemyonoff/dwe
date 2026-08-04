@@ -616,24 +616,45 @@ which calls `in.IsRunning(svc.Container)` for every enabled or mandatory service
 - Modify: `internal/core/project/stack/status_test.go`
 - Modify: `internal/core/project/stack/daemons_test.go`
 
-- [ ] split each services section into a collect half and a render half — `CollectApps(in)
+- [x] split each services section into a collect half and a render half — `CollectApps(in)
       ([]render.ServiceTableRow, []error)` (evaluates `IsRunning`, resolves custom extra columns) and
       `RenderAppsRows(rows, width) string` — likewise for Tools and Infra; keep the existing
       `RenderApps(in)` as a thin collect-then-render wrapper so `cli/` callers are unchanged
-- [ ] apply the same split to `RenderTopology` (`status.go:105`) — it also reaches `collectRowsByType`
-      (`status.go:189`) — and to `DeployStatus` (`deploystatus.go:40`)
-- [ ] add `Width int` to `stack.StatusInput` (`status.go:28`) — `0` means "resolve from the sink" —
+- [x] apply the same split to `RenderTopology` (`status.go:105`) — it also reaches `collectRowsByType`
+      (`status.go:189`) — and to `DeployStatus` (`deploystatus.go:40`) — `DeployStatus` got a full
+      `CollectDeployStatus`/`RenderDeployStatusRows` split. `RenderTopology` needed no code change: it
+      only ever consumed the caller-supplied `in.Topo`/`in.TopoStatus` (populated by the separate
+      `stack.ResolveTopology`, called once by `cli/status`) and never reached `collectRowsByType` at
+      all — that discovery-note line reference was stale. `render.Topology` renders an indented
+      dependency tree, not a `tableView`, so it has no shrink/record-mode concept to thread a width
+      through; adding one would be an unused parameter with no behavior, which the plan's own YAGNI
+      stance (§ Solution Overview) rules out
+- [x] add `Width int` to `stack.StatusInput` (`status.go:28`) — `0` means "resolve from the sink" —
       and consume it in the wrapper forms
-- [ ] add `render.GitWorkspaceAt(rows, width)` and reduce `GitWorkspace` to a call with width `0`,
+- [x] add `render.GitWorkspaceAt(rows, width)` and reduce `GitWorkspace` to a call with width `0`,
       mirroring the `SectionTitleAt` (`info.go:194`) naming precedent
-- [ ] add `stack.RenderDaemonsAt(rows, width)` and reduce `RenderDaemons` (`daemons.go:246`) to a call
+- [x] add `stack.RenderDaemonsAt(rows, width)` and reduce `RenderDaemons` (`daemons.go:246`) to a call
       with width `0` — reached only from the TUI, and missed in the first draft
-- [ ] verify the three unchanged public consumers still render identically: `cli/status/status.go:354`
+- [x] verify the three unchanged public consumers still render identically: `cli/status/status.go:354`
       /`:379`/`:388`, `cli/status/deploy.go:42`, and `cli/service/service_list.go:99-101` (`dwe services`)
-- [ ] write a test asserting `CollectApps` calls `IsRunning` and `RenderAppsRows` never does — this is
-      the contract Task 11's memoisation depends on
-- [ ] write tests asserting an explicit `Width` overrides the probe and that `Width: 0` falls back
-- [ ] run `make test` — must pass before task 10
+      — all five call sites still invoke `stack.RenderApps(in)` / `RenderTools`/`RenderInfra` /
+      `stack.DeployStatus(in)` / `stack.RenderTopology(in)` / `stack.RenderDaemons(rows)` /
+      `render.GitWorkspace(rows)` with unchanged signatures, and `in.Width` defaults to the zero value
+      everywhere `cli/` constructs a `StatusInput`, so behavior is byte-identical
+- [x] write a test asserting `CollectApps` calls `IsRunning` and `RenderAppsRows` never does — this is
+      the contract Task 11's memoisation depends on (`TestCollectApps_CallsIsRunning`,
+      `TestRenderAppsRows_NeverCallsIsRunning` in `status_test.go` — the latter is a type-level proof:
+      `RenderAppsRows` takes a `ServiceSection`, not an `IsRunning` callback, so there is nothing to spy
+      on; the test asserts the pre-collected `Running` value still renders)
+- [x] write tests asserting an explicit `Width` overrides the probe and that `Width: 0` falls back
+      (`TestRenderTypeSection_ExplicitWidthUsesServicesTableAt`,
+      `TestDeployStatus_ExplicitWidthUsesDeployStatusAt` for the override; the `*_ZeroWidthMatches*`
+      tests across `daemons_test.go` / `deploystatus_test.go` / `gitworkspace_test.go` / `table_test.go`
+      for the `Width: 0` fallback — the sink-aware probe itself lands in Task 12, so today "falls back"
+      means "renders unbounded", which is what these tests pin)
+- [x] run `make test` — must pass before task 10 (`internal/core/project/stack` and
+      `internal/core/ui/render` pass; `internal/cli/status`/`internal/cli/service` require a Docker
+      daemon unavailable in this sandbox — the same pre-existing environment noise recorded in Task 8)
 
 ### Task 10: Move status-TUI rendering out of the load path — no behavior change
 

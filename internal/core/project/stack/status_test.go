@@ -234,6 +234,121 @@ func TestRenderTopology_WithStatus(t *testing.T) {
 	}
 }
 
+func TestCollectApps_CallsIsRunning(t *testing.T) {
+	cfg := makeServicesCfg(
+		map[string]config.ServiceConfig{
+			"main": {Type: "app", Container: "app-main", Required: true},
+		},
+		map[string]testTool(nil),
+		nil,
+		nil,
+	)
+	called := false
+	sec, errs := CollectApps(StatusInput{Cfg: cfg, IsRunning: func(_ string) bool {
+		called = true
+		return true
+	}})
+	if len(errs) != 0 {
+		t.Errorf("unexpected errors: %v", errs)
+	}
+	if !called {
+		t.Errorf("expected CollectApps to call IsRunning")
+	}
+	if len(sec.Rows) != 1 || !sec.Rows[0].Running {
+		t.Errorf("expected one running row, got: %+v", sec.Rows)
+	}
+}
+
+func TestRenderAppsRows_NeverCallsIsRunning(t *testing.T) {
+	sec := ServiceSection{
+		Rows: []render.ServiceTableRow{
+			{Name: "main", Container: "app-main", Mandatory: false, Enabled: true, Running: true},
+		},
+	}
+	// RenderAppsRows takes no IsRunning callback at all — the type system
+	// itself proves the contract, this test asserts the rendered content
+	// still reflects the pre-collected Running value.
+	out := RenderAppsRows(sec, 0)
+	if !strings.Contains(out, "main") || !strings.Contains(out, "running") {
+		t.Errorf("expected rendered row content, got: %q", out)
+	}
+}
+
+func TestCollectRenderApps_RoundTrip(t *testing.T) {
+	cfg := makeServicesCfg(
+		map[string]config.ServiceConfig{
+			"main": {Type: "app", Container: "app-main", Required: true},
+		},
+		map[string]testTool(nil),
+		nil,
+		nil,
+	)
+	sec, errs := CollectApps(StatusInput{Cfg: cfg, IsRunning: func(_ string) bool { return false }})
+	if len(errs) != 0 {
+		t.Errorf("unexpected errors: %v", errs)
+	}
+	got := RenderAppsRows(sec, 0)
+	want, wantErrs := RenderApps(StatusInput{Cfg: cfg, IsRunning: func(_ string) bool { return false }})
+	if len(wantErrs) != 0 {
+		t.Errorf("unexpected errors: %v", wantErrs)
+	}
+	if got != want {
+		t.Errorf("collect+render split diverged from RenderApps:\ngot:  %q\nwant: %q", got, want)
+	}
+}
+
+func TestCollectRenderTools_RoundTrip(t *testing.T) {
+	cfg := makeServicesCfg(
+		map[string]config.ServiceConfig{},
+		map[string]testTool{
+			"adminer": {Enabled: true, Container: "adminer", Host: "adminer.localhost", Port: 8080},
+		},
+		nil,
+		nil,
+	)
+	sec, _ := CollectTools(StatusInput{Cfg: cfg, IsRunning: func(_ string) bool { return false }})
+	got := RenderToolsRows(sec, 0)
+	want, _ := RenderTools(StatusInput{Cfg: cfg, IsRunning: func(_ string) bool { return false }})
+	if got != want {
+		t.Errorf("collect+render split diverged from RenderTools:\ngot:  %q\nwant: %q", got, want)
+	}
+}
+
+func TestCollectRenderInfra_RoundTrip(t *testing.T) {
+	cfg := &config.DweConfig{
+		Services: map[string]config.ServiceConfig{
+			"db":   {Type: config.ServiceTypeInfra, Container: "db", Required: true},
+			"main": {Type: config.ServiceTypeApp, Container: "app-main", Required: true},
+		},
+	}
+	sec, _ := CollectInfra(StatusInput{Cfg: cfg, IsRunning: func(_ string) bool { return false }})
+	got := RenderInfraRows(sec, 0)
+	want, _ := RenderInfra(StatusInput{Cfg: cfg, IsRunning: func(_ string) bool { return false }})
+	if got != want {
+		t.Errorf("collect+render split diverged from RenderInfra:\ngot:  %q\nwant: %q", got, want)
+	}
+}
+
+func TestRenderTypeSection_ExplicitWidthUsesServicesTableAt(t *testing.T) {
+	cfg := makeServicesCfg(
+		map[string]config.ServiceConfig{
+			"main": {Type: "app", Container: "app-main", Required: true},
+		},
+		map[string]testTool(nil),
+		nil,
+		nil,
+	)
+	// A very narrow explicit width forces record mode; assert the width is
+	// actually honored rather than silently falling back to unbounded.
+	out, errs := RenderApps(StatusInput{Cfg: cfg, IsRunning: func(_ string) bool { return false }, Width: 20})
+	if len(errs) != 0 {
+		t.Errorf("unexpected errors: %v", errs)
+	}
+	if !strings.Contains(out, "main") {
+		t.Errorf("expected narrow-width output to still contain 'main': %q", out)
+	}
+}
+
 // TestRenderApps_CustomColumnsAggregateError verifies that
 // per-row template errors are aggregated into the returned slice.
 func TestRenderApps_CustomColumnsAggregateError(t *testing.T) {

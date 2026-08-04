@@ -13,16 +13,16 @@ import (
 	sharedrender "github.com/semsemyonoff/dwe/internal/shared/render"
 )
 
-// DeployStatus returns the Deploy Status section title + table as a
-// single string. Returns empty string when in.State is nil or no tracked
-// service yields a row.
-func DeployStatus(in StatusInput) string {
+// CollectDeployStatus builds the Deploy Status section's rows from in.State
+// joined against current config hashes. Returns nil when in.State is nil or
+// no tracked service yields a row. Pure — no Docker probe involved.
+func CollectDeployStatus(in StatusInput) []render.DeployStatusRow {
 	if in.State == nil {
-		return ""
+		return nil
 	}
 	view := BuildDeployStatusView(in.State, in.Cfg, in.SvcDeploys, in.Tracked)
 	if len(view.Rows) == 0 {
-		return ""
+		return nil
 	}
 
 	uiRows := make([]render.DeployStatusRow, len(view.Rows))
@@ -37,7 +37,32 @@ func DeployStatus(in StatusInput) string {
 			LastFailedStep:  row.LastFailedStep,
 		}
 	}
-	return wrapSection("Deploy Status", render.DeployStatus(uiRows))
+	return uiRows
+}
+
+// RenderDeployStatusRows renders a previously-collected deploy-status
+// snapshot as the section title + table, at the given width (0 = unbounded).
+// The pure counterpart to CollectDeployStatus, used by the status TUI which
+// already knows its panel width.
+func RenderDeployStatusRows(rows []render.DeployStatusRow, width int) string {
+	if len(rows) == 0 {
+		return ""
+	}
+	return wrapSection("Deploy Status", render.DeployStatusAt(rows, width))
+}
+
+// DeployStatus returns the Deploy Status section title + table as a
+// single string. Returns empty string when in.State is nil or no tracked
+// service yields a row.
+func DeployStatus(in StatusInput) string {
+	rows := CollectDeployStatus(in)
+	if len(rows) == 0 {
+		return ""
+	}
+	if in.Width > 0 {
+		return RenderDeployStatusRows(rows, in.Width)
+	}
+	return wrapSection("Deploy Status", render.DeployStatus(rows))
 }
 
 // BuildDeployStatusView assembles a view model joining current config hashes

@@ -16,6 +16,13 @@ import (
 // "—". Rows with Err != nil render the same way; the caller is expected to
 // emit a single aggregate warning to stderr counting Err != nil rows.
 func GitWorkspace(rows []statusview.GitWorkspaceRow) string {
+	return GitWorkspaceAt(rows, 0)
+}
+
+// GitWorkspaceAt is GitWorkspace at an explicit width budget (0 =
+// unbounded). Callers that already know their own render width — the status
+// TUI panel — use this instead of the sink-probing GitWorkspace.
+func GitWorkspaceAt(rows []statusview.GitWorkspaceRow, width int) string {
 	headers := []string{"SERVICE", "DIR", "BRANCH", "SHA", "DIRTY", "AHEAD/BEHIND"}
 	stringRows := make([][]string, len(rows))
 	dirtyStyles := make([]bool, len(rows))
@@ -66,5 +73,5 @@ func GitWorkspace(rows []statusview.GitWorkspaceRow) string {
 			return lipgloss.NewStyle()
 		},
 	}
-	return v.Render(0)
+	return v.Render(width)
 }

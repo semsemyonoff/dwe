@@ -244,6 +244,13 @@ func sanitiseDisplay(s string) string {
 // and any parse errors collected while building the rows. Empty rows → empty
 // string so the orchestrator can hide the section entirely.
 func RenderDaemons(rows []statusview.DaemonRow) (string, []error) {
+	return RenderDaemonsAt(rows, 0)
+}
+
+// RenderDaemonsAt is RenderDaemons at an explicit width budget (0 =
+// unbounded). Callers that already know their own render width — the status
+// TUI panel — use this instead of the sink-probing RenderDaemons.
+func RenderDaemonsAt(rows []statusview.DaemonRow, width int) (string, []error) {
 	if len(rows) == 0 {
 		return "", nil
 	}
@@ -256,7 +263,7 @@ func RenderDaemons(rows []statusview.DaemonRow) (string, []error) {
 			Uptime:    formatUptime(r.Uptime),
 		}
 	}
-	body := render.DaemonTable(tableRows)
+	body := render.DaemonTableAt(tableRows, width)
 	if body == "" {
 		return "", nil
 	}

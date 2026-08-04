@@ -33,6 +33,11 @@ type StatusInput struct {
 	State      *journal.ProjectState
 	SvcDeploys map[string]*config.ServiceDeployConfig
 	Tracked    []string
+	// Width is the render width budget for table sections (0 = resolve from
+	// the sink — i.e. fall back to the stdout-probing render.* entry points).
+	// Set by callers that already know their own width, such as the status
+	// TUI panel; cli/status leaves it 0.
+	Width int
 }
 
 // HealthIndicator returns just the health indicator glyph and state (e.g., "● running")
@@ -49,8 +54,82 @@ func RenderHealth(in StatusInput) string {
 	return "DWE: " + HealthIndicator(in)
 }
 
+// ServiceSection bundles a services section's collected rows and its stable
+// custom-column order — the extra-column names, in the deterministic order
+// BuildCustomColumns derives from config. Rendering needs both: the render
+// half has no config to re-derive the column order from, so Collect* carries
+// it alongside the rows.
+type ServiceSection struct {
+	Rows      []render.ServiceTableRow
+	ExtraCols []string
+}
+
+// CollectApps collects the Apps section's rows (services with type=app),
+// including the IsRunning probe and custom status-column evaluation. Callers
+// that only need to render — the status TUI — pass the result to
+// RenderAppsRows without re-probing Docker.
+func CollectApps(in StatusInput) (ServiceSection, []error) {
+	return collectServiceSection(in, config.ServiceTypeApp)
+}
+
+// CollectTools collects the Tools section's rows (services with type=tool).
+// See CollectApps.
+func CollectTools(in StatusInput) (ServiceSection, []error) {
+	return collectServiceSection(in, config.ServiceTypeTool)
+}
+
+// CollectInfra collects the Infra section's rows (services with type=infra).
+// See CollectApps.
+func CollectInfra(in StatusInput) (ServiceSection, []error) {
+	return collectServiceSection(in, config.ServiceTypeInfra)
+}
+
+func collectServiceSection(in StatusInput, t config.ServiceType) (ServiceSection, []error) {
+	rows := collectRowsByType(in.Cfg, in.IsRunning, &t)
+	extraCols := BuildCustomColumns(in.Cfg, t)
+	var errs []error
+	if len(extraCols) > 0 {
+		for i, row := range rows {
+			svc := in.Cfg.Services[row.Name]
+			data := buildServiceTemplateData(in.Cfg, svc)
+			cells, cellErrs := RenderCustomCells(svc.Status, data)
+			if len(cellErrs) > 0 {
+				errs = append(errs, cellErrs...)
+			}
+			rows[i].Extras = cells
+		}
+	}
+	return ServiceSection{Rows: rows, ExtraCols: extraCols}, errs
+}
+
+// RenderAppsRows renders a previously-collected Apps ServiceSection as the
+// section title + table, at the given width (0 = unbounded). It never probes
+// Docker or a sink — the pure counterpart to CollectApps, used by the status
+// TUI which already knows its panel width.
+func RenderAppsRows(sec ServiceSection, width int) string {
+	return renderServiceSectionAt(sec, "Apps", true, width)
+}
+
+// RenderToolsRows is RenderAppsRows for the Tools section. See CollectTools.
+func RenderToolsRows(sec ServiceSection, width int) string {
+	return renderServiceSectionAt(sec, "Tools", false, width)
+}
+
+// RenderInfraRows is RenderAppsRows for the Infra section. See CollectInfra.
+func RenderInfraRows(sec ServiceSection, width int) string {
+	return renderServiceSectionAt(sec, "Infra", false, width)
+}
+
+func renderServiceSectionAt(sec ServiceSection, title string, withDirCol bool, width int) string {
+	if len(sec.Rows) == 0 {
+		return ""
+	}
+	return wrapSection(title, render.ServicesTableAt(sec.Rows, sec.ExtraCols, withDirCol, width))
+}
+
 // RenderApps returns the Apps section (services with type=app) title + table.
-// Returns ("", nil) when no apps are configured.
+// Returns ("", nil) when no apps are configured. Thin collect-then-render
+// wrapper kept for cli/ callers; see CollectApps / RenderAppsRows for the split.
 func RenderApps(in StatusInput) (string, []error) {
 	return renderTypeSection(in, config.ServiceTypeApp, "Apps", true)
 }
@@ -68,24 +147,14 @@ func RenderInfra(in StatusInput) (string, []error) {
 }
 
 func renderTypeSection(in StatusInput, t config.ServiceType, title string, withDirCol bool) (string, []error) {
-	rows := collectRowsByType(in.Cfg, in.IsRunning, &t)
-	if len(rows) == 0 {
-		return "", nil
+	sec, errs := collectServiceSection(in, t)
+	if len(sec.Rows) == 0 {
+		return "", errs
 	}
-	extraCols := BuildCustomColumns(in.Cfg, t)
-	var errs []error
-	if len(extraCols) > 0 {
-		for i, row := range rows {
-			svc := in.Cfg.Services[row.Name]
-			data := buildServiceTemplateData(in.Cfg, svc)
-			cells, cellErrs := RenderCustomCells(svc.Status, data)
-			if len(cellErrs) > 0 {
-				errs = append(errs, cellErrs...)
-			}
-			rows[i].Extras = cells
-		}
+	if in.Width > 0 {
+		return wrapSection(title, render.ServicesTableAt(sec.Rows, sec.ExtraCols, withDirCol, in.Width)), errs
 	}
-	return wrapSection(title, render.ServicesTable(rows, extraCols, withDirCol)), errs
+	return wrapSection(title, render.ServicesTable(sec.Rows, sec.ExtraCols, withDirCol)), errs
 }
 
 // wrapSection renders a status section as a SectionTitle line followed by the

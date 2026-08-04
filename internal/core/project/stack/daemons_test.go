@@ -150,6 +150,43 @@ func TestRenderDaemons_TableContents(t *testing.T) {
 	}
 }
 
+func TestRenderDaemonsAt_ExplicitWidthMatchesRenderDaemons(t *testing.T) {
+	rows := []statusview.DaemonRow{
+		{ID: "services.main.queue", Params: "name=default", Container: "proj-php_queue_default", Uptime: 5 * time.Minute},
+	}
+	want, wantErrs := RenderDaemons(rows)
+	got, gotErrs := RenderDaemonsAt(rows, 0)
+	if got != want {
+		t.Errorf("RenderDaemonsAt(rows, 0) diverged from RenderDaemons:\ngot:  %q\nwant: %q", got, want)
+	}
+	if len(gotErrs) != len(wantErrs) {
+		t.Errorf("error count mismatch: got %v want %v", gotErrs, wantErrs)
+	}
+}
+
+func TestRenderDaemonsAt_NarrowWidthStillContainsContent(t *testing.T) {
+	rows := []statusview.DaemonRow{
+		{ID: "services.main.queue", Params: "name=default,extra=value,more=stuff", Container: "proj-php_queue_default", Uptime: 5 * time.Minute},
+	}
+	body, errs := RenderDaemonsAt(rows, 20)
+	if len(errs) != 0 {
+		t.Errorf("unexpected errs: %v", errs)
+	}
+	if !strings.Contains(body, "services.main.queue") {
+		t.Errorf("expected daemon ID to survive narrow rendering: %q", body)
+	}
+}
+
+func TestRenderDaemonsAt_EmptyHidesSection(t *testing.T) {
+	body, errs := RenderDaemonsAt(nil, 20)
+	if body != "" {
+		t.Errorf("expected empty body, got %q", body)
+	}
+	if len(errs) != 0 {
+		t.Errorf("expected no errs, got %v", errs)
+	}
+}
+
 func TestFormatUptime(t *testing.T) {
 	cases := []struct {
 		d    time.Duration
