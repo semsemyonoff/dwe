@@ -134,8 +134,11 @@ but nine test files still assert the old behaviour and must be migrated in Task 
 4c. **Render into a copy.** `With` and `Check` are reference types shared with the loaded
    config; in-place rendering makes `ProjectConfigHash` depend on deploy scope and makes a
    second resolve double-render. Deep-copy before rendering.
-4d. **Only render strings containing `${…}`** — otherwise `RenderCommand` executes stray
-   `{{ }}` and breaks the `docker inspect -f '{{.State.Status}}'` idiom at resolve time.
+4d. **Only render strings containing a `${…}` with a KNOWN head** — a bare
+   `VarPattern` match is not enough, because a shell-style `${CONTAINER}` would pull the
+   string into the renderer and the untouched `{{ }}` beside it would then be executed
+   against `RenderContext`. Mixed known-head + raw `{{ }}` in one field is unsupported and
+   documented as such.
 4e. **Rendered values now reach output surfaces.** After resolve-time rendering,
    `StepCommand` prints substituted values — so `dwe deploy plan`, `--format shell`, the
    Task 12 JSON payload, the pipeline log and `trace.Command` under `-v` will all show the
@@ -264,15 +267,26 @@ on which services were resolved (`--service` narrows the set). Deep-copy `With` 
 `*Check` before rendering, and add a test that resolving the same `*DweConfig` twice yields
 byte-identical results.
 
-**Only render strings that actually contain `${…}`.** `RenderCommand` executes anything
-containing `{{ }}` after `CompileVarSyntax`, so a plain `docker inspect -f '{{.State.Status}}'`
-would fail at resolve with `can't evaluate field State in type *tpl.RenderContext` — an
-idiom that works today because pipeline `cmd:` is not rendered at all. Gate each string on
-`tpl.VarPattern.MatchString(s)`; a string with no `${…}` passes through verbatim. Decide and
-test the mixed case (`${vars.x}` and `{{ … }}` in one string) explicitly — the honest
-default is to render it and let the Go-template error surface, since the author opted in.
-(Checked: no `deploy.yml` in the five workspaces uses `{{ }}` today, so nothing existing
-breaks — but the idiom is common enough that this must not be left to chance.)
+**Only render strings that contain a KNOWN head — not merely any `${…}`.**
+`RenderCommand` (`render_command.go:267-269`) returns early only when the compiled string
+has no `{{` left; otherwise it parses and executes. So a plain
+`docker inspect -f '{{.State.Status}}'` would fail at resolve with
+`can't evaluate field State in type *tpl.RenderContext` — an idiom that works today because
+pipeline `cmd:` is not rendered at all.
+
+A gate on `tpl.VarPattern.MatchString(s)` is **not sufficient**:
+`docker inspect -f '{{.State.Status}}' ${CONTAINER}` matches the pattern via `${CONTAINER}`,
+enters rendering, keeps `${CONTAINER}` literal per the whitelist — and then still explodes
+on the untouched `{{.State.Status}}`. Gate instead on **"contains at least one `${…}` whose
+head is in `KnownVarHeads`"**, so a command using only shell-style `${VAR}` plus Go-template
+text is never rendered at all.
+
+**Mixed known-head + raw `{{ }}` in one field is unsupported, by decision.** Once a string
+legitimately needs `${vars.x}`, any raw `{{ … }}` beside it will be executed against
+`RenderContext` and fail. Document that as a limitation with a clear error, rather than
+building a `${…}`-only renderer in `tpl` — that would be a new primitive with its own
+divergence risk, for a case no workspace exercises. (Checked: no `deploy.yml` in the five
+workspaces uses `{{ }}` at all today.)
 
 **Hashing `vars` is required for the plan to achieve anything.** Resolve-time rendering
 makes `StepHash` sensitive to `vars`, but execution never gets that far: `deploy.go:557`
@@ -379,8 +393,15 @@ the port is display-only, that `local.yml` overrides will not move the binding, 
       is hashed by `StepHash`, so leaving it unrendered is an asymmetry)
 - [ ] render into a **copy**: deep-copy `With`, clone `*Check`; never mutate `cfg` /
       `deployCfg` (constraint 4c)
-- [ ] gate every string on `tpl.VarPattern.MatchString` so `{{ }}`-only commands pass
-      through verbatim (constraint 4d)
+- [ ] gate every string on "**contains a `${…}` with a known head**" — not on
+      `VarPattern.MatchString`, which would still drag
+      `docker inspect -f '{{.State.Status}}' ${CONTAINER}` into the renderer and fail on the
+      untouched Go template (constraint 4d)
+- [ ] render the runtime `when` of **phases** and of **parallel group parents** too, not
+      only leaf steps: `phaseRuntimeWhen` is stored directly and `resolveParallelStep`
+      resolves the group's own `when` before its substeps reach `resolveLeafStep`, so a
+      `${vars.*}` there would stay unrendered while the executor evaluates it from the
+      stored pointer. Clone-then-render each condition at all three scopes
 - [ ] decide what a `RenderCommand` error does at resolve time (fail the resolve vs leave
       the literal). Note `RenderCommand` calls `validateSnapshotScope` with
       `SnapshotScopeNone`, so `${snapshot.x}` in a pipeline step becomes a hard resolve
@@ -394,9 +415,12 @@ the port is display-only, that `local.yml` overrides will not move the binding, 
       resolves with substituted values; a `type: command` step's
       `with: {repo: "${vars.source.repo}"}` does too (Plan B's dependency); `when.Cmd`
       renders (Plan B's symmetry requirement)
-- [ ] write tests: `cmd: 'echo ${HOME}'` reaches `sh` with `${HOME}` intact; and
-      `cmd: "docker inspect -f '{{.State.Status}}' x"` resolves **unchanged** rather than
-      erroring (the regression that would break a common idiom)
+- [ ] write tests: `cmd: 'echo ${HOME}'` reaches `sh` with `${HOME}` intact;
+      `cmd: "docker inspect -f '{{.State.Status}}' x"` resolves **unchanged**; and the
+      **mixed** `cmd: "docker inspect -f '{{.State.Status}}' ${CONTAINER}"` also resolves
+      unchanged (this is the case a bare `VarPattern` gate would break)
+- [ ] write tests for the three `when` scopes separately: phase-level, parallel-group
+      parent, and leaf step
 - [ ] write a test: resolving the same config twice is idempotent (guards against
       double-render and against in-place mutation)
 - [ ] write a test in `envtest` pinning that scenario `cmd:` keeps `${HOME}` literal
@@ -418,12 +442,17 @@ nothing would re-run.
 - [ ] include the `vars` block in `ProjectConfigHash` (owner decision: the whole block, not
       only referenced paths — simpler and cannot drift out of sync with the reference
       scanner)
-- [ ] decide whether `ServiceConfigHash` needs it too, or whether the project hash covers
-      the case (a per-service deploy referencing `${vars.*}` is the scenario to reason about)
-- [ ] write an **end-to-end** test: change a `vars:` value referenced by a step → the next
-      `deploy run` executes that step instead of reporting `already up-to-date`. A test that
-      only asserts "StepHash changed" is tautological — `StepHash` is a pure function of the
-      step — and would pass while the behaviour stays broken
+- [ ] **`ServiceConfigHash` must carry it too — this is a requirement, not a decision.**
+      A scoped deploy never consults the project hash: `computeScopeState`
+      (`deploy.go:847-851`) compares `svc.ConfigHash == serviceHashes[name]` for a
+      single-service run, and `makeSkipDecider` uses `serviceHashes` for service-scoped
+      steps as well. So `dwe deploy run --service app` after changing a var referenced only
+      by `services/app/deploy.yml` would still report `already up-to-date` if only the
+      project hash gained `vars`
+- [ ] write an **end-to-end** test for **both** paths: change a `vars:` value referenced by
+      a step → the next `deploy run` executes that step, **and** `deploy run --service app`
+      does too. A test that only asserts "StepHash changed" is tautological — `StepHash` is
+      a pure function of the step — and would pass while the behaviour stays broken
 - [ ] write a test that changing an unrelated `vars:` entry also invalidates (accepted
       cost of hashing the whole block — pin it so the trade-off is visible)
 - [ ] record the one-time re-run in the release notes (constraint: every existing project's
@@ -443,6 +472,10 @@ nothing would re-run.
 - [ ] (TDD) write the fixture: a service `deploy.yml` referencing `${vars.opechatka}` plus
       a valid `${vars.source.repo}`, and the test asserting exactly one warning naming the
       file, step and field
+- [ ] make `varsusage`'s `with:` scanning **recurse** through nested maps and sequences
+      first. Today it looks only at direct scalar values immediately under a `with` mapping
+      (`scan.go:271-277`), while Task 2 renders string leaves at any depth — so without this
+      the renderer and the validator disagree about which references exist
 - [ ] extend `varsusage` with an **enumeration** entry point. Today it is query-driven —
       `ScanUsages(projectRoot, queryPath)` looks for one known path and matches on dot
       boundaries, and `Usage` carries `File/Line/Kind/Text` but **not the referenced

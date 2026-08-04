@@ -100,12 +100,14 @@ that is stated deliberately rather than discovered mid-implementation.
 3a. **The INPUT contract — this is where the closed injection hole can reopen.** The field
    holds a host shell *program*, so whatever renders its text decides whether caller bytes
    can reach it. Non-negotiable:
-   - render it through **`runio.withoutArgs(rc)`**, never a plain `rc`. The comment at
-     `runtime/internal/runio/args.go:44-49` states the reason: leaving `Args` visible lets
-     the raw Go-template form `{{ index .Args 0 }}` interpolate a caller-controlled string
-     straight into program text — "the exact hole the `"$@"` transport exists to close".
-     Neither `RenderShellCommand` nor `RenderArgvWithArgs` renders without it; a new field
-     is easy to miss.
+   - render it through a **new exported helper in `runio`** (e.g.
+     `RenderArgvAppendFrom`) that internally uses the existing private `withoutArgs(rc)`
+     and centralizes the `${args}` rejection. `withoutArgs` (`args.go:107-117`) is
+     unexported, so `runners/service` and `runners/host` cannot call it directly — and
+     copying it ad hoc into two packages is exactly how the two copies drift. The reason it
+     must be used at all is at `args.go:44-49`: leaving `Args` visible lets the raw
+     Go-template form `{{ index .Args 0 }}` interpolate a caller-controlled string straight
+     into program text — "the exact hole the `"$@"` transport exists to close".
    - reject a literal `${args}` inside `argv_append_from` at load time, the same way
      `--filter=${args}` is already rejected in `CommandDef.Validate`.
    - **decision on `${param.*}`**: allowed, rendered exactly as it already is in `cmd:` —
@@ -118,13 +120,21 @@ that is stated deliberately rather than discovered mid-implementation.
      cover this path.
    - regression test in the exact shape of the `2a1d6b73` exploit:
      `dwe cmd x -- '$(touch /tmp/pwned)'` against a command carrying `argv_append_from`.
-3b. **Trust boundary: `argv_append_from` runs on the HOST even for a `service_exec`
-   command invoked from a container.** `commands` is in `bridgeAllowedTopLevel`
-   (`internal/cli/bridgepolicy.go:30`) and a command opts in per-command via
-   `bridge: {enabled: true}`. The daemon's env hardening does **not** help here — an
-   injection would be in program *text*, not in the environment. With 3a implemented the
-   vector is closed; without it, it is open. Document the host-side execution explicitly so
-   command authors see the boundary, and cover it with a test.
+3b. **Trust boundary: `argv_append_from` is FORBIDDEN on bridge-reachable commands.**
+   The field runs a host shell expression even for a `service_exec` command, `commands` is
+   in `bridgeAllowedTopLevel` (`internal/cli/bridgepolicy.go:30`), and a command opts into
+   container reachability via `bridge: {enabled: true}`. The daemon's env hardening does
+   **not** help — an injection lands in program *text*, not in the environment.
+   **3a alone is not sufficient**: `withoutArgs` closes only the `Args` vector, while the
+   render context still carries `Raw`, `Params`, `Context`, `Host` and `Snapshot`. A
+   container can influence `${param.*}` (and `ParamDef.Pattern` is optional by
+   documentation) and, via `bridge.vars_writable`, selected `${vars.*}` — so a command that
+   used to be argv-only and container-side would gain host shell execution with
+   container-influenced text. Therefore: **a command declaring both `bridge.enabled: true`
+   and `argv_append_from` is a load-time error.** This is a one-line rule that removes the
+   whole vector instead of trying to sanitize it; the cost is that such a command cannot be
+   invoked from a container. Also document the host-side execution so authors see the
+   boundary even in the allowed (host-only) case, and add a bridge regression test.
 4. **Empty append must not silently change the command's meaning.** `ruff check` with an
    empty file list lints the whole tree — the opposite of the intent. Define and test the
    empty-list behaviour explicitly (skip the step, not "run with no args").
@@ -304,6 +314,13 @@ it complicates the first implementation.
       recommendation): it is the fourth type accepting `argv` (`types.go:190`) and
       `registry/expand_daemon.go:71` packs that `argv` into the synthetic commands, so
       "skip on empty list" would mean "silently fail to start the daemon"
+- [ ] **reject `argv_append_from` together with `bridge.enabled: true`** at load time
+      (constraint 3b), with a message naming the trust boundary. Remember the `bridge:`
+      block may also be inherited from the command file's `group:` header and through a
+      service-level `extends:` chain — resolve the effective value, not just the literal
+      one on the command
+- [ ] write tests for the bridge rejection: direct `bridge.enabled: true` on the command,
+      and the inherited-from-group case
 - [ ] surface the field in `dwe cmd -i`: the typed JSON struct (`inspect.go:29`, filled at
       :134/:144) and the human output (:301-302 / :332-333). An executable field invisible
       to inspect is worse than usual here — inspect is the documented way for an agent to
@@ -329,9 +346,11 @@ it complicates the first implementation.
   reuses `buildServiceArgv` and needs no separate edit)
 - Modify: corresponding `*_test.go`
 
-- [ ] render the expression through `runio.withoutArgs(rc)` and reject a literal `${args}`
-      at load time (constraint 3a — do this **before** wiring execution, so the unsafe
-      shape never exists even transiently)
+- [ ] add the exported `runio.RenderArgvAppendFrom` (wrapping the private `withoutArgs`)
+      and render through it; reject a literal `${args}` at load time (constraint 3a — do
+      this **before** wiring execution, so the unsafe shape never exists even transiently).
+      Keep `withoutArgs` unexported: the point is one safe entry point, not a second
+      exported primitive both runners can misuse
 - [ ] execute the expression on the host via `config.ShellBin` with the run context's
       cancellation, capturing stdout only (stderr streams to the user)
 - [ ] split stdout into argv elements one per line, ignoring a trailing newline; treat
@@ -500,8 +519,10 @@ it complicates the first implementation.
 
 - [ ] document `argv_append_from` in `docs/reference/config/commands/types.md` and
       `directives.md` (the argv/args field tables), including the empty-result semantics,
-      its ordering relative to `${args}`, and the host-execution trust boundary from
-      constraint 3b
+      its ordering relative to `${args}`, the host-execution trust boundary from
+      constraint 3b, and the fact that it is **incompatible with `bridge.enabled: true`**
+- [ ] document the same incompatibility in the bridge reference page, so it is discoverable
+      from both directions
 - [ ] document `check: auto` in **both** condition pages —
       `docs/reference/config/conditions.md` and
       `docs/reference/config/deploy/conditions.md` — stating plainly that it applies only to
