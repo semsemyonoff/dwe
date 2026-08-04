@@ -876,37 +876,44 @@ byte-identical claim would then hold only under the non-TTY test seams, not in a
 - Modify: `docs/internals/packages.md`
 - Modify: `AGENTS.md`
 
-- [ ] update the `internal/core/ui/render/` entry (`docs/internals/packages.md:192`) — the file count
+- [x] update the `internal/core/ui/render/` entry (`docs/internals/packages.md:192`) — the file count
       and list move from 14 to 19 implementation files (+ `table_wrap.go`, `table_fit.go`,
       `table_view.go`, `table_record.go`, `table_budget.go`) and their test files, plus the new
       `testdata/` golden tree
-- [ ] document the responsive-table contract in that section: the budget is derived from the renderer's
+- [x] document the responsive-table contract in that section: the budget is derived from the renderer's
       **sink** (`DiagnosticsTable` → stderr, all others → stdout); a non-TTY sink means budget 0 means
       unbounded and byte-identical legacy output; **budget 0 disables shrinking, not `Max` wrapping**;
       `fitRows` returns `ok=false` rather than truncating; cells must be plain text because the
       wrappers are not ANSI-aware; the mode decision is made once per render call; explicit width via
       `StatusInput.Width` / `GitWorkspaceAt` / `RenderDaemonsAt` wins for TUI panels; the `dwe status`
       cross-table mode mismatch is accepted
-- [ ] document the statustui change in the `internal/core/ui/statustui/` section: `buildTabs` carries a
+- [x] document the statustui change in the `internal/core/ui/statustui/` section: `buildTabs` carries a
       data snapshot and rendering happens in `ViewPanel` at the known panel width, memoised on
       `(loadGen, tabIndex, width)`; `sectionAnchors` are width-dependent and must come from the same
       render pass
-- [ ] note the new `styles.TermWidthOrZero` in the `internal/core/ui/styles/` section and contrast it
+- [x] note the new `styles.TermWidthOrZero` in the `internal/core/ui/styles/` section and contrast it
       with `TermWidth`'s 80-column fallback
-- [ ] add a Critical Patterns bullet in `AGENTS.md` covering the two traps: non-TTY means budget 0 means
+- [x] add a Critical Patterns bullet in `AGENTS.md` covering the two traps: non-TTY means budget 0 means
       the whole mechanism is disabled (why goldens keep passing), and the budget must follow the sink,
       not `os.Stdout` — both are what will confuse whoever adds table number seven
-- [ ] confirm `CLAUDE.md` is still a symlink to `AGENTS.md` (`ls -l CLAUDE.md`) — edit `AGENTS.md` only
-- [ ] check the ru mirror: `docs/i18n/ru/` currently mirrors only `guides/`, `reference/`, and
+- [x] confirm `CLAUDE.md` is still a symlink to `AGENTS.md` (`ls -l CLAUDE.md`) — edit `AGENTS.md` only
+      (confirmed: `CLAUDE.md -> AGENTS.md`)
+- [x] check the ru mirror: `docs/i18n/ru/` currently mirrors only `guides/`, `reference/`, and
       `README.md` — there is **no** `docs/i18n/ru/internals/`, and `web/scripts/sync-docs.mjs:138`
       excludes `internals/` from the published site, so `packages.md` and `AGENTS.md` have no ru
       counterpart to update. Verify this still holds, and if any ru page under
       `docs/i18n/ru/guides/` or `docs/i18n/ru/reference/` embeds rendered table output, confirm it
-      matches the (unchanged) wide-terminal rendering
-- [ ] leave `docs/reference/` untouched: this is presentation, not configuration, and no `styles.yml`
-      knob is introduced
-- [ ] run `make build` to re-sync the embedded docs tree, then `make test` and `make lint`
-- [ ] move this plan to `docs/plans/completed/`
+      matches the (unchanged) wide-terminal rendering (confirmed: no `docs/i18n/ru/internals/`; the
+      only box-drawing glyphs in ru guides/reference are static directory-tree diagrams in prose, not
+      rendered CLI table output, so nothing there is affected by this plan)
+- [x] leave `docs/reference/` untouched: this is presentation, not configuration, and no `styles.yml`
+      knob is introduced (confirmed: `git diff --stat docs/reference/` is empty)
+- [x] run `make build` to re-sync the embedded docs tree, then `make test` and `make lint`
+      (`make build` and `make lint` clean; `make test` / `go test ./internal/cli/...` fail only on
+      `internal/cli/deploy` and `internal/cli/lifecycle` due to the sandbox's unreachable Docker daemon
+      — the same pre-existing environment noise documented in Tasks 8-14, unrelated to this doc-only
+      task)
+- [x] move this plan to `docs/plans/completed/`
 
 ## Post-Completion
 
