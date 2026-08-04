@@ -53,6 +53,12 @@ func DiagnosticsTable(rows []DiagnosticRow) string {
 // ordered canonically (see domainDisplayOrder) with unknown domains appended
 // alphabetically. Returns "" when there are no rows so the caller can skip an
 // empty bordered box. Used by `dwe validate`.
+//
+// The render mode is decided once, across every domain, rather than per
+// domain: a table immediately above a record block reads as a bug (see
+// § Mode decision is per render call, not per table). If any single domain
+// cannot fit as a table at the shared budget, every domain renders as
+// records.
 func DiagnosticsByDomain(rows []DiagnosticRow) string {
 	if len(rows) == 0 {
 		return ""
@@ -68,6 +74,16 @@ func DiagnosticsByDomain(rows []DiagnosticRow) string {
 	}
 	sortDomainsForDisplay(order)
 
+	budget := stderrBudget()
+	views := make([]tableView, len(order))
+	fitsAll := true
+	for i, d := range order {
+		views[i] = diagnosticsTableView(groups[d], false)
+		if !views[i].Fits(budget) {
+			fitsAll = false
+		}
+	}
+
 	var b strings.Builder
 	for i, d := range order {
 		if i > 0 {
@@ -75,7 +91,14 @@ func DiagnosticsByDomain(rows []DiagnosticRow) string {
 		}
 		b.WriteString(domainTitle(d, groups[d]))
 		b.WriteByte('\n')
-		b.WriteString(diagnosticsTable(groups[d], false))
+		if fitsAll {
+			// Fits(budget) already proved this succeeds; the rows are
+			// recomputed here because Fits deliberately does not expose them.
+			fittedRows, _ := fitRows(views[i].Headers, views[i].Rows, budget, views[i].Padding, views[i].Cols)
+			b.WriteString(views[i].renderTable(fittedRows))
+		} else {
+			b.WriteString(views[i].renderRecords(budget))
+		}
 	}
 	return b.String()
 }

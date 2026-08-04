@@ -126,6 +126,91 @@ func TestDiagnosticsByDomain_Empty(t *testing.T) {
 	}
 }
 
+// TestDiagnosticsByDomain_SharedMode_RecordsWhenAnyDomainDoesNotFit proves the
+// mode decision is made once across every domain, not per domain: "config"
+// alone would comfortably fit a table at the chosen budget, but "linters"
+// carries a HINT URL wide enough to blow its floor past the budget (URLs are
+// never split, per isURLToken), so both domains must fall back to records
+// rather than pairing a table with a record block.
+func TestDiagnosticsByDomain_SharedMode_RecordsWhenAnyDomainDoesNotFit(t *testing.T) {
+	resetStyles()
+	longURL := "https://example.com/" + strings.Repeat("a", 90)
+	rows := []DiagnosticRow{
+		{Severity: validate.SeverityOK, Domain: "config", Target: "config.workspace", File: "workspace.yml", Message: "ok"},
+		{
+			Severity: validate.SeverityError,
+			Domain:   "linters",
+			Target:   "hadolint",
+			File:     "Dockerfile",
+			Message:  "pin versions",
+			Hint:     longURL,
+		},
+	}
+
+	withTermWidth(t, 60)
+	output := DiagnosticsByDomain(rows)
+
+	if strings.Contains(output, "┌") || strings.Contains(output, "│") {
+		t.Errorf("expected both domains to render as records (no table borders), got:\n%s", stripANSI(output))
+	}
+	for _, want := range []string{"Configuration", "Linters", "config.workspace", "hadolint"} {
+		if !strings.Contains(output, want) {
+			t.Errorf("output missing %q:\n%s", want, stripANSI(output))
+		}
+	}
+	if !strings.Contains(output, longURL) {
+		t.Errorf("expected the long hint URL to stay intact, got:\n%s", stripANSI(output))
+	}
+}
+
+// TestDiagnosticsByDomain_SharedMode_TablesWhenEveryDomainFits is the
+// counterpart: when every domain fits the shared budget, every domain renders
+// as a table, borders included.
+func TestDiagnosticsByDomain_SharedMode_TablesWhenEveryDomainFits(t *testing.T) {
+	resetStyles()
+	rows := []DiagnosticRow{
+		{Severity: validate.SeverityOK, Domain: "config", Target: "config.workspace", File: "workspace.yml", Message: "ok"},
+		{Severity: validate.SeverityWarning, Domain: "linters", Target: "hadolint", File: "Dockerfile", Message: "pin versions"},
+	}
+
+	withTermWidth(t, 200)
+	output := DiagnosticsByDomain(rows)
+
+	if !strings.Contains(output, "│") {
+		t.Errorf("expected both domains to render as tables (with borders), got:\n%s", stripANSI(output))
+	}
+	for _, want := range []string{"Configuration", "Linters", "config.workspace", "pin versions"} {
+		if !strings.Contains(output, want) {
+			t.Errorf("output missing %q:\n%s", want, stripANSI(output))
+		}
+	}
+}
+
+// TestDiagnosticsByDomain_SingleDomain_MatchesDirectRender proves the shared-
+// mode decision is a no-op for the single-domain case — it must render
+// identically to the domain's own tableView rendered at the same budget,
+// both when that budget fits as a table and when it forces records.
+func TestDiagnosticsByDomain_SingleDomain_MatchesDirectRender(t *testing.T) {
+	rows := []DiagnosticRow{
+		{Severity: validate.SeverityError, Domain: "linters", Target: "hadolint", File: "Dockerfile", Message: "pin versions", Hint: "see docs"},
+	}
+
+	for _, budget := range []int{0, 200, 20} {
+		t.Run("", func(t *testing.T) {
+			resetStyles()
+			withTermWidth(t, budget)
+
+			got := DiagnosticsByDomain(rows)
+			want := domainTitle("linters", rows) + "\n" + diagnosticsTableView(rows, false).Render(stderrBudget())
+
+			if got != want {
+				t.Errorf("budget %d: DiagnosticsByDomain diverged from direct single-domain render\ngot:\n%s\nwant:\n%s",
+					budget, stripANSI(got), stripANSI(want))
+			}
+		})
+	}
+}
+
 func TestSortDomainsForDisplay(t *testing.T) {
 	domains := []string{"zeta", "linters", "config", "alpha", "commands"}
 	sortDomainsForDisplay(domains)

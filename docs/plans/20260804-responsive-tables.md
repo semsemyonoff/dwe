@@ -802,16 +802,23 @@ byte-identical claim would then hold only under the non-TTY test seams, not in a
 - Modify: `internal/core/ui/render/diagnostics_table.go`
 - Modify: `internal/core/ui/render/diagnostics_table_test.go`
 
-- [ ] refactor `DiagnosticsByDomain` (`diagnostics_table.go:54`) to build every domain's `tableView`
+- [x] refactor `DiagnosticsByDomain` (`diagnostics_table.go:54`) to build every domain's `tableView`
       first, then resolve one shared mode via `Fits(budget)` across all of them
-- [ ] render all domains as records when any single domain fails to fit; otherwise render all as
+- [x] render all domains as records when any single domain fails to fit; otherwise render all as
       tables, calling `renderTable` / `renderRecords` directly rather than per-domain `Render`
-- [ ] keep the existing domain ordering (`sortDomainsForDisplay`), per-domain titles, and the
+- [x] keep the existing domain ordering (`sortDomainsForDisplay`), per-domain titles, and the
       empty-input early return unchanged
-- [ ] write a test with two domains where one fits and one does not, asserting both render as records
-- [ ] write a test with two domains that both fit, asserting both render as tables
-- [ ] write a test asserting a single-domain input is unaffected
-- [ ] run `make test` — must pass before task 14
+- [x] write a test with two domains where one fits and one does not, asserting both render as records
+      (`TestDiagnosticsByDomain_SharedMode_RecordsWhenAnyDomainDoesNotFit`)
+- [x] write a test with two domains that both fit, asserting both render as tables
+      (`TestDiagnosticsByDomain_SharedMode_TablesWhenEveryDomainFits`)
+- [x] write a test asserting a single-domain input is unaffected
+      (`TestDiagnosticsByDomain_SingleDomain_MatchesDirectRender`, across a fitting, an unbounded, and a
+      record-forcing budget)
+- [x] run `make test` — must pass before task 14 (`go test` across all non-Docker-dependent packages
+      passes, including `internal/core/ui/render`; `internal/cli/status`/`internal/cli/lifecycle`/
+      `internal/cli/deploy`/`internal/cli/service` require a Docker daemon unavailable in this sandbox —
+      the same pre-existing environment noise documented in Tasks 8-12)
 
 ### Task 14: Verify acceptance criteria
 
