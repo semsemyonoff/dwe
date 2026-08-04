@@ -108,9 +108,14 @@ that is stated deliberately rather than discovered mid-implementation.
      is easy to miss.
    - reject a literal `${args}` inside `argv_append_from` at load time, the same way
      `--filter=${args}` is already rejected in `CommandDef.Validate`.
-   - decide and record whether `${param.*}` is allowed here. `ParamDef.Pattern`
-     (`types.go:579-582`) is optional, so by default a param is a free-form caller string.
-     If allowed, require an anchored `pattern:` on any param reachable from this field.
+   - **decision on `${param.*}`**: allowed, rendered exactly as it already is in `cmd:` —
+     the same accepted risk, not a new one. `withoutArgs` (`runio/args.go:110-117`) is a
+     shallow copy with `Args = nil`; it closes the `Args` vector only, and params remain
+     visible. `ParamDef.Pattern` is optional by documentation (`types.go:579-582`: "An empty
+     Pattern skips validation"), so an anchored `pattern:` is a **recommendation**, not a
+     requirement. Record it, and add a second exploit-shaped test —
+     `dwe cmd x --set file='$(touch /tmp/pwned)'` — since the `-- ` regression test does not
+     cover this path.
    - regression test in the exact shape of the `2a1d6b73` exploit:
      `dwe cmd x -- '$(touch /tmp/pwned)'` against a command carrying `argv_append_from`.
 3b. **Trust boundary: `argv_append_from` runs on the HOST even for a `service_exec`
@@ -202,7 +207,14 @@ place) followed by the `argv_append_from` items. Documented and pinned by test.
 **Empty-append semantics.** Empty stdout → the step/command is **skipped** with a message
 ("nothing to process"), exit 0. Rationale in constraint 4. Hard-coding this is a one-way
 door only in appearance: adding `on_empty: skip|run|fail` later is purely additive, so the
-decision does not need re-litigating at implementation review.
+decision does not need re-litigating at implementation review. One documentation note: used
+as a pipeline `type: command` step, a skip still journals as success, so the next deploy
+with a non-empty list would be skipped by hash — such steps should carry a `files_gate` or
+`check:`.
+
+**Two shells, deliberately.** Commands run under `config.ShellBin` (constraint 3), while
+derived conditions run under a hard `sh` (matching `condition.EvalCmd`). Both are correct
+and the difference is intentional — do not "unify" them during implementation.
 
 **Inversion — scoped to `when: {type: shell}` only.** Three load-time errors, each with a
 reason the message must state:
@@ -236,7 +248,16 @@ equivalent):
   no equivalent of.
 
 Pick the builtin form and fix `Shell.Run` to honour `ectx.ProjectRoot` as a prerequisite
-step; pin cwd, shell and timeout by test.
+step; pin cwd and shell by test.
+
+**Timeout — decide, do not "pin by test".** `Shell.Run` (`builtin/shell.go:47`) always wraps
+in `context.WithTimeout` with a 10s default, while `condition.EvalCmd`
+(`condition/condition.go:147-164`) has no timeout at all. So a derived check would silently
+cap at 10s something that was unbounded as a `when:`. Note `timeout: 0` is **not**
+"unlimited" — `spec.GetDurationParam` returns `0` and `WithTimeout(ctx, 0)` is an
+already-expired context. Choose one: (a) the derived check passes an explicit generous
+timeout; (b) teach `Shell.Run` to treat `0` as unbounded (a **second** change to
+`shell.go`, with its own test); (c) keep 10s and document it on both conditions pages.
 
 **Textual wrapping is not free.** `! ( … )` breaks on a trailing comment
 (`test -e x  # cloned?` → the closing paren is swallowed → syntax error, not inversion),
@@ -279,14 +300,20 @@ it complicates the first implementation.
       and `argv_append_from` on command types that do not build an argv
 - [ ] extend `allowedFieldsFor` **per type** — it is type-scoped, so add the key to
       `CommandTypeShell`, `CommandTypeServiceExec` and `CommandTypeServiceRun`
-- [ ] decide `CommandTypeDaemon` explicitly: it is the fourth type accepting `argv`
-      (`types.go:190`), so the "any command with argv" rule silently includes it.
-      Recommendation is to exclude it — a daemon expands into four synthetic commands and
-      "skip on empty list" there means "silently do not start the daemon"
+- [ ] **exclude `CommandTypeDaemon`** with a load-time rejection (decision, not a
+      recommendation): it is the fourth type accepting `argv` (`types.go:190`) and
+      `registry/expand_daemon.go:71` packs that `argv` into the synthetic commands, so
+      "skip on empty list" would mean "silently fail to start the daemon"
 - [ ] surface the field in `dwe cmd -i`: the typed JSON struct (`inspect.go:29`, filled at
       :134/:144) and the human output (:301-302 / :332-333). An executable field invisible
       to inspect is worse than usual here — inspect is the documented way for an agent to
       learn what a command does before running it
+- [ ] surface it in the generated command docs too: `internal/cli/docs/generate.go:215,
+      230-231,243-244` renders `argv` into markdown — the same "what does this command do"
+      surface
+- [ ] (checked, no work needed) completion does not touch the field, `dwe commands list`
+      has no full typed JSON, the shellcheck linter only reads `.sh` files, and
+      `internal/core/validate/commands/` carries no field allowlist of its own
 - [ ] write table-driven tests for accept/reject combinations
       (`argv` + append → ok; `cmd` + append → error; append alone → error; daemon → per the
       decision above)
@@ -330,19 +357,53 @@ it complicates the first implementation.
   for `DeployStep.Check` — `workspace.go:423` — so the relaxation is well contained)
 - Modify: `internal/core/project/config/workspace.go` (`validateStepShape`, 3196-3205)
 - Modify: `internal/core/execution/builtin/shell.go` (honour `ectx.ProjectRoot` — see
-  Technical Details; prerequisite for the chosen inversion form)
+  Technical Details; prerequisite for the chosen inversion form). **This is a standalone
+  bug fix touching three surfaces, not just the derived check**: `executor.go:261` (both
+  `check:` and `type: builtin, cmd: shell` step bodies), `validate/checks/loader.go:177`
+  (`cmd: shell` checks in `workspace/validate.yml`), and
+  `usercommands/runtime/runners/builtin/builtin.go:70` (user commands). Live example of
+  today's inconsistency: `cueBreaker/workspace/services/playwright/deploy.yml:11-18` runs
+  `mkdir -p data/playwright` (relative!) in the body while its paired
+  `check: {type: shell, …}` already runs in the project root — so the pair diverges when
+  `dwe deploy` is invoked from a subdirectory. Use a nil-safe form
+  (`if ectx.ProjectRoot != ""`); existing tests pass `spec.ExecContext{}` and keep their
+  current behaviour
 - Modify: `internal/core/execution/pipeline/resolve.go`
 - Modify: `internal/core/execution/pipeline/resolve_test.go`
 
 - [ ] accept the scalar form `check: auto` alongside the existing mapping form, decoding it
       into a **sentinel Action at load time** so `step.Check != nil` holds everywhere
       (`StepForcesRun` at `forcesrun.go:37`, `deployStepToMap` at `hash.go:416`, and the
-      `dwe reset step` path all inspect the raw config)
+      `dwe reset step` path all inspect the raw config). Fix the sentinel's concrete shape
+      (proposal: `Type: "auto"` plus an exported predicate `config.IsAutoCheck(*Action)`) so
+      no consumer string-compares on its own — `FormatAction` (`executor.go:1112-1117`) and
+      `deployStepToMap` both read it
+- [ ] **exempt the sentinel from `Action.Validate()`**: `validateStepShape`
+      (`workspace.go:3196-3200`) calls it unconditionally and `action.go:49-62` rejects
+      anything outside `{shell, dwe, command, builtin}` — so without this every
+      `check: auto` fails at load before any of the three intended rejections fire
+- [ ] accept **exactly** `auto`: `Auto`, `"auto "` and a null `check:` must keep today's
+      `action.go:28` message. One table test
 - [ ] reject at load time with a reason in the message: `auto` without `when:`; `auto` with
       `when: {type: builtin}` (disjoint registries); `auto` with `when: {type: template}`
-      (would always fail — see Technical Details)
+      (would always fail — see Technical Details). These three are exhaustive:
+      `condition.Type` has exactly three values
 - [ ] rewrite the sentinel into a real `*config.Action` at resolve time using the chosen
-      inversion form, wrapping across newlines rather than inline
+      inversion form, wrapping across newlines rather than inline. **Ordering inside
+      `resolveLeafStep` is load-bearing**: Plan A's whole-step render → sentinel rewrite →
+      `builtin.Validate` of the check (`resolve.go:138`). Rewriting before the render would
+      leave the derived check rendered while its source `when.Cmd` is not (or vice versa),
+      silently breaking the inversion; rewriting after `:138` would either send `auto` into
+      the builtin registry or skip validation of the derived check entirely
+- [ ] assign the derived check onto a **copy** — `step.Check = &config.Action{…}`, never
+      `*step.Check = …`. The pointer is shared with the loaded config, so mutating through
+      it breaks Task 4's own invariant ("auto stays auto" in `deployStepToMap`), shifts
+      `Service/ProjectConfigHash` mid-run depending on when they are computed, and makes a
+      second `ResolvePhaseSteps` over the same config produce `! ( ! ( … ) )` — silently
+      restoring the original logic
+- [ ] build the derived check from **the same string** the runtime `when:` evaluation will
+      see, and assert byte equality in a test (this is the symmetry Plan A's `when.Cmd`
+      rendering exists to provide)
 - [ ] write tests: shell inversion works; a `when.cmd` with a **trailing comment** inverts
       correctly (the naive inline wrap turns this into a syntax error); the three load-time
       rejections each fire with their own message
@@ -359,18 +420,24 @@ it complicates the first implementation.
 - Modify: `internal/cli/deploy/deploy.go` tests as needed
 
 - [ ] handle `dwe reset step`: it takes a `config.DeployStep` straight from config and calls
-      `pipeline.ExecAction(ctx, *step.Check, actx)` **bypassing `ResolvePhaseSteps` and
-      never evaluating `when:`** — so an unrewritten sentinel would reach it. Either resolve
-      it there too, or refuse with a message saying there is no `when:` on this path to
-      invert
+      `pipeline.ExecAction(ctx, *step.Check, actx)` bypassing `ResolvePhaseSteps`, so an
+      unrewritten sentinel would reach it. **It does evaluate `when:`** — `reset.go:668-687`
+      runs both `condition.EvalRuntimeTyped` and `tpl.EvalCondition` and skips the step when
+      false — so `step.When` is available right where the inverse must be built. (An earlier
+      draft claimed the opposite and proposed refusing with a message; that would have been
+      a worse UX built on a false premise.) Build the inverse there through the **same
+      shared helper** `resolveLeafStep` uses — not a copy. A "no `when:`" branch is
+      unreachable, since load-time already rejects `auto` without `when:`
 - [ ] verify `StepForcesRun` returns true for a step whose check came from `auto` (it does,
       given the load-time sentinel) and add the test that pins it
 - [ ] verify the `hasCheck → Run` path in the skip decider treats it identically
-- [ ] pin two useful invariants with tests: `journal.StepHash` (`hash.go:36-53`) hashes only
-      action + files_gate and **not** `Check`, so migrating a workspace from an explicit
-      inverse check to `check: auto` does not shift step hashes; and `deployStepToMap`
-      (`hash.go:395-422`) reads the **raw** config where `auto` stays `auto`, so it is
-      stable
+- [ ] pin the invariant honestly, in **both** halves: `journal.StepHash` (`hash.go:36-53`)
+      hashes action + files_gate and **not** `Check`, so per-step hashes do not move — but
+      `deployStepToMap` feeds `phasesToMap` → `Service/ProjectConfigHash`
+      (`hash.go:365/389`), and `makeSkipDecider` (`deploy.go:781-783`) returns
+      `journal.Run` for **every** step in scope when the config hash differs. So migrating a
+      workspace from an explicit inverse check to `check: auto` **does** cause a one-time
+      re-run of that service's steps. Test that, not the weaker "auto stays auto"
 - [ ] write a test covering an auto-check step inside a `parallel:` group (one level)
 - [ ] write a regression test that a step with `when:` and **no** `check:` still does not
       force a run (the 5 observed steps that rely on this)
@@ -405,8 +472,16 @@ it complicates the first implementation.
 - [ ] write tests: fresh clone, re-run is a no-op, different-branch checkout is a no-op,
       non-empty non-git destination errors, path escaping the project root is rejected,
       missing required field is rejected
-- [ ] write a test asserting the builtin is reachable from `CtxUserYAML` and rejected from
-      `CtxPredicate` positions if that is the intended kind boundary
+- [ ] pin the **actual** kind boundary rather than an assumed one: `kindAllowed`
+      (`builtin.go:147-155`) deliberately permits `KindAction` in `CtxPredicate` ("actions
+      may be read-only … and are safe in check: position"), so `source_clone` **will** be
+      callable from `check:`. A test asserting rejection would fail, and "fixing"
+      `kindAllowed` would affect every existing action builtin. Assert instead: reachable
+      from `CtxUserYAML` and `CtxPredicate`, and **not** reachable from `workspace/validate.yml`
+      (blocked by the hardcoded seven-name allowlist in `validate/checks/loader.go:51,119` —
+      which also keeps `docs/reference/config/validate.md:174` accurate)
+- [ ] add one line to the docs saying that putting a mutating builtin in `check:` is a bad
+      idea even though the schema permits it
 - [ ] run tests — must pass before task 6
 
 ### Task 6: Verify acceptance criteria
@@ -431,6 +506,14 @@ it complicates the first implementation.
       `docs/reference/config/conditions.md` and
       `docs/reference/config/deploy/conditions.md` — stating plainly that it applies only to
       `when: {type: shell}` and why the other two kinds are rejected
+- [ ] document the new load-time rejections in
+      `docs/reference/config/commands/validation.md`
+- [ ] document the working directory of the `shell` builtin in
+      `docs/reference/config/validate.md` (§ `shell`) and
+      `docs/reference/config/deploy/steps.md` — today neither says anything, while the
+      neighbouring `file_exists` is documented as "relative to the project root"
+- [ ] make `dwe deploy plan` print `check: auto (inverse of when)` rather than a bare
+      `builtin shell` — the whole point of the feature is that the check is implicit
 - [ ] document the `source_clone` builtin in `docs/reference/config/deploy/builtins.md`
 - [ ] update `skills/dwe/references/authoring-commands.md` and
       `pipelines-and-orchestration.md`, which describe exactly these schemas (Plan C Task 7
@@ -454,6 +537,9 @@ it complicates the first implementation.
   empirical, not definitional)
 - rewrite `quality.staged` in the four projects that carry it once `argv_append_from` is
   available; the ~40 lines of bash should reduce to a declared command
+- expect a **one-time re-run** of a service's steps after migrating it to `check: auto`:
+  the raw `check` value participates in `Service/ProjectConfigHash`, so changing it shifts
+  the config hash and `makeSkipDecider` marks every step in scope as `Run` once
 
 **Known non-goals**:
 - `archive_fetch` / `archive_unpack` stay recipes — see Overview for the reasoning

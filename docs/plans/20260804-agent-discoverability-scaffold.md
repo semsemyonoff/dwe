@@ -44,16 +44,30 @@ three `template pack not found` diagnostics per service — today they stay sile
 because `svc.Dir` is empty and the template validators bail out with an info line instead.
 
 **Explicit policy decision — `dwe test run` becomes agent-runnable under conditions.**
-Today the rule is unconditional the other way, and it is written in six places:
-`skills/dwe/references/integration-tests.md` §1 ("Never run it on your own initiative …
-executes only when the user explicitly asks"), §2 (table: "hand to the user, only on
-explicit ask"), §3, plus `SKILL.md:113`, `:142-144` (which argues *specifically* against
-the change proposed here), `:161`, `:183`, and `recipes.md:8`. Changing a safety rule is a
-decision, not a documentation chore, so it is recorded here rather than buried in a
-checkbox: **the owner has decided that an agent may run `dwe test run` unattended when the
-cost profile shows a cheap scenario, and must ask otherwise — with uncertainty defaulting
-to asking.** Task 7 must rewrite all six sites coherently; leaving any of them is the
-contradiction failure mode this branch has already hit once.
+Changing a safety rule is a decision, not a documentation chore, so it is recorded here
+rather than buried in a checkbox: **the owner has decided that an agent may run
+`dwe test run` unattended when the scenario is cheap, and must ask otherwise — with
+uncertainty defaulting to asking.**
+
+**The condition is cheap AND isolated, not cheap alone.** The existing rule rests on two
+arguments (see Technical Details): cost, and the fact that isolation is not total. The
+owner's decision addressed cost; the isolation half is therefore carried into the profile
+as facts, and the policy text reads: run unattended only when the profile shows a cheap
+scenario **and** no isolation findings (shared/external/named resources) **and** no
+`type: shell` steps — otherwise ask.
+
+Today the rule is unconditional the other way, in **thirteen** places across three files
+(the first draft said "six" and misattributed one of them):
+- `integration-tests.md` — `:3` (intro: "the **user** runs the mutating `dwe test run`"),
+  `:26` (end of §2), §1 ("Never run it on your own initiative"), §2 table ("hand to the
+  user, only on explicit ask"), `:138` (§8), `:154` (§9), `:162` and `:164` (§9 — "run only
+  when the user asks", table header "Command (user runs)"). **§3 does not contain the
+  policy** — it was cited in error and must not be edited on that basis.
+- `SKILL.md` — `:113`, `:127` ("destructive … forms are below"), `:142-144` (argues
+  *specifically* against this change), `:161`, `:183`.
+- `recipes.md` — `:8`.
+
+Leaving any of them is the contradiction failure mode this branch has already hit once.
 
 ## Context (from discovery)
 
@@ -203,10 +217,32 @@ literal behaviour. Add a short snippet per hit so a result is actionable without
 call. Existing single-token behaviour (`depends_on:`) must stay byte-identical.
 
 **Cost profile** (Task 6) — `dwe test list -o json` gains a per-scenario object describing
-what the run would cost, as facts: number of enabled services, whether any pipeline step
-runs `docker build`, whether any step fetches an external artifact, whether dependency
-installation steps are present, external images referenced, and total healthcheck
-`start_period`. Plus a `last_run` block when the journal has one. No verdict field.
+what the run would cost, restricted to facts computable without string-guessing: number of
+enabled services **after the scenario's `env.services` overlay**, presence of `build:` in
+compose, external images referenced (excluding local build tags), max healthcheck
+`start_period` across services, and the isolation facts below. **No `last_run` and no
+"dependency-install steps"** — both were dropped in Task 6, the first for lack of any
+source of truth, the second as an unreliable heuristic. No verdict field.
+
+**Isolation facts belong in the profile too.** The current rule ("`dwe test run` only on
+explicit ask") rests on two arguments, not one, and `integration-tests.md:26` states the
+second plainly: isolation is not total — `shared: true` volumes are reused verbatim,
+`container_name:` / named / `external:` resources bypass compose-project scoping, and host
+side effects of `shell` steps (absolute paths, `~`, binds outside the project) are not
+sandboxed. Cost alone therefore cannot justify unattended runs. These facts are already
+computable: the non-blocking findings of `config.ScanComposeIsolation`
+(`KindNamedVolume`/`KindExternalVolume`/`KindNamedNetwork`/`KindExternalNetwork`), the count
+of `shared: true` volumes, and whether any scenario or deploy step is `type: shell`.
+Verified on the real workspaces: alto and cueBreaker both declare `external: true` cache
+volumes shared across projects, which a test run writes into.
+
+**The honest limit of the profile** (state it in Task 6 rather than discover it later): it
+distinguishes *whether* there is a build, not what the build costs. The dominant factor —
+whether the layer cache is warm, seconds versus ~10 minutes — is not modelled, and was lost
+with `last_run`. Measured against the two real workspaces, both land in "there is a build →
+ask", so the new policy would not fire on either. That is acceptable for a first cut, but
+it must be written down, and Task 7's wording must not promise more than the profile
+carries.
 
 ## What Goes Where
 
@@ -217,25 +253,50 @@ installation steps are present, external images referenced, and total healthchec
 
 ## Implementation Steps
 
-### Task 1: Turn `llms-txt` into a real briefing
+### Task 1a: Export a builtin inventory
+
+*(Split out of the original Task 1: this half lives in the execution layer, 1b in the docs
+layer, and the combined task carried eight checkboxes against a norm of ~5.)*
+
+**Files:**
+- Modify: `internal/core/execution/builtin/spec/spec.go` (`Entry`)
+- Modify: `internal/core/execution/builtin/builtin.go` (root map + package doc-comment)
+- Modify: `internal/core/execution/builtin/{containers,services,fs,env,interaction}/*.go`
+  (the five `Builtins()` maps)
+- Modify: `internal/core/execution/builtin/builtin_test.go`
+
+There is no way to enumerate builtins today: `buildRegistry` is unexported
+(`builtin.go:97`) and the exported surface is only
+`Get`/`KindOf`/`Validate`/`Describe`/`Run`/`IsInteractive`; and there is no static purpose
+string, since `spec.Builtin` (`spec/spec.go:42`) offers only the per-invocation
+`Describe(with)`.
+
+- [ ] add `Summary string` to **`spec.Entry`** (`spec/spec.go:89`), next to the existing
+      `Kind` — **not** a `Summary()` method on the `spec.Builtin` interface. The interface
+      route means 24 edits across 23 files in six packages; the `Entry` route is 6 edits
+      (five `Builtins()` maps plus the root map in `builtin.go:98`) and keeps `Entry` as the
+      single home of metadata. Verified safe: `spec.Builtin`/`builtin.Builtin` is not
+      implemented anywhere outside the `builtin/` tree, and there are no test doubles
+- [ ] add an exported inventory accessor over the registry
+- [ ] fix the package doc-comment `builtin.go:29-37`, which currently mislabels
+      `docker_daemon_start`/`_logs`/`_stop` as `KindAction` while the registry
+      (`containers/containers.go:13-15`) has them as `KindInternal` — once the inventory is
+      generated, that comment becomes a second, contradicting list
+- [ ] write a test asserting **every** registry entry has a non-empty `Summary` (the
+      compiler cannot catch a missing one, and Plan B adds a 25th builtin)
+- [ ] run tests — must pass before task 1b
+
+### Task 1b: Turn `llms-txt` into a real briefing
 
 **Files:**
 - Modify: `internal/core/docs/llmstxt/generator.go` (`Opts`, `Generate` — the actual
-  generator; the CLI files below only collect data)
+  generator; the CLI files only collect data)
 - Modify: `internal/core/docs/llmstxt/testdata/llms_txt_project.golden`
 - Modify: `internal/core/docs/llmstxt/testdata/llms_txt_no_project.golden`
 - Modify: `internal/cli/docs/llmstxt_collectors.go`
 - Modify: `internal/cli/docs/llmstxt.go` (including the `Long` text, see the budget item)
 - Modify: `internal/cli/docs/llmstxt_test.go`
-- Modify: `internal/core/execution/builtin/` (export an inventory — see first checkbox)
 
-- [ ] **prerequisite**: there is no way to enumerate builtins today. `buildRegistry` is
-      unexported (`builtin.go:97`) and the only exported entry points are
-      `Get`/`KindOf`/`Validate`/`Describe`/`Run`/`IsInteractive`. Worse, there is no static
-      one-line purpose to print: `spec.Builtin` (`spec/spec.go:42`) offers only
-      `Describe(with map[string]any) string`, which is per-invocation. So this task must
-      first add an exported inventory accessor **and** a static summary string to all 24
-      builtins
 - [ ] collect the inventory in `cli/docs` and pass it through `Opts` (constraint 8) — do not
       import the execution layer into `core/docs`
 - [ ] add the builtin/predicate inventory section, one line each with kind and summary,
@@ -247,11 +308,17 @@ installation steps are present, external images referenced, and total healthchec
 - [ ] add a compact "which template syntax is evaluated where" table
 - [ ] **respect the declared size budget**: `llmstxt.go:33` advertises "a dense ~2-5KB
       index", and `SKILL.md:23` makes this command a mandatory first step of every session,
-      so growth is a permanent token tax. Set a hard number (proposal: ≤ 12KB), enforce it
-      with a test, and update the `Long` text, `docs/reference/docs/commands.md` and
-      `AGENTS.md.tmpl` to match whatever number is chosen
-- [ ] write tests asserting each new section is present, and that the builtin inventory is
-      derived from the registry (add a builtin in a test → it appears)
+      so growth is a permanent token tax. Measured today: `--no-project` is 4490 B,
+      project-aware in alto is 5844 B. Enforce the budget on the **`--no-project`** output
+      (or on the static sections alone) — a flat cap on project-aware output would be a test
+      of someone else's workspace size and would fail on a large one. Estimated addition
+      (~24 inventory lines + flags + reserved env + substrate table + the two-registries
+      note) ≈ 3 KB → ~7.5–9 KB, so a 12 KB cap is realistic. Update the `Long` text,
+      `docs/reference/docs/commands.md` and `AGENTS.md.tmpl` to the chosen number
+- [ ] write tests asserting each new section is present. Note the inventory cannot be tested
+      by "add a builtin in a test" from the docs layer — `registry` is a package-level var
+      built by `buildRegistry()`. Test it as: (a) in `builtin`, every entry has a summary
+      (Task 1a); (b) in the docs layer, the section is built from a stubbed `Opts` inventory
 - [ ] run tests — must pass before task 2
 
 ### Task 2: Tokenized `docs search` with snippets
@@ -267,9 +334,22 @@ installation steps are present, external images referenced, and total healthchec
       shell strips quotes, so `"interpolation vars"` and `interpolation vars` arrive
       identical — only absurd nested quoting could distinguish them. Add `--literal` (or
       `--match any|all|literal`)
-- [ ] decide the ranking rule and pin it: summing occurrences lets a section with 40 hits
-      of "vars" and one of "interpolation" outrank the section actually about the pair.
-      Either use min-across-tokens or record "sum, deliberately"
+- [ ] tokenize with `strings.Fields`, **not** `strings.Split(q, " ")`: an empty token makes
+      `countCaseInsensitive` return 0 (`search.go:117` returns early on an empty needle) and
+      the AND gate would then zero out **every** result for a query with a double space
+- [ ] use **min-across-tokens** for ranking: summing lets a section with 40 hits of "vars"
+      and one of "interpolation" outrank the section actually about the pair, and min also
+      makes duplicate tokens (`vars vars`) harmless
+- [ ] pin the token semantics as a decision: matching stays **substring** (the documented
+      design intent at `search.go:26-30`, and required for `depends_on:`), which means
+      `uid` matches inside `guide`/`guides` and `env` inside `environment`. Record it with
+      that example so the false-positive is a known trade-off, not a surprise
+- [ ] add a **second tier**: if no section satisfies AND, apply AND at document level and
+      attribute the hit to the section with the largest contribution. Without it the fix is
+      only half-done — measured on the real docs tree, `UID GID env` returns the right
+      sections (`config/workspace.md#exports.env`, `render/env.md#System variables`), but
+      `interpolation vars` still misses `reference/templates.md` because the two tokens live
+      in different sections of it
 - [ ] add a short snippet to each hit. In TSV this **breaks a documented contract** —
       `<source>\t<path>#<anchor>\t<count>` is specified in `--help` and
       `docs/reference/docs/commands.md:77-104`, and `TestDocsSearchTSV` requires exactly
@@ -279,11 +359,19 @@ installation steps are present, external images referenced, and total healthchec
 - [ ] update the texts that become false: `emitNoSearchMatches`
       (`internal/cli/docs/search.go:117-122` says "Search is a literal case-insensitive
       substring match") and the command's `Short`/`Long`
-- [ ] write tests: `interpolation vars` and `UID GID env` (the two real queries that
-      returned `[]`) now return hits; `--literal` still matches the exact phrase
+- [ ] decide which line the snippet comes from — `searchInDoc` (`search.go:81-111`) keeps
+      only counters today. The line containing the most tokens is markedly more useful than
+      the first line containing any, and costs one variable
+- [ ] write tests asserting **relevance, not non-emptiness**: `interpolation vars` must
+      return `reference/templates.md` in the top N, and `UID GID env` must return
+      `config/workspace.md#exports.env`. "Returns hits" would pass on noise — measured, the
+      naive AND does exactly that for the first query
 - [ ] write a regression test that single-token identifier search (`depends_on:`) is
       byte-identical to today (all four existing core tests are single-token, so the AND
-      change is low-risk — but pin it)
+      change is low-risk — but pin it). Note this test does **not** discriminate min from
+      sum ranking (they coincide for one token) — add a separate multi-token ordering test
+- [ ] (checked) `coredocs.Search` has exactly one caller (`cli/docs/search.go:81`); the TUI
+      and llms-txt do not use it, so the change is local
 - [ ] run tests — must pass before task 3
 
 ### Task 3: Point-of-need hints in command output
@@ -319,20 +407,27 @@ rule. If other hint sites are wanted, they are their own task.)*
 `template pack not found` diagnostics per service (see Overview).
 
 - [ ] make the hub triplet active (`dir`, `dir_internal: /workspace`,
-      `work_dir_internal: /workspace/src`) — identical in 9/9 services that use it — and
-      settle the `dir` value: the template says `./[[ .Service ]]`, `.gitignore` ignores
-      `/services/`, and `populate-init-repo.md:56` says `./services/<name>`. Pick one and
-      fix the other two
+      `work_dir_internal: /workspace/src`) — identical in 9/9 services that use it — with
+      `dir: ./services/[[ .Service ]]`. The evidence is one-sided: `.gitignore` ignores
+      `/services/` (generated by `scaffold/gitignore.go`), `populate-init-repo.md:56` says
+      `./services/<name>`, 9/9 services use that form, and the ai packs of alto/cueBreaker
+      render into `services/<name>/`. The template's current `./[[ .Service ]]` is the
+      outlier and gets fixed here
 - [ ] make `icon` active and **add** an `info:` block with `title` (19/19 services fill
       both; the template has no `info:` block at all today, so this is an addition)
-- [ ] **decide the port question first**, because it gates the rest: a real `ports:` value
-      makes `portsFreeValidator` return `SeverityError` on any host where that port is
-      busy — a very common state right after `dwe init`. Options: leave `ports:` commented
-      (then `exports.env` must stay commented too, see next item); pick an unlikely-to-clash
-      port; or exclude the `env` domain from the acceptance criterion. Record the choice
-- [ ] keep `exports.env` and `ports:` **in the same state** — a `from: services.<svc>.ports.http`
-      rule with no active `ports.http` resolves to nothing, i.e. the scaffold would emit
-      exactly the defect Plan A Task 3 flags
+- [ ] **the port question is decided: leave `ports:` and `exports.env` commented, but
+      paired**, with a comment stating the class-1 rule ("a port without a paired
+      `exports.env` rule is display-only"). Three reasons: the scaffolded `compose.yaml`
+      contains **no `services:` block at all**, so an active port binds nothing; an active
+      port makes `dwe validate` depend on whether that host port happens to be busy
+      (`portsFreeValidator` → `SeverityError`), turning the one deterministic acceptance
+      criterion into a flaky, host-dependent check; and the knowledge transfers *better* as
+      a comment that states the rule than as a pair that merely demonstrates it. The
+      rejected third option — excluding the `env` domain from the criterion — would weaken
+      exactly the check that catches regressions
+- [ ] this also gates Task 5c: with `ports:` commented, the starter scenario **cannot**
+      reference `${services.app.ports.http}` — `envtest` renders `${…}` before resolve, the
+      reference would collapse to `""`, and `http_check` would get `http://localhost:/health`
 - [ ] remove the commented `render.ide.enabled: true` example (it is the default for
       `type: app`; only `false` is meaningful)
 - [ ] **drop the `project_name` item**: `workspace/docker.yml` is not a `.tmpl`, so it is
@@ -362,7 +457,10 @@ rule. If other hint sites are wanted, they are their own task.)*
       `TestScaffold_EmptyServiceLoadsClean`
 - [ ] (5a) add a per-service `deploy.yml` skeleton with the `hub → image → render` phase
       shape reproduced by 5/5 workspaces, using Plan B's primitives (`source_clone`,
-      `check: auto`) so the scaffold teaches the final idiom
+      `check: auto`) so the scaffold teaches the final idiom. **Fallback**: Plan B calls its
+      `source_clone` task "the most droppable task in this plan" — if it is dropped, the
+      skeleton uses a `type: shell` clone plus `check: auto` instead (after Plan A Task 2,
+      `${vars.*}` renders in `cmd:`), which costs the skeleton nothing
 - [ ] (5b) add a minimal ai render pack (present in 5/5) producing `AGENTS.md` + the
       `CLAUDE.md` symlink. Note it renders into the **service hub** (`services/app/`, which
       is gitignored and absent until the first clone), which is a different file from the
@@ -370,8 +468,17 @@ rule. If other hint sites are wanted, they are their own task.)*
       the skill, since `SKILL.md:28` currently says "never edit the generated `AGENTS.md`"
       and the root one is meant to be edited. (Verified: an ai pack validates cleanly even
       with the hub directory absent — `ai.ValidateManifest` does not require `destRoot`.)
-- [ ] (5c) add a starter `workspace/tests/` scenario limited to "stack deploys, services
-      healthy" (constraint 11) — the feature currently has no users to learn from
+- [ ] (5c) add a starter `workspace/tests/` scenario — with two facts acknowledged in the
+      file itself. First, it **cannot** follow the "shipped fully commented" idiom every
+      other inert scaffold uses: the `envtest` loader is strict and an empty/all-comment
+      file is an **error**, so this is the one scaffold file that must be active (and the
+      one exception to Plan A Task 11's "uncommenting each inert scaffold must load
+      cleanly" table). Second, on a fresh scaffold `compose.yaml` has no services, so
+      "stack deploys, services healthy" would pass **vacuously** — which matters because
+      constraint 11 makes this the first thing an agent runs under the new policy. Prefer an
+      honest template: `description:` plus `steps: []` and a comment saying to add
+      assertions once the service exists in compose. It also cannot reference
+      `${services.app.ports.http}` — see Task 4
 - [ ] regenerate the golden
 - [ ] write tests: scaffolded pipeline resolves without error; scenario loads through
       `envtest.LoadScenario`; ai pack renders; `Service == ""` produces none of the three
@@ -385,15 +492,26 @@ golden.)*
 **Files:**
 - Modify: `internal/cli/test/list.go`
 - Modify: `internal/cli/test/list_test.go`
+- Modify: `internal/core/project/config/compose_scan.go` (extend the existing narrow compose
+  parser — Plan A Task 5 explicitly forbids adding a third one)
 
 - [ ] add a per-scenario cost-profile object to the JSON output, restricted to facts that
-      are **computable without guessing**: enabled service count, presence of `docker build`
-      steps, presence of `source_clone` steps, `build:` sections in compose, referenced
-      external images, summed healthcheck `start_period`
+      are **computable without guessing**: enabled service count, `build:` sections in
+      compose, external images referenced, **max** healthcheck `start_period`, plus the
+      isolation facts (see Technical Details)
+- [ ] compute the service count **over the scenario's `env.services` overlay** — otherwise
+      every scenario in a file reports identical numbers, which is exactly what distinguishes
+      them (the documented `redis-off.yml` example)
+- [ ] exclude services that have `build:` from "external images" — a local build tag like
+      `image: alto-app:dev` is not something to pull, and counting it makes the fact lie in
+      the least helpful direction
+- [ ] use **max** rather than sum for `start_period`: `docker up --wait` waits in parallel,
+      so a sum over-estimates the more services there are
 - [ ] **drop "presence of dependency-install steps"** — detecting it means string-matching
       `npm install` / `composer install` / …, a heuristic that will both lie and drift
-      (YAGNI). Same for a generic "external-artifact fetch" unless it reduces to a
-      checkable construct
+      (YAGNI). Drop "presence of `docker build` steps" for the same reason — it is the same
+      kind of string match, and the checkable construct (`build:` in compose) is already in
+      the list; in both real workspaces the build goes through compose, not through a step
 - [ ] **drop `last_run`** — there is no source for it. `envtest` persists nothing across
       runs: `report.go` writes only for a failed run and only before teardown, and the
       manifest is deleted by teardown; the deploy journal knows nothing about scenarios.
@@ -405,8 +523,14 @@ golden.)*
       required — today it runs on a broken config. A failed config load must degrade to
       "no profile", never to an error
 - [ ] emit facts only — no `cheap`/`expensive` verdict (constraint 12)
+- [ ] record the honest limit in the docs and in the profile's own description: it tells
+      whether there **is** a build, not what the build costs; layer-cache warmth is not
+      modelled (it went with `last_run`). Measured on alto and cueBreaker, both land in
+      "there is a build → ask", so the unattended path would not fire on either today
 - [ ] write tests for a minimal project (no build) and a heavy one (build + external
-      images), asserting the distinguishing fields, plus one with an unloadable config
+      images), asserting the distinguishing fields; one with an unloadable config; and one
+      where two scenarios in the same file differ only by `env.services` and get different
+      profiles
 - [ ] write a test asserting the human output is unchanged
 - [ ] run tests — must pass before task 7
 
@@ -421,11 +545,18 @@ golden.)*
 - Modify: `skills/dwe/references/pipelines-and-orchestration.md`
 - Modify: `internal/core/workflow/scaffold/templates/AGENTS.md.tmpl` (+ golden)
 
-- [ ] implement the policy decision recorded in the Overview across **all six sites** —
-      `dwe test run` may be run unattended when the cost profile shows a cheap scenario;
-      ask when it shows a build from scratch or external images, and whenever the agent is
-      unsure. `SKILL.md:142-144` currently argues the opposite explicitly and must be
-      rewritten, not merely amended
+- [ ] implement the policy decision recorded in the Overview across **all thirteen sites**
+      listed there — unattended only when the profile shows a cheap scenario **and** no
+      isolation findings **and** no `type: shell` steps; ask otherwise, and whenever unsure.
+      `SKILL.md:142-144` currently argues the opposite explicitly and must be rewritten, not
+      merely amended. Do **not** edit `integration-tests.md` §3 — it does not contain the
+      policy and was cited in error
+- [ ] give the conditional rule a structural home: `dwe test run` currently sits under the
+      heading "You **MUST NOT** invoke these MUTATING commands yourself" (`SKILL.md:153`),
+      so rewriting the bullet in place would make the heading false. Move the conditional
+      form into the existing "**Running project tasks — judge the task, not the verb**"
+      subsection (`:132-151`), which already has the right shape, and leave `:161` as a
+      pointer to it
 - [ ] state that the agent should judge what an image build actually costs (thin layer over
       a published base vs building from scratch) rather than treating "there is a build" as
       an automatic stop
@@ -447,8 +578,17 @@ golden.)*
 
 - [ ] verify all requirements from Overview are implemented
 - [ ] scaffold a throwaway project with `dwe init`, then confirm end to end:
-      `dwe validate` is silent, `dwe docs llms-txt --lang en` answers the questions the two
-      sessions had to reverse-engineer, `dwe test list -o json` carries a cost profile
+      `dwe validate` reports no `config`/`templates` diagnostics, `dwe docs llms-txt --lang en`
+      answers the questions the two sessions had to reverse-engineer, `dwe test list -o json`
+      carries a cost profile
+- [ ] verify **rendering**, not only validation: `render.ai` is on by default for
+      `type: app` (`renderEnabledExplicit`), so after Task 5b a fresh `dwe deploy run` will
+      try to render into `services/app/`, which does not exist until the first clone.
+      Confirm that path behaves sanely
+- [ ] note the reciprocal dependency: **this task is what makes Plan A's Task 15 acceptance
+      criterion true.** Measured on a real `dwe init`, Plan A alone leaves one warning
+      (`service "app" … has no dir or dir_internal`), and only activating `dir` here clears
+      it — while simultaneously creating the template-pack warnings Plan A Task 7 absorbs
 - [ ] re-run the two real search queries that returned `[]` and confirm useful hits
 - [ ] run full test suite: `make test`
 - [ ] run `make lint`
@@ -462,6 +602,9 @@ golden.)*
 - [ ] update `docs/guides/start-a-new-project.md` for the richer scaffold, and its ru mirror
 - [ ] update the `--help` texts changed along the way (`search.go` Short/Long,
       `llmstxt.go` Long)
+- [ ] note the merge order with Plan A: both plans touch
+      `internal/cli/validate/validate.go` (Plan A Task 14 adds scope to the summary, Task 3
+      here adds the hint line) — A lands first
 - [ ] run `make build` to resync embedded docs and content hashes
 - [ ] update `AGENTS.md` Critical Patterns if any new load-bearing contract emerged
 - [ ] move this plan to `docs/plans/completed/`

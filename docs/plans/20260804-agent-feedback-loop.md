@@ -131,6 +131,16 @@ but nine test files still assert the old behaviour and must be migrated in Task 
    does not close that by itself — record it, and consider a diagnostic when a path
    reachable via `bridge.vars_writable` is referenced from a pipeline `cmd:`. Do not treat
    the whitelist as a security control; it is a correctness control.
+4c. **Render into a copy.** `With` and `Check` are reference types shared with the loaded
+   config; in-place rendering makes `ProjectConfigHash` depend on deploy scope and makes a
+   second resolve double-render. Deep-copy before rendering.
+4d. **Only render strings containing `${…}`** — otherwise `RenderCommand` executes stray
+   `{{ }}` and breaks the `docker inspect -f '{{.State.Status}}'` idiom at resolve time.
+4e. **Rendered values now reach output surfaces.** After resolve-time rendering,
+   `StepCommand` prints substituted values — so `dwe deploy plan`, `--format shell`, the
+   Task 12 JSON payload, the pipeline log and `trace.Command` under `-v` will all show the
+   value of `${vars.db.password}` where today they show the literal. Decide masking (or
+   accept and document) in Tasks 12–13; this is the flip side of 4b.
 5. **Scaffold template edits require golden updates** —
    `internal/core/workflow/scaffold/testdata/golden_default.txt`.
 6. **Docs are mirrored**: an English page under `docs/reference/` usually has a Russian
@@ -232,15 +242,50 @@ was the single largest correction from plan review — an exec-time render in
    `with:` (`beetDeck/…/frontend/deploy.yml:27-29`, `cueBreaker/…/{frontend,backend}/deploy.yml`).
 
 So: render in `resolveLeafStep` / `ResolvePhaseSteps`, covering `cmd`, the string leaves of
-`with`, and `check` — mirroring `envtest/render.go:renderStep`, whose docstring already
-pins the ordering ("RenderSteps MUST run BEFORE ResolvePhaseSteps"). One code path, no
-asymmetry between `workspace/tests/*.yml` and `deploy.yml`, and Plan B's dependency holds
-as stated. Runtime shell `when:` is evaluated in three places (`executor.go:509` phase,
-`:735` step, `:972` parallel sub-step) — resolve-time rendering covers all three uniformly.
+`with`, `check`, **and `when.Cmd`** — mirroring `envtest/render.go:renderStep` in shape,
+though **not** in mutation strategy (see below). One code path, no asymmetry between
+`workspace/tests/*.yml` and `deploy.yml`, and Plan B's dependency holds as stated. Runtime
+shell `when:` is evaluated in three places (`executor.go:509` phase, `:735` step, `:972`
+parallel sub-step), all consuming the resolved step.
 
-**One-time consequence to state up front**: every step containing `${…}` changes its hash
-once on upgrade, so the first deploy after this lands re-runs those steps instead of
-skipping them. That is correct and self-limiting; it must be in the release notes.
+`when.Cmd` is in the list for two reasons: the Context section records it as a real defect
+(all five workspaces write literal paths in gates, one documenting the limitation in a
+comment), and **Plan B needs the symmetry** — its `check: auto` derives the check from
+`when.Cmd`, so if one is rendered and the other is not, the derived check compares
+different text than the gate it inverts.
+
+**Render into a copy — never mutate the loaded config.** `config.DeployStep` is passed by
+value, but `With map[string]any` and `Check *Action` are reference types pointing at memory
+owned by `deployCfg`/`svcDeploys`. `envtest/renderStep` mutates in place, which is safe
+there because it owns the scenario and renders once — copying that literally here is a bug:
+`internal/cli/deploy/deploy.go:503` computes `serviceHashes` **before** resolve while `:557`
+computes `projectHash` **after**, so in-place rendering would make the project hash depend
+on which services were resolved (`--service` narrows the set). Deep-copy `With` and clone
+`*Check` before rendering, and add a test that resolving the same `*DweConfig` twice yields
+byte-identical results.
+
+**Only render strings that actually contain `${…}`.** `RenderCommand` executes anything
+containing `{{ }}` after `CompileVarSyntax`, so a plain `docker inspect -f '{{.State.Status}}'`
+would fail at resolve with `can't evaluate field State in type *tpl.RenderContext` — an
+idiom that works today because pipeline `cmd:` is not rendered at all. Gate each string on
+`tpl.VarPattern.MatchString(s)`; a string with no `${…}` passes through verbatim. Decide and
+test the mixed case (`${vars.x}` and `{{ … }}` in one string) explicitly — the honest
+default is to render it and let the Go-template error surface, since the author opted in.
+(Checked: no `deploy.yml` in the five workspaces uses `{{ }}` today, so nothing existing
+breaks — but the idiom is common enough that this must not be left to chance.)
+
+**Hashing `vars` is required for the plan to achieve anything.** Resolve-time rendering
+makes `StepHash` sensitive to `vars`, but execution never gets that far: `deploy.go:557`
+computes `ProjectConfigHash` and `:503` `ServiceConfigHash`, **neither of which includes
+`vars`** (`hash.go:141` hashes tracked services + deploy configs only), and when every hash
+matches, deploy returns early with `already up-to-date` without consulting per-step hashes
+at all. So `vars` (or the referenced slice of `cfg.Raw`) must enter the project/service
+hash. **Owner decision: hash the whole `vars` block.**
+
+**One-time consequence to state up front**: adding `vars` to the project hash changes it
+once for every existing project, so the first deploy after the upgrade re-runs steps
+instead of skipping them. The steps are idempotent and gated, so this is safe — but it is
+visible and belongs in the release notes.
 
 **Empty-resolution diagnostic** (Task 3). Scan with `tpl.VarPattern`, but resolve **only**
 heads from `allowedRootKeys`. The special namespaces (`param`, `context`, `files`, `host`,
@@ -249,10 +294,11 @@ would warn on every `${param.*}` (99+ occurrences of `${param.database}` in this
 repository's fixtures alone, hundreds across the workspaces) and on every
 `${generated.*}`, which resolves to `""` by contract on the first deploy. A validator built
 to kill noise must not become its largest source — that would contradict Tasks 7–8.
-Reuse `internal/core/project/varsusage/scan.go` rather than re-deriving which fields render:
-it is already field-aware, already uses `tpl.VarPattern`, and AGENTS.md names it as the
-single scanner. Widen its head filter from `vars` to the whitelist instead of writing a
-second list that will drift.
+Build on `internal/core/project/varsusage/scan.go` rather than re-deriving which fields
+render: it is already field-aware, already uses `tpl.VarPattern`, and AGENTS.md names it as
+the single scanner. Note its API is **query-driven** (`ScanUsages(projectRoot, queryPath)`
+finds one known path; `Usage` does not carry the referenced path), so this needs a new
+enumeration entry point plus a path field — see Task 3, which sizes it accordingly.
 
 **Ports/exports pairing** (Task 6). For every `services.<n>.ports.<key>`, look for an
 `ExportRule` whose `From` is `services.<n>.ports.<key>`. Missing → warning explaining that
@@ -326,23 +372,62 @@ the port is display-only, that `local.yml` overrides will not move the binding, 
 - Modify: `internal/core/execution/pipeline/executor_test.go`
 - Modify: `internal/core/workflow/envtest/render_test.go`
 
-- [ ] render each resolved step's `cmd`, the string leaves of `with`, and `check` in
-      `resolveLeafStep` / `ResolvePhaseSteps`, mirroring `envtest/render.go:renderStep`
-      (constraint 4a — **not** in `execShellAction`)
-- [ ] confirm the three runtime shell `when:` evaluation points (`executor.go:509`,
-      `:735`, `:972`) all consume the resolved step, so gates can reference `${vars.*}`
-      uniformly (today all five workspaces write literal paths there and one documents the
-      limitation in a comment)
+- [ ] render `cmd`, the string leaves of `with`, `check` **and `when.Cmd`** at the very top
+      of `resolveLeafStep`, **before** `builtin.Validate` / `spec.Validate` (`resolve.go:134`,
+      `:139`, `:145`) and before `parseStepTimeout` — those read the fields being rendered.
+      Decide explicitly whether `timeout:` and `FilesGate.With` render too (`FilesGate.With`
+      is hashed by `StepHash`, so leaving it unrendered is an asymmetry)
+- [ ] render into a **copy**: deep-copy `With`, clone `*Check`; never mutate `cfg` /
+      `deployCfg` (constraint 4c)
+- [ ] gate every string on `tpl.VarPattern.MatchString` so `{{ }}`-only commands pass
+      through verbatim (constraint 4d)
+- [ ] decide what a `RenderCommand` error does at resolve time (fail the resolve vs leave
+      the literal). Note `RenderCommand` calls `validateSnapshotScope` with
+      `SnapshotScopeNone`, so `${snapshot.x}` in a pipeline step becomes a hard resolve
+      error where today it would reach `sh` as a literal — that is probably right, but it
+      must be a decision, not a surprise
+- [ ] note that `resolveParallelStep` builds its `ResolvedStep` directly, bypassing
+      `resolveLeafStep`: `rs.Step.Parallel.Steps[i]` stays raw while
+      `rs.Parallel.Steps[i].Step` is rendered. Harmless for `StepHash` (Parallel is not
+      hashed) but pin the divergence with a test so it is not mistaken for a bug later
 - [ ] write tests: a step with `cmd: "git clone ${vars.source.repo} ${vars.source.dir}"`
-      resolves with substituted values, and a `type: command` step's
-      `with: {repo: "${vars.source.repo}"}` does too (this is Plan B's dependency)
-- [ ] write tests: a step with `cmd: 'echo ${HOME}'` reaches `sh` with `${HOME}` intact
-      (regression guard for the whole whitelist argument)
-- [ ] write a journal test: changing a `vars:` value referenced by a step **changes** its
-      `StepHash`, so the step re-runs instead of being skipped as up-to-date (the defect
-      that made exec-time rendering wrong)
+      resolves with substituted values; a `type: command` step's
+      `with: {repo: "${vars.source.repo}"}` does too (Plan B's dependency); `when.Cmd`
+      renders (Plan B's symmetry requirement)
+- [ ] write tests: `cmd: 'echo ${HOME}'` reaches `sh` with `${HOME}` intact; and
+      `cmd: "docker inspect -f '{{.State.Status}}' x"` resolves **unchanged** rather than
+      erroring (the regression that would break a common idiom)
+- [ ] write a test: resolving the same config twice is idempotent (guards against
+      double-render and against in-place mutation)
 - [ ] write a test in `envtest` pinning that scenario `cmd:` keeps `${HOME}` literal
       (closes the pre-existing latent hole)
+- [ ] run tests — must pass before task 2a
+
+### Task 2a: Hash `vars` so a changed value actually re-runs the step
+
+**Files:**
+- Modify: `internal/core/workflow/deploy/journal/hash.go`
+- Modify: `internal/core/workflow/deploy/journal/hash_test.go`
+- Modify: `internal/cli/deploy/deploy.go` tests as needed
+
+Without this the whole plan is inert: `deploy.go:557`/`:503` compute the project and
+service hashes, `vars` is in neither, and a full hash match returns early with
+`already up-to-date` before any per-step hash is consulted. Rendering would work and
+nothing would re-run.
+
+- [ ] include the `vars` block in `ProjectConfigHash` (owner decision: the whole block, not
+      only referenced paths — simpler and cannot drift out of sync with the reference
+      scanner)
+- [ ] decide whether `ServiceConfigHash` needs it too, or whether the project hash covers
+      the case (a per-service deploy referencing `${vars.*}` is the scenario to reason about)
+- [ ] write an **end-to-end** test: change a `vars:` value referenced by a step → the next
+      `deploy run` executes that step instead of reporting `already up-to-date`. A test that
+      only asserts "StepHash changed" is tautological — `StepHash` is a pure function of the
+      step — and would pass while the behaviour stays broken
+- [ ] write a test that changing an unrelated `vars:` entry also invalidates (accepted
+      cost of hashing the whole block — pin it so the trade-off is visible)
+- [ ] record the one-time re-run in the release notes (constraint: every existing project's
+      project hash changes once on upgrade)
 - [ ] run tests — must pass before task 3
 
 ### Task 3: Validator — `${…}` with a known head that resolves to nothing
@@ -351,16 +436,23 @@ the port is display-only, that `local.yml` overrides will not move the binding, 
 - Create: `internal/core/validate/config/template_refs.go`
 - Create: `internal/core/validate/config/template_refs_test.go`
 - Create: `internal/core/validate/config/testdata/template_ref_typo/…`
-- Modify: `internal/core/project/varsusage/scan.go` (widen the head filter)
+- Modify: `internal/core/project/varsusage/scan.go` (new enumeration entry point + a path
+  field on `Usage` — see the first checkbox; this is not a filter widening)
 - Modify: `internal/core/validate/config/all.go`
 
 - [ ] (TDD) write the fixture: a service `deploy.yml` referencing `${vars.opechatka}` plus
       a valid `${vars.source.repo}`, and the test asserting exactly one warning naming the
       file, step and field
-- [ ] implement the validator on top of `varsusage.Scan` (already field-aware, already uses
-      `tpl.VarPattern`, named in AGENTS.md as the single scanner) by widening its head
-      filter from `vars` to the whitelist — do **not** re-derive which fields render, or the
-      two lists will drift
+- [ ] extend `varsusage` with an **enumeration** entry point. Today it is query-driven —
+      `ScanUsages(projectRoot, queryPath)` looks for one known path and matches on dot
+      boundaries, and `Usage` carries `File/Line/Kind/Text` but **not the referenced
+      path**. The validator needs the inverse: collect every `${known-head.path}` and test
+      each for resolvability. So this is a new exported function plus a path field on
+      `Usage` — not "widen a filter", and the task is roughly twice the size the first
+      draft implied
+- [ ] build the validator on that entry point rather than re-deriving which fields render —
+      `varsusage` is named in AGENTS.md as the single field-aware scanner, and a second list
+      would drift
 - [ ] resolve **only** heads from `allowedRootKeys`; exclude `param`, `context`, `files`,
       `host`, `snapshot`, `args` entirely (they do not live in `Raw`) and `generated`
       explicitly (lenient-by-contract: absent → `""` on the first deploy). Without this the
@@ -379,14 +471,17 @@ the port is display-only, that `local.yml` overrides will not move the binding, 
 
 - [ ] normalize to lowercase in both `ResolveComposeProjectName` and `ComposeProjectName`
       (single shared helper — the two must never diverge)
-- [ ] **keep** the legacy candidate in `ComposeProjectNameCandidates` when it differs only
-      by case, and collapse only on exact equality. This is the opposite of the first draft
-      and is the whole point of the second candidate: Docker **does** allow uppercase in
-      container names, and the compose-bypass paths (daemon builtins,
-      `StopContainer`/`RemoveContainer`, label filters) build `<project>-<name>` directly —
-      so a project that ran as `dwe-cueBreaker` has real containers under that name.
-      Dropping the candidate would orphan them and leave `stop`/`reap`/`status` unable to
-      find them
+- [ ] **keep** the legacy candidate when it differs only by case. Note the current code
+      already collapses on exact equality only (`docker.go:308`: `full != primary`), so this
+      is a **regression test**, not a change — write it as such
+- [ ] add the **pre-normalization** value as a candidate too. This is the real gap: an
+      explicit `docker.yml project_name: dwe-cueBreaker` becomes `dwe-cuebreaker` after
+      normalization, and the original spelling appears in no candidate at all (the second
+      candidate is derived from `Project.FullName()`, not from the pre-normalized value).
+      Docker **does** allow uppercase in container names, and the compose-bypass paths
+      (daemon builtins, `StopContainer`/`RemoveContainer`, label filters) build
+      `<project>-<name>` directly — so containers created under the old spelling would be
+      orphaned by exactly the argument this plan uses for the `FullName` route
 - [ ] write tests: `project.name: cueBreaker` yields `dwe-cuebreaker`; an explicit
       `docker.yml project_name` is passed through unchanged when already lowercase
 - [ ] write tests for the candidates helper: case-only difference keeps **two** candidates
@@ -412,11 +507,20 @@ the port is display-only, that `local.yml` overrides will not move the binding, 
       lowercase `container_name: myapp` breaks `dwe stop <name>`, `dwe restart <name>` and
       the daemon builtins exactly the same way, since those resolve the derived name
 - [ ] surface the finding through the existing `config.ScanComposeIsolation`
-      (`compose_scan.go:78,108`), which **already** parses the `ComposeFiles()` chain and
-      emits `KindContainerName` with `Blocking: true` — it is simply not wired into the
-      `config` validate domain today (only `dwe validate tests` and the envtest runner
-      consume it). Map `Blocking` to severity there rather than adding a third compose
-      parser
+      (`compose_scan.go:78,108`), which **already** parses the `ComposeFiles()` chain — but
+      note two gaps the first draft treated as drop-in reuse: (a) `scanComposeDoc` flags
+      **any** non-empty `container_name` (`svc.ContainerName != ""`), without comparing to
+      the derived name and without skipping `${…}`-interpolated values, so both "silent"
+      cases below fail as-is; (b) the value itself is not exposed —
+      `IsolationFinding.Resource` is the **service** name and the value only appears inside
+      the human `Message`, so `IsolationFinding` needs a `Value` field, which touches its
+      two existing consumers (`validate/tests`, envtest runner)
+- [ ] **filter by kind**: wire only `KindContainerName` into the `config` domain. Mapping
+      `Blocking → error` wholesale would also raise `KindRawHostPort`, which fires on any
+      literal `"5001:5000"` in compose — normal dev practice (beetDeck lives that way) —
+      turning `dwe validate` red almost everywhere and contradicting Tasks 7–8 and both
+      acceptance criteria in Task 15. Precedent: `dwe validate tests` deliberately demotes
+      **all** findings to `SeverityWarning`
 - [ ] write tests for the silent cases: derived-matching names, interpolated `${…}` names
 - [ ] run tests — must pass before task 6
 
@@ -437,11 +541,10 @@ the port is display-only, that `local.yml` overrides will not move the binding, 
       through `config.DeployOrder(...)` (never `range cfg.Services` — map order is random
       and would make the test flaky)
 - [ ] register in `All()`; write the negative test (correctly paired port → silent)
-- [ ] decide the overlap with `ScanComposeIsolation`: a port declared only for `dwe info` /
-      `ports_free` with a literal compose binding is a legal (if undesirable) pattern that
-      the isolation scanner already flags as `KindRawHostPort`. Either suppress one of the
-      two or state why both firing is correct — per Tasks 7–8 the bar is "something is
-      wrong", not "something is unused"
+- [ ] no overlap to resolve here — Task 5 wires **only** `KindContainerName` into the
+      `config` domain, so `KindRawHostPort` stays where it is and this validator is the only
+      voice on ports. (Keep this note: the first draft deferred the decision to this task,
+      which was the wrong place — the severity choice belongs where the scanner is wired in)
 - [ ] run tests — must pass before task 7
 
 ### Task 7: Silence render-pack diagnostics on implicit defaults; fix the `services.yml` hint
@@ -558,10 +661,15 @@ the port is display-only, that `local.yml` overrides will not move the binding, 
 - Modify: corresponding `*_test.go`
 
 - [ ] with resolve-time rendering (Task 2) the plan already prints substituted values, so a
-      `${…}` surviving into `StepCommand` output is **necessarily** an unknown head —
+      `${…}` surviving into `StepCommand` output is **almost always** an unknown head —
       annotate those in both the human and JSON plan output so the plan stops presenting
-      them as "what will run". (Had rendering stayed at exec time, this task would have
-      flagged correct references too — see Technical Details.)
+      them as "what will run". Two exceptions to keep in mind rather than mis-flag: a
+      `${vars.x}` whose *value* itself contains `${…}`, and any string that failed the
+      `VarPattern` gate. (Had rendering stayed at exec time, this task would have flagged
+      correct references too — see Technical Details.)
+- [ ] decide masking of sensitive rendered values (constraint 4e): after Task 2 the plan,
+      `--format shell`, the JSON payload, the pipeline log and `-v` tracing all show real
+      values where they used to show `${vars.db.password}`
 - [ ] keep the annotation out of `--format shell` (that output must stay executable)
 - [ ] write tests covering: resolved template renders substituted; unknown head shown as
       literal with annotation; JSON payload carries the flag
@@ -587,8 +695,18 @@ the port is display-only, that `local.yml` overrides will not move the binding, 
 - [ ] reproduce the three original defects as fixtures and confirm each is now caught
       statically: `${vars.*}` in a shell step (now renders), CamelCase project name (now
       normalized + flagged), all-comment `info.yml` (now falls back)
-- [ ] confirm a freshly scaffolded single-service project produces **zero** warnings from
-      `dwe validate` (the 6 `template pack not found` and the `no reset.yml` noise are gone)
+- [ ] confirm a freshly scaffolded single-service project produces **zero** `config` and
+      `templates` warnings from `dwe validate`. Two corrections to the first draft, both
+      measured on a real `dwe init`: (a) today a fresh scaffold emits exactly **one**
+      warning — `service "app" (type app) has no dir or dir_internal`
+      (`validate/config/workspace.go:560`) — and the six `template pack not found` lines do
+      **not** appear, because the template validators bail out with an info line while
+      `svc.Dir` is empty. They materialize only once Plan C Task 4 activates `dir`, which is
+      precisely what Tasks 7–8 here are built to absorb. (b) The `env` domain checks the
+      **host** (a busy port is a legitimate error), so it is out of scope for this
+      criterion. Consequently **this acceptance criterion is only fully satisfiable
+      together with Plan C Task 4** — state that rather than letting it read as achievable
+      by Plan A alone
 - [ ] run full test suite: `make test`
 - [ ] run `make lint`
 - [ ] verify test coverage meets project standard
@@ -605,8 +723,12 @@ the port is display-only, that `local.yml` overrides will not move the binding, 
       (§ `render.config`), `docs/internals/packages.md` (§ `internal/shared/tpl/` — it
       describes the old unconditional fallthrough verbatim), and the
       `internal/cli/render/config.go` help text
-- [ ] note the one-time hash change in the release notes (steps containing `${…}` re-run
-      once after upgrade)
+- [ ] note the one-time hash change in the release notes (adding `vars` to the project hash
+      makes the first deploy after upgrade re-run steps in every existing project)
+- [ ] document the remaining exception: `config.resolveVarTemplate` (`docker.go:339`) keeps
+      its own semantics for `${dot.path}` in `docker.yml project_name` and **errors** on an
+      unresolvable path. After Task 1 the same `${FOO}` is a literal in `deploy.yml` and a
+      hard error in `docker.yml` — one sentence, so the difference is deliberate
 - [ ] update the Russian mirrors under `docs/i18n/ru/`
 - [ ] run `make build` to resync embedded docs and content hashes
 - [ ] update `AGENTS.md` Critical Patterns — **not conditional**: a rule that changes the
