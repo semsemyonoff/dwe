@@ -243,14 +243,29 @@ func sanitiseDisplay(s string) string {
 // RenderDaemons returns the Daemons section as a single string (title + table)
 // and any parse errors collected while building the rows. Empty rows → empty
 // string so the orchestrator can hide the section entirely.
+//
+// It routes through the sink-probing render.DaemonTable rather than
+// RenderDaemonsAt(rows, 0): width 0 means *unbounded*, not "resolve from the
+// sink", so delegating there would silently opt `dwe status`'s Daemons
+// section out of responsive tables while every other section keeps it.
 func RenderDaemons(rows []statusview.DaemonRow) (string, []error) {
-	return RenderDaemonsAt(rows, 0)
+	return daemonsSection(rows, render.DaemonTable)
 }
 
 // RenderDaemonsAt is RenderDaemons at an explicit width budget (0 =
 // unbounded). Callers that already know their own render width — the status
 // TUI panel — use this instead of the sink-probing RenderDaemons.
 func RenderDaemonsAt(rows []statusview.DaemonRow, width int) (string, []error) {
+	return daemonsSection(rows, func(tableRows []render.DaemonTableRow) string {
+		return render.DaemonTableAt(tableRows, width)
+	})
+}
+
+// daemonsSection converts rows to table rows and wraps whatever renderTable
+// produces in the "Daemons" section envelope. Shared so the sink-probing and
+// explicit-width entry points cannot drift on the conversion or the
+// empty-body short-circuit.
+func daemonsSection(rows []statusview.DaemonRow, renderTable func([]render.DaemonTableRow) string) (string, []error) {
 	if len(rows) == 0 {
 		return "", nil
 	}
@@ -263,7 +278,7 @@ func RenderDaemonsAt(rows []statusview.DaemonRow, width int) (string, []error) {
 			Uptime:    formatUptime(r.Uptime),
 		}
 	}
-	body := render.DaemonTableAt(tableRows, width)
+	body := renderTable(tableRows)
 	if body == "" {
 		return "", nil
 	}

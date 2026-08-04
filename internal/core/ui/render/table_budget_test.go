@@ -268,6 +268,134 @@ func TestSinkAwareBudget_DiagnosticsTable_ProbesStderrNotStdout(t *testing.T) {
 	}
 }
 
+// TestSinkAwareBudget_DiagnosticsByDomain_ProbesStdoutNotStderr is the
+// mirror of the DiagnosticsTable test above, with the streams swapped:
+// DiagnosticsByDomain's only call site (`dwe validate`) writes to
+// cmd.OutOrStdout(), so it must follow stdout. Probing stderr here would
+// shrink `dwe validate > report.txt` to the terminal width and leave
+// `dwe validate 2>/dev/null` unbounded on a narrow terminal.
+func TestSinkAwareBudget_DiagnosticsByDomain_ProbesStdoutNotStderr(t *testing.T) {
+	resetStyles()
+	rows := []DiagnosticRow{
+		{
+			Severity: validate.SeverityError,
+			Domain:   "linters",
+			Target:   "hadolint",
+			File:     "services/admin/docker/images/base/vendor/Dockerfile",
+			Message:  "Non-numeric user-id may not be resolvable by host system (DL3066)",
+			Hint:     "https://github.com/hadolint/hadolint/wiki/DL3066",
+		},
+	}
+
+	saved := termWidthFn
+	t.Cleanup(func() { termWidthFn = saved })
+
+	// Narrow stdout must be honored.
+	termWidthFn = func(f *os.File) int {
+		if f == os.Stdout {
+			return 30
+		}
+		return 0
+	}
+	narrow := stripANSI(DiagnosticsByDomain(rows))
+	if isTableMode(narrow) {
+		t.Errorf("expected a narrow stdout to force record mode, got a table:\n%s", narrow)
+	}
+
+	// Narrow stderr must be ignored.
+	termWidthFn = func(f *os.File) int {
+		if f == os.Stderr {
+			return 30
+		}
+		return 0
+	}
+	unbounded := stripANSI(DiagnosticsByDomain(rows))
+	if !isTableMode(unbounded) {
+		t.Errorf("expected DiagnosticsByDomain to ignore a narrow stderr and stay unbounded via stdout, got records:\n%s", unbounded)
+	}
+}
+
+// TestSinkAwareBudget_Diagnostics_TableModeNeverExceedsBudget sweeps the
+// terminal widths around a diagnostics row whose HINT holds a URL longer than
+// the MESSAGE/HINT `Max` cap. That combination used to render *wider* than
+// the budget while still claiming to fit: naturalWidths clamped the column to
+// Max while the wrap helpers refused to split the URL, so distributeDeficit
+// saw negative headroom and widened the column instead of leaving it alone —
+// the terminal then hard-wrapped and broke the box borders, the exact failure
+// the responsive tables exist to prevent.
+//
+// The assertion is scoped to table mode on purpose. Record mode has no lower
+// width bound and never truncates, so at a budget narrower than the URL it
+// legitimately emits one over-long line rather than cutting the link — that
+// is the "no data is ever dropped" invariant, not an overflow bug.
+func TestSinkAwareBudget_Diagnostics_TableModeNeverExceedsBudget(t *testing.T) {
+	resetStyles()
+	rows := []DiagnosticRow{
+		{
+			Severity: validate.SeverityWarning,
+			Domain:   "linters",
+			Target:   "hadolint",
+			File:     "Dockerfile",
+			Message:  "pin versions in apk add so builds are reproducible",
+			// Deliberately longer than diagnosticTextWrapWidth (44).
+			Hint: "https://github.com/hadolint/hadolint/wiki/DL3018-pin-versions",
+		},
+	}
+
+	saved := termWidthFn
+	t.Cleanup(func() { termWidthFn = saved })
+
+	sawTableMode := false
+	for _, width := range []int{60, 80, 100, 105, 110, 115, 120, 125, 130, 140} {
+		termWidthFn = func(*os.File) int { return width }
+		for _, out := range []string{DiagnosticsByDomain(rows), DiagnosticsTable(rows)} {
+			if !isTableMode(out) {
+				continue
+			}
+			sawTableMode = true
+			assertLinesWithinBudget(t, out, width)
+		}
+	}
+	if !sawTableMode {
+		t.Fatal("no width in the sweep rendered as a table; the assertion never ran")
+	}
+}
+
+// TestFitRows_MaxCappedColumnWithOverlongToken pins the arithmetic half of
+// the bug above at the fitRows level: when a Max-capped Flex column holds an
+// unbreakable token wider than Max, the fitted width must never fall below
+// that token's width, and the total must stay inside the budget.
+func TestFitRows_MaxCappedColumnWithOverlongToken(t *testing.T) {
+	url := "https://github.com/hadolint/hadolint/wiki/DL3018-pin-versions"
+	headers := []string{"TARGET", "HINT"}
+	rows := [][]string{{"hadolint", url}}
+	cols := []columnSpec{
+		{Role: roleTitle},
+		{Flex: true, Max: 44, Wrap: wrapText},
+	}
+
+	urlWidth := lipgloss.Width(url)
+	if urlWidth <= 44 {
+		t.Fatalf("test precondition: URL width %d must exceed the Max cap 44", urlWidth)
+	}
+
+	floors := floorsFor(headers, rows, cols)
+	if floors[1] != urlWidth {
+		t.Errorf("HINT floor = %d, want the URL's own width %d (a Max cap must not push a column below an unbreakable token)", floors[1], urlWidth)
+	}
+
+	chrome := len(headers) + 1
+	for budget := sumInts(floors) + chrome; budget <= sumInts(floors)+chrome+40; budget++ {
+		out, ok := fitRows(headers, rows, budget, 0, cols)
+		if !ok {
+			t.Fatalf("fitRows(budget=%d) ok = false, want true at or above the floor sum", budget)
+		}
+		if got := lipgloss.Width(out[0][1]); got != urlWidth {
+			t.Errorf("budget=%d: HINT cell width = %d, want the URL kept whole at %d: %q", budget, got, urlWidth, out[0][1])
+		}
+	}
+}
+
 // TestSinkAwareBudget_DefaultSeam_GoldensUnaffected re-renders two of the
 // Task 1 goldens under the enabled sink-aware budget (this task's change),
 // without overriding termWidthFn. TestMain pins it to the non-TTY default (0

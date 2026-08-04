@@ -35,19 +35,21 @@ type tableView struct {
 // (budget == 0 means unbounded), or as a record layout when they do not fit
 // even at their floors.
 func (v tableView) Render(budget int) string {
-	rows, ok := fitRows(v.Headers, v.Rows, budget, v.Padding, v.Cols)
+	rows, ok := v.fit(budget)
 	if !ok {
 		return v.renderRecords(budget)
 	}
 	return v.renderTable(rows)
 }
 
-// Fits reports whether v renders as a table at budget, without rendering it.
-// DiagnosticsByDomain uses this to force one shared mode across every domain
-// table it emits rather than letting each domain decide independently.
-func (v tableView) Fits(budget int) bool {
-	_, ok := fitRows(v.Headers, v.Rows, budget, v.Padding, v.Cols)
-	return ok
+// fit resolves v's rows at budget without rendering them: ok reports whether
+// v renders as a table, and rows carries the fitted, wrapped cells to hand to
+// renderTable. DiagnosticsByDomain calls it directly so it can decide one
+// shared mode across every domain table it emits — rather than letting each
+// domain decide independently — while still reusing each domain's already
+// fitted rows.
+func (v tableView) fit(budget int) ([][]string, bool) {
+	return fitRows(v.Headers, v.Rows, budget, v.Padding, v.Cols)
 }
 
 // renderTable renders rows — already fitted and wrapped by fitRows — as a

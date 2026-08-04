@@ -201,7 +201,7 @@ func TestFitRows_BelowFloorsReturnsNotOK(t *testing.T) {
 		{Flex: true, Wrap: wrapText},
 	}
 
-	floors := effectiveFloors(headers, rows, cols, naturalWidths(headers, rows, cols))
+	floors := floorsFor(headers, rows, cols)
 	chrome := len(headers) + 1
 	budget := sumInts(floors) + chrome - 1 // one short of the floor sum
 
@@ -222,7 +222,7 @@ func TestFitRows_URLNeverSplit(t *testing.T) {
 		{Flex: true, Wrap: wrapText},
 	}
 
-	floors := effectiveFloors(headers, rows, cols, naturalWidths(headers, rows, cols))
+	floors := floorsFor(headers, rows, cols)
 	chrome := len(headers) + 1
 	budget := sumInts(floors) + chrome // exactly at the floor
 
@@ -294,5 +294,42 @@ func TestSplitDisplayWidth_ANSIInputIsUnsupported(t *testing.T) {
 	}
 	if strings.Contains(tail, openBold) {
 		t.Fatalf("tail = %q, want it to start unstyled — the open code stayed on the head half", tail)
+	}
+}
+
+// TestDistributeDeficit_MultipleFlexColumns exercises the proportional split
+// and the largest-remainder leftover loop, both of which every fitRows test
+// above leaves dead by using a single Flex column. It asserts the three
+// invariants the loop exists to hold: the total lands exactly on available,
+// no column is pushed below its floor, and no fixed column moves.
+func TestDistributeDeficit_MultipleFlexColumns(t *testing.T) {
+	cols := []columnSpec{
+		{},                           // fixed
+		{Flex: true, Wrap: wrapText}, // large headroom
+		{Flex: true, Wrap: wrapText}, // small headroom
+		{Flex: true, Wrap: wrapText}, // no headroom (already at floor)
+	}
+	natural := []int{10, 40, 13, 7}
+	floors := []int{10, 10, 10, 7}
+
+	// Sweep every reachable available width between the floor sum and the
+	// natural sum, so both the exact-division and the remainder path run.
+	for available := sumInts(floors); available < sumInts(natural); available++ {
+		widths := distributeDeficit(natural, floors, cols, available)
+
+		if got := sumInts(widths); got != available {
+			t.Errorf("available=%d: sum(widths) = %d, want exactly %d (largest-remainder leftover not drained)", available, got, available)
+		}
+		if widths[0] != natural[0] {
+			t.Errorf("available=%d: fixed column width = %d, want its natural %d", available, widths[0], natural[0])
+		}
+		for i, w := range widths {
+			if w < floors[i] {
+				t.Errorf("available=%d: column %d width = %d, below its floor %d", available, i, w, floors[i])
+			}
+			if w > natural[i] {
+				t.Errorf("available=%d: column %d width = %d, above its natural %d", available, i, w, natural[i])
+			}
+		}
 	}
 }

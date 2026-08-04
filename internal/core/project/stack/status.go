@@ -33,10 +33,14 @@ type StatusInput struct {
 	State      *journal.ProjectState
 	SvcDeploys map[string]*config.ServiceDeployConfig
 	Tracked    []string
-	// Width is the render width budget for table sections (0 = resolve from
-	// the sink — i.e. fall back to the stdout-probing render.* entry points).
-	// Set by callers that already know their own width, such as the status
-	// TUI panel; cli/status leaves it 0.
+	// Width is the render width budget for the Render*(in) convenience
+	// wrappers (0 = resolve from the sink — i.e. fall back to the
+	// stdout-probing render.* entry points). It exists as the override
+	// channel for a caller that already knows its own width, but has no
+	// production setter today: cli/status leaves it 0, and the status TUI
+	// does not use these wrappers at all — it goes through the collect/render
+	// split (CollectApps + RenderAppsRows(sec, width)), which takes the width
+	// as a parameter.
 	Width int
 }
 

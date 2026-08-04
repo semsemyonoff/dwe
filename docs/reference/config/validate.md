@@ -441,6 +441,14 @@ Diagnostics share the rendering and severity model used by the rest of `dwe vali
 
 Preflight writes the same diagnostic table to stderr before failing with exit code 1. Use `\n` in hints to split long remediation text across lines — the Lipgloss table honors newlines.
 
+### Terminal width
+
+The diagnostic table adapts to the terminal it is written to: columns shrink and wrap as the terminal narrows, and below the point where the columns still fit, the table is replaced by a labeled record block — one block per diagnostic, `label  value` lines instead of cells. Nothing is ever truncated; a long hint URL stays whole and copyable in both layouts, so a link wider than the terminal is the one thing that may still overflow.
+
+When the output is piped or redirected the terminal width is unknown, so the adaptive layout is disabled and the full-width table is emitted unchanged — `dwe validate > report.txt` produces the same bytes regardless of the terminal it ran in. For machine-readable output use `--output json`.
+
+The width follows the stream each command actually writes to: `dwe validate` writes its table to stdout, while preflight and the deploy menu write theirs to stderr. Redirecting one does not affect the other.
+
 ## External linters
 
 The `linters.*` domain runs well-known external linters (shellcheck, hadolint) and arbitrary `type: generic` adapters as part of `dwe validate`. Linters do **not** run in preflight — preflight answers "can we run?", not "is the code clean?".

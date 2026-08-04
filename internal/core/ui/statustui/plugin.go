@@ -103,6 +103,13 @@ func (p *plugin) Update(msg tea.Msg) tea.Cmd {
 			return nil
 		}
 		m.snap = msg.snap
+		// Invalidate the render memo explicitly. The (loadGen, active, width)
+		// key is NOT sufficient on its own: loadGen is bumped when a reload
+		// *starts* (HandleAction), and the spinner keeps ticking during the
+		// load, so at least one frame renders the pre-reload snapshot and
+		// caches it under the new gen. Without this the reloaded body would
+		// never reach the screen until a tab switch or resize.
+		m.renderCacheValid = false
 		if !m.loaded {
 			m.sectionAnchors = make([][]int, len(tabTitles))
 		}
@@ -115,9 +122,10 @@ func (p *plugin) Update(msg tea.Msg) tea.Cmd {
 		// Restore YOffset if this is a reload that matches the active tab;
 		// otherwise scroll to the top. Content itself is not set here —
 		// renderBody recomputes the active tab's body from m.snap on the next
-		// render via renderTab, and SetContent alone never touches YOffset
-		// (bubbles/v2 viewport), so the order relative to that later
-		// SetContent call does not matter.
+		// render via renderTab. Setting the offset before that later
+		// SetContent is safe: bubbles/v2's SetContentLines re-clamps
+		// (GotoBottom when YOffset > maxYOffset), so a restored offset past
+		// the end of shorter reloaded content is corrected, not stranded.
 		if m.reloadGen == msg.gen && m.reloadActive == m.active {
 			m.viewport.SetYOffset(m.reloadYOffset)
 		} else {
@@ -183,8 +191,10 @@ const panelChromeRows = 2
 // width, memoising the result on (loadGen, active, width) in m.renderCache*
 // so repeated View() calls with none of those three changed reuse the
 // previous render instead of re-running renderTabFn. A tab switch changes
-// active, a reload bumps loadGen, and a terminal resize changes width — each
-// alone invalidates the cache because it changes the key tuple.
+// active and a terminal resize changes width, so each alone invalidates the
+// cache. loadGen alone does NOT cover a reload — it is bumped when the reload
+// starts, so Update explicitly clears renderCacheValid when the snapshot
+// actually lands.
 func (p *plugin) renderActiveTab(width int) (string, []int) {
 	m := p.m
 	if m.renderCacheValid && m.renderCacheGen == m.loadGen && m.renderCacheTab == m.active && m.renderCacheWidth == width {

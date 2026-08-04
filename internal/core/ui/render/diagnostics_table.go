@@ -59,6 +59,12 @@ func DiagnosticsTable(rows []DiagnosticRow) string {
 // § Mode decision is per render call, not per table). If any single domain
 // cannot fit as a table at the shared budget, every domain renders as
 // records.
+//
+// Budget is resolved from stdout, not stderr: unlike DiagnosticsTable, this
+// renderer's only call site (`dwe validate`) writes to cmd.OutOrStdout(). The
+// budget must follow the sink — probing stderr here would shrink the output
+// of `dwe validate > report.txt` to the terminal width, and leave
+// `dwe validate 2>/dev/null` unbounded on a narrow terminal.
 func DiagnosticsByDomain(rows []DiagnosticRow) string {
 	if len(rows) == 0 {
 		return ""
@@ -74,12 +80,15 @@ func DiagnosticsByDomain(rows []DiagnosticRow) string {
 	}
 	sortDomainsForDisplay(order)
 
-	budget := stderrBudget()
+	budget := stdoutBudget()
 	views := make([]tableView, len(order))
+	fitted := make([][][]string, len(order))
 	fitsAll := true
 	for i, d := range order {
 		views[i] = diagnosticsTableView(groups[d], false)
-		if !views[i].Fits(budget) {
+		var ok bool
+		fitted[i], ok = views[i].fit(budget)
+		if !ok {
 			fitsAll = false
 		}
 	}
@@ -92,10 +101,7 @@ func DiagnosticsByDomain(rows []DiagnosticRow) string {
 		b.WriteString(domainTitle(d, groups[d]))
 		b.WriteByte('\n')
 		if fitsAll {
-			// Fits(budget) already proved this succeeds; the rows are
-			// recomputed here because Fits deliberately does not expose them.
-			fittedRows, _ := fitRows(views[i].Headers, views[i].Rows, budget, views[i].Padding, views[i].Cols)
-			b.WriteString(views[i].renderTable(fittedRows))
+			b.WriteString(views[i].renderTable(fitted[i]))
 		} else {
 			b.WriteString(views[i].renderRecords(budget))
 		}
@@ -115,7 +121,7 @@ func diagnosticsTable(rows []DiagnosticRow, showDomain bool) string {
 }
 
 // diagnosticsTableView builds the tableView backing diagnosticsTable. Split
-// out so a future caller (DiagnosticsByDomain) can inspect Fits/Render per
+// out so a future caller (DiagnosticsByDomain) can inspect fit/Render per
 // domain without duplicating the column-spec construction.
 func diagnosticsTableView(rows []DiagnosticRow, showDomain bool) tableView {
 	stringRows := make([][]string, len(rows))
@@ -301,10 +307,6 @@ func FormatDiagnostics(diags []validate.Diagnostic, quiet bool) []DiagnosticRow 
 		})
 	}
 	return rows
-}
-
-func wrapDiagnosticText(s string) string {
-	return wrapText(s, diagnosticTextWrapWidth)
 }
 
 // FormatSummary returns a summary line based on the aggregate counts.

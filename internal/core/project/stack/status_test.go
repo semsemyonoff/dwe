@@ -338,11 +338,26 @@ func TestRenderTypeSection_ExplicitWidthUsesServicesTableAt(t *testing.T) {
 		nil,
 		nil,
 	)
-	// A very narrow explicit width forces record mode; assert the width is
-	// actually honored rather than silently falling back to unbounded.
-	out, errs := RenderApps(StatusInput{Cfg: cfg, IsRunning: func(_ string) bool { return false }, Width: 20})
+	// A very narrow explicit width forces record mode. Byte-compare against
+	// the explicit-width renderer rather than merely looking for "main": a
+	// Contains check passes even if in.Width is dropped and the table renders
+	// unbounded, which is exactly the regression this test exists to catch.
+	in := StatusInput{Cfg: cfg, IsRunning: func(_ string) bool { return false }, Width: 20}
+	out, errs := RenderApps(in)
 	if len(errs) != 0 {
 		t.Errorf("unexpected errors: %v", errs)
+	}
+
+	sec, _ := CollectApps(in)
+	want := wrapSection("Apps", render.ServicesTableAt(sec.Rows, sec.ExtraCols, true, 20))
+	if out != want {
+		t.Errorf("RenderApps(Width: 20) = %q, want the ServicesTableAt(…, 20) rendering %q", out, want)
+	}
+
+	unbounded := in
+	unbounded.Width = 0
+	if wide, _ := RenderApps(unbounded); wide == out {
+		t.Error("width 20 did not change the rendering; this test cannot detect a dropped in.Width")
 	}
 	if !strings.Contains(out, "main") {
 		t.Errorf("expected narrow-width output to still contain 'main': %q", out)

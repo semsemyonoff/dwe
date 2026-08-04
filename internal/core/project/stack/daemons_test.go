@@ -150,6 +150,16 @@ func TestRenderDaemons_TableContents(t *testing.T) {
 	}
 }
 
+// TestRenderDaemonsAt_ExplicitWidthMatchesRenderDaemons pins that the two
+// entry points share one conversion + section envelope.
+//
+// They are NOT the same contract: RenderDaemons routes through the
+// sink-probing render.DaemonTable, while RenderDaemonsAt(rows, 0) means
+// literally unbounded. The two agree here only because `go test` runs with a
+// non-TTY stdout, where the probe also resolves to 0 — so this asserts the
+// shared plumbing, not that width 0 and "probe the sink" are interchangeable.
+// The probe itself is covered on the render side
+// (TestSinkAwareBudget_DaemonTable_ShrinksBeforeRecords).
 func TestRenderDaemonsAt_ExplicitWidthMatchesRenderDaemons(t *testing.T) {
 	rows := []statusview.DaemonRow{
 		{ID: "services.main.queue", Params: "name=default", Container: "proj-php_queue_default", Uptime: 5 * time.Minute},

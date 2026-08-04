@@ -71,7 +71,7 @@ func TestTableView_RenderRecords_BlankLineSeparatesRecords(t *testing.T) {
 	}
 }
 
-func TestTableView_RenderRecords_TitleSkipsEmptyAndDashCells(t *testing.T) {
+func TestTableView_RenderRecords_SkipsEmptyCellsAndDashTitles(t *testing.T) {
 	pinGoldenPalette(t)
 
 	row := []string{"✗", "hadolint", "—", "msg", ""}
@@ -82,11 +82,31 @@ func TestTableView_RenderRecords_TitleSkipsEmptyAndDashCells(t *testing.T) {
 	if header != "✗ hadolint" {
 		t.Errorf("header = %q, want %q (FILE=\"—\" must be skipped)", header, "✗ hadolint")
 	}
-	// HINT is empty; its field line still renders (only title cells are
-	// skipped when empty), so the block has a header, a body, and a field
-	// line for the empty HINT.
-	if !strings.Contains(got, "hint") {
-		t.Errorf("renderRecords() = %q, want the hint field line to still render even though empty", got)
+	// HINT is empty, so its field line is dropped entirely: emitting it would
+	// produce "  hint" followed by nothing but padding — noise plus trailing
+	// whitespace in output users copy and diff.
+	if strings.Contains(got, "hint") {
+		t.Errorf("renderRecords() = %q, want no field line for the empty HINT cell", got)
+	}
+	for line := range strings.SplitSeq(got, "\n") {
+		if line != strings.TrimRight(line, " ") {
+			t.Errorf("line has trailing whitespace: %q", line)
+		}
+	}
+}
+
+// TestTableView_RenderRecords_DashFieldStillRenders pins the other half of the
+// empty-cell rule: a "—" placeholder is informative ("this row has none") and
+// carries no trailing whitespace, so unlike a title cell it is NOT skipped.
+func TestTableView_RenderRecords_DashFieldStillRenders(t *testing.T) {
+	pinGoldenPalette(t)
+
+	row := []string{"✗", "hadolint", "a.sh", "msg", "—"}
+	v := diagnosticStyleRecordView([][]string{row})
+
+	got := stripANSI(v.renderRecords(80))
+	if !strings.Contains(got, "hint") || !strings.Contains(got, "—") {
+		t.Errorf("renderRecords() = %q, want the HINT field line rendered with its \"—\" placeholder", got)
 	}
 }
 
@@ -242,7 +262,7 @@ func TestTableView_Render_UsesRecordsWhenColumnsDoNotFitFloors(t *testing.T) {
 	}
 	v := tableView{Headers: headers, Rows: rows, Cols: cols}
 
-	floors := effectiveFloors(headers, rows, cols, naturalWidths(headers, rows, cols))
+	floors := floorsFor(headers, rows, cols)
 	chrome := len(headers) + 1
 	budget := sumInts(floors) + chrome - 1
 

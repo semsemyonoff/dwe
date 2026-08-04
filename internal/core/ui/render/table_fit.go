@@ -34,7 +34,9 @@ func cellAt(row []string, col int) string {
 // header and its widest cell, with cell content capped at Max when Max > 0.
 // The cap applies only to cell content — clamping the header too would let
 // natural drop below the column's floor and make deficit distribution see
-// negative headroom.
+// negative headroom. The Max cap can still land below the column's floor when
+// a cell holds an unbreakable token wider than Max; fitRows raises natural
+// back to the floor for exactly that reason.
 func naturalWidths(headers []string, rows [][]string, cols []columnSpec) []int {
 	widths := make([]int, len(headers))
 	for i, h := range headers {
@@ -86,12 +88,25 @@ func columnFloors(headers []string, rows [][]string, cols []columnSpec) []int {
 // take their Max-clamped natural widths and every cell is still wrapped at
 // those widths. Only deficit distribution and the floor fallback are skipped.
 func fitRows(headers []string, rows [][]string, budget, padding int, cols []columnSpec) ([][]string, bool) {
+	probed := columnFloors(headers, rows, cols)
 	natural := naturalWidths(headers, rows, cols)
+	// A Max cap cannot push a column below its unbreakable-token width: the
+	// wrap helpers never split such a token (a URL, a single wide rune), so
+	// Lipgloss lays the column out at the token's width no matter what width
+	// we compute. Raising natural to the floor keeps the fit arithmetic in
+	// step with what actually renders — otherwise a Max-capped column holding
+	// an over-long token yields negative headroom in distributeDeficit, which
+	// *widens* the column and lets the table overflow the budget.
+	for i := range natural {
+		if probed[i] > natural[i] {
+			natural[i] = probed[i]
+		}
+	}
 	chrome := len(headers) + 1 + 2*padding*len(headers)
 
 	widths := natural
 	if budget != 0 && sumInts(natural)+chrome > budget {
-		floors := effectiveFloors(headers, rows, cols, natural)
+		floors := effectiveFloors(probed, cols, natural)
 		if sumInts(floors)+chrome > budget {
 			return nil, false
 		}
@@ -123,12 +138,11 @@ func fitRows(headers []string, rows [][]string, budget, padding int, cols []colu
 
 // effectiveFloors returns, per column, the width used for the fits-or-not
 // decision and as the lower clamp during deficit distribution: the probed
-// floor for Flex columns (which may shrink), or the natural width for fixed
-// columns (which never do).
-func effectiveFloors(headers []string, rows [][]string, cols []columnSpec, natural []int) []int {
-	probed := columnFloors(headers, rows, cols)
-	floors := make([]int, len(headers))
-	for i := range headers {
+// floor (from columnFloors) for Flex columns (which may shrink), or the
+// natural width for fixed columns (which never do).
+func effectiveFloors(probed []int, cols []columnSpec, natural []int) []int {
+	floors := make([]int, len(natural))
+	for i := range natural {
 		if i < len(cols) && cols[i].Flex {
 			floors[i] = probed[i]
 			continue
@@ -155,7 +169,11 @@ func distributeDeficit(natural, floors []int, cols []columnSpec, available int) 
 	totalHeadroom := 0
 	for i := range natural {
 		if i < len(cols) && cols[i].Flex {
-			headroom[i] = natural[i] - floors[i]
+			// max(…, 0): fitRows already raises natural to the probed floor,
+			// so this cannot be negative — clamped anyway so a future caller
+			// passing floors > natural under-distributes rather than silently
+			// widening the column past its natural width.
+			headroom[i] = max(natural[i]-floors[i], 0)
 			totalHeadroom += headroom[i]
 		}
 	}

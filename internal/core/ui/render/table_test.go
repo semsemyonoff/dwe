@@ -322,7 +322,7 @@ func TestRenderServicesTable_RecordMode_WithDirCol(t *testing.T) {
 	}
 	v := servicesTableView(rows, []string{"TAG", "ENDPOINT"}, true)
 	const budget = 60
-	if v.Fits(budget) {
+	if fitsAt(v, budget) {
 		t.Fatalf("test setup: expected columns not to fit at budget %d, forcing record mode", budget)
 	}
 	got := stripANSI(v.Render(budget))
@@ -355,7 +355,7 @@ func TestRenderServicesTable_RecordMode_NoDirCol(t *testing.T) {
 	}
 	v := servicesTableView(rows, []string{"TAG", "ENDPOINT"}, false)
 	const budget = 60
-	if v.Fits(budget) {
+	if fitsAt(v, budget) {
 		t.Fatalf("test setup: expected columns not to fit at budget %d, forcing record mode", budget)
 	}
 	got := stripANSI(v.Render(budget))

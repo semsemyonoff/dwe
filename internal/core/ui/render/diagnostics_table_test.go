@@ -269,7 +269,7 @@ func TestFormatDiagnostics_Quiet(t *testing.T) {
 func TestWrapDiagnosticText(t *testing.T) {
 	longMessage := "workflow step services.main.database.restore declares a files_gate require entry that references command files but the command registry could not resolve the referenced file id"
 
-	wrapped := wrapDiagnosticText(longMessage)
+	wrapped := wrapText(longMessage, diagnosticTextWrapWidth)
 	lines := strings.Split(wrapped, "\n")
 	if len(lines) < 2 {
 		t.Fatalf("expected wrapped text to span multiple lines, got %q", wrapped)
@@ -287,7 +287,7 @@ func TestWrapDiagnosticText(t *testing.T) {
 func TestWrapDiagnosticText_LongToken(t *testing.T) {
 	longToken := "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
 
-	wrapped := wrapDiagnosticText(longToken)
+	wrapped := wrapText(longToken, diagnosticTextWrapWidth)
 	for line := range strings.SplitSeq(wrapped, "\n") {
 		if got := lipgloss.Width(line); got > diagnosticTextWrapWidth {
 			t.Fatalf("wrapped line width = %d, want <= %d: %q", got, diagnosticTextWrapWidth, line)
@@ -302,12 +302,12 @@ func TestWrapDiagnosticText_KeepsURLWhole(t *testing.T) {
 	}
 
 	// Bare URL stays on a single line.
-	if got := wrapDiagnosticText(url); strings.Contains(got, "\n") {
+	if got := wrapText(url, diagnosticTextWrapWidth); strings.Contains(got, "\n") {
 		t.Errorf("bare URL must not be split, got:\n%s", got)
 	}
 
 	// URL embedded in prose breaks onto its own line but stays intact.
-	wrapped := wrapDiagnosticText("see " + url + " for details")
+	wrapped := wrapText("see "+url+" for details", diagnosticTextWrapWidth)
 	if !strings.Contains(wrapped, url) {
 		t.Errorf("URL must survive wrapping intact, got:\n%s", wrapped)
 	}

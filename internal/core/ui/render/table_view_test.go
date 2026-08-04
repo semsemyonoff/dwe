@@ -142,14 +142,14 @@ func TestTableView_Fits(t *testing.T) {
 	}
 	v := tableView{Headers: headers, Rows: rows, Cols: cols}
 
-	if !v.Fits(0) {
+	if !fitsAt(v, 0) {
 		t.Errorf("Fits(0) = false, want true (unbounded budget always fits)")
 	}
 
-	floors := effectiveFloors(headers, rows, cols, naturalWidths(headers, rows, cols))
+	floors := floorsFor(headers, rows, cols)
 	chrome := len(headers) + 1
 	tooSmall := sumInts(floors) + chrome - 1
-	if v.Fits(tooSmall) {
+	if fitsAt(v, tooSmall) {
 		t.Errorf("Fits(%d) = true, want false when budget is below floors", tooSmall)
 	}
 }

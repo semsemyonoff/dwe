@@ -10,6 +10,7 @@ import (
 	tea "charm.land/bubbletea/v2"
 
 	"github.com/semsemyonoff/dwe/internal/core/project/config"
+	"github.com/semsemyonoff/dwe/internal/core/ui/statusview"
 	"github.com/semsemyonoff/dwe/internal/core/ui/tui"
 )
 
@@ -680,6 +681,61 @@ func TestPlugin_RenderActiveTab_MemoisationContract(t *testing.T) {
 	p.ViewPanel(panelMain, tui.Region{Width: 90, Height: 24})
 	if calls != 4 {
 		t.Fatalf("renderTabFn calls after reload = %d, want 4", calls)
+	}
+}
+
+// TestPlugin_RenderActiveTab_ReloadedSnapshotReachesTheScreen covers the step
+// the memoisation contract test above stops one short of: delivering the
+// tabsLoadedMsg that the reload produced, and re-rendering.
+//
+// The (loadGen, active, width) key alone is NOT enough here. loadGen is
+// bumped when the reload *starts*, and the spinner keeps ticking during the
+// load, so at least one frame renders the pre-reload snapshot and caches it
+// under the already-bumped gen. Without an explicit invalidation on
+// tabsLoadedMsg the reloaded body would never reach the screen until a tab
+// switch or a resize.
+func TestPlugin_RenderActiveTab_ReloadedSnapshotReachesTheScreen(t *testing.T) {
+	p, _ := newTestPlugin(t)
+	p.m.loading = false
+	p.m.loaded = true
+	p.m.sectionAnchors = make([][]int, len(tabTitles))
+
+	// Render from whatever the snapshot's git rows say, so the body is a pure
+	// function of the snapshot rather than a constant.
+	orig := renderTabFn
+	t.Cleanup(func() { renderTabFn = orig })
+	renderTabFn = func(snap tabSnapshot, _, _ int) (string, []int) {
+		if len(snap.gitRows) == 0 {
+			return "EMPTY", nil
+		}
+		return snap.gitRows[0].Service, nil
+	}
+
+	p.m.snap = tabSnapshot{gitRows: []statusview.GitWorkspaceRow{{Service: "SNAPSHOT-A"}}}
+	region := tui.Region{Width: 90, Height: 24}
+	if got := p.ViewPanel(panelMain, region); !strings.Contains(got, "SNAPSHOT-A") {
+		t.Fatalf("initial ViewPanel = %q, want it to contain SNAPSHOT-A", got)
+	}
+
+	cmd, handled := p.HandleAction(tui.ActionReload)
+	if !handled || cmd == nil {
+		t.Fatalf("HandleAction(ActionReload) = (%v, %v), want (non-nil, true)", cmd, handled)
+	}
+	// The in-flight frame: still snapshot A, but now cached under the bumped
+	// loadGen. This is what a spinner tick renders mid-reload.
+	if got := p.ViewPanel(panelMain, region); !strings.Contains(got, "SNAPSHOT-A") {
+		t.Fatalf("in-flight ViewPanel = %q, want it to still contain SNAPSHOT-A", got)
+	}
+
+	p.Update(tabsLoadedMsg{
+		gen:      p.m.loadGen,
+		snap:     tabSnapshot{gitRows: []statusview.GitWorkspaceRow{{Service: "SNAPSHOT-B"}}},
+		loadedAt: time.Now(),
+	})
+
+	got := p.ViewPanel(panelMain, region)
+	if !strings.Contains(got, "SNAPSHOT-B") {
+		t.Errorf("ViewPanel after the reload landed = %q, want it to contain SNAPSHOT-B (stale render cache)", got)
 	}
 }
 

@@ -69,10 +69,11 @@ type model struct {
 
 	// renderCache memoises the last renderTabFn call so repeated View()
 	// calls with an unchanged (loadGen, active, width) do not re-render the
-	// active tab's tables on every frame. Valid only while renderCacheValid;
-	// the key tuple alone drives invalidation — tab switches change active,
-	// reloads bump loadGen, and a terminal resize changes width, so no
-	// separate invalidation call is needed anywhere else.
+	// active tab's tables on every frame. Valid only while renderCacheValid:
+	// tab switches change active and a resize changes width, but a reload
+	// needs the explicit renderCacheValid = false in the tabsLoadedMsg branch
+	// — loadGen is bumped when the reload starts, not when its snapshot
+	// arrives, so the key tuple alone would keep serving pre-reload content.
 	renderCacheValid   bool
 	renderCacheGen     uint64
 	renderCacheTab     int

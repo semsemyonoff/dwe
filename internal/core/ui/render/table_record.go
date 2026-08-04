@@ -61,6 +61,16 @@ func (v tableView) renderRecord(row, budget, labelWidth int) string {
 
 	for col, spec := range v.Cols {
 		cell := cellAt(v.Rows[row], col)
+		// Skip cells with no content at all: they would otherwise emit a line
+		// that is nothing but indent (roleBody) or a label followed by
+		// nothing (roleField) — visual noise, and trailing whitespace in
+		// output users copy and diff. Unlike recordTitleText this does NOT
+		// skip the "—" placeholder: "ports  —" is informative ("this row has
+		// none") and carries no trailing whitespace, whereas a title line
+		// reading "web · —" is just noise.
+		if cell == "" {
+			continue
+		}
 		switch spec.Role {
 		case roleBody:
 			lines = append(lines, v.recordBodyLine(row, col, cell, spec, budget))

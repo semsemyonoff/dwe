@@ -31,6 +31,29 @@ func withTermWidth(t *testing.T, w int) {
 	t.Cleanup(func() { termWidthFn = saved })
 }
 
+// floorsFor is the fit-decision floor vector fitRows would compute for
+// (headers, rows, cols). Tests derive their "exactly at / one below the
+// floors" budgets from it, so they stay pinned to the real algorithm rather
+// than to a hand-counted number.
+func floorsFor(headers []string, rows [][]string, cols []columnSpec) []int {
+	probed := columnFloors(headers, rows, cols)
+	natural := naturalWidths(headers, rows, cols)
+	for i := range natural {
+		if probed[i] > natural[i] {
+			natural[i] = probed[i]
+		}
+	}
+	return effectiveFloors(probed, cols, natural)
+}
+
+// fitsAt reports whether v renders as a table (rather than falling back to
+// records) at budget — the boolean half of tableView.fit, which is all the
+// mode-selection tests care about.
+func fitsAt(v tableView, budget int) bool {
+	_, ok := v.fit(budget)
+	return ok
+}
+
 // resetStyles re-initialises the styles package palette to the built-in
 // defaults for the current dark/light mode. Provided here so the renderer
 // tests still co-located in package ui can reset palette state via the

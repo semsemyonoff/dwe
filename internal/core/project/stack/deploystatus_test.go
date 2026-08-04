@@ -270,8 +270,17 @@ func TestDeployStatus_ExplicitWidthUsesDeployStatusAt(t *testing.T) {
 		Tracked:    []string{"main"},
 		Width:      20,
 	}
-	out := DeployStatus(in)
-	assert.Contains(t, out, "main")
+	// Byte-compare against the explicit-width renderer rather than merely
+	// looking for "main": a Contains check passes even if in.Width is
+	// dropped and the table renders unbounded, which is exactly the
+	// regression this test exists to catch.
+	want := wrapSection("Deploy Status", render.DeployStatusAt(CollectDeployStatus(in), 20))
+	assert.Equal(t, want, DeployStatus(in))
+
+	unbounded := in
+	unbounded.Width = 0
+	assert.NotEqual(t, DeployStatus(unbounded), DeployStatus(in),
+		"width 20 must change the rendering; otherwise this test cannot detect a dropped in.Width")
 }
 
 func TestRenderDeployStatusEmpty(t *testing.T) {
