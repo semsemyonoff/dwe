@@ -631,6 +631,58 @@ func TestPlugin_Update_FocusChangedMsgIsNoop(t *testing.T) {
 	}
 }
 
+// --- Task 11: renderActiveTab memoisation on (loadGen, active, width) ---
+
+// TestPlugin_RenderActiveTab_MemoisationContract puts a call-count spy on
+// renderTabFn and drives it through the four invalidation triggers the plan
+// calls out directly, rather than inferring memoisation from inspecting
+// cache fields: two consecutive identical View() calls render once; a width
+// change, a tab switch, and a reload each force exactly one more render.
+func TestPlugin_RenderActiveTab_MemoisationContract(t *testing.T) {
+	p, _ := newTestPlugin(t)
+	p.m.loading = false
+	p.m.loaded = true
+	p.m.sectionAnchors = make([][]int, len(tabTitles))
+
+	calls := 0
+	orig := renderTabFn
+	t.Cleanup(func() { renderTabFn = orig })
+	renderTabFn = func(_ tabSnapshot, _, _ int) (string, []int) {
+		calls++
+		return "body", nil
+	}
+
+	p.ViewPanel(panelMain, tui.Region{Width: 80, Height: 24})
+	p.ViewPanel(panelMain, tui.Region{Width: 80, Height: 24})
+	if calls != 1 {
+		t.Fatalf("renderTabFn calls after two identical View() calls = %d, want 1", calls)
+	}
+
+	p.ViewPanel(panelMain, tui.Region{Width: 90, Height: 24})
+	if calls != 2 {
+		t.Fatalf("renderTabFn calls after width change = %d, want 2", calls)
+	}
+	p.ViewPanel(panelMain, tui.Region{Width: 90, Height: 24})
+	if calls != 2 {
+		t.Fatalf("renderTabFn calls after a repeated call at the new width = %d, want still 2", calls)
+	}
+
+	p.m.setActiveTab(1)
+	p.ViewPanel(panelMain, tui.Region{Width: 90, Height: 24})
+	if calls != 3 {
+		t.Fatalf("renderTabFn calls after tab switch = %d, want 3", calls)
+	}
+
+	cmd, handled := p.HandleAction(tui.ActionReload)
+	if !handled || cmd == nil {
+		t.Fatalf("HandleAction(ActionReload) = (%v, %v), want (non-nil, true)", cmd, handled)
+	}
+	p.ViewPanel(panelMain, tui.Region{Width: 90, Height: 24})
+	if calls != 4 {
+		t.Fatalf("renderTabFn calls after reload = %d, want 4", calls)
+	}
+}
+
 func TestPlugin_Update_UnmatchedKeyDelegatesToViewportScroll(t *testing.T) {
 	p, _ := newTestPlugin(t)
 	longContent := strings.Repeat("line\n", 100)

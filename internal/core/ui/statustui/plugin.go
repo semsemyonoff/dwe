@@ -179,16 +179,35 @@ func (p *plugin) renderLoading(inner tui.Region) string {
 // above the viewport.
 const panelChromeRows = 2
 
+// renderActiveTab returns the active tab's rendered body and jump-anchors at
+// width, memoising the result on (loadGen, active, width) in m.renderCache*
+// so repeated View() calls with none of those three changed reuse the
+// previous render instead of re-running renderTabFn. A tab switch changes
+// active, a reload bumps loadGen, and a terminal resize changes width — each
+// alone invalidates the cache because it changes the key tuple.
+func (p *plugin) renderActiveTab(width int) (string, []int) {
+	m := p.m
+	if m.renderCacheValid && m.renderCacheGen == m.loadGen && m.renderCacheTab == m.active && m.renderCacheWidth == width {
+		return m.renderCacheBody, m.renderCacheAnchors
+	}
+	body, anchors := renderTabFn(m.snap, m.active, width)
+	m.renderCacheValid = true
+	m.renderCacheGen = m.loadGen
+	m.renderCacheTab = m.active
+	m.renderCacheWidth = width
+	m.renderCacheBody = body
+	m.renderCacheAnchors = anchors
+	return body, anchors
+}
+
 // renderBody sizes the viewport to the panel's inner region (minus the
 // tab-strip and divider rows) and renders tab strip + divider + viewport
 // content. Reloading state does not change body rendering — only
 // StatusContext (Task 3) reflects it.
 //
-// The active tab's body is recomputed here, via renderTabFn, on every call —
-// width is hardcoded to 0 for now (byte-identical to today's rendering,
-// which never set a width either); a later task threads the panel's real
-// inner width through and memoises the result so this is not redone every
-// frame.
+// The active tab's body is recomputed here, via renderActiveTab, at the
+// panel's real inner width — the same width the tables are fitted or
+// dropped into record mode against.
 func (p *plugin) renderBody(inner tui.Region) string {
 	m := p.m
 	w := max(inner.Width, 0)
@@ -201,7 +220,7 @@ func (p *plugin) renderBody(inner tui.Region) string {
 		return m.viewport.View()
 	}
 
-	body, anchors := renderTabFn(m.snap, m.active, 0)
+	body, anchors := p.renderActiveTab(w)
 	m.viewport.SetContent(body)
 	if m.active >= 0 && m.active < len(m.sectionAnchors) {
 		m.sectionAnchors[m.active] = anchors

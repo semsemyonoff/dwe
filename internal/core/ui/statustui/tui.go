@@ -66,6 +66,19 @@ type model struct {
 	reloading       bool
 	reloadAt        time.Time
 	healthIndicator string // cached; recomputed only on tab reload
+
+	// renderCache memoises the last renderTabFn call so repeated View()
+	// calls with an unchanged (loadGen, active, width) do not re-render the
+	// active tab's tables on every frame. Valid only while renderCacheValid;
+	// the key tuple alone drives invalidation — tab switches change active,
+	// reloads bump loadGen, and a terminal resize changes width, so no
+	// separate invalidation call is needed anywhere else.
+	renderCacheValid   bool
+	renderCacheGen     uint64
+	renderCacheTab     int
+	renderCacheWidth   int
+	renderCacheBody    string
+	renderCacheAnchors []int
 }
 
 // newModel creates a new status dashboard model. It initializes the viewport

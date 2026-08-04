@@ -1,0 +1,7 @@
+── Deploy Status ───────────────────────────────────────────────────────────────
+web
+  status       not_deployed
+  config       missing
+  prev hash    
+  curr hash    04d838b291bd
+  last failed  —

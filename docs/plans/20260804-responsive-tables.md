@@ -725,24 +725,29 @@ one.
 - Modify: `internal/core/ui/statustui/plugin_test.go`
 - Modify: `internal/core/ui/statustui/tabs_golden_test.go`
 
-- [ ] thread `width` from `renderTab` into the Task 9 render halves — `RenderAppsRows` and siblings,
+- [x] thread `width` from `renderTab` into the Task 9 render halves — `RenderAppsRows` and siblings,
       `GitWorkspaceAt`, `RenderDaemonsAt`
-- [ ] pass the real inner width from `renderBody` (`plugin.go:178`, `w := max(inner.Width, 0)`) instead
+- [x] pass the real inner width from `renderBody` (`plugin.go:178`, `w := max(inner.Width, 0)`) instead
       of the `0` placeholder left by Task 10
-- [ ] memoise `renderTab` on `(loadGen, activeTab, width)`; invalidate on tab switch (`setActiveTab`),
+- [x] memoise `renderTab` on `(loadGen, activeTab, width)`; invalidate on tab switch (`setActiveTab`),
       on reload (`actions.go:112`), and on width change. The key is only valid because Task 9 and Task
       10 made the snapshot pure — nothing outside those three inputs may affect `renderTab` output
-- [ ] **put a call-count spy on `renderTab`** and assert the invalidation contract directly rather than
+- [x] **put a call-count spy on `renderTab`** and assert the invalidation contract directly rather than
       by inspection: two consecutive `View()` calls at one width → exactly one render; a width change →
       a second render; a tab switch → a second render; a reload → a second render
-- [ ] write a test asserting the rendered table width never exceeds the panel inner width at the narrow
+      (`TestPlugin_RenderActiveTab_MemoisationContract`)
+- [x] write a test asserting the rendered table width never exceeds the panel inner width at the narrow
       buckets (60, 79, 80) — remember inner = outer − 4 per `Frame.renderBody`
-- [ ] write a test asserting anchors recomputed at a narrow width still land on sub-table headings
-- [ ] keep `TestStatus_FrameWidthInvariant` (`plugin_golden_test.go:221`) passing at every width bucket
-- [ ] regenerate the Task 10 characterization golden **only** for the width-dependent buckets, and
+      (`TestTabs_RenderedWidthNeverExceedsBudget`)
+- [x] write a test asserting anchors recomputed at a narrow width still land on sub-table headings
+      (`TestTabs_AnchorsAtNarrowWidthLandOnHeadings`)
+- [x] keep `TestStatus_FrameWidthInvariant` (`plugin_golden_test.go:221`) passing at every width bucket
+- [x] regenerate the Task 10 characterization golden **only** for the width-dependent buckets, and
       review the diff line by line — it is the one place in this plan where a golden legitimately
-      changes
-- [ ] run `make test` — must pass before task 12
+      changes (`TestTabs_CharacterizationGolden_Width60`, new `tabs_*_w60.golden` files)
+- [x] run `make test` — must pass before task 12 (all packages pass; `internal/cli/status` fails only on
+      the pre-existing sandbox Docker-daemon unavailability documented in Tasks 8-10, unrelated to this
+      task's change)
 
 ### Task 12: Enable the sink-aware width budget
 

@@ -4,10 +4,16 @@ import (
 	"context"
 	"os"
 	"path/filepath"
+	"regexp"
+	"strings"
 	"testing"
 	"time"
 
+	"charm.land/lipgloss/v2"
+	"github.com/charmbracelet/x/ansi"
+
 	"github.com/semsemyonoff/dwe/internal/core/project/config"
+	"github.com/semsemyonoff/dwe/internal/core/project/stack"
 	"github.com/semsemyonoff/dwe/internal/core/ui/render"
 	"github.com/semsemyonoff/dwe/internal/core/ui/statusview"
 	"github.com/semsemyonoff/dwe/internal/core/workflow/deploy/journal"
@@ -131,5 +137,148 @@ func TestTabs_CharacterizationGolden_FilesExist(t *testing.T) {
 		if _, err := os.Stat(p); err != nil {
 			t.Errorf("golden file missing: %s (%v)", p, err)
 		}
+	}
+}
+
+// widthDependentTabIndex is tabsGoldenNames' index of every tab whose body
+// depends on the width renderTab is given. Topology is excluded: it is
+// pre-rendered by stack.RenderTopology, which has no width parameter (see
+// buildTabs' tabSnapshot.topology doc comment).
+var widthDependentTabIndex = map[int]string{0: "services", 1: "deploy", 3: "git", 4: "daemons"}
+
+// wideTabSnapshot builds a tabSnapshot with deliberately long values in
+// every column that has a Wrap function (DIR, CONTAINER on ServicesTable,
+// BRANCH, PARAMS, LAST FAILED) so rendering at a narrow width actually
+// exercises shrink/record mode rather than trivially fitting. Columns
+// declared unbreakable by design (DaemonTable's ID/CONTAINER, GitWorkspace's
+// SHA) are deliberately kept short — a value longer than the budget in one
+// of those is expected to overflow (Cols[i].Wrap == nil never wraps; see the
+// plan's "no data is ever dropped" invariant), so including one here would
+// make TestTabs_RenderedWidthNeverExceedsBudget assert the wrong thing.
+// Built directly (not via buildTabs) so the test needs no docker/git stubs.
+func wideTabSnapshot() tabSnapshot {
+	longDir := strings.Repeat("services/web/very/deep/nested/path/", 2) + "src"
+	longContainer := "demo-web-" + strings.Repeat("x", 40) + "-1"
+	longBranch := "feature/" + strings.Repeat("very-long-branch-segment-", 3) + "end"
+	longParams := strings.Repeat("key=value ", 12)
+	longStep := strings.Repeat("very-long-failed-step-name-", 3)
+
+	return tabSnapshot{
+		apps: stack.ServiceSection{
+			Rows: []render.ServiceTableRow{
+				{
+					Name: "web", Dir: longDir, Container: longContainer,
+					Hosts: map[string]string{"h": "web.local"}, Ports: map[string]int{"p": 80},
+					Mandatory: true, Running: true,
+				},
+			},
+		},
+		tools: stack.ServiceSection{
+			Rows: []render.ServiceTableRow{
+				{Name: "cache", Container: longContainer, Enabled: true, Running: false},
+			},
+		},
+		deployRows: []render.DeployStatusRow{
+			{
+				Service: "web", Status: "deployed", ConfigDelta: "changed",
+				PrevHashShort: "abc1234", CurrHashShort: "def5678", LastFailedStep: longStep,
+			},
+		},
+		gitRows: []statusview.GitWorkspaceRow{
+			{Service: "web", Dir: longDir, Branch: longBranch, SHA: "abc1234"},
+		},
+		daemonRows: []statusview.DaemonRow{
+			// ID and Container are DaemonTable's unbreakable columns (Cols[0]
+			// and Cols[2] have no Wrap) — kept short deliberately; only Params
+			// (Flex+wrapText) is made long here.
+			{ID: "web.migrate", Container: "web-migrate-1", Params: longParams},
+		},
+	}
+}
+
+// sectionTitleBarRe matches the decorative "── Title ──…" rule line
+// render.SectionTitle (used by stack's wrapSection) renders above every
+// table. That helper is pre-existing, package-wide infrastructure shared far
+// beyond render/'s tables — it always falls back to styles.TermWidth() (the
+// real terminal probe) rather than the panel width passed to renderTab, so
+// its bar can legitimately be wider than the panel. That gap predates this
+// plan (wrapSection predates the responsive-tables branch entirely) and is
+// out of scope here, which is strictly about tableView's own shrink/record
+// mechanism — so width assertions below skip these lines rather than
+// asserting on them.
+var sectionTitleBarRe = regexp.MustCompile(`^── .+ ─+$`)
+
+// TestTabs_RenderedWidthNeverExceedsBudget verifies every rendered *table*
+// line (excluding the pre-existing, non-width-aware SectionTitle bar — see
+// sectionTitleBarRe) of every width-dependent tab stays within the given
+// budget at the narrow buckets the status TUI panel can realistically end up
+// at (panel inner width = outer − 4 per Frame.renderBody). This is the
+// render-time counterpart to the render/ package's own fitRows tests: it
+// confirms renderTab actually threads the width down to
+// stack.RenderAppsRows / RenderDeployStatusRows / render.GitWorkspaceAt /
+// stack.RenderDaemonsAt rather than dropping it.
+func TestTabs_RenderedWidthNeverExceedsBudget(t *testing.T) {
+	snap := wideTabSnapshot()
+	for _, w := range []int{60, 79, 80} {
+		for idx, name := range widthDependentTabIndex {
+			body, _ := renderTab(snap, idx, w)
+			for lineNo, line := range strings.Split(body, "\n") {
+				plain := ansi.Strip(line)
+				if sectionTitleBarRe.MatchString(plain) {
+					continue
+				}
+				if got := lipgloss.Width(line); got > w {
+					t.Errorf("tab %s width=%d line %d exceeds budget: got %d\nline: %q", name, w, lineNo, got, line)
+				}
+			}
+		}
+	}
+}
+
+// TestTabs_AnchorsAtNarrowWidthLandOnHeadings verifies the Services tab's
+// jump anchors still point at the Apps/Tools sub-table headings once
+// rendering happens at a narrow width — anchors are line offsets into the
+// wrapped body (joinSectionsWithAnchors), so a change to how many lines a
+// table wraps into must not desynchronize them from the headings ]/[ jump
+// between.
+func TestTabs_AnchorsAtNarrowWidthLandOnHeadings(t *testing.T) {
+	snap := wideTabSnapshot()
+	body, anchors := renderTab(snap, 0, 60)
+
+	wantTitles := []string{"Apps", "Tools"}
+	if len(anchors) != len(wantTitles) {
+		t.Fatalf("anchors = %v, want %d entries (Apps, Tools; Infra empty)", anchors, len(wantTitles))
+	}
+	lines := strings.Split(body, "\n")
+	for i, a := range anchors {
+		if a < 0 || a >= len(lines) {
+			t.Fatalf("anchor[%d] = %d out of range (body has %d lines)", i, a, len(lines))
+		}
+		if !strings.Contains(lines[a], wantTitles[i]) {
+			t.Errorf("anchor[%d] = line %d %q, want it to contain %q", i, a, lines[a], wantTitles[i])
+		}
+	}
+}
+
+// TestTabs_CharacterizationGolden_Width60 pins byte-exact bodies for the four
+// width-dependent tabs at panel width 60, built from the same deterministic
+// snapshot as TestTabs_CharacterizationGolden. This is the one place in the
+// responsive-tables plan where a statustui golden legitimately changes
+// output as of Task 11: previously renderTab was always called with width 0
+// (unbounded) from the plugin, so no narrow-width tab body existed to pin.
+// The width-0 goldens above are untouched — width 0 still means "unbounded"
+// until Task 12 enables the sink-aware budget.
+//
+// Regenerate with:
+//
+//	UPDATE_GOLDEN=1 go test ./internal/core/ui/statustui/... -run TestTabs_CharacterizationGolden_Width60
+func TestTabs_CharacterizationGolden_Width60(t *testing.T) {
+	stubCollectors(t)
+	deps := characterizationDeps()
+
+	snap, _ := buildTabs(context.Background(), deps)
+	for idx, name := range widthDependentTabIndex {
+		body, _ := renderTab(snap, idx, 60)
+		assertGolden(t, "tabs_"+name+"_w60.golden", body)
 	}
 }
