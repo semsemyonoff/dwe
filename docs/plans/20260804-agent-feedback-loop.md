@@ -367,9 +367,11 @@ the port is display-only, that `local.yml` overrides will not move the binding, 
       args`)
 - [ ] change the default branch: emit `{{ resolve .Raw %q }}` only when the head is known;
       otherwise return the original `${…}` match unchanged
-- [ ] decide and pin the injected key `__configPath` (`workspace.go:1762`) — `varPattern`
-      admits a leading `_`, so `${__configPath}` must go literal deliberately, not by
-      oversight
+- [ ] **`__configPath` stays out of `KnownVarHeads`** (decision): `varPattern` admits a
+      leading `_`, so `${__configPath}` would otherwise resolve. It is an internal key the
+      loader injects (`workspace.go:1762`), not part of the authoring contract, and a
+      reference to it in a command is almost certainly a mistake — so it renders as a
+      literal. Pin it with a test so the choice is visible rather than accidental
 - [ ] migrate the eight test files above off the bare top-level dot-path form
       (`${databases.main}` → `${vars.databases.main}`) — that form has been dead since the
       strict root landed and the assertions encode the pre-strict contract
@@ -389,67 +391,91 @@ the port is display-only, that `local.yml` overrides will not move the binding, 
       `package config` and can see the unexported list
 - [ ] run tests — must pass before task 2
 
-### Task 2: Render the whole step at resolve time
+### Task 2: The shared render helper — `cmd`, `with`, `check` into a copy
+
+*(Split out of an over-large single task: 2 builds the helper, 2b extends it to the three
+`when` scopes, 2c wires the `reset step` bypass, 2d adds the hash. Each is independently
+testable.)*
 
 **Files:**
+- Create: `internal/core/execution/pipeline/render.go` (the shared helper)
+- Create: `internal/core/execution/pipeline/render_test.go`
 - Modify: `internal/core/execution/pipeline/resolve.go`
 - Modify: `internal/core/execution/pipeline/resolve_test.go`
-- Modify: `internal/core/execution/pipeline/executor_test.go`
-- Modify: `internal/cli/lifecycle/reset.go` (+ tests — the `reset step` bypass)
-- Modify: `internal/core/workflow/envtest/render_test.go`
 
-- [ ] render `cmd`, the string leaves of `with`, `check` **and `when.Cmd`** at the very top
-      of `resolveLeafStep`, **before** `builtin.Validate` / `spec.Validate` (`resolve.go:134`,
-      `:139`, `:145`) and before `parseStepTimeout` — those read the fields being rendered.
-      Decide explicitly whether `timeout:` and `FilesGate.With` render too (`FilesGate.With`
-      is hashed by `StepHash`, so leaving it unrendered is an asymmetry)
-- [ ] render into a **copy**: deep-copy `With`, clone `*Check`; never mutate `cfg` /
-      `deployCfg` (constraint 4c)
+- [ ] write the helper: render `cmd`, the string leaves of `with` (recursing into nested
+      maps and sequences) and `check`, **into a copy** — deep-copy `With`, clone `*Check`,
+      never mutate `cfg` / `deployCfg` (constraint 4c)
 - [ ] gate every string on "**contains a `${…}` with a known head**" — not on
       `VarPattern.MatchString`, which would still drag
       `docker inspect -f '{{.State.Status}}' ${CONTAINER}` into the renderer and fail on the
       untouched Go template (constraint 4d)
-- [ ] render the runtime `when` of **phases** and of **parallel group parents** too, not
-      only leaf steps: `phaseRuntimeWhen` is stored directly and `resolveParallelStep`
-      resolves the group's own `when` before its substeps reach `resolveLeafStep`, so a
-      `${vars.*}` there would stay unrendered while the executor evaluates it from the
-      stored pointer. Clone-then-render each condition at all three scopes
-- [ ] decide what a `RenderCommand` error does at resolve time (fail the resolve vs leave
-      the literal). Note `RenderCommand` calls `validateSnapshotScope` with
-      `SnapshotScopeNone`, so `${snapshot.x}` in a pipeline step becomes a hard resolve
-      error where today it would reach `sh` as a literal — that is probably right, but it
-      must be a decision, not a surprise
-- [ ] note that `resolveParallelStep` builds its `ResolvedStep` directly, bypassing
-      `resolveLeafStep`: `rs.Step.Parallel.Steps[i]` stays raw while
-      `rs.Parallel.Steps[i].Step` is rendered. Harmless for `StepHash` (Parallel is not
-      hashed) but pin the divergence with a test so it is not mistaken for a bug later
-- [ ] write tests: a step with `cmd: "git clone ${vars.source.repo} ${vars.source.dir}"`
-      resolves with substituted values; a `type: command` step's
-      `with: {repo: "${vars.source.repo}"}` does too (Plan B's dependency); `when.Cmd`
-      renders (Plan B's symmetry requirement)
-- [ ] write tests: `cmd: 'echo ${HOME}'` reaches `sh` with `${HOME}` intact;
-      `cmd: "docker inspect -f '{{.State.Status}}' x"` resolves **unchanged**; and the
-      **mixed** `cmd: "docker inspect -f '{{.State.Status}}' ${CONTAINER}"` also resolves
-      unchanged (this is the case a bare `VarPattern` gate would break)
-- [ ] write tests for the three `when` scopes separately: phase-level, parallel-group
-      parent, and leaf step
+- [ ] **a `RenderCommand` error fails the resolve** (decision, not a choice): returning the
+      literal instead would reproduce today's `Bad substitution` at runtime, only later and
+      with a worse message, which is the opposite of this plan's purpose. A consequence to
+      accept knowingly: `RenderCommand` calls `validateSnapshotScope` with
+      `SnapshotScopeNone`, so `${snapshot.x}` in a pipeline step becomes a hard resolve error
+      where today it reaches `sh` as a literal — correct, since it never resolved there
+- [ ] **`timeout:` and `FilesGate.With` are rendered too** (decision): `FilesGate.With` is
+      hashed by `StepHash`, so leaving it unrendered is an asymmetry, and a templated
+      `timeout:` is otherwise a silent parse failure
+- [ ] call the helper at the very top of `resolveLeafStep` — **before** `builtin.Validate` /
+      `spec.Validate` (`resolve.go:134`, `:139`, `:145`) and before `parseStepTimeout`, all
+      of which read the fields being rendered
+- [ ] write tests: `cmd: "git clone ${vars.source.repo} ${vars.source.dir}"` resolves
+      substituted; a `type: command` step's `with: {repo: "${vars.source.repo}"}` too (Plan
+      B's dependency); a nested `with` value at depth ≥ 2 renders
+- [ ] write tests: `cmd: 'echo ${HOME}'` keeps `${HOME}`;
+      `cmd: "docker inspect -f '{{.State.Status}}' x"` resolves **unchanged**; the **mixed**
+      `cmd: "docker inspect -f '{{.State.Status}}' ${CONTAINER}"` also unchanged
 - [ ] write regression tests proving **user commands are untouched**: the documented mixed
-      forms (`cmd` with `${vars.x}` + `{{ with .Params.x }}`, a `files.path` with
-      `${param.x}` + `{{ if … }}`, workflow `with`/`when`) still render exactly as today.
-      The gate lives on the pipeline path only (constraint 4d)
-- [ ] extract the render/copy step as a **shared helper** and call it from `dwe reset step`
-      too: `internal/cli/lifecycle/reset.go` takes a raw step from `FindStep`, evaluates
-      `step.When` itself, prints `pipeline.StepCommand(step)`, then runs `step.Action()` and
-      `*step.Check` — all bypassing `ResolvePhaseSteps`. Without this, `${vars.*}` behaves
-      differently under `reset step` than under `reset run`. Test `cmd`, `when.cmd` and
-      `check.with` on that path
+      forms (`cmd` with `${vars.x}` + `{{ with .Params.x }}`, `files.path` with `${param.x}`
+      + `{{ if … }}`, workflow `with`/`when`) render exactly as today — the gate lives on the
+      pipeline path only (constraint 4d)
 - [ ] write a test: resolving the same config twice is idempotent (guards against
-      double-render and against in-place mutation)
-- [ ] write a test in `envtest` pinning that scenario `cmd:` keeps `${HOME}` literal
-      (closes the pre-existing latent hole)
-- [ ] run tests — must pass before task 2a
+      double-render and in-place mutation)
+- [ ] run tests — must pass before task 2b
 
-### Task 2a: Hash `vars` so a changed value actually re-runs the step
+### Task 2b: Extend rendering to all three `when` scopes
+
+**Files:**
+- Modify: `internal/core/execution/pipeline/resolve.go`
+- Modify: `internal/core/execution/pipeline/resolve_test.go`
+- Modify: `internal/core/workflow/envtest/render_test.go`
+
+- [ ] render the runtime `when` of **phases** and **parallel group parents** as well as leaf
+      steps: `phaseRuntimeWhen` is stored directly, and `resolveParallelStep` resolves the
+      group's own `when` before its substeps reach `resolveLeafStep`, so a `${vars.*}` there
+      would stay unrendered while the executor evaluates it from the stored pointer.
+      Clone-then-render at each scope
+- [ ] pin the known divergence: `resolveParallelStep` builds its `ResolvedStep` directly, so
+      `rs.Step.Parallel.Steps[i]` stays raw while `rs.Parallel.Steps[i].Step` is rendered.
+      Harmless for `StepHash` (Parallel is not hashed) — test it so it is not later mistaken
+      for a bug
+- [ ] write tests for the three scopes separately: phase-level, parallel-group parent, leaf
+- [ ] write a test that `when.Cmd` renders — Plan B derives `check: auto` from exactly this
+      string and needs both sides to match byte for byte
+- [ ] write a test in `envtest` pinning that scenario `cmd:` keeps `${HOME}` literal (closes
+      the pre-existing latent hole)
+- [ ] run tests — must pass before task 2c
+
+### Task 2c: Use the helper on the `dwe reset step` path
+
+**Files:**
+- Modify: `internal/cli/lifecycle/reset.go`
+- Modify: `internal/cli/lifecycle/reset_test.go`
+
+- [ ] call the Task 2 helper before every raw-step read in `reset step`: it takes a step from
+      `FindStep`, evaluates `step.When` itself, prints `pipeline.StepCommand(step)`, then
+      runs `step.Action()` and `*step.Check` — all bypassing `ResolvePhaseSteps`
+- [ ] confirm the dry-run output path prints the rendered form too, so what is previewed is
+      what would run
+- [ ] write tests on that path for `cmd`, `when.cmd` and `check.with`
+- [ ] write a test that `reset step` and `reset run` produce the same rendered command for
+      the same step (the divergence this task exists to remove)
+- [ ] run tests — must pass before task 2d
+
+### Task 2d: Hash `vars` so a changed value actually re-runs the step
 
 **Files:**
 - Modify: `internal/core/workflow/deploy/journal/hash.go`
