@@ -765,23 +765,36 @@ byte-identical claim would then hold only under the non-TTY test seams, not in a
 - Modify: `internal/core/ui/render/table_view.go`
 - Modify: `internal/core/ui/render/test_helpers_test.go`
 
-- [ ] add `styles.TermWidthOrZero(f *os.File) int` with package-level test seams for the TTY check and
+- [x] add `styles.TermWidthOrZero(f *os.File) int` with package-level test seams for the TTY check and
       the size probe, following the `cmdbrowser/fallback.go:16` convention
-- [ ] add `stdoutBudget()` and `stderrBudget()` in `render/table_budget.go`, documenting that
+- [x] add `stdoutBudget()` and `stderrBudget()` in `render/table_budget.go`, documenting that
       `DiagnosticsTable` is the sole stderr consumer
-- [ ] wire the per-renderer budget into every public renderer's `Render` call — stdout for all except
+- [x] wire the per-renderer budget into every public renderer's `Render` call — stdout for all except
       `DiagnosticsTable`, which uses stderr
-- [ ] confirm the TUI path is unaffected: it passes an explicit non-zero width from Task 11 and must
-      never reach the probe
-- [ ] add a `TestMain` (or `init` in `test_helpers_test.go`) pinning the seams to non-TTY so the suite
+- [x] confirm the TUI path is unaffected: it passes an explicit non-zero width from Task 11 and must
+      never reach the probe — verified by inspection: `RenderAppsRows`/`RenderToolsRows`/`RenderInfraRows`,
+      `RenderDeployStatusRows`, `GitWorkspaceAt`, and `RenderDaemonsAt` all call `tableView.Render(width)`
+      (or the `*At` wrapper) directly with the caller-supplied width — none of them call `stdoutBudget()`
+      or `stderrBudget()`, so the probe is only ever reached from the six sink-probing entry points
+      (`Table`, `ServicesTable`, `DaemonTable`, `DeployStatus`, `GitWorkspace`, `DiagnosticsTable`/
+      `DiagnosticsByDomain`)
+- [x] add a `TestMain` (or `init` in `test_helpers_test.go`) pinning the seams to non-TTY so the suite
       cannot flip modes when the compiled test binary is run directly
-- [ ] add a test helper that swaps the seams to a given width and restores them via `t.Cleanup`
-- [ ] write tests for `TermWidthOrZero`: non-TTY returns 0; TTY returns the reported width; a zero or
-      negative reported width returns 0
-- [ ] write tests for shrink mode (flex columns narrowed, fixed columns untouched, total within budget)
-      and record mode (below floors, URL intact) across at least three renderers
-- [ ] write a test asserting that with the seams at their non-TTY defaults, all Task 1 goldens match
-- [ ] run `make test` — must pass before task 13
+- [x] add a test helper that swaps the seams to a given width and restores them via `t.Cleanup`
+      (`withTermWidth` in `test_helpers_test.go`)
+- [x] write tests for `TermWidthOrZero`: non-TTY returns 0; TTY returns the reported width; a zero or
+      negative reported width returns 0 (plus a size-probe-error case) — in `styles_test.go`
+- [x] write tests for shrink mode (flex columns narrowed, fixed columns untouched, total within budget)
+      and record mode (below floors, URL intact) across at least three renderers — `Table`, `ServicesTable`,
+      and `DiagnosticsTable` in `table_budget_test.go` (the last also proves the stderr-not-stdout sink
+      selection)
+- [x] write a test asserting that with the seams at their non-TTY defaults, all Task 1 goldens match
+      (`TestSinkAwareBudget_DefaultSeam_GoldensUnaffected`, plus every existing `TestGolden_*` test
+      continuing to pass unchanged)
+- [x] run `make test` — must pass before task 13 (all packages pass; `internal/cli/status` fails only on
+      the pre-existing sandbox Docker-daemon-unavailability documented in Tasks 8-11 — `docker ps` hangs
+      until the 10-minute test timeout — unrelated to this task's change; `go test -cover
+      ./internal/core/ui/render/...` = 93.3%, up from the Task 1 baseline of 92.3%)
 
 ### Task 13: Make `DiagnosticsByDomain` decide the mode once for all domains
 

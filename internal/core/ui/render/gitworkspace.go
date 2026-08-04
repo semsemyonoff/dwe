@@ -16,7 +16,7 @@ import (
 // "—". Rows with Err != nil render the same way; the caller is expected to
 // emit a single aggregate warning to stderr counting Err != nil rows.
 func GitWorkspace(rows []statusview.GitWorkspaceRow) string {
-	return GitWorkspaceAt(rows, 0)
+	return GitWorkspaceAt(rows, stdoutBudget())
 }
 
 // GitWorkspaceAt is GitWorkspace at an explicit width budget (0 =

@@ -415,6 +415,31 @@ func TermWidth() int {
 	return w
 }
 
+// Test seams for TermWidthOrZero, following the cmdbrowser/fallback.go
+// convention: production code indirects through these package-level vars so
+// tests can simulate TTY/non-TTY and specific widths without a real
+// terminal. Tests reassign and restore via t.Cleanup.
+var (
+	termWidthIsTerminalFn = func(f *os.File) bool { return term.IsTerminal(f.Fd()) }
+	termWidthGetSizeFn    = func(f *os.File) (w, h int, err error) { return term.GetSize(f.Fd()) }
+)
+
+// TermWidthOrZero returns f's terminal width, or 0 when f is not a terminal
+// or its size is unknown. Unlike TermWidth it has no 80-column fallback:
+// callers use 0 to mean "unbounded", which is the correct behavior for a
+// pipe or file — TermWidth's fallback would otherwise silently push every
+// piped run and every test into narrow mode.
+func TermWidthOrZero(f *os.File) int {
+	if !termWidthIsTerminalFn(f) {
+		return 0
+	}
+	w, _, err := termWidthGetSizeFn(f)
+	if err != nil || w <= 0 {
+		return 0
+	}
+	return w
+}
+
 // HuhTheme is the package-level huh.Theme built from workspace/styles.yml.
 // It defaults to ThemeBase + dwe glyph overrides (no project palette
 // applied) until ApplyStyles is called.

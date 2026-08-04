@@ -68,7 +68,7 @@ func Table(headers []string, rows [][]string) string {
 		cols[i] = columnSpec{Flex: true, Wrap: wrapText, Role: role}
 	}
 	v := tableView{Headers: headers, Rows: rows, Cols: cols}
-	return v.Render(0)
+	return v.Render(stdoutBudget())
 }
 
 // ServiceTableRow holds data for one row in the services Lipgloss table.
@@ -144,7 +144,7 @@ func formatPortsCell(ports map[string]int) string {
 // dwe treats per-developer port and host overrides as a core feature, so
 // these are always-visible built-in columns rather than opt-in extras.
 func ServicesTable(rows []ServiceTableRow, extraCols []string, withDirCol bool) string {
-	return ServicesTableAt(rows, extraCols, withDirCol, 0)
+	return ServicesTableAt(rows, extraCols, withDirCol, stdoutBudget())
 }
 
 // ServicesTableAt is ServicesTable at an explicit width budget (0 =
@@ -288,7 +288,7 @@ type DaemonTableRow struct {
 // DaemonTable renders a styled Lipgloss table of running daemons.
 // Columns: ID, PARAMS, CONTAINER, UPTIME. Empty input returns an empty string.
 func DaemonTable(rows []DaemonTableRow) string {
-	return DaemonTableAt(rows, 0)
+	return DaemonTableAt(rows, stdoutBudget())
 }
 
 // DaemonTableAt is DaemonTable at an explicit width budget (0 = unbounded).
@@ -362,7 +362,7 @@ func statusStyleForStatus(status string) lipgloss.Style {
 // DeployStatus renders a styled Lipgloss table of deploy status per service.
 // Columns: SERVICE, STATUS, CONFIG, PREV HASH, CURR HASH, LAST FAILED.
 func DeployStatus(rows []DeployStatusRow) string {
-	return DeployStatusAt(rows, 0)
+	return DeployStatusAt(rows, stdoutBudget())
 }
 
 // DeployStatusAt is DeployStatus at an explicit width budget (0 =

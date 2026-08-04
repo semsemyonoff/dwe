@@ -1,7 +1,9 @@
 package styles
 
 import (
+	"errors"
 	"image/color"
+	"os"
 	"strings"
 	"testing"
 
@@ -299,6 +301,49 @@ func TestTermWidth_ReturnsPositive(t *testing.T) {
 	w := TermWidth()
 	if w <= 0 {
 		t.Errorf("expected positive terminal width, got %d", w)
+	}
+}
+
+// withTermWidthSeams swaps the TermWidthOrZero seams for the duration of the
+// test and restores them via t.Cleanup.
+func withTermWidthSeams(t *testing.T, isTerminal bool, w, h int, err error) {
+	t.Helper()
+	savedIsTerminal, savedGetSize := termWidthIsTerminalFn, termWidthGetSizeFn
+	termWidthIsTerminalFn = func(*os.File) bool { return isTerminal }
+	termWidthGetSizeFn = func(*os.File) (int, int, error) { return w, h, err }
+	t.Cleanup(func() {
+		termWidthIsTerminalFn = savedIsTerminal
+		termWidthGetSizeFn = savedGetSize
+	})
+}
+
+func TestTermWidthOrZero_NonTTY_ReturnsZero(t *testing.T) {
+	withTermWidthSeams(t, false, 120, 40, nil)
+	if got := TermWidthOrZero(os.Stdout); got != 0 {
+		t.Errorf("expected 0 for non-TTY, got %d", got)
+	}
+}
+
+func TestTermWidthOrZero_TTY_ReturnsReportedWidth(t *testing.T) {
+	withTermWidthSeams(t, true, 120, 40, nil)
+	if got := TermWidthOrZero(os.Stdout); got != 120 {
+		t.Errorf("expected 120, got %d", got)
+	}
+}
+
+func TestTermWidthOrZero_TTY_ZeroOrNegativeWidth_ReturnsZero(t *testing.T) {
+	for _, w := range []int{0, -1} {
+		withTermWidthSeams(t, true, w, 40, nil)
+		if got := TermWidthOrZero(os.Stdout); got != 0 {
+			t.Errorf("width %d: expected 0, got %d", w, got)
+		}
+	}
+}
+
+func TestTermWidthOrZero_TTY_SizeError_ReturnsZero(t *testing.T) {
+	withTermWidthSeams(t, true, 0, 0, errors.New("boom"))
+	if got := TermWidthOrZero(os.Stdout); got != 0 {
+		t.Errorf("expected 0 on size probe error, got %d", got)
 	}
 }
 

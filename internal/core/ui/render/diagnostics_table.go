@@ -83,8 +83,12 @@ func DiagnosticsByDomain(rows []DiagnosticRow) string {
 // diagnosticsTable renders the diagnostics table, optionally including the
 // DOMAIN column. STATUS is always column 0 (its centering/glyph styling keys
 // off that), so dropping DOMAIN shifts only the prose columns.
+//
+// Budget is resolved from stderr, not stdout: DiagnosticsTable is the sole
+// stderr consumer among the six renderers — all three of its call sites
+// (preflight, deploy menu ×2) write diagnostics to stderr.
 func diagnosticsTable(rows []DiagnosticRow, showDomain bool) string {
-	return diagnosticsTableView(rows, showDomain).Render(0)
+	return diagnosticsTableView(rows, showDomain).Render(stderrBudget())
 }
 
 // diagnosticsTableView builds the tableView backing diagnosticsTable. Split

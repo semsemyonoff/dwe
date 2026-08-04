@@ -1,6 +1,7 @@
 package render
 
 import (
+	"os"
 	"testing"
 
 	"github.com/charmbracelet/lipgloss"
@@ -8,6 +9,27 @@ import (
 
 	"github.com/semsemyonoff/dwe/internal/core/ui/styles"
 )
+
+// TestMain pins termWidthFn to a non-TTY default (0 = unbounded) for the
+// whole suite, so the sink-probing renderers (Table, ServicesTable,
+// DaemonTable, DeployStatus, GitWorkspace, DiagnosticsTable) behave
+// identically whether the compiled test binary is run through `go test`
+// (stdout/stderr piped, already non-TTY) or directly from a real terminal.
+// Without this pin the Task 1 goldens would only hold under `go test`.
+func TestMain(m *testing.M) {
+	termWidthFn = func(*os.File) int { return 0 }
+	os.Exit(m.Run())
+}
+
+// withTermWidth swaps termWidthFn to report w for every stream and restores
+// the non-TTY default via t.Cleanup. Used to exercise shrink/record mode,
+// which the sink probe otherwise never reaches under go test.
+func withTermWidth(t *testing.T, w int) {
+	t.Helper()
+	saved := termWidthFn
+	termWidthFn = func(*os.File) int { return w }
+	t.Cleanup(func() { termWidthFn = saved })
+}
 
 // resetStyles re-initialises the styles package palette to the built-in
 // defaults for the current dark/light mode. Provided here so the renderer
