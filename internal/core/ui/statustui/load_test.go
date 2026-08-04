@@ -106,18 +106,19 @@ func TestBuildTabs_AllRunning(t *testing.T) {
 		IsRunning: alwaysRunning,
 	}
 
-	tabs, _, _ := buildTabs(context.Background(), deps)
+	snap, _ := buildTabs(context.Background(), deps)
 
-	require.Equal(t, 5, len(tabs), "expected 5 tabs")
-	require.Equal(t, "Services", tabs[0].title)
-	require.Equal(t, "Deploy", tabs[1].title)
-	require.Equal(t, "Topology", tabs[2].title)
-	require.Equal(t, "Git", tabs[3].title)
-	require.Equal(t, "Daemons", tabs[4].title)
+	require.Equal(t, 5, len(tabTitles), "expected 5 tabs")
+	require.Equal(t, "Services", tabTitles[0])
+	require.Equal(t, "Deploy", tabTitles[1])
+	require.Equal(t, "Topology", tabTitles[2])
+	require.Equal(t, "Git", tabTitles[3])
+	require.Equal(t, "Daemons", tabTitles[4])
 
+	servicesBody, _ := renderTab(snap, 0, 0)
 	// Services tab should contain the app name and not be a placeholder
-	require.NotEqual(t, "no services configured", tabs[0].content)
-	require.Contains(t, tabs[0].content, "main")
+	require.NotEqual(t, "no services configured", servicesBody)
+	require.Contains(t, servicesBody, "main")
 }
 
 func TestBuildTabs_AllStopped(t *testing.T) {
@@ -134,11 +135,11 @@ func TestBuildTabs_AllStopped(t *testing.T) {
 		IsRunning: neverRunning,
 	}
 
-	tabs, _, _ := buildTabs(context.Background(), deps)
+	snap, _ := buildTabs(context.Background(), deps)
 
-	require.Equal(t, 5, len(tabs))
+	servicesBody, _ := renderTab(snap, 0, 0)
 	// Content should still show the app, just not running
-	require.Contains(t, tabs[0].content, "main")
+	require.Contains(t, servicesBody, "main")
 }
 
 func TestBuildTabs_Partial(t *testing.T) {
@@ -158,11 +159,11 @@ func TestBuildTabs_Partial(t *testing.T) {
 		IsRunning: partialRunning,
 	}
 
-	tabs, _, _ := buildTabs(context.Background(), deps)
+	snap, _ := buildTabs(context.Background(), deps)
 
-	require.Equal(t, 5, len(tabs))
-	require.Contains(t, tabs[0].content, "main")
-	require.Contains(t, tabs[0].content, "second")
+	servicesBody, _ := renderTab(snap, 0, 0)
+	require.Contains(t, servicesBody, "main")
+	require.Contains(t, servicesBody, "second")
 }
 
 func TestBuildTabs_EmptyService(t *testing.T) {
@@ -176,11 +177,11 @@ func TestBuildTabs_EmptyService(t *testing.T) {
 		IsRunning: func(_ string) bool { return false },
 	}
 
-	tabs, _, _ := buildTabs(context.Background(), deps)
+	snap, _ := buildTabs(context.Background(), deps)
 
-	require.Equal(t, 5, len(tabs))
 	// Services tab should show placeholder when no services configured
-	require.Equal(t, "no services configured", tabs[0].content)
+	servicesBody, _ := renderTab(snap, 0, 0)
+	require.Equal(t, "no services configured", servicesBody)
 }
 
 func TestBuildTabs_WithNilState(t *testing.T) {
@@ -197,10 +198,11 @@ func TestBuildTabs_WithNilState(t *testing.T) {
 		State:     nil, // No deploy state
 	}
 
-	tabs, _, _ := buildTabs(context.Background(), deps)
+	snap, _ := buildTabs(context.Background(), deps)
 
 	// Deploy tab should show placeholder when no state
-	require.Equal(t, "no deploy status", tabs[1].content)
+	deployBody, _ := renderTab(snap, 1, 0)
+	require.Equal(t, "no deploy status", deployBody)
 }
 
 func TestBuildTabs_PrependsWarningOnRenderError(t *testing.T) {
@@ -224,10 +226,11 @@ func TestBuildTabs_PrependsWarningOnRenderError(t *testing.T) {
 		IsRunning: func(_ string) bool { return false },
 	}
 
-	tabs, _, _ := buildTabs(context.Background(), deps)
+	snap, _ := buildTabs(context.Background(), deps)
 
 	// Services tab should have a warning prefix because RenderApps will return an error
-	require.Contains(t, tabs[0].content, "⚠", "expected warning symbol in services tab when render error occurs")
+	servicesBody, _ := renderTab(snap, 0, 0)
+	require.Contains(t, servicesBody, "⚠", "expected warning symbol in services tab when render error occurs")
 }
 
 func TestWarningPrefix(t *testing.T) {

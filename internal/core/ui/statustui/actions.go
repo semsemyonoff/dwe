@@ -61,7 +61,7 @@ func (p *plugin) Actions(reg *tui.Registry) error {
 
 // HandleAction implements tui.Plugin. Tab-switch actions are no-ops until the
 // first load completes (mirrors the legacy guard against navigating before
-// m.tabs is populated — also avoids a modulo-by-zero on prev/next). Reload
+// m.loaded is set — also avoids a modulo-by-zero on prev/next). Reload
 // preserves the existing loadGen/reloadGen/reloadActive/reloadYOffset state
 // machine verbatim.
 func (p *plugin) HandleAction(a tui.Action) (tea.Cmd, bool) {
@@ -74,16 +74,16 @@ func (p *plugin) HandleAction(a tui.Action) (tea.Cmd, bool) {
 		m.jumpSection(-1)
 		return nil, true
 	case actionTabPrev:
-		if len(m.tabs) == 0 {
+		if !m.loaded {
 			return nil, true
 		}
-		m.setActiveTab((m.active - 1 + len(m.tabs)) % len(m.tabs))
+		m.setActiveTab((m.active - 1 + len(tabTitles)) % len(tabTitles))
 		return nil, true
 	case actionTabNext:
-		if len(m.tabs) == 0 {
+		if !m.loaded {
 			return nil, true
 		}
-		m.setActiveTab((m.active + 1) % len(m.tabs))
+		m.setActiveTab((m.active + 1) % len(tabTitles))
 		return nil, true
 	case actionTab1:
 		m.setActiveTab(0)
@@ -101,7 +101,7 @@ func (p *plugin) HandleAction(a tui.Action) (tea.Cmd, bool) {
 		m.setActiveTab(4)
 		return nil, true
 	case tui.ActionReload:
-		if len(m.tabs) == 0 {
+		if !m.loaded {
 			return nil, true
 		}
 		m.loadGen++

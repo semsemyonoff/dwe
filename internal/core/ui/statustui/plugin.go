@@ -78,12 +78,14 @@ func (p *plugin) CapturingInput() bool { return false }
 // nothing to cache here.
 func (p *plugin) Resize(tui.Region) {}
 
-// Update implements tui.Plugin. tabsLoadedMsg handling (stale-gen drop, tabs
-// assign, loadedAt/healthIndicator, YOffset restore-on-matching-reload else
-// GotoTop) and spinner.TickMsg are preserved VERBATIM from the legacy
-// model.Update — see the plan's single most important invariant. Unmatched
-// messages (e.g. viewport nav keys the registry left unbound) delegate to
-// viewport.Update for scroll handling.
+// Update implements tui.Plugin. tabsLoadedMsg handling (stale-gen drop,
+// snapshot assign, loadedAt/healthIndicator, YOffset restore-on-matching-
+// reload else GotoTop) and spinner.TickMsg preserve the legacy model.Update's
+// state machine — see the plan's single most important invariant. Body
+// content itself is no longer set here; renderBody recomputes it from
+// m.snap on the next render via renderTab. Unmatched messages (e.g.
+// viewport nav keys the registry left unbound) delegate to viewport.Update
+// for scroll handling.
 func (p *plugin) Update(msg tea.Msg) tea.Cmd {
 	m := p.m
 
@@ -100,19 +102,25 @@ func (p *plugin) Update(msg tea.Msg) tea.Cmd {
 		if msg.gen != m.loadGen {
 			return nil
 		}
-		m.tabs = msg.tabs
-		m.sectionAnchors = msg.anchors
+		m.snap = msg.snap
+		if !m.loaded {
+			m.sectionAnchors = make([][]int, len(tabTitles))
+		}
+		m.loaded = true
 		m.reloadAt = msg.loadedAt
 		m.healthIndicator = msg.healthIndicator
 		m.loading = false
 		m.reloading = false
 
-		// Restore YOffset if this is a reload that matches the active tab.
-		if m.reloadGen == msg.gen && m.reloadActive == m.active && len(m.tabs) > m.active {
-			m.viewport.SetContent(m.tabs[m.active].content)
+		// Restore YOffset if this is a reload that matches the active tab;
+		// otherwise scroll to the top. Content itself is not set here —
+		// renderBody recomputes the active tab's body from m.snap on the next
+		// render via renderTab, and SetContent alone never touches YOffset
+		// (bubbles/v2 viewport), so the order relative to that later
+		// SetContent call does not matter.
+		if m.reloadGen == msg.gen && m.reloadActive == m.active {
 			m.viewport.SetYOffset(m.reloadYOffset)
-		} else if len(m.tabs) > m.active {
-			m.viewport.SetContent(m.tabs[m.active].content)
+		} else {
 			m.viewport.GotoTop()
 		}
 		m.reloadGen = 0
@@ -175,6 +183,12 @@ const panelChromeRows = 2
 // tab-strip and divider rows) and renders tab strip + divider + viewport
 // content. Reloading state does not change body rendering — only
 // StatusContext (Task 3) reflects it.
+//
+// The active tab's body is recomputed here, via renderTabFn, on every call —
+// width is hardcoded to 0 for now (byte-identical to today's rendering,
+// which never set a width either); a later task threads the panel's real
+// inner width through and memoises the result so this is not redone every
+// frame.
 func (p *plugin) renderBody(inner tui.Region) string {
 	m := p.m
 	w := max(inner.Width, 0)
@@ -186,6 +200,13 @@ func (p *plugin) renderBody(inner tui.Region) string {
 		m.viewport.SetHeight(max(inner.Height, 0))
 		return m.viewport.View()
 	}
+
+	body, anchors := renderTabFn(m.snap, m.active, 0)
+	m.viewport.SetContent(body)
+	if m.active >= 0 && m.active < len(m.sectionAnchors) {
+		m.sectionAnchors[m.active] = anchors
+	}
+
 	// Tab strip + divider take panelChromeRows above the viewport.
 	m.viewport.SetHeight(max(inner.Height-panelChromeRows, 0))
 
@@ -209,7 +230,7 @@ func (p *plugin) StatusContext() string {
 		parts = append(parts, "·", "loading…")
 	case m.reloading:
 		parts = append(parts, "·", "reloading…")
-	case len(m.tabs) > 0 && m.deps.Cfg != nil:
+	case m.loaded && m.deps.Cfg != nil:
 		parts = append(parts, m.healthIndicator)
 		if !m.reloadAt.IsZero() {
 			elapsed := time.Since(m.reloadAt)

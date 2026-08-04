@@ -674,38 +674,47 @@ one.
 - Modify: `internal/core/ui/statustui/plugin_test.go`
 - Modify: `internal/core/ui/statustui/plugin_golden_test.go`
 
-- [ ] **first**, capture a characterization golden of the CURRENT behavior: all five tab bodies plus
+- [x] **first**, capture a characterization golden of the CURRENT behavior: all five tab bodies plus
       their anchor offsets, rendered from fixed stub data at a fixed width, with the palette and
       background mode pinned exactly as in Task 1
-- [ ] change `buildTabs` (`load.go:127`) to return a **data snapshot** rather than rendered strings:
+- [x] change `buildTabs` (`load.go:127`) to return a **data snapshot** rather than rendered strings:
       the collected service rows per type (from Task 9's `CollectApps` / `CollectTools` /
       `CollectInfra`), the topology and deploy-status rows, the collected daemon rows, the collected
       git rows, the per-section error slices, and the width-independent `stack.HealthIndicator(in)`.
       **Every Docker- or git-backed probe — `collectDaemonsFn`, `collectGitWorkspaceFn`, and
       `IsRunning` — must be evaluated here, in the async path**, so the snapshot is pure data
-- [ ] change `tabsLoadedMsg` (`load.go:19`) to carry that snapshot, and **drop `anchors` from it** —
+- [x] change `tabsLoadedMsg` (`load.go:19`) to carry that snapshot, and **drop `anchors` from it** —
       anchors are line offsets into the wrapped body (`joinSectionsWithAnchors`, `load.go:63-77`) and
       are therefore width-dependent
-- [ ] add `renderTab(snap, index, width) (body string, anchors []int)` performing the per-tab
+- [x] add `renderTab(snap, index, width) (body string, anchors []int)` performing the per-tab
       composition `buildTabs` does today (section titles, warning prefixes, `joinNonEmpty` /
       `joinSectionsWithAnchors`, the placeholder strings for empty sections)
-- [ ] call `renderTab` from `renderBody` (`plugin.go:178`) and set both the viewport content and
+- [x] call `renderTab` from `renderBody` (`plugin.go:178`) and set both the viewport content and
       `m.sectionAnchors` from its result, so `jumpSection` (`tui.go:117-131`) uses offsets that match
       what is on screen — but **pass width `0`** for now, so rendering is byte-identical to today
-- [ ] keep `plugin.Resize` a no-op (`plugin.go:79`) — sizing stays owned by `ViewPanel`, per the
+- [x] keep `plugin.Resize` a no-op (`plugin.go:79`) — sizing stays owned by `ViewPanel`, per the
       existing contract comment
-- [ ] update `plugin_golden_test.go`, which assigns `tabs` directly to bypass `buildTabsCmd`
-      (`:37`, `:49`) — it must now assign a snapshot
-- [ ] **adapt, do not delete, the six `tabsLoadedMsg{…, tabs: …}` constructions in `plugin_test.go`**
+- [x] update `plugin_golden_test.go`, which assigns `tabs` directly to bypass `buildTabsCmd`
+      (`:37`, `:49`) — it must now assign a snapshot. Done via a `renderTabFn` seam (mirroring the
+      package's existing `collectDaemonsFn`/`collectGitWorkspaceFn` pattern): these frame-chrome
+      goldens pin layout/tab-strip mechanics, not real table-rendering output, so `newGoldenPlugin`
+      assigns a zero-value `tabSnapshot` and stubs `renderTabFn` to canned per-tab bodies. Real
+      per-section rendering (through `stack.RenderAppsRows` et al.) is covered separately by the new
+      `tabs_golden_test.go` characterization goldens
+- [x] **adapt, do not delete, the six `tabsLoadedMsg{…, tabs: …}` constructions in `plugin_test.go`**
       (`:264`, `:285`, `:314`, `:374`, `:406`, `:412`) — these are the only coverage of stale-message
       filtering, same-tab reload YOffset restore, tab-switch reload invalidation, and back-to-back
       reloads. The characterization golden captures static bodies and **cannot** prove the reload path
       still works, so these tests are the real safety net for this task
-- [ ] add a frame-level reload test: `HandleAction(ActionReload)` → `tabsLoadedMsg` → viewport YOffset
+- [x] add a frame-level reload test: `HandleAction(ActionReload)` → `tabsLoadedMsg` → viewport YOffset
       restored, asserted through the rendered frame rather than internal fields
-- [ ] add a spy test proving `IsRunning` is **never** called from `renderTab` / `ViewPanel`
-- [ ] run `make test` — **the characterization golden and every `plugin_golden_test.go` golden must
-      match byte-for-byte with no regeneration**; must pass before task 11
+- [x] add a spy test proving `IsRunning` is **never** called from `renderTab` / `ViewPanel`
+- [x] run `make test` — **the characterization golden and every `plugin_golden_test.go` golden must
+      match byte-for-byte with no regeneration**; must pass before task 11. `internal/core/ui/statustui`
+      passes fully (no golden regenerated). Two unrelated packages (`internal/cli/status`,
+      `internal/cli/lifecycle`, neither touched by this task) fail in this sandbox because the Docker
+      daemon is unreachable (`docker ps` hangs) — a pre-existing environment limitation, not a
+      regression from this change
 
 ### Task 11: Render the status TUI at panel width, with memoised renders
 

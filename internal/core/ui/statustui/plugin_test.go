@@ -141,11 +141,12 @@ func TestPlugin_ViewPanel_LoadingShowsSpinnerNoTabStrip(t *testing.T) {
 func TestPlugin_ViewPanel_NormalShowsTabStripAndViewport(t *testing.T) {
 	p, _ := newTestPlugin(t)
 	p.m.loading = false
-	p.m.tabs = []tab{
-		{"Services", "service content"},
-		{"Deploy", "deploy content"},
-	}
-	p.m.viewport.SetContent(p.m.tabs[0].content)
+	p.m.loaded = true
+	p.m.sectionAnchors = make([][]int, len(tabTitles))
+
+	orig := renderTabFn
+	t.Cleanup(func() { renderTabFn = orig })
+	renderTabFn = func(_ tabSnapshot, _, _ int) (string, []int) { return "service content", nil }
 
 	got := p.ViewPanel(panelMain, tui.Region{Width: 80, Height: 24})
 	if !strings.Contains(got, "Services") || !strings.Contains(got, "Deploy") {
@@ -159,8 +160,8 @@ func TestPlugin_ViewPanel_NormalShowsTabStripAndViewport(t *testing.T) {
 func TestPlugin_ViewPanel_SizesViewportToInnerMinusChrome(t *testing.T) {
 	p, _ := newTestPlugin(t)
 	p.m.loading = false
-	p.m.tabs = []tab{{"Services", "content"}}
-	p.m.viewport.SetContent(p.m.tabs[0].content)
+	p.m.loaded = true
+	p.m.sectionAnchors = make([][]int, len(tabTitles))
 
 	p.ViewPanel(panelMain, tui.Region{Width: 40, Height: 10})
 
@@ -198,7 +199,7 @@ func TestPlugin_StatusContext_LoadedWithTimestamp(t *testing.T) {
 	p.m.loading = false
 	p.m.reloading = false
 	p.m.deps.Cfg = &config.DweConfig{}
-	p.m.tabs = []tab{{"Services", "content"}}
+	p.m.loaded = true
 	p.m.healthIndicator = "● healthy"
 	p.m.reloadAt = time.Now().Add(-5 * time.Second)
 
@@ -216,7 +217,7 @@ func TestPlugin_StatusContext_EmptyWhenNilCfgOrNoTabs(t *testing.T) {
 	p.m.loading = false
 	p.m.reloading = false
 	p.m.deps.Cfg = nil
-	p.m.tabs = []tab{{"Services", "content"}}
+	p.m.loaded = true
 	p.m.healthIndicator = "● healthy"
 	p.m.reloadAt = time.Now()
 
@@ -225,7 +226,7 @@ func TestPlugin_StatusContext_EmptyWhenNilCfgOrNoTabs(t *testing.T) {
 	}
 
 	p.m.deps.Cfg = &config.DweConfig{}
-	p.m.tabs = nil
+	p.m.loaded = false
 	if got := p.StatusContext(); got != "" {
 		t.Errorf("StatusContext() with no tabs = %q, want empty", got)
 	}
@@ -236,7 +237,7 @@ func TestPlugin_StatusContext_LoadedWithoutTimestamp(t *testing.T) {
 	p.m.loading = false
 	p.m.reloading = false
 	p.m.deps.Cfg = &config.DweConfig{}
-	p.m.tabs = []tab{{"Services", "content"}}
+	p.m.loaded = true
 	p.m.healthIndicator = "● healthy"
 	p.m.reloadAt = time.Time{}
 
@@ -254,20 +255,22 @@ func TestPlugin_StatusContext_LoadedWithoutTimestamp(t *testing.T) {
 func TestPlugin_Update_CurrentTabsLoadedMsgApplied(t *testing.T) {
 	p, _ := newTestPlugin(t)
 	p.m.loadGen = 5
-	p.m.tabs = []tab{{"Old", "old content"}}
 	p.m.loading = true
 
-	newTabs := []tab{
-		{"Services", "services content"},
-		{"Deploy", "deploy content"},
-	}
-	cmd := p.Update(tabsLoadedMsg{gen: 5, tabs: newTabs, loadedAt: time.Now()})
+	newSnap := tabSnapshot{daemonErrs: 2}
+	cmd := p.Update(tabsLoadedMsg{gen: 5, snap: newSnap, loadedAt: time.Now()})
 
 	if cmd != nil {
 		t.Errorf("Update(tabsLoadedMsg) cmd = %v, want nil", cmd)
 	}
-	if len(p.m.tabs) != 2 || p.m.tabs[0].title != "Services" || p.m.tabs[1].title != "Deploy" {
-		t.Errorf("tabs after Update = %+v, want Services/Deploy", p.m.tabs)
+	if !p.m.loaded {
+		t.Errorf("loaded after Update = false, want true")
+	}
+	if p.m.snap.daemonErrs != newSnap.daemonErrs {
+		t.Errorf("snap after Update = %+v, want %+v", p.m.snap, newSnap)
+	}
+	if len(p.m.sectionAnchors) != len(tabTitles) {
+		t.Errorf("sectionAnchors after Update len = %d, want %d", len(p.m.sectionAnchors), len(tabTitles))
 	}
 	if p.m.loading {
 		t.Errorf("loading after Update = true, want false")
@@ -280,22 +283,21 @@ func TestPlugin_Update_CurrentTabsLoadedMsgApplied(t *testing.T) {
 func TestPlugin_Update_StaleTabsLoadedMsgIgnored(t *testing.T) {
 	p, _ := newTestPlugin(t)
 	p.m.loadGen = 5
-	p.m.tabs = []tab{{"Old", "old content"}}
+	p.m.loaded = true
+	p.m.snap = tabSnapshot{daemonErrs: 9}
 
-	p.Update(tabsLoadedMsg{gen: 2, tabs: []tab{{"New", "new content"}}, loadedAt: time.Now()})
+	p.Update(tabsLoadedMsg{gen: 2, snap: tabSnapshot{daemonErrs: 1}, loadedAt: time.Now()})
 
-	if len(p.m.tabs) != 1 || p.m.tabs[0].title != "Old" {
-		t.Errorf("tabs after stale Update = %+v, want unchanged [Old]", p.m.tabs)
+	if p.m.snap.daemonErrs != 9 {
+		t.Errorf("snap after stale Update = %+v, want unchanged (daemonErrs=9)", p.m.snap)
 	}
 }
 
 func TestPlugin_Update_PreservesYOffsetOnReload_SameTab(t *testing.T) {
 	p, _ := newTestPlugin(t)
 	longContent := strings.Repeat("line\n", 100)
-	p.m.tabs = []tab{
-		{"Services", longContent},
-		{"Deploy", "deploy content"},
-	}
+	p.m.loaded = true
+	p.m.sectionAnchors = make([][]int, len(tabTitles))
 	p.m.active = 0
 	p.m.loading = false
 	p.m.loadGen = 1
@@ -311,7 +313,7 @@ func TestPlugin_Update_PreservesYOffsetOnReload_SameTab(t *testing.T) {
 	}
 	savedGen := p.m.loadGen
 
-	p.Update(tabsLoadedMsg{gen: savedGen, tabs: p.m.tabs, loadedAt: time.Now()})
+	p.Update(tabsLoadedMsg{gen: savedGen, snap: tabSnapshot{}, loadedAt: time.Now()})
 
 	if got := p.m.viewport.YOffset(); got != 5 {
 		t.Errorf("YOffset after same-tab reload = %d, want 5 (restored)", got)
@@ -321,10 +323,7 @@ func TestPlugin_Update_PreservesYOffsetOnReload_SameTab(t *testing.T) {
 func TestPlugin_Update_ResetsYOffsetOnTabSwitch(t *testing.T) {
 	p, _ := newTestPlugin(t)
 	longContent := strings.Repeat("line\n", 100)
-	p.m.tabs = []tab{
-		{"Services", longContent},
-		{"Deploy", "deploy content"},
-	}
+	p.m.loaded = true
 	p.m.active = 0
 	p.m.loading = false
 	p.m.loadGen = 1
@@ -344,10 +343,8 @@ func TestPlugin_Update_ResetsYOffsetOnTabSwitch(t *testing.T) {
 
 func TestPlugin_Update_TabSwitchInvalidatesPendingReloadRestore(t *testing.T) {
 	p, _ := newTestPlugin(t)
-	p.m.tabs = []tab{
-		{"Services", "services content"},
-		{"Deploy", "deploy content"},
-	}
+	p.m.loaded = true
+	p.m.sectionAnchors = make([][]int, len(tabTitles))
 	p.m.active = 0
 	p.m.loadGen = 1
 	p.m.loading = false
@@ -371,7 +368,7 @@ func TestPlugin_Update_TabSwitchInvalidatesPendingReloadRestore(t *testing.T) {
 	// bumped by the same reload), so it is NOT dropped as stale — but since
 	// reloadGen was cleared by the tab switch, the offset restore condition
 	// is false and GotoTop() runs instead.
-	p.Update(tabsLoadedMsg{gen: savedReloadGen, tabs: p.m.tabs, loadedAt: time.Now()})
+	p.Update(tabsLoadedMsg{gen: savedReloadGen, snap: tabSnapshot{}, loadedAt: time.Now()})
 
 	if p.m.active != 1 {
 		t.Errorf("active after stale-reload delivery = %d, want 1 (unchanged)", p.m.active)
@@ -383,7 +380,8 @@ func TestPlugin_Update_TabSwitchInvalidatesPendingReloadRestore(t *testing.T) {
 
 func TestPlugin_Update_MultipleReloads_DropsOlderResult(t *testing.T) {
 	p, _ := newTestPlugin(t)
-	p.m.tabs = []tab{{"Services", "original"}}
+	p.m.snap = tabSnapshot{daemonErrs: 0} // stands in for "original"
+	p.m.loaded = true
 	p.m.active = 0
 	p.m.loading = false
 	p.m.loadGen = 1
@@ -403,15 +401,15 @@ func TestPlugin_Update_MultipleReloads_DropsOlderResult(t *testing.T) {
 	}
 
 	// Stale (first) reload's result is dropped.
-	p.Update(tabsLoadedMsg{gen: firstGen, tabs: []tab{{"Services", "from first reload"}}, loadedAt: time.Now()})
-	if p.m.tabs[0].content != "original" {
-		t.Errorf("content after stale reload = %q, want %q (dropped)", p.m.tabs[0].content, "original")
+	p.Update(tabsLoadedMsg{gen: firstGen, snap: tabSnapshot{daemonErrs: 1}, loadedAt: time.Now()})
+	if p.m.snap.daemonErrs != 0 {
+		t.Errorf("snap after stale reload = %+v, want unchanged (daemonErrs=0, dropped)", p.m.snap)
 	}
 
 	// Current (second) reload's result is applied.
-	p.Update(tabsLoadedMsg{gen: secondGen, tabs: []tab{{"Services", "from second reload"}}, loadedAt: time.Now()})
-	if p.m.tabs[0].content != "from second reload" {
-		t.Errorf("content after current reload = %q, want %q", p.m.tabs[0].content, "from second reload")
+	p.Update(tabsLoadedMsg{gen: secondGen, snap: tabSnapshot{daemonErrs: 2}, loadedAt: time.Now()})
+	if p.m.snap.daemonErrs != 2 {
+		t.Errorf("snap after current reload = %+v, want daemonErrs=2", p.m.snap)
 	}
 }
 
@@ -450,20 +448,15 @@ func TestPlugin_Update_WindowSizeMsgDoesNotSizeViewport(t *testing.T) {
 func TestPlugin_PanelClick_TabStripSelectsCorrectTab(t *testing.T) {
 	p, _ := newTestPlugin(t)
 	p.m.loading = false
-	p.m.tabs = []tab{
-		{"Services", "services content"},
-		{"Deploy", "deploy content"},
-		{"Topology", "topology content"},
-	}
+	p.m.loaded = true
 	p.m.active = 0
-	p.m.viewport.SetContent(p.m.tabs[0].content)
 
 	// Zones are measured once while active==0, matching the strip actually
 	// on screen before each click below (active is reset to 0 before every
 	// click so the rendered positions stay consistent with the zones).
 	zones := p.m.tabHitZones()
-	if len(zones) != 3 {
-		t.Fatalf("tabHitZones() len = %d, want 3", len(zones))
+	if len(zones) != len(tabTitles) {
+		t.Fatalf("tabHitZones() len = %d, want %d", len(zones), len(tabTitles))
 	}
 
 	for i, z := range zones {
@@ -482,9 +475,8 @@ func TestPlugin_PanelClick_TabStripSelectsCorrectTab(t *testing.T) {
 func TestPlugin_PanelClick_PastLastTabIsNoop(t *testing.T) {
 	p, _ := newTestPlugin(t)
 	p.m.loading = false
-	p.m.tabs = []tab{{"Services", "c1"}, {"Deploy", "c2"}}
+	p.m.loaded = true
 	p.m.active = 0
-	p.m.viewport.SetContent(p.m.tabs[0].content)
 
 	zones := p.m.tabHitZones()
 	last := zones[len(zones)-1]
@@ -497,9 +489,8 @@ func TestPlugin_PanelClick_PastLastTabIsNoop(t *testing.T) {
 func TestPlugin_PanelClick_LeadingPadIsNoop(t *testing.T) {
 	p, _ := newTestPlugin(t)
 	p.m.loading = false
-	p.m.tabs = []tab{{"Services", "c1"}, {"Deploy", "c2"}}
+	p.m.loaded = true
 	p.m.active = 1
-	p.m.viewport.SetContent(p.m.tabs[1].content)
 
 	p.handlePanelClick(tui.PanelClickMsg{Panel: panelMain, X: 0, Y: 0})
 	if p.m.active != 1 {
@@ -510,9 +501,8 @@ func TestPlugin_PanelClick_LeadingPadIsNoop(t *testing.T) {
 func TestPlugin_PanelClick_GapIsNoop(t *testing.T) {
 	p, _ := newTestPlugin(t)
 	p.m.loading = false
-	p.m.tabs = []tab{{"Services", "c1"}, {"Deploy", "c2"}}
+	p.m.loaded = true
 	p.m.active = 0
-	p.m.viewport.SetContent(p.m.tabs[0].content)
 
 	zones := p.m.tabHitZones()
 	gapX := zones[0].end // first column of the gap after tab 0
@@ -525,9 +515,8 @@ func TestPlugin_PanelClick_GapIsNoop(t *testing.T) {
 func TestPlugin_PanelClick_ViewportRowIsNoop(t *testing.T) {
 	p, _ := newTestPlugin(t)
 	p.m.loading = false
-	p.m.tabs = []tab{{"Services", "c1"}, {"Deploy", "c2"}}
+	p.m.loaded = true
 	p.m.active = 0
-	p.m.viewport.SetContent(p.m.tabs[0].content)
 
 	p.handlePanelClick(tui.PanelClickMsg{Panel: panelMain, X: 5, Y: 1})
 	if p.m.active != 0 {
@@ -537,7 +526,7 @@ func TestPlugin_PanelClick_ViewportRowIsNoop(t *testing.T) {
 
 func TestPlugin_PanelClick_WrongPanelIsNoop(t *testing.T) {
 	p, _ := newTestPlugin(t)
-	p.m.tabs = []tab{{"Services", "c1"}, {"Deploy", "c2"}}
+	p.m.loaded = true
 	p.m.active = 0
 
 	p.handlePanelClick(tui.PanelClickMsg{Panel: tui.PanelID("other"), X: 5, Y: 0})
@@ -559,7 +548,6 @@ func TestPlugin_Wheel_ScrollsViewportByDeltaTimesStep(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			p, _ := newTestPlugin(t)
 			longContent := strings.Repeat("line\n", 100)
-			p.m.tabs = []tab{{"Services", longContent}}
 			p.m.loading = false
 			p.m.viewport.SetContent(longContent)
 			p.m.viewport.SetHeight(10)
@@ -581,7 +569,6 @@ func TestPlugin_Wheel_ScrollsViewportByDeltaTimesStep(t *testing.T) {
 func TestPlugin_Wheel_WrongPanelIsNoop(t *testing.T) {
 	p, _ := newTestPlugin(t)
 	longContent := strings.Repeat("line\n", 100)
-	p.m.tabs = []tab{{"Services", longContent}}
 	p.m.loading = false
 	p.m.viewport.SetContent(longContent)
 	p.m.viewport.SetHeight(10)
@@ -596,7 +583,6 @@ func TestPlugin_Wheel_WrongPanelIsNoop(t *testing.T) {
 func TestPlugin_Wheel_NeverChangesActivePanel(t *testing.T) {
 	p, _ := newTestPlugin(t)
 	longContent := strings.Repeat("line\n", 100)
-	p.m.tabs = []tab{{"Services", longContent}}
 	p.m.active = 0
 	p.m.loading = false
 	p.m.viewport.SetContent(longContent)
@@ -611,9 +597,8 @@ func TestPlugin_Wheel_NeverChangesActivePanel(t *testing.T) {
 func TestPlugin_Update_RoutesPanelClickMsgToTabStrip(t *testing.T) {
 	p, _ := newTestPlugin(t)
 	p.m.loading = false
-	p.m.tabs = []tab{{"Services", "c1"}, {"Deploy", "c2"}}
+	p.m.loaded = true
 	p.m.active = 0
-	p.m.viewport.SetContent(p.m.tabs[0].content)
 
 	zones := p.m.tabHitZones()
 	mid := (zones[1].start + zones[1].end - 1) / 2
@@ -628,7 +613,6 @@ func TestPlugin_Update_RoutesPanelClickMsgToTabStrip(t *testing.T) {
 func TestPlugin_Update_RoutesWheelMsgToViewport(t *testing.T) {
 	p, _ := newTestPlugin(t)
 	longContent := strings.Repeat("line\n", 100)
-	p.m.tabs = []tab{{"Services", longContent}}
 	p.m.loading = false
 	p.m.viewport.SetContent(longContent)
 	p.m.viewport.SetHeight(10)
@@ -650,7 +634,6 @@ func TestPlugin_Update_FocusChangedMsgIsNoop(t *testing.T) {
 func TestPlugin_Update_UnmatchedKeyDelegatesToViewportScroll(t *testing.T) {
 	p, _ := newTestPlugin(t)
 	longContent := strings.Repeat("line\n", 100)
-	p.m.tabs = []tab{{"Services", longContent}}
 	p.m.loading = false
 	p.m.viewport.SetContent(longContent)
 	p.m.viewport.SetHeight(10)

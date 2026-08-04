@@ -15,13 +15,13 @@ type tabHitZone struct{ start, end int }
 // constants (leading pad, active-tab decoration width, inter-tab gap) so click
 // hit-zones match what is drawn without re-deriving magic numbers.
 func (m *model) tabHitZones() []tabHitZone {
-	if len(m.tabs) == 0 {
+	if !m.loaded {
 		return nil
 	}
-	zones := make([]tabHitZone, len(m.tabs))
+	zones := make([]tabHitZone, len(tabTitles))
 	col := tabStripLeadPad
-	for i, t := range m.tabs {
-		w := lipgloss.Width(t.title)
+	for i, title := range tabTitles {
+		w := lipgloss.Width(title)
 		if i == m.active {
 			w += tabActiveDecoWidth()
 		}

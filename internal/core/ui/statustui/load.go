@@ -11,15 +11,47 @@ import (
 	"github.com/semsemyonoff/dwe/internal/core/project/config"
 	"github.com/semsemyonoff/dwe/internal/core/project/stack"
 	"github.com/semsemyonoff/dwe/internal/core/ui/render"
+	"github.com/semsemyonoff/dwe/internal/core/ui/statusview"
 	"github.com/semsemyonoff/dwe/internal/core/ui/styles"
 )
 
+// tabSnapshot is the pure data buildTabs collects: every Docker- or
+// git-backed probe (IsRunning, collectDaemonsFn, collectGitWorkspaceFn) has
+// already run by the time a tabSnapshot exists. renderTab composes it into a
+// tab's body at render time, at whatever width the caller passes — nothing
+// here is pre-rendered into a table, so the same snapshot can be rendered at
+// any width without re-probing Docker or git.
+type tabSnapshot struct {
+	apps  stack.ServiceSection
+	tools stack.ServiceSection
+	infra stack.ServiceSection
+	// serviceErrs is the total count of custom-column render errors across
+	// apps/tools/infra, driving the Services tab's warning prefix.
+	serviceErrs int
+
+	deployRows []render.DeployStatusRow
+	// pendingBanner is pre-rendered: render.PendingBanner is pure and
+	// width-independent, so there is nothing to gain by deferring it.
+	pendingBanner string
+
+	// topology is pre-rendered: stack.RenderTopology has no width parameter
+	// (Topology is a tree diagram, not a table) and no Docker probe of its
+	// own, so there is nothing to defer.
+	topology string
+
+	gitRows []statusview.GitWorkspaceRow
+
+	daemonRows []statusview.DaemonRow
+	// daemonErrs is the count of parse errors from collectDaemonsFn.
+	daemonErrs int
+}
+
 // tabsLoadedMsg is emitted when buildTabsCmd completes and carries the
-// loaded tabs, timestamp, and a generation number for stale-message filtering.
+// collected snapshot, timestamp, and a generation number for stale-message
+// filtering.
 type tabsLoadedMsg struct {
 	gen             uint64
-	tabs            []tab
-	anchors         [][]int // per-tab sub-table line offsets (aligned with tabs)
+	snap            tabSnapshot
 	loadedAt        time.Time
 	healthIndicator string
 }
@@ -30,6 +62,11 @@ type tabsLoadedMsg struct {
 var (
 	collectDaemonsFn      = stack.CollectDaemons
 	collectGitWorkspaceFn = stack.CollectGitWorkspace
+	// renderTabFn is the seam over renderTab itself. Production always uses
+	// renderTab; tests that only care about frame/tab-strip mechanics (not
+	// real render output) override this to return canned bodies without
+	// needing a realistic snapshot.
+	renderTabFn = renderTab
 )
 
 // joinNonEmpty drops empty/whitespace-only strings and joins the rest with a
@@ -97,34 +134,11 @@ func normaliseDocker(d *config.DockerConfig) *config.DockerConfig {
 	return &config.DockerConfig{}
 }
 
-// renderGitTab renders the Git Workspace section by calling collectGitWorkspaceFn
-// and render.GitWorkspace. Returns a placeholder when no repos are tracked,
-// and prepends a warning prefix if rows contain errors.
-func renderGitTab(ctx context.Context, d Deps) string {
-	title := render.SectionTitle("Git Workspace")
-	rows := collectGitWorkspaceFn(ctx, d.Cfg, d.ProjectRoot)
-	if len(rows) == 0 {
-		return joinNonEmpty(title, "no git workspace tracked")
-	}
-
-	// Count rows with errors and prepend a warning if any.
-	errCount := 0
-	for _, row := range rows {
-		if row.Err != nil {
-			errCount++
-		}
-	}
-
-	body := render.GitWorkspace(rows)
-	return joinNonEmpty(title, warningPrefix(errCount), body)
-}
-
-// buildTabs executes all five Render* functions serially and returns the
-// composed tabs, a per-tab list of sub-table line anchors (aligned with the
-// tabs slice; nil for tabs without jumpable sub-tables), and a cached health
-// indicator string. Each renderer returns (body, errs) — body strings are
-// joined with joinNonEmpty, errs trigger a warning prefix.
-func buildTabs(ctx context.Context, d Deps) ([]tab, [][]int, string) {
+// buildTabs runs every Docker- or git-backed probe (service IsRunning checks,
+// collectDaemonsFn, collectGitWorkspaceFn) and returns the result as a pure
+// tabSnapshot, plus the cached health indicator string. No table is rendered
+// here — renderTab does that at render time, at whatever width it is given.
+func buildTabs(ctx context.Context, d Deps) (tabSnapshot, string) {
 	in := stack.StatusInput{
 		Cfg:        d.Cfg,
 		IsRunning:  d.IsRunning,
@@ -135,66 +149,35 @@ func buildTabs(ctx context.Context, d Deps) ([]tab, [][]int, string) {
 		Tracked:    d.Tracked,
 	}
 
-	// Services (Apps + Tools + Infra combined). Each sub-table starts an anchor so
-	// ] / [ hop between them; the warning prefix is not an anchor.
-	appsBody, appsErrs := stack.RenderApps(in)
-	toolsBody, toolsErrs := stack.RenderTools(in)
-	infraBody, infraErrs := stack.RenderInfra(in)
-	serviceWarnings := warningPrefix(len(appsErrs) + len(toolsErrs) + len(infraErrs))
-	services, serviceAnchors := joinSectionsWithAnchors([]sectionPart{
-		{serviceWarnings, false},
-		{appsBody, true},
-		{toolsBody, true},
-		{infraBody, true},
-	})
-	if services == "" {
-		services = "no services configured"
-		serviceAnchors = nil
-	}
+	apps, appsErrs := stack.CollectApps(in)
+	tools, toolsErrs := stack.CollectTools(in)
+	infra, infraErrs := stack.CollectInfra(in)
 
-	// Deploy Status
-	deploy := stack.DeployStatus(in)
+	deployRows := stack.CollectDeployStatus(in)
+	var pendingBanner string
 	if d.State != nil {
-		pendingBanner := render.PendingBanner(d.State.Pending)
-		deploy = joinNonEmpty(pendingBanner, deploy)
-	}
-	if deploy == "" {
-		deploy = "no deploy status"
+		pendingBanner = render.PendingBanner(d.State.Pending)
 	}
 
-	// Topology
 	topology := stack.RenderTopology(in)
-	if topology == "" {
-		topology = "no topology data"
-	}
 
-	// Git Workspace
-	git := renderGitTab(ctx, d)
+	gitRows := collectGitWorkspaceFn(ctx, d.Cfg, d.ProjectRoot)
 
-	// Daemons
 	daemonRows, daemonErrs := collectDaemonsFn(ctx, d.Cfg, normaliseDocker(d.DockerCfg), d.ProjectRoot)
-	daemonsBody, renderErrs := stack.RenderDaemons(daemonRows)
-	allDaemonErrs := make([]error, 0, len(daemonErrs)+len(renderErrs))
-	allDaemonErrs = append(allDaemonErrs, daemonErrs...)
-	allDaemonErrs = append(allDaemonErrs, renderErrs...)
-	daemons := joinNonEmpty(warningPrefix(len(allDaemonErrs)), daemonsBody)
-	if daemons == "" {
-		daemons = "no daemons running"
-	}
 
-	tabs := []tab{
-		{"Services", services},
-		{"Deploy", deploy},
-		{"Topology", topology},
-		{"Git", git},
-		{"Daemons", daemons},
+	snap := tabSnapshot{
+		apps:          apps,
+		tools:         tools,
+		infra:         infra,
+		serviceErrs:   len(appsErrs) + len(toolsErrs) + len(infraErrs),
+		deployRows:    deployRows,
+		pendingBanner: pendingBanner,
+		topology:      topology,
+		gitRows:       gitRows,
+		daemonRows:    daemonRows,
+		daemonErrs:    len(daemonErrs),
 	}
-	// Anchors align with tabs by index and are sized off len(tabs) so the two can
-	// never drift. Only Services (index 0) stacks multiple sub-tables today; the
-	// rest stay nil → jumpSection no-ops there.
-	anchors := make([][]int, len(tabs))
-	anchors[0] = serviceAnchors
-	return tabs, anchors, stack.HealthIndicator(in)
+	return snap, stack.HealthIndicator(in)
 }
 
 // buildTabsCmd returns a bubbletea command that calls buildTabs and emits
@@ -202,13 +185,100 @@ func buildTabs(ctx context.Context, d Deps) ([]tab, [][]int, string) {
 // and returned in the message for stale-message filtering.
 func buildTabsCmd(ctx context.Context, d Deps, gen uint64) tea.Cmd {
 	return func() tea.Msg {
-		tabs, anchors, health := buildTabs(ctx, d)
+		snap, health := buildTabs(ctx, d)
 		return tabsLoadedMsg{
 			gen:             gen,
-			anchors:         anchors,
-			tabs:            tabs,
+			snap:            snap,
 			loadedAt:        time.Now(),
 			healthIndicator: health,
 		}
 	}
+}
+
+// renderTab composes the body and jump-anchors of tab index (0=Services,
+// 1=Deploy, 2=Topology, 3=Git, 4=Daemons) from snap, at the given width. It
+// is pure: no Docker or git probe, no side effect, safe to call once per
+// render. Titles, warning prefixes, and empty-section placeholders are
+// composed here, matching what buildTabs used to do before rendering moved
+// to render time.
+func renderTab(snap tabSnapshot, index, width int) (body string, anchors []int) {
+	switch index {
+	case 0:
+		return renderServicesTab(snap, width)
+	case 1:
+		return renderDeployTab(snap, width), nil
+	case 2:
+		return renderTopologyTab(snap), nil
+	case 3:
+		return renderGitTab(snap, width), nil
+	case 4:
+		return renderDaemonsTab(snap, width), nil
+	default:
+		return "", nil
+	}
+}
+
+// renderServicesTab composes the Apps/Tools/Infra sub-tables into the
+// Services tab. Each sub-table starts an anchor so ] / [ hop between them;
+// the warning prefix is not an anchor.
+func renderServicesTab(snap tabSnapshot, width int) (string, []int) {
+	appsBody := stack.RenderAppsRows(snap.apps, width)
+	toolsBody := stack.RenderToolsRows(snap.tools, width)
+	infraBody := stack.RenderInfraRows(snap.infra, width)
+	services, anchors := joinSectionsWithAnchors([]sectionPart{
+		{warningPrefix(snap.serviceErrs), false},
+		{appsBody, true},
+		{toolsBody, true},
+		{infraBody, true},
+	})
+	if services == "" {
+		return "no services configured", nil
+	}
+	return services, anchors
+}
+
+// renderDeployTab composes the pending-apply banner (if any) and the deploy
+// status table.
+func renderDeployTab(snap tabSnapshot, width int) string {
+	deploy := joinNonEmpty(snap.pendingBanner, stack.RenderDeployStatusRows(snap.deployRows, width))
+	if deploy == "" {
+		return "no deploy status"
+	}
+	return deploy
+}
+
+// renderTopologyTab returns the pre-rendered topology diagram, or the
+// placeholder when there is none.
+func renderTopologyTab(snap tabSnapshot) string {
+	if snap.topology == "" {
+		return "no topology data"
+	}
+	return snap.topology
+}
+
+// renderGitTab composes the Git Workspace section title, warning prefix (for
+// rows with a per-repo error), and table.
+func renderGitTab(snap tabSnapshot, width int) string {
+	title := render.SectionTitle("Git Workspace")
+	if len(snap.gitRows) == 0 {
+		return joinNonEmpty(title, "no git workspace tracked")
+	}
+	errCount := 0
+	for _, row := range snap.gitRows {
+		if row.Err != nil {
+			errCount++
+		}
+	}
+	return joinNonEmpty(title, warningPrefix(errCount), render.GitWorkspaceAt(snap.gitRows, width))
+}
+
+// renderDaemonsTab composes the Daemons warning prefix (parse errors from
+// collectDaemonsFn) and table.
+func renderDaemonsTab(snap tabSnapshot, width int) string {
+	daemonsBody, renderErrs := stack.RenderDaemonsAt(snap.daemonRows, width)
+	daemons := joinNonEmpty(warningPrefix(snap.daemonErrs+len(renderErrs)), daemonsBody)
+	if daemons == "" {
+		return "no daemons running"
+	}
+	return daemons
 }
