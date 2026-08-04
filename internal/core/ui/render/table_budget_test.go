@@ -7,6 +7,7 @@ import (
 
 	"github.com/charmbracelet/lipgloss"
 
+	"github.com/semsemyonoff/dwe/internal/core/ui/statusview"
 	"github.com/semsemyonoff/dwe/internal/core/validate"
 )
 
@@ -69,6 +70,13 @@ func assertLinesWithinBudget(t *testing.T, s string, width int) {
 	}
 }
 
+// isTableMode reports whether s was rendered as a lipgloss table (border
+// glyphs present) rather than the record layout (no borders at all) — the
+// cheapest reliable discriminator between tableView's two render modes.
+func isTableMode(s string) bool {
+	return strings.Contains(stripANSI(s), "│")
+}
+
 // TestSinkAwareBudget_Table_ShrinkAndRecordModes proves the Table entry
 // point resolves its width from the sink-aware seam rather than always
 // rendering unbounded, at both a shrink-mode width (columns narrow but still
@@ -113,6 +121,98 @@ func TestSinkAwareBudget_ServicesTable_ShrinkAndRecordModes(t *testing.T) {
 	withTermWidth(t, 15)
 	records := ServicesTable(rows, nil, true)
 	if !strings.Contains(stripANSI(records), "api") {
+		t.Errorf("expected service name to survive record mode: %q", stripANSI(records))
+	}
+}
+
+// TestSinkAwareBudget_DaemonTable_ShrinksBeforeRecords proves DaemonTable
+// passes through a genuine shrink stage (still a table, PARAMS narrowed)
+// before it degrades to records at a narrower width — completing the
+// per-renderer three-stage coverage Task 14 asks for (Table, ServicesTable,
+// and DiagnosticsTable already have shrink+record coverage above).
+func TestSinkAwareBudget_DaemonTable_ShrinksBeforeRecords(t *testing.T) {
+	resetStyles()
+	rows := []DaemonTableRow{
+		{ID: "services.main.queue", Params: "name=default,extra=" + strings.Repeat("word ", 20), Container: "proj-php_queue_default", Uptime: "5m0s"},
+	}
+
+	withTermWidth(t, 90)
+	shrunk := DaemonTable(rows)
+	if !isTableMode(shrunk) {
+		t.Errorf("expected shrink mode to stay a table at width 90: %q", stripANSI(shrunk))
+	}
+	assertLinesWithinBudget(t, shrunk, 90)
+	if !strings.Contains(stripANSI(shrunk), "services.main.queue") {
+		t.Errorf("expected daemon ID to survive shrink mode: %q", stripANSI(shrunk))
+	}
+
+	withTermWidth(t, 20)
+	records := DaemonTable(rows)
+	if isTableMode(records) {
+		t.Errorf("expected record mode at width 20: %q", stripANSI(records))
+	}
+	if !strings.Contains(stripANSI(records), "services.main.queue") {
+		t.Errorf("expected daemon ID to survive record mode: %q", stripANSI(records))
+	}
+}
+
+// TestSinkAwareBudget_DeployStatus_ShrinksBeforeRecords is the DeployStatus
+// counterpart of TestSinkAwareBudget_DaemonTable_ShrinksBeforeRecords.
+func TestSinkAwareBudget_DeployStatus_ShrinksBeforeRecords(t *testing.T) {
+	resetStyles()
+	rows := []DeployStatusRow{
+		{
+			Service: "main", Status: "failed", ConfigDelta: "changed",
+			PrevHashShort: "abc12345", CurrHashShort: "def12345",
+			LastFailedPhase: "setup", LastFailedStep: "a very long step name that should wrap under pressure " + strings.Repeat("word ", 15),
+		},
+	}
+
+	withTermWidth(t, 90)
+	shrunk := DeployStatus(rows)
+	if !isTableMode(shrunk) {
+		t.Errorf("expected shrink mode to stay a table at width 90: %q", stripANSI(shrunk))
+	}
+	assertLinesWithinBudget(t, shrunk, 90)
+	if !strings.Contains(stripANSI(shrunk), "main") {
+		t.Errorf("expected service name to survive shrink mode: %q", stripANSI(shrunk))
+	}
+
+	withTermWidth(t, 15)
+	records := DeployStatus(rows)
+	if isTableMode(records) {
+		t.Errorf("expected record mode at width 15: %q", stripANSI(records))
+	}
+	if !strings.Contains(stripANSI(records), "main") {
+		t.Errorf("expected service name to survive record mode: %q", stripANSI(records))
+	}
+}
+
+// TestSinkAwareBudget_GitWorkspace_ShrinksBeforeRecords is the GitWorkspace
+// counterpart of TestSinkAwareBudget_DaemonTable_ShrinksBeforeRecords.
+func TestSinkAwareBudget_GitWorkspace_ShrinksBeforeRecords(t *testing.T) {
+	resetStyles()
+	longDir := "very/long/nested/service/directory/path/that/definitely/wont/fit/in/a/narrow/terminal"
+	rows := []statusview.GitWorkspaceRow{
+		{Service: "app", Dir: longDir, Branch: "feature/some-long-branch-name", SHA: "abcdef12", Dirty: true, AheadBehind: "+1/-2"},
+	}
+
+	withTermWidth(t, 90)
+	shrunk := GitWorkspace(rows)
+	if !isTableMode(shrunk) {
+		t.Errorf("expected shrink mode to stay a table at width 90: %q", stripANSI(shrunk))
+	}
+	assertLinesWithinBudget(t, shrunk, 90)
+	if !strings.Contains(stripANSI(shrunk), "app") {
+		t.Errorf("expected service name to survive shrink mode: %q", stripANSI(shrunk))
+	}
+
+	withTermWidth(t, 20)
+	records := GitWorkspace(rows)
+	if isTableMode(records) {
+		t.Errorf("expected record mode at width 20: %q", stripANSI(records))
+	}
+	if !strings.Contains(stripANSI(records), "app") {
 		t.Errorf("expected service name to survive record mode: %q", stripANSI(records))
 	}
 }
