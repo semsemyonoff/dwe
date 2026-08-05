@@ -219,6 +219,7 @@ func writeCommandTypeDetails(sb *strings.Builder, def *usercommands.CommandDef, 
 	serviceLabel := store.T(locale, "docs.property.service", "Service")
 	shellLabel := store.T(locale, "docs.property.shell", "Shell")
 	composeArgsLabel := store.T(locale, "docs.property.compose_args", "Compose args")
+	argvAppendFromLabel := store.T(locale, "docs.property.argv_append_from", "Argv append from")
 	scriptLabel := store.T(locale, "docs.property.script", "Script")
 	builtinLabel := store.T(locale, "docs.property.builtin", "Builtin")
 
@@ -229,6 +230,9 @@ func writeCommandTypeDetails(sb *strings.Builder, def *usercommands.CommandDef, 
 		}
 		if len(def.Argv) > 0 {
 			fmt.Fprintf(sb, "## %s\n\n```\n%s\n```\n\n", argvHeader, strings.Join(def.Argv, " "))
+		}
+		if def.ArgvAppendFrom != "" {
+			fmt.Fprintf(sb, "**%s:** `%s`\n\n", argvAppendFromLabel, def.ArgvAppendFrom)
 		}
 		if def.Workdir != "" {
 			fmt.Fprintf(sb, "**%s:** `%s`\n\n", workdirLabel, def.Workdir)
@@ -242,6 +246,9 @@ func writeCommandTypeDetails(sb *strings.Builder, def *usercommands.CommandDef, 
 		}
 		if len(def.Argv) > 0 {
 			fmt.Fprintf(sb, "## %s\n\n```\n%s\n```\n\n", argvHeader, strings.Join(def.Argv, " "))
+		}
+		if def.ArgvAppendFrom != "" {
+			fmt.Fprintf(sb, "**%s:** `%s`\n\n", argvAppendFromLabel, def.ArgvAppendFrom)
 		}
 		if len(def.ComposeArgs) > 0 {
 			fmt.Fprintf(sb, "**%s:** `%s`\n\n", composeArgsLabel, strings.Join(def.ComposeArgs, " "))

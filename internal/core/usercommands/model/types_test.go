@@ -3084,3 +3084,128 @@ func TestValidate_Params_MultiselectWithSeparator(t *testing.T) {
 		t.Errorf("unexpected error: %v", err)
 	}
 }
+
+// ---------------------------------------------------------------------------
+// argv_append_from
+// ---------------------------------------------------------------------------
+
+// TestParseCommandFile_ArgvAppendFrom: the field must survive the strict
+// decoder and the per-type allowlist on every type that builds an argv.
+func TestParseCommandFile_ArgvAppendFrom(t *testing.T) {
+	cf := mustParse(t, `
+commands:
+  lint:
+    type: service_exec
+    service: app
+    argv: [ruff, check]
+    argv_append_from: "git diff --name-only --cached -- '*.py'"
+`)
+	cmd := cf.Commands["lint"]
+	if cmd.ArgvAppendFrom != "git diff --name-only --cached -- '*.py'" {
+		t.Errorf("ArgvAppendFrom = %q, want the declared expression", cmd.ArgvAppendFrom)
+	}
+}
+
+// TestArgvAppendFromFieldAllowed: the field is argv-only, so the allowlist must
+// admit it exactly on the types that build an argv and can skip — daemon accepts
+// argv but is excluded deliberately (see validateArgvAppendFrom).
+func TestArgvAppendFromFieldAllowed(t *testing.T) {
+	for _, tc := range []struct {
+		typ  CommandType
+		want bool
+	}{
+		{CommandTypeShell, true},
+		{CommandTypeServiceExec, true},
+		{CommandTypeServiceRun, true},
+		{CommandTypeDwe, false},
+		{CommandTypeDaemon, false},
+		{CommandTypeWorkflow, false},
+		{CommandTypeScript, false},
+		{CommandTypeBuiltin, false},
+	} {
+		t.Run(string(tc.typ), func(t *testing.T) {
+			if got := allowedFieldsFor(tc.typ)["argv_append_from"]; got != tc.want {
+				t.Errorf("allowedFieldsFor(%s)[argv_append_from] = %v, want %v", tc.typ, got, tc.want)
+			}
+		})
+	}
+}
+
+// TestParseCommandFile_ArgvAppendFromRejectedByAllowlist: a type outside the
+// allowlist fails at parse time, before Validate ever runs.
+func TestParseCommandFile_ArgvAppendFromRejectedByAllowlist(t *testing.T) {
+	_, err := ParseCommandFile([]byte(`
+commands:
+  boom:
+    type: dwe
+    cmd: status
+    argv_append_from: "echo x"
+`))
+	if err == nil || !strings.Contains(err.Error(), `field "argv_append_from" not allowed`) {
+		t.Fatalf("expected allowlist rejection, got %v", err)
+	}
+}
+
+// TestValidate_ArgvAppendFrom: accept/reject matrix for the load-time rules.
+func TestValidate_ArgvAppendFrom(t *testing.T) {
+	for _, tc := range []struct {
+		name    string
+		def     CommandDef
+		wantErr string
+	}{
+		{
+			name: "shell argv + append",
+			def:  CommandDef{Type: CommandTypeShell, ID: "g.a", Argv: []string{"ruff", "check"}, ArgvAppendFrom: "git diff --name-only"},
+		},
+		{
+			name: "service_exec argv + append",
+			def:  CommandDef{Type: CommandTypeServiceExec, ID: "g.b", Service: "app", Argv: []string{"ruff"}, ArgvAppendFrom: "git diff"},
+		},
+		{
+			name: "service_run argv + append",
+			def:  CommandDef{Type: CommandTypeServiceRun, ID: "g.c", Service: "app", Argv: []string{"ruff"}, ArgvAppendFrom: "git diff"},
+		},
+		{
+			name:    "cmd + append",
+			def:     CommandDef{Type: CommandTypeShell, ID: "g.d", Cmd: "ruff check", ArgvAppendFrom: "git diff"},
+			wantErr: "not valid together with cmd:",
+		},
+		{
+			name:    "append alone",
+			def:     CommandDef{Type: CommandTypeShell, ID: "g.e", ArgvAppendFrom: "git diff"},
+			wantErr: "requires argv:",
+		},
+		{
+			name: "daemon",
+			def: CommandDef{
+				Type: CommandTypeDaemon, ID: "g.f", Service: "app",
+				Argv:           []string{"tail", "-f", "/dev/null"},
+				ArgvAppendFrom: "git diff",
+				Daemon:         &DaemonSpec{ContainerTemplate: "worker"},
+			},
+			wantErr: "not valid for type=daemon",
+		},
+		{
+			name:    "workflow",
+			def:     CommandDef{Type: CommandTypeWorkflow, ID: "g.g", Steps: []WorkflowStep{{Command: "x"}}, ArgvAppendFrom: "git diff"},
+			wantErr: "not valid for type=workflow",
+		},
+		{
+			name: "no append is unaffected",
+			def:  CommandDef{Type: CommandTypeShell, ID: "g.h", Cmd: "echo ok"},
+		},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			err := tc.def.Validate()
+			if tc.wantErr == "" {
+				if err != nil {
+					t.Fatalf("unexpected error: %v", err)
+				}
+				return
+			}
+			if err == nil || !strings.Contains(err.Error(), tc.wantErr) {
+				t.Fatalf("expected error containing %q, got %v", tc.wantErr, err)
+			}
+		})
+	}
+}

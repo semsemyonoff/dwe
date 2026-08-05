@@ -139,6 +139,7 @@ func allowedFieldsFor(t CommandType) map[string]bool {
 	case CommandTypeShell:
 		common["cmd"] = true
 		common["argv"] = true
+		common["argv_append_from"] = true
 		common["args"] = true
 		common["workdir"] = true
 	case CommandTypeDwe:
@@ -163,6 +164,7 @@ func allowedFieldsFor(t CommandType) map[string]bool {
 		common["runner"] = true
 		common["cmd"] = true
 		common["argv"] = true
+		common["argv_append_from"] = true
 		common["args"] = true
 	case CommandTypeServiceRun:
 		common["service"] = true
@@ -173,6 +175,7 @@ func allowedFieldsFor(t CommandType) map[string]bool {
 		common["runner"] = true
 		common["cmd"] = true
 		common["argv"] = true
+		common["argv_append_from"] = true
 		common["args"] = true
 	case CommandTypeWorkflow:
 		common["steps"] = true
@@ -837,6 +840,11 @@ type CommandDef struct {
 	// Argv is the raw argument vector (no shell quoting).
 	// Mutually exclusive with Cmd.
 	Argv []string `yaml:"argv"`
+	// ArgvAppendFrom is a host shell expression whose stdout lines are appended
+	// to Argv as individual elements (one per line). Argv-only: appending to a
+	// shell Cmd string would splice derived bytes into program text. Empty
+	// output means "nothing to process" and skips the command.
+	ArgvAppendFrom string `yaml:"argv_append_from"`
 	// Args configures the pass-through arguments a caller may supply after
 	// `--`. It only takes effect for a command whose cmd/argv references
 	// ${args}; a command without that reference rejects extra arguments.
@@ -946,6 +954,10 @@ func (c *CommandDef) Validate() error {
 		}
 	}
 
+	if err := c.validateArgvAppendFrom(); err != nil {
+		return fmt.Errorf("command %q: %w", c.ID, err)
+	}
+
 	switch c.Type {
 	case CommandTypeShell, CommandTypeDwe:
 		if err := c.validateCommandType(); err != nil {
@@ -1042,6 +1054,44 @@ func (c *CommandDef) EffectiveWorkdirFrom() string {
 		return c.Runner.WorkdirFrom
 	}
 	return c.WorkdirFrom
+}
+
+// validateArgvAppendFrom enforces where the computed-argv field may appear.
+//
+// The field appends host-computed elements to an argument vector, so it is
+// argv-only by construction: appending to a shell `cmd:` string would splice
+// derived bytes back into program text, which is exactly the surface the
+// ${args} → "$@" transport exists to avoid.
+//
+// type=daemon is rejected deliberately even though it accepts argv: the
+// expansion packs that argv into the synthetic .start command, so the documented
+// "empty output → skip" semantics would read as "silently fail to start the
+// daemon".
+func (c *CommandDef) validateArgvAppendFrom() error {
+	if c.ArgvAppendFrom == "" {
+		return nil
+	}
+	switch c.Type {
+	case CommandTypeShell, CommandTypeServiceExec, CommandTypeServiceRun:
+		if c.Cmd != "" {
+			return fmt.Errorf(
+				"argv_append_from is not valid together with cmd: — it appends argv elements, "+
+					"and appending to a shell string would splice the computed values into program text; "+
+					"use argv: instead (type=%s)", c.Type)
+		}
+		if len(c.Argv) == 0 {
+			return fmt.Errorf(
+				"argv_append_from requires argv: — there is no argument vector to append to (type=%s)",
+				c.Type)
+		}
+		return nil
+	case CommandTypeDaemon:
+		return fmt.Errorf(
+			"argv_append_from is not valid for type=daemon: an empty result means \"nothing to " +
+				"process, skip\", which for a daemon would silently fail to start it")
+	default:
+		return fmt.Errorf("argv_append_from is not valid for type=%s (argv-building types only)", c.Type)
+	}
 }
 
 func (c *CommandDef) validateCommandType() error {

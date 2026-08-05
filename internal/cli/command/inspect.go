@@ -27,6 +27,7 @@ type commandInspectJSON struct {
 	DerivedFrom      string            `json:"derived_from,omitempty"`
 	Cmd              string            `json:"cmd,omitempty"`
 	Argv             []string          `json:"argv,omitempty"`
+	ArgvAppendFrom   string            `json:"argv_append_from,omitempty"`
 	Service          string            `json:"service,omitempty"`
 	User             string            `json:"user,omitempty"`
 	Workdir          string            `json:"workdir,omitempty"`
@@ -132,6 +133,7 @@ func buildCommandInspectJSON(def *usercommands.CommandDef, translator i18n.Trans
 	case usercommands.CommandTypeShell, usercommands.CommandTypeDwe:
 		data.Cmd = def.Cmd
 		data.Argv = def.Argv
+		data.ArgvAppendFrom = def.ArgvAppendFrom
 		data.Workdir = def.Workdir
 	case usercommands.CommandTypeServiceExec, usercommands.CommandTypeServiceRun:
 		data.Service = def.Service
@@ -142,6 +144,7 @@ func buildCommandInspectJSON(def *usercommands.CommandDef, translator i18n.Trans
 		data.ComposeArgs = def.ComposeArgs
 		data.Cmd = def.Cmd
 		data.Argv = def.Argv
+		data.ArgvAppendFrom = def.ArgvAppendFrom
 	case usercommands.CommandTypeScript:
 		if def.Script != nil {
 			data.Script = &scriptDefJSON{
@@ -301,6 +304,9 @@ func printInspectAt(w io.Writer, def *usercommands.CommandDef, cfg *config.DweCo
 		if len(def.Argv) > 0 {
 			def2("argv", strings.Join(def.Argv, " "), 2)
 		}
+		if def.ArgvAppendFrom != "" {
+			def2("argv_append_from", def.ArgvAppendFrom, 2)
+		}
 		if def.Workdir != "" {
 			def2("workdir", def.Workdir, 2)
 		}
@@ -331,6 +337,9 @@ func printInspectAt(w io.Writer, def *usercommands.CommandDef, cfg *config.DweCo
 		}
 		if len(def.Argv) > 0 {
 			def2("argv", strings.Join(def.Argv, " "), 2)
+		}
+		if def.ArgvAppendFrom != "" {
+			def2("argv_append_from", def.ArgvAppendFrom, 2)
 		}
 	case usercommands.CommandTypeScript:
 		if def.Script != nil {

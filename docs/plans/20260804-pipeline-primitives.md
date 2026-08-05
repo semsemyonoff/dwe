@@ -283,12 +283,12 @@ it complicates the first implementation.
 - Modify: `internal/core/usercommands/model/types_test.go`
 - Modify: `internal/cli/command/inspect.go` (+ its tests)
 
-- [ ] add `ArgvAppendFrom string` with tag `argv_append_from` next to `Argv`
-- [ ] reject at load time: `argv_append_from` together with `cmd:` (argv-only feature),
+- [x] add `ArgvAppendFrom string` with tag `argv_append_from` next to `Argv`
+- [x] reject at load time: `argv_append_from` together with `cmd:` (argv-only feature),
       and `argv_append_from` on command types that do not build an argv
-- [ ] extend `allowedFieldsFor` **per type** — it is type-scoped, so add the key to
+- [x] extend `allowedFieldsFor` **per type** — it is type-scoped, so add the key to
       `CommandTypeShell`, `CommandTypeServiceExec` and `CommandTypeServiceRun`
-- [ ] **exclude `CommandTypeDaemon`** with a load-time rejection (decision, not a
+- [x] **exclude `CommandTypeDaemon`** with a load-time rejection (decision, not a
       recommendation): it is the fourth type accepting `argv` (`types.go:190`) and
       `registry/expand_daemon.go:71` packs that `argv` into the synthetic commands, so
       "skip on empty list" would mean "silently fail to start the daemon"
@@ -297,20 +297,20 @@ commands. Dropped deliberately: dwe targets a developer working on their own mac
 author of such a command can already run anything through `type: shell`, and equivalent
 host-shell paths exist anyway via `hide:` / workflow `when:` conditions. The rule restricted
 authoring without buying protection.)*
-- [ ] surface the field in `dwe cmd -i`: the typed JSON struct (`inspect.go:29`, filled at
+- [x] surface the field in `dwe cmd -i`: the typed JSON struct (`inspect.go:29`, filled at
       :134/:144) and the human output (:301-302 / :332-333). An executable field invisible
       to inspect is worse than usual here — inspect is the documented way for an agent to
       learn what a command does before running it
-- [ ] surface it in the generated command docs too: `internal/cli/docs/generate.go:215,
+- [x] surface it in the generated command docs too: `internal/cli/docs/generate.go:215,
       230-231,243-244` renders `argv` into markdown — the same "what does this command do"
       surface
-- [ ] (checked, no work needed) completion does not touch the field, `dwe commands list`
+- [x] (checked, no work needed) completion does not touch the field, `dwe commands list`
       has no full typed JSON, the shellcheck linter only reads `.sh` files, and
       `internal/core/validate/commands/` carries no field allowlist of its own
-- [ ] write table-driven tests for accept/reject combinations
+- [x] write table-driven tests for accept/reject combinations
       (`argv` + append → ok; `cmd` + append → error; append alone → error; daemon → per the
       decision above)
-- [ ] run tests — must pass before task 2
+- [x] run tests — must pass before task 2
 
 ### Task 2: `argv_append_from` — host execution and argv assembly
 
