@@ -66,7 +66,15 @@ func ResolvePhaseSteps(cfg *config.DweConfig, reg *registry.Registry, phase conf
 	var phaseRuntimeWhen *condition.Condition
 	if phase.When != nil {
 		if phase.When.IsRuntime() {
-			phaseRuntimeWhen = phase.When
+			rendered, err := renderWhen(phase.When, renderContextFor(cfg))
+			if err != nil {
+				prefix := phase.Name
+				if service != "" {
+					prefix = service + "/" + prefix
+				}
+				return nil, fmt.Errorf("phase %s: rendering when: %w", prefix, err)
+			}
+			phaseRuntimeWhen = rendered
 		} else if phase.When.Type == condition.TypeTemplate {
 			ok, err := tpl.EvalCondition(phase.When.Expr, cfg)
 			if err != nil {
@@ -286,17 +294,23 @@ func resolveParallelStep(cfg *config.DweConfig, reg *registry.Registry, phase co
 }
 
 // resolveStepWhen evaluates a step's `when:` at plan time. A runtime condition
-// is returned as runtimeWhen (to attach to the resolved step) with keep=true; a
-// template condition is evaluated immediately and keep reports whether the step
-// survives filtering (keep=false when it evaluates to false). prefix names the
-// step for error messages. when: nil or a non-template/non-runtime condition
-// yields (nil, true, nil).
+// is rendered into a copy (Task 2b: ${...} in a shell/builtin when.cmd is
+// substituted the same as cmd/with/check) and returned as runtimeWhen (to
+// attach to the resolved step) with keep=true; a template condition is
+// evaluated immediately and keep reports whether the step survives filtering
+// (keep=false when it evaluates to false). prefix names the step for error
+// messages. when: nil or a non-template/non-runtime condition yields
+// (nil, true, nil).
 func resolveStepWhen(cfg *config.DweConfig, step config.DeployStep, prefix string) (runtimeWhen *condition.Condition, keep bool, err error) {
 	if step.When == nil {
 		return nil, true, nil
 	}
 	if step.When.IsRuntime() {
-		return step.When, true, nil
+		rendered, rerr := renderWhen(step.When, renderContextFor(cfg))
+		if rerr != nil {
+			return nil, false, fmt.Errorf("step %s: rendering when: %w", prefix, rerr)
+		}
+		return rendered, true, nil
 	}
 	if step.When.Type == condition.TypeTemplate {
 		ok, evalErr := tpl.EvalCondition(step.When.Expr, cfg)
