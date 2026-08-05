@@ -64,8 +64,11 @@ func TestResolvePhaseSteps_filesGateThreadedThrough(t *testing.T) {
 		t.Fatalf("expected 1 resolved step, got %d", len(resolved))
 	}
 
-	if resolved[0].FilesGate != fg {
-		t.Errorf("FilesGate not threaded through: expected %v, got %v", fg, resolved[0].FilesGate)
+	// FilesGate is rendered into a fresh copy (never the same pointer as the
+	// loaded config's step) — see render.go's renderFilesGate — so this checks
+	// value equality, not identity.
+	if resolved[0].FilesGate == nil || resolved[0].FilesGate.State != fg.State {
+		t.Errorf("FilesGate not threaded through: expected State %v, got %v", fg.State, resolved[0].FilesGate)
 	}
 	if resolved[0].FilesGate.State != filesgate.StateReadable {
 		t.Errorf("FilesGate.State = %q, want readable", resolved[0].FilesGate.State)

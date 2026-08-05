@@ -746,3 +746,131 @@ func TestResolvePhaseSteps_parallelSubStepCarriesOwnTimeout(t *testing.T) {
 		t.Errorf("substep b Timeout = %v, want 0 (absent)", rp.Steps[1].Timeout)
 	}
 }
+
+func configWithSourceVars() *config.DweConfig {
+	return &config.DweConfig{
+		Raw: map[string]any{
+			"vars": map[string]any{
+				"source": map[string]any{
+					"repo": "https://example.com/repo.git",
+					"dir":  "app",
+				},
+			},
+		},
+	}
+}
+
+func TestResolvePhaseSteps_rendersKnownHeadCmd(t *testing.T) {
+	cfg := configWithSourceVars()
+	phase := config.DeployPhase{
+		Name: "init",
+		Steps: []config.DeployStep{
+			{Name: "clone", Type: "shell", Cmd: "git clone ${vars.source.repo} ${vars.source.dir}"},
+		},
+	}
+	resolved, err := ResolvePhaseSteps(cfg, nil, phase, "")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	want := "git clone https://example.com/repo.git app"
+	if resolved[0].Step.Cmd != want {
+		t.Errorf("Step.Cmd = %q, want %q", resolved[0].Step.Cmd, want)
+	}
+}
+
+func TestResolvePhaseSteps_leavesUnknownHeadLiteral(t *testing.T) {
+	cfg := configWithSourceVars()
+	phase := config.DeployPhase{
+		Name: "init",
+		Steps: []config.DeployStep{
+			{Name: "greet", Type: "shell", Cmd: "echo ${HOME}"},
+		},
+	}
+	resolved, err := ResolvePhaseSteps(cfg, nil, phase, "")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if resolved[0].Step.Cmd != "echo ${HOME}" {
+		t.Errorf("Step.Cmd = %q, want unchanged", resolved[0].Step.Cmd)
+	}
+}
+
+func TestResolvePhaseSteps_rendersCommandStepWith(t *testing.T) {
+	cfg := configWithSourceVars()
+	phase := config.DeployPhase{
+		Name: "init",
+		Steps: []config.DeployStep{
+			{Name: "clone", Type: "command", Cmd: "source_clone", With: map[string]any{"repo": "${vars.source.repo}"}},
+		},
+	}
+	resolved, err := ResolvePhaseSteps(cfg, nil, phase, "")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if resolved[0].Step.With["repo"] != "https://example.com/repo.git" {
+		t.Errorf("Step.With[repo] = %v", resolved[0].Step.With["repo"])
+	}
+	if phase.Steps[0].With["repo"] != "${vars.source.repo}" {
+		t.Errorf("original phase.Steps[0].With mutated: %v", phase.Steps[0].With["repo"])
+	}
+}
+
+func TestResolvePhaseSteps_rendersFilesGateWith(t *testing.T) {
+	cfg := configWithSourceVars()
+	original := &filesgate.FilesGate{With: map[string]any{"x": "${vars.source.repo}"}, State: filesgate.StateReadable}
+	phase := config.DeployPhase{
+		Name: "init",
+		Steps: []config.DeployStep{
+			{Name: "a", Type: "shell", Cmd: "true", FilesGate: original},
+		},
+	}
+	resolved, err := ResolvePhaseSteps(cfg, nil, phase, "")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if resolved[0].FilesGate.With["x"] != "https://example.com/repo.git" {
+		t.Errorf("FilesGate.With[x] = %v", resolved[0].FilesGate.With["x"])
+	}
+	if original.With["x"] != "${vars.source.repo}" {
+		t.Errorf("original FilesGate mutated: %v", original.With["x"])
+	}
+}
+
+func TestResolvePhaseSteps_renderErrorFailsResolve(t *testing.T) {
+	cfg := configWithSourceVars()
+	phase := config.DeployPhase{
+		Name: "init",
+		Steps: []config.DeployStep{
+			{Name: "bad", Type: "shell", Cmd: "${vars.x}{{ if }}"},
+		},
+	}
+	_, err := ResolvePhaseSteps(cfg, nil, phase, "")
+	if err == nil {
+		t.Fatal("expected a render error")
+	}
+	if !strings.Contains(err.Error(), "init/bad") {
+		t.Errorf("error should name the step: %v", err)
+	}
+}
+
+func TestResolvePhaseSteps_resolvingSameConfigTwiceIsIdempotent(t *testing.T) {
+	cfg := configWithSourceVars()
+	phase := config.DeployPhase{
+		Name: "init",
+		Steps: []config.DeployStep{
+			{Name: "clone", Type: "command", Cmd: "source_clone", With: map[string]any{"repo": "${vars.source.repo}"}},
+		},
+	}
+	first, err := ResolvePhaseSteps(cfg, nil, phase, "")
+	if err != nil {
+		t.Fatalf("first resolve: unexpected error: %v", err)
+	}
+	second, err := ResolvePhaseSteps(cfg, nil, phase, "")
+	if err != nil {
+		t.Fatalf("second resolve: unexpected error: %v", err)
+	}
+	if first[0].Step.With["repo"] != second[0].Step.With["repo"] {
+		t.Errorf("resolve is not byte-identical across calls: first=%v second=%v",
+			first[0].Step.With["repo"], second[0].Step.With["repo"])
+	}
+}
