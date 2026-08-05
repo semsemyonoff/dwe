@@ -23,8 +23,11 @@ func PrintPlanShell(steps []pipeline.ResolvedStep, w io.Writer, dweBin string) {
 		}
 		phaseKey := rs.Service + "/" + rs.Phase.Name
 		if phaseKey != lastPhaseKey {
-			if rs.Phase.When != nil {
-				_, _ = fmt.Fprintf(w, "# phase %s [when: %s]\n", rs.Phase.Name, pipeline.FormatCondition(rs.Phase.When))
+			// DisplayPhaseWhen, not the raw Phase.When: the raw form still
+			// carries the literal ${vars.*} text, while the phase actually
+			// runs the rendered command.
+			if when := rs.DisplayPhaseWhen(); when != nil {
+				_, _ = fmt.Fprintf(w, "# phase %s [when: %s]\n", rs.Phase.Name, pipeline.FormatCondition(when))
 			}
 			lastPhaseKey = phaseKey
 		}
