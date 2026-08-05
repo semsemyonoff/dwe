@@ -62,7 +62,8 @@ func renderIfKnown(s string, ctx *tpl.RenderContext) (string, error) {
 // wide is set exactly where usercommands.BuildRunContext used to render the
 // map unconditionally at exec time and no longer does (the pipeline now hands
 // it to BuildPreRenderedRunContext, which never re-renders): a `type: command`
-// step/action, and a files_gate probe. There, gating on a known ${...} head
+// step/action, and a files_gate probe — its own with:, or the host step's map
+// when the gate declares none. There, gating on a known ${...} head
 // alone would silently pass a Go-template value — `{{ resolve .Raw
 // "vars.db.host" }}`, the form varsusage already recognizes inside with: —
 // through as literal text.
@@ -222,10 +223,13 @@ func renderWhen(when *condition.Condition, ctx *tpl.RenderContext) (*condition.C
 // reference (a bare Go-template idiom like `{{.State.Status}}`, or
 // shell-style ${VAR} only) never enters the template engine. with: leaves take
 // the wider renderWithLeaf gate only where the map used to be rendered by
-// usercommands.BuildRunContext at exec time — a `type: command` step, or any
-// step carrying a files_gate (whose probe falls back to step.With when
-// files_gate.with is empty). See renderWithLeaf for why widening it further
-// breaks builtin with: maps.
+// usercommands.BuildRunContext at exec time — a `type: command` step, or a step
+// whose files_gate probe FALLS BACK to step.With (evalFilesGate/spec.Validate
+// use step.With only when files_gate.with is empty). A gate carrying its own
+// with: never touches the host step's map, so that map keeps its native gate —
+// otherwise a `type: builtin` step's raw `{{ ... }}` parameter, which belongs
+// to the builtin's own template space, would be dragged into this one and hard-
+// fail the resolve. See renderWithLeaf.
 func renderStepFields(step config.DeployStep, ctx *tpl.RenderContext) (config.DeployStep, error) {
 	out := step
 
@@ -235,7 +239,8 @@ func renderStepFields(step config.DeployStep, ctx *tpl.RenderContext) (config.De
 	}
 	out.Cmd = cmd
 
-	with, err := renderWith(step.With, ctx, step.Type == "command" || step.FilesGate != nil)
+	gateInheritsWith := step.FilesGate != nil && len(step.FilesGate.With) == 0
+	with, err := renderWith(step.With, ctx, step.Type == "command" || gateInheritsWith)
 	if err != nil {
 		return config.DeployStep{}, err
 	}
