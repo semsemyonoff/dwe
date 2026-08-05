@@ -465,15 +465,15 @@ testable.)*
 - Modify: `internal/cli/lifecycle/reset.go`
 - Modify: `internal/cli/lifecycle/reset_test.go`
 
-- [ ] call the Task 2 helper before every raw-step read in `reset step`: it takes a step from
+- [x] call the Task 2 helper before every raw-step read in `reset step`: it takes a step from
       `FindStep`, evaluates `step.When` itself, prints `pipeline.StepCommand(step)`, then
       runs `step.Action()` and `*step.Check` — all bypassing `ResolvePhaseSteps`
-- [ ] confirm the dry-run output path prints the rendered form too, so what is previewed is
+- [x] confirm the dry-run output path prints the rendered form too, so what is previewed is
       what would run
-- [ ] write tests on that path for `cmd`, `when.cmd` and `check.with`
-- [ ] write a test that `reset step` and `reset run` produce the same rendered command for
+- [x] write tests on that path for `cmd`, `when.cmd` and `check.with`
+- [x] write a test that `reset step` and `reset run` produce the same rendered command for
       the same step (the divergence this task exists to remove)
-- [ ] run tests — must pass before task 2d
+- [x] run tests — must pass before task 2d
 
 ### Task 2d: Hash `vars` so a changed value actually re-runs the step
 
