@@ -1,29 +1,51 @@
 # Integration tests — `dwe test` (isolated deploy verification)
 
-Load this file when the task is "verify a clean deploy still works", "add an integration test / scenario", "test with redis off", "assert the app answers after deploy", or "make a throwaway test environment". **Your job here is to AUTHOR scenario yml** under `workspace/tests/`; the **user** runs the mutating `dwe test run`.
+Load this file when the task is "verify a clean deploy still works", "add an integration test / scenario", "test with redis off", "assert the app answers after deploy", or "make a throwaway test environment". **Your job here is to AUTHOR scenario yml** under `workspace/tests/`; whether you may also *run* the mutating `dwe test run` is decided per scenario by its cost profile (§ 1).
 
 `dwe test` runs `dwe validate` + a **real** `dwe deploy run` inside a fresh, isolated, disposable copy of the project (`.dwe/tests/runs/<scenario>/`), runs your assertions, then tears it all down. Host ports are auto-isolated, so a scenario can run *alongside* the live env — though isolation has limits (§ 2). `dwe test` **requires a project** (unlike the read-only docs commands).
 
-## 1. When to reach for it — and the cost
+## 1. When to reach for it — and who may run it
 
 Its value: a dwe project's deploy pipeline is normally only ever exercised against the developer's one working environment. `dwe test` is the only way to answer "does a **clean** deploy still come up with these config changes?" without risking that environment — so it's the natural verification step after you edit `service.yml`, a `deploy.yml`, a render template, `exports.env`, or add a service.
 
-**But a run is expensive.** `dwe test run` does a full clean deploy inside a copy — image pulls, builds, container starts — so it can be **slow** (minutes). Therefore:
+**Propose it selectively.** Suggest a test for *substantial* changes (new service, reworked deploy pipeline, config that touches provisioning/secrets). Don't offer it after routine or display-only edits. That part is unchanged.
 
-- **Propose it selectively.** Suggest a test for *substantial* changes (new service, reworked deploy pipeline, config that touches provisioning/secrets). Don't offer it after routine or display-only edits.
-- **Never run it on your own initiative.** Even proposing is opt-in; `dwe test run` executes only when the user **explicitly asks**. Author the scenario, hand over the command, wait — same as any mutation, but doubly so because of the runtime cost.
+**Whether you may run it yourself is conditional — and the condition is data.** A run is a full clean deploy inside a copy (image pulls, builds, container starts), and isolation is real but not total (§ 2). So read the facts before deciding:
+
+```shell
+dwe test list --output json
+```
+
+Each scenario carries a `cost_profile` object. Two groups, judged differently:
+
+| Field | Meaning | How it decides |
+| --- | --- | --- |
+| `isolation_findings` | named / `external:` volumes and networks the copy shares with the real env | **hard stop** if non-empty |
+| `shared_volumes` | `shared: true` volumes — the real cache/data | **hard stop** if > 0 |
+| `shell_steps` | `type: shell` steps in the scenario **and** in the deploy it triggers | **hard stop** if > 0 |
+| `build_services` | compose services that build locally | judge the build (below) |
+| `external_images` | images a cold run would pull | judge the cost |
+| `max_start_period_seconds` | largest healthcheck `start_period` (max, not sum — `up --wait` waits in parallel) | judge the cost |
+
+The three hard stops are the isolation half: they are exactly the channels through which a run reaches **outside** its own copy, so no cost argument redeems them — hand the command over.
+
+The cost half is a judgement, not a reflex. **A build is not an automatic stop**: read the Dockerfile and decide what it actually is — a thin layer over a published base is minutes at worst; compiling a toolchain from source is not something to start unattended. **The profile deliberately does not model this**: it tells you whether there *is* a build, never what it costs, and the dominant factor — whether the Docker layer cache is warm, seconds versus many minutes — has no static source and was not guessed at.
+
+> **Run unattended only when all three hard stops are clear AND you can positively account for the cost. Otherwise hand the exact command to the user — and when unsure, hand it over.** Measured on two real workspaces, both have builds and both land in "ask"; that is the rule working, not failing.
+
+`dwe validate tests` (free, no Docker) comes first either way — § 8.
 
 ## 2. Read / mutate split
 
 | Command | Class | Rule |
 | --- | --- | --- |
-| `dwe test list` | read (no Docker) | run freely |
+| `dwe test list` | read (no Docker) | run freely — `--output json` also carries each scenario's `cost_profile` (§ 1) |
 | `dwe test clean --dry-run` | read (no teardown) | run freely — previews a sweep, destroys nothing (does a read-only `docker ps` orphan probe + briefly flocks each scenario) |
 | `dwe validate tests` | read (no Docker) | run freely — static scenario check; run it while authoring |
-| `dwe test run [scenario...]` | **mutating + slow** | **hand to the user, only on explicit ask** — full Docker deploy in a disposable copy |
+| `dwe test run [scenario...]` | **mutating + slow** | **conditional** — full Docker deploy in a disposable copy; run it yourself only if the scenario's cost profile clears the gate in § 1, otherwise hand it over |
 | `dwe test clean [scenario...]` (no `--dry-run`) | **mutating** | **hand to the user** — tears down kept or crashed/interrupted runs (manifest-driven; no-manifest orphans are only *reported*, never auto-removed) |
 
-The mutations are **mostly isolated and disposable** — own compose project, **non-shared** volumes, auto-remapped host ports, and a copy-local `.dwe/`, so they don't touch your running stack. But isolation is **not** total: `shared: true` volumes are reused verbatim (real cache/data is visible to every run), `container_name:` / named / `external:` compose resources bypass compose-project scoping, and arbitrary host side effects of `shell`/deploy steps (absolute paths, `~`, bind mounts outside the project) are not sandboxed — see "Documented limitations" in `dwe docs show config/tests --lang en`. They also spin up real Docker, so they cross the permission boundary. Edit yml → show the diff → hand over the exact `dwe test run` → wait.
+The mutations are **mostly isolated and disposable** — own compose project, **non-shared** volumes, auto-remapped host ports, and a copy-local `.dwe/`, so they don't touch your running stack. But isolation is **not** total: `shared: true` volumes are reused verbatim (real cache/data is visible to every run), `container_name:` / named / `external:` compose resources bypass compose-project scoping, and arbitrary host side effects of `shell`/deploy steps (absolute paths, `~`, bind mounts outside the project) are not sandboxed — see "Documented limitations" in `dwe docs show config/tests --lang en`. **These three leaks are precisely the profile's hard-stop fields** (`shared_volumes`, `isolation_findings`, `shell_steps`): when any of them is set, the gate in § 1 sends the run to the user, because a failure would no longer be confined to the copy. When they are all clear, the remaining question is only cost.
 
 ## 3. Author a scenario file
 
@@ -135,7 +157,7 @@ Author the `private` command in `workspace/commands/**.yml` → see `authoring-c
 
 ## 8. Validate first (read, free)
 
-`dwe validate tests` statically checks every `workspace/tests/*.yml` — name, `timeout:` parse, `env.services` references, step schema + builtin `with:` params + `when:`, `type: command` IDs — **without touching Docker**. Cheap; run it yourself while authoring and before recommending the (slow) run:
+`dwe validate tests` statically checks every `workspace/tests/*.yml` — name, `timeout:` parse, `env.services` references, step schema + builtin `with:` params + `when:`, `type: command` IDs — **without touching Docker**. Cheap; run it yourself while authoring and before either running the scenario or handing it over:
 
 ```shell
 dwe validate tests --output json
@@ -151,7 +173,7 @@ When a scenario fails (deploy / step / timeout), the runner collects a **failure
 - `compose-ps.txt` — `docker compose ps --all` in the copy
 - `container-logs.txt` — combined container logs (last 200 lines each)
 
-When the report isn't enough, hand the user `dwe test run --keep <scenario>` to skip teardown and inspect the live copy (it prints the compose project name + copy path; a kept run blocks a re-run until cleaned). **For a brand-new, unproven scenario, suggest `--keep` on the very first run** — if it fails, the copy is already there to debug, instead of paying a second full deploy cycle (often 8–10 min) just to obtain one.
+When the report isn't enough, `dwe test run --keep <scenario>` skips teardown and leaves the live copy to inspect (it prints the compose project name + copy path; a kept run blocks a re-run until cleaned). `--keep` does not change the gate in § 1 — it makes the run *more* persistent, so a scenario you may run unattended you may also `--keep`, and one you must hand over you hand over with the `--keep` flag included. **For a brand-new, unproven scenario, use or suggest `--keep` on the very first run** — if it fails, the copy is already there to debug, instead of paying a second full deploy cycle (often 8–10 min) just to obtain one. Whoever ran it, remember the copy stays until `dwe test clean`.
 
 **`dwe test run -v` / `--debug` propagates into the copy's `dwe validate` + `dwe deploy run`.** The diagnostic level flows through to the subprocesses the scenario actually exercises, so the deploy firehose (command echoes with `-v`; probes/timings/compose env with `--debug`) goes to stderr live in the default sequential text mode, and to the copy's run log (`.dwe/tests/runs/<scenario>/.dwe/logs/test.log`) in `--parallel`/`--output json` mode. Reach for this before `--keep` when the question is *why did the deploy inside the copy do X* rather than *what state did it leave behind* — no need to hand-re-run `dwe deploy run` inside the copy to see the trace.
 
@@ -159,9 +181,9 @@ When the report isn't enough, hand the user `dwe test run --keep <scenario>` to 
 
 Clean up kept or crashed/interrupted runs with `dwe test clean` (`--dry-run` first, read-safe; the real sweep is a handoff — manifest-driven, never guesses at names; compose projects with no manifest are only reported, remove those by hand).
 
-Handoff table (edit yml → show diff → give the exact command → wait; run only when the user asks):
+Command table. `test clean` is always a handoff; the two `test run` forms go through the § 1 gate — clear it and run, otherwise edit yml → show diff → give the exact command → wait:
 
-| Goal | Command (user runs) |
+| Goal | Command |
 | --- | --- |
 | Run a scenario / the whole suite | `dwe test run [scenario...]` (`--parallel N`, `--timeout 15m`) |
 | Inspect the live env after a failure | `dwe test run --keep <scenario>` |

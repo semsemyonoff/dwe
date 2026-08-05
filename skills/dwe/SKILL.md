@@ -25,7 +25,16 @@ dwe docs llms-txt --lang en
 
 This emits a compact, project-aware index (services, commands, doc pointers) designed for AI agents. Read its output before doing anything else.
 
-**If a root `AGENTS.md` exists, read it too.** A populated project renders its own `AGENTS.md` (the `ai` render pack) — that is the **project-specific** layer: the real service list, the real command IDs, project-local rules. This skill is the **generic** layer: universal DWE mechanics and the read/mutate discipline. They are designed to agree. On a *project fact* the `AGENTS.md` wins; on a *generic rule* the skill wins. Never edit the generated `AGENTS.md` to change behavior — edit its template (`workspace/templates/ai/<pack>/`) and hand off `dwe render ai`.
+**If a root `AGENTS.md` exists, read it too.** It is the **project-specific** layer: the real service list, the real command IDs, project-local rules. This skill is the **generic** layer: universal DWE mechanics and the read/mutate discipline. They are designed to agree. On a *project fact* the `AGENTS.md` wins; on a *generic rule* the skill wins.
+
+**There are two different `AGENTS.md` files — do not confuse them:**
+
+| File | Origin | May you edit it? |
+| --- | --- | --- |
+| **root** `AGENTS.md` (next to `workspace.yml`) | written once by `dwe init`, then hand-maintained | **yes** — this is the project-specific layer, edit it directly |
+| **hub** `AGENTS.md` (inside a service hub, e.g. `services/app/`) | **generated** by the `ai` render pack on every `dwe render ai` / `dwe deploy run` | **no** — edit the template (`workspace/templates/ai/<pack>/`) and hand off `dwe render ai` |
+
+Both carry a `CLAUDE.md` symlink next to them. The generated one says so in its own footer; when in doubt, read the last lines of the file.
 
 ## Project anatomy (the map)
 
@@ -39,6 +48,33 @@ What lives where (paths, not schemas — look up any schema with the slug noted)
 - **Integration-test scenarios**: `workspace/tests/<scenario>.yml` (one file = one scenario; the name is the file basename; reuses the deploy step schema) → `dwe docs show config/tests --lang en`. See `references/integration-tests.md`.
 
 Schema for any of these → `dwe docs show concepts/project-layout --lang en` and the per-area slugs in the recipes below.
+
+## Rules no validator will catch for you
+
+`dwe validate` checks shape, not judgement. These four follow from DWE's own mechanics,
+pass validation either way, and are the ones a fresh project gets wrong.
+
+- **Two disjoint registries share the word `builtin`.** `when: {type: builtin}` takes
+  **condition predicates** (`dir-empty` · `dir-not-empty` · `dir-exists` · `dir-missing` ·
+  `file-exists` · `file-missing` · `generated-missing <svc> <field>` — that list is the whole
+  of it). A step body and `check:` take the **step builtins** (`service_configs_render`,
+  `containers_running`, `http_check`, …). **A name from one is rejected by the other**, so
+  `check: {type: builtin, cmd: dir-not-empty}` does not work and `when: {type: builtin, cmd:
+  containers_running}` does not either — write the shell equivalent, or use `check: auto`.
+  Both registries are enumerated in full, with kinds and one-line summaries, in
+  `dwe docs llms-txt --lang en` (§ Builtins) — read it there instead of guessing a verb.
+- **Mount the whole hub, not just `src/`.** A service's `dir:` is the hub (`./services/<name>`),
+  mounted at `dir_internal: /workspace`, with `work_dir_internal: /workspace/src` pointing at
+  the checkout inside it. Mounting the checkout directly leaves rendered configs, caches and
+  tooling state outside the container, and the render packs write into the hub, not `src/`.
+- **One definition.** If a deploy step needs to run something the project already declares as
+  a user command, use `type: command` + `cmd: <id>` — do not paste the same shell line into
+  `deploy.yml` as a `type: shell` step. The duplicate drifts, and only one of the two copies
+  gets the service/workdir/user/env the command carries.
+- **A port declared in `service.yml` is display-only** until an `exports.env` rule surfaces it
+  (`{name: APP_PORT, from: services.<name>.ports.http}`) and compose interpolates that var.
+  `PROJECT`, `UID` and `GID` are injected into `.env` automatically and must **not** be
+  redeclared as export rules.
 
 ## Output conventions
 
@@ -110,7 +146,7 @@ After editing yml, the apply command depends on **what** changed (never run it y
 - toggled a service → `dwe services enable|disable <name> --apply`
 - only icon / host / display strings → `dwe validate` (then `run`/`deploy run` if it affects runtime)
 - mixed / unsure → `dwe deploy run` (ends in `docker up --wait`, so it covers a restart)
-- authored/edited a `workspace/tests/<scenario>.yml` → verify read-only with `dwe validate tests`, then hand off `dwe test run <scenario>` (a slow clean deploy in a throwaway copy — does not touch the live stack). Propose this only for **substantial** changes (new service, reworked deploy pipeline), and let the user run it — never on your own initiative. See `references/integration-tests.md`.
+- authored/edited a `workspace/tests/<scenario>.yml` → verify read-only with `dwe validate tests`, then run or hand off `dwe test run <scenario>` (a clean deploy in a throwaway copy — does not touch the live stack). Whether you may run it yourself is decided by that scenario's cost profile — see **The `dwe test run` gate** below. Propose it for **substantial** changes (new service, reworked deploy pipeline), not after display-only edits. See `references/integration-tests.md`.
 
 Never recommend `dwe deploy run --force` as a clean install — `--force` only ignores prior state (`when:` still applies). A true clean install is `dwe reset run && dwe deploy run`.
 
@@ -124,7 +160,7 @@ You MAY run READ commands without asking (all read-only — they don't mutate or
 - `compose argv|files`, `docker ps|logs|project-name`, `bridge status|logs`
 - `vars get|list|inspect`, `commands list` / `commands -i <id>`, `services list`
 - `docs show|search|list|llms-txt` — read-only doc access.
-- `test list` — list integration-test scenarios (lock-free, no Docker). `test clean --dry-run` is also safe to run without asking (it previews a sweep and destroys nothing), but is NOT strictly lock-free/Docker-free: it does a read-only `docker ps` orphan probe and briefly acquires-then-releases each scenario's flock. (`validate tests` sits in the `validate` family above; the destructive `test run` / `test clean` forms are below.)
+- `test list` — list integration-test scenarios (lock-free, no Docker). `test list -o json` also carries each scenario's **cost profile**, which is what decides whether you may run it — see the gate below. `test clean --dry-run` is also safe to run without asking (it previews a sweep and destroys nothing), but is NOT strictly lock-free/Docker-free: it does a read-only `docker ps` orphan probe and briefly acquires-then-releases each scenario's flock. (`validate tests` sits in the `validate` family above; `test run` and the real `test clean` are gated/handed off below.)
 
 `compose argv` takes the compose subcommand it should print the argv for
 (`dwe compose argv ps`); bare, it errors.
@@ -139,9 +175,6 @@ change with `dwe cmd site.test` is not a mutation; `dwe shell db -c 'psql -c
 - **Run without asking** when the task only reads or verifies **in place**: the
   project's own test suites, linters, type-checks, formatters in check mode,
   status/inspection commands inside a container.
-  This is about `dwe cmd` / `dwe shell` tasks. It does **not** extend to
-  `dwe test run`, which despite the name is a full, slow Docker deploy of a
-  throwaway project copy — that stays in the ask-first list below.
 - **Ask first** when it changes project or data state: migrations, seeds, resets,
   dependency installs, anything writing outside a build cache — and anything you
   are unsure about.
@@ -150,7 +183,48 @@ change with `dwe cmd site.test` is not a mutation; `dwe shell db -c 'psql -c
   `confirmation:` means ask. When `-i` leaves you unsure, ask.
 - Being asked to "run the tests" is permission to run the tests.
 
-You MUST NOT invoke these MUTATING commands yourself. Prepare the change, then ask the user to run the exact command:
+#### The `dwe test run` gate — cheap AND isolated, or ask
+
+`dwe test run` is not a `dwe cmd` task: despite the name it is a full clean Docker
+deploy of a throwaway copy of the project. It is nevertheless the only way to prove
+a deploy pipeline still works, so the rule is **conditional, not blanket** — and the
+condition is decided by data, not by feel.
+
+Read the facts first (read-only, no Docker, no locks):
+
+```shell
+dwe test list --output json
+```
+
+Each scenario carries a `cost_profile`. Two groups, judged differently:
+
+**Hard stops — hand the run to the user, no judgement call.** The scenario reaches
+outside its own copy, so a failure is not confined to it:
+
+- `isolation_findings` non-empty — named / `external:` volumes or networks, reused verbatim
+- `shared_volumes` > 0 — `shared: true` volumes carry the real cache/data
+- `shell_steps` > 0 — host side effects of `type: shell` steps (absolute paths, `~`,
+  binds outside the project) are **not** sandboxed
+
+**Cost — judge it, don't reflex.** `build_services`, `external_images`,
+`max_start_period_seconds`. A build is not an automatic stop: judge what it *is* by
+reading the Dockerfile — a thin layer over a published base is minutes at worst,
+building a toolchain from source is not something to start unattended. **The profile
+does not model this**: it reports whether there *is* a build, never what it costs,
+and the dominant factor (whether the Docker layer cache is warm — seconds versus
+many minutes) has no static source at all.
+
+So: **run it unattended only when the profile shows all three hard stops clear AND
+you can positively account for the cost. Otherwise ask — and when unsure, ask.**
+On the two workspaces this rule was measured against, both have builds and both
+land in "ask", which is the expected outcome, not a failure of the rule.
+
+Two things stay true regardless: run `dwe validate tests` (free) first, and propose a
+run only for **substantial** changes — a new service, a reworked deploy pipeline,
+provisioning/secrets — never after a display-only edit. Details in
+`references/integration-tests.md`.
+
+You MUST NOT invoke these MUTATING commands yourself. Prepare the change, then ask the user to run the exact command. (Exactly one entry is conditional rather than absolute — `dwe test run`, marked as such at the end of the list.)
 
 - `dwe init` — scaffold a project (safe to re-run: gap-fills; `--force` overwrites).
 - `dwe deploy run` — run the deploy pipeline (the right command after editing a service's config/deploy steps or adding a service; ends with `docker up --wait`). The `--service <name>` form requires that service's own `deploy.yml` and **skips** the final stack up — see the recipes before recommending it.
@@ -158,14 +232,15 @@ You MUST NOT invoke these MUTATING commands yourself. Prepare the change, then a
 - `dwe services enable|disable <name> --apply` — toggle a service.
 - `dwe vars set`, `dwe render env|config|ide|ai|git`, `dwe snapshot create|restore|rollback|remove|pack|unpack`, `dwe bridge start|stop`, `dwe docs generate|export|cache clear`.
 - `dwe cmd <id>` / `dwe shell <service> -c '…'` **when the task they carry mutates** — see the judgement rule above. A verifying task through either one is not on this list.
-- `dwe test run [scenario...]` / `dwe test clean` (without `--dry-run`) — integration-test runner and sweeper. Isolated/disposable (they operate on throwaway project copies under `.dwe/tests/`), so they never touch the live stack — but a run is a **full, slow Docker deploy**. Only *propose* it for substantial changes, and run it strictly on the user's explicit request. See `references/integration-tests.md`.
+- `dwe test clean` (without `--dry-run`) — the integration-test sweeper: it tears down kept or crashed runs. Manifest-driven, but still a teardown — hand it over.
+- `dwe test run [scenario...]` — **conditional, not forbidden**: it is the one entry here whose answer comes from data. See **The `dwe test run` gate** above; if the scenario's `cost_profile` does not clear it, this list applies as written.
 
 Pattern: **edit yml files yourself → show the diff → tell the user the exact command → wait for them to run it.** Do not invoke the mutation, and do not work around the boundary by calling `docker` / `docker compose` / project scripts directly — including through `dwe shell`, which is a transport and not an exemption.
 
 ## Anti-patterns
 
 - Do NOT bypass the dwe lifecycle: use `dwe deploy run` / `dwe run` / `stop` / `restart` (whichever fits — see the table). NEVER run `docker compose up/down`, `dwe docker up`, or `dwe compose` write ops directly — DWE tracks state and holds file locks; bypassing breaks both.
-- Do NOT hand-edit generated artifacts: `.dwe/**`, `.env`, `workspace/local.yml`, or rendered hub files (incl. `AGENTS.md`). Edit the **source** (export rule / var / template / ai pack) and hand off the render/deploy.
+- Do NOT hand-edit generated artifacts: `.dwe/**`, `.env`, `workspace/local.yml`, or rendered hub files (incl. the **hub** `AGENTS.md` — the **root** one is scaffolded and yours to edit, see above). Edit the **source** (export rule / var / template / ai pack) and hand off the render/deploy.
 - Do NOT put a free-form key at the config root — the strict root hard-fails the load. It goes under `vars:`.
 - Do NOT assume config shape. Before editing any yml under `workspace/`, verify the schema with `dwe docs show config/<area> --lang en`.
 - Do NOT enumerate pending-op consumers from memory after `dwe services …` without `--apply` — run `dwe status` and follow its banner; that banner is authoritative.
@@ -180,5 +255,5 @@ Load a reference file on demand when the task matches:
 - `references/authoring-commands.md` — author user commands & background daemons (the type zoo, params, templating, bridge opt-in).
 - `references/render-and-vars.md` — render packs (config vs ide/ai/git), generated-secret harvest, the `vars` sandbox, `exports.env`.
 - `references/pipelines-and-orchestration.md` — per-service & project `deploy.yml`, `lifecycle`, `setup` wizard, `validate` checks, `info`/`styles`.
-- `references/integration-tests.md` — author `workspace/tests/<scenario>.yml` and verify an isolated clean deploy with `dwe test run` (you write the scenarios; the user runs them). Also the general engine additions: `http_check` predicate, predicate-as-assertion, per-step `timeout:`.
+- `references/integration-tests.md` — author `workspace/tests/<scenario>.yml` and verify an isolated clean deploy with `dwe test run` (you write the scenarios; the cost profile decides who runs them). Also the general engine additions: `http_check` predicate, predicate-as-assertion, per-step `timeout:`.
 - `references/snapshots-reset-troubleshoot.md` — snapshot workflows, reset, and the read-only triage trio.

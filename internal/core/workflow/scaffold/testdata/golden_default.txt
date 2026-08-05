@@ -145,15 +145,32 @@ Lifecycle and reference:
 ## Config layout
 
 - `workspace.yml` — project identity (name, prefix)
-- `workspace/defaults.yml` — versioned defaults (service toggles, exports)
+- `workspace/defaults.yml` — versioned defaults (service toggles, exports, `vars:`)
 - `workspace/styles.yml` — CLI branding and palette
-- `workspace/services/<name>/service.yml` — per-service definitions
-- `workspace/{deploy,lifecycle,info,docker}.yml` — optional overrides. They ship
-  fully commented; the built-in defaults stay active until you uncomment. An
-  active override **replaces** the whole built-in pipeline, so edit them whole.
+- `workspace/services/<name>/service.yml` — per-service definitions; the folder
+  name **is** the service key (there is no `name:` field)
+- `workspace/services/<name>/deploy.yml` — that service's provisioning pipeline
+- `workspace/templates/{config,ide,ai,git}/` — render packs
+- `workspace/tests/<scenario>.yml` — isolated integration-test scenarios
+  (`dwe test list`, `dwe validate tests`)
+- `workspace/{deploy,lifecycle,info}.yml` — optional pipeline overrides. They ship
+  fully commented; the built-in defaults stay active until you uncomment, and an
+  active section **replaces** the whole built-in one — copy every phase you still
+  want, don't uncomment a fragment.
+- `workspace/docker.yml` — compose policy. Unlike the pipelines above, overriding
+  here is **per key**: an uncommented key replaces just that key's default.
 
-> `CLAUDE.md` is a symlink to this file (a copy on platforms without symlinks).
-> Edit `AGENTS.md`.
+## The two `AGENTS.md` files
+
+- **This file** (project root) is scaffolded once by `dwe init` and then
+  hand-maintained. Edit it — it is where project-specific facts belong.
+- A service hub (`services/<name>/`) gets a **generated** `AGENTS.md` from the
+  `ai` render pack on every `dwe render ai` / `dwe deploy run`. Never edit that
+  one; edit `workspace/templates/ai/<pack>/` instead. It appears only after the
+  hub directory exists (i.e. after the first clone).
+
+> `CLAUDE.md` next to this file is a symlink to it (a copy on platforms without
+> symlinks). Edit `AGENTS.md`.
 
 --------
 === compose.yaml ===

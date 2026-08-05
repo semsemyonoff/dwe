@@ -45,9 +45,11 @@ Optional per-step keys: `name`, `description`, `when:`, `check:`, `continue_on_e
 
 `when:` and `check:` are themselves typed:
 
-- `type: builtin` + `cmd:` a **condition predicate**: `dir-empty` · `dir-not-empty` · `dir-exists` · `dir-missing` · `file-exists` · `file-missing` · `generated-missing <svc> <field>` · `containers_running`.
+- `type: builtin` + `cmd:` a **condition predicate**: `dir-empty` · `dir-not-empty` · `dir-exists` · `dir-missing` · `file-exists` · `file-missing` · `generated-missing <svc> <field>`. **That list is the whole registry** — every verb takes arguments in the `cmd:` string (`"file-missing <path>"`), and anything else is `unknown builtin predicate` at eval time.
 - `type: shell` + `cmd: "<sh test>"`.
 - `type: template` + `expr: '{{ ne .Raw.vars.x "" }}'`.
+
+**The two `type: builtin` registries are disjoint — this is the single most common authoring mistake.** The hyphenated verbs above belong to `when:` **only**; the underscored engine builtins below (`service_configs_render`, `containers_running`, `http_check`, …) belong to a step **body** and `check:` **only**. Neither side accepts the other's names: `check: {type: builtin, cmd: dir-not-empty}` and `when: {type: builtin, cmd: containers_running}` both fail. Need a `when:` the predicate registry doesn't cover? Write it as `type: shell`. Need the inverse of a shell `when:` as a `check:`? Write `check: auto`. Both registries are enumerated in full — names, kinds, one-line summaries — under **§ Builtins** of `dwe docs llms-txt --lang en`; read them there rather than guessing a verb.
 
 **`check: auto`** — the scalar form of `check:`, resolving to the logical inverse of the step's own `when:`. Write it instead of spelling the negation out a second time (`when: "[ ! -e X ]"` + `check: "test -e X"` is one predicate written twice, and the two drift). It requires a `when: {type: shell}`; `auto` with no `when:`, with a `type: builtin` `when:` (the predicate and check-builtin registries are disjoint), or with a `type: template` `when:` (would always fail — a false template `when:` already removed the step) is a **load-time error**. Journal behaviour is identical to an explicit check (the step re-runs every deploy); migrating a step from a hand-written inverse to `check: auto` shifts the config hash and costs a one-time re-run. `dwe docs show config/deploy/conditions#check-auto-the-inverse-of-when --lang en`.
 
@@ -113,6 +115,16 @@ phases:
         type: dwe
         cmd: "render ide <name>"
 ```
+
+**One definition — reuse the command, don't retype it as a shell step.** When a phase needs
+something the project already declares in `workspace/commands/**`, dispatch it with
+`type: command` + `cmd: <id>` (as `install` does above). Pasting the equivalent `php artisan
+…` / `npm ci` line into `deploy.yml` as `type: shell` compiles fine and passes validation,
+but the two copies drift, and only the command carries the service, workdir, user, env and
+compose flags — the shell step runs on the **host**. If a step is worth having in the deploy,
+it is worth being a command the developer can also run by hand. (It also shows up: every
+`type: shell` step is counted in the `shell_steps` field that gates unattended `dwe test run`
+— see `integration-tests.md` § 1.)
 
 Two render-gate idioms:
 

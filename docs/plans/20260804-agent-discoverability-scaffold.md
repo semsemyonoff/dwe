@@ -670,34 +670,69 @@ golden.)*
 - Modify: `skills/dwe/references/pipelines-and-orchestration.md`
 - Modify: `internal/core/workflow/scaffold/templates/AGENTS.md.tmpl` (+ golden)
 
-- [ ] implement the policy decision recorded in the Overview across **all thirteen sites**
+- [x] implement the policy decision recorded in the Overview across **all thirteen sites**
       listed there — unattended only when the profile shows a cheap scenario **and** no
       isolation findings **and** no `type: shell` steps; ask otherwise, and whenever unsure.
       `SKILL.md:142-144` currently argues the opposite explicitly and must be rewritten, not
       merely amended. Do **not** edit `integration-tests.md` §3 — it does not contain the
       policy and was cited in error
-- [ ] give the conditional rule a structural home: `dwe test run` currently sits under the
+      — the rule is stated once (`SKILL.md` § "The `dwe test run` gate") and referenced from
+      the other twelve sites, so a future change has one authoritative home. It names the
+      profile's own field names (`isolation_findings` / `shared_volumes` / `shell_steps` as
+      hard stops; `build_services` / `external_images` / `max_start_period_seconds` as the
+      cost half), verified against a real `dwe test list -o json`. §3 untouched
+- [x] give the conditional rule a structural home: `dwe test run` currently sits under the
       heading "You **MUST NOT** invoke these MUTATING commands yourself" (`SKILL.md:153`),
       so rewriting the bullet in place would make the heading false. Move the conditional
       form into the existing "**Running project tasks — judge the task, not the verb**"
       subsection (`:132-151`), which already has the right shape, and leave `:161` as a
       pointer to it
-- [ ] state that the agent should judge what an image build actually costs (thin layer over
+      — added as a `####` subsection of it; the MUST-NOT list keeps a `dwe test run` bullet
+      that points back and re-asserts the absolute rule for a scenario that fails the gate.
+      ➕ the list's own heading gained "(exactly one entry is conditional …)" — leaving it
+      unqualified would have made the heading false in the other direction. ➕ `test clean`
+      was split out into its own bullet: it had shared the `test run` bullet, and it is
+      unconditional
+- [x] state that the agent should judge what an image build actually costs (thin layer over
       a published base vs building from scratch) rather than treating "there is a build" as
       an automatic stop
-- [ ] document the class-1 rules that cannot be validated statically (mount the whole hub,
+      — stated in both homes, together with the profile's honest limit (it reports *whether*
+      there is a build, never what it costs; layer-cache warmth is unmodelled), so the
+      judgement is not read as license to guess
+- [x] document the class-1 rules that cannot be validated statically (mount the whole hub,
       not just `src/`; one definition — the deploy reuses the dev-facing command rather than
       duplicating it as a shell step)
-- [ ] document the **two disjoint `type: builtin` registries** (`when:` conditions vs
+      — new `SKILL.md` § "Rules no validator will catch for you" (four rules; the port /
+      `exports.env` pairing and the reserved `PROJECT`/`UID`/`GID` names joined them, since
+      they are the same class and were the exact facts one analysed session reverse-
+      engineered). Expanded where each is authored: hub-mount + port pairing in
+      `populate-init-repo.md` Step 3, one-definition in `pipelines-and-orchestration.md`
+- [x] document the **two disjoint `type: builtin` registries** (`when:` conditions vs
       `check:`/step-body builtins) and point at the inventory now in `llms-txt`. The first
       draft said "`check:` accepts the same predicates as `when:`" — that is false and must
       not be written anywhere
-- [ ] disambiguate the two `AGENTS.md` files: the root one is scaffolded and meant to be
+      — ⚠️ `pipelines-and-orchestration.md:48` listed `containers_running` as a `when:`
+      predicate, which is **false** (`condition.EvalBuiltin`'s switch has seven verbs and
+      rejects everything else): the skill itself carried an instance of the confusion this
+      checkbox exists to fix. Removed, the list pinned as exhaustive, and both failing
+      directions spelled out with their escape hatches (`type: shell` / `check: auto`)
+- [x] disambiguate the two `AGENTS.md` files: the root one is scaffolded and meant to be
       edited; the hub one is rendered by the ai pack and must not be. `SKILL.md:28` reads as
       if there is only the rendered one
-- [ ] verify SKILL.md, all references and `AGENTS.md.tmpl` agree with each other and with
+      — a two-row table in `SKILL.md`, the anti-pattern bullet corrected, and
+      `populate-init-repo.md:173` fixed: it claimed the *root* `AGENTS.md` is rendered after
+      deploy, which was already false and became actively misleading after Task 5b
+- [x] verify SKILL.md, all references and `AGENTS.md.tmpl` agree with each other and with
       the new scaffold; regenerate the scaffold golden
-- [ ] run tests — must pass before task 8
+      — `AGENTS.md.tmpl` gained the new scaffold paths (`services/<name>/deploy.yml`,
+      `templates/`, `tests/`) and the same two-`AGENTS.md` section; its "an active override
+      replaces the whole built-in pipeline" claim was split, since Task 4 established that
+      `docker.yml` overrides **per key** — the same self-describing-scaffold defect fixed
+      there. Golden regenerated
+- [x] run tests — must pass before task 8 — `make test` and `make lint` both clean; verified
+      against the built binary that the llms-txt section is really `## Builtins` and that a
+      freshly scaffolded `smoke` scenario clears all three hard stops with zero cost (so the
+      starter scenario is agent-runnable, as constraint 11 intends)
 
 ### Task 8: Verify acceptance criteria
 
