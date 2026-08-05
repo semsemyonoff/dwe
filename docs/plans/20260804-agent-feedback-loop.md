@@ -663,15 +663,36 @@ nothing would re-run.
 - Modify: `internal/core/validate/templates/git.go`
 - Modify: corresponding `*_test.go`
 
-- [ ] (TDD) write tests for each: absent `reset.yml` on a project that never declared one →
+- [x] (TDD) write tests for each: absent `reset.yml` on a project that never declared one →
       silent; `render.git` enabled implicitly with no `src/.git` before the first deploy →
       silent (today it advises creating a repo or disabling render, contradicting the
       intended clone-on-deploy order)
-- [ ] apply the implicit/explicit gate to both
-- [ ] audit the remaining default-on diagnostics for the same pattern and record in this
+- [x] apply the implicit/explicit gate to both
+- [x] audit the remaining default-on diagnostics for the same pattern and record in this
       plan (➕) any found beyond these two
-- [ ] write tests confirming the explicit-opt-in variants still warn
-- [ ] run tests — must pass before task 9
+- [x] write tests confirming the explicit-opt-in variants still warn
+- [x] run tests — must pass before task 9
+
+➕ Audit findings (implicit-default + absent-artifact noise pattern), beyond the two fixed
+above:
+- `internal/core/validate/config/workspace.go` `stylesValidator` "no styles.yml" —
+  **not** the same pattern: `styles.yml.tmpl` is unconditionally shipped by the scaffold
+  (`internal/core/workflow/scaffold/templates/workspace/styles.yml.tmpl`), so an absent
+  `styles.yml` on an existing project means the user deliberately deleted it, same as
+  `deploy.yml`/`lifecycle.yml`/`docker.yml`. Left untouched, deliberately.
+- `internal/core/validate/commands/commands.go:55-66` — `Validator.Run` emits
+  `SeverityInfo "no command files"` unconditionally whenever `workspace/commands/` is
+  absent. **This is the same noise pattern**: the directory is never shipped by the
+  scaffold (grep confirms no `workspace/commands` anywhere in
+  `internal/core/workflow/scaffold/templates/`), so every freshly scaffolded project hits
+  this Info on every `dwe validate` run, with no opt-in flag to gate on. Not fixed here —
+  out of this task's declared file scope (`commands.go` is not in Task 8's Files list) —
+  recorded for a follow-up fix using the same "unconditionally silent on absent, no
+  explicit-opt-in analog" treatment applied to `reset.yml` above.
+- `internal/core/validate/templates/ai.go` / `ide.go` — already correctly gated (mirror
+  the `git.go` fix from Task 7); no change needed.
+- `internal/core/validate/snapshot/`, `checks/`, `i18n/`, `setup/`, `linters/`, `env/`,
+  `bridge/`, `tests/tests.go` — audited, no unconditional absent-artifact diagnostic found.
 
 ### Task 9: An all-comment `info.yml` must fall back to the built-in dashboard
 

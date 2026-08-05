@@ -1193,13 +1193,10 @@ func (v *resetValidator) Run(ctx validate.Context) []validate.Diagnostic {
 	resetCfg, err := config.LoadResetConfig(resetPath)
 	if err != nil {
 		if errors.Is(err, errNotExist) {
-			diags = append(diags, validate.Diagnostic{
-				Severity: validate.SeverityInfo,
-				Domain:   "config",
-				Target:   "config.reset",
-				File:     relPath(ctx.ProjectRoot, resetPath),
-				Message:  "no reset.yml",
-			})
+			// Unlike deploy.yml/lifecycle.yml, reset.yml is never shipped by the
+			// scaffold — its absence is the universal default state, not a
+			// deliberate opt-out, so reporting it here would be pure noise on
+			// nearly every project.
 		} else {
 			diags = append(diags, validate.Diagnostic{
 				Severity: validate.SeverityError,

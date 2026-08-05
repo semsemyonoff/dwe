@@ -92,6 +92,7 @@ func (v *GitValidator) Run(ctx validate.Context) []validate.Diagnostic {
 func (v *GitValidator) validateService(name string, svc config.ServiceConfig, cfg *config.DweConfig, projectRoot string) []validate.Diagnostic {
 	services := cfg.Services
 	var diags []validate.Diagnostic
+	_, gitExplicit := svc.GitRenderEnabledExplicit()
 
 	absRoot, err := filepath.Abs(projectRoot)
 	if err != nil {
@@ -125,7 +126,7 @@ func (v *GitValidator) validateService(name string, svc config.ServiceConfig, cf
 		}}
 	}
 	if !found {
-		if _, explicit := svc.GitRenderEnabledExplicit(); !explicit {
+		if !gitExplicit {
 			// Implicit default (app type, no render.git key) + absent pack: the
 			// scaffold ships with no template pack, so this is expected, not
 			// broken. Warn only once the user has opted in explicitly.
@@ -216,13 +217,19 @@ func (v *GitValidator) validateService(name string, svc config.ServiceConfig, cf
 			Hint:     "render git will fail; check for unsupported symlinks in the service directory",
 		})
 	case status == git.DirMissing:
-		diags = append(diags, validate.Diagnostic{
-			Severity: validate.SeverityInfo,
-			Domain:   "templates",
-			Target:   fmt.Sprintf("templates.git:%s", name),
-			Message:  "no src/.git in service dir; render will be skipped",
-			Hint:     "initialize a git repository at " + filepath.Join(svc.Dir, "src") + " or remove render.git.enabled",
-		})
+		// Implicit default (app type, no render.git key) + no src/.git yet: the
+		// repo may still be populated by the deploy pipeline (e.g. a clone step)
+		// before render ever runs, so flagging it here is premature. Report only
+		// once the user has opted in explicitly.
+		if gitExplicit {
+			diags = append(diags, validate.Diagnostic{
+				Severity: validate.SeverityInfo,
+				Domain:   "templates",
+				Target:   fmt.Sprintf("templates.git:%s", name),
+				Message:  "no src/.git in service dir; render will be skipped",
+				Hint:     "initialize a git repository at " + filepath.Join(svc.Dir, "src") + " or remove render.git.enabled",
+			})
+		}
 	case status == git.DirWorktree:
 		diags = append(diags, validate.Diagnostic{
 			Severity: validate.SeverityInfo,
