@@ -943,6 +943,28 @@ func TestCommandCmd_InspectWithoutID_Error(t *testing.T) {
 	}
 }
 
+// TestCommandCmd_InspectRejectsPassThroughArgs pins the inspect route's own
+// pass-through guard. The run route rejects unsupported extra arguments
+// per-command via checkPassThroughArgs, but inspect never reaches that call —
+// without this check `dwe cmd -i site.test -- --run x` would print the
+// definition and drop `--run x` on the floor, which is exactly the silent
+// discard the `--` contract exists to prevent.
+func TestCommandCmd_InspectRejectsPassThroughArgs(t *testing.T) {
+	flags := &cmdctx.RootFlags{ConfigPath: "workspace.yml"}
+	parent := &cobra.Command{Use: "test"}
+	parent.AddCommand(NewCmd("", flags))
+	parent.SetArgs([]string{"commands", "--inspect", "site.test", "--", "--run", "x"})
+	parent.SetOut(&testBuf{})
+	parent.SetErr(&testBuf{})
+	err := parent.Execute()
+	if err == nil {
+		t.Fatal("expected an error for --inspect with pass-through args")
+	}
+	if !contains(err.Error(), "takes no arguments after `--`") {
+		t.Errorf("unexpected error message: %v", err)
+	}
+}
+
 func TestCommandCmd_InspectAndSet_MutuallyExclusive(t *testing.T) {
 	flags := &cmdctx.RootFlags{ConfigPath: "workspace.yml"}
 	parent := &cobra.Command{Use: "test"}

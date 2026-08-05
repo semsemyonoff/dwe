@@ -1,4 +1,4 @@
-> Translated from: reference/config/validate.md @ 5829c4216aa6
+> Translated from: reference/config/validate.md @ 1ecfaed6346f
 
 # validate.yml
 

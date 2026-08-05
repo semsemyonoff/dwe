@@ -41,39 +41,50 @@ func renderIfKnown(s string, ctx *tpl.RenderContext) (string, error) {
 	return tpl.RenderCommand(s, ctx)
 }
 
-// renderWithLeaf renders a single string leaf of a with: map. Unlike
-// renderIfKnown (used for cmd/check/timeout/when, none of which were rendered
-// at all before resolve-time rendering existed), a with: leaf ALSO enters the
-// engine when it carries a literal `{{`: usercommands.BuildRunContext used to
-// render every with: value unconditionally at exec time, and the pipeline now
-// hands the map to BuildPreRenderedRunContext, which never re-renders. Gating
-// a with: leaf on a known ${...} head alone would therefore silently pass a
-// Go-template value — `{{ resolve .Raw "vars.db.host" }}`, the form
-// varsusage already recognizes inside with: — through as literal text.
+// renderWithLeaf renders a single string leaf of a with: map. When wide is
+// false the gate is renderIfKnown's — a known-head ${...} reference and
+// nothing else. When wide is true the leaf ALSO enters the engine on a literal
+// `{{`.
 //
-// Widening stops at with: on purpose. A shell cmd:/when: that was never
-// rendered before must keep passing a `docker inspect -f "{{.State.Status}}"`
-// format string through untouched.
-func renderWithLeaf(s string, ctx *tpl.RenderContext) (string, error) {
-	if s == "" || (!hasKnownVarRef(s) && !strings.Contains(s, "{{")) {
+// wide is set exactly where usercommands.BuildRunContext used to render the
+// map unconditionally at exec time and no longer does (the pipeline now hands
+// it to BuildPreRenderedRunContext, which never re-renders): a `type: command`
+// step/action, and a files_gate probe. There, gating on a known ${...} head
+// alone would silently pass a Go-template value — `{{ resolve .Raw
+// "vars.db.host" }}`, the form varsusage already recognizes inside with: —
+// through as literal text.
+//
+// Everywhere else wide stays false, and deliberately so. A `type: builtin`
+// with: map was never rendered by this engine at all, and its values are
+// consumed raw by the builtin — the `message` builtin renders its own text
+// against DweConfig (`{{ .Project.Name }}`, a documented parameter form), and
+// the `shell` predicate takes a `docker inspect -f "{{.State.Status}}"` format
+// string. Both parse as Go templates but not in *this* template space, so a
+// wide gate here turns a working, documented pipeline into a hard resolve
+// failure. Same argument as the one that keeps cmd:/when: on the narrow gate.
+func renderWithLeaf(s string, ctx *tpl.RenderContext, wide bool) (string, error) {
+	if s == "" {
 		return s, nil
 	}
-	return tpl.RenderCommand(s, ctx)
+	if hasKnownVarRef(s) || (wide && strings.Contains(s, "{{")) {
+		return tpl.RenderCommand(s, ctx)
+	}
+	return s, nil
 }
 
-// renderValue renders every string leaf reachable from v that carries a
-// known-head ${...} reference or a literal `{{`, recursing into nested maps
-// and sequences. Non-string scalars, and strings carrying neither, are
+// renderValue renders every string leaf reachable from v through
+// renderWithLeaf (see there for what wide gates), recursing into nested maps
+// and sequences. Non-string scalars, and strings the gate rejects, are
 // returned unchanged. v is never mutated — new map/slice containers are
 // allocated for any branch reached during recursion.
-func renderValue(v any, ctx *tpl.RenderContext) (any, error) {
+func renderValue(v any, ctx *tpl.RenderContext, wide bool) (any, error) {
 	switch val := v.(type) {
 	case string:
-		return renderWithLeaf(val, ctx)
+		return renderWithLeaf(val, ctx, wide)
 	case map[string]any:
 		out := make(map[string]any, len(val))
 		for k, inner := range val {
-			rendered, err := renderValue(inner, ctx)
+			rendered, err := renderValue(inner, ctx, wide)
 			if err != nil {
 				return nil, fmt.Errorf("%s: %w", k, err)
 			}
@@ -83,7 +94,7 @@ func renderValue(v any, ctx *tpl.RenderContext) (any, error) {
 	case []any:
 		out := make([]any, len(val))
 		for i, inner := range val {
-			rendered, err := renderValue(inner, ctx)
+			rendered, err := renderValue(inner, ctx, wide)
 			if err != nil {
 				return nil, fmt.Errorf("[%d]: %w", i, err)
 			}
@@ -98,13 +109,13 @@ func renderValue(v any, ctx *tpl.RenderContext) (any, error) {
 // renderWith renders every string leaf of a with: map into a freshly
 // allocated copy (see renderWithLeaf for the gate); the input map is never
 // mutated.
-func renderWith(with map[string]any, ctx *tpl.RenderContext) (map[string]any, error) {
+func renderWith(with map[string]any, ctx *tpl.RenderContext, wide bool) (map[string]any, error) {
 	if len(with) == 0 {
 		return with, nil
 	}
 	out := make(map[string]any, len(with))
 	for k, v := range with {
-		rendered, err := renderValue(v, ctx)
+		rendered, err := renderValue(v, ctx, wide)
 		if err != nil {
 			return nil, fmt.Errorf("with.%s: %w", k, err)
 		}
@@ -114,7 +125,10 @@ func renderWith(with map[string]any, ctx *tpl.RenderContext) (map[string]any, er
 }
 
 // renderAction renders an Action's cmd/with into a freshly allocated copy.
-// A nil action renders to nil. The input action is never mutated.
+// A nil action renders to nil. The input action is never mutated. Only a
+// `type: command` action's with: map gets the wide gate — a builtin check:
+// consumes its with: values raw, so a Go-template value there belongs to the
+// builtin's own template space, not this one.
 func renderAction(action *config.Action, ctx *tpl.RenderContext) (*config.Action, error) {
 	if action == nil {
 		return nil, nil
@@ -123,7 +137,7 @@ func renderAction(action *config.Action, ctx *tpl.RenderContext) (*config.Action
 	if err != nil {
 		return nil, fmt.Errorf("cmd: %w", err)
 	}
-	with, err := renderWith(action.With, ctx)
+	with, err := renderWith(action.With, ctx, action.Type == "command")
 	if err != nil {
 		return nil, err
 	}
@@ -145,7 +159,10 @@ func renderFilesGate(fg *filesgate.FilesGate, ctx *tpl.RenderContext) (*filesgat
 	if err != nil {
 		return nil, fmt.Errorf("files_gate.command: %w", err)
 	}
-	with, err := renderWith(fg.With, ctx)
+	// A files_gate with: map is always destined for a user command
+	// (BuildPreRenderedRunContext in evalFilesGate), so it takes the wide gate
+	// regardless of the host step's own type.
+	with, err := renderWith(fg.With, ctx, true)
 	if err != nil {
 		return nil, fmt.Errorf("files_gate.%w", err)
 	}
@@ -186,8 +203,12 @@ func renderWhen(when *condition.Condition, ctx *tpl.RenderContext) (*condition.C
 // cmd, check.cmd, files_gate.command and timeout are gated on hasKnownVarRef
 // before they reach tpl.RenderCommand, so a command with no known-head ${...}
 // reference (a bare Go-template idiom like `{{.State.Status}}`, or
-// shell-style ${VAR} only) never enters the template engine. with: leaves use
-// the wider renderWithLeaf gate — see there for why.
+// shell-style ${VAR} only) never enters the template engine. with: leaves take
+// the wider renderWithLeaf gate only where the map used to be rendered by
+// usercommands.BuildRunContext at exec time — a `type: command` step, or any
+// step carrying a files_gate (whose probe falls back to step.With when
+// files_gate.with is empty). See renderWithLeaf for why widening it further
+// breaks builtin with: maps.
 func renderStepFields(step config.DeployStep, ctx *tpl.RenderContext) (config.DeployStep, error) {
 	out := step
 
@@ -197,7 +218,7 @@ func renderStepFields(step config.DeployStep, ctx *tpl.RenderContext) (config.De
 	}
 	out.Cmd = cmd
 
-	with, err := renderWith(step.With, ctx)
+	with, err := renderWith(step.With, ctx, step.Type == "command" || step.FilesGate != nil)
 	if err != nil {
 		return config.DeployStep{}, err
 	}
