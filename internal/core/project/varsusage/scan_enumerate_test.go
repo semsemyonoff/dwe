@@ -1,6 +1,8 @@
 package varsusage
 
 import (
+	"os"
+	"path/filepath"
 	"reflect"
 	"sort"
 	"testing"
@@ -142,5 +144,37 @@ func TestWithRecursion(t *testing.T) {
 	}
 	if res.Usages[0].Line != 9 {
 		t.Errorf("ScanUsages(vars.source.branch) line = %d, want 9", res.Usages[0].Line)
+	}
+}
+
+// TestEnumerateAllUsages_SkipsServiceSrc pins that a service's src/ hub — the
+// application's own checkout, which dwe never authors templates into — is not
+// walked. config.template_refs runs this scan on every `dwe validate`, so a
+// hit here would both cost a node_modules-sized traversal and warn about a
+// file dwe does not own.
+func TestEnumerateAllUsages_SkipsServiceSrc(t *testing.T) {
+	root := t.TempDir()
+	src := filepath.Join(root, "workspace", "services", "app", "src")
+	if err := os.MkdirAll(src, 0o755); err != nil {
+		t.Fatalf("mkdir src: %v", err)
+	}
+	// A file dwe does not own, shaped so the scanner would hit it if walked.
+	if err := os.WriteFile(filepath.Join(src, "ci.yml"), []byte("cmd: echo ${vars.db.host}\n"), 0o644); err != nil {
+		t.Fatalf("write src yaml: %v", err)
+	}
+	// A sibling dwe-owned file, to prove the walk still happens at all.
+	svc := filepath.Join(root, "workspace", "services", "app")
+	if err := os.WriteFile(filepath.Join(svc, "deploy.yml"), []byte("cmd: echo ${vars.db.port}\n"), 0o644); err != nil {
+		t.Fatalf("write service yaml: %v", err)
+	}
+
+	usages, err := EnumerateAllUsages(root)
+	if err != nil {
+		t.Fatalf("EnumerateAllUsages: %v", err)
+	}
+	got := enumLocsOf(usages)
+	want := []enumLoc{{"workspace/services/app/deploy.yml", 1, "vars.db.port"}}
+	if !reflect.DeepEqual(got, want) {
+		t.Errorf("EnumerateAllUsages() locs = %v, want %v", got, want)
 	}
 }

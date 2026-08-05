@@ -168,17 +168,12 @@ func (v *scenariosValidator) validateFile(ctx validate.Context, path string, reg
 	// this cfg, so a scenario step whose `when:` references a scenario-only var
 	// or a service's scenario-toggled enabled state must resolve against the
 	// overlaid config, not the bare project config.
+	//
+	// ResolvePhaseSteps is also the only place the steps get rendered: it does
+	// that once, per leaf step, before validating the step. A pre-pass here
+	// would render a second time, and rendering is not idempotent — see
+	// runSteps in envtest for the two ways that diverges from a real deploy.
 	renderCfg := renderConfigFor(ctx.Cfg, scn.Env)
-	if err := envtest.RenderSteps(scn.Steps, renderCfg); err != nil {
-		diags = append(diags, validate.Diagnostic{
-			Severity: validate.SeverityError,
-			Domain:   "tests",
-			Target:   target,
-			File:     relFile,
-			Message:  fmt.Sprintf("rendering steps: %v", err),
-		})
-		return diags
-	}
 
 	phase := config.DeployPhase{Name: "tests", Steps: scn.Steps}
 	if _, err := pipeline.ResolvePhaseSteps(renderCfg, reg, phase, ""); err != nil {
@@ -192,7 +187,7 @@ func (v *scenariosValidator) validateFile(ctx validate.Context, path string, reg
 	}
 
 	if reg != nil {
-		diags = append(diags, validateCommandRefs(scn.Steps, target, relFile, reg)...)
+		diags = append(diags, validateCommandRefs(renderCfg, scn.Steps, target, relFile, reg)...)
 	}
 
 	return diags
@@ -201,16 +196,26 @@ func (v *scenariosValidator) validateFile(ctx validate.Context, path string, reg
 // validateCommandRefs walks every step (recursing one level into parallel
 // substeps, matching the step schema's own nesting limit) and flags a
 // type: command step whose Cmd does not resolve in reg.
-func validateCommandRefs(steps []config.DeployStep, target, relFile string, reg *registry.Registry) []validate.Diagnostic {
+//
+// These are the raw loaded steps, so a cmd: naming its target through a
+// ${vars.*} reference has to be rendered before the lookup — the same read-a-
+// raw-step-outside-ResolvePhaseSteps rule `dwe reset step` follows. A render
+// error is left to the resolve pass above, which reports it.
+func validateCommandRefs(cfg *config.DweConfig, steps []config.DeployStep, target, relFile string, reg *registry.Registry) []validate.Diagnostic {
 	var diags []validate.Diagnostic
 	for _, step := range steps {
 		if step.Parallel != nil {
-			diags = append(diags, validateCommandRefs(step.Parallel.Steps, target, relFile, reg)...)
+			diags = append(diags, validateCommandRefs(cfg, step.Parallel.Steps, target, relFile, reg)...)
 			continue
 		}
 		if step.Type != "command" {
 			continue
 		}
+		rendered, err := pipeline.RenderStep(cfg, step)
+		if err != nil {
+			continue
+		}
+		step.Cmd = rendered.Cmd
 		if _, err := reg.Get(step.Cmd); err != nil {
 			diags = append(diags, validate.Diagnostic{
 				Severity: validate.SeverityError,

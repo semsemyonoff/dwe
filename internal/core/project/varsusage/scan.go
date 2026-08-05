@@ -204,6 +204,12 @@ func scanProject(projectRoot, queryPath string, matchAll bool) ([]Usage, error) 
 // their from:/to: values are template filenames, never vars.* dot-paths, so
 // they never produce a false structural hit; the *.tmpl bodies under those
 // packs are non-YAML and scanned separately as raw text (scanConfigTemplates).
+//
+// Each service's src/ hub is skipped: it is the application's own git checkout
+// (dwe only ever writes RENDERED output into it, never templates), so walking
+// it costs a full node_modules/vendor traversal and can only produce hits in
+// files dwe does not own. That matters because config.template_refs runs this
+// walk on every `dwe validate`, not just on an explicit `dwe vars inspect`.
 func collectYAMLFiles(workspace string) ([]string, error) {
 	var out []string
 	err := filepath.WalkDir(workspace, func(path string, d os.DirEntry, err error) error {
@@ -214,6 +220,9 @@ func collectYAMLFiles(workspace string) ([]string, error) {
 			return err
 		}
 		if d.IsDir() {
+			if skipScanDir(workspace, path) {
+				return filepath.SkipDir
+			}
 			return nil
 		}
 		switch strings.ToLower(filepath.Ext(path)) {
@@ -226,6 +235,19 @@ func collectYAMLFiles(workspace string) ([]string, error) {
 		return nil, nil
 	}
 	return out, err
+}
+
+// skipScanDir reports whether the walk should skip dir entirely. The one rule
+// is the per-service source hub, workspace/services/<name>/src — matched on
+// path shape rather than by loading the config, since the scan is a static
+// leaf that takes a project root and nothing else.
+func skipScanDir(workspace, dir string) bool {
+	rel, err := filepath.Rel(workspace, dir)
+	if err != nil {
+		return false
+	}
+	parts := strings.Split(filepath.ToSlash(rel), "/")
+	return len(parts) == 3 && parts[0] == "services" && parts[2] == "src"
 }
 
 func scanYAMLFile(projectRoot, absPath, queryPath string, matchAll bool) ([]Usage, error) {

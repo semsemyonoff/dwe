@@ -6,10 +6,12 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/semsemyonoff/dwe/internal/core/execution/pipeline"
 	"github.com/semsemyonoff/dwe/internal/core/project/config"
 	"github.com/semsemyonoff/dwe/internal/core/usercommands/model"
 	"github.com/semsemyonoff/dwe/internal/core/usercommands/registry"
 	"github.com/semsemyonoff/dwe/internal/core/validate"
+	"github.com/semsemyonoff/dwe/internal/core/workflow/envtest"
 )
 
 // baseCfg returns a minimal but valid *config.DweConfig with one known
@@ -393,10 +395,11 @@ steps:
 	}
 }
 
-func TestScenariosValidator_RenderErrorAbortsRemainingChecks(t *testing.T) {
-	// A ${snapshot.*} reference is scope-rejected at RENDER time (scenarios have
-	// no snapshot scope), which is a distinct diagnostic ("rendering steps") from
-	// the resolve-time path — and it must early-return, so no later check runs.
+func TestScenariosValidator_RenderErrorSurfacesFromResolve(t *testing.T) {
+	// A ${snapshot.*} reference is scope-rejected when the step is rendered,
+	// and rendering happens inside ResolvePhaseSteps — there is no separate
+	// pre-pass — so it must surface as a single "resolving steps" diagnostic
+	// naming the offending reference.
 	root := writeScenario(t, t.TempDir(), "renderfail.yml", `
 steps:
   - name: bad-render
@@ -405,10 +408,47 @@ steps:
 `)
 	diags := errorDiags(runFor(root, baseCfg()))
 	if len(diags) != 1 {
-		t.Fatalf("render error: want exactly 1 error diagnostic (abort after render), got %+v", diags)
+		t.Fatalf("render error: want exactly 1 error diagnostic, got %+v", diags)
 	}
-	if !strings.Contains(diags[0].Message, "rendering steps") {
-		t.Errorf("message = %q, want to mention rendering steps", diags[0].Message)
+	if !strings.Contains(diags[0].Message, "resolving steps") ||
+		!strings.Contains(diags[0].Message, "${snapshot.foo}") {
+		t.Errorf("message = %q, want to mention resolving steps and ${snapshot.foo}", diags[0].Message)
+	}
+}
+
+func TestScenariosValidator_StepsRenderedExactlyOnce(t *testing.T) {
+	// Regression: a scenario-local render pre-pass on top of the one inside
+	// ResolvePhaseSteps expanded a var whose value is itself a ${...}
+	// reference twice, so the scenario tested a command the deploy pipeline
+	// never runs. One pass leaves the inner reference literal.
+	cfg := baseCfg()
+	cfg.Raw["vars"] = map[string]any{
+		"outer": "${vars.inner}",
+		"inner": "expanded",
+	}
+	root := writeScenario(t, t.TempDir(), "once.yml", `
+steps:
+  - name: nested
+    type: shell
+    cmd: echo ${vars.outer}
+`)
+	if diags := errorDiags(runFor(root, cfg)); len(diags) != 0 {
+		t.Fatalf("want no error diagnostics, got %+v", diags)
+	}
+
+	scn, err := envtest.LoadScenario(filepath.Join(root, "workspace", "tests", "once.yml"))
+	if err != nil {
+		t.Fatalf("LoadScenario: %v", err)
+	}
+	resolved, err := pipeline.ResolvePhaseSteps(cfg, nil, config.DeployPhase{Name: "tests", Steps: scn.Steps}, "")
+	if err != nil {
+		t.Fatalf("ResolvePhaseSteps: %v", err)
+	}
+	if len(resolved) != 1 {
+		t.Fatalf("resolved %d steps, want 1", len(resolved))
+	}
+	if got := resolved[0].Step.Cmd; got != "echo ${vars.inner}" {
+		t.Errorf("cmd = %q, want a single render pass leaving %q", got, "echo ${vars.inner}")
 	}
 }
 
