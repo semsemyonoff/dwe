@@ -500,6 +500,32 @@ func TestGitValidator_ValidPackEmitsInfoForMissingSrcGit(t *testing.T) {
 	require.Contains(t, infoDiag.Message, "no src/.git")
 }
 
+// TestGitValidator_ImplicitDefaultMissingSrcGitIsSilent pins that an app-type
+// service with no render.git key and a valid pack, but no src/.git yet
+// (before the first deploy, e.g. a clone step has not run), produces no
+// diagnostic — the repo may still be populated by the deploy pipeline, so
+// flagging it here would be premature noise, not a real defect.
+func TestGitValidator_ImplicitDefaultMissingSrcGitIsSilent(t *testing.T) {
+	root := t.TempDir()
+	require.NoError(t, os.MkdirAll(filepath.Join(root, "services", "main"), 0o755))
+	writeGitPack(t, root, "default", map[string]string{
+		"manifest.yml":    "render:\n  - {from: pre-commit.tmpl, to: pre-commit}\n",
+		"pre-commit.tmpl": "#!/bin/sh\n",
+	})
+
+	v := &GitValidator{}
+	diags := v.Run(validate.Context{
+		ProjectRoot: root,
+		Cfg: &config.DweConfig{
+			Services: map[string]config.ServiceConfig{"main": appSvcNoRenderConfig("services/main")},
+		},
+	})
+
+	require.Equal(t, 0, severityCount(diags, validate.SeverityError))
+	require.Nil(t, findDiag(diags, validate.SeverityInfo, "templates.git:main"),
+		"expected no info diagnostic for missing src/.git on implicit default; got %+v", diags)
+}
+
 func TestGitValidator_ImplicitMissingPackEmitsWarning(t *testing.T) {
 	root := t.TempDir()
 	require.NoError(t, os.MkdirAll(filepath.Join(root, "services", "main"), 0o755))
