@@ -736,23 +736,60 @@ golden.)*
 
 ### Task 8: Verify acceptance criteria
 
-- [ ] verify all requirements from Overview are implemented
-- [ ] scaffold a throwaway project with `dwe init`, then confirm end to end:
+- [x] verify all requirements from Overview are implemented — every row of the Overview
+      table now has a home: the diagnostic flags (`--quiet`, `--level`, `-v`/`--debug`,
+      `--anchors`/`--toc`) in llms-txt § "Diagnostics and machine-readable output" plus the
+      Task 3 hint line, the builtin inventory in § "Builtins" (25 step builtins + the 7
+      `when:` verbs, the two registries named as disjoint), `PROJECT`/`UID`/`GID` in
+      § "Reserved env names" and in the scaffolded `defaults.yml`, the search fix in Task 2,
+      the class-1 scaffold in Tasks 4–5, and the `dwe test run` policy at all thirteen sites
+      in Task 7 (`grep` over `skills/dwe/` finds no surviving unconditional statement — the
+      one remaining `MUST NOT` heading is explicitly qualified)
+- [x] scaffold a throwaway project with `dwe init`, then confirm end to end:
       `dwe validate` reports no `config`/`templates` diagnostics, `dwe docs llms-txt --lang en`
       answers the questions the two sessions had to reverse-engineer, `dwe test list -o json`
       carries a cost profile
-- [ ] verify **rendering**, not only validation: `render.ai` is on by default for
+      — measured on a real `dwe init --default`: `dwe validate` → `2 infos, 18 checks`,
+      **zero warnings, zero errors**, and `--level error,warning -o json` returns an empty
+      `diagnostics` array (the two infos are `commands/commands: no command files` and
+      `config/config.info: info.yml has no active content`, neither a config/templates
+      defect). `dwe docs llms-txt --lang en` → 11 169 B, under the 12 KB cap, carrying all
+      five new sections. `dwe test list -o json --pretty` → `cost_profile` on the `smoke`
+      scenario with all three hard stops clear
+- [x] verify **rendering**, not only validation: `render.ai` is on by default for
       `type: app` (`renderEnabledExplicit`), so after Task 5b a fresh `dwe deploy run` will
       try to render into `services/app/`, which does not exist until the first clone.
       Confirm that path behaves sanely
-- [ ] note the reciprocal dependency: **this task is what makes Plan A's Task 15 acceptance
+      — three findings, all benign: (a) the **built-in default deploy pipeline contains no
+      ai-render step at all** (`dwe deploy plan` = env / start / post-deploy; `--service app`
+      = env only), so a fresh `dwe deploy run` never touches `services/app/` — the premise
+      of the checkbox does not fire on the default path; (b) invoked explicitly,
+      `dwe render ai` **creates** the absent hub directory and writes
+      `services/app/AGENTS.md` + the `CLAUDE.md → AGENTS.md` relative symlink, no error;
+      (c) in the scaffolded skeleton the `render` phase runs **after** `source`, and
+      `source_clone` targets `services/app/src` while the render writes
+      `services/app/AGENTS.md`, so the render can never make a later clone's
+      already-populated skip fire
+- [x] note the reciprocal dependency: **this task is what makes Plan A's Task 15 acceptance
       criterion true.** Measured on a real `dwe init`, Plan A alone leaves one warning
       (`service "app" … has no dir or dir_internal`), and only activating `dir` here clears
       it — while simultaneously creating the template-pack warnings Plan A Task 7 absorbs
-- [ ] re-run the two real search queries that returned `[]` and confirm useful hits
-- [ ] run full test suite: `make test`
-- [ ] run `make lint`
-- [ ] verify test coverage meets project standard
+      — confirmed: the fresh scaffold now validates at **zero warnings**, so both halves
+      (the `dir` warning cleared here, the template-pack warnings absorbed by Plan A Task 7)
+      hold simultaneously
+- [x] re-run the two real search queries that returned `[]` and confirm useful hits
+      — `UID GID env` → `reference/config/workspace#exportsenv` at rank 2 and
+      `reference/render/env#system-variables` at rank 3, each with a snippet that answers the
+      question without a second call; `interpolation vars` → `reference/templates#namespaces`
+      and `reference/config/commands/templating` in the returned set. Both were `[]` before
+- [x] run full test suite: `make test` — clean, no failures
+- [x] run `make lint` — `0 issues.`
+- [x] verify test coverage meets project standard — the packages this plan touched:
+      `core/docs/llmstxt` 99.3 %, `project/config` 89.3 %, `cli/test` 88.5 %,
+      `cli/validate` 87.3 %, `core/docs` 86.4 %, `workflow/scaffold` 86.1 %,
+      `cli/docs` 66.8 % (the residue is pre-existing TUI/render plumbing, not new code).
+      `builtin/spec` 41 % and `builtin/containers` 43.9 % are pre-existing docker-dependent
+      paths untouched by Task 1a
 
 ### Task 9: [Final] Update documentation
 
