@@ -34,8 +34,21 @@ func hasKnownVarRef(s string) bool {
 // renderIfKnown renders s through tpl.RenderCommand only when it carries a
 // known-head ${...} reference (hasKnownVarRef); otherwise s is returned
 // unchanged, never touched by the template engine.
+//
+// tpl.ValidateRawScope runs first, and on every string rather than only the
+// ones the gate admits: renderContextFor offers Raw and Host and nothing else,
+// so a ${param.*} / ${context.*} / ${files.*} / ${generated.*} / ${args}
+// reference here would otherwise render to "" — a known head, hence invisible
+// to UnresolvedTemplateRefs as well. Failing the resolve matches the treatment
+// ${snapshot.*} already gets on this path.
 func renderIfKnown(s string, ctx *tpl.RenderContext) (string, error) {
-	if s == "" || !hasKnownVarRef(s) {
+	if s == "" {
+		return s, nil
+	}
+	if err := tpl.ValidateRawScope(s); err != nil {
+		return "", err
+	}
+	if !hasKnownVarRef(s) {
 		return s, nil
 	}
 	return tpl.RenderCommand(s, ctx)
@@ -65,6 +78,10 @@ func renderIfKnown(s string, ctx *tpl.RenderContext) (string, error) {
 func renderWithLeaf(s string, ctx *tpl.RenderContext, wide bool) (string, error) {
 	if s == "" {
 		return s, nil
+	}
+	// Same Raw/Host-only scope as renderIfKnown — see there.
+	if err := tpl.ValidateRawScope(s); err != nil {
+		return "", err
 	}
 	if hasKnownVarRef(s) || (wide && strings.Contains(s, "{{")) {
 		return tpl.RenderCommand(s, ctx)
@@ -271,6 +288,11 @@ func RenderWhen(cfg *config.DweConfig, when *condition.Condition) (*condition.Co
 // pipeline-step source, so they stay nil/zero (SnapshotScope defaults to
 // SnapshotScopeNone: any ${snapshot.*} reference here is a resolve error,
 // matching envtest's scenario rendering context).
+//
+// The other unavailable namespaces are rejected the same way, by the
+// tpl.ValidateRawScope pre-scan in renderIfKnown/renderWithLeaf: leaving them
+// to the lenient resolvers would turn a nil field into an empty substitution
+// instead of an error.
 func renderContextFor(cfg *config.DweConfig) *tpl.RenderContext {
 	ctx := &tpl.RenderContext{Host: tpl.CurrentHostInfo()}
 	if cfg != nil {

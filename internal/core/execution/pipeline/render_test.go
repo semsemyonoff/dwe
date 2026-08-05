@@ -3,6 +3,7 @@ package pipeline
 import (
 	"testing"
 
+	"github.com/semsemyonoff/dwe/internal/core/execution/condition"
 	"github.com/semsemyonoff/dwe/internal/core/execution/filesgate"
 	"github.com/semsemyonoff/dwe/internal/core/project/config"
 	"github.com/semsemyonoff/dwe/internal/shared/tpl"
@@ -627,6 +628,116 @@ func TestRenderStepFields_builtinWithGoTemplateSurvives(t *testing.T) {
 		}
 		if got.With["db"] != "app" {
 			t.Errorf("With[db] = %v, want %q", got.With["db"], "app")
+		}
+	})
+}
+
+func TestRenderStepFields_namespaceWithoutPipelineSourceFails(t *testing.T) {
+	// renderContextFor offers Raw and Host only. ${param.*} and its siblings
+	// are known heads, so without the scope pre-scan they would be rewritten
+	// into a template call over a nil map and render to "" — a silently
+	// truncated command that UnresolvedTemplateRefs also skips (known head).
+	// Failing the resolve mirrors the ${snapshot.*} treatment on this path.
+	ctx := testRenderCtx()
+
+	cases := []struct {
+		name string
+		step config.DeployStep
+	}{
+		{
+			name: "param in cmd",
+			step: config.DeployStep{Name: "checkout", Type: "shell", Cmd: "git checkout ${param.branch}"},
+		},
+		{
+			name: "context in cmd",
+			step: config.DeployStep{Name: "echo", Type: "shell", Cmd: "echo ${context.env}"},
+		},
+		{
+			name: "files in cmd",
+			step: config.DeployStep{Name: "load", Type: "shell", Cmd: "cat ${files.dump.path}"},
+		},
+		{
+			name: "generated in cmd",
+			step: config.DeployStep{Name: "key", Type: "shell", Cmd: "echo ${generated.app_key}"},
+		},
+		{
+			name: "args in cmd",
+			step: config.DeployStep{Name: "run", Type: "shell", Cmd: "go test ${args}"},
+		},
+		{
+			name: "param in a command step's with",
+			step: config.DeployStep{
+				Name: "call",
+				Type: "command",
+				Cmd:  "db.dump",
+				With: map[string]any{"database": "${param.database}"},
+			},
+		},
+		{
+			name: "param in a builtin step's with",
+			step: config.DeployStep{
+				Name: "notify",
+				Type: "builtin",
+				Cmd:  "message",
+				With: map[string]any{"level": "info", "text": "for ${param.database}"},
+			},
+		},
+		{
+			name: "param nested inside a with sequence",
+			step: config.DeployStep{
+				Name: "call",
+				Type: "command",
+				Cmd:  "db.dump",
+				With: map[string]any{"list": []any{map[string]any{"db": "${param.database}"}}},
+			},
+		},
+		{
+			name: "param in a check cmd",
+			step: config.DeployStep{
+				Name:  "seed",
+				Type:  "shell",
+				Cmd:   "echo hi",
+				Check: &config.Action{Type: "shell", Cmd: "test -f ${param.path}"},
+			},
+		},
+		{
+			name: "param in a files_gate command",
+			step: config.DeployStep{
+				Name:      "restore",
+				Type:      "shell",
+				Cmd:       "echo hi",
+				FilesGate: &filesgate.FilesGate{Command: "restore ${param.dump}", State: filesgate.StateReadable},
+			},
+		},
+		{
+			name: "param in a timeout",
+			step: config.DeployStep{Name: "slow", Type: "shell", Cmd: "sleep 1", Timeout: "${param.timeout}"},
+		},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			if _, err := renderStepFields(tc.step, ctx); err == nil {
+				t.Fatal("expected a resolve error, got nil")
+			}
+		})
+	}
+
+	t.Run("runtime when cmd", func(t *testing.T) {
+		when := &condition.Condition{Type: condition.TypeShell, Cmd: "test -n ${param.branch}"}
+		if _, err := renderWhen(when, ctx); err == nil {
+			t.Fatal("expected a resolve error, got nil")
+		}
+	})
+
+	t.Run("host and raw namespaces still resolve", func(t *testing.T) {
+		step := config.DeployStep{Name: "ok", Type: "shell", Cmd: "chown ${host.uid} ${vars.source.dir}"}
+		got, err := renderStepFields(step, ctx)
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if got.Cmd == "" || got.Cmd == step.Cmd {
+			t.Errorf("Cmd = %q, want a substituted command", got.Cmd)
 		}
 	})
 }
