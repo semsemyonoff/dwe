@@ -118,6 +118,12 @@ func (v *AIValidator) validateService(name string, svc config.ServiceConfig, cfg
 		}}
 	}
 	if !found {
+		if _, explicit := svc.AIRenderEnabledExplicit(); !explicit {
+			// Implicit default (app type, no render.ai key) + absent pack: the
+			// scaffold ships with no template pack, so this is expected, not
+			// broken. Warn only once the user has opted in explicitly.
+			return nil
+		}
 		return []validate.Diagnostic{{
 			Severity: validate.SeverityWarning,
 			Domain:   "templates",
@@ -125,8 +131,8 @@ func (v *AIValidator) validateService(name string, svc config.ServiceConfig, cfg
 			Message:  fmt.Sprintf("template pack not found for service %q", name),
 			Hint: fmt.Sprintf(
 				"create workspace/templates/ai/%s or workspace/templates/ai/default\n"+
-					"or set services.%s.render.ai.enabled: false in services.yml",
-				name, name,
+					"or set services.%s.render.ai.enabled: false in workspace/services/%s/service.yml",
+				name, name, name,
 			),
 		}}
 	}

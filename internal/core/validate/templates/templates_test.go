@@ -700,3 +700,110 @@ func findOverrideDiag(diags []validate.Diagnostic, target string) *validate.Diag
 	}
 	return nil
 }
+
+// appSvcNoRenderConfig returns a plain "app" service with no render.* key at
+// all — the implicit-default case (IsApp() -> true, explicit -> false).
+func appSvcNoRenderConfig(dir string) config.ServiceConfig {
+	return config.ServiceConfig{
+		Enabled: true,
+		Type:    "app",
+		Dir:     dir,
+	}
+}
+
+func TestTemplateValidators_ImplicitDefaultMissingPackIsSilent(t *testing.T) {
+	root := t.TempDir()
+	require.NoError(t, os.MkdirAll(filepath.Join(root, "services", "main"), 0o755))
+
+	ctx := validate.Context{
+		ProjectRoot: root,
+		Cfg: &config.DweConfig{
+			Services: map[string]config.ServiceConfig{"main": appSvcNoRenderConfig("services/main")},
+		},
+	}
+
+	tests := []struct {
+		name      string
+		validator validate.Validator
+		target    string
+	}{
+		{name: "ide", validator: &IDEValidator{}, target: "templates.ide"},
+		{name: "ai", validator: &AIValidator{}, target: "templates.ai"},
+		{name: "git", validator: &GitValidator{}, target: "templates.git"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			diags := tt.validator.Run(ctx)
+			// No pack, no explicit opt-in: expect nothing but the aggregate OK
+			// diagnostic — no per-service warning about a missing pack.
+			require.Len(t, diags, 1, "expected only the aggregate OK diagnostic; got %+v", diags)
+			require.Equal(t, validate.SeverityOK, diags[0].Severity)
+			require.Equal(t, tt.target, diags[0].Target)
+		})
+	}
+}
+
+func TestTemplateValidators_ExplicitEnabledMissingPackWarns(t *testing.T) {
+	root := t.TempDir()
+	require.NoError(t, os.MkdirAll(filepath.Join(root, "services", "main"), 0o755))
+
+	tests := []struct {
+		name      string
+		validator validate.Validator
+		svc       config.ServiceConfig
+		target    string
+	}{
+		{name: "ide", validator: &IDEValidator{}, svc: ideSvc("services/main"), target: "templates.ide:main"},
+		{name: "ai", validator: &AIValidator{}, svc: aiSvc("services/main"), target: "templates.ai:main"},
+		{name: "git", validator: &GitValidator{}, svc: gitSvc("services/main"), target: "templates.git:main"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			diags := tt.validator.Run(validate.Context{
+				ProjectRoot: root,
+				Cfg: &config.DweConfig{
+					Services: map[string]config.ServiceConfig{"main": tt.svc},
+				},
+			})
+
+			warnDiag := findDiag(diags, validate.SeverityWarning, tt.target)
+			require.NotNil(t, warnDiag, "expected warning preserved for explicit opt-in; got %+v", diags)
+			require.Contains(t, warnDiag.Message, "template pack not found")
+		})
+	}
+}
+
+func TestTemplateValidators_MissingPackHintNamesServiceYML(t *testing.T) {
+	root := t.TempDir()
+	require.NoError(t, os.MkdirAll(filepath.Join(root, "services", "main"), 0o755))
+
+	tests := []struct {
+		name      string
+		validator validate.Validator
+		svc       config.ServiceConfig
+		target    string
+	}{
+		{name: "ide", validator: &IDEValidator{}, svc: ideSvc("services/main"), target: "templates.ide:main"},
+		{name: "ai", validator: &AIValidator{}, svc: aiSvc("services/main"), target: "templates.ai:main"},
+		{name: "git", validator: &GitValidator{}, svc: gitSvc("services/main"), target: "templates.git:main"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			diags := tt.validator.Run(validate.Context{
+				ProjectRoot: root,
+				Cfg: &config.DweConfig{
+					Services: map[string]config.ServiceConfig{"main": tt.svc},
+				},
+			})
+
+			warnDiag := findDiag(diags, validate.SeverityWarning, tt.target)
+			require.NotNil(t, warnDiag)
+			require.NotContains(t, warnDiag.Hint, "services.yml",
+				"hint must not reference a services.yml file, which does not exist in DWE")
+			require.Contains(t, warnDiag.Hint, "workspace/services/main/service.yml")
+		})
+	}
+}

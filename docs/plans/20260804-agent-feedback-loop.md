@@ -646,15 +646,15 @@ nothing would re-run.
 - Modify: `internal/core/validate/templates/git.go`
 - Modify: `internal/core/validate/templates/*_test.go`
 
-- [ ] (TDD) write tests: a `type: app` service with **no** `render.*` key and no pack →
+- [x] (TDD) write tests: a `type: app` service with **no** `render.*` key and no pack →
       **no** diagnostic; the same service with explicit `render.ai.enabled: true` and no
       pack → warning preserved
-- [ ] thread `explicit` from `AIRenderEnabledExplicit` / `IDERenderEnabledExplicit` /
+- [x] thread `explicit` from `AIRenderEnabledExplicit` / `IDERenderEnabledExplicit` /
       `GitRenderEnabledExplicit` into the three validators and gate the "pack not found"
       diagnostic on it
-- [ ] fix the hint text in all three: `services.yml` → `workspace/services/<name>/service.yml`
-- [ ] write a test pinning the hint names a path that exists in DWE
-- [ ] run tests — must pass before task 8
+- [x] fix the hint text in all three: `services.yml` → `workspace/services/<name>/service.yml`
+- [x] write a test pinning the hint names a path that exists in DWE
+- [x] run tests — must pass before task 8
 
 ### Task 8: Apply the same rule to the remaining always-on noise
 
