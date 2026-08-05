@@ -151,6 +151,46 @@ var KnownVarHeads = []string{
 	"args",
 }
 
+// contextOnlyVarHeads is the subset of KnownVarHeads that resolves from a
+// caller-populated RenderContext field rather than from Raw/Host: Params,
+// Context, Files, Generated, Args. Every one of those resolvers is lenient by
+// contract — an absent map yields "" — which is right where the namespace has
+// a source and the key is simply missing, and wrong where the namespace has no
+// source at all: the reference silently erases instead of failing.
+//
+// snapshot is deliberately absent: validateSnapshotScope already rejects it
+// out of scope, with a message naming the workflow it belongs to.
+var contextOnlyVarHeads = map[string]struct{}{
+	"param":     {},
+	"context":   {},
+	"files":     {},
+	"generated": {},
+	"args":      {},
+}
+
+// ValidateRawScope rejects ${...} references whose namespace cannot resolve on
+// a Raw/Host-only render path — the pipeline step renderer and the scenario
+// renderer, neither of which has command params, resolved files, or harvested
+// generated values to offer.
+//
+// Those namespaces are known heads, so CompileVarSyntax rewrites them into a
+// template call and the lenient resolver behind it renders them to "": without
+// this pre-scan `cmd: "git checkout ${param.branch}"` becomes `git checkout `
+// in `dwe deploy plan` and at run time, with nothing downstream to flag it
+// (UnresolvedTemplateRefs skips known heads by construction). Callers run it
+// before RenderCommand and fail the resolve on error — the same call shape,
+// and the same reasoning, as validateSnapshotScope.
+func ValidateRawScope(expr string) error {
+	for _, m := range varPattern.FindAllStringSubmatch(expr, -1) {
+		inner := m[1]
+		head, _, _ := strings.Cut(inner, ".")
+		if _, ok := contextOnlyVarHeads[head]; ok {
+			return fmt.Errorf("template uses ${%s}: the %q namespace has no source here (only project config paths and ${host.*} resolve on this path)", inner, head)
+		}
+	}
+	return nil
+}
+
 // knownVarHeadSet is the membership index over KnownVarHeads.
 var knownVarHeadSet = func() map[string]struct{} {
 	m := make(map[string]struct{}, len(KnownVarHeads))

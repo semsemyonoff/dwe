@@ -842,3 +842,34 @@ func TestEvalCommandCondition_typoOnBuiltinVerb(t *testing.T) {
 		t.Errorf("error should mention unknown predicate, got %q", err.Error())
 	}
 }
+
+func TestValidateRawScope(t *testing.T) {
+	tests := []struct {
+		name    string
+		expr    string
+		wantErr bool
+	}{
+		{"param", "git checkout ${param.branch}", true},
+		{"context", "echo ${context.env}", true},
+		{"files", "cat ${files.dump.path}", true},
+		{"generated", "echo ${generated.app_key}", true},
+		{"args", "go test ${args}", true},
+		{"raw head", "clone ${vars.source.repo} ${project.name}", false},
+		{"host", "chown ${host.uid}:${host.gid} .", false},
+		{"unknown head", "echo ${HOME}", false},
+		{"snapshot stays validateSnapshotScope's", "tar ${snapshot.path}", false},
+		{"no reference", "docker inspect -f '{{.State.Status}}' app", false},
+		{"empty", "", false},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			err := ValidateRawScope(tc.expr)
+			if (err != nil) != tc.wantErr {
+				t.Fatalf("ValidateRawScope(%q) = %v, wantErr %v", tc.expr, err, tc.wantErr)
+			}
+			if err != nil && !strings.Contains(err.Error(), "has no source here") {
+				t.Errorf("error should explain the namespace is unavailable, got %q", err.Error())
+			}
+		})
+	}
+}

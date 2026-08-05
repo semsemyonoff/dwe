@@ -212,3 +212,48 @@ func TestRenderSteps_NilConfig(t *testing.T) {
 		t.Errorf("Cmd = %q", steps[0].Cmd)
 	}
 }
+
+func TestRenderSteps_NamespaceWithoutScenarioSourceFails(t *testing.T) {
+	// A scenario has no command params, resolved files, or generated values.
+	// Those heads are known to CompileVarSyntax, so without the scope check
+	// they would render to "" here and reach ResolvePhaseSteps already erased
+	// — masking the identical check the pipeline resolver runs.
+	cases := []struct {
+		name string
+		step config.DeployStep
+	}{
+		{"param in cmd", config.DeployStep{Type: "shell", Cmd: "git checkout ${param.branch}"}},
+		{"context in cmd", config.DeployStep{Type: "shell", Cmd: "echo ${context.env}"}},
+		{"files in cmd", config.DeployStep{Type: "shell", Cmd: "cat ${files.dump.path}"}},
+		{"generated in cmd", config.DeployStep{Type: "shell", Cmd: "echo ${generated.app_key}"}},
+		{"args in cmd", config.DeployStep{Type: "shell", Cmd: "go test ${args}"}},
+		{
+			"param in with",
+			config.DeployStep{Type: "builtin", Cmd: "message", With: map[string]any{"text": "${param.x}"}},
+		},
+		{
+			"param in check cmd",
+			config.DeployStep{
+				Type:  "shell",
+				Cmd:   "echo hi",
+				Check: &config.Action{Type: "shell", Cmd: "test -f ${param.path}"},
+			},
+		},
+		{
+			"param in a parallel substep",
+			config.DeployStep{
+				Type: "parallel",
+				Parallel: &config.ParallelGroup{
+					Steps: []config.DeployStep{{Type: "shell", Cmd: "echo ${param.x}"}},
+				},
+			},
+		},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			if err := RenderSteps([]config.DeployStep{tc.step}, testConfig()); err == nil {
+				t.Fatal("expected a render error, got nil")
+			}
+		})
+	}
+}

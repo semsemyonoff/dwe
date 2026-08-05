@@ -158,6 +158,15 @@ The string leaves of `with:` are the one exception, and only on the steps where 
 
 A `type: builtin` `with:` map keeps the narrow gate — a known-head `${...}` is substituted, a literal `{{ }}` is passed through untouched. Builtins consume their `with:` values raw and some render them against a *different* template space: `message` renders its `text` as a Go template over `DweConfig` (`{{ .Project.Name }}`), and the `shell` predicate takes `docker inspect -f "{{.State.Status}}"` format strings. Both keep working unchanged.
 
+**Only project-config paths and `${host.uid}` / `${host.gid}` resolve in a pipeline step.** The namespaces that belong to a user command or a config render pass — `${param.*}`, `${context.*}`, `${files.*}`, `${generated.*}` and `${args}` — have no source here, so referencing one is a resolve error naming the namespace, not a silent empty substitution:
+
+```
+step "checkout": cmd: template uses ${param.branch}: the "param" namespace has no source here
+(only project config paths and ${host.*} resolve on this path)
+```
+
+`${snapshot.*}` fails the same way outside a snapshot workflow. To pass a value into a step, put it in `vars:` and reference `${vars.*}`; to give a `type: command` step its parameters, use the step's own `with:` map — that map *supplies* the target command's `${param.*}`, it cannot read them. The same rule applies to `workspace/tests/*.yml` scenario steps, which render through the identical substrate.
+
 Because a rendered step's actual text now depends on the `vars:` block, the whole `vars:` block is included in both the project and per-service config hash, so changing a referenced value re-runs the steps that use it instead of the deploy reporting a stale `already up-to-date`. **One-time consequence on upgrade**: this changes the project config hash for every existing project, so the first `dwe deploy run` after upgrading to a dwe version carrying this change re-runs every step once, even without any `vars:` change of your own. The steps are expected to be idempotent and gated, so this is safe, just visible — do not be alarmed if a deploy that has been "up-to-date" for weeks suddenly re-runs everything one time.
 
 ## Post-deploy semantics
