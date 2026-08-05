@@ -12,47 +12,12 @@
 // executed directly in Go — no subprocess is spawned. This makes destructive
 // and file-system operations safe, auditable, and visible in plan output.
 //
-// Canonical builtins (registry is composed in buildRegistry from per-domain subpackages):
-//
-//	interaction/ (KindAction)
-//	- confirm                       — interactive user confirmation prompt
-//	- message                       — output styled text
-//
-//	services/ (KindAction)
-//	- service_configs_copy          — copy service template configs into the hub (legacy; deprecation-warned)
-//	- service_configs_check         — verify service config files exist
-//	- service_configs_render        — render service config templates into the hub (modern render-based mechanism)
-//	- service_configs_render_check  — re-render gate paired as the render step's check: (forces re-run on template/store change)
-//	- service_generated_harvest     — harvest generated values (e.g. minted secrets) from the service into the generated store
-//	- service_dirs_ensure           — ensure service hub directories exist
-//
-//	containers/ (KindAction unless noted)
-//	- docker_remove_project_volumes — remove all Docker volumes for the project
-//	- docker_wait_healthy           — wait until containers are healthy
-//	- containers_running            — (KindPredicate) fast "is running" check
-//	- docker_daemon_start           — start a named daemon container (docker compose run -d)
-//	- docker_daemon_logs            — tail daemon container logs foreground (interactive)
-//	- docker_daemon_stop            — stop a named daemon container (idempotent)
-//	- docker_stop_remove_container  — (KindInternal) stop and remove a named container; per-service reset baseline
-//	- daemons_reap                  — (KindInternal) stop all project daemon containers; auto-injected as _auto_reap_daemons
-//
-//	fs/ (KindAction)
-//	- remove_paths                  — delete declared paths inside the project root
-//	fs/ (KindPredicate)
-//	- file_exists                   — check whether a file exists
-//
-//	source/ (KindAction)
-//	- source_clone                  — clone a git repository into a project-relative dir (idempotent)
-//
-//	env/ (KindPredicate)
-//	- env_keys_present              — verify env-file keys are defined
-//	- executable_in_path            — verify an executable resolves on PATH
-//
-//	root (KindPredicate)
-//	- shell                         — exit-code predicate via /bin/sh
-//	- tcp_reachable                 — TCP host:port reachability predicate
-//	- http_check                    — HTTP GET status/body reachability predicate (with retries)
-//	- config_keys_present           — verify merged-config dot-paths resolve to non-empty values
+// The registry is composed in buildRegistry from the per-domain subpackages
+// (interaction/, services/, containers/, fs/, env/, source/) plus a handful of
+// root-level predicates. Each spec.Entry carries its Kind and a one-line
+// Summary; Inventory returns the whole set, which is the single source the
+// documentation surfaces (dwe docs llms-txt) read. Deliberately not duplicated
+// as a list here — a second copy drifts, and this one already had.
 package builtin
 
 import (
@@ -101,10 +66,10 @@ var registry = buildRegistry()
 func buildRegistry() map[string]spec.Entry {
 	r := map[string]spec.Entry{
 		// KindPredicate: read-only checks for check: positions and validate.yml
-		"shell":               {Impl: Shell{}, Kind: spec.KindPredicate},
-		"tcp_reachable":       {Impl: TCPReachable{}, Kind: spec.KindPredicate},
-		"http_check":          {Impl: HTTPCheck{}, Kind: spec.KindPredicate},
-		"config_keys_present": {Impl: ConfigKeysPresent{}, Kind: spec.KindPredicate},
+		"shell":               {Impl: Shell{}, Kind: spec.KindPredicate, Summary: "run an arbitrary sh -c command; exit status 0 is true"},
+		"tcp_reachable":       {Impl: TCPReachable{}, Kind: spec.KindPredicate, Summary: "TCP host:port reachability check"},
+		"http_check":          {Impl: HTTPCheck{}, Kind: spec.KindPredicate, Summary: "HTTP GET status/body check with retries"},
+		"config_keys_present": {Impl: ConfigKeysPresent{}, Kind: spec.KindPredicate, Summary: "verify merged-config dot-paths resolve to non-empty values"},
 	}
 	for _, src := range []map[string]spec.Entry{
 		containers.Builtins(),
@@ -122,6 +87,28 @@ func buildRegistry() map[string]spec.Entry {
 		}
 	}
 	return r
+}
+
+// InventoryEntry is one registered builtin's static metadata, without its
+// implementation. It is the enumeration surface for documentation generators;
+// the execution layer must not be imported by the docs subsystem, so the
+// inventory is collected in cli/ and passed down.
+type InventoryEntry struct {
+	Name    string
+	Kind    Kind
+	Summary string
+}
+
+// Inventory returns every registered builtin sorted by name, including
+// KindInternal ones (a reader needs to know why docker_daemon_start is
+// rejected in user-authored YAML). Callers filter by Kind as needed.
+func Inventory() []InventoryEntry {
+	out := make([]InventoryEntry, 0, len(registry))
+	for name, entry := range registry {
+		out = append(out, InventoryEntry{Name: name, Kind: entry.Kind, Summary: entry.Summary})
+	}
+	sort.Slice(out, func(i, j int) bool { return out[i].Name < out[j].Name })
+	return out
 }
 
 // Get returns the named builtin if it exists and is compatible with ctx.

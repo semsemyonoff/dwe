@@ -64,6 +64,77 @@ func TestKnownNames_AllRegistered(t *testing.T) {
 	}
 }
 
+// --- Inventory ---
+
+func TestInventory_EveryEntryHasSummary(t *testing.T) {
+	inv := Inventory()
+	if len(inv) != len(registry) {
+		t.Fatalf("Inventory returned %d entries, registry has %d", len(inv), len(registry))
+	}
+	for _, e := range inv {
+		if strings.TrimSpace(e.Summary) == "" {
+			t.Errorf("builtin %q has no Summary; add one to its Builtins() map entry", e.Name)
+		}
+	}
+}
+
+func TestInventory_SortedAndMatchesRegistry(t *testing.T) {
+	inv := Inventory()
+	for i := 1; i < len(inv); i++ {
+		if inv[i].Name < inv[i-1].Name {
+			t.Fatalf("Inventory not sorted at %d: %q after %q", i, inv[i].Name, inv[i-1].Name)
+		}
+	}
+	for _, e := range inv {
+		entry, ok := registry[e.Name]
+		if !ok {
+			t.Errorf("Inventory reports unregistered builtin %q", e.Name)
+			continue
+		}
+		if entry.Kind != e.Kind {
+			t.Errorf("%s: Inventory kind %v, registry kind %v", e.Name, e.Kind, entry.Kind)
+		}
+	}
+}
+
+func TestInventory_CoversEveryKind(t *testing.T) {
+	// The internal kinds must be enumerated too: a reader needs to know why
+	// docker_daemon_start is rejected from user-authored YAML.
+	want := map[string]Kind{
+		"message":             KindAction,
+		"shell":               KindPredicate,
+		"docker_daemon_start": KindInternal,
+	}
+	got := make(map[string]Kind, len(want))
+	for _, e := range Inventory() {
+		if _, ok := want[e.Name]; ok {
+			got[e.Name] = e.Kind
+		}
+	}
+	for name, kind := range want {
+		if got[name] != kind {
+			t.Errorf("Inventory[%q].Kind = %v, want %v", name, got[name], kind)
+		}
+	}
+}
+
+func TestKindString(t *testing.T) {
+	cases := []struct {
+		kind Kind
+		want string
+	}{
+		{KindAction, "action"},
+		{KindPredicate, "predicate"},
+		{KindInternal, "internal"},
+		{spec.Kind(99), "unknown"},
+	}
+	for _, tc := range cases {
+		if got := tc.kind.String(); got != tc.want {
+			t.Errorf("Kind(%d).String() = %q, want %q", tc.kind, got, tc.want)
+		}
+	}
+}
+
 // --- Validate dispatcher ---
 
 func TestValidate_UnknownBuiltin(t *testing.T) {

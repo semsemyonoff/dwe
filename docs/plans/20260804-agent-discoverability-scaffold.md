@@ -272,20 +272,26 @@ There is no way to enumerate builtins today: `buildRegistry` is unexported
 string, since `spec.Builtin` (`spec/spec.go:42`) offers only the per-invocation
 `Describe(with)`.
 
-- [ ] add `Summary string` to **`spec.Entry`** (`spec/spec.go:89`), next to the existing
+- [x] add `Summary string` to **`spec.Entry`** (`spec/spec.go:89`), next to the existing
       `Kind` — **not** a `Summary()` method on the `spec.Builtin` interface. The interface
       route means 24 edits across 23 files in six packages; the `Entry` route is 6 edits
       (five `Builtins()` maps plus the root map in `builtin.go:98`) and keeps `Entry` as the
       single home of metadata. Verified safe: `spec.Builtin`/`builtin.Builtin` is not
       implemented anywhere outside the `builtin/` tree, and there are no test doubles
-- [ ] add an exported inventory accessor over the registry
-- [ ] fix the package doc-comment `builtin.go:29-37`, which currently mislabels
+      — ➕ `source/` is a **sixth** subpackage map (Plan B's `source_clone` already landed),
+      so it was 7 edits, and `spec.Kind` gained a `String()` (`action`/`predicate`/
+      `internal`) so the docs layer has a stable label to print
+- [x] add an exported inventory accessor over the registry — `builtin.Inventory()
+      []InventoryEntry{Name,Kind,Summary}`, sorted by name, including `KindInternal`
+- [x] fix the package doc-comment `builtin.go:29-37`, which currently mislabels
       `docker_daemon_start`/`_logs`/`_stop` as `KindAction` while the registry
       (`containers/containers.go:13-15`) has them as `KindInternal` — once the inventory is
-      generated, that comment becomes a second, contradicting list
-- [ ] write a test asserting **every** registry entry has a non-empty `Summary` (the
+      generated, that comment becomes a second, contradicting list — replaced the list
+      outright with a pointer to `Inventory()`, rather than fixing one label and keeping a
+      copy that will drift again
+- [x] write a test asserting **every** registry entry has a non-empty `Summary` (the
       compiler cannot catch a missing one, and Plan B adds a 25th builtin)
-- [ ] run tests — must pass before task 1b
+- [x] run tests — must pass before task 1b
 
 ### Task 1b: Turn `llms-txt` into a real briefing
 

@@ -7,6 +7,6 @@ import "github.com/semsemyonoff/dwe/internal/core/execution/builtin/spec"
 // Builtins returns the source builtin entries keyed by their registered name.
 func Builtins() map[string]spec.Entry {
 	return map[string]spec.Entry{
-		"source_clone": {Impl: Clone{}, Kind: spec.KindAction},
+		"source_clone": {Impl: Clone{}, Kind: spec.KindAction, Summary: "clone a git repository into a project-relative dir; skips when already populated"},
 	}
 }
