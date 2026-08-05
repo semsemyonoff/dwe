@@ -148,6 +148,10 @@ phases:
 
 A step may also declare a `parallel:` block instead of leaf body fields (`type` / `cmd`). See [Parallel step groups](examples.md#parallel-step-groups).
 
+## Templates in step fields
+
+`cmd`, the string leaves of `with`, `check`, `timeout`, and shell `when:` are rendered at plan-resolution time — before the step is displayed or executed. A `${...}` reference with a known head (`vars`, `services`, `project`, …) is substituted with its actual value; `dwe deploy plan` therefore prints what will actually run, not the literal `${vars.*}` text from `deploy.yml`. A `${...}` with an unknown head (a shell-style `${HOME}`, a typo) is left as a literal and, if it survives into the plan output, is called out with a trailing `[unresolved: ${...}]` annotation (also carried as the `unresolved` field in `--output json`) — that annotation is a display-only hint and is never added to `--format shell`, which must stay directly executable.
+
 ## Post-deploy semantics
 
 The `post-deploy` phase (by convention, the last phase in `deploy.yml`) runs only if all prior phases succeed. This is not magic — it follows the existing behavior where deploy aborts on first failure. Name the final summary phase `post-deploy` and it naturally benefits from this.

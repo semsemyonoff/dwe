@@ -400,6 +400,53 @@ func TestPrintPlanTable_binarySubstitution(t *testing.T) {
 	}
 }
 
+func TestPrintPlanTable_showsUnresolvedTemplateAnnotation(t *testing.T) {
+	var buf bytes.Buffer
+	w := render.NewWriter(&buf)
+
+	steps := []pipeline.ResolvedStep{
+		{Phase: config.DeployPhase{Name: "setup"}, Step: cmdStep("greet", "echo ${HOME}")},
+	}
+	pipeline.PrintPlanTable(steps, w, "dwe")
+	out := buf.String()
+
+	if !strings.Contains(out, "[unresolved: ${HOME}]") {
+		t.Errorf("expected unresolved-template annotation in table output, got:\n%s", out)
+	}
+}
+
+func TestPrintPlanTable_noUnresolvedAnnotationForPlainCommand(t *testing.T) {
+	var buf bytes.Buffer
+	w := render.NewWriter(&buf)
+
+	steps := []pipeline.ResolvedStep{
+		{Phase: config.DeployPhase{Name: "setup"}, Step: cmdStep("greet", "echo hello")},
+	}
+	pipeline.PrintPlanTable(steps, w, "dwe")
+	out := buf.String()
+
+	if strings.Contains(out, "[unresolved:") {
+		t.Errorf("did not expect unresolved-template annotation, got:\n%s", out)
+	}
+}
+
+func TestPrintPlanShell_noUnresolvedAnnotation(t *testing.T) {
+	var buf bytes.Buffer
+
+	steps := []pipeline.ResolvedStep{
+		{Phase: phaseWith("setup"), Step: cmdStep("greet", "echo ${HOME}")},
+	}
+	deploy.PrintPlanShell(steps, &buf, "dwe")
+	out := buf.String()
+
+	if strings.Contains(out, "[unresolved:") {
+		t.Errorf("shell format must stay executable, no annotation expected, got:\n%s", out)
+	}
+	if !strings.Contains(out, "echo ${HOME}") {
+		t.Errorf("shell output missing raw command, got:\n%s", out)
+	}
+}
+
 func TestPrintPlanTable_parallelGroupRendersHeaderAndSubSteps(t *testing.T) {
 	var buf bytes.Buffer
 	w := render.NewWriter(&buf)

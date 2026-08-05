@@ -10,6 +10,7 @@ import (
 	"github.com/semsemyonoff/dwe/internal/core/execution/condition"
 	"github.com/semsemyonoff/dwe/internal/core/execution/filesgate"
 	"github.com/semsemyonoff/dwe/internal/core/project/config"
+	"github.com/semsemyonoff/dwe/internal/shared/tpl"
 )
 
 // ResolvedStep holds a pipeline step together with the phase it belongs to,
@@ -109,4 +110,39 @@ func StepCommand(step config.DeployStep, dweBin string) string {
 	default:
 		return step.Type + ": " + strings.TrimSpace(step.Cmd)
 	}
+}
+
+// UnresolvedTemplateRefs returns the distinct ${...} references in s whose
+// head namespace is unknown to tpl.CompileVarSyntax, in first-occurrence
+// order. Resolve-time rendering (renderStepFields, called from
+// ResolvePhaseSteps before a step ever reaches display) substitutes every
+// known-head reference in a step's cmd or fails the whole resolve — see
+// render.go's renderIfKnown/hasKnownVarRef — so anything still matching
+// tpl.VarPattern in StepCommand's output is almost always a genuine
+// unknown-head leftover (a typo or a shell-style ${VAR}), not something the
+// plan failed to substitute.
+//
+// Two accepted exceptions this cannot distinguish from a real leftover: a
+// resolved ${vars.x} whose substituted *value* happens to itself contain
+// literal ${...} text, and a string with no known-head reference at all
+// (never entered rendering, e.g. "echo ${HOME}") — both are indistinguishable
+// from an unrendered reference by the time StepCommand runs.
+func UnresolvedTemplateRefs(s string) []string {
+	if s == "" {
+		return nil
+	}
+	var out []string
+	seen := make(map[string]struct{})
+	for _, m := range tpl.VarPattern.FindAllStringSubmatch(s, -1) {
+		head, _, _ := strings.Cut(m[1], ".")
+		if _, known := knownVarHeadSet[head]; known {
+			continue
+		}
+		if _, dup := seen[m[0]]; dup {
+			continue
+		}
+		seen[m[0]] = struct{}{}
+		out = append(out, m[0])
+	}
+	return out
 }

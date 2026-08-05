@@ -212,6 +212,115 @@ func TestRunDeployPlan_JSONMode_StableShape(t *testing.T) {
 	}
 }
 
+// TestRunDeployPlan_JSONMode_UnresolvedTemplateFlagged verifies the JSON
+// payload carries the `unresolved` field for a step whose cmd still contains
+// a ${...} reference with an unknown head after resolve-time rendering.
+func TestRunDeployPlan_JSONMode_UnresolvedTemplateFlagged(t *testing.T) {
+	dir := makeMinimalProject(t)
+
+	workspaceDir := filepath.Join(dir, "workspace")
+	if err := os.MkdirAll(workspaceDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	userDeploy := "phases:\n" +
+		"  - name: custom\n" +
+		"    steps:\n" +
+		"      - name: step1\n" +
+		"        type: shell\n" +
+		"        cmd: \"echo ${HOME}\"\n"
+	if err := os.WriteFile(filepath.Join(workspaceDir, "deploy.yml"), []byte(userDeploy), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	flags := &cmdctx.RootFlags{ConfigPath: filepath.Join(dir, "workspace.yml"), Output: "json"}
+
+	cmd := &cobra.Command{}
+	var outBuf bytes.Buffer
+	cmd.SetOut(&outBuf)
+
+	if err := runDeployPlan(context.Background(), cmd, flags, deployPlanOpts{}); err != nil {
+		t.Fatalf("runDeployPlan: %v", err)
+	}
+
+	var payload planJSON
+	if err := json.Unmarshal(outBuf.Bytes(), &payload); err != nil {
+		t.Fatalf("stdout is not valid JSON: %v", err)
+	}
+
+	var found *planStepJSON
+	for i := range payload.Phases {
+		for j := range payload.Phases[i].Steps {
+			if payload.Phases[i].Steps[j].Name == "step1" {
+				found = &payload.Phases[i].Steps[j]
+			}
+		}
+	}
+	if found == nil {
+		t.Fatalf("step1 not found in payload: %+v", payload)
+	}
+	if len(found.Unresolved) != 1 || found.Unresolved[0] != "${HOME}" {
+		t.Errorf("Unresolved = %v, want [${HOME}]", found.Unresolved)
+	}
+}
+
+// TestRunDeployPlan_JSONMode_ResolvedTemplateNotFlagged verifies a step whose
+// cmd only references a known-head ${...} (already substituted by
+// resolve-time rendering) carries no `unresolved` field.
+func TestRunDeployPlan_JSONMode_ResolvedTemplateNotFlagged(t *testing.T) {
+	dir := makeMinimalProject(t)
+
+	workspaceDir := filepath.Join(dir, "workspace")
+	if err := os.MkdirAll(workspaceDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	rootYML := "schema_version: \"2\"\nproject:\n  name: testproject\n  prefix: dwe\nvars:\n  greeting: hello\n"
+	if err := os.WriteFile(filepath.Join(dir, "workspace.yml"), []byte(rootYML), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	userDeploy := "phases:\n" +
+		"  - name: custom\n" +
+		"    steps:\n" +
+		"      - name: step1\n" +
+		"        type: shell\n" +
+		"        cmd: \"echo ${vars.greeting}\"\n"
+	if err := os.WriteFile(filepath.Join(workspaceDir, "deploy.yml"), []byte(userDeploy), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	flags := &cmdctx.RootFlags{ConfigPath: filepath.Join(dir, "workspace.yml"), Output: "json"}
+
+	cmd := &cobra.Command{}
+	var outBuf bytes.Buffer
+	cmd.SetOut(&outBuf)
+
+	if err := runDeployPlan(context.Background(), cmd, flags, deployPlanOpts{}); err != nil {
+		t.Fatalf("runDeployPlan: %v", err)
+	}
+
+	var payload planJSON
+	if err := json.Unmarshal(outBuf.Bytes(), &payload); err != nil {
+		t.Fatalf("stdout is not valid JSON: %v", err)
+	}
+
+	var found *planStepJSON
+	for i := range payload.Phases {
+		for j := range payload.Phases[i].Steps {
+			if payload.Phases[i].Steps[j].Name == "step1" {
+				found = &payload.Phases[i].Steps[j]
+			}
+		}
+	}
+	if found == nil {
+		t.Fatalf("step1 not found in payload: %+v", payload)
+	}
+	if found.Cmd != "echo hello" {
+		t.Errorf("Cmd = %q, want %q", found.Cmd, "echo hello")
+	}
+	if len(found.Unresolved) != 0 {
+		t.Errorf("Unresolved = %v, want none", found.Unresolved)
+	}
+}
+
 // TestRunDeployPlan_JSONMode_ServiceScope verifies the JSON payload records
 // the scoping service name for a per-service plan.
 func TestRunDeployPlan_JSONMode_ServiceScope(t *testing.T) {

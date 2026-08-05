@@ -69,6 +69,7 @@ type planStepJSON struct {
 	Name            string            `json:"name"`
 	Type            string            `json:"type"`
 	Cmd             string            `json:"cmd,omitempty"`
+	Unresolved      []string          `json:"unresolved,omitempty"`
 	Description     string            `json:"description,omitempty"`
 	When            string            `json:"when,omitempty"`
 	FilesGate       string            `json:"files_gate,omitempty"`
@@ -164,6 +165,7 @@ func buildPlanStepJSON(rs pipeline.ResolvedStep, dweBin string) planStepJSON {
 	}
 
 	step.Cmd = pipeline.StepCommand(rs.Step, dweBin)
+	step.Unresolved = pipeline.UnresolvedTemplateRefs(step.Cmd)
 	return step
 }
 
