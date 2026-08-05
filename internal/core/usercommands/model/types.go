@@ -1140,6 +1140,18 @@ func (c *CommandDef) validateArgvAppendFrom() error {
 				"argv_append_from requires argv: — there is no argument vector to append to (type=%s)",
 				c.Type)
 		}
+		// The computed lines are DATA appended after argv, never program text —
+		// but an argv of nothing but ${args} splices to an EMPTY vector when the
+		// command is invoked without pass-through arguments, and then the first
+		// computed line lands in argv[0] and is executed as the program (relative
+		// to the project root). Requiring one declared element keeps the program
+		// authored, not computed.
+		if !slices.ContainsFunc(c.Argv, func(a string) bool { return a != ArgsToken }) {
+			return fmt.Errorf(
+				"argv_append_from requires argv: to declare the program — an argv of only %s splices "+
+					"to nothing when the command runs without pass-through arguments, which would make "+
+					"the first computed line the program that executes (type=%s)", ArgsToken, c.Type)
+		}
 		return nil
 	case CommandTypeDaemon:
 		return fmt.Errorf(

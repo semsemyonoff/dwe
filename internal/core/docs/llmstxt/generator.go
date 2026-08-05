@@ -255,8 +255,9 @@ func writeBuiltinsSection(b *strings.Builder, builtins []BuiltinSummary, conds [
 	}
 
 	if len(conds) > 0 {
-		writeParagraph(b, "2. Condition predicates — the `when:` registry only (`when: <verb> <args>`, or "+
-			"`when: {type: builtin, cmd: \"<verb> <args>\"}`). This set is the whole of it:")
+		writeParagraph(b, "2. Condition predicates — the `when:` registry only. A pipeline `when:` is always a "+
+			"mapping (`when: {type: builtin, cmd: \"<verb> <args>\"}`); the scalar shorthand is rejected at load. "+
+			"This set is the whole of it:")
 		for _, c := range conds {
 			b.WriteString("- `")
 			b.WriteString(c.Name)
@@ -269,9 +270,9 @@ func writeBuiltinsSection(b *strings.Builder, builtins []BuiltinSummary, conds [
 			b.WriteString("\n")
 		}
 		b.WriteString("\n")
-		writeParagraph(b, "A `when:` needing anything else uses `when: \"cmd: <shell>\"` (or `when: {type: shell, cmd: …}`); "+
-			"a `check:` needing a filesystem test uses `check: {type: builtin, cmd: shell, with: {command: …}}` "+
-			"or the `check: auto` inverse of a shell `when:`.")
+		writeParagraph(b, "A `when:` needing anything else uses `when: {type: shell, cmd: …}`; "+
+			"a `check:` needing a filesystem test uses `check: {type: builtin, cmd: shell, with: {cmd: …}}` "+
+			"(the `shell` builtin's param is `cmd`, not `command`) or the `check: auto` inverse of a shell `when:`.")
 	}
 }
 
@@ -312,7 +313,7 @@ func writeDiagnosticsSection(b *strings.Builder) {
 		"`-v` / `--debug` — echo executed commands, skip decisions, timings and exit codes to **stderr**; stdout (including `-o json`) stays clean, so `dwe run --debug 2>debug.log` captures them",
 		"`dwe docs show <topic> --toc` / `--anchors` — headings or anchor ids instead of the whole document; use these instead of piping through `head`/`sed`",
 		"`dwe docs search <query> -o json` — search hits with `source`, `path`, `anchor`, `count`, `snippet`. Every word of the query must appear in the same section (or, failing that, the same document); `--literal` matches the whole query as one substring",
-		"`-o json` (+ `--pretty`) — every read-only command. NOT `dwe docs llms-txt` / `dwe docs show`: there `--output` is a file path, so `-o json` writes a file named `json`",
+		"`-o json` (+ `--pretty`) — every read-only command. Two exceptions: `dwe docs show` always emits markdown and ignores `-o json`; on `dwe docs llms-txt` the local `--output` is a file PATH (`--output json` writes a file called `json`) and `-o` is not accepted there at all",
 	}
 	writeLines(b, lines)
 }

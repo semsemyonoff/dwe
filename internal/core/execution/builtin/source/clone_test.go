@@ -314,6 +314,71 @@ func TestClone_GitFailureSurfacesStderr(t *testing.T) {
 	}
 }
 
+// TestClone_FailedCloneLeavesNoGitDir is the regression guard for the poisoned
+// idempotency gate: git creates `.git` early, so a clone that dies before the
+// checkout (a failing repo, or a SIGKILL from a cancelled context / expired step
+// timeout, which skips git's own junk cleanup) used to leave a bare `.git`
+// behind. classifyDest reads that as destGit, so every later deploy printed
+// "already cloned (skipping)" and journalled success against an empty tree.
+func TestClone_FailedCloneLeavesNoGitDir(t *testing.T) {
+	requireGit(t)
+	root := t.TempDir()
+	var out bytes.Buffer
+	with := map[string]any{"repo": filepath.Join(root, "no-such-repo"), "dir": "src"}
+
+	if err := (Clone{}).Run(context.Background(), with, newTestExecCtx(root, &out)); err == nil {
+		t.Fatal("expected an error for a missing repository")
+	}
+	if _, err := os.Stat(filepath.Join(root, "src", ".git")); !os.IsNotExist(err) {
+		t.Fatalf("failed clone left a .git behind (stat err = %v) — the next run would skip as already-cloned", err)
+	}
+
+	// The gate must be genuinely reset: a second attempt has to reach git again
+	// and report the same failure rather than short-circuit as destGit.
+	out.Reset()
+	err := (Clone{}).Run(context.Background(), with, newTestExecCtx(root, &out))
+	if err == nil {
+		t.Fatal("second attempt should fail again, not skip as already cloned")
+	}
+	if !strings.Contains(err.Error(), "git clone") {
+		t.Errorf("second attempt short-circuited instead of re-running git: %v", err)
+	}
+}
+
+// TestClone_FailedCloneRestoresPreExistingEmptyDir: a destination the author
+// created themselves is theirs — rollback drains what git wrote into it but
+// must not delete the directory (and its permissions) along with it.
+func TestClone_FailedCloneRestoresPreExistingEmptyDir(t *testing.T) {
+	requireGit(t)
+	root := t.TempDir()
+	dest := filepath.Join(root, "src")
+	if err := os.Mkdir(dest, 0o750); err != nil {
+		t.Fatal(err)
+	}
+
+	var out bytes.Buffer
+	if err := (Clone{}).Run(context.Background(),
+		map[string]any{"repo": filepath.Join(root, "no-such-repo"), "dir": "src"},
+		newTestExecCtx(root, &out)); err == nil {
+		t.Fatal("expected an error for a missing repository")
+	}
+
+	fi, err := os.Stat(dest)
+	if err != nil {
+		t.Fatalf("pre-existing destination was removed: %v", err)
+	}
+	if perm := fi.Mode().Perm(); perm != 0o750 {
+		t.Errorf("destination permissions = %o, want 750 (directory was recreated, not drained)", perm)
+	}
+	entries, err := os.ReadDir(dest)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(entries) != 0 {
+		t.Errorf("destination still holds %d entries after rollback, want 0", len(entries))
+	}
+}
+
 // `ext::<cmd>` is a git transport that runs <cmd> as a host program. Git refuses
 // it by default, so the environment here re-enables it exactly as a user-level
 // `protocol.ext.allow=always` would: the point is that the clone pins the policy

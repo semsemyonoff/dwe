@@ -3215,6 +3215,27 @@ func TestValidate_ArgvAppendFrom(t *testing.T) {
 			},
 			wantErr: "argv_append_from references ${args}",
 		},
+		// An argv of only ${args} is non-empty at load time but splices to an
+		// EMPTY vector when the command runs without pass-through arguments, so
+		// the first computed line would become argv[0] and execute as the
+		// program. The computed lines are data; the program must be authored.
+		{
+			name: "argv is only the args token",
+			def: CommandDef{
+				Type: CommandTypeShell, ID: "g.k",
+				Argv:           []string{ArgsToken},
+				ArgvAppendFrom: "git diff --name-only",
+			},
+			wantErr: "requires argv: to declare the program",
+		},
+		{
+			name: "argv with a declared program plus the args token",
+			def: CommandDef{
+				Type: CommandTypeShell, ID: "g.l",
+				Argv:           []string{"ruff", "check", ArgsToken},
+				ArgvAppendFrom: "git diff --name-only",
+			},
+		},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			err := tc.def.Validate()

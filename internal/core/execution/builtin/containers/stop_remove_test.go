@@ -276,6 +276,57 @@ func TestDockerStopRemoveContainer_Run_UsesDockerConfigProjectName(t *testing.T)
 	}
 }
 
+// TestDockerStopRemoveContainer_Run_FindsLegacyCasedProject locks in the legacy
+// scope sweep. Compose project names are lowercased now, but a project whose
+// name/prefix carries uppercase was deployed before normalization landed and its
+// containers still hold the ORIGINAL-cased com.docker.compose.project label.
+// Probing only the canonical name finds nothing, and the builtin would then
+// print "nothing to stop" and exit 0 while the container keeps running — the
+// exact silent no-op the label lookup exists to prevent.
+func TestDockerStopRemoveContainer_Run_FindsLegacyCasedProject(t *testing.T) {
+	prevLookup := lookupContainerFn
+	t.Cleanup(func() { lookupContainerFn = prevLookup })
+
+	var probed []string
+	lookupContainerFn = func(_ string, _ []string, projectName, service string) (string, error) {
+		probed = append(probed, projectName)
+		// Only the pre-normalization spelling has a container.
+		if projectName != "dwe-TBM" {
+			return "", nil
+		}
+		return projectName + "-" + service, nil
+	}
+
+	var stopName, rmName string
+	swapDockerSeams(t,
+		func(_ context.Context, _, name string, _ int) error { stopName = name; return nil },
+		func(_ context.Context, _, name string) error { rmName = name; return nil },
+	)
+
+	cfg := &config.DweConfig{}
+	cfg.Project.Name = "TBM"
+	cfg.Project.Prefix = "dwe"
+	ectx, buf := newDockerStopRemoveCtx(cfg)
+
+	err := StopRemoveContainer{}.Run(
+		context.Background(),
+		map[string]any{"container_template": "app"},
+		ectx,
+	)
+	if err != nil {
+		t.Fatalf("Run error: %v", err)
+	}
+	if len(probed) == 0 || probed[0] != "dwe-tbm" {
+		t.Errorf("probe order = %v, want the canonical lowercased name first", probed)
+	}
+	if stopName != "dwe-TBM-app" || rmName != "dwe-TBM-app" {
+		t.Errorf("stop/rm = %q/%q, want dwe-TBM-app (legacy scope was not swept)", stopName, rmName)
+	}
+	if strings.Contains(buf.String(), "nothing to stop") {
+		t.Errorf("builtin reported a no-op while a container existed:\n%s", buf.String())
+	}
+}
+
 func TestDockerStopRemoveContainer_Run_NoProjectPrefix(t *testing.T) {
 	// Without project.prefix, FullName returns just project.Name.
 	var stopName string

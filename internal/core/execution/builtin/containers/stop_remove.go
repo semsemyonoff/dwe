@@ -55,11 +55,6 @@ func (StopRemoveContainer) Run(ctx context.Context, with map[string]any, ectx sp
 		return fmt.Errorf("docker_stop_remove_container: config not available")
 	}
 
-	// The label query must use the same name compose stamped onto the
-	// containers, so it goes through the shared resolver (resolved docker.yml
-	// project_name, else FullName(), lowercased) rather than re-deriving the
-	// precedence here.
-	projectFull := config.ComposeProjectName(ectx.DockerConfig, ectx.Config)
 	dockerBin := config.DockerBin(ectx.Config)
 	// container_template carries the compose service name (svc.Container).
 	// Resolve the REAL container name via the compose project + service labels
@@ -67,11 +62,27 @@ func (StopRemoveContainer) Run(ctx context.Context, with map[string]any, ectx sp
 	// (compose's default "<project>-<service>-<index>") or customised — guessing
 	// "<project>-<service>" would silently no-op and leave the container behind.
 	service := spec.GetStringParam(with, "container_template", "")
-	// nil processEnv: stop+rm (StopContainer / RemoveContainer) run with the
-	// inherited environment, so the label probe must too (same daemon).
-	fullName, err := lookupContainerFn(dockerBin, nil, projectFull, service)
-	if err != nil {
-		return fmt.Errorf("resolving container for service %q: %w", service, err)
+	// The label query must use the same name compose stamped onto the
+	// containers, so it goes through the shared resolver rather than
+	// re-deriving the precedence here — and it sweeps every candidate scope,
+	// canonical (lowercased) first, exactly like the daemon lookups. A project
+	// whose name/prefix/docker.yml project_name carries uppercase was deployed
+	// before compose-name normalization landed, so its containers still hold
+	// the original-cased com.docker.compose.project label; probing only the
+	// lowercased name would find nothing and make `dwe reset run --service`
+	// print "nothing to stop" while the container keeps running.
+	var fullName string
+	for _, projectFull := range config.ComposeProjectNameCandidates(ectx.DockerConfig, ectx.Config) {
+		// nil processEnv: stop+rm (StopContainer / RemoveContainer) run with the
+		// inherited environment, so the label probe must too (same daemon).
+		name, err := lookupContainerFn(dockerBin, nil, projectFull, service)
+		if err != nil {
+			return fmt.Errorf("resolving container for service %q: %w", service, err)
+		}
+		if name != "" {
+			fullName = name
+			break
+		}
 	}
 	if fullName == "" {
 		// No container exists for this service (never deployed or already

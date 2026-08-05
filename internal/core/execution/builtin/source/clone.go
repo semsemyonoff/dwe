@@ -194,6 +194,13 @@ func (Clone) Run(ctx context.Context, with map[string]any, ectx spec.ExecContext
 	cmd.WaitDelay = 100 * time.Millisecond
 
 	if err := cmd.Run(); err != nil {
+		// A cancelled context SIGKILLs git, which then cannot run its own junk
+		// cleanup: the destination is left holding a bare `.git` and no worktree.
+		// classifyDest reads that as destGit, so without this rollback a single
+		// Ctrl+C (or an expired step `timeout:`) latches the step into
+		// "already cloned — skipping" forever, journalling success against an
+		// empty source tree with nothing in the output pointing at the cause.
+		rollbackClone(abs, state)
 		if tail := strings.TrimSpace(stderr.String()); tail != "" {
 			return fmt.Errorf("source_clone: git clone %s: %w: %s", p.repo, err, tail)
 		}
@@ -201,6 +208,32 @@ func (Clone) Run(ctx context.Context, with map[string]any, ectx spec.ExecContext
 	}
 	writeSuccess(ectx, fmt.Sprintf("cloned %s into %s", p.repo, p.dir))
 	return nil
+}
+
+// rollbackClone removes what a failed `git clone` left behind, restoring the
+// destination to the state classifyDest saw before the attempt. Best-effort: a
+// removal error is not worth masking the clone failure that caused it, and the
+// next run re-classifies the destination from disk either way.
+//
+// destEmpty is drained entry-by-entry rather than removed wholesale so a
+// pre-existing directory keeps its own ownership and permissions; only
+// destMissing means the directory itself is ours to delete. No other state
+// reaches the clone.
+func rollbackClone(abs string, state destState) {
+	switch state {
+	case destMissing:
+		_ = os.RemoveAll(abs)
+	case destEmpty:
+		entries, err := os.ReadDir(abs)
+		if err != nil {
+			return
+		}
+		for _, e := range entries {
+			_ = os.RemoveAll(filepath.Join(abs, e.Name()))
+		}
+	case destGit, destNonEmpty, destNotDir:
+		// Unreachable: these states return before the clone runs.
+	}
 }
 
 // nonInteractiveGitEnv forces git into a fail-fast posture: every clone in a
