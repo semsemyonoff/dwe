@@ -557,15 +557,53 @@ authoring without buying protection.)*
 
 ### Task 6: Verify acceptance criteria
 
-- [ ] verify all requirements from Overview are implemented
-- [ ] rebuild the three observed copy-paste patterns using the new capabilities and confirm
+- [x] verify all requirements from Overview are implemented
+      → all three shipped and exercised against the built binary: `argv_append_from`
+        (visible in `dwe cmd -i`, executes on the host, skips on empty output),
+        `check: auto` (scalar sentinel → derived inverse, three load-time rejections each
+        firing with its own reasoned message), `source_clone` (idempotent, `pathsafe`-gated).
+        The Plan A dependency is confirmed live: `dwe deploy plan` prints
+        `builtin: source_clone(repo=git@example.invalid:acme/backend.git, …)`, i.e. the
+        `${vars.*}` leaf of `with:` really is rendered at resolve time.
+        The deliberate non-goals hold — no `archive_fetch`/`archive_unpack` anywhere in
+        `internal/` or `docs/reference/`
+- [x] rebuild the three observed copy-paste patterns using the new capabilities and confirm
       each shrinks: the clone step loses its `when:`/`check:` pair; a staged-lint command
       expresses its computed file list without rebuilding `docker compose exec`
-- [ ] confirm every existing fixture and workspace-shaped test still passes untouched
+      → rebuilt as two real, `dwe validate`-clean throwaway workspaces (before / after).
+        Totals **105 → 36 lines**, and `workspace/commands/source.yml` disappears entirely:
+        - clone: 18-line step + 37-line private command → **7-line builtin step**, no
+          `when:`/`check:`, no command file
+        - inverted pair: 12 → **8 lines** (a 5-line `check:` block → `check: auto`)
+        - `quality.staged`: 33 lines of bash → **13-line `service_exec` + `argv_append_from`**
+        Runtime behaviour pinned by hand against the binary, not only by unit test:
+        multi-line output → separate argv elements (`[a b.txt]` / `[c.txt]` — a path with a
+        space stays one element), blank lines dropped, empty output → skip + exit 0,
+        failing expression → exit 3 with its stderr surfaced, `${args}` ordered before the
+        computed items. For `check: auto`: a `when:` carrying a **trailing comment** inverts
+        without a syntax error, the derived check evaluates at the **project root** when
+        `dwe` is invoked from a subdirectory, and it fails cleanly when the body did not
+        satisfy it. For `source_clone`: fresh clone, re-run skip, `../outside` rejected,
+        non-empty non-git destination errors by name
+- [x] confirm every existing fixture and workspace-shaped test still passes untouched
       (backward compatibility is the acceptance bar here)
-- [ ] run full test suite: `make test`
-- [ ] run `make lint`
-- [ ] verify test coverage meets project standard
+      → `git diff --name-status e8d46a90..HEAD -- '*testdata*'` reports **no modified
+        fixtures at all** across the five feature commits (not even additions), so the whole
+        suite is green against the pre-existing corpus unchanged
+- [x] run full test suite: `make test` → exit 0
+- [x] run `make lint` → `0 issues.`
+- [x] verify test coverage meets project standard
+      → touched packages: `builtin/source` 89.1%, `usercommands/model` 89.0%,
+        `project/config` 89.0%, `execution/pipeline` 82.1%, `runtime/internal/runio` 73.0%.
+        The new code itself is at or near full coverage: `ResolveAutoCheck` and
+        `InvertShellCommand` 100%, `source/clone.go` 86–100% per function
+        (`source.Builtins()` reads 0% only in its own package profile — it is exercised from
+        `builtin`'s registry test)
+
+⚠️ Observed during verification, already covered by Task 7: `dwe deploy plan` renders an
+auto-check as a bare `[check: builtin shell]`. That is exactly the Task 7 checkbox
+"make `dwe deploy plan` print `check: auto (inverse of when)`" — noted here as confirmed
+outstanding, not as new scope.
 
 ### Task 7: [Final] Update documentation
 
