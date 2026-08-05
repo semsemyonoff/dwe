@@ -51,6 +51,16 @@ func (v *portsExportsValidator) Run(ctx validate.Context) []validate.Diagnostic 
 			if exported[from] {
 				continue
 			}
+			// A service declaring no ports of its own inherits the parent's
+			// whole port map through extends (ResolveServiceExtends:
+			// `if len(svc.Ports) == 0 { svc.Ports = maps.Clone(parent.Ports) }`),
+			// so by the time the config is loaded the child looks like it
+			// declares a port that only ever appears in the parent's
+			// service.yml. Warning again here would duplicate the parent's own
+			// finding and anchor it at a file that never mentions the port.
+			if portInheritedViaExtends(ctx.Cfg, name, portName) {
+				continue
+			}
 			diags = append(diags, validate.Diagnostic{
 				Severity: validate.SeverityWarning,
 				Domain:   "config",
@@ -71,4 +81,30 @@ func (v *portsExportsValidator) Run(ctx validate.Context) []validate.Diagnostic 
 		}
 	}
 	return diags
+}
+
+// portInheritedViaExtends reports whether service name carries portName only
+// because an `extends:` ancestor declares it. Extends inheritance is preserved
+// on the resolved config (ResolveServiceExtends never clears Extends), so the
+// chain is still walkable here. The visited set guards against a cycle — the
+// loader rejects those, but this validator must not hang on a config that
+// somehow reached it.
+func portInheritedViaExtends(cfg *config.DweConfig, name, portName string) bool {
+	svc, ok := cfg.Services[name]
+	if !ok {
+		return false
+	}
+	visited := map[string]bool{name: true}
+	for svc.Extends != "" && !visited[svc.Extends] {
+		visited[svc.Extends] = true
+		parent, ok := cfg.Services[svc.Extends]
+		if !ok {
+			return false
+		}
+		if _, has := parent.Ports[portName]; has {
+			return true
+		}
+		svc = parent
+	}
+	return false
 }
