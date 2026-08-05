@@ -3,6 +3,9 @@ package test
 import (
 	"bytes"
 	"encoding/json"
+	"os"
+	"path/filepath"
+	"reflect"
 	"strings"
 	"testing"
 
@@ -101,5 +104,237 @@ func TestRunTestList_LoadErrorPropagates(t *testing.T) {
 
 	if err := runTestList(cmd, flags); err == nil {
 		t.Fatal("expected an error for a strict-decode failure, got nil")
+	}
+}
+
+// writeProjectFile writes one file under baseDir, creating parent directories.
+func writeProjectFile(t *testing.T, baseDir, rel, body string) {
+	t.Helper()
+	path := filepath.Join(baseDir, filepath.FromSlash(rel))
+	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+		t.Fatalf("mkdir for %s: %v", rel, err)
+	}
+	if err := os.WriteFile(path, []byte(body), 0o644); err != nil {
+		t.Fatalf("write %s: %v", rel, err)
+	}
+}
+
+// writeMinimalProject lays down the smallest project the cost profiler can
+// load: one required app service, an empty compose base, no build, no
+// pipelines.
+func writeMinimalProject(t *testing.T, baseDir string) {
+	t.Helper()
+	writeProjectFile(t, baseDir, "workspace.yml", "project:\n  name: demo\ncompose:\n  base: compose.yaml\n")
+	writeProjectFile(t, baseDir, "workspace/services/app/service.yml", "type: app\ncontainer: app\nrequired: true\n")
+	writeProjectFile(t, baseDir, "compose.yaml", "services: {}\n")
+}
+
+// listProfiles runs `dwe test list --output json` and returns the decoded rows.
+func listProfiles(t *testing.T, baseDir string) []testListEntryJSON {
+	t.Helper()
+	flags := &cmdctx.RootFlags{Root: baseDir, Output: "json"}
+	cmd, out := newListTestCmd()
+	if err := runTestList(cmd, flags); err != nil {
+		t.Fatalf("runTestList: %v", err)
+	}
+	var got testListJSON
+	if err := json.Unmarshal(out.Bytes(), &got); err != nil {
+		t.Fatalf("unmarshal: %v\n%s", err, out.String())
+	}
+	return got.Scenarios
+}
+
+func TestRunTestList_CostProfileMinimalProject(t *testing.T) {
+	baseDir := t.TempDir()
+	writeMinimalProject(t, baseDir)
+	writeScenarioFile(t, baseDir, "smoke", "description: Smoke\n")
+
+	rows := listProfiles(t, baseDir)
+	if len(rows) != 1 {
+		t.Fatalf("expected 1 scenario, got %d", len(rows))
+	}
+	p := rows[0].CostProfile
+	if p == nil {
+		t.Fatal("expected a cost profile for a loadable project")
+	}
+	if p.EnabledServices != 1 {
+		t.Errorf("enabled_services = %d, want 1", p.EnabledServices)
+	}
+	if len(p.BuildServices) != 0 {
+		t.Errorf("build_services = %v, want none", p.BuildServices)
+	}
+	if len(p.ExternalImages) != 0 {
+		t.Errorf("external_images = %v, want none", p.ExternalImages)
+	}
+	if p.MaxStartPeriodSeconds != 0 {
+		t.Errorf("max_start_period_seconds = %v, want 0", p.MaxStartPeriodSeconds)
+	}
+	if p.SharedVolumes != 0 {
+		t.Errorf("shared_volumes = %d, want 0", p.SharedVolumes)
+	}
+	if len(p.IsolationFindings) != 0 {
+		t.Errorf("isolation_findings = %v, want none", p.IsolationFindings)
+	}
+	// The built-in default deploy pipeline carries no shell step.
+	if p.ShellSteps != 0 {
+		t.Errorf("shell_steps = %d, want 0", p.ShellSteps)
+	}
+}
+
+func TestRunTestList_CostProfileHeavyProject(t *testing.T) {
+	baseDir := t.TempDir()
+	writeProjectFile(t, baseDir, "workspace.yml", "project:\n  name: demo\ncompose:\n  base: compose.yaml\n")
+	writeProjectFile(t, baseDir, "workspace/services/app/service.yml",
+		"type: app\ncontainer: app\nrequired: true\ncompose:\n  - compose/app.yml\n")
+	writeProjectFile(t, baseDir, "compose.yaml", `services:
+  db:
+    image: postgres:16
+    healthcheck:
+      start_period: 30s
+  cache:
+    image: redis:7
+    healthcheck:
+      start_period: 5s
+volumes:
+  composer-cache:
+    external: true
+`)
+	writeProjectFile(t, baseDir, "compose/app.yml", `services:
+  app:
+    build: .
+    image: demo-app:dev
+`)
+	writeProjectFile(t, baseDir, "workspace/docker.yml", `resources:
+  volumes:
+    composer:
+      name: composer-cache
+      shared: true
+    project_data:
+      name: data
+`)
+	writeProjectFile(t, baseDir, "workspace/services/app/deploy.yml", `phases:
+  - name: build
+    steps:
+      - name: sync
+        type: shell
+        cmd: "true"
+`)
+	writeScenarioFile(t, baseDir, "smoke", `description: Smoke
+steps:
+  - name: probe
+    type: shell
+    cmd: "true"
+`)
+
+	rows := listProfiles(t, baseDir)
+	p := rows[0].CostProfile
+	if p == nil {
+		t.Fatal("expected a cost profile")
+	}
+	if got := p.BuildServices; len(got) != 1 || got[0] != "app" {
+		t.Errorf("build_services = %v, want [app]", got)
+	}
+	// demo-app:dev is excluded — the app service builds it locally.
+	want := []string{"postgres:16", "redis:7"}
+	if !reflect.DeepEqual(p.ExternalImages, want) {
+		t.Errorf("external_images = %v, want %v", p.ExternalImages, want)
+	}
+	// max, not sum: 30s and 5s in parallel.
+	if p.MaxStartPeriodSeconds != 30 {
+		t.Errorf("max_start_period_seconds = %v, want 30", p.MaxStartPeriodSeconds)
+	}
+	if p.SharedVolumes != 1 {
+		t.Errorf("shared_volumes = %d, want 1", p.SharedVolumes)
+	}
+	if len(p.IsolationFindings) != 1 || p.IsolationFindings[0].Kind != "external_volume" ||
+		p.IsolationFindings[0].Resource != "composer-cache" {
+		t.Errorf("isolation_findings = %+v, want one external_volume composer-cache", p.IsolationFindings)
+	}
+	// One scenario step + one service deploy step.
+	if p.ShellSteps != 2 {
+		t.Errorf("shell_steps = %d, want 2", p.ShellSteps)
+	}
+}
+
+func TestRunTestList_CostProfileUnloadableConfig(t *testing.T) {
+	baseDir := t.TempDir()
+	// No workspace.yml at all — `list` must still work on a project whose
+	// config does not load, just without a profile.
+	writeScenarioFile(t, baseDir, "smoke", "description: Smoke\n")
+
+	rows := listProfiles(t, baseDir)
+	if len(rows) != 1 {
+		t.Fatalf("expected 1 scenario, got %d", len(rows))
+	}
+	if rows[0].CostProfile != nil {
+		t.Errorf("expected no cost profile for an unloadable config, got %+v", rows[0].CostProfile)
+	}
+	if rows[0].Name != "smoke" {
+		t.Errorf("scenario name = %q, want smoke", rows[0].Name)
+	}
+}
+
+func TestRunTestList_CostProfileDiffersByScenarioServices(t *testing.T) {
+	baseDir := t.TempDir()
+	writeProjectFile(t, baseDir, "workspace.yml", "project:\n  name: demo\ncompose:\n  base: compose.yaml\n")
+	writeProjectFile(t, baseDir, "workspace/services/app/service.yml", "type: app\ncontainer: app\nrequired: true\n")
+	writeProjectFile(t, baseDir, "workspace/services/redis/service.yml",
+		"type: infra\ncontainer: redis\ncompose:\n  - compose/redis.yml\n")
+	writeProjectFile(t, baseDir, "workspace/defaults.yml", "services:\n  redis:\n    enabled: true\n")
+	writeProjectFile(t, baseDir, "compose.yaml", "services: {}\n")
+	writeProjectFile(t, baseDir, "compose/redis.yml", "services:\n  redis:\n    image: redis:7\n")
+	writeScenarioFile(t, baseDir, "full", "description: Everything on\n")
+	writeScenarioFile(t, baseDir, "redis-off", "description: Redis off\nenv:\n  services:\n    disable: [redis]\n")
+
+	rows := listProfiles(t, baseDir)
+	if len(rows) != 2 {
+		t.Fatalf("expected 2 scenarios, got %d", len(rows))
+	}
+	byName := map[string]*testCostProfileJSON{}
+	for _, r := range rows {
+		byName[r.Name] = r.CostProfile
+	}
+	full, off := byName["full"], byName["redis-off"]
+	if full == nil || off == nil {
+		t.Fatalf("expected a profile per scenario, got %+v", byName)
+	}
+	if full.EnabledServices != 2 {
+		t.Errorf("full enabled_services = %d, want 2", full.EnabledServices)
+	}
+	if off.EnabledServices != 1 {
+		t.Errorf("redis-off enabled_services = %d, want 1", off.EnabledServices)
+	}
+	// The disabled service's compose overlay leaves the chain with it.
+	if len(full.ExternalImages) != 1 || full.ExternalImages[0] != "redis:7" {
+		t.Errorf("full external_images = %v, want [redis:7]", full.ExternalImages)
+	}
+	if len(off.ExternalImages) != 0 {
+		t.Errorf("redis-off external_images = %v, want none", off.ExternalImages)
+	}
+}
+
+func TestRunTestList_CostProfileRequiredServiceStaysEnabled(t *testing.T) {
+	baseDir := t.TempDir()
+	writeMinimalProject(t, baseDir)
+	writeScenarioFile(t, baseDir, "smoke", "description: Smoke\nenv:\n  services:\n    disable: [app]\n")
+
+	rows := listProfiles(t, baseDir)
+	if p := rows[0].CostProfile; p == nil || p.EnabledServices != 1 {
+		t.Errorf("a required service must stay enabled, got %+v", p)
+	}
+}
+
+func TestRunTestList_TextOutputCarriesNoProfile(t *testing.T) {
+	baseDir := t.TempDir()
+	writeMinimalProject(t, baseDir)
+	writeScenarioFile(t, baseDir, "smoke", "description: Smoke\n")
+
+	flags := &cmdctx.RootFlags{Root: baseDir}
+	cmd, out := newListTestCmd()
+	if err := runTestList(cmd, flags); err != nil {
+		t.Fatalf("runTestList: %v", err)
+	}
+	if got, want := out.String(), "smoke                    Smoke\n"; got != want {
+		t.Errorf("human output changed:\n got %q\nwant %q", got, want)
 	}
 }

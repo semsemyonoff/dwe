@@ -20,6 +20,7 @@ Declarative integration-test scenarios (`dwe test`).
 - [`dwe test run`](#dwe-test-run)
   - [`--parallel N`](#--parallel-n)
 - [`dwe test list`](#dwe-test-list)
+  - [Cost profile (`--output json`)](#cost-profile---output-json)
 - [`dwe test clean`](#dwe-test-clean)
 - [`dwe validate tests`](#dwe-validate-tests)
 - [Compose isolation scanner](#compose-isolation-scanner)
@@ -257,6 +258,47 @@ dwe test list
 
 Lists every scenario under `workspace/tests/*.yml` with its `description:`, verbatim. An absent `workspace/tests/` directory lists nothing and is not an error.
 
+### Cost profile (`--output json`)
+
+`dwe test list --output json` carries a `cost_profile` object per scenario — what running that scenario would cost, and how far its isolation reaches:
+
+```json
+{
+  "scenarios": [
+    {
+      "name": "redis-off",
+      "description": "Deploy with redis disabled",
+      "cost_profile": {
+        "enabled_services": 3,
+        "build_services": ["app"],
+        "external_images": ["postgres:16", "redis:7"],
+        "max_start_period_seconds": 30,
+        "shared_volumes": 1,
+        "isolation_findings": [{"kind": "external_volume", "resource": "composer-cache"}],
+        "shell_steps": 2
+      }
+    }
+  ]
+}
+```
+
+| Field | Meaning |
+|-------|---------|
+| `enabled_services` | dwe services enabled **after this scenario's `env.services` overlay** — the number that actually differs between two scenarios of the same project. A `required: true` service stays enabled even when a scenario disables it, exactly as the config loader resolves the generated `local.yml`. |
+| `build_services` | Compose services declaring `build:` in the enabled chain, sorted. |
+| `external_images` | Distinct `image:` references of compose services that do **not** build locally, sorted — what a cold run would have to pull. A service that builds carries a local tag (`image: myproject-app:dev`), which is not something to pull and is therefore excluded. |
+| `max_start_period_seconds` | The largest healthcheck `start_period` in the enabled chain. **Max, not sum**: `docker compose up --wait` waits in parallel, so a sum over-estimates the more services a project has. A disabled or unparseable healthcheck contributes nothing. |
+| `shared_volumes` | Count of `docker.yml` volumes declared `shared: true`. These resolve to their verbatim names and are written into by a test run. |
+| `isolation_findings` | The **non-blocking** findings of the [compose isolation scanner](#compose-isolation-scanner) — `named_volume` / `external_volume` / `named_network` / `external_network`, i.e. resources shared with the working environment. The blocking kinds (`container_name`, `raw_host_port`) are omitted: they abort the scenario before deploy anyway. Full messages come from `dwe validate tests`. |
+| `shell_steps` | `type: shell` steps this scenario would run: its own steps plus the deploy pipeline it triggers (project-wide plus the enabled services'), descending into `parallel:` groups. Host side effects of a shell step are [not sandboxed](#documented-limitations). |
+
+Two properties are deliberate:
+
+- **Facts only — there is no `cheap`/`expensive` verdict field.** What counts as cheap enough to run unattended is a policy that belongs to the caller (for AI agents, the dwe skill states the rule), not to the CLI.
+- **It reports whether there *is* a build, not what the build costs.** The dominant factor — whether the Docker layer cache is warm, seconds versus many minutes — has no static source and is not modelled.
+
+The profile is **omitted** (not empty, not an error) when the project state it needs does not load: `dwe test list` takes no locks, touches no Docker, and requires no loadable config — it is the command you reach for while the config is mid-edit, and it keeps working there. The plain-text listing never computes a profile at all.
+
 ## `dwe test clean`
 
 ```
@@ -353,6 +395,8 @@ dwe test list --output json
 ```
 
 `status` is one of `passed`, `failed`, `error` (`error` = the scenario could not be prepared — copy/config/manifest/validate failure; distinct from a deploy or step failure, which is `failed`). `failed_step` and `report_dir` are omitted when empty (a passing scenario has neither). `report_dir` is the [failure report](#failure-reports) directory for a non-passing scenario; omitted for a passing scenario, a `--keep` run, or when collection could not create the report directory. As with every other read-only/report surface, live pipeline output and the summary line are silenced in JSON mode — the file log under `.dwe/logs/` still records everything.
+
+`dwe test list --output json` additionally carries a per-scenario [cost profile](#cost-profile---output-json).
 
 ## Documented limitations
 

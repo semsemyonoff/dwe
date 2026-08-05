@@ -575,48 +575,87 @@ golden.)*
 
 **Files:**
 - Modify: `internal/cli/test/list.go`
+- Create: `internal/cli/test/profile.go` (➕ the profiler is ~200 lines — keeping it in
+  `list.go` would have buried the listing itself; tests stay in `list_test.go` as planned)
 - Modify: `internal/cli/test/list_test.go`
 - Modify: `internal/core/project/config/compose_scan.go` (extend the existing narrow compose
   parser — Plan A Task 5 explicitly forbids adding a third one)
+- Modify: `internal/core/project/config/compose_scan_test.go` +
+  `testdata/compose_scan/cost.yml`
 
-- [ ] add a per-scenario cost-profile object to the JSON output, restricted to facts that
+- [x] add a per-scenario cost-profile object to the JSON output, restricted to facts that
       are **computable without guessing**: enabled service count, `build:` sections in
       compose, external images referenced, **max** healthcheck `start_period`, plus the
       isolation facts (see Technical Details)
-- [ ] compute the service count **over the scenario's `env.services` overlay** — otherwise
+      — `cost_profile` carries `enabled_services`, `build_services`, `external_images`,
+      `max_start_period_seconds`, `shared_volumes`, `isolation_findings`, `shell_steps`.
+      The compose half is the new `config.ScanComposeCost`, sharing the extracted
+      `parseComposeFiles` with `ScanComposeIsolation` (no second parser); it merges each
+      compose service across the `-f` chain the way compose resolves it (later `image:`
+      wins, `build:` anywhere marks the service as building)
+      — ➕ `isolation_findings` carries only the **non-blocking** kinds: `container_name` /
+      `raw_host_port` abort the scenario before deploy anyway, so they are not part of an
+      "is this safe to run unattended" decision
+      — ➕ `shell_steps` counts the scenario's own steps **plus** the deploy pipeline it
+      triggers (project-wide + the enabled services'), descending into `parallel:` groups.
+      An absent `workspace/deploy.yml` resolves through `deploy.EnsureDeployConfig`, so the
+      count reflects the default pipeline that would actually run (which has none)
+- [x] compute the service count **over the scenario's `env.services` overlay** — otherwise
       every scenario in a file reports identical numbers, which is exactly what distinguishes
       them (the documented `redis-off.yml` example)
-- [ ] exclude services that have `build:` from "external images" — a local build tag like
+      — ➕ the overlay is applied to a shallow config view, so the **compose chain** is
+      scenario-specific too (a disabled service's overlay leaves the `-f` chain, and with it
+      its images/healthchecks). A `required: true` service stays enabled even when a
+      scenario disables it, mirroring the loader's precedence over the generated `local.yml`
+- [x] exclude services that have `build:` from "external images" — a local build tag like
       `image: alto-app:dev` is not something to pull, and counting it makes the fact lie in
       the least helpful direction
-- [ ] use **max** rather than sum for `start_period`: `docker up --wait` waits in parallel,
-      so a sum over-estimates the more services there are
-- [ ] **drop "presence of dependency-install steps"** — detecting it means string-matching
+- [x] use **max** rather than sum for `start_period`: `docker up --wait` waits in parallel,
+      so a sum over-estimates the more services there are — a `disable: true` healthcheck
+      and an unparseable duration contribute nothing (the scanner stays advisory and never
+      errors on a compose file docker itself accepts)
+- [x] **drop "presence of dependency-install steps"** — detecting it means string-matching
       `npm install` / `composer install` / …, a heuristic that will both lie and drift
       (YAGNI). Drop "presence of `docker build` steps" for the same reason — it is the same
       kind of string match, and the checkable construct (`build:` in compose) is already in
       the list; in both real workspaces the build goes through compose, not through a step
-- [ ] **drop `last_run`** — there is no source for it. `envtest` persists nothing across
+      — dropped, nothing string-matched
+- [x] **drop `last_run`** — there is no source for it. `envtest` persists nothing across
       runs: `report.go` writes only for a failed run and only before teardown, and the
       manifest is deleted by teardown; the deploy journal knows nothing about scenarios.
       Adding it means designing per-scenario run persistence (where it is written — likely
       `Runner.finish` before `teardown()`, mirroring `collectReport` — what format, who
       prunes it, what `dwe test clean` does with it). That is its own plan item, not a
-      checkbox here
-- [ ] preserve the current invariants of `list`: no Docker, no locks, no config load
+      checkbox here — dropped
+- [x] preserve the current invariants of `list`: no Docker, no locks, no config load
       required — today it runs on a broken config. A failed config load must degrade to
       "no profile", never to an error
-- [ ] emit facts only — no `cheap`/`expensive` verdict (constraint 12)
-- [ ] record the honest limit in the docs and in the profile's own description: it tells
+      — every failure path in `newCostProfiler` returns nil (config, `docker.yml`, project
+      and per-service deploy pipelines) and `(*costProfiler).profile` is nil-receiver-safe,
+      so the caller never branches. ➕ the profiler is built **only** in JSON mode, so the
+      text path performs no config load at all — its original shape byte-for-byte
+- [x] emit facts only — no `cheap`/`expensive` verdict (constraint 12)
+- [x] record the honest limit in the docs and in the profile's own description: it tells
       whether there **is** a build, not what the build costs; layer-cache warmth is not
       modelled (it went with `last_run`). Measured on alto and cueBreaker, both land in
       "there is a build → ask", so the unattended path would not fire on either today
-- [ ] write tests for a minimal project (no build) and a heavy one (build + external
+      — written into the `ComposeCostFacts` and `testCostProfileJSON` doc comments, the
+      `list --help` `Long`, and a new "Cost profile" section in
+      `docs/reference/config/tests.md`. ➕ the ru mirror was written in the same pass rather
+      than left for Task 9 (a mirror that lags is the staleness the freshness gate exists to
+      prevent); Task 9 now only has to re-check it
+- [x] write tests for a minimal project (no build) and a heavy one (build + external
       images), asserting the distinguishing fields; one with an unloadable config; and one
       where two scenarios in the same file differ only by `env.services` and get different
-      profiles
-- [ ] write a test asserting the human output is unchanged
-- [ ] run tests — must pass before task 7
+      profiles — `TestRunTestList_CostProfile{MinimalProject,HeavyProject,UnloadableConfig,
+      DiffersByScenarioServices,RequiredServiceStaysEnabled}`, plus scanner-level
+      `TestScanComposeCost_{Facts,NoBuildNoHealthcheck,OverlayWins,UnreadableFileSkippedSilently}`
+- [x] write a test asserting the human output is unchanged
+      — `TestRunTestList_TextOutputCarriesNoProfile` pins the exact rendered line for a
+      project that *does* have a loadable config (the existing text tests run without one)
+- [x] run tests — must pass before task 7 — `make test` and `make lint` both clean; a real
+      `dwe init --default` → `dwe test list -o json` emits the profile for the scaffolded
+      smoke scenario
 
 ### Task 7: Align the skill
 

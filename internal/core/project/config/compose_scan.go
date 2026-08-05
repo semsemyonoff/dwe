@@ -8,6 +8,7 @@ import (
 	"slices"
 	"strconv"
 	"strings"
+	"time"
 
 	"gopkg.in/yaml.v3"
 )
@@ -46,8 +47,17 @@ type composeScanDoc struct {
 }
 
 type composeScanService struct {
-	ContainerName string      `yaml:"container_name"`
-	Ports         []yaml.Node `yaml:"ports"`
+	ContainerName string                 `yaml:"container_name"`
+	Ports         []yaml.Node            `yaml:"ports"`
+	Image         string                 `yaml:"image"`
+	Build         yaml.Node              `yaml:"build"`
+	Healthcheck   composeScanHealthcheck `yaml:"healthcheck"`
+}
+
+// composeScanHealthcheck is the narrow healthcheck shape ScanComposeCost needs.
+type composeScanHealthcheck struct {
+	Disable     bool   `yaml:"disable"`
+	StartPeriod string `yaml:"start_period"`
 }
 
 type composeScanNamedEntity struct {
@@ -81,7 +91,28 @@ var hostPortLiteralRe = regexp.MustCompile(`^\d+(-\d+)?$`)
 func ScanComposeIsolation(cfg *DweConfig, projectRoot string) []IsolationFinding {
 	var findings []IsolationFinding
 
-	for _, rel := range cfg.ComposeFiles() {
+	for _, pf := range parseComposeFiles(cfg, projectRoot) {
+		findings = append(findings, scanComposeDoc(pf.doc, pf.file)...)
+	}
+
+	return findings
+}
+
+// parsedComposeFile is one successfully parsed file of the active -f chain.
+type parsedComposeFile struct {
+	doc  composeScanDoc
+	file string // absolute path
+}
+
+// parseComposeFiles reads and parses the project's active compose chain in
+// -f order. Unreadable or malformed files are skipped silently — both
+// scanners over this parser are advisory (real parse errors surface via
+// `dwe validate` / `docker compose` itself).
+func parseComposeFiles(cfg *DweConfig, projectRoot string) []parsedComposeFile {
+	files := cfg.ComposeFiles()
+	out := make([]parsedComposeFile, 0, len(files))
+
+	for _, rel := range files {
 		abs := rel
 		if !filepath.IsAbs(abs) {
 			abs = filepath.Join(projectRoot, rel)
@@ -96,10 +127,117 @@ func ScanComposeIsolation(cfg *DweConfig, projectRoot string) []IsolationFinding
 			continue
 		}
 
-		findings = append(findings, scanComposeDoc(doc, abs)...)
+		out = append(out, parsedComposeFile{doc: doc, file: abs})
 	}
 
-	return findings
+	return out
+}
+
+// ComposeCostFacts summarises what bringing a project's active compose chain
+// up would have to build, pull, and wait for. It is the facts-only companion
+// of ScanComposeIsolation over the same narrow parser, and carries no verdict:
+// callers decide what "expensive" means.
+//
+// Honest limit, by construction: it reports whether there IS a build, never
+// what the build costs. The dominant factor — whether the Docker layer cache
+// is warm, seconds versus many minutes — has no static source and is not
+// modelled here.
+type ComposeCostFacts struct {
+	// BuildServices are the compose services declaring build:, sorted.
+	BuildServices []string
+	// ExternalImages are the distinct image: references of compose services
+	// that do NOT declare build:, sorted. A service that builds carries a
+	// local tag (image: myproject-app:dev) which is not something to pull, so
+	// counting it would make the fact lie in the least helpful direction.
+	ExternalImages []string
+	// MaxStartPeriod is the largest healthcheck start_period across the chain.
+	// Max rather than sum: `docker compose up --wait` waits in parallel, so a
+	// sum over-estimates the more services a project has.
+	MaxStartPeriod time.Duration
+}
+
+// ScanComposeCost parses the project's active compose files (cfg.ComposeFiles(),
+// i.e. only the enabled services' overlays) and reports the cost facts above.
+//
+// Per compose service the chain is merged in -f order the way compose itself
+// resolves it: a later file's image: wins, and a build: declared in any file
+// marks the service as building.
+func ScanComposeCost(cfg *DweConfig, projectRoot string) ComposeCostFacts {
+	type serviceFacts struct {
+		image       string
+		hasBuild    bool
+		startPeriod time.Duration
+	}
+
+	merged := make(map[string]*serviceFacts)
+	for _, pf := range parseComposeFiles(cfg, projectRoot) {
+		for _, name := range slices.Sorted(maps.Keys(pf.doc.Services)) {
+			svc := pf.doc.Services[name]
+			facts, ok := merged[name]
+			if !ok {
+				facts = &serviceFacts{}
+				merged[name] = facts
+			}
+			if svc.Image != "" {
+				facts.image = svc.Image
+			}
+			if nodePresent(svc.Build) {
+				facts.hasBuild = true
+			}
+			if d, ok := parseStartPeriod(svc.Healthcheck); ok {
+				facts.startPeriod = d
+			}
+		}
+	}
+
+	out := ComposeCostFacts{
+		BuildServices:  []string{},
+		ExternalImages: []string{},
+	}
+	seenImage := make(map[string]bool)
+	for _, name := range slices.Sorted(maps.Keys(merged)) {
+		facts := merged[name]
+		if facts.hasBuild {
+			out.BuildServices = append(out.BuildServices, name)
+		} else if facts.image != "" && !seenImage[facts.image] {
+			seenImage[facts.image] = true
+			out.ExternalImages = append(out.ExternalImages, facts.image)
+		}
+		if facts.startPeriod > out.MaxStartPeriod {
+			out.MaxStartPeriod = facts.startPeriod
+		}
+	}
+	slices.Sort(out.ExternalImages)
+
+	return out
+}
+
+// nodePresent reports whether a YAML node carries an actual value. An absent
+// key decodes to the zero Node (Kind 0); an explicit `build:` with no value
+// decodes to a null scalar — neither declares a build.
+func nodePresent(n yaml.Node) bool {
+	if n.Kind == 0 {
+		return false
+	}
+	if n.Kind == yaml.ScalarNode && (n.Tag == "!!null" || n.Value == "") {
+		return false
+	}
+	return true
+}
+
+// parseStartPeriod parses a healthcheck start_period. A disabled healthcheck,
+// an absent value, or one docker's duration grammar shares with Go but this
+// parser cannot read yields (0, false) — the scanner stays advisory and never
+// errors on a compose file docker itself accepts.
+func parseStartPeriod(h composeScanHealthcheck) (time.Duration, bool) {
+	if h.Disable || h.StartPeriod == "" {
+		return 0, false
+	}
+	d, err := time.ParseDuration(strings.ReplaceAll(h.StartPeriod, " ", ""))
+	if err != nil || d < 0 {
+		return 0, false
+	}
+	return d, true
 }
 
 // scanComposeDoc walks a parsed compose document. Every map is iterated over
