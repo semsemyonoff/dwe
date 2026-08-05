@@ -118,6 +118,12 @@ func (v *IDEValidator) validateService(name string, svc config.ServiceConfig, cf
 		}}
 	}
 	if !found {
+		if _, explicit := svc.IDERenderEnabledExplicit(); !explicit {
+			// Implicit default (app type, no render.ide key) + absent pack: the
+			// scaffold ships with no template pack, so this is expected, not
+			// broken. Warn only once the user has opted in explicitly.
+			return nil
+		}
 		return []validate.Diagnostic{{
 			Severity: validate.SeverityWarning,
 			Domain:   "templates",
@@ -125,8 +131,8 @@ func (v *IDEValidator) validateService(name string, svc config.ServiceConfig, cf
 			Message:  fmt.Sprintf("template pack not found for service %q", name),
 			Hint: fmt.Sprintf(
 				"create workspace/templates/ide/%s or workspace/templates/ide/default\n"+
-					"or set services.%s.render.ide.enabled: false in services.yml",
-				name, name,
+					"or set services.%s.render.ide.enabled: false in workspace/services/%s/service.yml",
+				name, name, name,
 			),
 		}}
 	}

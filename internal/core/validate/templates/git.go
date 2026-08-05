@@ -125,6 +125,12 @@ func (v *GitValidator) validateService(name string, svc config.ServiceConfig, cf
 		}}
 	}
 	if !found {
+		if _, explicit := svc.GitRenderEnabledExplicit(); !explicit {
+			// Implicit default (app type, no render.git key) + absent pack: the
+			// scaffold ships with no template pack, so this is expected, not
+			// broken. Warn only once the user has opted in explicitly.
+			return nil
+		}
 		return []validate.Diagnostic{{
 			Severity: validate.SeverityWarning,
 			Domain:   "templates",
@@ -132,8 +138,8 @@ func (v *GitValidator) validateService(name string, svc config.ServiceConfig, cf
 			Message:  fmt.Sprintf("template pack not found for service %q", name),
 			Hint: fmt.Sprintf(
 				"create workspace/templates/git/%s or workspace/templates/git/default\n"+
-					"or set services.%s.render.git.enabled: false in services.yml",
-				name, name,
+					"or set services.%s.render.git.enabled: false in workspace/services/%s/service.yml",
+				name, name, name,
 			),
 		}}
 	}
