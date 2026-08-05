@@ -3,6 +3,7 @@ package config
 import (
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/require"
@@ -142,4 +143,24 @@ func TestComposeProjectNameValidator_NilCfgIsSilent(t *testing.T) {
 	t.Parallel()
 	diags := (&composeProjectNameValidator{}).Run(validate.Context{ProjectRoot: t.TempDir()})
 	require.Empty(t, diags)
+}
+
+// TestComposeProjectNameValidator_HintLeadsWithValidValue pins that the
+// hint's first suggested value is always a valid (lowercase-normalized)
+// compose project name. Before this fix the second suggestion told the
+// author to set docker.yml `project_name:` to the compose file's own
+// (potentially CamelCase) declared name verbatim — a value docker compose
+// rejects outright when it contains uppercase.
+func TestComposeProjectNameValidator_HintLeadsWithValidValue(t *testing.T) {
+	t.Parallel()
+	root := writeComposeNameProject(t, composeNameWorkspaceYML, "name: LegacyShop\nservices: {}\n", "")
+	diags := runComposeNameValidator(t, root)
+	d := hasDiag(t, diags, validate.SeverityWarning, "silently overridden")
+
+	// The docker.yml project_name route must lead the hint, and must
+	// recommend the normalized (valid) name — never the raw declared value.
+	require.True(t, strings.HasPrefix(d.Hint, "align the two: set workspace/docker.yml `project_name: dwe-shop`"),
+		"hint must lead with a valid docker.yml project_name suggestion, got: %s", d.Hint)
+	require.NotContains(t, d.Hint, "project_name: LegacyShop",
+		"hint must never suggest writing the invalid declared name into project_name")
 }

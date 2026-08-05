@@ -31,6 +31,7 @@ func All() []validate.Validator {
 		&resetParallelGroupsValidator{},
 		&iconsValidator{},
 		&composeProjectNameValidator{},
+		&containerNameValidator{},
 		&formalBlocksValidator{},
 		&templateRefsValidator{},
 	}
