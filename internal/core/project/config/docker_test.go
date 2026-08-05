@@ -290,12 +290,58 @@ args:
 			t.Errorf("got %q, want %q", got, "override-name")
 		}
 	})
+
+	// project.name with mixed case must be normalized: Docker Compose rejects
+	// uppercase in project names.
+	t.Run("mixed_case_project_name_normalized_to_lowercase", func(t *testing.T) {
+		c := &DweConfig{}
+		c.Project.Name = "cueBreaker"
+		c.Project.Prefix = "dwe"
+		got, err := ResolveComposeProjectName("", c)
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if got != "dwe-cuebreaker" {
+			t.Errorf("got %q, want %q", got, "dwe-cuebreaker")
+		}
+	})
+
+	// An already-lowercase docker.yml project_name is passed through unchanged.
+	t.Run("already_lowercase_docker_yml_project_name_unchanged", func(t *testing.T) {
+		baseDir := writeDockerFixture(t, "project_name: \"dwe-tbm\"\n", "")
+		got, err := ResolveComposeProjectName(baseDir, cfg())
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if got != "dwe-tbm" {
+			t.Errorf("got %q, want %q", got, "dwe-tbm")
+		}
+	})
+
+	// A mixed-case explicit docker.yml project_name is normalized to lowercase.
+	t.Run("mixed_case_docker_yml_project_name_normalized", func(t *testing.T) {
+		baseDir := writeDockerFixture(t, "project_name: \"dwe-CueBreaker\"\n", "")
+		got, err := ResolveComposeProjectName(baseDir, cfg())
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if got != "dwe-cuebreaker" {
+			t.Errorf("got %q, want %q", got, "dwe-cuebreaker")
+		}
+	})
 }
 
 func TestComposeProjectName(t *testing.T) {
 	cfg := &DweConfig{}
 	cfg.Project.Name = "tbm"
 	cfg.Project.Prefix = "dwe"
+
+	mkCfg := func(name, prefix string) *DweConfig {
+		c := &DweConfig{}
+		c.Project.Name = name
+		c.Project.Prefix = prefix
+		return c
+	}
 
 	tests := []struct {
 		name      string
@@ -308,6 +354,8 @@ func TestComposeProjectName(t *testing.T) {
 		{"nil_dockerCfg_falls_back_to_FullName", nil, cfg, "dwe-tbm"},
 		{"nil_cfg_returns_empty", &DockerConfig{}, nil, ""},
 		{"both_nil_returns_empty", nil, nil, ""},
+		{"docker_yml_project_name_normalized_to_lowercase", &DockerConfig{ProjectName: "Dwe_Tbm"}, cfg, "dwe_tbm"},
+		{"fullname_normalized_to_lowercase", &DockerConfig{}, mkCfg("Tbm", "dwe"), "dwe-tbm"},
 	}
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
@@ -336,6 +384,18 @@ func TestComposeProjectNameCandidates(t *testing.T) {
 		{"override_equals_fullname_single", &DockerConfig{ProjectName: "dwe-tbm"}, mk("tbm", "dwe"), []string{"dwe-tbm"}},
 		{"nil_dockerCfg_single", nil, mk("tbm", "dwe"), []string{"dwe-tbm"}},
 		{"both_empty_returns_empty", &DockerConfig{}, &DweConfig{}, nil},
+		// Case-only difference between the normalized primary and the
+		// pre-normalization docker.yml project_name keeps BOTH candidates,
+		// canonical (normalized) first — containers created under the old
+		// spelling before normalization landed must still be found.
+		{"case_only_docker_yml_override_kept_as_legacy_candidate", &DockerConfig{ProjectName: "Dwe-Tbm"}, mk("tbm", "dwe"), []string{"dwe-tbm", "Dwe-Tbm"}},
+		// Case-only difference between the normalized primary and FullName()
+		// (no docker.yml override) also keeps both candidates.
+		{"case_only_fullname_kept_as_legacy_candidate", nil, mk("Tbm", "dwe"), []string{"dwe-tbm", "dwe-Tbm"}},
+		// All three sources distinct: normalized primary, pre-normalization
+		// docker.yml override, and legacy FullName all survive as separate
+		// candidates, canonical first.
+		{"all_three_candidates_distinct", &DockerConfig{ProjectName: "Dwe_Tbm"}, mk("tbm", "legacy"), []string{"dwe_tbm", "Dwe_Tbm", "legacy-tbm"}},
 	}
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {

@@ -552,12 +552,12 @@ nothing would re-run.
 - Modify: `internal/core/project/config/docker.go`
 - Modify: `internal/core/project/config/docker_test.go`
 
-- [ ] normalize to lowercase in both `ResolveComposeProjectName` and `ComposeProjectName`
+- [x] normalize to lowercase in both `ResolveComposeProjectName` and `ComposeProjectName`
       (single shared helper — the two must never diverge)
-- [ ] **keep** the legacy candidate when it differs only by case. Note the current code
+- [x] **keep** the legacy candidate when it differs only by case. Note the current code
       already collapses on exact equality only (`docker.go:308`: `full != primary`), so this
       is a **regression test**, not a change — write it as such
-- [ ] add the **pre-normalization** value as a candidate too. This is the real gap: an
+- [x] add the **pre-normalization** value as a candidate too. This is the real gap: an
       explicit `docker.yml project_name: dwe-cueBreaker` becomes `dwe-cuebreaker` after
       normalization, and the original spelling appears in no candidate at all (the second
       candidate is derived from `Project.FullName()`, not from the pre-normalized value).
@@ -565,11 +565,11 @@ nothing would re-run.
       (daemon builtins, `StopContainer`/`RemoveContainer`, label filters) build
       `<project>-<name>` directly — so containers created under the old spelling would be
       orphaned by exactly the argument this plan uses for the `FullName` route
-- [ ] write tests: `project.name: cueBreaker` yields `dwe-cuebreaker`; an explicit
+- [x] write tests: `project.name: cueBreaker` yields `dwe-cuebreaker`; an explicit
       `docker.yml project_name` is passed through unchanged when already lowercase
-- [ ] write tests for the candidates helper: case-only difference keeps **two** candidates
+- [x] write tests for the candidates helper: case-only difference keeps **two** candidates
       (canonical first), exact match keeps one
-- [ ] run tests — must pass before task 5
+- [x] run tests — must pass before task 5
 
 ### Task 5: Fix the compose-name hint and add a `container_name` casing check
 
