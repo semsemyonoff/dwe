@@ -1,10 +1,15 @@
 package scaffold
 
 import (
+	"os"
+	"path/filepath"
+	"regexp"
 	"strings"
 	"testing"
 
 	"gopkg.in/yaml.v3"
+
+	"github.com/semsemyonoff/dwe/internal/core/project/config"
 )
 
 // inertFiles are the shipped-commented override mirrors. Their built-in defaults
@@ -91,6 +96,119 @@ func TestEmbeddedTemplates_InertFilesAreAllComments(t *testing.T) {
 		} else if out != nil {
 			t.Errorf("inert %q parsed to a non-nil value %#v; expected no active keys", path, out)
 		}
+	}
+}
+
+// bodyKeyLine matches a de-commented top-level YAML key line: lowercase,
+// snake_case, no leading whitespace, immediately followed by ':'. Real config
+// keys in the inert mirrors are all lowercase (run, log, phases, sections,
+// project_name, ...); the prose header above them is sentence-cased prose, so
+// this reliably locates where the commented-out YAML body begins without
+// hardcoding a per-file line offset.
+var bodyKeyLine = regexp.MustCompile(`^[a-z][a-z0-9_-]*:(\s|$)`)
+
+// uncommentInertBody finds the trailing commented-out YAML block in an inert
+// scaffold mirror and strips its "# " comment prefix, leaving the prose
+// header above it untouched. It simulates exactly what the file's own
+// "uncomment to override" instruction tells the user to do.
+func uncommentInertBody(t *testing.T, data []byte) []byte {
+	t.Helper()
+	lines := strings.Split(string(data), "\n")
+	start := -1
+	for i, line := range lines {
+		rest, isComment := strings.CutPrefix(line, "#")
+		if !isComment {
+			continue
+		}
+		rest = strings.TrimPrefix(rest, " ")
+		if bodyKeyLine.MatchString(rest) {
+			start = i
+			break
+		}
+	}
+	if start == -1 {
+		t.Fatalf("could not locate a top-level YAML key in inert file:\n%s", data)
+	}
+	for i := start; i < len(lines); i++ {
+		rest, isComment := strings.CutPrefix(lines[i], "#")
+		if !isComment {
+			continue
+		}
+		lines[i] = strings.TrimPrefix(rest, " ")
+	}
+	return []byte(strings.Join(lines, "\n"))
+}
+
+// TestEmbeddedTemplates_InertBodyUncommentsCleanly proves the "uncomment to
+// override" instruction each inert mirror carries actually works: taking the
+// commented-out YAML body literally and stripping only the comment markers
+// must load through the same strict decoder the real file goes through. This
+// is the regression guard for the class of defect fixed in task 11 (a
+// commented example referencing a field the schema no longer has).
+func TestEmbeddedTemplates_InertBodyUncommentsCleanly(t *testing.T) {
+	cases := []struct {
+		name string
+		rel  string
+		load func(t *testing.T, dir string)
+	}{
+		{
+			name: "lifecycle.yml",
+			rel:  filepath.Join("workspace", "lifecycle.yml"),
+			load: func(t *testing.T, dir string) {
+				if _, err := config.LoadLifecycleConfig(filepath.Join(dir, "workspace", "lifecycle.yml")); err != nil {
+					t.Errorf("LoadLifecycleConfig: %v", err)
+				}
+			},
+		},
+		{
+			name: "deploy.yml",
+			rel:  filepath.Join("workspace", "deploy.yml"),
+			load: func(t *testing.T, dir string) {
+				if _, err := config.LoadProjectDeployConfig(filepath.Join(dir, "workspace", "deploy.yml")); err != nil {
+					t.Errorf("LoadProjectDeployConfig: %v", err)
+				}
+			},
+		},
+		{
+			name: "info.yml",
+			rel:  filepath.Join("workspace", "info.yml"),
+			load: func(t *testing.T, dir string) {
+				if _, err := config.LoadInfoConfig(filepath.Join(dir, "workspace", "info.yml")); err != nil {
+					t.Errorf("LoadInfoConfig: %v", err)
+				}
+			},
+		},
+		{
+			name: "docker.yml",
+			rel:  filepath.Join("workspace", "docker.yml"),
+			load: func(t *testing.T, dir string) {
+				cfg, err := config.LoadConfig(filepath.Join(dir, "workspace.yml"))
+				if err != nil {
+					t.Fatalf("LoadConfig: %v", err)
+				}
+				if _, err := config.LoadDockerConfig(dir, cfg); err != nil {
+					t.Errorf("LoadDockerConfig: %v", err)
+				}
+			},
+		},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			dir := t.TempDir()
+			if _, err := Scaffold(defaultValidityOptions(dir)); err != nil {
+				t.Fatalf("Scaffold: %v", err)
+			}
+			path := filepath.Join(dir, tc.rel)
+			data, err := os.ReadFile(path)
+			if err != nil {
+				t.Fatalf("read %s: %v", path, err)
+			}
+			if err := os.WriteFile(path, uncommentInertBody(t, data), 0o644); err != nil {
+				t.Fatalf("write %s: %v", path, err)
+			}
+			tc.load(t, dir)
+		})
 	}
 }
 

@@ -738,17 +738,19 @@ above:
 - Modify: `internal/core/workflow/scaffold/templates/workspace/lifecycle.yml`
 - Modify: `internal/core/workflow/scaffold/testdata/golden_default.txt`
 
-- [ ] remove the commented `update:` block from the `run:` example (the field no longer
+- [x] remove the commented `update:` block from the `run:` example (the field no longer
       exists on `LifecycleRunConfig`; uncommenting the block as the file invites produces a
       strict-decode hard error)
-- [ ] point the comment at the top-level `update:` block instead, so the migration is
+- [x] point the comment at the top-level `update:` block instead, so the migration is
       discoverable from where the old field used to be
-- [ ] regenerate the scaffold golden
-- [ ] write a **table-driven** test covering every inert scaffold (`lifecycle.yml`,
-      `deploy.yml`, `info.yml`, `reset.yml`, `defaults.yml`): uncommenting each file
-      wholesale must load cleanly. Tasks 9 and 11 fix the same class of defect — "an inert
-      mirror that lies about itself" — and one table closes it for good
-- [ ] run tests — must pass before task 12
+- [x] regenerate the scaffold golden
+- [x] write a **table-driven** test covering every inert scaffold mirror shipped by the
+      scaffolder (`lifecycle.yml`, `deploy.yml`, `info.yml`, `docker.yml` — `reset.yml` and
+      `defaults.yml` are not part of the scaffold's inert-mirror set: no `reset.yml` is
+      scaffolded, and `defaults.yml` carries active keys so it is not fully inert):
+      uncommenting each file wholesale must load cleanly. Tasks 9 and 11 fix the same class
+      of defect — "an inert mirror that lies about itself" — and one table closes it for good
+- [x] run tests — must pass before task 12
 
 ### Task 12: `dwe deploy plan --output json`
 
