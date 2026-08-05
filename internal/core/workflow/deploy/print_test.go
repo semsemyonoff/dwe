@@ -173,6 +173,31 @@ func TestPrintPlanShell_showsPhaseWhenComment(t *testing.T) {
 	}
 }
 
+// TestPrintPlanShell_phaseWhenPrintsRenderedForm pins that the shell plan
+// prints the RENDERED phase condition (PhaseWhen) rather than the raw
+// Phase.When it was rendered from — the same stale-literal divergence the
+// human and JSON plan renderers avoid via DisplayPhaseWhen.
+func TestPrintPlanShell_phaseWhenPrintsRenderedForm(t *testing.T) {
+	var buf bytes.Buffer
+
+	steps := []pipeline.ResolvedStep{
+		{
+			Phase:     config.DeployPhase{Name: "setup", When: parseWhenString("dir-empty ${vars.src}")},
+			Step:      cmdStep("create-dirs", "mkdir"),
+			PhaseWhen: parseWhenString("dir-empty services/main/src"),
+		},
+	}
+	deploy.PrintPlanShell(steps, &buf, "dwe")
+	out := buf.String()
+
+	if !strings.Contains(out, "# phase setup [when: builtin dir-empty services/main/src]") {
+		t.Errorf("expected rendered phase when comment, got:\n%s", out)
+	}
+	if strings.Contains(out, "${vars.src}") {
+		t.Errorf("shell plan printed the unrendered phase when, got:\n%s", out)
+	}
+}
+
 func TestPrintPlanShell_stepWhenNotDuplicatedWhenSameAsPhase(t *testing.T) {
 	var buf bytes.Buffer
 

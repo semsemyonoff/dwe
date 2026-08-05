@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/semsemyonoff/dwe/internal/core/project/config"
 	"github.com/semsemyonoff/dwe/internal/core/project/varsusage"
 	"github.com/semsemyonoff/dwe/internal/core/validate"
 )
@@ -19,9 +20,14 @@ import (
 // Deliberately silent on everything else: an unknown head (shell-style
 // ${HOME}, a stray dollar sign) and the special namespaces that never live
 // in Raw (param, context, files, host, snapshot, args, generated — see
-// Technical Details in the plan) are not this validator's concern. Gating on
-// "head present in cfg.Raw" gets both exclusions for free, since Raw's
-// top-level keys are exactly allowedRootKeys by the strict-root invariant.
+// Technical Details in the plan) are not this validator's concern. Both
+// exclusions come from gating on config.IsAllowedRootKey.
+//
+// The gate is the root-key ALLOWLIST, not "head present in cfg.Raw": the
+// strict root makes Raw's keys a subset of allowedRootKeys, not an equal set,
+// so a Raw-presence probe goes silent on exactly the case that matters most —
+// a project with no vars: block at all, where every ${vars.*} reference is
+// unresolvable and renders to "".
 type templateRefsValidator struct{}
 
 var _ validate.Validator = (*templateRefsValidator)(nil)
@@ -44,7 +50,7 @@ func (v *templateRefsValidator) Run(ctx validate.Context) []validate.Diagnostic 
 	var diags []validate.Diagnostic
 	for _, u := range usages {
 		head, _, _ := strings.Cut(u.Ref, ".")
-		if _, known := ctx.Cfg.Raw[head]; !known {
+		if !config.IsAllowedRootKey(head) {
 			continue
 		}
 		if resolvesInRaw(ctx.Cfg.Raw, u.Ref) {

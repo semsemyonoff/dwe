@@ -120,6 +120,32 @@ vars:
 	}
 }
 
+// TestTemplateRefsValidator_HeadBlockAbsent pins that the gate is the root-key
+// allowlist, not "head present in cfg.Raw". A project that never declared a
+// vars: block is the most common shape (the scaffold ships none), and every
+// ${vars.*} reference in it is unresolvable — a Raw-presence probe would treat
+// the whole class as none of this validator's business and stay silent.
+func TestTemplateRefsValidator_HeadBlockAbsent(t *testing.T) {
+	t.Parallel()
+	root := t.TempDir()
+	require.NoError(t, os.WriteFile(filepath.Join(root, "workspace.yml"), []byte("project:\n  name: test\n"), 0o644))
+	require.NoError(t, os.MkdirAll(filepath.Join(root, "workspace"), 0o755))
+	require.NoError(t, os.WriteFile(filepath.Join(root, "workspace", "deploy.yml"), []byte(`phases:
+  - name: setup
+    steps:
+      - name: clone
+        type: shell
+        cmd: "git clone ${vars.source.repo}"
+`), 0o644))
+
+	diags := runTemplateRefsValidator(t, root)
+	d := hasDiag(t, diags, validate.SeverityWarning, "vars.source.repo")
+	require.Equal(t, "config.template_refs", d.Target)
+	require.Equal(t, "workspace/deploy.yml", d.File)
+	require.Contains(t, d.Message, "does not resolve")
+	require.Len(t, diags, 1)
+}
+
 func TestTemplateRefsValidator_NilCfgIsSilent(t *testing.T) {
 	t.Parallel()
 	diags := (&templateRefsValidator{}).Run(validate.Context{ProjectRoot: t.TempDir()})

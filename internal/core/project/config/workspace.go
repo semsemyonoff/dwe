@@ -61,6 +61,19 @@ var allowedRootKeySet = func() map[string]struct{} {
 	return m
 }()
 
+// IsAllowedRootKey reports whether key is a permitted top-level config key.
+//
+// Callers outside this package must ask through here rather than probing
+// cfg.Raw for the key: the strict root guarantees Raw's keys are a SUBSET of
+// allowedRootKeys, not an equal set. A project that never declared vars: has
+// no "vars" key in Raw at all, so a Raw-presence probe silently treats every
+// ${vars.*} reference as none of its business — which is exactly the case the
+// config.template_refs validator exists to catch.
+func IsAllowedRootKey(key string) bool {
+	_, ok := allowedRootKeySet[key]
+	return ok
+}
+
 // binOverride returns the user-configured override for the named binary, or
 // def when cfg is nil, cfg.userConfig is nil, or no override is present.
 func binOverride(cfg *DweConfig, key, def string) string {
