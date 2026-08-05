@@ -774,19 +774,32 @@ above:
 - Modify: `internal/cli/deploy/deploy.go`
 - Modify: corresponding `*_test.go`
 
-- [ ] with resolve-time rendering (Task 2) the plan already prints substituted values, so a
+- [x] with resolve-time rendering (Task 2) the plan already prints substituted values, so a
       `${…}` surviving into `StepCommand` output is **almost always** an unknown head —
       annotate those in both the human and JSON plan output so the plan stops presenting
       them as "what will run". Two exceptions to keep in mind rather than mis-flag: a
       `${vars.x}` whose *value* itself contains `${…}`, and any string that failed the
       `VarPattern` gate. (Had rendering stayed at exec time, this task would have flagged
       correct references too — see Technical Details.)
-- [ ] note in the docs that the plan now prints substituted values rather than `${vars.*}`
-      literals (constraint 4e) — that is the point of the change, no masking
-- [ ] keep the annotation out of `--format shell` (that output must stay executable)
-- [ ] write tests covering: resolved template renders substituted; unknown head shown as
+      Implementation: `pipeline.UnresolvedTemplateRefs` (`step.go`) scans a rendered command
+      for `${...}` matches whose head is not in `KnownVarHeads` — by construction (Task 2's
+      "a `RenderCommand` error fails the resolve" decision) every known-head reference is
+      either substituted or the resolve already failed, so anything still matching here is a
+      genuine leftover. Wired into the human table (`print.go`'s `printLeafStep`, a
+      `[unresolved: ...]` line) and the JSON payload (`deploy.go`'s `planStepJSON.Unresolved`).
+      Scope note: `print.go` was not in this task's original Files list but had to be touched
+      — it is where `PrintPlanTable`'s human-readable rendering actually lives; `deploy.go`
+      only wires the JSON path and the `--format table|shell` dispatch.
+- [x] note in the docs that the plan now prints substituted values rather than `${vars.*}`
+      literals (constraint 4e) — that is the point of the change, no masking. Added a
+      "Templates in step fields" section to `docs/reference/config/deploy/index.md` (+ RU
+      mirror) explaining resolve-time rendering and the `[unresolved: ...]` annotation.
+- [x] keep the annotation out of `--format shell` (that output must stay executable) —
+      `PrintPlanShell` (`workflow/deploy/print.go`) still calls `pipeline.StepCommand`
+      directly with no annotation, unchanged.
+- [x] write tests covering: resolved template renders substituted; unknown head shown as
       literal with annotation; JSON payload carries the flag
-- [ ] run tests — must pass before task 14
+- [x] run tests — must pass before task 14
 
 ### Task 14: Report scope when `validate` is narrowed
 

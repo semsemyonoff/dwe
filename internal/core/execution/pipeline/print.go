@@ -3,6 +3,7 @@ package pipeline
 import (
 	"fmt"
 	"io"
+	"strings"
 
 	"github.com/semsemyonoff/dwe/internal/core/ui/render"
 	sharedrender "github.com/semsemyonoff/dwe/internal/shared/render"
@@ -119,6 +120,9 @@ func printLeafStep(out io.Writer, rs ResolvedStep, indent, detailIndent, indexPr
 	}
 	if cmd != "" {
 		_, _ = fmt.Fprintln(out, detailIndent+cmd)
+		if refs := UnresolvedTemplateRefs(cmd); len(refs) > 0 {
+			_, _ = fmt.Fprintln(out, detailIndent+"[unresolved: "+strings.Join(refs, ", ")+"]")
+		}
 	}
 	if rs.RuntimeWhen != nil {
 		_, _ = fmt.Fprintln(out, detailIndent+"[when: "+FormatCondition(rs.RuntimeWhen)+"]")
