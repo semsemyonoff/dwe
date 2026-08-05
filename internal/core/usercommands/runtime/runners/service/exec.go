@@ -42,16 +42,11 @@ func (e *ExecRunner) BuildCommand(ctx context.Context, rc spec.RunContext, compo
 		mode = model.DefaultExecMode
 	}
 
-	argv, err := buildServiceArgv(ctx, rc)
-	if err != nil {
-		return nil, err
-	}
-
-	envVars, err := runio.BuildRenderedEnv(rc.Cmd, rc)
-	if err != nil {
-		return nil, err
-	}
-
+	// The container probe runs BEFORE the argv is built, because building it may
+	// execute the command's argv_append_from expression — a host side effect,
+	// and one whose empty-output result short-circuits with
+	// spec.ErrArgvAppendEmpty ("skipped: nothing to process"). Probing second
+	// would report a stopped service as a clean skip and exit 0.
 	useExec := true
 	switch mode {
 	case model.ExecModeRun:
@@ -73,6 +68,16 @@ func (e *ExecRunner) BuildCommand(ctx context.Context, rc spec.RunContext, compo
 		if !running {
 			render.NewWriter(runio.StderrOf(rc)).Warning(fmt.Sprintf("service %q is not running — falling back to ephemeral `docker compose run --rm`; state will not persist between invocations", svc))
 		}
+	}
+
+	argv, err := buildServiceArgv(ctx, rc)
+	if err != nil {
+		return nil, err
+	}
+
+	envVars, err := runio.BuildRenderedEnv(rc.Cmd, rc)
+	if err != nil {
+		return nil, err
 	}
 
 	composeArgs, err := buildRenderedComposeArgs(rc)

@@ -3,6 +3,8 @@ package service
 import (
 	"context"
 	"errors"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 
@@ -1065,5 +1067,58 @@ func TestExecRunner_BuildCommand_ArgvAppendFromEmpty(t *testing.T) {
 	r := &ExecRunner{}
 	if _, err := r.BuildCommand(context.Background(), ctx, testCompose("dwe-laravel", nil)); !errors.Is(err, spec.ErrArgvAppendEmpty) {
 		t.Fatalf("err = %v, want spec.ErrArgvAppendEmpty", err)
+	}
+}
+
+// TestExecRunner_BuildCommand_ProbesBeforeArgvAppendFrom pins the ordering
+// inside BuildCommand: the exec-or-fail container probe must run BEFORE the
+// argv_append_from expression.
+//
+// Probing second lets a stopped service be reported as
+// "skipped (nothing to process)" with exit 0 whenever the expression happens to
+// yield nothing — hiding that the container is down — and executes the
+// expression's host side effects for an invocation that could never have run.
+func TestExecRunner_BuildCommand_ProbesBeforeArgvAppendFrom(t *testing.T) {
+	baseDir := t.TempDir()
+
+	// A stand-in for `docker` that always reports no running container: empty
+	// stdout is how isContainerRunning spells "not running".
+	fakeDocker := filepath.Join(baseDir, "fake-docker")
+	if err := os.WriteFile(fakeDocker, []byte("#!/bin/sh\nexit 0\n"), 0o755); err != nil {
+		t.Fatalf("writing fake docker: %v", err)
+	}
+
+	marker := filepath.Join(baseDir, "expression-ran")
+	ctx := RunContext{
+		Cmd: &CommandDef{
+			Type:           CommandTypeServiceExec,
+			ID:             "quality.staged",
+			Service:        "app-main",
+			Mode:           model.ExecModeExecOrFail,
+			Argv:           []string{"ruff", "check"},
+			ArgvAppendFrom: "touch " + marker,
+		},
+		Render:      &tpl.RenderContext{},
+		Config:      &config.DweConfig{Project: config.ProjectConfig{Prefix: "dwe", Name: "laravel"}},
+		ProjectRoot: baseDir,
+	}
+
+	compose := testCompose("dwe-laravel", nil)
+	compose.Bin = fakeDocker
+	compose.BaseDir = baseDir
+
+	r := &ExecRunner{}
+	_, err := r.BuildCommand(context.Background(), ctx, compose)
+	if err == nil {
+		t.Fatal("expected the not-running diagnostic, got nil")
+	}
+	if errors.Is(err, spec.ErrArgvAppendEmpty) {
+		t.Fatalf("a stopped service must not be reported as an empty item list: %v", err)
+	}
+	if !strings.Contains(err.Error(), "is not running") {
+		t.Fatalf("err = %v, want the exec-or-fail not-running diagnostic", err)
+	}
+	if _, statErr := os.Stat(marker); statErr == nil {
+		t.Fatal("argv_append_from ran despite the service being down")
 	}
 }

@@ -96,7 +96,9 @@ dwe shell main -c "composer install"
 dwe shell main -c "php artisan migrate" --mode run
 ```
 
-A TTY is allocated only when both stdin and stdout are terminals, so piping works cleanly (`dwe shell main -c "ls -la" | grep ...`). The shell binary, user, working directory, and env defaults come from each service's `cli:` block in `service.yml` — flags override per invocation.
+A TTY is allocated only when both stdin and stdout are terminals, so piping works cleanly (`dwe shell main -c "ls -la" | grep ...`). The cost is buffering: a child whose stdout is a pipe block-buffers, so a long-running command prints nothing until it exits. `--tty` (`-t`) forces a pseudo-TTY to keep that output flowing, at the price of `\n` → `\r\n` translation; `--no-tty` forces the opposite even on an interactive terminal. The two are mutually exclusive. `--tty` cannot be honoured when the shell has to start a new container (`--mode run`) while stdin is not a terminal — compose refuses to allocate a PTY there, and dwe warns on stderr instead of failing.
+
+The shell binary, user, working directory, and env defaults come from each service's `cli:` block in `service.yml` — flags override per invocation.
 
 ## Running project commands
 

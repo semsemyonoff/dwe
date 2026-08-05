@@ -1,7 +1,6 @@
 package service
 
 import (
-	"strings"
 	"testing"
 
 	"github.com/semsemyonoff/dwe/internal/cli/cmdctx"
@@ -38,10 +37,12 @@ func TestServicesShortDescriptionMatchesSurface(t *testing.T) {
 		registered[sub.Name()] = true
 	}
 
+	// Both directions are asserted unconditionally. Skipping a verb the help
+	// no longer mentions would make the test pass by simply rewording Short —
+	// which is the same silent drift that opened the original gap.
 	for _, verb := range []string{"list", "enable", "disable"} {
-		if !strings.Contains(root.Short, verb) {
-			continue
-		}
+		require.Contains(t, root.Short, verb,
+			"`dwe services` short help must keep advertising %q", verb)
 		require.True(t, registered[verb],
 			"`dwe services` short help promises %q but no such subcommand is registered", verb)
 	}

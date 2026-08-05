@@ -145,11 +145,6 @@ refuses to allocate a PTY there, and the command says so.`,
 			if cmd.Flags().Changed("command") && strings.TrimSpace(flagCommand) == "" {
 				return fmt.Errorf("-c/--command cannot be empty or whitespace-only")
 			}
-			// Validate mutual exclusion: --tty and --no-tty contradict each other.
-			if flagTTY && flagNoTTY {
-				return fmt.Errorf("--tty and --no-tty are mutually exclusive")
-			}
-
 			cfg, err := config.LoadConfigOrWrap(flags.ConfigPath)
 			if err != nil {
 				return err
@@ -205,6 +200,7 @@ refuses to allocate a PTY there, and the command says so.`,
 	cmd.Flags().StringVarP(&flagCommand, "command", "c", "", "run a single command via `<shell> -c \"…\"` and exit (non-interactive)")
 	cmd.Flags().BoolVarP(&flagTTY, "tty", "t", false, "force a pseudo-TTY (keeps long-running output unbuffered when stdout is a pipe)")
 	cmd.Flags().BoolVar(&flagNoTTY, "no-tty", false, "never allocate a pseudo-TTY, even on an interactive terminal")
+	cmd.MarkFlagsMutuallyExclusive("tty", "no-tty")
 	cmd.GroupID = groupID
 	return cmd
 }

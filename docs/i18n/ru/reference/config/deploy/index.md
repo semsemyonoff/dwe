@@ -1,4 +1,4 @@
-> Translated from: reference/config/deploy/index.md @ 54047dee5154
+> Translated from: reference/config/deploy/index.md @ 0d1e1643a9f9
 
 # deploy.yml / reset.yml
 
@@ -89,7 +89,7 @@ phases:
           type: builtin|shell|template
           cmd: <string>            # for builtin/shell
           expr: <string>           # for template
-        check:                     # optional: post-condition (typed action)
+        check:                     # optional: post-condition (typed action, либо скаляр `auto`)
           type: shell|dwe|command|builtin
           cmd: <value>
           with:                    # optional: parameters
@@ -142,7 +142,7 @@ phases:
 | `cmd` | string | Полезная нагрузка команды (обязательно); содержимое зависит от `type` |
 | `with` | mapping | Параметры, передаваемые в команду или билтин (опционально; обязательно для большинства билтинов) |
 | `when` | typed condition | Предусловие, вычисляемое до запуска шага; шаг пропускается при ложном значении. См. [Условия](conditions.md). |
-| `check` | typed action | Постусловие, вычисляемое после успеха шага; пайплайн прерывается, если действие провалилось. Пропускается, когда `continue_on_error: true` и шаг провалился. См. [Условия](conditions.md). |
+| `check` | typed action, либо скаляр `auto` | Постусловие, вычисляемое после успеха шага; пайплайн прерывается, если действие провалилось. Пропускается, когда `continue_on_error: true` и шаг провалился. См. [Условия](conditions.md). |
 | `files_gate` | typed gate | Предусловие на основе наличия/отсутствия файлов из блока `files:` команды. Шаг пропускается, если не удовлетворено. См. [`files_gate:`](conditions.md#files_gate-предусловие-по-файлам). |
 | `continue_on_error` | bool | Если `true`, упавший шаг фиксируется через `FailStep` (красный ✗), но пайплайн не прерывается. После такого шага пропускаются `check` и хук следующего шага. Полезно для опциональных хук-фаз — см. [lifecycle.yml](../lifecycle.md). Если тело шага успешно, но `check:` падает и `continue_on_error: true`, шаг отмечается как упавший, а пайплайн переходит к следующему шагу (симметрично семантике падения тела). |
 | `skip_confirm` | bool | Если `true`, обходит промпты подтверждения только для этого шага — эквивалент шагового `-y` / `--yes`. Распространяется на тело шага и его действие `check:`. Объединяется по ИЛИ с пайплайновым флагом skip-confirm, поэтому шаг становится неинтерактивным, если задан хотя бы один из них. Полезно, когда основная часть пайплайна интерактивна, но один шаг (например, билтин `confirm`, защищающий идемпотентное действие, или команда с внутренним перепромптом) должен всегда продолжать. |

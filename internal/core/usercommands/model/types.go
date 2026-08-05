@@ -954,6 +954,10 @@ func (c *CommandDef) Validate() error {
 		}
 	}
 
+	if err := c.validateArgsSlotQuoting(); err != nil {
+		return fmt.Errorf("command %q: %w", c.ID, err)
+	}
+
 	if err := c.validateArgvAppendFrom(); err != nil {
 		return fmt.Errorf("command %q: %w", c.ID, err)
 	}
@@ -1067,6 +1071,46 @@ func (c *CommandDef) EffectiveWorkdirFrom() string {
 // expansion packs that argv into the synthetic .start command, so the documented
 // "empty output → skip" semantics would read as "silently fail to start the
 // daemon".
+// validateArgsSlotQuoting rejects a ${args} slot the author wrapped in quotes
+// of their own inside `cmd:`.
+//
+// The slot renders to "$@" — already correctly quoted — so a wrapping pair
+// nests badly and silently loses the arguments in a way nothing downstream can
+// detect:
+//
+//	'${args}'  →  '"$@"'   one literal 4-character argument; every caller
+//	                       argument is dropped
+//	"${args}"  →  ""$@""   $@ ends up UNQUOTED between two empty strings, so
+//	                       arguments split on whitespace and a `*` glob is
+//	                       expanded; with no arguments at all it collapses to a
+//	                       single empty argument (`npm test ""`), which is a
+//	                       different command from `npm test`
+//
+// Both are the natural shell habit, both fail silently at runtime, and neither
+// has a correct rendering — the same reasoning that rejects an embedded
+// `--filter=${args}` in argv. A slot merely appearing inside a longer quoted
+// span cannot be caught textually and stays a documented caveat.
+func (c *CommandDef) validateArgsSlotQuoting() error {
+	for _, q := range []string{`"`, `'`} {
+		if strings.Contains(c.Cmd, q+ArgsToken+q) {
+			return fmt.Errorf(
+				"cmd: wraps %s in %s quotes — the slot already renders to a quoted \"$@\", "+
+					"so wrapping it drops the arguments (%s) or exposes them to word splitting "+
+					"and globbing (%s); write it unquoted: %s",
+				ArgsToken, quoteName(q), `'${args}' → '"$@"'`, `"${args}" → ""$@""`, ArgsToken)
+		}
+	}
+	return nil
+}
+
+// quoteName renders a quote character as prose for the error above.
+func quoteName(q string) string {
+	if q == `"` {
+		return "double"
+	}
+	return "single"
+}
+
 func (c *CommandDef) validateArgvAppendFrom() error {
 	if c.ArgvAppendFrom == "" {
 		return nil

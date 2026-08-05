@@ -153,6 +153,9 @@ func TestResolveTTYMode(t *testing.T) {
 		{false, false, ttyAuto},
 		{true, false, ttyOn},
 		{false, true, ttyOff},
+		// Contradictory flags never reach here — cobra rejects them at parse
+		// time (see TestNewCmd_ttyFlags). Pinned so the helper stays total.
+		{true, true, ttyOn},
 	} {
 		if got := resolveTTYMode(tc.force, tc.off); got != tc.want {
 			t.Errorf("resolveTTYMode(%v,%v): got %v, want %v", tc.force, tc.off, got, tc.want)

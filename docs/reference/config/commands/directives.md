@@ -319,12 +319,19 @@ program itself, so nothing in an argument can change the command's structure: a
 filename containing a space stays one argument, and `;`, backticks or `$(…)`
 stay literal text.
 
-Write the slot **unquoted** — `${args}`, not `"${args}"`. It already expands to
-a correctly-quoted `"$@"`; wrapping it in quotes of your own produces `""$@""`,
-which executes nothing but does lose the protection quoting normally gives:
-arguments split on whitespace, and one containing `*` or `?` is subject to
-pathname expansion. `-- '*.txt'` reaches the command as the matching filenames
-rather than as the literal pattern.
+Write the slot **unquoted** — `${args}`, not `"${args}"` or `'${args}'`. It
+already expands to a correctly-quoted `"$@"`, so a wrapping pair of your own
+nests badly, and both spellings are **rejected at load time**:
+
+| You write | It would render to | What that does |
+| --- | --- | --- |
+| `'${args}'` | `'"$@"'` | one literal four-character argument; every caller argument is dropped |
+| `"${args}"` | `""$@""` | `$@` ends up *unquoted*: arguments split on whitespace and one containing `*` or `?` is glob-expanded (`-- '*.txt'` arrives as the matching filenames, not the pattern). With no arguments at all it collapses to a single empty argument — `npm test ""` is not `npm test`. |
+
+The check looks for a wrapping pair around the slot itself; quotes elsewhere in
+the command are untouched (`printf "%s\n" ${args}` is fine). A slot placed
+inside a longer quoted span cannot be detected textually and stays your
+responsibility.
 
 Two placements silently lose the arguments, because `"$@"` is scoped to the
 shell's current positional parameters:

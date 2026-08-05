@@ -2,7 +2,9 @@ package command
 
 import (
 	"errors"
+	"fmt"
 	"os/signal"
+	"strings"
 	"syscall"
 
 	"github.com/semsemyonoff/dwe/internal/cli/cmdctx"
@@ -189,6 +191,20 @@ Without an id, an interactive selector lists public commands. With a group prefi
 					groupFilter := ""
 					if len(args) == 1 {
 						groupFilter = args[0]
+					}
+					// Reaching the selector means the near argument was a group
+					// prefix, not an exact id — there is no command to hand the
+					// pass-through arguments to, and this branch would otherwise
+					// print the list and exit 0, discarding them. Same contract as
+					// the `dwe cmd -- <args>` guard in commandIDArgs.
+					if len(through) > 0 {
+						return "", cmdctx.Err("usage_error", fmt.Sprintf(
+							"arguments after `--` need an exact command id, got the group %q (%s)\n\n"+
+								"There is no picker in non-interactive mode, so the arguments have "+
+								"nowhere to go. Name the command:\n"+
+								"  dwe cmd <id> -- %s\n\n"+
+								"List the ids in this group with:  dwe commands list %s",
+							groupFilter, strings.Join(through, " "), strings.Join(through, " "), groupFilter))
 					}
 					if err := writeCommandsList(cmd, flags, reg, groupFilter, false); err != nil {
 						return "", err

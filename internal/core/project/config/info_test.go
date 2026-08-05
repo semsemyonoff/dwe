@@ -163,10 +163,11 @@ func TestLoadInfoConfig_fallbackStates(t *testing.T) {
 	defaultCfg := DefaultInfoConfig()
 
 	tests := []struct {
-		name    string
-		yaml    string
-		wantLen int  // want len(cfg.Sections)
-		wantDef bool // want cfg to equal the built-in default
+		name      string
+		yaml      string
+		wantLen   int  // want len(cfg.Sections)
+		wantDef   bool // want cfg to equal the built-in default
+		wantState InfoConfigState
 	}{
 		{
 			name: "fully commented",
@@ -176,21 +177,35 @@ func TestLoadInfoConfig_fallbackStates(t *testing.T) {
 #     items: []
 # footer: true
 `,
-			wantLen: len(defaultCfg.Sections),
-			wantDef: true,
+			wantLen:   len(defaultCfg.Sections),
+			wantDef:   true,
+			wantState: InfoStateDefaultFallback,
 		},
 		{
-			name:    "empty file",
-			yaml:    ``,
-			wantLen: len(defaultCfg.Sections),
-			wantDef: true,
+			name:      "empty file",
+			yaml:      ``,
+			wantLen:   len(defaultCfg.Sections),
+			wantDef:   true,
+			wantState: InfoStateDefaultFallback,
 		},
 		{
 			name: "deliberate empty sections",
 			yaml: `sections: []
 `,
-			wantLen: 0,
-			wantDef: false,
+			wantLen:   0,
+			wantDef:   false,
+			wantState: InfoStateDeliberatelyEmpty,
+		},
+		{
+			// Active keys but no `sections:` key at all — the loader treats it
+			// exactly like `sections: []`, so `dwe validate` must not claim the
+			// file wrote an explicit empty list.
+			name: "active keys but no sections key",
+			yaml: `footer: true
+`,
+			wantLen:   0,
+			wantDef:   false,
+			wantState: InfoStateDeliberatelyEmpty,
 		},
 		{
 			name: "one real section",
@@ -199,8 +214,9 @@ func TestLoadInfoConfig_fallbackStates(t *testing.T) {
     items:
       - type: separator
 `,
-			wantLen: 1,
-			wantDef: false,
+			wantLen:   1,
+			wantDef:   false,
+			wantState: InfoStateAuthored,
 		},
 	}
 
@@ -208,9 +224,14 @@ func TestLoadInfoConfig_fallbackStates(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 			path := writeTempYML(t, tt.yaml)
-			cfg, err := LoadInfoConfig(path)
+			cfg, state, err := LoadInfoConfigWithState(path)
 			if err != nil {
-				t.Fatalf("LoadInfoConfig: %v", err)
+				t.Fatalf("LoadInfoConfigWithState: %v", err)
+			}
+			// The state is what `dwe validate` reports on; deriving it a second
+			// time from the raw file is exactly the duplication this replaced.
+			if state != tt.wantState {
+				t.Errorf("state = %v, want %v", state, tt.wantState)
 			}
 			if len(cfg.Sections) != tt.wantLen {
 				t.Fatalf("sections count = %d, want %d", len(cfg.Sections), tt.wantLen)

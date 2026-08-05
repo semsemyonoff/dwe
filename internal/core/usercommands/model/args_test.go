@@ -164,3 +164,47 @@ func TestArgvArgsMustBeWholeElement(t *testing.T) {
 		require.NoError(t, def.Validate())
 	})
 }
+
+// TestCmdArgsSlotMustBeUnquoted covers the two wrappings a shell-literate author
+// writes by reflex. Both render to something that silently loses or mangles the
+// arguments, so both are load-time errors rather than runtime surprises.
+func TestCmdArgsSlotMustBeUnquoted(t *testing.T) {
+	// '"$@"' is one literal argument, so every caller argument disappears.
+	t.Run("single-quoted slot is rejected", func(t *testing.T) {
+		def := &CommandDef{ID: "x.y", Type: CommandTypeShell, Cmd: `ruff check '${args}'`}
+		err := def.Validate()
+		require.Error(t, err)
+		require.Contains(t, err.Error(), "single quotes")
+		require.Contains(t, err.Error(), "${args}")
+	})
+
+	// ""$@"" leaves $@ unquoted: arguments split on whitespace, `*` globs, and
+	// an empty call collapses to one empty argument.
+	t.Run("double-quoted slot is rejected", func(t *testing.T) {
+		def := &CommandDef{ID: "x.y", Type: CommandTypeShell, Cmd: `npm test "${args}"`}
+		err := def.Validate()
+		require.Error(t, err)
+		require.Contains(t, err.Error(), "double quotes")
+	})
+
+	t.Run("unquoted slot is accepted", func(t *testing.T) {
+		def := &CommandDef{ID: "x.y", Type: CommandTypeShell, Cmd: `npm test ${args}`}
+		require.NoError(t, def.Validate())
+	})
+
+	// The rule is about a wrapping PAIR, not about quotes appearing anywhere in
+	// the command — a slot next to an unrelated quoted word stays legal.
+	t.Run("quotes elsewhere in the command stay legal", func(t *testing.T) {
+		def := &CommandDef{ID: "x.y", Type: CommandTypeShell, Cmd: `printf "%s\n" ${args}`}
+		require.NoError(t, def.Validate())
+	})
+
+	// argv elements are not shell text — the quotes there would be literal
+	// bytes, and the whole-element rule already rejects them.
+	t.Run("argv is governed by the whole-element rule instead", func(t *testing.T) {
+		def := &CommandDef{ID: "x.y", Type: CommandTypeShell, Argv: []string{"tool", `"${args}"`}}
+		err := def.Validate()
+		require.Error(t, err)
+		require.Contains(t, err.Error(), "whole element")
+	})
+}

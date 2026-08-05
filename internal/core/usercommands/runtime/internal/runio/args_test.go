@@ -201,11 +201,16 @@ func appendRC(t *testing.T, expr string, args []string, stderr io.Writer) spec.R
 // spaces, quotes and `$(…)` included. Anything that re-parsed the output as
 // shell would split "a b.py" into two arguments and run the substitution.
 func TestAppendArgvFrom_OneElementPerLine(t *testing.T) {
-	expr := `printf '%s\n' 'a.py' 'src/a b.py' "it's.py" '$(touch /tmp/dwe-append-pwned)'`
+	// The marker lives under t.TempDir(), not a fixed /tmp path: a process-global
+	// path would make one genuinely failing run poison every later run on the
+	// machine, and would be shared by concurrent runs of this package.
+	marker := filepath.Join(t.TempDir(), "pwned")
+	payload := "$(touch " + marker + ")"
+	expr := `printf '%s\n' 'a.py' 'src/a b.py' "it's.py" '` + payload + `'`
 	got, err := AppendArgvFrom(context.Background(), appendRC(t, expr, nil, io.Discard), []string{"ruff", "check"})
 	require.NoError(t, err)
-	require.Equal(t, []string{"ruff", "check", "a.py", "src/a b.py", "it's.py", "$(touch /tmp/dwe-append-pwned)"}, got)
-	require.NoFileExists(t, "/tmp/dwe-append-pwned", "output must never be re-parsed as shell")
+	require.Equal(t, []string{"ruff", "check", "a.py", "src/a b.py", "it's.py", payload}, got)
+	require.NoFileExists(t, marker, "output must never be re-parsed as shell")
 }
 
 // TestAppendArgvFrom_TrailingNewlineAndBlankLines: the trailing newline every
@@ -310,9 +315,23 @@ func TestAppendArgvFrom_NoExpressionIsIdentity(t *testing.T) {
 
 // TestAppendArgvFrom_ContextCancellation: the expression is a child process and
 // must die with the invocation.
+//
+// The assertions are deliberately specific. `require.Error` alone cannot fail:
+// an uncancelled `sleep 30` eventually exits 0 with no output, which returns
+// ErrArgvAppendEmpty — non-nil. So the test also pins that the error is NOT the
+// empty sentinel, and that the call returned near the deadline rather than
+// after the sleep.
 func TestAppendArgvFrom_ContextCancellation(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 50*time.Millisecond)
 	defer cancel()
+
+	start := time.Now()
 	_, err := AppendArgvFrom(ctx, appendRC(t, "sleep 30", nil, io.Discard), []string{"ruff"})
+	elapsed := time.Since(start)
+
 	require.Error(t, err)
+	require.NotErrorIs(t, err, spec.ErrArgvAppendEmpty,
+		"a killed child is a failure, not an empty item list")
+	require.Less(t, elapsed, 25*time.Second,
+		"the child must die with the context, not run its full sleep")
 }

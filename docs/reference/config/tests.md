@@ -138,7 +138,9 @@ Any `KindPredicate` builtin (`file_exists`, `executable_in_path`, `tcp_reachable
 
 See the [builtins reference](deploy/builtins.md#http_check) for the full parameter list and retry semantics.
 
-**`${...}` rendering is a scenario-loader concern, not an engine change.** The pipeline engine passes builtin `with:` params and shell `cmd:` verbatim — only individual builtins render their own fields. The scenario loader renders `${...}` in step `with:`/`cmd:` against the copy's resolved config **before** the steps run (the same `${...}` substrate user commands and config templates use), so `${vars.app.http_port}` resolves to the concrete allocated port. Paths in builtin params (e.g. `file_exists` `path:`) resolve relative to the copy's root — assertions always inspect the test environment, never the original tree.
+**`${...}` rendering happens in the pipeline engine, exactly once.** Scenario steps resolve through the same path as `deploy.yml` steps, so `cmd`, the string leaves of `with`, `check`, `timeout` and a shell `when:` are rendered at resolve time against the copy's resolved config — `${vars.app.http_port}` resolves to the concrete allocated port. There is no scenario-local pre-pass: rendering is not idempotent, and a second one would double-expand a var whose value is itself a `${...}` reference, so a scenario would test something the deploy pipeline never runs.
+
+The same rules as [deploy steps](deploy/index.md) therefore apply here: an unrecognized head (`${HOME}`, a typo) is left as a literal `${...}` rather than collapsing to an empty string, and `${param.*}` / `${context.*}` / `${files.*}` / `${generated.*}` / `${args}` have no source on this path — using one fails the scenario at resolve time with a message naming it. Paths in builtin params (e.g. `file_exists` `path:`) resolve relative to the copy's root — assertions always inspect the test environment, never the original tree.
 
 A failing step fails the scenario; remaining steps are skipped.
 

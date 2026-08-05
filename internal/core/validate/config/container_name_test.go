@@ -59,6 +59,23 @@ func TestContainerNameValidator(t *testing.T) {
 			name:    "interpolated container_name is silent",
 			compose: "services:\n  app:\n    image: busybox\n    container_name: ${MY_CONTAINER}\n",
 		},
+		{
+			// Compose lowercases the project name, so a container_name that
+			// differs from the derived one only in casing IS a divergence:
+			// docker never creates a container called "DWE-Shop-App".
+			name:       "case-only divergence warns",
+			compose:    "services:\n  app:\n    image: busybox\n    container_name: DWE-Shop-App\n",
+			wantWarn:   true,
+			wantMsgHas: []string{"DWE-Shop-App", "dwe-shop-app"},
+		},
+		{
+			// Named volumes and networks are isolation findings of other kinds
+			// in the same scan. Without the KindContainerName filter each one
+			// would be reported as a service setting container_name: "".
+			name: "named volumes and networks are not container_name findings",
+			compose: "services:\n  app:\n    image: busybox\n    container_name: dwe-shop-app\n" +
+				"volumes:\n  data:\n    name: my-vol\nnetworks:\n  back:\n    name: my-net\n",
+		},
 	}
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
@@ -69,6 +86,7 @@ func TestContainerNameValidator(t *testing.T) {
 				require.Empty(t, diags)
 				return
 			}
+			require.Len(t, diags, 1, "exactly one diagnostic per divergent service")
 			d := hasDiag(t, diags, validate.SeverityWarning, "diverges from the conventional")
 			require.Equal(t, "config.container_name", d.Target)
 			require.Equal(t, "docker-compose.yml", d.File)

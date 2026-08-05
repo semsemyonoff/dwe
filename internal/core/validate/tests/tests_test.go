@@ -301,6 +301,55 @@ steps:
 	}
 }
 
+// TestScenariosValidator_CommandRefThroughVarIsRendered: a `type: command` step
+// naming its target through a ${vars.*} reference is a valid scenario. These are
+// raw loaded steps, so without the render pass the lookup runs against the
+// literal `${vars.target}` and `dwe validate tests` reports a bogus
+// "unknown command" ERROR (exit 1) on a project that deploys fine.
+func TestScenariosValidator_CommandRefThroughVarIsRendered(t *testing.T) {
+	root := writeScenario(t, t.TempDir(), "varcmd.yml", `
+steps:
+  - name: run-it
+    type: command
+    cmd: "${vars.target}"
+`)
+	cfg := baseCfg()
+	cfg.Raw = map[string]any{
+		"vars": map[string]any{"target": "queue.logs"},
+	}
+	reg := registry.NewEmptyRegistry()
+	reg.AddCommandForTest(&model.CommandDef{
+		ID: "queue.logs", Type: model.CommandTypeBuiltin, Cmd: "docker_daemon_logs",
+	})
+	diags := runForWithRegistry(root, cfg, reg)
+	if len(diags) != 0 {
+		t.Fatalf("a ${vars.*} command ref must render before the lookup, got %+v", diags)
+	}
+}
+
+// The rendered value is still looked up: a var pointing at a command that does
+// not exist must report, or the render pass would turn every typo into silence.
+func TestScenariosValidator_CommandRefThroughVarStillReportsUnknown(t *testing.T) {
+	root := writeScenario(t, t.TempDir(), "varcmdbad.yml", `
+steps:
+  - name: run-it
+    type: command
+    cmd: "${vars.target}"
+`)
+	cfg := baseCfg()
+	cfg.Raw = map[string]any{
+		"vars": map[string]any{"target": "does.not.exist"},
+	}
+	reg := registry.NewEmptyRegistry()
+	diags := errorDiags(runForWithRegistry(root, cfg, reg))
+	if len(diags) != 1 {
+		t.Fatalf("want 1 error diagnostic, got %+v", diags)
+	}
+	if !strings.Contains(diags[0].Message, `unknown command "does.not.exist"`) {
+		t.Errorf("message = %q, want the RESOLVED id, not the literal ${vars.target}", diags[0].Message)
+	}
+}
+
 func TestScenariosValidator_NoRegistrySkipsCommandCheck(t *testing.T) {
 	root := writeScenario(t, t.TempDir(), "nocmdcheck.yml", `
 steps:
