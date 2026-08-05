@@ -61,7 +61,8 @@ type ScanResult struct {
 //     those fields render through tpl.Render (the Go-template engine), where a
 //     ${...} literal is inert. Matching both is the safe direction for a
 //     "where is this used" check (over-report, never miss a real reference).
-//     cmd / text / value / title / project_name / confirm: direct scalar fields.
+//     cmd / text / value / title / project_name / confirm / timeout / command:
+//     direct scalar fields.
 //     env / with: mappings whose *values* are templated.
 //     when (scalar form only): command/workflow when supports ${...}.
 //   - structuralKeys — from / default_from: the value IS a config dot-path; a
@@ -95,6 +96,13 @@ var (
 		"project_name": true,
 		"confirm":      true,
 		"when":         true, // scalar form only; mapping form handled separately
+		// timeout / command are pipeline step fields the resolve-time renderer
+		// substitutes alongside cmd (pipeline.renderStepFields: step.Timeout and
+		// files_gate.command). Leaving them out let a ${vars.typo} there render
+		// to "" with nothing reporting it — a silently unbounded step, or a gate
+		// silently falling back to probing the step's own cmd.
+		"timeout": true,
+		"command": true,
 	}
 	// templatedMapKeys are mappings whose every value scalar is templated.
 	templatedMapKeys = map[string]bool{

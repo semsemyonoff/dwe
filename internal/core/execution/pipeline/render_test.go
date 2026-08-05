@@ -1,6 +1,7 @@
 package pipeline
 
 import (
+	"strings"
 	"testing"
 
 	"github.com/semsemyonoff/dwe/internal/core/execution/condition"
@@ -657,6 +658,46 @@ func TestRenderStepFields_builtinWithGoTemplateSurvives(t *testing.T) {
 		}
 		if got.FilesGate.With["dump"] != "app" {
 			t.Errorf("FilesGate.With[dump] = %v, want %q", got.FilesGate.With["dump"], "app")
+		}
+	})
+
+	// Same argument one step further: a builtin's with: map is the builtin's
+	// parameter map first and the gate's inherited one only incidentally. If the
+	// inheritance widened it, a documented `message` text (or a `shell`
+	// predicate's `docker inspect -f` format) on a step that happens to carry a
+	// files_gate would hard-fail the resolve and abort the whole plan.
+	t.Run("a files_gate inheriting a builtin with: does not widen it", func(t *testing.T) {
+		step := config.DeployStep{
+			Name:      "notify",
+			Type:      "builtin",
+			Cmd:       "message",
+			With:      map[string]any{"level": "info", "text": "{{ .Project.Name }} deployed"},
+			FilesGate: &filesgate.FilesGate{Command: "restore", State: filesgate.StateReadable},
+		}
+		got, err := renderStepFields(step, ctx)
+		if err != nil {
+			t.Fatalf("renderStepFields failed: %v", err)
+		}
+		if got.With["text"] != "{{ .Project.Name }} deployed" {
+			t.Errorf("With[text] = %v, want the builtin template left verbatim", got.With["text"])
+		}
+	})
+
+	// A lowercase shell variable colliding with a namespace name is not a
+	// reference — see tpl.IsVarNamespaceRef. Before that rule, ${host} resolved
+	// against .Raw (no such root key) and erased the variable silently.
+	t.Run("head-only shell variables are left alone", func(t *testing.T) {
+		step := config.DeployStep{
+			Name: "probe",
+			Type: "shell",
+			Cmd:  `host=$(cat h); curl "http://${host}:${services.app.ports.http}/"`,
+		}
+		got, err := renderStepFields(step, ctx)
+		if err != nil {
+			t.Fatalf("renderStepFields failed: %v", err)
+		}
+		if !strings.Contains(got.Cmd, "${host}") {
+			t.Errorf("Cmd = %q, want the ${host} shell variable preserved", got.Cmd)
 		}
 	})
 }

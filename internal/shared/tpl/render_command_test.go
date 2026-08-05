@@ -23,11 +23,56 @@ func TestCompileVarSyntax_noOp(t *testing.T) {
 	}
 }
 
-func TestCompileVarSyntax_simpleVar(t *testing.T) {
-	got := CompileVarSyntax("${project}")
-	want := `{{ resolve .Raw "project" }}`
+// A head-only ${...} is a shell variable that happens to be spelled like a
+// namespace, not a reference: every namespace form in the authoring contract is
+// dotted. Rewriting it resolved a whole config sub-map into the command text
+// (or erased it to "" when no root key matched) — silently, and now that
+// pipeline cmd: strings render, in commands that never opted into templating.
+// ${args} is the one bare form the contract defines and keeps its rewrite.
+func TestCompileVarSyntax_headOnlyIsLiteral(t *testing.T) {
+	for _, in := range []string{
+		"${project}",
+		"${services}",
+		"${vars}",
+		"${host}",
+		"${files}",
+		"${param}",
+		"${state}",
+		"for f in ${files}; do echo $f; done",
+	} {
+		if got := CompileVarSyntax(in); got != in {
+			t.Errorf("CompileVarSyntax(%q) = %q, want unchanged", in, got)
+		}
+	}
+}
+
+// The head-only rule must not leak into a dotted reference sharing the string.
+func TestCompileVarSyntax_headOnlyBesideDotPath(t *testing.T) {
+	got := CompileVarSyntax("curl http://${host}:${services.app.ports.http}/")
+	want := `curl http://${host}:{{ resolve .Raw "services.app.ports.http" }}/`
 	if got != want {
 		t.Errorf("got %q, want %q", got, want)
+	}
+}
+
+func TestIsVarNamespaceRef(t *testing.T) {
+	cases := map[string]bool{
+		"vars.db.host": true,
+		"project.name": true,
+		"host.uid":     true,
+		"args":         true, // the one bare form the contract defines
+		"args.0":       true,
+		"project":      false,
+		"files":        false,
+		"host":         false,
+		"HOME":         false,
+		"CONTAINER":    false,
+		"__configPath": false,
+	}
+	for inner, want := range cases {
+		if got := IsVarNamespaceRef(inner); got != want {
+			t.Errorf("IsVarNamespaceRef(%q) = %v, want %v", inner, got, want)
+		}
 	}
 }
 
@@ -857,6 +902,13 @@ func TestValidateRawScope(t *testing.T) {
 		{"raw head", "clone ${vars.source.repo} ${project.name}", false},
 		{"host", "chown ${host.uid}:${host.gid} .", false},
 		{"unknown head", "echo ${HOME}", false},
+		// Head-only tokens are shell variables, not references — a deploy step
+		// iterating over a `files` shell var must not be rejected as a use of
+		// the files namespace. ${args} is the contract's one bare form and stays
+		// rejected: it genuinely has no source on this path.
+		{"head-only files", "for f in ${files}; do echo $f; done", false},
+		{"head-only param", "echo ${param}", false},
+		{"head-only generated", "echo ${generated}", false},
 		{"snapshot stays validateSnapshotScope's", "tar ${snapshot.path}", false},
 		{"no reference", "docker inspect -f '{{.State.Status}}' app", false},
 		{"empty", "", false},

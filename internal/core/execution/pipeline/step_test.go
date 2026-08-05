@@ -86,6 +86,11 @@ func TestUnresolvedTemplateRefs(t *testing.T) {
 		{"resolved known head leaves nothing", "git clone https://example.com/repo dst", nil},
 		{"unknown head flagged", "echo ${HOME}", []string{"${HOME}"}},
 		{"known head not flagged", "echo ${vars.x}", nil},
+		// A head-only token is left literal by the renderer (it is a shell
+		// variable, not a reference), so the plan reports it exactly like
+		// ${HOME} rather than implying it was substituted.
+		{"head-only flagged like any shell var", "curl http://${host}/", []string{"${host}"}},
+		{"bare args is a reference, not a leftover", "go test ${args}", nil},
 		{"mixed known and unknown", "echo ${vars.x} ${HOME}", []string{"${HOME}"}},
 		{"dedupes repeats", "echo ${HOME} and ${HOME} again", []string{"${HOME}"}},
 		{"preserves first-occurrence order", "echo ${PATH} then ${HOME}", []string{"${PATH}", "${HOME}"}},

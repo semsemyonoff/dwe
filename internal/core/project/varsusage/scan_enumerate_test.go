@@ -55,6 +55,12 @@ func TestEnumerateAllUsages(t *testing.T) {
 		{"workspace/deploy.yml", 17, "HOME"},
 		{"workspace/deploy.yml", 20, "vars.db.host"},
 		{"workspace/deploy.yml", 20, "vars.db.port"},
+		// timeout: and files_gate.command: are rendered by the pipeline resolver
+		// alongside cmd:, so the scanner must see them too — otherwise a typo
+		// there renders to "" (an unbounded step, a gate falling back to the
+		// step's own cmd) with no validator reporting it.
+		{"workspace/deploy.yml", 24, "vars.timeouts.migrate"},
+		{"workspace/deploy.yml", 26, "vars.gate.command"},
 		{"workspace/templates/config/app/.env.tmpl", 1, "vars.db.host"},
 	}
 	if !reflect.DeepEqual(got, want) {

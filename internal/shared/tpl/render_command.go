@@ -177,13 +177,20 @@ var contextOnlyVarHeads = map[string]struct{}{
 // template call and the lenient resolver behind it renders them to "": without
 // this pre-scan `cmd: "git checkout ${param.branch}"` becomes `git checkout `
 // in `dwe deploy plan` and at run time, with nothing downstream to flag it
-// (UnresolvedTemplateRefs skips known heads by construction). Callers run it
-// before RenderCommand and fail the resolve on error — the same call shape,
-// and the same reasoning, as validateSnapshotScope.
+// (UnresolvedTemplateRefs skips namespace references by construction). Callers
+// run it before RenderCommand and fail the resolve on error — the same call
+// shape, and the same reasoning, as validateSnapshotScope.
+//
+// The membership test goes through IsVarNamespaceRef, so a bare shell variable
+// that happens to be spelled like a namespace (`for f in ${files}`) is not a
+// reference and is left alone — see there.
 func ValidateRawScope(expr string) error {
 	for _, m := range varPattern.FindAllStringSubmatch(expr, -1) {
 		inner := m[1]
 		head, _, _ := strings.Cut(inner, ".")
+		if !IsVarNamespaceRef(inner) {
+			continue
+		}
 		if _, ok := contextOnlyVarHeads[head]; ok {
 			return fmt.Errorf("template uses ${%s}: the %q namespace has no source here (only project config paths and ${host.*} resolve on this path)", inner, head)
 		}
@@ -208,6 +215,32 @@ var knownVarHeadSet = func() map[string]struct{} {
 func IsKnownVarHead(head string) bool {
 	_, ok := knownVarHeadSet[head]
 	return ok
+}
+
+// IsVarNamespaceRef reports whether inner (the dot-path inside a ${...}) is a
+// dwe namespace reference rather than an unrelated $-braced token. It is the
+// head test plus one rule: the reference must carry a tail.
+//
+// Every namespace form in the authoring contract is dotted — ${vars.db.host},
+// ${project.name}, ${host.uid}, ${files.id.path}. A head-only ${host} /
+// ${files} / ${services} is not one of them; it is a lowercase shell variable
+// that happens to collide with a namespace name, and pipeline `cmd:` strings
+// (rendered since resolve-time rendering landed) are full of those. Treating it
+// as a reference resolved it against .Raw, where it either erased to "" (no
+// matching root key) or interpolated a whole config sub-map as Go's map[...]
+// text — both silent, and both the exact failure mode the known-head whitelist
+// exists to prevent. ${args} is the one bare form the contract defines, so it
+// stays a reference.
+//
+// Callers outside this package must ask through here (or IsKnownVarHead for the
+// head alone) rather than re-deriving the rule, so the gate, the scope check,
+// the unresolved-reference reporter and CompileVarSyntax cannot drift apart.
+func IsVarNamespaceRef(inner string) bool {
+	head, _, hasTail := strings.Cut(inner, ".")
+	if !IsKnownVarHead(head) {
+		return false
+	}
+	return hasTail || head == "args"
 }
 
 // CompileVarSyntax rewrites ${...} expressions into Go template calls.
@@ -301,11 +334,12 @@ func CompileVarSyntax(input string) string {
 		}
 
 		// Default: resolve against .Raw config map, but only when the head is
-		// a known namespace. An unknown head (a shell-style ${VAR}, a typo, or
-		// a stale top-level dot-path from before the strict root landed) is
-		// left as a literal ${...} instead of silently collapsing to "" — see
-		// KnownVarHeads.
-		if _, ok := knownVarHeadSet[head]; ok {
+		// a known namespace AND the reference carries a tail. An unknown head
+		// (a shell-style ${VAR}, a typo, or a stale top-level dot-path from
+		// before the strict root landed) is left as a literal ${...} instead of
+		// silently collapsing to "" — see KnownVarHeads. A head-only reference
+		// is left literal for the same reason — see IsVarNamespaceRef.
+		if IsVarNamespaceRef(inner) {
 			return fmt.Sprintf(`{{ resolve .Raw %q }}`, inner)
 		}
 		return match
