@@ -355,7 +355,7 @@ Behavior by destination state:
 
 The skip is deliberately branch-blind: `source_clone` materialises the source once and never re-points or updates an existing working tree. Switching branches or pulling is the developer's job (or a separate step).
 
-Git runs with prompting disabled — `GIT_TERMINAL_PROMPT=0`, an emptied `GIT_ASKPASS`/`SSH_ASKPASS`, and `GIT_SSH_COMMAND=ssh -o BatchMode=yes` when the environment does not already set it — so a missing credential fails the step instead of hanging a deploy on an unanswerable prompt. An explicitly set `GIT_SSH_COMMAND` (custom identity file, port) is honoured as-is. The command reads no stdin.
+Git runs with prompting disabled — `GIT_TERMINAL_PROMPT=0`, an emptied `GIT_ASKPASS`/`SSH_ASKPASS`, and `GIT_SSH_COMMAND=ssh -o BatchMode=yes` when the environment does not already set it to an actual command — so a missing credential fails the step instead of hanging a deploy on an unanswerable prompt. An explicitly set `GIT_SSH_COMMAND` (custom identity file, port) is honoured as-is; an empty one carries no command git could run, so it counts as unset and takes the default. The command reads no stdin.
 
 ```yaml
 - name: clone-backend

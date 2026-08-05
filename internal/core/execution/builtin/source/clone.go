@@ -202,8 +202,12 @@ func (Clone) Run(ctx context.Context, with map[string]any, ectx spec.ExecContext
 // an unattended hang rather than a question anyone answers. GIT_ASKPASS and
 // SSH_ASKPASS are set *empty* on purpose — git then falls through to the
 // terminal prompt, which GIT_TERMINAL_PROMPT=0 turns into an immediate error.
-// GIT_SSH_COMMAND is only defaulted, never overridden: an author who set it
-// (custom identity file, port) means it.
+// GIT_SSH_COMMAND is only defaulted, never overridden: an author who set it to
+// an actual command (custom identity file, port) means it. An EMPTY value counts
+// as unset — unlike the askpass pair above, where empty is the meaningful state
+// that disables the helper, an empty ssh command is not a way to say "use the
+// default ssh": git would take it literally and the clone could not run at all.
+// Nothing can be expressed by clearing it, so inherited empties get the default.
 func nonInteractiveGitEnv(base []string) []string {
 	// os/exec keeps the last occurrence of each key, so appending overrides.
 	env := append(append([]string{}, base...),
@@ -211,20 +215,23 @@ func nonInteractiveGitEnv(base []string) []string {
 		"GIT_ASKPASS=",
 		"SSH_ASKPASS=",
 	)
-	if !hasEnvKey(base, "GIT_SSH_COMMAND") {
+	if !hasNonEmptyEnv(base, "GIT_SSH_COMMAND") {
 		env = append(env, "GIT_SSH_COMMAND=ssh -o BatchMode=yes")
 	}
 	return env
 }
 
-func hasEnvKey(env []string, key string) bool {
+// hasNonEmptyEnv reports whether key is present in env with a non-empty value.
+// A later entry wins, matching os/exec's last-occurrence rule.
+func hasNonEmptyEnv(env []string, key string) bool {
 	prefix := key + "="
+	found := false
 	for _, kv := range env {
-		if strings.HasPrefix(kv, prefix) && strings.TrimPrefix(kv, prefix) != "" {
-			return true
+		if val, ok := strings.CutPrefix(kv, prefix); ok {
+			found = val != ""
 		}
 	}
-	return false
+	return found
 }
 
 func outWriter(ectx spec.ExecContext) io.Writer {

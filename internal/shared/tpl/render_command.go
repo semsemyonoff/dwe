@@ -50,10 +50,14 @@ type RenderContext struct {
 	// runio.RenderShellCommand / RenderArgvWithArgs.
 	//
 	// What renderArgs (the ${args} resolver) serves is the remaining, non-executing
-	// references — a `messages.*` line, an `env:` value, a `workdir` — where the
-	// value lands in display text or a single exec argument with no shell to
-	// re-parse it, and a plain space-joined form is correct. Empty Args renders
-	// as the empty string.
+	// references of a command that already opted in through `cmd:`/`argv:` — a
+	// `messages.*` line, an `env:` value, a `workdir` — where the value lands in
+	// display text or a single exec argument with no shell to re-parse it, and a
+	// plain space-joined form is correct. Those fields never grant access to the
+	// arguments on their own: the opt-in gate is `cmd:`/`argv:` alone
+	// (model.CommandDef.ReferencesArgs), so a command naming ${args} only in a
+	// secondary field renders it against empty Args. Empty Args renders as the
+	// empty string.
 	Args []string
 	// SnapshotScope governs which ${snapshot.*} keys are allowed at compile
 	// time. Zero value (SnapshotScopeNone) makes any ${snapshot.*} reference

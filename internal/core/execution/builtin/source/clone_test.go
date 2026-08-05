@@ -339,3 +339,19 @@ func TestNonInteractiveGitEnv_RespectsExistingSSHCommand(t *testing.T) {
 		}
 	}
 }
+
+// An inherited GIT_SSH_COMMAND= carries no ssh command, and git would take the
+// empty value literally rather than falling back to its default — so it counts
+// as unset and gets the BatchMode default, unlike the askpass pair where empty
+// is the meaningful state.
+func TestNonInteractiveGitEnv_EmptySSHCommandTakesTheDefault(t *testing.T) {
+	env := nonInteractiveGitEnv([]string{"GIT_SSH_COMMAND="})
+	joined := strings.Join(env, "\n")
+	if !strings.Contains(joined, "GIT_SSH_COMMAND=ssh -o BatchMode=yes") {
+		t.Errorf("an empty GIT_SSH_COMMAND must be defaulted:\n%s", joined)
+	}
+	// The default must come last — os/exec keeps the last occurrence.
+	if strings.LastIndex(joined, "GIT_SSH_COMMAND=ssh -o BatchMode=yes") < strings.Index(joined, "GIT_SSH_COMMAND=\n") {
+		t.Error("the default must override the inherited empty value")
+	}
+}
