@@ -39,10 +39,11 @@ type validateJSON struct {
 }
 
 type validateSummaryJSON struct {
-	Ok      int `json:"ok"`
-	Info    int `json:"info"`
-	Warning int `json:"warning"`
-	Error   int `json:"error"`
+	Scope   string `json:"scope"`
+	Ok      int    `json:"ok"`
+	Info    int    `json:"info"`
+	Warning int    `json:"warning"`
+	Error   int    `json:"error"`
 }
 
 type diagnosticJSON struct {
@@ -141,8 +142,23 @@ func severityString(s validate.Severity) string {
 	}
 }
 
+// canonicalScope renders scope as the machine-identifiable "domain" or
+// "domain/id" form (or "all" for an unscoped run), so a narrowed run like
+// `dwe validate config services` is distinguishable from `dwe validate
+// config` by more than the raw diagnostic count. This is deliberately
+// separate from validateScopeLabel, which produces prose for the header.
+func canonicalScope(scope []string) string {
+	if len(scope) == 0 {
+		return "all"
+	}
+	if len(scope) == 1 {
+		return scope[0]
+	}
+	return scope[0] + "/" + scope[1]
+}
+
 // buildValidateData converts diagnostics and summary into the JSON DTO.
-func buildValidateData(diags []validate.Diagnostic, summary validate.Summary) validateJSON {
+func buildValidateData(diags []validate.Diagnostic, summary validate.Summary, scope []string) validateJSON {
 	diagnostics := make([]diagnosticJSON, 0, len(diags))
 	for _, d := range diags {
 		// d.Target is a display-oriented label and may carry multi-line
@@ -169,6 +185,7 @@ func buildValidateData(diags []validate.Diagnostic, summary validate.Summary) va
 	}
 	return validateJSON{
 		Summary: validateSummaryJSON{
+			Scope:   canonicalScope(scope),
 			Ok:      summary.OKs,
 			Info:    summary.Infos,
 			Warning: summary.Warnings,
@@ -534,7 +551,7 @@ func runValidate(cmd *cobra.Command, flags *cmdctx.RootFlags, strict, quiet bool
 	// Diagnostics ARE the data — no error envelope is emitted for validation
 	// failures (the exit code conveys severity; the envelope would be redundant).
 	if flags.Output == "json" {
-		data := buildValidateData(displayDiags, summary)
+		data := buildValidateData(displayDiags, summary, scope)
 		if err := cmdctx.WriteJSON(flags, cmd, data); err != nil {
 			return err
 		}
@@ -551,7 +568,7 @@ func runValidate(cmd *cobra.Command, flags *cmdctx.RootFlags, strict, quiet bool
 	if len(rows) > 0 {
 		_, _ = fmt.Fprintln(cmd.OutOrStdout(), render.DiagnosticsByDomain(rows))
 	}
-	summaryLine := render.FormatSummary(summary)
+	summaryLine := render.FormatSummary(summary) + fmt.Sprintf(" (scope: %s)", canonicalScope(scope))
 	if partialLoadErr != nil {
 		summaryLine += " (main config did not load; some validations skipped)"
 	}
