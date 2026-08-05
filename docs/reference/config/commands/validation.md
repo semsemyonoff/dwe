@@ -22,6 +22,8 @@ The loader enforces the rules below and reports the offending file + field on fa
 - `compose_args` is only valid for `service_exec` / `service_run` / `daemon`.
 - `mode` on `service_run` must be empty or `run`.
 - `notify: true` is rejected on `type: daemon` (error). `notify: true` on a direct sub-step inside a `parallel:` block produces an info diagnostic; the runtime suppresses it.
+- An `args:` block requires a `${args}` reference in `cmd:` or `argv:`. Without one the block is inert (its `prefix` / `default` would never apply), so it is rejected at load rather than silently ignored.
+- In `argv:`, `${args}` must be a **whole** element. `--filter=${args}` is rejected: arguments are spliced in as separate entries and nothing re-splits an embedded one.
 
 ## Common pitfalls
 

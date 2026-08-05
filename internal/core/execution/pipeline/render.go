@@ -10,15 +10,6 @@ import (
 	"github.com/semsemyonoff/dwe/internal/shared/tpl"
 )
 
-// knownVarHeadSet indexes tpl.KnownVarHeads for O(1) membership tests.
-var knownVarHeadSet = func() map[string]struct{} {
-	m := make(map[string]struct{}, len(tpl.KnownVarHeads))
-	for _, h := range tpl.KnownVarHeads {
-		m[h] = struct{}{}
-	}
-	return m
-}()
-
 // hasKnownVarRef reports whether s contains at least one ${...} reference
 // whose head namespace is known to tpl.CompileVarSyntax. A bare
 // tpl.VarPattern.MatchString is not enough: a shell-style ${CONTAINER} beside
@@ -26,10 +17,14 @@ var knownVarHeadSet = func() map[string]struct{} {
 // tpl.RenderCommand and then fail on the {{ }} part. Gating on a KNOWN head
 // keeps strings that only use shell-style ${VAR} (or none at all) out of the
 // renderer entirely — see resolveLeafStep for the call site.
+//
+// Membership goes through tpl.IsKnownVarHead rather than a local index over
+// tpl.KnownVarHeads: the gate must agree with what CompileVarSyntax actually
+// rewrites, and a second copy of the set is a second thing to keep in sync.
 func hasKnownVarRef(s string) bool {
 	for _, m := range tpl.VarPattern.FindAllStringSubmatch(s, -1) {
 		head, _, _ := strings.Cut(m[1], ".")
-		if _, ok := knownVarHeadSet[head]; ok {
+		if tpl.IsKnownVarHead(head) {
 			return true
 		}
 	}

@@ -34,6 +34,7 @@ type FileCandidate = model.FileCandidate
 type FileSpec = model.FileSpec
 type GroupMeta = model.GroupMeta
 type ParamDef = model.ParamDef
+type ArgsSpec = model.ArgsSpec
 type ContextDef = model.ContextDef
 type ScriptDef = model.ScriptDef
 type WorkflowStep = model.WorkflowStep

@@ -1,4 +1,4 @@
-> Translated from: reference/config/commands/validation.md @ 3524810e4f54
+> Translated from: reference/config/commands/validation.md @ 1893f5773a1c
 
 # Правила валидации и типичные подводные камни
 
@@ -24,6 +24,8 @@
 - `compose_args` допустим только для `service_exec` / `service_run` / `daemon`.
 - `mode` на `service_run` должен быть пустым или `run`.
 - `notify: true` отвергается на `type: daemon` (ошибка). `notify: true` на прямом подшаге внутри блока `parallel:` создаёт info-диагностику; runtime его подавляет.
+- Блок `args:` требует ссылки `${args}` в `cmd:` или `argv:`. Без неё блок инертен (его `prefix` / `default` никогда не применятся), поэтому он отвергается на загрузке, а не игнорируется молча.
+- В `argv:` `${args}` должен быть **целым** элементом. `--filter=${args}` отвергается: аргументы вставляются отдельными элементами, и встроенный токен никто не переразбивает.
 
 ## Типичные подводные камни
 

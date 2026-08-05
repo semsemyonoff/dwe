@@ -15,3 +15,6 @@ phases:
         cmd: message
         env:
           HOST: "${HOME}"
+      - name: wait-db
+        type: shell
+        cmd: "pg_isready -h ${vars.db.host} -p ${vars.db.port}"

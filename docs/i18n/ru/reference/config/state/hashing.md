@@ -1,4 +1,4 @@
-> Translated from: reference/config/state/hashing.md @ d8241bb48552
+> Translated from: reference/config/state/hashing.md @ f4b02cd491b9
 
 # Хеширование и решения о пропуске
 
@@ -60,23 +60,24 @@ sha256(type + "\x00" + cmd + "\x00" + canonical_json(with))
 
 ## config_hash для сервисов
 
-`config_hash` сервиса покрывает две вещи:
+`config_hash` сервиса покрывает три вещи:
 
 ```
-sha256(canonical_json(services.<name>) + canonical_json(workspace/services/<name>/deploy.yml))
+sha256(canonical_json(services.<name>) + canonical_json(workspace/services/<name>/deploy.yml) + canonical_json(vars))
 ```
 
 - Определение сервиса из `workspace/services/<name>/service.yml` (Type, Dir, Container, Depends, Required и т. д.)
 - Пайплайн деплоя для конкретного сервиса из `workspace/services/<name>/deploy.yml` (или пусто, если отсутствует)
+- Весь смерженный блок `vars:` (см. [примечание ниже](#почему-vars-хешируется))
 
 Когда `config_hash` сервиса меняется (например, вы редактируете `workspace/services/main/service.yml` или `workspace/services/main/deploy.yml`), **все шаги во всех фазах этого сервиса считаются отсутствующими**. Они выполняются заново при следующем деплое независимо от их `action_hash`.
 
 ## config_hash для проекта
 
-`config_hash` уровня проекта покрывает три вещи:
+`config_hash` уровня проекта покрывает четыре вещи:
 
 ```
-sha256(canonical_json(services[tracked_only]) + canonical_json(workspace/deploy.yml) + canonical_json(workspace/services/<tracked>/deploy.yml for all tracked services))
+sha256(canonical_json(services[tracked_only]) + canonical_json(workspace/deploy.yml) + canonical_json(workspace/services/<tracked>/deploy.yml for all tracked services) + canonical_json(vars))
 ```
 
 **«Отслеживаемый» означает:** сервис считается отслеживаемым тогда и только тогда, когда он появляется в разрешённом плане деплоя (то есть включён в `workspace/services/<name>/service.yml` И встроен в фазу с `deploy_services: true` в `workspace/deploy.yml`). Инструменты никогда не отслеживаются. Сервисы без `workspace/services/<name>/deploy.yml` всё равно отслеживаются, если они появляются в плане.
@@ -84,6 +85,14 @@ sha256(canonical_json(services[tracked_only]) + canonical_json(workspace/deploy.
 Когда `config_hash` проекта меняется (например, вы редактируете `workspace/deploy.yml` или добавляете сервис), **все шаги уровня проекта считаются отсутствующими** и выполняются заново при следующем деплое.
 
 Примечание: правки включённых, но не отслеживаемых вариантов сервисов (например, сервис `main-debug`, расширяющий `main` без собственной конфигурации деплоя) НЕ меняют хеш проекта, поэтому они не инвалидируют журнал.
+
+## Почему `vars` хешируется
+
+`cmd` пайплайна, строковые листья `with`, `check`, `timeout` и shell-условие `when:` рендерятся на этапе разрешения плана (см. [Шаблоны в полях шага](../deploy/index.md#шаблоны-в-полях-шага)), поэтому *фактическая* команда шага зависит от блока `vars:`. Хешируй мы только файлы пайплайна, изменение `vars.db.host` оставило бы хеш прежним, хотя команда, в которую он подставляется, изменилась — деплой отрапортовал бы `already up-to-date` для шага, который в своей текущей форме ни разу не выполнялся.
+
+Поэтому оба хеша включают **весь** блок `vars:`, а не только те записи, на которые ссылается конкретная область. Следствие: правка любой записи `vars:` инвалидирует все шаги уровня проекта и уровня сервисов, а не только те, что её читают.
+
+**Разовое следствие при обновлении**: поскольку формулы изменились, первый `dwe deploy run` после перехода на версию dwe с этим изменением один раз выполнит все шаги заново, даже без ваших правок `vars:`. Шаги должны быть идемпотентными и с гейтами, так что это безопасно — просто заметно.
 
 ## Инвалидация хешей
 

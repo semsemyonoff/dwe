@@ -212,6 +212,7 @@ info:
 - `dwe status` — composite read-only view: apps + tools + infra sections, each with custom `status:` columns.
 - `dwe status apps` / `dwe status tools` / `dwe status infra` — per-type tables.
 - `dwe services` — interactive multi-select toggle for every optional service across all types.
+- `dwe services list` — read-only listing of every configured service (apps, tools, infra, including required infra) with its enabled/running status; the same view bare `dwe services` falls back to on a non-interactive stdin or under `--output json`. Never writes `local.yml`, never runs lifecycle hooks.
 - `dwe services enable <name>` / `dwe services disable <name>` — toggle by name (type looked up internally).
 - `dwe deploy run` — runs the full deploy pipeline; enumerates all enabled services that have a `workspace/services/<name>/deploy.yml` (any service type).
 - `dwe reset run --service <name>` — resets a single service: stops and removes the container, deletes the service `dir:` if declared and present, runs per-service `reset.yml` if present, marks service as requiring a subsequent deploy. Volumes are not auto-removed (opt in via `docker_remove_project_volumes`).

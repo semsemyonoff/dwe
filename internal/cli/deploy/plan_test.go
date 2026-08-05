@@ -321,6 +321,77 @@ func TestRunDeployPlan_JSONMode_ResolvedTemplateNotFlagged(t *testing.T) {
 	}
 }
 
+// TestRunDeployPlan_PhaseWhenIsRendered pins that the phase-level runtime
+// `when:` shown by the plan is the RENDERED condition, not the raw
+// `${vars.*}` text from deploy.yml. The phase header used to read
+// rs.Phase.When directly while execution evaluated the substituted form —
+// the one position where the plan still lied about what would run. Checked in
+// both output modes, since the human table and the JSON payload build the
+// phase header independently.
+func TestRunDeployPlan_PhaseWhenIsRendered(t *testing.T) {
+	dir := t.TempDir()
+	yml := "schema_version: \"2\"\nproject:\n  name: testproject\n  prefix: dwe\nvars:\n  marker: sentinel\n"
+	if err := os.WriteFile(filepath.Join(dir, "workspace.yml"), []byte(yml), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	workspaceDir := filepath.Join(dir, "workspace")
+	if err := os.MkdirAll(workspaceDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	userDeploy := "phases:\n" +
+		"  - name: custom\n" +
+		"    when:\n" +
+		"      type: shell\n" +
+		"      cmd: \"test -d ${vars.marker}\"\n" +
+		"    steps:\n" +
+		"      - name: step1\n" +
+		"        type: shell\n" +
+		"        cmd: echo hi\n"
+	if err := os.WriteFile(filepath.Join(workspaceDir, "deploy.yml"), []byte(userDeploy), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	t.Run("table", func(t *testing.T) {
+		flags := &cmdctx.RootFlags{ConfigPath: filepath.Join(dir, "workspace.yml")}
+		cmd := &cobra.Command{}
+		var buf bytes.Buffer
+		cmd.SetOut(&buf)
+		if err := runDeployPlan(context.Background(), cmd, flags, deployPlanOpts{}); err != nil {
+			t.Fatalf("runDeployPlan: %v", err)
+		}
+		out := buf.String()
+		if !strings.Contains(out, "test -d sentinel") {
+			t.Errorf("phase when not rendered; output:\n%s", out)
+		}
+		if strings.Contains(out, "${vars.marker}") {
+			t.Errorf("phase when still shows the raw reference; output:\n%s", out)
+		}
+	})
+
+	t.Run("json", func(t *testing.T) {
+		flags := &cmdctx.RootFlags{ConfigPath: filepath.Join(dir, "workspace.yml"), Output: "json"}
+		cmd := &cobra.Command{}
+		var buf bytes.Buffer
+		cmd.SetOut(&buf)
+		if err := runDeployPlan(context.Background(), cmd, flags, deployPlanOpts{}); err != nil {
+			t.Fatalf("runDeployPlan: %v", err)
+		}
+		var payload planJSON
+		if err := json.Unmarshal(buf.Bytes(), &payload); err != nil {
+			t.Fatalf("stdout is not valid JSON: %v", err)
+		}
+		var when string
+		for _, p := range payload.Phases {
+			if p.Name == "custom" {
+				when = p.When
+			}
+		}
+		if !strings.Contains(when, "test -d sentinel") {
+			t.Errorf("phase.when = %q, want the rendered command", when)
+		}
+	})
+}
+
 // TestRunDeployPlan_JSONMode_ServiceScope verifies the JSON payload records
 // the scoping service name for a per-service plan.
 func TestRunDeployPlan_JSONMode_ServiceScope(t *testing.T) {
@@ -358,24 +429,40 @@ func TestRunDeployPlan_JSONMode_ServiceScope(t *testing.T) {
 	}
 }
 
-// TestRunDeployPlan_TextFormatsUnaffectedByJSONPath verifies the table and
-// shell text renderers are byte-identical to their pre-JSON-path behavior
-// (i.e. the --output json branch is a true short-circuit, not a refactor of
-// the text paths).
+// TestRunDeployPlan_TextFormatsUnaffectedByJSONPath verifies the --output json
+// branch is a short-circuit rather than a refactor of the text paths: each text
+// format still renders its own shape, and the JSON payload never leaks into it.
+//
+// Note this is not a byte-for-byte golden — it pins the distinguishing markers
+// of each format plus the absence of the JSON envelope. A regression that
+// changed spacing inside the table would pass; one that swapped a renderer,
+// emptied it, or let the JSON path run would not.
 func TestRunDeployPlan_TextFormatsUnaffectedByJSONPath(t *testing.T) {
 	dir := makeMinimalProject(t)
 	flags := &cmdctx.RootFlags{ConfigPath: filepath.Join(dir, "workspace.yml")}
 
-	for _, format := range []string{"", "table", "shell"} {
+	tests := []struct {
+		format string
+		want   string
+	}{
+		{format: "", want: "Deploy plan"},
+		{format: "table", want: "Deploy plan"},
+		{format: "shell", want: "set -e"},
+	}
+	for _, tt := range tests {
 		cmd := &cobra.Command{}
 		var buf bytes.Buffer
 		cmd.SetOut(&buf)
 
-		if err := runDeployPlan(context.Background(), cmd, flags, deployPlanOpts{Format: format}); err != nil {
-			t.Fatalf("format %q: runDeployPlan: %v", format, err)
+		if err := runDeployPlan(context.Background(), cmd, flags, deployPlanOpts{Format: tt.format}); err != nil {
+			t.Fatalf("format %q: runDeployPlan: %v", tt.format, err)
 		}
-		if strings.Contains(buf.String(), "{") && strings.Contains(buf.String(), "\"phases\"") {
-			t.Errorf("format %q: text output looks like JSON: %q", format, buf.String())
+		out := buf.String()
+		if !strings.Contains(out, tt.want) {
+			t.Errorf("format %q: output missing %q: %q", tt.format, tt.want, out)
+		}
+		if json.Valid(bytes.TrimSpace(buf.Bytes())) && strings.Contains(out, "\"phases\"") {
+			t.Errorf("format %q: text output is the JSON payload: %q", tt.format, out)
 		}
 	}
 }

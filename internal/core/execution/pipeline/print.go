@@ -41,8 +41,8 @@ func PrintPlanTable(steps []ResolvedStep, w *sharedrender.Writer, dweBin string)
 			if rs.Phase.Description != "" {
 				phaseLine += ": " + rs.Phase.Description
 			}
-			if rs.Phase.When != nil {
-				phaseLine += " [when: " + FormatCondition(rs.Phase.When) + "]"
+			if when := rs.DisplayPhaseWhen(); when != nil {
+				phaseLine += " [when: " + FormatCondition(when) + "]"
 			}
 			indent := ""
 			if rs.Service != "" {

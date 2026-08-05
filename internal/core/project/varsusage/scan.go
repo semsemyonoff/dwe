@@ -24,15 +24,21 @@ type Usage struct {
 	Kind string
 	// Text is the trimmed source line containing the reference.
 	Text string
-	// Ref is the full referenced dot-path (e.g. "vars.db.host"), populated for
-	// every usage regardless of scan mode. EnumerateAllUsages relies on it —
-	// the query-driven ScanUsages already knows the path it queried for, but
-	// records it here too for a uniform Usage shape.
+	// Ref is the full referenced dot-path (e.g. "vars.db.host"). It is set ONLY
+	// by EnumerateAllUsages, whose consumer (the config.template_refs
+	// validator) resolves each distinct reference. The query-driven ScanUsages
+	// leaves it empty on purpose: Ref participates in the dedupe key, so
+	// populating it there would split one source line carrying two refs that
+	// both match the query (`${vars.db.host} ${vars.db.port}` under
+	// `dwe vars inspect vars.db`) into two byte-identical rows — Ref is not
+	// rendered anywhere, so the user would see the same line twice and an
+	// inflated "Usages (N)" count.
 	Ref string
 }
 
 // ScanResult is the ordered set of usages for a queried var. It is sorted by
-// file then line then kind, and de-duplicated on (File, Line, Kind, Text).
+// file then line then kind then text, and de-duplicated on the whole Usage
+// (Ref is empty on this path, so effectively on File/Line/Kind/Text).
 type ScanResult struct {
 	Usages []Usage
 }
@@ -284,7 +290,7 @@ func hitsForField(keyName string, val *yaml.Node, queryPath, rel string, lines [
 		// Out of scope for matchAll: it is a bare dot-path, never a ${...}
 		// shorthand, and EnumerateAllUsages exists to enumerate the latter only.
 		if refMatches(val.Value, queryPath) {
-			hits = append(hits, Usage{File: rel, Line: val.Line, Kind: keyName, Text: lineText(lines, val.Line), Ref: val.Value})
+			hits = append(hits, Usage{File: rel, Line: val.Line, Kind: keyName, Text: lineText(lines, val.Line)})
 		}
 
 	case !matchAll && keyName == "when" && val.Kind == yaml.MappingNode:
@@ -299,7 +305,7 @@ func hitsForField(keyName string, val *yaml.Node, queryPath, rel string, lines [
 			for _, block := range goTemplateBlock.FindAllString(expr.Value, -1) {
 				for _, ref := range varDotPath.FindAllString(block, -1) {
 					if refMatches(ref, queryPath) {
-						hits = append(hits, Usage{File: rel, Line: expr.Line, Kind: "when", Text: lineText(lines, expr.Line), Ref: ref})
+						hits = append(hits, Usage{File: rel, Line: expr.Line, Kind: "when", Text: lineText(lines, expr.Line)})
 					}
 				}
 			}
@@ -344,8 +350,14 @@ func templatedScalarHits(n *yaml.Node, queryPath, rel string, lines []string, ma
 // mode, which enumerates the ${...} shorthand only (see EnumerateAllUsages).
 func templateHits(val *yaml.Node, queryPath, rel string, lines []string, matchAll bool) []Usage {
 	var hits []Usage
+	// Ref is set only in matchAll mode — see the Usage.Ref doc for why the
+	// query path must leave it empty.
 	add := func(ref string) {
-		hits = append(hits, Usage{File: rel, Line: val.Line, Kind: "template", Text: lineText(lines, val.Line), Ref: ref})
+		u := Usage{File: rel, Line: val.Line, Kind: "template", Text: lineText(lines, val.Line)}
+		if matchAll {
+			u.Ref = ref
+		}
+		hits = append(hits, u)
 	}
 	// (a) ${...} shorthand — any head when matchAll, else vars.* only.
 	for _, m := range tpl.VarPattern.FindAllStringSubmatch(val.Value, -1) {
@@ -430,7 +442,6 @@ func scanRawTextFile(projectRoot, absPath, queryPath string, matchAll bool) ([]U
 	var hits []Usage
 	for i, line := range strings.Split(string(data), "\n") {
 		matched := false
-		var matchedRef string
 		var allRefs []string
 		// (a) ${vars.x} shorthand.
 		for _, m := range tpl.VarPattern.FindAllStringSubmatch(line, -1) {
@@ -443,7 +454,7 @@ func scanRawTextFile(projectRoot, absPath, queryPath string, matchAll bool) ([]U
 				continue
 			}
 			if refMatches(inner, queryPath) {
-				matched, matchedRef = true, inner
+				matched = true
 			}
 		}
 		if !matchAll {
@@ -451,7 +462,7 @@ func scanRawTextFile(projectRoot, absPath, queryPath string, matchAll bool) ([]U
 			for _, block := range goTemplateBlock.FindAllString(line, -1) {
 				for _, ref := range varDotPath.FindAllString(block, -1) {
 					if refMatches(ref, queryPath) {
-						matched, matchedRef = true, ref
+						matched = true
 					}
 				}
 			}
@@ -463,7 +474,7 @@ func scanRawTextFile(projectRoot, absPath, queryPath string, matchAll bool) ([]U
 			continue
 		}
 		if matched {
-			hits = append(hits, Usage{File: rel, Line: i + 1, Kind: "template", Text: strings.TrimSpace(line), Ref: matchedRef})
+			hits = append(hits, Usage{File: rel, Line: i + 1, Kind: "template", Text: strings.TrimSpace(line)})
 		}
 	}
 	return hits, nil
@@ -529,7 +540,14 @@ func dedupeAndSort(in []Usage) []Usage {
 		if a.Kind != b.Kind {
 			return a.Kind < b.Kind
 		}
-		return a.Text < b.Text
+		if a.Text != b.Text {
+			return a.Text < b.Text
+		}
+		// Ref is the final tiebreaker: in enumeration mode one line can carry
+		// several distinct references, which are identical in every other
+		// field. Without this, sort.Slice (not stable) orders them arbitrarily
+		// and the resulting `dwe validate` diagnostics flap between runs.
+		return a.Ref < b.Ref
 	})
 	return out
 }

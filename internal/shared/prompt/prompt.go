@@ -654,22 +654,28 @@ func readProjectName(root string) (string, bool) {
 // displayName is passed in as the fallback name (used when workspace.yml is
 // unreadable or when no prefix is configured). The return value is always
 // non-empty.
+//
+// Every branch is lowercased, mirroring config.normalizeComposeProjectName:
+// this is a deliberate standalone reimplementation for the prompt hot path
+// (it must not load the full config), so the normalization has to be repeated
+// here or the label filter misses every container of a project whose name
+// carries uppercase.
 func readComposeProjectName(root, displayName string) string {
 	if dockerName := readDockerProjectNameLiteral(root); dockerName != "" {
-		return dockerName
+		return strings.ToLower(dockerName)
 	}
 	data, err := os.ReadFile(filepath.Join(root, configFilename))
 	if err != nil {
-		return displayName
+		return strings.ToLower(displayName)
 	}
 	var stub workspaceStub
 	if err := yaml.Unmarshal(data, &stub); err != nil {
-		return displayName
+		return strings.ToLower(displayName)
 	}
 	if stub.Project.Prefix != "" && stub.Project.Name != "" {
-		return stub.Project.Prefix + "-" + stub.Project.Name
+		return strings.ToLower(stub.Project.Prefix + "-" + stub.Project.Name)
 	}
-	return displayName
+	return strings.ToLower(displayName)
 }
 
 // readDockerProjectNameLiteral reads project_name from workspace/docker.yml and

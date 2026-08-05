@@ -55,14 +55,11 @@ func (StopRemoveContainer) Run(ctx context.Context, with map[string]any, ectx sp
 		return fmt.Errorf("docker_stop_remove_container: config not available")
 	}
 
-	// Prefer the compose project name from workspace/docker.yml (already
-	// resolved into ectx.DockerConfig) so the label query scopes to the right
-	// project. Fall back to FullName() when docker.yml is absent or its
-	// project_name is empty.
-	projectFull := ectx.Config.Project.FullName()
-	if ectx.DockerConfig != nil && ectx.DockerConfig.ProjectName != "" {
-		projectFull = ectx.DockerConfig.ProjectName
-	}
+	// The label query must use the same name compose stamped onto the
+	// containers, so it goes through the shared resolver (resolved docker.yml
+	// project_name, else FullName(), lowercased) rather than re-deriving the
+	// precedence here.
+	projectFull := config.ComposeProjectName(ectx.DockerConfig, ectx.Config)
 	dockerBin := config.DockerBin(ectx.Config)
 	// container_template carries the compose service name (svc.Container).
 	// Resolve the REAL container name via the compose project + service labels

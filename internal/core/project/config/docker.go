@@ -225,7 +225,12 @@ func applyDockerArgsDefaults(args *DockerArgs, presentKeys map[string]bool) {
 // project.name/project.prefix and docker.yml's project_name are free-form
 // user text. ResolveComposeProjectName and ComposeProjectName both route
 // through this single helper so the two entry points can never diverge on
-// casing.
+// casing, and every other site that needs the name — docker.buildCompose (the
+// -p value itself), `dwe docker project-name`, the reset stop/remove builtin,
+// spec.RunContext.Compose, the ports preflight — calls one of those two
+// rather than re-deriving the precedence. The one deliberate exception is
+// internal/shared/prompt.readComposeProjectName, a standalone hot-path reader
+// that repeats the lowercasing itself.
 func normalizeComposeProjectName(name string) string {
 	return strings.ToLower(name)
 }
