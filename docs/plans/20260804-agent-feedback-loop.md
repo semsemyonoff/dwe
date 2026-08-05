@@ -623,20 +623,20 @@ nothing would re-run.
 - Create: `internal/core/validate/config/testdata/ports_unexported/…`
 - Modify: `internal/core/validate/config/all.go`
 
-- [ ] (TDD) write the fixture reproducing the live beetDeck defect: `ports.http` declared
+- [x] (TDD) write the fixture reproducing the live beetDeck defect: `ports.http` declared
       on a service, no `ExportRule` with `from: services.<n>.ports.http`
-- [ ] write the test asserting a warning whose message states the port is display-only,
+- [x] write the test asserting a warning whose message states the port is display-only,
       that a `local.yml` override will not move the binding, and that `dwe test` host-port
       isolation will silently not apply
-- [ ] implement the validator over `cfg.Services` × `cfg.Exports.Env`, iterating services
+- [x] implement the validator over `cfg.Services` × `cfg.Exports.Env`, iterating services
       through `config.DeployOrder(...)` (never `range cfg.Services` — map order is random
       and would make the test flaky)
-- [ ] register in `All()`; write the negative test (correctly paired port → silent)
-- [ ] no overlap to resolve here — Task 5 wires **only** `KindContainerName` into the
+- [x] register in `All()`; write the negative test (correctly paired port → silent)
+- [x] no overlap to resolve here — Task 5 wires **only** `KindContainerName` into the
       `config` domain, so `KindRawHostPort` stays where it is and this validator is the only
       voice on ports. (Keep this note: the first draft deferred the decision to this task,
       which was the wrong place — the severity choice belongs where the scanner is wired in)
-- [ ] run tests — must pass before task 7
+- [x] run tests — must pass before task 7
 
 ### Task 7: Silence render-pack diagnostics on implicit defaults; fix the `services.yml` hint
 

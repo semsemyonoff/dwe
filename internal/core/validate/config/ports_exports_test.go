@@ -1,0 +1,108 @@
+package config
+
+import (
+	"os"
+	"path/filepath"
+	"testing"
+
+	"github.com/stretchr/testify/require"
+
+	devconfig "github.com/semsemyonoff/dwe/internal/core/project/config"
+	"github.com/semsemyonoff/dwe/internal/core/validate"
+)
+
+func runPortsExportsValidator(t *testing.T, root string) []validate.Diagnostic {
+	t.Helper()
+	cfg, err := devconfig.LoadConfig(filepath.Join(root, "workspace.yml"))
+	require.NoError(t, err)
+	return (&portsExportsValidator{}).Run(validate.Context{
+		ProjectRoot: root,
+		ConfigPath:  filepath.Join(root, "workspace.yml"),
+		Cfg:         cfg,
+	})
+}
+
+// TestPortsExportsValidator_Unexported pins the live beetDeck defect: service
+// "app" declares ports.http with no exports.env rule reading from it, while
+// the sibling ports.admin IS paired via exports.env and must stay silent.
+func TestPortsExportsValidator_Unexported(t *testing.T) {
+	t.Parallel()
+	root := filepath.Join("testdata", "ports_unexported")
+	diags := runPortsExportsValidator(t, root)
+
+	d := hasDiag(t, diags, validate.SeverityWarning, "services.app.ports.http")
+	require.Equal(t, "config.ports_exports", d.Target)
+	require.Equal(t, filepath.Join("workspace", "services", "app", "service.yml"), d.File)
+	require.Contains(t, d.Message, "app")
+	require.Contains(t, d.Message, "ports.http")
+	require.Contains(t, d.Hint, "display-only")
+	require.Contains(t, d.Hint, "local.yml")
+	require.Contains(t, d.Hint, "dwe test")
+
+	// The paired port must not also warn.
+	for _, diag := range diags {
+		require.NotContains(t, diag.Message, "ports.admin")
+	}
+	require.Len(t, diags, 1)
+}
+
+func TestPortsExportsValidator_PairedPortIsSilent(t *testing.T) {
+	t.Parallel()
+	root := t.TempDir()
+	workspace := `project:
+  name: test
+exports:
+  env:
+    - name: APP_HTTP_PORT
+      from: services.app.ports.http
+`
+	require.NoError(t, os.WriteFile(filepath.Join(root, "workspace.yml"), []byte(workspace), 0o644))
+	require.NoError(t, os.MkdirAll(filepath.Join(root, "workspace", "services", "app"), 0o755))
+	require.NoError(t, os.WriteFile(
+		filepath.Join(root, "workspace", "services", "app", "service.yml"),
+		[]byte("type: app\nrequired: true\nports:\n  http: 8080\n"),
+		0o644,
+	))
+
+	diags := runPortsExportsValidator(t, root)
+	require.Empty(t, diags)
+}
+
+func TestPortsExportsValidator_NoPortsIsSilent(t *testing.T) {
+	t.Parallel()
+	root := t.TempDir()
+	require.NoError(t, os.WriteFile(filepath.Join(root, "workspace.yml"), []byte("project:\n  name: test\n"), 0o644))
+	require.NoError(t, os.MkdirAll(filepath.Join(root, "workspace", "services", "app"), 0o755))
+	require.NoError(t, os.WriteFile(
+		filepath.Join(root, "workspace", "services", "app", "service.yml"),
+		[]byte("type: app\nrequired: true\n"),
+		0o644,
+	))
+
+	diags := runPortsExportsValidator(t, root)
+	require.Empty(t, diags)
+}
+
+// TestPortsExportsValidator_DisabledServiceIsSilent confirms a disabled
+// service's unexported port does not warn — it never binds, so nothing is
+// display-only about it.
+func TestPortsExportsValidator_DisabledServiceIsSilent(t *testing.T) {
+	t.Parallel()
+	root := t.TempDir()
+	require.NoError(t, os.WriteFile(filepath.Join(root, "workspace.yml"), []byte("project:\n  name: test\n"), 0o644))
+	require.NoError(t, os.MkdirAll(filepath.Join(root, "workspace", "services", "app"), 0o755))
+	require.NoError(t, os.WriteFile(
+		filepath.Join(root, "workspace", "services", "app", "service.yml"),
+		[]byte("type: app\nports:\n  http: 8080\n"),
+		0o644,
+	))
+
+	diags := runPortsExportsValidator(t, root)
+	require.Empty(t, diags)
+}
+
+func TestPortsExportsValidator_NilCfgIsSilent(t *testing.T) {
+	t.Parallel()
+	diags := (&portsExportsValidator{}).Run(validate.Context{ProjectRoot: t.TempDir()})
+	require.Empty(t, diags)
+}
