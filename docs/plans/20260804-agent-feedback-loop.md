@@ -702,20 +702,20 @@ above:
 - Modify: `internal/core/workflow/scaffold/templates/workspace/info.yml` (only if wording
   still misstates behavior after the fix)
 
-- [ ] define the fallback criterion precisely: **"the document decoded no top-level keys
+- [x] define the fallback criterion precisely: **"the document decoded no top-level keys
       at all"**, detected by a pre-pass into `map[string]any` — *not* "Sections is empty".
       `InfoConfig` is `{Sections []InfoSection; Footer bool}` (`info.go:13-17`), so
       "no sections" conflates three different states and would silently override a
       deliberate `sections: []` or a file carrying only `footer: true`
-- [ ] treat that state as absent and return `DefaultInfoConfig()`, mirroring the `io.EOF`
+- [x] treat that state as absent and return `DefaultInfoConfig()`, mirroring the `io.EOF`
       tolerance of the four strict pipeline loaders — **without** switching this loader to
       a strict decoder
-- [ ] write tests for all four states: fully commented → default; empty file → default;
+- [x] write tests for all four states: fully commented → default; empty file → default;
       deliberate `sections: []` → empty dashboard (default **not** restored); one real
       section → that section only
-- [ ] verify the scaffold header claim ("shipped fully commented so that default stays
+- [x] verify the scaffold header claim ("shipped fully commented so that default stays
       active") is now true, and adjust wording if the implemented semantics differ
-- [ ] run tests — must pass before task 10
+- [x] run tests — must pass before task 10
 
 ### Task 10: Invert the `info` validator verdict
 
