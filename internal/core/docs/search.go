@@ -129,10 +129,14 @@ func Search(roots []DocRoot, query, locale string, opts SearchOptions) []SearchH
 // so removing them only saves work.
 func searchTokens(query string, literal bool) []string {
 	if literal {
-		if query == "" {
+		// Trim before the emptiness check, matching the strings.Fields path
+		// below: an all-whitespace query must find nothing, not search for a
+		// run of spaces and match nearly every indented markdown line.
+		trimmed := strings.TrimSpace(query)
+		if trimmed == "" {
 			return nil
 		}
-		return []string{strings.ToLower(query)}
+		return []string{strings.ToLower(trimmed)}
 	}
 	fields := strings.Fields(strings.ToLower(query))
 	tokens := make([]string, 0, len(fields))
@@ -170,6 +174,9 @@ func searchInDoc(content []byte, tokens []string) []sectionStats {
 	scanner.Buffer(make([]byte, 0, 64*1024), 1024*1024)
 
 	inFence := false
+	// Reused across lines: fully overwritten each iteration and only ever read
+	// back into s.counts, never retained.
+	lineCounts := make([]int, 0, len(tokens))
 	for scanner.Scan() {
 		line := scanner.Text()
 		trim := strings.TrimSpace(line)
@@ -188,17 +195,16 @@ func searchInDoc(content []byte, tokens []string) []sectionStats {
 		// lines inside fenced code blocks. This matters because configuration
 		// schemas often appear only inside YAML/code samples.
 		lower := strings.ToLower(line)
-		lineTotal, lineDistinct := 0, 0
-		var lineCounts []int
+		lineDistinct := 0
+		lineCounts = lineCounts[:0]
 		for _, tok := range tokens {
 			c := countCaseInsensitiveLowered(lower, tok)
 			if c > 0 {
 				lineDistinct++
-				lineTotal += c
 			}
 			lineCounts = append(lineCounts, c)
 		}
-		if lineTotal == 0 {
+		if lineDistinct == 0 {
 			continue
 		}
 
@@ -296,20 +302,27 @@ func sumCount(counts []int) int {
 }
 
 // sanitizeSnippet collapses every whitespace run (tabs and newlines included —
-// markdown tables carry both) into single spaces and caps the length, so a
-// snippet can never break a tab-separated row or wrap a terminal.
+// markdown tables carry both) into single spaces and caps the length at
+// snippetMaxLen bytes, ellipsis included, so a snippet can never break a
+// tab-separated row or wrap a terminal.
 func sanitizeSnippet(line string) string {
 	s := strings.Join(strings.Fields(line), " ")
 	if len(s) <= snippetMaxLen {
 		return s
 	}
-	// Cut on a rune boundary, then trim a dangling partial word.
-	cut := snippetMaxLen
+	// Leave room for the ellipsis, cut back to a rune boundary, then back to
+	// the last word boundary so the snippet never ends mid-word.
+	cut := snippetMaxLen - len(snippetEllipsis)
 	for cut > 0 && !isRuneStart(s[cut]) {
 		cut--
 	}
-	return strings.TrimSpace(s[:cut]) + "…"
+	if sp := strings.LastIndexByte(s[:cut], ' '); sp > 0 {
+		cut = sp
+	}
+	return strings.TrimSpace(s[:cut]) + snippetEllipsis
 }
+
+const snippetEllipsis = "…"
 
 func isRuneStart(b byte) bool { return b&0xC0 != 0x80 }
 

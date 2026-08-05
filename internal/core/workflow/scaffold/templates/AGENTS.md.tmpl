@@ -78,9 +78,11 @@ Lifecycle and reference:
 - **This file** (project root) is scaffolded once by `dwe init` and then
   hand-maintained. Edit it — it is where project-specific facts belong.
 - A service hub (`services/<name>/`) gets a **generated** `AGENTS.md` from the
-  `ai` render pack on every `dwe render ai` / `dwe deploy run`. Never edit that
-  one; edit `workspace/templates/ai/<pack>/` instead. It appears only after the
-  hub directory exists (i.e. after the first clone).
+  `ai` render pack. `dwe render ai` writes it; a `dwe deploy run` refreshes it
+  only once the service's `deploy.yml` declares a `render ai` step (the
+  scaffolded one has it, commented) — the built-in default pipeline has none.
+  Never edit the generated file; edit `workspace/templates/ai/<pack>/` instead.
+  It appears only after the hub directory exists (i.e. after the first clone).
 
 > `CLAUDE.md` next to this file is a symlink to it (a copy on platforms without
 > symlinks). Edit `AGENTS.md`.

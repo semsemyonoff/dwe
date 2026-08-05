@@ -32,7 +32,7 @@ This emits a compact, project-aware index (services, commands, doc pointers) des
 | File | Origin | May you edit it? |
 | --- | --- | --- |
 | **root** `AGENTS.md` (next to `workspace.yml`) | written once by `dwe init`, then hand-maintained | **yes** — this is the project-specific layer, edit it directly |
-| **hub** `AGENTS.md` (inside a service hub, e.g. `services/app/`) | **generated** by the `ai` render pack on every `dwe render ai` / `dwe deploy run` | **no** — edit the template (`workspace/templates/ai/<pack>/`) and hand off `dwe render ai` |
+| **hub** `AGENTS.md` (inside a service hub, e.g. `services/app/`) | **generated** by the `ai` render pack — written by `dwe render ai`, and refreshed by `dwe deploy run` only when the service's `deploy.yml` declares a `render ai` step (the built-in default pipeline has none) | **no** — edit the template (`workspace/templates/ai/<pack>/`) and hand off `dwe render ai` |
 
 Both carry a `CLAUDE.md` symlink next to them. The generated one says so in its own footer; when in doubt, read the last lines of the file.
 
@@ -203,8 +203,12 @@ outside its own copy, so a failure is not confined to it:
 
 - `isolation_findings` non-empty — named / `external:` volumes or networks, reused verbatim
 - `shared_volumes` > 0 — `shared: true` volumes carry the real cache/data
-- `shell_steps` > 0 — host side effects of `type: shell` steps (absolute paths, `~`,
-  binds outside the project) are **not** sandboxed
+- `host_steps` > 0 — steps running **project-authored code on the host**, outside the
+  container sandbox (`type: shell`, the `shell` builtin, a `type: command` resolving to
+  a host command, a `type: dwe` re-entering a pipeline, and shell `when:` / `check:`
+  conditions). Their side effects (absolute paths, `~`, binds outside the project) are
+  **not** sandboxed. dwe's own subcommands don't count — the built-in default pipeline
+  reports 0
 
 **Cost — judge it, don't reflex.** `build_services`, `external_images`,
 `max_start_period_seconds`. A build is not an automatic stop: judge what it *is* by

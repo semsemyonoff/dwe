@@ -80,7 +80,20 @@ func (v *scenariosValidator) Run(ctx validate.Context) []validate.Diagnostic {
 
 	var diags []validate.Diagnostic
 	for _, name := range names {
-		diags = append(diags, v.validateFile(ctx, filepath.Join(dir, name), reg)...)
+		fileDiags := v.validateFile(ctx, filepath.Join(dir, name), reg)
+		if len(fileDiags) == 0 {
+			// Every other domain emits an OK row per clean file. Without one a
+			// project whose scenarios all pass renders as "validation skipped
+			// (no files found)" — FormatSummary's message for an empty
+			// diagnostic set — which reads as "your scenario file is missing".
+			fileDiags = []validate.Diagnostic{{
+				Severity: validate.SeverityOK,
+				Domain:   "tests",
+				Target:   "tests." + envtest.ScenarioNameFromPath(name),
+				File:     relPath(ctx.ProjectRoot, filepath.Join(dir, name)),
+			}}
+		}
+		diags = append(diags, fileDiags...)
 	}
 
 	for _, f := range config.ScanComposeIsolation(ctx.Cfg, ctx.ProjectRoot) {

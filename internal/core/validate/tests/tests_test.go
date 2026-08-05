@@ -105,8 +105,13 @@ steps:
     cmd: echo hi
 `)
 	diags := runFor(root, baseCfg())
-	if len(diags) != 0 {
-		t.Fatalf("valid scenario: want no diagnostics, got %+v", diags)
+	if problems := problemDiags(diags); len(problems) != 0 {
+		t.Fatalf("valid scenario: want no problems, got %+v", problems)
+	}
+	// A clean file must still report itself, or the summary renders as
+	// "validation skipped (no files found)".
+	if len(diags) != 1 || diags[0].Severity != validate.SeverityOK || diags[0].Target != "tests.smoke" {
+		t.Fatalf("valid scenario: want one OK row for tests.smoke, got %+v", diags)
 	}
 }
 
@@ -296,8 +301,8 @@ steps:
 		ID: "queue.logs", Type: model.CommandTypeBuiltin, Cmd: "docker_daemon_logs",
 	})
 	diags := runForWithRegistry(root, baseCfg(), reg)
-	if len(diags) != 0 {
-		t.Fatalf("known command: want no diagnostics, got %+v", diags)
+	if problems := problemDiags(diags); len(problems) != 0 {
+		t.Fatalf("known command: want no diagnostics, got %+v", problems)
 	}
 }
 
@@ -322,8 +327,8 @@ steps:
 		ID: "queue.logs", Type: model.CommandTypeBuiltin, Cmd: "docker_daemon_logs",
 	})
 	diags := runForWithRegistry(root, cfg, reg)
-	if len(diags) != 0 {
-		t.Fatalf("a ${vars.*} command ref must render before the lookup, got %+v", diags)
+	if problems := problemDiags(diags); len(problems) != 0 {
+		t.Fatalf("a ${vars.*} command ref must render before the lookup, got %+v", problems)
 	}
 }
 
@@ -360,8 +365,8 @@ steps:
 	// No CommandRegistry in ctx at all (nil, not even a *registry.Registry) -
 	// the command-ref check must self-skip rather than panic or misreport.
 	diags := runFor(root, baseCfg())
-	if len(diags) != 0 {
-		t.Fatalf("nil registry: want no diagnostics (self-skip), got %+v", diags)
+	if problems := problemDiags(diags); len(problems) != 0 {
+		t.Fatalf("nil registry: want no diagnostics (self-skip), got %+v", problems)
 	}
 }
 
@@ -398,8 +403,8 @@ steps:
       port: "${vars.db.port}"
 `)
 	diags := runFor(root, baseCfg())
-	if len(diags) != 0 {
-		t.Fatalf("auto-var placeholder: want no diagnostics, got %+v", diags)
+	if problems := problemDiags(diags); len(problems) != 0 {
+		t.Fatalf("auto-var placeholder: want no diagnostics, got %+v", problems)
 	}
 }
 
@@ -579,4 +584,17 @@ steps:
 	if diags[0].Target != "tests.a" {
 		t.Errorf("Target = %q, want %q", diags[0].Target, "tests.a")
 	}
+}
+
+// problemDiags drops the per-file SeverityOK rows a clean scenario emits,
+// leaving only the diagnostics a test is actually asserting on.
+func problemDiags(diags []validate.Diagnostic) []validate.Diagnostic {
+	out := make([]validate.Diagnostic, 0, len(diags))
+	for _, d := range diags {
+		if d.Severity == validate.SeverityOK {
+			continue
+		}
+		out = append(out, d)
+	}
+	return out
 }

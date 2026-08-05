@@ -2,7 +2,6 @@ package docs
 
 import (
 	"encoding/json"
-	"strconv"
 	"strings"
 	"testing"
 
@@ -106,30 +105,37 @@ func runDocsSearchLines(t *testing.T, args ...string) []string {
 // under the old whole-query substring matcher. A "returns hits" assertion would
 // pass on pure noise — a naive AND does exactly that for the first query.
 func TestDocsSearchRelevance(t *testing.T) {
+	// The relevance claim is asserted over the WHOLE result set plus a bound on
+	// its size, not over a near-boundary rank: a naive AND returns hundreds of
+	// rows, so a small total IS the relevance signal, while pinning the target's
+	// exact rank would turn any unrelated documentation edit into a failure here.
 	cases := []struct {
-		name  string
-		query string
-		want  string
-		topN  int
+		name    string
+		query   string
+		want    string
+		maxHits int
 	}{
 		{
-			name:  "two-word concept query finds the templates reference",
-			query: "interpolation vars",
-			want:  "reference/templates",
-			topN:  8,
+			name:    "two-word concept query finds the templates reference",
+			query:   "interpolation vars",
+			want:    "reference/templates",
+			maxHits: 25,
 		},
 		{
-			name:  "auto-injected env names find the exports.env schema",
-			query: "UID GID env",
-			want:  "reference/config/workspace#exportsenv",
-			topN:  8,
+			name:    "auto-injected env names find the exports.env schema",
+			query:   "UID GID env",
+			want:    "reference/config/workspace#exportsenv",
+			maxHits: 40,
 		},
 	}
 
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			lines := runDocsSearchLines(t, tc.query, "--limit", strconv.Itoa(tc.topN))
+			lines := runDocsSearchLines(t, tc.query, "--limit", "200")
 			require.NotEmpty(t, lines, "query %q must not return an empty result", tc.query)
+			require.LessOrEqual(t, len(lines), tc.maxHits,
+				"query %q returned %d hits — the AND gate is no longer discriminating",
+				tc.query, len(lines))
 
 			found := false
 			for _, line := range lines {
@@ -138,8 +144,8 @@ func TestDocsSearchRelevance(t *testing.T) {
 					break
 				}
 			}
-			require.True(t, found, "query %q must surface %q in the top %d:\n%s",
-				tc.query, tc.want, tc.topN, strings.Join(lines, "\n"))
+			require.True(t, found, "query %q must surface %q:\n%s",
+				tc.query, tc.want, strings.Join(lines, "\n"))
 		})
 	}
 }

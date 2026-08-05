@@ -296,6 +296,44 @@ func TestGenerate_ProjectAware(t *testing.T) {
 	}
 }
 
+// TestGenerate_Briefing_Golden pins the WHOLE document — including where the
+// data-driven briefing sections sit relative to Commands and Documentation, and
+// the blank lines between them. The other two goldens leave Builtins /
+// Conditions / ReservedEnvNames empty, so without this one a section reorder or
+// a lost separator would pass every test while visibly degrading the document
+// an agent reads once.
+func TestGenerate_Briefing_Golden(t *testing.T) {
+	opts := stubBriefingOpts()
+	opts.ProjectRoot = "/fake/project"
+	opts.ProjectName = "my-project"
+	opts.Services = []llmstxt.ServiceSummary{{Name: "api", Type: "app", Title: "API Server"}}
+	opts.Commands = []llmstxt.CommandSummary{{ID: "build", Description: "build the project"}}
+	opts.DocTopics = []coredocs.TopicEntry{
+		{Path: "reference/config/services", DisplayName: "Services", Source: "dwe"},
+	}
+
+	got, err := llmstxt.Generate(opts)
+	if err != nil {
+		t.Fatalf("Generate returned error: %v", err)
+	}
+
+	golden := "testdata/llms_txt_briefing.golden"
+	if *update {
+		if err := os.WriteFile(golden, []byte(got), 0644); err != nil {
+			t.Fatalf("failed to update golden: %v", err)
+		}
+		return
+	}
+
+	want, err := os.ReadFile(golden)
+	if err != nil {
+		t.Fatalf("failed to read golden file %s: %v", golden, err)
+	}
+	if got != string(want) {
+		t.Errorf("Generate (briefing) output mismatch\ngot:\n%s\nwant:\n%s", got, string(want))
+	}
+}
+
 func TestGenerate_ProjectAware_Golden(t *testing.T) {
 	opts := llmstxt.Opts{
 		ProjectRoot: "/fake/project",

@@ -169,10 +169,12 @@ func ScanComposeCost(cfg *DweConfig, projectRoot string) ComposeCostFacts {
 		startPeriod time.Duration
 	}
 
+	// Iteration order is irrelevant here — every update is keyed by service
+	// name and all output ordering is established below. (The sort in
+	// scanComposeDoc is load-bearing; this loop deliberately has none.)
 	merged := make(map[string]*serviceFacts)
 	for _, pf := range parseComposeFiles(cfg, projectRoot) {
-		for _, name := range slices.Sorted(maps.Keys(pf.doc.Services)) {
-			svc := pf.doc.Services[name]
+		for name, svc := range pf.doc.Services {
 			facts, ok := merged[name]
 			if !ok {
 				facts = &serviceFacts{}
@@ -184,7 +186,12 @@ func ScanComposeCost(cfg *DweConfig, projectRoot string) ComposeCostFacts {
 			if nodePresent(svc.Build) {
 				facts.hasBuild = true
 			}
-			if d, ok := parseStartPeriod(svc.Healthcheck); ok {
+			// A later file disabling the healthcheck must CLEAR an earlier
+			// start_period, not leave it standing — assigning only on ok would
+			// keep reporting a wait the merged stack never performs.
+			if svc.Healthcheck.Disable {
+				facts.startPeriod = 0
+			} else if d, ok := parseStartPeriod(svc.Healthcheck); ok {
 				facts.startPeriod = d
 			}
 		}

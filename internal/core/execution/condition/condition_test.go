@@ -1,8 +1,12 @@
 package condition_test
 
 import (
+	"go/ast"
+	"go/parser"
+	"go/token"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"testing"
 
@@ -554,10 +558,66 @@ func TestPredicates_MatchEvalBuiltinSwitch(t *testing.T) {
 		}
 	}
 
-	// And the reverse: a verb the evaluator knows but the inventory omits
-	// would ship undocumented. There is no way to enumerate a switch, so pin
-	// the count — a new case forces a deliberate update here.
-	if got := len(preds); got != 7 {
-		t.Errorf("predicate count = %d, want 7; add the new verb to Predicates() and update this test", got)
+	// And the reverse: a verb the evaluator knows but the inventory omits would
+	// ship undocumented. A count pinned to len(preds) would be tautological
+	// (adding a case to the switch alone leaves it green), so enumerate the
+	// switch itself from the source instead.
+	for _, verb := range evalBuiltinSwitchVerbs(t) {
+		if !seen[verb] {
+			t.Errorf("EvalBuiltin handles %q but Predicates() omits it — it would ship undocumented", verb)
+		}
 	}
+}
+
+// evalBuiltinSwitchVerbs parses condition.go and returns the case literals of
+// EvalBuiltin's `switch verb` — the evaluator's own list, read from the one
+// place it is written.
+func evalBuiltinSwitchVerbs(t *testing.T) []string {
+	t.Helper()
+
+	fset := token.NewFileSet()
+	file, err := parser.ParseFile(fset, "condition.go", nil, 0)
+	if err != nil {
+		t.Fatalf("parsing condition.go: %v", err)
+	}
+
+	var verbs []string
+	for _, decl := range file.Decls {
+		fn, ok := decl.(*ast.FuncDecl)
+		if !ok || fn.Name.Name != "EvalBuiltin" {
+			continue
+		}
+		ast.Inspect(fn, func(n ast.Node) bool {
+			sw, ok := n.(*ast.SwitchStmt)
+			if !ok {
+				return true
+			}
+			if ident, ok := sw.Tag.(*ast.Ident); !ok || ident.Name != "verb" {
+				return true
+			}
+			for _, stmt := range sw.Body.List {
+				clause, ok := stmt.(*ast.CaseClause)
+				if !ok {
+					continue
+				}
+				for _, expr := range clause.List {
+					lit, ok := expr.(*ast.BasicLit)
+					if !ok || lit.Kind != token.STRING {
+						continue
+					}
+					value, err := strconv.Unquote(lit.Value)
+					if err != nil {
+						t.Fatalf("unquoting case literal %s: %v", lit.Value, err)
+					}
+					verbs = append(verbs, value)
+				}
+			}
+			return true
+		})
+	}
+
+	if len(verbs) == 0 {
+		t.Fatal("found no case literals in EvalBuiltin's switch — the parser lost track of the function")
+	}
+	return verbs
 }

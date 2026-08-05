@@ -121,10 +121,12 @@ something the project already declares in `workspace/commands/**`, dispatch it w
 `type: command` + `cmd: <id>` (as `install` does above). Pasting the equivalent `php artisan
 …` / `npm ci` line into `deploy.yml` as `type: shell` compiles fine and passes validation,
 but the two copies drift, and only the command carries the service, workdir, user, env and
-compose flags — the shell step runs on the **host**. If a step is worth having in the deploy,
-it is worth being a command the developer can also run by hand. (It also shows up: every
-`type: shell` step is counted in the `shell_steps` field that gates unattended `dwe test run`
-— see `integration-tests.md` § 1.)
+compose flags — the shell step always runs on the **host**, while a service-scoped command
+runs in its container. If a step is worth having in the deploy, it is worth being a command
+the developer can also run by hand. (It also shows up: every step that executes on the host —
+a `type: shell` step, and a `type: command` whose command is not service-scoped — is counted
+in the `host_steps` field that gates unattended `dwe test run` — see `integration-tests.md`
+§ 1.)
 
 Two render-gate idioms:
 

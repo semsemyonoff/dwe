@@ -5,9 +5,14 @@ import (
 	"maps"
 	"os"
 	"path/filepath"
+	"slices"
+	"strings"
 
+	"github.com/semsemyonoff/dwe/internal/core/execution/condition"
 	"github.com/semsemyonoff/dwe/internal/core/project/config"
 	"github.com/semsemyonoff/dwe/internal/core/project/project"
+	"github.com/semsemyonoff/dwe/internal/core/usercommands"
+	"github.com/semsemyonoff/dwe/internal/core/usercommands/model"
 	"github.com/semsemyonoff/dwe/internal/core/workflow/deploy"
 	"github.com/semsemyonoff/dwe/internal/core/workflow/envtest"
 )
@@ -48,10 +53,15 @@ type testCostProfileJSON struct {
 	// resources shared with the working environment. Full messages come from
 	// `dwe validate tests`.
 	IsolationFindings []testIsolationFindingJSON `json:"isolation_findings"`
-	// ShellSteps counts `type: shell` steps this scenario would run: its own
+	// HostSteps counts the steps this scenario would run that execute on the
+	// HOST, outside the container sandbox the disposable copy provides: its own
 	// steps plus the deploy pipeline it triggers (project-wide + the enabled
-	// services'). Host side effects of a shell step are not sandboxed.
-	ShellSteps int `json:"shell_steps"`
+	// services'). Host side effects (absolute paths, ~, binds outside the
+	// project) are not sandboxed by the copy.
+	//
+	// `type: shell` is only one of the channels — see countHostSteps for the
+	// full list and for the one place the count is deliberately conservative.
+	HostSteps int `json:"host_steps"`
 }
 
 // testIsolationFindingJSON is one shared-resource hazard in the profile.
@@ -65,9 +75,10 @@ type testIsolationFindingJSON struct {
 type costProfiler struct {
 	baseDir       string
 	cfg           *config.DweConfig
+	reg           *usercommands.Registry // nil when the registry does not load
 	sharedVolumes int
-	projectShell  int            // shell steps in the project-wide deploy pipeline
-	serviceShell  map[string]int // shell steps per service deploy pipeline
+	projectHost   int            // host steps in the project-wide deploy pipeline
+	serviceHost   map[string]int // host steps per service deploy pipeline
 }
 
 // newCostProfiler assembles the profiler, or returns nil when the project
@@ -113,18 +124,25 @@ func newCostProfiler(baseDir, configPath string) *costProfiler {
 	if err != nil {
 		return nil
 	}
-	serviceShell := make(map[string]int, len(serviceDeploys))
-	for name, sd := range serviceDeploys {
-		serviceShell[name] = countShellStepsInPhases(sd.Phases)
-	}
 
-	return &costProfiler{
+	// Best-effort: the registry resolves a `type: command` step to the command
+	// that would run, which is what decides host vs container. A registry that
+	// does not load leaves it nil and countHostSteps falls back to the
+	// conservative reading — `list` still works on a broken commands tree.
+	reg, _ := usercommands.LoadRegistryFromConfigPath(configPath)
+
+	p := &costProfiler{
 		baseDir:       baseDir,
 		cfg:           cfg,
+		reg:           reg,
 		sharedVolumes: shared,
-		projectShell:  countShellStepsInPhases(effective.Phases),
-		serviceShell:  serviceShell,
 	}
+	p.projectHost = p.countHostStepsInPhases(effective.Phases)
+	p.serviceHost = make(map[string]int, len(serviceDeploys))
+	for name, sd := range serviceDeploys {
+		p.serviceHost[name] = p.countHostStepsInPhases(sd.Phases)
+	}
+	return p
 }
 
 // profile computes one scenario's cost profile. A nil profiler yields nil, so
@@ -153,13 +171,13 @@ func (p *costProfiler) profile(scn *envtest.Scenario) *testCostProfileJSON {
 	}
 
 	enabled := 0
-	shell := countShellSteps(scn.Steps) + p.projectShell
+	host := p.countHostSteps(scn.Steps) + p.projectHost
 	for name, svc := range services {
 		if !svc.Enabled {
 			continue
 		}
 		enabled++
-		shell += p.serviceShell[name]
+		host += p.serviceHost[name]
 	}
 
 	return &testCostProfileJSON{
@@ -169,7 +187,7 @@ func (p *costProfiler) profile(scn *envtest.Scenario) *testCostProfileJSON {
 		MaxStartPeriodSeconds: costs.MaxStartPeriod.Seconds(),
 		SharedVolumes:         p.sharedVolumes,
 		IsolationFindings:     findings,
-		ShellSteps:            shell,
+		HostSteps:             host,
 	}
 }
 
@@ -199,26 +217,175 @@ func (p *costProfiler) scenarioServices(scn *envtest.Scenario) map[string]config
 	return out
 }
 
-func countShellStepsInPhases(phases []config.DeployPhase) int {
+func (p *costProfiler) countHostStepsInPhases(phases []config.DeployPhase) int {
 	n := 0
 	for _, phase := range phases {
-		n += countShellSteps(phase.Steps)
+		// A phase-level shell `when:` runs sh -c in the project root before any
+		// of the phase's steps do, so it is host execution in its own right.
+		// Counting it as one keeps the > 0 gate honest; the exact number only
+		// ever has to distinguish "none" from "some".
+		if isHostCondition(phase.When) {
+			n++
+		}
+		n += p.countHostSteps(phase.Steps)
 	}
 	return n
 }
 
-// countShellSteps counts `type: shell` steps, descending into parallel groups
-// (nested groups are rejected at plan time, but the recursion costs nothing).
-func countShellSteps(steps []config.DeployStep) int {
+// countHostSteps counts the steps that execute something on the HOST, descending
+// into parallel groups (nested groups are rejected at plan time, but the
+// recursion costs nothing). A step is counted at most once no matter how many
+// host channels it uses.
+//
+// What the field is after is PROJECT-AUTHORED code running on the host, and
+// `type: shell` is only the most obvious of its channels — a counter that saw
+// only that one would report 0 for a pipeline running arbitrary host commands
+// through any of the others:
+//
+//   - type: shell — sh -c in the project root;
+//   - type: builtin, cmd: shell — the shell builtin, same sh -c;
+//   - type: command — host unless the referenced command runs in a container
+//     (service_exec / service_run). Resolved through the registry; an
+//     unresolvable reference counts as host, which is the safe direction for a
+//     field that gates an unattended run;
+//   - type: dwe — only when the subcommand re-enters project-authored code
+//     (see dweSubcommandRunsProjectCode);
+//   - a shell `when:` or a host-executing `check:` on any step, including the
+//     `check: auto` sentinel (it derives to the shell builtin).
+//
+// dwe's own subcommands (`docker up --wait`, `info`, `render …` — the whole
+// built-in default pipeline) are deliberately NOT counted: they are dwe
+// machinery acting on the disposable copy, which is exactly what the scenario
+// exists to run. Counting them would leave every project at host_steps > 0 and
+// the gate permanently shut, which reports nothing.
+func (p *costProfiler) countHostSteps(steps []config.DeployStep) int {
 	n := 0
 	for _, step := range steps {
 		if step.Parallel != nil {
-			n += countShellSteps(step.Parallel.Steps)
+			if isHostCondition(step.When) {
+				n++
+			}
+			n += p.countHostSteps(step.Parallel.Steps)
 			continue
 		}
-		if step.Type == "shell" {
+		if p.stepRunsOnHost(step) {
 			n++
 		}
 	}
 	return n
+}
+
+func (p *costProfiler) stepRunsOnHost(step config.DeployStep) bool {
+	if isHostCondition(step.When) {
+		return true
+	}
+	if step.Check != nil {
+		// The `check: auto` sentinel resolves to {type: builtin, cmd: shell}.
+		if config.IsAutoCheck(step.Check) || p.actionRunsOnHost(step.Check.Type, step.Check.Cmd) {
+			return true
+		}
+	}
+	return p.actionRunsOnHost(step.Type, step.Cmd)
+}
+
+func (p *costProfiler) actionRunsOnHost(actionType, cmd string) bool {
+	switch actionType {
+	case "shell":
+		return true
+	case "dwe":
+		return dweSubcommandRunsProjectCode(cmd)
+	case "builtin":
+		return cmd == "shell"
+	case "command":
+		return p.commandRunsOnHost(cmd, map[string]bool{})
+	default:
+		return false
+	}
+}
+
+// dweSubcommandsRunningProjectCode are the dwe subcommands that execute
+// project-authored code rather than dwe's own machinery: the user-command
+// dispatcher and every entry point that drives a project pipeline. The check is
+// on the first token only — deliberately coarse, since a read-only sub-verb
+// (`deploy plan`) counted as host merely closes the gate, while missing a
+// mutating one would open it wrongly.
+var dweSubcommandsRunningProjectCode = map[string]bool{
+	"cmd":     true,
+	"deploy":  true,
+	"reset":   true,
+	"restart": true,
+	"run":     true,
+	"test":    true,
+}
+
+func dweSubcommandRunsProjectCode(cmd string) bool {
+	fields := strings.Fields(cmd)
+	if len(fields) == 0 {
+		return false
+	}
+	return dweSubcommandsRunningProjectCode[fields[0]]
+}
+
+// commandRunsOnHost reports whether the user command id would execute
+// project-authored code on the host. service_exec / service_run run inside a
+// container; dwe and builtin are classified by the same rules their pipeline
+// step counterparts get; a workflow is host-executing when any sub-step it
+// references is; everything else (shell, script, …) is a host process. An
+// unresolvable id (registry absent, unknown command, a cmd: still carrying an
+// unrendered ${...} reference) counts as host — the profile gates an unattended
+// run, so the unknown case must close the gate, not open it.
+//
+// seen breaks a reference cycle; the loader rejects one, but this must not hang
+// on a config it never validated.
+func (p *costProfiler) commandRunsOnHost(id string, seen map[string]bool) bool {
+	if p.reg == nil {
+		return true
+	}
+	if seen[id] {
+		// Already counted on the way in; a cycle adds no new channel.
+		return false
+	}
+	seen[id] = true
+
+	def, err := p.reg.Get(id)
+	if err != nil || def == nil {
+		return true
+	}
+	switch def.Type {
+	case model.CommandTypeServiceExec, model.CommandTypeServiceRun:
+		return false
+	case model.CommandTypeDwe:
+		// Same rule as a `type: dwe` step — dwe's own subcommands are not
+		// project code.
+		return dweSubcommandRunsProjectCode(def.Cmd)
+	case model.CommandTypeBuiltin:
+		return def.Cmd == "shell"
+	case model.CommandTypeWorkflow:
+		return slices.ContainsFunc(flattenWorkflowSteps(def.Steps), func(s model.WorkflowStep) bool {
+			return s.Command != "" && p.commandRunsOnHost(s.Command, seen)
+		})
+	default:
+		return true
+	}
+}
+
+// flattenWorkflowSteps returns the workflow's leaf sub-steps, unwrapping
+// parallel containers (the schema allows exactly one level of nesting).
+func flattenWorkflowSteps(steps []model.WorkflowStep) []model.WorkflowStep {
+	out := make([]model.WorkflowStep, 0, len(steps))
+	for _, s := range steps {
+		if s.Parallel != nil {
+			out = append(out, s.Parallel.Steps...)
+			continue
+		}
+		out = append(out, s)
+	}
+	return out
+}
+
+// isHostCondition reports whether c is a shell condition — sh -c in the project
+// root. builtin predicates only stat the filesystem and template conditions are
+// evaluated in-process, so neither runs anything.
+func isHostCondition(c *condition.Condition) bool {
+	return c != nil && c.Type == condition.TypeShell
 }

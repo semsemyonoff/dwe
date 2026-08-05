@@ -441,6 +441,7 @@ commands:
 - `dwe validate --strict` — treat warnings as errors (exit 1).
 - `dwe validate --quiet` — hide ok / info rows.
 - `dwe validate --level <levels>` — show only the given severity levels (comma-separated: `ok`, `info`, `warning`, `error`; e.g. `--level error,warning`). This is display-only — it never changes the summary counts or the exit code. Applies to both the table and `--output json`.
+- **Filter hint.** After a long human-mode run — more than 20 rendered rows — `dwe validate` prints one info line to **stderr** naming `--level` and `--quiet`. It is suppressed when either flag is already set, when every displayed row is an error (neither flag would remove anything), and in `--output json` mode, where stdout stays the parseable surface and the consumer filters the array itself.
 - `--skip-preflight` — local flag on `deploy run`, `run`, `stop`, `restart`, and `reset run`. When set, preflight prints `preflight skipped (--skip-preflight)` to stderr and runs NO validators. The flag is a true bypass: `type: command` checks invoke arbitrary user scripts, so the CLI does not run them under a flag the user named "skip".
 
 ## Diagnostic output

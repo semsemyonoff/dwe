@@ -275,7 +275,7 @@ Lists every scenario under `workspace/tests/*.yml` with its `description:`, verb
         "max_start_period_seconds": 30,
         "shared_volumes": 1,
         "isolation_findings": [{"kind": "external_volume", "resource": "composer-cache"}],
-        "shell_steps": 2
+        "host_steps": 2
       }
     }
   ]
@@ -290,7 +290,7 @@ Lists every scenario under `workspace/tests/*.yml` with its `description:`, verb
 | `max_start_period_seconds` | The largest healthcheck `start_period` in the enabled chain. **Max, not sum**: `docker compose up --wait` waits in parallel, so a sum over-estimates the more services a project has. A disabled or unparseable healthcheck contributes nothing. |
 | `shared_volumes` | Count of `docker.yml` volumes declared `shared: true`. These resolve to their verbatim names and are written into by a test run. |
 | `isolation_findings` | The **non-blocking** findings of the [compose isolation scanner](#compose-isolation-scanner) — `named_volume` / `external_volume` / `named_network` / `external_network`, i.e. resources shared with the working environment. The blocking kinds (`container_name`, `raw_host_port`) are omitted: they abort the scenario before deploy anyway. Full messages come from `dwe validate tests`. |
-| `shell_steps` | `type: shell` steps this scenario would run: its own steps plus the deploy pipeline it triggers (project-wide plus the enabled services'), descending into `parallel:` groups. Host side effects of a shell step are [not sandboxed](#documented-limitations). |
+| `host_steps` | Steps this scenario would run **on the host**, outside the container sandbox: its own steps plus the deploy pipeline it triggers (project-wide plus the enabled services'), descending into `parallel:` groups. The counted forms are `type: shell`, `type: builtin` with `cmd: shell`, a `type: command` whose command resolves to a host type (anything but `service_exec` / `service_run`, recursing through a `workflow`), a `type: dwe` whose subcommand re-enters project-authored code (`cmd`, `run`, `restart`, `deploy`, `reset`, `test`), and any step carrying a shell `when:` or a host-executing `check:` (including `check: auto`). dwe's own subcommands (`docker up --wait`, `info`, `render …` — the whole built-in default pipeline) are **not** counted: they are dwe machinery acting on the disposable copy, which is what the scenario exists to run. A step is counted once however many of those it uses, and a phase-level shell `when:` counts as one. A `type: command` reference that does not resolve counts as a host step — the field gates an unattended run, so the unknown case closes the gate. Host side effects are [not sandboxed](#documented-limitations). |
 
 Two properties are deliberate:
 

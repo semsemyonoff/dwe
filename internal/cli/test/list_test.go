@@ -175,9 +175,9 @@ func TestRunTestList_CostProfileMinimalProject(t *testing.T) {
 	if len(p.IsolationFindings) != 0 {
 		t.Errorf("isolation_findings = %v, want none", p.IsolationFindings)
 	}
-	// The built-in default deploy pipeline carries no shell step.
-	if p.ShellSteps != 0 {
-		t.Errorf("shell_steps = %d, want 0", p.ShellSteps)
+	// The built-in default deploy pipeline runs only dwe's own subcommands.
+	if p.HostSteps != 0 {
+		t.Errorf("host_steps = %d, want 0", p.HostSteps)
 	}
 }
 
@@ -218,6 +218,19 @@ volumes:
       - name: sync
         type: shell
         cmd: "true"
+      - name: fanout
+        parallel:
+          steps:
+            - name: nested-shell
+              type: shell
+              cmd: "true"
+            - name: nested-quiet
+              type: dwe
+              cmd: "info"
+      - name: gated
+        type: dwe
+        cmd: "info"
+        when: {type: shell, cmd: "true"}
 `)
 	writeScenarioFile(t, baseDir, "smoke", `description: Smoke
 steps:
@@ -250,9 +263,10 @@ steps:
 		p.IsolationFindings[0].Resource != "composer-cache" {
 		t.Errorf("isolation_findings = %+v, want one external_volume composer-cache", p.IsolationFindings)
 	}
-	// One scenario step + one service deploy step.
-	if p.ShellSteps != 2 {
-		t.Errorf("shell_steps = %d, want 2", p.ShellSteps)
+	// One scenario step + three service deploy steps (a flat shell step, a
+	// shell step nested in a parallel group, and a step whose `when:` is shell).
+	if p.HostSteps != 4 {
+		t.Errorf("host_steps = %d, want 4", p.HostSteps)
 	}
 }
 
@@ -336,5 +350,175 @@ func TestRunTestList_TextOutputCarriesNoProfile(t *testing.T) {
 	}
 	if got, want := out.String(), "smoke                    Smoke\n"; got != want {
 		t.Errorf("human output changed:\n got %q\nwant %q", got, want)
+	}
+}
+
+// TestRunTestList_CostProfileOmitsBlockingIsolationFindings pins the Blocking
+// filter: a container_name / raw host port aborts the run before deploy, so it
+// is not part of an "is this safe to run unattended" decision, while the
+// shared-resource kinds around it must still be reported.
+func TestRunTestList_CostProfileOmitsBlockingIsolationFindings(t *testing.T) {
+	baseDir := t.TempDir()
+	writeProjectFile(t, baseDir, "workspace.yml", "project:\n  name: demo\ncompose:\n  base: compose.yaml\n")
+	writeProjectFile(t, baseDir, "workspace/services/app/service.yml", "type: app\ncontainer: app\nrequired: true\n")
+	writeProjectFile(t, baseDir, "compose.yaml", `services:
+  app:
+    image: nginx:1
+    container_name: pinned-app
+    ports:
+      - "8080:80"
+volumes:
+  composer-cache:
+    external: true
+`)
+	writeScenarioFile(t, baseDir, "smoke", "description: Smoke\n")
+
+	p := listProfiles(t, baseDir)[0].CostProfile
+	if p == nil {
+		t.Fatal("expected a cost profile")
+	}
+	kinds := make([]string, 0, len(p.IsolationFindings))
+	for _, f := range p.IsolationFindings {
+		kinds = append(kinds, f.Kind)
+	}
+	if !reflect.DeepEqual(kinds, []string{"external_volume"}) {
+		t.Errorf("isolation_findings kinds = %v, want [external_volume] only", kinds)
+	}
+}
+
+// TestRunTestList_CostProfileEnableOverlay covers the env.services.enable half
+// of the scenario overlay — the form the scaffolded smoke.yml documents.
+func TestRunTestList_CostProfileEnableOverlay(t *testing.T) {
+	baseDir := t.TempDir()
+	writeProjectFile(t, baseDir, "workspace.yml", "project:\n  name: demo\ncompose:\n  base: compose.yaml\n")
+	writeProjectFile(t, baseDir, "workspace/services/app/service.yml", "type: app\ncontainer: app\nrequired: true\n")
+	writeProjectFile(t, baseDir, "workspace/services/redis/service.yml",
+		"type: infra\ncontainer: redis\ncompose:\n  - compose/redis.yml\n")
+	writeProjectFile(t, baseDir, "compose.yaml", "services: {}\n")
+	writeProjectFile(t, baseDir, "compose/redis.yml", "services:\n  redis:\n    image: redis:7\n")
+	writeScenarioFile(t, baseDir, "off", "description: Default\n")
+	writeScenarioFile(t, baseDir, "on", "description: Redis on\nenv:\n  services:\n    enable: [redis]\n")
+
+	byName := map[string]*testCostProfileJSON{}
+	for _, r := range listProfiles(t, baseDir) {
+		byName[r.Name] = r.CostProfile
+	}
+	off, on := byName["off"], byName["on"]
+	if off == nil || on == nil {
+		t.Fatalf("expected a profile per scenario, got %+v", byName)
+	}
+	if off.EnabledServices != 1 || len(off.ExternalImages) != 0 {
+		t.Errorf("default profile = %+v, want 1 service and no images", off)
+	}
+	if on.EnabledServices != 2 {
+		t.Errorf("enabled overlay enabled_services = %d, want 2", on.EnabledServices)
+	}
+	if !reflect.DeepEqual(on.ExternalImages, []string{"redis:7"}) {
+		t.Errorf("enabled overlay external_images = %v, want [redis:7]", on.ExternalImages)
+	}
+}
+
+// TestRunTestList_CostProfileHostStepsByCommandTarget pins the type: command
+// classification: a service-scoped command runs in the container and must not
+// count, while a host command and an unresolvable reference both must.
+func TestRunTestList_CostProfileHostStepsByCommandTarget(t *testing.T) {
+	cases := []struct {
+		name    string
+		command string
+		steps   string
+		want    int
+	}{
+		{
+			name:    "service scoped command is not a host step",
+			command: "commands:\n  migrate:\n    type: service_exec\n    service: app\n    cmd: \"true\"\n",
+			steps:   "  - name: run\n    type: command\n    cmd: test.migrate\n",
+			want:    0,
+		},
+		{
+			name:    "host command counts",
+			command: "commands:\n  seed:\n    type: shell\n    cmd: \"true\"\n",
+			steps:   "  - name: run\n    type: command\n    cmd: test.seed\n",
+			want:    1,
+		},
+		{
+			name:    "workflow inherits its sub-steps",
+			command: "commands:\n  inner:\n    type: shell\n    cmd: \"true\"\n  flow:\n    type: workflow\n    steps:\n      - command: test.inner\n",
+			steps:   "  - name: run\n    type: command\n    cmd: test.flow\n",
+			want:    1,
+		},
+		{
+			name:    "builtin shell step counts",
+			command: "",
+			steps:   "  - name: run\n    type: builtin\n    cmd: shell\n    with:\n      command: \"true\"\n",
+			want:    1,
+		},
+		{
+			name:    "non-shell builtin does not count",
+			command: "",
+			steps:   "  - name: note\n    type: builtin\n    cmd: message\n    with:\n      text: hi\n",
+			want:    0,
+		},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			baseDir := t.TempDir()
+			writeMinimalProject(t, baseDir)
+			if tc.command != "" {
+				writeProjectFile(t, baseDir, "workspace/commands/test.yml", tc.command)
+			}
+			writeScenarioFile(t, baseDir, "smoke", "description: Smoke\nsteps:\n"+tc.steps)
+
+			p := listProfiles(t, baseDir)[0].CostProfile
+			if p == nil {
+				t.Fatal("expected a cost profile")
+			}
+			if p.HostSteps != tc.want {
+				t.Errorf("host_steps = %d, want %d", p.HostSteps, tc.want)
+			}
+		})
+	}
+}
+
+// TestRunTestList_CostProfileUnknownCommandCountsAsHost pins the safe direction
+// of the unknown case: a reference the registry cannot resolve closes the gate.
+func TestRunTestList_CostProfileUnknownCommandCountsAsHost(t *testing.T) {
+	baseDir := t.TempDir()
+	writeMinimalProject(t, baseDir)
+	writeScenarioFile(t, baseDir, "smoke", "description: Smoke\nsteps:\n  - name: run\n    type: command\n    cmd: nope\n")
+
+	p := listProfiles(t, baseDir)[0].CostProfile
+	if p == nil {
+		t.Fatal("expected a cost profile")
+	}
+	if p.HostSteps != 1 {
+		t.Errorf("host_steps = %d, want 1 for an unresolvable command", p.HostSteps)
+	}
+}
+
+// TestRunTestList_CostProfileDegradesOnBrokenProjectState covers the remaining
+// nil-degrading branches of newCostProfiler: `list` must keep listing while any
+// of the files it reads is mid-edit.
+func TestRunTestList_CostProfileDegradesOnBrokenProjectState(t *testing.T) {
+	cases := []struct{ name, rel, body string }{
+		{"docker.yml", "workspace/docker.yml", "resources: [not, a, mapping]\n"},
+		{"project deploy.yml", "workspace/deploy.yml", "phases: {not: a list}\n"},
+		{"service deploy.yml", "workspace/services/app/deploy.yml", "phases: {not: a list}\n"},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			baseDir := t.TempDir()
+			writeMinimalProject(t, baseDir)
+			writeProjectFile(t, baseDir, tc.rel, tc.body)
+			writeScenarioFile(t, baseDir, "smoke", "description: Smoke\n")
+
+			rows := listProfiles(t, baseDir)
+			if len(rows) != 1 {
+				t.Fatalf("expected 1 scenario, got %d", len(rows))
+			}
+			if rows[0].CostProfile != nil {
+				t.Errorf("expected no profile for a broken %s, got %+v", tc.rel, rows[0].CostProfile)
+			}
+		})
 	}
 }

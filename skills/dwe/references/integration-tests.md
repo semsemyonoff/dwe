@@ -22,7 +22,7 @@ Each scenario carries a `cost_profile` object. Two groups, judged differently:
 | --- | --- | --- |
 | `isolation_findings` | named / `external:` volumes and networks the copy shares with the real env | **hard stop** if non-empty |
 | `shared_volumes` | `shared: true` volumes — the real cache/data | **hard stop** if > 0 |
-| `shell_steps` | `type: shell` steps in the scenario **and** in the deploy it triggers | **hard stop** if > 0 |
+| `host_steps` | steps running **project-authored code on the host** — `type: shell`, the `shell` builtin, a `type: command` resolving to a host command, a `type: dwe` re-entering a pipeline, and shell `when:` / `check:` conditions — in the scenario **and** in the deploy it triggers. dwe's own subcommands don't count, so the built-in default pipeline reports 0 | **hard stop** if > 0 |
 | `build_services` | compose services that build locally | judge the build (below) |
 | `external_images` | images a cold run would pull | judge the cost |
 | `max_start_period_seconds` | largest healthcheck `start_period` (max, not sum — `up --wait` waits in parallel) | judge the cost |
@@ -45,7 +45,7 @@ The cost half is a judgement, not a reflex. **A build is not an automatic stop**
 | `dwe test run [scenario...]` | **mutating + slow** | **conditional** — full Docker deploy in a disposable copy; run it yourself only if the scenario's cost profile clears the gate in § 1, otherwise hand it over |
 | `dwe test clean [scenario...]` (no `--dry-run`) | **mutating** | **hand to the user** — tears down kept or crashed/interrupted runs (manifest-driven; no-manifest orphans are only *reported*, never auto-removed) |
 
-The mutations are **mostly isolated and disposable** — own compose project, **non-shared** volumes, auto-remapped host ports, and a copy-local `.dwe/`, so they don't touch your running stack. But isolation is **not** total: `shared: true` volumes are reused verbatim (real cache/data is visible to every run), `container_name:` / named / `external:` compose resources bypass compose-project scoping, and arbitrary host side effects of `shell`/deploy steps (absolute paths, `~`, bind mounts outside the project) are not sandboxed — see "Documented limitations" in `dwe docs show config/tests --lang en`. **These three leaks are precisely the profile's hard-stop fields** (`shared_volumes`, `isolation_findings`, `shell_steps`): when any of them is set, the gate in § 1 sends the run to the user, because a failure would no longer be confined to the copy. When they are all clear, the remaining question is only cost.
+The mutations are **mostly isolated and disposable** — own compose project, **non-shared** volumes, auto-remapped host ports, and a copy-local `.dwe/`, so they don't touch your running stack. But isolation is **not** total: `shared: true` volumes are reused verbatim (real cache/data is visible to every run), `container_name:` / named / `external:` compose resources bypass compose-project scoping, and arbitrary host side effects of host-executing deploy steps (absolute paths, `~`, bind mounts outside the project) are not sandboxed — see "Documented limitations" in `dwe docs show config/tests --lang en`. **These three leaks are precisely the profile's hard-stop fields** (`shared_volumes`, `isolation_findings`, `host_steps`): when any of them is set, the gate in § 1 sends the run to the user, because a failure would no longer be confined to the copy. When they are all clear, the remaining question is only cost.
 
 ## 3. Author a scenario file
 

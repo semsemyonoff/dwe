@@ -21,10 +21,13 @@ An absent workspace/tests/ directory is not an error — it simply lists nothing
 With --output json every scenario also carries a cost_profile: enabled service
 count (after the scenario's env.services overlay), compose services that build,
 external images to pull, the largest healthcheck start_period, shared volumes,
-non-blocking compose isolation findings, and the number of type: shell steps the
-scenario would run. Facts only — no cheap/expensive verdict; and it reports
-whether there IS a build, not what the build costs (layer-cache warmth is not
-modelled). The profile is omitted when the project config does not load.`,
+non-blocking compose isolation findings, and the number of steps the scenario
+would run project-authored code with on the host, outside the container sandbox
+(type: shell, the shell builtin, a type: command resolving to a host command, a
+type: dwe re-entering a pipeline, and shell when: / check: conditions). Facts
+only — no cheap/expensive verdict; and it reports whether there IS a build, not
+what the build costs (layer-cache warmth is not modelled). The profile is
+omitted when the project config does not load.`,
 		Args:         cobra.NoArgs,
 		SilenceUsage: true,
 		RunE: func(cmd *cobra.Command, args []string) error {

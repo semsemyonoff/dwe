@@ -1297,8 +1297,11 @@ func TestValidateFilterHint_LongRunEmitsToStderrOnly(t *testing.T) {
 func TestValidateFilterHint_ShortRunSilent(t *testing.T) {
 	workspacePath := writeLongValidateFixture(t)
 
-	_, stderr := runValidateTextCmd(t, workspacePath, "commands")
+	stdout, stderr := runValidateTextCmd(t, workspacePath, "commands")
 
+	// Precondition: the run actually rendered a table. Without this the
+	// "stderr lacks the hint" assertions would also pass on an aborted run.
+	require.Contains(t, stdout, "(scope:", "the run must have rendered a summary")
 	require.NotContains(t, stderr, "--level")
 	require.NotContains(t, stderr, "--quiet")
 }
@@ -1314,7 +1317,8 @@ func TestValidateFilterHint_SuppressedWhenAlreadyFiltering(t *testing.T) {
 		{"--level", "ok,info,warning,error"},
 	} {
 		t.Run(strings.Join(args, " "), func(t *testing.T) {
-			_, stderr := runValidateTextCmd(t, workspacePath, args...)
+			stdout, stderr := runValidateTextCmd(t, workspacePath, args...)
+			require.Contains(t, stdout, "(scope:", "the run must have rendered a summary")
 			require.NotContains(t, stderr, "Narrow the output")
 		})
 	}

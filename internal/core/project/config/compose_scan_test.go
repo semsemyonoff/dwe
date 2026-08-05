@@ -218,6 +218,24 @@ func TestScanComposeCost_OverlayWins(t *testing.T) {
 	require.Equal(t, []string{"postgres:16"}, facts.ExternalImages)
 }
 
+// TestScanComposeCost_OverlayDisablingHealthcheckClearsStartPeriod pins the
+// clearing half of the merge: a later file disabling the healthcheck removes
+// the earlier start_period instead of leaving it standing, so the reported
+// wait matches what the merged stack actually performs.
+func TestScanComposeCost_OverlayDisablingHealthcheckClearsStartPeriod(t *testing.T) {
+	t.Parallel()
+	root := t.TempDir()
+	base := filepath.Join(root, "base.yml")
+	overlay := filepath.Join(root, "overlay.yml")
+	require.NoError(t, os.WriteFile(base, []byte("services:\n  app:\n    image: nginx:1\n    healthcheck:\n      start_period: 300s\n  db:\n    image: postgres:16\n    healthcheck:\n      start_period: 20s\n"), 0o644))
+	require.NoError(t, os.WriteFile(overlay, []byte("services:\n  app:\n    healthcheck:\n      disable: true\n"), 0o644))
+
+	cfg := &DweConfig{Compose: ComposeConfig{Base: base, Extra: []string{overlay}}}
+	facts := ScanComposeCost(cfg, root)
+
+	require.Equal(t, 20*time.Second, facts.MaxStartPeriod)
+}
+
 func TestScanComposeCost_UnreadableFileSkippedSilently(t *testing.T) {
 	t.Parallel()
 	cfg := &DweConfig{Compose: ComposeConfig{Base: "does-not-exist.yml"}}

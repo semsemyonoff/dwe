@@ -4,6 +4,7 @@ import (
 	"strings"
 	"testing"
 	"testing/fstest"
+	"unicode/utf8"
 )
 
 func TestSearch_AttributesToNearestSection(t *testing.T) {
@@ -65,6 +66,39 @@ func TestSearch_EmptyQuery(t *testing.T) {
 	}
 	if hits := Search(roots, "", "en", SearchOptions{Literal: true}); hits != nil {
 		t.Errorf("empty literal query should return nil, got %+v", hits)
+	}
+	// A literal query is not quoting: an all-whitespace one must find nothing
+	// rather than search for a run of spaces and match every indented line.
+	if hits := Search(roots, "   ", "en", SearchOptions{Literal: true}); hits != nil {
+		t.Errorf("whitespace-only literal query should return nil, got %+v", hits)
+	}
+}
+
+// TestSearch_SnippetCapIncludesEllipsis pins the documented contract: a snippet
+// is at most snippetMaxLen bytes INCLUDING the ellipsis, cut on a rune and word
+// boundary, so a TSV row can never gain a fifth field.
+func TestSearch_SnippetCapIncludesEllipsis(t *testing.T) {
+	long := strings.Repeat("configuration référence ", 40)
+	roots := []DocRoot{{
+		Name: "dwe",
+		FS:   fstest.MapFS{"x.md": &fstest.MapFile{Data: []byte("# T\n\n## A\n\n" + long + "\n")}},
+	}}
+	hits := Search(roots, "configuration", "en", SearchOptions{})
+	if len(hits) != 1 {
+		t.Fatalf("expected 1 hit, got %d", len(hits))
+	}
+	snippet := hits[0].Snippet
+	if len(snippet) > snippetMaxLen {
+		t.Errorf("snippet is %d bytes, want <= %d: %q", len(snippet), snippetMaxLen, snippet)
+	}
+	if !strings.HasSuffix(snippet, "…") {
+		t.Errorf("truncated snippet should end with an ellipsis, got %q", snippet)
+	}
+	if !utf8.ValidString(snippet) {
+		t.Errorf("snippet cut mid-rune: %q", snippet)
+	}
+	if strings.HasSuffix(strings.TrimSuffix(snippet, "…"), " ") {
+		t.Errorf("snippet should not keep a trailing space before the ellipsis: %q", snippet)
 	}
 }
 
