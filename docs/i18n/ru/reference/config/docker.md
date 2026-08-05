@@ -1,4 +1,4 @@
-> Translated from: reference/config/docker.md @ 0baefde71076
+> Translated from: reference/config/docker.md @ 5b241197aa68
 
 # docker.yml / docker.local.yml
 
@@ -85,7 +85,7 @@ build:
 project_name: "${project.prefix}-${project.name}"
 ```
 
-Имя Docker Compose-проекта, передаваемое как `-p <name>` в каждый compose-вызов. Поддерживает `${dot.path}` lookup'ы по смерженному DWE-конфигу (см. [Шаблоны](../templates.md) — пространства имён `${...}`). По умолчанию разрешается в `dwe-laravel`.
+Имя Docker Compose-проекта, передаваемое как `-p <name>` в каждый compose-вызов. Поддерживает `${dot.path}` lookup'ы по смерженному DWE-конфигу (см. [Шаблоны](../templates.md) — пространства имён `${...}`), разрешаемый по отдельному, более строгому правилу: **любой** dot-path в `Raw` резолвится здесь (без whitelist'а по неймспейсам), но неразрешённый путь — это жёсткая **ошибка**, а не буквальный `${...}` — сломанное имя проекта должно упасть громко, а не молча дойти как `${...}` до `docker compose -p`. По умолчанию разрешается в `dwe-laravel`.
 
 Локальное переопределение:
 ```yaml
