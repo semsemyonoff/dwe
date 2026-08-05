@@ -49,6 +49,27 @@ func TestPrintPlanShell_WithPhaseWhen(t *testing.T) {
 	}
 }
 
+func TestPrintPlanShell_PrefersRenderedPhaseWhen(t *testing.T) {
+	// The shell plan must show the rendered phase condition, not the raw
+	// ${vars.*} text — the same divergence the table renderer already avoids.
+	steps := []pipeline.ResolvedStep{
+		{
+			Phase:     config.DeployPhase{Name: "setup", When: parseWhenString("cmd:test -f ${vars.marker}")},
+			PhaseWhen: parseWhenString("cmd:test -f /tmp/marker"),
+			Step:      config.DeployStep{Name: "migrate", Type: "shell", Cmd: "php artisan migrate"},
+		},
+	}
+	var buf bytes.Buffer
+	reset.PrintPlanShell(steps, &buf, "dwe")
+	out := buf.String()
+	if !strings.Contains(out, "/tmp/marker") {
+		t.Errorf("expected rendered phase condition in output, got: %q", out)
+	}
+	if strings.Contains(out, "${vars.marker}") {
+		t.Errorf("raw phase condition leaked into output: %q", out)
+	}
+}
+
 func TestPrintPlanShell_WithRuntimeWhen(t *testing.T) {
 	steps := []pipeline.ResolvedStep{
 		{

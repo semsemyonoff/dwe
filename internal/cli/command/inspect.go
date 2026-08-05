@@ -531,10 +531,13 @@ func inspectDaemonSection(def2 inspectDef2, sub inspectSub, def *usercommands.Co
 		if err == nil {
 			// Honor docker.yml project_name so the displayed name matches the
 			// container the daemon builtins actually create. baseDir == "" (or a
-			// template-resolution error) degrades to FullName().
+			// template-resolution error) degrades to the normalized FullName().
 			projectName, perr := config.ResolveComposeProjectName(baseDir, cfg)
 			if perr != nil {
-				projectName = cfg.Project.FullName()
+				// Normalized fallback (ComposeProjectName(nil, cfg)), not the
+				// raw FullName(): the displayed name must match what compose
+				// stamps even on the docker.yml-unreadable path.
+				projectName = config.ComposeProjectName(nil, cfg)
 			}
 			name, err := daemon.ResolveContainerName(projectName, rendered)
 			if err == nil {

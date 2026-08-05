@@ -192,7 +192,10 @@ func BuildOverlaySpec(baseDir string, cfg *config.DweConfig, arch ArchResolver, 
 	// diagnostic identity, not a container prefix.
 	composeProject, err := config.ResolveComposeProjectName(baseDir, cfg)
 	if err != nil {
-		composeProject = cfg.Project.FullName()
+		// ComposeProjectName(nil, cfg), not FullName(): the fallback must be
+		// normalized the same way, or the error path builds a prefix compose
+		// never stamps on a project whose name carries uppercase.
+		composeProject = config.ComposeProjectName(nil, cfg)
 		logf("bridge: resolving compose project name: %v; using %q", err, composeProject)
 	}
 	for _, name := range config.DeployOrder(cfg, []string{"app", "tool", "infra"}) {
