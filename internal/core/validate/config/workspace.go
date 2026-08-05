@@ -700,6 +700,51 @@ func (v *dockerValidator) Run(ctx validate.Context) []validate.Diagnostic {
 	return diags
 }
 
+// infoConfigState classifies what a present info.yml actually decoded to,
+// mirroring the fallback logic in config.LoadInfoConfig (probe-first, since
+// that loader collapses all three states into one InfoConfig and does not
+// report which branch it took).
+type infoConfigState int
+
+const (
+	// infoStateAuthored is a file that decoded at least one top-level key and
+	// at least one section — a genuine, user-authored dashboard.
+	infoStateAuthored infoConfigState = iota
+	// infoStateDefaultFallback is an all-comment or empty file: it decodes no
+	// top-level keys at all, so config.LoadInfoConfig silently substitutes the
+	// built-in default.
+	infoStateDefaultFallback
+	// infoStateDeliberatelyEmpty is a file that decoded top-level keys (e.g.
+	// `footer: true`) but an explicit `sections: []`.
+	infoStateDeliberatelyEmpty
+)
+
+// probeInfoConfigState re-parses the raw file to determine which of the three
+// states above produced the InfoConfig config.LoadInfoConfig already returned.
+func probeInfoConfigState(path string) (infoConfigState, error) {
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return infoStateAuthored, fmt.Errorf("read %s: %w", path, err)
+	}
+
+	var probe map[string]any
+	if err := yaml.Unmarshal(data, &probe); err != nil {
+		return infoStateAuthored, fmt.Errorf("parse %s: %w", path, err)
+	}
+	if len(probe) == 0 {
+		return infoStateDefaultFallback, nil
+	}
+
+	var cfg config.InfoConfig
+	if err := yaml.Unmarshal(data, &cfg); err != nil {
+		return infoStateAuthored, fmt.Errorf("parse %s: %w", path, err)
+	}
+	if len(cfg.Sections) == 0 {
+		return infoStateDeliberatelyEmpty, nil
+	}
+	return infoStateAuthored, nil
+}
+
 type infoValidator struct{}
 
 func (v *infoValidator) ID() string {
@@ -750,14 +795,49 @@ func (v *infoValidator) Run(ctx validate.Context) []validate.Diagnostic {
 		return diags
 	}
 
-	// Only emit OK when the file actually exists (missing file already emitted Info above)
+	// A present file can decode to one of three states (mirroring the fallback
+	// LoadInfoConfig applies): all-comment/empty (the built-in dashboard is
+	// silently active, same as an absent file — this must NOT read as "OK", an
+	// agent that sees SeverityOK has no reason to look further), a deliberate
+	// `sections: []` (dashboard intentionally empty), or an authored dashboard
+	// (the only state that actually earns OK).
 	if fileExists {
-		diags = append(diags, validate.Diagnostic{
-			Severity: validate.SeverityOK,
-			Domain:   "config",
-			Target:   "config.info",
-			File:     relPath(ctx.ProjectRoot, infoPath),
-		})
+		state, probeErr := probeInfoConfigState(infoPath)
+		if probeErr != nil {
+			diags = append(diags, validate.Diagnostic{
+				Severity: validate.SeverityError,
+				Domain:   "config",
+				Target:   "config.info",
+				File:     relPath(ctx.ProjectRoot, infoPath),
+				Message:  probeErr.Error(),
+			})
+			return diags
+		}
+		switch state {
+		case infoStateDefaultFallback:
+			diags = append(diags, validate.Diagnostic{
+				Severity: validate.SeverityInfo,
+				Domain:   "config",
+				Target:   "config.info",
+				File:     relPath(ctx.ProjectRoot, infoPath),
+				Message:  "info.yml has no active content (all comments or empty) — built-in dashboard is active",
+			})
+		case infoStateDeliberatelyEmpty:
+			diags = append(diags, validate.Diagnostic{
+				Severity: validate.SeverityInfo,
+				Domain:   "config",
+				Target:   "config.info",
+				File:     relPath(ctx.ProjectRoot, infoPath),
+				Message:  "info.yml declares sections: [] — dashboard is deliberately empty",
+			})
+		default:
+			diags = append(diags, validate.Diagnostic{
+				Severity: validate.SeverityOK,
+				Domain:   "config",
+				Target:   "config.info",
+				File:     relPath(ctx.ProjectRoot, infoPath),
+			})
+		}
 	}
 
 	// Validate auto-block rules that need cfg.Services

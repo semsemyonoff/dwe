@@ -723,14 +723,14 @@ above:
 - Modify: `internal/core/validate/config/workspace.go`
 - Modify: `internal/core/validate/config/workspace_test.go`
 
-- [ ] (TDD) write tests for the same four states Task 9 pinned: all-comment (default
+- [x] (TDD) write tests for the same four states Task 9 pinned: all-comment (default
       active) reports the inert state honestly rather than `SeverityOK`; deliberate
       `sections: []` reports its own state; an authored dashboard reports OK; an absent
       file stays informational
-- [ ] implement the inverted verdict
-- [ ] ensure the wording distinguishes "inert scaffold, built-in dashboard active",
+- [x] implement the inverted verdict
+- [x] ensure the wording distinguishes "inert scaffold, built-in dashboard active",
       "deliberately empty dashboard" and "authored dashboard"
-- [ ] run tests — must pass before task 11
+- [x] run tests — must pass before task 11
 
 ### Task 11: Drop the removed `run.update` from the lifecycle scaffold
 

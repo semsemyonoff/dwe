@@ -1236,6 +1236,87 @@ sections:
 	hasDiag(t, diags, validate.SeverityOK, "")
 }
 
+// TestInfoValidator_decodeStates pins the honest verdict for the same four
+// decode states config.LoadInfoConfig pins in TestLoadInfoConfig_fallbackStates:
+// the all-comment/empty file and the deliberate `sections: []` must no longer
+// read as SeverityOK — only an authored dashboard earns that.
+func TestInfoValidator_decodeStates(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name       string
+		body       string
+		wantSev    validate.Severity
+		wantSubstr string
+	}{
+		{
+			name: "fully commented",
+			body: `# workspace/info.yml — inert mirror.
+# sections:
+#   - id: project
+#     items: []
+# footer: true
+`,
+			wantSev:    validate.SeverityInfo,
+			wantSubstr: "built-in dashboard is active",
+		},
+		{
+			name:       "empty file",
+			body:       ``,
+			wantSev:    validate.SeverityInfo,
+			wantSubstr: "built-in dashboard is active",
+		},
+		{
+			name: "deliberate empty sections",
+			body: `sections: []
+`,
+			wantSev:    validate.SeverityInfo,
+			wantSubstr: "deliberately empty",
+		},
+		{
+			name: "one real section",
+			body: `sections:
+  - id: custom
+    items:
+      - type: separator
+`,
+			wantSev:    validate.SeverityOK,
+			wantSubstr: "",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+			root := writeInfoYML(t, tt.body)
+			cfg, _ := devconfig.LoadConfig(filepath.Join(root, "workspace.yml"))
+			diags := (&infoValidator{}).Run(validate.Context{
+				ProjectRoot: root,
+				Cfg:         cfg,
+			})
+			hasDiag(t, diags, tt.wantSev, tt.wantSubstr)
+		})
+	}
+}
+
+// TestInfoValidator_absentFileStaysInformational confirms Task 10 left the
+// missing-file case untouched — only the present-file verdict was inverted.
+func TestInfoValidator_absentFileStaysInformational(t *testing.T) {
+	t.Parallel()
+	root := t.TempDir()
+	workspaceDir := filepath.Join(root, "workspace")
+	require.NoError(t, os.MkdirAll(workspaceDir, 0o755))
+	workspaceYML := filepath.Join(root, "workspace.yml")
+	require.NoError(t, os.WriteFile(workspaceYML, []byte("project:\n  name: test\n"), 0o644))
+
+	cfg, _ := devconfig.LoadConfig(workspaceYML)
+	diags := (&infoValidator{}).Run(validate.Context{
+		ProjectRoot: root,
+		Cfg:         cfg,
+	})
+	hasDiag(t, diags, validate.SeverityInfo, "no info.yml")
+}
+
 func writeInfoYML(t *testing.T, content string) string {
 	t.Helper()
 	root := t.TempDir()
