@@ -807,13 +807,13 @@ above:
 - Modify: `internal/cli/validate/validate.go`
 - Modify: `internal/cli/validate/validate_test.go`
 
-- [ ] include the active scope (domain + validator id, or "all") in both the human summary
+- [x] include the active scope (domain + validator id, or "all") in both the human summary
       line and the JSON summary, so `dwe validate config services` (one check) is no longer
       indistinguishable from `dwe validate config` (ten)
-- [ ] keep the diagnostics-as-data contract intact (constraint 3)
-- [ ] write tests: full run, domain run, leaf run — each reports its own scope
-- [ ] write a test asserting the JSON summary gained the field without breaking existing keys
-- [ ] run tests — must pass before task 15
+- [x] keep the diagnostics-as-data contract intact (constraint 3)
+- [x] write tests: full run, domain run, leaf run — each reports its own scope
+- [x] write a test asserting the JSON summary gained the field without breaking existing keys
+- [x] run tests — must pass before task 15
 
 ### Task 15: Verify acceptance criteria
 

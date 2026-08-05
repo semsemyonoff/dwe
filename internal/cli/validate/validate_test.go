@@ -3,6 +3,7 @@ package validate
 import (
 	"bytes"
 	"encoding/json"
+	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
@@ -759,6 +760,95 @@ func TestValidateCmd_JSONMode_DiagnosticFields(t *testing.T) {
 		if d.Severity != "ok" {
 			require.NotEmpty(t, d.Message, "diagnostic[%d].message must not be empty for non-ok severity", i)
 		}
+	}
+}
+
+// TestValidateCmd_JSONMode_SummaryScope verifies that the JSON summary carries
+// a machine-identifiable scope field, so a narrowed run (e.g. `dwe validate
+// config services`, one validator) is no longer indistinguishable from a full
+// domain run (`dwe validate config`, ten validators) by diagnostic count alone.
+func TestValidateCmd_JSONMode_SummaryScope(t *testing.T) {
+	tmpDir := t.TempDir()
+	workspacePath := filepath.Join(tmpDir, "workspace.yml")
+	require.NoError(t, os.WriteFile(workspacePath, []byte("schema_version: \"2\"\n"), 0o644))
+
+	tests := []struct {
+		name      string
+		args      []string
+		wantScope string
+	}{
+		{name: "full run", args: nil, wantScope: "all"},
+		{name: "domain run", args: []string{"config"}, wantScope: "config"},
+		{name: "leaf run", args: []string{"config", "services"}, wantScope: "config/services"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			stdout, _ := runValidateJSONCmd(t, workspacePath, tt.args...)
+
+			var got struct {
+				Summary validateSummaryJSON `json:"summary"`
+			}
+			require.NoError(t, json.Unmarshal([]byte(stdout), &got))
+			require.Equal(t, tt.wantScope, got.Summary.Scope)
+		})
+	}
+}
+
+// TestValidateCmd_JSONMode_SummaryScopeAddsFieldOnly verifies that the new
+// summary.scope field is additive: every previously-existing summary key
+// keeps decoding into its own typed field alongside it.
+func TestValidateCmd_JSONMode_SummaryScopeAddsFieldOnly(t *testing.T) {
+	tmpDir := t.TempDir()
+	workspacePath := filepath.Join(tmpDir, "workspace.yml")
+	require.NoError(t, os.WriteFile(workspacePath, []byte("schema_version: \"2\"\n"), 0o644))
+
+	stdout, _ := runValidateJSONCmd(t, workspacePath, "config")
+
+	var got struct {
+		Summary struct {
+			Scope   string `json:"scope"`
+			Ok      int    `json:"ok"`
+			Info    int    `json:"info"`
+			Warning int    `json:"warning"`
+			Error   int    `json:"error"`
+		} `json:"summary"`
+	}
+	require.NoError(t, json.Unmarshal([]byte(stdout), &got))
+	require.Equal(t, "config", got.Summary.Scope)
+	require.GreaterOrEqual(t, got.Summary.Ok+got.Summary.Info+got.Summary.Warning+got.Summary.Error, 0)
+}
+
+// TestValidateText_SummaryReportsScope verifies the human summary line names
+// the active scope, matching the JSON contract, for a full run, a domain run
+// and a leaf run.
+func TestValidateText_SummaryReportsScope(t *testing.T) {
+	tmpDir := t.TempDir()
+	workspacePath := filepath.Join(tmpDir, "workspace.yml")
+	require.NoError(t, os.WriteFile(workspacePath, []byte("schema_version: \"2\"\n"), 0o644))
+
+	tests := []struct {
+		name      string
+		args      []string
+		wantScope string
+	}{
+		{name: "full run", args: nil, wantScope: "all"},
+		{name: "domain run", args: []string{"config"}, wantScope: "config"},
+		{name: "leaf run", args: []string{"config", "services"}, wantScope: "config/services"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			flags := &cmdctx.RootFlags{ConfigPath: workspacePath}
+			cmd := NewCmd("", flags)
+			var out bytes.Buffer
+			cmd.SetOut(&out)
+			cmd.SetErr(&out)
+			cmd.SetArgs(tt.args)
+			_ = cmd.Execute()
+
+			require.Contains(t, out.String(), fmt.Sprintf("(scope: %s)", tt.wantScope))
+		})
 	}
 }
 
