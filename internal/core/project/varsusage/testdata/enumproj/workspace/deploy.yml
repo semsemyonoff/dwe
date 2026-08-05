@@ -1,0 +1,17 @@
+phases:
+  - name: setup
+    steps:
+      - name: clone
+        type: shell
+        cmd: "git clone ${vars.source.repo}"
+        with:
+          opts:
+            branch: "${vars.source.branch}"
+          list:
+            - "${project.name}"
+            - plain
+      - name: env-step
+        type: builtin
+        cmd: message
+        env:
+          HOST: "${HOME}"

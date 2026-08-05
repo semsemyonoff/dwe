@@ -1,0 +1,5 @@
+project:
+  name: test
+vars:
+  source:
+    repo: https://example.com/app.git

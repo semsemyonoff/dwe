@@ -1,0 +1,6 @@
+phases:
+  - name: setup
+    steps:
+      - name: clone
+        type: shell
+        cmd: "git clone ${vars.source.repo} into ${vars.opechatka}"
