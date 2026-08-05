@@ -8,6 +8,8 @@ import (
 	"testing"
 
 	"github.com/semsemyonoff/dwe/internal/cli/cmdctx"
+	"github.com/semsemyonoff/dwe/internal/core/execution/builtin"
+	"github.com/semsemyonoff/dwe/internal/core/execution/condition"
 
 	"github.com/stretchr/testify/require"
 )
@@ -146,6 +148,65 @@ func TestDocsLlmsTxtCommand_IncludeInternals_Flag(t *testing.T) {
 	require.NotEqual(t, without, with, "--include-internals must change output (embedded internals topics)")
 	require.Contains(t, with, "internals/", "expected internals/ topic when --include-internals is set")
 	require.NotContains(t, without, "internals/", "internals/ topics must be absent without --include-internals")
+}
+
+// llmsTxtNoProjectBudget caps the project-agnostic document. The command is a
+// mandatory first step of every agent session, so growth is a permanent token
+// tax; the cap is enforced on --no-project only, since a project-aware document
+// grows with someone else's workspace.
+const llmsTxtNoProjectBudget = 12 * 1024
+
+func runLlmsTxt(t *testing.T, args ...string) string {
+	t.Helper()
+	cmd := newDocsLlmsTxtCmd(newTestLlmsTxtFlags())
+	cmd.SetArgs(args)
+	out := &bytes.Buffer{}
+	cmd.SetOut(out)
+	cmd.SetErr(&bytes.Buffer{})
+	require.NoError(t, cmd.Execute())
+	return out.String()
+}
+
+func TestDocsLlmsTxtCommand_SizeBudget(t *testing.T) {
+	got := runLlmsTxt(t, "--no-project")
+	require.LessOrEqual(t, len(got), llmsTxtNoProjectBudget,
+		"project-agnostic llms.txt is %d B, over the %d B budget advertised in --help and docs/reference/docs/commands.md",
+		len(got), llmsTxtNoProjectBudget)
+}
+
+func TestDocsLlmsTxtCommand_BriefingSections(t *testing.T) {
+	got := runLlmsTxt(t, "--no-project")
+
+	for _, want := range []string{
+		"## Builtins",
+		"## Template syntax by site",
+		"## Diagnostics and machine-readable output",
+		"## Reserved env names",
+	} {
+		require.Contains(t, got, want)
+	}
+
+	// Inventory collected from the real registries (not a stub), one line each.
+	require.Contains(t, got, "`source_clone` — action —", "expected a step builtin with its kind and summary")
+	require.Contains(t, got, "`http_check` — predicate —", "expected a predicate builtin")
+	require.Contains(t, got, "`daemons_reap` — internal —", "expected internal builtins to be listed too")
+	require.Contains(t, got, "`dir-not-empty <path>` —", "expected the disjoint when: predicate registry")
+
+	// Reserved names come from config.ReservedExportNames.
+	require.Contains(t, got, "`PROJECT`, `UID`, `GID`")
+}
+
+func TestDocsLlmsTxtCommand_InventoryMatchesRegistries(t *testing.T) {
+	got := runLlmsTxt(t, "--no-project")
+
+	for _, e := range builtin.Inventory() {
+		require.Contains(t, got, "`"+e.Name+"` — "+e.Kind.String()+" — "+e.Summary,
+			"builtin %q missing from the llms.txt inventory", e.Name)
+	}
+	for _, p := range condition.Predicates() {
+		require.Contains(t, got, "`"+p.Name+" "+p.Args+"` — "+p.Summary,
+			"when: predicate %q missing from the llms.txt inventory", p.Name)
+	}
 }
 
 func TestDocsLlmsTxtCommand_NoProjectFlag_InsideProject(t *testing.T) {

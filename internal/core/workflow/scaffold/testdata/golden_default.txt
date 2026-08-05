@@ -98,9 +98,11 @@ Run this once to load a project-aware index of services, commands, and docs:
 dwe docs llms-txt --lang en
 ```
 
-It emits a compact llms.txt snapshot (project context, services, commands, and
+It emits a compact llms.txt briefing (project context, services, commands, the
+pipeline builtin inventory, the diagnostic flags, the template-syntax map, and
 pointers into the built-in docs subsystem) designed to be loaded once and then
-navigated on demand.
+navigated on demand. The generic part stays under 12 KB; read it in full rather
+than grepping it.
 
 ## Conventions for AI agents
 

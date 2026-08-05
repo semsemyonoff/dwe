@@ -30,9 +30,11 @@ func newDocsLlmsTxtCmd(flags *cmdctx.RootFlags) *cobra.Command {
 		Short: "Emit an llms.txt project index for AI agents",
 		Long: `Emit a single llms.txt document to stdout (or --output PATH).
 
-The document follows the llms.txt spec: a dense ~2-5KB index that gives an AI
-agent a complete picture of "what this dwe project is and where to find more
-detail," without having to ingest the full embedded docs tree.
+The document follows the llms.txt spec: a dense briefing (project-agnostic part
+capped at 12KB) that gives an AI agent a complete picture of "what this dwe
+project is and where to find more detail," without having to ingest the full
+embedded docs tree. Besides the doc index it carries the builtin inventory, the
+diagnostic flags, the template-syntax map and the reserved env names.
 
 Works both inside a project (project-aware: includes services, commands, URLs)
 and outside one (project-agnostic: generic dwe reference).
@@ -71,9 +73,12 @@ func runDocsLlmsTxt(cmd *cobra.Command, rflags *cmdctx.RootFlags, df *docsLlmsTx
 
 	// Assemble Opts — project sections only when a project root is available.
 	opts := llmstxt.Opts{
-		ProjectRoot:   projectRoot,
-		IncludeIntern: df.includeInternals,
-		DocTopics:     docTopics,
+		ProjectRoot:      projectRoot,
+		IncludeIntern:    df.includeInternals,
+		DocTopics:        docTopics,
+		Builtins:         collectBuiltinSummaries(),
+		Conditions:       collectConditionSummaries(),
+		ReservedEnvNames: config.ReservedExportNames,
 	}
 
 	if projectRoot != "" {

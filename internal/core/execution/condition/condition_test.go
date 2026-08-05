@@ -523,3 +523,41 @@ func TestEvalRuntime_emptyReturnsError(t *testing.T) {
 		t.Error("EvalRuntime with empty expr should return error")
 	}
 }
+
+func TestPredicates_MatchEvalBuiltinSwitch(t *testing.T) {
+	root := t.TempDir()
+	preds := condition.Predicates()
+	if len(preds) == 0 {
+		t.Fatal("Predicates returned no entries")
+	}
+
+	seen := map[string]bool{}
+	for _, p := range preds {
+		if p.Name == "" || p.Args == "" || p.Summary == "" {
+			t.Errorf("predicate %+v has an empty field", p)
+		}
+		if seen[p.Name] {
+			t.Errorf("predicate %q listed twice", p.Name)
+		}
+		seen[p.Name] = true
+
+		// The verb must be understood by the evaluator. Args are filled with
+		// plausible placeholders; only the "unknown builtin predicate" error
+		// is a failure, any other outcome means the switch handled the verb.
+		args := "some/path"
+		if strings.Contains(p.Args, "<svc>") {
+			args = "svc field"
+		}
+		if _, err := condition.EvalBuiltin(p.Name+" "+args, root); err != nil &&
+			strings.Contains(err.Error(), "unknown builtin predicate") {
+			t.Errorf("predicate %q is listed but rejected by EvalBuiltin: %v", p.Name, err)
+		}
+	}
+
+	// And the reverse: a verb the evaluator knows but the inventory omits
+	// would ship undocumented. There is no way to enumerate a switch, so pin
+	// the count — a new case forces a deliberate update here.
+	if got := len(preds); got != 7 {
+		t.Errorf("predicate count = %d, want 7; add the new verb to Predicates() and update this test", got)
+	}
+}

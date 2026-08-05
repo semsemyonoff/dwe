@@ -4,10 +4,42 @@ import (
 	"sort"
 
 	"github.com/semsemyonoff/dwe/internal/core/docs/llmstxt"
+	"github.com/semsemyonoff/dwe/internal/core/execution/builtin"
+	"github.com/semsemyonoff/dwe/internal/core/execution/condition"
 	"github.com/semsemyonoff/dwe/internal/core/project/config"
 	"github.com/semsemyonoff/dwe/internal/core/usercommands"
 	"github.com/semsemyonoff/dwe/internal/shared/i18n"
 )
+
+// collectBuiltinSummaries flattens the step-builtin registry for the docs
+// layer. The docs subsystem must not import the execution layer, so the
+// inventory is collected here and passed down through llmstxt.Opts.
+func collectBuiltinSummaries() []llmstxt.BuiltinSummary {
+	inv := builtin.Inventory()
+	result := make([]llmstxt.BuiltinSummary, 0, len(inv))
+	for _, e := range inv {
+		result = append(result, llmstxt.BuiltinSummary{
+			Name:    e.Name,
+			Kind:    e.Kind.String(),
+			Summary: e.Summary,
+		})
+	}
+	return result
+}
+
+// collectConditionSummaries flattens the disjoint `when:` predicate registry.
+func collectConditionSummaries() []llmstxt.ConditionSummary {
+	preds := condition.Predicates()
+	result := make([]llmstxt.ConditionSummary, 0, len(preds))
+	for _, p := range preds {
+		result = append(result, llmstxt.ConditionSummary{
+			Name:    p.Name,
+			Args:    p.Args,
+			Summary: p.Summary,
+		})
+	}
+	return result
+}
 
 // collectServiceSummaries returns service summaries in deploy order.
 // Iterates via config.DeployOrder per the service-iteration rule (never range cfg.Services).

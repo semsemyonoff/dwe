@@ -140,6 +140,128 @@ func TestGenerate_EmptyDocTopics(t *testing.T) {
 	}
 }
 
+// stubBriefingOpts fills the sections the CLI layer collects, so the docs layer
+// is tested against injected data (the registry itself is pinned in builtin/).
+func stubBriefingOpts() llmstxt.Opts {
+	return llmstxt.Opts{
+		Builtins: []llmstxt.BuiltinSummary{
+			{Name: "confirm", Kind: "action", Summary: "interactive confirmation prompt"},
+			{Name: "shell", Kind: "predicate", Summary: "run an arbitrary sh -c command"},
+			{Name: "daemons_reap", Kind: "internal", Summary: "stop every project daemon container"},
+		},
+		Conditions: []llmstxt.ConditionSummary{
+			{Name: "dir-empty", Args: "<path>", Summary: "path is missing or is an empty directory"},
+		},
+		ReservedEnvNames: []string{"PROJECT", "UID", "GID"},
+	}
+}
+
+func TestGenerate_BuiltinsSection(t *testing.T) {
+	got, err := llmstxt.Generate(stubBriefingOpts())
+	if err != nil {
+		t.Fatalf("Generate error: %v", err)
+	}
+
+	if !strings.Contains(got, "## Builtins") {
+		t.Fatalf("expected '## Builtins' section")
+	}
+	for _, want := range []string{
+		"`confirm` — action — interactive confirmation prompt",
+		"`shell` — predicate — run an arbitrary sh -c command",
+		"`daemons_reap` — internal — stop every project daemon container",
+		"`dir-empty <path>` — path is missing or is an empty directory",
+	} {
+		if !strings.Contains(got, want) {
+			t.Errorf("expected inventory line %q in output", want)
+		}
+	}
+	// The two-registries distinction is the point of the section.
+	if !strings.Contains(got, "Two disjoint registries") {
+		t.Errorf("expected the disjoint-registries note")
+	}
+	if !strings.Contains(got, "`when:` registry only") {
+		t.Errorf("expected the when: registry to be named separately")
+	}
+}
+
+func TestGenerate_BuiltinsSection_OmittedWhenEmpty(t *testing.T) {
+	got, err := llmstxt.Generate(llmstxt.Opts{})
+	if err != nil {
+		t.Fatalf("Generate error: %v", err)
+	}
+	if strings.Contains(got, "## Builtins") {
+		t.Errorf("unexpected Builtins section without an inventory")
+	}
+	if strings.Contains(got, "## Reserved env names") {
+		t.Errorf("unexpected Reserved env names section without names")
+	}
+}
+
+func TestGenerate_StaticBriefingSections(t *testing.T) {
+	// Template syntax and diagnostics are static text: present with empty Opts.
+	got, err := llmstxt.Generate(llmstxt.Opts{})
+	if err != nil {
+		t.Fatalf("Generate error: %v", err)
+	}
+
+	if !strings.Contains(got, "## Template syntax by site") {
+		t.Errorf("expected the template-syntax section")
+	}
+	for _, want := range []string{
+		"| Site | Syntax | Notes |",
+		"plan-resolution time",
+		"workspace/templates/{ide,ai,git}/**",
+	} {
+		if !strings.Contains(got, want) {
+			t.Errorf("expected template-syntax content %q", want)
+		}
+	}
+
+	if !strings.Contains(got, "## Diagnostics and machine-readable output") {
+		t.Errorf("expected the diagnostics section")
+	}
+	for _, want := range []string{"--quiet", "--level error,warning", "--debug", "--toc", "--anchors"} {
+		if !strings.Contains(got, want) {
+			t.Errorf("expected diagnostic flag %q in output", want)
+		}
+	}
+}
+
+func TestGenerate_ReservedEnvSection(t *testing.T) {
+	got, err := llmstxt.Generate(stubBriefingOpts())
+	if err != nil {
+		t.Fatalf("Generate error: %v", err)
+	}
+	if !strings.Contains(got, "## Reserved env names") {
+		t.Fatalf("expected the reserved-env section")
+	}
+	if !strings.Contains(got, "`PROJECT`, `UID`, `GID`") {
+		t.Errorf("expected the reserved names joined in the section body")
+	}
+}
+
+func TestGenerate_BriefingSectionsInProjectOutput(t *testing.T) {
+	opts := stubBriefingOpts()
+	opts.ProjectRoot = "/fake/project"
+	opts.ProjectName = "my-project"
+
+	got, err := llmstxt.Generate(opts)
+	if err != nil {
+		t.Fatalf("Generate error: %v", err)
+	}
+	// The briefing describes dwe, not the project — it must survive both shapes.
+	for _, want := range []string{
+		"## Builtins",
+		"## Template syntax by site",
+		"## Diagnostics and machine-readable output",
+		"## Reserved env names",
+	} {
+		if !strings.Contains(got, want) {
+			t.Errorf("expected %q in project-aware output", want)
+		}
+	}
+}
+
 func TestGenerate_ProjectAware(t *testing.T) {
 	opts := llmstxt.Opts{
 		ProjectRoot: "/some/project",

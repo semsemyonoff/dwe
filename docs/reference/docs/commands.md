@@ -143,7 +143,7 @@ dwe docs export ./docs-latest/ --force
 
 ## `dwe docs llms-txt`
 
-Emit a single [llms.txt](https://llmstxt.org/) document — a dense ~2-5KB index that gives an AI agent a complete picture of what this DWE project is and where to find more detail.
+Emit a single [llms.txt](https://llmstxt.org/) document — a dense briefing that gives an AI agent a complete picture of what this DWE project is and where to find more detail. The project-agnostic part is capped at 12KB (enforced by a test on `--no-project`); the project-aware document adds services, commands and URLs on top and therefore grows with the workspace.
 
 **Usage:**
 ```bash
@@ -161,8 +161,14 @@ dwe docs llms-txt --lang ru                # localize command descriptions
 - `--no-project` — force the project-agnostic shape even when run inside a DWE project.
 
 **Output shapes:**
-- *Inside a project*: H1 with project name, a blockquote summary, then `## Project` (services, URLs, hosts), `## Commands` (user commands), `## Documentation` (topic links as `dwe-docs://path`), and `## Quick start`.
-- *Outside a project* (or with `--no-project`): generic DWE reference — H1 "dwe", blockquote, `## Documentation`, `## Quick start`. No project-specific sections.
+- *Inside a project*: H1 with project name, a blockquote summary, then `## Project` (services, URLs, hosts), `## Commands` (user commands), the briefing sections below, `## Documentation` (topic links as `dwe-docs://path`), and `## Quick start`.
+- *Outside a project* (or with `--no-project`): generic DWE reference — H1 "dwe", blockquote, the briefing sections, `## Documentation`, `## Quick start`. No project-specific sections.
+
+**Briefing sections** (identical in both shapes — they describe DWE itself):
+- `## Builtins` — every registered step builtin (`name — kind — purpose`, including `internal` ones), then the disjoint `when:` predicate registry. The two registries share the word "builtin" and accept nothing from each other; the section says so explicitly.
+- `## Template syntax by site` — which of `${...}` / `{{ ... }}` is evaluated where, and which `${...}` namespaces are unavailable in pipeline fields.
+- `## Diagnostics and machine-readable output` — `--quiet`, `--level`, `-v`/`--debug`, `docs show --toc`/`--anchors`, and the `-o json` exceptions.
+- `## Reserved env names` — the names `dwe render env` always emits itself (`PROJECT`, `UID`, `GID`), which `exports.env` rules may not redeclare.
 
 **Details:**
 - Read-only. Acquires no project lock and runs no preflight; works without `workspace.yml`.

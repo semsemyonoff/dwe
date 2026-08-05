@@ -304,16 +304,20 @@ string, since `spec.Builtin` (`spec/spec.go:42`) offers only the per-invocation
 - Modify: `internal/cli/docs/llmstxt.go` (including the `Long` text, see the budget item)
 - Modify: `internal/cli/docs/llmstxt_test.go`
 
-- [ ] collect the inventory in `cli/docs` and pass it through `Opts` (constraint 8) — do not
+- [x] collect the inventory in `cli/docs` and pass it through `Opts` (constraint 8) — do not
       import the execution layer into `core/docs`
-- [ ] add the builtin/predicate inventory section, one line each with kind and summary,
+- [x] add the builtin/predicate inventory section, one line each with kind and summary,
       **naming the two disjoint `type: builtin` registries** (`when:` conditions vs
       `check:`/step-body builtins) — that distinction is the actual knowledge gap
-- [ ] add the diagnostic flag section (`--level`, `--quiet`, `-v`/`--debug`,
+      — ➕ the `when:` set was a hardcoded switch with no enumeration surface, so
+      `condition.Predicates()` was added alongside (mirroring Task 1a's `builtin.Inventory()`)
+      with a drift test pinning it to `EvalBuiltin`'s switch; listing only the *names* of the
+      two registries would have left the actual gap (which verbs `when:` takes) open
+- [x] add the diagnostic flag section (`--level`, `--quiet`, `-v`/`--debug`,
       `docs show --anchors`/`--toc`) and the reserved auto-injected env names from
-      `config.ReservedExportNames`
-- [ ] add a compact "which template syntax is evaluated where" table
-- [ ] **respect the declared size budget**: `llmstxt.go:33` advertises "a dense ~2-5KB
+      `config.ReservedExportNames` — the reserved names are their own short section
+- [x] add a compact "which template syntax is evaluated where" table
+- [x] **respect the declared size budget**: `llmstxt.go:33` advertises "a dense ~2-5KB
       index", and `SKILL.md:23` makes this command a mandatory first step of every session,
       so growth is a permanent token tax. Measured today: `--no-project` is 4490 B,
       project-aware in alto is 5844 B. Enforce the budget on the **`--no-project`** output
@@ -322,11 +326,16 @@ string, since `spec.Builtin` (`spec/spec.go:42`) offers only the per-invocation
       (~24 inventory lines + flags + reserved env + substrate table + the two-registries
       note) ≈ 3 KB → ~7.5–9 KB, so a 12 KB cap is realistic. Update the `Long` text,
       `docs/reference/docs/commands.md` and `AGENTS.md.tmpl` to the chosen number
-- [ ] write tests asserting each new section is present. Note the inventory cannot be tested
+      — cap set to 12 KB and enforced by `TestDocsLlmsTxtCommand_SizeBudget`; measured
+      `--no-project` output is 10 910 B (the estimate was low: the inventory is 25 step
+      builtins + 7 `when:` verbs). `Long`, both locales of
+      `docs/reference/docs/commands.md` and `AGENTS.md.tmpl` (+ golden) updated
+- [x] write tests asserting each new section is present. Note the inventory cannot be tested
       by "add a builtin in a test" from the docs layer — `registry` is a package-level var
       built by `buildRegistry()`. Test it as: (a) in `builtin`, every entry has a summary
       (Task 1a); (b) in the docs layer, the section is built from a stubbed `Opts` inventory
-- [ ] run tests — must pass before task 2
+      — plus a CLI-layer test asserting every real registry entry reaches the rendered page
+- [x] run tests — must pass before task 2
 
 ### Task 2: Tokenized `docs search` with snippets
 

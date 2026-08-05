@@ -14,6 +14,32 @@
 - build — build the project
 - test — run tests
 
+## Template syntax by site
+
+| Site | Syntax | Notes |
+|---|---|---|
+| pipeline `cmd`, `with` leaves, `check`, `timeout`, shell `when` | `${...}` only | rendered ONCE at plan-resolution time; only `${vars.*}` / `${project.*}` / `${services.*}` / other config roots + `${host.*}` resolve — `${param.*}`, `${context.*}`, `${files.*}`, `${generated.*}`, `${args}` fail the resolve here |
+| pipeline `when: {type: template, expr}` | `{{ ... }}` | evaluated at plan time against the resolved config |
+| `workspace/commands/**` — `cmd`, `argv`, `workdir`, `env`, `messages.*`, `files.*` | `${...}` and `{{ ... }}` | full command context: `${param.*}`, `${context.*}`, `${files.*}`, `${args}`, `${host.*}` |
+| `info.yml` — `text`, `value`, `title`; custom columns | `{{ ... }}` and `${...}` | resolved project config |
+| `message` builtin — `text` | `{{ ... }}` | resolved project config (`{{ .Project.Name }}`) |
+| `workspace/templates/config/**` | `${...}` | lenient (absent → `""`); the only site where `${generated.<name>}` resolves |
+| `workspace/templates/{ide,ai,git}/**` | `{{ ... }}` | strict render packs; `${...}` is NOT interpreted here |
+| `docker.yml` — `project_name` | `${...}` | separate resolver: any `Raw` dot-path, and an unresolved path is a hard error |
+| `params.*.default_from`, `context.*.from` | — | plain dot-paths, no template expressions |
+
+An unknown `${...}` head (`${HOME}`, a typo) is left literal, never blanked. Full reference: `dwe docs show reference/templates`.
+
+## Diagnostics and machine-readable output
+
+- `dwe validate --quiet` — hide the ok/info rows; only warnings and errors remain
+- `dwe validate --level error,warning` — filter by severity instead of grepping the table
+- `dwe validate -o json` — structured diagnostics (this command emits diagnostics-as-data even at severity=error)
+- `-v` / `--debug` — echo executed commands, skip decisions, timings and exit codes to **stderr**; stdout (including `-o json`) stays clean, so `dwe run --debug 2>debug.log` captures them
+- `dwe docs show <topic> --toc` / `--anchors` — headings or anchor ids instead of the whole document; use these instead of piping through `head`/`sed`
+- `dwe docs search <query> -o json` — search hits with `source`, `path`, `anchor`, `count`
+- `-o json` (+ `--pretty`) — every read-only command. NOT `dwe docs llms-txt` / `dwe docs show`: there `--output` is a file path, so `-o json` writes a file named `json`
+
 ## Quick start
 
 - `dwe status` — see what's running
