@@ -498,7 +498,7 @@ func resetServiceRunCmd(cmd *cobra.Command, flags *cmdctx.RootFlags, name string
 	}
 
 	// Final step: atomic journal update — remove service state and add PendingDeploy.
-	configHash := journal.ServiceConfigHash(svc, svcDeploys[name])
+	configHash := journal.ServiceConfigHash(svc, svcDeploys[name], cfg.Vars)
 	pendingOp := journal.PendingOp{
 		Kind:     journal.PendingDeploy,
 		Services: []string{name},

@@ -487,25 +487,27 @@ service hashes, `vars` is in neither, and a full hash match returns early with
 `already up-to-date` before any per-step hash is consulted. Rendering would work and
 nothing would re-run.
 
-- [ ] include the `vars` block in `ProjectConfigHash` (owner decision: the whole block, not
+- [x] include the `vars` block in `ProjectConfigHash` (owner decision: the whole block, not
       only referenced paths — simpler and cannot drift out of sync with the reference
       scanner)
-- [ ] **`ServiceConfigHash` must carry it too — this is a requirement, not a decision.**
+- [x] **`ServiceConfigHash` must carry it too — this is a requirement, not a decision.**
       A scoped deploy never consults the project hash: `computeScopeState`
       (`deploy.go:847-851`) compares `svc.ConfigHash == serviceHashes[name]` for a
       single-service run, and `makeSkipDecider` uses `serviceHashes` for service-scoped
       steps as well. So `dwe deploy run --service app` after changing a var referenced only
       by `services/app/deploy.yml` would still report `already up-to-date` if only the
       project hash gained `vars`
-- [ ] write an **end-to-end** test for **both** paths: change a `vars:` value referenced by
+- [x] write an **end-to-end** test for **both** paths: change a `vars:` value referenced by
       a step → the next `deploy run` executes that step, **and** `deploy run --service app`
       does too. A test that only asserts "StepHash changed" is tautological — `StepHash` is
       a pure function of the step — and would pass while the behaviour stays broken
-- [ ] write a test that changing an unrelated `vars:` entry also invalidates (accepted
+- [x] write a test that changing an unrelated `vars:` entry also invalidates (accepted
       cost of hashing the whole block — pin it so the trade-off is visible)
-- [ ] record the one-time re-run in the release notes (constraint: every existing project's
-      project hash changes once on upgrade)
-- [ ] run tests — must pass before task 3
+- [x] record the one-time re-run in the release notes (constraint: every existing project's
+      project hash changes once on upgrade) — captured in the `ServiceConfigHash` doc comment
+      now; the user-facing release-notes entry is Task 16's explicit checkbox (final task,
+      once the whole plan lands)
+- [x] run tests — must pass before task 3
 
 ### Task 3: Validator — `${…}` with a known head that resolves to nothing
 

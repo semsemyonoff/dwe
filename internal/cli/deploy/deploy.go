@@ -503,12 +503,12 @@ func RunHelper(ctx context.Context, cmd *cobra.Command, flags *cmdctx.RootFlags,
 	serviceHashes := make(map[string]string)
 	for _, name := range trackedServices {
 		svcCfg := cfg.Services[name]
-		serviceHashes[name] = journal.ServiceConfigHash(svcCfg, svcDeploys[name])
+		serviceHashes[name] = journal.ServiceConfigHash(svcCfg, svcDeploys[name], cfg.Vars)
 	}
 	// Also hash requested services not in the tracked set
 	for _, name := range opts.Services {
 		if _, ok := serviceHashes[name]; !ok {
-			serviceHashes[name] = journal.ServiceConfigHash(cfg.Services[name], svcDeploys[name])
+			serviceHashes[name] = journal.ServiceConfigHash(cfg.Services[name], svcDeploys[name], cfg.Vars)
 		}
 	}
 
