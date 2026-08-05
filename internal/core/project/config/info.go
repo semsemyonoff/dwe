@@ -257,6 +257,21 @@ func LoadInfoConfig(path string) (*InfoConfig, error) {
 		return nil, fmt.Errorf("read %s: %w", path, err)
 	}
 
+	// An all-comment or empty file decodes no top-level keys at all. Treat that
+	// exactly like an absent file so the built-in dashboard stays active until
+	// the user uncomments — mirrors the io.EOF tolerance of the strict pipeline
+	// loaders, but yaml.Unmarshal never returns io.EOF, so probe the decoded key
+	// set instead. Checked on a separate probe decode (not "len(cfg.Sections) ==
+	// 0") so a deliberate `sections: []` or a file carrying only `footer: true`
+	// is not silently overridden.
+	var probe map[string]any
+	if err := yaml.Unmarshal(data, &probe); err != nil {
+		return nil, fmt.Errorf("parse %s: %w", path, err)
+	}
+	if len(probe) == 0 {
+		return DefaultInfoConfig(), nil
+	}
+
 	var cfg InfoConfig
 	if err := yaml.Unmarshal(data, &cfg); err != nil {
 		return nil, fmt.Errorf("parse %s: %w", path, err)
