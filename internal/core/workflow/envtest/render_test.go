@@ -183,6 +183,23 @@ func TestRenderSteps_ParallelSubsteps(t *testing.T) {
 	}
 }
 
+func TestRenderSteps_UnknownHeadStaysLiteral(t *testing.T) {
+	// Task 2b regression: RenderSteps calls tpl.RenderCommand directly (no
+	// pipeline known-head gate), so this pins the pre-existing latent hole —
+	// an unknown shell-style ${VAR} in a scenario cmd used to silently
+	// collapse to "" before Task 1's CompileVarSyntax whitelist; it now
+	// survives literally, same as the pipeline-resolve path.
+	steps := []config.DeployStep{
+		{Type: "shell", Cmd: "echo ${HOME}"},
+	}
+	if err := RenderSteps(steps, testConfig()); err != nil {
+		t.Fatalf("RenderSteps: %v", err)
+	}
+	if steps[0].Cmd != "echo ${HOME}" {
+		t.Errorf("Cmd = %q, want unchanged %q", steps[0].Cmd, "echo ${HOME}")
+	}
+}
+
 func TestRenderSteps_NilConfig(t *testing.T) {
 	steps := []config.DeployStep{
 		{Type: "shell", Cmd: "x=${vars.missing}"},

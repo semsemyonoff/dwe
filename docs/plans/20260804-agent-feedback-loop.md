@@ -443,21 +443,21 @@ testable.)*
 - Modify: `internal/core/execution/pipeline/resolve_test.go`
 - Modify: `internal/core/workflow/envtest/render_test.go`
 
-- [ ] render the runtime `when` of **phases** and **parallel group parents** as well as leaf
+- [x] render the runtime `when` of **phases** and **parallel group parents** as well as leaf
       steps: `phaseRuntimeWhen` is stored directly, and `resolveParallelStep` resolves the
       group's own `when` before its substeps reach `resolveLeafStep`, so a `${vars.*}` there
       would stay unrendered while the executor evaluates it from the stored pointer.
       Clone-then-render at each scope
-- [ ] pin the known divergence: `resolveParallelStep` builds its `ResolvedStep` directly, so
+- [x] pin the known divergence: `resolveParallelStep` builds its `ResolvedStep` directly, so
       `rs.Step.Parallel.Steps[i]` stays raw while `rs.Parallel.Steps[i].Step` is rendered.
       Harmless for `StepHash` (Parallel is not hashed) — test it so it is not later mistaken
       for a bug
-- [ ] write tests for the three scopes separately: phase-level, parallel-group parent, leaf
-- [ ] write a test that `when.Cmd` renders — Plan B derives `check: auto` from exactly this
+- [x] write tests for the three scopes separately: phase-level, parallel-group parent, leaf
+- [x] write a test that `when.Cmd` renders — Plan B derives `check: auto` from exactly this
       string and needs both sides to match byte for byte
-- [ ] write a test in `envtest` pinning that scenario `cmd:` keeps `${HOME}` literal (closes
+- [x] write a test in `envtest` pinning that scenario `cmd:` keeps `${HOME}` literal (closes
       the pre-existing latent hole)
-- [ ] run tests — must pass before task 2c
+- [x] run tests — must pass before task 2c
 
 ### Task 2c: Use the helper on the `dwe reset step` path
 

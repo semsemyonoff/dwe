@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/semsemyonoff/dwe/internal/core/execution/condition"
 	"github.com/semsemyonoff/dwe/internal/core/execution/filesgate"
 	"github.com/semsemyonoff/dwe/internal/core/project/config"
 	"github.com/semsemyonoff/dwe/internal/shared/tpl"
@@ -135,6 +136,26 @@ func renderFilesGate(fg *filesgate.FilesGate, ctx *tpl.RenderContext) (*filesgat
 	out := *fg
 	out.Command = cmd
 	out.With = with
+	return &out, nil
+}
+
+// renderWhen renders a runtime condition's Cmd into a freshly allocated copy.
+// A nil condition, or one whose type is not runtime (template conditions carry
+// Expr, not Cmd, and are evaluated separately), is returned unchanged. When is
+// a pointer shared with the loaded config — the same reference-type hazard as
+// With/Check/FilesGate — so this never mutates the input; callers at every
+// scope (phase, parallel-group parent, leaf step) route through this before
+// storing the condition on a ResolvedStep.
+func renderWhen(when *condition.Condition, ctx *tpl.RenderContext) (*condition.Condition, error) {
+	if when == nil || !when.IsRuntime() {
+		return when, nil
+	}
+	cmd, err := renderIfKnown(when.Cmd, ctx)
+	if err != nil {
+		return nil, fmt.Errorf("when.cmd: %w", err)
+	}
+	out := *when
+	out.Cmd = cmd
 	return &out, nil
 }
 
