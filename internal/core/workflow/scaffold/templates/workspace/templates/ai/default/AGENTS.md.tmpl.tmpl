@@ -1,0 +1,32 @@
+# {{ .Resolved }} — source hub of the {{ .Project.Name }} DWE project
+
+This directory is the **hub** of the `{{ .Resolved }}` service: the checkout plus
+everything that lives next to it (build artefacts, caches, tooling state). It is
+mounted into the container at `{{ .ServiceCfg.DirInternal }}`; commands run in
+`{{ .ServiceCfg.WorkDirInternal }}`.
+
+The environment around it is managed by the `dwe` CLI from the **project root**
+(the parent of `services/`). Run `dwe` commands there, not here.
+
+## Orientation
+
+```
+dwe docs llms-txt --lang en
+```
+
+Loads a project-aware index of services, commands, pipeline builtins, diagnostic
+flags and docs pointers. Read it once, then navigate on demand.
+
+## Working on this service
+
+- `dwe commands list` — this project's declared dev commands; `dwe cmd <id>` runs one
+- `dwe shell {{ .Resolved }} -c '<cmd>'` — a one-off command inside the container
+- `dwe logs {{ .Resolved }}` — stream this service's logs
+- `dwe status` — stack health and container names
+
+> This file is **generated** by `dwe render ai` from
+> `workspace/templates/ai/default/AGENTS.md.tmpl` in the project root. Edit the
+> template, not this file. `CLAUDE.md` next to it is a symlink to this file.
+>
+> The project root has its own `AGENTS.md` — that one is scaffolded once and is
+> meant to be edited by hand.

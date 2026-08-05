@@ -500,31 +500,48 @@ rule. If other hint sites are wanted, they are their own task.)*
 ### Task 5: Scaffold a pipeline skeleton, an ai pack and a starter scenario
 
 **Files:**
-- Create: `internal/core/workflow/scaffold/templates/workspace/services/app/deploy.yml`
-- Create: `internal/core/workflow/scaffold/templates/workspace/templates/ai/...`
-- Create: `internal/core/workflow/scaffold/templates/workspace/tests/...`
-- Modify: `internal/core/workflow/scaffold/` (file list)
+- Create: `internal/core/workflow/scaffold/templates/workspace/services/app/deploy.yml.tmpl`
+- Create: `internal/core/workflow/scaffold/templates/workspace/templates/ai/default/{manifest.yml,AGENTS.md.tmpl.tmpl}`
+- Create: `internal/core/workflow/scaffold/templates/workspace/tests/smoke.yml.tmpl`
+- Create: `internal/core/workflow/scaffold/starter_artefacts_test.go`
+- Modify: `internal/core/workflow/scaffold/scaffold.go` (`serviceScopedOutputs`, `applyServicePlan`)
+- Modify: `internal/core/workflow/scaffold/templates_content_test.go`
 - Modify: `internal/core/workflow/scaffold/testdata/golden_default.txt`
 
-- [ ] **first**: extend `applyServicePlan` (`scaffold.go:209`) so artefacts that reference
+- [x] **first**: extend `applyServicePlan` (`scaffold.go:209`) so artefacts that reference
       the starter service are dropped together with it. Today it filters only
       `workspace/services/app/`, so a scenario or ai pack naming `app` would still be
       written when `Service == ""` and would dangle. Add a test alongside the existing
       `TestScaffold_EmptyServiceLoadsClean`
-- [ ] (5a) add a per-service `deploy.yml` skeleton with the `hub → image → render` phase
+      — the drop list is the exported-by-convention `serviceScopedOutputs` (output paths,
+      post-`mapEmbedPath`), pinned against the rendered plan by
+      `TestScaffold_ServiceScopedOutputsExist` so a template rename cannot silently turn
+      the rule into a no-op
+- [x] (5a) add a per-service `deploy.yml` skeleton with the `hub → image → render` phase
       shape reproduced by 5/5 workspaces, using Plan B's primitives (`source_clone`,
       `check: auto`) so the scaffold teaches the final idiom. **Fallback**: Plan B calls its
       `source_clone` task "the most droppable task in this plan" — if it is dropped, the
       skeleton uses a `type: shell` clone plus `check: auto` instead (after Plan A Task 2,
       `${vars.*}` renders in `cmd:`), which costs the skeleton nothing
-- [ ] (5b) add a minimal ai render pack (present in 5/5) producing `AGENTS.md` + the
+      — ➕ `source_clone` landed, so the skeleton uses it. The file is `deploy.yml.tmpl`
+      (not `deploy.yml`): it substitutes `[[ .Service ]]` throughout. It ships **fully
+      commented** like every other pipeline mirror and joins `inertFiles` — an active
+      skeleton would fail `ResolvePhaseSteps` on the placeholder repo URL and abort
+      `dwe deploy plan` for every fresh project
+- [x] (5b) add a minimal ai render pack (present in 5/5) producing `AGENTS.md` + the
       `CLAUDE.md` symlink. Note it renders into the **service hub** (`services/app/`, which
       is gitignored and absent until the first clone), which is a different file from the
       **root** `AGENTS.md` the scaffold already writes — Task 7 must disambiguate the two in
       the skill, since `SKILL.md:28` currently says "never edit the generated `AGENTS.md`"
       and the root one is meant to be edited. (Verified: an ai pack validates cleanly even
       with the hub directory absent — `ai.ValidateManifest` does not require `destRoot`.)
-- [ ] (5c) add a starter `workspace/tests/` scenario — with two facts acknowledged in the
+      — ➕ the rendered template itself states the distinction, so the hub file carries it
+      even when the skill is not loaded. Pack name is `default` (last link of the implicit
+      chain, so it covers every later service too). Trap worth recording: the pack needs an
+      **output** file literally named `AGENTS.md.tmpl`, and `mapEmbedPath` strips one
+      `.tmpl` — the embedded source is therefore `AGENTS.md.tmpl.tmpl`, which the `[[ ]]`
+      scaffold delimiters render without touching its Go-template `{{ }}` bodies
+- [x] (5c) add a starter `workspace/tests/` scenario — with two facts acknowledged in the
       file itself. First, it **cannot** follow the "shipped fully commented" idiom every
       other inert scaffold uses: the `envtest` loader is strict and an empty/all-comment
       file is an **error**, so this is the one scaffold file that must be active (and the
@@ -535,10 +552,21 @@ rule. If other hint sites are wanted, they are their own task.)*
       honest template: `description:` plus `steps: []` and a comment saying to add
       assertions once the service exists in compose. It also cannot reference
       `${services.app.ports.http}` — see Task 4
-- [ ] regenerate the golden
-- [ ] write tests: scaffolded pipeline resolves without error; scenario loads through
+      — `workspace/tests/smoke.yml`, `description:` + `steps: []`, both facts written into
+      the file's header
+- [x] regenerate the golden
+- [x] write tests: scaffolded pipeline resolves without error; scenario loads through
       `envtest.LoadScenario`; ai pack renders; `Service == ""` produces none of the three
-- [ ] run tests — must pass before task 6
+      — `TestEmbeddedTemplates_ServiceDeployPipelineResolves` uncomments the skeleton,
+      loads it through `LoadServiceDeployConfig` and runs `ResolvePhaseSteps` per phase,
+      asserting both primitives survive (a derived check carries the negated command in
+      `Check.With["cmd"]`, not `Check.Cmd`); `TestEmbeddedTemplates_AIPackRenders` drives
+      the real `ResolveTemplatePack`/`ValidateManifest`/`DryRunRender`/`RenderTemplateFile`/
+      `EnsureRelativeSymlink` chain; `TestScaffold_EmptyServiceDropsStarterArtefacts` also
+      asserts no empty `workspace/tests`/`workspace/templates` directory is left behind
+- [x] run tests — must pass before task 6 — `make test` and `make lint` both clean; a real
+      `dwe init --default` now reports 2 infos / zero warnings / zero errors (the ai
+      "template pack not found" info is gone), and `dwe test list` shows the smoke scenario
 
 *(5a/5b/5c are separable if the task proves too large in practice — they share only the
 golden.)*

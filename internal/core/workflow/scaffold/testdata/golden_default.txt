@@ -362,6 +362,70 @@ services:
 #           description: "Stop all containers"
 
 --------
+=== workspace/services/app/deploy.yml ===
+# workspace/services/app/deploy.yml — per-service deploy pipeline (INERT MIRROR).
+#
+# Inlined by the orchestrator wherever workspace/deploy.yml declares a
+# `deploy_services: true` phase (the built-in default does). A service without
+# this file is silently skipped, so the whole skeleton below is shipped
+# commented and nothing runs until you uncomment it.
+#
+# The phase shape is the one every DWE app service converges on:
+#
+#   source  — materialise the hub (clone once, never touch it again)
+#   image   — build the container image
+#   render  — write hub-level artefacts (agent docs, IDE config)
+#
+# Schema and field reference: `dwe docs show config/deploy/index`
+# Builtin inventory (name, kind, purpose): `dwe docs llms-txt --lang en`
+#
+# phases:
+#   - name: source
+#     description: "Materialise the source hub"
+#     steps:
+#       - name: clone
+#         type: builtin
+#         cmd: source_clone
+#         description: "Clone the application source into the hub"
+#         with:
+#           # `repo` usually comes from vars: (`vars.app.repo` in
+#           # workspace.yml), so a fork can be pointed at in local.yml.
+#           repo: "git@example.com:acme/app.git"
+#           dir: "services/app/src"
+#           # branch: main
+#
+#   - name: image
+#     description: "Build the service image"
+#     steps:
+#       - name: build
+#         type: dwe
+#         cmd: "docker build app"
+#         description: "Build the app image"
+#
+#   - name: bootstrap
+#     description: "First-run setup inside the container"
+#     steps:
+#       - name: deps
+#         type: shell
+#         cmd: "docker compose run --rm app npm ci"
+#         description: "Install dependencies on first deploy"
+#         # `check: auto` derives the post-condition from `when:` by negating
+#         # it: run while the marker is missing, then assert it now exists.
+#         # It is only valid together with a `when:` of type shell.
+#         when:
+#           type: shell
+#           cmd: "test ! -d services/app/src/node_modules"
+#         check: auto
+#
+#   - name: render
+#     description: "Render hub-level artefacts"
+#     steps:
+#       - name: agent-docs
+#         type: dwe
+#         cmd: "render ai app"
+#         description: "Render AGENTS.md into the service hub"
+
+--------
 === workspace/services/app/service.yml ===
 # workspace/services/app/service.yml — the "app" starter service.
 #
@@ -424,6 +488,99 @@ colors:
 # separator: "·"
 
 --------
+=== workspace/templates/ai/default/AGENTS.md.tmpl ===
+# {{ .Resolved }} — source hub of the {{ .Project.Name }} DWE project
+
+This directory is the **hub** of the `{{ .Resolved }}` service: the checkout plus
+everything that lives next to it (build artefacts, caches, tooling state). It is
+mounted into the container at `{{ .ServiceCfg.DirInternal }}`; commands run in
+`{{ .ServiceCfg.WorkDirInternal }}`.
+
+The environment around it is managed by the `dwe` CLI from the **project root**
+(the parent of `services/`). Run `dwe` commands there, not here.
+
+## Orientation
+
+```
+dwe docs llms-txt --lang en
+```
+
+Loads a project-aware index of services, commands, pipeline builtins, diagnostic
+flags and docs pointers. Read it once, then navigate on demand.
+
+## Working on this service
+
+- `dwe commands list` — this project's declared dev commands; `dwe cmd <id>` runs one
+- `dwe shell {{ .Resolved }} -c '<cmd>'` — a one-off command inside the container
+- `dwe logs {{ .Resolved }}` — stream this service's logs
+- `dwe status` — stack health and container names
+
+> This file is **generated** by `dwe render ai` from
+> `workspace/templates/ai/default/AGENTS.md.tmpl` in the project root. Edit the
+> template, not this file. `CLAUDE.md` next to it is a symlink to this file.
+>
+> The project root has its own `AGENTS.md` — that one is scaffolded once and is
+> meant to be edited by hand.
+
+--------
+=== workspace/templates/ai/default/manifest.yml ===
+# workspace/templates/ai/default/manifest.yml — AI template pack (ACTIVE).
+#
+# `dwe render ai` renders this pack into each app service's HUB directory
+# (services/<name>/, gitignored and absent until the first clone). `default` is
+# the last link of the implicit resolution chain, so it applies to every service
+# that has no pack of its own; add workspace/templates/ai/<service>/ to give one
+# service a different pack.
+#
+# A manifest is strict-decoded and must declare at least one entry — unlike the
+# pipeline mirrors, this file cannot ship commented.
+#
+# Schema and template variables: `dwe docs show render/ai`
+
+render:
+  - from: AGENTS.md.tmpl
+    to: AGENTS.md
+
+# The hub CLAUDE.md mirrors the hub AGENTS.md, exactly as the project root does.
+symlinks:
+  - link: CLAUDE.md
+    to: AGENTS.md
+
+--------
+=== workspace/tests/smoke.yml ===
+# workspace/tests/smoke.yml — starter integration-test scenario.
+#
+# `dwe test run smoke` copies the project into a disposable directory, gives the
+# copy its own compose project name and freshly allocated host ports, deploys it
+# from a clean slate, runs the steps below, then tears the copy down.
+#
+# This is the ONE scaffold file that ships ACTIVE rather than fully commented:
+# the scenario loader is strict and rejects an empty document, so there is
+# nothing here to uncomment.
+#
+# It is also deliberately free of assertions. On a fresh scaffold compose.yaml
+# declares no services, so "the stack deploys and reports healthy" would pass
+# vacuously — an honest empty scenario beats a green check that proves nothing.
+# Add steps once app exists in compose.yaml; an `http_check` builtin
+# against the service's exported port is the usual first assertion.
+#
+# Schema and step reference: `dwe docs show config/tests`
+
+description: "Smoke test: the stack deploys from a clean slate"
+
+# timeout: 15m
+
+# Per-scenario overrides applied to the copy only. `auto` is the one magic
+# value: it allocates a free host port before the copy is deployed.
+# env:
+#   services:
+#     enable: ["app"]
+#   vars:
+#     app.port: auto
+
+steps: []
+
+--------
 DIR .dwe
 --------
 DIR workspace
@@ -431,5 +588,13 @@ DIR workspace
 DIR workspace/services
 --------
 DIR workspace/services/app
+--------
+DIR workspace/templates
+--------
+DIR workspace/templates/ai
+--------
+DIR workspace/templates/ai/default
+--------
+DIR workspace/tests
 --------
 SYMLINK CLAUDE.md -> AGENTS.md

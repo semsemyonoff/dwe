@@ -1,0 +1,61 @@
+# workspace/services/[[ .Service ]]/deploy.yml — per-service deploy pipeline (INERT MIRROR).
+#
+# Inlined by the orchestrator wherever workspace/deploy.yml declares a
+# `deploy_services: true` phase (the built-in default does). A service without
+# this file is silently skipped, so the whole skeleton below is shipped
+# commented and nothing runs until you uncomment it.
+#
+# The phase shape is the one every DWE app service converges on:
+#
+#   source  — materialise the hub (clone once, never touch it again)
+#   image   — build the container image
+#   render  — write hub-level artefacts (agent docs, IDE config)
+#
+# Schema and field reference: `dwe docs show config/deploy/index`
+# Builtin inventory (name, kind, purpose): `dwe docs llms-txt --lang en`
+#
+# phases:
+#   - name: source
+#     description: "Materialise the source hub"
+#     steps:
+#       - name: clone
+#         type: builtin
+#         cmd: source_clone
+#         description: "Clone the application source into the hub"
+#         with:
+#           # `repo` usually comes from vars: (`vars.[[ .Service ]].repo` in
+#           # workspace.yml), so a fork can be pointed at in local.yml.
+#           repo: "git@example.com:acme/[[ .Service ]].git"
+#           dir: "services/[[ .Service ]]/src"
+#           # branch: main
+#
+#   - name: image
+#     description: "Build the service image"
+#     steps:
+#       - name: build
+#         type: dwe
+#         cmd: "docker build [[ .Service ]]"
+#         description: "Build the [[ .Service ]] image"
+#
+#   - name: bootstrap
+#     description: "First-run setup inside the container"
+#     steps:
+#       - name: deps
+#         type: shell
+#         cmd: "docker compose run --rm [[ .Service ]] npm ci"
+#         description: "Install dependencies on first deploy"
+#         # `check: auto` derives the post-condition from `when:` by negating
+#         # it: run while the marker is missing, then assert it now exists.
+#         # It is only valid together with a `when:` of type shell.
+#         when:
+#           type: shell
+#           cmd: "test ! -d services/[[ .Service ]]/src/node_modules"
+#         check: auto
+#
+#   - name: render
+#     description: "Render hub-level artefacts"
+#     steps:
+#       - name: agent-docs
+#         type: dwe
+#         cmd: "render ai [[ .Service ]]"
+#         description: "Render AGENTS.md into the service hub"

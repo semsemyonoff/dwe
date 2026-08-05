@@ -20,6 +20,7 @@ var inertFiles = []string{
 	"workspace/lifecycle.yml",
 	"workspace/info.yml",
 	"workspace/docker.yml",
+	"workspace/services/app/deploy.yml",
 }
 
 // yamlOutputs are the rendered output paths that must parse as YAML.
@@ -33,6 +34,9 @@ var yamlOutputs = []string{
 	"workspace/info.yml",
 	"workspace/docker.yml",
 	"workspace/services/app/service.yml",
+	"workspace/services/app/deploy.yml",
+	"workspace/templates/ai/default/manifest.yml",
+	"workspace/tests/smoke.yml",
 }
 
 func TestEmbeddedTemplates_RenderForRepresentativeOptions(t *testing.T) {
