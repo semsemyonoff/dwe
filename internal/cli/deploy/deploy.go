@@ -63,6 +63,110 @@ type deployPlanOpts struct {
 	Format      string
 }
 
+// planStepJSON is the JSON representation of a single resolved step (or
+// parallel sub-step) in the deploy plan.
+type planStepJSON struct {
+	Name            string            `json:"name"`
+	Type            string            `json:"type"`
+	Cmd             string            `json:"cmd,omitempty"`
+	Description     string            `json:"description,omitempty"`
+	When            string            `json:"when,omitempty"`
+	FilesGate       string            `json:"files_gate,omitempty"`
+	Check           string            `json:"check,omitempty"`
+	ContinueOnError bool              `json:"continue_on_error,omitempty"`
+	Untracked       bool              `json:"untracked,omitempty"`
+	Parallel        *planParallelJSON `json:"parallel,omitempty"`
+}
+
+// planParallelJSON is the JSON representation of a parallel step group.
+type planParallelJSON struct {
+	MaxConcurrent int            `json:"max_concurrent"`
+	FailFast      bool           `json:"fail_fast"`
+	Steps         []planStepJSON `json:"steps"`
+}
+
+// planPhaseJSON groups the steps belonging to a single phase (optionally
+// scoped to a service) in declaration order.
+type planPhaseJSON struct {
+	Name        string         `json:"name"`
+	Service     string         `json:"service,omitempty"`
+	Description string         `json:"description,omitempty"`
+	When        string         `json:"when,omitempty"`
+	Steps       []planStepJSON `json:"steps"`
+}
+
+// planJSON is the top-level `dwe deploy plan --output json` payload.
+type planJSON struct {
+	Service string          `json:"service,omitempty"`
+	Phases  []planPhaseJSON `json:"phases"`
+}
+
+// buildPlanJSON converts a resolved deploy plan into its JSON payload,
+// grouping the flat step list into phases (and services, when unscoped) the
+// same way PrintPlanTable groups them for display.
+func buildPlanJSON(steps []pipeline.ResolvedStep, dweBin, serviceName string) planJSON {
+	payload := planJSON{Phases: []planPhaseJSON{}, Service: serviceName}
+
+	lastPhaseKey := ""
+	for _, rs := range steps {
+		phaseKey := rs.Phase.Name
+		if rs.Service != "" {
+			phaseKey = rs.Service + "/" + rs.Phase.Name
+		}
+		if phaseKey != lastPhaseKey || len(payload.Phases) == 0 {
+			phase := planPhaseJSON{
+				Name:        rs.Phase.Name,
+				Service:     rs.Service,
+				Description: rs.Phase.Description,
+				When:        pipeline.FormatCondition(rs.Phase.When),
+				Steps:       []planStepJSON{},
+			}
+			payload.Phases = append(payload.Phases, phase)
+			lastPhaseKey = phaseKey
+		}
+		last := &payload.Phases[len(payload.Phases)-1]
+		last.Steps = append(last.Steps, buildPlanStepJSON(rs, dweBin))
+	}
+	return payload
+}
+
+// buildPlanStepJSON converts a single resolved step into its JSON form,
+// recursing into parallel sub-steps.
+func buildPlanStepJSON(rs pipeline.ResolvedStep, dweBin string) planStepJSON {
+	step := planStepJSON{
+		Name:            rs.Step.Name,
+		Type:            rs.Step.Type,
+		Description:     rs.Step.Description,
+		ContinueOnError: rs.Step.ContinueOnError,
+		Untracked:       rs.IsUntracked(),
+	}
+	if rs.RuntimeWhen != nil {
+		step.When = pipeline.FormatCondition(rs.RuntimeWhen)
+	}
+	if rs.FilesGate != nil {
+		step.FilesGate = pipeline.FormatFilesGate(rs.FilesGate)
+	}
+	if rs.Step.Check != nil {
+		step.Check = pipeline.FormatAction(rs.Step.Check)
+	}
+
+	if rs.Parallel != nil {
+		subSteps := make([]planStepJSON, 0, len(rs.Parallel.Steps))
+		for _, sub := range rs.Parallel.Steps {
+			subSteps = append(subSteps, buildPlanStepJSON(sub, dweBin))
+		}
+		step.Parallel = &planParallelJSON{
+			MaxConcurrent: rs.Parallel.MaxConcurrent,
+			FailFast:      rs.Parallel.FailFast,
+			Steps:         subSteps,
+		}
+		return step
+	}
+
+	step.Cmd = pipeline.StepCommand(rs.Step, dweBin)
+	return step
+}
+
 // runDeployPlan is the common implementation for `dwe deploy plan` and menu dispatch.
 func runDeployPlan(ctx context.Context, cmd *cobra.Command, flags *cmdctx.RootFlags, opts deployPlanOpts) error {
 	cfg, err := config.LoadConfigOrWrap(flags.ConfigPath)
@@ -104,6 +208,9 @@ func runDeployPlan(ctx context.Context, cmd *cobra.Command, flags *cmdctx.RootFl
 	}
 
 	dweBin := config.DweBin(cfg)
+	if flags.Output == "json" {
+		return cmdctx.WriteJSON(flags, cmd, buildPlanJSON(steps, dweBin, opts.ServiceName))
+	}
 	switch opts.Format {
 	case "shell":
 		if opts.ServiceName != "" {
