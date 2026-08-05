@@ -264,21 +264,86 @@ func TestEmbeddedTemplates_ServiceTogglePresentOnlyWhenNamed(t *testing.T) {
 	}
 }
 
-func TestEmbeddedTemplates_StarterServiceKeepsTypeAndContainerActive(t *testing.T) {
+// TestEmbeddedTemplates_StarterServiceActiveKeys pins the class-1 set the
+// starter service ships active: the identity pair, the hub triplet (identical
+// across every surveyed app service), and the two display fields every service
+// fills anyway. Everything else stays a commented example.
+//
+// `ports` in particular MUST stay commented: the scaffolded compose.yaml has no
+// services block, so an active port binds nothing, and it would make
+// `dwe validate` depend on whether that host port happens to be busy
+// (portsFreeValidator emits SeverityError), turning the deterministic
+// scaffold-validates-clean guard into a host-dependent one.
+func TestEmbeddedTemplates_StarterServiceActiveKeys(t *testing.T) {
 	svc := mustRender(t, newTestOptions())["workspace/services/app/service.yml"]
 	var parsed map[string]any
 	if err := yaml.Unmarshal(svc, &parsed); err != nil {
 		t.Fatalf("parse service.yml: %v", err)
 	}
-	if parsed["type"] != "app" {
-		t.Errorf("service.yml type = %v, want app", parsed["type"])
+	want := map[string]any{
+		"type":              "app",
+		"container":         "app",
+		"dir":               "./services/app",
+		"dir_internal":      "/workspace",
+		"work_dir_internal": "/workspace/src",
+		"icon":              "📦",
+		"info":              map[string]any{"title": "app"},
 	}
-	if parsed["container"] != "app" {
-		t.Errorf("service.yml container = %v, want app", parsed["container"])
+	for key, wantVal := range want {
+		got, ok := parsed[key]
+		if !ok {
+			t.Errorf("service.yml missing active key %q", key)
+			continue
+		}
+		if gotMap, isMap := got.(map[string]any); isMap {
+			wantMap, _ := wantVal.(map[string]any)
+			if len(gotMap) != len(wantMap) {
+				t.Errorf("service.yml %q = %v, want %v", key, got, wantVal)
+				continue
+			}
+			for k, v := range wantMap {
+				if gotMap[k] != v {
+					t.Errorf("service.yml %s.%s = %v, want %v", key, k, gotMap[k], v)
+				}
+			}
+			continue
+		}
+		if got != wantVal {
+			t.Errorf("service.yml %q = %v, want %v", key, got, wantVal)
+		}
 	}
-	// Only the two active keys — everything else is commented.
-	if len(parsed) != 2 {
-		t.Errorf("service.yml has %d active keys %v, want exactly type+container", len(parsed), parsed)
+	for key := range parsed {
+		if _, ok := want[key]; !ok {
+			t.Errorf("service.yml has unexpected active key %q = %v", key, parsed[key])
+		}
+	}
+	for _, commented := range []string{"ports", "hosts", "required", "depends_on"} {
+		if _, ok := parsed[commented]; ok {
+			t.Errorf("service.yml key %q is active; it must stay a commented example", commented)
+		}
+	}
+}
+
+// TestEmbeddedTemplates_PortPairIsDocumentedOnBothSides guards the one class-1
+// rule the scaffold can only teach in prose: a port is display-only until a
+// matching exports.env rule exports it. Both halves ship commented, so the
+// pairing has to be stated in each file or the reader sees only one side.
+func TestEmbeddedTemplates_PortPairIsDocumentedOnBothSides(t *testing.T) {
+	plan := mustRender(t, newTestOptions())
+	svc := string(plan["workspace/services/app/service.yml"])
+	if !strings.Contains(svc, "exports.env") {
+		t.Errorf("service.yml does not mention the paired exports.env rule:\n%s", svc)
+	}
+	defaults := string(plan["workspace/defaults.yml"])
+	if !strings.Contains(defaults, "display-only") {
+		t.Errorf("defaults.yml does not state the display-only rule:\n%s", defaults)
+	}
+	// The reserved auto-injected names are a documented trap (they are rejected
+	// as user rule names), and exports.env is the only place they surface.
+	for _, name := range config.ReservedExportNames {
+		if !strings.Contains(defaults, name) {
+			t.Errorf("defaults.yml does not name the reserved export %q", name)
+		}
 	}
 }
 

@@ -206,6 +206,11 @@ services:
 
 # Declarative .env export rules. Each rule maps a dot-path in the merged config
 # to an environment variable. See `dwe docs show config/workspace`.
+#
+# This is the second half of the port pair: a port declared in
+# workspace/services/<name>/service.yml is display-only until a rule here
+# exports it, so compose.yaml can bind it. Uncomment both together.
+# PROJECT, UID and GID are injected automatically and must not be redeclared.
 # exports:
 #   env:
 #     - name: APP_PORT
@@ -259,8 +264,10 @@ services:
 #
 # This file controls how `dwe docker` builds and runs `docker compose` commands
 # (project name, per-subcommand args, process env). It is shipped fully
-# commented; with no docker.yml the built-in policy applies. Uncomment to
-# override — an active docker.yml replaces the built-in policy.
+# commented; with no docker.yml the built-in policy applies. Overriding is
+# per-key, not whole-file: uncommenting one key replaces only that key, and
+# every key you leave commented keeps its built-in default (up, logs, run and
+# down carry defaults; the other args keys default to empty).
 #
 # Per-developer overrides go in workspace/docker.local.yml (gitignored), which
 # is deep-merged on top of this file.
@@ -271,6 +278,7 @@ services:
 # args:
 #   global: ["--ansi", "always", "--progress", "tty"]
 #   up: ["-d", "--remove-orphans"]
+#   down: ["--remove-orphans"]
 #   logs: ["-f"]
 #   run: ["--rm"]
 #   pull: []
@@ -357,24 +365,38 @@ services:
 === workspace/services/app/service.yml ===
 # workspace/services/app/service.yml — the "app" starter service.
 #
-# type + container are active; every other field is an optional, commented
-# example. The folder name (app) is the service's map key — there is
-# no `name:` field. Run `dwe docs show config/services/index`.
+# The folder name (app) is the service's map key — there is no `name:`
+# field. Run `dwe docs show config/services/index` for the full schema.
 
 type: app
 container: "app"
 
+# Source hub: `dir` is the host directory holding this app's checkout (created
+# by the deploy pipeline, gitignored), mounted at `dir_internal` inside the
+# container. Mount the whole hub, not just the sources — build artefacts,
+# caches and tooling state live next to `src/`. `work_dir_internal` is where
+# `dwe cmd` / bridged commands run.
+dir: "./services/app"
+dir_internal: /workspace
+work_dir_internal: /workspace/src
+
+icon: "📦"
+
+info:
+  title: "app"
+
 # required: true              # always-on; removes the enable/disable toggle
-# dir: "./app"            # host source directory for this app
 # depends_on: []
+
+# Ports are DISPLAY-ONLY on their own: `dwe status` and info blocks read them,
+# but nothing binds them. To bind one, uncomment the pair — the port here AND
+# the matching `exports.env` rule in workspace/defaults.yml that turns it into
+# an environment variable your compose.yaml can reference.
 # ports:
 #   http: 8080
+
 # hosts:
 #   web: "app.localhost"
-# icon: "📦"
-# render:
-#   ide:
-#     enabled: true
 
 --------
 === workspace/styles.yml ===
