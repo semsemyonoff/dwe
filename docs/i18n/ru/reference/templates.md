@@ -1,4 +1,4 @@
-> Translated from: reference/templates.md @ 6d4bb783baa9
+> Translated from: reference/templates.md @ 87c24c3bc539
 
 # Шаблоны
 
@@ -26,6 +26,7 @@ Go-шаблоны (с библиотекой функций [go-sprout](https://
 | `info.yml` — `text`, `value`, `when` | `{{ ... }}` | Разрешённая конфигурация проекта | См. [info.md](config/info.md) |
 | `workspace/commands/` — `cmd`, `argv`, `workdir`, `compose_args`, `env`, `messages.*`, `confirmation_text`, `files.*.path`/`candidates`, workflow-шаги `steps[].with[<key>]` / `steps[].when` | `${...}` и `{{ ... }}` | Контекст команды (`.Raw` + `.Params` + `.Context` + `.Files` + `.Host`) | См. [commands/](config/commands/index.md) |
 | `deploy.yml` / `lifecycle.yml` / `reset.yml` — `when: type: template, expr:` | `{{ ... }}` | Разрешённая конфигурация проекта | Вычисляется на этапе планирования. См. [deploy](config/deploy/index.md) |
+| `deploy.yml` / `lifecycle.yml` / `reset.yml` — `cmd`, строковые листья `with`, `check`, `timeout` и shell `when: cmd:` | Только `${...}` (известные head'ы) | Смерженная конфигурация проекта (`.Raw`) | Рендерится один раз на этапе **разрешения плана**, не в момент выполнения — до того, как шаг будет показан, хеширован или запущен. См. [Шаблоны в полях шага](config/deploy/index.md#шаблоны-в-полях-шага) |
 | Билтин `message` — `text:` | `{{ ... }}` | Разрешённая конфигурация проекта | См. [билтин message](config/deploy/builtins.md#message) |
 | `docker.yml` — `project_name` | Только `${...}` | Разрешённая конфигурация проекта (lookup'ы по `.Raw`) | Только dot-path lookups (без `{{ }}`-логики). См. [docker.md](config/docker.md) |
 | `workspace/templates/git/<pack>/**/*.tmpl` | `{{ ... }}` | Контекст render-пака (`.Project`, `.Service`, `.Resolved`, `.ServiceCfg`, `.Runtime`, `.Services`, `.Cfg`) | Строгий режим. См. [render/git.md](render/git.md) |
@@ -62,7 +63,9 @@ path: "${param.dump_dir}/${param.database}{{ if .Params.dump_date }}_{{ now | da
 | `${host.uid}` / `${host.gid}` | Эффективные UID/GID (1000:1000 на macOS, реальные значения на Linux) |
 | `${generated.<name>}` | Значение по сервису, собранное в `.dwe/generated.yml` (только config-render-паки; отсутствующее → `""`). См. [render/config.md](render/config.md) |
 
-Всё, что не совпадает с известным неймспейсом (`${foo}`, `${a.b.c}`), трактуется как dot-path lookup в `Raw`. **Для пользовательских значений конфига предпочитайте `${vars.*}`** — они живут под блоком `vars:` в YAML; строгий корень отвергает свободные ключи верхнего уровня, поэтому `vars:` — их единственный дом. Литерал `$$` пропускается без изменений.
+Всё, чей head — это ключ корня смерженного конфига (`project`, `services`, `vars`, `exports`, `compose`, `update`, `bridge`, `state`, `schema_version`, …), трактуется как dot-path lookup в `Raw`. **Это whitelist, а не «всё, что иначе не сматчилось»**: нераспознанный head — shell-подобный `${HOME}`/`${PATH}`, случайный знак доллара, опечатка или устаревший bare dot-path времён до строгого корня вроде `${databases.main}` — остаётся **буквальным** `${...}` вместо того, чтобы молча схлопнуться в `""`. Это особенно важно в pipeline `cmd:`, который теперь рендерится (см. таблицу выше): shell-переменная вроде `${CONTAINER}` в команде `docker inspect` доходит до `sh` без изменений, а не проглатывается. **Для пользовательских значений конфига предпочитайте `${vars.*}`** — они живут под блоком `vars:` в YAML; строгий корень отвергает свободные ключи верхнего уровня, поэтому `vars:` — их единственный дом. Известный head, чей оставшийся путь не резолвится (например, опечатка под `vars:`), рендерится в `""` — `dwe validate` ловит этот случай для шагов пайплайна (см. [`config.template_refs`](config/validate.md#домены-валидации)). Литерал `$$` пропускается без изменений.
+
+Одно задокументированное исключение: поле `project_name` в `docker.yml` использует отдельный, более строгий резолвер (`resolveVarTemplate`), появившийся ещё до этого whitelist'а — у него нет ограничения по неймспейсам (резолвится любой dot-path в `Raw`), но неразрешённый путь — это **ошибка**, а не буквальный текст, поскольку сломанное имя compose-проекта должно упасть громко, а не молча передать неразрешённую строку `${...}` в `docker compose -p`.
 
 ### Квотинг шаблонов внутри YAML
 

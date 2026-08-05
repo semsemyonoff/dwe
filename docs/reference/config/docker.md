@@ -83,7 +83,7 @@ build:
 project_name: "${project.prefix}-${project.name}"
 ```
 
-The Docker Compose project name passed as `-p <name>` to every compose invocation. Supports `${dot.path}` lookups into the merged DWE config (see [Templates](../templates.md) — `${...}` namespaces). Default resolves to `dwe-laravel`.
+The Docker Compose project name passed as `-p <name>` to every compose invocation. Supports `${dot.path}` lookups into the merged DWE config (see [Templates](../templates.md) — `${...}` namespaces), resolved with its own stricter rule: **any** dot-path into `Raw` resolves here (no namespace whitelist), but an unresolved path is a hard **error** rather than a literal `${...}` — a broken project name must fail loudly instead of silently reaching `docker compose -p ${...}`. Default resolves to `dwe-laravel`.
 
 Override locally:
 ```yaml

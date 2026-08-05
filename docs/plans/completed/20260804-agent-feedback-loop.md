@@ -863,27 +863,48 @@ above:
 
 ### Task 16: [Final] Update documentation
 
-- [ ] document the whitelist rendering rule and the resolve-time evaluation point in
+- [x] document the whitelist rendering rule and the resolve-time evaluation point in
       `docs/reference/` (where templates are evaluated) — the current page's omission is
-      what three workspaces documented by hand in YAML comments
-- [ ] document the new validators (`ports`/`exports` pairing, `container_name` divergence,
-      empty template refs) in `docs/reference/config/validate.md`
-- [ ] confirm the contract migration from Task 1 landed everywhere:
+      what three workspaces documented by hand in YAML comments. Added a new "Where
+      templates are evaluated" table row for pipeline `cmd`/`with`/`check`/`timeout`/
+      `when.cmd` (linking to the Task 13 "Templates in step fields" section) and rewrote
+      the `${...}` namespaces paragraph in `docs/reference/templates.md` to state the
+      whitelist explicitly (was still describing the pre-Task-1 "anything unmatched falls
+      through" behavior)
+- [x] document the new validators (`ports`/`exports` pairing, `container_name` divergence,
+      empty template refs) in `docs/reference/config/validate.md` — added
+      `config.template_refs` / `config.container_name` / `config.ports_exports` /
+      `config.info` paragraphs to the "Validation domains" section, matching the existing
+      `config.compose_project_name` / `config.formal_block_fields` style
+- [x] confirm the contract migration from Task 1 landed everywhere:
       `docs/reference/render/config.md`, `docs/reference/config/services/fields.md`
       (§ `render.config`), `docs/internals/packages.md` (§ `internal/shared/tpl/` — it
       describes the old unconditional fallthrough verbatim), and the
-      `internal/cli/render/config.go` help text
-- [ ] note the one-time hash change in the release notes (adding `vars` to the project hash
-      makes the first deploy after upgrade re-run steps in every existing project)
-- [ ] document the remaining exception: `config.resolveVarTemplate` (`docker.go:339`) keeps
+      `internal/cli/render/config.go` help text — confirmed all four already use the
+      `${vars.*}` form and describe the known-head whitelist (landed with Task 1's
+      `866c9d20`); no further change needed
+- [x] note the one-time hash change in the release notes (adding `vars` to the project hash
+      makes the first deploy after upgrade re-run steps in every existing project) — added
+      as a paragraph in `docs/reference/config/deploy/index.md` § "Templates in step
+      fields" (no repo CHANGELOG file exists; changelog is goreleaser-generated from
+      commit messages, so the durable user-facing note lives in the reference doc)
+- [x] document the remaining exception: `config.resolveVarTemplate` (`docker.go:339`) keeps
       its own semantics for `${dot.path}` in `docker.yml project_name` and **errors** on an
       unresolvable path. After Task 1 the same `${FOO}` is a literal in `deploy.yml` and a
-      hard error in `docker.yml` — one sentence, so the difference is deliberate
-- [ ] update the Russian mirrors under `docs/i18n/ru/`
-- [ ] run `make build` to resync embedded docs and content hashes
-- [ ] update `AGENTS.md` Critical Patterns — **not conditional**: a rule that changes the
-      meaning of every `${...}` in the product is load-bearing by definition
-- [ ] move this plan to `docs/plans/completed/`
+      hard error in `docker.yml` — one sentence, so the difference is deliberate.
+      Documented in both `docs/reference/templates.md` (namespaces section) and
+      `docs/reference/config/docker.md` (`project_name` field reference)
+- [x] update the Russian mirrors under `docs/i18n/ru/` — `templates.md`,
+      `config/validate.md`, `config/deploy/index.md`, `config/docker.md`, plus the
+      `> Translated from: ... @ <hash>` header on each bumped to the new English content
+      hash (`TestRussianTranslationsAreFresh` enforces this)
+- [x] run `make build` to resync embedded docs and content hashes
+- [x] update `AGENTS.md` Critical Patterns — **not conditional**: a rule that changes the
+      meaning of every `${...}` in the product is load-bearing by definition. Added a new
+      bullet covering the `KnownVarHeads` whitelist, resolve-time pipeline rendering
+      (`render.go`), the `vars`-in-hash requirement, `dwe reset step` parity,
+      `UnresolvedTemplateRefs`/`config.template_refs`, and the `docker.go` exception
+- [x] move this plan to `docs/plans/completed/`
 
 ## Post-Completion
 
