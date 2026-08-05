@@ -1291,6 +1291,11 @@ func TestRunPipeline_FilesGate_NilRegistry_FailsStep(t *testing.T) {
 // the gate's `with` block are rendered against project config before being passed
 // to the target command's param validation. Regression test: previously these
 // values were forwarded as literal strings and tripped pattern validation.
+//
+// The step is built through ResolvePhaseSteps rather than by hand: the render
+// happens once at resolve time, and the gate probe consumes the already-rendered
+// with: map (BuildPreRenderedRunContext). Hand-building the ResolvedStep would
+// test a state production cannot produce — an unrendered FilesGate.With.
 func TestRunPipeline_FilesGate_WithRendersTemplate(t *testing.T) {
 	workDir := t.TempDir()
 	// Create the file whose path includes the rendered database name.
@@ -1330,27 +1335,33 @@ func TestRunPipeline_FilesGate_WithRendersTemplate(t *testing.T) {
 			},
 		},
 	}}
-	phase := config.DeployPhase{Name: "setup"}
-	steps := []ResolvedStep{
-		{
-			Phase: phase,
-			Step: config.DeployStep{
+	phase := config.DeployPhase{
+		Name: "setup",
+		Steps: []config.DeployStep{
+			{
 				Name: "check-stock-dump",
 				Type: "shell",
 				Cmd:  "echo dump-exists",
-			},
-			FilesGate: &filesgate.FilesGate{
-				Command: "db-dump-deploy",
-				State:   filesgate.StateReadable,
-				Require: filesgate.RequireRequired{},
-				With: map[string]any{
-					"database": "${vars.db.stock_database}",
+				FilesGate: &filesgate.FilesGate{
+					Command: "db-dump-deploy",
+					State:   filesgate.StateReadable,
+					Require: filesgate.RequireRequired{},
+					With: map[string]any{
+						"database": "${vars.db.stock_database}",
+					},
 				},
 			},
 		},
 	}
+	steps, err := ResolvePhaseSteps(cfg, reg, phase, "")
+	if err != nil {
+		t.Fatalf("ResolvePhaseSteps: %v", err)
+	}
+	if got := steps[0].FilesGate.With["database"]; got != "app_stock" {
+		t.Fatalf("gate with[database] = %v, want it rendered to app_stock at resolve time", got)
+	}
 
-	err := RunWithOptions(RunOptions{
+	err = RunWithOptions(RunOptions{
 		Steps:       steps,
 		Reporter:    rep,
 		Name:        "test",
