@@ -1,0 +1,6 @@
+project:
+  name: test
+exports:
+  env:
+    - name: APP_ADMIN_PORT
+      from: services.app.ports.admin

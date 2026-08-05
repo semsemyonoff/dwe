@@ -34,5 +34,6 @@ func All() []validate.Validator {
 		&containerNameValidator{},
 		&formalBlocksValidator{},
 		&templateRefsValidator{},
+		&portsExportsValidator{},
 	}
 }
