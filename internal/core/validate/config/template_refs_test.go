@@ -90,6 +90,24 @@ func TestTemplateRefsValidator_NegativeCases(t *testing.T) {
 `,
 		},
 		{
+			// A head-only ${state} / ${vars} / ${stop} is a lowercase shell
+			// variable that happens to collide with a root-key name;
+			// CompileVarSyntax leaves it literal (tpl.IsVarNamespaceRef needs a
+			// tail), so warning that it "does not resolve" would flag exactly
+			// what the whitelist keeps out of the engine.
+			name: "head-only known head is silent",
+			workspace: `project:
+  name: test
+`,
+			deployBody: `phases:
+  - name: setup
+    steps:
+      - name: step
+        type: shell
+        cmd: "for state in a b; do echo ${state} ${vars} ${stop}; done"
+`,
+		},
+		{
 			name: "resolvable reference is silent",
 			workspace: `project:
   name: test

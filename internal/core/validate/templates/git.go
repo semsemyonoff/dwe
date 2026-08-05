@@ -137,10 +137,13 @@ func (v *GitValidator) validateService(name string, svc config.ServiceConfig, cf
 			Domain:   "templates",
 			Target:   fmt.Sprintf("templates.git:%s", name),
 			Message:  fmt.Sprintf("template pack not found for service %q", name),
+			// Top-level render: — see the same note in ai.go: service.yml's
+			// strict per-type field allowlist rejects a `services` key, so the
+			// qualified path would break the project if pasted verbatim.
 			Hint: fmt.Sprintf(
 				"create workspace/templates/git/%s or workspace/templates/git/default\n"+
-					"or set services.%s.render.git.enabled: false in workspace/services/%s/service.yml",
-				name, name, name,
+					"or set render.git.enabled: false in workspace/services/%s/service.yml",
+				name, name,
 			),
 		}}
 	}

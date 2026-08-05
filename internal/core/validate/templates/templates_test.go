@@ -832,6 +832,14 @@ func TestTemplateValidators_MissingPackHintNamesServiceYML(t *testing.T) {
 			require.NotContains(t, warnDiag.Hint, "services.yml",
 				"hint must not reference a services.yml file, which does not exist in DWE")
 			require.Contains(t, warnDiag.Hint, "workspace/services/main/service.yml")
+			// The key must be written as service.yml actually accepts it:
+			// top-level render:, not the qualified services.<name>.render.
+			// path. service.yml is strict-decoded against a per-type field
+			// allowlist with no `services` key, so pasting the qualified form
+			// makes the project stop loading.
+			require.NotContains(t, warnDiag.Hint, "services.main.render.",
+				"hint must not tell the user to write a services.<name>. path inside service.yml")
+			require.Contains(t, warnDiag.Hint, fmt.Sprintf("set render.%s.enabled: false", tt.name))
 		})
 	}
 }

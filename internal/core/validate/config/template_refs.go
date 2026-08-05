@@ -7,6 +7,7 @@ import (
 	"github.com/semsemyonoff/dwe/internal/core/project/config"
 	"github.com/semsemyonoff/dwe/internal/core/project/varsusage"
 	"github.com/semsemyonoff/dwe/internal/core/validate"
+	"github.com/semsemyonoff/dwe/internal/shared/tpl"
 )
 
 // templateRefsValidator warns on a ${head.path} reference whose head is a
@@ -21,7 +22,8 @@ import (
 // ${HOME}, a stray dollar sign) and the special namespaces that never live
 // in Raw (param, context, files, host, snapshot, args, generated — see
 // Technical Details in the plan) are not this validator's concern. Both
-// exclusions come from gating on config.IsAllowedRootKey.
+// exclusions come from gating on config.IsAllowedRootKey. A head-only
+// ${state} / ${vars} is excluded too, by tpl.IsVarNamespaceRef — see the gate.
 //
 // The gate is the root-key ALLOWLIST, not "head present in cfg.Raw": the
 // strict root makes Raw's keys a subset of allowedRootKeys, not an equal set,
@@ -49,6 +51,15 @@ func (v *templateRefsValidator) Run(ctx validate.Context) []validate.Diagnostic 
 
 	var diags []validate.Diagnostic
 	for _, u := range usages {
+		// A known head is only a reference when it carries a tail:
+		// CompileVarSyntax leaves a head-only ${state} / ${update} / ${vars}
+		// literal (it is a lowercase shell variable colliding with a namespace
+		// name, rife in pipeline cmd: strings), so warning that it "does not
+		// resolve" would flag exactly what the whitelist deliberately keeps
+		// out of the engine. The tail rule is asked of tpl, never re-derived.
+		if !tpl.IsVarNamespaceRef(u.Ref) {
+			continue
+		}
 		head, _, _ := strings.Cut(u.Ref, ".")
 		if !config.IsAllowedRootKey(head) {
 			continue

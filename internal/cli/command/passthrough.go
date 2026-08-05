@@ -37,6 +37,21 @@ func commandIDArgs(cmd *cobra.Command, args []string) error {
 			near, strings.Join(args[:near], " "), args[0], strings.Join(args[1:], " "),
 		))
 	}
+	if near == 0 && len(args) > 0 {
+		// `dwe cmd -- --run x`: pass-through arguments with nothing to pass
+		// them to. Without this the run route falls through to the selector,
+		// and its non-interactive branch (CI pipe, or any container — the
+		// bridge daemon force-sets DWE_NONINTERACTIVE=1) prints the command
+		// list and exits 0, silently discarding them. Refusing loudly is the
+		// same contract checkPassThroughArgs enforces per-command.
+		return cmdctx.Err("usage_error", fmt.Sprintf(
+			"arguments after `--` need a command id, got none (%s)\n\n"+
+				"Name the command the arguments belong to:\n"+
+				"  dwe cmd <id> -- %s\n\n"+
+				"List the available ids with:  dwe commands list",
+			strings.Join(args, " "), strings.Join(args, " "),
+		))
+	}
 	return nil
 }
 

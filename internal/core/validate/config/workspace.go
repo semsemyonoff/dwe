@@ -715,7 +715,10 @@ const (
 	// built-in default.
 	infoStateDefaultFallback
 	// infoStateDeliberatelyEmpty is a file that decoded top-level keys (e.g.
-	// `footer: true`) but an explicit `sections: []`.
+	// `footer: true`) but no sections — either an explicit `sections: []` or
+	// no `sections:` key at all. Both mean the same thing to the loader (no
+	// default fallback, empty dashboard), so they share one state; the
+	// diagnostic message must therefore not claim the file wrote `sections: []`.
 	infoStateDeliberatelyEmpty
 )
 
@@ -828,7 +831,7 @@ func (v *infoValidator) Run(ctx validate.Context) []validate.Diagnostic {
 				Domain:   "config",
 				Target:   "config.info",
 				File:     relPath(ctx.ProjectRoot, infoPath),
-				Message:  "info.yml declares sections: [] — dashboard is deliberately empty",
+				Message:  "info.yml has active keys but declares no sections — dashboard is deliberately empty",
 			})
 		default:
 			diags = append(diags, validate.Diagnostic{

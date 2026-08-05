@@ -1274,6 +1274,16 @@ func TestInfoValidator_decodeStates(t *testing.T) {
 			wantSubstr: "deliberately empty",
 		},
 		{
+			// Same state, reached without a `sections:` key at all. The message
+			// must not claim the file declared `sections: []` — the reader
+			// would grep for a line that is not there.
+			name: "active key but no sections key",
+			body: `footer: true
+`,
+			wantSev:    validate.SeverityInfo,
+			wantSubstr: "declares no sections",
+		},
+		{
 			name: "one real section",
 			body: `sections:
   - id: custom
