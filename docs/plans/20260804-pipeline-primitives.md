@@ -504,25 +504,41 @@ authoring without buying protection.)*
   `len(registry) == len(allBuiltinNames)` plus a per-name kind table — the suite goes red
   without it)
 
-- [ ] create the sub-package exposing `Builtins()` following the `services`/`fs` shape and
+- [x] create the sub-package exposing `Builtins()` following the `services`/`fs` shape and
       register it in `buildRegistry()` as `KindAction`
-- [ ] implement `with: {repo, dir, branch?}`: required-field validation, destination
+- [x] implement `with: {repo, dir, branch?}`: required-field validation, destination
       resolved against the project root and checked with `pathsafe` — specifically
       `ContainedRel` + `CheckNoSymlinks` (and `EnsureRealUnder` if needed), the pattern
       already used in `execution/templates/config/config.go:255-279`
-- [ ] resolve the git binary via the nil-safe accessor `config.GitBin(...)` — AGENTS.md
+      → all three used: `ContainedRel` + `CheckNoSymlinks` before touching the filesystem,
+      `EnsureRealUnder` on the symlink-resolved parent after `MkdirAll` (which follows
+      symlinks). `depth:` **dropped** per the YAGNI clause in Technical Details — the task
+      checklist enumerates only `{repo, dir, branch?}`, and adding it later is additive
+- [x] resolve the git binary via the nil-safe accessor `config.GitBin(...)` — AGENTS.md
       forbids reading `cfg.Binaries.*` directly
-- [ ] force a non-interactive posture (`GIT_TERMINAL_PROMPT=0`, and an `GIT_ASKPASS`
+- [x] force a non-interactive posture (`GIT_TERMINAL_PROMPT=0`, and an `GIT_ASKPASS`
       decision): all five workspaces clone from a private host, and a credential prompt
       inside a deploy is a hang. In sequential mode the builtin is handed `os.Stdin`; in
       parallel it is nil, but git can still reach for `/dev/tty`
-- [ ] implement the idempotency gate: `.git` present → skip with message (success), **including
+      → **`GIT_ASKPASS` decision: set it (and `SSH_ASKPASS`) to the EMPTY string**, not to a
+      dummy program. git's `git_prompt` only runs an askpass helper when the value is
+      non-empty, so emptying it defeats an inherited GUI helper and falls through to the
+      terminal prompt — which `GIT_TERMINAL_PROMPT=0` turns into an immediate error. Plus
+      `GIT_SSH_COMMAND=ssh -o BatchMode=yes` **only when unset** (an author who set it means
+      it), and `cmd.Stdin = nil`. `/dev/tty` is not reachable from Go without a session
+      change and is documented rather than defended
+- [x] implement the idempotency gate: `.git` present → skip with message (success), **including
       when the existing checkout is on a different branch** — record that as intended;
       absent/empty → clone; non-empty non-git → error naming the path
-- [ ] write tests: fresh clone, re-run is a no-op, different-branch checkout is a no-op,
+      → `.git` is matched by `Lstat` of any type (a worktree/submodule `.git` is a file);
+      a destination that exists but is not a directory is its own error
+- [x] write tests: fresh clone, re-run is a no-op, different-branch checkout is a no-op,
       non-empty non-git destination errors, path escaping the project root is rejected,
       missing required field is rejected
-- [ ] pin the **actual** kind boundary rather than an assumed one: `kindAllowed`
+      → plus: empty destination is cloned, symlinked path component rejected, git failure
+      surfaces git's stderr, and the env posture (override + honour-existing) is pinned.
+      Clone tests use a real local git repo and `t.Skip` when git is off PATH
+- [x] pin the **actual** kind boundary rather than an assumed one: `kindAllowed`
       (`builtin.go:147-155`) deliberately permits `KindAction` in `CtxPredicate` ("actions
       may be read-only … and are safe in check: position"), so `source_clone` **will** be
       callable from `check:`. A test asserting rejection would fail, and "fixing"
@@ -530,9 +546,14 @@ authoring without buying protection.)*
       from `CtxUserYAML` and `CtxPredicate`, and **not** reachable from `workspace/validate.yml`
       (blocked by the hardcoded seven-name allowlist in `validate/checks/loader.go:51,119` —
       which also keeps `docs/reference/config/validate.md:174` accurate)
-- [ ] add one line to the docs saying that putting a mutating builtin in `check:` is a bad
+      → pinned in `builtin_test.go`'s kind table (`CtxUserYAML` ✓, `CtxPredicate` ✓,
+      `CtxInternal` ✗) and in `validate/checks/loader_test.go`'s disallowed-builtin table
+- [x] add one line to the docs saying that putting a mutating builtin in `check:` is a bad
       idea even though the schema permits it
-- [ ] run tests — must pass before task 6
+      → new "Action builtins in `check:` — permitted, but a bad idea" section in
+      `docs/reference/config/deploy/builtins.md`, plus the `source_clone` reference section
+      (the RU mirror stays for Task 7's docs pass)
+- [x] run tests — must pass before task 6
 
 ### Task 6: Verify acceptance criteria
 

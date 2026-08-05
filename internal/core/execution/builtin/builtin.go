@@ -41,6 +41,9 @@
 //	fs/ (KindPredicate)
 //	- file_exists                   — check whether a file exists
 //
+//	source/ (KindAction)
+//	- source_clone                  — clone a git repository into a project-relative dir (idempotent)
+//
 //	env/ (KindPredicate)
 //	- env_keys_present              — verify env-file keys are defined
 //	- executable_in_path            — verify an executable resolves on PATH
@@ -63,6 +66,7 @@ import (
 	"github.com/semsemyonoff/dwe/internal/core/execution/builtin/fs"
 	"github.com/semsemyonoff/dwe/internal/core/execution/builtin/interaction"
 	"github.com/semsemyonoff/dwe/internal/core/execution/builtin/services"
+	"github.com/semsemyonoff/dwe/internal/core/execution/builtin/source"
 	"github.com/semsemyonoff/dwe/internal/core/execution/builtin/spec"
 )
 
@@ -108,6 +112,7 @@ func buildRegistry() map[string]spec.Entry {
 		fs.Builtins(),
 		env.Builtins(),
 		interaction.Builtins(),
+		source.Builtins(),
 	} {
 		for k, v := range src {
 			if _, dup := r[k]; dup {
