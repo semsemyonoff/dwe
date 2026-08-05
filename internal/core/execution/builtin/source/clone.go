@@ -168,7 +168,13 @@ func (Clone) Run(ctx context.Context, with map[string]any, ectx spec.ExecContext
 	}
 
 	gitBin := config.GitBin(ectx.Config)
-	args := []string{"clone"}
+	// `ext::<cmd>` is a git transport that runs <cmd> as a host program. Git
+	// already refuses it by default, but a user-level `protocol.ext.allow=always`
+	// re-enables it — and `repo` can come from `vars:`, which a container may be
+	// allowed to write via `bridge.vars_writable`. Pin the policy on the command
+	// line (highest precedence) so a repo URL is never a way to execute a host
+	// command; anyone who genuinely wants to run a program writes a shell step.
+	args := []string{"-c", "protocol.ext.allow=never", "clone"}
 	if p.branch != "" {
 		args = append(args, "--branch", p.branch)
 	}

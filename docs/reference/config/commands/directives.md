@@ -448,6 +448,12 @@ in an argv silently changes what a tool does. stdout is captured; **stderr
 streams to the user**, so a failing expression explains itself. stdin is not
 wired: the expression must never consume the user's input.
 
+**The expression must exit 0 when the list is legitimately empty.** A non-zero
+exit is a broken expression and fails the command — it is deliberately not read
+as "nothing to do", because a typo'd command must not look like a clean skip.
+This matters when filtering with `grep`, which exits 1 on no match: prefer a
+pathspec (`git diff … -- '*.py'`, exit 0 on an empty result) or append `|| true`.
+
 **Empty output skips the command** — nothing runs, exit 0, and a note is printed
 to stderr. This is deliberate rather than "run with no extra arguments":
 `ruff check` with an empty file list lints the whole tree, the exact opposite of

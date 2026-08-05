@@ -314,6 +314,39 @@ func TestClone_GitFailureSurfacesStderr(t *testing.T) {
 	}
 }
 
+// `ext::<cmd>` is a git transport that runs <cmd> as a host program. Git refuses
+// it by default, so the environment here re-enables it exactly as a user-level
+// `protocol.ext.allow=always` would: the point is that the clone pins the policy
+// itself, because `repo` can come from `vars:` that a container may be allowed
+// to write.
+func TestClone_RejectsExtTransport(t *testing.T) {
+	requireGit(t)
+	root := t.TempDir()
+	marker := filepath.Join(root, "pwned")
+
+	// git's ext transport splits its command on spaces and offers no quoting, so
+	// the payload has to be a single token — a script that drops the marker.
+	helper := filepath.Join(t.TempDir(), "helper.sh")
+	if err := os.WriteFile(helper, []byte("#!/bin/sh\ntouch "+marker+"\n"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+
+	t.Setenv("GIT_CONFIG_COUNT", "1")
+	t.Setenv("GIT_CONFIG_KEY_0", "protocol.ext.allow")
+	t.Setenv("GIT_CONFIG_VALUE_0", "always")
+
+	var out bytes.Buffer
+	err := (Clone{}).Run(context.Background(),
+		map[string]any{"repo": "ext::" + helper, "dir": "src"},
+		newTestExecCtx(root, &out))
+	if err == nil {
+		t.Fatal("expected the ext:: transport to be refused")
+	}
+	if _, statErr := os.Stat(marker); statErr == nil {
+		t.Fatal("the ext:: helper executed — protocol.ext.allow=never is not in effect")
+	}
+}
+
 // --- non-interactive posture ---
 
 func TestNonInteractiveGitEnv(t *testing.T) {
