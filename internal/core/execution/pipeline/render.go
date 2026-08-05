@@ -10,21 +10,22 @@ import (
 	"github.com/semsemyonoff/dwe/internal/shared/tpl"
 )
 
-// hasKnownVarRef reports whether s contains at least one ${...} reference
-// whose head namespace is known to tpl.CompileVarSyntax. A bare
+// hasKnownVarRef reports whether s contains at least one ${...} reference that
+// tpl.CompileVarSyntax will actually rewrite. A bare
 // tpl.VarPattern.MatchString is not enough: a shell-style ${CONTAINER} beside
 // an untouched Go-template idiom would still pull the whole string into
-// tpl.RenderCommand and then fail on the {{ }} part. Gating on a KNOWN head
-// keeps strings that only use shell-style ${VAR} (or none at all) out of the
-// renderer entirely — see resolveLeafStep for the call site.
+// tpl.RenderCommand and then fail on the {{ }} part. Gating on a real namespace
+// reference keeps strings that only use shell-style ${VAR} (or none at all) out
+// of the renderer entirely — see resolveLeafStep for the call site.
 //
-// Membership goes through tpl.IsKnownVarHead rather than a local index over
+// Membership goes through tpl.IsVarNamespaceRef rather than a local index over
 // tpl.KnownVarHeads: the gate must agree with what CompileVarSyntax actually
-// rewrites, and a second copy of the set is a second thing to keep in sync.
+// rewrites, and a second copy of the rule is a second thing to keep in sync.
+// That includes the head-only case — `for f in ${files}` is a shell variable,
+// not a reference, and must not drag its command into the engine.
 func hasKnownVarRef(s string) bool {
 	for _, m := range tpl.VarPattern.FindAllStringSubmatch(s, -1) {
-		head, _, _ := strings.Cut(m[1], ".")
-		if tpl.IsKnownVarHead(head) {
+		if tpl.IsVarNamespaceRef(m[1]) {
 			return true
 		}
 	}
@@ -212,7 +213,8 @@ func renderWhen(when *condition.Condition, ctx *tpl.RenderContext) (*condition.C
 
 // renderStepFields renders a DeployStep's template-bearing fields — cmd,
 // with (recursively), check, files_gate, and timeout — into a freshly
-// resolved copy of the step. The input step's reference-typed fields (With,
+// resolved copy of the step. A `type: builtin` step's with: map keeps the
+// narrow gate even when its files_gate inherits it. The input step's reference-typed fields (With,
 // Check, FilesGate) are never mutated: With and Check are reference types
 // shared with the loaded config, so rendering in place would make
 // journal.ProjectConfigHash depend on deploy scope and a second resolve
@@ -239,7 +241,13 @@ func renderStepFields(step config.DeployStep, ctx *tpl.RenderContext) (config.De
 	}
 	out.Cmd = cmd
 
-	gateInheritsWith := step.FilesGate != nil && len(step.FilesGate.With) == 0
+	// A `type: builtin` map is excluded from the inheritance widening on
+	// purpose: it is the builtin's own parameter map first and the gate's
+	// inherited one only incidentally, and its values live in a different
+	// template space (see renderWithLeaf). Widening it would hard-fail the
+	// resolve of a documented `message`/`shell` builtin that happens to sit on
+	// a step carrying a files_gate — aborting the whole plan over a gate probe.
+	gateInheritsWith := step.FilesGate != nil && len(step.FilesGate.With) == 0 && step.Type != "builtin"
 	with, err := renderWith(step.With, ctx, step.Type == "command" || gateInheritsWith)
 	if err != nil {
 		return config.DeployStep{}, err

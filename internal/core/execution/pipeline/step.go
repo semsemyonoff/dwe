@@ -128,19 +128,20 @@ func StepCommand(step config.DeployStep, dweBin string) string {
 	}
 }
 
-// UnresolvedTemplateRefs returns the distinct ${...} references in s whose
-// head namespace is unknown to tpl.CompileVarSyntax, in first-occurrence
-// order. Resolve-time rendering (renderStepFields, called from
+// UnresolvedTemplateRefs returns the distinct ${...} references in s that
+// tpl.CompileVarSyntax does not rewrite (tpl.IsVarNamespaceRef), in
+// first-occurrence order. Resolve-time rendering (renderStepFields, called from
 // ResolvePhaseSteps before a step ever reaches display) substitutes every
-// known-head reference in a step's cmd or fails the whole resolve — see
+// namespace reference in a step's cmd or fails the whole resolve — see
 // render.go's renderIfKnown/hasKnownVarRef — so anything still matching
-// tpl.VarPattern in StepCommand's output is almost always a genuine
-// unknown-head leftover (a typo or a shell-style ${VAR}), not something the
-// plan failed to substitute.
+// tpl.VarPattern in StepCommand's output is almost always a genuine leftover (a
+// typo or a shell-style ${VAR}), not something the plan failed to substitute.
+// Head-only tokens like ${host} are reported for the same reason they are left
+// literal: they are shell variables, not references.
 //
 // Two accepted exceptions this cannot distinguish from a real leftover: a
 // resolved ${vars.x} whose substituted *value* happens to itself contain
-// literal ${...} text, and a string with no known-head reference at all
+// literal ${...} text, and a string with no namespace reference at all
 // (never entered rendering, e.g. "echo ${HOME}") — both are indistinguishable
 // from an unrendered reference by the time StepCommand runs.
 func UnresolvedTemplateRefs(s string) []string {
@@ -150,8 +151,7 @@ func UnresolvedTemplateRefs(s string) []string {
 	var out []string
 	seen := make(map[string]struct{})
 	for _, m := range tpl.VarPattern.FindAllStringSubmatch(s, -1) {
-		head, _, _ := strings.Cut(m[1], ".")
-		if tpl.IsKnownVarHead(head) {
+		if tpl.IsVarNamespaceRef(m[1]) {
 			continue
 		}
 		if _, dup := seen[m[0]]; dup {
