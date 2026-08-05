@@ -117,6 +117,18 @@ func ResolvePhaseSteps(cfg *config.DweConfig, reg *registry.Registry, phase conf
 // resolveLeafStep resolves a single leaf-style DeployStep. Returns ok=false when
 // the step's template `when:` evaluates to false (step is filtered out).
 func resolveLeafStep(cfg *config.DweConfig, reg *registry.Registry, phase config.DeployPhase, service string, step config.DeployStep, phaseRuntimeWhen *condition.Condition) (ResolvedStep, bool, error) {
+	prefix := stepPrefix(phase, service, step.Name)
+	// Render cmd/with/check/files_gate/timeout into a copy before anything
+	// else reads them — builtin.Validate, spec.Validate and parseStepTimeout
+	// below must all see the substituted values, and a RenderCommand error
+	// here fails the resolve rather than reaching sh -c as a literal
+	// "Bad substitution" at runtime.
+	rendered, err := renderStepFields(step, renderContextFor(cfg))
+	if err != nil {
+		return ResolvedStep{}, false, fmt.Errorf("step %s: rendering template: %w", prefix, err)
+	}
+	step = rendered
+
 	stepRuntimeWhen, keep, err := resolveStepWhen(cfg, step, stepPrefix(phase, service, step.Name))
 	if err != nil {
 		return ResolvedStep{}, false, err

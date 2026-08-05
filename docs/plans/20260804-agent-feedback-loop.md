@@ -403,38 +403,38 @@ testable.)*
 - Modify: `internal/core/execution/pipeline/resolve.go`
 - Modify: `internal/core/execution/pipeline/resolve_test.go`
 
-- [ ] write the helper: render `cmd`, the string leaves of `with` (recursing into nested
+- [x] write the helper: render `cmd`, the string leaves of `with` (recursing into nested
       maps and sequences) and `check`, **into a copy** — deep-copy `With`, clone `*Check`,
       never mutate `cfg` / `deployCfg` (constraint 4c)
-- [ ] gate every string on "**contains a `${…}` with a known head**" — not on
+- [x] gate every string on "**contains a `${…}` with a known head**" — not on
       `VarPattern.MatchString`, which would still drag
       `docker inspect -f '{{.State.Status}}' ${CONTAINER}` into the renderer and fail on the
       untouched Go template (constraint 4d)
-- [ ] **a `RenderCommand` error fails the resolve** (decision, not a choice): returning the
+- [x] **a `RenderCommand` error fails the resolve** (decision, not a choice): returning the
       literal instead would reproduce today's `Bad substitution` at runtime, only later and
       with a worse message, which is the opposite of this plan's purpose. A consequence to
       accept knowingly: `RenderCommand` calls `validateSnapshotScope` with
       `SnapshotScopeNone`, so `${snapshot.x}` in a pipeline step becomes a hard resolve error
       where today it reaches `sh` as a literal — correct, since it never resolved there
-- [ ] **`timeout:` and `FilesGate.With` are rendered too** (decision): `FilesGate.With` is
+- [x] **`timeout:` and `FilesGate.With` are rendered too** (decision): `FilesGate.With` is
       hashed by `StepHash`, so leaving it unrendered is an asymmetry, and a templated
       `timeout:` is otherwise a silent parse failure
-- [ ] call the helper at the very top of `resolveLeafStep` — **before** `builtin.Validate` /
+- [x] call the helper at the very top of `resolveLeafStep` — **before** `builtin.Validate` /
       `spec.Validate` (`resolve.go:134`, `:139`, `:145`) and before `parseStepTimeout`, all
       of which read the fields being rendered
-- [ ] write tests: `cmd: "git clone ${vars.source.repo} ${vars.source.dir}"` resolves
+- [x] write tests: `cmd: "git clone ${vars.source.repo} ${vars.source.dir}"` resolves
       substituted; a `type: command` step's `with: {repo: "${vars.source.repo}"}` too (Plan
       B's dependency); a nested `with` value at depth ≥ 2 renders
-- [ ] write tests: `cmd: 'echo ${HOME}'` keeps `${HOME}`;
+- [x] write tests: `cmd: 'echo ${HOME}'` keeps `${HOME}`;
       `cmd: "docker inspect -f '{{.State.Status}}' x"` resolves **unchanged**; the **mixed**
       `cmd: "docker inspect -f '{{.State.Status}}' ${CONTAINER}"` also unchanged
-- [ ] write regression tests proving **user commands are untouched**: the documented mixed
+- [x] write regression tests proving **user commands are untouched**: the documented mixed
       forms (`cmd` with `${vars.x}` + `{{ with .Params.x }}`, `files.path` with `${param.x}`
       + `{{ if … }}`, workflow `with`/`when`) render exactly as today — the gate lives on the
       pipeline path only (constraint 4d)
-- [ ] write a test: resolving the same config twice is idempotent (guards against
+- [x] write a test: resolving the same config twice is idempotent (guards against
       double-render and in-place mutation)
-- [ ] run tests — must pass before task 2b
+- [x] run tests — must pass before task 2b
 
 ### Task 2b: Extend rendering to all three `when` scopes
 
