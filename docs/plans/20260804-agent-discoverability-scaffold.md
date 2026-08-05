@@ -413,16 +413,25 @@ string, since `spec.Builtin` (`spec/spec.go:42`) offers only the per-invocation
 - Modify: `internal/cli/validate/validate.go`
 - Modify: corresponding `*_test.go`
 
-- [ ] when `validate` emits a long human table, add a single trailing stderr line naming
+- [x] when `validate` emits a long human table, add a single trailing stderr line naming
       `--level error` / `--quiet`, reusing the established notice shape
       (`render.NewWriter(cmd.ErrOrStderr()).Info(...)` with an early return when
       `flags.Output == "json"`, as `cmdctx.EmitDefaultNotice` / `emitNoSearchMatches` do) —
-      not a new writer
-- [ ] define "long" as a concrete threshold (diagnostic count or rendered line count), so
-      the negative test below is actually testable
-- [ ] write tests: hint appears above the threshold on the human path, never on stdout,
-      never in JSON, and not below the threshold
-- [ ] run tests — must pass before task 4
+      not a new writer — `emitFilterHint`, emitted after the summary line
+- [x] define "long" as a concrete threshold (diagnostic count or rendered line count), so
+      the negative test below is actually testable — `filterHintThreshold = 20` **rendered
+      rows** (`len(rows)`, i.e. post-`--level`/post-`--quiet`), decided in `shouldEmitFilterHint`
+      — ➕ two suppressions beyond the threshold, both load-bearing: the hint is silent when
+      the user already passed `--quiet`/`--level` (they know the flags), and when every
+      displayed row is already an error (`rows > errors` gate) — there both flags would
+      remove nothing and the hint would be false advice. Measured: the emptiest possible
+      project renders 19 rows on a full run, so the threshold deliberately sits just above
+      "nothing is configured yet"
+- [x] write tests: hint appears above the threshold on the human path, never on stdout,
+      never in JSON, and not below the threshold — `TestShouldEmitFilterHint` (table-driven
+      decision rule) plus four CLI-path tests over a fixture inflated with manifest-less
+      snapshot dirs
+- [x] run tests — must pass before task 4 — `make test` and `make lint` both clean
 
 *(Scope note: the earlier draft carried an open-ended "audit for one or two other high-cost
 misses" checkbox. Removed — an unbounded scan inside a task violates the one-logical-unit

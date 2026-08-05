@@ -1218,3 +1218,118 @@ func TestValidateFullRunIncludesTestsDomain(t *testing.T) {
 	}
 	require.Len(t, testsScopes, 1, "full run must include the tests domain rows")
 }
+
+// TestShouldEmitFilterHint pins the decision rule of the point-of-need
+// --level/--quiet hint. The threshold is a concrete row count so both the
+// positive and the negative case are testable.
+func TestShouldEmitFilterHint(t *testing.T) {
+	tests := []struct {
+		name     string
+		rows     int
+		errors   int
+		quiet    bool
+		levelRaw string
+		want     bool
+	}{
+		{name: "long run with narrowable rows", rows: filterHintThreshold + 1, want: true},
+		{name: "exactly at the threshold stays silent", rows: filterHintThreshold},
+		{name: "short run stays silent", rows: 3},
+		{name: "no rows at all", rows: 0},
+		{name: "already quiet", rows: filterHintThreshold + 10, quiet: true},
+		{name: "already filtered by level", rows: filterHintThreshold + 10, levelRaw: "error"},
+		{name: "level with surrounding space still counts as filtering", rows: filterHintThreshold + 10, levelRaw: "  error  "},
+		{name: "all rows are errors so nothing to narrow", rows: filterHintThreshold + 5, errors: filterHintThreshold + 5},
+		{name: "one non-error row is enough to narrow", rows: filterHintThreshold + 5, errors: filterHintThreshold + 4, want: true},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := shouldEmitFilterHint(tt.rows, tt.errors, tt.quiet, tt.levelRaw)
+			require.Equal(t, tt.want, got)
+		})
+	}
+}
+
+// writeLongValidateFixture builds a project whose unscoped `dwe validate` run
+// renders comfortably more than filterHintThreshold rows: the base domains
+// already contribute ~19 informational rows, and each manifest-less snapshot
+// directory adds one more.
+func writeLongValidateFixture(t *testing.T) string {
+	t.Helper()
+	tmpDir := t.TempDir()
+	workspacePath := filepath.Join(tmpDir, "workspace.yml")
+	require.NoError(t, os.WriteFile(workspacePath, []byte("schema_version: \"2\"\n"), 0o644))
+	for i := range 10 {
+		require.NoError(t, os.MkdirAll(filepath.Join(tmpDir, "snapshots", fmt.Sprintf("s%d", i)), 0o755))
+	}
+	return workspacePath
+}
+
+// runValidateTextCmd runs the validate tree in human mode and returns the two
+// streams separately, so a test can assert the hint never contaminates stdout.
+func runValidateTextCmd(t *testing.T, cfgPath string, args ...string) (stdout, stderr string) {
+	t.Helper()
+	flags := &cmdctx.RootFlags{ConfigPath: cfgPath}
+	cmd := NewCmd("", flags)
+	var outBuf, errBuf bytes.Buffer
+	cmd.SetOut(&outBuf)
+	cmd.SetErr(&errBuf)
+	cmd.SetArgs(args)
+	_ = cmd.Execute()
+	return outBuf.String(), errBuf.String()
+}
+
+// TestValidateFilterHint_LongRunEmitsToStderrOnly: above the threshold the hint
+// names both flags, and it goes to stderr — stdout stays the parseable surface.
+func TestValidateFilterHint_LongRunEmitsToStderrOnly(t *testing.T) {
+	workspacePath := writeLongValidateFixture(t)
+
+	stdout, stderr := runValidateTextCmd(t, workspacePath)
+
+	require.Contains(t, stderr, "--level")
+	require.Contains(t, stderr, "--quiet")
+	require.NotContains(t, stdout, "--level", "the hint must never reach stdout")
+	require.NotContains(t, stdout, "--quiet", "the hint must never reach stdout")
+}
+
+// TestValidateFilterHint_ShortRunSilent: a scoped run renders a single row, well
+// below the threshold, so no hint is emitted.
+func TestValidateFilterHint_ShortRunSilent(t *testing.T) {
+	workspacePath := writeLongValidateFixture(t)
+
+	_, stderr := runValidateTextCmd(t, workspacePath, "commands")
+
+	require.NotContains(t, stderr, "--level")
+	require.NotContains(t, stderr, "--quiet")
+}
+
+// TestValidateFilterHint_SuppressedWhenAlreadyFiltering: the hint is
+// point-of-need advice, so a user who already passed one of the flags does not
+// get told about them.
+func TestValidateFilterHint_SuppressedWhenAlreadyFiltering(t *testing.T) {
+	workspacePath := writeLongValidateFixture(t)
+
+	for _, args := range [][]string{
+		{"--quiet"},
+		{"--level", "ok,info,warning,error"},
+	} {
+		t.Run(strings.Join(args, " "), func(t *testing.T) {
+			_, stderr := runValidateTextCmd(t, workspacePath, args...)
+			require.NotContains(t, stderr, "Narrow the output")
+		})
+	}
+}
+
+// TestValidateFilterHint_SuppressedInJSON: JSON consumers filter the array
+// themselves, and a stderr line would be noise for them.
+func TestValidateFilterHint_SuppressedInJSON(t *testing.T) {
+	workspacePath := writeLongValidateFixture(t)
+
+	stdout, stderr := runValidateJSONCmd(t, workspacePath)
+
+	require.NotContains(t, stderr, "Narrow the output")
+	var got validateJSON
+	require.NoError(t, json.Unmarshal([]byte(stdout), &got))
+	require.Greater(t, len(got.Diagnostics), filterHintThreshold,
+		"fixture must exceed the threshold or the JSON suppression is untested")
+}

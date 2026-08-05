@@ -28,6 +28,7 @@ import (
 	valtests "github.com/semsemyonoff/dwe/internal/core/validate/tests"
 	"github.com/semsemyonoff/dwe/internal/core/workflow/setup"
 	"github.com/semsemyonoff/dwe/internal/shared/i18n"
+	sharedrender "github.com/semsemyonoff/dwe/internal/shared/render"
 
 	"github.com/spf13/cobra"
 )
@@ -124,6 +125,49 @@ func completeLevels(_ *cobra.Command, _ []string, toComplete string) ([]string, 
 		}
 	}
 	return out, cobra.ShellCompDirectiveNoFileComp | cobra.ShellCompDirectiveNoSpace
+}
+
+// filterHintThreshold is the number of rendered diagnostic rows above which a
+// run counts as "long" and earns the trailing --level/--quiet hint. Roughly one
+// screenful: below it the table is readable as-is and the hint is pure noise.
+const filterHintThreshold = 20
+
+// shouldEmitFilterHint decides whether a human-mode run is long enough — and
+// narrowable enough — to warrant naming the filter flags.
+//
+// Two suppressions beyond the threshold itself:
+//   - the user is already filtering (--quiet or --level), so they know the flags;
+//   - every displayed row is already an error, in which case both flags would
+//     remove nothing and the hint would be false advice.
+func shouldEmitFilterHint(rows, errors int, quiet bool, levelRaw string) bool {
+	if quiet || strings.TrimSpace(levelRaw) != "" {
+		return false
+	}
+	if rows <= filterHintThreshold {
+		return false
+	}
+	return rows > errors
+}
+
+// emitFilterHint writes a single info line to stderr after a long diagnostics
+// table, naming the two flags that shrink it. The output-narrowing flags have
+// existed since May and were used zero times across the sessions this hint was
+// added for — a table that scrolls past a screen is exactly the point of need.
+//
+// Same shape and constraints as cmdctx.EmitDefaultNotice: stderr only (stdout
+// stays the parseable surface), no-op in JSON mode where the consumer filters
+// the array itself.
+func emitFilterHint(cmd *cobra.Command, flags *cmdctx.RootFlags, rows int, summary validate.Summary, quiet bool, levelRaw string) {
+	if flags.Output == "json" {
+		return
+	}
+	if !shouldEmitFilterHint(rows, summary.Errors, quiet, levelRaw) {
+		return
+	}
+	sharedrender.NewWriter(cmd.ErrOrStderr()).Info(fmt.Sprintf(
+		"Showing %d diagnostics. Narrow the output with --level error (or --level error,warning), or --quiet to drop the ok/info rows.",
+		rows,
+	))
 }
 
 // severityString converts a validate.Severity to its JSON string representation.
@@ -573,6 +617,8 @@ func runValidate(cmd *cobra.Command, flags *cmdctx.RootFlags, strict, quiet bool
 		summaryLine += " (main config did not load; some validations skipped)"
 	}
 	_, _ = fmt.Fprintln(cmd.OutOrStdout(), summaryLine)
+
+	emitFilterHint(cmd, flags, len(rows), summary, quiet, levelRaw)
 
 	// Check if validation failed.
 	if validate.ExitCode(summary, strict) != 0 {
