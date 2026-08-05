@@ -730,10 +730,13 @@ func (r *Runner) runSteps(
 	// to have been resolved first.
 	_ = reg.ApplyVisibility(copyCfg, copyRoot)
 
-	if err := RenderSteps(scn.Steps, copyCfg); err != nil {
-		return "", fmt.Errorf("rendering scenario steps: %w", err)
-	}
-
+	// ${...} rendering is ResolvePhaseSteps' job and happens exactly once, in
+	// resolveLeafStep, before builtin.Validate/spec.Validate read the step. A
+	// scenario-local pre-pass here would render a second time: rendering is not
+	// idempotent, so a var holding another ${...} reference would expand twice
+	// and a var holding a literal `{{` would be re-parsed as a Go template — in
+	// both cases the scenario would test something the deploy pipeline never
+	// runs.
 	phase := config.DeployPhase{Name: "tests", Steps: scn.Steps}
 	resolved, err := pipeline.ResolvePhaseSteps(copyCfg, reg, phase, "")
 	if err != nil {
