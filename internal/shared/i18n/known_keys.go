@@ -27,6 +27,7 @@ var KnownUIKeys = []string{
 	"docs.property.workdir",
 	"docs.property.builtin",
 	"docs.property.compose_args",
+	"docs.property.argv_append_from",
 	"docs.property.script",
 	"docs.workflow.parallel",
 	"docs.workflow.sub_steps",

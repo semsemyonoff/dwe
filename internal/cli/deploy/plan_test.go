@@ -527,3 +527,83 @@ func TestRunDeployPlan_UserDeployYMLNoInfoLine(t *testing.T) {
 		t.Errorf("default step 'docker up --wait' should not appear when user deploy.yml is present")
 	}
 }
+
+// TestRunDeployPlan_JSONMode_ParallelGroup covers the buildPlanStepJSON
+// recursion: a `parallel:` group emits its own object with the group knobs and
+// an ordered nested `steps[]`, and carries no `cmd` of its own (the group is a
+// container, not a command). Nothing else in this file builds a plan with a
+// parallel group, so the whole recursion could be dropped and stay green.
+func TestRunDeployPlan_JSONMode_ParallelGroup(t *testing.T) {
+	dir := makeMinimalProject(t)
+
+	workspaceDir := filepath.Join(dir, "workspace")
+	if err := os.MkdirAll(workspaceDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	userDeploy := "phases:\n" +
+		"  - name: custom\n" +
+		"    steps:\n" +
+		"      - name: fanout\n" +
+		"        parallel:\n" +
+		"          max_concurrent: 3\n" +
+		"          fail_fast: true\n" +
+		"          steps:\n" +
+		"            - name: sub-a\n" +
+		"              type: shell\n" +
+		"              cmd: echo a\n" +
+		"            - name: sub-b\n" +
+		"              type: shell\n" +
+		"              cmd: echo b\n"
+	if err := os.WriteFile(filepath.Join(workspaceDir, "deploy.yml"), []byte(userDeploy), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	flags := &cmdctx.RootFlags{ConfigPath: filepath.Join(dir, "workspace.yml"), Output: "json"}
+	cmd := &cobra.Command{}
+	var outBuf bytes.Buffer
+	cmd.SetOut(&outBuf)
+
+	if err := runDeployPlan(context.Background(), cmd, flags, deployPlanOpts{}); err != nil {
+		t.Fatalf("runDeployPlan: %v", err)
+	}
+
+	var payload planJSON
+	if err := json.Unmarshal(outBuf.Bytes(), &payload); err != nil {
+		t.Fatalf("stdout is not valid JSON: %v", err)
+	}
+
+	var group *planStepJSON
+	for i := range payload.Phases {
+		for j := range payload.Phases[i].Steps {
+			if payload.Phases[i].Steps[j].Name == "fanout" {
+				group = &payload.Phases[i].Steps[j]
+			}
+		}
+	}
+	if group == nil {
+		t.Fatalf("parallel step not found in payload: %+v", payload)
+	}
+	if group.Parallel == nil {
+		t.Fatal("parallel group emitted no `parallel` object")
+	}
+	if group.Cmd != "" {
+		t.Errorf("Cmd = %q, want empty for a parallel group", group.Cmd)
+	}
+	// The payload carries the EFFECTIVE value the executor will use, not the
+	// authored one: resolve clamps max_concurrent to the number of sub-steps.
+	if group.Parallel.MaxConcurrent != 2 {
+		t.Errorf("MaxConcurrent = %d, want 2 (authored 3, clamped to 2 sub-steps)", group.Parallel.MaxConcurrent)
+	}
+	if !group.Parallel.FailFast {
+		t.Error("FailFast = false, want true")
+	}
+	if len(group.Parallel.Steps) != 2 {
+		t.Fatalf("nested steps = %d, want 2: %+v", len(group.Parallel.Steps), group.Parallel.Steps)
+	}
+	for i, want := range []struct{ name, cmd string }{{"sub-a", "echo a"}, {"sub-b", "echo b"}} {
+		got := group.Parallel.Steps[i]
+		if got.Name != want.name || got.Cmd != want.cmd {
+			t.Errorf("nested step %d = {%q, %q}, want {%q, %q}", i, got.Name, got.Cmd, want.name, want.cmd)
+		}
+	}
+}

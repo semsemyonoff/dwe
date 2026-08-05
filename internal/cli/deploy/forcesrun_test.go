@@ -3,6 +3,7 @@ package deploy
 import (
 	"testing"
 
+	"github.com/semsemyonoff/dwe/internal/core/execution/condition"
 	"github.com/semsemyonoff/dwe/internal/core/execution/filesgate"
 	"github.com/semsemyonoff/dwe/internal/core/execution/pipeline"
 	"github.com/semsemyonoff/dwe/internal/core/project/config"
@@ -20,6 +21,32 @@ func predicateStep(name string) pipeline.ResolvedStep {
 		Cmd:  "file_exists",
 		With: map[string]any{"path": "x"},
 	}}
+}
+
+// autoCheckStep returns a step carrying the check a `check: auto` directive
+// resolves to — the shape ResolvePhaseSteps hands the deploy gate.
+func autoCheckStep(t *testing.T, name string) pipeline.ResolvedStep {
+	t.Helper()
+	when := &condition.Condition{Type: condition.TypeShell, Cmd: "[ ! -e src/.git ]"}
+	check, err := pipeline.ResolveAutoCheck(when)
+	if err != nil {
+		t.Fatalf("ResolveAutoCheck: %v", err)
+	}
+	rs := shellStep(name)
+	rs.Step.When = when
+	rs.RuntimeWhen = when
+	rs.Step.Check = check
+	return rs
+}
+
+// whenOnlyStep returns a step with a when: and deliberately no check: — the
+// shape that must keep its journal skip.
+func whenOnlyStep(name string) pipeline.ResolvedStep {
+	when := &condition.Condition{Type: condition.TypeShell, Cmd: "[ ! -e .seeded ]"}
+	rs := shellStep(name)
+	rs.Step.When = when
+	rs.RuntimeWhen = when
+	return rs
 }
 
 func TestHasAlwaysRunSteps(t *testing.T) {
@@ -56,6 +83,24 @@ func TestHasAlwaysRunSteps(t *testing.T) {
 			name:  "files_gate step defeats the early gate",
 			steps: []pipeline.ResolvedStep{gateStep},
 			want:  true,
+		},
+		{
+			name:  "auto check step defeats the early gate",
+			steps: []pipeline.ResolvedStep{autoCheckStep(t, "clone")},
+			want:  true,
+		},
+		{
+			name:  "when: without check: stays early-gated",
+			steps: []pipeline.ResolvedStep{whenOnlyStep("seed")},
+			want:  false,
+		},
+		{
+			name: "auto check inside a parallel group defeats the early gate",
+			steps: []pipeline.ResolvedStep{{
+				Step:     config.DeployStep{Name: "group"},
+				Parallel: &pipeline.ResolvedParallel{Steps: []pipeline.ResolvedStep{shellStep("a"), autoCheckStep(t, "clone")}},
+			}},
+			want: true,
 		},
 		{
 			name: "predicate body inside a parallel group defeats the early gate",
@@ -124,6 +169,12 @@ func TestMakeSkipDecider_PredicateBodyRerunsOnSecondDeploy(t *testing.T) {
 	action := shellStep("build")
 	action.Phase = config.DeployPhase{Name: phaseName}
 
+	auto := autoCheckStep(t, "clone")
+	auto.Phase = config.DeployPhase{Name: phaseName}
+
+	whenOnly := whenOnlyStep("seed")
+	whenOnly.Phase = config.DeployPhase{Name: phaseName}
+
 	tests := []struct {
 		name string
 		rs   pipeline.ResolvedStep
@@ -131,6 +182,10 @@ func TestMakeSkipDecider_PredicateBodyRerunsOnSecondDeploy(t *testing.T) {
 	}{
 		{"journaled predicate body re-runs", predicate, journal.Run},
 		{"journaled action step skips", action, journal.Skip},
+		// hasCheck → Run treats a derived auto check exactly like a written
+		// one: the check is what re-validates idempotency, so it must run.
+		{"journaled auto check step re-runs", auto, journal.Run},
+		{"journaled when-only step skips", whenOnly, journal.Skip},
 	}
 
 	for _, tt := range tests {

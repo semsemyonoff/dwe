@@ -3,6 +3,7 @@ package journal
 import (
 	"testing"
 
+	"github.com/semsemyonoff/dwe/internal/core/execution/condition"
 	"github.com/semsemyonoff/dwe/internal/core/execution/filesgate"
 	"github.com/semsemyonoff/dwe/internal/core/project/config"
 
@@ -386,6 +387,56 @@ func TestStepHashNilFilesGateEqualsActionHash(t *testing.T) {
 	actionHash := ActionHash(step.Action())
 
 	assert.Equal(t, stepHash, actionHash, "StepHash with nil FilesGate should equal ActionHash(Action)")
+}
+
+// TestConfigHashAutoCheckMigration pins the honest cost of migrating a step
+// from an explicitly written inverse check to `check: auto`. StepHash covers
+// the action and files_gate only, so per-step hashes do not move — but
+// deployStepToMap feeds the raw check value into phasesToMap and therefore
+// into Service/ProjectConfigHash, where makeSkipDecider turns any mismatch
+// into journal.Run for every step in scope. Migration costs exactly one
+// re-run, and this test is what makes that a decision rather than a surprise.
+func TestConfigHashAutoCheckMigration(t *testing.T) {
+	stepWith := func(check *config.Action) config.DeployStep {
+		return config.DeployStep{
+			Name:  "clone",
+			Type:  "shell",
+			Cmd:   "git clone repo src",
+			When:  &condition.Condition{Type: condition.TypeShell, Cmd: "[ ! -e src/.git ]"},
+			Check: check,
+		}
+	}
+	// The hand-written inverse the auto form replaces, byte-for-byte as
+	// pipeline.ResolveAutoCheck would build it.
+	explicit := stepWith(&config.Action{
+		Type: "builtin",
+		Cmd:  "shell",
+		With: map[string]any{"cmd": "! (\n[ ! -e src/.git ]\n)", "timeout": "0"},
+	})
+	auto := stepWith(&config.Action{Type: config.AutoCheckType})
+	none := stepWith(nil)
+
+	// Per-step hashes are untouched: StepHash never reads Check.
+	assert.Equal(t, StepHash(explicit), StepHash(auto), "StepHash must not depend on check:")
+	assert.Equal(t, StepHash(explicit), StepHash(none), "StepHash must not depend on check:")
+
+	hashOf := func(step config.DeployStep) string {
+		return ProjectConfigHash(
+			&config.DweConfig{Services: map[string]config.ServiceConfig{"main": {Type: "app", Container: "main"}}},
+			&config.ProjectDeployConfig{Phases: []config.DeployPhase{{Name: "init", Steps: []config.DeployStep{step}}}},
+			map[string]*config.ServiceDeployConfig{"main": nil},
+			[]string{"main"},
+		)
+	}
+
+	assert.NotEqual(t, hashOf(explicit), hashOf(auto),
+		"migrating an explicit inverse check to `check: auto` must shift the project config hash (one-time re-run)")
+	assert.NotEqual(t, hashOf(none), hashOf(auto),
+		"adding `check: auto` to a step that had no check must shift the project config hash")
+	// The sentinel is hashed as itself, not as its derived form: the raw
+	// config is what ProjectConfigHash sees, and it must hash stably.
+	assert.Equal(t, hashOf(auto), hashOf(stepWith(&config.Action{Type: config.AutoCheckType})),
+		"the auto sentinel must hash stably")
 }
 
 // TestStepHashFilesGateChange verifies that changing FilesGate.State changes the hash.

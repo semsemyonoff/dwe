@@ -47,8 +47,8 @@ func PrintPlanShell(steps []pipeline.ResolvedStep, w io.Writer, dweBin string) {
 		if rs.Step.Name == ImplicitEnvStep.Name {
 			_, _ = fmt.Fprintln(w, ". .env")
 		}
-		if rs.Step.Check != nil {
-			_, _ = fmt.Fprintf(w, "# check: %s\n", pipeline.FormatAction(rs.Step.Check))
+		if check := rs.DisplayCheck(); check != "" {
+			_, _ = fmt.Fprintf(w, "# check: %s\n", check)
 		}
 	}
 }

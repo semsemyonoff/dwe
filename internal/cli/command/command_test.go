@@ -1473,3 +1473,42 @@ func TestMergeAnswers_SkippedFieldPreservesDefault(t *testing.T) {
 		t.Errorf("expected env=staging preserved from prev, got %q", out["env"])
 	}
 }
+
+func TestPrintCommandInspect_argvAppendFrom(t *testing.T) {
+	for _, tc := range []struct {
+		name string
+		def  *usercommands.CommandDef
+	}{
+		{
+			name: "shell",
+			def: &usercommands.CommandDef{
+				ID:             "quality.staged",
+				Type:           usercommands.CommandTypeShell,
+				Argv:           []string{"ruff", "check"},
+				ArgvAppendFrom: "git diff --name-only --cached",
+			},
+		},
+		{
+			name: "service_exec",
+			def: &usercommands.CommandDef{
+				ID:             "app.staged",
+				Type:           usercommands.CommandTypeServiceExec,
+				Service:        "app",
+				Argv:           []string{"ruff", "check"},
+				ArgvAppendFrom: "git diff --name-only --cached",
+			},
+		},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			buf := &testBuf{}
+			printInspect(buf, tc.def, nil, nil, i18n.NopTranslator{}, "", "")
+			out := buf.String()
+			if !contains(out, "argv_append_from") {
+				t.Errorf("output should name the field:\n%s", out)
+			}
+			if !contains(out, "git diff --name-only --cached") {
+				t.Errorf("output should contain the expression:\n%s", out)
+			}
+		})
+	}
+}

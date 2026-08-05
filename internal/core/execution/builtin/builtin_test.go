@@ -12,6 +12,7 @@ import (
 	"github.com/semsemyonoff/dwe/internal/core/execution/builtin/fs"
 	"github.com/semsemyonoff/dwe/internal/core/execution/builtin/interaction"
 	"github.com/semsemyonoff/dwe/internal/core/execution/builtin/services"
+	"github.com/semsemyonoff/dwe/internal/core/execution/builtin/source"
 	"github.com/semsemyonoff/dwe/internal/core/execution/builtin/spec"
 	"github.com/semsemyonoff/dwe/internal/core/project/config"
 	"github.com/semsemyonoff/dwe/internal/shared/render"
@@ -139,6 +140,10 @@ func TestKindCategorization(t *testing.T) {
 		{"docker_remove_project_volumes", KindAction, true, true, false},
 		{"docker_wait_healthy", KindAction, true, true, false},
 		{"remove_paths", KindAction, true, true, false},
+		// source_clone mutates, but kindAllowed deliberately permits actions in
+		// CtxPredicate — so it IS reachable from check:. The boundary that holds
+		// is validate.yml's own allowlist (see validate/checks).
+		{"source_clone", KindAction, true, true, false},
 		// KindPredicate: check: (CtxPredicate) AND step body (CtxUserYAML) —
 		// a predicate body is an assertion (false fails the step)
 		{"containers_running", KindPredicate, true, true, false},
@@ -327,6 +332,8 @@ var allBuiltinNames = []string{
 	// interaction/
 	"confirm",
 	"message",
+	// source/
+	"source_clone",
 }
 
 // TestRegistryHasAllNames asserts the registry contains exactly the expected
@@ -363,6 +370,7 @@ func TestNoDuplicateRegistryNames(t *testing.T) {
 		{"fs", fs.Builtins()},
 		{"env", env.Builtins()},
 		{"interaction", interaction.Builtins()},
+		{"source", source.Builtins()},
 	}
 	owner := map[string]string{}
 	for _, src := range sources {

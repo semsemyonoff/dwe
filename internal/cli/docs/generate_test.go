@@ -367,3 +367,57 @@ func buildTestRegistryForDocs(t *testing.T) *usercommands.Registry {
 	}
 	return reg
 }
+
+// TestWriteCommandMarkdown_ArgvAppendFrom: the generated command docs are the
+// other "what does this command do" surface, so a computed argv must show up
+// there for both argv-building command families.
+func TestWriteCommandMarkdown_ArgvAppendFrom(t *testing.T) {
+	store, err := i18n.Load("")
+	if err != nil {
+		t.Fatalf("failed to load i18n store: %v", err)
+	}
+
+	for _, tc := range []struct {
+		name string
+		def  *usercommands.CommandDef
+	}{
+		{
+			name: "shell",
+			def: &usercommands.CommandDef{
+				ID:             "quality.staged",
+				Group:          "quality",
+				LocalName:      "staged",
+				Type:           usercommands.CommandTypeShell,
+				Argv:           []string{"ruff", "check"},
+				ArgvAppendFrom: "git diff --name-only --cached",
+			},
+		},
+		{
+			name: "service_exec",
+			def: &usercommands.CommandDef{
+				ID:             "app.staged",
+				Group:          "app",
+				LocalName:      "staged",
+				Type:           usercommands.CommandTypeServiceExec,
+				Service:        "app",
+				Argv:           []string{"ruff", "check"},
+				ArgvAppendFrom: "git diff --name-only --cached",
+			},
+		},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			dir := t.TempDir()
+			if err := writeCommandMarkdown(tc.def, dir, usercommands.NewEmptyRegistry(), store, "en"); err != nil {
+				t.Fatalf("writeCommandMarkdown: %v", err)
+			}
+			data, err := os.ReadFile(filepath.Join(dir, "staged.md"))
+			if err != nil {
+				t.Fatalf("staged.md not written: %v", err)
+			}
+			content := string(data)
+			if !strings.Contains(content, "**Argv append from:** `git diff --name-only --cached`") {
+				t.Errorf("argv_append_from not rendered:\n%s", content)
+			}
+		})
+	}
+}

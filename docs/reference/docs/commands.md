@@ -96,6 +96,7 @@ dwe docs search <query> [--source all|dwe|project] [--lang <code>] [--limit <n>]
 **Output:**
 - **`text` (default):** Tab-separated, one row per matching section: `<source>\t<path>#<anchor>\t<count>`. Sections are sorted by match count (descending), then by path. Lead text under the H1 (before the first H2) is reported with an empty anchor.
 - **`--output json`:** A JSON array of `{source, path, anchor, count}` records (path and anchor are split; anchor is empty for lead text under the H1 before the first H2/H3).
+- **Zero matches:** stdout stays empty (text) or `[]` (JSON) and the exit code stays 0. In text mode a one-line notice goes to **stderr** naming the query, the active `--source` and the resolved locale — the two filters that most often produce a false empty result. JSON mode emits no notice, so a piped consumer sees byte-identical output either way.
 
 **Examples:**
 ```bash

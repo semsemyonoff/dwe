@@ -1,4 +1,4 @@
-> Translated from: reference/config/conditions.md @ 0e0487f140ed
+> Translated from: reference/config/conditions.md @ 89a0f0e6c5e2
 
 # Условия и действия
 
@@ -12,6 +12,7 @@
   - [`type: shell` — shell-команды](#type-shell--shell-команды)
   - [`type: template` — Go-шаблоны](#type-template--go-шаблоны)
 - [Типизированные действия (`check:` и тела шагов)](#типизированные-действия-check-и-тела-шагов)
+- [`check: auto` — инверсия `when:`](#check-auto--инверсия-when)
 - [Два регистра `type: builtin`](#два-регистра-type-builtin)
 - [Условия workflow'ов (строковые, отдельная система)](#условия-workflowов-строковые-отдельная-система)
 - [Связанная документация](#связанная-документация)
@@ -28,6 +29,7 @@
 Шаги пайплайна (типизированные):
   when: { type: builtin|shell|template, cmd: ..., expr: ... }
   check: { type: shell|dwe|command|builtin, cmd: ..., with: ... }
+  check: auto                                  # логическая инверсия when:
 
 Шаги workflow'а (строковые — отдельные, здесь не покрываются):
   when: "dir-empty path" | "{{ ... }}" | "cmd: ..."
@@ -126,6 +128,29 @@ Render-контекст включает полную разрешённую к�
 | `builtin` | Engine-билтин | `type: builtin, cmd: "service_configs_check"` |
 
 Полный справочник действий и семантику падений `check:` под `continue_on_error` см. в [deploy/conditions.md](deploy/conditions.md).
+
+## `check: auto` — инверсия `when:`
+
+Кроме формы-маппинга `check:` принимает один скаляр: `auto`. Он разворачивается в логическую инверсию собственного `when:` шага — для частого случая, когда «надо ли запускать» и «не сделано ли уже» — это один и тот же предикат, прочитанный в противоположных направлениях.
+
+```yaml
+- name: clone-source
+  type: shell
+  cmd: "git clone ${vars.source.repo} services/backend/src"
+  when:
+    type: shell
+    cmd: "[ ! -e services/backend/src/.git ]"
+  check: auto          # ≡ check: {type: builtin, cmd: shell, with: {cmd: "! ( [ ! -e … ] )"}}
+```
+
+**Работает только с `when: {type: shell}`.** Две другие формы — ошибки времени загрузки:
+
+- **`type: builtin`** — два неймспейса `type: builtin` ниже **не пересекаются**. `dir-empty` — это предикат, и в регистре действий, из которого черпает `check:`, у него нет пары, поэтому нет действия, способного выразить «НЕ `dir-empty foo`». (Инверсия подстановкой «парного противоположного» предиката тоже была бы неверна на краевых случаях: `dir-empty` и `dir-not-empty` не дополняют друг друга для отсутствующего каталога.)
+- **`type: template`** — template-условия вычисляются на этапе плана, и ложное условие полностью удаляет шаг. Значит любой шаг, доживший до исполнения, имел `when == true`, его инверсия всегда ложна, и выведенный check всегда падал бы.
+
+`check: auto` без `when:` тоже отвергается — инвертировать нечего. Инверсия — это логическое отрицание отрендеренной команды (`! (\n<cmd>\n)`), а не текстовая правка над ней.
+
+Детали разрешения (shell, рабочий каталог, таймаут) и последствия для журнала/хеша конфигурации см. в [deploy/conditions.md](deploy/conditions.md#check-auto-инверсия-when).
 
 ## Два регистра `type: builtin`
 

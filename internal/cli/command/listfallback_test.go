@@ -59,6 +59,57 @@ func runBare(t *testing.T, flags *cmdctx.RootFlags, args []string) (string, erro
 	return out.String(), err
 }
 
+// TestCommandsGroupPrefix_nonTTY_refusesPassThrough closes the other half of
+// the silent-discard hole commandIDArgs' `near == 0` guard opens on.
+//
+// A group prefix is not an exact id, so the run route reaches the selector; the
+// non-interactive fallback (CI pipe, or any container — the bridge daemon
+// force-sets DWE_NONINTERACTIVE=1) used to print the command list and return
+// nil, dropping the caller's arguments and exiting 0.
+//
+// This goes through cobra's own parse rather than calling RunE directly:
+// ArgsLenAtDash() is only populated by a real Execute, and it is the split the
+// whole guard depends on.
+func TestCommandsGroupPrefix_nonTTY_refusesPassThrough(t *testing.T) {
+	cfgPath := setupListProject(t)
+	stubInteractive(t, false)
+
+	cmd := NewCmd("", &cmdctx.RootFlags{ConfigPath: cfgPath})
+	cmd.SetContext(context.Background())
+	var out bytes.Buffer
+	cmd.SetOut(&out)
+	cmd.SetErr(&out)
+	cmd.SetArgs([]string{"db", "--", "--run", "x.ts"})
+
+	err := cmd.Execute()
+	if err == nil {
+		t.Fatal("a group prefix with pass-through args must fail, not list and exit 0")
+	}
+	for _, want := range []string{"exact command id", `"db"`, "--run x.ts", "dwe commands list db"} {
+		if !strings.Contains(err.Error(), want) {
+			t.Errorf("error %q does not mention %q", err.Error(), want)
+		}
+	}
+	if strings.Contains(out.String(), "db.up") {
+		t.Errorf("the command list must not be printed instead of the error:\n%s", out.String())
+	}
+}
+
+// A group prefix WITHOUT pass-through args keeps listing — the guard must not
+// break bare `dwe cmd <group>` in CI.
+func TestCommandsGroupPrefix_nonTTY_stillListsWithoutPassThrough(t *testing.T) {
+	cfgPath := setupListProject(t)
+	stubInteractive(t, false)
+
+	out, err := runBare(t, &cmdctx.RootFlags{ConfigPath: cfgPath}, []string{"db"})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if !strings.Contains(out, "db.up") {
+		t.Errorf("expected the group listing, got:\n%s", out)
+	}
+}
+
 func TestCommandsBare_nonTTY_printsList(t *testing.T) {
 	cfgPath := setupListProject(t)
 	stubInteractive(t, false)

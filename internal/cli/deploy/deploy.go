@@ -147,9 +147,7 @@ func buildPlanStepJSON(rs pipeline.ResolvedStep, dweBin string) planStepJSON {
 	if rs.FilesGate != nil {
 		step.FilesGate = pipeline.FormatFilesGate(rs.FilesGate)
 	}
-	if rs.Step.Check != nil {
-		step.Check = pipeline.FormatAction(rs.Step.Check)
-	}
+	step.Check = rs.DisplayCheck()
 
 	if rs.Parallel != nil {
 		subSteps := make([]planStepJSON, 0, len(rs.Parallel.Steps))

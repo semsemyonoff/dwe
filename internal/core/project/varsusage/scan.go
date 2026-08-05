@@ -103,6 +103,11 @@ var (
 		// silently falling back to probing the step's own cmd.
 		"timeout": true,
 		"command": true,
+		// argv_append_from is a command-file scalar rendered through the same
+		// ${...} substrate as cmd (runio.RenderArgvAppendFrom). A ${vars.typo}
+		// there renders to "" and silently changes which items the expression
+		// computes, so it has to be enumerated like every other rendered field.
+		"argv_append_from": true,
 	}
 	// templatedMapKeys are mappings whose every value scalar is templated.
 	templatedMapKeys = map[string]bool{

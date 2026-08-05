@@ -61,13 +61,17 @@ The `env.*` probes are: `env.docker_bin`, `env.docker_daemon`, `env.docker_compo
 
 `config.template_refs` warns on a `${head.path}` reference whose head is a permitted merged-config root key but the remaining path does not resolve — almost always a typo, since `vars:` is the one root key with fully free-form content (`${vars.opechatka}` when only `vars.source.repo` was declared). The head is checked against the root-key allowlist, not against what the project actually declared, so `${vars.source.repo}` in a project with no `vars:` block at all is reported too. It is deliberately silent on an unrecognized head (`${HOME}`, a stray dollar sign) and on the special namespaces that never live in `Raw` (`param`, `context`, `files`, `host`, `snapshot`, `args`, `generated`) — see [Two syntaxes: shorthand and full templates](../templates.md#two-syntaxes-shorthand-and-full-templates) in the Templates reference.
 
-Its scope is not pipeline steps alone, but it is not every field either: it covers the scalar fields `varsusage` recognizes as templated across all workspace YAML — `cmd`, `text`, `value`, `title`, `project_name`, `confirm`, scalar `when:`, plus every scalar leaf (at any depth) under a `with:` or `env:` mapping — plus the render bodies under `workspace/templates/config/**`. Sequence-valued fields such as a command's `argv:`, and scalar fields outside that set (`workdir`, `messages.*`, `confirmation_text`), are **not** scanned, so a `${vars.typo}` there is not reported. Only the `${...}` shorthand is checked — the Go-template form (`{{ resolve .Raw "vars.x" }}`) is not.
+Its scope is not pipeline steps alone, but it is not every field either: it covers the scalar fields `varsusage` recognizes as templated across all workspace YAML — `cmd`, `text`, `value`, `title`, `project_name`, `confirm`, scalar `when:`, a step's `timeout` and a `files_gate`'s own `command`, a command's `argv_append_from`, plus every scalar leaf (at any depth) under a `with:` or `env:` mapping — plus the render bodies under `workspace/templates/config/**`. Sequence-valued fields such as a command's `argv:`, and scalar fields outside that set (`workdir`, `messages.*`, `confirmation_text`), are **not** scanned, so a `${vars.typo}` there is not reported. Only the `${...}` shorthand is checked — the Go-template form (`{{ resolve .Raw "vars.x" }}`) is not.
 
 `config.container_name` warns when a compose service's `container_name:` diverges from the conventional `<project>-<service>` — the name the daemon builtins build directly and the one scripts and docs habitually assume. The defect is divergence itself, not casing. dwe's own per-service commands (`dwe stop`/`restart`/`logs <name>`) resolve containers through the compose project+service labels, never by guessing this name, so they are unaffected either way; the foot-gun is raw `docker`/`docker compose` usage, scripts, and documentation. Note that *removing* `container_name` is not equivalent to aligning it — compose then names the container `<project>-<service>-1`. Silent when the declared value already matches, or when it is an interpolated `${...}` value that cannot be compared without resolving the environment.
 
 `config.ports_exports` warns when a service declares `services.<name>.ports.<key>` but no `exports.env` rule reads from `services.<name>.ports.<key>`. Such a port is display-only: a `local.yml` override of it will not move the actual container binding anywhere visible, and `dwe test`'s automatic host-port isolation (see [`tests.md`](tests.md)) silently does not apply to it either. A service that declares no ports of its own inherits the parent's whole port map through `extends:`; those inherited ports are not reported again on the child, since the finding belongs to the parent's `service.yml`, which is where the port is actually written.
 
 `config.info` reports the effective state of `workspace/info.yml`, not merely "does it exist": an **all-comment or empty file** is treated the same as absent — the built-in dashboard is silently active — and is reported at `SeverityInfo` (not `SeverityOK`, so an agent scanning for green does not stop looking); a deliberate `sections: []` reports its own state at `SeverityInfo`; only an authored dashboard with real content earns `SeverityOK`.
+
+`templates.ai` / `templates.ide` / `templates.git` warn about a missing template pack only once the service sets `render.<kind>.enabled` explicitly. A `type: app` service running on the implicit default with no pack on disk is the scaffolded state, not a defect, and stays silent. `templates.git` applies the same rule to its "no `src/.git`" notice — the repository may still be populated by a deploy step before render runs.
+
+`config.reset` likewise no longer reports an absent `workspace/reset.yml`: the file is optional and the built-in default applies, so its absence is the normal state rather than something to report.
 
 The `checks.*` validators are synthesized one per `validate.yml` entry. Each dispatches to either a built-in inspection routine or a locked-down user command at run time.
 
@@ -184,10 +188,12 @@ All seven builtins are usable both as `type: builtin` check entries and as deplo
 
 Runs a shell command via hardcoded `sh -c` (matching the deploy `when:` predicate convention). Exit 0 = pass. This builtin uses POSIX-portable `sh -c` regardless of the project's configured shell, ensuring checks run identically across all environments.
 
+The command runs with its working directory set to the **project root**, so relative paths mean the same thing as in `file_exists` and in a `when:` condition regardless of the directory `dwe` was invoked from.
+
 | Key | Type | Required | Default | Description |
 |-----|------|----------|---------|-------------|
 | `cmd` | string | yes | — | Shell command body. |
-| `timeout` | duration | no | `10s` | Maximum execution time. |
+| `timeout` | duration | no | `10s` | Maximum execution time. `0` means **unbounded** (not "expire immediately"). |
 
 Error message on non-zero exit: `exit status N: <last line of stderr>`.
 
@@ -429,7 +435,7 @@ commands:
 
 ## CLI flags
 
-- `dwe validate` — runs `config.*`, `templates.*`, `commands.*`, `bridge.*`, `env.*`, and all `checks.*`. Optional positional scope narrows the run (e.g. `dwe validate env`, `dwe validate checks ghcr-login`, `dwe validate bridge`).
+- `dwe validate` — runs `config.*`, `templates.*`, `commands.*`, `bridge.*`, `env.*`, and all `checks.*`. Optional positional scope narrows the run (e.g. `dwe validate env`, `dwe validate checks ghcr-login`, `dwe validate bridge`). The summary line names the active scope — `(scope: all)`, `(scope: config)`, `(scope: config/services)` — and `--output json` carries the same value as `summary.scope`, so a narrowed run is distinguishable from a full one by more than its diagnostic count.
 - `dwe validate bridge` — static checks on per-service `bridge:` blocks only: `on_unreachable` enum (`fail` / `warn`), `shim_path` absoluteness, and the bridged-service `dir` / `dir_internal` workspace mapping the shim translates over. Validate-only — the bridge domain does not participate in preflight.
 - `dwe validate --stage <name>` — local flag on the `validate` command. Filters `checks.*` by stage. `env.*` and other domains are unaffected (they have no stages).
 - `dwe validate --strict` — treat warnings as errors (exit 1).

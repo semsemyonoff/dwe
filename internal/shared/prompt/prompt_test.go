@@ -1906,6 +1906,30 @@ func TestReadComposeProjectName(t *testing.T) {
 			displayName:  "myapp",
 			want:         "myorg-myapp",
 		},
+		// Compose rejects uppercase in a project name and lowercases it itself,
+		// so every branch here must too: the prompt builds a
+		// com.docker.compose.project label filter from this value, and a
+		// mixed-case one matches no container — the stack renders as stopped
+		// while running, and the no-downgrade rule means it never self-corrects.
+		{
+			name:         "mixed_case_prefix_and_name_lowercased",
+			workspaceYML: "project:\n  name: MyApp\n  prefix: MyOrg\n",
+			displayName:  "MyApp",
+			want:         "myorg-myapp",
+		},
+		{
+			name:         "mixed_case_docker_yml_literal_lowercased",
+			workspaceYML: "project:\n  name: myapp\n",
+			dockerYML:    "project_name: Custom-Name\n",
+			displayName:  "myapp",
+			want:         "custom-name",
+		},
+		{
+			name:         "mixed_case_display_name_lowercased",
+			workspaceYML: "project:\n  name: MyApp\n",
+			displayName:  "MyApp",
+			want:         "myapp",
+		},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {

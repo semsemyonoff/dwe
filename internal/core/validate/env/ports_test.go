@@ -151,6 +151,22 @@ func TestResolveComposeProject_NoDockerYml_FallsBackToFullName(t *testing.T) {
 	}
 }
 
+// TestResolveComposeProject_LowercasesMixedCaseName: project.name/prefix are
+// free-form user text, but compose rejects uppercase and labels containers with
+// the lowercased form. This check matches running containers against the label
+// to tell our own prior-deploy stack from a foreign project, so a mixed-case
+// answer here would classify the project's OWN containers as foreign port
+// conflicts and block every deploy.
+func TestResolveComposeProject_LowercasesMixedCaseName(t *testing.T) {
+	dir := t.TempDir()
+	cfg := &config.DweConfig{}
+	cfg.Project.Prefix = "DWE"
+	cfg.Project.Name = "Laravel"
+	if got, want := resolveComposeProject(dir, cfg), "dwe-laravel"; got != want {
+		t.Errorf("resolveComposeProject = %q, want %q (lowercased)", got, want)
+	}
+}
+
 func TestClassifyPort_OursReused(t *testing.T) {
 	bindings := map[int][]portOwner{
 		5432: {{Container: "ours-db-1", ComposeProject: "ours"}},

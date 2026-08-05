@@ -816,7 +816,12 @@ func TestValidateCmd_JSONMode_SummaryScopeAddsFieldOnly(t *testing.T) {
 	}
 	require.NoError(t, json.Unmarshal([]byte(stdout), &got))
 	require.Equal(t, "config", got.Summary.Scope)
-	require.GreaterOrEqual(t, got.Summary.Ok+got.Summary.Info+got.Summary.Warning+got.Summary.Error, 0)
+	// The point of this test is that adding `scope` did not displace the
+	// pre-existing counters, so at least one of them must still be populated —
+	// a `>= 0` assertion on four non-negative ints can never fail and would
+	// pass just as happily against an empty summary object.
+	require.Positive(t, got.Summary.Ok+got.Summary.Info+got.Summary.Warning+got.Summary.Error,
+		"the counters must still decode alongside scope")
 }
 
 // TestValidateText_SummaryReportsScope verifies the human summary line names

@@ -13,6 +13,7 @@ Directives common to **all** command types unless noted otherwise. Type-specific
 - [Params](#params)
 - [Param widgets](#param-widgets)
 - [Pass-through arguments](#pass-through-arguments)
+- [Computed arguments (`argv_append_from`)](#computed-arguments-argv_append_from)
 - [Context](#context)
 - [Env](#env)
 - [Files](#files)
@@ -318,12 +319,19 @@ program itself, so nothing in an argument can change the command's structure: a
 filename containing a space stays one argument, and `;`, backticks or `$(…)`
 stay literal text.
 
-Write the slot **unquoted** — `${args}`, not `"${args}"`. It already expands to
-a correctly-quoted `"$@"`; wrapping it in quotes of your own produces `""$@""`,
-which executes nothing but does lose the protection quoting normally gives:
-arguments split on whitespace, and one containing `*` or `?` is subject to
-pathname expansion. `-- '*.txt'` reaches the command as the matching filenames
-rather than as the literal pattern.
+Write the slot **unquoted** — `${args}`, not `"${args}"` or `'${args}'`. It
+already expands to a correctly-quoted `"$@"`, so a wrapping pair of your own
+nests badly, and both spellings are **rejected at load time**:
+
+| You write | It would render to | What that does |
+| --- | --- | --- |
+| `'${args}'` | `'"$@"'` | one literal four-character argument; every caller argument is dropped |
+| `"${args}"` | `""$@""` | `$@` ends up *unquoted*: arguments split on whitespace and one containing `*` or `?` is glob-expanded (`-- '*.txt'` arrives as the matching filenames, not the pattern). With no arguments at all it collapses to a single empty argument — `npm test ""` is not `npm test`. |
+
+The check looks for a wrapping pair around the slot itself; quotes elsewhere in
+the command are untouched (`printf "%s\n" ${args}` is fine). A slot placed
+inside a longer quoted span cannot be detected textually and stays your
+responsibility.
 
 Two placements silently lose the arguments, because `"$@"` is scoped to the
 shell's current positional parameters:
@@ -402,6 +410,84 @@ dwe cmd backend.test                   # → go test -count=1 -race ./...
 
 `dwe cmd -i <id>` reports whether a command accepts pass-through arguments and
 which prefix/default apply.
+
+## Computed arguments (`argv_append_from`)
+
+`argv_append_from` is a shell expression whose **stdout lines are appended to
+`argv:` as individual elements**, one per line. It is how a command derives its
+own argument list — the staged-files list for a linter, the changed packages for
+a test run — without rebuilding the runner around it.
+
+```yaml
+quality.staged:
+  type: service_exec
+  service: backend
+  argv: [ruff, check]
+  argv_append_from: "git diff --cached --name-only --diff-filter=ACM -- '*.py'"
+```
+
+`dwe cmd quality.staged` then runs `ruff check a.py b.py` inside the container.
+Without the field this is ~40 lines of bash reassembling `docker compose exec`
+by hand, because the file list has to be computed on the host and the command
+has to run in the container.
+
+**Where the expression runs.** On the **host**, via the project's configured
+shell (`binaries.shell`), even for a `service_exec` / `service_run` command
+whose body runs in a container. It computes the argument list; it is not part
+of the work done in the container. Its working directory is the **project
+root** — not `workdir:`, which for a service command names a path inside the
+container — so relative paths mean the same thing regardless of where `dwe` was
+invoked from.
+
+**Output is data, never program text.** stdout is split on newlines and each
+line becomes one argv element byte-for-byte: a filename containing spaces,
+quotes or `$(…)` stays a single argument and is never re-parsed by a shell.
+A trailing newline is ignored (no empty final element), and blank lines are
+dropped — no argument this field carries is the empty string, while a stray `""`
+in an argv silently changes what a tool does. stdout is captured; **stderr
+streams to the user**, so a failing expression explains itself. stdin is not
+wired: the expression must never consume the user's input.
+
+**The expression must exit 0 when the list is legitimately empty.** A non-zero
+exit is a broken expression and fails the command — it is deliberately not read
+as "nothing to do", because a typo'd command must not look like a clean skip.
+This matters when filtering with `grep`, which exits 1 on no match: prefer a
+pathspec (`git diff … -- '*.py'`, exit 0 on an empty result) or append `|| true`.
+
+**Empty output skips the command** — nothing runs, exit 0, and a note is printed
+to stderr. This is deliberate rather than "run with no extra arguments":
+`ruff check` with an empty file list lints the whole tree, the exact opposite of
+the intent. A skipped command emits no `messages.success` and no desktop
+notification, and its declared file effects are rolled back exactly as on the
+error path.
+
+> Used as a pipeline `type: command` step, a skip journals as **success** — so
+> the next deploy would be hash-skipped even if the list is no longer empty.
+> Give such a step a `files_gate:` or a `check:` (see
+> [deploy/conditions.md](../deploy/conditions.md)).
+
+**Ordering with `${args}`.** The declared `argv:` comes first with `${args}`
+already spliced in place, then the computed items:
+
+```yaml
+# argv: [ruff, check, "${args}"] + `-- --fix` + two changed files
+#   → ruff check --fix a.py b.py
+```
+
+**Field rules** (all enforced at load time):
+
+| Rule | Reason |
+|---|---|
+| Valid only for `shell`, `service_exec`, `service_run` | the types that build an argument vector |
+| Requires `argv:`; rejected together with `cmd:` | appending to a shell string would splice the computed values into program text |
+| Rejected for `type: daemon` | daemon expands its `argv` into the synthetic `.start` command, where "empty → skip" would read as silently failing to start the daemon |
+| A literal `${args}` in the expression is rejected | the pass-through arguments travel as positional parameters and are deliberately invisible here; reference them from `argv:` instead |
+
+`${param.*}`, `${vars.*}`, `${files.*}` and the rest of the command template
+space render in the expression exactly as they do in `cmd:`.
+
+`dwe cmd -i <id>` reports the field, and so do the generated command docs
+(`dwe docs generate`).
 
 ## Context
 

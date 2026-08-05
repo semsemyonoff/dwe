@@ -27,6 +27,10 @@ A `when:` guard still applies as normal — a predicate-body step with a `when:`
 
 This capability is purely permissive: predicates that previously were legal only inside `check:`/`when:` are now also legal as bodies, in every pipeline (`deploy.yml`, `reset.yml`, `lifecycle.yml`, and test scenarios) and as `type: builtin` user commands. Existing configs are unaffected.
 
+## Action builtins in `check:` — permitted, but a bad idea
+
+The schema also allows the reverse: an **action** builtin (`source_clone`, `remove_paths`, `service_configs_render`, …) is accepted in a `check:` position, because some actions are read-only (`service_configs_check`) and rejecting the whole kind would break them. That permission is not an endorsement — a `check:` answers "is this already done?" and is re-evaluated by the engine at times a step body is not, so putting a **mutating** builtin there makes the answer change the world it is being asked about. Keep `check:` to predicates and read-only actions. `workspace/validate.yml` enforces this on its own surface with a fixed allowlist (`shell`, `file_exists`, `executable_in_path`, `env_keys_present`, `tcp_reachable`, `http_check`, `config_keys_present`) — see [validate.md](../validate.md).
+
 ## Contents
 
 - [Catalogue](#catalogue)
@@ -43,6 +47,7 @@ This capability is purely permissive: predicates that previously were legal only
 - [`containers_running`](#containers_running)
 - [`http_check`](#http_check)
 - [`remove_paths`](#remove_paths)
+- [`source_clone`](#source_clone)
 - [Internal engine builtins (not callable from user YAML)](#internal-engine-builtins-not-callable-from-user-yaml)
 - [Naming convention](#naming-convention)
 
@@ -63,6 +68,7 @@ This capability is purely permissive: predicates that previously were legal only
 | `containers_running` | Fast "is running" check (no polling, no timeout, no healthcheck required) |
 | `http_check` | Assert an HTTP endpoint returns an expected status (and optional body substring), with retries |
 | `remove_paths` | Delete project-relative paths from the filesystem |
+| `source_clone` | Clone a git repository into a project-relative directory, once (idempotent) |
 
 ## `service_dirs_ensure`
 
@@ -327,6 +333,39 @@ Removes paths from the filesystem.
 | Parameter | Type | Description |
 |-----------|------|-------------|
 | `paths` | list of strings | Project-relative paths to remove. Each must be relative and must not escape the project root; absolute paths and `..` traversal are rejected at validate time. |
+
+## `source_clone`
+
+Clones a git repository into a project-relative directory. The idempotency gate is built in, so the step needs no `when:`/`check:` pair of its own.
+
+| Parameter | Type | Description |
+|-----------|------|-------------|
+| `repo` | string | required. Anything `git clone` accepts (SSH remote, HTTPS URL, local path). |
+| `dir` | string | required. Destination, relative to the project root. Absolute paths, `.`, and `..` traversal are rejected at validate time; a symlinked path component is rejected at run time. |
+| `branch` | string | optional. Passed as `git clone --branch <branch>`. |
+
+Behavior by destination state:
+
+| Destination | Result |
+|-------------|--------|
+| contains a `.git` entry | **skip** with a message, success — regardless of which branch that checkout is on |
+| absent or an empty directory | clone |
+| non-empty and not a git checkout | error naming the path |
+| exists but is not a directory | error naming the path |
+
+The skip is deliberately branch-blind: `source_clone` materialises the source once and never re-points or updates an existing working tree. Switching branches or pulling is the developer's job (or a separate step).
+
+Git runs with prompting disabled — `GIT_TERMINAL_PROMPT=0`, an emptied `GIT_ASKPASS`/`SSH_ASKPASS`, and `GIT_SSH_COMMAND=ssh -o BatchMode=yes` when the environment does not already set it to an actual command — so a missing credential fails the step instead of hanging a deploy on an unanswerable prompt. An explicitly set `GIT_SSH_COMMAND` (custom identity file, port) is honoured as-is; an empty one carries no command git could run, so it counts as unset and takes the default. The command reads no stdin.
+
+```yaml
+- name: clone-backend
+  type: builtin
+  cmd: source_clone
+  with:
+    repo: "${vars.source.backend.repo}"
+    dir: services/backend/src
+    branch: "${vars.source.backend.branch}"
+```
 
 ## Internal engine builtins (not callable from user YAML)
 

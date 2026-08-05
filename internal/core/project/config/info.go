@@ -246,15 +246,43 @@ func DefaultInfoConfig() *InfoConfig {
 	}
 }
 
+// InfoConfigState says which of the three shapes an info.yml resolved through,
+// so a caller can tell an authored dashboard from one that is silently running
+// on the built-in default. `dwe validate` reports the three differently.
+type InfoConfigState int
+
+const (
+	// InfoStateAuthored is a file that declares at least one section.
+	InfoStateAuthored InfoConfigState = iota
+	// InfoStateDefaultFallback is an absent, empty or all-comment file — the
+	// built-in dashboard is active and the file contributes nothing.
+	InfoStateDefaultFallback
+	// InfoStateDeliberatelyEmpty is a file that decodes but declares no
+	// sections (`sections: []`, or only `footer:`) — an intentionally empty
+	// dashboard. Both spellings share one state, so a diagnostic must not claim
+	// the file wrote an explicit empty list.
+	InfoStateDeliberatelyEmpty
+)
+
 // LoadInfoConfig reads and parses an info.yml file at the given path.
 // If the file does not exist, returns the built-in default InfoConfig.
 func LoadInfoConfig(path string) (*InfoConfig, error) {
+	cfg, _, err := LoadInfoConfigWithState(path)
+	return cfg, err
+}
+
+// LoadInfoConfigWithState is LoadInfoConfig plus the state that produced the
+// result. It is the single home of that classification: deriving it a second
+// time from the raw file (as `dwe validate` once did) means re-reading and
+// re-parsing to reconstruct a decision this function already made, and lets the
+// two copies drift.
+func LoadInfoConfigWithState(path string) (*InfoConfig, InfoConfigState, error) {
 	data, err := os.ReadFile(path)
 	if err != nil {
 		if errors.Is(err, os.ErrNotExist) {
-			return DefaultInfoConfig(), nil
+			return DefaultInfoConfig(), InfoStateDefaultFallback, nil
 		}
-		return nil, fmt.Errorf("read %s: %w", path, err)
+		return nil, InfoStateAuthored, fmt.Errorf("read %s: %w", path, err)
 	}
 
 	// An all-comment or empty file decodes no top-level keys at all. Treat that
@@ -266,20 +294,23 @@ func LoadInfoConfig(path string) (*InfoConfig, error) {
 	// is not silently overridden.
 	var probe map[string]any
 	if err := yaml.Unmarshal(data, &probe); err != nil {
-		return nil, fmt.Errorf("parse %s: %w", path, err)
+		return nil, InfoStateAuthored, fmt.Errorf("parse %s: %w", path, err)
 	}
 	if len(probe) == 0 {
-		return DefaultInfoConfig(), nil
+		return DefaultInfoConfig(), InfoStateDefaultFallback, nil
 	}
 
 	var cfg InfoConfig
 	if err := yaml.Unmarshal(data, &cfg); err != nil {
-		return nil, fmt.Errorf("parse %s: %w", path, err)
+		return nil, InfoStateAuthored, fmt.Errorf("parse %s: %w", path, err)
 	}
 	if err := ValidateInfoConfig(&cfg); err != nil {
-		return nil, err
+		return nil, InfoStateAuthored, err
 	}
-	return &cfg, nil
+	if len(cfg.Sections) == 0 {
+		return &cfg, InfoStateDeliberatelyEmpty, nil
+	}
+	return &cfg, InfoStateAuthored, nil
 }
 
 // ValidateInfoConfig checks that all item types are valid and subgroups declare items.

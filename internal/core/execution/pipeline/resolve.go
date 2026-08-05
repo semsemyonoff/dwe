@@ -144,6 +144,22 @@ func resolveLeafStep(cfg *config.DweConfig, reg *registry.Registry, phase config
 	if !keep {
 		return ResolvedStep{}, false, nil
 	}
+	// Rewrite the `check: auto` sentinel into a real action before the builtin
+	// validation below — otherwise "auto" would either reach the builtin
+	// registry as a name or skip validation of the derived check entirely. It
+	// must also come after the render above and after resolveStepWhen, so the
+	// inverse is built from the very string the runtime when: evaluation sees.
+	// step is a local copy, so assigning a fresh pointer here never mutates the
+	// loaded config (a second resolve over the same config must not produce
+	// "! ( ! ( ... ) )", and ProjectConfigHash must not depend on deploy scope).
+	autoCheck := config.IsAutoCheck(step.Check)
+	if autoCheck {
+		derived, derr := ResolveAutoCheck(stepRuntimeWhen)
+		if derr != nil {
+			return ResolvedStep{}, false, fmt.Errorf("step %s: %w", prefix, derr)
+		}
+		step.Check = derived
+	}
 	if step.Type == "builtin" {
 		// Engine-synthetic phases (underscore-prefixed) may use KindInternal builtins.
 		// User-authored phase names cannot start with "_" (rejected at loader time).
@@ -188,6 +204,7 @@ func resolveLeafStep(cfg *config.DweConfig, reg *registry.Registry, phase config
 		PhaseWhen:   phaseRuntimeWhen,
 		FilesGate:   step.FilesGate,
 		Timeout:     timeout,
+		AutoCheck:   autoCheck,
 	}, true, nil
 }
 

@@ -51,6 +51,10 @@ func TestEnumerateAllUsages(t *testing.T) {
 	}
 	got := enumLocsOf(usages)
 	want := []enumLoc{
+		// argv_append_from is a command-file scalar rendered through the same
+		// ${...} substrate as cmd:, so a typo there silently changes which
+		// items the expression computes — it has to be enumerated too.
+		{"workspace/commands/quality.yml", 6, "vars.source.dir"},
 		{"workspace/deploy.yml", 6, "vars.source.repo"},
 		{"workspace/deploy.yml", 9, "vars.source.branch"},
 		{"workspace/deploy.yml", 11, "project.name"},

@@ -283,12 +283,12 @@ it complicates the first implementation.
 - Modify: `internal/core/usercommands/model/types_test.go`
 - Modify: `internal/cli/command/inspect.go` (+ its tests)
 
-- [ ] add `ArgvAppendFrom string` with tag `argv_append_from` next to `Argv`
-- [ ] reject at load time: `argv_append_from` together with `cmd:` (argv-only feature),
+- [x] add `ArgvAppendFrom string` with tag `argv_append_from` next to `Argv`
+- [x] reject at load time: `argv_append_from` together with `cmd:` (argv-only feature),
       and `argv_append_from` on command types that do not build an argv
-- [ ] extend `allowedFieldsFor` **per type** — it is type-scoped, so add the key to
+- [x] extend `allowedFieldsFor` **per type** — it is type-scoped, so add the key to
       `CommandTypeShell`, `CommandTypeServiceExec` and `CommandTypeServiceRun`
-- [ ] **exclude `CommandTypeDaemon`** with a load-time rejection (decision, not a
+- [x] **exclude `CommandTypeDaemon`** with a load-time rejection (decision, not a
       recommendation): it is the fourth type accepting `argv` (`types.go:190`) and
       `registry/expand_daemon.go:71` packs that `argv` into the synthetic commands, so
       "skip on empty list" would mean "silently fail to start the daemon"
@@ -297,20 +297,20 @@ commands. Dropped deliberately: dwe targets a developer working on their own mac
 author of such a command can already run anything through `type: shell`, and equivalent
 host-shell paths exist anyway via `hide:` / workflow `when:` conditions. The rule restricted
 authoring without buying protection.)*
-- [ ] surface the field in `dwe cmd -i`: the typed JSON struct (`inspect.go:29`, filled at
+- [x] surface the field in `dwe cmd -i`: the typed JSON struct (`inspect.go:29`, filled at
       :134/:144) and the human output (:301-302 / :332-333). An executable field invisible
       to inspect is worse than usual here — inspect is the documented way for an agent to
       learn what a command does before running it
-- [ ] surface it in the generated command docs too: `internal/cli/docs/generate.go:215,
+- [x] surface it in the generated command docs too: `internal/cli/docs/generate.go:215,
       230-231,243-244` renders `argv` into markdown — the same "what does this command do"
       surface
-- [ ] (checked, no work needed) completion does not touch the field, `dwe commands list`
+- [x] (checked, no work needed) completion does not touch the field, `dwe commands list`
       has no full typed JSON, the shellcheck linter only reads `.sh` files, and
       `internal/core/validate/commands/` carries no field allowlist of its own
-- [ ] write table-driven tests for accept/reject combinations
+- [x] write table-driven tests for accept/reject combinations
       (`argv` + append → ok; `cmd` + append → error; append alone → error; daemon → per the
       decision above)
-- [ ] run tests — must pass before task 2
+- [x] run tests — must pass before task 2
 
 ### Task 2: `argv_append_from` — host execution and argv assembly
 
@@ -321,28 +321,51 @@ authoring without buying protection.)*
   caller of `RenderArgvWithArgs`, for `type: shell` with `argv:`; `runners/service/run.go:23`
   reuses `buildServiceArgv` and needs no separate edit)
 - Modify: corresponding `*_test.go`
+- ➕ Modify: `internal/core/usercommands/runtime/spec/errors.go` (the skip sentinel and its
+  written contract) and `internal/core/usercommands/runtime/runner.go` (the single place
+  that translates it into exit code / message / notification behaviour)
+- ➕ Modify: `internal/core/usercommands/model/types.go` + `types_test.go` (the literal
+  `${args}` rejection, which this task's first bullet requires)
 
-- [ ] add the exported `runio.RenderArgvAppendFrom` (wrapping the private `withoutArgs`)
+- [x] add the exported `runio.RenderArgvAppendFrom` (wrapping the private `withoutArgs`)
       and render through it; reject a literal `${args}` at load time (constraint 3a — do
       this **before** wiring execution, so the unsafe shape never exists even transiently).
       Keep `withoutArgs` unexported: the point is one safe entry point, not a second
       exported primitive both runners can misuse
-- [ ] execute the expression on the host via `config.ShellBin` with the run context's
+- [x] execute the expression on the host via `config.ShellBin` with the run context's
       cancellation, capturing stdout only (stderr streams to the user)
-- [ ] split stdout into argv elements one per line, ignoring a trailing newline; treat
+- [x] split stdout into argv elements one per line, ignoring a trailing newline; treat
       output bytes as data, never re-parse as shell
-- [ ] append after the declared `Argv` (with `${args}` already expanded in place)
-- [ ] name the skip mechanism explicitly (sentinel error, distinct runner outcome, or early
+- [x] append after the declared `Argv` (with `${args}` already expanded in place)
+- [x] name the skip mechanism explicitly (sentinel error, distinct runner outcome, or early
       return) and define what it does to `messages.success`, `notify:`, the pipeline
       reporter's Skip-vs-Finish accounting and `--output json` — "skip with a message" is
       not yet a mechanism
-- [ ] write tests: multi-line output → separate argv elements; paths containing spaces stay
+      → **`spec.ErrArgvAppendEmpty`**, returned by the runner and translated exactly once,
+      in `runtime.RunCommand`: stderr note + nil error (exit 0), so a pipeline
+      `type: command` step **Finishes** rather than Skipping — and therefore journals as
+      success, which is why such a step needs a `files_gate`/`check:` (already noted under
+      Technical Details). `messages.success` is suppressed (nothing ran); the desktop
+      notification is suppressed, following the declined-confirmation precedent; file
+      effects are rolled back as on the error path. `--output json` is unaffected —
+      command execution streams the child's output and has no JSON envelope
+- [x] write tests: multi-line output → separate argv elements; paths containing spaces stay
       single elements; empty output → skip, exit 0; expression failure → command fails with
       the expression's stderr surfaced
-- [ ] write a test that `${args}` reaches the command as positional parameters here exactly
+- [x] write a test that `${args}` reaches the command as positional parameters here exactly
       as it does in `cmd:`/`argv:` — the consistency point of constraint 3a
-- [ ] write a test pinning `${args}` + `argv_append_from` ordering
-- [ ] run tests — must pass before task 3
+- [x] write a test pinning `${args}` + `argv_append_from` ordering
+- [x] run tests — must pass before task 3
+
+➕ Decisions taken while implementing (documented so Task 7 can carry them into the docs):
+- **cwd of the expression is the project root**, not `cmd.workdir` — for a `service_exec`
+  command the workdir names a path *inside the container*, and a host expression must mean
+  the same thing regardless of the directory `dwe` was invoked from (the rule
+  `condition.EvalCmd` already follows).
+- **Blank lines are dropped** along with the trailing newline: no argument this field
+  carries is the empty string, while a stray `""` silently changes what a tool does. Lines
+  are otherwise byte-for-byte — no trimming — since spaces are legal in a path.
+- **stdin is left unwired**: the expression must not consume the user's input.
 
 ### Task 3: `check: auto` — schema and inversion
 
@@ -366,45 +389,70 @@ authoring without buying protection.)*
 - Modify: `internal/core/execution/pipeline/resolve.go`
 - Modify: `internal/core/execution/pipeline/resolve_test.go`
 
-- [ ] accept the scalar form `check: auto` alongside the existing mapping form, decoding it
+- [x] accept the scalar form `check: auto` alongside the existing mapping form, decoding it
       into a **sentinel Action at load time** so `step.Check != nil` holds everywhere
       (`StepForcesRun` at `forcesrun.go:37`, `deployStepToMap` at `hash.go:416`, and the
       `dwe reset step` path all inspect the raw config). Fix the sentinel's concrete shape
       (proposal: `Type: "auto"` plus an exported predicate `config.IsAutoCheck(*Action)`) so
       no consumer string-compares on its own — `FormatAction` (`executor.go:1112-1117`) and
       `deployStepToMap` both read it
-- [ ] **exempt the sentinel from `Action.Validate()`**: `validateStepShape`
+      → shipped as `config.AutoCheckType` + `config.IsAutoCheck`. `IsAutoCheck` additionally
+      requires an **empty payload**, so the mapping form `{type: auto, cmd: …}` is not a
+      sentinel but an unknown action type — a cmd written there is rejected instead of being
+      silently dropped by the rewrite
+- [x] **exempt the sentinel from `Action.Validate()`**: `validateStepShape`
       (`workspace.go:3196-3200`) calls it unconditionally and `action.go:49-62` rejects
       anything outside `{shell, dwe, command, builtin}` — so without this every
       `check: auto` fails at load before any of the three intended rejections fire
-- [ ] accept **exactly** `auto`: `Auto`, `"auto "` and a null `check:` must keep today's
+- [x] accept **exactly** `auto`: `Auto`, `"auto "` and a null `check:` must keep today's
       `action.go:28` message. One table test
-- [ ] reject at load time with a reason in the message: `auto` without `when:`; `auto` with
+      → ⚠️ corrected premise: a **null `check:` never reaches `UnmarshalYAML`** — yaml.v3
+      resolves the null tag before calling the Unmarshaler, so the pointer is simply left
+      nil with no error (verified, and now pinned by `TestAction_NullCheckStaysNil`). The
+      near-miss spellings (`Auto`, `AUTO`, `"auto "`, `" auto"`, `autos`, `auto check`) do
+      keep the `action.go:28` message
+- [x] reject at load time with a reason in the message: `auto` without `when:`; `auto` with
       `when: {type: builtin}` (disjoint registries); `auto` with `when: {type: template}`
       (would always fail — see Technical Details). These three are exhaustive:
       `condition.Type` has exactly three values
-- [ ] rewrite the sentinel into a real `*config.Action` at resolve time using the chosen
+- [x] rewrite the sentinel into a real `*config.Action` at resolve time using the chosen
       inversion form, wrapping across newlines rather than inline. **Ordering inside
       `resolveLeafStep` is load-bearing**: Plan A's whole-step render → sentinel rewrite →
       `builtin.Validate` of the check (`resolve.go:138`). Rewriting before the render would
       leave the derived check rendered while its source `when.Cmd` is not (or vice versa),
       silently breaking the inversion; rewriting after `:138` would either send `auto` into
       the builtin registry or skip validation of the derived check entirely
-- [ ] assign the derived check onto a **copy** — `step.Check = &config.Action{…}`, never
+      → the shared helper is `pipeline.ResolveAutoCheck(*condition.Condition)` in the new
+      `internal/core/execution/pipeline/autocheck.go` (with `pipeline.InvertShellCommand`);
+      Task 4's `dwe reset step` path must call the same helper
+- [x] assign the derived check onto a **copy** — `step.Check = &config.Action{…}`, never
       `*step.Check = …`. The pointer is shared with the loaded config, so mutating through
       it breaks Task 4's own invariant ("auto stays auto" in `deployStepToMap`), shifts
       `Service/ProjectConfigHash` mid-run depending on when they are computed, and makes a
       second `ResolvePhaseSteps` over the same config produce `! ( ! ( … ) )` — silently
       restoring the original logic
-- [ ] build the derived check from **the same string** the runtime `when:` evaluation will
+- [x] build the derived check from **the same string** the runtime `when:` evaluation will
       see, and assert byte equality in a test (this is the symmetry Plan A's `when.Cmd`
       rendering exists to provide)
-- [ ] write tests: shell inversion works; a `when.cmd` with a **trailing comment** inverts
+- [x] write tests: shell inversion works; a `when.cmd` with a **trailing comment** inverts
       correctly (the naive inline wrap turns this into a syntax error); the three load-time
       rejections each fire with their own message
-- [ ] write tests pinning cwd, shell binary and timeout of the derived check against the
+- [x] write tests pinning cwd, shell binary and timeout of the derived check against the
       `when:` it came from
-- [ ] run tests — must pass before task 4
+- [x] run tests — must pass before task 4
+
+➕ Decisions taken while implementing (for Task 7's docs):
+- **Timeout: option (b)** — `builtin.Shell.Run` now treats `timeout: "0"` as **unbounded**
+  instead of building an already-expired `context.WithTimeout(ctx, 0)`, and the derived
+  check passes `timeout: "0"`. This matches `parseStepTimeout`'s existing convention and
+  gives the derived check the same unbounded posture as the `when:` it inverts. Pinned by
+  `TestShellRunZeroTimeoutIsUnbounded`.
+- **`builtin.Shell.Run` now honours `ectx.ProjectRoot`** (nil-safe: empty ProjectRoot keeps
+  the old process-CWD behaviour, so `spec.ExecContext{}` callers are unaffected). All three
+  production surfaces already populate it — `executor.go`'s `execBuiltinAction`
+  (`ProjectRoot: actx.WorkDir`), `validate/checks/loader.go`, and
+  `usercommands/runtime/runners/builtin` — so the standalone cwd inconsistency described in
+  this task's Files section is fixed everywhere at once.
 
 ### Task 4: `check: auto` — journal and force-run integration
 
@@ -414,7 +462,7 @@ authoring without buying protection.)*
 - Modify: `internal/core/workflow/deploy/journal/hash_test.go`
 - Modify: `internal/cli/deploy/deploy.go` tests as needed
 
-- [ ] handle `dwe reset step`: it takes a `config.DeployStep` straight from config and calls
+- [x] handle `dwe reset step`: it takes a `config.DeployStep` straight from config and calls
       `pipeline.ExecAction(ctx, *step.Check, actx)` bypassing `ResolvePhaseSteps`, so an
       unrewritten sentinel would reach it. **It does evaluate `when:`** — `reset.go:668-687`
       runs both `condition.EvalRuntimeTyped` and `tpl.EvalCondition` and skips the step when
@@ -423,20 +471,27 @@ authoring without buying protection.)*
       a worse UX built on a false premise.) Build the inverse there through the **same
       shared helper** `resolveLeafStep` uses — not a copy. A "no `when:`" branch is
       unreachable, since load-time already rejects `auto` without `when:`
-- [ ] verify `StepForcesRun` returns true for a step whose check came from `auto` (it does,
+- [x] verify `StepForcesRun` returns true for a step whose check came from `auto` (it does,
       given the load-time sentinel) and add the test that pins it
-- [ ] verify the `hasCheck → Run` path in the skip decider treats it identically
-- [ ] pin the invariant honestly, in **both** halves: `journal.StepHash` (`hash.go:36-53`)
+      → pinned in **both** shapes: the raw sentinel (pre-resolve) and the derived builtin
+      shell action the resolver produces, the latter built through `ResolveAutoCheck` so the
+      test cannot drift from the real form
+- [x] verify the `hasCheck → Run` path in the skip decider treats it identically
+- [x] pin the invariant honestly, in **both** halves: `journal.StepHash` (`hash.go:36-53`)
       hashes action + files_gate and **not** `Check`, so per-step hashes do not move — but
       `deployStepToMap` feeds `phasesToMap` → `Service/ProjectConfigHash`
       (`hash.go:365/389`), and `makeSkipDecider` (`deploy.go:781-783`) returns
       `journal.Run` for **every** step in scope when the config hash differs. So migrating a
       workspace from an explicit inverse check to `check: auto` **does** cause a one-time
       re-run of that service's steps. Test that, not the weaker "auto stays auto"
-- [ ] write a test covering an auto-check step inside a `parallel:` group (one level)
-- [ ] write a regression test that a step with `when:` and **no** `check:` still does not
+      → `TestConfigHashAutoCheckMigration` pins all three halves: `StepHash` unchanged
+      across explicit-inverse / `auto` / no-check, `ProjectConfigHash` **differs** between
+      the explicit inverse and `auto` (the one-time re-run) and between no-check and `auto`,
+      and the sentinel hashes stably
+- [x] write a test covering an auto-check step inside a `parallel:` group (one level)
+- [x] write a regression test that a step with `when:` and **no** `check:` still does not
       force a run (the 5 observed steps that rely on this)
-- [ ] run tests — must pass before task 5
+- [x] run tests — must pass before task 5
 
 ### Task 5: `source_clone` builtin
 
@@ -449,25 +504,41 @@ authoring without buying protection.)*
   `len(registry) == len(allBuiltinNames)` plus a per-name kind table — the suite goes red
   without it)
 
-- [ ] create the sub-package exposing `Builtins()` following the `services`/`fs` shape and
+- [x] create the sub-package exposing `Builtins()` following the `services`/`fs` shape and
       register it in `buildRegistry()` as `KindAction`
-- [ ] implement `with: {repo, dir, branch?}`: required-field validation, destination
+- [x] implement `with: {repo, dir, branch?}`: required-field validation, destination
       resolved against the project root and checked with `pathsafe` — specifically
       `ContainedRel` + `CheckNoSymlinks` (and `EnsureRealUnder` if needed), the pattern
       already used in `execution/templates/config/config.go:255-279`
-- [ ] resolve the git binary via the nil-safe accessor `config.GitBin(...)` — AGENTS.md
+      → all three used: `ContainedRel` + `CheckNoSymlinks` before touching the filesystem,
+      `EnsureRealUnder` on the symlink-resolved parent after `MkdirAll` (which follows
+      symlinks). `depth:` **dropped** per the YAGNI clause in Technical Details — the task
+      checklist enumerates only `{repo, dir, branch?}`, and adding it later is additive
+- [x] resolve the git binary via the nil-safe accessor `config.GitBin(...)` — AGENTS.md
       forbids reading `cfg.Binaries.*` directly
-- [ ] force a non-interactive posture (`GIT_TERMINAL_PROMPT=0`, and an `GIT_ASKPASS`
+- [x] force a non-interactive posture (`GIT_TERMINAL_PROMPT=0`, and an `GIT_ASKPASS`
       decision): all five workspaces clone from a private host, and a credential prompt
       inside a deploy is a hang. In sequential mode the builtin is handed `os.Stdin`; in
       parallel it is nil, but git can still reach for `/dev/tty`
-- [ ] implement the idempotency gate: `.git` present → skip with message (success), **including
+      → **`GIT_ASKPASS` decision: set it (and `SSH_ASKPASS`) to the EMPTY string**, not to a
+      dummy program. git's `git_prompt` only runs an askpass helper when the value is
+      non-empty, so emptying it defeats an inherited GUI helper and falls through to the
+      terminal prompt — which `GIT_TERMINAL_PROMPT=0` turns into an immediate error. Plus
+      `GIT_SSH_COMMAND=ssh -o BatchMode=yes` **only when unset** (an author who set it means
+      it), and `cmd.Stdin = nil`. `/dev/tty` is not reachable from Go without a session
+      change and is documented rather than defended
+- [x] implement the idempotency gate: `.git` present → skip with message (success), **including
       when the existing checkout is on a different branch** — record that as intended;
       absent/empty → clone; non-empty non-git → error naming the path
-- [ ] write tests: fresh clone, re-run is a no-op, different-branch checkout is a no-op,
+      → `.git` is matched by `Lstat` of any type (a worktree/submodule `.git` is a file);
+      a destination that exists but is not a directory is its own error
+- [x] write tests: fresh clone, re-run is a no-op, different-branch checkout is a no-op,
       non-empty non-git destination errors, path escaping the project root is rejected,
       missing required field is rejected
-- [ ] pin the **actual** kind boundary rather than an assumed one: `kindAllowed`
+      → plus: empty destination is cloned, symlinked path component rejected, git failure
+      surfaces git's stderr, and the env posture (override + honour-existing) is pinned.
+      Clone tests use a real local git repo and `t.Skip` when git is off PATH
+- [x] pin the **actual** kind boundary rather than an assumed one: `kindAllowed`
       (`builtin.go:147-155`) deliberately permits `KindAction` in `CtxPredicate` ("actions
       may be read-only … and are safe in check: position"), so `source_clone` **will** be
       callable from `check:`. A test asserting rejection would fail, and "fixing"
@@ -475,49 +546,109 @@ authoring without buying protection.)*
       from `CtxUserYAML` and `CtxPredicate`, and **not** reachable from `workspace/validate.yml`
       (blocked by the hardcoded seven-name allowlist in `validate/checks/loader.go:51,119` —
       which also keeps `docs/reference/config/validate.md:174` accurate)
-- [ ] add one line to the docs saying that putting a mutating builtin in `check:` is a bad
+      → pinned in `builtin_test.go`'s kind table (`CtxUserYAML` ✓, `CtxPredicate` ✓,
+      `CtxInternal` ✗) and in `validate/checks/loader_test.go`'s disallowed-builtin table
+- [x] add one line to the docs saying that putting a mutating builtin in `check:` is a bad
       idea even though the schema permits it
-- [ ] run tests — must pass before task 6
+      → new "Action builtins in `check:` — permitted, but a bad idea" section in
+      `docs/reference/config/deploy/builtins.md`, plus the `source_clone` reference section
+      (the RU mirror stays for Task 7's docs pass)
+- [x] run tests — must pass before task 6
 
 ### Task 6: Verify acceptance criteria
 
-- [ ] verify all requirements from Overview are implemented
-- [ ] rebuild the three observed copy-paste patterns using the new capabilities and confirm
+- [x] verify all requirements from Overview are implemented
+      → all three shipped and exercised against the built binary: `argv_append_from`
+        (visible in `dwe cmd -i`, executes on the host, skips on empty output),
+        `check: auto` (scalar sentinel → derived inverse, three load-time rejections each
+        firing with its own reasoned message), `source_clone` (idempotent, `pathsafe`-gated).
+        The Plan A dependency is confirmed live: `dwe deploy plan` prints
+        `builtin: source_clone(repo=git@example.invalid:acme/backend.git, …)`, i.e. the
+        `${vars.*}` leaf of `with:` really is rendered at resolve time.
+        The deliberate non-goals hold — no `archive_fetch`/`archive_unpack` anywhere in
+        `internal/` or `docs/reference/`
+- [x] rebuild the three observed copy-paste patterns using the new capabilities and confirm
       each shrinks: the clone step loses its `when:`/`check:` pair; a staged-lint command
       expresses its computed file list without rebuilding `docker compose exec`
-- [ ] confirm every existing fixture and workspace-shaped test still passes untouched
+      → rebuilt as two real, `dwe validate`-clean throwaway workspaces (before / after).
+        Totals **105 → 36 lines**, and `workspace/commands/source.yml` disappears entirely:
+        - clone: 18-line step + 37-line private command → **7-line builtin step**, no
+          `when:`/`check:`, no command file
+        - inverted pair: 12 → **8 lines** (a 5-line `check:` block → `check: auto`)
+        - `quality.staged`: 33 lines of bash → **13-line `service_exec` + `argv_append_from`**
+        Runtime behaviour pinned by hand against the binary, not only by unit test:
+        multi-line output → separate argv elements (`[a b.txt]` / `[c.txt]` — a path with a
+        space stays one element), blank lines dropped, empty output → skip + exit 0,
+        failing expression → exit 3 with its stderr surfaced, `${args}` ordered before the
+        computed items. For `check: auto`: a `when:` carrying a **trailing comment** inverts
+        without a syntax error, the derived check evaluates at the **project root** when
+        `dwe` is invoked from a subdirectory, and it fails cleanly when the body did not
+        satisfy it. For `source_clone`: fresh clone, re-run skip, `../outside` rejected,
+        non-empty non-git destination errors by name
+- [x] confirm every existing fixture and workspace-shaped test still passes untouched
       (backward compatibility is the acceptance bar here)
-- [ ] run full test suite: `make test`
-- [ ] run `make lint`
-- [ ] verify test coverage meets project standard
+      → `git diff --name-status e8d46a90..HEAD -- '*testdata*'` reports **no modified
+        fixtures at all** across the five feature commits (not even additions), so the whole
+        suite is green against the pre-existing corpus unchanged
+- [x] run full test suite: `make test` → exit 0
+- [x] run `make lint` → `0 issues.`
+- [x] verify test coverage meets project standard
+      → touched packages: `builtin/source` 89.1%, `usercommands/model` 89.0%,
+        `project/config` 89.0%, `execution/pipeline` 82.1%, `runtime/internal/runio` 73.0%.
+        The new code itself is at or near full coverage: `ResolveAutoCheck` and
+        `InvertShellCommand` 100%, `source/clone.go` 86–100% per function
+        (`source.Builtins()` reads 0% only in its own package profile — it is exercised from
+        `builtin`'s registry test)
+
+⚠️ Observed during verification, already covered by Task 7: `dwe deploy plan` renders an
+auto-check as a bare `[check: builtin shell]`. That is exactly the Task 7 checkbox
+"make `dwe deploy plan` print `check: auto (inverse of when)`" — noted here as confirmed
+outstanding, not as new scope.
 
 ### Task 7: [Final] Update documentation
 
-- [ ] document `argv_append_from` in `docs/reference/config/commands/types.md` and
+- [x] document `argv_append_from` in `docs/reference/config/commands/types.md` and
       `directives.md` (the argv/args field tables), including the empty-result semantics,
       its ordering relative to `${args}`, and the plain fact that the expression runs **on
       the host** even for a `service_exec` command — authors should not be surprised by
       where it executes
-- [ ] document `check: auto` in **both** condition pages —
+- [x] document `check: auto` in **both** condition pages —
       `docs/reference/config/conditions.md` and
       `docs/reference/config/deploy/conditions.md` — stating plainly that it applies only to
       `when: {type: shell}` and why the other two kinds are rejected
-- [ ] document the new load-time rejections in
+- [x] document the new load-time rejections in
       `docs/reference/config/commands/validation.md`
-- [ ] document the working directory of the `shell` builtin in
+- [x] document the working directory of the `shell` builtin in
       `docs/reference/config/validate.md` (§ `shell`) and
       `docs/reference/config/deploy/steps.md` — today neither says anything, while the
       neighbouring `file_exists` is documented as "relative to the project root"
-- [ ] make `dwe deploy plan` print `check: auto (inverse of when)` rather than a bare
+- [x] make `dwe deploy plan` print `check: auto (inverse of when)` rather than a bare
       `builtin shell` — the whole point of the feature is that the check is implicit
-- [ ] document the `source_clone` builtin in `docs/reference/config/deploy/builtins.md`
-- [ ] update `skills/dwe/references/authoring-commands.md` and
+- [x] document the `source_clone` builtin in `docs/reference/config/deploy/builtins.md`
+- [x] update `skills/dwe/references/authoring-commands.md` and
       `pipelines-and-orchestration.md`, which describe exactly these schemas (Plan C Task 7
       edits the skill for different content — these two need this plan's changes)
-- [ ] update the Russian mirrors under `docs/i18n/ru/`
-- [ ] run `make build` to resync embedded docs and content hashes
-- [ ] update `AGENTS.md` Critical Patterns for the argv/injection boundary if warranted
-- [ ] move this plan to `docs/plans/completed/`
+- [x] update the Russian mirrors under `docs/i18n/ru/`
+- [x] run `make build` to resync embedded docs and content hashes
+- [x] update `AGENTS.md` Critical Patterns for the argv/injection boundary if warranted
+- [x] move this plan to `docs/plans/completed/`
+
+➕ Done beyond the checklist, for consistency rather than scope creep:
+- `skills/dwe/references/populate-init-repo.md` carried the same hand-rolled
+  `when: dir-empty` + `git clone` recipe as `pipelines-and-orchestration.md`; leaving one
+  of the two stale after shipping `source_clone` would have been the exact doc drift this
+  task exists to close. Both now show the builtin.
+- The plan-output change went in as `pipeline.ResolvedStep.DisplayCheck()` (backed by a new
+  `ResolvedStep.AutoCheck` flag set at rewrite time) rather than a special case inside
+  `FormatAction` — `FormatAction` receives only the derived `*config.Action`, which by
+  construction no longer knows it came from `auto`. All four plan renderers route through
+  the helper (human table, `--output json`, `--format shell` comment, and the reset plan),
+  so the three `dwe deploy plan` formats agree and `dwe reset plan` cannot drift.
+- `docs/internals/packages.md` gained the per-package write-ups the new AGENTS.md Critical
+  Pattern points at (§ Execution for `autocheck.go` + `source/`, § Foundation for the
+  sentinel's load-time rules, § User Commands for `runio.AppendArgvFrom`) — the AGENTS.md
+  entry is a pointer by convention, so adding it without the target would have been a
+  dangling reference.
 
 ## Post-Completion
 

@@ -139,6 +139,7 @@ func allowedFieldsFor(t CommandType) map[string]bool {
 	case CommandTypeShell:
 		common["cmd"] = true
 		common["argv"] = true
+		common["argv_append_from"] = true
 		common["args"] = true
 		common["workdir"] = true
 	case CommandTypeDwe:
@@ -163,6 +164,7 @@ func allowedFieldsFor(t CommandType) map[string]bool {
 		common["runner"] = true
 		common["cmd"] = true
 		common["argv"] = true
+		common["argv_append_from"] = true
 		common["args"] = true
 	case CommandTypeServiceRun:
 		common["service"] = true
@@ -173,6 +175,7 @@ func allowedFieldsFor(t CommandType) map[string]bool {
 		common["runner"] = true
 		common["cmd"] = true
 		common["argv"] = true
+		common["argv_append_from"] = true
 		common["args"] = true
 	case CommandTypeWorkflow:
 		common["steps"] = true
@@ -837,6 +840,11 @@ type CommandDef struct {
 	// Argv is the raw argument vector (no shell quoting).
 	// Mutually exclusive with Cmd.
 	Argv []string `yaml:"argv"`
+	// ArgvAppendFrom is a host shell expression whose stdout lines are appended
+	// to Argv as individual elements (one per line). Argv-only: appending to a
+	// shell Cmd string would splice derived bytes into program text. Empty
+	// output means "nothing to process" and skips the command.
+	ArgvAppendFrom string `yaml:"argv_append_from"`
 	// Args configures the pass-through arguments a caller may supply after
 	// `--`. It only takes effect for a command whose cmd/argv references
 	// ${args}; a command without that reference rejects extra arguments.
@@ -946,6 +954,14 @@ func (c *CommandDef) Validate() error {
 		}
 	}
 
+	if err := c.validateArgsSlotQuoting(); err != nil {
+		return fmt.Errorf("command %q: %w", c.ID, err)
+	}
+
+	if err := c.validateArgvAppendFrom(); err != nil {
+		return fmt.Errorf("command %q: %w", c.ID, err)
+	}
+
 	switch c.Type {
 	case CommandTypeShell, CommandTypeDwe:
 		if err := c.validateCommandType(); err != nil {
@@ -1042,6 +1058,96 @@ func (c *CommandDef) EffectiveWorkdirFrom() string {
 		return c.Runner.WorkdirFrom
 	}
 	return c.WorkdirFrom
+}
+
+// validateArgvAppendFrom enforces where the computed-argv field may appear.
+//
+// The field appends host-computed elements to an argument vector, so it is
+// argv-only by construction: appending to a shell `cmd:` string would splice
+// derived bytes back into program text, which is exactly the surface the
+// ${args} → "$@" transport exists to avoid.
+//
+// type=daemon is rejected deliberately even though it accepts argv: the
+// expansion packs that argv into the synthetic .start command, so the documented
+// "empty output → skip" semantics would read as "silently fail to start the
+// daemon".
+// validateArgsSlotQuoting rejects a ${args} slot the author wrapped in quotes
+// of their own inside `cmd:`.
+//
+// The slot renders to "$@" — already correctly quoted — so a wrapping pair
+// nests badly and silently loses the arguments in a way nothing downstream can
+// detect:
+//
+//	'${args}'  →  '"$@"'   one literal 4-character argument; every caller
+//	                       argument is dropped
+//	"${args}"  →  ""$@""   $@ ends up UNQUOTED between two empty strings, so
+//	                       arguments split on whitespace and a `*` glob is
+//	                       expanded; with no arguments at all it collapses to a
+//	                       single empty argument (`npm test ""`), which is a
+//	                       different command from `npm test`
+//
+// Both are the natural shell habit, both fail silently at runtime, and neither
+// has a correct rendering — the same reasoning that rejects an embedded
+// `--filter=${args}` in argv. A slot merely appearing inside a longer quoted
+// span cannot be caught textually and stays a documented caveat.
+func (c *CommandDef) validateArgsSlotQuoting() error {
+	for _, q := range []string{`"`, `'`} {
+		if strings.Contains(c.Cmd, q+ArgsToken+q) {
+			return fmt.Errorf(
+				"cmd: wraps %s in %s quotes — the slot already renders to a quoted \"$@\", "+
+					"so wrapping it drops the arguments (%s) or exposes them to word splitting "+
+					"and globbing (%s); write it unquoted: %s",
+				ArgsToken, quoteName(q), `'${args}' → '"$@"'`, `"${args}" → ""$@""`, ArgsToken)
+		}
+	}
+	return nil
+}
+
+// quoteName renders a quote character as prose for the error above.
+func quoteName(q string) string {
+	if q == `"` {
+		return "double"
+	}
+	return "single"
+}
+
+func (c *CommandDef) validateArgvAppendFrom() error {
+	if c.ArgvAppendFrom == "" {
+		return nil
+	}
+	// ${args} is the caller's slot and travels as positional parameters
+	// everywhere else, so it never reaches program text. argv_append_from IS
+	// program text — a shell expression — so the token has no transport here.
+	// Rejecting it keeps one coherent rule for the slot across every field,
+	// the same way an embedded `--filter=${args}` is rejected above.
+	if strings.Contains(c.ArgvAppendFrom, ArgsToken) {
+		return fmt.Errorf(
+			"argv_append_from references %s — the pass-through arguments travel as positional "+
+				"parameters and are deliberately not visible to this expression; reference them "+
+				"from argv: instead", ArgsToken)
+	}
+
+	switch c.Type {
+	case CommandTypeShell, CommandTypeServiceExec, CommandTypeServiceRun:
+		if c.Cmd != "" {
+			return fmt.Errorf(
+				"argv_append_from is not valid together with cmd: — it appends argv elements, "+
+					"and appending to a shell string would splice the computed values into program text; "+
+					"use argv: instead (type=%s)", c.Type)
+		}
+		if len(c.Argv) == 0 {
+			return fmt.Errorf(
+				"argv_append_from requires argv: — there is no argument vector to append to (type=%s)",
+				c.Type)
+		}
+		return nil
+	case CommandTypeDaemon:
+		return fmt.Errorf(
+			"argv_append_from is not valid for type=daemon: an empty result means \"nothing to " +
+				"process, skip\", which for a daemon would silently fail to start it")
+	default:
+		return fmt.Errorf("argv_append_from is not valid for type=%s (argv-building types only)", c.Type)
+	}
 }
 
 func (c *CommandDef) validateCommandType() error {

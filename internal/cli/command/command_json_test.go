@@ -428,3 +428,40 @@ func TestCommandInspect_JSONGolden(t *testing.T) {
 		t.Errorf("JSON inspect output mismatch:\ngot:  %s\nwant: %s", got, want)
 	}
 }
+
+// TestBuildCommandInspectJSON_argvAppendFrom: inspect is the documented way to
+// learn what a command does before running it, so an executable field must be
+// visible there for both argv-building command families.
+func TestBuildCommandInspectJSON_argvAppendFrom(t *testing.T) {
+	for _, tc := range []struct {
+		name string
+		def  *usercommands.CommandDef
+	}{
+		{
+			name: "shell",
+			def: &usercommands.CommandDef{
+				ID:             "quality.staged",
+				Type:           usercommands.CommandTypeShell,
+				Argv:           []string{"ruff", "check"},
+				ArgvAppendFrom: "git diff --name-only --cached",
+			},
+		},
+		{
+			name: "service_exec",
+			def: &usercommands.CommandDef{
+				ID:             "app.staged",
+				Type:           usercommands.CommandTypeServiceExec,
+				Service:        "app",
+				Argv:           []string{"ruff", "check"},
+				ArgvAppendFrom: "git diff --name-only --cached",
+			},
+		},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			data := buildCommandInspectJSON(tc.def, i18n.NopTranslator{}, "")
+			if data.ArgvAppendFrom != "git diff --name-only --cached" {
+				t.Errorf("argv_append_from: got %q", data.ArgvAppendFrom)
+			}
+		})
+	}
+}

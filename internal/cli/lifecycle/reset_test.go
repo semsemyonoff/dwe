@@ -1284,6 +1284,63 @@ func TestResetStepCmd_RendersCheckWith(t *testing.T) {
 	}
 }
 
+// TestResetStepCmd_AutoCheckInvertsWhen verifies that `dwe reset step` — which
+// bypasses ResolvePhaseSteps and reads step.Check straight from config —
+// rewrites the `check: auto` sentinel through the same helper the resolver
+// uses. Without the rewrite ExecAction would report `unknown action type
+// "auto"`; with a naive rewrite off the *unrendered* when:, the inverse would
+// be `! ( [ ! -e ${vars.marker} ] )`, whose bad substitution exits non-zero
+// and therefore passes the check for the wrong reason — which the failing
+// case below catches.
+func TestResetStepCmd_AutoCheckInvertsWhen(t *testing.T) {
+	resetYAML := func(cmd string) string {
+		return "phases:\n" +
+			"  - name: probe\n" +
+			"    steps:\n" +
+			"      - name: clone\n" +
+			"        type: shell\n" +
+			"        cmd: \"" + cmd + "\"\n" +
+			"        when:\n" +
+			"          type: shell\n" +
+			"          cmd: \"[ ! -e ${vars.marker} ]\"\n" +
+			"        check: auto\n"
+	}
+
+	t.Run("step does the work, so the inverse check passes", func(t *testing.T) {
+		dir := writeResetStepFixture(t, "  marker: marker.txt\n", resetYAML("touch ${vars.marker}"))
+		flags := &cmdctx.RootFlags{ConfigPath: filepath.Join(dir, "workspace.yml")}
+		cmd := &cobra.Command{}
+		cmd.SetOut(io.Discard)
+		cmd.SetContext(context.Background())
+
+		if err := resetStepCmd(cmd, flags, "probe/clone", false); err != nil {
+			t.Fatalf("resetStepCmd: %v", err)
+		}
+		if _, err := os.Stat(filepath.Join(dir, "marker.txt")); err != nil {
+			t.Fatalf("expected the step to run: %v", err)
+		}
+	})
+
+	t.Run("step does nothing, so the inverse check fails", func(t *testing.T) {
+		dir := writeResetStepFixture(t, "  marker: marker.txt\n", resetYAML("true"))
+		flags := &cmdctx.RootFlags{ConfigPath: filepath.Join(dir, "workspace.yml")}
+		cmd := &cobra.Command{}
+		cmd.SetOut(io.Discard)
+		cmd.SetContext(context.Background())
+
+		err := resetStepCmd(cmd, flags, "probe/clone", false)
+		if err == nil {
+			t.Fatal("expected the derived check to fail")
+		}
+		if !strings.Contains(err.Error(), "check failed") {
+			t.Fatalf("err = %v, want a check failure", err)
+		}
+		if strings.Contains(err.Error(), "unknown action type") {
+			t.Fatalf("the auto sentinel reached ExecAction unrewritten: %v", err)
+		}
+	})
+}
+
 // TestResetStepCmd_MatchesResetRunRenderedCommand verifies that `reset step
 // --dry-run` and the resolution path `reset run` uses (ResolvePhaseSteps via
 // reset.LoadAndResolvePlan) render the very same step to the very same

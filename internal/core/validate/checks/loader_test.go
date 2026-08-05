@@ -233,6 +233,10 @@ func TestBuildValidator_DisallowedBuiltin(t *testing.T) {
 		{"docker_daemon_logs", "engine-internal"},
 		{"docker_remove_project_volumes", "may only use builtins:"},
 		{"confirm", "may only use builtins:"},
+		// source_clone mutates the working tree; the seven-name allowlist keeps
+		// it out of workspace/validate.yml even though kindAllowed lets actions
+		// into CtxPredicate.
+		{"source_clone", "may only use builtins:"},
 	}
 	for _, tc := range tests {
 		t.Run(tc.cmd, func(t *testing.T) {

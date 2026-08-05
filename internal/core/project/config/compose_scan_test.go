@@ -126,3 +126,37 @@ func TestScanComposeIsolation_MalformedFileSkippedSilently(t *testing.T) {
 	findings := ScanComposeIsolation(cfg, root)
 	require.Empty(t, findings)
 }
+
+// TestScanComposeIsolation_DeterministicOrder pins the sorted-key iteration.
+// Findings from one compose file are identical in every `dwe validate` sort key
+// (severity/domain/target/file/line), so map-order iteration here surfaces as
+// `--output json` diagnostics that flap between runs on an unchanged project.
+// Every other assertion in this file is order-independent, so nothing else
+// would catch a regression to `range doc.Services`.
+func TestScanComposeIsolation_DeterministicOrder(t *testing.T) {
+	t.Parallel()
+
+	want := []struct {
+		kind     IsolationKind
+		resource string
+	}{
+		{KindContainerName, "alpha"},
+		{KindContainerName, "mid"},
+		{KindContainerName, "zeta"},
+		{KindNamedVolume, "avol"},
+		{KindNamedVolume, "zvol"},
+		{KindNamedNetwork, "anet"},
+		{KindNamedNetwork, "znet"},
+	}
+
+	// Repeated because Go randomizes map iteration per range statement: a
+	// single pass can match by luck.
+	for range 20 {
+		findings := scanFixture(t, "ordering.yml")
+		require.Len(t, findings, len(want))
+		for i, w := range want {
+			require.Equal(t, w.kind, findings[i].Kind, "finding %d kind", i)
+			require.Equal(t, w.resource, findings[i].Resource, "finding %d resource", i)
+		}
+	}
+}

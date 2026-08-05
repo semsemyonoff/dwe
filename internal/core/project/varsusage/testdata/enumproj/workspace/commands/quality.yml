@@ -1,0 +1,6 @@
+commands:
+  staged:
+    type: service_exec
+    service: app
+    argv: [ruff, check]
+    argv_append_from: "git -C ${vars.source.dir} diff --name-only --diff-filter=ACM"

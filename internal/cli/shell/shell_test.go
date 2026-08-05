@@ -215,6 +215,43 @@ func TestNewCmd_commandFlag_validation(t *testing.T) {
 	}
 }
 
+// TestNewCmd_ttyFlags covers the --tty/--no-tty surface: both spellings exist,
+// -t is the shorthand, and the pair is mutually exclusive (rejected by cobra at
+// parse time, before any config load).
+func TestNewCmd_ttyFlags(t *testing.T) {
+	t.Run("both flags are registered with the -t shorthand", func(t *testing.T) {
+		cmd := NewCmd("", &cmdctx.RootFlags{})
+		tty := cmd.Flags().Lookup("tty")
+		if tty == nil {
+			t.Fatal("--tty is not registered")
+		}
+		if tty.Shorthand != "t" {
+			t.Errorf("--tty shorthand = %q, want \"t\"", tty.Shorthand)
+		}
+		if cmd.Flags().Lookup("no-tty") == nil {
+			t.Fatal("--no-tty is not registered")
+		}
+	})
+
+	t.Run("tty and no-tty are mutually exclusive", func(t *testing.T) {
+		// A config path that cannot load, so reaching RunE would produce a
+		// *different* error — proving the rejection happens during parsing.
+		cmd := NewCmd("", &cmdctx.RootFlags{ConfigPath: "/nonexistent/path/workspace.yml"})
+		cmd.SetArgs([]string{"--tty", "--no-tty"})
+		cmd.SetOut(io.Discard)
+		cmd.SetErr(io.Discard)
+		err := cmd.Execute()
+		if err == nil {
+			t.Fatal("expected an error for --tty --no-tty, got nil")
+		}
+		for _, want := range []string{"tty", "no-tty"} {
+			if !strings.Contains(err.Error(), want) {
+				t.Errorf("error %q does not name %q", err.Error(), want)
+			}
+		}
+	})
+}
+
 // TestNewCmd_commandFlag_validationGate confirms the validator is gated on
 // `Changed("command")`, not on an empty string. An unset flag must NOT trigger
 // the "empty or whitespace-only" error; instead the command continues into

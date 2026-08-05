@@ -1,0 +1,22 @@
+# Deliberately declared out of alphabetical order: the scanner must emit
+# findings sorted by key, not in YAML/map order.
+services:
+  zeta:
+    image: busybox
+    container_name: zeta-fixed
+  alpha:
+    image: busybox
+    container_name: alpha-fixed
+  mid:
+    image: busybox
+    container_name: mid-fixed
+volumes:
+  zvol:
+    name: z-vol
+  avol:
+    name: a-vol
+networks:
+  znet:
+    name: z-net
+  anet:
+    name: a-net

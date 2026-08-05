@@ -22,6 +22,7 @@ ui:
   docs.property.workdir: "Working directory"
   docs.property.builtin: "Builtin"
   docs.property.compose_args: "Compose args"
+  docs.property.argv_append_from: "Argv append from"
   docs.property.script: "Script"
   docs.workflow.parallel: "parallel"
   docs.workflow.sub_steps: "sub-steps"
