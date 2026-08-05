@@ -28,6 +28,7 @@ const (
 type IsolationFinding struct {
 	Kind     IsolationKind
 	Resource string // service name or volume/network name
+	Value    string // the declared value (container_name / explicit name:), else ""
 	HostPort int    // raw_host_port only, else 0
 	Blocking bool   // intrinsic: causes a hard collision with the working env
 	Message  string
@@ -107,6 +108,7 @@ func scanComposeDoc(doc composeScanDoc, file string) []IsolationFinding {
 			findings = append(findings, IsolationFinding{
 				Kind:     KindContainerName,
 				Resource: name,
+				Value:    svc.ContainerName,
 				Blocking: true,
 				Message: "service " + name + " sets container_name: " + svc.ContainerName +
 					" — bypasses compose project-name scoping and collides with any other" +

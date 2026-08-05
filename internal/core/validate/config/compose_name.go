@@ -84,9 +84,10 @@ func (v *composeProjectNameValidator) Run(ctx validate.Context) []validate.Diagn
 			declared, resolved,
 		),
 		Hint: fmt.Sprintf(
-			"align the two: change the compose top-level to `name: %s`, or set workspace/docker.yml `project_name: %s` (and drop the now-redundant compose name:). "+
+			"align the two: set workspace/docker.yml `project_name: %s` to pin the name dwe already uses (recommended — leaves the compose file untouched), "+
+				"or change the compose top-level to `name: %s` to match it (dropping docker.yml project_name if that makes it redundant). "+
 				"Otherwise raw `docker compose` without dwe's -p would scope this stack as %q while dwe uses %q.",
-			resolved, declared, declared, resolved,
+			resolved, resolved, declared, resolved,
 		),
 	}}
 }

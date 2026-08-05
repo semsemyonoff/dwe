@@ -580,16 +580,24 @@ nothing would re-run.
 - Create: `internal/core/validate/config/container_name_test.go`
 - Modify: `internal/core/validate/config/all.go`
 
-- [ ] (TDD) write the test pinning that the hint's **first** suggestion is a valid compose
+- [x] (TDD) write the test pinning that the hint's **first** suggestion is a valid compose
       project name (today it recommends the CamelCase form docker rejects — an agent
       followed it and got a failed `reset run`)
-- [ ] reorder the hint so the `docker.yml project_name` route leads, and never suggest a
+- [x] reorder the hint so the `docker.yml project_name` route leads, and never suggest a
       value that would be rejected
-- [ ] (TDD) write the fixture + test for a `container_name:` that **diverges from the
+- [x] (TDD) write the fixture + test for a `container_name:` that **diverges from the
       derived `<project>-<service>`** — note the defect is divergence, not casing: a
       lowercase `container_name: myapp` breaks `dwe stop <name>`, `dwe restart <name>` and
-      the daemon builtins exactly the same way, since those resolve the derived name
-- [ ] surface the finding through the existing `config.ScanComposeIsolation`
+      the daemon builtins exactly the same way, since those resolve the derived name.
+      Correction found during implementation: `dwe stop`/`restart` and
+      `docker_stop_remove_container` already resolve containers via compose project+service
+      **labels** (`docker.LookupServiceContainer`), not by guessing the derived name — only
+      the daemon builtins (`daemon.ResolveContainerName`) build it directly, and daemons are
+      not compose services so this check doesn't apply to them either. The diagnostic wording
+      was written to state the real risk honestly: divergence is a foot-gun for raw
+      `docker`/`docker compose` usage, scripts and docs that assume the derived name — not a
+      claim that it breaks dwe's own compose-bypass paths, which are already robust to it
+- [x] surface the finding through the existing `config.ScanComposeIsolation`
       (`compose_scan.go:78,108`), which **already** parses the `ComposeFiles()` chain — but
       note two gaps the first draft treated as drop-in reuse: (a) `scanComposeDoc` flags
       **any** non-empty `container_name` (`svc.ContainerName != ""`), without comparing to
@@ -598,14 +606,14 @@ nothing would re-run.
       `IsolationFinding.Resource` is the **service** name and the value only appears inside
       the human `Message`, so `IsolationFinding` needs a `Value` field, which touches its
       two existing consumers (`validate/tests`, envtest runner)
-- [ ] **filter by kind**: wire only `KindContainerName` into the `config` domain. Mapping
+- [x] **filter by kind**: wire only `KindContainerName` into the `config` domain. Mapping
       `Blocking → error` wholesale would also raise `KindRawHostPort`, which fires on any
       literal `"5001:5000"` in compose — normal dev practice (beetDeck lives that way) —
       turning `dwe validate` red almost everywhere and contradicting Tasks 7–8 and both
       acceptance criteria in Task 15. Precedent: `dwe validate tests` deliberately demotes
       **all** findings to `SeverityWarning`
-- [ ] write tests for the silent cases: derived-matching names, interpolated `${…}` names
-- [ ] run tests — must pass before task 6
+- [x] write tests for the silent cases: derived-matching names, interpolated `${…}` names
+- [x] run tests — must pass before task 6
 
 ### Task 6: Validator — declared port without a matching `exports.env` rule
 
