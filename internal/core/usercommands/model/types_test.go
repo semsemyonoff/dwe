@@ -3194,6 +3194,27 @@ func TestValidate_ArgvAppendFrom(t *testing.T) {
 			name: "no append is unaffected",
 			def:  CommandDef{Type: CommandTypeShell, ID: "g.h", Cmd: "echo ok"},
 		},
+		// ${args} travels as positional parameters everywhere else and is
+		// deliberately invisible to this expression, so a reference here would
+		// silently render to nothing. One rule for the slot across all fields.
+		{
+			name: "args token in the expression",
+			def: CommandDef{
+				Type: CommandTypeShell, ID: "g.i",
+				Argv:           []string{"ruff", "check"},
+				ArgvAppendFrom: "git diff --name-only -- ${args}",
+			},
+			wantErr: "argv_append_from references ${args}",
+		},
+		{
+			name: "args token rejected before the type check",
+			def: CommandDef{
+				Type: CommandTypeWorkflow, ID: "g.j",
+				Steps:          []WorkflowStep{{Command: "x"}},
+				ArgvAppendFrom: "echo ${args}",
+			},
+			wantErr: "argv_append_from references ${args}",
+		},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			err := tc.def.Validate()

@@ -42,7 +42,14 @@ func (r *Runner) BuildCommand(ctx context.Context, rc spec.RunContext) (*exec.Cm
 		if err != nil {
 			return nil, err
 		}
-		argv = rendered
+		// argv_append_from runs its expression here, so BuildCommand is no
+		// longer side-effect free for a command that declares it — the argv
+		// cannot be known without executing it. An empty result surfaces as
+		// spec.ErrArgvAppendEmpty and is handled by runtime.RunCommand.
+		argv, err = runio.AppendArgvFrom(ctx, rc, rendered)
+		if err != nil {
+			return nil, err
+		}
 	}
 
 	if len(argv) == 0 {

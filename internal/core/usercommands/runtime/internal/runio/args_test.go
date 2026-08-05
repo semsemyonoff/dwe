@@ -1,11 +1,17 @@
 package runio
 
 import (
+	"bytes"
+	"context"
+	"io"
 	"os/exec"
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
+	"github.com/semsemyonoff/dwe/internal/core/usercommands/model"
+	"github.com/semsemyonoff/dwe/internal/core/usercommands/runtime/spec"
 	"github.com/semsemyonoff/dwe/internal/shared/tpl"
 
 	"github.com/stretchr/testify/require"
@@ -174,4 +180,139 @@ func TestRenderShellCommand_ArgsHiddenFromTemplates(t *testing.T) {
 		require.Contains(t, script, "world")
 		require.Contains(t, script, `"$@"`)
 	})
+}
+
+// --- argv_append_from ------------------------------------------------------
+
+// appendRC is the minimal RunContext AppendArgvFrom needs: a command carrying
+// the expression, a project root to run it in, and a stderr sink.
+func appendRC(t *testing.T, expr string, args []string, stderr io.Writer) spec.RunContext {
+	t.Helper()
+	return spec.RunContext{
+		Cmd:         &model.CommandDef{Type: model.CommandTypeShell, ID: "q.staged", ArgvAppendFrom: expr},
+		Render:      &tpl.RenderContext{Args: args},
+		ProjectRoot: t.TempDir(),
+		Stderr:      stderr,
+	}
+}
+
+// TestAppendArgvFrom_OneElementPerLine is the core contract: stdout is DATA.
+// Every line becomes exactly one argv element, whatever bytes it contains —
+// spaces, quotes and `$(…)` included. Anything that re-parsed the output as
+// shell would split "a b.py" into two arguments and run the substitution.
+func TestAppendArgvFrom_OneElementPerLine(t *testing.T) {
+	expr := `printf '%s\n' 'a.py' 'src/a b.py' "it's.py" '$(touch /tmp/dwe-append-pwned)'`
+	got, err := AppendArgvFrom(context.Background(), appendRC(t, expr, nil, io.Discard), []string{"ruff", "check"})
+	require.NoError(t, err)
+	require.Equal(t, []string{"ruff", "check", "a.py", "src/a b.py", "it's.py", "$(touch /tmp/dwe-append-pwned)"}, got)
+	require.NoFileExists(t, "/tmp/dwe-append-pwned", "output must never be re-parsed as shell")
+}
+
+// TestAppendArgvFrom_TrailingNewlineAndBlankLines: the trailing newline every
+// well-behaved tool emits must not become an empty argv element, and neither
+// must a blank line in the middle — `ruff check ""` is a different command.
+func TestAppendArgvFrom_TrailingNewlineAndBlankLines(t *testing.T) {
+	got, err := AppendArgvFrom(context.Background(),
+		appendRC(t, `printf 'a.py\n\nb.py\n'`, nil, io.Discard), []string{"ruff"})
+	require.NoError(t, err)
+	require.Equal(t, []string{"ruff", "a.py", "b.py"}, got)
+}
+
+// TestAppendArgvFrom_EmptyOutputSkips pins the empty-list decision: an
+// expression that succeeds with no output is the "nothing to process" signal,
+// never "run the declared argv anyway" (`ruff check` with no files lints the
+// whole tree — the opposite of the intent).
+func TestAppendArgvFrom_EmptyOutputSkips(t *testing.T) {
+	for _, expr := range []string{"true", "printf ''", `printf '\n\n'`} {
+		t.Run(expr, func(t *testing.T) {
+			_, err := AppendArgvFrom(context.Background(),
+				appendRC(t, expr, nil, io.Discard), []string{"ruff", "check"})
+			require.ErrorIs(t, err, spec.ErrArgvAppendEmpty)
+		})
+	}
+}
+
+// TestAppendArgvFrom_ExpressionFailureSurfaces: a failing expression fails the
+// command (it is not an empty list), and its stderr reaches the user rather
+// than being swallowed with the captured stdout.
+func TestAppendArgvFrom_ExpressionFailureSurfaces(t *testing.T) {
+	var stderr bytes.Buffer
+	_, err := AppendArgvFrom(context.Background(),
+		appendRC(t, `echo "not a git repo" >&2; exit 3`, nil, &stderr), []string{"ruff"})
+	require.Error(t, err)
+	require.NotErrorIs(t, err, spec.ErrArgvAppendEmpty, "a failure is not an empty list")
+	require.Contains(t, err.Error(), "argv_append_from")
+	require.Contains(t, stderr.String(), "not a git repo")
+}
+
+// TestAppendArgvFrom_ArgsHidden is the consistency point of the ${args} slot:
+// the caller's bytes travel as positional parameters everywhere else, so they
+// must not be reachable from this expression's program text either. The literal
+// ${args} token is rejected at load time; the raw Go-template form is only
+// stoppable here.
+func TestAppendArgvFrom_ArgsHidden(t *testing.T) {
+	payload := "$(touch /tmp/dwe-append-args-pwned)"
+
+	t.Run("template form cannot reach .Args", func(t *testing.T) {
+		_, err := AppendArgvFrom(context.Background(),
+			appendRC(t, `echo {{ index .Args 0 }}`, []string{payload}, io.Discard), nil)
+		require.Error(t, err, "a .Args reference must not silently succeed")
+	})
+
+	t.Run("bare .Args renders empty, not the payload", func(t *testing.T) {
+		script, err := RenderArgvAppendFrom(`echo {{ .Args }}`, &tpl.RenderContext{Args: []string{payload}})
+		require.NoError(t, err)
+		require.NotContains(t, script, payload)
+	})
+
+	t.Run("other context fields still render", func(t *testing.T) {
+		got, err := AppendArgvFrom(context.Background(),
+			spec.RunContext{
+				Cmd:    &model.CommandDef{ArgvAppendFrom: "echo ${param.who}"},
+				Render: &tpl.RenderContext{Params: map[string]any{"who": "world"}},
+				Stderr: io.Discard,
+			}, []string{"echo"})
+		require.NoError(t, err)
+		require.Equal(t, []string{"echo", "world"}, got)
+	})
+}
+
+// TestAppendArgvFrom_RunsInProjectRoot: the expression is host-side and its
+// relative paths must mean the same thing regardless of where dwe was invoked
+// from — the same rule condition.EvalCmd applies.
+func TestAppendArgvFrom_RunsInProjectRoot(t *testing.T) {
+	root := t.TempDir()
+	rc := spec.RunContext{
+		Cmd:         &model.CommandDef{ArgvAppendFrom: "pwd"},
+		Render:      &tpl.RenderContext{},
+		ProjectRoot: root,
+		Stderr:      io.Discard,
+	}
+	got, err := AppendArgvFrom(context.Background(), rc, nil)
+	require.NoError(t, err)
+	require.Len(t, got, 1)
+	// macOS resolves /var → /private/var, so compare resolved paths.
+	wantRoot, err := filepath.EvalSymlinks(root)
+	require.NoError(t, err)
+	gotRoot, err := filepath.EvalSymlinks(got[0])
+	require.NoError(t, err)
+	require.Equal(t, wantRoot, gotRoot)
+}
+
+// TestAppendArgvFrom_NoExpressionIsIdentity: a command without the field must
+// keep its argv byte-identical and spawn nothing.
+func TestAppendArgvFrom_NoExpressionIsIdentity(t *testing.T) {
+	got, err := AppendArgvFrom(context.Background(),
+		spec.RunContext{Cmd: &model.CommandDef{Type: model.CommandTypeShell}}, []string{"git", "status"})
+	require.NoError(t, err)
+	require.Equal(t, []string{"git", "status"}, got)
+}
+
+// TestAppendArgvFrom_ContextCancellation: the expression is a child process and
+// must die with the invocation.
+func TestAppendArgvFrom_ContextCancellation(t *testing.T) {
+	ctx, cancel := context.WithTimeout(context.Background(), 50*time.Millisecond)
+	defer cancel()
+	_, err := AppendArgvFrom(ctx, appendRC(t, "sleep 30", nil, io.Discard), []string{"ruff"})
+	require.Error(t, err)
 }

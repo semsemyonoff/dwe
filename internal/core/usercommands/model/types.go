@@ -1071,6 +1071,18 @@ func (c *CommandDef) validateArgvAppendFrom() error {
 	if c.ArgvAppendFrom == "" {
 		return nil
 	}
+	// ${args} is the caller's slot and travels as positional parameters
+	// everywhere else, so it never reaches program text. argv_append_from IS
+	// program text — a shell expression — so the token has no transport here.
+	// Rejecting it keeps one coherent rule for the slot across every field,
+	// the same way an embedded `--filter=${args}` is rejected above.
+	if strings.Contains(c.ArgvAppendFrom, ArgsToken) {
+		return fmt.Errorf(
+			"argv_append_from references %s — the pass-through arguments travel as positional "+
+				"parameters and are deliberately not visible to this expression; reference them "+
+				"from argv: instead", ArgsToken)
+	}
+
 	switch c.Type {
 	case CommandTypeShell, CommandTypeServiceExec, CommandTypeServiceRun:
 		if c.Cmd != "" {

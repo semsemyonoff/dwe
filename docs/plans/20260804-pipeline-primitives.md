@@ -321,28 +321,51 @@ authoring without buying protection.)*
   caller of `RenderArgvWithArgs`, for `type: shell` with `argv:`; `runners/service/run.go:23`
   reuses `buildServiceArgv` and needs no separate edit)
 - Modify: corresponding `*_test.go`
+- ➕ Modify: `internal/core/usercommands/runtime/spec/errors.go` (the skip sentinel and its
+  written contract) and `internal/core/usercommands/runtime/runner.go` (the single place
+  that translates it into exit code / message / notification behaviour)
+- ➕ Modify: `internal/core/usercommands/model/types.go` + `types_test.go` (the literal
+  `${args}` rejection, which this task's first bullet requires)
 
-- [ ] add the exported `runio.RenderArgvAppendFrom` (wrapping the private `withoutArgs`)
+- [x] add the exported `runio.RenderArgvAppendFrom` (wrapping the private `withoutArgs`)
       and render through it; reject a literal `${args}` at load time (constraint 3a — do
       this **before** wiring execution, so the unsafe shape never exists even transiently).
       Keep `withoutArgs` unexported: the point is one safe entry point, not a second
       exported primitive both runners can misuse
-- [ ] execute the expression on the host via `config.ShellBin` with the run context's
+- [x] execute the expression on the host via `config.ShellBin` with the run context's
       cancellation, capturing stdout only (stderr streams to the user)
-- [ ] split stdout into argv elements one per line, ignoring a trailing newline; treat
+- [x] split stdout into argv elements one per line, ignoring a trailing newline; treat
       output bytes as data, never re-parse as shell
-- [ ] append after the declared `Argv` (with `${args}` already expanded in place)
-- [ ] name the skip mechanism explicitly (sentinel error, distinct runner outcome, or early
+- [x] append after the declared `Argv` (with `${args}` already expanded in place)
+- [x] name the skip mechanism explicitly (sentinel error, distinct runner outcome, or early
       return) and define what it does to `messages.success`, `notify:`, the pipeline
       reporter's Skip-vs-Finish accounting and `--output json` — "skip with a message" is
       not yet a mechanism
-- [ ] write tests: multi-line output → separate argv elements; paths containing spaces stay
+      → **`spec.ErrArgvAppendEmpty`**, returned by the runner and translated exactly once,
+      in `runtime.RunCommand`: stderr note + nil error (exit 0), so a pipeline
+      `type: command` step **Finishes** rather than Skipping — and therefore journals as
+      success, which is why such a step needs a `files_gate`/`check:` (already noted under
+      Technical Details). `messages.success` is suppressed (nothing ran); the desktop
+      notification is suppressed, following the declined-confirmation precedent; file
+      effects are rolled back as on the error path. `--output json` is unaffected —
+      command execution streams the child's output and has no JSON envelope
+- [x] write tests: multi-line output → separate argv elements; paths containing spaces stay
       single elements; empty output → skip, exit 0; expression failure → command fails with
       the expression's stderr surfaced
-- [ ] write a test that `${args}` reaches the command as positional parameters here exactly
+- [x] write a test that `${args}` reaches the command as positional parameters here exactly
       as it does in `cmd:`/`argv:` — the consistency point of constraint 3a
-- [ ] write a test pinning `${args}` + `argv_append_from` ordering
-- [ ] run tests — must pass before task 3
+- [x] write a test pinning `${args}` + `argv_append_from` ordering
+- [x] run tests — must pass before task 3
+
+➕ Decisions taken while implementing (documented so Task 7 can carry them into the docs):
+- **cwd of the expression is the project root**, not `cmd.workdir` — for a `service_exec`
+  command the workdir names a path *inside the container*, and a host expression must mean
+  the same thing regardless of the directory `dwe` was invoked from (the rule
+  `condition.EvalCmd` already follows).
+- **Blank lines are dropped** along with the trailing newline: no argument this field
+  carries is the empty string, while a stray `""` silently changes what a tool does. Lines
+  are otherwise byte-for-byte — no trimming — since spaces are legal in a path.
+- **stdin is left unwired**: the expression must not consume the user's input.
 
 ### Task 3: `check: auto` — schema and inversion
 

@@ -448,3 +448,51 @@ func TestHostRunner_Run_ContextDeadline(t *testing.T) {
 	}
 	_ = errors.Is(ctx.Err(), context.DeadlineExceeded)
 }
+
+// TestHostRunner_BuildCommand_ArgvAppendFrom_Ordering pins the documented
+// order: the declared argv (with ${args} spliced in place) first, the computed
+// items last. An author reading `argv: [ruff, check, "${args}"]` must be able
+// to predict where the file list lands.
+func TestHostRunner_BuildCommand_ArgvAppendFrom_Ordering(t *testing.T) {
+	r := &Runner{}
+	rc := spec.RunContext{
+		Cmd: &model.CommandDef{
+			Type:           model.CommandTypeShell,
+			ID:             "quality.staged",
+			Argv:           []string{"echo", "check", "${args}"},
+			ArgvAppendFrom: `printf '%s\n' 'a b.py' 'c.py'`,
+		},
+		Render:      &tpl.RenderContext{Args: []string{"--fix"}},
+		ProjectRoot: t.TempDir(),
+		Stderr:      &bytes.Buffer{},
+	}
+	c, err := r.BuildCommand(context.Background(), rc)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	want := []string{"echo", "check", "--fix", "a b.py", "c.py"}
+	if !slices.Equal(c.Args, want) {
+		t.Errorf("argv = %q, want %q", c.Args, want)
+	}
+}
+
+// TestHostRunner_BuildCommand_ArgvAppendFrom_EmptySkips: the host runner must
+// propagate the skip sentinel rather than running the declared argv with no
+// file list.
+func TestHostRunner_BuildCommand_ArgvAppendFrom_EmptySkips(t *testing.T) {
+	r := &Runner{}
+	rc := spec.RunContext{
+		Cmd: &model.CommandDef{
+			Type:           model.CommandTypeShell,
+			ID:             "quality.staged",
+			Argv:           []string{"echo", "check"},
+			ArgvAppendFrom: "true",
+		},
+		Render:      &tpl.RenderContext{},
+		ProjectRoot: t.TempDir(),
+		Stderr:      &bytes.Buffer{},
+	}
+	if _, err := r.BuildCommand(context.Background(), rc); !errors.Is(err, spec.ErrArgvAppendEmpty) {
+		t.Fatalf("err = %v, want spec.ErrArgvAppendEmpty", err)
+	}
+}

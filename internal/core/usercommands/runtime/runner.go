@@ -162,6 +162,11 @@ func RunCommand(ctx context.Context, rc RunContext) (err error) {
 	}
 	normalizeRenderContext(&rc)
 
+	// Set when argv_append_from produced nothing to process. The notifier defer
+	// below reads it: the command did not do the work it would report on, so it
+	// is suppressed exactly like a declined confirmation.
+	var skippedEmptyAppend bool
+
 	// Conditional notifier install — only when this is the top-level user
 	// invocation of a command opted into notifications. Workflow sub-steps
 	// and pipeline-invoked commands have SkipNotify=true and skip this
@@ -182,6 +187,12 @@ func RunCommand(ctx context.Context, rc RunContext) (err error) {
 		defer func() {
 			// User explicitly declined the confirmation prompt — not a failure.
 			if errors.As(err, new(*commandAbortedError)) {
+				return
+			}
+			// Nothing to process — the command never ran, so there is no
+			// outcome to report. (err is nil here, so without this the user
+			// would get a "success" notification for work that did not happen.)
+			if skippedEmptyAppend {
 				return
 			}
 			n.Notify(context.Background(), notify.Event{
@@ -219,6 +230,15 @@ func RunCommand(ctx context.Context, rc RunContext) (err error) {
 	if err := runner.Run(ctx, rc); err != nil {
 		for _, cleanup := range slices.Backward(cleanups) {
 			cleanup()
+		}
+		// argv_append_from produced nothing: the command is skipped, not
+		// failed. File effects are rolled back above for the same reason they
+		// are on the error path — nothing consumed them. See
+		// spec.ErrArgvAppendEmpty for the full contract.
+		if errors.Is(err, spec.ErrArgvAppendEmpty) {
+			skippedEmptyAppend = true
+			_, _ = fmt.Fprintf(runio.StderrOf(rc), "  ◎ command %q: skipped (nothing to process)\n", rc.Cmd.ID)
+			return nil
 		}
 		if msgErr := emitCommandMessage(rc, rc.Cmd.Messages.Error, false); msgErr != nil {
 			return fmt.Errorf("%w; render error message: %v", err, msgErr)

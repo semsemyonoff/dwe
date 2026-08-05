@@ -2,6 +2,7 @@ package service
 
 import (
 	"context"
+	"errors"
 	"strings"
 	"testing"
 
@@ -1000,7 +1001,7 @@ func TestBuildServiceArgv_ShellFromConfig(t *testing.T) {
 				Config: tc.cfg,
 				Render: &tpl.RenderContext{},
 			}
-			argv, err := buildServiceArgv(ctx)
+			argv, err := buildServiceArgv(context.Background(), ctx)
 			if err != nil {
 				t.Fatalf("unexpected error: %v", err)
 			}
@@ -1008,5 +1009,61 @@ func TestBuildServiceArgv_ShellFromConfig(t *testing.T) {
 				t.Errorf("argv[0] = %q, want %q", argv[0], tc.wantShell)
 			}
 		})
+	}
+}
+
+// TestExecRunner_BuildCommand_ArgvAppendFrom: the expression runs on the HOST
+// (it computes the argument list) while its items land at the tail of the
+// container argv — the whole point of the field is that a container command can
+// receive a host-computed file list without the author rebuilding
+// `docker compose exec` by hand.
+func TestExecRunner_BuildCommand_ArgvAppendFrom(t *testing.T) {
+	ctx := RunContext{
+		Cmd: &CommandDef{
+			Type:           CommandTypeServiceExec,
+			ID:             "quality.staged",
+			Service:        "app-main",
+			Mode:           ExecModeExec,
+			Argv:           []string{"ruff", "check", "${args}"},
+			ArgvAppendFrom: `printf '%s\n' 'src/a b.py' 'src/c.py'`,
+		},
+		Render:      &tpl.RenderContext{Args: []string{"--fix"}},
+		Config:      &config.DweConfig{Project: config.ProjectConfig{Prefix: "dwe", Name: "laravel"}},
+		ProjectRoot: t.TempDir(),
+	}
+	r := &ExecRunner{}
+	c, err := r.BuildCommand(context.Background(), ctx, testCompose("dwe-laravel", nil))
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	tail := c.Args[len(c.Args)-6:]
+	want := []string{"app-main", "ruff", "check", "--fix", "src/a b.py", "src/c.py"}
+	for i := range want {
+		if tail[i] != want[i] {
+			t.Fatalf("argv tail = %q, want %q", tail, want)
+		}
+	}
+}
+
+// TestExecRunner_BuildCommand_ArgvAppendFromEmpty: the skip sentinel must reach
+// the caller instead of `ruff check` running with no file list (which would
+// lint the whole tree).
+func TestExecRunner_BuildCommand_ArgvAppendFromEmpty(t *testing.T) {
+	ctx := RunContext{
+		Cmd: &CommandDef{
+			Type:           CommandTypeServiceExec,
+			ID:             "quality.staged",
+			Service:        "app-main",
+			Mode:           ExecModeExec,
+			Argv:           []string{"ruff", "check"},
+			ArgvAppendFrom: "true",
+		},
+		Render:      &tpl.RenderContext{},
+		Config:      &config.DweConfig{Project: config.ProjectConfig{Prefix: "dwe", Name: "laravel"}},
+		ProjectRoot: t.TempDir(),
+	}
+	r := &ExecRunner{}
+	if _, err := r.BuildCommand(context.Background(), ctx, testCompose("dwe-laravel", nil)); !errors.Is(err, spec.ErrArgvAppendEmpty) {
+		t.Fatalf("err = %v, want spec.ErrArgvAppendEmpty", err)
 	}
 }
