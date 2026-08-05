@@ -5,6 +5,7 @@ import (
 	"bytes"
 	"sort"
 	"strings"
+	"unicode"
 )
 
 // SearchHit is one result from Search: a (topic, section) pair with the
@@ -301,12 +302,29 @@ func sumCount(counts []int) int {
 	return total
 }
 
-// sanitizeSnippet collapses every whitespace run (tabs and newlines included —
-// markdown tables carry both) into single spaces and caps the length at
-// snippetMaxLen bytes, ellipsis included, so a snippet can never break a
-// tab-separated row or wrap a terminal.
+// sanitizeSnippet makes a raw document line safe to write to a terminal as a
+// TSV field. Two passes, both load-bearing:
+//
+//   - non-printable runes are DROPPED. The snippet is the only channel through
+//     which document content reaches stdout, and a doc tree can be untrusted
+//     (`--source project` inside a cloned repo), so an ESC/BEL/OSC sequence
+//     embedded in a page would otherwise reach the terminal verbatim and clear
+//     the screen, recolor it, or set the window title. Whitespace is exempt
+//     here and normalized by the next pass instead;
+//   - every whitespace run (tabs and newlines included — markdown tables carry
+//     both) collapses to a single space, so the snippet can never break a
+//     tab-separated row.
+//
+// The length is then capped at snippetMaxLen bytes, ellipsis included, so a
+// snippet never wraps a terminal.
 func sanitizeSnippet(line string) string {
-	s := strings.Join(strings.Fields(line), " ")
+	printable := strings.Map(func(r rune) rune {
+		if unicode.IsSpace(r) || unicode.IsPrint(r) {
+			return r
+		}
+		return -1
+	}, line)
+	s := strings.Join(strings.Fields(printable), " ")
 	if len(s) <= snippetMaxLen {
 		return s
 	}

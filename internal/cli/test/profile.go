@@ -245,9 +245,10 @@ func (p *costProfiler) countHostStepsInPhases(phases []config.DeployPhase) int {
 //   - type: shell — sh -c in the project root;
 //   - type: builtin, cmd: shell — the shell builtin, same sh -c;
 //   - type: command — host unless the referenced command runs in a container
-//     (service_exec / service_run). Resolved through the registry; an
-//     unresolvable reference counts as host, which is the safe direction for a
-//     field that gates an unattended run;
+//     (service_exec / service_run) and computes no argv on the host
+//     (argv_append_from). Resolved through the registry; an unresolvable
+//     reference counts as host, which is the safe direction for a field that
+//     gates an unattended run;
 //   - type: dwe — only when the subcommand re-enters project-authored code
 //     (see dweSubcommandRunsProjectCode);
 //   - a shell `when:` or a host-executing `check:` on any step, including the
@@ -351,6 +352,17 @@ func (p *costProfiler) commandRunsOnHost(id string, seen map[string]bool) bool {
 	if err != nil || def == nil {
 		return true
 	}
+	// Checked BEFORE the type switch: argv_append_from is valid on
+	// service_exec / service_run, but the expression itself always runs on the
+	// HOST via config.ShellBin with cwd = project root (see
+	// runio.AppendArgvFrom) — it computes the argument list, it is not part of
+	// the work done in the container. A container-side classification here
+	// would report host_steps: 0 for a scenario that runs project-authored
+	// host code, which is the unsafe direction for a field that gates an
+	// unattended run.
+	if def.ArgvAppendFrom != "" {
+		return true
+	}
 	switch def.Type {
 	case model.CommandTypeServiceExec, model.CommandTypeServiceRun:
 		return false
@@ -362,6 +374,12 @@ func (p *costProfiler) commandRunsOnHost(id string, seen map[string]bool) bool {
 		return def.Cmd == "shell"
 	case model.CommandTypeWorkflow:
 		return slices.ContainsFunc(flattenWorkflowSteps(def.Steps), func(s model.WorkflowStep) bool {
+			// A sub-step's `when:` is host execution in its own right — the
+			// cmd: form dispatches to condition.EvalCmd, sh -c in the project
+			// root — exactly as a pipeline step's shell when: is counted.
+			if isHostWorkflowStepWhen(s.When) {
+				return true
+			}
 			return s.Command != "" && p.commandRunsOnHost(s.Command, seen)
 		})
 	default:
@@ -388,4 +406,19 @@ func flattenWorkflowSteps(steps []model.WorkflowStep) []model.WorkflowStep {
 // evaluated in-process, so neither runs anything.
 func isHostCondition(c *condition.Condition) bool {
 	return c != nil && c.Type == condition.TypeShell
+}
+
+// isHostWorkflowStepWhen reports whether a workflow sub-step's `when:` string
+// is the cmd: form, which tpl.EvalCommandCondition dispatches to
+// condition.EvalCmd — sh -c in the project root.
+//
+// A user command's when: is an untyped string rather than a *condition.
+// Condition, so it is classified with the same parser the evaluator uses. The
+// classification is static and therefore coarse: a when: that only renders
+// into a cmd: at runtime reads as a builtin predicate here. That matches how
+// the pipeline path treats a template when: (isHostCondition ignores it too),
+// and it is the only side on which the two can agree without a render context.
+func isHostWorkflowStepWhen(when string) bool {
+	kind, _ := condition.Classify(when)
+	return kind == condition.KindCmd
 }

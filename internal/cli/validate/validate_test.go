@@ -11,6 +11,7 @@ import (
 
 	"github.com/semsemyonoff/dwe/internal/cli/cmdctx"
 	"github.com/semsemyonoff/dwe/internal/core/validate"
+	"github.com/semsemyonoff/dwe/internal/core/workflow/scaffold"
 
 	"github.com/stretchr/testify/require"
 )
@@ -1227,24 +1228,30 @@ func TestShouldEmitFilterHint(t *testing.T) {
 		name     string
 		rows     int
 		errors   int
+		warnings int
 		quiet    bool
 		levelRaw string
 		want     bool
 	}{
-		{name: "long run with narrowable rows", rows: filterHintThreshold + 1, want: true},
-		{name: "exactly at the threshold stays silent", rows: filterHintThreshold},
-		{name: "short run stays silent", rows: 3},
+		{name: "long run with narrowable rows", rows: filterHintThreshold + 1, warnings: 1, want: true},
+		{name: "exactly at the threshold stays silent", rows: filterHintThreshold, warnings: 1},
+		{name: "short run stays silent", rows: 3, warnings: 1},
 		{name: "no rows at all", rows: 0},
-		{name: "already quiet", rows: filterHintThreshold + 10, quiet: true},
-		{name: "already filtered by level", rows: filterHintThreshold + 10, levelRaw: "error"},
-		{name: "level with surrounding space still counts as filtering", rows: filterHintThreshold + 10, levelRaw: "  error  "},
+		{name: "already quiet", rows: filterHintThreshold + 10, warnings: 1, quiet: true},
+		{name: "already filtered by level", rows: filterHintThreshold + 10, warnings: 1, levelRaw: "error"},
+		{name: "level with surrounding space still counts as filtering", rows: filterHintThreshold + 10, warnings: 1, levelRaw: "  error  "},
 		{name: "all rows are errors so nothing to narrow", rows: filterHintThreshold + 5, errors: filterHintThreshold + 5},
 		{name: "one non-error row is enough to narrow", rows: filterHintThreshold + 5, errors: filterHintThreshold + 4, want: true},
+		// A clean project is long precisely because every check renders an ok
+		// row; both suggested flags would empty the table, so the hint would be
+		// false advice. This is the freshly-scaffolded case.
+		{name: "long but nothing above info so both flags empty the table", rows: filterHintThreshold + 5},
+		{name: "a single warning is enough to make --quiet useful", rows: filterHintThreshold + 5, warnings: 1, want: true},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got := shouldEmitFilterHint(tt.rows, tt.errors, tt.quiet, tt.levelRaw)
+			got := shouldEmitFilterHint(tt.rows, tt.errors, tt.warnings, tt.quiet, tt.levelRaw)
 			require.Equal(t, tt.want, got)
 		})
 	}
@@ -1322,6 +1329,38 @@ func TestValidateFilterHint_SuppressedWhenAlreadyFiltering(t *testing.T) {
 			require.NotContains(t, stderr, "Narrow the output")
 		})
 	}
+}
+
+// TestValidateFilterHint_SilentOnFreshScaffold pins the case the hint must never
+// fire on: a freshly scaffolded project is ABOVE the row threshold (one ok row
+// per check, currently 21) yet has zero errors and zero warnings, so both
+// suggested flags render an empty table. This is the most common way to meet the
+// threshold at all, and it goes through the real scaffold rather than a
+// hand-built fixture so that adding another scaffolded artefact — the way
+// workspace/tests/smoke.yml first pushed the count past 20 — cannot silently
+// re-trip it.
+func TestValidateFilterHint_SilentOnFreshScaffold(t *testing.T) {
+	targetDir := t.TempDir()
+	_, err := scaffold.Scaffold(scaffold.Options{TargetDir: targetDir, Name: "hintcheck", Prefix: "dwe", Service: "app"})
+	require.NoError(t, err)
+
+	workspacePath := filepath.Join(targetDir, "workspace.yml")
+
+	// Precondition: without this the assertion below would also pass on a
+	// scaffold that simply fell back under the threshold, testing nothing.
+	jsonOut, _ := runValidateJSONCmd(t, workspacePath)
+	var got validateJSON
+	require.NoError(t, json.Unmarshal([]byte(jsonOut), &got))
+	require.Greater(t, len(got.Diagnostics), filterHintThreshold,
+		"the scaffold must exceed the threshold or the suppression is untested")
+	require.Zero(t, got.Summary.Error)
+	require.Zero(t, got.Summary.Warning)
+
+	stdout, stderr := runValidateTextCmd(t, workspacePath)
+
+	require.Contains(t, stdout, "(scope:", "the run must have rendered a summary")
+	require.NotContains(t, stderr, "Narrow the output",
+		"a clean scaffold has nothing to narrow to — both suggested flags empty the table")
 }
 
 // TestValidateFilterHint_SuppressedInJSON: JSON consumers filter the array

@@ -153,8 +153,10 @@ func emitNoSearchMatches(cmd *cobra.Command, rflags *cmdctx.RootFlags, df *docsS
 // The snippet is a FOURTH column rather than JSON-only on purpose: without it
 // every hit costs a second `docs show` call to find out whether it was worth
 // following. The column is append-only — a consumer reading fields [0..2] is
-// unaffected — and coredocs.Search has already stripped tabs and newlines from
-// the snippet, so the row can never gain a fifth field.
+// unaffected — and coredocs.Search has already collapsed the snippet's
+// whitespace (so the row can never gain a fifth field) and dropped its
+// non-printable runes (so untrusted document content cannot smuggle a terminal
+// escape sequence onto stdout).
 func renderDocsSearchText(results []docsSearchResult) string {
 	var sb strings.Builder
 	for i, r := range results {

@@ -458,6 +458,31 @@ func TestRunTestList_CostProfileHostStepsByCommandTarget(t *testing.T) {
 			steps:   "  - name: note\n    type: builtin\n    cmd: message\n    with:\n      text: hi\n",
 			want:    0,
 		},
+		{
+			// argv_append_from is valid on a container command, but the
+			// expression itself runs sh -c on the HOST in the project root
+			// (runio.AppendArgvFrom). Classifying it container-side would
+			// report 0 for a scenario that runs project-authored host code.
+			name:    "argv_append_from on a service command still counts",
+			command: "commands:\n  lint:\n    type: service_exec\n    service: app\n    argv: [ruff, check]\n    argv_append_from: \"git ls-files '*.py'\"\n",
+			steps:   "  - name: run\n    type: command\n    cmd: test.lint\n",
+			want:    1,
+		},
+		{
+			// A workflow sub-step's cmd: when: dispatches to condition.EvalCmd
+			// — sh -c in the project root — exactly like a pipeline step's
+			// shell when:, which is already counted.
+			name:    "workflow sub-step cmd: when: counts even with container sub-steps",
+			command: "commands:\n  inner:\n    type: service_exec\n    service: app\n    cmd: \"true\"\n  flow:\n    type: workflow\n    steps:\n      - command: test.inner\n        when: \"cmd: test -f ./scripts/x\"\n",
+			steps:   "  - name: run\n    type: command\n    cmd: test.flow\n",
+			want:    1,
+		},
+		{
+			name:    "workflow sub-step builtin predicate when: does not count",
+			command: "commands:\n  inner:\n    type: service_exec\n    service: app\n    cmd: \"true\"\n  flow:\n    type: workflow\n    steps:\n      - command: test.inner\n        when: \"file_exists ./scripts/x\"\n",
+			steps:   "  - name: run\n    type: command\n    cmd: test.flow\n",
+			want:    0,
+		},
 	}
 
 	for _, tc := range cases {

@@ -346,6 +346,30 @@ func TestSearch_SnippetIsDensestLineAndSanitized(t *testing.T) {
 	}
 }
 
+// TestSearch_SnippetStripsControlCharacters: the snippet is the only channel
+// through which document content reaches stdout, and a doc tree can be
+// untrusted (`--source project` inside a cloned repo). An ESC/BEL/OSC sequence
+// embedded in a page must not survive to the terminal, where it would clear the
+// screen, recolor it, or set the window title.
+func TestSearch_SnippetStripsControlCharacters(t *testing.T) {
+	doc := "# T\n\n## S\n\nalpha \x1b[2J\x1b[31mbeta\x1b]0;pwned\x07 \x00nul\n"
+	roots := []DocRoot{{
+		Name: "dwe",
+		FS:   fstest.MapFS{"a.md": &fstest.MapFile{Data: []byte(doc)}},
+	}}
+	hits := Search(roots, "alpha beta", "en", SearchOptions{})
+	if len(hits) != 1 {
+		t.Fatalf("expected 1 hit, got %+v", hits)
+	}
+	got := hits[0].Snippet
+	if strings.ContainsAny(got, "\x1b\x07\x00") {
+		t.Errorf("snippet must not carry control characters: %q", got)
+	}
+	if got != "alpha [2J[31mbeta]0;pwned nul" {
+		t.Errorf("snippet = %q, want the printable remainder only", got)
+	}
+}
+
 func TestSearch_SnippetTruncated(t *testing.T) {
 	long := strings.Repeat("alpha beta ", 60)
 	roots := []DocRoot{{

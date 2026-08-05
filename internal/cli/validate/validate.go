@@ -135,15 +135,24 @@ const filterHintThreshold = 20
 // shouldEmitFilterHint decides whether a human-mode run is long enough — and
 // narrowable enough — to warrant naming the filter flags.
 //
-// Two suppressions beyond the threshold itself:
+// Three suppressions beyond the threshold itself, all guarding the same thing:
+// never name a flag that would not actually improve the output.
 //   - the user is already filtering (--quiet or --level), so they know the flags;
 //   - every displayed row is already an error, in which case both flags would
-//     remove nothing and the hint would be false advice.
-func shouldEmitFilterHint(rows, errors int, quiet bool, levelRaw string) bool {
+//     remove nothing;
+//   - nothing worth keeping survives either flag. A clean project is long
+//     precisely because it renders one ok row per check, and both suggested
+//     flags then empty the table completely — which is what a freshly
+//     scaffolded project does (21 rows, 0 errors, 0 warnings), i.e. the single
+//     most common way to meet the threshold.
+func shouldEmitFilterHint(rows, errors, warnings int, quiet bool, levelRaw string) bool {
 	if quiet || strings.TrimSpace(levelRaw) != "" {
 		return false
 	}
 	if rows <= filterHintThreshold {
+		return false
+	}
+	if errors == 0 && warnings == 0 {
 		return false
 	}
 	return rows > errors
@@ -161,7 +170,7 @@ func emitFilterHint(cmd *cobra.Command, flags *cmdctx.RootFlags, rows int, summa
 	if flags.Output == "json" {
 		return
 	}
-	if !shouldEmitFilterHint(rows, summary.Errors, quiet, levelRaw) {
+	if !shouldEmitFilterHint(rows, summary.Errors, summary.Warnings, quiet, levelRaw) {
 		return
 	}
 	sharedrender.NewWriter(cmd.ErrOrStderr()).Info(fmt.Sprintf(

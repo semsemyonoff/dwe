@@ -421,3 +421,65 @@ func TestWriteCommandMarkdown_ArgvAppendFrom(t *testing.T) {
 		})
 	}
 }
+
+// TestGenRegistryMarkdown_RejectsPathTraversal: a command's LocalName is the
+// verbatim YAML map key from workspace/commands/*.yml and its group id comes
+// from the same source; neither is validated beyond non-emptiness. filepath.Join
+// RESOLVES a "../.." rather than rejecting it, so without a containment check
+// `dwe docs generate` on an untrusted project is an arbitrary file write outside
+// both --out and the project root.
+func TestGenRegistryMarkdown_RejectsPathTraversal(t *testing.T) {
+	store, err := i18n.Load("")
+	if err != nil {
+		t.Fatalf("failed to load i18n store: %v", err)
+	}
+
+	t.Run("command name escapes", func(t *testing.T) {
+		outRoot := t.TempDir()
+		dir := filepath.Join(outRoot, "commands")
+		if err := os.MkdirAll(dir, 0o755); err != nil {
+			t.Fatalf("mkdir: %v", err)
+		}
+		def := &usercommands.CommandDef{ID: "evil", LocalName: "../../pwned"}
+		err := writeCommandMarkdown(def, dir, usercommands.NewEmptyRegistry(), store, "en")
+		if err == nil {
+			t.Fatal("expected an error for a name escaping the output directory")
+		}
+		if !strings.Contains(err.Error(), "outside the output directory") {
+			t.Errorf("error must name the cause, got: %v", err)
+		}
+		if _, statErr := os.Stat(filepath.Join(outRoot, "..", "pwned.md")); statErr == nil {
+			t.Error("a file was written outside the output root")
+		}
+	})
+
+	t.Run("group id escapes", func(t *testing.T) {
+		outRoot := t.TempDir()
+		dir := filepath.Join(outRoot, "commands")
+		if err := os.MkdirAll(dir, 0o755); err != nil {
+			t.Fatalf("mkdir: %v", err)
+		}
+		reg := usercommands.NewEmptyRegistry()
+		reg.AddCommandForTest(&usercommands.CommandDef{
+			ID: "x.y", Group: "...", LocalName: "y",
+		})
+		err := genRegistryMarkdown(reg, dir, true, store, "en")
+		if err == nil {
+			t.Fatal("expected an error for a group escaping the output directory")
+		}
+		if !strings.Contains(err.Error(), "outside the output directory") {
+			t.Errorf("error must name the cause, got: %v", err)
+		}
+	})
+
+	t.Run("ordinary names still write", func(t *testing.T) {
+		dir := t.TempDir()
+		def := &usercommands.CommandDef{ID: "db.migrate", LocalName: "migrate"}
+		if err := writeCommandMarkdown(def, dir, usercommands.NewEmptyRegistry(), store, "en"); err != nil {
+			t.Fatalf("writeCommandMarkdown: %v", err)
+		}
+		if _, err := os.Stat(filepath.Join(dir, "migrate.md")); err != nil {
+			t.Fatalf("migrate.md not written: %v", err)
+		}
+	})
+}
