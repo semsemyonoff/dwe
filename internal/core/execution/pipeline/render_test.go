@@ -126,7 +126,7 @@ func TestRenderValue(t *testing.T) {
 			},
 			"count": 3,
 		}
-		got, err := renderValue(in, ctx)
+		got, err := renderValue(in, ctx, true)
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}
@@ -164,7 +164,7 @@ func TestRenderValue(t *testing.T) {
 
 	t.Run("non-string scalars pass through unchanged", func(t *testing.T) {
 		for _, v := range []any{42, true, 3.14, nil} {
-			got, err := renderValue(v, ctx)
+			got, err := renderValue(v, ctx, true)
 			if err != nil {
 				t.Fatalf("unexpected error for %v: %v", v, err)
 			}
@@ -180,7 +180,7 @@ func TestRenderValue(t *testing.T) {
 	// BuildPreRenderedRunContext, which never re-renders. Gating on the known
 	// head alone would silently pass the literal template text to the command.
 	t.Run("go-template-only leaves are still rendered", func(t *testing.T) {
-		got, err := renderValue(`{{ resolve .Raw "vars.source.repo" }}`, ctx)
+		got, err := renderValue(`{{ resolve .Raw "vars.source.repo" }}`, ctx, true)
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}
@@ -190,7 +190,7 @@ func TestRenderValue(t *testing.T) {
 	})
 
 	t.Run("leaves with neither form are untouched", func(t *testing.T) {
-		got, err := renderValue("plain ${HOME} value", ctx)
+		got, err := renderValue("plain ${HOME} value", ctx, true)
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}
@@ -204,7 +204,7 @@ func TestRenderWith(t *testing.T) {
 	ctx := testRenderCtx()
 
 	t.Run("nil/empty with is returned as-is", func(t *testing.T) {
-		got, err := renderWith(nil, ctx)
+		got, err := renderWith(nil, ctx, true)
 		if err != nil || got != nil {
 			t.Errorf("got (%v, %v), want (nil, nil)", got, err)
 		}
@@ -212,7 +212,7 @@ func TestRenderWith(t *testing.T) {
 
 	t.Run("renders and does not mutate the input", func(t *testing.T) {
 		in := map[string]any{"repo": "${vars.source.repo}"}
-		got, err := renderWith(in, ctx)
+		got, err := renderWith(in, ctx, true)
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}
@@ -255,6 +255,25 @@ func TestRenderAction(t *testing.T) {
 		}
 		if in.With["x"] != "${vars.source.repo}" {
 			t.Errorf("input mutated: With[x] = %v", in.With["x"])
+		}
+	})
+
+	// Regression: a builtin check: consumes its with: values raw, so a
+	// Go-template value there belongs to the builtin's own template space
+	// (the `shell` predicate takes docker -f format strings). Only a
+	// `type: command` action gets the wide `{{`-triggered gate.
+	t.Run("builtin check with go-template leaf is left literal", func(t *testing.T) {
+		in := &config.Action{
+			Type: "builtin",
+			Cmd:  "shell",
+			With: map[string]any{"cmd": `docker inspect -f "{{.State.Status}}" app`},
+		}
+		got, err := renderAction(in, ctx)
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if got.With["cmd"] != `docker inspect -f "{{.State.Status}}" app` {
+			t.Errorf("With[cmd] = %v, want unchanged", got.With["cmd"])
 		}
 	})
 }
@@ -524,4 +543,90 @@ func TestRenderStepFields_userCommandMixedFormsUntouched(t *testing.T) {
 	if got != want {
 		t.Errorf("got %q, want %q", got, want)
 	}
+}
+
+func TestRenderStepFields_builtinWithGoTemplateSurvives(t *testing.T) {
+	// Regression: a `type: builtin` with: map is consumed raw by the builtin,
+	// which may render it against a DIFFERENT template space. The `message`
+	// builtin's text: is documented as a Go template over DweConfig
+	// (docs/reference/config/deploy/builtins.md), and the `shell` predicate
+	// takes docker -f format strings. Pushing either through this package's
+	// *tpl.RenderContext engine at resolve time fails with "can't evaluate
+	// field Project", aborting the whole deploy plan/run.
+	ctx := testRenderCtx()
+
+	cases := []struct {
+		name string
+		step config.DeployStep
+		key  string
+		want string
+	}{
+		{
+			name: "message text over DweConfig",
+			step: config.DeployStep{
+				Name: "done",
+				Type: "builtin",
+				Cmd:  "message",
+				With: map[string]any{"level": "success", "text": "Deploy of {{ .Project.Name }} completed"},
+			},
+			key:  "text",
+			want: "Deploy of {{ .Project.Name }} completed",
+		},
+		{
+			name: "shell predicate docker format string",
+			step: config.DeployStep{
+				Name: "probe",
+				Type: "builtin",
+				Cmd:  "shell",
+				With: map[string]any{"cmd": `docker inspect -f "{{.State.Status}}" app`},
+			},
+			key:  "cmd",
+			want: `docker inspect -f "{{.State.Status}}" app`,
+		},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			got, err := renderStepFields(tc.step, ctx)
+			if err != nil {
+				t.Fatalf("renderStepFields failed: %v", err)
+			}
+			if got.With[tc.key] != tc.want {
+				t.Errorf("With[%s] = %v, want unchanged %q", tc.key, got.With[tc.key], tc.want)
+			}
+		})
+	}
+
+	t.Run("known-head refs in a builtin with: are still substituted", func(t *testing.T) {
+		step := config.DeployStep{
+			Name: "done",
+			Type: "builtin",
+			Cmd:  "message",
+			With: map[string]any{"level": "info", "text": "dir is ${vars.source.dir}"},
+		}
+		got, err := renderStepFields(step, ctx)
+		if err != nil {
+			t.Fatalf("renderStepFields failed: %v", err)
+		}
+		if got.With["text"] != "dir is app" {
+			t.Errorf("With[text] = %v, want %q", got.With["text"], "dir is app")
+		}
+	})
+
+	t.Run("a files_gate on a non-command step keeps the wide gate", func(t *testing.T) {
+		step := config.DeployStep{
+			Name:      "seed",
+			Type:      "shell",
+			Cmd:       "echo hi",
+			With:      map[string]any{"db": `{{ resolve .Raw "vars.source.dir" }}`},
+			FilesGate: &filesgate.FilesGate{Command: "restore", State: filesgate.StateReadable},
+		}
+		got, err := renderStepFields(step, ctx)
+		if err != nil {
+			t.Fatalf("renderStepFields failed: %v", err)
+		}
+		if got.With["db"] != "app" {
+			t.Errorf("With[db] = %v, want %q", got.With["db"], "app")
+		}
+	})
 }

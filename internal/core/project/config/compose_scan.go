@@ -1,9 +1,11 @@
 package config
 
 import (
+	"maps"
 	"os"
 	"path/filepath"
 	"regexp"
+	"slices"
 	"strconv"
 	"strings"
 
@@ -100,10 +102,16 @@ func ScanComposeIsolation(cfg *DweConfig, projectRoot string) []IsolationFinding
 	return findings
 }
 
+// scanComposeDoc walks a parsed compose document. Every map is iterated over
+// a sorted key list, never ranged directly: findings flow into `dwe validate`
+// diagnostics whose sort keys (severity/domain/target/file/line) are identical
+// across findings from one file, so a random map order surfaces as a random
+// diagnostic order in --output json between runs.
 func scanComposeDoc(doc composeScanDoc, file string) []IsolationFinding {
 	var findings []IsolationFinding
 
-	for name, svc := range doc.Services {
+	for _, name := range slices.Sorted(maps.Keys(doc.Services)) {
+		svc := doc.Services[name]
 		if svc.ContainerName != "" {
 			findings = append(findings, IsolationFinding{
 				Kind:     KindContainerName,
@@ -124,11 +132,11 @@ func scanComposeDoc(doc composeScanDoc, file string) []IsolationFinding {
 		}
 	}
 
-	for name, vol := range doc.Volumes {
-		findings = append(findings, scanNamedEntity(vol, name, file, KindExternalVolume, KindNamedVolume)...)
+	for _, name := range slices.Sorted(maps.Keys(doc.Volumes)) {
+		findings = append(findings, scanNamedEntity(doc.Volumes[name], name, file, KindExternalVolume, KindNamedVolume)...)
 	}
-	for name, net := range doc.Networks {
-		findings = append(findings, scanNamedEntity(net, name, file, KindExternalNetwork, KindNamedNetwork)...)
+	for _, name := range slices.Sorted(maps.Keys(doc.Networks)) {
+		findings = append(findings, scanNamedEntity(doc.Networks[name], name, file, KindExternalNetwork, KindNamedNetwork)...)
 	}
 
 	return findings

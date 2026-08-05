@@ -44,7 +44,7 @@ var ContentHashes = map[string]string{
 	"reference/config/deploy/builtins.md":      "c7a66b7e5583",
 	"reference/config/deploy/conditions.md":    "143f68c9bacd",
 	"reference/config/deploy/examples.md":      "d874b7ff49c6",
-	"reference/config/deploy/index.md":         "e179a890b75c",
+	"reference/config/deploy/index.md":         "fd91fdb382d2",
 	"reference/config/deploy/steps.md":         "13a6aca8567c",
 	"reference/config/docker.md":               "479056ee024d",
 	"reference/config/i18n.md":                 "d001e3c6acab",

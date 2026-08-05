@@ -120,6 +120,17 @@ Without an id, an interactive selector lists public commands. With a group prefi
 				if len(args) == 0 {
 					return cmdctx.Err("usage_error", "id required with --inspect")
 				}
+				// Inspect prints a definition, it does not run one, so there is
+				// nothing for pass-through arguments to reach. Rejecting here
+				// keeps the "extra arguments are opt-in and refused loudly"
+				// contract whole — the run route enforces it per-command via
+				// checkPassThroughArgs, which this route never reaches.
+				if len(through) > 0 {
+					return cmdctx.Err("usage_error",
+						"--inspect prints a command's definition rather than running it, so it takes no arguments after `--`\n\n"+
+							"Drop the `--` part to inspect:      dwe cmd -i "+args[0]+"\n"+
+							"Or drop --inspect to run it:        dwe cmd "+args[0]+" -- ...")
+				}
 				// Best-effort cfg load — inspect tolerates malformed configs so users
 				// can still introspect command definitions when the project is broken.
 				// ApplyVisibility is fail-open: per-expression eval failures log a
