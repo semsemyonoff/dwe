@@ -2,6 +2,7 @@ package docs
 
 import (
 	"encoding/json"
+	"strconv"
 	"strings"
 	"testing"
 
@@ -24,9 +25,13 @@ func TestDocsSearchFlags(t *testing.T) {
 	require.NotNil(t, cmd.Flag("lang"))
 	require.NotNil(t, cmd.Flag("source"))
 	require.NotNil(t, cmd.Flag("limit"))
+	require.NotNil(t, cmd.Flag("literal"))
 }
 
-// TestDocsSearchTSV verifies the default tab-separated output: source\tpath#anchor\tcount.
+// TestDocsSearchTSV verifies the default tab-separated output:
+// source\tpath#anchor\tcount\tsnippet. The snippet column is append-only — a
+// consumer reading fields [0..2] keeps working — and the snippet itself is
+// sanitized upstream, so a row can never gain a fifth field.
 func TestDocsSearchTSV(t *testing.T) {
 	flags := &cmdctx.RootFlags{Locale: "en"}
 	cmd := newDocsSearchCmd(flags)
@@ -44,7 +49,8 @@ func TestDocsSearchTSV(t *testing.T) {
 			continue
 		}
 		parts := strings.Split(line, "\t")
-		require.Len(t, parts, 3, "each TSV row must have exactly 3 fields: %q", line)
+		require.Len(t, parts, 4, "each TSV row must have exactly 4 fields: %q", line)
+		require.NotEmpty(t, parts[3], "every hit carries a snippet: %q", line)
 	}
 }
 
@@ -70,7 +76,101 @@ func TestDocsSearchJSON(t *testing.T) {
 	require.Contains(t, first, "path", "JSON contract: path field")
 	require.Contains(t, first, "anchor", "JSON contract: anchor field")
 	require.Contains(t, first, "count", "JSON contract: count field")
-	require.Len(t, first, 4, "JSON contract: exactly four fields per entry")
+	require.Contains(t, first, "snippet", "JSON contract: snippet field")
+	require.Len(t, first, 5, "JSON contract: exactly five fields per entry")
+}
+
+// runDocsSearchLines executes the command against the real embedded docs tree
+// and returns the TSV rows. --lang en is explicit: the locale comes from
+// i18n.ResolveLocale($LANG), not from RootFlags.Locale, so a developer machine
+// with LANG=ru would otherwise search the translated mirror.
+func runDocsSearchLines(t *testing.T, args ...string) []string {
+	t.Helper()
+	flags := &cmdctx.RootFlags{Locale: "en"}
+	cmd := newDocsSearchCmd(flags)
+	var outBuf, errBuf strings.Builder
+	cmd.SetOut(&outBuf)
+	cmd.SetErr(&errBuf)
+	cmd.SetArgs(append(args, "--lang", "en"))
+	require.NoError(t, cmd.Execute())
+
+	out := strings.TrimSpace(outBuf.String())
+	if out == "" {
+		return nil
+	}
+	return strings.Split(out, "\n")
+}
+
+// TestDocsSearchRelevance asserts RELEVANCE, not non-emptiness. Both queries are
+// real ones an agent typed during the analysed sessions; both returned `[]`
+// under the old whole-query substring matcher. A "returns hits" assertion would
+// pass on pure noise — a naive AND does exactly that for the first query.
+func TestDocsSearchRelevance(t *testing.T) {
+	cases := []struct {
+		name  string
+		query string
+		want  string
+		topN  int
+	}{
+		{
+			name:  "two-word concept query finds the templates reference",
+			query: "interpolation vars",
+			want:  "reference/templates",
+			topN:  8,
+		},
+		{
+			name:  "auto-injected env names find the exports.env schema",
+			query: "UID GID env",
+			want:  "reference/config/workspace#exportsenv",
+			topN:  8,
+		},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			lines := runDocsSearchLines(t, tc.query, "--limit", strconv.Itoa(tc.topN))
+			require.NotEmpty(t, lines, "query %q must not return an empty result", tc.query)
+
+			found := false
+			for _, line := range lines {
+				if strings.Contains(line, tc.want) {
+					found = true
+					break
+				}
+			}
+			require.True(t, found, "query %q must surface %q in the top %d:\n%s",
+				tc.query, tc.want, tc.topN, strings.Join(lines, "\n"))
+		})
+	}
+}
+
+// TestDocsSearchLiteral covers the flag that preserves the pre-tokenization
+// behaviour. It must be a flag: `docs search` is ExactArgs(1) and the shell
+// strips quotes, so "a b" and a b arrive identical.
+func TestDocsSearchLiteral(t *testing.T) {
+	const query = "vars interpolation" // reversed order — no doc says it verbatim
+
+	tokenized := runDocsSearchLines(t, query, "--limit", "5")
+	require.NotEmpty(t, tokenized, "tokenized search must find the pair")
+
+	literal := runDocsSearchLines(t, query, "--limit", "5", "--literal")
+	require.Empty(t, literal, "literal search must not match a phrase no document contains verbatim")
+}
+
+// TestDocsSearchLiteralNotice: the zero-result notice must name --literal when
+// it is the reason nothing matched, and must never claim the default matcher is
+// a whole-query literal substring — that stopped being true here.
+func TestDocsSearchLiteralNotice(t *testing.T) {
+	flags := &cmdctx.RootFlags{Locale: "en"}
+	cmd := newDocsSearchCmd(flags)
+	var outBuf, errBuf strings.Builder
+	cmd.SetOut(&outBuf)
+	cmd.SetErr(&errBuf)
+	cmd.SetArgs([]string{"vars interpolation", "--literal", "--lang", "en"})
+
+	require.NoError(t, cmd.Execute())
+	require.Empty(t, outBuf.String())
+	require.Contains(t, errBuf.String(), "--literal", "the notice must name the flag that caused the empty result")
 }
 
 // TestDocsSearchEmptyOutput is the regression guard for the empty-output

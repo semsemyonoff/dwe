@@ -25,7 +25,7 @@ An unknown `${...}` head (`${HOME}`, a typo) is left literal, never blanked. Ful
 - `dwe validate -o json` — structured diagnostics (this command emits diagnostics-as-data even at severity=error)
 - `-v` / `--debug` — echo executed commands, skip decisions, timings and exit codes to **stderr**; stdout (including `-o json`) stays clean, so `dwe run --debug 2>debug.log` captures them
 - `dwe docs show <topic> --toc` / `--anchors` — headings or anchor ids instead of the whole document; use these instead of piping through `head`/`sed`
-- `dwe docs search <query> -o json` — search hits with `source`, `path`, `anchor`, `count`
+- `dwe docs search <query> -o json` — search hits with `source`, `path`, `anchor`, `count`, `snippet`. Every word of the query must appear in the same section (or, failing that, the same document); `--literal` matches the whole query as one substring
 - `-o json` (+ `--pretty`) — every read-only command. NOT `dwe docs llms-txt` / `dwe docs show`: there `--output` is a file path, so `-o json` writes a file named `json`
 
 ## Quick start

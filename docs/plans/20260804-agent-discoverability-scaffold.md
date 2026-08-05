@@ -345,50 +345,67 @@ string, since `spec.Builtin` (`spec/spec.go:42`) offers only the per-invocation
 - Modify: `internal/cli/docs/search.go`
 - Modify: `internal/cli/docs/search_test.go`
 
-- [ ] split queries on whitespace and require all tokens per section (AND). **Literal mode
+- [x] split queries on whitespace and require all tokens per section (AND). **Literal mode
       must be a flag, not quoting**: `docs search` is `Args: cobra.ExactArgs(1)` and the
       shell strips quotes, so `"interpolation vars"` and `interpolation vars` arrive
       identical — only absurd nested quoting could distinguish them. Add `--literal` (or
-      `--match any|all|literal`)
-- [ ] tokenize with `strings.Fields`, **not** `strings.Split(q, " ")`: an empty token makes
+      `--match any|all|literal`) — `--literal` chosen; `Search` gained a
+      `SearchOptions{Literal bool}` parameter (one caller, so the signature change is local)
+- [x] tokenize with `strings.Fields`, **not** `strings.Split(q, " ")`: an empty token makes
       `countCaseInsensitive` return 0 (`search.go:117` returns early on an empty needle) and
       the AND gate would then zero out **every** result for a query with a double space
-- [ ] use **min-across-tokens** for ranking: summing lets a section with 40 hits of "vars"
+      — pinned by `TestSearch_DoubleSpaceQuery`; duplicate tokens are also dropped
+- [x] use **min-across-tokens** for ranking: summing lets a section with 40 hits of "vars"
       and one of "interpolation" outrank the section actually about the pair, and min also
       makes duplicate tokens (`vars vars`) harmless
-- [ ] pin the token semantics as a decision: matching stays **substring** (the documented
+- [x] pin the token semantics as a decision: matching stays **substring** (the documented
       design intent at `search.go:26-30`, and required for `depends_on:`), which means
       `uid` matches inside `guide`/`guides` and `env` inside `environment`. Record it with
       that example so the false-positive is a known trade-off, not a surprise
-- [ ] add a **second tier**: if no section satisfies AND, apply AND at document level and
+      — recorded in the `Search` doc comment, the `--help` `Long`, and
+      `TestSearch_SubstringTradeOff` (which uses exactly that `uid`/`guides` example)
+- [x] add a **second tier**: if no section satisfies AND, apply AND at document level and
       attribute the hit to the section with the largest contribution. Without it the fix is
       only half-done — measured on the real docs tree, `UID GID env` returns the right
       sections (`config/workspace.md#exports.env`, `render/env.md#System variables`), but
       `interpolation vars` still misses `reference/templates.md` because the two tokens live
       in different sections of it
-- [ ] add a short snippet to each hit. In TSV this **breaks a documented contract** —
+      — ➕ the tier is evaluated **per document**, not globally ("no section anywhere
+      matched"): the global form would never fire for `interpolation vars`, since other
+      documents do satisfy section-level AND, which is precisely the measured failure.
+      Tier-1 hits always sort above tier-2 hits
+- [x] add a short snippet to each hit. In TSV this **breaks a documented contract** —
       `<source>\t<path>#<anchor>\t<count>` is specified in `--help` and
       `docs/reference/docs/commands.md:77-104`, and `TestDocsSearchTSV` requires exactly
       three fields. Decide: fourth column or JSON-only. Either way sanitize the snippet
       (collapse whitespace, strip `\t` and `\n` — markdown tables contain both — and cap
       the length)
-- [ ] update the texts that become false: `emitNoSearchMatches`
+      — **decided: fourth TSV column** (append-only, so a consumer reading fields `[0..2]`
+      is unaffected) plus a `snippet` JSON field. Sanitized via `strings.Fields`+join and
+      capped at 160 bytes on a rune boundary, so a row can never gain a fifth field.
+      `docs/reference/docs/commands.md` is updated in Task 9, which already owns it
+- [x] update the texts that become false: `emitNoSearchMatches`
       (`internal/cli/docs/search.go:117-122` says "Search is a literal case-insensitive
-      substring match") and the command's `Short`/`Long`
-- [ ] decide which line the snippet comes from — `searchInDoc` (`search.go:81-111`) keeps
+      substring match") and the command's `Short`/`Long` — the notice now also names
+      `--literal` when that flag is what produced the empty result. Also fixed the
+      `llms-txt` diagnostics line, which listed the four old JSON fields
+- [x] decide which line the snippet comes from — `searchInDoc` (`search.go:81-111`) keeps
       only counters today. The line containing the most tokens is markedly more useful than
-      the first line containing any, and costs one variable
-- [ ] write tests asserting **relevance, not non-emptiness**: `interpolation vars` must
+      the first line containing any, and costs one variable — densest line, first wins ties
+- [x] write tests asserting **relevance, not non-emptiness**: `interpolation vars` must
       return `reference/templates.md` in the top N, and `UID GID env` must return
       `config/workspace.md#exports.env`. "Returns hits" would pass on noise — measured, the
-      naive AND does exactly that for the first query
-- [ ] write a regression test that single-token identifier search (`depends_on:`) is
+      naive AND does exactly that for the first query — `TestDocsSearchRelevance`, run
+      against the real embedded tree with an explicit `--lang en`
+- [x] write a regression test that single-token identifier search (`depends_on:`) is
       byte-identical to today (all four existing core tests are single-token, so the AND
       change is low-risk — but pin it). Note this test does **not** discriminate min from
       sum ranking (they coincide for one token) — add a separate multi-token ordering test
-- [ ] (checked) `coredocs.Search` has exactly one caller (`cli/docs/search.go:81`); the TUI
+      — `TestSearch_SingleTokenUnchanged` (full struct equality) plus
+      `TestSearch_MinRankingBeatsSum`
+- [x] (checked) `coredocs.Search` has exactly one caller (`cli/docs/search.go:81`); the TUI
       and llms-txt do not use it, so the change is local
-- [ ] run tests — must pass before task 3
+- [x] run tests — must pass before task 3 — `make test` and `make lint` both clean
 
 ### Task 3: Point-of-need hints in command output
 
