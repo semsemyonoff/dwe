@@ -688,12 +688,16 @@ func resetStepCmd(cmd *cobra.Command, flags *cmdctx.RootFlags, address string, d
 		return fmt.Errorf("rendering step %s: %w", address, err)
 	}
 
-	// Evaluate when condition.
+	// Evaluate when condition. The rendered condition outlives this block: a
+	// `check: auto` sentinel is the inverse of exactly this string, so it must
+	// be built from the same rendered value the evaluation below saw.
+	var runtimeWhen *condition.Condition
 	if step.When != nil {
 		when, err := pipeline.RenderWhen(cfg, step.When)
 		if err != nil {
 			return fmt.Errorf("rendering when condition for %s: %w", address, err)
 		}
+		runtimeWhen = when
 		var (
 			ok      bool
 			evalErr error
@@ -742,7 +746,19 @@ func resetStepCmd(cmd *cobra.Command, flags *cmdctx.RootFlags, address string, d
 	}
 
 	if step.Check != nil {
-		if err := pipeline.ExecAction(cmd.Context(), *step.Check, actx); err != nil {
+		check := *step.Check
+		// This command bypasses ResolvePhaseSteps, so the `check: auto` sentinel
+		// arrives unrewritten. Derive the inverse through the same helper the
+		// resolver uses — a second copy of the inversion here is how the two
+		// paths would drift.
+		if config.IsAutoCheck(step.Check) {
+			derived, err := pipeline.ResolveAutoCheck(runtimeWhen)
+			if err != nil {
+				return fmt.Errorf("step %s: %w", address, err)
+			}
+			check = *derived
+		}
+		if err := pipeline.ExecAction(cmd.Context(), check, actx); err != nil {
 			return fmt.Errorf("step %s: check failed: %w", address, err)
 		}
 	}

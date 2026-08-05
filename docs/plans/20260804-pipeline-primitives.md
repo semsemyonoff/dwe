@@ -462,7 +462,7 @@ authoring without buying protection.)*
 - Modify: `internal/core/workflow/deploy/journal/hash_test.go`
 - Modify: `internal/cli/deploy/deploy.go` tests as needed
 
-- [ ] handle `dwe reset step`: it takes a `config.DeployStep` straight from config and calls
+- [x] handle `dwe reset step`: it takes a `config.DeployStep` straight from config and calls
       `pipeline.ExecAction(ctx, *step.Check, actx)` bypassing `ResolvePhaseSteps`, so an
       unrewritten sentinel would reach it. **It does evaluate `when:`** — `reset.go:668-687`
       runs both `condition.EvalRuntimeTyped` and `tpl.EvalCondition` and skips the step when
@@ -471,20 +471,27 @@ authoring without buying protection.)*
       a worse UX built on a false premise.) Build the inverse there through the **same
       shared helper** `resolveLeafStep` uses — not a copy. A "no `when:`" branch is
       unreachable, since load-time already rejects `auto` without `when:`
-- [ ] verify `StepForcesRun` returns true for a step whose check came from `auto` (it does,
+- [x] verify `StepForcesRun` returns true for a step whose check came from `auto` (it does,
       given the load-time sentinel) and add the test that pins it
-- [ ] verify the `hasCheck → Run` path in the skip decider treats it identically
-- [ ] pin the invariant honestly, in **both** halves: `journal.StepHash` (`hash.go:36-53`)
+      → pinned in **both** shapes: the raw sentinel (pre-resolve) and the derived builtin
+      shell action the resolver produces, the latter built through `ResolveAutoCheck` so the
+      test cannot drift from the real form
+- [x] verify the `hasCheck → Run` path in the skip decider treats it identically
+- [x] pin the invariant honestly, in **both** halves: `journal.StepHash` (`hash.go:36-53`)
       hashes action + files_gate and **not** `Check`, so per-step hashes do not move — but
       `deployStepToMap` feeds `phasesToMap` → `Service/ProjectConfigHash`
       (`hash.go:365/389`), and `makeSkipDecider` (`deploy.go:781-783`) returns
       `journal.Run` for **every** step in scope when the config hash differs. So migrating a
       workspace from an explicit inverse check to `check: auto` **does** cause a one-time
       re-run of that service's steps. Test that, not the weaker "auto stays auto"
-- [ ] write a test covering an auto-check step inside a `parallel:` group (one level)
-- [ ] write a regression test that a step with `when:` and **no** `check:` still does not
+      → `TestConfigHashAutoCheckMigration` pins all three halves: `StepHash` unchanged
+      across explicit-inverse / `auto` / no-check, `ProjectConfigHash` **differs** between
+      the explicit inverse and `auto` (the one-time re-run) and between no-check and `auto`,
+      and the sentinel hashes stably
+- [x] write a test covering an auto-check step inside a `parallel:` group (one level)
+- [x] write a regression test that a step with `when:` and **no** `check:` still does not
       force a run (the 5 observed steps that rely on this)
-- [ ] run tests — must pass before task 5
+- [x] run tests — must pass before task 5
 
 ### Task 5: `source_clone` builtin
 
