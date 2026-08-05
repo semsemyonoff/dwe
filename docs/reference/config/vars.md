@@ -277,6 +277,19 @@ boundary, **not** naive prefix matching:
 An empty or absent `vars_writable` list means **no container writes** — the safe
 default. Malformed patterns fail closed (deny).
 
+**What allowlisting a var actually grants.** Pipeline step fields (`cmd:`,
+`when.cmd`, `check.cmd`, `timeout:`) are rendered through the `${...}`
+substrate, and a rendered `cmd:` is handed to the **host's** `sh -c` as program
+text — substitution is textual, never shell-quoted (see
+[Templates in step fields](deploy/index.md)). So a var that is both
+container-writable **and** referenced from a pipeline command lets the container
+choose part of a host command line: a value of `x; some-command` runs
+`some-command` on the host at the next `dwe deploy run`. That is the natural
+combination — a container usually wants to write a var precisely because a
+pipeline reads it — so treat `vars_writable` as delegating host-shell input to
+whoever can reach the container, and keep the list to vars that are consumed as
+data (config renders, `exports.env`) rather than spliced into commands.
+
 ### `render config` from a container
 
 So a container can regenerate service configs after a `set`, **`dwe render

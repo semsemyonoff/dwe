@@ -129,10 +129,13 @@ func (v *IDEValidator) validateService(name string, svc config.ServiceConfig, cf
 			Domain:   "templates",
 			Target:   fmt.Sprintf("templates.ide:%s", name),
 			Message:  fmt.Sprintf("template pack not found for service %q", name),
+			// Top-level render: — see the same note in ai.go: service.yml's
+			// strict per-type field allowlist rejects a `services` key, so the
+			// qualified path would break the project if pasted verbatim.
 			Hint: fmt.Sprintf(
 				"create workspace/templates/ide/%s or workspace/templates/ide/default\n"+
-					"or set services.%s.render.ide.enabled: false in workspace/services/%s/service.yml",
-				name, name, name,
+					"or set render.ide.enabled: false in workspace/services/%s/service.yml",
+				name, name,
 			),
 		}}
 	}

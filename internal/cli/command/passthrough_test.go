@@ -83,6 +83,23 @@ func TestCommandIDArgs(t *testing.T) {
 			"the corrected command must not drop the caller's existing pass-through args")
 	})
 
+	// Pass-through args with no id have nowhere to go: the run route would fall
+	// through to the selector, and its non-interactive branch (CI pipe, or any
+	// container — the bridge daemon force-sets DWE_NONINTERACTIVE=1) prints the
+	// command list and exits 0, silently discarding them.
+	t.Run("passthrough without an id is refused", func(t *testing.T) {
+		cmd, args := argsAtDash(t, []string{"--", "--run", "x.ts"})
+		err := commandIDArgs(cmd, args)
+		require.Error(t, err)
+		require.Contains(t, err.Error(), "need a command id")
+		require.Contains(t, err.Error(), "dwe cmd <id> -- --run x.ts")
+	})
+
+	t.Run("a bare dash with nothing after it is still fine", func(t *testing.T) {
+		cmd, args := argsAtDash(t, []string{"--"})
+		require.NoError(t, commandIDArgs(cmd, args))
+	})
+
 	// A bare flag would be eaten by cobra's parser, so the realistic
 	// two-positional case is an id plus a stray word (a filename, a package).
 	t.Run("two ids without a dash still fail, but say how to pass args", func(t *testing.T) {

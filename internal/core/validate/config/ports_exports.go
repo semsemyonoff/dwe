@@ -2,6 +2,7 @@ package config
 
 import (
 	"fmt"
+	"maps"
 	"path/filepath"
 	"slices"
 
@@ -40,6 +41,16 @@ func (v *portsExportsValidator) Run(ctx validate.Context) []validate.Diagnostic 
 	// randomized and would make diagnostic ordering (and tests) flaky.
 	for _, name := range config.DeployOrder(ctx.Cfg, []string{"app", "tool", "infra"}) {
 		svc := ctx.Cfg.Services[name]
+		// A service declaring no ports of its own inherits the parent's whole
+		// port map through extends, so by the time the config is loaded the
+		// child looks like it declares ports that only ever appear in the
+		// parent's service.yml. Warning again here would duplicate the
+		// parent's own finding and anchor it at a file that never mentions the
+		// port. The test is whole-map, matching the loader's all-or-nothing
+		// rule — see portsInheritedViaExtends.
+		if portsInheritedViaExtends(ctx.Cfg, name) {
+			continue
+		}
 		portNames := make([]string, 0, len(svc.Ports))
 		for portName := range svc.Ports {
 			portNames = append(portNames, portName)
@@ -49,16 +60,6 @@ func (v *portsExportsValidator) Run(ctx validate.Context) []validate.Diagnostic 
 		for _, portName := range portNames {
 			from := fmt.Sprintf("services.%s.ports.%s", name, portName)
 			if exported[from] {
-				continue
-			}
-			// A service declaring no ports of its own inherits the parent's
-			// whole port map through extends (ResolveServiceExtends:
-			// `if len(svc.Ports) == 0 { svc.Ports = maps.Clone(parent.Ports) }`),
-			// so by the time the config is loaded the child looks like it
-			// declares a port that only ever appears in the parent's
-			// service.yml. Warning again here would duplicate the parent's own
-			// finding and anchor it at a file that never mentions the port.
-			if portInheritedViaExtends(ctx.Cfg, name, portName) {
 				continue
 			}
 			diags = append(diags, validate.Diagnostic{
@@ -83,28 +84,44 @@ func (v *portsExportsValidator) Run(ctx validate.Context) []validate.Diagnostic 
 	return diags
 }
 
-// portInheritedViaExtends reports whether service name carries portName only
-// because an `extends:` ancestor declares it. Extends inheritance is preserved
-// on the resolved config (ResolveServiceExtends never clears Extends), so the
-// chain is still walkable here. The visited set guards against a cycle — the
-// loader rejects those, but this validator must not hang on a config that
-// somehow reached it.
-func portInheritedViaExtends(cfg *config.DweConfig, name, portName string) bool {
+// portsInheritedViaExtends reports whether service name's whole resolved port
+// map came from an `extends:` ancestor rather than its own service.yml.
+//
+// Inheritance is all-or-nothing: ResolveServiceExtends clones the parent's map
+// only when the child declares no ports at all
+// (`if len(svc.Ports) == 0 { svc.Ports = maps.Clone(parent.Ports) }`), so a
+// child declaring even one port keeps its own map entirely. The test has to
+// match that rule — asking per port name whether SOME ancestor uses the same
+// name would also swallow a genuinely unexported port the child declared
+// itself, which is precisely the finding this validator exists to produce.
+//
+// So the test is map equality against the nearest ancestor that declares
+// ports: that is exactly the map the clone would have produced. A child that
+// re-declares a byte-identical map is indistinguishable from an inheriting one
+// and is treated as inheriting — the right call either way, since the parent's
+// own finding already covers the identical port set.
+//
+// Extends inheritance is preserved on the resolved config (ResolveServiceExtends
+// never clears Extends), so the chain is still walkable here. The visited set
+// guards against a cycle — the loader rejects those, but this validator must
+// not hang on a config that somehow reached it.
+func portsInheritedViaExtends(cfg *config.DweConfig, name string) bool {
 	svc, ok := cfg.Services[name]
-	if !ok {
+	if !ok || len(svc.Ports) == 0 {
 		return false
 	}
 	visited := map[string]bool{name: true}
-	for svc.Extends != "" && !visited[svc.Extends] {
-		visited[svc.Extends] = true
-		parent, ok := cfg.Services[svc.Extends]
+	cur := svc
+	for cur.Extends != "" && !visited[cur.Extends] {
+		visited[cur.Extends] = true
+		parent, ok := cfg.Services[cur.Extends]
 		if !ok {
 			return false
 		}
-		if _, has := parent.Ports[portName]; has {
-			return true
+		if len(parent.Ports) > 0 {
+			return maps.Equal(svc.Ports, parent.Ports)
 		}
-		svc = parent
+		cur = parent
 	}
 	return false
 }

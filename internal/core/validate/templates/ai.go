@@ -129,10 +129,15 @@ func (v *AIValidator) validateService(name string, svc config.ServiceConfig, cfg
 			Domain:   "templates",
 			Target:   fmt.Sprintf("templates.ai:%s", name),
 			Message:  fmt.Sprintf("template pack not found for service %q", name),
+			// The key is written as it appears IN service.yml — top-level
+			// render:, not the services.<name>.render. path used to talk about
+			// it elsewhere. service.yml is strict-decoded against a per-type
+			// field allowlist that has no `services` key, so pasting the
+			// qualified path there makes the project stop loading.
 			Hint: fmt.Sprintf(
 				"create workspace/templates/ai/%s or workspace/templates/ai/default\n"+
-					"or set services.%s.render.ai.enabled: false in workspace/services/%s/service.yml",
-				name, name, name,
+					"or set render.ai.enabled: false in workspace/services/%s/service.yml",
+				name, name,
 			),
 		}}
 	}

@@ -153,6 +153,38 @@ exports:
 	require.Contains(t, diags[0].Message, "services.worker.ports.metrics")
 }
 
+// TestPortsExportsValidator_ExtendsChildSharedPortNameWarns pins the
+// all-or-nothing shape of extends port inheritance: the loader clones the
+// parent's map only when the child declares NO ports, so a child declaring its
+// own `http` inherits nothing — even though an ancestor happens to use the same
+// port name. Asking per port name whether some ancestor uses it would swallow
+// this genuinely unexported port.
+func TestPortsExportsValidator_ExtendsChildSharedPortNameWarns(t *testing.T) {
+	t.Parallel()
+	root := t.TempDir()
+	workspace := `project:
+  name: test
+exports:
+  env:
+    - name: APP_HTTP_PORT
+      from: services.app.ports.http
+`
+	require.NoError(t, os.WriteFile(filepath.Join(root, "workspace.yml"), []byte(workspace), 0o644))
+	for _, svc := range []struct{ name, body string }{
+		{"app", "type: app\nrequired: true\nports:\n  http: 8080\n"},
+		{"worker", "type: app\nrequired: true\nextends: app\nports:\n  http: 8081\n"},
+	} {
+		dir := filepath.Join(root, "workspace", "services", svc.name)
+		require.NoError(t, os.MkdirAll(dir, 0o755))
+		require.NoError(t, os.WriteFile(filepath.Join(dir, "service.yml"), []byte(svc.body), 0o644))
+	}
+
+	diags := runPortsExportsValidator(t, root)
+	require.Len(t, diags, 1)
+	require.Contains(t, diags[0].Message, "services.worker.ports.http")
+	require.Equal(t, filepath.Join("workspace", "services", "worker", "service.yml"), diags[0].File)
+}
+
 func TestPortsExportsValidator_NilCfgIsSilent(t *testing.T) {
 	t.Parallel()
 	diags := (&portsExportsValidator{}).Run(validate.Context{ProjectRoot: t.TempDir()})
