@@ -793,18 +793,62 @@ golden.)*
 
 ### Task 9: [Final] Update documentation
 
-- [ ] update `docs/reference/docs/commands.md` (search: TSV contract at lines 77-104, the
+- [x] update `docs/reference/docs/commands.md` (search: TSV contract at lines 77-104, the
       new `--literal`/match flag, the llms-txt size budget) and its ru mirror
-- [ ] update `docs/reference/config/tests.md` for the cost profile, and its ru mirror
-- [ ] update `docs/guides/start-a-new-project.md` for the richer scaffold, and its ru mirror
-- [ ] update the `--help` texts changed along the way (`search.go` Short/Long,
-      `llmstxt.go` Long)
-- [ ] note the merge order with Plan A: both plans touch
+      — the `search` section was rewritten in both locales: the 4th `<snippet>` TSV column
+      (stated as **append-only**, so a consumer reading fields `[0..2]` is unaffected), the
+      `snippet` JSON field, `--literal` as a **flag rather than quoting** (with the reason —
+      cobra takes one arg and the shell strips quotes), and a new "Matching" subsection
+      carrying the three decisions a caller can observe: substring-not-word-boundary with the
+      `uid`/`guides` trade-off named, the two tiers with tier-1-sorts-first, and `<count>`
+      being the **rarest** word's occurrences rather than the total. The llms-txt size budget
+      was already written into both locales by Task 1b and re-verified here (12 KB, measured
+      11 169 B)
+- [x] update `docs/reference/config/tests.md` for the cost profile, and its ru mirror
+      — written in full by Task 6 (deliberately, so the mirror could not lag); re-checked
+      here field by field against `testCostProfileJSON` and the ru mirror against the en
+      source. No drift, no edit needed
+- [x] update `docs/guides/start-a-new-project.md` for the richer scaffold, and its ru mirror
+      — the on-disk tree gained `services/app/deploy.yml`, `templates/ai/default/` and
+      `tests/smoke.yml`; the "two things worth understanding" list became four, adding (a)
+      `docker.yml` overrides **per key** while the pipeline mirrors are full-replacement —
+      the same conflation Task 4 fixed in the scaffold's own header, (b) the two files that
+      must ship ACTIVE and why (`manifest.yml` needs an entry, the scenario loader rejects an
+      empty document) together with the honest reason `smoke.yml` has no assertions, and
+      (c) the two `AGENTS.md` files. "After init" gained the two class-1 pairings no
+      validator can check (port ↔ `exports.env`, mount the whole hub) and the `--service ""`
+      edge case now states that the ai pack and scenario are dropped with the service
+- [x] update the `--help` texts changed along the way (`search.go` Short/Long,
+      `llmstxt.go` Long) — both were rewritten in Tasks 2 and 1b; verified against the built
+      binary here that `docs search --help` and `docs llms-txt --help` agree with the
+      reference pages (tokenization + `--literal`; the 12 KB budget)
+- [x] note the merge order with Plan A: both plans touch
       `internal/cli/validate/validate.go` (Plan A Task 14 adds scope to the summary, Task 3
       here adds the hint line) — A lands first
-- [ ] run `make build` to resync embedded docs and content hashes
-- [ ] update `AGENTS.md` Critical Patterns if any new load-bearing contract emerged
-- [ ] move this plan to `docs/plans/completed/`
+      — **already satisfied on this branch**: Plan A (`20260804-agent-feedback-loop.md`,
+      completed) landed first — `f29d8eb2 feat(validate): report active scope in summary
+      output` precedes `fccd9528 feat(validate): hint --level/--quiet after a long
+      diagnostics table`, and the summary line the hint is emitted after is Plan A's. No
+      merge-order action remains
+- [x] run `make build` to resync embedded docs and content hashes
+      — ⚠️ the doc edits tripped `TestRussianTranslationsAreFresh`: a ru mirror carries a
+      `> Translated from: <path> @ <hash>` header pinned to the English source, so **editing
+      both locales is not enough** — the header hash has to be re-stamped
+      (`reference/docs/commands.md`, `guides/start-a-new-project.md`). Rebuilt and re-ran
+      after; `make test`, `make lint` (`0 issues.`) and `web` `npm test` (28/28) all clean
+- [x] update `AGENTS.md` Critical Patterns if any new load-bearing contract emerged
+      — one new entry, "Agent discoverability surface", covering the five contracts this plan
+      created that are expensive to re-derive: (1) the two **disjoint** enumeration surfaces
+      (`builtin.Inventory()` via `Summary` on `spec.Entry`, `condition.Predicates()` pinned to
+      `EvalBuiltin`'s switch) and the rule that a new builtin/verb must update its own one;
+      (2) the llms-txt 12 KB budget being on `--no-project` only, duplicated in four places,
+      plus the `Opts`-not-import layering rule; (3) `docs search`'s `strings.Fields` /
+      min-ranking / per-document tier 2 / substring-by-design / `--literal`-is-a-flag /
+      append-only 4th column; (4) `cost_profile` as facts-only, JSON-only, nil-degrading, and
+      sharing `parseComposeFiles` rather than adding a third compose parser; (5) the
+      scaffold's `serviceScopedOutputs` drop rule, the two files that must ship active, the
+      per-service `deploy.yml` that must **not**, and the `AGENTS.md.tmpl.tmpl` double-suffix
+- [x] move this plan to `docs/plans/completed/`
 
 ## Post-Completion
 

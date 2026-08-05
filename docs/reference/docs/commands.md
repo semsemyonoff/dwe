@@ -76,32 +76,40 @@ project	guides/getting-started	en
 
 ## `dwe docs search <query>`
 
-Search every documentation topic for a case-insensitive literal substring and emit the sections that contain it. Built for pipes, scripts, agents, and CI.
+Search every documentation topic and emit the sections that contain the query. Built for pipes, scripts, agents, and CI.
 
 **Usage:**
 ```bash
-dwe docs search <query> [--source all|dwe|project] [--lang <code>] [--limit <n>] [--output text|json] [--pretty]
+dwe docs search <query> [--literal] [--source all|dwe|project] [--lang <code>] [--limit <n>] [--output text|json] [--pretty]
 ```
 
 **Arguments:**
-- `<query>` — Literal substring to search for (case-insensitive). Matches inside fenced code blocks are counted too — that's where schema names usually appear.
+- `<query>` — One or more words. The query is split on whitespace and **every** word must be present for a section to match (AND). Each word matches as a case-insensitive **substring**, so identifiers work (`depends_on:`, `RunContext.Render`). Matches inside fenced code blocks are counted too — that's where schema names usually appear.
 
 **Flags:**
+- `--literal` — Match the whole query as one substring instead of splitting it into words. Needed because `docs search` takes exactly one argument and the shell strips quotes, so `'a b'` and `a b` arrive identical — quoting cannot select literal mode.
 - `--source <all|dwe|project>` — Doc source (default `all`). `dwe` searches only built-in docs; `project` searches only `./docs/`; `all` searches both.
 - `--lang <code>` — Language code (default: active locale or `en`).
 - `--limit <n>` — Maximum result rows (default `50`; `0` = unlimited).
 - `--output <text|json>` — Output format (global flag; default `text`).
 - `--pretty` — Pretty-print JSON output (only with `--output json`).
 
+**Matching:**
+- **Substring, not word-boundary.** The known trade-off: a short word matches inside a longer one — `uid` also matches `guide`/`guides`, `env` also matches `environment`. Deliberate, because word-boundary matching would break `depends_on:`.
+- **Two tiers.** First, sections that contain every word. Then, for a document where *no* section holds them all but the document as a whole does, one row anchored at its densest section — a page explaining a pair of concepts in two adjacent sections would otherwise be invisible to the query naming both. Tier-1 rows always sort above tier-2 rows.
+- **`<count>` is the rarest word's occurrences, not the total.** Summing would let a section with 40 hits of `vars` and one of `interpolation` outrank the section actually about the pair; it also makes a repeated word (`vars vars`) harmless.
+
 **Output:**
-- **`text` (default):** Tab-separated, one row per matching section: `<source>\t<path>#<anchor>\t<count>`. Sections are sorted by match count (descending), then by path. Lead text under the H1 (before the first H2) is reported with an empty anchor.
-- **`--output json`:** A JSON array of `{source, path, anchor, count}` records (path and anchor are split; anchor is empty for lead text under the H1 before the first H2/H3).
-- **Zero matches:** stdout stays empty (text) or `[]` (JSON) and the exit code stays 0. In text mode a one-line notice goes to **stderr** naming the query, the active `--source` and the resolved locale — the two filters that most often produce a false empty result. JSON mode emits no notice, so a piped consumer sees byte-identical output either way.
+- **`text` (default):** Tab-separated, one row per matching section: `<source>\t<path>#<anchor>\t<count>\t<snippet>`. Sections are sorted by match count (descending), then by path. Lead text under the H1 (before the first H2) is reported with an empty anchor.
+- **`--output json`:** A JSON array of `{source, path, anchor, count, snippet}` records (path and anchor are split; anchor is empty for lead text under the H1 before the first H2/H3).
+- **`<snippet>`** is the source line carrying the most distinct words of the query (densest line, first wins ties), so a hit is actionable without a second `docs show`. It is whitespace-collapsed (tabs and newlines removed — markdown tables contain both) and capped at 160 bytes on a rune boundary, so a TSV row can never gain a fifth field. The column is **append-only**: a consumer reading fields `[0..2]` is unaffected.
+- **Zero matches:** stdout stays empty (text) or `[]` (JSON) and the exit code stays 0. In text mode a one-line notice goes to **stderr** naming the query, the active `--source` and the resolved locale — the filters that most often produce a false empty result — and suggests dropping a word (or dropping `--literal`, when that flag is what produced the empty result). JSON mode emits no notice, so a piped consumer sees byte-identical output either way.
 
 **Examples:**
 ```bash
 dwe docs search depends_on
-dwe docs search 'RunContext.Render' --source dwe
+dwe docs search 'RunContext.Render' --source dwe --literal
+dwe docs search 'UID GID env' --lang en --limit 5
 dwe docs search topo-sort --lang en --limit 5
 ```
 
