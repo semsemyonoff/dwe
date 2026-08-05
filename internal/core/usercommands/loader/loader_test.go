@@ -450,8 +450,8 @@ commands:
         default: true
     env:
       DB_NAME: "${param.database}"
-      DB_USER: "${db.user}"
-      DB_PASSWORD: "${db.password}"
+      DB_USER: "${vars.db.user}"
+      DB_PASSWORD: "${vars.db.password}"
       DUMP_LOCATION: "${files.dump.path}"
     files:
       dump:
@@ -776,8 +776,8 @@ commands:
       DB_NAME: "${param.database}"
       TARGET_DB_NAME: "${param.target_database}"
       CHECK_EXISTS: "{{ if .Params.check_exists }}1{{ else }}0{{ end }}"
-      DB_USER: "${db.user}"
-      DB_PASSWORD: "${db.password}"
+      DB_USER: "${vars.db.user}"
+      DB_PASSWORD: "${vars.db.password}"
       DUMP_LOCATION: "${files.dump.path}"
     files:
       dump:

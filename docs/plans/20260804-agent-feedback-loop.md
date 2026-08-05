@@ -360,36 +360,36 @@ the port is display-only, that `local.yml` overrides will not move the binding, 
   `docs/internals/packages.md` (§ `internal/shared/tpl/`),
   `internal/cli/render/config.go` (help text)
 
-- [ ] add an exported `KnownVarHeads` slice in `tpl` covering the config root keys
+- [x] add an exported `KnownVarHeads` slice in `tpl` covering the config root keys
       (`allowedRootKeys`: `schema_version, project, runtime, state, exports, compose, ui,
       docs, services, vars, update, bridge, stop`) plus the special namespaces already
       switched on in `CompileVarSyntax` (`files, host, param, context, snapshot, generated,
       args`)
-- [ ] change the default branch: emit `{{ resolve .Raw %q }}` only when the head is known;
+- [x] change the default branch: emit `{{ resolve .Raw %q }}` only when the head is known;
       otherwise return the original `${…}` match unchanged
-- [ ] **`__configPath` stays out of `KnownVarHeads`** (decision): `varPattern` admits a
+- [x] **`__configPath` stays out of `KnownVarHeads`** (decision): `varPattern` admits a
       leading `_`, so `${__configPath}` would otherwise resolve. It is an internal key the
       loader injects (`workspace.go:1762`), not part of the authoring contract, and a
       reference to it in a command is almost certainly a mistake — so it renders as a
       literal. Pin it with a test so the choice is visible rather than accidental
-- [ ] migrate the eight test files above off the bare top-level dot-path form
+- [x] migrate the eight test files above off the bare top-level dot-path form
       (`${databases.main}` → `${vars.databases.main}`) — that form has been dead since the
       strict root landed and the assertions encode the pre-strict contract
-- [ ] update the docs and help text that still promise the bare form, stating plainly that
+- [x] update the docs and help text that still promise the bare form, stating plainly that
       free-form values live under `vars:`
-- [ ] write tests: `${vars.x}` / `${services.app.ports.http}` / `${project.name}` still
+- [x] write tests: `${vars.x}` / `${services.app.ports.http}` / `${project.name}` still
       compile to `resolve`; `${HOME}` / `${PATH}` / `${UNKNOWN_THING}` survive literally
-- [ ] write tests for the boundary cases: `${host.uid}`, `${args}`, `${files.a.path}`, a
+- [x] write tests for the boundary cases: `${host.uid}`, `${args}`, `${files.a.path}`, a
       dotted unknown head (`${FOO.bar}`) staying literal, and the known-head/unknown-subkey
       pair `${host.bogus}` / `${args.0}` (today both resolve to `""` — decide and pin)
-- [ ] add a cross-check test in `internal/core/project/config` asserting `allowedRootKeys`
+- [x] add a cross-check test in `internal/core/project/config` asserting `allowedRootKeys`
       ⊆ `tpl.KnownVarHeads`, so a future root key cannot silently stop rendering.
       Note: `tpl` already imports `internal/core/execution/condition`
       (`render_command.go:10`), so "tpl is a leaf" is a convention, not an enforced
       invariant — the duplicated list plus cross-check is still the right call, since
       `internal/core/project/config` does not import `tpl` and `workspace_test.go` is
       `package config` and can see the unexported list
-- [ ] run tests — must pass before task 2
+- [x] run tests — must pass before task 2
 
 ### Task 2: The shared render helper — `cmd`, `with`, `check` into a copy
 

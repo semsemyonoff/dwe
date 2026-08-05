@@ -1324,8 +1324,10 @@ func TestRunPipeline_FilesGate_WithRendersTemplate(t *testing.T) {
 
 	rep := &mockReporter{}
 	cfg := &config.DweConfig{Raw: map[string]any{
-		"db": map[string]any{
-			"stock_database": "app_stock",
+		"vars": map[string]any{
+			"db": map[string]any{
+				"stock_database": "app_stock",
+			},
 		},
 	}}
 	phase := config.DeployPhase{Name: "setup"}
@@ -1342,7 +1344,7 @@ func TestRunPipeline_FilesGate_WithRendersTemplate(t *testing.T) {
 				State:   filesgate.StateReadable,
 				Require: filesgate.RequireRequired{},
 				With: map[string]any{
-					"database": "${db.stock_database}",
+					"database": "${vars.db.stock_database}",
 				},
 			},
 		},

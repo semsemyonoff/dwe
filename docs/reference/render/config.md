@@ -50,13 +50,16 @@ This is a deliberate divergence justified by config-file ergonomics: config
 authors expect `${...}` parity with the values they reference.
 
 `${X}` compiles to `{{ resolve .Raw "X" }}`, so the dot-path is looked up in the
-merged config (`cfg.Raw`) with **no `raw.` prefix**:
+merged config (`cfg.Raw`) with **no `raw.` prefix** — but only when `X`'s head
+is a known namespace (a merged-config root key, or one of the special
+namespaces below); an unrecognized head is left as a literal `${...}` instead
+of silently rendering `""`:
 
 ```bash
 # workspace/templates/config/laravel/env.tmpl
 APP_URL=${services.main.hosts.web}
-DB_HOST=${databases.main.host}
-DB_DATABASE=${databases.main.name}
+DB_HOST=${vars.databases.main.host}
+DB_DATABASE=${vars.databases.main.name}
 APP_KEY=${generated.app_key}
 ```
 
@@ -66,8 +69,11 @@ APP_KEY=${generated.app_key}
   `ports` / `hosts` / … — **not** `render` / `generated` / arbitrary merged
   fields. An omitted or uninjected field renders `""` (all `${...}` resolvers are
   lenient — a missing path is the empty string, never an error).
-- **Top-level config** uses the bare dot-path (`${databases.main}`,
-  `${project.name}`, …).
+- **Free-form values** live under `vars:` — reference them as
+  `${vars.<path>}` (e.g. `${vars.databases.main}`). A bare top-level dot-path
+  with no `vars.` prefix does not resolve: the merged config root is a strict
+  allowlist (`project`, `services`, `vars`, …), so an arbitrary key like
+  `databases` can never appear there directly.
 - **Generated values** use `${generated.<name>}` (see below).
 
 There is no singular current-service `${service....}` binding — reference the
