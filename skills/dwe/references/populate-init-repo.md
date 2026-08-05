@@ -88,12 +88,13 @@ phases:
       - type: builtin
         cmd: service_dirs_ensure
         with: { service: <name> }
-      - type: shell
-        description: clone source (first deploy only)
-        when:
-          type: builtin
-          cmd: "dir-empty services/<name>/src"
-        cmd: "git clone --branch ${vars.source.branch} ${vars.source.repo} services/<name>/src"
+      - type: builtin
+        description: clone source (idempotent — skips an existing checkout)
+        cmd: source_clone
+        with:
+          repo: "${vars.source.repo}"
+          dir: services/<name>/src
+          branch: "${vars.source.branch}"
       - type: builtin
         cmd: service_configs_render
         with: { service: <name> }

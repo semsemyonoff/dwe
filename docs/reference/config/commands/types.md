@@ -38,6 +38,7 @@ Runs a shell command on the **host** machine. Use this for tasks that don't need
 |-------|----------|-------------|
 | `cmd` | one of cmd/argv | Shell command string passed to `sh -c` (full shell semantics) |
 | `argv` | one of cmd/argv | Argument vector executed directly without a shell |
+| `argv_append_from` | optional | Host shell expression whose stdout lines are appended to `argv` as individual elements — see [Computed arguments](directives.md#computed-arguments-argv_append_from). Requires `argv`; empty output skips the command |
 | `workdir` | optional | Working directory; relative paths resolve against project root |
 
 ```yaml
@@ -219,6 +220,7 @@ Runs a command inside an existing container via `docker compose exec`. The `mode
 |-------|----------|-------------|
 | `service` | yes | Compose service name |
 | `cmd` / `argv` | one of | Shell command string OR raw argv |
+| `argv_append_from` | optional | Shell expression whose stdout lines are appended to `argv`. Runs on the **host**, not in the container — see [Computed arguments](directives.md#computed-arguments-argv_append_from) |
 | `mode` | optional | `exec-or-fail` (default), `exec`, `run`, or `exec-or-run` — see [mode resolution](#mode-resolution) |
 | `user` | optional | Container user to run as. See [User resolution](#user-resolution) for the full list of accepted values and the fallback rules. |
 | `workdir` | optional | Container workdir; rendered with templates |
@@ -316,6 +318,8 @@ artisan-tinker:
 ```
 
 `mode` is not a valid field for `service_run` (it always uses `docker compose run --rm`) — writing `mode:` at all is rejected at load time; omit it.
+
+`argv_append_from` is accepted here on the same terms as on `service_exec`: the expression runs on the host and its output lines are appended to `argv` — see [Computed arguments](directives.md#computed-arguments-argv_append_from).
 
 ### Runner override block
 
@@ -666,6 +670,8 @@ If `lifecycle.yml` is absent, `dwe stop` still runs (with only the `_auto_reap_d
 ### Invalid fields
 
 The source daemon command rejects fields that conflict with its declarative shape: `script:`, `steps:`, `cmd:` (the action is implicit), `mode`. Use `params:` / `context:` / `env:` / `files:` / `messages:` / `argv` / `service` / `workdir` / `workdir_from` / `user` / `compose_args` / `runner` as on any service runner. All of these flow into the virtual `.start` invocation.
+
+`argv_append_from` is rejected too, even though `daemon` builds an `argv`: the expansion packs that `argv` into the synthetic `.start` command, where the field's documented "empty output → skip" would read as silently failing to start the daemon. See [Computed arguments](directives.md#computed-arguments-argv_append_from).
 
 ### End-to-end flow
 

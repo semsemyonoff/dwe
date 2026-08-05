@@ -10,6 +10,7 @@ Typed conditions (`when:`) and typed actions (`check:` / step bodies) in pipelin
   - [`type: shell` — shell commands](#type-shell--shell-commands)
   - [`type: template` — Go templates](#type-template--go-templates)
 - [Typed actions (`check:` and step bodies)](#typed-actions-check-and-step-bodies)
+- [`check: auto` — the inverse of `when:`](#check-auto--the-inverse-of-when)
 - [Two `type: builtin` registries](#two-type-builtin-registries)
 - [Workflow conditions (string-based, separate)](#workflow-conditions-string-based-separate)
 - [Related documentation](#related-documentation)
@@ -26,6 +27,7 @@ The pipeline system uses **typed** forms for both — a `type:` field dispatches
 Pipeline steps (typed):
   when: { type: builtin|shell|template, cmd: ..., expr: ... }
   check: { type: shell|dwe|command|builtin, cmd: ..., with: ... }
+  check: auto                                  # the logical inverse of when:
 
 Workflow steps (string-based — separate, not covered here):
   when: "dir-empty path" | "{{ ... }}" | "cmd: ..."
@@ -124,6 +126,29 @@ Actions support four executor types:
 | `builtin` | Engine builtin | `type: builtin, cmd: "service_configs_check"` |
 
 See [deploy/conditions.md](deploy/conditions.md) for the full action reference and the semantics of `check:` failures under `continue_on_error`.
+
+## `check: auto` — the inverse of `when:`
+
+Besides the mapping form, `check:` accepts one scalar: `auto`. It resolves to the logical inverse of the step's own `when:`, for the common step whose "should I run" and "am I already done" are the same predicate read in opposite directions.
+
+```yaml
+- name: clone-source
+  type: shell
+  cmd: "git clone ${vars.source.repo} services/backend/src"
+  when:
+    type: shell
+    cmd: "[ ! -e services/backend/src/.git ]"
+  check: auto          # ≡ check: {type: builtin, cmd: shell, with: {cmd: "! ( [ ! -e … ] )"}}
+```
+
+**It applies only to `when: {type: shell}`.** The other two forms are load-time errors:
+
+- **`type: builtin`** — the two `type: builtin` namespaces below are **disjoint**. `dir-empty` is a predicate and has no counterpart in the action registry that `check:` draws from, so there is no action that could express "NOT `dir-empty foo`". (Negating by swapping in the "paired opposite" predicate name would also be wrong at the edges — `dir-empty` and `dir-not-empty` are not complements for a missing directory.)
+- **`type: template`** — template conditions are evaluated at plan time and a false one removes the step entirely. Every step that survives to execution therefore had `when == true`, so its inverse is always false and the derived check would always fail.
+
+`check: auto` without a `when:` is rejected as well — there is nothing to invert. The inversion is a logical negation of the rendered command (`! (\n<cmd>\n)`), never a textual edit of it.
+
+See [deploy/conditions.md](deploy/conditions.md#check-auto-the-inverse-of-when) for the resolution details (shell, working directory, timeout) and the journal/config-hash consequences.
 
 ## Two `type: builtin` registries
 

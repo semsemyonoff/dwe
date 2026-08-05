@@ -184,10 +184,12 @@ All seven builtins are usable both as `type: builtin` check entries and as deplo
 
 Runs a shell command via hardcoded `sh -c` (matching the deploy `when:` predicate convention). Exit 0 = pass. This builtin uses POSIX-portable `sh -c` regardless of the project's configured shell, ensuring checks run identically across all environments.
 
+The command runs with its working directory set to the **project root**, so relative paths mean the same thing as in `file_exists` and in a `when:` condition regardless of the directory `dwe` was invoked from.
+
 | Key | Type | Required | Default | Description |
 |-----|------|----------|---------|-------------|
 | `cmd` | string | yes | — | Shell command body. |
-| `timeout` | duration | no | `10s` | Maximum execution time. |
+| `timeout` | duration | no | `10s` | Maximum execution time. `0` means **unbounded** (not "expire immediately"). |
 
 Error message on non-zero exit: `exit status N: <last line of stderr>`.
 

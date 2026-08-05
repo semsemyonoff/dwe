@@ -152,7 +152,8 @@ func resolveLeafStep(cfg *config.DweConfig, reg *registry.Registry, phase config
 	// step is a local copy, so assigning a fresh pointer here never mutates the
 	// loaded config (a second resolve over the same config must not produce
 	// "! ( ! ( ... ) )", and ProjectConfigHash must not depend on deploy scope).
-	if config.IsAutoCheck(step.Check) {
+	autoCheck := config.IsAutoCheck(step.Check)
+	if autoCheck {
 		derived, derr := ResolveAutoCheck(stepRuntimeWhen)
 		if derr != nil {
 			return ResolvedStep{}, false, fmt.Errorf("step %s: %w", prefix, derr)
@@ -203,6 +204,7 @@ func resolveLeafStep(cfg *config.DweConfig, reg *registry.Registry, phase config
 		PhaseWhen:   phaseRuntimeWhen,
 		FilesGate:   step.FilesGate,
 		Timeout:     timeout,
+		AutoCheck:   autoCheck,
 	}, true, nil
 }
 

@@ -130,8 +130,8 @@ func printLeafStep(out io.Writer, rs ResolvedStep, indent, detailIndent, indexPr
 	if rs.FilesGate != nil {
 		_, _ = fmt.Fprintln(out, detailIndent+"["+FormatFilesGate(rs.FilesGate)+"]")
 	}
-	if rs.Step.Check != nil {
-		_, _ = fmt.Fprintln(out, detailIndent+"[check: "+FormatAction(rs.Step.Check)+"]")
+	if check := rs.DisplayCheck(); check != "" {
+		_, _ = fmt.Fprintln(out, detailIndent+"[check: "+check+"]")
 	}
 	if rs.Step.ContinueOnError {
 		_, _ = fmt.Fprintln(out, detailIndent+"[continue_on_error]")

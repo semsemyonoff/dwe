@@ -168,6 +168,7 @@ Pick by who resolves the value (full rules → `dwe docs show config/commands/te
 - `messages: { success, error }` — user-facing result lines.
 - `files:` — declarative file resolution (read/write candidates, globs, `env:` binding) for `script` commands.
 - `notify:` — desktop notification on completion.
+- `argv_append_from: "<host shell expr>"` — appends the expression's stdout **lines** to `argv:` as individual elements. This is how a staged-files linter is authored: `argv: [ruff, check]` + `argv_append_from: "git diff --cached --name-only …"` — do **not** hand-roll `docker compose exec` in a `type: shell` `cmd:` to get the same effect. Valid on `shell`/`service_exec`/`service_run`, requires `argv:` (rejected with `cmd:`, and rejected on `daemon`). The expression runs **on the host**, in the project root, even for a container command; empty output **skips** the command (exit 0), so a pipeline step using it needs a `files_gate:`/`check:`.
 
 Schema → `dwe docs show config/commands/directives --lang en`.
 

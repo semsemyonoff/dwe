@@ -1,6 +1,7 @@
 package pipeline
 
 import (
+	"bytes"
 	"context"
 	"os"
 	"path/filepath"
@@ -10,6 +11,7 @@ import (
 	"github.com/semsemyonoff/dwe/internal/core/execution/builtin"
 	"github.com/semsemyonoff/dwe/internal/core/execution/condition"
 	"github.com/semsemyonoff/dwe/internal/core/project/config"
+	sharedrender "github.com/semsemyonoff/dwe/internal/shared/render"
 )
 
 func autoCheckPhase(whenCmd string) config.DeployPhase {
@@ -212,5 +214,41 @@ func TestResolveAutoCheck_cwdIsProjectRoot(t *testing.T) {
 	err = builtin.Run(context.Background(), action.Cmd, action.With, builtin.ExecContext{ProjectRoot: root}, builtin.CtxPredicate)
 	if err == nil {
 		t.Fatal("derived check passed; it did not run in the project root")
+	}
+}
+
+// TestDisplayCheck_autoIsReportedAsAuthored pins that plan output names the
+// directive the author wrote. Printing the derived `builtin: shell(cmd=! ( … ))`
+// would send the reader looking for a check that appears nowhere in their
+// pipeline file.
+func TestDisplayCheck_autoIsReportedAsAuthored(t *testing.T) {
+	rs := resolveAutoCheckStep(t, "test -e ${vars.source.dir}/.git")
+
+	if got, want := rs.DisplayCheck(), "auto (inverse of when)"; got != want {
+		t.Fatalf("DisplayCheck() = %q, want %q", got, want)
+	}
+}
+
+func TestDisplayCheck_explicitAndAbsent(t *testing.T) {
+	explicit := ResolvedStep{Step: config.DeployStep{
+		Check: &config.Action{Type: "shell", Cmd: "test -e x"},
+	}}
+	if got, want := explicit.DisplayCheck(), FormatAction(explicit.Step.Check); got != want {
+		t.Errorf("explicit check: DisplayCheck() = %q, want %q", got, want)
+	}
+	if got := (ResolvedStep{}).DisplayCheck(); got != "" {
+		t.Errorf("no check: DisplayCheck() = %q, want empty", got)
+	}
+}
+
+// TestPrintPlanTable_autoCheckLine pins the human plan line end to end.
+func TestPrintPlanTable_autoCheckLine(t *testing.T) {
+	rs := resolveAutoCheckStep(t, "test -e ${vars.source.dir}/.git")
+
+	var buf bytes.Buffer
+	PrintPlanTable([]ResolvedStep{rs}, sharedrender.NewWriter(&buf), "dwe")
+
+	if !strings.Contains(buf.String(), "[check: auto (inverse of when)]") {
+		t.Fatalf("plan output missing the auto-check line:\n%s", buf.String())
 	}
 }

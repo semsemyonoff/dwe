@@ -607,31 +607,48 @@ outstanding, not as new scope.
 
 ### Task 7: [Final] Update documentation
 
-- [ ] document `argv_append_from` in `docs/reference/config/commands/types.md` and
+- [x] document `argv_append_from` in `docs/reference/config/commands/types.md` and
       `directives.md` (the argv/args field tables), including the empty-result semantics,
       its ordering relative to `${args}`, and the plain fact that the expression runs **on
       the host** even for a `service_exec` command — authors should not be surprised by
       where it executes
-- [ ] document `check: auto` in **both** condition pages —
+- [x] document `check: auto` in **both** condition pages —
       `docs/reference/config/conditions.md` and
       `docs/reference/config/deploy/conditions.md` — stating plainly that it applies only to
       `when: {type: shell}` and why the other two kinds are rejected
-- [ ] document the new load-time rejections in
+- [x] document the new load-time rejections in
       `docs/reference/config/commands/validation.md`
-- [ ] document the working directory of the `shell` builtin in
+- [x] document the working directory of the `shell` builtin in
       `docs/reference/config/validate.md` (§ `shell`) and
       `docs/reference/config/deploy/steps.md` — today neither says anything, while the
       neighbouring `file_exists` is documented as "relative to the project root"
-- [ ] make `dwe deploy plan` print `check: auto (inverse of when)` rather than a bare
+- [x] make `dwe deploy plan` print `check: auto (inverse of when)` rather than a bare
       `builtin shell` — the whole point of the feature is that the check is implicit
-- [ ] document the `source_clone` builtin in `docs/reference/config/deploy/builtins.md`
-- [ ] update `skills/dwe/references/authoring-commands.md` and
+- [x] document the `source_clone` builtin in `docs/reference/config/deploy/builtins.md`
+- [x] update `skills/dwe/references/authoring-commands.md` and
       `pipelines-and-orchestration.md`, which describe exactly these schemas (Plan C Task 7
       edits the skill for different content — these two need this plan's changes)
-- [ ] update the Russian mirrors under `docs/i18n/ru/`
-- [ ] run `make build` to resync embedded docs and content hashes
-- [ ] update `AGENTS.md` Critical Patterns for the argv/injection boundary if warranted
-- [ ] move this plan to `docs/plans/completed/`
+- [x] update the Russian mirrors under `docs/i18n/ru/`
+- [x] run `make build` to resync embedded docs and content hashes
+- [x] update `AGENTS.md` Critical Patterns for the argv/injection boundary if warranted
+- [x] move this plan to `docs/plans/completed/`
+
+➕ Done beyond the checklist, for consistency rather than scope creep:
+- `skills/dwe/references/populate-init-repo.md` carried the same hand-rolled
+  `when: dir-empty` + `git clone` recipe as `pipelines-and-orchestration.md`; leaving one
+  of the two stale after shipping `source_clone` would have been the exact doc drift this
+  task exists to close. Both now show the builtin.
+- The plan-output change went in as `pipeline.ResolvedStep.DisplayCheck()` (backed by a new
+  `ResolvedStep.AutoCheck` flag set at rewrite time) rather than a special case inside
+  `FormatAction` — `FormatAction` receives only the derived `*config.Action`, which by
+  construction no longer knows it came from `auto`. All four plan renderers route through
+  the helper (human table, `--output json`, `--format shell` comment, and the reset plan),
+  so the three `dwe deploy plan` formats agree and `dwe reset plan` cannot drift.
+- `docs/internals/packages.md` gained the per-package write-ups the new AGENTS.md Critical
+  Pattern points at (§ Execution for `autocheck.go` + `source/`, § Foundation for the
+  sentinel's load-time rules, § User Commands for `runio.AppendArgvFrom`) — the AGENTS.md
+  entry is a pointer by convention, so adding it without the target would have been a
+  dangling reference.
 
 ## Post-Completion
 

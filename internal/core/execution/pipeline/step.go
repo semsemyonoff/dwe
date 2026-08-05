@@ -34,6 +34,23 @@ type ResolvedStep struct {
 	FilesGate   *filesgate.FilesGate // step-level files gate; nil otherwise
 	Parallel    *ResolvedParallel    // non-nil when the step is a parallel group
 	Timeout     time.Duration        // step-body timeout; 0 = unbounded
+	AutoCheck   bool                 // Step.Check was derived from the `check: auto` sentinel
+}
+
+// DisplayCheck returns the plan-output form of the step's `check:`.
+//
+// An auto check is reported as what the author wrote, not as the machinery it
+// resolved to: printing the derived `builtin shell(cmd=! ( … ))` would tell the
+// reader to look for a check that is nowhere in their pipeline file. Returns ""
+// when the step has no check.
+func (rs ResolvedStep) DisplayCheck() string {
+	if rs.Step.Check == nil {
+		return ""
+	}
+	if rs.AutoCheck {
+		return config.AutoCheckType + " (inverse of when)"
+	}
+	return FormatAction(rs.Step.Check)
 }
 
 // ResolvedParallel is the resolved form of a config.ParallelGroup.
