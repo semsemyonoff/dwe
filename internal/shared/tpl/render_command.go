@@ -160,6 +160,16 @@ var knownVarHeadSet = func() map[string]struct{} {
 	return m
 }()
 
+// IsKnownVarHead reports whether head is a namespace CompileVarSyntax rewrites
+// into a template call. Callers outside this package (the pipeline resolve gate
+// and its unresolved-reference reporter) must ask through here rather than
+// re-indexing the exported KnownVarHeads slice, so there is exactly one
+// membership index and it cannot drift from the rewrite itself.
+func IsKnownVarHead(head string) bool {
+	_, ok := knownVarHeadSet[head]
+	return ok
+}
+
 // CompileVarSyntax rewrites ${...} expressions into Go template calls.
 //
 // Vars and dot-paths whose head is in KnownVarHeads are rewritten using the

@@ -119,7 +119,7 @@ func buildPlanJSON(steps []pipeline.ResolvedStep, dweBin, serviceName string) pl
 				Name:        rs.Phase.Name,
 				Service:     rs.Service,
 				Description: rs.Phase.Description,
-				When:        pipeline.FormatCondition(rs.Phase.When),
+				When:        pipeline.FormatCondition(rs.DisplayPhaseWhen()),
 				Steps:       []planStepJSON{},
 			}
 			payload.Phases = append(payload.Phases, phase)

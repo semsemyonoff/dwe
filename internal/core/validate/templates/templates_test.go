@@ -329,7 +329,7 @@ func aiSvc(dir string) config.ServiceConfig {
 	}
 }
 
-func TestIDEValidator_ImplicitMissingPackEmitsWarning(t *testing.T) {
+func TestIDEValidator_ExplicitEnabledMissingPackEmitsWarning(t *testing.T) {
 	root := t.TempDir()
 	require.NoError(t, os.MkdirAll(filepath.Join(root, "services", "main"), 0o755))
 
@@ -374,7 +374,7 @@ func TestIDEValidator_ExplicitMissingPackEmitsError(t *testing.T) {
 	require.Contains(t, errDiag.Message, "custom")
 }
 
-func TestAIValidator_ImplicitMissingPackEmitsWarning(t *testing.T) {
+func TestAIValidator_ExplicitEnabledMissingPackEmitsWarning(t *testing.T) {
 	root := t.TempDir()
 	require.NoError(t, os.MkdirAll(filepath.Join(root, "services", "main"), 0o755))
 
@@ -526,10 +526,12 @@ func TestGitValidator_ImplicitDefaultMissingSrcGitIsSilent(t *testing.T) {
 		"expected no info diagnostic for missing src/.git on implicit default; got %+v", diags)
 }
 
-func TestGitValidator_ImplicitMissingPackEmitsWarning(t *testing.T) {
+func TestGitValidator_ExplicitEnabledMissingPackEmitsWarning(t *testing.T) {
 	root := t.TempDir()
 	require.NoError(t, os.MkdirAll(filepath.Join(root, "services", "main"), 0o755))
-	// No pack on disk at all (implicit missing).
+	// No pack on disk at all, with render.git explicitly enabled (gitSvc sets
+	// Enabled: &true) — the case that must still warn. The implicit-default
+	// silence is covered by TestTemplateValidators_ImplicitDefaultMissingPackIsSilent.
 
 	v := &GitValidator{}
 	diags := v.Run(validate.Context{

@@ -45,6 +45,22 @@ type ResolvedParallel struct {
 	Steps         []ResolvedStep
 }
 
+// DisplayPhaseWhen returns the phase-level condition to show in plan output.
+//
+// PhaseWhen (rendered at resolve time) is preferred over the raw
+// Phase.When it was rendered from: displaying the raw form would print the
+// literal `${vars.*}` text while execution uses the substituted command —
+// the "plan lies about what will run" divergence the resolve-time rendering
+// exists to remove. Phase.When is used only when there is no rendered form:
+// a template condition (evaluated and filtered at plan time, never stored in
+// PhaseWhen), or no condition at all.
+func (rs ResolvedStep) DisplayPhaseWhen() *condition.Condition {
+	if rs.PhaseWhen != nil {
+		return rs.PhaseWhen
+	}
+	return rs.Phase.When
+}
+
 // IsUntracked reports whether this step is excluded from the [N/M] counter
 // and its lifecycle output suppressed — true when either the enclosing phase
 // or the step itself sets untracked. Failures still surface regardless.
@@ -135,7 +151,7 @@ func UnresolvedTemplateRefs(s string) []string {
 	seen := make(map[string]struct{})
 	for _, m := range tpl.VarPattern.FindAllStringSubmatch(s, -1) {
 		head, _, _ := strings.Cut(m[1], ".")
-		if _, known := knownVarHeadSet[head]; known {
+		if tpl.IsKnownVarHead(head) {
 			continue
 		}
 		if _, dup := seen[m[0]]; dup {

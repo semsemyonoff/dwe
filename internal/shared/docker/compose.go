@@ -80,23 +80,23 @@ func buildCompose(cfg *config.DweConfig, dockerCfg *config.DockerConfig, files [
 		"build":   dockerCfg.Args.Build,
 	}
 
-	// Project name precedence mirrors config.ResolveComposeProjectName and
-	// `dwe docker project-name`: the resolved docker.yml project_name, else the
-	// canonical "<prefix>-<name>" (cfg.Project.FullName()). Without this fallback
-	// an absent/empty docker.yml left ProjectName empty, so BuildArgs omitted -p
-	// and docker compose v2 silently scoped resources by the directory basename
-	// — diverging from every name-resolution path (status/stop/logs/reset/prompt)
-	// that already uses FullName(). Always passing -p keeps one compose project
-	// name across the whole tool. (FullName() is empty only for a project with no
-	// project.name, where compose's own basename default still applies.)
-	projectName := dockerCfg.ProjectName
-	if projectName == "" {
-		projectName = cfg.Project.FullName()
-	}
-
+	// The -p value MUST come from config.ComposeProjectName, the single
+	// resolution point shared with ResolveComposeProjectName: the resolved
+	// docker.yml project_name, else the canonical "<prefix>-<name>"
+	// (cfg.Project.FullName()), lowercased. Re-deriving the precedence inline
+	// here is what let the two diverge — every compose-bypass path (status,
+	// stop, restart, logs, reset --service, bridge overlay, the container_name
+	// validator) derives "<project>-<container>" from the normalized name, so a
+	// raw -p value would scope compose's own resources under a different
+	// project than every label lookup that goes looking for them. Without the
+	// FullName() fallback an absent/empty docker.yml left ProjectName empty, so
+	// BuildArgs omitted -p and compose v2 silently scoped by directory
+	// basename; always passing -p keeps one name across the whole tool.
+	// (ComposeProjectName is empty only for a project with no project.name,
+	// where compose's own basename default still applies.)
 	return &Compose{
 		Bin:         config.DockerBin(cfg),
-		ProjectName: projectName,
+		ProjectName: config.ComposeProjectName(dockerCfg, cfg),
 		Files:       files,
 		GlobalArgs:  dockerCfg.Args.Global,
 		CommandArgs: cmdArgs,

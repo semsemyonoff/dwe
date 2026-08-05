@@ -403,10 +403,11 @@ func newDockerProjectNameCmd(flags *cmdctx.RootFlags) *cobra.Command {
 				return err
 			}
 
-			name := dockerCfg.ProjectName
-			if name == "" {
-				name = cfg.Project.FullName()
-			}
+			// Must be the exact value dwe passes to `docker compose -p` —
+			// scripts use this to build their own label filters — so it goes
+			// through the shared resolver rather than re-deriving the
+			// precedence (and losing the lowercasing) here.
+			name := config.ComposeProjectName(dockerCfg, cfg)
 			_, err = fmt.Fprintln(cmd.OutOrStdout(), name)
 			return err
 		},

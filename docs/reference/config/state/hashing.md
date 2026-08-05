@@ -58,23 +58,24 @@ sha256(type + "\x00" + cmd + "\x00" + canonical_json(with))
 
 ## config_hash for services
 
-A service's `config_hash` covers two things:
+A service's `config_hash` covers three things:
 
 ```
-sha256(canonical_json(services.<name>) + canonical_json(workspace/services/<name>/deploy.yml))
+sha256(canonical_json(services.<name>) + canonical_json(workspace/services/<name>/deploy.yml) + canonical_json(vars))
 ```
 
 - The service definition from `workspace/services/<name>/service.yml` (Type, Dir, Container, Depends, Required, etc.)
 - The per-service deploy pipeline from `workspace/services/<name>/deploy.yml` (or empty if absent)
+- The whole merged `vars:` block (see [the note below](#why-vars-is-hashed))
 
 When the service's `config_hash` changes (e.g., you edit `workspace/services/main/service.yml` or `workspace/services/main/deploy.yml`), **all steps in that service's phases are treated as absent**. They re-run on the next deploy regardless of their `action_hash`.
 
 ## config_hash for the project
 
-The project-level `config_hash` covers three things:
+The project-level `config_hash` covers four things:
 
 ```
-sha256(canonical_json(services[tracked_only]) + canonical_json(workspace/deploy.yml) + canonical_json(workspace/services/<tracked>/deploy.yml for all tracked services))
+sha256(canonical_json(services[tracked_only]) + canonical_json(workspace/deploy.yml) + canonical_json(workspace/services/<tracked>/deploy.yml for all tracked services) + canonical_json(vars))
 ```
 
 **"Tracked" means:** A service is tracked iff it appears in the resolved deploy plan (i.e., enabled in `workspace/services/<name>/service.yml` AND inlined by a `deploy_services: true` phase in `workspace/deploy.yml`). Tools are never tracked. Services without a `workspace/services/<name>/deploy.yml` are still tracked if they appear in the plan.
@@ -82,6 +83,14 @@ sha256(canonical_json(services[tracked_only]) + canonical_json(workspace/deploy.
 When the project's `config_hash` changes (e.g., you edit `workspace/deploy.yml` or add a service), **all project-scope steps are treated as absent** and re-run on the next deploy.
 
 Note: edits to enabled-but-untracked service variants (e.g., a `main-debug` service extending `main` without its own deploy config) do NOT change the project hash, so they do not invalidate the journal.
+
+## Why `vars` is hashed
+
+Pipeline `cmd`, the string leaves of `with`, `check`, `timeout`, and shell `when:` are rendered at plan-resolution time (see [Templates in step fields](../deploy/index.md#templates-in-step-fields)), so a step's *actual* command depends on the `vars:` block. Hashing only the pipeline files would let a changed `vars.db.host` leave the hash untouched while the command it renders into changes — the deploy would report `already up-to-date` for a step that has not run in its current form.
+
+Both hashes therefore include the **whole** `vars:` block, not just the entries a given scope references. The consequence is that editing any `vars:` entry invalidates every project- and service-scope step, not only the ones that read it.
+
+**One-time consequence on upgrade**: because the formulas changed, the first `dwe deploy run` after upgrading to the dwe version carrying this change re-runs every step once, even without any `vars:` edit of your own. Steps are expected to be idempotent and gated, so this is safe — just visible.
 
 ## Hash invalidation
 

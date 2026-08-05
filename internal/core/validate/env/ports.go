@@ -428,11 +428,11 @@ func resolveComposeProject(baseDir string, cfg *config.DweConfig) string {
 		return ""
 	}
 	dockerCfg, err := config.LoadDockerConfig(baseDir, cfg)
-	if err == nil && dockerCfg != nil && dockerCfg.ProjectName != "" {
-		return dockerCfg.ProjectName
+	if err != nil {
+		dockerCfg = nil
 	}
-	if full := cfg.Project.FullName(); full != "" {
-		return full
+	if name := config.ComposeProjectName(dockerCfg, cfg); name != "" {
+		return name
 	}
 	return strings.ToLower(filepath.Base(baseDir))
 }

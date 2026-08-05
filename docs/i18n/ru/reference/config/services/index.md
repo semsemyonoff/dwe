@@ -1,4 +1,4 @@
-> Translated from: reference/config/services/index.md @ 668a687bb5c9
+> Translated from: reference/config/services/index.md @ 78433e754a0f
 
 # Конфигурация сервиса (`workspace/services/<name>/service.yml`)
 
@@ -214,6 +214,7 @@ info:
 - `dwe status` — составное представление только для чтения: разделы apps + tools + infra, у каждого свои `status:` колонки.
 - `dwe status apps` / `dwe status tools` / `dwe status infra` — таблицы по типам.
 - `dwe services` — интерактивный мультивыбор для переключения каждого необязательного сервиса всех типов.
+- `dwe services list` — read-only список всех настроенных сервисов (app, tool, infra, включая обязательную infra) с их состоянием enabled/running; то же представление, на которое голый `dwe services` откатывается при неинтерактивном stdin или под `--output json`. Никогда не пишет в `local.yml` и не запускает lifecycle-хуки.
 - `dwe services enable <name>` / `dwe services disable <name>` — переключение по имени (тип определяется внутри).
 - `dwe deploy run` — запускает полный пайплайн deploy; перечисляет все включённые сервисы, у которых есть `workspace/services/<name>/deploy.yml` (любой тип сервиса).
 - `dwe reset run --service <name>` — сбрасывает один сервис: останавливает и удаляет контейнер, удаляет `dir:` сервиса, если он объявлен и существует, запускает per-service `reset.yml`, если он есть, помечает сервис требующим последующего deploy. Тома автоматически не удаляются (opt-in через `docker_remove_project_volumes`).

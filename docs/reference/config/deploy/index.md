@@ -152,6 +152,8 @@ A step may also declare a `parallel:` block instead of leaf body fields (`type` 
 
 `cmd`, the string leaves of `with`, `check`, `timeout`, and shell `when:` are rendered at plan-resolution time — before the step is displayed or executed. A `${...}` reference with a known head (`vars`, `services`, `project`, …) is substituted with its actual value; `dwe deploy plan` therefore prints what will actually run, not the literal `${vars.*}` text from `deploy.yml`. A `${...}` with an unknown head (a shell-style `${HOME}`, a typo) is left as a literal and, if it survives into the plan output, is called out with a trailing `[unresolved: ${...}]` annotation (also carried as the `unresolved` field in `--output json`) — that annotation is a display-only hint and is never added to `--format shell`, which must stay directly executable.
 
+**A step field carrying a known-head `${...}` must not also contain a literal `{{ }}`.** Substitution runs the field through the same Go-template engine the `${...}` shorthand compiles down to, so a `docker` format string in the same command — `cmd: 'docker inspect -f "{{.State.Status}}" ${vars.container}'` — is evaluated as a template and fails the resolve with `can't evaluate field State`. The whole `dwe deploy plan` / `dwe deploy run` stops there. Either keep the two apart (put the format string in a script, or the `${vars.*}` value in a shell variable), or escape the braces as `{{"{{"}}`. A field with **no** known-head reference never enters the engine at all, so a plain `docker inspect -f "{{.State.Status}}" app` — or one using only a shell variable like `${CONTAINER}` — is passed through untouched.
+
 Because a rendered step's actual text now depends on the `vars:` block, the whole `vars:` block is included in both the project and per-service config hash, so changing a referenced value re-runs the steps that use it instead of the deploy reporting a stale `already up-to-date`. **One-time consequence on upgrade**: this changes the project config hash for every existing project, so the first `dwe deploy run` after upgrading to a dwe version carrying this change re-runs every step once, even without any `vars:` change of your own. The steps are expected to be idempotent and gated, so this is safe, just visible — do not be alarmed if a deploy that has been "up-to-date" for weeks suddenly re-runs everything one time.
 
 ## Post-deploy semantics
@@ -217,7 +219,7 @@ See [state/index.md](../state/index.md) for full details on hashing, skip decisi
 
 ## Related commands
 
-- `dwe deploy plan` — show resolved pipeline (with inlined service phases)
+- `dwe deploy plan` — show resolved pipeline (with inlined service phases). `--format table` (default) / `--format shell`, or `--output json` for the machine-readable form: `{service?, phases[]}`, each phase carrying `name` / `service` / `description` / `when` and an ordered `steps[]` of `{name, type, cmd, unresolved[], description, when, files_gate, check, continue_on_error, untracked, parallel{max_concurrent, fail_fast, steps[]}}`. `--output json` supersedes `--format`.
 - `dwe deploy run` — execute deploy pipeline with state tracking
 - `dwe deploy state show` — inspect deploy state journal
 - `dwe deploy state clear` — reset deploy state

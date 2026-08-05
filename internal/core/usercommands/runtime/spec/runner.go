@@ -132,7 +132,7 @@ func (ctx RunContext) Compose() *docker.Compose {
 		BaseDir:     ctx.ProjectRoot,
 	}
 	if ctx.Config != nil {
-		c.ProjectName = ctx.Config.Project.FullName()
+		c.ProjectName = config.ComposeProjectName(nil, ctx.Config)
 		c.Files = ctx.Config.ComposeFiles()
 	}
 	return c
