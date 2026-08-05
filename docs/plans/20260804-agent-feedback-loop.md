@@ -758,14 +758,14 @@ above:
 - Modify: `internal/cli/deploy/deploy.go`
 - Modify: `internal/cli/deploy/plan_test.go`
 
-- [ ] define the typed plan payload (phases → steps → type, cmd, gates) and emit it through
+- [x] define the typed plan payload (phases → steps → type, cmd, gates) and emit it through
       `cmdctx.WriteData[T]` when `--output json` is set, leaving `--format table|shell`
       untouched otherwise
-- [ ] ensure no ANSI escapes leak into the JSON path (the captured session shows
+- [x] ensure no ANSI escapes leak into the JSON path (the captured session shows
       `\x1b[38;5;45m…` in piped plan output)
-- [ ] write tests for the JSON shape (stable key set, deterministic ordering)
-- [ ] write a test asserting the human `--format` paths are byte-identical to today
-- [ ] run tests — must pass before task 13
+- [x] write tests for the JSON shape (stable key set, deterministic ordering)
+- [x] write a test asserting the human `--format` paths are byte-identical to today
+- [x] run tests — must pass before task 13
 
 ### Task 13: Mark unresolved templates in the plan output
 

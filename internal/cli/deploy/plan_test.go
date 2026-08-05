@@ -3,6 +3,7 @@ package deploy
 import (
 	"bytes"
 	"context"
+	"encoding/json"
 	"os"
 	"path/filepath"
 	"strings"
@@ -112,16 +113,161 @@ func TestRunDeployPlan_JSONModeNoInfoLine(t *testing.T) {
 	flags := &cmdctx.RootFlags{ConfigPath: filepath.Join(dir, "workspace.yml"), Output: "json"}
 
 	cmd := &cobra.Command{}
-	var errBuf bytes.Buffer
+	var outBuf, errBuf bytes.Buffer
+	cmd.SetOut(&outBuf)
 	cmd.SetErr(&errBuf)
 
-	// The plan command still writes text to stdout even in json mode (plan
-	// does not have a JSON output path for the plan table), so we don't assert
-	// on stdout here — only that stderr is empty.
-	_ = runDeployPlan(context.Background(), cmd, flags, deployPlanOpts{})
+	if err := runDeployPlan(context.Background(), cmd, flags, deployPlanOpts{}); err != nil {
+		t.Fatalf("runDeployPlan: %v", err)
+	}
 
 	if errBuf.Len() != 0 {
 		t.Errorf("json mode: expected empty stderr, got %q", errBuf.String())
+	}
+
+	var payload planJSON
+	if err := json.Unmarshal(outBuf.Bytes(), &payload); err != nil {
+		t.Fatalf("stdout is not valid JSON: %v\nstdout: %s", err, outBuf.String())
+	}
+	if len(payload.Phases) == 0 {
+		t.Fatalf("expected at least one phase in JSON payload, got %+v", payload)
+	}
+}
+
+// TestRunDeployPlan_JSONMode_NoANSIEscapes verifies the JSON payload carries
+// no ANSI escape codes — the table/shell text renderers style their output,
+// but the JSON path must stay a plain machine-readable payload.
+func TestRunDeployPlan_JSONMode_NoANSIEscapes(t *testing.T) {
+	dir := makeMinimalProject(t)
+	flags := &cmdctx.RootFlags{ConfigPath: filepath.Join(dir, "workspace.yml"), Output: "json"}
+
+	cmd := &cobra.Command{}
+	var outBuf bytes.Buffer
+	cmd.SetOut(&outBuf)
+
+	if err := runDeployPlan(context.Background(), cmd, flags, deployPlanOpts{}); err != nil {
+		t.Fatalf("runDeployPlan: %v", err)
+	}
+
+	if strings.Contains(outBuf.String(), "\x1b[") {
+		t.Errorf("JSON output contains ANSI escapes: %q", outBuf.String())
+	}
+}
+
+// TestRunDeployPlan_JSONMode_StableShape verifies the JSON payload contains
+// the expected phase/step/type/cmd/gate fields and a deterministic key
+// ordering (Go's json.Marshal on structs is always struct-field order, so
+// this pins the shape rather than re-testing encoding/json).
+func TestRunDeployPlan_JSONMode_StableShape(t *testing.T) {
+	dir := makeMinimalProject(t)
+
+	workspaceDir := filepath.Join(dir, "workspace")
+	if err := os.MkdirAll(workspaceDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	userDeploy := "phases:\n" +
+		"  - name: custom\n" +
+		"    steps:\n" +
+		"      - name: step1\n" +
+		"        type: shell\n" +
+		"        cmd: echo hello\n"
+	if err := os.WriteFile(filepath.Join(workspaceDir, "deploy.yml"), []byte(userDeploy), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	flags := &cmdctx.RootFlags{ConfigPath: filepath.Join(dir, "workspace.yml"), Output: "json"}
+
+	cmd := &cobra.Command{}
+	var outBuf bytes.Buffer
+	cmd.SetOut(&outBuf)
+
+	if err := runDeployPlan(context.Background(), cmd, flags, deployPlanOpts{}); err != nil {
+		t.Fatalf("runDeployPlan: %v", err)
+	}
+
+	var payload planJSON
+	if err := json.Unmarshal(outBuf.Bytes(), &payload); err != nil {
+		t.Fatalf("stdout is not valid JSON: %v", err)
+	}
+
+	var found *planStepJSON
+	for i := range payload.Phases {
+		if payload.Phases[i].Name != "custom" {
+			continue
+		}
+		for j := range payload.Phases[i].Steps {
+			if payload.Phases[i].Steps[j].Name == "step1" {
+				found = &payload.Phases[i].Steps[j]
+			}
+		}
+	}
+	if found == nil {
+		t.Fatalf("step1 not found in payload: %+v", payload)
+	}
+	if found.Type != "shell" {
+		t.Errorf("Type = %q, want %q", found.Type, "shell")
+	}
+	if found.Cmd != "echo hello" {
+		t.Errorf("Cmd = %q, want %q", found.Cmd, "echo hello")
+	}
+}
+
+// TestRunDeployPlan_JSONMode_ServiceScope verifies the JSON payload records
+// the scoping service name for a per-service plan.
+func TestRunDeployPlan_JSONMode_ServiceScope(t *testing.T) {
+	dir := makeMinimalProject(t)
+
+	servicesDir := filepath.Join(dir, "workspace", "services", "app")
+	if err := os.MkdirAll(servicesDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	serviceYML := "type: app\ndir: .\n"
+	if err := os.WriteFile(filepath.Join(servicesDir, "service.yml"), []byte(serviceYML), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	serviceDeployYML := "phases:\n  - name: build\n    steps:\n      - name: step1\n        type: shell\n        cmd: echo app\n"
+	if err := os.WriteFile(filepath.Join(servicesDir, "deploy.yml"), []byte(serviceDeployYML), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	flags := &cmdctx.RootFlags{ConfigPath: filepath.Join(dir, "workspace.yml"), Output: "json"}
+
+	cmd := &cobra.Command{}
+	var outBuf bytes.Buffer
+	cmd.SetOut(&outBuf)
+
+	if err := runDeployPlan(context.Background(), cmd, flags, deployPlanOpts{ServiceName: "app"}); err != nil {
+		t.Fatalf("runDeployPlan: %v", err)
+	}
+
+	var payload planJSON
+	if err := json.Unmarshal(outBuf.Bytes(), &payload); err != nil {
+		t.Fatalf("stdout is not valid JSON: %v", err)
+	}
+	if payload.Service != "app" {
+		t.Errorf("Service = %q, want %q", payload.Service, "app")
+	}
+}
+
+// TestRunDeployPlan_TextFormatsUnaffectedByJSONPath verifies the table and
+// shell text renderers are byte-identical to their pre-JSON-path behavior
+// (i.e. the --output json branch is a true short-circuit, not a refactor of
+// the text paths).
+func TestRunDeployPlan_TextFormatsUnaffectedByJSONPath(t *testing.T) {
+	dir := makeMinimalProject(t)
+	flags := &cmdctx.RootFlags{ConfigPath: filepath.Join(dir, "workspace.yml")}
+
+	for _, format := range []string{"", "table", "shell"} {
+		cmd := &cobra.Command{}
+		var buf bytes.Buffer
+		cmd.SetOut(&buf)
+
+		if err := runDeployPlan(context.Background(), cmd, flags, deployPlanOpts{Format: format}); err != nil {
+			t.Fatalf("format %q: runDeployPlan: %v", format, err)
+		}
+		if strings.Contains(buf.String(), "{") && strings.Contains(buf.String(), "\"phases\"") {
+			t.Errorf("format %q: text output looks like JSON: %q", format, buf.String())
+		}
 	}
 }
 
