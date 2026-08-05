@@ -519,32 +519,32 @@ nothing would re-run.
   field on `Usage` — see the first checkbox; this is not a filter widening)
 - Modify: `internal/core/validate/config/all.go`
 
-- [ ] (TDD) write the fixture: a service `deploy.yml` referencing `${vars.opechatka}` plus
+- [x] (TDD) write the fixture: a service `deploy.yml` referencing `${vars.opechatka}` plus
       a valid `${vars.source.repo}`, and the test asserting exactly one warning naming the
       file, step and field
-- [ ] make `varsusage`'s `with:` scanning **recurse** through nested maps and sequences
+- [x] make `varsusage`'s `with:` scanning **recurse** through nested maps and sequences
       first. Today it looks only at direct scalar values immediately under a `with` mapping
       (`scan.go:271-277`), while Task 2 renders string leaves at any depth — so without this
       the renderer and the validator disagree about which references exist
-- [ ] extend `varsusage` with an **enumeration** entry point. Today it is query-driven —
+- [x] extend `varsusage` with an **enumeration** entry point. Today it is query-driven —
       `ScanUsages(projectRoot, queryPath)` looks for one known path and matches on dot
       boundaries, and `Usage` carries `File/Line/Kind/Text` but **not the referenced
       path**. The validator needs the inverse: collect every `${known-head.path}` and test
       each for resolvability. So this is a new exported function plus a path field on
       `Usage` — not "widen a filter", and the task is roughly twice the size the first
       draft implied
-- [ ] build the validator on that entry point rather than re-deriving which fields render —
+- [x] build the validator on that entry point rather than re-deriving which fields render —
       `varsusage` is named in AGENTS.md as the single field-aware scanner, and a second list
       would drift
-- [ ] resolve **only** heads from `allowedRootKeys`; exclude `param`, `context`, `files`,
+- [x] resolve **only** heads from `allowedRootKeys`; exclude `param`, `context`, `files`,
       `host`, `snapshot`, `args` entirely (they do not live in `Raw`) and `generated`
       explicitly (lenient-by-contract: absent → `""` on the first deploy). Without this the
       validator fires on every `${param.*}` — 99+ in this repo's fixtures alone — and
       becomes the noise Tasks 7–8 are removing
-- [ ] register it in `All()`
-- [ ] write tests for the negative cases: unknown head (`${HOME}`), `${param.x}`,
+- [x] register it in `All()`
+- [x] write tests for the negative cases: unknown head (`${HOME}`), `${param.x}`,
       `${generated.key}` and a resolvable reference all produce **no** diagnostic
-- [ ] run tests — must pass before task 4
+- [x] run tests — must pass before task 4
 
 ### Task 4: Normalize the compose project name
 
