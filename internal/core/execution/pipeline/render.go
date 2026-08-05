@@ -41,15 +41,35 @@ func renderIfKnown(s string, ctx *tpl.RenderContext) (string, error) {
 	return tpl.RenderCommand(s, ctx)
 }
 
+// renderWithLeaf renders a single string leaf of a with: map. Unlike
+// renderIfKnown (used for cmd/check/timeout/when, none of which were rendered
+// at all before resolve-time rendering existed), a with: leaf ALSO enters the
+// engine when it carries a literal `{{`: usercommands.BuildRunContext used to
+// render every with: value unconditionally at exec time, and the pipeline now
+// hands the map to BuildPreRenderedRunContext, which never re-renders. Gating
+// a with: leaf on a known ${...} head alone would therefore silently pass a
+// Go-template value — `{{ resolve .Raw "vars.db.host" }}`, the form
+// varsusage already recognizes inside with: — through as literal text.
+//
+// Widening stops at with: on purpose. A shell cmd:/when: that was never
+// rendered before must keep passing a `docker inspect -f "{{.State.Status}}"`
+// format string through untouched.
+func renderWithLeaf(s string, ctx *tpl.RenderContext) (string, error) {
+	if s == "" || (!hasKnownVarRef(s) && !strings.Contains(s, "{{")) {
+		return s, nil
+	}
+	return tpl.RenderCommand(s, ctx)
+}
+
 // renderValue renders every string leaf reachable from v that carries a
-// known-head ${...} reference, recursing into nested maps and sequences.
-// Non-string scalars, and strings without a known reference, are returned
-// unchanged. v is never mutated — new map/slice containers are allocated for
-// any branch reached during recursion.
+// known-head ${...} reference or a literal `{{`, recursing into nested maps
+// and sequences. Non-string scalars, and strings carrying neither, are
+// returned unchanged. v is never mutated — new map/slice containers are
+// allocated for any branch reached during recursion.
 func renderValue(v any, ctx *tpl.RenderContext) (any, error) {
 	switch val := v.(type) {
 	case string:
-		return renderIfKnown(val, ctx)
+		return renderWithLeaf(val, ctx)
 	case map[string]any:
 		out := make(map[string]any, len(val))
 		for k, inner := range val {
@@ -76,7 +96,8 @@ func renderValue(v any, ctx *tpl.RenderContext) (any, error) {
 }
 
 // renderWith renders every string leaf of a with: map into a freshly
-// allocated copy; the input map is never mutated.
+// allocated copy (see renderWithLeaf for the gate); the input map is never
+// mutated.
 func renderWith(with map[string]any, ctx *tpl.RenderContext) (map[string]any, error) {
 	if len(with) == 0 {
 		return with, nil
@@ -162,10 +183,11 @@ func renderWhen(when *condition.Condition, ctx *tpl.RenderContext) (*condition.C
 // journal.ProjectConfigHash depend on deploy scope and a second resolve
 // double-render.
 //
-// Every string is gated on hasKnownVarRef before it reaches
-// tpl.RenderCommand, so a command with no known-head ${...} reference (a
-// bare Go-template idiom like `{{.State.Status}}`, or shell-style ${VAR}
-// only) never enters the template engine.
+// cmd, check.cmd, files_gate.command and timeout are gated on hasKnownVarRef
+// before they reach tpl.RenderCommand, so a command with no known-head ${...}
+// reference (a bare Go-template idiom like `{{.State.Status}}`, or
+// shell-style ${VAR} only) never enters the template engine. with: leaves use
+// the wider renderWithLeaf gate — see there for why.
 func renderStepFields(step config.DeployStep, ctx *tpl.RenderContext) (config.DeployStep, error) {
 	out := step
 

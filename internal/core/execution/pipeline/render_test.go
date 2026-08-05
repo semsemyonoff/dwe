@@ -173,6 +173,31 @@ func TestRenderValue(t *testing.T) {
 			}
 		}
 	})
+
+	// Regression: a with: leaf authored as a pure Go template carries no
+	// known-head ${...}, but usercommands.BuildRunContext used to render every
+	// with: value at exec time and the pipeline now hands the map to
+	// BuildPreRenderedRunContext, which never re-renders. Gating on the known
+	// head alone would silently pass the literal template text to the command.
+	t.Run("go-template-only leaves are still rendered", func(t *testing.T) {
+		got, err := renderValue(`{{ resolve .Raw "vars.source.repo" }}`, ctx)
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if got != "https://example.com/repo.git" {
+			t.Errorf("got %v, want the resolved repo", got)
+		}
+	})
+
+	t.Run("leaves with neither form are untouched", func(t *testing.T) {
+		got, err := renderValue("plain ${HOME} value", ctx)
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if got != "plain ${HOME} value" {
+			t.Errorf("got %v, want unchanged", got)
+		}
+	})
 }
 
 func TestRenderWith(t *testing.T) {
