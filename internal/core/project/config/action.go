@@ -21,9 +21,33 @@ type Action struct {
 	With map[string]any `yaml:"with,omitempty"`
 }
 
+// AutoCheckType is the Action.Type carried by the `check: auto` sentinel — the
+// one scalar form Action accepts. It is not an executable action: the pipeline
+// resolver rewrites it into a real check that is the logical inverse of the
+// step's `when:` (see pipeline.ResolveAutoCheck). The sentinel exists so
+// step.Check != nil holds from load time onward, which is what keeps
+// StepForcesRun and the journal's hasCheck → Run lever working unchanged.
+const AutoCheckType = "auto"
+
+// IsAutoCheck reports whether a is the `check: auto` sentinel. Consumers must
+// ask through this instead of string-comparing Type, and the payload emptiness
+// is part of the test: `{type: auto, cmd: ...}` is not a sentinel but an
+// unknown action type, so a cmd written there is rejected rather than silently
+// dropped by the rewrite.
+func IsAutoCheck(a *Action) bool {
+	return a != nil && a.Type == AutoCheckType && a.Cmd == "" && len(a.With) == 0
+}
+
 // UnmarshalYAML enforces that only the mapping form is accepted (defense-in-depth on top of
-// strict file-level decode). Rejects string shorthand and unknown keys with clear errors.
+// strict file-level decode), with the single exception of the scalar `auto`
+// sentinel. Rejects string shorthand and unknown keys with clear errors.
 func (a *Action) UnmarshalYAML(node *yaml.Node) error {
+	// Exactly "auto" — "Auto", "auto " and any other scalar keep the
+	// pre-existing rejection below.
+	if node.Kind == yaml.ScalarNode && node.Value == AutoCheckType {
+		*a = Action{Type: AutoCheckType}
+		return nil
+	}
 	if node.Kind != yaml.MappingNode {
 		return fmt.Errorf("action must be a mapping (e.g., {type: shell, cmd: ...}), not a scalar string")
 	}
@@ -46,7 +70,13 @@ func (a *Action) UnmarshalYAML(node *yaml.Node) error {
 // Type must be one of {shell, dwe, command, builtin}.
 // Cmd must be non-empty.
 // shell and dwe types do not accept with.
+// The `check: auto` sentinel is exempt: it carries no cmd by construction and
+// its own shape rules (a when: exists, and it is type: shell) need the
+// enclosing step, so they live in validateStepShape.
 func (a *Action) Validate() error {
+	if IsAutoCheck(a) {
+		return nil
+	}
 	switch a.Type {
 	case "shell", "dwe", "command", "builtin":
 	default:

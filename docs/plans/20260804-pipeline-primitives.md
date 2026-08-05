@@ -389,45 +389,70 @@ authoring without buying protection.)*
 - Modify: `internal/core/execution/pipeline/resolve.go`
 - Modify: `internal/core/execution/pipeline/resolve_test.go`
 
-- [ ] accept the scalar form `check: auto` alongside the existing mapping form, decoding it
+- [x] accept the scalar form `check: auto` alongside the existing mapping form, decoding it
       into a **sentinel Action at load time** so `step.Check != nil` holds everywhere
       (`StepForcesRun` at `forcesrun.go:37`, `deployStepToMap` at `hash.go:416`, and the
       `dwe reset step` path all inspect the raw config). Fix the sentinel's concrete shape
       (proposal: `Type: "auto"` plus an exported predicate `config.IsAutoCheck(*Action)`) so
       no consumer string-compares on its own — `FormatAction` (`executor.go:1112-1117`) and
       `deployStepToMap` both read it
-- [ ] **exempt the sentinel from `Action.Validate()`**: `validateStepShape`
+      → shipped as `config.AutoCheckType` + `config.IsAutoCheck`. `IsAutoCheck` additionally
+      requires an **empty payload**, so the mapping form `{type: auto, cmd: …}` is not a
+      sentinel but an unknown action type — a cmd written there is rejected instead of being
+      silently dropped by the rewrite
+- [x] **exempt the sentinel from `Action.Validate()`**: `validateStepShape`
       (`workspace.go:3196-3200`) calls it unconditionally and `action.go:49-62` rejects
       anything outside `{shell, dwe, command, builtin}` — so without this every
       `check: auto` fails at load before any of the three intended rejections fire
-- [ ] accept **exactly** `auto`: `Auto`, `"auto "` and a null `check:` must keep today's
+- [x] accept **exactly** `auto`: `Auto`, `"auto "` and a null `check:` must keep today's
       `action.go:28` message. One table test
-- [ ] reject at load time with a reason in the message: `auto` without `when:`; `auto` with
+      → ⚠️ corrected premise: a **null `check:` never reaches `UnmarshalYAML`** — yaml.v3
+      resolves the null tag before calling the Unmarshaler, so the pointer is simply left
+      nil with no error (verified, and now pinned by `TestAction_NullCheckStaysNil`). The
+      near-miss spellings (`Auto`, `AUTO`, `"auto "`, `" auto"`, `autos`, `auto check`) do
+      keep the `action.go:28` message
+- [x] reject at load time with a reason in the message: `auto` without `when:`; `auto` with
       `when: {type: builtin}` (disjoint registries); `auto` with `when: {type: template}`
       (would always fail — see Technical Details). These three are exhaustive:
       `condition.Type` has exactly three values
-- [ ] rewrite the sentinel into a real `*config.Action` at resolve time using the chosen
+- [x] rewrite the sentinel into a real `*config.Action` at resolve time using the chosen
       inversion form, wrapping across newlines rather than inline. **Ordering inside
       `resolveLeafStep` is load-bearing**: Plan A's whole-step render → sentinel rewrite →
       `builtin.Validate` of the check (`resolve.go:138`). Rewriting before the render would
       leave the derived check rendered while its source `when.Cmd` is not (or vice versa),
       silently breaking the inversion; rewriting after `:138` would either send `auto` into
       the builtin registry or skip validation of the derived check entirely
-- [ ] assign the derived check onto a **copy** — `step.Check = &config.Action{…}`, never
+      → the shared helper is `pipeline.ResolveAutoCheck(*condition.Condition)` in the new
+      `internal/core/execution/pipeline/autocheck.go` (with `pipeline.InvertShellCommand`);
+      Task 4's `dwe reset step` path must call the same helper
+- [x] assign the derived check onto a **copy** — `step.Check = &config.Action{…}`, never
       `*step.Check = …`. The pointer is shared with the loaded config, so mutating through
       it breaks Task 4's own invariant ("auto stays auto" in `deployStepToMap`), shifts
       `Service/ProjectConfigHash` mid-run depending on when they are computed, and makes a
       second `ResolvePhaseSteps` over the same config produce `! ( ! ( … ) )` — silently
       restoring the original logic
-- [ ] build the derived check from **the same string** the runtime `when:` evaluation will
+- [x] build the derived check from **the same string** the runtime `when:` evaluation will
       see, and assert byte equality in a test (this is the symmetry Plan A's `when.Cmd`
       rendering exists to provide)
-- [ ] write tests: shell inversion works; a `when.cmd` with a **trailing comment** inverts
+- [x] write tests: shell inversion works; a `when.cmd` with a **trailing comment** inverts
       correctly (the naive inline wrap turns this into a syntax error); the three load-time
       rejections each fire with their own message
-- [ ] write tests pinning cwd, shell binary and timeout of the derived check against the
+- [x] write tests pinning cwd, shell binary and timeout of the derived check against the
       `when:` it came from
-- [ ] run tests — must pass before task 4
+- [x] run tests — must pass before task 4
+
+➕ Decisions taken while implementing (for Task 7's docs):
+- **Timeout: option (b)** — `builtin.Shell.Run` now treats `timeout: "0"` as **unbounded**
+  instead of building an already-expired `context.WithTimeout(ctx, 0)`, and the derived
+  check passes `timeout: "0"`. This matches `parseStepTimeout`'s existing convention and
+  gives the derived check the same unbounded posture as the `when:` it inverts. Pinned by
+  `TestShellRunZeroTimeoutIsUnbounded`.
+- **`builtin.Shell.Run` now honours `ectx.ProjectRoot`** (nil-safe: empty ProjectRoot keeps
+  the old process-CWD behaviour, so `spec.ExecContext{}` callers are unaffected). All three
+  production surfaces already populate it — `executor.go`'s `execBuiltinAction`
+  (`ProjectRoot: actx.WorkDir`), `validate/checks/loader.go`, and
+  `usercommands/runtime/runners/builtin` — so the standalone cwd inconsistency described in
+  this task's Files section is fixed everywhere at once.
 
 ### Task 4: `check: auto` — journal and force-run integration
 
