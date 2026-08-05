@@ -114,9 +114,14 @@ func ShortHash(fullHash string) string {
 }
 
 // ServiceConfigHash computes a stable hash for a service's configuration.
-// It combines the service config block and the parsed deploy config (if present).
+// It combines the service config block, the parsed deploy config (if present),
+// and the project's vars block. vars is included because resolve-time template
+// rendering (pipeline.RenderStep) substitutes ${vars.*} into cmd/with/check, so a
+// scoped (--service) deploy must re-run when a referenced var changes even though
+// ProjectConfigHash is never consulted for that scope (deploy.go: computeScopeState /
+// makeSkipDecider compare against ServiceConfigHash for service-scoped steps).
 // The hash is invariant to key ordering and YAML formatting.
-func ServiceConfigHash(svcCfg config.ServiceConfig, deployCfg *config.ServiceDeployConfig) string {
+func ServiceConfigHash(svcCfg config.ServiceConfig, deployCfg *config.ServiceDeployConfig, vars map[string]any) string {
 	h := sha256.New()
 	h.Write(canonicalMap(serviceConfigToMap(svcCfg)))
 	h.Write([]byte{0})
@@ -125,6 +130,8 @@ func ServiceConfigHash(svcCfg config.ServiceConfig, deployCfg *config.ServiceDep
 	} else {
 		h.Write(canonicalMap(map[string]any{}))
 	}
+	h.Write([]byte{0})
+	h.Write(canonicalMap(vars))
 	return hex.EncodeToString(h.Sum(nil))
 }
 
@@ -172,6 +179,13 @@ func ProjectConfigHash(
 		}
 	}
 	h.Write(canonicalMap(trackedSvcDeploys))
+	h.Write([]byte{0})
+
+	// Hash the project's vars block. Resolve-time template rendering substitutes
+	// ${vars.*} into step cmd/with/check, so a changed var must invalidate the
+	// project hash or a full deploy would report "already up-to-date" while the
+	// rendered command text has actually changed.
+	h.Write(canonicalMap(cfg.Vars))
 
 	return hex.EncodeToString(h.Sum(nil))
 }
