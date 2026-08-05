@@ -1,4 +1,4 @@
-> Translated from: guides/start-a-new-project.md @ 8c9325bd1899
+> Translated from: guides/start-a-new-project.md @ c7a572a02130
 
 # Создание нового проекта с `dwe init`
 
@@ -92,7 +92,7 @@ dwe init my-project --default
    ├─ docker.yml        инертная копия политики compose
    ├─ services/app/
    │  ├─ service.yml    активны type, container, исходный хаб, icon и info.title
-   │  └─ deploy.yml     инертный скелет пайплайна сервиса (source → image → render)
+   │  └─ deploy.yml     инертный скелет пайплайна сервиса (source → image → bootstrap → render)
    ├─ templates/ai/default/
    │  ├─ manifest.yml   АКТИВНЫЙ AI-пак шаблонов
    │  └─ AGENTS.md.tmpl рендерится в хаб сервиса командой `dwe render ai`

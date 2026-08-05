@@ -478,6 +478,28 @@ func TestRunTestList_CostProfileHostStepsByCommandTarget(t *testing.T) {
 			want:    1,
 		},
 		{
+			// `when:` stays valid on a parallel CONTAINER, and it dispatches to
+			// the same host sh -c. Flattening that dropped the container itself,
+			// so its when: went uncounted — an undercount in the unsafe
+			// direction for the field that gates an unattended run.
+			name:    "workflow parallel container cmd: when: counts",
+			command: "commands:\n  inner:\n    type: service_exec\n    service: app\n    cmd: \"true\"\n  other:\n    type: service_exec\n    service: app\n    cmd: \"true\"\n  flow:\n    type: workflow\n    steps:\n      - name: group\n        when: \"cmd: test -f ./scripts/x\"\n        parallel:\n          steps:\n            - command: test.inner\n            - command: test.other\n",
+			steps:   "  - name: run\n    type: command\n    cmd: test.flow\n",
+			want:    1,
+		},
+		{
+			name:    "workflow parallel sub-step cmd: when: counts",
+			command: "commands:\n  inner:\n    type: service_exec\n    service: app\n    cmd: \"true\"\n  other:\n    type: service_exec\n    service: app\n    cmd: \"true\"\n  flow:\n    type: workflow\n    steps:\n      - name: group\n        parallel:\n          steps:\n            - command: test.inner\n              when: \"cmd: test -f ./scripts/x\"\n            - command: test.other\n",
+			steps:   "  - name: run\n    type: command\n    cmd: test.flow\n",
+			want:    1,
+		},
+		{
+			name:    "workflow parallel container without a shell when: does not count",
+			command: "commands:\n  inner:\n    type: service_exec\n    service: app\n    cmd: \"true\"\n  other:\n    type: service_exec\n    service: app\n    cmd: \"true\"\n  flow:\n    type: workflow\n    steps:\n      - name: group\n        parallel:\n          steps:\n            - command: test.inner\n            - command: test.other\n",
+			steps:   "  - name: run\n    type: command\n    cmd: test.flow\n",
+			want:    0,
+		},
+		{
 			name:    "workflow sub-step builtin predicate when: does not count",
 			command: "commands:\n  inner:\n    type: service_exec\n    service: app\n    cmd: \"true\"\n  flow:\n    type: workflow\n    steps:\n      - command: test.inner\n        when: \"file_exists ./scripts/x\"\n",
 			steps:   "  - name: run\n    type: command\n    cmd: test.flow\n",

@@ -19,7 +19,7 @@ var ContentHashes = map[string]string{
 	"guides/preflight-checks.md":               "0118a90a2c11",
 	"guides/shared-ide-and-agent-config.md":    "19821f92b789",
 	"guides/starship.md":                       "585d118b6b71",
-	"guides/start-a-new-project.md":            "8c9325bd1899",
+	"guides/start-a-new-project.md":            "c7a572a02130",
 	"guides/switching-tasks-with-snapshots.md": "83b43f46c197",
 	"guides/troubleshooting.md":                "32e3c8b81254",
 	"guides/write-snapshot-workflows.md":       "1b87b72a80f8",

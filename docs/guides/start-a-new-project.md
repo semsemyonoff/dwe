@@ -90,7 +90,7 @@ With `--output json` you get a structured report instead of prose:
    ├─ docker.yml        inert mirror of the compose policy
    ├─ services/app/
    │  ├─ service.yml    type, container, source hub, icon and info.title active
-   │  └─ deploy.yml     inert per-service pipeline skeleton (source → image → render)
+   │  └─ deploy.yml     inert per-service pipeline skeleton (source → image → bootstrap → render)
    ├─ templates/ai/default/
    │  ├─ manifest.yml   ACTIVE AI template pack
    │  └─ AGENTS.md.tmpl rendered into the service hub by `dwe render ai`

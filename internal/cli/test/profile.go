@@ -387,16 +387,22 @@ func (p *costProfiler) commandRunsOnHost(id string, seen map[string]bool) bool {
 	}
 }
 
-// flattenWorkflowSteps returns the workflow's leaf sub-steps, unwrapping
-// parallel containers (the schema allows exactly one level of nesting).
+// flattenWorkflowSteps returns the workflow's sub-steps, unwrapping parallel
+// containers (the schema allows exactly one level of nesting). A parallel
+// container is kept alongside its children rather than replaced by them:
+// `When` stays valid at the container level (see model.WorkflowStep.Parallel),
+// so dropping it would lose a shell `when:` that runs sh -c in the project root
+// — an undercount in the unsafe direction for a field that gates an unattended
+// run, and inconsistent with countHostSteps, which counts the pipeline
+// counterpart. The container carries no Command, so keeping it adds no
+// double-count.
 func flattenWorkflowSteps(steps []model.WorkflowStep) []model.WorkflowStep {
 	out := make([]model.WorkflowStep, 0, len(steps))
 	for _, s := range steps {
+		out = append(out, s)
 		if s.Parallel != nil {
 			out = append(out, s.Parallel.Steps...)
-			continue
 		}
-		out = append(out, s)
 	}
 	return out
 }

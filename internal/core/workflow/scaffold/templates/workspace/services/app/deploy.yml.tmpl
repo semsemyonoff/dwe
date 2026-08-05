@@ -7,9 +7,10 @@
 #
 # The phase shape is the one every DWE app service converges on:
 #
-#   source  — materialise the hub (clone once, never touch it again)
-#   image   — build the container image
-#   render  — write hub-level artefacts (agent docs, IDE config)
+#   source     — materialise the hub (clone once, never touch it again)
+#   image      — build the container image
+#   bootstrap  — first-run setup inside the container
+#   render     — write hub-level artefacts (agent docs, IDE config)
 #
 # Schema and field reference: `dwe docs show config/deploy/index`
 # Builtin inventory (name, kind, purpose): `dwe docs llms-txt --lang en`
@@ -41,12 +42,21 @@
 #     description: "First-run setup inside the container"
 #     steps:
 #       - name: deps
-#         type: shell
-#         cmd: "docker compose run --rm [[ .Service ]] npm ci"
+#         # Once the project declares this as a user command, dispatch it with
+#         # `type: command` + `cmd: <id>` instead — one definition, and the
+#         # command carries the service/workdir/user/env. Never paste the bare
+#         # `docker compose …` line into a `type: shell` step: it runs on the
+#         # HOST, bypasses dwe's -p/-f chain (so it lands in a different compose
+#         # project and misses the service's overlays), and every host step
+#         # counts against the `host_steps` gate on unattended `dwe test run`.
+#         type: dwe
+#         cmd: "docker run --rm [[ .Service ]] -- npm ci"
 #         description: "Install dependencies on first deploy"
 #         # `check: auto` derives the post-condition from `when:` by negating
 #         # it: run while the marker is missing, then assert it now exists.
-#         # It is only valid together with a `when:` of type shell.
+#         # It is only valid together with a `when:` of type shell — which is
+#         # host execution, so uncommenting this phase moves the project's
+#         # `host_steps` (dwe test list -o json) above zero.
 #         when:
 #           type: shell
 #           cmd: "test ! -d services/[[ .Service ]]/src/node_modules"
