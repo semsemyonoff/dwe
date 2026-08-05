@@ -9,12 +9,19 @@ import (
 )
 
 // containerNameValidator warns when a compose service's container_name:
-// diverges from the name dwe derives for it ("<project>-<service>", the same
-// pattern the daemon builtins (daemon.ResolveContainerName) build directly).
-// The defect is divergence itself, not casing — any container_name that does
-// not match the derived name is confusing for raw `docker`/`docker compose`
-// usage, scripts, and documentation that assume the derived name, regardless
-// of whether the declared value happens to be lowercase.
+// diverges from the conventional "<project>-<service>" name — the pattern the
+// daemon builtins (daemon.ResolveContainerName) build directly and the one
+// scripts and docs habitually assume. The defect is divergence itself, not
+// casing: any container_name that does not match is confusing for raw
+// `docker`/`docker compose` usage regardless of whether the declared value
+// happens to be lowercase.
+//
+// dwe's OWN per-service paths (`dwe stop`/`restart`/`logs <name>`,
+// docker_stop_remove_container) resolve containers through the compose
+// project+service labels (docker.LookupServiceContainer), never by guessing
+// this name, so they keep working either way — the diagnostic must not claim
+// otherwise. Removing container_name is likewise NOT equivalent to aligning
+// it: compose then names the container "<project>-<service>-1".
 //
 // Reuses config.ScanComposeIsolation's KindContainerName findings (the
 // generic leaf scanner flags ANY non-empty container_name, since even a
@@ -63,14 +70,15 @@ func (v *containerNameValidator) Run(ctx validate.Context) []validate.Diagnostic
 			Target:   "config.container_name",
 			File:     relPath(ctx.ProjectRoot, f.File),
 			Message: fmt.Sprintf(
-				"service %s sets container_name: %q, which diverges from the name dwe derives for it (%q)",
+				"service %s sets container_name: %q, which diverges from the conventional %q for this project",
 				f.Resource, f.Value, derived,
 			),
 			Hint: fmt.Sprintf(
-				"raw `docker`/`docker compose` commands, scripts, and docs that assume the derived name %q "+
-					"will not find this container under that name. Align container_name to %q, or drop it so "+
-					"compose's own naming applies.",
-				derived, derived,
+				"raw `docker`/`docker compose` commands, scripts, and docs that assume %q will not find this "+
+					"container under that name (dwe's own per-service commands resolve containers through "+
+					"compose labels, so they are unaffected). Align container_name to %q if anything depends "+
+					"on that name — dropping it is not equivalent, compose then names the container %q.",
+				derived, derived, derived+"-1",
 			),
 		})
 	}

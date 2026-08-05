@@ -69,12 +69,18 @@ func TestContainerNameValidator(t *testing.T) {
 				require.Empty(t, diags)
 				return
 			}
-			d := hasDiag(t, diags, validate.SeverityWarning, "diverges from the name dwe derives")
+			d := hasDiag(t, diags, validate.SeverityWarning, "diverges from the conventional")
 			require.Equal(t, "config.container_name", d.Target)
 			require.Equal(t, "docker-compose.yml", d.File)
 			for _, s := range tc.wantMsgHas {
 				require.Contains(t, d.Message, s)
 			}
+			// The hint must not claim dwe's own commands break, and must not
+			// offer "drop it" as an equivalent remedy — compose then names the
+			// container <derived>-1, which is a different name again.
+			require.Contains(t, d.Hint, "compose labels")
+			require.Contains(t, d.Hint, "dwe-shop-app-1")
+			require.NotContains(t, d.Hint, "compose's own naming applies")
 		})
 	}
 }

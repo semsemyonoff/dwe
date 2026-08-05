@@ -101,6 +101,58 @@ func TestPortsExportsValidator_DisabledServiceIsSilent(t *testing.T) {
 	require.Empty(t, diags)
 }
 
+// TestPortsExportsValidator_ExtendsChildIsSilent pins that a service which
+// declares no ports of its own — and therefore inherits the parent's whole
+// port map through extends — is not reported a second time. The parent keeps
+// its own finding; the child's service.yml never mentions the port, so a
+// diagnostic anchored there would send the reader to the wrong file.
+func TestPortsExportsValidator_ExtendsChildIsSilent(t *testing.T) {
+	t.Parallel()
+	root := t.TempDir()
+	require.NoError(t, os.WriteFile(filepath.Join(root, "workspace.yml"), []byte("project:\n  name: test\n"), 0o644))
+	for _, svc := range []struct{ name, body string }{
+		{"app", "type: app\nrequired: true\nports:\n  http: 8080\n"},
+		{"worker", "type: app\nrequired: true\nextends: app\n"},
+	} {
+		dir := filepath.Join(root, "workspace", "services", svc.name)
+		require.NoError(t, os.MkdirAll(dir, 0o755))
+		require.NoError(t, os.WriteFile(filepath.Join(dir, "service.yml"), []byte(svc.body), 0o644))
+	}
+
+	diags := runPortsExportsValidator(t, root)
+	require.Len(t, diags, 1)
+	require.Contains(t, diags[0].Message, "services.app.ports.http")
+	require.Equal(t, filepath.Join("workspace", "services", "app", "service.yml"), diags[0].File)
+}
+
+// TestPortsExportsValidator_ExtendsChildOwnPortWarns is the counterpart: a
+// child that declares its own port does not inherit, so the skip must not
+// swallow it.
+func TestPortsExportsValidator_ExtendsChildOwnPortWarns(t *testing.T) {
+	t.Parallel()
+	root := t.TempDir()
+	workspace := `project:
+  name: test
+exports:
+  env:
+    - name: APP_HTTP_PORT
+      from: services.app.ports.http
+`
+	require.NoError(t, os.WriteFile(filepath.Join(root, "workspace.yml"), []byte(workspace), 0o644))
+	for _, svc := range []struct{ name, body string }{
+		{"app", "type: app\nrequired: true\nports:\n  http: 8080\n"},
+		{"worker", "type: app\nrequired: true\nextends: app\nports:\n  metrics: 9090\n"},
+	} {
+		dir := filepath.Join(root, "workspace", "services", svc.name)
+		require.NoError(t, os.MkdirAll(dir, 0o755))
+		require.NoError(t, os.WriteFile(filepath.Join(dir, "service.yml"), []byte(svc.body), 0o644))
+	}
+
+	diags := runPortsExportsValidator(t, root)
+	require.Len(t, diags, 1)
+	require.Contains(t, diags[0].Message, "services.worker.ports.metrics")
+}
+
 func TestPortsExportsValidator_NilCfgIsSilent(t *testing.T) {
 	t.Parallel()
 	diags := (&portsExportsValidator{}).Run(validate.Context{ProjectRoot: t.TempDir()})
