@@ -656,76 +656,96 @@ func newResetStepCmd(flags *cmdctx.RootFlags) *cobra.Command {
 		Args:         cobra.ExactArgs(1),
 		SilenceUsage: true,
 		RunE: func(cmd *cobra.Command, args []string) error {
-			cfg, err := config.LoadConfigOrWrap(flags.ConfigPath)
-			if err != nil {
-				return err
-			}
-
-			address := args[0]
-			phase, step, err := reset.FindStep(cfg, address)
-			if err != nil {
-				return err
-			}
-
-			// Evaluate when condition.
-			if step.When != nil {
-				var (
-					ok  bool
-					err error
-				)
-				if step.When.IsRuntime() {
-					ok, err = condition.EvalRuntimeTyped(step.When, flags.ProjectRoot())
-				} else if step.When.Type == condition.TypeTemplate {
-					ok, err = tpl.EvalCondition(step.When.Expr, cfg)
-				}
-				if err != nil {
-					return fmt.Errorf("evaluating when condition for %s: %w", address, err)
-				}
-				if !ok {
-					render.Stdout().Warning(fmt.Sprintf("skipping step %s/%s: when condition is false", phase.Name, step.Name))
-					return nil
-				}
-			}
-
-			if step.FilesGate != nil {
-				render.Stdout().Warning(fmt.Sprintf("note: files_gate on step %s/%s is not evaluated by this command", phase.Name, step.Name))
-			}
-
-			resolved := pipeline.StepCommand(step, config.DweBin(cfg))
-			if dryRun {
-				_, _ = fmt.Fprintln(cmd.OutOrStdout(), resolved)
-				return nil
-			}
-
-			workDir := flags.ProjectRoot()
-			reg, err := usercommands.LoadRegistryFromConfigPath(flags.ConfigPath)
-			if err != nil {
-				return fmt.Errorf("loading command registry: %w", err)
-			}
-			_ = reg.ApplyVisibility(cfg, workDir)
-			// Single-step execution: no --yes flag, so confirm prompts are shown.
-			actx := pipeline.ActionContext{
-				WorkDir:     workDir,
-				Cfg:         cfg,
-				Reg:         reg,
-				LogWriter:   nil,
-				SkipConfirm: false,
-			}
-
-			if err := pipeline.ExecAction(cmd.Context(), step.Action(), actx); err != nil {
-				return err
-			}
-
-			if step.Check != nil {
-				if err := pipeline.ExecAction(cmd.Context(), *step.Check, actx); err != nil {
-					return fmt.Errorf("step %s: check failed: %w", address, err)
-				}
-			}
-
-			return nil
+			return resetStepCmd(cmd, flags, args[0], dryRun)
 		},
 	}
 
 	cmd.Flags().BoolVar(&dryRun, "dry-run", false, "print the resolved command without executing")
 	return cmd
+}
+
+// resetStepCmd runs (or, with dryRun, previews) a single reset step looked up
+// by <phase>/<step> address. It bypasses ResolvePhaseSteps (reset.FindStep
+// returns the raw, unrendered step), so it renders the step and its when
+// condition itself via pipeline.RenderStep/RenderWhen before evaluating the
+// when condition, printing the resolved command, or executing the step's
+// action/check — the same rendering `dwe reset run` applies through
+// ResolvePhaseSteps, so both paths print and execute the same command for the
+// same step.
+func resetStepCmd(cmd *cobra.Command, flags *cmdctx.RootFlags, address string, dryRun bool) error {
+	cfg, err := config.LoadConfigOrWrap(flags.ConfigPath)
+	if err != nil {
+		return err
+	}
+
+	phase, step, err := reset.FindStep(cfg, address)
+	if err != nil {
+		return err
+	}
+
+	step, err = pipeline.RenderStep(cfg, step)
+	if err != nil {
+		return fmt.Errorf("rendering step %s: %w", address, err)
+	}
+
+	// Evaluate when condition.
+	if step.When != nil {
+		when, err := pipeline.RenderWhen(cfg, step.When)
+		if err != nil {
+			return fmt.Errorf("rendering when condition for %s: %w", address, err)
+		}
+		var (
+			ok      bool
+			evalErr error
+		)
+		if when.IsRuntime() {
+			ok, evalErr = condition.EvalRuntimeTyped(when, flags.ProjectRoot())
+		} else if when.Type == condition.TypeTemplate {
+			ok, evalErr = tpl.EvalCondition(when.Expr, cfg)
+		}
+		if evalErr != nil {
+			return fmt.Errorf("evaluating when condition for %s: %w", address, evalErr)
+		}
+		if !ok {
+			render.Stdout().Warning(fmt.Sprintf("skipping step %s/%s: when condition is false", phase.Name, step.Name))
+			return nil
+		}
+	}
+
+	if step.FilesGate != nil {
+		render.Stdout().Warning(fmt.Sprintf("note: files_gate on step %s/%s is not evaluated by this command", phase.Name, step.Name))
+	}
+
+	resolved := pipeline.StepCommand(step, config.DweBin(cfg))
+	if dryRun {
+		_, _ = fmt.Fprintln(cmd.OutOrStdout(), resolved)
+		return nil
+	}
+
+	workDir := flags.ProjectRoot()
+	reg, err := usercommands.LoadRegistryFromConfigPath(flags.ConfigPath)
+	if err != nil {
+		return fmt.Errorf("loading command registry: %w", err)
+	}
+	_ = reg.ApplyVisibility(cfg, workDir)
+	// Single-step execution: no --yes flag, so confirm prompts are shown.
+	actx := pipeline.ActionContext{
+		WorkDir:     workDir,
+		Cfg:         cfg,
+		Reg:         reg,
+		LogWriter:   nil,
+		SkipConfirm: false,
+	}
+
+	if err := pipeline.ExecAction(cmd.Context(), step.Action(), actx); err != nil {
+		return err
+	}
+
+	if step.Check != nil {
+		if err := pipeline.ExecAction(cmd.Context(), *step.Check, actx); err != nil {
+			return fmt.Errorf("step %s: check failed: %w", address, err)
+		}
+	}
+
+	return nil
 }

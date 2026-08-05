@@ -207,6 +207,26 @@ func renderStepFields(step config.DeployStep, ctx *tpl.RenderContext) (config.De
 	return out, nil
 }
 
+// RenderStep renders a DeployStep's template-bearing fields (cmd, with,
+// check, files_gate, timeout) against cfg into a freshly resolved copy — the
+// same rendering ResolvePhaseSteps applies to every step it resolves. Callers
+// that read a step outside ResolvePhaseSteps (e.g. `dwe reset step`, which
+// looks a step up by address via reset.FindStep) must call this before
+// reading any of those fields, so the address path and ResolvePhaseSteps
+// never disagree about what a step's command actually is.
+func RenderStep(cfg *config.DweConfig, step config.DeployStep) (config.DeployStep, error) {
+	return renderStepFields(step, renderContextFor(cfg))
+}
+
+// RenderWhen renders a runtime condition's Cmd against cfg into a freshly
+// resolved copy, mirroring the rendering ResolvePhaseSteps applies to a
+// step's/phase's runtime when condition before storing it on a ResolvedStep.
+// A nil condition, or one that is not a runtime condition, is returned
+// unchanged.
+func RenderWhen(cfg *config.DweConfig, when *condition.Condition) (*condition.Condition, error) {
+	return renderWhen(when, renderContextFor(cfg))
+}
+
 // renderContextFor builds the ${...} evaluation context for pipeline step
 // rendering. Only Raw-backed namespaces and host info are meaningful on this
 // path — command params, files, snapshot vars, and generated values have no

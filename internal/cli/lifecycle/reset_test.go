@@ -11,6 +11,7 @@ import (
 	"testing"
 
 	"github.com/semsemyonoff/dwe/internal/cli/cmdctx"
+	pipeline "github.com/semsemyonoff/dwe/internal/core/execution/pipeline"
 	"github.com/semsemyonoff/dwe/internal/core/project/config"
 	"github.com/semsemyonoff/dwe/internal/core/ui/widgets"
 	"github.com/semsemyonoff/dwe/internal/core/usercommands"
@@ -1152,6 +1153,185 @@ func TestRunResetPlan_DefaultPipelineShellFormat(t *testing.T) {
 	const wantNotice = "Using built-in default reset pipeline (override with workspace/reset.yml)."
 	if !strings.Contains(errBuf.String(), wantNotice) {
 		t.Errorf("stderr missing info line in shell format; got:\n%s", errBuf.String())
+	}
+}
+
+// writeResetStepFixture builds a minimal project with a top-level vars:
+// block and a workspace/reset.yml, so tests can address a step through
+// resetStepCmd's <phase>/<step> lookup. vars is raw YAML for the vars:
+// block's body (already indented, e.g. "  greeting: hello\n"); pass "" to
+// omit the block entirely.
+func writeResetStepFixture(t *testing.T, vars, resetYAML string) string {
+	t.Helper()
+	dir := t.TempDir()
+	workspaceYAML := "schema_version: \"2\"\nproject:\n  name: testproject\n  prefix: dwe\n"
+	if vars != "" {
+		workspaceYAML += "vars:\n" + vars
+	}
+	if err := os.WriteFile(filepath.Join(dir, "workspace.yml"), []byte(workspaceYAML), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	workspaceDir := filepath.Join(dir, "workspace")
+	if err := os.MkdirAll(workspaceDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(workspaceDir, "reset.yml"), []byte(resetYAML), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	return dir
+}
+
+// TestResetStepCmd_DryRunRendersCmd verifies that `dwe reset step --dry-run`
+// prints the step's cmd with ${vars.*} substituted, not the literal — the
+// same rendering ResolvePhaseSteps applies on the `dwe reset run` path.
+func TestResetStepCmd_DryRunRendersCmd(t *testing.T) {
+	dir := writeResetStepFixture(t,
+		"  greeting: hello\n",
+		"phases:\n  - name: probe\n    steps:\n      - name: greet\n        type: shell\n        cmd: \"echo ${vars.greeting}\"\n",
+	)
+	flags := &cmdctx.RootFlags{ConfigPath: filepath.Join(dir, "workspace.yml")}
+
+	cmd := &cobra.Command{}
+	var outBuf bytes.Buffer
+	cmd.SetOut(&outBuf)
+
+	if err := resetStepCmd(cmd, flags, "probe/greet", true); err != nil {
+		t.Fatalf("resetStepCmd: %v", err)
+	}
+
+	got := strings.TrimSpace(outBuf.String())
+	if got != "echo hello" {
+		t.Errorf("dry-run output = %q, want %q", got, "echo hello")
+	}
+}
+
+// TestResetStepCmd_RendersWhenCmd verifies that a runtime shell when: cmd is
+// rendered before evaluation. Before Task 2c, `reset step` evaluated
+// step.When directly against the unrendered condition, so a
+// "${vars.mode}" would hit the shell as a literal and "bad substitution"
+// out — this pins that the condition now evaluates the substituted value and
+// gates step execution correctly in both directions.
+func TestResetStepCmd_RendersWhenCmd(t *testing.T) {
+	resetYAML := "phases:\n" +
+		"  - name: probe\n" +
+		"    steps:\n" +
+		"      - name: mark\n" +
+		"        type: shell\n" +
+		"        cmd: \"touch marker.txt\"\n" +
+		"        when:\n" +
+		"          type: shell\n" +
+		"          cmd: \"test \\\"${vars.mode}\\\" = go\"\n"
+
+	t.Run("condition true after render runs the step", func(t *testing.T) {
+		dir := writeResetStepFixture(t, "  mode: go\n", resetYAML)
+		flags := &cmdctx.RootFlags{ConfigPath: filepath.Join(dir, "workspace.yml")}
+		cmd := &cobra.Command{}
+		cmd.SetOut(io.Discard)
+		cmd.SetContext(context.Background())
+
+		if err := resetStepCmd(cmd, flags, "probe/mark", false); err != nil {
+			t.Fatalf("resetStepCmd: %v", err)
+		}
+		if _, err := os.Stat(filepath.Join(dir, "marker.txt")); err != nil {
+			t.Errorf("expected step to run (when condition true after render); marker.txt missing: %v", err)
+		}
+	})
+
+	t.Run("condition false after render skips the step", func(t *testing.T) {
+		dir := writeResetStepFixture(t, "  mode: stop\n", resetYAML)
+		flags := &cmdctx.RootFlags{ConfigPath: filepath.Join(dir, "workspace.yml")}
+		cmd := &cobra.Command{}
+		cmd.SetOut(io.Discard)
+		cmd.SetContext(context.Background())
+
+		if err := resetStepCmd(cmd, flags, "probe/mark", false); err != nil {
+			t.Fatalf("resetStepCmd: %v", err)
+		}
+		if _, err := os.Stat(filepath.Join(dir, "marker.txt")); !errors.Is(err, os.ErrNotExist) {
+			t.Errorf("expected step to be skipped (when condition false after render); marker.txt exists")
+		}
+	})
+}
+
+// TestResetStepCmd_RendersCheckWith verifies that check.with is rendered
+// before the check runs: a file_exists predicate keyed on ${vars.marker}
+// only succeeds when that reference resolved to the real file path.
+func TestResetStepCmd_RendersCheckWith(t *testing.T) {
+	resetYAML := "phases:\n" +
+		"  - name: probe\n" +
+		"    steps:\n" +
+		"      - name: verify\n" +
+		"        type: shell\n" +
+		"        cmd: \"true\"\n" +
+		"        check:\n" +
+		"          type: builtin\n" +
+		"          cmd: file_exists\n" +
+		"          with:\n" +
+		"            path: \"${vars.marker}\"\n"
+
+	dir := writeResetStepFixture(t, "  marker: marker.txt\n", resetYAML)
+	if err := os.WriteFile(filepath.Join(dir, "marker.txt"), []byte("x"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	flags := &cmdctx.RootFlags{ConfigPath: filepath.Join(dir, "workspace.yml")}
+	cmd := &cobra.Command{}
+	cmd.SetOut(io.Discard)
+	cmd.SetContext(context.Background())
+
+	if err := resetStepCmd(cmd, flags, "probe/verify", false); err != nil {
+		t.Fatalf("resetStepCmd: %v (check.with was apparently not rendered — file_exists looked for the literal \"${vars.marker}\")", err)
+	}
+}
+
+// TestResetStepCmd_MatchesResetRunRenderedCommand verifies that `reset step
+// --dry-run` and the resolution path `reset run` uses (ResolvePhaseSteps via
+// reset.LoadAndResolvePlan) render the very same step to the very same
+// command — the divergence Task 2c exists to remove.
+func TestResetStepCmd_MatchesResetRunRenderedCommand(t *testing.T) {
+	resetYAML := "phases:\n" +
+		"  - name: probe\n" +
+		"    steps:\n" +
+		"      - name: greet\n" +
+		"        type: shell\n" +
+		"        cmd: \"echo ${vars.greeting}\"\n"
+	dir := writeResetStepFixture(t, "  greeting: hello\n", resetYAML)
+	flags := &cmdctx.RootFlags{ConfigPath: filepath.Join(dir, "workspace.yml")}
+
+	cmd := &cobra.Command{}
+	var outBuf bytes.Buffer
+	cmd.SetOut(&outBuf)
+	if err := resetStepCmd(cmd, flags, "probe/greet", true); err != nil {
+		t.Fatalf("resetStepCmd: %v", err)
+	}
+	stepRendered := strings.TrimSpace(outBuf.String())
+
+	cfg, err := config.LoadConfig(flags.ConfigPath)
+	if err != nil {
+		t.Fatalf("loading config: %v", err)
+	}
+	_, steps, _, err := reset.LoadAndResolvePlan(cfg, usercommands.NewEmptyRegistry())
+	if err != nil {
+		t.Fatalf("resolving reset plan: %v", err)
+	}
+	var runRendered string
+	found := false
+	for _, rs := range steps {
+		if rs.StepAddress() == "probe/greet" {
+			runRendered = pipeline.StepCommand(rs.Step, config.DweBin(cfg))
+			found = true
+			break
+		}
+	}
+	if !found {
+		t.Fatalf("step probe/greet not found in resolved reset plan")
+	}
+
+	if stepRendered != runRendered {
+		t.Errorf("reset step and reset run render differently:\n  step: %q\n  run:  %q", stepRendered, runRendered)
+	}
+	if strings.Contains(stepRendered, "${vars") {
+		t.Errorf("reset step output still contains an unrendered ${vars...} reference: %q", stepRendered)
 	}
 }
 
