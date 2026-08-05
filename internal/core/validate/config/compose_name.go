@@ -83,13 +83,37 @@ func (v *composeProjectNameValidator) Run(ctx validate.Context) []validate.Diagn
 			"compose declares name: %q but dwe runs compose with -p %q — the top-level name: is silently overridden",
 			declared, resolved,
 		),
-		Hint: fmt.Sprintf(
-			"align the two: set workspace/docker.yml `project_name: %s` to pin the name dwe already uses (recommended — leaves the compose file untouched), "+
-				"or change the compose top-level to `name: %s` to match it (dropping docker.yml project_name if that makes it redundant). "+
-				"Otherwise raw `docker compose` without dwe's -p would scope this stack as %q while dwe uses %q.",
-			resolved, resolved, declared, resolved,
-		),
+		Hint: composeNameHint(declared, resolved),
 	}}
+}
+
+// composeNameHint builds the divergence hint. Both routes it offers must
+// actually clear the warning — recommending `project_name: <resolved>` would
+// not, since resolved IS the name dwe already passes to -p, so writing it into
+// docker.yml changes nothing and the divergence survives verbatim.
+//
+// Which route can lead depends on the declared name's casing. Compose project
+// names must be lowercase (see config.normalizeComposeProjectName), and dwe
+// lowercases whatever docker.yml declares, so adopting the compose-declared
+// identity via `project_name:` only converges when the declared name is
+// already lowercase. When it is not, the compose file has to change either
+// way, so that route leads instead.
+func composeNameHint(declared, resolved string) string {
+	if lower := strings.ToLower(declared); lower == declared {
+		return fmt.Sprintf(
+			"align the two: set workspace/docker.yml `project_name: %s` to make dwe adopt the compose-declared name (recommended — leaves the compose file untouched), "+
+				"or change the compose top-level to `name: %s` to match the name dwe already uses. "+
+				"Otherwise raw `docker compose` without dwe's -p would scope this stack as %q while dwe uses %q.",
+			declared, resolved, declared, resolved,
+		)
+	}
+	return fmt.Sprintf(
+		"align the two: change the compose top-level to `name: %s` to match the name dwe already uses (recommended), "+
+			"or lowercase it to `name: %s` and set workspace/docker.yml `project_name: %s` to keep that identity — "+
+			"compose project names must be lowercase, so %q cannot be pinned as-is. "+
+			"Otherwise raw `docker compose` without dwe's -p would scope this stack as %q while dwe uses %q.",
+		resolved, strings.ToLower(declared), strings.ToLower(declared), declared, declared, resolved,
+	)
 }
 
 // readComposeTopLevelName reads the top-level `name:` from a compose file.

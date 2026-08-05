@@ -614,7 +614,7 @@ func TestRenderStepFields_builtinWithGoTemplateSurvives(t *testing.T) {
 		}
 	})
 
-	t.Run("a files_gate on a non-command step keeps the wide gate", func(t *testing.T) {
+	t.Run("a files_gate inheriting step.with keeps the wide gate", func(t *testing.T) {
 		step := config.DeployStep{
 			Name:      "seed",
 			Type:      "shell",
@@ -628,6 +628,35 @@ func TestRenderStepFields_builtinWithGoTemplateSurvives(t *testing.T) {
 		}
 		if got.With["db"] != "app" {
 			t.Errorf("With[db] = %v, want %q", got.With["db"], "app")
+		}
+	})
+
+	// A gate carrying its own with: never reads the host step's map (see
+	// evalFilesGate / spec.Validate), so widening the step's own gate would
+	// only drag a builtin's raw Go template — which belongs to the builtin's
+	// template space, not this one — into RenderCommand and hard-fail the
+	// resolve of the entire pipeline.
+	t.Run("a files_gate with its own with: leaves the builtin with: on the narrow gate", func(t *testing.T) {
+		step := config.DeployStep{
+			Name: "notify",
+			Type: "builtin",
+			Cmd:  "message",
+			With: map[string]any{"level": "info", "text": "{{ .Project.Name }} deployed"},
+			FilesGate: &filesgate.FilesGate{
+				Command: "restore",
+				State:   filesgate.StateReadable,
+				With:    map[string]any{"dump": "${vars.source.dir}"},
+			},
+		}
+		got, err := renderStepFields(step, ctx)
+		if err != nil {
+			t.Fatalf("renderStepFields failed: %v", err)
+		}
+		if got.With["text"] != "{{ .Project.Name }} deployed" {
+			t.Errorf("With[text] = %v, want the builtin template left verbatim", got.With["text"])
+		}
+		if got.FilesGate.With["dump"] != "app" {
+			t.Errorf("FilesGate.With[dump] = %v, want %q", got.FilesGate.With["dump"], "app")
 		}
 	})
 }
