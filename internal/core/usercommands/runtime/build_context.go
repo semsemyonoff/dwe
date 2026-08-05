@@ -22,7 +22,26 @@ func BuildRunContext(
 	with map[string]any,
 	workDir string,
 ) (RunContext, error) {
-	return buildRunContext(cfg, reg, def, with, workDir, nil, tpl.SnapshotScopeNone)
+	return buildRunContext(cfg, reg, def, with, workDir, nil, tpl.SnapshotScopeNone, false)
+}
+
+// BuildPreRenderedRunContext mirrors BuildRunContext for callers whose with:
+// map has ALREADY been rendered through tpl.RenderCommand — the pipeline,
+// which renders every step's cmd/with/check leaves once at resolve time
+// (pipeline.renderStepFields). Rendering such a map a second time is not
+// idempotent: a value that resolved to text containing a literal `{{` (a var
+// holding a `docker inspect -f` format string) would be parsed as a Go
+// template on the second pass and fail the step, and a value that resolved to
+// another `${vars.*}` reference would be expanded a second time. Values are
+// stringified but never re-rendered.
+func BuildPreRenderedRunContext(
+	cfg *config.DweConfig,
+	reg *registry.Registry,
+	def *model.CommandDef,
+	with map[string]any,
+	workDir string,
+) (RunContext, error) {
+	return buildRunContext(cfg, reg, def, with, workDir, nil, tpl.SnapshotScopeNone, true)
 }
 
 // BuildSnapshotRunContext constructs a RunContext for command execution inside
@@ -39,7 +58,7 @@ func BuildSnapshotRunContext(
 	snapshot map[string]any,
 	scope tpl.SnapshotScope,
 ) (RunContext, error) {
-	return buildRunContext(cfg, reg, def, with, workDir, snapshot, scope)
+	return buildRunContext(cfg, reg, def, with, workDir, snapshot, scope, false)
 }
 
 func buildRunContext(
@@ -50,6 +69,7 @@ func buildRunContext(
 	workDir string,
 	snapshot map[string]any,
 	scope tpl.SnapshotScope,
+	withPreRendered bool,
 ) (RunContext, error) {
 	// Convert With map[string]any → map[string]string for command param resolution.
 	// String values are rendered through tpl.RenderCommand so that ${...} expressions
@@ -66,6 +86,10 @@ func buildRunContext(
 	strWith := make(map[string]string, len(with))
 	for k, v := range with {
 		raw := fmt.Sprintf("%v", v)
+		if withPreRendered {
+			strWith[k] = raw
+			continue
+		}
 		rendered, err := tpl.RenderCommand(raw, renderCtx)
 		if err != nil {
 			return RunContext{}, fmt.Errorf("rendering with[%q]: %w", k, err)

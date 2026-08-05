@@ -279,7 +279,9 @@ func execCommandAction(ctx context.Context, a config.Action, actx ActionContext)
 		return fmt.Errorf("command %q: %w", a.Cmd, err)
 	}
 	trace.Command(ctx, "dwe", a.Cmd)
-	rctx, err := usercommands.BuildRunContext(actx.Cfg, actx.Reg, def, a.With, actx.WorkDir)
+	// a.With is already rendered — resolveLeafStep renders every step's with:
+	// leaves once, so this must not render them a second time.
+	rctx, err := usercommands.BuildPreRenderedRunContext(actx.Cfg, actx.Reg, def, a.With, actx.WorkDir)
 	if err != nil {
 		return err
 	}
@@ -658,7 +660,9 @@ func evalFilesGate(ctx context.Context, opts RunOptions, rs ResolvedStep, addr s
 		if len(gateWith) == 0 {
 			gateWith = rs.Step.With
 		}
-		runCtx, err := usercommands.BuildRunContext(opts.Config, opts.Registry, def, gateWith, opts.WorkDir)
+		// Both sources (files_gate.with, step.with) come off the resolved
+		// step, whose with: leaves were already rendered at resolve time.
+		runCtx, err := usercommands.BuildPreRenderedRunContext(opts.Config, opts.Registry, def, gateWith, opts.WorkDir)
 		if err != nil {
 			return false, failGateStep(opts, rs, addr, stepIndex, stepTotal, stepHash,
 				fmt.Errorf("files_gate on step %q: building context for command %q: %w", addr, targetCmd, err))

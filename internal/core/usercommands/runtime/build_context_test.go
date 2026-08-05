@@ -474,3 +474,48 @@ func TestBuildRunContext_ArgsDefault(t *testing.T) {
 		}
 	})
 }
+
+// TestBuildPreRenderedRunContext_NoSecondRender pins the pipeline contract:
+// a with: map already rendered at pipeline resolve time must not be run
+// through tpl.RenderCommand again. Rendering is not idempotent — a value that
+// resolved to text containing a literal `{{` would be parsed as a Go template
+// on a second pass and fail the step, and a value that resolved to another
+// ${vars.*} reference would be expanded twice.
+func TestBuildPreRenderedRunContext_NoSecondRender(t *testing.T) {
+	cfg := &config.DweConfig{
+		Raw: map[string]any{
+			"vars": map[string]any{"container": "app"},
+		},
+	}
+	def := &model.CommandDef{
+		ID:     "test.cmd",
+		Type:   model.CommandTypeShell,
+		Params: map[string]model.ParamDef{"format": {Type: model.ParamTypeString}, "name": {Type: model.ParamTypeString}},
+		Cmd:    "echo hello",
+	}
+
+	// Both values stand in for pipeline output: the first is what
+	// `${vars.fmt}` resolves to when vars.fmt holds a docker format string,
+	// the second is a plain resolved value.
+	with := map[string]any{
+		"format": `{{.State.Status}}`,
+		"name":   "${vars.container}",
+	}
+
+	rc, err := BuildPreRenderedRunContext(cfg, nil, def, with, t.TempDir())
+	if err != nil {
+		t.Fatalf("BuildPreRenderedRunContext: %v", err)
+	}
+	if got := rc.Params["format"]; got != `{{.State.Status}}` {
+		t.Errorf("params[format] = %q, want the literal Go-template text back unchanged", got)
+	}
+	if got := rc.Params["name"]; got != "${vars.container}" {
+		t.Errorf("params[name] = %q, want no second ${...} expansion", got)
+	}
+
+	// The unrendered entry point still renders, and still fails on the same
+	// Go-template text — the exact double-render the pipeline must avoid.
+	if _, err := BuildRunContext(cfg, nil, def, with, t.TempDir()); err == nil {
+		t.Fatal("BuildRunContext: want an error rendering {{.State.Status}}, got nil")
+	}
+}
