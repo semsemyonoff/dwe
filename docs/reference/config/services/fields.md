@@ -593,7 +593,7 @@ render:
 |-------|---------|-------------|
 | `template` | — | Optional custom template pack directory name under `workspace/templates/config/<template>/`. When set, resolution is **strict** (a typo fails rather than silently falling back). When omitted, resolution walks service-name → `extends` ancestors → `default`, plus the `<pack>.local/` sibling override. |
 
-Unlike `render.ide` / `ai` / `git`, `render.config` has **no `enabled` flag** — config rendering is gated solely by whether a pack resolves (opt-in: no pack → no render). Config templates use the `${...}` shorthand (e.g. `${services.main.ports.http}`, `${databases.main}`, `${generated.app_key}`), a deliberate divergence from the raw `{{ }}` substrate used by the other render kinds. See [render config](../../render/config.md) for the full reference, substrate, manifest schema, and the harvest/replay flow.
+Unlike `render.ide` / `ai` / `git`, `render.config` has **no `enabled` flag** — config rendering is gated solely by whether a pack resolves (opt-in: no pack → no render). Config templates use the `${...}` shorthand (e.g. `${services.main.ports.http}`, `${vars.databases.main}`, `${generated.app_key}`), a deliberate divergence from the raw `{{ }}` substrate used by the other render kinds. See [render config](../../render/config.md) for the full reference, substrate, manifest schema, and the harvest/replay flow.
 
 ## `generated` block
 

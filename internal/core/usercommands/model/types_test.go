@@ -2636,15 +2636,15 @@ commands:
     params:
       p:
         widget: select
-        options: ${databases}
+        options: ${vars.databases}
 `
 	cf := mustParse(t, yaml)
 	p := cf.Commands["test"].Params["p"]
 	if p.Options == nil {
 		t.Fatalf("expected options to be parsed")
 	}
-	if p.Options.From != "databases" {
-		t.Errorf("From = %q, want databases", p.Options.From)
+	if p.Options.From != "vars.databases" {
+		t.Errorf("From = %q, want vars.databases", p.Options.From)
 	}
 	if len(p.Options.Static) != 0 {
 		t.Errorf("Static = %v, want empty", p.Options.Static)

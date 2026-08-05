@@ -114,12 +114,59 @@ var varPattern = regexp.MustCompile(`\$\{([a-zA-Z_][a-zA-Z0-9_.]*)\}`)
 // renderer actually rewrites — no internal whitespace, no leading digit.
 var VarPattern = varPattern
 
+// KnownVarHeads is the set of ${...} head namespaces CompileVarSyntax will
+// rewrite into a template call. It is the union of the merged-config root
+// keys (mirroring internal/core/project/config's allowedRootKeys — kept in
+// sync by a cross-check test in that package, since tpl must not import
+// config) and the special namespaces switched on below (files, host, param,
+// context, snapshot, generated, args). A ${...} whose head is NOT in this set
+// is left as a literal string instead of being rewritten — see the
+// unknown-head branch of CompileVarSyntax for why.
+//
+// __configPath is deliberately excluded: it is an internal key the config
+// loader injects, not part of the authoring contract, so a reference to it
+// renders as a literal rather than leaking loader internals.
+var KnownVarHeads = []string{
+	// mirrors config.allowedRootKeys
+	"schema_version",
+	"project",
+	"runtime",
+	"state",
+	"exports",
+	"compose",
+	"ui",
+	"docs",
+	"services",
+	"vars",
+	"update",
+	"bridge",
+	"stop",
+	// special namespaces CompileVarSyntax switches on directly
+	"files",
+	"host",
+	"param",
+	"context",
+	"snapshot",
+	"generated",
+	"args",
+}
+
+// knownVarHeadSet is the membership index over KnownVarHeads.
+var knownVarHeadSet = func() map[string]struct{} {
+	m := make(map[string]struct{}, len(KnownVarHeads))
+	for _, h := range KnownVarHeads {
+		m[h] = struct{}{}
+	}
+	return m
+}()
+
 // CompileVarSyntax rewrites ${...} expressions into Go template calls.
 //
-// Simple vars and dot-paths are rewritten using the resolve helper:
+// Vars and dot-paths whose head is in KnownVarHeads are rewritten using the
+// resolve helper:
 //
 //	${project.name}  →  {{ resolve .Raw "project.name" }}
-//	${name}          →  {{ resolve .Raw "name" }}
+//	${vars.db.user}  →  {{ resolve .Raw "vars.db.user" }}
 //
 // The special namespaces "param" and "context" are routed to their maps:
 //
@@ -139,6 +186,10 @@ var VarPattern = varPattern
 // the current service (config render pass):
 //
 //	${generated.app_key} → {{ resolveGenerated .Generated "app_key" }}
+//
+// A ${...} whose head is NOT in KnownVarHeads (a shell-style ${HOME}, a typo,
+// an unrelated $-braced token) is left unchanged rather than collapsing to
+// "" — the correctness argument for this is documented on KnownVarHeads.
 //
 // Literal Go template expressions ({{ }}) are left unchanged.
 // A literal dollar sign can be written as $$ (passed through as-is, not rewritten).
@@ -192,15 +243,22 @@ func CompileVarSyntax(input string) string {
 		case "args":
 			// ${args} is a whole-namespace reference with no sub-key — there is
 			// nothing to index into. Anything with a tail (${args.0}) falls
-			// through to the generic .Raw resolve, which yields "" as every
-			// unknown ${...} does.
+			// through to the generic .Raw resolve — "args" has no matching key
+			// in .Raw, so it yields "".
 			if !hasTail {
 				return "{{ renderArgs .Args }}"
 			}
 		}
 
-		// Default: resolve against .Raw config map
-		return fmt.Sprintf(`{{ resolve .Raw %q }}`, inner)
+		// Default: resolve against .Raw config map, but only when the head is
+		// a known namespace. An unknown head (a shell-style ${VAR}, a typo, or
+		// a stale top-level dot-path from before the strict root landed) is
+		// left as a literal ${...} instead of silently collapsing to "" — see
+		// KnownVarHeads.
+		if _, ok := knownVarHeadSet[head]; ok {
+			return fmt.Sprintf(`{{ resolve .Raw %q }}`, inner)
+		}
+		return match
 	})
 }
 

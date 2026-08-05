@@ -89,7 +89,7 @@ func TestServiceConfigsRender_Run_RendersAndReplays(t *testing.T) {
 	root := t.TempDir()
 	writeConfigPack(t, root, "default",
 		"render:\n  - from: env.tmpl\n    to: src/.env\n",
-		map[string]string{"env.tmpl": "DB=${databases.magento}\nAPP_KEY=${generated.app_key}\n"})
+		map[string]string{"env.tmpl": "DB=${vars.databases.magento}\nAPP_KEY=${generated.app_key}\n"})
 
 	// Seed the store so render replays the harvested value.
 	store := generatedstore.New()
@@ -98,7 +98,7 @@ func TestServiceConfigsRender_Run_RendersAndReplays(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	ectx, _ := renderExecCtx(t, root, map[string]any{"databases": map[string]any{"magento": "pgsql"}}, nil)
+	ectx, _ := renderExecCtx(t, root, map[string]any{"vars": map[string]any{"databases": map[string]any{"magento": "pgsql"}}}, nil)
 	if err := (ConfigsRender{}).Run(context.Background(), map[string]any{"service": "main"}, ectx); err != nil {
 		t.Fatalf("Run: %v", err)
 	}

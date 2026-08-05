@@ -24,8 +24,8 @@ func TestCompileVarSyntax_noOp(t *testing.T) {
 }
 
 func TestCompileVarSyntax_simpleVar(t *testing.T) {
-	got := CompileVarSyntax("${name}")
-	want := `{{ resolve .Raw "name" }}`
+	got := CompileVarSyntax("${project}")
+	want := `{{ resolve .Raw "project" }}`
 	if got != want {
 		t.Errorf("got %q, want %q", got, want)
 	}
@@ -98,6 +98,65 @@ func TestCompileVarSyntax_goTemplatePreserved(t *testing.T) {
 	}
 	if !strings.Contains(got, `{{ resolve .Raw "project.name" }}`) {
 		t.Errorf("dollar var not compiled in %q", got)
+	}
+}
+
+// ---- Unknown head whitelist (Task 1) ----
+
+func TestCompileVarSyntax_knownHeadsCompile(t *testing.T) {
+	cases := map[string]string{
+		"${vars.x}":                  `{{ resolve .Raw "vars.x" }}`,
+		"${services.app.ports.http}": `{{ resolve .Raw "services.app.ports.http" }}`,
+		"${project.name}":            `{{ resolve .Raw "project.name" }}`,
+	}
+	for in, want := range cases {
+		if got := CompileVarSyntax(in); got != want {
+			t.Errorf("CompileVarSyntax(%q) = %q, want %q", in, got, want)
+		}
+	}
+}
+
+func TestCompileVarSyntax_unknownHeadsSurviveLiteral(t *testing.T) {
+	cases := []string{"${HOME}", "${PATH}", "${UNKNOWN_THING}"}
+	for _, in := range cases {
+		if got := CompileVarSyntax(in); got != in {
+			t.Errorf("CompileVarSyntax(%q) = %q, want unchanged", in, got)
+		}
+	}
+}
+
+func TestCompileVarSyntax_unknownDottedHeadSurvivesLiteral(t *testing.T) {
+	in := "${FOO.bar}"
+	if got := CompileVarSyntax(in); got != in {
+		t.Errorf("CompileVarSyntax(%q) = %q, want unchanged", in, got)
+	}
+}
+
+// TestCompileVarSyntax_configPathExcluded pins the decision that
+// __configPath (an internal key the config loader injects, not part of the
+// authoring contract) is deliberately NOT in KnownVarHeads — a reference to
+// it renders as a literal rather than leaking loader internals.
+func TestCompileVarSyntax_configPathExcluded(t *testing.T) {
+	in := "${__configPath}"
+	if got := CompileVarSyntax(in); got != in {
+		t.Errorf("CompileVarSyntax(%q) = %q, want unchanged (excluded from KnownVarHeads)", in, got)
+	}
+}
+
+// TestRenderCommand_knownHeadUnknownSubkey pins that a KNOWN head with an
+// unresolvable sub-key still resolves to "" (lenient, like every other
+// ${...} resolver) rather than surviving literal — only the HEAD gates
+// whitelisting, not the full path.
+func TestRenderCommand_knownHeadUnknownSubkey(t *testing.T) {
+	cases := []string{"${host.bogus}", "${args.0}"}
+	for _, expr := range cases {
+		got, err := RenderCommand(expr, &RenderContext{})
+		if err != nil {
+			t.Fatalf("RenderCommand(%q): %v", expr, err)
+		}
+		if got != "" {
+			t.Errorf("RenderCommand(%q) = %q, want empty string", expr, got)
+		}
 	}
 }
 
@@ -191,11 +250,11 @@ func TestRenderCommand_missingRawPath(t *testing.T) {
 	ctx := &RenderContext{
 		Raw: map[string]any{},
 	}
-	got, err := RenderCommand("${missing.key}", ctx)
+	got, err := RenderCommand("${vars.missing.key}", ctx)
 	if err != nil {
 		t.Fatal(err)
 	}
-	// missing path resolves to empty string
+	// known head, missing path resolves to empty string
 	if got != "" {
 		t.Errorf("got %q, want empty string for missing path", got)
 	}
@@ -756,12 +815,12 @@ func TestRenderCommand_servicesInjectedSubset(t *testing.T) {
 func TestRenderCommand_generatedCoexistsWithNamespaces(t *testing.T) {
 	ctx := &RenderContext{
 		Raw: map[string]any{
-			"databases": map[string]any{"magento": "magentodb"},
+			"vars": map[string]any{"databases": map[string]any{"magento": "magentodb"}},
 		},
 		Generated: map[string]string{"crypt_key": "241f4fa6"},
 		Host:      HostInfo{UID: "1000", GID: "1000"},
 	}
-	expr := "db=${databases.magento} key=${generated.crypt_key} uid=${host.uid}"
+	expr := "db=${vars.databases.magento} key=${generated.crypt_key} uid=${host.uid}"
 	got, err := RenderCommand(expr, ctx)
 	if err != nil {
 		t.Fatal(err)

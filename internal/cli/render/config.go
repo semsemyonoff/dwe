@@ -49,7 +49,7 @@ tree by writing 'to: src/...':
   → services/main/src/.env
 
 Unlike ide/ai/git, config templates use the ${...} shorthand (e.g.
-${services.main.ports.http}, ${databases.magento}) and the ${generated.<name>}
+${services.main.ports.http}, ${vars.databases.magento}) and the ${generated.<name>}
 namespace, which replays service-minted secrets harvested into the
 generated-value store (.dwe/generated.yml).
 

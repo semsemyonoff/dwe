@@ -240,8 +240,10 @@ func TestBuildRunContext_WithTemplateRender(t *testing.T) {
 
 	cfg := &config.DweConfig{
 		Raw: map[string]any{
-			"db": map[string]any{
-				"stock_database": "app_stock",
+			"vars": map[string]any{
+				"db": map[string]any{
+					"stock_database": "app_stock",
+				},
 			},
 		},
 	}
@@ -259,7 +261,7 @@ func TestBuildRunContext_WithTemplateRender(t *testing.T) {
 		Cmd:     "echo hello",
 	}
 
-	with := map[string]any{"database": "${db.stock_database}"}
+	with := map[string]any{"database": "${vars.db.stock_database}"}
 
 	rctx, err := BuildRunContext(cfg, nil, def, with, tmpdir)
 	if err != nil {
@@ -290,7 +292,7 @@ func TestBuildRunContext_WithTemplateMissingKey(t *testing.T) {
 		Cmd:     "echo hello",
 	}
 
-	with := map[string]any{"name": "${db.nonexistent}"}
+	with := map[string]any{"name": "${vars.nonexistent}"}
 
 	rctx, err := BuildRunContext(cfg, nil, def, with, tmpdir)
 	if err != nil {
