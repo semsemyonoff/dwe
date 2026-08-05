@@ -817,11 +817,27 @@ above:
 
 ### Task 15: Verify acceptance criteria
 
-- [ ] verify all requirements from Overview are implemented
-- [ ] reproduce the three original defects as fixtures and confirm each is now caught
-      statically: `${vars.*}` in a shell step (now renders), CamelCase project name (now
-      normalized + flagged), all-comment `info.yml` (now falls back)
-- [ ] confirm a freshly scaffolded single-service project produces **zero** `config` and
+- [x] verify all requirements from Overview are implemented — Tasks 1–14 all landed and are
+      committed (`git log`: `866c9d20` known-head whitelist, `cbb8a571`/`5b88e4bd`/`d5e40b4e`
+      resolve-time rendering + vars hashing, `866c9d20` template-ref typo validator,
+      `67d09870`/`b1da62d7` project-name normalization + hint + `container_name` check,
+      `7a1a1a17` ports/exports validator, `e5243b92`/`65f55d99` noise silencing,
+      `2265cc39`/`0fce3468` info.yml fallback + verdict inversion, `dddab2da` scaffold fix,
+      `0c8b8581`/`4ae4b880` plan JSON + unresolved-ref annotation, `513d265c` validate scope
+      reporting)
+- [x] reproduce the three original defects as fixtures and confirm each is now caught
+      statically: `${vars.*}` in a shell step (now renders) — verified live: a fresh project
+      with `vars.source.repo`/`dir` now shows substituted values in `dwe deploy plan`
+      (`echo git clone https://example.com/demo.git src`), and a typo
+      (`${vars.source.repoo}`) is caught by `config.template_refs` with an exact hint
+      ("check for a typo in \"vars.source.repoo\""); CamelCase project name (now normalized
+      + flagged) — verified live: `project.name: cueBreaker` derives `dwe-cuebreaker`
+      (pinned in `docker_test.go:298-329`), and a diverging `container_name: myapp` in
+      `compose.yaml` is caught by `config.container_name` naming the correct derived name
+      (`dwe-cuebreaker-app`); all-comment `info.yml` (now falls back) — verified live: a
+      freshly scaffolded project's all-comment `info.yml` reports
+      `config.info` ⓘ "built-in dashboard is active" instead of the old inverted `SeverityOK`
+- [x] confirm a freshly scaffolded single-service project produces **zero** `config` and
       `templates` warnings from `dwe validate`. Two corrections to the first draft, both
       measured on a real `dwe init`: (a) today a fresh scaffold emits exactly **one**
       warning — `service "app" (type app) has no dir or dir_internal`
@@ -832,10 +848,18 @@ above:
       **host** (a busy port is a legitimate error), so it is out of scope for this
       criterion. Consequently **this acceptance criterion is only fully satisfiable
       together with Plan C Task 4** — state that rather than letting it read as achievable
-      by Plan A alone
-- [ ] run full test suite: `make test`
-- [ ] run `make lint`
-- [ ] verify test coverage meets project standard
+      by Plan A alone. Confirmed by running `dwe init --default` + `dwe validate` on a fresh
+      `/tmp` project: exactly 1 config warning (the pre-existing "no dir" one), 0 templates
+      warnings (3 templates infos, unchanged pattern), matching the stated expectation
+      exactly
+- [x] run full test suite: `make test` — all packages pass, no failures
+- [x] run `make lint` — `golangci-lint run ./...`: 0 issues
+- [x] verify test coverage meets project standard — no numeric coverage threshold is
+      configured in this repo (no `coverage` Makefile target, no CI gate found); the
+      project's actual standard is Development Approach's per-task requirement ("every task
+      MUST include new/updated tests"), which every task in this plan satisfied (TDD for
+      all new/changed validators, regular tests for rendering core/loaders/CLI output) —
+      confirmed by the task-by-task checklists above and the passing `make test` run
 
 ### Task 16: [Final] Update documentation
 
