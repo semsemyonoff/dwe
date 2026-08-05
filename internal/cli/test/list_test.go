@@ -527,6 +527,67 @@ func TestRunTestList_CostProfileHostStepsByCommandTarget(t *testing.T) {
 	}
 }
 
+// TestRunTestList_CostProfileHostStepsFromValidateChecks pins the third host
+// channel: the runner spawns `dwe validate` and `dwe deploy run` in the copy,
+// and both execute workspace/validate.yml checks. A check running project shell
+// is unsandboxed host code exactly like a pipeline step, so it must close the
+// gate; a probing builtin must not, and the services: gate still applies.
+func TestRunTestList_CostProfileHostStepsFromValidateChecks(t *testing.T) {
+	cases := []struct {
+		name     string
+		validate string
+		command  string
+		want     int
+	}{
+		{
+			name:     "shell builtin check counts",
+			validate: "checks:\n  - id: ssh-key\n    description: SSH key present\n    stages: [deploy]\n    type: builtin\n    cmd: shell\n    with:\n      command: \"test -f ~/.ssh/id_ed25519\"\n",
+			want:     1,
+		},
+		{
+			name:     "probing builtin check does not count",
+			validate: "checks:\n  - id: env\n    description: env present\n    stages: [deploy]\n    type: builtin\n    cmd: file_exists\n    with:\n      path: .env\n",
+			want:     0,
+		},
+		{
+			name:     "command check counts",
+			validate: "checks:\n  - id: seed\n    description: seed data\n    stages: [deploy]\n    type: command\n    cmd: test.seed\n",
+			command:  "commands:\n  seed:\n    type: shell\n    cmd: \"true\"\n",
+			want:     1,
+		},
+		{
+			name:     "check gated on an enabled service counts",
+			validate: "checks:\n  - id: ssh-key\n    description: SSH key present\n    stages: [deploy]\n    type: builtin\n    cmd: shell\n    services: [app]\n    with:\n      command: \"true\"\n",
+			want:     1,
+		},
+		{
+			name:     "check gated on an absent service does not count",
+			validate: "checks:\n  - id: ssh-key\n    description: SSH key present\n    stages: [deploy]\n    type: builtin\n    cmd: shell\n    services: [worker]\n    with:\n      command: \"true\"\n",
+			want:     0,
+		},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			baseDir := t.TempDir()
+			writeMinimalProject(t, baseDir)
+			writeProjectFile(t, baseDir, "workspace/validate.yml", tc.validate)
+			if tc.command != "" {
+				writeProjectFile(t, baseDir, "workspace/commands/test.yml", tc.command)
+			}
+			writeScenarioFile(t, baseDir, "smoke", "description: Smoke\n")
+
+			p := listProfiles(t, baseDir)[0].CostProfile
+			if p == nil {
+				t.Fatal("expected a cost profile")
+			}
+			if p.HostSteps != tc.want {
+				t.Errorf("host_steps = %d, want %d", p.HostSteps, tc.want)
+			}
+		})
+	}
+}
+
 // TestRunTestList_CostProfileUnknownCommandCountsAsHost pins the safe direction
 // of the unknown case: a reference the registry cannot resolve closes the gate.
 func TestRunTestList_CostProfileUnknownCommandCountsAsHost(t *testing.T) {
@@ -551,6 +612,7 @@ func TestRunTestList_CostProfileDegradesOnBrokenProjectState(t *testing.T) {
 		{"docker.yml", "workspace/docker.yml", "resources: [not, a, mapping]\n"},
 		{"project deploy.yml", "workspace/deploy.yml", "phases: {not: a list}\n"},
 		{"service deploy.yml", "workspace/services/app/deploy.yml", "phases: {not: a list}\n"},
+		{"validate.yml", "workspace/validate.yml", "checks: {not: a list}\n"},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {

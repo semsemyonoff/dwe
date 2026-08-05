@@ -13,6 +13,7 @@ import (
 	"github.com/semsemyonoff/dwe/internal/core/project/project"
 	"github.com/semsemyonoff/dwe/internal/core/usercommands"
 	"github.com/semsemyonoff/dwe/internal/core/usercommands/model"
+	"github.com/semsemyonoff/dwe/internal/core/validate/checks"
 	"github.com/semsemyonoff/dwe/internal/core/workflow/deploy"
 	"github.com/semsemyonoff/dwe/internal/core/workflow/envtest"
 )
@@ -55,9 +56,11 @@ type testCostProfileJSON struct {
 	IsolationFindings []testIsolationFindingJSON `json:"isolation_findings"`
 	// HostSteps counts the steps this scenario would run that execute on the
 	// HOST, outside the container sandbox the disposable copy provides: its own
-	// steps plus the deploy pipeline it triggers (project-wide + the enabled
-	// services'). Host side effects (absolute paths, ~, binds outside the
-	// project) are not sandboxed by the copy.
+	// steps, the deploy pipeline it triggers (project-wide + the enabled
+	// services') and the workspace/validate.yml checks the runner's `dwe
+	// validate` and `dwe deploy run` preflight execute in the copy. Host side
+	// effects (absolute paths, ~, binds outside the project) are not sandboxed
+	// by the copy.
 	//
 	// `type: shell` is only one of the channels — see countHostSteps for the
 	// full list and for the one place the count is deliberately conservative.
@@ -79,6 +82,10 @@ type costProfiler struct {
 	sharedVolumes int
 	projectHost   int            // host steps in the project-wide deploy pipeline
 	serviceHost   map[string]int // host steps per service deploy pipeline
+	// checks are the workspace/validate.yml entries. They are counted
+	// per-scenario rather than pre-summed because their services: gate is
+	// resolved against the scenario's own enabled set.
+	checks []config.CheckEntry
 }
 
 // newCostProfiler assembles the profiler, or returns nil when the project
@@ -125,6 +132,16 @@ func newCostProfiler(baseDir, configPath string) *costProfiler {
 		return nil
 	}
 
+	// The runner spawns `dwe validate` and `dwe deploy run` inside the copy,
+	// and both execute workspace/validate.yml checks (the latter through
+	// preflight) — a host-execution channel of its own, so it has to be part of
+	// the count. An absent file leaves it empty; a real parse error degrades the
+	// whole profile like every other load here.
+	validateCfg, _, err := config.LoadValidateConfig(config.ValidateConfigPath(baseDir))
+	if err != nil && !errors.Is(err, os.ErrNotExist) {
+		return nil
+	}
+
 	// Best-effort: the registry resolves a `type: command` step to the command
 	// that would run, which is what decides host vs container. A registry that
 	// does not load leaves it nil and countHostSteps falls back to the
@@ -136,6 +153,9 @@ func newCostProfiler(baseDir, configPath string) *costProfiler {
 		cfg:           cfg,
 		reg:           reg,
 		sharedVolumes: shared,
+	}
+	if validateCfg != nil {
+		p.checks = validateCfg.Checks
 	}
 	p.projectHost = p.countHostStepsInPhases(effective.Phases)
 	p.serviceHost = make(map[string]int, len(serviceDeploys))
@@ -171,7 +191,7 @@ func (p *costProfiler) profile(scn *envtest.Scenario) *testCostProfileJSON {
 	}
 
 	enabled := 0
-	host := p.countHostSteps(scn.Steps) + p.projectHost
+	host := p.countHostSteps(scn.Steps) + p.projectHost + p.countHostChecks(services)
 	for name, svc := range services {
 		if !svc.Enabled {
 			continue
@@ -215,6 +235,47 @@ func (p *costProfiler) scenarioServices(scn *envtest.Scenario) map[string]config
 	}
 
 	return out
+}
+
+// countHostChecks counts the workspace/validate.yml entries that execute
+// project-authored code on the host for a scenario with the given service set.
+//
+// The runner runs `dwe validate` (unscoped, so every stage matches) and then
+// `dwe deploy run`, whose preflight runs the deploy/post-setup stages — so no
+// stage filter narrows the set and every entry is reachable. The services:
+// gate does narrow it, and is resolved with the same matcher the checks loader
+// uses so the two cannot drift.
+//
+// Only two of the seven allowlisted check builtins execute anything
+// project-authored: `shell` is sh -c in the project root, and a `type: command`
+// entry is restricted by the loader to shell/script user commands. The rest
+// (file_exists, executable_in_path, env_keys_present, tcp_reachable,
+// http_check, config_keys_present) probe without running project code.
+func (p *costProfiler) countHostChecks(services map[string]config.ServiceConfig) int {
+	n := 0
+	for _, entry := range p.checks {
+		if !checks.MatchServices(entry, services) {
+			continue
+		}
+		if p.checkRunsOnHost(entry) {
+			n++
+		}
+	}
+	return n
+}
+
+func (p *costProfiler) checkRunsOnHost(entry config.CheckEntry) bool {
+	switch entry.Type {
+	case "builtin":
+		return entry.Cmd == "shell"
+	case "command":
+		return p.commandRunsOnHost(entry.Cmd, map[string]bool{})
+	default:
+		// LoadValidateConfig rejects any other type, so this is unreachable
+		// from a loadable config; count it as host anyway — the field gates an
+		// unattended run, so the unknown case closes the gate.
+		return true
+	}
 }
 
 func (p *costProfiler) countHostStepsInPhases(phases []config.DeployPhase) int {

@@ -206,9 +206,10 @@ outside its own copy, so a failure is not confined to it:
 - `host_steps` > 0 — steps running **project-authored code on the host**, outside the
   container sandbox (`type: shell`, the `shell` builtin, a `type: command` resolving to
   a host command, a `type: dwe` re-entering a pipeline, and shell `when:` / `check:`
-  conditions). Their side effects (absolute paths, `~`, binds outside the project) are
-  **not** sandboxed. dwe's own subcommands don't count — the built-in default pipeline
-  reports 0
+  conditions) — in the scenario, in the deploy it triggers, and in the
+  `workspace/validate.yml` checks the run executes. Their side effects (absolute paths,
+  `~`, binds outside the project) are **not** sandboxed. dwe's own subcommands don't
+  count — the built-in default pipeline reports 0
 
 **Cost — judge it, don't reflex.** `build_services`, `external_images`,
 `max_start_period_seconds`. A build is not an automatic stop: judge what it *is* by
