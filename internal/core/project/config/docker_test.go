@@ -839,3 +839,30 @@ func TestLoadDockerConfig_BuildPrepullBasesLocalOverride(t *testing.T) {
 		})
 	}
 }
+
+// TestLoadDockerConfig_AllCommentBaseWithLocalOverride pins the nil-map guard in
+// loadRawYAML. The init scaffold ships workspace/docker.yml fully commented, and
+// envtest stamps a workspace/docker.local.yml into every test copy — so the base
+// layer is an empty document merged into by a non-empty local one. A nil base map
+// panicked ("assignment to entry in nil map") inside deepMerge, taking down
+// `dwe validate`, `dwe test run` and `dwe test clean` on a fresh project.
+func TestLoadDockerConfig_AllCommentBaseWithLocalOverride(t *testing.T) {
+	baseDir := writeDockerFixture(t, "# only comments\n# nothing declared\n", "project_name: demo-t-smoke-abc\n")
+	cfg := &DweConfig{Raw: map[string]any{}}
+
+	dcfg, err := LoadDockerConfig(baseDir, cfg)
+	if err != nil {
+		t.Fatalf("LoadDockerConfig: %v", err)
+	}
+	if dcfg.ProjectName != "demo-t-smoke-abc" {
+		t.Errorf("ProjectName = %q, want %q", dcfg.ProjectName, "demo-t-smoke-abc")
+	}
+
+	name, err := readDockerProjectName(baseDir, cfg)
+	if err != nil {
+		t.Fatalf("readDockerProjectName: %v", err)
+	}
+	if name != "demo-t-smoke-abc" {
+		t.Errorf("readDockerProjectName = %q, want %q", name, "demo-t-smoke-abc")
+	}
+}

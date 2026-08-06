@@ -3449,6 +3449,11 @@ func ResolvePath(m map[string]any, path string) (any, bool) {
 
 // loadRawYAML reads a YAML file into a raw map. Returns os.ErrNotExist when
 // the file does not exist so callers can treat it as optional.
+//
+// An empty or all-comment document yields a non-nil EMPTY map, never nil: the
+// map is a deepMerge destination at several call sites (docker.yml + its
+// docker.local.yml override) and assigning into a nil map panics. The scaffold
+// ships workspace/docker.yml fully commented, so this is the ordinary case.
 func loadRawYAML(path string) (map[string]any, error) {
 	data, err := os.ReadFile(path)
 	if err != nil {
@@ -3457,6 +3462,9 @@ func loadRawYAML(path string) (map[string]any, error) {
 	var m map[string]any
 	if err := yaml.Unmarshal(data, &m); err != nil {
 		return nil, fmt.Errorf("parse %s: %w", path, err)
+	}
+	if m == nil {
+		m = make(map[string]any)
 	}
 	return m, nil
 }

@@ -107,7 +107,8 @@ func TestEmbeddedTemplates_StarterScenarioLoads(t *testing.T) {
 		t.Error("starter scenario has no description; `dwe test list` would show a blank row")
 	}
 	// Assertions are deliberately absent: a fresh compose.yaml declares no
-	// services, so "the stack is healthy" would pass vacuously.
+	// services, so the scenario's own deploy fails at start/up until the user
+	// adds one — steps here would only add noise behind that failure.
 	if len(scn.Steps) != 0 {
 		t.Errorf("starter scenario declares %d steps; it must stay assertion-free until the service exists in compose", len(scn.Steps))
 	}

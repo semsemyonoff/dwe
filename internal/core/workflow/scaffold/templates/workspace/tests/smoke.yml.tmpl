@@ -8,11 +8,12 @@
 # the scenario loader is strict and rejects an empty document, so there is
 # nothing here to uncomment.
 #
-# It is also deliberately free of assertions. On a fresh scaffold compose.yaml
-# declares no services, so "the stack deploys and reports healthy" would pass
-# vacuously — an honest empty scenario beats a green check that proves nothing.
-# Add steps once [[ .Service ]] exists in compose.yaml; an `http_check` builtin
-# against the service's exported port is the usual first assertion.
+# It is also deliberately free of assertions: on a fresh scaffold compose.yaml
+# declares no services, so the deploy the scenario wraps fails at `start/up`
+# with "empty compose file" and `dwe test run smoke` reports a failure. The
+# scenario becomes meaningful once [[ .Service ]] exists in compose.yaml — then
+# add steps here; an `http_check` builtin against the service's exported port is
+# the usual first assertion.
 #
 # Schema and step reference: `dwe docs show config/tests`
 
