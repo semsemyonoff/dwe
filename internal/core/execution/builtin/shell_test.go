@@ -23,6 +23,7 @@ func TestShellValidate(t *testing.T) {
 		{"missing cmd", map[string]any{}, "missing required param 'cmd'"},
 		{"empty cmd", map[string]any{"cmd": ""}, "missing required param 'cmd'"},
 		{"bad timeout", map[string]any{"cmd": "true", "timeout": "nope"}, "invalid duration"},
+		{"negative timeout", map[string]any{"cmd": "true", "timeout": "-5s"}, "must not be negative"},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -86,6 +87,16 @@ func TestShellRunZeroTimeoutIsUnbounded(t *testing.T) {
 	err := Shell{}.Run(context.Background(), map[string]any{"cmd": "sleep 0.2; exit 0", "timeout": "0"}, spec.ExecContext{})
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
+	}
+}
+
+func TestShellRunNegativeTimeoutRejected(t *testing.T) {
+	t.Parallel()
+	// 0 is the unbounded sentinel, so a negative value must be an error rather
+	// than falling through the `timeout > 0` guard and running unbounded too.
+	err := Shell{}.Run(context.Background(), map[string]any{"cmd": "exit 0", "timeout": "-5s"}, spec.ExecContext{})
+	if err == nil || !strings.Contains(err.Error(), "must not be negative") {
+		t.Fatalf("want negative-timeout error, got %v", err)
 	}
 }
 

@@ -1,4 +1,4 @@
-> Translated from: reference/config/vars.md @ 0bdbc28de12c
+> Translated from: reference/config/vars.md @ fba81db4645f
 
 # `dwe vars` — работа с песочницей `vars:`
 
@@ -208,7 +208,9 @@ runtime реально рендерит, поэтому избегает лож�
 структурных ключах). Отслеживаются два синтаксиса ссылок:
 
 1. **Шаблонные ссылки `${vars.x}`** — в полях, рендерящихся движком `${...}`
-   (декларативные команды `cmd` / `env` / `with`, `info.yml` `text` / `value`,
+   (декларативные команды `cmd` / `argv` / `compose_args` / `argv_append_from` /
+   `env` / `with`, шаги пайплайна `timeout` / `files_gate.command`,
+   `info.yml` `text` / `value`,
    скалярный `when:`, `docker.yml` `project_name`, подтверждающие промпты) и в
    config-шаблонах рендера под `workspace/templates/config/**` (произвольный
    текст → построчный скан и `${vars.x}`, и `{{ resolve .Raw "vars.x" }}`). Это

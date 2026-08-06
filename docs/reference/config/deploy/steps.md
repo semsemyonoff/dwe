@@ -67,7 +67,7 @@ Both usages ensure that conditions evaluate portably across CI systems, containe
 
 **Working directory.** Both the `type: shell` step body and the `cmd: shell` builtin run with their working directory set to the **project root** — the same base `when:` conditions and the `file_exists` builtin use. A relative path in a step body therefore names the same file as the relative path in the `check:` guarding it, regardless of the subdirectory `dwe` was invoked from.
 
-**Timeout.** The `cmd: shell` builtin takes an optional `timeout:` (default `10s`). `timeout: "0"` means **unbounded**, matching a step's own `timeout:` convention — this is what lets a derived [`check: auto`](conditions.md#check-auto-the-inverse-of-when) keep the unbounded posture of the `when:` it inverts. `type: shell` step bodies have no builtin timeout; bound them with the step-level `timeout:` field.
+**Timeout.** The `cmd: shell` builtin takes an optional `timeout:` (default `10s`). `timeout: "0"` means **unbounded**, matching a step's own `timeout:` convention — this is what lets a derived [`check: auto`](conditions.md#check-auto-the-inverse-of-when) keep the unbounded posture of the `when:` it inverts. A negative duration (`"-5s"`) is rejected, exactly as the step-level `timeout:` is — `0` is the only unbounded spelling. `type: shell` step bodies have no builtin timeout; bound them with the step-level `timeout:` field.
 
 ## `type: dwe`
 

@@ -51,10 +51,15 @@ func TestEnumerateAllUsages(t *testing.T) {
 	}
 	got := enumLocsOf(usages)
 	want := []enumLoc{
-		// argv_append_from is a command-file scalar rendered through the same
-		// ${...} substrate as cmd:, so a typo there silently changes which
-		// items the expression computes — it has to be enumerated too.
+		// argv: and compose_args: are sequences whose elements each render
+		// through tpl.RenderCommand (runio.RenderArgvWithArgs /
+		// service.buildRenderedComposeArgs), and argv_append_from is a scalar on
+		// the same substrate as cmd:. A typo in any of them renders to "" —
+		// dropping an argument, a compose flag, or changing which items the
+		// expression computes — so all three have to be enumerated.
+		{"workspace/commands/quality.yml", 5, "vars.lint.config"},
 		{"workspace/commands/quality.yml", 6, "vars.source.dir"},
+		{"workspace/commands/quality.yml", 7, "vars.lint.profile"},
 		{"workspace/deploy.yml", 6, "vars.source.repo"},
 		{"workspace/deploy.yml", 9, "vars.source.branch"},
 		{"workspace/deploy.yml", 11, "project.name"},

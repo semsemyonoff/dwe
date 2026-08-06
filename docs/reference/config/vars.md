@@ -197,7 +197,9 @@ fields) and false negatives (references in structural keys). Two reference
 syntaxes are tracked:
 
 1. **`${vars.x}` template references** — in fields rendered via the `${...}`
-   engine (declarative command `cmd` / `env` / `with`, `info.yml` `text` /
+   engine (declarative command `cmd` / `argv` / `compose_args` /
+   `argv_append_from` / `env` / `with`, pipeline step `timeout` /
+   `files_gate.command`, `info.yml` `text` /
    `value`, scalar `when:`, `docker.yml` `project_name`, confirm prompts) and in
    config render templates under `workspace/templates/config/**` (arbitrary text
    → line scan for both `${vars.x}` and `{{ resolve .Raw "vars.x" }}`). These are

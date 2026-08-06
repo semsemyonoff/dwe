@@ -1,8 +1,6 @@
 package docs
 
 import (
-	"bufio"
-	"bytes"
 	"regexp"
 	"strings"
 	"unicode"
@@ -21,12 +19,10 @@ type Heading struct {
 // shell snippets never get treated as headings. The first H1 is consumed by
 // the title — it does not appear in the headings list.
 func ParseDoc(content []byte) (title string, headings []Heading) {
-	scanner := bufio.NewScanner(bytes.NewReader(content))
-	scanner.Buffer(make([]byte, 0, 64*1024), 1024*1024)
-
 	inFence := false
-	for scanner.Scan() {
-		line := scanner.Text()
+	// splitLines rather than bufio.Scanner — see splitLinesKeepEOL for why the
+	// Scanner's silent over-long-line truncation is not acceptable here.
+	for _, line := range splitLines(content) {
 		trim := strings.TrimSpace(line)
 
 		// Track fenced code blocks (``` or ~~~). Anything inside is skipped.

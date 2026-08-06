@@ -103,6 +103,84 @@ func TestContainerNameValidator(t *testing.T) {
 	}
 }
 
+// TestContainerNameValidator_LastFileWins pins compose's `-f` merge semantics:
+// container_name is a scalar field, so the last file declaring it is the only
+// one that takes effect. Warning per file would flag a base value an overlay
+// already corrected, and stay silent about an overlay that broke a correct base.
+func TestContainerNameValidator_LastFileWins(t *testing.T) {
+	t.Parallel()
+	tests := []struct {
+		name     string
+		base     string
+		extra    string
+		wantWarn string // "" means silent
+	}{
+		{
+			name:  "overlay corrects a divergent base",
+			base:  "services:\n  app:\n    image: busybox\n    container_name: myapp\n",
+			extra: "services:\n  app:\n    container_name: dwe-shop-app\n",
+		},
+		{
+			name:     "overlay diverges from a correct base",
+			base:     "services:\n  app:\n    image: busybox\n    container_name: dwe-shop-app\n",
+			extra:    "services:\n  app:\n    container_name: myapp\n",
+			wantWarn: "myapp",
+		},
+		{
+			name:     "overlay leaving container_name alone keeps the base finding",
+			base:     "services:\n  app:\n    image: busybox\n    container_name: myapp\n",
+			extra:    "services:\n  app:\n    environment:\n      FOO: bar\n",
+			wantWarn: "myapp",
+		},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			root := writeComposeNameProjectExtra(t, tc.base, tc.extra)
+			diags := runContainerNameValidator(t, root)
+			if tc.wantWarn == "" {
+				require.Empty(t, diags)
+				return
+			}
+			require.Len(t, diags, 1)
+			require.Contains(t, diags[0].Message, tc.wantWarn)
+		})
+	}
+}
+
+// TestContainerNameValidator_ResetClearsBaseFinding pins compose's `!reset`
+// merge tag (Compose v2.24+): an overlay clearing container_name leaves the
+// merged stack with none at all, so neither the base declaration nor the
+// clearing overlay may warn. yaml.v3 leaves an unknown tag unresolved, so
+// `!reset null` arrives as the raw scalar text "null" — decoding it straight
+// into a string would report a container literally named "null".
+func TestContainerNameValidator_ResetClearsBaseFinding(t *testing.T) {
+	t.Parallel()
+	base := "services:\n  app:\n    image: busybox\n    container_name: myapp\n"
+	for _, extra := range []string{
+		"services:\n  app:\n    container_name: !reset null\n",
+		"services:\n  app:\n    container_name: !reset ''\n",
+	} {
+		root := writeComposeNameProjectExtra(t, base, extra)
+		diags := runContainerNameValidator(t, root)
+		require.Empty(t, diags, "extra=%q", extra)
+	}
+}
+
+// TestContainerNameValidator_OverrideTagIsAPlainValue pins the other compose
+// merge tag: `!override` replaces the merged value rather than clearing it, so
+// the overlay's value is what takes effect and what gets compared.
+func TestContainerNameValidator_OverrideTagIsAPlainValue(t *testing.T) {
+	t.Parallel()
+	root := writeComposeNameProjectExtra(t,
+		"services:\n  app:\n    image: busybox\n    container_name: dwe-shop-app\n",
+		"services:\n  app:\n    container_name: !override myapp\n",
+	)
+	diags := runContainerNameValidator(t, root)
+	require.Len(t, diags, 1)
+	require.Contains(t, diags[0].Message, "myapp")
+}
+
 func TestContainerNameValidator_NilCfgIsSilent(t *testing.T) {
 	t.Parallel()
 	diags := (&containerNameValidator{}).Run(validate.Context{ProjectRoot: t.TempDir()})

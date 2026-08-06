@@ -3,6 +3,7 @@ package config
 import (
 	"os"
 	"path/filepath"
+	"strconv"
 	"testing"
 	"time"
 
@@ -162,6 +163,256 @@ func TestScanComposeIsolation_DeterministicOrder(t *testing.T) {
 	}
 }
 
+// scanChain writes the given compose documents to a temp dir as a `-f` chain
+// (first is compose.base, the rest are extras) and returns the scan findings.
+func scanChain(t *testing.T, docs ...string) []IsolationFinding {
+	t.Helper()
+	root := t.TempDir()
+	paths := make([]string, 0, len(docs))
+	for i, doc := range docs {
+		p := filepath.Join(root, "compose-"+strconv.Itoa(i)+".yml")
+		require.NoError(t, os.WriteFile(p, []byte(doc), 0o644))
+		paths = append(paths, p)
+	}
+	cfg := &DweConfig{Compose: ComposeConfig{Base: paths[0], Extra: paths[1:]}}
+	return ScanComposeIsolation(cfg, root)
+}
+
+// TestScanComposeIsolation_ContainerNameLastWins pins the `-f` merge collapse:
+// container_name is a scalar field, so only the last file that sets it takes
+// effect. Reporting every declaration would flag a base value an overlay has
+// already replaced — a container the merged stack never creates.
+func TestScanComposeIsolation_ContainerNameLastWins(t *testing.T) {
+	t.Parallel()
+	findings := scanChain(t,
+		"services:\n  app:\n    image: busybox\n    container_name: base-name\n",
+		"services:\n  app:\n    container_name: overlay-name\n",
+	)
+	require.Len(t, findings, 1)
+	require.Equal(t, KindContainerName, findings[0].Kind)
+	require.Equal(t, "overlay-name", findings[0].Value)
+}
+
+// TestScanComposeIsolation_ContainerNameReset pins compose's `!reset` merge tag
+// (Compose v2.24+): it DROPS the merged value, so the stack runs with no
+// container_name and there is nothing left to collide. yaml.v3 leaves an
+// unknown tag unresolved, so the node arrives with the raw scalar text as its
+// value — decoding `!reset null` straight into a string would both keep the
+// finding alive and report a container literally named "null".
+func TestScanComposeIsolation_ContainerNameReset(t *testing.T) {
+	t.Parallel()
+	base := "services:\n  app:\n    image: busybox\n    container_name: base-name\n"
+	for _, clear := range []string{
+		"services:\n  app:\n    container_name: !reset null\n",
+		"services:\n  app:\n    container_name: !reset ''\n",
+	} {
+		require.Empty(t, scanChain(t, base, clear), "clear=%q", clear)
+	}
+
+	// A value re-declared AFTER the reset is in effect again.
+	findings := scanChain(t, base,
+		"services:\n  app:\n    container_name: !reset null\n",
+		"services:\n  app:\n    container_name: later-name\n",
+	)
+	require.Len(t, findings, 1)
+	require.Equal(t, "later-name", findings[0].Value)
+}
+
+// TestScanComposeIsolation_ContainerNameOverrideTag pins the sibling merge tag:
+// `!override` replaces the merged value rather than clearing it, so the tagged
+// value is a perfectly ordinary container_name finding.
+func TestScanComposeIsolation_ContainerNameOverrideTag(t *testing.T) {
+	t.Parallel()
+	findings := scanChain(t,
+		"services:\n  app:\n    image: busybox\n    container_name: base-name\n",
+		"services:\n  app:\n    container_name: !override overlay-name\n",
+	)
+	require.Len(t, findings, 1)
+	require.Equal(t, "overlay-name", findings[0].Value)
+}
+
+// TestScanComposeIsolation_ContainerNameNullIsNotAReset pins that a plain
+// explicit null is NOT compose's reset: `!reset` is the only documented way to
+// drop a merged value, so an untagged null must leave the base finding standing
+// rather than silently suppress a real collision.
+func TestScanComposeIsolation_ContainerNameNullIsNotAReset(t *testing.T) {
+	t.Parallel()
+	findings := scanChain(t,
+		"services:\n  app:\n    image: busybox\n    container_name: base-name\n",
+		"services:\n  app:\n    container_name: null\n",
+	)
+	require.Len(t, findings, 1)
+	require.Equal(t, "base-name", findings[0].Value)
+}
+
+// TestScanComposeIsolation_PortsAppendAcrossChain pins that `ports:` is NOT
+// collapsed last-wins like the scalar fields: compose merges sequences by
+// appending, so every file's literal host port really is published and every
+// one of them is a finding.
+func TestScanComposeIsolation_PortsAppendAcrossChain(t *testing.T) {
+	t.Parallel()
+	findings := scanChain(t,
+		"services:\n  app:\n    image: busybox\n    ports:\n      - \"8080:80\"\n",
+		"services:\n  app:\n    ports:\n      - \"9090:90\"\n",
+	)
+	require.Len(t, findings, 2)
+	require.Equal(t, 8080, findings[0].HostPort)
+	require.Equal(t, 9090, findings[1].HostPort)
+}
+
+// TestScanComposeIsolation_PortsResetAndOverride pins the two merge tags that
+// DO cancel an earlier file's ports. Without this the scanner blocks
+// `dwe test run` over a port the merged stack never publishes — which is
+// exactly the overlay an author would write to fix the finding.
+func TestScanComposeIsolation_PortsResetAndOverride(t *testing.T) {
+	t.Parallel()
+	base := "services:\n  app:\n    image: busybox\n    ports:\n      - \"8080:80\"\n"
+
+	// `!reset` drops the key: nothing is published, so nothing is a finding.
+	// Its own content never reaches the merged stack either.
+	for _, clear := range []string{
+		"services:\n  app:\n    ports: !reset null\n",
+		"services:\n  app:\n    ports: !reset []\n",
+		"services:\n  app:\n    ports: !reset\n      - \"7070:70\"\n",
+	} {
+		require.Empty(t, scanChain(t, base, clear), "clear=%q", clear)
+	}
+
+	// `!override []` replaces the merged list with an empty one.
+	require.Empty(t, scanChain(t, base, "services:\n  app:\n    ports: !override []\n"))
+
+	// `!override` with entries replaces — only the overriding file's ports
+	// survive.
+	findings := scanChain(t, base, "services:\n  app:\n    ports: !override\n      - \"9090:90\"\n")
+	require.Len(t, findings, 1)
+	require.Equal(t, 9090, findings[0].HostPort)
+
+	// A plain re-declaration AFTER a reset is published again.
+	findings = scanChain(t, base,
+		"services:\n  app:\n    ports: !reset null\n",
+		"services:\n  app:\n    ports:\n      - \"7070:70\"\n",
+	)
+	require.Len(t, findings, 1)
+	require.Equal(t, 7070, findings[0].HostPort)
+}
+
+// TestScanComposeIsolation_PortsResetIsPerService pins that a reset cancels
+// only the service it names — a sibling service's ports are untouched.
+func TestScanComposeIsolation_PortsResetIsPerService(t *testing.T) {
+	t.Parallel()
+	findings := scanChain(t,
+		"services:\n  app:\n    image: busybox\n    ports:\n      - \"8080:80\"\n  db:\n    image: postgres:16\n    ports:\n      - \"5432:5432\"\n",
+		"services:\n  app:\n    ports: !reset null\n",
+	)
+	require.Len(t, findings, 1)
+	require.Equal(t, "db", findings[0].Resource)
+	require.Equal(t, 5432, findings[0].HostPort)
+}
+
+// TestScanComposeIsolation_NamedEntityLastWins pins the same collapse on the
+// volume/network scalars: `external:` and `name:` are last-declaration-wins, so
+// an overlay turning one off must cancel the base finding rather than leave a
+// stale warning for a resource the merged stack scopes normally.
+func TestScanComposeIsolation_NamedEntityLastWins(t *testing.T) {
+	t.Parallel()
+	base := "volumes:\n  data:\n    external: true\n    name: shared-vol\nnetworks:\n  net:\n    external: true\n"
+
+	require.Empty(t, scanChain(t, base,
+		"volumes:\n  data:\n    external: false\n    name: !reset null\nnetworks:\n  net:\n    external: !reset null\n",
+	))
+
+	// A re-declaration after the clear is in effect again, and reports the
+	// overlay's value.
+	findings := scanChain(t, base,
+		"volumes:\n  data:\n    external: false\n    name: !reset null\nnetworks:\n  net:\n    external: !reset null\n",
+		"volumes:\n  data:\n    name: later-vol\n",
+	)
+	require.Len(t, findings, 1)
+	require.Equal(t, KindNamedVolume, findings[0].Kind)
+	require.Contains(t, findings[0].Message, "later-vol")
+}
+
+// TestScanComposeIsolation_PartialDecodeKeepsFindings pins that one field this
+// scanner's narrow shape cannot read does not blind it to the rest of the file:
+// yaml.v3 reports a *yaml.TypeError after decoding everything else, and
+// dropping the file would silently hide a blocking finding declared beside it.
+func TestScanComposeIsolation_PartialDecodeKeepsFindings(t *testing.T) {
+	t.Parallel()
+	findings := scanChain(t,
+		"services:\n  app:\n    image: busybox\n    container_name: fixed-name\nvolumes:\n  data: !reset null\n",
+	)
+	require.Len(t, findings, 1)
+	require.Equal(t, KindContainerName, findings[0].Kind)
+	require.Equal(t, "fixed-name", findings[0].Value)
+}
+
+// TestScanComposeIsolation_AliasNodes pins that a YAML alias is dereferenced
+// before classification. yaml.v3 resolves aliases transparently into a typed
+// field but hands a `yaml.Node` field the AliasNode itself, while compose sees
+// the anchored value — so every construct scanned through a yaml.Node must
+// follow the alias or the finding silently disappears.
+func TestScanComposeIsolation_AliasNodes(t *testing.T) {
+	t.Parallel()
+	findings := scanChain(t, `
+x-name: &name fixed-name
+x-port: &port "8080:80"
+x-published: &published 9090
+x-true: &yes true
+services:
+  app:
+    image: busybox
+    container_name: *name
+  ports-short:
+    image: busybox
+    ports:
+      - *port
+  ports-long:
+    image: busybox
+    ports:
+      - target: 90
+        published: *published
+volumes:
+  ext:
+    external: *yes
+`)
+
+	cn, ok := findByResource(findings, KindContainerName, "app")
+	require.True(t, ok, "alias-valued container_name must still be a finding")
+	require.Equal(t, "fixed-name", cn.Value)
+	require.True(t, cn.Blocking)
+
+	short, ok := findByResource(findings, KindRawHostPort, "ports-short")
+	require.True(t, ok, "alias-valued short port entry must still be a finding")
+	require.Equal(t, 8080, short.HostPort)
+
+	long, ok := findByResource(findings, KindRawHostPort, "ports-long")
+	require.True(t, ok, "alias-valued long-form published must still be a finding")
+	require.Equal(t, 9090, long.HostPort)
+
+	_, ok = findByResource(findings, KindExternalVolume, "ext")
+	require.True(t, ok, "alias-valued external: must still be a finding")
+}
+
+// TestScanComposeCost_AliasedBuild pins the same dereference on the cost
+// scanner's build: probe — an aliased build block still marks the service as
+// building, so it must not be reported as an image to pull.
+func TestScanComposeCost_AliasedBuild(t *testing.T) {
+	t.Parallel()
+	root := t.TempDir()
+	p := filepath.Join(root, "compose.yml")
+	require.NoError(t, os.WriteFile(p, []byte(`
+x-build: &build
+  context: .
+services:
+  app:
+    image: local/app:dev
+    build: *build
+`), 0o644))
+	facts := ScanComposeCost(&DweConfig{Compose: ComposeConfig{Base: p}}, root)
+	require.Equal(t, []string{"app"}, facts.BuildServices)
+	require.Empty(t, facts.ExternalImages)
+}
+
 // costFixture builds a DweConfig whose compose chain is the given testdata
 // fixtures, in order (absolute paths, so projectRoot is irrelevant).
 func costFixture(t *testing.T, filenames ...string) ComposeCostFacts {
@@ -234,6 +485,72 @@ func TestScanComposeCost_OverlayDisablingHealthcheckClearsStartPeriod(t *testing
 	facts := ScanComposeCost(cfg, root)
 
 	require.Equal(t, 20*time.Second, facts.MaxStartPeriod)
+}
+
+// costChain writes the given compose documents to a temp dir as a `-f` chain
+// and returns the cost facts.
+func costChain(t *testing.T, docs ...string) ComposeCostFacts {
+	t.Helper()
+	root := t.TempDir()
+	paths := make([]string, 0, len(docs))
+	for i, doc := range docs {
+		p := filepath.Join(root, "compose-"+strconv.Itoa(i)+".yml")
+		require.NoError(t, os.WriteFile(p, []byte(doc), 0o644))
+		paths = append(paths, p)
+	}
+	cfg := &DweConfig{Compose: ComposeConfig{Base: paths[0], Extra: paths[1:]}}
+	return ScanComposeCost(cfg, root)
+}
+
+// TestScanComposeCost_OverlayResetClearsBuild pins the clearing half of the
+// build merge: `build:` is sticky across the chain only until a later file
+// drops it with `!reset`. Leaving it sticky would report a build the merged
+// stack never runs AND suppress the image it actually pulls.
+func TestScanComposeCost_OverlayResetClearsBuild(t *testing.T) {
+	t.Parallel()
+	facts := costChain(t,
+		"services:\n  app:\n    image: busybox\n    build:\n      context: .\n",
+		"services:\n  app:\n    build: !reset null\n",
+	)
+	require.Empty(t, facts.BuildServices)
+	require.Equal(t, []string{"busybox"}, facts.ExternalImages)
+}
+
+// TestScanComposeCost_OverlayResetClearsImage pins the same on `image:`. The
+// value must not be read as a plain string either — yaml.v3 leaves the unknown
+// tag unresolved, so `!reset null` would report an image literally named "null".
+func TestScanComposeCost_OverlayResetClearsImage(t *testing.T) {
+	t.Parallel()
+	facts := costChain(t,
+		"services:\n  app:\n    image: busybox\n",
+		"services:\n  app:\n    image: !reset null\n",
+	)
+	require.Empty(t, facts.BuildServices)
+	require.Empty(t, facts.ExternalImages)
+}
+
+// TestScanComposeCost_OverlayResetClearsHealthcheck pins the reset sibling of
+// the `disable: true` clear already covered above.
+func TestScanComposeCost_OverlayResetClearsHealthcheck(t *testing.T) {
+	t.Parallel()
+	facts := costChain(t,
+		"services:\n  app:\n    image: nginx:1\n    healthcheck:\n      start_period: 300s\n",
+		"services:\n  app:\n    healthcheck: !reset null\n",
+	)
+	require.Zero(t, facts.MaxStartPeriod)
+}
+
+// TestScanComposeCost_OverrideTagIsAnOrdinaryDeclaration pins that `!override`
+// is NOT a clear: it replaces the merged value, which for these scalar fields
+// is what a plain declaration already does.
+func TestScanComposeCost_OverrideTagIsAnOrdinaryDeclaration(t *testing.T) {
+	t.Parallel()
+	facts := costChain(t,
+		"services:\n  app:\n    image: busybox\n",
+		"services:\n  app:\n    image: !override alpine:3\n    build: !override\n      context: .\n",
+	)
+	require.Equal(t, []string{"app"}, facts.BuildServices)
+	require.Empty(t, facts.ExternalImages)
 }
 
 func TestScanComposeCost_UnreadableFileSkippedSilently(t *testing.T) {

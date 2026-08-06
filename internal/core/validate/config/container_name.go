@@ -24,11 +24,11 @@ import (
 // it: compose then names the container "<project>-<service>-1".
 //
 // Reuses config.ScanComposeIsolation's KindContainerName findings (the
-// generic leaf scanner flags ANY non-empty container_name, since even a
-// derived-matching one is a collision risk for parallel `dwe test` copies)
-// but applies its own filter on top: skip a declared value that already
-// matches the derived name, and skip an interpolated `${...}` value that
-// cannot be compared without resolving env.
+// generic leaf scanner flags ANY container_name the `-f` merge leaves in
+// effect, since even a derived-matching one is a collision risk for parallel
+// `dwe test` copies) but applies its own filter on top: skip a declared value
+// that already matches the derived name, and skip an interpolated `${...}`
+// value that cannot be compared without resolving env.
 type containerNameValidator struct{}
 
 var _ validate.Validator = (*containerNameValidator)(nil)

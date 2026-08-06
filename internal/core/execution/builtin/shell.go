@@ -18,16 +18,34 @@ const shellDefaultTimeout = 10 * time.Second
 // reports success based on exit status.
 type Shell struct{}
 
-// Validate checks that the cmd param is present and timeout is parseable.
+// Validate checks that the cmd param is present and timeout is a parseable,
+// non-negative duration.
 func (Shell) Validate(with map[string]any) error {
 	cmd := spec.GetStringParam(with, "cmd", "")
 	if cmd == "" {
 		return errors.New("missing required param 'cmd'")
 	}
-	if _, err := spec.GetDurationParam(with, "timeout", shellDefaultTimeout); err != nil {
+	if _, err := shellTimeout(with); err != nil {
 		return err
 	}
 	return nil
+}
+
+// shellTimeout reads the timeout param and rejects a negative duration.
+//
+// 0 is the unbounded sentinel (see Run), so without this check a negative value
+// would fall through the `timeout > 0` guard and also run unbounded — silently
+// turning an obvious typo into no timeout at all. parseStepTimeout rejects a
+// negative step-level timeout for the same reason; keep the two in agreement.
+func shellTimeout(with map[string]any) (time.Duration, error) {
+	d, err := spec.GetDurationParam(with, "timeout", shellDefaultTimeout)
+	if err != nil {
+		return 0, err
+	}
+	if d < 0 {
+		return 0, fmt.Errorf("param %q: must not be negative, got %s", "timeout", d)
+	}
+	return d, nil
 }
 
 // Describe returns a one-line summary for plan output.
@@ -43,7 +61,7 @@ func (Shell) Describe(with map[string]any) string {
 // context.
 func (Shell) Run(ctx context.Context, with map[string]any, ectx spec.ExecContext) error {
 	cmdStr := spec.GetStringParam(with, "cmd", "")
-	timeout, err := spec.GetDurationParam(with, "timeout", shellDefaultTimeout)
+	timeout, err := shellTimeout(with)
 	if err != nil {
 		return err
 	}

@@ -387,3 +387,38 @@ func TestSearch_SnippetTruncated(t *testing.T) {
 		t.Errorf("truncated snippet must be marked: %q", hits[0].Snippet)
 	}
 }
+
+// TestSearch_HugeLineDoesNotTruncateDocument pins that a line longer than the
+// 1 MiB bufio.Scanner cap the scan used to run under no longer swallows the
+// rest of the document. Project docs are user-owned markdown, so a single
+// minified/base64 line is enough to hit it — and the truncation was silent
+// (scanner.Err() was never checked), hiding every later match.
+func TestSearch_HugeLineDoesNotTruncateDocument(t *testing.T) {
+	huge := strings.Repeat("x", 2*1024*1024)
+	doc := "# T\n\n## Early\n\nalpha here\n\n" + huge + "\n\n## Late\n\nalpha there\n"
+	roots := []DocRoot{{
+		Name: "dwe",
+		FS:   fstest.MapFS{"a.md": &fstest.MapFile{Data: []byte(doc)}},
+	}}
+	hits := Search(roots, "alpha", "en", SearchOptions{})
+	sections := make(map[string]bool, len(hits))
+	for _, h := range hits {
+		sections[h.Section] = true
+	}
+	if !sections["early"] || !sections["late"] {
+		t.Fatalf("want hits in both early and late sections, got %+v", hits)
+	}
+}
+
+// TestParseDoc_HugeLineDoesNotTruncateDocument is the same guarantee for the
+// heading parser, which shares the line splitter.
+func TestParseDoc_HugeLineDoesNotTruncateDocument(t *testing.T) {
+	huge := strings.Repeat("x", 2*1024*1024)
+	title, headings := ParseDoc([]byte("# T\n\n## Early\n\n" + huge + "\n\n## Late\n"))
+	if title != "T" {
+		t.Fatalf("title = %q, want T", title)
+	}
+	if len(headings) != 2 || headings[1].Text != "Late" {
+		t.Fatalf("headings = %+v, want Early and Late", headings)
+	}
+}

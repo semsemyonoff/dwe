@@ -125,6 +125,30 @@ func TestPortsExportsValidator_ExtendsChildIsSilent(t *testing.T) {
 	require.Equal(t, filepath.Join("workspace", "services", "app", "service.yml"), diags[0].File)
 }
 
+// TestPortsExportsValidator_ExtendsDisabledParentWarns pins the limit of the
+// inheritance skip: it defers to the parent's own finding, but this validator
+// only iterates ENABLED services (DeployOrder). A disabled `extends:` template
+// never gets its turn, so an enabled child inheriting from one has to report
+// the port itself or nobody does.
+func TestPortsExportsValidator_ExtendsDisabledParentWarns(t *testing.T) {
+	t.Parallel()
+	root := t.TempDir()
+	require.NoError(t, os.WriteFile(filepath.Join(root, "workspace.yml"), []byte("project:\n  name: test\n"), 0o644))
+	for _, svc := range []struct{ name, body string }{
+		{"base", "type: app\nports:\n  http: 8080\n"},
+		{"worker", "type: app\nrequired: true\nextends: base\n"},
+	} {
+		dir := filepath.Join(root, "workspace", "services", svc.name)
+		require.NoError(t, os.MkdirAll(dir, 0o755))
+		require.NoError(t, os.WriteFile(filepath.Join(dir, "service.yml"), []byte(svc.body), 0o644))
+	}
+
+	diags := runPortsExportsValidator(t, root)
+	require.Len(t, diags, 1)
+	require.Contains(t, diags[0].Message, "services.worker.ports.http")
+	require.Equal(t, filepath.Join("workspace", "services", "worker", "service.yml"), diags[0].File)
+}
+
 // TestPortsExportsValidator_ExtendsChildOwnPortWarns is the counterpart: a
 // child that declares its own port does not inherit, so the skip must not
 // swallow it.
@@ -173,6 +197,56 @@ exports:
 	for _, svc := range []struct{ name, body string }{
 		{"app", "type: app\nrequired: true\nports:\n  http: 8080\n"},
 		{"worker", "type: app\nrequired: true\nextends: app\nports:\n  http: 8081\n"},
+	} {
+		dir := filepath.Join(root, "workspace", "services", svc.name)
+		require.NoError(t, os.MkdirAll(dir, 0o755))
+		require.NoError(t, os.WriteFile(filepath.Join(dir, "service.yml"), []byte(svc.body), 0o644))
+	}
+
+	diags := runPortsExportsValidator(t, root)
+	require.Len(t, diags, 1)
+	require.Contains(t, diags[0].Message, "services.worker.ports.http")
+	require.Equal(t, filepath.Join("workspace", "services", "worker", "service.yml"), diags[0].File)
+}
+
+// TestPortsExportsValidator_ExtendsThroughDisabledTemplateIsSilent pins the
+// multi-hop case: ResolveServiceExtends runs in topological order, so the
+// disabled intermediate template already carries the enabled base's cloned port
+// map by the time the grandchild clones it in turn. Answering on the first
+// ancestor that has ports would find the disabled template and make the
+// grandchild warn — a duplicate of base's own finding, anchored at a
+// service.yml that never declares the port.
+func TestPortsExportsValidator_ExtendsThroughDisabledTemplateIsSilent(t *testing.T) {
+	t.Parallel()
+	root := t.TempDir()
+	require.NoError(t, os.WriteFile(filepath.Join(root, "workspace.yml"), []byte("project:\n  name: test\n"), 0o644))
+	for _, svc := range []struct{ name, body string }{
+		{"base", "type: app\nrequired: true\nports:\n  http: 8080\n"},
+		{"template", "type: app\nextends: base\n"},
+		{"worker", "type: app\nrequired: true\nextends: template\n"},
+	} {
+		dir := filepath.Join(root, "workspace", "services", svc.name)
+		require.NoError(t, os.MkdirAll(dir, 0o755))
+		require.NoError(t, os.WriteFile(filepath.Join(dir, "service.yml"), []byte(svc.body), 0o644))
+	}
+
+	diags := runPortsExportsValidator(t, root)
+	require.Len(t, diags, 1)
+	require.Contains(t, diags[0].Message, "services.base.ports.http")
+	require.Equal(t, filepath.Join("workspace", "services", "base", "service.yml"), diags[0].File)
+}
+
+// TestPortsExportsValidator_ExtendsThroughAllDisabledWarns is the counterpart:
+// when NO ancestor in the equal-map chain is enabled, nobody else reports the
+// port, so the enabled leaf still has to.
+func TestPortsExportsValidator_ExtendsThroughAllDisabledWarns(t *testing.T) {
+	t.Parallel()
+	root := t.TempDir()
+	require.NoError(t, os.WriteFile(filepath.Join(root, "workspace.yml"), []byte("project:\n  name: test\n"), 0o644))
+	for _, svc := range []struct{ name, body string }{
+		{"base", "type: app\nports:\n  http: 8080\n"},
+		{"template", "type: app\nextends: base\n"},
+		{"worker", "type: app\nrequired: true\nextends: template\n"},
 	} {
 		dir := filepath.Join(root, "workspace", "services", svc.name)
 		require.NoError(t, os.MkdirAll(dir, 0o755))

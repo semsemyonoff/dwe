@@ -61,9 +61,10 @@ type ScanResult struct {
 //     those fields render through tpl.Render (the Go-template engine), where a
 //     ${...} literal is inert. Matching both is the safe direction for a
 //     "where is this used" check (over-report, never miss a real reference).
-//     cmd / text / value / title / project_name / confirm / timeout / command:
-//     direct scalar fields.
+//     cmd / text / value / title / project_name / confirm / timeout / command /
+//     argv_append_from: direct scalar fields.
 //     env / with: mappings whose *values* are templated.
+//     argv / compose_args: sequences whose *elements* are templated.
 //     when (scalar form only): command/workflow when supports ${...}.
 //   - structuralKeys — from / default_from: the value IS a config dot-path; a
 //     "vars." prefix is a reference (no ${...} wrapper).
@@ -114,6 +115,17 @@ var (
 		"env":  true,
 		"with": true,
 	}
+	// templatedSeqKeys are sequences whose every element scalar is templated.
+	// argv elements render through tpl.RenderCommand one by one
+	// (runio.RenderArgvWithArgs) and compose_args the same way
+	// (service.buildRenderedComposeArgs), so a ${vars.typo} in either renders to
+	// "" exactly like one in cmd: — silently dropping an argument or a compose
+	// flag. Enumerating them is what lets config.template_refs and
+	// `dwe vars inspect` see those references at all.
+	templatedSeqKeys = map[string]bool{
+		"argv":         true,
+		"compose_args": true,
+	}
 	structuralKeys = map[string]bool{
 		"from":         true,
 		"default_from": true,
@@ -154,9 +166,10 @@ func ScanUsages(projectRoot, queryPath string) (ScanResult, error) {
 
 // EnumerateAllUsages walks a project's workspace tree and returns every static
 // ${head.path} shorthand reference (internal/shared/tpl.VarPattern) across the
-// fields the runtime actually renders (cmd, with, env, text, value, title,
-// project_name, confirm, scalar when) — regardless of head namespace — with
-// the referenced path recorded in Usage.Ref.
+// fields the runtime actually renders (cmd, argv, compose_args,
+// argv_append_from, with, env, text, value, title, project_name, confirm,
+// timeout, command, scalar when) — regardless of head namespace — with the
+// referenced path recorded in Usage.Ref.
 //
 // This is an enumeration primitive, not a filter widening of ScanUsages:
 // ScanUsages is query-driven (it looks for one known path and does not carry
@@ -353,6 +366,11 @@ func hitsForField(keyName string, val *yaml.Node, queryPath, rel string, lines [
 		// with:/env: are mappings whose values may themselves be nested maps or
 		// sequences (e.g. with: {opts: {branch: "${vars.x}"}}); recurse to reach
 		// every scalar leaf, not only the direct children.
+		hits = append(hits, templatedScalarHits(val, queryPath, rel, lines, matchAll)...)
+
+	case templatedSeqKeys[keyName] && val.Kind == yaml.SequenceNode:
+		// argv:/compose_args: are flat sequences of templated scalars; the same
+		// leaf recursion applies.
 		hits = append(hits, templatedScalarHits(val, queryPath, rel, lines, matchAll)...)
 	}
 	return hits

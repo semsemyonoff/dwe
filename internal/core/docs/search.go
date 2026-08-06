@@ -1,8 +1,6 @@
 package docs
 
 import (
-	"bufio"
-	"bytes"
 	"sort"
 	"strings"
 	"unicode"
@@ -171,15 +169,15 @@ func searchInDoc(content []byte, tokens []string) []sectionStats {
 	order := make([]*sectionStats, 0, 8)
 	currentSlug := ""
 
-	scanner := bufio.NewScanner(bytes.NewReader(content))
-	scanner.Buffer(make([]byte, 0, 64*1024), 1024*1024)
-
 	inFence := false
 	// Reused across lines: fully overwritten each iteration and only ever read
 	// back into s.counts, never retained.
 	lineCounts := make([]int, 0, len(tokens))
-	for scanner.Scan() {
-		line := scanner.Text()
+	// splitLines, not bufio.Scanner: a Scanner stops at the first over-long
+	// line and reports it only via scanner.Err(), so a single huge line in a
+	// project doc would have silently truncated that document's search stats
+	// and hidden every match after it.
+	for _, line := range splitLines(content) {
 		trim := strings.TrimSpace(line)
 
 		if IsFenceLine(trim) {

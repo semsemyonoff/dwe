@@ -47,8 +47,14 @@ func (v *portsExportsValidator) Run(ctx validate.Context) []validate.Diagnostic 
 		// parent's service.yml. Warning again here would duplicate the
 		// parent's own finding and anchor it at a file that never mentions the
 		// port. The test is whole-map, matching the loader's all-or-nothing
-		// rule — see portsInheritedViaExtends.
-		if portsInheritedViaExtends(ctx.Cfg, name) {
+		// rule — see portsCoveredByEnabledAncestor.
+		//
+		// The suppression is valid ONLY when some ancestor holding that same
+		// map is itself enabled: this loop runs over DeployOrder, which is
+		// enabled-only, so a disabled ancestor never gets its turn and emits
+		// nothing to defer to. An enabled child inheriting only through
+		// disabled templates must therefore report the port itself.
+		if portsCoveredByEnabledAncestor(ctx.Cfg, name) {
 			continue
 		}
 		portNames := make([]string, 0, len(svc.Ports))
@@ -84,8 +90,11 @@ func (v *portsExportsValidator) Run(ctx validate.Context) []validate.Diagnostic 
 	return diags
 }
 
-// portsInheritedViaExtends reports whether service name's whole resolved port
-// map came from an `extends:` ancestor rather than its own service.yml.
+// portsCoveredByEnabledAncestor reports whether service name's whole resolved
+// port map came from an `extends:` ancestor that is itself ENABLED — i.e. an
+// ancestor DeployOrder will visit, which therefore emits the finding for that
+// identical port set on its own service.yml. Suppressing the child is only
+// correct in that case.
 //
 // Inheritance is all-or-nothing: ResolveServiceExtends clones the parent's map
 // only when the child declares no ports at all
@@ -105,7 +114,16 @@ func (v *portsExportsValidator) Run(ctx validate.Context) []validate.Diagnostic 
 // never clears Extends), so the chain is still walkable here. The visited set
 // guards against a cycle — the loader rejects those, but this validator must
 // not hang on a config that somehow reached it.
-func portsInheritedViaExtends(cfg *config.DweConfig, name string) bool {
+//
+// A disabled ancestor carrying the identical map is NOT the answer, but it is
+// not the end of the walk either: ResolveServiceExtends runs in topological
+// order, so a disabled intermediate template has already been given its own
+// parent's map by the time the grandchild clones it. Stopping at the first
+// ancestor with ports would then report "not covered" for
+// base(enabled) <- template(disabled) <- worker(enabled) even though base
+// emits the finding for exactly that port set. So keep climbing while the map
+// stays equal, and answer on the first ancestor that is enabled.
+func portsCoveredByEnabledAncestor(cfg *config.DweConfig, name string) bool {
 	svc, ok := cfg.Services[name]
 	if !ok || len(svc.Ports) == 0 {
 		return false
@@ -113,13 +131,19 @@ func portsInheritedViaExtends(cfg *config.DweConfig, name string) bool {
 	visited := map[string]bool{name: true}
 	cur := svc
 	for cur.Extends != "" && !visited[cur.Extends] {
-		visited[cur.Extends] = true
-		parent, ok := cfg.Services[cur.Extends]
+		parentName := cur.Extends
+		visited[parentName] = true
+		parent, ok := cfg.Services[parentName]
 		if !ok {
 			return false
 		}
 		if len(parent.Ports) > 0 {
-			return maps.Equal(svc.Ports, parent.Ports)
+			if !maps.Equal(svc.Ports, parent.Ports) {
+				return false
+			}
+			if parent.Enabled {
+				return true
+			}
 		}
 		cur = parent
 	}

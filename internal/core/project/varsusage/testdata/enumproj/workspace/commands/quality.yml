@@ -2,5 +2,6 @@ commands:
   staged:
     type: service_exec
     service: app
-    argv: [ruff, check]
+    argv: [ruff, check, "--config=${vars.lint.config}"]
     argv_append_from: "git -C ${vars.source.dir} diff --name-only --diff-filter=ACM"
+    compose_args: ["-e", "PROFILE=${vars.lint.profile}"]

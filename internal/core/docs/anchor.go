@@ -1,7 +1,6 @@
 package docs
 
 import (
-	"bufio"
 	"bytes"
 	"sort"
 	"strings"
@@ -227,29 +226,36 @@ func sliceSection(content []byte, start, end int) []byte {
 // splitLinesKeepEOL returns the input split into lines, each retaining its
 // trailing newline (if any). The concatenation of the returned slices equals
 // the input exactly — this is what lets sliceSection use raw byte offsets.
+//
+// Deliberately not bufio.Scanner: the content is already fully in memory, and a
+// Scanner silently STOPS at the first line longer than its buffer cap (the
+// error only shows up in scanner.Err(), which is easy to forget). Project docs
+// are user-owned markdown, so one minified or base64 line would have truncated
+// the document — breaking the concatenation invariant above, and silently
+// dropping every later heading/match for the callers that share this splitter.
 func splitLinesKeepEOL(b []byte) []string {
-	scanner := bufio.NewScanner(bytes.NewReader(b))
-	scanner.Buffer(make([]byte, 0, 64*1024), 1024*1024)
-	// Default ScanLines drops the newline; use a custom splitter that keeps it.
-	scanner.Split(scanLinesKeepEOL)
 	lines := make([]string, 0, 64)
-	for scanner.Scan() {
-		lines = append(lines, scanner.Text())
+	for len(b) > 0 {
+		i := bytes.IndexByte(b, '\n')
+		if i < 0 {
+			lines = append(lines, string(b))
+			break
+		}
+		lines = append(lines, string(b[:i+1]))
+		b = b[i+1:]
 	}
 	return lines
 }
 
-func scanLinesKeepEOL(data []byte, atEOF bool) (advance int, token []byte, err error) {
-	if atEOF && len(data) == 0 {
-		return 0, nil, nil
+// splitLines is splitLinesKeepEOL with the line terminator removed, matching
+// bufio.ScanLines' semantics (trailing "\n", and a "\r" immediately before it,
+// are dropped) minus the token size limit.
+func splitLines(b []byte) []string {
+	lines := splitLinesKeepEOL(b)
+	for i, l := range lines {
+		lines[i] = stripEOL(l)
 	}
-	if i := bytes.IndexByte(data, '\n'); i >= 0 {
-		return i + 1, data[:i+1], nil
-	}
-	if atEOF {
-		return len(data), data, nil
-	}
-	return 0, nil, nil
+	return lines
 }
 
 func stripEOL(s string) string {
