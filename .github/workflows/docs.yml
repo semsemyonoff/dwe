@@ -44,7 +44,7 @@ jobs:
           # Build only reads the repo + uploads an artifact; it never needs the
           # checkout token, so don't leave it on disk.
           persist-credentials: false
-      - uses: actions/setup-node@v6
+      - uses: actions/setup-node@v7
         with:
           node-version: '22'
           cache: npm
